@@ -31,17 +31,3 @@ jobs:
             .pio/build/*/firmware.bin
             .pio/build/*/partitions.bin
           retention-days: 7
-
-  documentation:
-    runs-on: ubuntu-latest
-    name: Create the documentation
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: "14.x"
-      - name: Install build dependencies
-        run: npm install
-      - name: Build documentation
-        run: npm run docs:build
