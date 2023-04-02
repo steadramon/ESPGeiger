@@ -9,6 +9,7 @@ jobs:
       matrix:
         environments:
           - "d1_mini_lite"
+          - "wemos_d1_mini32"
     runs-on: ubuntu-latest
     name: Build with PlatformIO
     steps:
