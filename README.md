@@ -39,6 +39,20 @@ Automatically output every minute:
 - Async Webserver
 - Display support
 
+# Installation
+
+The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satify the requirements by installing the libraries.
+
+The `environments.ini` file defines some pre-built environments and examples of how the build can be configured. You can pick a combination of target board (esp32/esp8266) and geiger type (pulse/serial/GC10 etc)
+
+1.  Open the PlatformIO IDE and open the ESPGeiger project.
+2.  Edit the `platformio.ini` file to change `default_envs` to match the environment you want to build. 
+3.  Click on the `Build` button in the PlatformIO IDE.
+4.  The PlatformIO IDE will build the project.
+5.  Once the project is built, you can upload it to your microcontroller.
+6.  To upload the project to your microcontroller, click on the `Upload` button in the PlatformIO IDE.
+7.  The PlatformIO IDE will upload the project to your microcontroller.
+
 ## Geiger counters
 
 The project is compatible with Generic Pulse-based geiger counters and the GC10next serial based counters.
