@@ -76,6 +76,7 @@ public:
   void preSaveParams();
   void saveParams();
   void delay(unsigned long m);
+  void resetSettings();
   const char* getHostName() { return hostName; };
   const char* getChipID() { return chipId; };
   const char* getThingName() { return thingName; };

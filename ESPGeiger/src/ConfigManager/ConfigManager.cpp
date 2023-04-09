@@ -206,6 +206,15 @@ void ConfigManager::handleRestart()
   ESP.restart();
 }
 
+void ConfigManager::resetSettings()
+{
+  Log::console(PSTR("Config: Erasing ... "));
+  LittleFS.begin();
+  LittleFS.remove("/geigerconfig.json");
+  LittleFS.end();
+  WiFiManager::resetSettings();
+}
+
 void ConfigManager::handleResetParams()
 {
   Log::console(PSTR("Config: Erasing ... "));

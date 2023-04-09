@@ -1,5 +1,5 @@
 /***********************************************************************
-  Geiger.ino - Geiger Counter Firmware
+  Geiger.cpp - Geiger Counter Firmware
 
   Copyright (C) 2023 @steadramon
 
@@ -32,7 +32,7 @@
 #include <LittleFS.h>
 #include "ArduinoJson.h"
 #include <string.h>
-#include "AsyncHTTPRequest_Generic.h"           //https://github.com/khoih-prog/AsyncHTTPRequest_Generic
+#include "AsyncHTTPRequest_Generic.h"
 
 // Global status and cou
 Status status;
@@ -62,6 +62,7 @@ void handleSerial()
     // process serial command
     switch(serialCmd) {
       case 'e':
+        cManager.resetSettings();
         ESP.restart();
         break;
       case 'b':

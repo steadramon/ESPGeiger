@@ -27,7 +27,7 @@
 #endif
 
 #ifndef RELEASE_VERSION
-#define RELEASE_VERSION 23040901 // version year month day release
+#define RELEASE_VERSION 23040902 // version year month day release
 #endif
 
 struct Status {
