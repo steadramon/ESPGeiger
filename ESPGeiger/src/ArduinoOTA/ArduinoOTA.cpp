@@ -55,4 +55,3 @@ void arduino_ota_setup (const char* hostname = "ESPGeiger") {
 
 	ArduinoOTA.begin ();
 }
-

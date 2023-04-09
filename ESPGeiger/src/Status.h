@@ -26,16 +26,19 @@
 #define GIT_VERSION ""
 #endif
 
+#ifndef RELEASE_VERSION
+#define RELEASE_VERSION 23040901 // version year month day release
+#endif
+
 struct Status {
   const char thingName[11] = "ESPGeiger";
-  const uint32_t version = 23040801; // version year month day release
+  const int version = RELEASE_VERSION;
   const char* git_version = GIT_VERSION;
   bool mqtt_connected = false;
   Smoothed <float> geigerTicks;
   Smoothed <float> geigerTicks5;
   Smoothed <float> geigerTicks15;
   long start = 0;
-  bool console_waiting = false;
 };
 
 #endif

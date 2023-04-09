@@ -116,5 +116,4 @@ private:
   char hostName[20] = "";
   char userAgent[64] = "";
 };
-
 #endif

@@ -40,4 +40,3 @@ private:
   static char logIdx;
   static LoggingLevels logLevel;
 };
-
