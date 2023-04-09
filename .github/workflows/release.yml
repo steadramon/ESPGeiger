@@ -25,7 +25,7 @@ jobs:
       - name: Prepare Release Assets
         run: |
           sudo apt install rename
-          ./scripts/prepare_deploy.sh
+          bash ./scripts/prepare_deploy.sh
       - name: Get upload url
         id: release-id
         run: |
