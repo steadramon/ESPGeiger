@@ -57,3 +57,4 @@ Thanks for libraries goes to:
 And inspiration:
 - https://github.com/1technophile/OpenMQTTGateway
 - https://github.com/G4lile0/tinyGS/
+- https://github.com/PaulStoffregen/FreqCount
