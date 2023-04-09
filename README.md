@@ -1,7 +1,7 @@
 ![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)
-# ESPGeiger
+# <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger.svg" width="40px"/> ESPGeiger
 
-☢️  ESPGeiger is a project for collecting, calculating and reporting from Geiger counters with a pulse output signal. The firmware is written to be installed onto the common esp8266 and esp32 boards.
+ ESPGeiger is a project for collecting, calculating and reporting from Geiger counters with a pulse output signal. The firmware is written to be installed onto the common esp8266 and esp32 boards.
 
 - 😃  Easy to install and configure - contribute to monitoring!
 - 📈  Built in webserver with graphing
