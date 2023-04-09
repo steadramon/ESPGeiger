@@ -9,7 +9,7 @@
 - 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
 - ✅  Compatible with generic Geiger counters with Pulse output and GC10next (GC10 currently untested)
 - 🎛️  Configurable filtering and noise control
-- 📟  Hardware counter (ESP32 only - PCNT)
+- 📟  Accurate counting via interrupt and non-blocking functions. Hardware counter (ESP32 only - PCNT)
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png"/>
 
@@ -38,6 +38,10 @@ The project is compatible with Generic Pulse-based geiger counters and the GC10n
 *Currently the GC10 integration is untested until I can gain access to a device.*
 
 Other Serial based should in theory be supportable with small changes to the codebase.
+
+## Contributions
+
+Contributions are welcomed, please feel free to raise a Pull Request for this. I am a new Arduino/C coder, so please feel free to suggest improvements to the code here to make it better for everyone!
 
 ## Thanks 🙏
 Thanks for libraries goes to:
