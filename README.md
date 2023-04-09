@@ -1,8 +1,6 @@
 ![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)
 # <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger.svg" width="30px"/> ESPGeiger
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png"/>
-
  ESPGeiger is a project for collecting, calculating and reporting from Geiger counters with a pulse output signal. The firmware is written to be installed onto the common esp8266 and esp32 boards.
 
 - 😃  Easy to install and configure - contribute to monitoring!
@@ -12,6 +10,8 @@
 - ✅  Compatible with generic Geiger counters with Pulse output and GC10next (GC10 currently untested)
 - 🎛️  Configurable filtering and noise control
 - 📟  Hardware counter (ESP32 only - PCNT)
+
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png"/>
 
 ## Outputs
 - MQTT
