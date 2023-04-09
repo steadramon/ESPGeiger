@@ -30,7 +30,7 @@ textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:a
 <div id="g2" class="wdr"></div>
 <table>
 <tr><th>CPM:</th><td><span id="cpm">-</span></td></tr>
-<tr><th>uSv:</th><td><span id="usv">-</span></td></tr>
+<tr><th>μSv:</th><td><span id="usv">-</span></td></tr>
 <tr><th>Uptime:</th><td><span id="uptime">-</span></td></tr>
 </table>
 <div>
