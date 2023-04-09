@@ -8,8 +8,14 @@ jobs:
       fail-fast: false
       matrix:
         environments:
-          - "d1_mini_lite"
-          - "wemos_d1_mini32"
+          - "esp32_main"
+          - "esp32_test"
+          - "esp32_gc10"
+          - "esp32_gc10next"
+          - "esp8266_main"
+          - "esp8266_test"
+          - "esp8266_gc10"
+          - "esp8266_gc10next"
     runs-on: ubuntu-latest
     name: Build with PlatformIO
     steps:
