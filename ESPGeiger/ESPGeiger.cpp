@@ -38,8 +38,6 @@
 Status status;
 Counter gcounter = Counter();
 
-#define INT_PIN    13
-
 ConfigManager& cManager = ConfigManager::getInstance();
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
@@ -47,8 +45,6 @@ MQTT_Client& mqtt = MQTT_Client::getInstance();
 Radmon radmon = Radmon();
 Thingspeak thingspeak = Thingspeak();
 GMC gmc = GMC();
-
-//Ticker geigerTicker;
 
 void handleSerial()
 {
