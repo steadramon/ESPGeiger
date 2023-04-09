@@ -23,11 +23,14 @@ The firmware is written to be installed onto the common esp8266 and esp32 boards
 
 ### MQTT Output
 
+    ESPGeiger-129e0c/tele/lwt Online
     ESPGeiger-129e0c/tele/status {"uptime":"2T01:45:10","board":"ESP32","model":"GC10next","free_mem":191552,"ssid":"Wifi","ip":"192.168.1.123","rssi":-24}
     ESPGeiger-129e0c/stat/CPM 26.00
     ESPGeiger-129e0c/stat/uSv 0.10
     ESPGeiger-129e0c/stat/CPM5 25.00
     ESPGeiger-129e0c/stat/CPM15 25.00
+    ...
+    ESPGeiger-129e0c/tele/lwt Offline
 
 ### Planned:
 - ESPGeiger API
