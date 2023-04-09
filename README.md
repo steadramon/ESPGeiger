@@ -12,6 +12,7 @@ ESPGeiger is a project for collecting, calculating and reporting from Geiger cou
 Planned:
 - ESPGeiger API
 - Async Webserver
+- Display support
 
 ## Thanks 🙏
 Thanks for libraries goes to:
