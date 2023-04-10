@@ -62,11 +62,18 @@ The project is compatible with Generic Pulse-based geiger counters and the GC10n
 - [RHElectronics](https://www.rhelectronics.store/diy-geiger-counter-kit)
 - [GeigerHV](https://www.ebay.co.uk/usr/geigerhv)
 - [GGreg20](https://www.tindie.com/stores/iotdev/)
-- [MightOhm Kit](https://www.tindie.com/stores/mightyohm/)
+- [MightyOhm Kit](https://www.tindie.com/stores/mightyohm/)
 
-*Currently the GC10 integration is untested until I can gain access to a device.*
+*Currently the GC10 serial integration is untested until I can gain access to a device.*
 
 Other Serial based should in theory be supportable with small changes to the codebase.
+
+If you own or can offer a device below for testing and support, please get in touch!
+
+- GC10
+- MightyOhm
+- GMC-320
+- GGreg20
 
 ## Contributions
 
