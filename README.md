@@ -1,7 +1,7 @@
 ![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)
 # <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger.svg" width="30px"/> ESPGeiger
 
-ESPGeiger is a project for collecting, calculating and reporting from Geiger counters with a pulse output signal. Some serial counters are support, for example the GC10 range.
+ESPGeiger is a project for collecting, calculating and reporting from Geiger counters with a pulse output signal. Some serial counters are supported, for example the GC10 range.
 The firmware is written to be installed onto the common esp8266 and esp32 boards.
 
 - 😃  Easy to install and configure - contribute to monitoring!
@@ -39,8 +39,9 @@ Automatically output every minute:
 - ESPGeiger API
 - Async Webserver
 - Display support
+- Homeassistant discovery
 
-# Installation
+## Installation
 
 The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satify the requirements by installing the libraries.
 
@@ -54,7 +55,14 @@ The `environments.ini` file defines some pre-built environments and examples of 
 6.  To upload the project to your microcontroller, click on the `Upload` button in the PlatformIO IDE.
 7.  The PlatformIO IDE will upload the project to your microcontroller.
 
-## Geiger counters
+## Setup and Config
+
+1.  Once installed, connect to the built-in Wifi on the ESP to set up your access point.
+2.  When you connect a window show pop up asking for Wifi Configuration, if not browse to http://192.168.4.1/
+3.  Select the SSID and insert the password for the network you'd like to connect to.
+4.  Once connected to the network you can browse to the ESPGeiger IP address directly or enter http://<name of the device>.local into your browser, for example http://ESPGeiger-83e6a4.local
+
+## Counters
 
 The project is compatible with Generic Pulse-based geiger counters and the GC10next serial based counters.
 
