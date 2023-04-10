@@ -60,7 +60,7 @@ The `environments.ini` file defines some pre-built environments and examples of 
 1.  Once installed, connect to the built-in Wifi on the ESP to set up your access point.
 2.  When you connect a window show pop up asking for Wifi Configuration, if not browse to http://192.168.4.1/
 3.  Select the SSID and insert the password for the network you'd like to connect to.
-4.  Once connected to the network you can browse to the ESPGeiger IP address directly or enter http://<name of the device>.local into your browser, for example http://ESPGeiger-83e6a4.local
+4.  Once connected to the network you can browse to the ESPGeiger IP address directly or enter `http://<name of the device>.local` into your browser, for example http://ESPGeiger-83e6a4.local
 
 ## Counters
 
