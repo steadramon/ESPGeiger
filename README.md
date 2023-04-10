@@ -66,6 +66,8 @@ The project is compatible with Generic Pulse-based geiger counters and the GC10n
 - [MightyOhm Kit](https://www.tindie.com/stores/mightyohm/)
 - [DiY-GDC](https://www.ebay.com/usr/impexeris)
 
+### Serial Compatibility 
+
 *Currently the GC10 serial integration is untested until I can gain access to a device.*
 
 Other Serial based should in theory be supportable with small changes to the codebase.
