@@ -13,11 +13,12 @@ The firmware is written to be installed onto the common esp8266 and esp32 boards
 - 📟  Accurate counting via interrupt and non-blocking functions. Hardware counter (ESP32 only - PCNT)
 - 🌐  Upload and share statistics to services online and locally via MQTT
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png"/>
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
 
 ## Outputs
 - MQTT
-- ThingSpeak
+- [ThingSpeak](https://thingspeak.com/channels/2087322)
 - Radmon.org
 - gmcmap.com
 
