@@ -108,10 +108,12 @@ static void ICACHE_RAM_ATTR count() {
 
 static void ICACHE_RAM_ATTR handleSecondTick() {
 #ifdef USE_PCNT
+  #ifndef GEIGERTESTMODE
   int16_t pulseCount;
   pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
   pcnt_counter_clear(PCNT_UNIT);
   eventCounter = pulseCount;
+  #endif
 #endif
   status.geigerTicks.add(eventCounter);
   eventCounter = 0;
