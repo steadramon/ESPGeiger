@@ -10,7 +10,7 @@ The firmware is written to be installed onto the common esp8266 and esp32 boards
 - 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
 - ✅  Compatible with generic Geiger counters with Pulse output and some serial based - GC10next (GC10 currently untested)
 - 🎛️  Configurable filtering and noise control
-- 📟  Accurate counting via interrupt and non-blocking functions (tested up to 100000CPM). Hardware counter (ESP32 only - PCNT)
+- 📟  Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), optional hardware counter (ESP32 only - PCNT)
 - 🌐  Upload and share statistics to services online and locally via MQTT
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
