@@ -77,7 +77,7 @@ void Radmon::postMeasurement() {
     return;
   }
 
-#if GEIGERTESTMODE
+#ifdef GEIGERTESTMODE
   Log::console(PSTR("Radmon: Testmode"));
   return;
 #endif

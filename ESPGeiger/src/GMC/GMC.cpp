@@ -80,7 +80,7 @@ void GMC::postMeasurement() {
     return;
   }
 
-#if GEIGERTESTMODE
+#ifdef GEIGERTESTMODE
   Log::console(PSTR("GMC: Testmode"));
   return;
 #endif

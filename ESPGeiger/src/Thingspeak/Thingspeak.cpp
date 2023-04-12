@@ -56,7 +56,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
 void Thingspeak::postMeasurement() {
 
   ConfigManager &configManager = ConfigManager::getInstance();
-  const char* _send = configManager.getParamValueFromID("radmonSend");
+  const char* _send = configManager.getParamValueFromID("tsSend");
 
   if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
     return;
@@ -68,7 +68,7 @@ void Thingspeak::postMeasurement() {
     return;
   }
 
-#if GEIGERTESTMODE
+#ifdef GEIGERTESTMODE
   Log::console(PSTR("Thingspeak: Testmode"));
   return;
 #endif

@@ -23,6 +23,15 @@
 #include "../Status.h"
 #include <Ticker.h>
 
+#define GEIGER_TYPE_PULSE 1
+#define GEIGER_TYPE_SERIAL 2
+#define GEIGER_TYPE_TEST 3
+#define GEIGER_TYPE_TESTPULSE 4
+
+#ifndef GEIGER_TYPE
+#define GEIGER_TYPE GEIGER_TYPE_PULSE
+#endif
+
 #define GEIGER_SERIAL_CPM 1
 #define GEIGER_SERIAL_CPS 2
 
@@ -36,7 +45,14 @@
 
 static int _geiger_rxpin = GEIGER_RXPIN;
 
-#ifdef SERIALGEIGER
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
+  #ifndef GEIGER_MODEL
+    #define GEIGER_MODEL "genpulse"
+  #endif
+  #ifndef GEIGER_SERIAL_TYPE
+    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
+  #endif
+#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
   #ifndef GEIGER_BAUDRATE
     #define GEIGER_BAUDRATE 115200
   #endif
@@ -55,13 +71,33 @@ static int _geiger_txpin = GEIGER_TXPIN;
 #include <SoftwareSerial.h>
 static int _geiger_baud = GEIGER_BAUDRATE;
 static EspSoftwareSerial::UART geigerPort;
-#else
-#ifndef GEIGER_SERIAL_TYPE
-#define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
+#elif GEIGER_TYPE == GEIGER_TYPE_TEST
+  #ifndef GEIGER_MODEL
+    #define GEIGER_MODEL "test"
+  #endif
+  #ifndef GEIGER_SERIAL_TYPE
+    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
+  #endif
+  #define IGNORE_PCNT
+  #define GEIGERTESTMODE
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+  #ifndef GEIGER_MODEL
+    #define GEIGER_MODEL "testpulse"
+  #endif
+  #ifndef GEIGER_SERIAL_TYPE
+    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
+  #endif
+  #ifndef GEIGER_TXPIN
+    #define GEIGER_TXPIN 12
+  #endif
+  static int _geiger_txpin = GEIGER_TXPIN;
+  #define GEIGERTESTMODE
 #endif
+
 #ifndef GEIGER_MODEL
   #define GEIGER_MODEL "genpulse"
 #endif
+
 #ifdef ESP32
   #ifndef IGNORE_PCNT
     #define USE_PCNT
@@ -79,24 +115,73 @@ extern "C" {
 #define PCNT_UNIT PCNT_UNIT_0
 #define PCNT_CHANNEL PCNT_CHANNEL_0
 #endif
-#endif
 
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
 static int GEIGER_CPM_COUNT = 6;
-#elif GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPS
+#else
 static int GEIGER_CPM_COUNT = 60;
 #endif
 
 static int GEIGER_CPM5_COUNT = 60;
 static int GEIGER_CPM15_COUNT = 60;
 
-static float eventCounter;  // the event counter
+static volatile float eventCounter;
 static unsigned long _last = 0;
 static unsigned long _debounce = microsecondsToClockCycles(GEIGER_DEBOUNCE);
 
 extern Status status;
 
 static bool _waiting = false;
+
+#if GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+static unsigned long _out_last = 0;
+static unsigned long _out_between = _debounce/2;
+static int _pulse_state = 0;
+static void IRAM_ATTR sendpulse() {
+  unsigned long cycles = ESP.getCycleCount();
+  if (cycles - _out_last > _out_between) {
+    digitalWrite(_geiger_txpin, _pulse_state);
+    _pulse_state = !_pulse_state;
+    _out_last = cycles;
+  }
+}
+#endif
+
+#ifdef ESP32
+static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
+static void IRAM_ATTR count() {
+  unsigned long cycles = ESP.getCycleCount();
+  if (cycles - _last > _debounce) {
+    portENTER_CRITICAL_ISR(&timerMux);
+    eventCounter++;
+    portEXIT_CRITICAL_ISR(&timerMux);
+    _last = cycles;
+  }
+};
+
+static void IRAM_ATTR handleSecondTick() {
+  portENTER_CRITICAL_ISR(&timerMux);
+#ifdef USE_PCNT
+  int16_t pulseCount;
+  pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
+  pcnt_counter_clear(PCNT_UNIT);
+  eventCounter = pulseCount;
+#endif
+  status.geigerTicks.add(eventCounter);
+  eventCounter = 0;
+  portEXIT_CRITICAL_ISR(&timerMux);
+  unsigned long int secidx = (millis() / 1000) % 60;
+  if (secidx % 5 == 0) {
+    float avgcpm = status.geigerTicks.get();
+    status.geigerTicks5.add(avgcpm);
+  }
+  if (secidx % 15 == 0) {
+    float avgcpm5 = status.geigerTicks5.get();
+    status.geigerTicks15.add(avgcpm5);
+  }
+};
+#else
 
 static void ICACHE_RAM_ATTR count() {
   unsigned long cycles = ESP.getCycleCount();
@@ -107,14 +192,6 @@ static void ICACHE_RAM_ATTR count() {
 };
 
 static void ICACHE_RAM_ATTR handleSecondTick() {
-#ifdef USE_PCNT
-  #ifndef GEIGERTESTMODE
-  int16_t pulseCount;
-  pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
-  pcnt_counter_clear(PCNT_UNIT);
-  eventCounter = pulseCount;
-  #endif
-#endif
   status.geigerTicks.add(eventCounter);
   eventCounter = 0;
   unsigned long int secidx = (millis() / 1000) % 60;
@@ -126,7 +203,10 @@ static void ICACHE_RAM_ATTR handleSecondTick() {
     float avgcpm5 = status.geigerTicks5.get();
     status.geigerTicks15.add(avgcpm5);
   }
-}
+};
+
+#endif
+
 
 static Ticker geigerTicker;
 
@@ -141,6 +221,7 @@ class Counter {
       void set_ratio(float ratio);
       void begin();
     private:
+      void setup_pulse();
       float _ratio = 100.0;
 };
 

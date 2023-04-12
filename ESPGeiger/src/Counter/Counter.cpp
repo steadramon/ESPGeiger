@@ -45,20 +45,8 @@ float Counter::get_usv() {
   return avgcpm/_ratio;
 }
 
-void Counter::begin() {
-  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), GEIGER_CPM_COUNT, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
-  status.geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
-  status.geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
-  status.geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
-
-#ifdef SERIALGEIGER
-  Log::console(PSTR("Counter: Setting up serial geiger ..."));
-  Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, _geiger_baud);
-  geigerPort.begin(_geiger_baud, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
-#else
-  #ifndef GEIGERTESTMODE
-    #ifdef USE_PCNT
-  Log::console(PSTR("Counter: Setting up pulse geiger ..."));
+void Counter::setup_pulse() {
+#ifdef USE_PCNT && ESP32
   Log::console(PSTR("Counter: PCNT RXPIN: %d"), _geiger_rxpin);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _geiger_rxpin,
@@ -72,38 +60,68 @@ void Counter::begin() {
   };
   pcnt_unit_config(&pcntConfig);
   pcnt_counter_pause(PCNT_UNIT);
-      #ifdef PCNT_FILTER
+  #ifdef PCNT_FILTER
   pcnt_set_filter_value(PCNT_UNIT, PCNT_FILTER);
   pcnt_filter_enable(PCNT_UNIT);
-      #endif
+  #endif
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
-    #else
-  Log::console(PSTR("Counter: Setting up pulse geiger ..."));
+#else
   Log::console(PSTR("Counter: Interrupt RXPIN: %d"), _geiger_rxpin);
   pinMode(_geiger_rxpin, INPUT);
   attachInterrupt(digitalPinToInterrupt(_geiger_rxpin), count, FALLING);
-    #endif
-  #else
+#endif
+}
+
+void Counter::begin() {
+  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), GEIGER_CPM_COUNT, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
+  status.geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
+  status.geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
+  status.geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
+
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
+  Log::console(PSTR("Counter: Setting up pulse geiger ..."));
+  setup_pulse();
+#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
+  Log::console(PSTR("Counter: Setting up serial geiger ..."));
+  Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, _geiger_baud);
+  geigerPort.begin(_geiger_baud, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
+#elif GEIGER_TYPE == GEIGER_TYPE_TEST
   Log::console(PSTR("Counter: Setting up test geiger ..."));
-    #ifdef ESP8266
+  #ifdef ESP8266
   timer1_attachInterrupt(count);
   timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
   timer1_write(600);
-    #else
+  #else
   hw_timer_t * timer = NULL;
   timer = timerBegin(0, 80, true);
   timerAttachInterrupt(timer, &count, true);
   timerAlarmWrite(timer, 600, true);
   timerAlarmEnable(timer);
-    #endif
+  #endif
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+  Log::console(PSTR("Counter: Setting up test pulse geiger ..."));
+  setup_pulse();
+  Log::console(PSTR("Counter: Test TXPIN: %d"), _geiger_txpin);
+  pinMode(_geiger_txpin, OUTPUT);
+  #ifdef ESP8266
+  timer1_attachInterrupt(sendpulse);
+  timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
+  timer1_write(300);
+  #else
+  hw_timer_t * timer = NULL;
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &sendpulse, true);
+  timerAlarmWrite(timer, 300, true);
+  timerAlarmEnable(timer);
   #endif
 #endif
+
   geigerTicker.attach(1, handleSecondTick);
 }
 
 void Counter::loop() {
-#ifdef SERIALGEIGER
+#if GEIGER_TYPE == GEIGER_TYPE_SERIAL
   if (geigerPort.available() > 0) {
     int n = geigerPort.readStringUntil('\r').toInt();
     Log::debug(PSTR("Counter loop - %d"), n);
