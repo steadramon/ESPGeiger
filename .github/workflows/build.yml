@@ -11,10 +11,12 @@ jobs:
           - "esp32_pulse"
           - "esp32_pulse_no_pcnt"
           - "esp32_test"
+          - "esp32_testpulse"
           - "esp32_gc10"
           - "esp32_gc10next"
           - "esp8266_pulse"
           - "esp8266_test"
+          - "esp8266_pulsetest"
           - "esp8266_gc10"
           - "esp8266_gc10next"
     runs-on: ubuntu-latest
