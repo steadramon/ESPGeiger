@@ -37,7 +37,7 @@ Automatically output every minute:
 
 ### Planned:
 - ESPGeiger API
-- Async Webserver
+- Async Webserver/MQTT
 - Display support
 - Homeassistant discovery
 
