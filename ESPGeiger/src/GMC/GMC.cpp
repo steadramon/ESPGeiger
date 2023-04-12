@@ -75,15 +75,15 @@ void GMC::postMeasurement() {
     return;
   }
 
-  if ((_api_id == NULL) || (_api_gc_id == NULL)) {
-    Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
-    return;
-  }
-
 #ifdef GEIGERTESTMODE
   Log::console(PSTR("GMC: Testmode"));
   return;
 #endif
+
+  if ((_api_id == NULL) || (_api_gc_id == NULL)) {
+    Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
+    return;
+  }
 
   Log::console(PSTR("GMC: Uploading latest data ..."));
 

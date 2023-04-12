@@ -207,7 +207,6 @@ static void ICACHE_RAM_ATTR handleSecondTick() {
 
 #endif
 
-
 static Ticker geigerTicker;
 
 class Counter {
