@@ -16,7 +16,7 @@ jobs:
           - "esp32_gc10next"
           - "esp8266_pulse"
           - "esp8266_test"
-          - "esp8266_pulsetest"
+          - "esp8266_testpulse"
           - "esp8266_gc10"
           - "esp8266_gc10next"
     runs-on: ubuntu-latest
