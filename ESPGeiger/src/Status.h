@@ -27,12 +27,12 @@
 #endif
 
 #ifndef RELEASE_VERSION
-#define RELEASE_VERSION 23040902 // version year month day release
+#define RELEASE_VERSION "devel"
 #endif
 
 struct Status {
   const char thingName[11] = "ESPGeiger";
-  const int version = RELEASE_VERSION;
+  const char* version = RELEASE_VERSION;
   const char* git_version = GIT_VERSION;
   bool mqtt_connected = false;
   Smoothed <float> geigerTicks;

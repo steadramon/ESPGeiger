@@ -50,8 +50,6 @@ constexpr auto RESET_URL = "/reset";
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 
-const uint32_t thingVersion = status.version;
-
 #define MQTT_DEFAULT_PORT "8883"
 //char mqttServer[MQTT_SERVER_LENGTH] = "";
 //char mqttPort[MQTT_PORT_LENGTH] = MQTT_DEFAULT_PORT;
@@ -66,7 +64,6 @@ public:
     static ConfigManager instance;
     return instance;
   }
-  //WiFiManager wifiManager;
   void bindServerCallback();
   void autoConnect();
   void startWebPortal();

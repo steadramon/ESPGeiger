@@ -90,7 +90,7 @@ void setup()
   }
 
   const char* hostName = cManager.getHostName();
-  Log::console(PSTR("Starting up ... %s Version - %d/%s (%s)"), hostName, status.version, status.git_version, cManager.GetChipModel());
+  Log::console(PSTR("Starting up ... %s Version - %s/%s (%s)"), hostName, status.version, status.git_version, cManager.GetChipModel());
   delay(100);
 
   cManager.autoConnect();
