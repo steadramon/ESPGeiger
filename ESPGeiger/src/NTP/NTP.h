@@ -1,5 +1,5 @@
 /*
-  Counter.h - Geiger Counter class
+  NTP.h - NTP class
   
   Copyright (C) 2023 @steadramon
 
@@ -19,7 +19,9 @@
 
 #include <ESPNtpClient.h>
 
-const char* ntpServer = "pool.ntp.org";
+#ifndef NTP_SERVER
+#  define NTP_SERVER "pool.ntp.org"
+#endif
 
 void setupNTP()
 {
@@ -27,5 +29,5 @@ void setupNTP()
   NTP.setMinSyncAccuracy (2000); // Sync accuracy target is 2 ms
   NTP.settimeSyncThreshold (1000); // Sync only if calculated offset absolute value is greater than 1 ms
   NTP.setMaxNumSyncRetry (2); // 2 resync trials if accuracy not reached
-  NTP.begin (ntpServer); // Start NTP client
+  NTP.begin(NTP_SERVER); // Start NTP client
 }
