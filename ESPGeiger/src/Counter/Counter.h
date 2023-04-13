@@ -182,8 +182,11 @@ static void IRAM_ATTR handleSecondTick() {
   }
 };
 #else
+static bool _handlesecond = false;
 
 static void ICACHE_RAM_ATTR count() {
+  if (_handlesecond)
+    return;
   unsigned long cycles = ESP.getCycleCount();
   if (cycles - _last > _debounce) {
     eventCounter += 1;
@@ -192,8 +195,10 @@ static void ICACHE_RAM_ATTR count() {
 };
 
 static void ICACHE_RAM_ATTR handleSecondTick() {
+  _handlesecond = true;
   status.geigerTicks.add(eventCounter);
   eventCounter = 0;
+  _handlesecond = false;
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx % 5 == 0) {
     float avgcpm = status.geigerTicks.get();
