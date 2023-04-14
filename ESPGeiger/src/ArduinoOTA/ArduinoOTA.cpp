@@ -19,6 +19,7 @@
 
 #include "ArduinoOTA.h"
 #include "../Logger/Logger.h"
+#include "../Status.h"
 
 void arduino_ota_setup (const char* hostname = "ESPGeiger") {
 
@@ -29,21 +30,25 @@ void arduino_ota_setup (const char* hostname = "ESPGeiger") {
 		else // U_SPIFFS
 			type = "filesystem";
 		  // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+		digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
 		Log::console(PSTR("Start updating %s"), type.c_str());
 	});
 	ArduinoOTA.onEnd ([]() {
 		Log::console(PSTR("End"));
-			});
+		digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
+	});
 	ArduinoOTA.onProgress ([](unsigned int progress, unsigned int total) {
 		static uint8_t lastValue = 255;
 		uint8_t nextValue = progress / (total / 100);
 		if (lastValue != nextValue) {
 			Log::debug(PSTR("Progress: %u%%\r"), nextValue);
 			lastValue = nextValue;
+			digitalWrite(LED_SEND_RECEIVE, (nextValue % 2));
 		}
 	});
 	ArduinoOTA.onError ([](ota_error_t error) {
 		Log::debug(PSTR("Error[%u]: %u"), error);
+		digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
 		if (error == OTA_AUTH_ERROR) Log::debug(PSTR("Auth Failed"));
 		else if (error == OTA_BEGIN_ERROR) Log::debug(PSTR("Begin Failed"));
 		else if (error == OTA_CONNECT_ERROR) Log::debug(PSTR("Connect Failed"));
@@ -51,7 +56,6 @@ void arduino_ota_setup (const char* hostname = "ESPGeiger") {
 		else if (error == OTA_END_ERROR) Log::debug(PSTR("End Failed"));
 	});
 
-	ArduinoOTA.setHostname (hostname);
-
+	ArduinoOTA.setHostname(hostname);
 	ArduinoOTA.begin ();
 }

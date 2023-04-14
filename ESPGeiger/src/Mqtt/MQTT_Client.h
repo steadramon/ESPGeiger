@@ -1,5 +1,5 @@
 /*
-  MQTTClient.h - MQTT connection class
+  MQTT_Client.h - MQTT connection class
   
   Copyright (C) 2023 @steadramon
 

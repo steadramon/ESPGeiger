@@ -46,6 +46,8 @@ Radmon radmon = Radmon();
 Thingspeak thingspeak = Thingspeak();
 GMC gmc = GMC();
 
+unsigned long timer_led_measures = 0;
+
 void handleSerial()
 {
   if(Serial.available())
@@ -79,6 +81,8 @@ void setup()
 {
   Serial.begin(115200);
   delay(100);
+  pinMode(LED_SEND_RECEIVE, OUTPUT);
+  digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
 
 #ifdef ESP8266
   if(!LittleFS.begin()){
@@ -93,17 +97,33 @@ void setup()
   Log::console(PSTR("Starting up ... %s Version - %s/%s (%s)"), hostName, status.version, status.git_version, cManager.GetChipModel());
   delay(100);
 
+  digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
   cManager.autoConnect();
+  digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
   delay(100);
   cManager.startWebPortal();
   arduino_ota_setup(hostName);
   setupNTP();
   mqtt.begin();
   gcounter.begin();
+
+  for (int i = 0; i < 6; i++)
+  {
+    digitalWrite(LED_SEND_RECEIVE, (i%2)?LED_SEND_RECEIVE_ON:!LED_SEND_RECEIVE_ON);
+    delay(200);
+  }
 }
 
 void loop()
 {
+  unsigned long now = millis();
+
+  // Switch off of the LED after TimeLedON
+  if (now > (timer_led_measures + (TimeLedON * 1000))) {
+    timer_led_measures = millis();
+    digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
+  }
+
   handleSerial();
   gcounter.loop();
   cManager.process();

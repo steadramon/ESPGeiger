@@ -30,6 +30,19 @@
 #define RELEASE_VERSION "devel"
 #endif
 
+#ifndef LED_SEND_RECEIVE
+#define LED_SEND_RECEIVE 2
+#endif
+#ifndef LED_SEND_RECEIVE_ON
+#ifdef ESP8266
+#define LED_SEND_RECEIVE_ON LOW
+#else
+#define LED_SEND_RECEIVE_ON HIGH
+#endif
+#endif
+
+#define TimeLedON                    1
+
 struct Status {
   const char thingName[11] = "ESPGeiger";
   const char* version = RELEASE_VERSION;
@@ -39,6 +52,7 @@ struct Status {
   Smoothed <float> geigerTicks5;
   Smoothed <float> geigerTicks15;
   long start = 0;
+  bool ntp_synced = false;
 };
 
 #endif

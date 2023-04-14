@@ -91,6 +91,7 @@ void Thingspeak::postMeasurement() {
     requestOpenResult = request.open("GET", url);
     if (requestOpenResult)
     {
+      digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
       request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(5);
