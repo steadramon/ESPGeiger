@@ -169,10 +169,8 @@ void ConfigManager::handleJsonReturn()
 void ConfigManager::handleStatusPage()
 {
   String page = FPSTR(HTTP_HEAD_START);
-  page += FPSTR(HTTP_SCRIPT);
   page += FPSTR(HTTP_STYLE);
   page += FPSTR(faviconHead);
-  page += FPSTR(HTTP_SCRIPT);
   page += FPSTR(HTTP_HEAD_END);
   page += FPSTR(STATUS_PAGE_BODY);
   String title = FPSTR(thingName);
@@ -191,17 +189,16 @@ void ConfigManager::handleStatusPage()
 void ConfigManager::handleRestart()
 {
   String page = FPSTR(HTTP_HEAD_START);
-  page += FPSTR(HTTP_SCRIPT);
   page += FPSTR(HTTP_STYLE);
   page += FPSTR(faviconHead);
-  page += FPSTR(HTTP_SCRIPT);
   page += FPSTR(HTTP_HEAD_MREFRESH);
   page += FPSTR(HTTP_HEAD_END);
   page += FPSTR(thingName);
   page += F(" is restarting...<br /><br/>");
-  page.replace(FPSTR(T_v), "Restarting...");
+  page.replace(FPSTR(T_v), "Restarting ...");
   page += FPSTR(HTTP_END);
   ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
+  Log::console(PSTR("Config: Restarting ... "));
   delay(1000);
   ESP.restart();
 }
@@ -264,9 +261,6 @@ void ConfigManager::loadParams()
       {
         WiFiManagerParameter** customParams = ConfigManager::getParameters();
         // Should not be too verbose otherwise it triggers the watchdog reset
-        //logging::getLogStream().print("wifi: json to load: ");
-        //serializeJson(jsonBuffer, logging::getLogStream());
-        //logging::getLogStream().println();
         JsonObject root = jsonBuffer.as<JsonObject>();
         for (JsonObject::iterator it = root.begin(); it != root.end(); ++it)
         {
@@ -274,9 +268,7 @@ void ConfigManager::loadParams()
           if (idx != -1)
           {
             // Should not be too verbose otherwise it triggers the watchdog reset
-            //logging::getLogStream().printf("wifi: reading key \"%s\" and value \"%s\"\n", it->key().c_str(), it->value().as<char*>());
             // Log::console(PSTR("wifi: key \"%s\" with value \"%s\""), it->key().c_str(), it->value().as<char*>());
-
             customParams[idx]->setValue(it->value().as<char*>(), customParams[idx]->getValueLength());
           }
           else
@@ -301,7 +293,6 @@ void ConfigManager::loadParams()
 
 }
 
-
 void ConfigManager::handleRefreshConsole()
 {
   uint32_t counter = 0;
@@ -309,7 +300,6 @@ void ConfigManager::handleRefreshConsole()
   char stmp[8];
   String s = server->arg("c1");
   strcpy(stmp, s.c_str());
-//  strlcpy(stmp, s.c_str(), sizeof(stmp));
   if (strlen(stmp))
   {
     counter = atoi(stmp);
@@ -398,7 +388,6 @@ void ConfigManager::saveParams()
   MQTT_Client& mqtt = MQTT_Client::getInstance();
   mqtt.disconnect();
 }
-
 
 const char* ConfigManager::getParamValueFromID(const char* str)
 {

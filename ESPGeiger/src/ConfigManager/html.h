@@ -17,17 +17,11 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-const char IOTWEBCONF_DASHBOARD_STYLE_INNER[] PROGMEM = "table{margin:20px auto;}h3{text-align:center;}.card{height:12em;margin:10px;text-align:left;font-family:Arial;border:3px groove;border-radius:0.3rem;display:inline-block;padding:10px;min-width:260px;}td{padding:0 10px;}textarea{resize:vertical;width:100%;margin:0;height:318px;padding:5px;overflow:auto;}#c1{width:98%;padding:5px;}#t1{width:98%}.console{display:inline-block;text-align:center;margin:10px 0;width:98%;max-width:1080px;}.G{color:green;}.R{color:red}";
-
 const char HTTP_HEAD_MREFRESH[] PROGMEM = "<meta http-equiv='refresh' content='10; url=/'>";
 
 static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>
-<style>
-textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;}
-.wrap{min-width: 350px;max-width: 900px;width: 50vw; }
-</style>
-<canvas id="g1" style="height:200px; width: 100%; min-width: 350px; border:2px solid #000;"></canvas>
-<div id="g2" class="wdr"></div>
+<style>textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;} .wrap{min-width:350px;max-width:900px;width:50vw}</style>
+<canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
 <table><tr><th>CPM:</th><td><span id="cpm">-</span></td></tr><tr><th>μSv:</th><td><span id="usv">-</span></td></tr><tr><th>Uptime:</th><td><span id="uptime">-</span></td></tr></table>
 <div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
 <script src="/js"></script>
@@ -37,42 +31,8 @@ static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' h
 
 static const char statusJS[] PROGMEM = R"JS("use strict";
 !function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('uptime').innerHTML=o.uptime;byID('cpm').innerHTML=o.cpm;byID('usv').innerHTML=(o.cpm/o.ratio).toFixed(4);e.update([o.cpm,o.cpm5,o.cpm15]),setTimeout(t,3e3)}},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
-
-var x=null,lt,to,tp,pc='';var sn=0,id=0;
-
-function f(){
-  var c,o='',t;
-  clearTimeout(lt);
-  t = document.getElementById('t1');
-
-    x=new XMLHttpRequest();
-    x.onload = function() {
-      if(x.status==200){
-        var z,d;var a=x.responseText;
-        id=a.substr(0,a.indexOf('\n'));
-        z=a.substr(a.indexOf('\n')+1);
-        if(z.length>0){
-          t.value+=z;
-        }
-        if (t.scrollTop >= sn) {
-          t.scrollTop=99999;
-          sn=t.scrollTop;
-        }
-      }
-      lt=setTimeout(f,3210);
-    };
-    x.onerror = function() {
-      lt=setTimeout(f,6000);
-    };
-
-    x.open('GET','/cs?c1='+id,true);
-    x.send();
-  
-  return false;
-}
-
-window.addEventListener('load', f);
-
+var lt,to,tp,x=null,pc="",sn=0,id=0;
+function f(){var t;return clearTimeout(lt),t=byID("t1"),(x=new XMLHttpRequest).onload=function(){if(200==x.status){var e,n=x.responseText;id=n.substr(0,n.indexOf("\n")),(e=n.substr(n.indexOf("\n")+1)).length>0&&(t.value+=e),t.scrollTop>=sn&&(t.scrollTop=99999,sn=t.scrollTop)}lt=setTimeout(f,3210)},x.onerror=function(){lt=setTimeout(f,6e3)},x.open("GET","/cs?c1="+id,!0),x.send(),!1}window.addEventListener("load",f);
 )JS";
 
 // picograph.js - https://github.com/RainingComputers/picograph.js
