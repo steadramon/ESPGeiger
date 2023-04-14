@@ -112,6 +112,6 @@ private:
   char thingName[11] = "";
   char chipId[7] = "";
   char hostName[20] = "";
-  char userAgent[64] = "";
+  char userAgent[80] = "";
 };
 #endif

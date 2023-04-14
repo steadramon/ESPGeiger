@@ -95,7 +95,7 @@ ConfigManager::ConfigManager() : WiFiManager(){
   strcat(chipId, String(tchipId, HEX).c_str());
 
   sprintf_P (hostName, PSTR("%S-%S"), status.thingName, chipId);
-  sprintf_P (userAgent, PSTR("%S/%S (%S; %S; %S;)"), status.thingName, status.version, status.git_version, GetChipModel(), chipId);
+  sprintf_P (userAgent, PSTR("%S/%S (%S; %S; %S; %S)"), status.thingName, status.version, status.git_version, status.geiger_model, GetChipModel(), chipId);
 
   setHostname(hostName);
   setTitle(thingName);

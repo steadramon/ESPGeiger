@@ -231,6 +231,7 @@ class Counter {
       float get_usv();
       void set_ratio(float ratio);
       void begin();
+      const char* geiger_model() { return GEIGER_MODEL; };
     private:
       void setup_pulse();
       float _ratio = 100.0;
