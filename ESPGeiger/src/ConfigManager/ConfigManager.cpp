@@ -106,6 +106,7 @@ ConfigManager::ConfigManager() : WiFiManager(){
 void ConfigManager::autoConnect()
 {
   WiFiManager::autoConnect(hostName);
+  Log::console(PSTR("WiFi: IP: %s"), WiFi.localIP().toString().c_str());
 }
 
 void ConfigManager::startWebPortal()
