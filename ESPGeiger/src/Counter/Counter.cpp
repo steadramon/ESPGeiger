@@ -22,6 +22,7 @@
 #include "../Logger/Logger.h"
 
 Counter::Counter() {
+  status.geiger_model = GEIGER_MODEL;
 }
 
 int Counter::get_cpm() {

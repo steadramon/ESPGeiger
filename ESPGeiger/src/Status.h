@@ -53,7 +53,7 @@ struct Status {
   Smoothed <float> geigerTicks15;
   long start = 0;
   bool ntp_synced = false;
-  const char* geiger_model = GEIGER_MODEL;
+  const char* geiger_model = "";
 };
 
 #endif
