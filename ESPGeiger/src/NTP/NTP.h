@@ -16,18 +16,18 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+#ifndef _NTP_h
+#define _NTP_h
+#include <Arduino.h>
 #include <ESPNtpClient.h>
+#include "../Status.h"
 
 #ifndef NTP_SERVER
 #  define NTP_SERVER "pool.ntp.org"
 #endif
 
-void setupNTP()
-{
-  NTP.setInterval (120); // Sync each 2 minutes
-  NTP.setMinSyncAccuracy (2000); // Sync accuracy target is 2 ms
-  NTP.settimeSyncThreshold (1000); // Sync only if calculated offset absolute value is greater than 1 ms
-  NTP.setMaxNumSyncRetry (2); // 2 resync trials if accuracy not reached
-  NTP.begin(NTP_SERVER); // Start NTP client
-}
+extern Status status;
+
+void setupNTP();
+
+#endif
