@@ -117,14 +117,19 @@ extern "C" {
 #define PCNT_CHANNEL PCNT_CHANNEL_0
 #endif
 
+#ifndef GEIGER_CPM_COUNT
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
-static int GEIGER_CPM_COUNT = 6;
+#define GEIGER_CPM_COUNT 10
 #else
-static int GEIGER_CPM_COUNT = 60;
+#define GEIGER_CPM_COUNT 60
 #endif
-
-static int GEIGER_CPM5_COUNT = 60;
-static int GEIGER_CPM15_COUNT = 60;
+#endif
+#ifndef GEIGER_CPM5_COUNT
+#define GEIGER_CPM5_COUNT 60
+#endif
+#ifndef GEIGER_CPM15_COUNT
+#define GEIGER_CPM15_COUNT 60
+#endif
 
 static volatile float eventCounter;
 static unsigned long _last = 0;
