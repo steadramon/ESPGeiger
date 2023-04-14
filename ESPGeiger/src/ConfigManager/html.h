@@ -28,15 +28,8 @@ textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:a
 </style>
 <canvas id="g1" style="height:200px; width: 100%; min-width: 350px; border:2px solid #000;"></canvas>
 <div id="g2" class="wdr"></div>
-<table>
-<tr><th>CPM:</th><td><span id="cpm">-</span></td></tr>
-<tr><th>μSv:</th><td><span id="usv">-</span></td></tr>
-<tr><th>Uptime:</th><td><span id="uptime">-</span></td></tr>
-</table>
-<div>
-<h3>Console</h3>
-<textarea readonly='' id='t1' wrap='off'></textarea>
-</div>
+<table><tr><th>CPM:</th><td><span id="cpm">-</span></td></tr><tr><th>μSv:</th><td><span id="usv">-</span></td></tr><tr><th>Uptime:</th><td><span id="uptime">-</span></td></tr></table>
+<div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
 <script src="/js"></script>
 )HTML";
 
