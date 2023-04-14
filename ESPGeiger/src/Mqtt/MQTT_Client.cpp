@@ -113,7 +113,7 @@ void MQTT_Client::reconnect()
   digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
 
   Log::console(PSTR("MQTT: Attempting connection ... %s:%s"), configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
-  if (connect(clientId, configManager.getParamValueFromID("mqttUser"), configManager.getParamValueFromID("mqttPassword"), buildTopic(teleTopic, topicLWT).c_str(), 2, false, lwtOffline ))
+  if (connect(configManager.getHostName(), configManager.getParamValueFromID("mqttUser"), configManager.getParamValueFromID("mqttPassword"), buildTopic(teleTopic, topicLWT).c_str(), 2, false, lwtOffline ))
   {
     yield();
     Log::console(PSTR("MQTT: Connected!"));
@@ -133,7 +133,7 @@ String MQTT_Client::buildTopic(const char *baseTopic, const char *cmnd)
 {
   ConfigManager &configManager = ConfigManager::getInstance();
   String topic = baseTopic;
-  topic.replace("%st%", clientId);
+  topic.replace("%st%", configManager.getHostName());
   topic.replace("%cm%", cmnd);
 
   return topic;
@@ -153,7 +153,5 @@ void MQTT_Client::begin()
   setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
 
   mqttEnabled = true;
-  const char* hostName = configManager.getHostName();
-  strcat(clientId, hostName);
 
 }

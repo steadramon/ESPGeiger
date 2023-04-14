@@ -54,7 +54,6 @@ private:
   unsigned long lastConnectionAtempt = 0;
   uint8_t connectionAtempts = 0;
   bool mqttEnabled = true;
-  char clientId[16] = "";
 
   const unsigned long pingInterval = 1 * 60 * 1000;
   const unsigned long reconnectionInterval = 5 * 1000;
