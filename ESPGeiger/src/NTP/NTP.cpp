@@ -37,10 +37,7 @@ void ntp_cb (NTPEvent_t e)
 void setupNTP()
 {
   Log::console(PSTR("NTP: Starting ... %s"), NTP_SERVER);
-  NTP.setInterval (120); // Sync each 2 minutes
+  NTP.setInterval (300); // Sync each 5 minutes
   NTP.onNTPSyncEvent (ntp_cb);
-  NTP.setMinSyncAccuracy (2000); // Sync accuracy target is 2 ms
-  NTP.settimeSyncThreshold (1000); // Sync only if calculated offset absolute value is greater than 1 ms
-  NTP.setMaxNumSyncRetry (2); // 2 resync trials if accuracy not reached
   NTP.begin(NTP_SERVER); // Start NTP client
 }
