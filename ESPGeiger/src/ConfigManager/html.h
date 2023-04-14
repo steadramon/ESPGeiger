@@ -40,7 +40,7 @@ textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:a
 <script src="/js"></script>
 )HTML";
 
-static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>{1}</a> {2}</small>";
+static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>{1}</a> {2}/{3}</small>";
 
 static const char statusJS[] PROGMEM = R"JS("use strict";
 !function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('uptime').innerHTML=o.uptime;byID('cpm').innerHTML=o.cpm;byID('usv').innerHTML=(o.cpm/o.ratio).toFixed(4);e.update([o.cpm,o.cpm5,o.cpm15]),setTimeout(t,3e3)}},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();

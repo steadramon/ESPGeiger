@@ -182,6 +182,7 @@ void ConfigManager::handleStatusPage()
   page += FPSTR(STATUS_PAGE_FOOT);
   page.replace(FPSTR(T_1), String(status.thingName));
   page.replace(FPSTR(T_2), String(status.version));
+  page.replace(FPSTR(T_3), String(status.git_version));
   page += FPSTR(HTTP_END);
 
   ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
