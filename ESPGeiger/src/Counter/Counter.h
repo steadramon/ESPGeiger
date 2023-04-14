@@ -71,6 +71,7 @@ static int _geiger_txpin = GEIGER_TXPIN;
 #include <SoftwareSerial.h>
 static int _geiger_baud = GEIGER_BAUDRATE;
 static EspSoftwareSerial::UART geigerPort;
+#define IGNORE_PCNT
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
   #ifndef GEIGER_MODEL
     #define GEIGER_MODEL "test"
