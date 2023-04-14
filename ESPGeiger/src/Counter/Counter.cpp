@@ -123,6 +123,8 @@ void Counter::begin() {
 void Counter::loop() {
 #if GEIGER_TYPE == GEIGER_TYPE_SERIAL
   if (geigerPort.available() > 0) {
+    if (_handlesecond)
+      return;
     int n = geigerPort.readStringUntil('\r').toInt();
     Log::debug(PSTR("Counter loop - %d"), n);
     if (n) {

@@ -147,6 +147,7 @@ static void IRAM_ATTR sendpulse() {
   }
 }
 #endif
+static bool _handlesecond = false;
 
 #ifdef ESP32
 static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -162,6 +163,7 @@ static void IRAM_ATTR count() {
 };
 
 static void IRAM_ATTR handleSecondTick() {
+  _handlesecond = true;
   portENTER_CRITICAL_ISR(&timerMux);
 #ifdef USE_PCNT
   int16_t pulseCount;
@@ -171,6 +173,7 @@ static void IRAM_ATTR handleSecondTick() {
 #endif
   status.geigerTicks.add(eventCounter);
   eventCounter = 0;
+  _handlesecond = false;
   portEXIT_CRITICAL_ISR(&timerMux);
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx % 5 == 0) {
@@ -183,8 +186,6 @@ static void IRAM_ATTR handleSecondTick() {
   }
 };
 #else
-static bool _handlesecond = false;
-
 static void ICACHE_RAM_ATTR count() {
   if (_handlesecond)
     return;
