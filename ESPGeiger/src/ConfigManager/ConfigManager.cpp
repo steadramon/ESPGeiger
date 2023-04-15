@@ -128,12 +128,40 @@ void ConfigManager::startWebPortal()
   double ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
 
-  WiFiManager::setCustomMenuHTML("<form action='/status' method='get'><button>Status</button></form><br/>\n");
+  WiFiManager::setCustomMenuHTML("<form action='/status' method='get'><button>Status</button></form><br/>");
   const char * menu[] = {"custom", "wifi","param","info","update"};
   ConfigManager::setMenu(menu,sizeof(menu));
   WiFiManager::setWebServerCallback(std::bind(&ConfigManager::bindServerCallback, this));
   WiFiManager::setSaveParamsCallback(std::bind(&ConfigManager::saveParams, this));
   WiFiManager::startWebPortal();
+}
+
+void ConfigManager::handleRoot() {
+  String page = FPSTR(HTTP_HEAD_START);
+  page += FPSTR(HTTP_STYLE);
+  page += FPSTR(faviconHead);
+  page += FPSTR(HTTP_HEAD_END);
+  page.replace(FPSTR(T_v), hostName);
+  String str  = FPSTR(HTTP_ROOT_MAIN); // @todo custom title
+  str.replace(FPSTR(T_t),thingName);
+  str.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
+
+  page += str;
+  page += FPSTR(HTTP_PORTAL_OPTIONS);
+
+  page += "<form action='/status' method='get'><button>Status</button></form><br/>";
+  page += HTTP_PORTAL_MENU[0];
+  page += HTTP_PORTAL_MENU[3];
+  page += HTTP_PORTAL_MENU[2];
+  page += HTTP_PORTAL_MENU[8];
+  str = FPSTR(HTTP_STATUS_ON);
+  str.replace(FPSTR(T_i),WiFi.localIP().toString());
+  str.replace(FPSTR(T_v),htmlEntities(WiFiManager::getWiFiSSID()));
+  page += str;
+  page += FPSTR(HTTP_END);
+
+  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
+
 }
 
 void ConfigManager::handleJSReturn()
@@ -410,6 +438,7 @@ const char* ConfigManager::getParamValueFromID(const char* str)
 
 void ConfigManager::bindServerCallback()
 {
+  ConfigManager::server.get()->on(ROOT_URL, HTTP_GET, std::bind(&ConfigManager::handleRoot, this));
   ConfigManager::server.get()->on(STATUS_URL, HTTP_GET, std::bind(&ConfigManager::handleStatusPage, this));
   ConfigManager::server.get()->on(JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleJsonReturn, this));
   ConfigManager::server.get()->on(JS_URL, HTTP_GET, std::bind(&ConfigManager::handleJSReturn, this));

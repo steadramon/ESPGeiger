@@ -40,6 +40,7 @@ constexpr auto TEMPLATE_LEN = 256;
 constexpr auto ADVANCED_LEN = 256;
 constexpr auto CB_SELECTED_STR = "selected";
 
+constexpr auto ROOT_URL = "/";
 constexpr auto RESTART_URL = "/restart";
 constexpr auto CONSOLE_URL = "/cs";
 constexpr auto STATUS_URL = "/status";
@@ -103,6 +104,7 @@ public:
 }
 private:
   ConfigManager();
+  void handleRoot();
   void handleJSReturn();
   void handleJsonReturn();
   void handleStatusPage();
