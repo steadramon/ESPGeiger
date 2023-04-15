@@ -15,6 +15,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 *************************************************************************/
+#if !( defined(ESP8266) ||  defined(ESP32) )
+  #error This code is intended to run on the ESP8266 or ESP32 platform! Please check your Tools->Board setting.
+#endif
 
 #define DEFAULT_RX_TIMEOUT           30
 #include <Arduino.h>
@@ -103,7 +106,6 @@ void setup()
   delay(100);
   cManager.startWebPortal();
   arduino_ota_setup(hostName);
-  setupNTP();
   mqtt.begin();
   gcounter.begin();
 
@@ -112,6 +114,7 @@ void setup()
     digitalWrite(LED_SEND_RECEIVE, (i%2)?LED_SEND_RECEIVE_ON:!LED_SEND_RECEIVE_ON);
     delay(200);
   }
+  setupNTP();
 }
 
 void loop()
