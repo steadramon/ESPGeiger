@@ -97,7 +97,10 @@ void setup()
   }
 
   const char* hostName = cManager.getHostName();
-  Log::console(PSTR("Starting up ... %s Version - %s/%s (%s)"), hostName, status.version, status.git_version, cManager.GetChipModel());
+  Log::console(PSTR("   ___ "));
+  Log::console(PSTR("   \\_/    Starting up ... %s"), hostName);
+  Log::console(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, cManager.GetChipModel());
+  Log::console(PSTR(" \\/   \\/"));
   delay(100);
 
   digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
