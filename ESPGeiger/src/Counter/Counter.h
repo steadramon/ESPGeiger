@@ -117,6 +117,7 @@ static EspSoftwareSerial::UART geigerPort;
   static int _geiger_txpin = GEIGER_TXPIN;
   #define GEIGERTESTMODE
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+  #define GEIGERTESTMODE
   #ifndef GEIGER_BAUDRATE
     #define GEIGER_BAUDRATE 115200
   #endif

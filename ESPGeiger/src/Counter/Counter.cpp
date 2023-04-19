@@ -129,14 +129,14 @@ void Counter::begin() {
 void Counter::handleSerial(char* input)
 {
   int _scpm;
-  #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
+#if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
   int _scps;
     int n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
     if (n == 2) {
-  #else
+#else
     int n = sscanf(input, "%d\n", &_scpm);
     if (n == 1) {
-  #endif
+#endif
       Log::debug(PSTR("Counter loop - %d"), _scpm);
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
       eventCounter = (float)_scpm/(float)60;
