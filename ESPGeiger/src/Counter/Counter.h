@@ -27,6 +27,7 @@
 #define GEIGER_TYPE_SERIAL 2
 #define GEIGER_TYPE_TEST 3
 #define GEIGER_TYPE_TESTPULSE 4
+#define GEIGER_TYPE_TESTSERIAL 5
 
 #ifndef GEIGER_TYPE
 #define GEIGER_TYPE GEIGER_TYPE_PULSE
@@ -41,6 +42,28 @@
 
 #ifndef GEIGER_DEBOUNCE
 #define GEIGER_DEBOUNCE 500
+#endif
+
+#define GEIGER_STYPE_GC10 1
+#define GEIGER_STYPE_GC10NX 2
+#define GEIGER_STYPE_MIGHTYOHM 3
+
+#ifndef GEIGER_SERIALTYPE
+#define GEIGER_SERIALTYPE GEIGER_STYPE_GC10
+#endif
+
+#if GEIGER_SERIALTYPE == GEIGER_STYPE_GC10
+  #define GEIGER_BAUDRATE 9600
+  #define GEIGER_MODEL "GC10"
+  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
+#elif GEIGER_SERIALTYPE == GEIGER_STYPE_GC10NX
+  #define GEIGER_BAUDRATE 115200
+  #define GEIGER_MODEL "GC10Next"
+  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
+#elif GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
+  #define GEIGER_BAUDRATE 9600
+  #define GEIGER_MODEL "MightyOhm"
+  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
 #endif
 
 static int _geiger_rxpin = GEIGER_RXPIN;
@@ -67,9 +90,9 @@ static int _geiger_rxpin = GEIGER_RXPIN;
   #endif
 
 static int _geiger_txpin = GEIGER_TXPIN;
-
+static char _serial_buffer[64];
+static uint8_t _serial_idx = 0;
 #include <SoftwareSerial.h>
-static int _geiger_baud = GEIGER_BAUDRATE;
 static EspSoftwareSerial::UART geigerPort;
 #define IGNORE_PCNT
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
@@ -93,6 +116,28 @@ static EspSoftwareSerial::UART geigerPort;
   #endif
   static int _geiger_txpin = GEIGER_TXPIN;
   #define GEIGERTESTMODE
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+  #ifndef GEIGER_BAUDRATE
+    #define GEIGER_BAUDRATE 115200
+  #endif
+  #ifndef GEIGER_SERIAL_TYPE
+    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
+  #endif
+  #ifndef GEIGER_MODEL
+    #define GEIGER_MODEL "testserial"
+  #endif
+  #ifndef GEIGER_TXPIN
+    #define GEIGER_TXPIN 12
+  #endif
+static int _geiger_txpin = GEIGER_TXPIN;
+static char _serial_buffer[64];
+static uint8_t _serial_idx = 0;
+#include <SoftwareSerial.h>
+static EspSoftwareSerial::UART geigerPort;
+#define IGNORE_PCNT
+static int _last_secidx = 0;
+  /* MightyOhm CPS, 1, CPM, 60, uSv/hr, 1.23, INST/FAST/SLOW\n */
+  /* GC10 60\n */
 #endif
 
 #ifndef GEIGER_MODEL
@@ -152,6 +197,7 @@ static void IRAM_ATTR sendpulse() {
   }
 }
 #endif
+
 static bool _handlesecond = false;
 
 #ifdef ESP32
@@ -234,6 +280,7 @@ class Counter {
       const char* geiger_model() { return GEIGER_MODEL; };
     private:
       void setup_pulse();
+      void handleSerial(char* input);
       float _ratio = 100.0;
 };
 

@@ -85,8 +85,8 @@ void Counter::begin() {
   setup_pulse();
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
   Log::console(PSTR("Counter: Setting up serial geiger ..."));
-  Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, _geiger_baud);
-  geigerPort.begin(_geiger_baud, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
+  Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, GEIGER_BAUDRATE);
+  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
   Log::console(PSTR("Counter: Setting up test geiger ..."));
   #ifdef ESP8266
@@ -116,26 +116,64 @@ void Counter::begin() {
   timerAlarmWrite(timer, 300, true);
   timerAlarmEnable(timer);
   #endif
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+  Log::console(PSTR("Counter: Setting up test serial geiger ..."));
+  Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, GEIGER_BAUDRATE);
+  Log::console(PSTR("Counter: TXPIN: %d BAUD: %d"), _geiger_txpin, GEIGER_BAUDRATE);
+  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
 #endif
 
   geigerTicker.attach(1, handleSecondTick);
 }
 
+void Counter::handleSerial(char* input)
+{
+  int _scpm;
+  #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
+  int _scps;
+    int n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
+    if (n == 2) {
+  #else
+    int n = sscanf(input, "%d\n", &_scpm);
+    if (n == 1) {
+  #endif
+      Log::debug(PSTR("Counter loop - %d"), _scpm);
+#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
+      eventCounter = (float)_scpm/(float)60;
+#else
+      eventCounter = (float)_scpm;
+#endif
+    }
+}
+
 void Counter::loop() {
-#if GEIGER_TYPE == GEIGER_TYPE_SERIAL
+#if GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+  unsigned long int secidx = (millis() / 1000) % 60;
+  if (secidx != _last_secidx) {
+    _last_secidx = secidx;
+  #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
+    geigerPort.print(PSTR("CPS, 1, CPM, 60, uSv/hr, 1.23, INST\n"));
+  #else
+    geigerPort.print(PSTR("60\n"));
+  #endif
+  }
+#endif
+#if GEIGER_TYPE == GEIGER_TYPE_SERIAL || GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   if (geigerPort.available() > 0) {
     if (_handlesecond)
       return;
-    int n = geigerPort.readStringUntil('\r').toInt();
-    Log::debug(PSTR("Counter loop - %d"), n);
-    if (n) {
-#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
-      eventCounter = (float)n/(float)60;
-#elif GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPS
-      eventCounter = (float)n;
-#endif
+
+    char input = geigerPort.read();
+    _serial_buffer[_serial_idx++] = input;
+    if (input == '\n') {
+      handleSerial(_serial_buffer);
+      _serial_idx = 0;
     }
-    geigerPort.flush();
+
+    if (_serial_idx > 42) {
+      _serial_idx = 0;
+    }
+
   }
 #endif
 }
