@@ -4,13 +4,14 @@
 ESPGeiger is an open-source project that makes it easy to monitor radiation levels in your environment. It can collect, calculate, and report radiation levels from a range of Geiger counters with pulse and serial outputs. ESPGeiger supports the GC10/GC10next and MightyOhm counters, with additional support possible. The firmware is written to be installed onto the common esp8266 and esp32 boards.
 
 - 😃  Easy to install and configure - contribute to monitoring!
+- ✅  Compatible with all generic Geiger counters with Pulse output and a range of serial based - GC10, GC10next, MightyOhm
 - 📈  Built in webserver with graphing
 - 🔴  Live CPM and μSv/h readings
-- 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
-- ✅  Compatible with all generic Geiger counters with Pulse output and a range of serial based - GC10, GC10next, MightyOhm
-- 🎛️  Configurable filtering and noise control
 - 📟  Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), optional hardware counter (ESP32 only - PCNT)
+- 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
+- 🎛️  Configurable filtering and noise control
 - 🌐  Upload and share statistics to services online and locally via MQTT
+- 🚧  Test/Emulation builds for testing pulse and serial based counters
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
