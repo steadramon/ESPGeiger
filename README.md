@@ -11,7 +11,7 @@ ESPGeiger is an open-source project that makes it easy to monitor radiation leve
 - 🎛️  Configurable filtering/debounce and noise control
 - 📟  Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), with optional hardware counter (ESP32 only - PCNT)
 - 🌐  Upload and share statistics to services online and locally via MQTT
-- 🚧  Test/Emulation builds for testing pulse and serial based counters
+- 🚧  Test builds for emulating pulse and serial based counters
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
