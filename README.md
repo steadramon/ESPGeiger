@@ -68,11 +68,11 @@ The `GEIGER_TXPIN` is not currently in use for communication to the Geiger Count
 
 ### Test/Emulation mode counter
 
+**Note**: Publishing to public sites is disabled whilst ESPGeiger is in test mode.
+
 By default `GEIGER_RXPIN` is set to GPIO13. By default `GEIGER_TXPIN` is set to GPIO12.
 
 In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 together with a jumper wire, to emulate a Geiger counter from ESPGeiger itself.
-
-**Note**: Publishing to public sites is disabled whilst in test mode.
 
 ## Setup and Config
 
@@ -92,7 +92,7 @@ The project is compatible with Generic Pulse-based geiger counters and the GC10n
 - [GGreg20](https://www.tindie.com/stores/iotdev/)
 - [MightyOhm Kit](https://www.tindie.com/stores/mightyohm/)
 - [DiY-GDC](https://www.ebay.com/usr/impexeris)
-- 
+- CAJOE (and other clones) RadiationD-v1.1
 
 ### Serial Compatibility 
 
