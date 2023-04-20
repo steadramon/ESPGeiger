@@ -55,6 +55,23 @@ The `environments.ini` file defines some pre-built environments and examples of 
 6.  To upload the project to your microcontroller, click on the `Upload` button in the PlatformIO IDE.
 7.  The PlatformIO IDE will upload the project to your microcontroller.
 
+## Hardware
+
+### Pulse counter
+
+By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect the pulse output to. Don't forget to connect ground as well!
+
+### Serial counter
+
+By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect the serial output to. Don't forget to connect ground as well!
+`GEIGER_TXPIN` is not in use presently for communication to the Geiger Counter.
+
+### Test/Emulation mode counter
+
+By default `GEIGER_RXPIN` is set to GPIO13. By default `GEIGER_TXPIN` is set to GPIO12.
+
+In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 with a jumper wire to emulate a Geiger counter from ESPGeiger itself.
+
 ## Setup and Config
 
 1.  Once installed, connect to the built-in Wifi on the ESP to set up your access point. The SSID will look like ESPGeiger-\<alpha-num\>
