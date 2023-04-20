@@ -58,18 +58,18 @@ The `environments.ini` file defines some pre-built environments and examples of 
 
 ### Pulse counter
 
-By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect the pulse output to. Don't forget to connect ground as well!
+By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect the Geiger pulse output to. Don't forget to connect ground as well!
 
 ### Serial counter
 
-By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect the serial output to. Don't forget to connect ground as well!
+By default `GEIGER_RXPIN` is set to GPIO13. This is the pin on the ESP you need to connect the Geiger counter serial TX pin to. Don't forget to have a common ground, as well!
 `GEIGER_TXPIN` is not in use presently for communication to the Geiger Counter.
 
 ### Test/Emulation mode counter
 
 By default `GEIGER_RXPIN` is set to GPIO13. By default `GEIGER_TXPIN` is set to GPIO12.
 
-In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 with a jumper wire to emulate a Geiger counter from ESPGeiger itself.
+In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 together with a jumper wire, to emulate a Geiger counter from ESPGeiger itself.
 
 **Note**: Publishing to public sites is disabled whilst in test mode.
 
