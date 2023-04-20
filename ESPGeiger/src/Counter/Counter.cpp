@@ -84,7 +84,7 @@ void Counter::begin() {
   Log::console(PSTR("Counter: Setting up pulse geiger ..."));
   setup_pulse();
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-  Log::console(PSTR("Counter: Setting up serial geiger (%s) ..."), GEIGER_MODEL);
+  Log::console(PSTR("Counter: Setting up %s serial geiger ..."), GEIGER_MODEL);
   Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, GEIGER_BAUDRATE);
   geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
@@ -117,7 +117,7 @@ void Counter::begin() {
   timerAlarmEnable(timer);
   #endif
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  Log::console(PSTR("Counter: Setting up test serial geiger (%s) ..."), GEIGER_MODEL);
+  Log::console(PSTR("Counter: Setting up test %s serial geiger ..."), GEIGER_MODEL);
   Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, GEIGER_BAUDRATE);
   Log::console(PSTR("Counter: TXPIN: %d BAUD: %d"), _geiger_txpin, GEIGER_BAUDRATE);
   geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
@@ -173,7 +173,6 @@ void Counter::loop() {
     if (_serial_idx > 42) {
       _serial_idx = 0;
     }
-
   }
 #endif
 }
