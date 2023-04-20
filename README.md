@@ -72,6 +72,8 @@ By default `GEIGER_RXPIN` is set to GPIO13. By default `GEIGER_TXPIN` is set to 
 
 In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 with a jumper wire to emulate a Geiger counter from ESPGeiger itself.
 
+**Note**: Publishing to public sites is disabled whilst in test mode.
+
 ## Setup and Config
 
 1.  Once installed, connect to the built-in Wifi on the ESP to set up your access point. The SSID will look like ESPGeiger-\<alpha-num\>
