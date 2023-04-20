@@ -1,5 +1,5 @@
 /***********************************************************************
-  Geiger.cpp - Geiger Counter Firmware
+  ESPGeiger.cpp - Geiger Counter Firmware
 
   Copyright (C) 2023 @steadramon
 
