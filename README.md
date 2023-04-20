@@ -7,9 +7,9 @@ ESPGeiger is an open-source project that makes it easy to monitor radiation leve
 - ✅  Compatible with all generic Geiger counters with Pulse output and a range of serial based - GC10, GC10next, MightyOhm
 - 📈  Built in webserver with graphing
 - 🔴  Live CPM and μSv/h readings
-- 📟  Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), optional hardware counter (ESP32 only - PCNT)
 - 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
 - 🎛️  Configurable filtering and noise control
+- 📟  Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), with optional hardware counter (ESP32 only - PCNT)
 - 🌐  Upload and share statistics to services online and locally via MQTT
 - 🚧  Test/Emulation builds for testing pulse and serial based counters
 
