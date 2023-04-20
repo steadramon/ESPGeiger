@@ -63,7 +63,8 @@ By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect 
 ### Serial counter
 
 By default `GEIGER_RXPIN` is set to GPIO13. This is the pin on the ESP you need to connect the Geiger counter serial TX pin to. Don't forget to have a common ground, as well!
-`GEIGER_TXPIN` is not in use presently for communication to the Geiger Counter.
+
+The `GEIGER_TXPIN` is not currently in use for communication to the Geiger Counter.
 
 ### Test/Emulation mode counter
 
