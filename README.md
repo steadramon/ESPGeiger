@@ -54,7 +54,7 @@ There are builds for both ESP32 and ESP8266 boards, both with builds for:
 - GC10next (gc10next)
 - MightyOhm (mightyohm)
 
-For example, if you have an esp8266 and a generic pulse counter, use `esp8266_pulse.bin`
+For example, if you have an esp8266 and a generic pulse counter, use `esp8266_pulse-firmware.bin` - an ESP32 with a GC10 - `esp32_gc10-firmware.bin`
 
 Use a tool such as esptool.py to flash the firmware to your ESP device.
 
