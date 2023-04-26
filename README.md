@@ -49,10 +49,10 @@ Select an image - the images are in the format `<esp_device>_<geiger_device>`
 
 There are builds for both ESP32 and ESP8266 boards, both with builds for:
 
-- Generic Pulse Counters (pulse)
-- GC10 (gc10)
-- GC10next (gc10next)
-- MightyOhm (mightyohm)
+- Generic Pulse Counters (`pulse`)
+- GC10 (`gc10`)
+- GC10next (`gc10next`)
+- MightyOhm (`mightyohm`)
 
 For example, if you have an esp8266 and a generic pulse counter, use `esp8266_pulse-firmware.bin` - an ESP32 with a GC10 - `esp32_gc10-firmware.bin`
 
