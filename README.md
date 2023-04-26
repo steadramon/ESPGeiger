@@ -43,6 +43,23 @@ Automatically output every minute:
 
 ## Installation
 
+### Pre-built image
+
+Select an image - the images are in the format `<esp_device>_<geiger_device>`
+
+There are builds for both ESP32 and ESP8266 boards, both with builds for:
+
+- Generic Pulse Counters (pulse)
+- GC10 (gc10)
+- GC10next (gc10next)
+- MightyOhm (mightyohm)
+
+For example, if you have an esp8266 and a generic pulse counter, use `esp8266_pulse.bin`
+
+Use a tool such as esptool.py to flash the firmware to your ESP device.
+
+### Building your own image
+
 The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satify the requirements by installing the libraries.
 
 The `environments.ini` file defines some pre-built environments and examples of how the build can be configured. You can pick a combination of target board (esp32/esp8266) and geiger type (pulse/serial/GC10 etc)
@@ -113,7 +130,7 @@ If you own or can offer a device below for testing and support, please get in to
 Contributions are welcomed, please feel free to raise a Pull Request for this. I am a new Arduino/C coder, so please feel free to suggest improvements to the code here to make it better for everyone!
 
 ## Thanks 🙏
-Thanks for libraries goes to:
+Thanks for supporting libraries goes to:
 - https://github.com/tzapu/WiFiManager
 - https://github.com/khoih-prog/AsyncHTTPRequest_Generic
 - https://github.com/gmag11/ESPNtpClient
