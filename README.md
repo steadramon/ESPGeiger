@@ -10,7 +10,7 @@ ESPGeiger is an open-source project that makes it easy to monitor radiation leve
 - 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
 - 🎛️  Configurable filtering/debounce and noise control
 - 📟  Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), with optional hardware counter (ESP32 only - PCNT)
-- ⏲️  No dead time whilst waiting for 3rd party services
+- ⏲️  No dead time due to waiting for 3rd party services
 - 🌐  Upload and share statistics to services online and locally via MQTT and Home Assistant automatic discovery
 - 🚧  Test builds for emulating pulse and serial based counters
 
