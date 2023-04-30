@@ -138,10 +138,16 @@ void Counter::handleSerial(char* input)
     if (n == 1) {
 #endif
       Log::debug(PSTR("Counter loop - %d"), _scpm);
+#ifdef ESP32
+    portENTER_CRITICAL(&timerMux);
+#endif
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
       eventCounter = (float)_scpm/(float)60;
 #else
       eventCounter = (float)_scpm;
+#endif
+#ifdef ESP32
+    portEXIT_CRITICAL(&timerMux);
 #endif
     }
 }
