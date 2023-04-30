@@ -23,6 +23,12 @@ jobs:
           - "esp8266_test_mightyohm"
           - "esp8266_gc10"
           - "esp8266_gc10next"
+          - "esp8266oled_gc10"
+          - "esp32oled_gc10"
+          - "esp8266oled_gc10next"
+          - "esp32oled_gc10next"
+          - "esp8266oled_pulse"
+          - "esp32oled_pulse"
     runs-on: ubuntu-latest
     name: Build with PlatformIO
     steps:
