@@ -140,9 +140,9 @@ public:
         setFont(ArialMT_Plain_10);
         drawString(0, 0, configManager.getUptimeString());
         drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
-		if (now - status.last_send < 1000) {
-          drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
-		}
+        if (now - status.last_send < 1000) {
+         drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
+        }
         setFont(ArialMT_Plain_16);
         drawString(0,16, cpm );
         drawString(0,36, usv );
