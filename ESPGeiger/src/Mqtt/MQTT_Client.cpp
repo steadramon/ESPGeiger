@@ -227,7 +227,7 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
   json["name"] = configManager.getHostName() + String(" " + displayName);
   json["stat_t"] = String("~/stat/") + stateTopic;
   json["uniq_id"] = configManager.getHostName() + String("_") + mattDeviceName;
-/*
+
   if(deviceClass != "")
   {
     json["dev_cla"] = deviceClass;
@@ -246,7 +246,6 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
     json["cmd_t"] = String("~") + commandTopic;
   }
 
-  */
   for(const auto& entry : additionalEntries) {
     if(strcmp(entry.second, "true") == 0) {
       json[entry.first] = true;
