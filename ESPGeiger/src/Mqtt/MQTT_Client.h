@@ -73,8 +73,8 @@ private:
   bool mqttEnabled = true;
 
   const unsigned long pingInterval = 1 * 60 * 1000;
-  const unsigned long reconnectionInterval = 5 * 1000;
-  uint16_t connectionTimeout = 5 * 60 * 1000 / reconnectionInterval;
+  const unsigned long reconnectionInterval = 15 * 1000;
+  uint16_t connectionTimeout = 10 * 60 * 1000 / reconnectionInterval;
 
   const char* teleTopic = "%st%/tele/%cm%";
   const char* statTopic = "%st%/stat/%cm%";
