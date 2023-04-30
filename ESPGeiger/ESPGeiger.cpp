@@ -36,6 +36,11 @@
 #include "ArduinoJson.h"
 #include <string.h>
 #include "AsyncHTTPRequest_Generic.h"
+#include "src/OLEDDisplay/OLEDDisplay.h"
+
+#if defined(SSD1306_DISPLAY)
+SSD1306Display display(OLED_ADDR, OLED_SDA, OLED_SCL);
+#endif
 
 // Global status and cou
 Status status;
@@ -102,7 +107,9 @@ void setup()
   Log::console(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, cManager.GetChipModel());
   Log::console(PSTR(" \\/   \\/"));
   delay(100);
-
+#ifdef SSD1306_DISPLAY
+  display.begin();
+#endif
   digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
   cManager.autoConnect();
   digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
@@ -132,6 +139,9 @@ void loop()
 
   handleSerial();
   gcounter.loop();
+#ifdef SSD1306_DISPLAY
+  display.loop();
+#endif
   cManager.process();
   mqtt.loop();
   gmc.loop();
