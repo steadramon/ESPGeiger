@@ -18,6 +18,7 @@ ESPGeiger is an open-source project that makes it easy to monitor radiation leve
 
 ## Outputs
 - MQTT
+- Home Assistant (Autodiscovery)
 - [ThingSpeak](https://thingspeak.com/channels/2087322)
 - Radmon.org
 - gmcmap.com
