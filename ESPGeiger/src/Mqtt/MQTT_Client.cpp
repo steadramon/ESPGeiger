@@ -96,6 +96,7 @@ void MQTT_Client::loop()
     avgcpm = gcounter.get_cpm15();
     publish(buildTopic(statTopic, "CPM15").c_str(), String(avgcpm).c_str(), false);
 
+    status.last_send = millis();
   }
 
 }

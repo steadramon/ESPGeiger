@@ -123,13 +123,11 @@ public:
 		display();	// todo: not very efficient
 		return nc;
 	}
-	void createChar(byte idx, PGM_P ptr) {
-		//if(idx>=0&&idx<NUM_CUSTOM_ICONS) custom_chars[idx]=ptr;
-	}
+
     void loop() {
       unsigned long now = millis();
       if (now - _last_update > 1000) {
-       ConfigManager &configManager = ConfigManager::getInstance();
+        ConfigManager &configManager = ConfigManager::getInstance();
         _last_update = now;
 
         float avgcpm = gcounter.get_cpm();
@@ -139,11 +137,15 @@ public:
         String usv = "µSv/h: ";
         usv.concat(String(avgcpm).c_str());
         clear();
-        setFont(ArialMT_Plain_16);
-        drawString(0,1, cpm );
-        drawString(0,20, usv );
         setFont(ArialMT_Plain_10);
-        drawString(0, 52, configManager.getUptimeString());
+        drawString(0, 0, configManager.getUptimeString());
+        drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
+		if (now - status.last_send < 1000) {
+          drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
+		}
+        setFont(ArialMT_Plain_16);
+        drawString(0,16, cpm );
+        drawString(0,36, usv );
         display();
       }
     }

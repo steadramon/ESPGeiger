@@ -96,6 +96,7 @@ void Thingspeak::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(5);
       request.send();
+      status.last_send = millis();
     }
     else
     {

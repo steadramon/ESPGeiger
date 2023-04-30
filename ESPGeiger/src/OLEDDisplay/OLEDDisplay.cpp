@@ -1,5 +1,5 @@
 /*
-  MQTT_Client.cpp - MQTT connection class
+  OLEDDisplay.cpp - OLEDDisplay connection class
   
   Copyright (C) 2023 @steadramon
 

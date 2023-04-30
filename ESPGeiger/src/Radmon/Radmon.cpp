@@ -104,6 +104,7 @@ void Radmon::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(30);
       request.send();
+      status.last_send = millis();
     }
     else
     {

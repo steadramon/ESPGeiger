@@ -54,6 +54,7 @@ struct Status {
   long start = 0;
   bool ntp_synced = false;
   const char* geiger_model = "";
+  unsigned long last_send = 0;
 };
 
 #endif
