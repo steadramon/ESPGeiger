@@ -21,6 +21,7 @@
 #define OLEDDISP_H
 #ifdef SSD1306_DISPLAY
 #include <Arduino.h>
+#include "../ConfigManager/ConfigManager.h"
 #include <Wire.h>
 #include "SSD1306Wire.h"
 #include "../Status.h"
@@ -40,7 +41,7 @@ extern Counter gcounter;
 #endif
 
 #ifndef OLED_FLIP
-#define OLED_FLIP      true
+#define OLED_FLIP      false
 #endif
 
 #ifndef OLED_SDA
@@ -128,6 +129,7 @@ public:
     void loop() {
       unsigned long now = millis();
       if (now - _last_update > 1000) {
+       ConfigManager &configManager = ConfigManager::getInstance();
         _last_update = now;
 
         float avgcpm = gcounter.get_cpm();
@@ -137,8 +139,11 @@ public:
         String usv = "µSv/h: ";
         usv.concat(String(avgcpm).c_str());
         clear();
+        setFont(ArialMT_Plain_16);
         drawString(0,1, cpm );
         drawString(0,20, usv );
+        setFont(ArialMT_Plain_10);
+        drawString(0, 52, configManager.getUptimeString());
         display();
       }
     }
