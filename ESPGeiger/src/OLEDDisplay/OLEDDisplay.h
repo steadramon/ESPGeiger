@@ -39,6 +39,10 @@ extern Counter gcounter;
 #define OLED_HEIGHT      64
 #endif
 
+#ifndef OLED_FLIP
+#define OLED_FLIP      true
+#endif
+
 #ifndef OLED_SDA
 #define OLED_SDA      5
 #endif
@@ -59,7 +63,9 @@ public:
 	}
 	void begin() {
         init();
-		//flipScreenVertically();
+	#if OLED_FLIP
+		flipScreenVertically();
+	#endif
         setFont(ArialMT_Plain_10);
 		fontWidth = 8;
 		fontHeight = 16;
