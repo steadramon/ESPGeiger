@@ -217,6 +217,7 @@ static bool _handlesecond = false;
 
 #ifdef ESP32
 static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+static hw_timer_t * hwtimer = NULL;
 
 static void IRAM_ATTR count() {
   unsigned long cycles = ESP.getCycleCount();
@@ -229,13 +230,17 @@ static void IRAM_ATTR count() {
 };
 
 static void IRAM_ATTR handleSecondTick() {
-  _handlesecond = true;
   portENTER_CRITICAL_ISR(&timerMux);
+  _handlesecond = true;
 #ifdef USE_PCNT
   int16_t pulseCount;
   pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
   pcnt_counter_clear(PCNT_UNIT);
   eventCounter = pulseCount;
+#endif
+#if GEIGER_TYPE == GEIGER_TYPE_TEST && ESP32
+  eventCounter = timerRead(hwtimer)/600;
+  timerRestart(hwtimer);
 #endif
   status.geigerTicks.add(eventCounter);
   eventCounter = 0;

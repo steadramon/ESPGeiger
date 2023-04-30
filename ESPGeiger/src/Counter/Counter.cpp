@@ -94,11 +94,8 @@ void Counter::begin() {
   timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
   timer1_write(600);
   #else
-  hw_timer_t * timer = NULL;
-  timer = timerBegin(0, 80, true);
-  timerAttachInterrupt(timer, &count, true);
-  timerAlarmWrite(timer, 600, true);
-  timerAlarmEnable(timer);
+  hwtimer = timerBegin(0, 80, true);
+  timerAlarmEnable(hwtimer);
   #endif
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   Log::console(PSTR("Counter: Setting up test pulse geiger ..."));
@@ -139,7 +136,7 @@ void Counter::handleSerial(char* input)
 #endif
       Log::debug(PSTR("Counter loop - %d"), _scpm);
 #ifdef ESP32
-    portENTER_CRITICAL(&timerMux);
+  portENTER_CRITICAL(&timerMux);
 #endif
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
       eventCounter = (float)_scpm/(float)60;
@@ -147,7 +144,7 @@ void Counter::handleSerial(char* input)
       eventCounter = (float)_scpm;
 #endif
 #ifdef ESP32
-    portEXIT_CRITICAL(&timerMux);
+  portEXIT_CRITICAL(&timerMux);
 #endif
     }
 }
@@ -176,7 +173,7 @@ void Counter::loop() {
       _serial_idx = 0;
     }
 
-    if (_serial_idx > 42) {
+    if (_serial_idx > 52) {
       _serial_idx = 0;
     }
   }
