@@ -128,7 +128,7 @@ public:
         String cpm = "CPM: ";
         cpm.concat(String(avgcpm).c_str());
         avgcpm = gcounter.get_usv();
-        String usv = "uSv: ";
+        String usv = "µSv/h: ";
         usv.concat(String(avgcpm).c_str());
         clear();
         drawString(0,1, cpm );
