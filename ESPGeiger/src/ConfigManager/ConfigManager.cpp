@@ -53,6 +53,15 @@ WiFiManagerParameter MQTTParams[] =
   WiFiManagerParameter("mqttPassword", "Password", "", 255, "type='password'"),
 };
 
+WiFiManagerParameter HassioParams[] =
+{
+  // The broker parameters
+  WiFiManagerParameter("<br/><br/><hr><h3>Hassio Settings</h3>"),
+  WiFiManagerParameter("hassSend", "", "Y", 2, "type='hidden'"),
+  WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label>"),
+  WiFiManagerParameter("hassDisc", "<br>Discovery Topic", MQTT_DISCOVERY_TOPIC, 32),
+};
+
 WiFiManagerParameter CloudAPI[] = 
 {
   // The broker parameters
@@ -77,7 +86,7 @@ WiFiManagerParameter GMCParams[] =
   WiFiManagerParameter("<input type='checkbox' id='cbgm' onchange='getE(\"gmcSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbgm'>Send</label>"),
   WiFiManagerParameter("gmcAID", "<br>Account ID", "", 12, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("gmcGCID", "Geiger Counter ID", "", 12, "pattern='\\d{1,12}'"),
-  WiFiManagerParameter(R"J(<script>getE("cbgm").checked="Y"==getE("gmcSend").value,getE("cbrm").checked="Y"==getE("radmonSend").value,getE("cbts").checked="Y"==getE("tsSend").value;</script>)J"),
+  WiFiManagerParameter(R"J(<script>getE("cbgm").checked="Y"==getE("gmcSend").value,getE("cbrm").checked="Y"==getE("radmonSend").value,getE("cbts").checked="Y"==getE("tsSend").value,getE("cbhas").checked="Y"==getE("hassSend").value;</script>)J"),
 };
 
 ConfigManager::ConfigManager() : WiFiManager(){
@@ -115,6 +124,8 @@ void ConfigManager::startWebPortal()
     WiFiManager::addParameter(&ESPGeigerParams[i]);
   for (int i = 0; i < sizeof(MQTTParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&MQTTParams[i]);
+  for (int i = 0; i < sizeof(HassioParams) / sizeof(WiFiManagerParameter); i++)
+    WiFiManager::addParameter(&HassioParams[i]);
   for (int i = 0; i < sizeof(radmonParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&radmonParams[i]);
   for (int i = 0; i < sizeof(TSParams) / sizeof(WiFiManagerParameter); i++)
@@ -414,6 +425,10 @@ void ConfigManager::saveParams()
   LittleFS.end();
   Log::console(PSTR("Config: Saved"));
   MQTT_Client& mqtt = MQTT_Client::getInstance();
+  const char* _send = getParamValueFromID("hassSend");
+  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+    mqtt.removeHASSConfig();
+  }
   mqtt.disconnect();
 }
 

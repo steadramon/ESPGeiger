@@ -119,6 +119,56 @@ void MQTT_Client::reconnect()
     Log::console(PSTR("MQTT: Connected!"));
     status.mqtt_connected = true;
     publish(buildTopic(teleTopic, topicLWT).c_str(), lwtOnline, false);
+    publishHassTopic("sensor",
+      "cpm",
+      "CPM",
+      "CPM",
+      "CPM",
+      "",
+      "",
+      "",
+      "",
+      "",
+      { {"unit_of_meas", "CPM"},
+        { "ic", "mdi:pulse" }});
+    publishHassTopic("sensor",
+      "cpm5",
+      "CPM5",
+      "CPM5",
+      "CPM5",
+      "",
+      "",
+      "",
+      "",
+      "",
+      { {"unit_of_meas", "CPM"},
+        { "ic", "mdi:pulse" }});
+
+    publishHassTopic("sensor",
+      "cpm15",
+      "CPM15",
+      "CPM15",
+      "CPM15",
+      "",
+      "",
+      "",
+      "",
+      "",
+      { {"unit_of_meas", "CPM"},
+        { "ic", "mdi:pulse" }});
+
+    publishHassTopic("sensor",
+      "usv",
+      "\u00B5Sv/h",
+      "uSv",
+      "uSv",
+      "",
+      "",
+      "",
+      "",
+      "",
+      { {"unit_of_meas", "\u00B5S/h"},
+        { "ic", "mdi:radioactive" }});
   }
   else
   {
@@ -139,6 +189,119 @@ String MQTT_Client::buildTopic(const char *baseTopic, const char *cmnd)
   return topic;
 }
 
+void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
+                               const String& mattDeviceName,
+                               const String& displayName,
+                               const String& name,
+                               const String& stateTopic,
+                               const String& deviceType,
+                               const String& deviceClass,
+                               const String& stateClass,
+                               const String& entityCat,
+                               const String& commandTopic,
+                               std::vector<std::pair<char*, char*>> additionalEntries
+)
+{
+  ConfigManager &configManager = ConfigManager::getInstance();
+
+  const char* _send = configManager.getParamValueFromID("hassSend");
+  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+    return;
+  }
+  const char* _discovery_topic = configManager.getParamValueFromID("hassDisc");
+  if (_discovery_topic == NULL) {
+    return;
+  }
+
+  DynamicJsonDocument json(MQTT_JSON_BUFFER_SIZE);
+
+  json.clear();
+  auto dev = json.createNestedObject("device");
+  json["device"]["mf"] = configManager.getThingName();
+  json["device"]["mdl"] = configManager.GetChipModel() + String(" ") + status.geiger_model;
+  json["device"]["name"] = configManager.getHostName();
+  json["device"]["sw"] = status.version + String("/") + status.git_version;
+  auto ids = dev.createNestedArray("identifiers");
+  ids.add(configManager.getHostName());
+  json["~"] = configManager.getHostName();
+  json["name"] = configManager.getHostName() + String(" " + displayName);
+  json["stat_t"] = String("~/stat/") + stateTopic;
+  json["uniq_id"] = configManager.getHostName() + String("_") + mattDeviceName;
+/*
+  if(deviceClass != "")
+  {
+    json["dev_cla"] = deviceClass;
+  }
+
+  if(stateClass != "")
+  {
+    json["stat_cla"] = stateClass;
+  }
+  if(entityCat != "")
+  {
+    json["ent_cat"] = entityCat;
+  }
+  if(commandTopic != "")
+  {
+    json["cmd_t"] = String("~") + commandTopic;
+  }
+
+  */
+  for(const auto& entry : additionalEntries) {
+    if(strcmp(entry.second, "true") == 0) {
+      json[entry.first] = true;
+    } else if(strcmp(entry.second, "false") == 0) {
+      json[entry.first] = false;
+    }
+    else {
+      json[entry.first] = entry.second;
+    }
+  }
+
+  char buffer[MQTT_JSON_BUFFER_SIZE];
+  serializeJson(json, buffer);
+
+  String path = _discovery_topic;
+  path.concat("/");
+  path.concat(mqttDeviceType);
+  path.concat("/");
+  path.concat(configManager.getHostName());
+  path.concat("-");
+  path.concat(mattDeviceName);
+  path.concat("/config");
+
+  publish(path.c_str(), buffer);
+}
+
+void MQTT_Client::removeHASSConfig()
+{
+  removeHassTopic("sensor", "cpm");
+  removeHassTopic("sensor", "cpm5");
+  removeHassTopic("sensor", "cpm15");
+  removeHassTopic("sensor", "usv");
+}
+
+void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName)
+{
+  ConfigManager &configManager = ConfigManager::getInstance();
+
+  const char* _discovery_topic = configManager.getParamValueFromID("hassDisc");
+  if (_discovery_topic == NULL) {
+    _discovery_topic = MQTT_DISCOVERY_TOPIC;
+  }
+
+  String path = _discovery_topic;
+  path.concat("/");
+  path.concat(mqttDeviceType);
+  path.concat("/");
+  path.concat(configManager.getHostName());
+  path.concat("/");
+  path.concat(mattDeviceName);
+  path.concat("/config");
+
+  publish(path.c_str(), "", true);
+}
+
 void MQTT_Client::begin()
 {
   ConfigManager &configManager = ConfigManager::getInstance();
@@ -151,6 +314,7 @@ void MQTT_Client::begin()
     return;
   }
   setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
+  setBufferSize(MQTT_MAX_PACKET_SIZE);
 
   mqttEnabled = true;
 

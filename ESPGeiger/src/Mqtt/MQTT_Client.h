@@ -28,6 +28,9 @@
 #include <PubSubClient.h>
 #include <WiFiClient.h>
 
+#define MQTT_MAX_PACKET_SIZE 1024
+#define MQTT_JSON_BUFFER_SIZE 1024
+
 extern Status status;
 extern Counter gcounter;
 
@@ -42,14 +45,28 @@ public:
   void loop();
   void sendStatus();
   void disconnect();
+  void removeHASSConfig();
 protected:
   WiFiClient espClient;
   void reconnect();
 
 private:
   MQTT_Client();
+  static ConfigManager _configManager;
   String buildTopic(const char * baseTopic, const char * cmnd);
-
+  void publishHassTopic(const String& mqttDeviceType,
+                        const String& mattDeviceName,
+                        const String& displayName,
+                        const String& name,
+                        const String& stateTopic,
+                        const String& deviceType,
+                        const String& deviceClass,
+                        const String& stateClass = "",
+                        const String& entityCat = "",
+                        const String& commandTopic = "",
+                        std::vector<std::pair<char*, char*>> additionalEntries = {}
+                      );
+  void removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName);
   unsigned long lastPing = 0;
   unsigned long lastConnectionAtempt = 0;
   uint8_t connectionAtempts = 0;

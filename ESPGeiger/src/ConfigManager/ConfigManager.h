@@ -51,6 +51,10 @@ constexpr auto RESET_URL = "/reset";
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 
+#ifndef MQTT_DISCOVERY_TOPIC
+#  define MQTT_DISCOVERY_TOPIC "homeassistant"
+#endif
+
 #define MQTT_DEFAULT_PORT "8883"
 //char mqttServer[MQTT_SERVER_LENGTH] = "";
 //char mqttPort[MQTT_PORT_LENGTH] = MQTT_DEFAULT_PORT;
