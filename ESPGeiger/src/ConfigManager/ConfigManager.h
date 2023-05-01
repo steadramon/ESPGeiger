@@ -56,7 +56,11 @@ const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 #endif
 
 #ifndef MQTT_DISCOVERY
+#ifdef GEIGERTESTMODE
+#  define MQTT_DISCOVERY "N"
+#else
 #  define MQTT_DISCOVERY "Y"
+#endif
 #endif
 
 #define MQTT_DEFAULT_PORT "8883"

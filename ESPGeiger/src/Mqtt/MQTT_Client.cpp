@@ -203,9 +203,6 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
                                std::vector<std::pair<char*, char*>> additionalEntries
 )
 {
-#ifdef GEIGERTESTMODE
-  return;
-#endif
   ConfigManager &configManager = ConfigManager::getInstance();
 
   const char* _send = configManager.getParamValueFromID("hassSend");
