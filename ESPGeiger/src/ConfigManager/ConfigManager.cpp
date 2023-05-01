@@ -57,7 +57,7 @@ WiFiManagerParameter HassioParams[] =
 {
   // The broker parameters
   WiFiManagerParameter("<br/><br/><hr><h3>HA Autodiscovery</h3>"),
-  WiFiManagerParameter("hassSend", "", "Y", 2, "type='hidden'"),
+  WiFiManagerParameter("hassSend", "", MQTT_DISCOVERY, 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label>"),
   WiFiManagerParameter("hassDisc", "<br>Discovery Topic", MQTT_DISCOVERY_TOPIC, 32),
 };

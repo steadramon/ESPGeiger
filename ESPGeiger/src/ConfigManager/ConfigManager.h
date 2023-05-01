@@ -55,6 +55,10 @@ const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 #  define MQTT_DISCOVERY_TOPIC "homeassistant"
 #endif
 
+#ifndef MQTT_DISCOVERY
+#  define MQTT_DISCOVERY "Y"
+#endif
+
 #define MQTT_DEFAULT_PORT "8883"
 //char mqttServer[MQTT_SERVER_LENGTH] = "";
 //char mqttPort[MQTT_PORT_LENGTH] = MQTT_DEFAULT_PORT;
