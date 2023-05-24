@@ -8,6 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         environments:
+          - "espgeigerhw"
           - "esp32_pulse"
           - "esp32_pulse_no_pcnt"
           - "esp32_test"

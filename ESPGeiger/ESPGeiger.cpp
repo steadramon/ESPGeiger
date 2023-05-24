@@ -37,11 +37,21 @@
 #include <string.h>
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/OLEDDisplay/OLEDDisplay.h"
-
+#ifdef ESPGEIGER_HW
+#include "src/ESPGHW/ESPGHW.h"
+#endif
+#ifdef SERIALOUT
+#include "src/SerialOut/SerialOut.h"
+#endif
 #if defined(SSD1306_DISPLAY)
 SSD1306Display display(OLED_ADDR, OLED_SDA, OLED_SCL);
 #endif
-
+#ifdef ESPGEIGER_HW
+ESPGeigerHW hardware = ESPGeigerHW();
+#endif
+#ifdef SERIALOUT
+SerialOut serialout = SerialOut();
+#endif
 // Global status and cou
 Status status;
 Counter gcounter = Counter();
@@ -89,6 +99,7 @@ void setup()
 {
   Serial.begin(115200);
   delay(100);
+
   pinMode(LED_SEND_RECEIVE, OUTPUT);
   digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
 
@@ -106,6 +117,11 @@ void setup()
   Log::console(PSTR("   \\_/    Starting up ... %s"), hostName);
   Log::console(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, cManager.GetChipModel());
   Log::console(PSTR(" \\/   \\/"));
+
+#ifdef ESPGEIGER_HW
+  hardware.begin();
+#endif
+
   delay(100);
 #ifdef SSD1306_DISPLAY
   display.begin();
@@ -118,7 +134,9 @@ void setup()
   arduino_ota_setup(hostName);
   mqtt.begin();
   gcounter.begin();
-
+#ifdef SERIALOUT
+  serialout.begin();
+#endif
   for (int i = 0; i < 6; i++)
   {
     digitalWrite(LED_SEND_RECEIVE, (i%2)?LED_SEND_RECEIVE_ON:!LED_SEND_RECEIVE_ON);
@@ -129,6 +147,9 @@ void setup()
 
 void loop()
 {
+#ifdef ESPGEIGER_HW
+  hardware.loop();
+#endif
   unsigned long now = millis();
 
   // Switch off of the LED after TimeLedON

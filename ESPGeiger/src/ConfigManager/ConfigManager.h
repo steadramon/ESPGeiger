@@ -94,7 +94,11 @@ public:
   char* getUptimeString ();
   char* GetChipModel(){
 #ifdef ESP8266
+#ifdef ESPGEIGER_HW
+    return (char*)"ESPG-HW";
+#else
     return (char*)"ESP8266";
+#endif
 #elif defined(ESP32)
     esp_chip_info_t chipInfo;
     esp_chip_info(&chipInfo);
