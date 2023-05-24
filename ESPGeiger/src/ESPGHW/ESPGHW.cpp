@@ -16,6 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+#ifdef ESPGEIGER_HW
 
 #include <Arduino.h>
 #include "ESPGHW.h"
@@ -36,3 +37,4 @@ void ESPGeigerHW::loop() {
   analogWrite (GEIGER_PWMPIN, 102) ;
 
 }
+#endif

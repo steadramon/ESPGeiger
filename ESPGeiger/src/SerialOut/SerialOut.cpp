@@ -16,6 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+#ifdef SERIALOUT
 
 #include <Arduino.h>
 #include "SerialOut.h"
@@ -29,4 +30,9 @@ void SerialOut::begin() {
 }
 
 void SerialOut::loop() {
+  unsigned long int secidx = (millis() / 1000) % 60;
+  if (secidx != _last_serial_idx) {
+    _last_serial_idx = secidx;
+  }
 }
+#endif
