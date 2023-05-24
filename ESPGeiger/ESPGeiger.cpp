@@ -169,4 +169,7 @@ void loop()
   radmon.loop();
   thingspeak.loop();
   ArduinoOTA.handle();
+#ifdef SERIALOUT
+  serialout.loop();
+#endif
 }
