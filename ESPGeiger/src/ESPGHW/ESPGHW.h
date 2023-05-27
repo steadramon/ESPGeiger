@@ -23,7 +23,7 @@
 #include "../Status.h"
 
 #ifndef GEIGER_PWMPIN
-#define GEIGER_PWMPIN 4
+#define GEIGER_PWMPIN 12
 #endif
 
 class ESPGeigerHW {
@@ -31,6 +31,15 @@ class ESPGeigerHW {
       ESPGeigerHW();
       void loop();
       void begin();
+      void set_freq( int freq) {
+        _hw_freq = freq;
+      };
+      void set_duty( int duty) {
+        _hw_duty = duty;
+      };
+    private:
+      int _hw_freq = 8000;
+      int _hw_duty = 102;
 };
 
 #endif

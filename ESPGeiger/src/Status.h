@@ -21,6 +21,7 @@
 #define Status_h
 
 #include <Smoothed.h>
+#include "jled.h"
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
@@ -55,6 +56,14 @@ struct Status {
   bool ntp_synced = false;
   const char* geiger_model = "";
   unsigned long last_send = 0;
+#if LED_SEND_RECEIVE_ON == LOW
+  JLed led = JLed(LED_SEND_RECEIVE).LowActive();
+#else
+  JLed led = JLed(LED_SEND_RECEIVE);
+#endif
+#ifdef ESPGEIGER_HW
+  JLed blip_led = JLed(15);
+#endif
 };
 
 #endif

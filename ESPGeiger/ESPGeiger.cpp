@@ -100,9 +100,6 @@ void setup()
   Serial.begin(115200);
   delay(100);
 
-  pinMode(LED_SEND_RECEIVE, OUTPUT);
-  digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
-
 #ifdef ESP8266
   if(!LittleFS.begin()){
 #elif defined(ESP32)
@@ -126,9 +123,7 @@ void setup()
 #ifdef SSD1306_DISPLAY
   display.begin();
 #endif
-  digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
   cManager.autoConnect();
-  digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
   delay(100);
   cManager.startWebPortal();
   arduino_ota_setup(hostName);
@@ -137,11 +132,6 @@ void setup()
 #ifdef SERIALOUT
   serialout.begin();
 #endif
-  for (int i = 0; i < 6; i++)
-  {
-    digitalWrite(LED_SEND_RECEIVE, (i%2)?LED_SEND_RECEIVE_ON:!LED_SEND_RECEIVE_ON);
-    delay(200);
-  }
   setupNTP();
 }
 
@@ -150,13 +140,6 @@ void loop()
 #ifdef ESPGEIGER_HW
   hardware.loop();
 #endif
-  unsigned long now = millis();
-
-  // Switch off of the LED after TimeLedON
-  if (now > (timer_led_measures + (TimeLedON * 1000))) {
-    timer_led_measures = millis();
-    digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
-  }
 
   handleSerial();
   gcounter.loop();
@@ -171,5 +154,9 @@ void loop()
   ArduinoOTA.handle();
 #ifdef SERIALOUT
   serialout.loop();
+#endif
+  status.led.Update();
+#ifdef ESPGEIGER_HW
+  status.blip_led.Update();
 #endif
 }

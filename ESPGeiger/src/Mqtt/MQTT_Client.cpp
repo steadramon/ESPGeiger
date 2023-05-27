@@ -65,7 +65,7 @@ void MQTT_Client::loop()
   unsigned long now = millis();
   if (now - lastPing > pingInterval && connected())
   {
-    digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
+    status.led.Blink(500, 500);
     ConfigManager &configManager = ConfigManager::getInstance();
     lastPing = now;
     const size_t capacity = JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(17) + 22 + 20 + 20;
@@ -111,7 +111,6 @@ void MQTT_Client::reconnect()
     return;
   }
   setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
-  digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
 
   Log::console(PSTR("MQTT: Attempting connection ... %s:%s"), configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
   if (connect(configManager.getHostName(), configManager.getParamValueFromID("mqttUser"), configManager.getParamValueFromID("mqttPassword"), buildTopic(teleTopic, topicLWT).c_str(), 2, false, lwtOffline ))
@@ -176,7 +175,6 @@ void MQTT_Client::reconnect()
     status.mqtt_connected = false;
     Log::console(PSTR("MQTT: failed, rc=%i"), state());
   }
-  digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
 
 }
 

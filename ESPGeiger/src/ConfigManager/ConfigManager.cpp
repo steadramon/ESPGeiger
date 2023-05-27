@@ -31,6 +31,10 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 10),
+#ifndef ESPGHW_H
+  WiFiManagerParameter("geigerFreq", "PWM Frequency", "8000", 10),
+  WiFiManagerParameter("geigerDuty", "PWM Duty (0-254)", "102", 10),
+#endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)}</script>")
 };
 

@@ -30,11 +30,11 @@ void ESPGeigerHW::begin() {
   Log::console(PSTR("ESPG-HW: PWM Setup"));
   pinMode(GEIGER_PWMPIN, OUTPUT);
   analogWrite (GEIGER_PWMPIN, 0) ;
-  analogWriteFreq(8000);
+  analogWriteFreq(_hw_freq);
 }
 
 void ESPGeigerHW::loop() {
-  analogWrite (GEIGER_PWMPIN, 102) ;
+  analogWrite (GEIGER_PWMPIN, _hw_duty) ;
 
 }
 #endif

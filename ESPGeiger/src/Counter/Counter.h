@@ -264,6 +264,11 @@ static void ICACHE_RAM_ATTR count() {
   if (cycles - _last > _debounce) {
     eventCounter += 1;
     _last = cycles;
+#ifdef ESPGEIGER_HW
+    status.blip_led.Blink(50,50);
+#else
+    status.led.Blink(50,50);
+#endif
   }
 };
 
