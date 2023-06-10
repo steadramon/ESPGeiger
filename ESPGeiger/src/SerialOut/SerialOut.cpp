@@ -21,18 +21,22 @@
 #include <Arduino.h>
 #include "SerialOut.h"
 #include "../Logger/Logger.h"
+#include <SoftwareSerial.h>
+
+SoftwareSerial sSerial(3, 1);
 
 SerialOut::SerialOut() {
-
 }
 
 void SerialOut::begin() {
+  sSerial.begin(9600);
 }
 
 void SerialOut::loop() {
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx != _last_serial_idx) {
     _last_serial_idx = secidx;
+    sSerial.write("Loop");
   }
 }
 #endif

@@ -26,6 +26,14 @@
 #define GEIGER_PWMPIN 12
 #endif
 
+#ifndef GEIGERHW_FREQ
+#define GEIGERHW_FREQ 8000
+#endif
+
+#ifndef GEIGERHW_DUTY
+#define GEIGERHW_DUTY 70
+#endif
+
 class ESPGeigerHW {
     public:
       ESPGeigerHW();
@@ -38,8 +46,8 @@ class ESPGeigerHW {
         _hw_duty = duty;
       };
     private:
-      int _hw_freq = 8000;
-      int _hw_duty = 102;
+      int _hw_freq = GEIGERHW_FREQ;
+      int _hw_duty = GEIGERHW_DUTY;
 };
 
 #endif

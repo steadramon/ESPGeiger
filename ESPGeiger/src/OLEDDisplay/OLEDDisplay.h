@@ -27,6 +27,7 @@
 #include "../Status.h"
 #include "../Counter/Counter.h"
 #include "logo.h"
+#include "fonts.h"
 
 extern Status status;
 extern Counter gcounter;
@@ -55,6 +56,7 @@ extern Counter gcounter;
 #define OLED_ADDR      0x3c
 #endif
 
+
 class SSD1306Display : public SSD1306Wire{
 public:
 	SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl) : SSD1306Wire(_addr, _sda, _scl) {
@@ -72,8 +74,8 @@ public:
 		fontHeight = 16;
         clear();
         drawXbm(0, 0, 51, 51, ESPLogo);
-        drawString(55, 0, "ESPGeiger");
-        drawString(55, 14, status.version);
+        drawString(55, 10, "ESPGeiger");
+        drawString(55, 24, status.version);
 
 		display();	// todo: not very efficient
         setFont(ArialMT_Plain_16);
@@ -124,36 +126,98 @@ public:
 		return nc;
 	}
 
+	void setupWifi(const char* s) {
+		clear();
+		setFont(DialogInput_plain_12);
+		drawString(0, 10, "Setup - Connect to");
+		drawString(0, 24, "WiFi -");
+		drawString(0, 38, String(s));
+        display();
+	}
+
     void loop() {
       unsigned long now = millis();
-      if (now - _last_update > 1000) {
-        ConfigManager &configManager = ConfigManager::getInstance();
+      if (now - _last_update > 500) {
+        //ConfigManager &configManager = ConfigManager::getInstance();
         _last_update = now;
+		if ((now - _last_full > 10000) || (_last_full == 0)) {
+			_last_full = now;
+			clear();
+			drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
+			setFont(DialogInput_plain_12);
+			drawString(0,5, "CPM:");
+			drawString(0,20, "µSv/h:");
+		}
 
-        float avgcpm = gcounter.get_cpm();
-        String cpm = "CPM: ";
-        cpm.concat(String(avgcpm).c_str());
-        avgcpm = gcounter.get_usv();
-        String usv = "µSv/h: ";
-        usv.concat(String(avgcpm).c_str());
-        clear();
-        setFont(ArialMT_Plain_10);
-        drawString(0, 0, configManager.getUptimeString());
-        drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
-        if (now - status.last_send < 1000) {
-         drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
-        }
-        setFont(ArialMT_Plain_16);
-        drawString(0,16, cpm );
-        drawString(0,36, usv );
+		if ((now % 1000 >= 500) || (_last_full == now)) {
+			setFont(DialogInput_plain_17);
+			setColor(BLACK);
+			fillRect(45, 0, 72, 32);
+			setColor(WHITE);
+			drawString(45,0, String(gcounter.get_cpm()).c_str() );
+	        setFont(DialogInput_plain_12);
+			drawString(45,20, String(gcounter.get_usv()).c_str() );
+			if (status.cpm_history.capacity != status.cpm_history.size()) {
+				drawString(98,2, "W" );
+			}
+			if (now - status.last_send < 1000) {
+				drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
+			}
+		}
+		if ((now % 1000 < 500) || (_last_full == now)) {
+			setColor(BLACK);
+			fillRect(0, 35, 128, 29);
+			setColor(WHITE);
+
+	        drawLine(0, 63, 90, 63);
+	        drawLine(90, 35, 90, 63);
+
+			if (status.cpm_history.size() > 1)  {
+				int histSize = status.cpm_history.size();
+		        int maxValue = status.cpm_history[0];
+				int minValue = histSize > 1 ? status.cpm_history[0]:0;
+				for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
+					maxValue = status.cpm_history[i] > maxValue ? status.cpm_history[i] : maxValue;
+					minValue = status.cpm_history[i] < minValue ? status.cpm_history[i] : minValue;
+				}
+
+				if (minValue > 1) {
+					minValue = (int)(minValue * 0.9);
+				}
+				int xstart = 0;
+				if (status.cpm_history.capacity != histSize) {
+					xstart = (( 2*( status.cpm_history.capacity-histSize )));
+				}
+
+				if (maxValue == 0) {
+					setFont(Open_Sans_Regular_Plain_10);
+					drawString(93,55, String(minValue));
+					return;
+				}
+
+				for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
+					int location = ((map((long)status.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;  
+					drawRect(xstart+i*2, location, 2, (63 - location));
+				}
+				setFont(Open_Sans_Regular_Plain_10);
+				drawString(93,55, String(minValue));
+				drawString(93,35, String(maxValue));
+	        } else {
+				setFont(DialogInput_plain_12);
+				drawString(20,40, "Warmup" );
+				setFont(Open_Sans_Regular_Plain_10);
+				drawString(93,55, "0");
+			}
+		}
         display();
+
       }
     }
 private:
 	uint8_t cx, cy;
 	uint8_t fontWidth, fontHeight;
     unsigned long _last_update = 0;
-	//PGM_P custom_chars[NUM_CUSTOM_ICONS];
+    unsigned long _last_full = 0;
 };
 
 #endif

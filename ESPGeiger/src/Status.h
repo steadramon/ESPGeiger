@@ -22,6 +22,7 @@
 
 #include <Smoothed.h>
 #include "jled.h"
+#include <CircularBuffer.h>
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
@@ -43,7 +44,7 @@
 #endif
 
 #define TimeLedON                    1
-
+#define MAX_SIZE 90
 struct Status {
   const char thingName[11] = "ESPGeiger";
   const char* version = RELEASE_VERSION;
@@ -52,8 +53,10 @@ struct Status {
   Smoothed <float> geigerTicks;
   Smoothed <float> geigerTicks5;
   Smoothed <float> geigerTicks15;
+  CircularBuffer<int,45> cpm_history;
   long start = 0;
   bool ntp_synced = false;
+  bool warmup = true;
   const char* geiger_model = "";
   unsigned long last_send = 0;
 #if LED_SEND_RECEIVE_ON == LOW

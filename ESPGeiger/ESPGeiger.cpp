@@ -37,14 +37,16 @@
 #include <string.h>
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/OLEDDisplay/OLEDDisplay.h"
+#include <Ticker.h>  //Ticker Library
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
 #ifdef SERIALOUT
 #include "src/SerialOut/SerialOut.h"
 #endif
+
 #if defined(SSD1306_DISPLAY)
-SSD1306Display display(OLED_ADDR, OLED_SDA, OLED_SCL);
+SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
 #endif
 #ifdef ESPGEIGER_HW
 ESPGeigerHW hardware = ESPGeigerHW();
@@ -63,7 +65,9 @@ MQTT_Client& mqtt = MQTT_Client::getInstance();
 Radmon radmon = Radmon();
 Thingspeak thingspeak = Thingspeak();
 GMC gmc = GMC();
-
+Ticker msTicker;
+Ticker fiveSTicker;
+Ticker sTicker;
 unsigned long timer_led_measures = 0;
 
 void handleSerial()
@@ -94,6 +98,39 @@ void handleSerial()
     }
   }
 }
+void msTickerCB()
+{
+  status.led.Update();
+#ifdef ESPGEIGER_HW
+  status.blip_led.Update();
+#endif
+}
+
+void fiveSTickerCB()
+{
+  gmc.loop();
+  radmon.loop();
+  thingspeak.loop();
+}
+
+void sTickerCB()
+{
+#ifdef SERIALOUT
+  serialout.loop();
+#endif
+#ifdef ESPGEIGER_HW
+  hardware.loop();
+#endif
+  if (status.warmup == true) {
+    uint8_t uptime = NTP.getUptime() - status.start;
+    if (uptime > 10) {
+      status.warmup = false;
+    }
+  }
+  if (status.warmup == false) {
+    status.cpm_history.push(gcounter.get_cpm());
+  }
+}
 
 void setup()
 {
@@ -120,43 +157,39 @@ void setup()
 #endif
 
   delay(100);
+  msTicker.attach_ms(1, msTickerCB);
 #ifdef SSD1306_DISPLAY
   display.begin();
-#endif
+  if (!cManager.getWiFiIsSaved()) {
+    display.setupWifi(hostName);
+  }
+  #endif
   cManager.autoConnect();
   delay(100);
   cManager.startWebPortal();
   arduino_ota_setup(hostName);
+  delay(500);
   mqtt.begin();
   gcounter.begin();
 #ifdef SERIALOUT
   serialout.begin();
 #endif
   setupNTP();
+  status.start = NTP.getUptime();
+  sTicker.attach(1, sTickerCB);
+  fiveSTicker.attach(5, fiveSTickerCB);
+  status.led.Off().Update();
 }
 
 void loop()
 {
-#ifdef ESPGEIGER_HW
-  hardware.loop();
-#endif
+  cManager.process();
+  mqtt.loop();
 
   handleSerial();
   gcounter.loop();
 #ifdef SSD1306_DISPLAY
   display.loop();
 #endif
-  cManager.process();
-  mqtt.loop();
-  gmc.loop();
-  radmon.loop();
-  thingspeak.loop();
   ArduinoOTA.handle();
-#ifdef SERIALOUT
-  serialout.loop();
-#endif
-  status.led.Update();
-#ifdef ESPGEIGER_HW
-  status.blip_led.Update();
-#endif
 }
