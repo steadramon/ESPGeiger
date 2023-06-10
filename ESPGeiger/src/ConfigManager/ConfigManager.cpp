@@ -20,6 +20,9 @@
 #include "ConfigManager.h"
 #include "../Logger/Logger.h"
 #include "../Mqtt/MQTT_Client.h"
+#ifdef ESPGEIGER_HW
+#include "../ESPGHW/ESPGHW.h"
+#endif
 
 #include "ArduinoJson.h"
 #include <FS.h>
@@ -31,9 +34,9 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 10),
-#ifndef ESPGHW_H
-  WiFiManagerParameter("geigerFreq", "PWM Frequency", "8000", 10),
-  WiFiManagerParameter("geigerDuty", "PWM Duty (0-254)", "102", 10),
+#ifdef ESPGEIGER_HW
+  WiFiManagerParameter("geigerFreq", "PWM Frequency", String(GEIGERHW_FREQ).c_str(), 10),
+  WiFiManagerParameter("geigerDuty", "PWM Duty (0-254)", String(GEIGERHW_DUTY).c_str(), 10),
 #endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)}</script>")
 };

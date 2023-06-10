@@ -21,6 +21,9 @@
 
 #define DEFAULT_RX_TIMEOUT           30
 #include <Arduino.h>
+#ifdef ESPGEIGER_HW
+#include "src/ESPGHW/ESPGHW.h"
+#endif
 #include "src/ConfigManager/ConfigManager.h"
 #include "src/Status.h"
 #include "src/Counter/Counter.h"
@@ -38,9 +41,6 @@
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/OLEDDisplay/OLEDDisplay.h"
 #include <Ticker.h>  //Ticker Library
-#ifdef ESPGEIGER_HW
-#include "src/ESPGHW/ESPGHW.h"
-#endif
 #ifdef SERIALOUT
 #include "src/SerialOut/SerialOut.h"
 #endif
