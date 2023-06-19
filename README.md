@@ -102,6 +102,11 @@ In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 together
 
 ## Counters
 
+### Annoucing ESPGeiger-HW
+
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-J305.jpg" width="75%"/>
+
 The project is compatible with Generic Pulse-based geiger counters and the GC10next serial based counters.
 
 - [DIY GeigerKit](https://sites.google.com/site/diygeigercounter/)
