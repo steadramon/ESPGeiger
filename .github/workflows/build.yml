@@ -29,7 +29,7 @@ jobs:
           - "esp8266oled_gc10next"
           - "esp32oled_gc10next"
           - "esp8266oled_pulse"
-          - "esp32oled_pulse"
+          - "cajoe_gc_esp32"
     runs-on: ubuntu-latest
     name: Build with PlatformIO
     steps:
