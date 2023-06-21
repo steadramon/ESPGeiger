@@ -67,6 +67,7 @@ void Counter::setup_pulse() {
   #endif
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
+  gpio_set_pull_mode((gpio_num_t)_geiger_rxpin, GPIO_FLOATING);
 #else
   Log::console(PSTR("Counter: Interrupt RXPIN: %d"), _geiger_rxpin);
   pinMode(_geiger_rxpin, INPUT);
