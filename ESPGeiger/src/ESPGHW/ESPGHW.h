@@ -27,24 +27,46 @@
 #endif
 
 #ifndef GEIGERHW_FREQ
-#define GEIGERHW_FREQ 8000
+#define GEIGERHW_FREQ 6000
 #endif
 
 #ifndef GEIGERHW_DUTY
-#define GEIGERHW_DUTY 70
+#define GEIGERHW_DUTY 170
 #endif
+
+#ifndef GEIGERHW_MAX_FREQ
+#define GEIGERHW_MAX_FREQ 9000
+#endif
+
+extern Status status;
 
 class ESPGeigerHW {
     public:
       ESPGeigerHW();
       void loop();
+      void fiveloop();
       void begin();
       void set_freq( int freq) {
+        if (_hw_freq > GEIGERHW_MAX_FREQ) {
+          _hw_freq = GEIGERHW_MAX_FREQ;
+        }
+         analogWriteFreq(_hw_freq);
         _hw_freq = freq;
       };
+      int get_freq() {
+        return _hw_freq;
+      }
       void set_duty( int duty) {
+        if (_hw_duty > 255) {
+          _hw_duty = 255;
+        }
         _hw_duty = duty;
       };
+      int get_duty() {
+        return _hw_duty;
+      }
+      void saveconfig();
+      void loadconfig();
     private:
       int _hw_freq = GEIGERHW_FREQ;
       int _hw_duty = GEIGERHW_DUTY;
