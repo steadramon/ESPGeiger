@@ -28,10 +28,10 @@ GMC::GMC() {
 void GMC::loop()
 {
   unsigned long now = millis();
-  if (now - lastPing > pingInterval)
+  if (now - lastPing >= pingInterval)
   {
-    GMC::postMeasurement();
     lastPing = now;
+    GMC::postMeasurement();
   }
 }
 
