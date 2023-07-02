@@ -28,10 +28,10 @@ Radmon::Radmon() {
 void Radmon::loop()
 {
   unsigned long now = millis();
-  if (now - lastPing > pingInterval)
+  if (now - lastPing >= pingInterval)
   {
-    Radmon::postMeasurement();
     lastPing = now;
+    Radmon::postMeasurement();
   }
 }
 
