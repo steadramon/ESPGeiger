@@ -6,6 +6,7 @@ ESPGeiger is an open-source project that makes it easy to monitor radiation leve
 - 😃  Easy to install and configure - contribute to monitoring!
 - ✅  Compatible with all generic Geiger counters with Pulse output and a range of serial based - GC10, GC10next, MightyOhm
 - 📈  Built in webserver with graphing
+- 🖥️   SD1306 Display support
 - 🔴  Live CPM and μSv/h readings
 - 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
 - 🎛️  Configurable filtering/debounce and noise control
@@ -41,12 +42,12 @@ Automatically output every minute:
 
 https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-Homeassistant.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-Homeassistant.png" width="75%"/>
 
 ### Planned:
 - ESPGeiger API
 - Async Webserver/MQTT
-- Display support
+- Configurable alarms
 
 ## Installation
 
