@@ -37,6 +37,12 @@ Automatically output every minute:
     ...
     ESPGeiger-129e0c/tele/lwt Offline
 
+### Home Assistant MQTT Autodiscovery
+
+https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
+
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-Homeassistant.png" width="50%"/>
+
 ### Planned:
 - ESPGeiger API
 - Async Webserver/MQTT
