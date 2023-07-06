@@ -92,6 +92,10 @@ By default `GEIGER_RXPIN` is set to GPIO13. This is the pin on the ESP you need 
 
 The `GEIGER_TXPIN` is not currently in use for communication to the Geiger Counter.
 
+### ESPGeiger-HW
+
+Currently ESPGeiger-HW is in development testing, watch this space!
+
 ### Test/Emulation mode counter
 
 **Note**: Publishing to public sites is disabled whilst ESPGeiger is in test mode.
