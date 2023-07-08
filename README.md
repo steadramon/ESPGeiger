@@ -51,6 +51,10 @@ https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
 
 ## Installation
 
+### Web Installer
+
+On your Chrome or Edge browser, visit our web installer here: https://install.espgeiger.com/
+
 ### Pre-built image
 
 Select an image - the images are in the format `<esp_device>_<geiger_device>`
