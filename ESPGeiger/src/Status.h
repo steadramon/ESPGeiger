@@ -61,11 +61,18 @@ struct Status {
   const char* geiger_model = "";
   unsigned long last_send = 0;
   unsigned long last_blip = 0;
+#ifdef GEIGER_PUSHBUTTON
   unsigned long last_pushbutton = 0;
+  bool button_pushed = false;
+#endif
 #if LED_SEND_RECEIVE_ON == LOW
   JLed led = JLed(LED_SEND_RECEIVE).LowActive();
 #else
   JLed led = JLed(LED_SEND_RECEIVE);
+#endif
+#if defined(SSD1306_DISPLAY)
+  int oled_page = 1;
+  int oled_last_update = 0;
 #endif
 #ifdef ESPGEIGER_HW
   JLed blip_led = JLed(15);
