@@ -192,7 +192,6 @@ extern "C" {
 #endif
 
 static volatile float eventCounter;
-static unsigned long _last = 0;
 static unsigned long _debounce = microsecondsToClockCycles(GEIGER_DEBOUNCE);
 
 extern Status status;
@@ -221,11 +220,11 @@ static hw_timer_t * hwtimer = NULL;
 
 static void IRAM_ATTR count() {
   unsigned long cycles = ESP.getCycleCount();
-  if (cycles - _last > _debounce) {
+  if (cycles - status.last_blip > _debounce) {
     portENTER_CRITICAL_ISR(&timerMux);
     eventCounter++;
     portEXIT_CRITICAL_ISR(&timerMux);
-    _last = cycles;
+    status.last_blip = cycles;
   }
 };
 
@@ -261,9 +260,9 @@ static void ICACHE_RAM_ATTR count() {
   if (_handlesecond)
     return;
   unsigned long cycles = ESP.getCycleCount();
-  if (cycles - _last > _debounce) {
+  if (cycles - status.last_blip > _debounce) {
     eventCounter += 1;
-    _last = cycles;
+    status.last_blip = cycles;
 #ifdef ESPGEIGER_HW
     status.blip_led.Blink(2,2);
 #else
