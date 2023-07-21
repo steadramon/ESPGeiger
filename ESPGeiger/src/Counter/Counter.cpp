@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include "Counter.h"
 #include "../Logger/Logger.h"
+#include "../ConfigManager/ConfigManager.h"
 
 Counter::Counter() {
   status.geiger_model = GEIGER_MODEL;
@@ -80,6 +81,9 @@ void Counter::begin() {
   status.geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
   status.geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
   status.geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
+  ConfigManager &configManager = ConfigManager::getInstance();
+  const char* ratioChar = configManager.getParamValueFromID("geigerRatio");
+  _ratio = atof(ratioChar);
 
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
   Log::console(PSTR("Counter: Setting up pulse geiger ..."));
