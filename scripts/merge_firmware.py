@@ -19,10 +19,11 @@ def merge_bin(source, target, env):
                 "--chip",
                 BOARD_CONFIG.get("build.mcu", "esp32"),
                 "merge_bin",
-                "--fill-flash-size",
+                "--flash_mode",
+                "dio",
                 BOARD_CONFIG.get("upload.flash_size", "4MB"),
                 "-o",
-                MERGED_BIN,
+                APP_BIN,
             ]
             + flash_images
         )
@@ -30,11 +31,3 @@ def merge_bin(source, target, env):
 
 # Add a post action that runs esptoolpy to merge available flash images
 env.AddPostAction(APP_BIN , merge_bin)
-
-# Patch the upload command to flash the merged binary at address 0x0
-env.Replace(
-    UPLOADERFLAGS=[
-        ]
-        + ["0x0", MERGED_BIN],
-    UPLOADCMD='"$PYTHONEXE" "$UPLOADER" $UPLOADERFLAGS',
-)
