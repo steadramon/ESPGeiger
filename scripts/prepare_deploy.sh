@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 echo "renaming bin files with the environment name"
+rm .pio/build/*/bootloader.bin
+rm .pio/build/*/partitions.bin
 rename -v 's:/:-:g' .pio/build/*/*.bin
 mkdir toDeploy
 rename 's/.pio-build-//' .*.bin
