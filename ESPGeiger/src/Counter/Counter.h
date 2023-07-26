@@ -295,6 +295,7 @@ class Counter {
     public:
       Counter();
       void loop();
+      float get_cps();
       int get_cpm();
       int get_cpm5();
       int get_cpm15();

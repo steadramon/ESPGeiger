@@ -26,6 +26,10 @@ Counter::Counter() {
   status.geiger_model = GEIGER_MODEL;
 }
 
+float Counter::get_cps() {
+  return status.geigerTicks.get();
+}
+
 int Counter::get_cpm() {
   return status.geigerTicks.get()*60;
 }
