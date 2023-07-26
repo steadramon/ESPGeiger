@@ -50,4 +50,5 @@ jobs:
           name: ${{ matrix.environments }}
           path: |
             .pio/build/*/firmware.bin
+            .pio/build/*/firmware_merged.bin
           retention-days: 7

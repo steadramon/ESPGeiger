@@ -24,7 +24,7 @@ def merge_bin(source, target, env):
                 "--flash_size",
                 BOARD_CONFIG.get("upload.flash_size", "4MB"),
                 "-o",
-                APP_BIN,
+                MERGED_BIN,
             ]
             + flash_images
         )
