@@ -24,10 +24,19 @@
 MQTT_Client::MQTT_Client()
     : PubSubClient(espClient)
 {
+#ifdef ESP8266
+  // setTimeout in msecs
+  espClient.setTimeout(200 * 100);
+#else
+  // setTimeout in secs
+  uint32_t timeout = (20);
+  espClient.setTimeout(timeout);
+#endif
 }
 void MQTT_Client::disconnect()
 {
   PubSubClient::disconnect();
+  espClient.stop();
   mqttEnabled = true;
 }
 void MQTT_Client::loop()
@@ -298,6 +307,7 @@ void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& ma
   path.concat("/config");
 
   publish(path.c_str(), "", true);
+  yield();
 }
 
 void MQTT_Client::begin()
@@ -313,7 +323,8 @@ void MQTT_Client::begin()
   }
   setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
   setBufferSize(MQTT_MAX_PACKET_SIZE);
-
+  setKeepAlive(30);
+  setSocketTimeout(4);
   mqttEnabled = true;
 
 }
