@@ -24,6 +24,9 @@
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
+#ifdef GEIGER_PUSHBUTTON
+#include "src/PushButton/PushButton.h"
+#endif
 #include "src/ConfigManager/ConfigManager.h"
 #include "src/Status.h"
 #include "src/Counter/Counter.h"
@@ -44,27 +47,32 @@
 #ifdef SERIALOUT
 #include "src/SerialOut/SerialOut.h"
 #endif
-
+#ifdef GEIGER_PUSHBUTTON
+PushButton pushbutton = PushButton();
+#endif
 #if defined(SSD1306_DISPLAY)
 SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
 #endif
 #ifdef ESPGEIGER_HW
 ESPGeigerHW hardware = ESPGeigerHW();
 #endif
+
 #ifdef SERIALOUT
 SerialOut serialout = SerialOut();
 #endif
-// Global status and cou
+// Global status and counter
 Status status;
 Counter gcounter = Counter();
 
 ConfigManager& cManager = ConfigManager::getInstance();
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
-
+// External
 Radmon radmon = Radmon();
 Thingspeak thingspeak = Thingspeak();
 GMC gmc = GMC();
+
+// Tickers
 Ticker msTicker;
 Ticker fiveSTicker;
 Ticker sTicker;
@@ -108,9 +116,7 @@ void msTickerCB()
 
 void fiveSTickerCB()
 {
-  gmc.loop();
-  radmon.loop();
-  thingspeak.loop();
+
 }
 
 void sTickerCB()
@@ -130,6 +136,9 @@ void sTickerCB()
   if (status.warmup == false) {
     status.cpm_history.push(gcounter.get_cpm());
   }
+  gmc.loop();
+  radmon.loop();
+  thingspeak.loop();
 }
 
 void setup()
@@ -174,6 +183,9 @@ void setup()
 #ifdef SERIALOUT
   serialout.begin();
 #endif
+#ifdef GEIGER_PUSHBUTTON
+  pushbutton.begin();
+#endif
   setupNTP();
   status.start = NTP.getUptime();
   sTicker.attach(1, sTickerCB);
@@ -188,6 +200,9 @@ void loop()
 
   handleSerial();
   gcounter.loop();
+#ifdef GEIGER_PUSHBUTTON
+  pushbutton.loop();
+#endif
 #ifdef SSD1306_DISPLAY
   display.loop();
 #endif
