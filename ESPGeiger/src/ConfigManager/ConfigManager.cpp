@@ -20,9 +20,6 @@
 #include "ConfigManager.h"
 #include "../Logger/Logger.h"
 #include "../Mqtt/MQTT_Client.h"
-#ifdef ESPGEIGER_HW
-#include "../ESPGHW/ESPGHW.h"
-#endif
 
 #include "ArduinoJson.h"
 #include <FS.h>
@@ -34,10 +31,6 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 10),
-#ifdef ESPGEIGER_HW
-  WiFiManagerParameter("geigerFreq", "PWM Frequency", String(GEIGERHW_FREQ).c_str(), 10),
-  WiFiManagerParameter("geigerDuty", "PWM Duty (0-254)", String(GEIGERHW_DUTY).c_str(), 10),
-#endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)}</script>")
 };
 
@@ -231,6 +224,65 @@ void ConfigManager::handleStatusPage()
 
   ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
 }
+
+#ifdef ESPGEIGER_HW
+void ConfigManager::handleHVPage()
+{
+  String page = FPSTR(HTTP_HEAD_START);
+  page += FPSTR(HTTP_STYLE);
+  page += FPSTR(faviconHead);
+  page += FPSTR(HTTP_HEAD_END);
+  page += FPSTR(HV_STATUS_PAGE_BODY);
+  String title = FPSTR(thingName);
+  title += F("-HW - HV");
+  page.replace(FPSTR(T_v), title);
+  page += FPSTR(HTTP_BACKBTN);
+  page += FPSTR(STATUS_PAGE_FOOT);
+  page.replace(FPSTR(T_1), String(status.thingName));
+  page.replace(FPSTR(T_2), String(status.version));
+  page.replace(FPSTR(T_3), String(status.git_version));
+  page += FPSTR(HTTP_END);
+
+  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
+}
+
+void ConfigManager::handleHVSet()
+{
+  int _d = atoi(server->arg(F("d")).c_str());
+  int _f = atoi(server->arg(F("f")).c_str());
+  hardware.set_duty(_d);
+  hardware.set_freq(_f);
+  hardware.saveconfig();
+  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), F("OK"));
+}
+
+void ConfigManager::handleHVJSReturn()
+{
+  String page = FPSTR(picographJS);
+  page += FPSTR(hvJS);
+  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJS), page);
+}
+
+void ConfigManager::handleHVJsonReturn()
+{
+  char jsonBuffer[1500] = "";
+
+  int total = sizeof(jsonBuffer);
+  int volts = status.hvReading.get();
+  int freq = hardware.get_freq();
+  int duty = hardware.get_duty();
+
+  sprintf_P (
+    jsonBuffer,
+    PSTR("{\"volts\": %d, \"freq\": %d, \"duty\": %d }"),
+    volts,
+    freq,
+    duty
+  );
+  jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
+  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
+}
+#endif
 
 void ConfigManager::handleRestart()
 {
@@ -467,6 +519,12 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(CONSOLE_URL, HTTP_GET, std::bind(&ConfigManager::handleRefreshConsole, this));
   ConfigManager::server.get()->on(RESTART_URL, HTTP_GET, std::bind(&ConfigManager::handleRestart, this));
   ConfigManager::server.get()->on(RESET_URL, HTTP_GET, std::bind(&ConfigManager::handleResetParams, this));
+#ifdef ESPGEIGER_HW
+  ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
+  ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
+  ConfigManager::server.get()->on(HV_JS_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJSReturn, this));
+  ConfigManager::server.get()->on(HV_JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJsonReturn, this));
+#endif
 }
 
 char* ConfigManager::getUptimeString () {

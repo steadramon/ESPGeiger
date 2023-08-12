@@ -27,12 +27,99 @@ static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<center><h1>{v}</h1></cent
 <script src="/js"></script>
 )HTML";
 
+static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>
+<style>.wrap{min-width:350px;max-width:900px;width:50vw}        .wa {
+            padding: 20px;
+            width: 75%;
+            font-size: 20px;
+            margin: auto;
+            border-radius: 5px;
+            box-shadow: rgb(0 0 0 / 25%) 0px 5px 10px 2px;
+    background-color: #ffd48a;
+    border-left: 5px solid #8a5700;
+            }
+        
+        .cl {
+            float: right;
+            margin-left: 18px;
+            font-size: 30px;
+            line-height: 20px;
+            cursor: pointer;
+            transition: 0.4s;
+    border-color: #8a5700;
+    color: #8a5700;
+            }
+        </style>
+<canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
+    <div class="wa">
+        <span class="cl" onclick="this.parentElement.style.display='none';">×</span>
+        <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
+    </div>
+<table><tr><th>Frequency:</th><td><input type="range" id="freq" min="0" max="9000" step="250" value="50"><span id="sfreq">-</span></td></tr>
+<tr><th>Duty:</th><td><input type="range" id="duty" min="0" max="255" value="50"><span id="sduty">-</span></td></tr></table>
+<tr><td><button id="submit">Submit</button></td></tr></table>
+<script src="/hvjs"></script>
+)HTML";
+
+
 static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>{1}</a> {2}/{3}</small>";
 
 static const char statusJS[] PROGMEM = R"JS("use strict";
 !function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('uptime').innerHTML=o.uptime;byID('cpm').innerHTML=o.cpm;byID('usv').innerHTML=(o.cpm/o.ratio).toFixed(4);e.update([o.cpm,o.cpm5,o.cpm15]),setTimeout(t,3e3)}},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
 var lt,to,tp,x=null,pc="",sn=0,id=0;
 function f(){var t;return clearTimeout(lt),t=byID("t1"),(x=new XMLHttpRequest).onload=function(){if(200==x.status){var e,n=x.responseText;id=n.substr(0,n.indexOf("\n")),(e=n.substr(n.indexOf("\n")+1)).length>0&&(t.value+=e),t.scrollTop>=sn&&(t.scrollTop=99999,sn=t.scrollTop)}lt=setTimeout(f,3210)},x.onerror=function(){lt=setTimeout(f,6e3)},x.open("GET","/cs?c1="+id,!0),x.send(),!1}window.addEventListener("load",f);
+)JS";
+
+static const char hvJS[] PROGMEM = R"JS("use strict";
+var e=new Graph("g1", ["Volts"], "V", "g2", 15, null, 0, true, true, 5,5);
+var x=null,lt,to,tp,pc='';sn=0,id=0;
+
+function gethv() {
+  var c,o='',t;
+  clearTimeout(lt);
+  t = document.getElementById('t1');
+
+    x=new XMLHttpRequest();
+    x.onload = function() {
+      if(x.status==200){
+        var o=JSON.parse(x.responseText)
+        e.update([o.volts]);
+        if (byID('sfreq').innerHTML=="-") {
+          byID('freq').value=o.freq;
+          byID('duty').value=o.duty;
+          byID('sfreq').innerHTML=o.freq;
+          byID('sduty').innerHTML=o.duty;
+        }
+      }
+      lt=setTimeout(gethv,3000);
+    };
+
+    x.open('GET','/hvjson',true);
+    x.send();
+
+  return false;
+}
+window.addEventListener("load",gethv);
+byID('freq').addEventListener("change", function() {
+          byID('sfreq').innerHTML=this.value;
+});
+byID('duty').addEventListener("change", function() {
+          byID('sduty').innerHTML=this.value;
+});
+byID('submit').addEventListener("click", function() {
+  var duty = byID('duty').value;
+  var freq = byID('freq').value;
+
+   x=new XMLHttpRequest();
+    x.onload = function() {
+      if(x.status==200){
+          byID('sfreq').innerHTML='-';
+          byID('sduty').innerHTML='-';
+      }
+    };
+    x.open('GET','/hvset?f='+freq+'&d='+duty,true);
+    x.send();
+});
 )JS";
 
 // picograph.js - https://github.com/RainingComputers/picograph.js

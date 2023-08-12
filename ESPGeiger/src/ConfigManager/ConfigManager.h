@@ -26,6 +26,10 @@
 
 #include "logos.h"
 #include "html.h"
+#ifdef ESPGEIGER_HW
+#include "../ESPGHW/ESPGHW.h"
+extern ESPGeigerHW hardware;
+#endif
 
 extern Status status;
 extern Counter gcounter;
@@ -47,6 +51,10 @@ constexpr auto STATUS_URL = "/status";
 constexpr auto JS_URL = "/js";
 constexpr auto JSON_URL = "/json";
 constexpr auto RESET_URL = "/reset";
+constexpr auto HV_URL = "/hv";
+constexpr auto HV_JS_URL = "/hvjs";
+constexpr auto HV_JSON_URL = "/hvjson";
+constexpr auto HV_SET_URL = "/hvset";
 
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
@@ -127,6 +135,13 @@ private:
   void handleRefreshConsole();
   void handleRestart();
   void handleResetParams();
+  void handleRegisterAPI();
+#ifdef ESPGEIGER_HW
+  void handleHVPage();
+  void handleHVJSReturn();
+  void handleHVJsonReturn();
+  void handleHVSet();
+#endif
   char thingName[11] = "";
   char chipId[7] = "";
   char hostName[20] = "";
