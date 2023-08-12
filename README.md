@@ -18,37 +18,6 @@ ESPGeiger is an open-source project that makes it easy to monitor radiation leve
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
 
-## Outputs
-- MQTT
-- Home Assistant (Autodiscovery)
-- [ThingSpeak](https://thingspeak.com/channels/2087322)
-- Radmon.org
-- gmcmap.com
-
-### MQTT Output
-
-Automatically output every minute:
-
-    ESPGeiger-129e0c/tele/lwt Online
-    ESPGeiger-129e0c/tele/status {"uptime":"2T01:45:10","board":"ESP32","model":"GC10next","free_mem":191552,"ssid":"Wifi","ip":"192.168.1.123","rssi":-24}
-    ESPGeiger-129e0c/stat/CPM 26.00
-    ESPGeiger-129e0c/stat/uSv 0.10
-    ESPGeiger-129e0c/stat/CPM5 25.00
-    ESPGeiger-129e0c/stat/CPM15 25.00
-    ...
-    ESPGeiger-129e0c/tele/lwt Offline
-
-### Home Assistant MQTT Autodiscovery
-
-https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
-
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-Homeassistant.png" width="75%"/>
-
-### Planned:
-- ESPGeiger API
-- Async Webserver/MQTT
-- Configurable alarms
-
 ## Installation
 
 ### Web Installer
@@ -149,6 +118,37 @@ If you own or can offer a device below for testing and support, please get in to
 - MightyOhm
 - GMC-320
 - GGreg20
+
+## Outputs
+- MQTT
+- Home Assistant (Autodiscovery)
+- [ThingSpeak](https://thingspeak.com/channels/2087322)
+- Radmon.org
+- gmcmap.com
+
+### MQTT Output
+
+Automatically output every minute:
+
+    ESPGeiger-129e0c/tele/lwt Online
+    ESPGeiger-129e0c/tele/status {"uptime":"2T01:45:10","board":"ESP32","model":"GC10next","free_mem":191552,"ssid":"Wifi","ip":"192.168.1.123","rssi":-24}
+    ESPGeiger-129e0c/stat/CPM 26.00
+    ESPGeiger-129e0c/stat/uSv 0.10
+    ESPGeiger-129e0c/stat/CPM5 25.00
+    ESPGeiger-129e0c/stat/CPM15 25.00
+    ...
+    ESPGeiger-129e0c/tele/lwt Offline
+
+### Home Assistant MQTT Autodiscovery
+
+https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
+
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-Homeassistant.png" width="75%"/>
+
+### Planned:
+- ESPGeiger API
+- Async Webserver/MQTT
+- Configurable alarms
 
 ## Contributions
 
