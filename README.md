@@ -116,7 +116,7 @@ Other Serial based should in theory be supportable with small changes to the cod
 
 If you own or can offer a device below for testing and support, please get in touch!
 
-- GC10
+- GC10 (original)
 - MightyOhm
 - GMC-320
 - GGreg20
