@@ -122,6 +122,8 @@ In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 together
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-J305.jpg" width="75%"/>
 
+### Pulse Counters
+
 The project is compatible with Generic Pulse-based geiger counters and the GC10next serial based counters.
 
 - [DIY GeigerKit](https://sites.google.com/site/diygeigercounter/)
@@ -132,6 +134,8 @@ The project is compatible with Generic Pulse-based geiger counters and the GC10n
 - [MightyOhm Kit](https://www.tindie.com/stores/mightyohm/)
 - [DiY-GDC](https://www.ebay.com/usr/impexeris)
 - CAJOE (and other clones) RadiationD-v1.1
+
+Simply connect the pulse output to GPIO13
 
 ### Serial Compatibility 
 
