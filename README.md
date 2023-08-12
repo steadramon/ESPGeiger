@@ -106,7 +106,7 @@ The project is compatible with Generic Pulse-based geiger counters and the GC10n
 
 Simply connect the pulse output to GPIO13
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="25%"/>
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
 
 ### Serial Compatibility 
 
