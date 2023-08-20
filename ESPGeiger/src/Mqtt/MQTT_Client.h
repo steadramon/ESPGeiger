@@ -31,6 +31,15 @@
 #define MQTT_MAX_PACKET_SIZE 1024
 #define MQTT_JSON_BUFFER_SIZE 1024
 
+constexpr auto MQTT_LWT_ONLINE PROGMEM = "Online";
+constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
+
+const char MQTT_TELE_TOPIC[18] PROGMEM = "%st%/tele/%cm%";
+const char MQTT_STAT_TOPIC[18] PROGMEM = "%st%/stat/%cm%";
+
+constexpr auto MQTT_TOPIC_LWT PROGMEM = "lwt";
+constexpr auto MQTT_TOPIC_STATUS PROGMEM = "status";
+
 extern Status status;
 extern Counter gcounter;
 
@@ -76,21 +85,15 @@ private:
   const unsigned long reconnectionInterval = 15 * 1000;
   uint16_t connectionTimeout = 10 * 60 * 1000 / reconnectionInterval;
 
-  const char* teleTopic = "%st%/tele/%cm%";
-  const char* statTopic = "%st%/stat/%cm%";
+  const char* teleTopic = MQTT_TELE_TOPIC;
+  const char* statTopic = MQTT_STAT_TOPIC;
 
   // tele
-  const char* topicStatus = "status";
-  const char* topicLWT = "lwt";
+  const char* topicStatus = MQTT_TOPIC_STATUS;
+  const char* topicLWT = MQTT_TOPIC_LWT;
 
-  const char* lwtOnline = "Online";
-  const char* lwtOffline = "Offline";
-
-  // command
-  const char* commandReset = "reset";
-  const char* commandStatus = "status";
-  const char* commandLog = "log";
-
+  const char* lwtOnline = MQTT_LWT_ONLINE;
+  const char* lwtOffline = MQTT_LWT_OFFLINE;
 };
 
 #endif
