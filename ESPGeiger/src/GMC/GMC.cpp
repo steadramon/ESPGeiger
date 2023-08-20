@@ -102,7 +102,7 @@ void GMC::postMeasurement() {
     if (requestOpenResult)
     {
       status.led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
+      request.setReqHeader(PSTR("User-Agent"), configManager.getUserAgent());
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(30);
       request.send();
@@ -110,7 +110,7 @@ void GMC::postMeasurement() {
     }
     else
     {
-      Serial.println(F("Can't send bad request"));
+      Serial.println(PSTR("Can't send bad request"));
     }
   }
 }

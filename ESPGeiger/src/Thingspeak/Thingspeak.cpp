@@ -92,7 +92,7 @@ void Thingspeak::postMeasurement() {
     if (requestOpenResult)
     {
       status.led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
+      request.setReqHeader(PSTR("User-Agent"), configManager.getUserAgent());
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(5);
       request.send();
@@ -100,7 +100,7 @@ void Thingspeak::postMeasurement() {
     }
     else
     {
-      Serial.println(F("Can't send - bad request"));
+      Serial.println(PSTR("Can't send - bad request"));
     }
   }
 }
