@@ -41,6 +41,8 @@ void MQTT_Client::disconnect()
 }
 void MQTT_Client::loop()
 {
+  PubSubClient::loop();
+
   if (!mqttEnabled) {
     return;
   }
@@ -69,8 +71,6 @@ void MQTT_Client::loop()
     ESP.restart();
   }
 
-  PubSubClient::loop();
-
   unsigned long now = millis();
   if (now - lastPing > pingInterval && connected())
   {
@@ -79,6 +79,8 @@ void MQTT_Client::loop()
     lastPing = now;
     const size_t capacity = JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(17) + 22 + 20 + 20;
     DynamicJsonDocument doc(capacity);
+    char buffer[1048];
+
     doc["uptime"] = configManager.getUptimeString();
     doc["board"] = configManager.GetChipModel();
     doc["model"] = configManager.getParamValueFromID("geigerModel");
@@ -86,24 +88,24 @@ void MQTT_Client::loop()
     doc["ssid"] = WiFi.SSID();
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
-    char buffer[1048];
+
     serializeJson(doc, buffer);
     Log::console(PSTR("MQTT: %s"), buffer);
 
     publish(buildTopic(teleTopic, topicStatus).c_str(), buffer, false);
 
-    float avgcpm = gcounter.get_cpm();
+    float fval = gcounter.get_cpm();
 
-    publish(buildTopic(statTopic, "CPM").c_str(), String(avgcpm).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPM")).c_str(), String(fval).c_str(), false);
 
-    float usv =  gcounter.get_usv();
-    publish(buildTopic(statTopic, "uSv").c_str(), String(usv).c_str(), false);
+    fval =  gcounter.get_usv();
+    publish(buildTopic(statTopic, PSTR("uSv")).c_str(), String(fval).c_str(), false);
 
-    avgcpm = gcounter.get_cpm5();
-    publish(buildTopic(statTopic, "CPM5").c_str(), String(avgcpm).c_str(), false);
+    fval = gcounter.get_cpm5();
+    publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), String(fval).c_str(), false);
 
-    avgcpm = gcounter.get_cpm15();
-    publish(buildTopic(statTopic, "CPM15").c_str(), String(avgcpm).c_str(), false);
+    fval = gcounter.get_cpm15();
+    publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), String(fval).c_str(), false);
 
     status.last_send = millis();
   }
@@ -128,54 +130,54 @@ void MQTT_Client::reconnect()
     Log::console(PSTR("MQTT: Connected!"));
     status.mqtt_connected = true;
     publish(buildTopic(teleTopic, topicLWT).c_str(), lwtOnline, false);
-    publishHassTopic("sensor",
-      "cpm",
-      "CPM",
-      "CPM",
-      "CPM",
-      "",
-      "",
-      "",
-      "",
-      "",
+    publishHassTopic(PSTR("sensor"),
+      PSTR("cpm"),
+      PSTR("CPM"),
+      PSTR("CPM"),
+      PSTR("CPM"),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
       { {"unit_of_meas", "CPM"},
         { "ic", "mdi:pulse" }});
-    publishHassTopic("sensor",
-      "cpm5",
-      "CPM5",
-      "CPM5",
-      "CPM5",
-      "",
-      "",
-      "",
-      "",
-      "",
-      { {"unit_of_meas", "CPM"},
-        { "ic", "mdi:pulse" }});
-
-    publishHassTopic("sensor",
-      "cpm15",
-      "CPM15",
-      "CPM15",
-      "CPM15",
-      "",
-      "",
-      "",
-      "",
-      "",
+    publishHassTopic(PSTR("sensor"),
+      PSTR("cpm5"),
+      PSTR("CPM5"),
+      PSTR("CPM5"),
+      PSTR("CPM5"),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
       { {"unit_of_meas", "CPM"},
         { "ic", "mdi:pulse" }});
 
-    publishHassTopic("sensor",
-      "usv",
-      "\u00B5Sv/h",
-      "uSv",
-      "uSv",
-      "",
-      "",
-      "",
-      "",
-      "",
+    publishHassTopic(PSTR("sensor"),
+      PSTR("cpm15"),
+      PSTR("CPM15"),
+      PSTR("CPM15"),
+      PSTR("CPM15"),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      { {"unit_of_meas", "CPM"},
+        { "ic", "mdi:pulse" }});
+
+    publishHassTopic(PSTR("sensor"),
+      PSTR("usv"),
+      PSTR("\u00B5Sv/h"),
+      PSTR("uSv"),
+      PSTR("uSv"),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
+      PSTR(""),
       { {"unit_of_meas", "\u00B5S/h"},
         { "ic", "mdi:radioactive" }});
   }
@@ -269,23 +271,23 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
   serializeJson(json, buffer);
 
   String path = _discovery_topic;
-  path.concat("/");
+  path.concat(PSTR("/"));
   path.concat(mqttDeviceType);
-  path.concat("/");
+  path.concat(PSTR("/"));
   path.concat(configManager.getHostName());
-  path.concat("-");
+  path.concat(PSTR("-"));
   path.concat(mattDeviceName);
-  path.concat("/config");
+  path.concat(PSTR("/config"));
 
   publish(path.c_str(), buffer);
 }
 
 void MQTT_Client::removeHASSConfig()
 {
-  removeHassTopic("sensor", "cpm");
-  removeHassTopic("sensor", "cpm5");
-  removeHassTopic("sensor", "cpm15");
-  removeHassTopic("sensor", "usv");
+  removeHassTopic(PSTR("sensor"), PSTR("cpm"));
+  removeHassTopic(PSTR("sensor"), PSTR("cpm5"));
+  removeHassTopic(PSTR("sensor"), PSTR("cpm15"));
+  removeHassTopic(PSTR("sensor"), PSTR("usv"));
 }
 
 void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName)
@@ -298,13 +300,13 @@ void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& ma
   }
 
   String path = _discovery_topic;
-  path.concat("/");
+  path.concat(PSTR("/"));
   path.concat(mqttDeviceType);
-  path.concat("/");
+  path.concat(PSTR("/"));
   path.concat(configManager.getHostName());
-  path.concat("/");
+  path.concat(PSTR("/"));
   path.concat(mattDeviceName);
-  path.concat("/config");
+  path.concat(PSTR("/config"));
 
   publish(path.c_str(), "", true);
   yield();
@@ -326,5 +328,4 @@ void MQTT_Client::begin()
   setKeepAlive(30);
   setSocketTimeout(4);
   mqttEnabled = true;
-
 }
