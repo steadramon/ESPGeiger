@@ -134,6 +134,7 @@ void Counter::begin() {
 
 void Counter::handleSerial(char* input)
 {
+#if GEIGER_TYPE == GEIGER_TYPE_SERIAL || GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   int _scpm;
 #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
   int _scps;
@@ -156,6 +157,7 @@ void Counter::handleSerial(char* input)
   portEXIT_CRITICAL(&timerMux);
 #endif
     }
+#endif
 }
 
 void Counter::loop() {
