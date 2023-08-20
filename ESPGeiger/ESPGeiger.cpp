@@ -144,6 +144,7 @@ void sTickerCB()
 void setup()
 {
   Serial.begin(115200);
+  Serial.println();
   delay(100);
 
 #ifdef ESP8266
