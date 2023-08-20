@@ -63,7 +63,7 @@ void ESPGeigerHW::saveconfig() {
     Log::console(PSTR("ESPG-HW: Failed to open espgeigerhw.json"));
     return;
   }
-  char jsonBuffer[1500] = "";
+  char jsonBuffer[512] = "";
 
   int total = sizeof(jsonBuffer);
   char freq[16];
@@ -94,7 +94,7 @@ void ESPGeigerHW::loadconfig() {
     if (configFile)
     {
       // Process the json data
-      DynamicJsonDocument jsonBuffer(2048);
+      DynamicJsonDocument jsonBuffer(256);
       DeserializationError error = deserializeJson(jsonBuffer, configFile);
       if (!error)
       {
