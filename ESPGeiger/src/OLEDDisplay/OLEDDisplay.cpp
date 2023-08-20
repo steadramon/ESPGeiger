@@ -18,6 +18,5 @@
 */
 
 #include "OLEDDisplay.h"
-#include "ArduinoJson.h"
 #include "../Logger/Logger.h"
 
