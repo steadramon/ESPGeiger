@@ -62,7 +62,6 @@ public:
 	SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl) : SSD1306Wire(_addr, _sda, _scl) {
 		cx = 0;
 		cy = 0;
-		//for(byte i=0;i<NUM_CUSTOM_ICONS;i++) custom_chars[i]=NULL;
 	}
 	void begin() {
         init();
@@ -74,7 +73,7 @@ public:
 		fontHeight = 16;
         clear();
         drawXbm(0, 0, 51, 51, ESPLogo);
-        drawString(55, 10, "ESPGeiger");
+        drawString(55, 10, PSTR("ESPGeiger"));
         drawString(55, 24, status.version);
 
 		display();	// todo: not very efficient
@@ -129,8 +128,8 @@ public:
 	void setupWifi(const char* s) {
 		clear();
 		setFont(DialogInput_plain_12);
-		drawString(0, 10, "Setup - Connect to");
-		drawString(0, 24, "WiFi -");
+		drawString(0, 10, PSTR("Setup - Connect to"));
+		drawString(0, 24, PSTR("WiFi -"));
 		drawString(0, 38, String(s));
         display();
 	}
@@ -169,8 +168,8 @@ public:
 		clear();
 		drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
 		setFont(DialogInput_plain_12);
-		drawString(0,5, "CPM:");
-		drawString(0,20, "µSv/h:");
+		drawString(0,5, PSTR("CPM:"));
+		drawString(0,20, PSTR("µSv/h:"));
 	}
 
 	void page_one_graph() {
@@ -213,9 +212,9 @@ public:
 			drawString(93,35, String(maxValue));
         } else {
 			setFont(DialogInput_plain_12);
-			drawString(20,40, "Warmup" );
+			drawString(20,40, PSTR("Warmup") );
 			setFont(Open_Sans_Regular_Plain_10);
-			drawString(93,55, "0");
+			drawString(93,55, PSTR("0"));
 		}
 	}
 
@@ -229,7 +228,7 @@ public:
 	    setFont(DialogInput_plain_12);
 		drawString(45,20, String(gcounter.get_usv()).c_str() );
 		if (status.cpm_history.capacity != status.cpm_history.size()) {
-			drawString(98,2, "W" );
+			drawString(98,2, PSTR("W") );
 		}
 		if (now - status.last_send < 1000) {
 			drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
@@ -241,7 +240,7 @@ public:
 		clear();
 		setFont(ArialMT_Plain_10);
 		drawString(0,5, String(configManager.getHostName()));
-		drawString(0,20, "IP:");
+		drawString(0,20, PSTR("IP:"));
 		drawString(16, 20, WiFi.localIP().toString());
 		drawString(0, 36, configManager.getUptimeString());
 	}
@@ -253,7 +252,7 @@ public:
 		sprintf_P (versionString, PSTR("%S / %S"), status.version, status.git_version);
 		drawString(0, 5, status.geiger_model);
 		drawString(0, 20, versionString);
-		drawString(0, 35, "@steadramon");
+		drawString(0, 35, PSTR("@steadramon"));
 
 	}
 private:
