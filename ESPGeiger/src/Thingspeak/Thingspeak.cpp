@@ -92,7 +92,7 @@ void Thingspeak::postMeasurement() {
     if (requestOpenResult)
     {
       status.led.Blink(500, 500);
-      request.setReqHeader(PSTR("User-Agent"), configManager.getUserAgent());
+      request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(5);
       request.send();
