@@ -161,6 +161,13 @@ void Counter::handleSerial(char* input)
 }
 
 void Counter::loop() {
+  unsigned long cycles = ESP.getCycleCount();
+  if (cycles - status.last_blip < _debounce) {
+#ifdef ESPGEIGER_HW
+    status.blip_led.Blink(2,2);
+#else
+    status.led.Blink(20,20);
+#endif
 #if GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx != _last_secidx) {

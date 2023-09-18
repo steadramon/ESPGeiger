@@ -263,11 +263,6 @@ static void ICACHE_RAM_ATTR count() {
   if (cycles - status.last_blip > _debounce) {
     eventCounter += 1;
     status.last_blip = cycles;
-#ifdef ESPGEIGER_HW
-    status.blip_led.Blink(2,2);
-#else
-    status.led.Blink(20,20);
-#endif
   }
 };
 
