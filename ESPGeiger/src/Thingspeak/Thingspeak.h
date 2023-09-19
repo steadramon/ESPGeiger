@@ -18,6 +18,7 @@
 */
 #ifndef THINGSPEAK_H
 #define THINGSPEAK_H
+#ifdef THINGSPEAKOUT
 #include <Arduino.h>
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
@@ -47,4 +48,5 @@ class Thingspeak {
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
+#endif
 #endif

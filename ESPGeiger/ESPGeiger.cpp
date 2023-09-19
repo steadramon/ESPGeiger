@@ -71,7 +71,9 @@ MQTT_Client& mqtt = MQTT_Client::getInstance();
 #ifdef RADMONOUT
 Radmon radmon = Radmon();
 #endif
+#ifdef THINGSPEAKOUT
 Thingspeak thingspeak = Thingspeak();
+#endif
 GMC gmc = GMC();
 
 // Tickers
@@ -142,7 +144,9 @@ void sTickerCB()
 #ifdef RADMONOUT
   radmon.loop();
 #endif
+#ifdef THINGSPEAKOUT
   thingspeak.loop();
+#endif
 }
 
 void setup()

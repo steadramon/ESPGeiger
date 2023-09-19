@@ -16,7 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+#ifdef THINGSPEAKOUT
 #include <Arduino.h>
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
@@ -104,3 +104,4 @@ void Thingspeak::postMeasurement() {
     }
   }
 }
+#endif

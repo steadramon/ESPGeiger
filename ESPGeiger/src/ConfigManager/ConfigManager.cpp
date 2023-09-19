@@ -33,7 +33,7 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 10),
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)}</script>")
 };
-
+#ifdef THINGSPEAKOUT
 WiFiManagerParameter TSParams[] = 
 {
   // Thingspeak parameters
@@ -42,7 +42,7 @@ WiFiManagerParameter TSParams[] =
   WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label>"),
   WiFiManagerParameter("tsChannelKey", "<br>Channel Key", "", 16),
 };
-
+#endif
 WiFiManagerParameter MQTTParams[] = 
 {
   // The broker parameters
@@ -130,8 +130,10 @@ void ConfigManager::startWebPortal()
   for (int i = 0; i < sizeof(radmonParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&radmonParams[i]);
 #endif
+#ifdef THINGSPEAKOUT
   for (int i = 0; i < sizeof(TSParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&TSParams[i]);
+#endif
   for (int i = 0; i < sizeof(GMCParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&GMCParams[i]);
 
