@@ -19,6 +19,7 @@
 
 #ifndef RADMON_H
 #define RADMON_H
+#ifdef RADMONOUT
 #include <Arduino.h>
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
@@ -49,4 +50,5 @@ class Radmon {
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
+#endif
 #endif

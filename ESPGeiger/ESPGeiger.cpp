@@ -68,7 +68,9 @@ ConfigManager& cManager = ConfigManager::getInstance();
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
 // External
+#ifdef RADMONOUT
 Radmon radmon = Radmon();
+#endif
 Thingspeak thingspeak = Thingspeak();
 GMC gmc = GMC();
 
@@ -137,7 +139,9 @@ void sTickerCB()
     status.cpm_history.push(gcounter.get_cpm());
   }
   gmc.loop();
+#ifdef RADMONOUT
   radmon.loop();
+#endif
   thingspeak.loop();
 }
 

@@ -69,7 +69,7 @@ WiFiManagerParameter CloudAPI[] =
   WiFiManagerParameter("apiID", "IP", "", 16, "pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("apiSecret", "Port", "1883", 6, "pattern='\\d{1,5}'"),
 };
-
+#ifdef RADMONOUT
 WiFiManagerParameter radmonParams[] = 
 {
   WiFiManagerParameter("<br/><br/><hr><h3>Radmon.org parameters</h3>"),
@@ -78,7 +78,7 @@ WiFiManagerParameter radmonParams[] =
   WiFiManagerParameter("radmonUser", "<br>Radmon Username", "", 100),
   WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 100, "type='password'"),
 };
-
+#endif
 WiFiManagerParameter GMCParams[] = 
 {
   WiFiManagerParameter("<br/><br/><hr><h3>GMC parameters</h3>"),
@@ -126,8 +126,10 @@ void ConfigManager::startWebPortal()
     WiFiManager::addParameter(&MQTTParams[i]);
   for (int i = 0; i < sizeof(HassioParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&HassioParams[i]);
+#ifdef RADMONOUT
   for (int i = 0; i < sizeof(radmonParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&radmonParams[i]);
+#endif
   for (int i = 0; i < sizeof(TSParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&TSParams[i]);
   for (int i = 0; i < sizeof(GMCParams) / sizeof(WiFiManagerParameter); i++)
