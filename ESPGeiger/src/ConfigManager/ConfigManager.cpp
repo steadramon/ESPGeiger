@@ -193,7 +193,7 @@ void ConfigManager::handleJSReturn()
 
 void ConfigManager::handleJsonReturn()
 {
-  char jsonBuffer[1500] = "";
+  char jsonBuffer[256] = "";
 
   int total = sizeof(jsonBuffer);
   int rcpm = round((status.geigerTicks.get()*60));
@@ -274,7 +274,7 @@ void ConfigManager::handleHVJSReturn()
 
 void ConfigManager::handleHVJsonReturn()
 {
-  char jsonBuffer[1500] = "";
+  char jsonBuffer[256] = "";
 
   int total = sizeof(jsonBuffer);
   int volts = status.hvReading.get();
