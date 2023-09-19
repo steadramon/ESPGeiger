@@ -79,6 +79,7 @@ WiFiManagerParameter radmonParams[] =
   WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 100, "type='password'"),
 };
 #endif
+#ifdef GMCOUT
 WiFiManagerParameter GMCParams[] = 
 {
   WiFiManagerParameter("<br/><br/><hr><h3>GMC parameters</h3>"),
@@ -88,6 +89,7 @@ WiFiManagerParameter GMCParams[] =
   WiFiManagerParameter("gmcGCID", "Geiger Counter ID", "", 12, "pattern='\\d{1,12}'"),
   WiFiManagerParameter(R"J(<script>getE("cbgm").checked="Y"==getE("gmcSend").value,getE("cbrm").checked="Y"==getE("radmonSend").value,getE("cbts").checked="Y"==getE("tsSend").value,getE("cbhas").checked="Y"==getE("hassSend").value;</script>)J"),
 };
+#endif
 
 ConfigManager::ConfigManager() : WiFiManager(){
 
@@ -134,9 +136,10 @@ void ConfigManager::startWebPortal()
   for (int i = 0; i < sizeof(TSParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&TSParams[i]);
 #endif
+#ifdef GMCOUT
   for (int i = 0; i < sizeof(GMCParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&GMCParams[i]);
-
+#endif
   ConfigManager::loadParams();
 
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");

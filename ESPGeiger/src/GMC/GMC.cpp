@@ -16,7 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+#ifdef GMCOUT
 #include <Arduino.h>
 #include "GMC.h"
 #include "../Logger/Logger.h"
@@ -114,3 +114,4 @@ void GMC::postMeasurement() {
     }
   }
 }
+#endif

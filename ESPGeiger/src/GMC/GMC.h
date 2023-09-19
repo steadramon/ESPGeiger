@@ -19,6 +19,7 @@
 
 #ifndef GMC_H
 #define GMC_H
+#ifdef GMCOUT
 #include <Arduino.h>
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
@@ -48,4 +49,5 @@ class GMC {
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
+#endif
 #endif
