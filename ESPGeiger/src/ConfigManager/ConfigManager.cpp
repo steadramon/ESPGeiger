@@ -169,7 +169,7 @@ void ConfigManager::handleRoot() {
   page += str;
   page += FPSTR(HTTP_PORTAL_OPTIONS);
 
-  page += "<form action='/status' method='get'><button>Status</button></form><br/>";
+  page += F("<form action='/status' method='get'><button>Status</button></form><br/>");
   page += HTTP_PORTAL_MENU[0];
   page += HTTP_PORTAL_MENU[3];
   page += HTTP_PORTAL_MENU[2];
