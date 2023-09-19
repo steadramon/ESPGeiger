@@ -20,24 +20,8 @@
 #include "NTP.h"
 #include "../Logger/Logger.h"
 
-void ntp_cb (NTPEvent_t e)
-{
-  switch (e.event) {
-    case timeSyncd:
-      if (status.ntp_synced == false) {
-        Log::console(PSTR("NTP: Synched"));
-        status.ntp_synced = true;
-      }
-      break;
-    default:
-      break;
-  }
-}
-
 void setupNTP()
 {
   Log::console(PSTR("NTP: Starting ... %s"), NTP_SERVER);
-  NTP.setInterval (300); // Sync each 5 minutes
-  NTP.onNTPSyncEvent (ntp_cb);
-  NTP.begin(NTP_SERVER); // Start NTP client
+  configTime(0, 0, NTP_SERVER);
 }
