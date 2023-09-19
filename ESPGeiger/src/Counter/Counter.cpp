@@ -161,9 +161,8 @@ void Counter::handleSerial(char* input)
 }
 
 void Counter::loop() {
-  unsigned long cycles = ESP.getCycleCount();
-  if (cycles - status.last_blip < _debounce) {
-    status.last_blip = 0;
+  if (status.last_beep != status.last_blip) {
+    status.last_beep = status.last_blip;
 #ifdef ESPGEIGER_HW
     status.blip_led.Blink(2,2);
 #else
