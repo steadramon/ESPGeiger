@@ -29,6 +29,7 @@ SerialOut::SerialOut() {
 }
 
 void SerialOut::begin() {
+  //sSerial.begin(115200);
 }
 
 void SerialOut::loop() {
