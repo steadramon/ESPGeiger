@@ -17,7 +17,6 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #ifdef RADMONOUT
-#include <Arduino.h>
 #include "Radmon.h"
 #include "../Logger/Logger.h"
 
