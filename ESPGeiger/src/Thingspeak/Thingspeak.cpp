@@ -17,7 +17,6 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #ifdef THINGSPEAKOUT
-#include <Arduino.h>
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
 
