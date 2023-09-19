@@ -41,13 +41,23 @@ void MQTT_Client::disconnect()
 }
 void MQTT_Client::loop()
 {
-  PubSubClient::loop();
 
   if (!mqttEnabled) {
     return;
   }
+  unsigned long now = millis();
+  if (now - status.last_mqtt < 100) {
+    return;
+  }
 
-  if (!connected())
+  status.last_mqtt = now;
+
+  if (PubSubClient::loop())
+  {
+    connectionAtempts = 0;
+    status.mqtt_connected = true;
+  }
+  else
   {
     status.mqtt_connected = false;
     if (millis() - lastConnectionAtempt > reconnectionInterval)
@@ -59,11 +69,6 @@ void MQTT_Client::loop()
       reconnect();
     }
   }
-  else
-  {
-    connectionAtempts = 0;
-    status.mqtt_connected = true;
-  }
 
   if (connectionAtempts > connectionTimeout)
   {
@@ -71,7 +76,6 @@ void MQTT_Client::loop()
     ESP.restart();
   }
 
-  unsigned long now = millis();
   if (now - lastPing > pingInterval && connected())
   {
     status.led.Blink(500, 500);
@@ -237,7 +241,7 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
   ids.add(configManager.getHostName());
   json["~"] = configManager.getHostName();
   json["name"] = configManager.getHostName() + String(" " + displayName);
-  json["stat_t"] = String("~/stat/") + stateTopic;
+  json["stat_t"] = PSTR("~/stat/") + stateTopic;
   json["uniq_id"] = configManager.getHostName() + String("_") + mattDeviceName;
 
   if(deviceClass != "")

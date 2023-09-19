@@ -62,6 +62,7 @@ struct Status {
   unsigned long last_send = 0;
   unsigned long last_blip = 0;
   unsigned long last_beep = 0;
+  unsigned long last_mqtt = 0;
 #ifdef GEIGER_PUSHBUTTON
   unsigned long last_pushbutton = 0;
   bool button_pushed = false;
