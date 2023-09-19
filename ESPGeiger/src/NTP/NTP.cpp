@@ -22,6 +22,8 @@
 
 void setupNTP()
 {
+#ifndef DISABLE_NTP
   Log::console(PSTR("NTP: Starting ... %s"), NTP_SERVER);
   configTime(0, 0, NTP_SERVER);
+#endif
 }
