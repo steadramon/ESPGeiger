@@ -19,16 +19,20 @@
 
 #ifndef SERIALOUT_H
 #define SERIALOUT_H
+#ifdef SERIALOUT
 #include <Arduino.h>
 #include "../Status.h"
+#include "../Counter/Counter.h"
+
+extern Status status;
+extern Counter gcounter;
 
 class SerialOut {
     public:
       SerialOut();
       void loop();
       void begin();
-    private:
-      int _last_serial_idx = 0;
 };
 
+#endif
 #endif

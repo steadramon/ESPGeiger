@@ -29,14 +29,14 @@ SerialOut::SerialOut() {
 }
 
 void SerialOut::begin() {
-  sSerial.begin(9600);
 }
 
 void SerialOut::loop() {
-  unsigned long int secidx = (millis() / 1000) % 60;
-  if (secidx != _last_serial_idx) {
-    _last_serial_idx = secidx;
-    sSerial.write("Loop");
-  }
+  sSerial.write(PSTR("CPM: %d\n"), gcounter.get_cpm());
+#ifdef SERIALOUT_WEB
+  Log::console(PSTR("CPM: %d"), gcounter.get_cpm());
+#else
+  Serial.printf (PSTR ("CPM: %d\n"), gcounter.get_cpm());
+#endif
 }
 #endif
