@@ -130,6 +130,7 @@ void MQTT_Client::reconnect()
     Log::console(PSTR("MQTT: Connected!"));
     status.mqtt_connected = true;
     publish(buildTopic(teleTopic, topicLWT).c_str(), lwtOnline, false);
+#ifdef MQTTAUTODISCOVER
     publishHassTopic(PSTR("sensor"),
       PSTR("cpm"),
       PSTR("CPM"),
@@ -180,6 +181,7 @@ void MQTT_Client::reconnect()
       PSTR(""),
       { {"unit_of_meas", "\u00B5S/h"},
         { "ic", "mdi:radioactive" }});
+#endif
   }
   else
   {
@@ -198,7 +200,7 @@ String MQTT_Client::buildTopic(const char *baseTopic, const char *cmnd)
 
   return topic;
 }
-
+#ifdef MQTTAUTODISCOVER
 void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
                                const String& mattDeviceName,
                                const String& displayName,
@@ -311,7 +313,7 @@ void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& ma
   publish(path.c_str(), "", true);
   yield();
 }
-
+#endif
 void MQTT_Client::begin()
 {
   ConfigManager &configManager = ConfigManager::getInstance();

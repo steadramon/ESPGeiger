@@ -54,7 +54,9 @@ public:
   void loop();
   void sendStatus();
   void disconnect();
+#ifdef MQTTAUTODISCOVER
   void removeHASSConfig();
+#endif
 protected:
   WiFiClient espClient;
   void reconnect();
@@ -63,6 +65,7 @@ private:
   MQTT_Client();
   static ConfigManager _configManager;
   String buildTopic(const char * baseTopic, const char * cmnd);
+#ifdef MQTTAUTODISCOVER
   void publishHassTopic(const String& mqttDeviceType,
                         const String& mattDeviceName,
                         const String& displayName,
@@ -76,6 +79,7 @@ private:
                         std::vector<std::pair<char*, char*>> additionalEntries = {}
                       );
   void removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName);
+#endif
   unsigned long lastPing = 0;
   unsigned long lastConnectionAtempt = 0;
   uint8_t connectionAtempts = 0;

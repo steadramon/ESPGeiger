@@ -52,7 +52,7 @@ WiFiManagerParameter MQTTParams[] =
   WiFiManagerParameter("mqttUser", "User", "", 255),
   WiFiManagerParameter("mqttPassword", "Password", "", 255, "type='password'"),
 };
-
+#ifdef MQTTAUTODISCOVER
 WiFiManagerParameter HassioParams[] =
 {
   // The broker parameters
@@ -61,7 +61,7 @@ WiFiManagerParameter HassioParams[] =
   WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label>"),
   WiFiManagerParameter("hassDisc", "<br>Discovery Topic", MQTT_DISCOVERY_TOPIC, 32),
 };
-
+#endif
 WiFiManagerParameter CloudAPI[] = 
 {
   // The broker parameters
@@ -126,8 +126,10 @@ void ConfigManager::startWebPortal()
     WiFiManager::addParameter(&ESPGeigerParams[i]);
   for (int i = 0; i < sizeof(MQTTParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&MQTTParams[i]);
+#ifdef MQTTAUTODISCOVER
   for (int i = 0; i < sizeof(HassioParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&HassioParams[i]);
+#endif
 #ifdef RADMONOUT
   for (int i = 0; i < sizeof(radmonParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&radmonParams[i]);
@@ -491,10 +493,12 @@ void ConfigManager::saveParams()
   LittleFS.end();
   Log::console(PSTR("Config: Saved"));
   MQTT_Client& mqtt = MQTT_Client::getInstance();
+#ifdef MQTTAUTODISCOVER
   const char* _send = getParamValueFromID("hassSend");
   if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
     mqtt.removeHASSConfig();
   }
+#endif
   mqtt.disconnect();
 }
 
