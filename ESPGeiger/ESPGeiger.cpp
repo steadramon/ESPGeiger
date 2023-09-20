@@ -65,8 +65,9 @@ Status status;
 Counter gcounter = Counter();
 
 ConfigManager& cManager = ConfigManager::getInstance();
-
+#ifdef MQTTOUT
 MQTT_Client& mqtt = MQTT_Client::getInstance();
+#endif
 // External
 #ifdef GMCOUT
 GMC gmc = GMC();
@@ -191,7 +192,9 @@ void setup()
   cManager.startWebPortal();
   arduino_ota_setup(hostName);
   delay(500);
+#ifdef MQTTOUT
   mqtt.begin();
+#endif
   gcounter.begin();
 #ifdef SERIALOUT
   serialout.begin();
@@ -209,7 +212,9 @@ void setup()
 void loop()
 {
   cManager.process();
+#ifdef MQTTOUT
   mqtt.loop();
+#endif
 
   handleSerial();
   gcounter.loop();

@@ -19,7 +19,7 @@
 
 #ifndef MQTT_CLIENT_H
 #define MQTT_CLIENT_H
-
+#ifdef MQTTOUT
 #define LOG_TAG "MQTT"
 
 #include "../ConfigManager/ConfigManager.h"
@@ -100,4 +100,5 @@ private:
   const char* lwtOffline = MQTT_LWT_OFFLINE;
 };
 
+#endif
 #endif

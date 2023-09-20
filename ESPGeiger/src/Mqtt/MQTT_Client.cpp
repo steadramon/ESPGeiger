@@ -16,7 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+#ifdef MQTTOUT
 #include "MQTT_Client.h"
 #include "ArduinoJson.h"
 #include "../Logger/Logger.h"
@@ -335,3 +335,4 @@ void MQTT_Client::begin()
   setSocketTimeout(4);
   mqttEnabled = true;
 }
+#endif
