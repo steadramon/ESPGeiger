@@ -49,20 +49,21 @@ struct Status {
   const char thingName[11] = "ESPGeiger";
   const char* version = RELEASE_VERSION;
   const char* git_version = GIT_VERSION;
-  bool mqtt_connected = false;
   bool high_cpm_alarm = false;
   Smoothed <float> geigerTicks;
   Smoothed <float> geigerTicks5;
   Smoothed <float> geigerTicks15;
   CircularBuffer<int,45> cpm_history;
   long start = 0;
-  bool ntp_synced = false;
   bool warmup = true;
   const char* geiger_model = "";
   unsigned long last_send = 0;
   unsigned long last_blip = 0;
   unsigned long last_beep = 0;
+#ifdef MQTTOUT
+  bool mqtt_connected = false;
   unsigned long last_mqtt = 0;
+#endif
 #ifdef GEIGER_PUSHBUTTON
   unsigned long last_pushbutton = 0;
   bool button_pushed = false;
