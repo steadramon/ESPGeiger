@@ -20,6 +20,7 @@
 #ifndef Status_h
 #define Status_h
 
+#include <Arduino.h>
 #include <Smoothed.h>
 #include "jled.h"
 #include <CircularBuffer.h>

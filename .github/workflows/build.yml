@@ -18,6 +18,7 @@ jobs:
           - "esp32_gc10"
           - "esp32_gc10next"
           - "esp8266_pulse"
+          - "esp8266_pulsemin"
           - "esp8266_test"
           - "esp8266_testpulse"
           - "esp8266_test_gc10"
