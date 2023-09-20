@@ -22,7 +22,7 @@
 #include "WiFiManager.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
-#include <ESPNtpClient.h>
+#include "../NTP/NTP.h"
 
 #include "logos.h"
 #include "html.h"
