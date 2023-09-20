@@ -161,6 +161,7 @@ void Counter::handleSerial(char* input)
 }
 
 void Counter::loop() {
+#ifndef DISABLE_BLIP
   if (status.last_beep != status.last_blip) {
     status.last_beep = status.last_blip;
 #ifdef ESPGEIGER_HW
@@ -169,6 +170,7 @@ void Counter::loop() {
     status.led.Blink(20,20);
 #endif
   }
+#endif
 #if GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx != _last_secidx) {
