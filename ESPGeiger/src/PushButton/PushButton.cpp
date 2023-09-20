@@ -18,7 +18,6 @@
 */
 #ifdef GEIGER_PUSHBUTTON
 
-#include <Arduino.h>
 #include "PushButton.h"
 #include "../Logger/Logger.h"
 
