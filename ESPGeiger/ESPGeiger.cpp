@@ -139,8 +139,7 @@ void sTickerCB()
     if (uptime > 10) {
       status.warmup = false;
     }
-  }
-  if (status.warmup == false) {
+  } else {
     status.cpm_history.push(gcounter.get_cpm());
   }
 #ifdef GMCOUT
