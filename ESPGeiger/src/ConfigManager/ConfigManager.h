@@ -19,7 +19,6 @@
 
 #ifndef ConfigManager_h
 #define ConfigManager_h
-#define WM_NOHELP
 #include "WiFiManager.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
