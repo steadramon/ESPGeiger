@@ -80,7 +80,7 @@ void MQTT_Client::loop()
   {
     status.led.Blink(500, 500);
     ConfigManager &configManager = ConfigManager::getInstance();
-    lastPing = now;
+    lastPing = now - (now % 1000);
     const size_t capacity = JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(17) + 22 + 20 + 20;
     DynamicJsonDocument doc(capacity);
     char buffer[1048];
@@ -208,8 +208,8 @@ String MQTT_Client::buildTopic(const char *baseTopic, const char *cmnd)
 {
   ConfigManager &configManager = ConfigManager::getInstance();
   String topic = baseTopic;
-  topic.replace("%st%", configManager.getHostName());
-  topic.replace("%cm%", cmnd);
+  topic.replace(PSTR("%st%"), configManager.getHostName());
+  topic.replace(PSTR("%cm%"), cmnd);
 
   return topic;
 }
