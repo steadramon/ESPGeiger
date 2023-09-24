@@ -29,7 +29,7 @@ void Thingspeak::loop()
   unsigned long now = millis();
   if (now - lastPing >= pingInterval)
   {
-    lastPing = now;
+    lastPing = now - (now % 1000);
     Thingspeak::postMeasurement();
   }
 }
