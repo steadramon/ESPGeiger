@@ -88,11 +88,20 @@ void MQTT_Client::loop()
     doc["uptime"] = configManager.getUptimeString();
     doc["board"] = configManager.GetChipModel();
     doc["model"] = configManager.getParamValueFromID("geigerModel");
-    doc["free_mem"] = ESP.getFreeHeap();
     doc["ssid"] = WiFi.SSID();
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
-
+#ifdef MQTT_MEM_DEBUG
+    uint32_t heap_free;
+    uint16_t heap_max;
+    uint8_t heap_frag;
+    ESP.getHeapStats(&heap_free, &heap_max, &heap_frag);
+    doc["free_mem"] = heap_free;
+    doc["heap_m"] = heap_max;
+    doc["heap_fr"] = heap_frag;
+#else
+    doc["free_mem"] = ESP.getFreeHeap();
+#endif
     serializeJson(doc, buffer);
     Log::console(PSTR("MQTT: %s"), buffer);
 
