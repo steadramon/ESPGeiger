@@ -97,8 +97,8 @@ void MQTT_Client::loop()
     uint8_t heap_frag;
     ESP.getHeapStats(&heap_free, &heap_max, &heap_frag);
     doc["free_mem"] = heap_free;
-    doc["heap_m"] = heap_max;
-    doc["heap_fr"] = heap_frag;
+    doc["heap_max"] = heap_max;
+    doc["heap_frag"] = heap_frag;
 #else
     doc["free_mem"] = ESP.getFreeHeap();
 #endif
