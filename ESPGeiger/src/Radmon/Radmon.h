@@ -44,9 +44,8 @@ class Radmon {
     void postMeasurement();
     AsyncHTTPRequest request;
   private:
-    //char userAgent[64] = "";
     unsigned long lastPing = 0;
-    const unsigned long pingInterval = 1000 * 60;
+    const int pingInterval = 1000 * 60;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
