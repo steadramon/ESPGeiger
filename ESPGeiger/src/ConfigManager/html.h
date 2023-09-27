@@ -26,9 +26,9 @@ static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<center><h1>{v}</h1></cent
 <div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
 <script src="/js"></script>
 )HTML";
+static const char HV_STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>)HTML";
 
-static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>
-<style>.wrap{min-width:350px;max-width:900px;width:50vw}        .wa {
+static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}        .wa {
             padding: 20px;
             width: 75%;
             font-size: 20px;

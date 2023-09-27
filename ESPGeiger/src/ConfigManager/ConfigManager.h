@@ -125,7 +125,7 @@ public:
 #else
     return (char*)"UNKNOWN";
 #endif
-}
+  }
 private:
   ConfigManager();
   void handleRoot();
@@ -147,4 +147,5 @@ private:
   char hostName[20] = "";
   char userAgent[80] = "";
 };
+
 #endif

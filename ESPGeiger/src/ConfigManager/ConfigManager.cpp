@@ -16,7 +16,6 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
 #include "ConfigManager.h"
 #include "../Logger/Logger.h"
 #include "../Mqtt/MQTT_Client.h"
@@ -31,23 +30,25 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 10),
-  WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)}</script>")
+  WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>")
 };
 #ifdef THINGSPEAKOUT
 WiFiManagerParameter TSParams[] = 
 {
   // Thingspeak parameters
-  WiFiManagerParameter("<br/><br/><hr><h3>Thingspeak parameters</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>Thingspeak parameters</h3>"),
   WiFiManagerParameter("tsSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label>"),
   WiFiManagerParameter("tsChannelKey", "<br>Channel Key", "", 16),
+  WiFiManagerParameter(R"J(<script>doCB("cbts","tsSend")</script>)J"),
+
 };
 #endif
 #ifdef MQTTOUT
 WiFiManagerParameter MQTTParams[] = 
 {
   // The broker parameters
-  WiFiManagerParameter("<br/><br/><hr><h3>MQTT server</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>MQTT server</h3>"),
   WiFiManagerParameter("mqttServer", "<br>IP", "", 16, "input='number' pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("mqttPort", "Port", "1883", 6, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("mqttUser", "User", "", 255),
@@ -57,28 +58,29 @@ WiFiManagerParameter MQTTParams[] =
 WiFiManagerParameter HassioParams[] =
 {
   // The broker parameters
-  WiFiManagerParameter("<br/><br/><hr><h3>HA Autodiscovery</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>HA Autodiscovery</h3>"),
   WiFiManagerParameter("hassSend", "", MQTT_DISCOVERY, 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label>"),
   WiFiManagerParameter("hassDisc", "<br>Discovery Topic", MQTT_DISCOVERY_TOPIC, 32),
+  WiFiManagerParameter(R"J(<script>doCB("cbhas","hassSend")</script>)J"),
 };
 #endif
 #endif
 WiFiManagerParameter CloudAPI[] = 
 {
-  // The broker parameters
-  WiFiManagerParameter("<br/><br/><hr><h3>CloudAPI</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>CloudAPI</h3>"),
   WiFiManagerParameter("apiID", "IP", "", 16, "pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("apiSecret", "Port", "1883", 6, "pattern='\\d{1,5}'"),
 };
 #ifdef RADMONOUT
 WiFiManagerParameter radmonParams[] = 
 {
-  WiFiManagerParameter("<br/><br/><hr><h3>Radmon.org parameters</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>Radmon.org parameters</h3>"),
   WiFiManagerParameter("radmonSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbrm' onchange='getE(\"radmonSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbrm'>Send</label>"),
   WiFiManagerParameter("radmonUser", "<br>Radmon Username", "", 100),
   WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 100, "type='password'"),
+  WiFiManagerParameter(R"J(<script>doCB("cbrm","radmonSend")</script>)J"),
 };
 #endif
 #ifdef GMCOUT
@@ -89,7 +91,7 @@ WiFiManagerParameter GMCParams[] =
   WiFiManagerParameter("<input type='checkbox' id='cbgm' onchange='getE(\"gmcSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbgm'>Send</label>"),
   WiFiManagerParameter("gmcAID", "<br>Account ID", "", 12, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("gmcGCID", "Geiger Counter ID", "", 12, "pattern='\\d{1,12}'"),
-  WiFiManagerParameter(R"J(<script>getE("cbgm").checked="Y"==getE("gmcSend").value,getE("cbrm").checked="Y"==getE("radmonSend").value,getE("cbts").checked="Y"==getE("tsSend").value,getE("cbhas").checked="Y"==getE("hassSend").value;</script>)J"),
+  WiFiManagerParameter(R"J(<script>doCB("cbgm","gmcSend")</script>)J"),
 };
 #endif
 
@@ -113,7 +115,6 @@ ConfigManager::ConfigManager() : WiFiManager(){
   setHostname(hostName);
   setTitle(thingName);
   setCustomHeadElement(faviconHead);
-
 }
 
 void ConfigManager::autoConnect()
@@ -152,52 +153,64 @@ void ConfigManager::startWebPortal()
   double ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
 
-  WiFiManager::setCustomMenuHTML("<form action='/status' method='get'><button>Status</button></form><br/>");
-  const char * menu[] = {"custom", "wifi","param","info","update"};
-  ConfigManager::setMenu(menu,sizeof(menu));
+  //WiFiManager::setCustomMenuHTML("<form action='/status' method='get'><button>Status</button></form><br/>");
+  //const char * menu[] = {"custom", "wifi","param","info","update"};
+  //ConfigManager::setMenu(menu,sizeof(menu));
   WiFiManager::setWebServerCallback(std::bind(&ConfigManager::bindServerCallback, this));
   WiFiManager::setSaveParamsCallback(std::bind(&ConfigManager::saveParams, this));
   WiFiManager::startWebPortal();
 }
 
 void ConfigManager::handleRoot() {
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
-  page += FPSTR(HTTP_STYLE);
-  page += FPSTR(faviconHead);
-  page += FPSTR(HTTP_HEAD_END);
-  page.replace(FPSTR(T_v), hostName);
-  String str  = FPSTR(HTTP_ROOT_MAIN); // @todo custom title
-  str.replace(FPSTR(T_t),thingName);
-  str.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
-
-  page += str;
-  page += FPSTR(HTTP_PORTAL_OPTIONS);
-
-  page += F("<form action='/status' method='get'><button>Status</button></form><br/>");
-  page += HTTP_PORTAL_MENU[0];
-  page += HTTP_PORTAL_MENU[3];
-  page += HTTP_PORTAL_MENU[2];
-  page += HTTP_PORTAL_MENU[8];
-  str = FPSTR(HTTP_STATUS_ON);
-  str.replace(FPSTR(T_i),WiFi.localIP().toString());
-  str.replace(FPSTR(T_v),htmlEntities(WiFiManager::getWiFiSSID()));
-  page += str;
-  page += FPSTR(HTTP_END);
-
-  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
-
+  String title = FPSTR(thingName);
+  title += F(" - Status");
+  page.replace(FPSTR(T_v), title);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+  page = FPSTR(HTTP_ROOT_MAIN);
+  page.replace(FPSTR(T_t),thingName);
+  page.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
+  server->sendContent(page);
+  server->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
+  server->sendContent(FPSTR(HTTP_PORTAL_MENU[0]));
+  server->sendContent(FPSTR(HTTP_PORTAL_MENU[3]));
+  server->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
+  server->sendContent(FPSTR(HTTP_PORTAL_MENU[8]));
+  page = FPSTR(HTTP_STATUS_ON);
+  page.replace(FPSTR(T_i),WiFi.localIP().toString());
+  page.replace(FPSTR(T_v),htmlEntities(WiFiManager::getWiFiSSID()));
+  server->sendContent(page);
+  server->sendContent(HTTP_END);
+  server->sendContent("");
+  server->client().stop();
 }
 
 void ConfigManager::handleJSReturn()
 {
-  String page = FPSTR(picographJS);
-  page += FPSTR(statusJS);
-  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJS), page);
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CTJS), "");
+  server->sendContent(FPSTR(picographJS));
+  server->sendContent(FPSTR(statusJS));
+  server->sendContent("");
+  server->client().stop();
 }
 
 void ConfigManager::handleJsonReturn()
 {
-  char jsonBuffer[256] = "";
+  char jsonBuffer[128] = "";
 
   int total = sizeof(jsonBuffer);
   int rcpm = round((status.geigerTicks.get()*60));
@@ -207,7 +220,7 @@ void ConfigManager::handleJsonReturn()
 
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"uptime\": \"%s\", \"cpm\": %d, \"cpm5\": %d, \"cpm15\": %d, \"ratio\": %s}"),
+    PSTR("{\"uptime\":\"%s\",\"cpm\":%d,\"cpm5\":%d,\"cpm15\":%d,\"ratio\":%s}"),
     ConfigManager::getUptimeString(),
     rcpm,
     fivercpm,
@@ -220,43 +233,66 @@ void ConfigManager::handleJsonReturn()
 
 void ConfigManager::handleStatusPage()
 {
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
-  page += FPSTR(HTTP_STYLE);
-  page += FPSTR(faviconHead);
-  page += FPSTR(HTTP_HEAD_END);
-  page += FPSTR(STATUS_PAGE_BODY);
   String title = FPSTR(thingName);
   title += F(" - Status");
   page.replace(FPSTR(T_v), title);
-  page += FPSTR(HTTP_BACKBTN);
-  page += FPSTR(STATUS_PAGE_FOOT);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+  page = FPSTR(STATUS_PAGE_BODY);
+  page.replace(FPSTR(T_v), title);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_BACKBTN));
+  page = FPSTR(STATUS_PAGE_FOOT);
   page.replace(FPSTR(T_1), String(status.thingName));
   page.replace(FPSTR(T_2), String(status.version));
   page.replace(FPSTR(T_3), String(status.git_version));
-  page += FPSTR(HTTP_END);
-
-  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_END));
+  server->sendContent("");
+  server->client().stop();
 }
 
 #ifdef ESPGEIGER_HW
 void ConfigManager::handleHVPage()
 {
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
-  page += FPSTR(HTTP_STYLE);
-  page += FPSTR(faviconHead);
-  page += FPSTR(HTTP_HEAD_END);
-  page += FPSTR(HV_STATUS_PAGE_BODY);
   String title = FPSTR(thingName);
   title += F("-HW - HV");
   page.replace(FPSTR(T_v), title);
-  page += FPSTR(HTTP_BACKBTN);
-  page += FPSTR(STATUS_PAGE_FOOT);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+
+  page = FPSTR(HV_STATUS_PAGE_BODY_HEAD);
+  page.replace(FPSTR(T_v), title);
+  server->sendContent(page);
+
+  server->sendContent(HV_STATUS_PAGE_BODY);
+  server->sendContent(FPSTR(HTTP_BACKBTN));
+  page = FPSTR(STATUS_PAGE_FOOT);
   page.replace(FPSTR(T_1), String(status.thingName));
   page.replace(FPSTR(T_2), String(status.version));
   page.replace(FPSTR(T_3), String(status.git_version));
-  page += FPSTR(HTTP_END);
-
-  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_END));
+  server->sendContent("");
+  server->client().stop();
 }
 
 void ConfigManager::handleHVSet()
@@ -271,9 +307,16 @@ void ConfigManager::handleHVSet()
 
 void ConfigManager::handleHVJSReturn()
 {
-  String page = FPSTR(picographJS);
-  page += FPSTR(hvJS);
-  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJS), page);
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CTJS), "");
+  server->sendContent(FPSTR(picographJS));
+  server->sendContent(FPSTR(hvJS));
+  server->sendContent("");
+  server->client().stop();
 }
 
 void ConfigManager::handleHVJsonReturn()
@@ -287,7 +330,7 @@ void ConfigManager::handleHVJsonReturn()
 
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"volts\": %d, \"freq\": %d, \"duty\": %d }"),
+    PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d}"),
     volts,
     freq,
     duty
@@ -299,16 +342,24 @@ void ConfigManager::handleHVJsonReturn()
 
 void ConfigManager::handleRestart()
 {
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
-  page += FPSTR(HTTP_STYLE);
-  page += FPSTR(faviconHead);
-  page += FPSTR(HTTP_HEAD_MREFRESH);
-  page += FPSTR(HTTP_HEAD_END);
-  page += FPSTR(thingName);
-  page += F(" is restarting...<br /><br/>");
-  page.replace(FPSTR(T_v), "Restarting ...");
-  page += FPSTR(HTTP_END);
-  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), page);
+  page.replace(FPSTR(T_v), "Restarting...");
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+  server->sendContent(FPSTR(thingName));
+  server->sendContent(F(" is restarting...<br><br>"));
+  server->sendContent(FPSTR(HTTP_END));
+  server->sendContent("");
+  server->client().stop();
   Log::console(PSTR("Config: Restarting ... "));
   delay(1000);
   ESP.restart();
@@ -331,7 +382,6 @@ void ConfigManager::handleResetParams()
   LittleFS.end();
   handleRestart();
 }
-
 int ConfigManager::getIndexFromID(const char* str)
 {
   WiFiManagerParameter** customParams = ConfigManager::getParameters();
@@ -506,6 +556,9 @@ void ConfigManager::saveParams()
 #endif
   mqtt.disconnect();
 #endif
+  const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
+  double ratio = atof(ratioChar);
+  gcounter.set_ratio(ratio);
 }
 
 const char* ConfigManager::getParamValueFromID(const char* str)
