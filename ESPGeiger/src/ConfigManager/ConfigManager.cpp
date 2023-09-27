@@ -285,11 +285,6 @@ void ConfigManager::handleHVPage()
 
   server->sendContent(HV_STATUS_PAGE_BODY);
   server->sendContent(FPSTR(HTTP_BACKBTN));
-  page = FPSTR(STATUS_PAGE_FOOT);
-  page.replace(FPSTR(T_1), String(status.thingName));
-  page.replace(FPSTR(T_2), String(status.version));
-  page.replace(FPSTR(T_3), String(status.git_version));
-  server->sendContent(page);
   server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
   server->client().stop();
