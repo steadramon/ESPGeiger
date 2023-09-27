@@ -18,14 +18,13 @@
 */
 
 const char HTTP_HEAD_MREFRESH[] PROGMEM = "<meta http-equiv='refresh' content='10; url=/'>";
+static const char STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1 title="{t}">{v} - Status</h1></center>)HTML";
 
-static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>
-<style>textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;} .wrap{min-width:350px;max-width:900px;width:50vw}</style>
+static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;} .wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
 <table><tr><th>CPM:</th><td><span id="cpm">-</span></td></tr><tr><th>μSv:</th><td><span id="usv">-</span></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td></tr></table>
 <div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
-<script src="/js"></script>
-)HTML";
+<script src="/js"></script>)HTML";
 static const char HV_STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>)HTML";
 
 static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}        .wa {
