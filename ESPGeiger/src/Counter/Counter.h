@@ -23,6 +23,10 @@
 #include "../Status.h"
 #include <Ticker.h>
 
+#ifndef GEIGER_RATIO
+  #define GEIGER_RATIO 151.0
+#endif
+
 #define GEIGER_TYPE_PULSE 1
 #define GEIGER_TYPE_SERIAL 2
 #define GEIGER_TYPE_TEST 3
@@ -191,7 +195,8 @@ extern "C" {
 #define GEIGER_CPM15_COUNT 60
 #endif
 
-static volatile float eventCounter;
+static volatile int eventCounter;
+static volatile unsigned long _last_blip;
 static unsigned long _debounce = microsecondsToClockCycles(GEIGER_DEBOUNCE);
 
 extern Status status;
@@ -220,11 +225,11 @@ static hw_timer_t * hwtimer = NULL;
 
 static void IRAM_ATTR count() {
   unsigned long cycles = ESP.getCycleCount();
-  if (cycles - status.last_blip > _debounce) {
+  if (cycles - _last_blip > _debounce) {
     portENTER_CRITICAL_ISR(&timerMux);
     eventCounter++;
     portEXIT_CRITICAL_ISR(&timerMux);
-    status.last_blip = cycles;
+    _last_blip = cycles;
   }
 };
 
@@ -247,12 +252,10 @@ static void IRAM_ATTR handleSecondTick() {
   portEXIT_CRITICAL_ISR(&timerMux);
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx % 5 == 0) {
-    float avgcpm = status.geigerTicks.get();
-    status.geigerTicks5.add(avgcpm);
+    status.geigerTicks5.add(status.geigerTicks.get());
   }
   if (secidx % 15 == 0) {
-    float avgcpm5 = status.geigerTicks5.get();
-    status.geigerTicks15.add(avgcpm5);
+    status.geigerTicks15.add(status.geigerTicks5.get());
   }
 };
 #else
@@ -260,28 +263,26 @@ static void ICACHE_RAM_ATTR count() {
   if (_handlesecond)
     return;
   unsigned long cycles = ESP.getCycleCount();
-  if (cycles - status.last_blip > _debounce) {
-    eventCounter += 1;
-    status.last_blip = cycles;
+  if (cycles - _last_blip > _debounce) {
+    eventCounter++;
+    _last_blip = cycles;
   }
 };
 
-static void ICACHE_RAM_ATTR handleSecondTick() {
+//static void ICACHE_RAM_ATTR handleSecondTick() {
+static void handleSecondTick() {
   _handlesecond = true;
   status.geigerTicks.add(eventCounter);
   eventCounter = 0;
   _handlesecond = false;
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx % 5 == 0) {
-    float avgcpm = status.geigerTicks.get();
-    status.geigerTicks5.add(avgcpm);
+    status.geigerTicks5.add(status.geigerTicks.get());
   }
   if (secidx % 15 == 0) {
-    float avgcpm5 = status.geigerTicks5.get();
-    status.geigerTicks15.add(avgcpm5);
+    status.geigerTicks15.add(status.geigerTicks5.get());
   }
 };
-
 #endif
 
 static Ticker geigerTicker;
@@ -301,7 +302,7 @@ class Counter {
     private:
       void setup_pulse();
       void handleSerial(char* input);
-      float _ratio = 100.0;
+      float _ratio = GEIGER_RATIO;
 };
 
 #endif

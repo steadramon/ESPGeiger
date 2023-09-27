@@ -20,7 +20,6 @@
 #include <Arduino.h>
 #include "Counter.h"
 #include "../Logger/Logger.h"
-#include "../ConfigManager/ConfigManager.h"
 
 Counter::Counter() {
   status.geiger_model = GEIGER_MODEL;
@@ -51,6 +50,7 @@ float Counter::get_usv() {
   return avgcpm/_ratio;
 }
 
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
 void Counter::setup_pulse() {
 #ifdef USE_PCNT && ESP32
   Log::console(PSTR("Counter: PCNT RXPIN: %d"), _geiger_rxpin);
@@ -79,15 +79,13 @@ void Counter::setup_pulse() {
   attachInterrupt(digitalPinToInterrupt(_geiger_rxpin), count, FALLING);
 #endif
 }
+#endif
 
 void Counter::begin() {
   Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), GEIGER_CPM_COUNT, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
   status.geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
   status.geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
   status.geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
-  ConfigManager &configManager = ConfigManager::getInstance();
-  const char* ratioChar = configManager.getParamValueFromID("geigerRatio");
-  _ratio = atof(ratioChar);
 
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
   Log::console(PSTR("Counter: Setting up pulse geiger ..."));
@@ -162,8 +160,8 @@ void Counter::handleSerial(char* input)
 
 void Counter::loop() {
 #ifndef DISABLE_BLIP
-  if (status.last_beep != status.last_blip) {
-    status.last_beep = status.last_blip;
+  if (status.last_blip != _last_blip) {
+    status.last_blip = _last_blip;
 #ifdef ESPGEIGER_HW
     status.blip_led.Blink(2,2);
 #else
