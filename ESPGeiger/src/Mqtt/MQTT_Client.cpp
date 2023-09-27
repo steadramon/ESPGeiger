@@ -215,7 +215,7 @@ String MQTT_Client::buildTopic(const char *baseTopic, const char *cmnd)
 }
 #ifdef MQTTAUTODISCOVER
 void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
-                               const String& mattDeviceName,
+                               const String& mqttDeviceName,
                                const String& displayName,
                                const String& name,
                                const String& stateTopic,
@@ -251,7 +251,7 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
   json["~"] = configManager.getHostName();
   json["name"] = configManager.getHostName() + String(" " + displayName);
   json["stat_t"] = PSTR("~/stat/") + stateTopic;
-  json["uniq_id"] = configManager.getHostName() + String("_") + mattDeviceName;
+  json["uniq_id"] = configManager.getHostName() + String("_") + mqttDeviceName;
 
   if(deviceClass != "")
   {
@@ -291,7 +291,7 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
   path.concat(PSTR("/"));
   path.concat(configManager.getHostName());
   path.concat(PSTR("-"));
-  path.concat(mattDeviceName);
+  path.concat(mqttDeviceName);
   path.concat(PSTR("/config"));
 
   publish(path.c_str(), buffer);
@@ -305,7 +305,7 @@ void MQTT_Client::removeHASSConfig()
   removeHassTopic(PSTR("sensor"), PSTR("usv"));
 }
 
-void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName)
+void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mqttDeviceName)
 {
   ConfigManager &configManager = ConfigManager::getInstance();
 
@@ -320,7 +320,7 @@ void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& ma
   path.concat(PSTR("/"));
   path.concat(configManager.getHostName());
   path.concat(PSTR("/"));
-  path.concat(mattDeviceName);
+  path.concat(mqttDeviceName);
   path.concat(PSTR("/config"));
 
   publish(path.c_str(), "", true);
