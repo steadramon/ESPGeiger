@@ -44,7 +44,7 @@ class Thingspeak {
     AsyncHTTPRequest request;
   private:
     unsigned long lastPing = 0;
-    const unsigned long pingInterval = 1000 * 90;
+    const int pingInterval = 1000 * 90;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
