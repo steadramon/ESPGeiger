@@ -30,6 +30,10 @@ void GMC::loop()
   unsigned long now = millis();
   if (now - lastPing >= pingInterval)
   {
+    if (lastPing == 0) {
+      lastPing = random(30000);
+      return;
+    }
     lastPing = now - (now % 1000);
     GMC::postMeasurement();
   }
