@@ -218,7 +218,7 @@ void ConfigManager::handleJsonReturn()
 
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"uptime\":\"%s\",\"cpm\":%d,\"cpm5\":%d,\"cpm15\":%d,\"ratio\":%s}"),
+    PSTR("{\"u\":\"%s\",\"c\":%d,\"c5\":%d,\"c15\":%d,\"r\":%s}"),
     ConfigManager::getUptimeString(),
     rcpm,
     fivercpm,
@@ -252,9 +252,8 @@ void ConfigManager::handleStatusPage()
   server->sendContent(FPSTR(STATUS_PAGE_BODY));
   server->sendContent(FPSTR(HTTP_BACKBTN));
   page = FPSTR(STATUS_PAGE_FOOT);
-  page.replace(FPSTR(T_1), String(status.thingName));
-  page.replace(FPSTR(T_2), String(status.version));
-  page.replace(FPSTR(T_3), String(status.git_version));
+  page.replace(FPSTR(T_1), String(status.version));
+  page.replace(FPSTR(T_2), String(status.git_version));
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
