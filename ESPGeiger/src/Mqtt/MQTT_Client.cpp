@@ -92,6 +92,7 @@ void MQTT_Client::loop()
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
 #ifdef MQTT_MEM_DEBUG
+  #ifdef ESP8266
     uint32_t heap_free;
     uint16_t heap_max;
     uint8_t heap_frag;
@@ -99,6 +100,11 @@ void MQTT_Client::loop()
     doc["free_mem"] = heap_free;
     doc["heap_max"] = heap_max;
     doc["heap_frag"] = heap_frag;
+  #else
+    doc["free_mem"] = ESP.getFreeHeap();
+    doc["min_free"] = ESP.getMinFreeHeap();
+    doc["heap_max"] = ESP.getMaxAllocHeap();
+  #endif
 #else
     doc["free_mem"] = ESP.getFreeHeap();
 #endif
