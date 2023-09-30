@@ -246,7 +246,11 @@ static void IRAM_ATTR handleSecondTick() {
   eventCounter = timerRead(hwtimer)/600;
   timerRestart(hwtimer);
 #endif
+#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
+  status.geigerTicks.add((float)eventCounter/(float)60);
+#else
   status.geigerTicks.add(eventCounter);
+#endif
   eventCounter = 0;
   _handlesecond = false;
   portEXIT_CRITICAL_ISR(&timerMux);
@@ -272,7 +276,11 @@ static void ICACHE_RAM_ATTR count() {
 //static void ICACHE_RAM_ATTR handleSecondTick() {
 static void handleSecondTick() {
   _handlesecond = true;
+#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
+  status.geigerTicks.add((float)eventCounter/(float)60);
+#else
   status.geigerTicks.add(eventCounter);
+#endif
   eventCounter = 0;
   _handlesecond = false;
   unsigned long int secidx = (millis() / 1000) % 60;
