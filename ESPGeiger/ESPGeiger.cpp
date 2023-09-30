@@ -47,6 +47,7 @@
 #ifdef SERIALOUT
 #include "src/SerialOut/SerialOut.h"
 #endif
+
 #ifdef GEIGER_PUSHBUTTON
 PushButton pushbutton = PushButton();
 #endif
@@ -83,7 +84,6 @@ Thingspeak thingspeak = Thingspeak();
 Ticker msTicker;
 Ticker fiveSTicker;
 Ticker sTicker;
-unsigned long timer_led_measures = 0;
 
 void handleSerial()
 {
@@ -123,7 +123,6 @@ void msTickerCB()
 
 void fiveSTickerCB()
 {
-
 }
 
 void sTickerCB()
@@ -134,13 +133,13 @@ void sTickerCB()
 #ifdef ESPGEIGER_HW
   hardware.loop();
 #endif
-  if (status.warmup == true) {
+  if (status.warmup == false) {
+    status.cpm_history.push(gcounter.get_cpm());
+  } else {
     uint8_t uptime = NTP.getUptime() - status.start;
     if (uptime > 10) {
       status.warmup = false;
     }
-  } else {
-    status.cpm_history.push(gcounter.get_cpm());
   }
 #ifdef GMCOUT
   gmc.loop();
@@ -167,6 +166,7 @@ void setup()
     Serial.println("LittleFS Mount Failed");
     return;
   }
+  LittleFS.end();
 
   const char* hostName = cManager.getHostName();
   Log::console(PSTR("   ___"));
