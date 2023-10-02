@@ -59,6 +59,8 @@ The `environments.ini` file defines some pre-built environments and examples of 
 
 By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect the Geiger pulse output to. Don't forget to connect ground as well!
 
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
+
 ### Serial counter
 
 By default `GEIGER_RXPIN` is set to GPIO13. This is the pin on the ESP you need to connect the Geiger counter serial TX pin to. Don't forget to have a common ground, as well!
@@ -107,6 +109,7 @@ The project is compatible with Generic Pulse-based geiger counters and the GC10n
 Simply connect the pulse output to GPIO13
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
 
 ### Serial Compatibility 
 
