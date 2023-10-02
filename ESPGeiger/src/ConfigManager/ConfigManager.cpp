@@ -30,6 +30,12 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 10),
+#ifndef RXPIN_BLOCKED
+  WiFiManagerParameter("geigerRX", "RX Pin", String(GEIGER_RXPIN).c_str(), 12),
+#endif
+#if GEIGER_TXPIN != -1
+  WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 12),
+#endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>")
 };
 #ifdef THINGSPEAKOUT
@@ -153,9 +159,15 @@ void ConfigManager::startWebPortal()
   double ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
 
-  //WiFiManager::setCustomMenuHTML("<form action='/status' method='get'><button>Status</button></form><br/>");
-  //const char * menu[] = {"custom", "wifi","param","info","update"};
-  //ConfigManager::setMenu(menu,sizeof(menu));
+#ifndef RXPIN_BLOCKED
+  int pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
+  gcounter.set_rx_pin(pin);
+#endif
+#if GEIGER_TXPIN != -1
+  pin = atoi(ConfigManager::getParamValueFromID("geigerTX"));
+  gcounter.set_tx_pin(pin);
+#endif
+
   WiFiManager::setWebServerCallback(std::bind(&ConfigManager::bindServerCallback, this));
   WiFiManager::setSaveParamsCallback(std::bind(&ConfigManager::saveParams, this));
   WiFiManager::startWebPortal();
@@ -540,6 +552,25 @@ void ConfigManager::saveParams()
   configFile.close();
   LittleFS.end();
   Log::console(PSTR("Config: Saved"));
+  bool restart_required = false;
+#ifndef RXPIN_BLOCKED
+  int rx_pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
+  if (rx_pin != gcounter.get_rx_pin()) {
+    Log::console(PSTR("Config: Geiger RX Pin Changed"));
+    restart_required = true;
+  }
+#endif
+#if GEIGER_TXPIN != -1
+  int tx_pin = atoi(ConfigManager::getParamValueFromID("geigerTX"));
+  if (tx_pin != gcounter.get_tx_pin()) {
+    Log::console(PSTR("Config: Geiger TX Pin"));
+    restart_required = true;
+  }
+#endif
+  if (restart_required) {
+    handleRestart();
+  }
+
 #ifdef MQTTOUT
   MQTT_Client& mqtt = MQTT_Client::getInstance();
 #ifdef MQTTAUTODISCOVER
