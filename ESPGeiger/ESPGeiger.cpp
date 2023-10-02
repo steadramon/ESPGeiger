@@ -174,10 +174,6 @@ void setup()
   Log::console(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, cManager.GetChipModel());
   Log::console(PSTR(" \\/   \\/"));
 
-#ifdef ESPGEIGER_HW
-  hardware.begin();
-#endif
-
   delay(100);
   msTicker.attach_ms(1, msTickerCB);
 #ifdef SSD1306_DISPLAY
@@ -189,6 +185,11 @@ void setup()
   cManager.autoConnect();
   delay(100);
   cManager.startWebPortal();
+
+#ifdef ESPGEIGER_HW
+  hardware.begin();
+#endif
+
   arduino_ota_setup(hostName);
   delay(500);
 #ifdef MQTTOUT
