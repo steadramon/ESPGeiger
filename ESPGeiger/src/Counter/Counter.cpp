@@ -45,6 +45,21 @@ void Counter::set_ratio(float ratio) {
   _ratio = ratio;
 }
 
+void Counter::set_rx_pin(int pin) {
+  _geiger_rxpin = pin;
+}
+void Counter::set_tx_pin(int pin) {
+  _geiger_txpin = pin;
+}
+
+int Counter::get_rx_pin() {
+  return _geiger_rxpin;
+}
+
+int Counter::get_tx_pin() {
+  return _geiger_txpin;
+}
+
 float Counter::get_usv() {
   float avgcpm = status.geigerTicks.get()*60;
   return avgcpm/_ratio;
@@ -142,7 +157,9 @@ void Counter::handleSerial(char* input)
     int n = sscanf(input, "%d\n", &_scpm);
     if (n == 1) {
 #endif
-      Log::debug(PSTR("Counter loop - %d"), _scpm);
+      Log::debug(PSTR("Counter: Loop - %d"), _scpm);
+      if (_handlesecond)
+        return;
 #ifdef ESP32
   portENTER_CRITICAL(&timerMux);
 #endif
@@ -166,7 +183,7 @@ void Counter::loop() {
   }
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  unsigned long int secidx = (millis() / 1000) % 60;
+  unsigned long int secidx = (millis() / 1000);
   if (secidx != _last_secidx) {
     _last_secidx = secidx;
   #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
@@ -178,9 +195,6 @@ void Counter::loop() {
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_SERIAL || GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   if (geigerPort.available() > 0) {
-    if (_handlesecond)
-      return;
-
     char input = geigerPort.read();
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {

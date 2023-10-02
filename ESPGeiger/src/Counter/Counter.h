@@ -107,7 +107,6 @@ static int _geiger_rxpin = GEIGER_RXPIN;
     #define GEIGER_TXPIN -1
   #endif
 
-static int _geiger_txpin = GEIGER_TXPIN;
 static char _serial_buffer[64];
 static uint8_t _serial_idx = 0;
 #include <SoftwareSerial.h>
@@ -132,7 +131,6 @@ static EspSoftwareSerial::UART geigerPort;
   #ifndef GEIGER_TXPIN
     #define GEIGER_TXPIN 12
   #endif
-  static int _geiger_txpin = GEIGER_TXPIN;
   #define GEIGERTESTMODE
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   #define GEIGERTESTMODE
@@ -148,7 +146,6 @@ static EspSoftwareSerial::UART geigerPort;
   #ifndef GEIGER_TXPIN
     #define GEIGER_TXPIN 12
   #endif
-static int _geiger_txpin = GEIGER_TXPIN;
 static char _serial_buffer[64];
 static uint8_t _serial_idx = 0;
 #include <SoftwareSerial.h>
@@ -161,6 +158,10 @@ static int _last_secidx = 0;
 
 #ifndef GEIGER_MODEL
   #define GEIGER_MODEL "genpulse"
+#endif
+
+#ifndef GEIGER_TXPIN
+  #define GEIGER_TXPIN -1
 #endif
 
 #ifdef ESP32
@@ -183,7 +184,7 @@ extern "C" {
 
 #ifndef GEIGER_CPM_COUNT
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
-#define GEIGER_CPM_COUNT 10
+#define GEIGER_CPM_COUNT 60
 #else
 #define GEIGER_CPM_COUNT 60
 #endif
@@ -198,6 +199,7 @@ extern "C" {
 static volatile int eventCounter;
 static volatile unsigned long _last_blip;
 static unsigned long _debounce = microsecondsToClockCycles(GEIGER_DEBOUNCE);
+static int _geiger_txpin = GEIGER_TXPIN;
 
 extern Status status;
 
@@ -250,8 +252,8 @@ static void IRAM_ATTR handleSecondTick() {
   status.geigerTicks.add((float)eventCounter/(float)60);
 #else
   status.geigerTicks.add(eventCounter);
-#endif
   eventCounter = 0;
+#endif
   _handlesecond = false;
   portEXIT_CRITICAL_ISR(&timerMux);
   unsigned long int secidx = (millis() / 1000) % 60;
@@ -305,6 +307,10 @@ class Counter {
       int get_cpm15();
       float get_usv();
       void set_ratio(float ratio);
+      void set_rx_pin(int pin);
+      void set_tx_pin(int pin);
+      int get_rx_pin();
+      int get_tx_pin();
       void begin();
       const char* geiger_model() { return GEIGER_MODEL; };
     private:
