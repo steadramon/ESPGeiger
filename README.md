@@ -71,7 +71,7 @@ The `GEIGER_TXPIN` is not currently in use for communication to the Geiger Count
 
 Currently ESPGeiger-HW is in development testing, watch this space!
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPG-HW.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPG-HW.png" width="75%"/>
 
 ### Test/Emulation mode counter
 
