@@ -26,6 +26,10 @@
 #define GEIGER_PWMPIN 12
 #endif
 
+#ifndef GEIGER_VFEEDBACK
+#define GEIGER_VFEEDBACK A0
+#endif
+
 #ifndef GEIGERHW_FREQ
 #define GEIGERHW_FREQ 6000
 #endif
@@ -50,7 +54,11 @@ class ESPGeigerHW {
         if (_hw_freq > GEIGERHW_MAX_FREQ) {
           _hw_freq = GEIGERHW_MAX_FREQ;
         }
-         analogWriteFreq(_hw_freq);
+#ifdef ESP8266
+        analogWriteFreq(_hw_freq);
+#else
+        ledcChangeFrequency(0, _hw_freq, 8);
+#endif
         _hw_freq = freq;
       };
       int get_freq() {

@@ -32,15 +32,24 @@ ESPGeigerHW::ESPGeigerHW() {
 void ESPGeigerHW::begin() {
   Log::console(PSTR("ESPG-HW: PWM Setup"));
   loadconfig();
+#ifdef ESP8266
   pinMode(GEIGER_PWMPIN, OUTPUT);
   analogWrite (GEIGER_PWMPIN, 0) ;
   analogWriteFreq(_hw_freq);
+#else
+  ledcSetup(0, _hw_freq, 8);
+  ledcAttachPin(GEIGER_PWMPIN, 0);
+#endif
   status.hvReading.begin(SMOOTHED_AVERAGE, 10);
 }
 
 void ESPGeigerHW::loop() {
+#ifdef ESP8266
   analogWrite (GEIGER_PWMPIN, _hw_duty) ;
-  int sensorValue = analogRead(A0);
+#else
+  ledcWrite(0, _hw_duty);
+#endif
+  int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   //3.3 / 1024 = 0.00322265625
   float volts = (sensorValue * 0.00331796875)*235;
   status.hvReading.add((int)volts);
