@@ -22,7 +22,9 @@
 #include <Arduino.h>
 #include "../Status.h"
 
+#ifndef PUSHBUTTON_PIN
 #define PUSHBUTTON_PIN 14
+#endif
 
 static unsigned long _push_debounce = microsecondsToClockCycles(250000);
 
