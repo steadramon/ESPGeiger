@@ -158,7 +158,9 @@ void Counter::handleSerial(char* input)
     if (n == 1) {
 #endif
       Log::debug(PSTR("Counter: Loop - %d"), _scpm);
+#ifndef DISABLE_SERIALBLIP
       _last_blip = ESP.getCycleCount();
+#endif
       if (_handlesecond)
         return;
 #ifdef ESP32
