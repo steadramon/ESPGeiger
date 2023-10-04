@@ -108,6 +108,9 @@ public:
     return (char*)"ESP8266";
 #endif
 #elif defined(ESP32)
+#ifdef ESPGEIGER_HW
+    return (char*)"ESPG32-HW";
+#else
     esp_chip_info_t chipInfo;
     esp_chip_info(&chipInfo);
     switch((int)chipInfo.model) {
@@ -122,6 +125,7 @@ public:
         case 16 : return (char*)"ESP32-H2";
         default: return (char*)"ESP32";
     }
+#endif
 #else
     return (char*)"UNKNOWN";
 #endif
