@@ -34,11 +34,9 @@ extern Status status;
 static void IRAM_ATTR do_pushbutton() {
   unsigned long cycles = ESP.getCycleCount();
   if (cycles - status.last_pushbutton > _push_debounce) {
-    portENTER_CRITICAL_ISR(&timerMux);
     status.last_pushbutton = cycles;
     status.button_pushed = true;
     status.led.Blink(200, 200);
-    portEXIT_CRITICAL_ISR(&timerMux);
   }
 };
 #else
