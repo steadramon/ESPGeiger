@@ -44,6 +44,12 @@
 #endif
 #endif
 
+#ifdef ESPGEIGER_HW
+#ifndef BLIPLED
+#define BLIPLED 15
+#endif
+#endif
+
 #define TimeLedON                    1
 #define MAX_SIZE 90
 struct Status {
@@ -57,7 +63,7 @@ struct Status {
   CircularBuffer<int,45> cpm_history;
   long start = 0;
   bool warmup = true;
-  const char* geiger_model = "";
+  char* geiger_model = "";
   unsigned long last_send = 0;
   unsigned long last_blip = 0;
   unsigned long last_beep = 0;
@@ -78,8 +84,8 @@ struct Status {
   int oled_page = 1;
   int oled_last_update = 0;
 #endif
-#ifdef ESPGEIGER_HW
-  JLed blip_led = JLed(15);
+#ifdef BLIPLED
+  JLed blip_led = JLed(BLIPLED);
   Smoothed <float> hvReading;
 #endif
 };
