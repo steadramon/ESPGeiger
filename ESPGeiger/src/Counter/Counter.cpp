@@ -158,6 +158,7 @@ void Counter::handleSerial(char* input)
     if (n == 1) {
 #endif
       Log::debug(PSTR("Counter: Loop - %d"), _scpm);
+      _last_blip = ESP.getCycleCount();
       if (_handlesecond)
         return;
 #ifdef ESP32
@@ -195,6 +196,9 @@ void Counter::loop() {
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_SERIAL || GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   if (geigerPort.available() > 0) {
+    if (geigerPort.overflow()) {
+      Log::console(PSTR("Counter: Serial Overflow %d"), geigerPort.available());
+    }
     char input = geigerPort.read();
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
