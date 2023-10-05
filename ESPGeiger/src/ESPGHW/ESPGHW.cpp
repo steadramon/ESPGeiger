@@ -111,9 +111,6 @@ void ESPGeigerHW::loadconfig() {
         const char* duty = jsonBuffer["duty"];
         set_freq(atoi(jsonBuffer["freq"]));
         set_duty(atoi(jsonBuffer["duty"]));
-
-        Log::console(PSTR("ESPG-HW: freq: %s"), freq);
-        Log::console(PSTR("ESPG-HW: duty: %s"), duty);
       }
       else
         Log::console(PSTR("ESPG-HW: failed to load json params"));
@@ -130,5 +127,7 @@ void ESPGeigerHW::loadconfig() {
     Log::console(PSTR("ESPG-HW: No espgeigerhw.json file, using defaults"));
   }
   LittleFS.end();
+  Log::console(PSTR("ESPG-HW: freq: %d"), _hw_freq);
+  Log::console(PSTR("ESPG-HW: duty: %d"), _hw_duty);
 }
 #endif
