@@ -18,7 +18,7 @@ ESPGeiger is an open-source project that makes it easy to monitor radiation leve
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
 
-## Installation
+## 1. Installation
 
 ### Web Installer
 
@@ -53,7 +53,7 @@ The `environments.ini` file defines some pre-built environments and examples of 
 6.  To upload the project to your microcontroller, click on the `Upload` button in the PlatformIO IDE.
 7.  The PlatformIO IDE will upload the project to your microcontroller.
 
-## Hardware
+## 2. Connect Hardware
 
 ### Pulse counter
 
@@ -81,14 +81,17 @@ By default `GEIGER_RXPIN` is set to GPIO13. By default `GEIGER_TXPIN` is set to 
 
 In either Test Pulse or Test Serial modes you can connect `GEIGER_RXPIN` and `GEIGER_TXPIN` together with a jumper wire, to emulate a Geiger counter from ESPGeiger itself.
 
-## Setup and Config
+## 3. Setup and Config
 
 1.  Once installed, connect to the built-in Wifi on the ESP to set up your access point. The SSID will look like ESPGeiger-\<alpha-num\>
 2.  When you connect a window show pop up asking for Wifi Configuration, if not browse to http://192.168.4.1/
 3.  Select the SSID and insert the password for the network you'd like to connect to.
 4.  Once connected to the network you can browse to the ESPGeiger IP address directly or enter `http://<name of the device>.local` into your browser, for example http://ESPGeiger-83e6a4.local
+5.  You can now configure MQTT etc from the Setup page and view the current status from Status
 
-## Counters
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-anim.gif" width="75%"/>
+
+## Compatible Counters
 
 ### Annoucing ESPGeiger-HW
 
