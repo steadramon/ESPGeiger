@@ -79,7 +79,7 @@ Currently ESPGeiger-HW is in development testing, watch this space!
 
 By default `GEIGER_RXPIN` is set to GPIO13. By default `GEIGER_TXPIN` is set to GPIO12.
 
-In either Test Pulse or Test Serial modes you can connect PIN 12 and 13 together with a jumper wire, to emulate a Geiger counter from ESPGeiger itself.
+In either Test Pulse or Test Serial modes you can connect `GEIGER_RXPIN` and `GEIGER_TXPIN` together with a jumper wire, to emulate a Geiger counter from ESPGeiger itself.
 
 ## Setup and Config
 
