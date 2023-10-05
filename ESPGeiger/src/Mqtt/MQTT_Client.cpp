@@ -120,6 +120,11 @@ void MQTT_Client::loop()
     fval =  gcounter.get_usv();
     publish(buildTopic(statTopic, PSTR("uSv")).c_str(), String(fval).c_str(), false);
 
+#ifndef DISABLE_MQTT_CPS
+    fval =  gcounter.get_cps();
+    publish(buildTopic(statTopic, PSTR("CPS")).c_str(), String(fval).c_str(), false);
+#endif
+
     fval = gcounter.get_cpm5();
     publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), String(fval).c_str(), false);
 
