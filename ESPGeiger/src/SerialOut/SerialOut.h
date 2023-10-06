@@ -24,14 +24,12 @@
 #include "../Status.h"
 #include "../Counter/Counter.h"
 
-extern Status status;
 extern Counter gcounter;
 
 class SerialOut {
     public:
       SerialOut();
       void loop();
-      void begin();
 };
 
 #endif

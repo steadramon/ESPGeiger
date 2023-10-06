@@ -21,19 +21,11 @@
 #include <Arduino.h>
 #include "SerialOut.h"
 #include "../Logger/Logger.h"
-#include <SoftwareSerial.h>
-
-SoftwareSerial sSerial(3, 1);
 
 SerialOut::SerialOut() {
 }
 
-void SerialOut::begin() {
-  //sSerial.begin(115200);
-}
-
 void SerialOut::loop() {
-  sSerial.write(PSTR("CPM: %d\n"), gcounter.get_cpm());
 #ifdef SERIALOUT_WEB
   Log::console(PSTR("CPM: %d"), gcounter.get_cpm());
 #else
