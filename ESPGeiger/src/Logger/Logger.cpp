@@ -69,6 +69,7 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData)
   if (level > Log::logLevel)
     return;
 
+#ifndef DISABLE_LOG_TS
   char timeStr[10];  // "13:45:21 "
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
@@ -78,8 +79,11 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData)
   else {
       timeStr[0] = '\0';
   }
-  
   Serial.printf (PSTR ("%s%s\n"), timeStr, logData);
+#else
+  Serial.printf (PSTR ("%s\n"), logData);
+#endif
+
 
   // Delimited, zero-terminated buffer of log lines.
   // Each entry has this format: [index][log data]['\1']
