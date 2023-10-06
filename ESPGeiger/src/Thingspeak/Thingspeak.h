@@ -34,6 +34,10 @@
 extern Status status;
 extern Counter gcounter;
 
+#ifndef THINGSPEAK_INTERVAL
+#define THINGSPEAK_INTERVAL 90
+#endif
+
 const char TS_URI[] PROGMEM = "http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%s&field3=%d&field4=%d";
 
 class Thingspeak {
@@ -44,7 +48,7 @@ class Thingspeak {
     AsyncHTTPRequest request;
   private:
     unsigned long lastPing = 0;
-    const int pingInterval = 1000 * 90;
+    const int pingInterval = 1000 * THINGSPEAK_INTERVAL;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 

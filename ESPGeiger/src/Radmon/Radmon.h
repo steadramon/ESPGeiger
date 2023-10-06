@@ -35,6 +35,10 @@
 extern Status status;
 extern Counter gcounter;
 
+#ifndef RADMON_INTERVAL
+#define RADMON_INTERVAL 60
+#endif
+
 const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%d&unit=CPM";
 
 class Radmon {
@@ -45,7 +49,7 @@ class Radmon {
     AsyncHTTPRequest request;
   private:
     unsigned long lastPing = 0;
-    const int pingInterval = 1000 * 60;
+    const int pingInterval = 1000 * RADMON_INTERVAL;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 

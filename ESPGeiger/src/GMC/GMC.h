@@ -35,6 +35,10 @@
 extern Status status;
 extern Counter gcounter;
 
+#ifndef GMC_INTERVAL
+#define GMC_INTERVAL 300
+#endif
+
 const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM=%d&ACPM=%d&uSV=%s";
 
 class GMC {
@@ -45,7 +49,7 @@ class GMC {
     AsyncHTTPRequest request;
   private:
     unsigned long lastPing = 0;
-    const int pingInterval = 1000 * 300;
+    const int pingInterval = 1000 * GMC_INTERVAL;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
