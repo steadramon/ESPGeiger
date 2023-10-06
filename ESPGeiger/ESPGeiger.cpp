@@ -121,10 +121,6 @@ void msTickerCB()
 #endif
 }
 
-void fiveSTickerCB()
-{
-}
-
 void sTickerCB()
 {
 #ifdef SERIALOUT
@@ -196,16 +192,12 @@ void setup()
   mqtt.begin();
 #endif
   gcounter.begin();
-#ifdef SERIALOUT
-  serialout.begin();
-#endif
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.begin();
 #endif
   setupNTP();
   status.start = NTP.getUptime();
   sTicker.attach(1, sTickerCB);
-  fiveSTicker.attach(5, fiveSTickerCB);
   status.led.Off().Update();
 }
 
