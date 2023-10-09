@@ -113,23 +113,17 @@ void MQTT_Client::loop()
 
     publish(buildTopic(teleTopic, topicStatus).c_str(), buffer, false);
 
-    float fval = gcounter.get_cpm();
+    publish(buildTopic(statTopic, PSTR("CPM")).c_str(), String(status.geigerTicks.get()*60.0).c_str(), false);
 
-    publish(buildTopic(statTopic, PSTR("CPM")).c_str(), String(fval).c_str(), false);
-
-    fval =  gcounter.get_usv();
-    publish(buildTopic(statTopic, PSTR("uSv")).c_str(), String(fval).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("uSv")).c_str(), String(gcounter.get_usv()).c_str(), false);
 
 #ifndef DISABLE_MQTT_CPS
-    fval =  gcounter.get_cps();
-    publish(buildTopic(statTopic, PSTR("CPS")).c_str(), String(fval).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPS")).c_str(), String(status.geigerTicks.get()).c_str(), false);
 #endif
 
-    fval = gcounter.get_cpm5();
-    publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), String(fval).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), String(status.geigerTicks5.get()*60.0).c_str(), false);
 
-    fval = gcounter.get_cpm15();
-    publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), String(fval).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), String(status.geigerTicks15.get()*60.0).c_str(), false);
 
     status.last_send = millis();
   }
