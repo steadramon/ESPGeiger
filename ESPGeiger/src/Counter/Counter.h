@@ -303,8 +303,11 @@ class Counter {
       void loop();
       float get_cps();
       int get_cpm();
+      float get_cpmf();
       int get_cpm5();
+      float get_cpm5f();
       int get_cpm15();
+      float get_cpm15f();
       float get_usv();
       void set_ratio(float ratio);
       void set_rx_pin(int pin);

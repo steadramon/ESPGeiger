@@ -33,12 +33,24 @@ int Counter::get_cpm() {
   return status.geigerTicks.get()*60;
 }
 
+float Counter::get_cpmf() {
+  return status.geigerTicks.get()*60.0;
+}
+
 int Counter::get_cpm5() {
   return status.geigerTicks5.get()*60;
 }
 
+float Counter::get_cpm5f() {
+  return status.geigerTicks5.get()*60.0;
+}
+
 int Counter::get_cpm15() {
   return status.geigerTicks15.get()*60;
+}
+
+float Counter::get_cpm15f() {
+  return status.geigerTicks15.get()*60.0;
 }
 
 void Counter::set_ratio(float ratio) {
