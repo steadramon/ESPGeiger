@@ -223,18 +223,14 @@ void ConfigManager::handleJsonReturn()
   char jsonBuffer[128] = "";
 
   int total = sizeof(jsonBuffer);
-  int rcpm = round((status.geigerTicks.get()*60));
-  int fivercpm = round(status.geigerTicks5.get()*60);
-  int fifteenrcpm = round(status.geigerTicks15.get()*60);
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
-
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"u\":\"%s\",\"c\":%d,\"c5\":%d,\"c15\":%d,\"r\":%s}"),
+    PSTR("{\"u\":\"%s\",\"c\":%s,\"c5\":%s,\"c15\":%s,\"r\":%s}"),
     ConfigManager::getUptimeString(),
-    rcpm,
-    fivercpm,
-    fifteenrcpm,
+    String(status.geigerTicks.get()*60.0).c_str(),
+    String(status.geigerTicks5.get()*60.0).c_str(),
+    String(status.geigerTicks15.get()*60.0).c_str(),
     ratioChar
   );
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
