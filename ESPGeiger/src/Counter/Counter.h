@@ -237,6 +237,7 @@ static void IRAM_ATTR count() {
 
 static void IRAM_ATTR handleSecondTick() {
   portENTER_CRITICAL_ISR(&timerMux);
+  uint32_t last_clicks = status.total_clicks;
   _handlesecond = true;
 #ifdef USE_PCNT
   int16_t pulseCount;
@@ -250,12 +251,29 @@ static void IRAM_ATTR handleSecondTick() {
 #endif
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
   status.geigerTicks.add((float)eventCounter/(float)60);
+  status.partial_clicks += (float)eventCounter/(float)60;
 #else
   status.geigerTicks.add(eventCounter);
-  eventCounter = 0;
+  status.total_clicks += eventCounter;
 #endif
+  eventCounter = 0;
   _handlesecond = false;
   portEXIT_CRITICAL_ISR(&timerMux);
+
+  if (status.partial_clicks >= 1.0) {
+    status.total_clicks += (int)status.partial_clicks;
+    status.partial_clicks -= (int)status.partial_clicks;
+  }
+  time_t currentTime = time (NULL);
+  if (currentTime > 0) {
+    struct tm *timeinfo = localtime (&currentTime);
+    if ((timeinfo->tm_hour == 0) && (timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
+      status.clicks_yesterday = status.clicks_today;
+      status.clicks_today = 0;
+    }
+  }
+  status.clicks_today += (status.total_clicks - last_clicks);
+
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx % 5 == 0) {
     status.geigerTicks5.add(status.geigerTicks.get());
@@ -277,14 +295,33 @@ static void ICACHE_RAM_ATTR count() {
 
 //static void ICACHE_RAM_ATTR handleSecondTick() {
 static void handleSecondTick() {
+  uint32_t last_clicks = status.total_clicks;
   _handlesecond = true;
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
   status.geigerTicks.add((float)eventCounter/(float)60);
+  status.partial_clicks += (float)eventCounter/(float)60;
 #else
   status.geigerTicks.add(eventCounter);
+  status.total_clicks += eventCounter;
 #endif
   eventCounter = 0;
   _handlesecond = false;
+
+  if (status.partial_clicks >= 1.0) {
+    status.total_clicks += (int)status.partial_clicks;
+    status.partial_clicks -= (int)status.partial_clicks;
+  }
+  time_t currentTime = time (NULL);
+  if (currentTime > 0) {
+    struct tm *timeinfo = localtime (&currentTime);
+    if ((timeinfo->tm_hour == 0) && (timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
+      status.clicks_yesterday = status.clicks_today;
+      status.clicks_today = 0;
+    }
+
+  }
+  status.clicks_today += (status.total_clicks - last_clicks);
+
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx % 5 == 0) {
     status.geigerTicks5.add(status.geigerTicks.get());
