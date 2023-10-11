@@ -220,18 +220,20 @@ void ConfigManager::handleJSReturn()
 
 void ConfigManager::handleJsonReturn()
 {
-  char jsonBuffer[128] = "";
+  char jsonBuffer[256] = "";
 
   int total = sizeof(jsonBuffer);
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"u\":\"%s\",\"c\":%s,\"c5\":%s,\"c15\":%s,\"r\":%s}"),
+    PSTR("{\"u\":\"%s\",\"c\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u}"),
     ConfigManager::getUptimeString(),
     String(status.geigerTicks.get()*60.0).c_str(),
     String(status.geigerTicks5.get()*60.0).c_str(),
     String(status.geigerTicks15.get()*60.0).c_str(),
-    ratioChar
+    String(status.geigerTicks.get()).c_str(),
+    ratioChar,
+    status.total_clicks
   );
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
