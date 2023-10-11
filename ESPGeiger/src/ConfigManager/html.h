@@ -22,7 +22,7 @@ static const char STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1 title="{t
 
 static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;} .wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
-<table><tr><th>CPM:</th><td><span id="cpm">-</span></td></tr><tr><th>μSv:</th><td><span id="usv">-</span></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td></tr></table>
+<table style="width:75%"><tr><th>CPM:</th><td><span id="cpm">-</span></td><th>CPS:</th><td id="cs"></td></tr><tr><th>μSv/h:</th><td><span id="usv">-</span></td><th>Total Clicks:</th><td id="tc"></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td></tr></table>
 <div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
 <script src="/js"></script>)HTML";
 static const char HV_STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>)HTML";
@@ -43,7 +43,7 @@ static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:
 static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>ESPGeiger</a> {1}/{2}</small>";
 
 static const char statusJS[] PROGMEM = R"JS(
-!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('upt').innerHTML=o.u;byID('cpm').innerHTML=o.c.toFixed(2);byID('usv').innerHTML=(o.c/o.r).toFixed(4);e.update([o.c,o.c5,o.c15]),setTimeout(t,3e3)}},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
+!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('upt').innerHTML=o.u;byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);e.update([o.c,o.c5,o.c15]),setTimeout(t,3e3)}},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
 var lt,to,tp,x=null,pc="",sn=0,id=0;
 function f(){var t;return clearTimeout(lt),t=byID("t1"),(x=new XMLHttpRequest).onload=function(){if(200==x.status){var e,n=x.responseText;id=n.substr(0,n.indexOf("\n")),(e=n.substr(n.indexOf("\n")+1)).length>0&&(t.value+=e),t.scrollTop>=sn&&(t.scrollTop=99999,sn=t.scrollTop)}lt=setTimeout(f,3210)},x.onerror=function(){lt=setTimeout(f,6e3)},x.open("GET","/cs?c1="+id,!0),x.send(),!1}window.addEventListener("load",f);
 )JS";
