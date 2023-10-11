@@ -66,6 +66,7 @@ struct Status {
   char* geiger_model = "";
   uint32_t total_clicks = 0;
   uint32_t clicks_today = 0;
+  float partial_clicks = 0;
   unsigned long last_send = 0;
   unsigned long last_blip = 0;
   unsigned long last_beep = 0;
