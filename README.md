@@ -1,7 +1,7 @@
 ![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)
 # <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger.svg" width="30px"/> ESPGeiger
 
-ESPGeiger is an open-source project that makes it easy to monitor radiation levels in your environment. It can collect, calculate, and report radiation levels from a range of Geiger counters with pulse and serial outputs. ESPGeiger supports the GC10/GC10next and MightyOhm counters, with additional support possible. The firmware is written to be installed onto the common esp8266 and esp32 boards.
+ESPGeiger is an open-source project that makes it easy to create your own IOT connected Geiger counter, to monitor radiation levels in your environment. It can collect, calculate, and report radiation levels from a range of Geiger counters with pulse and serial outputs. ESPGeiger supports the GC10/GC10next and MightyOhm counters, with additional support possible. The firmware is written to be installed onto the common esp8266 and esp32 boards.
 
 - 😃  Easy to install and configure - contribute to monitoring!
 - ✅  Compatible with all generic Geiger counters with Pulse output and a range of serial based - GC10, GC10next, MightyOhm
