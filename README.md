@@ -46,7 +46,7 @@ There are additional builds with special features:
  - `no_pcnt` - disables PCNT (hardware) counting for ESP32 devices
  - `cajoe_iotgm` - build for the CaJoe IOT GM with ESP32 on board
 
-Use a tool such as esptool.py to flash the firmware to your ESP device.
+Use a tool such as esptool.py or Tasmotizer to flash the firmware to your ESP device.
 
 ### Building your own image
 
