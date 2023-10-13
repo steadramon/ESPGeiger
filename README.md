@@ -37,6 +37,15 @@ There are builds for both ESP32 and ESP8266 boards, both with builds for:
 
 For example, if you have an esp8266 and a generic pulse counter, use `esp8266_pulse-firmware.bin` - an ESP32 with a GC10 - `esp32_gc10-firmware.bin`
 
+All build files have an OLED option if you are using a SD1306 OLED display.
+
+There are additional builds with special features:
+
+ - `espgeigerhw` - build for the ESPGeiger HW geiger counter
+ - `minpulse` - this is a build without any 3rd party output other than web config
+ - `no_pcnt` - disables PCNT (hardware) counting for ESP32 devices
+ - `cajoe_iotgm` - build for the CaJoe IOT GM with ESP32 on board
+
 Use a tool such as esptool.py to flash the firmware to your ESP device.
 
 ### Building your own image
@@ -90,6 +99,12 @@ In either Test Pulse or Test Serial modes you can connect `GEIGER_RXPIN` and `GE
 5.  You can now configure MQTT etc from the Setup page and view the current status from Status
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-anim.gif" width="75%"/>
+
+## 4. Upgrading
+
+Upgrading can be done through the web interface. Please be careful to select the right firmware for your build.
+
+Note: ESP32 users please download the `firmware` version - `merged` firmwares are for fresh installs.
 
 ## Compatible Counters
 
