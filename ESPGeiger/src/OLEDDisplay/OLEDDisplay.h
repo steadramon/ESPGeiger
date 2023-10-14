@@ -21,7 +21,6 @@
 #define OLEDDISP_H
 #ifdef SSD1306_DISPLAY
 #include <Arduino.h>
-#include "../ConfigManager/ConfigManager.h"
 #include <Wire.h>
 #include "SSD1306Wire.h"
 #include "../Status.h"
@@ -56,13 +55,9 @@ extern Counter gcounter;
 #define OLED_ADDR      0x3c
 #endif
 
-
 class SSD1306Display : public SSD1306Wire{
 public:
-	SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl) : SSD1306Wire(_addr, _sda, _scl) {
-		cx = 0;
-		cy = 0;
-	}
+    SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl);
 	void begin() {
 		//Wire.setClock(400000L);
         init();
@@ -139,6 +134,16 @@ public:
     void loop() {
       unsigned long now = millis();
       if (now - _last_update > 500) {
+		if ((_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
+			if (status.oled_on) {
+				clear();
+				display();
+				status.oled_on = false;
+			}
+			return;
+		} else {
+			status.oled_on = true;
+		}
         _last_update = now;
 		if (status.oled_page == 1) {
 			if ((now - status.oled_last_update > 10000) || (status.oled_last_update == 0)) {
@@ -166,13 +171,7 @@ public:
       }
     }
 
-	void page_one_clear() {
-		clear();
-		drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
-		setFont(DialogInput_plain_12);
-		drawString(0,5, PSTR("CPM:"));
-		drawString(0,20, PSTR("µSv/h:"));
-	}
+	void page_one_clear();
 
 	void page_one_graph() {
 		setColor(BLACK);
@@ -237,15 +236,7 @@ public:
 		}
 	}
 
-	void page_two_full() {
-        ConfigManager &configManager = ConfigManager::getInstance();
-		clear();
-		setFont(ArialMT_Plain_10);
-		drawString(0,5, String(configManager.getHostName()));
-		drawString(0,20, PSTR("IP:"));
-		drawString(16, 20, WiFi.localIP().toString());
-		drawString(0, 36, configManager.getUptimeString());
-	}
+	void page_two_full();
 
 	void page_three_full() {
 		clear();
@@ -257,11 +248,21 @@ public:
 		drawString(0, 35, PSTR("@steadramon"));
 
 	}
+
+	void setTimeout(int timeout) {
+		_lcd_timeout = timeout * 1000;
+	}
+
 private:
 	uint8_t cx, cy;
 	uint8_t fontWidth, fontHeight;
     unsigned long _last_update = 0;
     unsigned long _last_full = 0;
+#ifdef GEIGER_PUSHBUTTON
+	unsigned long _lcd_timeout = 60000;
+#else
+	unsigned long _lcd_timeout = 0;
+#endif
 };
 
 #endif
