@@ -16,7 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+#ifdef SSD1306_DISPLAY
 #include "OLEDDisplay.h"
 #include "../Logger/Logger.h"
 #include "../ConfigManager/ConfigManager.h"
@@ -44,3 +44,4 @@ void SSD1306Display::page_two_full() {
 		drawString(0,5, PSTR("CPM:"));
 		drawString(0,20, PSTR("µSv/h:"));
 	}
+#endif
