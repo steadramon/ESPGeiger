@@ -87,6 +87,8 @@ struct Status {
 #if defined(SSD1306_DISPLAY)
   int oled_page = 1;
   int oled_last_update = 0;
+  bool oled_on = true;
+  unsigned long oled_timeout = 0;
 #endif
 #ifdef BLIPLED
   JLed blip_led = JLed(BLIPLED);
