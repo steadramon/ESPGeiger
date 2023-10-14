@@ -197,7 +197,11 @@ void ConfigManager::handleRoot() {
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
   page = FPSTR(HTTP_ROOT_MAIN);
+#ifdef ESPGEIGER_HW
+  page.replace(FPSTR(T_t),"ESPGeiger-HW");
+#else
   page.replace(FPSTR(T_t),thingName);
+#endif
   page.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
   server->sendContent(page);
   server->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
@@ -259,7 +263,11 @@ void ConfigManager::handleStatusPage()
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
   String title = FPSTR(hostName);
+#ifdef ESPGEIGER_HW
+  title += F("-HW - Status");
+#else
   title += F(" - Status");
+#endif
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_STYLE));
