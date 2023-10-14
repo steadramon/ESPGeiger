@@ -205,7 +205,7 @@ void MQTT_Client::reconnect()
   else
   {
     status.mqtt_connected = false;
-    Log::console(PSTR("MQTT: failed, rc=%i"), state());
+    Log::console(PSTR("MQTT: connection failed, rc=%i"), state());
   }
 
 }
@@ -342,10 +342,12 @@ void MQTT_Client::begin()
 
   if (_mqtt_server == NULL) {
     mqttEnabled = false;
+    Log::console(PSTR("MQTT: No server set"));
     return;
   }
   if ((_mqtt_pass != NULL) && (_mqtt_user == NULL)) {
     mqttEnabled = false;
+    Log::console(PSTR("MQTT: Please set username and password"));
     return;
   }
 
