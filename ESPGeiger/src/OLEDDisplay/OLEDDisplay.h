@@ -134,6 +134,7 @@ public:
     void loop() {
       unsigned long now = millis();
       if (now - _last_update > 500) {
+#ifdef GEIGER_PUSHBUTTON
 		if ((_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
 			if (status.oled_on) {
 				clear();
@@ -144,6 +145,7 @@ public:
 		} else {
 			status.oled_on = true;
 		}
+#endif
         _last_update = now;
 		if (status.oled_page == 1) {
 			if ((now - status.oled_last_update > 10000) || (status.oled_last_update == 0)) {
@@ -258,11 +260,7 @@ private:
 	uint8_t fontWidth, fontHeight;
     unsigned long _last_update = 0;
     unsigned long _last_full = 0;
-#ifdef GEIGER_PUSHBUTTON
 	unsigned long _lcd_timeout = 60000;
-#else
-	unsigned long _lcd_timeout = 0;
-#endif
 };
 
 #endif
