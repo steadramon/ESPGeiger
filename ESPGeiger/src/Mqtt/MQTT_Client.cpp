@@ -340,10 +340,15 @@ void MQTT_Client::begin()
   const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
   const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
 
-  if ((_mqtt_server == NULL) || (_mqtt_user == NULL) || (_mqtt_pass == NULL)) {
+  if (_mqtt_server == NULL) {
     mqttEnabled = false;
     return;
   }
+  if ((_mqtt_pass != NULL) && (_mqtt_user == NULL)) {
+    mqttEnabled = false;
+    return;
+  }
+
   setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
   setBufferSize(MQTT_MAX_PACKET_SIZE);
   setKeepAlive(30);
