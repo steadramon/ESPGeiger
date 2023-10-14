@@ -35,7 +35,7 @@ WiFiManagerParameter ESPGeigerParams[] =
 #if GEIGER_TXPIN != -1
   WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 12),
 #endif
-#if defined(SSD1306_DISPLAY)
+#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 10),
 #endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>")
@@ -164,7 +164,7 @@ void ConfigManager::startWebPortal()
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   double ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
-#if defined(SSD1306_DISPLAY)
+#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
   display.setTimeout(lcdTO);
 #endif
@@ -593,7 +593,7 @@ void ConfigManager::saveParams()
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   double ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
-#if defined(SSD1306_DISPLAY)
+#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
   display.setTimeout(lcdTO);
 #endif
