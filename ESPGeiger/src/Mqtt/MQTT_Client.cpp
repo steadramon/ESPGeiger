@@ -214,7 +214,9 @@ String MQTT_Client::buildTopic(const char *baseTopic, const char *cmnd)
 {
   ConfigManager &configManager = ConfigManager::getInstance();
   String topic = baseTopic;
-  topic.replace(PSTR("%st%"), configManager.getHostName());
+  String rootTopic = configManager.getParamValueFromID("mqttTopic");
+  rootTopic.replace(PSTR("{id}"), configManager.getChipID());
+  topic.replace(PSTR("%st%"), rootTopic);
   topic.replace(PSTR("%cm%"), cmnd);
 
   return topic;

@@ -59,6 +59,9 @@ WiFiManagerParameter MQTTParams[] =
   WiFiManagerParameter("mqttPort", "Port", "1883", 6, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("mqttUser", "User", "", 255),
   WiFiManagerParameter("mqttPassword", "Password", "", 255, "type='password'"),
+  WiFiManagerParameter("mqttTopic", "Root Topic", "ESPGeiger-{id}", 16),
+  WiFiManagerParameter("<small>{id} is replaced with the chip ID</small>"),
+
 };
 #ifdef MQTTAUTODISCOVER
 WiFiManagerParameter HassioParams[] =
