@@ -578,6 +578,7 @@ void ConfigManager::saveParams()
   }
 #endif
   mqtt.disconnect();
+  mqtt.begin();
 #endif
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   double ratio = atof(ratioChar);
