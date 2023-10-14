@@ -19,7 +19,6 @@
 #include "ConfigManager.h"
 #include "../Logger/Logger.h"
 #include "../Mqtt/MQTT_Client.h"
-
 #include "ArduinoJson.h"
 #include <FS.h>
 #include <LittleFS.h>
@@ -35,6 +34,9 @@ WiFiManagerParameter ESPGeigerParams[] =
 #endif
 #if GEIGER_TXPIN != -1
   WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 12),
+#endif
+#if defined(SSD1306_DISPLAY)
+  WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 10),
 #endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>")
 };
@@ -156,11 +158,16 @@ void ConfigManager::startWebPortal()
   for (int i = 0; i < sizeof(GMCParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&GMCParams[i]);
 #endif
+
   ConfigManager::loadParams();
 
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   double ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
+#if defined(SSD1306_DISPLAY)
+  int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
+  display.setTimeout(lcdTO);
+#endif
 
 #ifndef RXPIN_BLOCKED
   int pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
@@ -586,6 +593,10 @@ void ConfigManager::saveParams()
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   double ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
+#if defined(SSD1306_DISPLAY)
+  int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
+  display.setTimeout(lcdTO);
+#endif
 }
 
 const char* ConfigManager::getParamValueFromID(const char* str)

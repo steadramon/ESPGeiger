@@ -30,6 +30,10 @@
 #include "../ESPGHW/ESPGHW.h"
 extern ESPGeigerHW hardware;
 #endif
+#if defined(SSD1306_DISPLAY)
+#include "../OLEDDisplay/OLEDDisplay.h"
+extern SSD1306Display display;
+#endif
 
 extern Status status;
 extern Counter gcounter;
