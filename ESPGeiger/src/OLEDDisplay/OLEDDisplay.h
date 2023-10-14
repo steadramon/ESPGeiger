@@ -64,10 +64,12 @@ public:
 		cy = 0;
 	}
 	void begin() {
+		//Wire.setClock(400000L);
         init();
 	#if OLED_FLIP
 		flipScreenVertically();
 	#endif
+		setBrightness(64);
         setFont(ArialMT_Plain_10);
 		fontWidth = 8;
 		fontHeight = 16;
