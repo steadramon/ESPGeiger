@@ -271,11 +271,7 @@ void ConfigManager::handleStatusPage()
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
   page = FPSTR(STATUS_PAGE_BODY_HEAD);
-#ifdef ESPGEIGER_HW
-  page.replace(FPSTR(T_v),"ESPGeiger-HW");
-#else
   page.replace(FPSTR(T_v), thingName);
-#endif
   page.replace(FPSTR(T_t), hostName);
   server->sendContent(page);
   server->sendContent(FPSTR(STATUS_PAGE_BODY));
