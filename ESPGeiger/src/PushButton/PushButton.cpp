@@ -36,14 +36,13 @@ void PushButton::loop()
   if (status.button_pushed == true) {
     status.led.Blink(200, 1);
 #if defined(SSD1306_DISPLAY)
+    status.oled_timeout = millis();
     if (status.oled_on) {
       status.oled_page++;
       status.oled_last_update = 0;
       if (status.oled_page > 3) {
         status.oled_page = 1;
       }
-    } else {
-      status.oled_timeout = millis();
     }
 #endif
     status.high_cpm_alarm = false;
