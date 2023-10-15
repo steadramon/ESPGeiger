@@ -51,28 +51,28 @@ class ESPGeigerHW {
       void fiveloop();
       void begin();
       void set_freq( int freq) {
-        if (_hw_freq > GEIGERHW_MAX_FREQ) {
-          _hw_freq = GEIGERHW_MAX_FREQ;
+        if (freq > GEIGERHW_MAX_FREQ) {
+          freq = GEIGERHW_MAX_FREQ;
         }
-        if (_hw_freq < 1000) {
-          _hw_freq = 1000;
+        if (freq < 1000) {
+          freq = 1000;
         }
-#ifdef ESP8266
-        analogWriteFreq(_hw_freq);
-#else
-        ledcChangeFrequency(0, _hw_freq, 8);
-#endif
+      #ifdef ESP8266
+        analogWriteFreq(freq);
+      #else
+        ledcChangeFrequency(0, freq, 8);
+      #endif
         _hw_freq = freq;
       };
       int get_freq() {
         return _hw_freq;
       }
       void set_duty( int duty) {
-        if (_hw_duty > 255) {
-          _hw_duty = 255;
+        if (duty > 255) {
+          duty = 255;
         }
-        if (_hw_duty < 1) {
-          _hw_duty = 1;
+        if (duty < 1) {
+          duty = 1;
         }
         _hw_duty = duty;
       };
