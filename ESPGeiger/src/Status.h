@@ -80,9 +80,9 @@ struct Status {
   bool button_pushed = false;
 #endif
 #if LED_SEND_RECEIVE_ON == LOW
-  JLed led = JLed(LED_SEND_RECEIVE).LowActive();
+  JLed led = JLed(LED_SEND_RECEIVE).LowActive().Stop();
 #else
-  JLed led = JLed(LED_SEND_RECEIVE);
+  JLed led = JLed(LED_SEND_RECEIVE).Stop();
 #endif
 #if defined(SSD1306_DISPLAY)
   int oled_page = 1;
@@ -92,7 +92,7 @@ struct Status {
   unsigned long oled_timeout = 0;
 #endif
 #ifdef BLIPLED
-  JLed blip_led = JLed(BLIPLED);
+  JLed blip_led = JLed(BLIPLED).Stop();
   Smoothed <float> hvReading;
 #endif
 };
