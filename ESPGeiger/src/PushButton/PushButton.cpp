@@ -34,7 +34,7 @@ void PushButton::begin()
 void PushButton::loop()
 {
   if (status.button_pushed == true) {
-    status.led.Blink(200, 200);
+    status.led.Blink(200, 1);
 #if defined(SSD1306_DISPLAY)
     if (status.oled_on) {
       status.oled_page++;
