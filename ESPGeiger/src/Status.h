@@ -80,9 +80,9 @@ struct Status {
   bool button_pushed = false;
 #endif
 #if LED_SEND_RECEIVE_ON == LOW
-  JLed led = JLed(LED_SEND_RECEIVE).LowActive().Stop();
+  JLed led = JLed(LED_SEND_RECEIVE).LowActive();
 #else
-  JLed led = JLed(LED_SEND_RECEIVE).Stop();
+  JLed led = JLed(LED_SEND_RECEIVE);
 #endif
 #if defined(SSD1306_DISPLAY)
   int oled_page = 1;
