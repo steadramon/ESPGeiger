@@ -129,9 +129,8 @@ void sTickerCB()
 #ifdef ESPGEIGER_HW
   hardware.loop();
 #endif
-  if (status.warmup == false) {
-    status.cpm_history.push(gcounter.get_cpm());
-  } else {
+  status.cpm_history.push(gcounter.get_cpm());
+  if (status.warmup) {
     uint8_t uptime = NTP.getUptime() - status.start;
     if (uptime > 10) {
       status.warmup = false;
