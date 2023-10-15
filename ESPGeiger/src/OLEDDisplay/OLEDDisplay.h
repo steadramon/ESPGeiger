@@ -139,6 +139,7 @@ public:
 			if (status.oled_on) {
 				clear();
 				display();
+				status.oled_page=1;
 				status.oled_on = false;
 			}
 			return;
