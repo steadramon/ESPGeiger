@@ -209,6 +209,7 @@ void ConfigManager::handleRoot() {
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[3]));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[8]));
+  server->sendContent(F("<form action='/restart' method='get'><button>Reboot</button></form><br/>"));
   page = FPSTR(HTTP_STATUS_ON);
   page.replace(FPSTR(T_i),WiFi.localIP().toString());
   page.replace(FPSTR(T_v),htmlEntities(WiFiManager::getWiFiSSID()));
