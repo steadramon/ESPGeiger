@@ -51,7 +51,9 @@ void ESPGeigerHW::loop() {
 #endif
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   //3.3 / 1024 = 0.00322265625
-  float volts = (sensorValue * 0.00331796875)*235;
+  //R1=4700000/R2=20000 = 235
+  //4700000/18800 = 250
+  float volts = (sensorValue * 0.0032)*250;
   status.hvReading.add((int)volts);
 }
 
