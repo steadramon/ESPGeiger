@@ -191,7 +191,9 @@ void Counter::loop() {
   if (status.last_blip != _last_blip) {
     status.last_blip = _last_blip;
 #ifdef ESPGEIGER_HW
-    status.blip_led.Blink(2,2);
+    if (status.blip_led.IsRunning() == false) {
+      status.blip_led.Blink(2,1).Repeat(1);
+    }
 #else
     status.led.Blink(20,20);
 #endif
@@ -202,9 +204,9 @@ void Counter::loop() {
   if (secidx != _last_secidx) {
     _last_secidx = secidx;
   #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
-    geigerPort.print(PSTR("CPS, 1, CPM, 60, uSv/hr, 1.23, INST\n"));
+    geigerPort.println(PSTR("CPS, 1, CPM, 60, uSv/hr, 1.23, INST"));
   #else
-    geigerPort.print(PSTR("60\n"));
+    geigerPort.println(PSTR("60"));
   #endif
   }
 #endif
