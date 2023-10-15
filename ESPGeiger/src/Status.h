@@ -88,6 +88,7 @@ struct Status {
   int oled_page = 1;
   int oled_last_update = 0;
   bool oled_on = true;
+  bool enable_oled_timeout = true;
   unsigned long oled_timeout = 0;
 #endif
 #ifdef BLIPLED

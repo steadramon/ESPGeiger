@@ -21,34 +21,41 @@
 #define PUSHBUTTON_H
 #include <Arduino.h>
 #include "../Status.h"
+#include <EasyButton.h>
 
 #ifndef PUSHBUTTON_PIN
 #define PUSHBUTTON_PIN 14
 #endif
 
-static unsigned long _push_debounce = microsecondsToClockCycles(250000);
-
 extern Status status;
+static EasyButton pbutton(PUSHBUTTON_PIN);
 
 #ifdef ESP32
 static void IRAM_ATTR do_pushbutton() {
-  unsigned long cycles = ESP.getCycleCount();
-  if (cycles - status.last_pushbutton > _push_debounce) {
-    status.last_pushbutton = cycles;
-    status.button_pushed = true;
-    status.led.Blink(200, 200);
+  status.button_pushed = true;
+};
+static void IRAM_ATTR do_longpress() {
+  status.enable_oled_timeout = !status.enable_oled_timeout;
+  if (status.enable_oled_timeout) {
+    status.oled_timeout = 0;
   }
 };
 #else
 static void ICACHE_RAM_ATTR do_pushbutton() {
-  unsigned long cycles = ESP.getCycleCount();
-  if (cycles - status.last_pushbutton > _push_debounce) {
-    status.last_pushbutton = cycles;
-    status.button_pushed = true;
-    status.led.Blink(200, 200);
+  status.button_pushed = true;
+}
+
+static void ICACHE_RAM_ATTR do_longpress() {
+#ifdef ESPGEIGER_HW
+    status.blip_led.Blink(250,250);
+#endif
+  status.enable_oled_timeout = !status.enable_oled_timeout;
+  if (status.enable_oled_timeout) {
+    status.oled_timeout = 0;
   }
 }
 #endif
+
 class PushButton {
   public:
     PushButton();

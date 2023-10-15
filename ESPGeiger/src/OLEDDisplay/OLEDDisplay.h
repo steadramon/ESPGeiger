@@ -135,7 +135,7 @@ public:
       unsigned long now = millis();
       if (now - _last_update > 500) {
 #ifdef GEIGER_PUSHBUTTON
-		if ((_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
+		if ((status.enable_oled_timeout) && (_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
 			if (status.oled_on) {
 				clear();
 				display();
@@ -144,6 +144,7 @@ public:
 			return;
 		} else {
 			status.oled_on = true;
+			status.oled_last_update = 0;
 		}
 #endif
         _last_update = now;
@@ -183,42 +184,35 @@ public:
 		drawLine(0, 63, 90, 63);
 	    drawLine(90, 35, 90, 63);
 
-		if (status.cpm_history.size() > 1)  {
-			int histSize = status.cpm_history.size();
-	        int maxValue = status.cpm_history[0];
-			int minValue = histSize > 1 ? status.cpm_history[0]:0;
-			for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
-				maxValue = status.cpm_history[i] > maxValue ? status.cpm_history[i] : maxValue;
-				minValue = status.cpm_history[i] < minValue ? status.cpm_history[i] : minValue;
-			}
+		int histSize = status.cpm_history.size();
+		int maxValue = status.cpm_history[0];
+		int minValue = histSize > 1 ? status.cpm_history[0]:0;
+		for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
+			maxValue = status.cpm_history[i] > maxValue ? status.cpm_history[i] : maxValue;
+			minValue = status.cpm_history[i] < minValue ? status.cpm_history[i] : minValue;
+		}
 
-			if (minValue > 1) {
-				minValue = (int)(minValue * 0.9);
-			}
-			int xstart = 0;
-			if (status.cpm_history.capacity != histSize) {
-				xstart = (( 2*( status.cpm_history.capacity-histSize )));
-			}
+		if (minValue > 1) {
+			minValue = (int)(minValue * 0.9);
+		}
+		int xstart = 0;
+		if (status.cpm_history.capacity != histSize) {
+			xstart = (( 2*( status.cpm_history.capacity-histSize )));
+		}
 
-			if (maxValue == 0) {
-				setFont(Open_Sans_Regular_Plain_10);
-				drawString(93,55, String(minValue));
-				return;
-			}
-
-			for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
-				int location = ((map((long)status.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;  
-				drawRect(xstart+i*2, location, 2, (63 - location));
-			}
+		if (maxValue == 0) {
 			setFont(Open_Sans_Regular_Plain_10);
 			drawString(93,55, String(minValue));
-			drawString(93,35, String(maxValue));
-        } else {
-			setFont(DialogInput_plain_12);
-			drawString(20,40, PSTR("Warmup") );
-			setFont(Open_Sans_Regular_Plain_10);
-			drawString(93,55, PSTR("0"));
+			return;
 		}
+
+		for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
+			int location = ((map((long)status.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;  
+			drawRect(xstart+i*2, location, 2, (63 - location));
+		}
+		setFont(Open_Sans_Regular_Plain_10);
+		drawString(93,55, String(minValue));
+		drawString(93,35, String(maxValue));
 	}
 
 	void page_one_full() {

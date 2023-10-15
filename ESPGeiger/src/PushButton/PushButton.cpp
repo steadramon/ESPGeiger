@@ -26,13 +26,15 @@ PushButton::PushButton() {
 
 void PushButton::begin()
 {
-  pinMode(PUSHBUTTON_PIN, INPUT_PULLUP); // declare push button as input
-  attachInterrupt(digitalPinToInterrupt(PUSHBUTTON_PIN), do_pushbutton, FALLING);
+  pbutton.begin();
+  pbutton.onPressed(do_pushbutton);
+  pbutton.onPressedFor(2000, do_longpress);
 }
 
 void PushButton::loop()
 {
   if (status.button_pushed == true) {
+    status.led.Blink(200, 200);
 #if defined(SSD1306_DISPLAY)
     if (status.oled_on) {
       status.oled_page++;
@@ -47,5 +49,7 @@ void PushButton::loop()
     status.high_cpm_alarm = false;
     status.button_pushed = false;
   }
+  pbutton.read();
+
 }
 #endif
