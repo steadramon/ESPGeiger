@@ -71,6 +71,9 @@ class ESPGeigerHW {
         if (_hw_duty > 255) {
           _hw_duty = 255;
         }
+        if (_hw_duty < 1) {
+          _hw_duty = 1;
+        }
         _hw_duty = duty;
       };
       int get_duty() {
