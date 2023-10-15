@@ -26,8 +26,24 @@
 #  define NTP_SERVER "pool.ntp.org"
 #endif
 
+#ifndef NTP_TZ
+#  define NTP_TZ "GMT0"
+#endif
+/*
+https://remotemonitoringsystems.ca/time-zone-abbreviations.php
+*/
 extern Status status;
 
-void setupNTP();
+class NTP_Client {
+  public:
+    NTP_Client();
+    void loop();
+    void setup();
+    void set_server(char* ntpServer);
+    void set_tz(char* ntpTZ);
+  private:
+    const char* _ntp_server = NTP_SERVER;
+    const char* _ntp_tz   = NTP_TZ;
+};
 
 #endif

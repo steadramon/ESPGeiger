@@ -64,6 +64,7 @@ SerialOut serialout = SerialOut();
 // Global status and counter
 Status status;
 Counter gcounter = Counter();
+NTP_Client ntpclient;
 
 ConfigManager& cManager = ConfigManager::getInstance();
 #ifdef MQTTOUT
@@ -194,7 +195,7 @@ void setup()
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.begin();
 #endif
-  setupNTP();
+  ntpclient.setup();
   status.start = NTP.getUptime();
   sTicker.attach(1, sTickerCB);
   status.led.Off().Update();

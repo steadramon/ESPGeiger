@@ -20,10 +20,18 @@
 #include "NTP.h"
 #include "../Logger/Logger.h"
 
-void setupNTP()
+NTP_Client::NTP_Client() {
+}
+void NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
-  Log::console(PSTR("NTP: Starting ... %s"), NTP_SERVER);
-  configTime(0, 0, NTP_SERVER);
+  Log::console(PSTR("NTP: Starting ... %s"), _ntp_server);
+#ifdef ESP8266
+  configTime(_ntp_tz, _ntp_server);
+#else
+  configTime(0, 0, _ntp_server); // 0, 0 because we will use TZ in the next line
+  setenv("TZ", _ntp_tz, 1); // Set environment variable with your time zone
+  tzset();
+#endif
 #endif
 }
