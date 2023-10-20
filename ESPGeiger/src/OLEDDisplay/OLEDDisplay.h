@@ -241,7 +241,7 @@ public:
 		setFont(ArialMT_Plain_10);
 		char versionString[80] = "";
 		sprintf_P (versionString, PSTR("%S / %S"), status.version, status.git_version);
-		drawString(0, 5, status.geiger_model);
+		drawString(0, 5, GEIGER_MODEL);
 		drawString(0, 20, versionString);
 		drawString(0, 35, PSTR("@steadramon"));
 
