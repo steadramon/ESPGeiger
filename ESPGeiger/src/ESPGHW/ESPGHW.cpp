@@ -40,7 +40,7 @@ void ESPGeigerHW::begin() {
   ledcSetup(0, _hw_freq, 8);
   ledcAttachPin(GEIGER_PWMPIN, 0);
 #endif
-  status.hvReading.begin(SMOOTHED_AVERAGE, 10);
+  status.hvReading.begin(SMOOTHED_AVERAGE, 3);
 }
 
 void ESPGeigerHW::loop() {
