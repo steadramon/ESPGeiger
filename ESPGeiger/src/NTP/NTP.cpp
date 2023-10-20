@@ -16,21 +16,41 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+#include <Arduino.h>
 #include "NTP.h"
 #include "../Logger/Logger.h"
+#ifdef ESP32
+#include "sntp.h"
+#endif
 
 NTP_Client::NTP_Client() {
 }
+
 void NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
+  if (_ntp_server && !_ntp_server[0]) {
+    memcpy(_ntp_server, NTP_SERVER, 64);
+  }
   Log::console(PSTR("NTP: Starting ... %s"), _ntp_server);
+  const char *possixTZ = _ntp_tz;
 #ifdef ESP8266
-  configTime(_ntp_tz, _ntp_server);
+  settimeofday_cb([](){
+    Log::console(PSTR("NTP: Synched"));
+    status.ntp_synced = true;
+  });
+  configTime(possixTZ, _ntp_server);
 #else
+  sntp_set_time_sync_notification_cb([](struct timeval *t){
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)){
+      return;
+    }
+    Log::console(PSTR("NTP: Synched"));
+    status.ntp_synced = true;
+  });
   configTime(0, 0, _ntp_server); // 0, 0 because we will use TZ in the next line
-  setenv("TZ", _ntp_tz, 1); // Set environment variable with your time zone
+  setenv("TZ", possixTZ, 1); // Set environment variable with your time zone
   tzset();
 #endif
 #endif

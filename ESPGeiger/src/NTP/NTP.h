@@ -31,19 +31,33 @@
 #endif
 /*
 https://remotemonitoringsystems.ca/time-zone-abbreviations.php
+https://sites.google.com/a/usapiens.com/opnode/time-zones
+https://github.com/pgurenko/tzinfo
+https://github.com/GuruSR/Olson2POSIX
+https://github.com/HASwitchPlate/openHASP/
+https://github.com/charles-haynes/Watchy-Screen
+https://github.com/cmdc0de/corncon2022
+https://github.com/CargoBikoMeter/WZePaperDisplay
+https://github.com/search?q=MST7MDT%2CM3.2.0%2CM11.1.0+language%3AC%2B%2B+&type=code&p=1
+https://www.openhasp.com/0.7.0/firmware/configuration/time/
+https://remotemonitoringsystems.ca/time-zone-abbreviations.php
+https://github.com/yugabyte/yugabyte-db/blob/2461909fc9c34441c352c97e1b059336ac0cfc46/src/yb/util/date_time.h
 */
 extern Status status;
 
 class NTP_Client {
   public:
+  static NTP_Client &getInstance()
+  {
+    static NTP_Client instance;
+    return instance;
+  }
     NTP_Client();
     void loop();
     void setup();
-    void set_server(char* ntpServer);
-    void set_tz(char* ntpTZ);
+    char _ntp_server[128] = NTP_SERVER;
+    char _ntp_tz[64]      = NTP_TZ;
   private:
-    const char* _ntp_server = NTP_SERVER;
-    const char* _ntp_tz   = NTP_TZ;
 };
 
 #endif
