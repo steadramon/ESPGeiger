@@ -42,6 +42,12 @@
 #define GEIGERHW_MAX_FREQ 9000
 #endif
 
+//R1=4700000/R2=20000 = 235
+//4700000/18800 = 250
+#ifndef GEIGERHW_ADC_RATIO
+#define GEIGERHW_ADC_RATIO 251
+#endif
+
 extern Status status;
 
 class ESPGeigerHW {
@@ -79,11 +85,18 @@ class ESPGeigerHW {
       int get_duty() {
         return _hw_duty;
       }
+      void set_vd_ratio( int ratio) {
+        _hw_vd_ratio = ratio;
+      };
+      int get_vd_ratio() {
+        return _hw_vd_ratio;
+      }
       void saveconfig();
       void loadconfig();
     private:
       int _hw_freq = GEIGERHW_FREQ;
       int _hw_duty = GEIGERHW_DUTY;
+      int _hw_vd_ratio = GEIGERHW_ADC_RATIO;
 };
 
 #endif

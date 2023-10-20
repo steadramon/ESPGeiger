@@ -51,9 +51,7 @@ void ESPGeigerHW::loop() {
 #endif
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   //3.3 / 1024 = 0.00322265625
-  //R1=4700000/R2=20000 = 235
-  //4700000/18800 = 250
-  float volts = (sensorValue * 0.0032)*250;
+  float volts = (sensorValue * 0.0032)*_hw_vd_ratio;
   status.hvReading.add((int)volts);
 }
 
@@ -74,19 +72,22 @@ void ESPGeigerHW::saveconfig() {
     Log::console(PSTR("ESPG-HW: Failed to open espgeigerhw.json"));
     return;
   }
-  char jsonBuffer[512] = "";
+  char jsonBuffer[128] = "";
 
   int total = sizeof(jsonBuffer);
   char freq[16];
   itoa(_hw_freq, freq, 10); 
   char duty[16];
   itoa(_hw_duty, duty, 10); 
+  char ratio[16];
+  itoa(_hw_vd_ratio, ratio, 10); 
 
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"freq\": \"%s\", \"duty\": \"%s\" }"),
+    PSTR("{\"freq\":\"%s\",\"duty\":\"%s\",\"ratio\":\"%s\"}"),
     freq,
-    duty
+    duty,
+    ratio
   );
   configFile.print(jsonBuffer);
 
@@ -105,17 +106,26 @@ void ESPGeigerHW::loadconfig() {
     if (configFile)
     {
       // Process the json data
-      DynamicJsonDocument jsonBuffer(256);
+      DynamicJsonDocument jsonBuffer(128);
       DeserializationError error = deserializeJson(jsonBuffer, configFile);
       if (!error)
       {
         const char* freq = jsonBuffer["freq"];
+        if (freq) {
+          set_freq(atoi(freq));
+        }
         const char* duty = jsonBuffer["duty"];
-        set_freq(atoi(jsonBuffer["freq"]));
-        set_duty(atoi(jsonBuffer["duty"]));
+        if (duty) {
+          set_duty(atoi(duty));
+        }
+        const char* ratio = jsonBuffer["ratio"];
+        if (ratio) {
+          set_vd_ratio(atoi(ratio));
+        }
       }
-      else
+      else {
         Log::console(PSTR("ESPG-HW: failed to load json params"));
+      }
       // Close file
       configFile.close();
     }
@@ -131,5 +141,6 @@ void ESPGeigerHW::loadconfig() {
   LittleFS.end();
   Log::console(PSTR("ESPG-HW: freq: %d"), _hw_freq);
   Log::console(PSTR("ESPG-HW: duty: %d"), _hw_duty);
+  Log::console(PSTR("ESPG-HW: VD Ratio: %d"), _hw_vd_ratio);
 }
 #endif
