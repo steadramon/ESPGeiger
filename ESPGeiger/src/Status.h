@@ -57,13 +57,16 @@ struct Status {
   const char* version = RELEASE_VERSION;
   const char* git_version = GIT_VERSION;
   bool high_cpm_alarm = false;
+  bool ntp_synced = false;
   Smoothed <float> geigerTicks;
   Smoothed <float> geigerTicks5;
   Smoothed <float> geigerTicks15;
   CircularBuffer<int,45> cpm_history;
+  CircularBuffer<int,24> day_hourly_history;
   long start = 0;
   bool warmup = true;
   char* geiger_model = "";
+  unsigned long clicks_hour = 0;
   unsigned long total_clicks = 0;
   unsigned long clicks_today = 0;
   unsigned long clicks_yesterday = 0;

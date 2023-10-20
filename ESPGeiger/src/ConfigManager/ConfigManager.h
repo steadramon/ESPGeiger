@@ -59,6 +59,7 @@ constexpr auto HV_URL = "/hv";
 constexpr auto HV_JS_URL = "/hvjs";
 constexpr auto HV_JSON_URL = "/hvjson";
 constexpr auto HV_SET_URL = "/hvset";
+constexpr auto CLICKS_JSON  = "/clicks";
 
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
@@ -144,6 +145,7 @@ private:
   void handleRestart();
   void handleResetParams();
   void handleRegisterAPI();
+  void handleClicksReturn();
 #ifdef ESPGEIGER_HW
   void handleHVPage();
   void handleHVJSReturn();

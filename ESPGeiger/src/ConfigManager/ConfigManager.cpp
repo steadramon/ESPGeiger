@@ -254,6 +254,28 @@ void ConfigManager::handleJsonReturn()
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
 }
 
+void ConfigManager::handleClicksReturn()
+{
+  DynamicJsonDocument json(256);
+
+  json.clear();
+  json["hour"] = status.clicks_hour;
+  auto last_day = json.createNestedArray("last_day");
+
+  int histSize = status.day_hourly_history.size();
+  for (decltype(status.day_hourly_history)::index_t i = histSize; i > 0; i--) {
+    int value = status.day_hourly_history[i-1];
+    last_day.add(value);
+  }
+  json["today"] = status.clicks_today;
+  json["yesterday"] = status.clicks_yesterday;
+
+  char jsonBuffer[256] = "";
+  serializeJson(json, jsonBuffer);
+  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
+}
+
+
 void ConfigManager::handleStatusPage()
 {
   server->client().flush();
@@ -636,6 +658,7 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(CONSOLE_URL, HTTP_GET, std::bind(&ConfigManager::handleRefreshConsole, this));
   ConfigManager::server.get()->on(RESTART_URL, HTTP_GET, std::bind(&ConfigManager::handleRestart, this));
   ConfigManager::server.get()->on(RESET_URL, HTTP_GET, std::bind(&ConfigManager::handleResetParams, this));
+  ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
 #ifdef ESPGEIGER_HW
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
