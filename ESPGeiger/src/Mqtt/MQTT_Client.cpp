@@ -126,6 +126,10 @@ void MQTT_Client::loop()
 
     publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), String(status.geigerTicks15.get()*60.0).c_str(), false);
 
+#ifdef ESPGEIGER_HW
+    publish(buildTopic(statTopic, PSTR("HV")).c_str(), String(status.hvReading.get()).c_str(), false);
+#endif
+
     status.last_send = millis();
   }
 
