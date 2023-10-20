@@ -318,8 +318,10 @@ void ConfigManager::handleHVSet()
 {
   int _d = atoi(server->arg(F("d")).c_str());
   int _f = atoi(server->arg(F("f")).c_str());
+  int _r = atoi(server->arg(F("r")).c_str());
   hardware.set_duty(_d);
   hardware.set_freq(_f);
+  hardware.set_vd_ratio(_r);
   hardware.saveconfig();
   ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), F("OK"));
 }
@@ -346,13 +348,15 @@ void ConfigManager::handleHVJsonReturn()
   int volts = status.hvReading.get();
   int freq = hardware.get_freq();
   int duty = hardware.get_duty();
+  int ratio = hardware.get_vd_ratio();
 
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d}"),
+    PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d,\"ratio\":%d}"),
     volts,
     freq,
-    duty
+    duty,
+    ratio
   );
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
