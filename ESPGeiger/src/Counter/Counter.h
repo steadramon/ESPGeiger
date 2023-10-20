@@ -318,7 +318,7 @@ static void handleSecondTick() {
     if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
       status.day_hourly_history.push(status.clicks_hour);
       status.clicks_hour = 0;
-      if (timeinfo->tm_sec == 0) {
+      if (timeinfo->tm_hour == 0) {
         status.clicks_yesterday = status.clicks_today;
         status.clicks_today = 0;
       }
