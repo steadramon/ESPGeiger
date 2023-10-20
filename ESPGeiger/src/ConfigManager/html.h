@@ -34,7 +34,9 @@ static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:
 <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
 </div>
 <table><tr><th>Frequency:</th><td><input type="range" id="freq" min="0" max="9000" step="250" value="50"><span id="sfreq">-</span></td></tr>
-<tr><th>Duty:</th><td><input type="range" id="duty" min="0" max="255" value="50"><span id="sduty">-</span></td></tr></table>
+<tr><th>Duty:</th><td><input type="range" id="duty" min="0" max="255" value="50"><span id="sduty">-</span></td></tr>
+<tr><th>Ratio:</th><td><input id="ratio" value="-"></td></tr>
+
 <tr><td><button id="submit">Submit</button></td></tr></table>
 <script src="/hvjs"></script>
 )HTML";
@@ -65,6 +67,7 @@ function gethv() {
         if (byID('sfreq').innerHTML=="-") {
           byID('freq').value=o.freq;
           byID('duty').value=o.duty;
+          byID('ratio').value=o.ratio;
           byID('sfreq').innerHTML=o.freq;
           byID('sduty').innerHTML=o.duty;
         }
@@ -83,6 +86,7 @@ byID('duty').addEventListener("change", function() { byID('sduty').innerHTML=thi
 byID('submit').addEventListener("click", function() {
   var duty = byID('duty').value;
   var freq = byID('freq').value;
+  var ratio = byID('ratio').value;
 
    x=new XMLHttpRequest();
     x.onload = function() {
@@ -91,7 +95,7 @@ byID('submit').addEventListener("click", function() {
           byID('sduty').innerHTML='-';
       }
     };
-    x.open('GET','/hvset?f='+freq+'&d='+duty,true);
+    x.open('GET','/hvset?f='+freq+'&d='+duty+'&r='+ratio,true);
     x.send();
 });
 )JS";
