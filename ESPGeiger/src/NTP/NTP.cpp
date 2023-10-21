@@ -19,6 +19,9 @@
 #include <Arduino.h>
 #include "NTP.h"
 #include "../Logger/Logger.h"
+#include <FS.h>
+#include <LittleFS.h>
+#include "ArduinoJson.h"
 #ifdef ESP32
 #include "sntp.h"
 #endif
@@ -32,13 +35,17 @@ void NTP_Client::setup()
   if (_ntp_server && !_ntp_server[0]) {
     memcpy(_ntp_server, NTP_SERVER, 64);
   }
+
   Log::console(PSTR("NTP: Starting ... %s"), _ntp_server);
-  const char *possixTZ = _ntp_tz;
+  const char *possixTZ = getPosixTZforOlson(_ntp_tz);
 #ifdef ESP8266
   settimeofday_cb([](){
-    Log::console(PSTR("NTP: Synched"));
-    status.ntp_synced = true;
+    if (!status.ntp_synced) {
+      Log::console(PSTR("NTP: Synched"));
+      status.ntp_synced = true;
+    }
   });
+
   configTime(possixTZ, _ntp_server);
 #else
   sntp_set_time_sync_notification_cb([](struct timeval *t){
@@ -46,8 +53,10 @@ void NTP_Client::setup()
     if (!getLocalTime(&timeinfo)){
       return;
     }
-    Log::console(PSTR("NTP: Synched"));
-    status.ntp_synced = true;
+    if (!status.ntp_synced) {
+      Log::console(PSTR("NTP: Synched"));
+      status.ntp_synced = true;
+    }
   });
   configTime(0, 0, _ntp_server); // 0, 0 because we will use TZ in the next line
   setenv("TZ", possixTZ, 1); // Set environment variable with your time zone

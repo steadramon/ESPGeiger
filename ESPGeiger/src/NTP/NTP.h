@@ -20,6 +20,7 @@
 #define _NTP_h
 #include <Arduino.h>
 #include <ESPNtpClient.h>
+#include "timezones.h"
 #include "../Status.h"
 
 #ifndef NTP_SERVER
@@ -27,7 +28,7 @@
 #endif
 
 #ifndef NTP_TZ
-#  define NTP_TZ "GMT0"
+#  define NTP_TZ "Factory"
 #endif
 /*
 https://remotemonitoringsystems.ca/time-zone-abbreviations.php
@@ -55,7 +56,7 @@ class NTP_Client {
     NTP_Client();
     void loop();
     void setup();
-    char _ntp_server[128] = NTP_SERVER;
+    char _ntp_server[64] = NTP_SERVER;
     char _ntp_tz[64]      = NTP_TZ;
   private:
 };
