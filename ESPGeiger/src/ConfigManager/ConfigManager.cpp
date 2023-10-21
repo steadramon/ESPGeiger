@@ -322,7 +322,7 @@ void ConfigManager::handleHistoryPage()
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
   String title = FPSTR(hostName);
-  title += F(" - Status");
+  title += F(" - History");
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_STYLE));
