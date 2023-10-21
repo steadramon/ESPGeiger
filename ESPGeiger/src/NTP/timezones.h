@@ -20,108 +20,210 @@
 #ifndef TIMEZONES_H
 #define TIMEZONES_H
 
+static const char TZ_0[] PROGMEM = "GMT0";
+static const char TZ_1[] PROGMEM = "EAT-3";
+static const char TZ_2[] PROGMEM = "CET-1";
+static const char TZ_3[] PROGMEM = "WAT-1";
+static const char TZ_4[] PROGMEM = "CAT-2";
+static const char TZ_5[] PROGMEM = "EET-2";
+static const char TZ_6[] PROGMEM = "<+01>-1";
+static const char TZ_7[] PROGMEM = "CET-1CEST,M3.5.0,M10.5.0/3";
+static const char TZ_8[] PROGMEM = "SAST-2";
+static const char TZ_9[] PROGMEM = "HST10HDT,M3.2.0,M11.1.0";
+static const char TZ_10[] PROGMEM = "AKST9AKDT,M3.2.0,M11.1.0";
+static const char TZ_11[] PROGMEM = "AST4";
+static const char TZ_12[] PROGMEM = "<-03>3";
+static const char TZ_13[] PROGMEM = "<-04>4<-03>,M10.1.0/0,M3.4.0/0";
+static const char TZ_14[] PROGMEM = "EST5";
+static const char TZ_15[] PROGMEM = "CST6CDT,M4.1.0,M10.5.0";
+static const char TZ_16[] PROGMEM = "CST6";
+static const char TZ_17[] PROGMEM = "<-04>4";
+static const char TZ_18[] PROGMEM = "<-05>5";
+static const char TZ_19[] PROGMEM = "MST7MDT,M3.2.0,M11.1.0";
+static const char TZ_20[] PROGMEM = "CST6CDT,M3.2.0,M11.1.0";
+static const char TZ_21[] PROGMEM = "MST7MDT,M4.1.0,M10.5.0";
+static const char TZ_22[] PROGMEM = "MST7";
+static const char TZ_23[] PROGMEM = "EST5EDT,M3.2.0,M11.1.0";
+static const char TZ_24[] PROGMEM = "PST8PDT,M3.2.0,M11.1.0";
+static const char TZ_25[] PROGMEM = "AST4ADT,M3.2.0,M11.1.0";
+static const char TZ_26[] PROGMEM = "<-03>3<-02>,M3.5.0/-2,M10.5.0/-1";
+static const char TZ_27[] PROGMEM = "CST5CDT,M3.2.0/0,M11.1.0/1";
+static const char TZ_28[] PROGMEM = "<-03>3<-02>,M3.2.0,M11.1.0";
+static const char TZ_29[] PROGMEM = "<-02>2";
+static const char TZ_30[] PROGMEM = "<-04>4<-03>,M9.1.6/24,M4.1.6/24";
+static const char TZ_31[] PROGMEM = "<-01>1<+00>,M3.5.0/0,M10.5.0/1";
+static const char TZ_32[] PROGMEM = "NST3:30NDT,M3.2.0,M11.1.0";
+static const char TZ_33[] PROGMEM = "<+11>-11";
+static const char TZ_34[] PROGMEM = "<+07>-7";
+static const char TZ_35[] PROGMEM = "<+10>-10";
+static const char TZ_36[] PROGMEM = "AEST-10AEDT,M10.1.0,M4.1.0/3";
+static const char TZ_37[] PROGMEM = "<+05>-5";
+static const char TZ_38[] PROGMEM = "NZST-12NZDT,M9.5.0,M4.1.0/3";
+static const char TZ_39[] PROGMEM = "<+03>-3";
+static const char TZ_40[] PROGMEM = "<+00>0<+02>-2,M3.5.0/1,M10.5.0/3";
+static const char TZ_41[] PROGMEM = "<+06>-6";
+static const char TZ_42[] PROGMEM = "EET-2EEST,M3.5.4/24,M10.5.5/1";
+static const char TZ_43[] PROGMEM = "<+12>-12";
+static const char TZ_44[] PROGMEM = "<+04>-4";
+static const char TZ_45[] PROGMEM = "EET-2EEST,M3.5.0/0,M10.5.0/0";
+static const char TZ_46[] PROGMEM = "<+08>-8";
+static const char TZ_47[] PROGMEM = "IST-5:30";
+static const char TZ_48[] PROGMEM = "<+09>-9";
+static const char TZ_49[] PROGMEM = "CST-8";
+static const char TZ_50[] PROGMEM = "<+0530>-5:30";
+static const char TZ_51[] PROGMEM = "EET-2EEST,M3.5.5/0,M10.5.5/0";
+static const char TZ_52[] PROGMEM = "EET-2EEST,M3.5.0/3,M10.5.0/4";
+static const char TZ_53[] PROGMEM = "EET-2EEST,M3.4.4/48,M10.4.4/49";
+static const char TZ_54[] PROGMEM = "HKT-8";
+static const char TZ_55[] PROGMEM = "WIB-7";
+static const char TZ_56[] PROGMEM = "WIT-9";
+static const char TZ_57[] PROGMEM = "IST-2IDT,M3.4.4/26,M10.5.0";
+static const char TZ_58[] PROGMEM = "<+0430>-4:30";
+static const char TZ_59[] PROGMEM = "PKT-5";
+static const char TZ_60[] PROGMEM = "<+0545>-5:45";
+static const char TZ_61[] PROGMEM = "WITA-8";
+static const char TZ_62[] PROGMEM = "PST-8";
+static const char TZ_63[] PROGMEM = "KST-9";
+static const char TZ_64[] PROGMEM = "<+0630>-6:30";
+static const char TZ_65[] PROGMEM = "<+0330>-3:30<+0430>,J79/24,J263/24";
+static const char TZ_66[] PROGMEM = "JST-9";
+static const char TZ_67[] PROGMEM = "WET0WEST,M3.5.0/1,M10.5.0";
+static const char TZ_68[] PROGMEM = "<-01>1";
+static const char TZ_69[] PROGMEM = "ACST-9:30ACDT,M10.1.0,M4.1.0/3";
+static const char TZ_70[] PROGMEM = "AEST-10";
+static const char TZ_71[] PROGMEM = "ACST-9:30";
+static const char TZ_72[] PROGMEM = "<+0845>-8:45";
+static const char TZ_73[] PROGMEM = "<+1030>-10:30<+11>-11,M10.1.0,M4.1.0";
+static const char TZ_74[] PROGMEM = "AWST-8";
+static const char TZ_75[] PROGMEM = "<-06>6<-05>,M9.1.6/22,M4.1.6/22";
+static const char TZ_76[] PROGMEM = "IST-1GMT0,M10.5.0,M3.5.0/1";
+static const char TZ_77[] PROGMEM = "<-10>10";
+static const char TZ_78[] PROGMEM = "<-11>11";
+static const char TZ_79[] PROGMEM = "<-12>12";
+static const char TZ_80[] PROGMEM = "<-06>6";
+static const char TZ_81[] PROGMEM = "<-07>7";
+static const char TZ_82[] PROGMEM = "<-08>8";
+static const char TZ_83[] PROGMEM = "<-09>9";
+static const char TZ_84[] PROGMEM = "<+13>-13";
+static const char TZ_85[] PROGMEM = "<+14>-14";
+static const char TZ_86[] PROGMEM = "<+02>-2";
+static const char TZ_87[] PROGMEM = "UTC0";
+static const char TZ_88[] PROGMEM = "GMT0BST,M3.5.0/1,M10.5.0";
+static const char TZ_89[] PROGMEM = "EET-2EEST,M3.5.0,M10.5.0/3";
+static const char TZ_90[] PROGMEM = "MSK-3";
+static const char TZ_91[] PROGMEM = "<-00>0";
+static const char TZ_92[] PROGMEM = "HST10";
+static const char TZ_93[] PROGMEM = "MET-1MEST,M3.5.0,M10.5.0/3";
+static const char TZ_94[] PROGMEM = "<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45";
+static const char TZ_95[] PROGMEM = "<+13>-13<+14>,M9.5.0/3,M4.1.0/4";
+static const char TZ_96[] PROGMEM = "<+12>-12<+13>,M11.2.0,M1.2.3/99";
+static const char TZ_97[] PROGMEM = "ChST-10";
+static const char TZ_98[] PROGMEM = "<-0930>9:30";
+static const char TZ_99[] PROGMEM = "SST11";
+static const char TZ_100[] PROGMEM = "<+11>-11<+12>,M10.1.0,M4.1.0/3";
+
 static const char *posix[] PROGMEM = {
-    /*   0 */ "GMT0",
-    /*   1 */ "EAT-3",
-    /*   2 */ "CET-1",
-    /*   3 */ "WAT-1",
-    /*   4 */ "CAT-2",
-    /*   5 */ "EET-2",
-    /*   6 */ "<+01>-1",
-    /*   7 */ "CET-1CEST,M3.5.0,M10.5.0/3",
-    /*   8 */ "SAST-2",
-    /*   9 */ "HST10HDT,M3.2.0,M11.1.0",
-    /*  10 */ "AKST9AKDT,M3.2.0,M11.1.0",
-    /*  11 */ "AST4",
-    /*  12 */ "<-03>3",
-    /*  13 */ "<-04>4<-03>,M10.1.0/0,M3.4.0/0",
-    /*  14 */ "EST5",
-    /*  15 */ "CST6CDT,M4.1.0,M10.5.0",
-    /*  16 */ "CST6",
-    /*  17 */ "<-04>4",
-    /*  18 */ "<-05>5",
-    /*  19 */ "MST7MDT,M3.2.0,M11.1.0",
-    /*  20 */ "CST6CDT,M3.2.0,M11.1.0",
-    /*  21 */ "MST7MDT,M4.1.0,M10.5.0",
-    /*  22 */ "MST7",
-    /*  23 */ "EST5EDT,M3.2.0,M11.1.0",
-    /*  24 */ "PST8PDT,M3.2.0,M11.1.0",
-    /*  25 */ "AST4ADT,M3.2.0,M11.1.0",
-    /*  26 */ "<-03>3<-02>,M3.5.0/-2,M10.5.0/-1",
-    /*  27 */ "CST5CDT,M3.2.0/0,M11.1.0/1",
-    /*  28 */ "<-03>3<-02>,M3.2.0,M11.1.0",
-    /*  29 */ "<-02>2",
-    /*  30 */ "<-04>4<-03>,M9.1.6/24,M4.1.6/24",
-    /*  31 */ "<-01>1<+00>,M3.5.0/0,M10.5.0/1",
-    /*  32 */ "NST3:30NDT,M3.2.0,M11.1.0",
-    /*  33 */ "<+11>-11",
-    /*  34 */ "<+07>-7",
-    /*  35 */ "<+10>-10",
-    /*  36 */ "AEST-10AEDT,M10.1.0,M4.1.0/3",
-    /*  37 */ "<+05>-5",
-    /*  38 */ "NZST-12NZDT,M9.5.0,M4.1.0/3",
-    /*  39 */ "<+03>-3",
-    /*  40 */ "<+00>0<+02>-2,M3.5.0/1,M10.5.0/3",
-    /*  41 */ "<+06>-6",
-    /*  42 */ "EET-2EEST,M3.5.4/24,M10.5.5/1",
-    /*  43 */ "<+12>-12",
-    /*  44 */ "<+04>-4",
-    /*  45 */ "EET-2EEST,M3.5.0/0,M10.5.0/0",
-    /*  46 */ "<+08>-8",
-    /*  47 */ "IST-5:30",
-    /*  48 */ "<+09>-9",
-    /*  49 */ "CST-8",
-    /*  50 */ "<+0530>-5:30",
-    /*  51 */ "EET-2EEST,M3.5.5/0,M10.5.5/0",
-    /*  52 */ "EET-2EEST,M3.5.0/3,M10.5.0/4",
-    /*  53 */ "EET-2EEST,M3.4.4/48,M10.4.4/49",
-    /*  54 */ "HKT-8",
-    /*  55 */ "WIB-7",
-    /*  56 */ "WIT-9",
-    /*  57 */ "IST-2IDT,M3.4.4/26,M10.5.0",
-    /*  58 */ "<+0430>-4:30",
-    /*  59 */ "PKT-5",
-    /*  60 */ "<+0545>-5:45",
-    /*  61 */ "WITA-8",
-    /*  62 */ "PST-8",
-    /*  63 */ "KST-9",
-    /*  64 */ "<+0630>-6:30",
-    /*  65 */ "<+0330>-3:30<+0430>,J79/24,J263/24",
-    /*  66 */ "JST-9",
-    /*  67 */ "WET0WEST,M3.5.0/1,M10.5.0",
-    /*  68 */ "<-01>1",
-    /*  69 */ "ACST-9:30ACDT,M10.1.0,M4.1.0/3",
-    /*  70 */ "AEST-10",
-    /*  71 */ "ACST-9:30",
-    /*  72 */ "<+0845>-8:45",
-    /*  73 */ "<+1030>-10:30<+11>-11,M10.1.0,M4.1.0",
-    /*  74 */ "AWST-8",
-    /*  75 */ "<-06>6<-05>,M9.1.6/22,M4.1.6/22",
-    /*  76 */ "IST-1GMT0,M10.5.0,M3.5.0/1",
-    /*  77 */ "<-10>10",
-    /*  78 */ "<-11>11",
-    /*  79 */ "<-12>12",
-    /*  80 */ "<-06>6",
-    /*  81 */ "<-07>7",
-    /*  82 */ "<-08>8",
-    /*  83 */ "<-09>9",
-    /*  84 */ "<+13>-13",
-    /*  85 */ "<+14>-14",
-    /*  86 */ "<+02>-2",
-    /*  87 */ "UTC0",
-    /*  88 */ "GMT0BST,M3.5.0/1,M10.5.0",
-    /*  89 */ "EET-2EEST,M3.5.0,M10.5.0/3",
-    /*  90 */ "MSK-3",
-    /*  91 */ "<-00>0",
-    /*  92 */ "HST10",
-    /*  93 */ "MET-1MEST,M3.5.0,M10.5.0/3",
-    /*  94 */ "<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45",
-    /*  95 */ "<+13>-13<+14>,M9.5.0/3,M4.1.0/4",
-    /*  96 */ "<+12>-12<+13>,M11.2.0,M1.2.3/99",
-    /*  97 */ "ChST-10",
-    /*  98 */ "<-0930>9:30",
-    /*  99 */ "SST11",
-    /* 100 */ "<+11>-11<+12>,M10.1.0,M4.1.0/3",
+    /*   0 */ TZ_0,
+    /*   1 */ TZ_1,
+    /*   2 */ TZ_2,
+    /*   3 */ TZ_3,
+    /*   4 */ TZ_4,
+    /*   5 */ TZ_5,
+    /*   6 */ TZ_6,
+    /*   7 */ TZ_7,
+    /*   8 */ TZ_8,
+    /*   9 */ TZ_9,
+    /*  10 */ TZ_10,
+    /*  11 */ TZ_11,
+    /*  12 */ TZ_12,
+    /*  13 */ TZ_13,
+    /*  14 */ TZ_14,
+    /*  15 */ TZ_15,
+    /*  16 */ TZ_16,
+    /*  17 */ TZ_17,
+    /*  18 */ TZ_18,
+    /*  19 */ TZ_19,
+    /*  20 */ TZ_20,
+    /*  21 */ TZ_21,
+    /*  22 */ TZ_22,
+    /*  23 */ TZ_23,
+    /*  24 */ TZ_24,
+    /*  25 */ TZ_25,
+    /*  26 */ TZ_26,
+    /*  27 */ TZ_27,
+    /*  28 */ TZ_28,
+    /*  29 */ TZ_29,
+    /*  30 */ TZ_30,
+    /*  31 */ TZ_31,
+    /*  32 */ TZ_32,
+    /*  33 */ TZ_33,
+    /*  34 */ TZ_34,
+    /*  35 */ TZ_35,
+    /*  36 */ TZ_36,
+    /*  37 */ TZ_37,
+    /*  38 */ TZ_38,
+    /*  39 */ TZ_39,
+    /*  40 */ TZ_40,
+    /*  41 */ TZ_41,
+    /*  42 */ TZ_42,
+    /*  43 */ TZ_43,
+    /*  44 */ TZ_44,
+    /*  45 */ TZ_45,
+    /*  46 */ TZ_46,
+    /*  47 */ TZ_47,
+    /*  48 */ TZ_48,
+    /*  49 */ TZ_49,
+    /*  50 */ TZ_50,
+    /*  51 */ TZ_51,
+    /*  52 */ TZ_52,
+    /*  53 */ TZ_53,
+    /*  54 */ TZ_54,
+    /*  55 */ TZ_55,
+    /*  56 */ TZ_56,
+    /*  57 */ TZ_57,
+    /*  58 */ TZ_58,
+    /*  59 */ TZ_59,
+    /*  60 */ TZ_60,
+    /*  61 */ TZ_61,
+    /*  62 */ TZ_62,
+    /*  63 */ TZ_63,
+    /*  64 */ TZ_64,
+    /*  65 */ TZ_65,
+    /*  66 */ TZ_66,
+    /*  67 */ TZ_67,
+    /*  68 */ TZ_68,
+    /*  69 */ TZ_69,
+    /*  70 */ TZ_70,
+    /*  71 */ TZ_71,
+    /*  72 */ TZ_72,
+    /*  73 */ TZ_73,
+    /*  74 */ TZ_74,
+    /*  75 */ TZ_75,
+    /*  76 */ TZ_76,
+    /*  77 */ TZ_77,
+    /*  78 */ TZ_78,
+    /*  79 */ TZ_79,
+    /*  80 */ TZ_80,
+    /*  81 */ TZ_81,
+    /*  82 */ TZ_82,
+    /*  83 */ TZ_83,
+    /*  84 */ TZ_84,
+    /*  85 */ TZ_85,
+    /*  86 */ TZ_86,
+    /*  87 */ TZ_87,
+    /*  88 */ TZ_88,
+    /*  89 */ TZ_89,
+    /*  90 */ TZ_90,
+    /*  91 */ TZ_91,
+    /*  92 */ TZ_92,
+    /*  93 */ TZ_93,
+    /*  94 */ TZ_94,
+    /*  95 */ TZ_95,
+    /*  96 */ TZ_96,
+    /*  97 */ TZ_97,
+    /*  98 */ TZ_98,
+    /*  99 */ TZ_99,
+    /* 100 */ TZ_100,
 };
 
 #ifdef TZ_ETC_ONLY
