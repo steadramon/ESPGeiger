@@ -60,7 +60,7 @@ Object.entries(regions).forEach(entry => {
     if (v + '/' + l == sel) {
       option.selected=true;
     }
-    x.add(option); 
+    x.add(option);
   });
 });</script>)HTML";
 
