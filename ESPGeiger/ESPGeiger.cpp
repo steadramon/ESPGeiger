@@ -64,7 +64,7 @@ SerialOut serialout = SerialOut();
 // Global status and counter
 Status status;
 Counter gcounter = Counter();
-NTP_Client ntpclient;
+NTP_Client ntpclient = NTP_Client();
 
 ConfigManager& cManager = ConfigManager::getInstance();
 #ifdef MQTTOUT
