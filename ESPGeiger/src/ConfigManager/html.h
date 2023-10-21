@@ -41,6 +41,38 @@ static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:
 <script src="/hvjs"></script>
 )HTML";
 
+static const char NTP_TZ_JS[] PROGMEM = R"HTML(
+<script>var locations={af:["Abidjan","Algiers","Bissau","Cairo","Casablanca","El_Aaiun","Johannesburg","Juba","Khartoum","Lagos","Maputo","Monrovia","Nairobi","Ndjamena","Sao_Tome","Tripoli","Tunis","Windhoek","Cape_Verde","Mauritius"],eu:["Ceuta","Danmarkshavn","Nuuk","Scoresbysund","Thule","Anadyr","Barnaul","Chita","Irkutsk","Kamchatka","Khandyga","Krasnoyarsk","Magadan","Novokuznetsk","Novosibirsk","Omsk","Sakhalin","Srednekolymsk","Tomsk","Ust-Nera","Vladivostok","Yakutsk","Yekaterinburg","Azores","Canary","Faroe","Madeira","Andorra","Astrakhan","Athens","Belgrade","Berlin","Brussels","Bucharest","Budapest","Chisinau","Dublin","Gibraltar","Helsinki","Istanbul","Kaliningrad","Kirov","Kyiv","Lisbon","London","Madrid","Malta","Minsk","Moscow","Paris","Prague","Riga","Rome","Samara","Saratov","Sofia","Tallinn","Tirane","Ulyanovsk","Vienna","Vilnius","Volgograd","Warsaw","Zurich"],as:["Almaty","Amman","Aqtau","Aqtobe","Ashgabat","Atyrau","Baghdad","Baku","Bangkok","Beirut","Bishkek","Choibalsan","Colombo","Damascus","Dhaka","Dili","Dubai","Dushanbe","Famagusta","Gaza","Hebron","Ho_Chi_Minh","Hong_Kong","Hovd","Jakarta","Jayapura","Jerusalem","Kabul","Karachi","Kathmandu","Kolkata","Kuching","Macau","Makassar","Manila","Nicosia","Oral","Pontianak","Pyongyang","Qatar","Qostanay","Qyzylorda","Riyadh","Samarkand","Seoul","Shanghai","Singapore","Taipei","Tashkent","Tbilisi","Tehran","Thimphu","Tokyo","Ulaanbaatar","Urumqi","Yangon","Yerevan","Chagos","Maldives"],au:["Perth","Eucla","Adelaide","Broken_Hill","Darwin","Brisbane","Hobart","Lindeman","Melbourne","Sydney","Lord_Howe"],na:["Adak","Anchorage","Bahia_Banderas","Barbados","Belize","Boise","Cambridge_Bay","Cancun","Chicago","Chihuahua","Ciudad_Juarez","Costa_Rica","Dawson","Dawson_Creek","Denver","Detroit","Edmonton","El_Salvador","Fort_Nelson","Glace_Bay","Goose_Bay","Grand_Turk","Guatemala","Halifax","Havana","Hermosillo","Indiana/Indianapolis","Indiana/Knox","Indiana/Marengo","Indiana/Petersburg","Indiana/Tell_City","Indiana/Vevay","Indiana/Vincennes","Indiana/Winamac","Inuvik","Iqaluit","Jamaica","Juneau","Kentucky/Louisville","Kentucky/Monticello","Los_Angeles","Managua","Martinique","Matamoros","Mazatlan","Menominee","Merida","Metlakatla","Mexico_City","Miquelon","Moncton","Monterrey","New_York","Nome","North_Dakota/Beulah","North_Dakota/Center","North_Dakota/New_Salem","Ojinaga","Panama","Phoenix","Port-au-Prince","Puerto_Rico","Rankin_Inlet","Regina","Resolute","Santo_Domingo","Sitka","St_Johns","Swift_Current","Tegucigalpa","Tijuana","Toronto","Vancouver","Whitehorse","Winnipeg","Yakutat","Yellowknife","Bermuda","Honolulu"],sa:["Araguaina","Argentina/Buenos_Aires","Argentina/Catamarca","Argentina/Cordoba","Argentina/Jujuy","Argentina/La_Rioja","Argentina/Mendoza","Argentina/Rio_Gallegos","Argentina/Salta","Argentina/San_Juan","Argentina/San_Luis","Argentina/Tucuman","Argentina/Ushuaia","Asuncion","Bahia","Belem","Boa_Vista","Bogota","Campo_Grande","Caracas","Cayenne","Cuiaba","Eirunepe","Fortaleza","Guayaquil","Guyana","La_Paz","Lima","Maceio","Manaus","Montevideo","Noronha","Paramaribo","Porto_Velho","Punta_Arenas","Recife","Rio_Branco","Santarem","Santiago","Sao_Paulo","Palmer","South_Georgia","Stanley","Easter","Galapagos"],at:["Cape_Verde","Canary","Faroe","Madeira","Azores","Bermuda","South_Georgia","Stanley"],in:["Mauritius","Maldives","Chagos"],pa:["Palau","Guam","Port_Moresby","Bougainville","Efate","Guadalcanal","Kosrae","Norfolk","Noumea","Auckland","Fiji","Kwajalein","Nauru","Tarawa","Chatham","Apia","Fakaofo","Kanton","Tongatapu","Kiritimati","Pitcairn","Gambier","Marquesas","Rarotonga","Tahiti","Niue","Pago_Pago","Honolulu","Easter","Galapagos"],aq:["Troll","Mawson","Davis","Casey","Rothera","Macquarie","Palmer"],etc:["Greenwich","Universal","Zulu","GMT-14","GMT-13","GMT-12","GMT-11","GMT-10","GMT-9","GMT-8","GMT-7","GMT-6","GMT-5","GMT-4","GMT-3","GMT-2","GMT-1","GMT","GMT+1","GMT+2","GMT+3","GMT+4","GMT+5","GMT+6","GMT+7","GMT+8","GMT+9","GMT+10","GMT+11","GMT+12","UCT","UTC"]};
+var regions={af:"Africa",as:"Asia",au:"Australia",aq:"Antarctica",eu:"Europe",na:"America",sa:"America",at:"Atlantic",in:"Indian",pa:"Pacific",etc:"Etc"};
+var region_g={na: "North America", sa: "South America", in: "Indian Ocean"};)HTML";
+
+static const char NTP_JS[] PROGMEM = R"HTML(
+var x = document.getElementById("tz");
+var sel = x.getAttribute('data-option');
+Object.entries(regions).forEach(entry => {
+  const [key, v] = entry;
+  var optgroup = document.createElement("optgroup");
+  optgroup.label = (key in region_g) ? region_g[key]:v;
+  x.add(optgroup);
+	Object.values(locations[key]).sort().forEach(l => {
+    var option = document.createElement("option");
+    option.text = v + '/' + l;
+    if (v + '/' + l == sel) {
+      option.selected=true;
+    }
+    x.add(option); 
+  });
+});</script>)HTML";
+
+static const char NTP_HTML[] PROGMEM = R"HTML(<h1>NTP Settings</h1>
+<form method='POST' action='ntpset'>
+<label for="tz">Timezone</label>
+<select name="t" id="tz" data-option="{v}"></select>
+<label for="s">NTP Server</label>
+<input id="s" name="s" value="{i}">
+<button type='submit'>Save</button>
+</form>
+)HTML";
 
 static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>ESPGeiger</a> {1}/{2}</small>";
 
