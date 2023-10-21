@@ -267,7 +267,7 @@ static void IRAM_ATTR handleSecondTick() {
   int diff = (status.total_clicks - last_clicks);
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
-    struct tm *timeinfo = localtime (&currentTime);
+    struct tm *timeinfo = gmtime (&currentTime);
     if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
       status.day_hourly_history.push(status.clicks_hour);
       status.clicks_hour = 0;
@@ -277,6 +277,9 @@ static void IRAM_ATTR handleSecondTick() {
       }
     }
   }
+#ifdef GEIGERTESTMODE
+  status.day_hourly_history.push(diff*86400);
+#endif
   status.clicks_today += diff;
   status.clicks_hour += diff;
 
@@ -320,7 +323,7 @@ static void handleSecondTick() {
   int diff = (status.total_clicks - last_clicks);
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
-    struct tm *timeinfo = localtime (&currentTime);
+    struct tm *timeinfo = gmtime (&currentTime);
     if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
       status.day_hourly_history.push(status.clicks_hour);
       status.clicks_hour = 0;
@@ -330,6 +333,9 @@ static void handleSecondTick() {
       }
     }
   }
+#ifdef GEIGERTESTMODE
+  status.day_hourly_history.push(diff*86400);
+#endif
   status.clicks_today += diff;
   status.clicks_hour += diff;
 
