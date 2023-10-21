@@ -108,8 +108,14 @@ void NTP_Client::loadconfig() {
       DeserializationError error = deserializeJson(jsonBuffer, configFile);
       if (!error)
       {
-        set_server(jsonBuffer["srv"]);
-        set_tz(jsonBuffer["tz"]);
+        const char* srv = jsonBuffer["srv"];
+        if (srv) {
+          set_server(srv);
+        }
+        const char* tz = jsonBuffer["tz"];
+        if (tz) {
+          set_tz(tz);
+        }
       }
       else
         Log::console(PSTR("NTP: failed to load json params"));
