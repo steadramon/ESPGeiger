@@ -264,15 +264,21 @@ static void IRAM_ATTR handleSecondTick() {
     status.total_clicks += (int)status.partial_clicks;
     status.partial_clicks -= (int)status.partial_clicks;
   }
+  int diff = (status.total_clicks - last_clicks);
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
     struct tm *timeinfo = localtime (&currentTime);
-    if ((timeinfo->tm_hour == 0) && (timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
-      status.clicks_yesterday = status.clicks_today;
-      status.clicks_today = 0;
+    if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
+      status.day_hourly_history.push(status.clicks_hour);
+      status.clicks_hour = 0;
+      if (timeinfo->tm_hour == 0) {
+        status.clicks_yesterday = status.clicks_today;
+        status.clicks_today = 0;
+      }
     }
   }
-  status.clicks_today += (status.total_clicks - last_clicks);
+  status.clicks_today += diff;
+  status.clicks_hour += diff;
 
   unsigned long int secidx = (millis() / 1000) % 60;
   if (secidx % 5 == 0) {
