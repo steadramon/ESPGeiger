@@ -28,7 +28,7 @@
 #endif
 
 #ifndef NTP_TZ
-#  define NTP_TZ "Factory"
+#  define NTP_TZ "Etc/UTC"
 #endif
 /*
 https://remotemonitoringsystems.ca/time-zone-abbreviations.php
@@ -56,6 +56,20 @@ class NTP_Client {
     NTP_Client();
     void loop();
     void setup();
+    void saveconfig();
+    void loadconfig();
+    void set_server(const char* ntpServer) {
+      memcpy(_ntp_server, ntpServer, 64);
+    };
+    void set_tz(const char* ntpTZ) {
+      memcpy(_ntp_tz, ntpTZ, 64);
+    };
+    const char* get_server() {
+      return _ntp_server;
+    };
+    const char* get_tz() {
+      return _ntp_tz;
+    };
     char _ntp_server[64] = NTP_SERVER;
     char _ntp_tz[64]      = NTP_TZ;
   private:

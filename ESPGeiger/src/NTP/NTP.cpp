@@ -32,6 +32,7 @@ NTP_Client::NTP_Client() {
 void NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
+  loadconfig();
   if (_ntp_server && !_ntp_server[0]) {
     memcpy(_ntp_server, NTP_SERVER, 64);
   }
@@ -63,4 +64,62 @@ void NTP_Client::setup()
   tzset();
 #endif
 #endif
+}
+
+void NTP_Client::saveconfig() {
+
+  Log::console(PSTR("NTP: Saving ..."));
+  LittleFS.begin();
+
+  // Open the file
+  File configFile = LittleFS.open("/ntp.json", "w");
+  if (!configFile)
+  {
+    Log::console(PSTR("NTP: Failed to open ntp.json"));
+    return;
+  }
+  char jsonBuffer[256] = "";
+
+  sprintf_P (
+    jsonBuffer,
+    PSTR("{\"server\": \"%s\",\"tz\": \"%s\"}"),
+    _ntp_server,
+    _ntp_tz
+  );
+  configFile.print(jsonBuffer);
+  Log::console(PSTR("NTP: %s"), jsonBuffer);
+
+  // Close the file
+  configFile.close();
+  LittleFS.end();
+  Log::console(PSTR("NTP: Config Saved"));
+}
+
+void NTP_Client::loadconfig() {
+  LittleFS.begin();
+  Log::console(PSTR("NTP: Config Loading ..."));
+  if (LittleFS.exists("/ntp.json"))
+  {
+    File configFile = LittleFS.open("/ntp.json", "r");
+    if (configFile)
+    {
+      // Process the json data
+      DynamicJsonDocument jsonBuffer(256);
+      DeserializationError error = deserializeJson(jsonBuffer, configFile);
+      if (!error)
+      {
+        set_server(jsonBuffer["server"]);
+        set_tz(jsonBuffer["tz"]);
+      }
+      else
+        Log::console(PSTR("NTP: failed to load json params"));
+      // Close file
+      configFile.close();
+    }
+    else
+    {
+      Log::console(PSTR("NTP: failed to open ntp.json file"));
+    }
+  }
+  LittleFS.end();
 }
