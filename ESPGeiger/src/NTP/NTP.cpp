@@ -82,7 +82,7 @@ void NTP_Client::saveconfig() {
 
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"server\": \"%s\",\"tz\": \"%s\"}"),
+    PSTR("{\"srv\":\"%s\",\"tz\":\"%s\"}"),
     _ntp_server,
     _ntp_tz
   );
@@ -108,7 +108,7 @@ void NTP_Client::loadconfig() {
       DeserializationError error = deserializeJson(jsonBuffer, configFile);
       if (!error)
       {
-        set_server(jsonBuffer["server"]);
+        set_server(jsonBuffer["srv"]);
         set_tz(jsonBuffer["tz"]);
       }
       else
