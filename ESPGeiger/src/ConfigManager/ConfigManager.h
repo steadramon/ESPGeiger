@@ -63,6 +63,7 @@ constexpr auto HV_SET_URL = "/hvset";
 constexpr auto CLICKS_JSON  = "/clicks";
 constexpr auto NTP_URL = "/ntp";
 constexpr auto NTP_SET_URL = "/ntpset";
+constexpr auto HIST_URL PROGMEM = "/hist";
 
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
@@ -146,6 +147,7 @@ private:
   void handleJSReturn();
   void handleJsonReturn();
   void handleStatusPage();
+  void handleHistoryPage();
   void handleRefreshConsole();
   void handleRestart();
   void handleResetParams();

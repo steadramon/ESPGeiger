@@ -18,15 +18,41 @@
 */
 
 const char HTTP_HEAD_MREFRESH[] PROGMEM = "<meta http-equiv='refresh' content='10; url=/'>";
-static const char STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1 title="{t}">{v} - Status</h1></center>)HTML";
+static const char STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1 title="{t}">{v}</h1></center>)HTML";
 
 static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;} .wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
 <table style="width:75%"><tr><th>CPM:</th><td><span id="cpm">-</span></td><th>CPS:</th><td id="cs"></td></tr><tr><th>μSv/h:</th><td><span id="usv">-</span></td><th>Total Clicks:</th><td id="tc"></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td></tr></table>
 <div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
 <script src="/js"></script>)HTML";
-static const char HV_STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1>{v}</h1></center>)HTML";
 
+static const char HISTORY_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}</style>
+<table style="width:100%"><tr><th>Date</th><th>Clicks</th><th>μSv</th</tr><tbody id="tb"></tbody></table>
+<script>
+function go(){var t;return t=document.getElementById("tb"),x=new XMLHttpRequest,x.onload=function(){if(200==x.status){var e=JSON.parse(x.responseText);e.last_day.forEach((function(n,o){var a=new Date(36e5*Math.floor((new Date).getTime()/36e5)-36e5*o).toLocaleString();t.innerHTML+="<tr><td>"+a+"</td><td>"+n+"</td><td>"+(n/(60*e.ratio)).toFixed(4)+"</td></tr>"}))}},x.open("GET","/clicks",!0),x.send(),!1}window.addEventListener("load",go);
+</script>
+)HTML";
+
+/*
+function go() {
+  var c,o='',t;
+  t = document.getElementById('tb');
+    x=new XMLHttpRequest();
+    x.onload = function() {
+      if(x.status==200){
+        var o=JSON.parse(x.responseText)
+        o.last_day.forEach(function(number, idx) {
+          var date = new Date((Math.floor(new Date().getTime() / 3600000 ) * 3600000) - (idx*3600000) ).toLocaleString();
+          t.innerHTML += "<tr><td>"+date+"</td>"+"<td>"+number+"</td><td>"+(number/(o.ratio*60)).toFixed(2)+"</td></tr>";
+        });
+      }
+    };
+    x.open('GET','/clicks',true);
+    x.send();
+  return false;
+}
+window.addEventListener("load",go);
+*/
 static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}.wa{padding:20px;width:75%;font-size:20px;margin:auto;border-radius:5px;box-shadow:rgb(0 0 0 / 25%) 0 5px 10px 2px;background-color:#ffd48a;border-left:5px solid #8a5700}.cl{float:right;margin-left:18px;font-size:30px;line-height:20px;cursor:pointer;transition:0.4s;border-color:#8a5700;color:#8a5700}</style>
 <canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
 <div class="wa">

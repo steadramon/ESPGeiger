@@ -206,6 +206,7 @@ void ConfigManager::handleRoot() {
   page.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
   server->sendContent(page);
   server->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
+  server->sendContent(F("<form action='/hist' method='get'><button>History</button></form><br/>"));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[3]));
   server->sendContent(F("<form action='/ntp' method='get'><button>Configure NTP</button></form><br/>"));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[0]));
@@ -258,12 +259,11 @@ void ConfigManager::handleJsonReturn()
 
 void ConfigManager::handleClicksReturn()
 {
-  DynamicJsonDocument json(256);
+  DynamicJsonDocument json(512);
 
   json.clear();
-  json["hour"] = status.clicks_hour;
   auto last_day = json.createNestedArray("last_day");
-
+  last_day.add(status.clicks_hour);
   int histSize = status.day_hourly_history.size();
   for (decltype(status.day_hourly_history)::index_t i = histSize; i > 0; i--) {
     int value = status.day_hourly_history[i-1];
@@ -271,8 +271,9 @@ void ConfigManager::handleClicksReturn()
   }
   json["today"] = status.clicks_today;
   json["yesterday"] = status.clicks_yesterday;
+  json["ratio"] = ConfigManager::getParamValueFromID("geigerRatio");
 
-  char jsonBuffer[256] = "";
+  char jsonBuffer[512] = "";
   serializeJson(json, jsonBuffer);
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
 }
@@ -295,7 +296,9 @@ void ConfigManager::handleStatusPage()
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
   page = FPSTR(STATUS_PAGE_BODY_HEAD);
-  page.replace(FPSTR(T_v), thingName);
+  title = FPSTR(thingName);
+  title += F(" - Status");
+  page.replace(FPSTR(T_v), title);
   page.replace(FPSTR(T_t), hostName);
   server->sendContent(page);
   server->sendContent(FPSTR(STATUS_PAGE_BODY));
@@ -304,6 +307,37 @@ void ConfigManager::handleStatusPage()
   page.replace(FPSTR(T_1), String(status.version));
   page.replace(FPSTR(T_2), String(status.git_version));
   server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_END));
+  server->sendContent("");
+  server->client().stop();
+}
+
+void ConfigManager::handleHistoryPage()
+{
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  String page = FPSTR(HTTP_HEAD_START);
+  String title = FPSTR(hostName);
+  title += F(" - Status");
+  page.replace(FPSTR(T_v), title);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+  page = FPSTR(STATUS_PAGE_BODY_HEAD);
+  title = FPSTR(thingName);
+  title += F(" - History");
+  page.replace(FPSTR(T_v), title);
+  page.replace(FPSTR(T_t), hostName);
+  server->sendContent(page);
+
+  server->sendContent(HISTORY_PAGE_BODY);
+  server->sendContent(FPSTR(HTTP_BACKBTN));
+
   server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
   server->client().stop();
@@ -388,8 +422,9 @@ void ConfigManager::handleHVPage()
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
 
-  page = FPSTR(HV_STATUS_PAGE_BODY_HEAD);
+  page = FPSTR(STATUS_PAGE_BODY_HEAD);
   page.replace(FPSTR(T_v), title);
+  page.replace(FPSTR(T_t), hostName);
   server->sendContent(page);
 
   server->sendContent(HV_STATUS_PAGE_BODY);
@@ -726,6 +761,7 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(NTP_URL, HTTP_GET, std::bind(&ConfigManager::handleNTP, this));
   ConfigManager::server.get()->on(NTP_SET_URL, HTTP_POST, std::bind(&ConfigManager::handleNTPSet, this));
   ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
+  ConfigManager::server.get()->on(HIST_URL, HTTP_GET, std::bind(&ConfigManager::handleHistoryPage, this));
 #ifdef ESPGEIGER_HW
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
