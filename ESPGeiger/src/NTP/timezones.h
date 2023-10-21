@@ -17,6 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
+#ifndef TIMEZONES_H
+#define TIMEZONES_H
 
 static const char *posix[] PROGMEM = {
     /*   0 */ "GMT0",
@@ -597,3 +599,5 @@ PROGMEM static const struct TZoneH {
 #endif
 
 const char *getPosixTZforOlson(const char *olson);
+
+#endif
