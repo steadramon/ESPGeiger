@@ -22,6 +22,7 @@
 #include "ArduinoJson.h"
 #include <FS.h>
 #include <LittleFS.h>
+#include "../NTP/timezones.h"
 
 WiFiManagerParameter ESPGeigerParams[] = 
 {
@@ -72,7 +73,7 @@ WiFiManagerParameter HassioParams[] =
   WiFiManagerParameter("<br><br><hr><h3>HA Autodiscovery</h3>"),
   WiFiManagerParameter("hassSend", "", MQTT_DISCOVERY, 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label>"),
-  WiFiManagerParameter("hassDisc", "<br>Discovery Topic", MQTT_DISCOVERY_TOPIC, 32),
+  WiFiManagerParameter("hassDisc", "<br>Discovery Topic", S_MQTT_DISCOVERY_TOPIC, 32),
   WiFiManagerParameter(R"J(<script>doCB("cbhas","hassSend")</script>)J"),
 };
 #endif
@@ -205,8 +206,9 @@ void ConfigManager::handleRoot() {
   page.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
   server->sendContent(page);
   server->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
-  server->sendContent(FPSTR(HTTP_PORTAL_MENU[0]));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[3]));
+  server->sendContent(F("<form action='/ntp' method='get'><button>Configure NTP</button></form><br/>"));
+  server->sendContent(FPSTR(HTTP_PORTAL_MENU[0]));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[8]));
   server->sendContent(F("<form action='/restart' method='get'><button>Reboot</button></form><br/>"));
@@ -302,6 +304,67 @@ void ConfigManager::handleStatusPage()
   page.replace(FPSTR(T_1), String(status.version));
   page.replace(FPSTR(T_2), String(status.git_version));
   server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_END));
+  server->sendContent("");
+  server->client().stop();
+}
+
+void ConfigManager::handleNTP()
+{
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  String page = FPSTR(HTTP_HEAD_START);
+  String title = FPSTR(thingName);
+  title += F(" - NTP");
+  page.replace(FPSTR(T_v), title);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+  page = FPSTR(NTP_HTML);
+  page.replace(T_i, ntpclient.get_server());
+  page.replace(T_v, ntpclient.get_tz());
+
+  server->sendContent(page);
+  server->sendContent(FPSTR(NTP_TZ_JS));
+  server->sendContent(FPSTR(NTP_JS));
+
+  server->sendContent(FPSTR(HTTP_BACKBTN));
+  server->sendContent(FPSTR(HTTP_END));
+  server->sendContent("");
+  server->client().stop();
+
+}
+
+void ConfigManager::handleNTPSet()
+{
+  char stmp[64];
+  String s = server->arg("s");
+  strcpy(stmp, s.c_str());
+  ntpclient.set_server(stmp);
+  s = server->arg("t");
+  strcpy(stmp, s.c_str());
+  ntpclient.set_tz(stmp);
+  ntpclient.saveconfig();
+  ntpclient.setup();
+
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  String page = FPSTR(HTTP_HEAD_START);
+  String title = FPSTR(thingName);
+  title += F(" - NTP Saved");
+  page.replace(FPSTR(T_v), title);
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+  server->sendContent(HTTP_PARAMSAVED);
+  server->sendContent(FPSTR(HTTP_BACKBTN));
   server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
   server->client().stop();
@@ -415,6 +478,7 @@ void ConfigManager::resetSettings()
   Log::console(PSTR("Config: Erasing ... "));
   LittleFS.begin();
   LittleFS.remove("/geigerconfig.json");
+  LittleFS.remove("/ntp.json");
   LittleFS.end();
   WiFiManager::resetSettings();
 }
@@ -424,6 +488,7 @@ void ConfigManager::handleResetParams()
   Log::console(PSTR("Config: Erasing ... "));
   LittleFS.begin();
   LittleFS.remove("/geigerconfig.json");
+  LittleFS.remove("/ntp.json");
   LittleFS.end();
   handleRestart();
 }
@@ -658,6 +723,8 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(CONSOLE_URL, HTTP_GET, std::bind(&ConfigManager::handleRefreshConsole, this));
   ConfigManager::server.get()->on(RESTART_URL, HTTP_GET, std::bind(&ConfigManager::handleRestart, this));
   ConfigManager::server.get()->on(RESET_URL, HTTP_GET, std::bind(&ConfigManager::handleResetParams, this));
+  ConfigManager::server.get()->on(NTP_URL, HTTP_GET, std::bind(&ConfigManager::handleNTP, this));
+  ConfigManager::server.get()->on(NTP_SET_URL, HTTP_POST, std::bind(&ConfigManager::handleNTPSet, this));
   ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
 #ifdef ESPGEIGER_HW
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));

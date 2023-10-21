@@ -37,6 +37,7 @@ extern SSD1306Display display;
 
 extern Status status;
 extern Counter gcounter;
+extern NTP_Client ntpclient;
 
 constexpr auto MQTT_SERVER_LENGTH = 31;
 constexpr auto MQTT_PORT_LENGTH = 6;
@@ -60,6 +61,8 @@ constexpr auto HV_JS_URL = "/hvjs";
 constexpr auto HV_JSON_URL = "/hvjson";
 constexpr auto HV_SET_URL = "/hvset";
 constexpr auto CLICKS_JSON  = "/clicks";
+constexpr auto NTP_URL = "/ntp";
+constexpr auto NTP_SET_URL = "/ntpset";
 
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
@@ -67,6 +70,8 @@ const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 #ifndef MQTT_DISCOVERY_TOPIC
 #  define MQTT_DISCOVERY_TOPIC "homeassistant"
 #endif
+
+const char S_MQTT_DISCOVERY_TOPIC[] PROGMEM = MQTT_DISCOVERY_TOPIC;
 
 #ifndef MQTT_DISCOVERY
 #ifdef GEIGERTESTMODE
@@ -145,6 +150,8 @@ private:
   void handleRestart();
   void handleResetParams();
   void handleRegisterAPI();
+  void handleNTP();
+  void handleNTPSet();
   void handleClicksReturn();
 #ifdef ESPGEIGER_HW
   void handleHVPage();
