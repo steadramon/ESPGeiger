@@ -126,9 +126,17 @@ void Counter::begin() {
   #ifdef ESP8266
   timer1_attachInterrupt(count);
   timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
+#ifdef GEIGER_TEST_FAST
   timer1_write(600);
+#else
+  timer1_write(5000000);
+#endif
   #else
-  hwtimer = timerBegin(0, 80, true);
+#ifdef GEIGER_TEST_FAST
+  hwtimer = timerBegin(3, 80, true);
+#else
+  hwtimer = timerBegin(3, 80000000, true);
+#endif
   timerAlarmEnable(hwtimer);
   #endif
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
