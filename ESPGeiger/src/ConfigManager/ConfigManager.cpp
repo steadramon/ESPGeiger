@@ -276,7 +276,7 @@ void ConfigManager::handleClicksReturn()
   json["yesterday"] = status.clicks_yesterday;
   json["ratio"] = ConfigManager::getParamValueFromID("geigerRatio");
   if (status.ntp_synced) {
-    json["start_time"] = status.start_time;
+    json["start"] = status.start_time;
   } else {
     unsigned long uptime = NTP.getUptime () - status.start;
     json["uptime"] = uptime;
