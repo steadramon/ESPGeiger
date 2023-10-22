@@ -44,6 +44,8 @@ void NTP_Client::setup()
     if (!status.ntp_synced) {
       Log::console(PSTR("NTP: Synched"));
       status.ntp_synced = true;
+      unsigned long uptime = NTP.getUptime () - status.start;
+      status.start_time = int(time(NULL)-uptime);
     }
   });
 
@@ -57,6 +59,8 @@ void NTP_Client::setup()
     if (!status.ntp_synced) {
       Log::console(PSTR("NTP: Synched"));
       status.ntp_synced = true;
+      unsigned long uptime = NTP.getUptime () - status.start;
+      status.start_time = int(time(NULL)-uptime);
     }
   });
   configTime(0, 0, _ntp_server); // 0, 0 because we will use TZ in the next line

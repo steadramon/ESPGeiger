@@ -64,6 +64,7 @@ struct Status {
   CircularBuffer<int,45> cpm_history;
   CircularBuffer<int,24> day_hourly_history;
   long start = 0;
+  unsigned long start_time = 0;
   bool warmup = true;
   char* geiger_model = "";
   unsigned long clicks_hour = 0;
