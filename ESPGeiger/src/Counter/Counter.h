@@ -246,8 +246,13 @@ static void IRAM_ATTR handleSecondTick() {
   eventCounter = pulseCount;
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST && ESP32
+#ifdef GEIGER_TEST_FAST
   eventCounter = timerRead(hwtimer)/600;
+#else
+  eventCounter = timerRead(hwtimer)/1200;
+#endif
   timerRestart(hwtimer);
+  _last_blip = ESP.getCycleCount();
 #endif
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
   status.geigerTicks.add((float)eventCounter/(float)60);
@@ -268,7 +273,11 @@ static void IRAM_ATTR handleSecondTick() {
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
     struct tm *timeinfo = gmtime (&currentTime);
+#ifdef GEIGERTESTMODE
+    if (timeinfo->tm_sec == 0) {
+#else
     if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
+#endif
       status.day_hourly_history.push(status.clicks_hour);
       status.clicks_hour = 0;
       if (timeinfo->tm_hour == 0) {
@@ -277,9 +286,6 @@ static void IRAM_ATTR handleSecondTick() {
       }
     }
   }
-#ifdef GEIGERTESTMODE
-  status.day_hourly_history.push(diff*86400);
-#endif
   status.clicks_today += diff;
   status.clicks_hour += diff;
 
@@ -324,7 +330,11 @@ static void handleSecondTick() {
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
     struct tm *timeinfo = gmtime (&currentTime);
+#ifdef GEIGERTESTMODE
+    if (timeinfo->tm_sec == 0) {
+#else
     if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
+#endif
       status.day_hourly_history.push(status.clicks_hour);
       status.clicks_hour = 0;
       if (timeinfo->tm_hour == 0) {
@@ -333,9 +343,6 @@ static void handleSecondTick() {
       }
     }
   }
-#ifdef GEIGERTESTMODE
-  status.day_hourly_history.push(diff*86400);
-#endif
   status.clicks_today += diff;
   status.clicks_hour += diff;
 
