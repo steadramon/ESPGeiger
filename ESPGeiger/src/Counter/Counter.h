@@ -235,8 +235,7 @@ static void IRAM_ATTR count() {
   }
 };
 
-//static void IRAM_ATTR handleSecondTick() {
-static void handleSecondTick() {
+static void IRAM_ATTR handleSecondTick() {
   portENTER_CRITICAL_ISR(&timerMux);
   uint32_t last_clicks = status.total_clicks;
   _handlesecond = true;
@@ -383,5 +382,4 @@ class Counter {
       void handleSerial(char* input);
       float _ratio = GEIGER_RATIO;
 };
-
 #endif
