@@ -263,6 +263,9 @@ void ConfigManager::handleClicksReturn()
 
   json.clear();
   auto last_day = json.createNestedArray("last_day");
+#ifdef GEIGERTESTMODE
+  json["roll"] = 60;
+#endif
   last_day.add(status.clicks_hour);
   int histSize = status.day_hourly_history.size();
   for (decltype(status.day_hourly_history)::index_t i = histSize; i > 0; i--) {
@@ -272,6 +275,12 @@ void ConfigManager::handleClicksReturn()
   json["today"] = status.clicks_today;
   json["yesterday"] = status.clicks_yesterday;
   json["ratio"] = ConfigManager::getParamValueFromID("geigerRatio");
+  if (status.ntp_synced) {
+    json["start_time"] = status.start_time;
+  } else {
+    unsigned long uptime = NTP.getUptime () - status.start;
+    json["uptime"] = uptime;
+  }
 
   char jsonBuffer[512] = "";
   serializeJson(json, jsonBuffer);
