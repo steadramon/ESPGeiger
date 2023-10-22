@@ -191,12 +191,12 @@ void setup()
 #ifdef MQTTOUT
   mqtt.begin();
 #endif
+  ntpclient.setup();
   gcounter.begin();
+  status.start = NTP.getUptime()+1;
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.begin();
 #endif
-  ntpclient.setup();
-  status.start = NTP.getUptime();
   sTicker.attach(1, sTickerCB);
   status.led.Off().Update();
 }
