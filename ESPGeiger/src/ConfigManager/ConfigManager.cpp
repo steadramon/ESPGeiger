@@ -345,6 +345,7 @@ void ConfigManager::handleHistoryPage()
   server->sendContent(page);
 
   server->sendContent(HISTORY_PAGE_BODY);
+  server->sendContent(HISTORY_PAGE_JS);
   server->sendContent(FPSTR(HTTP_BACKBTN));
 
   server->sendContent(FPSTR(HTTP_END));

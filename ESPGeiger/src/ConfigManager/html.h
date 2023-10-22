@@ -39,14 +39,14 @@ function go() {
         } else {
           start = new Date(new Date().getTime() - o.uptime*1000);
         }
-        rollover = 3600000;
+        rlv = 3600000;
         if ('roll' in o) {
-          rollover = o.roll*1000;
+          rlv = o.roll*1000;
         }
         o.last_day.forEach(function(number, idx) {
-          var offset = (idx*rollover);
-          var start_date = new Date((Math.floor(new Date().getTime() / rollover ) * rollover) - offset );
-          var end_date = new Date(start_date.getTime() + rollover);
+          var offset = (idx*rlv);
+          var start_date = new Date((Math.floor(new Date().getTime() / rlv ) * rlv) - offset );
+          var end_date = new Date(start_date.getTime() + rlv);
 
           if (idx == 0) {
             end_date = new Date();
@@ -69,8 +69,10 @@ window.addEventListener("load",go);
 */
 static const char HISTORY_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <table style="width:100%"><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>μSv</th</tr><tbody id="tb"></tbody></table>
+)HTML";
+static const char HISTORY_PAGE_JS[] PROGMEM = R"HTML(
 <script>
-function go(){var e;return e=document.getElementById("tb"),x=new XMLHttpRequest,x.onload=function(){if(200==x.status){var t=JSON.parse(x.responseText);start="start"in t?new Date(1e3*t.start):new Date((new Date).getTime()-1e3*t.uptime),rollover=36e5,"roll"in t&&(rollover=1e3*t.roll),t.last_day.forEach((function(r,n){var o=n*rollover,a=new Date(Math.floor((new Date).getTime()/rollover)*rollover-o),l=new Date(a.getTime()+rollover);0==n&&(l=new Date),n==t.last_day.length-1&&a<start&&(a=start),mins=(l.getTime()-a.getTime())/6e4,e.innerHTML+="<tr><td>"+a.toLocaleString()+"</td><td>"+r+"</td><td>"+Math.ceil(r/mins)+"</td><td>"+(r/mins/t.ratio).toFixed(4)+"</td></tr>"}))}},x.open("GET","/clicks",!0),x.send(),!1}window.addEventListener("load",go);
+function go(){var e;return e=document.getElementById("tb"),x=new XMLHttpRequest,x.onload=function(){if(200==x.status){var t=JSON.parse(x.responseText);start="start"in t?new Date(1e3*t.start):new Date((new Date).getTime()-1e3*t.uptime),rlv=36e5,"roll"in t&&(rlv=1e3*t.roll),t.last_day.forEach((function(r,n){var o=n*rlv,a=new Date(Math.floor((new Date).getTime()/rlv)*rlv-o),l=new Date(a.getTime()+rlv);0==n&&(l=new Date),n==t.last_day.length-1&&a<start&&(a=start),mins=(l.getTime()-a.getTime())/6e4,e.innerHTML+="<tr><td>"+a.toLocaleString()+"</td><td>"+r+"</td><td>"+Math.ceil(r/mins)+"</td><td>"+(r/mins/t.ratio).toFixed(4)+"</td></tr>"}))}},x.open("GET","/clicks",!0),x.send(),!1}window.addEventListener("load",go);
 </script>
 )HTML";
 static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}.wa{padding:20px;width:75%;font-size:20px;margin:auto;border-radius:5px;box-shadow:rgb(0 0 0 / 25%) 0 5px 10px 2px;background-color:#ffd48a;border-left:5px solid #8a5700}.cl{float:right;margin-left:18px;font-size:30px;line-height:20px;cursor:pointer;transition:0.4s;border-color:#8a5700;color:#8a5700}</style>
