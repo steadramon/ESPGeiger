@@ -72,6 +72,7 @@ public:
         drawXbm(0, 0, 51, 51, ESPLogo);
         drawString(55, 10, PSTR("ESPGeiger"));
         drawString(55, 24, status.version);
+        drawString(55, 42, PSTR("Connecting .."));
 
 		display();	// todo: not very efficient
         setFont(ArialMT_Plain_16);
