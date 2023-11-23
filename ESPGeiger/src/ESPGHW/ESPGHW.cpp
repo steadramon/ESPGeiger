@@ -50,8 +50,7 @@ void ESPGeigerHW::loop() {
   ledcWrite(0, _hw_duty);
 #endif
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
-  //3.3 / 1024 = 0.00322265625
-  float volts = (sensorValue * 0.0032)*_hw_vd_ratio;
+  float volts = ((0.0009765625032 * sensorValue)*_hw_vd_ratio)+_hw_vd_offset;
   status.hvReading.add((int)volts);
 }
 
@@ -81,13 +80,16 @@ void ESPGeigerHW::saveconfig() {
   itoa(_hw_duty, duty, 10); 
   char ratio[16];
   itoa(_hw_vd_ratio, ratio, 10); 
+  char offset[16];
+  itoa(_hw_vd_offset, offset, 10);
 
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"freq\":\"%s\",\"duty\":\"%s\",\"ratio\":\"%s\"}"),
+    PSTR("{\"freq\":\"%s\",\"duty\":\"%s\",\"ratio\":\"%s\",\"offset\":\"%s\"}"),
     freq,
     duty,
-    ratio
+    ratio,
+    offset
   );
   configFile.print(jsonBuffer);
 
@@ -121,6 +123,10 @@ void ESPGeigerHW::loadconfig() {
         const char* ratio = jsonBuffer["ratio"];
         if (ratio) {
           set_vd_ratio(atoi(ratio));
+        }
+        const char* offset = jsonBuffer["offset"];
+        if (offset) {
+          set_vd_offset(atoi(offset));
         }
       }
       else {
