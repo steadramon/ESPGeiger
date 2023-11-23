@@ -131,6 +131,7 @@ ConfigManager::ConfigManager() : WiFiManager(){
 
 void ConfigManager::autoConnect()
 {
+  WiFiManager::setConnectTimeout(60);
   WiFiManager::autoConnect(hostName);
   Log::console(PSTR("WiFi: IP: %s"), WiFi.localIP().toString().c_str());
 }
@@ -163,7 +164,7 @@ void ConfigManager::startWebPortal()
   ConfigManager::loadParams();
 
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
-  double ratio = atof(ratioChar);
+  float ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
@@ -732,7 +733,7 @@ void ConfigManager::saveParams()
   mqtt.begin();
 #endif
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
-  double ratio = atof(ratioChar);
+  float ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
@@ -778,6 +779,10 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(HV_JS_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJSReturn, this));
   ConfigManager::server.get()->on(HV_JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJsonReturn, this));
 #endif
+}
+unsigned long ConfigManager::getUptime () {
+  time_t uptime = NTP.getUptime ();
+  return uptime;
 }
 
 char* ConfigManager::getUptimeString () {

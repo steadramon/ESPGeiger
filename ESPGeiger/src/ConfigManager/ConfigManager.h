@@ -49,20 +49,20 @@ constexpr auto TEMPLATE_LEN = 256;
 constexpr auto ADVANCED_LEN = 256;
 constexpr auto CB_SELECTED_STR = "selected";
 
-constexpr auto ROOT_URL = "/";
-constexpr auto RESTART_URL = "/restart";
-constexpr auto CONSOLE_URL = "/cs";
-constexpr auto STATUS_URL = "/status";
-constexpr auto JS_URL = "/js";
-constexpr auto JSON_URL = "/json";
-constexpr auto RESET_URL = "/reset";
-constexpr auto HV_URL = "/hv";
-constexpr auto HV_JS_URL = "/hvjs";
-constexpr auto HV_JSON_URL = "/hvjson";
-constexpr auto HV_SET_URL = "/hvset";
-constexpr auto CLICKS_JSON  = "/clicks";
-constexpr auto NTP_URL = "/ntp";
-constexpr auto NTP_SET_URL = "/ntpset";
+constexpr auto ROOT_URL PROGMEM = "/";
+constexpr auto RESTART_URL PROGMEM = "/restart";
+constexpr auto CONSOLE_URL PROGMEM = "/cs";
+constexpr auto STATUS_URL PROGMEM = "/status";
+constexpr auto JS_URL PROGMEM = "/js";
+constexpr auto JSON_URL PROGMEM = "/json";
+constexpr auto RESET_URL PROGMEM = "/reset";
+constexpr auto HV_URL PROGMEM = "/hv";
+constexpr auto HV_JS_URL PROGMEM = "/hvjs";
+constexpr auto HV_JSON_URL PROGMEM = "/hvjson";
+constexpr auto HV_SET_URL PROGMEM = "/hvset";
+constexpr auto CLICKS_JSON PROGMEM = "/clicks";
+constexpr auto NTP_URL PROGMEM = "/ntp";
+constexpr auto NTP_SET_URL PROGMEM = "/ntpset";
 constexpr auto HIST_URL PROGMEM = "/hist";
 
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
@@ -111,6 +111,7 @@ public:
   const char* getThingName() { return thingName; };
   const char* getUserAgent() { return userAgent; };
   char* getUptimeString ();
+  unsigned long getUptime ();
   char* GetChipModel(){
 #ifdef ESP8266
 #ifdef ESPGEIGER_HW
