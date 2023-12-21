@@ -99,7 +99,7 @@ void SDCard::loop()
       if (!fileExists) {
         myDataFile.print(F("Unixtime,CPM,CPM5,CPM15"));
 #ifdef SDCARD_EXTENDEDLOG
-        myDataFile.print(F("FreeMem"));
+        myDataFile.print(F(",FreeMem"));
 #endif
         myDataFile.println();
       }
@@ -111,6 +111,7 @@ void SDCard::loop()
       myDataFile.print(F(","));
       myDataFile.print(status.geigerTicks15.get()*60.0, 2);
 #ifdef SDCARD_EXTENDEDLOG
+      myDataFile.print(F(","));
       myDataFile.print(ESP.getFreeHeap());
 #endif
       myDataFile.println();
