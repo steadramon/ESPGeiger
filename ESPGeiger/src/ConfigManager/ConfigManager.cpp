@@ -209,6 +209,9 @@ void ConfigManager::handleRoot() {
   server->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
   server->sendContent(F("<form action='/hist' method='get'><button>History</button></form><br/>"));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[3]));
+#ifdef ESPGEIGER_HW
+  server->sendContent(F("<form action='/hv' method='get'><button>Configure HV</button></form><br/>"));
+#endif
   server->sendContent(F("<form action='/ntp' method='get'><button>Configure NTP</button></form><br/>"));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[0]));
   server->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
@@ -780,6 +783,7 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(HV_JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJsonReturn, this));
 #endif
 }
+
 unsigned long ConfigManager::getUptime () {
   time_t uptime = NTP.getUptime ();
   return uptime;

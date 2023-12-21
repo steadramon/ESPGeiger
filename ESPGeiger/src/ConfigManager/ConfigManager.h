@@ -56,14 +56,16 @@ constexpr auto STATUS_URL PROGMEM = "/status";
 constexpr auto JS_URL PROGMEM = "/js";
 constexpr auto JSON_URL PROGMEM = "/json";
 constexpr auto RESET_URL PROGMEM = "/reset";
-constexpr auto HV_URL PROGMEM = "/hv";
-constexpr auto HV_JS_URL PROGMEM = "/hvjs";
-constexpr auto HV_JSON_URL PROGMEM = "/hvjson";
-constexpr auto HV_SET_URL PROGMEM = "/hvset";
 constexpr auto CLICKS_JSON PROGMEM = "/clicks";
 constexpr auto NTP_URL PROGMEM = "/ntp";
 constexpr auto NTP_SET_URL PROGMEM = "/ntpset";
 constexpr auto HIST_URL PROGMEM = "/hist";
+#ifdef ESPGEIGER_HW
+constexpr auto HV_URL PROGMEM = "/hv";
+constexpr auto HV_JS_URL PROGMEM = "/hvjs";
+constexpr auto HV_JSON_URL PROGMEM = "/hvjson";
+constexpr auto HV_SET_URL PROGMEM = "/hvset";
+#endif
 
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
@@ -117,7 +119,11 @@ public:
 #ifdef ESPGEIGER_HW
     return (char*)"ESPG-HW";
 #else
+#ifdef ESPGEIGER_LT
+    return (char*)"ESPG-LT";
+#else
     return (char*)"ESP8266";
+#endif
 #endif
 #elif defined(ESP32)
 #ifdef ESPGEIGER_HW
