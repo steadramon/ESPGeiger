@@ -9,6 +9,8 @@ jobs:
       matrix:
         environments:
           - "espgeigerhw"
+          - "espgeigerlite"
+          - "espgeigerlog"
           - "esp32_pulse"
           - "esp32_pulse_no_pcnt"
           - "esp32_test"
