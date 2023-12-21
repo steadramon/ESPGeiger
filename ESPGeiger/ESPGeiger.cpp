@@ -24,9 +24,7 @@
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
-#ifdef GEIGER_PUSHBUTTON
-#include "src/PushButton/PushButton.h"
-#endif
+
 #include "src/ConfigManager/ConfigManager.h"
 #include "src/Status.h"
 #include "src/Counter/Counter.h"
@@ -35,6 +33,9 @@
 #include "src/Thingspeak/Thingspeak.h"
 #include "src/GMC/GMC.h"
 #include "src/Logger/Logger.h"
+#include "src/SDCard/SDCard.h"
+#include "src/NeoPixel/NeoPixel.h"
+#include "src/PushButton/PushButton.h"
 #include "src/NTP/NTP.h"
 #include "src/ArduinoOTA/ArduinoOTA.h"
 #include <FS.h>
@@ -47,7 +48,12 @@
 #ifdef SERIALOUT
 #include "src/SerialOut/SerialOut.h"
 #endif
-
+#ifdef GEIGER_SDCARD
+SDCard sdcard = SDCard::getInstance();
+#endif
+#ifdef GEIGER_NEOPIXEL
+NeoPixel neopixel = NeoPixel::getInstance();
+#endif
 #ifdef GEIGER_PUSHBUTTON
 PushButton pushbutton = PushButton();
 #endif
@@ -121,7 +127,16 @@ void msTickerCB()
   status.blip_led.Update();
 #endif
 }
-
+int getQuality() {
+  if (WiFi.status() != WL_CONNECTED)
+    return -1;
+  int dBm = WiFi.RSSI();
+  if (dBm <= -100)
+    return 0;
+  if (dBm >= -50)
+    return 100;
+  return 2 * (dBm + 100);
+}
 void sTickerCB()
 {
 #ifdef SERIALOUT
@@ -146,6 +161,9 @@ void sTickerCB()
 #ifdef THINGSPEAKOUT
   thingspeak.loop();
 #endif
+#ifdef GEIGER_SDCARD
+  sdcard.loop();
+#endif
 }
 
 void setup()
@@ -153,7 +171,9 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   delay(100);
-
+#ifdef GEIGER_NEOPIXEL
+  neopixel.setup();
+#endif
 #ifdef ESP8266
   if(!LittleFS.begin()){
 #elif defined(ESP32)
@@ -177,7 +197,7 @@ void setup()
   if (!cManager.getWiFiIsSaved()) {
     display.setupWifi(hostName);
   }
-  #endif
+#endif
   cManager.autoConnect();
   delay(100);
   cManager.startWebPortal();
@@ -207,14 +227,18 @@ void loop()
 #ifdef MQTTOUT
   mqtt.loop();
 #endif
-
+#ifndef DISABLE_SERIALRX
   handleSerial();
+#endif
   gcounter.loop();
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.loop();
 #endif
 #ifdef SSD1306_DISPLAY
   display.loop();
+#endif
+#ifdef GEIGER_NEOPIXEL
+  neopixel.loop();
 #endif
   ArduinoOTA.handle();
 }

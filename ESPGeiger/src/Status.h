@@ -57,7 +57,10 @@ struct Status {
   const char* version = RELEASE_VERSION;
   const char* git_version = GIT_VERSION;
   bool high_cpm_alarm = false;
+  bool high_cpm_warning = false;
   bool ntp_synced = false;
+  int cpm_warning = 50;
+  int cpm_alert = 100;
   Smoothed <float> geigerTicks;
   Smoothed <float> geigerTicks5;
   Smoothed <float> geigerTicks15;
