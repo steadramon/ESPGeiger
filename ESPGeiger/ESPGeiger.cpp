@@ -201,7 +201,9 @@ void setup()
   cManager.autoConnect();
   delay(100);
   cManager.startWebPortal();
-
+#ifdef GEIGER_SDCARD
+  sdcard.begin();
+#endif
 #ifdef ESPGEIGER_HW
   hardware.begin();
 #endif
