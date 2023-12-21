@@ -129,7 +129,7 @@ void Counter::begin() {
 #ifdef GEIGER_TEST_FAST
   timer1_write(600);
 #else
-  timer1_write(5000000);
+  timer1_write(8000000);
 #endif
   #else
 #ifdef GEIGER_TEST_FAST
@@ -194,19 +194,27 @@ void Counter::handleSerial(char* input)
 #endif
 }
 
-void Counter::loop() {
-#ifndef DISABLE_BLIP
-  if (status.last_blip != _last_blip) {
-    status.last_blip = _last_blip;
-#ifdef ESPGEIGER_HW
+void Counter::blip_led() {
+#ifndef DISABLE_INTERNAL_BLIP
+    status.led.Blink(20,20);
+#endif
+#ifdef GEIGER_BLIPLED
     if (status.blip_led.IsRunning() == false) {
       status.blip_led.Blink(2,1).Repeat(1);
     }
-#else
-    status.led.Blink(20,20);
+#endif
+#ifdef GEIGER_NEOPIXEL
+    neopixel.blip();
+#endif
+}
+
+void Counter::loop() {
+  if (status.last_blip != _last_blip) {
+    status.last_blip = _last_blip;
+#ifndef DISABLE_BLIP
+    this->blip_led();
 #endif
   }
-#endif
 #if GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   unsigned long int secidx = (millis() / 1000);
   if (secidx != _last_secidx) {
@@ -223,6 +231,7 @@ void Counter::loop() {
     if (geigerPort.overflow()) {
       Log::console(PSTR("Counter: Serial Overflow %d"), geigerPort.available());
     }
+    optimistic_yield(100 * 1000);
     char input = geigerPort.read();
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
