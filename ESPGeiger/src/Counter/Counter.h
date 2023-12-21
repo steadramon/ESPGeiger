@@ -21,7 +21,13 @@
 #define COUNTER_H
 #include <Arduino.h>
 #include "../Status.h"
+#include "../NTP/NTP.h"
 #include <Ticker.h>
+
+#ifdef GEIGER_NEOPIXEL
+#include "../NeoPixel/NeoPixel.h"
+extern NeoPixel neopixel;
+#endif
 
 #ifndef GEIGER_RATIO
   #define GEIGER_RATIO 151.0
@@ -353,6 +359,50 @@ static void handleSecondTick() {
   if (secidx % 15 == 0) {
     status.geigerTicks15.add(status.geigerTicks5.get());
   }
+  float our_cpm = status.geigerTicks.get()*60;
+  if (status.cpm_warning < our_cpm) {
+    status.high_cpm_warning = true;
+  } else {
+    status.high_cpm_warning = false;
+  }
+  if (status.cpm_alert < our_cpm ) {
+    status.high_cpm_alarm = true;
+  } else {
+    status.high_cpm_alarm = false;
+  }
+
+#ifdef GEIGERTESTMODE
+  secidx = (millis() / 1000) % 240;
+  if (secidx == 0) {
+#if GEIGER_TYPE == GEIGER_TYPE_TEST
+    timer1_write(8000000);
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+    timer1_write(300);
+#endif
+  }
+  if (secidx == 60) {
+#if GEIGER_TYPE == GEIGER_TYPE_TEST
+    timer1_write(5000000);
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+    timer1_write(300);
+#endif
+  }
+  if (secidx == 120) {
+#if GEIGER_TYPE == GEIGER_TYPE_TEST
+    timer1_write(1000000);
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+    timer1_write(300);
+#endif
+  }
+  if (secidx == 180) {
+#if GEIGER_TYPE == GEIGER_TYPE_TEST
+    timer1_write(1000);
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+    timer1_write(300);
+#endif
+  }
+
+#endif
 };
 #endif
 
@@ -375,6 +425,7 @@ class Counter {
       void set_tx_pin(int pin);
       int get_rx_pin();
       int get_tx_pin();
+      void blip_led();
       void begin();
       const char* geiger_model() { return GEIGER_MODEL; };
     private:
