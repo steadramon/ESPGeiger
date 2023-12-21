@@ -45,8 +45,8 @@
 #endif
 
 #ifdef ESPGEIGER_HW
-#ifndef BLIPLED
-#define BLIPLED 15
+#ifndef GEIGER_BLIPLED
+#define GEIGER_BLIPLED 15
 #endif
 #endif
 
@@ -98,8 +98,10 @@ struct Status {
   bool enable_oled_timeout = true;
   unsigned long oled_timeout = 0;
 #endif
-#ifdef BLIPLED
-  JLed blip_led = JLed(BLIPLED).Stop();
+#ifdef GEIGER_BLIPLED
+  JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
+#endif
+#ifdef ESPGEIGER_HW
   Smoothed <float> hvReading;
 #endif
 };
