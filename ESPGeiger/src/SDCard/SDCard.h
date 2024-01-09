@@ -22,12 +22,14 @@
 #include <SPI.h>
 #include <SdFat.h>
 #include "../Status.h"
+#include "../Counter/Counter.h"
 
-#ifndef SDCARD_CS
-#define SDCARD_CS 16
+#ifndef GEIGER_SDCARD_CS
+#define GEIGER_SDCARD_CS 16
 #endif
 
 extern Status status;
+extern Counter gcounter;
 static SdFat32 sd;
 
 class SDCard {

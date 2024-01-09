@@ -35,7 +35,7 @@ SDCard::SDCard() {
 void SDCard::begin()
 {
   Log::console(PSTR("SDCard: Init ..."));
-  if (!sd.begin(16))
+  if (!sd.begin(GEIGER_SDCARD_CS))
   {
     Log::console(PSTR("SDCard: Init failed ... Please check wiring or insert a card."));
     return;
@@ -97,7 +97,7 @@ void SDCard::loop()
     if (myDataFile)
     {
       if (!fileExists) {
-        myDataFile.print(F("Unixtime,CPM,CPM5,CPM15"));
+        myDataFile.print(F("Unixtime,CPM,μSv/h,CPM5,CPM15"));
 #ifdef SDCARD_EXTENDEDLOG
         myDataFile.print(F(",FreeMem"));
 #endif
@@ -105,11 +105,13 @@ void SDCard::loop()
       }
       myDataFile.print(time(NULL));
       myDataFile.print(F(","));
-      myDataFile.print(status.geigerTicks.get()*60.0, 2);
+      myDataFile.print(gcounter.get_cpmf(), 2);
       myDataFile.print(F(","));
-      myDataFile.print(status.geigerTicks5.get()*60.0, 2);
+      myDataFile.print(gcounter.get_usv(), 4);
       myDataFile.print(F(","));
-      myDataFile.print(status.geigerTicks15.get()*60.0, 2);
+      myDataFile.print(gcounter.get_cpm5f(), 2);
+      myDataFile.print(F(","));
+      myDataFile.print(gcounter.get_cpm15f(), 2);
 #ifdef SDCARD_EXTENDEDLOG
       myDataFile.print(F(","));
       myDataFile.print(ESP.getFreeHeap());
