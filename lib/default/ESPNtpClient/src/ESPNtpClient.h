@@ -62,8 +62,8 @@ public:
     * @return Uptime
     */
     time_t getUptime () {
-        uptime = uptime + (::millis () - uptime);
-        return uptime / 1000;
+        uptime = uptime + ((::millis ()/1000) - uptime);
+        return uptime;
     }
 
     /**
