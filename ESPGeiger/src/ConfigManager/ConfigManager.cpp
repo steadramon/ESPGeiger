@@ -201,6 +201,8 @@ void ConfigManager::handleRoot() {
   page = FPSTR(HTTP_ROOT_MAIN);
 #ifdef ESPGEIGER_HW
   page.replace(FPSTR(T_t),"ESPGeiger-HW");
+#elif defined(ESPGEIGER_LT)
+  page.replace(FPSTR(T_t),"ESPGeiger-Log");
 #else
   page.replace(FPSTR(T_t),thingName);
 #endif
