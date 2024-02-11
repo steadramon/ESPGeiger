@@ -75,54 +75,70 @@ void SDCard::loop()
   if (status.ntp_synced == false) {
     return;
   }
-  unsigned long millisnow = millis();
+
+  time_t currentTime = time (NULL);
+  if (currentTime > 0) {
+    struct tm *timeinfo = localtime (&currentTime);
+    if (timeinfo->tm_sec != 0) {
+      return;
+    }
+  } else {
+    return;
+  }
+
+  if (!sd.chdir()) {
+    Log::console(PSTR("SDCard: Cannot chdir to root"));
+    return;
+  }
+
   bool forceCleanup = false;
-  if (millisnow - lastLog >= logInterval) {
-    lastLog = millisnow;
-    char timeStr[23];
+  char timeStr[23];
+  char dirStr[20];
 
-    time_t currentTime = time (NULL);
-    if (currentTime > 0) {
-        struct tm *timeinfo = localtime (&currentTime);
-        snprintf_P (timeStr, sizeof (timeStr), "%04d%02d%02d.csv", 1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday);
-    } else {
-        snprintf_P (timeStr, sizeof (timeStr), "log.csv");
-    }
-    bool fileExists = false;
-    if(sd.exists(timeStr)) {
-      fileExists = true;
-    }
+  struct tm *timeinfo = localtime (&currentTime);
+  snprintf_P (timeStr, sizeof (timeStr), "%04d%02d%02d.csv", 1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday);
+  snprintf_P (dirStr, sizeof (dirStr), "%04d%02d", 1900+timeinfo->tm_year, timeinfo->tm_mon+1);
 
-    myDataFile.open(timeStr, FILE_WRITE);
-    if (myDataFile)
-    {
-      if (!fileExists) {
-        myDataFile.print(F("Unixtime,CPM,μSv/h,CPM5,CPM15"));
+  if (!sd.exists(dirStr)) {
+    sd.mkdir(dirStr);
+  }
+  sd.chdir(dirStr);
+
+  bool fileExists = false;
+  if(sd.exists(timeStr)) {
+    fileExists = true;
+  }
+
+  myDataFile.open(timeStr, FILE_WRITE);
+  if (myDataFile)
+  {
+    if (!fileExists) {
+      myDataFile.print(F("Unixtime,CPM,μSv/h,CPM5,CPM15"));
 #ifdef SDCARD_EXTENDEDLOG
-        myDataFile.print(F(",FreeMem"));
-#endif
-        myDataFile.println();
-      }
-      myDataFile.print(time(NULL));
-      myDataFile.print(F(","));
-      myDataFile.print(gcounter.get_cpmf(), 2);
-      myDataFile.print(F(","));
-      myDataFile.print(gcounter.get_usv(), 4);
-      myDataFile.print(F(","));
-      myDataFile.print(gcounter.get_cpm5f(), 2);
-      myDataFile.print(F(","));
-      myDataFile.print(gcounter.get_cpm15f(), 2);
-#ifdef SDCARD_EXTENDEDLOG
-      myDataFile.print(F(","));
-      myDataFile.print(ESP.getFreeHeap());
+      myDataFile.print(F(",FreeMem"));
 #endif
       myDataFile.println();
-      myDataFile.close();
-    } else {
-      Log::console(PSTR("SDCard: Unable to create file."));
-      forceCleanup = true;
     }
+    myDataFile.print(time(NULL));
+    myDataFile.print(F(","));
+    myDataFile.print(gcounter.get_cpmf(), 2);
+    myDataFile.print(F(","));
+    myDataFile.print(gcounter.get_usv(), 4);
+    myDataFile.print(F(","));
+    myDataFile.print(gcounter.get_cpm5f(), 2);
+    myDataFile.print(F(","));
+    myDataFile.print(gcounter.get_cpm15f(), 2);
+#ifdef SDCARD_EXTENDEDLOG
+    myDataFile.print(F(","));
+    myDataFile.print(ESP.getFreeHeap());
+#endif
+    myDataFile.println();
+    myDataFile.close();
+  } else {
+    Log::console(PSTR("SDCard: Unable to create file."));
+    forceCleanup = true;
   }
+
   if ((millis() - lastClean >= 86400*1000) || (forceCleanup)) {
     lastClean = millis();
     uint64_t freespace = sd.freeClusterCount() * sd.sectorsPerCluster() * 0.000512;
