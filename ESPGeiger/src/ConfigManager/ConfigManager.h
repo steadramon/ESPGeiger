@@ -38,7 +38,6 @@ extern SSD1306Display display;
 extern Status status;
 extern Counter gcounter;
 extern NTP_Client ntpclient;
-
 constexpr auto MQTT_SERVER_LENGTH = 31;
 constexpr auto MQTT_PORT_LENGTH = 6;
 constexpr auto MQTT_USER_LENGTH = 31;
@@ -120,7 +119,11 @@ public:
     return (char*)"ESPG-HW";
 #else
 #ifdef ESPGEIGER_LT
+    #ifdef GEIGER_SDCARD
+    return (char*)"ESPG-LOG";
+    #else
     return (char*)"ESPG-LT";
+    #endif
 #else
     return (char*)"ESP8266";
 #endif
