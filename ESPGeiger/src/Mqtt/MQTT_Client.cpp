@@ -114,17 +114,17 @@ void MQTT_Client::loop()
 
     publish(buildTopic(teleTopic, topicStatus).c_str(), buffer, false);
 
-    publish(buildTopic(statTopic, PSTR("CPM")).c_str(), String(status.geigerTicks.get()*60.0).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPM")).c_str(), String(gcounter.get_cpmf()).c_str(), false);
 
     publish(buildTopic(statTopic, PSTR("uSv")).c_str(), String(gcounter.get_usv()).c_str(), false);
 
 #ifndef DISABLE_MQTT_CPS
-    publish(buildTopic(statTopic, PSTR("CPS")).c_str(), String(status.geigerTicks.get()).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPS")).c_str(), String(gcounter.get_cps()).c_str(), false);
 #endif
 
-    publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), String(status.geigerTicks5.get()*60.0).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), String(gcounter.get_cpm5f()).c_str(), false);
 
-    publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), String(status.geigerTicks15.get()*60.0).c_str(), false);
+    publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), String(gcounter.get_cpm15f()).c_str(), false);
 
 #ifdef ESPGEIGER_HW
     publish(buildTopic(statTopic, PSTR("HV")).c_str(), String(status.hvReading.get()).c_str(), false);
