@@ -106,7 +106,7 @@ public:
 		//if(c<NUM_CUSTOM_ICONS && custom_chars[c]!=NULL) {
 		//	drawXbm(cx, cy, fontWidth, fontHeight, (const byte*) custom_chars[c]);
 		//} else {
-			drawString(cx, cy, String((char)c));
+		drawString(cx, cy, String((char)c));
 		//}
 		cx += fontWidth;
 		display();	// todo: not very efficient
@@ -257,7 +257,7 @@ private:
 	uint8_t fontWidth, fontHeight;
     unsigned long _last_update = 0;
     unsigned long _last_full = 0;
-	unsigned long _lcd_timeout = 60000;
+	unsigned long _lcd_timeout = 300000;
 };
 
 #endif
