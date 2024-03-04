@@ -45,7 +45,7 @@ void PushButton::loop()
       }
     }
 #endif
-    status.high_cpm_alarm = false;
+    gcounter.reset_alarm();
     status.button_pushed = false;
   }
   pbutton.read();
