@@ -23,175 +23,118 @@
 
 Counter::Counter() {
   status.geiger_model = GEIGER_MODEL;
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
+  geigerinput = new GeigerPulse();
+#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
+  geigerinput = new GeigerSerial();
+#elif GEIGER_TYPE == GEIGER_TYPE_TEST
+  geigerinput = new GeigerTest();
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+  geigerinput = new GeigerTestPulse();
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+  geigerinput = new GeigerTestSerial();
+#endif
+}
+
+void Counter::secondticker() {
+  geigerinput->secondticker();
+
+  int eventCounter = geigerinput->collect();
+  unsigned long int secidx = (millis() / 1000) % 60;
+  //Log::console(PSTR("Counter: Events - %d - %d"), eventCounter, secidx);
+  geigerTicks.add(eventCounter);
+  total_clicks += eventCounter;
+
+  cpm_history.push(get_cpm());
+
+  if (secidx % 5 == 0) {
+    geigerTicks5.add(geigerTicks.get());
+  }
+  if (secidx % 15 == 0) {
+    geigerTicks15.add(geigerTicks5.get());
+  }
+
+  time_t currentTime = time (NULL);
+  if (currentTime > 0) {
+    struct tm *timeinfo = gmtime (&currentTime);
+#ifdef GEIGERTESTMODE
+    if (timeinfo->tm_sec == 0) {
+#else
+    if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
+#endif
+      day_hourly_history.push(clicks_hour);
+      clicks_hour = 0;
+      if (timeinfo->tm_hour == 0) {
+        clicks_yesterday = clicks_today;
+        clicks_today = 0;
+      }
+    }
+  }
+
+  clicks_today += eventCounter;
+  clicks_hour += eventCounter;
+
+  if (_cpm_warning < get_cpm()) {
+    _bool_cpm_warning = true;
+  } else {
+    _bool_cpm_warning = false;
+  }
+  if (_cpm_alert < get_cpm() ) {
+    _bool_cpm_alert = true;
+  } else {
+    _bool_cpm_alert = false;
+  }
 }
 
 float Counter::get_cps() {
-  return status.geigerTicks.get();
+  return geigerTicks.get();
 }
 
 int Counter::get_cpm() {
-  return status.geigerTicks.get()*60;
+  return geigerTicks.get()*60;
 }
 
 float Counter::get_cpmf() {
-  return status.geigerTicks.get()*60.0;
+  return geigerTicks.get()*60.0;
 }
 
 int Counter::get_cpm5() {
-  return status.geigerTicks5.get()*60;
+  return geigerTicks5.get()*60;
 }
 
 float Counter::get_cpm5f() {
-  return status.geigerTicks5.get()*60.0;
+  return geigerTicks5.get()*60.0;
 }
 
 int Counter::get_cpm15() {
-  return status.geigerTicks15.get()*60;
+  return geigerTicks15.get()*60;
 }
 
 float Counter::get_cpm15f() {
-  return status.geigerTicks15.get()*60.0;
+  return geigerTicks15.get()*60.0;
 }
 
 void Counter::set_ratio(float ratio) {
   _ratio = ratio;
 }
 
-void Counter::set_rx_pin(int pin) {
-  _geiger_rxpin = pin;
-}
-void Counter::set_tx_pin(int pin) {
-  _geiger_txpin = pin;
-}
-
-int Counter::get_rx_pin() {
-  return _geiger_rxpin;
-}
-
-int Counter::get_tx_pin() {
-  return _geiger_txpin;
-}
-
 float Counter::get_usv() {
-  float avgcpm = status.geigerTicks.get()*60;
+  float avgcpm = geigerTicks.get()*60;
   return avgcpm/_ratio;
 }
 
-#if GEIGER_TYPE == GEIGER_TYPE_PULSE || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-void Counter::setup_pulse() {
-#ifdef USE_PCNT && ESP32
-  Log::console(PSTR("Counter: PCNT RXPIN: %d"), _geiger_rxpin);
-  pcnt_config_t pcntConfig = {
-    .pulse_gpio_num = _geiger_rxpin,
-    .ctrl_gpio_num = -1,
-    .pos_mode = PCNT_CHANNEL_EDGE_ACTION_HOLD,
-    .neg_mode = PCNT_CHANNEL_EDGE_ACTION_INCREASE,
-    .counter_h_lim = PCNT_HIGH_LIMIT,
-    .counter_l_lim = PCNT_LOW_LIMIT,
-    .unit = PCNT_UNIT,
-    .channel = PCNT_CHANNEL,
-  };
-  pcnt_unit_config(&pcntConfig);
-  pcnt_counter_pause(PCNT_UNIT);
-  #ifdef PCNT_FILTER
-  pcnt_set_filter_value(PCNT_UNIT, PCNT_FILTER);
-  pcnt_filter_enable(PCNT_UNIT);
-  #endif
-  gpio_set_pull_mode((gpio_num_t)_geiger_rxpin, GPIO_PULLDOWN_ONLY);
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
-#else
-  Log::console(PSTR("Counter: Interrupt RXPIN: %d"), _geiger_rxpin);
-  pinMode(_geiger_rxpin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(_geiger_rxpin), count, FALLING);
-#endif
+float Counter::get_millirem() {
+  float avgcpm = geigerTicks.get()*60;
+  return (avgcpm/_ratio)/10;
 }
-#endif
 
 void Counter::begin() {
   Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), GEIGER_CPM_COUNT, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
-  status.geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
-  status.geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
-  status.geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
+  geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
+  geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
+  geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
 
-#if GEIGER_TYPE == GEIGER_TYPE_PULSE
-  Log::console(PSTR("Counter: Setting up pulse geiger ..."));
-  setup_pulse();
-#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-  Log::console(PSTR("Counter: Setting up %s serial geiger ..."), GEIGER_MODEL);
-  Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, GEIGER_BAUDRATE);
-  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
-#elif GEIGER_TYPE == GEIGER_TYPE_TEST
-  Log::console(PSTR("Counter: Setting up test geiger ..."));
-  #ifdef ESP8266
-  timer1_attachInterrupt(count);
-  timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-#ifdef GEIGER_TEST_FAST
-  timer1_write(600);
-#else
-  timer1_write(8000000);
-#endif
-  #else
-#ifdef GEIGER_TEST_FAST
-  hwtimer = timerBegin(3, 80, true);
-#else
-  hwtimer = timerBegin(3, 80000000, true);
-#endif
-  timerAlarmEnable(hwtimer);
-  #endif
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  Log::console(PSTR("Counter: Setting up test pulse geiger ..."));
-  setup_pulse();
-  Log::console(PSTR("Counter: Test TXPIN: %d"), _geiger_txpin);
-  pinMode(_geiger_txpin, OUTPUT);
-  #ifdef ESP8266
-  timer1_attachInterrupt(sendpulse);
-  timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-  timer1_write(300);
-  #else
-  hw_timer_t * timer = NULL;
-  timer = timerBegin(0, 80, true);
-  timerAttachInterrupt(timer, &sendpulse, true);
-  timerAlarmWrite(timer, 300, true);
-  timerAlarmEnable(timer);
-  #endif
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  Log::console(PSTR("Counter: Setting up test %s serial geiger ..."), GEIGER_MODEL);
-  Log::console(PSTR("Counter: RXPIN: %d BAUD: %d"), _geiger_rxpin, GEIGER_BAUDRATE);
-  Log::console(PSTR("Counter: TXPIN: %d BAUD: %d"), _geiger_txpin, GEIGER_BAUDRATE);
-  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _geiger_rxpin, _geiger_txpin, false);
-#endif
-
-  geigerTicker.attach(1, handleSecondTick);
-}
-
-void Counter::handleSerial(char* input)
-{
-#if GEIGER_TYPE == GEIGER_TYPE_SERIAL || GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  int _scpm;
-#if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
-  int _scps;
-    int n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
-    if (n == 2) {
-#else
-    int n = sscanf(input, "%d\n", &_scpm);
-    if (n == 1) {
-#endif
-      Log::debug(PSTR("Counter: Loop - %d"), _scpm);
-#ifndef DISABLE_SERIALBLIP
-      _last_blip = ESP.getCycleCount();
-#endif
-      if (_handlesecond)
-        return;
-#ifdef ESP32
-  portENTER_CRITICAL(&timerMux);
-#endif
-      eventCounter = _scpm;
-#ifdef ESP32
-  portEXIT_CRITICAL(&timerMux);
-#endif
-    }
-#endif
+  geigerinput->begin();
 }
 
 void Counter::blip_led() {
@@ -203,45 +146,16 @@ void Counter::blip_led() {
       status.blip_led.Blink(2,1).Repeat(1);
     }
 #endif
-#ifdef GEIGER_NEOPIXEL
-    neopixel.blip();
-#endif
+
 }
 
 void Counter::loop() {
-  if (status.last_blip != _last_blip) {
-    status.last_blip = _last_blip;
+  geigerinput->loop();
+
+  if (status.last_blip != geigerinput->last_blip()) {
+    status.last_blip = geigerinput->last_blip();
 #ifndef DISABLE_BLIP
     this->blip_led();
 #endif
   }
-#if GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  unsigned long int secidx = (millis() / 1000);
-  if (secidx != _last_secidx) {
-    _last_secidx = secidx;
-  #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
-    geigerPort.println(PSTR("CPS, 1, CPM, 60, uSv/hr, 1.23, INST"));
-  #else
-    geigerPort.println(PSTR("60"));
-  #endif
-  }
-#endif
-#if GEIGER_TYPE == GEIGER_TYPE_SERIAL || GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  if (geigerPort.available() > 0) {
-    if (geigerPort.overflow()) {
-      Log::console(PSTR("Counter: Serial Overflow %d"), geigerPort.available());
-    }
-    optimistic_yield(100 * 1000);
-    char input = geigerPort.read();
-    _serial_buffer[_serial_idx++] = input;
-    if (input == '\n') {
-      handleSerial(_serial_buffer);
-      _serial_idx = 0;
-    }
-
-    if (_serial_idx > 52) {
-      _serial_idx = 0;
-    }
-  }
-#endif
 }

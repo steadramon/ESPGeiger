@@ -20,393 +20,34 @@
 #ifndef COUNTER_H
 #define COUNTER_H
 #include <Arduino.h>
+#include <CircularBuffer.h>
 #include "../Status.h"
 #include "../NTP/NTP.h"
-#include <Ticker.h>
+#include <Smoothed.h>
 
-#ifdef GEIGER_NEOPIXEL
-#include "../NeoPixel/NeoPixel.h"
-extern NeoPixel neopixel;
+#include "../GeigerInput/GeigerInput.h"
+
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
+#include "../GeigerInput/Type/Pulse.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
+#include "../GeigerInput/Type/Serial.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TEST
+#include "../GeigerInput/Type/Test.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+#include "../GeigerInput/Type/TestPulse.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+#include "../GeigerInput/Type/TestSerial.h"
 #endif
 
 #ifndef GEIGER_RATIO
   #define GEIGER_RATIO 151.0
 #endif
 
-#define GEIGER_TYPE_PULSE 1
-#define GEIGER_TYPE_SERIAL 2
-#define GEIGER_TYPE_TEST 3
-#define GEIGER_TYPE_TESTPULSE 4
-#define GEIGER_TYPE_TESTSERIAL 5
-
-#ifndef GEIGER_TYPE
-#define GEIGER_TYPE GEIGER_TYPE_PULSE
-#endif
-
-#define GEIGER_SERIAL_CPM 1
-#define GEIGER_SERIAL_CPS 2
-
-#ifndef GEIGER_RXPIN
-#define GEIGER_RXPIN 13
-#endif
-
-#ifndef GEIGER_DEBOUNCE
-#define GEIGER_DEBOUNCE 500
-#endif
-
-#define GEIGER_STYPE_GC10 1
-#define GEIGER_STYPE_GC10NX 2
-#define GEIGER_STYPE_MIGHTYOHM 3
-
-#ifndef GEIGER_SERIALTYPE
-#define GEIGER_SERIALTYPE GEIGER_STYPE_GC10
-#endif
-
-#if GEIGER_TYPE == GEIGER_TYPE_SERIAL || GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-#if GEIGER_SERIALTYPE == GEIGER_STYPE_GC10
-  #ifndef GEIGER_BAUDRATE
-  #define GEIGER_BAUDRATE 9600
-  #endif
-  #ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "GC10"
-  #endif
-  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-#elif GEIGER_SERIALTYPE == GEIGER_STYPE_GC10NX
-  #ifndef GEIGER_BAUDRATE
-  #define GEIGER_BAUDRATE 115200
-  #endif
-  #ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "GC10Next"
-  #endif
-  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-#elif GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
-  #ifndef GEIGER_BAUDRATE
-  #define GEIGER_BAUDRATE 9600
-  #endif
-  #ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "MightyOhm"
-  #endif
-  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-#endif
-#endif
-
-static int _geiger_rxpin = GEIGER_RXPIN;
-
-#if GEIGER_TYPE == GEIGER_TYPE_PULSE
-  #ifndef GEIGER_MODEL
-    #define GEIGER_MODEL "genpulse"
-  #endif
-  #ifndef GEIGER_SERIAL_TYPE
-    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
-  #endif
-#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-  #ifndef GEIGER_BAUDRATE
-    #define GEIGER_BAUDRATE 115200
-  #endif
-  #ifndef GEIGER_SERIAL_TYPE
-    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-  #endif
-  #ifndef GEIGER_MODEL
-    #define GEIGER_MODEL "genserial"
-  #endif
-  #ifndef GEIGER_TXPIN
-    #define GEIGER_TXPIN -1
-  #endif
-
-static char _serial_buffer[64];
-static uint8_t _serial_idx = 0;
-#include <SoftwareSerial.h>
-static EspSoftwareSerial::UART geigerPort;
-#define IGNORE_PCNT
-#elif GEIGER_TYPE == GEIGER_TYPE_TEST
-  #ifndef GEIGER_MODEL
-    #define GEIGER_MODEL "test"
-  #endif
-  #ifndef GEIGER_SERIAL_TYPE
-    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
-  #endif
-  #define IGNORE_PCNT
-  #define GEIGERTESTMODE
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  #ifndef GEIGER_MODEL
-    #define GEIGER_MODEL "testpulse"
-  #endif
-  #ifndef GEIGER_SERIAL_TYPE
-    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
-  #endif
-  #ifndef GEIGER_TXPIN
-    #define GEIGER_TXPIN 12
-  #endif
-  #define GEIGERTESTMODE
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  #define GEIGERTESTMODE
-  #ifndef GEIGER_BAUDRATE
-    #define GEIGER_BAUDRATE 115200
-  #endif
-  #ifndef GEIGER_SERIAL_TYPE
-    #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-  #endif
-  #ifndef GEIGER_MODEL
-    #define GEIGER_MODEL "testserial"
-  #endif
-  #ifndef GEIGER_TXPIN
-    #define GEIGER_TXPIN 12
-  #endif
-static char _serial_buffer[64];
-static uint8_t _serial_idx = 0;
-#include <SoftwareSerial.h>
-static EspSoftwareSerial::UART geigerPort;
-#define IGNORE_PCNT
-static int _last_secidx = 0;
-  /* MightyOhm CPS, 1, CPM, 60, uSv/hr, 1.23, INST/FAST/SLOW\n */
-  /* GC10 60\n */
-#endif
-
-#ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "genpulse"
-#endif
-
-#ifndef GEIGER_TXPIN
-  #define GEIGER_TXPIN -1
-#endif
-
-#ifdef ESP32
-  #ifndef IGNORE_PCNT
-    #define USE_PCNT
-  #endif
-#endif
-
-#ifdef USE_PCNT
-extern "C" {
-  #include "soc/pcnt_struct.h"
-}
-#include <driver/pcnt.h>
-#define PCNT_HIGH_LIMIT 32767  // largest +ve value for int16_t.
-#define PCNT_LOW_LIMIT  0
-
-#define PCNT_UNIT PCNT_UNIT_0
-#define PCNT_CHANNEL PCNT_CHANNEL_0
-#endif
-
-#ifndef GEIGER_CPM_COUNT
-#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
-#define GEIGER_CPM_COUNT 60
-#else
-#define GEIGER_CPM_COUNT 60
-#endif
-#endif
-#ifndef GEIGER_CPM5_COUNT
-#define GEIGER_CPM5_COUNT 60
-#endif
-#ifndef GEIGER_CPM15_COUNT
-#define GEIGER_CPM15_COUNT 60
-#endif
-
-static volatile int eventCounter;
-static volatile unsigned long _last_blip;
-static unsigned long _debounce = microsecondsToClockCycles(GEIGER_DEBOUNCE);
-static int _geiger_txpin = GEIGER_TXPIN;
-
 extern Status status;
 
-static bool _waiting = false;
-
-#if GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-static unsigned long _out_last = 0;
-static unsigned long _out_between = _debounce/2;
-static int _pulse_state = 0;
-static void IRAM_ATTR sendpulse() {
-  unsigned long cycles = ESP.getCycleCount();
-  if (cycles - _out_last > _out_between) {
-    digitalWrite(_geiger_txpin, _pulse_state);
-    _pulse_state = !_pulse_state;
-    _out_last = cycles;
-  }
-}
-#endif
-
-static bool _handlesecond = false;
-
-#ifdef ESP32
-static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-static hw_timer_t * hwtimer = NULL;
-
-static void IRAM_ATTR count() {
-  unsigned long cycles = ESP.getCycleCount();
-  if (cycles - _last_blip > _debounce) {
-    portENTER_CRITICAL_ISR(&timerMux);
-    eventCounter++;
-    portEXIT_CRITICAL_ISR(&timerMux);
-    _last_blip = cycles;
-  }
-};
-
-static void IRAM_ATTR handleSecondTick() {
-  portENTER_CRITICAL_ISR(&timerMux);
-  uint32_t last_clicks = status.total_clicks;
-  _handlesecond = true;
-#ifdef USE_PCNT
-  int16_t pulseCount;
-  pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
-  pcnt_counter_clear(PCNT_UNIT);
-  eventCounter = pulseCount;
-#endif
-#if GEIGER_TYPE == GEIGER_TYPE_TEST && ESP32
-#ifdef GEIGER_TEST_FAST
-  eventCounter = timerRead(hwtimer)/600;
-#else
-  eventCounter = timerRead(hwtimer)/1200;
-#endif
-  timerRestart(hwtimer);
-  _last_blip = ESP.getCycleCount();
-#endif
-#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
-  status.geigerTicks.add((float)eventCounter/(float)60);
-  status.partial_clicks += (float)eventCounter/(float)60;
-#else
-  status.geigerTicks.add(eventCounter);
-  status.total_clicks += eventCounter;
-  eventCounter = 0;
-#endif
-  _handlesecond = false;
-  portEXIT_CRITICAL_ISR(&timerMux);
-
-  if (status.partial_clicks >= 1.0) {
-    status.total_clicks += (int)status.partial_clicks;
-    status.partial_clicks -= (int)status.partial_clicks;
-  }
-  int diff = (status.total_clicks - last_clicks);
-  time_t currentTime = time (NULL);
-  if (currentTime > 0) {
-    struct tm *timeinfo = gmtime (&currentTime);
-#ifdef GEIGERTESTMODE
-    if (timeinfo->tm_sec == 0) {
-#else
-    if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
-#endif
-      status.day_hourly_history.push(status.clicks_hour);
-      status.clicks_hour = 0;
-      if (timeinfo->tm_hour == 0) {
-        status.clicks_yesterday = status.clicks_today;
-        status.clicks_today = 0;
-      }
-    }
-  }
-  status.clicks_today += diff;
-  status.clicks_hour += diff;
-
-  unsigned long int secidx = (millis() / 1000) % 60;
-  if (secidx % 5 == 0) {
-    status.geigerTicks5.add(status.geigerTicks.get());
-  }
-  if (secidx % 15 == 0) {
-    status.geigerTicks15.add(status.geigerTicks5.get());
-  }
-};
-#else
-static void ICACHE_RAM_ATTR count() {
-  if (_handlesecond)
-    return;
-  unsigned long cycles = ESP.getCycleCount();
-  if (cycles - _last_blip > _debounce) {
-    eventCounter++;
-    _last_blip = cycles;
-  }
-};
-
-//static void ICACHE_RAM_ATTR handleSecondTick() {
-static void handleSecondTick() {
-  uint32_t last_clicks = status.total_clicks;
-  _handlesecond = true;
-#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
-  status.geigerTicks.add((float)eventCounter/(float)60);
-  status.partial_clicks += (float)eventCounter/(float)60;
-#else
-  status.geigerTicks.add(eventCounter);
-  status.total_clicks += eventCounter;
-  eventCounter = 0;
-#endif
-  _handlesecond = false;
-
-  if (status.partial_clicks >= 1.0) {
-    status.total_clicks += (int)status.partial_clicks;
-    status.partial_clicks -= (int)status.partial_clicks;
-  }
-  int diff = (status.total_clicks - last_clicks);
-  time_t currentTime = time (NULL);
-  if (currentTime > 0) {
-    struct tm *timeinfo = gmtime (&currentTime);
-#ifdef GEIGERTESTMODE
-    if (timeinfo->tm_sec == 0) {
-#else
-    if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
-#endif
-      status.day_hourly_history.push(status.clicks_hour);
-      status.clicks_hour = 0;
-      if (timeinfo->tm_hour == 0) {
-        status.clicks_yesterday = status.clicks_today;
-        status.clicks_today = 0;
-      }
-    }
-  }
-  status.clicks_today += diff;
-  status.clicks_hour += diff;
-
-  unsigned long int secidx = (millis() / 1000) % 60;
-  if (secidx % 5 == 0) {
-    status.geigerTicks5.add(status.geigerTicks.get());
-  }
-  if (secidx % 15 == 0) {
-    status.geigerTicks15.add(status.geigerTicks5.get());
-  }
-  float our_cpm = status.geigerTicks.get()*60;
-  if (status.cpm_warning < our_cpm) {
-    status.high_cpm_warning = true;
-  } else {
-    status.high_cpm_warning = false;
-  }
-  if (status.cpm_alert < our_cpm ) {
-    status.high_cpm_alarm = true;
-  } else {
-    status.high_cpm_alarm = false;
-  }
-
-#ifdef GEIGERTESTMODE
-  secidx = (millis() / 1000) % 240;
-  if (secidx == 0) {
-#if GEIGER_TYPE == GEIGER_TYPE_TEST
-    timer1_write(8000000);
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-    timer1_write(300);
-#endif
-  }
-  if (secidx == 60) {
-#if GEIGER_TYPE == GEIGER_TYPE_TEST
-    timer1_write(5000000);
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-    timer1_write(300);
-#endif
-  }
-  if (secidx == 120) {
-#if GEIGER_TYPE == GEIGER_TYPE_TEST
-    timer1_write(1000000);
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-    timer1_write(300);
-#endif
-  }
-  if (secidx == 180) {
-#if GEIGER_TYPE == GEIGER_TYPE_TEST
-    timer1_write(1000);
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-    timer1_write(300);
-#endif
-  }
-
-#endif
-};
-#endif
-
-static Ticker geigerTicker;
+#define GEIGER_CPM_COUNT 60
+#define GEIGER_CPM5_COUNT 60
+#define GEIGER_CPM15_COUNT 60
 
 class Counter {
     public:
@@ -420,17 +61,60 @@ class Counter {
       int get_cpm15();
       float get_cpm15f();
       float get_usv();
+      float get_millirem();
       void set_ratio(float ratio);
-      void set_rx_pin(int pin);
-      void set_tx_pin(int pin);
-      int get_rx_pin();
-      int get_tx_pin();
+      float get_ratio() {
+        return _ratio;
+      };
       void blip_led();
       void begin();
       const char* geiger_model() { return GEIGER_MODEL; };
+      void secondticker();
+      void set_rx_pin(int pin) {
+        geigerinput->set_rx_pin(pin);
+      };
+      void set_tx_pin(int pin) {
+        geigerinput->set_tx_pin(pin);
+      };
+      int get_rx_pin() {
+        return geigerinput->get_rx_pin();
+      };
+      int get_tx_pin() {
+        return geigerinput->get_tx_pin();
+      };
+      void set_warning(int val) {
+        _cpm_warning = val;
+      }
+      void set_alert(int val) {
+        _cpm_alert = val;
+      }
+      bool is_warning() {
+        return _bool_cpm_warning;
+      }
+      bool is_alert() {
+        return _bool_cpm_alert;
+      }
+      unsigned long last_blip() {
+        return geigerinput->last_blip();
+      }
+      void reset_alarm() {
+        _bool_cpm_alert = false;
+      }
+      unsigned long clicks_hour = 0;
+      unsigned long total_clicks = 0;
+      unsigned long clicks_today = 0;
+      unsigned long clicks_yesterday = 0;
+      CircularBuffer<int,45> cpm_history;
+      CircularBuffer<int,24> day_hourly_history;
     private:
-      void setup_pulse();
-      void handleSerial(char* input);
+      int _cpm_warning = 50;
+      int _cpm_alert = 100;
+      bool _bool_cpm_warning = false;
+      bool _bool_cpm_alert = false;
       float _ratio = GEIGER_RATIO;
+      Smoothed <float> geigerTicks;
+      Smoothed <float> geigerTicks5;
+      Smoothed <float> geigerTicks15;
+      GeigerInput* geigerinput;
 };
 #endif
