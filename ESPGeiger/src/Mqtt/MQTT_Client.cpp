@@ -91,7 +91,7 @@ void MQTT_Client::loop()
     doc["ssid"] = WiFi.SSID();
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
-    doc["c_total"] = status.total_clicks;
+    doc["c_total"] = gcounter.total_clicks;
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
     uint32_t heap_free;
