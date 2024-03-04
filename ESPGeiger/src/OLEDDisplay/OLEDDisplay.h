@@ -60,23 +60,22 @@ public:
     SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl);
 	void begin() {
 		//Wire.setClock(400000L);
-        init();
+		init();
 	#if OLED_FLIP
 		flipScreenVertically();
 	#endif
 		setBrightness(64);
-        setFont(ArialMT_Plain_10);
+		setFont(ArialMT_Plain_10);
 		fontWidth = 8;
 		fontHeight = 16;
-        clear();
-        drawXbm(0, 0, 51, 51, ESPLogo);
-        drawString(55, 10, PSTR("ESPGeiger"));
-        drawString(55, 24, status.version);
-        drawString(55, 42, PSTR("Connecting .."));
+		clear();
+		drawXbm(0, 0, 51, 51, ESPLogo);
+		drawString(55, 10, PSTR("ESPGeiger"));
+		drawString(55, 24, status.version);
+		drawString(55, 42, PSTR("Connecting .."));
 
 		display();	// todo: not very efficient
-        setFont(ArialMT_Plain_16);
-
+		setFont(ArialMT_Plain_16);
 	}
 	void clear() {
 		SSD1306Wire::clear();
@@ -129,12 +128,12 @@ public:
 		drawString(0, 10, PSTR("Setup - Connect to"));
 		drawString(0, 24, PSTR("WiFi -"));
 		drawString(0, 38, String(s));
-        display();
+		display();
 	}
 
-    void loop() {
-      unsigned long now = millis();
-      if (now - _last_update > 500) {
+	void loop() {
+	  unsigned long now = millis();
+	  if (now - _last_update > 500) {
 #ifdef GEIGER_PUSHBUTTON
 		if ((status.enable_oled_timeout) && (_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
 			if (status.oled_on) {
@@ -172,9 +171,9 @@ public:
 				page_three_full();
 			}
 		}
-        display();
-      }
-    }
+		display();
+	  }
+	}
 
 	void page_one_clear();
 
@@ -184,22 +183,22 @@ public:
 		setColor(WHITE);
 
 		drawLine(0, 63, 90, 63);
-	    drawLine(90, 35, 90, 63);
-		if (status.cpm_history.size() > 0) {
-			int histSize = status.cpm_history.size();
-			int maxValue = status.cpm_history[0];
-			int minValue = histSize > 1 ? status.cpm_history[0]:0;
-			for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
-				maxValue = status.cpm_history[i] > maxValue ? status.cpm_history[i] : maxValue;
-				minValue = status.cpm_history[i] < minValue ? status.cpm_history[i] : minValue;
+		drawLine(90, 35, 90, 63);
+		if (gcounter.cpm_history.size() > 0) {
+			int histSize = gcounter.cpm_history.size();
+			int maxValue = gcounter.cpm_history[0];
+			int minValue = histSize > 1 ? gcounter.cpm_history[0]:0;
+			for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
+				maxValue = gcounter.cpm_history[i] > maxValue ? gcounter.cpm_history[i] : maxValue;
+				minValue = gcounter.cpm_history[i] < minValue ? gcounter.cpm_history[i] : minValue;
 			}
 
 			if (minValue > 1) {
 				minValue = (int)(minValue * 0.9);
 			}
 			int xstart = 0;
-			if (status.cpm_history.capacity != histSize) {
-				xstart = (( 2*( status.cpm_history.capacity-histSize )));
+			if (gcounter.cpm_history.capacity != histSize) {
+				xstart = (( 2*( gcounter.cpm_history.capacity-histSize )));
 			}
 
 			if (maxValue == 0) {
@@ -208,8 +207,8 @@ public:
 				return;
 			}
 
-			for (decltype(status.cpm_history)::index_t i = 0; i < histSize; i++) {
-				int location = ((map((long)status.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;  
+			for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
+				int location = ((map((long)gcounter.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
 				drawRect(xstart+i*2, location, 2, (63 - location));
 			}
 			setFont(Open_Sans_Regular_Plain_10);
@@ -219,15 +218,15 @@ public:
 	}
 
 	void page_one_full() {
-        unsigned long now = millis();
+		unsigned long now = millis();
 		setFont(DialogInput_plain_17);
 		setColor(BLACK);
 		fillRect(45, 0, 72, 32);
 		setColor(WHITE);
 		drawString(45,0, String(gcounter.get_cpm()).c_str() );
-	    setFont(DialogInput_plain_12);
+		setFont(DialogInput_plain_12);
 		drawString(45,20, String(gcounter.get_usv()).c_str() );
-		if (status.cpm_history.capacity != status.cpm_history.size()) {
+		if (gcounter.cpm_history.capacity != gcounter.cpm_history.size()) {
 			drawString(98,2, PSTR("W") );
 		}
 		if (now - status.last_send < 1000) {
@@ -255,8 +254,8 @@ public:
 private:
 	uint8_t cx, cy;
 	uint8_t fontWidth, fontHeight;
-    unsigned long _last_update = 0;
-    unsigned long _last_full = 0;
+	unsigned long _last_update = 0;
+	unsigned long _last_full = 0;
 	unsigned long _lcd_timeout = 300000;
 };
 
