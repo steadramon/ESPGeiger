@@ -20,6 +20,7 @@
 
 #include <Arduino.h>
 #include "NeoPixel.h"
+#include "../Logger/Logger.h"
 
 NeoPixel::NeoPixel() {
 }
@@ -44,13 +45,29 @@ void NeoPixel::blip()
 
 void NeoPixel::blink(uint16 timer)
 {
-  float our_cpm = status.geigerTicks.get()*60;
-
+  float our_cpm = gcounter.get_cpmf();
+  float our_5cpm = gcounter.get_cpm5f();
   RgbColor rgb(0, colorSaturation, 0);
-  if (status.high_cpm_alarm == true) {
-    rgb = RgbColor(colorSaturation, 0, 0);
-  } else if (status.high_cpm_warning) {
-    rgb = RgbColor(colorSaturation, 128, 0);
+  if ((this->neoPixelMode == 2) && (our_5cpm > 0)) {
+    float ratio = gcounter.get_ratio();
+    float diff_ratio = ((our_cpm/ratio) / (our_5cpm/ratio)) - 1;
+    if (diff_ratio > 0.5) {
+      rgb = RgbColor(colorSaturation, 0, 0);
+    } else if (diff_ratio > 0.25) {
+      rgb = RgbColor(colorSaturation, colorSaturation, 0);
+    } else if (diff_ratio == 0) {
+      rgb = RgbColor(0, 0, colorSaturation);
+    }// else if (diff_ratio < 0.25) {
+    //  rgb = RgbColor(colorSaturation, 0, colorSaturation);
+    //}
+  } else {
+    if (gcounter.is_alert()) {
+      rgb = RgbColor(colorSaturation, 0, 0);
+    } else if (gcounter.is_warning()) {
+      rgb = RgbColor(colorSaturation, colorSaturation, 0);
+    } else if (our_cpm == 0 && our_5cpm == 0) {
+      rgb = RgbColor(0, 0, colorSaturation);
+    }
   }
 
   this->controller_->SetPixelColor(0, rgb);
@@ -69,6 +86,11 @@ void NeoPixel::loop()
     this->controller_->Show();
   }
   if (this->neoPixelMode == 1) {
+    if (last_blip != gcounter.last_blip()) {
+      last_blip = gcounter.last_blip();
+      blink(20);
+    }
+  } else {
     if (now - onTime >= 2000) {
       blink(20);
     }

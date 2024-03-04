@@ -23,8 +23,11 @@
 #include "../Status.h"
 #include <NeoPixelBus.h>
 #include "../NTP/NTP.h"
+#include "../Counter/Counter.h"
 
 extern Status status;
+extern Counter gcounter;
+
 #define colorSaturation 128
 
 #ifndef NEOPIXEL_MODE
@@ -50,9 +53,9 @@ class NeoPixel {
     void setup();
     void blip();
     void blink(uint16 timer);
-    const uint16_t PixelCount = 1; // this example assumes 4 pixels, making it smaller will cause a failure
-    const uint8_t PixelPin = NEOPIXEL_PIN;  // make sure to set this to the correct pin, ignored for Esp8266
-    uint32_t neoPixelMode = 1;
+    const uint16_t PixelCount = 1;
+    const uint8_t PixelPin = NEOPIXEL_PIN;
+    uint32_t neoPixelMode = 3;
   protected:
     NeoPixelBus<NeoRgbFeature, NeoEsp8266BitBangWs2812xMethod> *controller_{nullptr};
   private:
@@ -60,6 +63,7 @@ class NeoPixel {
     unsigned long onTime = 0;
     unsigned long offTime = 0;
     unsigned long blinkInterval = 2000;
+    unsigned long last_blip = 0;
 };
 #endif
 #endif
