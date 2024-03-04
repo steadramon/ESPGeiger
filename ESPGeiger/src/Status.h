@@ -23,7 +23,6 @@
 #include <Arduino.h>
 #include <Smoothed.h>
 #include "jled.h"
-#include <CircularBuffer.h>
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
@@ -56,28 +55,13 @@ struct Status {
   const char thingName[11] = "ESPGeiger";
   const char* version = RELEASE_VERSION;
   const char* git_version = GIT_VERSION;
-  bool high_cpm_alarm = false;
-  bool high_cpm_warning = false;
   bool ntp_synced = false;
-  int cpm_warning = 50;
-  int cpm_alert = 100;
-  Smoothed <float> geigerTicks;
-  Smoothed <float> geigerTicks5;
-  Smoothed <float> geigerTicks15;
-  CircularBuffer<int,45> cpm_history;
-  CircularBuffer<int,24> day_hourly_history;
   long start = 0;
   unsigned long start_time = 0;
   bool warmup = true;
   char* geiger_model = "";
-  unsigned long clicks_hour = 0;
-  unsigned long total_clicks = 0;
-  unsigned long clicks_today = 0;
-  unsigned long clicks_yesterday = 0;
-  float partial_clicks = 0;
   unsigned long last_send = 0;
   unsigned long last_blip = 0;
-  unsigned long last_beep = 0;
 #ifdef MQTTOUT
   bool mqtt_connected = false;
   unsigned long last_mqtt = 0;
