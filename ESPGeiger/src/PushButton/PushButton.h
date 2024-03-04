@@ -21,6 +21,7 @@
 #define PUSHBUTTON_H
 #include <Arduino.h>
 #include "../Status.h"
+#include "../Counter/Counter.h"
 #include <EasyButton.h>
 
 #ifndef PUSHBUTTON_PIN
@@ -28,6 +29,7 @@
 #endif
 
 extern Status status;
+extern Counter gcounter;
 static EasyButton pbutton(PUSHBUTTON_PIN);
 
 #ifdef ESP32
