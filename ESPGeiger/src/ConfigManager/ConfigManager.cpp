@@ -176,7 +176,7 @@ void ConfigManager::startWebPortal()
   gcounter.set_rx_pin(pin);
 #endif
 #if GEIGER_TXPIN != -1
-#ifndef RXPIN_BLOCKED
+#ifndef TXPIN_BLOCKED
   pin = atoi(ConfigManager::getParamValueFromID("geigerTX"));
   gcounter.set_tx_pin(pin);
 #endif
@@ -266,6 +266,8 @@ void ConfigManager::handleJsonReturn()
 
 void ConfigManager::handleClicksReturn()
 {
+  //https://www.madomotic.fr/index.php/2019/11/03/kit-diy-rac2-radiation-counter-v2-ou-geiger/
+
   DynamicJsonDocument json(512);
 
   json.clear();
@@ -717,12 +719,15 @@ void ConfigManager::saveParams()
   }
 #endif
 #if GEIGER_TXPIN != -1
+#ifndef TXPIN_BLOCKED
   int tx_pin = atoi(ConfigManager::getParamValueFromID("geigerTX"));
   if (tx_pin != gcounter.get_tx_pin()) {
     Log::console(PSTR("Config: Geiger TX Pin"));
     restart_required = true;
   }
 #endif
+#endif
+
   if (restart_required) {
     handleRestart();
   }
