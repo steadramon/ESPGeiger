@@ -55,7 +55,7 @@ class NeoPixel {
     void blink(uint16 timer);
     const uint16_t PixelCount = 1;
     const uint8_t PixelPin = NEOPIXEL_PIN;
-    uint32_t neoPixelMode = 3;
+    uint32_t neoPixelMode = 2;
   protected:
     NeoPixelBus<NeoRgbFeature, NeoEsp8266BitBangWs2812xMethod> *controller_{nullptr};
   private:
