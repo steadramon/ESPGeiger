@@ -24,10 +24,9 @@
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
-
+#include "src/Counter/Counter.h"
 #include "src/ConfigManager/ConfigManager.h"
 #include "src/Status.h"
-#include "src/Counter/Counter.h"
 #include "src/Mqtt/MQTT_Client.h"
 #include "src/Radmon/Radmon.h"
 #include "src/Thingspeak/Thingspeak.h"
@@ -139,13 +138,13 @@ int getQuality() {
 }
 void sTickerCB()
 {
+  gcounter.secondticker();
 #ifdef SERIALOUT
   serialout.loop();
 #endif
 #ifdef ESPGEIGER_HW
   hardware.loop();
 #endif
-  status.cpm_history.push(gcounter.get_cpm());
   if (status.warmup) {
     uint8_t uptime = NTP.getUptime() - status.start;
     if (uptime > 10) {
