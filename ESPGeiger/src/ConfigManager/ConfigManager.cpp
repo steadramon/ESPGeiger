@@ -34,7 +34,9 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("geigerRX", "RX Pin", String(GEIGER_RXPIN).c_str(), 12),
 #endif
 #if GEIGER_TXPIN != -1
+#ifndef TXPIN_BLOCKED
   WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 12),
+#endif
 #endif
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 10),
@@ -266,8 +268,6 @@ void ConfigManager::handleJsonReturn()
 
 void ConfigManager::handleClicksReturn()
 {
-  //https://www.madomotic.fr/index.php/2019/11/03/kit-diy-rac2-radiation-counter-v2-ou-geiger/
-
   DynamicJsonDocument json(512);
 
   json.clear();
