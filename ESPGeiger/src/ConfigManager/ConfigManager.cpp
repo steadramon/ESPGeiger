@@ -170,14 +170,16 @@ void ConfigManager::startWebPortal()
   int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
   display.setTimeout(lcdTO);
 #endif
-
+  int pin;
 #ifndef RXPIN_BLOCKED
-  int pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
+  pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
   gcounter.set_rx_pin(pin);
 #endif
 #if GEIGER_TXPIN != -1
+#ifndef RXPIN_BLOCKED
   pin = atoi(ConfigManager::getParamValueFromID("geigerTX"));
   gcounter.set_tx_pin(pin);
+#endif
 #endif
 
   WiFiManager::setWebServerCallback(std::bind(&ConfigManager::bindServerCallback, this));
@@ -251,12 +253,12 @@ void ConfigManager::handleJsonReturn()
     jsonBuffer,
     PSTR("{\"u\":\"%s\",\"c\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u}"),
     ConfigManager::getUptimeString(),
-    String(status.geigerTicks.get()*60.0).c_str(),
-    String(status.geigerTicks5.get()*60.0).c_str(),
-    String(status.geigerTicks15.get()*60.0).c_str(),
-    String(status.geigerTicks.get()).c_str(),
+    String(gcounter.get_cpmf()).c_str(),
+    String(gcounter.get_cpm5f()).c_str(),
+    String(gcounter.get_cpm15f()).c_str(),
+    String(gcounter.get_cps()).c_str(),
     ratioChar,
-    status.total_clicks
+    gcounter.total_clicks
   );
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
@@ -271,14 +273,14 @@ void ConfigManager::handleClicksReturn()
 #ifdef GEIGERTESTMODE
   json["roll"] = 60;
 #endif
-  last_day.add(status.clicks_hour);
-  int histSize = status.day_hourly_history.size();
-  for (decltype(status.day_hourly_history)::index_t i = histSize; i > 0; i--) {
-    int value = status.day_hourly_history[i-1];
+  last_day.add(gcounter.clicks_hour);
+  int histSize = gcounter.day_hourly_history.size();
+  for (decltype(gcounter.day_hourly_history)::index_t i = histSize; i > 0; i--) {
+    int value = gcounter.day_hourly_history[i-1];
     last_day.add(value);
   }
-  json["today"] = status.clicks_today;
-  json["yesterday"] = status.clicks_yesterday;
+  json["today"] = gcounter.clicks_today;
+  json["yesterday"] = gcounter.clicks_yesterday;
   json["ratio"] = ConfigManager::getParamValueFromID("geigerRatio");
   if (status.ntp_synced) {
     json["start"] = status.start_time;
