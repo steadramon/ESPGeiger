@@ -62,10 +62,12 @@ class GeigerTestPulse : public GeigerInput
     void begin();
     void loop();
     static void IRAM_ATTR pulseInterrupt();
+    void secondticker();
 #ifdef USE_PCNT && ESP32
     int collect();
 #endif
   private:
     bool _bool_pulse_state = false;
+    int _current_selection = 0;
 };
 #endif

@@ -63,10 +63,8 @@ void GeigerTestPulse::begin() {
   // 1666.66 CPS / 100000 CPM
   timer1_write(1500);
 #else
-  // 1 CPS / 60 CPM
-  //timer1_write(2500000);
-  // 1.66 CPS / 100 CPM
-  timer1_write(1500000);
+  // 0.5 CPS / 30 CPM
+  timer1_write(5000000);
 #endif
 #else
   hw_timer_t * timer = NULL;
@@ -92,6 +90,35 @@ void GeigerTestPulse::loop() {
 
 void GeigerTestPulse::pulseInterrupt() {
   _pulse_send = true;
+}
+
+void GeigerTestPulse::secondticker() {
+#ifndef GEIGER_TESTPULSE_DISABLE_ADAPTIVE
+  int selection = (millis()/90000)%4;
+  if (selection != _current_selection) {
+    _current_selection = selection;
+#ifdef ESP8266
+    switch (selection) {
+      case 1:
+        // 1 CPS / 60 CPM
+        timer1_write(2500000);
+        break;
+      case 2:
+        // 1.66 CPS / 100 CPM
+        timer1_write(1500000);
+        break;
+      case 3:
+        // 2 CPS / 120 CPM
+        timer1_write(1250000);
+        break;
+      default:
+        // 0.5 CPS / 30 CPM
+        timer1_write(5000000);
+        break;
+    }
+#endif
+  }
+#endif
 }
 
 #ifdef USE_PCNT && ESP32
