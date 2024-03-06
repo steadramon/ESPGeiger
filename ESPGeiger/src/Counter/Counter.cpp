@@ -91,7 +91,7 @@ float Counter::get_cps() {
 }
 
 int Counter::get_cpm() {
-  return geigerTicks.get()*60;
+  return (int)roundf(get_cpmf());
 }
 
 float Counter::get_cpmf() {
@@ -99,7 +99,7 @@ float Counter::get_cpmf() {
 }
 
 int Counter::get_cpm5() {
-  return geigerTicks5.get()*60;
+  return (int)roundf(get_cpm5f());
 }
 
 float Counter::get_cpm5f() {
@@ -107,7 +107,7 @@ float Counter::get_cpm5f() {
 }
 
 int Counter::get_cpm15() {
-  return geigerTicks15.get()*60;
+  return (int)roundf(get_cpm15f());
 }
 
 float Counter::get_cpm15f() {
