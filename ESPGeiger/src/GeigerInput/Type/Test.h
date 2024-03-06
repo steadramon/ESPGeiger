@@ -26,6 +26,10 @@
 #define GEIGER_MODEL "test"
 #endif
 
+#ifndef GEIGERTESTMODE
+#define GEIGERTESTMODE
+#endif
+
 #ifdef ESP32
 static hw_timer_t * hwtimer = NULL;
 #endif

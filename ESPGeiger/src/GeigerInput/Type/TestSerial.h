@@ -41,6 +41,10 @@ GC10 60\n
 #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
 #endif
 
+#ifndef GEIGERTESTMODE
+#define GEIGERTESTMODE
+#endif
+
 #include "../GeigerInput.h"
 
 class GeigerTestSerial : public GeigerInput

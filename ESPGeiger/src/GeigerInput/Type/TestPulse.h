@@ -59,6 +59,10 @@ static bool _pulse_send = false;
 #define GEIGER_TESTPULSE_ADJUSTTIME 90000
 #endif
 
+#ifndef GEIGERTESTMODE
+#define GEIGERTESTMODE
+#endif
+
 class GeigerTestPulse : public GeigerInput
 {
   public:
