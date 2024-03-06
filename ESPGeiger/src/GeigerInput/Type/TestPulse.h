@@ -55,6 +55,10 @@ extern "C" {
 
 static bool _pulse_send = false;
 
+#ifndef GEIGER_TESTPULSE_ADJUSTTIME
+#define GEIGER_TESTPULSE_ADJUSTTIME 90000
+#endif
+
 class GeigerTestPulse : public GeigerInput
 {
   public:

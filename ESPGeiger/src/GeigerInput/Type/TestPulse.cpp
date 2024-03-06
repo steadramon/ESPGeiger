@@ -94,7 +94,7 @@ void GeigerTestPulse::pulseInterrupt() {
 
 void GeigerTestPulse::secondticker() {
 #ifndef GEIGER_TESTPULSE_FIXEDCPM
-  int selection = (millis()/90000)%4;
+  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
     _current_selection = selection;
 #ifdef ESP8266
