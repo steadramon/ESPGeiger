@@ -223,9 +223,9 @@ public:
 		setColor(BLACK);
 		fillRect(45, 0, 72, 32);
 		setColor(WHITE);
-		drawString(45,0, String((int)gcounter.get_cpmf()).c_str() );
+		drawString(45,0, String(gcounter.get_cpm()).c_str() );
 		setFont(DialogInput_plain_12);
-		drawString(45,20, String(gcounter.get_usv()).c_str() );
+		drawString(45,20, String(gcounter.get_usv(),2).c_str() );
 		if (gcounter.cpm_history.capacity != gcounter.cpm_history.size()) {
 			drawString(98,2, PSTR("W") );
 		}
