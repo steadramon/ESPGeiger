@@ -93,7 +93,7 @@ void GeigerTestPulse::pulseInterrupt() {
 }
 
 void GeigerTestPulse::secondticker() {
-#ifndef GEIGER_TESTPULSE_DISABLE_ADAPTIVE
+#ifndef GEIGER_TESTPULSE_FIXEDCPM
   int selection = (millis()/90000)%4;
   if (selection != _current_selection) {
     _current_selection = selection;
