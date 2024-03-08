@@ -7,7 +7,11 @@ remote_theme: just-the-docs/just-the-docs
 permalink: pretty
 exclude: []
 
+avatar: /img/ESPGeiger.svg
+
 aux_links:
   "ESPGeiger on GitHub":
     - "//github.com/steadramon/ESPGeiger"
 
+# Makes Aux links open in a new tab. Default is false
+aux_links_new_tab: true
