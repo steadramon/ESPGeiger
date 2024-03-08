@@ -1,3 +1,7 @@
-title: "Remote theme example"
+title: "ESPGeiger"
+description: A Jekyll theme for documentation
+
 remote_theme: just-the-docs/just-the-docs
-color_scheme: "dark"
+
+permalink: pretty
+exclude: []
