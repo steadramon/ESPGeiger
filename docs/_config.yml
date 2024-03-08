@@ -1,5 +1,6 @@
 title: "ESPGeiger"
 description: A Jekyll theme for documentation
+color_scheme: nil
 
 remote_theme: just-the-docs/just-the-docs
 
