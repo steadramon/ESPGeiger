@@ -6,3 +6,8 @@ remote_theme: just-the-docs/just-the-docs
 
 permalink: pretty
 exclude: []
+
+aux_links:
+  "ESPGeiger on GitHub":
+    - "//github.com/steadramon/ESPGeiger"
+
