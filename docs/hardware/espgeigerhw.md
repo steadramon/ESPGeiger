@@ -8,6 +8,8 @@ nav_order: 3
 
 # ESPGeiger-HW
 
+<img src="/img/ESPGeiger-HW-v4.svg" width="100%">
+
 ## Compatible Geiger Muller Tubes
 
 The ESPGeiger-HW Geiger counter supports multiple Geiger Muller Tubes. The hardware features adjustable mounting positions for tubes with the following lengths:
@@ -30,3 +32,4 @@ STS-15 (CTC-15) | 111mm | 390-400V | - |
 J305 | 105mm | 400V | - | 
 J305 | 90mm | 400V | - | 
 M4011 | 90mm | 400V | - | 
+ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | 
