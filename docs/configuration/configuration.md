@@ -10,23 +10,23 @@ nav_order: 4
 
 There are a number of configuration options available through the ESPGeiger portal.
 
-# Hardware Settings
+## Hardware Settings
 
-# MQTT Configuration
+## MQTT Configuration
 
-| Setting name | Value Range | Description |
-|---|---|---|
-IP | String 0..32 | The IP address of the MQTT server
-Port | Int 0..65535 | The port of the MQTT server
-User | String 0..32 | The username used to connect to MQTT
-Password | String 0..32 | The password used to connect to MQTT
-Root Topic | String 0..32 | The root topic for MQTT. `{id}` is interpolated to the devices' ID.
+| Setting name | Value Range | Default | Description |
+|---|---|---|---|
+IP | String 0..32 | None | The IP address of the MQTT server
+Port | Int 0..65535 | `1883` |The port of the MQTT server
+User | String 0..32 | None | The username used to connect to MQTT
+Password | String 0..32 | None | The password used to connect to MQTT
+Root Topic | String 0..32 | `ESPGeiger-{id}` | The root topic for MQTT. `{id}` is interpolated to the devices' ID.
 
-# HA Autodiscovery Configuration
+## HA Autodiscovery Configuration
 
-# Radmon.org Configuration
+## Radmon.org Configuration
 
-# Thingspeak Configuration
+## Thingspeak Configuration
 
-# GMC Configuration
+## GMC Configuration
 
