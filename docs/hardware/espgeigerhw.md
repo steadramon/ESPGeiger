@@ -8,7 +8,7 @@ nav_order: 3
 
 # ESPGeiger-HW
 
-<img src="/img/ESPGeiger-HW-v4.svg" width="100%">
+<img src="../img/ESPGeiger-HW-v4.svg" width="100%">
 
 ## Compatible Geiger Muller Tubes
 
