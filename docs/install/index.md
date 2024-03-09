@@ -41,9 +41,16 @@ _OR_
 4. Browse to http://**ESPGeiger-XXXXXX**.local
   - Once connected to your home network you can now connect to it using the IP address assigned by your router or http://ESPGeiger-XXXXXX.local
 
-Congratulations 🎉 ESPGeiger is installed
+Congratulations! 🎉 ESPGeiger is installed
 
 ## Hardware connection
+
+Note: By default the RXPIN for ESPGeiger is set to `GPIO13` - this can be changed from the Web Portal.
+
+<img src="/img/D1mini-basicwiring.png" title="D1 mini basic wiring">
+
+- Connect the *Pulse Output* of the Geiger Counter to `GPIO13`
+- Connect the `GND` of the Geiger Counter to `GND`
 
 # Build Targets
 
