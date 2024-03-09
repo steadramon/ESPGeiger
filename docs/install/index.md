@@ -6,11 +6,9 @@ nav_order: 1
 has_children: true
 ---
 
-# Install
+# Quick Install Guide
 
-The easiest way to install is to visit the web based installed in your Chrome or Edge browser:
-
-https://install.espgeiger.com
+Below is the quick overview of installing, for more detailed information, please visit the sub pages.
 
 ## Requirements
 
@@ -28,7 +26,9 @@ _OR_
 
 - ESPGeigerHW Geiger Counter kit
 
-## Quick Install Guide
+## Web Install
+
+The easiest way to install is to visit the web based installed in your Chrome or Edge browser:
 
 1. Visit <https://install.espgeiger.com> and follow the instructions to install the latest firmware.
   - Select your Geiger Counter type from the dropdown list - in most cases this is "Pulse"
