@@ -12,6 +12,18 @@ The easiest way to install is to visit the web based installed in your Chrome or
 
 https://install.espgeiger.com
 
+## Requirements
+
+- ESP8266 / ESP32
+- A pulse based or compatible Serial Geiger Counter
+Optional:
+- OLED screen
+- ESPGeiger Log kit
+
+__OR__
+
+- ESPGeigerHW Geiger Counter kit
+
 # Build Targets
 
 Builds for both ESP8266 and ESP32 are built automatically by github on release.
