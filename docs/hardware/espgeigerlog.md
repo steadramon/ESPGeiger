@@ -8,12 +8,8 @@ nav_order: 3
 <style>
 #espghwimg {
   /* ensure 1:1 aspect ratio, tweak 50 to make SVG larger */
-  width: 50vmin;
-  height: 50vmin;  
-  /* set some maximum size (width and height need to match
-   * aspect ratio, 1:1 in this case */
-  max-width: 200px;
-  max-height: 200px;
+  width: 100%;
+  max-height: 300px;
 }
 </style>
 
@@ -31,4 +27,5 @@ nav_order: 3
 
 ---
 
-<img id="espghwimg" src="../img/ESPGeiger-Log-v1.svg" width="100%">
+<img id="espghwimg" src="../img/ESPGeiger-Log-v1.svg">
+{: .text-center }
