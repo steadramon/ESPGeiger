@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Pulse Geiger Counters
+title: Pulse Counters
 permalink: /hardware/pulse
 parent: Hardware
 nav_order: 1

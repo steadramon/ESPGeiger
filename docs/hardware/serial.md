@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Serial Geiger Counters
+title: Serial Counters
 permalink: /hardware/serial
 parent: Hardware
 nav_order: 2
@@ -20,6 +20,9 @@ MightyOhm Kit | 9600 | `CPS, ####, CPM, ####, uSv/hr, #.##, [INST/FAST/SLOW]\n` 
 
 ## Other Serial Counters
 
-The GQ Geiger Counter range of counters is currently unsupported due to the lack of access to a device. 
+At present the GQ Geiger Counter range of counters is unsupported due to the lack of access to a device. 
 
-GMC-320
+The information regarding the CQ protocol can be found here - https://www.gqelectronicsllc.com/download/GQ-RFC1201.txt
+
+- GMC-300 Plus V4.xx
+- GMC-320
