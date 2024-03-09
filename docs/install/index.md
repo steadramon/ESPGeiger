@@ -39,6 +39,7 @@ _OR_
 3. Configure ESPGeiger to connect to your home Wi-Fi network
   - Once connected the status LED of the ESP will go out
 4. Browse to http://**ESPGeiger-XXXXXX**.local
+  - Once connected to your home network you can now connect to it using the IP address assigned by your router or http://ESPGeiger-XXXXXX.local
 
 Congratulations 🎉 ESPGeiger is installed
 
