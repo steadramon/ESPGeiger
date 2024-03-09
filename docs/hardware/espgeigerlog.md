@@ -29,6 +29,8 @@ nav_order: 3
 <img id="espghwimg" src="../img/ESPGeiger-Log-v1.svg" alt="ESPGeiger Log board">
 {: .text-center }
 
+<a href="https://www.tindie.com/stores/espgeiger/?ref=offsite_badges&utm_source=sellers_paulstead&utm_medium=badges&utm_campaign=badge_medium"><img src="https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-mediums.png" alt="I sell on Tindie" width="150" height="78"></a>
+
 ESPGeiger Log is a hardware solution designed to seamlessly transform existing Geiger counters into Internet of Things (IoT) devices.
 
 ## Features

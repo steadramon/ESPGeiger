@@ -28,6 +28,8 @@ nav_order: 3
 <img id="espghwimg" src="../img/ESPGeiger-HW-v4.svg" alt="ESPGeigerHW board">
 {: .text-center }
 
+<a href="https://www.tindie.com/stores/espgeiger/?ref=offsite_badges&utm_source=sellers_paulstead&utm_medium=badges&utm_campaign=badge_medium"><img src="https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-mediums.png" alt="I sell on Tindie" width="150" height="78"></a>
+
 ## Features
 
 - ESP8266 MCU based Geiger Counter
@@ -36,6 +38,12 @@ nav_order: 3
 - High Voltage circuit adjustment and feedback
 - OLED display
 - Integrated light and audio feedback
+
+## Technical Specification
+
+- Supply Voltage: 5V DC
+- Supply Current: 130mA with WiFi at background
+- 2.4GHz WiFi
 
 ## Compatible Geiger Muller Tubes
 
