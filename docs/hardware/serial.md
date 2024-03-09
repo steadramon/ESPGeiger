@@ -14,9 +14,9 @@ Additional counters are a
 
 | Counter | Image | Serial Rate | Serial Example | Link |
 |---|---|---|---|---|
-NetIO GC10 | ![NetIO GC10](img/gc10.jpg) | 9600 | `60\n` | https://www.ebay.co.uk/usr/pelorymate
-NetIO GC10next | ![NetIO GC10next](img/gc10next.jpg) | 115200 | `60\n` | https://www.ebay.co.uk/usr/pelorymate
-MightyOhm Kit | ![MightyOhm](img/mightyohm.jpg) | 9600 | `CPS, ####, CPM, ####, uSv/hr, #.##, [INST/FAST/SLOW]\n` | https://www.tindie.com/stores/mightyohm/
+NetIO GC10 | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | 9600 | `60\n` | https://www.ebay.co.uk/usr/pelorymate
+NetIO GC10next | ![NetIO GC10next](img/gc10next.jpg#img-thumbnail) | 115200 | `60\n` | https://www.ebay.co.uk/usr/pelorymate
+MightyOhm Kit | ![MightyOhm](img/mightyohm.jpg#img-thumbnail) | 9600 | `CPS, ####, CPM, ####, uSv/hr, #.##, [INST/FAST/SLOW]\n` | https://www.tindie.com/stores/mightyohm/
 
 ## Other Serial Counters
 
