@@ -30,11 +30,13 @@ nav_order: 3
 
 <a href="https://www.tindie.com/stores/espgeiger/?ref=offsite_badges&utm_source=sellers_paulstead&utm_medium=badges&utm_campaign=badge_medium"><img src="https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-mediums.png" alt="I sell on Tindie" width="150" height="78"></a>
 
+ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGeiger.
+
 ## Features
 
 - ESP8266 MCU based Geiger Counter
 - Low 5V power requirements
-- Compatible with numerous Geiger-Muller tubes
+- Compatible with various Geiger-Muller tubes
 - High Voltage circuit adjustment and feedback
 - OLED display
 - Integrated light and audio feedback
