@@ -29,6 +29,8 @@ nav_order: 3
 <img id="espghwimg" src="../img/ESPGeiger-Log-v1.svg" alt="ESPGeiger Log board">
 {: .text-center }
 
+ESPGeiger Log is a hardware solution designed to seamlessly transform existing Geiger counters into Internet of Things (IoT) devices.
+
 ## Features
 
 - ESP8266 MCU based Geiger counter logger

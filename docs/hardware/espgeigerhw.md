@@ -31,7 +31,7 @@ nav_order: 3
 ## Features
 
 - ESP8266 MCU based Geiger Counter
-- Low power requirements
+- Low 5V power requirements
 - Compatible with numerous Geiger-Muller tubes
 - High Voltage circuit adjustment and feedback
 - OLED display
