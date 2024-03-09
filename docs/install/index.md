@@ -8,10 +8,11 @@ has_children: true
 
 # Quick Install Guide
 
-Below is the quick overview of installing, for more detailed information, please visit the sub pages.
+Below is the quick overview of installing ESPGeiger, for more detailed information, please visit the sub pages.
 
 ## Requirements
 
+- PC (Mac/Windows) with Chrome or Edge
 - ESP8266 or ESP32 development board
   - Wemos D1 Mini is recommended
 - A pulse or compatible serial based Geiger Counter
