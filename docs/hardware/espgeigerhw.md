@@ -8,6 +8,15 @@ nav_order: 3
 
 # ESPGeiger-HW
 
+<details open markdown="block">
+  <summary>
+    Table of contents
+  </summary>
+  {: .text-delta }
+1. TOC
+{:toc}
+</details>
+
 <img src="../img/ESPGeiger-HW-v4.svg" width="100%">
 
 ## Compatible Geiger Muller Tubes
