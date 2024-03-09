@@ -1,27 +1,30 @@
 ---
 layout: page
-title: ESPGeiger-HW
-permalink: /hardware/espgeiger-hw
+title: ESPGeigerHW
+permalink: /hardware/espgeigerhw
 parent: Hardware
 nav_order: 3
 ---
 
-# ESPGeiger-HW
+# ESPGeigerHW
+{: .no_toc }
 
 <details open markdown="block">
   <summary>
     Table of contents
   </summary>
   {: .text-delta }
-1. TOC
+- TOC
 {:toc}
 </details>
+
+---
 
 <img src="../img/ESPGeiger-HW-v4.svg" width="100%">
 
 ## Compatible Geiger Muller Tubes
 
-The ESPGeiger-HW Geiger counter supports multiple Geiger Muller Tubes. The hardware features adjustable mounting positions for tubes with the following lengths:
+The ESPGeigerHW Geiger counter supports multiple different Geiger Muller Tubes. The hardware features adjustable mounting positions for tubes with the following lengths:
 
 - Position 1: 85mm - 95mm ± 2.0
 - Position 2: 100mm - 110mm ± 2.0
@@ -31,7 +34,7 @@ The board also has additional jumpers for connecting tubes that aren't directly 
 
 The high-voltage circuit is tested reliable for tubes requiring up to 400V operation.
 
-The following commonly available tubes are known to be compatible with the ESPGeiger-HW Geiger counter
+The following commonly available tubes are known to be compatible with the ESPGeigerHW Geiger counter
 
 | Tube Name | Length | Operating Voltage | Ratio | Notes |
 |---|---|---|---|---|
