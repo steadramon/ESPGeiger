@@ -28,6 +28,14 @@ nav_order: 3
 <img id="espghwimg" src="../img/ESPGeiger-HW-v4.svg">
 {: .text-center }
 
+## Features
+
+- Low power requirements
+- Compatible with numerous Geiger-Muller tubes
+- High Voltage circuit adjustment and feedback
+- OLED display
+- Integrated light and audio feedback
+
 ## Compatible Geiger Muller Tubes
 
 The ESPGeigerHW Geiger counter supports multiple different Geiger Muller Tubes. The hardware features adjustable mounting positions for tubes with the following lengths:

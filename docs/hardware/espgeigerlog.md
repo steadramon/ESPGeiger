@@ -7,7 +7,6 @@ nav_order: 3
 ---
 <style>
 #espghwimg {
-  /* ensure 1:1 aspect ratio, tweak 50 to make SVG larger */
   width: 100%;
   max-height: 300px;
 }
@@ -29,3 +28,10 @@ nav_order: 3
 
 <img id="espghwimg" src="../img/ESPGeiger-Log-v1.svg">
 {: .text-center }
+
+## Features
+
+- Compatible with numerous Geiger counters - Pulse and Serial
+- Intuitive coloured light feedback (NeoPixel)
+- OLED display
+- SDCard logging
