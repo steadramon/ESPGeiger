@@ -1,6 +1,6 @@
 ---
 layout: page
-title: ESPGeigerLog
+title: ESPGeiger Log
 permalink: /hardware/espgeigerlog
 parent: Hardware
 nav_order: 3
@@ -12,7 +12,7 @@ nav_order: 3
 }
 </style>
 
-# ESPGeigerLog
+# ESPGeiger Log
 {: .no_toc }
 
 <details open markdown="block">
@@ -26,11 +26,12 @@ nav_order: 3
 
 ---
 
-<img id="espghwimg" src="../img/ESPGeiger-Log-v1.svg">
+<img id="espghwimg" src="../img/ESPGeiger-Log-v1.svg" alt="ESPGeiger Log board">
 {: .text-center }
 
 ## Features
 
+- ESP8266 MCU based Geiger counter logger
 - Compatible with numerous Geiger counters - Pulse and Serial
 - Intuitive coloured light feedback (NeoPixel)
 - OLED display

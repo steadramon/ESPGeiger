@@ -25,11 +25,12 @@ nav_order: 3
 
 ---
 
-<img id="espghwimg" src="../img/ESPGeiger-HW-v4.svg">
+<img id="espghwimg" src="../img/ESPGeiger-HW-v4.svg" alt="ESPGeigerHW board">
 {: .text-center }
 
 ## Features
 
+- ESP8266 MCU based Geiger Counter
 - Low power requirements
 - Compatible with numerous Geiger-Muller tubes
 - High Voltage circuit adjustment and feedback
