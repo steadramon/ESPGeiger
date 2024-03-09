@@ -68,3 +68,19 @@ J305 | 105mm | 400V | - |
 J305 | 90mm | 400V | - | 
 M4011 | 90mm | 400V | - | 
 ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | 
+
+### Possibly Compatible
+{: .no_toc }
+
+The following tubes should also be compatible but are currently untested
+
+- LND-712 <https://www.lndinc.com/products/geiger-mueller-tubes/712/>/<https://www.pocketmagic.net/tube-lnd-712-end-window-alpha-beta-gamma-detector/>
+- [LND-7312](https://www.lndinc.com/products/geiger-mueller-tubes/7312/)
+- [SBT-9](https://www.pocketmagic.net/tube-sbt-9-end-window-geiger-tube/)
+- [SBT-10A](https://www.pocketmagic.net/tube-sbt-10a-c%d0%b1t-10a/)
+- [SBT-11A](https://www.gstube.com/data/3006/)
+- [SI-180G](https://sites.google.com/site/diygeigercounter/technical/gm-tubes-supported)
+- Philips 18504
+- Beta-1
+- Beta-2
+- Gamma-7C
