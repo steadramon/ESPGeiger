@@ -14,13 +14,17 @@ https://install.espgeiger.com
 
 ## Requirements
 
-- ESP8266 / ESP32
+- ESP8266 or ESP32 development board
+  - Wemos D1 Mini is recommended
 - A pulse based or compatible Serial Geiger Counter
+- Dupont/jumper wires
+
 Optional:
+
 - OLED screen
 - ESPGeiger Log kit
 
-__OR__
+_OR_
 
 - ESPGeigerHW Geiger Counter kit
 
