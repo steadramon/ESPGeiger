@@ -16,7 +16,7 @@ https://install.espgeiger.com
 
 - ESP8266 or ESP32 development board
   - Wemos D1 Mini is recommended
-- A pulse based or compatible Serial Geiger Counter
+- A pulse or compatible serial based Geiger Counter
 - Dupont/jumper wires
 
 Optional:
@@ -27,6 +27,22 @@ Optional:
 _OR_
 
 - ESPGeigerHW Geiger Counter kit
+
+## Quick Install Guide
+
+1. Visit <https://install.espgeiger.com> and follow the instructions to install the latest firmware.
+  - Select your Geiger Counter type from the dropdown list - in most cases this is "Pulse"
+  - Once installed your ESP device will create its own Wi-Fi network with the name in the format of "**ESPGeiger-XXXXXX**"
+  - The status LED of the ESP will be lit
+2. On your phone or computer, connect to to the new Wi-Fi network
+  - Make a note of the name of the ESPGeiger (**ESPGeiger-XXXXXX**) - we will need this soon.
+3. Configure ESPGeiger to connect to your home Wi-Fi network
+  - Once connected the status LED of the ESP will go out
+4. Browse to http://**ESPGeiger-XXXXXX**.local
+
+Congratulations 🎉 ESPGeiger is installed
+
+## Hardware connection
 
 # Build Targets
 
