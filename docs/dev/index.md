@@ -8,7 +8,7 @@ nav_order: 50
 
 # Testing & Development
 
-Pull requests are welcomed! Please [visit the github](https://github.com/steadramon/ESPGeiger) if you would like to contribute to the project.
+Pull requests are welcomed! Please [visit GitHub](https://github.com/steadramon/ESPGeiger) if you would like to contribute to the project.
 
 ## Pulse Testing
 

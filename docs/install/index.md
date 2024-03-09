@@ -24,7 +24,8 @@ The pulse Geiger counter target is the widest compatible target. This is used fo
 
 | Target Name | Target Counter | Notes |
 |---|---|---|
-`pulse` | Pulse | 
+`pulse` | Pulse | ESP32 builds default to using built in hardware PCNT counter
+`pulse_no_pcnt` | Pulse | ESP32-only build disabling PCNT
 
 ## Serial
 
@@ -42,9 +43,9 @@ Numerous serial Geiger target builds are made, one for each of the following tar
 |---|---|---|---|
 `espgeigerhw` | ESPGeiger-HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
 `espgeigerlog` | ESPGeiger-Log | Pulse | A pulse based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
-`espgeigerloggc10` | ESPGeiger-Log | GC10 | A GC10 serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
-`espgeigerloggc10next` | ESPGeiger-Log | GC10next | A GC10next serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
-`espgeigerloggc10mightyohm` | ESPGeiger-Log | Mighty Ohm | A Mighty Ohm serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_gc10` | ESPGeiger-Log | GC10 | A GC10 serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_gc10next` | ESPGeiger-Log | GC10next | A GC10next serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_mightyohm` | ESPGeiger-Log | Mighty Ohm | A Mighty Ohm serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
 
 ## Test
 
