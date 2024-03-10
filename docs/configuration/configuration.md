@@ -15,6 +15,8 @@ There are a number of configuration options available through the ESPGeiger port
 | Setting name | Value Range | Default | Description |
 |---|---|---|---|
 Model | String 0..32 | Varies | Model name of the ESPGeiger
+Ratio for calculating μSv | Float 0..10000 | `151.0` | Ratio used internally for calculating μSv
+Display timeout | Int 0..65535 | `300` | Timeout for OLED display (Only for builds with OLED display)
 
 ## MQTT Configuration
 
@@ -35,7 +37,23 @@ Discovery Topic | String 0..32 | `homeassistant` | Homeassistant Autodiscovery M
 
 ## Radmon.org Configuration
 
+| Setting name | Value Range | Default | Description |
+|---|---|---|---|
+Send | Boolean | `True` | Send data to Radmon.org
+Username | String 0..32 | `null` | Radmon.org username
+Password | String 0..32 | `null` | Radmon.org password
+
 ## Thingspeak Configuration
+
+| Setting name | Value Range | Default | Description |
+|---|---|---|---|
+Send | Boolean | True | Send data to Thingspeak
+Channel Key | String 0..32 | `null` | Channel key for Thingspeak
 
 ## GMC Configuration
 
+| Setting name | Value Range | Default | Description |
+|---|---|---|---|
+Send | Boolean | True | Send data to GMC
+Account ID | String 0..32 | `null` | gmcmap.com Account ID
+Geiger Counter ID | String 0..32 | `null` | gmcmap.com Geiger Counter ID
