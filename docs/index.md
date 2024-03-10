@@ -5,9 +5,9 @@ permalink: /
 nav_order: 0
 ---
 
-# Home
+# ESPGeiger - Documentation
 
-☢ ESP8266/ESP32 Firmware for collecting and reporting from Geiger counters or for building your own IoT connected Geiger Counter.
+ESPGeiger is an open-source software that turns your ESP8266 or ESP32 board into a radiation data collector. Use it with existing Geiger counters or build your own for real-time monitoring.
 
 ## Features
 - 😃 Easy to install and configure - contribute to monitoring!
