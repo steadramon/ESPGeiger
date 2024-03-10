@@ -8,7 +8,7 @@ nav_order: 1
 
 # Pulse Counters
 
-The ESPGeiger firmware is designed to be compatible with any pulse based Geiger Counter that sends a I/O pulse for every count it detects.
+ESPGeiger supports pulse-based Geiger counters that sends a I/O pulse for each detected count.
 
 | Counter | Image | Link |
 |---|---|---|
