@@ -8,18 +8,22 @@ nav_order: 10
 
 # MQTT
 
-ESPGeiger publishes radiation statistics on a minutely interval. MQTT connection is performed by default on port `1883`.
+ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This section details its interaction with MQTT brokers.
 
-By default ESPGeiger publishes to the base topic `ESPGeiger-<device_id>` - this can be changed in configuration.
+- ESPGeiger transmits radiation statistics every minute.
+- By default, it connects to the MQTT broker on the standard port `1883`
+- ESPGeiger publishes data to a base topic named: `ESPGeiger-<device_id>`
 
-| Topic | Example Value | Publish Interval | Description |
+## Published Topics
+
+| Topic | Description |  Example Value | Publish Interval |
 |---|---|---|---|
-`ESPGeiger-<device_id>/tele/lwt` | `Online` | - | LWT topic - shows current state of ESPGeiger connection to MQTT
-`ESPGeiger-<device_id>/stat/CPM` | `30.0` | 60 | Current CPM value
-`ESPGeiger-<device_id>/stat/CPM5` | `30.0` | 60 | Current CPM5 value
-`ESPGeiger-<device_id>/stat/CPM15` | `30.0` | 60 | Current CPM15 value
-`ESPGeiger-<device_id>/stat/uSv` | `0.10` | 60 | Current μSv value
-`ESPGeiger-<device_id>/tele/status` | `(status_json)` | 60 | Current status of board - json string
+`ESPGeiger-<device_id>/tele/lwt` | Last Will and Testament (LWT) topic. Indicates ESPGeiger's connection status to the MQTT broker. | `Online` | -
+`ESPGeiger-<device_id>/stat/CPM` | Current Counts Per Minute (CPM) value. | `30.0` | 60
+`ESPGeiger-<device_id>/stat/CPM5` | Average CPM over the last 5 minutes. | `30.0` | 60
+`ESPGeiger-<device_id>/stat/CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
+`ESPGeiger-<device_id>/stat/uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
+`ESPGeiger-<device_id>/tele/status` | Current status of ESPGeiger in JSON format. | `(status_json)` | 60
 
 ## Example Status JSON Output
 
