@@ -35,11 +35,11 @@ Numerous serial Geiger target builds are made, one for each of the following tar
 
 | Target Name | Target Counter | Counter Type | Notes |
 |---|---|---|---|
-`espgeigerhw` | ESPGeiger-HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
-`espgeigerlog` | ESPGeiger-Log | Pulse | A pulse based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_gc10` | ESPGeiger-Log | GC10 | A GC10 serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_gc10next` | ESPGeiger-Log | GC10next | A GC10next serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_mightyohm` | ESPGeiger-Log | Mighty Ohm | A Mighty Ohm serial based build for the ESPGeiger-Log hardware with NeoPixel and SDCard output.
+`espgeigerhw` | ESPGeiger—HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
+`espgeigerlog` | ESPGeiger Log | Pulse | A pulse based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_gc10` | ESPGeiger Log | GC10 | A GC10 serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_gc10next` | ESPGeiger Log | GC10next | A GC10next serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_mightyohm` | ESPGeiger Log | Mighty Ohm | A Mighty Ohm serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
 
 ## Test
 
@@ -56,5 +56,5 @@ Test builds can be used to emulate a Geiger counter with your board. You can con
 
 | Target Name | Target Counter | Counter Type | Notes |
 |---|---|---|---|
-`espgeigerlog_test` | ESPGeiger-Log | n/a | A test build for the ESPGeiger-Log hardware. Internal interrupt based counter. No output, mostly for testing the ESPGeiger-Log functionality.
-`espgeigerlog_testpulse` | ESPGeiger-Log | Pulse | A test build for the ESPGeiger-Log hardware. Test build which outputs a pulse on the PLS pin.
+`espgeigerlog_test` | ESPGeiger Log | n/a | A test build for the ESPGeiger Log hardware. Internal interrupt based counter. No output, mostly for testing the ESPGeiger Log functionality.
+`espgeigerlog_testpulse` | ESPGeiger Log | Pulse | A test build for the ESPGeiger Log hardware. Test build which outputs a pulse on the PLS pin.
