@@ -8,7 +8,7 @@ parent: Install
 
 # Build Targets
 
-Builds for both ESP8266 and ESP32 are built automatically by GitHub on Release.
+Builds for both general ESP8266 and ESP32 boards are built automatically by GitHub on Release.
 
 Builds for a number of target counters are available.
 
@@ -31,16 +31,6 @@ Numerous serial Geiger target builds are made, one for each of the following tar
 `gc10next` | GC10-next | 
 `mightyohm` | Mighty Ohm |
 
-## Hardware
-
-| Target Name | Target Counter | Counter Type | Notes |
-|---|---|---|---|
-`espgeigerhw` | ESPGeiger‑HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
-`espgeigerlog` | ESPGeiger Log | Pulse | A pulse based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_gc10` | ESPGeiger Log | GC10 | A GC10 serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_gc10next` | ESPGeiger Log | GC10next | A GC10next serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_mightyohm` | ESPGeiger Log | Mighty Ohm | A Mighty Ohm serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
-
 ## Test
 
 Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger RXPIN and TXPIN together, or connect one ESPGeiger TXPIN to the RXPIN on another.
@@ -52,7 +42,19 @@ Test builds can be used to emulate a Geiger counter with your board. You can con
 `testgc10` | GC10 | Test build which outputs an emulated GC10 serial based Geiger counter on the TXPIN
 `testmightyohm` | Mighty Ohm | Test build which outputs an emulated Mighty Ohm serial based Geiger counter on the TXPIN
 
-## Hardware Test
+## Hardware Specific Builds
+
+A number of hardware specific builds are also made to support ESPGeiger-HW and ESPGeiger Log devices.
+
+| Target Name | Target Counter | Counter Type | Notes |
+|---|---|---|---|
+`espgeigerhw` | ESPGeiger‑HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
+`espgeigerlog` | ESPGeiger Log | Pulse | A pulse based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_gc10` | ESPGeiger Log | Serial (GC10) | A GC10 serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_gc10next` | ESPGeiger Log | Serial (GC10next) | A GC10next serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_mightyohm` | ESPGeiger Log | Serial (Mighty Ohm) | A Mighty Ohm serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+
+## Hardware Specific Builds
 
 | Target Name | Target Counter | Counter Type | Notes |
 |---|---|---|---|
