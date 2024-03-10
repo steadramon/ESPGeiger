@@ -8,12 +8,12 @@ nav_order: 10
 
 # MQTT
 
-ESPGeiger publishes radiation statistics on a minutely interval.
+ESPGeiger publishes radiation statistics on a minutely interval. MQTT connection is performed by default on port `1883`.
 
 By default ESPGeiger publishes to the base topic `ESPGeiger-<device_id>` - this can be changed in configuration.
 
 | Topic | Example Value | Publish Interval | Description |
-|---|---|
+|---|---|---|---|
 `ESPGeiger-<device_id>/tele/lwt` | `Online` | - | LWT topic - shows current state of ESPGeiger connection to MQTT
 `ESPGeiger-<device_id>/stat/CPM` | `30` | 60 | Current CPM value
 `ESPGeiger-<device_id>/stat/CPM5` | `30` | 60 | Current CPM5 value
