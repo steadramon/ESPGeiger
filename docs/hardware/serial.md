@@ -8,15 +8,23 @@ nav_order: 2
 
 # Serial Counters
 
-The ESPGeiger firmware is compatible with the following Serial based counters. Compatibility has only been fully tested where access to the hardware has been available.
-A number of Serial based counters that are supported are untested but theoretically fine. If you own or can offer a device below for testing and support, please get in touch.
-Additional counters are a
+ESPGeiger supports a variety of Geiger counters that communicate via serial interfaces. However, comprehensive testing has only been conducted with models for which hardware access was available.
+
+## Supported Counters
+
+A list of currently supported serial Geiger counters can be found below
 
 | Counter | Image | Serial Rate | Serial Example | Link |
 |---|---|---|---|---|
 MightyOhm Kit | ![MightyOhm](img/mightyohm.jpg#img-thumbnail) | 9600 | `CPS, ####, CPM, ####, uSv/hr, #.##, [INST/FAST/SLOW]\n` | https://www.tindie.com/stores/mightyohm/
 NetIO GC10 | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | 9600 | `60\n` | https://www.ebay.co.uk/usr/pelorymate
 NetIO GC10next | ![NetIO GC10next](img/gc10next.jpg#img-thumbnail) | 115200 | `60\n` | https://www.ebay.co.uk/usr/pelorymate
+
+## Unsupported Counters
+
+ESPGeiger may also function with additional serial Geiger counters that are not explicitly listed. These counters are considered theoretically compatible based on their communication protocols. However, due to limited resources, formal testing hasn't been possible.
+
+Additional counters can be added easily within the codebase, if you own or can offer a device for testing and support, please get in touch.
 
 ## Other Serial Counters
 
