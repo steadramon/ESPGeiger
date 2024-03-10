@@ -15,6 +15,7 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 - ESPGeiger publishes data to a base topic named: `ESPGeiger‑<device_id>`
 
 ## Published Topics
+
 | Topic | Description |  Example Value | Publish Interval |
 |---|---|---|---|
 `ESPGeiger‑<device_id>/tele/lwt` | Last Will and Testament (LWT) topic. Indicates ESPGeiger's connection status to the MQTT broker. | `Online` | -
