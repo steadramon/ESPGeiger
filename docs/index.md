@@ -7,7 +7,7 @@ nav_order: 0
 
 # ESPGeiger
 
-ESPGeiger is a free, open-source firmware that lets you collect and export radiation data using a ESP8266 or ESP32 MCU. Use it with existing Geiger counters or build your own for real-time monitoring with multiple output options.
+ESPGeiger is a free, open-source firmware that lets you collect and export radiation data using a ESP8266 or ESP32 MCU. Use it with an existing Geiger counter, or build your own, for real-time monitoring with multiple output options.
 
 ## Features
 - 😃 Easy to install and configure - contribute to monitoring!

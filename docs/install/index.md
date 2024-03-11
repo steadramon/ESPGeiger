@@ -27,20 +27,23 @@ _OR_
 
 - ESPGeigerHW Geiger Counter kit
 
-## Web Install
+## Firmware Install
 
-The easiest way to install is to visit the web based installed in your Chrome or Edge browser:
+The easiest way to install ESPGeiger is to visit the web based installed in your Chrome or Edge browser:
 
 1. Visit <https://install.espgeiger.com> and follow the instructions to install the latest firmware.
   - Select your Geiger Counter type from the dropdown list - in most cases this is "Pulse"
+  - Installation takes up to two minutes
   - Once installed your ESP device will create its own Wi-Fi network with the name in the format of "**ESPGeiger-XXXXXX**"
-  - The status LED of the ESP will be lit
+  - The status LED of the ESP will be lit on installation has completed.
+  - For [ESPGeiger-HW firmware](https://install.espgeiger.com?board=espgeigerhw) and [ESPGeiger Log firmware](https://install.espgeiger.com?board=espgeigerlog) you can follow these links directly.
 2. On your phone or computer, connect to to the new Wi-Fi network
+  - A configuration web page should appear once connected, if not browse to <http://192.168.4.1/>
   - Make a note of the name of the ESPGeiger (**ESPGeiger-XXXXXX**) - we will need this soon.
 3. Configure ESPGeiger to connect to your home Wi-Fi network
   - Once connected the status LED of the ESP will go out
-4. Browse to http://**ESPGeiger-XXXXXX**.local
-  - Once connected to your home network you can now connect to it using the IP address assigned by your router or http://ESPGeiger-XXXXXX.local
+4. Browse to http://**ESPGeiger-XXXXXX**.local (replace XXXXXX with the ID of your ESPGeiger)
+  - Once connected to your home network you can now connect to ESPGeiger using the IP address assigned by your router or http://ESPGeiger-XXXXXX.local
 
 Congratulations! 🎉 ESPGeiger is installed
 
