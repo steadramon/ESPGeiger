@@ -12,7 +12,7 @@ ESPGeiger supports pulse-based Geiger counters that sends a I/O pulse for each d
 
 | Counter | Image | Link |
 |---|---|---|
-CAJOE RadiationD-v1.1 (and other clones) | ![CAJOE RadiationD-v1.1](img/cajoev11.jpg#img-thumbnail) |
+CAJOE RadiationD-v1.1 (and other clones) | ![CAJOE RadiationD-v1.1](img/cajoev11.jpg#img-thumbnail) | <https://s.click.aliexpress.com/e/_DB6zuUD>
 DiY-GDC | ![MightyOhm](img/DiY-GDC.jpg#img-thumbnail) | https://www.ebay.com/usr/impexeris
 DIY GeigerKit | ![DIY GeigerKit](img/diygeiger.jpg#img-thumbnail) | https://sites.google.com/site/diygeigercounter
 GeigerHV | | https://www.ebay.co.uk/usr/geigerhv
