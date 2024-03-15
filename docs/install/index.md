@@ -14,7 +14,7 @@ Below is the quick overview of installing ESPGeiger, for more detailed informati
 
 - PC (Mac/Windows) with Chrome or Edge
 - ESP8266 or ESP32 development board
-  - Wemos D1 Mini is recommended
+  - [Wemos D1 Mini](https://s.click.aliexpress.com/e/_DmfPg5L) is recommended
 - A pulse or compatible serial based Geiger Counter
 - Dupont/jumper wires
 
