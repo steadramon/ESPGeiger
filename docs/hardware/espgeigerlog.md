@@ -40,3 +40,5 @@ ESPGeiger Log is a hardware solution designed to seamlessly transform existing G
 - Intuitive coloured light feedback (NeoPixel)
 - OLED display
 - SDCard logging
+
+Note: Board version `001 12/2023` has positions for through hole components in positions `C1`, `C2` and `R1` - however these components are already in place as surface mounted components.
