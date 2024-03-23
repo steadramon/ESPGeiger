@@ -10,13 +10,16 @@ nav_order: 2
 
 ESPGeiger supports pulse-based Geiger counters that sends a I/O pulse for each detected count.
 
-| Counter | Image | Link |
+| Counter | Image | Notes |
 |---|---|---|
-CAJOE RadiationD-v1.1 (and other clones) | ![CAJOE RadiationD-v1.1](img/cajoev11.jpg#img-thumbnail) | <https://s.click.aliexpress.com/e/_DB6zuUD>
-DiY-GDC | ![MightyOhm](img/DiY-GDC.jpg#img-thumbnail) | https://www.ebay.com/usr/impexeris
-DIY GeigerKit | ![DIY GeigerKit](img/diygeiger.jpg#img-thumbnail) | https://sites.google.com/site/diygeigercounter
-GeigerHV | | https://www.ebay.co.uk/usr/geigerhv
-GGreg20 | ![GGreg20](img/ggreg.jpg#img-thumbnail) | https://www.tindie.com/stores/iotdev/
-MightyOhm Kit | ![MightyOhm](img/mightyohm.jpg#img-thumbnail) | https://www.tindie.com/stores/mightyohm/
-NetIO GC10 | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | https://www.ebay.co.uk/usr/pelorymate
-RHElectronics Counters | ![RH-K-GK-2-A](img/RH-K-GK-2-A.jpg#img-thumbnail) | https://www.rhelectronics.store/diy-geiger-counter-kit
+[CAJOE RadiationD-v1.1](https://s.click.aliexpress.com/e/_DB6zuUD) (and other clones) | ![CAJOE RadiationD-v1.1](img/cajoev11.jpg#img-thumbnail) |
+[DiY-GDC](https://www.ebay.com/usr/impexeris) | ![MightyOhm](img/DiY-GDC.jpg#img-thumbnail) | 
+[DIY GeigerKit](https://sites.google.com/site/diygeigercounter) | ![DIY GeigerKit](img/diygeiger.jpg#img-thumbnail) | 
+[GeigerHV](https://www.ebay.co.uk/usr/geigerhv) | | 
+[GGreg20](https://www.tindie.com/stores/iotdev/) | ![GGreg20](img/ggreg.jpg#img-thumbnail) | 
+[MightyOhm Kit](https://www.tindie.com/stores/mightyohm/) | ![MightyOhm](img/mightyohm.jpg#img-thumbnail) | 
+[NetIO GC10](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | 
+[RHElectronics Counters](https://www.rhelectronics.store/diy-geiger-counter-kit) | ![RH-K-GK-2-A](img/RH-K-GK-2-A.jpg#img-thumbnail) | 
+[SparkFun Geiger Counter](https://www.sparkfun.com/products/retired/11345) | ![11345](img/sparkfun11345.jpg#img-thumbnail) |
+
+Special thanks to all the above original creators. Without your hard work and inspiration this project would not be possible!
