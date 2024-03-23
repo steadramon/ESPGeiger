@@ -26,7 +26,7 @@ ESPGeiger is a free, open-source firmware that lets you collect and export radia
 
 ## ESPGeiger-HW
 
-ESPGeiger is used to power __ESPGeiger-HW__ - the fully feature Geiger Counter from the creator of ESPGeiger.
+ESPGeiger is used to power __ESPGeiger-HW__ - the fully featured IoT Geiger Counter from the creator of ESPGeiger.
 
 ESPGeiger-HW is almost ready for release!
 
