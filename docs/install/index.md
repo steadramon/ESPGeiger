@@ -21,7 +21,7 @@ Below is the quick overview of installing ESPGeiger, for more detailed informati
 Optional:
 
 - OLED screen
-- ESPGeiger Log kit
+- [ESPGeiger Log](/hardware/espgeigerlog) kit
 
 _OR_
 
