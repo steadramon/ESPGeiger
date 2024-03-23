@@ -86,3 +86,10 @@ The following tubes should also be compatible but are currently untested
 - Beta-1
 - Beta-2
 - Gamma-7C
+
+# Thanks
+
+Special thanks goes to the following people for the help and advice during 
+
+- [Jander](https://r.jander.me.uk/) 
+- [SimoMax](https://radmon.org/index.php/forum/profile/344-simomax)
