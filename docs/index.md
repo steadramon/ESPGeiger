@@ -30,4 +30,4 @@ ESPGeiger is used to power __ESPGeiger-HW__ - the fully feature Geiger Counter f
 
 ESPGeiger-HW is almost ready for release!
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPG-HW.png" width="75%"/>
+<img src="../img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
