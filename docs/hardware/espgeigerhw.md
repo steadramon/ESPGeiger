@@ -53,7 +53,7 @@ ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGei
 
 - Please use a reliable 5V DC supply. Whilst the overall power requirement is low, a stable 5V is required for the High Voltage circuit.
 
-A project box or enclosure is highly suggested. Do not to touch any conductive region to the right of, or below, the OLED display  when the Geiger tube is powered ON. An enclosure is not absolutely necessary, but if you choose not use an enclosure, remember to be extra careful with the high voltage regions.
+A project box or enclosure is highly suggested. Do not to touch any conductive region to the right of, or below, the OLED display when the Geiger tube is powered ON. An enclosure is not absolutely necessary, but if you choose not use an enclosure, remember to be extra careful with the high voltage regions.
 
 ## Compatible Geiger Muller Tubes
 
