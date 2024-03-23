@@ -47,6 +47,10 @@ ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGei
 - Supply Current: 130mA with WiFi at background
 - 2.4GHz WiFi
 
+## Technical Notes
+
+- Please use a reliable 5V DC supply. Whilst the overall power requirement is low, a stable 5V is required for the High Voltage circuit.
+
 ## Compatible Geiger Muller Tubes
 
 The ESPGeigerHW Geiger counter supports multiple different Geiger Muller Tubes. The hardware features adjustable mounting positions for tubes with the following lengths:
