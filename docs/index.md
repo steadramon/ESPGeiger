@@ -24,7 +24,9 @@ ESPGeiger is a free, open-source firmware that lets you collect and export radia
 - 💡 Colourful and intuitive feedback using a WS2812X NeoPixel
 - 🚧 Test builds for emulating pulse and serial based counters
 
-# ESPGeiger-HW
+## ESPGeiger-HW
+
+ESPGeiger is used to power __ESPGeiger-HW__ - the fully feature Geiger Counter from the creator of ESPGeiger.
 
 ESPGeiger-HW is almost ready for release!
 
