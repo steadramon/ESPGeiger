@@ -3,7 +3,7 @@ layout: page
 title: Serial Counters
 permalink: /hardware/serial
 parent: Hardware
-nav_order: 2
+nav_order: 3
 ---
 
 # Serial Counters

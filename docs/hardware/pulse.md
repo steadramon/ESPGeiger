@@ -3,7 +3,7 @@ layout: page
 title: Pulse Counters
 permalink: /hardware/pulse
 parent: Hardware
-nav_order: 1
+nav_order: 2
 ---
 
 # Pulse Counters
