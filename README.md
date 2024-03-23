@@ -20,6 +20,12 @@ ESPGeiger is an open-source project that makes it easy to create your own IOT co
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
 
+## Documentation
+
+Please visit (https://docs.espgeiger.com/) for the latest documentation.
+
+Note: Documentation is currently being populated
+
 ## 1. Installation
 
 ### Web Installer
