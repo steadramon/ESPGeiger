@@ -34,8 +34,8 @@ A SD Card of up to 16GB usually takes < 2 seconds to initialise.
 Unixtime, CPM, μSv/h, CPM5, CPM15
 ```
 
-| Value | Description |  Example Value | Publish Interval |
-|---|---|---|---|
+| Value | Description |  Example Value |
+|---|---|---|
 `Unixtime` | Current unixtime. | `30.0`
 `CPM` | Current Counts Per Minute (CPM) value. | `30.0`
 `uSv` | Current microSieverts per hour (μSv) value. | `0.10`
