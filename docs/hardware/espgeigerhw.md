@@ -53,7 +53,7 @@ ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGei
 
 ## Compatible Geiger Muller Tubes
 
-The ESPGeigerHW Geiger counter supports multiple different Geiger Muller Tubes. The hardware features adjustable mounting positions for tubes with the following lengths:
+The ESPGeigerHW Geiger counter supports a number of different Geiger Muller Tubes. The hardware features adjustable mounting positions for tubes with the following lengths:
 
 - Position 1 (removable tab): 85mm - 95mm ± 2.0
 - Position 2: 100mm - 110mm ± 2.0
