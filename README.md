@@ -1,4 +1,5 @@
-![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)
+[![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)](https://github.com/steadramon/ESPGeiger/actions) [![Issues](https://img.shields.io/github/issues/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/issues) [![Stars](https://img.shields.io/github/stars/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/stargazers)
+
 # <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger.svg" width="30px"/> ESPGeiger
 
 ESPGeiger is an open-source project that makes it easy to create your own IOT connected Geiger counter, to monitor radiation levels in your environment. It can collect, calculate, and report radiation levels from a range of Geiger counters with pulse and serial outputs. ESPGeiger supports the GC10/GC10next and MightyOhm counters, with additional support possible. The firmware is written to be installed onto the common esp8266 and esp32 boards.
