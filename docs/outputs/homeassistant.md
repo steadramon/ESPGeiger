@@ -1,14 +1,14 @@
 ---
 layout: page
-title: Homeassistant
+title: Home Assistant
 permalink: /output/ha
 parent: Outputs
 nav_order: 10
 ---
 
-![Img](../img/ESPGeiger-Homeassistant.png)
-
 # Home Assistant MQTT Discovery
+
+![Img](../img/ESPGeiger-Homeassistant.png)
 
 ESPGeiger automatically integrates into [Home Assistant](https://www.home-assistant.io/) through the use of the [MQTT Discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery) functions within Home Assistant.
 
