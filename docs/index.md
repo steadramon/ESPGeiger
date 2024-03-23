@@ -20,6 +20,6 @@ ESPGeiger is a free, open-source firmware that lets you collect and export radia
 - 📟 Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), with optional hardware counter (ESP32 only - PCNT)
 - ⏲️ No dead time due to waiting for 3rd party services
 - 🌐 Upload and share statistics to services online and locally via MQTT and Home Assistant automatic discovery
-- 💾 Save your data locally to a Fat16/32 SDCard over SPI
+- 💾 Save your data locally to an SDCard
 - 💡 Colourful and intuitive feedback using a WS2812X NeoPixel
 - 🚧 Test builds for emulating pulse and serial based counters
