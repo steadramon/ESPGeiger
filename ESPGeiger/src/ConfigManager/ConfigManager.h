@@ -35,6 +35,11 @@ extern ESPGeigerHW hardware;
 extern SSD1306Display display;
 #endif
 
+#if defined(GEIGER_NEOPIXEL)
+#include "../NeoPixel/NeoPixel.h"
+extern NeoPixel neopixel;
+#endif
+
 extern Status status;
 extern Counter gcounter;
 extern NTP_Client ntpclient;
