@@ -52,6 +52,10 @@ class NeoPixel {
     void blip();
     void blink(uint16 timer);
     void setBrightness(int input) {
+      input = (int)input * 2.55;
+      if (input > 255) {
+        input = 255;
+      }
       colorSaturation = input;
     }
     const uint16_t PixelCount = 1;
@@ -66,7 +70,7 @@ class NeoPixel {
     unsigned long blinkInterval = 2000;
     unsigned long nextInterval = 2000;
     unsigned long last_blip = 0;
-    int colorSaturation = 32;
+    int colorSaturation = 25;
 };
 #endif
 #endif
