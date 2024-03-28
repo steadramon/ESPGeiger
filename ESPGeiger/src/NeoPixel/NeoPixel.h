@@ -28,8 +28,6 @@
 extern Status status;
 extern Counter gcounter;
 
-#define colorSaturation 128
-
 #ifndef NEOPIXEL_MODE
 #define NEOPIXEL_MODE 1
 #endif
@@ -53,6 +51,9 @@ class NeoPixel {
     void setup();
     void blip();
     void blink(uint16 timer);
+    void setBrightness(int input) {
+      colorSaturation = input;
+    }
     const uint16_t PixelCount = 1;
     const uint8_t PixelPin = NEOPIXEL_PIN;
     uint32_t neoPixelMode = 3;
@@ -63,7 +64,9 @@ class NeoPixel {
     unsigned long onTime = 0;
     unsigned long offTime = 0;
     unsigned long blinkInterval = 2000;
+    unsigned long nextInterval = 2000;
     unsigned long last_blip = 0;
+    int colorSaturation = 32;
 };
 #endif
 #endif
