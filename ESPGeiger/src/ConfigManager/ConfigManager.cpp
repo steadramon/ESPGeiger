@@ -41,6 +41,9 @@ WiFiManagerParameter ESPGeigerParams[] =
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 10),
 #endif
+#ifdef GEIGER_NEOPIXEL
+  WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "10", 10),
+#endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>")
 };
 #ifdef THINGSPEAKOUT
@@ -172,6 +175,10 @@ void ConfigManager::startWebPortal()
   int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
   display.setTimeout(lcdTO);
 #endif
+#ifdef GEIGER_NEOPIXEL
+  int npB = atoi(ConfigManager::getParamValueFromID("neopixelBrightness"));
+  neopixel.setBrightness(npB);
+#endif
   int pin;
 #ifndef RXPIN_BLOCKED
   pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
@@ -273,7 +280,7 @@ void ConfigManager::handleClicksReturn()
   json.clear();
   auto last_day = json.createNestedArray("last_day");
 #ifdef GEIGERTESTMODE
-  json["roll"] = 60;
+  //json["roll"] = 60;
 #endif
   last_day.add(gcounter.clicks_hour);
   int histSize = gcounter.day_hourly_history.size();
@@ -749,6 +756,10 @@ void ConfigManager::saveParams()
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
   display.setTimeout(lcdTO);
+#endif
+#ifdef GEIGER_NEOPIXEL
+  int npB = atoi(ConfigManager::getParamValueFromID("neopixelBrightness"));
+  neopixel.setBrightness(npB);
 #endif
 }
 
