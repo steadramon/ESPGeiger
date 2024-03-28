@@ -17,6 +17,7 @@ There are a number of configuration options available through the ESPGeiger port
 Model | String 0..32 | `(varies)` | Model name of the ESPGeiger
 Ratio for calculating μSv | Float 0..10000 | `151.0` | Ratio used internally for calculating μSv
 Display timeout | Int 0..65535 | `300` | Timeout for OLED display (Only for builds with OLED display)
+Neopixel Brightness | Int 0..255 | `32` | Brightness for NeoPixel (Only for builds with Neopixel)
 
 ## MQTT Configuration
 
