@@ -94,16 +94,16 @@ void GeigerTestPulse::loop() {
 #ifdef GEIGER_COUNT_TXPULSE
       countInterrupt();
 #endif
-      double test = generatePoissonRandom(_target_cps);
+      double poisson_mult = generatePoissonRandom(_target_cps);
 #ifdef ESP8266
-      test *= 2500000;
-      if (test > 50) {
-        timer1_write(test);
+      poisson_mult *= 2500000;
+      if (poisson_mult > 50) {
+        timer1_write(poisson_mult);
       }
 #else
-      test *= 500000;
-      if (test > 25) {
-        timerAlarmWrite(pulsetimer, test, true);
+      poisson_mult *= 500000;
+      if (poisson_mult > 25) {
+        timerAlarmWrite(pulsetimer, poisson_mult, true);
       }
 #endif
     }
