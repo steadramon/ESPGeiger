@@ -10,6 +10,8 @@ parent: Install
 
 Builds for both general ESP8266 and ESP32 boards are built automatically by GitHub on Release.
 
+The latest release can always be [found here](https://github.com/steadramon/ESPGeiger/releases/latest).
+
 Builds for a number of target counters are available.
 
 ## Pulse
