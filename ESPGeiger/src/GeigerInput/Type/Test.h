@@ -22,6 +22,8 @@
 #include <Arduino.h>
 #include "../GeigerInput.h"
 
+static bool _pulse_test_send = false;
+
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "test"
 #endif
@@ -39,18 +41,22 @@ static hw_timer_t * pulsetimer = NULL;
 #endif
 
 //#define GEIGER_TEST_FAST
+//#define DISABLE_GEIGER_POISSON
 
 class GeigerTest : public GeigerInput
 {
   public:
     GeigerTest();
     void begin();
+    void loop();
     void secondTicker();
     void setTargetCPM(float target);
     void setTargetCPS(float target);
     void CPMAdjuster();
+    double calcDelay();
+    static void IRAM_ATTR testInterrupt();
   private:
-    int _target_pwm = 0;
+    float _target_cps = 0;
     int _current_selection = -1;
 };
 #endif

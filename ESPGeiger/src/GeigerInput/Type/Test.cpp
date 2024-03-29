@@ -26,16 +26,31 @@ void GeigerTest::begin() {
   GeigerInput::begin();
   Log::console(PSTR("GeigerTest: Setting up test geiger ..."));
   setTargetCPM(30.0);
+  double delay = calcDelay();
 #ifdef ESP8266
-  timer1_attachInterrupt(countInterrupt);
+  timer1_attachInterrupt(testInterrupt);
   timer1_isr_init();
   timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);
-  timer1_write(_target_pwm);
+  timer1_write(delay);
 #else
   pulsetimer = timerBegin(3, 80, true);
-  timerAttachInterrupt(pulsetimer, &countInterrupt, true);
-  timerAlarmWrite(pulsetimer, _target_pwm, true);
+  timerAttachInterrupt(pulsetimer, &testInterrupt, true);
+  timerAlarmWrite(pulsetimer, delay, true);
   timerAlarmEnable(pulsetimer);
+#endif
+}
+
+double GeigerTest::calcDelay() {
+#ifdef ESP8266
+  double mult = 320000;
+#else
+  double mult = 1000000;
+#endif
+#ifdef DISABLE_GEIGER_POISSON
+  return mult / _target_cps;
+#else
+  double result = generatePoissonRandom(_target_cps);
+  return mult * result;
 #endif
 }
 
@@ -44,15 +59,35 @@ void GeigerTest::setTargetCPM(float target) {
 };
 
 void GeigerTest::setTargetCPS(float target) {
-#ifdef ESP8266
-  _target_pwm = (int)320000/target;
-#else
-  _target_pwm = (int)1000000/target;
-#endif
+  _target_cps = target;
 };
 
 void GeigerTest::secondTicker() {
   CPMAdjuster();
+}
+
+void GeigerTest::testInterrupt() {
+  GeigerInput::countInterrupt();
+  _pulse_test_send = true;
+}
+
+void GeigerTest::loop() {
+#ifdef DISABLE_GEIGER_POISSON
+  return;
+#endif
+  if (_pulse_test_send == true) {
+    double delay = calcDelay();
+#ifdef ESP8266
+    if (delay > 50) {
+      timer1_write(delay);
+    }
+#else
+    if (delay > 25) {
+      timerAlarmWrite(pulsetimer, delay, true);
+    }
+#endif
+    _pulse_test_send = false;
+  }
 }
 
 void GeigerTest::CPMAdjuster() {
@@ -80,11 +115,6 @@ void GeigerTest::CPMAdjuster() {
 #endif
     Log::console(PSTR("GeigerTest: Setting CPM to: %d"), _targetCPM);
     setTargetCPM(_targetCPM);
-#ifdef ESP8266
-    timer1_write(_target_pwm);
-#else
-    timerAlarmWrite(pulsetimer, _target_pwm, true);
-#endif
   }
 #endif
 }
