@@ -126,6 +126,7 @@ void msTickerCB()
   status.blip_led.Update();
 #endif
 }
+
 int getQuality() {
   if (WiFi.status() != WL_CONNECTED)
     return -1;
@@ -136,6 +137,7 @@ int getQuality() {
     return 100;
   return 2 * (dBm + 100);
 }
+
 void sTickerCB()
 {
   gcounter.secondticker();
@@ -224,6 +226,7 @@ void setup()
 
 void loop()
 {
+  gcounter.loop();
   cManager.process();
 #ifdef MQTTOUT
   mqtt.loop();
@@ -231,7 +234,6 @@ void loop()
 #ifndef DISABLE_SERIALRX
   handleSerial();
 #endif
-  gcounter.loop();
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.loop();
 #endif
