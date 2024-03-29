@@ -31,17 +31,6 @@ Numerous serial Geiger target builds are made, one for each of the following tar
 `gc10next` | GC10-next | 
 `mightyohm` | Mighty Ohm |
 
-## Test
-
-Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger RXPIN and TXPIN together, or connect one ESPGeiger TXPIN to the RXPIN on another.
- 
-| Target Name | Target Counter | Notes |
-|---|---|---|
-`test` | n/a | Internal interrupt based counter. No output, mostly for testing the Counter.h functionality.
-`testpulse` | Pulse | Test build which outputs a pulse on the TXPIN
-`testgc10` | GC10 | Test build which outputs an emulated GC10 serial based Geiger counter on the TXPIN
-`testmightyohm` | Mighty Ohm | Test build which outputs an emulated Mighty Ohm serial based Geiger counter on the TXPIN
-
 ## Hardware Specific Builds
 
 A number of hardware specific builds are also made to support ESPGeiger-HW and ESPGeiger Log devices.
@@ -54,7 +43,28 @@ A number of hardware specific builds are also made to support ESPGeiger-HW and E
 `espgeigerlog_gc10next` | ESPGeiger Log | Serial (GC10next) | A GC10next serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
 `espgeigerlog_mightyohm` | ESPGeiger Log | Serial (Mighty Ohm) | A Mighty Ohm serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
 
-## Hardware Specific Builds
+## Test
+
+Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger RXPIN and TXPIN together, or connect one ESPGeiger `TXPIN` to the RXPIN on another.
+
+By default the Test output cycles through several ranges of reading, switching each 5 minute period:
+
+- 0.5 CPS / 30 CPM
+- 1 CPS / 60 CPM
+- 1.66 CPS / 100 CPM
+- 2 CPS / 120 CPM
+
+| Target Name | Target Counter | Notes |
+|---|---|---|
+`test` | n/a | Internal interrupt based counter. No output, mostly for testing the `Counter.h` functionality.
+`testpulse` | Pulse | Test build which outputs a Poisson distributed pulse on the TXPIN
+`testpulsepwm` | Pulse | Test build which outputs a interrupt generated pulse on the TXPIN
+`testgc10` | GC10 | Test build which outputs an emulated GC10 serial based Geiger counter on the TXPIN
+`testmightyohm` | Mighty Ohm | Test build which outputs an emulated Mighty Ohm serial based Geiger counter on the TXPIN
+
+### Test Build Options
+
+## Hardware Specific Test Builds
 
 | Target Name | Target Counter | Counter Type | Notes |
 |---|---|---|---|
