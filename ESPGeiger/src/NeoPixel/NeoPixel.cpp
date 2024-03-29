@@ -36,6 +36,17 @@ void NeoPixel::setup()
   this->controller_->Show();
 }
 
+void NeoPixel::setBrightness(int input) {
+  input = (int)input * 1.28;
+  if (input > 128) {
+    input = 128;
+  }
+  if (input < 0) {
+    input = 0;
+  }
+  colorSaturation = input;
+}
+
 void NeoPixel::blip()
 {
   if (this->neoPixelMode == 0) {

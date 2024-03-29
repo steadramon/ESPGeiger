@@ -42,22 +42,16 @@ extern Counter gcounter;
 
 class NeoPixel {
   public:
-  static NeoPixel &getInstance()
-  {
-    static NeoPixel instance;
-    return instance;
-  }
+    static NeoPixel &getInstance()
+    {
+      static NeoPixel instance;
+      return instance;
+    }
     void loop();
     void setup();
     void blip();
     void blink(uint16 timer);
-    void setBrightness(int input) {
-      input = (int)input * 2.55;
-      if (input > 255) {
-        input = 255;
-      }
-      colorSaturation = input;
-    }
+    void setBrightness(int input);
     const uint16_t PixelCount = 1;
     const uint8_t PixelPin = NEOPIXEL_PIN;
     uint32_t neoPixelMode = 3;
@@ -70,7 +64,7 @@ class NeoPixel {
     unsigned long blinkInterval = 2000;
     unsigned long nextInterval = 2000;
     unsigned long last_blip = 0;
-    int colorSaturation = 25;
+    int colorSaturation = 15;
 };
 #endif
 #endif
