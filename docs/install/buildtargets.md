@@ -45,7 +45,7 @@ A number of hardware specific builds are also made to support ESPGeiger-HW and E
 
 ## Test
 
-Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger RXPIN and TXPIN together, or connect one ESPGeiger `TXPIN` to the RXPIN on another.
+Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger `RXPIN` and `TXPIN` together, or connect one ESPGeiger `TXPIN` to the `RXPIN` on another ESPGeiger.
 
 By default the Test output cycles through several ranges of reading, switching each 5 minute period:
 
