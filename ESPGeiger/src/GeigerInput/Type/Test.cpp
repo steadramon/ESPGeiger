@@ -25,9 +25,10 @@ GeigerTest::GeigerTest() {
 void GeigerTest::begin() {
   GeigerInput::begin();
   Log::console(PSTR("GeigerTest: Setting up test geiger ..."));
-  setTargetCPM(123.45);
+  setTargetCPM(30.0);
 #ifdef ESP8266
   timer1_attachInterrupt(countInterrupt);
+  timer1_isr_init();
   timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);
   timer1_write(_target_pwm);
 #else
