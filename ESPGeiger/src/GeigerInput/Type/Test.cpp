@@ -22,36 +22,68 @@
 GeigerTest::GeigerTest() {
 };
 
-#ifdef ESP32
-int GeigerTest::collect() {
-  int current = timerRead(hwtimer);
-  timerRestart(hwtimer);
-  setCounter(current);
-  return current;
-}
-#endif
-
 void GeigerTest::begin() {
   GeigerInput::begin();
   Log::console(PSTR("GeigerTest: Setting up test geiger ..."));
+  setTargetCPM(123.45);
 #ifdef ESP8266
   timer1_attachInterrupt(countInterrupt);
-  timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-#ifdef GEIGER_TEST_FAST
-  // 1666.66 CPS / 100000 CPM
-  timer1_write(3000);
+  timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);
+  timer1_write(_target_pwm);
 #else
-  // 1 CPS / 60 CPM
-  //timer1_write(5000000);
-  // 1.66 CPS / 100 CPM
-  timer1_write(3000000);
+  pulsetimer = timerBegin(3, 80, true);
+  timerAttachInterrupt(pulsetimer, &countInterrupt, true);
+  timerAlarmWrite(pulsetimer, _target_pwm, true);
+  timerAlarmEnable(pulsetimer);
 #endif
+}
+
+void GeigerTest::setTargetCPM(float target) {
+  setTargetCPS(target/60.0);
+};
+
+void GeigerTest::setTargetCPS(float target) {
+#ifdef ESP8266
+  _target_pwm = (int)320000/target;
 #else
-#ifdef GEIGER_TEST_FAST
-  hwtimer = timerBegin(3, 80, true);
-#else
-  hwtimer = timerBegin(3, 80000000, true);
+  _target_pwm = (int)1000000/target;
 #endif
-  timerAlarmEnable(hwtimer);
+};
+
+void GeigerTest::secondTicker() {
+  CPMAdjuster();
+}
+
+void GeigerTest::CPMAdjuster() {
+#ifndef GEIGER_TESTPULSE_FIXEDCPM
+  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
+  if (selection != _current_selection) {
+    _current_selection = selection;
+    int _targetCPM = 30;
+    switch (selection) {
+      case 1:
+        _targetCPM = 60;
+        break;
+      case 2:
+        _targetCPM = 100;
+        break;
+      case 3:
+        _targetCPM = 120;
+        break;
+      default:
+        _targetCPM = 30;
+        break;
+    }
+#ifdef GEIGER_TEST_FAST
+    _targetCPM = _targetCPM * 100;
+#endif
+    Log::console(PSTR("GeigerTest: Setting CPM to: %d"), _targetCPM);
+    setTargetCPM(_targetCPM);
+#ifdef ESP8266
+    timer1_write(_target_pwm);
+#else
+    timerAlarmWrite(pulsetimer, _target_pwm, true);
+#endif
+  }
 #endif
 }

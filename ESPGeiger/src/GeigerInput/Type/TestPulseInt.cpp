@@ -1,5 +1,5 @@
 /*
-  GeigerInput/Type/TestPulse.cpp - Class for Test Pulse type counter
+  GeigerInput/Type/TestPulseInt.cpp - Class for Test Pulse type counter
   
   Copyright (C) 2024 @steadramon
 
@@ -16,18 +16,18 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include "TestPulse.h"
+#include "TestPulseInt.h"
 #include "../../Logger/Logger.h"
 
-GeigerTestPulse::GeigerTestPulse() {
+GeigerTestPulseInt::GeigerTestPulseInt() {
 };
 
-void GeigerTestPulse::begin() {
+void GeigerTestPulseInt::begin() {
   GeigerInput::begin();
-  Log::console(PSTR("TestPulse: Setting up Poisson test geiger ..."));
+  Log::console(PSTR("TestPulsePWM: Setting up test PWM geiger ..."));
 
 #ifdef USE_PCNT && ESP32
-  Log::console(PSTR("TestPulse: PCNT RXPIN: %d"), _rx_pin);
+  Log::console(PSTR("TestPulsePWM: PCNT RXPIN: %d"), _rx_pin);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _rx_pin,
     .ctrl_gpio_num = -1,
@@ -48,34 +48,31 @@ void GeigerTestPulse::begin() {
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
 #else
-  Log::console(PSTR("TestPulse: Interrupt RXPIN: %d"), _rx_pin);
+  Log::console(PSTR("TestPulsePWM: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);
   attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
 #endif
 
-  Log::console(PSTR("TestPulse: Test TXPIN: %d"), _tx_pin);
+  Log::console(PSTR("TestPulsePWM: Test TXPIN: %d"), _tx_pin);
   pinMode(_tx_pin, OUTPUT);
-#ifdef GEIGER_TEST_FAST
-    _target_cps = _target_cps * 2;
-#endif
-  double poisson_mult = generatePoissonRandom(_target_cps);
+  setTargetCPS(GEIGER_TEST_INITIAL_CPS);
 
 #ifdef ESP8266
   timer1_attachInterrupt(pulseInterrupt);
-  timer1_isr_init();
   timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-  timer1_write(2500000 * poisson_mult);
+  timer1_write(_target_pwm);
 #else
   pulsetimer = timerBegin(0, 80, true);
   timerAttachInterrupt(pulsetimer, pulseInterrupt, true);
-  timerAlarmWrite(pulsetimer, 500000 * poisson_mult, true);
+  timerAlarmWrite(pulsetimer, _target_pwm, true);
   timerAlarmEnable(pulsetimer);
 #endif
 }
 
-void GeigerTestPulse::loop() {
+void GeigerTestPulseInt::loop() {
   if (_pulse_send == true) {
 #ifdef ESP8266
+//    digitalWrite(_tx_pin, _bool_pulse_state);
     if (_bool_pulse_state) {
       GPOS = (1 << _tx_pin);
     } else {
@@ -94,35 +91,27 @@ void GeigerTestPulse::loop() {
 #ifdef GEIGER_COUNT_TXPULSE
       countInterrupt();
 #endif
-      double test = generatePoissonRandom(_target_cps);
-#ifdef ESP8266
-      test *= 2500000;
-      if (test > 50) {
-        timer1_write(test);
-      }
-#else
-      test *= 500000;
-      if (test > 25) {
-        timerAlarmWrite(pulsetimer, test, true);
-      }
-#endif
     }
   }
 }
 
-void GeigerTestPulse::pulseInterrupt() {
+void GeigerTestPulseInt::pulseInterrupt() {
   _pulse_send = true;
 }
 
-void GeigerTestPulse::setTargetCPM(float target) {
-  _target_cps = target/60.0;
+void GeigerTestPulseInt::setTargetCPM(float target) {
+  setTargetCPS(target/60.0);
 };
 
-void GeigerTestPulse::setTargetCPS(float target) {
-  _target_cps = target;
+void GeigerTestPulseInt::setTargetCPS(float target) {
+#ifdef ESP8266
+  _target_pwm = (int)2500000/target;
+#else
+  _target_pwm = (int)500000/target;
+#endif
 };
 
-void GeigerTestPulse::CPMAdjuster() {
+void GeigerTestPulseInt::CPMAdjuster() {
 #ifndef GEIGER_TESTPULSE_FIXEDCPM
   int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
@@ -143,20 +132,25 @@ void GeigerTestPulse::CPMAdjuster() {
         break;
     }
 #ifdef GEIGER_TEST_FAST
-    _targetCPM = _targetCPM * 2;
+    _targetCPM = _targetCPM * 100;
 #endif
-    Log::console(PSTR("TestPulse: Setting CPM to: %d"), _targetCPM);
+    Log::console(PSTR("TestPulsePWM: Setting CPM to: %d"), _targetCPM);
     setTargetCPM(_targetCPM);
+#ifdef ESP8266
+    timer1_write(_target_pwm);
+#else
+    timerAlarmWrite(pulsetimer, _target_pwm, true);
+#endif
   }
 #endif
 }
 
-void GeigerTestPulse::secondTicker() {
+void GeigerTestPulseInt::secondTicker() {
   CPMAdjuster();
 }
 
 #ifdef USE_PCNT && ESP32
-int GeigerTestPulse::collect() {
+int GeigerTestPulseInt::collect() {
   int16_t pulseCount;
   pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
   pcnt_counter_clear(PCNT_UNIT);

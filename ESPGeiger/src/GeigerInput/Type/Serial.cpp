@@ -48,7 +48,7 @@ void GeigerSerial::loop() {
   }
 }
 
-void GeigerSerial::secondticker() {
+void GeigerSerial::secondTicker() {
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
   partial_clicks += (float)serial_value/(float)60;
   if (partial_clicks >= 1.0) {

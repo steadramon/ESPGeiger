@@ -26,21 +26,31 @@
 #define GEIGER_MODEL "test"
 #endif
 
+#ifndef GEIGER_TESTPULSE_ADJUSTTIME
+#define GEIGER_TESTPULSE_ADJUSTTIME 300000
+#endif
+
 #ifndef GEIGERTESTMODE
 #define GEIGERTESTMODE
 #endif
 
 #ifdef ESP32
-static hw_timer_t * hwtimer = NULL;
+static hw_timer_t * pulsetimer = NULL;
 #endif
+
+//#define GEIGER_TEST_FAST
 
 class GeigerTest : public GeigerInput
 {
   public:
     GeigerTest();
     void begin();
-#ifdef ESP32
-    int collect();
-#endif
+    void secondTicker();
+    void setTargetCPM(float target);
+    void setTargetCPS(float target);
+    void CPMAdjuster();
+  private:
+    int _target_pwm = 0;
+    int _current_selection = -1;
 };
 #endif

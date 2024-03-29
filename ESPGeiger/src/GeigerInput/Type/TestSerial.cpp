@@ -23,16 +23,18 @@ GeigerTestSerial::GeigerTestSerial() {
 };
 
 void GeigerTestSerial::begin() {
-  Log::console(PSTR("GeigerSerial: Setting up test %s serial geiger ..."), GEIGER_MODEL);
-  Log::console(PSTR("GeigerSerial: RXPIN: %d BAUD: %d"), _rx_pin, GEIGER_BAUDRATE);
-  Log::console(PSTR("GeigerSerial: TXPIN: %d BAUD: %d"), _tx_pin, GEIGER_BAUDRATE);
+  Log::console(PSTR("TestSerial: Setting up test %s serial geiger ..."), GEIGER_MODEL);
+  Log::console(PSTR("TestSerial: RXPIN: %d BAUD: %d"), _rx_pin, GEIGER_BAUDRATE);
+  Log::console(PSTR("TestSerial: TXPIN: %d BAUD: %d"), _tx_pin, GEIGER_BAUDRATE);
   geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false);
+  serialAvg.begin(SMOOTHED_AVERAGE, 32);
+  setTargetCPS(GEIGER_TEST_INITIAL_CPS);
 }
 
 void GeigerTestSerial::loop() {
   if (geigerPort.available() > 0) {
     if (geigerPort.overflow()) {
-      Log::console(PSTR("GeigerSerial: Serial Overflow %d"), geigerPort.available());
+      Log::console(PSTR("TestSerial: Serial Overflow %d"), geigerPort.available());
     }
     optimistic_yield(100 * 1000);
     char input = geigerPort.read();
@@ -49,12 +51,64 @@ void GeigerTestSerial::loop() {
   }
 }
 
-void GeigerTestSerial::secondticker() {
-  #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
-    geigerPort.println(PSTR("CPS, 1, CPM, 123, uSv/hr, 1.23, INST"));
-  #else
-    geigerPort.println(PSTR("123"));
-  #endif
+void GeigerTestSerial::setTargetCPM(float target) {
+  setTargetCPS(target/60.0);
+};
+
+void GeigerTestSerial::setTargetCPS(float target) {
+  _poisson_target = 60.0/(target*60.0);
+};
+
+void GeigerTestSerial::CPMAdjuster() {
+#ifndef GEIGER_TESTPULSE_FIXEDCPM
+  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
+  if (selection != _current_selection) {
+    _current_selection = selection;
+    int _targetCPM = 30;
+    switch (selection) {
+      case 1:
+        _targetCPM = 60;
+        break;
+      case 2:
+        _targetCPM = 100;
+        break;
+      case 3:
+        _targetCPM = 120;
+        break;
+      default:
+        _targetCPM = 30;
+        break;
+    }
+    Log::console(PSTR("TestSerial: Setting CPM to: %d"), _targetCPM);
+    setTargetCPM(_targetCPM);
+  }
+#endif
+}
+
+void GeigerTestSerial::secondTicker() {
+  CPMAdjuster();
+  double poisson_result = generatePoissonRandom(_poisson_target);
+  serialAvg.add(poisson_result);
+  int test_serialCPM = 60 * serialAvg.get();
+
+  test_partial_clicks += poisson_result;
+  int test_serialCPS = 0;
+  if (test_partial_clicks >= 1.0) {
+    int full_clicks = (int)test_partial_clicks;
+    test_partial_clicks = test_partial_clicks - full_clicks;
+    test_serialCPS = full_clicks;
+#ifdef GEIGER_COUNT_TXPULSE
+    setCounter(full_clicks);
+#endif
+  }
+#if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
+  float test_serialuSV = (serialAvg.get() * 60.0)/175;
+  Log::debug(PSTR("TestSerial: CPS, %d, CPM, %d, uSv/hr, %.2lf, SLOW"), test_serialCPS, test_serialCPM, test_serialuSV);
+  geigerPort.printf(PSTR("CPS, %d, CPM, %d, uSv/hr, %.2lf, SLOW\n"), test_serialCPS, test_serialCPM, test_serialuSV);
+#else
+  Log::debug(PSTR("TestSerial: %d"), test_serialCPM);
+  geigerPort.printf(PSTR("%d\n"), test_serialCPM);
+#endif
   delay(10);
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
   partial_clicks += (float)serial_value/(float)60;
@@ -85,7 +139,7 @@ void GeigerTestSerial::handleSerial(char* input) {
   int n = sscanf(input, "%d\n", &_scpm);
   if (n == 1) {
 #endif
-    Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
+    Log::debug(PSTR("TestSerial: Loop - %d"), _scpm);
     setLastBlip();
     serial_value = _scpm;
     unsigned long temptime = millis();

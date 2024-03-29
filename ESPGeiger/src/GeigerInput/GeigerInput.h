@@ -28,6 +28,7 @@
 #define GEIGER_TYPE_TEST 3
 #define GEIGER_TYPE_TESTPULSE 4
 #define GEIGER_TYPE_TESTSERIAL 5
+#define GEIGER_TYPE_TESTPULSEINT 6
 
 #define GEIGER_STYPE_GC10 1
 #define GEIGER_STYPE_GC10NX 2
@@ -35,6 +36,10 @@
 
 #ifndef GEIGER_SERIALTYPE
 #define GEIGER_SERIALTYPE GEIGER_STYPE_GC10
+#endif
+
+#ifdef GEIGER_COUNT_TXPULSE
+#define GEIGER_RXPIN -1
 #endif
 
 #if GEIGER_SERIALTYPE == GEIGER_STYPE_GC10
@@ -72,16 +77,17 @@
 #endif
 
 #ifndef GEIGER_DEBOUNCE
-#define GEIGER_DEBOUNCE 500
+#define GEIGER_DEBOUNCE 100
 #endif
 
 #ifndef GEIGER_SERIAL_TYPE
 #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
 #endif
 
-static bool _handlesecond = false;
+static bool _eventFlipFlop = false;
 static volatile unsigned long _last_blip = 0;
-static volatile int eventCounter = 0;
+static volatile int eventCounter1 = 0;
+static volatile int eventCounter2 = 0;
 
 static unsigned long _debounce = microsecondsToClockCycles(GEIGER_DEBOUNCE);
 
@@ -90,36 +96,37 @@ static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
 class GeigerInput {
-    public:
-      virtual ~GeigerInput() {};
-      virtual void loop();
-      virtual void secondticker();
-      virtual int collect();
-      virtual void begin();
-      void set_rx_pin(int pin) {
-        _rx_pin = pin;
-      };
-      void set_tx_pin(int pin) {
-        _tx_pin = pin;
-      };
-      int get_rx_pin() {
-        return _rx_pin;
-      };
-      int get_tx_pin() {         
-        return _rx_pin;
-      };
-      void blip_led();
-      unsigned long last_blip();
-      const char* geiger_model();
-      static void IRAM_ATTR countInterrupt();
-      void setCounter(int val, bool update);
-      void setCounter(int val);
-      void setLastBlip();
-    private:
-      void (*callback)(void) = nullptr; // Member variable to store callback function pointer
-    protected:
-      int _tx_pin = GEIGER_TXPIN;
-      int _rx_pin = GEIGER_RXPIN;
+  public:
+    virtual ~GeigerInput() {};
+    virtual void loop();
+    virtual void secondTicker();
+    virtual int collect();
+    virtual void begin();
+    void set_rx_pin(int pin) {
+      _rx_pin = pin;
+    };
+    void set_tx_pin(int pin) {
+      _tx_pin = pin;
+    };
+    int get_rx_pin() {
+      return _rx_pin;
+    };
+    int get_tx_pin() {
+      return _rx_pin;
+    };
+    void blip_led();
+    unsigned long last_blip();
+    const char* geiger_model();
+    static void IRAM_ATTR countInterrupt();
+    void setCounter(int val, bool update);
+    void setCounter(int val);
+    void setLastBlip();
+    double generatePoissonRandom(double lambda);
+  private:
+    void (*callback)(void) = nullptr; // Member variable to store callback function pointer
+  protected:
+    int _tx_pin = GEIGER_TXPIN;
+    int _rx_pin = GEIGER_RXPIN;
 };
 
 #endif

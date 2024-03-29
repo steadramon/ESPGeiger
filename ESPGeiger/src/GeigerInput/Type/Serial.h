@@ -49,7 +49,7 @@ class GeigerSerial : public GeigerInput
     GeigerSerial();
     void begin();
     void loop();
-    void secondticker();
+    void secondTicker();
   private:
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;

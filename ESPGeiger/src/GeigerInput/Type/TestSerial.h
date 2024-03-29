@@ -20,6 +20,7 @@
 #define GEIGERTESTSRL_H
 #include <Arduino.h>
 #include <SoftwareSerial.h>
+#include <Smoothed.h>
 static EspSoftwareSerial::UART geigerPort;
 
 /*
@@ -45,6 +46,12 @@ GC10 60\n
 #define GEIGERTESTMODE
 #endif
 
+#ifndef GEIGER_TESTPULSE_ADJUSTTIME
+#define GEIGER_TESTPULSE_ADJUSTTIME 300000
+#endif
+
+#define GEIGER_TEST_INITIAL_CPS 0.5
+
 #include "../GeigerInput.h"
 
 class GeigerTestSerial : public GeigerInput
@@ -53,7 +60,10 @@ class GeigerTestSerial : public GeigerInput
     GeigerTestSerial();
     void begin();
     void loop();
-    void secondticker();
+    void secondTicker();
+    void setTargetCPM(float target);
+    void setTargetCPS(float target);
+    void CPMAdjuster();
   private:
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
@@ -62,5 +72,9 @@ class GeigerTestSerial : public GeigerInput
     int serial_value = 0;
     unsigned long last_serial;
     int avg_diff;
+    Smoothed <float> serialAvg;
+    float test_partial_clicks = 0;
+    float _poisson_target = 0;
+    int _current_selection = 0;
 };
 #endif

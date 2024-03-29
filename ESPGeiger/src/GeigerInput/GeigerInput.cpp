@@ -25,23 +25,28 @@ void GeigerInput::begin() {
 }
 
 int GeigerInput::collect() {
-  _handlesecond = true;
-  int current = eventCounter;
 #ifdef ESP32
     portENTER_CRITICAL_ISR(&timerMux);
 #endif
-    eventCounter = 0;
+  _eventFlipFlop = !_eventFlipFlop;
 #ifdef ESP32
     portEXIT_CRITICAL_ISR(&timerMux);
 #endif    
-  _handlesecond = false;
+  int current = 0;
+  if (_eventFlipFlop == false) {
+    current = eventCounter1;
+    eventCounter1 = 0;
+  } else {
+    current = eventCounter2;
+    eventCounter2 = 0;
+  }
   return current;
 }
 
 void GeigerInput::loop() {
 }
 
-void GeigerInput::secondticker() {
+void GeigerInput::secondTicker() {
 }
 
 void GeigerInput::setLastBlip()  {
@@ -54,19 +59,21 @@ unsigned long GeigerInput::last_blip()  {
 }
 
 void GeigerInput::countInterrupt() {
-  if (_handlesecond)
-    return;
   unsigned long cycles = ESP.getCycleCount();
-  if (cycles - _last_blip > _debounce) {
-#ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
-#endif
-    eventCounter++;
-#ifdef ESP32
-    portEXIT_CRITICAL_ISR(&timerMux);
-#endif    
-    _last_blip = cycles;
+  if (cycles - _last_blip < _debounce) {
+    return;
   }
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&timerMux);
+#endif
+  if (_eventFlipFlop == true)
+    eventCounter1++;
+  else
+    eventCounter2++;
+#ifdef ESP32
+  portEXIT_CRITICAL_ISR(&timerMux);
+#endif    
+  _last_blip = cycles;
 }
 
 void GeigerInput::setCounter(int val) {
@@ -74,11 +81,19 @@ void GeigerInput::setCounter(int val) {
 }
 
 void GeigerInput::setCounter(int val, bool update = true) {
-  if (_handlesecond)
-    return;
-  eventCounter = val;
+  if (_eventFlipFlop == true)
+    eventCounter1 = val;
+  else
+    eventCounter2 = val;
   if (!update)
     return;
   unsigned long cycles = ESP.getCycleCount();
   _last_blip = cycles;
+}
+
+double GeigerInput::generatePoissonRandom(double lambda) {
+  // https://tomroelandts.com/articles/simulating-a-geiger-counter
+	double u;
+	u = random(RAND_MAX) * 1.0 / RAND_MAX;
+	return -log(1 - u) / lambda;
 }

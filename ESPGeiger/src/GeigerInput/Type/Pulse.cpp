@@ -57,8 +57,10 @@ int GeigerPulse::collect() {
   int16_t pulseCount;
   pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
   pcnt_counter_clear(PCNT_UNIT);
-  if (pulseCount != eventCounter) {
+  if (pulseCount != 0) {
     setCounter(pulseCount);
+  } else {
+    setCounter(pulseCount, false);
   }
   return pulseCount;
 }

@@ -1,5 +1,5 @@
 /*
-  GeigerInput/Type/TestPulse.cpp - Class for Test Pulse type counter
+  GeigerInput/Type/TestPulseInt.cpp - Class for Test Pulse type counter
   
   Copyright (C) 2024 @steadramon
 
@@ -16,16 +16,14 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef GEIGERTESTPLS_H
-#define GEIGERTESTPLS_H
+#ifndef GEIGERTESTPLSPWM_H
+#define GEIGERTESTPLSPWM_H
 
 #include <Arduino.h>
 
 #ifdef ESP32
 #ifndef IGNORE_PCNT
-#ifndef GEIGER_COUNT_TXPULSE
 #define USE_PCNT
-#endif
 #endif
 #endif
 
@@ -73,10 +71,10 @@ static hw_timer_t * pulsetimer = NULL;
 
 //#define GEIGER_TEST_FAST
 
-class GeigerTestPulse : public GeigerInput
+class GeigerTestPulseInt : public GeigerInput
 {
   public:
-    GeigerTestPulse();
+    GeigerTestPulseInt();
     void begin();
     void loop();
     static void IRAM_ATTR pulseInterrupt();
@@ -90,6 +88,6 @@ class GeigerTestPulse : public GeigerInput
   private:
     bool _bool_pulse_state = false;
     int _current_selection = -1;
-    float _target_cps = GEIGER_TEST_INITIAL_CPS;
+    int _target_pwm = 0;
 };
 #endif

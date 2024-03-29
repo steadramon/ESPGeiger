@@ -33,11 +33,13 @@ Counter::Counter() {
   geigerinput = new GeigerTestPulse();
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
   geigerinput = new GeigerTestSerial();
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
+  geigerinput = new GeigerTestPulseInt();
 #endif
 }
 
 void Counter::secondticker() {
-  geigerinput->secondticker();
+  geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
   unsigned long int secidx = (millis() / 1000) % 60;
@@ -57,11 +59,11 @@ void Counter::secondticker() {
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
     struct tm *timeinfo = gmtime (&currentTime);
-#ifdef GEIGERTESTMODE
-    if (timeinfo->tm_sec == 0) {
-#else
+//#ifdef GEIGERTESTMODE
+//    if (timeinfo->tm_sec == 0) {
+//#else
     if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
-#endif
+//#endif
       day_hourly_history.push(clicks_hour);
       clicks_hour = 0;
       if (timeinfo->tm_hour == 0) {
