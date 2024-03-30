@@ -1,11 +1,11 @@
 ---
 layout: page
-title: Thingspeak
+title: ThingSpeak
 permalink: /output/thingspeak
 parent: Outputs
 nav_order: 10
 ---
 
-# Thingspeak
+# ThingSpeak
 
-![Thingspeak](/img/thingspeak.png)
+![ThingSpeak](/img/thingspeak.png)
