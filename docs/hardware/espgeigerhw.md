@@ -35,8 +35,8 @@ ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGei
 ## Features
 
 - ESP8266 MCU based Geiger Counter
-- Low 5V power requirements
 - Compatible with various Geiger-Muller tubes
+- 5V power requirements
 - On-board High Voltage boost circuit
 - High Voltage circuit adjustment and feedback
 - OLED display
