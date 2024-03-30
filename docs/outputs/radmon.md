@@ -8,8 +8,10 @@ nav_order: 10
 
 # Radmon.org
 
-ESPGeiger can submit CPM values every 60 seconds to [radmon.org](https://radmon.org/), the global radiation monitoring map and community for geiger counter enthusiasts.
+ESPGeiger allows you to contribute to the global monitoring of radiation levels by submitting your Geiger counter readings to [radmon.org](https://radmon.org/). Radmon is a free community for enthusiasts interested in tracking background radiation and potential events.
 
-To submit to radmon.org you will require a user account. After registering at [radmon.org](https://radmon.org/) you will be able to configure a __data sending password__ for ESPGeiger in the radmon.org station [Control Panel](https://radmon.org/index.php/control-panel).
+1. __Register on radmon.org__: Create a free account on the radmon.org website.
+2. __Configure Data Sending Password__: Login to your radmon.org account and navigate to the [Control Panel](https://radmon.org/index.php/control-panel). Within the control panel, locate the section for setting up the __data sending password__ for your station.
+3. __Configure ESPGeiger__: In the ESPGeiger web interface, click __Config__ and enter your radmon.org username and the __data sending password__ in the relevant fields. ESPGeiger will submit your CPM readings to radmon.org every 60 seconds.
 
-ESPGeiger should be configured with your radmon.org username and __data sending password__. ESPGeiger will report the submission status in the Web Interface console.
+ESPGeiger will report the submission status in the Web Interface console. Once your ESPGeiger is set up and transmitting data, your station will appear on the radmon.org map and Stations list.
