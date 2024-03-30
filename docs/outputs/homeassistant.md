@@ -14,7 +14,7 @@ ESPGeiger automatically integrates into [Home Assistant](https://www.home-assist
 
 Within Home Assistant MQTT discovery is enabled by default. The default prefix for the discovery topic is `homeassistant`. For information on how to change this in Home Assistant, please see the Home Assistant Documentation for [discovery options](https://www.home-assistant.io/integrations/mqtt/#discovery-options).
 
-The MQTT discovery topic can be adjusted within the ESPGeiger Config pages.
+The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/configuration#mqtt-configuration).
 
 A number of entities are published to the MQTT auto discovery topic, these are detailed below:
 
