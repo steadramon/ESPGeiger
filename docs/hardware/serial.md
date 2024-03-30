@@ -16,9 +16,9 @@ A list of currently supported serial Geiger counters can be found below
 
 | Counter | Image | Serial Rate | Serial Example | Notes |
 |---|---|---|---|---|
-[MightyOhm Kit](https://www.tindie.com/stores/mightyohm/) | ![MightyOhm](img/mightyohm.jpg#img-thumbnail) | 9600 | `CPS, ####, CPM, ####, uSv/hr, #.##, [INST/FAST/SLOW]\n` | 
-[NetIO GC10](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | 9600 | `60\n` | 
-[NetIO GC10next](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10next](img/gc10next.jpg#img-thumbnail) | 115200 | `60\n` |
+[MightyOhm Kit](https://www.tindie.com/stores/mightyohm/) | ![MightyOhm](img/mightyohm.jpg#img-thumbnail) | `9600` | `CPS, ####, CPM, ####, uSv/hr, #.##, [INST/FAST/SLOW]\n` | 
+[NetIO GC10](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | `9600` | `60\n` | 
+[NetIO GC10next](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10next](img/gc10next.jpg#img-thumbnail) | `115200` | `60\n` |
 
 ## Unsupported Counters
 
