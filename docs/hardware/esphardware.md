@@ -12,6 +12,10 @@ ESPGeiger is written to be compatible with both the ESP8266 and ESP32 range of M
 
 ## ESP8266
 
+The [Wemos D1 Mini](https://s.click.aliexpress.com/e/_DmfPg5L) (4MB) is the recommended ESP8266 MCU for ESPGeiger.
+
+The ESP8266 ESPGeiger build is the base firmware for the official ESPGeiger-based hardware __ESPGeiger-HW__ and __ESPGeiger Log__.
+
 ## ESP32
 
 ### PCNT
