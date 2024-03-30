@@ -20,7 +20,7 @@ A number of entities are published to the MQTT auto discovery topic, these are d
 
 | Value | Description |  Example Value | Publish Interval |
 |---|---|---|---|
-`ESPGeiger‑<device_id> CPM` | Current Counts Per Minute (CPM) value. | `30.0` | 60
-`ESPGeiger‑<device_id> CPM5` | Average CPM over the last 5 minutes. | `30.0` | 60
-`ESPGeiger‑<device_id> CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
-`ESPGeiger‑<device_id> uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
+`ESPGeiger‑<device_id> CPM` | Current Counts Per Minute (CPM) value. | `30.0` | 60
+`ESPGeiger‑<device_id> CPM5` | Average CPM over the last 5 minutes. | `30.0` | 60
+`ESPGeiger‑<device_id> CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
+`ESPGeiger‑<device_id> uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
