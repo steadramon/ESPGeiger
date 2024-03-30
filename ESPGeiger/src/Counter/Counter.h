@@ -63,6 +63,8 @@ class Counter {
       int get_cpm15();
       float get_cpm15f();
       float get_usv();
+      float get_usv5();
+      float get_usv15();
       float get_millirem();
       void set_ratio(float ratio);
       float get_ratio() {

@@ -121,13 +121,18 @@ void Counter::set_ratio(float ratio) {
 }
 
 float Counter::get_usv() {
-  float avgcpm = geigerTicks.get()*60;
-  return avgcpm/_ratio;
+  float avgCPM = geigerTicks.get()*60;
+  return avgCPM/_ratio;
 }
 
-float Counter::get_millirem() {
-  float avgcpm = geigerTicks.get()*60;
-  return (avgcpm/_ratio)/10;
+float Counter::get_usv5() {
+  float avgCPM = geigerTicks5.get()*60;
+  return avgCPM/_ratio;
+}
+
+float Counter::get_usv15() {
+  float avgCPM = geigerTicks15.get()*60;
+  return avgCPM/_ratio;
 }
 
 void Counter::begin() {

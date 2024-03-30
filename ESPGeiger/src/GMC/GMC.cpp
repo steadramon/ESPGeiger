@@ -93,7 +93,7 @@ void GMC::postMeasurement() {
 
   int avgcpm = gcounter.get_cpm();
   int avgcpm5 = gcounter.get_cpm5();
-  float usv =  gcounter.get_usv();
+  float usv =  gcounter.get_usv5();
   char usvChar[20];
   dtostrf(usv,1,5, usvChar);
   char url[256];
