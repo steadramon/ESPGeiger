@@ -53,8 +53,10 @@ Note: By default the RXPIN for ESPGeiger is set to `GPIO13` - this can be change
 
 <img src="/img/D1mini-basicwiring.png" title="D1 mini basic wiring">
 
-- Connect the *Pulse Output* of the Geiger Counter to `GPIO13`
+- Connect the *Pulse Output* of the Geiger Counter to `GPIO13` (`D7` on an Wemos D1 Mini)
 - Connect the `GND` of the Geiger Counter to `GND`
+
+<img src="/img/cajoe-wemosd1.jpg" width="50%" title="D1 mini basic wiring">
 
 A flashing/"blipping" status LED on the ESP device visually confirms that ESPGeiger is receiving readings from your Geiger counter.
 
