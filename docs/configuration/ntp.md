@@ -12,8 +12,7 @@ ESPGeiger makes use of Network Time Protocol to keep time within the firmware. N
 
 NTP synchronisation is required for a number of functions within the firmware, including:
 
-- SD Card writing
-- Submission to 
+- Accurate SD Card writing
 
 ## Options
 
