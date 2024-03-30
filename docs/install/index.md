@@ -25,7 +25,7 @@ Optional:
 
 _OR_
 
-- ESPGeigerHW Geiger Counter kit
+- [ESPGeigerHW Geiger Counter](http://docs.espgeiger.com/hardware/espgeigerhw) kit
 
 ## Firmware Install
 
@@ -35,9 +35,9 @@ The easiest way to install ESPGeiger is to visit the web based installed in your
   - Select your Geiger Counter type from the dropdown list - in most cases this is "Pulse"
   - Installation takes up to two minutes
   - Once installed your ESP device will create its own Wi-Fi network with the name in the format of "**ESPGeiger-XXXXXX**"
-  - The status LED of the ESP will be lit on installation has completed.
+  - The status LED of the ESP will be lit once installation has completed.
   - For [ESPGeiger-HW firmware](https://install.espgeiger.com?board=espgeigerhw) and [ESPGeiger Log firmware](https://install.espgeiger.com?board=espgeigerlog) you can follow these links directly.
-2. On your phone or computer, connect to to the new Wi-Fi network
+2. On your phone or computer, connect to to the new Wi-Fi network (**ESPGeiger-XXXXXX**)
   - A configuration web page should appear once connected, if not browse to <http://192.168.4.1/>
   - Make a note of the name of the ESPGeiger (**ESPGeiger-XXXXXX**) - we will need this soon.
 3. Configure ESPGeiger to connect to your home Wi-Fi network
@@ -55,3 +55,7 @@ Note: By default the RXPIN for ESPGeiger is set to `GPIO13` - this can be change
 
 - Connect the *Pulse Output* of the Geiger Counter to `GPIO13`
 - Connect the `GND` of the Geiger Counter to `GND`
+
+A flashing/"blipping" status LED on the ESP device visually confirms that ESPGeiger is receiving readings from your Geiger counter.
+
+Specific instructions and diagrams for connecting ESPGeiger to a variety of different Geiger counters can be found here.
