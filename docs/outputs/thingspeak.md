@@ -6,6 +6,6 @@ parent: Outputs
 nav_order: 10
 ---
 
-# ThingSpeak
+# ThingSpeak Output
 
 ![ThingSpeak](/img/thingspeak.png)

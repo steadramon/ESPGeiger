@@ -6,7 +6,7 @@ parent: Outputs
 nav_order: 10
 ---
 
-# Radmon.org
+# Radmon.org Output
 
 ESPGeiger allows you to contribute to the global monitoring of radiation levels by submitting your Geiger counter readings to [radmon.org](https://radmon.org/). Radmon is a free community for enthusiasts interested in tracking background radiation and potential events.
 

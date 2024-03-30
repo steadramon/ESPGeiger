@@ -6,7 +6,7 @@ parent: Outputs
 nav_order: 10
 ---
 
-# Neopixel
+# Neopixel Output
 
 The NeoPixel output for ESPGeiger gives intuitive feedback to the user by means of color and frequency.
 

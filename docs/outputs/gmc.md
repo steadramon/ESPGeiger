@@ -6,7 +6,7 @@ parent: Outputs
 nav_order: 10
 ---
 
-# GMC World Map
+# GMC World Map Output
 
 ESPGeiger allows you to contribute to the global monitoring of radiation levels by submitting your Geiger counter readings to [GMC World Map](http://www.gmcmap.com/). GMC World Map is provided by [GQ Electronics](https://www.gqelectronicsllc.com), who also design, build and sell a range of Geiger Counters.
 

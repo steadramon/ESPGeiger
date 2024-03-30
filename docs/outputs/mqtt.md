@@ -6,7 +6,7 @@ parent: Outputs
 nav_order: 10
 ---
 
-# MQTT
+# MQTT Output
 
 ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This section details its interaction with MQTT brokers.
 
