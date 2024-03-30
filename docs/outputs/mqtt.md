@@ -18,12 +18,12 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 
 | Topic | Description |  Example Value | Publish Interval |
 |---|---|---|---|
-`ESPGeiger‑<device_id>/tele/lwt` | Last Will and Testament (LWT) topic. Indicates ESPGeiger's connection status to the MQTT broker. | `Online` | -
-`ESPGeiger‑<device_id>/stat/CPM` | Current Counts Per Minute (CPM) value. | `30.0` | 60
-`ESPGeiger‑<device_id>/stat/CPM5` | Average CPM over the last 5 minutes. | `30.0` | 60
-`ESPGeiger‑<device_id>/stat/CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
-`ESPGeiger‑<device_id>/stat/uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
-`ESPGeiger‑<device_id>/tele/status` | Current status of ESPGeiger in JSON format. | `(status_json)` | 60
+`ESPGeiger‑<device_id>⁠/⁠tele⁠/⁠lwt` | Last Will and Testament (LWT) topic. Indicates ESPGeiger's connection status to the MQTT broker. | `Online` | -
+`ESPGeiger‑<device_id>⁠/⁠stat⁠/⁠CPM` | Current Counts Per Minute (CPM) value. | `30.0` | 60
+`ESPGeiger‑<device_id>⁠/⁠stat⁠/⁠CPM5` | Average CPM over the last 5 minutes. | `30.0` | 60
+`ESPGeiger‑<device_id>⁠/⁠stat⁠/⁠CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
+`ESPGeiger‑<device_id>⁠/⁠stat⁠/⁠uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
+`ESPGeiger‑<device_id>⁠/⁠tele⁠/⁠status` | Current status of ESPGeiger in JSON format. | `(status_json)` | 60
 
 ## Example Status JSON Output
 
