@@ -44,6 +44,11 @@ void NeoPixel::setBrightness(int input) {
   if (input < 0) {
     input = 0;
   }
+  if (input == 0) {
+    RgbColor black(0);
+    this->controller_->SetPixelColor(0, black);
+    this->controller_->Show();
+  }
   colorSaturation = input;
 }
 
@@ -56,6 +61,9 @@ void NeoPixel::blip()
 
 void NeoPixel::blink(uint16 timer)
 {
+  if (colorSaturation == 0) {
+    return;
+  }
   float our_cpm = gcounter.get_cpmf();
   float our_5cpm = gcounter.get_cpm5f();
   RgbColor rgb(0, colorSaturation, 0);
@@ -98,6 +106,9 @@ void NeoPixel::blink(uint16 timer)
 
 void NeoPixel::loop()
 {
+  if (colorSaturation == 0) {
+    return;
+  }
   unsigned long now = millis();
   if (now - onTime >= offTime)
   {
