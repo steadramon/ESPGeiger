@@ -29,3 +29,5 @@ Simulated values follow a Poisson distribution, mimicking the random nature of r
 ## Emulation and Communication
 
 In these test build modes, you can connect the `TXPIN` (transmit pin) of one ESPGeiger device to the `RXPIN` (receive pin) of another ESPGeiger device, either the same unit or a different one. This setup allows you to create a closed-loop testing environment, mimicking real-world Geiger counter communication scenarios.
+
+_Note_: No values are submitted to public services with Test builds.
