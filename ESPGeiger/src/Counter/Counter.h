@@ -37,7 +37,7 @@
 #include "../GeigerInput/Type/TestPulse.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
 #include "../GeigerInput/Type/TestSerial.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEPWM
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
 #include "../GeigerInput/Type/TestPulseInt.h"
 #endif
 
