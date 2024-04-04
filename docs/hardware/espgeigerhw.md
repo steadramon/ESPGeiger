@@ -97,6 +97,10 @@ The following tubes should also be compatible but are currently untested
 
 # Thanks
 
+The hardware circuit is inspired by this article from January 2004 at [Nuts and Volts Magazine](https://www.nutsvolts.com/magazine/article/pocket-geiger-unit) and a number of other counters based around the same design.
+
+Mentions also go to [Jeff Keyzer](https://mightyohm.com/) and [www.netiodev.com](http://www.netiodev.com) for general inspiration.
+
 Special thanks goes to the following people for the help and advice during development of the hardware.
 
 - [Jander](https://r.jander.me.uk/) 
