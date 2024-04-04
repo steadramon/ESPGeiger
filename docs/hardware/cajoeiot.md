@@ -7,8 +7,7 @@ nav_order: 99
 ---
 <style>
 #espghwimg {
-  width: 100%;
-  max-height: 300px;
+  width: 70%;
 }
 </style>
 
