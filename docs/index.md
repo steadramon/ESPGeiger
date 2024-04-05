@@ -32,3 +32,13 @@ ESPGeiger is used to power __ESPGeiger-HW__ - the fully featured IoT Geiger Coun
 ESPGeiger-HW is almost ready for release!
 
 <img src="../img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
+
+# Disclaimer
+{: .highlight }
+> The creators of ESPGeiger make no claims about the suitability of the firmware or hardware for measuring radiation in any serious/life threatening situation. ESPGeiger is created as an educational resource for hobbyists and makers a-like.
+> 
+> Always avoid the high voltage elements on any Geiger Counter, many of which have exposed circuitry.
+>
+> Please use extreme caution and safe practice when handling and storing known radioactive sources.
+>
+> Stay safe!
