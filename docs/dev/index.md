@@ -26,6 +26,15 @@ ESPGeiger offers test builds specifically designed for ESP8266 and ESP32 microco
 
 Simulated values follow a Poisson distribution, mimicking the random nature of real radioactive decay.
 
+By default the Test output cycles through several ranges of reading, switch each 5 minute period:
+
+- 0.5 CPS / 30 CPM
+- 1 CPS / 60 CPM
+- 1.66 CPS / 100 CPM
+- 2 CPS / 120 CPM
+
+A build option is available to count the number of CPM sent on the local device, note that if this option is enabled and the `RXPIN` and `TXPIN` of the same device are connected together, counted values will be doubled.
+
 ## Emulation and Communication
 
 In these test build modes, you can connect the `TXPIN` (transmit pin) of one ESPGeiger device to the `RXPIN` (receive pin) of another ESPGeiger device, either the same unit or a different one. This setup allows you to create a closed-loop testing environment, mimicking real-world Geiger counter communication scenarios.
