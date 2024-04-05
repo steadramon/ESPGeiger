@@ -28,6 +28,7 @@ MightyOhm CPS, 1, CPM, 60, uSv/hr, 1.23, INST/FAST/SLOW\n
 GC10 60\n
 
 */
+#include "../GeigerInput.h"
 
 #ifndef GEIGER_BAUDRATE
 #define GEIGER_BAUDRATE 9600
@@ -41,7 +42,6 @@ GC10 60\n
 #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
 #endif
 
-#include "../GeigerInput.h"
 
 class GeigerSerial : public GeigerInput
 {
