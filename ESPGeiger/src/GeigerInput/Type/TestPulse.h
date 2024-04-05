@@ -41,6 +41,8 @@ extern "C" {
 #define PCNT_CHANNEL PCNT_CHANNEL_0
 #endif
 
+#include "../GeigerInput.h"
+
 #ifndef GEIGER_DEBOUNCE
 #define GEIGER_DEBOUNCE 500
 #endif
@@ -53,17 +55,13 @@ extern "C" {
 #define GEIGER_TXPIN 12
 #endif
 
-#include "../GeigerInput.h"
-
 static bool _pulse_send = false;
 
 #ifndef GEIGER_TESTPULSE_ADJUSTTIME
 #define GEIGER_TESTPULSE_ADJUSTTIME 300000
 #endif
 
-#ifndef GEIGERTESTMODE
 #define GEIGERTESTMODE
-#endif
 
 #ifdef ESP32
 static hw_timer_t * pulsetimer = NULL;

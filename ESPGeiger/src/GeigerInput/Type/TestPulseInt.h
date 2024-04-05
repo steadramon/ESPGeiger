@@ -59,9 +59,7 @@ static bool _pulse_send = false;
 #define GEIGER_TESTPULSE_ADJUSTTIME 300000
 #endif
 
-#ifndef GEIGERTESTMODE
 #define GEIGERTESTMODE
-#endif
 
 #ifdef ESP32
 static hw_timer_t * pulsetimer = NULL;

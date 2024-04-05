@@ -39,11 +39,11 @@ extern "C" {
 #define PCNT_CHANNEL PCNT_CHANNEL_0
 #endif
 
+#include "../GeigerInput.h"
+
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "genpulse"
 #endif
-
-#include "../GeigerInput.h"
 
 class GeigerPulse : public GeigerInput
 {
