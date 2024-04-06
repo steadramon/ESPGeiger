@@ -20,7 +20,7 @@ Below is the quick overview of installing ESPGeiger, for more detailed informati
 
 Optional:
 
-- OLED screen
+- OLED screen (SSD1305 0.96-inch 128x64)
 - [ESPGeiger Log](/hardware/espgeigerlog) kit
 
 _OR_
