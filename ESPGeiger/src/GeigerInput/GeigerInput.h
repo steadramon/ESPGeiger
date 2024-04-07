@@ -102,6 +102,9 @@ class GeigerInput {
     virtual void secondTicker();
     virtual int collect();
     virtual void begin();
+    void set_debounce(int debounce) {
+      _debounce = microsecondsToClockCycles(debounce);
+    }
     void set_rx_pin(int pin) {
       _rx_pin = pin;
     };
