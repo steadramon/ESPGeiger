@@ -77,7 +77,7 @@
 #endif
 
 #ifndef GEIGER_DEBOUNCE
-#define GEIGER_DEBOUNCE 100
+#define GEIGER_DEBOUNCE 500
 #endif
 
 #ifndef GEIGER_SERIAL_TYPE
