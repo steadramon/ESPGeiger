@@ -55,6 +55,7 @@ static char strBuffer[35]; ///< @brief Temporary buffer for time and date string
 class NTPClient {
 protected:
     unsigned long uptime = 0;       ///< @brief Time since boot
+    uint16_t rolloverMillis = 0;
 public:
 
     /**
@@ -62,7 +63,10 @@ public:
     * @return Uptime
     */
     time_t getUptime () {
-        uptime = uptime + ((::millis ()/1000) - uptime);
+        if (uptime*1000 > ::millis ()) {
+          rolloverMillis++;
+        }
+        uptime = ::millis()/1000 + rolloverMillis*4294967;
         return uptime;
     }
 
