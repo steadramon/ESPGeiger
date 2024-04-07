@@ -45,7 +45,12 @@ void Counter::secondticker() {
   unsigned long int secidx = (millis() / 1000) % 60;
   //Log::console(PSTR("Counter: Events - %d - %d"), eventCounter, secidx);
   geigerTicks.add(eventCounter);
+  unsigned long previous_total_clicks = total_clicks;
   total_clicks += eventCounter;
+  if (previous_total_clicks > total_clicks) {
+    total_clicks = eventCounter;
+    total_clicks_rollover++;
+  }
 
   cpm_history.push(get_cpm());
 

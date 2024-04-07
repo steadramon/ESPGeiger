@@ -105,6 +105,7 @@ class Counter {
         _bool_cpm_alert = false;
       }
       unsigned long clicks_hour = 0;
+      unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;
       unsigned long clicks_today = 0;
       unsigned long clicks_yesterday = 0;
