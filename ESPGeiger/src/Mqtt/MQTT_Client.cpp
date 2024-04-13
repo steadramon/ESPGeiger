@@ -41,7 +41,6 @@ void MQTT_Client::disconnect()
 }
 void MQTT_Client::loop()
 {
-
   if (!mqttEnabled) {
     return;
   }
@@ -54,7 +53,7 @@ void MQTT_Client::loop()
 
   if (PubSubClient::loop())
   {
-    connectionAtempts = 0;
+    connectionAttempts = 0;
     status.mqtt_connected = true;
   }
   else
@@ -63,16 +62,16 @@ void MQTT_Client::loop()
     if (millis() - lastConnectionAtempt > reconnectionInterval)
     {
       lastConnectionAtempt = millis();
-      connectionAtempts++;
+      connectionAttempts++;
 
       lastPing = millis();
       reconnect();
     }
   }
 
-  if (connectionAtempts > connectionTimeout)
+  if (connectionAttempts > connectionTimeout)
   {
-    Log::console(PSTR("Unable to connect to MQTT Server after many atempts. Restarting..."));
+    Log::console(PSTR("Unable to connect to MQTT Server after many attempts. Restarting..."));
     ESP.restart();
   }
 
