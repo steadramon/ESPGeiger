@@ -64,7 +64,7 @@ protected:
 private:
   MQTT_Client();
   static ConfigManager _configManager;
-  String buildTopic(const char * baseTopic, const char * cmnd);
+  String buildTopic(const char * baseTopic, const char * cmd);
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
   void setupHassCB();
@@ -81,8 +81,8 @@ private:
                         std::vector<std::pair<char*, char*>> additionalEntries = {}
                       );
   void removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName);
-  void mqttDataCallback(char* topic, byte* payload, unsigned int length);
 #endif
+  void mqttDataCallback(char* topic, byte* payload, unsigned int length);
   unsigned long lastPing = 0;
   unsigned long lastConnectionAtempt = 0;
   uint8_t connectionAttempts = 0;
