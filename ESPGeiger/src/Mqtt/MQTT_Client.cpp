@@ -218,6 +218,7 @@ void MQTT_Client::setupHassAuto() {
     PSTR(""),
     { {"unit_of_meas", "CPM"},
       { "ic", "mdi:pulse" }});
+
   publishHassTopic(PSTR("sensor"),
     PSTR("cpm5"),
     PSTR("CPM5"),
@@ -256,6 +257,21 @@ void MQTT_Client::setupHassAuto() {
     PSTR(""),
     { {"unit_of_meas", "\u00B5S/h"},
       { "ic", "mdi:radioactive" }});
+
+#ifdef ESPGEIGER_HW
+  publishHassTopic(PSTR("sensor"),
+    PSTR("HV"),
+    PSTR("HV"),
+    PSTR("HV"),
+    PSTR("HV"),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    { {"unit_of_meas", "V"},
+      { "ic", "mdi:lightning-bolt" }});
+#endif
 
 }
 
