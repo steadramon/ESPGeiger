@@ -154,56 +154,8 @@ void MQTT_Client::reconnect()
     status.mqtt_connected = true;
     publish(buildTopic(teleTopic, topicLWT).c_str(), lwtOnline, false);
 #ifdef MQTTAUTODISCOVER
-    publishHassTopic(PSTR("sensor"),
-      PSTR("cpm"),
-      PSTR("CPM"),
-      PSTR("CPM"),
-      PSTR("CPM"),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      { {"unit_of_meas", "CPM"},
-        { "ic", "mdi:pulse" }});
-    publishHassTopic(PSTR("sensor"),
-      PSTR("cpm5"),
-      PSTR("CPM5"),
-      PSTR("CPM5"),
-      PSTR("CPM5"),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      { {"unit_of_meas", "CPM"},
-        { "ic", "mdi:pulse" }});
-
-    publishHassTopic(PSTR("sensor"),
-      PSTR("cpm15"),
-      PSTR("CPM15"),
-      PSTR("CPM15"),
-      PSTR("CPM15"),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      { {"unit_of_meas", "CPM"},
-        { "ic", "mdi:pulse" }});
-
-    publishHassTopic(PSTR("sensor"),
-      PSTR("usv"),
-      PSTR("\u00B5Sv/h"),
-      PSTR("uSv"),
-      PSTR("uSv"),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      PSTR(""),
-      { {"unit_of_meas", "\u00B5S/h"},
-        { "ic", "mdi:radioactive" }});
+    this->setupHassAuto();
+    this->setupHassCB();
 #endif
   }
   else
@@ -214,18 +166,100 @@ void MQTT_Client::reconnect()
 
 }
 
-String MQTT_Client::buildTopic(const char *baseTopic, const char *cmnd)
+String MQTT_Client::buildTopic(const char *baseTopic, const char *cmd)
 {
   ConfigManager &configManager = ConfigManager::getInstance();
   String topic = baseTopic;
   String rootTopic = configManager.getParamValueFromID("mqttTopic");
   rootTopic.replace(PSTR("{id}"), configManager.getChipID());
   topic.replace(PSTR("%st%"), rootTopic);
-  topic.replace(PSTR("%cm%"), cmnd);
+  topic.replace(PSTR("%cm%"), cmd);
 
   return topic;
 }
 #ifdef MQTTAUTODISCOVER
+
+void MQTT_Client::setupHassCB() {
+  ConfigManager &configManager = ConfigManager::getInstance();
+  const char* _send = configManager.getParamValueFromID("hassSend");
+  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+    return;
+  }
+  const char* _discovery_topic = configManager.getParamValueFromID("hassDisc");
+  if (_discovery_topic == NULL) {
+    return;
+  }
+  String path = _discovery_topic;
+  path.concat(PSTR("/status"));
+  subscribe(path.c_str());
+}
+
+void MQTT_Client::setupHassAuto() {
+  ConfigManager &configManager = ConfigManager::getInstance();
+  const char* _send = configManager.getParamValueFromID("hassSend");
+  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+    return;
+  }
+  const char* _discovery_topic = configManager.getParamValueFromID("hassDisc");
+  if (_discovery_topic == NULL) {
+    return;
+  }
+
+  Log::console(PSTR("MQTT: Publishing HA autodiscovery"));
+
+  publishHassTopic(PSTR("sensor"),
+    PSTR("cpm"),
+    PSTR("CPM"),
+    PSTR("CPM"),
+    PSTR("CPM"),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    { {"unit_of_meas", "CPM"},
+      { "ic", "mdi:pulse" }});
+  publishHassTopic(PSTR("sensor"),
+    PSTR("cpm5"),
+    PSTR("CPM5"),
+    PSTR("CPM5"),
+    PSTR("CPM5"),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    { {"unit_of_meas", "CPM"},
+      { "ic", "mdi:pulse" }});
+
+  publishHassTopic(PSTR("sensor"),
+    PSTR("cpm15"),
+    PSTR("CPM15"),
+    PSTR("CPM15"),
+    PSTR("CPM15"),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    { {"unit_of_meas", "CPM"},
+      { "ic", "mdi:pulse" }});
+
+  publishHassTopic(PSTR("sensor"),
+    PSTR("usv"),
+    PSTR("\u00B5Sv/h"),
+    PSTR("uSv"),
+    PSTR("uSv"),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    PSTR(""),
+    { {"unit_of_meas", "\u00B5S/h"},
+      { "ic", "mdi:radioactive" }});
+
+}
+
 void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
                                const String& mqttDeviceName,
                                const String& displayName,
@@ -339,6 +373,29 @@ void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mq
   yield();
 }
 #endif
+void MQTT_Client::mqttDataCallback(char* topic, byte* payload, unsigned int length)
+{
+  ConfigManager &configManager = ConfigManager::getInstance();
+#ifdef MQTTAUTODISCOVER
+  const char* _discovery_topic = configManager.getParamValueFromID("hassDisc");
+  if (_discovery_topic == NULL) {
+    _discovery_topic = MQTT_DISCOVERY_TOPIC;
+  }
+  String path = _discovery_topic;
+  path.concat(PSTR("/status"));
+
+  if (strcmp(path.c_str(), topic) == 0 ) {
+    const char* _send = configManager.getParamValueFromID("hassSend");
+    if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+      return;
+    }
+    if (memcmp(payload, "online", sizeof(payload)) == 0) {
+      Log::console(PSTR("MQTT: HA is back online"));
+      this->setupHassAuto();
+    }
+  }
+#endif
+}
 void MQTT_Client::begin()
 {
   ConfigManager &configManager = ConfigManager::getInstance();
@@ -358,6 +415,9 @@ void MQTT_Client::begin()
   }
 
   setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
+  setCallback([this] (char* topic, uint8_t* payload, unsigned int length) {
+    this->mqttDataCallback(topic, payload, length);
+  });
   setBufferSize(MQTT_MAX_PACKET_SIZE);
   setKeepAlive(30);
   setSocketTimeout(4);

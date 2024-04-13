@@ -66,6 +66,8 @@ private:
   static ConfigManager _configManager;
   String buildTopic(const char * baseTopic, const char * cmnd);
 #ifdef MQTTAUTODISCOVER
+  void setupHassAuto();
+  void setupHassCB();
   void publishHassTopic(const String& mqttDeviceType,
                         const String& mattDeviceName,
                         const String& displayName,
@@ -79,6 +81,7 @@ private:
                         std::vector<std::pair<char*, char*>> additionalEntries = {}
                       );
   void removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName);
+  void mqttDataCallback(char* topic, byte* payload, unsigned int length);
 #endif
   unsigned long lastPing = 0;
   unsigned long lastConnectionAtempt = 0;
