@@ -12,6 +12,7 @@ ESPGeiger supports pulse-based Geiger counters that sends a I/O pulse for each d
 
 | Counter | Image | Notes |
 |---|---|---|
+[BR-6](https://s.click.aliexpress.com/e/_Dk9RnbT) | ![BR-6](img/br-6.jpg#img-thumbnail) | 
 [CAJOE RadiationD-v1.1](https://s.click.aliexpress.com/e/_DB6zuUD) (and other clones) | ![CAJOE RadiationD-v1.1](img/cajoev11.jpg#img-thumbnail) | Compatible with CAJOE RadiationD v0.8/1.1/1.2 - v1.1 is by far the most common.
 [CAJOE GC-ESP32](https://s.click.aliexpress.com/e/_DB6zuUD) | ![CAJOE GC-ESP32](img/cajoeiot.png#img-thumbnail) | ESPGeiger is also [compatible with the ESP32 on board](/hardware/cajoeiot), no need for an external ESP.
 [DiY-GDC](https://www.ebay.com/usr/impexeris) | ![MightyOhm](img/DiY-GDC.jpg#img-thumbnail) | 
