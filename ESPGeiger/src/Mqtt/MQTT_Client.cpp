@@ -260,7 +260,7 @@ void MQTT_Client::setupHassAuto() {
 
 #ifdef ESPGEIGER_HW
   publishHassTopic(PSTR("sensor"),
-    PSTR("HV"),
+    PSTR("hv"),
     PSTR("HV"),
     PSTR("HV"),
     PSTR("HV"),
@@ -364,6 +364,9 @@ void MQTT_Client::removeHASSConfig()
   removeHassTopic(PSTR("sensor"), PSTR("cpm5"));
   removeHassTopic(PSTR("sensor"), PSTR("cpm15"));
   removeHassTopic(PSTR("sensor"), PSTR("usv"));
+#ifdef ESPGEIGER_HW
+  removeHassTopic(PSTR("sensor"), PSTR("hv"));
+#endif
 }
 
 void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mqttDeviceName)
