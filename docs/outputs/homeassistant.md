@@ -24,3 +24,9 @@ A number of entities are published to the MQTT auto discovery topic, these are d
 `ESPGeiger‑<device_id> CPM5` | Average CPM over the last 5 minutes. | `30.0` | 60
 `ESPGeiger‑<device_id> CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
 `ESPGeiger‑<device_id> uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
+
+## Domoticz Autodiscovery
+
+> From Stable 2022.1 Domoticz MQTT supports Home assistant MQTT Discovery 
+
+The Domoticz Autodiscovery Client Gateway is compatible with HomeAssistant autodiscovery. For more information see the (Domoticz wiki)[https://www.domoticz.com/wiki/MQTT#Add_hardware_.22MQTT_Auto_Discovery_Client_Gateway.22]
