@@ -29,4 +29,4 @@ A number of entities are published to the MQTT auto discovery topic, these are d
 
 > From Stable 2022.1 Domoticz MQTT supports Home assistant MQTT Discovery 
 
-The Domoticz Autodiscovery Client Gateway is compatible with HomeAssistant autodiscovery. For more information see the (Domoticz wiki)[https://www.domoticz.com/wiki/MQTT#Add_hardware_.22MQTT_Auto_Discovery_Client_Gateway.22]
+The Domoticz Autodiscovery Client Gateway is compatible with HomeAssistant autodiscovery. For more information see the [Domoticz wiki](https://www.domoticz.com/wiki/MQTT#Add_hardware_.22MQTT_Auto_Discovery_Client_Gateway.22)
