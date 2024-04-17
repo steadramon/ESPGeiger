@@ -14,7 +14,7 @@ ESPGeiger is a free, open-source firmware that lets you collect and export radia
 - 😃 Easy to install and configure - contribute to monitoring!
 - ✅ Compatible with all generic Geiger counters with Pulse output and a range of serial based counters
 - 📈 Built in webserver with graphing
-- 🖥️ SD1306 Display support
+- 🖥️ SSD1306 Display support
 - 🔴 Live CPM and μSv/h readings
 - 🔢 Smoothed and averaged values over 1, 5 and 15 minutes
 - 🎛️ Configurable filtering/debounce and noise control

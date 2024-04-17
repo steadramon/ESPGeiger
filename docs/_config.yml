@@ -1,5 +1,5 @@
 title: "ESPGeiger"
-description: A Jekyll theme for documentation
+description: Create your IoT connected Geiger Counter
 color_scheme: nil
 
 remote_theme: just-the-docs/just-the-docs

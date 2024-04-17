@@ -7,7 +7,7 @@ ESPGeiger is an open-source project that makes it easy to create your own IOT co
 - 😃  Easy to install and configure - contribute to monitoring!
 - ✅  Compatible with all generic Geiger counters with Pulse output and a range of serial based - GC10, GC10next, MightyOhm
 - 📈  Built in webserver with graphing
-- 🖥️   SD1306 Display support
+- 🖥️   SSD1306 Display support
 - 🔴  Live CPM and μSv/h readings
 - 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
 - 🎛️  Configurable filtering/debounce and noise control
@@ -46,7 +46,7 @@ There are builds for both ESP32 and ESP8266 boards, both with builds for:
 
 For example, if you have an esp8266 and a generic pulse counter, use `esp8266_pulse-firmware.v0.1.2.bin` - an ESP32 with a GC10 - `esp32_gc10-firmware.v0.1.2.bin`
 
-All build files have an OLED option if you are using a SD1306 OLED display.
+All build files have an OLED option if you are using a SSD1306 OLED display.
 
 There are additional builds with special features:
 
