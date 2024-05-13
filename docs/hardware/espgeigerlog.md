@@ -10,6 +10,10 @@ nav_order: 4
   width: 100%;
   max-height: 300px;
 }
+.espghwimg {
+  width: 100%;
+  max-height: 300px;
+}
 </style>
 
 # ESPGeiger Log
@@ -42,3 +46,11 @@ ESPGeiger Log is a hardware solution designed to seamlessly transform existing G
 - SDCard logging
 
 Note: Board version `001 12/2023` has positions for through hole components in positions `C1`, `C2` and `R1` - however these components are already in place as surface mounted components.
+
+## Example Setups
+
+Thanks goes to the users of ESPGeiger Log for their images
+
+<img class="espghwimg" src="../img/ESPGeiger-Log/CAJOE_RadiationD-v1.1/20240428_114951.jpg" alt="ESPGeiger Log & CAJOE D1">
+<img class="espghwimg" src="../img/ESPGeiger-Log/RH_Electronics_DIY_Kit_ver2/20240428_114222.jpg" alt="ESPGeiger Log & RH Electonics DIY kitv2">
+<img class="espghwimg" src="../img/ESPGeiger-Log/Gamma_Scout_Alert_(Modified)/20240428_112215.jpg" alt="ESPGeiger Log & modified Gamma Scout">
