@@ -11,7 +11,6 @@ nav_order: 4
   max-height: 300px;
 }
 .espghwimg {
-  width: 100%;
   max-height: 300px;
 }
 </style>
@@ -51,6 +50,11 @@ Note: Board version `001 12/2023` has positions for through hole components in p
 
 Thanks goes to the users of ESPGeiger Log for their images
 
+### CAJOE RadiationD
 <img class="espghwimg" src="../img/ESPGeiger-Log/CAJOE_RadiationD-v1.1/img.jpg" alt="ESPGeiger Log & CAJOE D1">
-<img class="espghwimg" src="../img/ESPGeiger-Log/RH_Electronics_DIY_Kit_ver2/img.jpg" alt="ESPGeiger Log & RH Electonics DIY kitv2">
+
+### RH Electronics DIY Kit v2
+<img class="espghwimg" src="../img/ESPGeiger-Log/RH_Electronics_DIY_Kit_ver2/img.jpg" alt="ESPGeiger Log & RH Electronics DIY kitv2">
+
+### Gamma Scount Alert (Modified)
 <img class="espghwimg" src="../img/ESPGeiger-Log/Gamma_Scout_Alert_(Modified)/img.jpg" alt="ESPGeiger Log & modified Gamma Scout">
