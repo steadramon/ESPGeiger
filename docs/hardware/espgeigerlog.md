@@ -51,6 +51,6 @@ Note: Board version `001 12/2023` has positions for through hole components in p
 
 Thanks goes to the users of ESPGeiger Log for their images
 
-<img class="espghwimg" src="../img/ESPGeiger-Log/CAJOE_RadiationD-v1.1/20240428_114951.jpg" alt="ESPGeiger Log & CAJOE D1">
-<img class="espghwimg" src="../img/ESPGeiger-Log/RH_Electronics_DIY_Kit_ver2/20240428_114222.jpg" alt="ESPGeiger Log & RH Electonics DIY kitv2">
-<img class="espghwimg" src="../img/ESPGeiger-Log/Gamma_Scout_Alert_(Modified)/20240428_112215.jpg" alt="ESPGeiger Log & modified Gamma Scout">
+<img class="espghwimg" src="../img/ESPGeiger-Log/CAJOE_RadiationD-v1.1/img.jpg" alt="ESPGeiger Log & CAJOE D1">
+<img class="espghwimg" src="../img/ESPGeiger-Log/RH_Electronics_DIY_Kit_ver2/img.jpg" alt="ESPGeiger Log & RH Electonics DIY kitv2">
+<img class="espghwimg" src="../img/ESPGeiger-Log/Gamma_Scout_Alert_(Modified)/img.jpg" alt="ESPGeiger Log & modified Gamma Scout">
