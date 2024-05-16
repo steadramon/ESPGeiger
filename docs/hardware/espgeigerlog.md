@@ -46,6 +46,12 @@ ESPGeiger Log is a hardware solution designed to seamlessly transform existing G
 
 Note: Board version `001 12/2023` has positions for through hole components in positions `C1`, `C2` and `R1` - however these components are already in place as surface mounted components.
 
+## Disclaimer
+
+{: .highlight }
+
+>This evaluation board/kit is intended for use for __ENGINEERING DEVELOPMENT, DEMONSTRATION, OR EVALUATION PURPOSES ONLY__ and is not considered to be a finished end-product fit for general consumer use. Persons handling the product(s) must have electronics training and observe good engineering practice standards. As such, the goods being provided are not intended to be complete in terms of required design-, marketing-, and/or manufacturing-related protective considerations, including product safety and environmental measures typically found in end products that incorporate such semiconductor components or circuit boards.
+
 ## Example Setups
 
 Thanks goes to the users of ESPGeiger Log for their images
