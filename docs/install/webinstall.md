@@ -55,30 +55,30 @@ The installation process is powered by [ESP Web Tools](https://esphome.github.io
 
 Ensure that the relevant drivers are installed for you device. Some information is provided on page if your device is not detected.
 
-1. Select the relevant __Geiger Counter Type__ you wish to install firmware for and where available, if the OLED variant should be used.
+- Select the relevant __Geiger Counter Type__ you wish to install firmware for and where available, if the OLED variant should be used.
 
-2. Connect your ESP device to your PC.
+- Connect your ESP device to your PC.
 
-3. Click __Install__
+- Click __Install__
 
 ![install](img/webinstall_2.png)
 
-4. Confirm the version to be installed
+- Confirm the version to be installed
 
 ![Confirm](img/webinstall_3.png)
 
-5. If this is the first install it is recommended to erase the device as well. This will remove any settings.
+- If this is the first install it is recommended to erase the device as well. This will remove any settings.
 
 ![Erase device](img/webinstall_4.png)
 
-6. Confirm options
+- Confirm options
 
 ![Confirm](img/webinstall_5.png)
 
-7. Await the install, this can take several minutes
+- Await the install, this can take several minutes
 
 ![Installing...](img/webinstall_6.png)
 
-8. Completed. ESPGeiger is now installed. The indication light on the ESP will be lit permanently until the WiFi hotspot is configured.
+- Completed. ESPGeiger is now installed. The indication light on the ESP will be lit permanently until the WiFi hotspot is configured.
 
-![alt text](image.png)
+![Completed](img/webinstall_7.png)
