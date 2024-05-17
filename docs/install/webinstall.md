@@ -12,8 +12,6 @@ The web installer at [https://install.espgeiger.com/](https://install.espgeiger.
 
 ![Web Installer](img/webinstall_1.png)
 
-The run the web installer requires the PC/Mac version of either Chrome or Edge.
-
 From the Web installer a number of predefined builds can be installed -
 
 ## Pulse
@@ -52,6 +50,8 @@ Features a number of test builds for various devices.
 # Installation
 
 The installation process is powered by [ESP Web Tools](https://esphome.github.io/esp-web-tools/)
+
+The web installer requires the PC/Mac version of either Chrome or Edge.
 
 Ensure that the relevant drivers are installed for you device. Some information is provided on page if your device is not detected.
 
