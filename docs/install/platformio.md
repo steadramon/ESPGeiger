@@ -2,7 +2,7 @@
 layout: page
 title: Platform.io Build
 permalink: /install/platformio
-nav_order: 10
+nav_order: 40
 parent: Install
 ---
 
