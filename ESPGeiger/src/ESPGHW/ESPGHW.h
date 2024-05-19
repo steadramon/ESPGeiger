@@ -35,7 +35,7 @@
 #endif
 
 #ifndef GEIGERHW_DUTY
-#define GEIGERHW_DUTY 170
+#define GEIGERHW_DUTY 70
 #endif
 
 #ifndef GEIGERHW_MAX_FREQ
@@ -43,7 +43,7 @@
 #endif
 
 #ifndef GEIGERHW_ADC_RATIO
-#define GEIGERHW_ADC_RATIO 1180
+#define GEIGERHW_ADC_RATIO 1035
 #endif
 
 #ifndef GEIGERHW_ADC_OFFSET
