@@ -140,7 +140,9 @@ int getQuality() {
 
 void sTickerCB()
 {
-  gcounter.secondticker();
+  unsigned long stick_now = millis();
+
+  gcounter.secondticker(stick_now);
 #ifdef SERIALOUT
   serialout.loop();
 #endif
@@ -154,16 +156,16 @@ void sTickerCB()
     }
   }
 #ifdef GMCOUT
-  gmc.loop();
+  gmc.s_tick(stick_now);
 #endif
 #ifdef RADMONOUT
-  radmon.loop();
+  radmon.s_tick(stick_now);
 #endif
 #ifdef THINGSPEAKOUT
-  thingspeak.loop();
+  thingspeak.s_tick(stick_now);
 #endif
 #ifdef GEIGER_SDCARD
-  sdcard.loop();
+  sdcard.s_tick(stick_now);
 #endif
 }
 
@@ -172,9 +174,6 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   delay(100);
-#ifdef GEIGER_NEOPIXEL
-  neopixel.setup();
-#endif
 #ifdef ESP8266
   if(!LittleFS.begin()){
 #elif defined(ESP32)
@@ -190,6 +189,9 @@ void setup()
   Log::console(PSTR("   \\_/    Starting up ... %s"), hostName);
   Log::console(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, cManager.GetChipModel());
   Log::console(PSTR(" \\/   \\/"));
+#ifdef GEIGER_NEOPIXEL
+  neopixel.setup();
+#endif
 
   delay(100);
   msTicker.attach_ms(1, msTickerCB);
