@@ -73,7 +73,7 @@ class Counter {
       void blip_led();
       void begin();
       const char* geiger_model() { return GEIGER_MODEL; };
-      void secondticker();
+      void secondticker(unsigned long stick_now);
       void set_rx_pin(int pin) {
         geigerinput->set_rx_pin(pin);
       };

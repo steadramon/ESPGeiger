@@ -25,16 +25,15 @@ GMC::GMC() {
   ConfigManager &configManager = ConfigManager::getInstance();
 }
 
-void GMC::loop()
+void GMC::s_tick(unsigned long stick_now)
 {
-  unsigned long now = millis();
-  if (now - lastPing >= pingInterval)
+  if (stick_now - lastPing >= pingInterval)
   {
     if (lastPing == 0) {
       lastPing = random(30000);
       return;
     }
-    lastPing = now - (now % 1000);
+    lastPing = stick_now - (stick_now % 1000);
     GMC::postMeasurement();
   }
 }

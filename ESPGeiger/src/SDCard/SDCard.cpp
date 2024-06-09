@@ -67,7 +67,7 @@ void SDCard::begin()
   sdenabled = true;
 }
 
-void SDCard::loop()
+void SDCard::s_tick(unsigned long stick_now)
 {
   if (!sdenabled) {
     return;

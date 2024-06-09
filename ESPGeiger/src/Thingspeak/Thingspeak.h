@@ -43,7 +43,7 @@ const char TS_URI[] PROGMEM = "http://api.thingspeak.com/update?api_key=%s&field
 class Thingspeak {
   public:
     Thingspeak();
-    void loop();
+    void s_tick(unsigned long stick_now);
     void postMeasurement();
     AsyncHTTPRequest request;
   private:

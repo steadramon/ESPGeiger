@@ -24,16 +24,15 @@ Radmon::Radmon() {
   ConfigManager &configManager = ConfigManager::getInstance();
 }
 
-void Radmon::loop()
+void Radmon::s_tick(unsigned long stick_now)
 {
-  unsigned long now = millis();
-  if (now - lastPing >= pingInterval)
+  if (stick_now - lastPing >= pingInterval)
   {
     if (lastPing == 0) {
       lastPing = random(30000);
       return;
     }
-    lastPing = now - (now % 1000);
+    lastPing = stick_now - (stick_now % 1000);
     Radmon::postMeasurement();
   }
 }

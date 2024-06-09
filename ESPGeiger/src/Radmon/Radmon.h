@@ -44,7 +44,7 @@ const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&
 class Radmon {
   public:
     Radmon();
-    void loop();
+    void s_tick(unsigned long stick_now);
     void postMeasurement();
     AsyncHTTPRequest request;
   private:

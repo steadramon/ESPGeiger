@@ -44,7 +44,7 @@ const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM
 class GMC {
   public:
     GMC();
-    void loop();
+    void s_tick(unsigned long stick_now);
     void postMeasurement();
     AsyncHTTPRequest request;
   private:

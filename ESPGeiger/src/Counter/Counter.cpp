@@ -38,11 +38,11 @@ Counter::Counter() {
 #endif
 }
 
-void Counter::secondticker() {
+void Counter::secondticker(unsigned long stick_now) {
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
-  unsigned long int secidx = (millis() / 1000) % 60;
+  unsigned long int secidx = (stick_now / 1000) % 60;
   //Log::console(PSTR("Counter: Events - %d - %d"), eventCounter, secidx);
   geigerTicks.add(eventCounter);
   unsigned long previous_total_clicks = total_clicks;

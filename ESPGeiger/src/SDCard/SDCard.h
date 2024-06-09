@@ -39,7 +39,7 @@ class SDCard {
     static SDCard instance;
     return instance;
   }
-    void loop();
+    void s_tick(unsigned long stick_now);
     void begin();
     void deleteOldest();
   protected:
