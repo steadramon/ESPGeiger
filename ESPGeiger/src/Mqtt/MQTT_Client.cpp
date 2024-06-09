@@ -408,7 +408,7 @@ void MQTT_Client::mqttDataCallback(char* topic, byte* payload, unsigned int leng
       return;
     }
     if (memcmp(payload, "online", sizeof(payload)) == 0) {
-      Log::console(PSTR("MQTT: HA is back online"));
+      Log::debug(PSTR("MQTT: HA is back online"));
       this->setupHassAuto();
     }
   }
