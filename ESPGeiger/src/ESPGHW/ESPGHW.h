@@ -62,8 +62,8 @@ class ESPGeigerHW {
         if (freq > GEIGERHW_MAX_FREQ) {
           freq = GEIGERHW_MAX_FREQ;
         }
-        if (freq < 1000) {
-          freq = 1000;
+        if (freq < 100) {
+          freq = 100;
         }
       #ifdef ESP8266
         analogWriteFreq(freq);
@@ -101,6 +101,7 @@ class ESPGeigerHW {
     private:
       int _hw_freq = GEIGERHW_FREQ;
       int _hw_duty = GEIGERHW_DUTY;
+      int _cur_duty = 0;
       int _hw_vd_ratio = GEIGERHW_ADC_RATIO;
       int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
 };

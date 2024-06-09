@@ -44,11 +44,14 @@ void ESPGeigerHW::begin() {
 }
 
 void ESPGeigerHW::loop() {
+  if (_cur_duty != _hw_duty) {
 #ifdef ESP8266
-  analogWrite (GEIGER_PWMPIN, _hw_duty) ;
+    analogWrite (GEIGER_PWMPIN, _hw_duty) ;
 #else
-  ledcWrite(0, _hw_duty);
+    ledcWrite(0, _hw_duty);
 #endif
+    _cur_duty = _hw_duty;
+  }
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   float volts = ((0.0009765625032 * sensorValue)*_hw_vd_ratio)+_hw_vd_offset;
   status.hvReading.add((int)volts);
