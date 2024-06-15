@@ -77,12 +77,12 @@ void SDCard::s_tick(unsigned long stick_now)
   }
 
   time_t currentTime = time (NULL);
-  if (currentTime > 0) {
-    struct tm *timeinfo = localtime (&currentTime);
-    if (timeinfo->tm_sec != 0) {
-      return;
-    }
-  } else {
+  if (currentTime == 0) {
+    return;
+  }
+
+  struct tm *timeinfo = gmtime (&currentTime);
+  if (timeinfo->tm_sec != 0) {
     return;
   }
 
@@ -94,10 +94,13 @@ void SDCard::s_tick(unsigned long stick_now)
   bool forceCleanup = false;
   char timeStr[23];
   char dirStr[20];
+  char dateTime[20];
 
-  struct tm *timeinfo = localtime (&currentTime);
   snprintf_P (timeStr, sizeof (timeStr), "%04d%02d%02d.csv", 1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday);
   snprintf_P (dirStr, sizeof (dirStr), "%04d%02d", 1900+timeinfo->tm_year, timeinfo->tm_mon+1);
+  snprintf_P (dateTime, sizeof (dateTime), "%04d-%02d-%02d %02d:%02d:%02d",
+    1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec
+  );
 
   if (!sd.exists(dirStr)) {
     sd.mkdir(dirStr);
@@ -113,13 +116,17 @@ void SDCard::s_tick(unsigned long stick_now)
   if (myDataFile)
   {
     if (!fileExists) {
-      myDataFile.print(F("Unixtime,CPM,μSv/h,CPM5,CPM15"));
+      myDataFile.print(F("DateTime,CPM,μSv/h,CPM5,CPM15"));
 #ifdef SDCARD_EXTENDEDLOG
       myDataFile.print(F(",FreeMem"));
 #endif
       myDataFile.println();
     }
+#ifdef SDCARD_LOG_UNIXTIME
     myDataFile.print(time(NULL));
+#else
+    myDataFile.print(dateTime);
+#endif
     myDataFile.print(F(","));
     myDataFile.print(gcounter.get_cpmf(), 2);
     myDataFile.print(F(","));
