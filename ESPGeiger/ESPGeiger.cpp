@@ -167,6 +167,7 @@ void sTickerCB()
 #ifdef GEIGER_SDCARD
   sdcard.s_tick(stick_now);
 #endif
+  status.wifi_status = WiFi.status();
 }
 
 void setup()
@@ -203,6 +204,7 @@ void setup()
 #endif
   cManager.autoConnect();
   delay(100);
+  status.wifi_status = WiFi.status();
   cManager.startWebPortal();
 #ifdef GEIGER_SDCARD
   sdcard.begin();
@@ -230,20 +232,21 @@ void loop()
 {
   gcounter.loop();
   cManager.process();
+  unsigned long now = millis();
 #ifdef MQTTOUT
-  mqtt.loop();
+  mqtt.loop(now);
 #endif
 #ifndef DISABLE_SERIALRX
   handleSerial();
 #endif
 #ifdef GEIGER_PUSHBUTTON
-  pushbutton.loop();
+  pushbutton.loop(now);
 #endif
 #ifdef SSD1306_DISPLAY
-  display.loop();
+  display.loop(now);
 #endif
 #ifdef GEIGER_NEOPIXEL
-  neopixel.loop();
+  neopixel.loop(now);
 #endif
   ArduinoOTA.handle();
 }
