@@ -47,7 +47,7 @@ class NeoPixel {
       static NeoPixel instance;
       return instance;
     }
-    void loop();
+    void loop(unsigned long now);
     void setup();
     void blip();
     void blink(uint16 timer);

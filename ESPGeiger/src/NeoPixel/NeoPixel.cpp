@@ -104,12 +104,11 @@ void NeoPixel::blink(uint16 timer)
   offTime = timer;
 }
 
-void NeoPixel::loop()
+void NeoPixel::loop(unsigned long now)
 {
   if (colorSaturation == 0) {
     return;
   }
-  unsigned long now = millis();
   if (now - onTime >= offTime)
   {
     RgbColor black(0);
