@@ -65,7 +65,7 @@ static void do_longpress() {
 class PushButton {
   public:
     PushButton();
-    void loop();
+    void loop(unsigned long now);
     void begin();
 };
 
