@@ -51,7 +51,7 @@ public:
     return instance;
   }
   void begin();
-  void loop();
+  void loop(unsigned long now);
   void sendStatus();
   void disconnect();
 #ifdef MQTTAUTODISCOVER

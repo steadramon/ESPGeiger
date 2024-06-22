@@ -39,12 +39,11 @@ void MQTT_Client::disconnect()
   espClient.stop();
   mqttEnabled = true;
 }
-void MQTT_Client::loop()
+void MQTT_Client::loop(unsigned long now)
 {
   if (!mqttEnabled) {
     return;
   }
-  unsigned long now = millis();
   if (now - status.last_mqtt < 100) {
     return;
   }
