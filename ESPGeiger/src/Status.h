@@ -77,7 +77,7 @@ struct Status {
 #endif
 #if defined(SSD1306_DISPLAY)
   int oled_page = 1;
-  int oled_last_update = 0;
+  unsigned long oled_last_update = 0;
   bool oled_on = true;
   bool enable_oled_timeout = true;
   unsigned long oled_timeout = 0;
@@ -88,6 +88,7 @@ struct Status {
 #ifdef ESPGEIGER_HW
   Smoothed <float> hvReading;
 #endif
+  int wifi_status;
 };
 
 #endif
