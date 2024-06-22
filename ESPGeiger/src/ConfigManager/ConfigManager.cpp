@@ -42,7 +42,7 @@ WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 10),
 #endif
 #ifdef GEIGER_NEOPIXEL
-  WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "10", 10),
+  WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "15", 10),
 #endif
   WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>")
 };
@@ -50,7 +50,7 @@ WiFiManagerParameter ESPGeigerParams[] =
 WiFiManagerParameter TSParams[] = 
 {
   // Thingspeak parameters
-  WiFiManagerParameter("<br><br><hr><h3>Thingspeak parameters</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>Thingspeak config</h3>"),
   WiFiManagerParameter("tsSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label>"),
   WiFiManagerParameter("tsChannelKey", "<br>Channel Key", "", 16),
@@ -92,7 +92,7 @@ WiFiManagerParameter CloudAPI[] =
 #ifdef RADMONOUT
 WiFiManagerParameter radmonParams[] = 
 {
-  WiFiManagerParameter("<br><br><hr><h3>Radmon.org parameters</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>Radmon.org config</h3>"),
   WiFiManagerParameter("radmonSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbrm' onchange='getE(\"radmonSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbrm'>Send</label>"),
   WiFiManagerParameter("radmonUser", "<br>Radmon Username", "", 100),
@@ -103,7 +103,7 @@ WiFiManagerParameter radmonParams[] =
 #ifdef GMCOUT
 WiFiManagerParameter GMCParams[] = 
 {
-  WiFiManagerParameter("<br/><br/><hr><h3>GMC parameters</h3>"),
+  WiFiManagerParameter("<br/><br/><hr><h3>GMC config</h3>"),
   WiFiManagerParameter("gmcSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbgm' onchange='getE(\"gmcSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbgm'>Send</label>"),
   WiFiManagerParameter("gmcAID", "<br>Account ID", "", 12, "pattern='\\d{1,5}'"),
@@ -271,6 +271,19 @@ void ConfigManager::handleJsonReturn()
   );
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
+}
+
+void ConfigManager::handleGeigerLog() {
+  char jsonBuffer[64] = "";
+  const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
+  sprintf_P (
+    jsonBuffer,
+    PSTR("%.2lf, %.2lf, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan"),
+    gcounter.get_cpmf(),
+    gcounter.get_cps()
+  );
+  jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
+  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), jsonBuffer );
 }
 
 void ConfigManager::handleClicksReturn()
@@ -795,6 +808,7 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(NTP_SET_URL, HTTP_POST, std::bind(&ConfigManager::handleNTPSet, this));
   ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
   ConfigManager::server.get()->on(HIST_URL, HTTP_GET, std::bind(&ConfigManager::handleHistoryPage, this));
+  ConfigManager::server.get()->on(GEIGERLOG_URL, HTTP_GET, std::bind(&ConfigManager::handleGeigerLog, this));
 #ifdef ESPGEIGER_HW
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
