@@ -58,5 +58,6 @@ class GeigerSerial : public GeigerInput
     int serial_value = 0;
     unsigned long last_serial;
     int avg_diff;
+    int _loop_c = 0;
 };
 #endif

@@ -29,11 +29,15 @@ void GeigerSerial::begin() {
 }
 
 void GeigerSerial::loop() {
+  if (_loop_c <= 5 && _serial_idx == 0) {
+    _loop_c++;
+    return;
+  }
+  _loop_c = 0;
   if (geigerPort.available() > 0) {
     if (geigerPort.overflow()) {
       Log::console(PSTR("GeigerSerial: Serial Overflow %d"), geigerPort.available());
     }
-    optimistic_yield(100 * 1000);
     char input = geigerPort.read();
     optimistic_yield(100 * 1000);
     _serial_buffer[_serial_idx++] = input;

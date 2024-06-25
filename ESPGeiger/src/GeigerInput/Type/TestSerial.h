@@ -77,5 +77,6 @@ class GeigerTestSerial : public GeigerInput
     float test_partial_clicks = 0;
     float _poisson_target = 0;
     int _current_selection = 0;
+    int _loop_c = 0;
 };
 #endif

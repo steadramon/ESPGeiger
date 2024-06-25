@@ -32,6 +32,11 @@ void GeigerTestSerial::begin() {
 }
 
 void GeigerTestSerial::loop() {
+  if (_loop_c <= 5 && _serial_idx == 0) {
+    _loop_c++;
+    return;
+  }
+  _loop_c = 0;
   if (geigerPort.available() > 0) {
     if (geigerPort.overflow()) {
       Log::console(PSTR("TestSerial: Serial Overflow %d"), geigerPort.available());
