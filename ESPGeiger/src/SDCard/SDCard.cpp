@@ -96,9 +96,9 @@ void SDCard::s_tick(unsigned long stick_now)
   char dirStr[20];
   char dateTime[20];
 
-  snprintf_P (timeStr, sizeof (timeStr), "%04d%02d%02d.csv", 1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday);
-  snprintf_P (dirStr, sizeof (dirStr), "%04d%02d", 1900+timeinfo->tm_year, timeinfo->tm_mon+1);
-  snprintf_P (dateTime, sizeof (dateTime), "%04d-%02d-%02d %02d:%02d:%02d",
+  snprintf_P (timeStr, sizeof (timeStr), PSTR("%04d%02d%02d.csv"), 1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday);
+  snprintf_P (dirStr, sizeof (dirStr), PSTR("%04d%02d"), 1900+timeinfo->tm_year, timeinfo->tm_mon+1);
+  snprintf_P (dateTime, sizeof (dateTime), PSTR("%04d-%02d-%02d %02d:%02d:%02d"),
     1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec
   );
 
