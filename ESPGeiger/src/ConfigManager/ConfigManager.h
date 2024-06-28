@@ -103,6 +103,8 @@ public:
     static ConfigManager instance;
     return instance;
   }
+  void handleOurParam();
+  void getOurParamOut();
   void bindServerCallback();
   void autoConnect();
   void startWebPortal();

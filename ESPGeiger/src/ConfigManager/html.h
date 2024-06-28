@@ -67,6 +67,9 @@ function go() {
 }
 window.addEventListener("load",go);
 */
+static const char CFG_PAGE_JS[] = R"HTML(
+<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>
+)HTML";
 static const char HISTORY_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <table style="width:100%"><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>μSv</th</tr><tbody id="tb"></tbody></table>
 )HTML";

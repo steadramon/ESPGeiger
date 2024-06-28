@@ -24,89 +24,87 @@
 #include <LittleFS.h>
 #include "../NTP/timezones.h"
 
-WiFiManagerParameter ESPGeigerParams[] = 
+static WiFiManagerParameter ESPGeigerParams[] = 
 {
   // The broker parameters
   WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
-  WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 10),
+  WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 8),
 #ifndef RXPIN_BLOCKED
-  WiFiManagerParameter("geigerRX", "RX Pin", String(GEIGER_RXPIN).c_str(), 12),
+  WiFiManagerParameter("geigerRX", "RX Pin", String(GEIGER_RXPIN).c_str(), 2),
 #endif
 #if GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
-  WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 12),
+  WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 2),
 #endif
 #endif
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
-  WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 10),
+  WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 4),
 #endif
 #ifdef GEIGER_NEOPIXEL
-  WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "15", 10),
+  WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "15", 4),
 #endif
-  WiFiManagerParameter("<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>")
 };
 #ifdef THINGSPEAKOUT
-WiFiManagerParameter TSParams[] = 
+static WiFiManagerParameter TSParams[] = 
 {
   // Thingspeak parameters
   WiFiManagerParameter("<br><br><hr><h3>Thingspeak config</h3>"),
   WiFiManagerParameter("tsSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label>"),
-  WiFiManagerParameter("tsChannelKey", "<br>Channel Key", "", 16),
+  WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label><br>"),
+  WiFiManagerParameter("tsChannelKey", "Channel Key", "", 16),
   WiFiManagerParameter(R"J(<script>doCB("cbts","tsSend")</script>)J"),
 
 };
 #endif
 #ifdef MQTTOUT
-WiFiManagerParameter MQTTParams[] = 
+static WiFiManagerParameter MQTTParams[] = 
 {
   // The broker parameters
   WiFiManagerParameter("<br><br><hr><h3>MQTT server</h3>"),
   WiFiManagerParameter("mqttServer", "<br>IP", "", 16, "input='number' pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("mqttPort", "Port", "1883", 6, "pattern='\\d{1,5}'"),
-  WiFiManagerParameter("mqttUser", "User", "", 255),
-  WiFiManagerParameter("mqttPassword", "Password", "", 255, "type='password'"),
+  WiFiManagerParameter("mqttUser", "User", "", 32),
+  WiFiManagerParameter("mqttPassword", "Password", "", 32, "type='password'"),
   WiFiManagerParameter("mqttTopic", "Root Topic", "ESPGeiger-{id}", 16),
   WiFiManagerParameter("<small>{id} is replaced with the chip ID</small>"),
-
 };
 #ifdef MQTTAUTODISCOVER
-WiFiManagerParameter HassioParams[] =
+static WiFiManagerParameter HassioParams[] = 
 {
   // The broker parameters
   WiFiManagerParameter("<br><br><hr><h3>HA Autodiscovery</h3>"),
   WiFiManagerParameter("hassSend", "", MQTT_DISCOVERY, 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label>"),
-  WiFiManagerParameter("hassDisc", "<br>Discovery Topic", S_MQTT_DISCOVERY_TOPIC, 32),
+  WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label><br>"),
+  WiFiManagerParameter("hassDisc", "Discovery Topic", S_MQTT_DISCOVERY_TOPIC, 32),
   WiFiManagerParameter(R"J(<script>doCB("cbhas","hassSend")</script>)J"),
 };
 #endif
 #endif
-WiFiManagerParameter CloudAPI[] = 
+static WiFiManagerParameter CloudAPI[] = 
 {
   WiFiManagerParameter("<br><br><hr><h3>CloudAPI</h3>"),
   WiFiManagerParameter("apiID", "IP", "", 16, "pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("apiSecret", "Port", "1883", 6, "pattern='\\d{1,5}'"),
 };
 #ifdef RADMONOUT
-WiFiManagerParameter radmonParams[] = 
+static WiFiManagerParameter radmonParams[] = 
 {
   WiFiManagerParameter("<br><br><hr><h3>Radmon.org config</h3>"),
   WiFiManagerParameter("radmonSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbrm' onchange='getE(\"radmonSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbrm'>Send</label>"),
-  WiFiManagerParameter("radmonUser", "<br>Radmon Username", "", 100),
-  WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 100, "type='password'"),
+  WiFiManagerParameter("<input type='checkbox' id='cbrm' onchange='getE(\"radmonSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbrm'>Send</label><br>"),
+  WiFiManagerParameter("radmonUser", "Radmon Username", "", 32),
+  WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 64, "type='password'"),
   WiFiManagerParameter(R"J(<script>doCB("cbrm","radmonSend")</script>)J"),
 };
 #endif
 #ifdef GMCOUT
-WiFiManagerParameter GMCParams[] = 
+static WiFiManagerParameter GMCParams[] = 
 {
   WiFiManagerParameter("<br/><br/><hr><h3>GMC config</h3>"),
   WiFiManagerParameter("gmcSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbgm' onchange='getE(\"gmcSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbgm'>Send</label>"),
-  WiFiManagerParameter("gmcAID", "<br>Account ID", "", 12, "pattern='\\d{1,5}'"),
+  WiFiManagerParameter("<input type='checkbox' id='cbgm' onchange='getE(\"gmcSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbgm'>Send</label><br>"),
+  WiFiManagerParameter("gmcAID", "Account ID", "", 12, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("gmcGCID", "Geiger Counter ID", "", 12, "pattern='\\d{1,12}'"),
   WiFiManagerParameter(R"J(<script>doCB("cbgm","gmcSend")</script>)J"),
 };
@@ -132,6 +130,100 @@ ConfigManager::ConfigManager() : WiFiManager(){
   setHostname(hostName);
   setTitle(thingName);
   setCustomHeadElement(faviconHead);
+}
+
+void ConfigManager::getOurParamOut(){
+
+  if(_paramsCount > 0){
+
+    String HTTP_PARAM_temp = FPSTR(HTTP_FORM_LABEL);
+    HTTP_PARAM_temp += FPSTR(HTTP_FORM_PARAM);
+    bool tok_I = HTTP_PARAM_temp.indexOf(FPSTR(T_I)) > 0;
+    bool tok_i = HTTP_PARAM_temp.indexOf(FPSTR(T_i)) > 0;
+    bool tok_n = HTTP_PARAM_temp.indexOf(FPSTR(T_n)) > 0;
+    bool tok_p = HTTP_PARAM_temp.indexOf(FPSTR(T_p)) > 0;
+    bool tok_t = HTTP_PARAM_temp.indexOf(FPSTR(T_t)) > 0;
+    bool tok_l = HTTP_PARAM_temp.indexOf(FPSTR(T_l)) > 0;
+    bool tok_v = HTTP_PARAM_temp.indexOf(FPSTR(T_v)) > 0;
+    bool tok_c = HTTP_PARAM_temp.indexOf(FPSTR(T_c)) > 0;
+
+    char valLength[5];
+
+    for (int i = 0; i < _paramsCount; i++) {
+      //Serial.println((String)_params[i]->_length);
+      if (_params[i] == NULL || _params[i]->getValueLength() > 99999) {
+        // try to detect param scope issues, doesnt always catch but works ok
+        return;
+      }
+    }
+
+    // add the extra parameters to the form
+    for (int i = 0; i < _paramsCount; i++) {
+     // label before or after, @todo this could be done via floats or CSS and eliminated
+     String pitem;
+      switch (_params[i]->getLabelPlacement()) {
+        case WFM_LABEL_BEFORE:
+          pitem = FPSTR(HTTP_FORM_LABEL);
+          pitem += FPSTR(HTTP_FORM_PARAM);
+          break;
+        case WFM_LABEL_AFTER:
+          pitem = FPSTR(HTTP_FORM_PARAM);
+          pitem += FPSTR(HTTP_FORM_LABEL);
+          break;
+        default:
+          // WFM_NO_LABEL
+          pitem = FPSTR(HTTP_FORM_PARAM);
+          break;
+      }
+
+      // Input templating
+      // "<br/><input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c}>";
+      // if no ID use customhtml for item, else generate from param string
+      if (_params[i]->getID() != NULL) {
+        if(tok_I)pitem.replace(FPSTR(T_I), (String)FPSTR(S_parampre)+(String)i); // T_I id number
+        if(tok_i)pitem.replace(FPSTR(T_i), _params[i]->getID()); // T_i id name
+        if(tok_n)pitem.replace(FPSTR(T_n), _params[i]->getID()); // T_n id name alias
+        if(tok_p)pitem.replace(FPSTR(T_p), FPSTR(T_t)); // T_p replace legacy placeholder token
+        if(tok_t)pitem.replace(FPSTR(T_t), _params[i]->getLabel()); // T_t title/label
+        snprintf(valLength, 5, "%d", _params[i]->getValueLength());
+        if(tok_l)pitem.replace(FPSTR(T_l), valLength); // T_l value length
+        if(tok_v)pitem.replace(FPSTR(T_v), _params[i]->getValue()); // T_v value
+        if(tok_c)pitem.replace(FPSTR(T_c), _params[i]->getCustomHTML()); // T_c meant for additional attributes, not html, but can stuff
+      } else {
+        server->sendContent(_params[i]->getCustomHTML());
+        continue;
+      }
+      server->sendContent(pitem);
+    }
+  }
+}
+
+void ConfigManager::handleOurParam(){
+  handleRequest();
+  String page = getHTTPHead(FPSTR(S_titleparam)); // @token titlewifi
+  server->client().flush();
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  page = FPSTR(HTTP_HEAD_START);
+  page.replace(FPSTR(T_v), FPSTR(S_titleparam));
+  server->sendContent(page);
+  server->sendContent(FPSTR(HTTP_STYLE));
+  server->sendContent(FPSTR(faviconHead));
+  server->sendContent(FPSTR(CFG_PAGE_JS));
+  server->sendContent(FPSTR(HTTP_HEAD_END));
+  page = FPSTR(HTTP_FORM_START);
+  page.replace(FPSTR(T_v), F("paramsave"));
+  server->sendContent(page);
+  getOurParamOut();
+  server->sendContent(FPSTR(HTTP_FORM_END));
+  server->sendContent(FPSTR(HTTP_BACKBTN));
+  server->sendContent(FPSTR(HTTP_END));
+
+  server->sendContent("");
+  server->client().stop();
 }
 
 void ConfigManager::autoConnect()
@@ -197,6 +289,7 @@ void ConfigManager::startWebPortal()
 }
 
 void ConfigManager::handleRoot() {
+  handleRequest();
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->sendHeader(F("Pragma"), F("no-cache"));
@@ -260,9 +353,10 @@ void ConfigManager::handleJsonReturn()
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   sprintf_P (
     jsonBuffer,
-    PSTR("{\"u\":\"%s\",\"c\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u}"),
+    PSTR("{\"u\":\"%s\",\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u}"),
     ConfigManager::getUptimeString(),
     String(gcounter.get_cpmf()).c_str(),
+    String(gcounter.get_usv()).c_str(),
     String(gcounter.get_cpm5f()).c_str(),
     String(gcounter.get_cpm15f()).c_str(),
     String(gcounter.get_cps()).c_str(),
@@ -274,6 +368,7 @@ void ConfigManager::handleJsonReturn()
 }
 
 void ConfigManager::handleGeigerLog() {
+  handleRequest();
   char jsonBuffer[64] = "";
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   sprintf_P (
@@ -288,6 +383,7 @@ void ConfigManager::handleGeigerLog() {
 
 void ConfigManager::handleClicksReturn()
 {
+  handleRequest();
   DynamicJsonDocument json(512);
 
   json.clear();
@@ -319,6 +415,7 @@ void ConfigManager::handleClicksReturn()
 
 void ConfigManager::handleStatusPage()
 {
+  handleRequest();
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->sendHeader(F("Pragma"), F("no-cache"));
@@ -352,6 +449,7 @@ void ConfigManager::handleStatusPage()
 
 void ConfigManager::handleHistoryPage()
 {
+  handleRequest();
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->sendHeader(F("Pragma"), F("no-cache"));
@@ -384,6 +482,7 @@ void ConfigManager::handleHistoryPage()
 
 void ConfigManager::handleNTP()
 {
+  handleRequest();
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
@@ -413,6 +512,7 @@ void ConfigManager::handleNTP()
 
 void ConfigManager::handleNTPSet()
 {
+  handleRequest();
   char stmp[64];
   String s = server->arg("s");
   strcpy(stmp, s.c_str());
@@ -446,6 +546,7 @@ void ConfigManager::handleNTPSet()
 #ifdef ESPGEIGER_HW
 void ConfigManager::handleHVPage()
 {
+  handleRequest();
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->sendHeader(F("Pragma"), F("no-cache"));
@@ -475,6 +576,7 @@ void ConfigManager::handleHVPage()
 
 void ConfigManager::handleHVSet()
 {
+  handleRequest();
   int _d = atoi(server->arg(F("d")).c_str());
   int _f = atoi(server->arg(F("f")).c_str());
   int _r = atoi(server->arg(F("r")).c_str());
@@ -487,6 +589,7 @@ void ConfigManager::handleHVSet()
 
 void ConfigManager::handleHVJSReturn()
 {
+  handleRequest();
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->sendHeader(F("Pragma"), F("no-cache"));
@@ -501,6 +604,7 @@ void ConfigManager::handleHVJSReturn()
 
 void ConfigManager::handleHVJsonReturn()
 {
+  handleRequest();
   char jsonBuffer[256] = "";
 
   int total = sizeof(jsonBuffer);
@@ -524,6 +628,7 @@ void ConfigManager::handleHVJsonReturn()
 
 void ConfigManager::handleRestart()
 {
+  handleRequest();
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->sendHeader(F("Pragma"), F("no-cache"));
@@ -640,6 +745,7 @@ void ConfigManager::loadParams()
 
 void ConfigManager::handleRefreshConsole()
 {
+  handleRequest();
   uint32_t counter = 0;
 
   char stmp[8];
@@ -798,6 +904,7 @@ const char* ConfigManager::getParamValueFromID(const char* str)
 void ConfigManager::bindServerCallback()
 {
   ConfigManager::server.get()->on(ROOT_URL, HTTP_GET, std::bind(&ConfigManager::handleRoot, this));
+  ConfigManager::server.get()->on(WM_G(R_param), std::bind(&ConfigManager::handleOurParam, this));
   ConfigManager::server.get()->on(STATUS_URL, HTTP_GET, std::bind(&ConfigManager::handleStatusPage, this));
   ConfigManager::server.get()->on(JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleJsonReturn, this));
   ConfigManager::server.get()->on(JS_URL, HTTP_GET, std::bind(&ConfigManager::handleJSReturn, this));
