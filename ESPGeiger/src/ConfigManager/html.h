@@ -127,7 +127,7 @@ af:{
   pa: ["Apia","Auckland","Bougainville","Chatham","Efate","Fakaofo","Fiji","Gambier","Guadalcanal","Guam","Kanton","Kiritimati","Kosrae","Kwajalein","Marquesas","Nauru","Niue","Norfolk","Noumea","Pago_Pago","Palau","Pitcairn","Port_Moresby","Rarotonga","Tahiti","Tarawa","Tongatapu"],
   etc: ["Greenwich","Universal","Zulu","GMT-14","GMT-13","GMT-12","GMT-11","GMT-10","GMT-9","GMT-8","GMT-7","GMT-6","GMT-5","GMT-4","GMT-3","GMT-2","GMT-1","GMT","GMT+1","GMT+2","GMT+3","GMT+4","GMT+5","GMT+6","GMT+7","GMT+8","GMT+9","GMT+10","GMT+11","GMT+12","UCT","UTC"]
 };
-var regions={af:"Africa",aq:"Antarctica",as:"Asia",pa:"Pacific",au:"Australia",eu:"Europe",na:"North America",sa:"South America", etc:"Etc"};
+var regions={as:"Asia",af:"Africa",eu:"Europe",na:"North America",sa:"South America",au:"Australia",pa:"Pacific",aq:"Antarctica",etc:"Etc"};
 var prefix={af:"Africa",am:"America",aq:"Antarctica",as:"Asia",at:"Atlantic",au:"Australia",etc:"Etc",eu:"Europe",in:"Indian",pa:"Pacific"};
 )HTML";
 
