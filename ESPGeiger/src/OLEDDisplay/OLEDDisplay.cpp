@@ -31,14 +31,14 @@ void SSD1306Display::page_two_full() {
   ConfigManager &configManager = ConfigManager::getInstance();
   clear();
   setFont(ArialMT_Plain_10);
-  drawString(0,5, String(configManager.getHostName()));
-  drawString(0,20, PSTR("IP:"));
-  drawString(16, 20, WiFi.localIP().toString());
-  int uptime_y = 35;
+  drawString(0, 2, String(configManager.getHostName()));
+  drawString(0, 17, PSTR("IP:"));
+  drawString(16, 17, WiFi.localIP().toString());
+  int uptime_y = 32;
 #ifdef ESPGEIGER_HW
-  drawString(0, 35, PSTR("HV:"));
-  drawString(20, 35, String(status.hvReading.get()));
-  uptime_y = 50;
+  drawString(0, uptime_y, PSTR("HV:"));
+  drawString(20, uptime_y, String(status.hvReading.get()));
+  uptime_y = 47;
 #endif
   drawString(0, uptime_y, configManager.getUptimeString());
 }
