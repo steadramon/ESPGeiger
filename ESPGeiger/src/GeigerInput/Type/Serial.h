@@ -21,7 +21,6 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 static EspSoftwareSerial::UART geigerPort;
-
 /*
 
 MightyOhm CPS, 1, CPM, 60, uSv/hr, 1.23, INST/FAST/SLOW\n
@@ -58,6 +57,6 @@ class GeigerSerial : public GeigerInput
     int serial_value = 0;
     unsigned long last_serial;
     int avg_diff;
-    int _loop_c = 0;
+    uint8_t _loop_c = 0;
 };
 #endif
