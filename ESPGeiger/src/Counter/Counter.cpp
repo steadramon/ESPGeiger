@@ -161,7 +161,7 @@ void Counter::blip_led() {
 
 }
 
-void Counter::loop() {
+void Counter::loop(unsigned long stick_now) {
   geigerinput->loop();
 
   if (status.last_blip != geigerinput->last_blip()) {

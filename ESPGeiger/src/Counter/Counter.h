@@ -54,7 +54,7 @@ extern Status status;
 class Counter {
     public:
       Counter();
-      void loop();
+      void loop(unsigned long stick_now);
       float get_cps();
       int get_cpm();
       float get_cpmf();
