@@ -230,9 +230,9 @@ void setup()
 
 void loop()
 {
-  gcounter.loop();
-  cManager.process();
   unsigned long now = millis();
+  gcounter.loop(now);
+  cManager.process();
 #ifdef MQTTOUT
   mqtt.loop(now);
 #endif
