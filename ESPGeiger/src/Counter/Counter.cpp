@@ -125,6 +125,34 @@ void Counter::set_ratio(float ratio) {
   _ratio = ratio;
 }
 
+void Counter::set_warning(int val) {
+  if (val < 0) {
+    val = 0;
+  } else if (val > 9999)
+  {
+    val = 9999;
+  }
+  _cpm_warning = val;
+}
+
+void Counter::set_alert(int val) {
+  if (val < 0) {
+    val = 0;
+  } else if (val > 9999)
+  {
+    val = 9999;
+  }
+  _cpm_alert = val;
+}
+
+bool Counter::is_warning() {
+  return _bool_cpm_warning;
+}
+
+bool Counter::is_alert() {
+  return _bool_cpm_alert;
+}
+
 float Counter::get_usv() {
   float avgCPM = geigerTicks.get()*60;
   return avgCPM/_ratio;

@@ -30,6 +30,8 @@ static WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 8),
+  WiFiManagerParameter("geigerWarn", "Warning CPM", "50", 4, "pattern='\\d{1,4}'"),
+  WiFiManagerParameter("geigerAlert", "Alert CPM", "100", 4, "pattern='\\d{1,4}'"),
 #ifndef RXPIN_BLOCKED
   WiFiManagerParameter("geigerRX", "RX Pin", String(GEIGER_RXPIN).c_str(), 2),
 #endif
@@ -263,23 +265,26 @@ void ConfigManager::startWebPortal()
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   float ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
+  int cfgint = atoi(ConfigManager::getParamValueFromID("geigerWarn"));
+  gcounter.set_warning(cfgint);
+  cfgint = atoi(ConfigManager::getParamValueFromID("geigerAlert"));
+  gcounter.set_alert(cfgint);
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
-  int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
-  display.setTimeout(lcdTO);
+  cfgint = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
+  display.setTimeout(cfgint);
 #endif
 #ifdef GEIGER_NEOPIXEL
-  int npB = atoi(ConfigManager::getParamValueFromID("neopixelBrightness"));
-  neopixel.setBrightness(npB);
+  cfgint = atoi(ConfigManager::getParamValueFromID("neopixelBrightness"));
+  neopixel.setBrightness(cfgint);
 #endif
-  int pin;
 #ifndef RXPIN_BLOCKED
-  pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
-  gcounter.set_rx_pin(pin);
+  cfgint = atoi(ConfigManager::getParamValueFromID("geigerRX"));
+  gcounter.set_rx_pin(cfgint);
 #endif
 #if GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
-  pin = atoi(ConfigManager::getParamValueFromID("geigerTX"));
-  gcounter.set_tx_pin(pin);
+  cfgint = atoi(ConfigManager::getParamValueFromID("geigerTX"));
+  gcounter.set_tx_pin(cfgint);
 #endif
 #endif
 
@@ -872,13 +877,17 @@ void ConfigManager::saveParams()
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   float ratio = atof(ratioChar);
   gcounter.set_ratio(ratio);
+  int cfgint = atoi(ConfigManager::getParamValueFromID("geigerWarn"));
+  gcounter.set_warning(cfgint);
+  cfgint = atoi(ConfigManager::getParamValueFromID("geigerAlert"));
+  gcounter.set_alert(cfgint);
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
-  int lcdTO = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
-  display.setTimeout(lcdTO);
+  cfgint = atoi(ConfigManager::getParamValueFromID("dispTimeout"));
+  display.setTimeout(cfgint);
 #endif
 #ifdef GEIGER_NEOPIXEL
-  int npB = atoi(ConfigManager::getParamValueFromID("neopixelBrightness"));
-  neopixel.setBrightness(npB);
+  cfgint = atoi(ConfigManager::getParamValueFromID("neopixelBrightness"));
+  neopixel.setBrightness(cfgint);
 #endif
 }
 

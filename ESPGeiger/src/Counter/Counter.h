@@ -86,18 +86,10 @@ class Counter {
       int get_tx_pin() {
         return geigerinput->get_tx_pin();
       };
-      void set_warning(int val) {
-        _cpm_warning = val;
-      }
-      void set_alert(int val) {
-        _cpm_alert = val;
-      }
-      bool is_warning() {
-        return _bool_cpm_warning;
-      }
-      bool is_alert() {
-        return _bool_cpm_alert;
-      }
+      void set_warning(int val);
+      void set_alert(int val);
+      bool is_warning();
+      bool is_alert();
       unsigned long last_blip() {
         return geigerinput->last_blip();
       }
