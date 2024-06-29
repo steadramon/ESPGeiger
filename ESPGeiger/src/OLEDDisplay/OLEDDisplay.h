@@ -239,11 +239,12 @@ public:
   void page_three_full() {
     clear();
     setFont(ArialMT_Plain_10);
-    char versionString[80] = "";
+    char versionString[32] = "";
     sprintf_P (versionString, PSTR("%S / %S"), status.version, status.git_version);
     drawString(0, 5, GEIGER_MODEL);
     drawString(0, 20, versionString);
-    drawString(0, 35, PSTR("@steadramon"));
+    drawString(0, 35, String(__DATE__ " " __TIME__));
+    drawString(0, 50, PSTR("@ steadramon"));
   }
 
   void setTimeout(int timeout) {

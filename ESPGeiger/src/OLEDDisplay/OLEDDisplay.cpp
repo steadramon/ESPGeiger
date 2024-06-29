@@ -34,13 +34,13 @@ void SSD1306Display::page_two_full() {
   drawString(0,5, String(configManager.getHostName()));
   drawString(0,20, PSTR("IP:"));
   drawString(16, 20, WiFi.localIP().toString());
+  int uptime_y = 35;
 #ifdef ESPGEIGER_HW
-  drawString(0, 36, PSTR("HV:"));
-  drawString(20, 36, String(status.hvReading.get()));
-  drawString(0, 52, configManager.getUptimeString());
-#else
-  drawString(0, 36, configManager.getUptimeString());
+  drawString(0, 35, PSTR("HV:"));
+  drawString(20, 35, String(status.hvReading.get()));
+  uptime_y = 50;
 #endif
+  drawString(0, uptime_y, configManager.getUptimeString());
 }
 
 void SSD1306Display::page_one_clear() {
