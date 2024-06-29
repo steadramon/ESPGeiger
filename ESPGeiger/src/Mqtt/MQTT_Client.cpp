@@ -81,8 +81,15 @@ void MQTT_Client::loop(unsigned long now)
     lastPing = now - (now % 1000);
     const size_t capacity = JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(17) + 22 + 20 + 20;
     DynamicJsonDocument doc(capacity);
+    time_t currentTime = time (NULL);
+    struct tm *timeinfo = localtime (&currentTime);
     char buffer[1048];
+    char dateTime[20];
+    snprintf_P (dateTime, sizeof (dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02d"),
+      1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec
+    );
 
+    doc["time"] = dateTime;
     doc["uptime"] = configManager.getUptimeString();
     doc["board"] = configManager.GetChipModel();
     doc["model"] = configManager.getParamValueFromID("geigerModel");
