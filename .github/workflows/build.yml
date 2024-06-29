@@ -17,8 +17,9 @@ jobs:
       matrix:
         environments:
           - "espgeigerhw"
-          - "espgeigerlite"
           - "espgeigerlog"
+          - "espgeigerlog_gc10next"
+          - "espgeigerlog_test"
           - "esp32_pulse"
           - "esp32_pulse_no_pcnt"
           - "esp32_test"

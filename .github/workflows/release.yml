@@ -9,11 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and upload Assets to Release
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.7"
+          python-version: "3.11"
       - name: Install platformio
         run: |
           python -m pip install --upgrade pip
@@ -32,9 +32,8 @@ jobs:
           RELEASE_ID=$(jq --raw-output '.release.id' $GITHUB_EVENT_PATH)
           echo "release_upload_url=https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets{?name,label}" >> $GITHUB_ENV
       - name: Upload Release Assets
-        uses: bgpat/release-asset-action@03b0c30db1c4031ce3474740b0e4275cd7e126a3
+        uses: csexton/release-asset-action@v3
         with:
           pattern: "toDeploy/*"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           release-url: ${{ env.release_upload_url }}
-          allow-overwrite: true
