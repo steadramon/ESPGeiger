@@ -27,7 +27,7 @@
 static WiFiManagerParameter ESPGeigerParams[] = 
 {
   // The broker parameters
-  WiFiManagerParameter("<h1>ESPGeiger Settings</h1>"),
+  WiFiManagerParameter("<h1>ESPGeiger Config</h1>"),
   WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
   WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 8),
   WiFiManagerParameter("geigerWarn", "Warning CPM", "50", 4, "pattern='\\d{1,4}'"),
@@ -51,7 +51,7 @@ static WiFiManagerParameter ESPGeigerParams[] =
 static WiFiManagerParameter TSParams[] = 
 {
   // Thingspeak parameters
-  WiFiManagerParameter("<br><br><hr><h3>Thingspeak config</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>Thingspeak</h3>"),
   WiFiManagerParameter("tsSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label><br>"),
   WiFiManagerParameter("tsChannelKey", "Channel Key", "", 16),
@@ -63,7 +63,7 @@ static WiFiManagerParameter TSParams[] =
 static WiFiManagerParameter MQTTParams[] = 
 {
   // The broker parameters
-  WiFiManagerParameter("<br><br><hr><h3>MQTT server</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>MQTT</h3>"),
   WiFiManagerParameter("mqttServer", "<br>IP", "", 16, "input='number' pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("mqttPort", "Port", "1883", 6, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("mqttUser", "User", "", 32),
@@ -92,7 +92,7 @@ static WiFiManagerParameter CloudAPI[] =
 #ifdef RADMONOUT
 static WiFiManagerParameter radmonParams[] = 
 {
-  WiFiManagerParameter("<br><br><hr><h3>Radmon.org config</h3>"),
+  WiFiManagerParameter("<br><br><hr><h3>Radmon.org</h3>"),
   WiFiManagerParameter("radmonSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbrm' onchange='getE(\"radmonSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbrm'>Send</label><br>"),
   WiFiManagerParameter("radmonUser", "Radmon Username", "", 32),
@@ -103,7 +103,7 @@ static WiFiManagerParameter radmonParams[] =
 #ifdef GMCOUT
 static WiFiManagerParameter GMCParams[] = 
 {
-  WiFiManagerParameter("<br/><br/><hr><h3>GMC config</h3>"),
+  WiFiManagerParameter("<br/><br/><hr><h3>GMC</h3>"),
   WiFiManagerParameter("gmcSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbgm' onchange='getE(\"gmcSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbgm'>Send</label><br>"),
   WiFiManagerParameter("gmcAID", "Account ID", "", 12, "pattern='\\d{1,5}'"),
