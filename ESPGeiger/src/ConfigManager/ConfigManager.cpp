@@ -954,7 +954,7 @@ char* ConfigManager::getUptimeString () {
     uptime -= hours * SECS_PER_HOUR;
     days = uptime / SECS_PER_DAY;
 
-    snprintf (strBuffer, sizeof (strBuffer) - 1, "%dT%02d:%02d:%02d", days, hours, minutes, seconds);
+    snprintf_P (strBuffer, sizeof (strBuffer) - 1, PSTR("%dT%02d:%02d:%02d"), days, hours, minutes, seconds);
 
     return strBuffer;
 }
