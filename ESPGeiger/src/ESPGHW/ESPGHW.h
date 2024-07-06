@@ -96,6 +96,9 @@ class ESPGeigerHW {
       int get_vd_ratio() {
         return _hw_vd_ratio;
       }
+      int get_vd_offset() {
+        return _hw_vd_offset;
+      }
       void saveconfig();
       void loadconfig();
     private:
