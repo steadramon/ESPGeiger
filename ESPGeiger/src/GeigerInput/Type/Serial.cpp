@@ -25,7 +25,25 @@ GeigerSerial::GeigerSerial() {
 void GeigerSerial::begin() {
   Log::console(PSTR("GeigerSerial: Setting up %s serial geiger ..."), GEIGER_MODEL);
   Log::console(PSTR("GeigerSerial: RXPIN: %d BAUD: %d"), _rx_pin, GEIGER_BAUDRATE);
-  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false);
+  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
+}
+
+void GeigerSerial::pullSerial() {
+  while (geigerPort.available()) {
+    char input = geigerPort.read();
+    ESP.wdtFeed();
+    delay(1);
+    _serial_buffer[_serial_idx++] = input;
+    if (input == '\n') {
+      handleSerial(_serial_buffer);
+      _serial_idx = 0;
+      _serial_buffer[0] = '\0';
+    }
+    if (_serial_idx > 52) {
+      _serial_idx = 0;
+      _serial_buffer[0] = '\0';
+    }
+  }
 }
 
 void GeigerSerial::loop() {
@@ -34,21 +52,23 @@ void GeigerSerial::loop() {
     return;
   }
   _loop_c = 0;
-  if (geigerPort.available() > 0) {
-    if (geigerPort.overflow()) {
-      Log::console(PSTR("GeigerSerial: Serial Overflow %d"), geigerPort.available());
-    }
-    char input = geigerPort.read();
-    optimistic_yield(100 * 1000);
-    _serial_buffer[_serial_idx++] = input;
-    if (input == '\n') {
-      handleSerial(_serial_buffer);
-      _serial_idx = 0;
-    }
-
-    if (_serial_idx > 52) {
-      _serial_idx = 0;
-    }
+  pullSerial();
+  if (avg_diff <= 0) {
+    avg_diff = 0;
+    return;
+  }
+  if (serial_value <= 0) {
+    serial_value = 0;
+    return;
+  }
+  unsigned long now = millis();
+/*
+  if (now - last_serial > avg_diff*2) {
+    serial_value = serial_value / 2;
+  }
+*/
+  if (now - last_serial > 10000) {
+    serial_value = 0;
   }
 }
 
@@ -63,13 +83,6 @@ void GeigerSerial::secondTicker() {
 #else
   setCounter(serial_value, false);
 #endif
-  if (avg_diff < 0) {
-    return;
-  }
-  unsigned long now = millis();
-  if (now - last_serial > avg_diff*2) {
-    serial_value = serial_value / 2;
-  }
 }
 
 void GeigerSerial::handleSerial(char* input) {
@@ -78,8 +91,16 @@ void GeigerSerial::handleSerial(char* input) {
   int _scps;
   int n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
   if (n == 2) {
+#elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
+  int n = sscanf(input, "CPM: %d", &_scpm);
+  if (n == 1) {
 #else
-  int n = sscanf(input, "%d\n", &_scpm);
+  for (int x = 0; x < strlen(input); x++) {
+    if (!isDigit(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
+      return;
+    }
+  }
+  int n = sscanf(input, "%d\r\n", &_scpm);
   if (n == 1) {
 #endif
     Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
