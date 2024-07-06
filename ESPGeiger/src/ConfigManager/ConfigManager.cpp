@@ -628,6 +628,16 @@ void ConfigManager::handleHVJsonReturn()
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
 }
 #endif
+#ifdef GEIGERTESTMODE
+void ConfigManager::handleSetCPM() {
+  handleRequest();
+  int _d = atoi(server->arg(F("v")).c_str());
+  if (_d > 0) {
+    gcounter.set_target_cpm(_d);
+  }
+  ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), F("OK"));
+}
+#endif
 
 void ConfigManager::handleRestart()
 {
@@ -947,6 +957,9 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
   ConfigManager::server.get()->on(HV_JS_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJSReturn, this));
   ConfigManager::server.get()->on(HV_JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJsonReturn, this));
+#endif
+#ifdef GEIGERTESTMODE
+  ConfigManager::server.get()->on(SETCPM_URL, HTTP_GET, std::bind(&ConfigManager::handleSetCPM, this));
 #endif
 }
 

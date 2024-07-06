@@ -71,6 +71,9 @@ constexpr auto HV_JS_URL PROGMEM = "/hvjs";
 constexpr auto HV_JSON_URL PROGMEM = "/hvjson";
 constexpr auto HV_SET_URL PROGMEM = "/hvset";
 #endif
+#ifdef GEIGERTESTMODE
+constexpr auto SETCPM_URL PROGMEM = "/cpm";
+#endif
 
 const char HTTP_HEAD_CTJS[17] PROGMEM = "text/javascript";
 const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
@@ -180,6 +183,9 @@ private:
   void handleHVJSReturn();
   void handleHVJsonReturn();
   void handleHVSet();
+#endif
+#ifdef GEIGERTESTMODE
+  void handleSetCPM();
 #endif
   char chipId[7] = "";
   char hostName[20] = "";
