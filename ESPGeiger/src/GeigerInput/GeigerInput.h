@@ -102,7 +102,6 @@ class GeigerInput {
     virtual void secondTicker();
     virtual int collect();
     virtual void begin();
-    virtual void setTargetCPM(float cpm, bool manual);
     void set_debounce(int debounce) {
       _debounce = microsecondsToClockCycles(debounce);
     }
