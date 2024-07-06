@@ -388,8 +388,10 @@ void ConfigManager::handleSerialOut() {
   handleRequest();
   if (status.serialOut == 0) {
     status.serialOut = 1;
+    Log::setSerialLogLevel(false);
   } else {
     status.serialOut = 0;
+    Log::setSerialLogLevel(true);
   }
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), "OK" );
 }
