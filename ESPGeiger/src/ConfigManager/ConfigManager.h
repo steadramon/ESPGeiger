@@ -65,6 +65,7 @@ constexpr auto NTP_URL PROGMEM = "/ntp";
 constexpr auto NTP_SET_URL PROGMEM = "/ntpset";
 constexpr auto HIST_URL PROGMEM = "/hist";
 constexpr auto GEIGERLOG_URL PROGMEM = "/lastdata";
+constexpr auto SERIAL_URL PROGMEM = "/serial";
 #ifdef ESPGEIGER_HW
 constexpr auto HV_URL PROGMEM = "/hv";
 constexpr auto HV_JS_URL PROGMEM = "/hvjs";
@@ -178,6 +179,7 @@ private:
   void handleNTPSet();
   void handleClicksReturn();
   void handleGeigerLog();
+  void handleSerialOut();
 #ifdef ESPGEIGER_HW
   void handleHVPage();
   void handleHVJSReturn();

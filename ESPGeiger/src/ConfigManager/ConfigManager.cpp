@@ -384,6 +384,16 @@ void ConfigManager::handleGeigerLog() {
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), jsonBuffer );
 }
 
+void ConfigManager::handleSerialOut() {
+  handleRequest();
+  if (status.serialOut == 0) {
+    status.serialOut = 1;
+  } else {
+    status.serialOut = 0;
+  }
+  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), "OK" );
+}
+
 void ConfigManager::handleClicksReturn()
 {
   handleRequest();
@@ -952,6 +962,7 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
   ConfigManager::server.get()->on(HIST_URL, HTTP_GET, std::bind(&ConfigManager::handleHistoryPage, this));
   ConfigManager::server.get()->on(GEIGERLOG_URL, HTTP_GET, std::bind(&ConfigManager::handleGeigerLog, this));
+  ConfigManager::server.get()->on(SERIAL_URL, HTTP_GET, std::bind(&ConfigManager::handleSerialOut, this));
 #ifdef ESPGEIGER_HW
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
