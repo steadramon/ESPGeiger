@@ -32,6 +32,7 @@ public:
   static void getLog(uint32_t idx, char** entry_pp, size_t* len_p);
   static char getLogIdx();
   static void setLogLevel(LoggingLevels level);
+  static void setSerialLogLevel(bool level);
 
 private:
   static void AddLog(LoggingLevels logLevel, const char* logData);
@@ -39,4 +40,5 @@ private:
   static char log[MAX_LOG_SIZE];
   static char logIdx;
   static LoggingLevels logLevel;
+  static bool serialLog;
 };

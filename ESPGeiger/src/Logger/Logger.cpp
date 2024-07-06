@@ -22,6 +22,7 @@
 char Log::logIdx = 1;
 Log::LoggingLevels Log::logLevel = LOG_LEVEL;
 char Log::log[MAX_LOG_SIZE] = "";
+bool Log::serialLog = true;
 
 void Log::console(const char* formatP, ...)
 {
@@ -79,9 +80,13 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData)
   else {
       timeStr[0] = '\0';
   }
-  Serial.printf (PSTR ("%s%s\n"), timeStr, logData);
+  if (serialLog) {
+      Serial.printf (PSTR ("%s%s\n"), timeStr, logData);
+  }
 #else
-  Serial.printf (PSTR ("%s\n"), logData);
+  if (serialLog) {
+      Serial.printf (PSTR ("%s\n"), logData);
+  }
 #endif
 
 
@@ -146,4 +151,9 @@ char Log::getLogIdx()
 void Log::setLogLevel(LoggingLevels level)
 {
   logLevel = level;
+}
+
+void Log::setSerialLogLevel(bool level)
+{
+  serialLog = level;
 }
