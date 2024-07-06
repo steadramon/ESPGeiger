@@ -96,9 +96,11 @@ class Counter {
       void reset_alarm() {
         _bool_cpm_alert = false;
       }
+#ifdef GEIGERTESTMODE
       void set_target_cpm(float val) {
         geigerinput->setTargetCPM(val, true);
       }
+#endif
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;
@@ -115,6 +117,18 @@ class Counter {
       Smoothed <float> geigerTicks;
       Smoothed <float> geigerTicks5;
       Smoothed <float> geigerTicks15;
-      GeigerInput* geigerinput;
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
+      GeigerPulse* geigerinput;
+#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
+      GeigerSerial* geigerinput;
+#elif GEIGER_TYPE == GEIGER_TYPE_TEST
+      GeigerTest* geigerinput;
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+      GeigerTestPulse* geigerinput;
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+      GeigerTestSerial* geigerinput;
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
+      GeigerTestPulseInt* geigerinput;
+#endif
 };
 #endif
