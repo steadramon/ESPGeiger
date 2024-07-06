@@ -128,7 +128,7 @@ void SerialCommand::set_cpm() {
   arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
   if (arg != NULL) {
     aNumber = atoi(arg);    // Converts a char string to an integer
-    if (aNumber != NULL) {
+    if ((aNumber != NULL) && (aNumber > 0)) {
       gcounter.set_target_cpm(aNumber);
     }
   }
@@ -199,6 +199,10 @@ void SerialCommand::set_vdoffset() {
   }
 }
 #endif
+
+void SerialCommand::loop() {
+  readSerial();
+}
 
 void SerialCommand::readSerial() {
   while (Serial.available() > 0) {

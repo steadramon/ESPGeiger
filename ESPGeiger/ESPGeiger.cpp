@@ -212,7 +212,8 @@ void loop()
 #ifdef MQTTOUT
   mqtt.loop(now);
 #endif
-#ifdef DISABLE_SERIALRX
+#ifndef DISABLE_SERIALRX
+  serialcmd.loop();
 #endif
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.loop(now);
@@ -223,6 +224,5 @@ void loop()
 #ifdef GEIGER_NEOPIXEL
   neopixel.loop(now);
 #endif
-  serialcmd.readSerial();
   ArduinoOTA.handle();
 }

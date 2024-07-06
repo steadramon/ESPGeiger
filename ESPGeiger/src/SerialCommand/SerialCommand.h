@@ -46,6 +46,7 @@ class SerialCommand {
 public:
     SerialCommand();
     void setup();
+    void loop();
     void readSerial();
     void clearBuffer();
     char *next();         // Returns pointer to next token found in command buffer (for getting arguments to commands).
