@@ -91,34 +91,6 @@ Ticker msTicker;
 Ticker fiveSTicker;
 Ticker sTicker;
 
-void handleSerial()
-{
-  if(Serial.available())
-  {
-    // get the first character
-    char serialCmd = Serial.read();
-
-    // dump the serial buffer
-    while(Serial.available())
-    {
-      Serial.read();
-    }
-
-    // process serial command
-    switch(serialCmd) {
-      case 'e':
-        cManager.resetSettings();
-        ESP.restart();
-        break;
-      case 'b':
-        ESP.restart();
-        break;
-      default:
-        Log::console(PSTR("Unknown command: %c"), serialCmd);
-        break;
-    }
-  }
-}
 void msTickerCB()
 {
   status.led.Update();
@@ -144,7 +116,7 @@ void sTickerCB()
 
   gcounter.secondticker(stick_now);
 #ifdef SERIALOUT
-  serialout.loop();
+  serialout.loop(stick_now);
 #endif
 #ifdef ESPGEIGER_HW
   hardware.loop();
@@ -236,8 +208,7 @@ void loop()
 #ifdef MQTTOUT
   mqtt.loop(now);
 #endif
-#ifndef DISABLE_SERIALRX
-  handleSerial();
+#ifdef DISABLE_SERIALRX
 #endif
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.loop(now);

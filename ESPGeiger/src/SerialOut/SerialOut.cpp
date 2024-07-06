@@ -25,11 +25,54 @@
 SerialOut::SerialOut() {
 }
 
-void SerialOut::loop() {
-#ifdef SERIALOUT_WEB
-  Log::console(PSTR("CPM: %d"), gcounter.get_cpm());
-#else
-  Serial.printf (PSTR ("CPM: %d\n"), gcounter.get_cpm());
+void SerialOut::print_cpm() {
+  Serial.printf (PSTR ("CPM: %d\r\n"), gcounter.get_cpm());
+}
+
+void SerialOut::print_usv() {
+  Serial.printf (PSTR ("uSv: %.3f\r\n"), gcounter.get_usv());
+}
+
+void SerialOut::toggle_usv() {
+  _show_usv = !_show_usv;
+}
+
+void SerialOut::toggle_hv() {
+  _show_hv = !_show_hv;
+}
+
+void SerialOut::toggle_cps() {
+  _show_cps = !_show_cps;
+}
+
+void SerialOut::set_show(int var) {
+  _show = var;
+  if (_show > 0) {
+    Log::setSerialLogLevel(false);
+  } else {
+    Log::setSerialLogLevel(true);
+  }
+}
+
+void SerialOut::loop(unsigned long stick_now) {
+  if (_show > 0) {
+    _loop_c++;
+    if (_loop_c >= _show) {
+      _loop_c = 0;
+      Serial.printf (PSTR ("CPM: %d"), gcounter.get_cpm());
+      if (_show_cps) {
+        Serial.printf (PSTR (", CPS: %.3f"), gcounter.get_cps());
+      }
+      if (_show_usv) {
+        Serial.printf (PSTR (", uSv: %.3f"), gcounter.get_usv());
+      }
+#ifdef ESPGEIGER_HW
+      if (_show_hv) {
+        Serial.printf (PSTR (", HV: %.3f"), status.hvReading.get());
+      }
 #endif
+      Serial.printf (PSTR ("\r\n"));
+    }
+  }
 }
 #endif

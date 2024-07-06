@@ -29,7 +29,19 @@ extern Counter gcounter;
 class SerialOut {
     public:
       SerialOut();
-      void loop();
+      void loop(unsigned long stick_now);
+      void set_show(int var);
+      void print_cpm();
+      void print_usv();
+      void toggle_usv();
+      void toggle_hv();
+      void toggle_cps();
+    private:
+      int _loop_c = 0;
+      int _show = 0;
+      bool _show_usv;
+      bool _show_hv;
+      bool _show_cps;
 };
 
 #endif
