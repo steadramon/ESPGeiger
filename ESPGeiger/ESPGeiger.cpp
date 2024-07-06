@@ -43,6 +43,7 @@
 #include <string.h>
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/OLEDDisplay/OLEDDisplay.h"
+#include "src/SerialCommand/SerialCommand.h"
 #include <Ticker.h>  //Ticker Library
 #ifdef SERIALOUT
 #include "src/SerialOut/SerialOut.h"
@@ -85,6 +86,8 @@ Radmon radmon = Radmon();
 #ifdef THINGSPEAKOUT
 Thingspeak thingspeak = Thingspeak();
 #endif
+
+SerialCommand serialcmd;     // The demo SerialCommand object
 
 // Tickers
 Ticker msTicker;
@@ -198,6 +201,7 @@ void setup()
 #endif
   sTicker.attach(1, sTickerCB);
   status.led.Off().Update();
+  serialcmd.setup();
 }
 
 void loop()
@@ -219,5 +223,6 @@ void loop()
 #ifdef GEIGER_NEOPIXEL
   neopixel.loop(now);
 #endif
+  serialcmd.readSerial();
   ArduinoOTA.handle();
 }
