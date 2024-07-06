@@ -114,8 +114,6 @@ static WiFiManagerParameter GMCParams[] =
 
 ConfigManager::ConfigManager() : WiFiManager(){
 
-  strcat(thingName, status.thingName);
-
 #ifdef ESP8266
   uint32_t tchipId = ESP.getChipId();
 #elif defined(ESP32)
@@ -130,7 +128,7 @@ ConfigManager::ConfigManager() : WiFiManager(){
   sprintf_P (userAgent, PSTR("%S/%S (%S; %S; %S; %S)"), status.thingName, status.version, status.git_version, status.geiger_model, GetChipModel(), chipId);
 
   setHostname(hostName);
-  setTitle(thingName);
+  setTitle(status.thingName);
   setCustomHeadElement(faviconHead);
 }
 
@@ -313,7 +311,7 @@ void ConfigManager::handleRoot() {
 #elif defined(ESPGEIGER_LT)
   page.replace(FPSTR(T_t),"ESPGeiger-Log");
 #else
-  page.replace(FPSTR(T_t),thingName);
+  page.replace(FPSTR(T_t),status.thingName);
 #endif
   page.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
   server->sendContent(page);
@@ -436,7 +434,7 @@ void ConfigManager::handleStatusPage()
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
   page = FPSTR(STATUS_PAGE_BODY_HEAD);
-  title = FPSTR(thingName);
+  title = FPSTR(status.thingName);
   title += F(" - Status");
   page.replace(FPSTR(T_v), title);
   page.replace(FPSTR(T_t), hostName);
@@ -470,7 +468,7 @@ void ConfigManager::handleHistoryPage()
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
   page = FPSTR(STATUS_PAGE_BODY_HEAD);
-  title = FPSTR(thingName);
+  title = FPSTR(status.thingName);
   title += F(" - History");
   page.replace(FPSTR(T_v), title);
   page.replace(FPSTR(T_t), hostName);
@@ -493,7 +491,7 @@ void ConfigManager::handleNTP()
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(thingName);
+  String title = FPSTR(status.thingName);
   title += F(" - NTP");
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
@@ -533,7 +531,7 @@ void ConfigManager::handleNTPSet()
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(thingName);
+  String title = FPSTR(status.thingName);
   title += F(" - NTP Saved");
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
@@ -559,7 +557,7 @@ void ConfigManager::handleHVPage()
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(thingName);
+  String title = FPSTR(status.thingName);
   title += F("-HW - HV");
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
@@ -647,7 +645,7 @@ void ConfigManager::handleRestart()
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
   server->sendContent(FPSTR(HTTP_HEAD_END));
-  server->sendContent(FPSTR(thingName));
+  server->sendContent(FPSTR(status.thingName));
   server->sendContent(F(" is restarting...<br><br>"));
   server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
@@ -899,6 +897,25 @@ const char* ConfigManager::getParamValueFromID(const char* str)
     if (customParams[i]->getID() == NULL)
       continue;
     if (strncmp(customParams[i]->getID(), str, strlen(str)) == 0)
+    {
+      if (customParams[i]->getValue() == NULL)
+        return NULL;
+      if (strlen(customParams[i]->getValue()) == 0)
+        return NULL;
+      return customParams[i]->getValue();
+    }
+  }
+  return NULL;
+}
+
+const char* ConfigManager::getParamValueFromID_P(const __FlashStringHelper *param_in)
+{
+  WiFiManagerParameter** customParams = ConfigManager::getParameters();
+  for (int i = 0; i < ConfigManager::getParametersCount(); i++)
+  {
+    if (customParams[i]->getID() == NULL)
+      continue;
+    if (strncmp_P(customParams[i]->getID(), (const char*)param_in, strlen_P((const char*)param_in)) == 0)
     {
       if (customParams[i]->getValue() == NULL)
         return NULL;

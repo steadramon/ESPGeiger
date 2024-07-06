@@ -109,6 +109,7 @@ public:
   void autoConnect();
   void startWebPortal();
   const char* getParamValueFromID(const char* str);
+  const char* getParamValueFromID_P(const __FlashStringHelper* param_p);
   int getIndexFromID(const char* str);
   void loadParams();
   void preSaveParams();
@@ -117,7 +118,7 @@ public:
   void resetSettings();
   const char* getHostName() { return hostName; };
   const char* getChipID() { return chipId; };
-  const char* getThingName() { return thingName; };
+  const char* getThingName() { return status.thingName; };
   const char* getUserAgent() { return userAgent; };
   char* getUptimeString ();
   unsigned long getUptime ();
@@ -180,7 +181,6 @@ private:
   void handleHVJsonReturn();
   void handleHVSet();
 #endif
-  char thingName[11] = "";
   char chipId[7] = "";
   char hostName[20] = "";
   char userAgent[80] = "";
