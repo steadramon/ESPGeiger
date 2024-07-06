@@ -96,6 +96,9 @@ class Counter {
       void reset_alarm() {
         _bool_cpm_alert = false;
       }
+      void set_target_cpm(float val) {
+        geigerinput->setTargetCPM(val, true);
+      }
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;
