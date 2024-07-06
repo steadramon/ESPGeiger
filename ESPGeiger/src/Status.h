@@ -89,6 +89,7 @@ struct Status {
   Smoothed <float> hvReading;
 #endif
   int wifi_status;
+  int serialOut;
 };
 
 #endif

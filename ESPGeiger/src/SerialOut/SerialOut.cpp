@@ -46,8 +46,8 @@ void SerialOut::toggle_cps() {
 }
 
 void SerialOut::set_show(int var) {
-  _show = var;
-  if (_show > 0) {
+  status.serialOut = var;
+  if (status.serialOut > 0) {
     Log::setSerialLogLevel(false);
   } else {
     Log::setSerialLogLevel(true);
@@ -55,9 +55,9 @@ void SerialOut::set_show(int var) {
 }
 
 void SerialOut::loop(unsigned long stick_now) {
-  if (_show > 0) {
+  if (status.serialOut > 0) {
     _loop_c++;
-    if (_loop_c >= _show) {
+    if (_loop_c >= status.serialOut) {
       _loop_c = 0;
       Serial.printf (PSTR ("CPM: %d"), gcounter.get_cpm());
       if (_show_cps) {
