@@ -58,18 +58,32 @@ void GeigerTestPulse::begin() {
 #ifdef GEIGER_TEST_FAST
     _target_cps = _target_cps * 2;
 #endif
-  double poisson_mult = generatePoissonRandom(_target_cps);
-
+  CPMAdjuster();
+  double delay = calcDelay();
 #ifdef ESP8266
   timer1_attachInterrupt(pulseInterrupt);
   timer1_isr_init();
   timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-  timer1_write(2500000 * poisson_mult);
+  timer1_write(delay);
 #else
   pulsetimer = timerBegin(0, 80, true);
   timerAttachInterrupt(pulsetimer, pulseInterrupt, true);
-  timerAlarmWrite(pulsetimer, 500000 * poisson_mult, true);
+  timerAlarmWrite(pulsetimer, delay, true);
   timerAlarmEnable(pulsetimer);
+#endif
+}
+
+double GeigerTestPulse::calcDelay() {
+#ifdef ESP8266
+  double mult = 2500000;
+#else
+  double mult = 500000;
+#endif
+#ifdef DISABLE_GEIGER_POISSON
+  return mult / _target_cps;
+#else
+  double result = generatePoissonRandom(_target_cps);
+  return mult * result;
 #endif
 }
 
@@ -94,16 +108,14 @@ void GeigerTestPulse::loop() {
 #ifdef GEIGER_COUNT_TXPULSE
       countInterrupt();
 #endif
-      double poisson_mult = generatePoissonRandom(_target_cps);
+      double delay = calcDelay();
 #ifdef ESP8266
-      poisson_mult *= 2500000;
-      if (poisson_mult > 50) {
-        timer1_write(poisson_mult);
+      if (delay > 50) {
+        timer1_write(delay);
       }
 #else
-      poisson_mult *= 500000;
-      if (poisson_mult > 25) {
-        timerAlarmWrite(pulsetimer, poisson_mult, true);
+      if (delay > 25) {
+        timerAlarmWrite(pulsetimer, delay, true);
       }
 #endif
     }
@@ -114,8 +126,10 @@ void GeigerTestPulse::pulseInterrupt() {
   _pulse_send = true;
 }
 
-void GeigerTestPulse::setTargetCPM(float target) {
-  _target_cps = target/60.0;
+void GeigerTestPulse::setTargetCPM(float target, bool manual = false) {
+  Log::console(PSTR("TestPulse: Setting CPM to: %d"), (int)target);
+  _manual = manual;
+  setTargetCPS(target/60.0);
 };
 
 void GeigerTestPulse::setTargetCPS(float target) {
@@ -123,6 +137,9 @@ void GeigerTestPulse::setTargetCPS(float target) {
 };
 
 void GeigerTestPulse::CPMAdjuster() {
+  if (_manual) {
+    return;
+  }
 #ifndef GEIGER_TESTPULSE_FIXEDCPM
   int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
@@ -145,8 +162,7 @@ void GeigerTestPulse::CPMAdjuster() {
 #ifdef GEIGER_TEST_FAST
     _targetCPM = _targetCPM * 2;
 #endif
-    Log::console(PSTR("TestPulse: Setting CPM to: %d"), _targetCPM);
-    setTargetCPM(_targetCPM);
+    setTargetCPM(_targetCPM, false);
   }
 #endif
 }
