@@ -26,9 +26,27 @@ void GeigerTestSerial::begin() {
   Log::console(PSTR("TestSerial: Setting up test %s serial geiger ..."), GEIGER_MODEL);
   Log::console(PSTR("TestSerial: RXPIN: %d BAUD: %d"), _rx_pin, GEIGER_BAUDRATE);
   Log::console(PSTR("TestSerial: TXPIN: %d BAUD: %d"), _tx_pin, GEIGER_BAUDRATE);
-  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false);
+  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
   serialAvg.begin(SMOOTHED_AVERAGE, 32);
   setTargetCPS(GEIGER_TEST_INITIAL_CPS);
+}
+
+void GeigerTestSerial::pullSerial() {
+  while (geigerPort.available()) {
+    char input = geigerPort.read();
+    ESP.wdtFeed();
+    delay(1);
+    _serial_buffer[_serial_idx++] = input;
+    if (input == '\n') {
+      handleSerial(_serial_buffer);
+      _serial_idx = 0;
+      _serial_buffer[0] = '\0';
+    }
+    if (_serial_idx > 52) {
+      _serial_idx = 0;
+      _serial_buffer[0] = '\0';
+    }
+  }
 }
 
 void GeigerTestSerial::loop() {
@@ -37,26 +55,29 @@ void GeigerTestSerial::loop() {
     return;
   }
   _loop_c = 0;
-  if (geigerPort.available() > 0) {
-    if (geigerPort.overflow()) {
-      Log::console(PSTR("TestSerial: Serial Overflow %d"), geigerPort.available());
-    }
-    optimistic_yield(100 * 1000);
-    char input = geigerPort.read();
-    optimistic_yield(100 * 1000);
-    _serial_buffer[_serial_idx++] = input;
-    if (input == '\n') {
-      handleSerial(_serial_buffer);
-      _serial_idx = 0;
-    }
-
-    if (_serial_idx > 52) {
-      _serial_idx = 0;
-    }
+  pullSerial();
+  if (avg_diff <= 0) {
+    avg_diff = 0;
+    return;
+  }
+  if (serial_value <= 0) {
+    serial_value = 0;
+    return;
+  }
+  unsigned long now = millis();
+/*
+  if (now - last_serial > avg_diff*2) {
+    serial_value = serial_value / 2;
+  }
+*/
+  if (now - last_serial > 10000) {
+    serial_value = 0;
   }
 }
 
-void GeigerTestSerial::setTargetCPM(float target) {
+void GeigerTestSerial::setTargetCPM(float target, bool manual = false) {
+  Log::console(PSTR("TestSerial: Setting CPM to: %d"), (int)target);
+  _manual = manual;
   setTargetCPS(target/60.0);
 };
 
@@ -65,6 +86,9 @@ void GeigerTestSerial::setTargetCPS(float target) {
 };
 
 void GeigerTestSerial::CPMAdjuster() {
+  if (_manual) {
+    return;
+  }
 #ifndef GEIGER_TESTPULSE_FIXEDCPM
   int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
@@ -84,8 +108,7 @@ void GeigerTestSerial::CPMAdjuster() {
         _targetCPM = 30;
         break;
     }
-    Log::console(PSTR("TestSerial: Setting CPM to: %d"), _targetCPM);
-    setTargetCPM(_targetCPM);
+    setTargetCPM(_targetCPM, false);
   }
 #endif
 }
@@ -110,9 +133,12 @@ void GeigerTestSerial::secondTicker() {
   float test_serialuSV = (serialAvg.get() * 60.0)/175;
   Log::debug(PSTR("TestSerial: CPS, %d, CPM, %d, uSv/hr, %.2lf, SLOW"), test_serialCPS, test_serialCPM, test_serialuSV);
   geigerPort.printf(PSTR("CPS, %d, CPM, %d, uSv/hr, %.2lf, SLOW\n"), test_serialCPS, test_serialCPM, test_serialuSV);
+#elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
+  Log::debug(PSTR("TestSerial: CPM: %d"), test_serialCPM);
+  geigerPort.printf(PSTR("CPM: %d\r\n"), test_serialCPM);
 #else
   Log::debug(PSTR("TestSerial: %d"), test_serialCPM);
-  geigerPort.printf(PSTR("%d\n"), test_serialCPM);
+  geigerPort.printf(PSTR("%d\r\n"), test_serialCPM);
 #endif
   delay(10);
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
@@ -125,13 +151,6 @@ void GeigerTestSerial::secondTicker() {
 #else
   setCounter(serial_value, false);
 #endif
-  if (avg_diff < 0) {
-    return;
-  }
-  unsigned long now = millis();
-  if (now - last_serial > avg_diff*2) {
-    serial_value = serial_value / 2;
-  }
 }
 
 void GeigerTestSerial::handleSerial(char* input) {
@@ -140,8 +159,16 @@ void GeigerTestSerial::handleSerial(char* input) {
   int _scps;
   int n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
   if (n == 2) {
+#elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
+  int n = sscanf(input, "CPM: %d", &_scpm);
+  if (n == 1) {
 #else
-  int n = sscanf(input, "%d\n", &_scpm);
+  for (int x = 0; x < strlen(input); x++) {
+    if (!isDigit(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
+      return;
+    }
+  }
+  int n = sscanf(input, "%d\r\n", &_scpm);
   if (n == 1) {
 #endif
     Log::debug(PSTR("TestSerial: Loop - %d"), _scpm);

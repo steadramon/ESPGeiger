@@ -62,10 +62,11 @@ class GeigerTestSerial : public GeigerInput
     void begin();
     void loop();
     void secondTicker();
-    void setTargetCPM(float target);
+    void setTargetCPM(float target, bool manual);
     void setTargetCPS(float target);
     void CPMAdjuster();
   private:
+    void pullSerial();
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
     void handleSerial(char* input);
@@ -78,5 +79,6 @@ class GeigerTestSerial : public GeigerInput
     float _poisson_target = 0;
     int _current_selection = 0;
     uint8_t _loop_c = 0;
+    bool _manual = false;
 };
 #endif
