@@ -31,7 +31,9 @@ void GeigerSerial::begin() {
 void GeigerSerial::pullSerial() {
   while (geigerPort.available()) {
     char input = geigerPort.read();
+#ifdef ESP8266
     ESP.wdtFeed();
+#endif
     delay(1);
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
