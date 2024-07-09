@@ -77,7 +77,7 @@ class GeigerTestPulseInt : public GeigerInput
     void loop();
     static void IRAM_ATTR pulseInterrupt();
     void secondTicker();
-    void setTargetCPM(float target);
+    void setTargetCPM(float target, bool manual);
     void setTargetCPS(float target);
     void CPMAdjuster();
 #ifdef USE_PCNT && ESP32
@@ -87,5 +87,6 @@ class GeigerTestPulseInt : public GeigerInput
     bool _bool_pulse_state = false;
     int _current_selection = -1;
     int _target_pwm = 0;
+    bool _manual = false;
 };
 #endif

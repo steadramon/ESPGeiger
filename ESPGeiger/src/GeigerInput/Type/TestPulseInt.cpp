@@ -99,7 +99,9 @@ void GeigerTestPulseInt::pulseInterrupt() {
   _pulse_send = true;
 }
 
-void GeigerTestPulseInt::setTargetCPM(float target) {
+void GeigerTestPulseInt::setTargetCPM(float target, bool manual = false) {
+  Log::console(PSTR("TestPulsePWM: Setting CPM to: %d"), (int)target);
+  _manual = manual;
   setTargetCPS(target/60.0);
 };
 
@@ -112,6 +114,9 @@ void GeigerTestPulseInt::setTargetCPS(float target) {
 };
 
 void GeigerTestPulseInt::CPMAdjuster() {
+  if (_manual) {
+    return;
+  }
 #ifndef GEIGER_TESTPULSE_FIXEDCPM
   int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
@@ -134,8 +139,7 @@ void GeigerTestPulseInt::CPMAdjuster() {
 #ifdef GEIGER_TEST_FAST
     _targetCPM = _targetCPM * 100;
 #endif
-    Log::console(PSTR("TestPulsePWM: Setting CPM to: %d"), _targetCPM);
-    setTargetCPM(_targetCPM);
+    setTargetCPM(_targetCPM, false);
 #ifdef ESP8266
     timer1_write(_target_pwm);
 #else
