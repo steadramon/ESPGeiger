@@ -25,7 +25,7 @@ GeigerTest::GeigerTest() {
 void GeigerTest::begin() {
   GeigerInput::begin();
   Log::console(PSTR("GeigerTest: Setting up test geiger ..."));
-  setTargetCPM(30.0);
+  CPMAdjuster();
   double delay = calcDelay();
 #ifdef ESP8266
   timer1_attachInterrupt(testInterrupt);
@@ -54,7 +54,9 @@ double GeigerTest::calcDelay() {
 #endif
 }
 
-void GeigerTest::setTargetCPM(float target) {
+void GeigerTest::setTargetCPM(float target, bool manual = false) {
+  Log::console(PSTR("GeigerTest: Setting CPM to: %d"), (int)target);
+  _manual = manual;
   setTargetCPS(target/60.0);
 };
 
@@ -86,11 +88,13 @@ void GeigerTest::loop() {
       timerAlarmWrite(pulsetimer, delay, true);
     }
 #endif
-    _pulse_test_send = false;
   }
 }
 
 void GeigerTest::CPMAdjuster() {
+  if (_manual) {
+    return;
+  }
 #ifndef GEIGER_TESTPULSE_FIXEDCPM
   int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
@@ -113,8 +117,7 @@ void GeigerTest::CPMAdjuster() {
 #ifdef GEIGER_TEST_FAST
     _targetCPM = _targetCPM * 100;
 #endif
-    Log::console(PSTR("GeigerTest: Setting CPM to: %d"), _targetCPM);
-    setTargetCPM(_targetCPM);
+    setTargetCPM(_targetCPM, false);
   }
 #endif
 }

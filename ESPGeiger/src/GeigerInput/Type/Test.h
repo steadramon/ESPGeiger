@@ -50,7 +50,7 @@ class GeigerTest : public GeigerInput
     void begin();
     void loop();
     void secondTicker();
-    void setTargetCPM(float target);
+    void setTargetCPM(float target, bool manual);
     void setTargetCPS(float target);
     void CPMAdjuster();
     double calcDelay();
@@ -58,5 +58,6 @@ class GeigerTest : public GeigerInput
   private:
     float _target_cps = 0;
     int _current_selection = -1;
+    bool _manual = false;
 };
 #endif
