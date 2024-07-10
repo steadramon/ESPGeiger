@@ -37,6 +37,7 @@ void GeigerSerial::pullSerial() {
     delay(1);
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
+      _serial_buffer[_serial_idx++] = '\0';
       handleSerial(_serial_buffer);
       _serial_idx = 0;
       _serial_buffer[0] = '\0';
@@ -88,6 +89,12 @@ void GeigerSerial::secondTicker() {
 }
 
 void GeigerSerial::handleSerial(char* input) {
+  for (int x = 0; x < strlen(input); x++) {
+    if (!isPrintable(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
+      Log::debug(PSTR("None printable character on serial"));
+      return;
+    }
+  }
   int _scpm = 0;
 #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
   int _scps;
