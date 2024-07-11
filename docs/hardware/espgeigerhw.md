@@ -78,12 +78,13 @@ The following commonly available tubes are known to be compatible with the ESPGe
 | Tube Name | Length | Operating Voltage | Ratio | Notes |
 |---|---|---|---|---|
 SBM-20 (СБМ-20) | 108 ± 3.5 | 400V | - | 
-SBM-19 (СБМ-19) | 195mm | 400V | - | 
+SBM-19 (СБМ-19) | 195mm | 400V | - | External connection
 STS-15 (CTC-15) | 111mm | 390-400V | - | 
+SI22G (СИ22Г) | 220mm | 390-400V | - | External connection
 J305 | 105mm | 400V | - | 
 J305 | 90mm | 400V | - | 
 M4011 | 90mm | 400V | - | 
-ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | 
+ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | External connection
 
 ### Possibly Compatible
 {: .no_toc }
