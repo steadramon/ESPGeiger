@@ -20,6 +20,8 @@ Files on the SDCard are written to every minute, giving the average values for t
 
 A SD Card of 4-8GB is recommended - an SD Card of 2GB should give enough capacity for ~20 years of minutely CSV information.
 
+NTP synchronisation is required to write to the SD Card. Writing to the file takes place once per minute.
+
 ## (Micro) SD Card Compatibility
 
 During testing most SDCards are compatible, however it seems some Micro SDCards simply do not support the SPI interface. If you find an SD Card which is not supported, please try another, after double checking your wiring.
