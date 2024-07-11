@@ -32,6 +32,12 @@ nav_order: 4
 
 ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGeiger.
 
+## Disclaimer
+
+{: .highlight }
+
+>This evaluation board/kit is intended for use for __ENGINEERING DEVELOPMENT, DEMONSTRATION, OR EVALUATION PURPOSES ONLY__ and is not considered to be a finished end-product fit for general consumer use. Persons handling the product(s) must have electronics training and observe good engineering practice standards. As such, the goods being provided are not intended to be complete in terms of required design-, marketing-, and/or manufacturing-related protective considerations, including product safety and environmental measures typically found in end products that incorporate such semiconductor components or circuit boards.
+
 ## Features
 
 - ESP8266 MCU based Geiger Counter
