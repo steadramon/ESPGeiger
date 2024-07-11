@@ -36,8 +36,8 @@ Unixtime, CPM, μSv/h, CPM5, CPM15
 
 | Value | Description |  Example Value |
 |---|---|---|
-`Unixtime` | Current unixtime. | `30.0`
+`Datetime` | Current datetime. | `30.0`
 `CPM` | Current Counts Per Minute (CPM) value. | `30.0`
-`uSv` | Current microSieverts per hour (μSv) value. | `0.10`
+`uSv` | Current micro Sieverts per hour (μSv) value. | `0.10`
 `CPM5` | Average CPM over the last 5 minutes. | `30.0`
 `CPM15` | Average CPM over the last 15 minutes. | `30.0`
