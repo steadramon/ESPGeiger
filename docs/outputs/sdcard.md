@@ -31,12 +31,12 @@ A SD Card of up to 16GB usually takes < 2 seconds to initialise.
 # CSV Format
 
 ```
-Unixtime, CPM, μSv/h, CPM5, CPM15
+Datetime, CPM, μSv/h, CPM5, CPM15
 ```
 
 | Value | Description |  Example Value |
 |---|---|---|
-`Datetime` | Current datetime. | `30.0`
+`Datetime` | Current datetime. | `2023-12-23T01:23:45`
 `CPM` | Current Counts Per Minute (CPM) value. | `30.0`
 `uSv` | Current micro Sieverts per hour (μSv) value. | `0.10`
 `CPM5` | Average CPM over the last 5 minutes. | `30.0`
