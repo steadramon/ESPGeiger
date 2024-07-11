@@ -18,3 +18,5 @@ NTP synchronisation is required for a number of functions within the firmware, i
 
 - Timezone - The timezone for locally shown times.
 - NTP Server - The server to contact for NTP time, accepts IP address or domain name.
+
+Please note that only the Canonical timezones are supported - in case your specific zone is not listed, a linked timezone can be used. See [https://en.wikipedia.org/wiki/List_of_tz_database_time_zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for more information.
