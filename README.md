@@ -18,6 +18,7 @@ ESPGeiger is an open-source project that makes it easy to create your own IOT co
 - 💡  Colourful and intuitive feedback using a WS2812X NeoPixel
 - 🚧  Test builds for emulating pulse and serial based counters
 
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/hardware/img/ESPGeigerLog.png" width="40%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
 
