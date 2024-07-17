@@ -42,6 +42,10 @@
 #define GEIGERHW_MAX_FREQ 9000
 #endif
 
+#ifndef GEIGERHW_MIN_FREQ
+#define GEIGERHW_MIN_FREQ 100
+#endif
+
 #ifndef GEIGERHW_ADC_RATIO
 #define GEIGERHW_ADC_RATIO 1035
 #endif
@@ -62,8 +66,8 @@ class ESPGeigerHW {
         if (freq > GEIGERHW_MAX_FREQ) {
           freq = GEIGERHW_MAX_FREQ;
         }
-        if (freq < 100) {
-          freq = 100;
+        if (freq < GEIGERHW_MIN_FREQ) {
+          freq = GEIGERHW_MIN_FREQ;
         }
       #ifdef ESP8266
         analogWriteFreq(freq);
