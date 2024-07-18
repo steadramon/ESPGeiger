@@ -33,12 +33,28 @@ MQTT_Client::MQTT_Client()
   espClient.setTimeout(timeout);
 #endif
 }
+
 void MQTT_Client::disconnect()
 {
   PubSubClient::disconnect();
   espClient.stop();
   mqttEnabled = true;
 }
+
+void MQTT_Client::setInterval(int interval) {
+  if (interval < MQTT_MIN_TIME) {
+    interval = MQTT_MIN_TIME;
+  }
+  if (interval > MQTT_MAX_TIME) {
+    interval = MQTT_MAX_TIME;
+  }
+  pingInterval = interval * 1000;
+}
+
+int MQTT_Client::getInterval() {
+  return (int)(pingInterval / 1000);
+}
+
 void MQTT_Client::loop(unsigned long now)
 {
   if (!mqttEnabled) {
@@ -74,11 +90,11 @@ void MQTT_Client::loop(unsigned long now)
     ESP.restart();
   }
 
-  if (now - lastPing > pingInterval && connected())
+  if (now - lastStatus > statusInterval && connected())
   {
     status.led.Blink(500, 500);
     ConfigManager &configManager = ConfigManager::getInstance();
-    lastPing = now - (now % 1000);
+    lastStatus = now - (now % 1000);
     const size_t capacity = JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(17) + 22 + 20 + 20;
     DynamicJsonDocument doc(capacity);
     time_t currentTime = time (NULL);
@@ -118,7 +134,12 @@ void MQTT_Client::loop(unsigned long now)
     Log::console(PSTR("MQTT: %s"), buffer);
 
     publish(buildTopic(teleTopic, topicStatus).c_str(), buffer, false);
+    status.last_send = millis();
+  }
 
+  if (now - lastPing > pingInterval && connected())
+  {
+    lastPing = now - (now % 1000);
     publish(buildTopic(statTopic, PSTR("CPM")).c_str(), String(gcounter.get_cpmf()).c_str(), false);
 
     publish(buildTopic(statTopic, PSTR("uSv")).c_str(), String(gcounter.get_usv()).c_str(), false);
@@ -426,6 +447,7 @@ void MQTT_Client::begin()
   const char* _mqtt_server = configManager.getParamValueFromID("mqttServer");
   const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
   const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
+  const char* _mqtt_time = configManager.getParamValueFromID("mqttTime");
 
   if (_mqtt_server == NULL) {
     mqttEnabled = false;
@@ -437,6 +459,13 @@ void MQTT_Client::begin()
     Log::console(PSTR("MQTT: Please set username and password"));
     return;
   }
+
+  if (_mqtt_time == NULL) {
+    _mqtt_time = "60";
+  }
+
+  setInterval(atoi(_mqtt_time));
+  Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
 
   setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
   setCallback([this] (char* topic, uint8_t* payload, unsigned int length) {

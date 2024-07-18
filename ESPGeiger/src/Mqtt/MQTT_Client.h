@@ -30,6 +30,9 @@
 
 #define MQTT_MAX_PACKET_SIZE 1024
 #define MQTT_JSON_BUFFER_SIZE 1024
+#define MQTT_MIN_TIME 5
+#define MQTT_MAX_TIME 3600
+#define MQTT_STATUS_INTERVAL 60000
 
 constexpr auto MQTT_LWT_ONLINE PROGMEM = "Online";
 constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
@@ -52,6 +55,8 @@ public:
   }
   void begin();
   void loop(unsigned long now);
+  void setInterval(int interval);
+  int getInterval();
   void sendStatus();
   void disconnect();
 #ifdef MQTTAUTODISCOVER
@@ -84,11 +89,13 @@ private:
 #endif
   void mqttDataCallback(char* topic, byte* payload, unsigned int length);
   unsigned long lastPing = 0;
+  unsigned long lastStatus = 0;
   unsigned long lastConnectionAtempt = 0;
   uint8_t connectionAttempts = 0;
   bool mqttEnabled = true;
 
-  const unsigned long pingInterval = 1 * 60 * 1000;
+  uint16_t statusInterval = MQTT_STATUS_INTERVAL;
+  uint16_t pingInterval = 1 * 60 * 1000;
   const unsigned long reconnectionInterval = 15 * 1000;
   uint16_t connectionTimeout = 10 * 60 * 1000 / reconnectionInterval;
 
@@ -101,6 +108,8 @@ private:
 
   const char* lwtOnline = MQTT_LWT_ONLINE;
   const char* lwtOffline = MQTT_LWT_OFFLINE;
+  bool warnSent;
+  bool alarmSent;
 };
 
 #endif
