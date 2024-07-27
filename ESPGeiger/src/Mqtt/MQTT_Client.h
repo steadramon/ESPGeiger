@@ -25,7 +25,7 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
-#include <PubSubClient.h>
+#include <AsyncMqttClient.h>
 #include <WiFiClient.h>
 
 #define MQTT_MAX_PACKET_SIZE 1024
@@ -46,7 +46,14 @@ constexpr auto MQTT_TOPIC_STATUS PROGMEM = "status";
 extern Status status;
 extern Counter gcounter;
 
-class MQTT_Client : public PubSubClient {
+struct MQTTMessage {
+  String topic;
+  String payload;
+  uint8_t qos;  ///< QoS. Only for last will testaments.
+  bool retain;
+};
+
+class MQTT_Client {
 public:
   static MQTT_Client& getInstance()
   {
@@ -59,11 +66,13 @@ public:
   int getInterval();
   void sendStatus();
   void disconnect();
+  void onMqttConnect(bool sessionPresent);
+  void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
 #ifdef MQTTAUTODISCOVER
   void removeHASSConfig();
 #endif
+  MQTTMessage last_will_;
 protected:
-  WiFiClient espClient;
   void reconnect();
 
 private:
@@ -87,7 +96,7 @@ private:
                       );
   void removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName);
 #endif
-  void mqttDataCallback(char* topic, byte* payload, unsigned int length);
+  void onMqttMessage(char* topic, char* payload);
   unsigned long lastPing = 0;
   unsigned long lastStatus = 0;
   unsigned long lastConnectionAtempt = 0;
@@ -96,8 +105,7 @@ private:
 
   uint16_t statusInterval = MQTT_STATUS_INTERVAL;
   uint16_t pingInterval = 1 * 60 * 1000;
-  const unsigned long reconnectionInterval = 15 * 1000;
-  uint16_t connectionTimeout = 10 * 60 * 1000 / reconnectionInterval;
+  const unsigned long reconnectionInterval = 60 * 1000;
 
   const char* teleTopic = MQTT_TELE_TOPIC;
   const char* statTopic = MQTT_STAT_TOPIC;

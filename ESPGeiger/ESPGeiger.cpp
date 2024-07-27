@@ -142,6 +142,9 @@ void sTickerCB()
 #ifdef GEIGER_SDCARD
   sdcard.s_tick(stick_now);
 #endif
+#ifdef MQTTOUT
+  mqtt.loop(stick_now);
+#endif
   status.wifi_status = WiFi.status();
 }
 
@@ -200,6 +203,7 @@ void setup()
   pushbutton.begin();
 #endif
   sTicker.attach(1, sTickerCB);
+  
   status.led.Off().Update();
   serialcmd.setup();
 }
@@ -209,9 +213,6 @@ void loop()
   unsigned long now = millis();
   gcounter.loop(now);
   cManager.process();
-#ifdef MQTTOUT
-  mqtt.loop(now);
-#endif
 #ifndef DISABLE_SERIALRX
   serialcmd.loop();
 #endif

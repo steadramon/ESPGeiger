@@ -21,24 +21,31 @@
 #include "ArduinoJson.h"
 #include "../Logger/Logger.h"
 
+AsyncMqttClient* mqttClient;
+
 MQTT_Client::MQTT_Client()
-    : PubSubClient(espClient)
 {
-#ifdef ESP8266
-  // setTimeout in msecs
-  espClient.setTimeout(200 * 100);
-#else
-  // setTimeout in secs
-  uint32_t timeout = (20);
-  espClient.setTimeout(timeout);
-#endif
 }
 
 void MQTT_Client::disconnect()
 {
-  PubSubClient::disconnect();
-  espClient.stop();
+  mqttClient->disconnect(true);
   mqttEnabled = true;
+  lastConnectionAtempt = millis() - 50000;
+}
+
+void MQTT_Client::onMqttConnect(bool sessionPresent) {
+  Log::console(PSTR("MQTT: Connected"));
+  status.mqtt_connected = true;
+  mqttClient->publish(this->last_will_.topic.c_str(), 1, false, lwtOnline);
+  this->setupHassAuto();
+  this->setupHassCB();
+}
+
+void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
+  Log::console(PSTR("MQTT: Disconnected"));
+  mqttClient->clearQueue();
+  status.mqtt_connected = false;
 }
 
 void MQTT_Client::setInterval(int interval) {
@@ -60,37 +67,13 @@ void MQTT_Client::loop(unsigned long now)
   if (!mqttEnabled) {
     return;
   }
-  if (now - status.last_mqtt < 100) {
+
+  if (!status.mqtt_connected) {
+    reconnect();
     return;
   }
 
-  status.last_mqtt = now;
-
-  if (PubSubClient::loop())
-  {
-    connectionAttempts = 0;
-    status.mqtt_connected = true;
-  }
-  else
-  {
-    status.mqtt_connected = false;
-    if (millis() - lastConnectionAtempt > reconnectionInterval)
-    {
-      lastConnectionAtempt = millis();
-      connectionAttempts++;
-
-      lastPing = millis();
-      reconnect();
-    }
-  }
-
-  if (connectionAttempts > connectionTimeout)
-  {
-    Log::console(PSTR("Unable to connect to MQTT Server after many attempts. Restarting..."));
-    ESP.restart();
-  }
-
-  if (now - lastStatus > statusInterval && connected())
+  if (now - lastStatus > statusInterval)
   {
     status.led.Blink(500, 500);
     ConfigManager &configManager = ConfigManager::getInstance();
@@ -112,7 +95,6 @@ void MQTT_Client::loop(unsigned long now)
     doc["ssid"] = WiFi.SSID();
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
-    doc["c_total"] = gcounter.total_clicks;
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
     uint32_t heap_free;
@@ -133,36 +115,48 @@ void MQTT_Client::loop(unsigned long now)
     serializeJson(doc, buffer);
     Log::console(PSTR("MQTT: %s"), buffer);
 
-    publish(buildTopic(teleTopic, topicStatus).c_str(), buffer, false);
-    status.last_send = millis();
+    mqttClient->publish(buildTopic(teleTopic, topicStatus).c_str(), 1, false, buffer);
+    status.last_send = now;
   }
 
-  if (now - lastPing > pingInterval && connected())
+  if (now - lastPing > pingInterval)
   {
     lastPing = now - (now % 1000);
-    publish(buildTopic(statTopic, PSTR("CPM")).c_str(), String(gcounter.get_cpmf()).c_str(), false);
 
-    publish(buildTopic(statTopic, PSTR("uSv")).c_str(), String(gcounter.get_usv()).c_str(), false);
+    mqttClient->publish(buildTopic(statTopic, PSTR("Clicks")).c_str(), 1, false, String(gcounter.total_clicks).c_str());
+
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPM")).c_str(), 1, false, String(gcounter.get_cpmf()).c_str());
+
+    mqttClient->publish(buildTopic(statTopic, PSTR("uSv")).c_str(), 1, false, String(gcounter.get_usv()).c_str());
 
 #ifndef DISABLE_MQTT_CPS
-    publish(buildTopic(statTopic, PSTR("CPS")).c_str(), String(gcounter.get_cps()).c_str(), false);
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPS")).c_str(), 1, false, String(gcounter.get_cps()).c_str());
 #endif
 
-    publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), String(gcounter.get_cpm5f()).c_str(), false);
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), 1, false, String(gcounter.get_cpm5f()).c_str());
 
-    publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), String(gcounter.get_cpm15f()).c_str(), false);
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), 1, false, String(gcounter.get_cpm15f()).c_str());
 
 #ifdef ESPGEIGER_HW
-    publish(buildTopic(statTopic, PSTR("HV")).c_str(), String(status.hvReading.get()).c_str(), false);
+    mqttClient->publish(buildTopic(statTopic, PSTR("HV")).c_str(), 1, false, String(status.hvReading.get()).c_str());
 #endif
 
-    status.last_send = millis();
+    status.last_send = now;
   }
-
 }
 
 void MQTT_Client::reconnect()
 {
+  if (mqttClient && mqttClient->connected()) {
+    return;
+  }
+
+  if (lastConnectionAtempt && millis() - lastConnectionAtempt < reconnectionInterval) {
+    return;
+  }
+
+  lastConnectionAtempt = millis();
+
   ConfigManager &configManager = ConfigManager::getInstance();
 
   if (configManager.getParamValueFromID("mqttServer") == NULL)
@@ -170,26 +164,29 @@ void MQTT_Client::reconnect()
     mqttEnabled = false;
     return;
   }
-  setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
 
-  Log::console(PSTR("MQTT: Attempting connection ... %s:%s"), configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
-  if (connect(configManager.getHostName(), configManager.getParamValueFromID("mqttUser"), configManager.getParamValueFromID("mqttPassword"), buildTopic(teleTopic, topicLWT).c_str(), 2, false, lwtOffline ))
-  {
-    yield();
-    Log::console(PSTR("MQTT: Connected!"));
-    status.mqtt_connected = true;
-    publish(buildTopic(teleTopic, topicLWT).c_str(), lwtOnline, false);
-#ifdef MQTTAUTODISCOVER
-    this->setupHassAuto();
-    this->setupHassCB();
-#endif
-  }
-  else
-  {
-    status.mqtt_connected = false;
-    Log::console(PSTR("MQTT: connection failed, rc=%i"), state());
+  if (mqttClient == nullptr) {
+    mqttClient = new AsyncMqttClient();
+    mqttClient->setClientId(configManager.getHostName());
+    mqttClient->onConnect([this] (bool sessionPresent) {
+      onMqttConnect(sessionPresent);
+    });
+    mqttClient->onMessage([this] (char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
+      onMqttMessage(topic, payload);
+    });
+    mqttClient->onDisconnect([this] (AsyncMqttClientDisconnectReason reason) {
+      onMqttDisconnect(reason);
+    });
+    mqttClient->setWill(last_will_.topic.c_str(), 1, false, last_will_.payload.c_str());
   }
 
+  mqttClient->setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
+  const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
+  const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
+  if (_mqtt_user[0] && _mqtt_pass[0]) mqttClient->setCredentials(_mqtt_user, _mqtt_pass);
+  
+  Log::console(PSTR("MQTT: Connecting ... %s:%s"), configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
+  mqttClient->connect();
 }
 
 String MQTT_Client::buildTopic(const char *baseTopic, const char *cmd)
@@ -217,7 +214,7 @@ void MQTT_Client::setupHassCB() {
   }
   String path = _discovery_topic;
   path.concat(PSTR("/status"));
-  subscribe(path.c_str());
+  mqttClient->subscribe(path.c_str(), 2);
 }
 
 void MQTT_Client::setupHassAuto() {
@@ -381,8 +378,7 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
   path.concat(PSTR("-"));
   path.concat(mqttDeviceName);
   path.concat(PSTR("/config"));
-
-  publish(path.c_str(), buffer);
+  mqttClient->publish(path.c_str(), 1, false, buffer);
 }
 
 void MQTT_Client::removeHASSConfig()
@@ -414,11 +410,11 @@ void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mq
   path.concat(mqttDeviceName);
   path.concat(PSTR("/config"));
 
-  publish(path.c_str(), "", true);
-  yield();
+  mqttClient->publish(path.c_str(), 1, false, "");
 }
 #endif
-void MQTT_Client::mqttDataCallback(char* topic, byte* payload, unsigned int length)
+  
+void MQTT_Client::onMqttMessage(char* topic, char* payload)
 {
   ConfigManager &configManager = ConfigManager::getInstance();
 #ifdef MQTTAUTODISCOVER
@@ -441,22 +437,16 @@ void MQTT_Client::mqttDataCallback(char* topic, byte* payload, unsigned int leng
   }
 #endif
 }
+
 void MQTT_Client::begin()
 {
   ConfigManager &configManager = ConfigManager::getInstance();
   const char* _mqtt_server = configManager.getParamValueFromID("mqttServer");
-  const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
-  const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
   const char* _mqtt_time = configManager.getParamValueFromID("mqttTime");
 
   if (_mqtt_server == NULL) {
     mqttEnabled = false;
     Log::console(PSTR("MQTT: No server set"));
-    return;
-  }
-  if ((_mqtt_pass != NULL) && (_mqtt_user == NULL)) {
-    mqttEnabled = false;
-    Log::console(PSTR("MQTT: Please set username and password"));
     return;
   }
 
@@ -466,14 +456,10 @@ void MQTT_Client::begin()
 
   setInterval(atoi(_mqtt_time));
   Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
+  this->last_will_.topic = buildTopic(teleTopic, topicLWT);
+  this->last_will_.payload = lwtOffline;
 
-  setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
-  setCallback([this] (char* topic, uint8_t* payload, unsigned int length) {
-    this->mqttDataCallback(topic, payload, length);
-  });
-  setBufferSize(MQTT_MAX_PACKET_SIZE);
-  setKeepAlive(30);
-  setSocketTimeout(4);
   mqttEnabled = true;
+  reconnect();
 }
 #endif
