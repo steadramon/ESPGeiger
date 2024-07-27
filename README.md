@@ -182,8 +182,6 @@ https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
 
 ### Planned:
 - ESPGeiger API
-- Async Webserver/MQTT
-- Configurable alarms
 
 ## Contributions
 
