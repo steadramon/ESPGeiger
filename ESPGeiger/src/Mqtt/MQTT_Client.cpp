@@ -166,6 +166,9 @@ void MQTT_Client::reconnect()
   }
 
   if (mqttClient == nullptr) {
+    this->last_will_.topic = buildTopic(teleTopic, topicLWT);
+    this->last_will_.payload = lwtOffline;
+
     mqttClient = new AsyncMqttClient();
     mqttClient->setClientId(configManager.getHostName());
     mqttClient->onConnect([this] (bool sessionPresent) {
@@ -184,7 +187,14 @@ void MQTT_Client::reconnect()
   const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
   const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
   if (_mqtt_user[0] && _mqtt_pass[0]) mqttClient->setCredentials(_mqtt_user, _mqtt_pass);
-  
+  const char* _mqtt_time = configManager.getParamValueFromID("mqttTime");
+
+  if (_mqtt_time == NULL) {
+    _mqtt_time = "60";
+  }
+
+  setInterval(atoi(_mqtt_time));
+  Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
   Log::console(PSTR("MQTT: Connecting ... %s:%s"), configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
   mqttClient->connect();
 }
@@ -442,24 +452,12 @@ void MQTT_Client::begin()
 {
   ConfigManager &configManager = ConfigManager::getInstance();
   const char* _mqtt_server = configManager.getParamValueFromID("mqttServer");
-  const char* _mqtt_time = configManager.getParamValueFromID("mqttTime");
 
   if (_mqtt_server == NULL) {
     mqttEnabled = false;
     Log::console(PSTR("MQTT: No server set"));
     return;
   }
-
-  if (_mqtt_time == NULL) {
-    _mqtt_time = "60";
-  }
-
-  setInterval(atoi(_mqtt_time));
-  Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
-  this->last_will_.topic = buildTopic(teleTopic, topicLWT);
-  this->last_will_.payload = lwtOffline;
-
   mqttEnabled = true;
-  reconnect();
 }
 #endif
