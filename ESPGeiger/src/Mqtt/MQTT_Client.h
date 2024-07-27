@@ -100,7 +100,6 @@ private:
   unsigned long lastPing = 0;
   unsigned long lastStatus = 0;
   unsigned long lastConnectionAtempt = 0;
-  uint8_t connectionAttempts = 0;
   bool mqttEnabled = true;
 
   uint16_t statusInterval = MQTT_STATUS_INTERVAL;
