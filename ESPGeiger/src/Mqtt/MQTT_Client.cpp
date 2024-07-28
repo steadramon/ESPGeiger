@@ -116,6 +116,7 @@ void MQTT_Client::loop(unsigned long now)
     doc["ssid"] = WiFi.SSID();
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
+    doc["c_total"] = gcounter.total_clicks;
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
     uint32_t heap_free;
@@ -143,8 +144,6 @@ void MQTT_Client::loop(unsigned long now)
   if (now - lastPing > pingInterval)
   {
     lastPing = now - (now % 1000);
-
-    mqttClient->publish(buildTopic(statTopic, PSTR("Clicks")).c_str(), 1, false, String(gcounter.total_clicks).c_str());
 
     mqttClient->publish(buildTopic(statTopic, PSTR("CPM")).c_str(), 1, false, String(gcounter.get_cpmf()).c_str());
 
