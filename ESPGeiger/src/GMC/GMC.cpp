@@ -22,7 +22,6 @@
 #include "../Logger/Logger.h"
 
 GMC::GMC() {
-  ConfigManager &configManager = ConfigManager::getInstance();
 }
 
 void GMC::s_tick(unsigned long stick_now)
@@ -90,13 +89,11 @@ void GMC::postMeasurement() {
 
   Log::console(PSTR("GMC: Uploading latest data ..."));
 
-  int avgcpm = gcounter.get_cpm();
-  int avgcpm5 = gcounter.get_cpm5();
+  int avgcpm = gcounter.get_cpmf();
+  float avgcpm5 = gcounter.get_cpm5f();
   float usv =  gcounter.get_usv5();
-  char usvChar[20];
-  dtostrf(usv,1,5, usvChar);
   char url[256];
-  sprintf(url, GMC_URI, _api_id, _api_gc_id, avgcpm, avgcpm5, usvChar);
+  sprintf(url, GMC_URI, _api_id, _api_gc_id, avgcpm, avgcpm5, usv);
 
   static bool requestOpenResult;
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
