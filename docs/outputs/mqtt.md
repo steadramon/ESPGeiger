@@ -10,13 +10,13 @@ nav_order: 10
 
 ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This section details its interaction with MQTT brokers.
 
-- ESPGeiger transmits radiation statistics every minute.
+- ESPGeiger transmits radiation statistics every minute. This can be configured.
 - By default, it connects to the MQTT broker on the standard port `1883`
 - ESPGeiger publishes data to a base topic named: `ESPGeiger‑<device_id>`
 
 ## Published Topics
 
-| Topic | Description |  Example Value | Publish Interval |
+| Topic | Description |  Example Value | Publish Interval Default |
 |---|---|---|---|
 `ESPGeiger⁠-⁠<device_id>⁠/⁠tele⁠/⁠lwt` | Last Will and Testament (LWT) topic. Indicates ESPGeiger's connection status to the MQTT broker. | `Online` | `Online` published when MQTT connection established. `Offline` set as LWT.
 `ESPGeiger⁠-⁠<device_id>⁠/⁠stat⁠/⁠CPM` | Current Counts Per Minute (CPM) value. | `30.0` | 60
@@ -26,7 +26,7 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 `ESPGeiger⁠-⁠<device_id>⁠/⁠stat⁠/HV` | Current HV circuit value - ESPGeigerHW only. | `400.1` | 60
 `ESPGeiger⁠-⁠<device_id>⁠/⁠tele⁠/⁠status` | Current status of ESPGeiger in JSON format. | `(status_json)` | 60
 
-## Example Status JSON Output
+## Example Tele Status JSON Output
 
 ```
 {"uptime":"2T01:45:10","board":"ESP32","model":"GC10next","free_mem":191552,"ssid":"Wifi","ip":"192.168.1.123","rssi":-24}

@@ -28,6 +28,7 @@ Port | Int 0..65535 | `1883` |The port of the MQTT server
 User | String 0..32 | `null` | The username used to connect to MQTT
 Password | String 0..32 | `null` | The password used to connect to MQTT
 Root Topic | String 0..32 | `ESPGeiger-{id}` | The root topic for MQTT. `{id}` is interpolated to the devices' ID.
+Submit Time (s) | Int 5-3600 | `60` | Interval in seconds to post `/stat` topic values
 
 ## HA Autodiscovery Configuration
 
