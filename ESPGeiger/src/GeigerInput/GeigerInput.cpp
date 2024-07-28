@@ -50,8 +50,7 @@ void GeigerInput::secondTicker() {
 }
 
 void GeigerInput::setLastBlip()  {
-  unsigned long cycles = ESP.getCycleCount();
-  _last_blip = cycles;
+  _last_blip = micros();
 }
 
 unsigned long GeigerInput::last_blip()  {
@@ -59,7 +58,7 @@ unsigned long GeigerInput::last_blip()  {
 }
 
 void GeigerInput::countInterrupt() {
-  unsigned long cycles = ESP.getCycleCount();
+  unsigned long cycles = micros();
   if (cycles - _last_blip < _debounce) {
     return;
   }
@@ -93,7 +92,10 @@ void GeigerInput::setCounter(int val, bool update = true) {
 
 double GeigerInput::generatePoissonRandom(double lambda) {
   // https://tomroelandts.com/articles/simulating-a-geiger-counter
-	double u;
-	u = random(RAND_MAX) * 1.0 / RAND_MAX;
-	return -log(1 - u) / lambda;
+  double u;
+  u = random(RAND_MAX) * 1.0 / RAND_MAX;
+  if (u == 0) {
+    u = _last_blip / RAND_MAX;
+  }
+  return -log(1 - u) / lambda;
 }

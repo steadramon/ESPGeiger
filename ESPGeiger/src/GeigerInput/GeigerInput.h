@@ -98,7 +98,7 @@ static volatile unsigned long _last_blip = 0;
 static volatile int eventCounter1 = 0;
 static volatile int eventCounter2 = 0;
 
-static unsigned long _debounce = microsecondsToClockCycles(GEIGER_DEBOUNCE);
+static unsigned long _debounce = GEIGER_DEBOUNCE;
 
 #ifdef ESP32
 static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -112,7 +112,7 @@ class GeigerInput {
     virtual int collect();
     virtual void begin();
     void set_debounce(int debounce) {
-      _debounce = microsecondsToClockCycles(debounce);
+      _debounce = debounce;
     }
     void set_rx_pin(int pin) {
       _rx_pin = pin;
