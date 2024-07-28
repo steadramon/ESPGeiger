@@ -43,7 +43,28 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
 }
 
 void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Log::console(PSTR("MQTT: Disconnected"));
+  String text;
+  switch( reason) {
+  case AsyncMqttClientDisconnectReason::TCP_DISCONNECTED:
+     text = "TCP_DISCONNECTED";
+     break;
+  case AsyncMqttClientDisconnectReason::MQTT_UNACCEPTABLE_PROTOCOL_VERSION:
+     text = "MQTT_UNACCEPTABLE_PROTOCOL_VERSION";
+     break;
+  case AsyncMqttClientDisconnectReason::MQTT_IDENTIFIER_REJECTED:
+     text = "MQTT_IDENTIFIER_REJECTED";
+     break;
+  case AsyncMqttClientDisconnectReason::MQTT_SERVER_UNAVAILABLE:
+     text = "MQTT_SERVER_UNAVAILABLE";
+     break;
+  case AsyncMqttClientDisconnectReason::MQTT_MALFORMED_CREDENTIALS:
+     text = "MQTT_MALFORMED_CREDENTIALS";
+     break;
+  case AsyncMqttClientDisconnectReason::MQTT_NOT_AUTHORIZED:
+     text = "MQTT_NOT_AUTHORIZED";
+     break;
+  }
+  Log::console(PSTR("MQTT: Disconnected (%s)"),text.c_str());
   mqttClient->clearQueue();
   status.mqtt_connected = false;
 }
@@ -193,8 +214,10 @@ void MQTT_Client::reconnect()
     _mqtt_time = "60";
   }
 
-  setInterval(atoi(_mqtt_time));
-  Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
+  if (atoi(_mqtt_time) != getInterval()) {
+    setInterval(atoi(_mqtt_time));
+    Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
+  }
   Log::console(PSTR("MQTT: Connecting ... %s:%s"), configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
   mqttClient->connect();
 }
