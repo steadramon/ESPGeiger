@@ -206,7 +206,7 @@ void MQTT_Client::reconnect()
   mqttClient->setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
   const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
   const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
-  if (_mqtt_user[0] && _mqtt_pass[0]) mqttClient->setCredentials(_mqtt_user, _mqtt_pass);
+  if (_mqtt_user != NULL && _mqtt_pass != NULL) mqttClient->setCredentials(_mqtt_user, _mqtt_pass);
   const char* _mqtt_time = configManager.getParamValueFromID("mqttTime");
 
   if (_mqtt_time == NULL) {
