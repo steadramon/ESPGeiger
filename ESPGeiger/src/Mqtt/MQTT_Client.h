@@ -115,8 +115,8 @@ private:
 
   const char* lwtOnline = MQTT_LWT_ONLINE;
   const char* lwtOffline = MQTT_LWT_OFFLINE;
-  bool warnSent;
-  bool alarmSent;
+  bool warnSent = false;
+  bool alertSent = false;
 };
 
 #endif

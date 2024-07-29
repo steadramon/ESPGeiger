@@ -163,6 +163,22 @@ void MQTT_Client::loop(unsigned long now)
 
     status.last_send = now;
   }
+  if (gcounter.is_warning() != warnSent) {
+    warnSent = gcounter.is_warning();
+    int is_warning = 0;
+    if (warnSent) {
+      is_warning = 1;
+    }
+    mqttClient->publish(buildTopic(statTopic, PSTR("WARN")).c_str(), 1, false, String(is_warning).c_str());
+  }
+  if (gcounter.is_alert() != alertSent) {
+    alertSent = gcounter.is_alert();
+    int is_alert = 0;
+    if (alertSent) {
+      is_alert = 1;
+    }
+    mqttClient->publish(buildTopic(statTopic, PSTR("ALERT")).c_str(), 1, false, String(is_alert).c_str());
+  }
 }
 
 void MQTT_Client::reconnect()
