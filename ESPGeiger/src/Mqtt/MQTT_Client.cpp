@@ -65,7 +65,7 @@ void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
      break;
   }
   Log::console(PSTR("MQTT: Disconnected (%s)"),text.c_str());
-  mqttClient->clearQueue();
+  //mqttClient->clearQueue();
   status.mqtt_connected = false;
 }
 
@@ -89,9 +89,13 @@ void MQTT_Client::loop(unsigned long now)
     return;
   }
 
-  if (!status.mqtt_connected) {
+  if (!mqttClient || !mqttClient->connected()) {
     reconnect();
     return;
+  }
+
+  if (!status.mqtt_connected) {
+    onMqttConnect(true);
   }
 
   if (now - lastStatus > statusInterval)
