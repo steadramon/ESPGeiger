@@ -21,17 +21,29 @@
 #include "../Logger/Logger.h"
 
 Radmon::Radmon() {
-  ConfigManager &configManager = ConfigManager::getInstance();
+}
+
+void Radmon::setInterval(int interval) {
+  if (interval > RADMON_INTERVAL_MAX) {
+    interval = RADMON_INTERVAL_MAX;
+  }
+  if (interval < RADMON_INTERVAL_MIN) {
+    interval = RADMON_INTERVAL_MIN;
+  }
+  pingInterval = interval*1000;
 }
 
 void Radmon::s_tick(unsigned long stick_now)
 {
+  if (lastPing == 0) {
+    ConfigManager &configManager = ConfigManager::getInstance();
+    int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
+    setInterval(rtimer);
+    lastPing = random((rtimer*1000)/2);
+    return;
+  }
   if (stick_now - lastPing >= pingInterval)
   {
-    if (lastPing == 0) {
-      lastPing = random(30000);
-      return;
-    }
     lastPing = stick_now - (stick_now % 1000);
     Radmon::postMeasurement();
   }
@@ -74,6 +86,8 @@ void Radmon::postMeasurement() {
 
   const char* _api_user = configManager.getParamValueFromID("radmonUser");
   const char* _api_key = configManager.getParamValueFromID("radmonKey");
+  int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
+  setInterval(rtimer);
 
   if ((_api_user == NULL) && (_api_key == NULL)) {
     return;
@@ -91,7 +105,14 @@ void Radmon::postMeasurement() {
 
   Log::console(PSTR("Radmon: Uploading latest data ..."));
 
-  int avgcpm = gcounter.get_cpm();
+  int avgcpm;
+  if (rtimer <= 90) {
+    avgcpm = gcounter.get_cpm();
+  } else if (rtimer <= 450) {
+    avgcpm = gcounter.get_cpm5();
+  } else {
+    avgcpm = gcounter.get_cpm15();
+  }
   char url[256];
   sprintf(url, RADMON_URI, _api_user, _api_key, avgcpm);
 
