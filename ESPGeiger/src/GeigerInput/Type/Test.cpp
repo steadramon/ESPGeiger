@@ -20,104 +20,55 @@
 #include "../../Logger/Logger.h"
 
 GeigerTest::GeigerTest() {
+  strcpy(_test_type, "TestGeiger");
 };
 
 void GeigerTest::begin() {
-  GeigerInput::begin();
-  Log::console(PSTR("GeigerTest: Setting up test geiger ..."));
+  GeigerInputTest::begin();
   CPMAdjuster();
-  double delay = calcDelay();
+  _next_delay = calcDelay();
 #ifdef ESP8266
   timer1_attachInterrupt(testInterrupt);
   timer1_isr_init();
-  timer1_enable(TIM_DIV256, TIM_EDGE, TIM_LOOP);
-  timer1_write(delay);
+  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
+  timer1_write((unsigned long)_next_delay);
 #else
-  pulsetimer = timerBegin(3, 80, true);
-  timerAttachInterrupt(pulsetimer, &testInterrupt, true);
-  timerAlarmWrite(pulsetimer, delay, true);
-  timerAlarmEnable(pulsetimer);
+  const esp_timer_create_args_t cfg_et = {
+    .callback = &testInterrupt,
+    .name = "testint",
+  };
+  esp_timer_create(&cfg_et, &hdl_pulse_timer);
+  esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
 #endif
 }
-
-double GeigerTest::calcDelay() {
-#ifdef ESP8266
-  double mult = 320000;
-#else
-  double mult = 1000000;
-#endif
-#ifdef DISABLE_GEIGER_POISSON
-  return mult / _target_cps;
-#else
-  double result = generatePoissonRandom(_target_cps);
-  return mult * result;
-#endif
-}
-
-void GeigerTest::setTargetCPM(float target, bool manual = false) {
-  Log::console(PSTR("GeigerTest: Setting CPM to: %d"), (int)target);
-  _manual = manual;
-  setTargetCPS(target/60.0);
-};
-
-void GeigerTest::setTargetCPS(float target) {
-  _target_cps = target;
-};
 
 void GeigerTest::secondTicker() {
   CPMAdjuster();
 }
 
-void GeigerTest::testInterrupt() {
-  GeigerInput::countInterrupt();
-  _pulse_test_send = true;
+void GeigerTest::testInterrupt(void *data) {
+  testInterrupt();
+}
+
+void ICACHE_RAM_ATTR GeigerTest::testInterrupt() {
+  GeigerInputTest::countInterrupt();
+#ifdef ESP8266
+  timer1_write((unsigned long)_next_delay);
+#else
+  esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
+#endif
+  _last_b = micros();
 }
 
 void GeigerTest::loop() {
-#ifdef DISABLE_GEIGER_POISSON
-  return;
-#endif
-  if (_pulse_test_send == true) {
-    double delay = calcDelay();
+  if (_last_pulse_test != _last_b) {
+    _last_pulse_test = _last_b;
 #ifdef ESP8266
-    if (delay > 50) {
-      timer1_write(delay);
-    }
+    _next_delay = calcDelay();
 #else
-    if (delay > 25) {
-      timerAlarmWrite(pulsetimer, delay, true);
-    }
+    portENTER_CRITICAL_ISR(&timerMux);
+    _next_delay = calcDelay();
+    portEXIT_CRITICAL_ISR(&timerMux);
 #endif
   }
-}
-
-void GeigerTest::CPMAdjuster() {
-  if (_manual) {
-    return;
-  }
-#ifndef GEIGER_TESTPULSE_FIXEDCPM
-  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
-  if (selection != _current_selection) {
-    _current_selection = selection;
-    int _targetCPM = 30;
-    switch (selection) {
-      case 1:
-        _targetCPM = 60;
-        break;
-      case 2:
-        _targetCPM = 100;
-        break;
-      case 3:
-        _targetCPM = 120;
-        break;
-      default:
-        _targetCPM = 30;
-        break;
-    }
-#ifdef GEIGER_TEST_FAST
-    _targetCPM = _targetCPM * 100;
-#endif
-    setTargetCPM(_targetCPM, false);
-  }
-#endif
 }

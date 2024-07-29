@@ -29,7 +29,6 @@ MightyOhm CPS, 1, CPM, 60, uSv/hr, 1.23, INST/FAST/SLOW\n
 GC10 60\n
 
 */
-#include "../GeigerInput.h"
 
 #ifndef GEIGER_BAUDRATE
 #define GEIGER_BAUDRATE 9600
@@ -43,28 +42,19 @@ GC10 60\n
 #define GEIGER_TXPIN 12
 #endif
 
+#include "../GeigerInputTest.h"
+
 #ifndef GEIGER_SERIAL_TYPE
 #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
 #endif
 
-#define GEIGERTESTMODE
-
-#ifndef GEIGER_TESTPULSE_ADJUSTTIME
-#define GEIGER_TESTPULSE_ADJUSTTIME 300000
-#endif
-
-#define GEIGER_TEST_INITIAL_CPS 0.5
-
-class GeigerTestSerial : public GeigerInput
+class GeigerTestSerial : public GeigerInputTest
 {
   public:
     GeigerTestSerial();
     void begin();
     void loop();
     void secondTicker();
-    void setTargetCPM(float target, bool manual);
-    void setTargetCPS(float target);
-    void CPMAdjuster();
   private:
     void pullSerial();
     char _serial_buffer[64];
@@ -79,6 +69,5 @@ class GeigerTestSerial : public GeigerInput
     float _poisson_target = 0;
     int _current_selection = 0;
     uint8_t _loop_c = 0;
-    bool _manual = false;
 };
 #endif

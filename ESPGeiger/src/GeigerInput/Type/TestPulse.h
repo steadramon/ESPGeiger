@@ -41,55 +41,37 @@ extern "C" {
 #define PCNT_CHANNEL PCNT_CHANNEL_0
 #endif
 
-#include "../GeigerInput.h"
-
-#ifndef GEIGER_DEBOUNCE
-#define GEIGER_DEBOUNCE 500
+#ifndef GEIGER_TXPIN
+#define GEIGER_TXPIN 12
 #endif
+
+#include "../GeigerInputTest.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "genpulse"
 #endif
 
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN 12
-#endif
-
-static bool _pulse_send = false;
-
-#ifndef GEIGER_TESTPULSE_ADJUSTTIME
-#define GEIGER_TESTPULSE_ADJUSTTIME 300000
-#endif
-
-#define GEIGERTESTMODE
+static int _pulse_tx_pin;
+static bool _bool_pulse_state = false;
+static unsigned long _last_b;
+static double _this_delay;
+static double _next_delay;
 
 #ifdef ESP32
-static hw_timer_t * pulsetimer = NULL;
+static esp_timer_handle_t hdl_pulse_timer = NULL;
 #endif
 
-#define GEIGER_TEST_INITIAL_CPS 0.5
-
-//#define GEIGER_TEST_FAST
-
-class GeigerTestPulse : public GeigerInput
+class GeigerTestPulse : public GeigerInputTest
 {
   public:
     GeigerTestPulse();
     void begin();
     void loop();
     static void IRAM_ATTR pulseInterrupt();
+    static void pulseInterrupt(void *data);
     void secondTicker();
-    void setTargetCPM(float target, bool manual);
-    void setTargetCPS(float target);
-    void CPMAdjuster();
-    double calcDelay();
 #ifdef USE_PCNT && ESP32
     int collect();
 #endif
-  private:
-    bool _bool_pulse_state = false;
-    int _current_selection = 0;
-    float _target_cps = GEIGER_TEST_INITIAL_CPS;
-    bool _manual = false;
 };
 #endif

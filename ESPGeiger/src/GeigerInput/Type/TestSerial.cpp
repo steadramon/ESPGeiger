@@ -20,6 +20,7 @@
 #include "../../Logger/Logger.h"
 
 GeigerTestSerial::GeigerTestSerial() {
+  strcpy(_test_type, "TestSerial");
 };
 
 void GeigerTestSerial::begin() {
@@ -27,8 +28,8 @@ void GeigerTestSerial::begin() {
   Log::console(PSTR("TestSerial: RXPIN: %d BAUD: %d"), _rx_pin, GEIGER_BAUDRATE);
   Log::console(PSTR("TestSerial: TXPIN: %d BAUD: %d"), _tx_pin, GEIGER_BAUDRATE);
   geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
-  serialAvg.begin(SMOOTHED_AVERAGE, 32);
-  setTargetCPS(GEIGER_TEST_INITIAL_CPS);
+  serialAvg.begin(SMOOTHED_AVERAGE, 16);
+  CPMAdjuster();
 }
 
 void GeigerTestSerial::pullSerial() {
@@ -78,46 +79,9 @@ void GeigerTestSerial::loop() {
   }
 }
 
-void GeigerTestSerial::setTargetCPM(float target, bool manual = false) {
-  Log::console(PSTR("TestSerial: Setting CPM to: %d"), (int)target);
-  _manual = manual;
-  setTargetCPS(target/60.0);
-};
-
-void GeigerTestSerial::setTargetCPS(float target) {
-  _poisson_target = 60.0/(target*60.0);
-};
-
-void GeigerTestSerial::CPMAdjuster() {
-  if (_manual) {
-    return;
-  }
-#ifndef GEIGER_TESTPULSE_FIXEDCPM
-  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
-  if (selection != _current_selection) {
-    _current_selection = selection;
-    int _targetCPM = 30;
-    switch (selection) {
-      case 1:
-        _targetCPM = 60;
-        break;
-      case 2:
-        _targetCPM = 100;
-        break;
-      case 3:
-        _targetCPM = 120;
-        break;
-      default:
-        _targetCPM = 30;
-        break;
-    }
-    setTargetCPM(_targetCPM, false);
-  }
-#endif
-}
-
 void GeigerTestSerial::secondTicker() {
   CPMAdjuster();
+  _poisson_target = 60.0 / (GeigerInputTest::getTargetCPS() * 60.0);
   double poisson_result = generatePoissonRandom(_poisson_target);
   serialAvg.add(poisson_result);
   int test_serialCPM = 60 * serialAvg.get();
@@ -144,6 +108,9 @@ void GeigerTestSerial::secondTicker() {
   geigerPort.printf(PSTR("%d\r\n"), test_serialCPM);
 #endif
   delay(10);
+#ifdef GEIGER_COUNT_TXPULSE
+  return;
+#endif
 #if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
   partial_clicks += (float)serial_value/(float)60;
   if (partial_clicks >= 1.0) {

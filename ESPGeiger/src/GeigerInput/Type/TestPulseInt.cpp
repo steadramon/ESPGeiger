@@ -20,6 +20,7 @@
 #include "../../Logger/Logger.h"
 
 GeigerTestPulseInt::GeigerTestPulseInt() {
+  strcpy(_test_type, "TestPulsePWM");
 };
 
 void GeigerTestPulseInt::begin() {
@@ -55,102 +56,71 @@ void GeigerTestPulseInt::begin() {
 
   Log::console(PSTR("TestPulsePWM: Test TXPIN: %d"), _tx_pin);
   pinMode(_tx_pin, OUTPUT);
-  setTargetCPS(GEIGER_TEST_INITIAL_CPS);
+  _pulse_tx_pin = _tx_pin;
+  CPMAdjuster();
+  _target_pwm = calcPWM();
 
 #ifdef ESP8266
   timer1_attachInterrupt(pulseInterrupt);
-  timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
+  timer1_isr_init();
+  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_LOOP);
   timer1_write(_target_pwm);
 #else
-  pulsetimer = timerBegin(0, 80, true);
-  timerAttachInterrupt(pulsetimer, pulseInterrupt, true);
-  timerAlarmWrite(pulsetimer, _target_pwm, true);
-  timerAlarmEnable(pulsetimer);
+  const esp_timer_create_args_t cfg_et = {
+    .callback = &pulseInterrupt,
+    .name = "pulseint",
+  };
+  esp_timer_create(&cfg_et, &hdl_pulse_timer);
+  esp_timer_start_periodic(hdl_pulse_timer, _target_pwm);
 #endif
+  _current_pwm = _target_pwm;
 }
 
 void GeigerTestPulseInt::loop() {
-  if (_pulse_send == true) {
-#ifdef ESP8266
-//    digitalWrite(_tx_pin, _bool_pulse_state);
-    if (_bool_pulse_state) {
-      GPOS = (1 << _tx_pin);
-    } else {
-      GPOC = (1 << _tx_pin);
-    }
-#else
-    if (_bool_pulse_state) {
-      GPIO.out_w1ts = ((uint32_t)1 << _tx_pin);
-    } else {
-      GPIO.out_w1tc = ((uint32_t)1 << _tx_pin);
-    }
-#endif
-    _bool_pulse_state = !_bool_pulse_state;
-    _pulse_send = false;
-    if (_bool_pulse_state) {
-#ifdef GEIGER_COUNT_TXPULSE
-      countInterrupt();
-#endif
-    }
-  }
+}
+
+void GeigerTestPulseInt::pulseInterrupt(void *data) {
+  pulseInterrupt();
 }
 
 void GeigerTestPulseInt::pulseInterrupt() {
-  _pulse_send = true;
+  _bool_pulse_state = !_bool_pulse_state;
+#ifdef ESP8266
+  if (_bool_pulse_state) {
+    GPOS = (1 << _pulse_tx_pin);
+  } else {
+    GPOC = (1 << _pulse_tx_pin);
+  }
+#else
+  if (_bool_pulse_state) {
+    GPIO.out_w1ts = ((uint32_t)1 << _pulse_tx_pin); // high
+  } else {
+    GPIO.out_w1tc = ((uint32_t)1 << _pulse_tx_pin); // low
+  }
+#endif
+  if (!_bool_pulse_state) {
+#ifdef GEIGER_COUNT_TXPULSE
+    GeigerInputTest::countInterrupt();
+#endif
+  }
 }
 
-void GeigerTestPulseInt::setTargetCPM(float target, bool manual = false) {
-  Log::console(PSTR("TestPulsePWM: Setting CPM to: %d"), (int)target);
-  _manual = manual;
-  setTargetCPS(target/60.0);
-};
-
-void GeigerTestPulseInt::setTargetCPS(float target) {
-#ifdef ESP8266
-  _target_pwm = (int)2500000/target;
-#else
-  _target_pwm = (int)500000/target;
-#endif
-};
-
-void GeigerTestPulseInt::CPMAdjuster() {
-  if (_manual) {
-    return;
-  }
-#ifndef GEIGER_TESTPULSE_FIXEDCPM
-  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
-  if (selection != _current_selection) {
-    _current_selection = selection;
-    int _targetCPM = 30;
-    switch (selection) {
-      case 1:
-        _targetCPM = 60;
-        break;
-      case 2:
-        _targetCPM = 100;
-        break;
-      case 3:
-        _targetCPM = 120;
-        break;
-      default:
-        _targetCPM = 30;
-        break;
-    }
-#ifdef GEIGER_TEST_FAST
-    _targetCPM = _targetCPM * 100;
-#endif
-    setTargetCPM(_targetCPM, false);
-#ifdef ESP8266
-    timer1_write(_target_pwm);
-#else
-    timerAlarmWrite(pulsetimer, _target_pwm, true);
-#endif
-  }
-#endif
+double GeigerTestPulseInt::calcPWM() {
+  return (GEIGER_TEST_TIMER_DIV/GeigerInputTest::getTargetCPS()) / 2;
 }
 
 void GeigerTestPulseInt::secondTicker() {
   CPMAdjuster();
+  _target_pwm = calcPWM();
+  if (_target_pwm != _current_pwm) {
+#ifdef ESP8266
+    timer1_write(_target_pwm);
+#else
+    esp_timer_stop(hdl_pulse_timer);
+    esp_timer_start_periodic(hdl_pulse_timer, _target_pwm);
+#endif
+    _current_pwm = _target_pwm;
+  }
 }
 
 #ifdef USE_PCNT && ESP32

@@ -20,6 +20,7 @@
 #include "../../Logger/Logger.h"
 
 GeigerTestPulse::GeigerTestPulse() {
+  strcpy(_test_type, "TestPulse");
 };
 
 void GeigerTestPulse::begin() {
@@ -55,116 +56,72 @@ void GeigerTestPulse::begin() {
 
   Log::console(PSTR("TestPulse: Test TXPIN: %d"), _tx_pin);
   pinMode(_tx_pin, OUTPUT);
-#ifdef GEIGER_TEST_FAST
-    _target_cps = _target_cps * 2;
-#endif
+  _pulse_tx_pin = _tx_pin;
   CPMAdjuster();
-  double delay = calcDelay();
+  _next_delay = calcDelay() / 2;
+  _this_delay = _next_delay;
 #ifdef ESP8266
   timer1_attachInterrupt(pulseInterrupt);
   timer1_isr_init();
-  timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-  timer1_write(delay);
+  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
+  timer1_write(_next_delay);
 #else
-  pulsetimer = timerBegin(0, 80, true);
-  timerAttachInterrupt(pulsetimer, pulseInterrupt, true);
-  timerAlarmWrite(pulsetimer, delay, true);
-  timerAlarmEnable(pulsetimer);
-#endif
-}
-
-double GeigerTestPulse::calcDelay() {
-#ifdef ESP8266
-  double mult = 2500000;
-#else
-  double mult = 500000;
-#endif
-#ifdef DISABLE_GEIGER_POISSON
-  return mult / _target_cps;
-#else
-  double result = generatePoissonRandom(_target_cps);
-  return mult * result;
+  const esp_timer_create_args_t cfg_et = {
+    .callback = &pulseInterrupt,
+    .name = "pulseint",
+  };
+  esp_timer_create(&cfg_et, &hdl_pulse_timer);
+  esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
 #endif
 }
 
 void GeigerTestPulse::loop() {
-  if (_pulse_send == true) {
+  if (_last_pulse_test != _last_b) {
+    _last_pulse_test = _last_b;
 #ifdef ESP8266
-    if (_bool_pulse_state) {
-      GPOS = (1 << _tx_pin);
-    } else {
-      GPOC = (1 << _tx_pin);
-    }
+    _next_delay = calcDelay() / 2;
 #else
-    if (_bool_pulse_state) {
-      GPIO.out_w1ts = ((uint32_t)1 << _tx_pin);
-    } else {
-      GPIO.out_w1tc = ((uint32_t)1 << _tx_pin);
-    }
+    portENTER_CRITICAL_ISR(&timerMux);
+    _next_delay = calcDelay() / 2;
+    portEXIT_CRITICAL_ISR(&timerMux);
 #endif
-    _bool_pulse_state = !_bool_pulse_state;
-    _pulse_send = false;
-    if (_bool_pulse_state) {
-#ifdef GEIGER_COUNT_TXPULSE
-      countInterrupt();
-#endif
-      double delay = calcDelay();
-#ifdef ESP8266
-      if (delay > 50) {
-        timer1_write(delay);
-      }
-#else
-      if (delay > 25) {
-        timerAlarmWrite(pulsetimer, delay, true);
-      }
-#endif
-    }
   }
+}
+
+void GeigerTestPulse::pulseInterrupt(void *data) {
+  pulseInterrupt();
 }
 
 void GeigerTestPulse::pulseInterrupt() {
-  _pulse_send = true;
-}
-
-void GeigerTestPulse::setTargetCPM(float target, bool manual = false) {
-  Log::console(PSTR("TestPulse: Setting CPM to: %d"), (int)target);
-  _manual = manual;
-  setTargetCPS(target/60.0);
-};
-
-void GeigerTestPulse::setTargetCPS(float target) {
-  _target_cps = target;
-};
-
-void GeigerTestPulse::CPMAdjuster() {
-  if (_manual) {
-    return;
+  _bool_pulse_state = !_bool_pulse_state;
+#ifdef ESP8266
+  if (_bool_pulse_state) {
+    GPOS = (1 << _pulse_tx_pin);
+  } else {
+    GPOC = (1 << _pulse_tx_pin);
   }
-#ifndef GEIGER_TESTPULSE_FIXEDCPM
-  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
-  if (selection != _current_selection) {
-    _current_selection = selection;
-    int _targetCPM = 30;
-    switch (selection) {
-      case 1:
-        _targetCPM = 60;
-        break;
-      case 2:
-        _targetCPM = 100;
-        break;
-      case 3:
-        _targetCPM = 120;
-        break;
-      default:
-        _targetCPM = 30;
-        break;
-    }
-#ifdef GEIGER_TEST_FAST
-    _targetCPM = _targetCPM * 2;
-#endif
-    setTargetCPM(_targetCPM, false);
+#else
+  if (_bool_pulse_state) {
+    GPIO.out_w1ts = ((uint32_t)1 << _pulse_tx_pin); // high
+  } else {
+    GPIO.out_w1tc = ((uint32_t)1 << _pulse_tx_pin); // low
   }
 #endif
+  unsigned long _our_delay = 0;
+  if (!_bool_pulse_state) {
+#ifdef GEIGER_COUNT_TXPULSE
+    GeigerInputTest::countInterrupt();
+#endif
+    _last_b = micros();
+  } else {
+    _this_delay = _next_delay;
+  }
+  _our_delay = _this_delay;
+  #ifdef ESP8266
+    timer1_write((unsigned long)_our_delay);
+  #else
+    esp_timer_start_once(hdl_pulse_timer, (unsigned long)_our_delay);
+  #endif
 }
 
 void GeigerTestPulse::secondTicker() {

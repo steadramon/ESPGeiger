@@ -20,44 +20,27 @@
 #define GEIGERTEST_H
 
 #include <Arduino.h>
-#include "../GeigerInput.h"
-
-static bool _pulse_test_send = false;
+#include "../GeigerInputTest.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "test"
 #endif
 
-#ifndef GEIGER_TESTPULSE_ADJUSTTIME
-#define GEIGER_TESTPULSE_ADJUSTTIME 300000
-#endif
-
-#ifndef GEIGERTESTMODE
-#define GEIGERTESTMODE
-#endif
+static unsigned long _last_b;
+static double _next_delay;
 
 #ifdef ESP32
-static hw_timer_t * pulsetimer = NULL;
+static esp_timer_handle_t hdl_pulse_timer = NULL;
 #endif
 
-//#define GEIGER_TEST_FAST
-//#define DISABLE_GEIGER_POISSON
-
-class GeigerTest : public GeigerInput
+class GeigerTest : public GeigerInputTest
 {
   public:
     GeigerTest();
     void begin();
     void loop();
     void secondTicker();
-    void setTargetCPM(float target, bool manual);
-    void setTargetCPS(float target);
-    void CPMAdjuster();
-    double calcDelay();
     static void IRAM_ATTR testInterrupt();
-  private:
-    float _target_cps = 0;
-    int _current_selection = -1;
-    bool _manual = false;
+    static void testInterrupt(void *data);
 };
 #endif
