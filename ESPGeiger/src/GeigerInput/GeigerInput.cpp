@@ -89,13 +89,3 @@ void GeigerInput::setCounter(int val, bool update = true) {
   unsigned long cycles = ESP.getCycleCount();
   _last_blip = cycles;
 }
-
-double GeigerInput::generatePoissonRandom(double lambda) {
-  // https://tomroelandts.com/articles/simulating-a-geiger-counter
-  double u;
-  u = random(RAND_MAX) * 1.0 / RAND_MAX;
-  if (u == 0) {
-    u = _last_blip / RAND_MAX;
-  }
-  return -log(1 - u) / lambda;
-}

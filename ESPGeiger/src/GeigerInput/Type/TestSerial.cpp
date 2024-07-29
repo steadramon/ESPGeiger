@@ -82,7 +82,7 @@ void GeigerTestSerial::loop() {
 void GeigerTestSerial::secondTicker() {
   CPMAdjuster();
   _poisson_target = 60.0 / (GeigerInputTest::getTargetCPS() * 60.0);
-  double poisson_result = generatePoissonRandom(_poisson_target);
+  double poisson_result = generatePoissonRand(_poisson_target);
   serialAvg.add(poisson_result);
   int test_serialCPM = 60 * serialAvg.get();
 
