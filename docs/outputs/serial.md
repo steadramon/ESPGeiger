@@ -19,7 +19,7 @@ Each command should be terminated with `\r\n`
 | Command | Description | Example |
 |---|---|---|
 | `reboot` | Reboot ESPGeiger | `reboot` |
-| `ratio` | Set ratio for calculating μSv | `ration 151.0` |
+| `ratio` | Set ratio for calculating μSv | `ratio 151.0` |
 | `cpm` | Return current CPM value  |  |
 | `usv` | Return current uSV value |  |
 | `show` | Toggle 1 second output of CPM |  |
