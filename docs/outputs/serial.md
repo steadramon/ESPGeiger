@@ -14,6 +14,8 @@ The default baud is `115200`
 
 Each command should be terminated with `\r\n`
 
+Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due to the Serial RX pin being in use for the user input button.
+
 ## Commands
 
 | Command | Description | Example |
