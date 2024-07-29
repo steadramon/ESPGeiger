@@ -24,6 +24,8 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 `ESPGeiger⁠-⁠<device_id>⁠/⁠stat⁠/⁠CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
 `ESPGeiger⁠-⁠<device_id>⁠/⁠stat⁠/⁠uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
 `ESPGeiger⁠-⁠<device_id>⁠/⁠stat⁠/HV` | Current HV circuit value - ESPGeigerHW only. | `400.1` | 60
+`ESPGeiger⁠-⁠<device_id>⁠/⁠stat⁠/WARN` | Triggered when over Warning threshold. | `0` / `1` | -
+`ESPGeiger⁠-⁠<device_id>⁠/⁠stat⁠/ALERT` | Triggered when over Alert threshold. | `0` / `1` | -
 `ESPGeiger⁠-⁠<device_id>⁠/⁠tele⁠/⁠status` | Current status of ESPGeiger in JSON format. | `(status_json)` | 60
 
 ## Example Tele Status JSON Output
