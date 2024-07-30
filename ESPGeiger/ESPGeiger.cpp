@@ -24,6 +24,7 @@
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
+#include "src/GRand/GRand.h"
 #include "src/Counter/Counter.h"
 #include "src/ConfigManager/ConfigManager.h"
 #include "src/Status.h"
@@ -70,6 +71,8 @@ SerialOut serialout = SerialOut();
 // Global status and counter
 Status status;
 Counter gcounter = Counter();
+GRand grand = GRand();
+
 NTP_Client ntpclient = NTP_Client();
 
 ConfigManager& cManager = ConfigManager::getInstance();
@@ -193,6 +196,7 @@ void setup()
 
   arduino_ota_setup(hostName);
   delay(500);
+  grand.begin();
 #ifdef MQTTOUT
   mqtt.begin();
 #endif
