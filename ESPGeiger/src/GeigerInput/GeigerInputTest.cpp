@@ -24,11 +24,6 @@ GeigerInputTest::GeigerInputTest() {
 
 void GeigerInputTest::begin() {
   Log::console(PSTR("%s: Setting up test geiger ..."), _test_type);
-#ifdef ESP8266
-  randomSeed(RANDOM_REG32);
-#else
-  randomSeed(esp_random());
-#endif
   GeigerInput::begin();
 }
 
