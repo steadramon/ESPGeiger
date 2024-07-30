@@ -35,15 +35,15 @@ void Radmon::setInterval(int interval) {
 
 void Radmon::s_tick(unsigned long stick_now)
 {
-  if (lastPing == 0) {
-    ConfigManager &configManager = ConfigManager::getInstance();
-    int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
-    setInterval(rtimer);
-    lastPing = (60*1000) + random(30000);
-    return;
-  }
   if (stick_now - lastPing >= pingInterval)
   {
+    if (lastPing == 0) {
+      ConfigManager &configManager = ConfigManager::getInstance();
+      int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
+      setInterval(rtimer);
+      lastPing = random(20000);
+      return;
+    }
     lastPing = stick_now - (stick_now % 1000);
     Radmon::postMeasurement();
   }

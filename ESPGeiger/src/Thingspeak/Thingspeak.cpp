@@ -25,12 +25,12 @@ Thingspeak::Thingspeak() {
 
 void Thingspeak::s_tick(unsigned long stick_now)
 {
-  if (lastPing == 0) {
-    lastPing = pingInterval + random(30000);
-    return;
-  }
   if (stick_now - lastPing >= pingInterval)
   {
+    if (lastPing == 0) {
+      lastPing = random(30000);
+      return;
+    }
     lastPing = stick_now - (stick_now % 1000);
     Thingspeak::postMeasurement();
   }
