@@ -133,6 +133,16 @@ void sTickerCB()
       status.warmup = false;
     }
   }
+#ifdef GEIGER_SDCARD
+  sdcard.s_tick(stick_now);
+#endif
+#ifdef MQTTOUT
+  mqtt.loop(stick_now);
+#endif
+  status.wifi_status = WiFi.status();
+  if (status.warmup) {
+    return;
+  }
 #ifdef GMCOUT
   gmc.s_tick(stick_now);
 #endif
@@ -142,13 +152,6 @@ void sTickerCB()
 #ifdef THINGSPEAKOUT
   thingspeak.s_tick(stick_now);
 #endif
-#ifdef GEIGER_SDCARD
-  sdcard.s_tick(stick_now);
-#endif
-#ifdef MQTTOUT
-  mqtt.loop(stick_now);
-#endif
-  status.wifi_status = WiFi.status();
 }
 
 void setup()
