@@ -39,7 +39,7 @@ void Radmon::s_tick(unsigned long stick_now)
     ConfigManager &configManager = ConfigManager::getInstance();
     int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
     setInterval(rtimer);
-    lastPing = random(rtimer*1000);
+    lastPing = rtimer + random(rtimer*1000);
     return;
   }
   if (stick_now - lastPing >= pingInterval)
