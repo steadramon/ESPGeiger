@@ -65,6 +65,7 @@ void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
      break;
   }
   Log::console(PSTR("MQTT: Disconnected (%s)"),text.c_str());
+  lastConnectionAtempt = millis();
   //mqttClient->clearQueue();
   status.mqtt_connected = false;
 }
@@ -210,7 +211,6 @@ void MQTT_Client::reconnect()
     this->last_will_.payload = lwtOffline;
 
     mqttClient = new AsyncMqttClient();
-    mqttClient->setClientId(configManager.getHostName());
     mqttClient->onConnect([this] (bool sessionPresent) {
       onMqttConnect(sessionPresent);
     });
@@ -223,6 +223,7 @@ void MQTT_Client::reconnect()
     mqttClient->setWill(last_will_.topic.c_str(), 1, false, last_will_.payload.c_str());
   }
 
+  mqttClient->setClientId(configManager.getHostName());
   mqttClient->setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
   const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
   const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
