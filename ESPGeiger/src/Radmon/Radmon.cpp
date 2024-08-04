@@ -24,6 +24,9 @@ Radmon::Radmon() {
 }
 
 void Radmon::setInterval(int interval) {
+  if (interval * 1000 == pingInterval) {
+    return;
+  }
   if (interval > RADMON_INTERVAL_MAX) {
     interval = RADMON_INTERVAL_MAX;
   }
