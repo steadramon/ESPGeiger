@@ -39,7 +39,7 @@ extern Counter gcounter;
 #define GMC_INTERVAL 300
 #endif
 
-const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM=%d&ACPM=%.2f&uSV=%.2f";
+const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM=%d&ACPM=%.2f&uSV=%.4f";
 
 class GMC {
   public:
