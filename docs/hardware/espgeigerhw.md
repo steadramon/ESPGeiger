@@ -10,6 +10,9 @@ nav_order: 4
   width: 100%;
   max-height: 300px;
 }
+.espghwimg {
+  max-height: 300px;
+}
 </style>
 # ESPGeigerHW
 {: .no_toc }
@@ -101,6 +104,17 @@ The following tubes should also be compatible but are currently untested
 - Beta-1
 - Beta-2
 - Gamma-7C
+
+## Example Setups
+
+### SMB-20
+<img class="espghwimg" src="../img/ESPGeiger-HW-SMB-20.jpg" alt="ESPGeigerHW + SMB-20">
+
+### STS-5
+<img class="espghwimg" src="../img/ESPGeiger-HW-STS-5.jpg" alt="ESPGeigerHW + STS 5">
+
+### J305 - 105mm
+<img class="espghwimg" src="../img/ESPGeiger-HW-J305.jpg" alt="ESPGeigerHW + J305">
 
 # Thanks
 
