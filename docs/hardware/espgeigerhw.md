@@ -107,8 +107,8 @@ The following tubes should also be compatible but are currently untested
 
 ## Example Setups
 
-### SMB-20
-<img class="espghwimg" src="../img/ESPGeiger-HW-SMB-20.jpg" alt="ESPGeigerHW + SMB-20">
+### SBM-20
+<img class="espghwimg" src="../img/ESPGeiger-HW-SMB-20.jpg" alt="ESPGeigerHW + SBM-20">
 
 ### STS-5
 <img class="espghwimg" src="../img/ESPGeiger-HW-STS-5.jpg" alt="ESPGeigerHW + STS 5">
