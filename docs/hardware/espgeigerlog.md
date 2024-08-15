@@ -80,12 +80,15 @@ Thanks goes to the users of ESPGeiger Log for their images
 
 ### CAJOE RadiationD
 <img class="espghwimg" src="../img/ESPGeiger-Log/CAJOE_RadiationD-v1.1/img.jpg" alt="ESPGeiger Log & CAJOE D1">
+
 <sup>Image credit: [SimoMax](https://radmon.org/index.php/forum/profile/344-simomax)</sup>
 
 ### RH Electronics DIY Kit v2
 <img class="espghwimg" src="../img/ESPGeiger-Log/RH_Electronics_DIY_Kit_ver2/img.jpg" alt="ESPGeiger Log & RH Electronics DIY kitv2">
+
 <sup>Image credit: [SimoMax](https://radmon.org/index.php/forum/profile/344-simomax)</sup>
 
 ### Gamma Scout Alert (Modified)
 <img class="espghwimg" src="../img/ESPGeiger-Log/Gamma_Scout_Alert_(Modified)/img.jpg" alt="ESPGeiger Log & modified Gamma Scout">
+
 <sup>Image credit: [SimoMax](https://radmon.org/index.php/forum/profile/344-simomax)</sup>
