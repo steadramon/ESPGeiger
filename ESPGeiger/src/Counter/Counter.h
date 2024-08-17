@@ -46,6 +46,7 @@
 #endif
 
 extern Status status;
+extern NTP_Client ntpclient;
 
 #define GEIGER_CPM_COUNT 60
 #define GEIGER_CPM5_COUNT 60
@@ -62,6 +63,7 @@ class Counter {
       float get_cpm5f();
       int get_cpm15();
       float get_cpm15f();
+      float get_totalusv();
       float get_usv();
       float get_usv5();
       float get_usv15();

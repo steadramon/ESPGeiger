@@ -52,7 +52,9 @@ void Counter::secondticker(unsigned long stick_now) {
     total_clicks_rollover++;
   }
 
-  cpm_history.push(get_cpm());
+  int ccpm = get_cpm();
+
+  cpm_history.push(ccpm);
 
   if (secidx % 5 == 0) {
     geigerTicks5.add(geigerTicks.get());
@@ -81,12 +83,12 @@ void Counter::secondticker(unsigned long stick_now) {
   clicks_today += eventCounter;
   clicks_hour += eventCounter;
 
-  if (_cpm_warning < get_cpm()) {
+  if (_cpm_warning < ccpm) {
     _bool_cpm_warning = true;
   } else {
     _bool_cpm_warning = false;
   }
-  if (_cpm_alert < get_cpm() ) {
+  if (_cpm_alert < ccpm) {
     _bool_cpm_alert = true;
   } else {
     _bool_cpm_alert = false;
@@ -156,6 +158,19 @@ bool Counter::is_alert() {
 float Counter::get_usv() {
   float avgCPM = geigerTicks.get()*60;
   return avgCPM/_ratio;
+}
+
+float Counter::get_totalusv() {
+  float totalUsv = 0;
+  unsigned long long uptime = NTP.getUptime ();
+  if (uptime < 1) {
+    return 0;
+  }
+  for (int index = 1; index <= total_clicks_rollover; index++) {
+    totalUsv += __LONG_MAX__ / (0.0166*uptime);
+  }
+  totalUsv += (total_clicks / (0.0166*uptime));
+  return (totalUsv/60.0)/_ratio;
 }
 
 float Counter::get_usv5() {
