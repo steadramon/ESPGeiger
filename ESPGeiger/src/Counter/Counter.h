@@ -96,7 +96,8 @@ class Counter {
         return geigerinput->last_blip();
       }
       void reset_alarm() {
-        _bool_cpm_alert = false;
+        // Todo
+        //_bool_cpm_alert = false;
       }
 #ifdef GEIGERTESTMODE
       void set_target_cpm(float val) {
