@@ -42,7 +42,7 @@ void GeigerPulse::begin() {
   pcnt_set_filter_value(PCNT_UNIT, PCNT_FILTER);
   pcnt_filter_enable(PCNT_UNIT);
   #endif
-  gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLDOWN_ONLY);
+  gpio_set_pull_mode((gpio_num_t)_rx_pin, PCNT_PIN_PULL_MODE);
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
 #else

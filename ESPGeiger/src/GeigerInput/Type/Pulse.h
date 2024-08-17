@@ -37,6 +37,11 @@ extern "C" {
 
 #define PCNT_UNIT PCNT_UNIT_0
 #define PCNT_CHANNEL PCNT_CHANNEL_0
+#ifdef PCNT_FLOATING_PIN
+#define PCNT_PIN_PULL_MODE GPIO_FLOATING
+#else
+#define PCNT_PIN_PULL_MODE GPIO_PULLDOWN_ONLY
+#endif
 #endif
 
 #include "../GeigerInput.h"
