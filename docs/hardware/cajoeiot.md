@@ -7,7 +7,11 @@ nav_order: 99
 ---
 <style>
 #espghwimg {
-  width: 70%;
+  width: 100%;
+  max-height: 300px;
+}
+.espghwimg {
+  max-height: 300px;
 }
 </style>
 
@@ -18,3 +22,17 @@ nav_order: 99
 <img id="espghwimg" src="img/cajoeiot.png" alt="Cajoe GC-ESP32 - IoT Geiger Counter">
 
 ESPGeiger is compatible with the Cajoe GC-ESP32 extending the existing functionality with all of the added features of ESPGeiger.
+
+The Cajoe GC-ESP32 has a inbuilt ESP32 to which ESPGeiger can be installed. The ESP32 does not have a function in the running of the Cajoe geiger counter, this is very similar to a classic Cajoe counter, with the main counter circuit being independent from the ESP32.
+
+## Disclaimer
+
+{: .highlight }
+
+>Install ESPGeiger at your own risk. Please ensure you take a back up of the original firmware from the Cajoe GC-ESP32 in case you want to restore the original firmware.
+
+# User Images
+
+## CAJOE GC-ESP32
+<img class="espghwimg" src="img/cajoeiot-shyrwall.jpg" alt="Cajoe GC-ESP32">
+<br/><sup>Image credit: [shyrwall](https://github.com/shyrwall)</sup>
