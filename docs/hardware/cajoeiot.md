@@ -34,8 +34,8 @@ The Cajoe GC-ESP32 has a inbuilt ESP32 to which ESPGeiger can be installed. The 
 
 - Follow the instructions for [installing ESPGeiger](/install/webinstaller) using the web installer at [https://install.espgeiger.com](https://install.espgeiger.com)
 
-# User Images
+## User Images
 
-## CAJOE GC-ESP32
+### CAJOE GC-ESP32
 <img class="espghwimg" src="img/cajoeiot-shyrwall.jpg" alt="Cajoe GC-ESP32">
 <br/><sup>Image credit: [shyrwall](https://github.com/shyrwall)</sup>
