@@ -94,7 +94,7 @@ ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | External connection
 
 The following tubes should also be compatible but are currently untested
 
-- LND-712 <https://www.lndinc.com/products/geiger-mueller-tubes/712/>/<https://www.pocketmagic.net/tube-lnd-712-end-window-alpha-beta-gamma-detector/>
+- [LND-712](https://www.lndinc.com/products/geiger-mueller-tubes/712/) [Info](https://www.pocketmagic.net/tube-lnd-712-end-window-alpha-beta-gamma-detector/)
 - [LND-7312](https://www.lndinc.com/products/geiger-mueller-tubes/7312/)
 - [SBT-9](https://www.pocketmagic.net/tube-sbt-9-end-window-geiger-tube/)
 - [SBT-10A](https://www.pocketmagic.net/tube-sbt-10a-c%d0%b1t-10a/)
