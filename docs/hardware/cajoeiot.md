@@ -20,7 +20,7 @@ nav_order: 99
 
 <img id="espghwimg" src="img/cajoeiot.png" alt="Cajoe GC-ESP32 - IoT Geiger Counter">
 
-ESPGeiger is compatible with the Cajoe GC-ESP32, providing an alternate custom firmware - extending the existing functionality with all of the added features of ESPGeiger.
+ESPGeiger is compatible with the Cajoe GC-ESP32 (IOT-GM), providing an alternate custom firmware - extending the existing functionality with all of the added features of ESPGeiger.
 
 The Cajoe GC-ESP32 has a inbuilt ESP32 to which ESPGeiger can be installed. The ESP32 does not have a function in the running of the Cajoe geiger counter, this is very similar to a classic Cajoe counter, with the main counter circuit being independent from the ESP32.
 
