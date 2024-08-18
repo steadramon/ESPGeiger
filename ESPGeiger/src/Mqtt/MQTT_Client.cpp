@@ -140,10 +140,10 @@ void MQTT_Client::loop(unsigned long now)
     doc["free_mem"] = ESP.getFreeHeap();
 #endif
     serializeJson(doc, buffer);
-    Log::console(PSTR("MQTT: %s"), buffer);
+    Log::console(PSTR("MQTT: Published"));
 
     mqttClient->publish(buildTopic(teleTopic, topicStatus).c_str(), 1, false, buffer);
-    status.last_send = now;
+    status.last_send = millis();
   }
 
   if (now - lastPing > pingInterval)
@@ -166,7 +166,7 @@ void MQTT_Client::loop(unsigned long now)
     mqttClient->publish(buildTopic(statTopic, PSTR("HV")).c_str(), 1, false, String(status.hvReading.get()).c_str());
 #endif
 
-    status.last_send = now;
+    status.last_send = millis();
   }
   if (gcounter.is_warning() != warnSent) {
     warnSent = gcounter.is_warning();
