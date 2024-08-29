@@ -78,23 +78,30 @@ The high-voltage circuit is tested reliable for tubes requiring up to 400V opera
 
 The following commonly available tubes are known to be compatible with the ESPGeigerHW Geiger counter
 
-| Tube Name | Length | Operating Voltage | Ratio | Notes |
+| Tube Name | Length | Operating Voltage | Suggested Ratios | Notes |
 |---|---|---|---|---|
-SBM-20 (СБМ-20) | 108 ± 3.5 | 400V | - | 
-SBM-19 (СБМ-19) | 195mm | 400V | - | External connection
-STS-15 (CTC-15) | 111mm | 390-400V | - | 
-SI22G (СИ22Г) | 220mm | 390-400V | - | External connection
-J305 | 105mm | 400V | - | 
+SBM-20 (СБМ-20) | 108 ± 3.5 | 400V | 158 / 175 | 
+SBM-19 (СБМ-19) | 195mm | 400V | 666 / 928 | External connection
+SBM-21 (СБМ-21) | 108 ± 3.5 | 400V | 21 | External Connection
+STS-5 (CTC-5) | 111mm | 390-400V | 150 / 175 | 
+SI22G (СИ22Г) | 220mm | 390-400V | 583 / 729 | External connection
+J305 | 105mm | 400V | 123.0 | [Discussion](https://iot-devices.com.ua/en/geiger-tube-j305-how-to-calculate-the-conversion-factor-of-cpm-technical-note-en)
 J305 | 90mm | 400V | - | 
 M4011 | 90mm | 400V | - | 
 ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | External connection
+
+## Tube References
+
+- https://andkom.github.io/gmcalc/
+- https://arduino-geiger-pcb.blogspot.com/2017/03/conversion-rates-for-soviet-made-geiger.html
+- https://www.uradmonitor.com/topic/hardware-conversion-factor/
 
 ### Possibly Compatible
 {: .no_toc }
 
 The following tubes should also be compatible but are currently untested
 
-- [LND-712](https://www.lndinc.com/products/geiger-mueller-tubes/712/) - [Info](https://www.pocketmagic.net/tube-lnd-712-end-window-alpha-beta-gamma-detector/)
+- [LND-712](https://www.lndinc.com/products/geiger-mueller-tubes/712/) - [Info](https://www.pocketmagic.net/tube-lnd-712-end-window-alpha-beta-gamma-detector/) Ratio - 168?
 - [LND-7312](https://www.lndinc.com/products/geiger-mueller-tubes/7312/)
 - [SBT-9](https://www.pocketmagic.net/tube-sbt-9-end-window-geiger-tube/)
 - [SBT-10A](https://www.pocketmagic.net/tube-sbt-10a-c%d0%b1t-10a/)
