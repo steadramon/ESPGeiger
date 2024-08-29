@@ -92,9 +92,9 @@ ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | External connection
 
 ## Tube References
 
-- https://andkom.github.io/gmcalc/
-- https://arduino-geiger-pcb.blogspot.com/2017/03/conversion-rates-for-soviet-made-geiger.html
-- https://www.uradmonitor.com/topic/hardware-conversion-factor/
+- [https://andkom.github.io/gmcalc/]
+- [https://arduino-geiger-pcb.blogspot.com/2017/03/conversion-rates-for-soviet-made-geiger.html]
+- [https://www.uradmonitor.com/topic/hardware-conversion-factor/]
 
 ### Possibly Compatible
 {: .no_toc }
