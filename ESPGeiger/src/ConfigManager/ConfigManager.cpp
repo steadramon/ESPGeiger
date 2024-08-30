@@ -70,7 +70,7 @@ static WiFiManagerParameter MQTTParams[] =
   WiFiManagerParameter("mqttPassword", "Password", "", 32, "type='password'"),
   WiFiManagerParameter("mqttTopic", "Root Topic", "ESPGeiger-{id}", 16),
   WiFiManagerParameter("<small>{id} is replaced with the chip ID</small><br>"),
-  WiFiManagerParameter("mqttTime", "Submit Time (s)", "60", 6),
+  WiFiManagerParameter("mqttTime", "Submit Time (s)", "60", 6, "type='number' min='5' max='3600'"),
 };
 #ifdef MQTTAUTODISCOVER
 static WiFiManagerParameter HassioParams[] = 
@@ -98,7 +98,7 @@ static WiFiManagerParameter radmonParams[] =
   WiFiManagerParameter("<input type='checkbox' id='cbrm' onchange='getE(\"radmonSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbrm'>Send</label><br>"),
   WiFiManagerParameter("radmonUser", "Radmon Username", "", 32),
   WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 64, "type='password'"),
-  WiFiManagerParameter("radmonTime", "Submit Time (s)", "60", 6),
+  WiFiManagerParameter("radmonTime", "Submit Time (s)", "60", 6, "type='number' min='30' max='1800'"),
   WiFiManagerParameter(R"J(<script>doCB("cbrm","radmonSend")</script>)J"),
 };
 #endif
