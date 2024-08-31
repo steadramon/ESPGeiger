@@ -87,6 +87,7 @@ STS-5 (CTC-5) | 111mm | 390-400V | 150 / 175 |
 SI22G (СИ22Г) | 220mm | 390-400V | 583 / 729 | External connection
 J305 | 105mm | 400V | 123.0 | [Discussion](https://iot-devices.com.ua/en/geiger-tube-j305-how-to-calculate-the-conversion-factor-of-cpm-technical-note-en)
 J305 | 90mm | 400V | - | 
+J321 | 86mm | 400V | - | *may* fit
 M4011 | 90mm | 400V | - | 
 ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | External connection
 
