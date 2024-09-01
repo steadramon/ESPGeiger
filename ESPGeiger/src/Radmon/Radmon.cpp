@@ -36,6 +36,10 @@ void Radmon::setInterval(int interval) {
   pingInterval = interval*1000;
 }
 
+int Radmon::getInterval() {
+  return pingInterval / 1000;
+}
+
 void Radmon::s_tick(unsigned long stick_now)
 {
   if (stick_now - lastPing >= pingInterval)
@@ -43,6 +47,9 @@ void Radmon::s_tick(unsigned long stick_now)
     if (lastPing == 0) {
       ConfigManager &configManager = ConfigManager::getInstance();
       int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
+      if (rtimer == NULL) {
+        rtimer = RADMON_INTERVAL;
+      }
       setInterval(rtimer);
       lastPing = random(rtimer / 2) * 1000;
       return;
@@ -90,6 +97,9 @@ void Radmon::postMeasurement() {
   const char* _api_user = configManager.getParamValueFromID("radmonUser");
   const char* _api_key = configManager.getParamValueFromID("radmonKey");
   int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
+  if (rtimer == NULL) {
+    rtimer = RADMON_INTERVAL;
+  }
   setInterval(rtimer);
 
   if ((_api_user == NULL) && (_api_key == NULL)) {

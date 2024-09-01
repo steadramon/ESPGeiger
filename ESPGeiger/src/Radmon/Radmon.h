@@ -50,6 +50,7 @@ class Radmon {
     void s_tick(unsigned long stick_now);
     void postMeasurement();
     void setInterval(int interval);
+    int getInterval();
     AsyncHTTPRequest request;
   private:
     unsigned long lastPing = 0;
