@@ -261,6 +261,7 @@ void ConfigManager::startWebPortal()
 #endif
 
   ConfigManager::loadParams();
+  int cfgint;
 
 #ifndef RXPIN_BLOCKED
   cfgint = atoi(ConfigManager::getParamValueFromID("geigerRX"));
