@@ -65,7 +65,7 @@ static WiFiManagerParameter MQTTParams[] =
   // The broker parameters
   WiFiManagerParameter("<br><br><hr><h3>MQTT</h3>"),
   WiFiManagerParameter("mqttServer", "<br>IP", "", 16, "input='number' pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
-  WiFiManagerParameter("mqttPort", "Port", "1883", 6, "pattern='\\d{1,5}'"),
+  WiFiManagerParameter("mqttPort", "Port", "1883", 6, "type='number' min='1' max='65535'"),
   WiFiManagerParameter("mqttUser", "User", "", 32),
   WiFiManagerParameter("mqttPassword", "Password", "", 32, "type='password'"),
   WiFiManagerParameter("mqttTopic", "Root Topic", "ESPGeiger-{id}", 16),
