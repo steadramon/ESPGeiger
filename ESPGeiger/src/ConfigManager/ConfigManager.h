@@ -116,6 +116,7 @@ public:
   const char* getParamValueFromID_P(const __FlashStringHelper* param_p);
   int getIndexFromID(const char* str);
   void loadParams();
+  void setExternals();
   void preSaveParams();
   void saveParams();
   void delay(unsigned long m);
