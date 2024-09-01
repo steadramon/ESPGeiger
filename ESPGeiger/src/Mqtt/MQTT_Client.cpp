@@ -168,6 +168,11 @@ void MQTT_Client::loop(unsigned long now)
 
     status.last_send = millis();
   }
+
+  if (status.warmup) {
+    return;
+  }
+
   if (gcounter.is_warning() != warnSent) {
     warnSent = gcounter.is_warning();
     int is_warning = 0;
