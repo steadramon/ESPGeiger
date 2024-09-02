@@ -7,11 +7,7 @@
 #define HASH_LENGTH 32
 #define BLOCK_LENGTH 64
 
-#ifdef ESP8266
-  #define WRITE_RET_TYPE size_t
-#else
-  #define WRITE_RET_TYPE void
-#endif
+#define WRITE_RET_TYPE size_t
 
 union _buffer {
   uint8_t b[BLOCK_LENGTH];
