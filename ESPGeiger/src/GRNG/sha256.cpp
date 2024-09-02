@@ -1,10 +1,5 @@
 #include <string.h>
-#ifdef ESP8266
-  #include <pgmspace.h>
-#else
-  #include <avr/io.h>
-  #include <avr/pgmspace.h>
-#endif
+#include <pgmspace.h>
 #include "sha256.h"
 
 uint32_t sha256K[] PROGMEM = {
