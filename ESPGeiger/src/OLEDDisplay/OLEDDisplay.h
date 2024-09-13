@@ -45,11 +45,11 @@ extern Counter gcounter;
 #endif
 
 #ifndef OLED_SDA
-#define OLED_SDA      5
+#define OLED_SDA      4
 #endif
 
 #ifndef OLED_SCL
-#define OLED_SCL      4
+#define OLED_SCL      5
 #endif
 #ifndef OLED_ADDR
 #define OLED_ADDR      0x3c
