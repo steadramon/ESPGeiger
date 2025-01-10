@@ -43,6 +43,9 @@ static WiFiManagerParameter ESPGeigerParams[] =
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 6, "required type='number' min='0' max='99999'"),
 #endif
+#if defined(SSD1306_DISPLAY)
+  WiFiManagerParameter("dispBrightness", "Display brightness", "64", 4, "required type='number' min='0' max='255'"),
+#endif
 #ifdef GEIGER_NEOPIXEL
   WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "15", 4, "required type='number' min='0' max='100'"),
 #endif
@@ -309,6 +312,13 @@ void ConfigManager::setExternals() {
     cfgvar = "120";
   }
   display.setTimeout(atoi(cfgvar));
+#endif
+#if defined(SSD1306_DISPLAY)
+  cfgvar = ConfigManager::getParamValueFromID("dispBrightness");
+  if (cfgvar == NULL) {
+    cfgvar = "64";
+  }
+  display.setBrightness(atoi(cfgvar));
 #endif
 #ifdef GEIGER_NEOPIXEL
   cfgvar = ConfigManager::getParamValueFromID("neopixelBrightness");
