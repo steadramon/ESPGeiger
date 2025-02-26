@@ -90,6 +90,7 @@ struct Status {
 #endif
   int wifi_status;
   int serialOut;
+  bool wifi_disabled = false;
 };
 
 #endif
