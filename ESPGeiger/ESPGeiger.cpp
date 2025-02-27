@@ -145,16 +145,19 @@ void sTickerCB()
 #ifdef GEIGER_SDCARD
   sdcard.s_tick(stick_now);
 #endif
+  status.wifi_status = WiFi.status();
+  if (status.warmup) {
+    return;
+  }
   if (status.wifi_disabled) {
+    return;
+  }
+  if (status.wifi_status != WL_CONNECTED) {
     return;
   }
 #ifdef MQTTOUT
   mqtt.loop(stick_now);
 #endif
-  status.wifi_status = WiFi.status();
-  if (status.warmup) {
-    return;
-  }
 #ifdef GMCOUT
   gmc.s_tick(stick_now);
 #endif
@@ -205,6 +208,7 @@ void setup()
       delay(250);
       pushbutton.read();
     }
+    delay(750);
     status.enable_oled_timeout = false;
     status.wifi_disabled = true;
   }
@@ -216,7 +220,19 @@ void setup()
   }
 #endif
   if (!status.wifi_disabled) {
-    cManager.autoConnect();
+    bool res = cManager.autoConnect();
+    if (!res) {
+#if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
+      if (!cManager.getWiFiIsSaved()) {
+        status.wifi_disabled = true;
+      }
+#else
+      Log::console(PSTR("WiFi not connecting ... Restarting ... "));
+      delay(1000);
+      ESP.restart();
+#endif
+    }
+
     delay(100);
     status.wifi_status = WiFi.status();
     cManager.startWebPortal();
@@ -247,6 +263,9 @@ void setup()
   status.led.Off().Update();
   serialcmd.setup();
   hmsTicker.attach_ms(100, hmsTickerCB);
+#ifdef SSD1306_DISPLAY
+  status.oled_timeout = millis();
+#endif
 }
 
 void loop()
