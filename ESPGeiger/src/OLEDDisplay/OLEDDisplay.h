@@ -207,9 +207,9 @@ public:
       if (minValue > 1) {
         minValue = (int)(minValue * 0.9);
       }
-      int xstart = 0;
+      int x_start = 0;
       if (gcounter.cpm_history.capacity != histSize) {
-        xstart = (( 2*( gcounter.cpm_history.capacity-histSize )));
+        x_start = (2 * (gcounter.cpm_history.capacity - histSize));
       }
 
       if (maxValue == 0) {
@@ -220,7 +220,7 @@ public:
 
       for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
         int location = ((map((long)gcounter.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
-        drawRect(xstart+i*2, location, 2, (63 - location));
+        drawRect(x_start + i * 2, location, 2, (63 - location));
       }
       setFont(Open_Sans_Regular_Plain_10);
       drawString(93,55, String(minValue));
