@@ -94,6 +94,7 @@ SerialCommand serialcmd;     // The demo SerialCommand object
 
 // Tickers
 Ticker msTicker;
+Ticker hmsTicker;
 Ticker fiveSTicker;
 Ticker sTicker;
 
@@ -102,6 +103,14 @@ void msTickerCB()
   status.led.Update();
 #ifdef ESPGEIGER_HW
   status.blip_led.Update();
+#endif
+}
+
+void hmsTickerCB()
+{
+  unsigned long now = millis();
+#ifdef GEIGER_PUSHBUTTON
+  pushbutton.loop(now);
 #endif
 }
 
@@ -136,6 +145,9 @@ void sTickerCB()
 #ifdef GEIGER_SDCARD
   sdcard.s_tick(stick_now);
 #endif
+  if (status.wifi_disabled) {
+    return;
+  }
 #ifdef MQTTOUT
   mqtt.loop(stick_now);
 #endif
@@ -182,14 +194,33 @@ void setup()
   msTicker.attach_ms(1, msTickerCB);
 #ifdef SSD1306_DISPLAY
   display.begin();
+#endif
+#ifdef GEIGER_PUSHBUTTON
+  pushbutton.init();
+  if (pushbutton.isPressed() && status.start == 0) {
+#ifdef SSD1306_DISPLAY
+    display.wifiDisabled();
+#endif
+    while (pushbutton.isPressed()) {
+      pushbutton.read();
+      delay(300);
+    }
+    delay(500);
+    status.wifi_disabled = true;
+  }
+  pushbutton.begin();
+#endif
+#ifdef SSD1306_DISPLAY
   if (!cManager.getWiFiIsSaved()) {
     display.setupWifi(hostName);
   }
 #endif
-  cManager.autoConnect();
-  delay(100);
-  status.wifi_status = WiFi.status();
-  cManager.startWebPortal();
+  if (!status.wifi_disabled) {
+    cManager.autoConnect();
+    delay(100);
+    status.wifi_status = WiFi.status();
+    cManager.startWebPortal();
+  }
 #ifdef GEIGER_SDCARD
   sdcard.begin();
 #endif
@@ -200,10 +231,12 @@ void setup()
   arduino_ota_setup(hostName);
   delay(500);
   grng.begin();
+  if (!status.wifi_disabled) {
 #ifdef MQTTOUT
-  mqtt.begin();
+    mqtt.begin();
 #endif
-  ntpclient.setup();
+    ntpclient.setup();
+  }
   gcounter.begin();
   status.start = NTP.getUptime()+1;
 #ifdef GEIGER_PUSHBUTTON
@@ -213,6 +246,7 @@ void setup()
   
   status.led.Off().Update();
   serialcmd.setup();
+  hmsTicker.attach_ms(100, hmsTickerCB);
 }
 
 void loop()
@@ -223,14 +257,13 @@ void loop()
 #ifndef DISABLE_SERIALRX
   serialcmd.loop();
 #endif
-#ifdef GEIGER_PUSHBUTTON
-  pushbutton.loop(now);
+#ifdef GEIGER_NEOPIXEL
+  // This has to be done in loop
+  neopixel.loop(now);
 #endif
 #ifdef SSD1306_DISPLAY
+  // This has to be done in loop
   display.loop(now);
-#endif
-#ifdef GEIGER_NEOPIXEL
-  neopixel.loop(now);
 #endif
   ArduinoOTA.handle();
 }
