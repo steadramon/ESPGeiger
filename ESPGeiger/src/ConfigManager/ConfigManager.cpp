@@ -251,9 +251,13 @@ bool ConfigManager::autoConnect()
 
   uint8_t connection_result = WiFiManager::getLastConxResult();
   if (connection_result == WL_WRONG_PASSWORD) {
+    Log::console(PSTR("Config: WiFi password incorrect");
     WiFiManager::setEnableConfigPortal(true);
     WiFiManager::setConfigPortalTimeout(300);
+    Log::console(PSTR("Config: Entering setup for 300s"));
+#if defined(SSD1306_DISPLAY)
     display.setupWifi(hostName);
+#endif
     result = WiFiManager::autoConnect(hostName);
     if (!result) {
       Log::console(PSTR("WiFi password incorrect ... Restarting ... "));
@@ -271,7 +275,10 @@ bool ConfigManager::autoConnect()
   if (WiFiManager::getWiFiIsSaved()) {
     WiFiManager::setEnableConfigPortal(true);
     WiFiManager::setConfigPortalTimeout(90);
+    Log::console(PSTR("Config: Entering setup for 90s"));
+#if defined(SSD1306_DISPLAY)
     display.setupWifi(hostName);
+#endif
     result = WiFiManager::autoConnect(hostName);
   }
 
