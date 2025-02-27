@@ -28,7 +28,8 @@ void Thingspeak::s_tick(unsigned long stick_now)
   if (stick_now - lastPing >= pingInterval)
   {
     if (lastPing == 0) {
-      lastPing = random(30) * 1000;
+      lastPing = stick_now;
+      lastPing += random(30000);
       return;
     }
     lastPing = stick_now - (stick_now % 1000);
