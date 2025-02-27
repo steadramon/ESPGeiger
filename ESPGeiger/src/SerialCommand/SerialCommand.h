@@ -52,7 +52,7 @@ public:
     char *next();         // Returns pointer to next token found in command buffer (for getting arguments to commands).
     void addCommand(const char *command, void(*function)());  // Add a command to the processing dictionary.
     static void reboot() { ESP.restart(); };
-    static void reset();
+    static void reset_wifi();
     static void set_ratio();
 #ifdef SERIALOUT
     static void get_cpm();

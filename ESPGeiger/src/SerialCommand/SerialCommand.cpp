@@ -35,6 +35,7 @@ SerialCommand::SerialCommand()
 
 void SerialCommand::setup() {
   addCommand(PSTR("reboot"), reboot);
+  addCommand(PSTR("resetwifi"), reset_wifi);
   addCommand(PSTR("ratio"), set_ratio);
 #ifdef SERIALOUT
   addCommand(PSTR("cpm"), get_cpm);
@@ -108,6 +109,12 @@ void SerialCommand::get_usv() {
 }
 
 #endif
+void SerialCommand::reset_wifi() {
+  ConfigManager &configManager = ConfigManager::getInstance();
+  configManager.resetSettings();
+  reboot();
+}
+
 void SerialCommand::set_ratio() {
   char *arg;
   float aNumber;
