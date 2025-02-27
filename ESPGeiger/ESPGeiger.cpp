@@ -202,10 +202,10 @@ void setup()
     display.wifiDisabled();
 #endif
     while (pushbutton.isPressed()) {
+      delay(250);
       pushbutton.read();
-      delay(300);
     }
-    delay(500);
+    status.enable_oled_timeout = false;
     status.wifi_disabled = true;
   }
   pushbutton.begin();
