@@ -29,6 +29,9 @@ MQTT_Client::MQTT_Client()
 
 void MQTT_Client::disconnect()
 {
+  if (!mqttClient || !mqttClient->connected()) {
+    return;
+  }
   mqttClient->disconnect(true);
   mqttEnabled = true;
   lastConnectionAtempt = millis() - 50000;
@@ -140,9 +143,9 @@ void MQTT_Client::loop(unsigned long now)
     doc["free_mem"] = ESP.getFreeHeap();
 #endif
     serializeJson(doc, buffer);
-    Log::console(PSTR("MQTT: Published"));
 
     mqttClient->publish(buildTopic(teleTopic, topicStatus).c_str(), 1, false, buffer);
+    Log::console(PSTR("MQTT: Published"));
     status.last_send = millis();
   }
 
