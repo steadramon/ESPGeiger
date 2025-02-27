@@ -131,7 +131,17 @@ public:
     display();
   }
 
+  void wifiDisabled() {
+    clear();
+    setFont(DialogInput_plain_12);
+    drawString(0, 10, PSTR("WiFi Disabled"));
+    display();
+  }
+
   void loop(unsigned long now) {
+    if (status.oled_page > 3) {
+      status.oled_page = 1;
+    }
     if (now - _last_update >= 500) {
 #ifdef GEIGER_PUSHBUTTON
       if ((status.enable_oled_timeout) && (_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
