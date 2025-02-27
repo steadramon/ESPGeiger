@@ -132,10 +132,17 @@ public:
   }
 
   void wifiDisabled() {
+    setFont(ArialMT_Plain_10);
+    fontWidth = 8;
+    fontHeight = 16;
     clear();
-    setFont(DialogInput_plain_12);
-    drawString(0, 10, PSTR("WiFi Disabled"));
+    drawXbm(0, 0, 51, 51, ESPLogo);
+    drawString(55, 10, PSTR("ESPGeiger"));
+    drawString(55, 24, status.version);
+    drawString(55, 42, PSTR("WiFi Disabled!"));
+
     display();
+    setFont(ArialMT_Plain_16);
   }
 
   void loop(unsigned long now) {
