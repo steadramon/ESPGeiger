@@ -233,11 +233,48 @@ void ConfigManager::handleOurParam(){
 
 bool ConfigManager::autoConnect()
 {
-  WiFiManager::setConnectTimeout(60);
+  WiFiManager::setConnectTimeout(10);
+  WiFiManager::setAPClientCheck(true);
+  WiFiManager::setWiFiAutoReconnect(true);
+  WiFiManager::setConfigPortalTimeout(300);
+
+  if (WiFiManager::getWiFiIsSaved()) {
+    WiFiManager::setEnableConfigPortal(false);
+  }
+
   bool result = WiFiManager::autoConnect(hostName);
+
   if (result) {
     Log::console(PSTR("WiFi: IP: %s"), WiFi.localIP().toString().c_str());
+    return result;
   }
+
+  uint8_t connection_result = WiFiManager::getLastConxResult();
+  if (connection_result == WL_WRONG_PASSWORD) {
+    WiFiManager::setEnableConfigPortal(true);
+    WiFiManager::setConfigPortalTimeout(300);
+    display.setupWifi(hostName);
+    result = WiFiManager::autoConnect(hostName);
+    if (!result) {
+      Log::console(PSTR("WiFi password incorrect ... Restarting ... "));
+      delay(1000);
+      ESP.restart();
+    }
+    return result;
+  }
+  if (connection_result == WL_CONNECT_FAILED) {
+      Log::console(PSTR("Connection FAILED ... Restarting ... "));
+      delay(1000);
+      ESP.restart();
+  }
+
+  if (WiFiManager::getWiFiIsSaved()) {
+    WiFiManager::setEnableConfigPortal(true);
+    WiFiManager::setConfigPortalTimeout(90);
+    display.setupWifi(hostName);
+    result = WiFiManager::autoConnect(hostName);
+  }
+
   return result;
 }
 
@@ -718,7 +755,7 @@ void ConfigManager::handleRestart()
   ESP.restart();
 }
 
-void ConfigManager::resetSettings()
+void ConfigManager::eraseSettings()
 {
   Log::console(PSTR("Config: Erasing ... "));
   LittleFS.begin();
