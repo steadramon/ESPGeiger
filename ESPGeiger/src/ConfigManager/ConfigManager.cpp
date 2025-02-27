@@ -251,7 +251,7 @@ bool ConfigManager::autoConnect()
 
   uint8_t connection_result = WiFiManager::getLastConxResult();
   if (connection_result == WL_WRONG_PASSWORD) {
-    Log::console(PSTR("Config: WiFi password incorrect");
+    Log::console(PSTR("Config: WiFi password incorrect"));
     WiFiManager::setEnableConfigPortal(true);
     WiFiManager::setConfigPortalTimeout(300);
     Log::console(PSTR("Config: Entering setup for 300s"));
