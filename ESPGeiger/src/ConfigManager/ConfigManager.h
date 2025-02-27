@@ -110,7 +110,7 @@ public:
   void handleOurParam();
   void getOurParamOut();
   void bindServerCallback();
-  void autoConnect();
+  bool autoConnect();
   void startWebPortal();
   const char* getParamValueFromID(const char* str);
   const char* getParamValueFromID_P(const __FlashStringHelper* param_p);
