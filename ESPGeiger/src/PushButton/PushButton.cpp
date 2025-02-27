@@ -24,11 +24,25 @@
 PushButton::PushButton() {
 }
 
-void PushButton::begin()
+void PushButton::init()
 {
   pbutton.begin();
+}
+
+void PushButton::begin()
+{
   pbutton.onPressed(do_pushbutton);
   pbutton.onPressedFor(2000, do_longpress);
+}
+
+void PushButton::read()
+{
+  pbutton.read();
+}
+
+bool PushButton::isPressed()
+{
+  return pbutton.isPressed();
 }
 
 void PushButton::loop(unsigned long now)
@@ -40,9 +54,6 @@ void PushButton::loop(unsigned long now)
     if (status.oled_on) {
       status.oled_page++;
       status.oled_last_update = 0;
-      if (status.oled_page > 3) {
-        status.oled_page = 1;
-      }
     }
 #endif
     gcounter.reset_alarm();

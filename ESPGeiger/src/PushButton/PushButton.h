@@ -66,7 +66,10 @@ class PushButton {
   public:
     PushButton();
     void loop(unsigned long now);
+    void init();
     void begin();
+    void read();
+    bool isPressed();
 };
 
 #endif
