@@ -45,9 +45,12 @@ void SSD1306Display::page_two_full() {
 
 void SSD1306Display::page_one_clear() {
   clear();
-  drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
   setFont(DialogInput_plain_12);
   drawString(0,5, PSTR("CPM:"));
   drawString(0,20, PSTR("µSv/h:"));
+  if (status.wifi_disabled) {
+    return;
+  }
+  drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
 }
 #endif
