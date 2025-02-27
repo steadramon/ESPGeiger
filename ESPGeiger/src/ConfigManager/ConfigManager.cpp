@@ -231,11 +231,14 @@ void ConfigManager::handleOurParam(){
   server->client().stop();
 }
 
-void ConfigManager::autoConnect()
+bool ConfigManager::autoConnect()
 {
   WiFiManager::setConnectTimeout(60);
-  WiFiManager::autoConnect(hostName);
-  Log::console(PSTR("WiFi: IP: %s"), WiFi.localIP().toString().c_str());
+  bool result = WiFiManager::autoConnect(hostName);
+  if (result) {
+    Log::console(PSTR("WiFi: IP: %s"), WiFi.localIP().toString().c_str());
+  }
+  return result;
 }
 
 void ConfigManager::startWebPortal()
