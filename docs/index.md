@@ -11,19 +11,29 @@ has_children: true
 ESPGeiger is a free, open-source firmware that lets you collect and export radiation data using a ESP8266 or ESP32 MCU. Use it with an existing Geiger counter, for real-time monitoring with multiple output options.
 
 ## Features
-- 😃 Easy to install and configure - contribute to monitoring!
-- ✅ Compatible with all generic Geiger counters with Pulse output and a range of serial based counters
-- 📈 Built in webserver with graphing
-- 🖥️ SSD1306 Display support
-- 🔴 Live CPM and μSv/h readings
-- 🔢 Smoothed and averaged values over 1, 5 and 15 minutes
-- 🎛️ Configurable filtering/debounce and noise control
-- 📟 Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), with optional hardware counter (ESP32 only - PCNT)
-- ⏲️ No dead time due to waiting for 3rd party services
-- 🌐 Upload and share statistics to services online and locally via MQTT and Home Assistant automatic discovery
-- 💾 Save your data locally to an SDCard
-- 💡 Colourful and intuitive feedback using a WS2812X NeoPixel
-- 🚧 Test builds for emulating pulse and serial based counters
+
+**Data Display & Analysis:**
+* 🔴 **Real-time Readings:** Live CPM and μSv/h displays.
+* 📈 **Web-based Graphing:** Integrated web server for visual data analysis.
+* 🔢 **Data Smoothing:** Averaged values over 1, 5, and 15 minutes for stable readings.
+* 🖥️ **Local Display:** Support for SSD1306 OLED displays.
+
+**Connectivity & Data Sharing:**
+* 🌐 **Online Data Export:** Compatible with Radmon.org, GMCMAP (gmcmap.com), and ThingSpeak.
+* 🏠 **Local Network Integration:** MQTT and Home Assistant automatic discovery for seamless LAN connectivity.
+* 💾 **Local Data Logging:** Save data to an SD card for offline analysis.
+* 🔌 **Offline Mode:** Disables all network functionality for standalone operation, activated by holding the onboard button during startup.
+
+**Hardware & Compatibility:**
+* ✅ **Wide Geiger Counter Compatibility:** Works with pulse output and serial-based counters.
+* 📟 **Accurate Counting:** Interrupt-driven and non-blocking functions, with hardware counter support (ESP32 PCNT).
+* 🎛️ **Noise Control:** Configurable filtering and debounce settings.
+* 💡 **Visual Feedback:** Customizable WS2812X NeoPixel for status indication.
+
+**Ease of Use & Development:**
+* 😃 **Easy Installation & Configuration:** Get started quickly and contribute to monitoring.
+* ⏲️ **Independent Operation:** No reliance on external services for real-time counting.
+* 🚧 **Emulation Tools:** Test builds for emulating pulse and serial counters.
 
 ## ESPGeiger-HW
 
