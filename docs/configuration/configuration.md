@@ -18,6 +18,7 @@ Model | String 0..32 | `(varies)` | Model name of the ESPGeiger
 Ratio for calculating μSv | Float 0..10000 | `151.0` | Ratio used internally for calculating μSv
 Warning CPM | Int | `50` | CPM Value to trigger Warning state
 Alert CPM | Int | `100` | CPM Value to trigger Alert state
+Display brightness | Int 0..255 | `64` | Brightness of the OLED Display (Only for builds with OLED display)
 Display timeout | Int 0..65535 | `300` | Timeout for OLED display (Only for builds with OLED display)
 Neopixel Brightness | Int 0..100 | `10` | % Brightness for NeoPixel - 0 disables (Only for builds with Neopixel, note too low a value can cause colours to be inaccurate)
 
