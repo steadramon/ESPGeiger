@@ -8,8 +8,7 @@ parent: Configuration
 
 # Offline Mode
 
-
-ESPGeiger offers an offline mode for situations where network connectivity is unavailable or unnecessary. This mode allows the device to function as a standalone Geiger counter, focusing solely on local radiation detection and data logging.
+ESPGeiger offers an offline mode for situations where network connectivity is unavailable or unnecessary. This mode allows the device to function as a standalone device. This is especially useful on the [ESPGeiger-HW](/hardware/espgeigerhw), [ESPGeiger-Log](/hardware/espgeigerlog) and [Cajoe GC-ESP32](/hardware/cajoeiot) hardware devices - focusing solely on local radiation detection and data logging.
 
 ## Entering Offline Mode
 
