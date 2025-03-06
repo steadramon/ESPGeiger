@@ -80,10 +80,16 @@ public:
   void clear() {
     SSD1306Wire::clear();
   }
+
   void clear(int start, int end) {
     setColor(BLACK);
     fillRect(0, (start+1)*fontHeight, OLED_WIDTH, (end-start+1)*fontHeight);
     setColor(WHITE);
+  }
+
+  void setBrightness(uint8_t brightness) {
+    brightness = (int)brightness * 2.55;
+    SSD1306Wire::setBrightness(brightness);
   }
 
   uint8_t type() { return 1; }
