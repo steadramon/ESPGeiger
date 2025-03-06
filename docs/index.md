@@ -8,7 +8,7 @@ has_children: true
 
 # ESPGeiger
 
-ESPGeiger is a free, open-source firmware that lets you collect and export radiation data using a ESP8266 or ESP32 MCU. Use it with an existing Geiger counter, for real-time monitoring with multiple output options.
+ESPGeiger is a free, open-source firmware allowing you to transform any compatible Geiger counter into a real-time, IoT-enabled radiation monitoring system using ESP8266 or ESP32 microcontrollers.
 
 ## Features
 
@@ -48,6 +48,7 @@ ESPGeiger-HW is almost ready for release!
 {: .highlight }
 > The creators of ESPGeiger make no claims about the suitability of the firmware or hardware for measuring radiation in any serious or life threatening situation. ESPGeiger is created as an educational resource for hobbyists and makers a-like.
 > 
+**Safety First:**
 > Always avoid the high voltage elements on any Geiger Counter, many of which have exposed circuitry.
 >
 > Please use extreme caution and safe practice when handling and storing known radioactive sources.
