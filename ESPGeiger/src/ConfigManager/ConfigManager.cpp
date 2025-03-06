@@ -44,7 +44,7 @@ static WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 6, "required type='number' min='0' max='99999'"),
 #endif
 #if defined(SSD1306_DISPLAY)
-  WiFiManagerParameter("dispBrightness", "Display brightness", "64", 4, "required type='number' min='0' max='255'"),
+  WiFiManagerParameter("dispBrightness", "Display brightness", "25", 4, "required type='number' min='0' max='100'"),
 #endif
 #ifdef GEIGER_NEOPIXEL
   WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "15", 4, "required type='number' min='0' max='100'"),
