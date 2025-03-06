@@ -21,6 +21,7 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | Command | Description | Example |
 |---|---|---|
 | `reboot` | Reboot ESPGeiger | `reboot` |
+| `resetwifi` | Reset the WiFi credentials | `resetwifi` |
 | `ratio` | Set ratio for calculating μSv | `ratio 151.0` |
 | `cpm` | Return current CPM value  |  |
 | `usv` | Return current uSV value |  |
