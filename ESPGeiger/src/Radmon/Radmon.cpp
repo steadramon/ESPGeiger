@@ -51,8 +51,7 @@ void Radmon::s_tick(unsigned long stick_now)
         rtimer = RADMON_INTERVAL;
       }
       setInterval(rtimer);
-      lastPing = stick_now;
-      lastPing += random(30) * 1000;
+      lastPing = random(rtimer / 2) * 1000;
       return;
     }
     lastPing = stick_now - (stick_now % 1000);
