@@ -237,11 +237,11 @@ bool ConfigManager::autoConnect()
   WiFiManager::setAPClientCheck(true);
   WiFiManager::setWiFiAutoReconnect(true);
   WiFiManager::setConfigPortalTimeout(300);
-
+#ifdef ESP8266
   if (WiFiManager::getWiFiIsSaved()) {
     WiFiManager::setEnableConfigPortal(false);
   }
-
+#endif
   bool result = WiFiManager::autoConnect(hostName);
 
   if (result) {
