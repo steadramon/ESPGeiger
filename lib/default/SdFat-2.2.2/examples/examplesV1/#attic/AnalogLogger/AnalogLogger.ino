@@ -22,7 +22,7 @@ ofstream logfile;
 // Serial print stream
 ArduinoOutStream cout(Serial);
 
-// buffer to format data - makes it eaiser to echo to Serial
+// buffer to format data - makes it easier to echo to Serial
 char buf[80];
 //------------------------------------------------------------------------------
 #if SENSOR_COUNT > 6
