@@ -149,7 +149,7 @@ void testMemberFunctions() {
   unsigned long ul = 4;   // unsigned 32-bit
 #else                     // BASIC_TYPES
   int8_t sc = -1;   // signed 8-bit
-  uint8_t uc = 1;   // unsiged 8-bit
+  uint8_t uc = 1;   // unsigned 8-bit
   int16_t ss = -2;  // signed 16-bit
   uint16_t us = 2;  // unsigned 16-bit
   int32_t sl = -4;  // signed 32-bit
