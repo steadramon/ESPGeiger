@@ -2,7 +2,7 @@
   Name:		MultipleButtons.ino
   Created:	3/25/2019 11:45:52 AM
   Author:	Evert Arias
-  Description: Example to demostrate how to use the library with more than one button
+  Description: Example to demonstrate how to use the library with more than one button
 */
 
 #include <EasyButton.h>
