@@ -118,7 +118,7 @@ Note: ESP32 users please download the `firmware` version - `merged` firmwares ar
 
 ## Compatible Counters
 
-### Annoucing ESPGeiger-HW
+### Announcing ESPGeiger-HW
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-J305.jpg" width="75%"/>
