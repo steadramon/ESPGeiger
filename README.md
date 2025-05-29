@@ -60,7 +60,7 @@ Use a tool such as esptool.py or Tasmotizer to flash the firmware to your ESP de
 
 ### Building your own image
 
-The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satify the requirements by installing the libraries.
+The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satisfy the requirements by installing the libraries.
 
 The `environments.ini` file defines some pre-built environments and examples of how the build can be configured. You can pick a combination of target board (esp32/esp8266) and geiger type (pulse/serial/GC10 etc)
 
