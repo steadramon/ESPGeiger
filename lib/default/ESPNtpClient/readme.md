@@ -46,7 +46,7 @@ This library includes an uptime log too. It counts number of seconds since sketc
 
 Every time that local time is adjusted a `ntpEvent` is thrown. You can attach a function to it using `NTP.onNTPSyncEvent()`. Called function format must be like `void eventHandler(NTPSyncEvent_t event)`.
 
-Library does WiFi connection tracking by itself so you can call begin after or before WiFi is connected and it takes care of WiFi reconnections. Meanwhile, if 'NTP.begin()' is called when WiFi is already connected, it takes far less to get syncronization. It takes up to 30 seconds if library is called before WiFi connection is completed, but it will only take less than 5 seconds if Wifi was connected prior to `NTP.begin()` call
+Library does WiFi connection tracking by itself so you can call begin after or before WiFi is connected and it takes care of WiFi reconnections. Meanwhile, if 'NTP.begin()' is called when WiFi is already connected, it takes far less to get synchronization. It takes up to 30 seconds if library is called before WiFi connection is completed, but it will only take less than 5 seconds if Wifi was connected prior to `NTP.begin()` call
 
 There are two examples, one simple and minimum one to show the very basic implementation. Second one shows advanced use with event and WiFi state management.
 
