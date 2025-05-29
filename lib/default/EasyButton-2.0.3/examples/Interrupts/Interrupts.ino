@@ -2,7 +2,7 @@
   Name:    Interrupts.ino
   Created:  8/11/2019 11:45:52 AM
   Author: José Gabriel Companioni Benítez (https://github.com/elC0mpa)
-  Description: Example to demostrate how to use interrupts in order to improve performance
+  Description: Example to demonstrate how to use interrupts in order to improve performance
 */
 
 #include <Arduino.h>
