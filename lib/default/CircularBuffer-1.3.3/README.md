@@ -213,7 +213,7 @@ void loop() {
 
 Multiple examples are available in the `examples` folder of the library:
 
- * [CircularBuffer.ino](https://github.com/rlogiacco/CircularBuffer/blob/master/examples/CircularBuffer/CircularBuffer.ino) shows how you can use the library to create a continous averaging of the most recent readings
+ * [CircularBuffer.ino](https://github.com/rlogiacco/CircularBuffer/blob/master/examples/CircularBuffer/CircularBuffer.ino) shows how you can use the library to create a continuous averaging of the most recent readings
  * [EventLogging.ino](https://github.com/rlogiacco/CircularBuffer/blob/master/examples/EventLogging/EventLogging.ino) focuses on dumping the buffer when it becomes full and printing the buffer contents periodically at the same time
  * [Object.ino](https://github.com/rlogiacco/CircularBuffer/blob/master/examples/Object/Object.ino) is meant to demonstrate how to use the buffer to store dynamic structures
  * [Queue.ino](https://github.com/rlogiacco/CircularBuffer/blob/master/examples/Queue/Queue.ino) is a classical example of a queue, or a FIFO data structure
