@@ -11,7 +11,7 @@
 #define SENSOR_COUNT     3  // number of analog pins to log
 #define ECHO_TO_SERIAL   1  // echo data to serial port if nonzero
 #define WAIT_TO_START    1  // Wait for serial input in setup()
-#define ADC_DELAY       10  // ADC delay for high impedence sensors
+#define ADC_DELAY       10  // ADC delay for high impedance sensors
 
 // file system object
 SdFat sd;
