@@ -2,7 +2,7 @@
  Name:		Pressed.ino
  Created:	9/5/2018 10:49:52 AM
  Author:	Evert Arias
- Description: Example to demostrate how to use the library to detect a single pressed on a button.
+ Description: Example to demonstrate how to use the library to detect a single pressed on a button.
 */
 
 #include <EasyButton.h>
