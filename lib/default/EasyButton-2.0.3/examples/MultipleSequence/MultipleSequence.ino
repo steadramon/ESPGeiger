@@ -2,7 +2,7 @@
   Name:    MultipleSequence.ino
   Created:  03/23/2020 12:45:23 AM
   Author: José Gabriel Companioni Benítez (https://github.com/elC0mpa)
-  Description: Example to demostrate how to work with multiple sequences 
+  Description: Example to demonstrate how to work with multiple sequences 
 */
 
 #include <Arduino.h>
@@ -28,7 +28,7 @@ EasyButton button(BUTTON_PIN);
 
 void setup()
 {
-  // Initialize Serial for debuging purposes.
+  // Initialize Serial for debugging purposes.
   Serial.begin(BAUDRATE);
 
   Serial.println();

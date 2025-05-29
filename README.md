@@ -60,7 +60,7 @@ Use a tool such as esptool.py or Tasmotizer to flash the firmware to your ESP de
 
 ### Building your own image
 
-The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satify the requirements by installing the libraries.
+The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satisfy the requirements by installing the libraries.
 
 The `environments.ini` file defines some pre-built environments and examples of how the build can be configured. You can pick a combination of target board (esp32/esp8266) and geiger type (pulse/serial/GC10 etc)
 
@@ -118,7 +118,7 @@ Note: ESP32 users please download the `firmware` version - `merged` firmwares ar
 
 ## Compatible Counters
 
-### Annoucing ESPGeiger-HW
+### Announcing ESPGeiger-HW
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-J305.jpg" width="75%"/>

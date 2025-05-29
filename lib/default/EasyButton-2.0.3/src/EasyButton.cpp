@@ -34,12 +34,12 @@ bool EasyButton::read()
 
 	if (read_started_ms - _last_change < _db_time)
 	{
-		// Debounce time has not ellapsed.
+		// Debounce time has not elapsed.
 		_changed = false;
 	}
 	else
 	{
-		// Debounce time ellapsed.
+		// Debounce time elapsed.
 		_last_state = _current_state;				// Save last state.
 		_current_state = pinVal;					// Assign new state as current state from pin's value.
 		_changed = (_current_state != _last_state); // Report state change if current state vary from last state.

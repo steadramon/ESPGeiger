@@ -2,7 +2,7 @@
   Name:    TouchButton.ino
   Created: 6/25/2019 9:25:52 AM
   Author:  Evert Arias
-  Description: Example to demostrate how to use the library to detect a single touch.
+  Description: Example to demonstrate how to use the library to detect a single touch.
 */
 
 #include <EasyButtonTouch.h>
@@ -23,7 +23,7 @@ void onPressed()
 
 void setup()
 {
-  // Initialize Serial for debuging purposes.
+  // Initialize Serial for debugging purposes.
   Serial.begin(BAUDRATE);
 
   Serial.println();

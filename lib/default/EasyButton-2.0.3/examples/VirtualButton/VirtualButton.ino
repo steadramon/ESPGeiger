@@ -2,7 +2,7 @@
   Name:    EasyButtonVirtual.ino
   Created:  4/11/2020 1:22:52 AM
   Author: José Gabriel Companioni Benítez (https://github.com/elC0mpa)
-  Description: Example to demostrate how to use the virtual button feature. This allows the user to use a variable as if it were a button. Really useful when 
+  Description: Example to demonstrate how to use the virtual button feature. This allows the user to use a variable as if it were a button. Really useful when 
   the buttons are connected through port expanders like PCF8574.
 */
 
@@ -39,7 +39,7 @@ void buttonPressedForTwoSeconds()
 
 void setup()
 {
-  // Initialize Serial for debuging purposes.
+  // Initialize Serial for debugging purposes.
   Serial.begin(BAUDRATE);
 
   Serial.println();

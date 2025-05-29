@@ -142,14 +142,14 @@ void testMemberFunctions() {
 //#define BASIC_TYPES
 #ifdef BASIC_TYPES
   signed char sc = -1;    // signed 8-bit
-  unsigned char uc = 1;   // unsiged 8-bit
+  unsigned char uc = 1;   // unsigned 8-bit
   signed short ss = -2;   // signed 16-bit
   unsigned short us = 2;  // unsigned 16-bit
   signed long sl = -4;    // signed 32-bit
   unsigned long ul = 4;   // unsigned 32-bit
 #else                     // BASIC_TYPES
   int8_t sc = -1;   // signed 8-bit
-  uint8_t uc = 1;   // unsiged 8-bit
+  uint8_t uc = 1;   // unsigned 8-bit
   int16_t ss = -2;  // signed 16-bit
   uint16_t us = 2;  // unsigned 16-bit
   int32_t sl = -4;  // signed 32-bit
@@ -224,7 +224,7 @@ void setup() {
     sd.initErrorHalt(&Serial);
   }
   Serial.println();
-  Serial.println(F("Test member funcions:"));
+  Serial.println(F("Test member functions:"));
   testMemberFunctions();
   Serial.println();
   Serial.println(

@@ -181,7 +181,7 @@ void setup() {
       "Flash erase sets all data to 0X00 for most cards\n"
       "and 0XFF for a few vendor's cards.\n"
       "\n"
-      "Cards up to 2 GiB (GiB = 2^30 bytes) will be formated FAT16.\n"
+      "Cards up to 2 GiB (GiB = 2^30 bytes) will be formatted FAT16.\n"
       "Cards larger than 2 GiB and up to 32 GiB will be formatted\n"
       "FAT32. Cards larger than 32 GiB will be formatted exFAT.\n"
       "\n"
@@ -193,7 +193,7 @@ void setup() {
   c = Serial.read();
   cout << c << endl;
   if (c != 'Y') {
-    cout << F("Quiting, you did not enter 'Y'.\n");
+    cout << F("Quitting, you did not enter 'Y'.\n");
     return;
   }
   // Read any existing Serial data.
@@ -217,7 +217,7 @@ void setup() {
   cout << F("Card size: ") << cardSectorCount / 2097152.0;
   cout << F(" GiB (GiB = 2^30 bytes)\n");
 
-  cout << F("Card will be formated ");
+  cout << F("Card will be formatted ");
   if (cardSectorCount > 67108864) {
     cout << F("exFAT\n");
   } else if (cardSectorCount > 4194304) {
@@ -240,7 +240,7 @@ void setup() {
   c = Serial.read();
   cout << c << endl;
   if (!strchr("EFQ", c)) {
-    cout << F("Quiting, invalid option entered.") << endl;
+    cout << F("Quitting, invalid option entered.") << endl;
     return;
   }
   if (c == 'E' || c == 'F') {
