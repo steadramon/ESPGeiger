@@ -34,7 +34,7 @@ bool EasyButton::read()
 
 	if (read_started_ms - _last_change < _db_time)
 	{
-		// Debounce time has not ellapsed.
+		// Debounce time has not elapsed.
 		_changed = false;
 	}
 	else
