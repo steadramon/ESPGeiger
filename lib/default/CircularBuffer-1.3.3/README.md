@@ -275,7 +275,7 @@ Most of the major improvements below have been contributed by [Erlkoenig90](http
 
 ### 1.2.0
 * Added interrupt related macro switch `CIRCULAR_BUFFER_INT_SAFE`
-* Dropped unecessary call to `memset` when clearing
+* Dropped unnecessary call to `memset` when clearing
 
 ### 1.1.1
 * Added tests
