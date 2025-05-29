@@ -224,7 +224,7 @@ void setup() {
     sd.initErrorHalt(&Serial);
   }
   Serial.println();
-  Serial.println(F("Test member funcions:"));
+  Serial.println(F("Test member functions:"));
   testMemberFunctions();
   Serial.println();
   Serial.println(
