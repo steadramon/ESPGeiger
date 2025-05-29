@@ -23,7 +23,7 @@ void onPressed()
 
 void setup()
 {
-  // Initialize Serial for debuging purposes.
+  // Initialize Serial for debugging purposes.
   Serial.begin(BAUDRATE);
 
   Serial.println();
