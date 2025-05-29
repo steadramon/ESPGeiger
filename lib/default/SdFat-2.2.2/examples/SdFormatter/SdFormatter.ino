@@ -181,7 +181,7 @@ void setup() {
       "Flash erase sets all data to 0X00 for most cards\n"
       "and 0XFF for a few vendor's cards.\n"
       "\n"
-      "Cards up to 2 GiB (GiB = 2^30 bytes) will be formated FAT16.\n"
+      "Cards up to 2 GiB (GiB = 2^30 bytes) will be formatted FAT16.\n"
       "Cards larger than 2 GiB and up to 32 GiB will be formatted\n"
       "FAT32. Cards larger than 32 GiB will be formatted exFAT.\n"
       "\n"
