@@ -240,7 +240,7 @@ void setup() {
   c = Serial.read();
   cout << c << endl;
   if (!strchr("EFQ", c)) {
-    cout << F("Quiting, invalid option entered.") << endl;
+    cout << F("Quitting, invalid option entered.") << endl;
     return;
   }
   if (c == 'E' || c == 'F') {
