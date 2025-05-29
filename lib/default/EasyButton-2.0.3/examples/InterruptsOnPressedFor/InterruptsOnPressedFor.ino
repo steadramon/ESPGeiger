@@ -2,7 +2,7 @@
   Name:    InterruptsOnPressedFor.ino
   Created:  8/17/2019 10:16:52 AM
   Author: José Gabriel Companioni Benítez (https://github.com/elC0mpa)
-  Description: Example to demostrate how to use onPressedFor functionality when using interrupts
+  Description: Example to demonstrate how to use onPressedFor functionality when using interrupts
 */
 
 #include <Arduino.h>
