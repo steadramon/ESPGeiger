@@ -217,7 +217,7 @@ void setup() {
   cout << F("Card size: ") << cardSectorCount / 2097152.0;
   cout << F(" GiB (GiB = 2^30 bytes)\n");
 
-  cout << F("Card will be formated ");
+  cout << F("Card will be formatted ");
   if (cardSectorCount > 67108864) {
     cout << F("exFAT\n");
   } else if (cardSectorCount > 4194304) {
