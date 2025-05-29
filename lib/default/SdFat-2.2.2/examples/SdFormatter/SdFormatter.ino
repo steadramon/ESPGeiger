@@ -193,7 +193,7 @@ void setup() {
   c = Serial.read();
   cout << c << endl;
   if (c != 'Y') {
-    cout << F("Quiting, you did not enter 'Y'.\n");
+    cout << F("Quitting, you did not enter 'Y'.\n");
     return;
   }
   // Read any existing Serial data.
