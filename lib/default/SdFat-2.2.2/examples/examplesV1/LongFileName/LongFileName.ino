@@ -77,7 +77,7 @@ void loop() {
   c = Serial.read();
   uint8_t i = c - '0';
   if (!isdigit(c) || i >= n) {
-    Serial.println(F("Invald number"));
+    Serial.println(F("Invalid number"));
     return;
   }
   Serial.println(i);
