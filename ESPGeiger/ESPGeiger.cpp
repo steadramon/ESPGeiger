@@ -90,7 +90,9 @@ Radmon radmon = Radmon();
 #ifdef THINGSPEAKOUT
 Thingspeak thingspeak = Thingspeak();
 #endif
+#ifdef WEBHOOKOUT
 Webhook webhook = Webhook();
+#endif
 
 SerialCommand serialcmd;     // The demo SerialCommand object
 
@@ -169,7 +171,9 @@ void sTickerCB()
 #ifdef THINGSPEAKOUT
   thingspeak.s_tick(stick_now);
 #endif
+#ifdef WEBHOOKOUT
   webhook.s_tick(stick_now);
+#endif
 }
 
 void setup()
