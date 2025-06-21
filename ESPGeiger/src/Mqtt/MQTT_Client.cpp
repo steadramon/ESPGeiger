@@ -29,7 +29,10 @@ MQTT_Client::MQTT_Client()
 
 void MQTT_Client::disconnect()
 {
-  if (!mqttClient || !mqttClient->connected()) {
+  if (!mqttClient) {
+    return;
+  }
+  if (!status.mqtt_connected) {
     return;
   }
   mqttClient->disconnect(true);
