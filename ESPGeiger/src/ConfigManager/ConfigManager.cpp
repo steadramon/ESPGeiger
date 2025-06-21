@@ -40,21 +40,28 @@ static WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 2),
 #endif
 #endif
+#if defined(SSD1306_DISPLAY) || defined(GEIGER_NEOPIXEL)
+  WiFiManagerParameter("<br><hr><h3>Display</h3>"),
+#endif
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 6, "required type='number' min='0' max='99999'"),
 #endif
 #if defined(SSD1306_DISPLAY)
   WiFiManagerParameter("dispBrightness", "Display brightness", "25", 4, "required type='number' min='0' max='100'"),
+  #ifndef GEIGER_PUSHBUTTON
+  WiFiManagerParameter("oledOn", "On Time", "06:00", 6, "type='time'"),
+  WiFiManagerParameter("oledOff", "Off Time", "22:00", 6, "type='time'"),
+  #endif
 #endif
 #ifdef GEIGER_NEOPIXEL
-  WiFiManagerParameter("neopixelBrightness", "NeoPixel Brightness", "15", 4, "required type='number' min='0' max='100'"),
+  WiFiManagerParameter("neopixelBrightness", "NeoPixel brightness", "15", 4, "required type='number' min='0' max='100'"),
 #endif
 };
 #ifdef THINGSPEAKOUT
 static WiFiManagerParameter TSParams[] = 
 {
   // Thingspeak parameters
-  WiFiManagerParameter("<br><br><hr><h3>Thingspeak</h3>"),
+  WiFiManagerParameter("<br><hr><h3>Thingspeak</h3>"),
   WiFiManagerParameter("tsSend", "", "Y", 2, "type='hidden'"),
   WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label><br>"),
   WiFiManagerParameter("tsChannelKey", "Channel Key", "", 16),
@@ -66,7 +73,7 @@ static WiFiManagerParameter TSParams[] =
 static WiFiManagerParameter MQTTParams[] = 
 {
   // The broker parameters
-  WiFiManagerParameter("<br><br><hr><h3>MQTT</h3>"),
+  WiFiManagerParameter("<br><hr><h3>MQTT</h3>"),
   WiFiManagerParameter("mqttServer", "<br>IP", "", 16, "input='number' pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("mqttPort", "Port", "1883", 6, "type='number' min='1' max='65535'"),
   WiFiManagerParameter("mqttUser", "User", "", 32),
@@ -79,9 +86,9 @@ static WiFiManagerParameter MQTTParams[] =
 static WiFiManagerParameter HassioParams[] = 
 {
   // The broker parameters
-  WiFiManagerParameter("<br><br><hr><h3>HA Autodiscovery</h3>"),
+  WiFiManagerParameter("<br><hr><h3>HA Autodiscovery</h3>"),
   WiFiManagerParameter("hassSend", "", MQTT_DISCOVERY, 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbhas' onchange='getE(\"hassSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbhas'>Send</label><br>"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbhas' onchange='getE("hassSend").value = this.checked ? "Y":"N"'> <label for='cbhas'>Send</label><br>)J"),
   WiFiManagerParameter("hassDisc", "Discovery Topic", S_MQTT_DISCOVERY_TOPIC, 32),
   WiFiManagerParameter(R"J(<script>doCB("cbhas","hassSend")</script>)J"),
 };
@@ -89,16 +96,16 @@ static WiFiManagerParameter HassioParams[] =
 #endif
 static WiFiManagerParameter CloudAPI[] = 
 {
-  WiFiManagerParameter("<br><br><hr><h3>CloudAPI</h3>"),
+  WiFiManagerParameter("<br><hr><h3>CloudAPI</h3>"),
   WiFiManagerParameter("apiID", "IP", "", 16, "pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
   WiFiManagerParameter("apiSecret", "Port", "1883", 6, "pattern='\\d{1,5}'"),
 };
 #ifdef RADMONOUT
 static WiFiManagerParameter radmonParams[] = 
 {
-  WiFiManagerParameter("<br><br><hr><h3>Radmon.org</h3>"),
+  WiFiManagerParameter("<br><hr><h3>Radmon.org</h3>"),
   WiFiManagerParameter("radmonSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbrm' onchange='getE(\"radmonSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbrm'>Send</label><br>"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbrm' onchange='getE("radmonSend").value = this.checked ? "Y":"N"'> <label for='cbrm'>Send</label><br>)J"),
   WiFiManagerParameter("radmonUser", "Radmon Username", "", 32),
   WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 64, "type='password'"),
   WiFiManagerParameter("radmonTime", "Submit Time (s)", "60", 6, "required type='number' min='30' max='1800'"),
@@ -110,10 +117,23 @@ static WiFiManagerParameter GMCParams[] =
 {
   WiFiManagerParameter("<br/><br/><hr><h3>GMC</h3>"),
   WiFiManagerParameter("gmcSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbgm' onchange='getE(\"gmcSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbgm'>Send</label><br>"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbgm' onchange='getE("gmcSend").value = this.checked ? "Y":"N"'> <label for='cbgm'>Send</label><br>)J"),
   WiFiManagerParameter("gmcAID", "Account ID", "", 12, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("gmcGCID", "Geiger Counter ID", "", 12, "pattern='\\d{1,12}'"),
   WiFiManagerParameter(R"J(<script>doCB("cbgm","gmcSend")</script>)J"),
+};
+#endif
+
+#ifdef WEBHOOKOUT
+static WiFiManagerParameter WHParams[] =
+{
+  WiFiManagerParameter("<br><hr><h3>Webhook</h3>"),
+  WiFiManagerParameter("whSend", "", "Y", 2, "type='hidden'"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbwh' onchange='getE("whSend").value = this.checked ? "Y":"N"'> <label for='cbwh'>Send</label><br>)J"),
+  WiFiManagerParameter("whURL", "Webhook URL", "", 255),
+  WiFiManagerParameter("whKey", "Webhook Key", "", 255),
+  WiFiManagerParameter("whTime", "Submit Time (s)", "60", 5, "required type='number' min='1' max='3600'"),
+  WiFiManagerParameter(R"J(<script>doCB("cbwh","whSend")</script>)J"),
 };
 #endif
 
@@ -135,6 +155,40 @@ ConfigManager::ConfigManager() : WiFiManager(){
   setHostname(hostName);
   setTitle(status.thingName);
   setCustomHeadElement(faviconHead);
+}
+ParsedTime ConfigManager::parseTime(const char* timeStr) {
+    ParsedTime pt;
+    pt.hour = -1;
+    pt.minute = -1;
+    pt.isValid = false;
+
+    if (timeStr == NULL || strlen(timeStr) != 5 || timeStr[2] != ':') {
+        return pt; // Invalid format
+    }
+
+    // Create a mutable copy of the string as strtok modifies it
+    char tempStr[6]; // HH:MM\0
+    strncpy(tempStr, timeStr, sizeof(tempStr) - 1);
+    tempStr[sizeof(tempStr) - 1] = '\0'; // Ensure null-termination
+
+    char* hourStr = strtok(tempStr, ":");
+    char* minStr = strtok(NULL, ":");
+
+    if (hourStr == NULL || minStr == NULL) {
+        return pt; // Parsing failed
+    }
+
+    int h = atoi(hourStr);
+    int m = atoi(minStr);
+
+    // Basic validation for hours and minutes
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+        pt.hour = h;
+        pt.minute = m;
+        pt.isValid = true;
+    }
+
+    return pt;
 }
 
 void ConfigManager::getOurParamOut(){
@@ -308,6 +362,10 @@ void ConfigManager::startWebPortal()
 #ifdef GMCOUT
   for (int i = 0; i < sizeof(GMCParams) / sizeof(WiFiManagerParameter); i++)
     WiFiManager::addParameter(&GMCParams[i]);
+#endif
+#ifdef WEBHOOKOUT
+  for (int i = 0; i < sizeof(WHParams) / sizeof(WiFiManagerParameter); i++)
+    WiFiManager::addParameter(&WHParams[i]);
 #endif
 
   ConfigManager::loadParams();
@@ -815,7 +873,7 @@ void ConfigManager::loadParams()
     if (configFile)
     {
       // Process the json data
-      DynamicJsonDocument jsonBuffer(2048);
+      DynamicJsonDocument jsonBuffer(3072);
       DeserializationError error = deserializeJson(jsonBuffer, configFile);
       if (!error)
       {
@@ -972,7 +1030,7 @@ void ConfigManager::saveParams()
   MQTT_Client& mqtt = MQTT_Client::getInstance();
 #ifdef MQTTAUTODISCOVER
   const char* _send = getParamValueFromID("hassSend");
-  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+  if ((_send == NULL) || (strcmp(_send, "N") == 0) && (status.mqtt_connected)) {
     mqtt.removeHASSConfig();
   }
 #endif

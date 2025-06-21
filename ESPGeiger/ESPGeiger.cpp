@@ -32,6 +32,7 @@
 #include "src/Radmon/Radmon.h"
 #include "src/Thingspeak/Thingspeak.h"
 #include "src/GMC/GMC.h"
+#include "src/Webhook/Webhook.h"
 #include "src/Logger/Logger.h"
 #include "src/SDCard/SDCard.h"
 #include "src/NeoPixel/NeoPixel.h"
@@ -89,6 +90,7 @@ Radmon radmon = Radmon();
 #ifdef THINGSPEAKOUT
 Thingspeak thingspeak = Thingspeak();
 #endif
+Webhook webhook = Webhook();
 
 SerialCommand serialcmd;     // The demo SerialCommand object
 
@@ -167,6 +169,7 @@ void sTickerCB()
 #ifdef THINGSPEAKOUT
   thingspeak.s_tick(stick_now);
 #endif
+  webhook.s_tick(stick_now);
 }
 
 void setup()

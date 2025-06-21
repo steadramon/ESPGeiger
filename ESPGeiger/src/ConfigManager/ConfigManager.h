@@ -99,6 +99,12 @@ const char S_MQTT_DISCOVERY_TOPIC[] PROGMEM = MQTT_DISCOVERY_TOPIC;
 //char mqttUser[MQTT_USER_LENGTH] = "";
 //char mqttPass[MQTT_PASS_LENGTH] = "";
 
+typedef struct {
+    int hour;
+    int minute;
+    bool isValid; // To indicate if parsing was successful
+} ParsedTime;
+
 class ConfigManager : public WiFiManager
 {
 public:
@@ -127,6 +133,7 @@ public:
   const char* getUserAgent() { return userAgent; };
   char* getUptimeString ();
   unsigned long getUptime ();
+  ParsedTime parseTime(const char* timeStr);
   char* GetChipModel(){
 #ifdef ESP8266
 #ifdef ESPGEIGER_HW
