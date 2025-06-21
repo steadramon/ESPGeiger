@@ -103,6 +103,7 @@ public:
   }
   void noBacklight() {/*no support*/}
   void backlight() {/*no support*/}
+  bool isScreenOnTime();
   size_t write(uint8_t c) {
     setColor(BLACK);
     fillRect(cx, cy, fontWidth, fontHeight);
@@ -151,53 +152,7 @@ public:
     setFont(ArialMT_Plain_16);
   }
 
-  void loop(unsigned long now) {
-    if (status.oled_page > 3) {
-      status.oled_page = 1;
-    }
-    if (now - _last_update >= 500) {
-#ifdef GEIGER_PUSHBUTTON
-      if ((status.enable_oled_timeout) && (_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
-        if (status.oled_on) {
-          displayOff();
-          status.oled_on = false;
-        }
-        return;
-      } else {
-        if (status.oled_on == false) {
-          displayOn();
-          status.oled_page=1;
-          status.oled_on = true;
-          status.oled_last_update = now-20000;
-        }
-      }
-#endif
-      if (status.oled_page == 1) {
-        if ((now - status.oled_last_update >= 10000) || (status.oled_last_update == 0)) {
-          status.oled_last_update = now;
-          page_one_clear();
-        }
-        if ((now % 1000 >= 500) || (status.oled_last_update == now)) {
-          page_one_values(now);
-        }
-        if ((now % 1000 < 500) || (status.oled_last_update == now)) {
-          page_one_graph();
-        }
-      } else if (status.oled_page == 2) {
-        if ((now - status.oled_last_update >= 1000) || (status.oled_last_update == 0)) {
-          status.oled_last_update = now;
-          page_two_full();
-        }
-      } else if (status.oled_page == 3) {
-        if ((now - status.oled_last_update >= 10000) || (status.oled_last_update == 0)) {
-          status.oled_last_update = now;
-          page_three_full();
-        }
-      }
-      display();
-      _last_update = now;
-    }
-  }
+  void loop(unsigned long now);
 
   void page_one_clear();
 
