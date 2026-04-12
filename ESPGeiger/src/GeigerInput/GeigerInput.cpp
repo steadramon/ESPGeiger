@@ -20,6 +20,17 @@
 #include "GeigerInput.h"
 #include "../Logger/Logger.h"
 
+volatile bool _eventFlipFlop = false;
+volatile unsigned long _last_blip = 0;
+volatile int eventCounter1 = 0;
+volatile int eventCounter2 = 0;
+
+volatile unsigned long _debounce = GEIGER_DEBOUNCE;
+
+#ifdef ESP32
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+#endif
+
 void GeigerInput::begin() {
 
 }
@@ -80,12 +91,21 @@ void GeigerInput::setCounter(int val) {
 }
 
 void GeigerInput::setCounter(int val, bool update = true) {
+#ifdef ESP32
+  portENTER_CRITICAL(&timerMux);
+#else
+  noInterrupts();
+#endif
   if (_eventFlipFlop == true)
     eventCounter1 = val;
   else
     eventCounter2 = val;
+#ifdef ESP32
+  portEXIT_CRITICAL(&timerMux);
+#else
+  interrupts();
+#endif
   if (!update)
     return;
-  unsigned long cycles = ESP.getCycleCount();
-  _last_blip = cycles;
+  _last_blip = micros();
 }

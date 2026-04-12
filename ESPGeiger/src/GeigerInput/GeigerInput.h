@@ -93,15 +93,15 @@
 #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
 #endif
 
-static bool _eventFlipFlop = false;
-static volatile unsigned long _last_blip = 0;
-static volatile int eventCounter1 = 0;
-static volatile int eventCounter2 = 0;
+extern volatile bool _eventFlipFlop;
+extern volatile unsigned long _last_blip;
+extern volatile int eventCounter1;
+extern volatile int eventCounter2;
 
-static unsigned long _debounce = GEIGER_DEBOUNCE;
+extern volatile unsigned long _debounce;
 
 #ifdef ESP32
-static portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+extern portMUX_TYPE timerMux;
 #endif
 
 class GeigerInput {
@@ -124,7 +124,7 @@ class GeigerInput {
       return _rx_pin;
     };
     int get_tx_pin() {
-      return _rx_pin;
+      return _tx_pin;
     };
     void blip_led();
     unsigned long last_blip();
