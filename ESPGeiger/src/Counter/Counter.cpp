@@ -124,7 +124,9 @@ float Counter::get_cpm15f() {
 }
 
 void Counter::set_ratio(float ratio) {
-  _ratio = ratio;
+  if (ratio > 0) {
+    _ratio = ratio;
+  }
 }
 
 void Counter::set_warning(int val) {
@@ -167,7 +169,7 @@ float Counter::get_totalusv() {
     return 0;
   }
   for (int index = 1; index <= total_clicks_rollover; index++) {
-    totalUsv += __LONG_MAX__ / (0.0166*uptime);
+    totalUsv += (float)__LONG_MAX__ / (0.0166*uptime);
   }
   totalUsv += (total_clicks / (0.0166*uptime));
   return (totalUsv/60.0)/_ratio;
