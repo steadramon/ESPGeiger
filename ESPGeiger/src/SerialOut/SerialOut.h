@@ -38,9 +38,9 @@ class SerialOut {
       void toggle_cps();
     private:
       int _loop_c = 0;
-      bool _show_usv;
-      bool _show_hv;
-      bool _show_cps;
+      bool _show_usv = false;
+      bool _show_hv = false;
+      bool _show_cps = false;
 };
 
 #endif
