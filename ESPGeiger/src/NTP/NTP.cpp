@@ -84,8 +84,9 @@ void NTP_Client::saveconfig() {
   }
   char jsonBuffer[256] = "";
 
-  sprintf_P (
+  snprintf_P (
     jsonBuffer,
+    sizeof(jsonBuffer),
     PSTR("{\"srv\":\"%s\",\"tz\":\"%s\"}"),
     _ntp_server,
     _ntp_tz
