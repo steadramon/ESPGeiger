@@ -31,8 +31,6 @@
 extern Status status;
 extern Counter gcounter;
 
-#define OLED_TEXT_BUFFER 1000
-#define OLED_TEXT_ROWS   5
 #ifndef OLED_WIDTH
 #define OLED_WIDTH       128
 #endif
@@ -112,18 +110,20 @@ public:
     //if(c<NUM_CUSTOM_ICONS && custom_chars[c]!=NULL) {
     //	drawXbm(cx, cy, fontWidth, fontHeight, (const byte*) custom_chars[c]);
     //} else {
-    drawString(cx, cy, String((char)c));
+    char cs[2] = {(char)c, '\0'};
+    drawString(cx, cy, cs);
     //}
     cx += fontWidth;
     display();	// todo: not very efficient
     return 1;
   }
   size_t write(const char* s) {
+    if (s == NULL) return 0;
     uint8_t nc = strlen(s);
     setColor(BLACK);
     fillRect(cx, cy, fontWidth*nc, fontHeight);
     setColor(WHITE);
-    drawString(cx, cy, String(s));
+    drawString(cx, cy, s);
     cx += fontWidth*nc;
     display();	// todo: not very efficient
     return nc;
@@ -134,7 +134,7 @@ public:
     setFont(DialogInput_plain_12);
     drawString(0, 10, PSTR("Setup - Connect to"));
     drawString(0, 24, PSTR("WiFi -"));
-    drawString(0, 38, String(s));
+    drawString(0, 38, s);
     display();
   }
 
@@ -180,9 +180,11 @@ public:
         x_start = (2 * (gcounter.cpm_history.capacity - histSize));
       }
 
+      char graphBuf[8];
       if (maxValue == 0) {
         setFont(Open_Sans_Regular_Plain_10);
-        drawString(93,55, String(minValue));
+        snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
+        drawString(93,55, graphBuf);
         return;
       }
 
@@ -191,8 +193,10 @@ public:
         drawRect(x_start + i * 2, location, 2, (63 - location));
       }
       setFont(Open_Sans_Regular_Plain_10);
-      drawString(93,55, String(minValue));
-      drawString(93,35, String(maxValue));
+      snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
+      drawString(93,55, graphBuf);
+      snprintf(graphBuf, sizeof(graphBuf), "%d", maxValue);
+      drawString(93,35, graphBuf);
     }
   }
 
@@ -201,9 +205,12 @@ public:
     setColor(BLACK);
     fillRect(45, 0, 72, 32);
     setColor(WHITE);
-    drawString(45,0, String(gcounter.get_cpm()).c_str() );
+    char oledBuf[16];
+    snprintf(oledBuf, sizeof(oledBuf), "%d", gcounter.get_cpm());
+    drawString(45,0, oledBuf);
     setFont(DialogInput_plain_12);
-    drawString(45,20, String(gcounter.get_usv(),2).c_str() );
+    snprintf(oledBuf, sizeof(oledBuf), "%.2f", gcounter.get_usv());
+    drawString(45,20, oledBuf);
     if (gcounter.cpm_history.capacity != gcounter.cpm_history.size()) {
       drawString(98,2, PSTR("W") );
     }
@@ -217,11 +224,13 @@ public:
   void page_three_full() {
     clear();
     setFont(ArialMT_Plain_10);
-    char versionString[32] = "";
-    sprintf_P (versionString, PSTR("%S / %S"), status.version, status.git_version);
+    static char versionString[32] = "";
+    if (versionString[0] == '\0') {
+      snprintf_P(versionString, sizeof(versionString), PSTR("%S / %S"), status.version, status.git_version);
+    }
     drawString(0, 2, GEIGER_MODEL);
     drawString(0, 17, versionString);
-    drawString(0, 32, String(__DATE__ " " __TIME__));
+    drawString(0, 32, PSTR(__DATE__ " " __TIME__));
     drawString(0, 47, PSTR("@ steadramon"));
   }
 

@@ -93,38 +93,47 @@ void SSD1306Display::loop(unsigned long now) {
   }
 
   bool SSD1306Display::isScreenOnTime() {
-    ConfigManager &configManager = ConfigManager::getInstance();
-    // 1. Parse the input time strings
-    const char* screen_on = configManager.getParamValueFromID("oledOn");
-    const char* screen_off = configManager.getParamValueFromID("oledOff");
-    ParsedTime on_time = configManager.parseTime(screen_on);
-    ParsedTime off_time = configManager.parseTime(screen_off);
+    static int cached_on_mins = -1;
+    static int cached_off_mins = -1;
+    static unsigned long last_config_check = 0;
 
-    if (!on_time.isValid || !off_time.isValid) {
+    unsigned long now = millis();
+    // Re-read config every 60 seconds instead of every 500ms
+    if (cached_on_mins == -1 || now - last_config_check > 60000) {
+      last_config_check = now;
+      ConfigManager &configManager = ConfigManager::getInstance();
+      const char* screen_on = configManager.getParamValueFromID("oledOn");
+      const char* screen_off = configManager.getParamValueFromID("oledOff");
+      ParsedTime on_time = configManager.parseTime(screen_on);
+      ParsedTime off_time = configManager.parseTime(screen_off);
+
+      if (!on_time.isValid || !off_time.isValid) {
+        cached_on_mins = -2;
         return true;
+      }
+      cached_on_mins = on_time.hour * 60 + on_time.minute;
+      cached_off_mins = off_time.hour * 60 + off_time.minute;
     }
-    time_t currentTime = time (NULL);
 
-    // 2. Get current time components
+    if (cached_on_mins == -2) {
+      return true;
+    }
+
+    time_t currentTime = time(NULL);
     struct tm *timeinfo = localtime(&currentTime);
 
     if (timeinfo == NULL) {
         return true;
     }
 
-    int current_hour = timeinfo->tm_hour;
-    int current_min = timeinfo->tm_min;
+    int current_time_in_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
 
-    int current_time_in_mins = current_hour * 60 + current_min;
-    int on_time_in_mins = on_time.hour * 60 + on_time.minute;
-    int off_time_in_mins = off_time.hour * 60 + off_time.minute;
-
-    if (on_time_in_mins < off_time_in_mins) {
-        return (current_time_in_mins >= on_time_in_mins &&
-                current_time_in_mins < off_time_in_mins);
+    if (cached_on_mins < cached_off_mins) {
+        return (current_time_in_mins >= cached_on_mins &&
+                current_time_in_mins < cached_off_mins);
     } else {
-        return (current_time_in_mins >= on_time_in_mins ||
-                current_time_in_mins < off_time_in_mins);
+        return (current_time_in_mins >= cached_on_mins ||
+                current_time_in_mins < cached_off_mins);
     }
   }
 
@@ -132,13 +141,15 @@ void SSD1306Display::page_two_full() {
   ConfigManager &configManager = ConfigManager::getInstance();
   clear();
   setFont(ArialMT_Plain_10);
-  drawString(0, 2, String(configManager.getHostName()));
+  drawString(0, 2, configManager.getHostName());
   drawString(0, 17, PSTR("IP:"));
   drawString(16, 17, WiFi.localIP().toString());
   int uptime_y = 32;
 #ifdef ESPGEIGER_HW
   drawString(0, uptime_y, PSTR("HV:"));
-  drawString(20, uptime_y, String(status.hvReading.get()));
+  char hvBuf[12];
+  snprintf(hvBuf, sizeof(hvBuf), "%.2f", status.hvReading.get());
+  drawString(20, uptime_y, hvBuf);
   uptime_y = 47;
 #endif
   drawString(0, uptime_y, configManager.getUptimeString());
