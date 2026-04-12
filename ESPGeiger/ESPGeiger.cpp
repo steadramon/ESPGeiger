@@ -157,7 +157,32 @@ void sTickerCB()
     return;
   }
   if (status.wifi_status != WL_CONNECTED) {
+    if (status.wifi_was_connected) {
+      // Just lost connection
+      status.wifi_was_connected = false;
+      status.wifi_lost_at = stick_now;
+      Log::console(PSTR("WiFi: Connection lost"));
+    }
+    unsigned long down_seconds = (stick_now - status.wifi_lost_at) / 1000;
+    // Try reconnect every 30 seconds
+    if (down_seconds > 0 && down_seconds % 30 == 0) {
+      Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
+      WiFi.reconnect();
+    }
+    // Reboot after 5 minutes of no WiFi
+    if (down_seconds > 300) {
+      Log::console(PSTR("WiFi: Down for 5 minutes, rebooting"));
+      delay(100);
+      ESP.restart();
+    }
     return;
+  }
+  if (!status.wifi_was_connected) {
+    status.wifi_was_connected = true;
+    if (status.wifi_lost_at > 0) {
+      unsigned long down_seconds = (stick_now - status.wifi_lost_at) / 1000;
+      Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
+    }
   }
 #ifdef MQTTOUT
   mqtt.loop(stick_now);
@@ -242,6 +267,7 @@ void setup()
 
     delay(100);
     status.wifi_status = WiFi.status();
+    status.wifi_was_connected = (status.wifi_status == WL_CONNECTED);
     cManager.startWebPortal();
   }
 #ifdef GEIGER_SDCARD
