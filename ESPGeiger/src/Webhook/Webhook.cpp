@@ -26,15 +26,17 @@ Webhook::Webhook() {
 
 void Webhook::s_tick(unsigned long stick_now)
 {
-  ConfigManager &configManager = ConfigManager::getInstance();
-  pingInterval = atoi(configManager.getParamValueFromID("whTime"))*1000;
+  if (lastPing == 0) {
+    ConfigManager &configManager = ConfigManager::getInstance();
+    const char* _whTime = configManager.getParamValueFromID("whTime");
+    if (_whTime != NULL) {
+      pingInterval = atoi(_whTime) * 1000;
+    }
+    lastPing = stick_now + random(30) * 1000;
+    return;
+  }
   if (stick_now - lastPing >= pingInterval)
   {
-    if (lastPing == 0) {
-      lastPing = random(30) * 1000;
-      return;
-    }
-
     lastPing = stick_now - (stick_now % 1000);
     Webhook::postMeasurement();
   }
@@ -47,7 +49,7 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     if (request->responseHTTPcode() == 200)
     {
       String response = request->responseText();
-      if (response.indexOf("OK") == 1) {
+      if (response.indexOf("OK") != -1) {
         Log::console(PSTR("Webhook: Upload OK"));
       } else {
         Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100));
@@ -99,20 +101,13 @@ void Webhook::postMeasurement() {
   doc["id"] = configManager.getChipID();
   doc["key"] = key;
   doc["ut"] = configManager.getUptime();
-  char fbuff[10];
-  sprintf(fbuff, "%.2f", gcounter.get_cps());
-  doc["cps"] = atof(fbuff);
-  sprintf(fbuff, "%.2f", gcounter.get_cpmf());
-  doc["cpm"] = atof(fbuff);
-  sprintf(fbuff, "%.2f", gcounter.get_cpm5f());
-  doc["cpm5"] = atof(fbuff);
-  sprintf(fbuff, "%.2f", gcounter.get_cpm15f());
-  doc["cpm15"] = atof(fbuff);
-  sprintf(fbuff, "%.2f", gcounter.get_usv());
-  doc["usv"] = atof(fbuff);
+  doc["cps"] = serialized(String(gcounter.get_cps(), 2));
+  doc["cpm"] = serialized(String(gcounter.get_cpmf(), 2));
+  doc["cpm5"] = serialized(String(gcounter.get_cpm5f(), 2));
+  doc["cpm15"] = serialized(String(gcounter.get_cpm15f(), 2));
+  doc["usv"] = serialized(String(gcounter.get_usv(), 2));
 #ifdef ESPGEIGER_HW
-  sprintf(fbuff, "%.2f", status.hvReading.get());
-  doc["hv"] = atof(fbuff);
+  doc["hv"] = serialized(String(status.hvReading.get(), 2));
 #endif
   doc["mem"] = ESP.getFreeHeap();
   doc["rssi"] = WiFi.RSSI();
