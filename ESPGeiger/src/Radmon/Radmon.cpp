@@ -50,10 +50,10 @@ void Radmon::s_tick(unsigned long stick_now)
       rtimer = RADMON_INTERVAL;
     }
     setInterval(rtimer);
-    lastPing = stick_now + random(30) * 1000;
+    lastPing = stick_now + random(pingInterval / 1000) * 1000;
     return;
   }
-  if (stick_now - lastPing >= pingInterval)
+  if (stick_now > lastPing && stick_now - lastPing >= (unsigned long)pingInterval)
   {
     lastPing = stick_now - (stick_now % 1000);
     Radmon::postMeasurement();
