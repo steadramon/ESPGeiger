@@ -91,21 +91,23 @@ void GeigerInput::setCounter(int val) {
 }
 
 void GeigerInput::setCounter(int val, bool update = true) {
+  if (update) {
 #ifdef ESP32
-  portENTER_CRITICAL(&timerMux);
+    portENTER_CRITICAL(&timerMux);
 #else
-  noInterrupts();
+    noInterrupts();
 #endif
+  }
   if (_eventFlipFlop == true)
     eventCounter1 = val;
   else
     eventCounter2 = val;
+  if (update) {
 #ifdef ESP32
-  portEXIT_CRITICAL(&timerMux);
+    portEXIT_CRITICAL(&timerMux);
 #else
-  interrupts();
+    interrupts();
 #endif
-  if (!update)
-    return;
-  _last_blip = micros();
+    _last_blip = micros();
+  }
 }
