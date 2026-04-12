@@ -59,7 +59,7 @@ struct Status {
   long start = 0;
   unsigned long start_time = 0;
   bool warmup = true;
-  char* geiger_model = "";
+  const char* geiger_model = "";
   unsigned long last_send = 0;
   unsigned long last_blip = 0;
 #ifdef MQTTOUT
@@ -88,9 +88,11 @@ struct Status {
 #ifdef ESPGEIGER_HW
   Smoothed <float> hvReading;
 #endif
-  int wifi_status;
-  int serialOut;
+  int wifi_status = 0;
+  int serialOut = 0;
   bool wifi_disabled = false;
+  unsigned long wifi_lost_at = 0;
+  bool wifi_was_connected = false;
 };
 
 #endif
