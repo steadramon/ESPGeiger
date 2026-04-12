@@ -54,7 +54,7 @@ void ESPGeigerHW::loop() {
   }
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   float volts = ((0.0009765625032 * sensorValue)*_hw_vd_ratio)+_hw_vd_offset;
-  status.hvReading.add((int)volts);
+  status.hvReading.add(volts);
 }
 
 void ESPGeigerHW::fiveloop() {
@@ -86,8 +86,9 @@ void ESPGeigerHW::saveconfig() {
   char offset[16];
   itoa(_hw_vd_offset, offset, 10);
 
-  sprintf_P (
+  snprintf_P (
     jsonBuffer,
+    sizeof(jsonBuffer),
     PSTR("{\"freq\":\"%s\",\"duty\":\"%s\",\"ratio\":\"%s\",\"offset\":\"%s\"}"),
     freq,
     duty,
