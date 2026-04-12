@@ -39,6 +39,7 @@ void MQTT_Client::disconnect()
   mqttEnabled = true;
   reconnectAttempts = 0;
   lastConnectionAtempt = 0;
+  _rootTopicCached = false;
 }
 
 void MQTT_Client::onMqttConnect(bool sessionPresent) {
@@ -46,8 +47,10 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   status.mqtt_connected = true;
   reconnectAttempts = 0;
   mqttClient->publish(this->last_will_.topic.c_str(), 1, false, lwtOnline);
+#ifdef MQTTAUTODISCOVER
   this->setupHassAuto();
   this->setupHassCB();
+#endif
 }
 
 void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -100,11 +103,6 @@ void MQTT_Client::loop(unsigned long now)
 
   if (!status.mqtt_connected) {
     onMqttConnect(true);
-  }
-
-  bool willPublish = (now - lastStatus > statusInterval) || (now - lastPing > pingInterval);
-  if (willPublish) {
-    buildTopicCache();
   }
 
   if (now - lastStatus > statusInterval)
@@ -272,33 +270,16 @@ void MQTT_Client::reconnect()
   mqttClient->connect();
 }
 
-void MQTT_Client::buildTopicCache()
-{
-  ConfigManager &configManager = ConfigManager::getInstance();
-  String rootTopic = configManager.getParamValueFromID("mqttTopic");
-  rootTopic.replace(PSTR("{id}"), configManager.getChipID());
-
-  _cachedTeleTopic = teleTopic;
-  _cachedTeleTopic.replace(PSTR("%st%"), rootTopic);
-
-  _cachedStatTopic = statTopic;
-  _cachedStatTopic.replace(PSTR("%st%"), rootTopic);
-}
-
 String MQTT_Client::buildTopic(const char *baseTopic, const char *cmd)
 {
-  String topic;
-  if (baseTopic == teleTopic && _cachedTeleTopic.length() > 0) {
-    topic = _cachedTeleTopic;
-  } else if (baseTopic == statTopic && _cachedStatTopic.length() > 0) {
-    topic = _cachedStatTopic;
-  } else {
+  if (!_rootTopicCached) {
     ConfigManager &configManager = ConfigManager::getInstance();
-    topic = baseTopic;
-    String rootTopic = configManager.getParamValueFromID("mqttTopic");
-    rootTopic.replace(PSTR("{id}"), configManager.getChipID());
-    topic.replace(PSTR("%st%"), rootTopic);
+    _cachedRootTopic = configManager.getParamValueFromID("mqttTopic");
+    _cachedRootTopic.replace(PSTR("{id}"), configManager.getChipID());
+    _rootTopicCached = true;
   }
+  String topic = baseTopic;
+  topic.replace(PSTR("%st%"), _cachedRootTopic);
   topic.replace(PSTR("%cm%"), cmd);
 
   return topic;
@@ -470,8 +451,9 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
     }
   }
 
-  char buffer[MQTT_JSON_BUFFER_SIZE];
+  static char buffer[MQTT_JSON_BUFFER_SIZE];
   serializeJson(json, buffer);
+  json.clear();
 
   String path = _discovery_topic;
   path.concat(PSTR("/"));

@@ -79,9 +79,8 @@ private:
   MQTT_Client();
   static ConfigManager _configManager;
   String buildTopic(const char * baseTopic, const char * cmd);
-  void buildTopicCache();
-  String _cachedTeleTopic;
-  String _cachedStatTopic;
+  String _cachedRootTopic;
+  bool _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
   void setupHassCB();
