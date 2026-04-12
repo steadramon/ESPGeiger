@@ -17,6 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "ConfigManager.h"
+#include "logos.h"
+#include "html.h"
 #include "../Logger/Logger.h"
 #include "../Mqtt/MQTT_Client.h"
 #include "ArduinoJson.h"
@@ -24,7 +26,10 @@
 #include <LittleFS.h>
 #include "../NTP/timezones.h"
 
-static WiFiManagerParameter ESPGeigerParams[] = 
+#define _STR(x) #x
+#define STR(x) _STR(x)
+
+static WiFiManagerParameter ESPGeigerParams[] =
 {
   // The broker parameters
   WiFiManagerParameter("<h1>ESPGeiger Config</h1>"),
@@ -33,11 +38,11 @@ static WiFiManagerParameter ESPGeigerParams[] =
   WiFiManagerParameter("geigerWarn", "Warning CPM", "50", 4, "pattern='\\d{1,4}'"),
   WiFiManagerParameter("geigerAlert", "Alert CPM", "100", 4, "pattern='\\d{1,4}'"),
 #ifndef RXPIN_BLOCKED
-  WiFiManagerParameter("geigerRX", "RX Pin", String(GEIGER_RXPIN).c_str(), 2),
+  WiFiManagerParameter("geigerRX", "RX Pin", STR(GEIGER_RXPIN), 2),
 #endif
 #if GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
-  WiFiManagerParameter("geigerTX", "TX Pin", String(GEIGER_TXPIN).c_str(), 2),
+  WiFiManagerParameter("geigerTX", "TX Pin", STR(GEIGER_TXPIN), 2),
 #endif
 #endif
 #if defined(SSD1306_DISPLAY) || defined(GEIGER_NEOPIXEL)
@@ -147,10 +152,12 @@ ConfigManager::ConfigManager() : WiFiManager(){
    tchipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
   }
 #endif
-  strcat(chipId, String(tchipId, HEX).c_str());
+  String hexId = String(tchipId & 0xFFFFFF, HEX);
+  strncpy(chipId, hexId.c_str(), sizeof(chipId) - 1);
+  chipId[sizeof(chipId) - 1] = '\0';
 
-  sprintf_P (hostName, PSTR("%S-%S"), status.thingName, chipId);
-  sprintf_P (userAgent, PSTR("%S/%S (%S; %S; %S; %S)"), status.thingName, status.version, status.git_version, status.geiger_model, GetChipModel(), chipId);
+  snprintf_P (hostName, sizeof(hostName), PSTR("%S-%S"), status.thingName, chipId);
+  snprintf_P (userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"), status.thingName, status.version, status.git_version, status.geiger_model, GetChipModel(), chipId);
 
   setHostname(hostName);
   setTitle(status.thingName);
@@ -369,16 +376,23 @@ void ConfigManager::startWebPortal()
 #endif
 
   ConfigManager::loadParams();
+  const char* cfgvar;
   int cfgint;
 
 #ifndef RXPIN_BLOCKED
-  cfgint = atoi(ConfigManager::getParamValueFromID("geigerRX"));
-  gcounter.set_rx_pin(cfgint);
+  cfgvar = ConfigManager::getParamValueFromID("geigerRX");
+  if (cfgvar != NULL) {
+    cfgint = atoi(cfgvar);
+    gcounter.set_rx_pin(cfgint);
+  }
 #endif
 #if GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
-  cfgint = atoi(ConfigManager::getParamValueFromID("geigerTX"));
-  gcounter.set_tx_pin(cfgint);
+  cfgvar = ConfigManager::getParamValueFromID("geigerTX");
+  if (cfgvar != NULL) {
+    cfgint = atoi(cfgvar);
+    gcounter.set_tx_pin(cfgint);
+  }
 #endif
 #endif
   ConfigManager::setExternals();
@@ -404,7 +418,7 @@ void ConfigManager::setExternals() {
   int cfgint = atoi(cfgvar);
   gcounter.set_warning(cfgint);
 
-  cfgvar = ConfigManager::getParamValueFromID("geigerWarn");
+  cfgvar = ConfigManager::getParamValueFromID("geigerAlert");
   if (cfgvar == NULL) {
     cfgvar = "100";
   }
@@ -495,17 +509,19 @@ void ConfigManager::handleJsonReturn()
 {
   char jsonBuffer[256] = "";
 
-  int total = sizeof(jsonBuffer);
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
-  sprintf_P (
+  char c[16], s[16], c5[16], c15[16], cs[16];
+  snprintf(c, sizeof(c), "%.2f", gcounter.get_cpmf());
+  snprintf(s, sizeof(s), "%.2f", gcounter.get_usv());
+  snprintf(c5, sizeof(c5), "%.2f", gcounter.get_cpm5f());
+  snprintf(c15, sizeof(c15), "%.2f", gcounter.get_cpm15f());
+  snprintf(cs, sizeof(cs), "%.2f", gcounter.get_cps());
+  snprintf_P (
     jsonBuffer,
+    sizeof(jsonBuffer),
     PSTR("{\"u\":\"%s\",\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u}"),
     ConfigManager::getUptimeString(),
-    String(gcounter.get_cpmf()).c_str(),
-    String(gcounter.get_usv()).c_str(),
-    String(gcounter.get_cpm5f()).c_str(),
-    String(gcounter.get_cpm15f()).c_str(),
-    String(gcounter.get_cps()).c_str(),
+    c, s, c5, c15, cs,
     ratioChar,
     gcounter.total_clicks
   );
@@ -515,10 +531,11 @@ void ConfigManager::handleJsonReturn()
 
 void ConfigManager::handleGeigerLog() {
   handleRequest();
-  char jsonBuffer[64] = "";
+  char jsonBuffer[128] = "";
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
-  sprintf_P (
+  snprintf_P (
     jsonBuffer,
+    sizeof(jsonBuffer),
     PSTR("%.2lf, %.2lf, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan"),
     gcounter.get_cpmf(),
     gcounter.get_cps()
@@ -597,8 +614,8 @@ void ConfigManager::handleStatusPage()
   server->sendContent(FPSTR(STATUS_PAGE_BODY));
   server->sendContent(FPSTR(HTTP_BACKBTN));
   page = FPSTR(STATUS_PAGE_FOOT);
-  page.replace(FPSTR(T_1), String(status.version));
-  page.replace(FPSTR(T_2), String(status.git_version));
+  page.replace(FPSTR(T_1), status.version);
+  page.replace(FPSTR(T_2), status.git_version);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
@@ -673,10 +690,12 @@ void ConfigManager::handleNTPSet()
   handleRequest();
   char stmp[64];
   String s = server->arg("s");
-  strcpy(stmp, s.c_str());
+  strncpy(stmp, s.c_str(), sizeof(stmp) - 1);
+  stmp[sizeof(stmp) - 1] = '\0';
   ntpclient.set_server(stmp);
   s = server->arg("t");
-  strcpy(stmp, s.c_str());
+  strncpy(stmp, s.c_str(), sizeof(stmp) - 1);
+  stmp[sizeof(stmp) - 1] = '\0';
   ntpclient.set_tz(stmp);
   ntpclient.saveconfig();
   ntpclient.setup();
@@ -771,8 +790,9 @@ void ConfigManager::handleHVJsonReturn()
   int duty = hardware.get_duty();
   int ratio = hardware.get_vd_ratio();
 
-  sprintf_P (
+  snprintf_P (
     jsonBuffer,
+    sizeof(jsonBuffer),
     PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d,\"ratio\":%d}"),
     volts,
     freq,
@@ -918,7 +938,8 @@ void ConfigManager::handleRefreshConsole()
 
   char stmp[8];
   String s = server->arg("c1");
-  strcpy(stmp, s.c_str());
+  strncpy(stmp, s.c_str(), sizeof(stmp) - 1);
+  stmp[sizeof(stmp) - 1] = '\0';
   if (strlen(stmp))
   {
     counter = atoi(stmp);
@@ -929,7 +950,9 @@ void ConfigManager::handleRefreshConsole()
   server->sendHeader(F("Expires"), F("-1"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, F("text/plain"), "");
-  server->sendContent(String((uint8_t)Log::getLogIdx()) + "\n");
+  char idxBuf[8];
+  snprintf(idxBuf, sizeof(idxBuf), "%u\n", (uint8_t)Log::getLogIdx());
+  server->sendContent(idxBuf);
   if (counter != Log::getLogIdx())
   {
     if (!counter)
@@ -943,10 +966,11 @@ void ConfigManager::handleRefreshConsole()
       Log::getLog(counter, &tmp, &len);
       if (len)
       {
-        char stemp[len + 1];
-        memcpy(stemp, tmp, len);
-        stemp[len - 1] = '\n';
-        stemp[len] = '\0';
+        char stemp[256];
+        size_t copyLen = (len < sizeof(stemp) - 1) ? len : sizeof(stemp) - 1;
+        memcpy(stemp, tmp, copyLen);
+        stemp[copyLen - 1] = '\n';
+        stemp[copyLen] = '\0';
         server->sendContent(stemp);
       }
       counter++;
@@ -993,7 +1017,7 @@ void ConfigManager::saveParams()
     }
 
     char tmp[256];
-    sprintf(tmp,"\"%s\":\"%s\"",customParams[i]->getID(),customParams[i]->getValue());
+    snprintf(tmp, sizeof(tmp), "\"%s\":\"%s\"",customParams[i]->getID(),customParams[i]->getValue());
     configFile.print(tmp);
     //Log::console(PSTR("Config: writing %s"), tmp);
     printComma=true;
@@ -1006,18 +1030,24 @@ void ConfigManager::saveParams()
   Log::console(PSTR("Config: Saved"));
   bool restart_required = false;
 #ifndef RXPIN_BLOCKED
-  int rx_pin = atoi(ConfigManager::getParamValueFromID("geigerRX"));
-  if (rx_pin != gcounter.get_rx_pin()) {
-    Log::console(PSTR("Config: Geiger RX Pin Changed"));
-    restart_required = true;
+  const char* _rx = ConfigManager::getParamValueFromID("geigerRX");
+  if (_rx != NULL) {
+    int rx_pin = atoi(_rx);
+    if (rx_pin != gcounter.get_rx_pin()) {
+      Log::console(PSTR("Config: Geiger RX Pin Changed"));
+      restart_required = true;
+    }
   }
 #endif
 #if GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
-  int tx_pin = atoi(ConfigManager::getParamValueFromID("geigerTX"));
-  if (tx_pin != gcounter.get_tx_pin()) {
-    Log::console(PSTR("Config: Geiger TX Pin"));
-    restart_required = true;
+  const char* _tx = ConfigManager::getParamValueFromID("geigerTX");
+  if (_tx != NULL) {
+    int tx_pin = atoi(_tx);
+    if (tx_pin != gcounter.get_tx_pin()) {
+      Log::console(PSTR("Config: Geiger TX Pin"));
+      restart_required = true;
+    }
   }
 #endif
 #endif
@@ -1030,7 +1060,7 @@ void ConfigManager::saveParams()
   MQTT_Client& mqtt = MQTT_Client::getInstance();
 #ifdef MQTTAUTODISCOVER
   const char* _send = getParamValueFromID("hassSend");
-  if ((_send == NULL) || (strcmp(_send, "N") == 0) && (status.mqtt_connected)) {
+  if (((_send == NULL) || (strcmp(_send, "N") == 0)) && (status.mqtt_connected)) {
     mqtt.removeHASSConfig();
   }
 #endif
