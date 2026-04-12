@@ -915,6 +915,7 @@ void ConfigManager::loadParams()
       }
       else
         Log::console(PSTR("Config: failed to load json params"));
+      jsonBuffer.clear();
       // Close file
       configFile.close();
     }

@@ -148,6 +148,7 @@ void MQTT_Client::loop(unsigned long now)
     doc["free_mem"] = ESP.getFreeHeap();
 #endif
     serializeJson(doc, buffer);
+    doc.clear();
 
     mqttClient->publish(buildTopic(teleTopic, topicStatus).c_str(), 1, false, buffer);
     Log::console(PSTR("MQTT: Published"));
