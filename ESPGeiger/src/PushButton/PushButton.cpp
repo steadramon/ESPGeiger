@@ -52,9 +52,9 @@ void PushButton::loop(unsigned long now)
 #if defined(SSD1306_DISPLAY)
     status.oled_timeout = now;
     if (status.oled_on) {
-      status.oled_page++;
-      status.oled_last_update = 0;
+      status.oled_page = (status.oled_page % 3) + 1;
     }
+    status.oled_last_update = 0;
 #endif
     gcounter.reset_alarm();
     status.button_pushed = false;
