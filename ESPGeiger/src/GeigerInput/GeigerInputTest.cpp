@@ -31,11 +31,11 @@ double GeigerInputTest::generatePoissonRand(double lambda) {
   // https://tomroelandts.com/articles/simulating-a-geiger-counter
   double u;
 #ifdef ESP8266
-  u = (1.0 * RANDOM_REG32) / 0xFFFFFFFF;
+  u = (1.0 * RANDOM_REG32) / (0xFFFFFFFF + 1.0);
 #else
-  u = (1.0 * esp_random()) / 0xFFFFFFFF;
+  u = (1.0 * esp_random()) / (0xFFFFFFFF + 1.0);
 #endif
-  return -log(1 - u) / lambda;
+  return -log(1.0 - u) / lambda;
 }
 
 double GeigerInputTest::calcDelay() {
