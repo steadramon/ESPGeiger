@@ -21,6 +21,8 @@
 #include "SDCard.h"
 #include "../Logger/Logger.h"
 
+SdFat32 sd;
+
 static void dateTimeCB(uint16_t *dosYear, uint16_t *dosTime) {
     time_t now;
     now = time(nullptr);
@@ -158,7 +160,7 @@ void SDCard::s_tick(unsigned long stick_now)
 void SDCard::deleteOldest(){ 
   File32 dirFile;
   File32 file;
-  char oldestFile[13];
+  char oldestFile[13] = "";
 
   uint32_t oldestModified = 0xFFFFFFFFul;
 

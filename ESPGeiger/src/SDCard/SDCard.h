@@ -30,7 +30,7 @@
 
 extern Status status;
 extern Counter gcounter;
-static SdFat32 sd;
+extern SdFat32 sd;
 
 class SDCard {
   public:
