@@ -23,45 +23,42 @@ char Log::logIdx = 1;
 Log::LoggingLevels Log::logLevel = LOG_LEVEL;
 char Log::log[MAX_LOG_SIZE] = "";
 bool Log::serialLog = true;
+static char logFmtBuffer[256];
 
 void Log::console(const char* formatP, ...)
 {
   va_list arg;
-  char buffer[256];
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(logFmtBuffer, sizeof(logFmtBuffer), formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_NONE, buffer);
+  AddLog(LOG_LEVEL_NONE, logFmtBuffer);
 }
 
 void Log::error(const char* formatP, ...)
 {
   va_list arg;
-  char buffer[256];
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(logFmtBuffer, sizeof(logFmtBuffer), formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_ERROR, buffer);
+  AddLog(LOG_LEVEL_ERROR, logFmtBuffer);
 }
 
 void Log::info(const char* formatP, ...)
 {
   va_list arg;
-  char buffer[256];
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(logFmtBuffer, sizeof(logFmtBuffer), formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_INFO, buffer);
+  AddLog(LOG_LEVEL_INFO, logFmtBuffer);
 }
 
 void Log::debug(const char* formatP, ...)
 {
   va_list arg;
-  char buffer[256];
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(logFmtBuffer, sizeof(logFmtBuffer), formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_DEBUG, buffer);
+  AddLog(LOG_LEVEL_DEBUG, logFmtBuffer);
 }
 
 // Based on arendst/Tasmota addLog (support.ino)
@@ -81,11 +78,12 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData)
       timeStr[0] = '\0';
   }
   if (serialLog) {
-      Serial.printf (PSTR ("%s%s\n"), timeStr, logData);
+      Serial.print(timeStr);
+      Serial.println(logData);
   }
 #else
   if (serialLog) {
-      Serial.printf (PSTR ("%s\n"), logData);
+      Serial.println(logData);
   }
 #endif
 
@@ -102,7 +100,8 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData)
     memmove(log, it, MAX_LOG_SIZE -(it-log));  // Move buffer forward to remove oldest log line
   }
   
-  snprintf_P(log, sizeof(log), PSTR("%s%c%s%s\1"), log, logIdx++, timeStr, logData);
+  size_t logLen = strlen(log);
+  snprintf_P(log + logLen, sizeof(log) - logLen, PSTR("%c%s%s\1"), logIdx++, timeStr, logData);
 
   logIdx &= 0xFF;
   if (!logIdx) 
