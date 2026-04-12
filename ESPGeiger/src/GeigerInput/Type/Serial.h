@@ -56,8 +56,8 @@ class GeigerSerial : public GeigerInput
     void handleSerial(char* input);
     float partial_clicks = 0;
     int serial_value = 0;
-    unsigned long last_serial;
-    int avg_diff;
+    unsigned long last_serial = 0;
+    int avg_diff = 0;
     uint8_t _loop_c = 0;
 };
 #endif

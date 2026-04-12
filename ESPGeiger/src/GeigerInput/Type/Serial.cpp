@@ -89,7 +89,8 @@ void GeigerSerial::secondTicker() {
 }
 
 void GeigerSerial::handleSerial(char* input) {
-  for (int x = 0; x < strlen(input); x++) {
+  size_t inputLen = strlen(input);
+  for (size_t x = 0; x < inputLen; x++) {
     if (!isPrintable(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
       Log::debug(PSTR("None printable character on serial"));
       return;
@@ -104,7 +105,7 @@ void GeigerSerial::handleSerial(char* input) {
   int n = sscanf(input, "CPM: %d", &_scpm);
   if (n == 1) {
 #else
-  for (int x = 0; x < strlen(input); x++) {
+  for (size_t x = 0; x < inputLen; x++) {
     if (!isDigit(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
       return;
     }
