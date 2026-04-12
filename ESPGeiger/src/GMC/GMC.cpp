@@ -26,12 +26,12 @@ GMC::GMC() {
 
 void GMC::s_tick(unsigned long stick_now)
 {
+  if (lastPing == 0) {
+    lastPing = stick_now + random(30) * 1000;
+    return;
+  }
   if (stick_now - lastPing >= pingInterval)
   {
-    if (lastPing == 0) {
-      lastPing = random(30) * 1000;
-      return;
-    }
     lastPing = stick_now - (stick_now % 1000);
     GMC::postMeasurement();
   }
@@ -93,13 +93,11 @@ void GMC::postMeasurement() {
   float avgcpm5 = gcounter.get_cpm5f();
   float usv =  gcounter.get_usv5();
   char url[256];
-  sprintf(url, GMC_URI, _api_id, _api_gc_id, avgcpm, avgcpm5, usv);
+  snprintf(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, avgcpm5, usv);
 
-  static bool requestOpenResult;
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {
-    requestOpenResult = request.open("GET", url);
-    if (requestOpenResult)
+    if (request.open("GET", url))
     {
       status.led.Blink(500, 500);
       request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
@@ -110,7 +108,7 @@ void GMC::postMeasurement() {
     }
     else
     {
-      Serial.println(PSTR("Can't send bad request"));
+      Log::console(PSTR("GMC: Can't send request"));
     }
   }
 }

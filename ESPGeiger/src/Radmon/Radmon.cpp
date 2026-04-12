@@ -42,18 +42,19 @@ int Radmon::getInterval() {
 
 void Radmon::s_tick(unsigned long stick_now)
 {
+  if (lastPing == 0) {
+    ConfigManager &configManager = ConfigManager::getInstance();
+    const char* _rtimer = configManager.getParamValueFromID("radmonTime");
+    int rtimer = (_rtimer != NULL) ? atoi(_rtimer) : 0;
+    if (rtimer == 0) {
+      rtimer = RADMON_INTERVAL;
+    }
+    setInterval(rtimer);
+    lastPing = stick_now + random(30) * 1000;
+    return;
+  }
   if (stick_now - lastPing >= pingInterval)
   {
-    if (lastPing == 0) {
-      ConfigManager &configManager = ConfigManager::getInstance();
-      int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
-      if (rtimer == NULL) {
-        rtimer = RADMON_INTERVAL;
-      }
-      setInterval(rtimer);
-      lastPing = random(rtimer / 2) * 1000;
-      return;
-    }
     lastPing = stick_now - (stick_now % 1000);
     Radmon::postMeasurement();
   }
@@ -96,15 +97,12 @@ void Radmon::postMeasurement() {
 
   const char* _api_user = configManager.getParamValueFromID("radmonUser");
   const char* _api_key = configManager.getParamValueFromID("radmonKey");
-  int rtimer = atoi(configManager.getParamValueFromID("radmonTime"));
-  if (rtimer == NULL) {
+  const char* _rtimer = configManager.getParamValueFromID("radmonTime");
+  int rtimer = (_rtimer != NULL) ? atoi(_rtimer) : 0;
+  if (rtimer == 0) {
     rtimer = RADMON_INTERVAL;
   }
   setInterval(rtimer);
-
-  if ((_api_user == NULL) && (_api_key == NULL)) {
-    return;
-  }
 
 #ifdef GEIGERTESTMODE
   Log::console(PSTR("Radmon: Testmode"));
@@ -127,13 +125,11 @@ void Radmon::postMeasurement() {
     avgcpm = gcounter.get_cpm15();
   }
   char url[256];
-  sprintf(url, RADMON_URI, _api_user, _api_key, avgcpm);
+  snprintf(url, sizeof(url), RADMON_URI, _api_user, _api_key, avgcpm);
 
-  static bool requestOpenResult;
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {
-    requestOpenResult = request.open("GET", url);
-    if (requestOpenResult)
+    if (request.open("GET", url))
     {
       status.led.Blink(500, 500);
       request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
@@ -144,7 +140,7 @@ void Radmon::postMeasurement() {
     }
     else
     {
-      Serial.println(PSTR("Can't send bad request"));
+      Log::console(PSTR("Radmon: Can't send request"));
     }
   }
 }

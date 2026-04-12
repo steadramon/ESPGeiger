@@ -25,12 +25,12 @@ Thingspeak::Thingspeak() {
 
 void Thingspeak::s_tick(unsigned long stick_now)
 {
+  if (lastPing == 0) {
+    lastPing = stick_now + random(30) * 1000;
+    return;
+  }
   if (stick_now - lastPing >= pingInterval)
   {
-    if (lastPing == 0) {
-      lastPing = random(30) * 1000;
-      return;
-    }
     lastPing = stick_now - (stick_now % 1000);
     Thingspeak::postMeasurement();
   }
@@ -43,7 +43,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     if (request->responseHTTPcode() == 200)
     {
       String response = request->responseText();
-      if (response != 0) {
+      if (response != "0") {
         Log::console(PSTR("Thingspeak: Upload OK"));
       } else {
         Log::console(PSTR("Thingspeak: Error!"));
@@ -84,13 +84,11 @@ void Thingspeak::postMeasurement() {
   char usvChar[20];
   dtostrf(usv,1,5, usvChar);
   char url[256];
-  sprintf(url, TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
+  snprintf(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
 
-  static bool requestOpenResult;
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {
-    requestOpenResult = request.open("GET", url);
-    if (requestOpenResult)
+    if (request.open("GET", url))
     {
       status.led.Blink(500, 500);
       request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
@@ -101,7 +99,7 @@ void Thingspeak::postMeasurement() {
     }
     else
     {
-      Serial.println(PSTR("Can't send - bad request"));
+      Log::console(PSTR("Thingspeak: Can't send request"));
     }
   }
 }
