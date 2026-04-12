@@ -56,13 +56,17 @@ void SerialCommand::setup() {
 
 void SerialCommand::addCommand(const char *command, void (*function)()) {
   #ifdef SERIALCOMMAND_DEBUG
-    Serial.print("Adding command (");
+    Serial.print(F("Adding command ("));
     Serial.print(commandCount);
-    Serial.print("): ");
+    Serial.print(F("): "));
     Serial.println(command);
   #endif
 
-  commandList = (SerialCommandCallback *) realloc(commandList, (commandCount + 1) * sizeof(SerialCommandCallback));
+  SerialCommandCallback *tmp = (SerialCommandCallback *) realloc(commandList, (commandCount + 1) * sizeof(SerialCommandCallback));
+  if (tmp == NULL) {
+    return;
+  }
+  commandList = tmp;
   strncpy(commandList[commandCount].command, command, SERIALCOMMAND_MAXCOMMANDLENGTH);
   commandList[commandCount].function = function;
   commandCount++;
@@ -125,7 +129,9 @@ void SerialCommand::set_ratio() {
       gcounter.set_ratio(aNumber);
     }
   } else {
-    Serial.printf (PSTR ("uSv Ratio: %.2f\r\n"), gcounter.get_ratio());
+    char buf[32];
+    snprintf(buf, sizeof(buf), "uSv Ratio: %.2f", gcounter.get_ratio());
+    Serial.println(buf);
   }
 }
 #ifdef GEIGERTESTMODE
@@ -143,7 +149,9 @@ void SerialCommand::set_cpm() {
 #endif
 #ifdef ESPGEIGER_HW
 void SerialCommand::get_hv() {
-  Serial.printf (PSTR ("HV: %.3f\r\n"), status.hvReading.get());
+  char buf[32];
+  snprintf(buf, sizeof(buf), "HV: %.3f", status.hvReading.get());
+  Serial.println(buf);
 }
 
 void SerialCommand::set_freq() {
@@ -157,7 +165,9 @@ void SerialCommand::set_freq() {
       hardware.saveconfig();
     }
   } else {
-    Serial.printf (PSTR ("Freq: %d\r\n"), hardware.get_freq());
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Freq: %d", hardware.get_freq());
+    Serial.println(buf);
   }
 }
 
@@ -172,7 +182,9 @@ void SerialCommand::set_duty() {
       hardware.saveconfig();
     }
   } else {
-    Serial.printf (PSTR ("Duty: %d\r\n"), hardware.get_duty());
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Duty: %d", hardware.get_duty());
+    Serial.println(buf);
   }
 }
 
@@ -187,7 +199,9 @@ void SerialCommand::set_vdratio() {
       hardware.saveconfig();
     }
   } else {
-    Serial.printf (PSTR ("VD Ratio: %d\r\n"), hardware.get_vd_ratio());
+    char buf[32];
+    snprintf(buf, sizeof(buf), "VD Ratio: %d", hardware.get_vd_ratio());
+    Serial.println(buf);
   }
 }
 
@@ -202,7 +216,9 @@ void SerialCommand::set_vdoffset() {
       hardware.saveconfig();
     }
   } else {
-    Serial.printf (PSTR ("VD Offset: %d\r\n"), hardware.get_vd_offset());
+    char buf[32];
+    snprintf(buf, sizeof(buf), "VD Offset: %d", hardware.get_vd_offset());
+    Serial.println(buf);
   }
 }
 #endif
@@ -220,7 +236,7 @@ void SerialCommand::readSerial() {
 
     if (inChar == term) {     // Check for the terminator (default '\r') meaning end of command
       #ifdef SERIALCOMMAND_DEBUG
-        Serial.print("Received: ");
+        Serial.print(F("Received: "));
         Serial.println(buffer);
       #endif
       char *command = strtok_r(buffer, delim, &last);   // Search for command at start of buffer
@@ -228,17 +244,17 @@ void SerialCommand::readSerial() {
         boolean matched = false;
         for (int i = 0; i < commandCount; i++) {
           #ifdef SERIALCOMMAND_DEBUG
-            Serial.print("Comparing [");
+            Serial.print(F("Comparing ["));
             Serial.print(command);
-            Serial.print("] to [");
+            Serial.print(F("] to ["));
             Serial.print(commandList[i].command);
-            Serial.println("]");
+            Serial.println(F("]"));
           #endif
 
           // Compare the found command against the list of known commands for a match
           if (strncmp(command, commandList[i].command, SERIALCOMMAND_MAXCOMMANDLENGTH) == 0) {
             #ifdef SERIALCOMMAND_DEBUG
-              Serial.print("Matched Command: ");
+              Serial.print(F("Matched Command: "));
               Serial.println(command);
             #endif
 
@@ -260,7 +276,7 @@ void SerialCommand::readSerial() {
         buffer[bufPos] = '\0';      // Null terminate
       } else {
         #ifdef SERIALCOMMAND_DEBUG
-          Serial.println("Line buffer is full - increase SERIALCOMMAND_BUFFER");
+          Serial.println(F("Line buffer is full - increase SERIALCOMMAND_BUFFER"));
         #endif
       }
     }
