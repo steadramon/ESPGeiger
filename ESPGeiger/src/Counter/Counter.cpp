@@ -169,10 +169,10 @@ float Counter::get_totalusv() {
     return 0;
   }
   for (int index = 1; index <= total_clicks_rollover; index++) {
-    totalUsv += (float)__LONG_MAX__ / (0.0166*uptime);
+    totalUsv += (float)__LONG_MAX__ / (0.0166 * uptime);
   }
-  totalUsv += (total_clicks / (0.0166*uptime));
-  return (totalUsv/60.0)/_ratio;
+  totalUsv += (total_clicks / (0.0166 * uptime));
+  return (totalUsv / 60.0) / _ratio;
 }
 
 float Counter::get_usv5() {
