@@ -24,8 +24,6 @@
 #include "../Counter/Counter.h"
 #include "../NTP/NTP.h"
 
-#include "logos.h"
-#include "html.h"
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"
 extern ESPGeigerHW hardware;
