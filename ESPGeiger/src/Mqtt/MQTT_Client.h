@@ -79,6 +79,9 @@ private:
   MQTT_Client();
   static ConfigManager _configManager;
   String buildTopic(const char * baseTopic, const char * cmd);
+  void buildTopicCache();
+  String _cachedTeleTopic;
+  String _cachedStatTopic;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
   void setupHassCB();
@@ -101,10 +104,10 @@ private:
   unsigned long lastStatus = 0;
   unsigned long lastConnectionAtempt = 0;
   bool mqttEnabled = true;
+  uint8_t reconnectAttempts = 0;
 
-  uint16_t statusInterval = MQTT_STATUS_INTERVAL;
-  uint16_t pingInterval = 1 * 60 * 1000;
-  const unsigned long reconnectionInterval = 60 * 1000;
+  unsigned long statusInterval = MQTT_STATUS_INTERVAL;
+  unsigned long pingInterval = 1 * 60 * 1000;
 
   const char* teleTopic = MQTT_TELE_TOPIC;
   const char* statTopic = MQTT_STAT_TOPIC;

@@ -37,42 +37,39 @@ void MQTT_Client::disconnect()
   }
   mqttClient->disconnect(true);
   mqttEnabled = true;
-  lastConnectionAtempt = millis() - 50000;
+  reconnectAttempts = 0;
+  lastConnectionAtempt = 0;
 }
 
 void MQTT_Client::onMqttConnect(bool sessionPresent) {
   Log::console(PSTR("MQTT: Connected"));
   status.mqtt_connected = true;
+  reconnectAttempts = 0;
   mqttClient->publish(this->last_will_.topic.c_str(), 1, false, lwtOnline);
   this->setupHassAuto();
   this->setupHassCB();
 }
 
 void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  String text;
-  switch( reason) {
+  const char* text;
+  switch (reason) {
   case AsyncMqttClientDisconnectReason::TCP_DISCONNECTED:
-     text = "TCP_DISCONNECTED";
-     break;
+     text = PSTR("TCP_DISCONNECTED"); break;
   case AsyncMqttClientDisconnectReason::MQTT_UNACCEPTABLE_PROTOCOL_VERSION:
-     text = "MQTT_UNACCEPTABLE_PROTOCOL_VERSION";
-     break;
+     text = PSTR("MQTT_UNACCEPTABLE_PROTOCOL_VERSION"); break;
   case AsyncMqttClientDisconnectReason::MQTT_IDENTIFIER_REJECTED:
-     text = "MQTT_IDENTIFIER_REJECTED";
-     break;
+     text = PSTR("MQTT_IDENTIFIER_REJECTED"); break;
   case AsyncMqttClientDisconnectReason::MQTT_SERVER_UNAVAILABLE:
-     text = "MQTT_SERVER_UNAVAILABLE";
-     break;
+     text = PSTR("MQTT_SERVER_UNAVAILABLE"); break;
   case AsyncMqttClientDisconnectReason::MQTT_MALFORMED_CREDENTIALS:
-     text = "MQTT_MALFORMED_CREDENTIALS";
-     break;
+     text = PSTR("MQTT_MALFORMED_CREDENTIALS"); break;
   case AsyncMqttClientDisconnectReason::MQTT_NOT_AUTHORIZED:
-     text = "MQTT_NOT_AUTHORIZED";
-     break;
+     text = PSTR("MQTT_NOT_AUTHORIZED"); break;
+  default:
+     text = PSTR("UNKNOWN"); break;
   }
-  Log::console(PSTR("MQTT: Disconnected (%s)"),text.c_str());
+  Log::console(PSTR("MQTT: Disconnected (%s)"), text);
   lastConnectionAtempt = millis();
-  //mqttClient->clearQueue();
   status.mqtt_connected = false;
 }
 
@@ -105,6 +102,11 @@ void MQTT_Client::loop(unsigned long now)
     onMqttConnect(true);
   }
 
+  bool willPublish = (now - lastStatus > statusInterval) || (now - lastPing > pingInterval);
+  if (willPublish) {
+    buildTopicCache();
+  }
+
   if (now - lastStatus > statusInterval)
   {
     status.led.Blink(500, 500);
@@ -114,7 +116,7 @@ void MQTT_Client::loop(unsigned long now)
     DynamicJsonDocument doc(capacity);
     time_t currentTime = time (NULL);
     struct tm *timeinfo = localtime (&currentTime);
-    char buffer[1048];
+    static char buffer[512];
     char dateTime[20];
     snprintf_P (dateTime, sizeof (dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02d"),
       1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec
@@ -156,20 +158,28 @@ void MQTT_Client::loop(unsigned long now)
   {
     lastPing = now - (now % 1000);
 
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPM")).c_str(), 1, false, String(gcounter.get_cpmf()).c_str());
+    char valBuf[16];
 
-    mqttClient->publish(buildTopic(statTopic, PSTR("uSv")).c_str(), 1, false, String(gcounter.get_usv()).c_str());
+    snprintf(valBuf, sizeof(valBuf), "%.2f", gcounter.get_cpmf());
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPM")).c_str(), 1, false, valBuf);
+
+    snprintf(valBuf, sizeof(valBuf), "%.2f", gcounter.get_usv());
+    mqttClient->publish(buildTopic(statTopic, PSTR("uSv")).c_str(), 1, false, valBuf);
 
 #ifndef DISABLE_MQTT_CPS
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPS")).c_str(), 1, false, String(gcounter.get_cps()).c_str());
+    snprintf(valBuf, sizeof(valBuf), "%.2f", gcounter.get_cps());
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPS")).c_str(), 1, false, valBuf);
 #endif
 
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), 1, false, String(gcounter.get_cpm5f()).c_str());
+    snprintf(valBuf, sizeof(valBuf), "%.2f", gcounter.get_cpm5f());
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), 1, false, valBuf);
 
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), 1, false, String(gcounter.get_cpm15f()).c_str());
+    snprintf(valBuf, sizeof(valBuf), "%.2f", gcounter.get_cpm15f());
+    mqttClient->publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), 1, false, valBuf);
 
 #ifdef ESPGEIGER_HW
-    mqttClient->publish(buildTopic(statTopic, PSTR("HV")).c_str(), 1, false, String(status.hvReading.get()).c_str());
+    snprintf(valBuf, sizeof(valBuf), "%.2f", status.hvReading.get());
+    mqttClient->publish(buildTopic(statTopic, PSTR("HV")).c_str(), 1, false, valBuf);
 #endif
 
     status.last_send = millis();
@@ -185,7 +195,7 @@ void MQTT_Client::loop(unsigned long now)
     if (warnSent) {
       is_warning = 1;
     }
-    mqttClient->publish(buildTopic(statTopic, PSTR("WARN")).c_str(), 1, false, String(is_warning).c_str());
+    mqttClient->publish(buildTopic(statTopic, PSTR("WARN")).c_str(), 1, false, is_warning ? "1" : "0");
   }
   if (gcounter.is_alert() != alertSent) {
     alertSent = gcounter.is_alert();
@@ -193,17 +203,22 @@ void MQTT_Client::loop(unsigned long now)
     if (alertSent) {
       is_alert = 1;
     }
-    mqttClient->publish(buildTopic(statTopic, PSTR("ALERT")).c_str(), 1, false, String(is_alert).c_str());
+    mqttClient->publish(buildTopic(statTopic, PSTR("ALERT")).c_str(), 1, false, is_alert ? "1" : "0");
   }
 }
 
 void MQTT_Client::reconnect()
 {
   if (mqttClient && mqttClient->connected()) {
+    reconnectAttempts = 0;
     return;
   }
 
-  if (lastConnectionAtempt && millis() - lastConnectionAtempt < reconnectionInterval) {
+  // Exponential backoff: 10s, 20s, 40s, 80s, 160s, capped at 300s
+  unsigned long backoff = 10000UL << min(reconnectAttempts, (uint8_t)5);
+  if (backoff > 300000UL) backoff = 300000UL;
+
+  if (lastConnectionAtempt && millis() - lastConnectionAtempt < backoff) {
     return;
   }
 
@@ -235,7 +250,9 @@ void MQTT_Client::reconnect()
   }
 
   mqttClient->setClientId(configManager.getHostName());
-  mqttClient->setServer(configManager.getParamValueFromID("mqttServer"), atoi(configManager.getParamValueFromID("mqttPort")));
+  const char* _mqtt_port = configManager.getParamValueFromID("mqttPort");
+  int mqtt_port = (_mqtt_port != NULL) ? atoi(_mqtt_port) : 1883;
+  mqttClient->setServer(configManager.getParamValueFromID("mqttServer"), mqtt_port);
   const char* _mqtt_user = configManager.getParamValueFromID("mqttUser");
   const char* _mqtt_pass = configManager.getParamValueFromID("mqttPassword");
   if (_mqtt_user != NULL && _mqtt_pass != NULL) mqttClient->setCredentials(_mqtt_user, _mqtt_pass);
@@ -249,17 +266,38 @@ void MQTT_Client::reconnect()
     setInterval(atoi(_mqtt_time));
     Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
   }
-  Log::console(PSTR("MQTT: Connecting ... %s:%s"), configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
+  reconnectAttempts++;
+  Log::console(PSTR("MQTT: Connecting (attempt %d) ... %s:%s"), reconnectAttempts, configManager.getParamValueFromID("mqttServer"), configManager.getParamValueFromID("mqttPort"));
   mqttClient->connect();
+}
+
+void MQTT_Client::buildTopicCache()
+{
+  ConfigManager &configManager = ConfigManager::getInstance();
+  String rootTopic = configManager.getParamValueFromID("mqttTopic");
+  rootTopic.replace(PSTR("{id}"), configManager.getChipID());
+
+  _cachedTeleTopic = teleTopic;
+  _cachedTeleTopic.replace(PSTR("%st%"), rootTopic);
+
+  _cachedStatTopic = statTopic;
+  _cachedStatTopic.replace(PSTR("%st%"), rootTopic);
 }
 
 String MQTT_Client::buildTopic(const char *baseTopic, const char *cmd)
 {
-  ConfigManager &configManager = ConfigManager::getInstance();
-  String topic = baseTopic;
-  String rootTopic = configManager.getParamValueFromID("mqttTopic");
-  rootTopic.replace(PSTR("{id}"), configManager.getChipID());
-  topic.replace(PSTR("%st%"), rootTopic);
+  String topic;
+  if (baseTopic == teleTopic && _cachedTeleTopic.length() > 0) {
+    topic = _cachedTeleTopic;
+  } else if (baseTopic == statTopic && _cachedStatTopic.length() > 0) {
+    topic = _cachedStatTopic;
+  } else {
+    ConfigManager &configManager = ConfigManager::getInstance();
+    topic = baseTopic;
+    String rootTopic = configManager.getParamValueFromID("mqttTopic");
+    rootTopic.replace(PSTR("{id}"), configManager.getChipID());
+    topic.replace(PSTR("%st%"), rootTopic);
+  }
   topic.replace(PSTR("%cm%"), cmd);
 
   return topic;
@@ -494,7 +532,7 @@ void MQTT_Client::onMqttMessage(char* topic, char* payload)
     if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
       return;
     }
-    if (memcmp(payload, "online", sizeof(payload)) == 0) {
+    if (strcmp(payload, "online") == 0) {
       Log::debug(PSTR("MQTT: HA is back online"));
       this->setupHassAuto();
     }
