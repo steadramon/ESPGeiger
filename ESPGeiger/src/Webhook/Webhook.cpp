@@ -92,14 +92,13 @@ void Webhook::postMeasurement() {
   Log::console(PSTR("Webhook: Uploading latest data ..."));
 
   const char* key = configManager.getParamValueFromID("whKey");
-  if (key == NULL) {
-    key = "";
-  }
 
-  DynamicJsonDocument doc(1024);
-  char buffer[1024];
+  DynamicJsonDocument doc(512);
+  static char buffer[512];
   doc["id"] = configManager.getChipID();
-  doc["key"] = key;
+  if (key != NULL && key[0] != '\0') {
+    doc["key"] = key;
+  }
   doc["ut"] = configManager.getUptime();
   doc["cps"] = serialized(String(gcounter.get_cps(), 2));
   doc["cpm"] = serialized(String(gcounter.get_cpmf(), 2));
@@ -109,6 +108,7 @@ void Webhook::postMeasurement() {
 #ifdef ESPGEIGER_HW
   doc["hv"] = serialized(String(status.hvReading.get(), 2));
 #endif
+  doc["tc"] = gcounter.total_clicks;
   doc["mem"] = ESP.getFreeHeap();
   doc["rssi"] = WiFi.RSSI();
 
