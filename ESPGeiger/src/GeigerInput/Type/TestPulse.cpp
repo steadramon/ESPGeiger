@@ -58,7 +58,7 @@ void GeigerTestPulse::begin() {
   pinMode(_tx_pin, OUTPUT);
   _pulse_tx_pin = _tx_pin;
   CPMAdjuster();
-  _next_delay = calcDelay() / 2;
+  _next_delay = calcDelay();
   _this_delay = _next_delay;
 #ifdef ESP8266
   timer1_attachInterrupt(pulseInterrupt);
@@ -79,10 +79,10 @@ void GeigerTestPulse::loop() {
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;
 #ifdef ESP8266
-    _next_delay = calcDelay() / 2;
+    _next_delay = calcDelay();
 #else
     portENTER_CRITICAL_ISR(&timerMux);
-    _next_delay = calcDelay() / 2;
+    _next_delay = calcDelay();
     portEXIT_CRITICAL_ISR(&timerMux);
 #endif
   }
@@ -113,10 +113,11 @@ void GeigerTestPulse::pulseInterrupt() {
     GeigerInputTest::countInterrupt();
 #endif
     _last_b = micros();
-  } else {
     _this_delay = _next_delay;
+    _our_delay = _this_delay;
+  } else {
+    _our_delay = GEIGER_PULSE_WIDTH * (GEIGER_TEST_TIMER_DIV / 1000000.0);
   }
-  _our_delay = _this_delay;
   #ifdef ESP8266
     timer1_write((unsigned long)_our_delay);
   #else

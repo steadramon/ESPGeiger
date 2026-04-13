@@ -51,6 +51,10 @@ extern "C" {
 #define GEIGER_MODEL "genpulse"
 #endif
 
+#ifndef GEIGER_PULSE_WIDTH
+#define GEIGER_PULSE_WIDTH 500
+#endif
+
 static int _pulse_tx_pin;
 static bool _bool_pulse_state = false;
 static unsigned long _last_b;
