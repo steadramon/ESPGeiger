@@ -27,13 +27,13 @@ SerialOut::SerialOut() {
 
 void SerialOut::print_cpm() {
   char buf[32];
-  snprintf(buf, sizeof(buf), "CPM: %d\r\n", gcounter.get_cpm());
+  snprintf(buf, sizeof(buf), "CPM: %d\n", gcounter.get_cpm());
   Serial.print(buf);
 }
 
 void SerialOut::print_usv() {
   char buf[32];
-  snprintf(buf, sizeof(buf), "uSv: %.3f\r\n", gcounter.get_usv());
+  snprintf(buf, sizeof(buf), "uSv: %.2f\n", gcounter.get_usv());
   Serial.print(buf);
 }
 
@@ -63,20 +63,21 @@ void SerialOut::loop(unsigned long stick_now) {
     _loop_c++;
     if (_loop_c >= status.serialOut) {
       _loop_c = 0;
-      char buf[80];
+      char buf[64];
       int pos = snprintf(buf, sizeof(buf), "CPM: %d", gcounter.get_cpm());
       if (_show_cps) {
-        pos += snprintf(buf + pos, sizeof(buf) - pos, ", CPS: %.3f", gcounter.get_cps());
+        pos += snprintf(buf + pos, sizeof(buf) - pos, " CPS: %.2f", gcounter.get_cps());
       }
       if (_show_usv) {
-        pos += snprintf(buf + pos, sizeof(buf) - pos, ", uSv: %.3f", gcounter.get_usv());
+        pos += snprintf(buf + pos, sizeof(buf) - pos, " uSv: %.2f", gcounter.get_usv());
       }
 #ifdef ESPGEIGER_HW
       if (_show_hv) {
-        pos += snprintf(buf + pos, sizeof(buf) - pos, ", HV: %.3f", status.hvReading.get());
+        pos += snprintf(buf + pos, sizeof(buf) - pos, " HV: %.2f", status.hvReading.get());
       }
 #endif
-      Serial.println(buf);
+      Serial.print(buf);
+      Serial.print('\n');
     }
   }
 }

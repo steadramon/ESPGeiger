@@ -49,7 +49,7 @@ CPM: 28
 With `show cps` and `show usv` enabled:
 
 ```
-CPM: 30, CPS: 0.500, uSv: 0.199
-CPM: 32, CPS: 0.533, uSv: 0.212
-CPM: 28, CPS: 0.467, uSv: 0.185
+CPM: 30 CPS: 0.50 uSv: 0.20
+CPM: 32 CPS: 0.53 uSv: 0.21
+CPM: 28 CPS: 0.47 uSv: 0.19
 ```

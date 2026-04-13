@@ -104,7 +104,7 @@ void GeigerTestSerial::secondTicker() {
   geigerPort.printf("CPS, %d, CPM, %d, uSv/hr, %.2f, SLOW\n", test_serialCPS, test_serialCPM, test_serialuSV);
 #elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
   Log::debug(PSTR("TestSerial: CPM: %d"), test_serialCPM);
-  geigerPort.printf("CPM: %d\r\n", test_serialCPM);
+  geigerPort.printf("CPM: %d\n", test_serialCPM);
 #else
   Log::debug(PSTR("TestSerial: %d"), test_serialCPM);
   geigerPort.printf("%d\r\n", test_serialCPM);
