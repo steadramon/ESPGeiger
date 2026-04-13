@@ -100,14 +100,14 @@ void GeigerTestSerial::secondTicker() {
   }
 #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
   float test_serialuSV = (serialAvg.get() * 60.0)/175;
-  Log::debug(PSTR("TestSerial: CPS, %d, CPM, %d, uSv/hr, %.2lf, SLOW"), test_serialCPS, test_serialCPM, test_serialuSV);
-  geigerPort.printf(PSTR("CPS, %d, CPM, %d, uSv/hr, %.2lf, SLOW\n"), test_serialCPS, test_serialCPM, test_serialuSV);
+  Log::debug(PSTR("TestSerial: CPS, %d, CPM, %d, uSv/hr, %.2f, SLOW"), test_serialCPS, test_serialCPM, test_serialuSV);
+  geigerPort.printf("CPS, %d, CPM, %d, uSv/hr, %.2f, SLOW\n", test_serialCPS, test_serialCPM, test_serialuSV);
 #elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
   Log::debug(PSTR("TestSerial: CPM: %d"), test_serialCPM);
-  geigerPort.printf(PSTR("CPM: %d\r\n"), test_serialCPM);
+  geigerPort.printf("CPM: %d\r\n", test_serialCPM);
 #else
   Log::debug(PSTR("TestSerial: %d"), test_serialCPM);
-  geigerPort.printf(PSTR("%d\r\n"), test_serialCPM);
+  geigerPort.printf("%d\r\n", test_serialCPM);
 #endif
   delay(10);
 #ifdef GEIGER_COUNT_TXPULSE
@@ -126,7 +126,8 @@ void GeigerTestSerial::secondTicker() {
 }
 
 void GeigerTestSerial::handleSerial(char* input) {
-  for (int x = 0; x < strlen(input); x++) {
+  size_t inputLen = strlen(input);
+  for (size_t x = 0; x < inputLen; x++) {
     if (!isPrintable(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
       Log::debug(PSTR("None printable character on serial"));
       return;
