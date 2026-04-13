@@ -50,6 +50,7 @@ double GeigerInputTest::calcDelay() {
   double test_debounce = (_debounce*0.000001);
   if (result < test_debounce) {
     _remainder = result - test_debounce;
+    if (_remainder < -test_debounce) _remainder = -test_debounce;
     result = test_debounce;
   }
   return (mult) * result;
