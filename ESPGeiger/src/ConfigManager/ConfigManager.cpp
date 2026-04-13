@@ -1142,6 +1142,7 @@ unsigned long ConfigManager::getUptime () {
 }
 
 char* ConfigManager::getUptimeString () {
+    static char uptimeBuffer[20];
     uint16_t days;
     uint8_t hours;
     uint8_t minutes;
@@ -1157,7 +1158,7 @@ char* ConfigManager::getUptimeString () {
     uptime -= hours * SECS_PER_HOUR;
     days = uptime / SECS_PER_DAY;
 
-    snprintf_P (strBuffer, sizeof (strBuffer) - 1, PSTR("%dT%02d:%02d:%02d"), days, hours, minutes, seconds);
+    snprintf_P (uptimeBuffer, sizeof (uptimeBuffer), PSTR("%dT%02d:%02d:%02d"), days, hours, minutes, seconds);
 
-    return strBuffer;
+    return uptimeBuffer;
 }
