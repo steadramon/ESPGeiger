@@ -123,6 +123,8 @@ class GeigerInput {
     int get_tx_pin() {
       return _tx_pin;
     };
+    virtual void set_pcnt_filter(int val) {};
+    virtual void apply_pcnt_filter() {};
     void blip_led();
     unsigned long last_blip();
     const char* geiger_model();

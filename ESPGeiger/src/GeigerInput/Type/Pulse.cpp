@@ -24,7 +24,7 @@ GeigerPulse::GeigerPulse() {
 
 void GeigerPulse::begin() {
   GeigerInput::begin();
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
   Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _rx_pin,
@@ -52,7 +52,7 @@ void GeigerPulse::begin() {
 #endif
 }
 
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
 int GeigerPulse::collect() {
   int16_t pulseCount;
   pcnt_counter_pause(PCNT_UNIT);
@@ -65,5 +65,22 @@ int GeigerPulse::collect() {
     setCounter(pulseCount, false);
   }
   return pulseCount;
+}
+
+void GeigerPulse::set_pcnt_filter(int val) {
+  if (val < 0) val = 0;
+  if (val > 1023) val = 1023;
+  _pcnt_filter = val;
+}
+
+void GeigerPulse::apply_pcnt_filter() {
+  if (_pcnt_filter > 0) {
+    pcnt_set_filter_value(PCNT_UNIT, _pcnt_filter);
+    pcnt_filter_enable(PCNT_UNIT);
+    Log::console(PSTR("GeigerPulse: PCNT filter set to %d"), _pcnt_filter);
+  } else {
+    pcnt_filter_disable(PCNT_UNIT);
+    Log::console(PSTR("GeigerPulse: PCNT filter disabled"));
+  }
 }
 #endif

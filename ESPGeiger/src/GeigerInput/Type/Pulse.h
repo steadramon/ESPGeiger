@@ -55,8 +55,12 @@ class GeigerPulse : public GeigerInput
   public:
     GeigerPulse();
     void begin();
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
     int collect();
+    void set_pcnt_filter(int val);
+    void apply_pcnt_filter();
+  private:
+    int _pcnt_filter = 0;
 #endif
 };
 #endif

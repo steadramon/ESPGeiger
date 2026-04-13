@@ -198,26 +198,8 @@ void Counter::begin() {
 #endif
 
   geigerinput->begin();
-#ifdef USE_PCNT
-  set_pcnt_filter(_pcnt_filter);
-#endif
+  apply_pcnt_filter();
 }
-
-#ifdef USE_PCNT
-void Counter::set_pcnt_filter(int val) {
-  if (val < 0) val = 0;
-  if (val > 1023) val = 1023;
-  _pcnt_filter = val;
-  if (val > 0) {
-    pcnt_set_filter_value(PCNT_UNIT, val);
-    pcnt_filter_enable(PCNT_UNIT);
-    Log::console(PSTR("Counter: PCNT filter set to %d"), val);
-  } else {
-    pcnt_filter_disable(PCNT_UNIT);
-    Log::console(PSTR("Counter: PCNT filter disabled"));
-  }
-}
-#endif
 
 void Counter::blip_led() {
 #ifndef DISABLE_INTERNAL_BLIP

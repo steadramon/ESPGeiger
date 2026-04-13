@@ -1079,6 +1079,7 @@ void ConfigManager::saveParams()
   mqtt.begin();
 #endif
   ConfigManager::setExternals();
+  gcounter.apply_pcnt_filter();
 }
 
 const char* ConfigManager::getParamValueFromID(const char* str)
