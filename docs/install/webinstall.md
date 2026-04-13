@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Web Installer
-permalink: /install/webinstaller
+permalink: /install/webinstall
 nav_order: 0
 parent: Install
 ---
