@@ -109,7 +109,7 @@ On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type ge
 | Flag | Description |
 |---|---|
 | `-D IGNORE_PCNT` | Disable hardware PCNT and use software interrupt counting instead. |
-| `-D PCNT_FILTER=N` | Set the PCNT glitch filter value. Filters pulses shorter than N APB clock cycles. |
+| `-D PCNT_FILTER=N` | Set the initial PCNT glitch filter value at compile time. Filters pulses shorter than N APB clock cycles. This can also be configured at runtime from the web interface. |
 
 ### MQTT Options
 
