@@ -55,8 +55,10 @@ void GeigerPulse::begin() {
 #ifdef USE_PCNT && ESP32
 int GeigerPulse::collect() {
   int16_t pulseCount;
+  pcnt_counter_pause(PCNT_UNIT);
   pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
   pcnt_counter_clear(PCNT_UNIT);
+  pcnt_counter_resume(PCNT_UNIT);
   if (pulseCount != 0) {
     setCounter(pulseCount);
   } else {
