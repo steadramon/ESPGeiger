@@ -113,7 +113,9 @@ void GeigerTestPulse::pulseInterrupt() {
     GeigerInputTest::countInterrupt();
 #endif
     _last_b = micros();
-    _this_delay = _next_delay;
+    double pulseWidthTicks = GEIGER_PULSE_WIDTH * (GEIGER_TEST_TIMER_DIV / 1000000.0);
+    _this_delay = _next_delay - pulseWidthTicks;
+    if (_this_delay < pulseWidthTicks) _this_delay = pulseWidthTicks;
     _our_delay = _this_delay;
   } else {
     _our_delay = GEIGER_PULSE_WIDTH * (GEIGER_TEST_TIMER_DIV / 1000000.0);
