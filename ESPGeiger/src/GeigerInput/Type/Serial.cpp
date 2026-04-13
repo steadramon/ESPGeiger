@@ -29,11 +29,9 @@ void GeigerSerial::begin() {
 }
 
 void GeigerSerial::pullSerial() {
-  while (geigerPort.available()) {
+  uint8_t maxRead = sizeof(_serial_buffer);
+  while (geigerPort.available() && maxRead--) {
     char input = geigerPort.read();
-#ifdef ESP8266
-    ESP.wdtFeed();
-#endif
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
       _serial_buffer[_serial_idx++] = '\0';
