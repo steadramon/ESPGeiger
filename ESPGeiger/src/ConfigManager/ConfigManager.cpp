@@ -480,7 +480,9 @@ void ConfigManager::handleRoot() {
 #else
   page.replace(FPSTR(T_t),status.thingName);
 #endif
-  page.replace(FPSTR(T_v), String(hostName) + " - " + WiFi.localIP().toString()); // use ip if ap is not active for heading @todo use hostname?
+  char heading[64];
+  snprintf(heading, sizeof(heading), "%s - %s", hostName, WiFi.localIP().toString().c_str());
+  page.replace(FPSTR(T_v), heading);
   server->sendContent(page);
   server->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
   server->sendContent(F("<form action='/hist' method='get'><button>History</button></form><br/>"));
@@ -607,17 +609,16 @@ void ConfigManager::handleStatusPage()
   server->sendHeader(F("Expires"), F("-1"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  char title[48];
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(hostName);
-  title += F(" - Status");
+  snprintf(title, sizeof(title), "%s - Status", hostName);
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_STYLE));
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
   page = FPSTR(STATUS_PAGE_BODY_HEAD);
-  title = FPSTR(status.thingName);
-  title += F(" - Status");
+  snprintf(title, sizeof(title), "%s - Status", status.thingName);
   page.replace(FPSTR(T_v), title);
   page.replace(FPSTR(T_t), hostName);
   server->sendContent(page);
@@ -641,17 +642,16 @@ void ConfigManager::handleHistoryPage()
   server->sendHeader(F("Expires"), F("-1"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  char title[48];
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(hostName);
-  title += F(" - History");
+  snprintf(title, sizeof(title), "%s - History", hostName);
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_STYLE));
   server->sendContent(FPSTR(faviconHead));
   server->sendContent(FPSTR(HTTP_HEAD_END));
   page = FPSTR(STATUS_PAGE_BODY_HEAD);
-  title = FPSTR(status.thingName);
-  title += F(" - History");
+  snprintf(title, sizeof(title), "%s - History", status.thingName);
   page.replace(FPSTR(T_v), title);
   page.replace(FPSTR(T_t), hostName);
   server->sendContent(page);
@@ -672,9 +672,9 @@ void ConfigManager::handleNTP()
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  char title[48];
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(status.thingName);
-  title += F(" - NTP");
+  snprintf(title, sizeof(title), "%s - NTP", status.thingName);
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_STYLE));
@@ -714,9 +714,9 @@ void ConfigManager::handleNTPSet()
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  char title[48];
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(status.thingName);
-  title += F(" - NTP Saved");
+  snprintf(title, sizeof(title), "%s - NTP Saved", status.thingName);
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_STYLE));
@@ -740,9 +740,9 @@ void ConfigManager::handleHVPage()
   server->sendHeader(F("Expires"), F("-1"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  char title[48];
   String page = FPSTR(HTTP_HEAD_START);
-  String title = FPSTR(status.thingName);
-  title += F("-HW - HV");
+  snprintf(title, sizeof(title), "%s-HW - HV", status.thingName);
   page.replace(FPSTR(T_v), title);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_STYLE));
