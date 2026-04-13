@@ -186,10 +186,16 @@ float Counter::get_usv15() {
 }
 
 void Counter::begin() {
-  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), GEIGER_CPM_COUNT, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
   geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
+#ifndef GEIGER_SMOOTH_AVG
+  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), GEIGER_CPM_COUNT);
+  geigerTicks5.begin(SMOOTHED_EXPONENTIAL, GEIGER_EMA_FACTOR);
+  geigerTicks15.begin(SMOOTHED_EXPONENTIAL, GEIGER_EMA_FACTOR);
+#else
+  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), GEIGER_CPM_COUNT, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
   geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
   geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
+#endif
 
   geigerinput->begin();
 }

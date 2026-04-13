@@ -49,8 +49,15 @@ extern Status status;
 extern NTP_Client ntpclient;
 
 #define GEIGER_CPM_COUNT 60
+
+#ifndef GEIGER_SMOOTH_AVG
+#ifndef GEIGER_EMA_FACTOR
+#define GEIGER_EMA_FACTOR 5
+#endif
+#else
 #define GEIGER_CPM5_COUNT 60
 #define GEIGER_CPM15_COUNT 60
+#endif
 
 class Counter {
     public:
