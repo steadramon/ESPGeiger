@@ -40,10 +40,13 @@ static WiFiManagerParameter ESPGeigerParams[] =
 #ifndef RXPIN_BLOCKED
   WiFiManagerParameter("geigerRX", "RX Pin", STR(GEIGER_RXPIN), 2),
 #endif
-#if GEIGER_TXPIN != -1
+#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
   WiFiManagerParameter("geigerTX", "TX Pin", STR(GEIGER_TXPIN), 2),
 #endif
+#endif
+#ifdef USE_PCNT
+  WiFiManagerParameter("pcntFilter", "PCNT Filter (0-1023, 0=off)", "100", 4, "type='number' min='0' max='1023'"),
 #endif
 #if defined(SSD1306_DISPLAY) || defined(GEIGER_NEOPIXEL)
   WiFiManagerParameter("<br><hr><h3>Display</h3>"),
@@ -386,7 +389,7 @@ void ConfigManager::startWebPortal()
     gcounter.set_rx_pin(cfgint);
   }
 #endif
-#if GEIGER_TXPIN != -1
+#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
   cfgvar = ConfigManager::getParamValueFromID("geigerTX");
   if (cfgvar != NULL) {
@@ -424,6 +427,13 @@ void ConfigManager::setExternals() {
   }
   cfgint = atoi(cfgvar);
   gcounter.set_alert(cfgint);
+
+#ifdef USE_PCNT
+  cfgvar = ConfigManager::getParamValueFromID("pcntFilter");
+  if (cfgvar != NULL) {
+    gcounter.set_pcnt_filter(atoi(cfgvar));
+  }
+#endif
 
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
   cfgvar = ConfigManager::getParamValueFromID("dispTimeout");
@@ -1040,7 +1050,7 @@ void ConfigManager::saveParams()
     }
   }
 #endif
-#if GEIGER_TXPIN != -1
+#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1
 #ifndef TXPIN_BLOCKED
   const char* _tx = ConfigManager::getParamValueFromID("geigerTX");
   if (_tx != NULL) {

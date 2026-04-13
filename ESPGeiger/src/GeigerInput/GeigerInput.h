@@ -81,9 +81,6 @@
 #define GEIGER_RXPIN 13
 #endif
 
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN -1
-#endif
 
 #ifndef GEIGER_DEBOUNCE
 #define GEIGER_DEBOUNCE 500
@@ -137,7 +134,11 @@ class GeigerInput {
   private:
     void (*callback)(void) = nullptr; // Member variable to store callback function pointer
   protected:
+#ifdef GEIGER_TXPIN
     int _tx_pin = GEIGER_TXPIN;
+#else
+    int _tx_pin = -1;
+#endif
     int _rx_pin = GEIGER_RXPIN;
 };
 

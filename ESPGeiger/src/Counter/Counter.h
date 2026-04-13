@@ -95,6 +95,10 @@ class Counter {
       int get_tx_pin() {
         return geigerinput->get_tx_pin();
       };
+#ifdef USE_PCNT
+      void set_pcnt_filter(int val);
+      int _pcnt_filter = 0;
+#endif
       void set_warning(int val);
       void set_alert(int val);
       bool is_warning();
