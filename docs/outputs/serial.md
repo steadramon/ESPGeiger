@@ -37,3 +37,19 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | `target` | Set target CPM value for Test builds only | `cpm 1234` |
 
 ## Example Output
+
+Using `show` to enable 1-second output:
+
+```
+CPM: 30
+CPM: 32
+CPM: 28
+```
+
+With `show cps` and `show usv` enabled:
+
+```
+CPM: 30, CPS: 0.500, uSv: 0.199
+CPM: 32, CPS: 0.533, uSv: 0.212
+CPM: 28, CPS: 0.467, uSv: 0.185
+```

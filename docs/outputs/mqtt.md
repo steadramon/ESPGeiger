@@ -30,6 +30,6 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 
 ## Example Tele Status JSON Output
 
+```json
+{"time":"2024-01-15T14:30:00","uptime":"2T01:45:10","board":"ESP32","model":"GC10next","ssid":"Wifi","ip":"192.168.1.123","rssi":-24,"c_total":43200,"free_mem":191552}
 ```
-{"uptime":"2T01:45:10","board":"ESP32","model":"GC10next","free_mem":191552,"ssid":"Wifi","ip":"192.168.1.123","rssi":-24}
-````
