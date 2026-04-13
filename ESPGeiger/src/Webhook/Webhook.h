@@ -42,7 +42,7 @@ class Webhook {
     AsyncHTTPRequest request;
   private:
     unsigned long lastPing = 0;
-    int pingInterval = 1000 * 10;
+    int pingInterval = 1000 * 60;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
