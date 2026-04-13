@@ -24,14 +24,17 @@
 void arduino_ota_setup (const char* hostname = "ESPGeiger") {
 
   ArduinoOTA.onStart ([]() {
-    String type;
+    const char* type;
     if (ArduinoOTA.getCommand () == U_FLASH)
       type = "sketch";
     else // U_SPIFFS
       type = "filesystem";
     // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+#ifdef GEIGER_TXPIN
+    digitalWrite(GEIGER_TXPIN, LOW);
+#endif
     digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
-    Log::console(PSTR("Start updating %s"), type.c_str());
+    Log::console(PSTR("Start updating %s"), type);
   });
   ArduinoOTA.onEnd ([]() {
     Log::console(PSTR("End"));
