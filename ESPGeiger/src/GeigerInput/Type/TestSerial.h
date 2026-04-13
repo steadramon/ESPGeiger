@@ -37,10 +37,6 @@ GC10 60\n
 #define GEIGER_TXPIN 12
 #endif
 
-#if GEIGER_TXPIN == -1
-#define GEIGER_TXPIN 12
-#endif
-
 #include "../GeigerInputTest.h"
 
 #ifndef GEIGER_SERIAL_TYPE
