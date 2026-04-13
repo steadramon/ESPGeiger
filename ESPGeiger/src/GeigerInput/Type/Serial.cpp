@@ -19,6 +19,8 @@
 #include "Serial.h"
 #include "../../Logger/Logger.h"
 
+static EspSoftwareSerial::UART geigerPort;
+
 GeigerSerial::GeigerSerial() {
 };
 

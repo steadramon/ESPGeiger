@@ -20,7 +20,6 @@
 #define GEIGERTESTSRL_H
 #include <Arduino.h>
 #include <SoftwareSerial.h>
-static EspSoftwareSerial::UART geigerPort;
 /*
 
 MightyOhm CPS, 1, CPM, 60, uSv/hr, 1.23, INST/FAST/SLOW\n

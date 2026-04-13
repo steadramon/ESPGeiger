@@ -19,6 +19,8 @@
 #include "TestSerial.h"
 #include "../../Logger/Logger.h"
 
+static EspSoftwareSerial::UART geigerPort;
+
 GeigerTestSerial::GeigerTestSerial() {
   strcpy(_test_type, "TestSerial");
 };

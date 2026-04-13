@@ -21,7 +21,6 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 #include <Smoothed.h>
-static EspSoftwareSerial::UART geigerPort;
 
 /*
 
