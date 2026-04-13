@@ -25,7 +25,7 @@ Optional:
 
 _OR_
 
-- [ESPGeigerHW Geiger Counter](http://docs.espgeiger.com/hardware/espgeigerhw) kit
+- [ESPGeigerHW Geiger Counter](/hardware/espgeigerhw) kit
 
 ## Firmware Install
 
@@ -63,4 +63,4 @@ Note: By default the RXPIN for ESPGeiger is set to `GPIO13` - this can be change
 
 A flashing/"blipping" status LED on the ESP device visually confirms that ESPGeiger is receiving readings from your Geiger counter.
 
-Specific instructions and diagrams for connecting ESPGeiger to a variety of different Geiger counters can be found here.
+Specific instructions and diagrams for connecting ESPGeiger to a variety of different Geiger counters can be found in the [Hardware](/hardware) section.
