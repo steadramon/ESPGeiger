@@ -41,7 +41,7 @@ void GeigerSerial::pullSerial() {
       _serial_idx = 0;
       _serial_buffer[0] = '\0';
     }
-    if (_serial_idx > 52) {
+    if (_serial_idx >= sizeof(_serial_buffer) - 2) {
       _serial_idx = 0;
       _serial_buffer[0] = '\0';
     }
