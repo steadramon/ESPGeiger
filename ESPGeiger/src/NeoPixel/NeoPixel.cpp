@@ -69,31 +69,36 @@ void NeoPixel::blink(uint16 timer)
   RgbColor rgb(0, colorSaturation, 0);
   if ((our_5cpm > 0) && (our_cpm > 0)) {
     float diff_ratio = (our_cpm / our_5cpm);
-    nextInterval = blinkInterval/diff_ratio;
+    nextInterval = blinkInterval / diff_ratio;
     if (nextInterval < 100) {
       nextInterval = 100;
     }
     if (nextInterval > 4000) {
       nextInterval = 4000;
     }
-    if (this->neoPixelMode == 2) {
+    if (this->neoPixelMode >= 2) {
       if (diff_ratio > 1.5) {
-        rgb = RgbColor(colorSaturation, 0, 0);
-      } else if (diff_ratio > 1.25) {
-        rgb = RgbColor(colorSaturation, colorSaturation, 0);
-      } else if (diff_ratio == 1.0) {
-        rgb = RgbColor(0, 0, colorSaturation);
-      } else if (diff_ratio < 0.50) {
-        rgb = RgbColor(colorSaturation, 0, colorSaturation);
+        rgb = RgbColor(colorSaturation, 0, 0);           // rising fast - red
+      } else if (diff_ratio > 1.15) {
+        rgb = RgbColor(colorSaturation, colorSaturation, 0); // rising - yellow
+      } else if (diff_ratio >= 0.5) {
+        rgb = RgbColor(0, colorSaturation, 0);            // stable/dropping - green
+      } else {
+        rgb = RgbColor(colorSaturation, 0, colorSaturation); // dropping fast - purple
       }
     }
+  } else {
+    nextInterval = blinkInterval;
+    if (this->neoPixelMode >= 2) {
+      rgb = RgbColor(0, 0, colorSaturation);              // no data - blue
+    }
   }
-  if (this->neoPixelMode != 2) {
+  if (this->neoPixelMode == 1 || this->neoPixelMode == 3) {
     if (gcounter.is_alert()) {
       rgb = RgbColor(colorSaturation, 0, 0);
     } else if (gcounter.is_warning()) {
       rgb = RgbColor(colorSaturation, colorSaturation, 0);
-    } else if (our_cpm == 0 && our_5cpm == 0) {
+    } else if (our_cpm < 0.01 && our_5cpm < 0.01) {
       rgb = RgbColor(0, 0, colorSaturation);
     }
   }

@@ -16,11 +16,10 @@ The brightness of the NeoPixel can be configured through the Web interface confi
 
 The frequency of flash is calculated by the ratio of the current `CPM` value to the current `CPM5` value. As the CPM value increases the frequency of the Neopixel flash increases.
 
-The Neopixel flashes in 4 preset colours, depending on the current environment status.
+The colour is based on the ratio of current `CPM` to the 5-minute average `CPM5`, giving a visual indication of how the radiation level is changing.
 
-If the threshold is - 
-
-- No readings, the Neopixel state is set to __BLUE__
-- Below the __WARNING__ and __ALARM__ thresholds the Neopixel state is set to __GREEN__
-- Above the __WARNING__ threshold, the Neopixel is state is set to __AMBER__
-- Above the __ALERT__ threshold, the Neopixel is state is set to __RED__
+- No signal, the Neopixel state is set to __BLUE__
+- Dropping fast (ratio below 0.5), the Neopixel state is set to __PURPLE__
+- Stable or dropping (ratio 0.5 to 1.15), the Neopixel state is set to __GREEN__
+- Rising (ratio 1.15 to 1.5), the Neopixel state is set to __AMBER__
+- Rising fast (ratio above 1.5), the Neopixel state is set to __RED__
