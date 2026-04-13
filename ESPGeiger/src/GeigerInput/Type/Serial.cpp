@@ -34,7 +34,6 @@ void GeigerSerial::pullSerial() {
 #ifdef ESP8266
     ESP.wdtFeed();
 #endif
-    delay(1);
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
       _serial_buffer[_serial_idx++] = '\0';
