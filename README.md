@@ -2,201 +2,148 @@
 
 # <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger.svg" width="30px"/> ESPGeiger
 
-ESPGeiger is an open-source project that makes it easy to create your own IOT connected Geiger counter, to monitor radiation levels in your environment. It can collect, calculate, and report radiation levels from a range of Geiger counters with pulse and serial outputs. ESPGeiger supports the GC10/GC10next and MightyOhm counters, with additional support possible. The firmware is written to be installed onto the common esp8266 and esp32 boards.
+ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-connected Geiger counter. It collects, calculates and reports radiation levels from a range of Geiger counters with pulse or serial outputs.
 
-- 😃  Easy to install and configure - contribute to monitoring!
-- ✅  Compatible with all generic Geiger counters with Pulse output and a range of serial based - GC10, GC10next, MightyOhm
-- 📈  Built in webserver with graphing
-- 🖥️   SSD1306 Display support
+- 😃  Easy to install via web browser — no compiler required
+- ✅  Works with generic pulse counters and GC10, GC10next, MightyOhm serial counters
+- 📈  Built-in web server with live graphing
 - 🔴  Live CPM and μSv/h readings
-- 🔢  Smoothed and averaged values over 1, 5 and 15 minutes
-- 🎛️  Configurable filtering/debounce and noise control
-- 📟  Accurate counting via interrupt and non-blocking functions (accuracy tested up to 100k CPM), with optional hardware counter (ESP32 only - PCNT)
-- ⏲️  No dead time due to waiting for 3rd party services
-- 🌐  Upload and share statistics to services online and locally via MQTT and Home Assistant automatic discovery
-- 💾  Save your data locally to a Fat16/32 SDCard over SPI
-- 💡  Colourful and intuitive feedback using a WS2812X NeoPixel
-- 🚧  Test builds for emulating pulse and serial based counters
+- 🔢  Smoothed values over 1, 5 and 15 minutes
+- 🖥️   Optional SSD1306 OLED display and WS2812X NeoPixel status light
+- 📟  Accurate counting via interrupt or ESP32 hardware counter (PCNT)
+- 🌐  MQTT, Home Assistant auto-discovery, Radmon.org, GMCMAP, ThingSpeak, custom Webhooks
+- 💾  Optional SD card logging
+- 🚧  Test builds for emulating pulse and serial counters
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/hardware/img/ESPGeigerLog.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/statuspage.png" width="50%"/>
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/settings.png" width="50%"/>
 
-## Documentation
+## Quick Start
 
-Please visit (https://docs.espgeiger.com/) for the latest documentation.
+The easiest way to install ESPGeiger is the **Web Installer** — it runs in your Chrome or Edge browser and flashes your device over USB. No code editor or compiler required.
 
-Note: Documentation is currently being populated
+### 👉 [https://install.espgeiger.com](https://install.espgeiger.com)
 
-## 1. Installation
+Select your build from the dropdown and follow the on-screen instructions. Installation takes about two minutes.
 
-### Web Installer
+## Which Build Do I Need?
 
-On your Chrome or Edge browser, visit our web installer here: https://install.espgeiger.com/
+Pick the build that matches your hardware. If in doubt, start with **Pulse** — it works with most generic Geiger counters.
 
-### Pre-built image
+### I have an ESP + generic pulse Geiger counter
 
-Select an image - the images are in the format `<esp_device>_<geiger_device>`
+| Hardware | Recommended Build |
+|---|---|
+| ESP8266 (Wemos D1 Mini, NodeMCU, etc.) | `esp8266_pulse` |
+| ESP8266 with SSD1306 OLED | `esp8266oled_pulse` |
+| ESP32 | `esp32_pulse` |
+| ESP32 with SSD1306 OLED | `esp32oled_pulse` |
+| CAJOE IoT-GM (ESP32 with built-in OLED) | `esp32_cajoe_iotgm` |
 
-There are builds for both ESP32 and ESP8266 boards, both with builds for:
+### I have an ESP + serial Geiger counter
 
-- Generic Pulse Counters (`pulse`)
-- GC10 (`gc10`)
-- GC10next (`gc10next`)
-- MightyOhm (`mightyohm`)
+| Counter | ESP8266 Build | ESP32 Build |
+|---|---|---|
+| GC10 | `esp8266_gc10` | `esp32_gc10` |
+| GC10-Next | `esp8266_gc10next` | `esp32_gc10next` |
+| MightyOhm | `esp8266_mightyohm` | `esp32_mightyohm` |
 
-For example, if you have an esp8266 and a generic pulse counter, use `esp8266_pulse-firmware.v0.1.2.bin` - an ESP32 with a GC10 - `esp32_gc10-firmware.v0.1.2.bin`
+OLED variants exist for each — replace `esp8266_` with `esp8266oled_` (or `esp32_` with `esp32oled_`).
 
-All build files have an OLED option if you are using a SSD1306 OLED display.
+### I have an ESPGeiger-HW or ESPGeiger Log
 
-There are additional builds with special features:
+These are official ESPGeiger hardware kits — use the hardware-specific builds:
 
- - `espgeigerhw` - build for the ESPGeiger HW geiger counter
- - `minpulse` - this is a build without any 3rd party output other than web config
- - `no_pcnt` - disables PCNT (hardware) counting for ESP32 devices
- - `cajoe_iotgm` - build for the CaJoe IOT GM with ESP32 on board
+| Hardware | Pulse | GC10 | GC10-Next | MightyOhm |
+|---|---|---|---|---|
+| ESPGeiger-HW | `espgeigerhw` | — | — | — |
+| ESPGeiger Log | `espgeigerlog` | `espgeigerlog_gc10` | `espgeigerlog_gc10next` | `espgeigerlog_mightyohm` |
 
-Use a tool such as esptool.py or Tasmotizer to flash the firmware to your ESP device.
+### I want to test without a real Geiger counter
 
-### Building your own image
+Test builds emulate a Geiger counter internally. You can also wire the `TXPIN` of one ESPGeiger to the `RXPIN` of another to simulate a serial counter:
 
-The project should build automatically with Platformio - it can be built with the Arduino IDE but will require you to satify the requirements by installing the libraries.
+| Build | Description |
+|---|---|
+| `esp8266_test` / `esp32_test` | Internal counter, no output |
+| `esp8266_testpulse` / `esp32_testpulse` | Outputs Poisson-distributed pulses on TXPIN |
+| `esp8266_test_gc10` / `esp32_test_gc10` | Emulates a GC10 serial counter |
+| `esp8266_test_mightyohm` / `esp32_test_mightyohm` | Emulates a MightyOhm serial counter |
 
-The `environments.ini` file defines some pre-built environments and examples of how the build can be configured. You can pick a combination of target board (esp32/esp8266) and geiger type (pulse/serial/GC10 etc)
+See the full list of available builds on the [releases page](https://github.com/steadramon/ESPGeiger/releases/latest) or in the [build targets documentation](https://docs.espgeiger.com/install/buildtargets).
 
-1.  Open the PlatformIO IDE and open the ESPGeiger project.
-2.  Edit the `platformio.ini` file to change `default_envs` to match the environment you want to build. 
-3.  Click on the `Build` button in the PlatformIO IDE.
-4.  The PlatformIO IDE will build the project.
-5.  Once the project is built, you can upload it to your microcontroller.
-6.  To upload the project to your microcontroller, click on the `Upload` button in the PlatformIO IDE.
-7.  The PlatformIO IDE will upload the project to your microcontroller.
+## Hardware Connection
 
-## 2. Connect Hardware
+By default `GEIGER_RXPIN` is set to GPIO13. Connect your Geiger counter's pulse or serial TX output to this pin. Don't forget a common ground.
 
-### Pulse counter
-
-By default `GEIGER_RXPIN` is set to GPIO13. This is the pin you need to connect the Geiger pulse output to. Don't forget to connect ground as well!
-
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
 
-### Serial counter
+## First-time Setup
 
-By default `GEIGER_RXPIN` is set to GPIO13. This is the pin on the ESP you need to connect the Geiger counter serial TX pin to. Don't forget to have a common ground, as well!
-
-The `GEIGER_TXPIN` is not currently in use for communication to the Geiger Counter.
-
-### ESPGeiger-HW
-
-Currently ESPGeiger-HW is in development testing, watch this space!
-
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPG-HW.png" width="75%"/>
-
-### Test/Emulation mode counter
-
-**Note**: Publishing to public sites is disabled whilst ESPGeiger is in test mode.
-
-By default `GEIGER_RXPIN` is set to GPIO13. By default `GEIGER_TXPIN` is set to GPIO12.
-
-In either Test Pulse or Test Serial modes you can connect `GEIGER_RXPIN` and `GEIGER_TXPIN` together with a jumper wire, to emulate a Geiger counter from ESPGeiger itself.
-
-## 3. Setup and Config
-
-1.  Once installed, connect to the built-in Wifi on the ESP to set up your access point. The SSID will look like ESPGeiger-\<alpha-num\>
-2.  When you connect a window show pop up asking for Wifi Configuration, if not browse to http://192.168.4.1/
-3.  Select the SSID and insert the password for the network you'd like to connect to.
-4.  Once connected to the network you can browse to the ESPGeiger IP address directly or enter `http://<name of the device>.local` into your browser, for example http://ESPGeiger-83e6a4.local
-5.  You can now configure MQTT etc from the Setup page and view the current status from Status
+1. After flashing, connect to the new Wi-Fi network (`ESPGeiger-XXXXXX`)
+2. A captive portal should pop up — if not, browse to http://192.168.4.1/
+3. Select your home Wi-Fi network and enter the password
+4. Once connected, browse to `http://ESPGeiger-XXXXXX.local` or the assigned IP
+5. Configure MQTT, Radmon, GMCMAP, ThingSpeak and other outputs from the Config page
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-anim.gif" width="75%"/>
 
-## 4. Upgrading
+## Upgrading
 
-Upgrading can be done through the web interface. Please be careful to select the right firmware for your build.
+Upgrades can be done over-the-air through the web interface. Please be careful to select the right firmware for your hardware.
 
-Note: ESP32 users please download the `firmware` version - `merged` firmwares are for fresh installs.
+Note: ESP32 users should use the `firmware` binary when upgrading (the `merged` binaries are for fresh installs via the Web Installer).
 
-## Compatible Counters
+## Documentation
 
-### Annoucing ESPGeiger-HW
+Full documentation is available at **[docs.espgeiger.com](https://docs.espgeiger.com/)**.
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-J305.jpg" width="75%"/>
+## Building from Source
 
-### Pulse Counters
+If you want to customise the firmware or create a build for unsupported hardware, you can build from source using PlatformIO. See the [Platformio Build documentation](https://docs.espgeiger.com/install/platformio) for details.
 
-The project is compatible with Generic Pulse-based geiger counters and the GC10next serial based counters.
+## Compatible Geiger Counters
+
+### Pulse
 
 - [DIY GeigerKit](https://sites.google.com/site/diygeigercounter/)
 - [NetIO GC10](https://www.ebay.co.uk/usr/pelorymate)
 - [RHElectronics](https://www.rhelectronics.store/diy-geiger-counter-kit)
 - [GeigerHV](https://www.ebay.co.uk/usr/geigerhv)
 - [GGreg20](https://www.tindie.com/stores/iotdev/)
-- [MightyOhm Kit](https://www.tindie.com/stores/mightyohm/)
+- [MightyOhm Kit](https://www.tindie.com/stores/mightyohm/) (can also be used as a pulse counter)
 - [DiY-GDC](https://www.ebay.com/usr/impexeris)
-- CAJOE (and other clones) RadiationD-v1.1
+- CAJOE (and clones) RadiationD-v1.1
 
-Simply connect the pulse output to GPIO13
+### Serial
 
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
-
-### Serial Compatibility 
-
-*Currently the serial integration is untested against some units until I can gain access to a device.*
-
-Other Serial based should in theory be supportable with small changes to the codebase.
-
-If you own or can offer a device below for testing and support, please get in touch!
-
-- GC10 (original)
+- GC10 / GC10-Next
 - MightyOhm
-- GMC-320
-- GGreg20
+- ESPGeiger-HW
 
-## Outputs
-- MQTT
-- Home Assistant (Autodiscovery)
-- [ThingSpeak](https://thingspeak.com/channels/2087322)
-- Radmon.org
-- gmcmap.com
+Other serial-based counters should be supportable with small additions to the codebase. If you have one not listed, please [raise an issue](https://github.com/steadramon/ESPGeiger/issues).
 
-### MQTT Output
+## Announcing ESPGeiger-HW
 
-Automatically output every minute:
+<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
 
-    ESPGeiger-129e0c/tele/lwt Online
-    ESPGeiger-129e0c/tele/status {"uptime":"2T01:45:10","board":"ESP32","model":"GC10next","free_mem":191552,"ssid":"Wifi","ip":"192.168.1.123","rssi":-24}
-    ESPGeiger-129e0c/stat/CPM 26.00
-    ESPGeiger-129e0c/stat/uSv 0.10
-    ESPGeiger-129e0c/stat/CPM5 25.00
-    ESPGeiger-129e0c/stat/CPM15 25.00
-    ...
-    ESPGeiger-129e0c/tele/lwt Offline
-
-### Home Assistant MQTT Autodiscovery
-
-https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
-
-<img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-Homeassistant.png" width="75%"/>
-
-### Planned:
-- ESPGeiger API
+The official IoT Geiger counter powered by ESPGeiger. See [docs.espgeiger.com](https://docs.espgeiger.com/hardware/espgeigerhw) for more information.
 
 ## Contributions
 
-Contributions are welcomed, please feel free to raise a Pull Request for this. I am a new Arduino/C coder, so please feel free to suggest improvements to the code here to make it better for everyone!
+Contributions are welcome — please feel free to raise a Pull Request or open an issue.
 
 ## Thanks 🙏
-Thanks for supporting libraries goes to:
-- https://github.com/tzapu/WiFiManager
-- https://github.com/khoih-prog/AsyncHTTPRequest_Generic
-- https://github.com/gmag11/ESPNtpClient
-- https://github.com/MattFryer/Smoothed
-- https://github.com/knolleary/pubsubclient/
-- https://github.com/bblanchon/ArduinoJson
 
-And inspiration:
-- https://github.com/1technophile/OpenMQTTGateway
-- https://github.com/G4lile0/tinyGS/
-- https://github.com/kapraran/FreqCountESP
+Supporting libraries:
+- [WiFiManager](https://github.com/tzapu/WiFiManager)
+- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
+- [ESPNtpClient](https://github.com/gmag11/ESPNtpClient)
+- [Smoothed](https://github.com/MattFryer/Smoothed)
+- [ArduinoJson](https://github.com/bblanchon/ArduinoJson)
+
+Inspiration:
+- [OpenMQTTGateway](https://github.com/1technophile/OpenMQTTGateway)
+- [tinyGS](https://github.com/G4lile0/tinyGS/)
+- [FreqCountESP](https://github.com/kapraran/FreqCountESP)
