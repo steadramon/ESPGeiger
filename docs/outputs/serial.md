@@ -53,3 +53,10 @@ CPM: 30 CPS: 0.50 uSv: 0.20
 CPM: 32 CPS: 0.53 uSv: 0.21
 CPM: 28 CPS: 0.47 uSv: 0.19
 ```
+
+With `show hv` enabled on ESPGeiger-HW:
+
+```
+CPM: 30 CPS: 0.50 uSv: 0.20 HV: 412
+CPM: 32 CPS: 0.53 uSv: 0.21 HV: 413
+```

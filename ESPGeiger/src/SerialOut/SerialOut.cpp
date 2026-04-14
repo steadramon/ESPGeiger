@@ -73,7 +73,7 @@ void SerialOut::loop(unsigned long stick_now) {
       }
 #ifdef ESPGEIGER_HW
       if (_show_hv) {
-        pos += snprintf(buf + pos, sizeof(buf) - pos, " HV: %.2f", status.hvReading.get());
+        pos += snprintf(buf + pos, sizeof(buf) - pos, " HV: %d", (int)status.hvReading.get());
       }
 #endif
       Serial.print(buf);

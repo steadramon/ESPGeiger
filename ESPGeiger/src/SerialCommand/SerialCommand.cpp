@@ -150,7 +150,7 @@ void SerialCommand::set_cpm() {
 #ifdef ESPGEIGER_HW
 void SerialCommand::get_hv() {
   char buf[32];
-  snprintf(buf, sizeof(buf), "HV: %.3f", status.hvReading.get());
+  snprintf(buf, sizeof(buf), "HV: %d", (int)status.hvReading.get());
   Serial.println(buf);
 }
 
