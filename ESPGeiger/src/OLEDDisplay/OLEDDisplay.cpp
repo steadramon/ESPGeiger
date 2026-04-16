@@ -32,7 +32,6 @@ SSD1306Display::SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl)
 }
 
 void SSD1306Display::loop(unsigned long now) {
-    // 500 ms cadence handled by EGModuleRegistry via loop_interval_ms().
     if (status.oled_page > OLED_PAGES) {
       status.oled_page = 1;
     }
