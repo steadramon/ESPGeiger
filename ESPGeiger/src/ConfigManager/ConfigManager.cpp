@@ -581,12 +581,14 @@ void ConfigManager::handleGeigerLog() {
   handleRequest();
   char jsonBuffer[128] = "";
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
+  char cpm[16], cps[16];
+  format_f(cpm, sizeof(cpm), gcounter.get_cpmf());
+  format_f(cps, sizeof(cps), gcounter.get_cps());
   snprintf_P (
     jsonBuffer,
     sizeof(jsonBuffer),
-    PSTR("%.2lf, %.2lf, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan"),
-    gcounter.get_cpmf(),
-    gcounter.get_cps()
+    PSTR("%s, %s, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan"),
+    cpm, cps
   );
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), jsonBuffer );
