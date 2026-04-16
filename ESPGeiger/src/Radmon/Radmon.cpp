@@ -73,8 +73,6 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      // strstr() on c_str() avoids the temp String that indexOf("literal")
-      // builds for each call (one small heap alloc per probe).
       String response = request->responseText();
       const char* r = response.c_str();
       if (strstr(r, "OK")) {
