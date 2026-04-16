@@ -23,6 +23,7 @@
 #include <SdFat.h>
 #include "../Status.h"
 #include "../Counter/Counter.h"
+#include "../Module/EGModule.h"
 
 #ifndef GEIGER_SDCARD_CS
 #define GEIGER_SDCARD_CS 16
@@ -30,26 +31,26 @@
 
 extern Status status;
 extern Counter gcounter;
-extern SdFat32 sd;
+extern SdFat32* sd;
 
-class SDCard {
+class SDCard : public EGModule {
   public:
-  static SDCard &getInstance()
-  {
-    static SDCard instance;
-    return instance;
-  }
-    void s_tick(unsigned long stick_now);
-    void begin();
+    SDCard();
+    const char* name() override { return "sdcard"; }
+    bool requires_ntp() override { return true; }
+    bool has_tick() override { return true; }
+    void s_tick(unsigned long stick_now) override;
+    void begin() override;
     void deleteOldest();
   protected:
     File32 myDataFile;
   private:
-    SDCard();
-    unsigned long lastLog = 0;
     unsigned long lastClean = 0;
-    unsigned long logInterval = 60 * 1000;
+    time_t lastWrittenMinute = 0;
     bool sdenabled = false;
 };
+
+extern SDCard sdcard;
+
 #endif
 #endif

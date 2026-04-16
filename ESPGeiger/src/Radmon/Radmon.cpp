@@ -19,6 +19,10 @@
 #ifdef RADMONOUT
 #include "Radmon.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
+
+Radmon radmon;
+EG_REGISTER_MODULE(radmon)
 
 Radmon::Radmon() {
 }
@@ -64,19 +68,25 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
 {
   if (readyState == readyStateDone)
   {
+    Radmon* self = static_cast<Radmon*>(optParm);
+    self->last_attempt_ms = millis();
+    self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
+      // strstr() on c_str() avoids the temp String that indexOf("literal")
+      // builds for each call (one small heap alloc per probe).
       String response = request->responseText();
-      if (response.indexOf("OK") != -1) {
+      const char* r = response.c_str();
+      if (strstr(r, "OK")) {
         Log::console(PSTR("Radmon: Upload OK"));
-      }
-      else if (response.indexOf("Incorrect") != -1) {
+        self->last_ok = true;
+      } else if (strstr(r, "Incorrect")) {
         Log::console(PSTR("Radmon: Password incorrect, please check"));
-      }
-      else if (response.indexOf("register") != -1) {
+      } else if (strstr(r, "register")) {
         Log::console(PSTR("Radmon: Username incorrect, please check"));
-      }
-      else {
+      } else if (strstr(r, "Too soon")) {
+        Log::console(PSTR("Radmon: Rate limited"));
+      } else {
         Log::console(PSTR("Radmon: Unknown error"));
       }
     } else {
@@ -90,29 +100,28 @@ void Radmon::postMeasurement() {
   ConfigManager &configManager = ConfigManager::getInstance();
 
   const char* _send = configManager.getParamValueFromID("radmonSend");
+  if (_send == NULL || strcmp(_send, "N") == 0) {
+    return;
+  }
 
-  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
+    Log::console(PSTR("Radmon: Testmode"));
     return;
   }
 
   const char* _api_user = configManager.getParamValueFromID("radmonUser");
   const char* _api_key = configManager.getParamValueFromID("radmonKey");
+  if (_api_user == NULL || _api_key == NULL) {
+    Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
+    return;
+  }
+
   const char* _rtimer = configManager.getParamValueFromID("radmonTime");
   int rtimer = (_rtimer != NULL) ? atoi(_rtimer) : 0;
   if (rtimer == 0) {
     rtimer = RADMON_INTERVAL;
   }
   setInterval(rtimer);
-
-#ifdef GEIGERTESTMODE
-  Log::console(PSTR("Radmon: Testmode"));
-  return;
-#endif
-
-  if ((_api_user == NULL) || (_api_key == NULL)) {
-    Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
-    return;
-  }
 
   Log::console(PSTR("Radmon: Uploading latest data ..."));
 

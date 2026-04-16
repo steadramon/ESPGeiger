@@ -20,6 +20,10 @@
 #include <Arduino.h>
 #include "GMC.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
+
+GMC gmc;
+EG_REGISTER_MODULE(gmc)
 
 GMC::GMC() {
 }
@@ -41,16 +45,20 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
 {
   if (readyState == readyStateDone)
   {
+    GMC* self = static_cast<GMC*>(optParm);
+    self->last_attempt_ms = millis();
+    self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
+      // strstr() on c_str() avoids the temp String alloc per indexOf probe.
       String response = request->responseText();
-      if (response.indexOf("OK") != -1) {
+      const char* r = response.c_str();
+      if (strstr(r, "OK")) {
         Log::console(PSTR("GMC: Upload OK"));
-      }
-      else if (response.indexOf("ERR1") != -1) {
+        self->last_ok = true;
+      } else if (strstr(r, "ERR1")) {
         Log::console(PSTR("GMC: User is not found"));
-      }
-      else if (response.indexOf("ERR2") != -1) {
+      } else if (strstr(r, "ERR2")) {
         Log::console(PSTR("GMC: Geiger Counter is not found"));
       } else {
         Log::console(PSTR("GMC: Error"));
@@ -65,24 +73,25 @@ void GMC::postMeasurement() {
   ConfigManager &configManager = ConfigManager::getInstance();
 
   const char* _send = configManager.getParamValueFromID("gmcSend");
-
-  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+  if (_send == NULL || strcmp(_send, "N") == 0) {
     return;
   }
 
   const char* _api_id = configManager.getParamValueFromID("gmcAID");
   const char* _api_gc_id = configManager.getParamValueFromID("gmcGCID");
 
-  if ((_api_id == NULL) && (_api_gc_id == NULL)) {
+  // Nothing configured at all — stay silent so unconfigured units don't spam.
+  if (_api_id == NULL && _api_gc_id == NULL) {
     return;
   }
 
-#ifdef GEIGERTESTMODE
-  Log::console(PSTR("GMC: Testmode"));
-  return;
-#endif
+  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
+    Log::console(PSTR("GMC: Testmode"));
+    return;
+  }
 
-  if ((_api_id == NULL) || (_api_gc_id == NULL)) {
+  // Partially configured — log a hint.
+  if (_api_id == NULL || _api_gc_id == NULL) {
     Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
     return;
   }
@@ -90,10 +99,11 @@ void GMC::postMeasurement() {
   Log::console(PSTR("GMC: Uploading latest data ..."));
 
   int avgcpm = gcounter.get_cpmf();
-  float avgcpm5 = gcounter.get_cpm5f();
-  float usv =  gcounter.get_usv5();
+  char acpm[16], usv[16];
+  format_f(acpm, sizeof(acpm), gcounter.get_cpm5f());
+  format_f(usv,  sizeof(usv),  gcounter.get_usv5(), 4);
   char url[256];
-  snprintf(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, avgcpm5, usv);
+  snprintf(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {

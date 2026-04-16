@@ -74,7 +74,7 @@ build_flags =
 
 | Flag | Description |
 |---|---|
-| `-D GEIGER_TYPE=N` | Set the geiger counter type. `1` Pulse (default), `2` Serial, `3` Test, `4` Test Pulse, `5` Test Serial, `6` Test Pulse PWM. |
+| `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield — bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 7 = test). `1` Pulse (default), `2` Serial, `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. |
 | `-D GEIGER_SERIALTYPE=N` | Set the serial counter type when using `GEIGER_TYPE=2`. `1` GC10 (9600 baud), `2` GC10-Next (115200 baud), `3` MightyOhm (9600 baud), `4` ESPGeiger (115200 baud). |
 
 ### Geiger Counter Input
@@ -83,7 +83,7 @@ build_flags =
 |---|---|
 | `-D GEIGER_RXPIN=N` | Set the geiger counter input pin (default `13`). |
 | `-D GEIGER_TXPIN=N` | Set the transmit pin for test builds (default `-1`). |
-| `-D GEIGER_DEBOUNCE=N` | Set the pulse debounce time in microseconds (default `500`). |
+| `-D GEIGER_DEBOUNCE=N` | Set the default pulse debounce time in microseconds (default `500`). This can also be configured at runtime from the web interface on builds that use software interrupt counting. |
 | `-D GEIGER_RATIO=N` | Set the default CPM to μSv/h conversion ratio (default `151.0`). |
 | `-D GEIGER_BAUDRATE=N` | Set the serial baud rate for serial-type counters. |
 | `-D GEIGER_MODEL="name"` | Set the geiger counter model name. |
@@ -110,6 +110,11 @@ On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type ge
 |---|---|
 | `-D IGNORE_PCNT` | Disable hardware PCNT and use software interrupt counting instead. |
 | `-D PCNT_FILTER=N` | Set the initial PCNT glitch filter value at compile time. Filters pulses shorter than N APB clock cycles. This can also be configured at runtime from the web interface. |
+| `-D PCNT_FLOATING_PIN` | Disable the internal pull resistor on the PCNT input. Use when the geiger module already provides its own pull. |
+| `-D PCNT_PULLDOWN_PIN` | Use an internal pulldown instead of the default pullup. For active-high modules without their own idle pull. |
+| `-D OTA_POLL_INTERVAL_MS=N` | How often to poll the ArduinoOTA UDP socket, in ms (default `100`). Shorter = faster OTA start response, more CPU cost. |
+| `-D CMAN_PROCESS_INTERVAL_MS=N` | How often to run the config-portal/HTTP handler in the main loop, in ms. Default `10` on ESP32, `5` on ESP8266. Shorter = faster HTTP response, more CPU overhead. |
+| `-D MQTT_HASS_REFRESH_S=N` | How often to republish Home Assistant autodiscovery configs on MQTT reconnect, in seconds (default `3600` = 1h). `0` = publish on every reconnect (legacy behaviour). |
 
 ### MQTT Options
 

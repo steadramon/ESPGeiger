@@ -20,6 +20,10 @@
 #include "OLEDDisplay.h"
 #include "../Logger/Logger.h"
 #include "../ConfigManager/ConfigManager.h"
+#include "../Module/EGModuleRegistry.h"
+
+SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
+EG_REGISTER_MODULE(display)
 
 SSD1306Display::SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl)
  : SSD1306Wire(_addr, _sda, _scl) {
@@ -28,10 +32,8 @@ SSD1306Display::SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl)
 }
 
 void SSD1306Display::loop(unsigned long now) {
-    if (now - _last_update < 500) {
-      return;
-    }
-    if (status.oled_page > 3) {
+    // 500 ms cadence handled by EGModuleRegistry via loop_interval_ms().
+    if (status.oled_page > OLED_PAGES) {
       status.oled_page = 1;
     }
 #ifdef GEIGER_PUSHBUTTON
@@ -88,7 +90,6 @@ void SSD1306Display::loop(unsigned long now) {
       }
     }
     display();
-    _last_update = now;
 
   }
 
@@ -148,7 +149,7 @@ void SSD1306Display::page_two_full() {
 #ifdef ESPGEIGER_HW
   drawString(0, uptime_y, PSTR("HV:"));
   char hvBuf[12];
-  snprintf(hvBuf, sizeof(hvBuf), "%.2f", status.hvReading.get());
+  format_f(hvBuf, sizeof(hvBuf), status.hvReading.get());
   drawString(20, uptime_y, hvBuf);
   uptime_y = 47;
 #endif

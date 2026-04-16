@@ -22,7 +22,7 @@
 #include <Arduino.h>
 #include "../Status.h"
 #include "../Counter/Counter.h"
-#include <EasyButton.h>
+#include "../Module/EGModule.h"
 
 #ifndef PUSHBUTTON_PIN
 #define PUSHBUTTON_PIN 14
@@ -30,47 +30,23 @@
 
 extern Status status;
 extern Counter gcounter;
-static EasyButton pbutton(PUSHBUTTON_PIN);
 
-#ifdef ESP32
-static void IRAM_ATTR do_pushbutton() {
-  status.button_pushed = true;
-};
-static void IRAM_ATTR do_longpress() {
-  status.enable_oled_timeout = !status.enable_oled_timeout;
-  if (status.enable_oled_timeout) {
-    status.oled_timeout = 0;
-  }
-};
-#else
-static void do_pushbutton() {
-  status.button_pushed = true;
-}
-
-static void do_longpress() {
-  status.enable_oled_timeout = !status.enable_oled_timeout;
-  if (status.enable_oled_timeout) {
-    status.oled_timeout = 0;
-#ifdef ESPGEIGER_HW
-    status.blip_led.Blink(200,100).Repeat(2);
-#endif
-  } else {
-#ifdef ESPGEIGER_HW
-    status.blip_led.Blink(200,1).Repeat(1);
-#endif
-  }
-}
-#endif
-
-class PushButton {
+class PushButton : public EGModule {
   public:
     PushButton();
-    void loop(unsigned long now);
+    const char* name() override { return "button"; }
+    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint16_t warmup_seconds() override { return 0; }
+    void loop(unsigned long now) override;
+    bool has_loop() override { return true; }
+    uint16_t loop_interval_ms() override { return 10; }
+    void begin() override;
     void init();
-    void begin();
     void read();
     bool isPressed();
 };
+
+extern PushButton pushbutton;
 
 #endif
 #endif

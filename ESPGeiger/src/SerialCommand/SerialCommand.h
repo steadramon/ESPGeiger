@@ -22,6 +22,7 @@
 #include "../Status.h"
 #include "../Counter/Counter.h"
 #include "../ConfigManager/ConfigManager.h"
+#include "../Module/EGModule.h"
 
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"
@@ -42,11 +43,16 @@ extern SerialOut serialout;
 
 typedef void (* cbFunction)(char*);
 
-class SerialCommand {
+class SerialCommand : public EGModule {
 public:
     SerialCommand();
+    const char* name() override { return "sercmd"; }
+    uint16_t warmup_seconds() override { return 0; }
+    void begin() override { setup(); }
+    void loop(unsigned long now) override;
+    bool has_loop() override { return true; }
+    uint16_t loop_interval_ms() override { return 10; }
     void setup();
-    void loop();
     void readSerial();
     void clearBuffer();
     char *next();         // Returns pointer to next token found in command buffer (for getting arguments to commands).
@@ -59,7 +65,7 @@ public:
     static void get_usv();
     static void set_show();
 #endif
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
     static void set_cpm();
 #endif
 #ifdef ESPGEIGER_HW

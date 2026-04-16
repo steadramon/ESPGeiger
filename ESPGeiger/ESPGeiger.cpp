@@ -19,7 +19,6 @@
   #error This code is intended to run on the ESP8266 or ESP32 platform! Please check your Tools->Board setting.
 #endif
 
-#define DEFAULT_RX_TIMEOUT           30
 #include <Arduino.h>
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
@@ -30,6 +29,7 @@
 #include "src/Status.h"
 #include "src/Mqtt/MQTT_Client.h"
 #include "src/Radmon/Radmon.h"
+#include "src/Module/EGModuleRegistry.h"
 #include "src/Thingspeak/Thingspeak.h"
 #include "src/GMC/GMC.h"
 #include "src/Webhook/Webhook.h"
@@ -47,60 +47,24 @@
 #include "src/OLEDDisplay/OLEDDisplay.h"
 #include "src/SerialCommand/SerialCommand.h"
 #include <Ticker.h>  //Ticker Library
-#ifdef SERIALOUT
-#include "src/SerialOut/SerialOut.h"
-#endif
-#ifdef GEIGER_SDCARD
-SDCard sdcard = SDCard::getInstance();
-#endif
-#ifdef GEIGER_NEOPIXEL
-NeoPixel neopixel = NeoPixel::getInstance();
-#endif
-#ifdef GEIGER_PUSHBUTTON
-PushButton pushbutton = PushButton();
-#endif
-#if defined(SSD1306_DISPLAY)
-SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
-#endif
-#ifdef ESPGEIGER_HW
-ESPGeigerHW hardware = ESPGeigerHW();
-#endif
-
-#ifdef SERIALOUT
-SerialOut serialout = SerialOut();
-#endif
 // Global status and counter
 Status status;
 Counter gcounter = Counter();
 GRNG grng = GRNG();
 
-NTP_Client ntpclient = NTP_Client();
-
 ConfigManager& cManager = ConfigManager::getInstance();
 #ifdef MQTTOUT
 MQTT_Client& mqtt = MQTT_Client::getInstance();
 #endif
-// External
-#ifdef GMCOUT
-GMC gmc = GMC();
-#endif
-#ifdef RADMONOUT
-Radmon radmon = Radmon();
-#endif
-#ifdef THINGSPEAKOUT
-Thingspeak thingspeak = Thingspeak();
-#endif
-#ifdef WEBHOOKOUT
-Webhook webhook = Webhook();
-#endif
 
-SerialCommand serialcmd;     // The demo SerialCommand object
+SerialCommand serialcmd;
 
 // Tickers
 Ticker msTicker;
-Ticker hmsTicker;
-Ticker fiveSTicker;
 Ticker sTicker;
+
+// Loop iteration counter — read & reset every second by sTickerCB
+static volatile uint32_t lps_count = 0;
 
 void msTickerCB()
 {
@@ -110,95 +74,67 @@ void msTickerCB()
 #endif
 }
 
-void hmsTickerCB()
-{
-  unsigned long now = millis();
-#ifdef GEIGER_PUSHBUTTON
-  pushbutton.loop(now);
-#endif
-}
-
-int getQuality() {
-  if (WiFi.status() != WL_CONNECTED)
-    return -1;
-  int dBm = WiFi.RSSI();
-  if (dBm <= -100)
-    return 0;
-  if (dBm >= -50)
-    return 100;
-  return 2 * (dBm + 100);
-}
-
 void sTickerCB()
 {
+  unsigned long t_start = micros();
   unsigned long stick_now = millis();
 
   gcounter.secondticker(stick_now);
-#ifdef SERIALOUT
-  serialout.loop(stick_now);
-#endif
-#ifdef ESPGEIGER_HW
-  hardware.loop();
-#endif
-  if (status.warmup) {
-    uint8_t uptime = NTP.getUptime() - status.start;
-    if (uptime > 10) {
-      status.warmup = false;
-    }
+
+  unsigned long uptime = NTP.getUptime() - status.start;
+  if (status.warmup && uptime > 10) {
+    status.warmup = false;
   }
-#ifdef GEIGER_SDCARD
-  sdcard.s_tick(stick_now);
-#endif
-  status.wifi_status = WiFi.status();
-  if (status.warmup) {
-    return;
-  }
-  if (status.wifi_disabled) {
-    return;
-  }
-  if (status.wifi_status != WL_CONNECTED) {
-    if (status.wifi_was_connected) {
-      // Just lost connection
-      status.wifi_was_connected = false;
-      status.wifi_lost_at = stick_now;
-      Log::console(PSTR("WiFi: Connection lost"));
-    }
-    unsigned long down_seconds = (stick_now - status.wifi_lost_at) / 1000;
-    // Try reconnect every 30 seconds
-    if (down_seconds > 0 && down_seconds % 30 == 0) {
-      Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
-      WiFi.reconnect();
-    }
-    // Reboot after 5 minutes of no WiFi
-    if (down_seconds > 300) {
-      Log::console(PSTR("WiFi: Down for 5 minutes, rebooting"));
-      delay(100);
-      ESP.restart();
-    }
-    return;
-  }
-  if (!status.wifi_was_connected) {
-    status.wifi_was_connected = true;
-    if (status.wifi_lost_at > 0) {
+  wl_status_t wifi_status = WiFi.status();
+
+  // WiFi recovery tracking (only once WiFi has been enabled)
+  if (!status.wifi_disabled) {
+    if (wifi_status != WL_CONNECTED) {
+      if (status.wifi_was_connected) {
+        status.wifi_was_connected = false;
+        status.wifi_lost_at = stick_now;
+        Log::console(PSTR("WiFi: Connection lost"));
+      }
       unsigned long down_seconds = (stick_now - status.wifi_lost_at) / 1000;
-      Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
+      if (down_seconds > 0 && down_seconds % 30 == 0) {
+        Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
+        WiFi.reconnect();
+      }
+      if (down_seconds > 300) {
+        Log::console(PSTR("WiFi: Down for 5 minutes, rebooting"));
+        delay(100);
+        ESP.restart();
+      }
+    } else if (!status.wifi_was_connected) {
+      status.wifi_was_connected = true;
+      if (status.wifi_lost_at > 0) {
+        unsigned long down_seconds = (stick_now - status.wifi_lost_at) / 1000;
+        Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
+      }
     }
   }
+
 #ifdef MQTTOUT
-  mqtt.loop(stick_now);
+  if (!status.wifi_disabled && wifi_status == WL_CONNECTED) {
+    mqtt.loop(stick_now);
+  }
 #endif
-#ifdef GMCOUT
-  gmc.s_tick(stick_now);
-#endif
-#ifdef RADMONOUT
-  radmon.s_tick(stick_now);
-#endif
-#ifdef THINGSPEAKOUT
-  thingspeak.s_tick(stick_now);
-#endif
-#ifdef WEBHOOKOUT
-  webhook.s_tick(stick_now);
-#endif
+
+  EGModuleRegistry::tick_all(stick_now, uptime);
+
+  status.lps = lps_count;
+  lps_count = 0;
+  // tick_us: EMA-smoothed for "typical load" display. α = 1/8 tracks sustained
+  // changes in ~8 ticks while masking single-tick spikes (MQTT publish etc).
+  // tick_max_us: raw peak, resets every 60 ticks for a rolling "worst-in-last-minute".
+  uint32_t this_tick = (uint32_t)(micros() - t_start);
+  status.tick_us = (status.tick_us * 7 + this_tick) >> 3;
+  if (this_tick > status.tick_max_us) status.tick_max_us = this_tick;
+  static uint8_t tick_max_age = 0;
+  if (++tick_max_age >= 60) {
+    tick_max_age = 0;
+    status.tick_max_us = this_tick;
+  }
 }
 
 void setup()
@@ -206,30 +142,27 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   delay(100);
-#ifdef ESP8266
-  if(!LittleFS.begin()){
-#elif defined(ESP32)
-  if(!LittleFS.begin(true)){
-#endif
-    Serial.println("LittleFS Mount Failed");
-    return;
-  }
-  LittleFS.end();
 
   const char* hostName = cManager.getHostName();
   Log::console(PSTR("   ___"));
   Log::console(PSTR("   \\_/    Starting up ... %s"), hostName);
   Log::console(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, cManager.GetChipModel());
   Log::console(PSTR(" \\/   \\/"));
-#ifdef GEIGER_NEOPIXEL
-  neopixel.setup();
+
+#ifdef ESP8266
+  if(!LittleFS.begin()){
+#else
+  if(!LittleFS.begin(true)){
 #endif
+    Log::console(PSTR("LittleFS Mount Failed"));
+    return;
+  }
+  LittleFS.end();
+
+  EGModuleRegistry::pre_wifi_all();
 
   delay(100);
   msTicker.attach_ms(1, msTickerCB);
-#ifdef SSD1306_DISPLAY
-  display.begin();
-#endif
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.init();
   if (pushbutton.isPressed() && status.start == 0) {
@@ -244,7 +177,6 @@ void setup()
     status.enable_oled_timeout = false;
     status.wifi_disabled = true;
   }
-  pushbutton.begin();
 #endif
 #ifdef SSD1306_DISPLAY
   if (!cManager.getWiFiIsSaved()) {
@@ -266,56 +198,31 @@ void setup()
     }
 
     delay(100);
-    status.wifi_status = WiFi.status();
-    status.wifi_was_connected = (status.wifi_status == WL_CONNECTED);
+    status.wifi_was_connected = (WiFi.status() == WL_CONNECTED);
     cManager.startWebPortal();
   }
-#ifdef GEIGER_SDCARD
-  sdcard.begin();
-#endif
-#ifdef ESPGEIGER_HW
-  hardware.begin();
-#endif
 
-  arduino_ota_setup(hostName);
   delay(500);
   grng.begin();
   if (!status.wifi_disabled) {
 #ifdef MQTTOUT
     mqtt.begin();
 #endif
-    ntpclient.setup();
   }
   gcounter.begin();
-  status.start = NTP.getUptime()+1;
-#ifdef GEIGER_PUSHBUTTON
-  pushbutton.begin();
-#endif
+  EGModuleRegistry::begin_all();
+  status.start = NTP.getUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
   status.led.Off().Update();
-  serialcmd.setup();
-  hmsTicker.attach_ms(100, hmsTickerCB);
-#ifdef SSD1306_DISPLAY
   status.oled_timeout = millis();
-#endif
 }
 
 void loop()
 {
+  lps_count++;
   unsigned long now = millis();
-  gcounter.loop(now);
-  cManager.process();
-#ifndef DISABLE_SERIALRX
-  serialcmd.loop();
-#endif
-#ifdef GEIGER_NEOPIXEL
-  // This has to be done in loop
-  neopixel.loop(now);
-#endif
-#ifdef SSD1306_DISPLAY
-  // This has to be done in loop
-  display.loop(now);
-#endif
-  ArduinoOTA.handle();
+  gcounter.loop();
+  cManager.processLoop(now);
+  EGModuleRegistry::loop_all(now);
 }

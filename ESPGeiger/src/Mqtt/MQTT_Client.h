@@ -34,6 +34,14 @@
 #define MQTT_MAX_TIME 3600
 #define MQTT_STATUS_INTERVAL 60000
 
+// How often (in seconds) to republish Home Assistant autodiscovery configs
+// on reconnect. Default 1 hour — frequent enough to recover from broker
+// restarts, rare enough to avoid flooding on flap-prone clients. Override
+// with -D MQTT_HASS_REFRESH_S=N (set to 0 to publish on every reconnect).
+#ifndef MQTT_HASS_REFRESH_S
+#define MQTT_HASS_REFRESH_S 3600UL
+#endif
+
 constexpr auto MQTT_LWT_ONLINE PROGMEM = "Online";
 constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
 
@@ -72,6 +80,8 @@ public:
   void removeHASSConfig();
 #endif
   MQTTMessage last_will_;
+  bool last_ok = false;
+  unsigned long last_attempt_ms = 0;
 protected:
   void reconnect();
 
@@ -107,6 +117,9 @@ private:
 
   unsigned long statusInterval = MQTT_STATUS_INTERVAL;
   unsigned long pingInterval = 1 * 60 * 1000;
+#ifdef MQTTAUTODISCOVER
+  unsigned long _hass_last_publish = 0;   // millis() of last HA autodiscovery publish (0 = never)
+#endif
 
   const char* teleTopic = MQTT_TELE_TOPIC;
   const char* statTopic = MQTT_STAT_TOPIC;

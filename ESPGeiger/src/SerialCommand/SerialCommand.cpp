@@ -17,7 +17,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "SerialCommand.h"
+#include "../Module/EGModuleRegistry.h"
 extern SerialCommand serialcmd;
+
+#ifndef DISABLE_SERIALRX
+EG_REGISTER_MODULE(serialcmd)
+#endif
 
 /**
  * Constructor makes sure some things are set.
@@ -42,7 +47,7 @@ void SerialCommand::setup() {
   addCommand(PSTR("usv"), get_usv);
   addCommand(PSTR("show"), set_show);
 #endif
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
   addCommand(PSTR("target"), set_cpm);
 #endif
 #ifdef ESPGEIGER_HW
@@ -130,11 +135,13 @@ void SerialCommand::set_ratio() {
     }
   } else {
     char buf[32];
-    snprintf(buf, sizeof(buf), "uSv Ratio: %.2f", gcounter.get_ratio());
+    char r[12];
+    format_f(r, sizeof(r), gcounter.get_ratio());
+    snprintf(buf, sizeof(buf), "uSv Ratio: %s", r);
     Serial.println(buf);
   }
 }
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
 void SerialCommand::set_cpm() {
   char *arg;
   int aNumber;
@@ -223,7 +230,7 @@ void SerialCommand::set_vdoffset() {
 }
 #endif
 
-void SerialCommand::loop() {
+void SerialCommand::loop(unsigned long now) {
   readSerial();
 }
 

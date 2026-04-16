@@ -26,6 +26,12 @@ void GeigerPulse::begin() {
   GeigerInput::begin();
 #ifdef USE_PCNT
   Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
+  // Set pull mode BEFORE pcnt_unit_config so the pin is at a defined level
+  // when PCNT samples it. A floating pin during init can leave the edge
+  // detector in an undefined state and prevent counting from starting.
+  // _pin_pull may have been updated by set_pin_pull() during loadParams()
+  // before begin() runs; otherwise it's the compile-time default.
+  set_pin_pull(_pin_pull);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _rx_pin,
     .ctrl_gpio_num = -1,
@@ -42,7 +48,6 @@ void GeigerPulse::begin() {
   pcnt_set_filter_value(PCNT_UNIT, PCNT_FILTER);
   pcnt_filter_enable(PCNT_UNIT);
   #endif
-  gpio_set_pull_mode((gpio_num_t)_rx_pin, PCNT_PIN_PULL_MODE);
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
 #else
@@ -82,5 +87,19 @@ void GeigerPulse::apply_pcnt_filter() {
     pcnt_filter_disable(PCNT_UNIT);
     Log::console(PSTR("GeigerPulse: PCNT filter disabled"));
   }
+}
+
+void GeigerPulse::set_pin_pull(int mode) {
+  gpio_pull_mode_t m;
+  const char* name;
+  switch (mode) {
+    case PCNT_PULL_FLOATING: m = GPIO_FLOATING;        name = "floating"; break;
+    case PCNT_PULL_DOWN:     m = GPIO_PULLDOWN_ONLY;   name = "pull-down"; break;
+    case PCNT_PULL_UP:
+    default:                 m = GPIO_PULLUP_ONLY;     name = "pull-up"; mode = PCNT_PULL_UP; break;
+  }
+  _pin_pull = mode;
+  gpio_set_pull_mode((gpio_num_t)_rx_pin, m);
+  Log::console(PSTR("GeigerPulse: PCNT pin pull = %s"), name);
 }
 #endif

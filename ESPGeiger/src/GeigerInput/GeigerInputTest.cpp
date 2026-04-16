@@ -47,11 +47,7 @@ double GeigerInputTest::calcDelay() {
   result += _remainder;
   _remainder = 0;
 
-#ifdef GEIGER_PULSE_WIDTH
   double min_interval = GEIGER_PULSE_WIDTH * 0.000001;
-#else
-  double min_interval = (_debounce * 0.000001);
-#endif
   if (result < min_interval) {
     _remainder = result - min_interval;
     if (_remainder < -min_interval) _remainder = -min_interval;

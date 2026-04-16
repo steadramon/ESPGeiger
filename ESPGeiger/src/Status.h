@@ -32,6 +32,10 @@
 #define RELEASE_VERSION "devel"
 #endif
 
+#ifndef BUILD_ENV
+#define BUILD_ENV "unknown"
+#endif
+
 #ifndef LED_SEND_RECEIVE
 #define LED_SEND_RECEIVE 2
 #endif
@@ -49,12 +53,11 @@
 #endif
 #endif
 
-#define TimeLedON                    1
-#define MAX_SIZE 90
 struct Status {
   const char thingName[11] = "ESPGeiger";
   const char* version = RELEASE_VERSION;
   const char* git_version = GIT_VERSION;
+  const char* build_env = BUILD_ENV;
   bool ntp_synced = false;
   long start = 0;
   unsigned long start_time = 0;
@@ -64,10 +67,8 @@ struct Status {
   unsigned long last_blip = 0;
 #ifdef MQTTOUT
   bool mqtt_connected = false;
-  unsigned long last_mqtt = 0;
 #endif
 #ifdef GEIGER_PUSHBUTTON
-  unsigned long last_pushbutton = 0;
   bool button_pushed = false;
 #endif
 #if LED_SEND_RECEIVE_ON == LOW
@@ -75,12 +76,12 @@ struct Status {
 #else
   JLed led = JLed(LED_SEND_RECEIVE);
 #endif
+  unsigned long oled_timeout = 0;
 #if defined(SSD1306_DISPLAY)
-  int oled_page = 1;
+  uint8_t oled_page = 1;
   unsigned long oled_last_update = 0;
   bool oled_on = true;
   bool enable_oled_timeout = true;
-  unsigned long oled_timeout = 0;
 #endif
 #ifdef GEIGER_BLIPLED
   JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
@@ -88,11 +89,13 @@ struct Status {
 #ifdef ESPGEIGER_HW
   Smoothed <float> hvReading;
 #endif
-  int wifi_status = 0;
-  int serialOut = 0;
+  uint16_t serialOut = 0;
   bool wifi_disabled = false;
   unsigned long wifi_lost_at = 0;
   bool wifi_was_connected = false;
+  uint32_t tick_us = 0;     // sTickerCB duration, EMA-smoothed (α = 1/8)
+  uint32_t tick_max_us = 0; // peak tick_us since the last 60s window reset
+  uint32_t lps = 0;         // loop iterations counted in the last second
 };
 
 #endif

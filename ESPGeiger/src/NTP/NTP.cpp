@@ -19,9 +19,13 @@
 #include <Arduino.h>
 #include "NTP.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
 #include <FS.h>
 #include <LittleFS.h>
 #include "ArduinoJson.h"
+
+NTP_Client ntpclient = NTP_Client();
+EG_REGISTER_MODULE(ntpclient)
 #ifdef ESP32
 #include "sntp.h"
 #endif
@@ -92,7 +96,7 @@ void NTP_Client::saveconfig() {
     _ntp_tz
   );
   configFile.print(jsonBuffer);
-  Log::console(PSTR("NTP: %s"), jsonBuffer);
+  Log::debug(PSTR("NTP: %s"), jsonBuffer);
 
   // Close the file
   configFile.close();

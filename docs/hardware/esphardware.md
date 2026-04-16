@@ -38,3 +38,19 @@ The filter value can be configured from the ESPGeiger web interface under __Conf
 Real Geiger-Muller tube pulses are typically 50-200μs in duration, so even the maximum filter value will not affect real readings. The filter is only available on ESP32 PCNT builds.
 
 The filter value can also be set at compile time with the `-D PCNT_FILTER=N` build flag. See [Build Options](/install/platformio#esp32-hardware-counter-pcnt) for details.
+
+### Interrupt Debounce
+
+On builds that use software interrupt counting instead of PCNT (all ESP8266 pulse builds, and ESP32 `no_pcnt` builds), a debounce window rejects any edge that arrives within a configurable number of microseconds of the previously accepted pulse. This serves the same purpose as the PCNT filter — suppressing electrical noise and contact bounce without affecting real tube pulses.
+
+The debounce value can be configured from the ESPGeiger web interface under __Config__. The value is in microseconds, with a range of 0 to 10000. A value of 0 disables the debounce.
+
+| Debounce Value | Pulses Rejected | Use Case |
+|---|---|---|
+| 0 | Disabled | No debounce |
+| 500 (default) | < 500μs apart | Suppresses typical switching noise, passes all real pulses |
+| 1000 | < 1ms apart | More aggressive for noisier setups |
+
+Real Geiger-Muller tube dead time is around 50-200μs, so the default value comfortably accommodates real events. The debounce only applies to the software interrupt path; PCNT builds use the PCNT Filter above instead.
+
+The default can also be set at compile time with the `-D GEIGER_DEBOUNCE=N` build flag. See [Build Options](/install/platformio#geiger-counter-input) for details.

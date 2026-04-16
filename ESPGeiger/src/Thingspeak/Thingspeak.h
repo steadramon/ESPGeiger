@@ -23,6 +23,7 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
+#include "../Module/EGModule.h"
 #include "AsyncHTTPRequest_Generic.hpp"
 
 #ifdef ESP8266
@@ -40,17 +41,24 @@ extern Counter gcounter;
 
 const char TS_URI[] PROGMEM = "http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%s&field3=%d&field4=%d";
 
-class Thingspeak {
+class Thingspeak : public EGModule {
   public:
     Thingspeak();
-    void s_tick(unsigned long stick_now);
+    const char* name() override { return "thgspk"; }
+    bool requires_wifi() override { return true; }
+    bool has_tick() override { return true; }
+    void s_tick(unsigned long stick_now) override;
     void postMeasurement();
     AsyncHTTPRequest request;
+    bool last_ok = false;
+    unsigned long last_attempt_ms = 0;
   private:
     unsigned long lastPing = 0;
     const int pingInterval = 1000 * THINGSPEAK_INTERVAL;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
+
+extern Thingspeak thingspeak;
 
 #endif
 #endif

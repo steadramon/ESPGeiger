@@ -23,12 +23,35 @@
 #include <Arduino.h>
 #include "../Status.h"
 
-#define GEIGER_TYPE_PULSE 1
-#define GEIGER_TYPE_SERIAL 2
-#define GEIGER_TYPE_TEST 3
-#define GEIGER_TYPE_TESTPULSE 4
-#define GEIGER_TYPE_TESTSERIAL 5
-#define GEIGER_TYPE_TESTPULSEINT 6
+// GEIGER_TYPE bitfield. Bit 7 partitions test (>=128) from real (<128) builds;
+// bits 0-2 describe the input pipeline; bits 3-6 reserved for future variants.
+// PCNT (ESP32 hardware pulse counter) is an implementation detail of the pulse
+// input path, controlled separately via the IGNORE_PCNT compile-time flag.
+#define GEIGER_FLAG_PULSE   0x01   // bit 0 — hardware pulse input
+#define GEIGER_FLAG_SERIAL  0x02   // bit 1 — UART input
+#define GEIGER_FLAG_INTPWM  0x04   // bit 2 — internal PWM generation (modifier on PULSE)
+// bits 3-6 reserved
+#define GEIGER_FLAG_TEST    0x80   // bit 7 — test/simulation build (real <128, test >=128)
+
+#define GEIGER_TYPE_PULSE         (GEIGER_FLAG_PULSE)
+#define GEIGER_TYPE_SERIAL        (GEIGER_FLAG_SERIAL)
+#define GEIGER_TYPE_TEST          (GEIGER_FLAG_TEST)
+#define GEIGER_TYPE_TESTPULSE     (GEIGER_FLAG_TEST | GEIGER_FLAG_PULSE)
+#define GEIGER_TYPE_TESTSERIAL    (GEIGER_FLAG_TEST | GEIGER_FLAG_SERIAL)
+#define GEIGER_TYPE_TESTPULSEINT  (GEIGER_FLAG_TEST | GEIGER_FLAG_PULSE | GEIGER_FLAG_INTPWM)
+
+#define GEIGER_IS_PULSE(t)   ((t) & GEIGER_FLAG_PULSE)
+#define GEIGER_IS_SERIAL(t)  ((t) & GEIGER_FLAG_SERIAL)
+#define GEIGER_IS_TEST(t)    ((t) & GEIGER_FLAG_TEST)
+#define GEIGER_HAS_INTPWM(t) ((t) & GEIGER_FLAG_INTPWM)
+
+// Central decision for PCNT usage. Previously duplicated in three Type headers;
+// now the single source of truth. ESP32-only hardware. Opt-out via -D IGNORE_PCNT.
+// Disabled when GEIGER_COUNT_TXPULSE is active (that build counts internal TX
+// pulses, not input pin edges, so PCNT isn't relevant).
+#if defined(ESP32) && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
+#define USE_PCNT
+#endif
 
 #define GEIGER_STYPE_GC10 1
 #define GEIGER_STYPE_GC10NX 2
@@ -125,12 +148,15 @@ class GeigerInput {
     };
     virtual void set_pcnt_filter(int val) {};
     virtual void apply_pcnt_filter() {};
+    virtual void set_pin_pull(int mode) {};   // 0=floating, 1=up, 2=down
+    virtual bool has_pcnt() { return false; }
     void blip_led();
-    unsigned long last_blip();
+    // Inline: called from the hot Counter::loop() path ~50k/sec.
+    // Not virtual — no subclass overrides it.
+    unsigned long last_blip() const { return _last_blip; }
     const char* geiger_model();
     static void IRAM_ATTR countInterrupt();
-    void setCounter(int val, bool update);
-    void setCounter(int val);
+    void setCounter(int val, bool update = true);
     void setLastBlip();
     double generatePoissonRandom(double lambda);
   private:

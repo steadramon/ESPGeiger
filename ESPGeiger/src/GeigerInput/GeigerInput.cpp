@@ -64,10 +64,6 @@ void GeigerInput::setLastBlip()  {
   _last_blip = micros();
 }
 
-unsigned long GeigerInput::last_blip()  {
-  return _last_blip;
-}
-
 void GeigerInput::countInterrupt() {
   unsigned long cycles = micros();
   if (cycles - _last_blip < _debounce) {
@@ -86,11 +82,7 @@ void GeigerInput::countInterrupt() {
   _last_blip = cycles;
 }
 
-void GeigerInput::setCounter(int val) {
-  setCounter(val, true);
-}
-
-void GeigerInput::setCounter(int val, bool update = true) {
+void GeigerInput::setCounter(int val, bool update) {
   if (update) {
 #ifdef ESP32
     portENTER_CRITICAL(&timerMux);

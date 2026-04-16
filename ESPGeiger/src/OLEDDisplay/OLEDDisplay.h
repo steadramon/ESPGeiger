@@ -25,11 +25,16 @@
 #include "SSD1306Wire.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
+#include "../Module/EGModule.h"
 #include "logo.h"
 #include "fonts.h"
 
 extern Status status;
 extern Counter gcounter;
+
+#ifndef OLED_PAGES
+#define OLED_PAGES 3
+#endif
 
 #ifndef OLED_WIDTH
 #define OLED_WIDTH       128
@@ -53,10 +58,14 @@ extern Counter gcounter;
 #define OLED_ADDR      0x3c
 #endif
 
-class SSD1306Display : public SSD1306Wire{
+class SSD1306Display : public SSD1306Wire, public EGModule {
 public:
     SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl);
-  void begin() {
+    const char* name() override { return "disp"; }
+    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint16_t warmup_seconds() override { return 0; }
+    void pre_wifi() override { setup(); }
+  void setup() {
     //Wire.setClock(400000L);
     SSD1306Wire::init();
   #if OLED_FLIP
@@ -152,7 +161,9 @@ public:
     setFont(ArialMT_Plain_16);
   }
 
-  void loop(unsigned long now);
+  void loop(unsigned long now) override;
+  bool has_loop() override { return true; }
+  uint16_t loop_interval_ms() override { return 500; }
 
   void page_one_clear();
 
@@ -209,7 +220,7 @@ public:
     snprintf(oledBuf, sizeof(oledBuf), "%d", gcounter.get_cpm());
     drawString(45,0, oledBuf);
     setFont(DialogInput_plain_12);
-    snprintf(oledBuf, sizeof(oledBuf), "%.2f", gcounter.get_usv());
+    format_f(oledBuf, sizeof(oledBuf), gcounter.get_usv());
     drawString(45,20, oledBuf);
     if (gcounter.cpm_history.capacity != gcounter.cpm_history.size()) {
       drawString(98,2, PSTR("W") );
@@ -241,7 +252,6 @@ public:
   private:
     uint8_t cx, cy;
     uint8_t fontWidth, fontHeight;
-    unsigned long _last_update = 0;
     unsigned long _last_full = 0;
     unsigned long _lcd_timeout = 300000;
 };

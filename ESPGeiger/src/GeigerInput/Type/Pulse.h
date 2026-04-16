@@ -20,12 +20,7 @@
 #define GEIGERINPUTPLS_H
 
 #include <Arduino.h>
-
-#ifdef ESP32
-#ifndef IGNORE_PCNT
-#define USE_PCNT
-#endif
-#endif
+#include "../GeigerInput.h"
 
 #ifdef USE_PCNT
 extern "C" {
@@ -37,14 +32,23 @@ extern "C" {
 
 #define PCNT_UNIT PCNT_UNIT_0
 #define PCNT_CHANNEL PCNT_CHANNEL_0
-#ifdef PCNT_FLOATING_PIN
-#define PCNT_PIN_PULL_MODE GPIO_FLOATING
+// Pull-mode encoding shared with the web portal config (pcntPull):
+//   0 = floating / no pull
+//   1 = pull-up  (default — matches active-low modules with external pullup)
+//   2 = pull-down (active-high modules without own idle pull)
+// The compile-time flags set the *default* visible in the portal; users can
+// override per-device from the web form.
+#define PCNT_PULL_FLOATING 0
+#define PCNT_PULL_UP       1
+#define PCNT_PULL_DOWN     2
+#if defined(PCNT_FLOATING_PIN)
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_FLOATING
+#elif defined(PCNT_PULLDOWN_PIN)
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_DOWN
 #else
-#define PCNT_PIN_PULL_MODE GPIO_PULLDOWN_ONLY
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_UP
 #endif
 #endif
-
-#include "../GeigerInput.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "genpulse"
@@ -55,12 +59,21 @@ class GeigerPulse : public GeigerInput
   public:
     GeigerPulse();
     void begin();
+    bool has_pcnt() override {
+#ifdef USE_PCNT
+      return true;
+#else
+      return false;
+#endif
+    }
 #ifdef USE_PCNT
     int collect();
     void set_pcnt_filter(int val);
     void apply_pcnt_filter();
+    void set_pin_pull(int mode);   // 0=floating, 1=up, 2=down
   private:
     int _pcnt_filter = 0;
+    int _pin_pull = PCNT_PIN_PULL_DEFAULT;
 #endif
 };
 #endif

@@ -21,6 +21,10 @@
 #include <Arduino.h>
 #include "ESPGHW.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
+
+ESPGeigerHW hardware;
+EG_REGISTER_MODULE(hardware)
 #include <FS.h>
 #include <LittleFS.h>
 #include "ArduinoJson.h"
@@ -43,7 +47,7 @@ void ESPGeigerHW::begin() {
   status.hvReading.begin(SMOOTHED_AVERAGE, 3);
 }
 
-void ESPGeigerHW::loop() {
+void ESPGeigerHW::s_tick(unsigned long stick_now) {
   if (_cur_duty != _hw_duty) {
 #ifdef ESP8266
     analogWrite (GEIGER_PWMPIN, _hw_duty) ;
@@ -53,7 +57,7 @@ void ESPGeigerHW::loop() {
     _cur_duty = _hw_duty;
   }
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
-  float volts = ((0.0009765625032 * sensorValue)*_hw_vd_ratio)+_hw_vd_offset;
+  float volts = ((0.0009765625032 * sensorValue) * _hw_vd_ratio) + _hw_vd_offset;
   status.hvReading.add(volts);
 }
 

@@ -24,6 +24,7 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
+#include "../Module/EGModule.h"
 #include "AsyncHTTPRequest_Generic.hpp"
 
 #ifdef ESP8266
@@ -39,19 +40,28 @@ extern Counter gcounter;
 #define GMC_INTERVAL 300
 #endif
 
-const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM=%d&ACPM=%.2f&uSV=%.4f";
+// ACPM / uSV interpolated as pre-formatted strings (format_f). %.2f / %.4f
+// via snprintf pull in soft-float on ESP8266 (~0.5-1ms per call).
+const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM=%d&ACPM=%s&uSV=%s";
 
-class GMC {
+class GMC : public EGModule {
   public:
     GMC();
-    void s_tick(unsigned long stick_now);
+    const char* name() override { return "gmc"; }
+    bool requires_wifi() override { return true; }
+    bool has_tick() override { return true; }
+    void s_tick(unsigned long stick_now) override;
     void postMeasurement();
     AsyncHTTPRequest request;
+    bool last_ok = false;
+    unsigned long last_attempt_ms = 0;
   private:
     unsigned long lastPing = 0;
     const int pingInterval = 1000 * GMC_INTERVAL;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
+
+extern GMC gmc;
 
 #endif
 #endif

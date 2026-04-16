@@ -20,12 +20,7 @@
 #define GEIGERTESTPLSPWM_H
 
 #include <Arduino.h>
-
-#ifdef ESP32
-#ifndef IGNORE_PCNT
-#define USE_PCNT
-#endif
-#endif
+#include "../GeigerInput.h"
 
 #ifdef USE_PCNT
 extern "C" {
@@ -67,7 +62,7 @@ class GeigerTestPulseInt : public GeigerInputTest
     static void pulseInterrupt(void *data);
     double calcPWM();
     void secondTicker();
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
     int collect();
 #endif
   private:

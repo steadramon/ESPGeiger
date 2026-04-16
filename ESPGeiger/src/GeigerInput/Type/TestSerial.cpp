@@ -18,6 +18,7 @@
 */
 #include "TestSerial.h"
 #include "../../Logger/Logger.h"
+#include "../../Util/FormatFloat.h"
 
 static EspSoftwareSerial::UART geigerPort;
 
@@ -26,7 +27,10 @@ GeigerTestSerial::GeigerTestSerial() {
 };
 
 void GeigerTestSerial::begin() {
-  Log::console(PSTR("TestSerial: Setting up test %s serial geiger ..."), GEIGER_MODEL);
+  Log::console(PSTR("TestSerial: Setting up %s serial test geiger ..."), GEIGER_MODEL);
+#ifdef GEIGER_COUNT_TXPULSE
+  Log::console(PSTR("TestSerial: TX pulse counting enabled"));
+#endif
   Log::console(PSTR("TestSerial: RXPIN: %d BAUD: %d"), _rx_pin, GEIGER_BAUDRATE);
   Log::console(PSTR("TestSerial: TXPIN: %d BAUD: %d"), _tx_pin, GEIGER_BAUDRATE);
   geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
@@ -100,8 +104,10 @@ void GeigerTestSerial::secondTicker() {
   }
 #if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
   float test_serialuSV = (serialAvg.get() * 60.0)/175;
-  Log::debug(PSTR("TestSerial: CPS, %d, CPM, %d, uSv/hr, %.2f, SLOW"), test_serialCPS, test_serialCPM, test_serialuSV);
-  geigerPort.printf("CPS, %d, CPM, %d, uSv/hr, %.2f, SLOW\n", test_serialCPS, test_serialCPM, test_serialuSV);
+  char usv_str[12];
+  format_f(usv_str, sizeof(usv_str), test_serialuSV);
+  Log::debug(PSTR("TestSerial: CPS, %d, CPM, %d, uSv/hr, %s, SLOW"), test_serialCPS, test_serialCPM, usv_str);
+  geigerPort.printf("CPS, %d, CPM, %d, uSv/hr, %s, SLOW\n", test_serialCPS, test_serialCPM, usv_str);
 #elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
   Log::debug(PSTR("TestSerial: CPM: %d"), test_serialCPM);
   geigerPort.printf("CPM: %d\n", test_serialCPM);

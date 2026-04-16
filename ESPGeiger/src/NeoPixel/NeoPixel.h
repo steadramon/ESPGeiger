@@ -24,6 +24,7 @@
 #include <NeoPixelBus.h>
 #include "../NTP/NTP.h"
 #include "../Counter/Counter.h"
+#include "../Module/EGModule.h"
 
 extern Status status;
 extern Counter gcounter;
@@ -40,14 +41,16 @@ extern Counter gcounter;
 #define NEOPIXEL_BITBANG 1
 #endif
 
-class NeoPixel {
+class NeoPixel : public EGModule {
   public:
-    static NeoPixel &getInstance()
-    {
-      static NeoPixel instance;
-      return instance;
-    }
-    void loop(unsigned long now);
+    NeoPixel();
+    const char* name() override { return "neopx"; }
+    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint16_t warmup_seconds() override { return 0; }
+    void pre_wifi() override { setup(); }
+    void loop(unsigned long now) override;
+    bool has_loop() override { return true; }
+    uint16_t loop_interval_ms() override { return 20; }
     void setup();
     void blip();
     void blink(uint16 timer);
@@ -58,13 +61,13 @@ class NeoPixel {
   protected:
     NeoPixelBus<NeoRgbFeature, NeoEsp8266BitBangWs2812xMethod> *controller_{nullptr};
   private:
-    NeoPixel();
     unsigned long onTime = 0;
     unsigned long offTime = 0;
     unsigned long blinkInterval = 2000;
     unsigned long nextInterval = 2000;
     unsigned long last_blip = 0;
     int colorSaturation = 15;
+    bool _is_off = true;   // tracks whether pixel was last written black, so loop() doesn't re-Show every iter
 };
 #endif
 #endif

@@ -26,8 +26,11 @@ GeigerTestPulse::GeigerTestPulse() {
 void GeigerTestPulse::begin() {
   GeigerInput::begin();
   Log::console(PSTR("TestPulse: Setting up Poisson test geiger ..."));
+#ifdef GEIGER_COUNT_TXPULSE
+  Log::console(PSTR("TestPulse: TX pulse counting enabled"));
+#endif
 
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
   Log::console(PSTR("TestPulse: PCNT RXPIN: %d"), _rx_pin);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _rx_pin,
@@ -131,7 +134,7 @@ void GeigerTestPulse::secondTicker() {
   CPMAdjuster();
 }
 
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
 int GeigerTestPulse::collect() {
   int16_t pulseCount;
   pcnt_counter_pause(PCNT_UNIT);

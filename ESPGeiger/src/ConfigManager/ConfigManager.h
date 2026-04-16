@@ -64,13 +64,15 @@ constexpr auto NTP_SET_URL PROGMEM = "/ntpset";
 constexpr auto HIST_URL PROGMEM = "/hist";
 constexpr auto GEIGERLOG_URL PROGMEM = "/lastdata";
 constexpr auto SERIAL_URL PROGMEM = "/serial";
+constexpr auto ABOUT_URL PROGMEM = "/about";
+constexpr auto OUTPUTS_URL PROGMEM = "/outputs";
 #ifdef ESPGEIGER_HW
 constexpr auto HV_URL PROGMEM = "/hv";
 constexpr auto HV_JS_URL PROGMEM = "/hvjs";
 constexpr auto HV_JSON_URL PROGMEM = "/hvjson";
 constexpr auto HV_SET_URL PROGMEM = "/hvset";
 #endif
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
 constexpr auto SETCPM_URL PROGMEM = "/cpm";
 #endif
 
@@ -84,7 +86,7 @@ const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 const char S_MQTT_DISCOVERY_TOPIC[] PROGMEM = MQTT_DISCOVERY_TOPIC;
 
 #ifndef MQTT_DISCOVERY
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
 #  define MQTT_DISCOVERY "N"
 #else
 #  define MQTT_DISCOVERY "Y"
@@ -124,6 +126,11 @@ public:
   void preSaveParams();
   void saveParams();
   void delay(unsigned long m);
+  // Self-throttled wrapper around the inherited process(). Call from loop()
+  // every iteration; only forwards to WiFiManager::process() at most every
+  // CMAN_PROCESS_INTERVAL_MS (platform-specific default). Prevents per-iter
+  // lwIP socket yield on ESP32 and saves idle polling cost on ESP8266.
+  void processLoop(unsigned long now);
   void eraseSettings();
   const char* getHostName() { return hostName; };
   const char* getChipID() { return chipId; };
@@ -186,13 +193,15 @@ private:
   void handleClicksReturn();
   void handleGeigerLog();
   void handleSerialOut();
+  void handleAbout();
+  void handleOutputsJson();
 #ifdef ESPGEIGER_HW
   void handleHVPage();
   void handleHVJSReturn();
   void handleHVJsonReturn();
   void handleHVSet();
 #endif
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
   void handleSetCPM();
 #endif
   char chipId[7] = "";

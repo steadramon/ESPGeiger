@@ -45,6 +45,8 @@
   #define GEIGER_RATIO 151.0
 #endif
 
+#include "../Util/FormatFloat.h"
+
 extern Status status;
 extern NTP_Client ntpclient;
 
@@ -62,7 +64,7 @@ extern NTP_Client ntpclient;
 class Counter {
     public:
       Counter();
-      void loop(unsigned long stick_now);
+      void loop();
       float get_cps();
       int get_cpm();
       float get_cpmf();
@@ -98,8 +100,17 @@ class Counter {
       void set_pcnt_filter(int val) {
         geigerinput->set_pcnt_filter(val);
       };
+      void set_debounce(int val) {
+        geigerinput->set_debounce(val);
+      };
       void apply_pcnt_filter() {
         geigerinput->apply_pcnt_filter();
+      };
+      void set_pin_pull(int mode) {
+        geigerinput->set_pin_pull(mode);
+      };
+      bool has_pcnt() {
+        return geigerinput->has_pcnt();
       };
       void set_warning(int val);
       void set_alert(int val);
@@ -112,7 +123,7 @@ class Counter {
         // Todo
         //_bool_cpm_alert = false;
       }
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
       void set_target_cpm(float val) {
         geigerinput->setTargetCPM(val, true);
       }

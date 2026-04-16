@@ -26,8 +26,8 @@
 #define GEIGER_TESTPULSE_ADJUSTTIME 300000
 #endif
 
-#ifndef GEIGERTESTMODE
-#define GEIGERTESTMODE
+#ifndef GEIGER_PULSE_WIDTH
+#define GEIGER_PULSE_WIDTH 500
 #endif
 
 #ifdef ESP8266
@@ -38,7 +38,6 @@
 #define GEIGER_TEST_TIMER_DIV 1000000
 #endif
 
-//#define GEIGER_TEST_FAST
 //#define DISABLE_GEIGER_POISSON
 
 class GeigerInputTest : public GeigerInput

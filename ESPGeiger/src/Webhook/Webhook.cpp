@@ -19,7 +19,11 @@
 #ifdef WEBHOOKOUT
 #include "Webhook.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
 #include "ArduinoJson.h"
+
+Webhook webhook;
+EG_REGISTER_MODULE(webhook)
 
 Webhook::Webhook() {
 }
@@ -46,13 +50,17 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
 {
   if (readyState == readyStateDone)
   {
+    Webhook* self = static_cast<Webhook*>(optParm);
+    self->last_attempt_ms = millis();
+    self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
       String response = request->responseText();
-      if (response.indexOf("OK") != -1) {
+      if (strstr(response.c_str(), "OK")) {
         Log::console(PSTR("Webhook: Upload OK"));
+        self->last_ok = true;
       } else {
-        Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100));
+        Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100).c_str());
       }
     } else {
       Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
@@ -71,20 +79,18 @@ const char* Webhook::cleanHTTP(const char* url) {
 }
 
 void Webhook::postMeasurement() {
-#ifdef GEIGERTESTMODE
-  Log::console(PSTR("Webhook: Testmode"));
-  return;
-#endif
-
   ConfigManager &configManager = ConfigManager::getInstance();
   const char* _send = configManager.getParamValueFromID("whSend");
+  if (_send == NULL || strcmp(_send, "N") == 0) {
+    return;
+  }
 
-  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
+    Log::console(PSTR("Webhook: Testmode"));
     return;
   }
 
   const char* whURL = configManager.getParamValueFromID("whURL");
-
   if (whURL == NULL) {
     return;
   }
@@ -95,18 +101,32 @@ void Webhook::postMeasurement() {
 
   DynamicJsonDocument doc(512);
   static char buffer[512];
+  // Formatted float buffers — each must stay alive until serializeJson()
+  // runs because serialized() stores a pointer, not a copy. Stack-local
+  // avoids heap churn from the previous `String(float, 2)` pattern.
+  char b_cps[12], b_cpm[12], b_cpm5[12], b_cpm15[12], b_usv[12];
+  format_f(b_cps,   sizeof(b_cps),   gcounter.get_cps());
+  format_f(b_cpm,   sizeof(b_cpm),   gcounter.get_cpmf());
+  format_f(b_cpm5,  sizeof(b_cpm5),  gcounter.get_cpm5f());
+  format_f(b_cpm15, sizeof(b_cpm15), gcounter.get_cpm15f());
+  format_f(b_usv,   sizeof(b_usv),   gcounter.get_usv());
+#ifdef ESPGEIGER_HW
+  char b_hv[12];
+  format_f(b_hv, sizeof(b_hv), status.hvReading.get());
+#endif
+
   doc["id"] = configManager.getChipID();
   if (key != NULL && key[0] != '\0') {
     doc["key"] = key;
   }
   doc["ut"] = configManager.getUptime();
-  doc["cps"] = serialized(String(gcounter.get_cps(), 2));
-  doc["cpm"] = serialized(String(gcounter.get_cpmf(), 2));
-  doc["cpm5"] = serialized(String(gcounter.get_cpm5f(), 2));
-  doc["cpm15"] = serialized(String(gcounter.get_cpm15f(), 2));
-  doc["usv"] = serialized(String(gcounter.get_usv(), 2));
+  doc["cps"]   = serialized(b_cps);
+  doc["cpm"]   = serialized(b_cpm);
+  doc["cpm5"]  = serialized(b_cpm5);
+  doc["cpm15"] = serialized(b_cpm15);
+  doc["usv"]   = serialized(b_usv);
 #ifdef ESPGEIGER_HW
-  doc["hv"] = serialized(String(status.hvReading.get(), 2));
+  doc["hv"]    = serialized(b_hv);
 #endif
   doc["tc"] = gcounter.total_clicks;
   doc["mem"] = ESP.getFreeHeap();
@@ -120,11 +140,9 @@ void Webhook::postMeasurement() {
 
   snprintf(url, sizeof(url), "http://%s", trimmedURL);
 
-  static bool requestOpenResult;
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {
-    requestOpenResult = request.open("POST", url);
-    if (requestOpenResult)
+    if (request.open("POST", url))
     {
       status.led.Blink(500, 500);
       request.setReqHeader(F("User-Agent"), configManager.getUserAgent());

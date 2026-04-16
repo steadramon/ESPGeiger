@@ -21,6 +21,10 @@
 #include <Arduino.h>
 #include "NeoPixel.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
+
+NeoPixel neopixel;
+EG_REGISTER_MODULE(neopixel)
 
 NeoPixel::NeoPixel() {
 }
@@ -105,6 +109,7 @@ void NeoPixel::blink(uint16 timer)
 
   this->controller_->SetPixelColor(0, rgb);
   this->controller_->Show();
+  _is_off = false;
   onTime = millis();
   offTime = timer;
 }
@@ -114,11 +119,14 @@ void NeoPixel::loop(unsigned long now)
   if (colorSaturation == 0) {
     return;
   }
-  if (now - onTime >= offTime)
+  // Turn pixel off once when the on-window has elapsed; skip the bitbang
+  // Show() on subsequent iterations until something turns it on again.
+  if (!_is_off && now - onTime >= offTime)
   {
     RgbColor black(0);
     this->controller_->SetPixelColor(0, black);
     this->controller_->Show();
+    _is_off = true;
   }
   if (this->neoPixelMode == 1) {
     if (last_blip != gcounter.last_blip()) {

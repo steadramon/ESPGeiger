@@ -21,6 +21,7 @@
 #define ESPGHW_H
 #include <Arduino.h>
 #include "../Status.h"
+#include "../Module/EGModule.h"
 
 #ifndef GEIGER_PWMPIN
 #define GEIGER_PWMPIN 12
@@ -56,12 +57,16 @@
 
 extern Status status;
 
-class ESPGeigerHW {
+class ESPGeigerHW : public EGModule {
     public:
       ESPGeigerHW();
-      void loop();
+      const char* name() override { return "espghw"; }
+      uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+      uint16_t warmup_seconds() override { return 0; }
+      bool has_tick() override { return true; }
+      void s_tick(unsigned long stick_now) override;
       void fiveloop();
-      void begin();
+      void begin() override;
       void set_freq( int freq) {
         if (freq > GEIGERHW_MAX_FREQ) {
           freq = GEIGERHW_MAX_FREQ;

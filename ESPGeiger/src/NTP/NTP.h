@@ -22,6 +22,7 @@
 #include <ESPNtpClient.h>
 #include "timezones.h"
 #include "../Status.h"
+#include "../Module/EGModule.h"
 
 #ifndef NTP_SERVER
 #  define NTP_SERVER "pool.ntp.org"
@@ -46,7 +47,7 @@ https://github.com/yugabyte/yugabyte-db/blob/2461909fc9c34441c352c97e1b059336ac0
 */
 extern Status status;
 
-class NTP_Client {
+class NTP_Client : public EGModule {
   public:
   static NTP_Client &getInstance()
   {
@@ -54,7 +55,11 @@ class NTP_Client {
     return instance;
   }
     NTP_Client();
-    void loop();
+    const char* name() override { return "ntp"; }
+    uint8_t priority() override { return EG_PRIORITY_INFRASTRUCTURE; }
+    bool requires_wifi() override { return true; }
+    uint16_t warmup_seconds() override { return 0; }
+    void begin() override { setup(); }
     void setup();
     void saveconfig();
     void loadconfig();

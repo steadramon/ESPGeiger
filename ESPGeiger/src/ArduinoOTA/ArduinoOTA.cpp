@@ -1,6 +1,6 @@
 /*
   ArduinoOTA.cpp - functions to handle Arduino OTA Update
-  
+
   Copyright (C) 2023 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -20,9 +20,13 @@
 #include "ArduinoOTA.h"
 #include "../Logger/Logger.h"
 #include "../Status.h"
+#include "../Module/EGModuleRegistry.h"
+#include "../ConfigManager/ConfigManager.h"
 
-void arduino_ota_setup (const char* hostname = "ESPGeiger") {
+ArduinoOTAModule arduinoOTA;
+EG_REGISTER_MODULE(arduinoOTA)
 
+void ArduinoOTAModule::begin() {
   ArduinoOTA.onStart ([]() {
     const char* type;
     if (ArduinoOTA.getCommand () == U_FLASH)
@@ -59,6 +63,11 @@ void arduino_ota_setup (const char* hostname = "ESPGeiger") {
     else if (error == OTA_END_ERROR) Log::debug(PSTR("End Failed"));
   });
 
-  ArduinoOTA.setHostname(hostname);
-  ArduinoOTA.begin ();
+  ArduinoOTA.setHostname(ConfigManager::getInstance().getHostName());
+  ArduinoOTA.begin();
+}
+
+void ArduinoOTAModule::loop(unsigned long now) {
+  // Throttle handled centrally by EGModuleRegistry via loop_interval_ms().
+  ArduinoOTA.handle();
 }

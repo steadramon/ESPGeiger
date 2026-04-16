@@ -19,6 +19,10 @@
 #ifdef THINGSPEAKOUT
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
+
+Thingspeak thingspeak;
+EG_REGISTER_MODULE(thingspeak)
 
 Thingspeak::Thingspeak() {
 }
@@ -40,11 +44,15 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
 {
   if (readyState == readyStateDone)
   {
+    Thingspeak* self = static_cast<Thingspeak*>(optParm);
+    self->last_attempt_ms = millis();
+    self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
       String response = request->responseText();
-      if (response != "0") {
+      if (strcmp(response.c_str(), "0") != 0) {
         Log::console(PSTR("Thingspeak: Upload OK"));
+        self->last_ok = true;
       } else {
         Log::console(PSTR("Thingspeak: Error!"));
       }
@@ -58,21 +66,19 @@ void Thingspeak::postMeasurement() {
 
   ConfigManager &configManager = ConfigManager::getInstance();
   const char* _send = configManager.getParamValueFromID("tsSend");
-
-  if ((_send == NULL) || (strcmp(_send, "N") == 0)) {
+  if (_send == NULL || strcmp(_send, "N") == 0) {
     return;
   }
-  
-  const char* _ts_channel_key = configManager.getParamValueFromID("tsChannelKey");
 
+  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
+    Log::console(PSTR("Thingspeak: Testmode"));
+    return;
+  }
+
+  const char* _ts_channel_key = configManager.getParamValueFromID("tsChannelKey");
   if (_ts_channel_key == NULL) {
     return;
   }
-
-#ifdef GEIGERTESTMODE
-  Log::console(PSTR("Thingspeak: Testmode"));
-  return;
-#endif
 
   Log::console(PSTR("Thingspeak: Uploading latest data ..."));
 

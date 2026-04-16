@@ -20,14 +20,7 @@
 #define GEIGERTESTPLS_H
 
 #include <Arduino.h>
-
-#ifdef ESP32
-#ifndef IGNORE_PCNT
-#ifndef GEIGER_COUNT_TXPULSE
-#define USE_PCNT
-#endif
-#endif
-#endif
+#include "../GeigerInput.h"
 
 #ifdef USE_PCNT
 extern "C" {
@@ -51,10 +44,6 @@ extern "C" {
 #define GEIGER_MODEL "genpulse"
 #endif
 
-#ifndef GEIGER_PULSE_WIDTH
-#define GEIGER_PULSE_WIDTH 500
-#endif
-
 static int _pulse_tx_pin;
 static bool _bool_pulse_state = false;
 static unsigned long _last_b;
@@ -74,7 +63,7 @@ class GeigerTestPulse : public GeigerInputTest
     static void IRAM_ATTR pulseInterrupt();
     static void pulseInterrupt(void *data);
     void secondTicker();
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
     int collect();
 #endif
 };

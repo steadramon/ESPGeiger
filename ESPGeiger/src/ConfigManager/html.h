@@ -22,7 +22,7 @@ static const char STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1 title="{t
 
 static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;} .wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
-<table style="width:75%"><tr><th>CPM:</th><td><span id="cpm">-</span></td><th>CPS:</th><td id="cs"></td></tr><tr><th>μSv/h:</th><td><span id="usv">-</span></td><th>Total Clicks:</th><td id="tc"></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td></tr></table>
+<table style="width:75%"><tr><th>CPM:</th><td><span id="cpm">-</span></td><th>CPS:</th><td id="cs"></td></tr><tr><th>&micro;Sv/h:</th><td><span id="usv">-</span></td><th>Total Clicks:</th><td id="tc"></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td></tr></table>
 <div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
 <script src="/js"></script>)HTML";
 
@@ -68,10 +68,10 @@ function go() {
 window.addEventListener("load",go);
 */
 static const char CFG_PAGE_JS[] = R"HTML(
-<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}</script>
+<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}function setCB(f,e){getE(f).value=e.checked?'Y':'N';}</script>
 )HTML";
 static const char HISTORY_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}</style>
-<table style="width:100%"><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>μSv</th</tr><tbody id="tb"></tbody></table>
+<table style="width:100%"><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>&micro;Sv</th</tr><tbody id="tb"></tbody></table>
 )HTML";
 static const char HISTORY_PAGE_JS[] PROGMEM = R"HTML(
 <script>
@@ -181,12 +181,12 @@ static const char NTP_HTML[] PROGMEM = R"HTML(<h1>NTP Config</h1>
 </form>
 )HTML";
 
-static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>ESPGeiger</a> {1}/{2}</small>";
+static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>ESPGeiger</a> <a href='/about' style='font-weight:normal'>{1}</a></small>";
 
 static const char statusJS[] PROGMEM = R"JS(
-!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('upt').innerHTML=o.u;byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);e.update([o.c,o.c5,o.c15]),setTimeout(t,3e3)}},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
-var lt,to,tp,x=null,pc="",sn=0,id=0;
-function f(){var t;return clearTimeout(lt),t=byID("t1"),(x=new XMLHttpRequest).onload=function(){if(200==x.status){var e,n=x.responseText;id=n.substr(0,n.indexOf("\n")),(e=n.substr(n.indexOf("\n")+1)).length>0&&(t.value+=e),t.scrollTop>=sn&&(t.scrollTop=99999,sn=t.scrollTop)}lt=setTimeout(f,3210)},x.onerror=function(){lt=setTimeout(f,6e3)},x.open("GET","/cs?c1="+id,!0),x.send(),!1}window.addEventListener("load",f);
+!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('upt').innerHTML=o.u;byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);e.update([o.c,o.c5,o.c15])}setTimeout(t,3e3)},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
+var lt,to,tp,x=null,pc="",id=0,ml=10000,dl=200;
+function f(){clearTimeout(lt);var t=byID("t1");x=new XMLHttpRequest;x.onload=function(){if(200==x.status){var n=x.responseText,e,ab=(t.scrollHeight-t.scrollTop-t.clientHeight)<50;id=n.substr(0,n.indexOf("\n"));e=n.substr(n.indexOf("\n")+1);if(e.length>0){t.value+=e;var L=t.value.split("\n");if(L.length>ml)t.value=L.slice(-(ml-dl)).join("\n");}if(ab)t.scrollTop=t.scrollHeight;}lt=setTimeout(f,3210);};x.onerror=function(){lt=setTimeout(f,6e3);};x.open("GET","/cs?c1="+id,!0);x.send();return!1;}window.addEventListener("load",f);
 )JS";
 
 static const char hvJS[] PROGMEM = R"JS("use strict";

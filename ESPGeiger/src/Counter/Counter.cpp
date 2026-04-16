@@ -66,11 +66,13 @@ void Counter::secondticker(unsigned long stick_now) {
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
     struct tm *timeinfo = gmtime (&currentTime);
-//#ifdef GEIGERTESTMODE
-//    if (timeinfo->tm_sec == 0) {
-//#else
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+    // Test builds: roll the hourly bucket every minute so rollover
+    // behaviour can be verified without waiting an hour.
+    if (timeinfo->tm_sec == 0) {
+#else
     if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
-//#endif
+#endif
       day_hourly_history.push(clicks_hour);
       clicks_hour = 0;
       if (timeinfo->tm_hour == 0) {
@@ -213,11 +215,17 @@ void Counter::blip_led() {
 
 }
 
-void Counter::loop(unsigned long stick_now) {
+void Counter::loop() {
+  // geigerinput->loop() is only non-empty for Serial/TestSerial (UART drain).
+  // Pulse builds (PCNT hardware / ISR) have nothing to do here — skip the
+  // virtual dispatch. This runs ~50k/sec on ESP8266 so a no-op call adds up.
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
+#endif
 
-  if (status.last_blip != geigerinput->last_blip()) {
-    status.last_blip = geigerinput->last_blip();
+  unsigned long lb = geigerinput->last_blip();
+  if (status.last_blip != lb) {
+    status.last_blip = lb;
 #ifndef DISABLE_BLIP
     this->blip_led();
 #endif

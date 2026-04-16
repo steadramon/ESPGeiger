@@ -20,7 +20,20 @@
 #include "logos.h"
 #include "html.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
 #include "../Mqtt/MQTT_Client.h"
+#ifdef RADMONOUT
+#include "../Radmon/Radmon.h"
+#endif
+#ifdef THINGSPEAKOUT
+#include "../Thingspeak/Thingspeak.h"
+#endif
+#ifdef GMCOUT
+#include "../GMC/GMC.h"
+#endif
+#ifdef WEBHOOKOUT
+#include "../Webhook/Webhook.h"
+#endif
 #include "ArduinoJson.h"
 #include <FS.h>
 #include <LittleFS.h>
@@ -47,6 +60,11 @@ static WiFiManagerParameter ESPGeigerParams[] =
 #endif
 #ifdef USE_PCNT
   WiFiManagerParameter("pcntFilter", "PCNT Filter (0-1023, 0=off)", "100", 4, "type='number' min='0' max='1023'"),
+  // 0=floating, 1=pull-up, 2=pull-down. Default comes from compile-time flags.
+  WiFiManagerParameter("pcntPull", "PCNT Pin Pull (0=none, 1=up, 2=down)", STR(PCNT_PIN_PULL_DEFAULT), 2, "type='number' min='0' max='2'"),
+#endif
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+  WiFiManagerParameter("geigerDebounce", "Debounce (us)", STR(GEIGER_DEBOUNCE), 5, "type='number' min='0' max='10000'"),
 #endif
 #if defined(SSD1306_DISPLAY) || defined(GEIGER_NEOPIXEL)
   WiFiManagerParameter("<br><hr><h3>Display</h3>"),
@@ -70,11 +88,9 @@ static WiFiManagerParameter TSParams[] =
 {
   // Thingspeak parameters
   WiFiManagerParameter("<br><hr><h3>Thingspeak</h3>"),
-  WiFiManagerParameter("tsSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter("<input type='checkbox' id='cbts' onchange='getE(\"tsSend\").value = this.checked ? \"Y\":\"N\"'> <label for='cbts'>Send</label><br>"),
+  WiFiManagerParameter("tsSend", "", "N", 2, "type='hidden'"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbts' onchange='setCB("tsSend",this)'> <label for='cbts'>Send</label><br><script>doCB("cbts","tsSend")</script>)J"),
   WiFiManagerParameter("tsChannelKey", "Channel Key", "", 16),
-  WiFiManagerParameter(R"J(<script>doCB("cbts","tsSend")</script>)J"),
-
 };
 #endif
 #ifdef MQTTOUT
@@ -96,9 +112,8 @@ static WiFiManagerParameter HassioParams[] =
   // The broker parameters
   WiFiManagerParameter("<br><hr><h3>HA Autodiscovery</h3>"),
   WiFiManagerParameter("hassSend", "", MQTT_DISCOVERY, 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbhas' onchange='getE("hassSend").value = this.checked ? "Y":"N"'> <label for='cbhas'>Send</label><br>)J"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbhas' onchange='setCB("hassSend",this)'> <label for='cbhas'>Send</label><br><script>doCB("cbhas","hassSend")</script>)J"),
   WiFiManagerParameter("hassDisc", "Discovery Topic", S_MQTT_DISCOVERY_TOPIC, 32),
-  WiFiManagerParameter(R"J(<script>doCB("cbhas","hassSend")</script>)J"),
 };
 #endif
 #endif
@@ -112,23 +127,21 @@ static WiFiManagerParameter CloudAPI[] =
 static WiFiManagerParameter radmonParams[] = 
 {
   WiFiManagerParameter("<br><hr><h3>Radmon.org</h3>"),
-  WiFiManagerParameter("radmonSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbrm' onchange='getE("radmonSend").value = this.checked ? "Y":"N"'> <label for='cbrm'>Send</label><br>)J"),
+  WiFiManagerParameter("radmonSend", "", "N", 2, "type='hidden'"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbrm' onchange='setCB("radmonSend",this)'> <label for='cbrm'>Send</label><br><script>doCB("cbrm","radmonSend")</script>)J"),
   WiFiManagerParameter("radmonUser", "Radmon Username", "", 32),
   WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 64, "type='password'"),
   WiFiManagerParameter("radmonTime", "Submit Time (s)", "60", 6, "required type='number' min='30' max='1800'"),
-  WiFiManagerParameter(R"J(<script>doCB("cbrm","radmonSend")</script>)J"),
 };
 #endif
 #ifdef GMCOUT
 static WiFiManagerParameter GMCParams[] = 
 {
   WiFiManagerParameter("<br/><br/><hr><h3>GMC</h3>"),
-  WiFiManagerParameter("gmcSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbgm' onchange='getE("gmcSend").value = this.checked ? "Y":"N"'> <label for='cbgm'>Send</label><br>)J"),
+  WiFiManagerParameter("gmcSend", "", "N", 2, "type='hidden'"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbgm' onchange='setCB("gmcSend",this)'> <label for='cbgm'>Send</label><br><script>doCB("cbgm","gmcSend")</script>)J"),
   WiFiManagerParameter("gmcAID", "Account ID", "", 12, "pattern='\\d{1,5}'"),
   WiFiManagerParameter("gmcGCID", "Geiger Counter ID", "", 12, "pattern='\\d{1,12}'"),
-  WiFiManagerParameter(R"J(<script>doCB("cbgm","gmcSend")</script>)J"),
 };
 #endif
 
@@ -136,12 +149,11 @@ static WiFiManagerParameter GMCParams[] =
 static WiFiManagerParameter WHParams[] =
 {
   WiFiManagerParameter("<br><hr><h3>Webhook</h3>"),
-  WiFiManagerParameter("whSend", "", "Y", 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbwh' onchange='getE("whSend").value = this.checked ? "Y":"N"'> <label for='cbwh'>Send</label><br>)J"),
+  WiFiManagerParameter("whSend", "", "N", 2, "type='hidden'"),
+  WiFiManagerParameter(R"J(<input type='checkbox' id='cbwh' onchange='setCB("whSend",this)'> <label for='cbwh'>Send</label><br><script>doCB("cbwh","whSend")</script>)J"),
   WiFiManagerParameter("whURL", "Webhook URL", "", 255),
   WiFiManagerParameter("whKey", "Webhook Key", "", 255),
   WiFiManagerParameter("whTime", "Submit Time (s)", "60", 5, "required type='number' min='1' max='3600'"),
-  WiFiManagerParameter(R"J(<script>doCB("cbwh","whSend")</script>)J"),
 };
 #endif
 
@@ -428,10 +440,21 @@ void ConfigManager::setExternals() {
   cfgint = atoi(cfgvar);
   gcounter.set_alert(cfgint);
 
-#ifdef USE_PCNT
+  // set_pcnt_filter / set_pin_pull are no-op virtuals on non-PCNT builds,
+  // and the form params aren't registered there, so these are idempotent.
   cfgvar = ConfigManager::getParamValueFromID("pcntFilter");
   if (cfgvar != NULL) {
     gcounter.set_pcnt_filter(atoi(cfgvar));
+  }
+  cfgvar = ConfigManager::getParamValueFromID("pcntPull");
+  if (cfgvar != NULL) {
+    gcounter.set_pin_pull(atoi(cfgvar));
+  }
+
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+  cfgvar = ConfigManager::getParamValueFromID("geigerDebounce");
+  if (cfgvar != NULL) {
+    gcounter.set_debounce(atoi(cfgvar));
   }
 #endif
 
@@ -466,6 +489,7 @@ void ConfigManager::handleRoot() {
   server->sendHeader(F("Expires"), F("-1"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  server->client().flush();
   String page = FPSTR(HTTP_HEAD_START);
   page.replace(FPSTR(T_v), hostName);
   server->sendContent(page);
@@ -519,24 +543,36 @@ void ConfigManager::handleJSReturn()
 
 void ConfigManager::handleJsonReturn()
 {
-  char jsonBuffer[256] = "";
+  char jsonBuffer[320] = "";
 
   const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
   char c[16], s[16], c5[16], c15[16], cs[16];
-  snprintf(c, sizeof(c), "%.2f", gcounter.get_cpmf());
-  snprintf(s, sizeof(s), "%.2f", gcounter.get_usv());
-  snprintf(c5, sizeof(c5), "%.2f", gcounter.get_cpm5f());
-  snprintf(c15, sizeof(c15), "%.2f", gcounter.get_cpm15f());
-  snprintf(cs, sizeof(cs), "%.2f", gcounter.get_cps());
-  snprintf_P (
+  format_f(c, sizeof(c), gcounter.get_cpmf());
+  format_f(s, sizeof(s), gcounter.get_usv());
+  format_f(c5, sizeof(c5), gcounter.get_cpm5f());
+  format_f(c15, sizeof(c15), gcounter.get_cpm15f());
+  format_f(cs, sizeof(cs), gcounter.get_cps());
+  int pos = snprintf_P (
     jsonBuffer,
     sizeof(jsonBuffer),
-    PSTR("{\"u\":\"%s\",\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u}"),
+    PSTR("{\"u\":\"%s\",\"ut\":%lu,\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u,\"mem\":%u,\"rssi\":%d"),
     ConfigManager::getUptimeString(),
+    ConfigManager::getUptime(),
     c, s, c5, c15, cs,
     ratioChar,
-    gcounter.total_clicks
+    gcounter.total_clicks,
+    ESP.getFreeHeap(),
+    (int)WiFi.RSSI()
   );
+#ifdef ESPGEIGER_HW
+  char hv[16];
+  format_f(hv, sizeof(hv), status.hvReading.get());
+  pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR(",\"hv\":%s"), hv);
+#endif
+  pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+    PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
+    status.tick_us, status.tick_max_us, status.lps);
+  snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR("}"));
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
 }
@@ -568,6 +604,106 @@ void ConfigManager::handleSerialOut() {
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), "OK" );
 }
 
+void ConfigManager::handleAbout()
+{
+  handleRequest();
+  char jsonBuffer[1024] = "";
+  size_t pos = 0;
+
+  uint8_t macb[6];
+  WiFi.macAddress(macb);
+  char mac_str[13];
+  snprintf(mac_str, sizeof(mac_str), "%02X%02X%02X%02X%02X%02X",
+    macb[0], macb[1], macb[2], macb[3], macb[4], macb[5]);
+
+  pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+    PSTR("{\"ver\":\"%s\",\"git\":\"%s\",\"env\":\"%s\","
+         "\"date\":\"%s %s\",\"chip\":\"%s\",\"mac\":\"%s\","
+         "\"host\":\"%s\",\"g_mod\":\"%s\","
+         "\"g_type\":\"%s\",\"g_test\":%s,\"g_pcnt\":%s,"
+         "\"modules\":["),
+    status.version, status.git_version, status.build_env,
+    __DATE__, __TIME__,
+    GetChipModel(),
+    mac_str,
+    hostName,
+    status.geiger_model,
+    GEIGER_IS_PULSE(GEIGER_TYPE)  ? "pulse" :
+    GEIGER_IS_SERIAL(GEIGER_TYPE) ? "serial" : "none",
+    GEIGER_IS_TEST(GEIGER_TYPE)   ? "true" : "false",
+    gcounter.has_pcnt()           ? "true" : "false");
+
+  uint8_t count = EGModuleRegistry::count();
+  for (uint8_t i = 0; i < count; i++) {
+    EGModule* m = EGModuleRegistry::get(i);
+    if (m == nullptr) continue;
+    pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+      "%s\"%s\"", (i > 0 ? "," : ""), m->name());
+  }
+  snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "]}");
+  ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer);
+}
+
+void ConfigManager::handleOutputsJson()
+{
+  handleRequest();
+  char jsonBuffer[512] = "";
+  size_t pos = 0;
+  unsigned long now = millis();
+  bool first = true;
+  pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "{");
+
+  // Emits "name":{"ok":bool,"age":S|null} — only for enabled modules.
+  // age is in seconds, or null when no attempt has been made yet.
+  auto emit = [&](const char* name, bool enabled, bool last_ok, unsigned long last_attempt_ms) {
+    if (!enabled) return;
+    if (!first) {
+      pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, ",");
+    }
+    first = false;
+    if (last_attempt_ms == 0) {
+      pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+        "\"%s\":{\"ok\":false,\"age\":null}",
+        name);
+    } else {
+      pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+        "\"%s\":{\"ok\":%s,\"age\":%lu}",
+        name,
+        last_ok ? "true" : "false",
+        (now - last_attempt_ms) / 1000);
+    }
+  };
+
+  auto send_enabled = [&](const char* paramId) {
+    const char* s = getParamValueFromID(paramId);
+    return (s != NULL) && (strcmp(s, "N") != 0);
+  };
+
+#ifdef MQTTOUT
+  {
+    const char* mqttServer = getParamValueFromID("mqttServer");
+    bool enabled = (mqttServer != NULL) && (mqttServer[0] != '\0');
+    MQTT_Client& mqtt = MQTT_Client::getInstance();
+    emit("mqtt", enabled, mqtt.last_ok && status.mqtt_connected, mqtt.last_attempt_ms);
+  }
+#endif
+#ifdef RADMONOUT
+  emit("radmon", send_enabled("radmonSend"), radmon.last_ok, radmon.last_attempt_ms);
+#endif
+#ifdef THINGSPEAKOUT
+  emit("thingspeak", send_enabled("tsSend"), thingspeak.last_ok, thingspeak.last_attempt_ms);
+#endif
+#ifdef GMCOUT
+  emit("gmc", send_enabled("gmcSend"), gmc.last_ok, gmc.last_attempt_ms);
+#endif
+#ifdef WEBHOOKOUT
+  emit("webhook", send_enabled("whSend"), webhook.last_ok, webhook.last_attempt_ms);
+#endif
+
+  snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "}");
+  ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer);
+}
+
 void ConfigManager::handleClicksReturn()
 {
   handleRequest();
@@ -575,7 +711,7 @@ void ConfigManager::handleClicksReturn()
 
   json.clear();
   auto last_day = json.createNestedArray("last_day");
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
   //json["roll"] = 60;
 #endif
   last_day.add(gcounter.clicks_hour);
@@ -626,7 +762,6 @@ void ConfigManager::handleStatusPage()
   server->sendContent(FPSTR(HTTP_BACKBTN));
   page = FPSTR(STATUS_PAGE_FOOT);
   page.replace(FPSTR(T_1), status.version);
-  page.replace(FPSTR(T_2), status.git_version);
   server->sendContent(page);
   server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
@@ -813,7 +948,7 @@ void ConfigManager::handleHVJsonReturn()
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
 }
 #endif
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
 void ConfigManager::handleSetCPM() {
   handleRequest();
   int _d = atoi(server->arg(F("v")).c_str());
@@ -891,6 +1026,30 @@ void ConfigManager::delay(unsigned long m)
     // 'yield' in 'doLoop' is eventually a good idea.
     delayMicroseconds(1000);
     yield();
+  }
+}
+
+// Self-throttled wrapper around WiFiManager::process().
+//   ESP32: sync WebServer.handleClient() yields 1ms per call via lwIP
+//     socket timeouts, capping loop() LPS to ~1k if unthrottled. 10 ms
+//     polling (100 Hz) keeps HTTP responsive with huge loop headroom.
+//   ESP8266: handler is cheap per call but not free (~3-5 µs each) —
+//     still meaningful at 20-50k iter/sec. 5 ms keeps captive-portal DNS
+//     snappy without eating ~10% of CPU on idle polling.
+// Override either via -D CMAN_PROCESS_INTERVAL_MS=N.
+#ifndef CMAN_PROCESS_INTERVAL_MS
+#ifdef ESP32
+#define CMAN_PROCESS_INTERVAL_MS 10
+#else
+#define CMAN_PROCESS_INTERVAL_MS 5
+#endif
+#endif
+void ConfigManager::processLoop(unsigned long now)
+{
+  static unsigned long last = 0;
+  if (now - last >= CMAN_PROCESS_INTERVAL_MS) {
+    last = now;
+    this->process();
   }
 }
 void ConfigManager::loadParams()
@@ -1136,13 +1295,15 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(HIST_URL, HTTP_GET, std::bind(&ConfigManager::handleHistoryPage, this));
   ConfigManager::server.get()->on(GEIGERLOG_URL, HTTP_GET, std::bind(&ConfigManager::handleGeigerLog, this));
   ConfigManager::server.get()->on(SERIAL_URL, HTTP_GET, std::bind(&ConfigManager::handleSerialOut, this));
+  ConfigManager::server.get()->on(ABOUT_URL, HTTP_GET, std::bind(&ConfigManager::handleAbout, this));
+  ConfigManager::server.get()->on(OUTPUTS_URL, HTTP_GET, std::bind(&ConfigManager::handleOutputsJson, this));
 #ifdef ESPGEIGER_HW
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
   ConfigManager::server.get()->on(HV_JS_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJSReturn, this));
   ConfigManager::server.get()->on(HV_JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJsonReturn, this));
 #endif
-#ifdef GEIGERTESTMODE
+#if GEIGER_IS_TEST(GEIGER_TYPE)
   ConfigManager::server.get()->on(SETCPM_URL, HTTP_GET, std::bind(&ConfigManager::handleSetCPM, this));
 #endif
 }

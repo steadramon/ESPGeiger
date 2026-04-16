@@ -22,6 +22,7 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
+#include "../Module/EGModule.h"
 #include "AsyncHTTPRequest_Generic.hpp"
 
 #ifdef ESP8266
@@ -33,17 +34,24 @@
 extern Status status;
 extern Counter gcounter;
 
-class Webhook {
+class Webhook : public EGModule {
   public:
     Webhook();
-    void s_tick(unsigned long stick_now);
+    const char* name() override { return "whook"; }
+    bool requires_wifi() override { return true; }
+    bool has_tick() override { return true; }
+    void s_tick(unsigned long stick_now) override;
     void postMeasurement();
     const char* cleanHTTP(const char* url);
     AsyncHTTPRequest request;
+    bool last_ok = false;
+    unsigned long last_attempt_ms = 0;
   private:
     unsigned long lastPing = 0;
     int pingInterval = 1000 * 60;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
+
+extern Webhook webhook;
 
 #endif

@@ -25,9 +25,12 @@ GeigerTestPulseInt::GeigerTestPulseInt() {
 
 void GeigerTestPulseInt::begin() {
   GeigerInput::begin();
-  Log::console(PSTR("TestPulsePWM: Setting up test PWM geiger ..."));
+  Log::console(PSTR("TestPulsePWM: Setting up PWM test geiger ..."));
+#ifdef GEIGER_COUNT_TXPULSE
+  Log::console(PSTR("TestPulsePWM: TX pulse counting enabled"));
+#endif
 
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
   Log::console(PSTR("TestPulsePWM: PCNT RXPIN: %d"), _rx_pin);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _rx_pin,
@@ -123,7 +126,7 @@ void GeigerTestPulseInt::secondTicker() {
   }
 }
 
-#ifdef USE_PCNT && ESP32
+#ifdef USE_PCNT
 int GeigerTestPulseInt::collect() {
   int16_t pulseCount;
   pcnt_counter_pause(PCNT_UNIT);
