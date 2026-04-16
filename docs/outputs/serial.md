@@ -25,10 +25,14 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | `ratio` | Set ratio for calculating μSv | `ratio 151.0` |
 | `cpm` | Return current CPM value  |  |
 | `usv` | Return current uSV value |  |
-| `show` | Toggle 1 second output of CPM |  |
-| `show cps` | Toggle CPS on 1 second output |  |
-| `show usv` | Toggle uSV on 1 second output |  |
-| `show hv` | Toggle HV on 1 second output (ESPGHW only) |  |
+| `show` | Enable 1-second CPM output |  |
+| `show N` | Enable periodic output every N seconds (1-65535). Implies CPM. | `show 5` |
+| `show 0` | Disable periodic output (clears every field toggle) | `show 0` |
+| `show off` | Same as `show 0` | `show off` |
+| `show cpm` | Toggle CPM line inclusion in periodic output | `show cpm` |
+| `show cps` | Toggle CPS on periodic output |  |
+| `show usv` | Toggle uSV on periodic output |  |
+| `show hv` | Toggle HV on periodic output (ESPGHW only) |  |
 | `hv` | Return current HV value (ESPGHW only) |  |
 | `duty` | Set duty cycle (0-254) (ESPGHW only) | `duty 50` |
 | `freq` | Set PWM frequency (100-9000) - usually not needed (ESPGHW only) | `freq 6000` |
@@ -38,7 +42,7 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 
 ## Example Output
 
-Using `show` to enable 1-second output:
+`show 1` enables a line every second, CPM only by default:
 
 ```
 CPM: 30
@@ -46,12 +50,18 @@ CPM: 32
 CPM: 28
 ```
 
-With `show cps` and `show usv` enabled:
+`show 5` for every 5 seconds:
+
+```
+CPM: 30
+CPM: 32
+```
+
+Toggle additional fields with `show cps` / `show usv`:
 
 ```
 CPM: 30 CPS: 0.50 uSv: 0.20
 CPM: 32 CPS: 0.53 uSv: 0.21
-CPM: 28 CPS: 0.47 uSv: 0.19
 ```
 
 With `show hv` enabled on ESPGeiger-HW:
@@ -60,3 +70,12 @@ With `show hv` enabled on ESPGeiger-HW:
 CPM: 30 CPS: 0.50 uSv: 0.20 HV: 412
 CPM: 32 CPS: 0.53 uSv: 0.21 HV: 413
 ```
+
+Toggle CPM off with `show cpm` for CPS-only output:
+
+```
+CPS: 0.50
+CPS: 0.53
+```
+
+Turn it all off with `show 0` — periodic output stops and the regular log verbosity returns.

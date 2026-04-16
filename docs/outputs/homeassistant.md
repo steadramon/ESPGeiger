@@ -16,18 +16,33 @@ Within Home Assistant MQTT discovery is enabled by default. The default prefix f
 
 The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/configuration#mqtt-configuration).
 
-A number of entities are published to the MQTT auto discovery topic, these are detailed below:
+## Measurement entities
 
-| Value | Description |  Example Value | Publish Interval |
+| Value | Description | Example | Publish Interval |
 |---|---|---|---|
-`ESPGeiger⁠-⁠<device_id> CPM` | Current Counts Per Minute (CPM) value. | `30.0` | 60
-`ESPGeiger⁠-⁠<device_id> CPM5` | Average CPM over the last 5 minutes. | `30.0` | 60
-`ESPGeiger⁠-⁠<device_id> CPM15` | Average CPM over the last 15 minutes. | `30.0` | 60
-`ESPGeiger⁠-⁠<device_id> uSv` | Current microSieverts per hour (μSv) value. | `0.10` | 60
-`ESPGeiger⁠-⁠<device_id> HV` | Current HV circuit value - ESPGeigerHW only. | `400.1` | 60
+| `ESPGeiger-<device_id> CPM` | Current CPM value | `30.0` | 60 s |
+| `ESPGeiger-<device_id> CPM5` | 5-minute smoothed CPM | `30.0` | 60 s |
+| `ESPGeiger-<device_id> CPM15` | 15-minute smoothed CPM | `30.0` | 60 s |
+| `ESPGeiger-<device_id> µSv/h` | μSv/h value | `0.10` | 60 s |
+| `ESPGeiger-<device_id> HV` | High-voltage reading — ESPGeiger-HW only | `400.1` | 60 s |
+| `ESPGeiger-<device_id> Total Clicks` | Cumulative clicks since boot. | `43200` | 60 s |
+
+## Diagnostic entities
+
+Appear under the device's **Diagnostic** section in Home Assistant, not the main dashboard.
+
+| Value | Description | Example | Publish Interval |
+|---|---|---|---|
+| `ESPGeiger-<device_id> tick` | EMA-smoothed `sTickerCB` duration in µs — typical device load | `953` | 60 s |
+| `ESPGeiger-<device_id> tick max` | Peak `tick` observed in last 60 s | `4870` | 60 s |
+| `ESPGeiger-<device_id> LPS` | Loop iterations per second | `58733` | 60 s |
+| `ESPGeiger-<device_id> RSSI` | WiFi signal strength (dBm) | `-37` | 60 s |
+| `ESPGeiger-<device_id> Uptime` | Seconds since boot | `120` | 60 s |
+| `ESPGeiger-<device_id> Free Memory` | Free heap in bytes | `16928` | 60 s |
+
 
 ## Domoticz Autodiscovery
 
-> From Stable 2022.1 Domoticz MQTT supports Home assistant MQTT Discovery 
+> From Stable 2022.1 Domoticz MQTT supports Home assistant MQTT Discovery
 
 The Domoticz Autodiscovery Client Gateway is compatible with HomeAssistant autodiscovery. For more information see the [Domoticz wiki](https://www.domoticz.com/wiki/MQTT#Add_hardware_.22MQTT_Auto_Discovery_Client_Gateway.22)

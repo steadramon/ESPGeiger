@@ -39,8 +39,8 @@ Response:
 | `rssi` | WiFi signal strength in dBm |
 | `hv` | HV reading in volts (ESPGeiger-HW only) |
 | `tick` | EMA-smoothed duration of the 1-second tick callback in microseconds (sTickerCB cost). Typical load indicator; α = 1/8 so single-tick spikes (MQTT publish, etc.) are averaged out. Lower is better. |
-| `t_max` | Peak `tick` observed in the current 60-tick window (rolling reset). Use alongside `tick` to see worst-case cost — e.g. `tick=700 t_max=8000` means typical load is 700µs with a once-per-minute 8ms spike. |
-| `lps` | Loop iterations counted in the last second. High = idle (~50,000+ on ESP8266); low = main loop is doing real work. |
+| `t_max` | Peak `tick` observed in the current 60-tick window (rolling reset). Use alongside `tick` to see worst-case cost. |
+| `lps` | Loop iterations counted in the last second. |
 
 ## GeigerLog
 
