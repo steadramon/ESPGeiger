@@ -345,7 +345,7 @@ void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const 
     size_t w = 0;
     const size_t cap = sizeof(_cachedRootTopic) - 1;
     for (const char* p = rootTopic; *p && w < cap; ) {
-      if (p[0] == '{' && p[1] == 'i' && p[2] == 'd' && p[3] == '}') {
+      if (strncmp(p, "{id}", 4) == 0) {
         size_t n = strlen(chipId);
         if (w + n > cap) n = cap - w;
         memcpy(_cachedRootTopic + w, chipId, n);
