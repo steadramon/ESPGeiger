@@ -44,34 +44,48 @@ void SerialOut::print_usv() {
 }
 
 void SerialOut::set_show(int var) {
-  // Clamp to uint16_t range. Negative → 0 (off); > 65535 → 65535 (~18h).
   if (var < 0) var = 0;
   if (var > UINT16_MAX) var = UINT16_MAX;
   status.serialOut = (uint16_t)var;
-  Log::setSerialLogLevel(status.serialOut == 0);
+  if (status.serialOut == 0) {
+    _show_flags = 0;
+  } else {
+    _show_flags |= SHOW_CPM;
+  }
+  Log::setSerialLogLevel(_show_flags == 0);
 }
 
+void SerialOut::toggle_cpm() { _show_flags ^= SHOW_CPM; Log::setSerialLogLevel(_show_flags == 0); }
+void SerialOut::toggle_usv() { _show_flags ^= SHOW_USV; Log::setSerialLogLevel(_show_flags == 0); }
+void SerialOut::toggle_hv()  { _show_flags ^= SHOW_HV;  Log::setSerialLogLevel(_show_flags == 0); }
+void SerialOut::toggle_cps() { _show_flags ^= SHOW_CPS; Log::setSerialLogLevel(_show_flags == 0); }
+
 void SerialOut::s_tick(unsigned long stick_now) {
+  if (_show_flags == 0) return;
   if (status.serialOut == 0) return;
   if (++_loop_c < status.serialOut) return;
   _loop_c = 0;
 
   char buf[80];
   char f[12];
-  int pos = snprintf(buf, sizeof(buf), "CPM: %d", gcounter.get_cpm());
+  int pos = 0;
+  if (_show_flags & SHOW_CPM) {
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "CPM: %d", gcounter.get_cpm());
+  }
   if (_show_flags & SHOW_CPS) {
     format_f(f, sizeof(f), gcounter.get_cps());
-    pos += snprintf(buf + pos, sizeof(buf) - pos, " CPS: %s", f);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "%sCPS: %s", pos ? " " : "", f);
   }
   if (_show_flags & SHOW_USV) {
     format_f(f, sizeof(f), gcounter.get_usv());
-    pos += snprintf(buf + pos, sizeof(buf) - pos, " uSv: %s", f);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "%suSv: %s", pos ? " " : "", f);
   }
 #ifdef ESPGEIGER_HW
   if (_show_flags & SHOW_HV) {
-    pos += snprintf(buf + pos, sizeof(buf) - pos, " HV: %d", (int)status.hvReading.get());
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "%sHV: %d", pos ? " " : "", (int)status.hvReading.get());
   }
 #endif
+  if (pos == 0) return;
   if (pos < (int)sizeof(buf) - 1) buf[pos++] = '\n';
   Serial.write((const uint8_t*)buf, pos);
 }

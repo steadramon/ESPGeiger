@@ -29,23 +29,23 @@ extern Counter gcounter;
 
 class SerialOut : public EGModule {
     public:
-      // Optional extras appended to the always-shown CPM line. Room in the
-      // byte for future flags (e.g. SHOW_CPM for a quiet mode).
-      static constexpr uint8_t SHOW_USV = 1 << 0;
-      static constexpr uint8_t SHOW_HV  = 1 << 1;
-      static constexpr uint8_t SHOW_CPS = 1 << 2;
+      static constexpr uint8_t SHOW_CPM = 1 << 0;
+      static constexpr uint8_t SHOW_USV = 1 << 1;
+      static constexpr uint8_t SHOW_HV  = 1 << 2;
+      static constexpr uint8_t SHOW_CPS = 1 << 3;
 
       SerialOut();
-      const char* name() override { return "serout"; }
+      const char* name() override { return "sout"; }
       uint16_t warmup_seconds() override { return 0; }
       bool has_tick() override { return true; }
       void s_tick(unsigned long stick_now) override;
       void set_show(int var);
       void print_cpm();
       void print_usv();
-      void toggle_usv() { _show_flags ^= SHOW_USV; }
-      void toggle_hv()  { _show_flags ^= SHOW_HV; }
-      void toggle_cps() { _show_flags ^= SHOW_CPS; }
+      void toggle_cpm();
+      void toggle_usv();
+      void toggle_hv();
+      void toggle_cps();
     private:
       uint16_t _loop_c = 0;
       uint8_t _show_flags = 0;
