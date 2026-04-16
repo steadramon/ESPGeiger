@@ -181,9 +181,6 @@ void MQTT_Client::s_tick(unsigned long now)
   {
     lastPing = now - (now % 1000);
 
-    // tele/sensor — measurements bundle. Single JSON publish consumed by HA
-    // autodiscovery via val_tpl. Replaces the per-metric stat/+ topics
-    // (still published below as LEGACY for non-HA consumers until 0.10.0).
     {
       const size_t cap = JSON_OBJECT_SIZE(10) + 64;
       DynamicJsonDocument sdoc(cap);
@@ -365,11 +362,6 @@ void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const 
 }
 #ifdef MQTTAUTODISCOVER
 
-// Table-driven HA autodiscovery definitions. Each entry produces one HA
-// sensor entity. id doubles as the uniq_id suffix and the removal key.
-// stat_t points at the JSON topic the sensor reads from; val_tpl extracts
-// the field. Empty string fields (dev_cla / state_cla / ent_cat) are
-// omitted from the published config by publishHassTopic.
 struct HassSensor {
   const char* id;
   const char* name;
@@ -391,8 +383,6 @@ static const HassSensor hass_sensors[] = {
 #ifdef ESPGEIGER_HW
   {"hv",    "HV",         "{{ value_json.hv }}",    "V",         "mdi:lightning-bolt", "~/tele/sensor", "",                "",                 ""},
 #endif
-  // Running counter — total_increasing lets HA utility_meter derive per-day
-  // / per-hour / per-month totals without us tracking them firmware-side.
   {"c_total", "Total Clicks", "{{ value_json.c_total }}", "", "mdi:counter", "~/tele/status", "", "total_increasing", ""},
   // Diagnostic sensors — extracted from tele/status JSON.
   {"tick",     "tick",        "{{ value_json.tick }}",     "\u00B5s", "mdi:timer-outline",       "~/tele/status", "",                "measurement",      "diagnostic"},
@@ -434,8 +424,6 @@ void MQTT_Client::setupHassAuto() {
 
   for (size_t i = 0; i < hass_sensor_count; i++) {
     const HassSensor& s = hass_sensors[i];
-    // Build extras conditionally so we don't emit empty "unit_of_meas":""
-    // on unit-less sensors (e.g. c_total).
     std::vector<std::pair<const char*, const char*>> extras = {
       {"stat_t",  s.stat_t},
       {"val_tpl", s.val_tpl},
@@ -548,8 +536,6 @@ void MQTT_Client::removeHASSConfig()
 
 void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mqttDeviceName)
 {
-  // Reachable from the UI "Remove HA config" button even if MQTT never
-  // connected (or is disabled). Guard against null dereference.
   if (!mqttClient) {
     return;
   }
