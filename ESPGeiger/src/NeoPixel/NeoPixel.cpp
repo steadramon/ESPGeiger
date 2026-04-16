@@ -119,8 +119,6 @@ void NeoPixel::loop(unsigned long now)
   if (colorSaturation == 0) {
     return;
   }
-  // Turn pixel off once when the on-window has elapsed; skip the bitbang
-  // Show() on subsequent iterations until something turns it on again.
   if (!_is_off && now - onTime >= offTime)
   {
     RgbColor black(0);
