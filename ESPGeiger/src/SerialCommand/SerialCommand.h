@@ -29,7 +29,7 @@
 extern ESPGeigerHW hardware;
 #endif
 
-#define SERIALCOMMAND_MAXCOMMANDLENGTH 8
+#define SERIALCOMMAND_MAXCOMMANDLENGTH 12
 #define SERIALCOMMAND_BUFFER 32
 #define MAX_COMMANDS 32
 //#define SERIALCOMMAND_DEBUG true
@@ -46,7 +46,7 @@ typedef void (* cbFunction)(char*);
 class SerialCommand : public EGModule {
 public:
     SerialCommand();
-    const char* name() override { return "sercmd"; }
+    const char* name() override { return "scmd"; }
     uint16_t warmup_seconds() override { return 0; }
     void begin() override { setup(); }
     void loop(unsigned long now) override;
@@ -55,8 +55,8 @@ public:
     void setup();
     void readSerial();
     void clearBuffer();
-    char *next();         // Returns pointer to next token found in command buffer (for getting arguments to commands).
-    void addCommand(const char *command, void(*function)());  // Add a command to the processing dictionary.
+    char *next();
+    void addCommand(const char *command, void(*function)());
     static void reboot() { ESP.restart(); };
     static void reset_wifi();
     static void set_ratio();
@@ -79,10 +79,9 @@ private:
     struct SerialCommandCallback {
       char command[SERIALCOMMAND_MAXCOMMANDLENGTH + 1];
       void (*function)();
-    };                                    // Data structure to hold Command/Handler function key-value pairs
-    SerialCommandCallback *commandList;   // Actual definition for command/handler array
+    };
+    SerialCommandCallback *commandList;
     byte commandCount;
-    // Pointer to the default handler function
     void (*defaultHandler)(const char *);
     
     char delim[2]; // null-terminated list of character to be used as delimeters for tokenizing (default " ")

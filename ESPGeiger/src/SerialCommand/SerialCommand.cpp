@@ -82,6 +82,10 @@ void SerialCommand::set_show() {
   int aNumber;
   arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
   if (arg != NULL) {
+    if (strstr("cpm", arg)) {
+      serialout.toggle_cpm();
+      return;
+    }
     if (strstr("usv", arg)) {
       serialout.toggle_usv();
       return;
@@ -103,9 +107,8 @@ void SerialCommand::set_show() {
       serialout.set_show(aNumber);
     }
   } else {
+    // Bare `show` enables 1-second CPM output, same as `show 1`.
     serialout.set_show(1);
-    serialout.loop(1);
-    serialout.set_show(0);
   }
 }
 
