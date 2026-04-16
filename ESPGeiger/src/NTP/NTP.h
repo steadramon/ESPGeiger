@@ -64,10 +64,12 @@ class NTP_Client : public EGModule {
     void saveconfig();
     void loadconfig();
     void set_server(const char* ntpServer) {
-      memcpy(_ntp_server, ntpServer, 64);
+      strncpy(_ntp_server, ntpServer, sizeof(_ntp_server) - 1);
+      _ntp_server[sizeof(_ntp_server) - 1] = '\0';
     };
     void set_tz(const char* ntpTZ) {
-      memcpy(_ntp_tz, ntpTZ, 64);
+      strncpy(_ntp_tz, ntpTZ, sizeof(_ntp_tz) - 1);
+      _ntp_tz[sizeof(_ntp_tz) - 1] = '\0';
     };
     const char* get_server() {
       return _ntp_server;

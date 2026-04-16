@@ -38,7 +38,7 @@ void NTP_Client::setup()
 #ifndef DISABLE_NTP
   loadconfig();
   if (_ntp_server && !_ntp_server[0]) {
-    memcpy(_ntp_server, NTP_SERVER, 64);
+    set_server(NTP_SERVER);
   }
 
   Log::console(PSTR("NTP: Starting ... %s"), _ntp_server);
