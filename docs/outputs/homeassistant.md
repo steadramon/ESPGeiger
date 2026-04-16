@@ -27,6 +27,15 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 | `ESPGeiger-<device_id> HV` | High-voltage reading — ESPGeiger-HW only | `400.1` | 60 s |
 | `ESPGeiger-<device_id> Total Clicks` | Cumulative clicks since boot. | `43200` | 60 s |
 
+## Threshold alerts (binary sensors)
+
+Triggered when CPM crosses the configured warning / alert thresholds. Consumed via `value_template` from `tele/sensor` JSON. Good targets for HA automations (notifications, lights, sirens).
+
+| Value | Description | Device class |
+|---|---|---|
+| `ESPGeiger-<device_id> Warning` | CPM above configured warning threshold | `problem` |
+| `ESPGeiger-<device_id> Alert` | CPM above configured alert threshold | `safety` |
+
 ## Diagnostic entities
 
 Appear under the device's **Diagnostic** section in Home Assistant, not the main dashboard.

@@ -376,12 +376,12 @@ struct HassSensor {
 
 static const HassSensor hass_sensors[] = {
   // Main measurement sensors — extracted from tele/sensor JSON.
-  {"cpm",   "CPM",        "{{ value_json.cpm }}",   "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "",                 ""},
-  {"cpm5",  "CPM5",       "{{ value_json.cpm5 }}",  "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "",                 ""},
-  {"cpm15", "CPM15",      "{{ value_json.cpm15 }}", "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "",                 ""},
-  {"usv",   "\u00B5Sv/h", "{{ value_json.usv }}",   "\u00B5S/h", "mdi:radioactive",    "~/tele/sensor", "",                "",                 ""},
+  {"cpm",   "CPM",        "{{ value_json.cpm }}",   "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "measurement",      ""},
+  {"cpm5",  "CPM5",       "{{ value_json.cpm5 }}",  "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "measurement",      ""},
+  {"cpm15", "CPM15",      "{{ value_json.cpm15 }}", "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "measurement",      ""},
+  {"usv",   "\u00B5Sv/h", "{{ value_json.usv }}",   "\u00B5S/h", "mdi:radioactive",    "~/tele/sensor", "",                "measurement",      ""},
 #ifdef ESPGEIGER_HW
-  {"hv",    "HV",         "{{ value_json.hv }}",    "V",         "mdi:lightning-bolt", "~/tele/sensor", "",                "",                 ""},
+  {"hv",    "HV",         "{{ value_json.hv }}",    "V",         "mdi:lightning-bolt", "~/tele/sensor", "",                "measurement",      ""},
 #endif
   {"c_total", "Total Clicks", "{{ value_json.c_total }}", "", "mdi:counter", "~/tele/status", "", "total_increasing", ""},
   // Diagnostic sensors — extracted from tele/status JSON.
@@ -393,6 +393,20 @@ static const HassSensor hass_sensors[] = {
   {"free_mem", "Free Memory", "{{ value_json.free_mem }}", "B",       "mdi:memory",              "~/tele/status", "",                "measurement",      "diagnostic"},
 };
 static constexpr size_t hass_sensor_count = sizeof(hass_sensors) / sizeof(hass_sensors[0]);
+
+struct HassBinarySensor {
+  const char* id;
+  const char* name;
+  const char* val_tpl;
+  const char* icon;
+  const char* stat_t;
+  const char* dev_cla;   // "problem" / "safety" / etc.
+};
+static const HassBinarySensor hass_binary_sensors[] = {
+  {"warn",  "Warning", "{{ value_json.warn }}",  "mdi:alert-outline",          "~/tele/sensor", "problem"},
+  {"alert", "Alert",   "{{ value_json.alert }}", "mdi:alert-octagram-outline", "~/tele/sensor", "safety"},
+};
+static constexpr size_t hass_binary_sensor_count = sizeof(hass_binary_sensors) / sizeof(hass_binary_sensors[0]);
 
 void MQTT_Client::setupHassCB() {
   ConfigManager &configManager = ConfigManager::getInstance();
@@ -441,6 +455,25 @@ void MQTT_Client::setupHassAuto() {
       s.ent_cat,
       "",
       extras);
+  }
+
+  for (size_t i = 0; i < hass_binary_sensor_count; i++) {
+    const HassBinarySensor& b = hass_binary_sensors[i];
+    publishHassTopic(PSTR("binary_sensor"),
+      b.id,
+      b.name,
+      b.id,
+      b.id,
+      "",
+      b.dev_cla,
+      "",
+      "",
+      "",
+      { {"stat_t",  b.stat_t},
+        {"val_tpl", b.val_tpl},
+        {"pl_on",   "1"},
+        {"pl_off",  "0"},
+        {"ic",      b.icon} });
   }
 }
 
@@ -531,6 +564,9 @@ void MQTT_Client::removeHASSConfig()
 {
   for (size_t i = 0; i < hass_sensor_count; i++) {
     removeHassTopic(PSTR("sensor"), hass_sensors[i].id);
+  }
+  for (size_t i = 0; i < hass_binary_sensor_count; i++) {
+    removeHassTopic(PSTR("binary_sensor"), hass_binary_sensors[i].id);
   }
 }
 
