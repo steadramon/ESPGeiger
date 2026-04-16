@@ -53,9 +53,6 @@ Counter gcounter = Counter();
 GRNG grng = GRNG();
 
 ConfigManager& cManager = ConfigManager::getInstance();
-#ifdef MQTTOUT
-MQTT_Client& mqtt = MQTT_Client::getInstance();
-#endif
 
 SerialCommand serialcmd;
 
@@ -114,19 +111,10 @@ void sTickerCB()
     }
   }
 
-#ifdef MQTTOUT
-  if (!status.wifi_disabled && wifi_status == WL_CONNECTED) {
-    mqtt.loop(stick_now);
-  }
-#endif
-
   EGModuleRegistry::tick_all(stick_now, uptime);
 
   status.lps = lps_count;
   lps_count = 0;
-  // tick_us: EMA-smoothed for "typical load" display. α = 1/8 tracks sustained
-  // changes in ~8 ticks while masking single-tick spikes (MQTT publish etc).
-  // tick_max_us: raw peak, resets every 60 ticks for a rolling "worst-in-last-minute".
   uint32_t this_tick = (uint32_t)(micros() - t_start);
   status.tick_us = (status.tick_us * 7 + this_tick) >> 3;
   if (this_tick > status.tick_max_us) status.tick_max_us = this_tick;
@@ -204,11 +192,6 @@ void setup()
 
   delay(500);
   grng.begin();
-  if (!status.wifi_disabled) {
-#ifdef MQTTOUT
-    mqtt.begin();
-#endif
-  }
   gcounter.begin();
   EGModuleRegistry::begin_all();
   status.start = NTP.getUptime() + 1;

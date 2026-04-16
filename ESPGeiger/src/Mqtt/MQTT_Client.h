@@ -25,6 +25,7 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
 #include "../Counter/Counter.h"
+#include "../Module/EGModule.h"
 #include <AsyncMqttClient.h>
 #include <WiFiClient.h>
 
@@ -34,10 +35,6 @@
 #define MQTT_MAX_TIME 3600
 #define MQTT_STATUS_INTERVAL 60000
 
-// How often (in seconds) to republish Home Assistant autodiscovery configs
-// on reconnect. Default 1 hour — frequent enough to recover from broker
-// restarts, rare enough to avoid flooding on flap-prone clients. Override
-// with -D MQTT_HASS_REFRESH_S=N (set to 0 to publish on every reconnect).
 #ifndef MQTT_HASS_REFRESH_S
 #define MQTT_HASS_REFRESH_S 3600UL
 #endif
@@ -45,11 +42,11 @@
 constexpr auto MQTT_LWT_ONLINE PROGMEM = "Online";
 constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
 
-const char MQTT_TELE_TOPIC[18] PROGMEM = "%st%/tele/%cm%";
-const char MQTT_STAT_TOPIC[18] PROGMEM = "%st%/stat/%cm%";
-
 constexpr auto MQTT_TOPIC_LWT PROGMEM = "lwt";
 constexpr auto MQTT_TOPIC_STATUS PROGMEM = "status";
+
+// Topics are built as "<root>/<middle>/<cmd>" directly from
+// buildTopic(out, sz, middle, cmd). No runtime template parsing.
 
 extern Status status;
 extern Counter gcounter;
@@ -61,15 +58,19 @@ struct MQTTMessage {
   bool retain;
 };
 
-class MQTT_Client {
+class MQTT_Client : public EGModule {
 public:
   static MQTT_Client& getInstance()
   {
-    static MQTT_Client instance; 
+    static MQTT_Client instance;
     return instance;
   }
-  void begin();
-  void loop(unsigned long now);
+  const char* name() override { return "mqtt"; }
+  bool requires_wifi() override { return true; }
+  bool has_tick() override { return true; }
+  uint16_t warmup_seconds() override { return 0; }
+  void begin() override;
+  void s_tick(unsigned long now) override;
   void setInterval(int interval);
   int getInterval();
   void sendStatus();
@@ -88,8 +89,8 @@ protected:
 private:
   MQTT_Client();
   static ConfigManager _configManager;
-  String buildTopic(const char * baseTopic, const char * cmd);
-  String _cachedRootTopic;
+  void buildTopic(char* out, size_t outsz, const char* middle, const char* cmd);
+  char _cachedRootTopic[64] = "";
   bool _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
@@ -104,14 +105,14 @@ private:
                         const String& stateClass = "",
                         const String& entityCat = "",
                         const String& commandTopic = "",
-                        std::vector<std::pair<char*, char*>> additionalEntries = {}
+                        std::vector<std::pair<const char*, const char*>> additionalEntries = {}
                       );
   void removeHassTopic(const String& mqttDeviceType, const String& mattDeviceName);
 #endif
   void onMqttMessage(char* topic, char* payload);
   unsigned long lastPing = 0;
   unsigned long lastStatus = 0;
-  unsigned long lastConnectionAtempt = 0;
+  unsigned long lastConnectionAttempt = 0;
   bool mqttEnabled = true;
   uint8_t reconnectAttempts = 0;
 
@@ -121,10 +122,7 @@ private:
   unsigned long _hass_last_publish = 0;   // millis() of last HA autodiscovery publish (0 = never)
 #endif
 
-  const char* teleTopic = MQTT_TELE_TOPIC;
-  const char* statTopic = MQTT_STAT_TOPIC;
-
-  // tele
+  // tele / stat middle paths are passed directly to buildTopic as literals.
   const char* topicStatus = MQTT_TOPIC_STATUS;
   const char* topicLWT = MQTT_TOPIC_LWT;
 
@@ -133,6 +131,8 @@ private:
   bool warnSent = false;
   bool alertSent = false;
 };
+
+extern MQTT_Client& mqtt;
 
 #endif
 #endif

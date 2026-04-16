@@ -20,8 +20,12 @@
 #include "MQTT_Client.h"
 #include "ArduinoJson.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModuleRegistry.h"
 
 AsyncMqttClient* mqttClient;
+
+MQTT_Client& mqtt = MQTT_Client::getInstance();
+EG_REGISTER_MODULE(mqtt)
 
 MQTT_Client::MQTT_Client()
 {
@@ -38,7 +42,7 @@ void MQTT_Client::disconnect()
   mqttClient->disconnect(true);
   mqttEnabled = true;
   reconnectAttempts = 0;
-  lastConnectionAtempt = 0;
+  lastConnectionAttempt = 0;
   _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
   // Force HA autodiscovery republish on next connect — the user just saved
@@ -53,10 +57,6 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   reconnectAttempts = 0;
   mqttClient->publish(this->last_will_.topic.c_str(), 1, false, lwtOnline);
 #ifdef MQTTAUTODISCOVER
-  // Only republish HA autodiscovery if we've never done it this boot, or
-  // if the refresh interval has elapsed. Skipping this on every reconnect
-  // dramatically reduces traffic on flap-prone clients while still
-  // recovering from broker restarts within MQTT_HASS_REFRESH_S.
   unsigned long now = millis();
   const unsigned long refresh_ms = MQTT_HASS_REFRESH_S * 1000UL;
   bool refresh_due = (_hass_last_publish == 0) ||
@@ -88,7 +88,7 @@ void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
      text = PSTR("UNKNOWN"); break;
   }
   Log::console(PSTR("MQTT: Disconnected (%s)"), text);
-  lastConnectionAtempt = millis();
+  lastConnectionAttempt = millis();
   status.mqtt_connected = false;
 }
 
@@ -106,7 +106,7 @@ int MQTT_Client::getInterval() {
   return (int)(pingInterval / 1000);
 }
 
-void MQTT_Client::loop(unsigned long now)
+void MQTT_Client::s_tick(unsigned long now)
 {
   if (!mqttEnabled) {
     return;
@@ -126,7 +126,7 @@ void MQTT_Client::loop(unsigned long now)
     status.led.Blink(500, 500);
     ConfigManager &configManager = ConfigManager::getInstance();
     lastStatus = now - (now % 1000);
-    const size_t capacity = JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(17) + 22 + 20 + 20;
+    const size_t capacity = JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(21) + 22 + 20 + 20;
     DynamicJsonDocument doc(capacity);
     time_t currentTime = time (NULL);
     struct tm *timeinfo = localtime (&currentTime);
@@ -138,12 +138,16 @@ void MQTT_Client::loop(unsigned long now)
 
     doc["time"] = dateTime;
     doc["uptime"] = configManager.getUptimeString();
+    doc["ut"] = configManager.getUptime();
     doc["board"] = configManager.GetChipModel();
     doc["model"] = configManager.getParamValueFromID("geigerModel");
     doc["ssid"] = WiFi.SSID();
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
     doc["c_total"] = gcounter.total_clicks;
+    doc["tick"] = status.tick_us;
+    doc["t_max"] = status.tick_max_us;
+    doc["lps"] = status.lps;
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
     uint32_t heap_free;
@@ -164,7 +168,9 @@ void MQTT_Client::loop(unsigned long now)
     serializeJson(doc, buffer);
     doc.clear();
 
-    uint16_t pid = mqttClient->publish(buildTopic(teleTopic, topicStatus).c_str(), 1, false, buffer);
+    char topic[64];
+    buildTopic(topic, sizeof(topic), "tele", topicStatus);
+    uint16_t pid = mqttClient->publish(topic, 1, false, buffer);
     Log::console(PSTR("MQTT: Published"));
     status.last_send = millis();
     last_attempt_ms = status.last_send;
@@ -175,29 +181,71 @@ void MQTT_Client::loop(unsigned long now)
   {
     lastPing = now - (now % 1000);
 
+    // tele/sensor — measurements bundle. Single JSON publish consumed by HA
+    // autodiscovery via val_tpl. Replaces the per-metric stat/+ topics
+    // (still published below as LEGACY for non-HA consumers until 0.10.0).
+    {
+      const size_t cap = JSON_OBJECT_SIZE(10) + 64;
+      DynamicJsonDocument sdoc(cap);
+      char b_cpm[12], b_usv[12], b_cps[12], b_cpm5[12], b_cpm15[12];
+      format_f(b_cpm,   sizeof(b_cpm),   gcounter.get_cpmf());
+      format_f(b_usv,   sizeof(b_usv),   gcounter.get_usv());
+      format_f(b_cps,   sizeof(b_cps),   gcounter.get_cps());
+      format_f(b_cpm5,  sizeof(b_cpm5),  gcounter.get_cpm5f());
+      format_f(b_cpm15, sizeof(b_cpm15), gcounter.get_cpm15f());
+#ifdef ESPGEIGER_HW
+      char b_hv[12];
+      format_f(b_hv, sizeof(b_hv), status.hvReading.get());
+#endif
+      sdoc["cpm"]   = serialized(b_cpm);
+      sdoc["usv"]   = serialized(b_usv);
+      sdoc["cps"]   = serialized(b_cps);
+      sdoc["cpm5"]  = serialized(b_cpm5);
+      sdoc["cpm15"] = serialized(b_cpm15);
+#ifdef ESPGEIGER_HW
+      sdoc["hv"]    = serialized(b_hv);
+#endif
+      sdoc["warn"]  = gcounter.is_warning() ? 1 : 0;
+      sdoc["alert"] = gcounter.is_alert() ? 1 : 0;
+      static char sbuf[256];
+      serializeJson(sdoc, sbuf, sizeof(sbuf));
+      char topic[64];
+      buildTopic(topic, sizeof(topic), "tele", "sensor");
+      mqttClient->publish(topic, 1, false, sbuf);
+    }
+
+    // ---- LEGACY ----
     char valBuf[16];
+    char topic[64];
 
     format_f(valBuf, sizeof(valBuf), gcounter.get_cpmf());
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPM")).c_str(), 1, false, valBuf);
+    buildTopic(topic, sizeof(topic), "stat", PSTR("CPM"));
+    mqttClient->publish(topic, 1, false, valBuf);
 
     format_f(valBuf, sizeof(valBuf), gcounter.get_usv());
-    mqttClient->publish(buildTopic(statTopic, PSTR("uSv")).c_str(), 1, false, valBuf);
+    buildTopic(topic, sizeof(topic), "stat", PSTR("uSv"));
+    mqttClient->publish(topic, 1, false, valBuf);
 
 #ifndef DISABLE_MQTT_CPS
     format_f(valBuf, sizeof(valBuf), gcounter.get_cps());
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPS")).c_str(), 1, false, valBuf);
+    buildTopic(topic, sizeof(topic), "stat", PSTR("CPS"));
+    mqttClient->publish(topic, 1, false, valBuf);
 #endif
 
     format_f(valBuf, sizeof(valBuf), gcounter.get_cpm5f());
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPM5")).c_str(), 1, false, valBuf);
+    buildTopic(topic, sizeof(topic), "stat", PSTR("CPM5"));
+    mqttClient->publish(topic, 1, false, valBuf);
 
     format_f(valBuf, sizeof(valBuf), gcounter.get_cpm15f());
-    mqttClient->publish(buildTopic(statTopic, PSTR("CPM15")).c_str(), 1, false, valBuf);
+    buildTopic(topic, sizeof(topic), "stat", PSTR("CPM15"));
+    mqttClient->publish(topic, 1, false, valBuf);
 
 #ifdef ESPGEIGER_HW
     format_f(valBuf, sizeof(valBuf), status.hvReading.get());
-    mqttClient->publish(buildTopic(statTopic, PSTR("HV")).c_str(), 1, false, valBuf);
+    buildTopic(topic, sizeof(topic), "stat", PSTR("HV"));
+    mqttClient->publish(topic, 1, false, valBuf);
 #endif
+    // ---- end LEGACY block ----
 
     status.last_send = millis();
     last_attempt_ms = status.last_send;
@@ -210,19 +258,15 @@ void MQTT_Client::loop(unsigned long now)
 
   if (gcounter.is_warning() != warnSent) {
     warnSent = gcounter.is_warning();
-    int is_warning = 0;
-    if (warnSent) {
-      is_warning = 1;
-    }
-    mqttClient->publish(buildTopic(statTopic, PSTR("WARN")).c_str(), 1, false, is_warning ? "1" : "0");
+    char topic[64];
+    buildTopic(topic, sizeof(topic), "stat", PSTR("WARN"));
+    mqttClient->publish(topic, 1, false, warnSent ? "1" : "0");
   }
   if (gcounter.is_alert() != alertSent) {
     alertSent = gcounter.is_alert();
-    int is_alert = 0;
-    if (alertSent) {
-      is_alert = 1;
-    }
-    mqttClient->publish(buildTopic(statTopic, PSTR("ALERT")).c_str(), 1, false, is_alert ? "1" : "0");
+    char topic[64];
+    buildTopic(topic, sizeof(topic), "stat", PSTR("ALERT"));
+    mqttClient->publish(topic, 1, false, alertSent ? "1" : "0");
   }
 }
 
@@ -238,10 +282,10 @@ void MQTT_Client::reconnect()
   if (backoff > 300000UL) backoff = 300000UL;
 
   unsigned long now = millis();
-  if (lastConnectionAtempt && now - lastConnectionAtempt < backoff) {
+  if (lastConnectionAttempt && now - lastConnectionAttempt < backoff) {
     return;
   }
-  lastConnectionAtempt = now;
+  lastConnectionAttempt = now;
 
   ConfigManager &configManager = ConfigManager::getInstance();
 
@@ -255,7 +299,9 @@ void MQTT_Client::reconnect()
   int mqtt_port = (_mqtt_port != NULL) ? atoi(_mqtt_port) : 1883;
 
   if (mqttClient == nullptr) {
-    this->last_will_.topic = buildTopic(teleTopic, topicLWT);
+    char lwt_topic[64];
+    buildTopic(lwt_topic, sizeof(lwt_topic), "tele", topicLWT);
+    this->last_will_.topic = lwt_topic;
     this->last_will_.payload = lwtOffline;
 
     mqttClient = new AsyncMqttClient();
@@ -291,21 +337,72 @@ void MQTT_Client::reconnect()
   mqttClient->connect();
 }
 
-String MQTT_Client::buildTopic(const char *baseTopic, const char *cmd)
+void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const char* cmd)
 {
   if (!_rootTopicCached) {
     ConfigManager &configManager = ConfigManager::getInstance();
-    _cachedRootTopic = configManager.getParamValueFromID("mqttTopic");
-    _cachedRootTopic.replace(PSTR("{id}"), configManager.getChipID());
+    const char* rootTopic = configManager.getParamValueFromID("mqttTopic");
+    if (rootTopic == nullptr) rootTopic = "";
+    const char* chipId = configManager.getChipID();
+    // Expand {id} inline. Single-pass, bounded write.
+    size_t w = 0;
+    const size_t cap = sizeof(_cachedRootTopic) - 1;
+    for (const char* p = rootTopic; *p && w < cap; ) {
+      if (p[0] == '{' && p[1] == 'i' && p[2] == 'd' && p[3] == '}') {
+        size_t n = strlen(chipId);
+        if (w + n > cap) n = cap - w;
+        memcpy(_cachedRootTopic + w, chipId, n);
+        w += n;
+        p += 4;
+      } else {
+        _cachedRootTopic[w++] = *p++;
+      }
+    }
+    _cachedRootTopic[w] = '\0';
     _rootTopicCached = true;
   }
-  String topic = baseTopic;
-  topic.replace(PSTR("%st%"), _cachedRootTopic);
-  topic.replace(PSTR("%cm%"), cmd);
-
-  return topic;
+  snprintf(out, outsz, "%s/%s/%s", _cachedRootTopic, middle, cmd);
 }
 #ifdef MQTTAUTODISCOVER
+
+// Table-driven HA autodiscovery definitions. Each entry produces one HA
+// sensor entity. id doubles as the uniq_id suffix and the removal key.
+// stat_t points at the JSON topic the sensor reads from; val_tpl extracts
+// the field. Empty string fields (dev_cla / state_cla / ent_cat) are
+// omitted from the published config by publishHassTopic.
+struct HassSensor {
+  const char* id;
+  const char* name;
+  const char* val_tpl;
+  const char* unit;
+  const char* icon;
+  const char* stat_t;
+  const char* dev_cla;
+  const char* state_cla;
+  const char* ent_cat;
+};
+
+static const HassSensor hass_sensors[] = {
+  // Main measurement sensors — extracted from tele/sensor JSON.
+  {"cpm",   "CPM",        "{{ value_json.cpm }}",   "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "",                 ""},
+  {"cpm5",  "CPM5",       "{{ value_json.cpm5 }}",  "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "",                 ""},
+  {"cpm15", "CPM15",      "{{ value_json.cpm15 }}", "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "",                 ""},
+  {"usv",   "\u00B5Sv/h", "{{ value_json.usv }}",   "\u00B5S/h", "mdi:radioactive",    "~/tele/sensor", "",                "",                 ""},
+#ifdef ESPGEIGER_HW
+  {"hv",    "HV",         "{{ value_json.hv }}",    "V",         "mdi:lightning-bolt", "~/tele/sensor", "",                "",                 ""},
+#endif
+  // Running counter — total_increasing lets HA utility_meter derive per-day
+  // / per-hour / per-month totals without us tracking them firmware-side.
+  {"c_total", "Total Clicks", "{{ value_json.c_total }}", "", "mdi:counter", "~/tele/status", "", "total_increasing", ""},
+  // Diagnostic sensors — extracted from tele/status JSON.
+  {"tick",     "tick",        "{{ value_json.tick }}",     "\u00B5s", "mdi:timer-outline",       "~/tele/status", "",                "measurement",      "diagnostic"},
+  {"t_max",    "tick max",    "{{ value_json.t_max }}",    "\u00B5s", "mdi:timer-alert-outline", "~/tele/status", "",                "measurement",      "diagnostic"},
+  {"lps",      "LPS",         "{{ value_json.lps }}",      "1/s",     "mdi:speedometer",         "~/tele/status", "",                "measurement",      "diagnostic"},
+  {"rssi",     "RSSI",        "{{ value_json.rssi }}",     "dBm",     "mdi:wifi",                "~/tele/status", "signal_strength", "measurement",      "diagnostic"},
+  {"uptime",   "Uptime",      "{{ value_json.ut }}",       "s",       "mdi:clock-outline",       "~/tele/status", "duration",        "total_increasing", "diagnostic"},
+  {"free_mem", "Free Memory", "{{ value_json.free_mem }}", "B",       "mdi:memory",              "~/tele/status", "",                "measurement",      "diagnostic"},
+};
+static constexpr size_t hass_sensor_count = sizeof(hass_sensors) / sizeof(hass_sensors[0]);
 
 void MQTT_Client::setupHassCB() {
   ConfigManager &configManager = ConfigManager::getInstance();
@@ -335,73 +432,28 @@ void MQTT_Client::setupHassAuto() {
 
   Log::console(PSTR("MQTT: Publishing HA autodiscovery"));
 
-  publishHassTopic(PSTR("sensor"),
-    PSTR("cpm"),
-    PSTR("CPM"),
-    PSTR("CPM"),
-    PSTR("CPM"),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    { {"unit_of_meas", "CPM"},
-      { "ic", "mdi:pulse" }});
-
-  publishHassTopic(PSTR("sensor"),
-    PSTR("cpm5"),
-    PSTR("CPM5"),
-    PSTR("CPM5"),
-    PSTR("CPM5"),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    { {"unit_of_meas", "CPM"},
-      { "ic", "mdi:pulse" }});
-
-  publishHassTopic(PSTR("sensor"),
-    PSTR("cpm15"),
-    PSTR("CPM15"),
-    PSTR("CPM15"),
-    PSTR("CPM15"),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    { {"unit_of_meas", "CPM"},
-      { "ic", "mdi:pulse" }});
-
-  publishHassTopic(PSTR("sensor"),
-    PSTR("usv"),
-    PSTR("\u00B5Sv/h"),
-    PSTR("uSv"),
-    PSTR("uSv"),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    { {"unit_of_meas", "\u00B5S/h"},
-      { "ic", "mdi:radioactive" }});
-
-#ifdef ESPGEIGER_HW
-  publishHassTopic(PSTR("sensor"),
-    PSTR("hv"),
-    PSTR("HV"),
-    PSTR("HV"),
-    PSTR("HV"),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    PSTR(""),
-    { {"unit_of_meas", "V"},
-      { "ic", "mdi:lightning-bolt" }});
-#endif
-
+  for (size_t i = 0; i < hass_sensor_count; i++) {
+    const HassSensor& s = hass_sensors[i];
+    // Build extras conditionally so we don't emit empty "unit_of_meas":""
+    // on unit-less sensors (e.g. c_total).
+    std::vector<std::pair<const char*, const char*>> extras = {
+      {"stat_t",  s.stat_t},
+      {"val_tpl", s.val_tpl},
+      {"ic",      s.icon},
+    };
+    if (s.unit[0]) extras.push_back({"unit_of_meas", s.unit});
+    publishHassTopic(PSTR("sensor"),
+      s.id,
+      s.name,
+      s.id,
+      s.id,            // stateTopic — default ignored, stat_t below overrides.
+      "",
+      s.dev_cla,
+      s.state_cla,
+      s.ent_cat,
+      "",
+      extras);
+  }
 }
 
 void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
@@ -414,7 +466,7 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
                                const String& stateClass,
                                const String& entityCat,
                                const String& commandTopic,
-                               std::vector<std::pair<char*, char*>> additionalEntries
+                               std::vector<std::pair<const char*, const char*>> additionalEntries
 )
 {
   ConfigManager &configManager = ConfigManager::getInstance();
@@ -489,17 +541,19 @@ void MQTT_Client::publishHassTopic(const String& mqttDeviceType,
 
 void MQTT_Client::removeHASSConfig()
 {
-  removeHassTopic(PSTR("sensor"), PSTR("cpm"));
-  removeHassTopic(PSTR("sensor"), PSTR("cpm5"));
-  removeHassTopic(PSTR("sensor"), PSTR("cpm15"));
-  removeHassTopic(PSTR("sensor"), PSTR("usv"));
-#ifdef ESPGEIGER_HW
-  removeHassTopic(PSTR("sensor"), PSTR("hv"));
-#endif
+  for (size_t i = 0; i < hass_sensor_count; i++) {
+    removeHassTopic(PSTR("sensor"), hass_sensors[i].id);
+  }
 }
 
 void MQTT_Client::removeHassTopic(const String& mqttDeviceType, const String& mqttDeviceName)
 {
+  // Reachable from the UI "Remove HA config" button even if MQTT never
+  // connected (or is disabled). Guard against null dereference.
+  if (!mqttClient) {
+    return;
+  }
+
   ConfigManager &configManager = ConfigManager::getInstance();
 
   const char* _discovery_topic = configManager.getParamValueFromID("hassDisc");
