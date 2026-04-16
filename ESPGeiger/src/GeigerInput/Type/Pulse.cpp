@@ -100,6 +100,9 @@ void GeigerPulse::set_pin_pull(int mode) {
   }
   _pin_pull = mode;
   gpio_set_pull_mode((gpio_num_t)_rx_pin, m);
-  Log::console(PSTR("GeigerPulse: PCNT pin pull = %s"), name);
+  if (mode != _pin_pull_last_logged) {
+    Log::console(PSTR("GeigerPulse: PCNT pin pull = %s"), name);
+    _pin_pull_last_logged = mode;
+  }
 }
 #endif

@@ -72,8 +72,9 @@ class GeigerPulse : public GeigerInput
     void apply_pcnt_filter();
     void set_pin_pull(int mode);   // 0=floating, 1=up, 2=down
   private:
-    int _pcnt_filter = 0;
-    int _pin_pull = PCNT_PIN_PULL_DEFAULT;
+    uint16_t _pcnt_filter = 0;          // 0-1023 per PCNT hardware
+    uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT; // 0-2
+    int8_t   _pin_pull_last_logged = -1;        // -1 = never logged yet
 #endif
 };
 #endif
