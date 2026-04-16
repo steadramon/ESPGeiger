@@ -153,7 +153,7 @@ static WiFiManagerParameter WHParams[] =
   WiFiManagerParameter(R"J(<input type='checkbox' id='cbwh' onchange='setCB("whSend",this)'> <label for='cbwh'>Send</label><br><script>doCB("cbwh","whSend")</script>)J"),
   WiFiManagerParameter("whURL", "Webhook URL", "", 255),
   WiFiManagerParameter("whKey", "Webhook Key", "", 255),
-  WiFiManagerParameter("whTime", "Submit Time (s)", "60", 5, "required type='number' min='1' max='3600'"),
+  WiFiManagerParameter("whTime", "Submit Time (s)", "60", 5, "required type='number' min='10' max='3600'"),
 };
 #endif
 

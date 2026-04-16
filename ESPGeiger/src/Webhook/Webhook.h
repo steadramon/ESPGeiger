@@ -34,6 +34,16 @@
 extern Status status;
 extern Counter gcounter;
 
+#ifndef WEBHOOK_INTERVAL_MIN
+#define WEBHOOK_INTERVAL_MIN 10
+#endif
+#ifndef WEBHOOK_INTERVAL_MAX
+#define WEBHOOK_INTERVAL_MAX 3600
+#endif
+#ifndef WEBHOOK_INTERVAL
+#define WEBHOOK_INTERVAL 60
+#endif
+
 class Webhook : public EGModule {
   public:
     Webhook();
@@ -42,13 +52,15 @@ class Webhook : public EGModule {
     bool has_tick() override { return true; }
     void s_tick(unsigned long stick_now) override;
     void postMeasurement();
+    void setInterval(int interval);
+    int getInterval() { return pingInterval / 1000; }
     const char* cleanHTTP(const char* url);
     AsyncHTTPRequest request;
     bool last_ok = false;
     unsigned long last_attempt_ms = 0;
   private:
     unsigned long lastPing = 0;
-    int pingInterval = 1000 * 60;
+    int pingInterval = 1000 * WEBHOOK_INTERVAL;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 

@@ -28,13 +28,20 @@ EG_REGISTER_MODULE(webhook)
 Webhook::Webhook() {
 }
 
+void Webhook::setInterval(int interval)
+{
+  if (interval < WEBHOOK_INTERVAL_MIN) interval = WEBHOOK_INTERVAL_MIN;
+  if (interval > WEBHOOK_INTERVAL_MAX) interval = WEBHOOK_INTERVAL_MAX;
+  pingInterval = interval * 1000;
+}
+
 void Webhook::s_tick(unsigned long stick_now)
 {
   if (lastPing == 0) {
     ConfigManager &configManager = ConfigManager::getInstance();
     const char* _whTime = configManager.getParamValueFromID("whTime");
     if (_whTime != NULL) {
-      pingInterval = atoi(_whTime) * 1000;
+      setInterval(atoi(_whTime));
     }
     lastPing = stick_now + random(pingInterval / 1000) * 1000;
     return;
@@ -93,6 +100,11 @@ void Webhook::postMeasurement() {
   const char* whURL = configManager.getParamValueFromID("whURL");
   if (whURL == NULL) {
     return;
+  }
+
+  const char* _whTime = configManager.getParamValueFromID("whTime");
+  if (_whTime != NULL) {
+    setInterval(atoi(_whTime));
   }
 
   Log::console(PSTR("Webhook: Uploading latest data ..."));
