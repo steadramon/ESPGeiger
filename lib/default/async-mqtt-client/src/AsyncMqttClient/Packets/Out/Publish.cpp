@@ -6,7 +6,6 @@ PublishOutPacket::PublishOutPacket(const char* topic, uint8_t qos, bool retain, 
   char fixedHeader[5];
   fixedHeader[0] = AsyncMqttClientInternals::PacketType.PUBLISH;
   fixedHeader[0] = fixedHeader[0] << 4;
-  // if (dup) fixedHeader[0] |= AsyncMqttClientInternals::HeaderFlag.PUBLISH_DUP;
   if (retain) fixedHeader[0] |= AsyncMqttClientInternals::HeaderFlag.PUBLISH_RETAIN;
   switch (qos) {
     case 0:
@@ -32,36 +31,42 @@ PublishOutPacket::PublishOutPacket(const char* topic, uint8_t qos, bool retain, 
   if (qos != 0) remainingLength += 2;
   uint8_t remainingLengthLength = AsyncMqttClientInternals::Helpers::encodeRemainingLength(remainingLength, fixedHeader + 1);
 
-  size_t neededSpace = 0;
-  neededSpace += 1 + remainingLengthLength;
-  neededSpace += 2;
-  neededSpace += topicLength;
-  if (qos != 0) neededSpace += 2;
-  if (payload != nullptr) neededSpace += payloadLength;
+  _len = 0;
+  _len += 1 + remainingLengthLength;
+  _len += 2;
+  _len += topicLength;
+  if (qos != 0) _len += 2;
+  if (payload != nullptr) _len += payloadLength;
 
-  _data.reserve(neededSpace);
+  _data = (uint8_t*)malloc(_len);
+  if (!_data) { _len = 0; return; }
 
-  _packetId = (qos !=0) ? _getNextPacketId() : 1;
+  _packetId = (qos != 0) ? _getNextPacketId() : 1;
   char packetIdBytes[2];
   packetIdBytes[0] = _packetId >> 8;
   packetIdBytes[1] = _packetId & 0xFF;
 
-  _data.insert(_data.end(), fixedHeader, fixedHeader + 1 + remainingLengthLength);
-  _data.insert(_data.end(), topicLengthBytes, topicLengthBytes + 2);
-  _data.insert(_data.end(), topic, topic + topicLength);
+  size_t pos = 0;
+  memcpy(_data + pos, fixedHeader, 1 + remainingLengthLength); pos += 1 + remainingLengthLength;
+  memcpy(_data + pos, topicLengthBytes, 2); pos += 2;
+  memcpy(_data + pos, topic, topicLength); pos += topicLength;
   if (qos != 0) {
-    _data.insert(_data.end(), packetIdBytes, packetIdBytes + 2);
+    memcpy(_data + pos, packetIdBytes, 2); pos += 2;
     _released = false;
   }
-  if (payload != nullptr) _data.insert(_data.end(), payload, payload + payloadLength);
+  if (payload != nullptr) { memcpy(_data + pos, payload, payloadLength); pos += payloadLength; }
+}
+
+PublishOutPacket::~PublishOutPacket() {
+  free(_data);
 }
 
 const uint8_t* PublishOutPacket::data(size_t index) const {
-  return &_data.data()[index];
+  return _data + index;
 }
 
 size_t PublishOutPacket::size() const {
-  return _data.size();
+  return _len;
 }
 
 void PublishOutPacket::setDup() {

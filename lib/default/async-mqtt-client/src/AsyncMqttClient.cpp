@@ -31,12 +31,12 @@ AsyncMqttClient::AsyncMqttClient()
 #if ASYNC_TCP_SSL_ENABLED
 , _secureServerFingerprints()
 #endif
-, _onConnectUserCallbacks()
-, _onDisconnectUserCallbacks()
-, _onSubscribeUserCallbacks()
-, _onUnsubscribeUserCallbacks()
-, _onMessageUserCallbacks()
-, _onPublishUserCallbacks()
+, _onConnectUserCallback(nullptr)
+, _onDisconnectUserCallback(nullptr)
+, _onSubscribeUserCallback(nullptr)
+, _onUnsubscribeUserCallback(nullptr)
+, _onMessageUserCallback(nullptr)
+, _onPublishUserCallback(nullptr)
 , _parsingInformation { .bufferState = AsyncMqttClientInternals::BufferState::NONE }
 , _currentParsedPacket(nullptr)
 , _remainingLengthBufferPosition(0)
@@ -139,32 +139,32 @@ AsyncMqttClient& AsyncMqttClient::addServerFingerprint(const uint8_t* fingerprin
 #endif
 
 AsyncMqttClient& AsyncMqttClient::onConnect(AsyncMqttClientInternals::OnConnectUserCallback callback) {
-  _onConnectUserCallbacks.push_back(callback);
+  _onConnectUserCallback = callback;
   return *this;
 }
 
 AsyncMqttClient& AsyncMqttClient::onDisconnect(AsyncMqttClientInternals::OnDisconnectUserCallback callback) {
-  _onDisconnectUserCallbacks.push_back(callback);
+  _onDisconnectUserCallback = callback;
   return *this;
 }
 
 AsyncMqttClient& AsyncMqttClient::onSubscribe(AsyncMqttClientInternals::OnSubscribeUserCallback callback) {
-  _onSubscribeUserCallbacks.push_back(callback);
+  _onSubscribeUserCallback = callback;
   return *this;
 }
 
 AsyncMqttClient& AsyncMqttClient::onUnsubscribe(AsyncMqttClientInternals::OnUnsubscribeUserCallback callback) {
-  _onUnsubscribeUserCallbacks.push_back(callback);
+  _onUnsubscribeUserCallback = callback;
   return *this;
 }
 
 AsyncMqttClient& AsyncMqttClient::onMessage(AsyncMqttClientInternals::OnMessageUserCallback callback) {
-  _onMessageUserCallbacks.push_back(callback);
+  _onMessageUserCallback = callback;
   return *this;
 }
 
 AsyncMqttClient& AsyncMqttClient::onPublish(AsyncMqttClientInternals::OnPublishUserCallback callback) {
-  _onPublishUserCallbacks.push_back(callback);
+  _onPublishUserCallback = callback;
   return *this;
 }
 
@@ -226,7 +226,7 @@ void AsyncMqttClient::_onDisconnect() {
 
   _clear();
 
-  for (auto callback : _onDisconnectUserCallbacks) callback(_disconnectReason);
+  if (_onDisconnectUserCallback) _onDisconnectUserCallback(_disconnectReason);
 }
 
 /*
@@ -510,7 +510,7 @@ void AsyncMqttClient::_onConnAck(bool sessionPresent, uint8_t connectReturnCode)
 
   if (connectReturnCode == 0) {
     _state = CONNECTED;
-    for (auto callback : _onConnectUserCallbacks) callback(sessionPresent);
+    if (_onConnectUserCallback) _onConnectUserCallback(sessionPresent);
   } else {
     // Callbacks are handled by the onDisconnect function which is called from the AsyncTcp lib
     _disconnectReason = static_cast<AsyncMqttClientDisconnectReason>(connectReturnCode);
@@ -529,7 +529,7 @@ void AsyncMqttClient::_onSubAck(uint16_t packetId, char status) {
   }
   SEMAPHORE_GIVE();
 
-  for (auto callback : _onSubscribeUserCallbacks) callback(packetId, status);
+  if (_onSubscribeUserCallback) _onSubscribeUserCallback(packetId, status);
 
   _handleQueue();  // subscribe confirmed, ready to send next queued item
 }
@@ -544,7 +544,7 @@ void AsyncMqttClient::_onUnsubAck(uint16_t packetId) {
   }
   SEMAPHORE_GIVE();
 
-  for (auto callback : _onUnsubscribeUserCallbacks) callback(packetId);
+  if (_onUnsubscribeUserCallback) _onUnsubscribeUserCallback(packetId);
 
   _handleQueue();  // unsubscribe confirmed, ready to send next queued item
 }
@@ -567,7 +567,7 @@ void AsyncMqttClient::_onMessage(char* topic, char* payload, uint8_t qos, bool d
     properties.dup = dup;
     properties.retain = retain;
 
-    for (auto callback : _onMessageUserCallbacks) callback(topic, payload, properties, len, index, total);
+    if (_onMessageUserCallback) _onMessageUserCallback(topic, payload, properties, len, index, total);
   }
 }
 
@@ -634,7 +634,7 @@ void AsyncMqttClient::_onPubAck(uint16_t packetId) {
     log_i("PUB released");
   }
 
-  for (auto callback : _onPublishUserCallbacks) callback(packetId);
+  if (_onPublishUserCallback) _onPublishUserCallback(packetId);
   _handleQueue();
 }
 
@@ -667,7 +667,7 @@ void AsyncMqttClient::_onPubComp(uint16_t packetId) {
     log_i("PUBREL released");
   }
 
-  for (auto callback : _onPublishUserCallbacks) callback(packetId);
+  if (_onPublishUserCallback) _onPublishUserCallback(packetId);
 }
 
 void AsyncMqttClient::_sendPing() {
