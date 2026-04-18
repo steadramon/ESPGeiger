@@ -326,6 +326,7 @@ void ConfigManager::handleGeigerLog() {
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), jsonBuffer );
 }
 
+#ifdef SERIALOUT
 void ConfigManager::handleSerialOut() {
   handleRequest();
   if (serialout.interval() == 0) {
@@ -337,6 +338,7 @@ void ConfigManager::handleSerialOut() {
   }
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), "OK" );
 }
+#endif
 
 void ConfigManager::handleAbout()
 {
@@ -966,7 +968,9 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
   ConfigManager::server.get()->on(HIST_URL, HTTP_GET, std::bind(&ConfigManager::handleHistoryPage, this));
   ConfigManager::server.get()->on(GEIGERLOG_URL, HTTP_GET, std::bind(&ConfigManager::handleGeigerLog, this));
+#ifdef SERIALOUT
   ConfigManager::server.get()->on(SERIAL_URL, HTTP_GET, std::bind(&ConfigManager::handleSerialOut, this));
+#endif
   ConfigManager::server.get()->on(ABOUT_URL, HTTP_GET, std::bind(&ConfigManager::handleAbout, this));
   ConfigManager::server.get()->on(OUTPUTS_URL, HTTP_GET, std::bind(&ConfigManager::handleOutputsJson, this));
   ConfigManager::server.get()->on(PREFS_URL, HTTP_GET, std::bind(&ConfigManager::handlePrefs, this));

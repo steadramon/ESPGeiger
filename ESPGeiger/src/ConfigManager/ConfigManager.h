@@ -151,7 +151,9 @@ private:
   void handleNTPSet();
   void handleClicksReturn();
   void handleGeigerLog();
+#ifdef SERIALOUT
   void handleSerialOut();
+#endif
   void handleAbout();
   void handleOutputsJson();
 #ifdef ESPGEIGER_HW
