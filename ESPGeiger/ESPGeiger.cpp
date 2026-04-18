@@ -21,6 +21,7 @@
 
 #include <Arduino.h>
 #include "src/Util/DeviceInfo.h"
+#include "src/Util/Wifi.h"
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
@@ -87,45 +88,7 @@ void sTickerCB()
   if (status.warmup && uptime > 10) {
     status.warmup = false;
   }
-  wl_status_t wifi_status = WiFi.status();
-  bool was_connected = status.wifi_connected;
-  status.wifi_connected = (wifi_status == WL_CONNECTED);
-  if (status.wifi_connected) {
-    static uint8_t rssi_cnt = 0;
-    if (++rssi_cnt >= 60) { rssi_cnt = 0; status.wifi_rssi = WiFi.RSSI(); }
-    if (!was_connected) {
-      strncpy(status.wifi_ip, WiFi.localIP().toString().c_str(), sizeof(status.wifi_ip) - 1);
-      strncpy(status.wifi_ssid, WiFi.SSID().c_str(), sizeof(status.wifi_ssid) - 1);
-      status.wifi_rssi = WiFi.RSSI();
-    }
-  }
-
-  // WiFi recovery tracking (only once WiFi has been enabled)
-  if (!status.wifi_disabled) {
-    if (wifi_status != WL_CONNECTED) {
-      if (status.wifi_was_connected) {
-        status.wifi_was_connected = false;
-        status.wifi_lost_at = stick_now;
-        Log::console(PSTR("WiFi: Connection lost"));
-      }
-      unsigned long down_seconds = (stick_now - status.wifi_lost_at) / 1000;
-      if (down_seconds > 0 && down_seconds % 30 == 0) {
-        Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
-        WiFi.reconnect();
-      }
-      if (down_seconds > 300) {
-        Log::console(PSTR("WiFi: Down for 5 minutes, rebooting"));
-        delay(100);
-        ESP.restart();
-      }
-    } else if (!status.wifi_was_connected) {
-      status.wifi_was_connected = true;
-      if (status.wifi_lost_at > 0) {
-        unsigned long down_seconds = (stick_now - status.wifi_lost_at) / 1000;
-        Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
-      }
-    }
-  }
+  Wifi::tick(stick_now);
 
 #ifdef TICK_PROFILE
   unsigned long t_after_wifi = micros();
@@ -202,7 +165,7 @@ void setup()
     }
     delay(750);
     status.enable_oled_timeout = false;
-    status.wifi_disabled = true;
+    Wifi::disabled = true;
   }
 #endif
 #ifdef SSD1306_DISPLAY
@@ -210,12 +173,12 @@ void setup()
     display.setupWifi(DeviceInfo::hostname());
   }
 #endif
-  if (!status.wifi_disabled) {
+  if (!Wifi::disabled) {
     bool res = cManager.autoConnect();
     if (!res) {
 #if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
       if (!cManager.getWiFiIsSaved()) {
-        status.wifi_disabled = true;
+        Wifi::disabled = true;
       }
 #else
       Log::console(PSTR("WiFi not connecting ... Restarting ... "));
@@ -225,7 +188,6 @@ void setup()
     }
 
     delay(100);
-    status.wifi_was_connected = (WiFi.status() == WL_CONNECTED);
     cManager.startWebPortal();
   }
 

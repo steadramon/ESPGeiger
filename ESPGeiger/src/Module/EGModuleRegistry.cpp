@@ -12,6 +12,7 @@
 #include "EGModuleRegistry.h"
 #include "../Logger/Logger.h"
 #include "../Status.h"
+#include "../Util/Wifi.h"
 #include <string.h>
 
 
@@ -32,7 +33,7 @@ void EGModuleRegistry::begin_all() {
   // Array is already sorted by pre_wifi_all()
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
-    if ((s.flags & FLAG_REQUIRES_WIFI) && status.wifi_disabled) {
+    if ((s.flags & FLAG_REQUIRES_WIFI) && Wifi::disabled) {
       Log::debug(PSTR("Module: Skipping %s (wifi disabled)"), s.module->name());
       continue;
     }
@@ -53,7 +54,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     if (!(s.flags & FLAG_HAS_LOOP)) continue;
     // Matches begin_all()'s wifi gate: if wifi was disabled at boot,
     // begin() was skipped so loop() has nothing to poll against.
-    if ((s.flags & FLAG_REQUIRES_WIFI) && status.wifi_disabled) continue;
+    if ((s.flags & FLAG_REQUIRES_WIFI) && Wifi::disabled) continue;
 
     unsigned long due = s.loop_last + s.loop_interval;
     if ((long)(now - due) >= 0) {
@@ -67,7 +68,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 }
 
 void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds) {
-  bool wifi_ok = !status.wifi_disabled && status.wifi_connected;
+  bool wifi_ok = !Wifi::disabled && Wifi::connected;
   bool ntp_ok = status.ntp_synced;
   bool seconds = false;
   for (uint8_t i = 0; i < _count; i++) {

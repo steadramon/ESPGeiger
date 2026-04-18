@@ -19,6 +19,7 @@
 
 #include "Logger.h"
 #include "../Status.h"
+#include "../Util/Wifi.h"
 
 extern Status status;
 
@@ -104,7 +105,7 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
   }
 
   // Offline: no web, so skip the 4KB ring-buffer bookkeeping (strlen + memmove).
-  if (status.wifi_disabled) return;
+  if (Wifi::disabled) return;
 
 #ifndef DISABLE_LOG_TS
   // Web log gets '*' suffix only when NTP may still sync - tells the JS regex

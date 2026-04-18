@@ -24,6 +24,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/ParseTime.h"
+#include "../Util/Wifi.h"
 
 SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
 EG_REGISTER_MODULE(display)
@@ -167,7 +168,7 @@ void SSD1306Display::page_two_full() {
   setFont(ArialMT_Plain_10);
   drawString(0, 2, DeviceInfo::hostname());
   drawString(0, 17, PSTR("IP:"));
-  drawString(16, 17, status.wifi_ip);
+  drawString(16, 17, Wifi::ip);
   int uptime_y = 32;
 #ifdef ESPGEIGER_HW
   drawString(0, uptime_y, PSTR("HV:"));
@@ -184,10 +185,10 @@ void SSD1306Display::page_one_clear() {
   setFont(DialogInput_plain_12);
   drawString(0,5, PSTR("CPM:"));
   drawString(0,20, PSTR("µSv/h:"));
-  if (status.wifi_disabled) {
+  if (Wifi::disabled) {
     return;
   }
-  drawXbm(120, 0, fontWidth, fontHeight, status.wifi_connected?_iconimage_connected:_iconimage_disconnected);
+  drawXbm(120, 0, fontWidth, fontHeight, Wifi::connected?_iconimage_connected:_iconimage_disconnected);
 }
 
 void SSD1306Display::setup() {

@@ -65,13 +65,6 @@ struct Status {
 #ifdef ESPGEIGER_HW
   Smoothed <float> hvReading;
 #endif
-  bool wifi_disabled = false;
-  bool wifi_connected = false;
-  char wifi_ip[16] = "";
-  char wifi_ssid[33] = "";
-  int16_t wifi_rssi = 0;
-  unsigned long wifi_lost_at = 0;
-  bool wifi_was_connected = false;
   uint32_t tick_us = 0;     // sTickerCB duration, EMA-smoothed (alpha = 1/8)
   uint32_t tick_max_us = 0; // peak tick_us since the last 60s window reset
   uint32_t lps = 0;         // loop iterations counted in the last second

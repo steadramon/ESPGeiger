@@ -20,6 +20,7 @@
 #include "Webhook.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/Wifi.h"
 
 Webhook webhook;
 EG_REGISTER_MODULE(webhook)
@@ -150,7 +151,7 @@ void Webhook::postMeasurement() {
 #endif
   pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
-    gcounter.total_clicks, ESP.getFreeHeap(), (int)status.wifi_rssi);
+    gcounter.total_clicks, ESP.getFreeHeap(), (int)Wifi::rssi);
 
   char url[256];
   const char* trimmedURL = cleanHTTP(whURL);

@@ -40,6 +40,7 @@
 #include <LittleFS.h>
 #include "../NTP/timezones.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/Wifi.h"
 #include "../SerialOut/SerialOut.h"
 
 #define _STR(x) #x
@@ -292,7 +293,7 @@ void ConfigManager::handleJsonReturn()
     ratioChar,
     gcounter.total_clicks,
     ESP.getFreeHeap(),
-    (int)status.wifi_rssi
+    (int)Wifi::rssi
   );
 #ifdef ESPGEIGER_HW
   char hv[16];
