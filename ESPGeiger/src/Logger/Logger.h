@@ -20,11 +20,11 @@
 #include "Arduino.h"
 
 #define MAX_LOG_SIZE 4000
-#define LOG_LEVEL    LOG_LEVEL_NONE
+#define LOG_LEVEL    LOG_LEVEL_ERROR
 
 class Log {
 public:
-  enum LoggingLevels {LOG_LEVEL_NONE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
+  enum LoggingLevels {LOG_LEVEL_CONSOLE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
   static void console(const char* logData, ...);
   static void error(const char* logData, ...);
   static void info(const char* logData, ...);

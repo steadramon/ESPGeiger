@@ -34,7 +34,7 @@ void Log::console(const char* formatP, ...)
   va_start(arg, formatP);
   vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_NONE, buffer);
+  AddLog(LOG_LEVEL_CONSOLE, buffer);
 }
 
 void Log::error(const char* formatP, ...)
@@ -74,7 +74,7 @@ void Log::banner(const char* formatP, ...)
   va_start(arg, formatP);
   vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_NONE, buffer, false);
+  AddLog(LOG_LEVEL_CONSOLE, buffer, false);
 }
 
 // Based on arendst/Tasmota addLog (support.ino)
