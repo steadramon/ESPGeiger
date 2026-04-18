@@ -41,6 +41,7 @@
 #include "../NTP/timezones.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
+#include "../Util/TickProfile.h"
 #include "../SerialOut/SerialOut.h"
 
 #define _STR(x) #x
@@ -302,7 +303,7 @@ void ConfigManager::handleJsonReturn()
 #endif
   pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
     PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
-    status.tick_us, status.tick_max_us, status.lps);
+    TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
   snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR("}"));
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );

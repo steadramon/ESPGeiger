@@ -65,9 +65,6 @@ struct Status {
 #ifdef ESPGEIGER_HW
   Smoothed <float> hvReading;
 #endif
-  uint32_t tick_us = 0;     // sTickerCB duration, EMA-smoothed (alpha = 1/8)
-  uint32_t tick_max_us = 0; // peak tick_us since the last 60s window reset
-  uint32_t lps = 0;         // loop iterations counted in the last second
   int16_t  tz_offset_min = 0; // device UTC offset in minutes; refreshed hourly by Counter
 };
 

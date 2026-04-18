@@ -22,6 +22,7 @@
 #include <Arduino.h>
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/Wifi.h"
+#include "src/Util/TickProfile.h"
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
@@ -63,9 +64,6 @@ SerialCommand serialcmd;
 Ticker msTicker;
 Ticker sTicker;
 
-// Loop iteration counter — read & reset every second by sTickerCB
-static volatile uint32_t lps_count = 0;
-
 void msTickerCB()
 {
   status.led.Update();
@@ -76,12 +74,12 @@ void msTickerCB()
 
 void sTickerCB()
 {
-  unsigned long t_start = micros();
+  TickProfile::beginTick();
   unsigned long stick_now = millis();
 
   gcounter.secondticker(stick_now);
 #ifdef TICK_PROFILE
-  unsigned long t_after_counter = micros();
+  TickProfile::markCounter();
 #endif
 
   unsigned long uptime = NTP.getUptime() - status.start;
@@ -89,42 +87,16 @@ void sTickerCB()
     status.warmup = false;
   }
   Wifi::tick(stick_now);
-
 #ifdef TICK_PROFILE
-  unsigned long t_after_wifi = micros();
+  TickProfile::markWifi();
 #endif
 
   EGModuleRegistry::tick_all(stick_now, uptime);
 #ifdef TICK_PROFILE
-  unsigned long t_after_modules = micros();
+  TickProfile::markModules();
 #endif
 
-  status.lps = lps_count;
-  lps_count = 0;
-  uint32_t this_tick = (uint32_t)(micros() - t_start);
-  status.tick_us = (status.tick_us * 7 + this_tick) >> 3;
-  if (this_tick > status.tick_max_us) status.tick_max_us = this_tick;
-#ifdef TICK_PROFILE
-  // Track max of each section over the tick_max window and log on reset
-  static uint32_t max_counter_us = 0, max_wifi_us = 0, max_modules_us = 0;
-  uint32_t counter_us = (uint32_t)(t_after_counter - t_start);
-  uint32_t wifi_us    = (uint32_t)(t_after_wifi - t_after_counter);
-  uint32_t modules_us = (uint32_t)(t_after_modules - t_after_wifi);
-  if (counter_us > max_counter_us) max_counter_us = counter_us;
-  if (wifi_us    > max_wifi_us)    max_wifi_us    = wifi_us;
-  if (modules_us > max_modules_us) max_modules_us = modules_us;
-#endif
-  static uint8_t tick_max_age = 0;
-  if (++tick_max_age >= 60) {
-    tick_max_age = 0;
-#ifdef TICK_PROFILE
-    Log::console(PSTR("Tick profile: total=%u ctr=%u wifi=%u mods=%u lps=%u"),
-      status.tick_max_us, max_counter_us, max_wifi_us, max_modules_us, status.lps);
-    EGModuleRegistry::log_profile_and_reset();
-    max_counter_us = max_wifi_us = max_modules_us = 0;
-#endif
-    status.tick_max_us = this_tick;
-  }
+  TickProfile::endTick();
 }
 
 void setup()
@@ -204,7 +176,7 @@ void setup()
 
 void loop()
 {
-  lps_count++;
+  TickProfile::countIter();
   unsigned long now = millis();
   gcounter.loop();
   cManager.processLoop(now);

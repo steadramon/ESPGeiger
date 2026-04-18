@@ -21,6 +21,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
+#include "../Util/TickProfile.h"
 
 AsyncMqttClient* mqttClient;
 
@@ -230,7 +231,7 @@ void MQTT_Client::publishStatus()
     dateTime, DeviceInfo::uptime(),
     DeviceInfo::chipmodel(), DeviceInfo::geigermodel(),
     Wifi::ssid, Wifi::ip, (int)Wifi::rssi,
-    gcounter.total_clicks, status.tick_us, status.tick_max_us, status.lps);
+    gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
     uint32_t heap_free;
