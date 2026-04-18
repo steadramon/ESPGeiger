@@ -46,8 +46,8 @@ void SerialOut::print_usv() {
 void SerialOut::set_show(int var) {
   if (var < 0) var = 0;
   if (var > UINT16_MAX) var = UINT16_MAX;
-  status.serialOut = (uint16_t)var;
-  if (status.serialOut == 0) {
+  _interval = (uint16_t)var;
+  if (_interval == 0) {
     _show_flags = 0;
   } else {
     _show_flags |= SHOW_CPM;
@@ -62,8 +62,8 @@ void SerialOut::toggle_cps() { _show_flags ^= SHOW_CPS; Log::setSerialLogLevel(_
 
 void SerialOut::loop(unsigned long now) {
   if (_show_flags == 0) return;
-  if (status.serialOut == 0) return;
-  if ((now - _last_fire) < (uint32_t)status.serialOut * 1000UL) return;
+  if (_interval == 0) return;
+  if ((now - _last_fire) < (uint32_t)_interval * 1000UL) return;
   _last_fire = now;
 
   char buf[80];

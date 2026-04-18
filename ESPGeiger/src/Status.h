@@ -47,13 +47,6 @@ struct Status {
   unsigned long start_time = 0;
   bool warmup = true;
   uint8_t send_indicator = 0;
-  unsigned long last_blip = 0;
-#ifdef MQTTOUT
-  bool mqtt_connected = false;
-#endif
-#ifdef GEIGER_PUSHBUTTON
-  bool button_pushed = false;
-#endif
 #if LED_SEND_RECEIVE_ON == LOW
   JLed led = JLed(LED_SEND_RECEIVE).LowActive();
 #else
@@ -72,7 +65,6 @@ struct Status {
 #ifdef ESPGEIGER_HW
   Smoothed <float> hvReading;
 #endif
-  uint16_t serialOut = 0;
   bool wifi_disabled = false;
   bool wifi_connected = false;
   char wifi_ip[16] = "";

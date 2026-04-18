@@ -47,10 +47,15 @@ class SerialOut : public EGModule {
       void toggle_usv();
       void toggle_hv();
       void toggle_cps();
+      uint16_t interval() const { return _interval; }
+      void setInterval(uint16_t v) { _interval = v; }
     private:
       unsigned long _last_fire = 0;
       uint8_t _show_flags = 0;
+      uint16_t _interval = 0;
 };
+
+extern SerialOut serialout;
 
 #endif
 #endif

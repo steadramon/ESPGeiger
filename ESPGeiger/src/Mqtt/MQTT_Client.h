@@ -100,6 +100,7 @@ public:
 #endif
   MQTTMessage last_will_;
   bool last_ok = false;
+  bool connected = false;
   unsigned long last_attempt_ms = 0;
 protected:
   void reconnect();

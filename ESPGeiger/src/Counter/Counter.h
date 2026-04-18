@@ -135,6 +135,7 @@ class Counter {
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
     private:
+      unsigned long _last_blip_seen = 0;
       int _cpm_warning = 50;
       int _cpm_alert = 100;
       bool _bool_cpm_warning = false;

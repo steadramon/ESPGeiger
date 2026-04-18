@@ -40,6 +40,7 @@
 #include <LittleFS.h>
 #include "../NTP/timezones.h"
 #include "../Util/DeviceInfo.h"
+#include "../SerialOut/SerialOut.h"
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
@@ -325,11 +326,11 @@ void ConfigManager::handleGeigerLog() {
 
 void ConfigManager::handleSerialOut() {
   handleRequest();
-  if (status.serialOut == 0) {
-    status.serialOut = 1;
+  if (serialout.interval() == 0) {
+    serialout.setInterval(1);
     Log::setSerialLogLevel(false);
   } else {
-    status.serialOut = 0;
+    serialout.setInterval(0);
     Log::setSerialLogLevel(true);
   }
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CT), "OK" );
@@ -409,7 +410,7 @@ void ConfigManager::handleOutputsJson()
   {
     bool enabled = EGPrefs::getString("mqtt", "server")[0] != '\0';
     MQTT_Client& mqtt = MQTT_Client::getInstance();
-    emit("mqtt", enabled, mqtt.last_ok && status.mqtt_connected, mqtt.last_attempt_ms);
+    emit("mqtt", enabled, mqtt.last_ok && mqtt.connected, mqtt.last_attempt_ms);
   }
 #endif
 #ifdef RADMONOUT

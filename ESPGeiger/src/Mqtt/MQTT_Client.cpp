@@ -73,7 +73,7 @@ void MQTT_Client::disconnect()
   if (!mqttClient) {
     return;
   }
-  if (!status.mqtt_connected) {
+  if (!connected) {
     return;
   }
   mqttClient->disconnect(true);
@@ -88,7 +88,7 @@ void MQTT_Client::disconnect()
 
 void MQTT_Client::onMqttConnect(bool sessionPresent) {
   Log::console(PSTR("MQTT: Connected"));
-  status.mqtt_connected = true;
+  connected = true;
   reconnectAttempts = 0;
   mqttClient->publish(this->last_will_.topic.c_str(), 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
@@ -124,7 +124,7 @@ void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
   }
   Log::console(PSTR("MQTT: Disconnected (%s)"), text);
   lastConnectionAttempt = millis();
-  status.mqtt_connected = false;
+  connected = false;
 }
 
 void MQTT_Client::setInterval(int interval) {
@@ -152,7 +152,7 @@ void MQTT_Client::s_tick(unsigned long now)
     return;
   }
 
-  if (!status.mqtt_connected) {
+  if (!connected) {
     onMqttConnect(true);
   }
 
@@ -255,7 +255,7 @@ void MQTT_Client::publishStatus()
   Log::console(PSTR("MQTT: Published"));
   status.send_indicator = 2;
   last_attempt_ms = millis();
-  last_ok = (pid != 0) && status.mqtt_connected;
+  last_ok = (pid != 0) && connected;
 }
 
 void MQTT_Client::publishPing()
@@ -319,7 +319,7 @@ void MQTT_Client::publishPing()
 
   status.send_indicator = 2;
   last_attempt_ms = millis();
-  last_ok = status.mqtt_connected;
+  last_ok = connected;
 }
 
 void MQTT_Client::reconnect()
@@ -612,7 +612,7 @@ void MQTT_Client::on_prefs_saved()
 {
   _rootTopicCached = false;  // topic may have changed - force rebuild
 #ifdef MQTTAUTODISCOVER
-  if (status.mqtt_connected && !EGPrefs::getBool("mqtt", "hass_enabled")) {
+  if (connected && !EGPrefs::getBool("mqtt", "hass_enabled")) {
     removeHASSConfig();
   }
 #endif

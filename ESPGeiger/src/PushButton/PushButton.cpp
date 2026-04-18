@@ -27,10 +27,11 @@
 #endif
 
 static EasyButton pbutton(PUSHBUTTON_PIN);
+static volatile bool button_pushed = false;
 
 #ifdef ESP32
 static void IRAM_ATTR do_pushbutton() {
-  status.button_pushed = true;
+  button_pushed = true;
 }
 #ifdef SSD1306_DISPLAY
 static void IRAM_ATTR do_longpress() {
@@ -42,7 +43,7 @@ static void IRAM_ATTR do_longpress() {
 #endif
 #else
 static void do_pushbutton() {
-  status.button_pushed = true;
+  button_pushed = true;
 }
 
 #ifdef SSD1306_DISPLAY
@@ -93,7 +94,7 @@ bool PushButton::isPressed()
 
 void PushButton::loop(unsigned long now)
 {
-  if (status.button_pushed == true) {
+  if (button_pushed) {
     status.led.Blink(200, 1);
 #if defined(SSD1306_DISPLAY)
     status.oled_timeout = now;
@@ -103,7 +104,7 @@ void PushButton::loop(unsigned long now)
     status.oled_last_update = 0;
 #endif
     gcounter.reset_alarm();
-    status.button_pushed = false;
+    button_pushed = false;
   }
   pbutton.read();
 
