@@ -76,7 +76,7 @@ void ESPGeigerHW::begin() {
   ledcSetup(0, _hw_freq, 8);
   ledcAttachPin(GEIGER_PWMPIN, 0);
 #endif
-  status.hvReading.begin(SMOOTHED_AVERAGE, 3);
+  hvReading.begin(SMOOTHED_AVERAGE, 3);
 }
 
 void ESPGeigerHW::loop(unsigned long /*now*/) {
@@ -93,11 +93,11 @@ void ESPGeigerHW::loop(unsigned long /*now*/) {
   }
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   float volts = (_scale * sensorValue) + _hw_vd_offset;
-  status.hvReading.add(volts);
+  hvReading.add(volts);
 }
 
 void ESPGeigerHW::fiveloop() {
-  int hvolts = (int)status.hvReading.get();
+  int hvolts = (int)hvReading.get();
   Log::console(PSTR("ESPG-HW: HV: %d"), hvolts);
 }
 

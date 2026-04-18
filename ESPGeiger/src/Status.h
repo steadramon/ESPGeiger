@@ -21,7 +21,6 @@
 #define Status_h
 
 #include <Arduino.h>
-#include "Util/EGSmoothed.h"
 #include "jled.h"
 
 #ifndef LED_SEND_RECEIVE
@@ -51,19 +50,6 @@ struct Status {
   JLed led = JLed(LED_SEND_RECEIVE).LowActive();
 #else
   JLed led = JLed(LED_SEND_RECEIVE);
-#endif
-  unsigned long oled_timeout = 0;
-#if defined(SSD1306_DISPLAY)
-  uint8_t oled_page = 1;
-  unsigned long oled_last_update = 0;
-  bool oled_on = true;
-  bool enable_oled_timeout = true;
-#endif
-#ifdef GEIGER_BLIPLED
-  JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
-#endif
-#ifdef ESPGEIGER_HW
-  Smoothed <float> hvReading;
 #endif
   int16_t  tz_offset_min = 0; // device UTC offset in minutes; refreshed hourly by Counter
 };

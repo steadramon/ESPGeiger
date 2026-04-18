@@ -163,3 +163,23 @@ void EGModuleRegistry::pre_wifi_all() {
     m->pre_wifi();
   }
 }
+
+size_t EGModuleRegistry::collect_status_json(char* buf, size_t cap, unsigned long now) {
+  size_t pos = 0;
+  bool first = true;
+  for (uint8_t i = 0; i < _count; i++) {
+    Slot& s = _slots[i];
+    if (!s.module) continue;
+    if (cap <= pos + 2) break;
+    size_t before = pos;
+    if (!first) buf[pos++] = ',';
+    size_t n = s.module->status_json(buf + pos, cap - pos, now);
+    if (n == 0) {
+      pos = before;
+    } else {
+      pos += n;
+      first = false;
+    }
+  }
+  return pos;
+}

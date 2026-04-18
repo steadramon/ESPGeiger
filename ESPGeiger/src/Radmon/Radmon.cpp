@@ -39,6 +39,11 @@ static const EGPrefGroup RADMON_PREF_GROUP = {
 
 const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
 
+size_t Radmon::status_json(char* buf, size_t cap, unsigned long now) {
+  if (!EGPrefs::getBool("radmon", "send")) return 0;
+  return write_status_json(buf, cap, "radmon", last_ok, last_attempt_ms, now);
+}
+
 // === LEGACY IMPORT (remove after v1.0.0) ===
 static const EGLegacyAlias RADMON_LEGACY[] = {
   {"radmonSend", "send"},

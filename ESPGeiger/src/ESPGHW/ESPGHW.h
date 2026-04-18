@@ -23,6 +23,7 @@
 #include "../Status.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Util/EGSmoothed.h"
 
 #ifndef GEIGER_PWMPIN
 #define GEIGER_PWMPIN 12
@@ -117,6 +118,7 @@ class ESPGeigerHW : public EGModule {
         return _hw_vd_offset;
       }
       void saveconfig();  // redirects to EGPrefs::commit
+      Smoothed<float> hvReading;
     private:
       int _hw_freq = GEIGERHW_FREQ;
       int _hw_duty = GEIGERHW_DUTY;
@@ -125,5 +127,7 @@ class ESPGeigerHW : public EGModule {
       int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
       float _scale = 0.0009765625032f * (float)GEIGERHW_ADC_RATIO;  // 1/1024 * ratio
 };
+
+extern ESPGeigerHW hardware;
 
 #endif

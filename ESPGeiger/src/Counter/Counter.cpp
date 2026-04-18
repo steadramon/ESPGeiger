@@ -211,13 +211,13 @@ void Counter::begin() {
   apply_pcnt_filter();
 }
 
-void Counter::blip_led() {
+void Counter::blip() {
 #ifndef DISABLE_INTERNAL_BLIP
     status.led.Blink(20,20);
 #endif
 #ifdef GEIGER_BLIPLED
-    if (status.blip_led.IsRunning() == false) {
-      status.blip_led.Blink(2,1).Repeat(1);
+    if (blip_led.IsRunning() == false) {
+      blip_led.Blink(2,1).Repeat(1);
     }
 #endif
 
@@ -233,7 +233,7 @@ void Counter::loop() {
   if (_last_blip_seen != lb) {
     _last_blip_seen = lb;
 #ifndef DISABLE_BLIP
-    this->blip_led();
+    this->blip();
 #endif
   }
 }

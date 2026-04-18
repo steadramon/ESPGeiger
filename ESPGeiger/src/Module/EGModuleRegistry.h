@@ -30,6 +30,10 @@ class EGModuleRegistry {
     static EGModule* find(const char* name);
     static bool has(const char* name) { return find(name) != nullptr; }
 
+    // Walks modules, asks each to status_json(). Comma-joins non-empty
+    // fragments. No outer braces (caller supplies them).
+    static size_t collect_status_json(char* buf, size_t cap, unsigned long now);
+
   private:
     static constexpr uint8_t FLAG_HAS_LOOP      = 1 << 0;
     static constexpr uint8_t FLAG_REQUIRES_WIFI = 1 << 1;

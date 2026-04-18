@@ -21,19 +21,6 @@
 #include "html.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
-#include "../Mqtt/MQTT_Client.h"
-#ifdef RADMONOUT
-#include "../Radmon/Radmon.h"
-#endif
-#ifdef THINGSPEAKOUT
-#include "../Thingspeak/Thingspeak.h"
-#endif
-#ifdef GMCOUT
-#include "../GMC/GMC.h"
-#endif
-#ifdef WEBHOOKOUT
-#include "../Webhook/Webhook.h"
-#endif
 #include "ArduinoJson.h"
 #include "../Prefs/EGPrefs.h"
 #include <FS.h>
@@ -298,7 +285,7 @@ void ConfigManager::handleJsonReturn()
   );
 #ifdef ESPGEIGER_HW
   char hv[16];
-  format_f(hv, sizeof(hv), status.hvReading.get());
+  format_f(hv, sizeof(hv), hardware.hvReading.get());
   pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR(",\"hv\":%s"), hv);
 #endif
   pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
@@ -383,55 +370,13 @@ void ConfigManager::handleAbout()
 void ConfigManager::handleOutputsJson()
 {
   handleRequest();
-  char jsonBuffer[512] = "";
+  char buf[512];
   size_t pos = 0;
-  unsigned long now = millis();
-  bool first = true;
-  pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "{");
-
-  // Emits "name":{"ok":bool,"age":S|null} — only for enabled modules.
-  // age is in seconds, or null when no attempt has been made yet.
-  auto emit = [&](const char* name, bool enabled, bool last_ok, unsigned long last_attempt_ms) {
-    if (!enabled) return;
-    if (!first) {
-      pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, ",");
-    }
-    first = false;
-    if (last_attempt_ms == 0) {
-      pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
-        "\"%s\":{\"ok\":false,\"age\":null}",
-        name);
-    } else {
-      pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
-        "\"%s\":{\"ok\":%s,\"age\":%lu}",
-        name,
-        last_ok ? "true" : "false",
-        (now - last_attempt_ms) / 1000);
-    }
-  };
-
-#ifdef MQTTOUT
-  {
-    bool enabled = EGPrefs::getString("mqtt", "server")[0] != '\0';
-    MQTT_Client& mqtt = MQTT_Client::getInstance();
-    emit("mqtt", enabled, mqtt.last_ok && mqtt.connected, mqtt.last_attempt_ms);
-  }
-#endif
-#ifdef RADMONOUT
-  emit("radmon", EGPrefs::getBool("radmon", "send"), radmon.last_ok, radmon.last_attempt_ms);
-#endif
-#ifdef THINGSPEAKOUT
-  emit("thingspeak", EGPrefs::getBool("thingspeak", "send"), thingspeak.last_ok, thingspeak.last_attempt_ms);
-#endif
-#ifdef GMCOUT
-  emit("gmc", EGPrefs::getBool("gmc", "send"), gmc.last_ok, gmc.last_attempt_ms);
-#endif
-#ifdef WEBHOOKOUT
-  emit("webhook", EGPrefs::getBool("webhook", "send"), webhook.last_ok, webhook.last_attempt_ms);
-#endif
-
-  snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "}");
-  ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer);
+  buf[pos++] = '{';
+  pos += EGModuleRegistry::collect_status_json(buf + pos, sizeof(buf) - pos - 2, millis());
+  buf[pos++] = '}';
+  buf[pos] = '\0';
+  ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), buf);
 }
 
 // Append src to dst[pos..cap], HTML-escaping. Returns new pos. Callers keep
@@ -792,7 +737,7 @@ void ConfigManager::handleHVJsonReturn()
   char jsonBuffer[256] = "";
 
   int total = sizeof(jsonBuffer);
-  int volts = status.hvReading.get();
+  int volts = hardware.hvReading.get();
   int freq = hardware.get_freq();
   int duty = hardware.get_duty();
   int ratio = hardware.get_vd_ratio();

@@ -67,8 +67,8 @@ Ticker sTicker;
 void msTickerCB()
 {
   status.led.Update();
-#ifdef ESPGEIGER_HW
-  status.blip_led.Update();
+#ifdef GEIGER_BLIPLED
+  gcounter.blip_led.Update();
 #endif
 }
 
@@ -136,7 +136,9 @@ void setup()
       pushbutton.read();
     }
     delay(750);
-    status.enable_oled_timeout = false;
+#ifdef SSD1306_DISPLAY
+    display.enable_oled_timeout = false;
+#endif
     Wifi::disabled = true;
   }
 #endif
@@ -171,7 +173,9 @@ void setup()
   sTicker.attach(1, sTickerCB);
   
   status.led.Off().Update();
-  status.oled_timeout = millis();
+#ifdef SSD1306_DISPLAY
+  display.oled_timeout = millis();
+#endif
 }
 
 void loop()

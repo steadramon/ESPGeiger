@@ -21,6 +21,9 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
+#ifdef ESPGEIGER_HW
+#include "../ESPGHW/ESPGHW.h"
+#endif
 
 Webhook webhook;
 EG_REGISTER_MODULE(webhook)
@@ -39,6 +42,11 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP = {
 };
 
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
+
+size_t Webhook::status_json(char* buf, size_t cap, unsigned long now) {
+  if (!EGPrefs::getBool("webhook", "send")) return 0;
+  return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now);
+}
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
 static const EGLegacyAlias WEBHOOK_LEGACY[] = {
@@ -146,7 +154,7 @@ void Webhook::postMeasurement() {
     DeviceInfo::uptime(), b_cps, b_cpm, b_cpm5, b_cpm15, b_usv);
 #ifdef ESPGEIGER_HW
   char b_hv[12];
-  format_f(b_hv, sizeof(b_hv), status.hvReading.get());
+  format_f(b_hv, sizeof(b_hv), hardware.hvReading.get());
   pos += snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);
 #endif
   pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,

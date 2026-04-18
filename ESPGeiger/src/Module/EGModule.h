@@ -54,6 +54,23 @@ class EGModule {
     virtual const EGLegacyAlias* legacy_aliases() { return nullptr; }
     // Source JSON file for legacy_aliases. Default = /geigerconfig.json.
     virtual const char* legacy_file() { return "/geigerconfig.json"; }
+
+    // Optional: write a "name":{...} fragment to buf for /outputs. Return
+    // bytes written, 0 = not emitting (not configured / disabled).
+    // Caller handles outer braces and comma separation.
+    virtual size_t status_json(char* buf, size_t cap, unsigned long now) { return 0; }
+
+  protected:
+    // Standard ok/age shape used by every sender module.
+    static size_t write_status_json(char* buf, size_t cap, const char* key,
+                                    bool ok, unsigned long last_attempt_ms,
+                                    unsigned long now) {
+      if (last_attempt_ms == 0) {
+        return snprintf(buf, cap, "\"%s\":{\"ok\":false,\"age\":null}", key);
+      }
+      return snprintf(buf, cap, "\"%s\":{\"ok\":%s,\"age\":%lu}", key,
+                      ok ? "true" : "false", (now - last_attempt_ms) / 1000);
+    }
 };
 
 #endif

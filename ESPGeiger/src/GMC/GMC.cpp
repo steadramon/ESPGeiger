@@ -39,6 +39,11 @@ static const EGPrefGroup GMC_PREF_GROUP = {
 
 const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
 
+size_t GMC::status_json(char* buf, size_t cap, unsigned long now) {
+  if (!EGPrefs::getBool("gmc", "send")) return 0;
+  return write_status_json(buf, cap, "gmc", last_ok, last_attempt_ms, now);
+}
+
 // === LEGACY IMPORT (remove after v1.0.0) ===
 static const EGLegacyAlias GMC_LEGACY[] = {
   {"gmcSend", "send"},

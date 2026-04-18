@@ -81,7 +81,7 @@ class Counter {
       float get_ratio() {
         return _ratio;
       };
-      void blip_led();
+      void blip();
       void begin();
       void secondticker(unsigned long stick_now);
       void set_rx_pin(int pin) {
@@ -134,6 +134,9 @@ class Counter {
       unsigned long clicks_yesterday = 0;
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
+#ifdef GEIGER_BLIPLED
+      JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
+#endif
     private:
       unsigned long _last_blip_seen = 0;
       int _cpm_warning = 50;

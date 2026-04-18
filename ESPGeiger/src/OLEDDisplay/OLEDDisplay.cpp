@@ -25,6 +25,9 @@
 #include "../Util/DeviceInfo.h"
 #include "../Util/ParseTime.h"
 #include "../Util/Wifi.h"
+#ifdef ESPGEIGER_HW
+#include "../ESPGHW/ESPGHW.h"
+#endif
 
 SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
 EG_REGISTER_MODULE(display)
@@ -75,60 +78,60 @@ SSD1306Display::SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl)
 }
 
 void SSD1306Display::loop(unsigned long now) {
-    if (status.oled_page > OLED_PAGES) {
-      status.oled_page = 1;
+    if (oled_page > OLED_PAGES) {
+      oled_page = 1;
     }
 #ifdef GEIGER_PUSHBUTTON
-    if ((status.enable_oled_timeout) && (_lcd_timeout > 0) && ((now - status.oled_timeout) / 1000 > _lcd_timeout)) {
-      if (status.oled_on) {
+    if ((enable_oled_timeout) && (_lcd_timeout > 0) && ((now - oled_timeout) / 1000 > _lcd_timeout)) {
+      if (oled_on) {
         displayOff();
-        status.oled_on = false;
+        oled_on = false;
       }
       return;
     } else {
-      if (status.oled_on == false) {
+      if (oled_on == false) {
         displayOn();
-        status.oled_page=1;
-        status.oled_on = true;
-        status.oled_last_update = now-20000;
+        oled_page=1;
+        oled_on = true;
+        oled_last_update = now-20000;
       }
     }
 #else
     if (isScreenOnTime(now)) {
-      if (status.oled_on == false) {
+      if (oled_on == false) {
         displayOn();
-        status.oled_page = 1;
-        status.oled_on = true;
-        status.oled_last_update = now;
+        oled_page = 1;
+        oled_on = true;
+        oled_last_update = now;
       }
     } else {
-      if (status.oled_on) {
+      if (oled_on) {
         displayOff();
-        status.oled_on = false;
+        oled_on = false;
       }
       return;
     }
 #endif
-    if (status.oled_page == 1) {
-      if ((now - status.oled_last_update >= 10000) || (status.oled_last_update == 0)) {
-        status.oled_last_update = now;
+    if (oled_page == 1) {
+      if ((now - oled_last_update >= 10000) || (oled_last_update == 0)) {
+        oled_last_update = now;
         page_one_clear();
       }
       bool half = (now >> 9) & 1;
-      if (half || (status.oled_last_update == now)) {
+      if (half || (oled_last_update == now)) {
         page_one_values(now);
       }
-      if (!half || (status.oled_last_update == now)) {
+      if (!half || (oled_last_update == now)) {
         page_one_graph();
       }
-    } else if (status.oled_page == 2) {
-      if ((now - status.oled_last_update >= 1000) || (status.oled_last_update == 0)) {
-        status.oled_last_update = now;
+    } else if (oled_page == 2) {
+      if ((now - oled_last_update >= 1000) || (oled_last_update == 0)) {
+        oled_last_update = now;
         page_two_full();
       }
-    } else if (status.oled_page == 3) {
-      if ((now - status.oled_last_update >= 10000) || (status.oled_last_update == 0)) {
-        status.oled_last_update = now;
+    } else if (oled_page == 3) {
+      if ((now - oled_last_update >= 10000) || (oled_last_update == 0)) {
+        oled_last_update = now;
         page_three_full();
       }
     }
@@ -173,7 +176,7 @@ void SSD1306Display::page_two_full() {
 #ifdef ESPGEIGER_HW
   drawString(0, uptime_y, PSTR("HV:"));
   char hvBuf[12];
-  format_f(hvBuf, sizeof(hvBuf), status.hvReading.get());
+  format_f(hvBuf, sizeof(hvBuf), hardware.hvReading.get());
   drawString(20, uptime_y, hvBuf);
   uptime_y = 47;
 #endif

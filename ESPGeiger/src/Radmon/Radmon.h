@@ -51,6 +51,7 @@ class Radmon : public EGModule {
     void loop(unsigned long now) override;
     const EGPrefGroup* prefs_group() override;
     uint8_t display_order() override { return 30; }
+    size_t status_json(char* buf, size_t cap, unsigned long now) override;
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void postMeasurement();
     void setInterval(int interval);

@@ -22,6 +22,9 @@
 #include "SerialOut.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#ifdef ESPGEIGER_HW
+#include "../ESPGHW/ESPGHW.h"
+#endif
 
 SerialOut serialout;
 EG_REGISTER_MODULE(serialout)
@@ -82,7 +85,7 @@ void SerialOut::loop(unsigned long now) {
   }
 #ifdef ESPGEIGER_HW
   if (_show_flags & SHOW_HV) {
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "%sHV: %d", pos ? " " : "", (int)status.hvReading.get());
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "%sHV: %d", pos ? " " : "", (int)hardware.hvReading.get());
   }
 #endif
   if (pos == 0) return;

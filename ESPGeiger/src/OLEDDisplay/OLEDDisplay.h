@@ -139,11 +139,19 @@ public:
     _lcd_timeout = timeout;
   }
 
+  uint8_t oled_page = 1;
+  unsigned long oled_timeout = 0;
+  unsigned long oled_last_update = 0;
+  bool oled_on = true;
+  bool enable_oled_timeout = true;
+
   private:
     uint8_t cx, cy;
     uint8_t fontWidth, fontHeight;
     uint16_t _lcd_timeout = 300;
 };
+
+extern SSD1306Display display;
 
 #endif
 #endif

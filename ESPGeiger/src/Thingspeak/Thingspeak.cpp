@@ -37,6 +37,11 @@ static const EGPrefGroup TS_PREF_GROUP = {
 
 const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
 
+size_t Thingspeak::status_json(char* buf, size_t cap, unsigned long now) {
+  if (!EGPrefs::getBool("thingspeak", "send")) return 0;
+  return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now);
+}
+
 // === LEGACY IMPORT (remove after v1.0.0) ===
 static const EGLegacyAlias TS_LEGACY[] = {
   {"tsSend",       "send"},

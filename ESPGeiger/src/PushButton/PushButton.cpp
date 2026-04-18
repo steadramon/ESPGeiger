@@ -35,9 +35,9 @@ static void IRAM_ATTR do_pushbutton() {
 }
 #ifdef SSD1306_DISPLAY
 static void IRAM_ATTR do_longpress() {
-  status.enable_oled_timeout = !status.enable_oled_timeout;
-  if (status.enable_oled_timeout) {
-    status.oled_timeout = 0;
+  display.enable_oled_timeout = !display.enable_oled_timeout;
+  if (display.enable_oled_timeout) {
+    display.oled_timeout = 0;
   }
 }
 #endif
@@ -48,15 +48,15 @@ static void do_pushbutton() {
 
 #ifdef SSD1306_DISPLAY
 static void do_longpress() {
-  status.enable_oled_timeout = !status.enable_oled_timeout;
-  if (status.enable_oled_timeout) {
-    status.oled_timeout = 0;
+  display.enable_oled_timeout = !display.enable_oled_timeout;
+  if (display.enable_oled_timeout) {
+    display.oled_timeout = 0;
 #ifdef ESPGEIGER_HW
-    status.blip_led.Blink(200,100).Repeat(2);
+    gcounter.blip_led.Blink(200,100).Repeat(2);
 #endif
   } else {
 #ifdef ESPGEIGER_HW
-    status.blip_led.Blink(200,1).Repeat(1);
+    gcounter.blip_led.Blink(200,1).Repeat(1);
 #endif
   }
 }
@@ -97,11 +97,11 @@ void PushButton::loop(unsigned long now)
   if (button_pushed) {
     status.led.Blink(200, 1);
 #if defined(SSD1306_DISPLAY)
-    status.oled_timeout = now;
-    if (status.oled_on) {
-      status.oled_page = (status.oled_page % OLED_PAGES) + 1;
+    display.oled_timeout = now;
+    if (display.oled_on) {
+      display.oled_page = (display.oled_page % OLED_PAGES) + 1;
     }
-    status.oled_last_update = 0;
+    display.oled_last_update = 0;
 #endif
     gcounter.reset_alarm();
     button_pushed = false;

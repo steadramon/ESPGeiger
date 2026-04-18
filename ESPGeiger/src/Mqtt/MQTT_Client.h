@@ -88,6 +88,7 @@ public:
   const EGPrefGroup* prefs_group() override;
   void on_prefs_saved() override;  // reconnects with new settings
   uint8_t display_order() override { return 20; }
+  size_t status_json(char* buf, size_t cap, unsigned long now) override;
   const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
   void setInterval(int interval);
   int getInterval();
