@@ -51,8 +51,8 @@
 #include <Ticker.h>  //Ticker Library
 // Global status and counter
 Status status;
-Counter gcounter = Counter();
-GRNG grng = GRNG();
+Counter gcounter;
+GRNG grng;
 
 ConfigManager& cManager = ConfigManager::getInstance();
 
