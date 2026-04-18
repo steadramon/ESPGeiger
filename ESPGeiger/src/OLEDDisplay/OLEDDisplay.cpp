@@ -29,6 +29,8 @@
 #include "../ESPGHW/ESPGHW.h"
 #endif
 
+extern uint8_t send_indicator;
+
 SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
 EG_REGISTER_MODULE(display)
 
@@ -294,9 +296,9 @@ void SSD1306Display::page_one_values(unsigned long now) {
   if (gcounter.cpm_history.capacity != gcounter.cpm_history.size()) {
     drawString(98,2, PSTR("W") );
   }
-  if (status.send_indicator) {
+  if (send_indicator) {
     drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
-    status.send_indicator--;
+    send_indicator--;
   }
 }
 

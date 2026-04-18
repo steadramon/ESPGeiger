@@ -13,6 +13,7 @@
 #include "../Logger/Logger.h"
 #include "../Status.h"
 #include "../Util/Wifi.h"
+#include "../NTP/NTP.h"
 #include <string.h>
 
 
@@ -69,7 +70,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 
 void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds) {
   bool wifi_ok = !Wifi::disabled && Wifi::connected;
-  bool ntp_ok = status.ntp_synced;
+  bool ntp_ok = ntpclient.synced;
   bool seconds = false;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];

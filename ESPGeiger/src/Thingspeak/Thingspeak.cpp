@@ -21,6 +21,8 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 
+extern uint8_t send_indicator;
+
 Thingspeak thingspeak;
 EG_REGISTER_MODULE(thingspeak)
 
@@ -122,7 +124,7 @@ void Thingspeak::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(5);
       request.send();
-      status.send_indicator = 2;
+      send_indicator = 2;
     }
     else
     {

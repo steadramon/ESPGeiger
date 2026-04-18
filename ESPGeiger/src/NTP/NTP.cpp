@@ -56,11 +56,11 @@ void NTP_Client::setup()
   const char *possixTZ = getPosixTZforOlson(tz);
 #ifdef ESP8266
   settimeofday_cb([](){
-    if (!status.ntp_synced) {
+    if (!ntpclient.synced) {
       Log::console(PSTR("NTP: Synched"));
-      status.ntp_synced = true;
+      ntpclient.synced = true;
       unsigned long uptime = NTP.getUptime () - status.start;
-      status.start_time = int(time(NULL)-uptime);
+      ntpclient.boot_epoch = int(time(NULL)-uptime);
     }
   });
 
@@ -71,11 +71,11 @@ void NTP_Client::setup()
     if (!getLocalTime(&timeinfo)){
       return;
     }
-    if (!status.ntp_synced) {
+    if (!ntpclient.synced) {
       Log::console(PSTR("NTP: Synched"));
-      status.ntp_synced = true;
+      ntpclient.synced = true;
       unsigned long uptime = NTP.getUptime () - status.start;
-      status.start_time = int(time(NULL)-uptime);
+      ntpclient.boot_epoch = int(time(NULL)-uptime);
     }
   });
   configTime(0, 0, server); // 0, 0 because we will use TZ in the next line

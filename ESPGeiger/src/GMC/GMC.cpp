@@ -22,6 +22,8 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 
+extern uint8_t send_indicator;
+
 GMC gmc;
 EG_REGISTER_MODULE(gmc)
 
@@ -139,7 +141,7 @@ void GMC::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(30);
       request.send();
-      status.send_indicator = 2;
+      send_indicator = 2;
     }
     else
     {

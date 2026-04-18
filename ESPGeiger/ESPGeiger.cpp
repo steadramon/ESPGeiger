@@ -64,6 +64,16 @@ SerialCommand serialcmd;
 Ticker msTicker;
 Ticker sTicker;
 
+// Set once after ESPG_WARMUP_S seconds of uptime; senders read via extern.
+#ifndef ESPG_WARMUP_S
+#define ESPG_WARMUP_S 10
+#endif
+bool past_warmup = false;
+
+// Senders bump this to 2; OLED page_one_values decrements as it paints the
+// "sending" icon. On non-OLED builds, nothing reads it (1 byte overhead).
+uint8_t send_indicator = 0;
+
 void msTickerCB()
 {
   status.led.Update();
@@ -83,9 +93,7 @@ void sTickerCB()
 #endif
 
   unsigned long uptime = NTP.getUptime() - status.start;
-  if (status.warmup && uptime > 10) {
-    status.warmup = false;
-  }
+  if (!past_warmup && uptime > ESPG_WARMUP_S) past_warmup = true;
   Wifi::tick(stick_now);
 #ifdef TICK_PROFILE
   TickProfile::markWifi();

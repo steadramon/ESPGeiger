@@ -20,6 +20,7 @@
 #include "Logger.h"
 #include "../Status.h"
 #include "../Util/Wifi.h"
+#include "../NTP/NTP.h"
 
 extern Status status;
 
@@ -87,7 +88,7 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
   char timeStr[10] = "";  // "13:45:21 " synced, "HH:MM:SS " offline uptime, empty for banners
 #ifndef DISABLE_LOG_TS
   if (withTimestamp) {
-    if (status.ntp_synced) {
+    if (ntpclient.synced) {
       time_t currentTime = time (NULL);
       struct tm *timeinfo = localtime (&currentTime);
       snprintf_P (timeStr, sizeof (timeStr), PSTR("%02d:%02d:%02d "), timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
@@ -110,7 +111,7 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
 #ifndef DISABLE_LOG_TS
   // Web log gets '*' suffix only when NTP may still sync - tells the JS regex
   // not to re-interpret this uptime as wall-clock.
-  if (timeStr[0] && !status.ntp_synced) {
+  if (timeStr[0] && !ntpclient.synced) {
     size_t tsLen = strlen(timeStr);
     if (tsLen > 0) timeStr[tsLen-1] = '*';
   }

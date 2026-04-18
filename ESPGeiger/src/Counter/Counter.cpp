@@ -83,7 +83,7 @@ void Counter::secondticker(unsigned long stick_now) {
       struct tm gmt_tm = *gmtime(&currentTime);
       int utc_hour = gmt_tm.tm_hour;
       gmt_tm.tm_isdst = -1;
-      status.tz_offset_min = (int16_t)((currentTime - mktime(&gmt_tm)) / 60);
+      ntpclient.tz_offset_min = (int16_t)((currentTime - mktime(&gmt_tm)) / 60);
       if (lastBoundary != 0) {
         day_hourly_history.push(clicks_hour);
         clicks_hour = 0;

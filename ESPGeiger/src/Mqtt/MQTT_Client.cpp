@@ -26,6 +26,9 @@
 #include "../ESPGHW/ESPGHW.h"
 #endif
 
+extern bool past_warmup;
+extern uint8_t send_indicator;
+
 AsyncMqttClient* mqttClient;
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
@@ -183,7 +186,7 @@ void MQTT_Client::s_tick(unsigned long now)
     _pending |= PEND_PING;
   }
 
-  if (status.warmup) {
+  if (!past_warmup) {
     return;
   }
 
@@ -263,7 +266,7 @@ void MQTT_Client::publishStatus()
   buildTopic(topic, sizeof(topic), "tele", topicStatus);
   uint16_t pid = mqttClient->publish(topic, 1, false, buffer);
   Log::console(PSTR("MQTT: Published"));
-  status.send_indicator = 2;
+  send_indicator = 2;
   last_attempt_ms = millis();
   last_ok = (pid != 0) && connected;
 }
@@ -327,7 +330,7 @@ void MQTT_Client::publishPing()
 #endif
   // ---- end LEGACY block ----
 
-  status.send_indicator = 2;
+  send_indicator = 2;
   last_attempt_ms = millis();
   last_ok = connected;
 }

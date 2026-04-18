@@ -49,6 +49,12 @@ class NTP_Client : public EGModule {
 
     const char* get_server() { return EGPrefs::getString("ntp", "server"); }
     const char* get_tz()     { return EGPrefs::getString("ntp", "tz"); }
+
+    bool synced = false;
+    unsigned long boot_epoch = 0;
+    int16_t tz_offset_min = 0;  // cached UTC offset (minutes); Counter refreshes hourly
 };
+
+extern NTP_Client ntpclient;
 
 #endif

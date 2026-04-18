@@ -41,17 +41,12 @@
 #endif
 
 struct Status {
-  bool ntp_synced = false;
   long start = 0;
-  unsigned long start_time = 0;
-  bool warmup = true;
-  uint8_t send_indicator = 0;
 #if LED_SEND_RECEIVE_ON == LOW
   JLed led = JLed(LED_SEND_RECEIVE).LowActive();
 #else
   JLed led = JLed(LED_SEND_RECEIVE);
 #endif
-  int16_t  tz_offset_min = 0; // device UTC offset in minutes; refreshed hourly by Counter
 };
 
 #endif

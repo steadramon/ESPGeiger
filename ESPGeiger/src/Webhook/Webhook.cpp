@@ -25,6 +25,8 @@
 #include "../ESPGHW/ESPGHW.h"
 #endif
 
+extern uint8_t send_indicator;
+
 Webhook webhook;
 EG_REGISTER_MODULE(webhook)
 
@@ -177,7 +179,7 @@ void Webhook::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(10);
       request.send(buffer);
-      status.send_indicator = 2;
+      send_indicator = 2;
     }
     else
     {

@@ -606,8 +606,8 @@ void ConfigManager::handleClicksReturn()
   json["today"] = gcounter.clicks_today;
   json["yesterday"] = gcounter.clicks_yesterday;
   json["ratio"] = EGPrefs::getString("system", "ratio");
-  if (status.ntp_synced) {
-    json["start"] = status.start_time;
+  if (ntpclient.synced) {
+    json["start"] = ntpclient.boot_epoch;
   } else {
     unsigned long uptime = NTP.getUptime () - status.start;
     json["uptime"] = uptime;
@@ -863,7 +863,7 @@ void ConfigManager::handleRefreshConsole()
   // "<log_idx>,<tz_offset_min>\n" - tz hitch-hikes here so JS can convert
   // log HH:MM:SS to browser-local. Only consumer needs it, so don't bloat /json.
   char idxBuf[16];
-  snprintf(idxBuf, sizeof(idxBuf), "%u,%d\n", (uint8_t)Log::getLogIdx(), status.tz_offset_min);
+  snprintf(idxBuf, sizeof(idxBuf), "%u,%d\n", (uint8_t)Log::getLogIdx(), ntpclient.tz_offset_min);
   server->sendContent(idxBuf);
   if (counter != Log::getLogIdx())
   {

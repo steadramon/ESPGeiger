@@ -21,6 +21,8 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 
+extern uint8_t send_indicator;
+
 Radmon radmon;
 EG_REGISTER_MODULE(radmon)
 
@@ -166,7 +168,7 @@ void Radmon::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(30);
       request.send();
-      status.send_indicator = 2;
+      send_indicator = 2;
     }
     else
     {
