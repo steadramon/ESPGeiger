@@ -24,18 +24,6 @@
 #include "Util/EGSmoothed.h"
 #include "jled.h"
 
-#ifndef GIT_VERSION
-#define GIT_VERSION ""
-#endif
-
-#ifndef RELEASE_VERSION
-#define RELEASE_VERSION "devel"
-#endif
-
-#ifndef BUILD_ENV
-#define BUILD_ENV "unknown"
-#endif
-
 #ifndef LED_SEND_RECEIVE
 #define LED_SEND_RECEIVE 2
 #endif
@@ -54,10 +42,6 @@
 #endif
 
 struct Status {
-  const char thingName[11] = "ESPGeiger";
-  const char* version = RELEASE_VERSION;
-  const char* git_version = GIT_VERSION;
-  const char* build_env = BUILD_ENV;
   bool ntp_synced = false;
   long start = 0;
   unsigned long start_time = 0;

@@ -202,7 +202,7 @@ void SSD1306Display::setup() {
   clear();
   drawXbm(0, 0, 51, 51, ESPLogo);
   drawString(55, 10, PSTR("ESPGeiger"));
-  drawString(55, 24, status.version);
+  drawString(55, 24, RELEASE_VERSION);
   drawString(55, 42, PSTR("Connecting .."));
 
   display();
@@ -225,7 +225,7 @@ void SSD1306Display::wifiDisabled() {
   clear();
   drawXbm(0, 0, 51, 51, ESPLogo);
   drawString(55, 10, PSTR("ESPGeiger"));
-  drawString(55, 24, status.version);
+  drawString(55, 24, RELEASE_VERSION);
   drawString(55, 42, PSTR("Offline mode"));
 
   display();
@@ -301,7 +301,7 @@ void SSD1306Display::page_three_full() {
   setFont(ArialMT_Plain_10);
   static char versionString[32] = "";
   if (versionString[0] == '\0') {
-    snprintf_P(versionString, sizeof(versionString), PSTR("%S / %S"), status.version, status.git_version);
+    snprintf_P(versionString, sizeof(versionString), PSTR("%S / %S"), RELEASE_VERSION, GIT_VERSION);
   }
   drawString(0, 2, GEIGER_MODEL);
   drawString(0, 17, versionString);

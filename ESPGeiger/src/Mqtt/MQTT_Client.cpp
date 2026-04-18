@@ -526,8 +526,8 @@ void MQTT_Client::publishHassTopic(
          ",\"cu\":\"http://%s/\"}"
          ",\"avty_t\":\"~/tele/lwt\",\"pl_avail\":\"Online\",\"pl_not_avail\":\"Offline\""
          ",\"~\":\"%s\",\"name\":\"%s %s\",\"uniq_id\":\"%s_%s\""),
-    status.thingName, DeviceInfo::chipmodel(), BUILD_ENV,
-    host, status.version, status.git_version, DeviceInfo::chipid(),
+    THING_NAME, DeviceInfo::chipmodel(), BUILD_ENV,
+    host, RELEASE_VERSION, GIT_VERSION, DeviceInfo::chipid(),
     host,
     DeviceInfo::mac(),
     status.wifi_ip,

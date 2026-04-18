@@ -83,7 +83,7 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
   if (level > Log::logLevel)
     return;
 
-  char timeStr[10] = "";  // "13:45:21 " or "HH:MM:SS*" pre-NTP, empty for banners
+  char timeStr[10] = "";  // "13:45:21 " synced, "HH:MM:SS " offline uptime, empty for banners
 #ifndef DISABLE_LOG_TS
   if (withTimestamp) {
     if (status.ntp_synced) {
@@ -91,10 +91,9 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
       struct tm *timeinfo = localtime (&currentTime);
       snprintf_P (timeStr, sizeof (timeStr), PSTR("%02d:%02d:%02d "), timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
     } else {
-      // Pre-NTP: format uptime directly, no TZ shift. "*" suffix tells the
-      // web console JS not to re-interpret this as a wall-clock time.
+      // Uptime when no wall-clock. Serial always sees plain uptime.
       unsigned long u = millis() / 1000UL;
-      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02lu:%02lu:%02lu*"),
+      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02lu:%02lu:%02lu "),
         (u / 3600UL) % 24UL, (u / 60UL) % 60UL, u % 60UL);
     }
   }
@@ -103,6 +102,18 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
     if (timeStr[0]) Serial.print(timeStr);
     Serial.println(logData);
   }
+
+  // Offline: no web, so skip the 4KB ring-buffer bookkeeping (strlen + memmove).
+  if (status.wifi_disabled) return;
+
+#ifndef DISABLE_LOG_TS
+  // Web log gets '*' suffix only when NTP may still sync - tells the JS regex
+  // not to re-interpret this uptime as wall-clock.
+  if (timeStr[0] && !status.ntp_synced) {
+    size_t tsLen = strlen(timeStr);
+    if (tsLen > 0) timeStr[tsLen-1] = '*';
+  }
+#endif
 
 
   // Delimited, zero-terminated buffer of log lines.

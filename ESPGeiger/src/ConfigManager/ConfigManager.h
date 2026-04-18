@@ -21,6 +21,7 @@
 #define ConfigManager_h
 #include "WiFiManager.h"
 #include "../Status.h"
+#include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../NTP/NTP.h"
 
@@ -127,7 +128,7 @@ public:
   void eraseSettings();
   const char* getHostName() { return hostName; };
   const char* getChipID() { return chipId; };
-  const char* getThingName() { return status.thingName; };
+  const char* getThingName() { return THING_NAME; };
   const char* getUserAgent() { return userAgent; };
   ParsedTime parseTime(const char* timeStr);
 private:

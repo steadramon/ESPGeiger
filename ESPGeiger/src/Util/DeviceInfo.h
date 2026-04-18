@@ -11,6 +11,22 @@
 #include <Arduino.h>
 #include <ESPNtpClient.h>
 
+#ifndef GIT_VERSION
+#define GIT_VERSION ""
+#endif
+
+#ifndef RELEASE_VERSION
+#define RELEASE_VERSION "devel"
+#endif
+
+#ifndef BUILD_ENV
+#define BUILD_ENV "unknown"
+#endif
+
+#ifndef THING_NAME
+#define THING_NAME "ESPGeiger"
+#endif
+
 namespace DeviceInfo {
   void init(const char* hostName, const char* chipId,
             const char* userAgent, const char* macAddr);

@@ -60,14 +60,14 @@ ConfigManager::ConfigManager() : WiFiManager(){
   strncpy(chipId, hexId.c_str(), sizeof(chipId) - 1);
   chipId[sizeof(chipId) - 1] = '\0';
 
-  snprintf_P (hostName, sizeof(hostName), PSTR("%S-%S"), status.thingName, chipId);
-  snprintf_P (userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"), status.thingName, status.version, status.git_version, DeviceInfo::geigermodel(), DeviceInfo::chipmodel(), chipId);
+  snprintf_P (hostName, sizeof(hostName), PSTR("%S-%S"), THING_NAME, chipId);
+  snprintf_P (userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"), THING_NAME, RELEASE_VERSION, GIT_VERSION, DeviceInfo::geigermodel(), DeviceInfo::chipmodel(), chipId);
   strncpy(macAddr, WiFi.macAddress().c_str(), sizeof(macAddr) - 1);
   macAddr[sizeof(macAddr) - 1] = '\0';
 
   DeviceInfo::init(hostName, chipId, userAgent, macAddr);
   setHostname(hostName);
-  setTitle(status.thingName);
+  setTitle(THING_NAME);
   setCustomHeadElement(faviconHead);
 }
 ParsedTime ConfigManager::parseTime(const char* timeStr) {
@@ -237,7 +237,7 @@ void ConfigManager::handleRoot() {
 #elif defined(ESPGEIGER_LT)
     "ESPGeiger-Log";
 #else
-    status.thingName;
+    THING_NAME;
 #endif
   { TemplateSub subs[] = {{"{t}", tname}, {"{v}", heading}};
     SEND_TEMPLATE(s, HTTP_ROOT_MAIN, subs); }
@@ -353,7 +353,7 @@ void ConfigManager::handleAbout()
          "\"host\":\"%s\",\"g_mod\":\"%s\","
          "\"g_type\":\"%s\",\"g_test\":%s,\"g_pcnt\":%s,"
          "\"modules\":["),
-    status.version, status.git_version, status.build_env,
+    RELEASE_VERSION, GIT_VERSION, BUILD_ENV,
     __DATE__, __TIME__,
     DeviceInfo::chipmodel(),
     mac_str,
@@ -677,12 +677,12 @@ void ConfigManager::handleStatusPage()
   snprintf(title, sizeof(title), "%s - Status", hostName);
   sendPageHead(title);
   auto* s = server.get();
-  snprintf(title, sizeof(title), "%s - Status", status.thingName);
+  snprintf(title, sizeof(title), "%s - Status", THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
   s->sendContent(FPSTR(STATUS_PAGE_BODY));
   s->sendContent(FPSTR(HTTP_BACKBTN));
-  { TemplateSub subs[] = {{"{1}", status.version}};
+  { TemplateSub subs[] = {{"{1}", RELEASE_VERSION}};
     SEND_TEMPLATE(s, STATUS_PAGE_FOOT, subs); }
   endChunkedPage();
 }
@@ -695,7 +695,7 @@ void ConfigManager::handleHistoryPage()
   snprintf(title, sizeof(title), "%s - History", hostName);
   sendPageHead(title);
   auto* s = server.get();
-  snprintf(title, sizeof(title), "%s - History", status.thingName);
+  snprintf(title, sizeof(title), "%s - History", THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
   s->sendContent(HISTORY_PAGE_BODY);
@@ -709,7 +709,7 @@ void ConfigManager::handleNTP()
   handleRequest();
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s - NTP", status.thingName);
+  snprintf(title, sizeof(title), "%s - NTP", THING_NAME);
   sendPageHead(title);
   auto* s = server.get();
   { TemplateSub subs[] = {{"{i}", ntpclient.get_server()}, {"{v}", ntpclient.get_tz()}};
@@ -729,7 +729,7 @@ void ConfigManager::handleNTPSet()
 
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s - NTP Saved", status.thingName);
+  snprintf(title, sizeof(title), "%s - NTP Saved", THING_NAME);
   auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}};
     SEND_TEMPLATE(s, HTTP_HEAD_START, subs); }
@@ -748,7 +748,7 @@ void ConfigManager::handleHVPage()
   handleRequest();
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s-HW - HV", status.thingName);
+  snprintf(title, sizeof(title), "%s-HW - HV", THING_NAME);
   sendPageHead(title);
   auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
@@ -827,7 +827,7 @@ void ConfigManager::handleRestart()
   s->sendContent(FPSTR(faviconHead));
   s->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
   s->sendContent(FPSTR(HTTP_HEAD_END));
-  s->sendContent(FPSTR(status.thingName));
+  s->sendContent(FPSTR(THING_NAME));
   s->sendContent(F(" is restarting...<br><br>"));
   endChunkedPage();
   Log::console(PSTR("Config: Restarting ... "));

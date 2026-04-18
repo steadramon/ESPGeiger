@@ -172,7 +172,7 @@ void setup()
 
   Log::banner(PSTR("   ___"));
   Log::banner(PSTR("   \\_/    Starting up ... %s"), DeviceInfo::hostname());
-  Log::banner(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, BUILD_ENV);
+  Log::banner(PSTR(".--.O.--. Version - %s/%s (%s)"), RELEASE_VERSION, GIT_VERSION, BUILD_ENV);
   Log::banner(PSTR(" \\/   \\/"));
 
 #ifdef ESP8266

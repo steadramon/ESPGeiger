@@ -20,6 +20,15 @@ The main page has buttons to reach each area of configuration:
 * **NTP Config** — time zone and NTP server settings. See [NTP Configuration](/configuration/ntp).
 * **HV Config** — high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
 
+## Console log
+
+The Status page includes a live console tail of the device's log. Timestamps follow two formats:
+
+* `HH:MM:SS` — wall-clock time (device has synced to NTP and applied its configured timezone). The web UI converts these to your browser's local timezone so they line up with the graph.
+* `HH:MM:SS*` — uptime since boot. The trailing asterisk signals that NTP hasn't synced yet; the time is not wall-clock and the browser should not timezone-shift it. Once NTP syncs, new lines appear without the asterisk.
+
+In [offline mode](/configuration/offlinemode) there is no wall-clock and no asterisk — timestamps are plain uptime. The web portal itself isn't reachable when WiFi is disabled, but the same format appears on the serial console.
+
 ## HTTP endpoints
 
 The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for integration, scripting, or simply linking to directly from a browser.
