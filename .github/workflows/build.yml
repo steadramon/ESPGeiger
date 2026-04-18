@@ -16,26 +16,24 @@ jobs:
       fail-fast: false
       matrix:
         environments:
-          - "espgeigerhw"
-          - "espgeigerlog"
-          - "espgeigerlog_serial"
-          - "espgeigerlog_test"
-          - "esp32_pulse"
-          - "esp32_pulse_no_pcnt"
+          - "esp32_cajoe_iotgm"
+          - "esp32_cajoe_iotgm_no_pcnt"
           - "esp32_serial"
-          - "esp32_test"
           - "esp32_testpulse"
-          - "esp32_testserial"
-          - "esp8266_pulse"
+          - "esp32_testpulseint"
+          - "esp32oled_pulse"
+          - "esp32oled_serial"
           - "esp8266_pulsemin"
           - "esp8266_serial"
           - "esp8266_test"
           - "esp8266_testpulse"
-          - "esp8266_testserial"
-          - "esp8266oled_serial"
+          - "esp8266_testpulseint"
           - "esp8266oled_pulse"
-          - "esp32oled_serial"
-          - "esp32_cajoe_iotgm"
+          - "esp8266oled_serial"
+          - "espgeigerhw"
+          - "espgeigerlite"
+          - "espgeigerlog"
+          - "espgeigerlog_testpulseint"
     runs-on: ubuntu-latest
     name: Build with PlatformIO
     steps:
