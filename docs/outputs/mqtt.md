@@ -64,13 +64,12 @@ Planned for removal in a future release — prefer consuming `tele/sensor` JSON 
 ## Example `tele/status` JSON
 
 ```json
-{"time":"2026-04-16T14:52:52","uptime":"0T00:02:00","ut":120,"board":"ESP-12E","model":"ESPGeiger-Log","ssid":"MyWiFi","ip":"192.168.1.166","rssi":-37,"c_total":165,"tick":953,"t_max":4870,"lps":58733,"free_mem":16928}
+{"time":"2026-04-18T14:52:52Z","ut":120,"board":"ESP-12E","model":"ESPGeiger-Log","ssid":"MyWiFi","ip":"192.168.1.166","rssi":-37,"c_total":165,"tick":953,"t_max":4870,"lps":58733,"free_mem":16928}
 ```
 
 | Field | Description |
 |---|---|
-| `time` | Current device time (ISO 8601) |
-| `uptime` | Human-readable uptime (`DTHH:MM:SS`) |
+| `time` | Current device time (ISO 8601 UTC, with `Z` suffix) |
 | `ut` | Uptime in seconds |
 | `board` | ESP chip model |
 | `model` | Configured Geiger model |

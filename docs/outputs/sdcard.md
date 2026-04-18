@@ -30,10 +30,25 @@ During initialisation of ESPGeiger the size and free space of the SD Card is cal
 
 A SD Card of up to 16GB usually takes < 2 seconds to initialise.
 
+# Configuration
+
+The SD Card module exposes one setting on the `/param` configuration page:
+
+| Setting | Default | Range | Description |
+|---|---|---|---|
+| `Sync Interval (min)` | `1` | `1`-`5` | Minutes between syncs to the card. |
+
+Each minute the firmware appends one CSV row. The file stays open between minutes to avoid the cost of re-opening on every write. Data is only physically committed to the card on sync — between syncs, rows sit in the firmware's RAM buffer.
+
+- `1` (default) — sync on every write. Safest: at most the current in-progress row is lost on a power cut. Highest SD wear.
+- `2`-`5` — sync every N minutes. Up to `N - 1` minutes of rows can be lost on a power cut, but SD write cycles are reduced proportionally. Useful on cheap / worn cards or battery-powered deployments where clean shutdown isn't guaranteed.
+
+Regardless of the setting, the file is always flushed at day rollover (when a new daily CSV is opened) and before the daily cleanup scan.
+
 # CSV Format
 
 ```
-Datetime, CPM, μSv/h, CPM5, CPM15
+Datetime, CPM, uSv/h, CPM5, CPM15
 ```
 
 | Value | Description |  Example Value |

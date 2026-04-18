@@ -60,11 +60,11 @@ void SerialOut::toggle_usv() { _show_flags ^= SHOW_USV; Log::setSerialLogLevel(_
 void SerialOut::toggle_hv()  { _show_flags ^= SHOW_HV;  Log::setSerialLogLevel(_show_flags == 0); }
 void SerialOut::toggle_cps() { _show_flags ^= SHOW_CPS; Log::setSerialLogLevel(_show_flags == 0); }
 
-void SerialOut::s_tick(unsigned long stick_now) {
+void SerialOut::loop(unsigned long now) {
   if (_show_flags == 0) return;
   if (status.serialOut == 0) return;
-  if (++_loop_c < status.serialOut) return;
-  _loop_c = 0;
+  if ((now - _last_fire) < (uint32_t)status.serialOut * 1000UL) return;
+  _last_fire = now;
 
   char buf[80];
   char f[12];

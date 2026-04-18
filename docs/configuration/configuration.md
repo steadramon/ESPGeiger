@@ -8,76 +8,92 @@ nav_order: 4
 
 # Configuration
 
-Most of the options below are available from the ESPGeiger [Web Portal](/output/webportal) — click the **Config** button on the main page. A few settings have their own dedicated pages accessed from the main portal:
+Most settings are available from the ESPGeiger [Web Portal](/output/webportal) — click **Config** on the main page.
 
-* **NTP Config** — time zone and NTP server settings. See [NTP Configuration](/configuration/ntp).
+Specialised pages with their own UI:
+
+* **NTP Config** — time zone and NTP server. See [NTP Configuration](/configuration/ntp).
 * **HV Config** — high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
 
-## Hardware Settings
+Settings changed on the Config page take effect immediately (or on next submission cycle for output modules). Pin and serial type changes require a reboot.
 
-| Setting name | Value Range | Default | Description |
+## System Settings
+
+| Setting | Type | Default | Description |
 |---|---|---|---|
-Model | String 0..32 | `(varies)` | Model name of the ESPGeiger
-Ratio for calculating μSv | Float 0..10000 | `151.0` | Ratio used internally for calculating μSv
-Warning CPM | Int | `50` | CPM Value to trigger Warning state
-Alert CPM | Int | `100` | CPM Value to trigger Alert state
-RX Pin | Int 0..99 | `(varies)` | Geiger counter input pin. Hidden on builds compiled with `-D RXPIN_BLOCKED`.
-TX Pin | Int 0..99 | `(varies)` | Transmit pin, only shown on test builds with a TX pin configured. Hidden when `-D TXPIN_BLOCKED` is set.
-PCNT Filter | Int 0..1023 | `100` | Glitch filter threshold in APB clock cycles (12.5ns each). `0` disables. Only shown on ESP32 PCNT builds. See [PCNT Filter](/hardware/esphardware#pcnt-filter).
-PCNT Pin Pull | Int 0..2 | `1` | Internal pull on the PCNT input pin: `0`=floating (no pull), `1`=pull-up (default), `2`=pull-down. Most active-low modules work with `1`. If you see missed counts, try toggling. Only shown on ESP32 PCNT builds. Compile-time default can be set via `-D PCNT_FLOATING_PIN` or `-D PCNT_PULLDOWN_PIN`.
-Debounce (μs) | Int 0..10000 | `500` | Software interrupt debounce window in microseconds. `0` disables. Only shown on pulse builds that use software interrupt counting (ESP8266, or ESP32 `no_pcnt`). See [Interrupt Debounce](/hardware/esphardware#interrupt-debounce).
-Display brightness | Int 0..100 | `25` | Brightness of the OLED Display (Only for builds with OLED display)
-Display timeout | Int 0..65535 | `300` | Timeout for OLED display (Only for builds with OLED display and push button)
-On Time | Time HH:MM | `06:00` | OLED on-time (shown on OLED builds without a push button)
-Off Time | Time HH:MM | `22:00` | OLED off-time (shown on OLED builds without a push button)
-Neopixel Brightness | Int 0..100 | `10` | % Brightness for NeoPixel - 0 disables (Only for builds with Neopixel, note too low a value can cause colours to be inaccurate)
+| uSv/h Ratio | Float | `151.0` | CPM to uSv/h conversion factor |
+| Warning CPM | Int 0-9999 | `50` | CPM threshold for warning state |
+| Alert CPM | Int 0-9999 | `100` | CPM threshold for alert state |
+| Serial Type | Int 1-255 | `(varies)` | Serial counter protocol: 1=GC10, 2=GC10Next, 3=MightyOhm, 4=ESPGeiger. Only shown on serial builds. Reboot required. |
+| RX Pin | Int | `(varies)` | Geiger counter input pin. Reboot required. Hidden when `-D RXPIN_BLOCKED`. |
+| TX Pin | Int | `(varies)` | Transmit pin. Only on builds with a TX pin configured. Reboot required. |
+| PCNT Filter | Int 0-1023 | `100` | Glitch filter threshold (ESP32 PCNT builds only). `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
+| PCNT Pin Pull | Int 0-2 | `1` | PCNT input pin pull: `0`=none, `1`=up, `2`=down. ESP32 PCNT builds only. |
+| Debounce (us) | Int 0-10000 | `500` | Software interrupt debounce. Pulse builds without PCNT only. |
 
 ## MQTT Configuration
 
-| Setting name | Value Range | Default | Description |
+| Setting | Type | Default | Description |
 |---|---|---|---|
-IP | String 0..32 | `null` | The IP address of the MQTT server
-Port | Int 0..65535 | `1883` |The port of the MQTT server
-User | String 0..32 | `null` | The username used to connect to MQTT
-Password | String 0..32 | `null` | The password used to connect to MQTT
-Root Topic | String 0..32 | `ESPGeiger-{id}` | The root topic for MQTT. `{id}` is interpolated to the devices' ID.
-Submit Time (s) | Int 5-3600 | `60` | Interval in seconds to post `/stat` topic values
-
-## HA Autodiscovery Configuration
-
-| Setting name | Value Range | Default | Description |
-|---|---|---|---|
-Send | Boolean | `True` | Invoke Homeassistant Autodiscovery on MQTT connection
-Discovery Topic | String 0..32 | `homeassistant` | Homeassistant Autodiscovery MQTT topic
+| Server | String (16) | `(empty)` | MQTT broker address or IP. Leave empty to disable MQTT. |
+| Port | Int 1-65535 | `1883` | MQTT broker port |
+| User | String (32) | `(empty)` | MQTT username |
+| Password | String (32) | `(empty)` | MQTT password (sensitive) |
+| Root Topic | String (16) | `ESPGeiger-{id}` | Root publish topic. `{id}` is replaced with the chip ID. |
+| Interval | Int 5-3600 | `60` | Publish interval in seconds |
+| HA Autodiscovery | Boolean | `true` | Publish Home Assistant autodiscovery on connect |
+| HA Discovery Topic | String (32) | `homeassistant` | Home Assistant discovery prefix |
 
 ## Radmon.org Configuration
 
-| Setting name | Value Range | Default | Description |
+| Setting | Type | Default | Description |
 |---|---|---|---|
-Send | Boolean | `True` | Send data to Radmon.org
-Username | String 0..32 | `null` | Radmon.org username
-Password | String 0..32 | `null` | Radmon.org password
+| Enable | Boolean | `false` | Upload to radmon.org |
+| Username | String (32) | `(empty)` | Radmon.org username |
+| Password | String (64) | `(empty)` | Radmon.org password (sensitive) |
+| Interval | Int 30-1800 | `60` | Upload interval in seconds |
 
-## Thingspeak Configuration
+## ThingSpeak Configuration
 
-| Setting name | Value Range | Default | Description |
+| Setting | Type | Default | Description |
 |---|---|---|---|
-Send | Boolean | `True` | Send data to Thingspeak
-Channel Key | String 0..32 | `null` | Channel key for Thingspeak
+| Enable | Boolean | `false` | Upload to ThingSpeak |
+| Channel Key | String (16) | `(empty)` | ThingSpeak channel write API key (sensitive) |
 
 ## GMC Configuration
 
-| Setting name | Value Range | Default | Description |
+| Setting | Type | Default | Description |
 |---|---|---|---|
-Send | Boolean | `True` | Send data to GMC
-Account ID | String 0..32 | `null` | gmcmap.com Account ID
-Geiger Counter ID | String 0..32 | `null` | gmcmap.com Geiger Counter ID
+| Enable | Boolean | `false` | Upload to gmcmap.com |
+| Account ID | String (12) | `(empty)` | gmcmap.com account ID (numeric) |
+| Geiger Counter ID | String (12) | `(empty)` | gmcmap.com geiger counter ID (numeric) |
 
 ## Webhook Configuration
 
-| Setting name | Value Range | Default | Description |
+| Setting | Type | Default | Description |
 |---|---|---|---|
-Send | Boolean | `True` | Send data to the configured webhook
-Webhook URL | String 0..255 | `null` | Full URL to POST data to. See [Webhook](/output/webhook).
-Webhook Key | String 0..255 | `null` | Optional key sent with each request. Omitted when empty.
-Submit Time (s) | Int 1..3600 | `60` | Interval in seconds between webhook submissions
+| Enable | Boolean | `false` | POST measurements to a webhook |
+| URL | String (255) | `(empty)` | Webhook endpoint (http only) |
+| Key | String (255) | `(empty)` | Optional shared secret sent as "key" in payload (sensitive) |
+| Interval | Int 10-3600 | `60` | POST interval in seconds |
+
+## SD Card Settings (SD-enabled builds)
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| Sync Interval (min) | Int 1-5 | `1` | Minutes between syncs to the card. `1` syncs on every write (safest). Higher values reduce SD wear at the cost of up to `N - 1` minutes of data loss on a power cut. File is always flushed at day rollover and before cleanup. See [SD Output](/output/sdcard). |
+
+## Display Settings (OLED builds)
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| Brightness | Int 0-100 | `25` | Display brightness |
+| Timeout | Int 0-99999 | `120` | Display timeout in seconds, 0=off (push button builds only) |
+| On Time | Time HH:MM | `06:00` | Display on-time (builds without push button) |
+| Off Time | Time HH:MM | `22:00` | Display off-time (builds without push button) |
+
+## NeoPixel Settings (NeoPixel builds)
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| Brightness | Int 0-100 | `15` | NeoPixel brightness, 0 disables. Too low a value can cause inaccurate colours. |

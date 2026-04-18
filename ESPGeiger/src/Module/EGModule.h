@@ -13,6 +13,9 @@
 
 #include <Arduino.h>
 
+struct EGPrefGroup;
+struct EGLegacyAlias;  // LEGACY IMPORT (remove after v1.0.0)
+
 // Lower priority values run first during begin() and tick().
 // Suggested values:
 //   10  - Hardware initialisation (HV, power, display, LEDs, etc.)
@@ -41,6 +44,16 @@ class EGModule {
     virtual bool requires_wifi() { return false; }
     virtual bool requires_ntp() { return false; }
     virtual uint16_t warmup_seconds() { return 10; }
+
+    virtual const EGPrefGroup* prefs_group() { return nullptr; }
+    virtual void on_prefs_loaded() {}
+    virtual void on_prefs_saved() { on_prefs_loaded(); }
+    virtual uint8_t display_order() { return 50; }  // /egprefs render order - lower first, 0 = hidden
+
+    // LEGACY IMPORT (remove after v1.0.0) - sentinel-terminated {nullptr,nullptr}
+    virtual const EGLegacyAlias* legacy_aliases() { return nullptr; }
+    // Source JSON file for legacy_aliases. Default = /geigerconfig.json.
+    virtual const char* legacy_file() { return "/geigerconfig.json"; }
 };
 
 #endif

@@ -11,7 +11,7 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 **Version of ESPGeiger Affected**
-Full version including model type, for example ESP32 vX.Y.Z Pulse or ESP8266 vX.Y.Z GC10
+Full version including model type, for example ESP32 vX.Y.Z Pulse or ESP8266 vX.Y.Z Serial
 
 **Geiger Counter in Use**
 Cajoe v1.1/GC10-nxt etc

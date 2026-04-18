@@ -24,11 +24,37 @@
 Radmon radmon;
 EG_REGISTER_MODULE(radmon)
 
+static const EGPref RADMON_PREF_ITEMS[] = {
+  {"send",     "Enable",   "Upload to radmon.org",  "0",  nullptr, 0, 0,  0,  EGP_BOOL,   0},
+  {"user",     "Username", "",                      "",   nullptr, 0, 0,  32, EGP_STRING, 0},
+  {"password", "Password", "",                      "",   nullptr, 0, 0,  64, EGP_STRING, EGP_SENSITIVE},
+  {"interval", "Interval", "Upload interval (sec)", "60", nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, 0},
+};
+
+static const EGPrefGroup RADMON_PREF_GROUP = {
+  "radmon", "Radmon", 1,
+  RADMON_PREF_ITEMS,
+  sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+static const EGLegacyAlias RADMON_LEGACY[] = {
+  {"radmonSend", "send"},
+  {"radmonUser", "user"},
+  {"radmonKey",  "password"},
+  {"radmonTime", "interval"},
+  {nullptr, nullptr},
+};
+const EGLegacyAlias* Radmon::legacy_aliases() { return RADMON_LEGACY; }
+// === END LEGACY IMPORT ===
+
 Radmon::Radmon() {
 }
 
 void Radmon::setInterval(int interval) {
-  if (interval * 1000 == pingInterval) {
+  if (interval == pingInterval) {
     return;
   }
   if (interval > RADMON_INTERVAL_MAX) {
@@ -37,30 +63,31 @@ void Radmon::setInterval(int interval) {
   if (interval < RADMON_INTERVAL_MIN) {
     interval = RADMON_INTERVAL_MIN;
   }
-  pingInterval = interval*1000;
+  pingInterval = interval;
+  pingIntervalMs = (uint32_t)interval * 1000UL;
 }
 
 int Radmon::getInterval() {
-  return pingInterval / 1000;
+  return pingInterval;
 }
 
-void Radmon::s_tick(unsigned long stick_now)
+void Radmon::loop(unsigned long now)
 {
   if (lastPing == 0) {
-    ConfigManager &configManager = ConfigManager::getInstance();
-    const char* _rtimer = configManager.getParamValueFromID("radmonTime");
-    int rtimer = (_rtimer != NULL) ? atoi(_rtimer) : 0;
-    if (rtimer == 0) {
-      rtimer = RADMON_INTERVAL;
-    }
+    int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
+    if (rtimer == 0) rtimer = RADMON_INTERVAL;
     setInterval(rtimer);
-    lastPing = stick_now + random(pingInterval / 1000) * 1000;
+    lastPing = now + random(pingIntervalMs);
     return;
   }
-  if (stick_now > lastPing && stick_now - lastPing >= (unsigned long)pingInterval)
+  if (now > lastPing && (now - lastPing) >= pingIntervalMs)
   {
-    lastPing = stick_now - (stick_now % 1000);
-    Radmon::postMeasurement();
+    // Advance by exact interval to keep the schedule drift-free.
+    // If we were stalled long enough to still be >= one interval behind,
+    // snap to now rather than firing a burst of catch-up publishes.
+    lastPing += pingIntervalMs;
+    if ((now - lastPing) >= pingIntervalMs) lastPing = now;
+    postMeasurement();
   }
 }
 
@@ -94,31 +121,22 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
 }
 
 void Radmon::postMeasurement() {
-
-  ConfigManager &configManager = ConfigManager::getInstance();
-
-  const char* _send = configManager.getParamValueFromID("radmonSend");
-  if (_send == NULL || strcmp(_send, "N") == 0) {
-    return;
-  }
+  if (!EGPrefs::getBool("radmon", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Radmon: Testmode"));
     return;
   }
 
-  const char* _api_user = configManager.getParamValueFromID("radmonUser");
-  const char* _api_key = configManager.getParamValueFromID("radmonKey");
-  if (_api_user == NULL || _api_key == NULL) {
+  const char* _api_user = EGPrefs::getString("radmon", "user");
+  const char* _api_key  = EGPrefs::getString("radmon", "password");
+  if (_api_user[0] == '\0' || _api_key[0] == '\0') {
     Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
     return;
   }
 
-  const char* _rtimer = configManager.getParamValueFromID("radmonTime");
-  int rtimer = (_rtimer != NULL) ? atoi(_rtimer) : 0;
-  if (rtimer == 0) {
-    rtimer = RADMON_INTERVAL;
-  }
+  int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
+  if (rtimer == 0) rtimer = RADMON_INTERVAL;
   setInterval(rtimer);
 
   Log::console(PSTR("Radmon: Uploading latest data ..."));
@@ -139,11 +157,11 @@ void Radmon::postMeasurement() {
     if (request.open("GET", url))
     {
       status.led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
+      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(30);
       request.send();
-      status.last_send = millis();
+      status.send_indicator = 2;
     }
     else
     {

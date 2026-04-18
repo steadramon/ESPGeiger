@@ -66,6 +66,8 @@ constexpr auto GEIGERLOG_URL PROGMEM = "/lastdata";
 constexpr auto SERIAL_URL PROGMEM = "/serial";
 constexpr auto ABOUT_URL PROGMEM = "/about";
 constexpr auto OUTPUTS_URL PROGMEM = "/outputs";
+constexpr auto PREFS_URL PROGMEM = "/prefs";  // test-only: /prefs?m=<module>&k=<key>
+constexpr auto EGPREFS_URL PROGMEM = "/param";
 #ifdef ESPGEIGER_HW
 constexpr auto HV_URL PROGMEM = "/hv";
 constexpr auto HV_JS_URL PROGMEM = "/hvjs";
@@ -83,13 +85,12 @@ const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 #  define MQTT_DISCOVERY_TOPIC "homeassistant"
 #endif
 
-const char S_MQTT_DISCOVERY_TOPIC[] PROGMEM = MQTT_DISCOVERY_TOPIC;
 
-#ifndef MQTT_DISCOVERY
+#ifndef MQTT_HASS_DEFAULT
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-#  define MQTT_DISCOVERY "N"
+#  define MQTT_HASS_DEFAULT "0"
 #else
-#  define MQTT_DISCOVERY "Y"
+#  define MQTT_HASS_DEFAULT "1"
 #endif
 #endif
 
@@ -113,18 +114,10 @@ public:
     static ConfigManager instance;
     return instance;
   }
-  void handleOurParam();
-  void getOurParamOut();
   void bindServerCallback();
   bool autoConnect();
   void startWebPortal();
-  const char* getParamValueFromID(const char* str);
-  const char* getParamValueFromID_P(const __FlashStringHelper* param_p);
-  int getIndexFromID(const char* str);
-  void loadParams();
-  void setExternals();
   void preSaveParams();
-  void saveParams();
   void delay(unsigned long m);
   // Self-throttled wrapper around the inherited process(). Call from loop()
   // every iteration; only forwards to WiFiManager::process() at most every
@@ -136,53 +129,18 @@ public:
   const char* getChipID() { return chipId; };
   const char* getThingName() { return status.thingName; };
   const char* getUserAgent() { return userAgent; };
-  char* getUptimeString ();
-  unsigned long getUptime ();
   ParsedTime parseTime(const char* timeStr);
-  char* GetChipModel(){
-#ifdef ESP8266
-#ifdef ESPGEIGER_HW
-    return (char*)"ESPG-HW";
-#else
-#ifdef ESPGEIGER_LT
-    #ifdef GEIGER_SDCARD
-    return (char*)"ESPG-LOG";
-    #else
-    return (char*)"ESPG-LT";
-    #endif
-#else
-    return (char*)"ESP8266";
-#endif
-#endif
-#elif defined(ESP32)
-#ifdef ESPGEIGER_HW
-    return (char*)"ESPG32-HW";
-#else
-    esp_chip_info_t chipInfo;
-    esp_chip_info(&chipInfo);
-    switch((int)chipInfo.model) {
-        case 0 : return (char*)"ESP8266";
-        case (int)esp_chip_model_t::CHIP_ESP32 : return (char*)"ESP32";
-        case (int)esp_chip_model_t::CHIP_ESP32S2 : return (char*)"ESP32-S2";
-        case (int)esp_chip_model_t::CHIP_ESP32S3 : return (char*)"ESP32-S3";
-        case (int)esp_chip_model_t::CHIP_ESP32C3 : return (char*)"ESP32-C3";
-        case 6 : return (char*)"ESP32-H4";
-        case 12 : return (char*)"ESP32-C2";
-        case 13 : return (char*)"ESP32-C6";
-        case 16 : return (char*)"ESP32-H2";
-        default: return (char*)"ESP32";
-    }
-#endif
-#else
-    return (char*)"UNKNOWN";
-#endif
-  }
 private:
   ConfigManager();
   void handleRoot();
   void handleJSReturn();
   void handleJsonReturn();
   void handleStatusPage();
+  void handlePrefs();  // test-only: /prefs?m=<module>&k=<key>
+  void beginChunkedPage(const char* contentType = nullptr);
+  void sendPageHead(const char* title);
+  void endChunkedPage();
+  void handleEGPrefs();  // GET renders form, POST saves + re-renders
   void handleHistoryPage();
   void handleRefreshConsole();
   void handleRestart();
@@ -207,6 +165,7 @@ private:
   char chipId[7] = "";
   char hostName[20] = "";
   char userAgent[80] = "";
+  char macAddr[18] = "";
 };
 
 #endif

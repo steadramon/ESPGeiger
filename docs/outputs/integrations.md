@@ -21,12 +21,11 @@ http://192.168.1.100/json
 Response:
 
 ```json
-{"u":"0T01:23:45","ut":5025,"c":42.00,"s":0.28,"c5":41.50,"c15":40.90,"cs":0.70,"r":151.0,"tc":9876,"mem":19088,"rssi":-45,"tick":712,"t_max":8012,"lps":59831}
+{"ut":5025,"c":42.00,"s":0.28,"c5":41.50,"c15":40.90,"cs":0.70,"r":151.0,"tc":9876,"mem":19088,"rssi":-45,"tick":712,"t_max":8012,"lps":59831}
 ```
 
 | Field | Description |
 |---|---|
-| `u` | Uptime string |
 | `ut` | Uptime in seconds |
 | `c` | Current CPM |
 | `s` | Current μSv/h |

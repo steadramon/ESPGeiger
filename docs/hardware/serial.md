@@ -8,17 +8,16 @@ nav_order: 3
 
 # Serial Counters
 
-ESPGeiger supports a variety of Geiger counters that communicate via serial interfaces.
+ESPGeiger supports a variety of Geiger counters that communicate via serial interfaces. A single unified `serial` build supports all serial protocols — select your counter type from the **Config** page (System > Serial Type) after flashing.
 
 ## Supported Counters
 
-A list of currently supported serial Geiger counters can be found below
-
-| Counter | Image | Serial Rate | Serial Example | Notes |
+| Type ID | Counter | Baud Rate | Serial Format | Notes |
 |---|---|---|---|---|
-[MightyOhm Kit](https://www.tindie.com/stores/mightyohm/) | ![MightyOhm](img/mightyohm.jpg#img-thumbnail) | `9600` | `CPS, ####, CPM, ####, uSv/hr, #.##, [INST/FAST/SLOW]\n` | [Serial Info](https://mightyohm.com/blog/products/geiger-counter/usage-instructions/)
-[NetIO GC10](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | `9600` | `60\n` | [Forum](https://www.netiodev.com/GC10/jne.cgi?) [Serial Info](netiodev.com/GC10/GC10_UART_SPEC.pdf)
-[NetIO GC10next](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10next](img/gc10next.jpg#img-thumbnail) | `115200` | `60\n` |
+| 1 | [NetIO GC10](https://www.ebay.co.uk/usr/pelorymate) | 9600 | `60\n` | [Forum](https://www.netiodev.com/GC10/jne.cgi?) |
+| 2 | [NetIO GC10next](https://www.ebay.co.uk/usr/pelorymate) | 115200 | `60\n` | |
+| 3 | [MightyOhm Kit](https://www.tindie.com/stores/mightyohm/) | 9600 | `CPS, ####, CPM, ####, uSv/hr, #.##, INST\n` | [Serial Info](https://mightyohm.com/blog/products/geiger-counter/usage-instructions/) |
+| 4 | ESPGeiger | 115200 | `CPM: ####\n` | |
 
 ## Unsupported Counters
 

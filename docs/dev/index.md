@@ -40,3 +40,21 @@ A build option is available to count the number of CPM sent on the local device,
 In these test build modes, you can connect the `TXPIN` (transmit pin) of one ESPGeiger device to the `RXPIN` (receive pin) of another ESPGeiger device, either the same unit or a different one. This setup allows you to create a closed-loop testing environment, mimicking real-world Geiger counter communication scenarios.
 
 _Note_: No values are submitted to public services with Test builds.
+
+## Tick Profiling
+
+For diagnosing performance issues in the 1Hz tick callback, add `-DTICK_PROFILE` to `build_flags` in your environment config. Once per minute the device logs a breakdown of where time is spent:
+
+```
+Tick profile: total=425 ctr=230 wifi=109 mods=128 lps=58733
+Mods max: mqtt=61 sdcard=25
+```
+
+- `total` — worst single tick duration in the last 60 seconds (us)
+- `ctr` — max time in `gcounter.secondticker()`
+- `wifi` — max time in WiFi tracking block
+- `mods` — max total time in `EGModuleRegistry::tick_all()`
+- `lps` — loop iterations per second (steady-state health indicator)
+- `Mods max:` — per-module worst-case `s_tick` duration, slowest first
+
+Zero overhead when the flag is not defined — all instrumentation compiles out.

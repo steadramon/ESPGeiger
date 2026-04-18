@@ -15,10 +15,6 @@
 #include "WProgram.h"
 #endif
 
-#include <functional>
-//using namespace std;
-//using namespace placeholders;
-
 extern "C" {
 #include "sys/time.h"
 #include "time.h"
@@ -47,8 +43,6 @@ constexpr auto SECS_PER_YEAR = ((time_t)(SECS_PER_DAY * 365UL));
 constexpr auto SECS_YR_2000 = ((time_t)(946684800UL)); ///< @brief The time at the start of y2k
 #endif
 
-static char strBuffer[35]; ///< @brief Temporary buffer for time and date strings
-
 /**
   * @brief NTPClient class
   */
@@ -63,10 +57,11 @@ public:
     * @return Uptime
     */
     time_t getUptime () {
-        if (uptime*1000 > ::millis ()) {
+        unsigned long now_ms = ::millis();
+        if (uptime * 1000UL > now_ms) {
           rolloverMillis++;
         }
-        uptime = ::millis()/1000 + rolloverMillis*4294967;
+        uptime = now_ms / 1000UL + (unsigned long)rolloverMillis * 4294967UL;
         return uptime;
     }
 

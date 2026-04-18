@@ -18,12 +18,54 @@
 */
 #ifdef SSD1306_DISPLAY
 #include "OLEDDisplay.h"
+#include "fonts.h"
+#include "logo.h"
 #include "../Logger/Logger.h"
-#include "../ConfigManager/ConfigManager.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/DeviceInfo.h"
+#include "../Util/ParseTime.h"
 
 SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
 EG_REGISTER_MODULE(display)
+
+static const EGPref OLED_PREF_ITEMS[] = {
+  {"brightness", "Brightness", "0-100", "25", nullptr, 0, 100, 0, EGP_UINT, 0},
+#ifdef GEIGER_PUSHBUTTON
+  {"timeout",    "Timeout",    "sec, 0=off", "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
+#else
+  {"on_time",    "On Time",    "HH:MM",  "06:00", nullptr, 0, 0, 5, EGP_STRING, 0},
+  {"off_time",   "Off Time",   "HH:MM",  "22:00", nullptr, 0, 0, 5, EGP_STRING, 0},
+#endif
+};
+
+static const EGPrefGroup OLED_PREF_GROUP = {
+  "display", "Display", 1,
+  OLED_PREF_ITEMS,
+  sizeof(OLED_PREF_ITEMS) / sizeof(OLED_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* SSD1306Display::prefs_group() { return &OLED_PREF_GROUP; }
+
+void SSD1306Display::on_prefs_loaded() {
+  setBrightness((uint8_t)EGPrefs::getUInt("display", "brightness"));
+#ifdef GEIGER_PUSHBUTTON
+  setTimeout((int)EGPrefs::getUInt("display", "timeout"));
+#endif
+}
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+static const EGLegacyAlias OLED_LEGACY[] = {
+  {"dispBrightness", "brightness"},
+#ifdef GEIGER_PUSHBUTTON
+  {"dispTimeout", "timeout"},
+#else
+  {"oledOn",  "on_time"},
+  {"oledOff", "off_time"},
+#endif
+  {nullptr, nullptr},
+};
+const EGLegacyAlias* SSD1306Display::legacy_aliases() { return OLED_LEGACY; }
+// === END LEGACY IMPORT ===
 
 SSD1306Display::SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl)
  : SSD1306Wire(_addr, _sda, _scl) {
@@ -36,7 +78,7 @@ void SSD1306Display::loop(unsigned long now) {
       status.oled_page = 1;
     }
 #ifdef GEIGER_PUSHBUTTON
-    if ((status.enable_oled_timeout) && (_lcd_timeout > 0) && (now - status.oled_timeout > _lcd_timeout)) {
+    if ((status.enable_oled_timeout) && (_lcd_timeout > 0) && ((now - status.oled_timeout) / 1000 > _lcd_timeout)) {
       if (status.oled_on) {
         displayOff();
         status.oled_on = false;
@@ -51,7 +93,7 @@ void SSD1306Display::loop(unsigned long now) {
       }
     }
 #else
-    if (isScreenOnTime()) {
+    if (isScreenOnTime(now)) {
       if (status.oled_on == false) {
         displayOn();
         status.oled_page = 1;
@@ -71,10 +113,11 @@ void SSD1306Display::loop(unsigned long now) {
         status.oled_last_update = now;
         page_one_clear();
       }
-      if ((now % 1000 >= 500) || (status.oled_last_update == now)) {
+      bool half = (now >> 9) & 1;
+      if (half || (status.oled_last_update == now)) {
         page_one_values(now);
       }
-      if ((now % 1000 < 500) || (status.oled_last_update == now)) {
+      if (!half || (status.oled_last_update == now)) {
         page_one_graph();
       }
     } else if (status.oled_page == 2) {
@@ -92,58 +135,39 @@ void SSD1306Display::loop(unsigned long now) {
 
   }
 
-  bool SSD1306Display::isScreenOnTime() {
-    static int cached_on_mins = -1;
-    static int cached_off_mins = -1;
-    static unsigned long last_config_check = 0;
+  bool SSD1306Display::isScreenOnTime(unsigned long now) {
+    static int16_t cached_on_mins = -1;
+    static int16_t cached_off_mins = -1;
 
-    unsigned long now = millis();
-    // Re-read config every 60 seconds instead of every 500ms
-    if (cached_on_mins == -1 || now - last_config_check > 60000) {
-      last_config_check = now;
-      ConfigManager &configManager = ConfigManager::getInstance();
-      const char* screen_on = configManager.getParamValueFromID("oledOn");
-      const char* screen_off = configManager.getParamValueFromID("oledOff");
-      ParsedTime on_time = configManager.parseTime(screen_on);
-      ParsedTime off_time = configManager.parseTime(screen_off);
-
-      if (!on_time.isValid || !off_time.isValid) {
-        cached_on_mins = -2;
-        return true;
-      }
+    static uint8_t tz_cnt = 0;
+    if (cached_on_mins == -1 || ++tz_cnt >= 120) {
+      tz_cnt = 0;
+      ParsedTime on_time  = parseTime(EGPrefs::getString("display", "on_time"));
+      ParsedTime off_time = parseTime(EGPrefs::getString("display", "off_time"));
+      if (!on_time.isValid || !off_time.isValid) { cached_on_mins = -2; return true; }
       cached_on_mins = on_time.hour * 60 + on_time.minute;
       cached_off_mins = off_time.hour * 60 + off_time.minute;
     }
 
-    if (cached_on_mins == -2) {
-      return true;
-    }
+    if (cached_on_mins == -2) return true;
 
     time_t currentTime = time(NULL);
     struct tm *timeinfo = localtime(&currentTime);
+    if (!timeinfo) return true;
 
-    if (timeinfo == NULL) {
-        return true;
-    }
-
-    int current_time_in_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
-
-    if (cached_on_mins < cached_off_mins) {
-        return (current_time_in_mins >= cached_on_mins &&
-                current_time_in_mins < cached_off_mins);
-    } else {
-        return (current_time_in_mins >= cached_on_mins ||
-                current_time_in_mins < cached_off_mins);
-    }
+    int now_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
+    if (cached_on_mins < cached_off_mins)
+      return (now_mins >= cached_on_mins && now_mins < cached_off_mins);
+    else
+      return (now_mins >= cached_on_mins || now_mins < cached_off_mins);
   }
 
 void SSD1306Display::page_two_full() {
-  ConfigManager &configManager = ConfigManager::getInstance();
   clear();
   setFont(ArialMT_Plain_10);
-  drawString(0, 2, configManager.getHostName());
+  drawString(0, 2, DeviceInfo::hostname());
   drawString(0, 17, PSTR("IP:"));
-  drawString(16, 17, WiFi.localIP().toString());
+  drawString(16, 17, status.wifi_ip);
   int uptime_y = 32;
 #ifdef ESPGEIGER_HW
   drawString(0, uptime_y, PSTR("HV:"));
@@ -152,7 +176,7 @@ void SSD1306Display::page_two_full() {
   drawString(20, uptime_y, hvBuf);
   uptime_y = 47;
 #endif
-  drawString(0, uptime_y, configManager.getUptimeString());
+  drawString(0, uptime_y, DeviceInfo::uptimeString());
 }
 
 void SSD1306Display::page_one_clear() {
@@ -163,6 +187,125 @@ void SSD1306Display::page_one_clear() {
   if (status.wifi_disabled) {
     return;
   }
-  drawXbm(120, 0, fontWidth, fontHeight, WiFi.status()==WL_CONNECTED?_iconimage_connected:_iconimage_disconnected);
+  drawXbm(120, 0, fontWidth, fontHeight, status.wifi_connected?_iconimage_connected:_iconimage_disconnected);
+}
+
+void SSD1306Display::setup() {
+  SSD1306Wire::init();
+#if OLED_FLIP
+  flipScreenVertically();
+#endif
+  setBrightness(64);
+  setFont(ArialMT_Plain_10);
+  fontWidth = 8;
+  fontHeight = 16;
+  clear();
+  drawXbm(0, 0, 51, 51, ESPLogo);
+  drawString(55, 10, PSTR("ESPGeiger"));
+  drawString(55, 24, status.version);
+  drawString(55, 42, PSTR("Connecting .."));
+
+  display();
+  setFont(ArialMT_Plain_16);
+}
+
+void SSD1306Display::setupWifi(const char* s) {
+  clear();
+  setFont(DialogInput_plain_12);
+  drawString(0, 10, PSTR("Setup - Connect to"));
+  drawString(0, 24, PSTR("WiFi -"));
+  drawString(0, 38, s);
+  display();
+}
+
+void SSD1306Display::wifiDisabled() {
+  setFont(ArialMT_Plain_10);
+  fontWidth = 8;
+  fontHeight = 16;
+  clear();
+  drawXbm(0, 0, 51, 51, ESPLogo);
+  drawString(55, 10, PSTR("ESPGeiger"));
+  drawString(55, 24, status.version);
+  drawString(55, 42, PSTR("Offline mode"));
+
+  display();
+  setFont(ArialMT_Plain_16);
+}
+
+void SSD1306Display::page_one_graph() {
+  setColor(BLACK);
+  fillRect(0, 35, OLED_WIDTH, 29);
+  setColor(WHITE);
+
+  drawLine(0, 63, 90, 63);
+  drawLine(90, 35, 90, 63);
+  if (gcounter.cpm_history.size() > 0) {
+    int histSize = gcounter.cpm_history.size();
+    int maxValue = gcounter.cpm_history[0];
+    int minValue = histSize > 1 ? gcounter.cpm_history[0]:0;
+    for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
+      maxValue = gcounter.cpm_history[i] > maxValue ? gcounter.cpm_history[i] : maxValue;
+      minValue = gcounter.cpm_history[i] < minValue ? gcounter.cpm_history[i] : minValue;
+    }
+
+    if (minValue > 1) {
+      minValue = (int)(minValue * 0.9);
+    }
+    int x_start = 0;
+    if (gcounter.cpm_history.capacity != histSize) {
+      x_start = (2 * (gcounter.cpm_history.capacity - histSize));
+    }
+
+    char graphBuf[8];
+    if (maxValue == 0) {
+      setFont(Open_Sans_Regular_Plain_10);
+      snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
+      drawString(93,55, graphBuf);
+      return;
+    }
+
+    for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
+      int location = ((map((long)gcounter.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
+      drawRect(x_start + i * 2, location, 2, (63 - location));
+    }
+    setFont(Open_Sans_Regular_Plain_10);
+    snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
+    drawString(93,55, graphBuf);
+    snprintf(graphBuf, sizeof(graphBuf), "%d", maxValue);
+    drawString(93,35, graphBuf);
+  }
+}
+
+void SSD1306Display::page_one_values(unsigned long now) {
+  setFont(DialogInput_plain_17);
+  setColor(BLACK);
+  fillRect(45, 0, 72, 32);
+  setColor(WHITE);
+  char oledBuf[16];
+  snprintf(oledBuf, sizeof(oledBuf), "%d", gcounter.get_cpm());
+  drawString(45,0, oledBuf);
+  setFont(DialogInput_plain_12);
+  format_f(oledBuf, sizeof(oledBuf), gcounter.get_usv());
+  drawString(45,20, oledBuf);
+  if (gcounter.cpm_history.capacity != gcounter.cpm_history.size()) {
+    drawString(98,2, PSTR("W") );
+  }
+  if (status.send_indicator) {
+    drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
+    status.send_indicator--;
+  }
+}
+
+void SSD1306Display::page_three_full() {
+  clear();
+  setFont(ArialMT_Plain_10);
+  static char versionString[32] = "";
+  if (versionString[0] == '\0') {
+    snprintf_P(versionString, sizeof(versionString), PSTR("%S / %S"), status.version, status.git_version);
+  }
+  drawString(0, 2, GEIGER_MODEL);
+  drawString(0, 17, versionString);
+  drawString(0, 32, PSTR(__DATE__ " " __TIME__));
+  drawString(0, 47, PSTR("@ steadramon"));
 }
 #endif

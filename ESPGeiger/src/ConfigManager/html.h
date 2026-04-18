@@ -67,9 +67,6 @@ function go() {
 }
 window.addEventListener("load",go);
 */
-static const char CFG_PAGE_JS[] = R"HTML(
-<style>h3{margin-bottom:0;}</style><script>function getE(e){return document.getElementById(e)};function doCB(a,b){getE(a).checked='Y'==getE(b).value;}function setCB(f,e){getE(f).value=e.checked?'Y':'N';}</script>
-)HTML";
 static const char HISTORY_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <table style="width:100%"><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>&micro;Sv</th</tr><tbody id="tb"></tbody></table>
 )HTML";
@@ -184,9 +181,9 @@ static const char NTP_HTML[] PROGMEM = R"HTML(<h1>NTP Config</h1>
 static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>ESPGeiger</a> <a href='/about' style='font-weight:normal'>{1}</a></small>";
 
 static const char statusJS[] PROGMEM = R"JS(
-!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);byID('upt').innerHTML=o.u;byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);e.update([o.c,o.c5,o.c15])}setTimeout(t,3e3)},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
-var lt,to,tp,x=null,pc="",id=0,ml=10000,dl=200;
-function f(){clearTimeout(lt);var t=byID("t1");x=new XMLHttpRequest;x.onload=function(){if(200==x.status){var n=x.responseText,e,ab=(t.scrollHeight-t.scrollTop-t.clientHeight)<50;id=n.substr(0,n.indexOf("\n"));e=n.substr(n.indexOf("\n")+1);if(e.length>0){t.value+=e;var L=t.value.split("\n");if(L.length>ml)t.value=L.slice(-(ml-dl)).join("\n");}if(ab)t.scrollTop=t.scrollHeight;}lt=setTimeout(f,3210);};x.onerror=function(){lt=setTimeout(f,6e3);};x.open("GET","/cs?c1="+id,!0);x.send();return!1;}window.addEventListener("load",f);
+!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);var u=o.ut,p=n=>String(n).padStart(2,"0");byID('upt').innerHTML=(u/86400|0)+"T"+p((u/3600|0)%24)+":"+p((u/60|0)%60)+":"+p(u%60);byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);e.update([o.c,o.c5,o.c15])}setTimeout(t,3e3)},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
+var lt,to,tp,x=null,pc="",id=0,ml=10000,dl=200,dtz=0;
+function f(){clearTimeout(lt);var t=byID("t1");x=new XMLHttpRequest;x.onload=function(){if(200==x.status){var n=x.responseText,e,ab=(t.scrollHeight-t.scrollTop-t.clientHeight)<50;var p=n.substr(0,n.indexOf("\n")).split(",");id=p[0];dtz=+p[1]||0;e=n.substr(n.indexOf("\n")+1);if(e.length>0){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){var b=-new Date().getTimezoneOffset(),T=((+h*60+(+m)+b-dtz)%1440+1440)%1440;return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s;});t.value+=e;var L=t.value.split("\n");if(L.length>ml)t.value=L.slice(-(ml-dl)).join("\n");}if(ab)t.scrollTop=t.scrollHeight;}lt=setTimeout(f,3210);};x.onerror=function(){lt=setTimeout(f,6e3);};x.open("GET","/cs?c1="+id,!0);x.send();return!1;}window.addEventListener("load",f);
 )JS";
 
 static const char hvJS[] PROGMEM = R"JS("use strict";

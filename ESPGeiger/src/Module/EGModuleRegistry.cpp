@@ -14,16 +14,12 @@
 #include "../Status.h"
 #include <string.h>
 
-#ifdef ESP8266
-#include <ESP8266WiFi.h>
-#elif defined(ESP32)
-#include <WiFi.h>
-#endif
 
 extern Status status;
 
 EGModuleRegistry::Slot EGModuleRegistry::_slots[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_count = 0;
+unsigned long EGModuleRegistry::_next_loop_due = 0;
 
 bool EGModuleRegistry::add(EGModule* m) {
   if (_count >= EG_MAX_MODULES) return false;
@@ -46,30 +42,80 @@ void EGModuleRegistry::begin_all() {
 }
 
 void EGModuleRegistry::loop_all(unsigned long now) {
+  // Fast-path: if no module's loop() is due yet, skip the walk entirely.
+  // Called from main loop ~50k/s so this check saves a lot of cycles.
+  // Signed compare handles millis() wrap safely.
+  if ((long)(now - _next_loop_due) < 0) return;
+
+  unsigned long earliest = now + 0x7FFFFFFF;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     if (!(s.flags & FLAG_HAS_LOOP)) continue;
     // Matches begin_all()'s wifi gate: if wifi was disabled at boot,
     // begin() was skipped so loop() has nothing to poll against.
     if ((s.flags & FLAG_REQUIRES_WIFI) && status.wifi_disabled) continue;
-    if (s.loop_interval && (now - s.loop_last < s.loop_interval)) continue;
-    s.loop_last = now;
-    s.module->loop(now);
+
+    unsigned long due = s.loop_last + s.loop_interval;
+    if ((long)(now - due) >= 0) {
+      s.loop_last = now;
+      s.module->loop(now);
+      due = now + s.loop_interval;
+    }
+    if ((long)(due - earliest) < 0) earliest = due;
   }
+  _next_loop_due = earliest;
 }
 
 void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds) {
-  bool wifi_ok = !status.wifi_disabled && (WiFi.status() == WL_CONNECTED);
+  bool wifi_ok = !status.wifi_disabled && status.wifi_connected;
   bool ntp_ok = status.ntp_synced;
+  bool seconds = false;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     if (!(s.flags & FLAG_HAS_TICK)) continue;
     if (uptime_seconds < s.warmup_seconds) continue;
     if ((s.flags & FLAG_REQUIRES_WIFI) && !wifi_ok) continue;
     if ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok) continue;
+    if (!seconds) {
+      now = now / 1000;
+      seconds = true;
+    }
+#ifdef TICK_PROFILE
+    unsigned long t0 = micros();
     s.module->s_tick(now);
+    uint32_t d = (uint32_t)(micros() - t0);
+    if (d > s.max_tick_us) s.max_tick_us = (d > 0xFFFF) ? 0xFFFF : (uint16_t)d;
+#else
+    s.module->s_tick(now);
+#endif
   }
 }
+
+#ifdef TICK_PROFILE
+void EGModuleRegistry::log_profile_and_reset() {
+  // Emit every module that ticked this window, sorted slowest first.
+  char buf[200];
+  int pos = 0;
+  uint16_t done = 0;  // bitmask of already-printed slots (up to 16 - matches EG_MAX_MODULES)
+  while (true) {
+    uint8_t best = 0xFF;
+    uint16_t bestv = 0;
+    for (uint8_t i = 0; i < _count && i < 16; i++) {
+      if (done & (1u << i)) continue;
+      uint16_t v = _slots[i].max_tick_us;
+      if (v > bestv) { bestv = v; best = i; }
+    }
+    if (best == 0xFF || bestv == 0) break;
+    done |= (1u << best);
+    int n = snprintf(buf + pos, sizeof(buf) - pos, "%s%s=%u",
+      pos ? " " : "", _slots[best].module->name(), bestv);
+    if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
+    pos += n;
+  }
+  Log::console(PSTR("Mods max: %s"), buf);
+  for (uint8_t i = 0; i < _count; i++) _slots[i].max_tick_us = 0;
+}
+#endif
 
 uint8_t EGModuleRegistry::count() {
   return _count;

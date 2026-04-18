@@ -27,11 +27,11 @@
 // bits 0-2 describe the input pipeline; bits 3-6 reserved for future variants.
 // PCNT (ESP32 hardware pulse counter) is an implementation detail of the pulse
 // input path, controlled separately via the IGNORE_PCNT compile-time flag.
-#define GEIGER_FLAG_PULSE   0x01   // bit 0 — hardware pulse input
-#define GEIGER_FLAG_SERIAL  0x02   // bit 1 — UART input
-#define GEIGER_FLAG_INTPWM  0x04   // bit 2 — internal PWM generation (modifier on PULSE)
+#define GEIGER_FLAG_PULSE   0x01   // bit 0 - hardware pulse input
+#define GEIGER_FLAG_SERIAL  0x02   // bit 1 - UART input
+#define GEIGER_FLAG_INTPWM  0x04   // bit 2 - internal PWM generation (modifier on PULSE)
 // bits 3-6 reserved
-#define GEIGER_FLAG_TEST    0x80   // bit 7 — test/simulation build (real <128, test >=128)
+#define GEIGER_FLAG_TEST    0x80   // bit 7 - test/simulation build (real <128, test >=128)
 
 #define GEIGER_TYPE_PULSE         (GEIGER_FLAG_PULSE)
 #define GEIGER_TYPE_SERIAL        (GEIGER_FLAG_SERIAL)
@@ -152,9 +152,8 @@ class GeigerInput {
     virtual bool has_pcnt() { return false; }
     void blip_led();
     // Inline: called from the hot Counter::loop() path ~50k/sec.
-    // Not virtual — no subclass overrides it.
+    // Not virtual - no subclass overrides it.
     unsigned long last_blip() const { return _last_blip; }
-    const char* geiger_model();
     static void IRAM_ATTR countInterrupt();
     void setCounter(int val, bool update = true);
     void setLastBlip();

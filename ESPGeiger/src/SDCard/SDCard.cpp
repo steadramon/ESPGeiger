@@ -27,6 +27,25 @@ SdFat32* sd = nullptr;
 SDCard sdcard;
 EG_REGISTER_MODULE(sdcard)
 
+static const EGPref SDCARD_PREF_ITEMS[] = {
+  {"sync_min", "Sync Interval (min)", "Minutes between syncs. 1=safest, higher=less SD wear", "1", nullptr, 1, 5, 0, EGP_UINT, 0},
+};
+
+static const EGPrefGroup SDCARD_PREF_GROUP = {
+  "sdcard", "SD Card", 1,
+  SDCARD_PREF_ITEMS,
+  sizeof(SDCARD_PREF_ITEMS) / sizeof(SDCARD_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* SDCard::prefs_group() { return &SDCARD_PREF_GROUP; }
+
+void SDCard::on_prefs_loaded() {
+  uint32_t v = EGPrefs::getUInt("sdcard", "sync_min");
+  if (v < 1) v = 1;
+  if (v > 5) v = 5;
+  _sync_min = (uint8_t)v;
+}
+
 static void dateTimeCB(uint16_t *dosYear, uint16_t *dosTime) {
     time_t now;
     now = time(nullptr);
@@ -51,15 +70,15 @@ void SDCard::begin()
   }
   FsDateTime::setCallback(dateTimeCB);
 
-  if (!myDataFile.open(".test.txt", O_WRITE | O_CREAT | O_TRUNC)) {
+  if (!myDataFile.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC)) {
     Log::console(PSTR("SDCard: Test file failed."));
     delete sd;
     sd = nullptr;
     return;
   }
-  if(sd->exists(".test.txt"))
+  if(sd->exists("TEST.TMP"))
   {
-    sd->remove(".test.txt");
+    sd->remove("TEST.TMP");
   }
 
   myDataFile.close();
@@ -91,21 +110,20 @@ void SDCard::s_tick(unsigned long stick_now)
     return;
   }
 
-  struct tm *timeinfo = gmtime (&currentTime);
-  if (timeinfo->tm_sec != 0) {
-    return;
-  }
-  // Guard against multiple fires within the same real minute
+  // Fire once per new minute. Check minute bucket before gmtime - gmtime
+  // is ~100us on ESP8266 so skipping it on 59/60 ticks saves real time.
   time_t thisMinute = currentTime / 60;
   if (thisMinute == lastWrittenMinute) {
     return;
   }
-  lastWrittenMinute = thisMinute;
-
-  if (!sd->chdir()) {
-    Log::console(PSTR("SDCard: Cannot chdir to root"));
+  if (lastWrittenMinute == 0) {
+    // First valid tick after boot - don't write immediately, just prime.
+    lastWrittenMinute = thisMinute;
     return;
   }
+  lastWrittenMinute = thisMinute;
+
+  struct tm *timeinfo = gmtime (&currentTime);
 
   bool forceCleanup = false;
   char timeStr[23];
@@ -118,26 +136,46 @@ void SDCard::s_tick(unsigned long stick_now)
     1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec
   );
 
-  if (!sd->exists(dirStr)) {
-    sd->mkdir(dirStr);
-  }
-  sd->chdir(dirStr);
+  uint32_t currentDay = (1900+timeinfo->tm_year) * 10000u
+                      + (timeinfo->tm_mon+1) * 100u
+                      + timeinfo->tm_mday;
 
-  bool fileExists = false;
-  if(sd->exists(timeStr)) {
-    fileExists = true;
-  }
-
-  myDataFile.open(timeStr, FILE_WRITE);
-  if (myDataFile)
-  {
-    if (!fileExists) {
-      myDataFile.print(F("DateTime,CPM,μSv/h,CPM5,CPM15"));
-#ifdef SDCARD_EXTENDEDLOG
-      myDataFile.print(F(",FreeMem"));
-#endif
-      myDataFile.println();
+  // Open file only on first write or day rollover - saves the open() cost
+  // (~10-30ms) on every other minute. sync() below still flushes per-minute
+  // so durability is unchanged.
+  if (currentDay != openFileDay || !myDataFile.isOpen()) {
+    if (myDataFile.isOpen()) {
+      myDataFile.close();
     }
+    openFileDay = 0;
+    _unsynced_writes = 0;
+
+    if (!sd->chdir()) {
+      Log::console(PSTR("SDCard: Cannot chdir to root"));
+      return;
+    }
+    if (!sd->exists(dirStr)) {
+      sd->mkdir(dirStr);
+    }
+    sd->chdir(dirStr);
+
+    bool fileExists = sd->exists(timeStr);
+    if (!myDataFile.open(timeStr, FILE_WRITE)) {
+      Log::console(PSTR("SDCard: Unable to create file."));
+      forceCleanup = true;
+    } else {
+      if (!fileExists) {
+        myDataFile.print(F("DateTime,CPM,uSv/h,CPM5,CPM15"));
+#ifdef SDCARD_EXTENDEDLOG
+        myDataFile.print(F(",FreeMem"));
+#endif
+        myDataFile.println();
+      }
+      openFileDay = currentDay;
+    }
+  }
+
+  if (myDataFile.isOpen()) {
 #ifdef SDCARD_LOG_UNIXTIME
     myDataFile.print(time(NULL));
 #else
@@ -156,14 +194,31 @@ void SDCard::s_tick(unsigned long stick_now)
     myDataFile.print(ESP.getFreeHeap());
 #endif
     myDataFile.println();
-    myDataFile.close();
-  } else {
-    Log::console(PSTR("SDCard: Unable to create file."));
-    forceCleanup = true;
+
+    // Sync every _sync_min writes. Between syncs, data is buffered in RAM
+    // only - power loss risks losing up to (_sync_min - 1) rows.
+    _unsynced_writes++;
+    if (_unsynced_writes >= _sync_min) {
+      if (!myDataFile.sync()) {
+        myDataFile.close();
+        openFileDay = 0;
+        forceCleanup = true;
+      }
+      _unsynced_writes = 0;
+    }
   }
 
-  if ((millis() - lastClean >= 86400*1000) || (forceCleanup)) {
-    lastClean = millis();
+  static uint8_t clean_sec = 0;
+  static uint16_t clean_min = 0;
+  bool clean_due = false;
+  if (++clean_sec >= 60) { clean_sec = 0; if (++clean_min >= 1440) { clean_min = 0; clean_due = true; } }
+  if (clean_due || forceCleanup) {
+    // Close before cleanup so deleteOldest never races our handle.
+    if (myDataFile.isOpen()) {
+      myDataFile.close();
+      openFileDay = 0;
+      _unsynced_writes = 0;
+    }
     uint8_t maxDeletes = 10;
     uint64_t freespace = sd->freeClusterCount() * sd->sectorsPerCluster() * 0.000512;
     while (freespace <= 8 && maxDeletes-- > 0) {

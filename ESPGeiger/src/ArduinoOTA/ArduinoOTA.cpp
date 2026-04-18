@@ -21,7 +21,7 @@
 #include "../Logger/Logger.h"
 #include "../Status.h"
 #include "../Module/EGModuleRegistry.h"
-#include "../ConfigManager/ConfigManager.h"
+#include "../Util/DeviceInfo.h"
 
 ArduinoOTAModule arduinoOTA;
 EG_REGISTER_MODULE(arduinoOTA)
@@ -63,8 +63,9 @@ void ArduinoOTAModule::begin() {
     else if (error == OTA_END_ERROR) Log::debug(PSTR("End Failed"));
   });
 
-  ArduinoOTA.setHostname(ConfigManager::getInstance().getHostName());
+  ArduinoOTA.setHostname(DeviceInfo::hostname());
   ArduinoOTA.begin();
+  MDNS.addService("http", "tcp", 80);  // advertise web UI for network discovery
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {

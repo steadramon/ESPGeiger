@@ -29,13 +29,14 @@ public:
   static void error(const char* logData, ...);
   static void info(const char* logData, ...);
   static void debug(const char* logData, ...);
+  static void banner(const char* logData, ...);  // raw serial, no timestamp
   static void getLog(uint32_t idx, char** entry_pp, size_t* len_p);
   static char getLogIdx();
   static void setLogLevel(LoggingLevels level);
   static void setSerialLogLevel(bool level);
 
 private:
-  static void AddLog(LoggingLevels logLevel, const char* logData);
+  static void AddLog(LoggingLevels logLevel, const char* logData, bool withTimestamp = true);
   static size_t strchrspn(const char *str1, int character);
   static char log[MAX_LOG_SIZE];
   static char logIdx;

@@ -23,9 +23,9 @@ Two pulse builds are made available.
 
 ## Serial
 
-- GC10
-- GC10Next
-- MightyOhm
+A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, or ESPGeiger) from the **Config** page.
+
+- Serial
 
 ## Hardware
 
@@ -36,12 +36,10 @@ Builds for specific Geiger Counter models and other hardware projects
 
 ## ESPGeiger Log
 
-Firmware versions for the ESPGeiger log, providing Pulse and Serial variants.
+Firmware versions for the ESPGeiger Log, providing Pulse and Serial variants.
 
 - Pulse
-- GC10
-- GC10Next
-- MightyOhm
+- Serial
 
 ## Test
 

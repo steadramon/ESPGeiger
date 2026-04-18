@@ -34,7 +34,7 @@ extern "C" {
 #define PCNT_CHANNEL PCNT_CHANNEL_0
 // Pull-mode encoding shared with the web portal config (pcntPull):
 //   0 = floating / no pull
-//   1 = pull-up  (default — matches active-low modules with external pullup)
+//   1 = pull-up  (default - matches active-low modules with external pullup)
 //   2 = pull-down (active-high modules without own idle pull)
 // The compile-time flags set the *default* visible in the portal; users can
 // override per-device from the web form.

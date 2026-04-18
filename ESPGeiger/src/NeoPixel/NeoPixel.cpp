@@ -26,6 +26,30 @@
 NeoPixel neopixel;
 EG_REGISTER_MODULE(neopixel)
 
+static const EGPref NEOPIXEL_PREF_ITEMS[] = {
+  {"brightness", "Brightness", "0-100", "15", nullptr, 0, 100, 0, EGP_UINT, 0},
+};
+
+static const EGPrefGroup NEOPIXEL_PREF_GROUP = {
+  "neopixel", "NeoPixel", 1,
+  NEOPIXEL_PREF_ITEMS,
+  sizeof(NEOPIXEL_PREF_ITEMS) / sizeof(NEOPIXEL_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }
+
+void NeoPixel::on_prefs_loaded() {
+  setBrightness((int)EGPrefs::getUInt("neopixel", "brightness"));
+}
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+static const EGLegacyAlias NEOPIXEL_LEGACY[] = {
+  {"neopixelBrightness", "brightness"},
+  {nullptr, nullptr},
+};
+const EGLegacyAlias* NeoPixel::legacy_aliases() { return NEOPIXEL_LEGACY; }
+// === END LEGACY IMPORT ===
+
 NeoPixel::NeoPixel() {
 }
 

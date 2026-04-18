@@ -20,10 +20,35 @@
 #include "Webhook.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
-#include "ArduinoJson.h"
 
 Webhook webhook;
 EG_REGISTER_MODULE(webhook)
+
+static const EGPref WEBHOOK_PREF_ITEMS[] = {
+  {"send",     "Enable",      "Enable webhook POSTs",            "0",  nullptr, 0, 0,    0,  EGP_BOOL,   0},
+  {"url",      "URL",         "Webhook endpoint (http only)",    "",   nullptr, 0, 0, 255, EGP_STRING, 0},
+  {"key",      "Key",         "Optional shared secret sent as \"key\"", "", nullptr, 0, 0, 255, EGP_STRING, EGP_SENSITIVE},
+  {"interval", "Interval",    "POST interval (sec)",             "60", nullptr, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX, 0, EGP_UINT, 0},
+};
+
+static const EGPrefGroup WEBHOOK_PREF_GROUP = {
+  "webhook", "Webhook", 1,
+  WEBHOOK_PREF_ITEMS,
+  sizeof(WEBHOOK_PREF_ITEMS) / sizeof(WEBHOOK_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+static const EGLegacyAlias WEBHOOK_LEGACY[] = {
+  {"whSend", "send"},
+  {"whURL",  "url"},
+  {"whKey",  "key"},
+  {"whTime", "interval"},
+  {nullptr, nullptr},
+};
+const EGLegacyAlias* Webhook::legacy_aliases() { return WEBHOOK_LEGACY; }
+// === END LEGACY IMPORT ===
 
 Webhook::Webhook() {
 }
@@ -32,24 +57,23 @@ void Webhook::setInterval(int interval)
 {
   if (interval < WEBHOOK_INTERVAL_MIN) interval = WEBHOOK_INTERVAL_MIN;
   if (interval > WEBHOOK_INTERVAL_MAX) interval = WEBHOOK_INTERVAL_MAX;
-  pingInterval = interval * 1000;
+  pingInterval = interval;
+  pingIntervalMs = (uint32_t)interval * 1000UL;
 }
 
-void Webhook::s_tick(unsigned long stick_now)
+void Webhook::loop(unsigned long now)
 {
   if (lastPing == 0) {
-    ConfigManager &configManager = ConfigManager::getInstance();
-    const char* _whTime = configManager.getParamValueFromID("whTime");
-    if (_whTime != NULL) {
-      setInterval(atoi(_whTime));
-    }
-    lastPing = stick_now + random(pingInterval / 1000) * 1000;
+    int iv = (int)EGPrefs::getUInt("webhook", "interval");
+    if (iv > 0) setInterval(iv);
+    lastPing = now + random(pingIntervalMs);
     return;
   }
-  if (stick_now > lastPing && stick_now - lastPing >= (unsigned long)pingInterval)
+  if (now > lastPing && (now - lastPing) >= pingIntervalMs)
   {
-    lastPing = stick_now - (stick_now % 1000);
-    Webhook::postMeasurement();
+    lastPing += pingIntervalMs;
+    if ((now - lastPing) >= pingIntervalMs) lastPing = now;
+    postMeasurement();
   }
 }
 
@@ -86,66 +110,47 @@ const char* Webhook::cleanHTTP(const char* url) {
 }
 
 void Webhook::postMeasurement() {
-  ConfigManager &configManager = ConfigManager::getInstance();
-  const char* _send = configManager.getParamValueFromID("whSend");
-  if (_send == NULL || strcmp(_send, "N") == 0) {
-    return;
-  }
+  if (!EGPrefs::getBool("webhook", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Webhook: Testmode"));
     return;
   }
 
-  const char* whURL = configManager.getParamValueFromID("whURL");
-  if (whURL == NULL) {
-    return;
-  }
+  const char* whURL = EGPrefs::getString("webhook", "url");
+  if (whURL[0] == '\0') return;
 
-  const char* _whTime = configManager.getParamValueFromID("whTime");
-  if (_whTime != NULL) {
-    setInterval(atoi(_whTime));
-  }
+  int iv = (int)EGPrefs::getUInt("webhook", "interval");
+  if (iv > 0) setInterval(iv);
 
   Log::console(PSTR("Webhook: Uploading latest data ..."));
 
-  const char* key = configManager.getParamValueFromID("whKey");
+  const char* key = EGPrefs::getString("webhook", "key");
 
-  DynamicJsonDocument doc(512);
   static char buffer[512];
-  // Formatted float buffers — each must stay alive until serializeJson()
-  // runs because serialized() stores a pointer, not a copy. Stack-local
-  // avoids heap churn from the previous `String(float, 2)` pattern.
   char b_cps[12], b_cpm[12], b_cpm5[12], b_cpm15[12], b_usv[12];
   format_f(b_cps,   sizeof(b_cps),   gcounter.get_cps());
   format_f(b_cpm,   sizeof(b_cpm),   gcounter.get_cpmf());
   format_f(b_cpm5,  sizeof(b_cpm5),  gcounter.get_cpm5f());
   format_f(b_cpm15, sizeof(b_cpm15), gcounter.get_cpm15f());
   format_f(b_usv,   sizeof(b_usv),   gcounter.get_usv());
+
+  int pos = snprintf_P(buffer, sizeof(buffer),
+    PSTR("{\"id\":\"%s\""), DeviceInfo::chipid());
+  if (key[0] != '\0') {
+    pos += snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"key\":\"%s\""), key);
+  }
+  pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
+    PSTR(",\"ut\":%lu,\"cps\":%s,\"cpm\":%s,\"cpm5\":%s,\"cpm15\":%s,\"usv\":%s"),
+    DeviceInfo::uptime(), b_cps, b_cpm, b_cpm5, b_cpm15, b_usv);
 #ifdef ESPGEIGER_HW
   char b_hv[12];
   format_f(b_hv, sizeof(b_hv), status.hvReading.get());
+  pos += snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);
 #endif
-
-  doc["id"] = configManager.getChipID();
-  if (key != NULL && key[0] != '\0') {
-    doc["key"] = key;
-  }
-  doc["ut"] = configManager.getUptime();
-  doc["cps"]   = serialized(b_cps);
-  doc["cpm"]   = serialized(b_cpm);
-  doc["cpm5"]  = serialized(b_cpm5);
-  doc["cpm15"] = serialized(b_cpm15);
-  doc["usv"]   = serialized(b_usv);
-#ifdef ESPGEIGER_HW
-  doc["hv"]    = serialized(b_hv);
-#endif
-  doc["tc"] = gcounter.total_clicks;
-  doc["mem"] = ESP.getFreeHeap();
-  doc["rssi"] = WiFi.RSSI();
-
-  serializeJson(doc, buffer);
-  doc.clear();
+  pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
+    PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
+    gcounter.total_clicks, ESP.getFreeHeap(), (int)status.wifi_rssi);
 
   char url[256];
   const char* trimmedURL = cleanHTTP(whURL);
@@ -157,13 +162,13 @@ void Webhook::postMeasurement() {
     if (request.open("POST", url))
     {
       status.led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
+      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Accept"), F("application/json"));
       request.setReqHeader(F("Content-Type"), F("application/json"));
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(10);
       request.send(buffer);
-      status.last_send = millis();
+      status.send_indicator = 2;
     }
     else
     {

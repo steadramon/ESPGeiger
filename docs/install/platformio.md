@@ -75,7 +75,7 @@ build_flags =
 | Flag | Description |
 |---|---|
 | `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield — bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 7 = test). `1` Pulse (default), `2` Serial, `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. |
-| `-D GEIGER_SERIALTYPE=N` | Set the serial counter type when using `GEIGER_TYPE=2`. `1` GC10 (9600 baud), `2` GC10-Next (115200 baud), `3` MightyOhm (9600 baud), `4` ESPGeiger (115200 baud). |
+| `-D GEIGER_SERIALTYPE=N` | Set the **default** serial counter type for serial builds. The serial type can be changed at runtime from the Config page. `1` GC10 (9600 baud), `2` GC10-Next (115200 baud), `3` MightyOhm (9600 baud), `4` ESPGeiger (115200 baud). |
 
 ### Geiger Counter Input
 
@@ -156,6 +156,16 @@ These flags are used by ESPGeiger-HW and ESPGeiger Log specific builds.
 | `-D NTP_SERVER="server"` | Set the default NTP server (default `pool.ntp.org`). |
 | `-D NTP_TZ="tz"` | Set the default timezone in POSIX format. |
 
+### SdFat (SD card builds)
+
+Applied globally in `[com-esp]` so they affect every SD-enabled build:
+
+| Flag | Description |
+|---|---|
+| `-D MAINTAIN_FREE_CLUSTER_COUNT=1` | Cache free-cluster count; `freeClusterCount()` becomes O(1) after first call. Eliminates multi-second "calculating free space" delay at boot and daily cleanup scan. |
+| `-D SDFAT_FILE_TYPE=1` | FAT16/FAT32 only (no exFAT). Saves ~15-20 KB flash; we use FAT32 exclusively. |
+| `-D USE_LONG_FILE_NAMES=0` | Disable LFN support. Saves ~5 KB flash. All our filenames are 8.3-compliant (`YYYYMMDD.CSV`, `YYYYMM/`, `TEST.TMP`). |
+
 ## Build Environments
 
 Build environments are defined in `environments.ini`. Each environment extends a base configuration and adds target-specific flags.
@@ -189,16 +199,14 @@ These bases handle the platform setup, library dependencies and core feature fla
 | `esp8266_pulse` | ESP8266 | Pulse | |
 | `esp8266_pulsemin` | ESP8266 | Pulse | Minimal build, no cloud services |
 | `esp8266oled_pulse` | ESP8266 | Pulse | OLED |
-| `esp8266_gc10next` | ESP8266 | Serial (GC10-Next) | |
-| `esp8266oled_gc10next` | ESP8266 | Serial (GC10-Next) | OLED |
-| `esp32_gc10next` | ESP32 | Serial (GC10-Next) | |
-| `esp32d1_gc10` | ESP32 | Serial (GC10) | RXPIN 23 |
+| `esp8266_serial` | ESP8266 | Serial | Runtime-selectable serial type |
+| `esp8266oled_serial` | ESP8266 | Serial | OLED |
+| `esp32_serial` | ESP32 | Serial | Runtime-selectable serial type |
+| `esp32oled_serial` | ESP32 | Serial | OLED |
 | `espgeigerhw` | ESP8266 | Pulse | OLED, PushButton, HV control |
 | `espgeigerlite` | ESP8266 | Pulse | OLED, NeoPixel, PushButton |
 | `espgeigerlog` | ESP8266 | Pulse | OLED, NeoPixel, PushButton, SDCard |
-| `espgeigerlog_gc10` | ESP8266 | Serial (GC10) | OLED, NeoPixel, PushButton, SDCard |
-| `espgeigerlog_gc10next` | ESP8266 | Serial (GC10-Next) | OLED, NeoPixel, PushButton, SDCard |
-| `espgeigerlog_mightyohm` | ESP8266 | Serial (MightyOhm) | OLED, NeoPixel, PushButton, SDCard |
+| `espgeigerlog_serial` | ESP8266 | Serial | OLED, NeoPixel, PushButton, SDCard |
 
 ### Test Environments
 
@@ -215,20 +223,14 @@ These bases handle the platform setup, library dependencies and core feature fla
 | `esp8266_testpulseint` | ESP8266 | PWM pulse output | |
 | `esp8266oled_testpulseint` | ESP8266 | PWM pulse output | OLED |
 | `esp32_testpulseint` | ESP32 | PWM pulse output | |
-| `esp8266_test_gc10` | ESP8266 | Serial (GC10 emulated) | |
-| `esp8266oled_test_gc10` | ESP8266 | Serial (GC10 emulated) | OLED |
-| `esp32_test_gc10` | ESP32 | Serial (GC10 emulated) | |
-| `esp32oled_test_gc10` | ESP32 | Serial (GC10 emulated) | OLED |
-| `esp8266_test_mightyohm` | ESP8266 | Serial (MightyOhm emulated) | |
-| `esp32_test_mightyohm` | ESP32 | Serial (MightyOhm emulated) | |
-| `esp32oled_test_mightyohm` | ESP32 | Serial (MightyOhm emulated) | OLED |
+| `esp8266_testserial` | ESP8266 | Serial emulated | Type selectable at runtime |
+| `esp32_testserial` | ESP32 | Serial emulated | Type selectable at runtime |
 | `espgeigerlite_test` | ESP8266 | Internal counter | OLED, NeoPixel, PushButton |
 | `espgeigerlite_testpulse` | ESP8266 | Pulse output | OLED, NeoPixel, PushButton |
 | `espgeigerlog_test` | ESP8266 | Internal counter | OLED, NeoPixel, PushButton, SDCard |
 | `espgeigerlog_testpulse` | ESP8266 | Pulse output | OLED, NeoPixel, PushButton, SDCard |
 | `espgeigerlog_testpulseint` | ESP8266 | PWM pulse output | OLED, NeoPixel, PushButton, SDCard |
-| `espgeigerlog_test_gc10` | ESP8266 | Serial (GC10 emulated) | OLED, NeoPixel, PushButton, SDCard |
-| `espgeigerlog_test_mightyohm` | ESP8266 | Serial (MightyOhm emulated) | OLED, NeoPixel, PushButton, SDCard |
+| `espgeigerlog_testserial` | ESP8266 | Serial emulated | OLED, NeoPixel, PushButton, SDCard |
 
 ## Making Custom Environments
 
@@ -236,14 +238,14 @@ Most common configurations are already covered by the pre-built environments lis
 
 PlatformIO is configured to automatically load any file matching `*_env.ini` in the project root. To create a custom environment, add a new file such as `custom_env.ini`. This file will not be tracked by git, keeping your custom configuration separate from the project.
 
-### Example: ESP8266 with GC10 serial, NeoPixel and OLED
+### Example: ESP8266 with serial counter, NeoPixel and OLED
 
-Say you've built your own hardware with an ESP8266, a GC10 serial Geiger counter, a NeoPixel LED and an SSD1306 OLED display. You want the GC10 serial input on GPIO5 and a push button on GPIO14.
+Say you've built your own hardware with an ESP8266, a serial Geiger counter, a NeoPixel LED and an SSD1306 OLED display. You want the serial input on GPIO5 and a push button on GPIO14.
 
 Start by choosing the right base. `base:esp8266_neopixel` gives you ESP8266 with NeoPixel support. Then add the OLED, counter type, and pin configuration on top:
 
 ```ini
-[env:my_gc10_neopixel_oled]
+[env:my_serial_neopixel_oled]
 extends = base:esp8266_neopixel
 lib_deps =
   ${base:esp8266_neopixel.lib_deps}
@@ -256,15 +258,16 @@ build_flags =
   -D GEIGER_PUSHBUTTON
   -D PUSHBUTTON_PIN=14
   -DGEIGER_TYPE=${geiger_type.serial}
-  -DGEIGER_SERIALTYPE=${serial_type.gc10}
   -DGEIGER_RXPIN='5'
-  -DGEIGER_MODEL='"MyGC10"'
+  -DGEIGER_MODEL='"MySerial"'
 ```
+
+After flashing, select your serial counter type (GC10, GC10Next, MightyOhm, or ESPGeiger) from the **Config** page under **Input > Serial Type**.
 
 The key points when building a custom environment:
 
 - **Pick the closest base** that has the hardware features you need. If you need NeoPixel, start with `base:esp8266_neopixel`. If you just need OLED, use `base:esp8266_oled`. For a bare board, use `base:esp8266_main` or `base:esp32_main`.
 - **Add library dependencies** for any features not in the base. For example, adding OLED to a NeoPixel base requires `${libraries.ssd1306display}` in `lib_deps`.
-- **Set your counter type** with `GEIGER_TYPE` and `GEIGER_SERIALTYPE` if using a serial counter.
+- **Set your counter type** with `GEIGER_TYPE`. For serial builds, the specific serial protocol is selected at runtime from the Config page.
 - **Configure your pins** to match your hardware wiring.
 - Common output modules (MQTT, Radmon, GMC, ThingSpeak, Webhook) are enabled globally in `platformio.ini` under `[com-esp]` and will be available in all custom environments.

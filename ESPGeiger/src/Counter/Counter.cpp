@@ -22,7 +22,6 @@
 #include "../Logger/Logger.h"
 
 Counter::Counter() {
-  status.geiger_model = GEIGER_MODEL;
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
   geigerinput = new GeigerPulse();
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
@@ -42,8 +41,7 @@ void Counter::secondticker(unsigned long stick_now) {
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
-  unsigned long int secidx = (stick_now / 1000) % 60;
-  //Log::console(PSTR("Counter: Events - %d - %d"), eventCounter, secidx);
+  static uint8_t tick_cnt = 0;
   geigerTicks.add(eventCounter);
   unsigned long previous_total_clicks = total_clicks;
   total_clicks += eventCounter;
@@ -52,61 +50,69 @@ void Counter::secondticker(unsigned long stick_now) {
     total_clicks_rollover++;
   }
 
-  int ccpm = get_cpm();
+  // Compute once per tick so external accessors are O(1) loads.
+  _cached_cps  = geigerTicks.get();
+  _cached_cpmf = _cached_cps * 60.0f;
+  _cached_usv  = _cached_cpmf * _ratio_inv;
+  int ccpm = (int)roundf(_cached_cpmf);
 
   cpm_history.push(ccpm);
 
-  if (secidx % 5 == 0) {
-    geigerTicks5.add(geigerTicks.get());
+  if (tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10) {
+    geigerTicks5.add(_cached_cps);
   }
-  if (secidx % 15 == 0) {
+  if (tick_cnt == 0) {
     geigerTicks15.add(geigerTicks5.get());
   }
+  if (++tick_cnt >= 15) tick_cnt = 0;
 
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
-    struct tm *timeinfo = gmtime (&currentTime);
+    // Fire on each new hour (minute in test builds). gmtime() only on transition.
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-    // Test builds: roll the hourly bucket every minute so rollover
-    // behaviour can be verified without waiting an hour.
-    if (timeinfo->tm_sec == 0) {
+    static time_t lastBoundary = 0;
+    time_t thisBoundary = currentTime / 60;
 #else
-    if ((timeinfo->tm_min == 0) && (timeinfo->tm_sec == 0)) {
+    static time_t lastBoundary = 0;
+    time_t thisBoundary = currentTime / 3600;
 #endif
-      day_hourly_history.push(clicks_hour);
-      clicks_hour = 0;
-      if (timeinfo->tm_hour == 0) {
-        clicks_yesterday = clicks_today;
-        clicks_today = 0;
+    if (thisBoundary != lastBoundary) {
+      // Refresh cached UTC offset once per hour (also sets initial value on
+      // first tick after NTP sync). mktime with tm_isdst=-1 handles DST.
+      // Capture utc_hour before mktime, which may normalise gmt_tm in place.
+      struct tm gmt_tm = *gmtime(&currentTime);
+      int utc_hour = gmt_tm.tm_hour;
+      gmt_tm.tm_isdst = -1;
+      status.tz_offset_min = (int16_t)((currentTime - mktime(&gmt_tm)) / 60);
+      if (lastBoundary != 0) {
+        day_hourly_history.push(clicks_hour);
+        clicks_hour = 0;
+        if (utc_hour == 0) {
+          clicks_yesterday = clicks_today;
+          clicks_today = 0;
+        }
       }
+      lastBoundary = thisBoundary;
     }
   }
 
   clicks_today += eventCounter;
   clicks_hour += eventCounter;
 
-  if (_cpm_warning < ccpm) {
-    _bool_cpm_warning = true;
-  } else {
-    _bool_cpm_warning = false;
-  }
-  if (_cpm_alert < ccpm) {
-    _bool_cpm_alert = true;
-  } else {
-    _bool_cpm_alert = false;
-  }
+  _bool_cpm_warning = (_cpm_warning < ccpm);
+  _bool_cpm_alert   = (_cpm_alert   < ccpm);
 }
 
 float Counter::get_cps() {
-  return geigerTicks.get();
+  return _cached_cps;
 }
 
 int Counter::get_cpm() {
-  return (int)roundf(get_cpmf());
+  return (int)roundf(_cached_cpmf);
 }
 
 float Counter::get_cpmf() {
-  return geigerTicks.get()*60.0;
+  return _cached_cpmf;
 }
 
 int Counter::get_cpm5() {
@@ -128,6 +134,8 @@ float Counter::get_cpm15f() {
 void Counter::set_ratio(float ratio) {
   if (ratio > 0) {
     _ratio = ratio;
+    _ratio_inv = 1.0f / ratio;                 // keep reciprocal in sync for hot-path multiplies
+    _cached_usv = _cached_cpmf * _ratio_inv;   // refresh cache so readers see new ratio immediately
   }
 }
 
@@ -160,8 +168,7 @@ bool Counter::is_alert() {
 }
 
 float Counter::get_usv() {
-  float avgCPM = geigerTicks.get()*60;
-  return avgCPM/_ratio;
+  return _cached_usv;
 }
 
 float Counter::get_totalusv() {
@@ -170,21 +177,22 @@ float Counter::get_totalusv() {
   if (uptime < 1) {
     return 0;
   }
+  // Compute the reciprocal once, convert the N divides in the loop into N multiplies.
+  const float inv_factor = 1.0f / (0.0166f * uptime);
   for (int index = 1; index <= total_clicks_rollover; index++) {
-    totalUsv += (float)__LONG_MAX__ / (0.0166 * uptime);
+    totalUsv += (float)__LONG_MAX__ * inv_factor;
   }
-  totalUsv += (total_clicks / (0.0166 * uptime));
-  return (totalUsv / 60.0) / _ratio;
+  totalUsv += total_clicks * inv_factor;
+  static constexpr float INV_60 = 1.0f / 60.0f;
+  return totalUsv * INV_60 * _ratio_inv;
 }
 
 float Counter::get_usv5() {
-  float avgCPM = geigerTicks5.get()*60;
-  return avgCPM/_ratio;
+  return geigerTicks5.get() * 60.0f * _ratio_inv;
 }
 
 float Counter::get_usv15() {
-  float avgCPM = geigerTicks15.get()*60;
-  return avgCPM/_ratio;
+  return geigerTicks15.get() * 60.0f * _ratio_inv;
 }
 
 void Counter::begin() {
@@ -216,9 +224,7 @@ void Counter::blip_led() {
 }
 
 void Counter::loop() {
-  // geigerinput->loop() is only non-empty for Serial/TestSerial (UART drain).
-  // Pulse builds (PCNT hardware / ISR) have nothing to do here — skip the
-  // virtual dispatch. This runs ~50k/sec on ESP8266 so a no-op call adds up.
+  // Only Serial/Test builds need per-iteration UART drain here.
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
 #endif

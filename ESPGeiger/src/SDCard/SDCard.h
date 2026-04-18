@@ -24,6 +24,7 @@
 #include "../Status.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
+#include "../Prefs/EGPrefs.h"
 
 #ifndef GEIGER_SDCARD_CS
 #define GEIGER_SDCARD_CS 16
@@ -37,16 +38,21 @@ class SDCard : public EGModule {
   public:
     SDCard();
     const char* name() override { return "sdcard"; }
+    uint8_t display_order() override { return 40; }
     bool requires_ntp() override { return true; }
     bool has_tick() override { return true; }
     void s_tick(unsigned long stick_now) override;
     void begin() override;
+    const EGPrefGroup* prefs_group() override;
+    void on_prefs_loaded() override;
     void deleteOldest();
   protected:
     File32 myDataFile;
   private:
-    unsigned long lastClean = 0;
     time_t lastWrittenMinute = 0;
+    uint32_t openFileDay = 0;  // YYYYMMDD of currently-open file, 0 if closed
+    uint8_t _sync_min = 1;
+    uint8_t _unsynced_writes = 0;
     bool sdenabled = false;
 };
 

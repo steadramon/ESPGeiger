@@ -1,33 +1,53 @@
 /*
   GeigerInput/Type/Serial.cpp - Class for Serial type counter
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Serial.h"
 #include "../../Logger/Logger.h"
+#include "../../Prefs/EGPrefs.h"
 
 static EspSoftwareSerial::UART geigerPort;
+
+struct SerialTypeInfo {
+  uint8_t     id;
+  uint32_t    baud;
+  const char* name;
+};
+
+// Add new serial types here. Parser cases go in handleSerial().
+static const SerialTypeInfo SERIAL_TYPES[] = {
+  { GEIGER_STYPE_GC10,      9600,   "GC10" },
+  { GEIGER_STYPE_GC10NX,    115200, "GC10Next" },
+  { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm" },
+  { GEIGER_STYPE_ESPGEIGER,  115200, "ESPGeiger" },
+};
+static constexpr uint8_t SERIAL_TYPE_COUNT = sizeof(SERIAL_TYPES) / sizeof(SERIAL_TYPES[0]);
+
+static const SerialTypeInfo* find_serial_type(uint8_t id) {
+  for (uint8_t i = 0; i < SERIAL_TYPE_COUNT; i++) {
+    if (SERIAL_TYPES[i].id == id) return &SERIAL_TYPES[i];
+  }
+  return nullptr;
+}
 
 GeigerSerial::GeigerSerial() {
 };
 
 void GeigerSerial::begin() {
-  Log::console(PSTR("GeigerSerial: Setting up %s serial geiger ..."), GEIGER_MODEL);
-  Log::console(PSTR("GeigerSerial: RXPIN: %d BAUD: %d"), _rx_pin, GEIGER_BAUDRATE);
-  geigerPort.begin(GEIGER_BAUDRATE, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
+  uint8_t st = (uint8_t)EGPrefs::getUInt("input", "serial_type");
+  const SerialTypeInfo* info = find_serial_type(st);
+  if (info) _serial_type = st;
+  else      info = find_serial_type(_serial_type);
+  uint32_t baud = info ? info->baud : 9600;
+  Log::console(PSTR("GeigerSerial: %s (type %d) baud %lu rx %d"),
+               info ? info->name : "?", _serial_type, baud, _rx_pin);
+  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
 }
 
 void GeigerSerial::pullSerial() {
@@ -63,62 +83,62 @@ void GeigerSerial::loop() {
     serial_value = 0;
     return;
   }
-  unsigned long now = millis();
-/*
-  if (now - last_serial > avg_diff*2) {
-    serial_value = serial_value / 2;
-  }
-*/
-  if (now - last_serial > 10000) {
+  if (millis() - last_serial > 10000) {
     serial_value = 0;
   }
 }
 
 void GeigerSerial::secondTicker() {
-#if GEIGER_SERIAL_TYPE == GEIGER_SERIAL_CPM
-  partial_clicks += (float)serial_value/(float)60;
-  if (partial_clicks >= 1.0) {
+  // All serial types report CPM - accumulate fractional clicks per second.
+  // Multiply by precomputed reciprocal - soft-float divide costs ~150 cycles
+  // on ESP8266, multiply only ~80. -Os may not fold this automatically.
+  static constexpr float INV_60 = 1.0f / 60.0f;
+  partial_clicks += (float)serial_value * INV_60;
+  if (partial_clicks >= 1.0f) {
     int full_clicks = (int)partial_clicks;
-    partial_clicks = partial_clicks - full_clicks;
+    partial_clicks -= full_clicks;
     setCounter(full_clicks, false);
   }
-#else
-  setCounter(serial_value, false);
-#endif
 }
 
 void GeigerSerial::handleSerial(char* input) {
   size_t inputLen = strlen(input);
   for (size_t x = 0; x < inputLen; x++) {
-    if (!isPrintable(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
-      Log::debug(PSTR("None printable character on serial"));
+    if (!isPrintable(input[x]) && input[x] != '\r' && input[x] != '\n') {
+      Log::debug(PSTR("Non-printable character on serial"));
       return;
     }
   }
+
   int _scpm = 0;
-#if GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
-  int _scps;
-  int n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
-  if (n == 2) {
-#elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
-  int n = sscanf(input, "CPM: %d", &_scpm);
-  if (n == 1) {
-#else
-  for (size_t x = 0; x < inputLen; x++) {
-    if (!isDigit(input[x]) && (input[x] != '\r') && (input[x] != '\n')) {
-      return;
+  int n = 0;
+
+  switch (_serial_type) {
+    case GEIGER_STYPE_MIGHTYOHM: {
+      int _scps;
+      n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
+      if (n != 2) return;
+      break;
     }
+    case GEIGER_STYPE_ESPGEIGER:
+      n = sscanf(input, "CPM: %d", &_scpm);
+      if (n != 1) return;
+      break;
+    default:
+      // GC10 / GC10Next - plain digits
+      for (size_t x = 0; x < inputLen; x++) {
+        if (!isDigit(input[x]) && input[x] != '\r' && input[x] != '\n') return;
+      }
+      n = sscanf(input, "%d", &_scpm);
+      if (n != 1) return;
+      break;
   }
-  int n = sscanf(input, "%d\r\n", &_scpm);
-  if (n == 1) {
-#endif
-    Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
-    setLastBlip();
-    serial_value = _scpm;
-    unsigned long temptime = millis();
-    int diff = temptime - last_serial;
-    if (last_serial != 0)
-      avg_diff = (avg_diff+diff)/2;
-    last_serial = temptime;
-  }
+
+  Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
+  setLastBlip();
+  serial_value = _scpm;
+  unsigned long now = millis();
+  int diff = now - last_serial;
+  if (last_serial != 0) avg_diff = (avg_diff + diff) / 2;
+  last_serial = now;
 }

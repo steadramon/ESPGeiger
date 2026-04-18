@@ -20,6 +20,7 @@
 #endif
 
 #include <Arduino.h>
+#include "src/Util/DeviceInfo.h"
 #ifdef ESPGEIGER_HW
 #include "src/ESPGHW/ESPGHW.h"
 #endif
@@ -39,6 +40,7 @@
 #include "src/PushButton/PushButton.h"
 #include "src/NTP/NTP.h"
 #include "src/ArduinoOTA/ArduinoOTA.h"
+#include "src/Prefs/EGPrefs.h"
 #include <FS.h>
 #include <LittleFS.h>
 #include "ArduinoJson.h"
@@ -77,12 +79,26 @@ void sTickerCB()
   unsigned long stick_now = millis();
 
   gcounter.secondticker(stick_now);
+#ifdef TICK_PROFILE
+  unsigned long t_after_counter = micros();
+#endif
 
   unsigned long uptime = NTP.getUptime() - status.start;
   if (status.warmup && uptime > 10) {
     status.warmup = false;
   }
   wl_status_t wifi_status = WiFi.status();
+  bool was_connected = status.wifi_connected;
+  status.wifi_connected = (wifi_status == WL_CONNECTED);
+  if (status.wifi_connected) {
+    static uint8_t rssi_cnt = 0;
+    if (++rssi_cnt >= 60) { rssi_cnt = 0; status.wifi_rssi = WiFi.RSSI(); }
+    if (!was_connected) {
+      strncpy(status.wifi_ip, WiFi.localIP().toString().c_str(), sizeof(status.wifi_ip) - 1);
+      strncpy(status.wifi_ssid, WiFi.SSID().c_str(), sizeof(status.wifi_ssid) - 1);
+      status.wifi_rssi = WiFi.RSSI();
+    }
+  }
 
   // WiFi recovery tracking (only once WiFi has been enabled)
   if (!status.wifi_disabled) {
@@ -111,16 +127,39 @@ void sTickerCB()
     }
   }
 
+#ifdef TICK_PROFILE
+  unsigned long t_after_wifi = micros();
+#endif
+
   EGModuleRegistry::tick_all(stick_now, uptime);
+#ifdef TICK_PROFILE
+  unsigned long t_after_modules = micros();
+#endif
 
   status.lps = lps_count;
   lps_count = 0;
   uint32_t this_tick = (uint32_t)(micros() - t_start);
   status.tick_us = (status.tick_us * 7 + this_tick) >> 3;
   if (this_tick > status.tick_max_us) status.tick_max_us = this_tick;
+#ifdef TICK_PROFILE
+  // Track max of each section over the tick_max window and log on reset
+  static uint32_t max_counter_us = 0, max_wifi_us = 0, max_modules_us = 0;
+  uint32_t counter_us = (uint32_t)(t_after_counter - t_start);
+  uint32_t wifi_us    = (uint32_t)(t_after_wifi - t_after_counter);
+  uint32_t modules_us = (uint32_t)(t_after_modules - t_after_wifi);
+  if (counter_us > max_counter_us) max_counter_us = counter_us;
+  if (wifi_us    > max_wifi_us)    max_wifi_us    = wifi_us;
+  if (modules_us > max_modules_us) max_modules_us = modules_us;
+#endif
   static uint8_t tick_max_age = 0;
   if (++tick_max_age >= 60) {
     tick_max_age = 0;
+#ifdef TICK_PROFILE
+    Log::console(PSTR("Tick profile: total=%u ctr=%u wifi=%u mods=%u lps=%u"),
+      status.tick_max_us, max_counter_us, max_wifi_us, max_modules_us, status.lps);
+    EGModuleRegistry::log_profile_and_reset();
+    max_counter_us = max_wifi_us = max_modules_us = 0;
+#endif
     status.tick_max_us = this_tick;
   }
 }
@@ -131,11 +170,10 @@ void setup()
   Serial.println();
   delay(100);
 
-  const char* hostName = cManager.getHostName();
-  Log::console(PSTR("   ___"));
-  Log::console(PSTR("   \\_/    Starting up ... %s"), hostName);
-  Log::console(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, cManager.GetChipModel());
-  Log::console(PSTR(" \\/   \\/"));
+  Log::banner(PSTR("   ___"));
+  Log::banner(PSTR("   \\_/    Starting up ... %s"), DeviceInfo::hostname());
+  Log::banner(PSTR(".--.O.--. Version - %s/%s (%s)"), status.version, status.git_version, BUILD_ENV);
+  Log::banner(PSTR(" \\/   \\/"));
 
 #ifdef ESP8266
   if(!LittleFS.begin()){
@@ -148,6 +186,7 @@ void setup()
   LittleFS.end();
 
   EGModuleRegistry::pre_wifi_all();
+  EGPrefs::begin();
 
   delay(100);
   msTicker.attach_ms(1, msTickerCB);
@@ -168,7 +207,7 @@ void setup()
 #endif
 #ifdef SSD1306_DISPLAY
   if (!cManager.getWiFiIsSaved()) {
-    display.setupWifi(hostName);
+    display.setupWifi(DeviceInfo::hostname());
   }
 #endif
   if (!status.wifi_disabled) {

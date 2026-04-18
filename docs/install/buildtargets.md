@@ -25,13 +25,20 @@ The pulse Geiger counter target is the widest compatible target. This is used fo
 
 ## Serial
 
-Numerous serial Geiger target builds are made, one for each of the following target serial counters -
+A single unified serial build supports all serial Geiger counter types. The serial protocol is selected at runtime via the **Config** page (System > Serial Type).
 
-| Target Name | Target Counter | Notes |
-|---|---|---|
-`gc10` | GC10 | 
-`gc10next` | GC10-next | 
-`mightyohm` | Mighty Ohm |
+| Target Name | Notes |
+|---|---|
+`serial` | Unified serial build. Supports GC10, GC10Next, MightyOhm and ESPGeiger protocols. Select your counter type from the Config page after flashing.
+
+Supported serial types:
+
+| Type ID | Counter | Baud Rate | Serial Format |
+|---|---|---|---|
+1 | GC10 | 9600 | `60\n` (plain integer)
+2 | GC10Next | 115200 | `60\n` (plain integer)
+3 | MightyOhm | 9600 | `CPS, 1, CPM, 60, uSv/hr, 1.23, INST\n`
+4 | ESPGeiger | 115200 | `CPM: 60\n`
 
 ## Hardware Specific Builds
 
@@ -39,11 +46,9 @@ A number of hardware specific builds are also made to support ESPGeiger-HW and E
 
 | Target Name | Target Counter | Counter Type | Notes |
 |---|---|---|---|
-`espgeigerhw` | ESPGeiger‑HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
-`espgeigerlog` | ESPGeiger Log | Pulse | A pulse based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_gc10` | ESPGeiger Log | Serial (GC10) | A GC10 serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_gc10next` | ESPGeiger Log | Serial (GC10next) | A GC10next serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
-`espgeigerlog_mightyohm` | ESPGeiger Log | Serial (Mighty Ohm) | A Mighty Ohm serial based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerhw` | ESPGeiger-HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
+`espgeigerlog` | ESPGeiger Log | Pulse | A pulse based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
+`espgeigerlog_serial` | ESPGeiger Log | Serial | A serial based build for the ESPGeiger Log hardware. Select your counter type from the Config page.
 
 ## Test
 
@@ -63,8 +68,7 @@ By default the Test output cycles through several ranges of reading, switching e
 `test` | n/a | Internal interrupt based counter. No output, mostly for testing the `Counter.h` functionality.
 `testpulse` | Pulse | Test build which outputs a Poisson distributed pulse on the TXPIN
 `testpulsepwm` | Pulse | Test build which outputs a interrupt generated pulse on the TXPIN
-`testgc10` | GC10 | Test build which outputs an emulated GC10 serial based Geiger counter on the TXPIN
-`testmightyohm` | Mighty Ohm | Test build which outputs an emulated Mighty Ohm serial based Geiger counter on the TXPIN
+`testserial` | Serial | Test build which outputs emulated serial data on the TXPIN. Serial format selectable at runtime via Config page.
 
 ### Test Build Options
 
@@ -72,5 +76,5 @@ By default the Test output cycles through several ranges of reading, switching e
 
 | Target Name | Target Counter | Counter Type | Notes |
 |---|---|---|---|
-`espgeigerlog_test` | ESPGeiger Log | n/a | A test build for the ESPGeiger Log hardware. Internal interrupt based counter. No output, mostly for testing the ESPGeiger Log functionality.
-`espgeigerlog_testpulse` | ESPGeiger Log | Pulse | A test build for the ESPGeiger Log hardware. Test build which outputs a pulse on the PLS pin.
+`espgeigerlog_test` | ESPGeiger Log | n/a | A test build for the ESPGeiger Log hardware. Internal interrupt based counter. No output, mostly for testing the ESPGeiger Log functionality.
+`espgeigerlog_testpulse` | ESPGeiger Log | Pulse | A test build for the ESPGeiger Log hardware. Test build which outputs a pulse on the PLS pin.

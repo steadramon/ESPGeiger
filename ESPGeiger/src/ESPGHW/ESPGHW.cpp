@@ -23,19 +23,51 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 
+#define _STR(x) #x
+#define STR(x)  _STR(x)
+
 ESPGeigerHW hardware;
 EG_REGISTER_MODULE(hardware)
-#include <FS.h>
-#include <LittleFS.h>
-#include "ArduinoJson.h"
+
+static const EGPref HW_PREF_ITEMS[] = {
+  {"freq",   "PWM Frequency",  "HV generator frequency (Hz)", STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, 0},
+  {"duty",   "PWM Duty",       "HV generator duty (1-255)",   STR(GEIGERHW_DUTY), nullptr, 1, 255, 0, EGP_UINT, 0},
+  {"ratio",  "ADC VD Ratio",   "Voltage divider ratio",       STR(GEIGERHW_ADC_RATIO),  nullptr, 0, 0, 0, EGP_INT, 0},
+  {"offset", "ADC VD Offset",  "Voltage divider offset",      STR(GEIGERHW_ADC_OFFSET), nullptr, 0, 0, 0, EGP_INT, 0},
+};
+
+static const EGPrefGroup HW_PREF_GROUP = {
+  "espghw", "HV Generator", 1,
+  HW_PREF_ITEMS,
+  sizeof(HW_PREF_ITEMS) / sizeof(HW_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* ESPGeigerHW::prefs_group() { return &HW_PREF_GROUP; }
+
+void ESPGeigerHW::on_prefs_loaded() {
+  set_freq((int)EGPrefs::getUInt("espghw", "freq"));
+  set_duty((int)EGPrefs::getUInt("espghw", "duty"));
+  set_vd_ratio((int)EGPrefs::getInt("espghw", "ratio"));
+  set_vd_offset((int)EGPrefs::getInt("espghw", "offset"));
+  Log::console(PSTR("ESPG-HW: freq: %d duty: %d vd: %d"), _hw_freq, _hw_duty, _hw_vd_ratio);
+}
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+static const EGLegacyAlias HW_LEGACY[] = {
+  {"freq",   "freq"},
+  {"duty",   "duty"},
+  {"ratio",  "ratio"},
+  {"offset", "offset"},
+  {nullptr, nullptr},
+};
+const EGLegacyAlias* ESPGeigerHW::legacy_aliases() { return HW_LEGACY; }
+// === END LEGACY IMPORT ===
 
 ESPGeigerHW::ESPGeigerHW() {
-
 }
 
 void ESPGeigerHW::begin() {
   Log::console(PSTR("ESPG-HW: PWM Setup"));
-  loadconfig();
 #ifdef ESP8266
   pinMode(GEIGER_PWMPIN, OUTPUT);
   analogWrite (GEIGER_PWMPIN, 0) ;
@@ -47,7 +79,10 @@ void ESPGeigerHW::begin() {
   status.hvReading.begin(SMOOTHED_AVERAGE, 3);
 }
 
-void ESPGeigerHW::s_tick(unsigned long stick_now) {
+void ESPGeigerHW::loop(unsigned long /*now*/) {
+  // Runs every loop_interval_ms=1000. analogRead() on ESP8266 briefly yields
+  // to the WiFi stack (shared RF ADC) and can block ~150-200us - kept out of
+  // the 1Hz tick so that cost doesn't inflate tick_us.
   if (_cur_duty != _hw_duty) {
 #ifdef ESP8266
     analogWrite (GEIGER_PWMPIN, _hw_duty) ;
@@ -57,7 +92,7 @@ void ESPGeigerHW::s_tick(unsigned long stick_now) {
     _cur_duty = _hw_duty;
   }
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
-  float volts = ((0.0009765625032 * sensorValue) * _hw_vd_ratio) + _hw_vd_offset;
+  float volts = (_scale * sensorValue) + _hw_vd_offset;
   status.hvReading.add(volts);
 }
 
@@ -67,94 +102,15 @@ void ESPGeigerHW::fiveloop() {
 }
 
 void ESPGeigerHW::saveconfig() {
-
-  Log::console(PSTR("ESPG-HW: Saving ..."));
-  LittleFS.begin();
-
-  // Open the file
-  File configFile = LittleFS.open("/espgeigerhw.json", "w");
-  if (!configFile)
-  {
-    Log::console(PSTR("ESPG-HW: Failed to open espgeigerhw.json"));
-    return;
-  }
-  char jsonBuffer[128] = "";
-
-  int total = sizeof(jsonBuffer);
-  char freq[16];
-  itoa(_hw_freq, freq, 10); 
-  char duty[16];
-  itoa(_hw_duty, duty, 10); 
-  char ratio[16];
-  itoa(_hw_vd_ratio, ratio, 10); 
-  char offset[16];
-  itoa(_hw_vd_offset, offset, 10);
-
-  snprintf_P (
-    jsonBuffer,
-    sizeof(jsonBuffer),
-    PSTR("{\"freq\":\"%s\",\"duty\":\"%s\",\"ratio\":\"%s\",\"offset\":\"%s\"}"),
-    freq,
-    duty,
-    ratio,
-    offset
-  );
-  configFile.print(jsonBuffer);
-
-  // Close the file
-  configFile.close();
-  LittleFS.end();
-  Log::console(PSTR("ESPG-HW: Config Saved"));
-}
-
-void ESPGeigerHW::loadconfig() {
-  LittleFS.begin();
-  Log::console(PSTR("ESPG-HW: Loading ..."));
-  if (LittleFS.exists("/espgeigerhw.json"))
-  {
-    File configFile = LittleFS.open("/espgeigerhw.json", "r");
-    if (configFile)
-    {
-      // Process the json data
-      DynamicJsonDocument jsonBuffer(128);
-      DeserializationError error = deserializeJson(jsonBuffer, configFile);
-      if (!error)
-      {
-        const char* freq = jsonBuffer["freq"];
-        if (freq) {
-          set_freq(atoi(freq));
-        }
-        const char* duty = jsonBuffer["duty"];
-        if (duty) {
-          set_duty(atoi(duty));
-        }
-        const char* ratio = jsonBuffer["ratio"];
-        if (ratio) {
-          set_vd_ratio(atoi(ratio));
-        }
-        const char* offset = jsonBuffer["offset"];
-        if (offset) {
-          set_vd_offset(atoi(offset));
-        }
-      }
-      else {
-        Log::console(PSTR("ESPG-HW: failed to load json params"));
-      }
-      // Close file
-      configFile.close();
-    }
-    else
-    {
-      Log::console(PSTR("ESPG-HW: failed to open espgeigerhw.json file"));
-    }
-  }
-  else
-  {
-    Log::console(PSTR("ESPG-HW: No espgeigerhw.json file, using defaults"));
-  }
-  LittleFS.end();
-  Log::console(PSTR("ESPG-HW: freq: %d"), _hw_freq);
-  Log::console(PSTR("ESPG-HW: duty: %d"), _hw_duty);
-  Log::console(PSTR("ESPG-HW: VD Ratio: %d"), _hw_vd_ratio);
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%d", _hw_freq);
+  EGPrefs::put("espghw", "freq", buf);
+  snprintf(buf, sizeof(buf), "%d", _hw_duty);
+  EGPrefs::put("espghw", "duty", buf);
+  snprintf(buf, sizeof(buf), "%d", _hw_vd_ratio);
+  EGPrefs::put("espghw", "ratio", buf);
+  snprintf(buf, sizeof(buf), "%d", _hw_vd_offset);
+  EGPrefs::put("espghw", "offset", buf);
+  EGPrefs::commit();
 }
 #endif

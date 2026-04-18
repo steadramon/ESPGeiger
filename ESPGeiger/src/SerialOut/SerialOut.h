@@ -37,8 +37,9 @@ class SerialOut : public EGModule {
       SerialOut();
       const char* name() override { return "sout"; }
       uint16_t warmup_seconds() override { return 0; }
-      bool has_tick() override { return true; }
-      void s_tick(unsigned long stick_now) override;
+      bool has_loop() override { return true; }
+      uint16_t loop_interval_ms() override { return 500; }
+      void loop(unsigned long now) override;
       void set_show(int var);
       void print_cpm();
       void print_usv();
@@ -47,7 +48,7 @@ class SerialOut : public EGModule {
       void toggle_hv();
       void toggle_cps();
     private:
-      uint16_t _loop_c = 0;
+      unsigned long _last_fire = 0;
       uint8_t _show_flags = 0;
 };
 

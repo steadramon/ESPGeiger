@@ -20,17 +20,13 @@
 #define THINGSPEAK_H
 #ifdef THINGSPEAKOUT
 #include <Arduino.h>
-#include "../ConfigManager/ConfigManager.h"
 #include "../Status.h"
+#include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
+#include "../Prefs/EGPrefs.h"
 #include "AsyncHTTPRequest_Generic.hpp"
 
-#ifdef ESP8266
-#include "ESP8266WiFi.h"
-#elif defined(ESP32)
-#include <WiFi.h>
-#endif
 
 extern Status status;
 extern Counter gcounter;
@@ -46,15 +42,18 @@ class Thingspeak : public EGModule {
     Thingspeak();
     const char* name() override { return "thgspk"; }
     bool requires_wifi() override { return true; }
-    bool has_tick() override { return true; }
-    void s_tick(unsigned long stick_now) override;
+    bool has_loop() override { return true; }
+    uint16_t loop_interval_ms() override { return 500; }
+    void loop(unsigned long now) override;
+    const EGPrefGroup* prefs_group() override;
+    const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void postMeasurement();
     AsyncHTTPRequest request;
     bool last_ok = false;
     unsigned long last_attempt_ms = 0;
   private:
     unsigned long lastPing = 0;
-    const int pingInterval = 1000 * THINGSPEAK_INTERVAL;
+    static constexpr uint32_t pingIntervalMs = (uint32_t)THINGSPEAK_INTERVAL * 1000UL;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 

@@ -1,28 +1,17 @@
 /*
   NTP.cpp - functions to handle NTP
-  
+
   Copyright (C) 2023 @steadramon
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <Arduino.h>
 #include "NTP.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
-#include <FS.h>
-#include <LittleFS.h>
-#include "ArduinoJson.h"
 
 NTP_Client ntpclient = NTP_Client();
 EG_REGISTER_MODULE(ntpclient)
@@ -30,19 +19,41 @@ EG_REGISTER_MODULE(ntpclient)
 #include "sntp.h"
 #endif
 
+static const EGPref NTP_PREF_ITEMS[] = {
+  {"server", "NTP Server", "",            NTP_SERVER, nullptr, 0, 0, 64, EGP_STRING, 0},
+  {"tz",     "Timezone",   "Olson name",  NTP_TZ,     nullptr, 0, 0, 64, EGP_STRING, 0},
+};
+
+static const EGPrefGroup NTP_PREF_GROUP = {
+  "ntp", "NTP", 1,
+  NTP_PREF_ITEMS,
+  sizeof(NTP_PREF_ITEMS) / sizeof(NTP_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* NTP_Client::prefs_group() { return &NTP_PREF_GROUP; }
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+static const EGLegacyAlias NTP_LEGACY[] = {
+  {"srv", "server"},
+  {"tz",  "tz"},
+  {nullptr, nullptr},
+};
+const EGLegacyAlias* NTP_Client::legacy_aliases() { return NTP_LEGACY; }
+// === END LEGACY IMPORT ===
+
 NTP_Client::NTP_Client() {
 }
 
 void NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
-  loadconfig();
-  if (_ntp_server && !_ntp_server[0]) {
-    set_server(NTP_SERVER);
-  }
+  const char* server = EGPrefs::getString("ntp", "server");
+  if (server[0] == '\0') server = NTP_SERVER;
+  const char* tz = EGPrefs::getString("ntp", "tz");
+  if (tz[0] == '\0') tz = NTP_TZ;
 
-  Log::console(PSTR("NTP: Starting ... %s"), _ntp_server);
-  const char *possixTZ = getPosixTZforOlson(_ntp_tz);
+  Log::console(PSTR("NTP: Starting ... %s"), server);
+  const char *possixTZ = getPosixTZforOlson(tz);
 #ifdef ESP8266
   settimeofday_cb([](){
     if (!status.ntp_synced) {
@@ -53,7 +64,7 @@ void NTP_Client::setup()
     }
   });
 
-  configTime(possixTZ, _ntp_server);
+  configTime(possixTZ, server);
 #else
   sntp_set_time_sync_notification_cb([](struct timeval *t){
     struct tm timeinfo;
@@ -67,74 +78,13 @@ void NTP_Client::setup()
       status.start_time = int(time(NULL)-uptime);
     }
   });
-  configTime(0, 0, _ntp_server); // 0, 0 because we will use TZ in the next line
+  configTime(0, 0, server); // 0, 0 because we will use TZ in the next line
   setenv("TZ", possixTZ, 1); // Set environment variable with your time zone
   tzset();
 #endif
 #endif
 }
 
-void NTP_Client::saveconfig() {
-
-  Log::console(PSTR("NTP: Saving ..."));
-  LittleFS.begin();
-
-  // Open the file
-  File configFile = LittleFS.open("/ntp.json", "w");
-  if (!configFile)
-  {
-    Log::console(PSTR("NTP: Failed to open ntp.json"));
-    return;
-  }
-  char jsonBuffer[256] = "";
-
-  snprintf_P (
-    jsonBuffer,
-    sizeof(jsonBuffer),
-    PSTR("{\"srv\":\"%s\",\"tz\":\"%s\"}"),
-    _ntp_server,
-    _ntp_tz
-  );
-  configFile.print(jsonBuffer);
-  Log::debug(PSTR("NTP: %s"), jsonBuffer);
-
-  // Close the file
-  configFile.close();
-  LittleFS.end();
-  Log::console(PSTR("NTP: Config Saved"));
-}
-
-void NTP_Client::loadconfig() {
-  LittleFS.begin();
-  Log::console(PSTR("NTP: Config Loading ..."));
-  if (LittleFS.exists("/ntp.json"))
-  {
-    File configFile = LittleFS.open("/ntp.json", "r");
-    if (configFile)
-    {
-      // Process the json data
-      DynamicJsonDocument jsonBuffer(256);
-      DeserializationError error = deserializeJson(jsonBuffer, configFile);
-      if (!error)
-      {
-        const char* srv = jsonBuffer["srv"];
-        if (srv) {
-          set_server(srv);
-        }
-        const char* tz = jsonBuffer["tz"];
-        if (tz) {
-          set_tz(tz);
-        }
-      }
-      else
-        Log::console(PSTR("NTP: failed to load json params"));
-      // Close file
-      configFile.close();
-    }
-    else
-    {
-      Log::console(PSTR("NTP: failed to open ntp.json file"));
-    }
-  }
-  LittleFS.end();
+void NTP_Client::on_prefs_saved() {
+  setup();  // re-apply server/tz without reboot
 }

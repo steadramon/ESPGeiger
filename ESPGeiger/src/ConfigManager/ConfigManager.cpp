@@ -35,127 +35,16 @@
 #include "../Webhook/Webhook.h"
 #endif
 #include "ArduinoJson.h"
+#include "../Prefs/EGPrefs.h"
 #include <FS.h>
 #include <LittleFS.h>
 #include "../NTP/timezones.h"
+#include "../Util/DeviceInfo.h"
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
-static WiFiManagerParameter ESPGeigerParams[] =
-{
-  // The broker parameters
-  WiFiManagerParameter("<h1>ESPGeiger Config</h1>"),
-  WiFiManagerParameter("geigerModel", "Model", GEIGER_MODEL, 32),
-  WiFiManagerParameter("geigerRatio", "Ratio for calculating uSv", "151.0", 8, "required"),
-  WiFiManagerParameter("geigerWarn", "Warning CPM", "50", 4, "pattern='\\d{1,4}'"),
-  WiFiManagerParameter("geigerAlert", "Alert CPM", "100", 4, "pattern='\\d{1,4}'"),
-#ifndef RXPIN_BLOCKED
-  WiFiManagerParameter("geigerRX", "RX Pin", STR(GEIGER_RXPIN), 2),
-#endif
-#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1
-#ifndef TXPIN_BLOCKED
-  WiFiManagerParameter("geigerTX", "TX Pin", STR(GEIGER_TXPIN), 2),
-#endif
-#endif
-#ifdef USE_PCNT
-  WiFiManagerParameter("pcntFilter", "PCNT Filter (0-1023, 0=off)", "100", 4, "type='number' min='0' max='1023'"),
-  // 0=floating, 1=pull-up, 2=pull-down. Default comes from compile-time flags.
-  WiFiManagerParameter("pcntPull", "PCNT Pin Pull (0=none, 1=up, 2=down)", STR(PCNT_PIN_PULL_DEFAULT), 2, "type='number' min='0' max='2'"),
-#endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-  WiFiManagerParameter("geigerDebounce", "Debounce (us)", STR(GEIGER_DEBOUNCE), 5, "type='number' min='0' max='10000'"),
-#endif
-#if defined(SSD1306_DISPLAY) || defined(GEIGER_NEOPIXEL)
-  WiFiManagerParameter("<br><hr><h3>Display</h3>"),
-#endif
-#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
-  WiFiManagerParameter("dispTimeout", "Display timeout (s)", "120", 6, "required type='number' min='0' max='99999'"),
-#endif
-#if defined(SSD1306_DISPLAY)
-  WiFiManagerParameter("dispBrightness", "Display brightness", "25", 4, "required type='number' min='0' max='100'"),
-  #ifndef GEIGER_PUSHBUTTON
-  WiFiManagerParameter("oledOn", "On Time", "06:00", 6, "type='time'"),
-  WiFiManagerParameter("oledOff", "Off Time", "22:00", 6, "type='time'"),
-  #endif
-#endif
-#ifdef GEIGER_NEOPIXEL
-  WiFiManagerParameter("neopixelBrightness", "NeoPixel brightness", "15", 4, "required type='number' min='0' max='100'"),
-#endif
-};
-#ifdef THINGSPEAKOUT
-static WiFiManagerParameter TSParams[] = 
-{
-  // Thingspeak parameters
-  WiFiManagerParameter("<br><hr><h3>Thingspeak</h3>"),
-  WiFiManagerParameter("tsSend", "", "N", 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbts' onchange='setCB("tsSend",this)'> <label for='cbts'>Send</label><br><script>doCB("cbts","tsSend")</script>)J"),
-  WiFiManagerParameter("tsChannelKey", "Channel Key", "", 16),
-};
-#endif
-#ifdef MQTTOUT
-static WiFiManagerParameter MQTTParams[] = 
-{
-  // The broker parameters
-  WiFiManagerParameter("<br><hr><h3>MQTT</h3>"),
-  WiFiManagerParameter("mqttServer", "<br>IP", "", 16, "input='number' pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
-  WiFiManagerParameter("mqttPort", "Port", "1883", 6, "type='number' min='1' max='65535'"),
-  WiFiManagerParameter("mqttUser", "User", "", 32),
-  WiFiManagerParameter("mqttPassword", "Password", "", 32, "type='password'"),
-  WiFiManagerParameter("mqttTopic", "Root Topic", "ESPGeiger-{id}", 16),
-  WiFiManagerParameter("<small>{id} is replaced with the chip ID</small><br>"),
-  WiFiManagerParameter("mqttTime", "Submit Time (s)", "60", 6, "required type='number' min='5' max='3600'"),
-};
-#ifdef MQTTAUTODISCOVER
-static WiFiManagerParameter HassioParams[] = 
-{
-  // The broker parameters
-  WiFiManagerParameter("<br><hr><h3>HA Autodiscovery</h3>"),
-  WiFiManagerParameter("hassSend", "", MQTT_DISCOVERY, 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbhas' onchange='setCB("hassSend",this)'> <label for='cbhas'>Send</label><br><script>doCB("cbhas","hassSend")</script>)J"),
-  WiFiManagerParameter("hassDisc", "Discovery Topic", S_MQTT_DISCOVERY_TOPIC, 32),
-};
-#endif
-#endif
-static WiFiManagerParameter CloudAPI[] = 
-{
-  WiFiManagerParameter("<br><hr><h3>CloudAPI</h3>"),
-  WiFiManagerParameter("apiID", "IP", "", 16, "pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'"),
-  WiFiManagerParameter("apiSecret", "Port", "1883", 6, "pattern='\\d{1,5}'"),
-};
-#ifdef RADMONOUT
-static WiFiManagerParameter radmonParams[] = 
-{
-  WiFiManagerParameter("<br><hr><h3>Radmon.org</h3>"),
-  WiFiManagerParameter("radmonSend", "", "N", 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbrm' onchange='setCB("radmonSend",this)'> <label for='cbrm'>Send</label><br><script>doCB("cbrm","radmonSend")</script>)J"),
-  WiFiManagerParameter("radmonUser", "Radmon Username", "", 32),
-  WiFiManagerParameter("radmonKey", "Radmon Data PW", "", 64, "type='password'"),
-  WiFiManagerParameter("radmonTime", "Submit Time (s)", "60", 6, "required type='number' min='30' max='1800'"),
-};
-#endif
-#ifdef GMCOUT
-static WiFiManagerParameter GMCParams[] = 
-{
-  WiFiManagerParameter("<br/><br/><hr><h3>GMC</h3>"),
-  WiFiManagerParameter("gmcSend", "", "N", 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbgm' onchange='setCB("gmcSend",this)'> <label for='cbgm'>Send</label><br><script>doCB("cbgm","gmcSend")</script>)J"),
-  WiFiManagerParameter("gmcAID", "Account ID", "", 12, "pattern='\\d{1,5}'"),
-  WiFiManagerParameter("gmcGCID", "Geiger Counter ID", "", 12, "pattern='\\d{1,12}'"),
-};
-#endif
 
-#ifdef WEBHOOKOUT
-static WiFiManagerParameter WHParams[] =
-{
-  WiFiManagerParameter("<br><hr><h3>Webhook</h3>"),
-  WiFiManagerParameter("whSend", "", "N", 2, "type='hidden'"),
-  WiFiManagerParameter(R"J(<input type='checkbox' id='cbwh' onchange='setCB("whSend",this)'> <label for='cbwh'>Send</label><br><script>doCB("cbwh","whSend")</script>)J"),
-  WiFiManagerParameter("whURL", "Webhook URL", "", 255),
-  WiFiManagerParameter("whKey", "Webhook Key", "", 255),
-  WiFiManagerParameter("whTime", "Submit Time (s)", "60", 5, "required type='number' min='10' max='3600'"),
-};
-#endif
 
 ConfigManager::ConfigManager() : WiFiManager(){
 
@@ -172,8 +61,11 @@ ConfigManager::ConfigManager() : WiFiManager(){
   chipId[sizeof(chipId) - 1] = '\0';
 
   snprintf_P (hostName, sizeof(hostName), PSTR("%S-%S"), status.thingName, chipId);
-  snprintf_P (userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"), status.thingName, status.version, status.git_version, status.geiger_model, GetChipModel(), chipId);
+  snprintf_P (userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"), status.thingName, status.version, status.git_version, DeviceInfo::geigermodel(), DeviceInfo::chipmodel(), chipId);
+  strncpy(macAddr, WiFi.macAddress().c_str(), sizeof(macAddr) - 1);
+  macAddr[sizeof(macAddr) - 1] = '\0';
 
+  DeviceInfo::init(hostName, chipId, userAgent, macAddr);
   setHostname(hostName);
   setTitle(status.thingName);
   setCustomHeadElement(faviconHead);
@@ -213,99 +105,6 @@ ParsedTime ConfigManager::parseTime(const char* timeStr) {
     return pt;
 }
 
-void ConfigManager::getOurParamOut(){
-
-  if(_paramsCount > 0){
-
-    String HTTP_PARAM_temp = FPSTR(HTTP_FORM_LABEL);
-    HTTP_PARAM_temp += FPSTR(HTTP_FORM_PARAM);
-    bool tok_I = HTTP_PARAM_temp.indexOf(FPSTR(T_I)) > 0;
-    bool tok_i = HTTP_PARAM_temp.indexOf(FPSTR(T_i)) > 0;
-    bool tok_n = HTTP_PARAM_temp.indexOf(FPSTR(T_n)) > 0;
-    bool tok_p = HTTP_PARAM_temp.indexOf(FPSTR(T_p)) > 0;
-    bool tok_t = HTTP_PARAM_temp.indexOf(FPSTR(T_t)) > 0;
-    bool tok_l = HTTP_PARAM_temp.indexOf(FPSTR(T_l)) > 0;
-    bool tok_v = HTTP_PARAM_temp.indexOf(FPSTR(T_v)) > 0;
-    bool tok_c = HTTP_PARAM_temp.indexOf(FPSTR(T_c)) > 0;
-
-    char valLength[5];
-
-    for (int i = 0; i < _paramsCount; i++) {
-      //Serial.println((String)_params[i]->_length);
-      if (_params[i] == NULL || _params[i]->getValueLength() > 99999) {
-        // try to detect param scope issues, doesnt always catch but works ok
-        return;
-      }
-    }
-
-    // add the extra parameters to the form
-    for (int i = 0; i < _paramsCount; i++) {
-     // label before or after, @todo this could be done via floats or CSS and eliminated
-     String pitem;
-      switch (_params[i]->getLabelPlacement()) {
-        case WFM_LABEL_BEFORE:
-          pitem = FPSTR(HTTP_FORM_LABEL);
-          pitem += FPSTR(HTTP_FORM_PARAM);
-          break;
-        case WFM_LABEL_AFTER:
-          pitem = FPSTR(HTTP_FORM_PARAM);
-          pitem += FPSTR(HTTP_FORM_LABEL);
-          break;
-        default:
-          // WFM_NO_LABEL
-          pitem = FPSTR(HTTP_FORM_PARAM);
-          break;
-      }
-
-      // Input templating
-      // "<br/><input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c}>";
-      // if no ID use customhtml for item, else generate from param string
-      if (_params[i]->getID() != NULL) {
-        if(tok_I)pitem.replace(FPSTR(T_I), (String)FPSTR(S_parampre)+(String)i); // T_I id number
-        if(tok_i)pitem.replace(FPSTR(T_i), _params[i]->getID()); // T_i id name
-        if(tok_n)pitem.replace(FPSTR(T_n), _params[i]->getID()); // T_n id name alias
-        if(tok_p)pitem.replace(FPSTR(T_p), FPSTR(T_t)); // T_p replace legacy placeholder token
-        if(tok_t)pitem.replace(FPSTR(T_t), _params[i]->getLabel()); // T_t title/label
-        snprintf(valLength, 5, "%d", _params[i]->getValueLength());
-        if(tok_l)pitem.replace(FPSTR(T_l), valLength); // T_l value length
-        if(tok_v)pitem.replace(FPSTR(T_v), _params[i]->getValue()); // T_v value
-        if(tok_c)pitem.replace(FPSTR(T_c), _params[i]->getCustomHTML()); // T_c meant for additional attributes, not html, but can stuff
-      } else {
-        server->sendContent(_params[i]->getCustomHTML());
-        continue;
-      }
-      server->sendContent(pitem);
-    }
-  }
-}
-
-void ConfigManager::handleOurParam(){
-  handleRequest();
-  String page = getHTTPHead(FPSTR(S_titleparam)); // @token titlewifi
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
-  page = FPSTR(HTTP_HEAD_START);
-  page.replace(FPSTR(T_v), FPSTR(S_titleparam));
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(CFG_PAGE_JS));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-  page = FPSTR(HTTP_FORM_START);
-  page.replace(FPSTR(T_v), F("paramsave"));
-  server->sendContent(page);
-  getOurParamOut();
-  server->sendContent(FPSTR(HTTP_FORM_END));
-  server->sendContent(FPSTR(HTTP_BACKBTN));
-  server->sendContent(FPSTR(HTTP_END));
-
-  server->sendContent("");
-  server->client().stop();
-}
 
 bool ConfigManager::autoConnect()
 {
@@ -363,178 +162,109 @@ bool ConfigManager::autoConnect()
 
 void ConfigManager::startWebPortal()
 {
-  for (int i = 0; i < sizeof(ESPGeigerParams) / sizeof(WiFiManagerParameter); i++)
-    WiFiManager::addParameter(&ESPGeigerParams[i]);
-#ifdef MQTTOUT
-  for (int i = 0; i < sizeof(MQTTParams) / sizeof(WiFiManagerParameter); i++)
-    WiFiManager::addParameter(&MQTTParams[i]);
-#ifdef MQTTAUTODISCOVER
-  for (int i = 0; i < sizeof(HassioParams) / sizeof(WiFiManagerParameter); i++)
-    WiFiManager::addParameter(&HassioParams[i]);
-#endif
-#endif
-#ifdef RADMONOUT
-  for (int i = 0; i < sizeof(radmonParams) / sizeof(WiFiManagerParameter); i++)
-    WiFiManager::addParameter(&radmonParams[i]);
-#endif
-#ifdef THINGSPEAKOUT
-  for (int i = 0; i < sizeof(TSParams) / sizeof(WiFiManagerParameter); i++)
-    WiFiManager::addParameter(&TSParams[i]);
-#endif
-#ifdef GMCOUT
-  for (int i = 0; i < sizeof(GMCParams) / sizeof(WiFiManagerParameter); i++)
-    WiFiManager::addParameter(&GMCParams[i]);
-#endif
-#ifdef WEBHOOKOUT
-  for (int i = 0; i < sizeof(WHParams) / sizeof(WiFiManagerParameter); i++)
-    WiFiManager::addParameter(&WHParams[i]);
-#endif
-
-  ConfigManager::loadParams();
-  const char* cfgvar;
-  int cfgint;
-
-#ifndef RXPIN_BLOCKED
-  cfgvar = ConfigManager::getParamValueFromID("geigerRX");
-  if (cfgvar != NULL) {
-    cfgint = atoi(cfgvar);
-    gcounter.set_rx_pin(cfgint);
-  }
-#endif
-#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1
-#ifndef TXPIN_BLOCKED
-  cfgvar = ConfigManager::getParamValueFromID("geigerTX");
-  if (cfgvar != NULL) {
-    cfgint = atoi(cfgvar);
-    gcounter.set_tx_pin(cfgint);
-  }
-#endif
-#endif
-  ConfigManager::setExternals();
-
   WiFiManager::setWebServerCallback(std::bind(&ConfigManager::bindServerCallback, this));
-  WiFiManager::setSaveParamsCallback(std::bind(&ConfigManager::saveParams, this));
   WiFiManager::startWebPortal();
 }
 
-void ConfigManager::setExternals() {
-  const char* cfgvar;
-  cfgvar = ConfigManager::getParamValueFromID("geigerRatio");
-  if (cfgvar == NULL) {
-    cfgvar = "151.0";
-  }
-  float ratio = atof(cfgvar);
-  gcounter.set_ratio(ratio);
+// Render a PROGMEM template into a stack buffer with token substitution, then send.
+struct TemplateSub { const char* token; const char* value; };
 
-  cfgvar = ConfigManager::getParamValueFromID("geigerWarn");
-  if (cfgvar == NULL) {
-    cfgvar = "50";
-  }
-  int cfgint = atoi(cfgvar);
-  gcounter.set_warning(cfgint);
-
-  cfgvar = ConfigManager::getParamValueFromID("geigerAlert");
-  if (cfgvar == NULL) {
-    cfgvar = "100";
-  }
-  cfgint = atoi(cfgvar);
-  gcounter.set_alert(cfgint);
-
-  // set_pcnt_filter / set_pin_pull are no-op virtuals on non-PCNT builds,
-  // and the form params aren't registered there, so these are idempotent.
-  cfgvar = ConfigManager::getParamValueFromID("pcntFilter");
-  if (cfgvar != NULL) {
-    gcounter.set_pcnt_filter(atoi(cfgvar));
-  }
-  cfgvar = ConfigManager::getParamValueFromID("pcntPull");
-  if (cfgvar != NULL) {
-    gcounter.set_pin_pull(atoi(cfgvar));
-  }
-
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-  cfgvar = ConfigManager::getParamValueFromID("geigerDebounce");
-  if (cfgvar != NULL) {
-    gcounter.set_debounce(atoi(cfgvar));
-  }
-#endif
-
-#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
-  cfgvar = ConfigManager::getParamValueFromID("dispTimeout");
-  if (cfgvar == NULL) {
-    cfgvar = "120";
-  }
-  display.setTimeout(atoi(cfgvar));
-#endif
-#if defined(SSD1306_DISPLAY)
-  cfgvar = ConfigManager::getParamValueFromID("dispBrightness");
-  if (cfgvar == NULL) {
-    cfgvar = "64";
-  }
-  display.setBrightness(atoi(cfgvar));
-#endif
-#ifdef GEIGER_NEOPIXEL
-  cfgvar = ConfigManager::getParamValueFromID("neopixelBrightness");
-  if (cfgvar == NULL) {
-    cfgvar = "15";
-  }
-  neopixel.setBrightness(atoi(cfgvar));
-#endif
+static bool replace_token(char* buf, size_t bufsz, const char* token, const char* value) {
+  char* pos = strstr(buf, token);
+  if (!pos) return false;
+  size_t tlen = strlen(token);
+  size_t vlen = strlen(value);
+  size_t tail = strlen(pos + tlen);
+  if ((size_t)(pos - buf) + vlen + tail >= bufsz) return false;
+  memmove(pos + vlen, pos + tlen, tail + 1);
+  memcpy(pos, value, vlen);
+  return true;
 }
 
-void ConfigManager::handleRoot() {
-  handleRequest();
+template <typename WS>
+static void sendTemplate(WS* s, const char* pgm, const TemplateSub* subs, size_t count) {
+  char buf[384];
+  strncpy_P(buf, pgm, sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = '\0';
+  for (size_t i = 0; i < count; i++) {
+    replace_token(buf, sizeof(buf), subs[i].token, subs[i].value);
+  }
+  size_t len = strlen(buf);
+  if (len > 0) s->sendContent(buf, len);
+}
+
+// Convenience macro — deduces array count automatically
+#define SEND_TEMPLATE(s, pgm, subs) sendTemplate(s, pgm, subs, sizeof(subs)/sizeof(subs[0]))
+
+void ConfigManager::beginChunkedPage(const char* contentType) {
   server->client().flush();
   server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
   server->sendHeader(F("Pragma"), F("no-cache"));
   server->sendHeader(F("Expires"), F("-1"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
-  server->client().flush();
-  String page = FPSTR(HTTP_HEAD_START);
-  page.replace(FPSTR(T_v), hostName);
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-  page = FPSTR(HTTP_ROOT_MAIN);
-#ifdef ESPGEIGER_HW
-  page.replace(FPSTR(T_t),"ESPGeiger-HW");
-#elif defined(ESPGEIGER_LT)
-  page.replace(FPSTR(T_t),"ESPGeiger-Log");
-#else
-  page.replace(FPSTR(T_t),status.thingName);
-#endif
-  char heading[64];
-  snprintf(heading, sizeof(heading), "%s - %s", hostName, WiFi.localIP().toString().c_str());
-  page.replace(FPSTR(T_v), heading);
-  server->sendContent(page);
-  server->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
-  server->sendContent(F("<form action='/hist' method='get'><button>History</button></form><br/>"));
-  server->sendContent(F("<form action='/param' method='get'><button>Config</button></form><br/>"));
-#ifdef ESPGEIGER_HW
-  server->sendContent(F("<form action='/hv' method='get'><button>HV Config</button></form><br/>"));
-#endif
-  server->sendContent(F("<form action='/ntp' method='get'><button>NTP Config</button></form><br/>"));
-  server->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
-  server->sendContent(FPSTR(HTTP_PORTAL_MENU[8]));
-  server->sendContent(F("<form action='/restart' method='get'><button>Reboot</button></form><br/>"));
-  page = FPSTR(HTTP_STATUS_ON);
-  page.replace(FPSTR(T_i),WiFi.localIP().toString());
-  page.replace(FPSTR(T_v),htmlEntities(WiFiManager::getWiFiSSID()));
-  server->sendContent(page);
-  server->sendContent(HTTP_END);
+  if (contentType)
+    server->send(200, contentType, "");
+  else
+    server->send(200, FPSTR(HTTP_HEAD_CT), "");
+}
+
+void ConfigManager::sendPageHead(const char* title) {
+  auto* s = server.get();
+  { TemplateSub subs[] = {{"{v}", title}};
+    SEND_TEMPLATE(s, HTTP_HEAD_START, subs); }
+  s->sendContent(FPSTR(HTTP_STYLE));
+  s->sendContent(FPSTR(faviconHead));
+  s->sendContent(FPSTR(HTTP_HEAD_END));
+}
+
+void ConfigManager::endChunkedPage() {
+  server->sendContent(FPSTR(HTTP_END));
   server->sendContent("");
   server->client().stop();
 }
 
+void ConfigManager::handleRoot() {
+  handleRequest();
+  beginChunkedPage();
+  server->client().flush();
+  sendPageHead(hostName);
+  auto* s = server.get();
+  char heading[64];
+  snprintf(heading, sizeof(heading), "%s - %s", hostName, WiFi.localIP().toString().c_str());
+  const char* tname =
+#ifdef ESPGEIGER_HW
+    "ESPGeiger-HW";
+#elif defined(ESPGEIGER_LT)
+    "ESPGeiger-Log";
+#else
+    status.thingName;
+#endif
+  { TemplateSub subs[] = {{"{t}", tname}, {"{v}", heading}};
+    SEND_TEMPLATE(s, HTTP_ROOT_MAIN, subs); }
+  s->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
+  s->sendContent(F("<form action='/hist' method='get'><button>History</button></form><br/>"));
+  s->sendContent(F("<form action='/param' method='get'><button>Config</button></form><br/>"));
+#ifdef ESPGEIGER_HW
+  s->sendContent(F("<form action='/hv' method='get'><button>HV Config</button></form><br/>"));
+#endif
+  s->sendContent(F("<form action='/ntp' method='get'><button>NTP Config</button></form><br/>"));
+  s->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
+  s->sendContent(FPSTR(HTTP_PORTAL_MENU[8]));
+  s->sendContent(F("<form action='/restart' method='get'><button>Reboot</button></form><br/>"));
+  char ip[16];
+  strncpy(ip, WiFi.localIP().toString().c_str(), sizeof(ip) - 1);
+  ip[sizeof(ip) - 1] = '\0';
+  char ssid[33];
+  strncpy(ssid, WiFiManager::getWiFiSSID().c_str(), sizeof(ssid) - 1);
+  ssid[sizeof(ssid) - 1] = '\0';
+  { TemplateSub subs[] = {{"{i}", ip}, {"{v}", ssid}};
+    SEND_TEMPLATE(s, HTTP_STATUS_ON, subs); }
+  endChunkedPage();
+}
+
 void ConfigManager::handleJSReturn()
 {
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CTJS), "");
+  beginChunkedPage(HTTP_HEAD_CTJS);
   server->sendContent(FPSTR(picographJS));
   server->sendContent(FPSTR(statusJS));
   server->sendContent("");
@@ -545,7 +275,7 @@ void ConfigManager::handleJsonReturn()
 {
   char jsonBuffer[320] = "";
 
-  const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
+  const char* ratioChar = EGPrefs::getString("system", "ratio");
   char c[16], s[16], c5[16], c15[16], cs[16];
   format_f(c, sizeof(c), gcounter.get_cpmf());
   format_f(s, sizeof(s), gcounter.get_usv());
@@ -555,14 +285,13 @@ void ConfigManager::handleJsonReturn()
   int pos = snprintf_P (
     jsonBuffer,
     sizeof(jsonBuffer),
-    PSTR("{\"u\":\"%s\",\"ut\":%lu,\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u,\"mem\":%u,\"rssi\":%d"),
-    ConfigManager::getUptimeString(),
-    ConfigManager::getUptime(),
+    PSTR("{\"ut\":%lu,\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u,\"mem\":%u,\"rssi\":%d"),
+    DeviceInfo::uptime(),
     c, s, c5, c15, cs,
     ratioChar,
     gcounter.total_clicks,
     ESP.getFreeHeap(),
-    (int)WiFi.RSSI()
+    (int)status.wifi_rssi
   );
 #ifdef ESPGEIGER_HW
   char hv[16];
@@ -580,7 +309,7 @@ void ConfigManager::handleJsonReturn()
 void ConfigManager::handleGeigerLog() {
   handleRequest();
   char jsonBuffer[128] = "";
-  const char* ratioChar = ConfigManager::getParamValueFromID("geigerRatio");
+  const char* ratioChar = EGPrefs::getString("system", "ratio");
   char cpm[16], cps[16];
   format_f(cpm, sizeof(cpm), gcounter.get_cpmf());
   format_f(cps, sizeof(cps), gcounter.get_cps());
@@ -626,10 +355,10 @@ void ConfigManager::handleAbout()
          "\"modules\":["),
     status.version, status.git_version, status.build_env,
     __DATE__, __TIME__,
-    GetChipModel(),
+    DeviceInfo::chipmodel(),
     mac_str,
     hostName,
-    status.geiger_model,
+    DeviceInfo::geigermodel(),
     GEIGER_IS_PULSE(GEIGER_TYPE)  ? "pulse" :
     GEIGER_IS_SERIAL(GEIGER_TYPE) ? "serial" : "none",
     GEIGER_IS_TEST(GEIGER_TYPE)   ? "true" : "false",
@@ -676,34 +405,236 @@ void ConfigManager::handleOutputsJson()
     }
   };
 
-  auto send_enabled = [&](const char* paramId) {
-    const char* s = getParamValueFromID(paramId);
-    return (s != NULL) && (strcmp(s, "N") != 0);
-  };
-
 #ifdef MQTTOUT
   {
-    const char* mqttServer = getParamValueFromID("mqttServer");
-    bool enabled = (mqttServer != NULL) && (mqttServer[0] != '\0');
+    bool enabled = EGPrefs::getString("mqtt", "server")[0] != '\0';
     MQTT_Client& mqtt = MQTT_Client::getInstance();
     emit("mqtt", enabled, mqtt.last_ok && status.mqtt_connected, mqtt.last_attempt_ms);
   }
 #endif
 #ifdef RADMONOUT
-  emit("radmon", send_enabled("radmonSend"), radmon.last_ok, radmon.last_attempt_ms);
+  emit("radmon", EGPrefs::getBool("radmon", "send"), radmon.last_ok, radmon.last_attempt_ms);
 #endif
 #ifdef THINGSPEAKOUT
-  emit("thingspeak", send_enabled("tsSend"), thingspeak.last_ok, thingspeak.last_attempt_ms);
+  emit("thingspeak", EGPrefs::getBool("thingspeak", "send"), thingspeak.last_ok, thingspeak.last_attempt_ms);
 #endif
 #ifdef GMCOUT
-  emit("gmc", send_enabled("gmcSend"), gmc.last_ok, gmc.last_attempt_ms);
+  emit("gmc", EGPrefs::getBool("gmc", "send"), gmc.last_ok, gmc.last_attempt_ms);
 #endif
 #ifdef WEBHOOKOUT
-  emit("webhook", send_enabled("whSend"), webhook.last_ok, webhook.last_attempt_ms);
+  emit("webhook", EGPrefs::getBool("webhook", "send"), webhook.last_ok, webhook.last_attempt_ms);
 #endif
 
   snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "}");
   ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer);
+}
+
+// Append src to dst[pos..cap], HTML-escaping. Returns new pos. Callers keep
+// a margin; stops before write would overflow rather than truncating mid-entity.
+static size_t append_escaped(char* dst, size_t cap, size_t pos, const char* src) {
+  while (*src && pos + 6 < cap) {
+    char c = *src++;
+    const char* rep = nullptr;
+    switch (c) {
+      case '<':  rep = "&lt;";   break;
+      case '>':  rep = "&gt;";   break;
+      case '&':  rep = "&amp;";  break;
+      case '"':  rep = "&quot;"; break;
+      case '\'': rep = "&#39;";  break;
+    }
+    if (rep) { size_t n = strlen(rep); memcpy(dst + pos, rep, n); pos += n; }
+    else     { dst[pos++] = c; }
+  }
+  return pos;
+}
+
+template <typename WS>
+static inline void send_chunk(WS* s, const char* buf, size_t len) {
+  if (len > 0) s->sendContent(buf, len);
+}
+
+
+// memcpy a compile-time string literal into buf[pos..], advancing pos.
+#define APPEND_LIT(buf, pos, cap, lit) do {                      \
+  size_t _n = sizeof(lit) - 1;                                   \
+  if ((pos) + _n < (cap)) { memcpy((buf)+(pos), lit, _n); (pos) += _n; } \
+} while (0)
+
+void ConfigManager::handleEGPrefs() {
+  auto* s = ConfigManager::server.get();
+  bool did_save = false;
+
+  if (s->method() == HTTP_POST) {
+    char name[64];
+    for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
+      const EGPrefGroup* g = EGPrefs::group_at(gi);
+      if (!g) continue;
+      for (size_t j = 0; j < g->count; j++) {
+        const EGPref& p = g->prefs[j];
+        if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
+        snprintf(name, sizeof(name), "%s.%s", g->module_id, p.id);
+        String lookup(name);  // WebServer::arg requires String
+        char one[2] = {0, 0};
+        const char* v;
+        if (p.type == EGP_BOOL) {
+          one[0] = s->hasArg(lookup) ? '1' : '0';
+          v = one;
+        } else {
+          if (!s->hasArg(lookup)) continue;
+          v = s->arg(lookup).c_str();
+          if ((p.flags & EGP_SENSITIVE) && v[0] == '\0') continue;
+        }
+        EGPrefs::put(g->module_id, p.id, v);
+      }
+    }
+    EGPrefs::commit();
+    did_save = true;
+    if (EGPrefs::restart_pending()) {
+      s->sendHeader(F("Location"), RESTART_URL);
+      s->send(302);
+      return;
+    }
+  }
+
+  beginChunkedPage();
+  sendPageHead("Config");
+  s->sendContent(F("<style>details{border:1px solid #eee;padding:8px;margin:8px 0}summary{font-weight:bold;padding:4px 0;cursor:pointer}label{display:inline-block;margin-top:10px}hr{border:0;border-top:1px solid #ddd;margin:16px 0}@media(min-width:520px){details{min-width:500px}}</style>"));
+
+  char buf[384];
+  int n;
+
+  n = snprintf(buf, sizeof(buf),
+               "<h1>ESPGeiger Config</h1>%s<form method='post' action='/param'>",
+               did_save ? "<p style='color:green'>Saved</p>" : "");
+  send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
+
+  // Render groups sorted by EGModule::display_order (stable — preserves
+  // registration order within the same bucket).
+  uint8_t gc = (uint8_t)EGPrefs::group_count();
+  uint8_t order[16];
+  if (gc > sizeof(order)) gc = sizeof(order);
+  for (uint8_t i = 0; i < gc; i++) order[i] = i;
+  for (uint8_t i = 1; i < gc; i++) {
+    uint8_t cur = order[i];
+    EGModule* m_cur = EGPrefs::module_at(cur);
+    uint8_t o_cur = m_cur ? m_cur->display_order() : 50;
+    uint8_t j = i;
+    while (j > 0) {
+      EGModule* m_prev = EGPrefs::module_at(order[j - 1]);
+      uint8_t o_prev = m_prev ? m_prev->display_order() : 50;
+      if (o_prev <= o_cur) break;
+      order[j] = order[j - 1];
+      j--;
+    }
+    order[j] = cur;
+  }
+
+  bool first_emitted = true;
+  for (uint8_t gi = 0; gi < gc; gi++) {
+    EGModule* mod = EGPrefs::module_at(order[gi]);
+    if (mod && mod->display_order() == 0) continue;  // hidden — has its own page
+    const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
+    if (!g || g->count == 0) continue;
+
+    n = snprintf(buf, sizeof(buf), "<details%s><summary>%s</summary>",
+                 first_emitted ? " open" : "",
+                 g->label ? g->label : g->module_id);
+    send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
+    first_emitted = false;
+
+    for (size_t j = 0; j < g->count; j++) {
+      const EGPref& p = g->prefs[j];
+      if (p.flags & EGP_HIDDEN) continue;
+
+      const char* cur = EGPrefs::getString(g->module_id, p.id);
+      const char* mid = g->module_id;
+      const char* pid = p.id;
+      const char* lbl = p.label ? p.label : p.id;
+      bool ro = (p.flags & EGP_READONLY);
+      size_t pos = 0;
+
+      n = snprintf(buf, sizeof(buf), "<label for='%s.%s'>%s</label><br/>", mid, pid, lbl);
+      if (n > 0 && (size_t)n < sizeof(buf)) pos = (size_t)n;
+
+      if (p.type == EGP_BOOL) {
+        n = snprintf(buf + pos, sizeof(buf) - pos,
+                     "<input type='checkbox' id='%s.%s' name='%s.%s' value='1'%s%s><br/>",
+                     mid, pid, mid, pid,
+                     (cur[0] == '1') ? " checked" : "",
+                     ro ? " disabled" : "");
+        if (n > 0) pos += (size_t)n;
+      } else {
+        const char* itype = "text";
+        if (p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) itype = "number";
+        else if (p.type == EGP_STRING && (p.flags & EGP_SENSITIVE)) itype = "password";
+
+        n = snprintf(buf + pos, sizeof(buf) - pos,
+                     "<input type='%s' id='%s.%s' name='%s.%s'",
+                     itype, mid, pid, mid, pid);
+        if (n > 0) pos += (size_t)n;
+
+        if (p.flags & EGP_SENSITIVE) {
+          const char* ph = cur[0] ? "(unchanged)" : "(not set)";
+          n = snprintf(buf + pos, sizeof(buf) - pos, " value='' placeholder='%s'", ph);
+          if (n > 0) pos += (size_t)n;
+        } else {
+          APPEND_LIT(buf, pos, sizeof(buf), " value='");
+          pos = append_escaped(buf, sizeof(buf), pos, cur);
+          if (pos + 1 < sizeof(buf)) buf[pos++] = '\'';
+        }
+
+        if (p.type == EGP_STRING && p.max_len > 0) {
+          n = snprintf(buf + pos, sizeof(buf) - pos, " maxlength='%u'", (unsigned)p.max_len);
+          if (n > 0) pos += (size_t)n;
+        }
+        if ((p.type == EGP_INT || p.type == EGP_UINT) && p.min_i != p.max_i) {
+          n = snprintf(buf + pos, sizeof(buf) - pos, " min='%ld' max='%ld'", (long)p.min_i, (long)p.max_i);
+          if (n > 0) pos += (size_t)n;
+        }
+        if (p.type == EGP_FLOAT) APPEND_LIT(buf, pos, sizeof(buf), " step='any'");
+        if (ro) APPEND_LIT(buf, pos, sizeof(buf), " readonly");
+        APPEND_LIT(buf, pos, sizeof(buf), "><br/>");
+      }
+
+      if (p.help && p.help[0]) {
+        n = snprintf(buf + pos, sizeof(buf) - pos, "<small>%s</small><br/>", p.help);
+        if (n > 0) pos += (size_t)n;
+      }
+
+      send_chunk(s, buf, pos);
+    }
+    s->sendContent(F("</details>"));
+  }
+
+  s->sendContent(F("<hr><button type='submit'>Save</button></form>"));
+
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
+}
+
+void ConfigManager::handlePrefs() {
+  auto* s = ConfigManager::server.get();
+  if (!s->hasArg("m")) {
+    s->send(400, "text/plain", "usage: /prefs?m=<module>&k=<key>  or  &action=delete");
+    return;
+  }
+  String m = s->arg("m");
+  if (s->arg("action") == "delete") {
+    bool ok = EGPrefs::remove_group(m.c_str());
+    s->send(ok ? 200 : 404, "text/plain", ok ? "deleted" : "no file");
+    return;
+  }
+  if (!s->hasArg("k")) {
+    s->send(400, "text/plain", "missing k");
+    return;
+  }
+  String k = s->arg("k");
+  const EGPref* p = EGPrefs::find_pref(m.c_str(), k.c_str());
+  if (!p) {
+    s->send(404, "text/plain", "not found");
+    return;
+  }
+  s->send(200, "text/plain", EGPrefs::getString(m.c_str(), k.c_str()));
 }
 
 void ConfigManager::handleClicksReturn()
@@ -724,7 +655,7 @@ void ConfigManager::handleClicksReturn()
   }
   json["today"] = gcounter.clicks_today;
   json["yesterday"] = gcounter.clicks_yesterday;
-  json["ratio"] = ConfigManager::getParamValueFromID("geigerRatio");
+  json["ratio"] = EGPrefs::getString("system", "ratio");
   if (status.ntp_synced) {
     json["start"] = status.start_time;
   } else {
@@ -741,161 +672,90 @@ void ConfigManager::handleClicksReturn()
 void ConfigManager::handleStatusPage()
 {
   handleRequest();
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  beginChunkedPage();
   char title[48];
-  String page = FPSTR(HTTP_HEAD_START);
   snprintf(title, sizeof(title), "%s - Status", hostName);
-  page.replace(FPSTR(T_v), title);
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-  page = FPSTR(STATUS_PAGE_BODY_HEAD);
+  sendPageHead(title);
+  auto* s = server.get();
   snprintf(title, sizeof(title), "%s - Status", status.thingName);
-  page.replace(FPSTR(T_v), title);
-  page.replace(FPSTR(T_t), hostName);
-  server->sendContent(page);
-  server->sendContent(FPSTR(STATUS_PAGE_BODY));
-  server->sendContent(FPSTR(HTTP_BACKBTN));
-  page = FPSTR(STATUS_PAGE_FOOT);
-  page.replace(FPSTR(T_1), status.version);
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_END));
-  server->sendContent("");
-  server->client().stop();
+  { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
+    SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
+  s->sendContent(FPSTR(STATUS_PAGE_BODY));
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  { TemplateSub subs[] = {{"{1}", status.version}};
+    SEND_TEMPLATE(s, STATUS_PAGE_FOOT, subs); }
+  endChunkedPage();
 }
 
 void ConfigManager::handleHistoryPage()
 {
   handleRequest();
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  beginChunkedPage();
   char title[48];
-  String page = FPSTR(HTTP_HEAD_START);
   snprintf(title, sizeof(title), "%s - History", hostName);
-  page.replace(FPSTR(T_v), title);
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-  page = FPSTR(STATUS_PAGE_BODY_HEAD);
+  sendPageHead(title);
+  auto* s = server.get();
   snprintf(title, sizeof(title), "%s - History", status.thingName);
-  page.replace(FPSTR(T_v), title);
-  page.replace(FPSTR(T_t), hostName);
-  server->sendContent(page);
-
-  server->sendContent(HISTORY_PAGE_BODY);
-  server->sendContent(HISTORY_PAGE_JS);
-  server->sendContent(FPSTR(HTTP_BACKBTN));
-
-  server->sendContent(FPSTR(HTTP_END));
-  server->sendContent("");
-  server->client().stop();
+  { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
+    SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
+  s->sendContent(HISTORY_PAGE_BODY);
+  s->sendContent(HISTORY_PAGE_JS);
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
 }
 
 void ConfigManager::handleNTP()
 {
   handleRequest();
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  beginChunkedPage();
   char title[48];
-  String page = FPSTR(HTTP_HEAD_START);
   snprintf(title, sizeof(title), "%s - NTP", status.thingName);
-  page.replace(FPSTR(T_v), title);
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-  page = FPSTR(NTP_HTML);
-  page.replace(T_i, ntpclient.get_server());
-  page.replace(T_v, ntpclient.get_tz());
-
-  server->sendContent(page);
-  server->sendContent(FPSTR(NTP_TZ_JS));
-  server->sendContent(FPSTR(NTP_JS));
-
-  server->sendContent(FPSTR(HTTP_BACKBTN));
-  server->sendContent(FPSTR(HTTP_END));
-  server->sendContent("");
-  server->client().stop();
-
+  sendPageHead(title);
+  auto* s = server.get();
+  { TemplateSub subs[] = {{"{i}", ntpclient.get_server()}, {"{v}", ntpclient.get_tz()}};
+    SEND_TEMPLATE(s, NTP_HTML, subs); }
+  s->sendContent(FPSTR(NTP_TZ_JS));
+  s->sendContent(FPSTR(NTP_JS));
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
 }
 
 void ConfigManager::handleNTPSet()
 {
   handleRequest();
-  char stmp[64];
-  String s = server->arg("s");
-  strncpy(stmp, s.c_str(), sizeof(stmp) - 1);
-  stmp[sizeof(stmp) - 1] = '\0';
-  ntpclient.set_server(stmp);
-  s = server->arg("t");
-  strncpy(stmp, s.c_str(), sizeof(stmp) - 1);
-  stmp[sizeof(stmp) - 1] = '\0';
-  ntpclient.set_tz(stmp);
-  ntpclient.saveconfig();
-  ntpclient.setup();
+  EGPrefs::put("ntp", "server", server->arg("s").c_str());
+  EGPrefs::put("ntp", "tz",     server->arg("t").c_str());
+  EGPrefs::commit();  // triggers NTP_Client::on_prefs_saved -> setup()
 
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  beginChunkedPage();
   char title[48];
-  String page = FPSTR(HTTP_HEAD_START);
   snprintf(title, sizeof(title), "%s - NTP Saved", status.thingName);
-  page.replace(FPSTR(T_v), title);
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-  server->sendContent(HTTP_PARAMSAVED);
-  server->sendContent(FPSTR(HTTP_BACKBTN));
-  server->sendContent(FPSTR(HTTP_END));
-  server->sendContent("");
-  server->client().stop();
+  auto* s = server.get();
+  { TemplateSub subs[] = {{"{v}", title}};
+    SEND_TEMPLATE(s, HTTP_HEAD_START, subs); }
+  s->sendContent(FPSTR(HTTP_STYLE));
+  s->sendContent(FPSTR(faviconHead));
+  s->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
+  s->sendContent(FPSTR(HTTP_HEAD_END));
+  s->sendContent(HTTP_PARAMSAVED);
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
 }
 
 #ifdef ESPGEIGER_HW
 void ConfigManager::handleHVPage()
 {
   handleRequest();
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
+  beginChunkedPage();
   char title[48];
-  String page = FPSTR(HTTP_HEAD_START);
   snprintf(title, sizeof(title), "%s-HW - HV", status.thingName);
-  page.replace(FPSTR(T_v), title);
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-
-  page = FPSTR(STATUS_PAGE_BODY_HEAD);
-  page.replace(FPSTR(T_v), title);
-  page.replace(FPSTR(T_t), hostName);
-  server->sendContent(page);
-
-  server->sendContent(HV_STATUS_PAGE_BODY);
-  server->sendContent(FPSTR(HTTP_BACKBTN));
-  server->sendContent(FPSTR(HTTP_END));
-  server->sendContent("");
-  server->client().stop();
+  sendPageHead(title);
+  auto* s = server.get();
+  { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
+    SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
+  s->sendContent(HV_STATUS_PAGE_BODY);
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
 }
 
 void ConfigManager::handleHVSet()
@@ -914,12 +774,7 @@ void ConfigManager::handleHVSet()
 void ConfigManager::handleHVJSReturn()
 {
   handleRequest();
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CTJS), "");
+  beginChunkedPage(HTTP_HEAD_CTJS);
   server->sendContent(FPSTR(picographJS));
   server->sendContent(FPSTR(hvJS));
   server->sendContent("");
@@ -964,24 +819,17 @@ void ConfigManager::handleSetCPM() {
 void ConfigManager::handleRestart()
 {
   handleRequest();
-  server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, FPSTR(HTTP_HEAD_CT), "");
-  String page = FPSTR(HTTP_HEAD_START);
-  page.replace(FPSTR(T_v), "Restarting...");
-  server->sendContent(page);
-  server->sendContent(FPSTR(HTTP_STYLE));
-  server->sendContent(FPSTR(faviconHead));
-  server->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
-  server->sendContent(FPSTR(HTTP_HEAD_END));
-  server->sendContent(FPSTR(status.thingName));
-  server->sendContent(F(" is restarting...<br><br>"));
-  server->sendContent(FPSTR(HTTP_END));
-  server->sendContent("");
-  server->client().stop();
+  beginChunkedPage();
+  auto* s = server.get();
+  { TemplateSub subs[] = {{"{v}", "Restarting..."}};
+    SEND_TEMPLATE(s, HTTP_HEAD_START, subs); }
+  s->sendContent(FPSTR(HTTP_STYLE));
+  s->sendContent(FPSTR(faviconHead));
+  s->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
+  s->sendContent(FPSTR(HTTP_HEAD_END));
+  s->sendContent(FPSTR(status.thingName));
+  s->sendContent(F(" is restarting...<br><br>"));
+  endChunkedPage();
   Log::console(PSTR("Config: Restarting ... "));
   delay(1000);
   ESP.restart();
@@ -1005,18 +853,6 @@ void ConfigManager::handleResetParams()
   LittleFS.remove("/ntp.json");
   LittleFS.end();
   handleRestart();
-}
-int ConfigManager::getIndexFromID(const char* str)
-{
-  WiFiManagerParameter** customParams = ConfigManager::getParameters();
-  for (int i = 0; i < ConfigManager::getParametersCount(); i++)
-  {
-    if (customParams[i]->getID() == NULL)
-      continue;
-    if (strcmp(customParams[i]->getID(), str) == 0)
-      return i;
-  }
-  return -1;
 }
 void ConfigManager::delay(unsigned long m)
 {
@@ -1054,54 +890,6 @@ void ConfigManager::processLoop(unsigned long now)
     this->process();
   }
 }
-void ConfigManager::loadParams()
-{
-  LittleFS.begin();
-  Log::console(PSTR("Config: Loading ..."));
-  if (LittleFS.exists("/geigerconfig.json"))
-  {
-    File configFile = LittleFS.open("/geigerconfig.json", "r");
-    if (configFile)
-    {
-      // Process the json data
-      DynamicJsonDocument jsonBuffer(3072);
-      DeserializationError error = deserializeJson(jsonBuffer, configFile);
-      if (!error)
-      {
-        WiFiManagerParameter** customParams = ConfigManager::getParameters();
-        // Should not be too verbose otherwise it triggers the watchdog reset
-        JsonObject root = jsonBuffer.as<JsonObject>();
-        for (JsonObject::iterator it = root.begin(); it != root.end(); ++it)
-        {
-          int idx = getIndexFromID(it->key().c_str());
-          if (idx != -1)
-          {
-            // Should not be too verbose otherwise it triggers the watchdog reset
-            // Log::console(PSTR("wifi: key \"%s\" with value \"%s\""), it->key().c_str(), it->value().as<char*>());
-            customParams[idx]->setValue(it->value().as<char*>(), customParams[idx]->getValueLength());
-          }
-          else
-            Log::console(PSTR("Config: key \"%s\" with value \"%s\" not found"), it->key().c_str(), it->value().as<char*>());
-        }
-      }
-      else
-        Log::console(PSTR("Config: failed to load json params"));
-      jsonBuffer.clear();
-      // Close file
-      configFile.close();
-    }
-    else
-    {
-      Log::console(PSTR("Config: failed to open config file"));
-    }
-  }
-  else
-  {
-    Log::console(PSTR("Config: No config file, using defaults"));
-  }
-  LittleFS.end();
-
-}
 
 void ConfigManager::handleRefreshConsole()
 {
@@ -1122,8 +910,10 @@ void ConfigManager::handleRefreshConsole()
   server->sendHeader(F("Expires"), F("-1"));
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, F("text/plain"), "");
-  char idxBuf[8];
-  snprintf(idxBuf, sizeof(idxBuf), "%u\n", (uint8_t)Log::getLogIdx());
+  // "<log_idx>,<tz_offset_min>\n" - tz hitch-hikes here so JS can convert
+  // log HH:MM:SS to browser-local. Only consumer needs it, so don't bloat /json.
+  char idxBuf[16];
+  snprintf(idxBuf, sizeof(idxBuf), "%u,%d\n", (uint8_t)Log::getLogIdx(), status.tz_offset_min);
   server->sendContent(idxBuf);
   if (counter != Log::getLogIdx())
   {
@@ -1158,133 +948,10 @@ void ConfigManager::handleRefreshConsole()
   server->client().stop();
 }
 
-void ConfigManager::saveParams()
-{
-  Log::console(PSTR("Config: Saving ..."));
-  LittleFS.begin();
-
-  WiFiManagerParameter** customParams = ConfigManager::getParameters();
-  // Open the file
-  File configFile = LittleFS.open("/geigerconfig.json", "w");
-  if (!configFile)
-  {
-    Log::console(PSTR("Config: Failed to open geigerconfig.json"));
-    return;
-  }
-  configFile.print("{\n");
-  bool printComma=false;
-  for (int i = 0; i < ConfigManager::getParametersCount(); i++)
-  {
-    if (customParams[i]->getID() == NULL)
-      continue;
-    if (strlen(customParams[i]->getID()) == 0)
-      continue;
-    if (customParams[i]->getValue() == NULL)
-      continue;
-
-    if (printComma)
-    {
-      configFile.print(",\n");
-      printComma=false;
-    }
-
-    char tmp[256];
-    snprintf(tmp, sizeof(tmp), "\"%s\":\"%s\"",customParams[i]->getID(),customParams[i]->getValue());
-    configFile.print(tmp);
-    //Log::console(PSTR("Config: writing %s"), tmp);
-    printComma=true;
-  }
-  configFile.print("\n}");
-
-  // Close the file
-  configFile.close();
-  LittleFS.end();
-  Log::console(PSTR("Config: Saved"));
-  bool restart_required = false;
-#ifndef RXPIN_BLOCKED
-  const char* _rx = ConfigManager::getParamValueFromID("geigerRX");
-  if (_rx != NULL) {
-    int rx_pin = atoi(_rx);
-    if (rx_pin != gcounter.get_rx_pin()) {
-      Log::console(PSTR("Config: Geiger RX Pin Changed"));
-      restart_required = true;
-    }
-  }
-#endif
-#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1
-#ifndef TXPIN_BLOCKED
-  const char* _tx = ConfigManager::getParamValueFromID("geigerTX");
-  if (_tx != NULL) {
-    int tx_pin = atoi(_tx);
-    if (tx_pin != gcounter.get_tx_pin()) {
-      Log::console(PSTR("Config: Geiger TX Pin"));
-      restart_required = true;
-    }
-  }
-#endif
-#endif
-
-  if (restart_required) {
-    handleRestart();
-  }
-
-#ifdef MQTTOUT
-  MQTT_Client& mqtt = MQTT_Client::getInstance();
-#ifdef MQTTAUTODISCOVER
-  const char* _send = getParamValueFromID("hassSend");
-  if (((_send == NULL) || (strcmp(_send, "N") == 0)) && (status.mqtt_connected)) {
-    mqtt.removeHASSConfig();
-  }
-#endif
-  mqtt.disconnect();
-  mqtt.begin();
-#endif
-  ConfigManager::setExternals();
-  gcounter.apply_pcnt_filter();
-}
-
-const char* ConfigManager::getParamValueFromID(const char* str)
-{
-  WiFiManagerParameter** customParams = ConfigManager::getParameters();
-  for (int i = 0; i < ConfigManager::getParametersCount(); i++)
-  {
-    if (customParams[i]->getID() == NULL)
-      continue;
-    if (strncmp(customParams[i]->getID(), str, strlen(str)) == 0)
-    {
-      if (customParams[i]->getValue() == NULL)
-        return NULL;
-      if (strlen(customParams[i]->getValue()) == 0)
-        return NULL;
-      return customParams[i]->getValue();
-    }
-  }
-  return NULL;
-}
-
-const char* ConfigManager::getParamValueFromID_P(const __FlashStringHelper *param_in)
-{
-  WiFiManagerParameter** customParams = ConfigManager::getParameters();
-  for (int i = 0; i < ConfigManager::getParametersCount(); i++)
-  {
-    if (customParams[i]->getID() == NULL)
-      continue;
-    if (strncmp_P(customParams[i]->getID(), (const char*)param_in, strlen_P((const char*)param_in)) == 0)
-    {
-      if (customParams[i]->getValue() == NULL)
-        return NULL;
-      if (strlen(customParams[i]->getValue()) == 0)
-        return NULL;
-      return customParams[i]->getValue();
-    }
-  }
-  return NULL;
-}
 
 void ConfigManager::bindServerCallback()
 {
   ConfigManager::server.get()->on(ROOT_URL, HTTP_GET, std::bind(&ConfigManager::handleRoot, this));
-  ConfigManager::server.get()->on(WM_G(R_param), std::bind(&ConfigManager::handleOurParam, this));
   ConfigManager::server.get()->on(STATUS_URL, HTTP_GET, std::bind(&ConfigManager::handleStatusPage, this));
   ConfigManager::server.get()->on(JSON_URL, HTTP_GET, std::bind(&ConfigManager::handleJsonReturn, this));
   ConfigManager::server.get()->on(JS_URL, HTTP_GET, std::bind(&ConfigManager::handleJSReturn, this));
@@ -1299,6 +966,9 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(SERIAL_URL, HTTP_GET, std::bind(&ConfigManager::handleSerialOut, this));
   ConfigManager::server.get()->on(ABOUT_URL, HTTP_GET, std::bind(&ConfigManager::handleAbout, this));
   ConfigManager::server.get()->on(OUTPUTS_URL, HTTP_GET, std::bind(&ConfigManager::handleOutputsJson, this));
+  ConfigManager::server.get()->on(PREFS_URL, HTTP_GET, std::bind(&ConfigManager::handlePrefs, this));
+  ConfigManager::server.get()->on(EGPREFS_URL, HTTP_GET,  std::bind(&ConfigManager::handleEGPrefs, this));
+  ConfigManager::server.get()->on(EGPREFS_URL, HTTP_POST, std::bind(&ConfigManager::handleEGPrefs, this));
 #ifdef ESPGEIGER_HW
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
@@ -1310,29 +980,3 @@ void ConfigManager::bindServerCallback()
 #endif
 }
 
-unsigned long ConfigManager::getUptime () {
-  time_t uptime = NTP.getUptime ();
-  return uptime;
-}
-
-char* ConfigManager::getUptimeString () {
-    static char uptimeBuffer[20];
-    uint16_t days;
-    uint8_t hours;
-    uint8_t minutes;
-    uint8_t seconds;
-
-    time_t uptime = NTP.getUptime ();
-
-    seconds = uptime % SECS_PER_MIN;
-    uptime -= seconds;
-    minutes = (uptime % SECS_PER_HOUR) / SECS_PER_MIN;
-    uptime -= minutes * SECS_PER_MIN;
-    hours = (uptime % SECS_PER_DAY) / SECS_PER_HOUR;
-    uptime -= hours * SECS_PER_HOUR;
-    days = uptime / SECS_PER_DAY;
-
-    snprintf_P (uptimeBuffer, sizeof (uptimeBuffer), PSTR("%dT%02d:%02d:%02d"), days, hours, minutes, seconds);
-
-    return uptimeBuffer;
-}

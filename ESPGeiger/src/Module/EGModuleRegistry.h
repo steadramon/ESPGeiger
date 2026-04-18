@@ -22,6 +22,9 @@ class EGModuleRegistry {
     static void begin_all();
     static void loop_all(unsigned long now);
     static void tick_all(unsigned long now, unsigned long uptime_seconds);
+#ifdef TICK_PROFILE
+    static void log_profile_and_reset();
+#endif
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);
@@ -35,13 +38,17 @@ class EGModuleRegistry {
 
     struct Slot {
       EGModule* module;          // 4
-      unsigned long loop_last;   // 4 — last millis() loop() ran
-      uint16_t loop_interval;    // 2 — 0 = every iteration
-      uint16_t warmup_seconds;   // 2 — cached, tick_all skips if uptime < this
-      uint8_t flags;             // 1 — packed module flags (see above)
+      unsigned long loop_last;   // 4 - last millis() loop() ran
+      uint16_t loop_interval;    // 2 - 0 = every iteration
+      uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
+      uint8_t flags;             // 1 - packed module flags (see above)
+#ifdef TICK_PROFILE
+      uint16_t max_tick_us;      // 2 - slowest s_tick over current window
+#endif
     };
     static Slot _slots[EG_MAX_MODULES];
     static uint8_t _count;
+    static unsigned long _next_loop_due;  // earliest pending loop() fire (millis)
 };
 
 #define EG_REGISTER_MODULE(instance) \

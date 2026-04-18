@@ -34,7 +34,7 @@ extern Counter gcounter;
 class PushButton : public EGModule {
   public:
     PushButton();
-    const char* name() override { return "button"; }
+    const char* name() override { return "btn"; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint16_t warmup_seconds() override { return 0; }
     void loop(unsigned long now) override;

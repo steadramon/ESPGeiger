@@ -21,7 +21,7 @@
 #define Status_h
 
 #include <Arduino.h>
-#include <Smoothed.h>
+#include "Util/EGSmoothed.h"
 #include "jled.h"
 
 #ifndef GIT_VERSION
@@ -62,8 +62,7 @@ struct Status {
   long start = 0;
   unsigned long start_time = 0;
   bool warmup = true;
-  const char* geiger_model = "";
-  unsigned long last_send = 0;
+  uint8_t send_indicator = 0;
   unsigned long last_blip = 0;
 #ifdef MQTTOUT
   bool mqtt_connected = false;
@@ -91,11 +90,16 @@ struct Status {
 #endif
   uint16_t serialOut = 0;
   bool wifi_disabled = false;
+  bool wifi_connected = false;
+  char wifi_ip[16] = "";
+  char wifi_ssid[33] = "";
+  int16_t wifi_rssi = 0;
   unsigned long wifi_lost_at = 0;
   bool wifi_was_connected = false;
-  uint32_t tick_us = 0;     // sTickerCB duration, EMA-smoothed (α = 1/8)
+  uint32_t tick_us = 0;     // sTickerCB duration, EMA-smoothed (alpha = 1/8)
   uint32_t tick_max_us = 0; // peak tick_us since the last 60s window reset
   uint32_t lps = 0;         // loop iterations counted in the last second
+  int16_t  tz_offset_min = 0; // device UTC offset in minutes; refreshed hourly by Counter
 };
 
 #endif

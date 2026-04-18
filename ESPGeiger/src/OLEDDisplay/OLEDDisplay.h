@@ -1,6 +1,6 @@
 /*
   OLEDDisplay.h - OLEDDisplay connection class
-  
+
   Copyright (C) 2023 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -26,8 +26,7 @@
 #include "../Status.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
-#include "logo.h"
-#include "fonts.h"
+#include "../Prefs/EGPrefs.h"
 
 extern Status status;
 extern Counter gcounter;
@@ -58,32 +57,25 @@ extern Counter gcounter;
 #define OLED_ADDR      0x3c
 #endif
 
+// Note: font-using methods live in OLEDDisplay.cpp to keep fonts.h /
+// SSD1306Wire's bundled fonts referenced from a single TU. See Fix B
+// in the session notes - reduces binary by ~20-30 KB on OLED builds.
 class SSD1306Display : public SSD1306Wire, public EGModule {
 public:
     SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl);
     const char* name() override { return "disp"; }
+    uint8_t display_order() override { return 15; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint16_t warmup_seconds() override { return 0; }
     void pre_wifi() override { setup(); }
-  void setup() {
-    //Wire.setClock(400000L);
-    SSD1306Wire::init();
-  #if OLED_FLIP
-    flipScreenVertically();
-  #endif
-    setBrightness(64);
-    setFont(ArialMT_Plain_10);
-    fontWidth = 8;
-    fontHeight = 16;
-    clear();
-    drawXbm(0, 0, 51, 51, ESPLogo);
-    drawString(55, 10, PSTR("ESPGeiger"));
-    drawString(55, 24, status.version);
-    drawString(55, 42, PSTR("Connecting .."));
+    const EGPrefGroup* prefs_group() override;
+    void on_prefs_loaded() override;
+    const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
 
-    display();	// todo: not very efficient
-    setFont(ArialMT_Plain_16);
-  }
+  void setup();
+  void setupWifi(const char* s);
+  void wifiDisabled();
+
   void clear() {
     SSD1306Wire::clear();
   }
@@ -110,20 +102,15 @@ public:
   }
   void noBacklight() {/*no support*/}
   void backlight() {/*no support*/}
-  bool isScreenOnTime();
+  bool isScreenOnTime(unsigned long now);
   size_t write(uint8_t c) {
     setColor(BLACK);
     fillRect(cx, cy, fontWidth, fontHeight);
     setColor(WHITE);
-
-    //if(c<NUM_CUSTOM_ICONS && custom_chars[c]!=NULL) {
-    //	drawXbm(cx, cy, fontWidth, fontHeight, (const byte*) custom_chars[c]);
-    //} else {
     char cs[2] = {(char)c, '\0'};
     drawString(cx, cy, cs);
-    //}
     cx += fontWidth;
-    display();	// todo: not very efficient
+    display();
     return 1;
   }
   size_t write(const char* s) {
@@ -134,31 +121,8 @@ public:
     setColor(WHITE);
     drawString(cx, cy, s);
     cx += fontWidth*nc;
-    display();	// todo: not very efficient
+    display();
     return nc;
-  }
-
-  void setupWifi(const char* s) {
-    clear();
-    setFont(DialogInput_plain_12);
-    drawString(0, 10, PSTR("Setup - Connect to"));
-    drawString(0, 24, PSTR("WiFi -"));
-    drawString(0, 38, s);
-    display();
-  }
-
-  void wifiDisabled() {
-    setFont(ArialMT_Plain_10);
-    fontWidth = 8;
-    fontHeight = 16;
-    clear();
-    drawXbm(0, 0, 51, 51, ESPLogo);
-    drawString(55, 10, PSTR("ESPGeiger"));
-    drawString(55, 24, status.version);
-    drawString(55, 42, PSTR("Offline mode"));
-
-    display();
-    setFont(ArialMT_Plain_16);
   }
 
   void loop(unsigned long now) override;
@@ -166,94 +130,19 @@ public:
   uint16_t loop_interval_ms() override { return 500; }
 
   void page_one_clear();
-
-  void page_one_graph() {
-    setColor(BLACK);
-    fillRect(0, 35, OLED_WIDTH, 29);
-    setColor(WHITE);
-
-    drawLine(0, 63, 90, 63);
-    drawLine(90, 35, 90, 63);
-    if (gcounter.cpm_history.size() > 0) {
-      int histSize = gcounter.cpm_history.size();
-      int maxValue = gcounter.cpm_history[0];
-      int minValue = histSize > 1 ? gcounter.cpm_history[0]:0;
-      for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
-        maxValue = gcounter.cpm_history[i] > maxValue ? gcounter.cpm_history[i] : maxValue;
-        minValue = gcounter.cpm_history[i] < minValue ? gcounter.cpm_history[i] : minValue;
-      }
-
-      if (minValue > 1) {
-        minValue = (int)(minValue * 0.9);
-      }
-      int x_start = 0;
-      if (gcounter.cpm_history.capacity != histSize) {
-        x_start = (2 * (gcounter.cpm_history.capacity - histSize));
-      }
-
-      char graphBuf[8];
-      if (maxValue == 0) {
-        setFont(Open_Sans_Regular_Plain_10);
-        snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
-        drawString(93,55, graphBuf);
-        return;
-      }
-
-      for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
-        int location = ((map((long)gcounter.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
-        drawRect(x_start + i * 2, location, 2, (63 - location));
-      }
-      setFont(Open_Sans_Regular_Plain_10);
-      snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
-      drawString(93,55, graphBuf);
-      snprintf(graphBuf, sizeof(graphBuf), "%d", maxValue);
-      drawString(93,35, graphBuf);
-    }
-  }
-
-  void page_one_values(unsigned long now) {
-    setFont(DialogInput_plain_17);
-    setColor(BLACK);
-    fillRect(45, 0, 72, 32);
-    setColor(WHITE);
-    char oledBuf[16];
-    snprintf(oledBuf, sizeof(oledBuf), "%d", gcounter.get_cpm());
-    drawString(45,0, oledBuf);
-    setFont(DialogInput_plain_12);
-    format_f(oledBuf, sizeof(oledBuf), gcounter.get_usv());
-    drawString(45,20, oledBuf);
-    if (gcounter.cpm_history.capacity != gcounter.cpm_history.size()) {
-      drawString(98,2, PSTR("W") );
-    }
-    if (now - status.last_send < 1000) {
-      drawXbm(110, 0, fontWidth, fontHeight, _iconimage_remotext);
-    }
-  }
-
+  void page_one_graph();
+  void page_one_values(unsigned long now);
   void page_two_full();
+  void page_three_full();
 
-  void page_three_full() {
-    clear();
-    setFont(ArialMT_Plain_10);
-    static char versionString[32] = "";
-    if (versionString[0] == '\0') {
-      snprintf_P(versionString, sizeof(versionString), PSTR("%S / %S"), status.version, status.git_version);
-    }
-    drawString(0, 2, GEIGER_MODEL);
-    drawString(0, 17, versionString);
-    drawString(0, 32, PSTR(__DATE__ " " __TIME__));
-    drawString(0, 47, PSTR("@ steadramon"));
-  }
-
-  void setTimeout(int timeout) {
-    _lcd_timeout = timeout * 1000;
+  void setTimeout(uint16_t timeout) {
+    _lcd_timeout = timeout;
   }
 
   private:
     uint8_t cx, cy;
     uint8_t fontWidth, fontHeight;
-    unsigned long _last_full = 0;
-    unsigned long _lcd_timeout = 300000;
+    uint16_t _lcd_timeout = 300;
 };
 
 #endif

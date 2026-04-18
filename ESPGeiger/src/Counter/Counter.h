@@ -20,10 +20,10 @@
 #ifndef COUNTER_H
 #define COUNTER_H
 #include <Arduino.h>
-#include <CircularBuffer.h>
+#include <CircularBuffer.hpp>
 #include "../Status.h"
 #include "../NTP/NTP.h"
-#include <Smoothed.h>
+#include "../Util/EGSmoothed.h"
 
 #include "../GeigerInput/GeigerInput.h"
 
@@ -83,7 +83,6 @@ class Counter {
       };
       void blip_led();
       void begin();
-      const char* geiger_model() { return GEIGER_MODEL; };
       void secondticker(unsigned long stick_now);
       void set_rx_pin(int pin) {
         geigerinput->set_rx_pin(pin);
@@ -141,6 +140,11 @@ class Counter {
       bool _bool_cpm_warning = false;
       bool _bool_cpm_alert = false;
       float _ratio = GEIGER_RATIO;
+      float _ratio_inv = 1.0f / GEIGER_RATIO;   // reciprocal, kept in sync in set_ratio
+      // Cached once per tick so accessors are O(1).
+      float _cached_cps  = 0.0f;
+      float _cached_cpmf = 0.0f;
+      float _cached_usv  = 0.0f;
       Smoothed <float> geigerTicks;
       Smoothed <float> geigerTicks5;
       Smoothed <float> geigerTicks15;

@@ -24,19 +24,42 @@
 Thingspeak thingspeak;
 EG_REGISTER_MODULE(thingspeak)
 
+static const EGPref TS_PREF_ITEMS[] = {
+  {"send",        "Enable",      "Upload to ThingSpeak", "0", nullptr, 0, 0,  0,  EGP_BOOL,   0},
+  {"channel_key", "Channel Key", "ThingSpeak channel write API key", "",  nullptr, 0, 0, 16, EGP_STRING, EGP_SENSITIVE},
+};
+
+static const EGPrefGroup TS_PREF_GROUP = {
+  "thingspeak", "ThingSpeak", 1,
+  TS_PREF_ITEMS,
+  sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+static const EGLegacyAlias TS_LEGACY[] = {
+  {"tsSend",       "send"},
+  {"tsChannelKey", "channel_key"},
+  {nullptr, nullptr},
+};
+const EGLegacyAlias* Thingspeak::legacy_aliases() { return TS_LEGACY; }
+// === END LEGACY IMPORT ===
+
 Thingspeak::Thingspeak() {
 }
 
-void Thingspeak::s_tick(unsigned long stick_now)
+void Thingspeak::loop(unsigned long now)
 {
   if (lastPing == 0) {
-    lastPing = stick_now + random(pingInterval / 1000) * 1000;
+    lastPing = now + random(pingIntervalMs);
     return;
   }
-  if (stick_now > lastPing && stick_now - lastPing >= (unsigned long)pingInterval)
+  if (now > lastPing && (now - lastPing) >= pingIntervalMs)
   {
-    lastPing = stick_now - (stick_now % 1000);
-    Thingspeak::postMeasurement();
+    lastPing += pingIntervalMs;
+    if ((now - lastPing) >= pingIntervalMs) lastPing = now;
+    postMeasurement();
   }
 }
 
@@ -63,22 +86,15 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
 }
 
 void Thingspeak::postMeasurement() {
-
-  ConfigManager &configManager = ConfigManager::getInstance();
-  const char* _send = configManager.getParamValueFromID("tsSend");
-  if (_send == NULL || strcmp(_send, "N") == 0) {
-    return;
-  }
+  if (!EGPrefs::getBool("thingspeak", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Thingspeak: Testmode"));
     return;
   }
 
-  const char* _ts_channel_key = configManager.getParamValueFromID("tsChannelKey");
-  if (_ts_channel_key == NULL) {
-    return;
-  }
+  const char* _ts_channel_key = EGPrefs::getString("thingspeak", "channel_key");
+  if (_ts_channel_key[0] == '\0') return;
 
   Log::console(PSTR("Thingspeak: Uploading latest data ..."));
 
@@ -97,11 +113,11 @@ void Thingspeak::postMeasurement() {
     if (request.open("GET", url))
     {
       status.led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), configManager.getUserAgent());
+      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(5);
       request.send();
-      status.last_send = millis();
+      status.send_indicator = 2;
     }
     else
     {

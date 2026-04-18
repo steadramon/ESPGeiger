@@ -42,22 +42,22 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** —
 
 ### I have an ESP + serial Geiger counter
 
-| Counter | ESP8266 Build | ESP32 Build |
-|---|---|---|
-| GC10 | `esp8266_gc10` | `esp32_gc10` |
-| GC10-Next | `esp8266_gc10next` | `esp32_gc10next` |
-| MightyOhm | `esp8266_mightyohm` | `esp32_mightyohm` |
+A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger). Select your counter type from the **Config** page after flashing.
 
-OLED variants exist for each — replace `esp8266_` with `esp8266oled_` (or `esp32_` with `esp32oled_`).
+| ESP8266 Build | ESP32 Build |
+|---|---|
+| `esp8266_serial` | `esp32_serial` |
+
+OLED variants: `esp8266oled_serial` / `esp32oled_serial`.
 
 ### I have an ESPGeiger-HW or ESPGeiger Log
 
 These are official ESPGeiger hardware kits — use the hardware-specific builds:
 
-| Hardware | Pulse | GC10 | GC10-Next | MightyOhm |
-|---|---|---|---|---|
-| ESPGeiger-HW | `espgeigerhw` | — | — | — |
-| ESPGeiger Log | `espgeigerlog` | `espgeigerlog_gc10` | `espgeigerlog_gc10next` | `espgeigerlog_mightyohm` |
+| Hardware | Pulse | Serial |
+|---|---|---|
+| ESPGeiger-HW | `espgeigerhw` | — |
+| ESPGeiger Log | `espgeigerlog` | `espgeigerlog_serial` |
 
 ### I want to test without a real Geiger counter
 
@@ -67,8 +67,7 @@ Test builds emulate a Geiger counter internally. You can also wire the `TXPIN` o
 |---|---|
 | `esp8266_test` / `esp32_test` | Internal counter, no output |
 | `esp8266_testpulse` / `esp32_testpulse` | Outputs Poisson-distributed pulses on TXPIN |
-| `esp8266_test_gc10` / `esp32_test_gc10` | Emulates a GC10 serial counter |
-| `esp8266_test_mightyohm` / `esp32_test_mightyohm` | Emulates a MightyOhm serial counter |
+| `esp8266_testserial` / `esp32_testserial` | Emulates a serial counter (type selectable via Config) |
 
 See the full list of available builds on the [releases page](https://github.com/steadramon/ESPGeiger/releases/latest) or in the [build targets documentation](https://docs.espgeiger.com/install/buildtargets).
 

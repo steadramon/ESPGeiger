@@ -22,6 +22,7 @@
 #include <Arduino.h>
 #include "../Status.h"
 #include "../Module/EGModule.h"
+#include "../Prefs/EGPrefs.h"
 
 #ifndef GEIGER_PWMPIN
 #define GEIGER_PWMPIN 12
@@ -62,11 +63,17 @@ class ESPGeigerHW : public EGModule {
       ESPGeigerHW();
       const char* name() override { return "espghw"; }
       uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+      uint8_t display_order() override { return 0; }  // managed via /hv page
       uint16_t warmup_seconds() override { return 0; }
-      bool has_tick() override { return true; }
-      void s_tick(unsigned long stick_now) override;
+      bool has_loop() override { return true; }
+      uint16_t loop_interval_ms() override { return 1000; }
+      void loop(unsigned long now) override;
       void fiveloop();
       void begin() override;
+      const EGPrefGroup* prefs_group() override;
+      void on_prefs_loaded() override;
+      const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+      const char* legacy_file() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
       void set_freq( int freq) {
         if (freq > GEIGERHW_MAX_FREQ) {
           freq = GEIGERHW_MAX_FREQ;
@@ -98,6 +105,7 @@ class ESPGeigerHW : public EGModule {
       }
       void set_vd_ratio( int ratio) {
         _hw_vd_ratio = ratio;
+        _scale = 0.0009765625032f * (float)ratio;  // precompute for hot path
       };
       void set_vd_offset (int offset) {
         _hw_vd_offset = offset;
@@ -108,14 +116,14 @@ class ESPGeigerHW : public EGModule {
       int get_vd_offset() {
         return _hw_vd_offset;
       }
-      void saveconfig();
-      void loadconfig();
+      void saveconfig();  // redirects to EGPrefs::commit
     private:
       int _hw_freq = GEIGERHW_FREQ;
       int _hw_duty = GEIGERHW_DUTY;
       int _cur_duty = 0;
       int _hw_vd_ratio = GEIGERHW_ADC_RATIO;
       int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
+      float _scale = 0.0009765625032f * (float)GEIGERHW_ADC_RATIO;  // 1/1024 * ratio
 };
 
 #endif
