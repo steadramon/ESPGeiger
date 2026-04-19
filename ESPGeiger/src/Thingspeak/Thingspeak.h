@@ -20,7 +20,7 @@
 #define THINGSPEAK_H
 #ifdef THINGSPEAKOUT
 #include <Arduino.h>
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
@@ -28,7 +28,6 @@
 #include "AsyncHTTPRequest_Generic.hpp"
 
 
-extern Status status;
 extern Counter gcounter;
 
 #ifndef THINGSPEAK_INTERVAL

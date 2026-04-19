@@ -21,9 +21,15 @@
 #define COUNTER_H
 #include <Arduino.h>
 #include <CircularBuffer.hpp>
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../NTP/NTP.h"
 #include "../Util/EGSmoothed.h"
+
+#ifdef ESPGEIGER_HW
+#ifndef GEIGER_BLIPLED
+#define GEIGER_BLIPLED 15
+#endif
+#endif
 
 #include "../GeigerInput/GeigerInput.h"
 
@@ -47,7 +53,6 @@
 
 #include "../Util/FormatFloat.h"
 
-extern Status status;
 extern NTP_Client ntpclient;
 
 #define GEIGER_CPM_COUNT 60

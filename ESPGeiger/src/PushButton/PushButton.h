@@ -20,7 +20,7 @@
 #ifndef PUSHBUTTON_H
 #define PUSHBUTTON_H
 #include <Arduino.h>
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
 
@@ -28,7 +28,6 @@
 #define PUSHBUTTON_PIN 14
 #endif
 
-extern Status status;
 extern Counter gcounter;
 
 class PushButton : public EGModule {

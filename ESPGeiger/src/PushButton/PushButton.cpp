@@ -95,7 +95,7 @@ bool PushButton::isPressed()
 void PushButton::loop(unsigned long now)
 {
   if (button_pushed) {
-    status.led.Blink(200, 1);
+    led.Blink(200, 1);
 #if defined(SSD1306_DISPLAY)
     display.oled_timeout = now;
     if (display.oled_on) {

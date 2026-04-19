@@ -22,7 +22,7 @@
 #ifdef MQTTOUT
 #define LOG_TAG "MQTT"
 
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
@@ -59,7 +59,6 @@ constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
 constexpr auto MQTT_TOPIC_LWT PROGMEM = "lwt";
 constexpr auto MQTT_TOPIC_STATUS PROGMEM = "status";
 
-extern Status status;
 extern Counter gcounter;
 
 struct MQTTMessage {

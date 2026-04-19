@@ -21,7 +21,6 @@
 #ifdef GEIGER_SDCARD
 #include <SPI.h>
 #include <SdFat.h>
-#include "../Status.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
@@ -30,7 +29,6 @@
 #define GEIGER_SDCARD_CS 16
 #endif
 
-extern Status status;
 extern Counter gcounter;
 extern SdFat32* sd;
 

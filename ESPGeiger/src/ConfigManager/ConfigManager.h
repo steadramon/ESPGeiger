@@ -20,7 +20,7 @@
 #ifndef ConfigManager_h
 #define ConfigManager_h
 #include "WiFiManager.h"
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../NTP/NTP.h"
@@ -39,7 +39,6 @@ extern SSD1306Display display;
 extern NeoPixel neopixel;
 #endif
 
-extern Status status;
 extern Counter gcounter;
 extern NTP_Client ntpclient;
 constexpr auto MQTT_SERVER_LENGTH = 31;

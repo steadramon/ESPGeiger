@@ -21,7 +21,7 @@
 #define SERIALOUT_H
 #ifdef SERIALOUT
 #include <Arduino.h>
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
 

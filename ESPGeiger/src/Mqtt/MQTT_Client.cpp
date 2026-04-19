@@ -227,7 +227,7 @@ void MQTT_Client::publishAlert()
 
 void MQTT_Client::publishStatus()
 {
-  status.led.Blink(500, 500);
+  led.Blink(500, 500);
   time_t currentTime = time(NULL);
   struct tm *timeinfo = gmtime(&currentTime);
   static char buffer[512];

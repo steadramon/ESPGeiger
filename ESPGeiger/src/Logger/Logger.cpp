@@ -18,11 +18,8 @@
 */
 
 #include "Logger.h"
-#include "../Status.h"
 #include "../Util/Wifi.h"
 #include "../NTP/NTP.h"
-
-extern Status status;
 
 char Log::logIdx = 1;
 Log::LoggingLevels Log::logLevel = LOG_LEVEL;

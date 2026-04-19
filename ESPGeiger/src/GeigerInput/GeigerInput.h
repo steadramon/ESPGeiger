@@ -21,7 +21,7 @@
 #ifndef GEIGERINPUT_H
 #define GEIGERINPUT_H
 #include <Arduino.h>
-#include "../Status.h"
+#include "../Util/Globals.h"
 
 // GEIGER_TYPE bitfield. Bit 7 partitions test (>=128) from real (<128) builds;
 // bits 0-2 describe the input pipeline; bits 3-6 reserved for future variants.

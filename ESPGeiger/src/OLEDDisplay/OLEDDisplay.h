@@ -23,12 +23,11 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "SSD1306Wire.h"
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
 
-extern Status status;
 extern Counter gcounter;
 
 #ifndef OLED_PAGES

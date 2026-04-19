@@ -172,7 +172,7 @@ void Webhook::postMeasurement() {
   {
     if (request.open("POST", url))
     {
-      status.led.Blink(500, 500);
+      led.Blink(500, 500);
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Accept"), F("application/json"));
       request.setReqHeader(F("Content-Type"), F("application/json"));

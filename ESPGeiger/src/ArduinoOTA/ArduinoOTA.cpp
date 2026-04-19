@@ -19,7 +19,7 @@
 
 #include "ArduinoOTA.h"
 #include "../Logger/Logger.h"
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/DeviceInfo.h"
 

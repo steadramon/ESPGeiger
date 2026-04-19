@@ -20,14 +20,12 @@
 #define _NEOPIXEL_h
 #ifdef GEIGER_NEOPIXEL
 #include <Arduino.h>
-#include "../Status.h"
 #include <NeoPixelBus.h>
 #include "../NTP/NTP.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
 
-extern Status status;
 extern Counter gcounter;
 
 #ifndef NEOPIXEL_MODE

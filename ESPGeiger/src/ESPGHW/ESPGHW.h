@@ -20,7 +20,7 @@
 #ifndef ESPGHW_H
 #define ESPGHW_H
 #include <Arduino.h>
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/EGSmoothed.h"
@@ -56,8 +56,6 @@
 #ifndef GEIGERHW_ADC_OFFSET
 #define GEIGERHW_ADC_OFFSET 0
 #endif
-
-extern Status status;
 
 class ESPGeigerHW : public EGModule {
     public:

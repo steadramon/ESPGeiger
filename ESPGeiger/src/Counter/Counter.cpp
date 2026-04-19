@@ -213,7 +213,7 @@ void Counter::begin() {
 
 void Counter::blip() {
 #ifndef DISABLE_INTERNAL_BLIP
-    status.led.Blink(20,20);
+    led.Blink(20,20);
 #endif
 #ifdef GEIGER_BLIPLED
     if (blip_led.IsRunning() == false) {

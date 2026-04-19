@@ -21,7 +21,7 @@
 #define GMC_H
 #ifdef GMCOUT
 #include <Arduino.h>
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
@@ -29,7 +29,6 @@
 #include "AsyncHTTPRequest_Generic.hpp"
 
 
-extern Status status;
 extern Counter gcounter;
 
 #ifndef GMC_INTERVAL

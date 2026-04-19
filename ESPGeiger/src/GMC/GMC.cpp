@@ -136,7 +136,7 @@ void GMC::postMeasurement() {
   {
     if (request.open("GET", url))
     {
-      status.led.Blink(500, 500);
+      led.Blink(500, 500);
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(30);

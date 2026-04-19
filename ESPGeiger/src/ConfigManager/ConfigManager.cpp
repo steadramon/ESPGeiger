@@ -609,7 +609,7 @@ void ConfigManager::handleClicksReturn()
   if (ntpclient.synced) {
     json["start"] = ntpclient.boot_epoch;
   } else {
-    unsigned long uptime = NTP.getUptime () - status.start;
+    unsigned long uptime = NTP.getUptime () - start;
     json["uptime"] = uptime;
   }
 

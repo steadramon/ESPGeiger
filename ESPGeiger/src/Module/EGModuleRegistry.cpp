@@ -11,13 +11,10 @@
 
 #include "EGModuleRegistry.h"
 #include "../Logger/Logger.h"
-#include "../Status.h"
 #include "../Util/Wifi.h"
 #include "../NTP/NTP.h"
 #include <string.h>
 
-
-extern Status status;
 
 EGModuleRegistry::Slot EGModuleRegistry::_slots[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_count = 0;

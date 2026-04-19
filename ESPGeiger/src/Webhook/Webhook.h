@@ -19,7 +19,7 @@
 #ifndef WEBHOOK_H
 #define WEBHOOK_H
 #include <Arduino.h>
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
@@ -27,7 +27,6 @@
 #include "AsyncHTTPRequest_Generic.hpp"
 
 
-extern Status status;
 extern Counter gcounter;
 
 #ifndef WEBHOOK_INTERVAL_MIN

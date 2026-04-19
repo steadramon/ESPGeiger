@@ -29,7 +29,7 @@
 #include "src/GRNG/GRNG.h"
 #include "src/Counter/Counter.h"
 #include "src/ConfigManager/ConfigManager.h"
-#include "src/Status.h"
+#include "jled.h"
 #include "src/Mqtt/MQTT_Client.h"
 #include "src/Radmon/Radmon.h"
 #include "src/Module/EGModuleRegistry.h"
@@ -51,8 +51,13 @@
 #include "src/OLEDDisplay/OLEDDisplay.h"
 #include "src/SerialCommand/SerialCommand.h"
 #include <Ticker.h>  //Ticker Library
-// Global status and counter
-Status status;
+long start = 0;  // NTP.getUptime() at end of setup() - uptime-since-ready baseline
+#if LED_SEND_RECEIVE_ON == LOW
+JLed led = JLed(LED_SEND_RECEIVE).LowActive();
+#else
+JLed led = JLed(LED_SEND_RECEIVE);
+#endif
+
 Counter gcounter;
 GRNG grng;
 
@@ -76,7 +81,7 @@ uint8_t send_indicator = 0;
 
 void msTickerCB()
 {
-  status.led.Update();
+  led.Update();
 #ifdef GEIGER_BLIPLED
   gcounter.blip_led.Update();
 #endif
@@ -92,7 +97,7 @@ void sTickerCB()
   TickProfile::markCounter();
 #endif
 
-  unsigned long uptime = NTP.getUptime() - status.start;
+  unsigned long uptime = NTP.getUptime() - start;
   if (!past_warmup && uptime > ESPG_WARMUP_S) past_warmup = true;
   Wifi::tick(stick_now);
 #ifdef TICK_PROFILE
@@ -135,7 +140,7 @@ void setup()
   msTicker.attach_ms(1, msTickerCB);
 #ifdef GEIGER_PUSHBUTTON
   pushbutton.init();
-  if (pushbutton.isPressed() && status.start == 0) {
+  if (pushbutton.isPressed() && start == 0) {
 #ifdef SSD1306_DISPLAY
     display.wifiDisabled();
 #endif
@@ -177,10 +182,10 @@ void setup()
   grng.begin();
   gcounter.begin();
   EGModuleRegistry::begin_all();
-  status.start = NTP.getUptime() + 1;
+  start = NTP.getUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
-  status.led.Off().Update();
+  led.Off().Update();
 #ifdef SSD1306_DISPLAY
   display.oled_timeout = millis();
 #endif

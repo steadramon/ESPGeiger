@@ -13,7 +13,7 @@
 #include <Arduino.h>
 #include <ESPNtpClient.h>
 #include "timezones.h"
-#include "../Status.h"
+#include "../Util/Globals.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
 
@@ -25,7 +25,6 @@
 #  define NTP_TZ "Etc/UTC"
 #endif
 
-extern Status status;
 
 class NTP_Client : public EGModule {
   public:

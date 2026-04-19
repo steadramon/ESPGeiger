@@ -19,7 +19,6 @@
 #ifndef _SERIALCOMMAND_h_
 #define _SERIALCOMMAND_h_
 #include <Arduino.h>
-#include "../Status.h"
 #include "../Counter/Counter.h"
 #include "../ConfigManager/ConfigManager.h"
 #include "../Module/EGModule.h"
@@ -34,7 +33,6 @@ extern ESPGeigerHW hardware;
 #define MAX_COMMANDS 32
 //#define SERIALCOMMAND_DEBUG true
 
-extern Status status;
 extern Counter gcounter;
 #ifdef SERIALOUT
 #include "../SerialOut/SerialOut.h"
