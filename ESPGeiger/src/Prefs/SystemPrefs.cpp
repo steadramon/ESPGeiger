@@ -29,7 +29,7 @@ static const EGPref SYSTEM_PREF_ITEMS[] = {
 };
 
 static const EGPrefGroup SYSTEM_PREF_GROUP = {
-  "system", "System", 1,
+  "sys", "System", 1,
   SYSTEM_PREF_ITEMS,
   sizeof(SYSTEM_PREF_ITEMS) / sizeof(SYSTEM_PREF_ITEMS[0]),
 };
@@ -37,15 +37,15 @@ static const EGPrefGroup SYSTEM_PREF_GROUP = {
 const EGPrefGroup* SystemPrefs::prefs_group() { return &SYSTEM_PREF_GROUP; }
 
 void SystemPrefs::on_prefs_loaded() {
-  gcounter.set_ratio(EGPrefs::getFloat("system", "ratio"));
-  gcounter.set_warning((int)EGPrefs::getUInt("system", "warn"));
-  gcounter.set_alert((int)EGPrefs::getUInt("system", "alert"));
+  gcounter.set_ratio(EGPrefs::getFloat("sys", "ratio"));
+  gcounter.set_warning((int)EGPrefs::getUInt("sys", "warn"));
+  gcounter.set_alert((int)EGPrefs::getUInt("sys", "alert"));
 #ifdef USE_PCNT
-  gcounter.set_pcnt_filter((int)EGPrefs::getUInt("system", "pcnt_filter"));
-  gcounter.set_pin_pull((int)EGPrefs::getUInt("system", "pcnt_pull"));
+  gcounter.set_pcnt_filter((int)EGPrefs::getUInt("sys", "pcnt_filter"));
+  gcounter.set_pin_pull((int)EGPrefs::getUInt("sys", "pcnt_pull"));
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-  gcounter.set_debounce((int)EGPrefs::getUInt("system", "debounce"));
+  gcounter.set_debounce((int)EGPrefs::getUInt("sys", "debounce"));
 #endif
 }
 

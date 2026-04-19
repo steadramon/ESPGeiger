@@ -265,7 +265,7 @@ void ConfigManager::handleJsonReturn()
 {
   char jsonBuffer[320] = "";
 
-  const char* ratioChar = EGPrefs::getString("system", "ratio");
+  const char* ratioChar = EGPrefs::getString("sys", "ratio");
   char c[16], s[16], c5[16], c15[16], cs[16];
   format_f(c, sizeof(c), gcounter.get_cpmf());
   format_f(s, sizeof(s), gcounter.get_usv());
@@ -299,7 +299,7 @@ void ConfigManager::handleJsonReturn()
 void ConfigManager::handleGeigerLog() {
   handleRequest();
   char jsonBuffer[128] = "";
-  const char* ratioChar = EGPrefs::getString("system", "ratio");
+  const char* ratioChar = EGPrefs::getString("sys", "ratio");
   char cpm[16], cps[16];
   format_f(cpm, sizeof(cpm), gcounter.get_cpmf());
   format_f(cps, sizeof(cps), gcounter.get_cps());
@@ -605,7 +605,7 @@ void ConfigManager::handleClicksReturn()
   }
   json["today"] = gcounter.clicks_today;
   json["yesterday"] = gcounter.clicks_yesterday;
-  json["ratio"] = EGPrefs::getString("system", "ratio");
+  json["ratio"] = EGPrefs::getString("sys", "ratio");
   if (ntpclient.synced) {
     json["start"] = ntpclient.boot_epoch;
   } else {
