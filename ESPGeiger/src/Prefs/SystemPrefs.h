@@ -14,7 +14,7 @@ extern Counter gcounter;
 
 class SystemPrefs : public EGModule {
   public:
-    const char* name() override { return "system"; }
+    const char* name() override { return "sys"; }
     uint8_t display_order() override { return 10; }
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
