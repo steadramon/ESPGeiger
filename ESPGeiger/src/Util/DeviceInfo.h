@@ -41,6 +41,32 @@ namespace DeviceInfo {
   inline unsigned long uptime() { return NTP.getUptime(); }
 
   char* uptimeString();
+
+  // Normalised reset-reason code. ESP8266 rst_info.reason and ESP32
+  // esp_reset_reason() use different enums; this maps both to a single
+  // small set so the census can aggregate cross-platform. Codes are
+  // frozen — never renumber.
+  //   0 unknown   1 power-on     2 external reset   3 software restart
+  //   4 exception 5 watchdog     6 brown-out        7 deep-sleep wake
+  uint8_t resetReason();
+
+  // Compile-time feature bitmask. Bits track *optional* modules that may or
+  // may not be built in. Board variants live in chipmodel/`btd`; input types
+  // in BUILD_ENV/`gm`; WebAPI itself is a given (we're inside its handshake).
+  // Always-on modules (NTP, Counter, ConfigManager, etc.) aren't tracked —
+  // a bit that's always 1 carries no information. Bits are frozen — never
+  // reassign.
+  //   bit 0  MQTT          (MQTTOUT)
+  //   bit 1  Radmon        (RADMONOUT)
+  //   bit 2  ThingSpeak    (THINGSPEAKOUT)
+  //   bit 3  Webhook       (WEBHOOKOUT)
+  //   bit 4  Serial out    (SERIALOUT)
+  //   bit 5  GMC out       (GMCOUT)
+  //   bit 6  OLED display  (SSD1306_DISPLAY)
+  //   bit 7  Push button   (GEIGER_PUSHBUTTON)
+  //   bit 8  SD logger     (GEIGER_SDCARD)
+  //   bit 9  NeoPixel      (GEIGER_NEOPIXEL)
+  uint16_t featureFlags();
 }
 
 #endif
