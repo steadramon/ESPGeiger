@@ -43,8 +43,20 @@ bool EGPrefsStorage::begin(const char* name, bool readOnly) {
   _readOnly = readOnly;
   ensure_mounted();
   String dir = String("/") + name;
-  if (!_readOnly && !LittleFS.exists(dir.c_str())) {
-    LittleFS.mkdir(dir.c_str());
+  if (!_readOnly) {
+    if (LittleFS.exists(dir.c_str())) {
+      File chk = LittleFS.open(dir.c_str(), "r");
+      if (chk && !chk.isDirectory()) {
+        chk.close();
+        LittleFS.remove(dir.c_str());
+        Log::console(PSTR("prefs: cleared rogue file at %s"), dir.c_str());
+      } else if (chk) {
+        chk.close();
+      }
+    }
+    if (!LittleFS.exists(dir.c_str())) {
+      LittleFS.mkdir(dir.c_str());
+    }
   }
   _path = dir + "/";
   _started = true;
