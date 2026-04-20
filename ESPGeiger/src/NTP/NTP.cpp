@@ -57,10 +57,10 @@ void NTP_Client::setup()
 #ifdef ESP8266
   settimeofday_cb([](){
     if (!ntpclient.synced) {
-      Log::console(PSTR("NTP: Synched"));
       ntpclient.synced = true;
       unsigned long uptime = NTP.getUptime () - start;
       ntpclient.boot_epoch = int(time(NULL)-uptime);
+      Log::console(PSTR("NTP: Synched"));
     }
   });
 
@@ -72,10 +72,10 @@ void NTP_Client::setup()
       return;
     }
     if (!ntpclient.synced) {
-      Log::console(PSTR("NTP: Synched"));
       ntpclient.synced = true;
       unsigned long uptime = NTP.getUptime () - start;
       ntpclient.boot_epoch = int(time(NULL)-uptime);
+      Log::console(PSTR("NTP: Synched"));
     }
   });
   configTime(0, 0, server); // 0, 0 because we will use TZ in the next line
