@@ -564,15 +564,18 @@ void ConfigManager::handleEGPrefs() {
   endChunkedPage();
 }
 
+#ifdef DEBUG_PREFS
 void ConfigManager::handlePrefs() {
   auto* s = ConfigManager::server.get();
   if (!s->hasArg("m")) {
     s->send(400, "text/plain", "usage: /prefs?m=<module>&k=<key>  or  &action=delete");
     return;
   }
-  String m = s->arg("m");
-  if (s->arg("action") == "delete") {
-    bool ok = EGPrefs::remove_group(m.c_str());
+  String m_arg = s->arg("m");
+  const char* m = m_arg.c_str();
+  String action_arg = s->arg("action");
+  if (strcmp(action_arg.c_str(), "delete") == 0) {
+    bool ok = EGPrefs::remove_group(m);
     s->send(ok ? 200 : 404, "text/plain", ok ? "deleted" : "no file");
     return;
   }
@@ -580,44 +583,48 @@ void ConfigManager::handlePrefs() {
     s->send(400, "text/plain", "missing k");
     return;
   }
-  String k = s->arg("k");
-  const EGPref* p = EGPrefs::find_pref(m.c_str(), k.c_str());
+  String k_arg = s->arg("k");
+  const char* k = k_arg.c_str();
+  const EGPref* p = EGPrefs::find_pref(m, k);
   if (!p) {
     s->send(404, "text/plain", "not found");
     return;
   }
-  s->send(200, "text/plain", EGPrefs::getString(m.c_str(), k.c_str()));
+  s->send(200, "text/plain", EGPrefs::getString(m, k));
 }
+#endif
 
 void ConfigManager::handleClicksReturn()
 {
   handleRequest();
-  DynamicJsonDocument json(512);
+  char buf[512];
+  int pos = 0;
+  pos += snprintf(buf + pos, sizeof(buf) - pos,
+    "{\"last_day\":[%d", (int)gcounter.clicks_hour);
 
-  json.clear();
-  auto last_day = json.createNestedArray("last_day");
-#if GEIGER_IS_TEST(GEIGER_TYPE)
-  //json["roll"] = 60;
-#endif
-  last_day.add(gcounter.clicks_hour);
-  int histSize = gcounter.day_hourly_history.size();
-  for (decltype(gcounter.day_hourly_history)::index_t i = histSize; i > 0; i--) {
-    int value = gcounter.day_hourly_history[i-1];
-    last_day.add(value);
+  const int histSize = gcounter.day_hourly_history.size();
+  for (int i = histSize; i > 0; i--) {
+    if (pos >= (int)sizeof(buf) - 32) break;  // reserve tail
+    pos += snprintf(buf + pos, sizeof(buf) - pos, ",%d",
+      (int)gcounter.day_hourly_history[i - 1]);
   }
-  json["today"] = gcounter.clicks_today;
-  json["yesterday"] = gcounter.clicks_yesterday;
-  json["ratio"] = EGPrefs::getString("sys", "ratio");
+
+  pos += snprintf(buf + pos, sizeof(buf) - pos,
+    "],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\"",
+    (int)gcounter.clicks_today,
+    (int)gcounter.clicks_yesterday,
+    EGPrefs::getString("sys", "ratio"));
+
   if (ntpclient.synced) {
-    json["start"] = ntpclient.boot_epoch;
+    pos += snprintf(buf + pos, sizeof(buf) - pos,
+      ",\"start\":%lu}", (unsigned long)ntpclient.boot_epoch);
   } else {
-    unsigned long uptime = NTP.getUptime () - start;
-    json["uptime"] = uptime;
+    unsigned long uptime = NTP.getUptime() - start;
+    pos += snprintf(buf + pos, sizeof(buf) - pos,
+      ",\"uptime\":%lu}", uptime);
   }
 
-  char jsonBuffer[512] = "";
-  serializeJson(json, jsonBuffer);
-  ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
+  ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), buf);
 }
 
 
@@ -920,7 +927,9 @@ void ConfigManager::bindServerCallback()
 #endif
   ConfigManager::server.get()->on(ABOUT_URL, HTTP_GET, std::bind(&ConfigManager::handleAbout, this));
   ConfigManager::server.get()->on(OUTPUTS_URL, HTTP_GET, std::bind(&ConfigManager::handleOutputsJson, this));
+#ifdef DEBUG_PREFS
   ConfigManager::server.get()->on(PREFS_URL, HTTP_GET, std::bind(&ConfigManager::handlePrefs, this));
+#endif
   ConfigManager::server.get()->on(EGPREFS_URL, HTTP_GET,  std::bind(&ConfigManager::handleEGPrefs, this));
   ConfigManager::server.get()->on(EGPREFS_URL, HTTP_POST, std::bind(&ConfigManager::handleEGPrefs, this));
 #ifdef ESPGEIGER_HW
