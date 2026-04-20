@@ -265,10 +265,11 @@ void MQTT_Client::publishStatus()
   char topic[64];
   buildTopic(topic, sizeof(topic), "tele", topicStatus);
   uint16_t pid = mqttClient->publish(topic, 1, false, buffer);
-  Log::console(PSTR("MQTT: Published"));
+  Log::debug(PSTR("MQTT: Published"));
   send_indicator = 2;
   last_attempt_ms = millis();
   last_ok = (pid != 0) && connected;
+  note_publish(last_ok);
 }
 
 void MQTT_Client::publishPing()

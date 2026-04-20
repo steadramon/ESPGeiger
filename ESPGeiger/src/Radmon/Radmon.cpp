@@ -110,7 +110,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
       String response = request->responseText();
       const char* r = response.c_str();
       if (strstr(r, "OK")) {
-        Log::console(PSTR("Radmon: Upload OK"));
+        Log::debug(PSTR("Radmon: Upload OK"));
         self->last_ok = true;
       } else if (strstr(r, "Incorrect")) {
         Log::console(PSTR("Radmon: Password incorrect, please check"));
@@ -124,6 +124,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     } else {
       Log::console(PSTR("Radmon: Error - %s"), request->responseHTTPString().c_str());
     }
+    self->note_publish(self->last_ok);
   }
 }
 
@@ -146,7 +147,7 @@ void Radmon::postMeasurement() {
   if (rtimer == 0) rtimer = RADMON_INTERVAL;
   setInterval(rtimer);
 
-  Log::console(PSTR("Radmon: Uploading latest data ..."));
+  Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
   int avgcpm;
   if (rtimer <= 90) {

@@ -57,6 +57,7 @@ void TickProfile::endTick() {
     EGModuleRegistry::log_profile_and_reset();
     max_counter_us = max_wifi_us = max_modules_us = 0;
 #endif
+    EGModuleRegistry::log_activity_and_reset();
     TickProfile::tick_max_us = this_tick;
   }
 }

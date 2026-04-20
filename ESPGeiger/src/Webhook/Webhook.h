@@ -55,8 +55,6 @@ class Webhook : public EGModule {
     int getInterval() { return pingInterval; }
     const char* cleanHTTP(const char* url);
     AsyncHTTPRequest request;
-    bool last_ok = false;
-    unsigned long last_attempt_ms = 0;
   private:
     unsigned long lastPing = 0;
     uint16_t pingInterval = WEBHOOK_INTERVAL;

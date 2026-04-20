@@ -86,7 +86,7 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
       String response = request->responseText();
       const char* r = response.c_str();
       if (strstr(r, "OK")) {
-        Log::console(PSTR("GMC: Upload OK"));
+        Log::debug(PSTR("GMC: Upload OK"));
         self->last_ok = true;
       } else if (strstr(r, "ERR1")) {
         Log::console(PSTR("GMC: User is not found"));
@@ -98,6 +98,7 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
     } else {
       Log::console(PSTR("GMC: Error - %s"), request->responseHTTPString().c_str());
     }
+    self->note_publish(self->last_ok);
   }
 }
 
@@ -123,7 +124,7 @@ void GMC::postMeasurement() {
     return;
   }
 
-  Log::console(PSTR("GMC: Uploading latest data ..."));
+  Log::debug(PSTR("GMC: Uploading latest data ..."));
 
   int avgcpm = gcounter.get_cpmf();
   char acpm[16], usv[16];

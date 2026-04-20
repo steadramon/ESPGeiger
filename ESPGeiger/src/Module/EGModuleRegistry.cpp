@@ -116,6 +116,28 @@ void EGModuleRegistry::log_profile_and_reset() {
 }
 #endif
 
+void EGModuleRegistry::log_activity_and_reset() {
+  char buf[200];
+  int pos = 0;
+  bool any = false;
+  for (uint8_t i = 0; i < _count; i++) {
+    EGModule* m = _slots[i].module;
+    uint8_t ok = m->take_publish_ok();
+    uint8_t err = m->take_publish_err();
+    if (ok == 0 && err == 0) continue;
+    any = true;
+    int n;
+    if (err == 0) {
+      n = snprintf(buf + pos, sizeof(buf) - pos, "%s%s=%u", pos ? " " : "", m->name(), ok);
+    } else {
+      n = snprintf(buf + pos, sizeof(buf) - pos, "%s%s=%u/%u", pos ? " " : "", m->name(), ok, (uint8_t)(ok + err));
+    }
+    if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
+    pos += n;
+  }
+  if (any) Log::console(PSTR("Activity: %s"), buf);
+}
+
 uint8_t EGModuleRegistry::count() {
   return _count;
 }

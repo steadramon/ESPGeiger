@@ -25,6 +25,7 @@ class EGModuleRegistry {
 #ifdef TICK_PROFILE
     static void log_profile_and_reset();
 #endif
+    static void log_activity_and_reset();
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);

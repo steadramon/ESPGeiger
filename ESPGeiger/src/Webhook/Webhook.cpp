@@ -99,7 +99,7 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     {
       String response = request->responseText();
       if (strstr(response.c_str(), "OK")) {
-        Log::console(PSTR("Webhook: Upload OK"));
+        Log::debug(PSTR("Webhook: Upload OK"));
         self->last_ok = true;
       } else {
         Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100).c_str());
@@ -107,6 +107,7 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     } else {
       Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
     }
+    self->note_publish(self->last_ok);
   }
 }
 
@@ -134,7 +135,7 @@ void Webhook::postMeasurement() {
   int iv = (int)EGPrefs::getUInt("webhook", "interval");
   if (iv > 0) setInterval(iv);
 
-  Log::console(PSTR("Webhook: Uploading latest data ..."));
+  Log::debug(PSTR("Webhook: Uploading latest data ..."));
 
   const char* key = EGPrefs::getString("webhook", "key");
 

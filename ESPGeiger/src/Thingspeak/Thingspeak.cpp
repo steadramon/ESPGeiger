@@ -81,7 +81,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     {
       String response = request->responseText();
       if (strcmp(response.c_str(), "0") != 0) {
-        Log::console(PSTR("Thingspeak: Upload OK"));
+        Log::debug(PSTR("Thingspeak: Upload OK"));
         self->last_ok = true;
       } else {
         Log::console(PSTR("Thingspeak: Error!"));
@@ -89,6 +89,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     } else {
       Log::console(PSTR("Thingspeak: Error - %s"), request->responseHTTPString().c_str());
     }
+    self->note_publish(self->last_ok);
   }
 }
 
@@ -103,7 +104,7 @@ void Thingspeak::postMeasurement() {
   const char* _ts_channel_key = EGPrefs::getString("thingspeak", "channel_key");
   if (_ts_channel_key[0] == '\0') return;
 
-  Log::console(PSTR("Thingspeak: Uploading latest data ..."));
+  Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
 
   int avgcpm = gcounter.get_cpm();
   int avgcpm5 = gcounter.get_cpm5();

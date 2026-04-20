@@ -52,8 +52,6 @@ class GMC : public EGModule {
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void postMeasurement();
     AsyncHTTPRequest request;
-    bool last_ok = false;
-    unsigned long last_attempt_ms = 0;
   private:
     unsigned long lastPing = 0;
     static constexpr uint32_t pingIntervalMs = (uint32_t)GMC_INTERVAL * 1000UL;

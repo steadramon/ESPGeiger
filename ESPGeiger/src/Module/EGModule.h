@@ -60,6 +60,22 @@ class EGModule {
     // Caller handles outer braces and comma separation.
     virtual size_t status_json(char* buf, size_t cap, unsigned long now) { return 0; }
 
+    bool last_ok = false;
+    unsigned long last_attempt_ms = 0;
+
+    void note_publish(bool ok) {
+      last_ok = ok;
+      last_attempt_ms = millis();
+      if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
+      else    { if (_pub_err < 0xFF) ++_pub_err; }
+    }
+    uint8_t take_publish_ok()  { uint8_t v = _pub_ok;  _pub_ok  = 0; return v; }
+    uint8_t take_publish_err() { uint8_t v = _pub_err; _pub_err = 0; return v; }
+
+  private:
+    uint8_t _pub_ok  = 0;
+    uint8_t _pub_err = 0;
+
   protected:
     // Standard ok/age shape used by every sender module.
     static size_t write_status_json(char* buf, size_t cap, const char* key,
