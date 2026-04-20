@@ -776,6 +776,14 @@ void ConfigManager::handleInfo()
   INFO_ROW("Feature flags","0x%04x", (unsigned)DeviceInfo::featureFlags());
   s->sendContent(F("</table></details>"));
 
+  s->sendContent(F("<details><summary>Actions</summary>"));
+  s->sendContent(FPSTR(HTTP_UPDATEBTN));
+  s->sendContent(F(
+    "<br/><form action='/erase' method='get'"
+    " onsubmit=\"return confirm('Erase saved WiFi credentials? Device will reboot into captive-portal mode.')\">"
+    "<button class='D'>Erase WiFi config</button></form>"));
+  s->sendContent(F("</details>"));
+
   #undef INFO_ROW
   s->sendContent(FPSTR(HTTP_BACKBTN));
   endChunkedPage();
