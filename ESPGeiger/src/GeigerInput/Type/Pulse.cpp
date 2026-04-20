@@ -26,12 +26,10 @@ void GeigerPulse::begin() {
   GeigerInput::begin();
 #ifdef USE_PCNT
   Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
-  // Set pull mode BEFORE pcnt_unit_config so the pin is at a defined level
-  // when PCNT samples it. A floating pin during init can leave the edge
-  // detector in an undefined state and prevent counting from starting.
-  // _pin_pull may have been updated by set_pin_pull() during loadParams()
-  // before begin() runs; otherwise it's the compile-time default.
-  set_pin_pull(_pin_pull);
+  // Force pull-up during PCNT init: the channel counts on falling edges,
+  // so the edge detector needs a HIGH prior-state to latch against. We
+  // restore the user-configured pull after the counter is running.
+  gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _rx_pin,
     .ctrl_gpio_num = -1,
@@ -50,6 +48,7 @@ void GeigerPulse::begin() {
   #endif
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
+  set_pin_pull(_pin_pull);
 #else
   Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);

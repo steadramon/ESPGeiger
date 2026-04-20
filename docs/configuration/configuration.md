@@ -24,11 +24,18 @@ Settings changed on the Config page take effect immediately (or on next submissi
 | uSv/h Ratio | Float | `151.0` | CPM to uSv/h conversion factor |
 | Warning CPM | Int 0-9999 | `50` | CPM threshold for warning state |
 | Alert CPM | Int 0-9999 | `100` | CPM threshold for alert state |
+
+## Input Settings
+
+Some settings only appear on specific builds. Pin and Serial Type changes trigger a reboot to apply; PCNT Filter, PCNT Pin Pull and Debounce apply live.
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
 | Serial Type | Int 1-255 | `(varies)` | Serial counter protocol: 1=GC10, 2=GC10Next, 3=MightyOhm, 4=ESPGeiger. Only shown on serial builds. Reboot required. |
-| RX Pin | Int | `(varies)` | Geiger counter input pin. Reboot required. Hidden when `-D RXPIN_BLOCKED`. |
+| RX Pin | Int | `(varies)` | Geiger counter input pin. Hidden when `-D RXPIN_BLOCKED`. Reboot required. |
 | TX Pin | Int | `(varies)` | Transmit pin. Only on builds with a TX pin configured. Reboot required. |
-| PCNT Filter | Int 0-1023 | `100` | Glitch filter threshold (ESP32 PCNT builds only). `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
-| PCNT Pin Pull | Int 0-2 | `1` | PCNT input pin pull: `0`=none, `1`=up, `2`=down. ESP32 PCNT builds only. |
+| PCNT Filter | Int 0-1023 | `200` | Glitch filter threshold (ESP32 PCNT builds only). `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
+| PCNT Pin Pull | Int 0-2 | `0` | PCNT input pin pull: `0`=none (floating), `1`=up, `2`=down. ESP32 PCNT builds only. Default floating suits most modules that drive the line actively both directions; change to pull-up for open-drain outputs or pull-down for active-high modules without their own idle pull. |
 | Debounce (us) | Int 0-10000 | `500` | Software interrupt debounce. Pulse builds without PCNT only. |
 
 ## MQTT Configuration

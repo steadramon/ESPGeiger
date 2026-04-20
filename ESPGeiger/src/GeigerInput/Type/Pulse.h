@@ -32,21 +32,15 @@ extern "C" {
 
 #define PCNT_UNIT PCNT_UNIT_0
 #define PCNT_CHANNEL PCNT_CHANNEL_0
-// Pull-mode encoding shared with the web portal config (pcntPull):
-//   0 = floating / no pull
-//   1 = pull-up  (default - matches active-low modules with external pullup)
-//   2 = pull-down (active-high modules without own idle pull)
-// The compile-time flags set the *default* visible in the portal; users can
-// override per-device from the web form.
 #define PCNT_PULL_FLOATING 0
 #define PCNT_PULL_UP       1
 #define PCNT_PULL_DOWN     2
-#if defined(PCNT_FLOATING_PIN)
-#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_FLOATING
+#if defined(PCNT_PULLUP_PIN)
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_UP
 #elif defined(PCNT_PULLDOWN_PIN)
 #define PCNT_PIN_PULL_DEFAULT PCNT_PULL_DOWN
 #else
-#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_UP
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_FLOATING
 #endif
 #endif
 
