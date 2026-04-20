@@ -89,9 +89,7 @@ void Sha256Class::addUncounted(uint8_t data) {
 WRITE_RET_TYPE Sha256Class::write(uint8_t data) {
   ++byteCount;
   addUncounted(data);
-#ifdef ESP8266
   return 1;
-#endif
 }
 
 void Sha256Class::pad() {
