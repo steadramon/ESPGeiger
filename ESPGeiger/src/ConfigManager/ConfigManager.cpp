@@ -51,7 +51,9 @@ ConfigManager::ConfigManager() : WiFiManager(){
   chipId[sizeof(chipId) - 1] = '\0';
 
   snprintf_P (hostName, sizeof(hostName), PSTR("%S-%S"), THING_NAME, chipId);
-  snprintf_P (userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"), THING_NAME, RELEASE_VERSION, GIT_VERSION, DeviceInfo::geigermodel(), DeviceInfo::chipmodel(), chipId);
+  snprintf_P(userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"),
+             THING_NAME, RELEASE_VERSION, GIT_VERSION,
+             BUILD_ENV, DeviceInfo::chipmodel(), chipId);
   strncpy(macAddr, WiFi.macAddress().c_str(), sizeof(macAddr) - 1);
   macAddr[sizeof(macAddr) - 1] = '\0';
 
@@ -219,8 +221,13 @@ void ConfigManager::handleRoot() {
   server->client().flush();
   sendPageHead(hostName);
   auto* s = server.get();
+
+  char ip[16];
+  strncpy(ip, WiFi.localIP().toString().c_str(), sizeof(ip) - 1);
+  ip[sizeof(ip) - 1] = '\0';
+
   char heading[64];
-  snprintf(heading, sizeof(heading), "%s - %s", hostName, WiFi.localIP().toString().c_str());
+  snprintf(heading, sizeof(heading), "%s - %s", hostName, ip);
   const char* tname =
 #ifdef ESPGEIGER_HW
     "ESPGeiger-HW";
@@ -241,9 +248,6 @@ void ConfigManager::handleRoot() {
   s->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
   s->sendContent(FPSTR(HTTP_PORTAL_MENU[8]));
   s->sendContent(F("<form action='/restart' method='get'><button>Reboot</button></form><br/>"));
-  char ip[16];
-  strncpy(ip, WiFi.localIP().toString().c_str(), sizeof(ip) - 1);
-  ip[sizeof(ip) - 1] = '\0';
   char ssid[33];
   strncpy(ssid, WiFiManager::getWiFiSSID().c_str(), sizeof(ssid) - 1);
   ssid[sizeof(ssid) - 1] = '\0';
@@ -416,6 +420,8 @@ void ConfigManager::handleEGPrefs() {
 
   if (s->method() == HTTP_POST) {
     char name[64];
+    String lookup;  lookup.reserve(64);
+    String arg_val; arg_val.reserve(64);
     for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
       const EGPrefGroup* g = EGPrefs::group_at(gi);
       if (!g) continue;
@@ -423,9 +429,8 @@ void ConfigManager::handleEGPrefs() {
         const EGPref& p = g->prefs[j];
         if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
         snprintf(name, sizeof(name), "%s.%s", g->module_id, p.id);
-        String lookup(name);  // WebServer::arg requires String
+        lookup = name;
         char one[2] = {0, 0};
-        String arg_val;
         const char* v;
         if (p.type == EGP_BOOL) {
           one[0] = s->hasArg(lookup) ? '1' : '0';
@@ -646,6 +651,136 @@ void ConfigManager::handleStatusPage()
   endChunkedPage();
 }
 
+static const char* reset_reason_label(uint8_t code) {
+  switch (code) {
+    case 1: return "Power on";
+    case 2: return "External reset";
+    case 3: return "Software/System restart";
+    case 4: return "Exception";
+    case 5: return "Watchdog";
+    case 6: return "Brown-out";
+    case 7: return "Deep-sleep wake";
+    default: return "Unknown";
+  }
+}
+
+void ConfigManager::handleInfo()
+{
+  handleRequest();
+  beginChunkedPage();
+  char title[48];
+  snprintf(title, sizeof(title), "%s - Info", THING_NAME);
+  sendPageHead(title);
+  auto* s = server.get();
+  { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
+    SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
+
+  s->sendContent(F(
+    "<style>"
+    "details{border:1px solid #eee;padding:8px;margin:8px 0;max-width:680px;margin-left:auto;margin-right:auto}"
+    "summary{font-weight:bold;padding:4px 0;cursor:pointer}"
+    ".i{margin:auto;width:100%}"
+    ".i th{text-align:left;padding-right:1em;vertical-align:top;font-weight:normal;color:#555}"
+    ".i td{text-align:left;font-family:monospace;word-break:break-word}"
+    ".m{list-style:none;padding:0;margin:0;columns:2;column-gap:1em}"
+    ".m li{padding:2px 0}"
+    "</style>"));
+
+  char ip[16], gw[16], sn[16], dns[16], bssid[20], ssid[33], mac[18];
+  char ap_ssid[33], ap_ip[16], ap_mac[18];
+  strncpy(ip,      WiFi.localIP().toString().c_str(),      sizeof(ip)      - 1); ip[sizeof(ip) - 1] = '\0';
+  strncpy(gw,      WiFi.gatewayIP().toString().c_str(),    sizeof(gw)      - 1); gw[sizeof(gw) - 1] = '\0';
+  strncpy(sn,      WiFi.subnetMask().toString().c_str(),   sizeof(sn)      - 1); sn[sizeof(sn) - 1] = '\0';
+  strncpy(dns,     WiFi.dnsIP().toString().c_str(),        sizeof(dns)     - 1); dns[sizeof(dns) - 1] = '\0';
+  strncpy(bssid,   WiFi.BSSIDstr().c_str(),                sizeof(bssid)   - 1); bssid[sizeof(bssid) - 1] = '\0';
+  strncpy(ssid,    WiFiManager::getWiFiSSID().c_str(),     sizeof(ssid)    - 1); ssid[sizeof(ssid) - 1] = '\0';
+  strncpy(mac,     WiFi.macAddress().c_str(),              sizeof(mac)     - 1); mac[sizeof(mac) - 1] = '\0';
+  strncpy(ap_ssid, WiFi.softAPSSID().c_str(),              sizeof(ap_ssid) - 1); ap_ssid[sizeof(ap_ssid) - 1] = '\0';
+  strncpy(ap_ip,   WiFi.softAPIP().toString().c_str(),     sizeof(ap_ip)   - 1); ap_ip[sizeof(ap_ip) - 1] = '\0';
+  strncpy(ap_mac,  WiFi.softAPmacAddress().c_str(),        sizeof(ap_mac)  - 1); ap_mac[sizeof(ap_mac) - 1] = '\0';
+
+  char buf[256];
+  int n;
+
+  #define INFO_ROW(k, fmt, ...) do { \
+    n = snprintf(buf, sizeof(buf), "<tr><th>%s</th><td>" fmt "</td></tr>", k, ##__VA_ARGS__); \
+    if (n > 0) s->sendContent(buf, (size_t)n); \
+  } while (0)
+
+  n = snprintf(buf, sizeof(buf),
+    "<p style='text-align:center'>Connected to <b>%s</b> with IP <b>%s</b> &middot; %s</p>",
+    ssid[0] ? ssid : "(not connected)", ip, DeviceInfo::chipmodel());
+  if (n > 0) s->sendContent(buf, (size_t)n);
+
+  s->sendContent(F("<details open><summary>System</summary><table class='i'>"));
+  INFO_ROW("Uptime",       "%s",            DeviceInfo::uptimeString());
+  INFO_ROW("Chip ID",      "%s",            chipId);
+#ifdef ESP8266
+  INFO_ROW("Platform",     "%s",            "esp8266");
+  INFO_ROW("Flash chip ID","%u",            (unsigned)ESP.getFlashChipId());
+  INFO_ROW("Flash size",   "%u bytes",      (unsigned)ESP.getFlashChipSize());
+  INFO_ROW("Real flash",   "%u bytes",      (unsigned)ESP.getFlashChipRealSize());
+  INFO_ROW("Core version", "%s",            ESP.getCoreVersion().c_str());
+  INFO_ROW("Boot version", "%u",            (unsigned)ESP.getBootVersion());
+#elif defined(ESP32)
+  INFO_ROW("Platform",     "%s",            ESP.getChipModel());   // ESP32, ESP32-S3, ESP32-C3 ...
+  INFO_ROW("Flash size",   "%u bytes",      (unsigned)ESP.getFlashChipSize());
+  INFO_ROW("Chip rev",     "%u",            (unsigned)ESP.getChipRevision());
+  INFO_ROW("SDK version",  "%s",            ESP.getSdkVersion());
+#endif
+  INFO_ROW("CPU frequency","%u MHz",        (unsigned)ESP.getCpuFreqMHz());
+  INFO_ROW("Free heap",    "%u bytes",      (unsigned)ESP.getFreeHeap());
+  INFO_ROW("Sketch size",  "%u / %u bytes", (unsigned)ESP.getSketchSize(),
+                                            (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
+  INFO_ROW("Last reset",   "%s",            reset_reason_label(DeviceInfo::resetReason()));
+  s->sendContent(F("</table></details>"));
+
+  // --- WiFi -----------------------------------------------------------
+  s->sendContent(F("<details open><summary>WiFi</summary><table class='i'>"));
+  INFO_ROW("Connected",     "%s",     WiFi.isConnected() ? "Yes" : "No");
+  INFO_ROW("Station SSID",  "%s",     ssid);
+  INFO_ROW("Station IP",    "%s",     ip);
+  INFO_ROW("Station gateway","%s",    gw);
+  INFO_ROW("Station subnet","%s",     sn);
+  INFO_ROW("DNS Server",    "%s",     dns);
+  INFO_ROW("Hostname",      "%s",     hostName);
+  INFO_ROW("Station MAC",   "%s",     mac);
+  INFO_ROW("RSSI",          "%d dBm", (int)Wifi::rssi);
+  INFO_ROW("BSSID",         "%s",     bssid);
+  INFO_ROW("Autoconnect",   "%s",     WiFi.getAutoReconnect() ? "Enabled" : "Disabled");
+  INFO_ROW("AP SSID",       "%s",     ap_ssid[0] ? ap_ssid : "(not active)");
+  INFO_ROW("AP IP",         "%s",     ap_ip);
+  INFO_ROW("AP MAC",        "%s",     ap_mac);
+  s->sendContent(F("</table></details>"));
+
+  // --- Modules --------------------------------------------------------
+  s->sendContent(F("<details open><summary>Modules</summary><ul class='m'>"));
+  {
+    uint8_t count = EGModuleRegistry::count();
+    for (uint8_t i = 0; i < count; i++) {
+      EGModule* m = EGModuleRegistry::get(i);
+      if (m == nullptr) continue;
+      n = snprintf(buf, sizeof(buf), "<li>%s</li>", m->name());
+      if (n > 0) s->sendContent(buf, (size_t)n);
+    }
+  }
+  s->sendContent(F("</ul></details>"));
+
+  // --- About ----------------------------------------------------------
+  s->sendContent(F("<details><summary>About</summary><table class='i'>"));
+  INFO_ROW("Version",    "%s",    RELEASE_VERSION);
+  INFO_ROW("Git",        "%s",    GIT_VERSION);
+  INFO_ROW("Build env",  "%s",    BUILD_ENV);
+  INFO_ROW("Build date", "%s %s", __DATE__, __TIME__);
+  INFO_ROW("Geiger",     "%s",    DeviceInfo::geigermodel());
+  INFO_ROW("Feature flags","0x%04x", (unsigned)DeviceInfo::featureFlags());
+  s->sendContent(F("</table></details>"));
+
+  #undef INFO_ROW
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
+}
+
 void ConfigManager::handleHistoryPage()
 {
   handleRequest();
@@ -657,8 +792,8 @@ void ConfigManager::handleHistoryPage()
   snprintf(title, sizeof(title), "%s - History", THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
-  s->sendContent(HISTORY_PAGE_BODY);
-  s->sendContent(HISTORY_PAGE_JS);
+  s->sendContent(FPSTR(HISTORY_PAGE_BODY));
+  s->sendContent(FPSTR(HISTORY_PAGE_JS));
   s->sendContent(FPSTR(HTTP_BACKBTN));
   endChunkedPage();
 }
@@ -696,7 +831,7 @@ void ConfigManager::handleNTPSet()
   s->sendContent(FPSTR(faviconHead));
   s->sendContent(FPSTR(HTTP_HEAD_MREFRESH));
   s->sendContent(FPSTR(HTTP_HEAD_END));
-  s->sendContent(HTTP_PARAMSAVED);
+  s->sendContent(FPSTR(HTTP_PARAMSAVED));
   s->sendContent(FPSTR(HTTP_BACKBTN));
   endChunkedPage();
 }
@@ -712,7 +847,7 @@ void ConfigManager::handleHVPage()
   auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
-  s->sendContent(HV_STATUS_PAGE_BODY);
+  s->sendContent(FPSTR(HV_STATUS_PAGE_BODY));
   s->sendContent(FPSTR(HTTP_BACKBTN));
   endChunkedPage();
 }
@@ -926,6 +1061,7 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(SERIAL_URL, HTTP_GET, std::bind(&ConfigManager::handleSerialOut, this));
 #endif
   ConfigManager::server.get()->on(ABOUT_URL, HTTP_GET, std::bind(&ConfigManager::handleAbout, this));
+  ConfigManager::server.get()->on(INFO_URL,  HTTP_GET, std::bind(&ConfigManager::handleInfo, this));
   ConfigManager::server.get()->on(OUTPUTS_URL, HTTP_GET, std::bind(&ConfigManager::handleOutputsJson, this));
 #ifdef DEBUG_PREFS
   ConfigManager::server.get()->on(PREFS_URL, HTTP_GET, std::bind(&ConfigManager::handlePrefs, this));

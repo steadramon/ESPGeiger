@@ -65,8 +65,9 @@ constexpr auto HIST_URL PROGMEM = "/hist";
 constexpr auto GEIGERLOG_URL PROGMEM = "/lastdata";
 constexpr auto SERIAL_URL PROGMEM = "/serial";
 constexpr auto ABOUT_URL PROGMEM = "/about";
+constexpr auto INFO_URL  PROGMEM = "/info";
 constexpr auto OUTPUTS_URL PROGMEM = "/outputs";
-constexpr auto PREFS_URL PROGMEM = "/prefs";  // test-only: /prefs?m=<module>&k=<key>
+constexpr auto PREFS_URL PROGMEM = "/prefs";
 constexpr auto EGPREFS_URL PROGMEM = "/param";
 #ifdef ESPGEIGER_HW
 constexpr auto HV_URL PROGMEM = "/hv";
@@ -156,6 +157,7 @@ private:
   void handleSerialOut();
 #endif
   void handleAbout();
+  void handleInfo();
   void handleOutputsJson();
 #ifdef ESPGEIGER_HW
   void handleHVPage();
