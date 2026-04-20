@@ -20,38 +20,31 @@
 #endif
 
 #include <Arduino.h>
+#include <FS.h>
+#include <LittleFS.h>
+#include <Ticker.h>
+#include "jled.h"
+#include "ArduinoJson.h"
+#include "AsyncHTTPRequest_Generic.h"
+#include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
-#ifdef ESPGEIGER_HW
-#include "src/ESPGHW/ESPGHW.h"
-#endif
+#include "src/Module/EGModuleRegistry.h"
+#include "src/Prefs/EGPrefs.h"
+#include "src/NTP/NTP.h"
 #include "src/GRNG/GRNG.h"
 #include "src/Counter/Counter.h"
 #include "src/ConfigManager/ConfigManager.h"
-#include "jled.h"
-#include "src/Mqtt/MQTT_Client.h"
-#include "src/Radmon/Radmon.h"
-#include "src/Module/EGModuleRegistry.h"
-#include "src/Thingspeak/Thingspeak.h"
-#include "src/GMC/GMC.h"
-#include "src/Webhook/Webhook.h"
-#include "src/Logger/Logger.h"
-#include "src/SDCard/SDCard.h"
-#include "src/NeoPixel/NeoPixel.h"
-#include "src/PushButton/PushButton.h"
-#include "src/NTP/NTP.h"
-#include "src/ArduinoOTA/ArduinoOTA.h"
-#include "src/Prefs/EGPrefs.h"
-#include <FS.h>
-#include <LittleFS.h>
-#include "ArduinoJson.h"
-#include <string.h>
-#include "AsyncHTTPRequest_Generic.h"
-#include "src/OLEDDisplay/OLEDDisplay.h"
 #include "src/SerialCommand/SerialCommand.h"
-#include <Ticker.h>  //Ticker Library
-long start = 0;  // NTP.getUptime() at end of setup() - uptime-since-ready baseline
+#ifdef GEIGER_PUSHBUTTON
+#include "src/PushButton/PushButton.h"
+#endif
+#ifdef SSD1306_DISPLAY
+#include "src/OLEDDisplay/OLEDDisplay.h"
+#endif
+
+long start = 0;
 #if LED_SEND_RECEIVE_ON == LOW
 JLed led = JLed(LED_SEND_RECEIVE).LowActive();
 #else
