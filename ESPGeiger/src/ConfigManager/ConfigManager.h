@@ -136,7 +136,9 @@ private:
   void handleJSReturn();
   void handleJsonReturn();
   void handleStatusPage();
-  void handlePrefs();  // test-only: /prefs?m=<module>&k=<key>
+#ifdef DEBUG_PREFS
+  void handlePrefs();  // debug-only: /prefs?m=<module>&k=<key>
+#endif
   void beginChunkedPage(const char* contentType = nullptr);
   void sendPageHead(const char* title);
   void endChunkedPage();
