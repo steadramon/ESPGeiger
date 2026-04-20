@@ -425,13 +425,15 @@ void ConfigManager::handleEGPrefs() {
         snprintf(name, sizeof(name), "%s.%s", g->module_id, p.id);
         String lookup(name);  // WebServer::arg requires String
         char one[2] = {0, 0};
+        String arg_val;
         const char* v;
         if (p.type == EGP_BOOL) {
           one[0] = s->hasArg(lookup) ? '1' : '0';
           v = one;
         } else {
           if (!s->hasArg(lookup)) continue;
-          v = s->arg(lookup).c_str();
+          arg_val = s->arg(lookup);
+          v = arg_val.c_str();
           if ((p.flags & EGP_SENSITIVE) && v[0] == '\0') continue;
         }
         EGPrefs::put(g->module_id, p.id, v);
