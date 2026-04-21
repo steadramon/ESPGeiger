@@ -36,7 +36,7 @@ class SDCard : public EGModule {
   public:
     SDCard();
     const char* name() override { return "sdcard"; }
-    uint8_t display_order() override { return 40; }
+    uint8_t display_order() override { return 20; }
     bool requires_ntp() override { return true; }
     bool has_tick() override { return true; }
     void s_tick(unsigned long stick_now) override;
