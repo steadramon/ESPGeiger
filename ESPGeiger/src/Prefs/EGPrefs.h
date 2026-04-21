@@ -34,6 +34,9 @@ static constexpr uint8_t EGP_SENSITIVE = 1 << 0;
 static constexpr uint8_t EGP_HIDDEN    = 1 << 1;
 static constexpr uint8_t EGP_ADVANCED  = 1 << 2;
 static constexpr uint8_t EGP_READONLY  = 1 << 3;
+static constexpr uint8_t EGP_TIME      = 1 << 4;
+static constexpr uint8_t EGP_SLIDER    = 1 << 5;
+static constexpr uint8_t EGP_REQUIRED  = 1 << 6;
 
 struct EGPref {
   const char* id;         // 4
