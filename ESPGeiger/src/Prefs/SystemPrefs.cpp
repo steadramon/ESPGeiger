@@ -83,6 +83,10 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
   {"debounce", "Debounce", "Debounce (us)", STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, 0},
 #endif
+#ifndef DISABLE_INTERNAL_BLIP
+  {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
+  {"blip_bright", "Blip brightness","LED brightness (0-100%)", "80",  nullptr, 0, 100, 0, EGP_UINT, 0},
+#endif
 };
 
 static const EGPrefGroup INPUT_PREF_GROUP = {
@@ -110,6 +114,10 @@ void InputPrefs::on_prefs_loaded() {
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
   gcounter.set_debounce((int)EGPrefs::getUInt("input", "debounce"));
+#endif
+#ifndef DISABLE_INTERNAL_BLIP
+  gcounter.set_blip_led(EGPrefs::getBool("input", "blip_led"));
+  gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("input", "blip_bright") * 255 + 50) / 100));
 #endif
 }
 

@@ -37,6 +37,8 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 | PCNT Filter | Int 0-1023 | `200` | Glitch filter threshold (ESP32 PCNT builds only). `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT Pin Pull | Int 0-2 | `0` | PCNT input pin pull: `0`=none (floating), `1`=up, `2`=down. ESP32 PCNT builds only. Default floating suits most modules that drive the line actively both directions; change to pull-up for open-drain outputs or pull-down for active-high modules without their own idle pull. |
 | Debounce (us) | Int 0-10000 | `500` | Software interrupt debounce. Pulse builds without PCNT only. |
+| Blip LED | Boolean | `true` | Flash the onboard LED on each detected count. Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
+| Blip brightness | Int 0-100 | `80` | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
 
 ## MQTT Configuration
 

@@ -118,6 +118,8 @@ class Counter {
       };
       void set_warning(int val);
       void set_alert(int val);
+      void set_blip_led(bool on) { _blip_led = on; }
+      void set_blip_brightness(uint8_t level) { led.MaxBrightness(level); }
       bool is_warning();
       bool is_alert();
       unsigned long last_blip() {
@@ -148,6 +150,7 @@ class Counter {
       int _cpm_alert = 100;
       bool _bool_cpm_warning = false;
       bool _bool_cpm_alert = false;
+      bool _blip_led = true;
       float _ratio = GEIGER_RATIO;
       float _ratio_inv = 1.0f / GEIGER_RATIO;   // reciprocal, kept in sync in set_ratio
       // Cached once per tick so accessors are O(1).
