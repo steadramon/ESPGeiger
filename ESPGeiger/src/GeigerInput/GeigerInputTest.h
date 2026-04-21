@@ -1,5 +1,5 @@
 /*
-  GeigerInputTest.h - Class for Test type counter
+  GeigerInputTest.h - Base class for test-type Geiger inputs
   
   Copyright (C) 2024 @steadramon
 

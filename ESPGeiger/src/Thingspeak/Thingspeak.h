@@ -1,5 +1,5 @@
 /*
-  Radmon.h - Radmon class
+  Thingspeak.h - Thingspeak class
 
   Copyright (C) 2023 @steadramon
 

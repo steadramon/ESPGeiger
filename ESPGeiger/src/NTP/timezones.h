@@ -1,5 +1,5 @@
 /*
-  timezones.h - Timezone objects for NTPs
+  timezones.h - Timezone objects for NTP
   
   Copyright (C) 2023 @steadramon
 

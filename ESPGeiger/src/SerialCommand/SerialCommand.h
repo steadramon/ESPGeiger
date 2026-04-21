@@ -1,5 +1,5 @@
 /*
-  SerialCommand.h - Geiger Counter class
+  SerialCommand.h - Serial Command class
   
   Copyright (C) 2024 @steadramon
 

@@ -1,5 +1,5 @@
 /*
-  GeigerInput/Type/TestPulse.cpp - Class for Test Pulse type counter
+  GeigerInput/Type/TestPulse.h - Class for Test Pulse type counter
   
   Copyright (C) 2024 @steadramon
 

@@ -1,5 +1,5 @@
 /*
-  GeigerInput/Type/Test.cpp - Class for Test type counter
+  GeigerInput/GeigerInputTest.cpp - Base class for test-type Geiger inputs
   
   Copyright (C) 2024 @steadramon
 
