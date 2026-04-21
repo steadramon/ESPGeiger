@@ -1,5 +1,5 @@
 /*
-  SerialOut.cpp - Geiger Counter class
+  SerialOut.cpp - Serial Out class
   
   Copyright (C) 2023 @steadramon
 
