@@ -35,15 +35,15 @@ MQTT_Client& mqtt = MQTT_Client::getInstance();
 EG_REGISTER_MODULE(mqtt)
 
 static const EGPref MQTT_PREF_ITEMS[] = {
-  {"server",   "Server",     "Broker address or IP",      "",               nullptr, 0, 0,     16, EGP_STRING, 0},
+  {"server",   "Server",     "Broker address or IP",      "",               "[A-Za-z0-9.:_\\-]+", 0, 0, 16, EGP_STRING, 0},
   {"port",     "Port",       "",                          "1883",           nullptr, 1, 65535, 0,  EGP_UINT,   0},
   {"user",     "User",       "",                          "",               nullptr, 0, 0,     32, EGP_STRING, 0},
   {"password", "Password",   "",                          "",               nullptr, 0, 0,     32, EGP_STRING, EGP_SENSITIVE},
-  {"topic",    "Root Topic", "Root topic; {id}=chip ID",  "ESPGeiger-{id}", nullptr, 0, 0,     16, EGP_STRING, 0},
+  {"topic",    "Root Topic", "Root topic; {id}=chip ID",  "ESPGeiger-{id}", "[A-Za-z0-9_\\/\\{\\}\\-]+", 0, 0, 16, EGP_STRING, 0},
   {"interval", "Interval",   "Publish interval (sec)",    "60",             nullptr, MQTT_MIN_TIME, MQTT_MAX_TIME, 0, EGP_UINT, 0},
 #ifdef MQTTAUTODISCOVER
   {"hass_enabled", "HA Autodiscovery",       "Publish HA autodiscovery",         MQTT_HASS_DEFAULT,    nullptr, 0, 0, 0,  EGP_BOOL,   0},
-  {"hass_topic",   "HA Autodiscovery Topic", "HA discovery prefix",              MQTT_DISCOVERY_TOPIC, nullptr, 0, 0, 32, EGP_STRING, 0},
+  {"hass_topic",   "HA Autodiscovery Topic", "HA discovery prefix",              MQTT_DISCOVERY_TOPIC, "[A-Za-z0-9_\\/\\-]+", 0, 0, 32, EGP_STRING, 0},
 #endif
 };
 
