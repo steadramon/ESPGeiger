@@ -44,6 +44,7 @@ class NeoPixel : public EGModule {
   public:
     NeoPixel();
     const char* name() override { return "neopx"; }
+    uint8_t display_order() override { return 15; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint16_t warmup_seconds() override { return 0; }
     void pre_wifi() override { setup(); }
