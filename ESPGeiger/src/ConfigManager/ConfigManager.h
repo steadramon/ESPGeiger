@@ -29,15 +29,6 @@
 #include "../ESPGHW/ESPGHW.h"
 extern ESPGeigerHW hardware;
 #endif
-#if defined(SSD1306_DISPLAY)
-#include "../OLEDDisplay/OLEDDisplay.h"
-extern SSD1306Display display;
-#endif
-
-#if defined(GEIGER_NEOPIXEL)
-#include "../NeoPixel/NeoPixel.h"
-extern NeoPixel neopixel;
-#endif
 
 extern Counter gcounter;
 extern NTP_Client ntpclient;
