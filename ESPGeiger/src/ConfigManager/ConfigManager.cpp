@@ -651,19 +651,6 @@ void ConfigManager::handleStatusPage()
   endChunkedPage();
 }
 
-static const char* reset_reason_label(uint8_t code) {
-  switch (code) {
-    case 1: return "Power on";
-    case 2: return "External reset";
-    case 3: return "Software/System restart";
-    case 4: return "Exception";
-    case 5: return "Watchdog";
-    case 6: return "Brown-out";
-    case 7: return "Deep-sleep wake";
-    default: return "Unknown";
-  }
-}
-
 void ConfigManager::handleInfo()
 {
   handleRequest();
@@ -732,11 +719,8 @@ void ConfigManager::handleInfo()
   INFO_ROW("Free heap",    "%u bytes",      (unsigned)ESP.getFreeHeap());
   INFO_ROW("Sketch size",  "%u / %u bytes", (unsigned)ESP.getSketchSize(),
                                             (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
-#ifdef ESP8266
-  // ESP.getResetReason() is more specific than our normalised label
-  // ("Hardware Watchdog" vs "Watchdog"). rst_info->epc1 / excvaddr are
-  // only meaningful when the reset was from an exception (reason 2).
   INFO_ROW("Last reset",   "%s",            ESP.getResetReason().c_str());
+#ifdef ESP8266
   {
     rst_info* ri = ESP.getResetInfoPtr();
     if (ri && ri->reason == REASON_EXCEPTION_RST) {
@@ -745,8 +729,6 @@ void ConfigManager::handleInfo()
       INFO_ROW("Exc addr",  "0x%08x", (unsigned)ri->excvaddr);
     }
   }
-#else
-  INFO_ROW("Last reset",   "%s",            reset_reason_label(DeviceInfo::resetReason()));
 #endif
   s->sendContent(F("</table></details>"));
 
