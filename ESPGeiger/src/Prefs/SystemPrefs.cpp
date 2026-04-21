@@ -99,6 +99,8 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #ifndef DISABLE_INTERNAL_BLIP
   {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
   {"blip_bright", "Blip brightness","LED brightness (0-100%)", "80",  nullptr, 0, 100, 0, EGP_UINT, 0},
+  {"quiet_from",  "Quiet from",     "HH:MM — silence blip LED + beeper from (blank = off)", "", nullptr, 0, 0, 5, EGP_STRING, 0},
+  {"quiet_to",    "Quiet to",       "HH:MM — silence blip LED + beeper until", "", nullptr, 0, 0, 5, EGP_STRING, 0},
 #endif
 };
 
@@ -131,6 +133,10 @@ void InputPrefs::on_prefs_loaded() {
 #ifndef DISABLE_INTERNAL_BLIP
   gcounter.set_blip_led(EGPrefs::getBool("input", "blip_led"));
   gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("input", "blip_bright") * 255 + 50) / 100));
+  gcounter.set_quiet_hours(
+    EGPrefs::getString("input", "quiet_from"),
+    EGPrefs::getString("input", "quiet_to")
+  );
 #endif
 }
 

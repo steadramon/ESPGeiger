@@ -39,6 +39,8 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 | Debounce (us) | Int 0-10000 | `500` | Software interrupt debounce. Pulse builds without PCNT only. |
 | Blip LED | Boolean | `true` | Flash the onboard LED on each detected count. Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
 | Blip brightness | Int 0-100 | `80` | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
+| Quiet from | Time HH:MM | `(empty)` | Silence the blip LED + beeper (ESPGeiger-HW) from this time. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
+| Quiet to | Time HH:MM | `(empty)` | End of quiet window. Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`). |
 
 ## MQTT Configuration
 

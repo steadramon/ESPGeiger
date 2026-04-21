@@ -20,6 +20,8 @@
 #include <Arduino.h>
 #include "Counter.h"
 #include "../Logger/Logger.h"
+#include "../Util/ParseTime.h"
+#include "../NTP/NTP.h"
 
 Counter::Counter() {
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
@@ -212,15 +214,40 @@ void Counter::begin() {
 }
 
 void Counter::blip() {
+    const bool quiet = is_quiet_now();
 #ifndef DISABLE_INTERNAL_BLIP
-    if (_blip_led) led.Blink(20,20);
+    if (_blip_led && !quiet) led.Blink(20,20);
 #endif
 #ifdef GEIGER_BLIPLED
-    if (blip_led.IsRunning() == false) {
+    if (!quiet && blip_led.IsRunning() == false) {
       blip_led.Blink(2,1).Repeat(1);
     }
 #endif
 
+}
+
+void Counter::set_quiet_hours(const char* from, const char* to) {
+  ParsedTime f = parseTime(from);
+  ParsedTime t = parseTime(to);
+  _quiet_from_min = f.isValid ? (f.hour * 60 + f.minute) : -1;
+  _quiet_to_min   = t.isValid ? (t.hour * 60 + t.minute) : -1;
+}
+
+bool Counter::is_quiet_now() {
+  // Both ends must parse; either blank = feature off. Also require NTP so we
+  // don't silence the LED on unsynced boots (uptime-as-time would be wrong).
+  if (_quiet_from_min < 0 || _quiet_to_min < 0)      return false;
+  if (_quiet_from_min == _quiet_to_min)              return false;
+  if (!ntpclient.synced)                             return false;
+
+  time_t now = time(NULL);
+  struct tm* t = localtime(&now);
+  int16_t m = t->tm_hour * 60 + t->tm_min;
+
+  // Range crosses midnight when from > to (e.g. 22:00 -> 07:00).
+  return (_quiet_from_min < _quiet_to_min)
+    ? (m >= _quiet_from_min && m < _quiet_to_min)
+    : (m >= _quiet_from_min || m < _quiet_to_min);
 }
 
 void Counter::loop() {

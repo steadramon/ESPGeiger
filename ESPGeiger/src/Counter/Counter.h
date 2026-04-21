@@ -120,6 +120,8 @@ class Counter {
       void set_alert(int val);
       void set_blip_led(bool on) { _blip_led = on; }
       void set_blip_brightness(uint8_t level) { led.MaxBrightness(level); }
+      void set_quiet_hours(const char* from, const char* to);
+      bool is_quiet_now();
       bool is_warning();
       bool is_alert();
       unsigned long last_blip() {
@@ -151,6 +153,8 @@ class Counter {
       bool _bool_cpm_warning = false;
       bool _bool_cpm_alert = false;
       bool _blip_led = true;
+      int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled
+      int16_t _quiet_to_min   = -1;
       float _ratio = GEIGER_RATIO;
       float _ratio_inv = 1.0f / GEIGER_RATIO;   // reciprocal, kept in sync in set_ratio
       // Cached once per tick so accessors are O(1).
