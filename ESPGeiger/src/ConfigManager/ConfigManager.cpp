@@ -732,7 +732,22 @@ void ConfigManager::handleInfo()
   INFO_ROW("Free heap",    "%u bytes",      (unsigned)ESP.getFreeHeap());
   INFO_ROW("Sketch size",  "%u / %u bytes", (unsigned)ESP.getSketchSize(),
                                             (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
+#ifdef ESP8266
+  // ESP.getResetReason() is more specific than our normalised label
+  // ("Hardware Watchdog" vs "Watchdog"). rst_info->epc1 / excvaddr are
+  // only meaningful when the reset was from an exception (reason 2).
+  INFO_ROW("Last reset",   "%s",            ESP.getResetReason().c_str());
+  {
+    rst_info* ri = ESP.getResetInfoPtr();
+    if (ri && ri->reason == REASON_EXCEPTION_RST) {
+      INFO_ROW("Exc cause", "%u",     (unsigned)ri->exccause);
+      INFO_ROW("Exc PC",    "0x%08x", (unsigned)ri->epc1);
+      INFO_ROW("Exc addr",  "0x%08x", (unsigned)ri->excvaddr);
+    }
+  }
+#else
   INFO_ROW("Last reset",   "%s",            reset_reason_label(DeviceInfo::resetReason()));
+#endif
   s->sendContent(F("</table></details>"));
 
   // --- WiFi -----------------------------------------------------------
