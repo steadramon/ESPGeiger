@@ -1,5 +1,5 @@
 /*
-  ESPGHW.cpp - Geiger Counter class
+  ESPGHW.cpp - ESPGeiger hardware class
   
   Copyright (C) 2023 @steadramon
 
