@@ -30,6 +30,9 @@
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
 #include "../SerialOut/SerialOut.h"
+#ifdef ESP32
+#include <esp_system.h>
+#endif
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
@@ -61,6 +64,16 @@ ConfigManager::ConfigManager() : WiFiManager(){
   setHostname(hostName);
   setTitle(THING_NAME);
   setCustomHeadElement(faviconHead);
+}
+
+void ConfigManager::updatePortalMessage()
+{
+  snprintf_P(portalMenuHtml, sizeof(portalMenuHtml),
+    PSTR("<div style='padding:.5em;margin:.5em 0;background:#eef6ff;border:1px solid #89b;border-radius:4px'>"
+         "After WiFi setup, open <b>http://%s.local/</b> "
+         "(or find the device IP on your router)</div>"),
+    hostName);
+  setCustomMenuHTML(portalMenuHtml);
 }
 ParsedTime ConfigManager::parseTime(const char* timeStr) {
     ParsedTime pt;
@@ -98,17 +111,28 @@ ParsedTime ConfigManager::parseTime(const char* timeStr) {
 }
 
 
+bool ConfigManager::hasWiFiCreds()
+{
+#ifdef ESP32
+  WiFi.mode(WIFI_STA);  // esp_wifi_get_config needs the stack up to read persistent creds
+#endif
+  return WiFiManager::getWiFiIsSaved();
+}
+
 bool ConfigManager::autoConnect()
 {
   WiFiManager::setConnectTimeout(10);
   WiFiManager::setAPClientCheck(true);
   WiFiManager::setWiFiAutoReconnect(true);
   WiFiManager::setConfigPortalTimeout(300);
-#ifdef ESP8266
-  if (WiFiManager::getWiFiIsSaved()) {
+  static const char* portalMenu[] = {"custom","wifi","info","exit","sep","update"};
+  setMenu(portalMenu, sizeof(portalMenu) / sizeof(portalMenu[0]));
+  updatePortalMessage();
+  if (hasWiFiCreds()) {
     WiFiManager::setEnableConfigPortal(false);
+  } else {
+    Log::console(PSTR("Config: No WiFi saved - captive portal on AP '%s' (300s)"), hostName);
   }
-#endif
   bool result = WiFiManager::autoConnect(hostName);
 
   if (result) {
@@ -139,7 +163,7 @@ bool ConfigManager::autoConnect()
       ESP.restart();
   }
 
-  if (WiFiManager::getWiFiIsSaved()) {
+  if (hasWiFiCreds()) {
     WiFiManager::setEnableConfigPortal(true);
     WiFiManager::setConfigPortalTimeout(90);
     Log::console(PSTR("Config: Entering setup for 90s"));
@@ -155,6 +179,8 @@ bool ConfigManager::autoConnect()
 void ConfigManager::startWebPortal()
 {
   WiFiManager::setWebServerCallback(std::bind(&ConfigManager::bindServerCallback, this));
+  static const char* webPortalMenu[] = {"wifi","info","exit","sep","update"};
+  setMenu(webPortalMenu, sizeof(webPortalMenu) / sizeof(webPortalMenu[0]));
   WiFiManager::startWebPortal();
 }
 
@@ -719,8 +745,8 @@ void ConfigManager::handleInfo()
   INFO_ROW("Free heap",    "%u bytes",      (unsigned)ESP.getFreeHeap());
   INFO_ROW("Sketch size",  "%u / %u bytes", (unsigned)ESP.getSketchSize(),
                                             (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
-  INFO_ROW("Last reset",   "%s",            ESP.getResetReason().c_str());
 #ifdef ESP8266
+  INFO_ROW("Last reset",   "%s",            ESP.getResetReason().c_str());
   {
     rst_info* ri = ESP.getResetInfoPtr();
     if (ri && ri->reason == REASON_EXCEPTION_RST) {
@@ -728,6 +754,23 @@ void ConfigManager::handleInfo()
       INFO_ROW("Exc PC",    "0x%08x", (unsigned)ri->epc1);
       INFO_ROW("Exc addr",  "0x%08x", (unsigned)ri->excvaddr);
     }
+  }
+#elif defined(ESP32)
+  {
+    const char* rstStr;
+    switch (esp_reset_reason()) {
+      case ESP_RST_POWERON:   rstStr = "Power on"; break;
+      case ESP_RST_EXT:       rstStr = "External reset"; break;
+      case ESP_RST_SW:        rstStr = "Software restart"; break;
+      case ESP_RST_PANIC:     rstStr = "Exception/panic"; break;
+      case ESP_RST_INT_WDT:   rstStr = "Interrupt watchdog"; break;
+      case ESP_RST_TASK_WDT:  rstStr = "Task watchdog"; break;
+      case ESP_RST_WDT:       rstStr = "Watchdog"; break;
+      case ESP_RST_BROWNOUT:  rstStr = "Brownout"; break;
+      case ESP_RST_DEEPSLEEP: rstStr = "Deep sleep wake"; break;
+      default:                rstStr = "Unknown"; break;
+    }
+    INFO_ROW("Last reset", "%s", rstStr);
   }
 #endif
   s->sendContent(F("</table></details>"));

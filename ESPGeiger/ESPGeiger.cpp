@@ -142,7 +142,7 @@ void setup()
   }
 #endif
 #ifdef SSD1306_DISPLAY
-  if (!cManager.getWiFiIsSaved()) {
+  if (!cManager.hasWiFiCreds()) {
     display.setupWifi(DeviceInfo::hostname());
   }
 #endif
@@ -150,7 +150,7 @@ void setup()
     bool res = cManager.autoConnect();
     if (!res) {
 #if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
-      if (!cManager.getWiFiIsSaved()) {
+      if (!cManager.hasWiFiCreds()) {
         Wifi::disabled = true;
       }
 #else

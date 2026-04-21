@@ -118,6 +118,7 @@ public:
   void bindServerCallback();
   bool autoConnect();
   void startWebPortal();
+  bool hasWiFiCreds();
   void preSaveParams();
   void delay(unsigned long m);
   // Self-throttled wrapper around the inherited process(). Call from loop()
@@ -172,6 +173,8 @@ private:
   char hostName[20] = "";
   char userAgent[80] = "";
   char macAddr[18] = "";
+  char portalMenuHtml[256] = "";
+  void updatePortalMessage();
 };
 
 #endif
