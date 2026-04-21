@@ -27,7 +27,7 @@ NeoPixel neopixel;
 EG_REGISTER_MODULE(neopixel)
 
 static const EGPref NEOPIXEL_PREF_ITEMS[] = {
-  {"brightness", "Brightness", "0-100", "15", nullptr, 0, 100, 0, EGP_UINT, 0},
+  {"brightness", "Brightness", "",      "15", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
 };
 
 static const EGPrefGroup NEOPIXEL_PREF_GROUP = {

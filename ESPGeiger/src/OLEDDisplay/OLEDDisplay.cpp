@@ -35,12 +35,12 @@ SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
 EG_REGISTER_MODULE(display)
 
 static const EGPref OLED_PREF_ITEMS[] = {
-  {"brightness", "Brightness", "0-100", "25", nullptr, 0, 100, 0, EGP_UINT, 0},
+  {"brightness", "Brightness", "",      "25", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
 #ifdef GEIGER_PUSHBUTTON
   {"timeout",    "Timeout",    "sec, 0=off", "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
 #else
-  {"on_time",    "On Time",    "HH:MM",  "06:00", nullptr, 0, 0, 5, EGP_STRING, 0},
-  {"off_time",   "Off Time",   "HH:MM",  "22:00", nullptr, 0, 0, 5, EGP_STRING, 0},
+  {"on_time",    "On Time",    "Display on",   "06:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"off_time",   "Off Time",   "Display off",  "22:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
 #endif
 };
 

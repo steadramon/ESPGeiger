@@ -478,7 +478,7 @@ void ConfigManager::handleEGPrefs() {
 
   beginChunkedPage();
   sendPageHead("Config");
-  s->sendContent(F("<style>details{border:1px solid #eee;padding:8px;margin:8px 0}summary{font-weight:bold;padding:4px 0;cursor:pointer}label{display:inline-block;margin-top:10px}hr{border:0;border-top:1px solid #ddd;margin:16px 0}@media(min-width:520px){details{min-width:500px}}</style>"));
+  s->sendContent(F("<style>details{border:1px solid #eee;padding:8px;margin:8px 0}summary{font-weight:bold;padding:4px 0;cursor:pointer}label{display:inline-block;margin-top:10px}small{display:block;color:#666;margin-top:2px}hr{border:0;border-top:1px solid #ddd;margin:16px 0}@media(min-width:520px){details{min-width:500px}}</style>"));
 
   char buf[384];
   int n;
@@ -544,9 +544,14 @@ void ConfigManager::handleEGPrefs() {
                      ro ? " disabled" : "");
         if (n > 0) pos += (size_t)n;
       } else {
+        const bool slider = (p.type == EGP_INT || p.type == EGP_UINT)
+                         && (p.flags & EGP_SLIDER)
+                         && p.min_i != p.max_i;
         const char* itype = "text";
-        if (p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) itype = "number";
+        if (slider) itype = "range";
+        else if (p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) itype = "number";
         else if (p.type == EGP_STRING && (p.flags & EGP_SENSITIVE)) itype = "password";
+        else if (p.type == EGP_STRING && (p.flags & EGP_TIME))      itype = "time";
 
         n = snprintf(buf + pos, sizeof(buf) - pos,
                      "<input type='%s' id='%s.%s' name='%s.%s'",
@@ -561,10 +566,22 @@ void ConfigManager::handleEGPrefs() {
           APPEND_LIT(buf, pos, sizeof(buf), " value='");
           pos = append_escaped(buf, sizeof(buf), pos, cur);
           if (pos + 1 < sizeof(buf)) buf[pos++] = '\'';
+          // Show the default value as placeholder when the field is empty.
+          // Slider/time don't show placeholders so skip them.
+          if (!slider && cur[0] == '\0'
+              && p.default_val && p.default_val[0]
+              && !(p.flags & EGP_TIME)) {
+            n = snprintf(buf + pos, sizeof(buf) - pos, " placeholder='%s'", p.default_val);
+            if (n > 0) pos += (size_t)n;
+          }
         }
 
         if (p.type == EGP_STRING && p.max_len > 0) {
           n = snprintf(buf + pos, sizeof(buf) - pos, " maxlength='%u'", (unsigned)p.max_len);
+          if (n > 0) pos += (size_t)n;
+        }
+        if (p.type == EGP_STRING && p.pattern && p.pattern[0]) {
+          n = snprintf(buf + pos, sizeof(buf) - pos, " pattern='%s'", p.pattern);
           if (n > 0) pos += (size_t)n;
         }
         if ((p.type == EGP_INT || p.type == EGP_UINT) && p.min_i != p.max_i) {
@@ -572,12 +589,25 @@ void ConfigManager::handleEGPrefs() {
           if (n > 0) pos += (size_t)n;
         }
         if (p.type == EGP_FLOAT) APPEND_LIT(buf, pos, sizeof(buf), " step='any'");
+        if (!slider && (p.type == EGP_INT || p.type == EGP_UINT)) {
+          APPEND_LIT(buf, pos, sizeof(buf), " inputmode='numeric'");
+        } else if (p.type == EGP_FLOAT) {
+          APPEND_LIT(buf, pos, sizeof(buf), " inputmode='decimal'");
+        }
+        if (p.flags & EGP_REQUIRED) APPEND_LIT(buf, pos, sizeof(buf), " required");
         if (ro) APPEND_LIT(buf, pos, sizeof(buf), " readonly");
-        APPEND_LIT(buf, pos, sizeof(buf), "><br/>");
+        if (slider) {
+          n = snprintf(buf + pos, sizeof(buf) - pos,
+                       " oninput='this.nextElementSibling.value=this.value'>"
+                       "<output>%s</output><br/>", cur);
+          if (n > 0) pos += (size_t)n;
+        } else {
+          APPEND_LIT(buf, pos, sizeof(buf), "><br/>");
+        }
       }
 
       if (p.help && p.help[0]) {
-        n = snprintf(buf + pos, sizeof(buf) - pos, "<small>%s</small><br/>", p.help);
+        n = snprintf(buf + pos, sizeof(buf) - pos, "<small>%s</small>", p.help);
         if (n > 0) pos += (size_t)n;
       }
 
