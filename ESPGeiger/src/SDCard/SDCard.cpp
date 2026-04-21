@@ -91,11 +91,12 @@ void SDCard::begin()
   }
 
   Log::console(PSTR("SDCard: Calculating free space, please wait"));
-  uint64_t freespace = sd->freeClusterCount() * sd->sectorsPerCluster() * 0.000512;
+  // sectors = freeClusterCount * sectorsPerCluster; MB = sectors / 2048 (1 sector = 512 B).
+  uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
   if (freespace <= 8) {
     deleteOldest();
   }
-  Log::console(PSTR("SDCard: OK! %lld MB free."), freespace);
+  Log::console(PSTR("SDCard: OK! %lu MB free."), (unsigned long)freespace);
   sdenabled = true;
 }
 
@@ -220,10 +221,10 @@ void SDCard::s_tick(unsigned long stick_now)
       _unsynced_writes = 0;
     }
     uint8_t maxDeletes = 10;
-    uint64_t freespace = sd->freeClusterCount() * sd->sectorsPerCluster() * 0.000512;
+    uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
     while (freespace <= 8 && maxDeletes-- > 0) {
       deleteOldest();
-      freespace = sd->freeClusterCount() * sd->sectorsPerCluster() * 0.000512;
+      freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
     }
   }
 }
