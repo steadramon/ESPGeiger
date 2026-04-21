@@ -437,6 +437,13 @@ static inline void send_chunk(WS* s, const char* buf, size_t len) {
   if ((pos) + _n < (cap)) { memcpy((buf)+(pos), lit, _n); (pos) += _n; } \
 } while (0)
 
+static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
+  if (nret <= 0) return;
+  size_t want = (size_t) nret;
+  size_t room = (pos < bufsz) ? (bufsz - pos - 1) : 0;  // -1 for NUL
+  pos += (want < room) ? want : room;
+}
+
 void ConfigManager::handleEGPrefs() {
   auto* s = ConfigManager::server.get();
   bool did_save = false;
@@ -480,7 +487,7 @@ void ConfigManager::handleEGPrefs() {
   sendPageHead("Config");
   s->sendContent(F("<style>details{border:1px solid #eee;padding:8px;margin:8px 0}summary{font-weight:bold;padding:4px 0;cursor:pointer}label{display:inline-block;margin-top:10px}small{display:block;color:#666;margin-top:2px}hr{border:0;border-top:1px solid #ddd;margin:16px 0}@media(min-width:520px){details{min-width:500px}}</style>"));
 
-  char buf[384];
+  char buf[512];
   int n;
 
   n = snprintf(buf, sizeof(buf),
@@ -542,7 +549,7 @@ void ConfigManager::handleEGPrefs() {
                      mid, pid, mid, pid,
                      (cur[0] == '1') ? " checked" : "",
                      ro ? " disabled" : "");
-        if (n > 0) pos += (size_t)n;
+        advance_pos(pos, n, sizeof(buf));
       } else {
         const bool slider = (p.type == EGP_INT || p.type == EGP_UINT)
                          && (p.flags & EGP_SLIDER)
@@ -556,12 +563,12 @@ void ConfigManager::handleEGPrefs() {
         n = snprintf(buf + pos, sizeof(buf) - pos,
                      "<input type='%s' id='%s.%s' name='%s.%s'",
                      itype, mid, pid, mid, pid);
-        if (n > 0) pos += (size_t)n;
+        advance_pos(pos, n, sizeof(buf));
 
         if (p.flags & EGP_SENSITIVE) {
           const char* ph = cur[0] ? "(unchanged)" : "(not set)";
           n = snprintf(buf + pos, sizeof(buf) - pos, " value='' placeholder='%s'", ph);
-          if (n > 0) pos += (size_t)n;
+          advance_pos(pos, n, sizeof(buf));
         } else {
           APPEND_LIT(buf, pos, sizeof(buf), " value='");
           pos = append_escaped(buf, sizeof(buf), pos, cur);
@@ -572,21 +579,21 @@ void ConfigManager::handleEGPrefs() {
               && p.default_val && p.default_val[0]
               && !(p.flags & EGP_TIME)) {
             n = snprintf(buf + pos, sizeof(buf) - pos, " placeholder='%s'", p.default_val);
-            if (n > 0) pos += (size_t)n;
+            advance_pos(pos, n, sizeof(buf));
           }
         }
 
         if (p.type == EGP_STRING && p.max_len > 0) {
           n = snprintf(buf + pos, sizeof(buf) - pos, " maxlength='%u'", (unsigned)p.max_len);
-          if (n > 0) pos += (size_t)n;
+          advance_pos(pos, n, sizeof(buf));
         }
         if (p.type == EGP_STRING && p.pattern && p.pattern[0]) {
           n = snprintf(buf + pos, sizeof(buf) - pos, " pattern='%s'", p.pattern);
-          if (n > 0) pos += (size_t)n;
+          advance_pos(pos, n, sizeof(buf));
         }
         if ((p.type == EGP_INT || p.type == EGP_UINT) && p.min_i != p.max_i) {
           n = snprintf(buf + pos, sizeof(buf) - pos, " min='%ld' max='%ld'", (long)p.min_i, (long)p.max_i);
-          if (n > 0) pos += (size_t)n;
+          advance_pos(pos, n, sizeof(buf));
         }
         if (p.type == EGP_FLOAT) APPEND_LIT(buf, pos, sizeof(buf), " step='any'");
         if (!slider && (p.type == EGP_INT || p.type == EGP_UINT)) {
@@ -600,7 +607,7 @@ void ConfigManager::handleEGPrefs() {
           n = snprintf(buf + pos, sizeof(buf) - pos,
                        " oninput='this.nextElementSibling.value=this.value'>"
                        "<output>%s</output><br/>", cur);
-          if (n > 0) pos += (size_t)n;
+          advance_pos(pos, n, sizeof(buf));
         } else {
           APPEND_LIT(buf, pos, sizeof(buf), "><br/>");
         }
@@ -608,7 +615,7 @@ void ConfigManager::handleEGPrefs() {
 
       if (p.help && p.help[0]) {
         n = snprintf(buf + pos, sizeof(buf) - pos, "<small>%s</small>", p.help);
-        if (n > 0) pos += (size_t)n;
+        advance_pos(pos, n, sizeof(buf));
       }
 
       send_chunk(s, buf, pos);
@@ -656,31 +663,38 @@ void ConfigManager::handleClicksReturn()
 {
   handleRequest();
   char buf[512];
-  int pos = 0;
-  pos += snprintf(buf + pos, sizeof(buf) - pos,
+  size_t pos = 0;
+  int n;
+
+  n = snprintf(buf + pos, sizeof(buf) - pos,
     "{\"last_day\":[%d", (int)gcounter.clicks_hour);
+  advance_pos(pos, n, sizeof(buf));
 
   const int histSize = gcounter.day_hourly_history.size();
   for (int i = histSize; i > 0; i--) {
-    if (pos >= (int)sizeof(buf) - 32) break;  // reserve tail
-    pos += snprintf(buf + pos, sizeof(buf) - pos, ",%d",
+    if (pos >= sizeof(buf) - 32) break;  // reserve tail for the JSON closer
+    n = snprintf(buf + pos, sizeof(buf) - pos, ",%d",
       (int)gcounter.day_hourly_history[i - 1]);
+    advance_pos(pos, n, sizeof(buf));
   }
 
-  pos += snprintf(buf + pos, sizeof(buf) - pos,
+  n = snprintf(buf + pos, sizeof(buf) - pos,
     "],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\"",
     (int)gcounter.clicks_today,
     (int)gcounter.clicks_yesterday,
     EGPrefs::getString("sys", "ratio"));
+  advance_pos(pos, n, sizeof(buf));
 
   if (ntpclient.synced) {
-    pos += snprintf(buf + pos, sizeof(buf) - pos,
+    n = snprintf(buf + pos, sizeof(buf) - pos,
       ",\"start\":%lu}", (unsigned long)ntpclient.boot_epoch);
   } else {
     unsigned long uptime = NTP.getUptime() - start;
-    pos += snprintf(buf + pos, sizeof(buf) - pos,
+    n = snprintf(buf + pos, sizeof(buf) - pos,
       ",\"uptime\":%lu}", uptime);
   }
+  advance_pos(pos, n, sizeof(buf));
+  buf[pos] = '\0';
 
   ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), buf);
 }
