@@ -30,6 +30,7 @@
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
 #include "../SerialOut/SerialOut.h"
+#include "../Util/BootHooks.h"
 #ifdef ESP32
 #include <esp_system.h>
 #endif
@@ -146,9 +147,7 @@ bool ConfigManager::autoConnect()
     WiFiManager::setEnableConfigPortal(true);
     WiFiManager::setConfigPortalTimeout(300);
     Log::console(PSTR("Config: Entering setup for 300s"));
-#if defined(SSD1306_DISPLAY)
-    display.setupWifi(hostName);
-#endif
+    BootHooks::displaySetupWifi(hostName);
     result = WiFiManager::autoConnect(hostName);
     if (!result) {
       Log::console(PSTR("WiFi password incorrect ... Restarting ... "));
@@ -167,9 +166,7 @@ bool ConfigManager::autoConnect()
     WiFiManager::setEnableConfigPortal(true);
     WiFiManager::setConfigPortalTimeout(90);
     Log::console(PSTR("Config: Entering setup for 90s"));
-#if defined(SSD1306_DISPLAY)
-    display.setupWifi(hostName);
-#endif
+    BootHooks::displaySetupWifi(hostName);
     result = WiFiManager::autoConnect(hostName);
   }
 

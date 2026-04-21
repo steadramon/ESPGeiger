@@ -37,12 +37,7 @@
 #include "src/Counter/Counter.h"
 #include "src/ConfigManager/ConfigManager.h"
 #include "src/SerialCommand/SerialCommand.h"
-#ifdef GEIGER_PUSHBUTTON
-#include "src/PushButton/PushButton.h"
-#endif
-#ifdef SSD1306_DISPLAY
-#include "src/OLEDDisplay/OLEDDisplay.h"
-#endif
+#include "src/Util/BootHooks.h"
 
 long start = 0;
 #if LED_SEND_RECEIVE_ON == LOW
@@ -124,28 +119,12 @@ void setup()
 
   delay(100);
   msTicker.attach_ms(1, msTickerCB);
-#ifdef GEIGER_PUSHBUTTON
-  pushbutton.init();
-  if (pushbutton.isPressed() && start == 0) {
-#ifdef SSD1306_DISPLAY
-    display.wifiDisabled();
-#endif
-    while (pushbutton.isPressed()) {
-      delay(250);
-      pushbutton.read();
-    }
-    delay(750);
-#ifdef SSD1306_DISPLAY
-    display.enable_oled_timeout = false;
-#endif
+  if (start == 0 && BootHooks::checkStartupButtonHold()) {
     Wifi::disabled = true;
   }
-#endif
-#ifdef SSD1306_DISPLAY
   if (!cManager.hasWiFiCreds()) {
-    display.setupWifi(DeviceInfo::hostname());
+    BootHooks::displaySetupWifi(DeviceInfo::hostname());
   }
-#endif
   if (!Wifi::disabled) {
     bool res = cManager.autoConnect();
     if (!res) {
@@ -172,9 +151,7 @@ void setup()
   sTicker.attach(1, sTickerCB);
   
   led.Off().Update();
-#ifdef SSD1306_DISPLAY
-  display.oled_timeout = millis();
-#endif
+  BootHooks::displayResetTimeout();
 }
 
 void loop()
