@@ -18,7 +18,7 @@
 */
 #include "TestSerial.h"
 #include "../../Logger/Logger.h"
-#include "../../Util/FormatFloat.h"
+#include "../../Util/StringUtil.h"
 #include "../../Prefs/EGPrefs.h"
 
 static EspSoftwareSerial::UART geigerPort;

@@ -31,6 +31,7 @@
 #include "../Util/TickProfile.h"
 #include "../SerialOut/SerialOut.h"
 #include "../Util/BootHooks.h"
+#include "../Util/StringUtil.h"
 #ifdef ESP32
 #include <esp_system.h>
 #endif
@@ -299,7 +300,9 @@ void ConfigManager::handleJsonReturn()
   format_f(c5, sizeof(c5), gcounter.get_cpm5f());
   format_f(c15, sizeof(c15), gcounter.get_cpm15f());
   format_f(cs, sizeof(cs), gcounter.get_cps());
-  int pos = snprintf_P (
+  size_t pos = 0;
+  int n;
+  n = snprintf_P (
     jsonBuffer,
     sizeof(jsonBuffer),
     PSTR("{\"ut\":%lu,\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u,\"mem\":%u,\"rssi\":%d"),
@@ -310,16 +313,20 @@ void ConfigManager::handleJsonReturn()
     ESP.getFreeHeap(),
     (int)Wifi::rssi
   );
+  advance_pos(pos, n, sizeof(jsonBuffer));
 #ifdef ESPGEIGER_HW
   char hv[16];
   format_f(hv, sizeof(hv), hardware.hvReading.get());
-  pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR(",\"hv\":%s"), hv);
+  n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR(",\"hv\":%s"), hv);
+  advance_pos(pos, n, sizeof(jsonBuffer));
 #endif
-  pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+  n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
     PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
     TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
-  snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR("}"));
-  jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
+  advance_pos(pos, n, sizeof(jsonBuffer));
+  n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR("}"));
+  advance_pos(pos, n, sizeof(jsonBuffer));
+  jsonBuffer[pos] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
 }
 
@@ -366,7 +373,8 @@ void ConfigManager::handleAbout()
   snprintf(mac_str, sizeof(mac_str), "%02X%02X%02X%02X%02X%02X",
     macb[0], macb[1], macb[2], macb[3], macb[4], macb[5]);
 
-  pos += snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+  int n;
+  n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
     PSTR("{\"ver\":\"%s\",\"git\":\"%s\",\"env\":\"%s\","
          "\"date\":\"%s %s\",\"chip\":\"%s\",\"mac\":\"%s\","
          "\"host\":\"%s\",\"g_mod\":\"%s\","
@@ -382,15 +390,19 @@ void ConfigManager::handleAbout()
     GEIGER_IS_SERIAL(GEIGER_TYPE) ? "serial" : "none",
     GEIGER_IS_TEST(GEIGER_TYPE)   ? "true" : "false",
     gcounter.has_pcnt()           ? "true" : "false");
+  advance_pos(pos, n, sizeof(jsonBuffer));
 
   uint8_t count = EGModuleRegistry::count();
   for (uint8_t i = 0; i < count; i++) {
     EGModule* m = EGModuleRegistry::get(i);
     if (m == nullptr) continue;
-    pos += snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+    n = snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
       "%s\"%s\"", (i > 0 ? "," : ""), m->name());
+    advance_pos(pos, n, sizeof(jsonBuffer));
   }
-  snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "]}");
+  n = snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "]}");
+  advance_pos(pos, n, sizeof(jsonBuffer));
+  jsonBuffer[pos] = '\0';
   ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer);
 }
 
@@ -437,12 +449,6 @@ static inline void send_chunk(WS* s, const char* buf, size_t len) {
   if ((pos) + _n < (cap)) { memcpy((buf)+(pos), lit, _n); (pos) += _n; } \
 } while (0)
 
-static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
-  if (nret <= 0) return;
-  size_t want = (size_t) nret;
-  size_t room = (pos < bufsz) ? (bufsz - pos - 1) : 0;  // -1 for NUL
-  pos += (want < room) ? want : room;
-}
 
 void ConfigManager::handleEGPrefs() {
   auto* s = ConfigManager::server.get();

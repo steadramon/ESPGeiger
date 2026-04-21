@@ -23,7 +23,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/DeviceInfo.h"
-#include "../Util/ParseTime.h"
+#include "../Util/StringUtil.h"
 #include "../Util/Wifi.h"
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"

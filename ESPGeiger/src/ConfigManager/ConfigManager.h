@@ -22,6 +22,7 @@
 #include "WiFiManager.h"
 #include "../Util/Globals.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/StringUtil.h"
 #include "../Counter/Counter.h"
 #include "../NTP/NTP.h"
 
@@ -91,12 +92,6 @@ const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 //char mqttPort[MQTT_PORT_LENGTH] = MQTT_DEFAULT_PORT;
 //char mqttUser[MQTT_USER_LENGTH] = "";
 //char mqttPass[MQTT_PASS_LENGTH] = "";
-
-typedef struct {
-    int hour;
-    int minute;
-    bool isValid; // To indicate if parsing was successful
-} ParsedTime;
 
 class ConfigManager : public WiFiManager
 {

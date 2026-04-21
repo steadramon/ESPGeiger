@@ -22,6 +22,7 @@
 #include "SerialOut.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/StringUtil.h"
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"
 #endif
@@ -71,25 +72,30 @@ void SerialOut::loop(unsigned long now) {
 
   char buf[80];
   char f[12];
-  int pos = 0;
+  size_t pos = 0;
+  int n;
   if (_show_flags & SHOW_CPM) {
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "CPM: %d", gcounter.get_cpm());
+    n = snprintf(buf + pos, sizeof(buf) - pos, "CPM: %d", gcounter.get_cpm());
+    advance_pos(pos, n, sizeof(buf));
   }
   if (_show_flags & SHOW_CPS) {
     format_f(f, sizeof(f), gcounter.get_cps());
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "%sCPS: %s", pos ? " " : "", f);
+    n = snprintf(buf + pos, sizeof(buf) - pos, "%sCPS: %s", pos ? " " : "", f);
+    advance_pos(pos, n, sizeof(buf));
   }
   if (_show_flags & SHOW_USV) {
     format_f(f, sizeof(f), gcounter.get_usv());
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "%suSv: %s", pos ? " " : "", f);
+    n = snprintf(buf + pos, sizeof(buf) - pos, "%suSv: %s", pos ? " " : "", f);
+    advance_pos(pos, n, sizeof(buf));
   }
 #ifdef ESPGEIGER_HW
   if (_show_flags & SHOW_HV) {
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "%sHV: %d", pos ? " " : "", (int)hardware.hvReading.get());
+    n = snprintf(buf + pos, sizeof(buf) - pos, "%sHV: %d", pos ? " " : "", (int)hardware.hvReading.get());
+    advance_pos(pos, n, sizeof(buf));
   }
 #endif
   if (pos == 0) return;
-  if (pos < (int)sizeof(buf) - 1) buf[pos++] = '\n';
+  if (pos < sizeof(buf) - 1) buf[pos++] = '\n';
   Serial.write((const uint8_t*)buf, pos);
 }
 #endif

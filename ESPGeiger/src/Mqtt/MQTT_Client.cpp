@@ -22,6 +22,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
+#include "../Util/StringUtil.h"
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"
 #endif
@@ -235,7 +236,9 @@ void MQTT_Client::publishStatus()
   snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02dZ"),
     1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 
-  int pos = snprintf_P(buffer, sizeof(buffer),
+  size_t pos = 0;
+  int n;
+  n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"time\":\"%s\",\"ut\":%lu,\"board\":\"%s\",\"model\":\"%s\""
          ",\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"c_total\":%u"
          ",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
@@ -243,24 +246,30 @@ void MQTT_Client::publishStatus()
     DeviceInfo::chipmodel(), DeviceInfo::geigermodel(),
     Wifi::ssid, Wifi::ip, (int)Wifi::rssi,
     gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
+  advance_pos(pos, n, sizeof(buffer));
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
     uint32_t heap_free;
     uint16_t heap_max;
     uint8_t heap_frag;
     ESP.getHeapStats(&heap_free, &heap_max, &heap_frag);
-    pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
+    n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
       PSTR(",\"free_mem\":%u,\"heap_max\":%u,\"heap_frag\":%u"), heap_free, heap_max, heap_frag);
+    advance_pos(pos, n, sizeof(buffer));
   #else
-    pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
+    n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
       PSTR(",\"free_mem\":%u,\"min_free\":%u,\"heap_max\":%u"),
       ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap());
+    advance_pos(pos, n, sizeof(buffer));
   #endif
 #else
-  pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
+  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
     PSTR(",\"free_mem\":%u"), ESP.getFreeHeap());
+  advance_pos(pos, n, sizeof(buffer));
 #endif
-  snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR("}"));
+  n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR("}"));
+  advance_pos(pos, n, sizeof(buffer));
+  buffer[pos] = '\0';
 
   char topic[64];
   buildTopic(topic, sizeof(topic), "tele", topicStatus);
@@ -532,7 +541,9 @@ void MQTT_Client::publishHassTopic(
   const char* host = DeviceInfo::hostname();
   static char buffer[MQTT_JSON_BUFFER_SIZE];
 
-  int pos = snprintf_P(buffer, sizeof(buffer),
+  size_t pos = 0;
+  int n;
+  n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"device\":{\"mf\":\"%s\",\"mdl\":\"%s\",\"mdl_id\":\"%s\",\"name\":\"%s\""
          ",\"sw\":\"%s/%s\",\"sn\":\"%s\""
          ",\"identifiers\":[\"%s\"]"
@@ -546,26 +557,36 @@ void MQTT_Client::publishHassTopic(
     DeviceInfo::mac(),
     Wifi::ip,
     host, host, displayName, host, id);
+  advance_pos(pos, n, sizeof(buffer));
 
-  if (devCla[0])
-    pos += snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"dev_cla\":\"%s\""), devCla);
-  if (stateCla[0])
-    pos += snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"stat_cla\":\"%s\""), stateCla);
-  if (entCat[0])
-    pos += snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"ent_cat\":\"%s\""), entCat);
-  if (cmdTopic[0])
-    pos += snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"cmd_t\":\"~%s\""), cmdTopic);
+  if (devCla[0]) {
+    n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"dev_cla\":\"%s\""), devCla);
+    advance_pos(pos, n, sizeof(buffer));
+  }
+  if (stateCla[0]) {
+    n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"stat_cla\":\"%s\""), stateCla);
+    advance_pos(pos, n, sizeof(buffer));
+  }
+  if (entCat[0]) {
+    n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"ent_cat\":\"%s\""), entCat);
+    advance_pos(pos, n, sizeof(buffer));
+  }
+  if (cmdTopic[0]) {
+    n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"cmd_t\":\"~%s\""), cmdTopic);
+    advance_pos(pos, n, sizeof(buffer));
+  }
 
   for (size_t i = 0; i < n_extras; i++) {
     if (strcmp(extras[i].value, "true") == 0)
-      pos += snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":true"), extras[i].key);
+      n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":true"), extras[i].key);
     else if (strcmp(extras[i].value, "false") == 0)
-      pos += snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":false"), extras[i].key);
+      n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":false"), extras[i].key);
     else
-      pos += snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":\"%s\""), extras[i].key, extras[i].value);
+      n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":\"%s\""), extras[i].key, extras[i].value);
+    advance_pos(pos, n, sizeof(buffer));
   }
 
-  if (pos + 1 < (int)sizeof(buffer)) { buffer[pos++] = '}'; buffer[pos] = '\0'; }
+  if (pos + 1 < sizeof(buffer)) { buffer[pos++] = '}'; buffer[pos] = '\0'; }
 
   char path[128];
   buildHassPath(path, sizeof(path), disc, type, id);

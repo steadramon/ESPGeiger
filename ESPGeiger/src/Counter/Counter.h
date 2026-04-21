@@ -51,7 +51,7 @@
   #define GEIGER_RATIO 151.0
 #endif
 
-#include "../Util/FormatFloat.h"
+#include "../Util/StringUtil.h"
 
 extern NTP_Client ntpclient;
 

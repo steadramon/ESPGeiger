@@ -21,6 +21,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
+#include "../Util/StringUtil.h"
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"
 #endif
@@ -147,22 +148,30 @@ void Webhook::postMeasurement() {
   format_f(b_cpm15, sizeof(b_cpm15), gcounter.get_cpm15f());
   format_f(b_usv,   sizeof(b_usv),   gcounter.get_usv());
 
-  int pos = snprintf_P(buffer, sizeof(buffer),
+  size_t pos = 0;
+  int n;
+  n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"id\":\"%s\""), DeviceInfo::chipid());
+  advance_pos(pos, n, sizeof(buffer));
   if (key[0] != '\0') {
-    pos += snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"key\":\"%s\""), key);
+    n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"key\":\"%s\""), key);
+    advance_pos(pos, n, sizeof(buffer));
   }
-  pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
+  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
     PSTR(",\"ut\":%lu,\"cps\":%s,\"cpm\":%s,\"cpm5\":%s,\"cpm15\":%s,\"usv\":%s"),
     DeviceInfo::uptime(), b_cps, b_cpm, b_cpm5, b_cpm15, b_usv);
+  advance_pos(pos, n, sizeof(buffer));
 #ifdef ESPGEIGER_HW
   char b_hv[12];
   format_f(b_hv, sizeof(b_hv), hardware.hvReading.get());
-  pos += snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);
+  n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);
+  advance_pos(pos, n, sizeof(buffer));
 #endif
-  pos += snprintf_P(buffer + pos, sizeof(buffer) - pos,
+  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
     gcounter.total_clicks, ESP.getFreeHeap(), (int)Wifi::rssi);
+  advance_pos(pos, n, sizeof(buffer));
+  buffer[pos] = '\0';
 
   char url[256];
   const char* trimmedURL = cleanHTTP(whURL);

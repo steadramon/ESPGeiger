@@ -20,7 +20,7 @@
 #include <Arduino.h>
 #include "Counter.h"
 #include "../Logger/Logger.h"
-#include "../Util/ParseTime.h"
+#include "../Util/StringUtil.h"
 #include "../NTP/NTP.h"
 
 Counter::Counter() {
