@@ -179,11 +179,8 @@ float Counter::get_totalusv() {
   if (uptime < 1) {
     return 0;
   }
-  // Compute the reciprocal once, convert the N divides in the loop into N multiplies.
-  const float inv_factor = 1.0f / (0.0166f * uptime);
-  for (int index = 1; index <= total_clicks_rollover; index++) {
-    totalUsv += (float)__LONG_MAX__ * inv_factor;
-  }
+  const float inv_factor = 60.0f / uptime;
+  totalUsv  = (float)__LONG_MAX__ * inv_factor * (float)total_clicks_rollover;
   totalUsv += total_clicks * inv_factor;
   static constexpr float INV_60 = 1.0f / 60.0f;
   return totalUsv * INV_60 * _ratio_inv;
