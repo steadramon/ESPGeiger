@@ -718,12 +718,6 @@ void ConfigManager::handleStatusPage()
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
 
-  // Pre-seed the live chart with every 3rd sample from the OLED's 1 Hz
-  // cpm_history ring, so it renders the last ~45 s of real data the
-  // moment the page loads instead of filling in blank-to-full over the
-  // next 15 polls. Downsample by 3 to match the 3s /json cadence the
-  // chart updates on — same bucket shape as the live feed. Data is
-  // already in memory; no heap, no strings, just %d.
   {
     char seedBuf[240];
     size_t sp = 0;
