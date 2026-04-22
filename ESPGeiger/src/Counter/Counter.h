@@ -124,6 +124,7 @@ class Counter {
       bool is_quiet_now();
       bool is_warning();
       bool is_alert();
+      bool is_healthy() const { return geigerinput && geigerinput->isHealthy(); }
       unsigned long last_blip() {
         return geigerinput->last_blip();
       }

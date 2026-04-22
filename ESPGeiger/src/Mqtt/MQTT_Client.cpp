@@ -267,6 +267,11 @@ void MQTT_Client::publishStatus()
     PSTR(",\"free_mem\":%u"), ESP.getFreeHeap());
   advance_pos(pos, n, sizeof(buffer));
 #endif
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
+    PSTR(",\"ser_ok\":%d"), gcounter.is_healthy() ? 1 : 0);
+  advance_pos(pos, n, sizeof(buffer));
+#endif
   n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR("}"));
   advance_pos(pos, n, sizeof(buffer));
   buffer[pos] = '\0';
@@ -476,6 +481,11 @@ struct HassBinarySensor {
 static const HassBinarySensor hass_binary_sensors[] = {
   {"warn",  "Warning", "{{ value_json.warn }}",  "mdi:alert-outline",          "~/tele/sensor", "problem"},
   {"alert", "Alert",   "{{ value_json.alert }}", "mdi:alert-octagram-outline", "~/tele/sensor", "safety"},
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  // Serial builds only: reports whether the external counter is still
+  // feeding us valid lines. Pulse builds have no external peer — skipped.
+  {"ser_ok", "Serial Connected", "{{ value_json.ser_ok }}", "mdi:serial-port", "~/tele/status", "connectivity"},
+#endif
 };
 static constexpr size_t hass_binary_sensor_count = sizeof(hass_binary_sensors) / sizeof(hass_binary_sensors[0]);
 

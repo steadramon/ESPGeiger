@@ -256,7 +256,7 @@ void Counter::loop() {
   geigerinput->loop();
 #endif
 
-  unsigned long lb = geigerinput->last_blip();
+  unsigned long lb = _last_blip;
   if (_last_blip_seen != lb) {
     _last_blip_seen = lb;
 #ifndef DISABLE_BLIP

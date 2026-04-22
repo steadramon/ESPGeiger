@@ -150,9 +150,9 @@ class GeigerInput {
     virtual void apply_pcnt_filter() {};
     virtual void set_pin_pull(int mode) {};   // 0=floating, 1=up, 2=down
     virtual bool has_pcnt() { return false; }
+    // Pulse doesn't have a real connection concept, serial does
+    virtual bool isHealthy() const { return true; }
     void blip_led();
-    // Inline: called from the hot Counter::loop() path ~50k/sec.
-    // Not virtual - no subclass overrides it.
     unsigned long last_blip() const { return _last_blip; }
     static void IRAM_ATTR countInterrupt();
     void setCounter(int val, bool update = true);

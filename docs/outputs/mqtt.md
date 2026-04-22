@@ -22,7 +22,7 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 |---|---|---|
 | `ESPGeiger-<device_id>/tele/lwt` | Last Will and Testament. `Online` on connect, `Offline` via LWT on disconnect. | event |
 | `ESPGeiger-<device_id>/tele/sensor` | Radiation measurements bundle (CPM, uSv, CPS, CPM5, CPM15, HV, warn, alert). | 60 s |
-| `ESPGeiger-<device_id>/tele/status` | Device state + diagnostics (time, uptime, IP, RSSI, counts, load metrics, memory). | 60 s |
+| `ESPGeiger-<device_id>/tele/status` | Device state + diagnostics (time, uptime, IP, RSSI, counts, load metrics, memory, serial health on serial builds). | 60 s |
 
 ### Event topics
 
@@ -81,3 +81,4 @@ Planned for removal in a future release — prefer consuming `tele/sensor` JSON 
 | `t_max` | Peak `tick` in last 60 s |
 | `lps` | Loop iterations per second |
 | `free_mem` | Free heap (bytes) |
+| `ser_ok` | `1` when the external serial counter has sent a valid line within the last 60 s, `0` otherwise. Serial builds only — absent from pulse builds. |

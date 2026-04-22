@@ -35,6 +35,7 @@ Triggered when CPM crosses the configured warning / alert thresholds. Consumed v
 |---|---|---|
 | `ESPGeiger-<device_id> Warning` | CPM above configured warning threshold | `problem` |
 | `ESPGeiger-<device_id> Alert` | CPM above configured alert threshold | `safety` |
+| `ESPGeiger-<device_id> Serial Connected` | Serial counter has reported within the last 60 s. Published only on serial builds — pulse builds have no external peer to monitor. | `connectivity` |
 
 ## Diagnostic entities
 

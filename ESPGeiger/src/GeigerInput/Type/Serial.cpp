@@ -7,6 +7,14 @@
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Serial.h"
 #include "../../Logger/Logger.h"
@@ -47,7 +55,10 @@ void GeigerSerial::begin() {
   uint32_t baud = info ? info->baud : 9600;
   Log::console(PSTR("GeigerSerial: %s (type %d) baud %lu rx %d"),
                info ? info->name : "?", _serial_type, baud, _rx_pin);
-  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
+  if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
+    Log::error(PSTR("GeigerSerial: rx/tx pin clashes with UART0"));
+  }
+  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 64);
 }
 
 void GeigerSerial::pullSerial() {
@@ -75,10 +86,6 @@ void GeigerSerial::loop() {
   }
   _loop_c = 0;
   pullSerial();
-  if (avg_diff <= 0) {
-    avg_diff = 0;
-    return;
-  }
   if (serial_value <= 0) {
     serial_value = 0;
     return;
@@ -101,44 +108,68 @@ void GeigerSerial::secondTicker() {
   }
 }
 
+// Reset SoftSerial if we see this many consecutive un-parseable lines.
+#define GEIGERSERIAL_BAD_LIMIT 20
+
 void GeigerSerial::handleSerial(char* input) {
   size_t inputLen = strlen(input);
   for (size_t x = 0; x < inputLen; x++) {
     if (!isPrintable(input[x]) && input[x] != '\r' && input[x] != '\n') {
       Log::debug(PSTR("Non-printable character on serial"));
-      return;
+      _bad_streak++;
+      goto maybe_drain;
     }
   }
 
-  int _scpm = 0;
-  int n = 0;
-
-  switch (_serial_type) {
-    case GEIGER_STYPE_MIGHTYOHM: {
-      int _scps;
-      n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
-      if (n != 2) return;
-      break;
-    }
-    case GEIGER_STYPE_ESPGEIGER:
-      n = sscanf(input, "CPM: %d", &_scpm);
-      if (n != 1) return;
-      break;
-    default:
-      // GC10 / GC10Next - plain digits
-      for (size_t x = 0; x < inputLen; x++) {
-        if (!isDigit(input[x]) && input[x] != '\r' && input[x] != '\n') return;
+  {
+    int _scpm = 0;
+    int n = 0;
+    switch (_serial_type) {
+      case GEIGER_STYPE_MIGHTYOHM: {
+        int _scps;
+        n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
+        if (n != 2) { _bad_streak++; goto maybe_drain; }
+        break;
       }
-      n = sscanf(input, "%d", &_scpm);
-      if (n != 1) return;
-      break;
+      case GEIGER_STYPE_ESPGEIGER:
+        n = sscanf(input, "CPM: %d", &_scpm);
+        if (n != 1) { _bad_streak++; goto maybe_drain; }
+        break;
+      default:
+        // GC10 / GC10Next - plain digits
+        for (size_t x = 0; x < inputLen; x++) {
+          if (!isDigit(input[x]) && input[x] != '\r' && input[x] != '\n') {
+            _bad_streak++;
+            goto maybe_drain;
+          }
+        }
+        n = sscanf(input, "%d", &_scpm);
+        if (n != 1) { _bad_streak++; goto maybe_drain; }
+        break;
+    }
+
+    // 1M CPM is way beyond any realistic tube — reject as garbage.
+    if (_scpm < 0 || _scpm > 1000000) {
+      Log::debug(PSTR("GeigerSerial: out-of-range CPM %d"), _scpm);
+      _bad_streak++;
+      goto maybe_drain;
+    }
+
+    Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
+    setLastBlip();
+    serial_value = _scpm;
+    last_serial = millis();
+    _bad_streak = max((int)_bad_streak - 3, 0);
+    return;
   }
 
-  Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
-  setLastBlip();
-  serial_value = _scpm;
-  unsigned long now = millis();
-  int diff = now - last_serial;
-  if (last_serial != 0) avg_diff = (avg_diff + diff) / 2;
-  last_serial = now;
+maybe_drain:
+  if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) {
+    Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
+    int n = geigerPort.available();
+    while (n-- > 0) geigerPort.read();
+    _serial_idx = 0;
+    _serial_buffer[0] = '\0';
+    _bad_streak = 0;
+  }
 }

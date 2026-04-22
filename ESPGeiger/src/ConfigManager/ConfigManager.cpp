@@ -597,7 +597,7 @@ void ConfigManager::handleEGPrefs() {
           n = snprintf(buf + pos, sizeof(buf) - pos, " pattern='%s'", p.pattern);
           advance_pos(pos, n, sizeof(buf));
         }
-        if ((p.type == EGP_INT || p.type == EGP_UINT) && p.min_i != p.max_i) {
+        if ((p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) && p.min_i != p.max_i) {
           n = snprintf(buf + pos, sizeof(buf) - pos, " min='%ld' max='%ld'", (long)p.min_i, (long)p.max_i);
           advance_pos(pos, n, sizeof(buf));
         }
@@ -717,6 +717,32 @@ void ConfigManager::handleStatusPage()
   snprintf(title, sizeof(title), "%s - Status", THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
+
+  // Pre-seed the live chart with every 3rd sample from the OLED's 1 Hz
+  // cpm_history ring, so it renders the last ~45 s of real data the
+  // moment the page loads instead of filling in blank-to-full over the
+  // next 15 polls. Downsample by 3 to match the 3s /json cadence the
+  // chart updates on — same bucket shape as the live feed. Data is
+  // already in memory; no heap, no strings, just %d.
+  {
+    char seedBuf[240];
+    size_t sp = 0;
+    int sn;
+    sn = snprintf(seedBuf, sizeof(seedBuf), "<script>window._seedHist=[");
+    advance_pos(sp, sn, sizeof(seedBuf));
+    int histSize = gcounter.cpm_history.size();
+    bool firstHist = true;
+    for (int i = 0; i < histSize; i += 3) {
+      sn = snprintf(seedBuf + sp, sizeof(seedBuf) - sp,
+                    firstHist ? "%d" : ",%d", gcounter.cpm_history[i]);
+      advance_pos(sp, sn, sizeof(seedBuf));
+      firstHist = false;
+    }
+    sn = snprintf(seedBuf + sp, sizeof(seedBuf) - sp, "]</script>");
+    advance_pos(sp, sn, sizeof(seedBuf));
+    s->sendContent(seedBuf, sp);
+  }
+
   s->sendContent(FPSTR(STATUS_PAGE_BODY));
   s->sendContent(FPSTR(HTTP_BACKBTN));
   { TemplateSub subs[] = {{"{1}", RELEASE_VERSION}};
