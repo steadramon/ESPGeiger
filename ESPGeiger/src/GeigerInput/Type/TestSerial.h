@@ -43,7 +43,6 @@ class GeigerTestSerial : public GeigerInputTest
     float partial_clicks = 0;
     int serial_value = 0;
     unsigned long last_serial = 0;
-    int avg_diff = 0;
     Smoothed <float> serialAvg;
     float test_partial_clicks = 0;
     float _poisson_target = 0;

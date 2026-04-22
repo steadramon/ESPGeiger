@@ -70,10 +70,6 @@ void GeigerTestSerial::loop() {
   }
   _loop_c = 0;
   pullSerial();
-  if (avg_diff <= 0) {
-    avg_diff = 0;
-    return;
-  }
   if (serial_value <= 0) {
     serial_value = 0;
     return;
@@ -171,8 +167,5 @@ void GeigerTestSerial::handleSerial(char* input) {
   Log::debug(PSTR("TestSerial: Loop - %d"), _scpm);
   setLastBlip();
   serial_value = _scpm;
-  unsigned long now = millis();
-  int diff = now - last_serial;
-  if (last_serial != 0) avg_diff = (avg_diff + diff) / 2;
-  last_serial = now;
+  last_serial = millis();
 }
