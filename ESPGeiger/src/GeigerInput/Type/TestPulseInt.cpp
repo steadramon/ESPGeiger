@@ -64,6 +64,7 @@ void GeigerTestPulseInt::begin() {
   _target_pwm = calcPWM();
 
 #ifdef ESP8266
+  timer1_disable();
   timer1_attachInterrupt(pulseInterrupt);
   timer1_isr_init();
   timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_LOOP);

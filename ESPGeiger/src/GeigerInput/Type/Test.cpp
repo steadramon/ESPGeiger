@@ -1,6 +1,6 @@
 /*
   GeigerInput/Type/Test.cpp - Class for Test type counter
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ void GeigerTest::begin() {
   CPMAdjuster();
   _next_delay = calcDelay();
 #ifdef ESP8266
+  timer1_disable();
   timer1_attachInterrupt(testInterrupt);
   timer1_isr_init();
   timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);

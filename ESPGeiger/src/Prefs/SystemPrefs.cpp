@@ -98,7 +98,9 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #endif
 #ifndef DISABLE_INTERNAL_BLIP
   {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   {"blip_bright", "Blip brightness","LED brightness (0-100%)", "80",  nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+#endif
   {"quiet_from",  "Quiet from",     "Silence blip LED + beeper from (blank = off)", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
   {"quiet_to",    "Quiet to",       "End of quiet window; crosses midnight if from > to", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
 #endif
@@ -132,7 +134,9 @@ void InputPrefs::on_prefs_loaded() {
 #endif
 #ifndef DISABLE_INTERNAL_BLIP
   gcounter.set_blip_led(EGPrefs::getBool("input", "blip_led"));
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("input", "blip_bright") * 255 + 50) / 100));
+#endif
   gcounter.set_quiet_hours(
     EGPrefs::getString("input", "quiet_from"),
     EGPrefs::getString("input", "quiet_to")

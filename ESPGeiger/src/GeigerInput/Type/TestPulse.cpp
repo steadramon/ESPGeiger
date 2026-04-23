@@ -64,6 +64,7 @@ void GeigerTestPulse::begin() {
   _next_delay = calcDelay();
   _this_delay = _next_delay;
 #ifdef ESP8266
+  timer1_disable();
   timer1_attachInterrupt(pulseInterrupt);
   timer1_isr_init();
   timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
