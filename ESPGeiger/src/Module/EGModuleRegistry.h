@@ -34,6 +34,7 @@ class EGModuleRegistry {
     static void log_profile_and_reset();
 #endif
     static void log_activity_and_reset();
+    static void wake();
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);

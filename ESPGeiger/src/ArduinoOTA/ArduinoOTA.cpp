@@ -45,6 +45,7 @@ void ArduinoOTAModule::begin() {
     display.showOTABanner();
 #endif
     ota_in_progress = true;
+    EGModuleRegistry::wake();
     gcounter.stop_for_ota();
     digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
     Log::console(PSTR("Start updating %s"), type);

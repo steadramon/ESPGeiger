@@ -52,12 +52,9 @@ void EGModuleRegistry::begin_all() {
 void EGModuleRegistry::loop_all(unsigned long now) {
   if (ota_in_progress) {
     arduinoOTA.loop(now);
+    _next_loop_due = now;
     return;
   }
-  // Fast-path: if no module's loop() is due yet, skip the walk entirely.
-  // Called from main loop ~50k/s so this check saves a lot of cycles.
-  // Signed compare handles millis() wrap safely.
-  if ((long)(now - _next_loop_due) < 0) return;
 
   unsigned long earliest = now + 0x7FFFFFFF;
   for (uint8_t i = 0; i < _count; i++) {
@@ -150,6 +147,10 @@ void EGModuleRegistry::log_activity_and_reset() {
     pos += n;
   }
   if (any) Log::console(PSTR("Activity: %s"), buf);
+}
+
+void EGModuleRegistry::wake() {
+  _next_loop_due = millis();
 }
 
 uint8_t EGModuleRegistry::count() {
