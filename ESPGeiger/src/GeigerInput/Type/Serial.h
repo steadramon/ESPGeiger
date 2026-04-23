@@ -34,7 +34,8 @@ class GeigerSerial : public GeigerInput
     void loop();
     void secondTicker();
     bool isHealthy() const override {
-      return last_serial != 0 && (millis() - last_serial) < 60000;
+      if (_last_drain != 0 && (millis() - _last_drain) < 60000) return false;
+      return true;
     }
   private:
     void pullSerial();
@@ -47,5 +48,6 @@ class GeigerSerial : public GeigerInput
     uint8_t _loop_c = 0;
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint16_t _bad_streak = 0;
+    unsigned long _last_drain = 0;
 };
 #endif

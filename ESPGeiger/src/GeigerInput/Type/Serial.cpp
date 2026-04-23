@@ -101,6 +101,7 @@ void GeigerSerial::handleSerial(char* input) {
       _serial_idx = 0;
       _serial_buffer[0] = '\0';
       _bad_streak = 0;
+      _last_drain = millis();
     }
     return;
   }
