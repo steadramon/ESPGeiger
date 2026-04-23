@@ -45,6 +45,8 @@ double GeigerInputTest::calcDelay() {
 #ifdef DISABLE_GEIGER_POISSON
   return mult / _target_cps;
 #else
+  // Debt carries forward unclamped so long-run rate stays Poisson-correct
+  // up to the pulse-width floor; above the floor output saturates cleanly.
   double result       = generatePoissonRand(_target_cps) + _remainder;
   double min_interval = _pulse_width_us * 0.000001;
   if (result < min_interval) {
