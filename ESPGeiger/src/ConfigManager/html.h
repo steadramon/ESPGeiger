@@ -181,9 +181,9 @@ static const char NTP_HTML[] PROGMEM = R"HTML(<h1>NTP Config</h1>
 static const char STATUS_PAGE_FOOT[] PROGMEM = "<br/><small><a target='_blank' href='https://github.com/steadramon/ESPGeiger'>ESPGeiger</a> <a href='/about' style='font-weight:normal'>{1}</a></small>";
 
 static const char statusJS[] PROGMEM = R"JS(
-!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);if(window._seedHist&&window._seedHist.length){window._seedHist.forEach(v=>e.update([v,v,v]))}!function t(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);var u=o.ut,p=n=>String(n).padStart(2,"0");byID('upt').innerHTML=(u/86400|0)+"T"+p((u/3600|0)%24)+":"+p((u/60|0)%60)+":"+p(u%60);byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);e.update([o.c,o.c5,o.c15])}setTimeout(t,3e3)},n.onerror=function(){setTimeout(t,6e3)},n.send()}()}();
+!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);if(window._seedHist&&window._seedHist.length){window._seedHist.forEach(v=>e.update([v,v,v]))}var jt,t=function(){if(document.hidden){jt=setTimeout(t,3e4);return}var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);var u=o.ut,p=n=>String(n).padStart(2,"0");byID('upt').innerHTML=(u/86400|0)+"T"+p((u/3600|0)%24)+":"+p((u/60|0)%60)+":"+p(u%60);byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);e.update([o.c,o.c5,o.c15])}jt=setTimeout(t,3e3)},n.onerror=function(){jt=setTimeout(t,6e3)},n.send()};t();document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(jt);t()}})}();
 var lt,to,tp,x=null,pc="",id=0,ml=10000,dl=200,dtz=0;
-function f(){clearTimeout(lt);var t=byID("t1");x=new XMLHttpRequest;x.onload=function(){if(200==x.status){var n=x.responseText,e,ab=(t.scrollHeight-t.scrollTop-t.clientHeight)<50;var p=n.substr(0,n.indexOf("\n")).split(",");id=p[0];dtz=+p[1]||0;e=n.substr(n.indexOf("\n")+1);if(e.length>0){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){var b=-new Date().getTimezoneOffset(),T=((+h*60+(+m)+b-dtz)%1440+1440)%1440;return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s;});t.value+=e;var L=t.value.split("\n");if(L.length>ml)t.value=L.slice(-(ml-dl)).join("\n");}if(ab)t.scrollTop=t.scrollHeight;}lt=setTimeout(f,3210);};x.onerror=function(){lt=setTimeout(f,6e3);};x.open("GET","/cs?c1="+id,!0);x.send();return!1;}window.addEventListener("load",f);
+function f(){clearTimeout(lt);if(document.hidden){lt=setTimeout(f,3e4);return!1}var t=byID("t1");x=new XMLHttpRequest;x.onload=function(){if(200==x.status){var n=x.responseText,e,ab=(t.scrollHeight-t.scrollTop-t.clientHeight)<50;var p=n.substr(0,n.indexOf("\n")).split(",");id=p[0];dtz=+p[1]||0;e=n.substr(n.indexOf("\n")+1);if(e.length>0){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){var b=-new Date().getTimezoneOffset(),T=((+h*60+(+m)+b-dtz)%1440+1440)%1440;return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s;});t.value+=e;var L=t.value.split("\n");if(L.length>ml)t.value=L.slice(-(ml-dl)).join("\n");}if(ab)t.scrollTop=t.scrollHeight;}lt=setTimeout(f,3210);};x.onerror=function(){lt=setTimeout(f,6e3);};x.open("GET","/cs?c1="+id,!0);x.send();return!1;}window.addEventListener("load",f);document.addEventListener("visibilitychange",function(){if(!document.hidden)f()});
 )JS";
 
 static const char hvJS[] PROGMEM = R"JS("use strict";
@@ -193,6 +193,7 @@ var x=null,lt,to,tp,pc='';sn=0,id=0;
 function gethv() {
   var c,o='',t;
   clearTimeout(lt);
+  if(document.hidden){lt=setTimeout(gethv,3e4);return false;}
   t = document.getElementById('t1');
 
     x=new XMLHttpRequest();
@@ -217,6 +218,7 @@ function gethv() {
   return false;
 }
 window.addEventListener("load",gethv);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)gethv()});
 byID('freq').addEventListener("change", function() { byID('sfreq').innerHTML=this.value });
 byID('duty').addEventListener("change", function() { byID('sduty').innerHTML=this.value });
 byID('submit').addEventListener("click", function() {
