@@ -133,6 +133,7 @@ public:
   void page_one_values(unsigned long now);
   void page_two_full();
   void page_three_full();
+  void showOTABanner();
 
   void setTimeout(uint16_t timeout) {
     _lcd_timeout = timeout;

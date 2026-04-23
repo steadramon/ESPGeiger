@@ -314,4 +314,14 @@ void SSD1306Display::page_three_full() {
   drawString(0, 32, PSTR(__DATE__ " " __TIME__));
   drawString(0, 47, PSTR("@ steadramon"));
 }
+
+void SSD1306Display::showOTABanner() {
+  clear();
+  setTextAlignment(TEXT_ALIGN_CENTER);
+  setFont(ArialMT_Plain_16);
+  drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) - 12, "Update");
+  drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) + 8,  "in progress...");
+  display();
+  setTextAlignment(TEXT_ALIGN_LEFT);  // restore default for any caller assumptions
+}
 #endif
