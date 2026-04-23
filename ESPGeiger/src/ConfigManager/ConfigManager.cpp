@@ -885,7 +885,7 @@ void ConfigManager::handleInfo()
   s->sendContent(F("</ul></details>"));
 
   // --- About ----------------------------------------------------------
-  s->sendContent(F("<details><summary>About</summary><table class='i'>"));
+  s->sendContent(F("<details open><summary>About</summary><table class='i'>"));
   INFO_ROW("Version",    "%s",    RELEASE_VERSION);
   INFO_ROW("Git",        "%s",    GIT_VERSION);
   INFO_ROW("Build env",  "%s",    BUILD_ENV);
