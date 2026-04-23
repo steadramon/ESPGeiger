@@ -97,11 +97,7 @@ void PushButton::loop(unsigned long now)
   if (button_pushed) {
     led.Blink(200, 1);
 #if defined(SSD1306_DISPLAY)
-    display.oled_timeout = now;
-    if (display.oled_on) {
-      display.oled_page = (display.oled_page % OLED_PAGES) + 1;
-    }
-    display.oled_last_update = 0;
+    display.onButtonTap(now);
 #endif
     gcounter.reset_alarm();
     button_pushed = false;

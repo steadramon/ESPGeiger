@@ -74,6 +74,7 @@ public:
   void setup();
   void setupWifi(const char* s);
   void wifiDisabled();
+  void onButtonTap(unsigned long now);
 
   void clear() {
     SSD1306Wire::clear();

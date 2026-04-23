@@ -215,6 +215,19 @@ void SSD1306Display::setup() {
   setFont(ArialMT_Plain_16);
 }
 
+void SSD1306Display::onButtonTap(unsigned long now) {
+  oled_timeout = now;
+  if (!oled_on) {
+    oled_page = 1;
+    displayOn();
+    oled_on = true;
+  } else {
+    oled_page = (oled_page % OLED_PAGES) + 1;
+  }
+  oled_last_update = 0;
+  loop(now);
+}
+
 void SSD1306Display::setupWifi(const char* s) {
   clear();
   setFont(DialogInput_plain_12);
