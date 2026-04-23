@@ -107,21 +107,21 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
     case EGP_BOOL: {
       char c = value[0];
       bool v = (c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y');
-      return snprintf(out, outsz, "%c", v ? '1' : '0');
+      return snprintf_P(out, outsz, PSTR("%c"), v ? '1' : '0');
     }
     case EGP_INT: {
       char* end;
       long v = strtol(value, &end, 10);
       if (*end != '\0' || end == value) return -1;
       if (p->min_i != p->max_i && (v < p->min_i || v > p->max_i)) return -1;
-      return snprintf(out, outsz, "%ld", v);
+      return snprintf_P(out, outsz, PSTR("%ld"), v);
     }
     case EGP_UINT: {
       char* end;
       unsigned long v = strtoul(value, &end, 10);
       if (*end != '\0' || end == value) return -1;
       if (p->min_i != p->max_i && ((int32_t)v < p->min_i || (int32_t)v > p->max_i)) return -1;
-      return snprintf(out, outsz, "%lu", v);
+      return snprintf_P(out, outsz, PSTR("%lu"), v);
     }
     case EGP_FLOAT: {
       char* end;

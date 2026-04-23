@@ -434,7 +434,7 @@ void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const 
     _cachedRootTopic[w] = '\0';
     _rootTopicCached = true;
   }
-  snprintf(out, outsz, "%s/%s/%s", _cachedRootTopic, middle, cmd);
+  snprintf_P(out, outsz, PSTR("%s/%s/%s"), _cachedRootTopic, middle, cmd);
 }
 #ifdef MQTTAUTODISCOVER
 
@@ -492,7 +492,7 @@ static constexpr size_t hass_binary_sensor_count = sizeof(hass_binary_sensors) /
 // Shared path builder for HA discovery - avoids String heap allocations.
 static int buildHassPath(char* buf, size_t sz, const char* disc,
                           const char* type, const char* name) {
-  return snprintf(buf, sz, "%s/%s/%s-%s/config", disc, type, DeviceInfo::hostname(), name);
+  return snprintf_P(buf, sz, PSTR("%s/%s/%s-%s/config"), disc, type, DeviceInfo::hostname(), name);
 }
 
 void MQTT_Client::setupHassCB() {
@@ -500,7 +500,7 @@ void MQTT_Client::setupHassCB() {
   const char* _discovery_topic = EGPrefs::getString("mqtt", "hass_topic");
   if (_discovery_topic[0] == '\0') return;
   char path[128];
-  snprintf(path, sizeof(path), "%s/status", _discovery_topic);
+  snprintf_P(path, sizeof(path), PSTR("%s/status"), _discovery_topic);
   mqttClient->subscribe(path, 2);
 }
 
@@ -630,7 +630,7 @@ void MQTT_Client::onMqttMessage(char* topic, char* payload)
   const char* _discovery_topic = EGPrefs::getString("mqtt", "hass_topic");
   if (_discovery_topic[0] == '\0') _discovery_topic = MQTT_DISCOVERY_TOPIC;
   char path[128];
-  snprintf(path, sizeof(path), "%s/status", _discovery_topic);
+  snprintf_P(path, sizeof(path), PSTR("%s/status"), _discovery_topic);
 
   if (strcmp(path, topic) == 0 ) {
     if (!EGPrefs::getBool("mqtt", "hass_enabled")) return;

@@ -32,10 +32,10 @@ void GeigerSerial::begin() {
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;    // safety fallback for an unknown saved pref
-  Log::console(PSTR("GeigerSerial: %s (type %d) baud %lu rx %d"),
+  Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
                name ? name : "?", _serial_type, baud, _rx_pin);
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
-    Log::error(PSTR("GeigerSerial: rx/tx pin clashes with UART0"));
+    Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
   }
   geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 64);
 }

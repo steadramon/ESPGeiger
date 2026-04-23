@@ -131,7 +131,7 @@ void GMC::postMeasurement() {
   format_f(acpm, sizeof(acpm), gcounter.get_cpm5f());
   format_f(usv,  sizeof(usv),  gcounter.get_usv5(), 4);
   char url[256];
-  snprintf(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv);
+  snprintf_P(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {

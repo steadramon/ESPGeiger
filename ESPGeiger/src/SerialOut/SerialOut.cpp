@@ -35,7 +35,7 @@ SerialOut::SerialOut() {
 
 void SerialOut::print_cpm() {
   char buf[32];
-  snprintf(buf, sizeof(buf), "CPM: %d\n", gcounter.get_cpm());
+  snprintf_P(buf, sizeof(buf), PSTR("CPM: %d\n"), gcounter.get_cpm());
   Serial.print(buf);
 }
 
@@ -43,7 +43,7 @@ void SerialOut::print_usv() {
   char buf[32];
   char f[12];
   format_f(f, sizeof(f), gcounter.get_usv());
-  snprintf(buf, sizeof(buf), "uSv: %s\n", f);
+  snprintf_P(buf, sizeof(buf), PSTR("uSv: %s\n"), f);
   Serial.print(buf);
 }
 
@@ -75,22 +75,22 @@ void SerialOut::loop(unsigned long now) {
   size_t pos = 0;
   int n;
   if (_show_flags & SHOW_CPM) {
-    n = snprintf(buf + pos, sizeof(buf) - pos, "CPM: %d", gcounter.get_cpm());
+    n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("CPM: %d"), gcounter.get_cpm());
     advance_pos(pos, n, sizeof(buf));
   }
   if (_show_flags & SHOW_CPS) {
     format_f(f, sizeof(f), gcounter.get_cps());
-    n = snprintf(buf + pos, sizeof(buf) - pos, "%sCPS: %s", pos ? " " : "", f);
+    n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%sCPS: %s"), pos ? " " : "", f);
     advance_pos(pos, n, sizeof(buf));
   }
   if (_show_flags & SHOW_USV) {
     format_f(f, sizeof(f), gcounter.get_usv());
-    n = snprintf(buf + pos, sizeof(buf) - pos, "%suSv: %s", pos ? " " : "", f);
+    n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%suSv: %s"), pos ? " " : "", f);
     advance_pos(pos, n, sizeof(buf));
   }
 #ifdef ESPGEIGER_HW
   if (_show_flags & SHOW_HV) {
-    n = snprintf(buf + pos, sizeof(buf) - pos, "%sHV: %d", pos ? " " : "", (int)hardware.hvReading.get());
+    n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%sHV: %d"), pos ? " " : "", (int)hardware.hvReading.get());
     advance_pos(pos, n, sizeof(buf));
   }
 #endif

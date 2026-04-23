@@ -88,7 +88,7 @@ EG_REGISTER_MODULE(inputPrefs)
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 // Filled by SerialFormat::describe_types at prefs-load; pref entry
 // points at this so help text tracks the TYPES[] table.
-static char serial_type_desc[80] = "";
+static char serial_type_desc[48] = "";
 #endif
 
 static const EGPref INPUT_PREF_ITEMS[] = {

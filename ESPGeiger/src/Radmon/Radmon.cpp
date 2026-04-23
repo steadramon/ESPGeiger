@@ -158,7 +158,7 @@ void Radmon::postMeasurement() {
     avgcpm = gcounter.get_cpm15();
   }
   char url[256];
-  snprintf(url, sizeof(url), RADMON_URI, _api_user, _api_key, avgcpm);
+  snprintf_P(url, sizeof(url), RADMON_URI, _api_user, _api_key, avgcpm);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {

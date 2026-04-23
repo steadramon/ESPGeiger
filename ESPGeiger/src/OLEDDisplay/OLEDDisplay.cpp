@@ -265,7 +265,7 @@ void SSD1306Display::page_one_graph() {
     char graphBuf[8];
     if (maxValue == 0) {
       setFont(Open_Sans_Regular_Plain_10);
-      snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
+      snprintf_P(graphBuf, sizeof(graphBuf), PSTR("%d"), minValue);
       drawString(93,55, graphBuf);
       return;
     }
@@ -275,9 +275,9 @@ void SSD1306Display::page_one_graph() {
       drawRect(x_start + i * 2, location, 2, (63 - location));
     }
     setFont(Open_Sans_Regular_Plain_10);
-    snprintf(graphBuf, sizeof(graphBuf), "%d", minValue);
+    snprintf_P(graphBuf, sizeof(graphBuf), PSTR("%d"), minValue);
     drawString(93,55, graphBuf);
-    snprintf(graphBuf, sizeof(graphBuf), "%d", maxValue);
+    snprintf_P(graphBuf, sizeof(graphBuf), PSTR("%d"), maxValue);
     drawString(93,35, graphBuf);
   }
 }
@@ -288,7 +288,7 @@ void SSD1306Display::page_one_values(unsigned long now) {
   fillRect(45, 0, 72, 32);
   setColor(WHITE);
   char oledBuf[16];
-  snprintf(oledBuf, sizeof(oledBuf), "%d", gcounter.get_cpm());
+  snprintf_P(oledBuf, sizeof(oledBuf), PSTR("%d"), gcounter.get_cpm());
   drawString(45,0, oledBuf);
   setFont(DialogInput_plain_12);
   format_f(oledBuf, sizeof(oledBuf), gcounter.get_usv());

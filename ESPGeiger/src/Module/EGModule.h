@@ -90,9 +90,9 @@ class EGModule {
                                     bool ok, unsigned long last_attempt_ms,
                                     unsigned long now) {
       if (last_attempt_ms == 0) {
-        return snprintf(buf, cap, "\"%s\":{\"ok\":false,\"age\":null}", key);
+        return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":false,\"age\":null}"), key);
       }
-      return snprintf(buf, cap, "\"%s\":{\"ok\":%s,\"age\":%lu}", key,
+      return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":%s,\"age\":%lu}"), key,
                       ok ? "true" : "false", (now - last_attempt_ms) / 1000);
     }
 };

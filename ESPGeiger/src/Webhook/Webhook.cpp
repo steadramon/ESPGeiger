@@ -125,13 +125,13 @@ const char* Webhook::cleanHTTP(const char* url) {
 void Webhook::postMeasurement() {
   if (!EGPrefs::getBool("webhook", "send")) return;
 
+  const char* whURL = EGPrefs::getString("webhook", "url");
+  if (whURL[0] == '\0') return;
+
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Webhook: Testmode"));
     return;
   }
-
-  const char* whURL = EGPrefs::getString("webhook", "url");
-  if (whURL[0] == '\0') return;
 
   int iv = (int)EGPrefs::getUInt("webhook", "interval");
   if (iv > 0) setInterval(iv);
@@ -176,7 +176,7 @@ void Webhook::postMeasurement() {
   char url[256];
   const char* trimmedURL = cleanHTTP(whURL);
 
-  snprintf(url, sizeof(url), "http://%s", trimmedURL);
+  snprintf_P(url, sizeof(url), PSTR("http://%s"), trimmedURL);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {

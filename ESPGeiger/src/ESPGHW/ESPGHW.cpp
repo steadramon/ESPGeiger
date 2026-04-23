@@ -103,13 +103,13 @@ void ESPGeigerHW::fiveloop() {
 
 void ESPGeigerHW::saveconfig() {
   char buf[16];
-  snprintf(buf, sizeof(buf), "%d", _hw_freq);
+  snprintf_P(buf, sizeof(buf), PSTR("%d"), _hw_freq);
   EGPrefs::put("espghw", "freq", buf);
-  snprintf(buf, sizeof(buf), "%d", _hw_duty);
+  snprintf_P(buf, sizeof(buf), PSTR("%d"), _hw_duty);
   EGPrefs::put("espghw", "duty", buf);
-  snprintf(buf, sizeof(buf), "%d", _hw_vd_ratio);
+  snprintf_P(buf, sizeof(buf), PSTR("%d"), _hw_vd_ratio);
   EGPrefs::put("espghw", "ratio", buf);
-  snprintf(buf, sizeof(buf), "%d", _hw_vd_offset);
+  snprintf_P(buf, sizeof(buf), PSTR("%d"), _hw_vd_offset);
   EGPrefs::put("espghw", "offset", buf);
   EGPrefs::commit();
 }

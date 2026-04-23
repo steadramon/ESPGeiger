@@ -70,8 +70,12 @@ ConfigManager::ConfigManager() : WiFiManager(){
 
 void ConfigManager::updatePortalMessage()
 {
-  snprintf_P(portalMenuHtml, sizeof(portalMenuHtml),
-    PSTR("<div style='padding:.5em;margin:.5em 0;background:#eef6ff;border:1px solid #89b;border-radius:4px'>"
+  if (!portalMenuHtml) {
+    portalMenuHtml = (char*)malloc(PORTAL_MENU_HTML_SIZE);
+    if (!portalMenuHtml) return;  // OOM — portal just renders without the banner
+  }
+  snprintf_P(portalMenuHtml, PORTAL_MENU_HTML_SIZE,
+    PSTR("<div style='padding:.5em;background:#eef6ff;border:1px solid #89b'>"
          "After WiFi setup, open <b>http://%s.local/</b> "
          "(or find the device IP on your router)</div>"),
     hostName);
@@ -129,11 +133,12 @@ bool ConfigManager::autoConnect()
   WiFiManager::setConfigPortalTimeout(300);
   static const char* portalMenu[] = {"custom","wifi","info","exit","sep","update"};
   setMenu(portalMenu, sizeof(portalMenu) / sizeof(portalMenu[0]));
-  updatePortalMessage();
   if (hasWiFiCreds()) {
     WiFiManager::setEnableConfigPortal(false);
+    // No updatePortalMessage() — portal won't render; skip the 192 B alloc.
   } else {
     Log::console(PSTR("Config: No WiFi saved - captive portal on AP '%s' (300s)"), hostName);
+    updatePortalMessage();
   }
   bool result = WiFiManager::autoConnect(hostName);
 
@@ -251,7 +256,7 @@ void ConfigManager::handleRoot() {
   ip[sizeof(ip) - 1] = '\0';
 
   char heading[64];
-  snprintf(heading, sizeof(heading), "%s - %s", hostName, ip);
+  snprintf_P(heading, sizeof(heading), PSTR("%s - %s"), hostName, ip);
   const char* tname =
 #ifdef ESPGEIGER_HW
     "ESPGeiger-HW";
@@ -370,7 +375,7 @@ void ConfigManager::handleAbout()
   uint8_t macb[6];
   WiFi.macAddress(macb);
   char mac_str[13];
-  snprintf(mac_str, sizeof(mac_str), "%02X%02X%02X%02X%02X%02X",
+  snprintf_P(mac_str, sizeof(mac_str), PSTR("%02X%02X%02X%02X%02X%02X"),
     macb[0], macb[1], macb[2], macb[3], macb[4], macb[5]);
 
   int n;
@@ -396,11 +401,11 @@ void ConfigManager::handleAbout()
   for (uint8_t i = 0; i < count; i++) {
     EGModule* m = EGModuleRegistry::get(i);
     if (m == nullptr) continue;
-    n = snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
-      "%s\"%s\"", (i > 0 ? "," : ""), m->name());
+    n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
+      PSTR("%s\"%s\""), (i > 0 ? "," : ""), m->name());
     advance_pos(pos, n, sizeof(jsonBuffer));
   }
-  n = snprintf(jsonBuffer + pos, sizeof(jsonBuffer) - pos, "]}");
+  n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR("]}"));
   advance_pos(pos, n, sizeof(jsonBuffer));
   jsonBuffer[pos] = '\0';
   ConfigManager::server.get()->send(200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer);
@@ -464,7 +469,7 @@ void ConfigManager::handleEGPrefs() {
       for (size_t j = 0; j < g->count; j++) {
         const EGPref& p = g->prefs[j];
         if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
-        snprintf(name, sizeof(name), "%s.%s", g->module_id, p.id);
+        snprintf_P(name, sizeof(name), PSTR("%s.%s"), g->module_id, p.id);
         lookup = name;
         char one[2] = {0, 0};
         const char* v;
@@ -496,9 +501,9 @@ void ConfigManager::handleEGPrefs() {
   char buf[512];
   int n;
 
-  n = snprintf(buf, sizeof(buf),
-               "<h1>ESPGeiger Config</h1>%s<form method='post' action='/param'>",
-               did_save ? "<p style='color:green'>Saved</p>" : "");
+  n = snprintf_P(buf, sizeof(buf),
+               PSTR("<h1>ESPGeiger Config</h1>%S<form method='post' action='/param'>"),
+               did_save ? (PGM_P)PSTR("<p style='color:green'>Saved</p>") : (PGM_P)PSTR(""));
   send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
 
   // Render groups sorted by EGModule::display_order (stable — preserves
@@ -529,8 +534,8 @@ void ConfigManager::handleEGPrefs() {
     const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
     if (!g || g->count == 0) continue;
 
-    n = snprintf(buf, sizeof(buf), "<details%s><summary>%s</summary>",
-                 first_emitted ? " open" : "",
+    n = snprintf_P(buf, sizeof(buf), PSTR("<details%S><summary>%s</summary>"),
+                 first_emitted ? (PGM_P)PSTR(" open") : (PGM_P)PSTR(""),
                  g->label ? g->label : g->module_id);
     send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
     first_emitted = false;
@@ -546,15 +551,15 @@ void ConfigManager::handleEGPrefs() {
       bool ro = (p.flags & EGP_READONLY);
       size_t pos = 0;
 
-      n = snprintf(buf, sizeof(buf), "<label for='%s.%s'>%s</label><br/>", mid, pid, lbl);
+      n = snprintf_P(buf, sizeof(buf), PSTR("<label for='%s.%s'>%s</label><br/>"), mid, pid, lbl);
       if (n > 0 && (size_t)n < sizeof(buf)) pos = (size_t)n;
 
       if (p.type == EGP_BOOL) {
-        n = snprintf(buf + pos, sizeof(buf) - pos,
-                     "<input type='checkbox' id='%s.%s' name='%s.%s' value='1'%s%s><br/>",
+        n = snprintf_P(buf + pos, sizeof(buf) - pos,
+                     PSTR("<input type='checkbox' id='%s.%s' name='%s.%s' value='1'%S%S><br/>"),
                      mid, pid, mid, pid,
-                     (cur[0] == '1') ? " checked" : "",
-                     ro ? " disabled" : "");
+                     (cur[0] == '1') ? (PGM_P)PSTR(" checked") : (PGM_P)PSTR(""),
+                     ro ? (PGM_P)PSTR(" disabled") : (PGM_P)PSTR(""));
         advance_pos(pos, n, sizeof(buf));
       } else {
         const bool slider = (p.type == EGP_INT || p.type == EGP_UINT)
@@ -566,14 +571,14 @@ void ConfigManager::handleEGPrefs() {
         else if (p.type == EGP_STRING && (p.flags & EGP_SENSITIVE)) itype = "password";
         else if (p.type == EGP_STRING && (p.flags & EGP_TIME))      itype = "time";
 
-        n = snprintf(buf + pos, sizeof(buf) - pos,
-                     "<input type='%s' id='%s.%s' name='%s.%s'",
+        n = snprintf_P(buf + pos, sizeof(buf) - pos,
+                     PSTR("<input type='%s' id='%s.%s' name='%s.%s'"),
                      itype, mid, pid, mid, pid);
         advance_pos(pos, n, sizeof(buf));
 
         if (p.flags & EGP_SENSITIVE) {
           const char* ph = cur[0] ? "(unchanged)" : "(not set)";
-          n = snprintf(buf + pos, sizeof(buf) - pos, " value='' placeholder='%s'", ph);
+          n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" value='' placeholder='%s'"), ph);
           advance_pos(pos, n, sizeof(buf));
         } else {
           APPEND_LIT(buf, pos, sizeof(buf), " value='");
@@ -584,21 +589,21 @@ void ConfigManager::handleEGPrefs() {
           if (!slider && cur[0] == '\0'
               && p.default_val && p.default_val[0]
               && !(p.flags & EGP_TIME)) {
-            n = snprintf(buf + pos, sizeof(buf) - pos, " placeholder='%s'", p.default_val);
+            n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" placeholder='%s'"), p.default_val);
             advance_pos(pos, n, sizeof(buf));
           }
         }
 
         if (p.type == EGP_STRING && p.max_len > 0) {
-          n = snprintf(buf + pos, sizeof(buf) - pos, " maxlength='%u'", (unsigned)p.max_len);
+          n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" maxlength='%u'"), (unsigned)p.max_len);
           advance_pos(pos, n, sizeof(buf));
         }
         if (p.type == EGP_STRING && p.pattern && p.pattern[0]) {
-          n = snprintf(buf + pos, sizeof(buf) - pos, " pattern='%s'", p.pattern);
+          n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" pattern='%s'"), p.pattern);
           advance_pos(pos, n, sizeof(buf));
         }
         if ((p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) && p.min_i != p.max_i) {
-          n = snprintf(buf + pos, sizeof(buf) - pos, " min='%ld' max='%ld'", (long)p.min_i, (long)p.max_i);
+          n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" min='%ld' max='%ld'"), (long)p.min_i, (long)p.max_i);
           advance_pos(pos, n, sizeof(buf));
         }
         if (p.type == EGP_FLOAT) APPEND_LIT(buf, pos, sizeof(buf), " step='any'");
@@ -610,9 +615,9 @@ void ConfigManager::handleEGPrefs() {
         if (p.flags & EGP_REQUIRED) APPEND_LIT(buf, pos, sizeof(buf), " required");
         if (ro) APPEND_LIT(buf, pos, sizeof(buf), " readonly");
         if (slider) {
-          n = snprintf(buf + pos, sizeof(buf) - pos,
-                       " oninput='this.nextElementSibling.value=this.value'>"
-                       "<output>%s</output><br/>", cur);
+          n = snprintf_P(buf + pos, sizeof(buf) - pos,
+                       PSTR(" oninput='this.nextElementSibling.value=this.value'>"
+                            "<output>%s</output><br/>"), cur);
           advance_pos(pos, n, sizeof(buf));
         } else {
           APPEND_LIT(buf, pos, sizeof(buf), "><br/>");
@@ -620,12 +625,13 @@ void ConfigManager::handleEGPrefs() {
       }
 
       if (p.help && p.help[0]) {
-        n = snprintf(buf + pos, sizeof(buf) - pos, "<small>%s</small>", p.help);
+        n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("<small>%s</small>"), p.help);
         advance_pos(pos, n, sizeof(buf));
       }
 
       send_chunk(s, buf, pos);
     }
+
     s->sendContent(F("</details>"));
   }
 
@@ -672,32 +678,32 @@ void ConfigManager::handleClicksReturn()
   size_t pos = 0;
   int n;
 
-  n = snprintf(buf + pos, sizeof(buf) - pos,
-    "{\"last_day\":[%d", (int)gcounter.clicks_hour);
+  n = snprintf_P(buf + pos, sizeof(buf) - pos,
+    PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour);
   advance_pos(pos, n, sizeof(buf));
 
   const int histSize = gcounter.day_hourly_history.size();
   for (int i = histSize; i > 0; i--) {
     if (pos >= sizeof(buf) - 32) break;  // reserve tail for the JSON closer
-    n = snprintf(buf + pos, sizeof(buf) - pos, ",%d",
+    n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(",%d"),
       (int)gcounter.day_hourly_history[i - 1]);
     advance_pos(pos, n, sizeof(buf));
   }
 
-  n = snprintf(buf + pos, sizeof(buf) - pos,
-    "],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\"",
+  n = snprintf_P(buf + pos, sizeof(buf) - pos,
+    PSTR("],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\""),
     (int)gcounter.clicks_today,
     (int)gcounter.clicks_yesterday,
     EGPrefs::getString("sys", "ratio"));
   advance_pos(pos, n, sizeof(buf));
 
   if (ntpclient.synced) {
-    n = snprintf(buf + pos, sizeof(buf) - pos,
-      ",\"start\":%lu}", (unsigned long)ntpclient.boot_epoch);
+    n = snprintf_P(buf + pos, sizeof(buf) - pos,
+      PSTR(",\"start\":%lu}"), (unsigned long)ntpclient.boot_epoch);
   } else {
     unsigned long uptime = NTP.getUptime() - start;
-    n = snprintf(buf + pos, sizeof(buf) - pos,
-      ",\"uptime\":%lu}", uptime);
+    n = snprintf_P(buf + pos, sizeof(buf) - pos,
+      PSTR(",\"uptime\":%lu}"), uptime);
   }
   advance_pos(pos, n, sizeof(buf));
   buf[pos] = '\0';
@@ -711,10 +717,10 @@ void ConfigManager::handleStatusPage()
   handleRequest();
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s - Status", hostName);
+  snprintf_P(title, sizeof(title), PSTR("%s - Status"), hostName);
   sendPageHead(title);
   auto* s = server.get();
-  snprintf(title, sizeof(title), "%s - Status", THING_NAME);
+  snprintf_P(title, sizeof(title), PSTR("%s - Status"), THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
 
@@ -722,17 +728,17 @@ void ConfigManager::handleStatusPage()
     char seedBuf[240];
     size_t sp = 0;
     int sn;
-    sn = snprintf(seedBuf, sizeof(seedBuf), "<script>window._seedHist=[");
+    sn = snprintf_P(seedBuf, sizeof(seedBuf), PSTR("<script>window._seedHist=["));
     advance_pos(sp, sn, sizeof(seedBuf));
     int histSize = gcounter.cpm_history.size();
     bool firstHist = true;
     for (int i = 0; i < histSize; i += 3) {
-      sn = snprintf(seedBuf + sp, sizeof(seedBuf) - sp,
-                    firstHist ? "%d" : ",%d", gcounter.cpm_history[i]);
+      sn = snprintf_P(seedBuf + sp, sizeof(seedBuf) - sp,
+                    firstHist ? PSTR("%d") : PSTR(",%d"), gcounter.cpm_history[i]);
       advance_pos(sp, sn, sizeof(seedBuf));
       firstHist = false;
     }
-    sn = snprintf(seedBuf + sp, sizeof(seedBuf) - sp, "]</script>");
+    sn = snprintf_P(seedBuf + sp, sizeof(seedBuf) - sp, PSTR("]</script>"));
     advance_pos(sp, sn, sizeof(seedBuf));
     s->sendContent(seedBuf, sp);
   }
@@ -749,7 +755,7 @@ void ConfigManager::handleInfo()
   handleRequest();
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s - Info", THING_NAME);
+  snprintf_P(title, sizeof(title), PSTR("%s - Info"), THING_NAME);
   sendPageHead(title);
   auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
@@ -782,13 +788,18 @@ void ConfigManager::handleInfo()
   char buf[256];
   int n;
 
+  // PSTR the label + template into flash; literal `fmt` concatenates into the
+  // surrounding PSTR string. `%S` (capital) reads the PGM-resident label.
+  // This keeps ~25 label literals out of .rodata (SRAM on ESP8266).
   #define INFO_ROW(k, fmt, ...) do { \
-    n = snprintf(buf, sizeof(buf), "<tr><th>%s</th><td>" fmt "</td></tr>", k, ##__VA_ARGS__); \
+    n = snprintf_P(buf, sizeof(buf), \
+        PSTR("<tr><th>%S</th><td>" fmt "</td></tr>"), \
+        (PGM_P)PSTR(k), ##__VA_ARGS__); \
     if (n > 0) s->sendContent(buf, (size_t)n); \
   } while (0)
 
-  n = snprintf(buf, sizeof(buf),
-    "<p style='text-align:center'>Connected to <b>%s</b> with IP <b>%s</b> &middot; %s</p>",
+  n = snprintf_P(buf, sizeof(buf),
+    PSTR("<p style='text-align:center'>Connected to <b>%s</b> with IP <b>%s</b> &middot; %s</p>"),
     ssid[0] ? ssid : "(not connected)", ip, DeviceInfo::chipmodel());
   if (n > 0) s->sendContent(buf, (size_t)n);
 
@@ -867,7 +878,7 @@ void ConfigManager::handleInfo()
     for (uint8_t i = 0; i < count; i++) {
       EGModule* m = EGModuleRegistry::get(i);
       if (m == nullptr) continue;
-      n = snprintf(buf, sizeof(buf), "<li>%s</li>", m->name());
+      n = snprintf_P(buf, sizeof(buf), PSTR("<li>%s</li>"), m->name());
       if (n > 0) s->sendContent(buf, (size_t)n);
     }
   }
@@ -901,10 +912,10 @@ void ConfigManager::handleHistoryPage()
   handleRequest();
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s - History", hostName);
+  snprintf_P(title, sizeof(title), PSTR("%s - History"), hostName);
   sendPageHead(title);
   auto* s = server.get();
-  snprintf(title, sizeof(title), "%s - History", THING_NAME);
+  snprintf_P(title, sizeof(title), PSTR("%s - History"), THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
   s->sendContent(FPSTR(HISTORY_PAGE_BODY));
@@ -918,7 +929,7 @@ void ConfigManager::handleNTP()
   handleRequest();
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s - NTP", THING_NAME);
+  snprintf_P(title, sizeof(title), PSTR("%s - NTP"), THING_NAME);
   sendPageHead(title);
   auto* s = server.get();
   { TemplateSub subs[] = {{"{i}", ntpclient.get_server()}, {"{v}", ntpclient.get_tz()}};
@@ -938,7 +949,7 @@ void ConfigManager::handleNTPSet()
 
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s - NTP Saved", THING_NAME);
+  snprintf_P(title, sizeof(title), PSTR("%s - NTP Saved"), THING_NAME);
   auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}};
     SEND_TEMPLATE(s, HTTP_HEAD_START, subs); }
@@ -957,7 +968,7 @@ void ConfigManager::handleHVPage()
   handleRequest();
   beginChunkedPage();
   char title[48];
-  snprintf(title, sizeof(title), "%s-HW - HV", THING_NAME);
+  snprintf_P(title, sizeof(title), PSTR("%s-HW - HV"), THING_NAME);
   sendPageHead(title);
   auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
@@ -1122,7 +1133,7 @@ void ConfigManager::handleRefreshConsole()
   // "<log_idx>,<tz_offset_min>\n" - tz hitch-hikes here so JS can convert
   // log HH:MM:SS to browser-local. Only consumer needs it, so don't bloat /json.
   char idxBuf[16];
-  snprintf(idxBuf, sizeof(idxBuf), "%u,%d\n", (uint8_t)Log::getLogIdx(), ntpclient.tz_offset_min);
+  snprintf_P(idxBuf, sizeof(idxBuf), PSTR("%u,%d\n"), (uint8_t)Log::getLogIdx(), ntpclient.tz_offset_min);
   server->sendContent(idxBuf);
   if (counter != Log::getLogIdx())
   {

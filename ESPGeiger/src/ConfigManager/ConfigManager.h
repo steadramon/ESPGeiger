@@ -159,7 +159,8 @@ private:
   char hostName[20] = "";
   char userAgent[80] = "";
   char macAddr[18] = "";
-  char portalMenuHtml[256] = "";
+  char* portalMenuHtml = nullptr;
+  static constexpr size_t PORTAL_MENU_HTML_SIZE = 192;
   void updatePortalMessage();
 };
 

@@ -30,7 +30,7 @@ namespace {
 
 // char[] version - avoids a String heap alloc per call.
 void group_path(char* out, size_t sz, const char* base, const char* mid) {
-  snprintf(out, sz, "%s%s.bin", base, mid);
+  snprintf_P(out, sz, PSTR("%s%s.bin"), base, mid);
 }
 
 } // anonymous namespace
@@ -138,7 +138,7 @@ bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t l
   char final_path[EGPS_PATH_BUFSZ];
   group_path(final_path, sizeof(final_path), _path.c_str(), module_id);
   char staging[EGPS_PATH_BUFSZ];
-  snprintf(staging, sizeof(staging), "%s%s", final_path, EGPS_STAGING_SUFFIX);
+  snprintf_P(staging, sizeof(staging), PSTR("%s%s"), final_path, EGPS_STAGING_SUFFIX);
   {
     File f = LittleFS.open(staging, "w");
     if (!f) return false;

@@ -140,7 +140,7 @@ void SerialCommand::set_ratio() {
     char buf[32];
     char r[12];
     format_f(r, sizeof(r), gcounter.get_ratio());
-    snprintf(buf, sizeof(buf), "uSv Ratio: %s", r);
+    snprintf_P(buf, sizeof(buf), PSTR("uSv Ratio: %s"), r);
     Serial.println(buf);
   }
 }
@@ -160,7 +160,7 @@ void SerialCommand::set_cpm() {
 #ifdef ESPGEIGER_HW
 void SerialCommand::get_hv() {
   char buf[32];
-  snprintf(buf, sizeof(buf), "HV: %d", (int)hardware.hvReading.get());
+  snprintf_P(buf, sizeof(buf), PSTR("HV: %d"), (int)hardware.hvReading.get());
   Serial.println(buf);
 }
 
@@ -176,7 +176,7 @@ void SerialCommand::set_freq() {
     }
   } else {
     char buf[32];
-    snprintf(buf, sizeof(buf), "Freq: %d", hardware.get_freq());
+    snprintf_P(buf, sizeof(buf), PSTR("Freq: %d"), hardware.get_freq());
     Serial.println(buf);
   }
 }
@@ -193,7 +193,7 @@ void SerialCommand::set_duty() {
     }
   } else {
     char buf[32];
-    snprintf(buf, sizeof(buf), "Duty: %d", hardware.get_duty());
+    snprintf_P(buf, sizeof(buf), PSTR("Duty: %d"), hardware.get_duty());
     Serial.println(buf);
   }
 }
@@ -210,7 +210,7 @@ void SerialCommand::set_vdratio() {
     }
   } else {
     char buf[32];
-    snprintf(buf, sizeof(buf), "VD Ratio: %d", hardware.get_vd_ratio());
+    snprintf_P(buf, sizeof(buf), PSTR("VD Ratio: %d"), hardware.get_vd_ratio());
     Serial.println(buf);
   }
 }
@@ -227,7 +227,7 @@ void SerialCommand::set_vdoffset() {
     }
   } else {
     char buf[32];
-    snprintf(buf, sizeof(buf), "VD Offset: %d", hardware.get_vd_offset());
+    snprintf_P(buf, sizeof(buf), PSTR("VD Offset: %d"), hardware.get_vd_offset());
     Serial.println(buf);
   }
 }

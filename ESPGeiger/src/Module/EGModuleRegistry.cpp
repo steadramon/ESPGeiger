@@ -120,7 +120,7 @@ void EGModuleRegistry::log_profile_and_reset() {
     }
     if (best == 0xFF || bestv == 0) break;
     done |= (1u << best);
-    int n = snprintf(buf + pos, sizeof(buf) - pos, "%s%s=%u",
+    int n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%s%s=%u"),
       pos ? " " : "", _slots[best].module->name(), bestv);
     if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
     pos += n;
@@ -142,9 +142,9 @@ void EGModuleRegistry::log_activity_and_reset() {
     any = true;
     int n;
     if (err == 0) {
-      n = snprintf(buf + pos, sizeof(buf) - pos, "%s%s=%u", pos ? " " : "", m->name(), ok);
+      n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%s%s=%u"), pos ? " " : "", m->name(), ok);
     } else {
-      n = snprintf(buf + pos, sizeof(buf) - pos, "%s%s=%u/%u", pos ? " " : "", m->name(), ok, (uint8_t)(ok + err));
+      n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%s%s=%u/%u"), pos ? " " : "", m->name(), ok, (uint8_t)(ok + err));
     }
     if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
     pos += n;

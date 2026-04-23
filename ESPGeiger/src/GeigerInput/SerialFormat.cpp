@@ -55,7 +55,7 @@ size_t describe_types(char* buf, size_t cap) {
   size_t pos = 0;
   buf[0] = '\0';
   for (uint8_t i = 0; i < TYPE_COUNT; i++) {
-    int n = snprintf(buf + pos, cap - pos, "%s%u=%s",
+    int n = snprintf_P(buf + pos, cap - pos, PSTR("%s%u=%s"),
                      pos ? " " : "", (unsigned)TYPES[i].id, TYPES[i].name);
     if (n <= 0) break;
     if ((size_t)n >= cap - pos) { buf[pos] = '\0'; break; }
@@ -70,17 +70,17 @@ size_t format_line(uint8_t type, int cps, int cpm, char* buf, size_t cap) {
     case GEIGER_STYPE_MIGHTYOHM: {
       char usv_str[12];
       format_f(usv_str, sizeof(usv_str), cpm / MIGHTYOHM_USV_DIV);
-      int n = snprintf(buf, cap, "CPS, %d, CPM, %d, uSv/hr, %s, SLOW\n",
+      int n = snprintf_P(buf, cap, PSTR("CPS, %d, CPM, %d, uSv/hr, %s, SLOW\n"),
                        cps, cpm, usv_str);
       return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
     }
     case GEIGER_STYPE_ESPGEIGER: {
-      int n = snprintf(buf, cap, "CPM: %d\n", cpm);
+      int n = snprintf_P(buf, cap, PSTR("CPM: %d\n"), cpm);
       return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
     }
     default: {
       // GC10 / GC10Next — plain integer.
-      int n = snprintf(buf, cap, "%d\r\n", cpm);
+      int n = snprintf_P(buf, cap, PSTR("%d\r\n"), cpm);
       return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
     }
   }

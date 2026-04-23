@@ -114,7 +114,7 @@ void Thingspeak::postMeasurement() {
   char usvChar[20];
   dtostrf(usv,1,5, usvChar);
   char url[256];
-  snprintf(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
+  snprintf_P(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
   {
