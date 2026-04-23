@@ -25,6 +25,7 @@ GeigerTest::GeigerTest() {
 
 void GeigerTest::begin() {
   GeigerInputTest::begin();
+  set_debounce(0);
   CPMAdjuster();
   _next_delay = calcDelay();
 #ifdef ESP8266
