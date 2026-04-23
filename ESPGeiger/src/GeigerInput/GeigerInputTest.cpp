@@ -19,6 +19,8 @@
 #include "GeigerInputTest.h"
 #include "../Logger/Logger.h"
 
+volatile int _pulse_width_us = GEIGER_PULSE_WIDTH;
+
 GeigerInputTest::GeigerInputTest() {
 };
 
@@ -43,17 +45,15 @@ double GeigerInputTest::calcDelay() {
 #ifdef DISABLE_GEIGER_POISSON
   return mult / _target_cps;
 #else
-  double result = generatePoissonRand(_target_cps);
-  result += _remainder;
-  _remainder = 0;
-
-  double min_interval = GEIGER_PULSE_WIDTH * 0.000001;
+  double result       = generatePoissonRand(_target_cps) + _remainder;
+  double min_interval = _pulse_width_us * 0.000001;
   if (result < min_interval) {
-    _remainder = result - min_interval;
-    if (_remainder < -min_interval) _remainder = -min_interval;
-    result = min_interval;
+    _remainder = result - min_interval;   // unclamped — may be deeply negative
+    result     = min_interval;
+  } else {
+    _remainder = 0;
   }
-  return (mult) * result;
+  return mult * result;
 #endif
 }
 
