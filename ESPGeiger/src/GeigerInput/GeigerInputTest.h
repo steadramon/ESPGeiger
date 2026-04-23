@@ -40,6 +40,8 @@
 
 //#define DISABLE_GEIGER_POISSON
 
+extern volatile int _pulse_width_us;
+
 class GeigerInputTest : public GeigerInput
 {
   public:
