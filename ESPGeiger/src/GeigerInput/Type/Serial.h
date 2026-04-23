@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef GEIGERTESTSRL_H
-#define GEIGERTESTSRL_H
+#ifndef GEIGERINPUTSRL_H
+#define GEIGERINPUTSRL_H
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 #include "../GeigerInput.h"
