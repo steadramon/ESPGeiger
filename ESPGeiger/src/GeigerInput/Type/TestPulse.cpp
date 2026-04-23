@@ -112,17 +112,17 @@ void GeigerTestPulse::pulseInterrupt() {
   }
 #endif
   unsigned long _our_delay = 0;
+  double pulseWidthTicks = _pulse_width_us * (GEIGER_TEST_TIMER_DIV / 1000000.0);
   if (!_bool_pulse_state) {
 #ifdef GEIGER_COUNT_TXPULSE
     GeigerInputTest::countInterrupt();
 #endif
     _last_b = micros();
-    double pulseWidthTicks = GEIGER_PULSE_WIDTH * (GEIGER_TEST_TIMER_DIV / 1000000.0);
     _this_delay = _next_delay - pulseWidthTicks;
     if (_this_delay < pulseWidthTicks) _this_delay = pulseWidthTicks;
     _our_delay = _this_delay;
   } else {
-    _our_delay = GEIGER_PULSE_WIDTH * (GEIGER_TEST_TIMER_DIV / 1000000.0);
+    _our_delay = pulseWidthTicks;
   }
   #ifdef ESP8266
     timer1_write((unsigned long)_our_delay);
