@@ -50,6 +50,8 @@ void EGModuleRegistry::begin_all() {
 }
 
 void EGModuleRegistry::loop_all(unsigned long now) {
+  if ((long)(now - _next_loop_due) < 0) return;
+
   if (ota_in_progress) {
     arduinoOTA.loop(now);
     _next_loop_due = now;
