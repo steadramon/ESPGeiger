@@ -62,6 +62,14 @@ void ICACHE_RAM_ATTR GeigerTest::testInterrupt() {
   _last_b = micros();
 }
 
+void GeigerTest::stopForOTA() {
+#ifdef ESP8266
+  timer1_disable();
+#else
+  if (hdl_pulse_timer != NULL) esp_timer_stop(hdl_pulse_timer);
+#endif
+}
+
 void GeigerTest::loop() {
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;

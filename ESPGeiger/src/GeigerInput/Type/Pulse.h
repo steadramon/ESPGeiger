@@ -53,6 +53,7 @@ class GeigerPulse : public GeigerInput
   public:
     GeigerPulse();
     void begin();
+    void stopForOTA() override;
     bool has_pcnt() override {
 #ifdef USE_PCNT
       return true;

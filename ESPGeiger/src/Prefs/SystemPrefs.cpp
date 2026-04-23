@@ -22,6 +22,9 @@
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "../GeigerInput/GeigerInputTest.h"
 #endif
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+#include "../GeigerInput/SerialFormat.h"
+#endif
 
 #define _STR(x) #x
 #define STR(x)  _STR(x)
@@ -82,9 +85,15 @@ private:
 static InputPrefs inputPrefs;
 EG_REGISTER_MODULE(inputPrefs)
 
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+// Filled by SerialFormat::describe_types at prefs-load; pref entry
+// points at this so help text tracks the TYPES[] table.
+static char serial_type_desc[80] = "";
+#endif
+
 static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  {"serial_type", "Serial Type", "1=GC10 2=GC10Next 3=MightyOhm 4=ESPGeiger", STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
+  {"serial_type", "Serial Type", serial_type_desc, STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
 #endif
 #ifndef RXPIN_BLOCKED
   {"rx_pin", "RX Pin",        "",  STR(GEIGER_RXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
@@ -123,6 +132,7 @@ const EGPrefGroup* InputPrefs::prefs_group() { return &INPUT_PREF_GROUP; }
 void InputPrefs::on_prefs_loaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   _serial_type = (uint8_t)EGPrefs::getUInt("input", "serial_type");
+  SerialFormat::describe_types(serial_type_desc, sizeof(serial_type_desc));
 #endif
 #ifndef RXPIN_BLOCKED
   gcounter.set_rx_pin((int)EGPrefs::getUInt("input", "rx_pin"));

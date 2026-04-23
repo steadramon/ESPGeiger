@@ -56,6 +56,14 @@ void GeigerPulse::begin() {
 #endif
 }
 
+void GeigerPulse::stopForOTA() {
+#ifdef USE_PCNT
+  pcnt_counter_pause(PCNT_UNIT);
+#else
+  detachInterrupt(digitalPinToInterrupt(_rx_pin));
+#endif
+}
+
 #ifdef USE_PCNT
 int GeigerPulse::collect() {
   int16_t pulseCount;

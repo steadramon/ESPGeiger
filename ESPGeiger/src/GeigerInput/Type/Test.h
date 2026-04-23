@@ -40,6 +40,7 @@ class GeigerTest : public GeigerInputTest
     void begin();
     void loop();
     void secondTicker();
+    void stopForOTA() override;
     static void IRAM_ATTR testInterrupt();
     static void testInterrupt(void *data);
 };

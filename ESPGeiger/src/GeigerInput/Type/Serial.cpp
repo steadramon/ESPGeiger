@@ -19,42 +19,21 @@
 #include "Serial.h"
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
+#include "../SerialFormat.h"
 
 static EspSoftwareSerial::UART geigerPort;
-
-struct SerialTypeInfo {
-  uint8_t     id;
-  uint32_t    baud;
-  const char* name;
-};
-
-// Add new serial types here. Parser cases go in handleSerial().
-static const SerialTypeInfo SERIAL_TYPES[] = {
-  { GEIGER_STYPE_GC10,      9600,   "GC10" },
-  { GEIGER_STYPE_GC10NX,    115200, "GC10Next" },
-  { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm" },
-  { GEIGER_STYPE_ESPGEIGER,  115200, "ESPGeiger" },
-};
-static constexpr uint8_t SERIAL_TYPE_COUNT = sizeof(SERIAL_TYPES) / sizeof(SERIAL_TYPES[0]);
-
-static const SerialTypeInfo* find_serial_type(uint8_t id) {
-  for (uint8_t i = 0; i < SERIAL_TYPE_COUNT; i++) {
-    if (SERIAL_TYPES[i].id == id) return &SERIAL_TYPES[i];
-  }
-  return nullptr;
-}
 
 GeigerSerial::GeigerSerial() {
 };
 
 void GeigerSerial::begin() {
   uint8_t st = (uint8_t)EGPrefs::getUInt("input", "serial_type");
-  const SerialTypeInfo* info = find_serial_type(st);
-  if (info) _serial_type = st;
-  else      info = find_serial_type(_serial_type);
-  uint32_t baud = info ? info->baud : 9600;
+  if (SerialFormat::is_known(st)) _serial_type = st;
+  uint32_t    baud = SerialFormat::baud_for(_serial_type);
+  const char* name = SerialFormat::name_for(_serial_type);
+  if (baud == 0) baud = 9600;    // safety fallback for an unknown saved pref
   Log::console(PSTR("GeigerSerial: %s (type %d) baud %lu rx %d"),
-               info ? info->name : "?", _serial_type, baud, _rx_pin);
+               name ? name : "?", _serial_type, baud, _rx_pin);
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
     Log::error(PSTR("GeigerSerial: rx/tx pin clashes with UART0"));
   }
@@ -112,64 +91,23 @@ void GeigerSerial::secondTicker() {
 #define GEIGERSERIAL_BAD_LIMIT 20
 
 void GeigerSerial::handleSerial(char* input) {
-  size_t inputLen = strlen(input);
-  for (size_t x = 0; x < inputLen; x++) {
-    if (!isPrintable(input[x]) && input[x] != '\r' && input[x] != '\n') {
-      Log::debug(PSTR("Non-printable character on serial"));
-      _bad_streak++;
-      goto maybe_drain;
+  int _scpm = 0;
+  if (!SerialFormat::parse_cpm(_serial_type, input, &_scpm)) {
+    _bad_streak++;
+    if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) {
+      Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
+      int n = geigerPort.available();
+      while (n-- > 0) geigerPort.read();
+      _serial_idx = 0;
+      _serial_buffer[0] = '\0';
+      _bad_streak = 0;
     }
-  }
-
-  {
-    int _scpm = 0;
-    int n = 0;
-    switch (_serial_type) {
-      case GEIGER_STYPE_MIGHTYOHM: {
-        int _scps;
-        n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
-        if (n != 2) { _bad_streak++; goto maybe_drain; }
-        break;
-      }
-      case GEIGER_STYPE_ESPGEIGER:
-        n = sscanf(input, "CPM: %d", &_scpm);
-        if (n != 1) { _bad_streak++; goto maybe_drain; }
-        break;
-      default:
-        // GC10 / GC10Next - plain digits
-        for (size_t x = 0; x < inputLen; x++) {
-          if (!isDigit(input[x]) && input[x] != '\r' && input[x] != '\n') {
-            _bad_streak++;
-            goto maybe_drain;
-          }
-        }
-        n = sscanf(input, "%d", &_scpm);
-        if (n != 1) { _bad_streak++; goto maybe_drain; }
-        break;
-    }
-
-    // 1M CPM is way beyond any realistic tube — reject as garbage.
-    if (_scpm < 0 || _scpm > 1000000) {
-      Log::debug(PSTR("GeigerSerial: out-of-range CPM %d"), _scpm);
-      _bad_streak++;
-      goto maybe_drain;
-    }
-
-    Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
-    setLastBlip();
-    serial_value = _scpm;
-    last_serial = millis();
-    _bad_streak = max((int)_bad_streak - 3, 0);
     return;
   }
 
-maybe_drain:
-  if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) {
-    Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
-    int n = geigerPort.available();
-    while (n-- > 0) geigerPort.read();
-    _serial_idx = 0;
-    _serial_buffer[0] = '\0';
-    _bad_streak = 0;
-  }
+  Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
+  setLastBlip();
+  serial_value = _scpm;
+  last_serial = millis();
+  _bad_streak = max((int)_bad_streak - 3, 0);
 }

@@ -37,16 +37,10 @@ class GeigerTestSerial : public GeigerInputTest
     void secondTicker();
   private:
     void pullSerial();
+    void handleSerial(char* input);
+
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
-    void handleSerial(char* input);
-    float partial_clicks = 0;
-    int serial_value = 0;
-    unsigned long last_serial = 0;
-    Smoothed <float> serialAvg;
-    float test_partial_clicks = 0;
-    float _poisson_target = 0;
-    int _current_selection = 0;
     uint8_t _loop_c = 0;
     uint8_t _serial_type = GEIGER_SERIALTYPE;
 };

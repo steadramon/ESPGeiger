@@ -20,10 +20,12 @@
 #include "../../Logger/Logger.h"
 #include "../../Util/StringUtil.h"
 #include "../../Prefs/EGPrefs.h"
+#include "../../Counter/Counter.h"
+#include "../SerialFormat.h"
+
+extern Counter gcounter;
 
 static EspSoftwareSerial::UART geigerPort;
-
-static const uint32_t SERIAL_BAUD[] = { 9600, 115200, 9600, 115200 };
 
 GeigerTestSerial::GeigerTestSerial() {
   strcpy(_test_type, "TestSerial");
@@ -31,14 +33,16 @@ GeigerTestSerial::GeigerTestSerial() {
 
 void GeigerTestSerial::begin() {
   uint8_t st = (uint8_t)EGPrefs::getUInt("input", "serial_type");
-  if (st >= 1 && st <= 4) _serial_type = st;
-  uint32_t baud = SERIAL_BAUD[_serial_type - 1];
-  Log::console(PSTR("TestSerial: type %d baud %lu rx %d tx %d"), _serial_type, baud, _rx_pin, _tx_pin);
+  if (SerialFormat::is_known(st)) _serial_type = st;
+  uint32_t    baud = SerialFormat::baud_for(_serial_type);
+  const char* name = SerialFormat::name_for(_serial_type);
+  if (baud == 0) baud = 9600;
+  Log::console(PSTR("TestSerial: %s (type %d) baud %lu rx %d tx %d"),
+               name ? name : "?", _serial_type, baud, _rx_pin, _tx_pin);
 #ifdef GEIGER_COUNT_TXPULSE
   Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
   geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
-  serialAvg.begin(SMOOTHED_AVERAGE, 16);
   CPMAdjuster();
 }
 
@@ -70,102 +74,45 @@ void GeigerTestSerial::loop() {
   }
   _loop_c = 0;
   pullSerial();
-  if (serial_value <= 0) {
-    serial_value = 0;
-    return;
-  }
-  if (millis() - last_serial > 10000) {
-    serial_value = 0;
-  }
 }
 
 void GeigerTestSerial::secondTicker() {
   CPMAdjuster();
-  _poisson_target = 60.0 / (GeigerInputTest::getTargetCPS() * 60.0);
-  double poisson_result = generatePoissonRand(_poisson_target);
-  serialAvg.add(poisson_result);
-  int test_serialCPM = 60 * serialAvg.get();
-
-  test_partial_clicks += poisson_result;
-  int test_serialCPS = 0;
-  if (test_partial_clicks >= 1.0) {
-    int full_clicks = (int)test_partial_clicks;
-    test_partial_clicks -= full_clicks;
-    test_serialCPS = full_clicks;
-#ifdef GEIGER_COUNT_TXPULSE
-    setCounter(full_clicks);
+  int count = 0;
+  double target = (double) GeigerInputTest::getTargetCPS();
+  if (target > 0) {
+    double u1, u2;
+#ifdef ESP8266
+    u1 = (RANDOM_REG32 + 1.0) / (0xFFFFFFFF + 2.0);
+    u2 = (RANDOM_REG32 + 1.0) / (0xFFFFFFFF + 2.0);
+#else
+    u1 = (esp_random() + 1.0) / (0xFFFFFFFF + 2.0);
+    u2 = (esp_random() + 1.0) / (0xFFFFFFFF + 2.0);
 #endif
+    double z = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
+    long c = (long) (target + sqrt(target) * z + 0.5);
+    if (c > 0) count = (int) c;
   }
 
-  // Generate output in the selected serial format
-  switch (_serial_type) {
-    case GEIGER_STYPE_MIGHTYOHM: {
-      static constexpr float INV_175 = 1.0f / 175.0f;
-      float test_serialuSV = serialAvg.get() * 60.0f * INV_175;
-      char usv_str[12];
-      format_f(usv_str, sizeof(usv_str), test_serialuSV);
-      Log::debug(PSTR("TestSerial: CPS, %d, CPM, %d, uSv/hr, %s, SLOW"), test_serialCPS, test_serialCPM, usv_str);
-      geigerPort.printf("CPS, %d, CPM, %d, uSv/hr, %s, SLOW\n", test_serialCPS, test_serialCPM, usv_str);
-      break;
-    }
-    case GEIGER_STYPE_ESPGEIGER:
-      Log::debug(PSTR("TestSerial: CPM: %d"), test_serialCPM);
-      geigerPort.printf("CPM: %d\n", test_serialCPM);
-      break;
-    default:
-      Log::debug(PSTR("TestSerial: %d"), test_serialCPM);
-      geigerPort.printf("%d\r\n", test_serialCPM);
-      break;
+  // CPS = instant sample, CPM = Counter's smoothed value (matches real
+  // GC10 / MightyOhm wire behaviour).
+  char line[80];
+  size_t n = SerialFormat::format_line(_serial_type, count, gcounter.get_cpm(), line, sizeof(line));
+  if (n > 0) {
+    char echo[80];
+    memcpy(echo, line, n);
+    echo[n] = '\0';
+    while (n > 0 && (echo[n - 1] == '\n' || echo[n - 1] == '\r')) echo[--n] = '\0';
+    Log::console(PSTR("TestSerial TX: %s"), echo);
+    geigerPort.write((const uint8_t*) line, strlen(line));
   }
 
-  delay(10);
-#ifdef GEIGER_COUNT_TXPULSE
-  return;
-#endif
-  // All serial types report CPM
-  static constexpr float INV_60 = 1.0f / 60.0f;
-  partial_clicks += (float)serial_value * INV_60;
-  if (partial_clicks >= 1.0f) {
-    int full_clicks = (int)partial_clicks;
-    partial_clicks -= full_clicks;
-    setCounter(full_clicks, false);
-  }
+  if (count > 0) setCounter(count, false);
 }
 
 void GeigerTestSerial::handleSerial(char* input) {
-  size_t inputLen = strlen(input);
-  for (size_t x = 0; x < inputLen; x++) {
-    if (!isPrintable(input[x]) && input[x] != '\r' && input[x] != '\n') {
-      Log::debug(PSTR("Non-printable character on serial"));
-      return;
-    }
-  }
-
   int _scpm = 0;
-  int n = 0;
-
-  switch (_serial_type) {
-    case GEIGER_STYPE_MIGHTYOHM: {
-      int _scps;
-      n = sscanf(input, "CPS, %d, CPM, %d", &_scps, &_scpm);
-      if (n != 2) return;
-      break;
-    }
-    case GEIGER_STYPE_ESPGEIGER:
-      n = sscanf(input, "CPM: %d", &_scpm);
-      if (n != 1) return;
-      break;
-    default:
-      for (size_t x = 0; x < inputLen; x++) {
-        if (!isDigit(input[x]) && input[x] != '\r' && input[x] != '\n') return;
-      }
-      n = sscanf(input, "%d", &_scpm);
-      if (n != 1) return;
-      break;
+  if (SerialFormat::parse_cpm(_serial_type, input, &_scpm)) {
+    Log::console(PSTR("TestSerial RX: %d"), _scpm);
   }
-
-  Log::debug(PSTR("TestSerial: Loop - %d"), _scpm);
-  setLastBlip();
-  serial_value = _scpm;
-  last_serial = millis();
 }

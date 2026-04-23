@@ -53,10 +53,7 @@
 #define USE_PCNT
 #endif
 
-#define GEIGER_STYPE_GC10 1
-#define GEIGER_STYPE_GC10NX 2
-#define GEIGER_STYPE_MIGHTYOHM 3
-#define GEIGER_STYPE_ESPGEIGER 4
+#include "SerialFormat.h"
 
 #ifndef GEIGER_SERIALTYPE
 #define GEIGER_SERIALTYPE GEIGER_STYPE_GC10
@@ -66,51 +63,25 @@
 #define GEIGER_RXPIN -1
 #endif
 
-#if GEIGER_SERIALTYPE == GEIGER_STYPE_GC10
-  #ifndef GEIGER_BAUDRATE
-  #define GEIGER_BAUDRATE 9600
+// Fallback MODEL for builds that set only GEIGER_SERIALTYPE.
+#ifndef GEIGER_MODEL
+  #if GEIGER_SERIALTYPE == GEIGER_STYPE_GC10
+    #define GEIGER_MODEL "GC10"
+  #elif GEIGER_SERIALTYPE == GEIGER_STYPE_GC10NX
+    #define GEIGER_MODEL "GC10Next"
+  #elif GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
+    #define GEIGER_MODEL "MightyOhm"
+  #elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
+    #define GEIGER_MODEL "ESPG"
   #endif
-  #ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "GC10"
-  #endif
-  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-#elif GEIGER_SERIALTYPE == GEIGER_STYPE_GC10NX
-  #ifndef GEIGER_BAUDRATE
-  #define GEIGER_BAUDRATE 115200
-  #endif
-  #ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "GC10Next"
-  #endif
-  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-#elif GEIGER_SERIALTYPE == GEIGER_STYPE_MIGHTYOHM
-  #ifndef GEIGER_BAUDRATE
-  #define GEIGER_BAUDRATE 9600
-  #endif
-  #ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "MightyOhm"
-  #endif
-  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
-#elif GEIGER_SERIALTYPE == GEIGER_STYPE_ESPGEIGER
-  #ifndef GEIGER_BAUDRATE
-  #define GEIGER_BAUDRATE 115200
-  #endif
-  #ifndef GEIGER_MODEL
-  #define GEIGER_MODEL "ESPG"
-  #endif
-  #define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPM
 #endif
 
 #ifndef GEIGER_RXPIN
 #define GEIGER_RXPIN 13
 #endif
 
-
 #ifndef GEIGER_DEBOUNCE
 #define GEIGER_DEBOUNCE 500
-#endif
-
-#ifndef GEIGER_SERIAL_TYPE
-#define GEIGER_SERIAL_TYPE GEIGER_SERIAL_CPS
 #endif
 
 extern volatile bool _eventFlipFlop;
@@ -152,6 +123,7 @@ class GeigerInput {
     virtual bool has_pcnt() { return false; }
     // Pulse doesn't have a real connection concept, serial does
     virtual bool isHealthy() const { return true; }
+    virtual void stopForOTA() {}
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
     static void IRAM_ATTR countInterrupt();

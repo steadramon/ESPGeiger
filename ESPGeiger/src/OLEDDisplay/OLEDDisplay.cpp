@@ -322,6 +322,6 @@ void SSD1306Display::showOTABanner() {
   drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) - 12, "Update");
   drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) + 8,  "in progress...");
   display();
-  setTextAlignment(TEXT_ALIGN_LEFT);  // restore default for any caller assumptions
+  setTextAlignment(TEXT_ALIGN_LEFT);
 }
 #endif

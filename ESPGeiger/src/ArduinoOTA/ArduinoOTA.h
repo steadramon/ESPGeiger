@@ -50,4 +50,8 @@ class ArduinoOTAModule : public EGModule {
 
 extern ArduinoOTAModule arduinoOTA;
 
+// True mid-flash. EGModuleRegistry pauses everything else while set.
+// Reset on OTA error so a failed negotiation isn't terminal.
+extern volatile bool ota_in_progress;
+
 #endif

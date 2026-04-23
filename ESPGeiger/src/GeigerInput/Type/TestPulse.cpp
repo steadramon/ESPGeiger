@@ -79,6 +79,14 @@ void GeigerTestPulse::begin() {
 #endif
 }
 
+void GeigerTestPulse::stopForOTA() {
+#ifdef ESP8266
+  timer1_disable();
+#else
+  if (hdl_pulse_timer != NULL) esp_timer_stop(hdl_pulse_timer);
+#endif
+}
+
 void GeigerTestPulse::loop() {
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;

@@ -22,9 +22,17 @@
 #include "../Util/Globals.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/DeviceInfo.h"
+#include "../Counter/Counter.h"
+#ifdef SSD1306_DISPLAY
+#include "../OLEDDisplay/OLEDDisplay.h"
+#endif
+
+extern Counter gcounter;
 
 ArduinoOTAModule arduinoOTA;
 EG_REGISTER_MODULE(arduinoOTA)
+
+volatile bool ota_in_progress = false;
 
 void ArduinoOTAModule::begin() {
   ArduinoOTA.onStart ([]() {
@@ -33,16 +41,18 @@ void ArduinoOTAModule::begin() {
       type = "sketch";
     else // U_SPIFFS
       type = "filesystem";
-    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-#ifdef GEIGER_TXPIN
-    digitalWrite(GEIGER_TXPIN, LOW);
+#ifdef SSD1306_DISPLAY
+    display.showOTABanner();
 #endif
+    ota_in_progress = true;
+    gcounter.stop_for_ota();
     digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
     Log::console(PSTR("Start updating %s"), type);
   });
   ArduinoOTA.onEnd ([]() {
     Log::console(PSTR("End"));
     digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
+    ota_in_progress = false;
   });
   ArduinoOTA.onProgress ([](unsigned int progress, unsigned int total) {
     static uint8_t lastValue = 255;
@@ -56,6 +66,7 @@ void ArduinoOTAModule::begin() {
   ArduinoOTA.onError ([](ota_error_t error) {
     Log::debug(PSTR("Error[%u]: %u"), error);
     digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
+    ota_in_progress = false;
     if (error == OTA_AUTH_ERROR) Log::debug(PSTR("Auth Failed"));
     else if (error == OTA_BEGIN_ERROR) Log::debug(PSTR("Begin Failed"));
     else if (error == OTA_CONNECT_ERROR) Log::debug(PSTR("Connect Failed"));
@@ -69,6 +80,5 @@ void ArduinoOTAModule::begin() {
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {
-  // Throttle handled centrally by EGModuleRegistry via loop_interval_ms().
   ArduinoOTA.handle();
 }

@@ -58,6 +58,7 @@ class GeigerTestPulseInt : public GeigerInputTest
     GeigerTestPulseInt();
     void begin();
     void loop();
+    void stopForOTA() override;
     static void IRAM_ATTR pulseInterrupt();
     static void pulseInterrupt(void *data);
     double calcPWM();

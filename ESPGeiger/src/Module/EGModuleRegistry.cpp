@@ -21,6 +21,7 @@
 #include "../Logger/Logger.h"
 #include "../Util/Wifi.h"
 #include "../NTP/NTP.h"
+#include "../ArduinoOTA/ArduinoOTA.h"
 #include <string.h>
 
 
@@ -49,6 +50,10 @@ void EGModuleRegistry::begin_all() {
 }
 
 void EGModuleRegistry::loop_all(unsigned long now) {
+  if (ota_in_progress) {
+    arduinoOTA.loop(now);
+    return;
+  }
   // Fast-path: if no module's loop() is due yet, skip the walk entirely.
   // Called from main loop ~50k/s so this check saves a lot of cycles.
   // Signed compare handles millis() wrap safely.
@@ -74,6 +79,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 }
 
 void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds) {
+  if (ota_in_progress) return;
   bool wifi_ok = !Wifi::disabled && Wifi::connected;
   bool ntp_ok = ntpclient.synced;
   bool seconds = false;
