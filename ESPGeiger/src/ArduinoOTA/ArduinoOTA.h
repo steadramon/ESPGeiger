@@ -37,6 +37,10 @@
 #define OTA_POLL_INTERVAL_MS 100
 #endif
 
+static const char K_HTTP[]   PROGMEM = "http";
+static const char K_TCP[]    PROGMEM = "tcp";
+static const char K_GEIGER[] PROGMEM = "geiger";
+
 class ArduinoOTAModule : public EGModule {
   public:
     const char* name() override { return "ota"; }

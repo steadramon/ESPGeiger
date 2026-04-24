@@ -77,7 +77,8 @@ void ArduinoOTAModule::begin() {
 
   ArduinoOTA.setHostname(DeviceInfo::hostname());
   ArduinoOTA.begin();
-  MDNS.addService("http", "tcp", 80);  // advertise web UI for network discovery
+  MDNS.addService(K_HTTP, K_TCP, 80);
+  MDNS.addService(K_GEIGER, K_TCP, 80);
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {
