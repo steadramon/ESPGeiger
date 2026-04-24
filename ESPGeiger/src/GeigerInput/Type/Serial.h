@@ -50,6 +50,5 @@ class GeigerSerial : public GeigerInput
     uint16_t _bad_streak = 0;
     unsigned long _last_drain = 0;
     bool _use_cps = false;
-    bool _warmed_up = false;
 };
 #endif
