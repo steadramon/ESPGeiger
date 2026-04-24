@@ -277,7 +277,7 @@ void SSD1306Display::page_one_graph() {
 
     char graphBuf[8];
     if (maxValue == 0) {
-      setFont(Open_Sans_Regular_Plain_10);
+      setFont(Open_Sans_Digits_10);
       snprintf_P(graphBuf, sizeof(graphBuf), PSTR("%d"), minValue);
       drawString(93,55, graphBuf);
       return;
@@ -287,7 +287,7 @@ void SSD1306Display::page_one_graph() {
       int location = ((map((long)gcounter.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
       drawRect(x_start + i * 2, location, 2, (63 - location));
     }
-    setFont(Open_Sans_Regular_Plain_10);
+    setFont(Open_Sans_Digits_10);
     snprintf_P(graphBuf, sizeof(graphBuf), PSTR("%d"), minValue);
     drawString(93,55, graphBuf);
     snprintf_P(graphBuf, sizeof(graphBuf), PSTR("%d"), maxValue);
@@ -296,7 +296,7 @@ void SSD1306Display::page_one_graph() {
 }
 
 void SSD1306Display::page_one_values(unsigned long now) {
-  setFont(DialogInput_plain_17);
+  setFont(DialogInput_Digits_17);
   setColor(BLACK);
   fillRect(45, 0, 72, 32);
   setColor(WHITE);
