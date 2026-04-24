@@ -112,6 +112,36 @@ private:
   void setupHassAuto();
   void setupHassCB();
   struct HassExtra { const char* key; const char* value; };
+  // Rows filled in by the forEach*Hass* walkers. Every member is
+  // PGM_P — assembled from PSTR() literals + palette constants in
+  // MQTT_Client.cpp.
+  struct HassSensorRow {
+    const char* id;
+    const char* name;
+    const char* val_tpl;
+    const char* unit;
+    const char* icon;
+    const char* stat_t;
+    const char* dev_cla;
+    const char* state_cla;
+    const char* ent_cat;
+  };
+  struct HassBinaryRow {
+    const char* id;
+    const char* name;
+    const char* val_tpl;
+    const char* icon;
+    const char* stat_t;
+    const char* dev_cla;
+  };
+  typedef void (MQTT_Client::*HassSensorFn)(const HassSensorRow&);
+  typedef void (MQTT_Client::*HassBinaryFn)(const HassBinaryRow&);
+  void forEachHassSensor(HassSensorFn fn);
+  void forEachHassBinarySensor(HassBinaryFn fn);
+  void hassPublishSensor(const HassSensorRow& r);
+  void hassPublishBinarySensor(const HassBinaryRow& r);
+  void hassRemoveSensor(const HassSensorRow& r);
+  void hassRemoveBinarySensor(const HassBinaryRow& r);
   void publishHassTopic(const char* type, const char* id, const char* displayName,
                         const char* devCla, const char* stateCla, const char* entCat,
                         const char* cmdTopic,

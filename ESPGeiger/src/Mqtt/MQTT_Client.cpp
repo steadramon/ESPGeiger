@@ -35,6 +35,14 @@ AsyncMqttClient* mqttClient;
 MQTT_Client& mqtt = MQTT_Client::getInstance();
 EG_REGISTER_MODULE(mqtt)
 
+// Shared publish buffer — ESP8266 only. NONOS is cooperative so
+// onMqttConnect (HA discovery) and loop() (status/ping) never overlap;
+// one buffer is safe. ESP32's async_tcp can preempt, so per-method
+// statics there.
+#ifdef ESP8266
+static char s_pub_buffer[MQTT_JSON_BUFFER_SIZE];
+#endif
+
 static const EGPref MQTT_PREF_ITEMS[] = {
   {"server",   "Server",     "Broker address or IP",      "",               "[A-Za-z0-9.:_\\-]+", 0, 0, 16, EGP_STRING, 0},
   {"port",     "Port",       "",                          "1883",           nullptr, 1, 65535, 0,  EGP_UINT,   0},
@@ -231,7 +239,11 @@ void MQTT_Client::publishStatus()
   led.Blink(500, 500);
   time_t currentTime = time(NULL);
   struct tm *timeinfo = gmtime(&currentTime);
+#ifdef ESP8266
+  auto& buffer = s_pub_buffer;
+#else
   static char buffer[512];
+#endif
   char dateTime[24];
   snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02dZ"),
     1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
@@ -295,7 +307,11 @@ void MQTT_Client::publishPing()
     format_f(b_cps,   sizeof(b_cps),   gcounter.get_cps());
     format_f(b_cpm5,  sizeof(b_cpm5),  gcounter.get_cpm5f());
     format_f(b_cpm15, sizeof(b_cpm15), gcounter.get_cpm15f());
+#ifdef ESP8266
+    auto& sbuf = s_pub_buffer;
+#else
     static char sbuf[256];
+#endif
     int sp = snprintf_P(sbuf, sizeof(sbuf),
       PSTR("{\"cpm\":%s,\"usv\":%s,\"cps\":%s,\"cpm5\":%s,\"cpm15\":%s"),
       b_cpm, b_usv, b_cps, b_cpm5, b_cpm15);
@@ -438,61 +454,93 @@ void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const 
 }
 #ifdef MQTTAUTODISCOVER
 
-struct HassSensor {
-  const char* id;
-  const char* name;
-  const char* val_tpl;
-  const char* unit;
-  const char* icon;
-  const char* stat_t;
-  const char* dev_cla;
-  const char* state_cla;
-  const char* ent_cat;
-};
+// HA autodiscovery palette. PROGMEM puts these in flash (ESP8266's
+// .rodata is SRAM otherwise). Per-sensor strings are inlined via PSTR()
+// in the forEach* walkers below; this file-scope block holds only the
+// categorical values reused across rows.
 
-static const HassSensor hass_sensors[] = {
-  // Main measurement sensors - extracted from tele/sensor JSON.
-  {"cpm",   "CPM",        "{{ value_json.cpm }}",   "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "measurement",      ""},
-  {"cpm5",  "CPM5",       "{{ value_json.cpm5 }}",  "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "measurement",      ""},
-  {"cpm15", "CPM15",      "{{ value_json.cpm15 }}", "CPM",       "mdi:pulse",          "~/tele/sensor", "",                "measurement",      ""},
-  {"usv",   "\u00B5Sv/h", "{{ value_json.usv }}",   "\u00B5S/h", "mdi:radioactive",    "~/tele/sensor", "",                "measurement",      ""},
-#ifdef ESPGEIGER_HW
-  {"hv",    "HV",         "{{ value_json.hv }}",    "V",         "mdi:lightning-bolt", "~/tele/sensor", "",                "measurement",      ""},
-#endif
-  {"c_total", "Total Clicks", "{{ value_json.c_total }}", "", "mdi:counter", "~/tele/status", "", "total_increasing", ""},
-  // Diagnostic sensors - extracted from tele/status JSON.
-  {"tick",     "tick",        "{{ value_json.tick }}",     "\u00B5s", "mdi:timer-outline",       "~/tele/status", "",                "measurement",      "diagnostic"},
-  {"t_max",    "tick max",    "{{ value_json.t_max }}",    "\u00B5s", "mdi:timer-alert-outline", "~/tele/status", "",                "measurement",      "diagnostic"},
-  {"lps",      "LPS",         "{{ value_json.lps }}",      "1/s",     "mdi:speedometer",         "~/tele/status", "",                "measurement",      "diagnostic"},
-  {"rssi",     "RSSI",        "{{ value_json.rssi }}",     "dBm",     "mdi:wifi",                "~/tele/status", "signal_strength", "measurement",      "diagnostic"},
-  {"uptime",   "Uptime",      "{{ value_json.ut }}",       "s",       "mdi:clock-outline",       "~/tele/status", "duration",        "total_increasing", "diagnostic"},
-  {"free_mem", "Free Memory", "{{ value_json.free_mem }}", "B",       "mdi:memory",              "~/tele/status", "",                "measurement",      "diagnostic"},
-};
-static constexpr size_t hass_sensor_count = sizeof(hass_sensors) / sizeof(hass_sensors[0]);
+// Topic suffix.
+static const char H_ST_SENSOR[] PROGMEM = "~/tele/sensor";
+static const char H_ST_STATUS[] PROGMEM = "~/tele/status";
+// state_class.
+static const char H_SC_MEAS[]   PROGMEM = "measurement";
+static const char H_SC_TOTINC[] PROGMEM = "total_increasing";
+// device_class.
+static const char H_DC_SIG[]    PROGMEM = "signal_strength";
+static const char H_DC_DUR[]    PROGMEM = "duration";
+static const char H_DC_PROB[]   PROGMEM = "problem";
+static const char H_DC_SAFETY[] PROGMEM = "safety";
+static const char H_DC_CONN[]   PROGMEM = "connectivity";
+// entity_category.
+static const char H_EC_DIAG[]   PROGMEM = "diagnostic";
+// "not set" sentinel — consumers check pgm_read_byte(x) to skip.
+static const char H_EMPTY[]     PROGMEM = "";
 
-struct HassBinarySensor {
-  const char* id;
-  const char* name;
-  const char* val_tpl;
-  const char* icon;
-  const char* stat_t;
-  const char* dev_cla;   // "problem" / "safety" / etc.
-};
-static const HassBinarySensor hass_binary_sensors[] = {
-  {"warn",  "Warning", "{{ value_json.warn }}",  "mdi:alert-outline",          "~/tele/sensor", "problem"},
-  {"alert", "Alert",   "{{ value_json.alert }}", "mdi:alert-octagram-outline", "~/tele/sensor", "safety"},
-#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  // Serial builds only: reports whether the external counter is still
-  // feeding us valid lines. Pulse builds have no external peer — skipped.
-  {"ser_ok", "Serial Connected", "{{ value_json.ser_ok }}", "mdi:serial-port", "~/tele/status", "connectivity"},
-#endif
-};
-static constexpr size_t hass_binary_sensor_count = sizeof(hass_binary_sensors) / sizeof(hass_binary_sensors[0]);
+// Discovery type (topic-path component).
+static const char H_TYPE_SENSOR[]  PROGMEM = "sensor";
+static const char H_TYPE_BINSENS[] PROGMEM = "binary_sensor";
 
-// Shared path builder for HA discovery - avoids String heap allocations.
+// HassExtra keys + stock pl_on / pl_off values.
+static const char H_K_STAT[]  PROGMEM = "stat_t";
+static const char H_K_VT[]    PROGMEM = "val_tpl";
+static const char H_K_IC[]    PROGMEM = "ic";
+static const char H_K_UOM[]   PROGMEM = "unit_of_meas";
+static const char H_K_PLON[]  PROGMEM = "pl_on";
+static const char H_K_PLOFF[] PROGMEM = "pl_off";
+static const char H_V_ONE[]   PROGMEM = "1";
+static const char H_V_ZERO[]  PROGMEM = "0";
+
 static int buildHassPath(char* buf, size_t sz, const char* disc,
                           const char* type, const char* name) {
   return snprintf_P(buf, sz, PSTR("%s/%s/%s-%s/config"), disc, type, DeviceInfo::hostname(), name);
+}
+
+// Adding a sensor = one S(...) line. PSTR() only works in function
+// scope, so the catalog lives here rather than a file-scope array.
+// jKey is the tele/* JSON field — usually matches id (uptime→"ut" is
+// the sole oddity).
+void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
+  #define S(id_, jKey_, name_, unit_, icon_, stat_, dev_, state_, ent_) do { \
+    HassSensorRow r = {PSTR(id_), PSTR(name_), PSTR("{{ value_json." jKey_ " }}"), \
+                        PSTR(unit_), PSTR(icon_), stat_, dev_, state_, ent_}; \
+    (this->*fn)(r); \
+  } while (0)
+
+  // tele/sensor — main measurement.
+  S("cpm",      "cpm",      "CPM",          "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
+  S("cpm5",     "cpm5",     "CPM5",         "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
+  S("cpm15",    "cpm15",    "CPM15",        "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
+  S("usv",      "usv",      "\u00B5Sv/h",   "\u00B5S/h", "mdi:radioactive",    H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
+#ifdef ESPGEIGER_HW
+  S("hv",       "hv",       "HV",           "V",         "mdi:lightning-bolt", H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
+#endif
+  S("c_total",  "c_total",  "Total Clicks", "",          "mdi:counter",        H_ST_STATUS, H_EMPTY,  H_SC_TOTINC, H_EMPTY);
+  // tele/status — diagnostic.
+  S("tick",     "tick",     "tick",         "\u00B5s",   "mdi:timer-outline",  H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG);
+  S("t_max",    "t_max",    "tick max",     "\u00B5s",   "mdi:timer-alert-outline", H_ST_STATUS, H_EMPTY, H_SC_MEAS, H_EC_DIAG);
+  S("lps",      "lps",      "LPS",          "1/s",       "mdi:speedometer",    H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG);
+  S("rssi",     "rssi",     "RSSI",         "dBm",       "mdi:wifi",           H_ST_STATUS, H_DC_SIG, H_SC_MEAS,   H_EC_DIAG);
+  S("uptime",   "ut",       "Uptime",       "s",         "mdi:clock-outline",  H_ST_STATUS, H_DC_DUR, H_SC_TOTINC, H_EC_DIAG);
+  S("free_mem", "free_mem", "Free Memory",  "B",         "mdi:memory",         H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG);
+
+  #undef S
+}
+
+void MQTT_Client::forEachHassBinarySensor(HassBinaryFn fn) {
+  #define B(id_, name_, icon_, stat_, dev_) do { \
+    HassBinaryRow r = {PSTR(id_), PSTR(name_), PSTR("{{ value_json." id_ " }}"), \
+                        PSTR(icon_), stat_, dev_}; \
+    (this->*fn)(r); \
+  } while (0)
+
+  B("warn",  "Warning", "mdi:alert-outline",          H_ST_SENSOR, H_DC_PROB);
+  B("alert", "Alert",   "mdi:alert-octagram-outline", H_ST_SENSOR, H_DC_SAFETY);
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  // Serial builds only — pulse builds have no external peer to track.
+  B("ser_ok", "Serial Connected", "mdi:serial-port", H_ST_STATUS, H_DC_CONN);
+#endif
+
+  #undef B
 }
 
 void MQTT_Client::setupHassCB() {
@@ -511,33 +559,48 @@ void MQTT_Client::setupHassAuto() {
 
   Log::console(PSTR("MQTT: Publishing HA autodiscovery"));
 
-  for (size_t i = 0; i < hass_sensor_count; i++) {
-    const HassSensor& s = hass_sensors[i];
-    HassExtra extras[4] = {
-      {"stat_t",  s.stat_t},
-      {"val_tpl", s.val_tpl},
-      {"ic",      s.icon},
-    };
-    size_t n = 3;
-    if (s.unit[0]) extras[n++] = {"unit_of_meas", s.unit};
-    publishHassTopic("sensor", s.id, s.name,
-      s.dev_cla, s.state_cla, s.ent_cat, "", extras, n);
-  }
-
-  for (size_t i = 0; i < hass_binary_sensor_count; i++) {
-    const HassBinarySensor& b = hass_binary_sensors[i];
-    HassExtra extras[] = {
-      {"stat_t",  b.stat_t},
-      {"val_tpl", b.val_tpl},
-      {"pl_on",   "1"},
-      {"pl_off",  "0"},
-      {"ic",      b.icon},
-    };
-    publishHassTopic("binary_sensor", b.id, b.name,
-      b.dev_cla, "", "", "", extras, 5);
-  }
+  forEachHassSensor(&MQTT_Client::hassPublishSensor);
+  forEachHassBinarySensor(&MQTT_Client::hassPublishBinarySensor);
 }
 
+// Per-row emitters. Instance methods so the forEach walkers can
+// dispatch to either publish or remove over the same row list.
+void MQTT_Client::hassPublishSensor(const HassSensorRow& r) {
+  HassExtra extras[4] = {
+    {H_K_STAT, r.stat_t},
+    {H_K_VT,   r.val_tpl},
+    {H_K_IC,   r.icon},
+  };
+  size_t n = 3;
+  if (pgm_read_byte(r.unit)) extras[n++] = {H_K_UOM, r.unit};
+  publishHassTopic(H_TYPE_SENSOR, r.id, r.name,
+    r.dev_cla, r.state_cla, r.ent_cat, H_EMPTY, extras, n);
+}
+
+void MQTT_Client::hassPublishBinarySensor(const HassBinaryRow& r) {
+  HassExtra extras[] = {
+    {H_K_STAT,  r.stat_t},
+    {H_K_VT,    r.val_tpl},
+    {H_K_PLON,  H_V_ONE},
+    {H_K_PLOFF, H_V_ZERO},
+    {H_K_IC,    r.icon},
+  };
+  publishHassTopic(H_TYPE_BINSENS, r.id, r.name,
+    r.dev_cla, H_EMPTY, H_EMPTY, H_EMPTY, extras, 5);
+}
+
+void MQTT_Client::hassRemoveSensor(const HassSensorRow& r) {
+  removeHassTopic(H_TYPE_SENSOR, r.id);
+}
+
+void MQTT_Client::hassRemoveBinarySensor(const HassBinaryRow& r) {
+  removeHassTopic(H_TYPE_BINSENS, r.id);
+}
+
+// All string args (type/id/displayName/devCla/stateCla/entCat/cmdTopic
+// and extras[].key/value) are PGM_P — passed through to %s (safe on
+// ESP8266 via the unaligned-load handler) with pgm_read_byte for
+// "is set" checks.
 void MQTT_Client::publishHassTopic(
     const char* type, const char* id, const char* displayName,
     const char* devCla, const char* stateCla, const char* entCat,
@@ -549,7 +612,13 @@ void MQTT_Client::publishHassTopic(
   if (disc[0] == '\0') return;
 
   const char* host = DeviceInfo::hostname();
+#ifdef ESP8266
+  // Array-ref so sizeof(buffer) still resolves to MQTT_JSON_BUFFER_SIZE.
+  auto& buffer = s_pub_buffer;
+#else
+  // ESP32: async_tcp can preempt loop(), so don't share the buffer.
   static char buffer[MQTT_JSON_BUFFER_SIZE];
+#endif
 
   size_t pos = 0;
   int n;
@@ -569,30 +638,27 @@ void MQTT_Client::publishHassTopic(
     host, host, displayName, host, id);
   advance_pos(pos, n, sizeof(buffer));
 
-  if (devCla[0]) {
+  if (pgm_read_byte(devCla)) {
     n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"dev_cla\":\"%s\""), devCla);
     advance_pos(pos, n, sizeof(buffer));
   }
-  if (stateCla[0]) {
+  if (pgm_read_byte(stateCla)) {
     n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"stat_cla\":\"%s\""), stateCla);
     advance_pos(pos, n, sizeof(buffer));
   }
-  if (entCat[0]) {
+  if (pgm_read_byte(entCat)) {
     n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"ent_cat\":\"%s\""), entCat);
     advance_pos(pos, n, sizeof(buffer));
   }
-  if (cmdTopic[0]) {
+  if (pgm_read_byte(cmdTopic)) {
     n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"cmd_t\":\"~%s\""), cmdTopic);
     advance_pos(pos, n, sizeof(buffer));
   }
 
   for (size_t i = 0; i < n_extras; i++) {
-    if (strcmp(extras[i].value, "true") == 0)
-      n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":true"), extras[i].key);
-    else if (strcmp(extras[i].value, "false") == 0)
-      n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":false"), extras[i].key);
-    else
-      n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":\"%s\""), extras[i].key, extras[i].value);
+    // Quoted-string form only — no caller passes bare-boolean values,
+    // and strcmp_P with a flash first arg crashes Exception 3.
+    n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":\"%s\""), extras[i].key, extras[i].value);
     advance_pos(pos, n, sizeof(buffer));
   }
 
@@ -605,12 +671,8 @@ void MQTT_Client::publishHassTopic(
 
 void MQTT_Client::removeHASSConfig()
 {
-  for (size_t i = 0; i < hass_sensor_count; i++) {
-    removeHassTopic(PSTR("sensor"), hass_sensors[i].id);
-  }
-  for (size_t i = 0; i < hass_binary_sensor_count; i++) {
-    removeHassTopic(PSTR("binary_sensor"), hass_binary_sensors[i].id);
-  }
+  forEachHassSensor(&MQTT_Client::hassRemoveSensor);
+  forEachHassBinarySensor(&MQTT_Client::hassRemoveBinarySensor);
 }
 
 void MQTT_Client::removeHassTopic(const char* type, const char* id)
@@ -623,7 +685,7 @@ void MQTT_Client::removeHassTopic(const char* type, const char* id)
   mqttClient->publish(path, 1, false, "");
 }
 #endif
-  
+
 void MQTT_Client::onMqttMessage(char* topic, char* payload)
 {
 #ifdef MQTTAUTODISCOVER
