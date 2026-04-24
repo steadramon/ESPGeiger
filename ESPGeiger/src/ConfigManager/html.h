@@ -219,7 +219,7 @@ function gethv() {
   return false;
 }
 window.addEventListener("load",gethv);
-document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(lt);lt=setTimeout(gethv,Math.max(0,3e3-(Date.now()-lf)))}});
+document.addEventListener("visibilitychange",function(){if(document.hidden){bg=Date.now()}else{bg=0;clearTimeout(lt);lt=setTimeout(gethv,Math.max(0,3e3-(Date.now()-lf)))}});
 byID('freq').addEventListener("change", function() { byID('sfreq').innerHTML=this.value });
 byID('duty').addEventListener("change", function() { byID('sduty').innerHTML=this.value });
 byID('submit').addEventListener("click", function() {
