@@ -36,6 +36,7 @@ static const char* s_hostname = "";
 static const char* s_chipid = "";
 static const char* s_useragent = "";
 static const char* s_mac = "";
+static char s_geigermodel[33] = GEIGER_MODEL;
 
 void DeviceInfo::init(const char* hostName, const char* chipId,
                       const char* userAgent, const char* macAddr) {
@@ -49,7 +50,16 @@ const char* DeviceInfo::hostname()    { return s_hostname; }
 const char* DeviceInfo::chipid()      { return s_chipid; }
 const char* DeviceInfo::useragent()   { return s_useragent; }
 const char* DeviceInfo::mac()         { return s_mac; }
-const char* DeviceInfo::geigermodel() { return GEIGER_MODEL; }
+const char* DeviceInfo::geigermodel() { return s_geigermodel; }
+
+void DeviceInfo::setGeigermodel(const char* s) {
+  if (s && s[0]) {
+    strncpy(s_geigermodel, s, sizeof(s_geigermodel) - 1);
+  } else {
+    strncpy(s_geigermodel, GEIGER_MODEL, sizeof(s_geigermodel) - 1);
+  }
+  s_geigermodel[sizeof(s_geigermodel) - 1] = '\0';
+}
 
 const char* DeviceInfo::chipmodel() {
 #ifdef ESP8266

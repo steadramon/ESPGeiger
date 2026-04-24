@@ -19,6 +19,7 @@
 #include "SystemPrefs.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../GeigerInput/GeigerInput.h"
+#include "../Util/DeviceInfo.h"
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "../GeigerInput/GeigerInputTest.h"
 #endif
@@ -112,6 +113,9 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   {"pulse_width_us", "Pulse width", "Simulated pulse width (us)", STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
 #endif
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(ESPGEIGER_HW)
+  {"geiger_model", "Geiger Counter", "Connected counter/tube model (e.g., SBM-20, J305)", GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
+#endif
 #ifndef DISABLE_INTERNAL_BLIP
   {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
@@ -154,6 +158,9 @@ void InputPrefs::on_prefs_loaded() {
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   _pulse_width_us = (int)EGPrefs::getUInt("input", "pulse_width_us");
+#endif
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(ESPGEIGER_HW)
+  DeviceInfo::setGeigermodel(EGPrefs::getString("input", "geiger_model"));
 #endif
 #ifndef DISABLE_INTERNAL_BLIP
   gcounter.set_blip_led(EGPrefs::getBool("input", "blip_led"));

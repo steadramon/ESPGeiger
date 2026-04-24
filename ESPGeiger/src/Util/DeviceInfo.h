@@ -50,6 +50,7 @@ namespace DeviceInfo {
   const char* useragent();
   const char* chipmodel();
   const char* geigermodel();
+  void setGeigermodel(const char* s);
   const char* mac();
 
   inline unsigned long uptime() { return NTP.getUptime(); }
