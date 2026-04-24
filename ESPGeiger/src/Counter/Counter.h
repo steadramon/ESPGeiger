@@ -89,6 +89,9 @@ class Counter {
       void blip();
       void begin();
       void secondticker(unsigned long stick_now);
+      void set_fast_cpm(bool on) { _fast_cpm = on; }
+      bool get_fast_cpm() const { return _fast_cpm; }
+      void warm_up(float per_sec);
       void set_rx_pin(int pin) {
         geigerinput->set_rx_pin(pin);
       };
@@ -155,6 +158,7 @@ class Counter {
       bool _bool_cpm_warning = false;
       bool _bool_cpm_alert = false;
       bool _blip_led = true;
+      bool _fast_cpm = false;
       int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled
       int16_t _quiet_to_min   = -1;
       float _ratio = GEIGER_RATIO;

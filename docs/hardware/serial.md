@@ -39,9 +39,22 @@ These are accumulated in a fractional counter and pushed through the same 60-sec
 
 Practical consequences:
 
-- **Display lag (CPM-only formats).** The CPM on the ESPGeiger display is a smoothed view of an already-smoothed number. It will lag the counter's own display by up to ~60 seconds during a true rate change (e.g. waving a source past the tube). Instantaneous side-by-side readings will differ even at steady state — the counter's display is noisier, ESPGeiger's is quieter — but they describe the same underlying rate.
-- **Total counts (CPM-only formats).** Over an hour of steady operation the total agrees with the counter's true total within about **1%**; over 24 hours within **~0.03%**. The small gap comes almost entirely from the first minute after boot while the rolling window fills from zero.
+- **Display lag (CPM-only formats).** The CPM on the ESPGeiger display is a smoothed view of an already-smoothed number. It will lag the counter's own display by up to ~60 seconds during a true rate change (e.g. waving a source past the tube). Instantaneous side-by-side readings will differ even at steady state — the counter's display is noisier, ESPGeiger's is quieter — but they describe the same underlying rate. The [Fast CPM](#fast-cpm-option) option shortens this lag considerably.
+- **Total counts (CPM-only formats).** On the first valid line from the counter the firmware pre-fills the rolling window and credits `total_clicks` with the reported CPM, so boot-time totals track the counter's already-running state from second 1 rather than ramping from zero. Past that first line both sides add the same per-second counts. Over any window longer than a couple of minutes, totals agree to within a handful of counts.
 - **Total counts (CPS-bearing formats).** Exact, modulo only the single boot second during which the serial stream hasn't started yet. MightyOhm totals should match to within a count or two.
+
+## Fast CPM Option
+
+By default ESPGeiger averages received CPM values over a **60-second rolling window**, matching how the pulse-mode firmware behaves. This makes the on-screen CPM quiet and stable but means it lags the counter's own display whenever the true rate changes — for a source wave test, the ESPGeiger reading takes ~30 seconds to reach the halfway point and a full minute to fully converge.
+
+The **Fast CPM** option (Config > Input > Fast CPM, serial builds only) shortens the window to **5 seconds**. Trade-offs:
+
+- Tracks the counter's display within a few seconds during rate changes, not a minute.
+- Higher natural variance at steady state — CPM bounces closer to what the counter's own display shows.
+- Warning / alert thresholds can trip on short Poisson spikes that a 60-second window would have smoothed over. If you have tight thresholds, bump them up or keep Fast CPM off.
+- Requires a reboot to apply (the window size is fixed at startup).
+
+`total_clicks`, CPS, 5- and 15-minute averages, and all MQTT/API feeds continue to work unchanged with either setting — only the 1-minute CPM's responsiveness is affected.
 
 ## Unsupported Counters
 

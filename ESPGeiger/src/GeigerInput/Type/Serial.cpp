@@ -19,7 +19,10 @@
 #include "Serial.h"
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
+#include "../../Counter/Counter.h"
 #include "../SerialFormat.h"
+
+extern Counter gcounter;
 
 static EspSoftwareSerial::UART geigerPort;
 
@@ -116,8 +119,12 @@ void GeigerSerial::handleSerial(char* input) {
   Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
   setLastBlip();
   serial_value = _scpm;
-  // CPS path shares partial_clicks with CPM synth (mutually exclusive via _use_cps).
   if (_use_cps && _scps >= 0) partial_clicks += (float)_scps;
+  if (!_warmed_up && !_use_cps && _scpm > 0) {
+    gcounter.warm_up((float)_scpm / 60.0f);
+    gcounter.total_clicks += _scpm;
+    _warmed_up = true;
+  }
   last_serial = millis();
   _bad_streak = max((int)_bad_streak - 3, 0);
 }

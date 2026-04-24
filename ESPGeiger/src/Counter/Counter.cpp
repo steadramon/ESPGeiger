@@ -195,19 +195,30 @@ float Counter::get_usv15() {
 }
 
 void Counter::begin() {
-  geigerTicks.begin(SMOOTHED_AVERAGE, GEIGER_CPM_COUNT);
+  uint8_t window = _fast_cpm ? 5 : GEIGER_CPM_COUNT;
+  geigerTicks.begin(SMOOTHED_AVERAGE, window);
 #ifndef GEIGER_SMOOTH_AVG
-  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), GEIGER_CPM_COUNT);
+  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), window);
   geigerTicks5.begin(SMOOTHED_EXPONENTIAL, GEIGER_EMA_FACTOR);
   geigerTicks15.begin(SMOOTHED_EXPONENTIAL, GEIGER_EMA_FACTOR);
 #else
-  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), GEIGER_CPM_COUNT, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
+  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), window, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
   geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
   geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
 #endif
 
   geigerinput->begin();
   apply_pcnt_filter();
+}
+
+void Counter::warm_up(float per_sec) {
+  uint8_t window = _fast_cpm ? 5 : GEIGER_CPM_COUNT;
+  for (uint8_t i = 0; i < window; i++) geigerTicks.add(per_sec);
+  geigerTicks5.add(per_sec);
+  geigerTicks15.add(per_sec);
+  _cached_cps  = per_sec;
+  _cached_cpmf = _cached_cps * 60.0f;
+  _cached_usv  = _cached_cpmf * _ratio_inv;
 }
 
 void Counter::blip() {
