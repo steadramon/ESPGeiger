@@ -29,13 +29,14 @@ struct TypeInfo {
   uint8_t     id;
   uint32_t    baud;
   const char* name;
+  bool        has_cps;   // protocol transmits a usable per-second count
 };
 
 static const TypeInfo TYPES[] = {
-  { GEIGER_STYPE_GC10,      9600,   "GC10"      },
-  { GEIGER_STYPE_GC10NX,    115200, "GC10Next"  },
-  { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm" },
-  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger" },
+  { GEIGER_STYPE_GC10,      9600,   "GC10",      false },
+  { GEIGER_STYPE_GC10NX,    115200, "GC10Next",  false },
+  { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm", true  },
+  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger", false },
 };
 static constexpr uint8_t TYPE_COUNT = sizeof(TYPES) / sizeof(TYPES[0]);
 
@@ -49,6 +50,7 @@ static const TypeInfo* find(uint8_t id) {
 uint32_t    baud_for(uint8_t type)  { const TypeInfo* t = find(type); return t ? t->baud : 0; }
 const char* name_for(uint8_t type)  { const TypeInfo* t = find(type); return t ? t->name : nullptr; }
 bool        is_known(uint8_t type)  { return find(type) != nullptr; }
+bool        has_cps(uint8_t type)   { const TypeInfo* t = find(type); return t ? t->has_cps : false; }
 
 size_t describe_types(char* buf, size_t cap) {
   if (buf == nullptr || cap == 0) return 0;
@@ -79,14 +81,14 @@ size_t format_line(uint8_t type, int cps, int cpm, char* buf, size_t cap) {
       return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
     }
     default: {
-      // GC10 / GC10Next — plain integer.
+      // GC10 / GC10Next - plain integer.
       int n = snprintf_P(buf, cap, PSTR("%d\r\n"), cpm);
       return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
     }
   }
 }
 
-bool parse_cpm(uint8_t type, const char* input, int* out_cpm) {
+bool parse_cpm(uint8_t type, const char* input, int* out_cpm, int* out_cps) {
   if (input == nullptr || out_cpm == nullptr) return false;
   size_t len = strlen(input);
   if (len == 0) return false;
@@ -100,9 +102,11 @@ bool parse_cpm(uint8_t type, const char* input, int* out_cpm) {
   int n = 0;
   switch (type) {
     case GEIGER_STYPE_MIGHTYOHM: {
+      // INST mode (>255 cps): CPS field is CPS*60, so skip the fast-path.
       int cps;
       n = sscanf(input, "CPS, %d, CPM, %d", &cps, &cpm);
       if (n != 2) return false;
+      if (out_cps && cps >= 0 && strstr(input, "INST") == nullptr) *out_cps = cps;
       break;
     }
     case GEIGER_STYPE_ESPGEIGER:
@@ -110,7 +114,7 @@ bool parse_cpm(uint8_t type, const char* input, int* out_cpm) {
       if (n != 1) return false;
       break;
     default:
-      // GC10 / GC10Next — digits-only (plus CR/LF) so garbage that
+      // GC10 / GC10Next - digits-only (plus CR/LF) so garbage that
       // happens to start with a digit is rejected instead of parsed.
       for (size_t i = 0; i < len; i++) {
         if (!isDigit(input[i]) && input[i] != '\r' && input[i] != '\n') {

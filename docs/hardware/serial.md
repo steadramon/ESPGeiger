@@ -25,17 +25,23 @@ All supported counters emit one reading per second. ESPGeiger treats the stream 
 
 ## How CPS, CPM5/CPM15 and Total Counts Are Derived
 
-Most serial counters transmit only a rolling CPM number — they don't send individual pulses (MightyOhm is the exception, also emitting CPS in-band). So that the pulse- and serial-mode builds share the same downstream pipeline (CPS, 5- and 15-minute averages, total counts, MQTT/API feeds, alarm thresholds), ESPGeiger reverse-engineers per-second click events from the reported CPM:
+The firmware shares a single pipeline across pulse and serial builds — CPS, 5- and 15-minute averages, total counts, MQTT/API feeds, and alarm thresholds are all driven from a stream of per-second click events. How those events get produced depends on what the counter emits:
+
+**CPM-only formats (GC10 / GC10Next / ESPGeiger-serial)** — the counter transmits just its rolling CPM value. ESPGeiger reverse-engineers synthetic per-second clicks from it:
 
 ```
 synthetic_clicks_per_second = reported_CPM ÷ 60
 ```
 
-These synthetic clicks accumulate in a fractional counter; whole clicks are pushed through the same 60-second rolling window used by pulse firmware. A few practical consequences:
+These are accumulated in a fractional counter and pushed through the same 60-second rolling window used by the pulse firmware.
 
-- The CPM on the ESPGeiger display is a smoothed view of an already-smoothed number. It will lag the counter's own display by up to ~60 seconds during a true rate change (e.g. waving a source past the tube). Instantaneous side-by-side readings will differ even at steady state — the counter's display is noisier, ESPGeiger's is quieter — but they describe the same underlying rate.
-- Total counts over an hour of steady operation agree with the counter's true total to within about **1%**; over 24 hours within **~0.03%**. The small gap comes almost entirely from the first minute after boot while the rolling window fills from zero.
-- CPS in serial mode is computed from the synthesised click stream, not read directly from the counter. For MightyOhm this means we currently ignore its native CPS field.
+**CPS-bearing formats (MightyOhm)** — the counter transmits both CPS and CPM in every line. ESPGeiger uses the CPS value directly, so each second's count matches exactly what the counter measured. MightyOhm has three internal modes (`SLOW` / `FAST` / `INST`); in `INST` mode (triggered when counts exceed an internal 8-bit buffer, roughly >255 CPS) the CPS field is repurposed to transmit a CPM-extrapolated figure, so ESPGeiger falls back to CPM synthesis for that second. For typical background-to-moderate-source rates you're always in `SLOW` or `FAST`, so the direct-CPS path applies.
+
+Practical consequences:
+
+- **Display lag (CPM-only formats).** The CPM on the ESPGeiger display is a smoothed view of an already-smoothed number. It will lag the counter's own display by up to ~60 seconds during a true rate change (e.g. waving a source past the tube). Instantaneous side-by-side readings will differ even at steady state — the counter's display is noisier, ESPGeiger's is quieter — but they describe the same underlying rate.
+- **Total counts (CPM-only formats).** Over an hour of steady operation the total agrees with the counter's true total within about **1%**; over 24 hours within **~0.03%**. The small gap comes almost entirely from the first minute after boot while the rolling window fills from zero.
+- **Total counts (CPS-bearing formats).** Exact, modulo only the single boot second during which the serial stream hasn't started yet. MightyOhm totals should match to within a count or two.
 
 ## Unsupported Counters
 

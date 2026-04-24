@@ -32,8 +32,9 @@ void GeigerSerial::begin() {
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;    // safety fallback for an unknown saved pref
-  Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
-               name ? name : "?", _serial_type, baud, _rx_pin);
+  _use_cps = SerialFormat::has_cps(_serial_type);
+  Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d CPS=%d"),
+               name ? name : "?", _serial_type, baud, _rx_pin, _use_cps ? 1 : 0);
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
     Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
   }
@@ -75,9 +76,14 @@ void GeigerSerial::loop() {
 }
 
 void GeigerSerial::secondTicker() {
-  // All serial types report CPM - accumulate fractional clicks per second.
-  // Multiply by precomputed reciprocal - soft-float divide costs ~150 cycles
-  // on ESP8266, multiply only ~80. -Os may not fold this automatically.
+  // CPS path: drain the whole int accumulated from the line's CPS field.
+  if (_use_cps) {
+    int c = (int)partial_clicks;
+    partial_clicks = 0;
+    setCounter(c, false);
+    return;
+  }
+  // CPM path: synthesise fractional clicks. INV_60 avoids the soft-float divide.
   static constexpr float INV_60 = 1.0f / 60.0f;
   partial_clicks += (float)serial_value * INV_60;
   if (partial_clicks >= 1.0f) {
@@ -92,7 +98,8 @@ void GeigerSerial::secondTicker() {
 
 void GeigerSerial::handleSerial(char* input) {
   int _scpm = 0;
-  if (!SerialFormat::parse_cpm(_serial_type, input, &_scpm)) {
+  int _scps = -1;
+  if (!SerialFormat::parse_cpm(_serial_type, input, &_scpm, &_scps)) {
     _bad_streak++;
     if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) {
       Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
@@ -109,6 +116,8 @@ void GeigerSerial::handleSerial(char* input) {
   Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
   setLastBlip();
   serial_value = _scpm;
+  // CPS path shares partial_clicks with CPM synth (mutually exclusive via _use_cps).
+  if (_use_cps && _scps >= 0) partial_clicks += (float)_scps;
   last_serial = millis();
   _bad_streak = max((int)_bad_streak - 3, 0);
 }

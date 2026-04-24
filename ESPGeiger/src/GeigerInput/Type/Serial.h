@@ -49,5 +49,6 @@ class GeigerSerial : public GeigerInput
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint16_t _bad_streak = 0;
     unsigned long _last_drain = 0;
+    bool _use_cps = false;
 };
 #endif

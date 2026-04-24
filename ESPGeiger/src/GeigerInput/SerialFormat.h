@@ -25,7 +25,7 @@
 
 #include <Arduino.h>
 
-// Protocol IDs — stable ints, persisted in prefs. New protocol: append
+// Protocol IDs - stable ints, persisted in prefs. New protocol: append
 // a value here + a row in TYPES[] + cases in format_line/parse_cpm.
 #define GEIGER_STYPE_GC10       1
 #define GEIGER_STYPE_GC10NX     2
@@ -35,11 +35,12 @@
 namespace SerialFormat {
 
 size_t      format_line(uint8_t type, int cps, int cpm, char* buf, size_t cap);
-bool        parse_cpm(uint8_t type, const char* input, int* out_cpm);
+bool        parse_cpm(uint8_t type, const char* input, int* out_cpm, int* out_cps = nullptr);
 
 uint32_t    baud_for(uint8_t type);            // 0 if unknown
 const char* name_for(uint8_t type);            // nullptr if unknown
 bool        is_known(uint8_t type);
+bool        has_cps(uint8_t type);             // true if protocol emits per-second count
 size_t      describe_types(char* buf, size_t cap);   // "1=GC10 2=GC10Next ..."
 
 }
