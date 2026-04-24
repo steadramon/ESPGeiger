@@ -334,6 +334,8 @@ void SSD1306Display::showOTABanner() {
   setFont(ArialMT_Plain_16);
   drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) - 12, "Update");
   drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) + 8,  "in progress...");
+  displayOn();
+  oled_on = true;
   display();
   setTextAlignment(TEXT_ALIGN_LEFT);
 }
