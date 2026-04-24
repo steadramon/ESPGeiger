@@ -216,7 +216,7 @@ void Counter::blip() {
     if (_blip_led && !quiet) led.Blink(20,20);
 #endif
 #ifdef GEIGER_BLIPLED
-    if (!quiet && blip_led.IsRunning() == false) {
+    if (_blip_led && !quiet && blip_led.IsRunning() == false) {
       blip_led.Blink(2,1).Repeat(1);
     }
 #endif
