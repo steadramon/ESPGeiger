@@ -102,11 +102,13 @@ bool parse_cpm(uint8_t type, const char* input, int* out_cpm, int* out_cps) {
   int n = 0;
   switch (type) {
     case GEIGER_STYPE_MIGHTYOHM: {
-      // INST mode (>255 cps): CPS field is CPS*60, so skip the fast-path.
+      // CPS field is 0..65535 in all modes (SLOW/FAST/INST). In INST the CPM
+      // field becomes CPS*60 extrapolated from the current sample, but we take
+      // CPS directly so that doesn't matter.
       int cps;
       n = sscanf(input, "CPS, %d, CPM, %d", &cps, &cpm);
       if (n != 2) return false;
-      if (out_cps && cps >= 0 && strstr(input, "INST") == nullptr) *out_cps = cps;
+      if (out_cps && cps >= 0) *out_cps = cps;
       break;
     }
     case GEIGER_STYPE_ESPGEIGER:

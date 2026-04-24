@@ -35,7 +35,7 @@ synthetic_clicks_per_second = reported_CPM ÷ 60
 
 These are accumulated in a fractional counter and pushed through the same 60-second rolling window used by the pulse firmware.
 
-**CPS-bearing formats (MightyOhm)** — the counter transmits both CPS and CPM in every line. ESPGeiger uses the CPS value directly, so each second's count matches exactly what the counter measured. MightyOhm has three internal modes (`SLOW` / `FAST` / `INST`); in `INST` mode (triggered when counts exceed an internal 8-bit buffer, roughly >255 CPS) the CPS field is repurposed to transmit a CPM-extrapolated figure, so ESPGeiger falls back to CPM synthesis for that second. For typical background-to-moderate-source rates you're always in `SLOW` or `FAST`, so the direct-CPS path applies.
+**CPS-bearing formats (MightyOhm)** — the counter transmits both CPS and CPM in every line, with the CPS field valid up to 65535 across all three of its internal modes (`SLOW` / `FAST` / `INST`). ESPGeiger uses that CPS value directly, so each second's count matches exactly what the counter measured regardless of which mode it's currently in.
 
 Practical consequences:
 
