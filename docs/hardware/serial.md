@@ -45,7 +45,9 @@ Practical consequences:
 
 ## CPM Window Option
 
-ESPGeiger averages received CPM values over a rolling window before displaying them, which keeps the reading steady at the cost of lagging the counter's own display whenever the true rate changes. The **CPM Window** setting (Config > Input > CPM Window, serial builds only) controls that window's length, from **1 to 60 seconds**.
+ESPGeiger averages received CPM values over a rolling window before displaying them, which keeps the reading steady at the cost of lagging the counter's own display whenever the true rate changes. The **CPM Window (CPM-only counters)** setting (Config > Input, serial builds only) controls that window's length, from **1 to 60 seconds**.
+
+It only applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). MightyOhm is ignored and uses a fixed 60s window because its in-band CPS field already gives ESPGeiger exact per-second counts — the window there is smoothing real click data rather than counter-smoothed values, so the "double smoothing" that motivates a shorter default doesn't apply.
 
 Reference points:
 

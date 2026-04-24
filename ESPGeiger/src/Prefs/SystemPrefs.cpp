@@ -94,7 +94,7 @@ static char serial_type_desc[48] = "";
 static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   {"serial_type", "Serial Type", serial_type_desc, STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
-  {"cpm_window", "CPM Window", "Rolling CPM window (seconds). Lower=more responsive, higher=smoother. Reboot to apply.", "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER},
+  {"cpm_window", "CPM Window (CPM-only counters)", "Rolling CPM window (seconds). Lower=more responsive, higher=smoother. Reboot to apply.", "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER},
 #endif
 #ifndef RXPIN_BLOCKED
   {"rx_pin", "RX Pin",        "",  STR(GEIGER_RXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
@@ -134,7 +134,9 @@ void InputPrefs::on_prefs_loaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   _serial_type = (uint8_t)EGPrefs::getUInt("input", "serial_type");
   SerialFormat::describe_types(serial_type_desc, sizeof(serial_type_desc));
-  gcounter.set_cpm_window((uint8_t)EGPrefs::getUInt("input", "cpm_window"));
+  uint8_t cw = (uint8_t)EGPrefs::getUInt("input", "cpm_window");
+  if (SerialFormat::has_cps(_serial_type)) cw = GEIGER_CPM_COUNT;
+  gcounter.set_cpm_window(cw);
 #endif
 #ifndef RXPIN_BLOCKED
   gcounter.set_rx_pin((int)EGPrefs::getUInt("input", "rx_pin"));
@@ -175,7 +177,8 @@ void InputPrefs::on_prefs_saved() {
 #endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   if (_serial_type != (uint8_t)EGPrefs::getUInt("input", "serial_type")) need_reboot = true;
-  if (gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("input", "cpm_window")) need_reboot = true;
+  if (!SerialFormat::has_cps(_serial_type) &&
+      gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("input", "cpm_window")) need_reboot = true;
 #endif
   on_prefs_loaded();
   if (need_reboot) EGPrefs::request_restart();

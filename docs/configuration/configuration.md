@@ -32,7 +32,7 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | Serial Type | Int 1-255 | `(varies)` | Serial counter protocol: 1=GC10, 2=GC10Next, 3=MightyOhm, 4=ESPGeiger. Only shown on serial builds. Reboot required. |
-| CPM Window | Int 1-60 | `30` | Serial builds only. Rolling CPM window in seconds. Lower values track the counter's display more closely during rate changes; higher values smooth out natural variance. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
+| CPM Window (CPM-only counters) | Int 1-60 | `30` | Serial builds only, applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
 | RX Pin | Int | `(varies)` | Geiger counter input pin. Hidden when `-D RXPIN_BLOCKED`. Reboot required. |
 | TX Pin | Int | `(varies)` | Transmit pin. Only on builds with a TX pin configured. Reboot required. |
 | PCNT Filter | Int 0-1023 | `200` | Glitch filter threshold (ESP32 PCNT builds only). `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
