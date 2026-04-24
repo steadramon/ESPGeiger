@@ -26,54 +26,73 @@ Log::LoggingLevels Log::logLevel = LOG_LEVEL;
 char Log::log[MAX_LOG_SIZE] = "";
 bool Log::serialLog = true;
 
+#ifdef ESP8266
+static char s_log_buf[256];
+  #define LOG_BUF s_log_buf
+  #define LOG_BUF_SIZE sizeof(s_log_buf)
+#else
+  #define LOG_BUF buffer
+  #define LOG_BUF_SIZE sizeof(buffer)
+#endif
+
 void Log::console(const char* formatP, ...)
 {
   va_list arg;
+#ifndef ESP8266
   static char buffer[256];
+#endif
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_CONSOLE, buffer);
+  AddLog(LOG_LEVEL_CONSOLE, LOG_BUF);
 }
 
 void Log::error(const char* formatP, ...)
 {
   va_list arg;
+#ifndef ESP8266
   static char buffer[256];
+#endif
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_ERROR, buffer);
+  AddLog(LOG_LEVEL_ERROR, LOG_BUF);
 }
 
 void Log::info(const char* formatP, ...)
 {
   va_list arg;
+#ifndef ESP8266
   static char buffer[256];
+#endif
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_INFO, buffer);
+  AddLog(LOG_LEVEL_INFO, LOG_BUF);
 }
 
 void Log::debug(const char* formatP, ...)
 {
   va_list arg;
+#ifndef ESP8266
   static char buffer[256];
+#endif
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_DEBUG, buffer);
+  AddLog(LOG_LEVEL_DEBUG, LOG_BUF);
 }
 
 void Log::banner(const char* formatP, ...)
 {
   va_list arg;
+#ifndef ESP8266
   static char buffer[256];
+#endif
   va_start(arg, formatP);
-  vsnprintf_P(buffer, sizeof(buffer), formatP, arg);
+  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_CONSOLE, buffer, false);
+  AddLog(LOG_LEVEL_CONSOLE, LOG_BUF, false);
 }
 
 // Based on arendst/Tasmota addLog (support.ino)
