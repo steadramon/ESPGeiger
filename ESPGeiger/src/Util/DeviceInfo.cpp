@@ -37,6 +37,7 @@ static const char* s_chipid = "";
 static const char* s_useragent = "";
 static const char* s_mac = "";
 static char s_geigermodel[33] = GEIGER_MODEL;
+static char s_friendlyname[33] = "";
 
 void DeviceInfo::init(const char* hostName, const char* chipId,
                       const char* userAgent, const char* macAddr) {
@@ -59,6 +60,17 @@ void DeviceInfo::setGeigermodel(const char* s) {
     strncpy(s_geigermodel, GEIGER_MODEL, sizeof(s_geigermodel) - 1);
   }
   s_geigermodel[sizeof(s_geigermodel) - 1] = '\0';
+}
+
+const char* DeviceInfo::friendlyName() { return s_friendlyname; }
+
+void DeviceInfo::setFriendlyName(const char* s) {
+  if (s && s[0]) {
+    strncpy(s_friendlyname, s, sizeof(s_friendlyname) - 1);
+  } else {
+    s_friendlyname[0] = '\0';
+  }
+  s_friendlyname[sizeof(s_friendlyname) - 1] = '\0';
 }
 
 const char* DeviceInfo::chipmodel() {

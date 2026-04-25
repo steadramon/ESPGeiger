@@ -36,6 +36,7 @@ SystemPrefs systemPrefs;
 EG_REGISTER_MODULE(systemPrefs)
 
 static const EGPref SYSTEM_PREF_ITEMS[] = {
+  {"name",   "Friendly name", "Optional label for web UI + Home Assistant (hostname stays as-is)", "", nullptr, 0, 0, 32, EGP_STRING, 0},
   {"ratio",  "uSv/h Ratio",   "CPM to uSv/h factor",  "151.0",      nullptr, 0, 0,    0,  EGP_FLOAT,  0},
   {"warn",   "Warning CPM",   "Warning trigger (CPM)","50",         nullptr, 0, 9999, 0,  EGP_UINT,   0},
   {"alert",  "Alert CPM",     "Alert trigger (CPM)",  "100",        nullptr, 0, 9999, 0,  EGP_UINT,   0},
@@ -49,10 +50,14 @@ static const EGPrefGroup SYSTEM_PREF_GROUP = {
 
 const EGPrefGroup* SystemPrefs::prefs_group() { return &SYSTEM_PREF_GROUP; }
 
+extern void applyFriendlyTitle();
+
 void SystemPrefs::on_prefs_loaded() {
   gcounter.set_ratio(EGPrefs::getFloat("sys", "ratio"));
   gcounter.set_warning((int)EGPrefs::getUInt("sys", "warn"));
   gcounter.set_alert((int)EGPrefs::getUInt("sys", "alert"));
+  DeviceInfo::setFriendlyName(EGPrefs::getString("sys", "name"));
+  applyFriendlyTitle();
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
