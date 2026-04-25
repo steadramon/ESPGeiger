@@ -18,7 +18,6 @@
 */
 #include "GRNG.h"
 #include "../Logger/Logger.h"
-#include "../Util/DeviceInfo.h"
 #include "sha256.h"
 #include <string.h>
 
@@ -41,12 +40,13 @@ void GRNG::mix(uint32_t bits) {
 }
 
 uint32_t GRNG::stir() {
-  uint32_t m = 0;
-  for (const char* p = DeviceInfo::mac(); *p; ++p) {
-    m = (m * 31) ^ (uint8_t)*p;
-  }
-  uint32_t e = m ^ (uint32_t)millis() ^ (uint32_t)micros()
-               ^ ESP.getCycleCount() ^ s_pool;
+#ifdef ESP8266
+  uint32_t hw = RANDOM_REG32;
+#else
+  uint32_t hw = esp_random();
+#endif
+  uint32_t e = hw ^ ESP.getCycleCount() ^ s_pool;
+  s_pool ^= e;
   randomSeed(e);
   return e;
 }
@@ -55,7 +55,6 @@ void GRNG::extract(uint8_t* out, size_t n) {
   while (n > 0) {
     Sha256.init();
     Sha256.write((const uint8_t*)&s_pool, sizeof(s_pool));
-    for (const char* p = DeviceInfo::mac(); *p; ++p) Sha256.write((uint8_t)*p);
     uint32_t cc = ESP.getCycleCount();
     Sha256.write((const uint8_t*)&cc, sizeof(cc));
 #ifdef ESP8266
