@@ -31,7 +31,7 @@
 extern Counter gcounter;
 
 #ifndef OLED_PAGES
-#define OLED_PAGES 3
+#define OLED_PAGES 4
 #endif
 
 #ifndef OLED_WIDTH
@@ -134,6 +134,7 @@ public:
   void page_one_values(unsigned long now);
   void page_two_full();
   void page_three_full();
+  void page_four_static();
   void showOTABanner();
 
   void setTimeout(uint16_t timeout) {
@@ -150,6 +151,9 @@ public:
     uint8_t cx, cy;
     uint8_t fontWidth, fontHeight;
     uint16_t _lcd_timeout = 300;
+    unsigned long _page4_num_last = 0;
+    char _page4_num[8] = "";
+    uint8_t _last_page = 0;        // tracks page change to retune loop interval
 };
 
 extern SSD1306Display display;

@@ -25,6 +25,7 @@
 #include "../Util/DeviceInfo.h"
 #include "../Util/StringUtil.h"
 #include "../Util/Wifi.h"
+#include "../GRNG/GRNG.h"
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"
 #endif
@@ -83,6 +84,10 @@ void SSD1306Display::loop(unsigned long now) {
     if (oled_page > OLED_PAGES) {
       oled_page = 1;
     }
+    if (oled_page != _last_page) {
+      EGModuleRegistry::set_loop_interval(this, oled_page == 4 ? 50 : 250);
+      _last_page = oled_page;
+    }
 #ifdef GEIGER_PUSHBUTTON
     if ((enable_oled_timeout) && (_lcd_timeout > 0) && ((now - oled_timeout) / 1000 > _lcd_timeout)) {
       if (oled_on) {
@@ -136,6 +141,10 @@ void SSD1306Display::loop(unsigned long now) {
         oled_last_update = now;
         page_three_full();
       }
+    } else if (oled_page == 4) {
+      if (oled_last_update == 0) _page4_num_last = 0;
+      oled_last_update = now;
+      page_four_static();
     }
     display();
 
@@ -216,13 +225,22 @@ void SSD1306Display::setup() {
 }
 
 void SSD1306Display::onButtonTap(unsigned long now) {
+  static unsigned long s_last_tap = 0;
+  static uint8_t s_tap_count = 0;
+  s_tap_count = (now - s_last_tap < 400) ? (s_tap_count + 1) : 1;
+  s_last_tap = now;
+
   oled_timeout = now;
   if (!oled_on) {
     oled_page = 1;
     displayOn();
     oled_on = true;
+  } else if (s_tap_count >= 5) {
+    oled_page = 4;            // hidden gesture: 5 rapid taps
+    s_tap_count = 0;
   } else {
-    oled_page = (oled_page % OLED_PAGES) + 1;
+    oled_page++;
+    if (oled_page > 3) oled_page = 1;   // normal rotation skips page 4
   }
   oled_last_update = 0;
   loop(now);
@@ -326,6 +344,26 @@ void SSD1306Display::page_three_full() {
   drawString(0, 17, versionString);
   drawString(0, 32, PSTR(__DATE__ " " __TIME__));
   drawString(0, 47, PSTR("@ steadramon"));
+}
+
+void SSD1306Display::page_four_static() {
+  unsigned long now = millis();
+  if (_page4_num_last == 0 || now - _page4_num_last >= 1000) {
+    _page4_num_last = now;
+    uint16_t num;
+    GRNG::extract((uint8_t*)&num, sizeof(num));
+    num %= 1001;
+    snprintf_P(_page4_num, sizeof(_page4_num), PSTR("%u"), num);
+  }
+  uint8_t noise[1024];
+  GRNG::extract(noise, sizeof(noise));
+  clear();
+  drawXbm(0, 0, 128, 64, noise);
+  setColor(BLACK);
+  fillRect(41, 19, 44, 24);
+  setColor(WHITE);
+  setFont(DialogInput_Digits_17);
+  drawString(63 - (int)strlen(_page4_num) * 5, 21, _page4_num);
 }
 
 void SSD1306Display::showOTABanner() {

@@ -32,6 +32,7 @@
 #include "../SerialOut/SerialOut.h"
 #include "../Util/BootHooks.h"
 #include "../Util/StringUtil.h"
+#include "../GRNG/GRNG.h"
 #ifdef ESP32
 #include <esp_system.h>
 #endif
@@ -949,6 +950,70 @@ void ConfigManager::handleHistoryPage()
   endChunkedPage();
 }
 
+void ConfigManager::handleRandomPage()
+{
+  handleRequest();
+  beginChunkedPage();
+  sendPageHead(PSTR("Random"));
+  auto* s = server.get();
+  s->sendContent(FPSTR(RANDOM_PAGE_BODY));
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
+}
+
+void ConfigManager::handleRandomDo()
+{
+  handleRequest();
+  String type = server->arg("type");
+  char out[68];
+  size_t outlen = 0;
+
+  if (type == "coin") {
+    uint8_t b;
+    GRNG::extract(&b, 1);
+    const char* s = (b & 1) ? "Heads" : "Tails";
+    outlen = strlen(s);
+    memcpy(out, s, outlen);
+  } else if (type == "dice") {
+    long sides = server->arg("sides").toInt();
+    if (sides < 2)     sides = 6;
+    if (sides > 10000) sides = 10000;
+    uint8_t bytes[4];
+    GRNG::extract(bytes, 4);
+    uint32_t r = ((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) |
+                 ((uint32_t)bytes[2] << 8)  | bytes[3];
+    long roll = (long)(r % (uint32_t)sides) + 1;
+    outlen = snprintf_P(out, sizeof(out), PSTR("%ld"), roll);
+  } else if (type == "hex") {
+    long n = server->arg("n").toInt();
+    if (n < 1)  n = 16;
+    if (n > 32) n = 32;
+    uint8_t bytes[32];
+    GRNG::extract(bytes, n);
+    static const char hexc[] = "0123456789abcdef";
+    for (long i = 0; i < n; i++) {
+      out[i*2]     = hexc[bytes[i] >> 4];
+      out[i*2 + 1] = hexc[bytes[i] & 0xF];
+    }
+    outlen = n * 2;
+  } else if (type == "password") {
+    long len = server->arg("len").toInt();
+    if (len < 4)  len = 16;
+    if (len > 64) len = 64;
+    static const char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    uint8_t bytes[64];
+    GRNG::extract(bytes, len);
+    for (long i = 0; i < len; i++) out[i] = chars[bytes[i] % (sizeof(chars) - 1)];
+    outlen = len;
+  } else {
+    server->send(400, F("text/plain"), F(""));
+    return;
+  }
+
+  out[outlen] = '\0';
+  server->send(200, F("text/plain"), out);
+}
+
 void ConfigManager::handleNTP()
 {
   handleRequest();
@@ -1193,6 +1258,8 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(RESET_URL, HTTP_GET, std::bind(&ConfigManager::handleResetParams, this));
   ConfigManager::server.get()->on(NTP_URL, HTTP_GET, std::bind(&ConfigManager::handleNTP, this));
   ConfigManager::server.get()->on(NTP_SET_URL, HTTP_POST, std::bind(&ConfigManager::handleNTPSet, this));
+  ConfigManager::server.get()->on(RANDOM_URL, HTTP_GET, std::bind(&ConfigManager::handleRandomPage, this));
+  ConfigManager::server.get()->on(RANDOM_DO_URL, HTTP_GET, std::bind(&ConfigManager::handleRandomDo, this));
   ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
   ConfigManager::server.get()->on(HIST_URL, HTTP_GET, std::bind(&ConfigManager::handleHistoryPage, this));
   ConfigManager::server.get()->on(GEIGERLOG_URL, HTTP_GET, std::bind(&ConfigManager::handleGeigerLog, this));

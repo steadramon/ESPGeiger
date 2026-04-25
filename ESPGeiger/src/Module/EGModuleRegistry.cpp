@@ -155,6 +155,17 @@ void EGModuleRegistry::wake() {
   _next_loop_due = millis();
 }
 
+bool EGModuleRegistry::set_loop_interval(EGModule* m, uint16_t interval_ms) {
+  for (uint8_t i = 0; i < _count; i++) {
+    if (_slots[i].module == m) {
+      _slots[i].loop_interval = interval_ms;
+      _next_loop_due = millis();
+      return true;
+    }
+  }
+  return false;
+}
+
 uint8_t EGModuleRegistry::count() {
   return _count;
 }

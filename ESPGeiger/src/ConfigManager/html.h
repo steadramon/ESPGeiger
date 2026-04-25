@@ -168,6 +168,22 @@ Object.entries(regions).forEach(entry => {
 </script>
 )HTML";
 
+static const char RANDOM_PAGE_BODY[] PROGMEM = R"HTML(
+<style>.rg div{margin:.6em 0}.rg .o{display:inline-block;min-width:8em;padding:.2em .6em;background:#f0f0f0;border-radius:.3em;font-family:monospace;word-break:break-all}.rg input{width:5em}</style>
+<div class='rg'>
+<div>Coin: <button type='button' onclick='r(this,"coin")'>Flip</button> <span class='o'></span></div>
+<div>Dice D<input type='number' value='6' min='2' max='10000'>: <button type='button' onclick='r(this,"dice","sides")'>Roll</button> <span class='o'></span></div>
+<div>Password (<input type='number' value='16' min='4' max='64'> chars): <button type='button' onclick='r(this,"password","len")'>Generate</button> <span class='o'></span></div>
+<div>Hex (<input type='number' value='16' min='1' max='32'> bytes): <button type='button' onclick='r(this,"hex","n")'>Generate</button> <span class='o'></span></div>
+</div>
+<small>Powered by accumulated radiation events.</small>
+<script>
+function r(b,t,k){var d=b.parentElement,i=d.querySelector('input'),u='/random.do?type='+t;
+if(i&&k)u+='&'+k+'='+i.value;
+fetch(u).then(r=>r.text()).then(x=>d.querySelector('.o').textContent=x);}
+</script>
+)HTML";
+
 static const char NTP_HTML[] PROGMEM = R"HTML(<h1>NTP Config</h1>
 <form method='POST' action='ntpset'>
 <label for="tz">Timezone</label>

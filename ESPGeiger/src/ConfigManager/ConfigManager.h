@@ -61,6 +61,8 @@ constexpr auto INFO_URL  PROGMEM = "/info";
 constexpr auto OUTPUTS_URL PROGMEM = "/outputs";
 constexpr auto PREFS_URL PROGMEM = "/prefs";
 constexpr auto EGPREFS_URL PROGMEM = "/param";
+constexpr auto RANDOM_URL PROGMEM = "/random";
+constexpr auto RANDOM_DO_URL PROGMEM = "/random.do";
 #ifdef ESPGEIGER_HW
 constexpr auto HV_URL PROGMEM = "/hv";
 constexpr auto HV_JS_URL PROGMEM = "/hvjs";
@@ -147,6 +149,8 @@ private:
   void handleRegisterAPI();
   void handleNTP();
   void handleNTPSet();
+  void handleRandomPage();
+  void handleRandomDo();
   void handleClicksReturn();
   void handleGeigerLog();
 #ifdef SERIALOUT
