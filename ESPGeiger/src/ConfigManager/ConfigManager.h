@@ -93,6 +93,15 @@ const char HTTP_HEAD_CTJSON[18] PROGMEM = "application/json";
 //char mqttUser[MQTT_USER_LENGTH] = "";
 //char mqttPass[MQTT_PASS_LENGTH] = "";
 
+// Override either via -D CMAN_PROCESS_INTERVAL_MS=N.
+#ifndef CMAN_PROCESS_INTERVAL_MS
+#ifdef ESP32
+#define CMAN_PROCESS_INTERVAL_MS 10
+#else
+#define CMAN_PROCESS_INTERVAL_MS 5
+#endif
+#endif
+
 class ConfigManager : public WiFiManager
 {
 public:
