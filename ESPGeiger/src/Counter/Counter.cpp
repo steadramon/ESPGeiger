@@ -22,6 +22,7 @@
 #include "../Logger/Logger.h"
 #include "../Util/StringUtil.h"
 #include "../NTP/NTP.h"
+#include "../GRNG/GRNG.h"
 
 Counter::Counter() {
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
@@ -43,6 +44,9 @@ void Counter::secondticker(unsigned long stick_now) {
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
+  if (eventCounter > 0) {
+    GRNG::mix((uint32_t)geigerinput->last_blip() ^ ESP.getCycleCount());
+  }
   static uint8_t tick_cnt = 0;
   geigerTicks.add(eventCounter);
   unsigned long previous_total_clicks = total_clicks;

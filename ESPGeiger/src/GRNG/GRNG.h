@@ -26,5 +26,7 @@ class GRNG
   public:
     GRNG();
     void begin();
+    static void mix(uint32_t bits);
+    static uint32_t stir();
 };
 #endif

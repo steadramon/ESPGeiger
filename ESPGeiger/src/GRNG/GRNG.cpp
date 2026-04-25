@@ -18,14 +18,33 @@
 */
 #include "GRNG.h"
 #include "../Logger/Logger.h"
+#include "../Util/DeviceInfo.h"
+
+static volatile uint32_t s_pool = 0;
 
 GRNG::GRNG() {
 };
 
 void GRNG::begin() {
 #ifdef ESP8266
-  randomSeed(RANDOM_REG32);
+  mix(RANDOM_REG32);
 #else
-  randomSeed(esp_random());
+  mix(esp_random());
 #endif
+  stir();
+}
+
+void GRNG::mix(uint32_t bits) {
+  s_pool ^= bits;
+}
+
+uint32_t GRNG::stir() {
+  uint32_t m = 0;
+  for (const char* p = DeviceInfo::mac(); *p; ++p) {
+    m = (m * 31) ^ (uint8_t)*p;
+  }
+  uint32_t e = m ^ (uint32_t)millis() ^ (uint32_t)micros()
+               ^ ESP.getCycleCount() ^ s_pool;
+  randomSeed(e);
+  return e;
 }
