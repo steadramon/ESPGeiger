@@ -371,6 +371,17 @@ bool EGPrefs::remove_group(const char* module) {
   return removed;
 }
 
+void EGPrefs::reset_all() {
+  for (size_t i = 0; i < s_group_count; i++) {
+    GroupShadow& gs = s_groups[i];
+    s_storage.removeGroup(gs.group->module_id);
+    for (size_t j = 0; j < gs.group->count; j++) {
+      shadow_reset(gs.shadows[j], gs.group->prefs[j]);
+    }
+    gs.dirty = false;
+  }
+}
+
 void EGPrefs::request_restart() { s_restart_pending = true; }
 bool EGPrefs::restart_pending() { return s_restart_pending; }
 

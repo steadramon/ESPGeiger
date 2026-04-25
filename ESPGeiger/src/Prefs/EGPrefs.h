@@ -80,6 +80,7 @@ public:
   static bool put(const char* module, const char* key, const char* value);
   static bool commit();
   static bool remove_group(const char* module);  // deletes stored file + resets shadow
+  static void reset_all();                        // wipes every group's storage + shadows
   static void request_restart();  // modules call this from on_prefs_saved if reboot needed
   static bool restart_pending();
 
