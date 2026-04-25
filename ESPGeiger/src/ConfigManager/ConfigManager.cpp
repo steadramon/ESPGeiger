@@ -68,6 +68,19 @@ ConfigManager::ConfigManager() : WiFiManager(){
   setCustomHeadElement(faviconHead);
 }
 
+void applyFriendlyTitle()
+{
+  const char* fn = DeviceInfo::friendlyName();
+  const char* host = DeviceInfo::hostname();
+  if (fn && fn[0]) {
+    char title[64];
+    snprintf_P(title, sizeof(title), PSTR("%s (%s)"), host, fn);
+    ConfigManager::getInstance().setTitle(title);
+  } else {
+    ConfigManager::getInstance().setTitle(host);
+  }
+}
+
 void ConfigManager::updatePortalMessage()
 {
   if (!portalMenuHtml) {
@@ -229,9 +242,18 @@ void ConfigManager::beginChunkedPage(const char* contentType) {
     server->send(200, FPSTR(HTTP_HEAD_CT), "");
 }
 
-void ConfigManager::sendPageHead(const char* title) {
+void ConfigManager::sendPageHead(const char* page) {
   auto* s = server.get();
-  { TemplateSub subs[] = {{"{v}", title}};
+  const char* fn = DeviceInfo::friendlyName();
+  char buf[80];
+  if (page) {
+    if (fn && fn[0]) snprintf_P(buf, sizeof(buf), PSTR("%s \xc2\xb7 %s (%s)"), hostName, page, fn);
+    else             snprintf_P(buf, sizeof(buf), PSTR("%s \xc2\xb7 %s"),      hostName, page);
+  } else {
+    if (fn && fn[0]) snprintf_P(buf, sizeof(buf), PSTR("%s (%s)"), hostName, fn);
+    else             snprintf_P(buf, sizeof(buf), PSTR("%s"),      hostName);
+  }
+  { TemplateSub subs[] = {{"{v}", buf}};
     SEND_TEMPLATE(s, HTTP_HEAD_START, subs); }
   s->sendContent(FPSTR(HTTP_STYLE));
   s->sendContent(FPSTR(faviconHead));
@@ -248,7 +270,7 @@ void ConfigManager::handleRoot() {
   handleRequest();
   beginChunkedPage();
   server->client().flush();
-  sendPageHead(hostName);
+  sendPageHead(nullptr);
   auto* s = server.get();
 
   char ip[16];
@@ -257,7 +279,7 @@ void ConfigManager::handleRoot() {
 
   char heading[64];
   snprintf_P(heading, sizeof(heading), PSTR("%s - %s"), hostName, ip);
-  const char* tname =
+  const char* baseName =
 #ifdef ESPGEIGER_HW
     "ESPGeiger-HW";
 #elif defined(ESPGEIGER_LT)
@@ -265,7 +287,12 @@ void ConfigManager::handleRoot() {
 #else
     THING_NAME;
 #endif
-  { TemplateSub subs[] = {{"{t}", tname}, {"{v}", heading}};
+  char h1[64];
+  const char* fn = DeviceInfo::friendlyName();
+  if (fn && fn[0]) snprintf_P(h1, sizeof(h1), PSTR("%s - %s"), baseName, fn);
+  else             strncpy(h1, baseName, sizeof(h1) - 1);
+  h1[sizeof(h1) - 1] = '\0';
+  { TemplateSub subs[] = {{"{t}", h1}, {"{v}", heading}};
     SEND_TEMPLATE(s, HTTP_ROOT_MAIN, subs); }
   s->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
   s->sendContent(F("<form action='/hist' method='get'><button>History</button></form><br/>"));
@@ -495,7 +522,7 @@ void ConfigManager::handleEGPrefs() {
   }
 
   beginChunkedPage();
-  sendPageHead("Config");
+  sendPageHead(PSTR("Config"));
   s->sendContent(F("<style>details{border:1px solid #eee;padding:8px;margin:8px 0}summary{font-weight:bold;padding:4px 0;cursor:pointer}label{display:inline-block;margin-top:10px}small{display:block;color:#666;margin-top:2px}hr{border:0;border-top:1px solid #ddd;margin:16px 0}@media(min-width:520px){details{min-width:500px}}</style>"));
 
   char buf[512];
@@ -716,10 +743,9 @@ void ConfigManager::handleStatusPage()
 {
   handleRequest();
   beginChunkedPage();
-  char title[48];
-  snprintf_P(title, sizeof(title), PSTR("%s - Status"), hostName);
-  sendPageHead(title);
+  sendPageHead(PSTR("Status"));
   auto* s = server.get();
+  char title[48];
   snprintf_P(title, sizeof(title), PSTR("%s - Status"), THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
@@ -754,10 +780,10 @@ void ConfigManager::handleInfo()
 {
   handleRequest();
   beginChunkedPage();
+  sendPageHead(PSTR("Info"));
+  auto* s = server.get();
   char title[48];
   snprintf_P(title, sizeof(title), PSTR("%s - Info"), THING_NAME);
-  sendPageHead(title);
-  auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
 
@@ -911,10 +937,9 @@ void ConfigManager::handleHistoryPage()
 {
   handleRequest();
   beginChunkedPage();
-  char title[48];
-  snprintf_P(title, sizeof(title), PSTR("%s - History"), hostName);
-  sendPageHead(title);
+  sendPageHead(PSTR("History"));
   auto* s = server.get();
+  char title[48];
   snprintf_P(title, sizeof(title), PSTR("%s - History"), THING_NAME);
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
@@ -928,9 +953,7 @@ void ConfigManager::handleNTP()
 {
   handleRequest();
   beginChunkedPage();
-  char title[48];
-  snprintf_P(title, sizeof(title), PSTR("%s - NTP"), THING_NAME);
-  sendPageHead(title);
+  sendPageHead(PSTR("NTP"));
   auto* s = server.get();
   { TemplateSub subs[] = {{"{i}", ntpclient.get_server()}, {"{v}", ntpclient.get_tz()}};
     SEND_TEMPLATE(s, NTP_HTML, subs); }
@@ -967,10 +990,10 @@ void ConfigManager::handleHVPage()
 {
   handleRequest();
   beginChunkedPage();
+  sendPageHead(PSTR("HV"));
+  auto* s = server.get();
   char title[48];
   snprintf_P(title, sizeof(title), PSTR("%s-HW - HV"), THING_NAME);
-  sendPageHead(title);
-  auto* s = server.get();
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
   s->sendContent(FPSTR(HV_STATUS_PAGE_BODY));
@@ -1058,7 +1081,9 @@ void ConfigManager::handleRestart()
 void ConfigManager::eraseSettings()
 {
   Log::console(PSTR("Config: Erasing ... "));
+  EGPrefs::reset_all();
   LittleFS.begin();
+  LittleFS.remove("/api.key");
   LittleFS.remove("/geigerconfig.json");
   LittleFS.remove("/ntp.json");
   LittleFS.end();
@@ -1068,12 +1093,15 @@ void ConfigManager::eraseSettings()
 void ConfigManager::handleResetParams()
 {
   Log::console(PSTR("Config: Erasing ... "));
+  EGPrefs::reset_all();
   LittleFS.begin();
+  LittleFS.remove("/api.key");
   LittleFS.remove("/geigerconfig.json");
   LittleFS.remove("/ntp.json");
   LittleFS.end();
   handleRestart();
 }
+
 void ConfigManager::delay(unsigned long m)
 {
   unsigned long delayStart = millis();
@@ -1087,21 +1115,6 @@ void ConfigManager::delay(unsigned long m)
   }
 }
 
-// Self-throttled wrapper around WiFiManager::process().
-//   ESP32: sync WebServer.handleClient() yields 1ms per call via lwIP
-//     socket timeouts, capping loop() LPS to ~1k if unthrottled. 10 ms
-//     polling (100 Hz) keeps HTTP responsive with huge loop headroom.
-//   ESP8266: handler is cheap per call but not free (~3-5 µs each) —
-//     still meaningful at 20-50k iter/sec. 5 ms keeps captive-portal DNS
-//     snappy without eating ~10% of CPU on idle polling.
-// Override either via -D CMAN_PROCESS_INTERVAL_MS=N.
-#ifndef CMAN_PROCESS_INTERVAL_MS
-#ifdef ESP32
-#define CMAN_PROCESS_INTERVAL_MS 10
-#else
-#define CMAN_PROCESS_INTERVAL_MS 5
-#endif
-#endif
 void ConfigManager::processLoop(unsigned long now)
 {
   static unsigned long last = 0;
