@@ -65,18 +65,15 @@ void GeigerPulse::stopForOTA() {
 }
 
 #ifdef USE_PCNT
-int GeigerPulse::collect() {
+uint32_t GeigerPulse::collect() {
   int16_t pulseCount;
   pcnt_counter_pause(PCNT_UNIT);
   pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
-  if (pulseCount != 0) {
-    setCounter(pulseCount);
-  } else {
-    setCounter(pulseCount, false);
-  }
-  return pulseCount;
+  uint32_t v = (pulseCount > 0) ? (uint32_t)pulseCount : 0;
+  setCounter(v, v != 0);
+  return v;
 }
 
 void GeigerPulse::set_pcnt_filter(int val) {

@@ -38,7 +38,12 @@ void GeigerSerial::begin() {
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
     Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
   }
-  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 32);
+  pinMode(_rx_pin, INPUT_PULLUP);
+  // bufCap scales with baud — at 115200 the 32-byte cap gives only ~2.7ms
+  // before the ring overwrites unread bytes, tight against an AsyncMqtt
+  // publish or WiFi reconnect. 48 buys ~4ms slack for cheap heap.
+  size_t bufCap = (baud > 9600) ? 48 : 32;
+  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, bufCap);
 }
 
 void GeigerSerial::pullSerial() {
@@ -104,7 +109,10 @@ void GeigerSerial::handleSerial(char* input) {
     if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) {
       Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
       int n = geigerPort.available();
-      while (n-- > 0) geigerPort.read();
+      while (n-- > 0) {
+        geigerPort.read();
+        if ((n & 0x1F) == 0) yield();
+      }
       _serial_idx = 0;
       _serial_buffer[0] = '\0';
       _bad_streak = 0;

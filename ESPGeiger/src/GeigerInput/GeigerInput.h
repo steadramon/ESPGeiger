@@ -86,8 +86,8 @@
 
 extern volatile bool _eventFlipFlop;
 extern volatile unsigned long _last_blip;
-extern volatile int eventCounter1;
-extern volatile int eventCounter2;
+extern volatile uint32_t eventCounter1;
+extern volatile uint32_t eventCounter2;
 
 extern volatile unsigned long _debounce;
 
@@ -100,7 +100,7 @@ class GeigerInput {
     virtual ~GeigerInput() {};
     virtual void loop();
     virtual void secondTicker();
-    virtual int collect();
+    virtual uint32_t collect();
     virtual void begin();
     void set_debounce(int debounce) {
       _debounce = debounce;
@@ -127,7 +127,7 @@ class GeigerInput {
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
     static void IRAM_ATTR countInterrupt();
-    void setCounter(int val, bool update = true);
+    void setCounter(uint32_t val, bool update = true);
     void setLastBlip();
     double generatePoissonRandom(double lambda);
   private:
