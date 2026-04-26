@@ -20,6 +20,7 @@
 #include "../../Logger/Logger.h"
 #include "../../Util/StringUtil.h"
 #include "../../Prefs/EGPrefs.h"
+#include "../../Util/DeviceInfo.h"
 #include "../../Counter/Counter.h"
 #include "../SerialFormat.h"
 
@@ -37,6 +38,7 @@ void GeigerTestSerial::begin() {
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;
+  if (name) DeviceInfo::setGeigermodel(name);
   Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
                name ? name : "?", _serial_type, baud, _rx_pin, _tx_pin);
 #ifdef GEIGER_COUNT_TXPULSE
