@@ -21,6 +21,7 @@
 #include "SDCard.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/DeviceInfo.h"
 
 SdFat32* sd = nullptr;
 
@@ -192,7 +193,7 @@ void SDCard::s_tick(unsigned long stick_now)
     myDataFile.print(gcounter.get_cpm15f(), 2);
 #ifdef SDCARD_EXTENDEDLOG
     myDataFile.print(F(","));
-    myDataFile.print(ESP.getFreeHeap());
+    myDataFile.print(DeviceInfo::freeHeap());
 #endif
     myDataFile.println();
 
