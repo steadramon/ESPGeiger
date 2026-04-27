@@ -44,7 +44,7 @@ Counter::Counter() {
 void Counter::secondticker(unsigned long stick_now) {
   geigerinput->secondTicker();
 
-  uint32_t eventCounter = geigerinput->collect();
+  int eventCounter = geigerinput->collect();
   if (eventCounter > 0) {
     GRNG::mix((uint32_t)geigerinput->last_blip() ^ ESP.getCycleCount());
   }
@@ -247,7 +247,6 @@ bool Counter::is_quiet_now() {
 
   time_t now = time(NULL);
   struct tm* t = localtime(&now);
-  if (!t) return false;  // localtime can return NULL on malformed time_t
   int16_t m = t->tm_hour * 60 + t->tm_min;
 
   // Range crosses midnight when from > to (e.g. 22:00 -> 07:00).

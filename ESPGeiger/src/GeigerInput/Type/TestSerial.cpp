@@ -80,7 +80,7 @@ void GeigerTestSerial::loop() {
 
 void GeigerTestSerial::secondTicker() {
   CPMAdjuster();
-  uint32_t count = 0;
+  int count = 0;
   double target = (double) GeigerInputTest::getTargetCPS();
   if (target > 0) {
     double u1, u2;
@@ -93,7 +93,7 @@ void GeigerTestSerial::secondTicker() {
 #endif
     double z = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
     long c = (long) (target + sqrt(target) * z + 0.5);
-    if (c > 0) count = (uint32_t) c;
+    if (c > 0) count = (int) c;
   }
 
   // CPS = instant sample, CPM = Counter's smoothed value (matches real

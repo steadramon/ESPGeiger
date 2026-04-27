@@ -144,7 +144,7 @@ void GeigerTestPulse::secondTicker() {
 }
 
 #ifdef USE_PCNT
-uint32_t GeigerTestPulse::collect() {
+int GeigerTestPulse::collect() {
   int16_t pulseCount;
   pcnt_counter_pause(PCNT_UNIT);
   pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
@@ -153,8 +153,11 @@ uint32_t GeigerTestPulse::collect() {
 #ifdef GEIGER_COUNT_TXPULSE
   return GeigerInput::collect();
 #endif
-  uint32_t v = (pulseCount > 0) ? (uint32_t)pulseCount : 0;
-  setCounter(v, v != 0);
-  return v;
+  if (pulseCount != 0) {
+    setCounter(pulseCount);
+  } else {
+    setCounter(pulseCount, false);
+  }
+  return pulseCount;
 }
 #endif

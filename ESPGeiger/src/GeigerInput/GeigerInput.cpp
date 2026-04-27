@@ -22,8 +22,8 @@
 
 volatile bool _eventFlipFlop = false;
 volatile unsigned long _last_blip = 0;
-volatile uint32_t eventCounter1 = 0;
-volatile uint32_t eventCounter2 = 0;
+volatile int eventCounter1 = 0;
+volatile int eventCounter2 = 0;
 
 volatile unsigned long _debounce = GEIGER_DEBOUNCE;
 
@@ -35,15 +35,15 @@ void GeigerInput::begin() {
 
 }
 
-uint32_t GeigerInput::collect() {
+int GeigerInput::collect() {
 #ifdef ESP32
     portENTER_CRITICAL_ISR(&timerMux);
 #endif
   _eventFlipFlop = !_eventFlipFlop;
 #ifdef ESP32
     portEXIT_CRITICAL_ISR(&timerMux);
-#endif
-  uint32_t current = 0;
+#endif    
+  int current = 0;
   if (_eventFlipFlop == false) {
     current = eventCounter1;
     eventCounter1 = 0;
@@ -64,7 +64,7 @@ void GeigerInput::setLastBlip()  {
   _last_blip = micros();
 }
 
-void IRAM_ATTR GeigerInput::countInterrupt() {
+void GeigerInput::countInterrupt() {
   unsigned long cycles = micros();
   if (cycles - _last_blip < _debounce) {
     return;
@@ -82,7 +82,7 @@ void IRAM_ATTR GeigerInput::countInterrupt() {
   _last_blip = cycles;
 }
 
-void GeigerInput::setCounter(uint32_t val, bool update) {
+void GeigerInput::setCounter(int val, bool update) {
   if (update) {
 #ifdef ESP32
     portENTER_CRITICAL(&timerMux);

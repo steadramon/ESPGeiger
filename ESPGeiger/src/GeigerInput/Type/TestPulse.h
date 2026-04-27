@@ -65,7 +65,7 @@ class GeigerTestPulse : public GeigerInputTest
     static void pulseInterrupt(void *data);
     void secondTicker();
 #ifdef USE_PCNT
-    uint32_t collect();
+    int collect();
 #endif
 };
 #endif

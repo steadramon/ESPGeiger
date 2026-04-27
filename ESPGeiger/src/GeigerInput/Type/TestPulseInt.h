@@ -64,7 +64,7 @@ class GeigerTestPulseInt : public GeigerInputTest
     double calcPWM();
     void secondTicker();
 #ifdef USE_PCNT
-    uint32_t collect();
+    int collect();
 #endif
   private:
     int _target_pwm = 0;

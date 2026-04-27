@@ -62,7 +62,7 @@ class GeigerPulse : public GeigerInput
 #endif
     }
 #ifdef USE_PCNT
-    uint32_t collect();
+    int collect();
     void set_pcnt_filter(int val);
     void apply_pcnt_filter();
     void set_pin_pull(int mode);   // 0=floating, 1=up, 2=down
