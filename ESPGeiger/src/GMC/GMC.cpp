@@ -21,6 +21,7 @@
 #include "GMC.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/Schedule.h"
 
 extern uint8_t send_indicator;
 
@@ -62,7 +63,7 @@ GMC::GMC() {
 void GMC::loop(unsigned long now)
 {
   if (lastPing == 0) {
-    lastPing = now + random(pingIntervalMs);
+    lastPing = now + Schedule::offsetFor(name(), pingIntervalMs);
     return;
   }
   if (now > lastPing && (now - lastPing) >= pingIntervalMs)
@@ -103,6 +104,7 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
 }
 
 void GMC::postMeasurement() {
+  if (!gcounter.is_warm()) return;
   if (!EGPrefs::getBool("gmc", "send")) return;
 
   const char* _api_id    = EGPrefs::getString("gmc", "aid");

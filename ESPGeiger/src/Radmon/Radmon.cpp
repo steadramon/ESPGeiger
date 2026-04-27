@@ -20,6 +20,7 @@
 #include "Radmon.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/Schedule.h"
 
 extern uint8_t send_indicator;
 
@@ -84,7 +85,7 @@ void Radmon::loop(unsigned long now)
     int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
     if (rtimer == 0) rtimer = RADMON_INTERVAL;
     setInterval(rtimer);
-    lastPing = now + random(pingIntervalMs);
+    lastPing = now + Schedule::offsetFor(name(), pingIntervalMs);
     return;
   }
   if (now > lastPing && (now - lastPing) >= pingIntervalMs)
@@ -129,6 +130,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
 }
 
 void Radmon::postMeasurement() {
+  if (!gcounter.is_warm()) return;
   if (!EGPrefs::getBool("radmon", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {

@@ -20,6 +20,7 @@
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/Schedule.h"
 
 extern uint8_t send_indicator;
 
@@ -59,7 +60,7 @@ Thingspeak::Thingspeak() {
 void Thingspeak::loop(unsigned long now)
 {
   if (lastPing == 0) {
-    lastPing = now + random(pingIntervalMs);
+    lastPing = now + Schedule::offsetFor(name(), pingIntervalMs);
     return;
   }
   if (now > lastPing && (now - lastPing) >= pingIntervalMs)
@@ -94,6 +95,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
 }
 
 void Thingspeak::postMeasurement() {
+  if (!gcounter.is_warm()) return;
   if (!EGPrefs::getBool("thingspeak", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {

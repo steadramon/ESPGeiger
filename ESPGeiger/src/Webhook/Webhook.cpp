@@ -22,6 +22,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
+#include "../Util/Schedule.h"
 #ifdef ESPGEIGER_HW
 #include "../ESPGHW/ESPGHW.h"
 #endif
@@ -78,7 +79,7 @@ void Webhook::loop(unsigned long now)
   if (lastPing == 0) {
     int iv = (int)EGPrefs::getUInt("webhook", "interval");
     if (iv > 0) setInterval(iv);
-    lastPing = now + random(pingIntervalMs);
+    lastPing = now + Schedule::offsetFor(name(), pingIntervalMs);
     return;
   }
   if (now > lastPing && (now - lastPing) >= pingIntervalMs)
@@ -123,6 +124,7 @@ const char* Webhook::cleanHTTP(const char* url) {
 }
 
 void Webhook::postMeasurement() {
+  if (!gcounter.is_warm()) return;
   if (!EGPrefs::getBool("webhook", "send")) return;
 
   const char* whURL = EGPrefs::getString("webhook", "url");
@@ -169,7 +171,7 @@ void Webhook::postMeasurement() {
 #endif
   n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
-    gcounter.total_clicks, ESP.getFreeHeap(), (int)Wifi::rssi);
+    gcounter.total_clicks, DeviceInfo::freeHeap(), (int)Wifi::rssi);
   advance_pos(pos, n, sizeof(buffer));
   buffer[pos] = '\0';
 
