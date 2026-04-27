@@ -35,9 +35,11 @@ The following build flags can be added to your environment's `build_flags` to cu
 | Flag | Description |
 |---|---|
 | `-D SSD1306_DISPLAY` | Enable SSD1306 OLED display. |
-| `-D OLED_SDA=N` | Set the OLED I2C SDA pin (default `4`). |
-| `-D OLED_SCL=N` | Set the OLED I2C SCL pin (default `5`). |
+| `-D OLED_SDA=N` | Set the default OLED I2C SDA pin (default `4`). Also exposed as a runtime pref unless `OLED_PINS_BLOCKED` is set. |
+| `-D OLED_SCL=N` | Set the default OLED I2C SCL pin (default `5`). Also exposed as a runtime pref unless `OLED_PINS_BLOCKED` is set. |
+| `-D OLED_PINS_BLOCKED=true` | Hide the OLED SDA/SCL pins from the runtime prefs UI. Use on builds with fixed hardware where the pins must not be reconfigured. |
 | `-D OLED_FLIP=true` | Flip the OLED display vertically. |
+| `-D GEIGER_BLIPLED=N` | Set the count-flash LED pin. Defining this flag enables the dedicated count LED (used for visible per-pulse feedback alongside `GEIGER_PUSHBUTTON` long-press confirmations). When undefined, no dedicated LED is wired up. |
 | `-D GEIGER_NEOPIXEL` | Enable WS2812X NeoPixel status LED. |
 | `-D NEOPIXEL_PIN=N` | Set the NeoPixel data pin (default `15`). |
 | `-D GEIGER_PUSHBUTTON` | Enable push button for OLED page switching and display wake. |
@@ -87,6 +89,7 @@ build_flags =
 | `-D GEIGER_RATIO=N` | Set the default CPM to μSv/h conversion ratio (default `151.0`). |
 | `-D GEIGER_BAUDRATE=N` | Set the serial baud rate for serial-type counters. |
 | `-D GEIGER_MODEL="name"` | Set the geiger counter model name. |
+| `-D GEIGER_MODEL_FIXED` | Hide the user-editable `geiger_model` pref from the Config page. Use on purpose-built kits where the tube is fixed in firmware via `GEIGER_MODEL`. |
 | `-D RXPIN_BLOCKED` | Prevent the RX pin from being changed via the web interface. |
 | `-D TXPIN_BLOCKED` | Prevent the TX pin from being changed via the web interface. |
 | `-D DISABLE_SERIALRX` | Disable the serial command interface on the hardware UART. |
@@ -130,21 +133,36 @@ On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type ge
 | `-D GEIGER_TEST_FIXEDCPM` | Lock the test output to a single CPM value instead of cycling through 30/60/100/120. |
 | `-D GEIGER_COUNT_TXPULSE` | Count the pulses generated on the TX pin locally. Note: if RX and TX pins are connected together, counts will be doubled. |
 
-### Hardware Specific
+### High-Voltage Generator (HV)
 
-These flags are used by ESPGeiger-HW and ESPGeiger Log specific builds.
+The HV codepath splits into two independent capabilities, gated separately so that boards with PWM-only or with full ADC feedback both compile cleanly.
 
 | Flag | Description |
 |---|---|
-| `-D ESPGEIGER_HW` | Enable ESPGeiger-HW hardware support. Enables HV PWM control, voltage feedback monitoring and related configuration. |
-| `-D ESPGEIGER_LT` | Identify the build as an ESPGeiger Lite/Log device. |
-| `-D GEIGER_PWMPIN=N` | Set the HV PWM output pin (default `12`). Requires `ESPGEIGER_HW`. |
-| `-D GEIGER_VFEEDBACKPIN=N` | Set the HV voltage feedback ADC pin (default `A0`). Requires `ESPGEIGER_HW`. |
-| `-D GEIGERHW_FREQ=N` | Set the default HV PWM frequency in Hz (default `6000`). Requires `ESPGEIGER_HW`. |
-| `-D GEIGERHW_DUTY=N` | Set the default HV PWM duty cycle 0-255 (default `70`). Requires `ESPGEIGER_HW`. |
-| `-D GEIGERHW_ADC_RATIO=N` | Set the ADC voltage divider ratio for HV reading (default `1035`). Requires `ESPGEIGER_HW`. |
-| `-D GEIGERHW_ADC_OFFSET=N` | Set the ADC offset for HV reading calibration (default `0`). Requires `ESPGEIGER_HW`. |
-| `-D GEIGER_BLIPLED=N` | Set the blip LED pin for ESPGeiger-HW (default `15`). Requires `ESPGEIGER_HW`. |
+| `-D ESPG_HV` | Enable PWM HV generator: ESPGHW module, `freq`/`duty` prefs, /hv page (only when paired with `ESPG_HV_ADC`), serial commands `freq` and `duty`. |
+| `-D ESPG_HV_ADC` | Enable ADC HV feedback divider: `ratio`/`offset` calibration prefs, live HV readout on /hv, /info, /status, OLED, and as the `hv` field on every output module (WebAPI, MQTT, Webhook, SerialOut). Requires `ESPG_HV`. |
+| `-D GEIGER_PWMPIN=N` | Set the HV PWM output pin (default `12`). Requires `ESPG_HV`. |
+| `-D GEIGER_VFEEDBACKPIN=N` | Set the HV voltage feedback ADC pin (default `A0`). Requires `ESPG_HV_ADC`. |
+| `-D GEIGERHW_FREQ=N` | Set the default HV PWM frequency in Hz (default `6000`). Requires `ESPG_HV`. |
+| `-D GEIGERHW_DUTY=N` | Set the default HV PWM duty cycle 0-255 (default `70`). Requires `ESPG_HV`. |
+| `-D GEIGERHW_ADC_RATIO=N` | Set the ADC voltage divider ratio for HV reading (default `1035`). Requires `ESPG_HV_ADC`. |
+| `-D GEIGERHW_ADC_OFFSET=N` | Set the ADC offset for HV reading calibration (default `0`). Requires `ESPG_HV_ADC`. |
+
+When `ESPG_HV` is defined without `ESPG_HV_ADC` (a board that drives HV via PWM but has no real feedback divider), the espghw prefs surface in the regular `/param` UI rather than `/hv`, and no `hv` field is emitted on outputs.
+
+### Product Identity
+
+Identifies a specific product family. Implies a known set of capability flags as defensive defaults (see `Util/Globals.h`) so a custom build that defines only the product flag still gets the right behaviour.
+
+| Flag | Implies | Description |
+|---|---|---|
+| `-D ESPGEIGER_HW` | `ESPG_HV`, `ESPG_HV_ADC`, `GEIGER_BLIPLED=15`, `GEIGER_MODEL_FIXED` | ESPGeiger-HW kit (HV generator with real ADC feedback divider, count LED on GPIO15, fixed tube model). |
+| `-D ESPGEIGER_LT` | (none currently) | Identify the build as an ESPGeiger Lite/Log device. |
+
+### SD Card
+
+| Flag | Description |
+|---|---|
 | `-D GEIGER_SDCARD_CS=N` | Set the SD card SPI chip select pin (default `16`). Requires `GEIGER_SDCARD`. |
 
 ### Miscellaneous
