@@ -95,6 +95,8 @@ class Counter {
         _cpm_window = n;
       }
       uint8_t get_cpm_window() const { return _cpm_window; }
+      // True once warmup + CPM window have elapsed (full sample bucket).
+      bool is_warm() const;
       void set_rx_pin(int pin) {
         geigerinput->set_rx_pin(pin);
       };

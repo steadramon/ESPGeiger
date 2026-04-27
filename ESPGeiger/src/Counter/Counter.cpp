@@ -21,6 +21,7 @@
 #include "Counter.h"
 #include "../Logger/Logger.h"
 #include "../Util/StringUtil.h"
+#include "../Util/DeviceInfo.h"
 #include "../NTP/NTP.h"
 #include "../GRNG/GRNG.h"
 
@@ -162,6 +163,10 @@ void Counter::set_alert(int val) {
     val = 9999;
   }
   _cpm_alert = val;
+}
+
+bool Counter::is_warm() const {
+  return DeviceInfo::uptime() >= (uint32_t)(ESPG_WARMUP_S + _cpm_window);
 }
 
 bool Counter::is_warning() {
