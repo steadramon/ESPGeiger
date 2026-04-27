@@ -22,7 +22,7 @@ static const char STATUS_PAGE_BODY_HEAD[] PROGMEM = R"HTML(<center><h1 title="{t
 
 static const char STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>textarea{resize:vertical;width:100%;margin:0;height:250px;padding:5px;overflow:auto;} .wrap{min-width:350px;max-width:900px;width:50vw}</style>
 <canvas id="g1" style="height:200px;width:100%;min-width:350px;border:2px solid #000;"></canvas><div id="g2" class="wdr"></div>
-<table style="width:75%"><tr><th>CPM:</th><td><span id="cpm">-</span></td><th>CPS:</th><td id="cs"></td></tr><tr><th>&micro;Sv/h:</th><td><span id="usv">-</span></td><th>Total Clicks:</th><td id="tc"></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td><th>Signal:</th><td><span id="rssi">-</span></td></tr></table>
+<table style="width:85%"><tr><th>CPM:</th><td><span id="cpm">-</span></td><th>CPS:</th><td id="cs"></td></tr><tr><th>&micro;Sv/h:</th><td><span id="usv">-</span></td><th>Total Clicks:</th><td id="tc"></td></tr><tr><th>Uptime:</th><td><span id="upt">-</span></td><th>Signal:</th><td><span id="rssi">-</span></td></tr></table>
 <div><h3>Console</h3><textarea readonly='' id='t1' wrap='off'></textarea></div>
 <script src="/js"></script>)HTML";
 
