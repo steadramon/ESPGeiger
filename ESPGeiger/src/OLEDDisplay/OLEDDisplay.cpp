@@ -32,7 +32,11 @@
 
 extern uint8_t send_indicator;
 
-SSD1306Display display = SSD1306Display(OLED_ADDR, OLED_SDA, OLED_SCL);
+#define _OLED_STR(x) #x
+#define OLED_STR(x) _OLED_STR(x)
+
+// -1 defers Wire.begin to setup() once prefs have loaded.
+SSD1306Display display = SSD1306Display(OLED_ADDR, -1, -1);
 EG_REGISTER_MODULE(display)
 
 static const EGPref OLED_PREF_ITEMS[] = {
@@ -42,6 +46,10 @@ static const EGPref OLED_PREF_ITEMS[] = {
 #else
   {"on_time",    "On Time",    "Display on",   "06:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
   {"off_time",   "Off Time",   "Display off",  "22:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+#endif
+#ifndef OLED_PINS_BLOCKED
+  {"sda",        "I2C SDA Pin","Reboot to apply", OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
+  {"scl",        "I2C SCL Pin","Reboot to apply", OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
 #endif
 };
 
@@ -57,6 +65,10 @@ void SSD1306Display::on_prefs_loaded() {
   setBrightness((uint8_t)EGPrefs::getUInt("display", "brightness"));
 #ifdef GEIGER_PUSHBUTTON
   setTimeout((int)EGPrefs::getUInt("display", "timeout"));
+#endif
+#ifndef OLED_PINS_BLOCKED
+  _pin_sda = (uint8_t)EGPrefs::getUInt("display", "sda");
+  _pin_scl = (uint8_t)EGPrefs::getUInt("display", "scl");
 #endif
 }
 
@@ -74,11 +86,21 @@ static const EGLegacyAlias OLED_LEGACY[] = {
 const EGLegacyAlias* SSD1306Display::legacy_aliases() { return OLED_LEGACY; }
 // === END LEGACY IMPORT ===
 
-SSD1306Display::SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl)
+SSD1306Display::SSD1306Display(uint8_t _addr, int _sda, int _scl)
  : SSD1306Wire(_addr, _sda, _scl) {
   cx = 0;
   cy = 0;
 }
+
+#ifndef OLED_PINS_BLOCKED
+void SSD1306Display::on_prefs_saved() {
+  uint8_t sda = (uint8_t)EGPrefs::getUInt("display", "sda");
+  uint8_t scl = (uint8_t)EGPrefs::getUInt("display", "scl");
+  bool need_reboot = (sda != _pin_sda) || (scl != _pin_scl);
+  on_prefs_loaded();
+  if (need_reboot) EGPrefs::request_restart();
+}
+#endif
 
 void SSD1306Display::loop(unsigned long now) {
     if (oled_page > OLED_PAGES) {
@@ -206,6 +228,7 @@ void SSD1306Display::page_one_clear() {
 }
 
 void SSD1306Display::setup() {
+  Wire.begin(_pin_sda, _pin_scl);
   SSD1306Wire::init();
 #if OLED_FLIP
   flipScreenVertically();

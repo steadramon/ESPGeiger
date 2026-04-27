@@ -61,7 +61,7 @@ extern Counter gcounter;
 // in the session notes - reduces binary by ~20-30 KB on OLED builds.
 class SSD1306Display : public SSD1306Wire, public EGModule {
 public:
-    SSD1306Display(uint8_t _addr, uint8_t _sda, uint8_t _scl);
+    SSD1306Display(uint8_t _addr, int _sda, int _scl);
     const char* name() override { return "disp"; }
     uint8_t display_order() override { return 15; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
@@ -69,7 +69,14 @@ public:
     void pre_wifi() override { setup(); }
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
+#ifndef OLED_PINS_BLOCKED
+    void on_prefs_saved() override;
+#endif
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+private:
+    uint8_t _pin_sda = OLED_SDA;
+    uint8_t _pin_scl = OLED_SCL;
+public:
 
   void setup();
   void setupWifi(const char* s);
