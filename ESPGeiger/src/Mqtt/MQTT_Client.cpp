@@ -27,7 +27,6 @@
 #include "../ESPGHW/ESPGHW.h"
 #endif
 
-extern bool past_warmup;
 extern uint8_t send_indicator;
 
 AsyncMqttClient* mqttClient;
@@ -195,7 +194,8 @@ void MQTT_Client::s_tick(unsigned long now)
     _pending |= PEND_PING;
   }
 
-  if (!past_warmup) {
+  // Warning/alert flags depend on CPM; wait for a full bucket.
+  if (!gcounter.is_warm()) {
     return;
   }
 
@@ -271,12 +271,12 @@ void MQTT_Client::publishStatus()
   #else
     n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
       PSTR(",\"free_mem\":%u,\"min_free\":%u,\"heap_max\":%u"),
-      ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap());
+      DeviceInfo::freeHeap(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap());
     advance_pos(pos, n, sizeof(buffer));
   #endif
 #else
   n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
-    PSTR(",\"free_mem\":%u"), ESP.getFreeHeap());
+    PSTR(",\"free_mem\":%u"), DeviceInfo::freeHeap());
   advance_pos(pos, n, sizeof(buffer));
 #endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
