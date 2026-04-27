@@ -20,6 +20,24 @@
 #ifndef UTIL_GLOBALS_H
 #define UTIL_GLOBALS_H
 
+// ESPGeiger-HW product identity implies a known set of capabilities. The
+// official base:espgeigerhw env sets these as build flags directly; this
+// block catches custom build paths that define only ESPGEIGER_HW.
+#ifdef ESPGEIGER_HW
+#ifndef GEIGER_BLIPLED
+#define GEIGER_BLIPLED 15
+#endif
+#ifndef ESPG_HV
+#define ESPG_HV
+#endif
+#ifndef ESPG_HV_ADC
+#define ESPG_HV_ADC
+#endif
+#ifndef GEIGER_MODEL_FIXED
+#define GEIGER_MODEL_FIXED
+#endif
+#endif
+
 #include <Arduino.h>
 #include "jled.h"
 
