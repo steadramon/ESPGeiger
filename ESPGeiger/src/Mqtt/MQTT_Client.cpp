@@ -65,7 +65,7 @@ const EGPrefGroup* MQTT_Client::prefs_group() { return &MQTT_PREF_GROUP; }
 
 size_t MQTT_Client::status_json(char* buf, size_t cap, unsigned long now) {
   if (EGPrefs::getString("mqtt", "server")[0] == '\0') return 0;
-  return write_status_json(buf, cap, "mqtt", last_ok && connected, last_attempt_ms, now);
+  return write_status_json(buf, cap, "mqtt", last_ok && connected, last_attempt_ms, now, last_reason);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -295,7 +295,7 @@ void MQTT_Client::publishStatus()
   send_indicator = 2;
   last_attempt_ms = millis();
   last_ok = (pid != 0) && connected;
-  note_publish(last_ok);
+  note_publish(last_ok, !connected ? "disconnect" : (pid == 0 ? "publish err" : nullptr));
 }
 
 void MQTT_Client::publishPing()

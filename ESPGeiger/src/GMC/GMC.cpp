@@ -44,7 +44,7 @@ const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
 
 size_t GMC::status_json(char* buf, size_t cap, unsigned long now) {
   if (!EGPrefs::getBool("gmc", "send")) return 0;
-  return write_status_json(buf, cap, "gmc", last_ok, last_attempt_ms, now);
+  return write_status_json(buf, cap, "gmc", last_ok, last_attempt_ms, now, last_reason);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -81,7 +81,9 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
     GMC* self = static_cast<GMC*>(optParm);
     self->last_attempt_ms = millis();
     self->last_ok = false;
-    if (request->responseHTTPcode() == 200)
+    char reason[16] = "";
+    int code = request->responseHTTPcode();
+    if (code == 200)
     {
       // strstr() on c_str() avoids the temp String alloc per indexOf probe.
       String response = request->responseText();
@@ -91,15 +93,19 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
         self->last_ok = true;
       } else if (strstr(r, "ERR1")) {
         Log::console(PSTR("GMC: User is not found"));
+        strncpy(reason, "no user", sizeof(reason));
       } else if (strstr(r, "ERR2")) {
         Log::console(PSTR("GMC: Geiger Counter is not found"));
+        strncpy(reason, "no counter", sizeof(reason));
       } else {
         Log::console(PSTR("GMC: Error"));
+        strncpy(reason, "rejected", sizeof(reason));
       }
     } else {
       Log::console(PSTR("GMC: Error - %s"), request->responseHTTPString().c_str());
+      snprintf_P(reason, sizeof(reason), PSTR("HTTP %d"), code);
     }
-    self->note_publish(self->last_ok);
+    self->note_publish(self->last_ok, reason);
   }
 }
 

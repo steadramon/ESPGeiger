@@ -49,7 +49,7 @@ const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
 
 size_t Webhook::status_json(char* buf, size_t cap, unsigned long now) {
   if (!EGPrefs::getBool("webhook", "send")) return 0;
-  return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now);
+  return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now, last_reason);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -97,7 +97,9 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     Webhook* self = static_cast<Webhook*>(optParm);
     self->last_attempt_ms = millis();
     self->last_ok = false;
-    if (request->responseHTTPcode() == 200)
+    char reason[16] = "";
+    int code = request->responseHTTPcode();
+    if (code == 200)
     {
       String response = request->responseText();
       if (strstr(response.c_str(), "OK")) {
@@ -105,11 +107,13 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
         self->last_ok = true;
       } else {
         Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100).c_str());
+        strncpy(reason, "no OK", sizeof(reason));
       }
     } else {
-      Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
+      Log::console(PSTR("Webhook: Error %d - %s"), code, request->responseHTTPString().c_str());
+      snprintf_P(reason, sizeof(reason), PSTR("HTTP %d"), code);
     }
-    self->note_publish(self->last_ok);
+    self->note_publish(self->last_ok, reason);
   }
 }
 

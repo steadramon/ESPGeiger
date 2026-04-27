@@ -70,12 +70,21 @@ class EGModule {
 
     bool last_ok = false;
     unsigned long last_attempt_ms = 0;
+    char last_reason[16] = "";  // short error tag for /outputs on failure
 
-    void note_publish(bool ok) {
+    void note_publish(bool ok, const char* reason = nullptr) {
       last_ok = ok;
       last_attempt_ms = millis();
-      if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
-      else    { if (_pub_err < 0xFF) ++_pub_err; }
+      if (ok) {
+        last_reason[0] = '\0';
+        if (_pub_ok < 0xFF) ++_pub_ok;
+      } else {
+        if (reason) {
+          strncpy(last_reason, reason, sizeof(last_reason) - 1);
+          last_reason[sizeof(last_reason) - 1] = '\0';
+        }
+        if (_pub_err < 0xFF) ++_pub_err;
+      }
     }
     uint8_t take_publish_ok()  { uint8_t v = _pub_ok;  _pub_ok  = 0; return v; }
     uint8_t take_publish_err() { uint8_t v = _pub_err; _pub_err = 0; return v; }
@@ -85,12 +94,17 @@ class EGModule {
     uint8_t _pub_err = 0;
 
   protected:
-    // Standard ok/age shape used by every sender module.
+    // Standard ok/age shape used by every sender module. Adds a "reason"
+    // field on failure when reason is non-empty.
     static size_t write_status_json(char* buf, size_t cap, const char* key,
                                     bool ok, unsigned long last_attempt_ms,
-                                    unsigned long now) {
+                                    unsigned long now, const char* reason = nullptr) {
       if (last_attempt_ms == 0) {
         return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":false,\"age\":null}"), key);
+      }
+      if (!ok && reason && reason[0]) {
+        return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":false,\"age\":%lu,\"reason\":\"%s\"}"),
+                        key, (now - last_attempt_ms) / 1000, reason);
       }
       return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":%s,\"age\":%lu}"), key,
                       ok ? "true" : "false", (now - last_attempt_ms) / 1000);

@@ -42,7 +42,7 @@ const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
 
 size_t Thingspeak::status_json(char* buf, size_t cap, unsigned long now) {
   if (!EGPrefs::getBool("thingspeak", "send")) return 0;
-  return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now);
+  return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now, last_reason);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -78,7 +78,9 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     Thingspeak* self = static_cast<Thingspeak*>(optParm);
     self->last_attempt_ms = millis();
     self->last_ok = false;
-    if (request->responseHTTPcode() == 200)
+    char reason[16] = "";
+    int code = request->responseHTTPcode();
+    if (code == 200)
     {
       String response = request->responseText();
       if (strcmp(response.c_str(), "0") != 0) {
@@ -86,11 +88,13 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
         self->last_ok = true;
       } else {
         Log::console(PSTR("Thingspeak: Error!"));
+        strncpy(reason, "rejected", sizeof(reason));
       }
     } else {
       Log::console(PSTR("Thingspeak: Error - %s"), request->responseHTTPString().c_str());
+      snprintf_P(reason, sizeof(reason), PSTR("HTTP %d"), code);
     }
-    self->note_publish(self->last_ok);
+    self->note_publish(self->last_ok, reason);
   }
 }
 
