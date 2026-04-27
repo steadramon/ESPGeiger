@@ -109,15 +109,15 @@ void SSD1306Display::loop(unsigned long now) {
       _last_page = oled_page;
     }
 #ifdef GEIGER_PUSHBUTTON
+    static constexpr unsigned long OLED_TAP_WAKE_MS = 30000UL;
     bool should_be_on;
     if (!enable_oled_timeout) {
-      // Long-press override: keep on regardless of timeout/schedule.
       should_be_on = true;
     } else if (_lcd_timeout > 0) {
       should_be_on = ((now - oled_timeout) / 1000 <= (unsigned long)_lcd_timeout);
     } else {
-      // timeout=0 falls back to schedule (always on if both times blank).
-      should_be_on = isScreenOnTime(now);
+      bool recent_tap = (oled_timeout != 0) && ((now - oled_timeout) < OLED_TAP_WAKE_MS);
+      should_be_on = isScreenOnTime(now) || recent_tap;
     }
     if (should_be_on) {
       if (!oled_on) {
