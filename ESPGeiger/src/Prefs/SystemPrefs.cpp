@@ -118,7 +118,7 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   {"pulse_width_us", "Pulse width", "Simulated pulse width (us)", STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(ESPGEIGER_HW)
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(GEIGER_MODEL_FIXED)
   {"geiger_model", "Geiger Counter", "Connected counter/tube model (e.g., SBM-20, J305)", GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
 #endif
 #ifndef DISABLE_INTERNAL_BLIP
@@ -164,7 +164,7 @@ void InputPrefs::on_prefs_loaded() {
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   _pulse_width_us = (int)EGPrefs::getUInt("input", "pulse_width_us");
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(ESPGEIGER_HW)
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(GEIGER_MODEL_FIXED)
   DeviceInfo::setGeigermodel(EGPrefs::getString("input", "geiger_model"));
 #endif
 #ifndef DISABLE_INTERNAL_BLIP

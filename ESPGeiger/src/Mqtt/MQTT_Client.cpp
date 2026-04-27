@@ -23,7 +23,7 @@
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
 #include "../Util/StringUtil.h"
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
 #include "../ESPGHW/ESPGHW.h"
 #endif
 
@@ -315,7 +315,7 @@ void MQTT_Client::publishPing()
     int sp = snprintf_P(sbuf, sizeof(sbuf),
       PSTR("{\"cpm\":%s,\"usv\":%s,\"cps\":%s,\"cpm5\":%s,\"cpm15\":%s"),
       b_cpm, b_usv, b_cps, b_cpm5, b_cpm15);
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
     char b_hv[12];
     format_f(b_hv, sizeof(b_hv), hardware.hvReading.get());
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"hv\":%s"), b_hv);
@@ -354,7 +354,7 @@ void MQTT_Client::publishPing()
   buildTopic(topic, sizeof(topic), "stat", PSTR("CPM15"));
   mqttClient->publish(topic, 1, false, valBuf);
 
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   format_f(valBuf, sizeof(valBuf), hardware.hvReading.get());
   buildTopic(topic, sizeof(topic), "stat", PSTR("HV"));
   mqttClient->publish(topic, 1, false, valBuf);
@@ -511,7 +511,7 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   S("cpm5",     "cpm5",     "CPM5",         "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
   S("cpm15",    "cpm15",    "CPM15",        "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
   S("usv",      "usv",      "\u00B5Sv/h",   "\u00B5S/h", "mdi:radioactive",    H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   S("hv",       "hv",       "HV",           "V",         "mdi:lightning-bolt", H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
 #endif
   S("c_total",  "c_total",  "Total Clicks", "",          "mdi:counter",        H_ST_STATUS, H_EMPTY,  H_SC_TOTINC, H_EMPTY);

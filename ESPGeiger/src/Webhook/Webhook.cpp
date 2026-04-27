@@ -23,7 +23,7 @@
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
 #include "../Util/Schedule.h"
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
 #include "../ESPGHW/ESPGHW.h"
 #endif
 
@@ -167,7 +167,7 @@ void Webhook::postMeasurement() {
     PSTR(",\"ut\":%lu,\"cps\":%s,\"cpm\":%s,\"cpm5\":%s,\"cpm15\":%s,\"usv\":%s"),
     DeviceInfo::uptime(), b_cps, b_cpm, b_cpm5, b_cpm15, b_usv);
   advance_pos(pos, n, sizeof(buffer));
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   char b_hv[12];
   format_f(b_hv, sizeof(b_hv), hardware.hvReading.get());
   n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);

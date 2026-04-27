@@ -25,12 +25,6 @@
 #include "../NTP/NTP.h"
 #include "../Util/EGSmoothed.h"
 
-#ifdef ESPGEIGER_HW
-#ifndef GEIGER_BLIPLED
-#define GEIGER_BLIPLED 15
-#endif
-#endif
-
 #include "../GeigerInput/GeigerInput.h"
 
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE

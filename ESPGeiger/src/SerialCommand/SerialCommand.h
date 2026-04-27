@@ -23,7 +23,7 @@
 #include "../ConfigManager/ConfigManager.h"
 #include "../Module/EGModule.h"
 
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV
 #include "../ESPGHW/ESPGHW.h"
 extern ESPGeigerHW hardware;
 #endif
@@ -66,10 +66,12 @@ public:
 #if GEIGER_IS_TEST(GEIGER_TYPE)
     static void set_cpm();
 #endif
-#ifdef ESPGEIGER_HW
-    static void get_hv();
+#ifdef ESPG_HV
     static void set_freq();
     static void set_duty();
+#endif
+#ifdef ESPG_HV_ADC
+    static void get_hv();
     static void set_vdratio();
     static void set_vdoffset();
 #endif

@@ -50,10 +50,12 @@ void SerialCommand::setup() {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   addCommand(PSTR("target"), set_cpm);
 #endif
-#ifdef ESPGEIGER_HW
-  addCommand(PSTR("hv"), get_hv);
+#ifdef ESPG_HV
   addCommand(PSTR("duty"), set_duty);
   addCommand(PSTR("freq"), set_freq);
+#endif
+#ifdef ESPG_HV_ADC
+  addCommand(PSTR("hv"), get_hv);
   addCommand(PSTR("vratio"), set_vdratio);
   addCommand(PSTR("voffset"), set_vdoffset);
 #endif
@@ -157,13 +159,7 @@ void SerialCommand::set_cpm() {
   }
 }
 #endif
-#ifdef ESPGEIGER_HW
-void SerialCommand::get_hv() {
-  char buf[32];
-  snprintf_P(buf, sizeof(buf), PSTR("HV: %d"), (int)hardware.hvReading.get());
-  Serial.println(buf);
-}
-
+#ifdef ESPG_HV
 void SerialCommand::set_freq() {
   char *arg;
   int aNumber;
@@ -196,6 +192,14 @@ void SerialCommand::set_duty() {
     snprintf_P(buf, sizeof(buf), PSTR("Duty: %d"), hardware.get_duty());
     Serial.println(buf);
   }
+}
+#endif
+
+#ifdef ESPG_HV_ADC
+void SerialCommand::get_hv() {
+  char buf[32];
+  snprintf_P(buf, sizeof(buf), PSTR("HV: %d"), (int)hardware.hvReading.get());
+  Serial.println(buf);
 }
 
 void SerialCommand::set_vdratio() {

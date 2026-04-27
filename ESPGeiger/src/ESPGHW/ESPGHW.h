@@ -62,7 +62,12 @@ class ESPGeigerHW : public EGModule {
       ESPGeigerHW();
       const char* name() override { return "espghw"; }
       uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-      uint8_t display_order() override { return 0; }  // managed via /hv page
+      // Managed via /hv when feedback exists; falls back to /param otherwise.
+#ifdef ESPG_HV_ADC
+      uint8_t display_order() override { return 0; }
+#else
+      uint8_t display_order() override { return 15; }
+#endif
       uint16_t warmup_seconds() override { return 0; }
       bool has_loop() override { return true; }
       uint16_t loop_interval_ms() override { return 1000; }

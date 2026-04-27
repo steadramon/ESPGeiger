@@ -16,7 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifdef ESPGEIGER_HW
+#include "../Util/Globals.h"  // resolves ESPGEIGER_HW -> ESPG_HV before the gate
+#ifdef ESPG_HV
 
 #include <Arduino.h>
 #include "ESPGHW.h"
@@ -32,8 +33,10 @@ EG_REGISTER_MODULE(hardware)
 static const EGPref HW_PREF_ITEMS[] = {
   {"freq",   "PWM Frequency",  "HV generator frequency (Hz)", STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, 0},
   {"duty",   "PWM Duty",       "HV generator duty (1-255)",   STR(GEIGERHW_DUTY), nullptr, 1, 255, 0, EGP_UINT, 0},
+#ifdef ESPG_HV_ADC
   {"ratio",  "ADC VD Ratio",   "Voltage divider ratio",       STR(GEIGERHW_ADC_RATIO),  nullptr, 0, 0, 0, EGP_INT, 0},
   {"offset", "ADC VD Offset",  "Voltage divider offset",      STR(GEIGERHW_ADC_OFFSET), nullptr, 0, 0, 0, EGP_INT, 0},
+#endif
 };
 
 static const EGPrefGroup HW_PREF_GROUP = {
@@ -47,17 +50,23 @@ const EGPrefGroup* ESPGeigerHW::prefs_group() { return &HW_PREF_GROUP; }
 void ESPGeigerHW::on_prefs_loaded() {
   set_freq((int)EGPrefs::getUInt("espghw", "freq"));
   set_duty((int)EGPrefs::getUInt("espghw", "duty"));
+#ifdef ESPG_HV_ADC
   set_vd_ratio((int)EGPrefs::getInt("espghw", "ratio"));
   set_vd_offset((int)EGPrefs::getInt("espghw", "offset"));
   Log::console(PSTR("ESPG-HW: freq: %d duty: %d vd: %d"), _hw_freq, _hw_duty, _hw_vd_ratio);
+#else
+  Log::console(PSTR("ESPG-HW: freq: %d duty: %d"), _hw_freq, _hw_duty);
+#endif
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
 static const EGLegacyAlias HW_LEGACY[] = {
   {"freq",   "freq"},
   {"duty",   "duty"},
+#ifdef ESPG_HV_ADC
   {"ratio",  "ratio"},
   {"offset", "offset"},
+#endif
   {nullptr, nullptr},
 };
 const EGLegacyAlias* ESPGeigerHW::legacy_aliases() { return HW_LEGACY; }
@@ -76,7 +85,9 @@ void ESPGeigerHW::begin() {
   ledcSetup(0, _hw_freq, 8);
   ledcAttachPin(GEIGER_PWMPIN, 0);
 #endif
+#ifdef ESPG_HV_ADC
   hvReading.begin(SMOOTHED_AVERAGE, 3);
+#endif
 }
 
 void ESPGeigerHW::loop(unsigned long /*now*/) {
@@ -91,15 +102,19 @@ void ESPGeigerHW::loop(unsigned long /*now*/) {
 #endif
     _cur_duty = _hw_duty;
   }
+#ifdef ESPG_HV_ADC
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   float volts = (_scale * sensorValue) + _hw_vd_offset;
   hvReading.add(volts);
+#endif
 }
 
+#ifdef ESPG_HV_ADC
 void ESPGeigerHW::fiveloop() {
   int hvolts = (int)hvReading.get();
   Log::console(PSTR("ESPG-HW: HV: %d"), hvolts);
 }
+#endif
 
 void ESPGeigerHW::saveconfig() {
   char buf[16];
@@ -107,10 +122,12 @@ void ESPGeigerHW::saveconfig() {
   EGPrefs::put("espghw", "freq", buf);
   snprintf_P(buf, sizeof(buf), PSTR("%d"), _hw_duty);
   EGPrefs::put("espghw", "duty", buf);
+#ifdef ESPG_HV_ADC
   snprintf_P(buf, sizeof(buf), PSTR("%d"), _hw_vd_ratio);
   EGPrefs::put("espghw", "ratio", buf);
   snprintf_P(buf, sizeof(buf), PSTR("%d"), _hw_vd_offset);
   EGPrefs::put("espghw", "offset", buf);
+#endif
   EGPrefs::commit();
 }
 #endif

@@ -24,7 +24,6 @@
 #include "../Prefs/EGPrefs.h"
 #include <FS.h>
 #include <LittleFS.h>
-#include "../NTP/timezones.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
@@ -32,6 +31,9 @@
 #include "../Util/BootHooks.h"
 #include "../Util/StringUtil.h"
 #include "../GRNG/GRNG.h"
+#ifdef WEBAPIOUT
+#include "../WebAPI/WebAPI.h"
+#endif
 #ifdef ESP32
 #include <esp_system.h>
 #endif
@@ -297,10 +299,13 @@ void ConfigManager::handleRoot() {
   s->sendContent(F("<form action='/status' method='get'><button>Status</button></form><br/>"));
   s->sendContent(F("<form action='/hist' method='get'><button>History</button></form><br/>"));
   s->sendContent(F("<form action='/param' method='get'><button>Config</button></form><br/>"));
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   s->sendContent(F("<form action='/hv' method='get'><button>HV Config</button></form><br/>"));
 #endif
   s->sendContent(F("<form action='/ntp' method='get'><button>NTP Config</button></form><br/>"));
+#ifdef WEBAPIOUT
+  s->sendContent(F("<form action='/webapi' method='get'><button>Station Network</button></form><br/>"));
+#endif
   s->sendContent(FPSTR(HTTP_PORTAL_MENU[2]));
   s->sendContent(FPSTR(HTTP_PORTAL_MENU[8]));
   s->sendContent(F("<form action='/restart' method='get'><button>Reboot</button></form><br/>"));
@@ -346,7 +351,7 @@ void ConfigManager::handleJsonReturn()
     (int)Wifi::rssi
   );
   advance_pos(pos, n, sizeof(jsonBuffer));
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   char hv[16];
   format_f(hv, sizeof(hv), hardware.hvReading.get());
   n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR(",\"hv\":%s"), hv);
@@ -1020,6 +1025,121 @@ void ConfigManager::handleRandomDo()
   server->send(200, F("text/plain"), out);
 }
 
+#ifdef WEBAPIOUT
+void ConfigManager::handleWebAPI()
+{
+  handleRequest();
+  bool saved = false;
+  if (server->method() == HTTP_POST) {
+    int mode = server->arg("m").toInt();
+    if (mode < 0 || mode > 2) mode = 0;
+    char mbuf[2] = {(char)('0' + mode), '\0'};
+    EGPrefs::put("webapi", "mode", mbuf);
+    // Range-check coords; EGPrefs::put rejects unparseable floats, we handle bounds.
+    // Empty -> "0" (Null Island = "use IP fallback"). Out-of-range = silently kept as previous value.
+    String lat = server->arg("lat"); if (!lat.length()) lat = "0";
+    String lon = server->arg("lon"); if (!lon.length()) lon = "0";
+    float la = lat.toFloat();
+    float lo = lon.toFloat();
+    if (la >= -90.0f  && la <=  90.0f) EGPrefs::put("webapi", "lat", lat.c_str());
+    if (lo >= -180.0f && lo <= 180.0f) EGPrefs::put("webapi", "lon", lon.c_str());
+    EGPrefs::commit();
+    saved = true;
+  }
+
+  beginChunkedPage();
+  sendPageHead(saved ? PSTR("Station Network Saved") : PSTR("Station Network"));
+  auto* s = server.get();
+  if (saved) s->sendContent(FPSTR(HTTP_PARAMSAVED));
+
+  uint8_t mode = (uint8_t)EGPrefs::getUInt("webapi", "mode");
+
+  s->sendContent(F(
+    "<h1>Station Network</h1>"
+    "<p style='font-size:.9em'>ESPGeiger can share data with the public station network so it appears on the global map. The device identity and location are obscured before publication.</p>"));
+  if (mode > 0) {
+    if (webapi.getStationId() != 0) {
+      char status[160];
+      snprintf_P(status, sizeof(status),
+        PSTR("<p>Station: <a href='" WEBAPI_STATION_URL "' target='_blank'>#%u</a></p>"),
+        webapi.getStationId(), webapi.getStationId());
+      s->sendContent(status);
+    } else {
+      s->sendContent(F("<p>Station: not yet registered (handshake pending) "
+        "<button type='button' onclick='location.reload()'>Refresh</button></p>"));
+    }
+  }
+  s->sendContent(F(
+    "<form method='POST' action='/webapi'>"
+    "<fieldset><legend>Sharing</legend>"
+    "<label><input type='radio' name='m' value='0'"));
+  if (mode == 0) s->sendContent(F(" checked"));
+  s->sendContent(F("> Off </label><br>"
+    "<label><input type='radio' name='m' value='1'"));
+  if (mode == 1) s->sendContent(F(" checked"));
+  s->sendContent(F("> Heartbeat </label><br>"
+    "<label><input type='radio' name='m' value='2'"));
+  if (mode == 2) s->sendContent(F(" checked"));
+  s->sendContent(F("> CPM Readings </label>"
+    "</fieldset>"
+    "<label for='lat'>Latitude</label>"
+    "<input id='lat' name='lat' type='number' step='any' min='-90' max='90' placeholder='approximate by IP if blank' value='"));
+  s->sendContent(EGPrefs::getString("webapi", "lat"));
+  s->sendContent(F("'><label for='lon'>Longitude</label>"
+    "<input id='lon' name='lon' type='number' step='any' min='-180' max='180' placeholder='approximate by IP if blank' value='"));
+  s->sendContent(EGPrefs::getString("webapi", "lon"));
+  s->sendContent(F("'><p style='margin-top:.5em'>"
+    "<button type='button' onclick=\"window.open('https://loc.espgeiger.com/','espgeiger-loc')\">Find location</button></p>"
+    "<button type='submit'>Save</button></form>"
+    "<script>window.addEventListener('message',function(e){if(e.origin!=='https://loc.espgeiger.com')return;var d=e.data;if(!d||d.type!=='espgeiger-location')return;var la=document.getElementById('lat');var lo=document.getElementById('lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
+
+  s->sendContent(F(
+    "<details style='margin-top:1em'><summary>Advanced</summary>"
+    "<p style='font-size:.9em'>Reset the device key. The next handshake registers a new station &mdash; the existing one <b>cannot be retrieved</b>.</p>"
+    "<form method='POST' action='/webapikeyreset' onsubmit=\"return confirm('Reset the Station Network key? This orphans the existing station.')\">"
+    "<button class='D' type='submit'>Reset key</button></form>"));
+  if (mode > 0 && webapi.getStationId() != 0) {
+    s->sendContent(F(
+      "<p style='font-size:.9em;margin-top:1em'>Delete this station from the network. Removes all readings and history server-side and switches sharing to Off. <b>Cannot be undone.</b></p>"
+      "<form method='POST' action='/webapiforget' onsubmit=\"return confirm('Permanently delete this station from the network? This cannot be undone.')\">"
+      "<button class='D' type='submit'>Forget station</button></form>"));
+  }
+  s->sendContent(F("</details>"));
+
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
+}
+
+void ConfigManager::handleWebAPIKeyReset()
+{
+  handleRequest();
+  Log::console(PSTR("WebAPI: Resetting api.key"));
+  LittleFS.begin();
+  LittleFS.remove("/api.key");
+  LittleFS.end();
+  handleRestart();
+}
+
+void ConfigManager::handleWebAPIForget()
+{
+  handleRequest();
+  // Sign before flipping mode so the request still has a valid key + id.
+  webapi.forget();
+  EGPrefs::put("webapi", "mode", "0");
+  EGPrefs::commit();
+
+  beginChunkedPage();
+  sendPageHead(PSTR("Station Forgotten"));
+  auto* s = server.get();
+  s->sendContent(F(
+    "<h1>Station forgotten</h1>"
+    "<p>A delete request has been sent to the server. Sharing is now <b>Off</b>.</p>"
+    "<p style='font-size:.9em'>Re-enabling sharing later will register a new station; old readings will not be linked.</p>"));
+  s->sendContent(FPSTR(HTTP_BACKBTN));
+  endChunkedPage();
+}
+#endif
+
 void ConfigManager::handleNTP()
 {
   handleRequest();
@@ -1056,7 +1176,7 @@ void ConfigManager::handleNTPSet()
   endChunkedPage();
 }
 
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
 void ConfigManager::handleHVPage()
 {
   handleRequest();
@@ -1264,6 +1384,12 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(NTP_SET_URL, HTTP_POST, std::bind(&ConfigManager::handleNTPSet, this));
   ConfigManager::server.get()->on(RANDOM_URL, HTTP_GET, std::bind(&ConfigManager::handleRandomPage, this));
   ConfigManager::server.get()->on(RANDOM_DO_URL, HTTP_GET, std::bind(&ConfigManager::handleRandomDo, this));
+#ifdef WEBAPIOUT
+  ConfigManager::server.get()->on(WEBAPI_PAGE_URL, HTTP_GET,  std::bind(&ConfigManager::handleWebAPI, this));
+  ConfigManager::server.get()->on(WEBAPI_PAGE_URL, HTTP_POST, std::bind(&ConfigManager::handleWebAPI, this));
+  ConfigManager::server.get()->on(WEBAPI_KEY_RESET_URL, HTTP_POST, std::bind(&ConfigManager::handleWebAPIKeyReset, this));
+  ConfigManager::server.get()->on(WEBAPI_FORGET_URL, HTTP_POST, std::bind(&ConfigManager::handleWebAPIForget, this));
+#endif
   ConfigManager::server.get()->on(CLICKS_JSON, HTTP_GET, std::bind(&ConfigManager::handleClicksReturn, this));
   ConfigManager::server.get()->on(HIST_URL, HTTP_GET, std::bind(&ConfigManager::handleHistoryPage, this));
   ConfigManager::server.get()->on(GEIGERLOG_URL, HTTP_GET, std::bind(&ConfigManager::handleGeigerLog, this));
@@ -1278,7 +1404,7 @@ void ConfigManager::bindServerCallback()
 #endif
   ConfigManager::server.get()->on(EGPREFS_URL, HTTP_GET,  std::bind(&ConfigManager::handleEGPrefs, this));
   ConfigManager::server.get()->on(EGPREFS_URL, HTTP_POST, std::bind(&ConfigManager::handleEGPrefs, this));
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   ConfigManager::server.get()->on(HV_URL, HTTP_GET, std::bind(&ConfigManager::handleHVPage, this));
   ConfigManager::server.get()->on(HV_SET_URL, HTTP_GET, std::bind(&ConfigManager::handleHVSet, this));
   ConfigManager::server.get()->on(HV_JS_URL, HTTP_GET, std::bind(&ConfigManager::handleHVJSReturn, this));

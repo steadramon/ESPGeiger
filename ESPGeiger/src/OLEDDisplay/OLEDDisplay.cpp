@@ -26,7 +26,7 @@
 #include "../Util/StringUtil.h"
 #include "../Util/Wifi.h"
 #include "../GRNG/GRNG.h"
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
 #include "../ESPGHW/ESPGHW.h"
 #endif
 
@@ -206,7 +206,7 @@ void SSD1306Display::page_two_full() {
   drawString(0, 17, PSTR("IP:"));
   drawString(16, 17, Wifi::ip);
   int uptime_y = 32;
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   drawString(0, uptime_y, PSTR("HV:"));
   char hvBuf[12];
   format_f(hvBuf, sizeof(hvBuf), hardware.hvReading.get());

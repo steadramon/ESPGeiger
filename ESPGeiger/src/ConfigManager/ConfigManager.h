@@ -26,7 +26,7 @@
 #include "../Counter/Counter.h"
 #include "../NTP/NTP.h"
 
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV
 #include "../ESPGHW/ESPGHW.h"
 extern ESPGeigerHW hardware;
 #endif
@@ -63,7 +63,10 @@ constexpr auto PREFS_URL PROGMEM = "/prefs";
 constexpr auto EGPREFS_URL PROGMEM = "/param";
 constexpr auto RANDOM_URL PROGMEM = "/random";
 constexpr auto RANDOM_DO_URL PROGMEM = "/random.do";
-#ifdef ESPGEIGER_HW
+constexpr auto WEBAPI_PAGE_URL PROGMEM = "/webapi";
+constexpr auto WEBAPI_KEY_RESET_URL PROGMEM = "/webapikeyreset";
+constexpr auto WEBAPI_FORGET_URL PROGMEM = "/webapiforget";
+#ifdef ESPG_HV_ADC
 constexpr auto HV_URL PROGMEM = "/hv";
 constexpr auto HV_JS_URL PROGMEM = "/hvjs";
 constexpr auto HV_JSON_URL PROGMEM = "/hvjson";
@@ -151,6 +154,9 @@ private:
   void handleNTPSet();
   void handleRandomPage();
   void handleRandomDo();
+  void handleWebAPI();
+  void handleWebAPIKeyReset();
+  void handleWebAPIForget();
   void handleClicksReturn();
   void handleGeigerLog();
 #ifdef SERIALOUT
@@ -159,7 +165,7 @@ private:
   void handleAbout();
   void handleInfo();
   void handleOutputsJson();
-#ifdef ESPGEIGER_HW
+#ifdef ESPG_HV_ADC
   void handleHVPage();
   void handleHVJSReturn();
   void handleHVJsonReturn();
