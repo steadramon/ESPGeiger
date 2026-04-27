@@ -35,6 +35,7 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 | CPM Window (CPM-only counters) | Int 1-60 | `30` | Serial builds only, applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
 | RX Pin | Int | `(varies)` | Geiger counter input pin. Hidden when `-D RXPIN_BLOCKED`. Reboot required. |
 | TX Pin | Int | `(varies)` | Transmit pin. Only on builds with a TX pin configured. Reboot required. |
+| Geiger Counter | String (32) | `(varies)` | GM tube model name (e.g. SBM-20, J305). Pulse builds only. Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
 | PCNT Filter | Int 0-1023 | `200` | Glitch filter threshold (ESP32 PCNT builds only). `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT Pin Pull | Int 0-2 | `0` | PCNT input pin pull: `0`=none (floating), `1`=up, `2`=down. ESP32 PCNT builds only. Default floating suits most modules that drive the line actively both directions; change to pull-up for open-drain outputs or pull-down for active-high modules without their own idle pull. |
 | Debounce (us) | Int 0-10000 | `500` | Software interrupt debounce. Pulse builds without PCNT only. |
@@ -100,9 +101,13 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | Brightness | Int 0-100 | `25` | Display brightness |
-| Timeout | Int 0-99999 | `120` | Display timeout in seconds, 0=off (push button builds only) |
-| On Time | Time HH:MM | `06:00` | Display on-time (builds without push button) |
-| Off Time | Time HH:MM | `22:00` | Display off-time (builds without push button) |
+| Timeout | Int 0-99999 | `120` | Push-button builds only. Display turns off after this many seconds of inactivity. `0` falls back to On Time / Off Time below. |
+| On Time | Time HH:MM | `06:00` | Display on-time. On push-button builds, only takes effect when Timeout is `0`. Blank means always on. |
+| Off Time | Time HH:MM | `22:00` | Display off-time. Same rules as On Time. Window crosses midnight if `from > to`. |
+| I2C SDA Pin | Int 0-39 | `(varies)` | OLED SDA pin. Hidden when `-D OLED_PINS_BLOCKED`. Reboot required. |
+| I2C SCL Pin | Int 0-39 | `(varies)` | OLED SCL pin. Hidden when `-D OLED_PINS_BLOCKED`. Reboot required. |
+
+On push-button builds the long-press gesture toggles a permanent override that keeps the display on regardless of Timeout or schedule. Re-toggle to restore the configured behaviour.
 
 ## NeoPixel Settings (NeoPixel builds)
 
