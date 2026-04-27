@@ -42,11 +42,10 @@ EG_REGISTER_MODULE(display)
 static const EGPref OLED_PREF_ITEMS[] = {
   {"brightness", "Brightness", "",      "25", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
 #ifdef GEIGER_PUSHBUTTON
-  {"timeout",    "Timeout",    "sec, 0=off", "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
-#else
-  {"on_time",    "On Time",    "Display on",   "06:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
-  {"off_time",   "Off Time",   "Display off",  "22:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"timeout",    "Timeout",    "sec, 0=use On/Off Time below", "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
 #endif
+  {"on_time",    "On Time",    "Display on (blank = always on)",  "06:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"off_time",   "Off Time",   "Display off (blank = always on)", "22:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
 #ifndef OLED_PINS_BLOCKED
   {"sda",        "I2C SDA Pin","Reboot to apply", OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
   {"scl",        "I2C SCL Pin","Reboot to apply", OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
@@ -77,10 +76,9 @@ static const EGLegacyAlias OLED_LEGACY[] = {
   {"dispBrightness", "brightness"},
 #ifdef GEIGER_PUSHBUTTON
   {"dispTimeout", "timeout"},
-#else
+#endif
   {"oledOn",  "on_time"},
   {"oledOff", "off_time"},
-#endif
   {nullptr, nullptr},
 };
 const EGLegacyAlias* SSD1306Display::legacy_aliases() { return OLED_LEGACY; }
@@ -111,19 +109,29 @@ void SSD1306Display::loop(unsigned long now) {
       _last_page = oled_page;
     }
 #ifdef GEIGER_PUSHBUTTON
-    if ((enable_oled_timeout) && (_lcd_timeout > 0) && ((now - oled_timeout) / 1000 > _lcd_timeout)) {
+    bool should_be_on;
+    if (!enable_oled_timeout) {
+      // Long-press override: keep on regardless of timeout/schedule.
+      should_be_on = true;
+    } else if (_lcd_timeout > 0) {
+      should_be_on = ((now - oled_timeout) / 1000 <= (unsigned long)_lcd_timeout);
+    } else {
+      // timeout=0 falls back to schedule (always on if both times blank).
+      should_be_on = isScreenOnTime(now);
+    }
+    if (should_be_on) {
+      if (!oled_on) {
+        displayOn();
+        oled_page = 1;
+        oled_on = true;
+        oled_last_update = now - 20000;
+      }
+    } else {
       if (oled_on) {
         displayOff();
         oled_on = false;
       }
       return;
-    } else {
-      if (oled_on == false) {
-        displayOn();
-        oled_page=1;
-        oled_on = true;
-        oled_last_update = now-20000;
-      }
     }
 #else
     if (isScreenOnTime(now)) {
