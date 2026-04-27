@@ -39,6 +39,17 @@ static const char* s_mac = "";
 static char s_geigermodel[33] = GEIGER_MODEL;
 static char s_friendlyname[33] = "";
 
+uint32_t DeviceInfo::freeHeap() {
+  static uint32_t cached = 0;
+  static uint32_t last_ms = 0;
+  uint32_t now = millis();
+  if (cached == 0 || now - last_ms >= 1000) {
+    cached = ESP.getFreeHeap();
+    last_ms = now;
+  }
+  return cached;
+}
+
 void DeviceInfo::init(const char* hostName, const char* chipId,
                       const char* userAgent, const char* macAddr) {
   s_hostname = hostName;

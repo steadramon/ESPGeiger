@@ -59,6 +59,8 @@ namespace DeviceInfo {
 
   char* uptimeString();
 
+  uint32_t freeHeap();
+
   // Normalised reset-reason code. ESP8266 rst_info.reason and ESP32
   // esp_reset_reason() use different enums; this maps both to a single
   // small set so the census can aggregate cross-platform. Codes are
