@@ -21,7 +21,6 @@
 #include "html.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
-#include "ArduinoJson.h"
 #include "../Prefs/EGPrefs.h"
 #include <FS.h>
 #include <LittleFS.h>
@@ -343,7 +342,7 @@ void ConfigManager::handleJsonReturn()
     c, s, c5, c15, cs,
     ratioChar,
     gcounter.total_clicks,
-    ESP.getFreeHeap(),
+    DeviceInfo::freeHeap(),
     (int)Wifi::rssi
   );
   advance_pos(pos, n, sizeof(jsonBuffer));
@@ -725,6 +724,13 @@ void ConfigManager::handleClicksReturn()
     EGPrefs::getString("sys", "ratio"));
   advance_pos(pos, n, sizeof(buf));
 
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+  // Test builds tick history per-minute instead of per-hour. Tell the
+  // page JS so it labels timestamps with 60s granularity.
+  n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(",\"roll\":60"));
+  advance_pos(pos, n, sizeof(buf));
+#endif
+
   if (ntpclient.synced) {
     n = snprintf_P(buf + pos, sizeof(buf) - pos,
       PSTR(",\"start\":%lu}"), (unsigned long)ntpclient.boot_epoch);
@@ -847,7 +853,7 @@ void ConfigManager::handleInfo()
   INFO_ROW("SDK version",  "%s",            ESP.getSdkVersion());
 #endif
   INFO_ROW("CPU frequency","%u MHz",        (unsigned)ESP.getCpuFreqMHz());
-  INFO_ROW("Free heap",    "%u bytes",      (unsigned)ESP.getFreeHeap());
+  INFO_ROW("Free heap",    "%u bytes",      (unsigned)DeviceInfo::freeHeap());
   INFO_ROW("Sketch size",  "%u / %u bytes", (unsigned)ESP.getSketchSize(),
                                             (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
 #ifdef ESP8266
@@ -1148,7 +1154,6 @@ void ConfigManager::eraseSettings()
   Log::console(PSTR("Config: Erasing ... "));
   EGPrefs::reset_all();
   LittleFS.begin();
-  LittleFS.remove("/api.key");
   LittleFS.remove("/geigerconfig.json");
   LittleFS.remove("/ntp.json");
   LittleFS.end();
@@ -1160,7 +1165,6 @@ void ConfigManager::handleResetParams()
   Log::console(PSTR("Config: Erasing ... "));
   EGPrefs::reset_all();
   LittleFS.begin();
-  LittleFS.remove("/api.key");
   LittleFS.remove("/geigerconfig.json");
   LittleFS.remove("/ntp.json");
   LittleFS.end();
