@@ -166,7 +166,12 @@ void Counter::set_alert(int val) {
 }
 
 bool Counter::is_warm() const {
-  return DeviceInfo::uptime() >= (uint32_t)(ESPG_WARMUP_S + _cpm_window);
+  if (_warm_cached) return true;
+  if (DeviceInfo::uptime() >= (uint32_t)(ESPG_WARMUP_S + _cpm_window)) {
+    _warm_cached = true;
+    return true;
+  }
+  return false;
 }
 
 bool Counter::is_warning() {

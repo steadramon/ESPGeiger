@@ -87,6 +87,7 @@ class Counter {
         if (n < 1) n = 1;
         if (n > GEIGER_CPM_COUNT) n = GEIGER_CPM_COUNT;
         _cpm_window = n;
+        _warm_cached = false;
       }
       uint8_t get_cpm_window() const { return _cpm_window; }
       // True once warmup + CPM window have elapsed (full sample bucket).
@@ -158,6 +159,7 @@ class Counter {
       bool _bool_cpm_alert = false;
       bool _blip_led = true;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
+      mutable bool _warm_cached = false;
       int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled
       int16_t _quiet_to_min   = -1;
       float _ratio = GEIGER_RATIO;
