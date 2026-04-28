@@ -33,9 +33,6 @@
 #ifndef ESPG_HV_ADC
 #define ESPG_HV_ADC
 #endif
-#ifndef GEIGER_MODEL_FIXED
-#define GEIGER_MODEL_FIXED
-#endif
 #endif
 
 #include <Arduino.h>
