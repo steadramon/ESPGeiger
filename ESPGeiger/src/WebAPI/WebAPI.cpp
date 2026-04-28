@@ -138,7 +138,7 @@ void WebAPI::loop(unsigned long now) {
 void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
-    //return;
+    return;
   }
 
   GRNG::stir();
@@ -279,7 +279,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
 void WebAPI::postMeasurement(bool censusOnly) {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
-    //return;
+    return;
   }
 
   // Wait for a full CPM bucket so the first post isn't noisy.
