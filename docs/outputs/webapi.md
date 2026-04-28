@@ -70,6 +70,18 @@ server's metadata (version, board, mode, etc.) current. The server
 responds with the assigned station ID, which the device then uses as
 `id` in subsequent per-minute posts.
 
+## Configuring on the device
+
+The `/webapi` page on each device shows the Station Network controls:
+
+![Station Network config page](/img/station-network.png)
+
+- **Station ID** — assigned by the server on first handshake. Click to view your station on `stations.espgeiger.com`.
+- **Sharing** — tri-state: Off / Heartbeat / CPM Readings (see below).
+- **Latitude / Longitude** — optional. Leave both at `0` to fall back to coarse IP-based geolocation. Coordinates are rounded to 2 decimal places (~1 km resolution) before publication.
+- **Find location** — uses browser geolocation to fill in the lat/lon fields.
+- **Advanced** — `Reset key` (rotate identity, register as a new station) and `Forget station` (server-side delete; see below).
+
 ## Sharing modes
 
 A single tri-state pref (`webapi.mode`, default `2`) controls what
