@@ -27,23 +27,23 @@ fixmaps with single- or two-letter keys.
 |---|---|---|
 | `id`  | uint32  | Station ID (assigned at first handshake) |
 | `n`   | uint32  | Unix timestamp of the reading (seconds) |
-| `cpm` | float32 | Current CPM |
-| `usv` | float32 | Microsieverts per hour |
+| `c`   | float32 | Current CPM |
+| `u`   | float32 | Microsieverts per hour |
 | `hv`  | float32 | HV tube reading (ESPGeiger-HW only) |
 
-In **Heartbeat** mode the radiation fields (`cpm`/`usv`/`hv`) are omitted
+In **Heartbeat** mode the radiation fields (`c`/`u`/`hv`) are omitted
 — the post becomes a minimal `{id, n}` body so the server still sees the
 station as alive without any readings leaving the device.
 
 **Every 15 minutes** (health snapshot, piggy-backed on the post above):
 
-| Field  | Type   | Description |
+| Field | Type   | Description |
 |---|---|---|
-| `ut`   | uint32 | Uptime in seconds |
-| `mem`  | uint32 | Free heap (bytes) |
-| `lps`  | uint32 | Loop iterations per second |
-| `tk`   | uint32 | Peak ticker duration in the last 60 s (µs) |
-| `rssi` | int32  | WiFi signal strength (dBm) |
+| `ut`  | uint32 | Uptime in seconds |
+| `mh`  | uint32 | Free heap (bytes) |
+| `l`   | uint32 | Loop iterations per second |
+| `tk`  | uint32 | Peak ticker duration in the last 60 s (µs) |
+| `rs`  | int32  | WiFi signal strength (dBm) |
 
 Health fields live only in the raw tier server-side — they age out and
 are never aggregated into long-term history.
@@ -54,16 +54,16 @@ are never aggregated into long-term history.
 |---|---|---|
 | `n`   | uint32  | Unix timestamp of the handshake (seconds) |
 | `pk`  | string  | Device public key, base64 (ECC secp192r1, 64 chars) |
-| `cid` | string  | Device chip ID (hex). The server looks up or creates a station for this chip and returns the numeric `id` the device quotes in subsequent posts. |
+| `ci`  | string  | Device chip ID (hex). The server looks up or creates a station for this chip and returns the numeric `id` the device quotes in subsequent posts. |
 | `v`   | string  | Firmware release version — `tag/sha` when built from a non-tagged commit (e.g. `devel/7a2407d`), or just `tag` for released builds (e.g. `0.9.3`). |
-| `btd` | string  | Chip model (e.g. `esp8266`, `ESP32-C3`) |
+| `bd`  | string  | Chip model (e.g. `esp8266`, `ESP32-C3`) |
 | `gm`  | string  | PlatformIO build environment name (e.g. `espgeigerlog_serial`) |
 | `gc`  | string  | Geiger counter model — auto-detected on Serial builds, user-set on Pulse builds |
 | `fl`  | uint32  | Feature-flag bitmask (which optional output modules are compiled in) |
 | `rr`  | uint32  | Normalised last-reset reason |
 | `m`   | uint8   | Sharing mode: `1` = heartbeat-only, `2` = full readings (mode `0` doesn't handshake) |
-| `lat` | float32 | Optional. Latitude in degrees (−90..90), 2-decimal-place rounded on device for privacy (~1.1 km cells). Omitted when both `lat` and `lon` are `0` (the "use IP" signal). |
-| `lon` | float32 | Optional. Longitude in degrees (−180..180). Same rounding and omission rules as `lat`. |
+| `la`  | float32 | Optional. Latitude in degrees (−90..90), 2-decimal-place rounded on device for privacy (~1.1 km cells). Omitted when both `la` and `lo` are `0` (the "use IP" signal). |
+| `lo`  | float32 | Optional. Longitude in degrees (−180..180). Same rounding and omission rules as `la`. |
 
 The handshake is what registers your station on the map and keeps the
 server's metadata (version, board, mode, etc.) current. The server
@@ -89,7 +89,7 @@ leaves the device:
 
 | Mode | Label | Behaviour |
 |---|---|---|
-| `2` | **CPM Readings** *(default)* | Hourly handshake, per-minute posts with `cpm`/`usv`, 15-min health snapshots. Your station appears on the map. |
+| `2` | **CPM Readings** *(default)* | Hourly handshake, per-minute posts with `c`/`u`, 15-min health snapshots. Your station appears on the map. |
 | `1` | **Heartbeat**                | Hourly handshake + 15-min health snapshots only. No radiation data leaves the device. Your station appears in fleet-size / uptime stats but not on the map. |
 | `0` | **Off**                      | Nothing sent — no handshake, no posts. |
 

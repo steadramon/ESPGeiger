@@ -175,19 +175,19 @@ void WebAPI::doHandshake() {
 
   MsgPack::Writer mp(buffer, sizeof(buffer));
   mp.map(sendCoords ? 12 : 10);
-  mp.kv("n",   (uint32_t)time(NULL));
-  mp.kv("pk",  pub_k_64);
-  mp.kv("cid", DeviceInfo::chipid());
-  mp.kv("v",   versionStr);
-  mp.kv("btd", DeviceInfo::chipmodel());
-  mp.kv("gm",  BUILD_ENV);
-  mp.kv("gc",  DeviceInfo::geigermodel());
-  mp.kv("fl",  (uint32_t)DeviceInfo::featureFlags());
-  mp.kv("rr",  DeviceInfo::resetReason());
-  mp.kv("m",   (uint32_t)_mode);
+  mp.kv("n",  (uint32_t)time(NULL));
+  mp.kv("pk", pub_k_64);
+  mp.kv("ci", DeviceInfo::chipid());
+  mp.kv("v",  versionStr);
+  mp.kv("bd", DeviceInfo::chipmodel());
+  mp.kv("gm", BUILD_ENV);
+  mp.kv("gc", DeviceInfo::geigermodel());
+  mp.kv("fl", (uint32_t)DeviceInfo::featureFlags());
+  mp.kv("rr", DeviceInfo::resetReason());
+  mp.kv("m",  (uint32_t)_mode);
   if (sendCoords) {
-    mp.kv("lat", (int32_t)(latF * 100.0f + (latF >= 0 ? 0.5f : -0.5f)) / 100.0f);
-    mp.kv("lon", (int32_t)(lonF * 100.0f + (lonF >= 0 ? 0.5f : -0.5f)) / 100.0f);
+    mp.kv("la", (int32_t)(latF * 100.0f + (latF >= 0 ? 0.5f : -0.5f)) / 100.0f);
+    mp.kv("lo", (int32_t)(lonF * 100.0f + (lonF >= 0 ? 0.5f : -0.5f)) / 100.0f);
   }
   if (mp.overflow) {
     Log::console(PSTR("WebAPI: Handshake encode overflow"));
@@ -312,20 +312,20 @@ void WebAPI::postMeasurement(bool censusOnly) {
 
   // float32 keeps the payload compact and avoids the soft-float printer.
   if (sendRadiation) {
-    mp.kv("cpm", gcounter.get_cpmf());
-    mp.kv("usv", gcounter.get_usv());
+    mp.kv("c",  gcounter.get_cpmf());
+    mp.kv("u",  gcounter.get_usv());
 #ifdef ESPG_HV_ADC
-    mp.kv("hv",  hardware.hvReading.get());
+    mp.kv("hv", hardware.hvReading.get());
 #endif
   }
 
   // Health snapshot rides the regular post every WEBAPI_HEALTH_EVERY ticks.
   if (sendHealth) {
-    mp.kv("ut",   (uint32_t)DeviceInfo::uptime());
-    mp.kv("mem",  DeviceInfo::freeHeap());
-    mp.kv("lps",  (uint32_t)TickProfile::lps);
-    mp.kv("tk",   (uint32_t)TickProfile::tick_max_us);
-    mp.kv("rssi", (int32_t)Wifi::rssi);
+    mp.kv("ut", (uint32_t)DeviceInfo::uptime());
+    mp.kv("mh", DeviceInfo::freeHeap());
+    mp.kv("l",  (uint32_t)TickProfile::lps);
+    mp.kv("tk", (uint32_t)TickProfile::tick_max_us);
+    mp.kv("rs", (int32_t)Wifi::rssi);
   }
   if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
 
