@@ -4,7 +4,7 @@ title: ESPGeiger Stations
 permalink: /output/webapi
 parent: Outputs
 nav_order: 20
-published: false
+published: true
 ---
 
 # ESPGeiger Stations — Public WebAPI
