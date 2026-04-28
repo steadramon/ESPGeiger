@@ -245,6 +245,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
         Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
         self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
         self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+        self->note_publish(false);
         return;
       }
       if (self->station_id != id) {
@@ -259,6 +260,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
       }
       self->last_ok = true;
       self->_hs_backoff_ms = 30000UL;
+      self->note_publish(true);
       return;
     }
     Log::debug(PSTR("WebAPI: Handshake parse error"));
@@ -268,12 +270,14 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
       code, request->responseHTTPString().c_str());
     if (code == 429) {
       Log::debug(PSTR("WebAPI: Rate-limited; waiting for next scheduled interval"));
+      self->note_publish(false);
       return;
     }
   }
   // Backoff prevents a uECC_sign storm while the server is down.
   self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
   self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+  self->note_publish(false);
 }
 
 void WebAPI::postMeasurement(bool censusOnly) {
@@ -393,6 +397,7 @@ void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
       Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
     }
   }
+  self->note_publish(self->last_ok);
 }
 
 void WebAPI::forget() {
@@ -456,6 +461,7 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
     Log::console(PSTR("WebAPI: Forget failed - %s"), request->responseHTTPString().c_str());
   }
   self->last_attempt_ms = millis();
+  self->note_publish(self->last_ok);
 }
 
 void WebAPI::saveConfig() {
