@@ -103,7 +103,7 @@ void MQTT_Client::disconnect()
   lastConnectionAttempt = 0;
   _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
-  _hass_last_publish = 0;  // force HA rediscovery on next connect
+  _hass_next_publish = 0;  // force HA rediscovery on next connect
 #endif
 }
 
@@ -114,12 +114,9 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   mqttClient->publish(this->last_will_.topic.c_str(), 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
   unsigned long now = millis();
-  const unsigned long refresh_ms = MQTT_HASS_REFRESH_S * 1000UL;
-  bool refresh_due = (_hass_last_publish == 0) ||
-                     (now - _hass_last_publish >= refresh_ms);
-  if (refresh_due) {
-    this->setupHassAuto();
-    _hass_last_publish = now;
+  if (_hass_next_publish == 0 || (long)(now - _hass_next_publish) >= 0) {
+    _hass_next_publish = now + 2000UL;
+    if (_hass_next_publish == 0) _hass_next_publish = 1;
   }
   this->setupHassCB();
 #endif
@@ -176,6 +173,14 @@ void MQTT_Client::s_tick(unsigned long now)
   if (!connected) {
     onMqttConnect(true);
   }
+
+#ifdef MQTTAUTODISCOVER
+  if (_hass_next_publish && (long)(now - _hass_next_publish) >= 0) {
+    setupHassAuto();
+    _hass_next_publish = now + (MQTT_HASS_REFRESH_S * 1000UL);
+    if (_hass_next_publish == 0) _hass_next_publish = 1;
+  }
+#endif
 
   // Advance by exact interval; snap to now if we fell more than one behind.
   if ((now - lastStatus) > statusInterval) {
