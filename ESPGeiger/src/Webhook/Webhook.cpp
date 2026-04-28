@@ -22,7 +22,6 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
-#include "../Util/Schedule.h"
 #ifdef ESPG_HV_ADC
 #include "../ESPGHW/ESPGHW.h"
 #endif
@@ -49,7 +48,7 @@ const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
 
 size_t Webhook::status_json(char* buf, size_t cap, unsigned long now) {
   if (!EGPrefs::getBool("webhook", "send")) return 0;
-  return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now, last_reason);
+  return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -79,7 +78,7 @@ void Webhook::loop(unsigned long now)
   if (lastPing == 0) {
     int iv = (int)EGPrefs::getUInt("webhook", "interval");
     if (iv > 0) setInterval(iv);
-    lastPing = now + Schedule::offsetFor(name(), pingIntervalMs);
+    lastPing = now + random(pingIntervalMs);
     return;
   }
   if (now > lastPing && (now - lastPing) >= pingIntervalMs)
@@ -97,9 +96,7 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     Webhook* self = static_cast<Webhook*>(optParm);
     self->last_attempt_ms = millis();
     self->last_ok = false;
-    char reason[16] = "";
-    int code = request->responseHTTPcode();
-    if (code == 200)
+    if (request->responseHTTPcode() == 200)
     {
       String response = request->responseText();
       if (strstr(response.c_str(), "OK")) {
@@ -107,13 +104,11 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
         self->last_ok = true;
       } else {
         Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100).c_str());
-        strncpy(reason, "no OK", sizeof(reason));
       }
     } else {
-      Log::console(PSTR("Webhook: Error %d - %s"), code, request->responseHTTPString().c_str());
-      snprintf_P(reason, sizeof(reason), PSTR("HTTP %d"), code);
+      Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
     }
-    self->note_publish(self->last_ok, reason);
+    self->note_publish(self->last_ok);
   }
 }
 

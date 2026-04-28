@@ -20,7 +20,6 @@
 #include "Radmon.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
-#include "../Util/Schedule.h"
 
 extern uint8_t send_indicator;
 
@@ -44,7 +43,7 @@ const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
 
 size_t Radmon::status_json(char* buf, size_t cap, unsigned long now) {
   if (!EGPrefs::getBool("radmon", "send")) return 0;
-  return write_status_json(buf, cap, "radmon", last_ok, last_attempt_ms, now, last_reason);
+  return write_status_json(buf, cap, "radmon", last_ok, last_attempt_ms, now);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -85,7 +84,7 @@ void Radmon::loop(unsigned long now)
     int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
     if (rtimer == 0) rtimer = RADMON_INTERVAL;
     setInterval(rtimer);
-    lastPing = now + Schedule::offsetFor(name(), pingIntervalMs);
+    lastPing = now + random(pingIntervalMs);
     return;
   }
   if (now > lastPing && (now - lastPing) >= pingIntervalMs)
@@ -106,9 +105,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     Radmon* self = static_cast<Radmon*>(optParm);
     self->last_attempt_ms = millis();
     self->last_ok = false;
-    char reason[16] = "";
-    int code = request->responseHTTPcode();
-    if (code == 200)
+    if (request->responseHTTPcode() == 200)
     {
       String response = request->responseText();
       const char* r = response.c_str();
@@ -117,22 +114,17 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
         self->last_ok = true;
       } else if (strstr(r, "Incorrect")) {
         Log::console(PSTR("Radmon: Password incorrect, please check"));
-        strncpy(reason, "bad pass", sizeof(reason));
       } else if (strstr(r, "register")) {
         Log::console(PSTR("Radmon: Username incorrect, please check"));
-        strncpy(reason, "bad user", sizeof(reason));
       } else if (strstr(r, "Too soon")) {
         Log::console(PSTR("Radmon: Rate limited"));
-        strncpy(reason, "rate limit", sizeof(reason));
       } else {
         Log::console(PSTR("Radmon: Unknown error"));
-        strncpy(reason, "unknown", sizeof(reason));
       }
     } else {
       Log::console(PSTR("Radmon: Error - %s"), request->responseHTTPString().c_str());
-      snprintf_P(reason, sizeof(reason), PSTR("HTTP %d"), code);
     }
-    self->note_publish(self->last_ok, reason);
+    self->note_publish(self->last_ok);
   }
 }
 

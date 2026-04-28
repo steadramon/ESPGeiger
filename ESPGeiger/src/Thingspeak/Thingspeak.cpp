@@ -20,7 +20,6 @@
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
-#include "../Util/Schedule.h"
 
 extern uint8_t send_indicator;
 
@@ -42,7 +41,7 @@ const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
 
 size_t Thingspeak::status_json(char* buf, size_t cap, unsigned long now) {
   if (!EGPrefs::getBool("thingspeak", "send")) return 0;
-  return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now, last_reason);
+  return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -60,7 +59,7 @@ Thingspeak::Thingspeak() {
 void Thingspeak::loop(unsigned long now)
 {
   if (lastPing == 0) {
-    lastPing = now + Schedule::offsetFor(name(), pingIntervalMs);
+    lastPing = now + random(pingIntervalMs);
     return;
   }
   if (now > lastPing && (now - lastPing) >= pingIntervalMs)
@@ -78,9 +77,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     Thingspeak* self = static_cast<Thingspeak*>(optParm);
     self->last_attempt_ms = millis();
     self->last_ok = false;
-    char reason[16] = "";
-    int code = request->responseHTTPcode();
-    if (code == 200)
+    if (request->responseHTTPcode() == 200)
     {
       String response = request->responseText();
       if (strcmp(response.c_str(), "0") != 0) {
@@ -88,13 +85,11 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
         self->last_ok = true;
       } else {
         Log::console(PSTR("Thingspeak: Error!"));
-        strncpy(reason, "rejected", sizeof(reason));
       }
     } else {
       Log::console(PSTR("Thingspeak: Error - %s"), request->responseHTTPString().c_str());
-      snprintf_P(reason, sizeof(reason), PSTR("HTTP %d"), code);
     }
-    self->note_publish(self->last_ok, reason);
+    self->note_publish(self->last_ok);
   }
 }
 
