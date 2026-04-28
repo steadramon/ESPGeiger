@@ -564,8 +564,10 @@ void MQTT_Client::setupHassAuto() {
 
   Log::console(PSTR("MQTT: Publishing HA autodiscovery"));
 
+  _hass_active_disc = _discovery_topic;
   forEachHassSensor(&MQTT_Client::hassPublishSensor);
   forEachHassBinarySensor(&MQTT_Client::hassPublishBinarySensor);
+  _hass_active_disc = nullptr;
 }
 
 // Per-row emitters. Instance methods so the forEach walkers can
@@ -612,9 +614,8 @@ void MQTT_Client::publishHassTopic(
     const char* cmdTopic,
     const HassExtra* extras, size_t n_extras)
 {
-  if (!EGPrefs::getBool("mqtt", "hass_enabled")) return;
-  const char* disc = EGPrefs::getString("mqtt", "hass_topic");
-  if (disc[0] == '\0') return;
+  const char* disc = _hass_active_disc;
+  if (!disc) return;
 
   const char* host = DeviceInfo::hostname();
 #ifdef ESP8266

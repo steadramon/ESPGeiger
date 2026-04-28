@@ -169,6 +169,7 @@ private:
   uint16_t pingInterval = 60;
 #ifdef MQTTAUTODISCOVER
   unsigned long _hass_next_publish = 0;
+  const char* _hass_active_disc = nullptr;
 #endif
 
   const char* topicStatus = MQTT_TOPIC_STATUS;
