@@ -65,6 +65,7 @@ class WebAPI : public EGModule {
     void doHandshake();
     // censusOnly: respect heartbeat-mode opt-out by omitting radiation fields.
     void postMeasurement(bool censusOnly = false);
+    unsigned long staggeredPingStart(unsigned long now) const;
     void loadConfig();
     void saveConfig();
 

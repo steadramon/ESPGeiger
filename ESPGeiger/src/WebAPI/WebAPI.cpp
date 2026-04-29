@@ -112,16 +112,12 @@ void WebAPI::loop(unsigned long now) {
   if (station_id == 0) return;
 
   if (lastPing == 0) {
-    // Spread fleet posts across the minute so shared-IP households don't
-    // thundering-herd at :00. Offset comes from public bytes of pub_k.
-    uint32_t k = ((uint32_t)pub_k[0] << 24) | ((uint32_t)pub_k[1] << 16)
-               | ((uint32_t)pub_k[2] << 8)  |  (uint32_t)pub_k[3];
-    lastPing = now - pingIntervalMs + (k % pingIntervalMs);
+    lastPing = staggeredPingStart(now);
     return;
   }
   if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
-    if ((now - lastPing) >= pingIntervalMs) lastPing = now;
+    if ((now - lastPing) >= pingIntervalMs) lastPing = staggeredPingStart(now);
 
     const bool healthDue = (healthPostCounter == 0);
     if (_mode == 2 || healthDue) {
@@ -133,6 +129,14 @@ void WebAPI::loop(unsigned long now) {
       if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
     }
   }
+}
+
+// Spread fleet posts across the minute so shared-IP households don't
+// thundering-herd at :00. Offset comes from public bytes of pub_k.
+unsigned long WebAPI::staggeredPingStart(unsigned long now) const {
+  uint32_t k = ((uint32_t)pub_k[0] << 24) | ((uint32_t)pub_k[1] << 16)
+             | ((uint32_t)pub_k[2] << 8)  |  (uint32_t)pub_k[3];
+  return now - pingIntervalMs + (k % pingIntervalMs);
 }
 
 void WebAPI::doHandshake() {
