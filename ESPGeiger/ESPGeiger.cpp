@@ -20,12 +20,9 @@
 #endif
 
 #include <Arduino.h>
-#include <FS.h>
 #include <LittleFS.h>
 #include <Ticker.h>
 #include "jled.h"
-#include "ArduinoJson.h"
-#include "AsyncHTTPRequest_Generic.h"
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/Wifi.h"
