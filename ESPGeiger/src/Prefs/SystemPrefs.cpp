@@ -121,9 +121,9 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(GEIGER_MODEL_FIXED)
   {"geiger_model", "Geiger Counter", "Connected counter/tube model (e.g., SBM-20, J305)", GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
 #endif
-#ifndef DISABLE_INTERNAL_BLIP
+#if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)
   {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
   {"blip_bright", "Blip brightness","LED brightness (0-100%)", "80",  nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
 #endif
   {"quiet_from",  "Quiet from",     "Silence blip LED + beeper from (blank = off)", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
@@ -167,9 +167,9 @@ void InputPrefs::on_prefs_loaded() {
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(GEIGER_MODEL_FIXED)
   DeviceInfo::setGeigermodel(EGPrefs::getString("input", "geiger_model"));
 #endif
-#ifndef DISABLE_INTERNAL_BLIP
+#if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)
   gcounter.set_blip_led(EGPrefs::getBool("input", "blip_led"));
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
   gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("input", "blip_bright") * 255 + 50) / 100));
 #endif
   gcounter.set_quiet_hours(
