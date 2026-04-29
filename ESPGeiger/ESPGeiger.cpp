@@ -23,6 +23,9 @@
 #include <LittleFS.h>
 #include <Ticker.h>
 #include "jled.h"
+// PlatformIO LDF anchor: modules include the .hpp variant only; LDF needs
+// the .h here in a project source to discover and link the library.
+#include "AsyncHTTPRequest_Generic.h"
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/Wifi.h"
