@@ -138,6 +138,7 @@ void WebAPI::loop(unsigned long now) {
 void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
+    lastHandshake = millis();
     return;
   }
 
