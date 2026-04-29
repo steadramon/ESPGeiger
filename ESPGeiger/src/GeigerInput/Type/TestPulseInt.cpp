@@ -91,11 +91,11 @@ void GeigerTestPulseInt::stopForOTA() {
 #endif
 }
 
-void GeigerTestPulseInt::pulseInterrupt(void *data) {
+void IRAM_ATTR GeigerTestPulseInt::pulseInterrupt(void *data) {
   pulseInterrupt();
 }
 
-void GeigerTestPulseInt::pulseInterrupt() {
+void IRAM_ATTR GeigerTestPulseInt::pulseInterrupt() {
   _bool_pulse_state = !_bool_pulse_state;
 #ifdef ESP8266
   if (_bool_pulse_state) {

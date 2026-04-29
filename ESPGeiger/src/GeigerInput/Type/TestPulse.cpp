@@ -100,11 +100,11 @@ void GeigerTestPulse::loop() {
   }
 }
 
-void GeigerTestPulse::pulseInterrupt(void *data) {
+void IRAM_ATTR GeigerTestPulse::pulseInterrupt(void *data) {
   pulseInterrupt();
 }
 
-void GeigerTestPulse::pulseInterrupt() {
+void IRAM_ATTR GeigerTestPulse::pulseInterrupt() {
   _bool_pulse_state = !_bool_pulse_state;
 #ifdef ESP8266
   if (_bool_pulse_state) {

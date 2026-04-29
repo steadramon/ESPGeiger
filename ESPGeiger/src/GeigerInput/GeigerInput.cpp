@@ -64,7 +64,7 @@ void GeigerInput::setLastBlip()  {
   _last_blip = micros();
 }
 
-void GeigerInput::countInterrupt() {
+void IRAM_ATTR GeigerInput::countInterrupt() {
   unsigned long cycles = micros();
   if (cycles - _last_blip < _debounce) {
     return;
