@@ -501,6 +501,7 @@ void ConfigManager::handleEGPrefs() {
       for (size_t j = 0; j < g->count; j++) {
         const EGPref& p = g->prefs[j];
         if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
+        if (p.type == EGP_LABEL) continue;
         snprintf_P(name, sizeof(name), PSTR("%s.%s"), g->module_id, p.id);
         lookup = name;
         char one[2] = {0, 0};
@@ -528,7 +529,7 @@ void ConfigManager::handleEGPrefs() {
 
   beginChunkedPage();
   sendPageHead(PSTR("Config"));
-  s->sendContent(F("<style>details{border:1px solid #eee;padding:8px;margin:8px 0}summary{font-weight:bold;padding:4px 0;cursor:pointer}label{display:inline-block;margin-top:10px}small{display:block;color:#666;margin-top:2px}hr{border:0;border-top:1px solid #ddd;margin:16px 0}@media(min-width:520px){details{min-width:500px}}</style>"));
+  s->sendContent(F("<style>details{border:1px solid #eee;padding:8px;margin:8px 0}summary{font-weight:bold;padding:4px 0;cursor:pointer}label{display:inline-block;margin-top:10px}small{display:block;color:#666;margin-top:2px}hr{border:0;border-top:1px solid #ddd;margin:16px 0}h4{margin:14px 0 4px;font-size:1em}.il{display:inline-block;margin:6px 14px 6px 0}.il input{margin-right:4px}@media(min-width:520px){details{min-width:500px}}</style>"));
 
   char buf[512];
   int n;
@@ -576,17 +577,35 @@ void ConfigManager::handleEGPrefs() {
       const EGPref& p = g->prefs[j];
       if (p.flags & EGP_HIDDEN) continue;
 
+      if (p.type == EGP_LABEL) {
+        n = snprintf_P(buf, sizeof(buf), PSTR("<label>%s</label><br/>"), p.label ? p.label : "");
+        send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
+        continue;
+      }
+
       const char* cur = EGPrefs::getString(g->module_id, p.id);
       const char* mid = g->module_id;
       const char* pid = p.id;
       const char* lbl = p.label ? p.label : p.id;
       bool ro = (p.flags & EGP_READONLY);
+      bool inline_bool = (p.type == EGP_BOOL) && (p.flags & EGP_INLINE);
       size_t pos = 0;
 
-      n = snprintf_P(buf, sizeof(buf), PSTR("<label for='%s.%s'>%s</label><br/>"), mid, pid, lbl);
-      if (n > 0 && (size_t)n < sizeof(buf)) pos = (size_t)n;
+      if (!inline_bool) {
+        n = snprintf_P(buf, sizeof(buf), PSTR("<label for='%s.%s'>%s</label><br/>"), mid, pid, lbl);
+        if (n > 0 && (size_t)n < sizeof(buf)) pos = (size_t)n;
+      }
 
-      if (p.type == EGP_BOOL) {
+      if (p.type == EGP_BOOL && inline_bool) {
+        const char* tip = (p.help && p.help[0]) ? p.help : "";
+        n = snprintf_P(buf + pos, sizeof(buf) - pos,
+                     PSTR("<label class='il' title='%s'><input type='checkbox' id='%s.%s' name='%s.%s' value='1'%S%S>%s</label>"),
+                     tip, mid, pid, mid, pid,
+                     (cur[0] == '1') ? (PGM_P)PSTR(" checked") : (PGM_P)PSTR(""),
+                     ro ? (PGM_P)PSTR(" disabled") : (PGM_P)PSTR(""),
+                     lbl);
+        advance_pos(pos, n, sizeof(buf));
+      } else if (p.type == EGP_BOOL) {
         n = snprintf_P(buf + pos, sizeof(buf) - pos,
                      PSTR("<input type='checkbox' id='%s.%s' name='%s.%s' value='1'%S%S><br/>"),
                      mid, pid, mid, pid,
@@ -656,7 +675,7 @@ void ConfigManager::handleEGPrefs() {
         }
       }
 
-      if (p.help && p.help[0]) {
+      if (!inline_bool && p.help && p.help[0]) {
         n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("<small>%s</small>"), p.help);
         advance_pos(pos, n, sizeof(buf));
       }
