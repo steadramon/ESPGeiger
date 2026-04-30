@@ -179,7 +179,7 @@ void WebAPI::doHandshake() {
   bool sendCoords = (latF != 0.0f || lonF != 0.0f);
 
   MsgPack::Writer mp(buffer, sizeof(buffer));
-  mp.map(sendCoords ? 12 : 10);
+  mp.map(sendCoords ? 13 : 11);
   mp.kv("n",  (uint32_t)time(NULL));
   mp.kv("pk", pub_k_64);
   mp.kv("ci", DeviceInfo::chipid());
@@ -187,6 +187,7 @@ void WebAPI::doHandshake() {
   mp.kv("bd", DeviceInfo::chipmodel());
   mp.kv("gm", BUILD_ENV);
   mp.kv("gc", DeviceInfo::geigermodel());
+  mp.kv("td", (uint32_t)DeviceInfo::tubeDetection());
   mp.kv("fl", (uint32_t)DeviceInfo::featureFlags());
   mp.kv("rr", DeviceInfo::resetReason());
   mp.kv("m",  (uint32_t)_mode);
