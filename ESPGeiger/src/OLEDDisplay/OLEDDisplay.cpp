@@ -110,6 +110,9 @@ void SSD1306Display::loop(unsigned long now) {
       EGModuleRegistry::set_loop_interval(this, oled_page == 4 ? 50 : 250);
       _last_page = oled_page;
     }
+    if (oled_page == 4) {
+      oled_timeout = now;
+    }
 #ifdef GEIGER_PUSHBUTTON
     if ((enable_oled_timeout) && (_lcd_timeout > 0) && ((now - oled_timeout) / 1000 > _lcd_timeout)) {
       if (oled_on) {
@@ -376,11 +379,61 @@ void SSD1306Display::page_three_full() {
   drawString(0, 47, PSTR("@ steadramon"));
 }
 
+namespace {
+static const unsigned long MTX_T1 = 100;
+static const unsigned long MTX_T2 = 300;
+static const unsigned long MTX_T3 = 800;
+static const unsigned long MTX_T4 = 2000;
+
+struct MatrixCtx {
+  uint8_t cps_factor;
+};
+
+static MatrixCtx compute_matrix_ctx(unsigned long typical) {
+  MatrixCtx c;
+  if      (typical < 200)  c.cps_factor = 8;
+  else if (typical < 500)  c.cps_factor = 7;
+  else if (typical < 1000) c.cps_factor = 6;
+  else if (typical < 2000) c.cps_factor = 5;
+  else                     c.cps_factor = 4;
+  return c;
+}
+
+static void compute_drop_speed_tail(unsigned long delta_ms, const MatrixCtx& ctx,
+                                    uint8_t multiplier, uint32_t r,
+                                    uint8_t& out_speed, uint8_t& out_tail) {
+  uint8_t s_min = 1, s_max = 2;
+  if      (delta_ms < MTX_T1) { s_min = 4; s_max = 6; }
+  else if (delta_ms < MTX_T2) { s_min = 3; s_max = 5; }
+  else if (delta_ms < MTX_T3) { s_min = 3; s_max = 4; }
+  else if (delta_ms < MTX_T4) { s_min = 2; s_max = 3; }
+  // Multiply-and-shift uniform: 11-bit slice * range >> 11 gives [0, range).
+  uint16_t r_band = (r >> 21) & 0x7FF;
+  uint8_t band_speed = s_min + (uint8_t)(((uint32_t)r_band * (s_max - s_min + 1)) >> 11);
+  uint16_t raw_spd = (uint16_t)band_speed * multiplier * ctx.cps_factor;
+  uint8_t spd = (uint8_t)(raw_spd >> 3);
+  spd = (spd + 4) & 0xF8;
+  if (spd < 8) spd = 8;
+  uint8_t tail_max = (spd > 30) ? 30 : spd;
+  uint8_t tail_min = spd >> 3;
+  if (tail_min < 2) tail_min = 2;
+  if (tail_max < tail_min) tail_max = tail_min;
+  uint8_t r_jitter = (uint8_t)(r >> 24);
+  uint8_t tail = (tail_max == tail_min)
+                 ? tail_min
+                 : (tail_min + (uint8_t)(((uint16_t)r_jitter * (tail_max - tail_min + 1)) >> 8));
+  out_speed = spd;
+  out_tail  = tail;
+}
+
+}  // namespace
+
 void SSD1306Display::page_four_matrix() {
   static const uint8_t MATRIX_DROPS = 32;
-  struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; bool alive; };
+  struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; uint8_t seed; bool alive; };
   static Drop drops[MATRIX_DROPS];
   static unsigned long last_blip_seen = 0;
+  static uint8_t last_col = 255;
 
   if (_page4_num_last == 0) {
     _page4_num_last = millis();
@@ -388,13 +441,26 @@ void SSD1306Display::page_four_matrix() {
     for (uint8_t i = 0; i < MATRIX_DROPS; i++) drops[i].alive = false;
     // Pre-populate so the screen isn't blank on entry. They'll fall off
     // naturally as real blips arrive.
+    size_t hist_n = gcounter.cpm_history.size();
+    float cps_e = gcounter.get_cps();
+    unsigned long typical_e = (cps_e > 0.05f) ? (unsigned long)(1000.0f / cps_e) : 1500;
+    MatrixCtx ctx_e = compute_matrix_ctx(typical_e);
     for (uint8_t i = 0; i < 6; i++) {
       uint32_t r = GRNG::fast_uint32();
+      unsigned long sample_delta_ms = 5000;
+      if (hist_n > 0) {
+        size_t idx = (r >> 12) % hist_n;
+        int cpm_sample = gcounter.cpm_history[idx];
+        if (cpm_sample > 0) sample_delta_ms = 60000UL / (unsigned long)cpm_sample;
+      }
+      uint8_t spd, tail;
+      compute_drop_speed_tail(sample_delta_ms, ctx_e, 8, r, spd, tail);
       drops[i].alive = true;
-      drops[i].x = r & 0x7F;
-      drops[i].y = (int16_t)((r >> 8) & 0x3F);
-      drops[i].speed = 2;
-      drops[i].tail = 8 + ((r >> 24) & 0x07);
+      drops[i].x = (uint8_t)((r >> 4) & 0x7F);
+      drops[i].y = (int16_t)((r >> 26) & 0x3F);
+      drops[i].speed = spd;
+      drops[i].tail = tail;
+      drops[i].seed = (uint8_t)GRNG::fast_uint32();
     }
   }
 
@@ -402,22 +468,50 @@ void SSD1306Display::page_four_matrix() {
   if (now_blip != last_blip_seen) {
     unsigned long delta_ms = (now_blip - last_blip_seen) / 1000;
     last_blip_seen = now_blip;
-    // Faster ticks → faster, shorter drops. Slower ticks → slower, longer trails.
-    // Random jitter within each delta-band keeps the visual lively.
-    uint8_t s_min = 1, s_max = 2, t_min = 16, t_max = 22;
-    if      (delta_ms < 100)  { s_min = 3; s_max = 4; t_min = 2;  t_max = 5;  }
-    else if (delta_ms < 300)  { s_min = 3; s_max = 4; t_min = 4;  t_max = 8;  }
-    else if (delta_ms < 800)  { s_min = 2; s_max = 3; t_min = 8;  t_max = 14; }
-    else if (delta_ms < 2000) { s_min = 1; s_max = 3; t_min = 12; t_max = 18; }
-    for (uint8_t i = 0; i < MATRIX_DROPS; i++) {
-      if (!drops[i].alive) {
-        uint32_t r = GRNG::fast_uint32();
-        drops[i].alive = true;
-        drops[i].x = r & 0x7F;
-        drops[i].y = -(int16_t)((r >> 8) & 0x1F);
-        drops[i].speed = s_min + ((r >> 16) % (s_max - s_min + 1));
-        drops[i].tail  = t_min + ((r >> 24) % (t_max - t_min + 1));
-        break;
+    size_t hist_n = gcounter.cpm_history.size();
+    uint32_t recent_sum = 0;
+    uint8_t  recent_n   = 0;
+    if (hist_n > 0) {
+      recent_n = (hist_n < 5) ? (uint8_t)hist_n : 5;
+      for (uint8_t k = 0; k < recent_n; k++) {
+        recent_sum += (uint32_t)gcounter.cpm_history[hist_n - 1 - k];
+      }
+    }
+    unsigned long typical = 1500;
+    if (recent_n > 0 && recent_sum > 0) {
+      uint32_t avg_cpm = recent_sum / recent_n;
+      if (avg_cpm > 0) typical = 60000UL / avg_cpm;
+    }
+    MatrixCtx ctx = compute_matrix_ctx(typical);
+    uint8_t alive_count = 0;
+    for (uint8_t i = 0; i < MATRIX_DROPS; i++) if (drops[i].alive) alive_count++;
+    uint8_t alive_factor = (alive_count < 3) ? (4 + alive_count * 2) : 8;
+    uint8_t to_spawn = 1;
+    if      (delta_ms < MTX_T1) to_spawn = 3;
+    else if (delta_ms < MTX_T2) to_spawn = 2;
+    uint8_t prox_thresh = (ctx.cps_factor >> 1);
+    uint8_t prox_shift  = prox_thresh + 3;
+    for (uint8_t s = 0; s < to_spawn; s++) {
+      for (uint8_t i = 0; i < MATRIX_DROPS; i++) {
+        if (!drops[i].alive) {
+          uint32_t r = GRNG::fast_uint32();
+          uint8_t col = (uint8_t)(r & 0x7F);
+          int8_t diff = (int8_t)col - (int8_t)last_col;
+          if (diff < 0) diff = -diff;
+          if (last_col < 128 && diff < prox_thresh) col = (col + prox_shift) & 0x7F;
+          last_col = col;
+          uint8_t spd, tail;
+          compute_drop_speed_tail(delta_ms, ctx, alive_factor, r, spd, tail);
+          drops[i].alive = true;
+          drops[i].x = col;
+          drops[i].y = (alive_factor < 8) ? 0 : -(int16_t)((r >> 16) & 0x1F);
+          drops[i].speed = spd;
+          drops[i].tail  = tail;
+          drops[i].seed  = (uint8_t)(GRNG::fast_uint32() & 0xFF);
+          alive_count++;
+          if (alive_count >= 3) alive_factor = 8;
+          break;
+        }
       }
     }
   }
@@ -426,12 +520,21 @@ void SSD1306Display::page_four_matrix() {
   for (uint8_t i = 0; i < MATRIX_DROPS; i++) {
     Drop& d = drops[i];
     if (!d.alive) continue;
+    const uint8_t BODY = 2;
+    uint8_t fade_span = (d.tail > BODY) ? (d.tail - BODY) : 1;
+    uint16_t skip_step = 256 / fade_span;
     for (uint8_t t = 0; t < d.tail; t++) {
-      int16_t ty = d.y - t * 2;
-      if (ty >= 0 && ty < 64) setPixel(d.x, ty);
+      int16_t ty = d.y - (t << 1);
+      if (ty < 0 || ty >= 64) continue;
+      if (t >= BODY) {
+        uint16_t skip_prob = (uint16_t)(t - BODY) * skip_step;
+        uint8_t h = (uint8_t)(d.seed * 53u + t * 97u);
+        if (h < skip_prob) continue;
+      }
+      setPixel(d.x, ty);
     }
-    d.y += d.speed;
-    if (d.y - d.tail * 2 >= 64) d.alive = false;
+    d.y += d.speed >> 3;
+    if (d.y - (d.tail << 1) >= 64) d.alive = false;
   }
 }
 
@@ -459,8 +562,8 @@ void SSD1306Display::showOTABanner() {
   clear();
   setTextAlignment(TEXT_ALIGN_CENTER);
   setFont(ArialMT_Plain_16);
-  drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) - 12, "Update");
-  drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) + 8,  "in progress...");
+  drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2) - 20, "Update");
+  drawString(OLED_WIDTH / 2, (OLED_HEIGHT / 2),  "in progress...");
   displayOn();
   oled_on = true;
   display();

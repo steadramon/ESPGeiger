@@ -45,6 +45,10 @@
   #define GEIGER_RATIO 151.0
 #endif
 
+#ifndef GEIGER_DEAD_TIME_US
+  #define GEIGER_DEAD_TIME_US 100
+#endif
+
 #include "../Util/StringUtil.h"
 
 extern NTP_Client ntpclient;
@@ -110,6 +114,8 @@ class Counter {
       void set_debounce(int val) {
         geigerinput->set_debounce(val);
       };
+      void set_dead_time_us(uint16_t us) { _dead_time_us = us; _dead_time_sec = us * 1e-6f; }
+      uint16_t get_dead_time_us() const { return _dead_time_us; }
       void apply_pcnt_filter() {
         geigerinput->apply_pcnt_filter();
       };
@@ -164,6 +170,8 @@ class Counter {
       int16_t _quiet_to_min   = -1;
       float _ratio = GEIGER_RATIO;
       float _ratio_inv = 1.0f / GEIGER_RATIO;   // reciprocal, kept in sync in set_ratio
+      uint16_t _dead_time_us = GEIGER_DEAD_TIME_US;
+      float    _dead_time_sec = GEIGER_DEAD_TIME_US * 1e-6f;
       // Cached once per tick so accessors are O(1).
       float _cached_cps  = 0.0f;
       float _cached_cpmf = 0.0f;

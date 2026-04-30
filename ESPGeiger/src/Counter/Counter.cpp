@@ -58,6 +58,10 @@ void Counter::secondticker(unsigned long stick_now) {
   }
 
   _cached_cps  = geigerTicks.get();
+  if (_dead_time_us > 0 && _cached_cps > 0.0f) {
+    float x = _cached_cps * _dead_time_sec;
+    _cached_cps *= 1.0f + x * (1.0f + x);
+  }
   _cached_cpmf = _cached_cps * 60.0f;
   _cached_usv  = _cached_cpmf * _ratio_inv;
   int ccpm = (int)roundf(_cached_cpmf);
