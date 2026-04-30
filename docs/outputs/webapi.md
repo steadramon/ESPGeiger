@@ -154,8 +154,10 @@ when it deviates from its own typical rate.
 | Grey   | Silent   | Reading ≥ 4σ *below* baseline and no post in the last 15 min. Likely dead tube, HV drop, or pulse line disconnected. |
 
 The score is a per-bucket Poisson z-score against the station's 7-day
-baseline. 4σ Elevated clears LLD comfortably and 6σ Warning is unambiguous
-(~1-in-1000 by chance).
+baseline, with a small per-hour-of-day adjustment so stable daily cycles
+(heating, occupancy, indoor radon) get absorbed rather than triggering
+the same alert every day. 4σ Elevated clears ISO 11929 L_D (3.29σ)
+comfortably and 6σ Warning is unambiguous (~1-in-1000 by chance).
 Refresh cadence is 10 minutes server-side.
 
 **Cluster pins** use a weighted vote: `Warning` children weigh 4,
