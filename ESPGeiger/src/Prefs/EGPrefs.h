@@ -28,6 +28,7 @@ enum EGPrefType : uint8_t {
   EGP_UINT,
   EGP_FLOAT,
   EGP_STRING,
+  EGP_LABEL,
 };
 
 static constexpr uint8_t EGP_SENSITIVE = 1 << 0;
@@ -37,6 +38,7 @@ static constexpr uint8_t EGP_READONLY  = 1 << 3;
 static constexpr uint8_t EGP_TIME      = 1 << 4;
 static constexpr uint8_t EGP_SLIDER    = 1 << 5;
 static constexpr uint8_t EGP_REQUIRED  = 1 << 6;
+static constexpr uint8_t EGP_INLINE    = 1 << 7;
 
 struct EGPref {
   const char* id;         // 4

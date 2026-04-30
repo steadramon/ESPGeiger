@@ -118,16 +118,12 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   {"pulse_width_us", "Pulse width", "Simulated pulse width (us)", STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(GEIGER_MODEL_FIXED)
+#if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {"geiger_model", "Geiger Counter", "Connected counter/tube model (e.g., SBM-20, J305)", GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
-#endif
-#if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)
-  {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
-  {"blip_bright", "Blip brightness","LED brightness (0-100%)", "80",  nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
-#endif
-  {"quiet_from",  "Quiet from",     "Silence blip LED + beeper from (blank = off)", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
-  {"quiet_to",    "Quiet to",       "End of quiet window; crosses midnight if from > to", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"_tube_hdr", "Tube Detects", nullptr, nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
+  {"tube_alpha", "α Alpha", "Detects alpha radiation", "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+  {"tube_beta",  "β Beta", "Detects beta radiation",  "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+  {"tube_gamma", "γ Gamma", "Detects gamma radiation", "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
 #endif
 };
 
@@ -164,18 +160,11 @@ void InputPrefs::on_prefs_loaded() {
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   _pulse_width_us = (int)EGPrefs::getUInt("input", "pulse_width_us");
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(GEIGER_MODEL_FIXED)
-  DeviceInfo::setGeigermodel(EGPrefs::getString("input", "geiger_model"));
-#endif
-#if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)
-  gcounter.set_blip_led(EGPrefs::getBool("input", "blip_led"));
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
-  gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("input", "blip_bright") * 255 + 50) / 100));
-#endif
-  gcounter.set_quiet_hours(
-    EGPrefs::getString("input", "quiet_from"),
-    EGPrefs::getString("input", "quiet_to")
-  );
+#if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  {
+    const char* m = EGPrefs::getString("input", "geiger_model");
+    if (m[0] != '\0') DeviceInfo::setGeigermodel(m);
+  }
 #endif
 }
 
@@ -215,3 +204,44 @@ static const EGLegacyAlias INPUT_LEGACY[] = {
 };
 const EGLegacyAlias* InputPrefs::legacy_aliases() { return INPUT_LEGACY; }
 // === END LEGACY IMPORT ===
+
+#if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)
+class LedPrefs : public EGModule {
+public:
+  const char* name() override { return "led"; }
+  uint8_t display_order() override { return 13; }
+  const EGPrefGroup* prefs_group() override;
+  void on_prefs_loaded() override;
+};
+
+static LedPrefs ledPrefs;
+EG_REGISTER_MODULE(ledPrefs)
+
+static const EGPref LED_PREF_ITEMS[] = {
+  {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
+  {"blip_bright", "Blip brightness","LED brightness (0-100%)", "80",  nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+#endif
+  {"quiet_from",  "Quiet from",     "Silence blip LED + beeper from (blank = off)", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"quiet_to",    "Quiet to",       "End of quiet window; crosses midnight if from > to", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+};
+
+static const EGPrefGroup LED_PREF_GROUP = {
+  "led", "Blip LED", 1,
+  LED_PREF_ITEMS,
+  sizeof(LED_PREF_ITEMS) / sizeof(LED_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
+
+void LedPrefs::on_prefs_loaded() {
+  gcounter.set_blip_led(EGPrefs::getBool("led", "blip_led"));
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
+  gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("led", "blip_bright") * 255 + 50) / 100));
+#endif
+  gcounter.set_quiet_hours(
+    EGPrefs::getString("led", "quiet_from"),
+    EGPrefs::getString("led", "quiet_to")
+  );
+}
+#endif
