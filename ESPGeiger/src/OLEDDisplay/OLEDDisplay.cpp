@@ -164,9 +164,16 @@ void SSD1306Display::loop(unsigned long now) {
         page_three_full();
       }
     } else if (oled_page == 4) {
-      if (oled_last_update == 0) _page4_num_last = 0;
+      if (oled_last_update == 0) {
+        _page4_num_last = 0;
+        _page4_variant = random(2);
+      }
       oled_last_update = now;
-      page_four_static();
+      if (_page4_variant == 0) {
+        page_four_static();
+      } else {
+        page_four_matrix();
+      }
     }
     display();
 
@@ -369,6 +376,65 @@ void SSD1306Display::page_three_full() {
   drawString(0, 47, PSTR("@ steadramon"));
 }
 
+void SSD1306Display::page_four_matrix() {
+  static const uint8_t MATRIX_DROPS = 32;
+  struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; bool alive; };
+  static Drop drops[MATRIX_DROPS];
+  static unsigned long last_blip_seen = 0;
+
+  if (_page4_num_last == 0) {
+    _page4_num_last = millis();
+    last_blip_seen = gcounter.last_blip();
+    for (uint8_t i = 0; i < MATRIX_DROPS; i++) drops[i].alive = false;
+    // Pre-populate so the screen isn't blank on entry. They'll fall off
+    // naturally as real blips arrive.
+    for (uint8_t i = 0; i < 6; i++) {
+      uint32_t r = GRNG::fast_uint32();
+      drops[i].alive = true;
+      drops[i].x = r & 0x7F;
+      drops[i].y = (int16_t)((r >> 8) & 0x3F);
+      drops[i].speed = 2;
+      drops[i].tail = 8 + ((r >> 24) & 0x07);
+    }
+  }
+
+  unsigned long now_blip = gcounter.last_blip();
+  if (now_blip != last_blip_seen) {
+    unsigned long delta_ms = (now_blip - last_blip_seen) / 1000;
+    last_blip_seen = now_blip;
+    // Faster ticks → faster, shorter drops. Slower ticks → slower, longer trails.
+    // Random jitter within each delta-band keeps the visual lively.
+    uint8_t s_min = 1, s_max = 2, t_min = 16, t_max = 22;
+    if      (delta_ms < 100)  { s_min = 3; s_max = 4; t_min = 2;  t_max = 5;  }
+    else if (delta_ms < 300)  { s_min = 3; s_max = 4; t_min = 4;  t_max = 8;  }
+    else if (delta_ms < 800)  { s_min = 2; s_max = 3; t_min = 8;  t_max = 14; }
+    else if (delta_ms < 2000) { s_min = 1; s_max = 3; t_min = 12; t_max = 18; }
+    for (uint8_t i = 0; i < MATRIX_DROPS; i++) {
+      if (!drops[i].alive) {
+        uint32_t r = GRNG::fast_uint32();
+        drops[i].alive = true;
+        drops[i].x = r & 0x7F;
+        drops[i].y = -(int16_t)((r >> 8) & 0x1F);
+        drops[i].speed = s_min + ((r >> 16) % (s_max - s_min + 1));
+        drops[i].tail  = t_min + ((r >> 24) % (t_max - t_min + 1));
+        break;
+      }
+    }
+  }
+
+  clear();
+  for (uint8_t i = 0; i < MATRIX_DROPS; i++) {
+    Drop& d = drops[i];
+    if (!d.alive) continue;
+    for (uint8_t t = 0; t < d.tail; t++) {
+      int16_t ty = d.y - t * 2;
+      if (ty >= 0 && ty < 64) setPixel(d.x, ty);
+    }
+    d.y += d.speed;
+    if (d.y - d.tail * 2 >= 64) d.alive = false;
+  }
+}
+
 void SSD1306Display::page_four_static() {
   unsigned long now = millis();
   if (_page4_num_last == 0 || now - _page4_num_last >= 1000) {
@@ -379,7 +445,7 @@ void SSD1306Display::page_four_static() {
     snprintf_P(_page4_num, sizeof(_page4_num), PSTR("%u"), num);
   }
   uint8_t noise[1024];
-  GRNG::extract(noise, sizeof(noise));
+  GRNG::extract_fast(noise, sizeof(noise));
   clear();
   drawXbm(0, 0, 128, 64, noise);
   setColor(BLACK);
