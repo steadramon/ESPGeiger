@@ -29,5 +29,7 @@ class GRNG
     static void mix(uint32_t bits);
     static uint32_t stir();
     static void extract(uint8_t* out, size_t n);
+    static uint32_t fast_uint32();
+    static void extract_fast(uint8_t* out, size_t n);
 };
 #endif
