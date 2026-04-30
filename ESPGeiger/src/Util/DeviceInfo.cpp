@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "DeviceInfo.h"
+#include "../Prefs/EGPrefs.h"
 #ifdef ESP32
 #include <esp_chip_info.h>
 #include <esp_system.h>
@@ -71,6 +72,14 @@ void DeviceInfo::setGeigermodel(const char* s) {
     strncpy(s_geigermodel, GEIGER_MODEL, sizeof(s_geigermodel) - 1);
   }
   s_geigermodel[sizeof(s_geigermodel) - 1] = '\0';
+}
+
+uint8_t DeviceInfo::tubeDetection() {
+  uint8_t f = 0;
+  if (EGPrefs::getBool("input", "tube_alpha")) f |= 0x01;
+  if (EGPrefs::getBool("input", "tube_beta"))  f |= 0x02;
+  if (EGPrefs::getBool("input", "tube_gamma")) f |= 0x04;
+  return f;
 }
 
 const char* DeviceInfo::friendlyName() { return s_friendlyname; }

@@ -51,6 +51,8 @@ namespace DeviceInfo {
   const char* chipmodel();
   const char* geigermodel();
   void setGeigermodel(const char* s);
+  // Bitflag: bit 0 = alpha, bit 1 = beta, bit 2 = gamma.
+  uint8_t tubeDetection();
   const char* friendlyName();
   void setFriendlyName(const char* s);
   const char* mac();
