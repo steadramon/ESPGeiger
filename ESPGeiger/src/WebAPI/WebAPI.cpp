@@ -462,6 +462,8 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
   // 403 = unknown station, treat as already-gone.
   if (code == 200 || code == 403) {
     Log::console(PSTR("WebAPI: Station forgotten (HTTP %d)"), code);
+    self->station_id = 0;
+    self->lastHandshake = 0;
     self->last_ok = true;
   } else {
     Log::console(PSTR("WebAPI: Forget failed - %s"), request->responseHTTPString().c_str());
