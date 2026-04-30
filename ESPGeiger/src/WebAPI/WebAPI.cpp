@@ -464,6 +464,8 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
     Log::console(PSTR("WebAPI: Station forgotten (HTTP %d)"), code);
     self->station_id = 0;
     self->lastHandshake = 0;
+    self->lastPing = 0;
+    self->healthPostCounter = 0;
     self->last_ok = true;
   } else {
     Log::console(PSTR("WebAPI: Forget failed - %s"), request->responseHTTPString().c_str());
