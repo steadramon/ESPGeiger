@@ -59,6 +59,7 @@ are never aggregated into long-term history.
 | `bd`  | string  | Chip model (e.g. `esp8266`, `ESP32-C3`) |
 | `gm`  | string  | PlatformIO build environment name (e.g. `espgeigerlog_serial`) |
 | `gc`  | string  | Geiger counter model — auto-detected on Serial builds, user-set on Pulse builds |
+| `td`  | uint32  | Tube detection bitmask: bit 0 = α, bit 1 = β, bit 2 = γ. `0` = unknown / not set on the device. Bits 3-7 reserved. |
 | `fl`  | uint32  | Feature-flag bitmask (which optional output modules are compiled in) |
 | `rr`  | uint32  | Normalised last-reset reason |
 | `m`   | uint8   | Sharing mode: `1` = heartbeat-only, `2` = full readings (mode `0` doesn't handshake) |
