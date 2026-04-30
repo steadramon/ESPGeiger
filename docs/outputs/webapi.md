@@ -139,30 +139,50 @@ station also gets a memorable three-word alias — e.g.
 
 ## Pin colours
 
-Each station is represented by a teardrop pin on the map. The colour
-reflects the station's **current reading compared to its own baseline**
-— not a global threshold. This means a tube with a high background
-(e.g. sitting next to granite) is only flagged when it deviates from
-its *own* typical rate, not against an arbitrary fleet-wide value.
+Each station is a teardrop pin on the map. Colour reflects the station's
+current reading vs **its own baseline**, not a global threshold. A tube
+with high local background (e.g. sitting next to granite) is only flagged
+when it deviates from its own typical rate.
 
 | Colour | State | Meaning |
 |---|---|---|
-| Blue   | New       | Fewer than ~4h of data. Baseline not yet established. |
-| Green  | Normal    | Reading within 2σ of the station's baseline. |
-| Amber  | Elevated  | Reading 2σ–5σ *above* baseline. Worth a glance. |
-| Red    | Excursion | Reading ≥5σ *above* baseline. Unusual — investigate. |
-| Grey   | Silent    | Reading ≥2σ *below* baseline, or consistent zeros with enough history to know it's not a fresh station. Likely dead tube / HV drop / pulse line disconnected. |
+| Blue   | New      | Fewer than ~4 h of data. Baseline not yet established. |
+| Green  | Normal   | Reading within 4σ of baseline. |
+| Amber  | Elevated | Reading 4σ–6σ *above* baseline. Worth a glance. |
+| Red    | Warning  | Reading ≥ 6σ *above* baseline. Investigate. |
+| Grey   | Silent   | Reading ≥ 4σ *below* baseline and no post in the last 15 min. Likely dead tube, HV drop, or pulse line disconnected. |
 
-The score is a **Poisson z-score**: `(observed - baseline) / √baseline`.
-Geiger counts follow Poisson statistics (variance = mean), so a
-5σ deviation is genuinely rare for a healthy tube. Refresh cadence
-is 10 minutes server-side.
+The score is a per-bucket Poisson z-score against the station's 7-day
+baseline. 4σ Elevated clears LLD comfortably and 6σ Warning is unambiguous
+(~1-in-1000 by chance).
+Refresh cadence is 10 minutes server-side.
 
-**Cluster pins** (shown when many stations overlap at low zoom) inherit
-the "worst" alert colour from their members: any `Excursion` child
-makes the whole cluster red; otherwise any `Elevated` child makes it
-amber. `Silent` and `New` are deliberately ignored at cluster level —
-a single dead tube shouldn't tint the neighbourhood.
+**Cluster pins** use a weighted vote: `Warning` children weigh 4,
+`Elevated` weigh 2, others weigh 1. A single `Warning` child tints
+clusters up to ~4 members red; a single `Elevated` tints clusters up
+to ~2 members amber. Larger clusters need the alert state to dominate
+by weighted total. `Silent` and `New` never apply a tint, so dead
+tubes don't colour the neighbourhood.
+
+## Events timeline
+
+The map's red pin is coarse: anything ≥ 6σ paints red. The station
+detail page's **Events** panel breaks the same band down further:
+
+| Badge | σ range | Meaning |
+|---|---|---|
+| Elevated | 4σ–6σ | Above detection limit but routine. Often weather-driven (radon washout after rain). |
+| Warning  | 6σ–9σ | Unambiguous deviation. ~1-in-1000 by chance. |
+| Danger   | 9σ–14σ | Effectively impossible by chance. Hardware fault or genuine source. |
+| Critical | ≥ 14σ | Tube going rogue, point source nearby, or pulse line shorted. |
+
+So a 12σ station shows a red `Warning` pin on the map, but its event row
+on the station page shows `Danger`. Map = umbrella, events = exact band.
+
+Event rows also show direction (↑ above baseline, ↓ below), duration,
+peak σ, and an `(ongoing)` tag if still active. **Offline events** use
+a separate grey badge with no σ value, because silence isn't a
+severity-banded anomaly.
 
 ## Endpoint
 
