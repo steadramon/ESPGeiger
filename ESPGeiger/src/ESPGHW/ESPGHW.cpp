@@ -30,12 +30,23 @@
 ESPGeigerHW hardware;
 EG_REGISTER_MODULE(hardware)
 
-static const EGPref HW_PREF_ITEMS[] = {
-  {"freq",   "PWM Frequency",  "HV generator frequency (Hz)", STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, 0},
-  {"duty",   "PWM Duty",       "HV generator duty (1-255)",   STR(GEIGERHW_DUTY), nullptr, 1, 255, 0, EGP_UINT, 0},
+EG_PSTR(HW_L_FRQ, "PWM Frequency");
+EG_PSTR(HW_H_FRQ, "HV generator frequency (Hz)");
+EG_PSTR(HW_L_DTY, "PWM Duty");
+EG_PSTR(HW_H_DTY, "HV generator duty (1-255)");
 #ifdef ESPG_HV_ADC
-  {"ratio",  "ADC VD Ratio",   "Voltage divider ratio",       STR(GEIGERHW_ADC_RATIO),  nullptr, 0, 0, 0, EGP_INT, 0},
-  {"offset", "ADC VD Offset",  "Voltage divider offset",      STR(GEIGERHW_ADC_OFFSET), nullptr, 0, 0, 0, EGP_INT, 0},
+EG_PSTR(HW_L_RAT, "ADC VD Ratio");
+EG_PSTR(HW_H_RAT, "Voltage divider ratio");
+EG_PSTR(HW_L_OFF, "ADC VD Offset");
+EG_PSTR(HW_H_OFF, "Voltage divider offset");
+#endif
+
+static const EGPref HW_PREF_ITEMS[] = {
+  {"freq",   HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, 0},
+  {"duty",   HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, 255, 0, EGP_UINT, 0},
+#ifdef ESPG_HV_ADC
+  {"ratio",  HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0, 0, 0, EGP_INT, 0},
+  {"offset", HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, 0, 0, 0, EGP_INT, 0},
 #endif
 };
 

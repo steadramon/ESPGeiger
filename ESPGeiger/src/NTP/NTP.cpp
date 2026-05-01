@@ -27,9 +27,13 @@ EG_REGISTER_MODULE(ntpclient)
 #include "sntp.h"
 #endif
 
+EG_PSTR(NT_L_SRV, "NTP Server");
+EG_PSTR(NT_L_TZ,  "Timezone");
+EG_PSTR(NT_H_TZ,  "Olson name");
+
 static const EGPref NTP_PREF_ITEMS[] = {
-  {"server", "NTP Server", "",            NTP_SERVER, nullptr, 0, 0, 64, EGP_STRING, 0},
-  {"tz",     "Timezone",   "Olson name",  NTP_TZ,     nullptr, 0, 0, 64, EGP_STRING, 0},
+  {"server", NT_L_SRV, nullptr,  NTP_SERVER, nullptr, 0, 0, 64, EGP_STRING, 0},
+  {"tz",     NT_L_TZ,  NT_H_TZ,  NTP_TZ,     nullptr, 0, 0, 64, EGP_STRING, 0},
 };
 
 static const EGPrefGroup NTP_PREF_GROUP = {

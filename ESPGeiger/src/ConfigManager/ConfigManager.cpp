@@ -498,11 +498,15 @@ void ConfigManager::handleEGPrefs() {
     for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
       const EGPrefGroup* g = EGPrefs::group_at(gi);
       if (!g) continue;
+      char id_buf[32];
       for (size_t j = 0; j < g->count; j++) {
         const EGPref& p = g->prefs[j];
         if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
         if (p.type == EGP_LABEL) continue;
-        snprintf_P(name, sizeof(name), PSTR("%s.%s"), g->module_id, p.id);
+        // p.id may be PROGMEM; copy to SRAM for snprintf %s and put().
+        strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
+        id_buf[sizeof(id_buf) - 1] = '\0';
+        snprintf_P(name, sizeof(name), PSTR("%s.%s"), g->module_id, id_buf);
         lookup = name;
         char one[2] = {0, 0};
         const char* v;
@@ -515,7 +519,7 @@ void ConfigManager::handleEGPrefs() {
           v = arg_val.c_str();
           if ((p.flags & EGP_SENSITIVE) && v[0] == '\0') continue;
         }
-        EGPrefs::put(g->module_id, p.id, v);
+        EGPrefs::put(g->module_id, id_buf, v);
       }
     }
     EGPrefs::commit();
@@ -573,20 +577,35 @@ void ConfigManager::handleEGPrefs() {
     send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
     first_emitted = false;
 
+    // Per-iteration SRAM copies — pref id/label/help/pattern may be PROGMEM,
+    // and snprintf_P %s reads string args from RAM, not flash.
+    char s_id[32], s_lbl[80], s_help[120], s_pat[64];
+    auto P2S = [](const char* fp, char* dst, size_t cap) -> const char* {
+      if (!fp) return "";
+      strncpy_P(dst, fp, cap - 1);
+      dst[cap - 1] = '\0';
+      return dst;
+    };
+
     for (size_t j = 0; j < g->count; j++) {
       const EGPref& p = g->prefs[j];
       if (p.flags & EGP_HIDDEN) continue;
 
+      const char* p_id    = P2S(p.id,    s_id,  sizeof(s_id));
+      const char* p_label = P2S(p.label, s_lbl, sizeof(s_lbl));
+      const char* p_help  = P2S(p.help,  s_help, sizeof(s_help));
+      const char* p_pat   = P2S(p.pattern, s_pat, sizeof(s_pat));
+
       if (p.type == EGP_LABEL) {
-        n = snprintf_P(buf, sizeof(buf), PSTR("<label>%s</label><br/>"), p.label ? p.label : "");
+        n = snprintf_P(buf, sizeof(buf), PSTR("<label>%s</label><br/>"), p.label ? p_label : "");
         send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
         continue;
       }
 
-      const char* cur = EGPrefs::getString(g->module_id, p.id);
+      const char* cur = EGPrefs::getString(g->module_id, p_id);
       const char* mid = g->module_id;
-      const char* pid = p.id;
-      const char* lbl = p.label ? p.label : p.id;
+      const char* pid = p_id;
+      const char* lbl = p.label ? p_label : p_id;
       bool ro = (p.flags & EGP_READONLY);
       bool inline_bool = (p.type == EGP_BOOL) && (p.flags & EGP_INLINE);
       size_t pos = 0;
@@ -597,7 +616,7 @@ void ConfigManager::handleEGPrefs() {
       }
 
       if (p.type == EGP_BOOL && inline_bool) {
-        const char* tip = (p.help && p.help[0]) ? p.help : "";
+        const char* tip = (p.help && p_help[0]) ? p_help : "";
         n = snprintf_P(buf + pos, sizeof(buf) - pos,
                      PSTR("<label class='il' title='%s'><input type='checkbox' id='%s.%s' name='%s.%s' value='1'%S%S>%s</label>"),
                      tip, mid, pid, mid, pid,
@@ -649,8 +668,8 @@ void ConfigManager::handleEGPrefs() {
           n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" maxlength='%u'"), (unsigned)p.max_len);
           advance_pos(pos, n, sizeof(buf));
         }
-        if (p.type == EGP_STRING && p.pattern && p.pattern[0]) {
-          n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" pattern='%s'"), p.pattern);
+        if (p.type == EGP_STRING && p.pattern && p_pat[0]) {
+          n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" pattern='%s'"), p_pat);
           advance_pos(pos, n, sizeof(buf));
         }
         if ((p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) && p.min_i != p.max_i) {
@@ -675,8 +694,8 @@ void ConfigManager::handleEGPrefs() {
         }
       }
 
-      if (!inline_bool && p.help && p.help[0]) {
-        n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("<small>%s</small>"), p.help);
+      if (!inline_bool && p.help && p_help[0]) {
+        n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("<small>%s</small>"), p_help);
         advance_pos(pos, n, sizeof(buf));
       }
 

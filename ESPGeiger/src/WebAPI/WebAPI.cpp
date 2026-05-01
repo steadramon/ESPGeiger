@@ -46,10 +46,17 @@ EG_REGISTER_MODULE(webapi)
 
 // 0=Off (silent), 1=Heartbeat (presence + health every 15 min), 2=Readings (full).
 // 0,0 lat/lon is the "unset" signal so server falls back to IP-based geo.
+EG_PSTR(WA_L_MD,  "Sharing mode");
+EG_PSTR(WA_H_MD,  "0=Off, 1=Heartbeat, 2=CPM Readings");
+EG_PSTR(WA_L_LAT, "Latitude");
+EG_PSTR(WA_H_LAT, "Station latitude  (-90..90, 0 = use IP)");
+EG_PSTR(WA_L_LON, "Longitude");
+EG_PSTR(WA_H_LON, "Station longitude (-180..180, 0 = use IP)");
+
 static const EGPref WEBAPI_PREF_ITEMS[] = {
-  {"mode",   "Sharing mode",    "0=Off, 1=Heartbeat, 2=CPM Readings",  "2", nullptr, 0, 2, 0, EGP_UINT, 0},
-  {"lat",    "Latitude",        "Station latitude  (-90..90, 0 = use IP)",   "0", nullptr, -90,  90,  0, EGP_FLOAT, 0},
-  {"lon",    "Longitude",       "Station longitude (-180..180, 0 = use IP)", "0", nullptr, -180, 180, 0, EGP_FLOAT, 0},
+  {"mode",   WA_L_MD,  WA_H_MD,  "2", nullptr, 0,    2,   0, EGP_UINT,  0},
+  {"lat",    WA_L_LAT, WA_H_LAT, "0", nullptr, -90,  90,  0, EGP_FLOAT, 0},
+  {"lon",    WA_L_LON, WA_H_LON, "0", nullptr, -180, 180, 0, EGP_FLOAT, 0},
 };
 
 static const EGPrefGroup WEBAPI_PREF_GROUP = {

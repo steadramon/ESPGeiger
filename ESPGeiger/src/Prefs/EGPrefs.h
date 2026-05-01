@@ -40,12 +40,18 @@ static constexpr uint8_t EGP_SLIDER    = 1 << 5;
 static constexpr uint8_t EGP_REQUIRED  = 1 << 6;
 static constexpr uint8_t EGP_INLINE    = 1 << 7;
 
+// Declare a PROGMEM pref string. label/help/pattern fields in EGPref tables
+// can be set to one of these (PSTR() can't appear in static initializers).
+// id and default_val must stay SRAM — getString returns default_val to
+// callers that may do strcmp without _P, and find_pref does strcmp on id.
+#define EG_PSTR(name, val) static const char name[] PROGMEM = val
+
 struct EGPref {
-  const char* id;         // 4
-  const char* label;      // 4
-  const char* help;       // 4
-  const char* default_val;// 4
-  const char* pattern;    // 4  (regex for HTML5 validation, or nullptr)
+  const char* id;         // 4  (SRAM)
+  const char* label;      // 4  (SRAM or PROGMEM)
+  const char* help;       // 4  (SRAM or PROGMEM)
+  const char* default_val;// 4  (SRAM)
+  const char* pattern;    // 4  (regex for HTML5 validation, SRAM or PROGMEM, or nullptr)
   int32_t     min_i;      // 4  (min range, or 0 if unconstrained)
   int32_t     max_i;      // 4  (max range, same as min_i = unconstrained)
   uint16_t    max_len;    // 2  (max string length, 0 = unlimited)

@@ -35,11 +35,20 @@
 SystemPrefs systemPrefs;
 EG_REGISTER_MODULE(systemPrefs)
 
+EG_PSTR(SY_L_NAM, "Friendly name");
+EG_PSTR(SY_H_NAM, "Optional label for web UI");
+EG_PSTR(SY_L_RAT, "uSv/h Ratio");
+EG_PSTR(SY_H_RAT, "CPM to uSv/h factor");
+EG_PSTR(SY_L_WRN, "Warning CPM");
+EG_PSTR(SY_H_WRN, "Warning trigger (CPM)");
+EG_PSTR(SY_L_ALR, "Alert CPM");
+EG_PSTR(SY_H_ALR, "Alert trigger (CPM)");
+
 static const EGPref SYSTEM_PREF_ITEMS[] = {
-  {"name",   "Friendly name", "Optional label for web UI", "", nullptr, 0, 0, 32, EGP_STRING, 0},
-  {"ratio",  "uSv/h Ratio",   "CPM to uSv/h factor",  "151.0",      nullptr, 0, 0,    0,  EGP_FLOAT,  0},
-  {"warn",   "Warning CPM",   "Warning trigger (CPM)","50",         nullptr, 0, 9999, 0,  EGP_UINT,   0},
-  {"alert",  "Alert CPM",     "Alert trigger (CPM)",  "100",        nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"name",   SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    32, EGP_STRING, 0},
+  {"ratio",  SY_L_RAT, SY_H_RAT, "151.0", nullptr, 0, 0,    0,  EGP_FLOAT,  0},
+  {"warn",   SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"alert",  SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
 };
 
 static const EGPrefGroup SYSTEM_PREF_GROUP = {
@@ -97,36 +106,92 @@ EG_REGISTER_MODULE(inputPrefs)
 static char serial_type_desc[48] = "";
 #endif
 
-static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  {"serial_type", "Serial Type", serial_type_desc, STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
-  {"cpm_window", "CPM Window (CPM-only counters)", "Rolling CPM window (seconds). Lower=more responsive, higher=smoother. Reboot to apply.", "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER},
+EG_PSTR(IN_L_STY, "Serial Type");
+EG_PSTR(IN_L_CPW, "CPM Window (CPM-only counters)");
+EG_PSTR(IN_H_CPW, "Rolling CPM window (seconds). Lower=more responsive, higher=smoother. Reboot to apply.");
 #endif
 #ifndef RXPIN_BLOCKED
-  {"rx_pin", "RX Pin",        "",  STR(GEIGER_RXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
+EG_PSTR(IN_L_RXP, "RX Pin");
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {"tx_pin", "TX Pin",        "",  STR(GEIGER_TXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
+EG_PSTR(IN_L_TXP, "TX Pin");
 #endif
 #ifdef USE_PCNT
-  {"pcnt_filter", "PCNT Filter", "Pulse counter filter (0-1023, 0=off)", "200", nullptr, 0, 1023, 0, EGP_UINT, 0},
-  {"pcnt_pull",   "PCNT Pull",   "Pin pull (0=none, 1=up, 2=down)",     STR(PCNT_PIN_PULL_DEFAULT), nullptr, 0, 2, 0, EGP_UINT, 0},
+EG_PSTR(IN_L_PCF, "PCNT Filter");
+EG_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0=off)");
+EG_PSTR(IN_L_PCP, "PCNT Pull");
+EG_PSTR(IN_H_PCP, "Pin pull (0=none, 1=up, 2=down)");
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-  {"debounce", "Debounce", "Debounce (us)", STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, 0},
+EG_PSTR(IN_L_DBN, "Debounce");
+EG_PSTR(IN_H_DBN, "Debounce (us)");
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  {"pulse_width_us", "Pulse width", "Simulated pulse width (us)", STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
+EG_PSTR(IN_L_PWU, "Pulse width");
+EG_PSTR(IN_H_PWU, "Simulated pulse width (us)");
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  {"dead_time_us", "Tube dead time", "GM tube dead time (us). 0=disabled. J305=50, SBM-20=150.", STR(GEIGER_DEAD_TIME_US), nullptr, 0, 1000, 0, EGP_UINT, 0},
+EG_PSTR(IN_L_DTU, "Tube dead time");
+EG_PSTR(IN_H_DTU, "GM tube dead time (us). 0=disabled. J305=50, SBM-20=150.");
 #endif
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  {"geiger_model", "Geiger Counter", "Connected counter/tube model (e.g., SBM-20, J305)", GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
-  {"_tube_hdr", "Tube Detects", nullptr, nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
-  {"tube_alpha", "α Alpha", "Detects alpha radiation", "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
-  {"tube_beta",  "β Beta", "Detects beta radiation",  "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
-  {"tube_gamma", "γ Gamma", "Detects gamma radiation", "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+EG_PSTR(IN_L_GMD, "Geiger Counter");
+EG_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
+EG_PSTR(IN_L_THD, "Tube Detects");
+EG_PSTR(IN_L_TBA, "\xCE\xB1 Alpha");
+EG_PSTR(IN_H_TBA, "Detects alpha radiation");
+EG_PSTR(IN_L_TBB, "\xCE\xB2 Beta");
+EG_PSTR(IN_H_TBB, "Detects beta radiation");
+EG_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
+EG_PSTR(IN_H_TBG, "Detects gamma radiation");
+#endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+EG_PSTR(IN_L_CHD, "Dual Tube");
+EG_PSTR(IN_L_RXB, "RX Pin B");
+EG_PSTR(IN_H_RXB, "GPIO for the second tube");
+EG_PSTR(IN_L_CMD, "Mode");
+EG_PSTR(IN_H_CMD, "0 = Sum (any pulse), 1 = Coincidence, 2 = Anti-coincidence");
+EG_PSTR(IN_L_CWN, "Coincidence Window");
+EG_PSTR(IN_H_CWN, "Pair window in microseconds (10-10000)");
+#endif
+
+static const EGPref INPUT_PREF_ITEMS[] = {
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+  {"serial_type", IN_L_STY, serial_type_desc, STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
+  {"cpm_window",  IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER},
+#endif
+#ifndef RXPIN_BLOCKED
+  {"rx_pin", IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
+#endif
+#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
+  {"tx_pin", IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
+#endif
+#ifdef USE_PCNT
+  {"pcnt_filter", IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, 0},
+  {"pcnt_pull",   IN_L_PCP, IN_H_PCP, STR(PCNT_PIN_PULL_DEFAULT), nullptr, 0, 2, 0, EGP_UINT, 0},
+#endif
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+  {"debounce", IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, 0},
+#endif
+#if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+  {"pulse_width_us", IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
+#endif
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_US), nullptr, 0, 1000, 0, EGP_UINT, 0},
+#endif
+#if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  {"geiger_model", IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
+  {"_tube_hdr", IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
+  {"tube_alpha", IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+  {"tube_beta",  IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+  {"tube_gamma", IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+#endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+  {"_coinc_hdr",  IN_L_CHD, nullptr,  nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
+  {"rx_pin_b",    IN_L_RXB, IN_H_RXB, STR(GEIGER_RXPIN_B),               nullptr, 0, 0, 0, EGP_UINT, 0},
+  {"coinc_mode",  IN_L_CMD, IN_H_CMD, "0",                                nullptr, 0, 2, 0, EGP_UINT, 0},
+  {"coinc_win_us",IN_L_CWN, IN_H_CWN, STR(GEIGER_COINCIDENCE_WINDOW_US), nullptr, 10, 10000, 0, EGP_UINT, 0},
 #endif
 };
 
@@ -172,6 +237,11 @@ void InputPrefs::on_prefs_loaded() {
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   gcounter.set_dead_time_us((uint16_t)EGPrefs::getUInt("input", "dead_time_us"));
 #endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+  gcounter.set_rx_pin_b((int)EGPrefs::getUInt("input", "rx_pin_b"));
+  gcounter.set_coinc_mode((uint8_t)EGPrefs::getUInt("input", "coinc_mode"));
+  gcounter.set_coinc_window_us(EGPrefs::getUInt("input", "coinc_win_us"));
+#endif
 }
 
 void InputPrefs::on_prefs_saved() {
@@ -186,6 +256,9 @@ void InputPrefs::on_prefs_saved() {
   if (_serial_type != (uint8_t)EGPrefs::getUInt("input", "serial_type")) need_reboot = true;
   if (!SerialFormat::has_cps(_serial_type) &&
       gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("input", "cpm_window")) need_reboot = true;
+#endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+  if (gcounter.get_rx_pin_b() != (int)EGPrefs::getUInt("input", "rx_pin_b")) need_reboot = true;
 #endif
   on_prefs_loaded();
   if (need_reboot) EGPrefs::request_restart();
@@ -223,13 +296,24 @@ public:
 static LedPrefs ledPrefs;
 EG_REGISTER_MODULE(ledPrefs)
 
-static const EGPref LED_PREF_ITEMS[] = {
-  {"blip_led",    "Blip LED",       "Flash LED on each count", "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
+EG_PSTR(LD_L_BLP, "Blip LED");
+EG_PSTR(LD_H_BLP, "Flash LED on each count");
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
-  {"blip_bright", "Blip brightness","LED brightness (0-100%)", "80",  nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+EG_PSTR(LD_L_BRT, "Blip brightness");
+EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
 #endif
-  {"quiet_from",  "Quiet from",     "Silence blip LED + beeper from (blank = off)", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
-  {"quiet_to",    "Quiet to",       "End of quiet window; crosses midnight if from > to", "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+EG_PSTR(LD_L_QFR, "Quiet from");
+EG_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
+EG_PSTR(LD_L_QTO, "Quiet to");
+EG_PSTR(LD_H_QTO, "End of quiet window; crosses midnight if from > to");
+
+static const EGPref LED_PREF_ITEMS[] = {
+  {"blip_led",    LD_L_BLP, LD_H_BLP, "1",  nullptr, 0, 1,   0, EGP_BOOL, 0},
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
+  {"blip_bright", LD_L_BRT, LD_H_BRT, "80", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+#endif
+  {"quiet_from",  LD_L_QFR, LD_H_QFR, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
+  {"quiet_to",    LD_L_QTO, LD_H_QTO, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
 };
 
 static const EGPrefGroup LED_PREF_GROUP = {

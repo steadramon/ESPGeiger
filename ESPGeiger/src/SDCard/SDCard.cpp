@@ -28,8 +28,11 @@ SdFat32* sd = nullptr;
 SDCard sdcard;
 EG_REGISTER_MODULE(sdcard)
 
+EG_PSTR(SD_L_SI, "Sync Interval (min)");
+EG_PSTR(SD_H_SI, "Minutes between syncs. 1=safest, higher=less SD wear");
+
 static const EGPref SDCARD_PREF_ITEMS[] = {
-  {"sync_min", "Sync Interval (min)", "Minutes between syncs. 1=safest, higher=less SD wear", "1", nullptr, 1, 5, 0, EGP_UINT, 0},
+  {"sync_min", SD_L_SI, SD_H_SI, "1", nullptr, 1, 5, 0, EGP_UINT, 0},
 };
 
 static const EGPrefGroup SDCARD_PREF_GROUP = {

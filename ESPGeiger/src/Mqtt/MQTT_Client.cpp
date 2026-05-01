@@ -45,16 +45,35 @@ static char s_pub_buffer[MQTT_JSON_BUFFER_SIZE];
 #define MQTT_PUB_YIELD() yield()
 #endif
 
-static const EGPref MQTT_PREF_ITEMS[] = {
-  {"server",   "Server",     "Broker address or IP",      "",               "[A-Za-z0-9.:_\\-]+", 0, 0, 16, EGP_STRING, 0},
-  {"port",     "Port",       "",                          "1883",           nullptr, 1, 65535, 0,  EGP_UINT,   0},
-  {"user",     "User",       "",                          "",               nullptr, 0, 0,     32, EGP_STRING, 0},
-  {"password", "Password",   "",                          "",               nullptr, 0, 0,     32, EGP_STRING, EGP_SENSITIVE},
-  {"topic",    "Root Topic", "Root topic; {id}=chip ID",  "ESPGeiger-{id}", "[A-Za-z0-9_\\/\\{\\}\\-]+", 0, 0, 16, EGP_STRING, 0},
-  {"interval", "Interval",   "Publish interval (sec)",    "60",             nullptr, MQTT_MIN_TIME, MQTT_MAX_TIME, 0, EGP_UINT, 0},
+EG_PSTR(MQ_L_SRV, "Server");
+EG_PSTR(MQ_H_SRV, "Broker address or IP");
+EG_PSTR(MQ_P_SRV, "[A-Za-z0-9.:_\\-]+");
+EG_PSTR(MQ_L_PRT, "Port");
+EG_PSTR(MQ_L_USR, "User");
+EG_PSTR(MQ_L_PWD, "Password");
+EG_PSTR(MQ_L_TPC, "Root Topic");
+EG_PSTR(MQ_H_TPC, "Root topic; {id}=chip ID");
+EG_PSTR(MQ_P_TPC, "[A-Za-z0-9_\\/\\{\\}\\-]+");
+EG_PSTR(MQ_L_INT, "Interval");
+EG_PSTR(MQ_H_INT, "Publish interval (sec)");
 #ifdef MQTTAUTODISCOVER
-  {"hass_enabled", "HA Autodiscovery",       "Publish HA autodiscovery",         MQTT_HASS_DEFAULT,    nullptr, 0, 0, 0,  EGP_BOOL,   0},
-  {"hass_topic",   "HA Autodiscovery Topic", "HA discovery prefix",              MQTT_DISCOVERY_TOPIC, "[A-Za-z0-9_\\/\\-]+", 0, 0, 32, EGP_STRING, 0},
+EG_PSTR(MQ_L_HEN, "HA Autodiscovery");
+EG_PSTR(MQ_H_HEN, "Publish HA autodiscovery");
+EG_PSTR(MQ_L_HTP, "HA Autodiscovery Topic");
+EG_PSTR(MQ_H_HTP, "HA discovery prefix");
+EG_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
+#endif
+
+static const EGPref MQTT_PREF_ITEMS[] = {
+  {"server",   MQ_L_SRV, MQ_H_SRV, "",               MQ_P_SRV, 0, 0, 16, EGP_STRING, 0},
+  {"port",     MQ_L_PRT, nullptr,  "1883",           nullptr,  1, 65535, 0,  EGP_UINT,   0},
+  {"user",     MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     32, EGP_STRING, 0},
+  {"password", MQ_L_PWD, nullptr,  "",               nullptr,  0, 0,     32, EGP_STRING, EGP_SENSITIVE},
+  {"topic",    MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, 16, EGP_STRING, 0},
+  {"interval", MQ_L_INT, MQ_H_INT, "60",             nullptr,  MQTT_MIN_TIME, MQTT_MAX_TIME, 0, EGP_UINT, 0},
+#ifdef MQTTAUTODISCOVER
+  {"hass_enabled", MQ_L_HEN, MQ_H_HEN, MQTT_HASS_DEFAULT,    nullptr,  0, 0, 0,  EGP_BOOL,   0},
+  {"hass_topic",   MQ_L_HTP, MQ_H_HTP, MQTT_DISCOVERY_TOPIC, MQ_P_HTP, 0, 0, 32, EGP_STRING, 0},
 #endif
 };
 
@@ -536,6 +555,7 @@ static int buildHassPath(char* buf, size_t sz, const char* disc,
 // the sole oddity).
 void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   #define S(id_, jKey_, name_, unit_, icon_, stat_, dev_, state_, ent_) do { \
+    if (_hass_walk_done) return; \
     HassSensorRow r = {PSTR(id_), PSTR(name_), PSTR("{{ value_json." jKey_ " }}"), \
                         PSTR(unit_), PSTR(icon_), stat_, dev_, state_, ent_}; \
     (this->*fn)(r); \
@@ -563,6 +583,7 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
 
 void MQTT_Client::forEachHassBinarySensor(HassBinaryFn fn) {
   #define B(id_, name_, icon_, stat_, dev_) do { \
+    if (_hass_walk_done) return; \
     HassBinaryRow r = {PSTR(id_), PSTR(name_), PSTR("{{ value_json." id_ " }}"), \
                         PSTR(icon_), stat_, dev_}; \
     (this->*fn)(r); \

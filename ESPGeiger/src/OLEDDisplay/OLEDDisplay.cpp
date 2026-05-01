@@ -39,17 +39,33 @@ extern uint8_t send_indicator;
 SSD1306Display display = SSD1306Display(OLED_ADDR, -1, -1);
 EG_REGISTER_MODULE(display)
 
-static const EGPref OLED_PREF_ITEMS[] = {
-  {"brightness", "Brightness", "",      "25", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+EG_PSTR(OL_L_BRT, "Brightness");
 #ifdef GEIGER_PUSHBUTTON
-  {"timeout",    "Timeout",    "sec, 0=off", "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
+EG_PSTR(OL_L_TMO, "Timeout");
+EG_PSTR(OL_H_TMO, "sec, 0=off");
 #else
-  {"on_time",    "On Time",    "Display on",   "06:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
-  {"off_time",   "Off Time",   "Display off",  "22:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+EG_PSTR(OL_L_ONT, "On Time");
+EG_PSTR(OL_H_ONT, "Display on");
+EG_PSTR(OL_L_OFT, "Off Time");
+EG_PSTR(OL_H_OFT, "Display off");
 #endif
 #ifndef OLED_PINS_BLOCKED
-  {"sda",        "I2C SDA Pin","Reboot to apply", OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
-  {"scl",        "I2C SCL Pin","Reboot to apply", OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
+EG_PSTR(OL_L_SDA, "I2C SDA Pin");
+EG_PSTR(OL_L_SCL, "I2C SCL Pin");
+EG_PSTR(OL_H_RBA, "Reboot to apply");
+#endif
+
+static const EGPref OLED_PREF_ITEMS[] = {
+  {"brightness", OL_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+#ifdef GEIGER_PUSHBUTTON
+  {"timeout",    OL_L_TMO, OL_H_TMO, "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
+#else
+  {"on_time",    OL_L_ONT, OL_H_ONT, "06:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"off_time",   OL_L_OFT, OL_H_OFT, "22:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+#endif
+#ifndef OLED_PINS_BLOCKED
+  {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
+  {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
 #endif
 };
 

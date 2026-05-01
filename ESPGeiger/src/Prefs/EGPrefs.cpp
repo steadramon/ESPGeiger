@@ -87,8 +87,9 @@ GroupShadow* find_group(const char* module_id) {
 
 int find_pref_index(const EGPrefGroup* g, const char* key) {
   if (!g || !key) return -1;
+  // p.id may be PROGMEM. strcmp_P needs SRAM-first arg, so key first.
   for (size_t i = 0; i < g->count; i++) {
-    if (strcmp(g->prefs[i].id, key) == 0) return (int)i;
+    if (strcmp_P(key, g->prefs[i].id) == 0) return (int)i;
   }
   return -1;
 }
@@ -148,9 +149,10 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
 void load_record_cb(void* ctx, const char* key, uint8_t klen,
                     const char* val, uint16_t vlen) {
   GroupShadow* gs = (GroupShadow*)ctx;
+  // p.id may be PROGMEM; key is SRAM (from storage read).
   for (size_t j = 0; j < gs->group->count; j++) {
     const char* pid = gs->group->prefs[j].id;
-    if (strlen(pid) == klen && memcmp(pid, key, klen) == 0) {
+    if (strlen_P(pid) == klen && strncmp_P(key, pid, klen) == 0) {
       shadow_set(gs->shadows[j], val, vlen);
       return;
     }
@@ -159,8 +161,9 @@ void load_record_cb(void* ctx, const char* key, uint8_t klen,
 
 bool write_group(GroupShadow& gs) {
   size_t total = 4;
+  // p.id is PROGMEM-safe; use _P variants.
   for (size_t j = 0; j < gs.group->count; j++) {
-    total += 1 + strlen(gs.group->prefs[j].id) + 2 + strlen(gs.shadows[j].value);
+    total += 1 + strlen_P(gs.group->prefs[j].id) + 2 + strlen(gs.shadows[j].value);
   }
   if (total > EGPREFS_MAX_GROUP_SZ) {
     Log::console(PSTR("prefs: group %s too large (%u)"), gs.group->module_id, (unsigned)total);
@@ -172,11 +175,11 @@ bool write_group(GroupShadow& gs) {
   buf[p++] = 'E'; buf[p++] = 'G'; buf[p++] = 'P'; buf[p++] = '1';
   for (size_t j = 0; j < gs.group->count; j++) {
     const char* key = gs.group->prefs[j].id;
-    size_t klen = strlen(key);
+    size_t klen = strlen_P(key);
     const char* val = gs.shadows[j].value;
     size_t vlen = strlen(val);
     buf[p++] = (uint8_t)klen;
-    memcpy(&buf[p], key, klen); p += klen;
+    memcpy_P(&buf[p], key, klen); p += klen;
     buf[p++] = (uint8_t)(vlen & 0xFF);
     buf[p++] = (uint8_t)((vlen >> 8) & 0xFF);
     memcpy(&buf[p], val, vlen); p += vlen;

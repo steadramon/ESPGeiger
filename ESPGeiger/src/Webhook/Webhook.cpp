@@ -31,11 +31,21 @@ extern uint8_t send_indicator;
 Webhook webhook;
 EG_REGISTER_MODULE(webhook)
 
+EG_PSTR(WH_L_EN,  "Enable");
+EG_PSTR(WH_H_EN,  "Enable webhook POSTs");
+EG_PSTR(WH_L_URL, "URL");
+EG_PSTR(WH_H_URL, "Webhook endpoint (http only)");
+EG_PSTR(WH_P_URL, "https?://[A-Za-z0-9.:_%\\/\\-]+");
+EG_PSTR(WH_L_KEY, "Key");
+EG_PSTR(WH_H_KEY, "Optional shared secret sent as \"key\"");
+EG_PSTR(WH_L_INT, "Interval");
+EG_PSTR(WH_H_INT, "POST interval (sec)");
+
 static const EGPref WEBHOOK_PREF_ITEMS[] = {
-  {"send",     "Enable",      "Enable webhook POSTs",            "0",  nullptr, 0, 0,    0,  EGP_BOOL,   0},
-  {"url",      "URL",         "Webhook endpoint (http only)",    "",   "https?://[A-Za-z0-9.:_%\\/\\-]+", 0, 0, 255, EGP_STRING, 0},
-  {"key",      "Key",         "Optional shared secret sent as \"key\"", "", nullptr, 0, 0, 255, EGP_STRING, EGP_SENSITIVE},
-  {"interval", "Interval",    "POST interval (sec)",             "60", nullptr, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX, 0, EGP_UINT, 0},
+  {"send",     WH_L_EN,  WH_H_EN,  "0",  nullptr,  0, 0,    0,   EGP_BOOL,   0},
+  {"url",      WH_L_URL, WH_H_URL, "",   WH_P_URL, 0, 0,    255, EGP_STRING, 0},
+  {"key",      WH_L_KEY, WH_H_KEY, "",   nullptr,  0, 0,    255, EGP_STRING, EGP_SENSITIVE},
+  {"interval", WH_L_INT, WH_H_INT, "60", nullptr,  WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX, 0, EGP_UINT, 0},
 };
 
 static const EGPrefGroup WEBHOOK_PREF_GROUP = {

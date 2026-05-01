@@ -26,11 +26,18 @@ extern uint8_t send_indicator;
 Radmon radmon;
 EG_REGISTER_MODULE(radmon)
 
+EG_PSTR(RM_L_EN,  "Enable");
+EG_PSTR(RM_H_EN,  "Upload to radmon.org");
+EG_PSTR(RM_L_USR, "Username");
+EG_PSTR(RM_L_PWD, "Password");
+EG_PSTR(RM_L_INT, "Interval");
+EG_PSTR(RM_H_INT, "Upload interval (sec)");
+
 static const EGPref RADMON_PREF_ITEMS[] = {
-  {"send",     "Enable",   "Upload to radmon.org",  "0",  nullptr, 0, 0,  0,  EGP_BOOL,   0},
-  {"user",     "Username", "",                      "",   nullptr, 0, 0,  32, EGP_STRING, 0},
-  {"password", "Password", "",                      "",   nullptr, 0, 0,  64, EGP_STRING, EGP_SENSITIVE},
-  {"interval", "Interval", "Upload interval (sec)", "60", nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, 0},
+  {"send",     RM_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  EGP_BOOL,   0},
+  {"user",     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  32, EGP_STRING, 0},
+  {"password", RM_L_PWD, nullptr,  "",   nullptr, 0, 0,  64, EGP_STRING, EGP_SENSITIVE},
+  {"interval", RM_L_INT, RM_H_INT, "60", nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, 0},
 };
 
 static const EGPrefGroup RADMON_PREF_GROUP = {
