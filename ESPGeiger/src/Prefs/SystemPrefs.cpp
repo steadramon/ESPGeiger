@@ -146,15 +146,6 @@ EG_PSTR(IN_H_TBB, "Detects beta radiation");
 EG_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
 EG_PSTR(IN_H_TBG, "Detects gamma radiation");
 #endif
-#if GEIGER_IS_COINC(GEIGER_TYPE)
-EG_PSTR(IN_L_CHD, "Dual Tube");
-EG_PSTR(IN_L_RXB, "RX Pin B");
-EG_PSTR(IN_H_RXB, "GPIO for the second tube");
-EG_PSTR(IN_L_CMD, "Mode");
-EG_PSTR(IN_H_CMD, "0 = Sum (any pulse), 1 = Coincidence, 2 = Anti-coincidence");
-EG_PSTR(IN_L_CWN, "Coincidence Window");
-EG_PSTR(IN_H_CWN, "Pair window in microseconds (10-10000)");
-#endif
 
 static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
@@ -186,12 +177,6 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"tube_alpha", IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_beta",  IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_gamma", IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
-#endif
-#if GEIGER_IS_COINC(GEIGER_TYPE)
-  {"_coinc_hdr",  IN_L_CHD, nullptr,  nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
-  {"rx_pin_b",    IN_L_RXB, IN_H_RXB, STR(GEIGER_RXPIN_B),               nullptr, 0, 0, 0, EGP_UINT, 0},
-  {"coinc_mode",  IN_L_CMD, IN_H_CMD, "0",                                nullptr, 0, 2, 0, EGP_UINT, 0},
-  {"coinc_win_us",IN_L_CWN, IN_H_CWN, STR(GEIGER_COINCIDENCE_WINDOW_US), nullptr, 10, 10000, 0, EGP_UINT, 0},
 #endif
 };
 
@@ -237,11 +222,6 @@ void InputPrefs::on_prefs_loaded() {
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   gcounter.set_dead_time_us((uint16_t)EGPrefs::getUInt("input", "dead_time_us"));
 #endif
-#if GEIGER_IS_COINC(GEIGER_TYPE)
-  gcounter.set_rx_pin_b((int)EGPrefs::getUInt("input", "rx_pin_b"));
-  gcounter.set_coinc_mode((uint8_t)EGPrefs::getUInt("input", "coinc_mode"));
-  gcounter.set_coinc_window_us(EGPrefs::getUInt("input", "coinc_win_us"));
-#endif
 }
 
 void InputPrefs::on_prefs_saved() {
@@ -256,9 +236,6 @@ void InputPrefs::on_prefs_saved() {
   if (_serial_type != (uint8_t)EGPrefs::getUInt("input", "serial_type")) need_reboot = true;
   if (!SerialFormat::has_cps(_serial_type) &&
       gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("input", "cpm_window")) need_reboot = true;
-#endif
-#if GEIGER_IS_COINC(GEIGER_TYPE)
-  if (gcounter.get_rx_pin_b() != (int)EGPrefs::getUInt("input", "rx_pin_b")) need_reboot = true;
 #endif
   on_prefs_loaded();
   if (need_reboot) EGPrefs::request_restart();
