@@ -434,7 +434,7 @@ void MQTT_Client::reconnect()
   mqttClient->connect();
 }
 
-void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const char* cmd)
+const char* MQTT_Client::getRootTopic()
 {
   if (!_rootTopicCached) {
     const char* rootTopic = EGPrefs::getString("mqtt", "topic");
@@ -455,7 +455,12 @@ void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const 
     _cachedRootTopic[w] = '\0';
     _rootTopicCached = true;
   }
-  snprintf_P(out, outsz, PSTR("%s/%s/%s"), _cachedRootTopic, middle, cmd);
+  return _cachedRootTopic;
+}
+
+void MQTT_Client::buildTopic(char* out, size_t outsz, const char* middle, const char* cmd)
+{
+  snprintf_P(out, outsz, PSTR("%s/%s/%s"), getRootTopic(), middle, cmd);
 }
 #ifdef MQTTAUTODISCOVER
 
@@ -618,6 +623,7 @@ void MQTT_Client::publishHassTopic(
   if (!disc) return;
 
   const char* host = DeviceInfo::hostname();
+  const char* root = getRootTopic();
 #ifdef ESP8266
   // Array-ref so sizeof(buffer) still resolves to MQTT_JSON_BUFFER_SIZE.
   auto& buffer = s_pub_buffer;
@@ -641,7 +647,7 @@ void MQTT_Client::publishHassTopic(
     host,
     DeviceInfo::mac(),
     Wifi::ip,
-    host, host, displayName, host, id);
+    root, host, displayName, host, id);
   advance_pos(pos, n, sizeof(buffer));
 
   if (pgm_read_byte(devCla)) {

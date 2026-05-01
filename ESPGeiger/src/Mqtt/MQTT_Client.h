@@ -106,6 +106,7 @@ protected:
 private:
   MQTT_Client();
   void buildTopic(char* out, size_t outsz, const char* middle, const char* cmd);
+  const char* getRootTopic();
   char _cachedRootTopic[64] = "";
   bool _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
