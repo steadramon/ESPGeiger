@@ -53,6 +53,10 @@
 #define MQTT_HASS_REFRESH_S 3600UL
 #endif
 
+#ifndef MQTT_HASS_MIN_INTERVAL_S
+#define MQTT_HASS_MIN_INTERVAL_S 30UL
+#endif
+
 constexpr auto MQTT_LWT_ONLINE PROGMEM = "Online";
 constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
 
@@ -96,7 +100,6 @@ public:
   void onMqttConnect(bool sessionPresent);
   void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
 #ifdef MQTTAUTODISCOVER
-  void removeHASSConfig();
 #endif
   MQTTMessage last_will_;
   bool connected = false;
@@ -111,6 +114,11 @@ private:
   bool _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
+  void setupHassRemove();
+  void triggerHassDiscovery();
+  bool publishHassNext(uint8_t idx);
+  bool removeHassNext(uint8_t idx);
+  void stepHassDiscovery();
   void setupHassCB();
   struct HassExtra { const char* key; const char* value; };
   // Rows filled in by the forEach*Hass* walkers. Every member is
@@ -137,6 +145,10 @@ private:
   };
   typedef void (MQTT_Client::*HassSensorFn)(const HassSensorRow&);
   typedef void (MQTT_Client::*HassBinaryFn)(const HassBinaryRow&);
+  void hassPublishSensorAt(const HassSensorRow& r);
+  void hassPublishBinaryAt(const HassBinaryRow& r);
+  void hassRemoveSensorAt(const HassSensorRow& r);
+  void hassRemoveBinaryAt(const HassBinaryRow& r);
   void forEachHassSensor(HassSensorFn fn);
   void forEachHassBinarySensor(HassBinaryFn fn);
   void hassPublishSensor(const HassSensorRow& r);
@@ -165,11 +177,17 @@ private:
   unsigned long lastConnectionAttempt = 0;
   bool mqttEnabled = true;
   uint8_t reconnectAttempts = 0;
+  uint8_t authFailures = 0;
 
   uint16_t statusInterval = MQTT_STATUS_INTERVAL;
   uint16_t pingInterval = 60;
 #ifdef MQTTAUTODISCOVER
   unsigned long _hass_next_publish = 0;
+  unsigned long _hass_last_publish = 0;
+  int8_t  _hass_walk_state = 0;
+  uint8_t _hass_idx = 0;
+  uint8_t _hass_walk_cursor = 0;
+  bool    _hass_walk_done = false;
   const char* _hass_active_disc = nullptr;
 #endif
 

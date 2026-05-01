@@ -40,6 +40,9 @@ EG_REGISTER_MODULE(mqtt)
 // statics there.
 #ifdef ESP8266
 static char s_pub_buffer[MQTT_JSON_BUFFER_SIZE];
+#define MQTT_PUB_YIELD() optimistic_yield(10000)
+#else
+#define MQTT_PUB_YIELD() yield()
 #endif
 
 static const EGPref MQTT_PREF_ITEMS[] = {
@@ -113,9 +116,9 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   reconnectAttempts = 0;
   mqttClient->publish(this->last_will_.topic.c_str(), 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
-  unsigned long now = millis();
-  if (_hass_next_publish == 0 || (long)(now - _hass_next_publish) >= 0) {
-    _hass_next_publish = now + 2000UL;
+  unsigned long now_s = millis() / 1000UL;
+  if (_hass_next_publish == 0 || (long)(now_s - _hass_next_publish) >= 0) {
+    _hass_next_publish = now_s + 2;
     if (_hass_next_publish == 0) _hass_next_publish = 1;
   }
   this->setupHassCB();
@@ -124,6 +127,7 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
 
 void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
   const char* text;
+  bool authFail = false;
   switch (reason) {
   case AsyncMqttClientDisconnectReason::TCP_DISCONNECTED:
      text = PSTR("TCP_DISCONNECTED"); break;
@@ -134,15 +138,21 @@ void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
   case AsyncMqttClientDisconnectReason::MQTT_SERVER_UNAVAILABLE:
      text = PSTR("MQTT_SERVER_UNAVAILABLE"); break;
   case AsyncMqttClientDisconnectReason::MQTT_MALFORMED_CREDENTIALS:
-     text = PSTR("MQTT_MALFORMED_CREDENTIALS"); break;
+     text = PSTR("MQTT_MALFORMED_CREDENTIALS"); authFail = true; break;
   case AsyncMqttClientDisconnectReason::MQTT_NOT_AUTHORIZED:
-     text = PSTR("MQTT_NOT_AUTHORIZED"); break;
+     text = PSTR("MQTT_NOT_AUTHORIZED"); authFail = true; break;
   default:
      text = PSTR("UNKNOWN"); break;
   }
   Log::console(PSTR("MQTT: Disconnected (%s)"), text);
+  if (authFail && ++authFailures >= 3) {
+    mqttEnabled = false;
+  }
   lastConnectionAttempt = millis();
   connected = false;
+#ifdef MQTTAUTODISCOVER
+  if (_hass_walk_state) _hass_idx = 0;
+#endif
 }
 
 void MQTT_Client::setInterval(int interval) {
@@ -176,9 +186,7 @@ void MQTT_Client::s_tick(unsigned long now)
 
 #ifdef MQTTAUTODISCOVER
   if (_hass_next_publish && (long)(now - _hass_next_publish) >= 0) {
-    setupHassAuto();
-    _hass_next_publish = now + (MQTT_HASS_REFRESH_S * 1000UL);
-    if (_hass_next_publish == 0) _hass_next_publish = 1;
+    triggerHassDiscovery();
   }
 #endif
 
@@ -222,7 +230,10 @@ void MQTT_Client::loop(unsigned long /*now*/)
   if (_pending & PEND_WARN)       { _pending &= ~PEND_WARN;   publishWarn();   return; }
   if (_pending & PEND_ALERT)      { _pending &= ~PEND_ALERT;  publishAlert();  return; }
   if (_pending & PEND_STATUS)     { _pending &= ~PEND_STATUS; publishStatus(); return; }
-  if (_pending & PEND_PING)       { _pending &= ~PEND_PING;   publishPing(); }
+  if (_pending & PEND_PING)       { _pending &= ~PEND_PING;   publishPing();   return; }
+#ifdef MQTTAUTODISCOVER
+  if (_hass_walk_state)           { stepHassDiscovery(); }
+#endif
 }
 
 void MQTT_Client::publishWarn()
@@ -250,8 +261,12 @@ void MQTT_Client::publishStatus()
   static char buffer[512];
 #endif
   char dateTime[24];
-  snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02dZ"),
-    1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+  if (timeinfo) {
+    snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02dZ"),
+      1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+  } else {
+    dateTime[0] = '\0';
+  }
 
   size_t pos = 0;
   int n;
@@ -331,6 +346,7 @@ void MQTT_Client::publishPing()
     char topic[64];
     buildTopic(topic, sizeof(topic), "tele", "sensor");
     mqttClient->publish(topic, 1, false, sbuf);
+    MQTT_PUB_YIELD();
   }
 
   // ---- LEGACY ----
@@ -340,29 +356,35 @@ void MQTT_Client::publishPing()
   format_f(valBuf, sizeof(valBuf), gcounter.get_cpmf());
   buildTopic(topic, sizeof(topic), "stat", PSTR("CPM"));
   mqttClient->publish(topic, 1, false, valBuf);
+  MQTT_PUB_YIELD();
 
   format_f(valBuf, sizeof(valBuf), gcounter.get_usv());
   buildTopic(topic, sizeof(topic), "stat", PSTR("uSv"));
   mqttClient->publish(topic, 1, false, valBuf);
+  MQTT_PUB_YIELD();
 
 #ifndef DISABLE_MQTT_CPS
   format_f(valBuf, sizeof(valBuf), gcounter.get_cps());
   buildTopic(topic, sizeof(topic), "stat", PSTR("CPS"));
   mqttClient->publish(topic, 1, false, valBuf);
+  MQTT_PUB_YIELD();
 #endif
 
   format_f(valBuf, sizeof(valBuf), gcounter.get_cpm5f());
   buildTopic(topic, sizeof(topic), "stat", PSTR("CPM5"));
   mqttClient->publish(topic, 1, false, valBuf);
+  MQTT_PUB_YIELD();
 
   format_f(valBuf, sizeof(valBuf), gcounter.get_cpm15f());
   buildTopic(topic, sizeof(topic), "stat", PSTR("CPM15"));
   mqttClient->publish(topic, 1, false, valBuf);
+  MQTT_PUB_YIELD();
 
 #ifdef ESPG_HV_ADC
   format_f(valBuf, sizeof(valBuf), hardware.hvReading.get());
   buildTopic(topic, sizeof(topic), "stat", PSTR("HV"));
   mqttClient->publish(topic, 1, false, valBuf);
+  MQTT_PUB_YIELD();
 #endif
   // ---- end LEGACY block ----
 
@@ -399,11 +421,6 @@ void MQTT_Client::reconnect()
   if (mqtt_port <= 0) mqtt_port = 1883;
 
   if (mqttClient == nullptr) {
-    char lwt_topic[64];
-    buildTopic(lwt_topic, sizeof(lwt_topic), "tele", topicLWT);
-    this->last_will_.topic = lwt_topic;
-    this->last_will_.payload = lwtOffline;
-
     mqttClient = new AsyncMqttClient();
     mqttClient->onConnect([this] (bool sessionPresent) {
       onMqttConnect(sessionPresent);
@@ -414,14 +431,21 @@ void MQTT_Client::reconnect()
     mqttClient->onDisconnect([this] (AsyncMqttClientDisconnectReason reason) {
       onMqttDisconnect(reason);
     });
-    mqttClient->setWill(last_will_.topic.c_str(), 1, true, last_will_.payload.c_str());
   }
+
+  // Rebuild LWT every begin() so a topic-pref change picks up cleanly.
+  char lwt_topic[64];
+  buildTopic(lwt_topic, sizeof(lwt_topic), "tele", topicLWT);
+  this->last_will_.topic = lwt_topic;
+  this->last_will_.payload = lwtOffline;
+  mqttClient->setWill(last_will_.topic.c_str(), 1, true, last_will_.payload.c_str());
 
   mqttClient->setClientId(DeviceInfo::hostname());
   mqttClient->setServer(_mqtt_server, mqtt_port);
   const char* _mqtt_user = EGPrefs::getString("mqtt", "user");
   const char* _mqtt_pass = EGPrefs::getString("mqtt", "password");
-  if (_mqtt_user[0] != '\0') mqttClient->setCredentials(_mqtt_user, _mqtt_pass);
+  mqttClient->setCredentials(_mqtt_user[0] ? _mqtt_user : nullptr,
+                             _mqtt_pass[0] ? _mqtt_pass : nullptr);
 
   int mqtt_time = (int)EGPrefs::getUInt("mqtt", "interval");
   if (mqtt_time <= 0) mqtt_time = 60;
@@ -429,7 +453,7 @@ void MQTT_Client::reconnect()
     setInterval(mqtt_time);
     Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
   }
-  reconnectAttempts++;
+  if (reconnectAttempts < 10) reconnectAttempts++;
   Log::console(PSTR("MQTT: Connecting (attempt %d) ... %s:%d"), reconnectAttempts, _mqtt_server, mqtt_port);
   mqttClient->connect();
 }
@@ -452,6 +476,7 @@ const char* MQTT_Client::getRootTopic()
         _cachedRootTopic[w++] = *p++;
       }
     }
+    while (w > 0 && _cachedRootTopic[w-1] == '/') w--;
     _cachedRootTopic[w] = '\0';
     _rootTopicCached = true;
   }
@@ -553,6 +578,60 @@ void MQTT_Client::forEachHassBinarySensor(HassBinaryFn fn) {
   #undef B
 }
 
+void MQTT_Client::hassPublishSensorAt(const HassSensorRow& r) {
+  if (_hass_walk_done) return;
+  if (_hass_walk_cursor == _hass_idx) {
+    hassPublishSensor(r);
+    _hass_walk_done = true;
+  }
+  _hass_walk_cursor++;
+}
+
+void MQTT_Client::hassPublishBinaryAt(const HassBinaryRow& r) {
+  if (_hass_walk_done) return;
+  if (_hass_walk_cursor == _hass_idx) {
+    hassPublishBinarySensor(r);
+    _hass_walk_done = true;
+  }
+  _hass_walk_cursor++;
+}
+
+void MQTT_Client::hassRemoveSensorAt(const HassSensorRow& r) {
+  if (_hass_walk_done) return;
+  if (_hass_walk_cursor == _hass_idx) {
+    hassRemoveSensor(r);
+    _hass_walk_done = true;
+  }
+  _hass_walk_cursor++;
+}
+
+void MQTT_Client::hassRemoveBinaryAt(const HassBinaryRow& r) {
+  if (_hass_walk_done) return;
+  if (_hass_walk_cursor == _hass_idx) {
+    hassRemoveBinarySensor(r);
+    _hass_walk_done = true;
+  }
+  _hass_walk_cursor++;
+}
+
+bool MQTT_Client::publishHassNext(uint8_t idx) {
+  (void)idx;
+  _hass_walk_cursor = 0;
+  _hass_walk_done   = false;
+  forEachHassSensor(&MQTT_Client::hassPublishSensorAt);
+  if (!_hass_walk_done) forEachHassBinarySensor(&MQTT_Client::hassPublishBinaryAt);
+  return _hass_walk_done;
+}
+
+bool MQTT_Client::removeHassNext(uint8_t idx) {
+  (void)idx;
+  _hass_walk_cursor = 0;
+  _hass_walk_done   = false;
+  forEachHassSensor(&MQTT_Client::hassRemoveSensorAt);
+  if (!_hass_walk_done) forEachHassBinarySensor(&MQTT_Client::hassRemoveBinaryAt);
+  return _hass_walk_done;
+}
+
 void MQTT_Client::setupHassCB() {
   if (!EGPrefs::getBool("mqtt", "hass_enabled")) return;
   const char* _discovery_topic = EGPrefs::getString("mqtt", "hass_topic");
@@ -563,16 +642,54 @@ void MQTT_Client::setupHassCB() {
 }
 
 void MQTT_Client::setupHassAuto() {
+  if (_hass_walk_state) return;
   if (!EGPrefs::getBool("mqtt", "hass_enabled")) return;
   const char* _discovery_topic = EGPrefs::getString("mqtt", "hass_topic");
   if (_discovery_topic[0] == '\0') return;
-
-  Log::console(PSTR("MQTT: Publishing HA autodiscovery"));
-
+  _hass_walk_state = 1;
+  _hass_idx = 0;
   _hass_active_disc = _discovery_topic;
-  forEachHassSensor(&MQTT_Client::hassPublishSensor);
-  forEachHassBinarySensor(&MQTT_Client::hassPublishBinarySensor);
-  _hass_active_disc = nullptr;
+  Log::console(PSTR("MQTT: Starting HA autodiscovery walk"));
+}
+
+void MQTT_Client::setupHassRemove() {
+  if (_hass_walk_state) return;
+  const char* _discovery_topic = EGPrefs::getString("mqtt", "hass_topic");
+  if (_discovery_topic[0] == '\0') return;
+  _hass_walk_state = -1;
+  _hass_idx = 0;
+  _hass_active_disc = _discovery_topic;
+  Log::console(PSTR("MQTT: Starting HA autodiscovery removal walk"));
+}
+
+void MQTT_Client::triggerHassDiscovery() {
+  if (_hass_walk_state) return;
+  unsigned long now_s = millis() / 1000UL;
+  if (_hass_last_publish && (now_s - _hass_last_publish) < MQTT_HASS_MIN_INTERVAL_S) {
+    Log::debug(PSTR("MQTT: HA discovery throttled (%lu s since last)"),
+               now_s - _hass_last_publish);
+    return;
+  }
+  setupHassAuto();
+  _hass_next_publish = now_s + MQTT_HASS_REFRESH_S;
+  if (_hass_next_publish == 0) _hass_next_publish = 1;
+}
+
+void MQTT_Client::stepHassDiscovery() {
+  if (_hass_walk_state == 0) return;
+  bool emitted = (_hass_walk_state > 0)
+                  ? publishHassNext(_hass_idx)
+                  : removeHassNext(_hass_idx);
+  if (emitted) {
+    _hass_idx++;
+  } else {
+    if (_hass_walk_state > 0) {
+      _hass_last_publish = millis() / 1000UL;
+      if (_hass_last_publish == 0) _hass_last_publish = 1;
+    }
+    _hass_walk_state = 0;
+    _hass_active_disc = nullptr;
+  }
 }
 
 // Per-row emitters. Instance methods so the forEach walkers can
@@ -678,13 +795,10 @@ void MQTT_Client::publishHassTopic(
 
   char path[128];
   buildHassPath(path, sizeof(path), disc, type, id);
-  mqttClient->publish(path, 1, false, buffer);
-}
-
-void MQTT_Client::removeHASSConfig()
-{
-  forEachHassSensor(&MQTT_Client::hassRemoveSensor);
-  forEachHassBinarySensor(&MQTT_Client::hassRemoveBinarySensor);
+  if (mqttClient->publish(path, 1, false, buffer) == 0) {
+    Log::console(PSTR("MQTT: HA discovery publish dropped: %s"), id);
+  }
+  MQTT_PUB_YIELD();
 }
 
 void MQTT_Client::removeHassTopic(const char* type, const char* id)
@@ -710,7 +824,7 @@ void MQTT_Client::onMqttMessage(char* topic, char* payload)
     if (!EGPrefs::getBool("mqtt", "hass_enabled")) return;
     if (strcmp(payload, "online") == 0) {
       Log::debug(PSTR("MQTT: HA is back online"));
-      this->setupHassAuto();
+      this->triggerHassDiscovery();
     }
   }
 #endif
@@ -729,15 +843,18 @@ void MQTT_Client::begin()
 
 void MQTT_Client::on_prefs_saved()
 {
-  _rootTopicCached = false;  // topic may have changed - force rebuild
+  _rootTopicCached = false;
+  bool needs_hass_remove = false;
 #ifdef MQTTAUTODISCOVER
-  if (connected && !EGPrefs::getBool("mqtt", "hass_enabled")) {
-    removeHASSConfig();
-  }
+  needs_hass_remove = (connected && !EGPrefs::getBool("mqtt", "hass_enabled"));
 #endif
   disconnect();
   reconnectAttempts = 0;
-  lastConnectionAttempt = 0;  // skip backoff - reconnect immediately
+  authFailures = 0;
+  lastConnectionAttempt = 0;
+#ifdef MQTTAUTODISCOVER
+  if (needs_hass_remove) setupHassRemove();
+#endif
   begin();
 }
 #endif
