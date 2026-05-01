@@ -53,9 +53,7 @@ ConfigManager::ConfigManager() : WiFiManager(){
    tchipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
   }
 #endif
-  String hexId = String(tchipId & 0xFFFFFF, HEX);
-  strncpy(chipId, hexId.c_str(), sizeof(chipId) - 1);
-  chipId[sizeof(chipId) - 1] = '\0';
+  snprintf_P(chipId, sizeof(chipId), PSTR("%06lx"), (unsigned long)(tchipId & 0xFFFFFFul));
 
   snprintf_P (hostName, sizeof(hostName), PSTR("%S-%S"), THING_NAME, chipId);
   snprintf_P(userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"),
@@ -502,7 +500,7 @@ void ConfigManager::handleEGPrefs() {
       for (size_t j = 0; j < g->count; j++) {
         const EGPref& p = g->prefs[j];
         if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
-        if (p.type == EGP_LABEL) continue;
+        if (p.type == EGP_LABEL || p.type == EGP_HEADER) continue;
         // p.id may be PROGMEM; copy to SRAM for snprintf %s and put().
         strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
         id_buf[sizeof(id_buf) - 1] = '\0';
@@ -598,6 +596,11 @@ void ConfigManager::handleEGPrefs() {
 
       if (p.type == EGP_LABEL) {
         n = snprintf_P(buf, sizeof(buf), PSTR("<label>%s</label><br/>"), p.label ? p_label : "");
+        send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
+        continue;
+      }
+      if (p.type == EGP_HEADER) {
+        n = snprintf_P(buf, sizeof(buf), PSTR("<h4>%s</h4>"), p.label ? p_label : "");
         send_chunk(s, buf, (n > 0) ? (size_t)n : 0);
         continue;
       }
@@ -1039,7 +1042,7 @@ void ConfigManager::handleRandomDo()
     if (n > 32) n = 32;
     uint8_t bytes[32];
     GRNG::extract(bytes, n);
-    static const char hexc[] = "0123456789abcdef";
+    static const char hexc[] PROGMEM = "0123456789abcdef";
     for (long i = 0; i < n; i++) {
       out[i*2]     = hexc[bytes[i] >> 4];
       out[i*2 + 1] = hexc[bytes[i] & 0xF];
