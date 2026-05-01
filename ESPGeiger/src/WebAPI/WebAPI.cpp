@@ -344,7 +344,6 @@ void WebAPI::postMeasurement(bool censusOnly) {
     mp.kv("tk", (uint32_t)TickProfile::tick_max_us);
     mp.kv("rs", (int32_t)Wifi::rssi);
   }
-  if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
 
   if (mp.overflow) {
     Log::console(PSTR("WebAPI: Post encode overflow"));
@@ -397,6 +396,7 @@ void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     if (!reader.error && ok) {
       Log::debug(PSTR("WebAPI: Post OK - station %u"), self->station_id);
       self->last_ok = true;
+      if (++self->healthPostCounter >= WEBAPI_HEALTH_EVERY) self->healthPostCounter = 0;
     } else {
       Log::debug(PSTR("WebAPI: Post response not ok"));
     }
