@@ -56,9 +56,9 @@ ConfigManager::ConfigManager() : WiFiManager(){
   snprintf_P(chipId, sizeof(chipId), PSTR("%06lx"), (unsigned long)(tchipId & 0xFFFFFFul));
 
   snprintf_P (hostName, sizeof(hostName), PSTR("%S-%S"), THING_NAME, chipId);
-  snprintf_P(userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S; %S)"),
+  snprintf_P(userAgent, sizeof(userAgent), PSTR("%S/%S (%S; %S; %S)"),
              THING_NAME, RELEASE_VERSION, GIT_VERSION,
-             BUILD_ENV, DeviceInfo::chipmodel(), chipId);
+             BUILD_ENV, chipId);
   strncpy(macAddr, WiFi.macAddress().c_str(), sizeof(macAddr) - 1);
   macAddr[sizeof(macAddr) - 1] = '\0';
 
