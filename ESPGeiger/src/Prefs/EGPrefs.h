@@ -29,6 +29,7 @@ enum EGPrefType : uint8_t {
   EGP_FLOAT,
   EGP_STRING,
   EGP_LABEL,
+  EGP_HEADER,
 };
 
 static constexpr uint8_t EGP_SENSITIVE = 1 << 0;
