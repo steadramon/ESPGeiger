@@ -123,7 +123,7 @@ void SSD1306Display::loop(unsigned long now) {
       oled_page = 1;
     }
     if (oled_page != _last_page) {
-      EGModuleRegistry::set_loop_interval(this, oled_page == 4 ? 50 : 250);
+      EGModuleRegistry::set_loop_interval(this, oled_page == 4 ? 80 : 250);
       _last_page = oled_page;
     }
     if (oled_page == 4) {
@@ -418,11 +418,11 @@ static MatrixCtx compute_matrix_ctx(unsigned long typical) {
 static void compute_drop_speed_tail(unsigned long delta_ms, const MatrixCtx& ctx,
                                     uint8_t multiplier, uint32_t r,
                                     uint8_t& out_speed, uint8_t& out_tail) {
-  uint8_t s_min = 1, s_max = 2;
-  if      (delta_ms < MTX_T1) { s_min = 4; s_max = 6; }
-  else if (delta_ms < MTX_T2) { s_min = 3; s_max = 5; }
-  else if (delta_ms < MTX_T3) { s_min = 3; s_max = 4; }
-  else if (delta_ms < MTX_T4) { s_min = 2; s_max = 3; }
+  uint8_t s_min = 2, s_max = 3;
+  if      (delta_ms < MTX_T1) { s_min = 6; s_max = 9; }
+  else if (delta_ms < MTX_T2) { s_min = 5; s_max = 8; }
+  else if (delta_ms < MTX_T3) { s_min = 5; s_max = 7; }
+  else if (delta_ms < MTX_T4) { s_min = 3; s_max = 5; }
   // Multiply-and-shift uniform: 11-bit slice * range >> 11 gives [0, range).
   uint16_t r_band = (r >> 21) & 0x7FF;
   uint8_t band_speed = s_min + (uint8_t)(((uint32_t)r_band * (s_max - s_min + 1)) >> 11);
