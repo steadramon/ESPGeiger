@@ -53,7 +53,7 @@ class NeoPixel : public EGModule {
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void loop(unsigned long now) override;
     bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 20; }
+    uint16_t loop_interval_ms() override { return 30; }
     void setup();
     void blip();
     void blink(uint16 timer);

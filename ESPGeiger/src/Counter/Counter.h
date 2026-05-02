@@ -55,6 +55,12 @@
   #define GEIGER_DEAD_TIME_DEFAULT 0
 #endif
 
+// External blip-LED runtime path. Excluded on ESPGeiger-Log (SD+NeoPixel+OLED
+// uses all pins) and ESP8266 test builds (timer1/PWM collision).
+#if !defined(GEIGER_SDCARD) && !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
+  #define HAS_EXT_BLIP
+#endif
+
 #include "../Util/StringUtil.h"
 
 extern NTP_Client ntpclient;
@@ -160,8 +166,11 @@ class Counter {
       unsigned long clicks_yesterday = 0;
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
-#ifdef GEIGER_BLIPLED
-      JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
+#ifdef HAS_EXT_BLIP
+      JLed* ext_blip_led = nullptr;
+      uint8_t ext_blip_pulse_ms = 2;
+      void set_ext_blip_pin(int pin);
+      void set_ext_blip_pulse_ms(uint8_t ms) { ext_blip_pulse_ms = ms ? ms : 1; }
 #endif
     private:
       unsigned long _last_blip_seen = 0;

@@ -58,7 +58,7 @@ void Counter::secondticker(unsigned long stick_now) {
   }
 
   _cached_cps  = geigerTicks.get();
-  if (_dead_time_us > 0 && _cached_cps > 0.0f) {
+  if (_dead_time_us > 0 && _cached_cps > 50.0f) {
     float x = _cached_cps * _dead_time_sec;
     _cached_cps *= 1.0f + x * (1.0f + x);
   }
@@ -212,6 +212,9 @@ float Counter::get_usv15() {
 }
 
 void Counter::begin() {
+#if defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
+  set_ext_blip_pin(GEIGER_BLIPLED);
+#endif
   geigerTicks.begin(SMOOTHED_AVERAGE, _cpm_window);
 #ifndef GEIGER_SMOOTH_AVG
   Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), _cpm_window);
@@ -228,17 +231,29 @@ void Counter::begin() {
 }
 
 void Counter::blip() {
-    const bool quiet = is_quiet_now();
+    if (!_blip_led) return;
+    if (is_quiet_now()) return;
 #ifndef DISABLE_INTERNAL_BLIP
-    if (_blip_led && !quiet) led.Blink(20,20);
+    led.Blink(20,20);
 #endif
-#ifdef GEIGER_BLIPLED
-    if (_blip_led && !quiet && blip_led.IsRunning() == false) {
-      blip_led.Blink(2,1).Repeat(1);
-    }
+#ifdef HAS_EXT_BLIP
+    if (ext_blip_led && !ext_blip_led->IsRunning()) ext_blip_led->Blink(ext_blip_pulse_ms, 1).Repeat(1);
 #endif
-
 }
+
+#ifdef HAS_EXT_BLIP
+void Counter::set_ext_blip_pin(int pin) {
+  if (ext_blip_led) {
+    ext_blip_led->Off().Update();
+    delete ext_blip_led;
+    ext_blip_led = nullptr;
+  }
+  if (pin >= 0) {
+    ext_blip_led = new JLed(pin);
+    ext_blip_led->Stop();
+  }
+}
+#endif
 
 void Counter::set_quiet_hours(const char* from, const char* to) {
   ParsedTime f = parseTime(from);

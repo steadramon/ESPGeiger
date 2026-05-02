@@ -31,6 +31,7 @@
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
 #include "src/Module/EGModuleRegistry.h"
+#include "src/ArduinoOTA/ArduinoOTA.h"
 #include "src/Prefs/EGPrefs.h"
 #include "src/NTP/NTP.h"
 #include "src/GRNG/GRNG.h"
@@ -63,8 +64,8 @@ uint8_t send_indicator = 0;
 void msTickerCB()
 {
   led.Update();
-#ifdef GEIGER_BLIPLED
-  gcounter.blip_led.Update();
+#ifdef HAS_EXT_BLIP
+  if (gcounter.ext_blip_led) gcounter.ext_blip_led->Update();
 #endif
 }
 
@@ -158,7 +159,9 @@ void loop()
 {
   TickProfile::countIter();
   unsigned long now = millis();
-  gcounter.loop();
-  cManager.processLoop(now);
+  if (!ota_in_progress) {
+    gcounter.loop();
+    cManager.processLoop(now);
+  }
   EGModuleRegistry::loop_all(now);
 }

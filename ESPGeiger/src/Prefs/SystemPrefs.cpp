@@ -279,6 +279,12 @@ EG_PSTR(LD_H_BLP, "Flash LED on each count");
 EG_PSTR(LD_L_BRT, "Blip brightness");
 EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
 #endif
+#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
+EG_PSTR(LD_L_EXP, "External LED Pin");
+EG_PSTR(LD_H_EXP, "GPIO to mirror blip on (-1 = off). Reboot to apply.");
+EG_PSTR(LD_L_EXW, "External Pulse Width");
+EG_PSTR(LD_H_EXW, "Pulse width on external pin (ms)");
+#endif
 EG_PSTR(LD_L_QFR, "Quiet from");
 EG_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
 EG_PSTR(LD_L_QTO, "Quiet to");
@@ -288,6 +294,10 @@ static const EGPref LED_PREF_ITEMS[] = {
   {"blip_led",    LD_L_BLP, LD_H_BLP, "1",  nullptr, 0, 1,   0, EGP_BOOL, 0},
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
   {"blip_bright", LD_L_BRT, LD_H_BRT, "80", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+#endif
+#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
+  {"blip_pin",      LD_L_EXP, LD_H_EXP, "-1", nullptr, -1, 39,  0, EGP_INT, 0},
+  {"blip_pulse_ms", LD_L_EXW, LD_H_EXW, "2",  nullptr,  1, 100, 0, EGP_UINT, 0},
 #endif
   {"quiet_from",  LD_L_QFR, LD_H_QFR, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
   {"quiet_to",    LD_L_QTO, LD_H_QTO, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
@@ -305,6 +315,10 @@ void LedPrefs::on_prefs_loaded() {
   gcounter.set_blip_led(EGPrefs::getBool("led", "blip_led"));
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
   gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("led", "blip_bright") * 255 + 50) / 100));
+#endif
+#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
+  gcounter.set_ext_blip_pin((int)EGPrefs::getInt("led", "blip_pin"));
+  gcounter.set_ext_blip_pulse_ms((uint8_t)EGPrefs::getUInt("led", "blip_pulse_ms"));
 #endif
   gcounter.set_quiet_hours(
     EGPrefs::getString("led", "quiet_from"),

@@ -51,12 +51,12 @@ static void do_longpress() {
   display.enable_oled_timeout = !display.enable_oled_timeout;
   if (display.enable_oled_timeout) {
     display.oled_timeout = 0;
-#ifdef GEIGER_BLIPLED
-    gcounter.blip_led.Blink(200,100).Repeat(2);
+#ifdef HAS_EXT_BLIP
+    if (gcounter.ext_blip_led) gcounter.ext_blip_led->Blink(200,100).Repeat(2);
 #endif
   } else {
-#ifdef GEIGER_BLIPLED
-    gcounter.blip_led.Blink(200,1).Repeat(1);
+#ifdef HAS_EXT_BLIP
+    if (gcounter.ext_blip_led) gcounter.ext_blip_led->Blink(200,1).Repeat(1);
 #endif
   }
 }
