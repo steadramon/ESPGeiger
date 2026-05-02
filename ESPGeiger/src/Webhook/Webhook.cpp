@@ -88,11 +88,10 @@ void Webhook::loop(unsigned long now)
   if (lastPing == 0) {
     int iv = (int)EGPrefs::getUInt("webhook", "interval");
     if (iv > 0) setInterval(iv);
-    lastPing = now + random(pingIntervalMs);
+    lastPing = now - pingIntervalMs + random(pingIntervalMs);
     return;
   }
-  if (now > lastPing && (now - lastPing) >= pingIntervalMs)
-  {
+  if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();

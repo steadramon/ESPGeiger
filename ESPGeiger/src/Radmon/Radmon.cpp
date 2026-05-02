@@ -91,11 +91,10 @@ void Radmon::loop(unsigned long now)
     int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
     if (rtimer == 0) rtimer = RADMON_INTERVAL;
     setInterval(rtimer);
-    lastPing = now + random(pingIntervalMs);
+    lastPing = now - pingIntervalMs + random(pingIntervalMs);
     return;
   }
-  if (now > lastPing && (now - lastPing) >= pingIntervalMs)
-  {
+  if ((now - lastPing) >= pingIntervalMs) {
     // Advance by exact interval to keep the schedule drift-free.
     // If we were stalled long enough to still be >= one interval behind,
     // snap to now rather than firing a burst of catch-up publishes.

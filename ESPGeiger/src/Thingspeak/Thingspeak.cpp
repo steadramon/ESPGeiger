@@ -64,11 +64,10 @@ Thingspeak::Thingspeak() {
 void Thingspeak::loop(unsigned long now)
 {
   if (lastPing == 0) {
-    lastPing = now + random(pingIntervalMs);
+    lastPing = now - pingIntervalMs + random(pingIntervalMs);
     return;
   }
-  if (now > lastPing && (now - lastPing) >= pingIntervalMs)
-  {
+  if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();
