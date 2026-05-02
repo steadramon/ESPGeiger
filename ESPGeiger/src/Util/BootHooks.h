@@ -63,7 +63,6 @@ namespace BootHooks {
       displayWifiDisabled();
       while (pushbutton.isPressed()) {
         delay(250);
-        pushbutton.read();
       }
       delay(750);
       displayDisableTimeout();

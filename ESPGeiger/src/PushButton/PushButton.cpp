@@ -21,29 +21,40 @@
 #include "PushButton.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
-#include <EasyButton.h>
+#include <Ticker.h>
 #ifdef SSD1306_DISPLAY
 #include "../OLEDDisplay/OLEDDisplay.h"
 #endif
 
-static EasyButton pbutton(PUSHBUTTON_PIN);
-static volatile bool button_pushed = false;
+static const uint16_t POLL_MS      = 5;
+static const uint16_t DEBOUNCE_MS  = 30;
+static const uint16_t LONG_PRESS_MS = 2000;
 
-#ifdef ESP32
-static void IRAM_ATTR do_pushbutton() {
-  button_pushed = true;
-}
-#ifdef SSD1306_DISPLAY
-static void IRAM_ATTR do_longpress() {
-  display.enable_oled_timeout = !display.enable_oled_timeout;
-  if (display.enable_oled_timeout) {
-    display.oled_timeout = 0;
+static Ticker buttonTicker;
+static volatile bool s_last_read = false;
+static volatile uint32_t s_last_change_ms = 0;
+static volatile uint32_t s_press_start_ms = 0;
+static volatile bool s_pressed = false;
+static volatile bool s_short_press_pending = false;
+static volatile bool s_long_press_fired = false;
+
+static void IRAM_ATTR button_tick() {
+  bool down = (digitalRead(PUSHBUTTON_PIN) == LOW);
+  uint32_t now = millis();
+  if (down != s_last_read) {
+    s_last_read = down;
+    s_last_change_ms = now;
+    return;
   }
-}
-#endif
-#else
-static void do_pushbutton() {
-  button_pushed = true;
+  if (now - s_last_change_ms < DEBOUNCE_MS) return;
+  if (down == s_pressed) return;
+  s_pressed = down;
+  if (down) {
+    s_press_start_ms = now;
+    s_long_press_fired = false;
+  } else if (!s_long_press_fired) {
+    s_short_press_pending = true;
+  }
 }
 
 #ifdef SSD1306_DISPLAY
@@ -61,7 +72,6 @@ static void do_longpress() {
   }
 }
 #endif
-#endif
 
 PushButton pushbutton;
 EG_REGISTER_MODULE(pushbutton)
@@ -71,38 +81,45 @@ PushButton::PushButton() {
 
 void PushButton::init()
 {
-  pbutton.begin();
+  static bool ready = false;
+  if (ready) return;
+  pinMode(PUSHBUTTON_PIN, INPUT_PULLUP);
+  delayMicroseconds(20);
+  bool down = (digitalRead(PUSHBUTTON_PIN) == LOW);
+  s_last_read = down;
+  s_pressed = down;
+  s_last_change_ms = millis();
+  s_press_start_ms = s_last_change_ms;
+  s_long_press_fired = down;
+  buttonTicker.attach_ms(POLL_MS, button_tick);
+  ready = true;
 }
 
 void PushButton::begin()
 {
-  pbutton.onPressed(do_pushbutton);
-#ifdef SSD1306_DISPLAY
-  pbutton.onPressedFor(2000, do_longpress);
-#endif
-}
-
-void PushButton::read()
-{
-  pbutton.read();
+  init();
 }
 
 bool PushButton::isPressed()
 {
-  return pbutton.isPressed();
+  return s_pressed;
 }
 
 void PushButton::loop(unsigned long now)
 {
-  if (button_pushed) {
+#ifdef SSD1306_DISPLAY
+  if (s_pressed && !s_long_press_fired && (now - s_press_start_ms) >= LONG_PRESS_MS) {
+    s_long_press_fired = true;
+    do_longpress();
+  }
+#endif
+  if (s_short_press_pending) {
+    s_short_press_pending = false;
     led.Blink(200, 1);
 #if defined(SSD1306_DISPLAY)
     display.onButtonTap(now);
 #endif
     gcounter.reset_alarm();
-    button_pushed = false;
   }
-  pbutton.read();
-
 }
 #endif

@@ -41,7 +41,6 @@ class PushButton : public EGModule {
     uint16_t loop_interval_ms() override { return 10; }
     void begin() override;
     void init();
-    void read();
     bool isPressed();
 };
 
