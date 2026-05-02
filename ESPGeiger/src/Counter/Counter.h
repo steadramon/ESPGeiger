@@ -49,6 +49,12 @@
   #define GEIGER_DEAD_TIME_US 100
 #endif
 
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  #define GEIGER_DEAD_TIME_DEFAULT GEIGER_DEAD_TIME_US
+#else
+  #define GEIGER_DEAD_TIME_DEFAULT 0
+#endif
+
 #include "../Util/StringUtil.h"
 
 extern NTP_Client ntpclient;
@@ -170,8 +176,8 @@ class Counter {
       int16_t _quiet_to_min   = -1;
       float _ratio = GEIGER_RATIO;
       float _ratio_inv = 1.0f / GEIGER_RATIO;   // reciprocal, kept in sync in set_ratio
-      uint16_t _dead_time_us = GEIGER_DEAD_TIME_US;
-      float    _dead_time_sec = GEIGER_DEAD_TIME_US * 1e-6f;
+      uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
+      float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
       // Cached once per tick so accessors are O(1).
       float _cached_cps  = 0.0f;
       float _cached_cpmf = 0.0f;

@@ -131,7 +131,7 @@ EG_PSTR(IN_H_DBN, "Debounce (us)");
 EG_PSTR(IN_L_PWU, "Pulse width");
 EG_PSTR(IN_H_PWU, "Simulated pulse width (us)");
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
 EG_PSTR(IN_L_DTU, "Tube dead time");
 EG_PSTR(IN_H_DTU, "GM tube dead time (us). 0=disabled. J305=50, SBM-20=150.");
 #endif
@@ -168,8 +168,8 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   {"pulse_width_us", IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_US), nullptr, 0, 1000, 0, EGP_UINT, 0},
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
+  {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, EGP_UINT, 0},
 #endif
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {"geiger_model", IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
@@ -219,7 +219,7 @@ void InputPrefs::on_prefs_loaded() {
     if (m[0] != '\0') DeviceInfo::setGeigermodel(m);
   }
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
   gcounter.set_dead_time_us((uint16_t)EGPrefs::getUInt("input", "dead_time_us"));
 #endif
 }
