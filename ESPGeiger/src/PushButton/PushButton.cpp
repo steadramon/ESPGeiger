@@ -40,14 +40,14 @@ static volatile bool s_long_press_fired = false;
 
 static void IRAM_ATTR button_tick() {
   bool down = (digitalRead(PUSHBUTTON_PIN) == LOW);
-  uint32_t now = millis();
   if (down != s_last_read) {
     s_last_read = down;
-    s_last_change_ms = now;
+    s_last_change_ms = millis();
     return;
   }
-  if (now - s_last_change_ms < DEBOUNCE_MS) return;
   if (down == s_pressed) return;
+  uint32_t now = millis();
+  if (now - s_last_change_ms < DEBOUNCE_MS) return;
   s_pressed = down;
   if (down) {
     s_press_start_ms = now;
