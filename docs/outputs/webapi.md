@@ -143,22 +143,26 @@ station also gets a memorable three-word alias — e.g.
 Each station is a teardrop pin on the map. Colour reflects the station's
 current reading vs **its own baseline**, not a global threshold. A tube
 with high local background (e.g. sitting next to granite) is only flagged
-when it deviates from its own typical rate.
+when it departs from its own typical rate.
 
 | Colour | State | Meaning |
 |---|---|---|
 | Blue   | New      | Fewer than ~4 h of data. Baseline not yet established. |
-| Green  | Normal   | Reading within 4σ of baseline. |
-| Amber  | Elevated | Reading 4σ–6σ *above* baseline. Worth a glance. |
-| Red    | Warning  | Reading ≥ 6σ *above* baseline. Investigate. |
-| Grey   | Silent   | Reading ≥ 4σ *below* baseline and no post in the last 15 min. Likely dead tube, HV drop, or pulse line disconnected. |
+| Green  | Normal   | Reading consistent with baseline. |
+| Amber  | Elevated | Sustained or spike departure above baseline. Worth a glance. |
+| Red    | Warning  | Larger or longer-lasting departure above baseline. Investigate. |
+| Grey   | Silent   | No post received in the last 15 minutes. Likely lost connectivity, lost power, or device failure. |
 
-The score is a per-bucket Poisson z-score against the station's 7-day
-baseline, with a small per-hour-of-day adjustment so stable daily cycles
+The score is a [Poisson CUSUM](https://en.wikipedia.org/wiki/CUSUM)
+(cumulative sum) detector running against the station's 7-day
+baseline, with a per-hour-of-day adjustment so stable daily cycles
 (heating, occupancy, indoor radon) get absorbed rather than triggering
-the same alert every day. 4σ Elevated clears ISO 11929 L_D (3.29σ)
-comfortably and 6σ Warning is unambiguous (~1-in-1000 by chance).
-Refresh cadence is 10 minutes server-side.
+the same alert every day. Routine Poisson noise is absorbed by a slack
+term; sustained or large excursions accumulate across consecutive
+15-minute buckets and open an event when they cross the configured
+threshold. The same accumulator handles spikes, persistent drops, and
+slow drift under one principled algorithm. Refresh cadence is 10
+minutes server-side.
 
 **Cluster pins** use a weighted vote: `Warning` children weigh 4,
 `Elevated` weigh 2, others weigh 1. A single `Warning` child tints
@@ -169,23 +173,25 @@ tubes don't colour the neighbourhood.
 
 ## Events timeline
 
-The map's red pin is coarse: anything ≥ 6σ paints red. The station
-detail page's **Events** panel breaks the same band down further:
+The map's red pin is coarse: anything past `Warning` paints red. The
+station detail page's **Events** panel breaks the same band down
+further:
 
-| Badge | σ range | Meaning |
-|---|---|---|
-| Elevated | 4σ–6σ | Above detection limit but routine. Often weather-driven (radon washout after rain). |
-| Warning  | 6σ–9σ | Unambiguous deviation. ~1-in-1000 by chance. |
-| Danger   | 9σ–14σ | Effectively impossible by chance. Hardware fault or genuine source. |
-| Critical | ≥ 14σ | Tube going rogue, point source nearby, or pulse line shorted. |
+| Badge | Meaning |
+|---|---|
+| Elevated | Above noise floor. Often weather-driven (radon washout after rain). |
+| Warning  | Unambiguous excursion. Worth investigating. |
+| Danger   | Sustained or large excursion. Hardware fault or genuine source likely. |
+| Critical | Severe or long-running excursion. Tube failing, point source nearby, or pulse line shorted. |
 
-So a 12σ station shows a red `Warning` pin on the map, but its event row
-on the station page shows `Danger`. Map = umbrella, events = exact band.
+A station that crosses `Danger` shows a red `Warning` pin on the map
+but its event row on the station page shows the exact `Danger` band.
+Map = umbrella, events = exact band.
 
 Event rows also show direction (↑ above baseline, ↓ below), duration,
-peak σ, and an `(ongoing)` tag if still active. **Offline events** use
-a separate grey badge with no σ value, because silence isn't a
-severity-banded anomaly.
+peak departure score, and an `(ongoing)` tag if still active. **Offline
+events** use a separate grey badge with no severity, because silence
+isn't a severity-banded anomaly.
 
 ## Endpoint
 
