@@ -38,7 +38,7 @@ class PushButton : public EGModule {
     uint16_t warmup_seconds() override { return 0; }
     void loop(unsigned long now) override;
     bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 10; }
+    uint16_t loop_interval_ms() override { return 50; }
     void begin() override;
     void init();
     bool isPressed();

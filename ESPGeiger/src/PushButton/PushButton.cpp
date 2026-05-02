@@ -26,7 +26,7 @@
 #include "../OLEDDisplay/OLEDDisplay.h"
 #endif
 
-static const uint16_t POLL_MS      = 5;
+static const uint16_t POLL_MS      = 10;
 static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
@@ -38,7 +38,7 @@ static volatile bool s_pressed = false;
 static volatile bool s_short_press_pending = false;
 static volatile bool s_long_press_fired = false;
 
-static void IRAM_ATTR button_tick() {
+static void button_tick() {
   bool down = (digitalRead(PUSHBUTTON_PIN) == LOW);
   if (down != s_last_read) {
     s_last_read = down;
