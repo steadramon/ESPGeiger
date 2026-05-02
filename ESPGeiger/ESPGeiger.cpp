@@ -64,7 +64,9 @@ uint8_t send_indicator = 0;
 void msTickerCB()
 {
   led.Update();
-#ifdef HAS_EXT_BLIP
+#ifdef GEIGER_BLIPLED
+  gcounter.blip_led.Update();
+#elif defined(HAS_EXT_BLIP)
   if (gcounter.ext_blip_led) gcounter.ext_blip_led->Update();
 #endif
 }

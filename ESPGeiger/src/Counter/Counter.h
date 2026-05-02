@@ -166,7 +166,11 @@ class Counter {
       unsigned long clicks_yesterday = 0;
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
-#ifdef HAS_EXT_BLIP
+#ifdef GEIGER_BLIPLED
+      // Compile-time pin: keep static-init so msTickerCB can inline Update()
+      // and pin 15 doesn't get pinMode'd in the HV PWM init window.
+      JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
+#elif defined(HAS_EXT_BLIP)
       JLed* ext_blip_led = nullptr;
       uint8_t ext_blip_pulse_ms = 2;
       void set_ext_blip_pin(int pin);
