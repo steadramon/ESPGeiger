@@ -27,7 +27,7 @@
 #include "../Util/Wifi.h"
 #include "../GRNG/GRNG.h"
 #ifdef ESPG_HV_ADC
-#include "../ESPGHW/ESPGHW.h"
+#include "../HV/HV.h"
 #endif
 
 extern uint8_t send_indicator;
@@ -235,7 +235,7 @@ void SSD1306Display::page_two_full() {
 #ifdef ESPG_HV_ADC
   drawString(0, uptime_y, PSTR("HV:"));
   char hvBuf[12];
-  format_f(hvBuf, sizeof(hvBuf), hardware.hvReading.get());
+  format_f(hvBuf, sizeof(hvBuf), hv.hvReading.get());
   drawString(20, uptime_y, hvBuf);
   uptime_y = 47;
 #endif

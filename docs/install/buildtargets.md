@@ -50,6 +50,17 @@ A number of hardware specific builds are also made to support ESPGeiger-HW and E
 `espgeigerlog` | ESPGeiger Log | Pulse | A pulse based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
 `espgeigerlog_serial` | ESPGeiger Log | Serial | A serial based build for the ESPGeiger Log hardware. Select your counter type from the Config page.
 
+## HV Builds
+
+Generic HV builds enable the same closed-loop high-voltage management used on ESPGeiger-HW, but on stock ESP8266 / ESP32 boards. You wire up your own boost converter (transistor + inductor + voltage divider) and configure the PWM pin at runtime via the **Config** page. See [High Voltage Configuration](/configuration/hv) for wiring and tuning.
+
+| Target Name | Platform | Notes |
+|---|---|---|
+`esp8266_hv` | ESP8266 | Pulse build with HV generator + ADC feedback. PWM frequency up to 40 kHz; PWM pin defaults to **-1 (disabled)** until set in the Config page.
+`esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 80 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict).
+
+For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not** drive any pin until you've explicitly chosen one. After setting the pin in `/egprefs`, **reboot** for the change to take effect.
+
 ## Test
 
 Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger `RXPIN` and `TXPIN` together, or connect one ESPGeiger `TXPIN` to the `RXPIN` on another ESPGeiger.

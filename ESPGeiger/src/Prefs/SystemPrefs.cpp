@@ -326,3 +326,40 @@ void LedPrefs::on_prefs_loaded() {
   );
 }
 #endif
+
+#if defined(ESPG_HV) && !defined(ESPGEIGER_HW)
+#include "../HV/HV.h"
+#include "../Logger/Logger.h"
+
+class HVPinPrefs : public EGModule {
+public:
+  const char* name() override { return "hvpin"; }
+  uint8_t display_order() override { return 14; }
+  const EGPrefGroup* prefs_group() override;
+  void on_prefs_loaded() override;
+};
+
+static HVPinPrefs hvPinPrefs;
+EG_REGISTER_MODULE(hvPinPrefs)
+
+EG_PSTR(HV_L_PWM, "HV PWM Pin");
+EG_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
+
+static const EGPref HV_PIN_PREF_ITEMS[] = {
+  {"pwm_pin", HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, 39, 0, EGP_INT, 0},
+};
+
+static const EGPrefGroup HV_PIN_PREF_GROUP = {
+  "hvpin", "HV Hardware", 1,
+  HV_PIN_PREF_ITEMS,
+  sizeof(HV_PIN_PREF_ITEMS) / sizeof(HV_PIN_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* HVPinPrefs::prefs_group() { return &HV_PIN_PREF_GROUP; }
+
+void HVPinPrefs::on_prefs_loaded() {
+  int pin = (int)EGPrefs::getInt("hvpin", "pwm_pin");
+  hv.set_pwm_pin(pin);
+  Log::console(PSTR("HV: pwm_pin=%d"), pin);
+}
+#endif

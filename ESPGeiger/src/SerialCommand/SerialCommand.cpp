@@ -167,12 +167,12 @@ void SerialCommand::set_freq() {
   if (arg != NULL) {
     aNumber = atoi(arg);    // Converts a char string to an integer
     if (aNumber != NULL) {
-      hardware.set_freq(aNumber);
-      hardware.saveconfig();
+      hv.set_freq(aNumber);
+      hv.saveconfig();
     }
   } else {
     char buf[32];
-    snprintf_P(buf, sizeof(buf), PSTR("Freq: %d"), hardware.get_freq());
+    snprintf_P(buf, sizeof(buf), PSTR("Freq: %d"), hv.get_freq());
     Serial.println(buf);
   }
 }
@@ -184,12 +184,12 @@ void SerialCommand::set_duty() {
   if (arg != NULL) {
     aNumber = atoi(arg);    // Converts a char string to an integer
     if (aNumber != NULL) {
-      hardware.set_duty(aNumber);
-      hardware.saveconfig();
+      hv.set_duty(aNumber);
+      hv.saveconfig();
     }
   } else {
     char buf[32];
-    snprintf_P(buf, sizeof(buf), PSTR("Duty: %d"), hardware.get_duty());
+    snprintf_P(buf, sizeof(buf), PSTR("Duty: %d"), hv.get_duty());
     Serial.println(buf);
   }
 }
@@ -198,7 +198,7 @@ void SerialCommand::set_duty() {
 #ifdef ESPG_HV_ADC
 void SerialCommand::get_hv() {
   char buf[32];
-  snprintf_P(buf, sizeof(buf), PSTR("HV: %d"), (int)hardware.hvReading.get());
+  snprintf_P(buf, sizeof(buf), PSTR("HV: %d"), (int)hv.hvReading.get());
   Serial.println(buf);
 }
 
@@ -209,12 +209,12 @@ void SerialCommand::set_vdratio() {
   if (arg != NULL) {
     aNumber = atoi(arg);    // Converts a char string to an integer
     if (aNumber != NULL) {
-      hardware.set_vd_ratio(aNumber);
-      hardware.saveconfig();
+      hv.set_vd_ratio(aNumber);
+      hv.saveconfig();
     }
   } else {
     char buf[32];
-    snprintf_P(buf, sizeof(buf), PSTR("VD Ratio: %d"), hardware.get_vd_ratio());
+    snprintf_P(buf, sizeof(buf), PSTR("VD Ratio: %d"), hv.get_vd_ratio());
     Serial.println(buf);
   }
 }
@@ -226,12 +226,12 @@ void SerialCommand::set_vdoffset() {
   if (arg != NULL) {
     aNumber = atoi(arg);    // Converts a char string to an integer
     if (aNumber != NULL) {
-      hardware.set_vd_offset(aNumber);
-      hardware.saveconfig();
+      hv.set_vd_offset(aNumber);
+      hv.saveconfig();
     }
   } else {
     char buf[32];
-    snprintf_P(buf, sizeof(buf), PSTR("VD Offset: %d"), hardware.get_vd_offset());
+    snprintf_P(buf, sizeof(buf), PSTR("VD Offset: %d"), hv.get_vd_offset());
     Serial.println(buf);
   }
 }

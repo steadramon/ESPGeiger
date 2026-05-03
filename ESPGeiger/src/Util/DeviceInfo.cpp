@@ -200,6 +200,9 @@ uint16_t DeviceInfo::featureFlags() {
 #ifdef GEIGER_NEOPIXEL
   f |= 1 << 9;
 #endif
+#ifdef ESPG_HV
+  f |= 1 << 10;
+#endif
   return f;
 }
 

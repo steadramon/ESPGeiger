@@ -24,7 +24,7 @@
 #include "../Util/TickProfile.h"
 #include "../Util/StringUtil.h"
 #ifdef ESPG_HV_ADC
-#include "../ESPGHW/ESPGHW.h"
+#include "../HV/HV.h"
 #endif
 
 extern uint8_t send_indicator;
@@ -356,7 +356,7 @@ void MQTT_Client::publishPing()
       b_cpm, b_usv, b_cps, b_cpm5, b_cpm15);
 #ifdef ESPG_HV_ADC
     char b_hv[12];
-    format_f(b_hv, sizeof(b_hv), hardware.hvReading.get());
+    format_f(b_hv, sizeof(b_hv), hv.hvReading.get());
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"hv\":%s"), b_hv);
 #endif
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
@@ -400,7 +400,7 @@ void MQTT_Client::publishPing()
   MQTT_PUB_YIELD();
 
 #ifdef ESPG_HV_ADC
-  format_f(valBuf, sizeof(valBuf), hardware.hvReading.get());
+  format_f(valBuf, sizeof(valBuf), hv.hvReading.get());
   buildTopic(topic, sizeof(topic), "stat", PSTR("HV"));
   mqttClient->publish(topic, 1, false, valBuf);
   MQTT_PUB_YIELD();

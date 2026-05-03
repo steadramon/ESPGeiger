@@ -230,11 +230,15 @@ static void sendTemplate(WS* s, const char* pgm, const TemplateSub* subs, size_t
 // Convenience macro — deduces array count automatically
 #define SEND_TEMPLATE(s, pgm, subs) sendTemplate(s, pgm, subs, sizeof(subs)/sizeof(subs[0]))
 
-void ConfigManager::beginChunkedPage(const char* contentType) {
+void ConfigManager::beginChunkedPage(const char* contentType, bool cacheable) {
   server->client().flush();
-  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
-  server->sendHeader(F("Pragma"), F("no-cache"));
-  server->sendHeader(F("Expires"), F("-1"));
+  if (cacheable) {
+    server->sendHeader(F("Cache-Control"), F("public, max-age=3600"));
+  } else {
+    server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+    server->sendHeader(F("Pragma"), F("no-cache"));
+    server->sendHeader(F("Expires"), F("-1"));
+  }
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   if (contentType)
     server->send(200, contentType, "");
@@ -317,7 +321,7 @@ void ConfigManager::handleRoot() {
 
 void ConfigManager::handleJSReturn()
 {
-  beginChunkedPage(HTTP_HEAD_CTJS);
+  beginChunkedPage(HTTP_HEAD_CTJS, true);
   server->sendContent(FPSTR(picographJS));
   server->sendContent(FPSTR(statusJS));
   server->sendContent("");
@@ -350,9 +354,9 @@ void ConfigManager::handleJsonReturn()
   );
   advance_pos(pos, n, sizeof(jsonBuffer));
 #ifdef ESPG_HV_ADC
-  char hv[16];
-  format_f(hv, sizeof(hv), hardware.hvReading.get());
-  n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR(",\"hv\":%s"), hv);
+  char hvBuf[16];
+  format_f(hvBuf, sizeof(hvBuf), hv.hvReading.get());
+  n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos, PSTR(",\"hv\":%s"), hvBuf);
   advance_pos(pos, n, sizeof(jsonBuffer));
 #endif
   n = snprintf_P(jsonBuffer + pos, sizeof(jsonBuffer) - pos,
@@ -1189,10 +1193,19 @@ void ConfigManager::handleNTP()
   auto* s = server.get();
   { TemplateSub subs[] = {{"{i}", ntpclient.get_server()}, {"{v}", ntpclient.get_tz()}};
     SEND_TEMPLATE(s, NTP_HTML, subs); }
-  s->sendContent(FPSTR(NTP_TZ_JS));
-  s->sendContent(FPSTR(NTP_JS));
+  s->sendContent(F("<script src='/ntpjs'></script>"));
   s->sendContent(FPSTR(HTTP_BACKBTN));
   endChunkedPage();
+}
+
+void ConfigManager::handleNTPJSReturn()
+{
+  handleRequest();
+  beginChunkedPage(HTTP_HEAD_CTJS, true);
+  server->sendContent(FPSTR(NTP_TZ_JS));
+  server->sendContent(FPSTR(NTP_JS));
+  server->sendContent("");
+  server->client().stop();
 }
 
 void ConfigManager::handleNTPSet()
@@ -1225,7 +1238,11 @@ void ConfigManager::handleHVPage()
   sendPageHead(PSTR("HV"));
   auto* s = server.get();
   char title[48];
+#ifdef ESPGEIGER_HW
   snprintf_P(title, sizeof(title), PSTR("%s-HW - HV"), THING_NAME);
+#else
+  snprintf_P(title, sizeof(title), PSTR("%s - HV"), THING_NAME);
+#endif
   { TemplateSub subs[] = {{"{v}", title}, {"{t}", hostName}};
     SEND_TEMPLATE(s, STATUS_PAGE_BODY_HEAD, subs); }
   s->sendContent(FPSTR(HV_STATUS_PAGE_BODY));
@@ -1236,20 +1253,36 @@ void ConfigManager::handleHVPage()
 void ConfigManager::handleHVSet()
 {
   handleRequest();
-  int _d = atoi(server->arg(F("d")).c_str());
-  int _f = atoi(server->arg(F("f")).c_str());
-  int _r = atoi(server->arg(F("r")).c_str());
-  hardware.set_duty(_d);
-  hardware.set_freq(_f);
-  hardware.set_vd_ratio(_r);
-  hardware.saveconfig();
+  String d = server->arg(F("d"));
+  String f = server->arg(F("f"));
+  String r = server->arg(F("r"));
+  String t = server->arg(F("t"));
+  bool changed = false;
+  if (d.length() || f.length()) {
+    int new_freq = f.length() ? atoi(f.c_str()) : hv.get_freq();
+    int new_duty = d.length() ? atoi(d.c_str()) : hv.get_duty();
+    hv.apply_freq_duty_safe(new_freq, new_duty);
+    changed = true;
+  }
+  if (r.length()) { hv.set_vd_ratio(atoi(r.c_str())); changed = true; }
+  if (t.length()) {
+    int _t = atoi(t.c_str());
+    if (_t < 0)   _t = 0;
+    if (_t > 500) _t = 500;
+    hv.set_hv_target((uint16_t)_t);
+    changed = true;
+  }
+  if (changed) {
+    hv.reset_trim();
+    hv.saveconfig();
+  }
   ConfigManager::server->send(200, FPSTR(HTTP_HEAD_CT), F("OK"));
 }
 
 void ConfigManager::handleHVJSReturn()
 {
   handleRequest();
-  beginChunkedPage(HTTP_HEAD_CTJS);
+  beginChunkedPage(HTTP_HEAD_CTJS, true);
   server->sendContent(FPSTR(picographJS));
   server->sendContent(FPSTR(hvJS));
   server->sendContent("");
@@ -1262,19 +1295,24 @@ void ConfigManager::handleHVJsonReturn()
   char jsonBuffer[256] = "";
 
   int total = sizeof(jsonBuffer);
-  int volts = hardware.hvReading.get();
-  int freq = hardware.get_freq();
-  int duty = hardware.get_duty();
-  int ratio = hardware.get_vd_ratio();
+  int volts = hv.hvReading.get();
+  int freq = hv.get_freq();
+  int duty = hv.get_duty();
+  int ratio = hv.get_vd_ratio();
+  int target = hv.get_hv_target();
+  int trim = hv.get_duty_trim();
 
   snprintf_P (
     jsonBuffer,
     sizeof(jsonBuffer),
-    PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d,\"ratio\":%d}"),
+    PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d,\"ratio\":%d,\"target\":%d,\"trim\":%d,\"fmax\":%d}"),
     volts,
     freq,
     duty,
-    ratio
+    ratio,
+    target,
+    trim,
+    GEIGERHW_MAX_FREQ
   );
   jsonBuffer[sizeof(jsonBuffer)-1] = '\0';
   ConfigManager::server.get()->send ( 200, FPSTR(HTTP_HEAD_CTJSON), jsonBuffer );
@@ -1423,6 +1461,7 @@ void ConfigManager::bindServerCallback()
   ConfigManager::server.get()->on(RESET_URL, HTTP_GET, std::bind(&ConfigManager::handleResetParams, this));
   ConfigManager::server.get()->on(NTP_URL, HTTP_GET, std::bind(&ConfigManager::handleNTP, this));
   ConfigManager::server.get()->on(NTP_SET_URL, HTTP_POST, std::bind(&ConfigManager::handleNTPSet, this));
+  ConfigManager::server.get()->on(NTP_JS_URL, HTTP_GET, std::bind(&ConfigManager::handleNTPJSReturn, this));
   ConfigManager::server.get()->on(RANDOM_URL, HTTP_GET, std::bind(&ConfigManager::handleRandomPage, this));
   ConfigManager::server.get()->on(RANDOM_DO_URL, HTTP_GET, std::bind(&ConfigManager::handleRandomDo, this));
 #ifdef WEBAPIOUT

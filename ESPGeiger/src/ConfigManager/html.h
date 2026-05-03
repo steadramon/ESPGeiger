@@ -81,11 +81,12 @@ static const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wrap{min-width:
 <span class="cl" onclick="this.parentElement.style.display='none';">×</span>
 <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
 </div>
-<table><tr><th>Frequency:</th><td><input type="range" id="freq" min="0" max="9000" step="250" value="50"><span id="sfreq">-</span></td></tr>
-<tr><th>Duty:</th><td><input type="range" id="duty" min="0" max="255" value="50"><span id="sduty">-</span></td></tr>
-<tr><th>Ratio:</th><td><input id="ratio" value="-"></td></tr>
+<table><tr><th>Frequency:</th><td><input type="range" id="freq" min="0" max="9000" step="100" value="50"><span id="sfreq">-</span></td></tr>
+<tr><th>Duty:</th><td><input type="range" id="duty" min="0" max="1023" value="50"><span id="sduty">-</span></td></tr>
+<tr><th>Ratio:</th><td><input id="ratio" value="-" type="number" min="0" max="9999"></td></tr>
+<tr><th>Target:</th><td><input id="tgt" value="-" type="number" min="0" max="500"> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
 
-<tr><td><button id="submit">Submit</button></td></tr></table>
+<tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
 <script src="/hvjs"></script>
 )HTML";
 /*
@@ -124,7 +125,6 @@ af:{
 };
 */
 static const char NTP_TZ_JS[] PROGMEM = R"HTML(
-<script>
 var locations = {
   af:{af:["Abidjan","Algiers","Bissau","Cairo","Casablanca","El_Aaiun","Johannesburg","Juba","Khartoum","Lagos","Maputo","Monrovia","Nairobi","Ndjamena","Sao_Tome","Tripoli","Tunis","Windhoek"],at:["Cape_Verde"],in:["Mauritius"],},
   aq:["Casey","Davis","Macquarie","Mawson","Palmer","Rothera","Troll"],
@@ -165,7 +165,6 @@ Object.entries(regions).forEach(entry => {
     });
   });
 });
-</script>
 )HTML";
 
 static const char RANDOM_PAGE_BODY[] PROGMEM = R"HTML(
@@ -217,12 +216,16 @@ function gethv() {
         var o=JSON.parse(x.responseText)
         e.update([o.volts]);
         if (byID('sfreq').innerHTML=="-") {
+          if(o.fmax) byID('freq').max=o.fmax;
           byID('freq').value=o.freq;
           byID('duty').value=o.duty;
           byID('ratio').value=o.ratio;
+          byID('tgt').value=o.target;
           byID('sfreq').innerHTML=o.freq;
           byID('sduty').innerHTML=o.duty;
+          var b=byID('submit');b.disabled=false;b.innerHTML='Submit';
         }
+        byID('strim').innerHTML=o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
       }
       lf=Date.now();
       lt=setTimeout(gethv,3000);
@@ -241,6 +244,7 @@ byID('submit').addEventListener("click", function() {
   var duty = byID('duty').value;
   var freq = byID('freq').value;
   var ratio = byID('ratio').value;
+  var tgt = byID('tgt').value;
 
    x=new XMLHttpRequest();
     x.onload = function() {
@@ -249,7 +253,7 @@ byID('submit').addEventListener("click", function() {
           byID('sduty').innerHTML='-';
       }
     };
-    x.open('GET','/hvset?f='+freq+'&d='+duty+'&r='+ratio,true);
+    x.open('GET','/hvset?f='+freq+'&d='+duty+'&r='+ratio+'&t='+tgt,true);
     x.send();
 });
 )JS";

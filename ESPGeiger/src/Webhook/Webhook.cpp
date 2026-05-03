@@ -23,7 +23,7 @@
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
 #ifdef ESPG_HV_ADC
-#include "../ESPGHW/ESPGHW.h"
+#include "../HV/HV.h"
 #endif
 
 extern uint8_t send_indicator;
@@ -173,7 +173,7 @@ void Webhook::postMeasurement() {
   advance_pos(pos, n, sizeof(buffer));
 #ifdef ESPG_HV_ADC
   char b_hv[12];
-  format_f(b_hv, sizeof(b_hv), hardware.hvReading.get());
+  format_f(b_hv, sizeof(b_hv), hv.hvReading.get());
   n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);
   advance_pos(pos, n, sizeof(buffer));
 #endif

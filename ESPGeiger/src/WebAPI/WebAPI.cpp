@@ -38,7 +38,7 @@
 #include <LittleFS.h>
 #include <uECC.h>
 #ifdef ESPG_HV_ADC
-#include "../ESPGHW/ESPGHW.h"
+#include "../HV/HV.h"
 #endif
 
 WebAPI webapi;
@@ -332,7 +332,7 @@ void WebAPI::postMeasurement(bool censusOnly) {
     mp.kv("c",  gcounter.get_cpmf());
     mp.kv("u",  gcounter.get_usv());
 #ifdef ESPG_HV_ADC
-    mp.kv("hv", hardware.hvReading.get());
+    mp.kv("hv", hv.hvReading.get());
 #endif
   }
 

@@ -21,11 +21,13 @@ jobs:
         environments:
           - "esp32_cajoe_iotgm"
           - "esp32_cajoe_iotgm_no_pcnt"
+          - "esp32_hv"
           - "esp32_serial"
           - "esp32_testpulse"
           - "esp32_testpulseint"
           - "esp32oled_pulse"
           - "esp32oled_serial"
+          - "esp8266_hv"
           - "esp8266_pulse"
           - "esp8266_pulsemin"
           - "esp8266_serial"

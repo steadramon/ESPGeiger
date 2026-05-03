@@ -24,8 +24,8 @@
 #include "../Module/EGModule.h"
 
 #ifdef ESPG_HV
-#include "../ESPGHW/ESPGHW.h"
-extern ESPGeigerHW hardware;
+#include "../HV/HV.h"
+extern HV hv;
 #endif
 
 #define SERIALCOMMAND_MAXCOMMANDLENGTH 12

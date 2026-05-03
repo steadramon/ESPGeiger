@@ -27,8 +27,8 @@
 #include "../NTP/NTP.h"
 
 #ifdef ESPG_HV
-#include "../ESPGHW/ESPGHW.h"
-extern ESPGeigerHW hardware;
+#include "../HV/HV.h"
+extern HV hv;
 #endif
 
 extern Counter gcounter;
@@ -53,6 +53,7 @@ constexpr auto RESET_URL PROGMEM = "/reset";
 constexpr auto CLICKS_JSON PROGMEM = "/clicks";
 constexpr auto NTP_URL PROGMEM = "/ntp";
 constexpr auto NTP_SET_URL PROGMEM = "/ntpset";
+constexpr auto NTP_JS_URL PROGMEM = "/ntpjs";
 constexpr auto HIST_URL PROGMEM = "/hist";
 constexpr auto GEIGERLOG_URL PROGMEM = "/lastdata";
 constexpr auto SERIAL_URL PROGMEM = "/serial";
@@ -141,7 +142,7 @@ private:
 #ifdef DEBUG_PREFS
   void handlePrefs();  // debug-only: /prefs?m=<module>&k=<key>
 #endif
-  void beginChunkedPage(const char* contentType = nullptr);
+  void beginChunkedPage(const char* contentType = nullptr, bool cacheable = false);
   void sendPageHead(const char* title);
   void endChunkedPage();
   void handleEGPrefs();  // GET renders form, POST saves + re-renders
@@ -152,6 +153,7 @@ private:
   void handleRegisterAPI();
   void handleNTP();
   void handleNTPSet();
+  void handleNTPJSReturn();
   void handleRandomPage();
   void handleRandomDo();
   void handleWebAPI();

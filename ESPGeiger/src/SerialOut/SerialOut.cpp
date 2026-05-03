@@ -24,7 +24,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/StringUtil.h"
 #ifdef ESPG_HV_ADC
-#include "../ESPGHW/ESPGHW.h"
+#include "../HV/HV.h"
 #endif
 
 SerialOut serialout;
@@ -90,7 +90,7 @@ void SerialOut::loop(unsigned long now) {
   }
 #ifdef ESPG_HV_ADC
   if (_show_flags & SHOW_HV) {
-    n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%sHV: %d"), pos ? " " : "", (int)hardware.hvReading.get());
+    n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%sHV: %d"), pos ? " " : "", (int)hv.hvReading.get());
     advance_pos(pos, n, sizeof(buf));
   }
 #endif
