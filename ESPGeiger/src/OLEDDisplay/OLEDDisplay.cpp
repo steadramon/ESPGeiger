@@ -114,6 +114,8 @@ const EGLegacyAlias* SSD1306Display::legacy_aliases() { return OLED_LEGACY; }
 
 SSD1306Display::SSD1306Display(uint8_t _addr, int _sda, int _scl)
  : SSD1306Wire(_addr, _sda, _scl) {
+  cx = 0;
+  cy = 0;
 }
 
 void SSD1306Display::setBrightness(uint8_t brightness) {
