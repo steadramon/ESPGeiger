@@ -100,39 +100,7 @@ public:
   // cascading recompile that triggered an icache layout shift in 0.10.0.
   void setBrightness(uint8_t brightness);
 
-  uint8_t type() { return 1; }
-  void noBlink() {/*no support*/}
-  void blink() {/*no support*/}
-  void setCursor(uint8_t col, int8_t row) {
-    /* assume 4 lines, the middle two lines
-       are row 0 and 1 */
-    cy = (row+1)*fontHeight;
-    cx = col*fontWidth;
-  }
-  void noBacklight() {/*no support*/}
-  void backlight() {/*no support*/}
   bool isScreenOnTime(unsigned long now);
-  size_t write(uint8_t c) {
-    setColor(BLACK);
-    fillRect(cx, cy, fontWidth, fontHeight);
-    setColor(WHITE);
-    char cs[2] = {(char)c, '\0'};
-    drawString(cx, cy, cs);
-    cx += fontWidth;
-    display();
-    return 1;
-  }
-  size_t write(const char* s) {
-    if (s == NULL) return 0;
-    uint8_t nc = strlen(s);
-    setColor(BLACK);
-    fillRect(cx, cy, fontWidth*nc, fontHeight);
-    setColor(WHITE);
-    drawString(cx, cy, s);
-    cx += fontWidth*nc;
-    display();
-    return nc;
-  }
 
   void loop(unsigned long now) override;
   bool has_loop() override { return true; }
@@ -158,7 +126,6 @@ public:
   bool enable_oled_timeout = true;
 
   private:
-    uint8_t cx, cy;
     uint8_t fontWidth, fontHeight;
     bool _present = false;
     uint32_t _lcd_timeout_ms = 0;  // 0 = no idle-off, schedule applies. Pref only loaded when GEIGER_PUSHBUTTON.
