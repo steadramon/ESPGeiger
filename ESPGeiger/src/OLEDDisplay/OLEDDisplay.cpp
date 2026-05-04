@@ -351,7 +351,7 @@ void SSD1306Display::page_one_graph() {
     }
 
     if (minValue > 1) {
-      minValue = (int)(minValue * 0.9);
+      minValue = minValue * 9 / 10;
     }
     int x_start = 0;
     if (gcounter.cpm_history.capacity != histSize) {
