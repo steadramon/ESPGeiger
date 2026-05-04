@@ -206,16 +206,14 @@ float Counter::get_usv() {
 }
 
 float Counter::get_totalusv() {
-  float totalUsv = 0;
   unsigned long long uptime = NTP.getUptime ();
   if (uptime < 1) {
     return 0;
   }
-  const float inv_factor = 60.0f / uptime;
-  totalUsv  = (float)__LONG_MAX__ * inv_factor * (float)total_clicks_rollover;
-  totalUsv += total_clicks * inv_factor;
-  static constexpr float INV_60 = 1.0f / 60.0f;
-  return totalUsv * INV_60 * _ratio_inv;
+  const float inv_uptime = 1.0f / uptime;
+  float totalUsv  = (float)__LONG_MAX__ * inv_uptime * (float)total_clicks_rollover;
+  totalUsv       += total_clicks * inv_uptime;
+  return totalUsv * _ratio_inv;
 }
 
 float Counter::get_usv5() {
