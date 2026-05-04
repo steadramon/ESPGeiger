@@ -23,9 +23,10 @@
 #include "../Util/Globals.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
+#include "../Prefs/EGPrefs.h"
 
 #ifndef PUSHBUTTON_PIN
-#define PUSHBUTTON_PIN 14
+#define PUSHBUTTON_PIN -1
 #endif
 
 extern Counter gcounter;
@@ -42,6 +43,12 @@ class PushButton : public EGModule {
     void begin() override;
     void init();
     bool isPressed();
+    bool is_active();
+    void set_pin(int pin);
+#ifndef BTN_PIN_BLOCKED
+    const EGPrefGroup* prefs_group() override;
+    void on_prefs_loaded() override;
+#endif
 };
 
 extern PushButton pushbutton;

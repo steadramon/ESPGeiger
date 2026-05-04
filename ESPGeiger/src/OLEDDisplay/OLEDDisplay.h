@@ -66,7 +66,9 @@ public:
     uint8_t display_order() override { return 15; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint16_t warmup_seconds() override { return 0; }
-    void pre_wifi() override { setup(); }
+    // setup() is deferred to on_prefs_loaded() so the configured SDA/SCL
+    // and other display prefs are honoured on first boot.
+    void pre_wifi() override {}
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 #ifndef OLED_PINS_BLOCKED
@@ -82,6 +84,7 @@ public:
   void setupWifi(const char* s);
   void wifiDisabled();
   void onButtonTap(unsigned long now);
+  bool is_present() const { return _present; }
 
   void clear() {
     SSD1306Wire::clear();
@@ -145,8 +148,8 @@ public:
   void page_four_matrix();
   void showOTABanner();
 
-  void setTimeout(uint16_t timeout) {
-    _lcd_timeout = timeout;
+  void setTimeout(uint32_t seconds) {
+    _lcd_timeout_ms = seconds * 1000;
   }
 
   uint8_t oled_page = 1;
@@ -158,7 +161,8 @@ public:
   private:
     uint8_t cx, cy;
     uint8_t fontWidth, fontHeight;
-    uint16_t _lcd_timeout = 300;
+    bool _present = false;
+    uint32_t _lcd_timeout_ms = 0;  // 0 = no idle-off, schedule applies. Pref only loaded when GEIGER_PUSHBUTTON.
     unsigned long _page4_num_last = 0;
     char _page4_num[8] = "";
     uint8_t _page4_variant = 0;

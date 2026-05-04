@@ -31,6 +31,7 @@ static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
 static Ticker buttonTicker;
+static volatile int s_pin = PUSHBUTTON_PIN;
 static volatile bool s_last_read = false;
 static volatile uint32_t s_last_change_ms = 0;
 static volatile uint32_t s_press_start_ms = 0;
@@ -39,7 +40,8 @@ static volatile bool s_short_press_pending = false;
 static volatile bool s_long_press_fired = false;
 
 static void button_tick() {
-  bool down = (digitalRead(PUSHBUTTON_PIN) == LOW);
+  if (s_pin < 0) return;
+  bool down = (digitalRead(s_pin) == LOW);
   if (down != s_last_read) {
     s_last_read = down;
     s_last_change_ms = millis();
@@ -80,22 +82,63 @@ static void do_longpress() {
 PushButton pushbutton;
 EG_REGISTER_MODULE(pushbutton)
 
+#ifndef BTN_PIN_BLOCKED
+#define _BTN_STR(x) #x
+#define BTN_STR(x)  _BTN_STR(x)
+
+EG_PSTR(BTN_L_PIN, "Button Pin");
+EG_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
+
+static const EGPref BTN_PREF_ITEMS[] = {
+  {"pin", BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, 39, 0, EGP_INT, 0},
+};
+
+static const EGPrefGroup BTN_PREF_GROUP = {
+  "btn", "Button", 1,
+  BTN_PREF_ITEMS,
+  sizeof(BTN_PREF_ITEMS) / sizeof(BTN_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* PushButton::prefs_group() { return &BTN_PREF_GROUP; }
+
+void PushButton::on_prefs_loaded() {
+  int pin = (int)EGPrefs::getInt("btn", "pin");
+  set_pin(pin);
+  Log::console(PSTR("Btn: pin=%d"), pin);
+}
+#endif
+
 PushButton::PushButton() {
+}
+
+void PushButton::set_pin(int pin) {
+  if (pin == s_pin && buttonTicker.active()) return;
+  buttonTicker.detach();
+  s_pressed = false;
+  s_last_read = false;
+  s_short_press_pending = false;
+  s_long_press_fired = false;
+  s_last_change_ms = millis();
+  s_press_start_ms = s_last_change_ms;
+  s_pin = pin;
+  if (pin >= 0) {
+    pinMode(pin, INPUT_PULLUP);
+    delayMicroseconds(20);
+    bool down = (digitalRead(pin) == LOW);
+    s_last_read = down;
+    s_pressed = down;
+    s_long_press_fired = down;
+    buttonTicker.attach_ms(POLL_MS, button_tick);
+  }
 }
 
 void PushButton::init()
 {
   static bool ready = false;
   if (ready) return;
-  pinMode(PUSHBUTTON_PIN, INPUT_PULLUP);
-  delayMicroseconds(20);
-  bool down = (digitalRead(PUSHBUTTON_PIN) == LOW);
-  s_last_read = down;
-  s_pressed = down;
-  s_last_change_ms = millis();
-  s_press_start_ms = s_last_change_ms;
-  s_long_press_fired = down;
-  buttonTicker.attach_ms(POLL_MS, button_tick);
+  if (s_pin >= 0) {
+    set_pin(s_pin);
+  }
   ready = true;
 }
 
@@ -109,8 +152,14 @@ bool PushButton::isPressed()
   return s_pressed;
 }
 
+bool PushButton::is_active()
+{
+  return s_pin >= 0;
+}
+
 void PushButton::loop(unsigned long now)
 {
+  if (s_pin < 0) return;
 #ifdef SSD1306_DISPLAY
   if (s_pressed && !s_long_press_fired && (now - s_press_start_ms) >= LONG_PRESS_MS) {
     s_long_press_fired = true;
@@ -120,7 +169,7 @@ void PushButton::loop(unsigned long now)
   if (s_short_press_pending) {
     s_short_press_pending = false;
     led.Blink(200, 1);
-#if defined(SSD1306_DISPLAY)
+#ifdef SSD1306_DISPLAY
     display.onButtonTap(now);
 #endif
     gcounter.reset_alarm();

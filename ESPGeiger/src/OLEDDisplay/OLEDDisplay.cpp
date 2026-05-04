@@ -42,11 +42,15 @@ EG_REGISTER_MODULE(display)
 EG_PSTR(OL_L_BRT, "Brightness");
 #ifdef GEIGER_PUSHBUTTON
 EG_PSTR(OL_L_TMO, "Timeout");
-EG_PSTR(OL_H_TMO, "sec, 0=off");
-#else
+EG_PSTR(OL_H_TMO, "Idle seconds before display blanks (0 = use schedule below)");
+#endif
 EG_PSTR(OL_L_ONT, "On Time");
-EG_PSTR(OL_H_ONT, "Display on");
 EG_PSTR(OL_L_OFT, "Off Time");
+#ifdef GEIGER_PUSHBUTTON
+EG_PSTR(OL_H_ONT, "Display on (used when Timeout = 0)");
+EG_PSTR(OL_H_OFT, "Display off (used when Timeout = 0)");
+#else
+EG_PSTR(OL_H_ONT, "Display on");
 EG_PSTR(OL_H_OFT, "Display off");
 #endif
 #ifndef OLED_PINS_BLOCKED
@@ -59,10 +63,9 @@ static const EGPref OLED_PREF_ITEMS[] = {
   {"brightness", OL_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
 #ifdef GEIGER_PUSHBUTTON
   {"timeout",    OL_L_TMO, OL_H_TMO, "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
-#else
-  {"on_time",    OL_L_ONT, OL_H_ONT, "06:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
-  {"off_time",   OL_L_OFT, OL_H_OFT, "22:00", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
 #endif
+  {"on_time",    OL_L_ONT, OL_H_ONT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"off_time",   OL_L_OFT, OL_H_OFT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
 #ifndef OLED_PINS_BLOCKED
   {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
@@ -78,13 +81,21 @@ static const EGPrefGroup OLED_PREF_GROUP = {
 const EGPrefGroup* SSD1306Display::prefs_group() { return &OLED_PREF_GROUP; }
 
 void SSD1306Display::on_prefs_loaded() {
-  setBrightness((uint8_t)EGPrefs::getUInt("display", "brightness"));
-#ifdef GEIGER_PUSHBUTTON
-  setTimeout((int)EGPrefs::getUInt("display", "timeout"));
-#endif
 #ifndef OLED_PINS_BLOCKED
   _pin_sda = (uint8_t)EGPrefs::getUInt("display", "sda");
   _pin_scl = (uint8_t)EGPrefs::getUInt("display", "scl");
+#endif
+  // Defer Wire.begin + probe to first prefs load so configured SDA/SCL apply
+  // on first boot. on_prefs_saved requests reboot for pin changes, so this
+  // only needs to run once per boot.
+  static bool setup_done = false;
+  if (!setup_done) {
+    setup_done = true;
+    setup();
+  }
+  setBrightness((uint8_t)EGPrefs::getUInt("display", "brightness"));
+#ifdef GEIGER_PUSHBUTTON
+  setTimeout((int)EGPrefs::getUInt("display", "timeout"));
 #endif
 }
 
@@ -93,10 +104,9 @@ static const EGLegacyAlias OLED_LEGACY[] = {
   {"dispBrightness", "brightness"},
 #ifdef GEIGER_PUSHBUTTON
   {"dispTimeout", "timeout"},
-#else
+#endif
   {"oledOn",  "on_time"},
   {"oledOff", "off_time"},
-#endif
   {nullptr, nullptr},
 };
 const EGLegacyAlias* SSD1306Display::legacy_aliases() { return OLED_LEGACY; }
@@ -119,6 +129,7 @@ void SSD1306Display::on_prefs_saved() {
 #endif
 
 void SSD1306Display::loop(unsigned long now) {
+    if (!_present) return;
     if (oled_page > OLED_PAGES) {
       oled_page = 1;
     }
@@ -129,37 +140,23 @@ void SSD1306Display::loop(unsigned long now) {
     if (oled_page == 4) {
       oled_timeout = now;
     }
-#ifdef GEIGER_PUSHBUTTON
-    if ((enable_oled_timeout) && (_lcd_timeout > 0) && ((now - oled_timeout) / 1000 > _lcd_timeout)) {
+    bool idle_off = enable_oled_timeout && _lcd_timeout_ms > 0 &&
+                    (now - oled_timeout > _lcd_timeout_ms);
+    bool sched_off = (_lcd_timeout_ms == 0) && !isScreenOnTime(now);
+    if (idle_off || sched_off) {
       if (oled_on) {
         displayOff();
         oled_on = false;
       }
       return;
     } else {
-      if (oled_on == false) {
-        displayOn();
-        oled_page=1;
-        oled_on = true;
-        oled_last_update = now-20000;
-      }
-    }
-#else
-    if (isScreenOnTime(now)) {
       if (oled_on == false) {
         displayOn();
         oled_page = 1;
         oled_on = true;
-        oled_last_update = now;
+        oled_last_update = now - 20000;
       }
-    } else {
-      if (oled_on) {
-        displayOff();
-        oled_on = false;
-      }
-      return;
     }
-#endif
     if (oled_page == 1) {
       if ((now - oled_last_update >= 10000) || (oled_last_update == 0)) {
         oled_last_update = now;
@@ -198,32 +195,33 @@ void SSD1306Display::loop(unsigned long now) {
 
   }
 
-  bool SSD1306Display::isScreenOnTime(unsigned long now) {
-    static int16_t cached_on_mins = -1;
-    static int16_t cached_off_mins = -1;
-
-    static uint8_t tz_cnt = 0;
-    if (cached_on_mins == -1 || ++tz_cnt >= 120) {
-      tz_cnt = 0;
-      ParsedTime on_time  = parseTime(EGPrefs::getString("display", "on_time"));
-      ParsedTime off_time = parseTime(EGPrefs::getString("display", "off_time"));
-      if (!on_time.isValid || !off_time.isValid) { cached_on_mins = -2; return true; }
-      cached_on_mins = on_time.hour * 60 + on_time.minute;
-      cached_off_mins = off_time.hour * 60 + off_time.minute;
-    }
-
-    if (cached_on_mins == -2) return true;
-
-    time_t currentTime = time(NULL);
-    struct tm *timeinfo = localtime(&currentTime);
-    if (!timeinfo) return true;
-
-    int now_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
-    if (cached_on_mins < cached_off_mins)
-      return (now_mins >= cached_on_mins && now_mins < cached_off_mins);
-    else
-      return (now_mins >= cached_on_mins || now_mins < cached_off_mins);
+bool SSD1306Display::isScreenOnTime(unsigned long now) {
+  static int16_t cached_on_mins = -1;
+  static int16_t cached_off_mins = -1;
+  static uint8_t tz_cnt = 0;
+  static time_t recompute_at = 0;
+  static bool cached_result = true;
+  if (cached_on_mins == -1 || ++tz_cnt >= 120) {
+    tz_cnt = 0;
+    ParsedTime on_time  = parseTime(EGPrefs::getString("display", "on_time"));
+    ParsedTime off_time = parseTime(EGPrefs::getString("display", "off_time"));
+    if (!on_time.isValid || !off_time.isValid) { cached_on_mins = -2; return true; }
+    cached_on_mins = on_time.hour * 60 + on_time.minute;
+    cached_off_mins = off_time.hour * 60 + off_time.minute;
+    recompute_at = 0;  // force recompute after prefs reload
   }
+  if (cached_on_mins == -2) return true;
+  time_t currentTime = time(NULL);
+  if (currentTime < recompute_at) return cached_result;
+  struct tm *timeinfo = localtime(&currentTime);
+  if (!timeinfo) return true;
+  int now_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
+  cached_result = (cached_on_mins < cached_off_mins)
+    ? (now_mins >= cached_on_mins && now_mins < cached_off_mins)
+    : (now_mins >= cached_on_mins || now_mins < cached_off_mins);
+  recompute_at = currentTime + (60 - timeinfo->tm_sec);
+  return cached_result;
+}
 
 void SSD1306Display::page_two_full() {
   clear();
@@ -255,6 +253,15 @@ void SSD1306Display::page_one_clear() {
 
 void SSD1306Display::setup() {
   Wire.begin(_pin_sda, _pin_scl);
+  Wire.beginTransmission(OLED_ADDR);
+  if (Wire.endTransmission() != 0) {
+    _present = false;
+    Log::console(PSTR("OLED: no display detected at 0x%02X (sda=%d scl=%d)"),
+                 OLED_ADDR, _pin_sda, _pin_scl);
+    return;
+  }
+  _present = true;
+  Log::console(PSTR("OLED: detected at 0x%02X"), OLED_ADDR);
   SSD1306Wire::init();
 #if OLED_FLIP
   flipScreenVertically();
@@ -274,6 +281,7 @@ void SSD1306Display::setup() {
 }
 
 void SSD1306Display::onButtonTap(unsigned long now) {
+  if (!_present) return;
   static unsigned long s_last_tap = 0;
   static uint8_t s_tap_count = 0;
   s_tap_count = (now - s_last_tap < 400) ? (s_tap_count + 1) : 1;
@@ -296,6 +304,7 @@ void SSD1306Display::onButtonTap(unsigned long now) {
 }
 
 void SSD1306Display::setupWifi(const char* s) {
+  if (!_present) return;
   clear();
   setFont(DialogInput_plain_12);
   drawString(0, 10, PSTR("Setup - Connect to"));
@@ -305,6 +314,7 @@ void SSD1306Display::setupWifi(const char* s) {
 }
 
 void SSD1306Display::wifiDisabled() {
+  if (!_present) return;
   setFont(ArialMT_Plain_10);
   fontWidth = 8;
   fontHeight = 16;
@@ -575,6 +585,7 @@ void SSD1306Display::page_four_static() {
 }
 
 void SSD1306Display::showOTABanner() {
+  if (!_present) return;
   clear();
   setTextAlignment(TEXT_ALIGN_CENTER);
   setFont(ArialMT_Plain_16);
