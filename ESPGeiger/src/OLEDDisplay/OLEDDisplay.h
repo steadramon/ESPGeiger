@@ -97,7 +97,7 @@ public:
   }
 
   void setBrightness(uint8_t brightness) {
-    brightness = (int)brightness * 2.55;
+    brightness = (uint8_t)((uint16_t)brightness * 255 / 100);
     SSD1306Wire::setBrightness(brightness);
   }
 
