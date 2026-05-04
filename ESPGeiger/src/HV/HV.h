@@ -125,7 +125,6 @@ class HV : public EGModule {
       }
       void set_vd_ratio( int ratio) {
         _hw_vd_ratio = ratio;
-        _scale = 0.0009765625032f * (float)ratio;  // precompute for hot path
       };
       void set_vd_offset (int offset) {
         _hw_vd_offset = offset;
@@ -155,7 +154,6 @@ class HV : public EGModule {
       int _cur_duty = 0;
       int _hw_vd_ratio = GEIGERHW_ADC_RATIO;
       int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
-      float _scale = 0.0009765625032f * (float)GEIGERHW_ADC_RATIO;  // 1/1024 * ratio
       // Closed-loop trim: 0 target = disabled (open-loop). Bounded to ±5 LSB
       // (≈±8 V on this divider) so feedback faults can't run away.
       uint16_t _hv_target = 0;

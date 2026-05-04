@@ -133,8 +133,8 @@ void HV::loop(unsigned long /*now*/) {
 #ifdef ESPG_HV_ADC
   if (GEIGER_VFEEDBACKPIN < 0) return;
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
-  float volts = (_scale * sensorValue) + _hw_vd_offset;
-  hvReading.add(volts);
+  int volts = ((_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
+  hvReading.add((float)volts);
 
   // Closed-loop trim — only after warmup, throttled, bounded ±TRIM_MAX.
   // Suppressed for TRIM_SETTLE_MS after duty/freq change so the dip from
