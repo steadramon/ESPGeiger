@@ -104,7 +104,7 @@ class HV : public EGModule {
       #ifdef ESP8266
         analogWriteFreq(freq);
       #else
-        ledcChangeFrequency(0, freq, 8);
+        ledcChangeFrequency(0, freq, 10);
       #endif
         _hw_freq = freq;
       };
