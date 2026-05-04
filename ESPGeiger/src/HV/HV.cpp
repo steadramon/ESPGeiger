@@ -118,9 +118,7 @@ void HV::loop(unsigned long /*now*/) {
   // to the WiFi stack (shared RF ADC) and can block ~150-200us - kept out of
   // the 1Hz tick so that cost doesn't inflate tick_us.
   if (_pwm_pin >= 0) {
-    int eff_duty = _hw_duty + _duty_trim;
-    if (eff_duty < 1)    eff_duty = 1;
-    if (eff_duty > 1023) eff_duty = 1023;
+    int eff_duty = clamp(_hw_duty + _duty_trim, 1, 1023);
     if (_cur_duty != eff_duty) {
 #ifdef ESP8266
       analogWrite (_pwm_pin, eff_duty) ;

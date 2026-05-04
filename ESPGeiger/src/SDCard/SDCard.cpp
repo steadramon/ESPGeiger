@@ -22,6 +22,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/MathUtil.h"
 
 SdFat32* sd = nullptr;
 
@@ -44,10 +45,7 @@ static const EGPrefGroup SDCARD_PREF_GROUP = {
 const EGPrefGroup* SDCard::prefs_group() { return &SDCARD_PREF_GROUP; }
 
 void SDCard::on_prefs_loaded() {
-  uint32_t v = EGPrefs::getUInt("sdcard", "sync_min");
-  if (v < 1) v = 1;
-  if (v > 5) v = 5;
-  _sync_min = (uint8_t)v;
+  _sync_min = (uint8_t)clamp((uint32_t)EGPrefs::getUInt("sdcard", "sync_min"), 1u, 5u);
 }
 
 static void dateTimeCB(uint16_t *dosYear, uint16_t *dosTime) {

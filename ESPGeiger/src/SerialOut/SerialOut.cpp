@@ -23,6 +23,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/StringUtil.h"
+#include "../Util/MathUtil.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 #endif
@@ -48,9 +49,7 @@ void SerialOut::print_usv() {
 }
 
 void SerialOut::set_show(int var) {
-  if (var < 0) var = 0;
-  if (var > UINT16_MAX) var = UINT16_MAX;
-  _interval = (uint16_t)var;
+  _interval = (uint16_t)clamp(var, 0, (int)UINT16_MAX);
   if (_interval == 0) {
     _show_flags = 0;
   } else {

@@ -18,6 +18,7 @@
 */
 #include "Pulse.h"
 #include "../../Logger/Logger.h"
+#include "../../Util/MathUtil.h"
 
 GeigerPulse::GeigerPulse() {
 };
@@ -80,9 +81,7 @@ int GeigerPulse::collect() {
 }
 
 void GeigerPulse::set_pcnt_filter(int val) {
-  if (val < 0) val = 0;
-  if (val > 1023) val = 1023;
-  _pcnt_filter = val;
+  _pcnt_filter = clamp(val, 0, 1023);
 }
 
 void GeigerPulse::apply_pcnt_filter() {

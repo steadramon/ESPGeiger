@@ -30,6 +30,7 @@
 #include "../SerialOut/SerialOut.h"
 #include "../Util/BootHooks.h"
 #include "../Util/StringUtil.h"
+#include "../Util/MathUtil.h"
 #include "../GRNG/GRNG.h"
 #ifdef WEBAPIOUT
 #include "../WebAPI/WebAPI.h"
@@ -1266,10 +1267,7 @@ void ConfigManager::handleHVSet()
   }
   if (r.length()) { hv.set_vd_ratio(atoi(r.c_str())); changed = true; }
   if (t.length()) {
-    int _t = atoi(t.c_str());
-    if (_t < 0)   _t = 0;
-    if (_t > 500) _t = 500;
-    hv.set_hv_target((uint16_t)_t);
+    hv.set_hv_target((uint16_t)clamp(atoi(t.c_str()), 0, 500));
     changed = true;
   }
   if (changed) {

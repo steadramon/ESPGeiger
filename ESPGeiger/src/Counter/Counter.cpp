@@ -21,6 +21,7 @@
 #include "Counter.h"
 #include "../Logger/Logger.h"
 #include "../Util/StringUtil.h"
+#include "../Util/MathUtil.h"
 #include "../Util/DeviceInfo.h"
 #include "../NTP/NTP.h"
 #include "../GRNG/GRNG.h"
@@ -165,23 +166,11 @@ void Counter::set_ratio(float ratio) {
 }
 
 void Counter::set_warning(int val) {
-  if (val < 0) {
-    val = 0;
-  } else if (val > 9999)
-  {
-    val = 9999;
-  }
-  _cpm_warning = val;
+  _cpm_warning = clamp(val, 0, 9999);
 }
 
 void Counter::set_alert(int val) {
-  if (val < 0) {
-    val = 0;
-  } else if (val > 9999)
-  {
-    val = 9999;
-  }
-  _cpm_alert = val;
+  _cpm_alert = clamp(val, 0, 9999);
 }
 
 bool Counter::is_warm() const {

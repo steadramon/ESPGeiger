@@ -22,6 +22,7 @@
 #include "NeoPixel.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/MathUtil.h"
 
 NeoPixel neopixel;
 EG_REGISTER_MODULE(neopixel)
@@ -67,13 +68,7 @@ void NeoPixel::setup()
 }
 
 void NeoPixel::setBrightness(int input) {
-  input = input * 128 / 100;
-  if (input > 128) {
-    input = 128;
-  }
-  if (input < 0) {
-    input = 0;
-  }
+  input = clamp(input * 128 / 100, 0, 128);  // 0-100% pref → 0-128 hw, int math
   if (input == 0) {
     RgbColor black(0);
     this->controller_->SetPixelColor(0, black);
@@ -99,13 +94,7 @@ void NeoPixel::blink(uint16 timer)
   RgbColor rgb(0, colorSaturation, 0);
   if ((our_5cpm > 0) && (our_cpm > 0)) {
     float diff_ratio = (our_cpm / our_5cpm);
-    nextInterval = blinkInterval / diff_ratio;
-    if (nextInterval < 100) {
-      nextInterval = 100;
-    }
-    if (nextInterval > 4000) {
-      nextInterval = 4000;
-    }
+    nextInterval = clamp((unsigned long)(blinkInterval / diff_ratio), 100UL, 4000UL);
     if (this->neoPixelMode >= 2) {
       if (diff_ratio > 1.5) {
         rgb = RgbColor(colorSaturation, 0, 0);           // rising fast - red

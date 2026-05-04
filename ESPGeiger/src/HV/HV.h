@@ -21,6 +21,7 @@
 #define HV_H
 #include <Arduino.h>
 #include "../Util/Globals.h"
+#include "../Util/MathUtil.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/EGSmoothed.h"
@@ -112,13 +113,7 @@ class HV : public EGModule {
         return _hw_freq;
       }
       void set_duty( int duty) {
-        if (duty > 1023) {
-          duty = 1023;
-        }
-        if (duty < 1) {
-          duty = 1;
-        }
-        _hw_duty = duty;
+        _hw_duty = clamp(duty, 1, 1023);
       };
       int get_duty() {
         return _hw_duty;
