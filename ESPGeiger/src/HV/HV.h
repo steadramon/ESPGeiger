@@ -21,7 +21,6 @@
 #define HV_H
 #include <Arduino.h>
 #include "../Util/Globals.h"
-#include "../Util/MathUtil.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/EGSmoothed.h"
@@ -112,9 +111,9 @@ class HV : public EGModule {
       int get_freq() {
         return _hw_freq;
       }
-      void set_duty( int duty) {
-        _hw_duty = clamp(duty, 1, 1023);
-      };
+      // Body in HV.cpp — keeps clamp() out of the header to avoid the
+      // cascading recompile that hit OLEDDisplay.h's setBrightness.
+      void set_duty(int duty);
       int get_duty() {
         return _hw_duty;
       }

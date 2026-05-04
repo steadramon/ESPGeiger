@@ -24,6 +24,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Counter/Counter.h"
+#include "../Util/MathUtil.h"
 
 extern Counter gcounter;
 
@@ -91,6 +92,10 @@ const EGLegacyAlias* HV::legacy_aliases() { return HW_LEGACY; }
 // === END LEGACY IMPORT ===
 
 HV::HV() {
+}
+
+void HV::set_duty(int duty) {
+  _hw_duty = clamp(duty, 1, 1023);
 }
 
 void HV::begin() {
