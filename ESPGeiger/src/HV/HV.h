@@ -88,7 +88,6 @@ class HV : public EGModule {
       bool has_loop() override { return true; }
       uint16_t loop_interval_ms() override { return 1000; }
       void loop(unsigned long now) override;
-      void fiveloop();
       void begin() override;
       const EGPrefGroup* prefs_group() override;
       void on_prefs_loaded() override;
@@ -148,8 +147,6 @@ class HV : public EGModule {
       int _cur_duty = 0;
       int _hw_vd_ratio = GEIGERHW_ADC_RATIO;
       int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
-      // Closed-loop trim: 0 target = disabled (open-loop). Bounded to ±5 LSB
-      // (≈±8 V on this divider) so feedback faults can't run away.
       uint16_t _hv_target = 0;
       int8_t   _duty_trim = 0;
       unsigned long _trim_settle_until = 0;  // suppress trim until this millis()

@@ -134,7 +134,7 @@ void HV::loop(unsigned long /*now*/) {
     }
   }
 #ifdef ESPG_HV_ADC
-  if (GEIGER_VFEEDBACKPIN < 0) return;
+  if (_pwm_pin < 0) return;
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   int volts = ((_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
   hvReading.add((float)volts);
@@ -157,17 +157,6 @@ void HV::loop(unsigned long /*now*/) {
   }
 #endif
 }
-
-#ifdef ESPG_HV_ADC
-void HV::fiveloop() {
-  int hvolts = (int)hvReading.get();
-  if (_duty_trim != 0) {
-    Log::console(PSTR("HV: %d trim: %d"), hvolts, _duty_trim);
-  } else {
-    Log::console(PSTR("HV: %d"), hvolts);
-  }
-}
-#endif
 
 void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   if (_pwm_pin >= 0) {
