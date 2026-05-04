@@ -67,7 +67,7 @@ void NeoPixel::setup()
 }
 
 void NeoPixel::setBrightness(int input) {
-  input = (int)input * 1.28;
+  input = input * 128 / 100;
   if (input > 128) {
     input = 128;
   }
