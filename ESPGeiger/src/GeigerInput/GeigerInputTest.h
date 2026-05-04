@@ -41,6 +41,10 @@
 //#define DISABLE_GEIGER_POISSON
 
 extern volatile int _pulse_width_us;
+// Precomputed: _pulse_width_us scaled to timer ticks. Read from IRAM ISRs;
+// updated only via set_pulse_width_us() to keep them in sync.
+extern volatile uint32_t _pulse_width_ticks;
+void set_pulse_width_us(int us);
 
 class GeigerInputTest : public GeigerInput
 {

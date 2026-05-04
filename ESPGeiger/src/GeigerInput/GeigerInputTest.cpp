@@ -20,6 +20,13 @@
 #include "../Logger/Logger.h"
 
 volatile int _pulse_width_us = GEIGER_PULSE_WIDTH;
+volatile uint32_t _pulse_width_ticks =
+    (uint32_t)((double)GEIGER_PULSE_WIDTH * GEIGER_TEST_TIMER_DIV / 1000000.0);
+
+void set_pulse_width_us(int us) {
+  _pulse_width_us = us;
+  _pulse_width_ticks = (uint32_t)((double)us * GEIGER_TEST_TIMER_DIV / 1000000.0);
+}
 
 GeigerInputTest::GeigerInputTest() {
 };

@@ -211,7 +211,7 @@ void InputPrefs::on_prefs_loaded() {
   gcounter.set_debounce((int)EGPrefs::getUInt("input", "debounce"));
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  _pulse_width_us = (int)EGPrefs::getUInt("input", "pulse_width_us");
+  set_pulse_width_us((int)EGPrefs::getUInt("input", "pulse_width_us"));
 #endif
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {
@@ -363,3 +363,4 @@ void HVPinPrefs::on_prefs_loaded() {
   Log::console(PSTR("HV: pwm_pin=%d"), pin);
 }
 #endif
+

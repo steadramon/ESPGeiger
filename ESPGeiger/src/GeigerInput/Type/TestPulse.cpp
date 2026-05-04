@@ -120,7 +120,7 @@ void IRAM_ATTR GeigerTestPulse::pulseInterrupt() {
   }
 #endif
   unsigned long _our_delay = 0;
-  double pulseWidthTicks = _pulse_width_us * (GEIGER_TEST_TIMER_DIV / 1000000.0);
+  uint32_t pulseWidthTicks = _pulse_width_ticks;  // precomputed; ISR stays float-free
   if (!_bool_pulse_state) {
 #ifdef GEIGER_COUNT_TXPULSE
     GeigerInputTest::countInterrupt();
