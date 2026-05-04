@@ -96,10 +96,9 @@ public:
     setColor(WHITE);
   }
 
-  void setBrightness(uint8_t brightness) {
-    brightness = (uint8_t)((uint16_t)brightness * 255 / 100);
-    SSD1306Wire::setBrightness(brightness);
-  }
+  // Body in OLEDDisplay.cpp — keeping it out of the header avoids the
+  // cascading recompile that triggered an icache layout shift in 0.10.0.
+  void setBrightness(uint8_t brightness);
 
   uint8_t type() { return 1; }
   void noBlink() {/*no support*/}

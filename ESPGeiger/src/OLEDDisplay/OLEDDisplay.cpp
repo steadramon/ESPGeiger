@@ -118,6 +118,12 @@ SSD1306Display::SSD1306Display(uint8_t _addr, int _sda, int _scl)
   cy = 0;
 }
 
+void SSD1306Display::setBrightness(uint8_t brightness) {
+  // 0-100% pref → 0-255 hardware. Int math (255/100 ≈ 2.55) avoids float.
+  brightness = (uint8_t)((uint16_t)brightness * 255 / 100);
+  SSD1306Wire::setBrightness(brightness);
+}
+
 #ifndef OLED_PINS_BLOCKED
 void SSD1306Display::on_prefs_saved() {
   uint8_t sda = (uint8_t)EGPrefs::getUInt("display", "sda");
