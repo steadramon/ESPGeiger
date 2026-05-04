@@ -157,27 +157,33 @@ void SSD1306Display::loop(unsigned long now) {
         oled_last_update = now - 20000;
       }
     }
+    bool dirty = false;
     if (oled_page == 1) {
       if ((now - oled_last_update >= 10000) || (oled_last_update == 0)) {
         oled_last_update = now;
         page_one_clear();
+        dirty = true;
       }
       bool half = (now >> 9) & 1;
       if (half || (oled_last_update == now)) {
         page_one_values(now);
+        dirty = true;
       }
       if (!half || (oled_last_update == now)) {
         page_one_graph();
+        dirty = true;
       }
     } else if (oled_page == 2) {
       if ((now - oled_last_update >= 1000) || (oled_last_update == 0)) {
         oled_last_update = now;
         page_two_full();
+        dirty = true;
       }
     } else if (oled_page == 3) {
       if ((now - oled_last_update >= 10000) || (oled_last_update == 0)) {
         oled_last_update = now;
         page_three_full();
+        dirty = true;
       }
     } else if (oled_page == 4) {
       if (oled_last_update == 0) {
@@ -190,9 +196,9 @@ void SSD1306Display::loop(unsigned long now) {
       } else {
         page_four_matrix();
       }
+      dirty = true;
     }
-    display();
-
+    if (dirty) display();
   }
 
 bool SSD1306Display::isScreenOnTime(unsigned long now) {
