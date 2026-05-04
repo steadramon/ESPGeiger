@@ -199,8 +199,8 @@ void WebAPI::doHandshake() {
   mp.kv("rr", DeviceInfo::resetReason());
   mp.kv("m",  (uint32_t)_mode);
   if (sendCoords) {
-    mp.kv("la", (int32_t)(latF * 100.0f + (latF >= 0 ? 0.5f : -0.5f)) / 100.0f);
-    mp.kv("lo", (int32_t)(lonF * 100.0f + (lonF >= 0 ? 0.5f : -0.5f)) / 100.0f);
+    mp.kv("la", (int32_t)(latF * 100.0f + (latF >= 0 ? 0.5f : -0.5f)) * 0.01f);
+    mp.kv("lo", (int32_t)(lonF * 100.0f + (lonF >= 0 ? 0.5f : -0.5f)) * 0.01f);
   }
   if (mp.overflow) {
     Log::console(PSTR("WebAPI: Handshake encode overflow"));
