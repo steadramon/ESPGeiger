@@ -153,7 +153,7 @@ class HV : public EGModule {
       uint16_t _hv_target = 0;
       int8_t   _duty_trim = 0;
       unsigned long _trim_settle_until = 0;  // suppress trim until this millis()
-      static constexpr int8_t TRIM_MAX = 8;
+      static constexpr int8_t TRIM_MAX = 5;
       static constexpr int    TRIM_HYST_V = 4;
       static constexpr uint8_t TRIM_PERIOD_S = 10;
       static constexpr unsigned long TRIM_SETTLE_MS = 30000;
