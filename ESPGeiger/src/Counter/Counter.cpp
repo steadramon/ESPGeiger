@@ -70,31 +70,46 @@ void Counter::secondticker(unsigned long stick_now) {
 
   if (tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10) {
     geigerTicks5.add(_cached_cps);
-  }
-  if (tick_cnt == 0) {
-    geigerTicks15.add(geigerTicks5.get());
+    float cps5 = geigerTicks5.get();
+    _cached_cpm5f = cps5 * 60.0f;
+    if (tick_cnt == 0) {
+      geigerTicks15.add(cps5);
+      _cached_cpm15f = geigerTicks15.get() * 60.0f;
+    }
   }
   if (++tick_cnt >= 15) tick_cnt = 0;
 
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
     // Fire on each new hour (minute in test builds). gmtime() only on transition.
+    // Cache next-fire time so we don't divide every tick — one-time alignment
+    // divide on first sync, then pure compare-and-add.
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-    static time_t lastBoundary = 0;
-    time_t thisBoundary = currentTime / 60;
+    constexpr time_t kBoundarySecs = 60;
 #else
-    static time_t lastBoundary = 0;
-    time_t thisBoundary = currentTime / 3600;
+    constexpr time_t kBoundarySecs = 3600;
 #endif
-    if (thisBoundary != lastBoundary) {
-      // Refresh cached UTC offset once per hour (also sets initial value on
-      // first tick after NTP sync). mktime with tm_isdst=-1 handles DST.
-      // Capture utc_hour before mktime, which may normalise gmt_tm in place.
+    static time_t nextBoundary = 0;
+    static bool boundaryArmed = false;
+    bool fire = false;
+    if (nextBoundary == 0) {
+      // First call after sync — align to wall-clock boundary; fire once for tz refresh.
+      nextBoundary = currentTime - (currentTime % kBoundarySecs) + kBoundarySecs;
+      fire = true;
+    } else if (currentTime >= nextBoundary) {
+      fire = true;
+      // Advance past any missed boundaries (e.g. NTP step forward).
+      while (currentTime >= nextBoundary) nextBoundary += kBoundarySecs;
+    }
+    if (fire) {
+      // Refresh cached UTC offset (also sets initial value on first sync).
+      // mktime with tm_isdst=-1 handles DST. Capture utc_hour before mktime,
+      // which may normalise gmt_tm in place.
       struct tm gmt_tm = *gmtime(&currentTime);
       int utc_hour = gmt_tm.tm_hour;
       gmt_tm.tm_isdst = -1;
       ntpclient.tz_offset_min = (int16_t)((currentTime - mktime(&gmt_tm)) / 60);
-      if (lastBoundary != 0) {
+      if (boundaryArmed) {
         day_hourly_history.push(clicks_hour);
         clicks_hour = 0;
         if (utc_hour == 0) {
@@ -102,7 +117,7 @@ void Counter::secondticker(unsigned long stick_now) {
           clicks_today = 0;
         }
       }
-      lastBoundary = thisBoundary;
+      boundaryArmed = true;
     }
   }
 
@@ -126,19 +141,19 @@ float Counter::get_cpmf() {
 }
 
 int Counter::get_cpm5() {
-  return (int)roundf(get_cpm5f());
+  return (int)roundf(_cached_cpm5f);
 }
 
 float Counter::get_cpm5f() {
-  return geigerTicks5.get()*60.0;
+  return _cached_cpm5f;
 }
 
 int Counter::get_cpm15() {
-  return (int)roundf(get_cpm15f());
+  return (int)roundf(_cached_cpm15f);
 }
 
 float Counter::get_cpm15f() {
-  return geigerTicks15.get()*60.0;
+  return _cached_cpm15f;
 }
 
 void Counter::set_ratio(float ratio) {
@@ -204,11 +219,11 @@ float Counter::get_totalusv() {
 }
 
 float Counter::get_usv5() {
-  return geigerTicks5.get() * 60.0f * _ratio_inv;
+  return _cached_cpm5f * _ratio_inv;
 }
 
 float Counter::get_usv15() {
-  return geigerTicks15.get() * 60.0f * _ratio_inv;
+  return _cached_cpm15f * _ratio_inv;
 }
 
 void Counter::begin() {

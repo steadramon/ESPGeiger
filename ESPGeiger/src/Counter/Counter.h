@@ -192,9 +192,11 @@ class Counter {
       uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
       float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
       // Cached once per tick so accessors are O(1).
-      float _cached_cps  = 0.0f;
-      float _cached_cpmf = 0.0f;
-      float _cached_usv  = 0.0f;
+      float _cached_cps    = 0.0f;
+      float _cached_cpmf   = 0.0f;
+      float _cached_usv    = 0.0f;
+      float _cached_cpm5f  = 0.0f;
+      float _cached_cpm15f = 0.0f;
       Smoothed <float> geigerTicks;
       Smoothed <float> geigerTicks5;
       Smoothed <float> geigerTicks15;
