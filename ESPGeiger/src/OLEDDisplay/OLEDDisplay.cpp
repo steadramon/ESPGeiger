@@ -97,6 +97,7 @@ void SSD1306Display::on_prefs_loaded() {
 #ifdef GEIGER_PUSHBUTTON
   setTimeout((int)EGPrefs::getUInt("display", "timeout"));
 #endif
+  _sched_on_mins = -1;
   EGModuleRegistry::set_loop_interval(this, 250);
 }
 
@@ -215,31 +216,25 @@ void SSD1306Display::loop(unsigned long now) {
   }
 
 bool SSD1306Display::isScreenOnTime(unsigned long now) {
-  static int16_t cached_on_mins = -1;
-  static int16_t cached_off_mins = -1;
-  static uint8_t tz_cnt = 0;
-  static time_t recompute_at = 0;
-  static bool cached_result = true;
-  if (cached_on_mins == -1 || ++tz_cnt >= 120) {
-    tz_cnt = 0;
+  if (_sched_on_mins == -1) {
     ParsedTime on_time  = parseTime(EGPrefs::getString("display", "on_time"));
     ParsedTime off_time = parseTime(EGPrefs::getString("display", "off_time"));
-    if (!on_time.isValid || !off_time.isValid) { cached_on_mins = -2; return true; }
-    cached_on_mins = on_time.hour * 60 + on_time.minute;
-    cached_off_mins = off_time.hour * 60 + off_time.minute;
-    recompute_at = 0;  // force recompute after prefs reload
+    if (!on_time.isValid || !off_time.isValid) { _sched_on_mins = -2; return true; }
+    _sched_on_mins = on_time.hour * 60 + on_time.minute;
+    _sched_off_mins = off_time.hour * 60 + off_time.minute;
+    _sched_recompute_ms = 0;
   }
-  if (cached_on_mins == -2) return true;
+  if (_sched_on_mins == -2) return true;
+  if ((long)(now - _sched_recompute_ms) < 0) return _sched_cached;
   time_t currentTime = time(NULL);
-  if (currentTime < recompute_at) return cached_result;
   struct tm *timeinfo = localtime(&currentTime);
   if (!timeinfo) return true;
   int now_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
-  cached_result = (cached_on_mins < cached_off_mins)
-    ? (now_mins >= cached_on_mins && now_mins < cached_off_mins)
-    : (now_mins >= cached_on_mins || now_mins < cached_off_mins);
-  recompute_at = currentTime + (60 - timeinfo->tm_sec);
-  return cached_result;
+  _sched_cached = (_sched_on_mins < _sched_off_mins)
+    ? (now_mins >= _sched_on_mins && now_mins < _sched_off_mins)
+    : (now_mins >= _sched_on_mins || now_mins < _sched_off_mins);
+  _sched_recompute_ms = now + (60UL - timeinfo->tm_sec) * 1000UL;
+  return _sched_cached;
 }
 
 void SSD1306Display::page_two_full() {

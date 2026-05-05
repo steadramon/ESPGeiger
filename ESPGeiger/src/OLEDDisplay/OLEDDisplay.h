@@ -162,6 +162,10 @@ public:
     uint8_t fontWidth, fontHeight;
     bool _present = false;
     uint32_t _lcd_timeout_ms = 0;  // 0 = no idle-off, schedule applies. Pref only loaded when GEIGER_PUSHBUTTON.
+    int16_t _sched_on_mins = -1;   // -1 = unparsed, -2 = invalid pref → always-on
+    int16_t _sched_off_mins = -1;
+    unsigned long _sched_recompute_ms = 0;
+    bool _sched_cached = true;
     unsigned long _page4_num_last = 0;
     char _page4_num[8] = "";
     uint8_t _page4_variant = 0;
