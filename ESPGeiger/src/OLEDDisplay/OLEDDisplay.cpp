@@ -149,8 +149,9 @@ void SSD1306Display::loop(unsigned long now) {
     }
     bool idle_off = enable_oled_timeout && _lcd_timeout_ms > 0 &&
                     (now - oled_timeout > _lcd_timeout_ms);
-    bool sched_off = (_lcd_timeout_ms == 0) && !isScreenOnTime(now)
-                     && (now - oled_timeout) > 30000;
+    bool sched_off = (_lcd_timeout_ms == 0)
+                     && (now - oled_timeout) > 30000
+                     && !isScreenOnTime(now);
     if (idle_off || sched_off) {
       if (oled_on) {
         displayOff();
