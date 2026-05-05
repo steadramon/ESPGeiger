@@ -97,6 +97,7 @@ void SSD1306Display::on_prefs_loaded() {
 #ifdef GEIGER_PUSHBUTTON
   setTimeout((int)EGPrefs::getUInt("display", "timeout"));
 #endif
+  EGModuleRegistry::set_loop_interval(this, 250);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -148,7 +149,8 @@ void SSD1306Display::loop(unsigned long now) {
     }
     bool idle_off = enable_oled_timeout && _lcd_timeout_ms > 0 &&
                     (now - oled_timeout > _lcd_timeout_ms);
-    bool sched_off = (_lcd_timeout_ms == 0) && !isScreenOnTime(now);
+    bool sched_off = (_lcd_timeout_ms == 0) && !isScreenOnTime(now)
+                     && (now - oled_timeout) > 30000;
     if (idle_off || sched_off) {
       if (oled_on) {
         displayOff();
@@ -308,6 +310,7 @@ void SSD1306Display::onButtonTap(unsigned long now) {
     oled_page = 1;
     displayOn();
     oled_on = true;
+    EGModuleRegistry::set_loop_interval(this, 250);
   } else if (s_tap_count >= 5) {
     oled_page = 4;            // hidden gesture: 5 rapid taps
     s_tap_count = 0;
