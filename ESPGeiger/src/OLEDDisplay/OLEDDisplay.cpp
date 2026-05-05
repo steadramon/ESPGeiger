@@ -215,22 +215,26 @@ void SSD1306Display::loop(unsigned long now) {
     if (dirty) display();
   }
 
-bool SSD1306Display::isScreenOnTime(unsigned long /*now*/) {
+bool SSD1306Display::isScreenOnTime(unsigned long now) {
   if (_sched_on_mins == -1) {
     ParsedTime on_time  = parseTime(EGPrefs::getString("display", "on_time"));
     ParsedTime off_time = parseTime(EGPrefs::getString("display", "off_time"));
     if (!on_time.isValid || !off_time.isValid) { _sched_on_mins = -2; return true; }
     _sched_on_mins = on_time.hour * 60 + on_time.minute;
     _sched_off_mins = off_time.hour * 60 + off_time.minute;
+    _sched_recompute_ms = 0;
   }
   if (_sched_on_mins == -2) return true;
+  if ((long)(now - _sched_recompute_ms) < 0) return _sched_cached;
   time_t currentTime = time(NULL);
   struct tm *timeinfo = localtime(&currentTime);
   if (!timeinfo) return true;
   int now_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
-  return (_sched_on_mins < _sched_off_mins)
+  _sched_cached = (_sched_on_mins < _sched_off_mins)
     ? (now_mins >= _sched_on_mins && now_mins < _sched_off_mins)
     : (now_mins >= _sched_on_mins || now_mins < _sched_off_mins);
+  _sched_recompute_ms = now + (60UL - timeinfo->tm_sec) * 1000UL;
+  return _sched_cached;
 }
 
 void SSD1306Display::page_two_full() {
