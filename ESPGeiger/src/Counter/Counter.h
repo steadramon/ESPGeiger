@@ -187,8 +187,6 @@ class Counter {
       mutable bool _warm_cached = false;
       int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled
       int16_t _quiet_to_min   = -1;
-      unsigned long _quiet_recompute_ms = 0;
-      bool _quiet_cached = false;
       float _ratio = GEIGER_RATIO;
       float _ratio_inv = 1.0f / GEIGER_RATIO;   // reciprocal, kept in sync in set_ratio
       uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
