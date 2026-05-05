@@ -261,6 +261,7 @@ void Counter::set_quiet_hours(const char* from, const char* to) {
   ParsedTime t = parseTime(to);
   _quiet_from_min = f.isValid ? (f.hour * 60 + f.minute) : -1;
   _quiet_to_min   = t.isValid ? (t.hour * 60 + t.minute) : -1;
+  _quiet_recompute_ms = 0;
 }
 
 bool Counter::is_quiet_now() {
@@ -270,14 +271,19 @@ bool Counter::is_quiet_now() {
   if (_quiet_from_min == _quiet_to_min)              return false;
   if (!ntpclient.synced)                             return false;
 
+  unsigned long now_ms = millis();
+  if ((long)(now_ms - _quiet_recompute_ms) < 0) return _quiet_cached;
+
   time_t now = time(NULL);
   struct tm* t = localtime(&now);
+  if (!t) return false;
   int16_t m = t->tm_hour * 60 + t->tm_min;
 
-  // Range crosses midnight when from > to (e.g. 22:00 -> 07:00).
-  return (_quiet_from_min < _quiet_to_min)
+  _quiet_cached = (_quiet_from_min < _quiet_to_min)
     ? (m >= _quiet_from_min && m < _quiet_to_min)
     : (m >= _quiet_from_min || m < _quiet_to_min);
+  _quiet_recompute_ms = now_ms + (60UL - t->tm_sec) * 1000UL;
+  return _quiet_cached;
 }
 
 void Counter::loop() {
