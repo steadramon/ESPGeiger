@@ -154,6 +154,9 @@ void SSD1306Display::loop(unsigned long now) {
         displayOff();
         oled_on = false;
       }
+      if (sched_off && !idle_off) {
+        EGModuleRegistry::set_loop_interval(this, 30000);
+      }
       return;
     } else {
       if (oled_on == false) {
@@ -161,6 +164,7 @@ void SSD1306Display::loop(unsigned long now) {
         oled_page = 1;
         oled_on = true;
         oled_last_update = now - 20000;
+        EGModuleRegistry::set_loop_interval(this, 250);
       }
     }
     bool dirty = false;
