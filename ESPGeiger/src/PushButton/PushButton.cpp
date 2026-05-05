@@ -105,6 +105,7 @@ void PushButton::on_prefs_loaded() {
   int pin = (int)EGPrefs::getInt("btn", "pin");
   set_pin(pin);
   Log::console(PSTR("Btn: pin=%d"), pin);
+  EGModuleRegistry::set_loop_interval(this, pin < 0 ? 60000 : 50);
 }
 #endif
 
