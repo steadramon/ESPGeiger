@@ -153,28 +153,24 @@ void SSD1306Display::loop(unsigned long now) {
     if (oled_page == 4) {
       oled_timeout = now;
     }
-    bool idle_off = enable_oled_timeout && _lcd_timeout_ms > 0 &&
-                    (now - oled_timeout > _lcd_timeout_ms);
-    bool sched_off = (_lcd_timeout_ms == 0)
-                     && (now - oled_timeout) > 30000
-                     && !isScreenOnTime(now);
-    if (idle_off || sched_off) {
-      if (oled_on) {
-        displayOff();
-        oled_on = false;
-      }
-      if (sched_off && !idle_off) {
-        EGModuleRegistry::set_loop_interval(this, 30000);
-      }
+    if (enable_oled_timeout && _lcd_timeout_ms > 0 &&
+        (now - oled_timeout > _lcd_timeout_ms)) {
+      if (oled_on) { displayOff(); oled_on = false; }
       return;
-    } else {
-      if (oled_on == false) {
-        displayOn();
-        oled_page = 1;
-        oled_on = true;
-        oled_last_update = now - 20000;
-        EGModuleRegistry::set_loop_interval(this, 250);
-      }
+    }
+    if (_lcd_timeout_ms == 0
+        && (now - oled_timeout) > 30000
+        && !isScreenOnTime(now)) {
+      if (oled_on) { displayOff(); oled_on = false; }
+      EGModuleRegistry::set_loop_interval(this, 30000);
+      return;
+    }
+    if (!oled_on) {
+      displayOn();
+      oled_page = 1;
+      oled_on = true;
+      oled_last_update = now - 20000;
+      EGModuleRegistry::set_loop_interval(this, 250);
     }
     bool dirty = false;
     if (oled_page == 1) {
