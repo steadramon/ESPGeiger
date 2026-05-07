@@ -313,12 +313,12 @@ const EGPrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
 
 void LedPrefs::on_prefs_loaded() {
   gcounter.set_blip_led(EGPrefs::getBool("led", "blip_led"));
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
-  gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("led", "blip_bright") * 255 + 50) / 100));
-#endif
 #if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
   gcounter.set_ext_blip_pin((int)EGPrefs::getInt("led", "blip_pin"));
   gcounter.set_ext_blip_pulse_ms((uint8_t)EGPrefs::getUInt("led", "blip_pulse_ms"));
+#endif
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
+  gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("led", "blip_bright") * 255 + 50) / 100));
 #endif
   gcounter.set_quiet_hours(
     EGPrefs::getString("led", "quiet_from"),

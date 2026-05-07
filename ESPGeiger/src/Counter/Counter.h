@@ -140,7 +140,7 @@ class Counter {
       void set_warning(int val);
       void set_alert(int val);
       void set_blip_led(bool on) { _blip_led = on; }
-      void set_blip_brightness(uint8_t level) { led.MaxBrightness(level); }
+      void set_blip_brightness(uint8_t level);
       void set_quiet_hours(const char* from, const char* to);
       bool is_quiet_now();
       bool is_warning();

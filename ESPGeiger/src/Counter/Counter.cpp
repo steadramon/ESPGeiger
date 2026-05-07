@@ -233,12 +233,22 @@ void Counter::blip() {
     if (!_blip_led) return;
     if (is_quiet_now()) return;
 #ifndef DISABLE_INTERNAL_BLIP
-    led.Blink(20,20);
+  #if defined(HAS_EXT_BLIP) && !defined(GEIGER_BLIPLED)
+    if (!ext_blip_led)
+  #endif
+    led.Blink(20, 20);
 #endif
 #ifdef GEIGER_BLIPLED
     if (!blip_led.IsRunning()) blip_led.Blink(2, 1).Repeat(1);
 #elif defined(HAS_EXT_BLIP)
     if (ext_blip_led && !ext_blip_led->IsRunning()) ext_blip_led->Blink(ext_blip_pulse_ms, 1).Repeat(1);
+#endif
+}
+
+void Counter::set_blip_brightness(uint8_t level) {
+  led.MaxBrightness(level);
+#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
+  if (ext_blip_led) ext_blip_led->MaxBrightness(level);
 #endif
 }
 
