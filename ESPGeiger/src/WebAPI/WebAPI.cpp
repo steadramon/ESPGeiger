@@ -314,12 +314,15 @@ void WebAPI::postMeasurement(bool censusOnly) {
   uint8_t entries = 2;  // id, n
   bool sendRadiation = !censusOnly;
   bool sendHealth = (healthPostCounter == 0);
+#ifdef ESPG_HV_ADC
+  bool sendHv = sendRadiation && hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0;
+#endif
   if (sendRadiation) {
     entries += 2;  // cpm, usv
-#ifdef ESPG_HV_ADC
-    entries += 1;  // hv
-#endif
   }
+#ifdef ESPG_HV_ADC
+  if (sendHv) entries += 1;  // hv
+#endif
   if (sendHealth) entries += 5;  // ut, mem, lps, tk, rssi
 
   MsgPack::Writer mp(buffer, sizeof(buffer));
@@ -331,10 +334,10 @@ void WebAPI::postMeasurement(bool censusOnly) {
   if (sendRadiation) {
     mp.kv("c",  gcounter.get_cpmf());
     mp.kv("u",  gcounter.get_usv());
-#ifdef ESPG_HV_ADC
-    mp.kv("hv", hv.hvReading.get());
-#endif
   }
+#ifdef ESPG_HV_ADC
+  if (sendHv) mp.kv("hv", hv.hvReading.get());
+#endif
 
   // Health snapshot rides the regular post every WEBAPI_HEALTH_EVERY ticks.
   if (sendHealth) {
