@@ -28,6 +28,7 @@ jobs:
           - "esp32oled_pulse"
           - "esp32oled_serial"
           - "esp8266_hv"
+          - "esp8266oled_hv"
           - "esp8266_pulse"
           - "esp8266_pulsemin"
           - "esp8266_serial"
