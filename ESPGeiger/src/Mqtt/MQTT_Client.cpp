@@ -355,9 +355,11 @@ void MQTT_Client::publishPing()
       PSTR("{\"cpm\":%s,\"usv\":%s,\"cps\":%s,\"cpm5\":%s,\"cpm15\":%s"),
       b_cpm, b_usv, b_cps, b_cpm5, b_cpm15);
 #ifdef ESPG_HV_ADC
-    char b_hv[12];
-    format_f(b_hv, sizeof(b_hv), hv.hvReading.get());
-    sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"hv\":%s"), b_hv);
+    if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0) {
+      char b_hv[12];
+      format_f(b_hv, sizeof(b_hv), hv.hvReading.get());
+      sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"hv\":%s"), b_hv);
+    }
 #endif
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
       PSTR(",\"warn\":%d,\"alert\":%d}"),
@@ -400,10 +402,12 @@ void MQTT_Client::publishPing()
   MQTT_PUB_YIELD();
 
 #ifdef ESPG_HV_ADC
-  format_f(valBuf, sizeof(valBuf), hv.hvReading.get());
-  buildTopic(topic, sizeof(topic), "stat", PSTR("HV"));
-  mqttClient->publish(topic, 1, false, valBuf);
-  MQTT_PUB_YIELD();
+  if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0) {
+    format_f(valBuf, sizeof(valBuf), hv.hvReading.get());
+    buildTopic(topic, sizeof(topic), "stat", PSTR("HV"));
+    mqttClient->publish(topic, 1, false, valBuf);
+    MQTT_PUB_YIELD();
+  }
 #endif
   // ---- end LEGACY block ----
 
@@ -567,7 +571,9 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   S("cpm15",    "cpm15",    "CPM15",        "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
   S("usv",      "usv",      "\u00B5Sv/h",   "\u00B5S/h", "mdi:radioactive",    H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
 #ifdef ESPG_HV_ADC
-  S("hv",       "hv",       "HV",           "V",         "mdi:lightning-bolt", H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
+  if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0) {
+    S("hv",     "hv",       "HV",           "V",         "mdi:lightning-bolt", H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
+  }
 #endif
   S("c_total",  "c_total",  "Total Clicks", "",          "mdi:counter",        H_ST_STATUS, H_EMPTY,  H_SC_TOTINC, H_EMPTY);
   // tele/status — diagnostic.
