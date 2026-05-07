@@ -57,6 +57,7 @@ EG_PSTR(OL_H_OFT, "Display off");
 EG_PSTR(OL_L_SDA, "I2C SDA Pin");
 EG_PSTR(OL_L_SCL, "I2C SCL Pin");
 EG_PSTR(OL_H_RBA, "Reboot to apply");
+EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 #endif
 
 static const EGPref OLED_PREF_ITEMS[] = {
@@ -69,6 +70,7 @@ static const EGPref OLED_PREF_ITEMS[] = {
 #ifndef OLED_PINS_BLOCKED
   {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
+  {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, 0},
 #endif
 };
 
@@ -84,6 +86,7 @@ static int16_t s_sched_on_mins = -1;
 static int16_t s_sched_off_mins = -1;
 static unsigned long s_sched_recompute_ms = 0;
 static bool s_sched_cached = true;
+static bool s_oled_flipped = false;
 
 void SSD1306Display::on_prefs_loaded() {
 #ifndef OLED_PINS_BLOCKED
@@ -135,7 +138,8 @@ void SSD1306Display::setBrightness(uint8_t brightness) {
 void SSD1306Display::on_prefs_saved() {
   uint8_t sda = (uint8_t)EGPrefs::getUInt("display", "sda");
   uint8_t scl = (uint8_t)EGPrefs::getUInt("display", "scl");
-  bool need_reboot = (sda != _pin_sda) || (scl != _pin_scl);
+  bool flip = EGPrefs::getBool("display", "flip");
+  bool need_reboot = (sda != _pin_sda) || (scl != _pin_scl) || (flip != s_oled_flipped);
   on_prefs_loaded();
   if (need_reboot) EGPrefs::request_restart();
 }
@@ -278,9 +282,12 @@ void SSD1306Display::setup() {
   _present = true;
   Log::console(PSTR("OLED: detected at 0x%02X"), OLED_ADDR);
   SSD1306Wire::init();
-#if OLED_FLIP
-  flipScreenVertically();
+#ifdef OLED_PINS_BLOCKED
+  s_oled_flipped = OLED_FLIP;
+#else
+  s_oled_flipped = EGPrefs::getBool("display", "flip");
 #endif
+  if (s_oled_flipped) flipScreenVertically();
   setBrightness(64);
   setFont(ArialMT_Plain_10);
   fontWidth = 8;
