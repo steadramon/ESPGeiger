@@ -38,7 +38,9 @@ void GeigerTestSerial::begin() {
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;
-  if (name) DeviceInfo::setGeigermodel(name);
+  if (name && EGPrefs::getString("input", "geiger_model")[0] == '\0') {
+    DeviceInfo::setGeigermodel(name);
+  }
   Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
                name ? name : "?", _serial_type, baud, _rx_pin, _tx_pin);
 #ifdef GEIGER_COUNT_TXPULSE

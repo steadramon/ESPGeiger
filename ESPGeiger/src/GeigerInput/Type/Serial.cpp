@@ -34,7 +34,9 @@ void GeigerSerial::begin() {
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;    // safety fallback for an unknown saved pref
   _use_cps = SerialFormat::has_cps(_serial_type);
-  if (name) DeviceInfo::setGeigermodel(name);
+  if (name && EGPrefs::getString("input", "geiger_model")[0] == '\0') {
+    DeviceInfo::setGeigermodel(name);
+  }
   Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d CPS=%d"),
                name ? name : "?", _serial_type, baud, _rx_pin, _use_cps ? 1 : 0);
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
