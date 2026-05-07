@@ -40,7 +40,7 @@ EG_PSTR(HW_L_DTY, "PWM Duty");
 EG_PSTR(HW_H_DTY, "HV generator duty (1-1023)");
 #ifdef ESPG_HV_ADC
 EG_PSTR(HW_L_RAT, "ADC VD Ratio");
-EG_PSTR(HW_H_RAT, "Voltage divider ratio");
+EG_PSTR(HW_H_RAT, "Voltage divider ratio (0 = ADC disabled)");
 EG_PSTR(HW_L_OFF, "ADC VD Offset");
 EG_PSTR(HW_H_OFF, "Voltage divider offset");
 EG_PSTR(HW_L_TGT, "HV target");
@@ -135,7 +135,7 @@ void HV::loop(unsigned long /*now*/) {
     }
   }
 #ifdef ESPG_HV_ADC
-  if (_pwm_pin < 0) return;
+  if (_hw_vd_ratio == 0) return;
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   int volts = ((_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
   hvReading.add((float)volts);
