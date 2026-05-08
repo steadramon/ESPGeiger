@@ -479,7 +479,10 @@ static size_t append_escaped(char* dst, size_t cap, size_t pos, const char* src)
 
 template <typename WS>
 static inline void send_chunk(WS* s, const char* buf, size_t len) {
-  if (len > 0) s->sendContent(buf, len);
+  if (len > 0) {
+    yield();  // let lwIP drain TCP send buffer; avoids short-send torn framing in chunked mode
+    s->sendContent(buf, len);
+  }
 }
 
 
@@ -879,7 +882,7 @@ void ConfigManager::handleInfo()
     n = snprintf_P(buf, sizeof(buf), \
         PSTR("<tr><th>%S</th><td>" fmt "</td></tr>"), \
         (PGM_P)PSTR(k), ##__VA_ARGS__); \
-    if (n > 0) s->sendContent(buf, (size_t)n); \
+    if (n > 0) { yield(); s->sendContent(buf, (size_t)n); } \
   } while (0)
 
   n = snprintf_P(buf, sizeof(buf),
@@ -963,7 +966,7 @@ void ConfigManager::handleInfo()
       EGModule* m = EGModuleRegistry::get(i);
       if (m == nullptr) continue;
       n = snprintf_P(buf, sizeof(buf), PSTR("<li>%s</li>"), m->name());
-      if (n > 0) s->sendContent(buf, (size_t)n);
+      if (n > 0) { yield(); s->sendContent(buf, (size_t)n); }
     }
   }
   s->sendContent(F("</ul></details>"));
@@ -1095,11 +1098,12 @@ void ConfigManager::handleWebAPI()
   beginChunkedPage();
   sendPageHead(saved ? PSTR("Station Network Saved") : PSTR("Station Network"));
   auto* s = server.get();
-  if (saved) s->sendContent(FPSTR(HTTP_PARAMSAVED));
+  #define SC(x) do { yield(); s->sendContent(x); } while (0)
+  if (saved) SC(FPSTR(HTTP_PARAMSAVED));
 
   uint8_t mode = (uint8_t)EGPrefs::getUInt("webapi", "mode");
 
-  s->sendContent(F(
+  SC(F(
     "<h1>Station Network</h1>"
     "<p style='font-size:.9em'>ESPGeiger can share data with the public station network so it appears on the global map. The device identity and location are obscured before publication.</p>"));
   if (mode > 0) {
@@ -1108,50 +1112,51 @@ void ConfigManager::handleWebAPI()
       snprintf_P(status, sizeof(status),
         PSTR("<p>Station: <a href='" WEBAPI_STATION_URL "' target='_blank'>#%u</a></p>"),
         webapi.getStationId(), webapi.getStationId());
-      s->sendContent(status);
+      SC(status);
     } else {
-      s->sendContent(F("<p>Station: not yet registered (handshake pending) "
+      SC(F("<p>Station: not yet registered (handshake pending) "
         "<button type='button' onclick='location.reload()'>Refresh</button></p>"));
     }
   }
-  s->sendContent(F(
+  SC(F(
     "<form method='POST' action='/webapi'>"
     "<fieldset><legend>Sharing</legend>"
     "<label><input type='radio' name='m' value='0'"));
-  if (mode == 0) s->sendContent(F(" checked"));
-  s->sendContent(F("> Off </label><br>"
+  if (mode == 0) SC(F(" checked"));
+  SC(F("> Off </label><br>"
     "<label><input type='radio' name='m' value='1'"));
-  if (mode == 1) s->sendContent(F(" checked"));
-  s->sendContent(F("> Heartbeat </label><br>"
+  if (mode == 1) SC(F(" checked"));
+  SC(F("> Heartbeat </label><br>"
     "<label><input type='radio' name='m' value='2'"));
-  if (mode == 2) s->sendContent(F(" checked"));
-  s->sendContent(F("> CPM Readings </label>"
+  if (mode == 2) SC(F(" checked"));
+  SC(F("> CPM Readings </label>"
     "</fieldset>"
     "<label for='lat'>Latitude</label>"
     "<input id='lat' name='lat' type='number' step='any' min='-90' max='90' placeholder='approximate by IP if blank' value='"));
-  s->sendContent(EGPrefs::getString("webapi", "lat"));
-  s->sendContent(F("'><label for='lon'>Longitude</label>"
+  SC(EGPrefs::getString("webapi", "lat"));
+  SC(F("'><label for='lon'>Longitude</label>"
     "<input id='lon' name='lon' type='number' step='any' min='-180' max='180' placeholder='approximate by IP if blank' value='"));
-  s->sendContent(EGPrefs::getString("webapi", "lon"));
-  s->sendContent(F("'><p style='margin-top:.5em'>"
+  SC(EGPrefs::getString("webapi", "lon"));
+  SC(F("'><p style='margin-top:.5em'>"
     "<button type='button' onclick=\"window.open('https://loc.espgeiger.com/','espgeiger-loc')\">Find location</button></p>"
     "<button type='submit'>Save</button></form>"
     "<script>window.addEventListener('message',function(e){if(e.origin!=='https://loc.espgeiger.com')return;var d=e.data;if(!d||d.type!=='espgeiger-location')return;var la=document.getElementById('lat');var lo=document.getElementById('lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
 
-  s->sendContent(F(
+  SC(F(
     "<details style='margin-top:1em'><summary>Advanced</summary>"
     "<p style='font-size:.9em'>Reset the device key. The next handshake registers a new station &mdash; the existing one <b>cannot be retrieved</b>.</p>"
     "<form method='POST' action='/webapikeyreset' onsubmit=\"return confirm('Reset the Station Network key? This orphans the existing station.')\">"
     "<button class='D' type='submit'>Reset key</button></form>"));
   if (mode > 0 && webapi.getStationId() != 0) {
-    s->sendContent(F(
+    SC(F(
       "<p style='font-size:.9em;margin-top:1em'>Delete this station from the network. Removes all readings and history server-side and switches sharing to Off. <b>Cannot be undone.</b></p>"
       "<form method='POST' action='/webapiforget' onsubmit=\"return confirm('Permanently delete this station from the network? This cannot be undone.')\">"
       "<button class='D' type='submit'>Forget station</button></form>"));
   }
-  s->sendContent(F("</details>"));
+  SC(F("</details>"));
 
-  s->sendContent(FPSTR(HTTP_BACKBTN));
+  SC(FPSTR(HTTP_BACKBTN));
+  #undef SC
   endChunkedPage();
 }
 
