@@ -1047,10 +1047,9 @@ void ConfigManager::handleRandomDo()
     if (n > 32) n = 32;
     uint8_t bytes[32];
     GRNG::extract(bytes, n);
-    static const char hexc[] PROGMEM = "0123456789abcdef";
     for (long i = 0; i < n; i++) {
-      out[i*2]     = hexc[bytes[i] >> 4];
-      out[i*2 + 1] = hexc[bytes[i] & 0xF];
+      out[i*2]     = "0123456789abcdef"[bytes[i] >> 4];
+      out[i*2 + 1] = "0123456789abcdef"[bytes[i] & 0xF];
     }
     outlen = n * 2;
   } else if (type == "password") {
