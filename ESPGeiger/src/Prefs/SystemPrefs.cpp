@@ -276,7 +276,11 @@ EG_REGISTER_MODULE(ledprefs)
 EG_PSTR(LD_L_BLP, "Blip LED");
 EG_PSTR(LD_H_BLP, "Flash LED on each count");
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
+  #ifdef GEIGER_BLIPLED
+EG_PSTR(LD_L_BRT, "Internal brightness");
+  #else
 EG_PSTR(LD_L_BRT, "Blip brightness");
+  #endif
 EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
 #endif
 #if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
