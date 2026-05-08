@@ -4,7 +4,7 @@
 
 ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-connected Geiger counter. It collects, calculates and reports radiation levels from a range of Geiger counters with pulse or serial outputs.
 
-- 😃  Easy to install via web browser — no compiler required
+- 😃  Easy to install via web browser - no compiler required
 - ✅  Works with generic pulse counters and GC10, GC10next, MightyOhm serial counters
 - 📈  Built-in web server with live graphing
 - 🔴  Live CPM and μSv/h readings
@@ -20,7 +20,7 @@ ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-c
 
 ## Quick Start
 
-The easiest way to install ESPGeiger is the **Web Installer** — it runs in your Chrome or Edge browser and flashes your device over USB. No code editor or compiler required.
+The easiest way to install ESPGeiger is the **Web Installer** - it runs in your Chrome or Edge browser and flashes your device over USB. No code editor or compiler required.
 
 ### 👉 [https://install.espgeiger.com](https://install.espgeiger.com)
 
@@ -28,7 +28,7 @@ Select your build from the dropdown and follow the on-screen instructions. Insta
 
 ## Which Build Do I Need?
 
-Pick the build that matches your hardware. If in doubt, start with **Pulse** — it works with most generic Geiger counters.
+Pick the build that matches your hardware. If in doubt, start with **Pulse** - it works with most generic Geiger counters.
 
 ### I have an ESP + generic pulse Geiger counter
 
@@ -52,11 +52,11 @@ OLED variants: `esp8266oled_serial` / `esp32oled_serial`.
 
 ### I have an ESPGeiger-HW or ESPGeiger Log
 
-These are official ESPGeiger hardware kits — use the hardware-specific builds:
+These are official ESPGeiger hardware kits - use the hardware-specific builds:
 
 | Hardware | Pulse | Serial |
 |---|---|---|
-| ESPGeiger-HW | `espgeigerhw` | — |
+| ESPGeiger-HW | `espgeigerhw` | - |
 | ESPGeiger Log | `espgeigerlog` | `espgeigerlog_serial` |
 
 ### I want to test without a real Geiger counter
@@ -81,7 +81,7 @@ By default `GEIGER_RXPIN` is set to GPIO13. Connect your Geiger counter's pulse 
 ## First-time Setup
 
 1. After flashing, connect to the new Wi-Fi network (`ESPGeiger-XXXXXX`)
-2. A captive portal should pop up — if not, browse to http://192.168.4.1/
+2. A captive portal should pop up - if not, browse to http://192.168.4.1/
 3. Select your home Wi-Fi network and enter the password
 4. Once connected, browse to `http://ESPGeiger-XXXXXX.local` or the assigned IP
 5. Configure MQTT, Radmon, GMCMAP, ThingSpeak and other outputs from the Config page
@@ -131,7 +131,7 @@ The official IoT Geiger counter powered by ESPGeiger. See [docs.espgeiger.com](h
 
 ## Contributions
 
-Contributions are welcome — please feel free to raise a Pull Request or open an issue.
+Contributions are welcome - please feel free to raise a Pull Request or open an issue.
 
 ## Thanks 🙏
 
