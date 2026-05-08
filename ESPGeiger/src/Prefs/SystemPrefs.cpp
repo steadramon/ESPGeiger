@@ -275,7 +275,7 @@ EG_REGISTER_MODULE(ledprefs)
 
 EG_PSTR(LD_L_BLP, "Blip LED");
 EG_PSTR(LD_H_BLP, "Flash LED on each count");
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
 EG_PSTR(LD_L_BRT, "Blip brightness");
 EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
 #endif
@@ -292,7 +292,7 @@ EG_PSTR(LD_H_QTO, "End of quiet window; crosses midnight if from > to");
 
 static const EGPref LED_PREF_ITEMS[] = {
   {"blip_led",    LD_L_BLP, LD_H_BLP, "1",  nullptr, 0, 1,   0, EGP_BOOL, 0},
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   {"blip_bright", LD_L_BRT, LD_H_BRT, "80", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
 #endif
 #if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
@@ -317,7 +317,7 @@ void LedPrefs::on_prefs_loaded() {
   gcounter.set_ext_blip_pin((int)EGPrefs::getInt("led", "blip_pin"));
   gcounter.set_ext_blip_pulse_ms((uint8_t)EGPrefs::getUInt("led", "blip_pulse_ms"));
 #endif
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("led", "blip_bright") * 255 + 50) / 100));
 #endif
   gcounter.set_quiet_hours(
