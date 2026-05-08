@@ -77,8 +77,9 @@ void ArduinoOTAModule::begin() {
 
   ArduinoOTA.setHostname(DeviceInfo::hostname());
   ArduinoOTA.begin();
-  MDNS.addService(K_HTTP, K_TCP, 80);
-  MDNS.addService(K_GEIGER, K_TCP, 80);
+  Log::console(PSTR("OTA: ready on port 8266"));
+  MDNS.addService("http",   "tcp", 80);
+  MDNS.addService("geiger", "tcp", 80);
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {
