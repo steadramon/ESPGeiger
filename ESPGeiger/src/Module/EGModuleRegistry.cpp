@@ -27,16 +27,20 @@
 
 EGModuleRegistry::Slot EGModuleRegistry::_slots[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_count = 0;
+uint8_t EGModuleRegistry::_overflow = 0;
 unsigned long EGModuleRegistry::_next_loop_due = 0;
 
 bool EGModuleRegistry::add(EGModule* m) {
-  if (_count >= EG_MAX_MODULES) return false;
+  if (_count >= EG_MAX_MODULES) { _overflow++; return false; }
   _slots[_count].module = m;
   _count++;
   return true;
 }
 
 void EGModuleRegistry::begin_all() {
+  if (_overflow) {
+    Log::console(PSTR("Module: Registry overflow, %u module(s) dropped (raise EG_MAX_MODULES)"), _overflow);
+  }
   // Array is already sorted by pre_wifi_all()
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
@@ -108,11 +112,11 @@ void EGModuleRegistry::log_profile_and_reset() {
   // Emit every module that ticked this window, sorted slowest first.
   char buf[200];
   int pos = 0;
-  uint16_t done = 0;  // bitmask of already-printed slots (up to 16 - matches EG_MAX_MODULES)
+  uint32_t done = 0;  // bitmask of already-printed slots (sized for EG_MAX_MODULES)
   while (true) {
     uint8_t best = 0xFF;
     uint16_t bestv = 0;
-    for (uint8_t i = 0; i < _count && i < 16; i++) {
+    for (uint8_t i = 0; i < _count && i < EG_MAX_MODULES; i++) {
       if (done & (1u << i)) continue;
       uint16_t v = _slots[i].max_tick_us;
       if (v > bestv) { bestv = v; best = i; }

@@ -21,7 +21,7 @@
 
 #include "EGModule.h"
 
-#define EG_MAX_MODULES 16
+#define EG_MAX_MODULES 24
 
 class EGModuleRegistry {
   public:
@@ -63,6 +63,7 @@ class EGModuleRegistry {
     };
     static Slot _slots[EG_MAX_MODULES];
     static uint8_t _count;
+    static uint8_t _overflow;             // dropped registrations (logged at begin_all)
     static unsigned long _next_loop_due;  // earliest pending loop() fire (millis)
 };
 
