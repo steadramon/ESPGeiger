@@ -103,7 +103,6 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
   if (readyState == readyStateDone)
   {
     Webhook* self = static_cast<Webhook*>(optParm);
-    self->last_attempt_ms = millis();
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
@@ -117,7 +116,7 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     } else {
       Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
     }
-    self->note_publish(self->last_ok);
+    self->note_result(self->last_ok);
   }
 }
 
@@ -199,6 +198,7 @@ void Webhook::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(10);
       request.send(buffer);
+      note_attempt();
       send_indicator = 2;
     }
     else

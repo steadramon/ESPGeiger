@@ -79,7 +79,6 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
   if (readyState == readyStateDone)
   {
     Thingspeak* self = static_cast<Thingspeak*>(optParm);
-    self->last_attempt_ms = millis();
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
@@ -93,7 +92,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     } else {
       Log::console(PSTR("Thingspeak: Error - %s"), request->responseHTTPString().c_str());
     }
-    self->note_publish(self->last_ok);
+    self->note_result(self->last_ok);
   }
 }
 
@@ -130,6 +129,7 @@ void Thingspeak::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(5);
       request.send();
+      note_attempt();
       send_indicator = 2;
     }
     else

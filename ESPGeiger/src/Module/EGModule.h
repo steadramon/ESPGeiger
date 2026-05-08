@@ -77,12 +77,28 @@ class EGModule {
       if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
       else    { if (_pub_err < 0xFF) ++_pub_err; }
     }
+    void note_attempt() {
+      last_attempt_ms = millis();
+      last_ok = true;
+      _publish_pending = true;
+      if (_pub_ok < 0xFF) ++_pub_ok;
+    }
+    void note_result(bool ok) {
+      if (!_publish_pending) return;
+      _publish_pending = false;
+      last_ok = ok;
+      if (!ok) {
+        if (_pub_ok > 0) --_pub_ok;
+        if (_pub_err < 0xFF) ++_pub_err;
+      }
+    }
     uint8_t take_publish_ok()  { uint8_t v = _pub_ok;  _pub_ok  = 0; return v; }
     uint8_t take_publish_err() { uint8_t v = _pub_err; _pub_err = 0; return v; }
 
   private:
     uint8_t _pub_ok  = 0;
     uint8_t _pub_err = 0;
+    bool    _publish_pending = false;
 
   protected:
     // Standard ok/age shape used by every sender module.

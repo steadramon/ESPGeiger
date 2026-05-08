@@ -109,7 +109,6 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
   if (readyState == readyStateDone)
   {
     Radmon* self = static_cast<Radmon*>(optParm);
-    self->last_attempt_ms = millis();
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
@@ -130,7 +129,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     } else {
       Log::console(PSTR("Radmon: Error - %s"), request->responseHTTPString().c_str());
     }
-    self->note_publish(self->last_ok);
+    self->note_result(self->last_ok);
   }
 }
 
@@ -176,6 +175,7 @@ void Radmon::postMeasurement() {
       request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(30);
       request.send();
+      note_attempt();
       send_indicator = 2;
     }
     else
