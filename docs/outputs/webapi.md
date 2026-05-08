@@ -7,7 +7,7 @@ nav_order: 20
 published: true
 ---
 
-# ESPGeiger Stations — Public WebAPI
+# ESPGeiger Stations - Public WebAPI
 
 ESPGeiger can optionally contribute its readings to the public map at
 [stations.espgeiger.com](https://stations.espgeiger.com), a global
@@ -16,7 +16,7 @@ Participation is opt-in, signed end-to-end, and privacy-respecting.
 
 ## What gets sent
 
-The device speaks **MessagePack** to the server — a compact binary
+The device speaks **MessagePack** to the server - a compact binary
 encoding chosen to keep heap pressure low on ESP8266. The schemas
 below describe the logical contents; on the wire they're encoded as
 fixmaps with single- or two-letter keys.
@@ -32,7 +32,7 @@ fixmaps with single- or two-letter keys.
 | `hv`  | float32 | HV tube reading (ESPGeiger-HW only) |
 
 In **Heartbeat** mode the radiation fields (`c`/`u`/`hv`) are omitted
-— the post becomes a minimal `{id, n}` body so the server still sees the
+- the post becomes a minimal `{id, n}` body so the server still sees the
 station as alive without any readings leaving the device.
 
 **Every 15 minutes** (health snapshot, piggy-backed on the post above):
@@ -45,7 +45,7 @@ station as alive without any readings leaving the device.
 | `tk`  | uint32 | Peak ticker duration in the last 60 s (µs) |
 | `rs`  | int32  | WiFi signal strength (dBm) |
 
-Health fields live only in the raw tier server-side — they age out and
+Health fields live only in the raw tier server-side - they age out and
 are never aggregated into long-term history.
 
 **Handshake** (once per hour, or on first boot / reset):
@@ -55,10 +55,10 @@ are never aggregated into long-term history.
 | `n`   | uint32  | Unix timestamp of the handshake (seconds) |
 | `pk`  | string  | Device public key, base64 (ECC secp192r1, 64 chars) |
 | `ci`  | string  | Device chip ID (hex). The server looks up or creates a station for this chip and returns the numeric `id` the device quotes in subsequent posts. |
-| `v`   | string  | Firmware release version — `tag/sha` when built from a non-tagged commit (e.g. `devel/7a2407d`), or just `tag` for released builds (e.g. `0.9.3`). |
+| `v`   | string  | Firmware release version - `tag/sha` when built from a non-tagged commit (e.g. `devel/7a2407d`), or just `tag` for released builds (e.g. `0.9.3`). |
 | `bd`  | string  | Chip model (e.g. `esp8266`, `ESP32-C3`) |
 | `gm`  | string  | PlatformIO build environment name (e.g. `espgeigerlog_serial`) |
-| `gc`  | string  | Geiger counter model — auto-detected on Serial builds, user-set on Pulse builds |
+| `gc`  | string  | Geiger counter model - auto-detected on Serial builds, user-set on Pulse builds |
 | `td`  | uint32  | Tube detection bitmask: bit 0 = α, bit 1 = β, bit 2 = γ. `0` = unknown / not set on the device. Bits 3-7 reserved. |
 | `fl`  | uint32  | Feature-flag bitmask (which optional output modules are compiled in) |
 | `rr`  | uint32  | Normalised last-reset reason |
@@ -77,11 +77,11 @@ The `/webapi` page on each device shows the Station Network controls:
 
 ![Station Network config page](/img/station-network.png)
 
-- **Station ID** — assigned by the server on first handshake. Click to view your station on `stations.espgeiger.com`.
-- **Sharing** — tri-state: Off / Heartbeat / CPM Readings (see below).
-- **Latitude / Longitude** — optional. Leave both at `0` to fall back to coarse IP-based geolocation. Coordinates are rounded to 2 decimal places (~1 km resolution) before publication.
-- **Find location** — uses browser geolocation to fill in the lat/lon fields.
-- **Advanced** — `Reset key` (rotate identity, register as a new station) and `Forget station` (server-side delete; see below).
+- **Station ID** - assigned by the server on first handshake. Click to view your station on `stations.espgeiger.com`.
+- **Sharing** - tri-state: Off / Heartbeat / CPM Readings (see below).
+- **Latitude / Longitude** - optional. Leave both at `0` to fall back to coarse IP-based geolocation. Coordinates are rounded to 2 decimal places (~1 km resolution) before publication.
+- **Find location** - uses browser geolocation to fill in the lat/lon fields.
+- **Advanced** - `Reset key` (rotate identity, register as a new station) and `Forget station` (server-side delete; see below).
 
 ## Sharing modes
 
@@ -92,7 +92,7 @@ leaves the device:
 |---|---|---|
 | `2` | **CPM Readings** *(default)* | Hourly handshake, per-minute posts with `c`/`u`, 15-min health snapshots. Your station appears on the map. |
 | `1` | **Heartbeat**                | Hourly handshake + 15-min health snapshots only. No radiation data leaves the device. Your station appears in fleet-size / uptime stats but not on the map. |
-| `0` | **Off**                      | Nothing sent — no handshake, no posts. |
+| `0` | **Off**                      | Nothing sent - no handshake, no posts. |
 
 Switching modes is a single click on the device's `/webapi` page. The
 posting cadence changes immediately; the server learns the new mode at
@@ -111,7 +111,7 @@ means:
 - Your station can't be impersonated.
 - Losing the device's flash means a new keypair on next boot, which
   registers as a new station (same chip ID, new server-side row).
-- No shared secrets to configure — no passwords to leak.
+- No shared secrets to configure - no passwords to leak.
 
 ### Reset key
 
@@ -126,7 +126,7 @@ keep contributing data.
 The `/webapi` page's **Advanced → Forget station** button sends a signed
 delete request to `/api/1/forget`. The server purges the station row,
 all readings, and all history. Sharing is then automatically switched
-to **Off**. This is irreversible — re-enabling later registers a
+to **Off**. This is irreversible - re-enabling later registers a
 brand-new station with no link to the deleted one. This is the GDPR
 right-to-erasure path.
 
@@ -134,8 +134,8 @@ right-to-erasure path.
 
 Once you've submitted a handshake, visit
 `https://stations.espgeiger.com/station/<id>` to see your station. Each
-station also gets a memorable three-word alias — e.g.
-`curie-counts-photons` — which you can share directly:
+station also gets a memorable three-word alias - e.g.
+`curie-counts-photons` - which you can share directly:
 `https://stations.espgeiger.com/station/curie-counts-photons`.
 
 ## Pin colours
@@ -164,7 +164,7 @@ term; sustained or large excursions accumulate across consecutive
 15-minute buckets and open an event when they cross the configured
 threshold. The accumulator is normalised by each station's own σ so a
 2σ excursion sustained for an hour reads the same on a 10 cpm tube
-and a 1000 cpm tube — same operational severity, same alert level.
+and a 1000 cpm tube - same operational severity, same alert level.
 The same algorithm handles spikes, persistent drops, and slow drift.
 Refresh cadence is 10 minutes server-side.
 
@@ -201,7 +201,7 @@ silence isn't a severity-banded anomaly.
 ## Endpoint
 
 The canonical URL is `http://api.espgeiger.com/api/1/`. HTTP-only is
-intentional — signatures provide tamper-resistance, TLS would just add
+intentional - signatures provide tamper-resistance, TLS would just add
 heap pressure on ESP8266 without additional security in this threat
 model.
 
@@ -220,7 +220,7 @@ Routes:
 |---|---|---|
 | `/api/1/handshake` | POST | Register or refresh station metadata |
 | `/api/1/post`      | POST | Submit a reading (and optionally a health snapshot) |
-| `/api/1/forget`    | POST | Right-to-erasure — purge station + all history |
+| `/api/1/forget`    | POST | Right-to-erasure - purge station + all history |
 
 ## Opt-out at any time
 

@@ -78,4 +78,4 @@ CPS: 0.50
 CPS: 0.53
 ```
 
-Turn it all off with `show 0` — periodic output stops and the regular log verbosity returns.
+Turn it all off with `show 0` - periodic output stops and the regular log verbosity returns.

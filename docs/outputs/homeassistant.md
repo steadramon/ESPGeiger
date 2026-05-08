@@ -24,7 +24,7 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 | `ESPGeiger-<device_id> CPM5` | 5-minute smoothed CPM | `30.0` | 60 s |
 | `ESPGeiger-<device_id> CPM15` | 15-minute smoothed CPM | `30.0` | 60 s |
 | `ESPGeiger-<device_id> µSv/h` | μSv/h value | `0.10` | 60 s |
-| `ESPGeiger-<device_id> HV` | High-voltage reading — ESPGeiger-HW only | `400.1` | 60 s |
+| `ESPGeiger-<device_id> HV` | High-voltage reading - ESPGeiger-HW only | `400.1` | 60 s |
 | `ESPGeiger-<device_id> Total Clicks` | Cumulative clicks since boot. | `43200` | 60 s |
 
 ## Threshold alerts (binary sensors)
@@ -35,7 +35,7 @@ Triggered when CPM crosses the configured warning / alert thresholds. Consumed v
 |---|---|---|
 | `ESPGeiger-<device_id> Warning` | CPM above configured warning threshold | `problem` |
 | `ESPGeiger-<device_id> Alert` | CPM above configured alert threshold | `safety` |
-| `ESPGeiger-<device_id> Serial Connected` | Serial counter has reported within the last 60 s. Published only on serial builds — pulse builds have no external peer to monitor. | `connectivity` |
+| `ESPGeiger-<device_id> Serial Connected` | Serial counter has reported within the last 60 s. Published only on serial builds - pulse builds have no external peer to monitor. | `connectivity` |
 
 ## Diagnostic entities
 
@@ -43,7 +43,7 @@ Appear under the device's **Diagnostic** section in Home Assistant, not the main
 
 | Value | Description | Example | Publish Interval |
 |---|---|---|---|
-| `ESPGeiger-<device_id> tick` | EMA-smoothed `sTickerCB` duration in µs — typical device load | `953` | 60 s |
+| `ESPGeiger-<device_id> tick` | EMA-smoothed `sTickerCB` duration in µs - typical device load | `953` | 60 s |
 | `ESPGeiger-<device_id> tick max` | Peak `tick` observed in last 60 s | `4870` | 60 s |
 | `ESPGeiger-<device_id> LPS` | Loop iterations per second | `58733` | 60 s |
 | `ESPGeiger-<device_id> RSSI` | WiFi signal strength (dBm) | `-37` | 60 s |

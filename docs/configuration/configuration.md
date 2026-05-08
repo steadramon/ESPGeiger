@@ -8,12 +8,12 @@ nav_order: 4
 
 # Configuration
 
-Most settings are available from the ESPGeiger [Web Portal](/output/webportal) — click **Config** on the main page.
+Most settings are available from the ESPGeiger [Web Portal](/output/webportal) - click **Config** on the main page.
 
 Specialised pages with their own UI:
 
-* **NTP Config** — time zone and NTP server. See [NTP Configuration](/configuration/ntp).
-* **HV Config** — high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
+* **NTP Config** - time zone and NTP server. See [NTP Configuration](/configuration/ntp).
+* **HV Config** - high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
 
 Settings changed on the Config page take effect immediately (or on next submission cycle for output modules). Pin and serial type changes require a reboot.
 

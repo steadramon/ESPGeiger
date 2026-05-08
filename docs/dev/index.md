@@ -33,7 +33,7 @@ By default the Test output cycles through several ranges of reading, switch each
 - 1.66 CPS / 100 CPM
 - 2 CPS / 120 CPM
 
-A build option is available to count the number of CPM sent on the local device, note that if this option is enabled and the `RXPIN` and `TXPIN` of the same device are connected together, counted values will be doubled *unless the debounce window filters the duplicate* — see below.
+A build option is available to count the number of CPM sent on the local device, note that if this option is enabled and the `RXPIN` and `TXPIN` of the same device are connected together, counted values will be doubled *unless the debounce window filters the duplicate* - see below.
 
 ## Emulation and Communication
 
@@ -52,7 +52,7 @@ Notes:
 
 Default settings give a practical ceiling of roughly 120k CPM on both sides:
 
-- TX side: `pulse_width_us` pref sets the simulated pulse high-time (default 500µs). Below the pulse width, the Poisson inter-arrival sampler saturates rather than producing overlapping pulses — the long-run rate is Poisson-correct up to that floor, then plateaus.
+- TX side: `pulse_width_us` pref sets the simulated pulse high-time (default 500µs). Below the pulse width, the Poisson inter-arrival sampler saturates rather than producing overlapping pulses - the long-run rate is Poisson-correct up to that floor, then plateaus.
 - RX side: `debounce` pref discards edges arriving closer than its value (default 500µs).
 
 To stress-test beyond 120k CPM:
@@ -61,7 +61,7 @@ To stress-test beyond 120k CPM:
 2. Lower `debounce` on the receiving device to match or beat the new pulse cadence.
 3. Optionally set `GEIGER_TEST_FIXEDCPM` or use the `--manual` CPM setter so you're testing a specific rate rather than the rotating 30/60/100/120.
 
-The `*_testpulseint` variant uses a deterministic PWM (not Poisson) and scales cleanly to ~500k CPM without these knobs — useful when the goal is "does the counter keep up?" rather than "does the statistics look right?".
+The `*_testpulseint` variant uses a deterministic PWM (not Poisson) and scales cleanly to ~500k CPM without these knobs - useful when the goal is "does the counter keep up?" rather than "does the statistics look right?".
 
 ### Test build variants at a glance
 
@@ -74,11 +74,11 @@ The `*_testpulseint` variant uses a deterministic PWM (not Poisson) and scales c
 
 ### TestSerial TX↔RX self-loopback is limited to 9600-baud protocols
 
-Bridging TX to RX on the same `*_testserial` device for a self-loopback sanity check works cleanly for **GC10** and **MightyOhm** (both 9600 baud) — you'll see matching `TestSerial TX:` and `TestSerial RX:` lines in the log as the codec round-trips.
+Bridging TX to RX on the same `*_testserial` device for a self-loopback sanity check works cleanly for **GC10** and **MightyOhm** (both 9600 baud) - you'll see matching `TestSerial TX:` and `TestSerial RX:` lines in the log as the codec round-trips.
 
 For **GC10Next** and **ESPGeiger** (both 115200 baud) the self-loopback is unreliable. `EspSoftwareSerial` bit-banging *both* directions on one chip at 115200 (8.7µs per bit) collides with WiFi / MQTT / loop() CPU work, so the frames corrupt in transit and the parser rejects them. `TestSerial TX:` still shows the correct outgoing line, but no matching `TestSerial RX:` line appears.
 
-This is a SoftwareSerial limitation, not a codec bug — the same `SerialFormat::parse_cpm` round-trips cleanly at 9600, so we know the format/parse pair is symmetric by construction. Real hardware counters emitting to our SoftwareSerial RX at 115200 work fine because their hardware UART has precise bit timing; only the self-loopback scenario hits the limit.
+This is a SoftwareSerial limitation, not a codec bug - the same `SerialFormat::parse_cpm` round-trips cleanly at 9600, so we know the format/parse pair is symmetric by construction. Real hardware counters emitting to our SoftwareSerial RX at 115200 work fine because their hardware UART has precise bit timing; only the self-loopback scenario hits the limit.
 
 To validate the 115200 path specifically, either run TestSerial on one ESP8266 wired to a *second* ESP8266 running real `GeigerSerial`, or trust the 9600 round-trip as evidence of codec correctness.
 
@@ -93,11 +93,11 @@ Tick profile: total=425 ctr=230 wifi=109 mods=128 lps=58733
 Mods max: mqtt=61 sdcard=25
 ```
 
-- `total` — worst single tick duration in the last 60 seconds (us)
-- `ctr` — max time in `gcounter.secondticker()`
-- `wifi` — max time in WiFi tracking block
-- `mods` — max total time in `EGModuleRegistry::tick_all()`
-- `lps` — loop iterations per second (steady-state health indicator)
-- `Mods max:` — per-module worst-case `s_tick` duration, slowest first
+- `total` - worst single tick duration in the last 60 seconds (us)
+- `ctr` - max time in `gcounter.secondticker()`
+- `wifi` - max time in WiFi tracking block
+- `mods` - max total time in `EGModuleRegistry::tick_all()`
+- `lps` - loop iterations per second (steady-state health indicator)
+- `Mods max:` - per-module worst-case `s_tick` duration, slowest first
 
-Zero overhead when the flag is not defined — all instrumentation compiles out.
+Zero overhead when the flag is not defined - all instrumentation compiles out.

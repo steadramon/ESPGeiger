@@ -58,11 +58,11 @@ The `/lastdata` endpoint returns a single comma-separated line matching the Geig
 22.50, 0.37, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan
 ```
 
-The first two values are the current **CPM** and **CPS**. The remaining ten fields are reported as `nan` — GeigerLog ignores them and plots only the two populated variables.
+The first two values are the current **CPM** and **CPS**. The remaining ten fields are reported as `nan` - GeigerLog ignores them and plots only the two populated variables.
 
 ### Notes
 
-* Polling is driven by GeigerLog — ESPGeiger responds on each request, so cadence is whatever you configure on the GeigerLog side.
+* Polling is driven by GeigerLog - ESPGeiger responds on each request, so cadence is whatever you configure on the GeigerLog side.
 * The endpoint is always available; there is no toggle in the ESPGeiger portal.
 * If you need richer data (5-minute or 15-minute CPM, HV, memory, RSSI) consume `/json` instead from your own tooling.
 

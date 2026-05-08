@@ -16,18 +16,18 @@ ESPGeiger comes with a built-in Web Portal, allowing you to easy configuration o
 
 The main page has buttons to reach each area of configuration:
 
-* **Config** — all general device and output settings. See the [Configuration reference](/configuration) for the full list of options, value ranges and defaults.
-* **NTP Config** — time zone and NTP server settings. See [NTP Configuration](/configuration/ntp).
-* **HV Config** — high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
+* **Config** - all general device and output settings. See the [Configuration reference](/configuration) for the full list of options, value ranges and defaults.
+* **NTP Config** - time zone and NTP server settings. See [NTP Configuration](/configuration/ntp).
+* **HV Config** - high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
 
 ## Console log
 
 The Status page includes a live console tail of the device's log. Timestamps follow two formats:
 
-* `HH:MM:SS` — wall-clock time (device has synced to NTP and applied its configured timezone). The web UI converts these to your browser's local timezone so they line up with the graph.
-* `HH:MM:SS*` — uptime since boot. The trailing asterisk signals that NTP hasn't synced yet; the time is not wall-clock and the browser should not timezone-shift it. Once NTP syncs, new lines appear without the asterisk.
+* `HH:MM:SS` - wall-clock time (device has synced to NTP and applied its configured timezone). The web UI converts these to your browser's local timezone so they line up with the graph.
+* `HH:MM:SS*` - uptime since boot. The trailing asterisk signals that NTP hasn't synced yet; the time is not wall-clock and the browser should not timezone-shift it. Once NTP syncs, new lines appear without the asterisk.
 
-In [offline mode](/configuration/offlinemode) there is no wall-clock and no asterisk — timestamps are plain uptime. The web portal itself isn't reachable when WiFi is disabled, but the same format appears on the serial console.
+In [offline mode](/configuration/offlinemode) there is no wall-clock and no asterisk - timestamps are plain uptime. The web portal itself isn't reachable when WiFi is disabled, but the same format appears on the serial console.
 
 ## HTTP endpoints
 
@@ -38,20 +38,20 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/` | Main home page |
 | `/status` | Detailed device status page (live readings, uptime, build info) |
 | `/hist` | Rolling CPM history view |
-| `/json` | Machine-readable status snapshot — see [JSON Endpoint](/output/integrations#json-endpoint) |
-| `/lastdata` | GeigerLog-compatible CSV line — see [GeigerLog](/output/integrations#geigerlog) |
-| `/about` | Build, hardware and module identity (useful for support / debugging) — see below |
-| `/outputs` | State of the configured third-party output modules — see below |
+| `/json` | Machine-readable status snapshot - see [JSON Endpoint](/output/integrations#json-endpoint) |
+| `/lastdata` | GeigerLog-compatible CSV line - see [GeigerLog](/output/integrations#geigerlog) |
+| `/about` | Build, hardware and module identity (useful for support / debugging) - see below |
+| `/outputs` | State of the configured third-party output modules - see below |
 | `/ntp` | NTP configuration page |
 | `/hv` | High-voltage tuning page (ESPGeiger-HW builds only) |
-| `/cpm?v=N` | Set target CPM on test geiger builds — see [Test build CPM setter](#test-build-cpm-setter) |
-| `/restart` | Reboots the device — use with care |
+| `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
+| `/restart` | Reboots the device - use with care |
 
 For the `/json` response schema and examples of integrating `/json` or `/lastdata` with external tools (GeigerLog, Home Assistant, Prometheus, InfluxDB, Node-RED, Grafana), see [Integrations](/output/integrations).
 
 ### `/outputs` response
 
-Returns a JSON object keyed by module name, describing the state of each configured third-party output. Only modules that are **enabled** in the Config page appear — unconfigured or disabled modules are omitted. An empty object `{}` means no third-party outputs are active.
+Returns a JSON object keyed by module name, describing the state of each configured third-party output. Only modules that are **enabled** in the Config page appear - unconfigured or disabled modules are omitted. An empty object `{}` means no third-party outputs are active.
 
 Possible keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`.
 
@@ -72,7 +72,7 @@ Example:
 | `ok` | `true` if the last submission was accepted by the remote service. For MQTT this reflects the live connection plus a successful recent publish. |
 | `age` | Seconds since the last submission attempt completed, or `null` if the module is enabled but has not yet attempted a submission (e.g. just after boot). |
 
-This is intended as a lightweight health check — useful for local dashboards, scripts, or Home Assistant REST sensors that want to know whether a given remote integration is working without subscribing to MQTT or scraping the logs.
+This is intended as a lightweight health check - useful for local dashboards, scripts, or Home Assistant REST sensors that want to know whether a given remote integration is working without subscribing to MQTT or scraping the logs.
 
 ### `/about` response
 
@@ -126,7 +126,7 @@ GET /cpm?v=<target_cpm>
 
 The internal test counter retargets to generate pulses at the given rate (Poisson-distributed for pulse-type test builds). Response body is `OK` on success.
 
-Example — set target to 150 CPM:
+Example - set target to 150 CPM:
 
 ```
 curl http://192.168.1.100/cpm?v=150

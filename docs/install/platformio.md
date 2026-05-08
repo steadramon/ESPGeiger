@@ -76,7 +76,7 @@ build_flags =
 
 | Flag | Description |
 |---|---|
-| `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield — bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 7 = test). `1` Pulse (default), `2` Serial, `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. |
+| `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield - bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 7 = test). `1` Pulse (default), `2` Serial, `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. |
 | `-D GEIGER_SERIALTYPE=N` | Set the **default** serial counter type for serial builds. The serial type can be changed at runtime from the Config page. `1` GC10 (9600 baud), `2` GC10-Next (115200 baud), `3` MightyOhm (9600 baud), `4` ESPGeiger (115200 baud). |
 
 ### Geiger Counter Input

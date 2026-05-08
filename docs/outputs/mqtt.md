@@ -33,7 +33,7 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 
 ### Legacy per-metric topics (backward compat)
 
-Planned for removal in a future release — prefer consuming `tele/sensor` JSON instead.
+Planned for removal in a future release - prefer consuming `tele/sensor` JSON instead.
 
 | Topic | Example | Interval |
 |---|---|---|
@@ -77,8 +77,8 @@ Planned for removal in a future release — prefer consuming `tele/sensor` JSON 
 | `ip` | Device IP address |
 | `rssi` | WiFi signal (dBm) |
 | `c_total` | Total clicks since boot |
-| `tick` | EMA-smoothed sTickerCB duration (μs) — device load signal |
+| `tick` | EMA-smoothed sTickerCB duration (μs) - device load signal |
 | `t_max` | Peak `tick` in last 60 s |
 | `lps` | Loop iterations per second |
 | `free_mem` | Free heap (bytes) |
-| `ser_ok` | `1` when the external serial counter has sent a valid line within the last 60 s, `0` otherwise. Serial builds only — absent from pulse builds. |
+| `ser_ok` | `1` when the external serial counter has sent a valid line within the last 60 s, `0` otherwise. Serial builds only - absent from pulse builds. |

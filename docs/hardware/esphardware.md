@@ -41,7 +41,7 @@ The filter value can also be set at compile time with the `-D PCNT_FILTER=N` bui
 
 ### Interrupt Debounce
 
-On builds that use software interrupt counting instead of PCNT (all ESP8266 pulse builds, and ESP32 `no_pcnt` builds), a debounce window rejects any edge that arrives within a configurable number of microseconds of the previously accepted pulse. This serves the same purpose as the PCNT filter — suppressing electrical noise and contact bounce without affecting real tube pulses.
+On builds that use software interrupt counting instead of PCNT (all ESP8266 pulse builds, and ESP32 `no_pcnt` builds), a debounce window rejects any edge that arrives within a configurable number of microseconds of the previously accepted pulse. This serves the same purpose as the PCNT filter - suppressing electrical noise and contact bounce without affecting real tube pulses.
 
 The debounce value can be configured from the ESPGeiger web interface under __Config__. The value is in microseconds, with a range of 0 to 10000. A value of 0 disables the debounce.
 
