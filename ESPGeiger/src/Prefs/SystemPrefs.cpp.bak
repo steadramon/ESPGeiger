@@ -32,8 +32,8 @@
 
 // --- System prefs (live-apply, no reboot needed) ---
 
-SystemPrefs sysprefs;
-EG_REGISTER_MODULE(sysprefs)
+SystemPrefs systemPrefs;
+EG_REGISTER_MODULE(systemPrefs)
 
 EG_PSTR(SY_L_NAM, "Friendly name");
 EG_PSTR(SY_H_NAM, "Optional label for web UI");
@@ -97,8 +97,8 @@ private:
 #endif
 };
 
-static InputPrefs inputprefs;
-EG_REGISTER_MODULE(inputprefs)
+static InputPrefs inputPrefs;
+EG_REGISTER_MODULE(inputPrefs)
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 // Filled by SerialFormat::describe_types at prefs-load; pref entry
@@ -146,6 +146,15 @@ EG_PSTR(IN_H_TBB, "Detects beta radiation");
 EG_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
 EG_PSTR(IN_H_TBG, "Detects gamma radiation");
 #endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+EG_PSTR(IN_L_CHD, "Dual Tube");
+EG_PSTR(IN_L_RXB, "RX Pin B");
+EG_PSTR(IN_H_RXB, "GPIO for the second tube");
+EG_PSTR(IN_L_CMD, "Mode");
+EG_PSTR(IN_H_CMD, "0 = Sum (any pulse), 1 = Coincidence, 2 = Anti-coincidence");
+EG_PSTR(IN_L_CWN, "Coincidence Window");
+EG_PSTR(IN_H_CWN, "Pair window in microseconds (10-10000)");
+#endif
 
 static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
@@ -177,6 +186,12 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"tube_alpha", IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_beta",  IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_gamma", IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+#endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+  {"_coinc_hdr",  IN_L_CHD, nullptr,  nullptr, nullptr, 0, 0, 0, EGP_HEADER, 0},
+  {"rx_pin_b",    IN_L_RXB, IN_H_RXB, STR(GEIGER_RXPIN_B),               nullptr, 0, 0, 0, EGP_UINT, 0},
+  {"coinc_mode",  IN_L_CMD, IN_H_CMD, "0",                                nullptr, 0, 2, 0, EGP_UINT, 0},
+  {"coinc_win_us",IN_L_CWN, IN_H_CWN, STR(GEIGER_COINCIDENCE_WINDOW_US), nullptr, 10, 10000, 0, EGP_UINT, 0},
 #endif
 };
 
@@ -211,7 +226,7 @@ void InputPrefs::on_prefs_loaded() {
   gcounter.set_debounce((int)EGPrefs::getUInt("input", "debounce"));
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  set_pulse_width_us((int)EGPrefs::getUInt("input", "pulse_width_us"));
+  _pulse_width_us = (int)EGPrefs::getUInt("input", "pulse_width_us");
 #endif
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {
@@ -221,6 +236,11 @@ void InputPrefs::on_prefs_loaded() {
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
   gcounter.set_dead_time_us((uint16_t)EGPrefs::getUInt("input", "dead_time_us"));
+#endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+  gcounter.set_rx_pin_b((int)EGPrefs::getUInt("input", "rx_pin_b"));
+  gcounter.set_coinc_mode((uint8_t)EGPrefs::getUInt("input", "coinc_mode"));
+  gcounter.set_coinc_window_us(EGPrefs::getUInt("input", "coinc_win_us"));
 #endif
 }
 
@@ -236,6 +256,9 @@ void InputPrefs::on_prefs_saved() {
   if (_serial_type != (uint8_t)EGPrefs::getUInt("input", "serial_type")) need_reboot = true;
   if (!SerialFormat::has_cps(_serial_type) &&
       gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("input", "cpm_window")) need_reboot = true;
+#endif
+#if GEIGER_IS_COINC(GEIGER_TYPE)
+  if (gcounter.get_rx_pin_b() != (int)EGPrefs::getUInt("input", "rx_pin_b")) need_reboot = true;
 #endif
   on_prefs_loaded();
   if (need_reboot) EGPrefs::request_restart();
@@ -270,20 +293,14 @@ public:
   void on_prefs_loaded() override;
 };
 
-static LedPrefs ledprefs;
-EG_REGISTER_MODULE(ledprefs)
+static LedPrefs ledPrefs;
+EG_REGISTER_MODULE(ledPrefs)
 
 EG_PSTR(LD_L_BLP, "Blip LED");
 EG_PSTR(LD_H_BLP, "Flash LED on each count");
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
 EG_PSTR(LD_L_BRT, "Blip brightness");
 EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
-#endif
-#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
-EG_PSTR(LD_L_EXP, "External LED Pin");
-EG_PSTR(LD_H_EXP, "GPIO to mirror blip on (-1 = off). Reboot to apply.");
-EG_PSTR(LD_L_EXW, "External Pulse Width");
-EG_PSTR(LD_H_EXW, "Pulse width on external pin (ms)");
 #endif
 EG_PSTR(LD_L_QFR, "Quiet from");
 EG_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
@@ -294,10 +311,6 @@ static const EGPref LED_PREF_ITEMS[] = {
   {"blip_led",    LD_L_BLP, LD_H_BLP, "1",  nullptr, 0, 1,   0, EGP_BOOL, 0},
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
   {"blip_bright", LD_L_BRT, LD_H_BRT, "80", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
-#endif
-#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
-  {"blip_pin",      LD_L_EXP, LD_H_EXP, "-1", nullptr, -1, 39,  0, EGP_INT, 0},
-  {"blip_pulse_ms", LD_L_EXW, LD_H_EXW, "2",  nullptr,  1, 100, 0, EGP_UINT, 0},
 #endif
   {"quiet_from",  LD_L_QFR, LD_H_QFR, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
   {"quiet_to",    LD_L_QTO, LD_H_QTO, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
@@ -313,10 +326,6 @@ const EGPrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
 
 void LedPrefs::on_prefs_loaded() {
   gcounter.set_blip_led(EGPrefs::getBool("led", "blip_led"));
-#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
-  gcounter.set_ext_blip_pin((int)EGPrefs::getInt("led", "blip_pin"));
-  gcounter.set_ext_blip_pulse_ms((uint8_t)EGPrefs::getUInt("led", "blip_pulse_ms"));
-#endif
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(GEIGER_BLIPLED)
   gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("led", "blip_bright") * 255 + 50) / 100));
 #endif
@@ -326,41 +335,3 @@ void LedPrefs::on_prefs_loaded() {
   );
 }
 #endif
-
-#if defined(ESPG_HV) && !defined(ESPGEIGER_HW)
-#include "../HV/HV.h"
-#include "../Logger/Logger.h"
-
-class HVPinPrefs : public EGModule {
-public:
-  const char* name() override { return "hvpin"; }
-  uint8_t display_order() override { return 14; }
-  const EGPrefGroup* prefs_group() override;
-  void on_prefs_loaded() override;
-};
-
-static HVPinPrefs hvpinprefs;
-EG_REGISTER_MODULE(hvpinprefs)
-
-EG_PSTR(HV_L_PWM, "HV PWM Pin");
-EG_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
-
-static const EGPref HV_PIN_PREF_ITEMS[] = {
-  {"pwm_pin", HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, 39, 0, EGP_INT, 0},
-};
-
-static const EGPrefGroup HV_PIN_PREF_GROUP = {
-  "hvpin", "HV Hardware", 1,
-  HV_PIN_PREF_ITEMS,
-  sizeof(HV_PIN_PREF_ITEMS) / sizeof(HV_PIN_PREF_ITEMS[0]),
-};
-
-const EGPrefGroup* HVPinPrefs::prefs_group() { return &HV_PIN_PREF_GROUP; }
-
-void HVPinPrefs::on_prefs_loaded() {
-  int pin = (int)EGPrefs::getInt("hvpin", "pwm_pin");
-  hv.set_pwm_pin(pin);
-  Log::console(PSTR("HV: pwm_pin=%d"), pin);
-}
-#endif
-

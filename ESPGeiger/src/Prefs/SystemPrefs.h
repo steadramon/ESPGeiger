@@ -34,6 +34,6 @@ class SystemPrefs : public EGModule {
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
 };
 
-extern SystemPrefs systemPrefs;
+extern SystemPrefs sysprefs;
 
 #endif

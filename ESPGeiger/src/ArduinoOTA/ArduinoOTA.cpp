@@ -29,8 +29,8 @@
 
 extern Counter gcounter;
 
-ArduinoOTAModule arduinoOTA;
-EG_REGISTER_MODULE(arduinoOTA)
+ArduinoOTAModule ota;
+EG_REGISTER_MODULE(ota)
 
 volatile bool ota_in_progress = false;
 

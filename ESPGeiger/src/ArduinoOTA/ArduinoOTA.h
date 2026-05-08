@@ -48,7 +48,7 @@ class ArduinoOTAModule : public EGModule {
     uint16_t loop_interval_ms() override { return OTA_POLL_INTERVAL_MS; }
 };
 
-extern ArduinoOTAModule arduinoOTA;
+extern ArduinoOTAModule ota;
 
 // True mid-flash. EGModuleRegistry pauses everything else while set.
 // Reset on OTA error so a failed negotiation isn't terminal.
