@@ -138,12 +138,17 @@ void WebAPI::loop(unsigned long now) {
   }
 }
 
-// Spread fleet posts across the minute so shared-IP households don't
-// thundering-herd at :00. Offset comes from public bytes of pub_k.
+static uint32_t wallClockWaitMs(uint32_t k, uint32_t intervalMs, uint32_t period_s) {
+  uint32_t target_ms = k % intervalMs;
+  uint32_t cur_ms    = (uint32_t)((time(NULL) % period_s) * 1000UL);
+  return (target_ms >= cur_ms) ? target_ms - cur_ms
+                               : intervalMs - cur_ms + target_ms;
+}
+
 unsigned long WebAPI::staggeredPingStart(unsigned long now) const {
   uint32_t k = ((uint32_t)pub_k[0] << 24) | ((uint32_t)pub_k[1] << 16)
              | ((uint32_t)pub_k[2] << 8)  |  (uint32_t)pub_k[3];
-  return now - pingIntervalMs + (k % pingIntervalMs);
+  return now + wallClockWaitMs(k, pingIntervalMs, 60) - pingIntervalMs;
 }
 
 void WebAPI::doHandshake() {
@@ -264,10 +269,9 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
       if (self->station_id != id) {
         Log::console(PSTR("WebAPI: Handshake OK - station ID %u"), id);
         self->station_id = id;
-        // Stagger fleet handshakes to a per-device minute-of-hour.
         uint32_t k = ((uint32_t)self->pub_k[4] << 24) | ((uint32_t)self->pub_k[5] << 16)
                    | ((uint32_t)self->pub_k[6] << 8)  |  (uint32_t)self->pub_k[7];
-        self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + (k % WEBAPI_HANDSHAKE_MS);
+        self->lastHandshake = millis() + wallClockWaitMs(k, WEBAPI_HANDSHAKE_MS, 3600) - WEBAPI_HANDSHAKE_MS;
       } else {
         Log::debug(PSTR("WebAPI: Handshake OK - station ID %u"), id);
       }
