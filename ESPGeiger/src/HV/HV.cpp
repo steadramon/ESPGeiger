@@ -100,7 +100,12 @@ void HV::set_duty(int duty) {
 }
 
 void HV::set_pwm_pin(int pin) {
-  if (const char* why = PinSafety::claim_output(pin, PSTR("HV"))) {
+  const char* why = nullptr;
+#ifdef ESP8266
+  if (pin == 16) why = PSTR("no PWM on GPIO 16");
+#endif
+  if (!why) why = PinSafety::claim_output(pin, PSTR("HV"));
+  if (why) {
     Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
