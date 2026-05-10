@@ -36,7 +36,7 @@
 #include "src/NTP/NTP.h"
 #include "src/GRNG/GRNG.h"
 #include "src/Counter/Counter.h"
-#include "src/ConfigManager/ConfigManager.h"
+#include "src/WebPortal/WebPortal.h"
 #include "src/SerialCommand/SerialCommand.h"
 #include "src/Util/BootHooks.h"
 
@@ -49,8 +49,6 @@ JLed led = JLed(LED_SEND_RECEIVE);
 
 Counter gcounter;
 GRNG grng;
-
-ConfigManager& cManager = ConfigManager::getInstance();
 
 SerialCommand serialcmd;
 
@@ -96,11 +94,18 @@ void sTickerCB()
   TickProfile::endTick();
 }
 
+static WebPortal s_webPortal;
+
 void setup()
 {
   Serial.begin(115200);
   Serial.println();
   delay(100);
+
+  // Identity must be ready before anything that publishes hostname / MAC
+  // (MQTT, WebAPI, banner, EGPortal). Was previously seeded by
+  // ConfigManager's constructor; now self-contained in DeviceInfo.
+  DeviceInfo::begin();
 
   Log::banner(PSTR("   ___"));
   Log::banner(PSTR("   \\_/    Starting up ... %s"), DeviceInfo::hostname());
@@ -122,17 +127,24 @@ void setup()
 
   delay(100);
   msTicker.attach_ms(1, msTickerCB);
-  if (start == 0 && BootHooks::checkStartupButtonHold()) {
-    Wifi::disabled = true;
+  if (start == 0) {
+    auto action = BootHooks::checkStartupButtonHold();
+    if (action == BootHooks::ButtonHold::FULL_RESET) {
+      DeviceInfo::factoryReset();
+      delay(500);
+      ESP.restart();
+    } else if (action == BootHooks::ButtonHold::OFFLINE) {
+      Wifi::disabled = true;
+    }
   }
-  if (!cManager.hasWiFiCreds()) {
+  if (!Wifi::hasSavedCreds()) {
     BootHooks::displaySetupWifi(DeviceInfo::hostname());
   }
   if (!Wifi::disabled) {
-    bool res = cManager.autoConnect();
+    bool res = Wifi::connectOrPortal();
     if (!res) {
 #if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
-      if (!cManager.hasWiFiCreds()) {
+      if (!Wifi::hasSavedCreds()) {
         Wifi::disabled = true;
       }
 #else
@@ -143,7 +155,7 @@ void setup()
     }
 
     delay(100);
-    cManager.startWebPortal();
+    s_webPortal.begin(80);
   }
 
   delay(500);
@@ -163,7 +175,7 @@ void loop()
   unsigned long now = millis();
   if (!ota_in_progress) {
     gcounter.loop();
-    cManager.processLoop(now);
+    s_webPortal.tick(now);
   }
   EGModuleRegistry::loop_all(now);
 }
