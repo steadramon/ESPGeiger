@@ -68,20 +68,22 @@ class EGModule {
     // Caller handles outer braces and comma separation.
     virtual size_t status_json(char* buf, size_t cap, unsigned long now) { return 0; }
 
-    bool last_ok = false;
+    // Two 1-bit bitfields share one byte; full uint8_t for _pub_ok keeps 0-255 range.
+    uint8_t last_ok          : 1;
+    uint8_t _publish_pending : 1;
     unsigned long last_attempt_ms = 0;
 
     void note_publish(bool ok) {
       last_ok = ok;
       last_attempt_ms = millis();
-      if (ok) { if (_pub_ok < 0x7F) ++_pub_ok; }
+      if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
       else    { if (_pub_err < 0xFF) ++_pub_err; }
     }
     void note_attempt() {
       last_attempt_ms = millis();
       last_ok = true;
       _publish_pending = 1;
-      if (_pub_ok < 0x7F) ++_pub_ok;
+      if (_pub_ok < 0xFF) ++_pub_ok;
     }
     void note_result(bool ok) {
       if (!_publish_pending) return;
@@ -96,8 +98,7 @@ class EGModule {
     uint8_t take_publish_err() { uint8_t v = _pub_err; _pub_err = 0; return v; }
 
   private:
-    uint8_t _pub_ok          : 7;
-    uint8_t _publish_pending : 1;
+    uint8_t _pub_ok  = 0;
     uint8_t _pub_err = 0;
 
   protected:
