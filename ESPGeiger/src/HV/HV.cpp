@@ -129,7 +129,7 @@ void HV::begin() {
 #endif
   }
 #ifdef ESPG_HV_ADC
-  hvReading.begin(SMOOTHED_AVERAGE, 3);
+  hvReading.begin(SMOOTHED_AVERAGE, 20);
 #endif
 }
 

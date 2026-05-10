@@ -157,9 +157,16 @@ class HV : public EGModule {
       uint16_t _hv_target = 0;
       int8_t   _duty_trim = 0;
       unsigned long _trim_settle_until = 0;  // suppress trim until this millis()
+      // Trim cadence retuned against Mr Blinky's Fluke 289 data
+      // (1h capture, ESPG HW 004): autotrim at the previous (3-sample,
+      // 4V hysteresis, 10s period) made HV 2.4x noisier than
+      // baseline (sigma 1.51V vs 0.64V). Wider smoother + wider deadband
+      // + slower cadence stop the loop chasing its own ADC noise.
+      // TRIM_PERIOD_S must be >= Smoothed window so the reading reflects
+      // the previous trim before the next decision.
       static constexpr int8_t TRIM_MAX = 5;
-      static constexpr int    TRIM_HYST_V = 4;
-      static constexpr uint8_t TRIM_PERIOD_S = 10;
+      static constexpr int    TRIM_HYST_V = 8;
+      static constexpr uint8_t TRIM_PERIOD_S = 30;
       static constexpr unsigned long TRIM_SETTLE_MS = 30000;
 };
 
