@@ -35,21 +35,13 @@ extern const char statusJS[]    PROGMEM;
 // ---------- shared CSS + page templates (PROGMEM) ----------
 
 static const char STYLE_CSS[] PROGMEM =
-  // Palette aligned with Bootstrap 5 / stations.espgeiger.com so the
-  // device UI and the station map share one visual language. Theme JS
-  // (loaded render-blocking from <head>) always sets data-theme on the
-  // root element, deriving from OS preference when no localStorage -
-  // means we only need the [data-theme=dark] rule, not a parallel
-  // @media block.
+  // Palette aligned with stations.espgeiger.com (Bootstrap 5).
   ":root{--bg:#fff;--page:#f8f9fa;--fg:#212529;--muted:#6c757d;--border:#dee2e6;--accent:#06c;--card:#f8f9fa}"
   ":root[data-theme=dark]{--bg:#212529;--page:#1a1d20;--fg:#dee2e6;--muted:#adb5bd;--border:#373b3e;--card:#2b3035}"
   ".themetoggle{position:fixed;top:.8em;right:.8em;width:2.4em;height:2.4em;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;font-size:1.1em;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;z-index:10}"
-  // Chart canvas + legend shared by /status and /hv (both use id=g1/g2).
-  // Centralised so both pages can drop their inline styles.
+  // Chart canvas + legend shared by /status and /hv.
   "#g1{height:200px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:4px}"
   "#g2{display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.4em 0;font-size:1.05em}"
-  // Status console textarea - used on /status only but the inline style
-  // would have to repeat all this anyway.
   "#t1{width:100%;height:250px;font-family:monospace;font-size:.8em;line-height:1.3;resize:vertical}"
   ".themetoggle::before{content:'\\2600'}"
   ":root[data-theme=dark] .themetoggle::before{content:'\\263E'}"
@@ -85,11 +77,7 @@ static const char STYLE_CSS[] PROGMEM =
   ".back{display:inline-block;padding:.5em 1em;background:var(--accent);color:#fff;border-radius:4px;text-decoration:none;font-weight:500}"
   ".back:hover{opacity:.9;text-decoration:none}";
 
-// Radiation-trefoil favicon. PROGMEM char array (true flash storage -
-// `static const char* PROGMEM` only puts the pointer in flash, not the
-// string; explicit array form lands the bytes in irom).
-// Served from /favicon.svg so markup stays clean (no data-URI escaping).
-// SVG path-encoded; ~570 B in flash.
+// Char array form lands bytes in irom (vs `const char*` which only flash-stores the pointer).
 static const char FAVICON_SVG[] PROGMEM =
   "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>"
   "<path fill='#666' d='M256 0a256 256 0 1 1 0 512 256 256 0 0 1 0-512z'/>"
@@ -101,8 +89,7 @@ static const char PAGE_TAIL[] PROGMEM =
   "<p style=margin-top:2em><a class=back href=/>\xe2\x86\x90 Home</a></p>"
   "</body></html>";
 
-// Shared chrome - extracted from sendPageHead + hRoot which both emit
-// these byte-for-byte. Saves ~350 B PROGMEM vs two inline copies.
+// Shared with hRoot to dedupe.
 static const char HEAD_OPEN[] PROGMEM =
   "<!DOCTYPE html><html lang=en><head>"
   "<meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">"
@@ -116,9 +103,7 @@ static const char HEAD_TAIL[] PROGMEM =
   "<div class=devhead>"
   "<h1><img src=/favicon.svg alt=\"\">";
 
-// Cross-cutting menu entries owned by WebPortal itself (not any module).
-// Top entries (Status, History, Config) and bottom (Update) are added back
-// as their target routes are migrated.
+// Cross-cutting menu entries owned here, not by any module.
 static const EGMenuEntry WEBPORTAL_TOP_MENU[] = {
   {"/status",  "Status"},
   {"/hist",    "History"},
@@ -143,12 +128,8 @@ static void renderMenuButton(EGHttpResponse& res, const EGMenuEntry& e) {
 }
 
 // ---------- pending-restart machinery ----------
-//
-// Handler context runs from AsyncTCP / lwIP callbacks; calling ESP.restart()
-// directly there kills in-flight responses mid-stream. Handlers that want a
-// reboot call requestRestart(); WebPortal::tick (driven from main loop)
-// fires the actual restart once the delay elapses, giving pump time to
-// drain.
+// Handlers request via requestRestart(); tick() fires ESP.restart() after
+// the delay so in-flight responses drain (vs killing them from callback ctx).
 
 static volatile uint32_t s_restartAt = 0;
 
@@ -185,9 +166,6 @@ void WebPortal::tick(uint32_t now) {
 
   if (s_restartAt != 0 && (int32_t)(now - s_restartAt) >= 0) {
     if (s_pendingWifiSave) {
-      // Apply new creds to SDK persistent store. WiFi.begin updates the
-      // stored config and tries to associate; we don't wait - restart
-      // takes care of giving the new creds a clean reconnect.
       Log::console(PSTR("WebPortal: applying new WiFi creds (ssid='%s')"),
                    s_pendingWifiSsid);
       WiFi.persistent(true);
@@ -201,15 +179,8 @@ void WebPortal::tick(uint32_t now) {
   }
 }
 
-// ---------- per-module registration ----------
-//
-// EGModule subclasses self-register via the registerRoutes() virtual: we
-// just walk EGModuleRegistry and call each. Modules that don't have routes
-// inherit the default empty impl.
-//
-// Non-EGModule classes (GRNG, Counter) get explicit calls - only ones
-// currently in that bucket. New modules following the EGModule pattern get
-// auto-discovery for free.
+// EGModule subclasses self-register via registerRoutes(); GRNG and Counter
+// aren't EGModules so we call them explicitly.
 
 namespace GRNGRoutes    { void registerRoutes(EGHttpServer& http); }
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
@@ -270,10 +241,7 @@ void WebPortal::applyAuthFromPrefs() {
 }
 
 void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title) {
-  // Browser <title>: "<page> · <friendly-or-hostname>". h1 is consistent
-  // across all pages: <favicon> ESPGeiger - <page title>, matching the
-  // home page chrome. Static parts go zero-copy from PROGMEM so the
-  // page chrome can grow without anyone tracking a stack-buffer ceiling.
+  // <title>: "<page>  <friendly-or-hostname>". h1: <favicon> ESPGeiger - <page>.
   const char* fname = DeviceInfo::friendlyName();
   const char* devName = (fname && fname[0]) ? fname : DeviceInfo::hostname();
   res.sendChunk(FPSTR(HEAD_OPEN));
@@ -290,8 +258,6 @@ void WebPortal::sendPageTail(EGHttpResponse& res) {
 }
 
 void WebPortal::sendPageFooter(EGHttpResponse& res) {
-  // Static parts go zero-copy from PROGMEM. Three sendChunks rather than
-  // a stack snprintf so a future copy/style change can't truncate.
   res.sendKV(F("<p class=muted style='margin-top:1.5em;font-size:.85em'>"
                "<a href='https://github.com/steadramon/ESPGeiger' target=_blank rel=noopener style='color:var(--fg);font-weight:bold;text-decoration:none'>ESPGeiger</a>"
                " &middot; <a href='/about' style='color:inherit;text-decoration:none'>"),
@@ -302,12 +268,8 @@ void WebPortal::sendPageFooter(EGHttpResponse& res) {
 void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
 
-  // Home page chrome: device-identity header. Build-time identity is
-  // baked at compile time the same way the legacy ConfigManager did it,
-  // so this never collides with a user-set tube model in input.geiger_model.
-  //   1. Friendly name set                → "ESPGeiger[-Variant] - <friendly>"
-  //   2. No friendly, branded build       → "ESPGeiger-HW" / "ESPGeiger-Log"
-  //   3. No friendly, plain build         → "ESPGeiger"
+  // Home page identity. Friendly name (if set) takes precedence over the
+  // baked-in build variant name. Never uses input.geiger_model.
 #ifdef ESPGEIGER_HW
   #define WEBPORTAL_BASE_NAME "ESPGeiger-HW"
 #elif defined(ESPGEIGER_LT)
@@ -318,14 +280,12 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* fname = DeviceInfo::friendlyName();
   bool hasFriendly = (fname && fname[0]);
   const char* hostname = DeviceInfo::hostname();
-  // Format IP directly from byte representation - WiFi.localIP().toString()
-  // would return an Arduino String temp on heap. /info uses the same trick.
+  // Direct byte format - avoids the heap String from .toString().
   char ipBuf[16];
   IPAddress ipa = WiFi.localIP();
   snprintf(ipBuf, sizeof(ipBuf), "%u.%u.%u.%u", ipa[0], ipa[1], ipa[2], ipa[3]);
 
-  // Helper for the h1/title content - emitted twice so we keep one
-  // source of truth for the chosen identity tail.
+  // Emitted twice; keep one source of truth.
   auto emitIdentity = [&]() {
     if (hasFriendly) res.sendKV(F(WEBPORTAL_BASE_NAME " - "), fname);
     else             res.sendChunk(F(WEBPORTAL_BASE_NAME));
@@ -339,11 +299,9 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendKV(F(" &middot; "), ipBuf, F("</div></div>"));
 
   res.sendChunk(F("<div class=menu>"));
-  // Top: Status / History / Config
   for (const EGMenuEntry* e = WEBPORTAL_TOP_MENU; e->path; e++) {
     renderMenuButton(res, *e);
   }
-  // Module-contributed entries (HV Config, NTP Config, Station Network, etc.)
   uint8_t mc = EGModuleRegistry::count();
   for (uint8_t i = 0; i < mc; i++) {
     EGModule* m = EGModuleRegistry::get(i);
@@ -354,7 +312,6 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
       e++;
     }
   }
-  // Bottom: Info / Random / Update / Reboot
   for (const EGMenuEntry* e = WEBPORTAL_BOTTOM_MENU; e->path; e++) {
     renderMenuButton(res, *e);
   }
@@ -365,22 +322,16 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // 1-day cache - CSS rarely changes; saves a fetch per page nav.
-  res.addHeader("Cache-Control", "public, max-age=86400");
+  res.addHeader("Cache-Control", "public, max-age=86400");   // 1 day
   res.send(200, "text/css", FPSTR(STYLE_CSS));
 }
 
 void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // 7-day cache - the icon never changes during a firmware lifetime.
-  res.addHeader("Cache-Control", "public, max-age=604800");
+  res.addHeader("Cache-Control", "public, max-age=604800");  // 7 days
   res.send(200, "image/svg+xml", FPSTR(FAVICON_SVG));
 }
 
-// Shared theme init + toggle. Loaded render-blocking from <head> so the
-// data-theme attribute is set before paint (no flash of wrong theme).
-// Init always sets data-theme - derived from OS preference when no
-// localStorage value - so the CSS only needs one [data-theme=dark]
-// rule rather than a parallel @media block.
+// Render-blocking so the theme is set before paint (no flash).
 static const char THEME_JS[] PROGMEM =
   "!function(){var d=document.documentElement;"
     "d.dataset.theme=localStorage.theme||"
@@ -420,7 +371,7 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Info"));
 
-  // INFO_ROW: %S reads PROGMEM label so we don't pay SRAM for ~25 labels.
+  // %S = PROGMEM label so we don't pay SRAM for ~25 labels.
   char rowbuf[256];
   int n;
   #define INFO_ROW(k, fmt, ...) do { \
@@ -430,10 +381,7 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (n > 0) res.sendChunk(rowbuf, (size_t)n); \
   } while (0)
 
-  // Snapshot WiFi info into stack buffers. Format IPs and MACs directly
-  // from the byte representation - the toString()/macAddress() overloads
-  // would return Arduino String temporaries (heap). SSIDs still need the
-  // String form because the WiFi API has no buffer-filling alternative.
+  // Direct byte format avoids the heap String from .toString().
   char ip[16], gw[16], sn[16], dns_[16], bssid[20], ssid[33], mac[18];
   char ap_ssid[33], ap_ip[16], ap_mac[18];
   auto fmtIP = [](char* dst, size_t cap, IPAddress a) {
@@ -456,8 +404,7 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const uint8_t* bssidPtr = WiFi.BSSID();
   if (bssidPtr) fmtMac(bssid, sizeof(bssid), bssidPtr);
   else          bssid[0] = '\0';
-  // SSIDs: WiFi.SSID() / softAPSSID() return Arduino String. .c_str()
-  // dangles after the temporary's destructor, so copy into stack buffer.
+  // .c_str() on a String temp dangles; copy out before the temp dies.
   strncpy(ssid,    WiFi.SSID().c_str(),       sizeof(ssid)-1);    ssid[sizeof(ssid)-1]='\0';
   strncpy(ap_ssid, WiFi.softAPSSID().c_str(), sizeof(ap_ssid)-1); ap_ssid[sizeof(ap_ssid)-1]='\0';
 
@@ -632,17 +579,9 @@ void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::requestRestart(1500);
 }
 
-// ---------- /wifi + /wifisave (running-mode WiFi config) ----------
-//
-// Replaces WiFiManager's running-mode wifi page so we can drop the lib.
-// Sync scan blocks ~2s - acceptable for an admin task driven from main
-// loop. Save defers WiFi.begin() to tick() so the response page can drain
-// before the current STA association drops.
-//
-// Future: extend with static IP / gateway / DNS fields here. The request
-// already exists (see memory/network_static_ip_request.md). Apply via
-// WiFi.config(ip, gw, mask, dns1, dns2) BEFORE WiFi.begin() in tick(),
-// persisting the values to EGPrefs ("net" group) so they survive reboot.
+// ---------- /wifi + /wifisave ----------
+// Sync scan blocks ~2s. Save defers WiFi.begin() to tick() so the response
+// drains before the STA association drops.
 
 void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
@@ -673,10 +612,8 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 <input id=p name=password type=password maxlength=64 placeholder='(blank for open networks)'>
 )HTML"));
 
-  // Static IP / DHCP - server-rendered with current prefs prefilled. IPv4
-  // pattern enforces basic validation client-side; applyStaticConfig
-  // validates again at boot. The pattern attribute opener is bundled in
-  // so each field emits one PROGMEM chunk (vs three) for the constant tail.
+  // Server-rendered with current prefs prefilled; pattern enforces basic
+  // client-side validation. applyStaticConfig revalidates at boot.
   static const char IPV4_PATTERN_ATTR[] PROGMEM =
     " pattern='^(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3}$' value='";
   bool useStatic = EGPrefs::getBool("net", "static_ip");
@@ -688,8 +625,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (useStatic) res.sendChunk(F(" checked"));
   res.sendChunk(F(">Use static IP (otherwise DHCP)</label>"));
 
-  // Each field: <label><input ... placeholder='X'> + pattern attr + value attr + close.
-  // The label/input head varies per field; pattern + value tail is constant.
+  // head varies per field; pattern + value tail is constant.
   auto ipField = [&](const __FlashStringHelper* head, const char* prefKey) {
     res.sendChunk(head);
     res.sendChunk(FPSTR(IPV4_PATTERN_ATTR));
@@ -711,11 +647,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 <p class=muted style='margin-top:1em'>After saving, the device reboots and tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute.</p>
 )HTML"));
 
-  // Time / NTP section - lazy-load /ntpjs (the ~4 KB timezone payload)
-  // only when the user opens this section. ontoggle fires on both open
-  // and close; the dataset.loaded flag prevents duplicate <script>
-  // injection. Cache-Control on /ntpjs means a real refetch only happens
-  // every 24 h.
+  // Lazy-load the ~4 KB /ntpjs timezone payload on first expand.
   res.sendChunk(F("<details style='margin-top:1.5em' "
                   "ontoggle=\"if(this.open&&!this.dataset.loaded){"
                   "this.dataset.loaded=1;"
@@ -773,12 +705,8 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // Async scan poller. Each call returns one of:
-  //   {"state":"scanning"}                       - scan in progress
-  //   {"state":"complete","aps":[{ssid,rssi,open}, ...]}
-  //   {"state":"failed"}                          - scan returned error
-  // Caller polls every ~1.5 s until "complete". ?refresh=1 forces a new
-  // scan even if cached results are fresh. Cache lifetime: 60 s.
+  // Async poller; returns {state:scanning|complete|failed[,aps:...]}.
+  // ?refresh=1 forces a new scan; cache lifetime 60s.
   static uint32_t s_lastScan = 0;
   bool force = req.arg("refresh") != nullptr;
 
@@ -806,7 +734,7 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const int8_t RSSI_MIN = -85;     // weaker than this is unreliable
   const uint8_t MAX_APS = sizeof(aps) / sizeof(aps[0]);
   for (int i = 0; i < status; i++) {
-    // Filter on RSSI first — cheap, no heap alloc. WiFi.SSID(i) returns
+    // Filter on RSSI first - cheap, no heap alloc. WiFi.SSID(i) returns
     // a String (allocates) so we want to skip weak entries before that.
     int rssi = WiFi.RSSI(i);
     if (rssi < RSSI_MIN) continue;
@@ -885,13 +813,8 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
     }
   }
 
-  // Static IP / DHCP - net.* prefs persist independently of SDK NVS creds
-  // and apply on next boot via Wifi::applyStaticConfig(). req.arg()
-  // returns into a shared static decode buffer, so we copy each field
-  // into local storage before the next arg() call (otherwise the form-
-  // time validate would compare gw against an already-overwritten ip).
-  // Always write all four IP fields so toggling the checkbox doesn't
-  // lose previously-entered values.
+  // req.arg() returns a shared static buffer - copy before the next call.
+  // Always write all four fields so toggling the checkbox keeps values.
   bool wantStatic = (req.arg("static_ip") != nullptr);
   char ip_buf[16], gw_buf[16], sn_buf[16], dns_buf[16];
   auto copy_arg = [&](const char* name, char* dst, size_t cap) {
@@ -919,10 +842,7 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
     }
   }
 
-  // Snapshot current values to /net_backup BEFORE overwriting - boot-time
-  // probe-and-revert reads it back if the new static config is
-  // unreachable. saveNetBackup refuses to overwrite an existing pending
-  // backup so we don't lose the last-known-good across rapid edits.
+  // Save before overwrite so boot probe-and-revert can roll back.
   Wifi::saveNetBackup();
   EGPrefs::put("net", "static_ip", wantStatic ? "1" : "0");
   EGPrefs::put("net", "ip",  ip_buf);
@@ -932,11 +852,7 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   EGPrefs::commit();
 
   if (ssidProvided) {
-    // Save current creds as a fallback before tick() applies the new ones.
-    // If the new SSID can't be associated within ~30 s on next boot, the
-    // backup is restored automatically (see Wifi::connectOrPortal /
-    // tryRestoreBackup). Backup is cleared after 5 min stable on the new
-    // network so the user can't fall back to a long-stale config.
+    // Backup the current creds; if new SSID fails on next boot, revert.
     Wifi::saveBackupCreds();
     s_pendingWifiSave = true;
   }
@@ -960,23 +876,15 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::sendPageTail(res);
   res.endChunked();
 
-  // Long delay so the response chunks reach the browser before tick()
-  // applies WiFi.begin() (which would otherwise drop the connection
-  // mid-flight).
+  // Response must drain before tick() drops the connection via WiFi.begin().
   WebPortal::requestRestart(2500);
 }
 
 // ---------- /update (OTA web upload via streaming POST) ----------
-//
-// Form: <input type=file> + JS fetch() that POSTs the .bin as raw octet
-// stream (Content-Type: application/octet-stream). EGHttpServer streams
-// the body to hUpdateBody chunk-by-chunk; hUpdateBody pipes each chunk
-// straight to Update.write(). hUpdateDone runs after BODY_END to send
-// the final response and schedule a restart.
+// Form POSTs .bin as application/octet-stream; hUpdateBody pipes to
+// Update.write(). hUpdateDone fires after BODY_END.
+// Device env/chip/ver spliced into window._dev by hUpdateForm.
 
-// Form HTML is server-rendered with the running device's env/chip/ver
-// spliced into a `window._dev` constant by hUpdateForm - no /about fetch
-// needed, no race where the user picks a file before info has loaded.
 static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 <p>Upload a firmware <code>.bin</code> built for this board. The device
 will reboot when the upload completes.</p>
@@ -1024,8 +932,7 @@ will reboot when the upload completes.</p>
     var myChip = (dev.chip || '').toLowerCase();
     var myVer  = dev.ver  || '';
 
-    // Heuristic checks against strings already present in any ESPGeiger
-    // bin via DeviceInfo / Log::console PSTR usage of BUILD_ENV.
+    // PIO bakes BUILD_ENV into PSTR literals so we can scan for it.
     function envIsESP32(e)   { return /^esp32/i.test(e); }
     function envIsESP8266(e) { return /^esp8266/i.test(e) || /^espgeiger(?:lite|log|hw)/i.test(e); }
     var fileHasEsp32   = /\besp32[a-z0-9_]*\b/i.test(txt);
@@ -1043,9 +950,7 @@ will reboot when the upload completes.</p>
       return;
     }
 
-    // Soft check: does the running build env appear in the file? PIO
-    // embeds BUILD_ENV as a literal so any matching variant contains the
-    // exact env name. Older builds without DeviceInfo embedding miss.
+    // Soft check; older builds without DeviceInfo embedding miss.
     var envMatch = (myEnv && txt.indexOf(myEnv) !== -1);
     btn.disabled = false;
     if (envMatch) {
@@ -1099,8 +1004,7 @@ will reboot when the upload completes.</p>
 void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Update"));
-  // Splice device identity into the script so checkFirmware() can compare
-  // a selected .bin against the running build env / chip / version.
+  // Splice device identity so checkFirmware() can compare against the bin.
   char dev[200];
   int n = snprintf_P(dev, sizeof(dev),
     PSTR("<script>window._dev={env:\"%s\",chip:\"%s\",ver:\"%s\"};</script>"),
@@ -1113,9 +1017,8 @@ void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// OTA progress bookkeeping. The body handler runs across many ticks; we
-// need state across calls. Single global is fine because EGHttpServer
-// allows only one streaming upload at a time.
+// Body handler is called many times per upload; one global because
+// EGHttpServer allows only one stream at a time.
 static struct {
   size_t expected = 0;     // Content-Length from request
   size_t delivered = 0;    // bytes successfully written via Update.write
@@ -1154,9 +1057,7 @@ void WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
       break;
     }
     case EGHttpServer::BODY_END: {
-      // Strict mode: Update.end() (default arg false) requires
-      // writeCount == _size. If anything was dropped along the way it
-      // returns false and Update.hasError() reports the cause.
+      // Update.end() with no arg = strict; needs writeCount == _size.
       if (s_ota.write_error || !Update.isRunning()) {
         Log::console(PSTR("OTA: aborting on prior error"));
         if (Update.isRunning()) Update.end(false);  // discard
@@ -1164,7 +1065,6 @@ void WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
         break;
       }
       if (s_ota.delivered != s_ota.expected) {
-        // Body handler vs lib byte-count drift - treat as failure.
         Log::console(PSTR("OTA: byte-count mismatch %u != %u"),
                      (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
         Update.end(false);
@@ -1206,9 +1106,7 @@ void WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 // ---------- /param (EGPrefs flag-driven config UI) ----------
 
-// HTML-escape src into dst[pos..cap], stopping cleanly before any entity
-// would overflow. Mirrors the ConfigManager helper - copied so /param
-// doesn't take a dependency on ConfigManager during the migration.
+// HTML-escape, stopping cleanly before an entity would overflow.
 static size_t append_escaped(char* dst, size_t cap, size_t pos, const char* src) {
   while (*src && pos + 6 < cap) {
     char c = *src++;
@@ -1244,9 +1142,7 @@ output{display:inline-block;margin-left:.6em;color:var(--muted)}
 </style>
 )HTML";
 
-// /param POST body buffer - heap-allocated by hParamBody at BODY_BEGIN,
-// holds the entire form-encoded body until hParam reads it during dispatch,
-// freed there. Zero RAM cost when no save is in flight.
+// Heap-alloc'd at BODY_BEGIN, freed in hParam. Zero cost when idle.
 static char*  s_paramBody    = nullptr;
 static size_t s_paramBodyLen = 0;
 static size_t s_paramBodyCap = 0;

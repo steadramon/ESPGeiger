@@ -112,7 +112,7 @@ class HV : public EGModule {
       int get_freq() {
         return _hw_freq;
       }
-      // Body in HV.cpp — keeps clamp() out of the header to avoid the
+      // Body in HV.cpp - keeps clamp() out of the header to avoid the
       // cascading recompile that hit OLEDDisplay.h's setBrightness.
       void set_duty(int duty);
       int get_duty() {

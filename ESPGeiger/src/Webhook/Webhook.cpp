@@ -149,7 +149,7 @@ void Webhook::postMeasurement() {
 
   const char* key = EGPrefs::getString("webhook", "key");
 
-  // Lazy-allocate on first send — saves 512 B BSS for users who never
+  // Lazy-allocate on first send - saves 512 B BSS for users who never
   // configure a webhook URL. Once allocated it persists for the lifetime
   // of the firmware (cheaper than malloc/free per call, and the async
   // request needs the buffer to outlive postMeasurement anyway).

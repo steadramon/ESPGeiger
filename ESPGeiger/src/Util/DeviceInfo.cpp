@@ -104,7 +104,7 @@ void DeviceInfo::factoryReset() {
   // Wipes every module's pref JSON (via EGPrefs) + the WiFi auto-revert
   // backup + any legacy ConfigManager-era config + SDK-stored WiFi creds.
   // /api.key is untouched: not in the EGPrefs file set, not in our
-  // explicit remove list — survives by exclusion.
+  // explicit remove list - survives by exclusion.
   Log::console(PSTR("Factory reset"));
   EGPrefs::reset_all();
   if (LittleFS.begin()) {

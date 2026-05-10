@@ -30,11 +30,8 @@
 
 namespace BootHooks {
 
-  // Result of a startup-time button hold. The hold ladder is:
-  //   released < 5s → OFFLINE  : skip WiFi, run locally
-  //   held >= 5s    → FULL_RESET: wipe prefs / WiFi / config files
-  //                                (preserves /api.key so the station ID
-  //                                 survives) and continue boot.
+  // Hold ladder: released <5s = OFFLINE, held >=5s = FULL_RESET
+  // (wipes prefs/WiFi but keeps /api.key so station ID survives).
   enum class ButtonHold : uint8_t { NONE = 0, OFFLINE = 1, FULL_RESET = 2 };
 
   inline void displayWifiDisabled() {
@@ -73,16 +70,13 @@ namespace BootHooks {
 #endif
   }
 
-  // Detect button held at startup. Returns NONE when no button or no
-  // press, OFFLINE for a brief hold, FULL_RESET if held >= 5 s. Blocks
-  // until release. OLED counts down + announces the wipe threshold;
-  // serial logs each transition for non-OLED builds.
+  // Blocks until button released. OLED counts down; serial logs transitions.
   inline ButtonHold checkStartupButtonHold() {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();
     if (!pushbutton.isPressed()) return ButtonHold::NONE;
 
-    Serial.println(F("BOOT: button held — offline mode, hold 5s for factory reset"));
+    Serial.println(F("BOOT: button held - offline mode, hold 5s for factory reset"));
     displayWifiDisabled();
     uint32_t start = millis();
     int last_shown = 999;

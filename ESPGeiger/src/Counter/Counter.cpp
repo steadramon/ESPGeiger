@@ -94,7 +94,7 @@ void Counter::secondticker(unsigned long stick_now) {
   time_t currentTime = time (NULL);
   if (currentTime > 0) {
     // Fire on each new hour (minute in test builds). gmtime() only on transition.
-    // Cache next-fire time so we don't divide every tick — one-time alignment
+    // Cache next-fire time so we don't divide every tick - one-time alignment
     // divide on first sync, then pure compare-and-add.
 #if GEIGER_IS_TEST(GEIGER_TYPE)
     constexpr time_t kBoundarySecs = 60;
@@ -105,7 +105,7 @@ void Counter::secondticker(unsigned long stick_now) {
     static bool boundaryArmed = false;
     bool fire = false;
     if (nextBoundary == 0) {
-      // First call after sync — align to wall-clock boundary; fire once for tz refresh.
+      // First call after sync - align to wall-clock boundary; fire once for tz refresh.
       nextBoundary = currentTime - (currentTime % kBoundarySecs) + kBoundarySecs;
       fire = true;
     } else if (currentTime >= nextBoundary) {

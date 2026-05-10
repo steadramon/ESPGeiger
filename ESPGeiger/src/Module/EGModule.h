@@ -65,7 +65,7 @@ class EGModule {
     virtual void on_prefs_loaded() {}
 
     // Override to expose HTTP routes. WebPortal walks EGModuleRegistry at
-    // boot and calls this on each registered module — no manual list.
+    // boot and calls this on each registered module - no manual list.
     virtual void registerRoutes(EGHttpServer& http) { (void)http; }
 
     // Override to contribute entries to the WebPortal home-page launcher.

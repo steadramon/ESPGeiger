@@ -83,8 +83,8 @@ public:
   void setup();
   void setupWifi(const char* s);
   void wifiDisabled();
-  void wipeCountdown(int seconds_left);   // boot button held — N seconds to FULL WIPE
-  void wipeReady();                       // crossed the threshold — release-to-wipe
+  void wipeCountdown(int seconds_left);   // boot button held - N seconds to FULL WIPE
+  void wipeReady();                       // crossed the threshold - release-to-wipe
   void onButtonTap(unsigned long now);
   bool is_present() const { return _present; }
 
@@ -98,7 +98,7 @@ public:
     setColor(WHITE);
   }
 
-  // Body in OLEDDisplay.cpp — keeping it out of the header avoids the
+  // Body in OLEDDisplay.cpp - keeping it out of the header avoids the
   // cascading recompile that triggered an icache layout shift in 0.10.0.
   void setBrightness(uint8_t brightness);
 

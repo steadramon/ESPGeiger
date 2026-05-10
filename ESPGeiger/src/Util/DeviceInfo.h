@@ -1,7 +1,5 @@
 /*
   DeviceInfo.h - Device identity and utility functions.
-  Computed once at boot by ConfigManager, readable from anywhere
-  without pulling in the WiFiManager dependency chain.
 
   Copyright (C) 2025 @steadramon
 
@@ -42,16 +40,12 @@
 #endif
 
 namespace DeviceInfo {
-  // Build chipId / hostname / useragent / mac from runtime APIs and stash
-  // them in module-owned buffers so subsequent hostname()/mac()/etc.
-  // return stable strings. Call once early in setup() before anything
-  // that publishes identity (MQTT/WebAPI/WebPortal).
+  // Populates identity buffers; call once early in setup() before any
+  // module that publishes hostname/mac/etc.
   void begin();
 
-  // Wipe all module prefs + auto-revert WiFi backup + SDK-stored WiFi
-  // credentials. Deliberately KEEPS /api.key so the device retains its
-  // WebAPI station identity across the reset. EGPrefs must already be
-  // initialised. Caller is responsible for restarting afterward.
+  // Wipes prefs + WiFi backup + SDK creds. KEEPS /api.key so the WebAPI
+  // station identity survives. EGPrefs must already be initialised.
   void factoryReset();
 
   const char* hostname();
@@ -72,10 +66,7 @@ namespace DeviceInfo {
 
   uint32_t freeHeap();
 
-  // Normalised reset-reason code. ESP8266 rst_info.reason and ESP32
-  // esp_reset_reason() use different enums; this maps both to a single
-  // small set so the census can aggregate cross-platform. Codes are
-  // frozen — never renumber.
+  // Cross-platform reset-reason. Codes are frozen - never renumber.
   //   0 unknown   1 power-on     2 external reset   3 software restart
   //   4 exception 5 watchdog     6 brown-out        7 deep-sleep wake
   uint8_t resetReason();
@@ -83,12 +74,7 @@ namespace DeviceInfo {
   // Returns false when not available (ESP32 lacks per-fault details).
   bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause);
 
-  // Compile-time feature bitmask. Bits track *optional* modules that may or
-  // may not be built in. Board variants live in chipmodel/`btd`; input types
-  // in BUILD_ENV/`gm`; WebAPI itself is a given (we're inside its handshake).
-  // Always-on modules (NTP, Counter, ConfigManager, etc.) aren't tracked —
-  // a bit that's always 1 carries no information. Bits are frozen — never
-  // reassign.
+  // Compile-time optional-module bitmask. Bits are frozen - never reassign.
   //   bit 0  MQTT          (MQTTOUT)
   //   bit 1  Radmon        (RADMONOUT)
   //   bit 2  ThingSpeak    (THINGSPEAKOUT)

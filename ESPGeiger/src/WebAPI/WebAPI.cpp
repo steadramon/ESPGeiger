@@ -572,7 +572,7 @@ static const char FORGET_BODY[] PROGMEM =
 static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool saved = false;
   if (req.method() == EGHttpRequest::POST) {
-    // arg() returns into a shared static buffer — atof/atoi consumes the
+    // arg() returns into a shared static buffer - atof/atoi consumes the
     // value before the next arg() call, and EGPrefs::put copies internally.
     const char* m = req.arg("m");
     if (m) {
