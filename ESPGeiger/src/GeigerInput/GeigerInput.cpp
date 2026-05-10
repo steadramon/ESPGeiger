@@ -19,6 +19,7 @@
 #include <Arduino.h>
 #include "GeigerInput.h"
 #include "../Logger/Logger.h"
+#include "../Util/PinSafety.h"
 
 volatile bool _eventFlipFlop = false;
 volatile unsigned long _last_blip = 0;
@@ -33,6 +34,22 @@ portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
 void GeigerInput::begin() {
 
+}
+
+void GeigerInput::set_rx_pin(int pin) {
+  if (const char* why = PinSafety::claim_input(pin, PSTR("RX"))) {
+    Log::console(PSTR("Counter: rx_pin=%d unsafe (%s) - disabled"), pin, why);
+    pin = -1;
+  }
+  _rx_pin = pin;
+}
+
+void GeigerInput::set_tx_pin(int pin) {
+  if (const char* why = PinSafety::claim_output(pin, PSTR("TX"))) {
+    Log::console(PSTR("Counter: tx_pin=%d unsafe (%s) - disabled"), pin, why);
+    pin = -1;
+  }
+  _tx_pin = pin;
 }
 
 int GeigerInput::collect() {

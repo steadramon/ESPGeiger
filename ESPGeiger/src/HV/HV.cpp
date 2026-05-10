@@ -100,7 +100,7 @@ void HV::set_duty(int duty) {
 }
 
 void HV::set_pwm_pin(int pin) {
-  if (const char* why = PinSafety::unsafe_output(pin)) {
+  if (const char* why = PinSafety::claim_output(pin, PSTR("HV"))) {
     Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }

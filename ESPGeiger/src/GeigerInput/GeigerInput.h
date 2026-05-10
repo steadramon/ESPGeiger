@@ -105,12 +105,8 @@ class GeigerInput {
     void set_debounce(int debounce) {
       _debounce = debounce;
     }
-    void set_rx_pin(int pin) {
-      _rx_pin = pin;
-    };
-    void set_tx_pin(int pin) {
-      _tx_pin = pin;
-    };
+    void set_rx_pin(int pin);
+    void set_tx_pin(int pin);
     int get_rx_pin() {
       return _rx_pin;
     };

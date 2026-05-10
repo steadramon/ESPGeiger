@@ -1,5 +1,5 @@
 /*
-  PinSafety.h - Reject GPIOs reserved for SPI flash or input-only.
+  PinSafety.h - GPIO safety check + in-use registry.
 
   Copyright (C) 2026 @steadramon
 
@@ -22,14 +22,13 @@
 
 #include <Arduino.h>
 
-// -1 is the universal "disabled / unset" sentinel and is treated as safe so
-// modules can use it as their off marker.
-//
-// Returns nullptr if `pin` is safe for the requested role, else a PROGMEM
-// reason string (use with `%s` in Log::console).
 namespace PinSafety {
 
-inline const char* unsafe_output(int pin) {
+// Register pin as in use. Same-owner re-claim is silent (pointer compare); different-owner warns.
+void claim(int pin, const char* owner);
+
+// Returns nullptr if pin is safe for output (and claims it), else PROGMEM reason. -1 is no-op.
+inline const char* claim_output(int pin, const char* owner) {
   if (pin == -1) return nullptr;
 #ifdef ESP8266
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
@@ -39,10 +38,12 @@ inline const char* unsafe_output(int pin) {
   if (pin >= 34 && pin <= 39) return PSTR("input only");
   if (pin < 0 || pin > 39)    return PSTR("out of range");
 #endif
+  claim(pin, owner);
   return nullptr;
 }
 
-inline const char* unsafe_input(int pin) {
+// Returns nullptr if pin is safe for input (and claims it), else PROGMEM reason. -1 is no-op.
+inline const char* claim_input(int pin, const char* owner) {
   if (pin == -1) return nullptr;
 #ifdef ESP8266
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
@@ -51,6 +52,7 @@ inline const char* unsafe_input(int pin) {
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
   if (pin < 0 || pin > 39)   return PSTR("out of range");
 #endif
+  claim(pin, owner);
   return nullptr;
 }
 

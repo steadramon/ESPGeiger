@@ -255,7 +255,7 @@ void Counter::set_blip_brightness(uint8_t level) {
 
 #if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
 void Counter::set_ext_blip_pin(int pin) {
-  if (const char* why = PinSafety::unsafe_output(pin)) {
+  if (const char* why = PinSafety::claim_output(pin, PSTR("LED"))) {
     Log::console(PSTR("LED: blip_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }

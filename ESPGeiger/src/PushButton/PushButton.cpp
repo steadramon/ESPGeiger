@@ -114,7 +114,7 @@ PushButton::PushButton() {
 }
 
 void PushButton::set_pin(int pin) {
-  if (const char* why = PinSafety::unsafe_input(pin)) {
+  if (const char* why = PinSafety::claim_input(pin, PSTR("Btn"))) {
     Log::console(PSTR("Btn: pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }

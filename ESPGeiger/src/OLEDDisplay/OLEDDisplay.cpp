@@ -23,6 +23,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/PinSafety.h"
 #include "../Util/StringUtil.h"
 #include "../Util/Wifi.h"
 #include "../GRNG/GRNG.h"
@@ -82,6 +83,7 @@ static const EGPrefGroup OLED_PREF_GROUP = {
 
 const EGPrefGroup* SSD1306Display::prefs_group() { return &OLED_PREF_GROUP; }
 
+static const char PIN_OWNER[] PROGMEM = "OLED";
 static int16_t s_sched_on_mins = -1;
 static int16_t s_sched_off_mins = -1;
 static unsigned long s_sched_recompute_ms = 0;
@@ -90,8 +92,24 @@ static bool s_oled_flipped = false;
 
 void SSD1306Display::on_prefs_loaded() {
 #ifndef OLED_PINS_BLOCKED
-  _pin_sda = (uint8_t)EGPrefs::getUInt("display", "sda");
-  _pin_scl = (uint8_t)EGPrefs::getUInt("display", "scl");
+  {
+    uint8_t sda = (uint8_t)EGPrefs::getUInt("display", "sda");
+    if (const char* why = PinSafety::claim_output((int)sda, PIN_OWNER)) {
+      Log::console(PSTR("OLED: sda=%u unsafe (%s) - keeping default %u"), sda, why, _pin_sda);
+      PinSafety::claim((int)_pin_sda, PIN_OWNER);
+    } else {
+      _pin_sda = sda;
+    }
+  }
+  {
+    uint8_t scl = (uint8_t)EGPrefs::getUInt("display", "scl");
+    if (const char* why = PinSafety::claim_output((int)scl, PIN_OWNER)) {
+      Log::console(PSTR("OLED: scl=%u unsafe (%s) - keeping default %u"), scl, why, _pin_scl);
+      PinSafety::claim((int)_pin_scl, PIN_OWNER);
+    } else {
+      _pin_scl = scl;
+    }
+  }
 #endif
   // Defer Wire.begin + probe to first prefs load so configured SDA/SCL apply
   // on first boot. on_prefs_saved requests reboot for pin changes, so this
