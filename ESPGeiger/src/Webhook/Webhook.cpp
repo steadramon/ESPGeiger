@@ -149,7 +149,19 @@ void Webhook::postMeasurement() {
 
   const char* key = EGPrefs::getString("webhook", "key");
 
-  static char buffer[512];
+  // Lazy-allocate on first send — saves 512 B BSS for users who never
+  // configure a webhook URL. Once allocated it persists for the lifetime
+  // of the firmware (cheaper than malloc/free per call, and the async
+  // request needs the buffer to outlive postMeasurement anyway).
+  static constexpr size_t WEBHOOK_BUF_SIZE = 512;
+  static char* buffer = nullptr;
+  if (!buffer) {
+    buffer = (char*)malloc(WEBHOOK_BUF_SIZE);
+    if (!buffer) {
+      Log::console(PSTR("Webhook: malloc(%u) failed"), (unsigned)WEBHOOK_BUF_SIZE);
+      return;
+    }
+  }
   char b_cps[12], b_cpm[12], b_cpm5[12], b_cpm15[12], b_usv[12];
   format_f(b_cps,   sizeof(b_cps),   gcounter.get_cps());
   format_f(b_cpm,   sizeof(b_cpm),   gcounter.get_cpmf());
@@ -159,27 +171,27 @@ void Webhook::postMeasurement() {
 
   size_t pos = 0;
   int n;
-  n = snprintf_P(buffer, sizeof(buffer),
+  n = snprintf_P(buffer, WEBHOOK_BUF_SIZE,
     PSTR("{\"id\":\"%s\""), DeviceInfo::chipid());
-  advance_pos(pos, n, sizeof(buffer));
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   if (key[0] != '\0') {
-    n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"key\":\"%s\""), key);
-    advance_pos(pos, n, sizeof(buffer));
+    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"key\":\"%s\""), key);
+    advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   }
-  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
+  n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos,
     PSTR(",\"ut\":%lu,\"cps\":%s,\"cpm\":%s,\"cpm5\":%s,\"cpm15\":%s,\"usv\":%s"),
     DeviceInfo::uptime(), b_cps, b_cpm, b_cpm5, b_cpm15, b_usv);
-  advance_pos(pos, n, sizeof(buffer));
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
 #ifdef ESPG_HV_ADC
   char b_hv[12];
   format_f(b_hv, sizeof(b_hv), hv.hvReading.get());
-  n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);
-  advance_pos(pos, n, sizeof(buffer));
+  n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"hv\":%s"), b_hv);
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
 #endif
-  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
+  n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos,
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
     gcounter.total_clicks, DeviceInfo::freeHeap(), (int)Wifi::rssi);
-  advance_pos(pos, n, sizeof(buffer));
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   buffer[pos] = '\0';
 
   char url[256];
