@@ -22,6 +22,7 @@
 #include "../GeigerInput/GeigerInput.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/PinSafety.h"
+#include "../WebPortal/WebPortal.h"
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "../GeigerInput/GeigerInputTest.h"
 #endif
@@ -45,12 +46,15 @@ EG_PSTR(SY_L_WRN, "Warning CPM");
 EG_PSTR(SY_H_WRN, "Warning trigger (CPM)");
 EG_PSTR(SY_L_ALR, "Alert CPM");
 EG_PSTR(SY_H_ALR, "Alert trigger (CPM)");
+EG_PSTR(SY_L_WPW, "Web password");
+EG_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin). Empty = no auth.");
 
 static const EGPref SYSTEM_PREF_ITEMS[] = {
-  {"name",   SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    32, EGP_STRING, 0},
-  {"ratio",  SY_L_RAT, SY_H_RAT, "151.0", nullptr, 0, 0,    0,  EGP_FLOAT,  0},
-  {"warn",   SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
-  {"alert",  SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"name",     SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    32, EGP_STRING, 0},
+  {"ratio",    SY_L_RAT, SY_H_RAT, "151.0", nullptr, 0, 0,    0,  EGP_FLOAT,  0},
+  {"warn",     SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"alert",    SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"web_pass", SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    32, EGP_STRING, EGP_SENSITIVE},
 };
 
 static const EGPrefGroup SYSTEM_PREF_GROUP = {
@@ -61,14 +65,15 @@ static const EGPrefGroup SYSTEM_PREF_GROUP = {
 
 const EGPrefGroup* SystemPrefs::prefs_group() { return &SYSTEM_PREF_GROUP; }
 
-extern void applyFriendlyTitle();
-
 void SystemPrefs::on_prefs_loaded() {
   gcounter.set_ratio(EGPrefs::getFloat("sys", "ratio"));
   gcounter.set_warning((int)EGPrefs::getUInt("sys", "warn"));
   gcounter.set_alert((int)EGPrefs::getUInt("sys", "alert"));
   DeviceInfo::setFriendlyName(EGPrefs::getString("sys", "name"));
-  applyFriendlyTitle();
+  // Push web_pass into the running EGHttpServer. on_prefs_loaded fires
+  // at boot AND after a /param save (default on_prefs_saved chains here),
+  // so this covers both initial config and live changes.
+  WebPortal::applyAuthFromPrefs();
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -80,6 +85,44 @@ static const EGLegacyAlias SYSTEM_LEGACY[] = {
 };
 const EGLegacyAlias* SystemPrefs::legacy_aliases() { return SYSTEM_LEGACY; }
 // === END LEGACY IMPORT ===
+
+// --- Network prefs (static IP / DHCP) ---
+// display_order==0 → hidden from /param. Edited via the dedicated /wifi
+// page which renders the form with current values prefilled. Applied at
+// boot in Wifi::connectOrPortal() before WiFi.begin().
+
+class NetPrefs : public EGModule {
+public:
+  const char* name() override { return "net"; }
+  uint8_t display_order() override { return 0; }
+  const EGPrefGroup* prefs_group() override;
+};
+
+static NetPrefs netprefs;
+EG_REGISTER_MODULE(netprefs)
+
+EG_PSTR(NT_L_STA, "Use static IP");
+EG_PSTR(NT_L_IP,  "IP address");
+EG_PSTR(NT_L_GW,  "Gateway");
+EG_PSTR(NT_L_SN,  "Subnet mask");
+EG_PSTR(NT_L_DNS, "DNS server");
+EG_PSTR(NT_P_IP,  "^(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3}$");
+
+static const EGPref NET_PREF_ITEMS[] = {
+  {"static_ip", NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
+  {"ip",        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+  {"gw",        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+  {"sn",        NT_L_SN,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+  {"dns",       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+};
+
+static const EGPrefGroup NET_PREF_GROUP = {
+  "net", "Network", 1,
+  NET_PREF_ITEMS,
+  sizeof(NET_PREF_ITEMS) / sizeof(NET_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* NetPrefs::prefs_group() { return &NET_PREF_GROUP; }
 
 // --- Input prefs ---
 // Pin / serial-type changes trigger a reboot (pinMode + attachInterrupt
