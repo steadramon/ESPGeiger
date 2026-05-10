@@ -30,6 +30,13 @@
 
 namespace BootHooks {
 
+  // Result of a startup-time button hold. The hold ladder is:
+  //   released < 5s → OFFLINE  : skip WiFi, run locally
+  //   held >= 5s    → FULL_RESET: wipe prefs / WiFi / config files
+  //                                (preserves /api.key so the station ID
+  //                                 survives) and continue boot.
+  enum class ButtonHold : uint8_t { NONE = 0, OFFLINE = 1, FULL_RESET = 2 };
+
   inline void displayWifiDisabled() {
 #ifdef SSD1306_DISPLAY
     display.wifiDisabled();
@@ -54,22 +61,54 @@ namespace BootHooks {
 #endif
   }
 
-  // Detect "button held during startup" = user wants offline mode.
-  // Blocks until the button is released. Returns true if the hold was seen.
-  inline bool checkStartupButtonHold() {
+  inline void displayWipeCountdown(int s) {
+#ifdef SSD1306_DISPLAY
+    display.wipeCountdown(s);
+#endif
+  }
+
+  inline void displayWipeReady() {
+#ifdef SSD1306_DISPLAY
+    display.wipeReady();
+#endif
+  }
+
+  // Detect button held at startup. Returns NONE when no button or no
+  // press, OFFLINE for a brief hold, FULL_RESET if held >= 5 s. Blocks
+  // until release. OLED counts down + announces the wipe threshold;
+  // serial logs each transition for non-OLED builds.
+  inline ButtonHold checkStartupButtonHold() {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();
-    if (pushbutton.isPressed()) {
-      displayWifiDisabled();
-      while (pushbutton.isPressed()) {
-        delay(250);
+    if (!pushbutton.isPressed()) return ButtonHold::NONE;
+
+    Serial.println(F("BOOT: button held — offline mode, hold 5s for factory reset"));
+    displayWifiDisabled();
+    uint32_t start = millis();
+    int last_shown = 999;
+    bool wipe = false;
+
+    while (pushbutton.isPressed()) {
+      uint32_t held_ms = millis() - start;
+      int remain = 5 - (int)(held_ms / 1000);
+      if (remain != last_shown) {
+        last_shown = remain;
+        if (remain >= 1) {
+          displayWipeCountdown(remain);
+        } else if (!wipe) {
+          wipe = true;
+          displayWipeReady();
+          Serial.println(F("BOOT: factory reset armed"));
+        }
       }
-      delay(750);
-      displayDisableTimeout();
-      return true;
+      delay(50);
     }
+    delay(500);
+    displayDisableTimeout();
+    return wipe ? ButtonHold::FULL_RESET : ButtonHold::OFFLINE;
+#else
+    return ButtonHold::NONE;
 #endif
-    return false;
   }
 
 }

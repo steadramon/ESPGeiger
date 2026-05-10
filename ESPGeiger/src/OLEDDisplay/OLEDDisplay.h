@@ -83,6 +83,8 @@ public:
   void setup();
   void setupWifi(const char* s);
   void wifiDisabled();
+  void wipeCountdown(int seconds_left);   // boot button held — N seconds to FULL WIPE
+  void wipeReady();                       // crossed the threshold — release-to-wipe
   void onButtonTap(unsigned long now);
   bool is_present() const { return _present; }
 

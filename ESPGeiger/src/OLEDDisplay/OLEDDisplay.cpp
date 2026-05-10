@@ -369,6 +369,37 @@ void SSD1306Display::wifiDisabled() {
   setFont(ArialMT_Plain_16);
 }
 
+void SSD1306Display::wipeCountdown(int seconds_left) {
+  if (!_present) return;
+  setFont(ArialMT_Plain_10);
+  fontWidth = 8;
+  fontHeight = 16;
+  clear();
+  drawString(0, 0,  PSTR("Offline mode armed"));
+  drawString(0, 16, PSTR("Hold to factory reset"));
+  char line[24];
+  snprintf_P(line, sizeof(line), PSTR("%ds"), seconds_left);
+  setFont(ArialMT_Plain_24);
+  drawString(0, 32, line);
+  display();
+  setFont(ArialMT_Plain_16);
+}
+
+void SSD1306Display::wipeReady() {
+  if (!_present) return;
+  setFont(ArialMT_Plain_16);
+  fontWidth = 8;
+  fontHeight = 16;
+  clear();
+  drawString(0, 0,  PSTR("RELEASE for"));
+  drawString(0, 18, PSTR("FULL WIPE"));
+  setFont(ArialMT_Plain_10);
+  drawString(0, 44, PSTR("Keep holding"));
+  drawString(0, 54, PSTR("to cancel."));
+  display();
+  setFont(ArialMT_Plain_16);
+}
+
 void SSD1306Display::page_one_graph() {
   setColor(BLACK);
   fillRect(0, 35, OLED_WIDTH, 29);
