@@ -25,6 +25,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Counter/Counter.h"
 #include "../Util/MathUtil.h"
+#include "../Util/PinSafety.h"
 
 extern Counter gcounter;
 
@@ -96,6 +97,14 @@ HV::HV() {
 
 void HV::set_duty(int duty) {
   _hw_duty = clamp(duty, 1, 1023);
+}
+
+void HV::set_pwm_pin(int pin) {
+  if (const char* why = PinSafety::unsafe_output(pin)) {
+    Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
+    pin = -1;
+  }
+  _pwm_pin = pin;
 }
 
 void HV::begin() {

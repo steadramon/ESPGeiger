@@ -137,7 +137,9 @@ class HV : public EGModule {
       // so freq transitions don't run with old duty at new freq (spike risk).
       void apply_freq_duty_safe(int new_freq, int new_duty);
       // PWM pin is configured at boot from prefs; takes effect after reboot.
-      void set_pwm_pin(int pin) { _pwm_pin = pin; }
+      // Rejects SPI flash / input-only pins via PinSafety; body in HV.cpp to
+      // keep Logger out of this header.
+      void set_pwm_pin(int pin);
       int get_pwm_pin() const { return _pwm_pin; }
       void set_hv_target(uint16_t v) { _hv_target = v; }
       uint16_t get_hv_target() const { return _hv_target; }
