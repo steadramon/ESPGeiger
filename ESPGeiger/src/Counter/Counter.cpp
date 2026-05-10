@@ -22,6 +22,7 @@
 #include "../Logger/Logger.h"
 #include "../Util/StringUtil.h"
 #include "../Util/MathUtil.h"
+#include "../Util/PinSafety.h"
 #include "../Util/DeviceInfo.h"
 #include "../NTP/NTP.h"
 #include "../GRNG/GRNG.h"
@@ -254,6 +255,10 @@ void Counter::set_blip_brightness(uint8_t level) {
 
 #if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
 void Counter::set_ext_blip_pin(int pin) {
+  if (const char* why = PinSafety::unsafe_output(pin)) {
+    Log::console(PSTR("LED: blip_pin=%d unsafe (%s) - disabled"), pin, why);
+    pin = -1;
+  }
   if (ext_blip_led) {
     ext_blip_led->Off().Update();
     delete ext_blip_led;

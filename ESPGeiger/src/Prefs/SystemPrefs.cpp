@@ -17,9 +17,11 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "SystemPrefs.h"
+#include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../GeigerInput/GeigerInput.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/PinSafety.h"
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "../GeigerInput/GeigerInputTest.h"
 #endif
@@ -197,10 +199,24 @@ void InputPrefs::on_prefs_loaded() {
   gcounter.set_cpm_window(cw);
 #endif
 #ifndef RXPIN_BLOCKED
-  gcounter.set_rx_pin((int)EGPrefs::getUInt("input", "rx_pin"));
+  {
+    int rx = (int)EGPrefs::getUInt("input", "rx_pin");
+    if (const char* why = PinSafety::unsafe_input(rx)) {
+      Log::console(PSTR("Counter: rx_pin=%d unsafe (%s) - disabled"), rx, why);
+      rx = -1;
+    }
+    gcounter.set_rx_pin(rx);
+  }
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  gcounter.set_tx_pin((int)EGPrefs::getUInt("input", "tx_pin"));
+  {
+    int tx = (int)EGPrefs::getUInt("input", "tx_pin");
+    if (const char* why = PinSafety::unsafe_output(tx)) {
+      Log::console(PSTR("Counter: tx_pin=%d unsafe (%s) - disabled"), tx, why);
+      tx = -1;
+    }
+    gcounter.set_tx_pin(tx);
+  }
 #endif
 #ifdef USE_PCNT
   gcounter.set_pcnt_filter((int)EGPrefs::getUInt("input", "pcnt_filter"));
