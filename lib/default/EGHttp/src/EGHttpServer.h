@@ -2,17 +2,20 @@
   EGHttpServer.h - Minimal HTTP/1.1 server on (ESP)AsyncTCP, dispatched from
   the main loop.
 
-  Architecture: AsyncTCP callbacks parse incoming requests; once a request is
-  complete the slot is marked READY. The main loop (via EGHttpServer::tick())
-  picks up READY slots and runs the handler in main-loop context, where it is
-  safe to yield(). Response bodies stream directly to TCP via a yield-retry
-  write helper — no per-slot accumulator buffer is required. Chunked
-  responses use HTTP Transfer-Encoding: chunked on the wire.
+  Copyright (C) 2026 @steadramon
 
-  Safety: client deletion is deferred to tick() so a yield() inside a
-  handler can't cause use-after-free on the AsyncClient pointer.
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-  License: GPL-3.0
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #pragma once
 
