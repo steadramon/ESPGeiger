@@ -50,7 +50,14 @@ class NTP_Client : public EGModule {
     void setup();
     const EGPrefGroup* prefs_group() override;
     void on_prefs_saved() override;  // reconfigures NTP client live
-    uint8_t display_order() override { return 0; }  // managed via /ntp page
+    void registerRoutes(EGHttpServer& http) override;
+    uint8_t display_order() override { return 0; }  // managed via /network
+
+    // Render the timezone + server form chunk-by-chunk into a chunked
+    // response. Caller owns the surrounding <details>/page chrome and is
+    // responsible for triggering /ntpjs (lazy, on details-open). Used by
+    // WebPortal /network so all networking config lives in one place.
+    void renderInlineForm(class EGHttpResponse& res);
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     const char* legacy_file() override { return "/ntp.json"; }  // LEGACY IMPORT
 

@@ -23,16 +23,19 @@
 #endif
 
 #include <Arduino.h>
+#include <EGHttpServer.h>
 #include "WebAPI.h"
-#include "base64.h"
+#include <EGBase64.h>   // buffer-in/out, no heap (vs core's heap-using <base64.h>)
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Prefs/EGPrefs.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
 #include "../NTP/NTP.h"
 #include "../GRNG/sha256.h"
 #include "../GRNG/GRNG.h"
 #include "../Util/TickProfile.h"
+#include "../WebPortal/WebPortal.h"
 #include "MsgPack.h"
 #include <FS.h>
 #include <LittleFS.h>
@@ -101,6 +104,23 @@ void WebAPI::begin() {
     WEBAPI_URL, priv_k[0] == 0 ? "none (will generate)" : "loaded");
 }
 
+void WebAPI::note_publish(bool ok) {
+  // Forward to base class for the regular pub_ok/pub_err counters that
+  // feed Activity logging.
+  EGModule::note_publish(ok);
+  if (ok) {
+    _fail_count = 0;
+    return;
+  }
+  if (_fail_count < UINT16_MAX) ++_fail_count;
+  if (_fail_count >= WEBAPI_FAIL_REBOOT) {
+    Log::console(PSTR("WebAPI: %u consecutive failures, restarting"),
+                 (unsigned)_fail_count);
+    delay(150);
+    ESP.restart();
+  }
+}
+
 void WebAPI::loop(unsigned long now) {
   if (_mode == 0) return;
   if (!ntpclient.synced) return;
@@ -155,7 +175,7 @@ void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
     lastHandshake = millis();
-    return;
+    //return;
   }
 
   GRNG::stir();
@@ -315,7 +335,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
 void WebAPI::postMeasurement(bool censusOnly) {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
-    return;
+    //return;
   }
 
   // Wait for a full CPM bucket so the first post isn't noisy.
@@ -541,5 +561,141 @@ void WebAPI::loadConfig() {
 size_t WebAPI::status_json(char* buf, size_t cap, unsigned long now) {
   if (_mode == 0) return 0;
   return write_status_json(buf, cap, "webapi", last_ok, last_attempt_ms, now);
+}
+
+// ---------- HTTP routes ----------
+
+static const char FORGET_BODY[] PROGMEM =
+  "<p>A delete request has been sent to the server. Sharing is now <b>Off</b>.</p>"
+  "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
+
+static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  bool saved = false;
+  if (req.method() == EGHttpRequest::POST) {
+    // arg() returns into a shared static buffer — atof/atoi consumes the
+    // value before the next arg() call, and EGPrefs::put copies internally.
+    const char* m = req.arg("m");
+    if (m) {
+      int mode = atoi(m);
+      if (mode < 0 || mode > 2) mode = 0;
+      char mbuf[2] = {(char)('0' + mode), '\0'};
+      EGPrefs::put("webapi", "mode", mbuf);
+    }
+    const char* lat = req.arg("lat");
+    if (lat) {
+      float la = atof(lat);
+      if (la >= -90.0f && la <= 90.0f) {
+        EGPrefs::put("webapi", "lat", *lat ? lat : "0");
+      }
+    }
+    const char* lon = req.arg("lon");
+    if (lon) {
+      float lo = atof(lon);
+      if (lo >= -180.0f && lo <= 180.0f) {
+        EGPrefs::put("webapi", "lon", *lon ? lon : "0");
+      }
+    }
+    EGPrefs::commit();
+    saved = true;
+  }
+
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("Station Network"));
+  if (saved) {
+    res.sendChunk(F("<div class=card style='border-color:#5a5'>Saved.</div>"));
+  }
+  res.sendChunk(F(
+    "<p class=muted>ESPGeiger can share data with the public station "
+    "network so it appears on the global map. The device identity and "
+    "location are obscured before publication.</p>"));
+
+  uint8_t mode = (uint8_t)EGPrefs::getUInt("webapi", "mode");
+  if (mode > 0) {
+    if (webapi.getStationId() != 0) {
+      char status[160];
+      int n = snprintf_P(status, sizeof(status),
+        PSTR("<p>Station: <a href='" WEBAPI_STATION_URL "' target=_blank>#%u</a></p>"),
+        webapi.getStationId(), webapi.getStationId());
+      if (n > 0) res.sendChunk(status, (size_t)n);
+    } else {
+      res.sendChunk(F(
+        "<p>Station: not yet registered (handshake pending) "
+        "<button type=button onclick='location.reload()'>Refresh</button></p>"));
+    }
+  }
+
+  res.sendChunk(F(
+    "<form method=POST action=/webapi><fieldset><legend>Sharing</legend>"
+    "<label><input type=radio name=m value=0"));
+  if (mode == 0) res.sendChunk(F(" checked"));
+  res.sendChunk(F("> Off</label>"
+    "<label><input type=radio name=m value=1"));
+  if (mode == 1) res.sendChunk(F(" checked"));
+  res.sendChunk(F("> Heartbeat</label>"
+    "<label><input type=radio name=m value=2"));
+  if (mode == 2) res.sendChunk(F(" checked"));
+  res.sendKV(F("> CPM Readings</label></fieldset>"
+               "<label for=lat>Latitude</label>"
+               "<input id=lat name=lat type=number step=any min=-90 max=90 placeholder='approximate by IP if blank' value='"),
+             EGPrefs::getString("webapi", "lat"),
+             F("'><label for=lon>Longitude</label>"
+               "<input id=lon name=lon type=number step=any min=-180 max=180 placeholder='approximate by IP if blank' value='"));
+  res.sendKV(nullptr, EGPrefs::getString("webapi", "lon"),
+             F("'><p style=margin-top:.5em>"));
+  res.sendChunk(F(
+    "<button type=button onclick=\"window.open('https://loc.espgeiger.com/','espgeiger-loc')\">Find location</button></p>"
+    "<button type=submit>Save</button></form>"
+    "<script>window.addEventListener('message',function(e){if(e.origin!=='https://loc.espgeiger.com')return;var d=e.data;if(!d||d.type!=='espgeiger-location')return;var la=document.getElementById('lat');var lo=document.getElementById('lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
+
+  res.sendChunk(F(
+    "<details style=margin-top:1em><summary>Advanced</summary>"
+    "<p class=muted>Reset the device key. The next handshake registers a new station &mdash; the existing one <b>cannot be retrieved</b>.</p>"
+    "<form method=POST action=/webapikeyreset onsubmit=\"return confirm('Reset the Station Network key? This orphans the existing station.')\">"
+    "<button type=submit class=danger>Reset key</button></form>"));
+  if (mode > 0 && webapi.getStationId() != 0) {
+    res.sendChunk(F(
+      "<p class=muted style=margin-top:1em>Delete this station from the network. Removes all readings and history server-side and switches sharing to Off. <b>Cannot be undone.</b></p>"
+      "<form method=POST action=/webapiforget onsubmit=\"return confirm('Permanently delete this station from the network? This cannot be undone.')\">"
+      "<button type=submit class=danger>Forget station</button></form>"));
+  }
+  res.sendChunk(F("</details>"));
+
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  Log::console(PSTR("WebAPI: Resetting api.key"));
+  LittleFS.begin();
+  LittleFS.remove("/api.key");
+  LittleFS.end();
+  res.send(200, "text/plain", "Key reset; restarting");
+  WebPortal::requestRestart(1500);
+}
+
+static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // Sign before flipping mode so the request still has a valid key + id.
+  webapi.forget();
+  EGPrefs::put("webapi", "mode", "0");
+  EGPrefs::commit();
+
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("Station Forgotten"));
+  res.sendChunk(FPSTR(FORGET_BODY));
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+static const EGMenuEntry WEBAPI_MENU[] = {
+  {"/webapi", "Station Network"},
+  {nullptr, nullptr}
+};
+const EGMenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
+
+void WebAPI::registerRoutes(EGHttpServer& http) {
+  http.on("/webapi",         EGHttpRequest::GET,  hWebAPI);
+  http.on("/webapi",         EGHttpRequest::POST, hWebAPI);
+  http.on("/webapikeyreset", EGHttpRequest::POST, hKeyReset);
+  http.on("/webapiforget",   EGHttpRequest::POST, hForget);
 }
 #endif

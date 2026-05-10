@@ -18,14 +18,24 @@
 */
 
 #include <Arduino.h>
+#include <EGHttpServer.h>
 #include "Counter.h"
 #include "../Logger/Logger.h"
+#include "../Prefs/EGPrefs.h"
 #include "../Util/StringUtil.h"
 #include "../Util/MathUtil.h"
 #include "../Util/PinSafety.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/Wifi.h"
+#include "../Util/TickProfile.h"
 #include "../NTP/NTP.h"
 #include "../GRNG/GRNG.h"
+#include "../WebPortal/WebPortal.h"
+#ifdef ESPG_HV_ADC
+#include "../HV/HV.h"
+#endif
+
+extern long start;  // boot epoch ref from main
 
 Counter::Counter() {
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
@@ -317,4 +327,152 @@ void Counter::loop() {
     this->blip();
 #endif
   }
+}
+
+// ---------- HTTP routes ----------
+
+extern Counter gcounter;
+
+namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
+
+static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // /clicks JSON can run ~250 B with full 24h history; chunked to be safe.
+  res.beginChunked(200, "application/json");
+
+  char line[160];
+  int n;
+
+  n = snprintf_P(line, sizeof(line),
+    PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour);
+  if (n > 0) res.sendChunk(line, (size_t)n);
+
+  const int histSize = gcounter.day_hourly_history.size();
+  for (int i = histSize; i > 0; i--) {
+    n = snprintf_P(line, sizeof(line), PSTR(",%d"),
+                   (int)gcounter.day_hourly_history[i - 1]);
+    if (n > 0) res.sendChunk(line, (size_t)n);
+  }
+
+  n = snprintf_P(line, sizeof(line),
+    PSTR("],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\""),
+    (int)gcounter.clicks_today,
+    (int)gcounter.clicks_yesterday,
+    EGPrefs::getString("sys", "ratio"));
+  if (n > 0) res.sendChunk(line, (size_t)n);
+
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+  res.sendChunk(F(",\"roll\":60"));
+#endif
+
+  if (ntpclient.synced) {
+    n = snprintf_P(line, sizeof(line),
+      PSTR(",\"start\":%lu}"), (unsigned long)ntpclient.boot_epoch);
+  } else {
+    unsigned long uptime = NTP.getUptime() - start;
+    n = snprintf_P(line, sizeof(line),
+      PSTR(",\"uptime\":%lu}"), uptime);
+  }
+  if (n > 0) res.sendChunk(line, (size_t)n);
+
+  res.endChunked();
+}
+
+static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  char out[128];
+  char cpm[16], cps[16];
+  format_f(cpm, sizeof(cpm), gcounter.get_cpmf());
+  format_f(cps, sizeof(cps), gcounter.get_cps());
+  snprintf_P(out, sizeof(out),
+    PSTR("%s, %s, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan"),
+    cpm, cps);
+  res.send(200, "text/plain", out);
+}
+
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  const char* v = req.arg("v");
+  if (v) {
+    int target = atoi(v);
+    if (target > 0) gcounter.set_target_cpm(target);
+  }
+  res.send(200, "text/plain", "OK");
+}
+#endif
+
+static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // Live status as JSON. ~250-320 bytes; chunked since it can flirt with
+  // bodyScratch's 256B cap (esp. with HV_ADC adding more fields).
+  res.beginChunked(200, "application/json");
+  char buf[200];
+  char c[16], s[16], c5[16], c15[16], cs[16];
+  format_f(c,   sizeof(c),   gcounter.get_cpmf());
+  format_f(s,   sizeof(s),   gcounter.get_usv());
+  format_f(c5,  sizeof(c5),  gcounter.get_cpm5f());
+  format_f(c15, sizeof(c15), gcounter.get_cpm15f());
+  format_f(cs,  sizeof(cs),  gcounter.get_cps());
+  int n = snprintf_P(buf, sizeof(buf),
+    PSTR("{\"ut\":%lu,\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u,\"mem\":%u,\"rssi\":%d"),
+    DeviceInfo::uptime(),
+    c, s, c5, c15, cs,
+    EGPrefs::getString("sys", "ratio"),
+    gcounter.total_clicks,
+    DeviceInfo::freeHeap(),
+    (int)Wifi::rssi);
+  if (n > 0) res.sendChunk(buf, (size_t)n);
+#ifdef ESPG_HV_ADC
+  char hvBuf[16];
+  format_f(hvBuf, sizeof(hvBuf), hv.hvReading.get());
+  n = snprintf_P(buf, sizeof(buf), PSTR(",\"hv\":%s"), hvBuf);
+  if (n > 0) res.sendChunk(buf, (size_t)n);
+#endif
+  n = snprintf_P(buf, sizeof(buf),
+    PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u}"),
+    TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
+  if (n > 0) res.sendChunk(buf, (size_t)n);
+  res.endChunked();
+}
+
+// /hist renders the past-day rolling history table by fetching /clicks
+// in JS. Body + script live next to /clicks since they share the schema.
+static const char HISTORY_BODY[] PROGMEM = R"HTML(
+<table>
+<thead><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>&micro;Sv</th></tr></thead>
+<tbody id=tb></tbody>
+</table>
+<script>
+fetch('/clicks').then(r=>r.json()).then(o=>{
+  var tb=document.getElementById('tb'),
+      start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
+      rlv='roll' in o?o.roll*1000:3600000,
+      rows='';
+  o.last_day.forEach(function(n,idx){
+    var off=idx*rlv,
+        sd=new Date(Math.floor(Date.now()/rlv)*rlv-off),
+        ed=new Date(sd.getTime()+rlv);
+    if(idx==0)ed=new Date();
+    if(idx==o.last_day.length-1&&sd<start)sd=start;
+    var mins=(ed-sd)/60000;
+    rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+Math.ceil(n/mins)+'</td><td>'+(n/mins/o.ratio).toFixed(4)+'</td></tr>';
+  });
+  tb.innerHTML=rows;
+});
+</script>
+)HTML";
+
+static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("History"));
+  res.sendChunk(FPSTR(HISTORY_BODY));
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+void CounterRoutes::registerRoutes(EGHttpServer& http) {
+  http.on("/clicks",   EGHttpRequest::GET, hClicks);
+  http.on("/lastdata", EGHttpRequest::GET, hLastData);
+  http.on("/json",     EGHttpRequest::GET, hJson);
+  http.on("/hist",     EGHttpRequest::GET, hHistory);
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+  http.on("/cpm",      EGHttpRequest::GET, hSetCPM);
+#endif
 }

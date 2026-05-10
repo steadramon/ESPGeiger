@@ -119,8 +119,11 @@ class HV : public EGModule {
         return _hw_duty;
       }
       void set_vd_ratio(int ratio) {
-        // 0 is the sentinel for "ADC disabled" - HV loop skips the read.
-        if (ratio < 0)     ratio = 0;
+        // Belt-and-braces clamp to match the pref schema bounds. Catches
+        // any stale out-of-range values stored before the pref validator
+        // was tightened, so the closed-loop / volts math can't overflow
+        // or chase nonsense.
+        if (ratio < 1)     ratio = 1;
         if (ratio > 50000) ratio = 50000;
         _hw_vd_ratio = ratio;
       }
@@ -140,7 +143,7 @@ class HV : public EGModule {
       // so freq transitions don't run with old duty at new freq (spike risk).
       void apply_freq_duty_safe(int new_freq, int new_duty);
       // PWM pin is configured at boot from prefs; takes effect after reboot.
-      void set_pwm_pin(int pin);
+      void set_pwm_pin(int pin) { _pwm_pin = pin; }
       int get_pwm_pin() const { return _pwm_pin; }
       void set_hv_target(uint16_t v) { _hv_target = v; }
       uint16_t get_hv_target() const { return _hv_target; }
@@ -157,16 +160,9 @@ class HV : public EGModule {
       uint16_t _hv_target = 0;
       int8_t   _duty_trim = 0;
       unsigned long _trim_settle_until = 0;  // suppress trim until this millis()
-      // Trim cadence retuned against Mr Blinky's Fluke 289 data
-      // (1h capture, ESPG HW 004): autotrim at the previous (3-sample,
-      // 4V hysteresis, 10s period) made HV 2.4x noisier than
-      // baseline (sigma 1.51V vs 0.64V). Wider smoother + wider deadband
-      // + slower cadence stop the loop chasing its own ADC noise.
-      // TRIM_PERIOD_S must be >= Smoothed window so the reading reflects
-      // the previous trim before the next decision.
       static constexpr int8_t TRIM_MAX = 5;
-      static constexpr int    TRIM_HYST_V = 8;
-      static constexpr uint8_t TRIM_PERIOD_S = 30;
+      static constexpr int    TRIM_HYST_V = 4;
+      static constexpr uint8_t TRIM_PERIOD_S = 10;
       static constexpr unsigned long TRIM_SETTLE_MS = 30000;
 };
 

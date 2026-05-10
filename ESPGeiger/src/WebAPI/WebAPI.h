@@ -33,6 +33,9 @@
 #define WEBAPI_STATION_URL "https://stations.espgeiger.com/station/%u"
 #endif
 #define WEBAPI_HANDSHAKE_MS  (1UL * 60UL * 60UL * 1000UL)  // 1 hour
+// Reboot after this many consecutive WebAPI failures. At ~5min between
+// posts (after backoff hits ceiling), this is ~2.5h of no contact.
+#define WEBAPI_FAIL_REBOOT   30
 // Cadence of the health snapshot piggyback on the regular post.
 #define WEBAPI_HEALTH_EVERY  15
 
@@ -50,6 +53,8 @@ class WebAPI : public EGModule {
     const EGPrefGroup* prefs_group() override;
     uint8_t display_order() override { return 0; }  // managed via /webapi page
     void on_prefs_loaded() override;
+    void registerRoutes(EGHttpServer& http) override;
+    const EGMenuEntry* menuEntries() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
 
     AsyncHTTPRequest request;
@@ -81,7 +86,22 @@ class WebAPI : public EGModule {
     uint8_t _mode = 2;
     // Doubles on each handshake failure, capped at 5min, reset on success.
     uint32_t _hs_backoff_ms = 30000UL;
+    // Set after the first handshake that successfully reported the
+    // boot-time exception details. Stops us re-sending the same crash
+    // info on every subsequent hourly handshake.
     bool _exc_sent = false;
+    // Consecutive WebAPI failures. Resets to 0 on success. If this
+    // climbs past WEBAPI_FAIL_REBOOT (without recovery from existing
+    // backoff), force a reboot - covers cases where AsyncHTTPRequest
+    // / DNS / lwIP are wedged after a network blip and the existing
+    // backoff alone can't get us back.
+    uint16_t _fail_count = 0;
+
+  public:
+    // Shadows EGModule::note_publish so callers (our static callbacks
+    // dispatching via self->note_publish(ok)) get the failure counting
+    // for free without changing each callsite.
+    void note_publish(bool ok);
 };
 
 extern WebAPI webapi;

@@ -27,7 +27,6 @@
 #include "../Counter/Counter.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/MathUtil.h"
-#include "../Util/PinSafety.h"
 #include "../Util/StringUtil.h"
 #include "../WebPortal/WebPortal.h"
 
@@ -56,7 +55,7 @@ static const EGPref HW_PREF_ITEMS[] = {
   {"freq",   HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, 0},
   {"duty",   HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, 1023, 0, EGP_UINT, 0},
 #ifdef ESPG_HV_ADC
-  {"ratio",  HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    50000, 0, EGP_INT, 0},
+  {"ratio",  HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 1,    50000, 0, EGP_INT, 0},
   {"offset", HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, EGP_INT, 0},
   {"target", HW_L_TGT, HW_H_TGT, "0", nullptr, 0, 500, 0, EGP_UINT, 0},
 #endif
@@ -103,19 +102,6 @@ void HV::set_duty(int duty) {
   _hw_duty = clamp(duty, 1, 1023);
 }
 
-void HV::set_pwm_pin(int pin) {
-  const char* why = nullptr;
-#ifdef ESP8266
-  if (pin == 16) why = PSTR("no PWM on GPIO 16");
-#endif
-  if (!why) why = PinSafety::claim_output(pin, PSTR("HV"));
-  if (why) {
-    Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
-    pin = -1;
-  }
-  _pwm_pin = pin;
-}
-
 void HV::begin() {
   if (_pwm_pin < 0) {
     Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
@@ -133,7 +119,7 @@ void HV::begin() {
 #endif
   }
 #ifdef ESPG_HV_ADC
-  hvReading.begin(SMOOTHED_AVERAGE, 20);
+  hvReading.begin(SMOOTHED_AVERAGE, 3);
 #endif
 }
 

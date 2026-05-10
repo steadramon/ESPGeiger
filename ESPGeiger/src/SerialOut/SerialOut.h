@@ -40,6 +40,7 @@ class SerialOut : public EGModule {
       bool has_loop() override { return true; }
       uint16_t loop_interval_ms() override { return 500; }
       void loop(unsigned long now) override;
+      void registerRoutes(EGHttpServer& http) override;
       void set_show(int var);
       void print_cpm();
       void print_usv();
