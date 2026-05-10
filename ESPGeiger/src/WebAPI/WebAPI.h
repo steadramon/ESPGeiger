@@ -81,6 +81,7 @@ class WebAPI : public EGModule {
     uint8_t _mode = 2;
     // Doubles on each handshake failure, capped at 5min, reset on success.
     uint32_t _hs_backoff_ms = 30000UL;
+    bool _exc_sent = false;
 };
 
 extern WebAPI webapi;

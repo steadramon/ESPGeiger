@@ -190,8 +190,17 @@ void WebAPI::doHandshake() {
   float lonF = EGPrefs::getFloat("webapi", "lon");
   bool sendCoords = (latF != 0.0f || lonF != 0.0f);
 
+  // Crash details on the FIRST post-boot handshake only, so we don't
+  // re-send the same exception across the rest of an uptime.
+  uint32_t epc1 = 0, excvaddr = 0;
+  uint8_t exccause = 0;
+  bool sendExc = !_exc_sent && DeviceInfo::resetExc(&epc1, &excvaddr, &exccause);
+
   MsgPack::Writer mp(buffer, sizeof(buffer));
-  mp.map(sendCoords ? 13 : 11);
+  uint8_t entries = 11;
+  if (sendCoords) entries += 2;
+  if (sendExc)    entries += 3;   // ec, pc, va
+  mp.map(entries);
   mp.kv("n",  (uint32_t)time(NULL));
   mp.kv("pk", pub_k_64);
   mp.kv("ci", DeviceInfo::chipid());
@@ -206,6 +215,11 @@ void WebAPI::doHandshake() {
   if (sendCoords) {
     mp.kv("la", (int32_t)(latF * 100.0f + (latF >= 0 ? 0.5f : -0.5f)) * 0.01f);
     mp.kv("lo", (int32_t)(lonF * 100.0f + (lonF >= 0 ? 0.5f : -0.5f)) * 0.01f);
+  }
+  if (sendExc) {
+    mp.kv("ec", (uint32_t)exccause);
+    mp.kv("pc", epc1);
+    mp.kv("va", excvaddr);
   }
   if (mp.overflow) {
     Log::console(PSTR("WebAPI: Handshake encode overflow"));
@@ -277,6 +291,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
       }
       self->last_ok = true;
       self->_hs_backoff_ms = 30000UL;
+      self->_exc_sent = true;     // crash info delivered (or none was sent)
       self->note_publish(true);
       return;
     }
