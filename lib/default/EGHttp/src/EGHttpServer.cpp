@@ -21,10 +21,7 @@
 #include <stdlib.h>
 #include <EGBase64.h>   // buffer-in/out, no heap (vs core's heap-using <base64.h>)
 
-// Wait-queue mutual exclusion. ESP32's AsyncTCP runs in its own task,
-// so onClient/onDisconnect (enqueue/drop) can race with tick()'s
-// promoteWaiters in the main task. ESP8266 NONOS is cooperative single-
-// thread so callbacks and main loop can't interleave - lock is a no-op.
+// ESP32 AsyncTCP callbacks race with tick(); ESP8266 NONOS is single-task.
 #ifdef ESP32
   #include <freertos/portmacro.h>
   static portMUX_TYPE s_eghttp_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -35,17 +32,15 @@
   #define EGHTTP_UNLOCK() ((void)0)
 #endif
 
-// ---------- yield-retry write helpers ----------
-//
-// Streams `len` bytes to the slot's AsyncClient, yielding when the TCP send
-// buffer is full so lwIP can ACK and free space. Safe only in main-loop
-// context (handlers dispatched by tick()) - not in AsyncTCP callbacks.
-
+// Yield-retry write: blocks until len bytes go on the wire or the
+// connection drops. Main-loop context only (handlers via tick()).
 static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
   if (!s) return false;
   size_t sent = 0;
 #ifdef ESP32
-  #define EGHTTP_BACKPRESSURE_PAUSE() do { vTaskDelay(1); } while (0)
+  // taskYIELD relinquishes to same-priority tasks (lwIP/AsyncTCP) without
+  // sleeping a full RTOS tick (~10ms) like vTaskDelay(1) would.
+  #define EGHTTP_BACKPRESSURE_PAUSE() do { taskYIELD(); } while (0)
 #else
   #define EGHTTP_BACKPRESSURE_PAUSE() do { yield(); delay(0); } while (0)
 #endif
@@ -76,11 +71,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
 }
 
 static bool yield_write_pgm(EGHttpServer::Slot* s, PGM_P data, size_t len) {
-  // 512 keeps the stack hit modest while reducing yield_write_sram call
-  // count by 4× vs the old 128. Each inner call has fixed setup overhead
-  // (state/connected checks, space()); for a 5 KB JS body that's the
-  // difference between 40 iterations and 10. AsyncClient::space() typically
-  // hands back ~1460 (one TCP MSS) so 512 fits comfortably in one write.
+  // 512 fits comfortably in one TCP MSS write while keeping stack modest.
   char chunk[512];
   size_t off = 0;
   while (off < len) {
@@ -108,8 +99,7 @@ void EGHttpServer::on(const char* path, EGHttpRequest::Method method, Handler h,
 }
 
 void EGHttpServer::onUpload(const char* path, BodyHandler bh, void* user) {
-  // Attaches a streaming-body handler to a previously-registered route.
-  // Match on path; method must be POST (we only stream on POST).
+  // POST-only; matches by path against a previously-registered route.
   for (uint8_t i = 0; i < _routeCount; i++) {
     Route& r = _routes[i];
     if (r.method == EGHttpRequest::POST && strcmp(r.path, path) == 0) {
@@ -133,8 +123,6 @@ void EGHttpServer::setBasicAuth(const char* user, const char* password,
     _authValue[0] = '\0';
     return;
   }
-  // Build "user:password" then base64-encode it. encode_base64() writes
-  // into a caller-provided buffer with no heap allocation.
   char raw[96];
   int rlen = snprintf(raw, sizeof(raw), "%s:%s", user, password);
   if (rlen <= 0 || (size_t)rlen >= sizeof(raw)) {
@@ -174,6 +162,9 @@ void EGHttpServer::end() {
     s.client = nullptr;
     s.state  = IDLE;
   }
+#ifdef ESP32
+  if (_dispatchChunkAcc) { free(_dispatchChunkAcc); _dispatchChunkAcc = nullptr; }
+#endif
 }
 
 EGHttpServer::Slot* EGHttpServer::findSlot(AsyncClient* c) {
@@ -184,26 +175,9 @@ EGHttpServer::Slot* EGHttpServer::findSlot(AsyncClient* c) {
 EGHttpServer::Slot* EGHttpServer::allocSlot(AsyncClient* c) {
   for (auto& s : _slots) {
     if (s.state == IDLE && s.client == nullptr) {
-      // Heap-allocate the slot's request + scratch buffers on demand.
-      // Both are fixed-size (umm_malloc reuses freed blocks in place
-      // for stable allocs). If either fails, refuse the slot - caller
-      // queues or 503s.
-      if (!s.buf)         s.buf         = (char*)malloc(EGHTTP_REQ_BUF);
-      if (!s.bodyScratch) s.bodyScratch = (char*)malloc(EGHTTP_BODY_SCRATCH);
-#ifdef ESP32
-      if (!s.chunkAcc)    s.chunkAcc    = (char*)malloc(EGHTTP_CHUNK_ACC);
-      s.chunkAccLen = 0;
-      if (!s.buf || !s.bodyScratch || !s.chunkAcc) {
-#else
-      if (!s.buf || !s.bodyScratch) {
-#endif
-        if (s.buf)         { free(s.buf);         s.buf = nullptr; }
-        if (s.bodyScratch) { free(s.bodyScratch); s.bodyScratch = nullptr; }
-#ifdef ESP32
-        if (s.chunkAcc)    { free(s.chunkAcc);    s.chunkAcc = nullptr; }
-#endif
-        return nullptr;
-      }
+      // Only buf is per-slot; chunkAcc is server-shared (claimed at dispatch).
+      if (!s.buf) s.buf = (char*)malloc(EGHTTP_REQ_BUF);
+      if (!s.buf) return nullptr;
       s.client         = c;
       s.state          = RECEIVING;
       s.delete_pending = false;
@@ -237,12 +211,11 @@ void EGHttpServer::resetSlot(Slot* s) {
   s->ack_paused     = false;
   s->bodyAcked      = 0;
   s->routeIdx       = 0xFF;
-  // Return slot buffers to the heap so an idle server costs only its
-  // bookkeeping fields. Re-allocated next time this slot is taken.
+  // buf returned so idle server costs only its bookkeeping fields.
   if (s->buf)         { free(s->buf);         s->buf         = nullptr; }
-  if (s->bodyScratch) { free(s->bodyScratch); s->bodyScratch = nullptr; }
 #ifdef ESP32
-  if (s->chunkAcc)    { free(s->chunkAcc);    s->chunkAcc    = nullptr; }
+  // chunkAcc is server-shared; just null the slot's view.
+  s->chunkAcc    = nullptr;
   s->chunkAccLen = 0;
 #endif
 }
@@ -269,10 +242,8 @@ void EGHttpServer::dropWaiter(AsyncClient* c) {
 }
 
 void EGHttpServer::promoteWaiters() {
-  // Pop one waiter under the lock, allocate + wire outside the lock
-  // (allocSlot does heap mallocs; wireSlotCallbacks calls into AsyncTCP
-  // which has its own internal locks - holding ours across either is a
-  // recipe for deadlock and breaks the "short critical section" rule).
+  // Pop one under the lock; alloc + wire outside (allocSlot mallocs and
+  // AsyncTCP has its own locks - keep our critical section short).
   while (true) {
     AsyncClient* c = nullptr;
     EGHTTP_LOCK();
@@ -296,11 +267,7 @@ void EGHttpServer::promoteWaiters() {
 }
 
 void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
-  // 60 s no-rx timeout: any active connection that goes silent that long
-  // (e.g. a stuck /update upload that never delivers BODY_END) will fire
-  // onTimeout → state=DONE+delete_pending → slot reclaims. Without this,
-  // hung connections pin slots forever and the pool eventually exhausts,
-  // returning 503 on every new request.
+  // 60s no-rx timeout so a stuck upload doesn't pin its slot forever.
   c->setRxTimeout(60);
 
   c->onData([](void* arg, AsyncClient* cli, void* data, size_t len) {
@@ -318,6 +285,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
     if (sl) {
       sl->state          = DONE;
       sl->delete_pending = true;
+      cli->close();   // force onDisconnect so the client gets deleted
     }
   }, this);
 
@@ -346,11 +314,14 @@ void EGHttpServer::onClient(AsyncClient* c) {
                       cli, (unsigned)sl->bodyAcked, (unsigned)sl->contentLength);
     }
     if (sl) {
+      // onDisconnect fires once - we own the delete. Null s.client so
+      // tick's reclaim doesn't UAF.
       sl->state          = DONE;
       sl->delete_pending = true;
+      sl->client         = nullptr;
+      delete cli;
     } else {
-      // Either the slot was already released, or the client was queued.
-      // Drop from queue if present so we don't promote a dead pointer.
+      // Slot already released (eager-close), or client was queued.
       self->dropWaiter(cli);
       delete cli;
     }
@@ -386,11 +357,12 @@ void EGHttpServer::onClient(AsyncClient* c) {
 void EGHttpServer::onData(Slot* s, void* data, size_t len) {
   if (s->state != RECEIVING) return;   // already past parse, ignore extra
 
-  // Phase 1: header accumulation. Streaming routes also pass through
-  // here - we need the request line + Content-Length before we can
-  // identify them.
+  // Phase 1: header accumulation. Streaming routes pass through here
+  // too; we need Content-Length before route identification.
   if (!s->headersDone) {
     if (s->len + len > EGHTTP_REQ_BUF) {
+      Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
+                      (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
       static const char r413[] =
         "HTTP/1.1 413 Payload Too Large\r\n"
         "Content-Length: 0\r\n"
@@ -428,9 +400,7 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
     identifyRoute(s);
     if (s->routeIdx != 0xFF && s->routeIdx < _routeCount &&
         _routes[s->routeIdx].bodyHandler) {
-      // Claim the streaming buffer. If another slot is already streaming,
-      // refuse this upload. Allocate buffer on demand so non-OTA traffic
-      // pays no RAM cost.
+      // One stream at a time; lazy buffer alloc for zero idle cost.
       if (_streamOwner != nullptr) {
         static const char r503[] =
           "HTTP/1.1 503 Service Unavailable\r\n"
@@ -446,7 +416,6 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
       }
       _streamBuf = (uint8_t*)malloc(STREAM_BUF_SIZE);
       if (!_streamBuf) {
-        // Heap too fragmented - refuse upload, user can retry after reboot
         Serial.printf_P(PSTR("[EGHttp] stream buf alloc failed (need %u)\n"),
                         (unsigned)STREAM_BUF_SIZE);
         static const char r503[] =
@@ -464,33 +433,27 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
       _streamOwner = s;
       _streamLen   = 0;
 
-      // Body bytes that arrived alongside the headers go into the stream
-      // buffer. Subsequent packets land in the streaming branch below.
+      // Body bytes that arrived with the headers carry over.
       size_t inBuf = s->len - s->headerEnd;
       if (inBuf) {
         memcpy(_streamBuf, s->buf + s->headerEnd, inBuf);
         _streamLen = inBuf;
       }
       s->len = s->headerEnd;
-      // Defer ack until tick() drains via the body handler.
-      s->client->ackLater();
+      s->client->ackLater();   // peer throttles until tick() drains
       s->ack_paused = true;
       return;
     }
 
-    // Non-streaming with body fully arrived already (rare but possible)
     if (s->len >= s->headerEnd + s->contentLength) {
       s->state = READY;
     }
     return;
   }
 
-  // Phase 2: body bytes after headers.
+  // Phase 2: body after headers (streaming path).
   if (s->streaming) {
-    // Buffer into the shared stream buffer; tick() drains via the body
-    // handler. ackLater so peer's TCP window stays bounded by our buffer.
     if (_streamLen + len > STREAM_BUF_SIZE) {
-      // Peer violated the receive window we advertised. Abort.
       Serial.printf_P(PSTR("[EGHttp] stream buf overflow: %u+%u>%u, aborting\n"),
                       (unsigned)_streamLen, (unsigned)len, (unsigned)STREAM_BUF_SIZE);
       s->client->close();
@@ -525,16 +488,11 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
 }
 
 void EGHttpServer::parseRequest(Slot* s) {
-  // identifyRoute already mutated the request line during onData.
-  // This function is kept as a no-op for now to avoid disturbing dispatch
-  // call sites in case any rebuild ordering reintroduces it.
-  (void)s;
+  (void)s;   // identifyRoute already did the work.
 }
 
 void EGHttpServer::identifyRoute(Slot* s) {
-  // Mutates request line in s->buf in place: NUL after method, NUL after
-  // path, NUL at end of request line. Caches matched route index on slot.
-  // Idempotent - guarded by routeIdx sentinel.
+  // Mutates s->buf: NULs at method/path/line boundaries. Caches routeIdx.
   if (s->routeIdx != 0xFF) return;
   if (!s->headersDone) return;
 
@@ -595,20 +553,14 @@ void EGHttpServer::drainStream(Slot* s) {
   }
 
   if (_streamLen > 0) {
-    // Snapshot length BEFORE deliverBodyEvent - Update.write()'s internal
-    // optimistic_yield() can let onData fire and append more bytes to
-    // _streamBuf. Process only what we snapshotted; shift any newly-arrived
-    // bytes down for the next tick. Without this, late-appended bytes get
-    // ack'd but never delivered → silently truncated firmware.
+    // Snapshot before delivery - Update.write's optimistic_yield can let
+    // onData append more bytes; processing past the snapshot would ack
+    // bytes that never reach the handler (silent truncation).
     size_t toDeliver = _streamLen;
     deliverBodyEvent(s, BODY_DATA, (const char*)_streamBuf, toDeliver);
     s->bodyAcked += toDeliver;
-    // ack(toDeliver) tells AsyncTCP to release that many bytes worth of
-    // peer's window. Don't clear ack_paused: AsyncClient has no way to
-    // re-enable auto-ack once ackLater has been called, so we have to
-    // stay in manual-ack mode for the rest of the connection. Calling
-    // ackLater() a second time would zero _rx_ack_len and lose any
-    // bytes received but not yet acked.
+    // Stay in manual-ack mode: a second ackLater() zeroes _rx_ack_len and
+    // loses already-received-but-unacked bytes.
     if (s->client) s->client->ack(toDeliver);
     size_t leftover = (_streamLen > toDeliver) ? _streamLen - toDeliver : 0;
     if (leftover > 0) {
@@ -632,10 +584,18 @@ void EGHttpServer::dispatch(Slot* s) {
   EGHttpResponse res;
   res._slot = s;
 
-  // identifyRoute already mutated the request line. Re-walk it to extract
-  // path + query for the EGHttpRequest. Method is implied by the matched
-  // route (s->routeIdx) but we resolve it from the buf to keep the
-  // contract obvious to the caller.
+#ifdef ESP32
+  // Claim server-shared chunk accumulator. Lazy-alloc on first use;
+  // kept alive for the life of the server (no per-request churn).
+  // dispatch() is serialised in tick() so single buffer is safe.
+  if (!_dispatchChunkAcc) {
+    _dispatchChunkAcc = (char*)malloc(EGHTTP_CHUNK_ACC);
+  }
+  s->chunkAcc    = _dispatchChunkAcc;
+  s->chunkAccLen = 0;
+#endif
+
+  // Walk the (already-NUL-mutated) request line back out for req.
   char* sp1 = strchr(s->buf, '\0');   // first NUL = end of method
   if (!sp1 || sp1 >= s->buf + s->headerEnd) { s->client->close(); return; }
   if      (strcmp(s->buf, "GET")  == 0) req._method = EGHttpRequest::GET;
@@ -658,11 +618,6 @@ void EGHttpServer::dispatch(Slot* s) {
     s->buf[s->headerEnd + req._bodyLen] = '\0';
   }
 
-  // Basic Auth gate. Walk the parsed header block looking for an
-  // "Authorization:" line and compare its value against the precomputed
-  // "Basic <base64>" token. Any miss → 401 with WWW-Authenticate, no
-  // dispatch. Headers occupy s->buf[0..headerEnd) - request line was
-  // NUL-mutated earlier but raw header lines below it are intact.
   if (_authEnabled) {
     bool authOk = false;
     for (size_t i = 0; i + 14 < s->headerEnd; i++) {
@@ -670,7 +625,6 @@ void EGHttpServer::dispatch(Slot* s) {
         const char* p = s->buf + i + 14;
         while (*p == ' ' || *p == '\t') p++;
         size_t vlen = strlen(_authValue);
-        // Header value runs until \r or \n; both are safe terminators.
         if (strncmp(p, _authValue, vlen) == 0 &&
             (p[vlen] == '\r' || p[vlen] == '\n' || p[vlen] == '\0')) {
           authOk = true;
@@ -689,7 +643,7 @@ void EGHttpServer::dispatch(Slot* s) {
         s->client->write(head, (size_t)hn);
         s->client->send();
       }
-      return;     // tick() closes the connection on this slot's behalf
+      return;     // tick() closes the connection
     }
   }
 
@@ -701,17 +655,14 @@ void EGHttpServer::dispatch(Slot* s) {
     else           res.send(404, "text/plain", "Not Found");
   }
 
-  // If handler exited without sending anything, emit a 500 to flush the
-  // socket so the client doesn't hang.
+  // Handler that sent nothing: 500 so the client doesn't hang.
   if (!res._started && !res._done) {
     res.send(500, "text/plain", "");
   }
 }
 
 void EGHttpServer::tick() {
-  // Fast path: when every slot is IDLE, nothing's pending, and the
-  // wait queue is empty we have nothing to do. Runs every loop()
-  // iteration so worth bailing early.
+  // Fast path - runs every loop() iteration, worth bailing early.
   bool any = false;
   for (auto& s : _slots) {
     if (s.delete_pending || s.state != IDLE) { any = true; break; }
@@ -719,14 +670,9 @@ void EGHttpServer::tick() {
   if (!any && _waitCount == 0) return;
 
   for (auto& s : _slots) {
-    // Reclaim disconnected slots first so newly-arriving connections can
-    // grab them in this same tick.
     if (s.delete_pending) {
-      // Streaming uploads that didn't finish: try one last drain so
-      // any bytes received but not yet delivered to the body handler
-      // get processed before we declare the upload aborted. If draining
-      // pushes bodyAcked to contentLength, drainStream transitions to
-      // stream_ended and fires BODY_END for us.
+      // One last drain so unfinished streams catch any pending bytes;
+      // drainStream transitions to stream_ended on its own if complete.
       if (s.streaming && s.stream_begun && !s.stream_ended &&
           _streamOwner == &s && _streamLen > 0) {
         drainStream(&s);
@@ -735,16 +681,13 @@ void EGHttpServer::tick() {
         s.stream_aborted = true;
         deliverBodyEvent(&s, BODY_ABORT, nullptr, 0);
       }
-      // Release the streaming buffer if this slot owned it.
       if (_streamOwner == &s) {
         _streamOwner = nullptr;
         if (_streamBuf) { free(_streamBuf); _streamBuf = nullptr; }
         _streamLen = 0;
       }
-      // Don't delete s.client here - leave the AsyncClient alive for
-      // AsyncTCP to fire its remaining onDisconnect callback on. The
-      // else-branch there deletes it once we've already cleared s.client.
-      // Trying to delete here would double-free.
+      // Don't delete s.client - eager-close path leaves it for AsyncTCP's
+      // later onDisconnect; disconnect-driven path already deleted it.
       resetSlot(&s);
       continue;
     }
@@ -755,21 +698,13 @@ void EGHttpServer::tick() {
       s.state = RESPONDING;
       dispatch(&s);
       if (s.client && s.client->connected()) s.client->close();
-      // Eager reclaim: don't wait for onDisconnect to set delete_pending.
-      // ESP32 AsyncTCP runs onDisconnect in its own task with significant
-      // lag - the slot would stay RESPONDING for hundreds of ms while
-      // queued/new connections sit unaccepted. Mark for reclaim now;
-      // tick's reclaim path frees only slot bookkeeping (NOT s.client),
-      // and onDisconnect's else-branch deletes the AsyncClient when it
-      // eventually fires.
+      // Eager reclaim: ESP32 AsyncTCP can lag onDisconnect by hundreds of
+      // ms. Without this, queued connections wait, returning 503s.
       s.state          = DONE;
       s.delete_pending = true;
     }
   }
 
-  // Anything in the wait queue gets promoted into the slots we just
-  // freed. Done last so a slot reclaimed earlier in this tick (delete-
-  // pending branch) is available before the next loop iteration.
   if (_waitCount > 0) promoteWaiters();
 }
 
@@ -806,8 +741,7 @@ static bool find_arg_in(const char* region, size_t regionLen,
   return false;
 }
 
-// Shared decode buffer for arg() and decodeArg(). Reused - caller must
-// consume the returned pointer before the next arg/decodeArg call.
+// Shared between arg() and decodeArg(); consume before the next call.
 static char s_arg_decoded[128];
 
 const char* EGHttpRequest::arg(const char* name) const {
@@ -831,11 +765,8 @@ const char* EGHttpRequest::decodeArg(const char* body, size_t bodyLen,
 }
 
 #ifdef ESP32
-// Append bytes to the slot's chunk accumulator. If the new data would
-// overflow, flush what's there via a single direct write, then either
-// store the new data (fits in empty buffer) or write it directly (too
-// big to ever fit). Goal: minimize AsyncClient calls in the typical case
-// where a whole chunked response fits in EGHTTP_CHUNK_ACC.
+// Append-or-flush on overflow. Goal: one write for the common case
+// where the whole chunked response fits in EGHTTP_CHUNK_ACC.
 static bool eghttp_acc_append(EGHttpServer::Slot* s, const char* data, size_t len) {
   if (!s->chunkAcc) return yield_write_sram(s, data, len);
   if (s->chunkAccLen + len > EGHTTP_CHUNK_ACC) {
@@ -899,18 +830,18 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
     _started = true; _done = true;
     return;
   }
-  if (bodyLen > 0) memcpy(s->bodyScratch, body, bodyLen);
+  // AsyncClient::write copies into its tx buffer, so writing `body`
+  // directly is safe; no intermediate scratch buffer needed.
   char head[256];
   int n = snprintf(head, sizeof(head),
     "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n%s\r\n",
     status, contentType, (unsigned)bodyLen, _extraHeaders);
 #ifdef ESP32
-  // Single-write via the chunk accumulator: same anti-race motivation as
-  // chunked responses. Header + body packed into one buffer + one write.
+  // Header + body in one write; same anti-race motivation as chunked.
   if (s->chunkAcc) {
     s->chunkAccLen = 0;
     bool ok = eghttp_acc_append(s, head, (size_t)n);
-    if (ok && bodyLen > 0) ok = eghttp_acc_append(s, s->bodyScratch, bodyLen);
+    if (ok && bodyLen > 0) ok = eghttp_acc_append(s, body, bodyLen);
     if (ok) ok = eghttp_acc_flush(s);
     _started = true;
     _done    = true;
@@ -919,7 +850,7 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
 #endif
   if (!yield_write_sram(s, head, (size_t)n)) { _done = true; return; }
   _started = true;
-  if (bodyLen > 0) yield_write_sram(s, s->bodyScratch, bodyLen);
+  if (bodyLen > 0) yield_write_sram(s, body, bodyLen);
   _done = true;
 }
 
@@ -932,10 +863,8 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const __Flas
     "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n%s\r\n",
     status, contentType, (unsigned)bodyLen, _extraHeaders);
 #ifdef ESP32
-  // Single-write via the chunk accumulator. Pages bigger than the
-  // accumulator (e.g. picographJS at ~5 KB) still fall through to the
-  // streaming path automatically when eghttp_acc_append_pgm hits the
-  // overflow branch and flushes to direct write mid-body.
+  // Pages larger than the accumulator fall through to direct-write
+  // mid-body via the append_pgm overflow branch.
   if (s->chunkAcc) {
     s->chunkAccLen = 0;
     bool ok = eghttp_acc_append(s, head, (size_t)n);

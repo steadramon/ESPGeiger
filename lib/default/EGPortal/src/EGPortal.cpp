@@ -74,7 +74,7 @@ static const char SAVED_HTML[] PROGMEM =
 void EGPortal::begin(const char* apSsid, const char* apPassword) {
   if (_active) return;
 
-  // Scan first, in STA-only mode — far more reliable than AP_STA scan.
+  // Scan first, in STA-only mode - far more reliable than AP_STA scan.
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   delay(100);
@@ -149,7 +149,7 @@ void EGPortal::refreshScan(int n) {
     if (!s.length()) continue;
     if (rssi < SCAN_RSSI_MIN) continue;
 
-    // Dedup by SSID — keep strongest. Linear scan is fine at this size.
+    // Dedup by SSID - keep strongest. Linear scan is fine at this size.
     int existing = -1;
     for (uint8_t j = 0; j < _scanCount; j++) {
       if (strcmp(_scan[j].ssid, s.c_str()) == 0) { existing = j; break; }

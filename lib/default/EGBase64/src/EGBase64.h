@@ -7,7 +7,7 @@
   Renamed from <base64.h> to avoid colliding with the ESP8266/ESP32 core's
   <base64.h>, which is a different `class base64 { ... }` (heap-allocating
   String API) used internally by ESP8266WebServer. This is the no-heap
-  variant — encode/decode in place into caller-provided buffers.
+  variant - encode/decode in place into caller-provided buffers.
 
   Function bodies live in EGBase64.cpp so multiple TUs can include this
   header without the linker complaining about duplicate symbols.
