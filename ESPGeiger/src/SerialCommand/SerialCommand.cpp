@@ -18,6 +18,7 @@
 */
 #include "SerialCommand.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Logger/Logger.h"
 extern SerialCommand serialcmd;
 
 #ifndef DISABLE_SERIALRX
