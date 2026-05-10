@@ -30,6 +30,55 @@ namespace Wifi {
   extern int16_t rssi;
 
   void tick(unsigned long now);
+
+  // Boot-time WiFi association: try saved creds first, fall back to the
+  // EGPortal captive setup AP. Implements a backup/revert protocol - if
+  // a /wifi_backup file exists from a recent /wifisave attempt and the
+  // current creds fail, the backup is restored before dropping into
+  // setup mode. Returns true on success.
+  bool connectOrPortal();
+
+  // Returns true if the SDK has STA credentials stored. Used to skip the
+  // 30 s connect timeout when there's nothing to try yet.
+  bool hasSavedCreds();
+
+  // Persist current STA SSID/PSK to /wifi_backup so a failed /wifisave
+  // can revert. Call BEFORE WiFi.begin(new_ssid, new_pass).
+  bool saveBackupCreds();
+
+  // Erase the SDK-stored STA credentials. Replaces WiFiManager::
+  // resetSettings() so the WiFiManager dependency can be dropped.
+  void clearSavedCreds();
+
+  // Read net.* prefs and call WiFi.config() with static IP/gw/sn/dns when
+  // net.static_ip is set. No-op when DHCP is selected. Must be called
+  // BEFORE WiFi.begin(); ESP8266/ESP32 latch the addressing mode at the
+  // point begin() runs. Returns true if static config was applied.
+  bool applyStaticConfig();
+
+  // Validate string-form static IP config (parses + subnet-sanity).
+  // Returns true if the values would yield a usable LAN config. On
+  // failure, writes a human-readable reason into errbuf if provided.
+  // Used by /wifisave for immediate form-time feedback, and by
+  // applyStaticConfig at boot - single source of truth so the two paths
+  // can't drift.
+  bool validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
+                      char* errbuf, size_t errlen);
+
+  // Snapshot current net.* prefs to /net_backup for the auto-revert flow.
+  // Refuses to overwrite an existing backup (a previous network change is
+  // still pending verification - clobbering it would lose the
+  // last-known-good state). Call before EGPrefs::put for net.* keys.
+  bool saveNetBackup();
+
+  // Reachability probe - `WiFi.hostByName` against pool.ntp.org. lwIP
+  // default timeout (~14 s). Routes through the gateway and DNS, so it
+  // catches both bad gateway and bad DNS configs in one shot.
+  bool probeReachability();
+
+  // Read /net_backup and write the values back into net.* prefs +
+  // commit. Caller is expected to ESP.restart() afterwards.
+  bool restoreNetBackup();
 }
 
 #endif
