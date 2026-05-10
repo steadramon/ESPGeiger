@@ -42,8 +42,17 @@
 #endif
 
 namespace DeviceInfo {
-  void init(const char* hostName, const char* chipId,
-            const char* userAgent, const char* macAddr);
+  // Build chipId / hostname / useragent / mac from runtime APIs and stash
+  // them in module-owned buffers so subsequent hostname()/mac()/etc.
+  // return stable strings. Call once early in setup() before anything
+  // that publishes identity (MQTT/WebAPI/WebPortal).
+  void begin();
+
+  // Wipe all module prefs + auto-revert WiFi backup + SDK-stored WiFi
+  // credentials. Deliberately KEEPS /api.key so the device retains its
+  // WebAPI station identity across the reset. EGPrefs must already be
+  // initialised. Caller is responsible for restarting afterward.
+  void factoryReset();
 
   const char* hostname();
   const char* chipid();

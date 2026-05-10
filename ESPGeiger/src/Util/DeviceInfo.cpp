@@ -18,6 +18,9 @@
 */
 #include "DeviceInfo.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Logger/Logger.h"
+#include "Wifi.h"
+#include <LittleFS.h>
 #ifdef ESP32
 #include <esp_chip_info.h>
 #include <esp_system.h>
@@ -26,19 +29,23 @@
 extern "C" {
 #include <user_interface.h>
 }
+#include <ESP8266WiFi.h>
+#else
+#include <WiFi.h>
 #endif
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL ""
 #endif
 
-// Pointers into ConfigManager's buffers - no copies, no extra RAM.
-static const char* s_hostname = "";
-static const char* s_chipid = "";
-static const char* s_useragent = "";
-static const char* s_mac = "";
-static char s_geigermodel[33] = GEIGER_MODEL;
-static char s_friendlyname[33] = "";
+// Module-owned identity buffers populated by begin(). hostname is
+// "<THING_NAME>-<chipid>" e.g. "ESPGeiger-d5536d".
+static char s_hostname_buf[24]   = "";
+static char s_chipid_buf[8]      = "";
+static char s_useragent_buf[80]  = "";
+static char s_mac_buf[18]        = "";
+static char s_geigermodel[33]    = GEIGER_MODEL;
+static char s_friendlyname[33]   = "";
 
 uint32_t DeviceInfo::freeHeap() {
   static uint32_t cached = 0;
@@ -51,18 +58,62 @@ uint32_t DeviceInfo::freeHeap() {
   return cached;
 }
 
-void DeviceInfo::init(const char* hostName, const char* chipId,
-                      const char* userAgent, const char* macAddr) {
-  s_hostname = hostName;
-  s_chipid = chipId;
-  s_useragent = userAgent;
-  s_mac = macAddr;
+void DeviceInfo::begin() {
+  // chipid: low 24 bits of native chip identifier, hex-formatted.
+#ifdef ESP8266
+  uint32_t tchipId = ESP.getChipId();
+#else
+  uint32_t tchipId = 0;
+  for (int i = 0; i < 17; i += 8) {
+    tchipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  }
+#endif
+  snprintf_P(s_chipid_buf, sizeof(s_chipid_buf), PSTR("%06lx"),
+             (unsigned long)(tchipId & 0xFFFFFFul));
+
+  // hostname = "ESPGeiger-d5536d"
+  snprintf_P(s_hostname_buf, sizeof(s_hostname_buf), PSTR("%s-%s"),
+             THING_NAME, s_chipid_buf);
+
+  snprintf_P(s_useragent_buf, sizeof(s_useragent_buf),
+             PSTR("%s/%s (%s; %s; %s)"),
+             THING_NAME, RELEASE_VERSION, GIT_VERSION,
+             BUILD_ENV, s_chipid_buf);
+
+  // WiFi.mode(WIFI_STA) idempotent + makes MAC + DHCP-hostname both
+  // valid even though Wifi::connectOrPortal hasn't run yet. Otherwise
+  // WiFi.macAddress() can return all-FF on first call before the SDK
+  // has populated its station struct.
+#ifdef ESP8266
+  WiFi.mode(WIFI_STA);
+  WiFi.hostname(s_hostname_buf);
+#else
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(s_hostname_buf);
+#endif
+  strncpy(s_mac_buf, WiFi.macAddress().c_str(), sizeof(s_mac_buf) - 1);
+  s_mac_buf[sizeof(s_mac_buf) - 1] = '\0';
 }
 
-const char* DeviceInfo::hostname()    { return s_hostname; }
-const char* DeviceInfo::chipid()      { return s_chipid; }
-const char* DeviceInfo::useragent()   { return s_useragent; }
-const char* DeviceInfo::mac()         { return s_mac; }
+const char* DeviceInfo::hostname()    { return s_hostname_buf; }
+const char* DeviceInfo::chipid()      { return s_chipid_buf; }
+const char* DeviceInfo::useragent()   { return s_useragent_buf; }
+const char* DeviceInfo::mac()         { return s_mac_buf; }
+
+void DeviceInfo::factoryReset() {
+  // Wipes every module's pref JSON (via EGPrefs) + the WiFi auto-revert
+  // backup + any legacy ConfigManager-era config + SDK-stored WiFi creds.
+  // /api.key is untouched: not in the EGPrefs file set, not in our
+  // explicit remove list — survives by exclusion.
+  Log::console(PSTR("Factory reset"));
+  EGPrefs::reset_all();
+  if (LittleFS.begin()) {
+    LittleFS.remove("/wifi_backup");
+    LittleFS.remove("/geigerconfig.json");      // legacy ConfigManager
+    LittleFS.end();
+  }
+  Wifi::clearSavedCreds();
+}
 const char* DeviceInfo::geigermodel() { return s_geigermodel; }
 
 void DeviceInfo::setGeigermodel(const char* s) {
