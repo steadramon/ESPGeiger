@@ -37,6 +37,12 @@ class WebPortal {
     // responses time to drain. Safe to call from AsyncTCP callback context.
     static void requestRestart(uint32_t delayMs = 1500);
 
+    // Emit a shared "restarting" countdown that auto-reloads / after ~20s.
+    // Handlers emit their action-specific message first, then call this.
+    // Auto-reload fails gracefully when the device moves networks
+    // (reset/erase/wifisave); the countdown UX is the consistent part.
+    static void sendRestartCountdown(EGHttpResponse& res);
+
     // Re-read sys.web_pass and reconfigure the underlying EGHttpServer's
     // Basic Auth. Called from SystemPrefs::on_prefs_loaded (boot) and
     // on_prefs_saved (after /param POST). Cheap when called rarely; do

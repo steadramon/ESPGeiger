@@ -348,18 +348,33 @@ void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, "application/javascript", FPSTR(THEME_JS));
 }
 
-static const char RESTART_BODY[] PROGMEM =
-  "<p>Device is restarting. This page will reload once it's back \xe2\x80\x94 typically 15-20 seconds for WiFi to come up.</p>"
-  "<p class=muted><span id=ct>20</span>s\xe2\x80\xa6</p>"
-  "<script>"
-  "var n=20,c=document.getElementById('ct');"
-  "var t=setInterval(function(){n--;c.textContent=n;if(n<=0){clearInterval(t);location.href='/';}},1000);"
-  "</script>";
+static const char RESTART_COUNTDOWN[] PROGMEM = R"HTML(
+<p class=muted>Reloading in <span id=ct>5</span>s&hellip;</p>
+<script>
+var n=5,c=document.getElementById('ct');
+function p(){
+  var a=new AbortController();
+  setTimeout(()=>a.abort(),1000);
+  fetch('/ping',{cache:'no-store',signal:a.signal})
+    .then(r=>location.href='/')
+    .catch(()=>setTimeout(p,0));
+}
+var t=setInterval(function(){
+  if(--n>0) c.textContent=n;
+  else { clearInterval(t); c.textContent='checking…'; p(); }
+},1000);
+</script>
+)HTML";
+
+void WebPortal::sendRestartCountdown(EGHttpResponse& res) {
+  res.sendChunk(FPSTR(RESTART_COUNTDOWN));
+}
 
 void WebPortal::hRestart(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Restarting"));
-  res.sendChunk(FPSTR(RESTART_BODY));
+  res.sendChunk(F("<p>Device is restarting. This page will reload once it's back - typically 15-20 seconds for WiFi to come up.</p>"));
+  WebPortal::sendRestartCountdown(res);
   WebPortal::sendPageTail(res);
   res.endChunked();
   WebPortal::requestRestart(1500);
@@ -561,6 +576,7 @@ void WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Reset"));
   res.sendChunk(F("<p>All settings cleared. Device is restarting and will return to the setup portal.</p>"));
+  WebPortal::sendRestartCountdown(res);
   WebPortal::sendPageTail(res);
   res.endChunked();
   WebPortal::requestRestart(1500);
@@ -574,6 +590,7 @@ void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Erase WiFi"));
   res.sendChunk(F("<p>WiFi credentials erased. Device is restarting into setup mode.</p>"));
+  WebPortal::sendRestartCountdown(res);
   WebPortal::sendPageTail(res);
   res.endChunked();
   WebPortal::requestRestart(1500);
@@ -874,6 +891,7 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
                     "<p class=muted>WiFi credentials unchanged. New IP "
                     "configuration will apply once the device comes back up.</p>"));
   }
+  WebPortal::sendRestartCountdown(res);
   WebPortal::sendPageTail(res);
   res.endChunked();
 
@@ -984,9 +1002,13 @@ will reboot when the upload completes.</p>
     };
     xhr.onload = function(){
       if (xhr.status === 200) {
-        st.innerHTML = '<b style="color:#0a0">' + xhr.responseText + '</b><br>Rebooting&hellip; this page will reload once the device is back (typically 20-25s).';
-        var n=25;
-        var iv=setInterval(function(){n--;if(n<=0){clearInterval(iv);location.href='/';}},1000);
+        st.innerHTML = '<b style="color:#0a0">' + xhr.responseText + '</b><br>Rebooting&hellip; this page will reload once the device is back.';
+        var n=5;
+        function p(){var a=new AbortController();setTimeout(()=>a.abort(),1000);fetch('/ping',{cache:'no-store',signal:a.signal}).then(r=>location.href='/').catch(()=>setTimeout(p,0));}
+        var iv=setInterval(function(){
+          if(--n>0){st.innerHTML='<b style="color:#0a0">'+xhr.responseText+'</b><br>Reloading in '+n+'s…';}
+          else{clearInterval(iv);st.innerHTML='<b style="color:#0a0">'+xhr.responseText+'</b><br>Checking…';p();}
+        },1000);
       } else {
         btn.disabled = false;
         st.innerHTML = '<b style="color:#c0392b">Upload failed: ' + xhr.responseText + '</b>';
@@ -1254,12 +1276,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::sendPageHead(res, F("Config"));
   res.sendChunk(FPSTR(PARAM_STYLE));
   if (did_save) res.sendChunk(F(
-    "<div style=\"padding:.8em 1em;margin:1em 0;background:#28a74526;"
-    "border-left:4px solid #28a74599;border-radius:4px;font-size:.95em\">"
-    "<span style=\"float:right;cursor:pointer;font-size:1.3em;line-height:1;opacity:.6\" "
-    "onclick=\"this.parentElement.style.display='none';\">&times;</span>"
-    "<strong>Saved.</strong> Your changes have been applied."
-    "</div>"));
+    "<div class=card style='border-color:#5a5'>Saved.</div>"));
   res.sendChunk(F("<form method=POST action=/param>"));
 
   char buf[512];

@@ -669,7 +669,12 @@ static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   LittleFS.begin();
   LittleFS.remove("/api.key");
   LittleFS.end();
-  res.send(200, "text/plain", "Key reset; restarting");
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("Key Reset"));
+  res.sendChunk(F("<p>Station Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
+  WebPortal::sendRestartCountdown(res);
+  WebPortal::sendPageTail(res);
+  res.endChunked();
   WebPortal::requestRestart(1500);
 }
 
