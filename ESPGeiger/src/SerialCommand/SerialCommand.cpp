@@ -84,33 +84,24 @@ void SerialCommand::set_show() {
   int aNumber;
   arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
   if (arg != NULL) {
-    if (strstr("cpm", arg)) {
-      serialout.toggle_cpm();
-      return;
-    }
-    if (strstr("usv", arg)) {
-      serialout.toggle_usv();
-      return;
-    }
-    if (strstr("hv", arg)) {
+    if (strcmp(arg, "cpm") == 0) { serialout.toggle_cpm(); return; }
+    if (strcmp(arg, "usv") == 0) { serialout.toggle_usv(); return; }
+    if (strcmp(arg, "cps") == 0) { serialout.toggle_cps(); return; }
+    if (strcmp(arg, "hv")  == 0) {
+#ifdef ESPG_HV_ADC
       serialout.toggle_hv();
+#endif
       return;
     }
-    if (strstr("cps", arg)) {
-      serialout.toggle_cps();
-      return;
-    }
-    if (strstr("off", arg)) {
-      serialout.set_show(0);
-      return;
-    }
+    if (strcmp(arg, "off") == 0) { serialout.set_show(0); return; }
     if (isDigit(arg[0])) {
       aNumber = atoi(arg);
       serialout.set_show(aNumber);
+      return;
     }
+    Log::console(PSTR("show: unknown arg '%s'"), arg);
   } else {
-    // Bare `show` enables 1-second CPM output, same as `show 1`.
-    serialout.set_show(1);
+    serialout.set_show(serialout.interval() > 0 ? 0 : 1);
   }
 }
 
@@ -148,15 +139,10 @@ void SerialCommand::set_ratio() {
 }
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 void SerialCommand::set_cpm() {
-  char *arg;
-  int aNumber;
-  arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
-  if (arg != NULL) {
-    aNumber = atoi(arg);    // Converts a char string to an integer
-    if ((aNumber != NULL) && (aNumber > 0)) {
-      gcounter.set_target_cpm(aNumber);
-    }
-  }
+  char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
+  if (arg == NULL) return;
+  int aNumber = atoi(arg);
+  if (aNumber > 0) gcounter.set_target_cpm(aNumber);
 }
 #endif
 #ifdef ESPG_HV
