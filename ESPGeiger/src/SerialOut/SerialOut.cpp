@@ -50,12 +50,10 @@ void SerialOut::print_usv() {
 
 void SerialOut::set_show(int var) {
   _interval = (uint16_t)clamp(var, 0, (int)UINT16_MAX);
-  if (_interval == 0) {
-    _show_flags = 0;
-  } else {
-    _show_flags |= SHOW_CPM;
+  if (_interval > 0 && _show_flags == 0) {
+    _show_flags = SHOW_CPM;
   }
-  Log::setSerialLogLevel(_show_flags == 0);
+  Log::setSerialLogLevel(_interval == 0);
 }
 
 void SerialOut::toggle_cpm() { _show_flags ^= SHOW_CPM; Log::setSerialLogLevel(_show_flags == 0); }
@@ -97,4 +95,5 @@ void SerialOut::loop(unsigned long now) {
   if (pos < sizeof(buf) - 1) buf[pos++] = '\n';
   Serial.write((const uint8_t*)buf, pos);
 }
+
 #endif
