@@ -302,7 +302,8 @@ void EGPrefs::begin() {
 
 const char* EGPrefs::getString(const char* module, const char* key) {
   const PrefShadow* s = find_shadow(module, key);
-  return s ? s->value : "";
+  if (!s || !s->value) return "";
+  return s->value;
 }
 
 int32_t EGPrefs::getInt(const char* module, const char* key) {
