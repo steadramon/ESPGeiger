@@ -199,24 +199,10 @@ void InputPrefs::on_prefs_loaded() {
   gcounter.set_cpm_window(cw);
 #endif
 #ifndef RXPIN_BLOCKED
-  {
-    int rx = (int)EGPrefs::getUInt("input", "rx_pin");
-    if (const char* why = PinSafety::unsafe_input(rx)) {
-      Log::console(PSTR("Counter: rx_pin=%d unsafe (%s) - disabled"), rx, why);
-      rx = -1;
-    }
-    gcounter.set_rx_pin(rx);
-  }
+  gcounter.set_rx_pin((int)EGPrefs::getUInt("input", "rx_pin"));
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {
-    int tx = (int)EGPrefs::getUInt("input", "tx_pin");
-    if (const char* why = PinSafety::unsafe_output(tx)) {
-      Log::console(PSTR("Counter: tx_pin=%d unsafe (%s) - disabled"), tx, why);
-      tx = -1;
-    }
-    gcounter.set_tx_pin(tx);
-  }
+  gcounter.set_tx_pin((int)EGPrefs::getUInt("input", "tx_pin"));
 #endif
 #ifdef USE_PCNT
   gcounter.set_pcnt_filter((int)EGPrefs::getUInt("input", "pcnt_filter"));
@@ -349,7 +335,6 @@ void LedPrefs::on_prefs_loaded() {
 
 #if defined(ESPG_HV) && !defined(ESPGEIGER_HW)
 #include "../HV/HV.h"
-#include "../Logger/Logger.h"
 
 class HVPinPrefs : public EGModule {
 public:
