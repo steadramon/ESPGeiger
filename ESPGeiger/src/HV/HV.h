@@ -117,7 +117,8 @@ class HV : public EGModule {
         return _hw_duty;
       }
       void set_vd_ratio(int ratio) {
-        if (ratio < 1)     ratio = 1;
+        // 0 is the sentinel for "ADC disabled" - HV loop skips the read.
+        if (ratio < 0)     ratio = 0;
         if (ratio > 50000) ratio = 50000;
         _hw_vd_ratio = ratio;
       }
