@@ -21,6 +21,7 @@
 #include "PushButton.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/PinSafety.h"
 #include <Ticker.h>
 #ifdef SSD1306_DISPLAY
 #include "../OLEDDisplay/OLEDDisplay.h"
@@ -113,6 +114,10 @@ PushButton::PushButton() {
 }
 
 void PushButton::set_pin(int pin) {
+  if (const char* why = PinSafety::unsafe_input(pin)) {
+    Log::console(PSTR("Btn: pin=%d unsafe (%s) - disabled"), pin, why);
+    pin = -1;
+  }
   if (pin == s_pin && buttonTicker.active()) return;
   buttonTicker.detach();
   s_pressed = false;
