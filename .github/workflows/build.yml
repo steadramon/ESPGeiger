@@ -9,6 +9,7 @@ on:
     paths-ignore:
       - 'README.md'
       - 'docs/**'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -63,4 +64,5 @@ jobs:
           path: |
             .pio/build/*/firmware.bin
             .pio/build/*/firmware_merged.bin
+            .pio/build/*/firmware.elf
           retention-days: 7
