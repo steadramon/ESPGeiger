@@ -17,6 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#ifndef LOGGER_H
+#define LOGGER_H
+
 #include "Arduino.h"
 
 #define MAX_LOG_SIZE 4000
@@ -43,3 +46,5 @@ private:
   static LoggingLevels logLevel;
   static bool serialLog;
 };
+
+#endif
