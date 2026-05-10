@@ -118,7 +118,12 @@ void IRAM_ATTR GeigerTestPulseInt::pulseInterrupt() {
 }
 
 double GeigerTestPulseInt::calcPWM() {
-  return (GEIGER_TEST_TIMER_DIV/GeigerInputTest::getTargetCPS()) / 2;
+  double r = (GEIGER_TEST_TIMER_DIV / GeigerInputTest::getTargetCPS()) / 2;
+#ifdef ESP8266
+  // timer1 is 23-bit; cap so very low cps doesn't wrap.
+  if (r > 8388607) r = 8388607;
+#endif
+  return r;
 }
 
 void GeigerTestPulseInt::secondTicker() {

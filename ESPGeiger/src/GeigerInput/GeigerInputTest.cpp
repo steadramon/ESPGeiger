@@ -49,21 +49,28 @@ double GeigerInputTest::generatePoissonRand(double lambda) {
 
 double GeigerInputTest::calcDelay() {
   double mult = GEIGER_TEST_TIMER_DIV;
+  double cps  = getTargetCPS();
+  double r;
 #ifdef DISABLE_GEIGER_POISSON
-  return mult / _target_cps;
+  r = mult / cps;
 #else
   // Debt carries forward unclamped so long-run rate stays Poisson-correct
   // up to the pulse-width floor; above the floor output saturates cleanly.
-  double result       = generatePoissonRand(_target_cps) + _remainder;
+  double result       = generatePoissonRand(cps) + _remainder;
   double min_interval = _pulse_width_us * 0.000001;
   if (result < min_interval) {
-    _remainder = result - min_interval;   // unclamped — may be deeply negative
+    _remainder = result - min_interval;   // unclamped - may be deeply negative
     result     = min_interval;
   } else {
     _remainder = 0;
   }
-  return mult * result;
+  r = mult * result;
 #endif
+#ifdef ESP8266
+  // timer1 is 23-bit; cap so very low cps doesn't wrap into a small fast rate.
+  if (r > 8388607) r = 8388607;
+#endif
+  return r;
 }
 
 void GeigerInputTest::setTargetCPM(float target, bool manual = false) {
@@ -77,7 +84,10 @@ void GeigerInputTest::setTargetCPS(float target) {
 };
 
 float GeigerInputTest::getTargetCPS() {
-  return _target_cps;
+  // Clamp literal 0 to a tiny epsilon so callers can divide without checking.
+  // Result-capping in calcDelay/calcPWM handles the timer1 overflow case,
+  // so any positive cps is safe here.
+  return (_target_cps > 0) ? _target_cps : 1e-6f;
 }
 
 void GeigerInputTest::secondTicker() {
