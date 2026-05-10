@@ -400,8 +400,7 @@ static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #endif
 
 static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // Live status as JSON. ~250-320 bytes; chunked since it can flirt with
-  // bodyScratch's 256B cap (esp. with HV_ADC adding more fields).
+  // Live status as JSON. Chunked since ~250-320 B exceeds the inline-send cap.
   res.beginChunked(200, "application/json");
   char buf[200];
   char c[16], s[16], c5[16], c15[16], cs[16];

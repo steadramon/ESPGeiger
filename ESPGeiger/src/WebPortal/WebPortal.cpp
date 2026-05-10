@@ -587,11 +587,12 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Network"));
 
-  // Show currently-connected network (if any).
+  // Show currently-connected network (if any). One String alloc, not two.
+  String curSsid = WiFi.SSID();
   char head[160];
   int n = snprintf_P(head, sizeof(head),
     PSTR("<p class=muted>Connected to <b>%s</b></p>"),
-    WiFi.SSID().length() ? WiFi.SSID().c_str() : "(none)");
+    curSsid.length() ? curSsid.c_str() : "(none)");
   if (n > 0) res.sendChunk(head, (size_t)n);
 
   // Form renders immediately with no scan; JS below polls /wifiscan in
@@ -1252,7 +1253,13 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Config"));
   res.sendChunk(FPSTR(PARAM_STYLE));
-  if (did_save) res.sendChunk(F("<p style='color:#0a0'>Saved</p>"));
+  if (did_save) res.sendChunk(F(
+    "<div style=\"padding:.8em 1em;margin:1em 0;background:#28a74526;"
+    "border-left:4px solid #28a74599;border-radius:4px;font-size:.95em\">"
+    "<span style=\"float:right;cursor:pointer;font-size:1.3em;line-height:1;opacity:.6\" "
+    "onclick=\"this.parentElement.style.display='none';\">&times;</span>"
+    "<strong>Saved.</strong> Your changes have been applied."
+    "</div>"));
   res.sendChunk(F("<form method=POST action=/param>"));
 
   char buf[512];
@@ -1505,8 +1512,7 @@ void WebPortal::hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // Aggregates each module's status_json fragment into one object.
-  // Bigger buffer than bodyScratch since the response can run several
-  // hundred bytes once MQTT/WebAPI/etc all chime in.
+  // Several hundred bytes once MQTT/WebAPI/etc all chime in.
   char buf[512];
   size_t pos = 0;
   buf[pos++] = '{';
@@ -1518,10 +1524,7 @@ void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hWebCmd(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // Body is the raw command line (no encoding - the JS client posts as
-  // text/plain). EGHttpRequest::body() points at slot bodyScratch which
-  // auto-copies bodies <= 256 B. Trim trailing CR/LF that some browsers
-  // append before forwarding to the dispatcher.
+  // Raw command line (text/plain). Trim trailing CR/LF before dispatch.
   const char* body = req.body();
   if (!body || !*body) {
     res.send(400, "text/plain", "empty command");

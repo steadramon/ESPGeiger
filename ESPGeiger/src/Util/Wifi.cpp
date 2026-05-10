@@ -59,8 +59,12 @@ void Wifi::tick(unsigned long now) {
     static uint8_t rssi_cnt = 0;
     if (++rssi_cnt >= 60) { rssi_cnt = 0; Wifi::rssi = WiFi.RSSI(); }
     if (!prev) {
-      strncpy(Wifi::ip, WiFi.localIP().toString().c_str(), sizeof(Wifi::ip) - 1);
+      // Format IP from bytes directly - avoids the heap String from toString().
+      IPAddress ipa = WiFi.localIP();
+      snprintf(Wifi::ip, sizeof(Wifi::ip), "%u.%u.%u.%u",
+               ipa[0], ipa[1], ipa[2], ipa[3]);
       strncpy(Wifi::ssid, WiFi.SSID().c_str(), sizeof(Wifi::ssid) - 1);
+      Wifi::ssid[sizeof(Wifi::ssid) - 1] = '\0';
       Wifi::rssi = WiFi.RSSI();
     }
   }
@@ -115,7 +119,9 @@ static bool waitForWifi(uint32_t timeoutMs) {
   uint32_t start = millis();
   while ((millis() - start) < timeoutMs) {
     if (WiFi.status() == WL_CONNECTED) {
-      Log::console(PSTR("WiFi: IP: %s"), WiFi.localIP().toString().c_str());
+      IPAddress ipa = WiFi.localIP();
+      Log::console(PSTR("WiFi: IP: %u.%u.%u.%u"),
+                   ipa[0], ipa[1], ipa[2], ipa[3]);
       return true;
     }
     delay(100);
@@ -313,9 +319,11 @@ bool Wifi::applyStaticConfig() {
   // DNS is optional - fall back to gateway if blank/invalid.
   if (!dns.fromString(s_dns)) dns = gw;
   WiFi.config(ip, gw, sn, dns);
-  Log::console(PSTR("WiFi: Static %s gw=%s sn=%s dns=%s"),
-               ip.toString().c_str(), gw.toString().c_str(),
-               sn.toString().c_str(), dns.toString().c_str());
+  Log::console(PSTR("WiFi: Static %u.%u.%u.%u gw=%u.%u.%u.%u sn=%u.%u.%u.%u dns=%u.%u.%u.%u"),
+               ip[0], ip[1], ip[2], ip[3],
+               gw[0], gw[1], gw[2], gw[3],
+               sn[0], sn[1], sn[2], sn[3],
+               dns[0], dns[1], dns[2], dns[3]);
   return true;
 }
 
