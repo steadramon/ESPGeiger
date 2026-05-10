@@ -116,10 +116,14 @@ class HV : public EGModule {
       int get_duty() {
         return _hw_duty;
       }
-      void set_vd_ratio( int ratio) {
+      void set_vd_ratio(int ratio) {
+        if (ratio < 1)     ratio = 1;
+        if (ratio > 50000) ratio = 50000;
         _hw_vd_ratio = ratio;
-      };
-      void set_vd_offset (int offset) {
+      }
+      void set_vd_offset(int offset) {
+        if (offset < -100) offset = -100;
+        if (offset >  100) offset =  100;
         _hw_vd_offset = offset;
       }
       int get_vd_ratio() {

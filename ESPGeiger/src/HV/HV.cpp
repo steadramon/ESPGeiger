@@ -51,8 +51,8 @@ static const EGPref HW_PREF_ITEMS[] = {
   {"freq",   HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, 0},
   {"duty",   HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, 1023, 0, EGP_UINT, 0},
 #ifdef ESPG_HV_ADC
-  {"ratio",  HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0, 0, 0, EGP_INT, 0},
-  {"offset", HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, 0, 0, 0, EGP_INT, 0},
+  {"ratio",  HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 1,    50000, 0, EGP_INT, 0},
+  {"offset", HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, EGP_INT, 0},
   {"target", HW_L_TGT, HW_H_TGT, "0", nullptr, 0, 500, 0, EGP_UINT, 0},
 #endif
 };
@@ -137,7 +137,7 @@ void HV::loop(unsigned long /*now*/) {
 #ifdef ESPG_HV_ADC
   if (_hw_vd_ratio == 0) return;
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
-  int volts = ((_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
+  int volts = (int)(((int64_t)_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
   hvReading.add((float)volts);
 
   // Closed-loop trim — only after warmup, throttled, bounded ±TRIM_MAX.
