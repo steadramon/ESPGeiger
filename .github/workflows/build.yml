@@ -10,6 +10,11 @@ on:
       - 'README.md'
       - 'docs/**'
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch/tag/SHA) to build. Leave blank for current.'
+        required: false
+        default: ''
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -47,6 +52,8 @@ jobs:
     name: Build with PlatformIO
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
