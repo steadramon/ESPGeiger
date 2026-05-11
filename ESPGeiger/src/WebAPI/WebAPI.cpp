@@ -104,23 +104,6 @@ void WebAPI::begin() {
     WEBAPI_URL, priv_k[0] == 0 ? "none (will generate)" : "loaded");
 }
 
-void WebAPI::note_publish(bool ok) {
-  // Forward to base class for the regular pub_ok/pub_err counters that
-  // feed Activity logging.
-  EGModule::note_publish(ok);
-  if (ok) {
-    _fail_count = 0;
-    return;
-  }
-  if (_fail_count < UINT16_MAX) ++_fail_count;
-  if (_fail_count >= WEBAPI_FAIL_REBOOT) {
-    Log::console(PSTR("WebAPI: %u consecutive failures, restarting"),
-                 (unsigned)_fail_count);
-    delay(150);
-    ESP.restart();
-  }
-}
-
 void WebAPI::loop(unsigned long now) {
   if (_mode == 0) return;
   if (!ntpclient.synced) return;
@@ -175,7 +158,7 @@ void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
     lastHandshake = millis();
-    //return;
+    return;
   }
 
   GRNG::stir();
@@ -335,7 +318,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
 void WebAPI::postMeasurement(bool censusOnly) {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
-    //return;
+    return;
   }
 
   // Wait for a full CPM bucket so the first post isn't noisy.
