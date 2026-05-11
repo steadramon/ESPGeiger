@@ -581,19 +581,28 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
       char mbuf[2] = {(char)('0' + mode), '\0'};
       EGPrefs::put("webapi", "mode", mbuf);
     }
+    // atof would pull _strtod_l (~3.7 KB flash).
+    auto validDeg = [](const char* s, int maxWhole) -> bool {
+      if (!s || !*s) return false;
+      if (*s == '-' || *s == '+') s++;
+      int w = 0; bool any = false;
+      while (*s >= '0' && *s <= '9') {
+        w = w * 10 + (*s++ - '0'); any = true;
+        if (w > maxWhole) return false;
+      }
+      if (!any) return false;
+      if (*s == '.') { s++; while (*s >= '0' && *s <= '9') s++; }
+      return !*s;
+    };
     const char* lat = req.arg("lat");
     if (lat) {
-      float la = atof(lat);
-      if (la >= -90.0f && la <= 90.0f) {
-        EGPrefs::put("webapi", "lat", *lat ? lat : "0");
-      }
+      if (!*lat) EGPrefs::put("webapi", "lat", "0");
+      else if (validDeg(lat, 90)) EGPrefs::put("webapi", "lat", lat);
     }
     const char* lon = req.arg("lon");
     if (lon) {
-      float lo = atof(lon);
-      if (lo >= -180.0f && lo <= 180.0f) {
-        EGPrefs::put("webapi", "lon", *lon ? lon : "0");
-      }
+      if (!*lon) EGPrefs::put("webapi", "lon", "0");
+      else if (validDeg(lon, 180)) EGPrefs::put("webapi", "lon", lon);
     }
     EGPrefs::commit();
     saved = true;
