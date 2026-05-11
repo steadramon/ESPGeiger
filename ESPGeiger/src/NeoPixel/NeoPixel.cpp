@@ -96,14 +96,17 @@ void NeoPixel::blink(uint16 timer)
     float diff_ratio = (our_cpm / our_5cpm);
     nextInterval = clamp((unsigned long)(blinkInterval / diff_ratio), 100UL, 4000UL);
     if (this->neoPixelMode >= 2) {
-      if (diff_ratio > 1.5) {
-        rgb = RgbColor(colorSaturation, 0, 0);           // rising fast - red
-      } else if (diff_ratio > 1.15) {
+      // z-score against Poisson std (sqrt of cpm5). Noise-aware: low rates
+      // need bigger absolute deltas to trigger, high rates trip on small.
+      float z = (our_cpm - our_5cpm) / sqrtf(our_5cpm);
+      if (z > 3.0f) {
+        rgb = RgbColor(colorSaturation, 0, 0);              // significant rise - red
+      } else if (z > 1.5f) {
         rgb = RgbColor(colorSaturation, colorSaturation, 0); // rising - yellow
-      } else if (diff_ratio >= 0.5) {
-        rgb = RgbColor(0, colorSaturation, 0);            // stable/dropping - green
+      } else if (z < -1.5f) {
+        rgb = RgbColor(colorSaturation, 0, colorSaturation); // dropping - purple
       } else {
-        rgb = RgbColor(colorSaturation, 0, colorSaturation); // dropping fast - purple
+        rgb = RgbColor(0, colorSaturation, 0);              // stable - green
       }
     }
   } else {
