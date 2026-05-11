@@ -285,6 +285,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
     if (sl) {
       sl->state          = DONE;
       sl->delete_pending = true;
+      self->_tickWanted  = true;
       cli->close();   // force onDisconnect so the client gets deleted
     }
   }, this);
@@ -298,12 +299,14 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
     if (sl) {
       sl->state          = DONE;
       sl->delete_pending = true;
+      self->_tickWanted  = true;
       cli->close();
     }
   }, this);
 }
 
 void EGHttpServer::onClient(AsyncClient* c) {
+  _tickWanted = true;   // any accept = work for tick (alloc or 503)
   // onDisconnect first - every accepted client must clean up, whether it
   // ended up in a slot or sat in the wait queue.
   c->onDisconnect([](void* arg, AsyncClient* cli) {
@@ -319,6 +322,7 @@ void EGHttpServer::onClient(AsyncClient* c) {
       sl->state          = DONE;
       sl->delete_pending = true;
       sl->client         = nullptr;
+      self->_tickWanted  = true;
       delete cli;
     } else {
       // Slot already released (eager-close), or client was queued.
@@ -330,18 +334,11 @@ void EGHttpServer::onClient(AsyncClient* c) {
   Slot* s = allocSlot(c);
   if (s) { wireSlotCallbacks(s, c); return; }
 
-  // Slots full. Park the client; promoteWaiters() runs from tick() and
-  // will assign a slot once one frees. lwIP buffers inbound TCP bytes
-  // for us until we register onData via wireSlotCallbacks.
-  if (enqueueWaiter(c)) {
-    c->onError([](void* arg, AsyncClient* cli, int8_t) {
-      auto* self = static_cast<EGHttpServer*>(arg);
-      self->dropWaiter(cli);
-    }, this);
-    return;
-  }
-
-  // Wait queue also full - last-resort 503.
+  // Slots full. Queueing is lossy (AsyncTCP frees pbufs with no onData
+  // callback), so a queued client's request bytes get dropped and the
+  // promotion lands on a slot that never sees its request - 60s hang
+  // until rx timeout. Better to 503 + close immediately; browser retries
+  // per Retry-After.
   static const char r503[] =
     "HTTP/1.1 503 Service Unavailable\r\n"
     "Content-Length: 0\r\n"
@@ -356,6 +353,7 @@ void EGHttpServer::onClient(AsyncClient* c) {
 
 void EGHttpServer::onData(Slot* s, void* data, size_t len) {
   if (s->state != RECEIVING) return;   // already past parse, ignore extra
+  _tickWanted = true;                  // packet received - tick may have work
 
   // Phase 1: header accumulation. Streaming routes pass through here
   // too; we need Content-Length before route identification.
@@ -453,7 +451,19 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
 
   // Phase 2: body after headers (streaming path).
   if (s->streaming) {
-    if (_streamLen + len > STREAM_BUF_SIZE) {
+    // Lock the read-then-write on _streamLen: drainStream in the main
+    // task does the inverse mutation; without this the appended bytes
+    // can land beyond a stale snapshot and get clobbered when drainStream
+    // resets _streamLen, losing ~1 MTU silently mid-upload.
+    EGHTTP_LOCK();
+    bool overflow = (_streamLen + len > STREAM_BUF_SIZE);
+    if (!overflow) {
+      memcpy(_streamBuf + _streamLen, data, len);
+      _streamLen += len;
+    }
+    EGHTTP_UNLOCK();
+
+    if (overflow) {
       Serial.printf_P(PSTR("[EGHttp] stream buf overflow: %u+%u>%u, aborting\n"),
                       (unsigned)_streamLen, (unsigned)len, (unsigned)STREAM_BUF_SIZE);
       s->client->close();
@@ -461,8 +471,6 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
       s->delete_pending = true;
       return;
     }
-    memcpy(_streamBuf + _streamLen, data, len);
-    _streamLen += len;
     s->client->ackLater();
     s->ack_paused = true;
     return;
@@ -562,11 +570,17 @@ void EGHttpServer::drainStream(Slot* s) {
     // Stay in manual-ack mode: a second ackLater() zeroes _rx_ack_len and
     // loses already-received-but-unacked bytes.
     if (s->client) s->client->ack(toDeliver);
+    // Lock the memmove + _streamLen reset against onData: any bytes
+    // appended between our read and write of _streamLen here would be
+    // silently overwritten on the next onData append. (~1 MTU lost
+    // mid-upload, breaks OTA at 99%+ completion.)
+    EGHTTP_LOCK();
     size_t leftover = (_streamLen > toDeliver) ? _streamLen - toDeliver : 0;
     if (leftover > 0) {
       memmove(_streamBuf, _streamBuf + toDeliver, leftover);
     }
     _streamLen = leftover;
+    EGHTTP_UNLOCK();
   }
 
   if (s->bodyAcked >= s->contentLength) {
@@ -662,12 +676,11 @@ void EGHttpServer::dispatch(Slot* s) {
 }
 
 void EGHttpServer::tick() {
-  // Fast path - runs every loop() iteration, worth bailing early.
-  bool any = false;
-  for (auto& s : _slots) {
-    if (s.delete_pending || s.state != IDLE) { any = true; break; }
-  }
-  if (!any && _waitCount == 0) return;
+  // Fast path - one volatile bool read instead of a per-slot scan.
+  // Callbacks set _tickWanted; we clear it optimistically and anything
+  // firing during the body re-sets it.
+  if (!_tickWanted && _waitCount == 0) return;
+  _tickWanted = false;
 
   for (auto& s : _slots) {
     if (s.delete_pending) {
@@ -702,6 +715,7 @@ void EGHttpServer::tick() {
       // ms. Without this, queued connections wait, returning 503s.
       s.state          = DONE;
       s.delete_pending = true;
+      _tickWanted      = true;     // next tick must run reclaim path
     }
   }
 

@@ -30,12 +30,22 @@
 #ifndef EGHTTP_MAX_CLIENTS
   // Queued clients silently lose inbound data: AsyncTCP ACKs and frees
   // pbufs on connections that don't yet have onData registered. Slot
-  // pool must directly cover the realistic parallel-fetch burst.
-  #define EGHTTP_MAX_CLIENTS 6
+  // pool must directly cover the realistic parallel-fetch burst. ESP8266
+  // trades depth for heap; 3 slots fits a typical home-page in practice.
+  #ifdef ESP32
+    #define EGHTTP_MAX_CLIENTS 6
+  #else
+    #define EGHTTP_MAX_CLIENTS 3
+  #endif
 #endif
 #ifndef EGHTTP_WAIT_QUEUE
-  // Last-resort overflow only; queued clients lose inbound data.
-  #define EGHTTP_WAIT_QUEUE 1
+  // Last-resort overflow only; queued clients lose inbound data. Deeper
+  // queue on ESP8266 compensates for the smaller slot pool.
+  #ifdef ESP32
+    #define EGHTTP_WAIT_QUEUE 1
+  #else
+    #define EGHTTP_WAIT_QUEUE 3
+  #endif
 #endif
 #ifndef EGHTTP_REQ_BUF
   // Browsers send 700-900 B of headers (sec-ch-ua + Sec-Fetch-* + cookies).
@@ -212,6 +222,11 @@ class EGHttpServer {
     uint8_t*          _streamBuf  = nullptr;
     volatile size_t   _streamLen  = 0;
     Slot*             _streamOwner = nullptr;
+
+    // tick() fast-path skip. Set by callbacks and dispatch when there's
+    // anything for tick to do. Cleared optimistically at top of tick; any
+    // callback that fires during the body will re-set it.
+    volatile bool     _tickWanted = false;
 
 #ifdef ESP32
     // Dispatch-shared chunk accumulator. Lazy-alloc on first dispatch,

@@ -51,6 +51,20 @@ class EGPortal {
 
     bool active() const { return _active; }
 
+    // ---- Shared scan helpers ----
+    // ScanEntry is shared so WebPortal can reuse the dedup/sort path.
+    struct ScanEntry {
+      char    ssid[EGPORTAL_SSID_MAX + 1];
+      int8_t  rssi;
+      uint8_t enc;     // wl_enc_type / wifi_auth_mode_t per platform
+    };
+
+    // Process the result of WiFi.scanComplete() into a filtered/deduped/
+    // sorted output buffer. rawCount = scanComplete() return. Returns the
+    // populated entry count. Caller owns out[]; helper does no heap.
+    static size_t processScan(ScanEntry* out, size_t maxOut, int rawCount,
+                              int8_t rssiMin = -85);
+
   private:
     EGHttpServer _http;
     DNSServer    _dns;
@@ -65,11 +79,6 @@ class EGPortal {
     char _savedSsid[EGPORTAL_SSID_MAX + 1] = {0};
     char _savedPass[EGPORTAL_PASS_MAX + 1] = {0};
 
-    struct ScanEntry {
-      char    ssid[EGPORTAL_SSID_MAX + 1];
-      int8_t  rssi;
-      uint8_t enc;
-    };
     ScanEntry _scan[EGPORTAL_SCAN_MAX];
     uint8_t   _scanCount = 0;
     uint32_t  _scanLast  = 0;

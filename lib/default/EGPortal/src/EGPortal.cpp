@@ -138,29 +138,28 @@ void EGPortal::onSave(SaveCallback cb, void* user) {
   _onSaveUser = user;
 }
 
-void EGPortal::refreshScan(int n) {
-  Serial.printf("[EGPortal] refreshScan(%d)\n", n);
-  if (n <= 0) return;
-  _scanCount = 0;
-  for (int i = 0; i < n; i++) {
-    String s = WiFi.SSID(i);
+size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
+                              int8_t rssiMin) {
+  if (rawCount <= 0 || maxOut == 0 || !out) return 0;
+  size_t count = 0;
+  for (int i = 0; i < rawCount; i++) {
     int8_t rssi = (int8_t)WiFi.RSSI(i);
-    Serial.printf("[EGPortal]   [%d] '%s' %d dBm\n", i, s.c_str(), rssi);
+    if (rssi < rssiMin) continue;     // cheap filter before String alloc
+    String s = WiFi.SSID(i);
     if (!s.length()) continue;
-    if (rssi < SCAN_RSSI_MIN) continue;
 
     // Dedup by SSID - keep strongest. Linear scan is fine at this size.
     int existing = -1;
-    for (uint8_t j = 0; j < _scanCount; j++) {
-      if (strcmp(_scan[j].ssid, s.c_str()) == 0) { existing = j; break; }
+    for (size_t j = 0; j < count; j++) {
+      if (strcmp(out[j].ssid, s.c_str()) == 0) { existing = j; break; }
     }
     if (existing >= 0) {
-      if (rssi > _scan[existing].rssi) _scan[existing].rssi = rssi;
+      if (rssi > out[existing].rssi) out[existing].rssi = rssi;
       continue;
     }
-    if (_scanCount >= EGPORTAL_SCAN_MAX) continue;
+    if (count >= maxOut) continue;
 
-    ScanEntry& e = _scan[_scanCount++];
+    ScanEntry& e = out[count++];
     strncpy(e.ssid, s.c_str(), EGPORTAL_SSID_MAX);
     e.ssid[EGPORTAL_SSID_MAX] = '\0';
     e.rssi = rssi;
@@ -168,15 +167,21 @@ void EGPortal::refreshScan(int n) {
   }
 
   // Insertion sort by RSSI descending (strongest first).
-  for (uint8_t i = 1; i < _scanCount; i++) {
-    ScanEntry cur = _scan[i];
-    int j = i;
-    while (j > 0 && _scan[j - 1].rssi < cur.rssi) {
-      _scan[j] = _scan[j - 1];
+  for (size_t i = 1; i < count; i++) {
+    ScanEntry cur = out[i];
+    int j = (int)i;
+    while (j > 0 && out[j - 1].rssi < cur.rssi) {
+      out[j] = out[j - 1];
       j--;
     }
-    _scan[j] = cur;
+    out[j] = cur;
   }
+  return count;
+}
+
+void EGPortal::refreshScan(int n) {
+  Serial.printf("[EGPortal] refreshScan(%d)\n", n);
+  _scanCount = (uint8_t)processScan(_scan, EGPORTAL_SCAN_MAX, n, SCAN_RSSI_MIN);
 }
 
 // ---- handlers ----
@@ -262,7 +267,8 @@ void EGPortal::hRescan(EGHttpRequest& req, EGHttpResponse& res, void* user) {
 void EGPortal::hCaptive(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // Absolute redirect so the captive popup navigates onto our AP IP rather
   // than staying on the probe host (connectivitycheck.*, generate_204, etc).
+  IPAddress ip = WiFi.softAPIP();
   char loc[40];
-  snprintf(loc, sizeof(loc), "http://%s/", WiFi.softAPIP().toString().c_str());
+  snprintf(loc, sizeof(loc), "http://%u.%u.%u.%u/", ip[0], ip[1], ip[2], ip[3]);
   res.redirect(loc);
 }
