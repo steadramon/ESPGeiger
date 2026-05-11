@@ -31,6 +31,9 @@ extern Counter gcounter;
 // PROGMEM JS blobs are defined at the bottom of this file. Forward-declare
 // so the handlers above can reference them.
 extern const char picographJS[] PROGMEM;
+
+#define CACHE_1D "public, max-age=86400"
+#define CACHE_7D "public, max-age=604800"
 extern const char statusJS[]    PROGMEM;
 
 // ---------- shared CSS + page templates (PROGMEM) ----------
@@ -332,12 +335,12 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader("Cache-Control", "public, max-age=86400");   // 1 day
+  res.addHeader("Cache-Control", CACHE_1D);   // 1 day
   res.send(200, "text/css", FPSTR(STYLE_CSS));
 }
 
 void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader("Cache-Control", "public, max-age=604800");  // 7 days
+  res.addHeader("Cache-Control", CACHE_7D);  // 7 days
   res.beginChunked(200, "image/svg+xml");
   res.sendChunk(F("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>"));
   res.sendChunk(FPSTR(FAVICON_PATHS));
@@ -358,7 +361,7 @@ static const char THEME_JS[] PROGMEM =
   "}";
 
 void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader("Cache-Control", "public, max-age=86400");
+  res.addHeader("Cache-Control", CACHE_1D);
   res.send(200, "application/javascript", FPSTR(THEME_JS));
 }
 
@@ -876,8 +879,7 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // Device env/chip/ver spliced into window._dev by hUpdateForm.
 
 static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
-<p>Upload a firmware <code>.bin</code> built for this board. The device
-will reboot when the upload completes.</p>
+<p>Upload a firmware <code>.bin</code> built for this board. The device will reboot when the upload completes.</p>
 <form id=uf>
 <input type=file id=uf_file accept=".bin,application/octet-stream" required>
 <div id=uf_check style="margin:.6em 0;padding:.5em .7em;border-radius:4px;display:none;font-size:.9em"></div>
@@ -887,72 +889,24 @@ will reboot when the upload completes.</p>
 <p id=uf_st style="margin-top:.6em"></p>
 <script>
 (function(){
-  var dev = window._dev || {};
-
-  function setCheck(level, html){
-    var c = document.getElementById('uf_check');
-    var bg = {ok:'#1f6f3a', warn:'#7a5a00', err:'#7a1f1f'}[level] || '#444';
-    c.style.display = 'block';
-    c.style.background = bg;
-    c.style.color = '#fff';
-    c.innerHTML = html;
+  var dev=window._dev||{};
+  function sC(l,h){var c=document.getElementById('uf_check');c.style.display='block';c.style.background=({ok:'#1f6f3a',warn:'#7a5a00',err:'#7a1f1f'})[l]||'#444';c.style.color='#fff';c.innerHTML=h;}
+  async function cF(f){
+    var btn=document.getElementById('uf_btn');
+    if(!f){btn.disabled=true;document.getElementById('uf_check').style.display='none';return;}
+    var u8=new Uint8Array(await f.arrayBuffer());
+    if(u8.length<8||(u8[0]!==0xE9&&u8[0]!==0xEA)){btn.disabled=true;sC('err','Not an ESP firmware image.');return;}
+    var t=new TextDecoder('latin1').decode(u8);
+    var e=dev.env||'';
+    var mine=/^esp32/i.test(e)?'esp32':'esp8266';
+    var b32=/\besp32[_a-z0-9]/i.test(t);
+    var b66=/\besp8266[_a-z0-9]|\bespgeiger(lite|log|hw)/i.test(t);
+    if((mine==='esp8266'&&b32&&!b66)||(mine==='esp32'&&b66&&!b32)){btn.disabled=true;sC('err','<b>Refusing:</b> wrong platform firmware.');return;}
+    btn.disabled=false;
+    if(e&&t.indexOf(e)!==-1)sC('ok','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
+    else sC('warn','<b>Warning:</b> running <code>'+e+'</code> not found in file.');
   }
-  function clearCheck(){
-    document.getElementById('uf_check').style.display = 'none';
-  }
-
-  async function checkFirmware(file){
-    var btn = document.getElementById('uf_btn');
-    if (!file) { btn.disabled = true; clearCheck(); return; }
-    var u8 = new Uint8Array(await file.arrayBuffer());
-    if (u8.length < 8) {
-      btn.disabled = true;
-      setCheck('err', 'File is too small to be valid firmware.');
-      return;
-    }
-    if (u8[0] !== 0xE9 && u8[0] !== 0xEA) {
-      btn.disabled = true;
-      setCheck('err', 'Not an ESP firmware image (bad magic byte 0x'+u8[0].toString(16)+'). Expected 0xE9 or 0xEA.');
-      return;
-    }
-    // latin-1 decode preserves byte values; lets us indexOf for ASCII strings.
-    var txt = new TextDecoder('latin1').decode(u8);
-
-    var myEnv  = dev.env  || '';
-    var myChip = (dev.chip || '').toLowerCase();
-    var myVer  = dev.ver  || '';
-
-    // PIO bakes BUILD_ENV into PSTR literals so we can scan for it.
-    function envIsESP32(e)   { return /^esp32/i.test(e); }
-    function envIsESP8266(e) { return /^esp8266/i.test(e) || /^espgeiger(?:lite|log|hw)/i.test(e); }
-    var fileHasEsp32   = /\besp32[a-z0-9_]*\b/i.test(txt);
-    var fileHasEsp8266 = /\besp8266[a-z0-9_]*\b/i.test(txt) || /\bespgeiger(?:lite|log|hw)/i.test(txt);
-
-    // Hard block: ESP32 firmware on ESP8266 device or vice versa.
-    if (envIsESP8266(myEnv) && fileHasEsp32 && !fileHasEsp8266) {
-      btn.disabled = true;
-      setCheck('err', '<b>Refusing:</b> file looks like ESP32 firmware - running on ESP8266.');
-      return;
-    }
-    if (envIsESP32(myEnv) && fileHasEsp8266 && !fileHasEsp32) {
-      btn.disabled = true;
-      setCheck('err', '<b>Refusing:</b> file looks like ESP8266 firmware - running on ESP32.');
-      return;
-    }
-
-    // Soft check; older builds without DeviceInfo embedding miss.
-    var envMatch = (myEnv && txt.indexOf(myEnv) !== -1);
-    btn.disabled = false;
-    if (envMatch) {
-      setCheck('ok', '<b>Looks compatible</b> - build env <code>' + myEnv + '</code> found in firmware.');
-    } else {
-      setCheck('warn', '<b>Warning:</b> running env <code>' + myEnv + '</code> not found - likely a different board variant. Upload anyway?');
-    }
-  }
-
-  document.getElementById('uf_file').addEventListener('change', function(){
-    checkFirmware(this.files[0]);
-  });
+  document.getElementById('uf_file').addEventListener('change',function(){cF(this.files[0]);});
 
   document.getElementById('uf').addEventListener('submit', function(e){
     e.preventDefault();
@@ -998,14 +952,10 @@ will reboot when the upload completes.</p>
 void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Update"));
-  // Splice device identity so checkFirmware() can compare against the bin.
-  char dev[200];
+  char dev[80];
   int n = snprintf_P(dev, sizeof(dev),
-    PSTR("<script>window._dev={env:\"%s\",chip:\"%s\",ver:\"%s\"};</script>"),
-    BUILD_ENV, DeviceInfo::chipmodel(), RELEASE_VERSION);
-  size_t dlen = (n > 0) ? (size_t)n : 0;
-  if (dlen >= sizeof(dev)) dlen = sizeof(dev) - 1;
-  if (dlen) res.sendChunk(dev, dlen);
+    PSTR("<script>window._dev={env:\"%s\"};</script>"), BUILD_ENV);
+  if (n > 0 && (size_t)n < sizeof(dev)) res.sendChunk(dev, (size_t)n);
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
   WebPortal::sendPageTail(res);
   res.endChunked();
@@ -1040,6 +990,30 @@ void WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
     }
     case EGHttpServer::BODY_DATA: {
       if (s_ota.write_error || !Update.isRunning()) break;  // already failed; drain
+      // First chunk: validate the image header's entry_addr lives in the
+      // platform's expected memory range. Both ESP8266 and ESP32 share the
+      // 0xE9 magic byte so Update.write alone can't catch wrong-platform
+      // bins - which silently bricks the device on next boot.
+      if (s_ota.delivered == 0 && len >= 8) {
+        uint32_t entry = (uint32_t)data[4]
+                       | ((uint32_t)data[5] << 8)
+                       | ((uint32_t)data[6] << 16)
+                       | ((uint32_t)data[7] << 24);
+#ifdef ESP8266
+        // ESP8266 entry: iRAM, 0x40100000-0x401FFFFF.
+        bool plat_ok = (entry >= 0x40100000UL && entry < 0x40200000UL);
+#else
+        // ESP32 app entry: flash-mapped XIP, 0x400D0000-0x40400000.
+        bool plat_ok = (entry >= 0x400D0000UL && entry < 0x40400000UL);
+#endif
+        if (!plat_ok) {
+          Log::console(PSTR("OTA: REFUSING wrong-platform bin (entry=0x%08x)"),
+                       (unsigned)entry);
+          Update.end(false);
+          s_ota.write_error = true;
+          break;
+        }
+      }
       size_t wrote = Update.write((uint8_t*)data, len);
       if (wrote != len) {
         Log::console(PSTR("OTA: short write %u/%u err=%u"),
@@ -1493,7 +1467,7 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void WebPortal::hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // 1-day cache - JS rarely changes; saves a fetch per status page nav.
-  res.addHeader("Cache-Control", "public, max-age=86400");
+  res.addHeader("Cache-Control", CACHE_1D);
   res.beginChunked(200, "application/javascript");
   res.sendChunk(FPSTR(picographJS));
   res.sendChunk(FPSTR(statusJS));
