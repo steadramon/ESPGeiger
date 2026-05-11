@@ -23,6 +23,7 @@
 #include <EGHttpServer.h>
 #include "HV.h"
 #include "../Logger/Logger.h"
+#include "../Util/DeviceInfo.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Counter/Counter.h"
 #include "../Prefs/EGPrefs.h"
