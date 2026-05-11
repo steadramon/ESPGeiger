@@ -242,6 +242,14 @@ class EGHttpServer {
     Slot* findSlot(AsyncClient* c);
     Slot* allocSlot(AsyncClient* c);
     void  resetSlot(Slot* s);
+    // Mark slot for tick reclaim (state triple, no client touch).
+    inline void markDone(Slot* s) {
+      s->state          = DONE;
+      s->delete_pending = true;
+      _tickWanted       = true;
+    }
+    // Write status template + close + markDone. body=nullptr = close only.
+    void  sendStatusAndClose(Slot* s, const char* body, size_t len);
 
     bool  enqueueWaiter(AsyncClient* c);
     void  dropWaiter(AsyncClient* c);

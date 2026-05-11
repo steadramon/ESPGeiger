@@ -32,6 +32,21 @@
   #define EGHTTP_UNLOCK() ((void)0)
 #endif
 
+// Shared status-only responses (zero-length body, close).
+static const char R413[] =
+  "HTTP/1.1 413 Payload Too Large\r\n"
+  "Content-Length: 0\r\n"
+  "Connection: close\r\n\r\n";
+static const char R503[] =
+  "HTTP/1.1 503 Service Unavailable\r\n"
+  "Content-Length: 0\r\n"
+  "Connection: close\r\n\r\n";
+static const char R503_RETRY5[] =
+  "HTTP/1.1 503 Service Unavailable\r\n"
+  "Content-Length: 0\r\n"
+  "Connection: close\r\n"
+  "Retry-After: 5\r\n\r\n";
+
 // Yield-retry write: blocks until len bytes go on the wire or the
 // connection drops. Main-loop context only (handlers via tick()).
 static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
@@ -198,6 +213,17 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(AsyncClient* c) {
   return nullptr;
 }
 
+void EGHttpServer::sendStatusAndClose(Slot* s, const char* body, size_t len) {
+  if (s->client) {
+    if (body && len && s->client->space() >= len) {
+      s->client->write(body, len);
+      s->client->send();
+    }
+    s->client->close();
+  }
+  markDone(s);
+}
+
 void EGHttpServer::resetSlot(Slot* s) {
   s->client         = nullptr;
   s->state          = IDLE;
@@ -283,9 +309,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
                     cli, (int)err, sl ? (int)sl->streaming : -1,
                     sl ? (unsigned)sl->bodyAcked : 0u);
     if (sl) {
-      sl->state          = DONE;
-      sl->delete_pending = true;
-      self->_tickWanted  = true;
+      self->markDone(sl);
       cli->close();   // force onDisconnect so the client gets deleted
     }
   }, this);
@@ -297,9 +321,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
                     cli, (unsigned)time, sl ? (int)sl->streaming : -1,
                     sl ? (unsigned)sl->bodyAcked : 0u);
     if (sl) {
-      sl->state          = DONE;
-      sl->delete_pending = true;
-      self->_tickWanted  = true;
+      self->markDone(sl);
       cli->close();
     }
   }, this);
@@ -361,15 +383,7 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
     if (s->len + len > EGHTTP_REQ_BUF) {
       Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
                       (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
-      static const char r413[] =
-        "HTTP/1.1 413 Payload Too Large\r\n"
-        "Content-Length: 0\r\n"
-        "Connection: close\r\n\r\n";
-      s->client->write(r413, sizeof(r413) - 1);
-      s->client->send();
-      s->state          = DONE;
-      s->delete_pending = true;
-      s->client->close();
+      sendStatusAndClose(s, R413, sizeof(R413) - 1);
       return;
     }
     memcpy(s->buf + s->len, data, len);
@@ -400,31 +414,14 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
         _routes[s->routeIdx].bodyHandler) {
       // One stream at a time; lazy buffer alloc for zero idle cost.
       if (_streamOwner != nullptr) {
-        static const char r503[] =
-          "HTTP/1.1 503 Service Unavailable\r\n"
-          "Content-Length: 0\r\n"
-          "Connection: close\r\n"
-          "Retry-After: 5\r\n\r\n";
-        s->client->write(r503, sizeof(r503) - 1);
-        s->client->send();
-        s->state          = DONE;
-        s->delete_pending = true;
-        s->client->close();
+        sendStatusAndClose(s, R503_RETRY5, sizeof(R503_RETRY5) - 1);
         return;
       }
       _streamBuf = (uint8_t*)malloc(STREAM_BUF_SIZE);
       if (!_streamBuf) {
         Serial.printf_P(PSTR("[EGHttp] stream buf alloc failed (need %u)\n"),
                         (unsigned)STREAM_BUF_SIZE);
-        static const char r503[] =
-          "HTTP/1.1 503 Service Unavailable\r\n"
-          "Content-Length: 0\r\n"
-          "Connection: close\r\n\r\n";
-        s->client->write(r503, sizeof(r503) - 1);
-        s->client->send();
-        s->state          = DONE;
-        s->delete_pending = true;
-        s->client->close();
+        sendStatusAndClose(s, R503, sizeof(R503) - 1);
         return;
       }
       s->streaming = true;
@@ -466,9 +463,7 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
     if (overflow) {
       Serial.printf_P(PSTR("[EGHttp] stream buf overflow: %u+%u>%u, aborting\n"),
                       (unsigned)_streamLen, (unsigned)len, (unsigned)STREAM_BUF_SIZE);
-      s->client->close();
-      s->state          = DONE;
-      s->delete_pending = true;
+      sendStatusAndClose(s, nullptr, 0);
       return;
     }
     s->client->ackLater();
@@ -478,15 +473,7 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
 
   // Non-streaming body: accumulate, 413 on overflow, READY when full.
   if (s->len + len > EGHTTP_REQ_BUF) {
-    static const char r413[] =
-      "HTTP/1.1 413 Payload Too Large\r\n"
-      "Content-Length: 0\r\n"
-      "Connection: close\r\n\r\n";
-    s->client->write(r413, sizeof(r413) - 1);
-    s->client->send();
-    s->state          = DONE;
-    s->delete_pending = true;
-    s->client->close();
+    sendStatusAndClose(s, R413, sizeof(R413) - 1);
     return;
   }
   memcpy(s->buf + s->len, data, len);
@@ -711,11 +698,8 @@ void EGHttpServer::tick() {
       s.state = RESPONDING;
       dispatch(&s);
       if (s.client && s.client->connected()) s.client->close();
-      // Eager reclaim: ESP32 AsyncTCP can lag onDisconnect by hundreds of
-      // ms. Without this, queued connections wait, returning 503s.
-      s.state          = DONE;
-      s.delete_pending = true;
-      _tickWanted      = true;     // next tick must run reclaim path
+      // Eager reclaim: ESP32 AsyncTCP can lag onDisconnect by hundreds of ms.
+      markDone(&s);
     }
   }
 
