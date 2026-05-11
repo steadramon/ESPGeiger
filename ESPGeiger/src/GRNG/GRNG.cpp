@@ -110,76 +110,36 @@ void GRNG::extract_fast(uint8_t* out, size_t n) {
 
 static const char RANDOM_PAGE_BODY_NEW[] PROGMEM = R"HTML(
 <style>
-.rg{display:grid;grid-template-columns:5.5em 4em max-content max-content 1fr;gap:.55em .7em;align-items:center;margin:1em 0;max-width:560px}
-.rg .row{display:contents}
-.rg .lbl{color:var(--muted);text-align:right}
-.rg .u{color:var(--muted);font-size:.9em}
+.rg{margin:1em 0}
+.rg th{text-align:right;color:var(--muted);font-weight:normal;padding:.3em .7em .3em 0}
+.rg td{padding:.3em .4em}
 .rg input[type=number]{width:4em;padding:.3em .4em;text-align:center}
 .rg button{min-width:6em;padding:.4em .8em;width:auto}
-.rg .o{padding:.35em .65em;background:var(--card);border:1px solid var(--border);border-radius:4px;font-family:monospace;font-size:.92em;white-space:nowrap;overflow-x:auto;min-height:1.4em;transition:opacity .15s}
+.rg .u{color:var(--muted);font-size:.9em}
+.rg .o{display:inline-block;min-width:8em;min-height:1em;padding:.3em .6em;background:var(--card);border:1px solid var(--border);border-radius:4px;font-family:monospace;font-size:.92em;white-space:nowrap;overflow-x:auto;vertical-align:middle}
 .rg .o:empty::before{content:"\00a0";color:var(--muted)}
-.rg .o.loading{opacity:.4}
 .rg .o.flash{animation:rgflash .55s ease-out}
-@keyframes rgflash{0%{background:var(--accent);color:#fff;border-color:var(--accent)}100%{background:var(--card);color:inherit;border-color:var(--border)}}
-@media(max-width:520px){
-  .rg{grid-template-columns:auto 1fr;gap:.4em .5em}
-  .rg .row{display:contents}
-  .rg .lbl{text-align:left}
-  .rg .row > *:nth-child(2),.rg .row > *:nth-child(3){grid-column:span 1}
-  .rg .row > .o{grid-column:1/-1}
-}
+@keyframes rgflash{0%{background:var(--accent);color:#fff}100%{background:var(--card);color:inherit}}
 </style>
-<div class=rg>
-  <div class=row data-type=coin>
-    <span class=lbl>Coin</span>
-    <span></span>
-    <span></span>
-    <button type=button onclick='r(this)'>Flip</button>
-    <span class=o></span>
-  </div>
-  <div class=row data-type=dice data-arg=sides>
-    <span class=lbl>Dice D</span>
-    <input type=number value=6 min=2 max=10000>
-    <span></span>
-    <button type=button onclick='r(this)'>Roll</button>
-    <span class=o></span>
-  </div>
-  <div class=row data-type=password data-arg=len>
-    <span class=lbl>Password</span>
-    <input type=number value=16 min=4 max=64>
-    <span class=u>chars</span>
-    <button type=button onclick='r(this)'>Generate</button>
-    <span class=o></span>
-  </div>
-  <div class=row data-type=hex data-arg=n>
-    <span class=lbl>Hex</span>
-    <input type=number value=16 min=1 max=32>
-    <span class=u>bytes</span>
-    <button type=button onclick='r(this)'>Generate</button>
-    <span class=o></span>
-  </div>
-</div>
+<table class=rg>
+<tr data-type=coin><th>Coin</th><td></td><td></td><td><button type=button onclick='r(this)'>Flip</button></td><td><span class=o></span></td></tr>
+<tr data-type=dice data-arg=sides><th>Dice D</th><td><input type=number value=6 min=2 max=10000></td><td></td><td><button type=button onclick='r(this)'>Roll</button></td><td><span class=o></span></td></tr>
+<tr data-type=password data-arg=len><th>Password</th><td><input type=number value=16 min=4 max=64></td><td class=u>chars</td><td><button type=button onclick='r(this)'>Generate</button></td><td><span class=o></span></td></tr>
+<tr data-type=hex data-arg=n><th>Hex</th><td><input type=number value=16 min=1 max=32></td><td class=u>bytes</td><td><button type=button onclick='r(this)'>Generate</button></td><td><span class=o></span></td></tr>
+</table>
 <p class=muted style="margin-top:1.2em">Powered by accumulated radiation events.</p>
 <script>
 function r(b){
-  var row=b.closest('.row');
+  var row=b.closest('tr');
   var t=row.dataset.type, k=row.dataset.arg;
   var i=row.querySelector('input'), o=row.querySelector('.o');
-  o.classList.remove('flash');o.classList.add('loading');
-  b.disabled=true;
+  o.classList.remove('flash');b.disabled=true;
   var u='/random.do?type='+t;
   if(i&&k)u+='&'+k+'='+i.value;
   fetch(u).then(r=>r.text()).then(x=>{
-    o.classList.remove('loading');
-    o.textContent=x;
-    void o.offsetWidth;       /* restart animation if same value lands twice */
-    o.classList.add('flash');
+    o.textContent=x;void o.offsetWidth;o.classList.add('flash');
     b.disabled=false;
-  }).catch(()=>{
-    o.classList.remove('loading');
-    o.textContent='(error)';
-    b.disabled=false;
-  });
+  }).catch(()=>{o.textContent='(error)';b.disabled=false;});
 }
 </script>
 )HTML";
