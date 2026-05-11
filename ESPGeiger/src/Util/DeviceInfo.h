@@ -27,6 +27,11 @@
 #define GIT_VERSION ""
 #endif
 
+// Query-string suffix for static assets. Compile-time concat - browsers
+// treat /style.css?v=<hash> as a new URL per firmware, busting stale
+// JS/CSS automatically. Empty GIT_VERSION emits `?v=` which is harmless.
+#define EG_CACHE_BUST "?v=" GIT_VERSION
+
 #ifndef RELEASE_VERSION
 #define RELEASE_VERSION "devel"
 #endif

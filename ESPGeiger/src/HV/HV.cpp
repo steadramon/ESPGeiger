@@ -228,7 +228,7 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wa{padding:.8em
 <tr><th>Target:</th><td><input id="tgt" value="-" type="number" min="0" max="500"> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
 
 <tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
-<script src="/hvjs"></script>
+<script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
 )HTML";
 
 extern const char hvJS[] PROGMEM = R"JS("use strict";

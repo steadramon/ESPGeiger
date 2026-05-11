@@ -11,6 +11,7 @@
 #include "../GeigerInput/GeigerInput.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
+#include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../NTP/NTP.h"
 #include "../SerialCommand/SerialCommand.h"
@@ -40,7 +41,7 @@ static const char STYLE_CSS[] PROGMEM =
   ":root[data-theme=dark]{--bg:#212529;--page:#1a1d20;--fg:#dee2e6;--muted:#adb5bd;--border:#373b3e;--card:#2b3035}"
   ".themetoggle{position:fixed;top:.8em;right:.8em;width:2.4em;height:2.4em;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;font-size:1.1em;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;z-index:10}"
   // Chart canvas + legend shared by /status and /hv.
-  "#g1{height:200px;width:100%;background:var(--card);border:1px solid var(--border);border-radius:4px}"
+  "#g1{height:200px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px}"
   "#g2{display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.4em 0;font-size:1.05em}"
   "#t1{width:100%;height:250px;font-family:monospace;font-size:.8em;line-height:1.3;resize:vertical}"
   ".themetoggle::before{content:'\\2600'}"
@@ -77,13 +78,14 @@ static const char STYLE_CSS[] PROGMEM =
   ".back{display:inline-block;padding:.5em 1em;background:var(--accent);color:#fff;border-radius:4px;text-decoration:none;font-weight:500}"
   ".back:hover{opacity:.9;text-decoration:none}";
 
-// Char array form lands bytes in irom (vs `const char*` which only flash-stores the pointer).
-static const char FAVICON_SVG[] PROGMEM =
-  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>"
-  "<path fill='#666' d='M256 0a256 256 0 1 1 0 512 256 256 0 0 1 0-512z'/>"
-  "<path fill='#FB2' d='M256 36a220 220 0 1 1 0 440 220 220 0 0 1 0-440z'/>"
-  "<path fill='#555' d='M256 286a30 30 0 1 0 0-60 30 30 0 0 0 0 60zm28-82 62-109a182 182 0 0 0-182 1l63 109a57 57 0 0 1 57-1zm155 51H313c0 21-11 39-28 49l64 108c54-32 90-90 90-157zM163 412l64-108a57 57 0 0 1-28-49H73c0 67 36 125 90 157z'/>"
-  "</svg>";
+// Trefoil path data, single flash copy. Wrapped at emission time with either
+// the standalone <svg xmlns=...> (for /favicon.svg, tab icon) or the inline
+// <svg style=...> (for the page-header H1 logo).
+static const char FAVICON_PATHS[] PROGMEM = R"SVG(
+<path fill='#666' d='M256 0a256 256 0 1 1 0 512 256 256 0 0 1 0-512z'/>
+<path fill='#FB2' d='M256 36a220 220 0 1 1 0 440 220 220 0 0 1 0-440z'/>
+<path fill='#555' d='M256 286a30 30 0 1 0 0-60 30 30 0 0 0 0 60zm28-82 62-109a182 182 0 0 0-182 1l63 109a57 57 0 0 1 57-1zm155 51H313c0 21-11 39-28 49l64 108c54-32 90-90 90-157zM163 412l64-108a57 57 0 0 1-28-49H73c0 67 36 125 90 157z'/>
+)SVG";
 
 static const char PAGE_TAIL[] PROGMEM =
   "<p style=margin-top:2em><a class=back href=/>\xe2\x86\x90 Home</a></p>"
@@ -93,15 +95,23 @@ static const char PAGE_TAIL[] PROGMEM =
 static const char HEAD_OPEN[] PROGMEM =
   "<!DOCTYPE html><html lang=en><head>"
   "<meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">"
-  "<link rel=stylesheet href=/style.css>"
+  "<link rel=stylesheet href=/style.css" EG_CACHE_BUST ">"
   "<link rel=icon type=image/svg+xml href=/favicon.svg>"
   "<title>";
 
+// Page chrome up to the inline-SVG opening tag. FAVICON_PATHS + "</svg>"
+// follow via sendHeadTail() to keep the path data flash-singleton.
 static const char HEAD_TAIL[] PROGMEM =
-  "</title><script src=/theme.js></script></head><body>"
+  "</title><script src=/theme.js" EG_CACHE_BUST "></script></head><body>"
   "<button class=themetoggle aria-label=\"Toggle theme\" onclick=theme()></button>"
   "<div class=devhead>"
-  "<h1><img src=/favicon.svg alt=\"\">";
+  "<h1><svg viewBox='0 0 512 512' style='width:1.4em;height:1.4em;flex:0 0 auto'>";
+
+static void sendHeadTail(EGHttpResponse& res) {
+  res.sendChunk(FPSTR(HEAD_TAIL));
+  res.sendChunk(FPSTR(FAVICON_PATHS));
+  res.sendChunk(F("</svg>"));
+}
 
 // Cross-cutting menu entries owned here, not by any module.
 static const EGMenuEntry WEBPORTAL_TOP_MENU[] = {
@@ -247,7 +257,7 @@ void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* tit
   res.sendChunk(FPSTR(HEAD_OPEN));
   res.sendChunk(title);
   res.sendKV(F(" \xc2\xb7 "), devName);
-  res.sendChunk(FPSTR(HEAD_TAIL));
+  sendHeadTail(res);
   res.sendChunk(F(THING_NAME " - "));
   res.sendChunk(title);
   res.sendChunk(F("</h1></div>"));
@@ -293,7 +303,7 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   res.sendChunk(FPSTR(HEAD_OPEN));
   emitIdentity();
-  res.sendChunk(FPSTR(HEAD_TAIL));
+  sendHeadTail(res);
   emitIdentity();
   res.sendKV(F("</h1><div class=sub>"), hostname);
   res.sendKV(F(" &middot; "), ipBuf, F("</div></div>"));
@@ -328,7 +338,11 @@ void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.addHeader("Cache-Control", "public, max-age=604800");  // 7 days
-  res.send(200, "image/svg+xml", FPSTR(FAVICON_SVG));
+  res.beginChunked(200, "image/svg+xml");
+  res.sendChunk(F("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>"));
+  res.sendChunk(FPSTR(FAVICON_PATHS));
+  res.sendChunk(F("</svg>"));
+  res.endChunked();
 }
 
 // Render-blocking so the theme is set before paint (no flash).
@@ -507,6 +521,8 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
       n = snprintf_P(rowbuf, sizeof(rowbuf), PSTR("<li>%s</li>"), m->name());
       if (n > 0) res.sendChunk(rowbuf, (size_t)n);
     }
+    // Display-only entry; not an EGModule and not pushed to WebAPI.
+    res.sendChunk(F("<li>portal</li>"));
   }
   res.sendChunk(F("</ul></details>"));
 
@@ -744,68 +760,23 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
     return;
   }
 
-  // status > 0 - dedup by SSID (keep strongest), drop weak signal,
-  // sort strongest-first, then serialize.
-  struct AP { char ssid[33]; int8_t rssi; uint8_t open; };
-  AP aps[12];
-  uint8_t count = 0;
-  const int8_t RSSI_MIN = -85;     // weaker than this is unreliable
-  const uint8_t MAX_APS = sizeof(aps) / sizeof(aps[0]);
-  for (int i = 0; i < status; i++) {
-    // Filter on RSSI first - cheap, no heap alloc. WiFi.SSID(i) returns
-    // a String (allocates) so we want to skip weak entries before that.
-    int rssi = WiFi.RSSI(i);
-    if (rssi < RSSI_MIN) continue;
-
-    String ssid = WiFi.SSID(i);
-    if (ssid.length() == 0) continue;
-
-    // Linear dedup by SSID (N ≤ 12; O(N²) is fine).
-    int existing = -1;
-    for (uint8_t j = 0; j < count; j++) {
-      if (strncmp(aps[j].ssid, ssid.c_str(), 32) == 0) { existing = j; break; }
-    }
-    if (existing >= 0) {
-      if (rssi > aps[existing].rssi) aps[existing].rssi = (int8_t)rssi;
-      continue;
-    }
-
-    uint8_t slot;
-    if (count < MAX_APS) {
-      slot = count++;
-    } else {
-      // Array full - replace the weakest entry if this one beats it.
-      uint8_t weak = 0;
-      for (uint8_t j = 1; j < count; j++) {
-        if (aps[j].rssi < aps[weak].rssi) weak = j;
-      }
-      if (rssi <= aps[weak].rssi) continue;
-      slot = weak;
-    }
-    strncpy(aps[slot].ssid, ssid.c_str(), 32);
-    aps[slot].ssid[32] = '\0';
-    aps[slot].rssi = (int8_t)rssi;
-#ifdef ESP8266
-    aps[slot].open = WiFi.encryptionType(i) == ENC_TYPE_NONE ? 1 : 0;
-#else
-    aps[slot].open = WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? 1 : 0;
-#endif
-  }
-  // Insertion sort by RSSI descending - strongest first.
-  for (uint8_t i = 1; i < count; i++) {
-    AP key = aps[i];
-    int8_t j = i - 1;
-    while (j >= 0 && aps[j].rssi < key.rssi) { aps[j+1] = aps[j]; j--; }
-    aps[j+1] = key;
-  }
+  // Shared dedup/sort/filter pipeline lives in EGPortal so the captive
+  // portal and this /wifiscan endpoint never drift apart.
+  EGPortal::ScanEntry aps[12];
+  size_t count = EGPortal::processScan(aps, 12, status);
 
   res.beginChunked(200, "application/json");
   res.sendChunk(F("{\"state\":\"complete\",\"aps\":["));
   char row[140];
-  for (uint8_t i = 0; i < count; i++) {
+  for (size_t i = 0; i < count; i++) {
+#ifdef ESP8266
+    int open = (aps[i].enc == ENC_TYPE_NONE) ? 1 : 0;
+#else
+    int open = (aps[i].enc == WIFI_AUTH_OPEN) ? 1 : 0;
+#endif
     int n = snprintf_P(row, sizeof(row),
       PSTR("%s{\"ssid\":\"%s\",\"rssi\":%d,\"open\":%d}"),
-      i > 0 ? "," : "", aps[i].ssid, (int)aps[i].rssi, (int)aps[i].open);
+      i > 0 ? "," : "", aps[i].ssid, (int)aps[i].rssi, open);
     if (n > 0) res.sendChunk(row, (size_t)n);
   }
   res.sendChunk(F("]}"));
@@ -1466,7 +1437,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // the page theme. Console textarea uses var(--bg)/--fg so it does.
 static const char STATUS_BODY[] PROGMEM = R"HTML(
 <style>
-#blip{display:inline-block;width:.7em;height:.7em;border-radius:50%;background:#333;margin-right:.5em;vertical-align:middle;transition:background-color .08s ease-out,box-shadow .08s ease-out}
+#blip{display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--border);margin-right:.5em;vertical-align:middle;transition:background-color .08s ease-out,box-shadow .08s ease-out}
 #blip.f{background:var(--blip,#0f0);box-shadow:0 0 6px var(--blip,#0f0)}
 </style>
 <canvas id=g1></canvas>
@@ -1485,7 +1456,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 </form>
 </details>
 <script>function cmdSend(e){e.preventDefault();var i=document.getElementById('ci'),v=i.value.trim();if(!v)return!1;fetch('/webcmd',{method:'POST',body:v});i.value='';return!1}</script>
-<script src=/js></script>
+<script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
 
 void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -1513,8 +1484,10 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendChunk(seedBuf, sp);
 
   res.sendChunk(FPSTR(STATUS_BODY));
+  // Status page wants back link first, then the ESPGeiger credit.
+  res.sendChunk(F("<p style=margin-top:2em><a class=back href=/>\xe2\x86\x90 Home</a></p>"));
   WebPortal::sendPageFooter(res);
-  WebPortal::sendPageTail(res);
+  res.sendChunk(F("</body></html>"));
   res.endChunked();
 }
 
@@ -1602,7 +1575,7 @@ void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // Single canonical copy; legacy ConfigManager /js externs this same symbol
 // (see html.h).
 extern const char statusJS[] PROGMEM = R"JS(
-!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);if(window._seedHist&&window._seedHist.length){const N=window._seedHist.length,now=Date.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new Date(now-(N-1-i)*3000).toLocaleTimeString()))}var jt,lf=0,bp=byID('blip'),bivl=2000,bcol='#0f0',bacc=0,flash=function(){bp.classList.add('f');setTimeout(()=>bp.classList.remove('f'),90)};bp.style.setProperty('--blip',bcol);setInterval(function(){bacc+=100/bivl;if(bacc>=1){flash();bacc-=1;if(bacc>3)bacc=3}},100);var csk=function(){if(!window._csk){window._csk=1;setTimeout(f,50)}},t=function(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);var u=o.ut,p=n=>String(n).padStart(2,"0");byID('upt').innerHTML=(u/86400|0)+"T"+p((u/3600|0)%24)+":"+p((u/60|0)%60)+":"+p(u%60);byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);var v=o.rssi,pct=v<=-100?0:v>=-50?100:2*(v+100);byID('rssi').innerHTML=v+' dBm ('+pct+'%)';e.update([o.c,o.c5,o.c15]);var rt=o.c5>0&&o.c>0?o.c/o.c5:1;bivl=Math.max(100,Math.min(4000,2000/rt));bcol=o.c<.01&&o.c5<.01?'#08f':rt>1.5?'#f33':rt>1.15?'#fa0':rt<.5?'#c0f':'#0f0';bp.style.setProperty('--blip',bcol)}lf=Date.now();csk();jt=setTimeout(t,3e3)},n.onerror=function(){lf=Date.now();csk();jt=setTimeout(t,6e3)},n.send()};t();document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(jt);jt=setTimeout(t,Math.max(0,3e3-(Date.now()-lf)))}})}();
+!function(){let e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);if(window._seedHist&&window._seedHist.length){const N=window._seedHist.length,now=Date.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new Date(now-(N-1-i)*3000).toLocaleTimeString()))}var jt,lf=0,bp=byID('blip'),bivl=2000,bcol='#0f0',bacc=0,flash=function(){bp.classList.add('f');setTimeout(()=>bp.classList.remove('f'),90)};bp.style.setProperty('--blip',bcol);setInterval(function(){bacc+=100/bivl;if(bacc>=1){flash();bacc-=1;if(bacc>3)bacc=3}},100);var csk=function(){if(!window._csk){window._csk=1;setTimeout(f,50)}},t=function(){var n=new XMLHttpRequest;n.open("GET","/json",!0),n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText);var u=o.ut,p=n=>String(n).padStart(2,"0");byID('upt').innerHTML=(u/86400|0)+"T"+p((u/3600|0)%24)+":"+p((u/60|0)%60)+":"+p(u%60);byID('cpm').innerHTML=o.c.toFixed(2);byID('tc').innerHTML=(o.tc);byID('usv').innerHTML=(o.c/o.r).toFixed(4);byID('cs').innerHTML=(o.cs).toFixed(2);var v=o.rssi,pct=v<=-100?0:v>=-50?100:2*(v+100);byID('rssi').innerHTML=v+' dBm ('+pct+'%)';e.update([o.c,o.c5,o.c15]);var rt=o.c5>0&&o.c>0?o.c/o.c5:1;bivl=Math.max(100,Math.min(4000,2000/rt));var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));bcol=o.c<.01&&o.c5<.01?'#08f':z>3?'#f33':z>1.5?'#fa0':z<-1.5?'#c0f':'#0f0';bp.style.setProperty('--blip',bcol)}lf=Date.now();csk();jt=setTimeout(t,3e3)},n.onerror=function(){lf=Date.now();csk();jt=setTimeout(t,6e3)},n.send()};t();document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(jt);jt=setTimeout(t,Math.max(0,3e3-(Date.now()-lf)))}})}();
 var lt,lfc=0,to,tp,x=null,pc="",id=0,ml=10000,dl=200,dtz=0;
 function f(){clearTimeout(lt);var t=byID("t1");x=new XMLHttpRequest;x.onload=function(){if(200==x.status){var n=x.responseText,e,ab=(t.scrollHeight-t.scrollTop-t.clientHeight)<50;var p=n.substr(0,n.indexOf("\n")).split(",");id=p[0];dtz=+p[1]||0;e=n.substr(n.indexOf("\n")+1);if(e.length>0){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){var b=-new Date().getTimezoneOffset(),T=((+h*60+(+m)+b-dtz)%1440+1440)%1440;return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s;});t.value+=e;var L=t.value.split("\n");if(L.length>ml)t.value=L.slice(-(ml-dl)).join("\n");}if(ab)t.scrollTop=t.scrollHeight;}lfc=Date.now();lt=setTimeout(f,3e3);};x.onerror=function(){lfc=Date.now();lt=setTimeout(f,6e3);};x.open("GET","/cs?c1="+id,!0);x.send();return!1;}document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lfc&&Date.now()-lfc>1.08e7)id=0;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(Date.now()-lfc)))}});
 )JS";
