@@ -79,6 +79,10 @@ void ArduinoOTAModule::begin() {
   ArduinoOTA.begin();
   MDNS.addService("http",   "tcp", 80);
   MDNS.addService("geiger", "tcp", 80);
+  const char* fname = DeviceInfo::friendlyName();
+  if (fname && fname[0]) {
+    MDNS.addServiceTxt("geiger", "tcp", "fname", fname);
+  }
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {
