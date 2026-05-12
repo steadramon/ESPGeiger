@@ -71,6 +71,13 @@ namespace DeviceInfo {
 
   uint32_t freeHeap();
 
+  // Heap fragmentation 0-100 %. Sqrt-weighted, matches umm_malloc. Cached 10s.
+  // Every cache refresh updates an internal peak; consumers report peak via
+  // heapFragPeak() and reset at the end of their window.
+  uint8_t heapFrag();
+  uint8_t heapFragPeak();
+  void    heapFragPeakReset();
+
   // Cross-platform reset-reason. Codes are frozen - never renumber.
   //   0 unknown   1 power-on     2 external reset   3 software restart
   //   4 exception 5 watchdog     6 brown-out        7 deep-sleep wake

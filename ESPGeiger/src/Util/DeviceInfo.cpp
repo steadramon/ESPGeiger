@@ -22,6 +22,7 @@
 #include "Wifi.h"
 #include <LittleFS.h>
 #ifdef ESP32
+#include <math.h>
 #include <esp_chip_info.h>
 #include <esp_system.h>
 #endif
@@ -56,6 +57,46 @@ uint32_t DeviceInfo::freeHeap() {
     last_ms = now;
   }
   return cached;
+}
+
+static uint8_t s_hf_peak = 0;
+
+uint8_t DeviceInfo::heapFrag() {
+  static uint8_t cached = 0;
+  static uint32_t last_ms = 0;
+  uint32_t now = millis();
+  if (last_ms == 0 || now - last_ms >= 10000) {
+#ifdef ESP8266
+    uint32_t free_;
+    uint16_t max_;
+    uint8_t frag_;
+    ESP.getHeapStats(&free_, &max_, &frag_);
+    cached = frag_;
+#else
+    // Sqrt-weighted to match ESP8266 umm_malloc semantics. ESP32 has an FPU
+    // so sqrtf is a single instruction; this runs at 1 Hz, negligible cost.
+    uint32_t free_ = ESP.getFreeHeap();
+    uint32_t max_  = ESP.getMaxAllocHeap();
+    if (free_ == 0 || max_ > free_) {
+      cached = 0;
+    } else {
+      float ratio = (float)max_ / (float)free_;
+      cached = (uint8_t)(100.0f - sqrtf(ratio) * 100.0f);
+    }
+#endif
+    last_ms = now;
+    if (cached > s_hf_peak) s_hf_peak = cached;
+  }
+  return cached;
+}
+
+uint8_t DeviceInfo::heapFragPeak() {
+  heapFrag();  // refresh cache + peak if stale
+  return s_hf_peak;
+}
+
+void DeviceInfo::heapFragPeakReset() {
+  s_hf_peak = heapFrag();
 }
 
 void DeviceInfo::begin() {
