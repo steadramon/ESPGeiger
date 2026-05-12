@@ -55,7 +55,7 @@ extern Counter gcounter;
 #define OLED_SCL      5
 #endif
 #ifndef OLED_TYPE
-#define OLED_TYPE      0   // 0=SSD1306, 1=SH1106
+#define OLED_TYPE      0   // 0=SSD1306, 1=SH1106, 2=SSD1309
 #endif
 
 class SSD1306Display : public EGModule {
@@ -63,6 +63,7 @@ public:
     enum DisplayType : uint8_t {
       DISP_SSD1306 = 0,
       DISP_SH1106  = 1,
+      DISP_SSD1309 = 2,
     };
 
     SSD1306Display();

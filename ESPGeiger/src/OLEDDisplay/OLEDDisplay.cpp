@@ -66,7 +66,7 @@ EG_PSTR(OL_L_SCL, "I2C SCL Pin");
 EG_PSTR(OL_H_RBA, "Reboot to apply");
 EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 EG_PSTR(OL_L_TYP, "Display Type");
-EG_PSTR(OL_H_TYP, "0 = SSD1306 128x64 (default), 1 = SH1106 128x64 (1.3in). Reboot to apply.");
+EG_PSTR(OL_H_TYP, "0 = SSD1306 128x64 (default), 1 = SH1106 128x64 (1.3in), 2 = SSD1309 128x64. Reboot to apply.");
 #endif
 
 static const EGPref OLED_PREF_ITEMS[] = {
@@ -80,7 +80,7 @@ static const EGPref OLED_PREF_ITEMS[] = {
   {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
   {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, 0},
-  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 1, 0, EGP_UINT, 0},
+  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, 0},
 #endif
 };
 
@@ -431,6 +431,10 @@ void SSD1306Display::setup() {
   switch (_pref_display_type) {
     case DISP_SH1106:
       u8g2_Setup_sh1106_i2c_128x64_noname_f(&_u8g2, U8G2_R0,
+          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+      break;
+    case DISP_SSD1309:
+      u8g2_Setup_ssd1309_i2c_128x64_noname0_f(&_u8g2, U8G2_R0,
           u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
       break;
     case DISP_SSD1306:
