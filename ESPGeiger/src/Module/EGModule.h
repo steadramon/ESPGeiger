@@ -92,12 +92,8 @@ class EGModule {
     void note_publish(bool ok) {
       last_ok = ok;
       last_attempt_ms = millis();
-      if (ok) {
-        if (_pub_ok < 0xFF) ++_pub_ok;
-        s_last_any_pub_ok_ms = last_attempt_ms;
-      } else {
-        if (_pub_err < 0xFF) ++_pub_err;
-      }
+      if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
+      else    { if (_pub_err < 0xFF) ++_pub_err; }
     }
     void note_attempt() {
       last_attempt_ms = millis();
@@ -109,18 +105,13 @@ class EGModule {
       if (!_publish_pending) return;
       _publish_pending = 0;
       last_ok = ok;
-      if (ok) {
-        s_last_any_pub_ok_ms = millis();
-      } else {
+      if (!ok) {
         if (_pub_ok > 0) --_pub_ok;
         if (_pub_err < 0xFF) ++_pub_err;
       }
     }
     uint8_t take_publish_ok()  { uint8_t v = _pub_ok;  _pub_ok  = 0; return v; }
     uint8_t take_publish_err() { uint8_t v = _pub_err; _pub_err = 0; return v; }
-
-    // Wifi connectivity watchdog reads this; 0 until first success.
-    static volatile uint32_t s_last_any_pub_ok_ms;
 
   private:
     uint8_t _pub_ok  = 0;
