@@ -903,7 +903,7 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
     var b66=/\besp8266[_a-z0-9]|\bespgeiger(lite|log|hw)/i.test(t);
     if((mine==='esp8266'&&b32&&!b66)||(mine==='esp32'&&b66&&!b32)){btn.disabled=true;sC('err','<b>Refusing:</b> wrong platform firmware.');return;}
     btn.disabled=false;
-    if(e&&t.indexOf(e)!==-1)sC('ok','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
+    if(dev.tag&&t.indexOf(dev.tag)!==-1)sC('ok','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
     else sC('warn','<b>Warning:</b> running <code>'+e+'</code> not found in file.');
   }
   document.getElementById('uf_file').addEventListener('change',function(){cF(this.files[0]);});
@@ -949,12 +949,19 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 </script>
 )HTML";
 
+// Substring match on BUILD_ENV alone collides with legacy_file paths
+// embedding other variant names (e.g. /espgeigerhw.json in HV.h appears
+// in every HV build). Match against this delimited tag instead.
+static const char EG_ENV_TAG[] PROGMEM __attribute__((used)) =
+  "<EGENV:" BUILD_ENV ":ENV>";
+
 void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Update"));
-  char dev[80];
+  char dev[120];
   int n = snprintf_P(dev, sizeof(dev),
-    PSTR("<script>window._dev={env:\"%s\"};</script>"), BUILD_ENV);
+    PSTR("<script>window._dev={env:\"%s\",tag:\"<EGENV:%s:ENV>\"};</script>"),
+    BUILD_ENV, BUILD_ENV);
   if (n > 0 && (size_t)n < sizeof(dev)) res.sendChunk(dev, (size_t)n);
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
   WebPortal::sendPageTail(res);
