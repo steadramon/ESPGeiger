@@ -57,7 +57,7 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP = {
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
 
 size_t Webhook::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("webhook", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now);
 }
 
@@ -83,11 +83,16 @@ void Webhook::setInterval(int interval)
   pingIntervalMs = (uint32_t)interval * 1000UL;
 }
 
+void Webhook::on_prefs_loaded() {
+  int iv = (int)EGPrefs::getUInt("webhook", "interval");
+  if (iv > 0) setInterval(iv);
+  _send_enabled = EGPrefs::getBool("webhook", "send");
+}
+
 void Webhook::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
-    int iv = (int)EGPrefs::getUInt("webhook", "interval");
-    if (iv > 0) setInterval(iv);
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
     return;
   }
@@ -132,7 +137,6 @@ const char* Webhook::cleanHTTP(const char* url) {
 
 void Webhook::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("webhook", "send")) return;
 
   const char* whURL = EGPrefs::getString("webhook", "url");
   if (whURL[0] == '\0') return;
@@ -141,9 +145,6 @@ void Webhook::postMeasurement() {
     Log::console(PSTR("Webhook: Testmode"));
     return;
   }
-
-  int iv = (int)EGPrefs::getUInt("webhook", "interval");
-  if (iv > 0) setInterval(iv);
 
   Log::debug(PSTR("Webhook: Uploading latest data ..."));
 

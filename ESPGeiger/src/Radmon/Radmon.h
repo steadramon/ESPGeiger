@@ -48,6 +48,7 @@ class Radmon : public EGModule {
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return 500; }
     void loop(unsigned long now) override;
+    void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
     uint8_t display_order() override { return 30; }
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
@@ -60,6 +61,7 @@ class Radmon : public EGModule {
     unsigned long lastPing = 0;
     uint16_t pingInterval = RADMON_INTERVAL;
     uint32_t pingIntervalMs = (uint32_t)RADMON_INTERVAL * 1000UL;  // precomputed - no mul per check
+    bool _send_enabled = false;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 

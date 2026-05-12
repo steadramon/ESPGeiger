@@ -47,6 +47,7 @@ class Webhook : public EGModule {
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return 500; }
     void loop(unsigned long now) override;
+    void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
@@ -59,6 +60,7 @@ class Webhook : public EGModule {
     unsigned long lastPing = 0;
     uint16_t pingInterval = WEBHOOK_INTERVAL;
     uint32_t pingIntervalMs = (uint32_t)WEBHOOK_INTERVAL * 1000UL;  // precomputed
+    bool _send_enabled = false;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 

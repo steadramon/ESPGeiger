@@ -51,8 +51,12 @@ static const EGPrefGroup GMC_PREF_GROUP = {
 const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
 
 size_t GMC::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("gmc", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "gmc", last_ok, last_attempt_ms, now);
+}
+
+void GMC::on_prefs_loaded() {
+  _send_enabled = EGPrefs::getBool("gmc", "send");
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -70,6 +74,7 @@ GMC::GMC() {
 
 void GMC::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
     return;
@@ -111,7 +116,6 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
 
 void GMC::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("gmc", "send")) return;
 
   const char* _api_id    = EGPrefs::getString("gmc", "aid");
   const char* _api_gc_id = EGPrefs::getString("gmc", "gcid");

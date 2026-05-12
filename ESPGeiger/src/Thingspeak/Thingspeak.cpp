@@ -45,8 +45,12 @@ static const EGPrefGroup TS_PREF_GROUP = {
 const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
 
 size_t Thingspeak::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("thingspeak", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now);
+}
+
+void Thingspeak::on_prefs_loaded() {
+  _send_enabled = EGPrefs::getBool("thingspeak", "send");
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -63,6 +67,7 @@ Thingspeak::Thingspeak() {
 
 void Thingspeak::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
     return;
@@ -98,7 +103,6 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
 
 void Thingspeak::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("thingspeak", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Thingspeak: Testmode"));

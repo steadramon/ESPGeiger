@@ -49,7 +49,7 @@ static const EGPrefGroup RADMON_PREF_GROUP = {
 const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
 
 size_t Radmon::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("radmon", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "radmon", last_ok, last_attempt_ms, now);
 }
 
@@ -85,12 +85,17 @@ int Radmon::getInterval() {
   return pingInterval;
 }
 
+void Radmon::on_prefs_loaded() {
+  int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
+  if (rtimer == 0) rtimer = RADMON_INTERVAL;
+  setInterval(rtimer);
+  _send_enabled = EGPrefs::getBool("radmon", "send");
+}
+
 void Radmon::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
-    int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
-    if (rtimer == 0) rtimer = RADMON_INTERVAL;
-    setInterval(rtimer);
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
     return;
   }
@@ -135,7 +140,6 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
 
 void Radmon::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("radmon", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Radmon: Testmode"));
@@ -149,16 +153,14 @@ void Radmon::postMeasurement() {
     return;
   }
 
-  int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
-  if (rtimer == 0) rtimer = RADMON_INTERVAL;
-  setInterval(rtimer);
-
   Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
+  // Window selection follows the live ping cadence, which on_prefs_loaded
+  // keeps in sync with the saved pref.
   int avgcpm;
-  if (rtimer <= 90) {
+  if (pingInterval <= 90) {
     avgcpm = gcounter.get_cpm();
-  } else if (rtimer <= 450) {
+  } else if (pingInterval <= 450) {
     avgcpm = gcounter.get_cpm5();
   } else {
     avgcpm = gcounter.get_cpm15();
