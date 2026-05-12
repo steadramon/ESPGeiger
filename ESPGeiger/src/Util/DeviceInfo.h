@@ -21,7 +21,7 @@
 #define DEVICEINFO_H
 
 #include <Arduino.h>
-#include <ESPNtpClient.h>
+#include "../NTP/NTP.h"
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
@@ -65,7 +65,7 @@ namespace DeviceInfo {
   void setFriendlyName(const char* s);
   const char* mac();
 
-  inline unsigned long uptime() { return NTP.getUptime(); }
+  inline unsigned long uptime() { return ntpclient.getUptime(); }
 
   char* uptimeString();
 

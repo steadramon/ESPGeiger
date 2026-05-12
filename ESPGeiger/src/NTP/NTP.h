@@ -19,7 +19,8 @@
 #ifndef _NTP_h
 #define _NTP_h
 #include <Arduino.h>
-#include <ESPNtpClient.h>
+#include <time.h>
+#include <sys/time.h>
 #include "timezones.h"
 #include "../Util/Globals.h"
 #include "../Module/EGModule.h"
@@ -27,6 +28,12 @@
 
 #ifndef NTP_SERVER
 #  define NTP_SERVER "pool.ntp.org"
+#endif
+
+#ifndef SECS_PER_MIN
+constexpr time_t SECS_PER_MIN  = 60UL;
+constexpr time_t SECS_PER_HOUR = 3600UL;
+constexpr time_t SECS_PER_DAY  = SECS_PER_HOUR * 24UL;
 #endif
 
 #ifndef NTP_TZ
@@ -64,9 +71,35 @@ class NTP_Client : public EGModule {
     const char* get_server() { return EGPrefs::getString("ntp", "server"); }
     const char* get_tz()     { return EGPrefs::getString("ntp", "tz"); }
 
+    // Sticky: true once we ever sync (kept for boot_epoch validity).
     bool synced = false;
     unsigned long boot_epoch = 0;
     int16_t tz_offset_min = 0;  // cached UTC offset (minutes); Counter refreshes hourly
+
+    // millis() at most-recent sync (every callback, not just first).
+    // 0 until first sync. Use isFresh() for "is the time still trustworthy?"
+    unsigned long last_sync_ms = 0;
+    // Default 25h covers the SDK's ~hourly re-sync with headroom.
+    bool isFresh(uint32_t maxAgeMs = 25UL * 3600UL * 1000UL) const {
+      return last_sync_ms && (millis() - last_sync_ms) < maxAgeMs;
+    }
+
+    // Inlined ex-ESPNtpClient uptime tracker. millis() rollover correction
+    // every 49.7d. Single source of truth for "seconds since boot".
+    time_t getUptime() {
+      unsigned long now_ms = ::millis();
+      if (_uptime * 1000UL > now_ms) _rolloverMillis++;
+      _uptime = now_ms / 1000UL + (unsigned long)_rolloverMillis * 4294967UL;
+      return _uptime;
+    }
+    int64_t getMillisEpoch() {
+      timeval t;
+      gettimeofday(&t, nullptr);
+      return (int64_t)t.tv_sec * 1000L + t.tv_usec / 1000L;
+    }
+  private:
+    unsigned long _uptime = 0;
+    uint16_t _rolloverMillis = 0;
 };
 
 extern NTP_Client ntpclient;

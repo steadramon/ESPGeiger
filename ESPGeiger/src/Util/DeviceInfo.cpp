@@ -273,7 +273,7 @@ uint16_t DeviceInfo::featureFlags() {
 
 char* DeviceInfo::uptimeString() {
   static char buf[20];
-  time_t uptime = NTP.getUptime();
+  time_t uptime = ntpclient.getUptime();
   uint16_t days = uptime / SECS_PER_DAY;
   uptime %= SECS_PER_DAY;
   uint8_t hours = uptime / SECS_PER_HOUR;

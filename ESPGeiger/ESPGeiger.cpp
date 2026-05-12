@@ -79,7 +79,7 @@ void sTickerCB()
   TickProfile::markCounter();
 #endif
 
-  unsigned long uptime = NTP.getUptime() - start;
+  unsigned long uptime = ntpclient.getUptime() - start;
   if (!past_warmup && uptime > ESPG_WARMUP_S) past_warmup = true;
   Wifi::tick(stick_now);
 #ifdef TICK_PROFILE
@@ -162,7 +162,7 @@ void setup()
   grng.begin();
   gcounter.begin();
   EGModuleRegistry::begin_all();
-  start = NTP.getUptime() + 1;
+  start = ntpclient.getUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
   led.Off().Update();

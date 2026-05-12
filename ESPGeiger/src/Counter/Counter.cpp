@@ -206,7 +206,7 @@ float Counter::get_usv() {
 }
 
 float Counter::get_totalusv() {
-  unsigned long long uptime = NTP.getUptime ();
+  unsigned long long uptime = ntpclient.getUptime ();
   if (uptime < 1) {
     return 0;
   }
@@ -368,7 +368,7 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
     n = snprintf_P(line, sizeof(line),
       PSTR(",\"start\":%lu}"), (unsigned long)ntpclient.boot_epoch);
   } else {
-    unsigned long uptime = NTP.getUptime() - start;
+    unsigned long uptime = ntpclient.getUptime() - start;
     n = snprintf_P(line, sizeof(line),
       PSTR(",\"uptime\":%lu}"), uptime);
   }

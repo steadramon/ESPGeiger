@@ -71,9 +71,10 @@ void NTP_Client::setup()
   const char *possixTZ = getPosixTZforOlson(tz);
 #ifdef ESP8266
   settimeofday_cb([](){
+    ntpclient.last_sync_ms = millis();
     if (!ntpclient.synced) {
       ntpclient.synced = true;
-      unsigned long uptime = NTP.getUptime () - start;
+      unsigned long uptime = ntpclient.getUptime() - start;
       ntpclient.boot_epoch = int(time(NULL)-uptime);
       Log::console(PSTR("NTP: Synched"));
     }
@@ -86,9 +87,10 @@ void NTP_Client::setup()
     if (!getLocalTime(&timeinfo)){
       return;
     }
+    ntpclient.last_sync_ms = millis();
     if (!ntpclient.synced) {
       ntpclient.synced = true;
-      unsigned long uptime = NTP.getUptime () - start;
+      unsigned long uptime = ntpclient.getUptime() - start;
       ntpclient.boot_epoch = int(time(NULL)-uptime);
       Log::console(PSTR("NTP: Synched"));
     }
@@ -163,8 +165,8 @@ void NTP_Client::renderInlineForm(EGHttpResponse& res) {
                "<select name=t id=tz data-option='"),
              get_tz(),
              F("'></select>"
-               "<label for=s>NTP Server</label>"
-               "<input id=s name=s value='"));
+               "<label for=ntps>NTP Server</label>"
+               "<input id=ntps name=s value='"));
   res.sendKV(nullptr, get_server(), F("'><button type=submit>Save</button></form>"));
 }
 
