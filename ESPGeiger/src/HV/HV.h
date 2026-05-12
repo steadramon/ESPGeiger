@@ -73,6 +73,10 @@
 #define GEIGERHW_ADC_OFFSET 0
 #endif
 
+#ifndef GEIGERHW_MAX_V
+#define GEIGERHW_MAX_V 700
+#endif
+
 class HV : public EGModule {
     public:
       HV();
@@ -146,7 +150,16 @@ class HV : public EGModule {
       uint16_t get_hv_target() const { return _hv_target; }
       int8_t get_duty_trim() const { return _duty_trim; }
       void reset_trim() { _duty_trim = 0; }
-      Smoothed<float> hvReading;
+      Smoothed<float> hvReading;       // 20-sample, autotrim
+      // 3-sample running-mean for /hvjson display. O(1) add and get.
+      void addFast(float v) {
+        _fastSum -= _fastBuf[_fastIdx];
+        _fastBuf[_fastIdx] = v;
+        _fastSum += v;
+        if (++_fastIdx >= 3) _fastIdx = 0;
+        if (_fastCount < 3)  _fastCount++;
+      }
+      float getFast() const { return _fastCount ? _fastSum / _fastCount : 0.0f; }
     private:
       int _pwm_pin = GEIGER_PWMPIN;
       int _hw_freq = GEIGERHW_FREQ;
@@ -168,6 +181,10 @@ class HV : public EGModule {
       static constexpr int    TRIM_HYST_V = 8;
       static constexpr uint8_t TRIM_PERIOD_S = 30;
       static constexpr unsigned long TRIM_SETTLE_MS = 30000;
+      float    _fastBuf[3] = {0, 0, 0};
+      float    _fastSum    = 0;
+      uint8_t  _fastIdx    = 0;
+      uint8_t  _fastCount  = 0;
 };
 
 extern HV hv;

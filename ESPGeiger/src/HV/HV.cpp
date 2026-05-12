@@ -59,7 +59,7 @@ static const EGPref HW_PREF_ITEMS[] = {
 #ifdef ESPG_HV_ADC
   {"ratio",  HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    50000, 0, EGP_INT, 0},
   {"offset", HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, EGP_INT, 0},
-  {"target", HW_L_TGT, HW_H_TGT, "0", nullptr, 0, 500, 0, EGP_UINT, 0},
+  {"target", HW_L_TGT, HW_H_TGT, "0", nullptr, 0, GEIGERHW_MAX_V, 0, EGP_UINT, 0},
 #endif
 };
 
@@ -158,6 +158,7 @@ void HV::loop(unsigned long /*now*/) {
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   int volts = (int)(((int64_t)_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
   hvReading.add((float)volts);
+  addFast((float)volts);
 
   // Closed-loop trim - only after warmup, throttled, bounded ±TRIM_MAX.
   // Suppressed for TRIM_SETTLE_MS after duty/freq change so the dip from
@@ -223,10 +224,10 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wa{padding:.8em
 <span class="cl" onclick="this.parentElement.style.display='none';">×</span>
 <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
 </div>
-<table><tr><th>Frequency:</th><td><input type="range" id="freq" min="0" max="9000" step="100" value="50"><span id="sfreq">-</span></td></tr>
-<tr><th>Duty:</th><td><input type="range" id="duty" min="0" max="1023" value="50"><span id="sduty">-</span></td></tr>
-<tr><th>Ratio:</th><td><input id="ratio" value="-" type="number" min="0" max="9999"></td></tr>
-<tr><th>Target:</th><td><input id="tgt" value="-" type="number" min="0" max="500"> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
+<table><tr><th><label for=freq>Frequency:</label></th><td><input type="range" id="freq" min="0" max="9000" step="100" value="50"><span id="sfreq">-</span></td></tr>
+<tr><th><label for=duty>Duty:</label></th><td><input type="range" id="duty" min="0" max="1023" value="50"><span id="sduty">-</span></td></tr>
+<tr><th><label for=ratio>Ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max="9999"> <small>(voltage-divider scale, 0 = disabled)</small></td></tr>
+<tr><th><label for=tgt>Target:</label></th><td><input id="tgt" value="-" type="number" min="0" max="500"> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
 
 <tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
 <script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
@@ -235,6 +236,15 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wa{padding:.8em
 extern const char hvJS[] PROGMEM = R"JS("use strict";
 var e=new Graph("g1", ["Volts"], "V", "g2", 15, null, 0, true, true, 5,5);
 var x=null,lt,lf=0,to,tp,pc='';sn=0,id=0;
+var ge=true;
+function showGraph(on){
+  if(on===ge)return;
+  ge=on;
+  var d=on?'':'none';
+  byID('g1').style.display=d;
+  byID('g2').style.display=d;
+  byID('tgt').closest('tr').style.display=d;
+}
 
 function gethv() {
   var c,o='',t;
@@ -245,7 +255,8 @@ function gethv() {
     x.onload = function() {
       if(x.status==200){
         var o=JSON.parse(x.responseText)
-        e.update([o.volts]);
+        showGraph(o.ratio>0);
+        if(o.ratio>0)e.update([o.volts]);
         if (byID('sfreq').innerHTML=="-") {
           if(o.fmax) byID('freq').max=o.fmax;
           byID('freq').value=o.freq;
@@ -343,7 +354,7 @@ static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[256];
   snprintf_P(buf, sizeof(buf),
     PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d,\"ratio\":%d,\"target\":%d,\"trim\":%d,\"fmax\":%d}"),
-    (int)hv.hvReading.get(),
+    (int)hv.getFast(),
     hv.get_freq(),
     hv.get_duty(),
     hv.get_vd_ratio(),
