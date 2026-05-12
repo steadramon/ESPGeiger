@@ -52,7 +52,7 @@ class GMC : public EGModule {
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void postMeasurement();
-    AsyncHTTPRequest request;
+    AsyncHTTPRequest* request = nullptr;
   private:
     unsigned long lastPing = 0;
     static constexpr uint32_t pingIntervalMs = (uint32_t)GMC_INTERVAL * 1000UL;

@@ -200,17 +200,20 @@ void Webhook::postMeasurement() {
 
   snprintf_P(url, sizeof(url), PSTR("http://%s"), trimmedURL);
 
-  if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
+  if (!request) request = new AsyncHTTPRequest();
+  if (!request) { Log::console(PSTR("Webhook: alloc failed")); return; }
+
+  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
   {
-    if (request.open("POST", url))
+    if (request->open("POST", url))
     {
       led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request.setReqHeader(F("Accept"), F("application/json"));
-      request.setReqHeader(F("Content-Type"), F("application/json"));
-      request.onReadyStateChange(httpRequestCb, this);
-      request.setTimeout(10);
-      request.send(buffer);
+      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
+      request->setReqHeader(F("Accept"), F("application/json"));
+      request->setReqHeader(F("Content-Type"), F("application/json"));
+      request->onReadyStateChange(httpRequestCb, this);
+      request->setTimeout(10);
+      request->send(buffer);
       note_attempt();
       send_indicator = 2;
     }

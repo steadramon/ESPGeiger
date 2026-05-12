@@ -56,7 +56,7 @@ class Radmon : public EGModule {
     void postMeasurement();
     void setInterval(int interval);
     int getInterval();
-    AsyncHTTPRequest request;
+    AsyncHTTPRequest* request = nullptr;
   private:
     unsigned long lastPing = 0;
     uint16_t pingInterval = RADMON_INTERVAL;

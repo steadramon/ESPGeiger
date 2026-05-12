@@ -145,15 +145,18 @@ void GMC::postMeasurement() {
   char url[256];
   snprintf_P(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv);
 
-  if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
+  if (!request) request = new AsyncHTTPRequest();
+  if (!request) { Log::console(PSTR("GMC: alloc failed")); return; }
+
+  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
   {
-    if (request.open("GET", url))
+    if (request->open("GET", url))
     {
       led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request.onReadyStateChange(httpRequestCb, this);
-      request.setTimeout(30);
-      request.send();
+      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
+      request->onReadyStateChange(httpRequestCb, this);
+      request->setTimeout(30);
+      request->send();
       note_attempt();
       send_indicator = 2;
     }

@@ -124,15 +124,18 @@ void Thingspeak::postMeasurement() {
   char url[256];
   snprintf_P(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
 
-  if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
+  if (!request) request = new AsyncHTTPRequest();
+  if (!request) { Log::console(PSTR("Thingspeak: alloc failed")); return; }
+
+  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
   {
-    if (request.open("GET", url))
+    if (request->open("GET", url))
     {
       led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request.onReadyStateChange(httpRequestCb, this);
-      request.setTimeout(5);
-      request.send();
+      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
+      request->onReadyStateChange(httpRequestCb, this);
+      request->setTimeout(5);
+      request->send();
       note_attempt();
       send_indicator = 2;
     }

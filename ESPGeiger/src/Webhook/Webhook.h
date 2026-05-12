@@ -55,7 +55,7 @@ class Webhook : public EGModule {
     void setInterval(int interval);
     int getInterval() { return pingInterval; }
     const char* cleanHTTP(const char* url);
-    AsyncHTTPRequest request;
+    AsyncHTTPRequest* request = nullptr;
   private:
     unsigned long lastPing = 0;
     uint16_t pingInterval = WEBHOOK_INTERVAL;
