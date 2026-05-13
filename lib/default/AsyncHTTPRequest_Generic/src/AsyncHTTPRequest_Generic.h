@@ -1,0 +1,51 @@
+/****************************************************************************************************************************
+  AsyncHTTPRequest_Generic.h - Dead simple AsyncHTTPRequest for ESP8266, ESP32 and currently STM32 with built-in LAN8742A Ethernet
+
+  For ESP8266, ESP32 and STM32 with built-in LAN8742A Ethernet (Nucleo-144, DISCOVERY, etc)
+
+  AsyncHTTPRequest_STM32 is a library for the ESP8266, ESP32 and currently STM32 run built-in Ethernet WebServer
+
+  Based on and modified from asyncHTTPrequest Library (https://github.com/boblemaire/asyncHTTPrequest)
+
+  Built by Khoi Hoang https://github.com/khoih-prog/AsyncHTTPRequest_Generic
+  Licensed under MIT license
+
+  Copyright (C) <2018>  <Bob Lemaire, IoTaWatt, Inc.>
+  This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License
+  as published bythe Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+  You should have received a copy of the GNU General Public License along with this program.
+  If not, see <https://www.gnu.org/licenses/>.
+
+  Version: 1.13.0
+
+  Version Modified By   Date      Comments
+  ------- -----------  ---------- -----------
+  1.0.0    K Hoang     14/09/2020 Initial coding to add support to STM32 using built-in Ethernet (Nucleo-144, DISCOVERY, etc).
+  ...
+  1.7.0    K Hoang     10/02/2022 Add support to new ESP32-S3. Add LittleFS support to ESP32-C3. Use core LittleFS
+  1.7.1    K Hoang     25/02/2022 Add example AsyncHTTPRequest_ESP_Multi to demo connection to multiple addresses
+  1.8.0    K Hoang     13/04/2022 Add support to ESP8266 using W5x00 with lwip_W5100 or lwip_W5500 library
+  1.8.1    K Hoang     13/04/2022 Add support to ESP8266 using ENC28J60 with lwip_enc28j60 library
+  1.8.2    K Hoang     10/08/2022 Fix library.properties to remove unavailable items from depends
+  1.9.0    K Hoang     30/08/2022 Fix bug. Improve debug messages. Optimize code
+  1.9.1    K Hoang     09/09/2022 Fix ESP32 chipID for example `AsyncHTTPRequest_ESP_WiFiManager`
+  1.9.2    K Hoang     18/10/2022 Not try to reconnect to the same host:port after connected
+  1.10.0   K Hoang     20/10/2022 Fix bug. Clean up
+  1.10.1   K Hoang     21/10/2022 Fix bug of wrong reqStates
+  1.10.2   K Hoang     09/11/2022 Default to reconnect to the same host:port after connected for new HTTP sites
+  1.11.0   K Hoang     28/11/2022 Add support to ESP32 boards using LwIP ENC28J60 Ethernet
+  1.12.0   K Hoang     30/11/2022 Add support to ESP32 boards using LwIP W5500 Ethernet. Fix bug
+  1.13.0   K Hoang     01/02/2023 Add support to ESP32 using LwIP W6100 Ethernet. Fix _parseURL() bug
+ *****************************************************************************************************************************/
+
+#pragma once
+
+#ifndef ASYNC_HTTP_REQUEST_GENERIC_H
+#define ASYNC_HTTP_REQUEST_GENERIC_H
+
+#include "AsyncHTTPRequest_Generic.hpp"
+#include "AsyncHTTPRequest_Impl_Generic.h"
+
+#endif    // ASYNC_HTTP_REQUEST_GENERIC_H

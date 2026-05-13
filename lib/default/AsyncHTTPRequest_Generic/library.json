@@ -1,0 +1,26 @@
+{
+  "name": "AsyncHTTPRequest_Generic",
+  "version": "1.13.0",
+  "description": "Simple Async HTTP Request library, supporting GET, POST, PUT, PATCH, DELETE and HEAD, on top of AsyncTCP libraries.",
+  "keywords": "communication, async, tcp, http, ESP8266, ESP32, wifi",
+  "authors": [
+    {
+      "name": "Bob Lemaire",
+      "url":  "https://github.com/boblemaire"
+    },
+    {
+      "name":       "Khoi Hoang",
+      "url":        "https://github.com/khoih-prog",
+      "maintainer": true
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url":  "https://github.com/khoih-prog/AsyncHTTPRequest_Generic"
+  },
+  "homepage": "https://github.com/khoih-prog/AsyncHTTPRequest_Generic",
+  "license":    "LGPL-3.0",
+  "frameworks": "arduino",
+  "platforms":  ["espressif8266", "espressif32"],
+  "headers":    ["AsyncHTTPRequest_Generic.h", "AsyncHTTPRequest_Generic.hpp"]
+}
