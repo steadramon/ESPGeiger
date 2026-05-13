@@ -249,8 +249,20 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #endif
 };
 
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "Serial Input"
+#elif GEIGER_IS_PULSE(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "Pulse Input"
+#elif GEIGER_IS_UDPRX(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "UDP Input"
+#elif GEIGER_IS_TEST(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "Test Input"
+#else
+  #define INPUT_GROUP_TITLE "Input"
+#endif
+
 static const EGPrefGroup INPUT_PREF_GROUP = {
-  "input", "Input", 1,
+  "input", INPUT_GROUP_TITLE, 1,
   INPUT_PREF_ITEMS,
   sizeof(INPUT_PREF_ITEMS) / sizeof(INPUT_PREF_ITEMS[0]),
 };
