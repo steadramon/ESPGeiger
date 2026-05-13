@@ -9,9 +9,10 @@ ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-c
 - 📈  Built-in web server with live graphing
 - 🔴  Live CPM and μSv/h readings
 - 🔢  Smoothed values over 1, 5 and 15 minutes
-- 🖥️   Optional SSD1306 OLED display and WS2812X NeoPixel status light
+- 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED display and WS2812X NeoPixel status light
 - 📟  Accurate counting via interrupt or ESP32 hardware counter (PCNT)
 - 🌐  MQTT, Home Assistant auto-discovery, Radmon.org, GMCMAP, ThingSpeak, custom Webhooks
+- 📡  UDP/OSC receiver builds for tubeless mirror displays and fleet aggregators
 - 💾  Optional SD card logging
 - 🚧  Test builds for emulating pulse and serial counters
 
@@ -68,6 +69,17 @@ Test builds emulate a Geiger counter internally. You can also wire the `TXPIN` o
 | `esp8266_test` / `esp32_test` | Internal counter, no output |
 | `esp8266_testpulse` / `esp32_testpulse` | Outputs Poisson-distributed pulses on TXPIN |
 | `esp8266_testserial` / `esp32_testserial` | Emulates a serial counter (type selectable via Config) |
+
+### I want a remote display or fleet aggregator (no tube needed)
+
+UDP receiver builds listen for OSC multicast broadcasts from other ESPGeiger devices and mirror them locally. Everything (CPM, µSv, OLED, MQTT, blip-LED) works as if a real tube were attached:
+
+| Hardware | Build |
+|---|---|
+| ESP8266 | `esp8266_udp` / `esp8266oled_udp` |
+| ESP32 | `esp32_udp` / `esp32oled_udp` |
+
+Producers enable the broadcast via Config → UDP blip out → mode 2. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
 
 See the full list of available builds on the [releases page](https://github.com/steadramon/ESPGeiger/releases/latest) or in the [build targets documentation](https://docs.espgeiger.com/install/buildtargets).
 
