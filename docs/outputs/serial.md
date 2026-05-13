@@ -40,7 +40,7 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 
 ### Setting prefs
 
-Use `get` and `set` for every persisted pref. `get` with no `<module>.<key>` echoes nothing — the names match the `/egprefs` JSON dumps and the pref keys on the Configuration page.
+Use `get` and `set` for every persisted pref. `get` with no `<module>.<key>` echoes nothing. The names match the `/egprefs` JSON dumps and the pref keys on the Configuration page.
 
 Common examples:
 

@@ -84,6 +84,34 @@ The `UDP-Receiver` firmware variant takes the multicast feed of one producer and
 - A **mirror** for backup logging or alternative output sinks
 - A **fleet aggregator** in sum mode, totalising clicks from many producers
 
+## Quick Start
+
+You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer**) and one with a `*_udp` build (the **receiver**).
+
+**On the producer:**
+1. Note its 6-hex chipid, visible on the home page or `/info`.
+2. Go to **Config → UDP blip out**, set Mode to `2` (stats + blips), Save.
+
+**On the receiver:**
+1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32oled_udp` build via the [Web Installer](https://install.espgeiger.com).
+2. Join your WiFi via the captive portal, same network as the producer.
+3. Open the device's web UI and go to **Config → Input**.
+4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
+5. Save.
+
+Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage, and the CPM number should track the producer's.
+
+### Not working?
+
+Quick things to check:
+
+- **Same WiFi network and subnet.** Multicast doesn't cross routers or guest networks; both devices need to be on the same AP / SSID.
+- **Producer in Mode 2.** Mode 1 only sends stats every 60 s and produces no clicks. The CPM on the receiver stays at 0.
+- **Receiver actually flashed as `*_udp`.** Check `/info` on the receiver shows a UDP build target. A regular pulse build with a blank input won't listen.
+- **Loss percentage stuck high or RX line blank.** Common on busy networks - try `udprx_rxmode = 1` (modem sleep, default) before `2` (none). `2` is usually *worse* on noisy LANs, not better.
+- **Wrong producer locked.** In auto-mode (`udprx_chipid` blank), the receiver latches onto the first producer heard. Set the chipid explicitly if you have multiple producers.
+- **Stats arriving but no clicks.** The producer just rebooted - mode 2 sends `/click` only for new events. Wait for activity.
+
 ## Build Targets
 
 | Target | Platform | Display |
