@@ -1287,7 +1287,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       const char* p_pat   = P2S(p.pattern, s_pat,  sizeof(s_pat));
 
       if (p.type == EGP_LABEL) {
-        n = snprintf_P(buf, sizeof(buf), PSTR("<label>%s</label><br>"), p.label ? p_label : "");
+        n = snprintf_P(buf, sizeof(buf), PSTR("<label>%s</label>"), p.label ? p_label : "");
         if (n > 0) res.sendChunk(buf, (size_t)n);
         continue;
       }
