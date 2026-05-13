@@ -234,69 +234,50 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wa{padding:.8em
 )HTML";
 
 extern const char hvJS[] PROGMEM = R"JS("use strict";
-var e=new Graph("g1", ["Volts"], "V", "g2", 15, null, 0, true, true, 5,5);
-var x=null,lt,lf=0,to,tp,pc='';sn=0,id=0;
-var ge=true;
-function showGraph(on){
-  if(on===ge)return;
-  ge=on;
-  var d=on?'':'none';
-  byID('g1').style.display=d;
-  byID('g2').style.display=d;
-  byID('tgt').closest('tr').style.display=d;
-}
-
-function gethv() {
-  var c,o='',t;
+var e=new Graph("g1",["Volts"],"V","g2",15,null,0,!0,!0,5,5),
+D=Date,X=XMLHttpRequest,O=setTimeout,
+G1=byID('g1'),G2=byID('g2'),
+FQ=byID('freq'),DU=byID('duty'),RT=byID('ratio'),TG=byID('tgt'),
+SF=byID('sfreq'),SD=byID('sduty'),ST=byID('strim'),SB=byID('submit'),
+TRow=TG.closest('tr'),
+lt,lf=0,ge=!0,inited=!1;
+function showGraph(on){if(on===ge)return;ge=on;var d=on?'':'none';G1.style.display=d;G2.style.display=d;TRow.style.display=d}
+function gethv(){
   clearTimeout(lt);
-  t = document.getElementById('t1');
-
-    x=new XMLHttpRequest();
-    x.onload = function() {
-      if(x.status==200){
-        var o=JSON.parse(x.responseText)
-        showGraph(o.ratio>0);
-        if(o.ratio>0)e.update([o.volts]);
-        if (byID('sfreq').innerHTML=="-") {
-          if(o.fmax) byID('freq').max=o.fmax;
-          byID('freq').value=o.freq;
-          byID('duty').value=o.duty;
-          byID('ratio').value=o.ratio;
-          byID('tgt').value=o.target;
-          byID('sfreq').innerHTML=o.freq;
-          byID('sduty').innerHTML=o.duty;
-          var b=byID('submit');b.disabled=false;b.innerHTML='Submit';
-        }
-        byID('strim').innerHTML=o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
+  var x=new X;
+  x.onload=function(){
+    if(x.status==200){
+      var o=JSON.parse(x.responseText);
+      showGraph(o.ratio>0);
+      if(o.ratio>0)e.update([o.volts]);
+      if(!inited){
+        inited=!0;
+        if(o.fmax)FQ.max=o.fmax;
+        FQ.value=o.freq;DU.value=o.duty;RT.value=o.ratio;TG.value=o.target;
+        SF.textContent=o.freq;SD.textContent=o.duty;
+        SB.disabled=!1;SB.textContent='Submit';
       }
-      lf=Date.now();
-      lt=setTimeout(gethv,3000);
-    };
-
-    x.open('GET','/hvjson',true);
-    x.send();
-
-  return false;
+      ST.textContent=o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
+    }
+    lf=D.now();lt=O(gethv,3e3);
+  };
+  x.open('GET','/hvjson',!0);
+  x.send();
+  return!1;
 }
-window.addEventListener("load",gethv);
-document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(lt);lt=setTimeout(gethv,Math.max(0,3e3-(Date.now()-lf)))}});
-byID('freq').addEventListener("change", function() { byID('sfreq').innerHTML=this.value });
-byID('duty').addEventListener("change", function() { byID('sduty').innerHTML=this.value });
-byID('submit').addEventListener("click", function() {
-  var duty = byID('duty').value;
-  var freq = byID('freq').value;
-  var ratio = byID('ratio').value;
-  var tgt = byID('tgt').value;
-
-   x=new XMLHttpRequest();
-    x.onload = function() {
-      if(x.status==200){
-          byID('sfreq').innerHTML='-';
-          byID('sduty').innerHTML='-';
-      }
-    };
-    x.open('GET','/hvset?f='+freq+'&d='+duty+'&r='+ratio+'&t='+tgt,true);
-    x.send();
+addEventListener("load",gethv);
+document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(lt);lt=O(gethv,Math.max(0,3e3-(D.now()-lf)))}});
+FQ.addEventListener("change",function(){SF.textContent=this.value});
+DU.addEventListener("change",function(){SD.textContent=this.value});
+SB.addEventListener("click",function(){
+  var x=new X;
+  x.onload=function(){
+    if(x.status==200){
+      SF.textContent='-';SD.textContent='-';inited=!1;
+    }
+  };
+  x.open('GET','/hvset?f='+FQ.value+'&d='+DU.value+'&r='+RT.value+'&t='+TG.value,!0);
+  x.send();
 });
 )JS";
 
