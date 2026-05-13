@@ -409,6 +409,30 @@ void SSD1306Display::page_two_full() {
   uptime_y = 47;
 #endif
   drawStrP(0, uptime_y, DeviceInfo::uptimeString());
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  // UDP source line: identity left, loss % right-aligned.
+  GeigerUdpRx* rx = gcounter.udp_rx();
+  if (rx) {
+    char rxBuf[24];
+    const char* chip = rx->locked_chipid();
+    if (rx->mode() == 1) {
+      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("Sum %u src"), (unsigned)rx->producer_count());
+    } else if (chip) {
+      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("RX %s"), chip);
+    } else {
+      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("RX waiting"));
+    }
+    drawStrP(0, uptime_y + 18, rxBuf);
+
+    if (rx->packets_accepted() > 0) {
+      uint16_t loss = rx->loss_pct_x10();
+      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("%u.%u%%"),
+                 (unsigned)(loss / 10), (unsigned)(loss % 10));
+      int16_t w = (int16_t)getStrWidth(rxBuf);
+      drawStrP((int16_t)OLED_WIDTH - w, uptime_y + 18, rxBuf);
+    }
+  }
+#endif
 }
 
 void SSD1306Display::page_one_clear() {
@@ -612,7 +636,7 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   // those refresh promptly, not only on the 10s page_one_clear cycle.
   uint32_t cpm = (uint32_t)gcounter.get_cpm();
   int32_t  usv_x100 = (int32_t)(gcounter.get_usv() * 100.0f + 0.5f);
-  bool warming = (gcounter.cpm_history.capacity != gcounter.cpm_history.size());
+  bool warming = !gcounter.is_warm();
   uint8_t snd = send_indicator;
   uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0);
   // Trend: compare to history N samples back, with sqrt(N) Poisson threshold.
