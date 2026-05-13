@@ -130,12 +130,7 @@ Loss percentage is shown on page 2 of the OLED and exposed via the receiver's ac
 
 ## OLED Display
 
-`*oled_udp` builds show two UDP-specific indicators:
-
-- **Page 1, bottom-right corner of the graph**: filled-dot glyph while we've heard any packet (click *or* stats heartbeat) in the last `UDPRX_STALE_MS` (default 70 s). Warning glyph replaces it when nothing has been heard in that window. Refreshes once per second.
-- **Page 2**: Line `RX <chipid>` (or `Sum N src` in sum mode), with cumulative loss percentage right-aligned.
-
-The 70 s threshold is just over one `/stats` heartbeat interval, so a quiet click feed never false-triggers stale as long as the producer's stats heartbeat is arriving.
+`*oled_udp` builds show a UDP-specific line on page 2: `RX <chipid>` (or `Sum N src` in sum mode), with cumulative loss percentage right-aligned. Page 1 shows the standard CPM / µSv display unchanged, fed from the locally accumulated click count.
 
 # Receive Examples
 
@@ -163,18 +158,6 @@ server.serve_forever()
 
 Subscribe to multicast group `239.255.42.42` on port `57340`. Filter on path `/espg/*/click` for live click events or `/espg/*/stats` for periodic reports.
 
-# Tuning Constants
+# Build Flags
 
-Override at compile time via `-D`:
-
-| Macro | Default | Effect |
-|---|---|---|
-| `UDPBLIP_STATS_INTERVAL_MS` | 60000 | Interval between `/stats` heartbeats |
-| `UDPBLIP_STATS_JITTER_MS` | 1000 | First-emission GRNG offset range |
-| `UDPBLIP_BUNDLE_MAX` | 10 | Max `/click` messages per OSC bundle |
-| `UDPBLIP_MAX_BURST` | 200 | Per-loop click cap before summary path |
-| `UDPBLIP_FAIL_BACKOFF` | 8 | Consecutive send failures before cool-off |
-| `UDPRX_PRODUCER_SLOTS` | 8 | Producer tracking table size (sum mode) |
-| `UDPRX_STALE_MS` | 70000 | OLED stale-feed threshold (any packet) |
-| `UDPRX_DEFAULT_GROUP` | `"239.255.42.42"` | Default multicast group |
-| `UDPRX_DEFAULT_PORT` | `"57340"` | Default UDP port |
+All compile-time tunables (group, port, intervals, bundle size, fleet jitter etc.) are documented in [PlatformIO Build Options → UDP / OSC Output](/install/platformio#udp--osc-output).
