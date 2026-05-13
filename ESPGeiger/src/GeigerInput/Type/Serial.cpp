@@ -17,6 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Serial.h"
+
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
 #include "../../Util/DeviceInfo.h"
@@ -124,3 +127,4 @@ void GeigerSerial::handleSerial(char* input) {
   last_serial = millis();
   _bad_streak = max((int)_bad_streak - 3, 0);
 }
+#endif // GEIGER_IS_SERIAL

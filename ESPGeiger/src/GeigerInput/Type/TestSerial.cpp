@@ -17,6 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "TestSerial.h"
+
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+
 #include "../../Logger/Logger.h"
 #include "../../Util/StringUtil.h"
 #include "../../Prefs/EGPrefs.h"
@@ -120,3 +123,4 @@ void GeigerTestSerial::handleSerial(char* input) {
     Log::console(PSTR("TestSerial RX: %d"), _scpm);
   }
 }
+#endif // GEIGER_IS_TEST

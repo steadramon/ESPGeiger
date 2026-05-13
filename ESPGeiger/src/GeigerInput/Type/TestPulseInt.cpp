@@ -17,6 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "TestPulseInt.h"
+
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+
 #include "../../Logger/Logger.h"
 
 GeigerTestPulseInt::GeigerTestPulseInt() {
@@ -158,3 +161,4 @@ int GeigerTestPulseInt::collect() {
   return pulseCount;
 }
 #endif
+#endif // GEIGER_IS_TEST

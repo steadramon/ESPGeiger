@@ -17,6 +17,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "TestPulse.h"
+
+// Only meaningful on test builds. ISR uses Xtensa-specific GPIO register
+// access that doesn't compile on ESP32-C3; gating here also saves compile
+// time on builds that never instantiate this class.
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+
 #include "../../Logger/Logger.h"
 
 GeigerTestPulse::GeigerTestPulse() {
@@ -161,3 +167,4 @@ int GeigerTestPulse::collect() {
   return pulseCount;
 }
 #endif
+#endif // GEIGER_IS_TEST

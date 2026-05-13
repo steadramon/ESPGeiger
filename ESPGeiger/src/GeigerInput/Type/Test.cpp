@@ -17,6 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Test.h"
+
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+
 #include "../../Logger/Logger.h"
 
 GeigerTest::GeigerTest() {
@@ -82,3 +85,4 @@ void GeigerTest::loop() {
 #endif
   }
 }
+#endif // GEIGER_IS_TEST
