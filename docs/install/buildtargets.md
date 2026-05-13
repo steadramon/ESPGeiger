@@ -61,6 +61,19 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 
 For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not** drive any pin until you've explicitly chosen one. After setting the pin in `/egprefs`, **reboot** for the change to take effect.
 
+## UDP Receiver
+
+UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for [UDP Blip Out](/output/udp) broadcasts from another ESPGeiger and behaves as if a real Geiger tube were attached. CPM/µSv/history/blip-LED/MQTT/WebAPI/OLED all derive from the received clicks. See [UDP / OSC Output](/output/udp) for the full protocol and configuration.
+
+| Target Name | Platform | Display | Notes |
+|---|---|---|---|
+`esp8266_udp` | ESP8266 | none | Headless receiver. |
+`esp8266oled_udp` | ESP8266 | OLED | Receiver with display; shows producer chipid + loss% on page 2 and a feed-alive indicator on page 1. |
+`esp32_udp` | ESP32 | none | ESP32 headless receiver. More heap headroom; cleaner choice for fleet aggregator (sum mode). |
+`esp32oled_udp` | ESP32 | OLED | ESP32 receiver with display. |
+
+After flashing, configure the source mode (pin / sum / auto) and group/port from the **Config → Input** page.
+
 ## Test
 
 Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger `RXPIN` and `TXPIN` together, or connect one ESPGeiger `TXPIN` to the `RXPIN` on another ESPGeiger.

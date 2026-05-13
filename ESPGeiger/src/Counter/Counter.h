@@ -31,6 +31,8 @@
 #include "../GeigerInput/Type/Pulse.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
 #include "../GeigerInput/Type/Serial.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
+#include "../GeigerInput/Type/UdpRx.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
 #include "../GeigerInput/Type/Test.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
@@ -159,6 +161,15 @@ class Counter {
         geigerinput->setTargetCPM(val, true);
       }
 #endif
+#if GEIGER_TYPE == GEIGER_TYPE_UDPRX
+      GeigerUdpRx* udp_rx() { return geigerinput; }
+#endif
+      // Queue one blip for loop()'s Poisson-drain scheduler. Used by
+      // batched inputs (UDPRX bundles) so each click flashes separately.
+      void queueBlip() {
+        _last_blip = micros();
+        if (_pending_blips < 255) _pending_blips++;
+      }
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;
@@ -178,6 +189,8 @@ class Counter {
 #endif
     private:
       unsigned long _last_blip_seen = 0;
+      uint8_t  _pending_blips = 0;
+      uint32_t _last_blip_fire_ms = 0;
       int _cpm_warning = 50;
       int _cpm_alert = 100;
       bool _bool_cpm_warning = false;
@@ -204,6 +217,8 @@ class Counter {
       GeigerPulse* geigerinput;
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
       GeigerSerial* geigerinput;
+#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
+      GeigerUdpRx* geigerinput;
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
       GeigerTest* geigerinput;
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE

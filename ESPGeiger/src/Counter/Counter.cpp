@@ -42,6 +42,8 @@ Counter::Counter() {
   geigerinput = new GeigerPulse();
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
   geigerinput = new GeigerSerial();
+#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
+  geigerinput = new GeigerUdpRx();
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
   geigerinput = new GeigerTest();
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
@@ -315,11 +317,38 @@ bool Counter::is_quiet_now() {
 }
 
 void Counter::loop() {
-  // Only Serial/Test builds need per-iteration UART drain here.
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
+#elif GEIGER_IS_UDPRX(GEIGER_TYPE)
+  // Skip-count throttle dodges the 64-bit millis() div at ~60 kHz LPS.
+  static uint16_t s_udp_skip = 0;
+  if (++s_udp_skip >= 5000) {
+    s_udp_skip = 0;
+    geigerinput->loop();
+  }
 #endif
 
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  // Poisson inter-arrival drain: bundle blips fire with exp(-lambda*t)
+  // spacing rather than as a metronome. Clamped [40, 1000] ms.
+  if (_pending_blips > 0) {
+    unsigned long now = millis();
+    if ((long)(now - _last_blip_fire_ms) >= 0) {
+      _pending_blips--;
+#ifndef DISABLE_BLIP
+      this->blip();
+#endif
+      float lambda = get_cps();
+      if (lambda < 0.1f) lambda = 0.1f;
+      float u = (float)GRNG::fast_uint32() * (1.0f / 4294967296.0f);
+      if (u < 1e-6f) u = 1e-6f;
+      uint32_t delay_ms = (uint32_t)((-logf(u) / lambda) * 1000.0f);
+      if (delay_ms < 40)   delay_ms = 40;
+      if (delay_ms > 1000) delay_ms = 1000;
+      _last_blip_fire_ms = now + delay_ms;
+    }
+  }
+#else
   unsigned long lb = _last_blip;
   if (_last_blip_seen != lb) {
     _last_blip_seen = lb;
@@ -327,6 +356,7 @@ void Counter::loop() {
     this->blip();
 #endif
   }
+#endif
 }
 
 // ---------- HTTP routes ----------

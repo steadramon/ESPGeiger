@@ -191,6 +191,23 @@ EG_PSTR(IN_H_TBB, "Detects beta radiation");
 EG_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
 EG_PSTR(IN_H_TBG, "Detects gamma radiation");
 #endif
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+EG_PSTR(IN_L_URMD, "Source Mode");
+EG_PSTR(IN_H_URMD, "0=specific chipid (auto-latches first heard if blank), 1=sum all producers heard");
+EG_PSTR(IN_L_URCH, "Pin chipid");
+EG_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in pin mode (0)");
+EG_PSTR(IN_P_URCH, "[0-9a-fA-F]{0,6}");
+EG_PSTR(IN_L_URGP, "Multicast group");
+EG_PSTR(IN_H_URGP, "Must match producers (default 239.255.42.42)");
+EG_PSTR(IN_P_URGP, "[0-9.]+");
+EG_PSTR(IN_L_URPT, "Port");
+EG_PSTR(IN_H_URPT, "UDP port (default 57340)");
+EG_PSTR(IN_L_URRM, "RX sleep");
+EG_PSTR(IN_H_URRM, "0=light (DTIM wake + CPU nap, lowest power), 1=modem (DTIM wake + CPU awake, balanced default), 2=none (radio always on, pulls LAN noise so often higher loss).");
+// Defined in UdpRx.cpp; routes prefs-saved notifications to GeigerUdpRx
+// without dragging WiFiUDP.h into this file.
+extern "C" void udprx_notify_prefs_saved();
+#endif
 
 static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
@@ -222,6 +239,13 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"tube_alpha", IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_beta",  IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_gamma", IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+#endif
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  {"udprx_mode",   IN_L_URMD, IN_H_URMD, "0",                  nullptr,     0, 1,     0,  EGP_UINT,   0},
+  {"udprx_chipid", IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     6,  EGP_STRING, 0},
+  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.42.42",      IN_P_URGP,   0, 0,     24, EGP_STRING, 0},
+  {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   0},
+  {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   0},
 #endif
 };
 
@@ -283,6 +307,9 @@ void InputPrefs::on_prefs_saved() {
       gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("input", "cpm_window")) need_reboot = true;
 #endif
   on_prefs_loaded();
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  udprx_notify_prefs_saved();   // reread mode/chipid/group/port, rebind UDP
+#endif
   if (need_reboot) EGPrefs::request_restart();
 }
 
