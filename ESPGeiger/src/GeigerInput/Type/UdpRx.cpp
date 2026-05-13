@@ -245,7 +245,6 @@ void GeigerUdpRx::processMessage(const uint8_t* buf, size_t len) {
     uint32_t producer_counter = rd_i32(args);
     uint32_t producer_ts      = rd_i32(args + 4);
     float    cps              = rd_f32(args + 8);
-    gcounter.queueBlip();
 
     ProducerRecord* p = findOrAllocProducer(src, now_ms);
 
@@ -304,6 +303,7 @@ void GeigerUdpRx::processMessage(const uint8_t* buf, size_t len) {
       _packets_accepted++;
       _last_click_ms  = now_ms;
       _gap_filled    += gap_credit;
+      gcounter.queueBlip(credit);
     }
     _local_count    += credit;
     p->click_count  += credit;
