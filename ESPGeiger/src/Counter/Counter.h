@@ -164,11 +164,22 @@ class Counter {
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
       GeigerUdpRx* udp_rx() { return geigerinput; }
 #endif
-      // Queue one blip for loop()'s Poisson-drain scheduler. Used by
-      // batched inputs (UDPRX bundles) so each click flashes separately.
-      void queueBlip() {
+      void queueBlip(uint32_t count = 1) {
         _last_blip = micros();
-        if (_pending_blips < 255) _pending_blips++;
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+        if (count == 0) return;
+        uint32_t now_ms = millis();
+        if ((uint32_t)(now_ms - _last_imm_blip_ms) >= 40) {
+          _last_imm_blip_ms = now_ms;
+          blip();
+          if ((int32_t)(_last_blip_fire_ms - now_ms) < 40)
+            _last_blip_fire_ms = now_ms + 40;
+          count--;
+        }
+        uint32_t room = 255u - _pending_blips;
+        if (count > room) count = room;
+        _pending_blips += (uint8_t)count;
+#endif
       }
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
@@ -189,8 +200,14 @@ class Counter {
 #endif
     private:
       unsigned long _last_blip_seen = 0;
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+      // Poisson-drain bookkeeping. Only the UDP receiver needs to spread
+      // bundle / gap-fill blips - real Geiger inputs blip directly off the
+      // _last_blip != _last_blip_seen change-detector in loop().
       uint8_t  _pending_blips = 0;
       uint32_t _last_blip_fire_ms = 0;
+      uint32_t _last_imm_blip_ms = 0;
+#endif
       int _cpm_warning = 50;
       int _cpm_alert = 100;
       bool _bool_cpm_warning = false;
