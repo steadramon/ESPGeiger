@@ -201,9 +201,6 @@ class Counter {
     private:
       unsigned long _last_blip_seen = 0;
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-      // Poisson-drain bookkeeping. Only the UDP receiver needs to spread
-      // bundle / gap-fill blips - real Geiger inputs blip directly off the
-      // _last_blip != _last_blip_seen change-detector in loop().
       uint8_t  _pending_blips = 0;
       uint32_t _last_blip_fire_ms = 0;
       uint32_t _last_imm_blip_ms = 0;
