@@ -49,39 +49,66 @@ static const char R503_RETRY5[] =
 
 // Yield-retry write: blocks until len bytes go on the wire or the
 // connection drops. Main-loop context only (handlers via tick()).
-static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
-  if (!s) return false;
-  size_t sent = 0;
+// Wall-time-budgeted write with sticky abort. Spinning yield() makes
+// each iteration variable (20us idle to 50ms under lwIP load), so a spin
+// counter is not a real budget. Track millis since last progress instead;
+// any actual write resets the clock, so a slow-but-steady client gets
+// unbounded time. Budget is well under the ESP8266 software WDT (3.2s)
+// and ESP32 has more slack to spare.
+//
+// Once we give up on this client, set send_aborted on the slot so all
+// subsequent sendChunk calls in the same response fast-fail. Otherwise
+// handlers that ignore return values pay one full budget per chunk
+// (minutes on a big page).
 #ifdef ESP32
   // taskYIELD relinquishes to same-priority tasks (lwIP/AsyncTCP) without
   // sleeping a full RTOS tick (~10ms) like vTaskDelay(1) would.
   #define EGHTTP_BACKPRESSURE_PAUSE() do { taskYIELD(); } while (0)
+  static const uint32_t EGHTTP_SEND_BUDGET_MS = 5000;
 #else
   #define EGHTTP_BACKPRESSURE_PAUSE() do { yield(); delay(0); } while (0)
+  static const uint32_t EGHTTP_SEND_BUDGET_MS = 2500;
 #endif
-  uint16_t spin_no_progress = 0;
-  const uint16_t SPIN_LIMIT = 2000;
+
+static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
+  if (!s || s->send_aborted) return false;
+  size_t sent = 0;
+  uint32_t last_progress = millis();
   while (sent < len) {
-    if (!s->client) return false;
+    if (!s->client || !s->client->connected()) {
+      Serial.printf_P(PSTR("[EGHttp] send aborted, client gone after %u/%u B\n"),
+                      (unsigned)sent, (unsigned)len);
+      s->send_aborted = true;
+      return false;
+    }
     size_t can = s->client->space();
     if (can == 0) {
-      if (++spin_no_progress > SPIN_LIMIT) return false;
+      if (millis() - last_progress > EGHTTP_SEND_BUDGET_MS) {
+        Serial.printf_P(PSTR("[EGHttp] send aborted, %ums no-progress at %u/%u B\n"),
+                        (unsigned)EGHTTP_SEND_BUDGET_MS, (unsigned)sent, (unsigned)len);
+        s->send_aborted = true;
+        return false;
+      }
       EGHTTP_BACKPRESSURE_PAUSE();
       continue;
     }
     size_t take = (len - sent) < can ? (len - sent) : can;
     size_t wrote = s->client->write(data + sent, take);
     if (wrote == 0) {
-      if (++spin_no_progress > SPIN_LIMIT) return false;
+      if (millis() - last_progress > EGHTTP_SEND_BUDGET_MS) {
+        Serial.printf_P(PSTR("[EGHttp] send aborted, write stuck at %u/%u B\n"),
+                        (unsigned)sent, (unsigned)len);
+        s->send_aborted = true;
+        return false;
+      }
       EGHTTP_BACKPRESSURE_PAUSE();
       continue;
     }
-    spin_no_progress = 0;
     s->client->send();
     sent += wrote;
+    last_progress = millis();
     yield();
   }
-#undef EGHTTP_BACKPRESSURE_PAUSE
   return true;
 }
 
@@ -206,6 +233,7 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(AsyncClient* c) {
       s.stream_aborted = false;
       s.ack_paused     = false;
       s.bodyAcked      = 0;
+      s.send_aborted   = false;
       s.routeIdx       = 0xFF;
       return &s;
     }
@@ -236,14 +264,14 @@ void EGHttpServer::resetSlot(Slot* s) {
   s->stream_aborted = false;
   s->ack_paused     = false;
   s->bodyAcked      = 0;
+  s->send_aborted   = false;
   s->routeIdx       = 0xFF;
   // buf returned so idle server costs only its bookkeeping fields.
   if (s->buf)         { free(s->buf);         s->buf         = nullptr; }
-#ifdef ESP32
-  // chunkAcc is server-shared; just null the slot's view.
+  // chunkAcc points into shared/slot buffer; null the slot's view either way.
   s->chunkAcc    = nullptr;
   s->chunkAccLen = 0;
-#endif
+  s->chunkAccCap = 0;
 }
 
 bool EGHttpServer::enqueueWaiter(AsyncClient* c) {
@@ -585,15 +613,32 @@ void EGHttpServer::dispatch(Slot* s) {
   EGHttpResponse res;
   res._slot = s;
 
+  // Claim chunk accumulator. ESP32 uses a server-shared 12 KB heap buffer
+  // (lazy-alloc, kept alive for the life of the server). ESP8266 reuses
+  // the slot's own request buffer tail (no extra heap). dispatch() is
+  // serialised in tick() so a single accumulator across slots is safe.
 #ifdef ESP32
-  // Claim server-shared chunk accumulator. Lazy-alloc on first use;
-  // kept alive for the life of the server (no per-request churn).
-  // dispatch() is serialised in tick() so single buffer is safe.
   if (!_dispatchChunkAcc) {
     _dispatchChunkAcc = (char*)malloc(EGHTTP_CHUNK_ACC);
   }
   s->chunkAcc    = _dispatchChunkAcc;
   s->chunkAccLen = 0;
+  s->chunkAccCap = _dispatchChunkAcc ? EGHTTP_CHUNK_ACC : 0;
+#else
+  // Request data ([0, headerEnd) for headers, [headerEnd, headerEnd+bodyLen)
+  // for body) is still referenced by req via path/query/body pointers, so
+  // only the tail is safe to repurpose. Streaming bodies leave bodyLen as 0
+  // because the body went into _streamBuf elsewhere.
+  size_t reqUsed = s->headerEnd + (s->streaming ? 0 : s->contentLength);
+  if (s->buf && reqUsed < EGHTTP_REQ_BUF) {
+    s->chunkAcc    = s->buf + reqUsed;
+    s->chunkAccLen = 0;
+    s->chunkAccCap = EGHTTP_REQ_BUF - reqUsed;
+  } else {
+    s->chunkAcc    = nullptr;
+    s->chunkAccLen = 0;
+    s->chunkAccCap = 0;
+  }
 #endif
 
   // Walk the (already-NUL-mutated) request line back out for req.
@@ -762,17 +807,19 @@ const char* EGHttpRequest::decodeArg(const char* body, size_t bodyLen,
   return nullptr;
 }
 
-#ifdef ESP32
-// Append-or-flush on overflow. Goal: one write for the common case
-// where the whole chunked response fits in EGHTTP_CHUNK_ACC.
+// Append-or-flush on overflow. ESP32 has a 12 KB shared accumulator so
+// most responses fit in one write. ESP8266 reuses the slot's request
+// buffer tail (typically 500-1100 B) so big pages flush a handful of
+// times instead of once-per-sendChunk. Either way, dramatically fewer
+// wire interactions than calling yield_write_sram per chunk.
 static bool eghttp_acc_append(EGHttpServer::Slot* s, const char* data, size_t len) {
-  if (!s->chunkAcc) return yield_write_sram(s, data, len);
-  if (s->chunkAccLen + len > EGHTTP_CHUNK_ACC) {
+  if (!s->chunkAcc || s->chunkAccCap == 0) return yield_write_sram(s, data, len);
+  if (s->chunkAccLen + len > s->chunkAccCap) {
     if (s->chunkAccLen > 0) {
       if (!yield_write_sram(s, s->chunkAcc, s->chunkAccLen)) return false;
       s->chunkAccLen = 0;
     }
-    if (len >= EGHTTP_CHUNK_ACC) return yield_write_sram(s, data, len);
+    if (len >= s->chunkAccCap) return yield_write_sram(s, data, len);
   }
   memcpy(s->chunkAcc + s->chunkAccLen, data, len);
   s->chunkAccLen += len;
@@ -780,13 +827,13 @@ static bool eghttp_acc_append(EGHttpServer::Slot* s, const char* data, size_t le
 }
 
 static bool eghttp_acc_append_pgm(EGHttpServer::Slot* s, PGM_P data, size_t len) {
-  if (!s->chunkAcc) return yield_write_pgm(s, data, len);
-  if (s->chunkAccLen + len > EGHTTP_CHUNK_ACC) {
+  if (!s->chunkAcc || s->chunkAccCap == 0) return yield_write_pgm(s, data, len);
+  if (s->chunkAccLen + len > s->chunkAccCap) {
     if (s->chunkAccLen > 0) {
       if (!yield_write_sram(s, s->chunkAcc, s->chunkAccLen)) return false;
       s->chunkAccLen = 0;
     }
-    if (len >= EGHTTP_CHUNK_ACC) return yield_write_pgm(s, data, len);
+    if (len >= s->chunkAccCap) return yield_write_pgm(s, data, len);
   }
   memcpy_P(s->chunkAcc + s->chunkAccLen, data, len);
   s->chunkAccLen += len;
@@ -799,7 +846,6 @@ static bool eghttp_acc_flush(EGHttpServer::Slot* s) {
   s->chunkAccLen = 0;
   return ok;
 }
-#endif
 
 // ---------- EGHttpResponse ----------
 
@@ -834,9 +880,10 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
   int n = snprintf(head, sizeof(head),
     "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n%s\r\n",
     status, contentType, (unsigned)bodyLen, _extraHeaders);
-#ifdef ESP32
-  // Header + body in one write; same anti-race motivation as chunked.
-  if (s->chunkAcc) {
+  // Header + body in one write via accumulator when available; same
+  // batch-everything motivation as chunked. Falls through to direct
+  // writes when no accumulator is set (e.g. response before dispatch).
+  if (s->chunkAcc && s->chunkAccCap > 0) {
     s->chunkAccLen = 0;
     bool ok = eghttp_acc_append(s, head, (size_t)n);
     if (ok && bodyLen > 0) ok = eghttp_acc_append(s, body, bodyLen);
@@ -845,7 +892,6 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
     _done    = true;
     return;
   }
-#endif
   if (!yield_write_sram(s, head, (size_t)n)) { _done = true; return; }
   _started = true;
   if (bodyLen > 0) yield_write_sram(s, body, bodyLen);
@@ -860,10 +906,9 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const __Flas
   int n = snprintf(head, sizeof(head),
     "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n%s\r\n",
     status, contentType, (unsigned)bodyLen, _extraHeaders);
-#ifdef ESP32
-  // Pages larger than the accumulator fall through to direct-write
+  // Bodies larger than the accumulator fall through to direct-write
   // mid-body via the append_pgm overflow branch.
-  if (s->chunkAcc) {
+  if (s->chunkAcc && s->chunkAccCap > 0) {
     s->chunkAccLen = 0;
     bool ok = eghttp_acc_append(s, head, (size_t)n);
     if (ok && bodyLen > 0) ok = eghttp_acc_append_pgm(s, (PGM_P)body, bodyLen);
@@ -872,7 +917,6 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const __Flas
     _done    = true;
     return;
   }
-#endif
   if (!yield_write_sram(s, head, (size_t)n)) { _done = true; return; }
   _started = true;
   if (bodyLen > 0) yield_write_pgm(s, (PGM_P)body, bodyLen);
@@ -908,15 +952,9 @@ bool EGHttpResponse::sendChunk(const char* data, size_t len) {
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   char hdr[16];
   int hn = snprintf(hdr, sizeof(hdr), "%X\r\n", (unsigned)len);
-#ifdef ESP32
   if (!eghttp_acc_append(s, hdr, (size_t)hn))   return false;
   if (!eghttp_acc_append(s, data, len))         return false;
   if (!eghttp_acc_append(s, "\r\n", 2))         return false;
-#else
-  if (!yield_write_sram(s, hdr, (size_t)hn))    return false;
-  if (!yield_write_sram(s, data, len))          return false;
-  if (!yield_write_sram(s, "\r\n", 2))          return false;
-#endif
   return true;
 }
 
@@ -932,15 +970,9 @@ bool EGHttpResponse::sendChunk(const __FlashStringHelper* data) {
   if (len == 0) return false;
   char hdr[16];
   int hn = snprintf(hdr, sizeof(hdr), "%X\r\n", (unsigned)len);
-#ifdef ESP32
   if (!eghttp_acc_append(s, hdr, (size_t)hn))      return false;
   if (!eghttp_acc_append_pgm(s, (PGM_P)data, len)) return false;
   if (!eghttp_acc_append(s, "\r\n", 2))            return false;
-#else
-  if (!yield_write_sram(s, hdr, (size_t)hn))       return false;
-  if (!yield_write_pgm(s, (PGM_P)data, len))       return false;
-  if (!yield_write_sram(s, "\r\n", 2))             return false;
-#endif
   return true;
 }
 
@@ -959,30 +991,20 @@ bool EGHttpResponse::sendKV(const __FlashStringHelper* prefix, const char* value
   if (total == 0) return true;
   char hdr[16];
   int hn = snprintf(hdr, sizeof(hdr), "%X\r\n", (unsigned)total);
-#ifdef ESP32
   if (!eghttp_acc_append(s, hdr, (size_t)hn))                          return false;
   if (pLen && !eghttp_acc_append_pgm(s, (PGM_P)prefix, pLen))          return false;
   if (vLen && !eghttp_acc_append(s, value, vLen))                      return false;
   if (sLen && !eghttp_acc_append_pgm(s, (PGM_P)suffix, sLen))          return false;
   return eghttp_acc_append(s, "\r\n", 2);
-#else
-  if (!yield_write_sram(s, hdr, (size_t)hn))                       return false;
-  if (pLen && !yield_write_pgm(s, (PGM_P)prefix, pLen))            return false;
-  if (vLen && !yield_write_sram(s, value, vLen))                   return false;
-  if (sLen && !yield_write_pgm(s, (PGM_P)suffix, sLen))            return false;
-  return yield_write_sram(s, "\r\n", 2);
-#endif
 }
 
 bool EGHttpResponse::endChunked() {
   if (!_slot || !_chunked || _done) return false;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
-#ifdef ESP32
-  // Append terminating zero-chunk into accumulator, then one big write.
+  // Append terminating zero-chunk into accumulator, then flush whatever's
+  // pending in one shot. Works on both platforms now that ESP8266 also
+  // uses the accumulator (backed by slot's request-buf tail).
   bool ok = eghttp_acc_append(s, "0\r\n\r\n", 5) && eghttp_acc_flush(s);
-#else
-  bool ok = yield_write_sram(s, "0\r\n\r\n", 5);
-#endif
   _done = true;
   return ok;
 }

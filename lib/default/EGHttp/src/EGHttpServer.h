@@ -56,8 +56,11 @@
   #define EGHTTP_BODY_SCRATCH 128
 #endif
 #ifndef EGHTTP_CHUNK_ACC
-  // ESP32-only chunked-response accumulator. Single flush at endChunked
+  // ESP32: dedicated chunked-response accumulator. Single flush at endChunked
   // closes the AsyncTCP-task-race window that truncates mid-response.
+  // ESP8266: not used as a separate alloc - the slot's request buffer
+  // (Slot::buf, EGHTTP_REQ_BUF bytes) is repurposed as the accumulator
+  // during RESPONDING using its tail (after request headers + body).
   #define EGHTTP_CHUNK_ACC 12288
 #endif
 #ifndef EGHTTP_MAX_ROUTES
@@ -179,14 +182,20 @@ class EGHttpServer {
       volatile bool stream_aborted = false;
       volatile bool ack_paused = false;
       volatile size_t bodyAcked = 0;
+      // Sticky once a send fails (timeout, disconnect, write rejected).
+      // Subsequent sendChunk calls fast-return false without spinning, so
+      // handlers that ignore return values don't pay 1 budget per chunk.
+      volatile bool send_aborted = false;
       uint8_t routeIdx = 0xFF;
-#ifdef ESP32
-      // Pointer into server-owned chunk accumulator; set at dispatch
-      // entry, cleared at exit. Sharing one buffer across all slots is
-      // safe because dispatch() is serialised in tick().
-      char* chunkAcc      = nullptr;
-      size_t chunkAccLen  = 0;
-#endif
+      // Chunked-response accumulator. ESP32: points into a server-owned
+      // 12 KB heap buffer claimed at dispatch entry. ESP8266: points into
+      // the slot's own request buffer tail (Slot::buf + headerEnd + bodyLen),
+      // reusing already-allocated heap. chunkAccCap is the available size
+      // (fixed on ESP32, variable per-request on ESP8266). dispatch() is
+      // serialised in tick() so a single accumulator across slots is safe.
+      char*  chunkAcc    = nullptr;
+      size_t chunkAccLen = 0;
+      size_t chunkAccCap = 0;
     };
 
   private:
