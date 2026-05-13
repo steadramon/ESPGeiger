@@ -126,6 +126,23 @@ On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type ge
 | `-D MQTT_MEM_DEBUG` | Include additional memory statistics in the MQTT status JSON (free heap, max block, fragmentation). |
 | `-D DISABLE_MQTT_CPS` | Disable publishing the CPS topic to reduce MQTT traffic. |
 
+### UDP / OSC Output
+
+See [UDP / OSC Output](/output/udp) for the full protocol. Tunables for the producer (`UdpBlip`) and receiver (`UdpRx`):
+
+| Flag | Default | Description |
+|---|---|---|
+| `-D UDPBLIP_DEFAULT_GROUP="239.x.x.x"` | `"239.255.42.42"` | Producer's default multicast group. |
+| `-D UDPBLIP_DEFAULT_PORT="N"` | `"57340"` | Producer's default UDP port. |
+| `-D UDPBLIP_STATS_INTERVAL_MS=N` | `60000` | Interval between `/stats` heartbeats (ms). |
+| `-D UDPBLIP_STATS_JITTER_MS=N` | `15000` | First-emission GRNG offset range so fleet boots don't synchronize. |
+| `-D UDPBLIP_BUNDLE_MAX=N` | `10` | Max `/click` messages per OSC bundle. |
+| `-D UDPBLIP_MAX_BURST=N` | `200` | Per-loop click cap before collapsing to a single summary `/click`. |
+| `-D UDPBLIP_FAIL_BACKOFF=N` | `8` | Consecutive send failures before a one-stats-period cool-off. |
+| `-D UDPRX_DEFAULT_GROUP="239.x.x.x"` | `"239.255.42.42"` | Receiver's default multicast group. |
+| `-D UDPRX_DEFAULT_PORT="N"` | `"57340"` | Receiver's default UDP port. |
+| `-D UDPRX_PRODUCER_SLOTS=N` | `8` | Producer tracking table size (sum mode). |
+
 ### Test Build Options
 
 | Flag | Description |
