@@ -29,11 +29,6 @@ class WiFiUDP;
 #ifndef UDPRX_PRODUCER_SLOTS
 #define UDPRX_PRODUCER_SLOTS 8
 #endif
-// Producer-alive threshold (just over one /stats interval).
-#ifndef UDPRX_STALE_MS
-#define UDPRX_STALE_MS 70000UL
-#endif
-
 class GeigerUdpRx : public GeigerInput {
 public:
   GeigerUdpRx();
