@@ -951,17 +951,18 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 
 // Substring match on BUILD_ENV alone collides with legacy_file paths
 // embedding other variant names (e.g. /espgeigerhw.json in HV.h appears
-// in every HV build). Match against this delimited tag instead.
-static const char EG_ENV_TAG[] PROGMEM __attribute__((used)) =
-  "<EGENV:" BUILD_ENV ":ENV>";
+// in every HV build). Match against this delimited tag instead. Must be
+// referenced by hUpdateForm below or the linker prunes it - ((used))
+// alone doesn't survive --gc-sections.
+static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
 
 void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Update"));
   char dev[120];
   int n = snprintf_P(dev, sizeof(dev),
-    PSTR("<script>window._dev={env:\"%s\",tag:\"<EGENV:%s:ENV>\"};</script>"),
-    BUILD_ENV, BUILD_ENV);
+    PSTR("<script>window._dev={env:\"%s\",tag:\"%s\"};</script>"),
+    BUILD_ENV, EG_ENV_TAG);
   if (n > 0 && (size_t)n < sizeof(dev)) res.sendChunk(dev, (size_t)n);
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
   WebPortal::sendPageTail(res);
