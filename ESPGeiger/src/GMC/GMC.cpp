@@ -122,7 +122,7 @@ void GMC::postMeasurement() {
   bool has_id   = (_api_id[0]    != '\0');
   bool has_gcid = (_api_gc_id[0] != '\0');
 
-  // Nothing configured at all — stay silent so unconfigured units don't spam.
+  // Nothing configured at all - stay silent so unconfigured units don't spam.
   if (!has_id && !has_gcid) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
@@ -130,7 +130,7 @@ void GMC::postMeasurement() {
     return;
   }
 
-  // Partially configured — log a hint.
+  // Partially configured - log a hint.
   if (!has_id || !has_gcid) {
     Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
     return;

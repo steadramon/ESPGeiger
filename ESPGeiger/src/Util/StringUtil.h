@@ -28,7 +28,7 @@
 //
 // snprintf returns what it WOULD have written, not what it did. Naively
 // doing `pos += n` after a truncated write walks `pos` past the buffer,
-// and the next `snprintf(buf + pos, ...)` scribbles over stack frames —
+// and the next `snprintf(buf + pos, ...)` scribbles over stack frames,
 // which has caused garbled pages + reboots. Always use this helper after
 // every `pos += snprintf(buf + pos, sizeof(buf) - pos, ...)`-style call.
 //

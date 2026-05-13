@@ -44,7 +44,7 @@ static constexpr uint8_t TAG_STR16   = 0xda;
 static constexpr uint8_t TAG_ARRAY16 = 0xdc;
 static constexpr uint8_t TAG_MAP16   = 0xde;
 
-// Float bit-pattern punning — no libm, no copy via memcpy in tight code.
+// Float bit-pattern punning - no libm, no copy via memcpy in tight code.
 static inline uint32_t f32_bits(float f) {
   union { float f; uint32_t u; } x;
   x.f = f; return x.u;
@@ -55,7 +55,7 @@ static inline float bits_to_f32(uint32_t u) {
 }
 
 // ---------------------------------------------------------------------------
-// Writer — encode MessagePack into a caller-supplied buffer.
+// Writer - encode MessagePack into a caller-supplied buffer.
 //
 // Usage:
 //   uint8_t buf[256];
@@ -158,7 +158,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Reader — decode MessagePack from a caller-supplied buffer.
+// Reader - decode MessagePack from a caller-supplied buffer.
 //
 // Usage:
 //   MsgPack::Reader r(buf, len);
@@ -176,7 +176,7 @@ public:
 
   bool eof() const { return pos >= cap; }
 
-  // Read a map header — returns entry count, or 0 with error=true on mismatch.
+  // Read a map header. Returns entry count, or 0 with error=true on mismatch.
   uint16_t read_map() {
     uint8_t t;
     if (!peek(&t)) return 0;

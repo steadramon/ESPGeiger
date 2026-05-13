@@ -124,7 +124,7 @@ private:
   void setupHassCB();
   struct HassExtra { const char* key; const char* value; };
   // Rows filled in by the forEach*Hass* walkers. Every member is
-  // PGM_P — assembled from PSTR() literals + palette constants in
+  // PGM_P - assembled from PSTR() literals + palette constants in
   // MQTT_Client.cpp.
   struct HassSensorRow {
     const char* id;
