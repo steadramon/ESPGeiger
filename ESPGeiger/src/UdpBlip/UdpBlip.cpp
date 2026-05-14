@@ -55,13 +55,16 @@ const EGPrefGroup* UdpBlipModule::prefs_group() { return &UDPBLIP_PREF_GROUP; }
 
 static inline size_t osc_pad(size_t n) { return (n + 3) & ~3u; }
 
-static size_t osc_str(uint8_t* buf, size_t cap, size_t off, const char* s) {
-  size_t len = strlen(s);
+static size_t osc_strn(uint8_t* buf, size_t cap, size_t off, const char* s, size_t len) {
   size_t padded = osc_pad(len + 1);
   if (off + padded > cap) return 0;
   memcpy(buf + off, s, len);
   for (size_t i = len; i < padded; i++) buf[off + i] = 0;
   return padded;
+}
+
+static inline size_t osc_str(uint8_t* buf, size_t cap, size_t off, const char* s) {
+  return osc_strn(buf, cap, off, s, strlen(s));
 }
 
 static size_t osc_i32(uint8_t* buf, size_t cap, size_t off, uint32_t v) {
@@ -195,13 +198,15 @@ bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   return true;
 }
 
+static constexpr size_t PATH_LEN = 18;
+
 void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms, float cps) {
   // /espg/{id}/click ,iif counter ts_ms cps
   uint8_t buf[96];
   size_t off = 0;
   size_t n;
-  if (!(n = osc_str(buf, sizeof(buf), off, _click_path))) return; off += n;
-  if (!(n = osc_str(buf, sizeof(buf), off, ",iif"))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, PATH_LEN))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",iif", 4))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, counter))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, ts_ms))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, cps))) return; off += n;
@@ -218,7 +223,7 @@ void UdpBlipModule::emitClickBundle(uint32_t start_counter, uint8_t count,
   uint8_t buf[512];
   size_t off = 0;
   size_t n;
-  if (!(n = osc_str(buf, sizeof(buf), off, "#bundle"))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, "#bundle", 7))) return; off += n;
   // Timetag 0x0000000000000001 = "execute immediately".
   if (!(n = osc_i32(buf, sizeof(buf), off, 0))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, 1))) return; off += n;
@@ -228,8 +233,8 @@ void UdpBlipModule::emitClickBundle(uint32_t start_counter, uint8_t count,
     size_t size_off = off;
     off += 4;
     size_t msg_start = off;
-    if (!(n = osc_str(buf, sizeof(buf), off, _click_path))) return; off += n;
-    if (!(n = osc_str(buf, sizeof(buf), off, ",iif"))) return; off += n;
+    if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, PATH_LEN))) return; off += n;
+    if (!(n = osc_strn(buf, sizeof(buf), off, ",iif", 4))) return; off += n;
     if (!(n = osc_i32(buf, sizeof(buf), off, start_counter + i))) return; off += n;
     if (!(n = osc_i32(buf, sizeof(buf), off, ts_ms))) return; off += n;
     if (!(n = osc_f32(buf, sizeof(buf), off, cps))) return; off += n;
@@ -247,8 +252,8 @@ void UdpBlipModule::emitStats(uint32_t now) {
     gcounter.is_warning() ? "warning" :
     gcounter.is_warm()    ? "healthy" : "warming";
   size_t n;
-  if (!(n = osc_str(buf, sizeof(buf), off, _stats_path))) return; off += n;
-  if (!(n = osc_str(buf, sizeof(buf), off, ",fffsi"))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, _stats_path, PATH_LEN))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",fffsi", 6))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_cpmf()))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_usv()))) return; off += n;
   float hv_v = 0.0f;
