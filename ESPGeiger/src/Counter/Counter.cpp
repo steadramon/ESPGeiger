@@ -470,7 +470,7 @@ static const char HISTORY_BODY[] PROGMEM = R"HTML(
 </table>
 <script>
 fetch('/clicks').then(r=>r.json()).then(o=>{
-  var tb=document.getElementById('tb'),
+  var tb=byID('tb'),
       start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
       rlv='roll' in o?o.roll*1000:3600000,
       rows='';

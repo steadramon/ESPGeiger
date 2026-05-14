@@ -370,7 +370,8 @@ void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-static const char THEME_JS[] PROGMEM = R"JS(!function(){
+static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t);
+!function(){
 var d=document.documentElement,L=addEventListener,
 TE=()=>dispatchEvent(new Event('themechange'));
 function C(){var s=localStorage.crt,a=new Date();
@@ -393,7 +394,7 @@ void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static const char RESTART_COUNTDOWN[] PROGMEM = R"HTML(
 <p class=muted>Reloading in <span id=ct>5</span>s&hellip;</p>
 <script>
-var n=5,c=document.getElementById('ct');
+var n=5,c=byID('ct');
 function p(){
   var a=new AbortController();
   setTimeout(()=>a.abort(),1000);
@@ -689,7 +690,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   <span>Network</span>
   <button type=button id=rescan style='font-size:.8em;padding:.2em .8em;background:transparent;color:var(--accent);border:1px solid var(--accent);width:auto'>Rescan</button>
 </label>
-<select id=ws onchange="document.getElementById('s').value=this.options[this.selectedIndex].dataset.ssid||''">
+<select id=ws onchange="byID('s').value=this.options[this.selectedIndex].dataset.ssid||''">
 <option value=''>Scanning&hellip;</option>
 </select>
 <label for=s>SSID</label>
@@ -753,8 +754,8 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 </details>
 <script>
 (function(){
-  var sel=document.getElementById('ws');
-  var rb=document.getElementById('rescan');
+  var sel=byID('ws');
+  var rb=byID('rescan');
   var pollT=null;
   function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function poll(force){
@@ -938,62 +939,51 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 <p id=uf_st style="margin-top:.6em"></p>
 <script>
 (function(){
-  var dev=window._dev||{};
-  function sC(l,h){var c=document.getElementById('uf_check');c.style.display='block';c.style.background=({ok:'#1f6f3a',warn:'#7a5a00',err:'#7a1f1f'})[l]||'#444';c.style.color='#fff';c.innerHTML=h;}
-  async function cF(f){
-    var btn=document.getElementById('uf_btn');
-    if(!f){btn.disabled=true;document.getElementById('uf_check').style.display='none';return;}
-    var u8=new Uint8Array(await f.arrayBuffer());
-    if(u8.length<8||(u8[0]!==0xE9&&u8[0]!==0xEA)){btn.disabled=true;sC('err','Not an ESP firmware image.');return;}
-    var t=new TextDecoder('latin1').decode(u8);
-    var e=dev.env||'';
-    var mine=/^esp32/i.test(e)?'esp32':'esp8266';
-    var b32=/\besp32[_a-z0-9]/i.test(t);
-    var b66=/\besp8266[_a-z0-9]|\bespgeiger(lite|log|hw)/i.test(t);
-    if((mine==='esp8266'&&b32&&!b66)||(mine==='esp32'&&b66&&!b32)){btn.disabled=true;sC('err','<b>Refusing:</b> wrong platform firmware.');return;}
-    btn.disabled=false;
-    if(dev.tag&&t.indexOf(dev.tag)!==-1)sC('ok','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
-    else sC('warn','<b>Warning:</b> running <code>'+e+'</code> not found in file.');
-  }
-  document.getElementById('uf_file').addEventListener('change',function(){cF(this.files[0]);});
-
-  document.getElementById('uf').addEventListener('submit', function(e){
-    e.preventDefault();
-    var f = document.getElementById('uf_file').files[0];
-    if (!f) return;
-    var st = document.getElementById('uf_st');
-    var p  = document.getElementById('uf_p');
-    var btn = document.getElementById('uf_btn');
-    btn.disabled = true;
-    st.textContent = 'Uploading ' + f.name + ' (' + f.size + ' bytes)...';
-    p.style.display = 'block';
-    p.value = 0;
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/update', true);
-    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-    xhr.upload.onprogress = function(ev){
-      if (ev.lengthComputable) p.value = ev.loaded / ev.total;
-    };
-    xhr.onload = function(){
-      if (xhr.status === 200) {
-        st.innerHTML = '<b style="color:#0a0">' + xhr.responseText + '</b><br>Rebooting&hellip; this page will reload once the device is back.';
-        var n=5;
-        function p(){var a=new AbortController();setTimeout(()=>a.abort(),1000);fetch('/ping',{cache:'no-store',signal:a.signal}).then(r=>location.href='/').catch(()=>setTimeout(p,0));}
-        var iv=setInterval(function(){
-          if(--n>0){st.innerHTML='<b style="color:#0a0">'+xhr.responseText+'</b><br>Reloading in '+n+'s…';}
-          else{clearInterval(iv);st.innerHTML='<b style="color:#0a0">'+xhr.responseText+'</b><br>Checking…';p();}
-        },1000);
-      } else {
-        btn.disabled = false;
-        st.innerHTML = '<b style="color:#c0392b">Upload failed: ' + xhr.responseText + '</b>';
-      }
-    };
-    xhr.onerror = function(){
-      btn.disabled = false;
-      st.innerHTML = '<b style="color:#c0392b">Upload error (connection lost?)</b>';
-    };
-    xhr.send(f);
-  });
+var D=window._dev||{},F=byID('uf_file'),B=byID('uf_btn'),C=byID('uf_check'),S=byID('uf_st'),P=byID('uf_p');
+function sC(l,h){C.style.display='block';C.style.background=({ok:'#1f6f3a',warn:'#7a5a00',err:'#7a1f1f'})[l]||'#444';C.style.color='#fff';C.innerHTML=h}
+async function cF(f){
+  if(!f){B.disabled=true;C.style.display='none';return}
+  var u=new Uint8Array(await f.arrayBuffer());
+  if(u.length<8||(u[0]!==0xE9&&u[0]!==0xEA)){B.disabled=true;sC('err','Not an ESP firmware image.');return}
+  var t=new TextDecoder('latin1').decode(u),e=D.env||'',m=/^esp32/i.test(e)?'esp32':'esp8266',
+      b32=/\besp32[_a-z0-9]/i.test(t),b66=/\besp8266[_a-z0-9]|\bespgeiger(lite|log|hw)/i.test(t);
+  if((m==='esp8266'&&b32&&!b66)||(m==='esp32'&&b66&&!b32)){B.disabled=true;sC('err','<b>Refusing:</b> wrong platform firmware.');return}
+  B.disabled=false;
+  if(D.tag&&t.indexOf(D.tag)!==-1)sC('ok','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
+  else sC('warn','<b>Warning:</b> running <code>'+e+'</code> not found in file.');
+}
+F.addEventListener('change',function(){cF(this.files[0])});
+byID('uf').addEventListener('submit',function(e){
+  e.preventDefault();
+  var f=F.files[0];if(!f)return;
+  B.disabled=true;
+  S.textContent='Uploading '+f.name+' ('+f.size+' bytes)...';
+  P.style.display='block';P.value=0;
+  var x=new XMLHttpRequest();
+  x.open('POST','/update',!0);
+  x.setRequestHeader('Content-Type','application/octet-stream');
+  x.upload.onprogress=function(v){if(v.lengthComputable)P.value=v.loaded/v.total};
+  x.onload=function(){
+    if(x.status===200){
+      var R='<b style="color:#0a0">'+x.responseText+'</b><br>';
+      S.innerHTML=R+'Rebooting&hellip; this page will reload once the device is back.';
+      var n=5;
+      function pn(){var a=new AbortController();setTimeout(()=>a.abort(),1000);fetch('/ping',{cache:'no-store',signal:a.signal}).then(r=>location.href='/').catch(()=>setTimeout(pn,0))}
+      var iv=setInterval(function(){
+        if(--n>0)S.innerHTML=R+'Reloading in '+n+'s…';
+        else{clearInterval(iv);S.innerHTML=R+'Checking…';pn()}
+      },1000);
+    }else{
+      B.disabled=false;
+      S.innerHTML='<b style="color:#c0392b">Upload failed: '+x.responseText+'</b>';
+    }
+  };
+  x.onerror=function(){
+    B.disabled=false;
+    S.innerHTML='<b style="color:#c0392b">Upload error (connection lost?)</b>';
+  };
+  x.send(f);
+});
 })();
 </script>
 )HTML";
@@ -1445,7 +1435,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       if ((p.flags & EGP_SENSITIVE) && cur[0]) {
         n = snprintf_P(buf + pos, sizeof(buf) - pos,
           PSTR("<button type=button class=danger style='padding:.2em .6em;font-size:.85em;margin-top:.2em' "
-               "onclick=\"if(confirm('Clear stored value?')){document.getElementById('%s.%s').value='__CLEAR__';this.form.submit();}\""
+               "onclick=\"if(confirm('Clear stored value?')){byID('%s.%s').value='__CLEAR__';this.form.submit();}\""
                ">Clear</button>"),
           mid, pid);
         if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
@@ -1486,7 +1476,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button type=submit style="width:auto">Send</button>
 </form>
 </details>
-<script>function cmdSend(e){e.preventDefault();var i=document.getElementById('ci'),v=i.value.trim();if(!v)return!1;fetch('/webcmd',{method:'POST',body:v});i.value='';return!1}</script>
+<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;fetch('/webcmd',{method:'POST',body:v});i.value='';return!1}</script>
 <script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
 
@@ -1638,8 +1628,7 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden){if(
 // picographJS - shared graphing library used by /hvjs (HV) and /js
 // (status page). Lives here so non-HV builds still get the symbol.
 extern const char picographJS[] PROGMEM = R"JS(
-var byID=t=>document.getElementById(t),
-cVID=(t,s)=>t.map(x=>s+x.replace(" ","")+"value"),
+var cVID=(t,s)=>t.map(x=>s+x.replace(" ","")+"value"),
 gTS=()=>new Date().toLocaleTimeString(),
 sclInv=(t,s,i,e)=>(1-(t-s)/(i-s))*e,
 sAL=(t,s)=>(t.shift(),t.push(s),t),

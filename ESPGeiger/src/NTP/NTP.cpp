@@ -129,7 +129,7 @@ var locations = {
 };
 var regions={as:"Asia",af:"Africa",eu:"Europe",na:"North America",sa:"South America",au:"Australia",pa:"Pacific",aq:"Antarctica",etc:"Etc"};
 var prefix={am:"America",at:"Atlantic",in:"Indian",pa:"Pacific"};
-var x = document.getElementById("tz");
+var x = byID("tz");
 var sel = x.getAttribute('data-option')||'Etc/UTC';
 Object.entries(regions).forEach(entry => {
   const [k, v] = entry;

@@ -991,7 +991,7 @@ static const char SCREEN_PAGE_BODY[] PROGMEM = R"HTML(
 <script>
 // Uint32Array view over imageData lets us write one pixel per assignment
 // (instead of 3 byte writes). Tint colour is precomputed once per frame.
-const $=i=>document.getElementById(i),
+const $=byID,
   C=$('oled'),x=C.getContext('2d'),I=x.createImageData(128,64),P=new Uint32Array(I.data.buffer),
   F=$('fps'),V=$('ivl'),M=$('col'),H=$('colt'),
   N=()=>{let v=+V.value;return v<50?50:v>10000?10000:v},
