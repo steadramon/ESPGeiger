@@ -217,152 +217,142 @@ GeigerUdpRx::ProducerRecord* GeigerUdpRx::findOrAllocProducer(const char* chipid
   return &_producers[slot];
 }
 
-void GeigerUdpRx::processMessage(const uint8_t* buf, size_t len) {
-  if (len < PATH_FULL_LEN + 4) return;
-  if (memcmp(buf, PATH_PREFIX, PATH_PREFIX_LEN) != 0) return;
+void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms) {
+  if (len < PATH_FULL_LEN + 8 + 12) return;
   if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
-  const uint8_t* suffix = buf + SUFFIX_OFFSET;
-  bool is_click = (memcmp(suffix, SUFFIX_CLICK, 5) == 0);
-  bool is_stats = !is_click && (memcmp(suffix, SUFFIX_STATS, 5) == 0);
-  if (!is_click && !is_stats) return;
   if (buf[SUFFIX_OFFSET + 5] != '\0') return;
+  if (memcmp(buf + PATH_FULL_LEN, TAG_IIF, 4) != 0) return;
 
-  char src[CHIPID_LEN + 2];
-  memcpy(src, buf + CHIPID_OFFSET, CHIPID_LEN);
-  src[CHIPID_LEN] = '\0';
+  const uint8_t* args = buf + PATH_FULL_LEN + 8;
+  uint32_t producer_counter = rd_i32(args);
+  uint32_t producer_ts      = rd_i32(args + 4);
+  float    cps              = rd_f32(args + 8);
 
-  if (!acceptChipid(src)) return;
-
-  if (len < PATH_FULL_LEN + 8) return;
-  const uint8_t* tag = buf + PATH_FULL_LEN;
-
-  uint32_t now_ms = millis();
-
-  if (is_click) {
-    if (memcmp(tag, TAG_IIF, 4) != 0) return;
-    if (len < PATH_FULL_LEN + 8 + 12) return;
-    const uint8_t* args = buf + PATH_FULL_LEN + 8;
-    uint32_t producer_counter = rd_i32(args);
-    uint32_t producer_ts      = rd_i32(args + 4);
-    float    cps              = rd_f32(args + 8);
-
-    ProducerRecord* p = findOrAllocProducer(src, now_ms);
-
-    // Gap-fill tiers: <=1024 instant credit, 1024..65535 rate-drained
-    // over dt_ms (recovers MAX_BURST summary + long outages smoothly),
-    // bigger = resync, small backwards = reorder of an already-credited
-    // future click (silently dropped to avoid double-count).
-    uint32_t credit = 1;
-    uint32_t gap_credit = 0;
-    bool     advance_anchor = true;
-    if (p->click_count > 0) {
-      if (producer_counter == p->last_counter) {
-        credit = 0;   // dup
-      } else if (producer_counter > p->last_counter) {
-        uint32_t gap = producer_counter - p->last_counter - 1;
-        if (gap == 0) {
-          // perfect sequence
-        } else if (gap <= 1024) {
-          credit += gap;
-          gap_credit = gap;
-        } else if (gap <= 65535) {
-          uint32_t dt_ms = producer_ts - p->last_ts_ms;
-          if (dt_ms > 100 && dt_ms < 60000) {
-            _drain_pending += (float)gap;
-            float r = (float)gap * 1000.0f / (float)dt_ms;
-            if (r > _drain_rate) _drain_rate = r;
-          } else {
-            _resync_count++;
-            Log::console(PSTR("UdpRx: %s drain rejected, gap=%u dt=%ums"),
-                         src, (unsigned)gap, (unsigned)dt_ms);
-          }
+  // Gap-fill tiers: <=1024 instant credit, 1024..65535 rate-drained over
+  // dt_ms, bigger = resync, small backwards = reorder of an already-credited
+  // future click (silently dropped to avoid double-count).
+  uint32_t credit = 1;
+  uint32_t gap_credit = 0;
+  bool     advance_anchor = true;
+  if (p->click_count > 0) {
+    if (producer_counter == p->last_counter) {
+      credit = 0;   // dup
+    } else if (producer_counter > p->last_counter) {
+      uint32_t gap = producer_counter - p->last_counter - 1;
+      if (gap == 0) {
+        // perfect sequence
+      } else if (gap <= 1024) {
+        credit += gap;
+        gap_credit = gap;
+      } else if (gap <= 65535) {
+        uint32_t dt_ms = producer_ts - p->last_ts_ms;
+        if (dt_ms > 100 && dt_ms < 60000) {
+          _drain_pending += (float)gap;
+          float r = (float)gap * 1000.0f / (float)dt_ms;
+          if (r > _drain_rate) _drain_rate = r;
         } else {
           _resync_count++;
-          Log::console(PSTR("UdpRx: %s resync, gap=%u (counter %u -> %u)"),
-                       src, (unsigned)gap,
-                       (unsigned)p->last_counter, (unsigned)producer_counter);
+          Log::console(PSTR("UdpRx: %s drain rejected, gap=%u dt=%ums"),
+                       p->chipid, (unsigned)gap, (unsigned)dt_ms);
         }
       } else {
-        // Backwards. Small = UDP reorder (we already gap-filled this number
-        // when the future packet arrived). Big = producer reboot.
-        uint32_t back = p->last_counter - producer_counter;
-        if (back > 1024) {
-          _resync_count++;
-          Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
-                       src,
-                       (unsigned)p->last_counter, (unsigned)producer_counter);
-        } else {
-          credit = 0;
-          advance_anchor = false;
-        }
+        _resync_count++;
+        Log::console(PSTR("UdpRx: %s resync, gap=%u (counter %u -> %u)"),
+                     p->chipid, (unsigned)gap,
+                     (unsigned)p->last_counter, (unsigned)producer_counter);
+      }
+    } else {
+      // Backwards. Small = UDP reorder (we already gap-filled this number
+      // when the future packet arrived). Big = producer reboot.
+      uint32_t back = p->last_counter - producer_counter;
+      if (back > 1024) {
+        _resync_count++;
+        Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
+                     p->chipid,
+                     (unsigned)p->last_counter, (unsigned)producer_counter);
+      } else {
+        credit = 0;
+        advance_anchor = false;
       }
     }
-    // _last_packet_ms tracks proof-of-life - update even on duplicates.
-    _last_packet_ms = now_ms;
-    if (credit > 0) {
-      _packets_accepted++;
-      _last_click_ms  = now_ms;
-      _gap_filled    += gap_credit;
-      gcounter.queueBlip(credit);
-    }
-    _local_count    += credit;
-    p->click_count  += credit;
-    if (advance_anchor) {
-      p->last_counter = producer_counter;
-      p->last_ts_ms   = producer_ts;
-    }
-    p->last_cpm_x10  = (uint16_t)(cps * 600.0f);   // cps * 60 * 10 fixed
-  } else {
-    // /stats ,fffsi cpm usv hv state rssi - we only consume cpm + state.
-    const uint8_t* args = buf + PATH_FULL_LEN + 8;
-    if (len < PATH_FULL_LEN + 8 + 12) return;
-    float cpm = rd_f32(args);
-    const uint8_t* p_state = args + 12;   // skip usv (4) + hv (4)
-    size_t state_pad = osc_str_len(p_state, len - (PATH_FULL_LEN + 8 + 12));
-    if (state_pad == 0) return;
-    uint8_t state_code = 0;
-    switch ((char)p_state[0]) {
-      case 'w': state_code = p_state[1] == 'a' ? 3 : 1; break;  // warning vs warming
-      case 'h': state_code = 2; break;
-      case 'a': state_code = 4; break;
-    }
-    ProducerRecord* p = findOrAllocProducer(src, now_ms);
-    p->last_cpm_x10 = (uint16_t)(cpm * 10.0f);
-    p->state = state_code;
-    _last_packet_ms = now_ms;
   }
+  if (credit > 0) {
+    _packets_accepted++;
+    _last_click_ms  = now_ms;
+    _gap_filled    += gap_credit;
+    gcounter.queueBlip(credit);
+  }
+  _local_count    += credit;
+  p->click_count  += credit;
+  if (advance_anchor) {
+    p->last_counter = producer_counter;
+    p->last_ts_ms   = producer_ts;
+  }
+  p->last_cpm_x10  = (uint16_t)(cps * 600.0f);   // cps * 60 * 10 fixed
+}
+
+void GeigerUdpRx::processStats(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms) {
+  if (len < PATH_FULL_LEN + 8 + 12) return;
+  if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
+  if (buf[SUFFIX_OFFSET + 5] != '\0') return;
+
+  const uint8_t* args = buf + PATH_FULL_LEN + 8;
+  float cpm = rd_f32(args);
+  const uint8_t* p_state = args + 12;   // skip usv (4) + hv (4)
+  size_t state_pad = osc_str_len(p_state, len - (PATH_FULL_LEN + 8 + 12));
+  if (state_pad == 0) return;
+  uint8_t state_code = 0;
+  switch ((char)p_state[0]) {
+    case 'w': state_code = p_state[1] == 'a' ? 3 : 1; break;  // warning vs warming
+    case 'h': state_code = 2; break;
+    case 'a': state_code = 4; break;
+  }
+  p->last_cpm_x10 = (uint16_t)(cpm * 10.0f);
+  p->state = state_code;
+  (void)now_ms;
 }
 
 void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   if (len < 8) return;
   bool is_bundle = (memcmp(buf, "#bundle", 8) == 0);
 
-  // Datagram-level chipid pre-filter: every message in an ESPGeiger bundle
-  // is from the same producer, so a single chipid compare can drop a
-  // 10-click bundle that doesn't match our UID. Offsets: single = 0,
-  // bundle = 20 (header 8 + timetag 8 + first-msg size 4).
+  // Bundle first-msg offset: header 8 + timetag 8 + size 4 = 20. All messages
+  // in a bundle share one producer chipid; we check once and reuse.
   const size_t prefix_off = is_bundle ? 20 : 0;
   const size_t chipid_off = prefix_off + CHIPID_OFFSET;
-  if (len >= chipid_off + CHIPID_LEN + 1
-      && memcmp(buf + prefix_off, PATH_PREFIX, PATH_PREFIX_LEN) == 0
-      && buf[chipid_off + CHIPID_LEN] == '/') {
-    char src[CHIPID_LEN + 1];
-    memcpy(src, buf + chipid_off, CHIPID_LEN);
-    src[CHIPID_LEN] = '\0';
-    if (!acceptChipid(src)) return;
-  }
+  if (len < chipid_off + CHIPID_LEN + 1) return;
+  if (memcmp(buf + prefix_off, PATH_PREFIX, PATH_PREFIX_LEN) != 0) return;
+  if (buf[chipid_off + CHIPID_LEN] != '/') return;
+  char src[CHIPID_LEN + 1];
+  memcpy(src, buf + chipid_off, CHIPID_LEN);
+  src[CHIPID_LEN] = '\0';
+  if (!acceptChipid(src)) return;
+
+  uint32_t now_ms = millis();
+  ProducerRecord* p = findOrAllocProducer(src, now_ms);
+  _last_packet_ms = now_ms;
 
   if (is_bundle) {
+    // Producer only bundles /click; trust the invariant.
     size_t off = 16;
     while (off + 4 <= len) {
       uint32_t msg_size = rd_i32(buf + off);
       off += 4;
       if (msg_size == 0 || off + msg_size > len) break;
-      processMessage(buf + off, msg_size);
+      processClick(buf + off, msg_size, p, now_ms);
       off += msg_size;
     }
-  } else {
-    processMessage(buf, len);
+    return;
+  }
+  // Single message: first suffix byte discriminates ('c' click, 's' stats).
+  if (len < PATH_FULL_LEN + 4) return;
+  uint8_t s0 = buf[SUFFIX_OFFSET];
+  if (s0 == 'c') {
+    if (memcmp(buf + SUFFIX_OFFSET, SUFFIX_CLICK, 5) != 0) return;
+    processClick(buf, len, p, now_ms);
+  } else if (s0 == 's') {
+    if (memcmp(buf + SUFFIX_OFFSET, SUFFIX_STATS, 5) != 0) return;
+    processStats(buf, len, p, now_ms);
   }
 }
 
