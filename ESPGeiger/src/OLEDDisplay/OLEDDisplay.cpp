@@ -753,9 +753,14 @@ static void compute_drop_speed_tail(unsigned long delta_ms, const MatrixCtx& ctx
 void SSD1306Display::page_four_matrix() {
   static const uint8_t MATRIX_DROPS = 32;
   struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; uint8_t seed; bool alive; };
-  static Drop drops[MATRIX_DROPS];
+  static Drop* drops = nullptr;
   static unsigned long last_blip_seen = 0;
   static uint8_t last_col = 255;
+
+  if (!drops) {
+    drops = (Drop*)calloc(MATRIX_DROPS, sizeof(Drop));
+    if (!drops) return;
+  }
 
   if (_page4_num_last == 0) {
     _page4_num_last = millis();
@@ -867,11 +872,13 @@ void SSD1306Display::page_four_static() {
     num %= 1001;
     snprintf_P(_page4_num, sizeof(_page4_num), PSTR("%u"), num);
   }
-  // Static to dodge a 1 KB stack alloc each call (page 4 isn't re-entered).
-  static uint8_t noise[1024];
-  GRNG::extract_fast(noise, sizeof(noise));
+  static uint8_t* noise = nullptr;
+  if (!noise) noise = (uint8_t*)malloc(1024);
   clearBuffer();
-  drawXBMP(0, 0, 128, 64, noise);
+  if (noise) {
+    GRNG::extract_fast(noise, 1024);
+    drawXBMP(0, 0, 128, 64, noise);
+  }
   setDrawColor(0);
   drawBox(41, 19, 44, 24);
   setDrawColor(1);
