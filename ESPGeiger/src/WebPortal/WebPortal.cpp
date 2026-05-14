@@ -373,7 +373,7 @@ void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static const char THEME_JS[] PROGMEM = R"JS(!function(){
 var d=document.documentElement,L=addEventListener,
 TE=()=>dispatchEvent(new Event('themechange'));
-function C(){var s=sessionStorage.crt,a=new Date();
+function C(){var s=localStorage.crt,a=new Date();
 if(s==='1'||(s==null&&a.getMonth()===3&&a.getDate()===1))d.classList.add('crt');
 else if(s==='0')d.classList.remove('crt')}
 window.theme=()=>{var t=d.dataset.theme=='dark'?'light':'dark';
@@ -382,7 +382,7 @@ d.dataset.theme=localStorage.theme||(matchMedia('(prefers-color-scheme:dark)').m
 C();L('pageshow',C);
 var k=[38,38,40,40,37,39,37,39,66,65],i=0;
 L('keydown',e=>{i=e.keyCode===k[i]?i+1:0;
-if(i===k.length){sessionStorage.crt=d.classList.toggle('crt')?'1':'0';TE();i=0}})
+if(i===k.length){localStorage.crt=d.classList.toggle('crt')?'1':'0';TE();i=0}})
 }();)JS";
 
 void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
