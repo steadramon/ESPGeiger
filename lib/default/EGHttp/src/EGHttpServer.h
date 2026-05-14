@@ -35,7 +35,7 @@
   #ifdef ESP32
     #define EGHTTP_MAX_CLIENTS 6
   #else
-    #define EGHTTP_MAX_CLIENTS 3
+    #define EGHTTP_MAX_CLIENTS 5
   #endif
 #endif
 #ifndef EGHTTP_WAIT_QUEUE
