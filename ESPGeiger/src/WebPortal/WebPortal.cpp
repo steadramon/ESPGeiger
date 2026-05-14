@@ -1064,11 +1064,11 @@ void WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                        | ((uint32_t)data[6] << 16)
                        | ((uint32_t)data[7] << 24);
 #ifdef ESP8266
-        // ESP8266 entry: iRAM, 0x40100000-0x401FFFFF.
+        // ESP8266 IROM0 flash window.
         bool plat_ok = (entry >= 0x40100000UL && entry < 0x40200000UL);
 #else
-        // ESP32 app entry: flash-mapped XIP, 0x400D0000-0x40400000.
-        bool plat_ok = (entry >= 0x400D0000UL && entry < 0x40400000UL);
+        // ESP32 IRAM startup. S2/S3/C3/C6 variants need their own range.
+        bool plat_ok = (entry >= 0x40080000UL && entry < 0x400A0000UL);
 #endif
         if (!plat_ok) {
           Log::console(PSTR("OTA: REFUSING wrong-platform bin (entry=0x%08x)"),
