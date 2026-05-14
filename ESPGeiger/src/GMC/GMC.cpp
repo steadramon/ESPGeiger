@@ -57,6 +57,7 @@ size_t GMC::status_json(char* buf, size_t cap, unsigned long now) {
 
 void GMC::on_prefs_loaded() {
   _send_enabled = EGPrefs::getBool("gmc", "send");
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -77,13 +78,12 @@ void GMC::loop(unsigned long now)
   if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
+  } else if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();
   }
+  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
 }
 
 void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)

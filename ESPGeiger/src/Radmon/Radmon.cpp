@@ -90,6 +90,7 @@ void Radmon::on_prefs_loaded() {
   if (rtimer == 0) rtimer = RADMON_INTERVAL;
   setInterval(rtimer);
   _send_enabled = EGPrefs::getBool("radmon", "send");
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
 }
 
 void Radmon::loop(unsigned long now)
@@ -97,9 +98,7 @@ void Radmon::loop(unsigned long now)
   if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
+  } else if ((now - lastPing) >= pingIntervalMs) {
     // Advance by exact interval to keep the schedule drift-free.
     // If we were stalled long enough to still be >= one interval behind,
     // snap to now rather than firing a burst of catch-up publishes.
@@ -107,6 +106,7 @@ void Radmon::loop(unsigned long now)
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();
   }
+  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
 }
 
 void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)

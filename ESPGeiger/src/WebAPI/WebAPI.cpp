@@ -72,6 +72,7 @@ const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
 
 void WebAPI::on_prefs_loaded() {
   _mode = (uint8_t)EGPrefs::getUInt("webapi", "mode");
+  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 1000);
 }
 
 static int webapi_rng(uint8_t *dest, unsigned size) {
@@ -106,39 +107,43 @@ void WebAPI::begin() {
 
 void WebAPI::loop(unsigned long now) {
   if (_mode == 0) return;
-  if (!ntpclient.synced) return;
+  if (!ntpclient.synced) {
+    EGModuleRegistry::set_loop_interval(this, 1000);
+    return;
+  }
 
   if (lastHandshake == 0) {
     lastHandshake = now + random(11311) - WEBAPI_HANDSHAKE_MS;
-    return;
-  }
-
-  // Hourly handshake doubles as the heartbeat/census signal.
-  if ((now - lastHandshake) >= WEBAPI_HANDSHAKE_MS) {
+  } else if ((now - lastHandshake) >= WEBAPI_HANDSHAKE_MS) {
     doHandshake();
-    return;
-  }
+  } else if (station_id != 0) {
+    if (lastPing == 0) {
+      lastPing = staggeredPingStart(now);
+    } else if ((now - lastPing) >= pingIntervalMs) {
+      lastPing += pingIntervalMs;
+      if ((now - lastPing) >= pingIntervalMs) lastPing = staggeredPingStart(now);
 
-  if (station_id == 0) return;
-
-  if (lastPing == 0) {
-    lastPing = staggeredPingStart(now);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
-    lastPing += pingIntervalMs;
-    if ((now - lastPing) >= pingIntervalMs) lastPing = staggeredPingStart(now);
-
-    const bool healthDue = (healthPostCounter == 0);
-    if (_mode == 2 || healthDue) {
-      // Heartbeat-only mode never sends radiation; the cadence reduces
-      // to one post per WEBAPI_HEALTH_EVERY ticks.
-      postMeasurement(_mode != 2);
-    } else {
-      // Heartbeat skip: keep the per-15-min cadence aligned.
-      if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
+      const bool healthDue = (healthPostCounter == 0);
+      if (_mode == 2 || healthDue) {
+        // Heartbeat-only mode never sends radiation; the cadence reduces
+        // to one post per WEBAPI_HEALTH_EVERY ticks.
+        postMeasurement(_mode != 2);
+      } else {
+        // Heartbeat skip: keep the per-15-min cadence aligned.
+        if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
+      }
     }
   }
+
+  // Sleep until whichever target fires next: handshake or ping. station_id
+  // gate means before the first handshake completes we only watch the
+  // handshake target.
+  unsigned long target = lastHandshake + WEBAPI_HANDSHAKE_MS;
+  if (station_id != 0 && lastPing != 0) {
+    unsigned long ping_target = lastPing + pingIntervalMs;
+    if ((long)(ping_target - target) < 0) target = ping_target;
+  }
+  EGModuleRegistry::sleep_until(this, now, target);
 }
 
 static uint32_t wallClockWaitMs(uint32_t k, uint32_t intervalMs, uint32_t period_s) {
@@ -280,6 +285,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
         Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
         self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
         self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+        EGModuleRegistry::set_loop_interval(self, 100);
         self->note_publish(false);
         return;
       }
@@ -289,6 +295,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
         uint32_t k = ((uint32_t)self->pub_k[4] << 24) | ((uint32_t)self->pub_k[5] << 16)
                    | ((uint32_t)self->pub_k[6] << 8)  |  (uint32_t)self->pub_k[7];
         self->lastHandshake = millis() + wallClockWaitMs(k, WEBAPI_HANDSHAKE_MS, 3600) - WEBAPI_HANDSHAKE_MS;
+        EGModuleRegistry::set_loop_interval(self, 100);
       } else {
         Log::debug(PSTR("WebAPI: Handshake OK - station ID %u"), id);
       }
@@ -312,6 +319,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
   // Backoff prevents a uECC_sign storm while the server is down.
   self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
   self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+  EGModuleRegistry::set_loop_interval(self, 100);
   self->note_publish(false);
 }
 
@@ -431,6 +439,7 @@ void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     if (code == 403) {
       self->station_id = 0;
       self->lastHandshake = 0;
+      EGModuleRegistry::set_loop_interval(self, 100);
     } else if (code == 409) {
       Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
     }
@@ -499,6 +508,7 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
     self->lastPing = 0;
     self->healthPostCounter = 0;
     self->last_ok = true;
+    EGModuleRegistry::set_loop_interval(self, 100);
   } else {
     Log::console(PSTR("WebAPI: Forget failed - %s"), request->responseHTTPString().c_str());
   }

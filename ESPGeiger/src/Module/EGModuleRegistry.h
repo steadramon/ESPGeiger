@@ -36,6 +36,7 @@ class EGModuleRegistry {
     static void log_activity_and_reset();
     static void wake();
     static bool set_loop_interval(EGModule* m, uint16_t interval_ms);
+    static bool sleep_until(EGModule* m, unsigned long now, unsigned long target_ms);
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);
