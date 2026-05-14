@@ -28,6 +28,7 @@
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
+#include "src/Util/CrashDump.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
 #include "src/Module/EGModuleRegistry.h"
@@ -102,9 +103,8 @@ void setup()
   Serial.println();
   delay(100);
 
-  // Identity must be ready before anything that publishes hostname / MAC
-  // (MQTT, WebAPI, banner, EGPortal). Was previously seeded by
-  // ConfigManager's constructor; now self-contained in DeviceInfo.
+  CrashDump::begin();
+
   DeviceInfo::begin();
 
   Log::banner(PSTR("   ___"));
