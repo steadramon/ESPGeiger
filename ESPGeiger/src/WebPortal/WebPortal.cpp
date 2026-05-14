@@ -10,6 +10,7 @@
 #include "../Counter/Counter.h"
 #include "../GeigerInput/GeigerInput.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/CrashDump.h"
 #include "../Util/Wifi.h"
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
@@ -483,6 +484,30 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
       INFO_ROW("Exc cause", "%u",     (unsigned)ri->exccause);
       INFO_ROW("Exc PC",    "0x%08x", (unsigned)ri->epc1);
       INFO_ROW("Exc addr",  "0x%08x", (unsigned)ri->excvaddr);
+    }
+  }
+  if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) {
+    INFO_ROW("EPC2",      "0x%08x", (unsigned)cd->epc2);
+    INFO_ROW("EPC3",      "0x%08x", (unsigned)cd->epc3);
+    INFO_ROW("DEPC",      "0x%08x", (unsigned)cd->depc);
+    INFO_ROW("SP",        "0x%08x", (unsigned)cd->sp);
+    // Filter the stack snapshot to candidate code pointers (IROM range)
+    // so the page shows the few words that addr2line could actually
+    // resolve, not a wall of locals.
+    char framesbuf[256];
+    size_t fp = 0;
+    bool any = false;
+    for (uint32_t i = 0; i < cd->word_count && fp < sizeof(framesbuf) - 12; i++) {
+      uint32_t w = cd->stack[i];
+      if (w < 0x40100000u || w >= 0x40300000u) continue;
+      int wn = snprintf_P(framesbuf + fp, sizeof(framesbuf) - fp,
+                          PSTR("%s0x%08x"), any ? " " : "", (unsigned)w);
+      if (wn > 0 && (size_t)wn < sizeof(framesbuf) - fp) fp += (size_t)wn;
+      any = true;
+    }
+    if (any) {
+      framesbuf[fp] = '\0';
+      INFO_ROW("Stack frames", "<code>%s</code>", framesbuf);
     }
   }
 #elif defined(ESP32)
