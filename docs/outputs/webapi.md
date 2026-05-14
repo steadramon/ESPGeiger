@@ -73,9 +73,9 @@ responds with the assigned station ID, which the device then uses as
 
 ## Configuring on the device
 
-The `/webapi` page on each device shows the Station Network controls:
+The `/webapi` page on each device shows the ESPGeiger Network controls:
 
-![Station Network config page](/img/station-network.png)
+![ESPGeiger Network config page](/img/station-network.png)
 
 - **Station ID** - assigned by the server on first handshake. Click to view your station on `stations.espgeiger.com`.
 - **Sharing** - tri-state: Off / Heartbeat / CPM Readings (see below).

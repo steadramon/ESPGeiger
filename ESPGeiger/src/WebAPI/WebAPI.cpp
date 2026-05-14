@@ -63,7 +63,7 @@ static const EGPref WEBAPI_PREF_ITEMS[] = {
 };
 
 static const EGPrefGroup WEBAPI_PREF_GROUP = {
-  "webapi", "Station Network", 3,
+  "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
 };
@@ -592,7 +592,7 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
 
   res.beginChunked(200, "text/html");
-  WebPortal::sendPageHead(res, F("Station Network"));
+  WebPortal::sendPageHead(res, F("ESPGeiger Network"));
   if (saved) {
     res.sendChunk(F("<div class=card style='border-color:#5a5'>Saved.</div>"));
   }
@@ -642,7 +642,7 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendChunk(F(
     "<details style=margin-top:1em><summary>Advanced</summary>"
     "<p class=muted>Reset the device key. The next handshake registers a new station &mdash; the existing one <b>cannot be retrieved</b>.</p>"
-    "<form method=POST action=/webapikeyreset onsubmit=\"return confirm('Reset the Station Network key? This orphans the existing station.')\">"
+    "<form method=POST action=/webapikeyreset onsubmit=\"return confirm('Reset the ESPGeiger Network key? This orphans the existing station.')\">"
     "<button type=submit class=danger>Reset key</button></form>"));
   if (mode > 0 && webapi.getStationId() != 0) {
     res.sendChunk(F(
@@ -663,7 +663,7 @@ static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   LittleFS.end();
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Key Reset"));
-  res.sendChunk(F("<p>Station Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
+  res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
   WebPortal::sendRestartCountdown(res);
   WebPortal::sendPageTail(res);
   res.endChunked();
@@ -684,7 +684,7 @@ static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static const EGMenuEntry WEBAPI_MENU[] = {
-  {"/webapi", "Station Network"},
+  {"/webapi", "ESPGeiger Network"},
   {nullptr, nullptr}
 };
 const EGMenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
