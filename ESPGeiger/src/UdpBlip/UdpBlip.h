@@ -1,17 +1,6 @@
 /*
   UdpBlip.h - OSC over UDP multicast click + stats broadcaster
 
-  Emits /click events per radioactive pulse and /stats every 60s to a
-  multicast group, allowing OSC-aware consumers (Pure Data, TouchDesigner,
-  Node-RED, ESPGeiger-Explorer on CYD) to subscribe via a single group.
-  mDNS-announced as _osc._udp so consumers can discover devices on the
-  network.
-
-  Modes:
-    0 = off       (no UDP traffic, WiFiUDP not constructed)
-    1 = stats    (60s /stats only - safe on any geiger input type)
-    2 = stats+blip  (stats + per-click /click events; pulse input only)
-
   Copyright (C) 2026 @steadramon
 
   This program is free software: you can redistribute it and/or modify
