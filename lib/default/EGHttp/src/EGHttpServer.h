@@ -101,6 +101,9 @@ class EGHttpResponse {
   public:
     void send(uint16_t status, const char* contentType, const char* body);
     void send(uint16_t status, const char* contentType, const __FlashStringHelper* body);
+    // Length-prefixed PROGMEM body with Content-Encoding: gzip header.
+    void sendGzipP(uint16_t status, const char* contentType,
+                   const uint8_t* body, size_t len);
     void redirect(const char* location);
 
     // Returns false if connection dropped mid-response.

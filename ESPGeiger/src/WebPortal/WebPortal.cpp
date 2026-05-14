@@ -43,6 +43,11 @@ extern SerialCommand serialcmd;
 
 extern Counter gcounter;
 
+#include "STYLE_CSS.gz.h"
+#include "THEME_JS.gz.h"
+#include "JS_BUNDLE.gz.h"
+#include "HVJS_BUNDLE.gz.h"
+
 // PROGMEM JS blobs are defined at the bottom of this file. Forward-declare
 // so the handlers above can reference them.
 extern const char picographJS[] PROGMEM;
@@ -54,6 +59,7 @@ extern const char statusJS[]    PROGMEM;
 
 // ---------- shared CSS + page templates (PROGMEM) ----------
 
+#if !EG_GZ_STYLE_CSS
 static const char STYLE_CSS[] PROGMEM = R"CSS(:root{--bg:#fff;--page:#f8f9fa;--fg:#212529;--muted:#6c757d;--border:#dee2e6;--accent:#06c;--card:#f8f9fa}
 :root[data-theme=dark]{--bg:#212529;--page:#1a1d20;--fg:#dee2e6;--muted:#adb5bd;--border:#373b3e;--card:#2b3035}
 .themetoggle{position:fixed;top:.8em;right:.8em;width:2.4em;height:2.4em;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer;font-size:1.1em;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;z-index:10}
@@ -102,6 +108,7 @@ th{font-weight:500;color:var(--muted)}
 :root.crt button,:root.crt input[type=submit],:root.crt .menu a,:root.crt .back{color:#000;text-shadow:none}
 :root.crt::after{content:'';position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0,rgba(0,0,0,.18) 1px,transparent 1px,transparent 3px);z-index:9998;animation:crtroll 4s linear infinite}
 @keyframes crtroll{to{background-position:0 3px}})CSS";
+#endif
 
 // Trefoil path data, single flash copy. Wrapped at emission time with either
 // the standalone <svg xmlns=...> (for /favicon.svg, tab icon) or the inline
@@ -358,7 +365,11 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.addHeader("Cache-Control", CACHE_IMMUTABLE);
+#if EG_GZ_STYLE_CSS
+  res.sendGzipP(200, "text/css", STYLE_CSS_GZ, STYLE_CSS_GZ_LEN);
+#else
   res.send(200, "text/css", FPSTR(STYLE_CSS));
+#endif
 }
 
 void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -370,6 +381,7 @@ void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
+#if !EG_GZ_THEME_JS
 static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t);
 !function(){
 var d=document.documentElement,L=addEventListener,
@@ -385,10 +397,15 @@ var k=[38,38,40,40,37,39,37,39,66,65],i=0;
 L('keydown',e=>{i=e.keyCode===k[i]?i+1:0;
 if(i===k.length){localStorage.crt=d.classList.toggle('crt')?'1':'0';TE();i=0}})
 }();)JS";
+#endif
 
 void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.addHeader("Cache-Control", CACHE_IMMUTABLE);
+#if EG_GZ_THEME_JS
+  res.sendGzipP(200, "application/javascript", THEME_JS_GZ, THEME_JS_GZ_LEN);
+#else
   res.send(200, "application/javascript", FPSTR(THEME_JS));
+#endif
 }
 
 static const char RESTART_COUNTDOWN[] PROGMEM = R"HTML(
@@ -1514,10 +1531,14 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void WebPortal::hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.addHeader("Cache-Control", CACHE_IMMUTABLE);
+#if EG_GZ_JS_BUNDLE
+  res.sendGzipP(200, "application/javascript", JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
+#else
   res.beginChunked(200, "application/javascript");
   res.sendChunk(FPSTR(picographJS));
   res.sendChunk(FPSTR(statusJS));
   res.endChunked();
+#endif
 }
 
 void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -1594,6 +1615,7 @@ void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // statusJS - cpm-graph poller (hits /json) + console poller (hits /cs).
 // Single canonical copy; legacy ConfigManager /js externs this same symbol
 // (see html.h).
+#if !EG_GZ_JS_BUNDLE
 extern const char statusJS[] PROGMEM = R"JS(
 !function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);
 if(window._seedHist&&window._seedHist.length){var N=window._seedHist.length,w=D.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new D(w-(N-1-i)*3e3).toLocaleTimeString()))}
@@ -1624,9 +1646,11 @@ if(ab)T1.scrollTop=T1.scrollHeight}lc=DD.now();lt=setTimeout(f,3e3)};
 x.onerror=function(){lc=DD.now();lt=setTimeout(f,6e3)};x.open("GET","/cs?c1="+id,!0);x.send();return!1}
 document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lc&&DD.now()-lc>1.08e7)id=0;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(DD.now()-lc)))}});
 )JS";
+#endif
 
 // picographJS - shared graphing library used by /hvjs (HV) and /js
 // (status page). Lives here so non-HV builds still get the symbol.
+#if !EG_GZ_JS_BUNDLE || !EG_GZ_HVJS_BUNDLE
 extern const char picographJS[] PROGMEM = R"JS(
 var cVID=(t,s)=>t.map(x=>s+x.replace(" ","")+"value"),
 gTS=()=>new Date().toLocaleTimeString(),
@@ -1660,3 +1684,4 @@ dr(){const c=this.ctx,lv=this.lv,mv=this.mv,h=this.h,sz=this.iS,F=Number.isFinit
 rd(){this.cl(),this.sW(),this.sIW(),this.sS(),this.vl&&this.dV(),this.dH(),this.tm&&this.dT(),this.dr()}
 update(t,ts){this.uP(t),this.uL(t),this.uT(ts),this.rd()}
 })JS";
+#endif

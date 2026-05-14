@@ -32,16 +32,24 @@
   #define EGHTTP_UNLOCK() ((void)0)
 #endif
 
-// Shared status-only responses (zero-length body, close).
-static const char R413[] =
+// Shared substrings reused via %s in dynamic format strings.
+static const char CL0_CRLF[]      PROGMEM = "Content-Length: 0\r\n";
+static const char CONN_CLOSE_CR[] PROGMEM = "Connection: close\r\n";
+
+static const char R413[] PROGMEM =
   "HTTP/1.1 413 Payload Too Large\r\n"
   "Content-Length: 0\r\n"
   "Connection: close\r\n\r\n";
-static const char R503[] =
+static const char R503[] PROGMEM =
   "HTTP/1.1 503 Service Unavailable\r\n"
   "Content-Length: 0\r\n"
   "Connection: close\r\n\r\n";
-static const char R503_RETRY5[] =
+static const char R503_RETRY1[] PROGMEM =
+  "HTTP/1.1 503 Service Unavailable\r\n"
+  "Content-Length: 0\r\n"
+  "Connection: close\r\n"
+  "Retry-After: 1\r\n\r\n";
+static const char R503_RETRY5[] PROGMEM =
   "HTTP/1.1 503 Service Unavailable\r\n"
   "Content-Length: 0\r\n"
   "Connection: close\r\n"
@@ -243,8 +251,8 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(AsyncClient* c) {
 
 void EGHttpServer::sendStatusAndClose(Slot* s, const char* body, size_t len) {
   if (s->client) {
-    if (body && len && s->client->space() >= len) {
-      s->client->write(body, len);
+    if (body && len) {
+      yield_write_pgm(s, (PGM_P)body, len);
       s->client->send();
     }
     s->client->close();
@@ -384,18 +392,12 @@ void EGHttpServer::onClient(AsyncClient* c) {
   Slot* s = allocSlot(c);
   if (s) { wireSlotCallbacks(s, c); return; }
 
-  // Slots full. Queueing is lossy (AsyncTCP frees pbufs with no onData
-  // callback), so a queued client's request bytes get dropped and the
-  // promotion lands on a slot that never sees its request - 60s hang
-  // until rx timeout. Better to 503 + close immediately; browser retries
-  // per Retry-After.
-  static const char r503[] =
-    "HTTP/1.1 503 Service Unavailable\r\n"
-    "Content-Length: 0\r\n"
-    "Connection: close\r\n"
-    "Retry-After: 1\r\n\r\n";
-  if (c->space() >= sizeof(r503) - 1) {
-    c->write(r503, sizeof(r503) - 1);
+  // Slots full. Queueing is lossy (AsyncTCP drops pbufs without onData),
+  // so 503 + close immediately; browser retries per Retry-After.
+  if (c->space() >= sizeof(R503_RETRY1) - 1) {
+    char tmp[sizeof(R503_RETRY1)];
+    memcpy_P(tmp, R503_RETRY1, sizeof(R503_RETRY1) - 1);
+    c->write(tmp, sizeof(R503_RETRY1) - 1);
     c->send();
   }
   c->close();
@@ -680,11 +682,10 @@ void EGHttpServer::dispatch(Slot* s) {
     }
     if (!authOk) {
       char head[160];
-      int hn = snprintf(head, sizeof(head),
-        "HTTP/1.1 401 Unauthorized\r\n"
-        "WWW-Authenticate: Basic realm=\"%s\"\r\n"
-        "Content-Length: 0\r\n"
-        "Connection: close\r\n\r\n", _authRealm);
+      int hn = snprintf_P(head, sizeof(head),
+        PSTR("HTTP/1.1 401 Unauthorized\r\n"
+             "WWW-Authenticate: Basic realm=\"%s\"\r\n"
+             "%s%s\r\n"), _authRealm, CL0_CRLF, CONN_CLOSE_CR);
       if (hn > 0 && s->client) {
         s->client->write(head, (size_t)hn);
         s->client->send();
@@ -866,9 +867,9 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
       "EGHttp: body too large for inline send; use beginChunked";
     size_t tlen = strlen_P(too_big);
     char head[256];
-    int n = snprintf(head, sizeof(head),
-      "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: %u\r\nConnection: close\r\n\r\n",
-      (unsigned)tlen);
+    int n = snprintf_P(head, sizeof(head),
+      PSTR("HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: %u\r\n%s\r\n"),
+      (unsigned)tlen, CONN_CLOSE_CR);
     yield_write_sram(s, head, (size_t)n);
     yield_write_pgm(s, (PGM_P)too_big, tlen);
     _started = true; _done = true;
@@ -877,9 +878,9 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
   // AsyncClient::write copies into its tx buffer, so writing `body`
   // directly is safe; no intermediate scratch buffer needed.
   char head[256];
-  int n = snprintf(head, sizeof(head),
-    "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n%s\r\n",
-    status, contentType, (unsigned)bodyLen, _extraHeaders);
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n%s%s\r\n"),
+    status, contentType, (unsigned)bodyLen, CONN_CLOSE_CR, _extraHeaders);
   // Header + body in one write via accumulator when available; same
   // batch-everything motivation as chunked. Falls through to direct
   // writes when no accumulator is set (e.g. response before dispatch).
@@ -903,9 +904,9 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const __Flas
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   size_t bodyLen = body ? strlen_P((PGM_P)body) : 0;
   char head[256];
-  int n = snprintf(head, sizeof(head),
-    "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n%s\r\n",
-    status, contentType, (unsigned)bodyLen, _extraHeaders);
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n%s%s\r\n"),
+    status, contentType, (unsigned)bodyLen, CONN_CLOSE_CR, _extraHeaders);
   // Bodies larger than the accumulator fall through to direct-write
   // mid-body via the append_pgm overflow branch.
   if (s->chunkAcc && s->chunkAccCap > 0) {
@@ -923,12 +924,36 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const __Flas
   _done = true;
 }
 
+void EGHttpResponse::sendGzipP(uint16_t status, const char* contentType,
+                                 const uint8_t* body, size_t len) {
+  if (!_slot || _started || _done) return;
+  auto* s = static_cast<EGHttpServer::Slot*>(_slot);
+  char head[256];
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Encoding: gzip\r\n"
+         "Content-Length: %u\r\n%s%s\r\n"),
+    status, contentType, (unsigned)len, CONN_CLOSE_CR, _extraHeaders);
+  if (s->chunkAcc && s->chunkAccCap > 0) {
+    s->chunkAccLen = 0;
+    bool ok = eghttp_acc_append(s, head, (size_t)n);
+    if (ok && len > 0) ok = eghttp_acc_append_pgm(s, (PGM_P)body, len);
+    if (ok) ok = eghttp_acc_flush(s);
+    _started = true;
+    _done    = true;
+    return;
+  }
+  if (!yield_write_sram(s, head, (size_t)n)) { _done = true; return; }
+  _started = true;
+  if (len > 0) yield_write_pgm(s, (PGM_P)body, len);
+  _done = true;
+}
+
 void EGHttpResponse::redirect(const char* location) {
   if (!_slot || _started || _done) return;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   char head[256];
-  int n = snprintf(head, sizeof(head),
-    "HTTP/1.1 302 Found\r\nLocation: %s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", location);
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("HTTP/1.1 302 Found\r\nLocation: %s\r\n%s%s\r\n"), location, CL0_CRLF, CONN_CLOSE_CR);
   yield_write_sram(s, head, (size_t)n);
   _started = true;
   _done    = true;
@@ -938,9 +963,9 @@ bool EGHttpResponse::beginChunked(uint16_t status, const char* contentType) {
   if (!_slot || _started || _done) return false;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   char head[256];
-  int n = snprintf(head, sizeof(head),
-    "HTTP/1.1 %u OK\r\nContent-Type: %s\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n%s\r\n",
-    status, contentType, _extraHeaders);
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nTransfer-Encoding: chunked\r\n%s%s\r\n"),
+    status, contentType, CONN_CLOSE_CR, _extraHeaders);
   if (!yield_write_sram(s, head, (size_t)n)) { _done = true; return false; }
   _started = true;
   _chunked = true;

@@ -31,6 +31,7 @@
 #include "../Util/PinSafety.h"
 #include "../Util/StringUtil.h"
 #include "../WebPortal/WebPortal.h"
+#include "HVJS_BUNDLE.gz.h"
 
 extern Counter gcounter;
 
@@ -233,6 +234,7 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wa{padding:.8em
 <script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
 )HTML";
 
+#if !EG_GZ_HVJS_BUNDLE
 extern const char hvJS[] PROGMEM = R"JS("use strict";
 var e=new Graph("g1",["Volts"],"V","g2",15,null,0,!0,!0,5,5),
 D=Date,X=XMLHttpRequest,O=setTimeout,
@@ -280,6 +282,7 @@ SB.addEventListener("click",function(){
   x.send();
 });
 )JS";
+#endif
 
 
 
@@ -324,10 +327,14 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
+#if EG_GZ_HVJS_BUNDLE
+  res.sendGzipP(200, "application/javascript", HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
+#else
   res.beginChunked(200, "application/javascript");
   res.sendChunk(FPSTR(picographJS));
   res.sendChunk(FPSTR(hvJS));
   res.endChunked();
+#endif
 }
 
 #ifdef ESPG_HV_ADC

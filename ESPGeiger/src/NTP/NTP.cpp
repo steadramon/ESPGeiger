@@ -23,6 +23,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
 #include "../WebPortal/WebPortal.h"
+#include "NTP_PAGE_JS.gz.h"
 
 NTP_Client ntpclient = NTP_Client();
 EG_REGISTER_MODULE(ntpclient)
@@ -108,13 +109,9 @@ void NTP_Client::on_prefs_saved() {
 
 // ---------- HTTP routes ----------
 
-// Single canonical instance - ConfigManager (legacy /ntpjs handler) and
-// the new WebPortal /ntpjs handler both link against this combined blob.
-// `extern const` gives external linkage (plain `const` at namespace scope
-// is internal in C++). Combined into one literal so the new server can
-// send it zero-copy via res.send(F(NTP_PAGE_JS)) - the timezone data alone
-// is >4 KB, larger than EGHTTP_CHUNK_BUF, so any sendChunk attempt would
-// overflow the per-slot accumulator.
+// When EG_GZ_NTP_PAGE_JS is set the gzipped blob in NTP_PAGE_JS.gz.h
+// replaces this; the raw R"..." then compiles out.
+#if !EG_GZ_NTP_PAGE_JS
 extern const char NTP_PAGE_JS[] PROGMEM = R"HTML(
 var locations = {
   af:{af:["Abidjan","Algiers","Bissau","Cairo","Casablanca","El_Aaiun","Johannesburg","Juba","Khartoum","Lagos","Maputo","Monrovia","Nairobi","Ndjamena","Sao_Tome","Tripoli","Tunis","Windhoek"],at:["Cape_Verde"],in:["Mauritius"],},
@@ -154,6 +151,7 @@ Object.entries(regions).forEach(entry => {
   });
 });
 )HTML";
+#endif
 
 // Form HTML split into static (PROGMEM, zero-copy) and dynamic (current
 // values) pieces. /ntpjs is NOT pulled in here - WebPortal triggers it
@@ -171,9 +169,12 @@ void NTP_Client::renderInlineForm(EGHttpResponse& res) {
 }
 
 static void hNtpJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // Single combined PROGMEM blob - sent zero-copy from flash.
   res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
+#if EG_GZ_NTP_PAGE_JS
+  res.sendGzipP(200, "application/javascript", NTP_PAGE_JS_GZ, NTP_PAGE_JS_GZ_LEN);
+#else
   res.send(200, "application/javascript", FPSTR(NTP_PAGE_JS));
+#endif
 }
 
 static const char NTP_SAVED_BODY[] PROGMEM =
