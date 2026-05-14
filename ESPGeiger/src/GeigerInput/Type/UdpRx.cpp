@@ -48,7 +48,7 @@ static constexpr size_t     SUFFIX_OFFSET   = 13;
 static constexpr size_t     PATH_FULL_LEN   = 20;
 static constexpr const char SUFFIX_CLICK[]  = "click";
 static constexpr const char SUFFIX_STATS[]  = "stats";
-static constexpr const char TAG_IIF[]       = ",iif";
+static constexpr const char TAG_II[]        = ",ii";
 
 static inline uint32_t rd_i32(const uint8_t* p) {
   return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
@@ -225,21 +225,19 @@ GeigerUdpRx::ProducerRecord* GeigerUdpRx::findOrAllocProducer(const char* chipid
   _producers[slot].click_count  = 0;
   _producers[slot].last_counter = 0;
   _producers[slot].last_ts_ms   = 0;
-  _producers[slot].last_cpm_x10 = 0;
-  _producers[slot].state        = 0;
   return &_producers[slot];
 }
 
 void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms) {
-  if (len < PATH_FULL_LEN + 8 + 12) return;
+  // Tag string ",ii\0" = 4 bytes padded; args = 2 x int32 = 8 bytes.
+  if (len < PATH_FULL_LEN + 4 + 8) return;
   if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
   if (buf[SUFFIX_OFFSET + 5] != '\0') return;
-  if (memcmp(buf + PATH_FULL_LEN, TAG_IIF, 4) != 0) return;
+  if (memcmp(buf + PATH_FULL_LEN, TAG_II, 4) != 0) return;
 
-  const uint8_t* args = buf + PATH_FULL_LEN + 8;
+  const uint8_t* args = buf + PATH_FULL_LEN + 4;
   uint32_t producer_counter = rd_i32(args);
   uint32_t producer_ts      = rd_i32(args + 4);
-  float    cps              = rd_f32(args + 8);
 
   // Gap-fill tiers: <=1024 instant credit, 1024..65535 rate-drained over
   // dt_ms, bigger = resync, small backwards = reorder of an already-credited
@@ -277,8 +275,11 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     } else {
       // Backwards. Small = UDP reorder (we already gap-filled this number
       // when the future packet arrived). Big = producer reboot.
+      // Producer ts_ms going way backwards also indicates a reboot, which
+      // catches the case where it rebooted before counter reached 1024.
       uint32_t back = p->last_counter - producer_counter;
-      if (back > 1024) {
+      bool ts_reset = (int32_t)(producer_ts - p->last_ts_ms) < -60000;
+      if (back > 1024 || ts_reset) {
         _resync_count++;
         Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
                      p->chipid,
@@ -301,27 +302,17 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     p->last_counter = producer_counter;
     p->last_ts_ms   = producer_ts;
   }
-  p->last_cpm_x10  = (uint16_t)(cps * 600.0f);   // cps * 60 * 10 fixed
 }
 
 void GeigerUdpRx::processStats(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms) {
+  // Currently a no-op past the structural validation - the cpm/usv/hv/state/
+  // rssi/uptime_s payload has no consumer on the receiver. Re-add the decode
+  // when /producers (or similar) lands. Path validation still gates the
+  // packet so producer last_seen_ms keeps advancing.
   if (len < PATH_FULL_LEN + 8 + 12) return;
   if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
   if (buf[SUFFIX_OFFSET + 5] != '\0') return;
-
-  const uint8_t* args = buf + PATH_FULL_LEN + 8;
-  float cpm = rd_f32(args);
-  const uint8_t* p_state = args + 12;   // skip usv (4) + hv (4)
-  size_t state_pad = osc_str_len(p_state, len - (PATH_FULL_LEN + 8 + 12));
-  if (state_pad == 0) return;
-  uint8_t state_code = 0;
-  switch ((char)p_state[0]) {
-    case 'w': state_code = p_state[1] == 'a' ? 3 : 1; break;  // warning vs warming
-    case 'h': state_code = 2; break;
-    case 'a': state_code = 4; break;
-  }
-  p->last_cpm_x10 = (uint16_t)(cpm * 10.0f);
-  p->state = state_code;
+  (void)p;
   (void)now_ms;
 }
 
@@ -418,10 +409,6 @@ int GeigerUdpRx::collect() {
 
 bool GeigerUdpRx::isHealthy() const {
   return _producers_seen > 0;
-}
-
-const GeigerUdpRx::ProducerRecord* GeigerUdpRx::producer_at(uint8_t i) const {
-  return (i < _producers_seen) ? &_producers[i] : nullptr;
 }
 
 const char* GeigerUdpRx::locked_chipid() const {

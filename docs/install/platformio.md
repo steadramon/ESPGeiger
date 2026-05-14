@@ -134,8 +134,8 @@ See [UDP / OSC Output](/output/udp) for the full protocol. Tunables for the prod
 |---|---|---|
 | `-D UDPBLIP_DEFAULT_GROUP="239.x.x.x"` | `"239.255.42.42"` | Producer's default multicast group. |
 | `-D UDPBLIP_DEFAULT_PORT="N"` | `"57340"` | Producer's default UDP port. |
-| `-D UDPBLIP_STATS_INTERVAL_MS=N` | `60000` | Interval between `/stats` heartbeats (ms). |
-| `-D UDPBLIP_STATS_JITTER_MS=N` | `15000` | First-emission GRNG offset range so fleet boots don't synchronize. |
+| `-D UDPBLIP_STATS_INTERVAL_MS=N` | `30000` | Interval between `/stats` heartbeats (ms). |
+| `-D UDPBLIP_STATS_JITTER_MS=N` | `7500` | First-emission GRNG offset range so fleet boots don't synchronize. |
 | `-D UDPBLIP_BUNDLE_MAX=N` | `10` | Max `/click` messages per OSC bundle. |
 | `-D UDPBLIP_MAX_BURST=N` | `200` | Per-loop click cap before collapsing to a single summary `/click`. |
 | `-D UDPBLIP_FAIL_BACKOFF=N` | `8` | Consecutive send failures before a one-stats-period cool-off. |

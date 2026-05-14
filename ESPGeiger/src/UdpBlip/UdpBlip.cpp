@@ -210,21 +210,20 @@ bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
 
 static constexpr size_t PATH_LEN = 18;
 
-void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms, float cps) {
-  // /espg/{id}/click ,iif counter ts_ms cps
+void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms) {
+  // /espg/{id}/click ,ii counter ts_ms
   uint8_t buf[96];
   size_t off = 0;
   size_t n;
   if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, PATH_LEN))) return; off += n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, ",iif", 4))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",ii", 3))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, counter))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, ts_ms))) return; off += n;
-  if (!(n = osc_f32(buf, sizeof(buf), off, cps))) return; off += n;
   sendPacket(buf, off);
 }
 
 void UdpBlipModule::emitClickBundle(uint32_t start_counter, uint8_t count,
-                                    uint32_t ts_ms, float cps) {
+                                    uint32_t ts_ms) {
   // OSC #bundle of up to UDPBLIP_BUNDLE_MAX /click messages in one
   // datagram. Cuts WiFi airtime ~Nx vs separate packets; receivers unpack
   // transparently and dispatch one callback per inner message.
@@ -244,17 +243,16 @@ void UdpBlipModule::emitClickBundle(uint32_t start_counter, uint8_t count,
     off += 4;
     size_t msg_start = off;
     if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, PATH_LEN))) return; off += n;
-    if (!(n = osc_strn(buf, sizeof(buf), off, ",iif", 4))) return; off += n;
+    if (!(n = osc_strn(buf, sizeof(buf), off, ",ii", 3))) return; off += n;
     if (!(n = osc_i32(buf, sizeof(buf), off, start_counter + i))) return; off += n;
     if (!(n = osc_i32(buf, sizeof(buf), off, ts_ms))) return; off += n;
-    if (!(n = osc_f32(buf, sizeof(buf), off, cps))) return; off += n;
     osc_i32(buf, sizeof(buf), size_off, (uint32_t)(off - msg_start));
   }
   sendPacket(buf, off);
 }
 
 void UdpBlipModule::emitStats(uint32_t now) {
-  // /espg/{id}/stats ,fffsi cpm usv hv state rssi
+  // /espg/{id}/stats ,fffsii cpm usv hv state rssi uptime_s
   uint8_t buf[160];
   size_t off = 0;
   const char* state =
@@ -263,7 +261,7 @@ void UdpBlipModule::emitStats(uint32_t now) {
     gcounter.is_warm()    ? "healthy" : "warming";
   size_t n;
   if (!(n = osc_strn(buf, sizeof(buf), off, _stats_path, PATH_LEN))) return; off += n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, ",fffsi", 6))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",fffsii", 7))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_cpmf()))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_usv()))) return; off += n;
   float hv_v = 0.0f;
@@ -273,6 +271,7 @@ void UdpBlipModule::emitStats(uint32_t now) {
   if (!(n = osc_f32(buf, sizeof(buf), off, hv_v))) return; off += n;
   if (!(n = osc_str(buf, sizeof(buf), off, state))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(int32_t)Wifi::rssi))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(millis() / 1000UL)))) return; off += n;
   if (sendPacket(buf, off)) _last_stats_ms = now;
 }
 
@@ -310,18 +309,17 @@ void UdpBlipModule::loop(unsigned long now) {
         // Tube saturating or WiFi-outage catch-up: one summary event keeps
         // the rate visible without flooding the multicast group.
         Log::debug(PSTR("UdpBlip: %u click burst, summarising"), (unsigned)delta);
-        emitClick(now_total, now, gcounter.get_cps());
+        emitClick(now_total, now);
       } else if (delta == 1) {
-        emitClick(_last_clicks + 1, now, gcounter.get_cps());
+        emitClick(_last_clicks + 1, now);
       } else {
         // Pack into bundles of up to UDPBLIP_BUNDLE_MAX per packet.
-        float cps = gcounter.get_cps();
         uint32_t start = _last_clicks + 1;
         uint32_t remaining = delta;
         while (remaining > 0 && _fail_count < UDPBLIP_FAIL_BACKOFF) {
           uint32_t batch = (remaining > UDPBLIP_BUNDLE_MAX)
                            ? (uint32_t)UDPBLIP_BUNDLE_MAX : remaining;
-          emitClickBundle(start, (uint8_t)batch, now, cps);
+          emitClickBundle(start, (uint8_t)batch, now);
           start += batch;
           remaining -= batch;
         }

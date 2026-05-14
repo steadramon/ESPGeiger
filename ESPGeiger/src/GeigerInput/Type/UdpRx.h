@@ -52,13 +52,9 @@ public:
     uint32_t click_count;     // credited locally, including gap-fills
     uint32_t last_counter;    // producer's lifetime click number, for gap detection
     uint32_t last_ts_ms;      // producer's millis() at last /click, for rate-drain
-    uint16_t last_cpm_x10;
-    uint8_t  state;           // 0=unknown 1=warming 2=healthy 3=warning 4=alert
-    uint8_t  _pad;
   };
 
   uint8_t producer_count() const { return _producers_seen; }
-  const ProducerRecord* producer_at(uint8_t i) const;
   const char* locked_chipid() const;
   uint8_t mode() const { return _mode; }
   IPAddress group() const { return _group; }

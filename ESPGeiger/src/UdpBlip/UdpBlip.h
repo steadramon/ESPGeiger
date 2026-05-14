@@ -33,12 +33,11 @@ class WiFiUDP;
 #define UDPBLIP_DEFAULT_PORT  "57340"
 #endif
 #ifndef UDPBLIP_STATS_INTERVAL_MS
-#define UDPBLIP_STATS_INTERVAL_MS 60000UL
+#define UDPBLIP_STATS_INTERVAL_MS 30000UL
 #endif
-// Fleet-desync phase shift on the first /stats emission. 15 s on a 60 s
-// interval spreads 100 devices to ~150 ms apart.
+// Fleet-desync phase shift on the first /stats emission.
 #ifndef UDPBLIP_STATS_JITTER_MS
-#define UDPBLIP_STATS_JITTER_MS 15000UL
+#define UDPBLIP_STATS_JITTER_MS 7500UL
 #endif
 // 200 clicks/loop = 240k CPM ceiling at 50 ms loop cadence. Past this we
 // collapse to one summary so we don't flood WiFi.
@@ -80,9 +79,9 @@ private:
   void readPrefs();
   void teardown();
   bool ensureUdp();
-  void emitClick(uint32_t counter, uint32_t ts_ms, float cps);
+  void emitClick(uint32_t counter, uint32_t ts_ms);
   void emitClickBundle(uint32_t start_counter, uint8_t count,
-                       uint32_t ts_ms, float cps);
+                       uint32_t ts_ms);
   void emitStats(uint32_t now);
   bool sendPacket(const uint8_t* buf, size_t len);
   void announce_mdns();

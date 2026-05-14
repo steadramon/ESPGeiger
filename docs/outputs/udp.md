@@ -23,7 +23,7 @@ Configured on the **Config → Local broadcast** page.
 | Mode | Behaviour |
 |---|---|
 | `0` (off) | No packets sent. Default. |
-| `1` (stats only) | Emits `/stats` every 60 s. No per-click traffic. |
+| `1` (stats only) | Emits `/stats` every 30 s. No per-click traffic. |
 | `2` (stats + blips) | `/stats` plus one `/click` per radiation event, OSC-bundled when bursts ≥ 2 clicks. |
 
 ## OSC Message Schema
@@ -33,23 +33,25 @@ Configured on the **Config → Local broadcast** page.
 Emitted on every accepted click in mode 2.
 
 ```
-,iif
+,ii
   counter : int32   monotonic click number on the producer
   ts_ms   : int32   producer millis() at emit
-  cps     : float   counts-per-second snapshot
 ```
+
+Current rate is intentionally not carried per-click - subscribe to `/stats` for CPM, or derive rate from click cadence over a window.
 
 ### `/espg/<chipid>/stats`
 
-Periodic heartbeat (60 s ± random per-boot jitter, see "Stats Jitter" below).
+Periodic heartbeat (30 s ± random per-boot jitter, see "Stats Jitter" below).
 
 ```
-,fffsi
-  cpm   : float    1-minute average
-  usv   : float    µSv/h
-  hv    : float    HV reading on HW builds, else 0
-  state : string   "warming" | "healthy" | "warning" | "alert"
-  rssi  : int32    WiFi signal strength
+,fffsii
+  cpm       : float    1-minute average
+  usv       : float    µSv/h
+  hv        : float    HV reading on HW builds, else 0
+  state     : string   "warming" | "healthy" | "warning" | "alert"
+  rssi      : int32    WiFi signal strength
+  uptime_s  : int32    producer seconds since boot
 ```
 
 ### OSC Bundles
@@ -60,7 +62,7 @@ For sustained hot sources above `UDPBLIP_MAX_BURST=200` clicks/loop (~4 000 cps,
 
 ## Stats Jitter
 
-The first `/stats` emission is offset by a per-device `GRNG`-seeded random delay (default `UDPBLIP_STATS_JITTER_MS=15000` ms). A fleet of 100 devices booting together after a power-cut spreads its stats packets across the 15 s window, averaging 150 ms between emissions, well clear of the receiver's lwIP UDP mbox (6-deep on ESP8266).
+The first `/stats` emission is offset by a per-device `GRNG`-seeded random delay (default `UDPBLIP_STATS_JITTER_MS=7500` ms). A fleet of 100 devices booting together after a power-cut spreads its stats packets across the 7.5 s window, averaging 75 ms between emissions, well clear of the receiver's lwIP UDP mbox (6-deep on ESP8266).
 
 The phase shift persists across all subsequent cycles. Override at compile time with `-DUDPBLIP_STATS_JITTER_MS=N`.
 
@@ -106,7 +108,7 @@ Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <
 Quick things to check:
 
 - **Same WiFi network and subnet.** Multicast doesn't cross routers or guest networks; both devices need to be on the same AP / SSID.
-- **Producer in Mode 2.** Mode 1 only sends stats every 60 s and produces no clicks. The CPM on the receiver stays at 0.
+- **Producer in Mode 2.** Mode 1 only sends stats every 30 s and produces no clicks. The CPM on the receiver stays at 0.
 - **Receiver actually flashed as `*_udp`.** Check `/info` on the receiver shows a UDP build target. A regular pulse build with a blank input won't listen.
 - **Loss percentage stuck high or RX line blank.** Common on busy networks - try `udprx_rxmode = 1` (modem sleep, default) before `2` (none). `2` is usually *worse* on noisy LANs, not better.
 - **Wrong producer locked.** In auto-mode (`udprx_chipid` blank), the receiver latches onto the first producer heard. Set the chipid explicitly if you have multiple producers.
@@ -167,11 +169,11 @@ Loss percentage is shown on page 2 of the OLED and exposed via the receiver's ac
 ```python
 from pythonosc import dispatcher, osc_server
 
-def on_click(addr, counter, ts_ms, cps):
-    print(f"{addr} counter={counter} cps={cps:.2f}")
+def on_click(addr, counter, ts_ms):
+    print(f"{addr} counter={counter} ts_ms={ts_ms}")
 
-def on_stats(addr, cpm, usv, hv, state, rssi):
-    print(f"{addr} {cpm:.1f} CPM {state}")
+def on_stats(addr, cpm, usv, hv, state, rssi, uptime_s):
+    print(f"{addr} {cpm:.1f} CPM {state} up={uptime_s}s")
 
 d = dispatcher.Dispatcher()
 d.map("/espg/*/click", on_click)
