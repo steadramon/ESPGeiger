@@ -323,7 +323,7 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader("Cache-Control", "public, max-age=86400");
+  res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
   res.beginChunked(200, "application/javascript");
   res.sendChunk(FPSTR(picographJS));
   res.sendChunk(FPSTR(hvJS));

@@ -172,7 +172,7 @@ void NTP_Client::renderInlineForm(EGHttpResponse& res) {
 
 static void hNtpJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // Single combined PROGMEM blob - sent zero-copy from flash.
-  res.addHeader("Cache-Control", "public, max-age=86400");
+  res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
   res.send(200, "application/javascript", FPSTR(NTP_PAGE_JS));
 }
 

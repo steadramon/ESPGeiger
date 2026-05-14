@@ -49,6 +49,7 @@ extern const char picographJS[] PROGMEM;
 
 #define CACHE_1D "public, max-age=86400"
 #define CACHE_7D "public, max-age=604800"
+#define CACHE_IMMUTABLE "public, max-age=31536000, immutable"
 extern const char statusJS[]    PROGMEM;
 
 // ---------- shared CSS + page templates (PROGMEM) ----------
@@ -356,7 +357,7 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader("Cache-Control", CACHE_1D);   // 1 day
+  res.addHeader("Cache-Control", CACHE_IMMUTABLE);
   res.send(200, "text/css", FPSTR(STYLE_CSS));
 }
 
@@ -385,7 +386,7 @@ if(i===k.length){sessionStorage.crt=d.classList.toggle('crt')?'1':'0';TE();i=0}}
 }();)JS";
 
 void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader("Cache-Control", CACHE_1D);
+  res.addHeader("Cache-Control", CACHE_IMMUTABLE);
   res.send(200, "application/javascript", FPSTR(THEME_JS));
 }
 
@@ -737,7 +738,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
                   "ontoggle=\"if(this.open&&!this.dataset.loaded){"
                   "this.dataset.loaded=1;"
                   "var s=document.createElement('script');"
-                  "s.src='/ntpjs';this.appendChild(s);"
+                  "s.src='/ntpjs" EG_CACHE_BUST "';this.appendChild(s);"
                   "}\">"
                   "<summary>Time / NTP</summary>"));
   ntpclient.renderInlineForm(res);
@@ -1522,8 +1523,7 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // 1-day cache - JS rarely changes; saves a fetch per status page nav.
-  res.addHeader("Cache-Control", CACHE_1D);
+  res.addHeader("Cache-Control", CACHE_IMMUTABLE);
   res.beginChunked(200, "application/javascript");
   res.sendChunk(FPSTR(picographJS));
   res.sendChunk(FPSTR(statusJS));
