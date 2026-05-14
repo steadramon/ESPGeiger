@@ -63,7 +63,7 @@ For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not**
 
 ## UDP Receiver
 
-UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for [UDP Blip Out](/output/udp) broadcasts from another ESPGeiger and behaves as if a real Geiger tube were attached. CPM/µSv/history/blip-LED/MQTT/WebAPI/OLED all derive from the received clicks. See [UDP / OSC Output](/output/udp) for the full protocol and configuration.
+UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for [Local broadcast](/output/udp) traffic from another ESPGeiger and behaves as if a real Geiger tube were attached. CPM/µSv/history/blip-LED/MQTT/WebAPI/OLED all derive from the received clicks. See [UDP / OSC Output](/output/udp) for the full protocol and configuration.
 
 | Target Name | Platform | Display | Notes |
 |---|---|---|---|

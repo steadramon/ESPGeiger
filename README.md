@@ -79,7 +79,7 @@ UDP receiver builds listen for OSC multicast broadcasts from other ESPGeiger dev
 | ESP8266 | `esp8266_udp` / `esp8266oled_udp` |
 | ESP32 | `esp32_udp` / `esp32oled_udp` |
 
-Producers enable the broadcast via Config → UDP blip out → mode 2. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
+Producers enable the broadcast via Config → Local broadcast → mode 2. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
 
 See the full list of available builds on the [releases page](https://github.com/steadramon/ESPGeiger/releases/latest) or in the [build targets documentation](https://docs.espgeiger.com/install/buildtargets).
 

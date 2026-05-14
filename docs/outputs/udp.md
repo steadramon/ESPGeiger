@@ -6,7 +6,7 @@ parent: Outputs
 nav_order: 10
 ---
 
-# UDP Blip Out
+# Local broadcast (UDP/OSC)
 
 ESPGeiger can broadcast click events and periodic stats to a UDP multicast group using the [Open Sound Control (OSC) 1.0](https://opensoundcontrol.stanford.edu/spec-1_0.html) wire format. Any OSC-aware tool on the same LAN (Pure Data, TouchDesigner, python-osc, Max/MSP, Node-RED) can subscribe and react to live radiation events without polling MQTT or HTTP.
 
@@ -18,7 +18,7 @@ A matching receiver firmware variant (`UDP-Receiver`) lets a tubeless ESP device
 
 ## Output Modes
 
-Configured on the **Config → UDP blip out** page.
+Configured on the **Config → Local broadcast** page.
 
 | Mode | Behaviour |
 |---|---|
@@ -90,7 +90,7 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 
 **On the producer:**
 1. Note its 6-hex chipid, visible on the home page or `/info`.
-2. Go to **Config → UDP blip out**, set Mode to `2` (stats + blips), Save.
+2. Go to **Config → Local broadcast**, set Mode to `2` (stats + blips), Save.
 
 **On the receiver:**
 1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32oled_udp` build via the [Web Installer](https://install.espgeiger.com).

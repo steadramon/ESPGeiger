@@ -52,7 +52,7 @@ static const EGPref UDPBLIP_PREF_ITEMS[] = {
 };
 
 static const EGPrefGroup UDPBLIP_PREF_GROUP = {
-  "udpblip", "UDP blip out", 1,
+  "udpblip", "Local broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),
 };
