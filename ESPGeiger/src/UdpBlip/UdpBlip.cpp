@@ -113,6 +113,7 @@ void UdpBlipModule::begin() {
                  EGPrefs::getString("udpblip", "group"),
                  _port);
   }
+  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 50);
   // WiFiUDP + MDNS are lazy-constructed in loop() once WiFi is up.
 }
 
@@ -178,6 +179,7 @@ void UdpBlipModule::on_prefs_saved() {
   // one burst, and so stats waits a full interval while WiFi resettles.
   _last_clicks = (uint32_t)gcounter.total_clicks;
   _last_stats_ms = millis();
+  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 50);
   Log::console(PSTR("UdpBlip: prefs saved, mode=%u port=%u"), _mode, _port);
 }
 
