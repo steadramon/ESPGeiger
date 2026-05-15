@@ -19,6 +19,9 @@
 #include "TickProfile.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#ifdef TICK_PROFILE
+#include "DeviceInfo.h"
+#endif
 
 namespace TickProfile {
   uint32_t tick_us = 0;
@@ -36,6 +39,7 @@ static unsigned long t_after_modules = 0;
 static uint32_t max_counter_us = 0;
 static uint32_t max_wifi_us = 0;
 static uint32_t max_modules_us = 0;
+static uint32_t min_free_heap = 0xFFFFFFFFu;
 #endif
 
 void TickProfile::beginTick() {
@@ -61,14 +65,18 @@ void TickProfile::endTick() {
   if (counter_us > max_counter_us) max_counter_us = counter_us;
   if (wifi_us    > max_wifi_us)    max_wifi_us    = wifi_us;
   if (modules_us > max_modules_us) max_modules_us = modules_us;
+  uint32_t cur_free = DeviceInfo::freeHeap();
+  if (cur_free < min_free_heap) min_free_heap = cur_free;
 #endif
   if (++tick_max_age >= 60) {
     tick_max_age = 0;
 #ifdef TICK_PROFILE
-    Log::console(PSTR("Tick profile: total=%u ctr=%u wifi=%u mods=%u lps=%u"),
-      TickProfile::tick_max_us, max_counter_us, max_wifi_us, max_modules_us, TickProfile::lps);
+    Log::console(PSTR("Tick profile: total=%u ctr=%u wifi=%u mods=%u lps=%u free=%u min_free=%u frag=%u%%"),
+      TickProfile::tick_max_us, max_counter_us, max_wifi_us, max_modules_us, TickProfile::lps,
+      (unsigned)cur_free, (unsigned)min_free_heap, (unsigned)DeviceInfo::heapFrag());
     EGModuleRegistry::log_profile_and_reset();
     max_counter_us = max_wifi_us = max_modules_us = 0;
+    min_free_heap = 0xFFFFFFFFu;
 #endif
     EGModuleRegistry::log_activity_and_reset();
     TickProfile::tick_max_us = this_tick;
