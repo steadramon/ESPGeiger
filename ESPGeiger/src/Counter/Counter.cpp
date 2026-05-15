@@ -31,6 +31,7 @@
 #include "../NTP/NTP.h"
 #include "../GRNG/GRNG.h"
 #include "../WebPortal/WebPortal.h"
+#include "../UdpBlip/UdpBlip.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 #endif
@@ -355,6 +356,7 @@ void Counter::loop() {
 #ifndef DISABLE_BLIP
     this->blip();
 #endif
+    udpblip.notifyClick(millis());
   }
 #endif
 }

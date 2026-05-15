@@ -39,15 +39,6 @@ class WiFiUDP;
 #ifndef UDPBLIP_STATS_JITTER_MS
 #define UDPBLIP_STATS_JITTER_MS 7500UL
 #endif
-// 200 clicks/loop = 240k CPM ceiling at 50 ms loop cadence. Past this we
-// collapse to one summary so we don't flood WiFi.
-#ifndef UDPBLIP_MAX_BURST
-#define UDPBLIP_MAX_BURST 200
-#endif
-// Max /click messages per OSC bundle. 10 keeps encoder stack at ~512 B.
-#ifndef UDPBLIP_BUNDLE_MAX
-#define UDPBLIP_BUNDLE_MAX 10
-#endif
 // Consecutive send failures before backoff (one stats period cool-off).
 #ifndef UDPBLIP_FAIL_BACKOFF
 #define UDPBLIP_FAIL_BACKOFF 8
@@ -72,6 +63,8 @@ public:
   void on_prefs_saved() override;
   uint8_t display_order() override { return 26; }
   size_t status_json(char* buf, size_t cap, unsigned long now) override;
+  // Called from Counter on each detected blip.
+  void notifyClick(unsigned long now_ms);
 
 private:
   UdpBlipModule() {}
@@ -80,9 +73,8 @@ private:
   void teardown();
   bool ensureUdp();
   void emitClick(uint32_t counter, uint32_t ts_ms);
-  void emitClickBundle(uint32_t start_counter, uint8_t count,
-                       uint32_t ts_ms);
-  void emitStats(uint32_t now);
+  void emitRad(uint32_t now);
+  void emitSys(uint32_t now);
   bool sendPacket(const uint8_t* buf, size_t len);
   void announce_mdns();
 
@@ -95,9 +87,11 @@ private:
   unsigned long _last_stats_ms = 0;
   uint8_t   _fail_count = 0;
   bool      _mdns_done = false;
+  bool      _sys_phase = false;   // /sys fires every other /rad
   // Pre-built OSC paths, formatted once at begin() from the boot chipid.
   char      _click_path[20] = {0};
-  char      _stats_path[20] = {0};
+  char      _rad_path[20]   = {0};
+  char      _sys_path[20]   = {0};
 };
 
 extern UdpBlipModule& udpblip;

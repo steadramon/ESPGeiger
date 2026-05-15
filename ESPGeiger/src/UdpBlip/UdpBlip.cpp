@@ -18,7 +18,7 @@
 */
 #include "UdpBlip.h"
 #include "../Counter/Counter.h"
-#include "../GeigerInput/GeigerInput.h"
+#include "../GeigerInput/GeigerInput.h"  // eventCounter1/2 (ISR pending)
 #include "../Module/EGModuleRegistry.h"
 #include "../Logger/Logger.h"
 #include "../Prefs/EGPrefs.h"
@@ -26,6 +26,7 @@
 #include "../Util/Wifi.h"
 #include "../ArduinoOTA/ArduinoOTA.h"
 #include "../GRNG/GRNG.h"
+#include "../Util/TickProfile.h"
 #include <WiFiUdp.h>
 #ifdef ESP8266
 #include <ESP8266mDNS.h>
@@ -105,16 +106,18 @@ void UdpBlipModule::begin() {
   // chipid is fixed at boot - pre-format the OSC paths once.
   snprintf_P(_click_path, sizeof(_click_path),
              PSTR("/espg/%s/click"), DeviceInfo::chipid());
-  snprintf_P(_stats_path, sizeof(_stats_path),
-             PSTR("/espg/%s/stats"), DeviceInfo::chipid());
+  snprintf_P(_rad_path, sizeof(_rad_path),
+             PSTR("/espg/%s/rad"), DeviceInfo::chipid());
+  snprintf_P(_sys_path, sizeof(_sys_path),
+             PSTR("/espg/%s/sys"), DeviceInfo::chipid());
   if (_mode > 0) {
     Log::console(PSTR("UdpBlip: mode=%u group=%s port=%u"),
                  _mode,
                  EGPrefs::getString("udpblip", "group"),
                  _port);
   }
-  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 50);
-  // WiFiUDP + MDNS are lazy-constructed in loop() once WiFi is up.
+  // Clicks push from Counter; loop() only handles setup + periodic telemetry.
+  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 1000);
 }
 
 void UdpBlipModule::readPrefs() {
@@ -179,7 +182,7 @@ void UdpBlipModule::on_prefs_saved() {
   // one burst, and so stats waits a full interval while WiFi resettles.
   _last_clicks = (uint32_t)gcounter.total_clicks;
   _last_stats_ms = millis();
-  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 50);
+  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 1000);
   Log::console(PSTR("UdpBlip: prefs saved, mode=%u port=%u"), _mode, _port);
 }
 
@@ -189,7 +192,7 @@ bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   // ESP8266's WiFiUDP needs a multicast-specific begin that takes the
   // source IP; ESP32 routes via standard beginPacket on 224.0.0.0/4 dest.
 #ifdef ESP8266
-  if (!_udp->beginPacketMulticast(_group, _port, WiFi.localIP())) {
+  if (!_udp->beginPacketMulticast(_group, _port, Wifi::local_ip)) {
     _fail_count++;
     return false;
   }
@@ -208,71 +211,69 @@ bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   return true;
 }
 
-static constexpr size_t PATH_LEN = 18;
+static constexpr size_t CLICK_PATH_LEN = 18;
 
 void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms) {
-  // /espg/{id}/click ,ii counter ts_ms
   uint8_t buf[96];
   size_t off = 0;
   size_t n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, PATH_LEN))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, CLICK_PATH_LEN))) return; off += n;
   if (!(n = osc_strn(buf, sizeof(buf), off, ",ii", 3))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, counter))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, ts_ms))) return; off += n;
   sendPacket(buf, off);
 }
 
-void UdpBlipModule::emitClickBundle(uint32_t start_counter, uint8_t count,
-                                    uint32_t ts_ms) {
-  // OSC #bundle of up to UDPBLIP_BUNDLE_MAX /click messages in one
-  // datagram. Cuts WiFi airtime ~Nx vs separate packets; receivers unpack
-  // transparently and dispatch one callback per inner message.
-  if (count == 0) return;
-  if (count > UDPBLIP_BUNDLE_MAX) count = UDPBLIP_BUNDLE_MAX;
-  uint8_t buf[512];
-  size_t off = 0;
-  size_t n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, "#bundle", 7))) return; off += n;
-  // Timetag 0x0000000000000001 = "execute immediately".
-  if (!(n = osc_i32(buf, sizeof(buf), off, 0))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, 1))) return; off += n;
-  for (uint8_t i = 0; i < count; i++) {
-    // Reserve the size prefix and backfill after we know the msg length.
-    if (off + 4 > sizeof(buf)) return;
-    size_t size_off = off;
-    off += 4;
-    size_t msg_start = off;
-    if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, PATH_LEN))) return; off += n;
-    if (!(n = osc_strn(buf, sizeof(buf), off, ",ii", 3))) return; off += n;
-    if (!(n = osc_i32(buf, sizeof(buf), off, start_counter + i))) return; off += n;
-    if (!(n = osc_i32(buf, sizeof(buf), off, ts_ms))) return; off += n;
-    osc_i32(buf, sizeof(buf), size_off, (uint32_t)(off - msg_start));
-  }
-  sendPacket(buf, off);
-}
-
-void UdpBlipModule::emitStats(uint32_t now) {
-  // /espg/{id}/stats ,fffsii cpm usv hv state rssi uptime_s
-  uint8_t buf[160];
+void UdpBlipModule::emitRad(uint32_t now) {
+  uint8_t buf[96];
   size_t off = 0;
   const char* state =
     gcounter.is_alert()   ? "alert" :
     gcounter.is_warning() ? "warning" :
     gcounter.is_warm()    ? "healthy" : "warming";
   size_t n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, _stats_path, PATH_LEN))) return; off += n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, ",fffsii", 7))) return; off += n;
+  if (!(n = osc_str(buf, sizeof(buf), off, _rad_path))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",fffsi", 6))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_cpmf()))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_usv()))) return; off += n;
   float hv_v = 0.0f;
-#ifdef ESPG_HV_ADC
-  extern class HVModule hv;
-#endif
   if (!(n = osc_f32(buf, sizeof(buf), off, hv_v))) return; off += n;
   if (!(n = osc_str(buf, sizeof(buf), off, state))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(int32_t)Wifi::rssi))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)gcounter.total_clicks))) return; off += n;
+  sendPacket(buf, off);
+  (void)now;
+}
+
+void UdpBlipModule::emitSys(uint32_t now) {
+  uint8_t buf[96];
+  size_t off = 0;
+  size_t n;
+  if (!(n = osc_str(buf, sizeof(buf), off, _sys_path))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",iiiiii", 7))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(millis() / 1000UL)))) return; off += n;
-  if (sendPacket(buf, off)) _last_stats_ms = now;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(int32_t)Wifi::rssi))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)ESP.getFreeHeap()))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)DeviceInfo::heapFrag()))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::lps))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::tick_max_us))) return; off += n;
+  sendPacket(buf, off);
+  (void)now;
+}
+
+void UdpBlipModule::notifyClick(unsigned long now_ms) {
+  if (_mode != 2) return;
+  if (_fail_count >= UDPBLIP_FAIL_BACKOFF) return;
+  if (!_udp) return;
+  if (!Wifi::connected) return;
+  if (ota_in_progress) return;
+  // total_clicks lags 1 Hz; eventCounter1+2 is the live ISR-pending
+  // count. Sum is ISR-accurate, so a counter jump credits any clicks
+  // the main loop missed catching individually.
+  uint32_t true_count = (uint32_t)gcounter.total_clicks +
+                        (uint32_t)(eventCounter1 + eventCounter2);
+  if (true_count == _last_clicks) return;
+  _last_clicks = true_count;
+  emitClick((uint32_t)_last_clicks, (uint32_t)now_ms);
 }
 
 void UdpBlipModule::loop(unsigned long now) {
@@ -282,11 +283,8 @@ void UdpBlipModule::loop(unsigned long now) {
   if (!_mdns_done) announce_mdns();
 
   // After FAIL_BACKOFF consecutive send failures, cool off for one stats
-  // period so we don't hammer a sick WiFi stack. Advance the latches
-  // during backoff so recovery doesn't dump every stale click at once.
-  bool in_backoff = (_fail_count >= UDPBLIP_FAIL_BACKOFF);
-  if (in_backoff) {
-    _last_clicks = (uint32_t)gcounter.total_clicks;
+  // period so we don't hammer a sick WiFi stack.
+  if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
     if ((unsigned long)(now - _last_stats_ms) >= UDPBLIP_STATS_INTERVAL_MS) {
       _fail_count = 0;
       _last_stats_ms = now;
@@ -295,37 +293,12 @@ void UdpBlipModule::loop(unsigned long now) {
   }
 
   // Stamp last_stats_ms on the attempt, not on success, so a persistent
-  // failure doesn't tight-loop emitStats every iteration.
+  // failure doesn't tight-loop the emit calls every iteration.
   if ((unsigned long)(now - _last_stats_ms) >= UDPBLIP_STATS_INTERVAL_MS) {
     _last_stats_ms = now;
-    emitStats(now);
-  }
-
-  if (_mode == 2) {
-    uint32_t now_total = (uint32_t)gcounter.total_clicks;
-    uint32_t delta = now_total - _last_clicks;
-    if (delta) {
-      if (delta > UDPBLIP_MAX_BURST) {
-        // Tube saturating or WiFi-outage catch-up: one summary event keeps
-        // the rate visible without flooding the multicast group.
-        Log::debug(PSTR("UdpBlip: %u click burst, summarising"), (unsigned)delta);
-        emitClick(now_total, now);
-      } else if (delta == 1) {
-        emitClick(_last_clicks + 1, now);
-      } else {
-        // Pack into bundles of up to UDPBLIP_BUNDLE_MAX per packet.
-        uint32_t start = _last_clicks + 1;
-        uint32_t remaining = delta;
-        while (remaining > 0 && _fail_count < UDPBLIP_FAIL_BACKOFF) {
-          uint32_t batch = (remaining > UDPBLIP_BUNDLE_MAX)
-                           ? (uint32_t)UDPBLIP_BUNDLE_MAX : remaining;
-          emitClickBundle(start, (uint8_t)batch, now);
-          start += batch;
-          remaining -= batch;
-        }
-      }
-      _last_clicks = now_total;
-    }
+    emitRad(now);
+    _sys_phase = !_sys_phase;
+    if (_sys_phase) emitSys(now);
   }
 }
 

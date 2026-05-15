@@ -46,30 +46,11 @@ static constexpr size_t     CHIPID_OFFSET   = 6;
 static constexpr size_t     CHIPID_LEN      = 6;
 static constexpr size_t     SUFFIX_OFFSET   = 13;
 static constexpr size_t     PATH_FULL_LEN   = 20;
-static constexpr const char SUFFIX_CLICK[]  = "click";
-static constexpr const char SUFFIX_STATS[]  = "stats";
 static constexpr const char TAG_II[]        = ",ii";
 
 static inline uint32_t rd_i32(const uint8_t* p) {
   return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
          ((uint32_t)p[2] <<  8) |  (uint32_t)p[3];
-}
-
-static inline float rd_f32(const uint8_t* p) {
-  uint32_t u = rd_i32(p);
-  float f;
-  memcpy(&f, &u, 4);
-  return f;
-}
-
-// OSC string length including NUL + 4-byte padding. 0 on overflow.
-static size_t osc_str_len(const uint8_t* p, size_t maxLen) {
-  for (size_t i = 0; i < maxLen; i++) {
-    if (p[i] == 0) {
-      return (i + 4) & ~3u;
-    }
-  }
-  return 0;
 }
 
 // Bridge from InputPrefs::on_prefs_saved (we piggyback on the "input" pref
@@ -167,7 +148,7 @@ bool GeigerUdpRx::ensureUdp() {
   }
   apply_rx_sleep_mode(_rx_mode);
 #ifdef ESP8266
-  if (!_udp->beginMulticast(WiFi.localIP(), _group, _port)) {
+  if (!_udp->beginMulticast(Wifi::local_ip, _group, _port)) {
     teardownUdp();
     return false;
   }
@@ -304,31 +285,16 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
   }
 }
 
-void GeigerUdpRx::processStats(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms) {
-  // Currently a no-op past the structural validation - the cpm/usv/hv/state/
-  // rssi/uptime_s payload has no consumer on the receiver. Re-add the decode
-  // when /producers (or similar) lands. Path validation still gates the
-  // packet so producer last_seen_ms keeps advancing.
-  if (len < PATH_FULL_LEN + 8 + 12) return;
-  if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
-  if (buf[SUFFIX_OFFSET + 5] != '\0') return;
-  (void)p;
-  (void)now_ms;
-}
-
 void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
-  if (len < 8) return;
-  bool is_bundle = (memcmp(buf, "#bundle", 8) == 0);
-
-  // Bundle first-msg offset: header 8 + timetag 8 + size 4 = 20. All messages
-  // in a bundle share one producer chipid; we check once and reuse.
-  const size_t prefix_off = is_bundle ? 20 : 0;
-  const size_t chipid_off = prefix_off + CHIPID_OFFSET;
-  if (len < chipid_off + CHIPID_LEN + 1) return;
-  if (memcmp(buf + prefix_off, PATH_PREFIX, PATH_PREFIX_LEN) != 0) return;
-  if (buf[chipid_off + CHIPID_LEN] != '/') return;
+  // Two-byte reject before the full prefix check.
+  if (len < PATH_FULL_LEN + 4) return;
+  if (buf[0] != '/' || buf[1] != 'e') return;
+  if (memcmp(buf + 2, "spg/", 4) != 0) return;
+  if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
+  // Self-loop reject by chipid - cheaper than the SDK call to remoteIP().
+  if (memcmp(buf + CHIPID_OFFSET, DeviceInfo::chipid(), CHIPID_LEN) == 0) return;
   char src[CHIPID_LEN + 1];
-  memcpy(src, buf + chipid_off, CHIPID_LEN);
+  memcpy(src, buf + CHIPID_OFFSET, CHIPID_LEN);
   src[CHIPID_LEN] = '\0';
   if (!acceptChipid(src)) return;
 
@@ -336,41 +302,21 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   ProducerRecord* p = findOrAllocProducer(src, now_ms);
   _last_packet_ms = now_ms;
 
-  if (is_bundle) {
-    // Producer only bundles /click; trust the invariant.
-    size_t off = 16;
-    while (off + 4 <= len) {
-      uint32_t msg_size = rd_i32(buf + off);
-      off += 4;
-      if (msg_size == 0 || off + msg_size > len) break;
-      processClick(buf + off, msg_size, p, now_ms);
-      off += msg_size;
-    }
-    return;
-  }
-  // Single message: first suffix byte discriminates ('c' click, 's' stats).
-  if (len < PATH_FULL_LEN + 4) return;
-  uint8_t s0 = buf[SUFFIX_OFFSET];
-  if (s0 == 'c') {
-    if (memcmp(buf + SUFFIX_OFFSET, SUFFIX_CLICK, 5) != 0) return;
+  // /rad and /sys: path validated, producer keep-alive already bumped
+  // by findOrAllocProducer + _last_packet_ms above. No payload decode
+  // until /producers (or similar) lands.
+  const uint8_t* s = buf + SUFFIX_OFFSET;
+  if (s[0] == 'c') {
+    if (s[1] != 'l' || s[2] != 'i' || s[3] != 'c' || s[4] != 'k') return;
     processClick(buf, len, p, now_ms);
-  } else if (s0 == 's') {
-    if (memcmp(buf + SUFFIX_OFFSET, SUFFIX_STATS, 5) != 0) return;
-    processStats(buf, len, p, now_ms);
   }
 }
 
 void GeigerUdpRx::loop() {
   if (!ensureUdp()) return;
-  IPAddress me = WiFi.localIP();
-  uint8_t buf[768];
+  uint8_t buf[128];
   int sz;
   while ((sz = _udp->parsePacket()) > 0) {
-    // Self-loop reject: skip our own broadcasts before reading any bytes.
-    if (_udp->remoteIP() == me) {
-      while (_udp->available()) _udp->read();
-      continue;
-    }
     if ((size_t)sz > sizeof(buf)) {
       while (_udp->available()) _udp->read();
       continue;

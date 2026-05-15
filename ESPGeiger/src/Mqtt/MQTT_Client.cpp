@@ -289,13 +289,15 @@ void MQTT_Client::publishStatus()
 
   size_t pos = 0;
   int n;
+  char ipStr[16];
+  Wifi::formatIP(ipStr, sizeof(ipStr));
   n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"time\":\"%s\",\"ut\":%lu,\"board\":\"%s\",\"model\":\"%s\""
          ",\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"c_total\":%u"
          ",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
     dateTime, DeviceInfo::uptime(),
     DeviceInfo::chipmodel(), DeviceInfo::geigermodel(),
-    Wifi::ssid, Wifi::ip, (int)Wifi::rssi,
+    Wifi::ssid, ipStr, (int)Wifi::rssi,
     gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
   advance_pos(pos, n, sizeof(buffer));
 #ifdef MQTT_MEM_DEBUG
@@ -778,6 +780,8 @@ void MQTT_Client::publishHassTopic(
 
   size_t pos = 0;
   int n;
+  char ipStr[16];
+  Wifi::formatIP(ipStr, sizeof(ipStr));
   n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"device\":{\"mf\":\"%s\",\"mdl\":\"%s\",\"mdl_id\":\"%s\",\"name\":\"%s\""
          ",\"sw\":\"%s/%s\",\"sn\":\"%s\""
@@ -790,7 +794,7 @@ void MQTT_Client::publishHassTopic(
     host, RELEASE_VERSION, GIT_VERSION, DeviceInfo::chipid(),
     host,
     DeviceInfo::mac(),
-    Wifi::ip,
+    ipStr,
     root, host, displayName, host, id);
   advance_pos(pos, n, sizeof(buffer));
 

@@ -21,15 +21,21 @@
 #define UTIL_WIFI_H
 
 #include <Arduino.h>
+#include <IPAddress.h>
 
 namespace Wifi {
   extern bool disabled;
   extern bool connected;
-  extern char ip[16];
+  extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[33];
   extern int16_t rssi;
 
   void tick(unsigned long now);
+
+  // Format local_ip as dotted-quad into buf. Needs cap >= 16. Returns
+  // chars written (excludes NUL). Use when a string form is needed for
+  // display or text protocols.
+  size_t formatIP(char* buf, size_t cap);
 
   // Boot-time WiFi association: try saved creds first, fall back to the
   // EGPortal captive setup AP. Implements a backup/revert protocol - if

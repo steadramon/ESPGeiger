@@ -399,7 +399,9 @@ void SSD1306Display::page_two_full() {
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 2, DeviceInfo::hostname());
   drawStrP(0, 17, PSTR("IP:"));
-  drawStrP(16, 17, Wifi::ip);
+  char ipStr[16];
+  Wifi::formatIP(ipStr, sizeof(ipStr));
+  drawStrP(16, 17, ipStr);
   int uptime_y = 32;
 #ifdef ESPG_HV_ADC
   drawStrP(0, uptime_y, PSTR("HV:"));

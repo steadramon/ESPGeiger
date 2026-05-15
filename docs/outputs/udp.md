@@ -23,8 +23,8 @@ Configured on the **Config → Local broadcast** page.
 | Mode | Behaviour |
 |---|---|
 | `0` (off) | No packets sent. Default. |
-| `1` (stats only) | Emits `/stats` every 30 s. No per-click traffic. |
-| `2` (stats + blips) | `/stats` plus one `/click` per radiation event, OSC-bundled when bursts ≥ 2 clicks. |
+| `1` (telemetry only) | Emits `/rad` + `/sys` every 30 s. No per-click traffic. |
+| `2` (telemetry + blips) | `/rad` + `/sys` plus one `/click` per radiation event, pushed in real time from the click-detection path. |
 
 ## OSC Message Schema
 
@@ -38,27 +38,42 @@ Emitted on every accepted click in mode 2.
   ts_ms   : int32   producer millis() at emit
 ```
 
-Current rate is intentionally not carried per-click - subscribe to `/stats` for CPM, or derive rate from click cadence over a window.
+The OSC counter is synced to the live ISR-pending count, so bursts that fire faster than the main loop catches them still advance the counter by the true amount; receivers gap-fill the missing packets transparently.
 
-### `/espg/<chipid>/stats`
+### `/espg/<chipid>/rad`
 
-Periodic heartbeat (30 s ± random per-boot jitter, see "Stats Jitter" below).
+Radiation telemetry. Periodic heartbeat (30 s ± random per-boot jitter, see "Stats Jitter" below).
 
 ```
-,fffsii
-  cpm       : float    1-minute average
-  usv       : float    µSv/h
-  hv        : float    HV reading on HW builds, else 0
-  state     : string   "warming" | "healthy" | "warning" | "alert"
-  rssi      : int32    WiFi signal strength
-  uptime_s  : int32    producer seconds since boot
+,fffsi
+  cpm          : float    1-minute average
+  usv          : float    µSv/h
+  hv           : float    HV reading on HW builds, else 0
+  state        : string   "warming" | "healthy" | "warning" | "alert"
+  total_clicks : int32    producer's lifetime click count (1 Hz reconciled)
 ```
 
-### OSC Bundles
+### `/espg/<chipid>/sys`
 
-When ≥ 2 clicks fire in the same loop pass, `/click` messages are wrapped in an OSC `#bundle` (up to 10 per packet, `UDPBLIP_BUNDLE_MAX`) to cut WiFi airtime. Receivers unpack bundles transparently; every reasonable OSC library dispatches a callback per inner message.
+System telemetry. Fires every other `/rad` (~60 s) - system stats drift slower than radiation.
 
-For sustained hot sources above `UDPBLIP_MAX_BURST=200` clicks/loop (~4 000 cps, ~240 000 CPM ceiling), the producer collapses the burst into a single summary event rather than fragmenting across many packets.
+```
+,iiiiii
+  uptime_s      : int32   producer seconds since boot
+  rssi          : int32   WiFi signal strength
+  free_heap     : int32   bytes
+  heap_frag_pct : int32   0-100
+  lps           : int32   main loops per second
+  tick_max_us   : int32   worst main-loop iteration in last window
+```
+
+### Per-click emit
+
+`/click` messages are pushed straight from the click-detection path in `Counter::loop` (via `UdpBlipModule::notifyClick`), one OSC message per real tube pulse. Wire latency from blip to packet is on the order of tens of microseconds plus lwIP transmit; the receiver sees a steady stream rather than 1 Hz bursts.
+
+The OSC counter on each `/click` is set to `gcounter.total_clicks + (eventCounter1 + eventCounter2)` - the secondticker-reconciled total plus the live ISR-pending count. This is exact at the moment of emit, so multi-ISR bursts between two main-loop iterations cause the counter to jump by the true amount and the receiver's gap-fill credits the missing clicks.
+
+If WiFi is down or the producer is in failure-backoff, the counter still tracks the true ISR count so the gap is visible downstream once the link recovers.
 
 ## Stats Jitter
 
@@ -190,4 +205,4 @@ Subscribe to multicast group `239.255.42.42` on port `57340`. Filter on path `/e
 
 # Build Flags
 
-All compile-time tunables (group, port, intervals, bundle size, fleet jitter etc.) are documented in [PlatformIO Build Options → UDP / OSC Output](/install/platformio#udp--osc-output).
+All compile-time tunables (group, port, intervals, fleet jitter etc.) are documented in [PlatformIO Build Options → UDP / OSC Output](/install/platformio#udp--osc-output).

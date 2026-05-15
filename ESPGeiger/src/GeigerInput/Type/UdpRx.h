@@ -83,7 +83,6 @@ private:
   bool acceptChipid(const char* src_chipid);
   void processDatagram(uint8_t* buf, size_t len);
   void processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
-  void processStats(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
   ProducerRecord* findOrAllocProducer(const char* chipid, uint32_t now_ms);
 
   WiFiUDP*  _udp = nullptr;

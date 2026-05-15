@@ -43,9 +43,14 @@ static volatile bool s_portalGotCreds = false;
 namespace Wifi {
   bool disabled = false;
   bool connected = false;
-  char ip[16] = "";
+  IPAddress local_ip;
   char ssid[33] = "";
   int16_t rssi = 0;
+
+  size_t formatIP(char* buf, size_t cap) {
+    return snprintf(buf, cap, "%u.%u.%u.%u",
+                    local_ip[0], local_ip[1], local_ip[2], local_ip[3]);
+  }
 }
 
 static bool was_connected = false;
@@ -57,12 +62,14 @@ void Wifi::tick(unsigned long now) {
   Wifi::connected = (wifi_status == WL_CONNECTED);
   if (Wifi::connected) {
     static uint8_t rssi_cnt = 0;
-    if (++rssi_cnt >= 60) { rssi_cnt = 0; Wifi::rssi = WiFi.RSSI(); }
+    if (++rssi_cnt >= 60) {
+      rssi_cnt = 0;
+      Wifi::rssi = WiFi.RSSI();
+      // Refresh IP cache once a minute to catch DHCP renewals.
+      Wifi::local_ip = WiFi.localIP();
+    }
     if (!prev) {
-      // Format IP from bytes directly - avoids the heap String from toString().
-      IPAddress ipa = WiFi.localIP();
-      snprintf(Wifi::ip, sizeof(Wifi::ip), "%u.%u.%u.%u",
-               ipa[0], ipa[1], ipa[2], ipa[3]);
+      Wifi::local_ip = WiFi.localIP();
       strncpy(Wifi::ssid, WiFi.SSID().c_str(), sizeof(Wifi::ssid) - 1);
       Wifi::ssid[sizeof(Wifi::ssid) - 1] = '\0';
       Wifi::rssi = WiFi.RSSI();

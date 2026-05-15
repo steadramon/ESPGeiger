@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Stdlib-only watcher for the ESPGeiger UDP multicast feed.
-# Joins the group, parses /espg/<chipid>/click and /stats messages
-# (including OSC #bundle envelopes), prints each event with a timestamp.
+# Joins the group, parses /espg/<chipid>/{click,rad,sys} messages,
+# prints each event with a timestamp.
 #
 # Usage:  ./watch_osc.py [group] [port]
 # Defaults: 239.255.42.42 : 57340
@@ -26,31 +26,36 @@ def parse_osc_string(buf, off):
 
 
 def parse_msg(buf):
-    """Parse one /espg/<chipid>/{click|stats} message.
+    """Parse one /espg/<chipid>/{click|rad|sys} message.
 
-    Wire layout (path 20 bytes, then type tag + args):
-      /click ,ii    counter(i32) ts_ms(i32)                          = 32 B
-                    (tag ",ii\\0" padded to 4 bytes, args from off 24)
-      /stats ,fffsii cpm(f32) usv(f32) hv(f32) state(str) rssi(i32)
-                     uptime_s(i32)                                    = >= 56 B
-                    (tag ",fffsii\\0" padded to 8 bytes, args from off 28)
+    All paths pad to 20 bytes. Tag follows; args after the tag's 4-byte pad.
+      /click ,ii    counter(i32) ts_ms(i32)
+      /rad   ,fffsi cpm usv hv state(str) total_clicks(i32)
+      /sys   ,iiiiii uptime_s rssi free_heap heap_frag_pct lps tick_max_us
     """
     if len(buf) < 24 or not buf.startswith(b"/espg/"):
         return None
     if buf[12:13] != b"/":
         return None
     chipid = buf[6:12].decode("ascii", errors="replace")
-    suffix = buf[13:18].decode("ascii", errors="replace")
-    if suffix == "click" and len(buf) >= 32:
+    s0 = buf[13:14]
+    if s0 == b"c" and buf[13:18] == b"click" and len(buf) >= 32:
         counter, ts_ms = struct.unpack(">II", buf[24:32])
         return ("click", chipid, counter, ts_ms)
-    if suffix == "stats" and len(buf) >= 56:
+    if s0 == b"r" and buf[13:16] == b"rad" and len(buf) >= 48:
+        # /rad path is 16 chars + NUL, padded to 20. Tag ",fffsi\0" pads to 8.
         cpm, usv, hv = struct.unpack(">fff", buf[28:40])
         state, off = parse_osc_string(buf, 40)
-        if state is None or off + 8 > len(buf):
-            return ("stats", chipid, cpm, usv, hv, "?", 0, 0)
-        rssi, uptime_s = struct.unpack(">ii", buf[off:off+8])
-        return ("stats", chipid, cpm, usv, hv, state, rssi, uptime_s)
+        if state is None or off + 4 > len(buf):
+            return ("rad", chipid, cpm, usv, hv, "?", 0)
+        (total,) = struct.unpack(">I", buf[off:off+4])
+        return ("rad", chipid, cpm, usv, hv, state, total)
+    if s0 == b"s" and buf[13:16] == b"sys" and len(buf) >= 52:
+        # Tag ",iiiiii\0" pads to 8, args at off 28.
+        uptime_s, rssi, free_heap, frag, lps, tick_max_us = struct.unpack(
+            ">iiiiii", buf[28:52]
+        )
+        return ("sys", chipid, uptime_s, rssi, free_heap, frag, lps, tick_max_us)
     return None
 
 
@@ -59,30 +64,21 @@ def format_msg(m):
     if m[0] == "click":
         _, chipid, counter, ts_ms = m
         return f"click  {chipid}  c={counter:<6}  ts={ts_ms}"
-    if m[0] == "stats":
-        _, chipid, cpm, usv, hv, state, rssi, uptime_s = m
-        return (f"stats  {chipid}  cpm={cpm:6.2f}  usv={usv:.4f}  "
-                f"hv={hv:.1f}  state={state:<8} rssi={rssi:>4}  up={uptime_s}")
+    if m[0] == "rad":
+        _, chipid, cpm, usv, hv, state, total = m
+        return (f"rad    {chipid}  cpm={cpm:6.2f}  usv={usv:.4f}  "
+                f"hv={hv:.1f}  state={state:<8} total={total}")
+    if m[0] == "sys":
+        _, chipid, uptime_s, rssi, free_heap, frag, lps, tick_max_us = m
+        return (f"sys    {chipid}  up={uptime_s:<6}  rssi={rssi:>4}  "
+                f"free={free_heap}  frag={frag}%  lps={lps}  tickmax={tick_max_us}us")
     return " ".join(str(x) for x in m)
 
 
 def parse_datagram(buf, src):
-    """Top level: peel #bundle envelope or process a single message."""
-    if buf.startswith(b"#bundle"):
-        off = 16
-        while off + 4 <= len(buf):
-            sz = struct.unpack(">I", buf[off:off+4])[0]
-            off += 4
-            if sz == 0 or off + sz > len(buf):
-                break
-            m = parse_msg(buf[off:off + sz])
-            if m:
-                print(f"{time.strftime('%H:%M:%S')}  {src:<15}  {format_msg(m)}")
-            off += sz
-    else:
-        m = parse_msg(buf)
-        if m:
-            print(f"{time.strftime('%H:%M:%S')}  {src:<15}  {format_msg(m)}")
+    m = parse_msg(buf)
+    if m:
+        print(f"{time.strftime('%H:%M:%S')}  {src:<15}  {format_msg(m)}")
 
 
 def main():
@@ -94,7 +90,8 @@ def main():
     print(f"Listening on {GROUP}:{PORT} (Ctrl+C to stop)")
     print("Fields:")
     print("  click  chipid  c=counter  ts=producer_millis")
-    print("  stats  chipid  cpm=CPM  usv=uSv/h  hv=volts  state  rssi=dBm  up=uptime_s")
+    print("  rad    chipid  cpm=CPM  usv=uSv/h  hv=volts  state  total=lifetime_clicks")
+    print("  sys    chipid  up=uptime_s  rssi=dBm  free=heap_B  frag=%  lps  tickmax=us")
     print()
     try:
         while True:
