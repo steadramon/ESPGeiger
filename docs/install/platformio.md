@@ -136,7 +136,10 @@ See [UDP / OSC Output](/output/udp) for the full protocol. Tunables for the prod
 | `-D UDPBLIP_DEFAULT_PORT="N"` | `"57340"` | Producer's default UDP port. |
 | `-D UDPBLIP_STATS_INTERVAL_MS=N` | `30000` | Interval between telemetry bursts (`/rad` cadence; `/hv` rides alongside, `/sys` fires every other cycle). |
 | `-D UDPBLIP_STATS_JITTER_MS=N` | `7500` | First-emission GRNG offset range so fleet boots don't synchronize. |
-| `-D UDPBLIP_FAIL_BACKOFF=N` | `8` | Consecutive send failures before a one-stats-period cool-off. |
+| `-D UDPBLIP_FAIL_BACKOFF=N` | `8` | Consecutive send failures before entering the cool-off state. |
+| `-D UDPBLIP_FAIL_COOLDOWN_MS=N` | `10000` | How long to sit in cool-off before resetting `_fail_count` and re-trying sends. Independent of telemetry cadence. |
+| `-D UDPBLIP_CLICK_MIN_INTERVAL_MS=N` | `50` | Minimum ms between `/click` packets. Deferred clicks accumulate in the cumulative counter so the receiver gap-fills via delta. `0` disables the cap (push-per-pulse). Default 50 ms = 20 pps cap (~1200 CPM before coalescing), ~0.6 % CPU at saturation. |
+| `-D UDPBLIP_CLICK_BURST_TOKENS=N` | `5` | Token-bucket depth. Idle time earns one token per `CLICK_MIN_INTERVAL_MS`, capped here. Lets a sudden cluster of clicks after a quiet period fire as separate packets (visible blips on the receiver) before the steady-state throttle kicks in. `1` disables bursts. |
 | `-D UDPRX_DEFAULT_GROUP="239.x.x.x"` | (inherits `UDPBLIP_DEFAULT_GROUP`) | Override receiver's multicast group only if it should listen on a different group than local producers send to. |
 | `-D UDPRX_DEFAULT_PORT="N"` | `"57340"` | Receiver's default UDP port. |
 | `-D UDPRX_PRODUCER_SLOTS=N` | `8` | Producer tracking table size (sum mode). |

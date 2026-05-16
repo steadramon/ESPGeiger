@@ -80,11 +80,29 @@ System telemetry. Fires every other `/rad` (~60 s) - system stats drift slower t
 
 ### Per-click emit
 
-`/click` messages are pushed straight from the click-detection path in `Counter::loop` (via `UdpBlipModule::notifyClick`), one OSC message per real tube pulse. Wire latency from blip to packet is on the order of tens of microseconds plus lwIP transmit; the receiver sees a steady stream rather than 1 Hz bursts.
+`/click` messages are pushed straight from the click-detection path in `Counter::loop` (via `UdpBlipModule::notifyClick`). Wire latency from blip to packet is tens of microseconds plus lwIP transmit; the receiver sees individual clicks rather than 1 Hz bursts.
 
 The OSC counter on each `/click` is set to `gcounter.total_clicks + (eventCounter1 + eventCounter2)` - the secondticker-reconciled total plus the live ISR-pending count. This is exact at the moment of emit, so multi-ISR bursts between two main-loop iterations cause the counter to jump by the true amount and the receiver's gap-fill credits the missing clicks.
 
 If WiFi is down or the producer is in failure-backoff, the counter still tracks the true ISR count so the gap is visible downstream once the link recovers.
+
+#### Send rate throttle
+
+To bound CPU and WiFi load at high CPS, `/click` emits are rate-limited by a token bucket. Defaults (overridable via build flags - see [PlatformIO Build Options](/install/platformio#udp--osc-output)):
+
+- **`UDPBLIP_CLICK_MIN_INTERVAL_MS = 50`** - minimum interval between emits. 20 pps cap.
+- **`UDPBLIP_CLICK_BURST_TOKENS = 5`** - bucket depth. Idle time earns one token per `MIN_INTERVAL_MS`, capped here.
+
+Behaviour at different rates:
+
+| Rate | Behaviour |
+|---|---|
+| Background (< ~1200 CPM) | Every click emits its own packet. Bucket replenishes faster than it drains. |
+| Bursts after idle | First 5 clicks fire on consecutive 50 ms loop ticks (bucket spends down from full). |
+| Sustained > 1200 CPM | Emits hit the 20 pps cap. Each packet carries multiple clicks via the cumulative counter delta. Receiver gap-fill instant-credits up to 1024 per packet, rate-drains larger jumps. |
+| Saturation (any CPS) | Max ~20 pps. ~0.6 % CPU. |
+
+Counter accuracy is **independent of the throttle** - the receiver reconstructs the full click count from the counter delta regardless of how many real clicks were coalesced into one packet. The throttle only affects how many separate LED blips the receiver shows during heavy bursts.
 
 ## Telemetry Jitter
 
