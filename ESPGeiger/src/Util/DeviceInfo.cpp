@@ -59,7 +59,9 @@ uint32_t DeviceInfo::freeHeap() {
   return cached;
 }
 
-static uint8_t s_hf_peak = 0;
+static uint8_t  s_hf_peak = 0;
+static uint32_t s_lfb_cur = 0;  // current largest free block (bytes)
+static uint32_t s_lfb_low = 0;  // low-water mark since last reset; 0 = unset
 
 uint8_t DeviceInfo::heapFrag() {
   static uint8_t cached = 0;
@@ -72,11 +74,13 @@ uint8_t DeviceInfo::heapFrag() {
     uint8_t frag_;
     ESP.getHeapStats(&free_, &max_, &frag_);
     cached = frag_;
+    s_lfb_cur = max_;
 #else
     // Sqrt-weighted to match ESP8266 umm_malloc semantics. ESP32 has an FPU
     // so sqrtf is a single instruction; this runs at 1 Hz, negligible cost.
     uint32_t free_ = ESP.getFreeHeap();
     uint32_t max_  = ESP.getMaxAllocHeap();
+    s_lfb_cur = max_;
     if (free_ == 0 || max_ > free_) {
       cached = 0;
     } else {
@@ -86,6 +90,7 @@ uint8_t DeviceInfo::heapFrag() {
 #endif
     last_ms = now;
     if (cached > s_hf_peak) s_hf_peak = cached;
+    if (s_lfb_low == 0 || s_lfb_cur < s_lfb_low) s_lfb_low = s_lfb_cur;
   }
   return cached;
 }
@@ -97,6 +102,21 @@ uint8_t DeviceInfo::heapFragPeak() {
 
 void DeviceInfo::heapFragPeakReset() {
   s_hf_peak = heapFrag();
+}
+
+uint32_t DeviceInfo::largestFreeBlock() {
+  heapFrag();  // shared 10s cache refresh
+  return s_lfb_cur;
+}
+
+uint32_t DeviceInfo::largestFreeBlockLow() {
+  heapFrag();
+  return s_lfb_low;
+}
+
+void DeviceInfo::largestFreeBlockLowReset() {
+  largestFreeBlock();  // ensure s_lfb_cur is fresh
+  s_lfb_low = s_lfb_cur;
 }
 
 void DeviceInfo::begin() {

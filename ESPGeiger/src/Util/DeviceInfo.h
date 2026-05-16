@@ -74,9 +74,20 @@ namespace DeviceInfo {
   // Heap fragmentation 0-100 %. Sqrt-weighted, matches umm_malloc. Cached 10s.
   // Every cache refresh updates an internal peak; consumers report peak via
   // heapFragPeak() and reset at the end of their window.
+  // CAVEAT: the % form is denominator-sensitive - a build with more total free
+  // heap can read higher % for the same actual scatter. For consistent
+  // cross-build measurement use largestFreeBlock() / largestFreeBlockLow().
   uint8_t heapFrag();
   uint8_t heapFragPeak();
   void    heapFragPeakReset();
+
+  // Largest contiguous free block in bytes. The honest "can I allocate N bytes
+  // right now?" metric, independent of total free heap. Sampled by the same
+  // 10 s cache that backs heapFrag(). largestFreeBlockLow() is the low-water
+  // mark since the last reset - i.e. worst-case big-alloc availability seen.
+  uint32_t largestFreeBlock();
+  uint32_t largestFreeBlockLow();
+  void     largestFreeBlockLowReset();
 
   // Cross-platform reset-reason. Codes are frozen - never renumber.
   //   0 unknown   1 power-on     2 external reset   3 software restart
