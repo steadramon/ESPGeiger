@@ -6,7 +6,7 @@ parent: Outputs
 nav_order: 10
 ---
 
-# Local broadcast (UDP/OSC)
+# Local Broadcast (UDP/OSC)
 
 ESPGeiger can broadcast click events and periodic stats to a UDP multicast group using the [Open Sound Control (OSC) 1.0](https://opensoundcontrol.stanford.edu/spec-1_0.html) wire format. Any OSC-aware tool on the same LAN (Pure Data, TouchDesigner, python-osc, Max/MSP, Node-RED) can subscribe and react to live radiation events without polling MQTT or HTTP.
 
@@ -18,13 +18,15 @@ A matching receiver firmware variant (`UDP-Receiver`) lets a tubeless ESP device
 
 ## Output Modes
 
-Configured on the **Config → Local broadcast** page.
+Configured on the **Config → Local Broadcast** page.
 
 | Mode | Behaviour |
 |---|---|
 | `0` (off) | No packets sent. Default. |
-| `1` (telemetry only) | Emits `/rad` + `/sys` every 30 s. No per-click traffic. |
-| `2` (telemetry + blips) | `/rad` + `/sys` plus one `/click` per radiation event, pushed in real time from the click-detection path. |
+| `1` (telemetry only) | Emits the periodic telemetry burst: `/rad` every 30 s, `/hv` alongside (on HV-equipped builds), `/sys` every other `/rad` (~60 s). No per-click traffic. |
+| `2` (telemetry + blips) | Periodic telemetry as above, plus one `/click` per radiation event, pushed in real time from the click-detection path. |
+
+`/rad`, `/hv` and `/sys` are emitted on separate 1 s loop ticks (~1 s apart) so they don't burst together onto the wire.
 
 ## OSC Message Schema
 
@@ -86,9 +88,9 @@ The OSC counter on each `/click` is set to `gcounter.total_clicks + (eventCounte
 
 If WiFi is down or the producer is in failure-backoff, the counter still tracks the true ISR count so the gap is visible downstream once the link recovers.
 
-## Stats Jitter
+## Telemetry Jitter
 
-The first `/stats` emission is offset by a per-device `GRNG`-seeded random delay (default `UDPBLIP_STATS_JITTER_MS=7500` ms). A fleet of 100 devices booting together after a power-cut spreads its stats packets across the 7.5 s window, averaging 75 ms between emissions, well clear of the receiver's lwIP UDP mbox (6-deep on ESP8266).
+The first telemetry burst (`/rad` + `/hv` + `/sys`) is offset by a per-device `GRNG`-seeded random delay (default `UDPBLIP_STATS_JITTER_MS=7500` ms). A fleet of 100 devices booting together after a power cut spreads its telemetry across the 7.5 s window, averaging 75 ms between emissions, well clear of the receiver's lwIP UDP mbox (6-deep on ESP8266).
 
 The phase shift persists across all subsequent cycles. Override at compile time with `-DUDPBLIP_STATS_JITTER_MS=N`.
 
@@ -118,7 +120,7 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 
 **On the producer:**
 1. Note its 6-hex chipid, visible on the home page or `/info`.
-2. Go to **Config → Local broadcast**, set Mode to `2` (stats + blips), Save.
+2. Go to **Config → Local Broadcast**, set Mode to `2` (stats + blips), Save.
 
 **On the receiver:**
 1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32oled_udp` build via the [Web Installer](https://install.espgeiger.com).
@@ -198,12 +200,20 @@ from pythonosc import dispatcher, osc_server
 def on_click(addr, counter, ts_ms):
     print(f"{addr} counter={counter} ts_ms={ts_ms}")
 
-def on_stats(addr, cpm, usv, hv, state, rssi, uptime_s):
-    print(f"{addr} {cpm:.1f} CPM {state} up={uptime_s}s")
+def on_rad(addr, cpm, usv, state, total_clicks):
+    print(f"{addr} {cpm:.1f} CPM ({usv:.3f} uSv/h) {state}")
+
+def on_hv(addr, reading_v, target_v, duty, trim):
+    print(f"{addr} HV {reading_v:.1f}V (target {target_v:.0f}V)")
+
+def on_sys(addr, uptime_s, rssi, free_heap, heap_frag, lps, tick_max_us):
+    print(f"{addr} up={uptime_s}s rssi={rssi} heap={free_heap}B")
 
 d = dispatcher.Dispatcher()
 d.map("/espg/*/click", on_click)
-d.map("/espg/*/stats", on_stats)
+d.map("/espg/*/rad",   on_rad)
+d.map("/espg/*/hv",    on_hv)
+d.map("/espg/*/sys",   on_sys)
 
 server = osc_server.ThreadingOSCUDPServer(
     ("239.255.86.86", 57340), d, multicast=True)
@@ -212,7 +222,7 @@ server.serve_forever()
 
 ## Pure Data / TouchDesigner / Max
 
-Subscribe to multicast group `239.255.86.86` on port `57340`. Filter on path `/espg/*/click` for live click events or `/espg/*/stats` for periodic reports.
+Subscribe to multicast group `239.255.86.86` on port `57340`. Filter on path `/espg/*/click` for live click events, `/espg/*/rad` for radiation telemetry, `/espg/*/hv` for high-voltage readings (HV builds only), or `/espg/*/sys` for system health.
 
 # Build Flags
 

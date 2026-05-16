@@ -37,7 +37,8 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 |---|---|
 | `/` | Main home page |
 | `/status` | Detailed device status page (live readings, uptime, build info) |
-| `/hist` | Rolling CPM history view |
+| `/hist` | Rolling 24 h CPM history view with bar chart, hour-by-hour table, and (when enabled) a lifetime stats card with a **Reset lifetime** button |
+| `/clicks` | JSON feed of the 24 h hourly bucket array plus today/yesterday totals and (when enabled) the lifetime block - powers `/hist` |
 | `/json` | Machine-readable status snapshot - see [JSON Endpoint](/output/integrations#json-endpoint) |
 | `/lastdata` | GeigerLog-compatible CSV line - see [GeigerLog](/output/integrations#geigerlog) |
 | `/info` | Human-readable HTML page with full device + network identity - see [/info page](#info-page) |
@@ -48,6 +49,10 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/hv` | High-voltage tuning page (ESPGeiger-HW builds only) |
 | `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
 | `/screen` | Live OLED framebuffer preview (OLED builds only) - see [OLED](/output/oled#browser-screen-viewer) |
+| `/export` | Streaming base64+CRC32 dump of all prefs (skips `sys.web_pass` and the `net` group). UI lives at the bottom of the Config page. |
+| `/import` (POST) | Apply a previously-exported blob (overlay-only; keys not in the blob are left alone). Reboots on success. |
+| `/life/reset` (POST) | Zero the lifetime click counter + first-boot timestamp. Button on `/hist`. |
+| `/erase` | Wipe saved WiFi credentials and reboot into the captive setup portal. Linked from `/network` → Erase WiFi config. |
 | `/restart` | Reboots the device - use with care |
 
 For the `/json` response schema and examples of integrating `/json` or `/lastdata` with external tools (GeigerLog, Home Assistant, Prometheus, InfluxDB, Node-RED, Grafana), see [Integrations](/output/integrations).
