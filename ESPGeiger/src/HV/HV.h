@@ -150,7 +150,7 @@ class HV : public EGModule {
       uint16_t get_hv_target() const { return _hv_target; }
       int8_t get_duty_trim() const { return _duty_trim; }
       void reset_trim() { _duty_trim = 0; }
-      Smoothed<float> hvReading;       // 20-sample, autotrim
+      EGRingAvg<float, 20> hvReading;  // 20-sample, autotrim
       // 3-sample running-mean for /hvjson display. O(1) add and get.
       void addFast(float v) {
         _fastSum -= _fastBuf[_fastIdx];

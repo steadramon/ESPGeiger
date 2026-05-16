@@ -135,7 +135,7 @@ void HV::begin() {
 #endif
   }
 #ifdef ESPG_HV_ADC
-  hvReading.begin(SMOOTHED_AVERAGE, 20);
+  hvReading.begin();  // default = MaxN = 20
 #endif
 }
 
