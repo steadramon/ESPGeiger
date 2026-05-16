@@ -48,6 +48,8 @@ EG_PSTR(SY_L_ALR, "Alert CPM");
 EG_PSTR(SY_H_ALR, "Alert trigger (CPM)");
 EG_PSTR(SY_L_WPW, "Web password");
 EG_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin). Empty = no auth.");
+EG_PSTR(SY_L_LE,  "Track lifetime");
+EG_PSTR(SY_H_LE,  "Persist total clicks + exposure across reboots.");
 
 static const EGPref SYSTEM_PREF_ITEMS[] = {
   {"name",     SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    32, EGP_STRING, 0},
@@ -55,6 +57,7 @@ static const EGPref SYSTEM_PREF_ITEMS[] = {
   {"warn",     SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
   {"alert",    SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
   {"web_pass", SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    32, EGP_STRING, EGP_SENSITIVE},
+  {"life_en",  SY_L_LE,  SY_H_LE,  "1",     nullptr, 0, 1,    0,  EGP_BOOL,   0},
 };
 
 static const EGPrefGroup SYSTEM_PREF_GROUP = {
@@ -70,10 +73,50 @@ void SystemPrefs::on_prefs_loaded() {
   gcounter.set_warning((int)EGPrefs::getUInt("sys", "warn"));
   gcounter.set_alert((int)EGPrefs::getUInt("sys", "alert"));
   DeviceInfo::setFriendlyName(EGPrefs::getString("sys", "name"));
+  gcounter.set_lifetime_enabled(EGPrefs::getUInt("sys", "life_en") != 0);
   // Push web_pass into the running EGHttpServer. on_prefs_loaded fires
   // at boot AND after a /param save (default on_prefs_saved chains here),
   // so this covers both initial config and live changes.
   WebPortal::applyAuthFromPrefs();
+}
+
+// --- Lifetime prefs ---
+// Hidden group dedicated to the persisted counter state so the periodic
+// flash save (~every 6 h) only fires this lightweight callback, not the
+// full sys-group cascade (ratio/warn/alert/name re-apply + auth refresh).
+
+class LifePrefs : public EGModule {
+public:
+  const char* name() override { return "life"; }
+  uint8_t display_order() override { return 0; }  // hidden from /param
+  const EGPrefGroup* prefs_group() override;
+  void on_prefs_loaded() override;
+};
+
+static LifePrefs lifeprefs;
+EG_REGISTER_MODULE(lifeprefs)
+
+static const EGPref LIFE_PREF_ITEMS[] = {
+  {"clk",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
+  {"clkr", nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
+  {"fbt",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
+};
+
+static const EGPrefGroup LIFE_PREF_GROUP = {
+  "life", "Lifetime", 1,
+  LIFE_PREF_ITEMS,
+  sizeof(LIFE_PREF_ITEMS) / sizeof(LIFE_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* LifePrefs::prefs_group() { return &LIFE_PREF_GROUP; }
+
+void LifePrefs::on_prefs_loaded() {
+  const char* lc = EGPrefs::getString("life", "clk");
+  gcounter.set_lifetime_clicks(lc ? strtoul(lc, nullptr, 10) : 0);
+  const char* lcr = EGPrefs::getString("life", "clkr");
+  gcounter.set_lifetime_rollover(lcr ? strtoul(lcr, nullptr, 10) : 0);
+  const char* fbt = EGPrefs::getString("life", "fbt");
+  gcounter.set_first_boot_ts(fbt ? (uint32_t)strtoul(fbt, nullptr, 10) : 0);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
