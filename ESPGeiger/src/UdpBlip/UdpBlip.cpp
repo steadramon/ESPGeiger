@@ -100,12 +100,13 @@ static size_t osc_f32(uint8_t* buf, size_t cap, size_t off, float v) {
 void UdpBlipModule::begin() {
   readPrefs();
   _last_clicks = gcounter.total_clicks;
-  // GRNG phase-shift the first /stats emission so a fleet booting together
-  // (power-cut, AP reboot) doesn't synchronize bursts onto the receiver's
-  // lwIP rx mbox. Persistent across all subsequent cycles.
-  uint32_t jitter = UDPBLIP_STATS_JITTER_MS
-                  ? (GRNG::fast_uint32() % UDPBLIP_STATS_JITTER_MS) : 0;
-  _last_stats_ms = millis() - jitter;
+  // GRNG-jitter the first telemetry burst so a synchronized fleet (power
+  // cut, AP reboot) doesn't pile packets onto the receiver's lwIP rx mbox.
+  // Counter starts already-aged by the jitter amount.
+  uint16_t jitter_s = UDPBLIP_STATS_JITTER_MS
+                    ? (uint16_t)((GRNG::fast_uint32() % UDPBLIP_STATS_JITTER_MS) / 1000UL) : 0;
+  _stats_ticks = jitter_s;
+  _backoff_ticks = 0;
   _fail_count = 0;
   // chipid is fixed at boot - pre-format the OSC paths once.
   snprintf_P(_click_path, sizeof(_click_path),
@@ -124,8 +125,6 @@ void UdpBlipModule::begin() {
                  EGPrefs::getString("udpblip", "group"),
                  _port);
   }
-  // Clicks push from Counter; loop() only handles setup + periodic telemetry.
-  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 1000);
 }
 
 void UdpBlipModule::readPrefs() {
@@ -189,8 +188,7 @@ void UdpBlipModule::on_prefs_saved() {
   // Resync latches so enabling mode=2 doesn't fire every since-boot click in
   // one burst, and so stats waits a full interval while WiFi resettles.
   _last_clicks = (uint32_t)gcounter.total_clicks;
-  _last_stats_ms = millis();
-  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 1000);
+  _stats_ticks = 0;
   Log::console(PSTR("UdpBlip: prefs saved, mode=%u port=%u"), _mode, _port);
 }
 
@@ -299,8 +297,7 @@ void UdpBlipModule::tryEmitClick(unsigned long now_ms) {
                         (uint32_t)(eventCounter1 + eventCounter2);
   if (true_count == _last_clicks) return;
 
-  // Token bucket: 1 token per CLICK_MIN_INTERVAL_MS idle, cap BURST_TOKENS.
-  // _last_token_ms advances only by the time we converted into tokens, so
+  // Token bucket; _last_token_ms only advances by converted intervals so
   // sub-interval slack carries forward.
   uint32_t elapsed = (uint32_t)(now_ms - _last_token_ms);
   uint8_t  gained  = (uint8_t)(elapsed / UDPBLIP_CLICK_MIN_INTERVAL_MS);
@@ -323,41 +320,50 @@ void UdpBlipModule::notifyClick(unsigned long now_ms) {
   tryEmitClick(now_ms);
 }
 
-void UdpBlipModule::loop(unsigned long now) {
+// 1 Hz scheduler for telemetry + cooldown. Counter-based, no millis() math.
+void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
   if (_mode == 0 || ota_in_progress) return;
   if (!Wifi::connected) return;
   if (!ensureUdp()) return;
   if (!_mdns_done) announce_mdns();
 
-  // After FAIL_BACKOFF consecutive send failures, cool off so we don't
-  // hammer a sick WiFi stack.
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
-    if (_backoff_at_ms == 0) _backoff_at_ms = now;
-    if ((unsigned long)(now - _backoff_at_ms) >= UDPBLIP_FAIL_COOLDOWN_MS) {
+    if (++_backoff_ticks * 1000UL >= UDPBLIP_FAIL_COOLDOWN_MS) {
       _fail_count = 0;
-      _backoff_at_ms = 0;
+      _backoff_ticks = 0;
     }
     return;
   }
 
   if (_emit_phase == 0) {
-    if ((unsigned long)(now - _last_stats_ms) >= UDPBLIP_STATS_INTERVAL_MS) {
-      _last_stats_ms = now;
-      emitRad(now);
+    if (++_stats_ticks * 1000UL >= UDPBLIP_STATS_INTERVAL_MS) {
+      _stats_ticks = 0;
+      emitRad(millis());
       _emit_phase = 1;
     }
   } else if (_emit_phase == 1) {
 #ifdef ESPG_HV_ADC
-    emitHv(now);
+    emitHv(millis());
 #endif
     _emit_phase = 2;
   } else {
     _sys_phase = !_sys_phase;
-    if (_sys_phase) emitSys(now);
+    if (_sys_phase) emitSys(millis());
     _emit_phase = 0;
   }
+}
 
-  // Catch any click counter the throttle deferred after a burst.
+uint16_t UdpBlipModule::loop_interval_ms() {
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  return 60000;   // UDPRX: tryEmitClick is a no-op; loop body is empty
+#else
+  return UDPBLIP_CLICK_MIN_INTERVAL_MS;
+#endif
+}
+
+// Producer-only tail-catcher: flush any click counter the throttle deferred
+// when a burst ends without further notifyClick calls. No-op on UDPRX.
+void UdpBlipModule::loop(unsigned long now) {
   tryEmitClick(now);
 }
 

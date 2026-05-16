@@ -68,10 +68,12 @@ public:
   }
   const char* name() override { return "udpblip"; }
   bool requires_wifi() override { return true; }
+  bool has_tick() override { return true; }
   bool has_loop() override { return true; }
-  uint16_t loop_interval_ms() override { return 50; }
+  uint16_t loop_interval_ms() override;
   uint16_t warmup_seconds() override { return 0; }
   void begin() override;
+  void s_tick(unsigned long now_s) override;
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
   void on_prefs_saved() override;
@@ -103,8 +105,8 @@ private:
   unsigned long _last_clicks = 0;
   unsigned long _last_click_emit_ms = 0;
   unsigned long _last_token_ms = 0;
-  unsigned long _last_stats_ms = 0;
-  unsigned long _backoff_at_ms = 0;
+  uint16_t      _stats_ticks = 0;      // seconds since last /rad emit
+  uint16_t      _backoff_ticks = 0;    // seconds in fail-backoff
   uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
   uint8_t   _fail_count = 0;
   bool      _mdns_done = false;
