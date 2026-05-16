@@ -24,6 +24,11 @@ unsigned int encode_base64_length(unsigned int input_length);
 unsigned int decode_base64_length(unsigned char input[]);
 unsigned int decode_base64_length(unsigned char input[], unsigned int input_length);
 
+// CONTRACT: output buffer must be at least `encode_base64_length(input_length) + 1`
+// bytes. The function writes the 4*ceil(N/3) encoded chars AND a trailing NUL
+// terminator (the +1 byte). Streaming callers that write successive encodes
+// into a single rolling buffer must reserve room for the NUL or encode into a
+// scratch buffer first - the NUL OOBs into the next encode's start position.
 unsigned int encode_base64(unsigned char input[], unsigned int input_length, unsigned char output[]);
 
 unsigned int decode_base64(unsigned char input[], unsigned char output[]);
