@@ -56,7 +56,7 @@ public:
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
   void on_prefs_saved() override;
-  uint8_t display_order() override { return 26; }
+  uint8_t display_order() override { return 20; }  // first output: minimal config
   size_t status_json(char* buf, size_t cap, unsigned long now) override;
   void notifyClick(unsigned long now_ms);
 

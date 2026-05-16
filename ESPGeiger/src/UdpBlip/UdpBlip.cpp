@@ -44,7 +44,7 @@ UdpBlipModule& udpblip = UdpBlipModule::getInstance();
 EG_REGISTER_MODULE(udpblip)
 
 EG_PSTR(UB_L_MODE,  "Mode");
-EG_PSTR(UB_H_MODE,  "0=off, 1=stats only (60s), 2=stats + per-click blip");
+EG_PSTR(UB_H_MODE,  "0=off, 1=telemetry only, 2=telemetry + per-click broadcast");
 EG_PSTR(UB_L_GROUP, "Multicast group");
 EG_PSTR(UB_H_GROUP, "239.x.x.x site-local. All devices on a LAN share one group.");
 EG_PSTR(UB_P_GROUP, "[0-9.]+");
@@ -57,7 +57,7 @@ static const EGPref UDPBLIP_PREF_ITEMS[] = {
 };
 
 static const EGPrefGroup UDPBLIP_PREF_GROUP = {
-  "udpblip", "Local broadcast", 1,
+  "udpblip", "Local Broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),
 };
