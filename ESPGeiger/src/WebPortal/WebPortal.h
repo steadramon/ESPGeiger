@@ -87,6 +87,10 @@ class WebPortal {
     static void hWifi(EGHttpRequest&, EGHttpResponse&, void*);
     static void hWifiScan(EGHttpRequest&, EGHttpResponse&, void*);
     static void hWifiSave(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hExport(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hImport(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hImportBody(EGHttpRequest&, EGHttpServer::BodyEvent,
+                            const char*, size_t, void*);
 };
 
 #endif

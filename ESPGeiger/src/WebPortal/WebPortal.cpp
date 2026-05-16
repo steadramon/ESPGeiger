@@ -31,6 +31,7 @@
 #include "../NTP/NTP.h"
 #include "../SerialCommand/SerialCommand.h"
 #include <LittleFS.h>
+#include <EGBase64.h>
 
 extern SerialCommand serialcmd;
 #ifdef ESP8266
@@ -255,6 +256,9 @@ void WebPortal::begin(uint16_t port) {
   _http.on("/network",   EGHttpRequest::GET,  &WebPortal::hWifi,         nullptr);
   _http.on("/wifiscan",  EGHttpRequest::GET,  &WebPortal::hWifiScan,     nullptr);
   _http.on("/wifisave",  EGHttpRequest::POST, &WebPortal::hWifiSave,     nullptr);
+  _http.on("/export",    EGHttpRequest::GET,  &WebPortal::hExport,       nullptr);
+  _http.on("/import",    EGHttpRequest::POST, &WebPortal::hImport,       nullptr);
+  _http.onUpload("/import", &WebPortal::hImportBody, nullptr);
 
   // Non-EGModule routes (explicit).
   GRNGRoutes::registerRoutes(_http);
@@ -278,8 +282,13 @@ void WebPortal::applyAuthFromPrefs() {
   if (!p || !p->_active) return;
   const char* cur = EGPrefs::getString("sys", "web_pass");
   p->_http.setBasicAuth("admin", cur);
-  Log::console(PSTR("WebPortal: auth %s"),
-               (cur && *cur) ? PSTR("enabled (user=admin)") : PSTR("disabled"));
+  static int8_t s_last_state = -1;
+  int8_t state = (cur && *cur) ? 1 : 0;
+  if (state != s_last_state) {
+    Log::console(PSTR("WebPortal: auth %s"),
+                 state ? PSTR("enabled (user=admin)") : PSTR("disabled"));
+    s_last_state = state;
+  }
 }
 
 void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title) {
@@ -669,13 +678,16 @@ void WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // WiFi-only erase: clear stored creds, reboot into setup mode. Other prefs
-  // (NTP, HV, WebAPI) survive.
+  // WiFi-only erase: clear stored creds and revert network config to DHCP
+  // so the setup-mode portal doesn't try to bring up a static IP on the
+  // captive AP. Other prefs (NTP, HV, WebAPI) survive.
   Log::console(PSTR("WebPortal: erasing WiFi credentials"));
   Wifi::clearSavedCreds();
+  EGPrefs::put("net", "static_ip", "0");
+  EGPrefs::commit();
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Erase WiFi"));
-  res.sendChunk(F("<p>WiFi credentials erased. Device is restarting into setup mode.</p>"));
+  res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device is restarting into setup mode.</p>"));
   WebPortal::sendRestartCountdown(res);
   WebPortal::sendPageTail(res);
   res.endChunked();
@@ -1462,9 +1474,403 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     res.sendChunk(F("</details>"));
   }
 
-  res.sendChunk(F("<hr><button type=submit>Save</button></form>"));
+  res.sendChunk(F("<hr><button type=submit>Save</button></form>"
+                  "<hr>"
+                  "<details><summary>Backup &amp; restore</summary>"
+                  "<form method=POST action=/import>"
+                  "<p><textarea name=blob id=cfgB rows=4 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
+                  "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
+                  " <button type=submit>Import</button></p></form>"
+                  "<p style=\"color:var(--muted);font-size:.85em\">Import overlays blob values onto current config (keys not in blob are kept). Device reboots automatically after import.</p>"
+                  "</details>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
+}
+
+// ---------- /export + /import (config backup/restore) ----------
+
+// Wire format:
+//   "ESPG1" | gcount(1B) | for each group:
+//     mid_len(1B) | module_id | pcount(1B) | for each pref:
+//       key_len(1B) | key | val_len(2B BE) | value
+//   crc32_be(4B)   // over all preceding bytes
+// sys.web_pass and the whole `net` group are skipped (device-local).
+
+static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
+  crc = ~crc;
+  for (size_t i = 0; i < len; i++) {
+    crc ^= data[i];
+    for (int j = 0; j < 8; j++) {
+      uint32_t mask = -(int32_t)(crc & 1);
+      crc = (crc >> 1) ^ (0xEDB88320 & mask);
+    }
+  }
+  return ~crc;
+}
+
+// SRAM key in; callers strncpy_P first.
+static bool is_skip_pref(const char* module_id, const char* key) {
+  if (strcmp(module_id, "sys") == 0 && strcmp(key, "web_pass") == 0) return true;
+  if (strcmp(module_id, "net") == 0) return true;
+  return false;
+}
+
+// Stack-only base64 sink: 3-byte triplet buffer, 256-char out buffer.
+// Tracks a running CRC32 over every raw byte fed in.
+struct B64Sink {
+  EGHttpResponse* res;
+  uint8_t  tri[3];
+  uint8_t  triLen;
+  char     out[256];
+  size_t   outLen;
+  uint32_t crc;
+};
+
+static void b64_init(B64Sink& s, EGHttpResponse& r) {
+  s.res = &r; s.triLen = 0; s.outLen = 0; s.crc = 0;
+}
+static void b64_flush_out(B64Sink& s) {
+  if (s.outLen) { s.res->sendChunk(s.out, s.outLen); s.outLen = 0; }
+}
+static void b64_emit_quartet(B64Sink& s, uint8_t in_len) {
+  if (s.outLen + 4 > sizeof(s.out)) b64_flush_out(s);
+  // EGBase64 writes 4 chars + NUL terminator (5 bytes); using out
+  // directly OOBs when outLen approaches sizeof(out) and clobbers outLen.
+  unsigned char tmp[5];
+  encode_base64(s.tri, in_len, tmp);
+  memcpy(s.out + s.outLen, tmp, 4);
+  s.outLen += 4;
+  s.triLen = 0;
+}
+static void b64_write(B64Sink& s, const void* data, size_t len) {
+  const uint8_t* p = (const uint8_t*)data;
+  s.crc = crc32_update(s.crc, p, len);
+  for (size_t i = 0; i < len; i++) {
+    s.tri[s.triLen++] = p[i];
+    if (s.triLen == 3) b64_emit_quartet(s, 3);
+  }
+}
+static void b64_write_u8(B64Sink& s, uint8_t v) { b64_write(s, &v, 1); }
+static void b64_finish(B64Sink& s) {
+  if (s.triLen > 0) b64_emit_quartet(s, s.triLen);
+  b64_flush_out(s);
+}
+
+static bool is_exportable_pref(const EGPrefGroup* g, const EGPref& p,
+                               const char* id_buf, const char*& val_out) {
+  if (p.type == EGP_LABEL || p.type == EGP_HEADER) return false;
+  if (is_skip_pref(g->module_id, id_buf)) return false;
+  const char* val = EGPrefs::getString(g->module_id, id_buf);
+  if (!val) val = "";
+  if (p.default_val && strcmp(val, p.default_val) == 0) return false;
+  val_out = val;
+  return true;
+}
+
+// Two passes: count groups for the size-prefix byte, then emit.
+static void serializeExportStream(B64Sink& sink) {
+  uint8_t group_count = 0;
+  for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
+    const EGPrefGroup* g = EGPrefs::group_at(gi);
+    if (!g || g->count == 0) continue;
+    for (size_t j = 0; j < g->count; j++) {
+      char id_buf[32];
+      strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+      id_buf[sizeof(id_buf) - 1] = '\0';
+      const char* val;
+      if (is_exportable_pref(g, g->prefs[j], id_buf, val)) {
+        group_count++;
+        break;
+      }
+    }
+  }
+
+  b64_write(sink, "ESPG1", 5);
+  b64_write_u8(sink, group_count);
+
+  for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
+    const EGPrefGroup* g = EGPrefs::group_at(gi);
+    if (!g || g->count == 0) continue;
+    uint8_t emitted_prefs = 0;
+    for (size_t j = 0; j < g->count; j++) {
+      char id_buf[32];
+      strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+      id_buf[sizeof(id_buf) - 1] = '\0';
+      const char* val;
+      if (is_exportable_pref(g, g->prefs[j], id_buf, val)) emitted_prefs++;
+    }
+    if (emitted_prefs == 0) continue;
+
+    size_t mid_len = strlen(g->module_id);
+    if (mid_len > 255) continue;
+    b64_write_u8(sink, (uint8_t)mid_len);
+    b64_write(sink, g->module_id, mid_len);
+    b64_write_u8(sink, emitted_prefs);
+
+    for (size_t j = 0; j < g->count; j++) {
+      const EGPref& p = g->prefs[j];
+      char id_buf[32];
+      strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
+      id_buf[sizeof(id_buf) - 1] = '\0';
+      const char* val;
+      if (!is_exportable_pref(g, p, id_buf, val)) continue;
+      size_t klen = strlen(id_buf);
+      size_t vlen = strlen(val);
+      if (klen > 255 || vlen > 65535) continue;
+      b64_write_u8(sink, (uint8_t)klen);
+      b64_write(sink, id_buf, klen);
+      b64_write_u8(sink, (uint8_t)((vlen >> 8) & 0xFF));
+      b64_write_u8(sink, (uint8_t)(vlen & 0xFF));
+      b64_write(sink, val, vlen);
+    }
+  }
+}
+
+// Returns nullptr on valid format, else a short error string for the UI.
+static const char* validateImport(const uint8_t* buf, size_t len) {
+  if (len < 10) return "too short";
+  if (memcmp(buf, "ESPG1", 5) != 0) return "bad magic";
+  // Last 4 bytes are CRC32 BE of the preceding bytes.
+  size_t payload_len = len - 4;
+  uint32_t expected = ((uint32_t)buf[payload_len    ] << 24) |
+                      ((uint32_t)buf[payload_len + 1] << 16) |
+                      ((uint32_t)buf[payload_len + 2] <<  8) |
+                      ((uint32_t)buf[payload_len + 3]      );
+  uint32_t actual = crc32_update(0, buf, payload_len);
+  if (expected != actual) return "checksum mismatch";
+
+  size_t off = 5;
+  uint8_t gcount = buf[off++];
+  for (uint8_t gi = 0; gi < gcount; gi++) {
+    if (off + 1 > payload_len) return "truncated group hdr";
+    uint8_t mid_len = buf[off++];
+    if (mid_len >= 32 || off + mid_len + 1 > payload_len) return "bad group hdr";
+    off += mid_len;
+    uint8_t pcount = buf[off++];
+    for (uint8_t pi = 0; pi < pcount; pi++) {
+      if (off + 3 > payload_len) return "truncated pref";
+      uint8_t klen = buf[off++];
+      if (klen >= 32 || off + klen + 2 > payload_len) return "bad pref key";
+      off += klen;
+      uint16_t vlen = ((uint16_t)buf[off] << 8) | buf[off + 1];
+      off += 2;
+      if (off + vlen > payload_len) return "truncated pref value";
+      off += vlen;
+    }
+  }
+  return nullptr;
+}
+
+// Overlay semantics: blob values override matching keys; everything else
+// untouched. (Tried snapshot reset-to-default earlier - it fired too
+// many on_prefs_saved callbacks at commit time, hitting WDT.)
+// Returns count applied, or -1 on parse error (err_out gets a UI string).
+static int applyImport(const uint8_t* buf, size_t len, const char** err_out) {
+  const char* err = validateImport(buf, len);
+  if (err) { if (err_out) *err_out = err; return -1; }
+
+  size_t payload_len = len - 4;   // CRC stripped
+  size_t off = 5;   // 5-byte magic
+  uint8_t gcount = buf[off++];
+  int applied = 0;
+  (void)payload_len;
+  for (uint8_t gi = 0; gi < gcount; gi++) {
+    uint8_t mid_len = buf[off++];
+    char module_id[32];
+    memcpy(module_id, buf + off, mid_len); off += mid_len;
+    module_id[mid_len] = '\0';
+    uint8_t pcount = buf[off++];
+    for (uint8_t pi = 0; pi < pcount; pi++) {
+      uint8_t klen = buf[off++];
+      char key[32];
+      memcpy(key, buf + off, klen); off += klen;
+      key[klen] = '\0';
+      uint16_t vlen = ((uint16_t)buf[off] << 8) | buf[off + 1];
+      off += 2;
+      char val[256];
+      if (vlen >= sizeof(val)) { off += vlen; continue; }
+      memcpy(val, buf + off, vlen); off += vlen;
+      val[vlen] = '\0';
+      if (is_skip_pref(module_id, key)) continue;
+      // Forward-compat: skip unknown keys (older blob, newer firmware).
+      bool known = false;
+      for (size_t gi2 = 0; gi2 < EGPrefs::group_count() && !known; gi2++) {
+        const EGPrefGroup* g = EGPrefs::group_at(gi2);
+        if (!g || strcmp(g->module_id, module_id) != 0) continue;
+        for (size_t j = 0; j < g->count; j++) {
+          char id_buf[32];
+          strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+          id_buf[sizeof(id_buf) - 1] = '\0';
+          if (strcmp(id_buf, key) == 0) { known = true; break; }
+        }
+      }
+      if (!known) continue;
+      EGPrefs::put(module_id, key, val);
+      applied++;
+    }
+  }
+  EGPrefs::commit();
+  return applied;
+}
+
+void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  (void)req;
+  // Zero heap allocation. Sink lives on stack (~270 B); serializer reads
+  // EGPrefs shadow directly and streams base64-encoded chunks to res.
+  res.beginChunked(200, "text/plain");
+  B64Sink sink;
+  b64_init(sink, res);
+  serializeExportStream(sink);
+  // Append CRC32 of everything written so far, big-endian, then flush.
+  // Done before b64_finish so the CRC bytes go through the same encoder.
+  uint32_t crc = sink.crc;
+  uint8_t crc_be[4] = {
+    (uint8_t)((crc >> 24) & 0xFF),
+    (uint8_t)((crc >> 16) & 0xFF),
+    (uint8_t)((crc >> 8)  & 0xFF),
+    (uint8_t)( crc        & 0xFF),
+  };
+  // Write CRC bytes WITHOUT folding them into the running CRC (we'd be
+  // hashing our own hash). Bypass b64_write's crc update.
+  for (int i = 0; i < 4; i++) {
+    sink.tri[sink.triLen++] = crc_be[i];
+    if (sink.triLen == 3) b64_emit_quartet(sink, 3);
+  }
+  b64_finish(sink);
+  res.endChunked();
+}
+
+// Streaming-body storage for /import. Same shape as hParamBody.
+static char*  s_importBody    = nullptr;
+static size_t s_importBodyLen = 0;
+static size_t s_importBodyCap = 0;
+static bool   s_importBodyOk  = false;
+
+void WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+                             const char* data, size_t len, void*) {
+  switch (ev) {
+    case EGHttpServer::BODY_BEGIN: {
+      if (s_importBody) { free(s_importBody); s_importBody = nullptr; }
+      s_importBodyLen = 0;
+      s_importBodyCap = 0;
+      s_importBodyOk  = false;
+      size_t cap = req.bodyLen();
+      if (cap == 0 || cap > 8192) return;
+      s_importBody = (char*)malloc(cap + 1);
+      if (!s_importBody) return;
+      s_importBodyCap = cap;
+      s_importBodyOk  = true;
+      break;
+    }
+    case EGHttpServer::BODY_DATA:
+      if (s_importBodyOk && s_importBody && s_importBodyLen + len <= s_importBodyCap) {
+        memcpy(s_importBody + s_importBodyLen, data, len);
+        s_importBodyLen += len;
+      }
+      break;
+    case EGHttpServer::BODY_END:
+      if (s_importBody) s_importBody[s_importBodyLen] = '\0';
+      break;
+    case EGHttpServer::BODY_ABORT:
+      if (s_importBody) { free(s_importBody); s_importBody = nullptr; }
+      s_importBodyLen = 0;
+      s_importBodyCap = 0;
+      s_importBodyOk  = false;
+      break;
+  }
+}
+
+// Inline url-decode of form body for `blob=...` only. Mutates buf to
+// place the decoded value in-place; returns pointer to it (NUL-terminated).
+// Avoids EGHttpRequest::decodeArg's 128-byte static buffer which truncates
+// our multi-KB blob.
+static char* extract_blob_field(char* body, size_t bodyLen, size_t* out_len) {
+  if (bodyLen < 5) return nullptr;
+  char* eq = nullptr;
+  for (size_t i = 0; i + 5 <= bodyLen; i++) {
+    bool at_start = (i == 0 || body[i - 1] == '&');
+    if (at_start && memcmp(body + i, "blob=", 5) == 0) {
+      eq = body + i + 5;
+      break;
+    }
+  }
+  if (!eq) return nullptr;
+  char* src = eq;
+  char* dst = eq;
+  char* end = body + bodyLen;
+  auto hex_nyb = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+  };
+  while (src < end && *src != '&') {
+    if (*src == '+') { *dst++ = ' '; src++; }
+    else if (*src == '%' && src + 2 < end) {
+      int hi = hex_nyb(src[1]);
+      int lo = hex_nyb(src[2]);
+      if (hi >= 0 && lo >= 0) { *dst++ = (char)((hi << 4) | lo); src += 3; }
+      else                    { *dst++ = *src++; }
+    }
+    else { *dst++ = *src++; }
+  }
+  *dst = '\0';
+  if (out_len) *out_len = dst - eq;
+  return eq;
+}
+
+void WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  (void)req;
+  auto renderError = [&](const char* msg) {
+    res.beginChunked(200, "text/html");
+    WebPortal::sendPageHead(res, F("Import"));
+    char buf[160];
+    snprintf_P(buf, sizeof(buf),
+               PSTR("<p>Import failed: %s.</p><p><a href=/param>Back</a></p>"), msg);
+    res.sendChunk(buf);
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    if (s_importBody) { free(s_importBody); s_importBody = nullptr; }
+  };
+  if (!s_importBodyOk || !s_importBody || s_importBodyLen == 0) {
+    renderError("no body");
+    return;
+  }
+  size_t b64_len = 0;
+  char* b64 = extract_blob_field(s_importBody, s_importBodyLen, &b64_len);
+  if (!b64 || b64_len == 0) {
+    renderError("missing blob");
+    return;
+  }
+  unsigned int raw_cap = decode_base64_length((unsigned char*)b64, b64_len);
+  if (raw_cap == 0 || raw_cap > 8192) {
+    renderError("bad base64");
+    return;
+  }
+  uint8_t* raw = (uint8_t*)malloc(raw_cap);
+  if (!raw) {
+    renderError("alloc failed");
+    return;
+  }
+  unsigned int raw_len = decode_base64((unsigned char*)b64, b64_len, raw);
+  free(s_importBody); s_importBody = nullptr;
+  const char* err = nullptr;
+  int applied = applyImport(raw, raw_len, &err);
+  free(raw);
+  if (applied < 0) {
+    renderError(err ? err : "bad blob");
+    return;
+  }
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("Imported"));
+  char msg[96];
+  snprintf_P(msg, sizeof(msg),
+             PSTR("<p>Imported %d prefs. Restarting.</p>"), applied);
+  res.sendChunk(msg);
+  WebPortal::sendRestartCountdown(res);
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+  WebPortal::requestRestart(1500);
 }
 
 // ---------- /status + /js + /cs ----------
@@ -1489,7 +1895,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <textarea readonly id=t1 wrap=off></textarea>
 <details style="margin-top:.4em"><summary style="cursor:pointer;color:var(--muted);width:1.5em;list-style-position:inside">&nbsp;</summary>
 <form id=cf style="display:flex;gap:.5em;margin-top:.4em" onsubmit="return cmdSend(event)">
-<input id=ci placeholder=cmd style="flex:1;font-family:monospace" autocomplete=off>
+<input id=ci placeholder="cmd" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:.95em" autocomplete=off spellcheck=false>
 <button type=submit style="width:auto">Send</button>
 </form>
 </details>
