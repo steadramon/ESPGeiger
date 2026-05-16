@@ -253,8 +253,7 @@ SSD1306Display::SSD1306Display() {
 
 void SSD1306Display::setBrightness(uint8_t brightness) {
   if (!_present) return;
-  // Int math to avoid a float multiply (255/100 = 2.55).
-  brightness = (uint8_t)((uint16_t)brightness * 255 / 100);
+  brightness = (uint8_t)(((uint16_t)brightness * 255 + 50) / 100);
   setContrast(brightness);
 }
 
