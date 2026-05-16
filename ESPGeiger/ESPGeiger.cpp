@@ -131,8 +131,7 @@ void setup()
     auto action = BootHooks::checkStartupButtonHold();
     if (action == BootHooks::ButtonHold::FULL_RESET) {
       DeviceInfo::factoryReset();
-      delay(500);
-      ESP.restart();
+      DeviceInfo::safeRestart(500);
     } else if (action == BootHooks::ButtonHold::OFFLINE) {
       Wifi::disabled = true;
     }
@@ -149,8 +148,7 @@ void setup()
       }
 #else
       Log::console(PSTR("WiFi not connecting ... Restarting ... "));
-      delay(1000);
-      ESP.restart();
+      DeviceInfo::safeRestart(1000);
 #endif
     }
 

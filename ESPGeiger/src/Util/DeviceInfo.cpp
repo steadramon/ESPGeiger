@@ -19,8 +19,11 @@
 #include "DeviceInfo.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Logger/Logger.h"
+#include "../Counter/Counter.h"
 #include "Wifi.h"
 #include <LittleFS.h>
+
+extern Counter gcounter;
 #ifdef ESP32
 #include <math.h>
 #include <esp_chip_info.h>
@@ -115,8 +118,14 @@ uint32_t DeviceInfo::largestFreeBlockLow() {
 }
 
 void DeviceInfo::largestFreeBlockLowReset() {
-  largestFreeBlock();  // ensure s_lfb_cur is fresh
+  largestFreeBlock();
   s_lfb_low = s_lfb_cur;
+}
+
+void DeviceInfo::safeRestart(uint32_t delayMs) {
+  gcounter.stop_for_ota();
+  if (delayMs) delay(delayMs);
+  ESP.restart();
 }
 
 void DeviceInfo::begin() {

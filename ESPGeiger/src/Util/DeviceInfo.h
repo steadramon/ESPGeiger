@@ -71,20 +71,14 @@ namespace DeviceInfo {
 
   uint32_t freeHeap();
 
-  // Heap fragmentation 0-100 %. Sqrt-weighted, matches umm_malloc. Cached 10s.
-  // Every cache refresh updates an internal peak; consumers report peak via
-  // heapFragPeak() and reset at the end of their window.
-  // CAVEAT: the % form is denominator-sensitive - a build with more total free
-  // heap can read higher % for the same actual scatter. For consistent
-  // cross-build measurement use largestFreeBlock() / largestFreeBlockLow().
+  // Heap fragmentation 0-100 %, cached 10 s. Denominator-sensitive across
+  // builds; prefer largestFreeBlock() for cross-build comparisons.
   uint8_t heapFrag();
   uint8_t heapFragPeak();
   void    heapFragPeakReset();
 
-  // Largest contiguous free block in bytes. The honest "can I allocate N bytes
-  // right now?" metric, independent of total free heap. Sampled by the same
-  // 10 s cache that backs heapFrag(). largestFreeBlockLow() is the low-water
-  // mark since the last reset - i.e. worst-case big-alloc availability seen.
+  // Largest contiguous free block in bytes. Honest cross-build metric.
+  // *Low()*  = low-water mark since last reset.
   uint32_t largestFreeBlock();
   uint32_t largestFreeBlockLow();
   void     largestFreeBlockLowReset();
@@ -93,6 +87,9 @@ namespace DeviceInfo {
   //   0 unknown   1 power-on     2 external reset   3 software restart
   //   4 exception 5 watchdog     6 brown-out        7 deep-sleep wake
   uint8_t resetReason();
+
+  // The only ESP.restart() in the codebase. Flushes lifetime to flash first.
+  void safeRestart(uint32_t delayMs = 0);
 
   // Returns false when not available (ESP32 lacks per-fault details).
   bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause);

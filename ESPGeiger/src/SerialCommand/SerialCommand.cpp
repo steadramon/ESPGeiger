@@ -20,7 +20,10 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Logger/Logger.h"
+#include "../Util/DeviceInfo.h"
 #include <LittleFS.h>
+
+void SerialCommand::reboot() { DeviceInfo::safeRestart(); }
 extern SerialCommand serialcmd;
 
 #ifndef DISABLE_SERIALRX

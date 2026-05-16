@@ -90,8 +90,7 @@ void Wifi::tick(unsigned long now) {
       }
       if (down_seconds > 300) {
         Log::console(PSTR("WiFi: Down for 5 minutes, rebooting"));
-        delay(100);
-        ESP.restart();
+        DeviceInfo::safeRestart(100);
       }
     } else if (!was_connected) {
       was_connected = true;
@@ -355,8 +354,7 @@ bool Wifi::connectOrPortal() {
         } else {
           Log::console(PSTR("WiFi: Static config probe failed, reverting"));
           Wifi::restoreNetBackup();
-          delay(500);
-          ESP.restart();
+          DeviceInfo::safeRestart(500);
         }
       }
       return true;

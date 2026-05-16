@@ -61,7 +61,7 @@ public:
     // strtok_r/`last` by individual handlers. Output goes to Serial like
     // any other command, so the web /cs stream picks it up.
     void dispatch(const char* line);
-    static void reboot() { ESP.restart(); };
+    static void reboot();
     static void reset_wifi();
     static void reset_net();
     static void cmd_get();
