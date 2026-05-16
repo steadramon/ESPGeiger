@@ -133,7 +133,7 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   Log::console(PSTR("MQTT: Connected"));
   connected = true;
   reconnectAttempts = 0;
-  mqttClient->publish(this->last_will_.topic.c_str(), 1, true, lwtOnline);
+  mqttClient->publish(_lwt_topic, 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
   unsigned long now_s = millis() / 1000UL;
   if (_hass_next_publish == 0 || (long)(now_s - _hass_next_publish) >= 0) {
@@ -459,11 +459,8 @@ void MQTT_Client::reconnect()
   }
 
   // Rebuild LWT every begin() so a topic-pref change picks up cleanly.
-  char lwt_topic[64];
-  buildTopic(lwt_topic, sizeof(lwt_topic), "tele", topicLWT);
-  this->last_will_.topic = lwt_topic;
-  this->last_will_.payload = lwtOffline;
-  mqttClient->setWill(last_will_.topic.c_str(), 1, true, last_will_.payload.c_str());
+  buildTopic(_lwt_topic, sizeof(_lwt_topic), "tele", topicLWT);
+  mqttClient->setWill(_lwt_topic, 1, true, lwtOffline);
 
   mqttClient->setClientId(DeviceInfo::hostname());
   mqttClient->setServer(_mqtt_server, mqtt_port);

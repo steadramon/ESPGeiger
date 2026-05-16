@@ -67,13 +67,6 @@ constexpr auto MQTT_TOPIC_STATUS PROGMEM = "status";
 
 extern Counter gcounter;
 
-struct MQTTMessage {
-  String topic;
-  String payload;
-  uint8_t qos;  ///< QoS. Only for last will testaments.
-  bool retain;
-};
-
 class MQTT_Client : public EGModule {
 public:
   static MQTT_Client& getInstance()
@@ -103,7 +96,7 @@ public:
   void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
 #ifdef MQTTAUTODISCOVER
 #endif
-  MQTTMessage last_will_;
+  char _lwt_topic[64] = "";
   bool connected = false;
 protected:
   void reconnect();
