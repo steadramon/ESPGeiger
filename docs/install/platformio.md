@@ -132,14 +132,15 @@ See [UDP / OSC Output](/output/udp) for the full protocol. Tunables for the prod
 
 | Flag | Default | Description |
 |---|---|---|
-| `-D UDPBLIP_DEFAULT_GROUP="239.x.x.x"` | `"239.255.42.42"` | Producer's default multicast group. |
+| `-D UDPBLIP_DEFAULT_GROUP="239.x.x.x"` | `"239.255.86.86"` | Default multicast group. Used by producers, and by receivers unless `UDPRX_DEFAULT_GROUP` overrides. |
 | `-D UDPBLIP_DEFAULT_PORT="N"` | `"57340"` | Producer's default UDP port. |
 | `-D UDPBLIP_STATS_INTERVAL_MS=N` | `30000` | Interval between `/stats` heartbeats (ms). |
 | `-D UDPBLIP_STATS_JITTER_MS=N` | `7500` | First-emission GRNG offset range so fleet boots don't synchronize. |
 | `-D UDPBLIP_FAIL_BACKOFF=N` | `8` | Consecutive send failures before a one-stats-period cool-off. |
-| `-D UDPRX_DEFAULT_GROUP="239.x.x.x"` | `"239.255.42.42"` | Receiver's default multicast group. |
+| `-D UDPRX_DEFAULT_GROUP="239.x.x.x"` | (inherits `UDPBLIP_DEFAULT_GROUP`) | Override receiver's multicast group only if it should listen on a different group than local producers send to. |
 | `-D UDPRX_DEFAULT_PORT="N"` | `"57340"` | Receiver's default UDP port. |
 | `-D UDPRX_PRODUCER_SLOTS=N` | `8` | Producer tracking table size (sum mode). |
+| `-D UDPRX_POLL_SKIP=N` | `500` | Main-loop iterations between UDP rx drains. Lower = less burst loss, more polling cost. |
 
 ### Test Build Options
 

@@ -4,14 +4,14 @@
 # prints each event with a timestamp.
 #
 # Usage:  ./watch_osc.py [group] [port]
-# Defaults: 239.255.42.42 : 57340
+# Defaults: 239.255.86.86 : 57340
 
 import socket
 import struct
 import sys
 import time
 
-GROUP = sys.argv[1] if len(sys.argv) > 1 else "239.255.42.42"
+GROUP = sys.argv[1] if len(sys.argv) > 1 else "239.255.86.86"
 PORT  = int(sys.argv[2]) if len(sys.argv) > 2 else 57340
 
 
@@ -26,11 +26,12 @@ def parse_osc_string(buf, off):
 
 
 def parse_msg(buf):
-    """Parse one /espg/<chipid>/{click|rad|sys} message.
+    """Parse one /espg/<chipid>/{click|rad|hv|sys} message.
 
     All paths pad to 20 bytes. Tag follows; args after the tag's 4-byte pad.
-      /click ,ii    counter(i32) ts_ms(i32)
-      /rad   ,fffsi cpm usv hv state(str) total_clicks(i32)
+      /click ,ii     counter(i32) ts_ms(i32)
+      /rad   ,ffsi   cpm usv state(str) total_clicks(i32)
+      /hv    ,ffii   reading_v target_v duty trim    (HV builds only)
       /sys   ,iiiiii uptime_s rssi free_heap heap_frag_pct lps tick_max_us
     """
     if len(buf) < 24 or not buf.startswith(b"/espg/"):
@@ -42,14 +43,18 @@ def parse_msg(buf):
     if s0 == b"c" and buf[13:18] == b"click" and len(buf) >= 32:
         counter, ts_ms = struct.unpack(">II", buf[24:32])
         return ("click", chipid, counter, ts_ms)
-    if s0 == b"r" and buf[13:16] == b"rad" and len(buf) >= 48:
-        # /rad path is 16 chars + NUL, padded to 20. Tag ",fffsi\0" pads to 8.
-        cpm, usv, hv = struct.unpack(">fff", buf[28:40])
-        state, off = parse_osc_string(buf, 40)
+    if s0 == b"r" and buf[13:16] == b"rad" and len(buf) >= 44:
+        # Tag ",ffsi\0\0" pads to 8, args at off 28.
+        cpm, usv = struct.unpack(">ff", buf[28:36])
+        state, off = parse_osc_string(buf, 36)
         if state is None or off + 4 > len(buf):
-            return ("rad", chipid, cpm, usv, hv, "?", 0)
+            return ("rad", chipid, cpm, usv, "?", 0)
         (total,) = struct.unpack(">I", buf[off:off+4])
-        return ("rad", chipid, cpm, usv, hv, state, total)
+        return ("rad", chipid, cpm, usv, state, total)
+    if s0 == b"h" and buf[13:15] == b"hv" and len(buf) >= 44:
+        # Tag ",ffii\0\0" pads to 8, args at off 28.
+        reading, target, duty, trim = struct.unpack(">ffii", buf[28:44])
+        return ("hv", chipid, reading, target, duty, trim)
     if s0 == b"s" and buf[13:16] == b"sys" and len(buf) >= 52:
         # Tag ",iiiiii\0" pads to 8, args at off 28.
         uptime_s, rssi, free_heap, frag, lps, tick_max_us = struct.unpack(
@@ -65,9 +70,13 @@ def format_msg(m):
         _, chipid, counter, ts_ms = m
         return f"click  {chipid}  c={counter:<6}  ts={ts_ms}"
     if m[0] == "rad":
-        _, chipid, cpm, usv, hv, state, total = m
+        _, chipid, cpm, usv, state, total = m
         return (f"rad    {chipid}  cpm={cpm:6.2f}  usv={usv:.4f}  "
-                f"hv={hv:.1f}  state={state:<8} total={total}")
+                f"state={state:<8} total={total}")
+    if m[0] == "hv":
+        _, chipid, reading, target, duty, trim = m
+        return (f"hv     {chipid}  read={reading:6.1f}V  target={target:6.1f}V  "
+                f"duty={duty:>4}  trim={trim:+d}")
     if m[0] == "sys":
         _, chipid, uptime_s, rssi, free_heap, frag, lps, tick_max_us = m
         return (f"sys    {chipid}  up={uptime_s:<6}  rssi={rssi:>4}  "
@@ -90,7 +99,8 @@ def main():
     print(f"Listening on {GROUP}:{PORT} (Ctrl+C to stop)")
     print("Fields:")
     print("  click  chipid  c=counter  ts=producer_millis")
-    print("  rad    chipid  cpm=CPM  usv=uSv/h  hv=volts  state  total=lifetime_clicks")
+    print("  rad    chipid  cpm=CPM  usv=uSv/h  state  total=lifetime_clicks")
+    print("  hv     chipid  read=volts  target=volts  duty=PWM  trim=signed_units")
     print("  sys    chipid  up=uptime_s  rssi=dBm  free=heap_B  frag=%  lps  tickmax=us")
     print()
     try:

@@ -198,7 +198,7 @@ EG_PSTR(IN_L_URCH, "Pin chipid");
 EG_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in pin mode (0)");
 EG_PSTR(IN_P_URCH, "[0-9a-fA-F]{0,6}");
 EG_PSTR(IN_L_URGP, "Multicast group");
-EG_PSTR(IN_H_URGP, "Must match producers (default 239.255.42.42)");
+EG_PSTR(IN_H_URGP, "Must match producers (default 239.255.86.86)");
 EG_PSTR(IN_P_URGP, "[0-9.]+");
 EG_PSTR(IN_L_URPT, "Port");
 EG_PSTR(IN_H_URPT, "UDP port (default 57340)");
@@ -243,7 +243,7 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   {"udprx_mode",   IN_L_URMD, IN_H_URMD, "0",                  nullptr,     0, 1,     0,  EGP_UINT,   0},
   {"udprx_chipid", IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     6,  EGP_STRING, 0},
-  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.42.42",      IN_P_URGP,   0, 0,     24, EGP_STRING, 0},
+  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.86.86",      IN_P_URGP,   0, 0,     24, EGP_STRING, 0},
   {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   0},
   {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   0},
 #endif

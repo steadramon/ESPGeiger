@@ -321,9 +321,11 @@ void Counter::loop() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
 #elif GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // Skip-count throttle dodges the 64-bit millis() div at ~60 kHz LPS.
+  #ifndef UDPRX_POLL_SKIP
+  #define UDPRX_POLL_SKIP 500
+  #endif
   static uint16_t s_udp_skip = 0;
-  if (++s_udp_skip >= 5000) {
+  if (++s_udp_skip >= UDPRX_POLL_SKIP) {
     s_udp_skip = 0;
     geigerinput->loop();
   }

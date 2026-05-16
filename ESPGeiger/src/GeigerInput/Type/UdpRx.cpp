@@ -212,7 +212,6 @@ GeigerUdpRx::ProducerRecord* GeigerUdpRx::findOrAllocProducer(const char* chipid
 void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms) {
   // Tag string ",ii\0" = 4 bytes padded; args = 2 x int32 = 8 bytes.
   if (len < PATH_FULL_LEN + 4 + 8) return;
-  if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
   if (buf[SUFFIX_OFFSET + 5] != '\0') return;
   if (memcmp(buf + PATH_FULL_LEN, TAG_II, 4) != 0) return;
 
@@ -286,12 +285,14 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
 }
 
 void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
-  // Two-byte reject before the full prefix check.
+  // buf[12] is the '/' between chipid and suffix - rejects anything that
+  // isn't shaped like /espg/XXXXXX/ in a single byte.
   if (len < PATH_FULL_LEN + 4) return;
-  if (buf[0] != '/' || buf[1] != 'e') return;
-  if (memcmp(buf + 2, "spg/", 4) != 0) return;
   if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
-  // Self-loop reject by chipid - cheaper than the SDK call to remoteIP().
+  if (memcmp(buf, "/espg/", 6) != 0) return;
+  // Silent self-loop reject. lwIP suppresses multicast loopback on both
+  // ESP8266 and ESP32 today, but keeping the check is ~10 cycles of
+  // insurance against future stack changes.
   if (memcmp(buf + CHIPID_OFFSET, DeviceInfo::chipid(), CHIPID_LEN) == 0) return;
   char src[CHIPID_LEN + 1];
   memcpy(src, buf + CHIPID_OFFSET, CHIPID_LEN);

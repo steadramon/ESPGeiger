@@ -27,6 +27,10 @@
 #include "../ArduinoOTA/ArduinoOTA.h"
 #include "../GRNG/GRNG.h"
 #include "../Util/TickProfile.h"
+#ifdef ESPG_HV_ADC
+#include "../HV/HV.h"
+extern HV hv;
+#endif
 #include <WiFiUdp.h>
 #ifdef ESP8266
 #include <ESP8266mDNS.h>
@@ -110,6 +114,10 @@ void UdpBlipModule::begin() {
              PSTR("/espg/%s/rad"), DeviceInfo::chipid());
   snprintf_P(_sys_path, sizeof(_sys_path),
              PSTR("/espg/%s/sys"), DeviceInfo::chipid());
+#ifdef ESPG_HV_ADC
+  snprintf_P(_hv_path, sizeof(_hv_path),
+             PSTR("/espg/%s/hv"), DeviceInfo::chipid());
+#endif
   if (_mode > 0) {
     Log::console(PSTR("UdpBlip: mode=%u group=%s port=%u"),
                  _mode,
@@ -233,16 +241,31 @@ void UdpBlipModule::emitRad(uint32_t now) {
     gcounter.is_warm()    ? "healthy" : "warming";
   size_t n;
   if (!(n = osc_str(buf, sizeof(buf), off, _rad_path))) return; off += n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, ",fffsi", 6))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",ffsi", 5))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_cpmf()))) return; off += n;
   if (!(n = osc_f32(buf, sizeof(buf), off, gcounter.get_usv()))) return; off += n;
-  float hv_v = 0.0f;
-  if (!(n = osc_f32(buf, sizeof(buf), off, hv_v))) return; off += n;
   if (!(n = osc_str(buf, sizeof(buf), off, state))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)gcounter.total_clicks))) return; off += n;
   sendPacket(buf, off);
   (void)now;
 }
+
+#ifdef ESPG_HV_ADC
+void UdpBlipModule::emitHv(uint32_t now) {
+  // /espg/{id}/hv ,ffii  reading_v target_v duty trim
+  uint8_t buf[64];
+  size_t off = 0;
+  size_t n;
+  if (!(n = osc_str(buf, sizeof(buf), off, _hv_path))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",ffii", 5))) return; off += n;
+  if (!(n = osc_f32(buf, sizeof(buf), off, hv.hvReading.get()))) return; off += n;
+  if (!(n = osc_f32(buf, sizeof(buf), off, (float)hv.get_hv_target()))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)hv.get_duty()))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(int32_t)hv.get_duty_trim()))) return; off += n;
+  sendPacket(buf, off);
+  (void)now;
+}
+#endif
 
 void UdpBlipModule::emitSys(uint32_t now) {
   uint8_t buf[96];
@@ -261,6 +284,11 @@ void UdpBlipModule::emitSys(uint32_t now) {
 }
 
 void UdpBlipModule::notifyClick(unsigned long now_ms) {
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  // Receivers must never re-broadcast received clicks (feedback loop).
+  (void)now_ms;
+  return;
+#else
   if (_mode != 2) return;
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) return;
   if (!_udp) return;
@@ -274,6 +302,7 @@ void UdpBlipModule::notifyClick(unsigned long now_ms) {
   if (true_count == _last_clicks) return;
   _last_clicks = true_count;
   emitClick((uint32_t)_last_clicks, (uint32_t)now_ms);
+#endif
 }
 
 void UdpBlipModule::loop(unsigned long now) {
@@ -292,13 +321,21 @@ void UdpBlipModule::loop(unsigned long now) {
     return;
   }
 
-  // Stamp last_stats_ms on the attempt, not on success, so a persistent
-  // failure doesn't tight-loop the emit calls every iteration.
-  if ((unsigned long)(now - _last_stats_ms) >= UDPBLIP_STATS_INTERVAL_MS) {
-    _last_stats_ms = now;
-    emitRad(now);
+  if (_emit_phase == 0) {
+    if ((unsigned long)(now - _last_stats_ms) >= UDPBLIP_STATS_INTERVAL_MS) {
+      _last_stats_ms = now;
+      emitRad(now);
+      _emit_phase = 1;
+    }
+  } else if (_emit_phase == 1) {
+#ifdef ESPG_HV_ADC
+    emitHv(now);
+#endif
+    _emit_phase = 2;
+  } else {
     _sys_phase = !_sys_phase;
     if (_sys_phase) emitSys(now);
+    _emit_phase = 0;
   }
 }
 

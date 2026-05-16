@@ -12,7 +12,7 @@ ESPGeiger can broadcast click events and periodic stats to a UDP multicast group
 
 A matching receiver firmware variant (`UDP-Receiver`) lets a tubeless ESP device mirror another ESPGeiger over the air: display, MQTT, WebAPI, OLED and blip-LED all work as if a real tube were attached.
 
-- Multicast group: `239.255.42.42` (site-local, configurable)
+- Multicast group: `239.255.86.86` (site-local, configurable)
 - UDP port: `57340` (configurable)
 - Service announced via mDNS as `_osc._udp`
 
@@ -45,12 +45,23 @@ The OSC counter is synced to the live ISR-pending count, so bursts that fire fas
 Radiation telemetry. Periodic heartbeat (30 s ± random per-boot jitter, see "Stats Jitter" below).
 
 ```
-,fffsi
+,ffsi
   cpm          : float    1-minute average
   usv          : float    µSv/h
-  hv           : float    HV reading on HW builds, else 0
   state        : string   "warming" | "healthy" | "warning" | "alert"
   total_clicks : int32    producer's lifetime click count (1 Hz reconciled)
+```
+
+### `/espg/<chipid>/hv`
+
+HV telemetry. Only emitted on HV-equipped builds (ESPG_HV_ADC). Same 30 s cadence as `/rad`.
+
+```
+,ffii
+  reading_v  : float    measured HV (smoothed)
+  target_v   : float    HV setpoint
+  duty       : int32    PWM duty (0-1023)
+  trim       : int32    autotrim adjustment in duty units (signed)
 ```
 
 ### `/espg/<chipid>/sys`
@@ -195,13 +206,13 @@ d.map("/espg/*/click", on_click)
 d.map("/espg/*/stats", on_stats)
 
 server = osc_server.ThreadingOSCUDPServer(
-    ("239.255.42.42", 57340), d, multicast=True)
+    ("239.255.86.86", 57340), d, multicast=True)
 server.serve_forever()
 ```
 
 ## Pure Data / TouchDesigner / Max
 
-Subscribe to multicast group `239.255.42.42` on port `57340`. Filter on path `/espg/*/click` for live click events or `/espg/*/stats` for periodic reports.
+Subscribe to multicast group `239.255.86.86` on port `57340`. Filter on path `/espg/*/click` for live click events or `/espg/*/stats` for periodic reports.
 
 # Build Flags
 
