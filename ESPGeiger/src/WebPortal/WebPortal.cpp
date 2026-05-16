@@ -217,8 +217,7 @@ void WebPortal::tick(uint32_t now) {
       delay(150);                  // let SDK NVS write settle
     }
     Log::console(PSTR("WebPortal: restarting"));
-    delay(50);
-    ESP.restart();
+    DeviceInfo::safeRestart(50);
   }
 }
 
@@ -1490,7 +1489,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // ---------- /export + /import (config backup/restore) ----------
 
 // Wire format:
-//   "ESPG1" | gcount(1B) | for each group:
+//   magic(3B) = 0x11 0x23 0xC6 (base64s to "ESPG", visible in the blob)
+//   version(1B) | gcount(1B) | for each group:
 //     mid_len(1B) | module_id | pcount(1B) | for each pref:
 //       key_len(1B) | key | val_len(2B BE) | value
 //   crc32_be(4B)   // over all preceding bytes
@@ -1585,7 +1585,10 @@ static void serializeExportStream(B64Sink& sink) {
     }
   }
 
-  b64_write(sink, "ESPG1", 5);
+  // Magic bytes chosen so base64 prefix reads "ESPG".
+  static const uint8_t MAGIC[3] = {0x11, 0x23, 0xC6};
+  b64_write(sink, MAGIC, 3);
+  b64_write_u8(sink, 1);              // format version
   b64_write_u8(sink, group_count);
 
   for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
@@ -1629,7 +1632,8 @@ static void serializeExportStream(B64Sink& sink) {
 // Returns nullptr on valid format, else a short error string for the UI.
 static const char* validateImport(const uint8_t* buf, size_t len) {
   if (len < 10) return "too short";
-  if (memcmp(buf, "ESPG1", 5) != 0) return "bad magic";
+  if (buf[0] != 0x11 || buf[1] != 0x23 || buf[2] != 0xC6) return "bad magic";
+  if (buf[3] != 1) return "bad version";
   // Last 4 bytes are CRC32 BE of the preceding bytes.
   size_t payload_len = len - 4;
   uint32_t expected = ((uint32_t)buf[payload_len    ] << 24) |
@@ -1639,7 +1643,7 @@ static const char* validateImport(const uint8_t* buf, size_t len) {
   uint32_t actual = crc32_update(0, buf, payload_len);
   if (expected != actual) return "checksum mismatch";
 
-  size_t off = 5;
+  size_t off = 4;                     // 3-byte magic + 1-byte version
   uint8_t gcount = buf[off++];
   for (uint8_t gi = 0; gi < gcount; gi++) {
     if (off + 1 > payload_len) return "truncated group hdr";
@@ -1670,7 +1674,7 @@ static int applyImport(const uint8_t* buf, size_t len, const char** err_out) {
   if (err) { if (err_out) *err_out = err; return -1; }
 
   size_t payload_len = len - 4;   // CRC stripped
-  size_t off = 5;   // 5-byte magic
+  size_t off = 4;   // 3-byte magic + 1-byte version
   uint8_t gcount = buf[off++];
   int applied = 0;
   (void)payload_len;
