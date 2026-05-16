@@ -1,18 +1,6 @@
 /*
-  EGSmoothed.h - Specialized O(1) smoothers for ESPGeiger.
-
-  Two templates, one for each smoothing strategy used in the firmware:
-
-    EGRingAvg<T, MaxN> - fixed-capacity circular-buffer running average.
-      Buffer lives in-class (no heap). Runtime window 1..MaxN.
-      add() is O(1) running sum maintenance; get() is one divide.
-
-    EGEma<T>           - exponential moving average. value = a*x + (1-a)*v,
-      with a = 1/factor. No buffer.
-
-  Replaces the earlier mode-dispatched Smoothed<T> wrapper - splitting by
-  type removes the per-call mode branch and lets the compiler dead-code-
-  eliminate the unused path entirely.
+  EGSmoothed.h - O(1) smoothers. EGRingAvg<T,MaxN> (in-class buffer) and
+  EGEma<T> (no buffer). Replaces the mode-dispatched Smoothed wrapper.
 
   Copyright (C) 2026 @steadramon
 
@@ -34,11 +22,8 @@
 
 #include <Arduino.h>
 
-// Fixed-capacity circular-buffer running average.
-//   T    : sample type (typically float).
-//   MaxN : compile-time max window size. Buffer is sized to MaxN.
-// Runtime window is set via begin(N) and may be 1..MaxN. Outside the active
-// window the buffer is unused but still resident.
+// Ring-buffer running average. Buffer is T[MaxN] in-class (no heap).
+// Runtime window 1..MaxN via begin(N).
 template<typename T, uint16_t MaxN>
 class EGRingAvg {
   public:
@@ -59,9 +44,6 @@ class EGRingAvg {
       for (uint16_t i = 0; i < MaxN; i++) _buf[i] = (T)0;
     }
 
-    // O(1) update: drop the evicted sample from the sum, write the new
-    // one, advance the write cursor. _value stays exact (single-precision
-    // sum stays well under mantissa precision for our scales).
     void add(T value) {
       _value     -= _buf[_pos];
       _buf[_pos]  = value;
@@ -70,7 +52,6 @@ class EGRingAvg {
       if (_count < _window)  _count++;
     }
 
-    // Mean over the samples seen so far (up to the active window).
     T get() const {
       return _count ? (T)(_value / (T)_count) : (T)0;
     }
@@ -81,21 +62,18 @@ class EGRingAvg {
 
   private:
     T        _buf[MaxN];
-    T        _value;   // running sum
+    T        _value;        // running sum
     uint16_t _window;
-    uint16_t _pos;     // next write index
-    uint16_t _count;   // fill level (<= _window)
+    uint16_t _pos;
+    uint16_t _count;
 };
 
-// Exponential moving average. Output = a*input + (1-a)*previous,
-// with a = 1/factor. Higher factor = smoother + slower to respond.
-// Starts at zero and converges; first sample reads 1/factor of the input.
+// EMA: value = a*x + (1-a)*prev, a = 1/factor. Starts at 0.
 template<typename T>
 class EGEma {
   public:
     EGEma() : _value((T)0), _alpha(0.0f) {}
 
-    // factor >= 1. alpha is precomputed once.
     void begin(uint16_t factor) {
       if (factor < 1) factor = 1;
       _alpha = 1.0f / (float)factor;
