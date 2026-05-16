@@ -71,11 +71,9 @@ HV telemetry. Only emitted on HV-equipped builds (ESPG_HV_ADC). Same 30 s cadenc
 System telemetry. Fires every other `/rad` (~60 s) - system stats drift slower than radiation.
 
 ```
-,iiiiii
+,iiii
   uptime_s      : int32   producer seconds since boot
   rssi          : int32   WiFi signal strength
-  free_heap     : int32   bytes
-  heap_frag_pct : int32   0-100
   lps           : int32   main loops per second
   tick_max_us   : int32   worst main-loop iteration in last window
 ```
