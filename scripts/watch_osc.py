@@ -32,7 +32,7 @@ def parse_msg(buf):
       /click ,ii     counter(i32) ts_ms(i32)
       /rad   ,ffsi   cpm usv state(str) total_clicks(i32)
       /hv    ,ffii   reading_v target_v duty trim    (HV builds only)
-      /sys   ,iiiiii uptime_s rssi free_heap heap_frag_pct lps tick_max_us
+      /sys   ,iiii   uptime_s rssi lps tick_max_us
     """
     if len(buf) < 24 or not buf.startswith(b"/espg/"):
         return None
@@ -55,12 +55,9 @@ def parse_msg(buf):
         # Tag ",ffii\0\0" pads to 8, args at off 28.
         reading, target, duty, trim = struct.unpack(">ffii", buf[28:44])
         return ("hv", chipid, reading, target, duty, trim)
-    if s0 == b"s" and buf[13:16] == b"sys" and len(buf) >= 52:
-        # Tag ",iiiiii\0" pads to 8, args at off 28.
-        uptime_s, rssi, free_heap, frag, lps, tick_max_us = struct.unpack(
-            ">iiiiii", buf[28:52]
-        )
-        return ("sys", chipid, uptime_s, rssi, free_heap, frag, lps, tick_max_us)
+    if s0 == b"s" and buf[13:16] == b"sys" and len(buf) >= 44:
+        uptime_s, rssi, lps, tick_max_us = struct.unpack(">iiii", buf[28:44])
+        return ("sys", chipid, uptime_s, rssi, lps, tick_max_us)
     return None
 
 
@@ -78,9 +75,9 @@ def format_msg(m):
         return (f"hv     {chipid}  read={reading:6.1f}V  target={target:6.1f}V  "
                 f"duty={duty:>4}  trim={trim:+d}")
     if m[0] == "sys":
-        _, chipid, uptime_s, rssi, free_heap, frag, lps, tick_max_us = m
+        _, chipid, uptime_s, rssi, lps, tick_max_us = m
         return (f"sys    {chipid}  up={uptime_s:<6}  rssi={rssi:>4}  "
-                f"free={free_heap}  frag={frag}%  lps={lps}  tickmax={tick_max_us}us")
+                f"lps={lps}  tickmax={tick_max_us}us")
     return " ".join(str(x) for x in m)
 
 
@@ -101,7 +98,7 @@ def main():
     print("  click  chipid  c=counter  ts=producer_millis")
     print("  rad    chipid  cpm=CPM  usv=uSv/h  state  total=lifetime_clicks")
     print("  hv     chipid  read=volts  target=volts  duty=PWM  trim=signed_units")
-    print("  sys    chipid  up=uptime_s  rssi=dBm  free=heap_B  frag=%  lps  tickmax=us")
+    print("  sys    chipid  up=uptime_s  rssi=dBm  lps  tickmax=us")
     print()
     try:
         while True:
