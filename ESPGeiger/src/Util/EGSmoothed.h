@@ -1,17 +1,18 @@
 /*
-  EGSmoothed.h - Lightweight smoothing classes for ESPGeiger.
+  EGSmoothed.h - Specialized O(1) smoothers for ESPGeiger.
 
-  In-house replacement for <Smoothed.h> with O(1) running-sum math.
-  Matches Smoothed's API (Smoothed<T>, SMOOTHED_AVERAGE,
-  SMOOTHED_EXPONENTIAL) so call sites read the same. On ESP8266 this
-  drops a 60-item average get() from ~280us to ~5us.
+  Two templates, one for each smoothing strategy used in the firmware:
 
-  Usage:
-    #include "../Util/EGSmoothed.h"
-    Smoothed<float> avg;
-    avg.begin(SMOOTHED_AVERAGE, 60);
-    avg.add(x);
-    float v = avg.get();
+    EGRingAvg<T, MaxN> - fixed-capacity circular-buffer running average.
+      Buffer lives in-class (no heap). Runtime window 1..MaxN.
+      add() is O(1) running sum maintenance; get() is one divide.
+
+    EGEma<T>           - exponential moving average. value = a*x + (1-a)*v,
+      with a = 1/factor. No buffer.
+
+  Replaces the earlier mode-dispatched Smoothed<T> wrapper - splitting by
+  type removes the per-call mode branch and lets the compiler dead-code-
+  eliminate the unused path entirely.
 
   Copyright (C) 2026 @steadramon
 
@@ -33,68 +34,83 @@
 
 #include <Arduino.h>
 
-#define SMOOTHED_AVERAGE      1
-#define SMOOTHED_EXPONENTIAL  2
-
-template<typename T>
-class EGSmoothed {
+// Fixed-capacity circular-buffer running average.
+//   T    : sample type (typically float).
+//   MaxN : compile-time max window size. Buffer is sized to MaxN.
+// Runtime window is set via begin(N) and may be 1..MaxN. Outside the active
+// window the buffer is unused but still resident.
+template<typename T, uint16_t MaxN>
+class EGRingAvg {
   public:
-    EGSmoothed()
-      : _mode(0), _factor(0), _value(0), _buf(nullptr),
-        _pos(0), _count(0), _alpha(0.0f) {}
+    EGRingAvg() { reset(); _window = MaxN; }
 
-    ~EGSmoothed() { delete[] _buf; }
+    // Configure runtime window (1..MaxN). Resets running state.
+    void begin(uint16_t window = MaxN) {
+      if (window < 1)    window = 1;
+      if (window > MaxN) window = MaxN;
+      _window = window;
+      reset();
+    }
 
-    bool begin(uint8_t mode, uint16_t factor = 10) {
-      _mode = mode;
-      _factor = factor;
-      _value = 0;
-      _pos = 0;
+    void reset() {
+      _value = (T)0;
+      _pos   = 0;
       _count = 0;
-      if (mode == SMOOTHED_AVERAGE) {
-        delete[] _buf;
-        _buf = new T[factor]();  // value-initialised to 0
-        return _buf != nullptr;
-      }
-      // EXPONENTIAL: precompute alpha = 1/factor for the EMA update.
-      _alpha = 1.0f / factor;
-      return true;
+      for (uint16_t i = 0; i < MaxN; i++) _buf[i] = (T)0;
     }
 
-    // O(1) running-sum update - replaces the library's naive push.
+    // O(1) update: drop the evicted sample from the sum, write the new
+    // one, advance the write cursor. _value stays exact (single-precision
+    // sum stays well under mantissa precision for our scales).
     void add(T value) {
-      if (_mode == SMOOTHED_AVERAGE) {
-        if (!_buf) return;
-        _value -= _buf[_pos];   // drop evicted element from sum
-        _buf[_pos] = value;
-        _value += value;
-        if (++_pos >= _factor) _pos = 0;
-        if (_count < _factor) _count++;
-      } else {
-        // EMA: new = alpha*input + (1-alpha)*prev
-        _value = (T)(value * _alpha + _value * (1.0f - _alpha));
-      }
+      _value     -= _buf[_pos];
+      _buf[_pos]  = value;
+      _value     += value;
+      if (++_pos >= _window) _pos = 0;
+      if (_count < _window)  _count++;
     }
 
-    // O(1) read for both modes. Average = running_sum / count.
+    // Mean over the samples seen so far (up to the active window).
     T get() const {
-      if (_mode == SMOOTHED_AVERAGE) {
-        return _count ? (_value / _count) : (T)0;
-      }
-      return _value;
+      return _count ? (T)(_value / (T)_count) : (T)0;
     }
+
+    uint16_t window() const { return _window; }
+    uint16_t count()  const { return _count; }
+    bool     warm()   const { return _count >= _window; }
 
   private:
-    uint8_t  _mode;
-    uint16_t _factor;
-    T        _value;   // running sum (AVG) or current smoothed value (EMA)
-    T*       _buf;     // circular buffer - only used for AVG mode
-    uint16_t _pos;
-    uint16_t _count;
-    float    _alpha;   // precomputed 1/factor for EMA
+    T        _buf[MaxN];
+    T        _value;   // running sum
+    uint16_t _window;
+    uint16_t _pos;     // next write index
+    uint16_t _count;   // fill level (<= _window)
 };
 
-// Alias so existing callers using Smoothed<T> transparently get ours.
-template<typename T> using Smoothed = EGSmoothed<T>;
+// Exponential moving average. Output = a*input + (1-a)*previous,
+// with a = 1/factor. Higher factor = smoother + slower to respond.
+// Starts at zero and converges; first sample reads 1/factor of the input.
+template<typename T>
+class EGEma {
+  public:
+    EGEma() : _value((T)0), _alpha(0.0f) {}
+
+    // factor >= 1. alpha is precomputed once.
+    void begin(uint16_t factor) {
+      if (factor < 1) factor = 1;
+      _alpha = 1.0f / (float)factor;
+      _value = (T)0;
+    }
+
+    void add(T value) {
+      _value = (T)(value * _alpha + _value * (1.0f - _alpha));
+    }
+
+    T get() const { return _value; }
+
+  private:
+    T     _value;
+    float _alpha;
+};
 
 #endif  // EGSMOOTHED_H
