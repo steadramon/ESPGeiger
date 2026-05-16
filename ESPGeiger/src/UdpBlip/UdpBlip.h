@@ -34,11 +34,30 @@ class WiFiUDP;
 #ifndef UDPBLIP_STATS_INTERVAL_MS
 #define UDPBLIP_STATS_INTERVAL_MS 30000UL
 #endif
+#ifndef UDPBLIP_FAIL_COOLDOWN_MS
+// How long to sit in the fail-backoff state before resetting _fail_count
+// and re-trying. Decoupled from STATS_INTERVAL_MS so telemetry cadence and
+// recovery cadence can be tuned independently.
+#define UDPBLIP_FAIL_COOLDOWN_MS 10000UL
+#endif
 #ifndef UDPBLIP_STATS_JITTER_MS
 #define UDPBLIP_STATS_JITTER_MS 7500UL
 #endif
 #ifndef UDPBLIP_FAIL_BACKOFF
 #define UDPBLIP_FAIL_BACKOFF 8
+#endif
+#ifndef UDPBLIP_CLICK_MIN_INTERVAL_MS
+// Cap /click emit rate. Deferred clicks accumulate in the cumulative counter
+// so the receiver gap-fills regardless. 50 ms = 20 pps cap (~1200 CPM
+// unthrottled), ~0.6 % CPU at saturation.
+#define UDPBLIP_CLICK_MIN_INTERVAL_MS 50
+#endif
+#ifndef UDPBLIP_CLICK_BURST_TOKENS
+// Token-bucket depth. Idle time earns 1 token per CLICK_MIN_INTERVAL_MS up
+// to this cap; each emit spends one. Lets a sudden cluster of clicks after
+// idle fire as separate packets (visible blips on the receiver) before the
+// steady-state throttle kicks in.
+#define UDPBLIP_CLICK_BURST_TOKENS 5
 #endif
 
 class UdpBlipModule : public EGModule {
@@ -67,6 +86,7 @@ private:
   void teardown();
   bool ensureUdp();
   void emitClick(uint32_t counter, uint32_t ts_ms);
+  void tryEmitClick(unsigned long now_ms);
   void emitRad(uint32_t now);
   void emitSys(uint32_t now);
 #ifdef ESPG_HV_ADC
@@ -81,7 +101,11 @@ private:
   uint16_t  _port = 0;
   uint16_t  _src_port = 0;
   unsigned long _last_clicks = 0;
+  unsigned long _last_click_emit_ms = 0;
+  unsigned long _last_token_ms = 0;
   unsigned long _last_stats_ms = 0;
+  unsigned long _backoff_at_ms = 0;
+  uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
   uint8_t   _fail_count = 0;
   bool      _mdns_done = false;
   bool      _sys_phase = false;

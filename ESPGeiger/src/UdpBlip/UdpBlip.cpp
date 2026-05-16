@@ -281,7 +281,10 @@ void UdpBlipModule::emitSys(uint32_t now) {
   (void)now;
 }
 
-void UdpBlipModule::notifyClick(unsigned long now_ms) {
+// Single emit path used by both notifyClick (high-freq) and loop() (tail
+// catcher). Throttle caps emit rate; deferred clicks accumulate in the
+// cumulative counter so the receiver gap-fills via delta regardless.
+void UdpBlipModule::tryEmitClick(unsigned long now_ms) {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   // Receivers must never re-broadcast received clicks (feedback loop).
   (void)now_ms;
@@ -292,15 +295,32 @@ void UdpBlipModule::notifyClick(unsigned long now_ms) {
   if (!_udp) return;
   if (!Wifi::connected) return;
   if (ota_in_progress) return;
-  // total_clicks lags 1 Hz; eventCounter1+2 is the live ISR-pending
-  // count. Sum is ISR-accurate, so a counter jump credits any clicks
-  // the main loop missed catching individually.
   uint32_t true_count = (uint32_t)gcounter.total_clicks +
                         (uint32_t)(eventCounter1 + eventCounter2);
   if (true_count == _last_clicks) return;
+
+  // Token bucket: 1 token per CLICK_MIN_INTERVAL_MS idle, cap BURST_TOKENS.
+  // _last_token_ms advances only by the time we converted into tokens, so
+  // sub-interval slack carries forward.
+  uint32_t elapsed = (uint32_t)(now_ms - _last_token_ms);
+  uint8_t  gained  = (uint8_t)(elapsed / UDPBLIP_CLICK_MIN_INTERVAL_MS);
+  if (gained > 0) {
+    uint16_t t = _burst_tokens + gained;
+    if (t > UDPBLIP_CLICK_BURST_TOKENS) t = UDPBLIP_CLICK_BURST_TOKENS;
+    _burst_tokens = (uint8_t)t;
+    _last_token_ms += (uint32_t)gained * UDPBLIP_CLICK_MIN_INTERVAL_MS;
+  }
+  if (_burst_tokens == 0) return;
+  _burst_tokens--;
+
+  _last_click_emit_ms = (uint32_t)now_ms;
   _last_clicks = true_count;
-  emitClick((uint32_t)_last_clicks, (uint32_t)now_ms);
+  emitClick(true_count, (uint32_t)now_ms);
 #endif
+}
+
+void UdpBlipModule::notifyClick(unsigned long now_ms) {
+  tryEmitClick(now_ms);
 }
 
 void UdpBlipModule::loop(unsigned long now) {
@@ -309,12 +329,13 @@ void UdpBlipModule::loop(unsigned long now) {
   if (!ensureUdp()) return;
   if (!_mdns_done) announce_mdns();
 
-  // After FAIL_BACKOFF consecutive send failures, cool off for one stats
-  // period so we don't hammer a sick WiFi stack.
+  // After FAIL_BACKOFF consecutive send failures, cool off so we don't
+  // hammer a sick WiFi stack.
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
-    if ((unsigned long)(now - _last_stats_ms) >= UDPBLIP_STATS_INTERVAL_MS) {
+    if (_backoff_at_ms == 0) _backoff_at_ms = now;
+    if ((unsigned long)(now - _backoff_at_ms) >= UDPBLIP_FAIL_COOLDOWN_MS) {
       _fail_count = 0;
-      _last_stats_ms = now;
+      _backoff_at_ms = 0;
     }
     return;
   }
@@ -335,6 +356,9 @@ void UdpBlipModule::loop(unsigned long now) {
     if (_sys_phase) emitSys(now);
     _emit_phase = 0;
   }
+
+  // Catch any click counter the throttle deferred after a burst.
+  tryEmitClick(now);
 }
 
 size_t UdpBlipModule::status_json(char* buf, size_t cap, unsigned long now) {
