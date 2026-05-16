@@ -268,15 +268,13 @@ void UdpBlipModule::emitHv(uint32_t now) {
 #endif
 
 void UdpBlipModule::emitSys(uint32_t now) {
-  uint8_t buf[96];
+  uint8_t buf[64];
   size_t off = 0;
   size_t n;
   if (!(n = osc_str(buf, sizeof(buf), off, _sys_path))) return; off += n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, ",iiiiii", 7))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",iiii", 5))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(millis() / 1000UL)))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(int32_t)Wifi::rssi))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)ESP.getFreeHeap()))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)DeviceInfo::heapFrag()))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::lps))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::tick_max_us))) return; off += n;
   sendPacket(buf, off);
