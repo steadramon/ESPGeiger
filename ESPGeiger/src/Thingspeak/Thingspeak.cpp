@@ -87,8 +87,10 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      String response = request->responseText();
-      if (strcmp(response.c_str(), "0") != 0) {
+      char r[32];
+      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
+      r[got] = 0;
+      if (strcmp(r, "0") != 0) {
         Log::debug(PSTR("Thingspeak: Upload OK"));
         self->last_ok = true;
       } else {

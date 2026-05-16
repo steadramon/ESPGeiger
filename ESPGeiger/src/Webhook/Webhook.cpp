@@ -111,12 +111,14 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      String response = request->responseText();
-      if (strstr(response.c_str(), "OK")) {
+      char r[128];
+      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
+      r[got] = 0;
+      if (strstr(r, "OK")) {
         Log::debug(PSTR("Webhook: Upload OK"));
         self->last_ok = true;
       } else {
-        Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100).c_str());
+        Log::console(PSTR("Webhook: Error - %s"), r);
       }
     } else {
       Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());

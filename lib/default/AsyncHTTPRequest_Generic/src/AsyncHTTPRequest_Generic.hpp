@@ -364,10 +364,7 @@ class AsyncHTTPRequest
     int         responseHTTPcode();                                     // HTTP response code or (negative) error code
     String      responseHTTPString();
     String      responseText();                                         // response (whole* or partial* as string)
-    
-    char*       responseLongText();                                     // response long (whole* or partial* as string)
-    
-    size_t      responseRead(uint8_t* buffer, size_t len);              // Read response into buffer
+    size_t      responseRead(uint8_t* buffer, size_t len);              // Read response into buffer (stack-friendly, no heap)
     uint32_t    elapsedTime();                                          // Elapsed time of in progress transaction or last completed (ms)
     String      version();                                              // Version of AsyncHTTPRequest
     

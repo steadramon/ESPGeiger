@@ -1028,48 +1028,9 @@ String AsyncHTTPRequest::responseText()
 }
 
 ////////////////////////////////////////
-
-#if (ESP32)
-  #define GLOBAL_STR_LEN      (32 * 1024)
-#elif (ESP8266)
-  #define GLOBAL_STR_LEN      (16 * 1024)
-#else
-  #define GLOBAL_STR_LEN      (4 * 1024)
-#endif
-
-////////////////////////////////////////
-
-char globalLongString[GLOBAL_STR_LEN + 1];
-
-////////////////////////////////////////
-
-char* AsyncHTTPRequest::responseLongText()
-{
-  MUTEX_LOCK(NULL)
-
-  if ( ! _response || _readyState < readyStateLoading || ! available())
-  {
-    AHTTP_LOGWARN(F("responseText() no data"));
-
-    _AHTTP_unlock;
-
-    return NULL;
-  }
-
-  size_t avail = available();
-  size_t lenToCopy = (avail <= GLOBAL_STR_LEN) ? avail : GLOBAL_STR_LEN;
-
-  strncpy(globalLongString, _response->readString(avail).c_str(), lenToCopy );
-  globalLongString[ lenToCopy + 1 ] = 0;
-
-  _contentRead += _response->readString(avail).length();
-
-  _AHTTP_unlock;
-
-  return globalLongString;
-}
-
-////////////////////////////////////////
+// responseLongText() + globalLongString removed: never called by ESPGeiger,
+// freed 16 KB BSS on ESP8266 / 32 KB on ESP32. Use responseRead() into a
+// caller-owned buffer instead.
 
 size_t AsyncHTTPRequest::responseRead(uint8_t* buf, size_t len)
 {

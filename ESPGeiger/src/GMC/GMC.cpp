@@ -94,9 +94,9 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      // strstr() on c_str() avoids the temp String alloc per indexOf probe.
-      String response = request->responseText();
-      const char* r = response.c_str();
+      char r[64];
+      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
+      r[got] = 0;
       if (strstr(r, "OK")) {
         Log::debug(PSTR("GMC: Upload OK"));
         self->last_ok = true;
