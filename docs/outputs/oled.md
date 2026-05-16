@@ -39,3 +39,16 @@ Toggles the always-on override. The onboard LED flashes once when the override t
 # Pin configuration
 
 Builds without `OLED_PINS_BLOCKED` expose the OLED I2C pins as runtime prefs (**I2C SDA Pin** and **I2C SCL Pin**) on the same Display config page. Changes trigger a reboot to take effect. Purpose-built kits set `OLED_PINS_BLOCKED` at compile time so the pins stay fixed.
+
+# Browser screen viewer
+
+OLED builds expose a live preview of the framebuffer at **`/screen`**. The page redraws ~5 times a second from a raw fetch of the 1024-byte framebuffer, picks a phosphor tint, and accepts virtual button taps - useful for headless debugging, remote demos, or screenshots without a phone camera. The view is rendered even on builds compiled with display support but no display attached, so you can build a UDP-receiver build with `esp8266oled_udp` and still see what the panel *would* show.
+
+| Path | Returns | Use |
+|---|---|---|
+| `/screen` | HTML viewer page | Interactive view in the browser |
+| `/screen.bin` | Raw 1024-byte framebuffer | Direct decode (column-packed, 128x64 1bpp) |
+| `/screen.bmp` | Transposed PNG-alike | One-shot screenshot |
+| `/screen/tap` | `OK` | Virtual short press of the user button (push-button builds) |
+
+The viewer remembers your phosphor tint choice in `localStorage`. The `/screen.bin` endpoint is what you want if you're scripting against the device.

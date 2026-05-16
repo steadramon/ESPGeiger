@@ -34,7 +34,7 @@ AsyncMqttClient* mqttClient;
 MQTT_Client& mqtt = MQTT_Client::getInstance();
 EG_REGISTER_MODULE(mqtt)
 
-// Shared publish buffer — ESP8266 only. NONOS is cooperative so
+// Shared publish buffer - ESP8266 only. NONOS is cooperative so
 // onMqttConnect (HA discovery) and loop() (status/ping) never overlap;
 // one buffer is safe. ESP32's async_tcp can preempt, so per-method
 // statics there.
@@ -133,7 +133,7 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   Log::console(PSTR("MQTT: Connected"));
   connected = true;
   reconnectAttempts = 0;
-  mqttClient->publish(this->last_will_.topic.c_str(), 1, true, lwtOnline);
+  mqttClient->publish(_lwt_topic, 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
   unsigned long now_s = millis() / 1000UL;
   if (_hass_next_publish == 0 || (long)(now_s - _hass_next_publish) >= 0) {
@@ -289,13 +289,15 @@ void MQTT_Client::publishStatus()
 
   size_t pos = 0;
   int n;
+  char ipStr[16];
+  Wifi::formatIP(ipStr, sizeof(ipStr));
   n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"time\":\"%s\",\"ut\":%lu,\"board\":\"%s\",\"model\":\"%s\""
          ",\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"c_total\":%u"
          ",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
     dateTime, DeviceInfo::uptime(),
     DeviceInfo::chipmodel(), DeviceInfo::geigermodel(),
-    Wifi::ssid, Wifi::ip, (int)Wifi::rssi,
+    Wifi::ssid, ipStr, (int)Wifi::rssi,
     gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
   advance_pos(pos, n, sizeof(buffer));
 #ifdef MQTT_MEM_DEBUG
@@ -457,11 +459,8 @@ void MQTT_Client::reconnect()
   }
 
   // Rebuild LWT every begin() so a topic-pref change picks up cleanly.
-  char lwt_topic[64];
-  buildTopic(lwt_topic, sizeof(lwt_topic), "tele", topicLWT);
-  this->last_will_.topic = lwt_topic;
-  this->last_will_.payload = lwtOffline;
-  mqttClient->setWill(last_will_.topic.c_str(), 1, true, last_will_.payload.c_str());
+  buildTopic(_lwt_topic, sizeof(_lwt_topic), "tele", topicLWT);
+  mqttClient->setWill(_lwt_topic, 1, true, lwtOffline);
 
   mqttClient->setClientId(DeviceInfo::hostname());
   mqttClient->setServer(_mqtt_server, mqtt_port);
@@ -531,7 +530,7 @@ static const char H_DC_SAFETY[] PROGMEM = "safety";
 static const char H_DC_CONN[]   PROGMEM = "connectivity";
 // entity_category.
 static const char H_EC_DIAG[]   PROGMEM = "diagnostic";
-// "not set" sentinel — consumers check pgm_read_byte(x) to skip.
+// "not set" sentinel - consumers check pgm_read_byte(x) to skip.
 static const char H_EMPTY[]     PROGMEM = "";
 
 // Discovery type (topic-path component).
@@ -555,7 +554,7 @@ static int buildHassPath(char* buf, size_t sz, const char* disc,
 
 // Adding a sensor = one S(...) line. PSTR() only works in function
 // scope, so the catalog lives here rather than a file-scope array.
-// jKey is the tele/* JSON field — usually matches id (uptime→"ut" is
+// jKey is the tele/* JSON field - usually matches id (uptime→"ut" is
 // the sole oddity).
 void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   #define S(id_, jKey_, name_, unit_, icon_, stat_, dev_, state_, ent_) do { \
@@ -565,7 +564,7 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
     (this->*fn)(r); \
   } while (0)
 
-  // tele/sensor — main measurement.
+  // tele/sensor - main measurement.
   S("cpm",      "cpm",      "CPM",          "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
   S("cpm5",     "cpm5",     "CPM5",         "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
   S("cpm15",    "cpm15",    "CPM15",        "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
@@ -576,7 +575,7 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   }
 #endif
   S("c_total",  "c_total",  "Total Clicks", "",          "mdi:counter",        H_ST_STATUS, H_EMPTY,  H_SC_TOTINC, H_EMPTY);
-  // tele/status — diagnostic.
+  // tele/status - diagnostic.
   S("tick",     "tick",     "tick",         "\u00B5s",   "mdi:timer-outline",  H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG);
   S("t_max",    "t_max",    "tick max",     "\u00B5s",   "mdi:timer-alert-outline", H_ST_STATUS, H_EMPTY, H_SC_MEAS, H_EC_DIAG);
   S("lps",      "lps",      "LPS",          "1/s",       "mdi:speedometer",    H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG);
@@ -598,7 +597,7 @@ void MQTT_Client::forEachHassBinarySensor(HassBinaryFn fn) {
   B("warn",  "Warning", "mdi:alert-outline",          H_ST_SENSOR, H_DC_PROB);
   B("alert", "Alert",   "mdi:alert-octagram-outline", H_ST_SENSOR, H_DC_SAFETY);
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  // Serial builds only — pulse builds have no external peer to track.
+  // Serial builds only - pulse builds have no external peer to track.
   B("ser_ok", "Serial Connected", "mdi:serial-port", H_ST_STATUS, H_DC_CONN);
 #endif
 
@@ -754,7 +753,7 @@ void MQTT_Client::hassRemoveBinarySensor(const HassBinaryRow& r) {
 }
 
 // All string args (type/id/displayName/devCla/stateCla/entCat/cmdTopic
-// and extras[].key/value) are PGM_P — passed through to %s (safe on
+// and extras[].key/value) are PGM_P - passed through to %s (safe on
 // ESP8266 via the unaligned-load handler) with pgm_read_byte for
 // "is set" checks.
 void MQTT_Client::publishHassTopic(
@@ -778,6 +777,8 @@ void MQTT_Client::publishHassTopic(
 
   size_t pos = 0;
   int n;
+  char ipStr[16];
+  Wifi::formatIP(ipStr, sizeof(ipStr));
   n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"device\":{\"mf\":\"%s\",\"mdl\":\"%s\",\"mdl_id\":\"%s\",\"name\":\"%s\""
          ",\"sw\":\"%s/%s\",\"sn\":\"%s\""
@@ -790,7 +791,7 @@ void MQTT_Client::publishHassTopic(
     host, RELEASE_VERSION, GIT_VERSION, DeviceInfo::chipid(),
     host,
     DeviceInfo::mac(),
-    Wifi::ip,
+    ipStr,
     root, host, displayName, host, id);
   advance_pos(pos, n, sizeof(buffer));
 
@@ -812,7 +813,7 @@ void MQTT_Client::publishHassTopic(
   }
 
   for (size_t i = 0; i < n_extras; i++) {
-    // Quoted-string form only — no caller passes bare-boolean values,
+    // Quoted-string form only - no caller passes bare-boolean values,
     // and strcmp_P with a flash first arg crashes Exception 3.
     n = snprintf_P(buffer+pos, sizeof(buffer)-pos, PSTR(",\"%s\":\"%s\""), extras[i].key, extras[i].value);
     advance_pos(pos, n, sizeof(buffer));

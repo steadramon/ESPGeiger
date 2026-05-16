@@ -28,6 +28,7 @@
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
+#include "src/Util/CrashDump.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
 #include "src/Module/EGModuleRegistry.h"
@@ -36,7 +37,7 @@
 #include "src/NTP/NTP.h"
 #include "src/GRNG/GRNG.h"
 #include "src/Counter/Counter.h"
-#include "src/ConfigManager/ConfigManager.h"
+#include "src/WebPortal/WebPortal.h"
 #include "src/SerialCommand/SerialCommand.h"
 #include "src/Util/BootHooks.h"
 
@@ -49,8 +50,6 @@ JLed led = JLed(LED_SEND_RECEIVE);
 
 Counter gcounter;
 GRNG grng;
-
-ConfigManager& cManager = ConfigManager::getInstance();
 
 SerialCommand serialcmd;
 
@@ -81,7 +80,7 @@ void sTickerCB()
   TickProfile::markCounter();
 #endif
 
-  unsigned long uptime = NTP.getUptime() - start;
+  unsigned long uptime = ntpclient.getUptime() - start;
   if (!past_warmup && uptime > ESPG_WARMUP_S) past_warmup = true;
   Wifi::tick(stick_now);
 #ifdef TICK_PROFILE
@@ -96,11 +95,17 @@ void sTickerCB()
   TickProfile::endTick();
 }
 
+static WebPortal s_webPortal;
+
 void setup()
 {
   Serial.begin(115200);
   Serial.println();
   delay(100);
+
+  CrashDump::begin();
+
+  DeviceInfo::begin();
 
   Log::banner(PSTR("   ___"));
   Log::banner(PSTR("   \\_/    Starting up ... %s"), DeviceInfo::hostname());
@@ -122,35 +127,40 @@ void setup()
 
   delay(100);
   msTicker.attach_ms(1, msTickerCB);
-  if (start == 0 && BootHooks::checkStartupButtonHold()) {
-    Wifi::disabled = true;
+  if (start == 0) {
+    auto action = BootHooks::checkStartupButtonHold();
+    if (action == BootHooks::ButtonHold::FULL_RESET) {
+      DeviceInfo::factoryReset();
+      DeviceInfo::safeRestart(500);
+    } else if (action == BootHooks::ButtonHold::OFFLINE) {
+      Wifi::disabled = true;
+    }
   }
-  if (!cManager.hasWiFiCreds()) {
+  if (!Wifi::hasSavedCreds()) {
     BootHooks::displaySetupWifi(DeviceInfo::hostname());
   }
   if (!Wifi::disabled) {
-    bool res = cManager.autoConnect();
+    bool res = Wifi::connectOrPortal();
     if (!res) {
 #if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
-      if (!cManager.hasWiFiCreds()) {
+      if (!Wifi::hasSavedCreds()) {
         Wifi::disabled = true;
       }
 #else
       Log::console(PSTR("WiFi not connecting ... Restarting ... "));
-      delay(1000);
-      ESP.restart();
+      DeviceInfo::safeRestart(1000);
 #endif
     }
 
     delay(100);
-    cManager.startWebPortal();
+    s_webPortal.begin(80);
   }
 
   delay(500);
   grng.begin();
   gcounter.begin();
   EGModuleRegistry::begin_all();
-  start = NTP.getUptime() + 1;
+  start = ntpclient.getUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
   led.Off().Update();
@@ -163,7 +173,7 @@ void loop()
   unsigned long now = millis();
   if (!ota_in_progress) {
     gcounter.loop();
-    cManager.processLoop(now);
+    s_webPortal.tick(now);
   }
   EGModuleRegistry::loop_all(now);
 }

@@ -30,11 +30,13 @@
 #define GEIGER_FLAG_PULSE   0x01   // bit 0 - hardware pulse input
 #define GEIGER_FLAG_SERIAL  0x02   // bit 1 - UART input
 #define GEIGER_FLAG_INTPWM  0x04   // bit 2 - internal PWM generation (modifier on PULSE)
-// bits 3-6 reserved
+#define GEIGER_FLAG_UDPRX   0x08   // bit 3 - clicks arrive over UDP/OSC multicast
+// bits 4-6 reserved
 #define GEIGER_FLAG_TEST    0x80   // bit 7 - test/simulation build (real <128, test >=128)
 
 #define GEIGER_TYPE_PULSE         (GEIGER_FLAG_PULSE)
 #define GEIGER_TYPE_SERIAL        (GEIGER_FLAG_SERIAL)
+#define GEIGER_TYPE_UDPRX         (GEIGER_FLAG_UDPRX)
 #define GEIGER_TYPE_TEST          (GEIGER_FLAG_TEST)
 #define GEIGER_TYPE_TESTPULSE     (GEIGER_FLAG_TEST | GEIGER_FLAG_PULSE)
 #define GEIGER_TYPE_TESTSERIAL    (GEIGER_FLAG_TEST | GEIGER_FLAG_SERIAL)
@@ -42,6 +44,7 @@
 
 #define GEIGER_IS_PULSE(t)   ((t) & GEIGER_FLAG_PULSE)
 #define GEIGER_IS_SERIAL(t)  ((t) & GEIGER_FLAG_SERIAL)
+#define GEIGER_IS_UDPRX(t)   ((t) & GEIGER_FLAG_UDPRX)
 #define GEIGER_IS_TEST(t)    ((t) & GEIGER_FLAG_TEST)
 #define GEIGER_HAS_INTPWM(t) ((t) & GEIGER_FLAG_INTPWM)
 
@@ -51,6 +54,19 @@
 // pulses, not input pin edges, so PCNT isn't relevant).
 #if defined(ESP32) && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
 #define USE_PCNT
+#endif
+
+// UDPRX has no tube and no click pin - block hardware-input prefs.
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  #ifndef RXPIN_BLOCKED
+    #define RXPIN_BLOCKED
+  #endif
+  #ifndef TXPIN_BLOCKED
+    #define TXPIN_BLOCKED
+  #endif
+  #ifndef GEIGER_MODEL_FIXED
+    #define GEIGER_MODEL_FIXED
+  #endif
 #endif
 
 #include "SerialFormat.h"

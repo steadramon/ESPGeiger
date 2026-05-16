@@ -21,24 +21,36 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | Command | Description | Example |
 |---|---|---|
 | `reboot` | Reboot ESPGeiger | `reboot` |
-| `resetwifi` | Reset the WiFi credentials | `resetwifi` |
-| `ratio` | Set ratio for calculating μSv | `ratio 151.0` |
-| `cpm` | Return current CPM value  |  |
-| `usv` | Return current uSV value |  |
-| `show` | Enable 1-second CPM output |  |
+| `resetwifi` | Erase WiFi credentials and drop into setup mode | `resetwifi` |
+| `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
+| `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get sys.ratio` |
+| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set sys.ratio 151.0` |
+| `cpm` | Return current CPM value | |
+| `usv` | Return current μSv/h value | |
+| `show` | Enable 1-second CPM output | |
 | `show N` | Enable periodic output every N seconds (1-65535). Implies CPM. | `show 5` |
 | `show 0` | Disable periodic output (clears every field toggle) | `show 0` |
 | `show off` | Same as `show 0` | `show off` |
 | `show cpm` | Toggle CPM line inclusion in periodic output | `show cpm` |
-| `show cps` | Toggle CPS on periodic output |  |
-| `show usv` | Toggle uSV on periodic output |  |
-| `show hv` | Toggle HV on periodic output (ESPGHW only) |  |
-| `hv` | Return current HV value (ESPGHW only) |  |
-| `duty` | Set duty cycle (0-254) (ESPGHW only) | `duty 50` |
-| `freq` | Set PWM frequency (100-9000) - usually not needed (ESPGHW only) | `freq 6000` |
-| `vratio` | Set ratio for calculating HV value (ESPGHW only) | `vratio 1000` |
-| `voffset` | Set offset for calculating HV value (ESPGHW only) | `voffset -10` |
-| `target` | Set target CPM value for Test builds only | `cpm 1234` |
+| `show cps` | Toggle CPS on periodic output | |
+| `show usv` | Toggle μSv on periodic output | |
+| `show hv` | Toggle HV on periodic output (ESPGHW only) | |
+| `hv` | Return current live HV value (ESPGHW only) | |
+| `target` | Set target CPM value for Test builds only | `target 1234` |
+
+### Setting prefs
+
+Use `get` and `set` for every persisted pref. `get` with no `<module>.<key>` echoes nothing. The names match the `/egprefs` JSON dumps and the pref keys on the Configuration page.
+
+Common examples:
+
+| Was | Now |
+|---|---|
+| `ratio 151.0` | `set sys.ratio 151.0` |
+| `duty 50` | `set espghw.duty 50` |
+| `freq 6000` | `set espghw.freq 6000` |
+| `vratio 1000` | `set espghw.ratio 1000` |
+| `voffset -10` | `set espghw.offset -10` |
 
 ## Example Output
 

@@ -49,7 +49,7 @@ static const EGPrefGroup RADMON_PREF_GROUP = {
 const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
 
 size_t Radmon::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("radmon", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "radmon", last_ok, last_attempt_ms, now);
 }
 
@@ -85,16 +85,20 @@ int Radmon::getInterval() {
   return pingInterval;
 }
 
+void Radmon::on_prefs_loaded() {
+  int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
+  if (rtimer == 0) rtimer = RADMON_INTERVAL;
+  setInterval(rtimer);
+  _send_enabled = EGPrefs::getBool("radmon", "send");
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
+}
+
 void Radmon::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
-    int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
-    if (rtimer == 0) rtimer = RADMON_INTERVAL;
-    setInterval(rtimer);
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
+  } else if ((now - lastPing) >= pingIntervalMs) {
     // Advance by exact interval to keep the schedule drift-free.
     // If we were stalled long enough to still be >= one interval behind,
     // snap to now rather than firing a burst of catch-up publishes.
@@ -102,6 +106,7 @@ void Radmon::loop(unsigned long now)
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();
   }
+  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
 }
 
 void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)
@@ -112,8 +117,9 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      String response = request->responseText();
-      const char* r = response.c_str();
+      char r[64];
+      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
+      r[got] = 0;
       if (strstr(r, "OK")) {
         Log::debug(PSTR("Radmon: Upload OK"));
         self->last_ok = true;
@@ -135,7 +141,6 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
 
 void Radmon::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("radmon", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Radmon: Testmode"));
@@ -149,16 +154,14 @@ void Radmon::postMeasurement() {
     return;
   }
 
-  int rtimer = (int)EGPrefs::getUInt("radmon", "interval");
-  if (rtimer == 0) rtimer = RADMON_INTERVAL;
-  setInterval(rtimer);
-
   Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
+  // Window selection follows the live ping cadence, which on_prefs_loaded
+  // keeps in sync with the saved pref.
   int avgcpm;
-  if (rtimer <= 90) {
+  if (pingInterval <= 90) {
     avgcpm = gcounter.get_cpm();
-  } else if (rtimer <= 450) {
+  } else if (pingInterval <= 450) {
     avgcpm = gcounter.get_cpm5();
   } else {
     avgcpm = gcounter.get_cpm15();
@@ -166,15 +169,18 @@ void Radmon::postMeasurement() {
   char url[256];
   snprintf_P(url, sizeof(url), RADMON_URI, _api_user, _api_key, avgcpm);
 
-  if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
+  if (!request) request = new AsyncHTTPRequest();
+  if (!request) { Log::console(PSTR("Radmon: alloc failed")); return; }
+
+  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
   {
-    if (request.open("GET", url))
+    if (request->open("GET", url))
     {
       led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request.onReadyStateChange(httpRequestCb, this);
-      request.setTimeout(30);
-      request.send();
+      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
+      request->onReadyStateChange(httpRequestCb, this);
+      request->setTimeout(30);
+      request->send();
       note_attempt();
       send_indicator = 2;
     }

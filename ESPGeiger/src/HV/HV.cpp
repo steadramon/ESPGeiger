@@ -20,12 +20,18 @@
 #ifdef ESPG_HV
 
 #include <Arduino.h>
+#include <EGHttpServer.h>
 #include "HV.h"
 #include "../Logger/Logger.h"
+#include "../Util/DeviceInfo.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Counter/Counter.h"
+#include "../Prefs/EGPrefs.h"
 #include "../Util/MathUtil.h"
 #include "../Util/PinSafety.h"
+#include "../Util/StringUtil.h"
+#include "../WebPortal/WebPortal.h"
+#include "HVJS_BUNDLE.gz.h"
 
 extern Counter gcounter;
 
@@ -54,7 +60,7 @@ static const EGPref HW_PREF_ITEMS[] = {
 #ifdef ESPG_HV_ADC
   {"ratio",  HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    50000, 0, EGP_INT, 0},
   {"offset", HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, EGP_INT, 0},
-  {"target", HW_L_TGT, HW_H_TGT, "0", nullptr, 0, 500, 0, EGP_UINT, 0},
+  {"target", HW_L_TGT, HW_H_TGT, "0", nullptr, 0, GEIGERHW_MAX_V, 0, EGP_UINT, 0},
 #endif
 };
 
@@ -129,7 +135,7 @@ void HV::begin() {
 #endif
   }
 #ifdef ESPG_HV_ADC
-  hvReading.begin(SMOOTHED_AVERAGE, 20);
+  hvReading.begin();  // default = MaxN = 20
 #endif
 }
 
@@ -153,8 +159,9 @@ void HV::loop(unsigned long /*now*/) {
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   int volts = (int)(((int64_t)_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
   hvReading.add((float)volts);
+  addFast((float)volts);
 
-  // Closed-loop trim — only after warmup, throttled, bounded ±TRIM_MAX.
+  // Closed-loop trim - only after warmup, throttled, bounded ±TRIM_MAX.
   // Suppressed for TRIM_SETTLE_MS after duty/freq change so the dip from
   // apply_freq_duty_safe doesn't trick the loop into chasing transients.
   if (_hv_target > 0 && gcounter.is_warm() && (long)(millis() - _trim_settle_until) >= 0) {
@@ -205,4 +212,160 @@ void HV::saveconfig() {
 #endif
   EGPrefs::commit();
 }
+
+// ---------- HTTP routes ----------
+
+// PROGMEM blobs migrated out of ConfigManager/html.h. ConfigManager
+// references them via extern decls in html.h until /hv legacy routes
+// are retired.
+
+extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wa{padding:.8em 1em;margin:1em 0;background:#ffc40026;border-left:4px solid #ffc40099;border-radius:4px;font-size:.95em}.cl{float:right;cursor:pointer;font-size:1.3em;line-height:1;opacity:.6}.cl:hover{opacity:1}</style>
+<canvas id=g1></canvas><div id=g2></div>
+<div class="wa">
+<span class="cl" onclick="this.parentElement.style.display='none';">×</span>
+<strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
+</div>
+<table><tr><th><label for=freq>Frequency:</label></th><td><input type="range" id="freq" min="0" max="9000" step="100" value="50"><span id="sfreq">-</span></td></tr>
+<tr><th><label for=duty>Duty:</label></th><td><input type="range" id="duty" min="0" max="1023" value="50"><span id="sduty">-</span></td></tr>
+<tr><th><label for=ratio>Ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max="9999"> <small>(voltage-divider scale, 0 = disabled)</small></td></tr>
+<tr><th><label for=tgt>Target:</label></th><td><input id="tgt" value="-" type="number" min="0" max="500"> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
+
+<tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
+<script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
+)HTML";
+
+#if !EG_GZ_HVJS_BUNDLE
+extern const char hvJS[] PROGMEM = R"JS("use strict";
+var e=new Graph("g1",["Volts"],"V","g2",15,null,0,!0,!0,5,5),
+D=Date,X=XMLHttpRequest,O=setTimeout,
+G1=byID('g1'),G2=byID('g2'),
+FQ=byID('freq'),DU=byID('duty'),RT=byID('ratio'),TG=byID('tgt'),
+SF=byID('sfreq'),SD=byID('sduty'),ST=byID('strim'),SB=byID('submit'),
+TRow=TG.closest('tr'),
+lt,lf=0,ge=!0,inited=!1;
+function showGraph(on){if(on===ge)return;ge=on;var d=on?'':'none';G1.style.display=d;G2.style.display=d;TRow.style.display=d}
+function gethv(){
+  clearTimeout(lt);
+  var x=new X;
+  x.onload=function(){
+    if(x.status==200){
+      var o=JSON.parse(x.responseText);
+      showGraph(o.ratio>0);
+      if(o.ratio>0)e.update([o.volts]);
+      if(!inited){
+        inited=!0;
+        if(o.fmax)FQ.max=o.fmax;
+        FQ.value=o.freq;DU.value=o.duty;RT.value=o.ratio;TG.value=o.target;
+        SF.textContent=o.freq;SD.textContent=o.duty;
+        SB.disabled=!1;SB.textContent='Submit';
+      }
+      ST.textContent=o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
+    }
+    lf=D.now();lt=O(gethv,3e3);
+  };
+  x.open('GET','/hvjson',!0);
+  x.send();
+  return!1;
+}
+addEventListener("load",gethv);
+document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(lt);lt=O(gethv,Math.max(0,3e3-(D.now()-lf)))}});
+FQ.addEventListener("change",function(){SF.textContent=this.value});
+DU.addEventListener("change",function(){SD.textContent=this.value});
+SB.addEventListener("click",function(){
+  var x=new X;
+  x.onload=function(){
+    if(x.status==200){
+      SF.textContent='-';SD.textContent='-';inited=!1;
+    }
+  };
+  x.open('GET','/hvset?f='+FQ.value+'&d='+DU.value+'&r='+RT.value+'&t='+TG.value,!0);
+  x.send();
+});
+)JS";
+#endif
+
+
+
+// picographJS lives in WebPortal.cpp (shared with /js status page).
+extern const char picographJS[] PROGMEM;
+
+static void hHv(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("HV"));
+  res.sendChunk(FPSTR(HV_STATUS_PAGE_BODY));
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // arg() returns into a shared static buffer - atoi each immediately, then
+  // re-call arg() for the next field.
+  int new_freq = -1, new_duty = -1, new_ratio = -1, new_target = -1;
+  const char* p = req.arg("d"); if (p && *p) new_duty   = atoi(p);
+  p = req.arg("f");              if (p && *p) new_freq   = atoi(p);
+  p = req.arg("r");              if (p && *p) new_ratio  = atoi(p);
+  p = req.arg("t");              if (p && *p) new_target = atoi(p);
+
+  bool changed = false;
+  if (new_duty >= 0 || new_freq >= 0) {
+    int f = new_freq >= 0 ? new_freq : hv.get_freq();
+    int d = new_duty >= 0 ? new_duty : hv.get_duty();
+    hv.apply_freq_duty_safe(f, d);
+    changed = true;
+  }
+  if (new_ratio >= 0)  { hv.set_vd_ratio(new_ratio); changed = true; }
+  if (new_target >= 0) {
+    hv.set_hv_target((uint16_t)clamp(new_target, 0, 500));
+    changed = true;
+  }
+  if (changed) {
+    hv.reset_trim();
+    hv.saveconfig();
+  }
+  res.send(200, "text/plain", "OK");
+}
+
+static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
+#if EG_GZ_HVJS_BUNDLE
+  res.sendGzipP(200, "application/javascript", HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
+#else
+  res.beginChunked(200, "application/javascript");
+  res.sendChunk(FPSTR(picographJS));
+  res.sendChunk(FPSTR(hvJS));
+  res.endChunked();
+#endif
+}
+
+#ifdef ESPG_HV_ADC
+static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  char buf[256];
+  snprintf_P(buf, sizeof(buf),
+    PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d,\"ratio\":%d,\"target\":%d,\"trim\":%d,\"fmax\":%d}"),
+    (int)hv.getFast(),
+    hv.get_freq(),
+    hv.get_duty(),
+    hv.get_vd_ratio(),
+    hv.get_hv_target(),
+    hv.get_duty_trim(),
+    GEIGERHW_MAX_FREQ);
+  res.send(200, "application/json", buf);
+}
+#endif
+
+static const EGMenuEntry HV_MENU[] = {
+  {"/hv", "HV Config"},
+  {nullptr, nullptr}
+};
+const EGMenuEntry* HV::menuEntries() { return HV_MENU; }
+
+void HV::registerRoutes(EGHttpServer& http) {
+  http.on("/hv",     EGHttpRequest::GET, hHv);
+  http.on("/hvset",  EGHttpRequest::GET, hHvSet);
+  http.on("/hvjs",   EGHttpRequest::GET, hHvJs);
+#ifdef ESPG_HV_ADC
+  http.on("/hvjson", EGHttpRequest::GET, hHvJson);
+#endif
+}
+
 #endif

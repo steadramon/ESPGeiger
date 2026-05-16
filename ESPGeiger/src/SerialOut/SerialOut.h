@@ -40,6 +40,10 @@ class SerialOut : public EGModule {
       bool has_loop() override { return true; }
       uint16_t loop_interval_ms() override { return 500; }
       void loop(unsigned long now) override;
+      void registerRoutes(EGHttpServer& http) override;
+      const EGPrefGroup* prefs_group() override;
+      uint8_t display_order() override { return 0; }
+      void on_prefs_loaded() override;
       void set_show(int var);
       void print_cpm();
       void print_usv();
@@ -48,8 +52,9 @@ class SerialOut : public EGModule {
       void toggle_hv();
       void toggle_cps();
       uint16_t interval() const { return _interval; }
-      void setInterval(uint16_t v) { _interval = v; }
+      void setInterval(uint16_t v);
     private:
+      void save();
       unsigned long _last_fire = 0;
       uint8_t _show_flags = 0;
       uint16_t _interval = 0;

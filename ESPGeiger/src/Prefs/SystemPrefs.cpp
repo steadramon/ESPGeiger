@@ -22,6 +22,7 @@
 #include "../GeigerInput/GeigerInput.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/PinSafety.h"
+#include "../WebPortal/WebPortal.h"
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "../GeigerInput/GeigerInputTest.h"
 #endif
@@ -45,12 +46,18 @@ EG_PSTR(SY_L_WRN, "Warning CPM");
 EG_PSTR(SY_H_WRN, "Warning trigger (CPM)");
 EG_PSTR(SY_L_ALR, "Alert CPM");
 EG_PSTR(SY_H_ALR, "Alert trigger (CPM)");
+EG_PSTR(SY_L_WPW, "Web password");
+EG_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin). Empty = no auth.");
+EG_PSTR(SY_L_LE,  "Track lifetime");
+EG_PSTR(SY_H_LE,  "Persist total clicks + exposure across reboots.");
 
 static const EGPref SYSTEM_PREF_ITEMS[] = {
-  {"name",   SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    32, EGP_STRING, 0},
-  {"ratio",  SY_L_RAT, SY_H_RAT, "151.0", nullptr, 0, 0,    0,  EGP_FLOAT,  0},
-  {"warn",   SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
-  {"alert",  SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"name",     SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    32, EGP_STRING, 0},
+  {"ratio",    SY_L_RAT, SY_H_RAT, "151.0", nullptr, 0, 0,    0,  EGP_FLOAT,  0},
+  {"warn",     SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"alert",    SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
+  {"web_pass", SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    32, EGP_STRING, EGP_SENSITIVE},
+  {"life_en",  SY_L_LE,  SY_H_LE,  "1",     nullptr, 0, 1,    0,  EGP_BOOL,   0},
 };
 
 static const EGPrefGroup SYSTEM_PREF_GROUP = {
@@ -61,14 +68,55 @@ static const EGPrefGroup SYSTEM_PREF_GROUP = {
 
 const EGPrefGroup* SystemPrefs::prefs_group() { return &SYSTEM_PREF_GROUP; }
 
-extern void applyFriendlyTitle();
-
 void SystemPrefs::on_prefs_loaded() {
   gcounter.set_ratio(EGPrefs::getFloat("sys", "ratio"));
   gcounter.set_warning((int)EGPrefs::getUInt("sys", "warn"));
   gcounter.set_alert((int)EGPrefs::getUInt("sys", "alert"));
   DeviceInfo::setFriendlyName(EGPrefs::getString("sys", "name"));
-  applyFriendlyTitle();
+  gcounter.set_lifetime_enabled(EGPrefs::getUInt("sys", "life_en") != 0);
+  // Push web_pass into the running EGHttpServer. on_prefs_loaded fires
+  // at boot AND after a /param save (default on_prefs_saved chains here),
+  // so this covers both initial config and live changes.
+  WebPortal::applyAuthFromPrefs();
+}
+
+// --- Lifetime prefs ---
+// Hidden group dedicated to the persisted counter state so the periodic
+// flash save (~every 6 h) only fires this lightweight callback, not the
+// full sys-group cascade (ratio/warn/alert/name re-apply + auth refresh).
+
+class LifePrefs : public EGModule {
+public:
+  const char* name() override { return "life"; }
+  uint8_t display_order() override { return 0; }  // hidden from /param
+  const EGPrefGroup* prefs_group() override;
+  void on_prefs_loaded() override;
+};
+
+static LifePrefs lifeprefs;
+EG_REGISTER_MODULE(lifeprefs)
+
+static const EGPref LIFE_PREF_ITEMS[] = {
+  {"clk",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
+  {"clkr", nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
+  {"fbt",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
+};
+
+static const EGPrefGroup LIFE_PREF_GROUP = {
+  "life", "Lifetime", 1,
+  LIFE_PREF_ITEMS,
+  sizeof(LIFE_PREF_ITEMS) / sizeof(LIFE_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* LifePrefs::prefs_group() { return &LIFE_PREF_GROUP; }
+
+void LifePrefs::on_prefs_loaded() {
+  const char* lc = EGPrefs::getString("life", "clk");
+  gcounter.set_lifetime_clicks(lc ? strtoul(lc, nullptr, 10) : 0);
+  const char* lcr = EGPrefs::getString("life", "clkr");
+  gcounter.set_lifetime_rollover(lcr ? strtoul(lcr, nullptr, 10) : 0);
+  const char* fbt = EGPrefs::getString("life", "fbt");
+  gcounter.set_first_boot_ts(fbt ? (uint32_t)strtoul(fbt, nullptr, 10) : 0);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -80,6 +128,44 @@ static const EGLegacyAlias SYSTEM_LEGACY[] = {
 };
 const EGLegacyAlias* SystemPrefs::legacy_aliases() { return SYSTEM_LEGACY; }
 // === END LEGACY IMPORT ===
+
+// --- Network prefs (static IP / DHCP) ---
+// display_order==0 → hidden from /param. Edited via the dedicated /wifi
+// page which renders the form with current values prefilled. Applied at
+// boot in Wifi::connectOrPortal() before WiFi.begin().
+
+class NetPrefs : public EGModule {
+public:
+  const char* name() override { return "net"; }
+  uint8_t display_order() override { return 0; }
+  const EGPrefGroup* prefs_group() override;
+};
+
+static NetPrefs netprefs;
+EG_REGISTER_MODULE(netprefs)
+
+EG_PSTR(NT_L_STA, "Use static IP");
+EG_PSTR(NT_L_IP,  "IP address");
+EG_PSTR(NT_L_GW,  "Gateway");
+EG_PSTR(NT_L_SN,  "Subnet mask");
+EG_PSTR(NT_L_DNS, "DNS server");
+EG_PSTR(NT_P_IP,  "^(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3}$");
+
+static const EGPref NET_PREF_ITEMS[] = {
+  {"static_ip", NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
+  {"ip",        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+  {"gw",        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+  {"sn",        NT_L_SN,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+  {"dns",       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
+};
+
+static const EGPrefGroup NET_PREF_GROUP = {
+  "net", "Network", 1,
+  NET_PREF_ITEMS,
+  sizeof(NET_PREF_ITEMS) / sizeof(NET_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* NetPrefs::prefs_group() { return &NET_PREF_GROUP; }
 
 // --- Input prefs ---
 // Pin / serial-type changes trigger a reboot (pinMode + attachInterrupt
@@ -148,6 +234,23 @@ EG_PSTR(IN_H_TBB, "Detects beta radiation");
 EG_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
 EG_PSTR(IN_H_TBG, "Detects gamma radiation");
 #endif
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+EG_PSTR(IN_L_URMD, "Source Mode");
+EG_PSTR(IN_H_URMD, "0=specific chipid (auto-latches first heard if blank), 1=sum all producers heard");
+EG_PSTR(IN_L_URCH, "Pin chipid");
+EG_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in pin mode (0)");
+EG_PSTR(IN_P_URCH, "[0-9a-fA-F]{0,6}");
+EG_PSTR(IN_L_URGP, "Multicast group");
+EG_PSTR(IN_H_URGP, "Must match producers (default 239.255.86.86)");
+EG_PSTR(IN_P_URGP, "[0-9.]+");
+EG_PSTR(IN_L_URPT, "Port");
+EG_PSTR(IN_H_URPT, "UDP port (default 57340)");
+EG_PSTR(IN_L_URRM, "RX sleep");
+EG_PSTR(IN_H_URRM, "0=light (DTIM wake + CPU nap, lowest power), 1=modem (DTIM wake + CPU awake, balanced default), 2=none (radio always on, pulls LAN noise so often higher loss).");
+// Defined in UdpRx.cpp; routes prefs-saved notifications to GeigerUdpRx
+// without dragging WiFiUDP.h into this file.
+extern "C" void udprx_notify_prefs_saved();
+#endif
 
 static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
@@ -180,10 +283,29 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"tube_beta",  IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_gamma", IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
 #endif
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  {"udprx_mode",   IN_L_URMD, IN_H_URMD, "0",                  nullptr,     0, 1,     0,  EGP_UINT,   0},
+  {"udprx_chipid", IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     6,  EGP_STRING, 0},
+  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.86.86",      IN_P_URGP,   0, 0,     24, EGP_STRING, 0},
+  {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   0},
+  {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   0},
+#endif
 };
 
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "Serial Input"
+#elif GEIGER_IS_PULSE(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "Pulse Input"
+#elif GEIGER_IS_UDPRX(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "UDP Input"
+#elif GEIGER_IS_TEST(GEIGER_TYPE)
+  #define INPUT_GROUP_TITLE "Test Input"
+#else
+  #define INPUT_GROUP_TITLE "Input"
+#endif
+
 static const EGPrefGroup INPUT_PREF_GROUP = {
-  "input", "Input", 1,
+  "input", INPUT_GROUP_TITLE, 1,
   INPUT_PREF_ITEMS,
   sizeof(INPUT_PREF_ITEMS) / sizeof(INPUT_PREF_ITEMS[0]),
 };
@@ -240,6 +362,9 @@ void InputPrefs::on_prefs_saved() {
       gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("input", "cpm_window")) need_reboot = true;
 #endif
   on_prefs_loaded();
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  udprx_notify_prefs_saved();   // reread mode/chipid/group/port, rebind UDP
+#endif
   if (need_reboot) EGPrefs::request_restart();
 }
 

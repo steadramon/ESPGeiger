@@ -23,6 +23,14 @@
 
 struct EGPrefGroup;
 struct EGLegacyAlias;  // LEGACY IMPORT (remove after v1.0.0)
+class EGHttpServer;    // forward decl for registerRoutes override
+
+// Menu entry exposed on the WebPortal home page. Modules return a
+// sentinel-terminated array (final entry has path == nullptr).
+struct EGMenuEntry {
+  const char* path;     // e.g. "/hv"
+  const char* label;    // e.g. "HV"
+};
 
 // Lower priority values run first during begin() and tick().
 // Suggested values:
@@ -55,6 +63,14 @@ class EGModule {
 
     virtual const EGPrefGroup* prefs_group() { return nullptr; }
     virtual void on_prefs_loaded() {}
+
+    // Override to expose HTTP routes. WebPortal walks EGModuleRegistry at
+    // boot and calls this on each registered module - no manual list.
+    virtual void registerRoutes(EGHttpServer& http) { (void)http; }
+
+    // Override to contribute entries to the WebPortal home-page launcher.
+    // Return a sentinel-terminated array (final entry has path == nullptr).
+    virtual const EGMenuEntry* menuEntries() { return nullptr; }
     virtual void on_prefs_saved() { on_prefs_loaded(); }
     virtual uint8_t display_order() { return 50; }  // /egprefs render order - lower first, 0 = hidden
 

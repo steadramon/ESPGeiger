@@ -20,7 +20,7 @@
 #define _SERIALCOMMAND_h_
 #include <Arduino.h>
 #include "../Counter/Counter.h"
-#include "../ConfigManager/ConfigManager.h"
+#include "../Util/Wifi.h"
 #include "../Module/EGModule.h"
 
 #ifdef ESPG_HV
@@ -55,9 +55,17 @@ public:
     void clearBuffer();
     char *next();
     void addCommand(const char *command, void(*function)());
-    static void reboot() { ESP.restart(); };
+    // Run a command line (e.g. from the web UI) through the same dispatch
+    // path Serial input uses. The line is parsed identically - first
+    // whitespace-token is the command, remainder is consumed via
+    // strtok_r/`last` by individual handlers. Output goes to Serial like
+    // any other command, so the web /cs stream picks it up.
+    void dispatch(const char* line);
+    static void reboot();
     static void reset_wifi();
-    static void set_ratio();
+    static void reset_net();
+    static void cmd_get();
+    static void cmd_set();
 #ifdef SERIALOUT
     static void get_cpm();
     static void get_usv();
@@ -66,14 +74,8 @@ public:
 #if GEIGER_IS_TEST(GEIGER_TYPE)
     static void set_cpm();
 #endif
-#ifdef ESPG_HV
-    static void set_freq();
-    static void set_duty();
-#endif
 #ifdef ESPG_HV_ADC
     static void get_hv();
-    static void set_vdratio();
-    static void set_vdoffset();
 #endif
 private:
     struct SerialCommandCallback {

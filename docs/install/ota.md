@@ -86,9 +86,44 @@ the update - only the firmware code is replaced.
 
 ## Advanced: command-line OTA
 
-If you prefer the CLI, `espota.py` (ships with the Arduino ESP core) does
-the same thing in one command:
+### Via curl (web `/update`)
+
+`/update` reads the raw firmware as the request body (not a multipart
+upload). Send it with `--data-binary` so curl doesn't wrap the bytes in a
+multipart envelope:
+
+```
+curl --data-binary @esp8266_pulse.v1.2.3.bin \
+  -H "Content-Type: application/octet-stream" \
+  http://192.168.1.167/update
+```
+
+> Don't use `-F image=@file` - that posts a `multipart/form-data` envelope
+> and the device sees the boundary dashes (`----...`) as the first bytes,
+> reads them as the entry-address, and refuses the upload as
+> wrong-platform (`entry=0x2d2d2d2d`).
+
+If you've set a portal password under **Config -> System -> Web password**,
+include Basic Auth:
+
+```
+curl -u admin:<password> --data-binary @esp8266_pulse.v1.2.3.bin \
+  -H "Content-Type: application/octet-stream" \
+  http://192.168.1.167/update
+```
+
+The response body is the same status text the browser would show. The
+device rejects wrong-platform binaries server-side (entry-address check),
+so an ESP32 `.bin` sent at an ESP8266 device aborts before any flash
+writes happen.
+
+### Via espota.py (ArduinoOTA, port 8266)
+
+A separate path that doesn't go through the web stack. `espota.py` ships
+with the Arduino ESP core:
 
 ```
 python espota.py -i 192.168.1.167 -p 8266 -f esp8266_pulse.v1.2.3.bin
 ```
+
+Useful if the web stack is wedged but ArduinoOTA is still alive.

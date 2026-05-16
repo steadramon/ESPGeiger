@@ -45,8 +45,13 @@ static const EGPrefGroup TS_PREF_GROUP = {
 const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
 
 size_t Thingspeak::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("thingspeak", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now);
+}
+
+void Thingspeak::on_prefs_loaded() {
+  _send_enabled = EGPrefs::getBool("thingspeak", "send");
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -63,15 +68,15 @@ Thingspeak::Thingspeak() {
 
 void Thingspeak::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
+  } else if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();
   }
+  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
 }
 
 void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)
@@ -82,8 +87,10 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      String response = request->responseText();
-      if (strcmp(response.c_str(), "0") != 0) {
+      char r[32];
+      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
+      r[got] = 0;
+      if (strcmp(r, "0") != 0) {
         Log::debug(PSTR("Thingspeak: Upload OK"));
         self->last_ok = true;
       } else {
@@ -98,7 +105,6 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
 
 void Thingspeak::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("thingspeak", "send")) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Thingspeak: Testmode"));
@@ -120,15 +126,18 @@ void Thingspeak::postMeasurement() {
   char url[256];
   snprintf_P(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
 
-  if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
+  if (!request) request = new AsyncHTTPRequest();
+  if (!request) { Log::console(PSTR("Thingspeak: alloc failed")); return; }
+
+  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
   {
-    if (request.open("GET", url))
+    if (request->open("GET", url))
     {
       led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request.onReadyStateChange(httpRequestCb, this);
-      request.setTimeout(5);
-      request.send();
+      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
+      request->onReadyStateChange(httpRequestCb, this);
+      request->setTimeout(5);
+      request->send();
       note_attempt();
       send_indicator = 2;
     }

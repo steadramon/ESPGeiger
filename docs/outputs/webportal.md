@@ -37,14 +37,22 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 |---|---|
 | `/` | Main home page |
 | `/status` | Detailed device status page (live readings, uptime, build info) |
-| `/hist` | Rolling CPM history view |
+| `/hist` | Rolling 24 h CPM history view with bar chart, hour-by-hour table, and (when enabled) a lifetime stats card with a **Reset lifetime** button |
+| `/clicks` | JSON feed of the 24 h hourly bucket array plus today/yesterday totals and (when enabled) the lifetime block - powers `/hist` |
 | `/json` | Machine-readable status snapshot - see [JSON Endpoint](/output/integrations#json-endpoint) |
 | `/lastdata` | GeigerLog-compatible CSV line - see [GeigerLog](/output/integrations#geigerlog) |
+| `/info` | Human-readable HTML page with full device + network identity - see [/info page](#info-page) |
 | `/about` | Build, hardware and module identity (useful for support / debugging) - see below |
+| `/network` | WiFi + static IP + NTP configuration - see [/network page](#network-page) |
 | `/outputs` | State of the configured third-party output modules - see below |
 | `/ntp` | NTP configuration page |
 | `/hv` | High-voltage tuning page (ESPGeiger-HW builds only) |
 | `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
+| `/screen` | Live OLED framebuffer preview (OLED builds only) - see [OLED](/output/oled#browser-screen-viewer) |
+| `/export` | Streaming base64+CRC32 dump of all prefs (skips `sys.web_pass` and the `net` group). UI lives at the bottom of the Config page. |
+| `/import` (POST) | Apply a previously-exported blob (overlay-only; keys not in the blob are left alone). Reboots on success. |
+| `/life/reset` (POST) | Zero the lifetime click counter + first-boot timestamp. Button on `/hist`. |
+| `/erase` | Wipe saved WiFi credentials and reboot into the captive setup portal. Linked from `/network` → Erase WiFi config. |
 | `/restart` | Reboots the device - use with care |
 
 For the `/json` response schema and examples of integrating `/json` or `/lastdata` with external tools (GeigerLog, Home Assistant, Prometheus, InfluxDB, Node-RED, Grafana), see [Integrations](/output/integrations).
@@ -111,6 +119,36 @@ Example:
 | `g_test` | `true` if the build is a test / simulation variant (generates pulses internally) |
 | `g_pcnt` | `true` if the build uses the ESP32 PCNT hardware counter for pulse counting (false on ESP8266 builds, and on ESP32 builds compiled with `-D IGNORE_PCNT`) |
 | `modules` | List of module identifiers compiled into this firmware |
+
+### `/info` page
+
+Human-readable HTML report grouped into expandable sections. Useful as the first stop when raising a support issue or debugging odd behaviour.
+
+| Section | Contents |
+|---|---|
+| System | Uptime, chip ID, platform, flash size, core/SDK version, CPU frequency, free heap, sketch size, last reset reason. On ESP8266, exception cause / PC / address are shown when the last reset was a crash. |
+| Network | SSID, BSSID, signal strength, channel, local IP, gateway, subnet, DNS, MAC, hostname. AP mode shows softAP SSID, IP and MAC instead. |
+| Firmware | Version, git hash, build environment, build date, geiger model + type, PCNT availability, test-build flag. |
+| Modules | List of compiled-in modules and their runtime state. |
+
+For machine-readable equivalents see `/json` (live data) and `/about` (static identity).
+
+### `/network` page
+
+WiFi + IP + NTP configuration, all on a single page. Reachable from the home page or directly via `/network`.
+
+| Setting | Notes |
+|---|---|
+| **Network** dropdown | Live-scanned list of nearby SSIDs. The **Rescan** button re-runs a fresh scan. |
+| **SSID** | Manual SSID entry. Blank keeps the current network (useful when only changing the password or IP settings). |
+| **Password** | WPA2 password. Blank for open networks. |
+| **Use static IP** | Toggle under **Network (advanced)**. When unchecked the device gets its address by DHCP. When checked the four IP fields below take effect after reboot. |
+| **IP address / Gateway / Subnet mask** | IPv4 fields with client-side validation. Server re-validates at boot; invalid combinations fall back to DHCP. |
+| **DNS server** | Optional. If blank, the gateway is used. |
+| **Time / NTP** | Lazy-loaded section: timezone picker, NTP server, manual time/date entry, DST mode. Pulls a ~4 KB JS payload only when expanded. |
+| **Erase WiFi config** | Under **Advanced**. Wipes saved credentials and reboots into the captive setup portal. Useful when no hardware reset button is available. |
+
+After **Save and reboot**, the device tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute.
 
 ### Test build CPM setter
 

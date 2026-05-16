@@ -51,8 +51,13 @@ static const EGPrefGroup GMC_PREF_GROUP = {
 const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
 
 size_t GMC::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("gmc", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "gmc", last_ok, last_attempt_ms, now);
+}
+
+void GMC::on_prefs_loaded() {
+  _send_enabled = EGPrefs::getBool("gmc", "send");
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -70,15 +75,15 @@ GMC::GMC() {
 
 void GMC::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
+  } else if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();
   }
+  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
 }
 
 void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)
@@ -89,9 +94,9 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      // strstr() on c_str() avoids the temp String alloc per indexOf probe.
-      String response = request->responseText();
-      const char* r = response.c_str();
+      char r[64];
+      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
+      r[got] = 0;
       if (strstr(r, "OK")) {
         Log::debug(PSTR("GMC: Upload OK"));
         self->last_ok = true;
@@ -111,14 +116,13 @@ void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState
 
 void GMC::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("gmc", "send")) return;
 
   const char* _api_id    = EGPrefs::getString("gmc", "aid");
   const char* _api_gc_id = EGPrefs::getString("gmc", "gcid");
   bool has_id   = (_api_id[0]    != '\0');
   bool has_gcid = (_api_gc_id[0] != '\0');
 
-  // Nothing configured at all — stay silent so unconfigured units don't spam.
+  // Nothing configured at all - stay silent so unconfigured units don't spam.
   if (!has_id && !has_gcid) return;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
@@ -126,7 +130,7 @@ void GMC::postMeasurement() {
     return;
   }
 
-  // Partially configured — log a hint.
+  // Partially configured - log a hint.
   if (!has_id || !has_gcid) {
     Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
     return;
@@ -141,15 +145,18 @@ void GMC::postMeasurement() {
   char url[256];
   snprintf_P(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv);
 
-  if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
+  if (!request) request = new AsyncHTTPRequest();
+  if (!request) { Log::console(PSTR("GMC: alloc failed")); return; }
+
+  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
   {
-    if (request.open("GET", url))
+    if (request->open("GET", url))
     {
       led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request.onReadyStateChange(httpRequestCb, this);
-      request.setTimeout(30);
-      request.send();
+      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
+      request->onReadyStateChange(httpRequestCb, this);
+      request->setTimeout(30);
+      request->send();
       note_attempt();
       send_indicator = 2;
     }

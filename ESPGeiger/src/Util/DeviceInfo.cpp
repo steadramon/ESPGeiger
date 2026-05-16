@@ -18,7 +18,14 @@
 */
 #include "DeviceInfo.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Logger/Logger.h"
+#include "../Counter/Counter.h"
+#include "Wifi.h"
+#include <LittleFS.h>
+
+extern Counter gcounter;
 #ifdef ESP32
+#include <math.h>
 #include <esp_chip_info.h>
 #include <esp_system.h>
 #endif
@@ -26,19 +33,23 @@
 extern "C" {
 #include <user_interface.h>
 }
+#include <ESP8266WiFi.h>
+#else
+#include <WiFi.h>
 #endif
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL ""
 #endif
 
-// Pointers into ConfigManager's buffers - no copies, no extra RAM.
-static const char* s_hostname = "";
-static const char* s_chipid = "";
-static const char* s_useragent = "";
-static const char* s_mac = "";
-static char s_geigermodel[33] = GEIGER_MODEL;
-static char s_friendlyname[33] = "";
+// Module-owned identity buffers populated by begin(). hostname is
+// "<THING_NAME>-<chipid>" e.g. "ESPGeiger-d5536d".
+static char s_hostname_buf[24]   = "";
+static char s_chipid_buf[8]      = "";
+static char s_useragent_buf[80]  = "";
+static char s_mac_buf[18]        = "";
+static char s_geigermodel[33]    = GEIGER_MODEL;
+static char s_friendlyname[33]   = "";
 
 uint32_t DeviceInfo::freeHeap() {
   static uint32_t cached = 0;
@@ -51,18 +62,128 @@ uint32_t DeviceInfo::freeHeap() {
   return cached;
 }
 
-void DeviceInfo::init(const char* hostName, const char* chipId,
-                      const char* userAgent, const char* macAddr) {
-  s_hostname = hostName;
-  s_chipid = chipId;
-  s_useragent = userAgent;
-  s_mac = macAddr;
+static uint8_t  s_hf_peak = 0;
+static uint32_t s_lfb_cur = 0;  // current largest free block (bytes)
+static uint32_t s_lfb_low = 0;  // low-water mark since last reset; 0 = unset
+
+uint8_t DeviceInfo::heapFrag() {
+  static uint8_t cached = 0;
+  static uint32_t last_ms = 0;
+  uint32_t now = millis();
+  if (last_ms == 0 || now - last_ms >= 10000) {
+#ifdef ESP8266
+    uint32_t free_;
+    uint16_t max_;
+    uint8_t frag_;
+    ESP.getHeapStats(&free_, &max_, &frag_);
+    cached = frag_;
+    s_lfb_cur = max_;
+#else
+    // Sqrt-weighted to match ESP8266 umm_malloc semantics. ESP32 has an FPU
+    // so sqrtf is a single instruction; this runs at 1 Hz, negligible cost.
+    uint32_t free_ = ESP.getFreeHeap();
+    uint32_t max_  = ESP.getMaxAllocHeap();
+    s_lfb_cur = max_;
+    if (free_ == 0 || max_ > free_) {
+      cached = 0;
+    } else {
+      float ratio = (float)max_ / (float)free_;
+      cached = (uint8_t)(100.0f - sqrtf(ratio) * 100.0f);
+    }
+#endif
+    last_ms = now;
+    if (cached > s_hf_peak) s_hf_peak = cached;
+    if (s_lfb_low == 0 || s_lfb_cur < s_lfb_low) s_lfb_low = s_lfb_cur;
+  }
+  return cached;
 }
 
-const char* DeviceInfo::hostname()    { return s_hostname; }
-const char* DeviceInfo::chipid()      { return s_chipid; }
-const char* DeviceInfo::useragent()   { return s_useragent; }
-const char* DeviceInfo::mac()         { return s_mac; }
+uint8_t DeviceInfo::heapFragPeak() {
+  heapFrag();  // refresh cache + peak if stale
+  return s_hf_peak;
+}
+
+void DeviceInfo::heapFragPeakReset() {
+  s_hf_peak = heapFrag();
+}
+
+uint32_t DeviceInfo::largestFreeBlock() {
+  heapFrag();  // shared 10s cache refresh
+  return s_lfb_cur;
+}
+
+uint32_t DeviceInfo::largestFreeBlockLow() {
+  heapFrag();
+  return s_lfb_low;
+}
+
+void DeviceInfo::largestFreeBlockLowReset() {
+  largestFreeBlock();
+  s_lfb_low = s_lfb_cur;
+}
+
+void DeviceInfo::safeRestart(uint32_t delayMs) {
+  gcounter.stop_for_ota();
+  if (delayMs) delay(delayMs);
+  ESP.restart();
+}
+
+void DeviceInfo::begin() {
+  // chipid: low 24 bits of native chip identifier, hex-formatted.
+#ifdef ESP8266
+  uint32_t tchipId = ESP.getChipId();
+#else
+  uint32_t tchipId = 0;
+  for (int i = 0; i < 17; i += 8) {
+    tchipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  }
+#endif
+  snprintf_P(s_chipid_buf, sizeof(s_chipid_buf), PSTR("%06lx"),
+             (unsigned long)(tchipId & 0xFFFFFFul));
+
+  // hostname = "ESPGeiger-d5536d"
+  snprintf_P(s_hostname_buf, sizeof(s_hostname_buf), PSTR("%s-%s"),
+             THING_NAME, s_chipid_buf);
+
+  snprintf_P(s_useragent_buf, sizeof(s_useragent_buf),
+             PSTR("%s/%s (%s; %s; %s)"),
+             THING_NAME, RELEASE_VERSION, GIT_VERSION,
+             BUILD_ENV, s_chipid_buf);
+
+  // WiFi.mode(WIFI_STA) idempotent + makes MAC + DHCP-hostname both
+  // valid even though Wifi::connectOrPortal hasn't run yet. Otherwise
+  // WiFi.macAddress() can return all-FF on first call before the SDK
+  // has populated its station struct.
+#ifdef ESP8266
+  WiFi.mode(WIFI_STA);
+  WiFi.hostname(s_hostname_buf);
+#else
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(s_hostname_buf);
+#endif
+  strncpy(s_mac_buf, WiFi.macAddress().c_str(), sizeof(s_mac_buf) - 1);
+  s_mac_buf[sizeof(s_mac_buf) - 1] = '\0';
+}
+
+const char* DeviceInfo::hostname()    { return s_hostname_buf; }
+const char* DeviceInfo::chipid()      { return s_chipid_buf; }
+const char* DeviceInfo::useragent()   { return s_useragent_buf; }
+const char* DeviceInfo::mac()         { return s_mac_buf; }
+
+void DeviceInfo::factoryReset() {
+  // Wipes every module's pref JSON (via EGPrefs) + the WiFi auto-revert
+  // backup + any legacy ConfigManager-era config + SDK-stored WiFi creds.
+  // /api.key is untouched: not in the EGPrefs file set, not in our
+  // explicit remove list - survives by exclusion.
+  Log::console(PSTR("Factory reset"));
+  EGPrefs::reset_all();
+  if (LittleFS.begin()) {
+    LittleFS.remove("/wifi_backup");
+    LittleFS.remove("/geigerconfig.json");      // legacy ConfigManager
+    LittleFS.end();
+  }
+  Wifi::clearSavedCreds();
+}
 const char* DeviceInfo::geigermodel() { return s_geigermodel; }
 
 void DeviceInfo::setGeigermodel(const char* s) {
@@ -222,7 +343,7 @@ uint16_t DeviceInfo::featureFlags() {
 
 char* DeviceInfo::uptimeString() {
   static char buf[20];
-  time_t uptime = NTP.getUptime();
+  time_t uptime = ntpclient.getUptime();
   uint16_t days = uptime / SECS_PER_DAY;
   uptime %= SECS_PER_DAY;
   uint8_t hours = uptime / SECS_PER_HOUR;

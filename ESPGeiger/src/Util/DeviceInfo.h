@@ -1,7 +1,5 @@
 /*
   DeviceInfo.h - Device identity and utility functions.
-  Computed once at boot by ConfigManager, readable from anywhere
-  without pulling in the WiFiManager dependency chain.
 
   Copyright (C) 2025 @steadramon
 
@@ -23,11 +21,16 @@
 #define DEVICEINFO_H
 
 #include <Arduino.h>
-#include <ESPNtpClient.h>
+#include "../NTP/NTP.h"
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
 #endif
+
+// Query-string suffix for static assets. Compile-time concat - browsers
+// treat /style.css?v=<hash> as a new URL per firmware, busting stale
+// JS/CSS automatically. Empty GIT_VERSION emits `?v=` which is harmless.
+#define EG_CACHE_BUST "?v=" GIT_VERSION
 
 #ifndef RELEASE_VERSION
 #define RELEASE_VERSION "devel"
@@ -42,8 +45,13 @@
 #endif
 
 namespace DeviceInfo {
-  void init(const char* hostName, const char* chipId,
-            const char* userAgent, const char* macAddr);
+  // Populates identity buffers; call once early in setup() before any
+  // module that publishes hostname/mac/etc.
+  void begin();
+
+  // Wipes prefs + WiFi backup + SDK creds. KEEPS /api.key so the WebAPI
+  // station identity survives. EGPrefs must already be initialised.
+  void factoryReset();
 
   const char* hostname();
   const char* chipid();
@@ -57,29 +65,36 @@ namespace DeviceInfo {
   void setFriendlyName(const char* s);
   const char* mac();
 
-  inline unsigned long uptime() { return NTP.getUptime(); }
+  inline unsigned long uptime() { return ntpclient.getUptime(); }
 
   char* uptimeString();
 
   uint32_t freeHeap();
 
-  // Normalised reset-reason code. ESP8266 rst_info.reason and ESP32
-  // esp_reset_reason() use different enums; this maps both to a single
-  // small set so the census can aggregate cross-platform. Codes are
-  // frozen — never renumber.
+  // Heap fragmentation 0-100 %, cached 10 s. Denominator-sensitive across
+  // builds; prefer largestFreeBlock() for cross-build comparisons.
+  uint8_t heapFrag();
+  uint8_t heapFragPeak();
+  void    heapFragPeakReset();
+
+  // Largest contiguous free block in bytes. Honest cross-build metric.
+  // *Low()*  = low-water mark since last reset.
+  uint32_t largestFreeBlock();
+  uint32_t largestFreeBlockLow();
+  void     largestFreeBlockLowReset();
+
+  // Cross-platform reset-reason. Codes are frozen - never renumber.
   //   0 unknown   1 power-on     2 external reset   3 software restart
   //   4 exception 5 watchdog     6 brown-out        7 deep-sleep wake
   uint8_t resetReason();
 
+  // The only ESP.restart() in the codebase. Flushes lifetime to flash first.
+  void safeRestart(uint32_t delayMs = 0);
+
   // Returns false when not available (ESP32 lacks per-fault details).
   bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause);
 
-  // Compile-time feature bitmask. Bits track *optional* modules that may or
-  // may not be built in. Board variants live in chipmodel/`btd`; input types
-  // in BUILD_ENV/`gm`; WebAPI itself is a given (we're inside its handshake).
-  // Always-on modules (NTP, Counter, ConfigManager, etc.) aren't tracked —
-  // a bit that's always 1 carries no information. Bits are frozen — never
-  // reassign.
+  // Compile-time optional-module bitmask. Bits are frozen - never reassign.
   //   bit 0  MQTT          (MQTTOUT)
   //   bit 1  Radmon        (RADMONOUT)
   //   bit 2  ThingSpeak    (THINGSPEAKOUT)

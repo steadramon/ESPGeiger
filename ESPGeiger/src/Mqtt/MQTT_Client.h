@@ -44,7 +44,9 @@
 #endif
 
 #define MQTT_MAX_PACKET_SIZE 1024
+#ifndef MQTT_JSON_BUFFER_SIZE
 #define MQTT_JSON_BUFFER_SIZE 1024
+#endif
 #define MQTT_MIN_TIME 5
 #define MQTT_MAX_TIME 3600
 #define MQTT_STATUS_INTERVAL 60
@@ -64,13 +66,6 @@ constexpr auto MQTT_TOPIC_LWT PROGMEM = "lwt";
 constexpr auto MQTT_TOPIC_STATUS PROGMEM = "status";
 
 extern Counter gcounter;
-
-struct MQTTMessage {
-  String topic;
-  String payload;
-  uint8_t qos;  ///< QoS. Only for last will testaments.
-  bool retain;
-};
 
 class MQTT_Client : public EGModule {
 public:
@@ -101,7 +96,7 @@ public:
   void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
 #ifdef MQTTAUTODISCOVER
 #endif
-  MQTTMessage last_will_;
+  char _lwt_topic[64] = "";
   bool connected = false;
 protected:
   void reconnect();
@@ -122,7 +117,7 @@ private:
   void setupHassCB();
   struct HassExtra { const char* key; const char* value; };
   // Rows filled in by the forEach*Hass* walkers. Every member is
-  // PGM_P — assembled from PSTR() literals + palette constants in
+  // PGM_P - assembled from PSTR() literals + palette constants in
   // MQTT_Client.cpp.
   struct HassSensorRow {
     const char* id;

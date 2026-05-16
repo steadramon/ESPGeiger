@@ -17,6 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Serial.h"
+
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
 #include "../../Util/DeviceInfo.h"
@@ -42,7 +45,8 @@ void GeigerSerial::begin() {
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
     Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
   }
-  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 32);
+  // 64-byte RX buffer at 115200 (GC10NX) gives ISR margin under WiFi PHY work.
+  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 64);
 }
 
 void GeigerSerial::pullSerial() {
@@ -124,3 +128,4 @@ void GeigerSerial::handleSerial(char* input) {
   last_serial = millis();
   _bad_streak = max((int)_bad_streak - 3, 0);
 }
+#endif // GEIGER_IS_SERIAL

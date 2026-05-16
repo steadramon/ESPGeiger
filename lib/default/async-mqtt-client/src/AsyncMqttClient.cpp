@@ -739,7 +739,8 @@ uint16_t AsyncMqttClient::publish(const char* topic, uint8_t qos, bool retain, c
   if (_state != CONNECTED || GET_FREE_MEMORY() < MQTT_MIN_FREE_MEMORY) return 0;
   log_i("PUBLISH");
 
-  AsyncMqttClientInternals::OutPacket* msg = new AsyncMqttClientInternals::PublishOutPacket(topic, qos, retain, payload, length);
+  size_t wireLen = AsyncMqttClientInternals::PublishOutPacket::computeLen(topic, qos, payload, length);
+  auto* msg = new (wireLen) AsyncMqttClientInternals::PublishOutPacket(topic, qos, retain, payload, length, wireLen);
   _addBack(msg);
   return msg->packetId();
 }

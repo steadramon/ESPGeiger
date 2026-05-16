@@ -21,6 +21,8 @@
 
 #include <Arduino.h>
 
+class EGHttpServer;
+
 class GRNG
 {
   public:
@@ -32,4 +34,9 @@ class GRNG
     static uint32_t fast_uint32();
     static void extract_fast(uint8_t* out, size_t n);
 };
+
+namespace GRNGRoutes {
+  void registerRoutes(EGHttpServer& http);
+}
+
 #endif

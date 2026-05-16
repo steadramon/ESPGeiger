@@ -47,14 +47,16 @@ class GMC : public EGModule {
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return 500; }
     void loop(unsigned long now) override;
+    void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void postMeasurement();
-    AsyncHTTPRequest request;
+    AsyncHTTPRequest* request = nullptr;
   private:
     unsigned long lastPing = 0;
     static constexpr uint32_t pingIntervalMs = (uint32_t)GMC_INTERVAL * 1000UL;
+    bool _send_enabled = false;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 

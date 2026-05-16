@@ -1,0 +1,9 @@
+{
+  "name": "EGBase64",
+  "version": "0.1.0",
+  "description": "Buffer-in / buffer-out base64 codec for ESPGeiger libraries (EGHttp, WebAPI). No heap allocation. Adapted from Densaugeo/base64_arduino. Header is named EGBase64.h to avoid colliding with the ESP8266/ESP32 core's <base64.h> (heap-using class base64).",
+  "keywords": "base64, encoding, esp8266, esp32",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}

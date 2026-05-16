@@ -17,6 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Pulse.h"
+
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
+
 #include "../../Logger/Logger.h"
 #include "../../Util/MathUtil.h"
 
@@ -112,3 +115,4 @@ void GeigerPulse::set_pin_pull(int mode) {
   }
 }
 #endif
+#endif // GEIGER_IS_PULSE

@@ -50,6 +50,8 @@ class WebAPI : public EGModule {
     const EGPrefGroup* prefs_group() override;
     uint8_t display_order() override { return 0; }  // managed via /webapi page
     void on_prefs_loaded() override;
+    void registerRoutes(EGHttpServer& http) override;
+    const EGMenuEntry* menuEntries() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
 
     AsyncHTTPRequest request;
@@ -81,6 +83,9 @@ class WebAPI : public EGModule {
     uint8_t _mode = 2;
     // Doubles on each handshake failure, capped at 5min, reset on success.
     uint32_t _hs_backoff_ms = 30000UL;
+    // Set after the first handshake that successfully reported the
+    // boot-time exception details. Stops us re-sending the same crash
+    // info on every subsequent hourly handshake.
     bool _exc_sent = false;
 };
 

@@ -57,7 +57,7 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP = {
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
 
 size_t Webhook::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!EGPrefs::getBool("webhook", "send")) return 0;
+  if (!_send_enabled) return 0;
   return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now);
 }
 
@@ -83,19 +83,24 @@ void Webhook::setInterval(int interval)
   pingIntervalMs = (uint32_t)interval * 1000UL;
 }
 
+void Webhook::on_prefs_loaded() {
+  int iv = (int)EGPrefs::getUInt("webhook", "interval");
+  if (iv > 0) setInterval(iv);
+  _send_enabled = EGPrefs::getBool("webhook", "send");
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
+}
+
 void Webhook::loop(unsigned long now)
 {
+  if (!_send_enabled) return;
   if (lastPing == 0) {
-    int iv = (int)EGPrefs::getUInt("webhook", "interval");
-    if (iv > 0) setInterval(iv);
     lastPing = now - pingIntervalMs + random(pingIntervalMs);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
+  } else if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;
     postMeasurement();
   }
+  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
 }
 
 void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)
@@ -106,12 +111,14 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     self->last_ok = false;
     if (request->responseHTTPcode() == 200)
     {
-      String response = request->responseText();
-      if (strstr(response.c_str(), "OK")) {
+      char r[128];
+      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
+      r[got] = 0;
+      if (strstr(r, "OK")) {
         Log::debug(PSTR("Webhook: Upload OK"));
         self->last_ok = true;
       } else {
-        Log::console(PSTR("Webhook: Error - %s"), response.substring(0, 100).c_str());
+        Log::console(PSTR("Webhook: Error - %s"), r);
       }
     } else {
       Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
@@ -132,7 +139,6 @@ const char* Webhook::cleanHTTP(const char* url) {
 
 void Webhook::postMeasurement() {
   if (!gcounter.is_warm()) return;
-  if (!EGPrefs::getBool("webhook", "send")) return;
 
   const char* whURL = EGPrefs::getString("webhook", "url");
   if (whURL[0] == '\0') return;
@@ -142,14 +148,23 @@ void Webhook::postMeasurement() {
     return;
   }
 
-  int iv = (int)EGPrefs::getUInt("webhook", "interval");
-  if (iv > 0) setInterval(iv);
-
   Log::debug(PSTR("Webhook: Uploading latest data ..."));
 
   const char* key = EGPrefs::getString("webhook", "key");
 
-  static char buffer[512];
+  // Lazy-allocate on first send - saves 512 B BSS for users who never
+  // configure a webhook URL. Once allocated it persists for the lifetime
+  // of the firmware (cheaper than malloc/free per call, and the async
+  // request needs the buffer to outlive postMeasurement anyway).
+  static constexpr size_t WEBHOOK_BUF_SIZE = 512;
+  static char* buffer = nullptr;
+  if (!buffer) {
+    buffer = (char*)malloc(WEBHOOK_BUF_SIZE);
+    if (!buffer) {
+      Log::console(PSTR("Webhook: malloc(%u) failed"), (unsigned)WEBHOOK_BUF_SIZE);
+      return;
+    }
+  }
   char b_cps[12], b_cpm[12], b_cpm5[12], b_cpm15[12], b_usv[12];
   format_f(b_cps,   sizeof(b_cps),   gcounter.get_cps());
   format_f(b_cpm,   sizeof(b_cpm),   gcounter.get_cpmf());
@@ -159,27 +174,27 @@ void Webhook::postMeasurement() {
 
   size_t pos = 0;
   int n;
-  n = snprintf_P(buffer, sizeof(buffer),
+  n = snprintf_P(buffer, WEBHOOK_BUF_SIZE,
     PSTR("{\"id\":\"%s\""), DeviceInfo::chipid());
-  advance_pos(pos, n, sizeof(buffer));
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   if (key[0] != '\0') {
-    n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"key\":\"%s\""), key);
-    advance_pos(pos, n, sizeof(buffer));
+    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"key\":\"%s\""), key);
+    advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   }
-  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
+  n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos,
     PSTR(",\"ut\":%lu,\"cps\":%s,\"cpm\":%s,\"cpm5\":%s,\"cpm15\":%s,\"usv\":%s"),
     DeviceInfo::uptime(), b_cps, b_cpm, b_cpm5, b_cpm15, b_usv);
-  advance_pos(pos, n, sizeof(buffer));
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
 #ifdef ESPG_HV_ADC
   char b_hv[12];
   format_f(b_hv, sizeof(b_hv), hv.hvReading.get());
-  n = snprintf_P(buffer + pos, sizeof(buffer) - pos, PSTR(",\"hv\":%s"), b_hv);
-  advance_pos(pos, n, sizeof(buffer));
+  n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"hv\":%s"), b_hv);
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
 #endif
-  n = snprintf_P(buffer + pos, sizeof(buffer) - pos,
+  n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos,
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
     gcounter.total_clicks, DeviceInfo::freeHeap(), (int)Wifi::rssi);
-  advance_pos(pos, n, sizeof(buffer));
+  advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   buffer[pos] = '\0';
 
   char url[256];
@@ -187,17 +202,20 @@ void Webhook::postMeasurement() {
 
   snprintf_P(url, sizeof(url), PSTR("http://%s"), trimmedURL);
 
-  if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone)
+  if (!request) request = new AsyncHTTPRequest();
+  if (!request) { Log::console(PSTR("Webhook: alloc failed")); return; }
+
+  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
   {
-    if (request.open("POST", url))
+    if (request->open("POST", url))
     {
       led.Blink(500, 500);
-      request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request.setReqHeader(F("Accept"), F("application/json"));
-      request.setReqHeader(F("Content-Type"), F("application/json"));
-      request.onReadyStateChange(httpRequestCb, this);
-      request.setTimeout(10);
-      request.send(buffer);
+      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
+      request->setReqHeader(F("Accept"), F("application/json"));
+      request->setReqHeader(F("Content-Type"), F("application/json"));
+      request->onReadyStateChange(httpRequestCb, this);
+      request->setTimeout(10);
+      request->send(buffer);
       note_attempt();
       send_indicator = 2;
     }

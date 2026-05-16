@@ -2,7 +2,32 @@
 
 using AsyncMqttClientInternals::PublishOutPacket;
 
-PublishOutPacket::PublishOutPacket(const char* topic, uint8_t qos, bool retain, const char* payload, size_t length) {
+size_t PublishOutPacket::computeLen(const char* topic, uint8_t qos,
+                                    const char* payload, size_t length) {
+  uint16_t topicLength = strlen(topic);
+  uint32_t payloadLength = length;
+  if (payload != nullptr && payloadLength == 0) payloadLength = strlen(payload);
+
+  uint32_t remainingLength = 2 + topicLength + payloadLength;
+  if (qos != 0) remainingLength += 2;
+
+  char scratch[5];   // throwaway; just to measure encoded-length size
+  uint8_t remainingLengthLength =
+      AsyncMqttClientInternals::Helpers::encodeRemainingLength(remainingLength, scratch);
+
+  size_t total = 0;
+  total += 1 + remainingLengthLength;
+  total += 2;
+  total += topicLength;
+  if (qos != 0) total += 2;
+  if (payload != nullptr) total += payloadLength;
+  return total;
+}
+
+PublishOutPacket::PublishOutPacket(const char* topic, uint8_t qos, bool retain,
+                                   const char* payload, size_t length, size_t wireLen) {
+  _len = wireLen;
+
   char fixedHeader[5];
   fixedHeader[0] = AsyncMqttClientInternals::PacketType.PUBLISH;
   fixedHeader[0] = fixedHeader[0] << 4;
@@ -29,40 +54,28 @@ PublishOutPacket::PublishOutPacket(const char* topic, uint8_t qos, bool retain, 
 
   uint32_t remainingLength = 2 + topicLength + payloadLength;
   if (qos != 0) remainingLength += 2;
-  uint8_t remainingLengthLength = AsyncMqttClientInternals::Helpers::encodeRemainingLength(remainingLength, fixedHeader + 1);
-
-  _len = 0;
-  _len += 1 + remainingLengthLength;
-  _len += 2;
-  _len += topicLength;
-  if (qos != 0) _len += 2;
-  if (payload != nullptr) _len += payloadLength;
-
-  _data = (uint8_t*)malloc(_len);
-  if (!_data) { _len = 0; return; }
+  uint8_t remainingLengthLength =
+      AsyncMqttClientInternals::Helpers::encodeRemainingLength(remainingLength, fixedHeader + 1);
 
   _packetId = (qos != 0) ? _getNextPacketId() : 1;
   char packetIdBytes[2];
   packetIdBytes[0] = _packetId >> 8;
   packetIdBytes[1] = _packetId & 0xFF;
 
+  uint8_t* out = data_ptr();
   size_t pos = 0;
-  memcpy(_data + pos, fixedHeader, 1 + remainingLengthLength); pos += 1 + remainingLengthLength;
-  memcpy(_data + pos, topicLengthBytes, 2); pos += 2;
-  memcpy(_data + pos, topic, topicLength); pos += topicLength;
+  memcpy(out + pos, fixedHeader, 1 + remainingLengthLength); pos += 1 + remainingLengthLength;
+  memcpy(out + pos, topicLengthBytes, 2); pos += 2;
+  memcpy(out + pos, topic, topicLength); pos += topicLength;
   if (qos != 0) {
-    memcpy(_data + pos, packetIdBytes, 2); pos += 2;
+    memcpy(out + pos, packetIdBytes, 2); pos += 2;
     _released = false;
   }
-  if (payload != nullptr) { memcpy(_data + pos, payload, payloadLength); pos += payloadLength; }
-}
-
-PublishOutPacket::~PublishOutPacket() {
-  free(_data);
+  if (payload != nullptr) { memcpy(out + pos, payload, payloadLength); pos += payloadLength; }
 }
 
 const uint8_t* PublishOutPacket::data(size_t index) const {
-  return _data + index;
+  return data_ptr() + index;
 }
 
 size_t PublishOutPacket::size() const {
@@ -70,5 +83,5 @@ size_t PublishOutPacket::size() const {
 }
 
 void PublishOutPacket::setDup() {
-  _data[0] |= AsyncMqttClientInternals::HeaderFlag.PUBLISH_DUP;
+  data_ptr()[0] |= AsyncMqttClientInternals::HeaderFlag.PUBLISH_DUP;
 }

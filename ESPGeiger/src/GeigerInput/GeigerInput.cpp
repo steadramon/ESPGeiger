@@ -59,7 +59,7 @@ int GeigerInput::collect() {
   _eventFlipFlop = !_eventFlipFlop;
 #ifdef ESP32
     portEXIT_CRITICAL_ISR(&timerMux);
-#endif    
+#endif
   int current = 0;
   if (_eventFlipFlop == false) {
     current = eventCounter1;
@@ -95,7 +95,7 @@ void IRAM_ATTR GeigerInput::countInterrupt() {
     eventCounter2++;
 #ifdef ESP32
   portEXIT_CRITICAL_ISR(&timerMux);
-#endif    
+#endif
   _last_blip = cycles;
 }
 

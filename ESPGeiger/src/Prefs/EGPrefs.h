@@ -43,7 +43,7 @@ static constexpr uint8_t EGP_INLINE    = 1 << 7;
 
 // Declare a PROGMEM pref string. label/help/pattern fields in EGPref tables
 // can be set to one of these (PSTR() can't appear in static initializers).
-// id and default_val must stay SRAM — getString returns default_val to
+// id and default_val must stay SRAM - getString returns default_val to
 // callers that may do strcmp without _P, and find_pref does strcmp on id.
 #define EG_PSTR(name, val) static const char name[] PROGMEM = val
 

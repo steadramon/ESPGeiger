@@ -23,16 +23,19 @@
 #endif
 
 #include <Arduino.h>
+#include <EGHttpServer.h>
 #include "WebAPI.h"
-#include "base64.h"
+#include <EGBase64.h>   // buffer-in/out, no heap (vs core's heap-using <base64.h>)
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Prefs/EGPrefs.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
 #include "../NTP/NTP.h"
 #include "../GRNG/sha256.h"
 #include "../GRNG/GRNG.h"
 #include "../Util/TickProfile.h"
+#include "../WebPortal/WebPortal.h"
 #include "MsgPack.h"
 #include <FS.h>
 #include <LittleFS.h>
@@ -60,7 +63,7 @@ static const EGPref WEBAPI_PREF_ITEMS[] = {
 };
 
 static const EGPrefGroup WEBAPI_PREF_GROUP = {
-  "webapi", "Station Network", 3,
+  "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
 };
@@ -69,6 +72,7 @@ const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
 
 void WebAPI::on_prefs_loaded() {
   _mode = (uint8_t)EGPrefs::getUInt("webapi", "mode");
+  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 1000);
 }
 
 static int webapi_rng(uint8_t *dest, unsigned size) {
@@ -103,39 +107,43 @@ void WebAPI::begin() {
 
 void WebAPI::loop(unsigned long now) {
   if (_mode == 0) return;
-  if (!ntpclient.synced) return;
+  if (!ntpclient.synced) {
+    EGModuleRegistry::set_loop_interval(this, 1000);
+    return;
+  }
 
   if (lastHandshake == 0) {
     lastHandshake = now + random(11311) - WEBAPI_HANDSHAKE_MS;
-    return;
-  }
-
-  // Hourly handshake doubles as the heartbeat/census signal.
-  if ((now - lastHandshake) >= WEBAPI_HANDSHAKE_MS) {
+  } else if ((now - lastHandshake) >= WEBAPI_HANDSHAKE_MS) {
     doHandshake();
-    return;
-  }
+  } else if (station_id != 0) {
+    if (lastPing == 0) {
+      lastPing = staggeredPingStart(now);
+    } else if ((now - lastPing) >= pingIntervalMs) {
+      lastPing += pingIntervalMs;
+      if ((now - lastPing) >= pingIntervalMs) lastPing = staggeredPingStart(now);
 
-  if (station_id == 0) return;
-
-  if (lastPing == 0) {
-    lastPing = staggeredPingStart(now);
-    return;
-  }
-  if ((now - lastPing) >= pingIntervalMs) {
-    lastPing += pingIntervalMs;
-    if ((now - lastPing) >= pingIntervalMs) lastPing = staggeredPingStart(now);
-
-    const bool healthDue = (healthPostCounter == 0);
-    if (_mode == 2 || healthDue) {
-      // Heartbeat-only mode never sends radiation; the cadence reduces
-      // to one post per WEBAPI_HEALTH_EVERY ticks.
-      postMeasurement(_mode != 2);
-    } else {
-      // Heartbeat skip: keep the per-15-min cadence aligned.
-      if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
+      const bool healthDue = (healthPostCounter == 0);
+      if (_mode == 2 || healthDue) {
+        // Heartbeat-only mode never sends radiation; the cadence reduces
+        // to one post per WEBAPI_HEALTH_EVERY ticks.
+        postMeasurement(_mode != 2);
+      } else {
+        // Heartbeat skip: keep the per-15-min cadence aligned.
+        if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
+      }
     }
   }
+
+  // Sleep until whichever target fires next: handshake or ping. station_id
+  // gate means before the first handshake completes we only watch the
+  // handshake target.
+  unsigned long target = lastHandshake + WEBAPI_HANDSHAKE_MS;
+  if (station_id != 0 && lastPing != 0) {
+    unsigned long ping_target = lastPing + pingIntervalMs;
+    if ((long)(ping_target - target) < 0) target = ping_target;
+  }
+  EGModuleRegistry::sleep_until(this, now, target);
 }
 
 static uint32_t wallClockWaitMs(uint32_t k, uint32_t intervalMs, uint32_t period_s) {
@@ -155,7 +163,9 @@ void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
     lastHandshake = millis();
+#ifndef WEBAPI_TESTMODE_POST
     return;
+#endif
   }
 
   GRNG::stir();
@@ -277,6 +287,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
         Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
         self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
         self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+        EGModuleRegistry::set_loop_interval(self, 100);
         self->note_publish(false);
         return;
       }
@@ -286,6 +297,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
         uint32_t k = ((uint32_t)self->pub_k[4] << 24) | ((uint32_t)self->pub_k[5] << 16)
                    | ((uint32_t)self->pub_k[6] << 8)  |  (uint32_t)self->pub_k[7];
         self->lastHandshake = millis() + wallClockWaitMs(k, WEBAPI_HANDSHAKE_MS, 3600) - WEBAPI_HANDSHAKE_MS;
+        EGModuleRegistry::set_loop_interval(self, 100);
       } else {
         Log::debug(PSTR("WebAPI: Handshake OK - station ID %u"), id);
       }
@@ -309,13 +321,16 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
   // Backoff prevents a uECC_sign storm while the server is down.
   self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
   self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+  EGModuleRegistry::set_loop_interval(self, 100);
   self->note_publish(false);
 }
 
 void WebAPI::postMeasurement(bool censusOnly) {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
+#ifndef WEBAPI_TESTMODE_POST
     return;
+#endif
   }
 
   // Wait for a full CPM bucket so the first post isn't noisy.
@@ -343,6 +358,9 @@ void WebAPI::postMeasurement(bool censusOnly) {
   if (sendHv) entries += 1;  // hv
 #endif
   if (sendHealth) entries += 5;  // ut, mem, lps, tk, rssi
+#ifdef WEBAPI_TESTMODE_POST
+  if (sendHealth) entries += 1;  // lfb (largest-free-block low water, bytes)
+#endif
 
   MsgPack::Writer mp(buffer, sizeof(buffer));
   mp.map(entries);
@@ -365,6 +383,11 @@ void WebAPI::postMeasurement(bool censusOnly) {
     mp.kv("l",  (uint32_t)TickProfile::lps);
     mp.kv("tk", (uint32_t)TickProfile::tick_max_us);
     mp.kv("rs", (int32_t)Wifi::rssi);
+#ifdef WEBAPI_TESTMODE_POST
+    // Worst-case largest free block across the window, bytes.
+    mp.kv("lfb", DeviceInfo::largestFreeBlockLow());
+    DeviceInfo::largestFreeBlockLowReset();
+#endif
   }
 
   if (mp.overflow) {
@@ -428,6 +451,7 @@ void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     if (code == 403) {
       self->station_id = 0;
       self->lastHandshake = 0;
+      EGModuleRegistry::set_loop_interval(self, 100);
     } else if (code == 409) {
       Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
     }
@@ -496,6 +520,7 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
     self->lastPing = 0;
     self->healthPostCounter = 0;
     self->last_ok = true;
+    EGModuleRegistry::set_loop_interval(self, 100);
   } else {
     Log::console(PSTR("WebAPI: Forget failed - %s"), request->responseHTTPString().c_str());
   }
@@ -541,5 +566,155 @@ void WebAPI::loadConfig() {
 size_t WebAPI::status_json(char* buf, size_t cap, unsigned long now) {
   if (_mode == 0) return 0;
   return write_status_json(buf, cap, "webapi", last_ok, last_attempt_ms, now);
+}
+
+// ---------- HTTP routes ----------
+
+static const char FORGET_BODY[] PROGMEM =
+  "<p>A delete request has been sent to the server. Sharing is now <b>Off</b>.</p>"
+  "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
+
+static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  bool saved = false;
+  if (req.method() == EGHttpRequest::POST) {
+    // arg() returns into a shared static buffer - atof/atoi consumes the
+    // value before the next arg() call, and EGPrefs::put copies internally.
+    const char* m = req.arg("m");
+    if (m) {
+      int mode = atoi(m);
+      if (mode < 0 || mode > 2) mode = 0;
+      char mbuf[2] = {(char)('0' + mode), '\0'};
+      EGPrefs::put("webapi", "mode", mbuf);
+    }
+    // atof would pull _strtod_l (~3.7 KB flash).
+    auto validDeg = [](const char* s, int maxWhole) -> bool {
+      if (!s || !*s) return false;
+      if (*s == '-' || *s == '+') s++;
+      int w = 0; bool any = false;
+      while (*s >= '0' && *s <= '9') {
+        w = w * 10 + (*s++ - '0'); any = true;
+        if (w > maxWhole) return false;
+      }
+      if (!any) return false;
+      if (*s == '.') { s++; while (*s >= '0' && *s <= '9') s++; }
+      return !*s;
+    };
+    const char* lat = req.arg("lat");
+    if (lat) {
+      if (!*lat) EGPrefs::put("webapi", "lat", "0");
+      else if (validDeg(lat, 90)) EGPrefs::put("webapi", "lat", lat);
+    }
+    const char* lon = req.arg("lon");
+    if (lon) {
+      if (!*lon) EGPrefs::put("webapi", "lon", "0");
+      else if (validDeg(lon, 180)) EGPrefs::put("webapi", "lon", lon);
+    }
+    EGPrefs::commit();
+    saved = true;
+  }
+
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("ESPGeiger Network"));
+  if (saved) {
+    res.sendChunk(F("<div class=card style='border-color:#5a5'>Saved.</div>"));
+  }
+  res.sendChunk(F(
+    "<p class=muted>ESPGeiger can share data with the public station "
+    "network so it appears on the global map. The device identity and "
+    "location are obscured before publication.</p>"));
+
+  uint8_t mode = (uint8_t)EGPrefs::getUInt("webapi", "mode");
+  if (mode > 0) {
+    if (webapi.getStationId() != 0) {
+      char status[160];
+      int n = snprintf_P(status, sizeof(status),
+        PSTR("<p>Station: <a href='" WEBAPI_STATION_URL "' target=_blank>#%u</a></p>"),
+        webapi.getStationId(), webapi.getStationId());
+      if (n > 0) res.sendChunk(status, (size_t)n);
+    } else {
+      res.sendChunk(F(
+        "<p>Station: not yet registered (handshake pending) "
+        "<button type=button onclick='location.reload()'>Refresh</button></p>"));
+    }
+  }
+
+  res.sendChunk(F(
+    "<form method=POST action=/webapi><fieldset><legend>Sharing</legend>"
+    "<label><input type=radio name=m value=0"));
+  if (mode == 0) res.sendChunk(F(" checked"));
+  res.sendChunk(F("> Off</label>"
+    "<label><input type=radio name=m value=1"));
+  if (mode == 1) res.sendChunk(F(" checked"));
+  res.sendChunk(F("> Heartbeat</label>"
+    "<label><input type=radio name=m value=2"));
+  if (mode == 2) res.sendChunk(F(" checked"));
+  res.sendKV(F("> CPM Readings</label></fieldset>"
+               "<label for=lat>Latitude</label>"
+               "<input id=lat name=lat type=number step=any min=-90 max=90 placeholder='approximate by IP if blank' value='"),
+             EGPrefs::getString("webapi", "lat"),
+             F("'><label for=lon>Longitude</label>"
+               "<input id=lon name=lon type=number step=any min=-180 max=180 placeholder='approximate by IP if blank' value='"));
+  res.sendKV(nullptr, EGPrefs::getString("webapi", "lon"),
+             F("'><p style=margin-top:.5em>"));
+  res.sendChunk(F(
+    "<button type=button onclick=\"window.open('https://loc.espgeiger.com/','espgeiger-loc')\">Find location</button></p>"
+    "<button type=submit>Save</button></form>"
+    "<script>window.addEventListener('message',function(e){if(e.origin!=='https://loc.espgeiger.com')return;var d=e.data;if(!d||d.type!=='espgeiger-location')return;var la=document.getElementById('lat');var lo=document.getElementById('lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
+
+  res.sendChunk(F(
+    "<details style=margin-top:1em><summary>Advanced</summary>"
+    "<p class=muted>Reset the device key. The next handshake registers a new station &mdash; the existing one <b>cannot be retrieved</b>.</p>"
+    "<form method=POST action=/webapikeyreset onsubmit=\"return confirm('Reset the ESPGeiger Network key? This orphans the existing station.')\">"
+    "<button type=submit class=danger>Reset key</button></form>"));
+  if (mode > 0 && webapi.getStationId() != 0) {
+    res.sendChunk(F(
+      "<p class=muted style=margin-top:1em>Delete this station from the network. Removes all readings and history server-side and switches sharing to Off. <b>Cannot be undone.</b></p>"
+      "<form method=POST action=/webapiforget onsubmit=\"return confirm('Permanently delete this station from the network? This cannot be undone.')\">"
+      "<button type=submit class=danger>Forget station</button></form>"));
+  }
+  res.sendChunk(F("</details>"));
+
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  Log::console(PSTR("WebAPI: Resetting api.key"));
+  LittleFS.begin();
+  LittleFS.remove("/api.key");
+  LittleFS.end();
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("Key Reset"));
+  res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
+  WebPortal::sendRestartCountdown(res);
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+  WebPortal::requestRestart(1500);
+}
+
+static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // Sign before flipping mode so the request still has a valid key + id.
+  webapi.forget();
+  EGPrefs::put("webapi", "mode", "0");
+  EGPrefs::commit();
+
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("Station Forgotten"));
+  res.sendChunk(FPSTR(FORGET_BODY));
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+static const EGMenuEntry WEBAPI_MENU[] = {
+  {"/webapi", "ESPGeiger Network"},
+  {nullptr, nullptr}
+};
+const EGMenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
+
+void WebAPI::registerRoutes(EGHttpServer& http) {
+  http.on("/webapi",         EGHttpRequest::GET,  hWebAPI);
+  http.on("/webapi",         EGHttpRequest::POST, hWebAPI);
+  http.on("/webapikeyreset", EGHttpRequest::POST, hKeyReset);
+  http.on("/webapiforget",   EGHttpRequest::POST, hForget);
 }
 #endif

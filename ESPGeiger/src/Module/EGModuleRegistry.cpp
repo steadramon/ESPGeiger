@@ -170,6 +170,16 @@ bool EGModuleRegistry::set_loop_interval(EGModule* m, uint16_t interval_ms) {
   return false;
 }
 
+bool EGModuleRegistry::sleep_until(EGModule* m, unsigned long now, unsigned long target_ms) {
+  long until = (long)(target_ms - now);
+  uint16_t interval;
+  if (until <= 0)         interval = 100;
+  else if (until > 60000) interval = 60000;
+  else if (until > 2000)  interval = (uint16_t)(until - 1000);
+  else                    interval = 200;
+  return set_loop_interval(m, interval);
+}
+
 uint8_t EGModuleRegistry::count() {
   return _count;
 }
