@@ -11,9 +11,7 @@ size_t PublishOutPacket::computeLen(const char* topic, uint8_t qos,
   uint32_t remainingLength = 2 + topicLength + payloadLength;
   if (qos != 0) remainingLength += 2;
 
-  // encodeRemainingLength returns 1..4 bytes; we need a temp here just to
-  // measure - caller-side prep, not on wire yet.
-  char scratch[5];
+  char scratch[5];   // throwaway; just to measure encoded-length size
   uint8_t remainingLengthLength =
       AsyncMqttClientInternals::Helpers::encodeRemainingLength(remainingLength, scratch);
 

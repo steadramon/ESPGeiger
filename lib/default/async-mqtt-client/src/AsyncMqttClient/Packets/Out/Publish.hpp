@@ -22,23 +22,16 @@ class PublishOutPacket : public OutPacket {
   size_t size() const;
   void setDup();
 
-  // Combined allocation: struct + wire bytes in one umm block. _data lives
-  // inline at this+1 - one malloc per publish (was two), no separate free.
+  // Single combined alloc: struct + wire bytes in one block. _data at this+1.
   static void* operator new(size_t base, size_t flex) {
     return ::operator new(base + flex);
   }
-  // Matching placement-delete called only if the ctor throws (it can't on
-  // -fno-exceptions, but provided for correctness).
-  static void operator delete(void* p, size_t /*flex*/) { ::operator delete(p); }
-  // Regular delete (called by `delete tmp` via virtual destructor) frees the
-  // whole combined block.
+  static void operator delete(void* p, size_t) { ::operator delete(p); }
   static void operator delete(void* p) noexcept { ::operator delete(p); }
-  // Guard against accidental `new PublishOutPacket(...)` without the flex arg.
-  static void* operator new(size_t) = delete;
+  static void* operator new(size_t) = delete;  // force the flex form
 
  private:
   size_t _len;
-  // wire bytes follow this struct in the same allocation; see operator new.
   uint8_t* data_ptr() { return reinterpret_cast<uint8_t*>(this + 1); }
   const uint8_t* data_ptr() const { return reinterpret_cast<const uint8_t*>(this + 1); }
 };
