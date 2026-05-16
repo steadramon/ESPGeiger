@@ -359,7 +359,7 @@ void WebAPI::postMeasurement(bool censusOnly) {
 #endif
   if (sendHealth) entries += 5;  // ut, mem, lps, tk, rssi
 #ifdef WEBAPI_TESTMODE_POST
-  if (sendHealth) entries += 1;  // hf (dev-only fragmentation peak)
+  if (sendHealth) entries += 1;  // lfb (largest-free-block low water, bytes)
 #endif
 
   MsgPack::Writer mp(buffer, sizeof(buffer));
@@ -384,11 +384,9 @@ void WebAPI::postMeasurement(bool censusOnly) {
     mp.kv("tk", (uint32_t)TickProfile::tick_max_us);
     mp.kv("rs", (int32_t)Wifi::rssi);
 #ifdef WEBAPI_TESTMODE_POST
-    // Peak heap fragmentation across this health window. TickProfile
-    // already samples heapFrag() at 1 Hz so the peak is fresh; we just
-    // emit and reset for the next window.
-    mp.kv("hf", (uint32_t)DeviceInfo::heapFragPeak());
-    DeviceInfo::heapFragPeakReset();
+    // Worst-case largest free block across the window, bytes.
+    mp.kv("lfb", DeviceInfo::largestFreeBlockLow());
+    DeviceInfo::largestFreeBlockLowReset();
 #endif
   }
 
