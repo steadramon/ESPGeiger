@@ -38,6 +38,34 @@
 
 extern long start;  // boot epoch ref from main
 
+// RTC user-RAM stash for lifetime clicks since last flash save. Survives WDT,
+// exception, soft reset; lost on hard power loss. Folded into flash on boot.
+// Word offset 48 = 192 B from start of user RTC RAM - inside the 384 B OTA-
+// safe region (>= word 32) and clear of CrashDump (words 0..41).
+#ifdef ESP8266
+namespace {
+constexpr uint32_t LIFE_RTC_OFFSET_WORDS = 48;
+constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC10C;
+struct LifeRtc { uint32_t magic; uint32_t delta; };
+
+void rtc_life_stash(uint32_t delta) {
+  LifeRtc r{LIFE_RTC_MAGIC, delta};
+  ESP.rtcUserMemoryWrite(LIFE_RTC_OFFSET_WORDS, (uint32_t*)&r, sizeof(r));
+}
+uint32_t rtc_life_recover_and_clear() {
+  LifeRtc r{};
+  if (!ESP.rtcUserMemoryRead(LIFE_RTC_OFFSET_WORDS, (uint32_t*)&r, sizeof(r))) return 0;
+  if (r.magic != LIFE_RTC_MAGIC) return 0;
+  uint32_t zero[2] = {0, 0};
+  ESP.rtcUserMemoryWrite(LIFE_RTC_OFFSET_WORDS, zero, sizeof(zero));
+  return r.delta;
+}
+}
+#else
+static inline void rtc_life_stash(uint32_t) {}
+static inline uint32_t rtc_life_recover_and_clear() { return 0; }
+#endif
+
 Counter::Counter() {
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
   geigerinput = new GeigerPulse();
@@ -139,8 +167,54 @@ void Counter::secondticker(unsigned long stick_now) {
   clicks_today += eventCounter;
   clicks_hour += eventCounter;
 
+  if (_lifetime_enabled) {
+    unsigned long prev_lifetime = total_clicks_lifetime;
+    total_clicks_lifetime += eventCounter;
+    if (prev_lifetime > total_clicks_lifetime) {
+      total_clicks_lifetime = eventCounter;
+      total_clicks_lifetime_rollover++;
+    }
+    if (eventCounter > 0) {
+      _rtc_unsaved_clicks += (uint32_t)eventCounter;
+      rtc_life_stash(_rtc_unsaved_clicks);
+    }
+    // Capture first NTP-synced timestamp once across all boots.
+    if (_first_boot_ts == 0 && currentTime > 0) {
+      _first_boot_ts = (uint32_t)currentTime;
+      save_lifetime();
+    }
+    // Periodic flash save: every 21600 ticks = 6 h of uptime. Survives
+    // power loss with at most 6 h of clicks unsaved.
+    static uint32_t s_save_ctr = 0;
+    if (++s_save_ctr >= 21600) {
+      s_save_ctr = 0;
+      save_lifetime();
+    }
+  }
+
   _bool_cpm_warning = (_cpm_warning < ccpm);
   _bool_cpm_alert   = (_cpm_alert   < ccpm);
+}
+
+void Counter::save_lifetime() {
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%lu", total_clicks_lifetime);
+  EGPrefs::put("life", "clk", buf);
+  snprintf(buf, sizeof(buf), "%lu", total_clicks_lifetime_rollover);
+  EGPrefs::put("life", "clkr", buf);
+  snprintf(buf, sizeof(buf), "%lu", (unsigned long)_first_boot_ts);
+  EGPrefs::put("life", "fbt", buf);
+  EGPrefs::commit();
+  _rtc_unsaved_clicks = 0;
+  rtc_life_stash(0);
+}
+
+void Counter::reset_lifetime() {
+  total_clicks_lifetime = 0;
+  total_clicks_lifetime_rollover = 0;
+  _first_boot_ts = 0;
+  save_lifetime();
+  Log::console(PSTR("Lifetime: reset"));
 }
 
 float Counter::get_cps() {
@@ -228,19 +302,31 @@ float Counter::get_usv15() {
 }
 
 void Counter::begin() {
-  geigerTicks.begin(SMOOTHED_AVERAGE, _cpm_window);
+  geigerTicks.begin(_cpm_window);
 #ifndef GEIGER_SMOOTH_AVG
   Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), _cpm_window);
-  geigerTicks5.begin(SMOOTHED_EXPONENTIAL, GEIGER_EMA_FACTOR);
-  geigerTicks15.begin(SMOOTHED_EXPONENTIAL, GEIGER_EMA_FACTOR);
+  geigerTicks5.begin(GEIGER_EMA_FACTOR);
+  geigerTicks15.begin(GEIGER_EMA_FACTOR);
 #else
   Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), _cpm_window, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
-  geigerTicks5.begin(SMOOTHED_AVERAGE, GEIGER_CPM5_COUNT);
-  geigerTicks15.begin(SMOOTHED_AVERAGE, GEIGER_CPM15_COUNT);
+  geigerTicks5.begin(GEIGER_CPM5_COUNT);
+  geigerTicks15.begin(GEIGER_CPM15_COUNT);
 #endif
 
   geigerinput->begin();
   apply_pcnt_filter();
+
+  uint32_t rtc_delta = rtc_life_recover_and_clear();
+  if (rtc_delta > 0 && _lifetime_enabled) {
+    unsigned long prev = total_clicks_lifetime;
+    total_clicks_lifetime += rtc_delta;
+    if (prev > total_clicks_lifetime) {
+      total_clicks_lifetime = rtc_delta;
+      total_clicks_lifetime_rollover++;
+    }
+    Log::console(PSTR("Lifetime: recovered %lu unsaved clicks from RTC"),
+                 (unsigned long)rtc_delta);
+  }
 }
 
 void Counter::blip() {
@@ -331,27 +417,6 @@ void Counter::loop() {
   }
 #endif
 
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // Poisson inter-arrival drain: bundle blips fire with exp(-lambda*t)
-  // spacing rather than as a metronome. Clamped [40, 1000] ms.
-  if (_pending_blips > 0) {
-    unsigned long now = millis();
-    if ((long)(now - _last_blip_fire_ms) >= 0) {
-      _pending_blips--;
-#ifndef DISABLE_BLIP
-      this->blip();
-#endif
-      float lambda = get_cps();
-      if (lambda < 0.1f) lambda = 0.1f;
-      float u = (float)GRNG::fast_uint32() * (1.0f / 4294967296.0f);
-      if (u < 1e-6f) u = 1e-6f;
-      uint32_t delay_ms = (uint32_t)((-logf(u) / lambda) * 1000.0f);
-      if (delay_ms < 40)   delay_ms = 40;
-      if (delay_ms > 1000) delay_ms = 1000;
-      _last_blip_fire_ms = now + delay_ms;
-    }
-  }
-#else
   unsigned long lb = _last_blip;
   if (_last_blip_seen != lb) {
     _last_blip_seen = lb;
@@ -360,7 +425,6 @@ void Counter::loop() {
 #endif
     udpblip.notifyClick(millis());
   }
-#endif
 }
 
 // ---------- HTTP routes ----------
@@ -368,6 +432,17 @@ void Counter::loop() {
 extern Counter gcounter;
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
+
+// uint64 -> decimal ASCII (nano-libc has no %llu).
+static void fmt_u64(char* out, size_t cap, uint64_t v) {
+  char tmp[24];
+  int n = 0;
+  if (v == 0) { tmp[n++] = '0'; }
+  else { while (v > 0 && n < (int)sizeof(tmp)) { tmp[n++] = (char)('0' + v % 10); v /= 10; } }
+  size_t o = 0;
+  while (n > 0 && o + 1 < cap) out[o++] = tmp[--n];
+  out[o] = 0;
+}
 
 static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // /clicks JSON can run ~250 B with full 24h history; chunked to be safe.
@@ -400,14 +475,24 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   if (ntpclient.synced) {
     n = snprintf_P(line, sizeof(line),
-      PSTR(",\"start\":%lu}"), (unsigned long)ntpclient.boot_epoch);
+      PSTR(",\"start\":%lu"), (unsigned long)ntpclient.boot_epoch);
   } else {
     unsigned long uptime = ntpclient.getUptime() - start;
     n = snprintf_P(line, sizeof(line),
-      PSTR(",\"uptime\":%lu}"), uptime);
+      PSTR(",\"uptime\":%lu"), uptime);
   }
   if (n > 0) res.sendChunk(line, (size_t)n);
 
+  if (gcounter.get_lifetime_enabled()) {
+    char clkBuf[24];
+    fmt_u64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
+    n = snprintf_P(line, sizeof(line),
+      PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu}"),
+      clkBuf, (unsigned long)gcounter.get_first_boot_ts());
+    if (n > 0) res.sendChunk(line, (size_t)n);
+  }
+
+  res.sendChunk(F("}"));
   res.endChunked();
 }
 
@@ -465,9 +550,17 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// /hist renders the past-day rolling history table by fetching /clicks
-// in JS. Body + script live next to /clicks since they share the schema.
+// /hist is a pure-JS render: lifetime block, 24h bar chart, hour table.
+// All values come from /clicks (single source of truth).
 static const char HISTORY_BODY[] PROGMEM = R"HTML(
+<div id=lf style=display:none><h2>Lifetime</h2><div class=card><div id=g2>
+<div><span class=muted>Clicks </span><b id=lfc>&mdash;</b></div>
+<div><span class=muted>&micro;Sv </span><b id=lfs>&mdash;</b></div>
+<div><span class=muted>Elapsed </span><b id=lfd>&mdash;</b></div>
+<div><span class=muted>Avg CPM </span><b id=lfa>&mdash;</b></div>
+</div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
+<h2>Last 24 hours</h2>
+<div id=bc style="display:flex;align-items:flex-end;gap:1px;height:80px;margin:.4em 0 1em;border-bottom:1px solid var(--border)"></div>
 <table>
 <thead><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>&micro;Sv</th></tr></thead>
 <tbody id=tb></tbody>
@@ -477,7 +570,29 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
   var tb=byID('tb'),
       start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
       rlv='roll' in o?o.roll*1000:3600000,
-      rows='';
+      rows='',mx=0;
+  if('life' in o){
+    var L=o.life;
+    byID('lfc').textContent=L.clk.toLocaleString();
+    byID('lfs').textContent=(L.clk/60/o.ratio).toFixed(3);
+    if(L.fbt>0){
+      var s=Math.floor(Date.now()/1000)-L.fbt;
+      if(s>0){
+        var u=s>=86400?(s/86400).toFixed(1)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?Math.floor(s/60)+'m':s+'s';
+        byID('lfd').textContent=u;
+        byID('lfa').textContent=(L.clk*60/s).toFixed(1);
+      }
+    }
+    byID('lf').style.display='';
+  }
+  o.last_day.forEach(function(n){if(n>mx)mx=n});
+  if(mx<1)mx=1;
+  var bars='';
+  for(var i=o.last_day.length-1;i>=0;i--){
+    var v=o.last_day[i],h=(v/mx*100).toFixed(1);
+    bars+='<div style="flex:1;background:var(--accent);height:'+h+'%" title="'+v+'"></div>';
+  }
+  byID('bc').innerHTML=bars;
   o.last_day.forEach(function(n,idx){
     var off=idx*rlv,
         sd=new Date(Math.floor(Date.now()/rlv)*rlv-off),
@@ -500,12 +615,18 @@ static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
+static void hLifeReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  gcounter.reset_lifetime();
+  res.send(200, "text/plain", "OK");
+}
+
 void CounterRoutes::registerRoutes(EGHttpServer& http) {
-  http.on("/clicks",   EGHttpRequest::GET, hClicks);
-  http.on("/lastdata", EGHttpRequest::GET, hLastData);
-  http.on("/json",     EGHttpRequest::GET, hJson);
-  http.on("/hist",     EGHttpRequest::GET, hHistory);
+  http.on("/clicks",   EGHttpRequest::GET,  hClicks);
+  http.on("/lastdata", EGHttpRequest::GET,  hLastData);
+  http.on("/json",     EGHttpRequest::GET,  hJson);
+  http.on("/hist",     EGHttpRequest::GET,  hHistory);
+  http.on("/life/reset", EGHttpRequest::POST, hLifeReset);
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-  http.on("/cpm",      EGHttpRequest::GET, hSetCPM);
+  http.on("/cpm",      EGHttpRequest::GET,  hSetCPM);
 #endif
 }

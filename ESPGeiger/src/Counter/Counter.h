@@ -164,28 +164,27 @@ class Counter {
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
       GeigerUdpRx* udp_rx() { return geigerinput; }
 #endif
-      void queueBlip(uint32_t count = 1) {
+      void queueBlip(uint32_t /*count*/ = 1) {
         _last_blip = micros();
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-        if (count == 0) return;
-        uint32_t now_ms = millis();
-        if ((uint32_t)(now_ms - _last_imm_blip_ms) >= 40) {
-          _last_imm_blip_ms = now_ms;
-          blip();
-          if ((int32_t)(_last_blip_fire_ms - now_ms) < 40)
-            _last_blip_fire_ms = now_ms + 40;
-          count--;
-        }
-        uint32_t room = 255u - _pending_blips;
-        if (count > room) count = room;
-        _pending_blips += (uint8_t)count;
-#endif
       }
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;
       unsigned long clicks_today = 0;
       unsigned long clicks_yesterday = 0;
+      unsigned long total_clicks_lifetime = 0;
+      unsigned long total_clicks_lifetime_rollover = 0;
+      void set_lifetime_enabled(bool on) { _lifetime_enabled = on; }
+      bool get_lifetime_enabled() const { return _lifetime_enabled; }
+      void set_lifetime_clicks(unsigned long v) { total_clicks_lifetime = v; }
+      void set_lifetime_rollover(unsigned long v) { total_clicks_lifetime_rollover = v; }
+      uint64_t get_lifetime_clicks_total() const {
+        return ((uint64_t)total_clicks_lifetime_rollover << 32) + total_clicks_lifetime;
+      }
+      void set_first_boot_ts(uint32_t v) { _first_boot_ts = v; }
+      uint32_t get_first_boot_ts() const { return _first_boot_ts; }
+      void save_lifetime();
+      void reset_lifetime();
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
 #ifdef GEIGER_BLIPLED
@@ -200,16 +199,14 @@ class Counter {
 #endif
     private:
       unsigned long _last_blip_seen = 0;
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-      uint8_t  _pending_blips = 0;
-      uint32_t _last_blip_fire_ms = 0;
-      uint32_t _last_imm_blip_ms = 0;
-#endif
       int _cpm_warning = 50;
       int _cpm_alert = 100;
       bool _bool_cpm_warning = false;
       bool _bool_cpm_alert = false;
       bool _blip_led = true;
+      bool _lifetime_enabled = true;
+      uint32_t _first_boot_ts = 0;
+      uint32_t _rtc_unsaved_clicks = 0;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
       mutable bool _warm_cached = false;
       int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled
@@ -224,9 +221,14 @@ class Counter {
       float _cached_usv    = 0.0f;
       float _cached_cpm5f  = 0.0f;
       float _cached_cpm15f = 0.0f;
-      Smoothed <float> geigerTicks;
-      Smoothed <float> geigerTicks5;
-      Smoothed <float> geigerTicks15;
+      EGRingAvg<float, GEIGER_CPM_COUNT> geigerTicks;
+#ifdef GEIGER_SMOOTH_AVG
+      EGRingAvg<float, GEIGER_CPM5_COUNT>  geigerTicks5;
+      EGRingAvg<float, GEIGER_CPM15_COUNT> geigerTicks15;
+#else
+      EGEma<float> geigerTicks5;
+      EGEma<float> geigerTicks15;
+#endif
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
       GeigerPulse* geigerinput;
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
