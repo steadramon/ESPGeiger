@@ -20,7 +20,6 @@
 #define GEIGERTESTSRL_H
 #include <Arduino.h>
 #include <SoftwareSerial.h>
-#include "../../Util/EGSmoothed.h"
 
 #ifndef GEIGER_TXPIN
 #define GEIGER_TXPIN 12
