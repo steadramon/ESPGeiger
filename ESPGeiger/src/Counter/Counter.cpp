@@ -38,10 +38,8 @@
 
 extern long start;  // boot epoch ref from main
 
-// RTC user-RAM stash for lifetime clicks since last flash save. Survives WDT,
-// exception, soft reset; lost on hard power loss. Folded into flash on boot.
-// Word offset 48 = 192 B from start of user RTC RAM - inside the 384 B OTA-
-// safe region (>= word 32) and clear of CrashDump (words 0..41).
+// RTC stash for clicks-since-last-flash-save. Word 48 = OTA-safe region,
+// clear of CrashDump (0..41). Folded into flash on boot.
 #ifdef ESP8266
 namespace {
 constexpr uint32_t LIFE_RTC_OFFSET_WORDS = 48;
@@ -178,15 +176,12 @@ void Counter::secondticker(unsigned long stick_now) {
       _rtc_unsaved_clicks += (uint32_t)eventCounter;
       rtc_life_stash(_rtc_unsaved_clicks);
     }
-    // Capture first NTP-synced timestamp once across all boots.
     if (_first_boot_ts == 0 && currentTime > 0) {
       _first_boot_ts = (uint32_t)currentTime;
       save_lifetime();
     }
-    // Periodic flash save: every 21600 ticks = 6 h of uptime. Survives
-    // power loss with at most 6 h of clicks unsaved.
     static uint32_t s_save_ctr = 0;
-    if (++s_save_ctr >= 21600) {
+    if (++s_save_ctr >= 21600) {   // 6 h
       s_save_ctr = 0;
       save_lifetime();
     }

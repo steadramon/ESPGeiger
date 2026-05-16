@@ -148,7 +148,10 @@ class Counter {
       bool is_warning();
       bool is_alert();
       bool is_healthy() const { return geigerinput && geigerinput->isHealthy(); }
-      void stop_for_ota() { if (geigerinput) geigerinput->stopForOTA(); }
+      void stop_for_ota() {
+        if (_lifetime_enabled) save_lifetime();
+        if (geigerinput) geigerinput->stopForOTA();
+      }
       unsigned long last_blip() {
         return geigerinput->last_blip();
       }
