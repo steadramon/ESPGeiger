@@ -42,6 +42,7 @@ class SerialOut : public EGModule {
       void loop(unsigned long now) override;
       void registerRoutes(EGHttpServer& http) override;
       const EGPrefGroup* prefs_group() override;
+      uint8_t display_order() override { return 0; }
       void on_prefs_loaded() override;
       void set_show(int var);
       void print_cpm();
