@@ -100,6 +100,7 @@ static const EGPref LIFE_PREF_ITEMS[] = {
   {"clk",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
   {"clkr", nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
   {"fbt",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
+  {"secs", nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
 };
 
 static const EGPrefGroup LIFE_PREF_GROUP = {
@@ -117,6 +118,8 @@ void LifePrefs::on_prefs_loaded() {
   gcounter.set_lifetime_rollover(lcr ? strtoul(lcr, nullptr, 10) : 0);
   const char* fbt = EGPrefs::getString("life", "fbt");
   gcounter.set_first_boot_ts(fbt ? (uint32_t)strtoul(fbt, nullptr, 10) : 0);
+  const char* secs = EGPrefs::getString("life", "secs");
+  gcounter.set_lifetime_seconds(secs ? strtoul(secs, nullptr, 10) : 0);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===

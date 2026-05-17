@@ -186,6 +186,8 @@ class Counter {
       }
       void set_first_boot_ts(uint32_t v) { _first_boot_ts = v; }
       uint32_t get_first_boot_ts() const { return _first_boot_ts; }
+      void set_lifetime_seconds(unsigned long v) { _lifetime_seconds_saved = v; }
+      unsigned long get_lifetime_seconds() const { return _lifetime_seconds_saved; }
       void save_lifetime();
       void reset_lifetime();
       CircularBuffer<int,45> cpm_history;
@@ -210,6 +212,8 @@ class Counter {
       bool _lifetime_enabled = true;
       uint32_t _first_boot_ts = 0;
       uint32_t _rtc_unsaved_clicks = 0;
+      unsigned long _lifetime_seconds_saved = 0;
+      uint32_t      _last_save_time_t = 0;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
       mutable bool _warm_cached = false;
       int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled

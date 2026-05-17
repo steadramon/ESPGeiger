@@ -38,30 +38,33 @@
 
 extern long start;  // boot epoch ref from main
 
-// RTC stash for clicks-since-last-flash-save. Word 48 = OTA-safe region,
-// clear of CrashDump (0..41). Folded into flash on boot.
+// RTC stash for clicks + tracked-seconds since last flash save. Word 48 =
+// OTA-safe region, clear of CrashDump (0..41). Folded into flash on boot.
 #ifdef ESP8266
 namespace {
 constexpr uint32_t LIFE_RTC_OFFSET_WORDS = 48;
-constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC10C;
-struct LifeRtc { uint32_t magic; uint32_t delta; };
+constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11D;  // bumped: layout grew delta_seconds
+struct LifeRtc { uint32_t magic; uint32_t delta_clicks; uint32_t delta_seconds; };
 
-void rtc_life_stash(uint32_t delta) {
-  LifeRtc r{LIFE_RTC_MAGIC, delta};
+void rtc_life_stash(uint32_t delta_clicks, uint32_t delta_seconds) {
+  LifeRtc r{LIFE_RTC_MAGIC, delta_clicks, delta_seconds};
   ESP.rtcUserMemoryWrite(LIFE_RTC_OFFSET_WORDS, (uint32_t*)&r, sizeof(r));
 }
-uint32_t rtc_life_recover_and_clear() {
+bool rtc_life_recover_and_clear(uint32_t* out_clicks, uint32_t* out_seconds) {
   LifeRtc r{};
-  if (!ESP.rtcUserMemoryRead(LIFE_RTC_OFFSET_WORDS, (uint32_t*)&r, sizeof(r))) return 0;
-  if (r.magic != LIFE_RTC_MAGIC) return 0;
-  uint32_t zero[2] = {0, 0};
+  *out_clicks = 0; *out_seconds = 0;
+  if (!ESP.rtcUserMemoryRead(LIFE_RTC_OFFSET_WORDS, (uint32_t*)&r, sizeof(r))) return false;
+  if (r.magic != LIFE_RTC_MAGIC) return false;
+  uint32_t zero[3] = {0, 0, 0};
   ESP.rtcUserMemoryWrite(LIFE_RTC_OFFSET_WORDS, zero, sizeof(zero));
-  return r.delta;
+  *out_clicks  = r.delta_clicks;
+  *out_seconds = r.delta_seconds;
+  return true;
 }
 }
 #else
-static inline void rtc_life_stash(uint32_t) {}
-static inline uint32_t rtc_life_recover_and_clear() { return 0; }
+static inline void rtc_life_stash(uint32_t, uint32_t) {}
+static inline bool rtc_life_recover_and_clear(uint32_t* c, uint32_t* s) { *c=0; *s=0; return false; }
 #endif
 
 Counter::Counter() {
@@ -174,7 +177,21 @@ void Counter::secondticker(unsigned long stick_now) {
     }
     if (eventCounter > 0) {
       _rtc_unsaved_clicks += (uint32_t)eventCounter;
-      rtc_life_stash(_rtc_unsaved_clicks);
+    }
+    if (_last_save_time_t == 0 && currentTime > 0) {
+      _last_save_time_t = (uint32_t)currentTime;
+    }
+    // Stash every 30 s. Worst-case soft-reboot loss: 30 s of clicks + time
+    // (both drop symmetrically, so CPM math stays correct).
+    static uint32_t s_rtc_ctr = 0;
+    if (++s_rtc_ctr >= 30) {
+      s_rtc_ctr = 0;
+      uint32_t delta_s = 0;
+      if (_last_save_time_t > 0 && currentTime > 0 &&
+          (uint32_t)currentTime >= _last_save_time_t) {
+        delta_s = (uint32_t)currentTime - _last_save_time_t;
+      }
+      rtc_life_stash(_rtc_unsaved_clicks, delta_s);
     }
     if (_first_boot_ts == 0 && currentTime > 0) {
       _first_boot_ts = (uint32_t)currentTime;
@@ -192,6 +209,15 @@ void Counter::secondticker(unsigned long stick_now) {
 }
 
 void Counter::save_lifetime() {
+  // Advance tracked seconds by the span since the previous save: keeps the
+  // CPM denominator symmetric with the click numerator across reboots.
+  time_t currentTime = time(nullptr);
+  if (_last_save_time_t > 0 && currentTime > 0 &&
+      (uint32_t)currentTime >= _last_save_time_t) {
+    _lifetime_seconds_saved += (uint32_t)currentTime - _last_save_time_t;
+  }
+  if (currentTime > 0) _last_save_time_t = (uint32_t)currentTime;
+
   char buf[16];
   snprintf(buf, sizeof(buf), "%lu", total_clicks_lifetime);
   EGPrefs::put("life", "clk", buf);
@@ -199,15 +225,19 @@ void Counter::save_lifetime() {
   EGPrefs::put("life", "clkr", buf);
   snprintf(buf, sizeof(buf), "%lu", (unsigned long)_first_boot_ts);
   EGPrefs::put("life", "fbt", buf);
+  snprintf(buf, sizeof(buf), "%lu", _lifetime_seconds_saved);
+  EGPrefs::put("life", "secs", buf);
   EGPrefs::commit();
   _rtc_unsaved_clicks = 0;
-  rtc_life_stash(0);
+  rtc_life_stash(0, 0);
 }
 
 void Counter::reset_lifetime() {
   total_clicks_lifetime = 0;
   total_clicks_lifetime_rollover = 0;
   _first_boot_ts = 0;
+  _lifetime_seconds_saved = 0;
+  _last_save_time_t = 0;
   save_lifetime();
   Log::console(PSTR("Lifetime: reset"));
 }
@@ -311,16 +341,23 @@ void Counter::begin() {
   geigerinput->begin();
   apply_pcnt_filter();
 
-  uint32_t rtc_delta = rtc_life_recover_and_clear();
-  if (rtc_delta > 0 && _lifetime_enabled) {
-    unsigned long prev = total_clicks_lifetime;
-    total_clicks_lifetime += rtc_delta;
-    if (prev > total_clicks_lifetime) {
-      total_clicks_lifetime = rtc_delta;
-      total_clicks_lifetime_rollover++;
+  uint32_t rtc_delta_clicks = 0, rtc_delta_seconds = 0;
+  bool rtc_ok = rtc_life_recover_and_clear(&rtc_delta_clicks, &rtc_delta_seconds);
+  if (rtc_ok && _lifetime_enabled) {
+    if (rtc_delta_clicks > 0) {
+      unsigned long prev = total_clicks_lifetime;
+      total_clicks_lifetime += rtc_delta_clicks;
+      if (prev > total_clicks_lifetime) {
+        total_clicks_lifetime = rtc_delta_clicks;
+        total_clicks_lifetime_rollover++;
+      }
     }
-    Log::console(PSTR("Lifetime: recovered %lu unsaved clicks from RTC"),
-                 (unsigned long)rtc_delta);
+    _lifetime_seconds_saved += rtc_delta_seconds;
+    if (rtc_delta_clicks > 0 || rtc_delta_seconds > 0) {
+      Log::console(PSTR("Lifetime: recovered %lu clicks + %lu s from RTC"),
+                   (unsigned long)rtc_delta_clicks,
+                   (unsigned long)rtc_delta_seconds);
+    }
   }
 }
 
@@ -482,8 +519,9 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
     char clkBuf[24];
     fmt_u64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
     n = snprintf_P(line, sizeof(line),
-      PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu}"),
-      clkBuf, (unsigned long)gcounter.get_first_boot_ts());
+      PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu,\"secs\":%lu}"),
+      clkBuf, (unsigned long)gcounter.get_first_boot_ts(),
+      gcounter.get_lifetime_seconds());
     if (n > 0) res.sendChunk(line, (size_t)n);
   }
 
@@ -551,7 +589,8 @@ static const char HISTORY_BODY[] PROGMEM = R"HTML(
 <div id=lf style=display:none><h2>Lifetime</h2><div class=card><div id=g2>
 <div><span class=muted>Clicks </span><b id=lfc>&mdash;</b></div>
 <div><span class=muted>&micro;Sv </span><b id=lfs>&mdash;</b></div>
-<div><span class=muted>Elapsed </span><b id=lfd>&mdash;</b></div>
+<div><span class=muted>Tracked </span><b id=lfd>&mdash;</b></div>
+<div><span class=muted>Install age </span><b id=lfi>&mdash;</b></div>
 <div><span class=muted>Avg CPM </span><b id=lfa>&mdash;</b></div>
 </div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
 <h2>Last 24 hours</h2>
@@ -568,16 +607,16 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
       rows='',mx=0;
   if('life' in o){
     var L=o.life;
+    var fmtDur=function(s){return s>=86400?(s/86400).toFixed(1)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?Math.floor(s/60)+'m':s+'s'};
     byID('lfc').textContent=L.clk.toLocaleString();
     byID('lfs').textContent=(L.clk/60/o.ratio).toFixed(3);
-    if(L.fbt>0){
-      var s=Math.floor(Date.now()/1000)-L.fbt;
-      if(s>0){
-        var u=s>=86400?(s/86400).toFixed(1)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?Math.floor(s/60)+'m':s+'s';
-        byID('lfd').textContent=u;
-        byID('lfa').textContent=(L.clk*60/s).toFixed(1);
-      }
+    // Fallback to wall-clock-since-fbt for firmware predating the secs field.
+    var ts=L.secs>0?L.secs:(L.fbt>0?Math.floor(Date.now()/1000)-L.fbt:0);
+    if(ts>0){
+      byID('lfd').textContent=fmtDur(ts);
+      byID('lfa').textContent=(L.clk*60/ts).toFixed(1);
     }
+    if(L.fbt>0) byID('lfi').textContent=fmtDur(Math.floor(Date.now()/1000)-L.fbt);
     byID('lf').style.display='';
   }
   o.last_day.forEach(function(n){if(n>mx)mx=n});
