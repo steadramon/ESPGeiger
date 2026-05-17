@@ -112,16 +112,18 @@ void WebAPI::loop(unsigned long now) {
     return;
   }
 
+  // Signed deltas: backoff math can push lastHandshake into the future when
+  // _hs_backoff_ms > WEBAPI_HANDSHAKE_MS - unsigned compare then underflows.
   if (lastHandshake == 0) {
     lastHandshake = now + random(11311) - WEBAPI_HANDSHAKE_MS;
-  } else if ((now - lastHandshake) >= WEBAPI_HANDSHAKE_MS) {
+  } else if ((long)(now - lastHandshake) >= (long)WEBAPI_HANDSHAKE_MS) {
     doHandshake();
   } else if (station_id != 0) {
     if (lastPing == 0) {
       lastPing = staggeredPingStart(now);
-    } else if ((now - lastPing) >= pingIntervalMs) {
+    } else if ((long)(now - lastPing) >= (long)pingIntervalMs) {
       lastPing += pingIntervalMs;
-      if ((now - lastPing) >= pingIntervalMs) lastPing = staggeredPingStart(now);
+      if ((long)(now - lastPing) >= (long)pingIntervalMs) lastPing = staggeredPingStart(now);
 
       const bool healthDue = (healthPostCounter == 0);
       if (_mode == 2 || healthDue) {
