@@ -668,9 +668,10 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
         ed=new Date(sd.getTime()+rlv);
     if(idx==0)ed=new Date();
     if(idx==o.last_day.length-1&&sd<start)sd=start;
-    var mins=(ed-sd)/60000;
-    var uv=n/mins/o.ratio;
-    rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+Math.ceil(n/mins)+'</td><td class=usv data-uv="'+uv+'">'+uv.toFixed(4)+'</td></tr>';
+    var mins=(ed-sd)/60000,
+        ok=mins>0&&o.ratio>0,
+        uv=ok?n/mins/o.ratio:0;
+    rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+(ok?Math.ceil(n/mins):'—')+'</td><td'+(ok?' class=usv data-uv="'+uv+'"':'')+'>'+(ok?uv.toFixed(4):'—')+'</td></tr>';
   });
   tb.innerHTML=rows;
   if(window.applyRad)applyRad();
