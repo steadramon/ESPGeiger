@@ -49,17 +49,19 @@ class URADMonitor : public EGModule {
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return 500; }
     void loop(unsigned long now) override;
+    void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
     uint8_t display_order() override { return 35; }
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
     void postMeasurement();
     void setInterval(int interval);
     int getInterval();
-    AsyncHTTPRequest request;
+    AsyncHTTPRequest* request = nullptr;
   private:
     unsigned long lastPing = 0;
     uint16_t pingInterval = URADMON_INTERVAL;
     uint32_t pingIntervalMs = (uint32_t)URADMON_INTERVAL * 1000UL;
+    bool _send_enabled = false;
     static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
