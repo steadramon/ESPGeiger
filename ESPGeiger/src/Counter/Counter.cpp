@@ -32,6 +32,7 @@
 #include "../GRNG/GRNG.h"
 #include "../WebPortal/WebPortal.h"
 #include "../UdpBlip/UdpBlip.h"
+#include "HIST_JS.gz.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 #endif
@@ -230,6 +231,15 @@ void Counter::save_lifetime() {
   EGPrefs::commit();
   _rtc_unsaved_clicks = 0;
   rtc_life_stash(0, 0);
+}
+
+unsigned long Counter::get_lifetime_seconds() const {
+  unsigned long live = _lifetime_seconds_saved;
+  if (_last_save_time_t > 0 && ntpclient.synced) {
+    time_t now = time(nullptr);
+    if ((uint32_t)now >= _last_save_time_t) live += (uint32_t)now - _last_save_time_t;
+  }
+  return live;
 }
 
 void Counter::reset_lifetime() {
@@ -583,48 +593,73 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// /hist is a pure-JS render: lifetime block, 24h bar chart, hour table.
-// All values come from /clicks (single source of truth).
+// /hist body + /histjs. All values come from /clicks.
 static const char HISTORY_BODY[] PROGMEM = R"HTML(
 <div id=lf style=display:none><h2>Lifetime</h2><div class=card><div id=g2>
 <div><span class=muted>Clicks </span><b id=lfc>&mdash;</b></div>
-<div><span class=muted>&micro;Sv </span><b id=lfs>&mdash;</b></div>
+<div><span class=muted><span class=usvL data-on=µR data-off=µSv>&micro;Sv</span> </span><b id=lfs class=usv>&mdash;</b></div>
 <div><span class=muted>Tracked </span><b id=lfd>&mdash;</b></div>
 <div><span class=muted>Install age </span><b id=lfi>&mdash;</b></div>
 <div><span class=muted>Avg CPM </span><b id=lfa>&mdash;</b></div>
 </div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
 <h2>Last 24 hours</h2>
-<div id=bc style="display:flex;align-items:flex-end;gap:1px;height:80px;margin:.4em 0 1em;border-bottom:1px solid var(--border)"></div>
+<div class=card style="margin:.4em 0"><div id=g2>
+<div><span class=muted>Today </span><b id=hsT>&mdash;</b></div>
+<div><span class=muted>Yesterday </span><b id=hsY>&mdash;</b></div>
+<div><span class=muted id=hsAL>24h avg CPM </span><b id=hsA>&mdash;</b></div>
+<div><span class=muted>24h peak CPM </span><b id=hsP>&mdash;</b></div>
+<div><span class=muted>Today vs yesterday </span><b id=hsD>&mdash;</b></div>
+</div></div>
+<div id=bc style="display:flex;align-items:flex-end;gap:1px;height:80px;max-height:80px;width:100%;overflow:hidden;margin:.4em 0 1em;border-bottom:1px solid var(--border)"></div>
 <table>
-<thead><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th>&micro;Sv</th></tr></thead>
+<thead><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th><span class=usvL>&micro;Sv</span></th></tr></thead>
 <tbody id=tb></tbody>
 </table>
-<script>
+<script src=/histjs)HTML" EG_CACHE_BUST R"HTML(></script>
+)HTML";
+
+static const char HIST_JS[] PROGMEM = R"JS(
 fetch('/clicks').then(r=>r.json()).then(o=>{
-  var tb=byID('tb'),
+  var $=byID,N=Date.now()/1000|0,T=o.today||0,Y=o.yesterday||0,
+      tb=$('tb'),
       start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
       rlv='roll' in o?o.roll*1000:3600000,
-      rows='',mx=0;
+      rows='',mx=0,sum=0,
+      F=s=>s>=86400?(s/86400).toFixed(1)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?(s/60|0)+'m':s+'s';
   if('life' in o){
-    var L=o.life;
-    var fmtDur=function(s){return s>=86400?(s/86400).toFixed(1)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?Math.floor(s/60)+'m':s+'s'};
-    byID('lfc').textContent=L.clk.toLocaleString();
-    byID('lfs').textContent=(L.clk/60/o.ratio).toFixed(3);
-    // Fallback to wall-clock-since-fbt for firmware predating the secs field.
-    var ts=L.secs>0?L.secs:(L.fbt>0?Math.floor(Date.now()/1000)-L.fbt:0);
-    if(ts>0){
-      byID('lfd').textContent=fmtDur(ts);
-      byID('lfa').textContent=(L.clk*60/ts).toFixed(1);
-    }
-    if(L.fbt>0) byID('lfi').textContent=fmtDur(Math.floor(Date.now()/1000)-L.fbt);
-    byID('lf').style.display='';
+    var L=o.life,ts=L.secs>0?L.secs:(L.fbt>0?N-L.fbt:0);
+    $('lfc').textContent=L.clk.toLocaleString();
+    setUsv($('lfs'),L.clk/60/o.ratio);
+    if(ts>0){$('lfd').textContent=F(ts);$('lfa').textContent=(L.clk*60/ts).toFixed(1)}
+    if(L.fbt>0)$('lfi').textContent=F(N-L.fbt);
+    $('lf').style.display='';
   }
-  o.last_day.forEach(function(n){if(n>mx)mx=n});
+  var nowMs=Date.now(),curB=Math.floor(nowMs/rlv)*rlv,pk=0,bs=o.start*1000;
+  o.last_day.forEach((n,i)=>{
+    sum+=n;if(n>mx)mx=n;
+    var sd=curB-i*rlv,ed=i?sd+rlv:nowMs;
+    if(i===o.last_day.length-1&&sd<bs)sd=bs;
+    var ms=ed-sd;
+    if(ms>0){var r=n*60000/ms;if(r>pk)pk=r}
+  });
+  $('hsT').textContent=T.toLocaleString();
+  $('hsY').textContent=Y.toLocaleString();
+  var es='start' in o?Math.max(0,N-o.start):o.uptime||0,
+      h60=rlv>=3600000&&es>=3600,
+      cpmA=h60?((o.last_day[1]||0)*(60-new Date().getMinutes())/60+(o.last_day[0]||0))/60
+              :es>0?sum*60/Math.min(es,86400):0,
+      p=Y>0?(T-Y)*100/Y:0;
+  $('hsA').textContent=Math.round(cpmA);
+  $('hsAL').textContent=(h60?'1h ':'')+'avg CPM ';
+  $('hsP').textContent=Math.round(pk);
+  $('hsD').textContent=Y>0?(p>=0?'+':'')+p.toFixed(1)+'%':'—';
   if(mx<1)mx=1;
   var bars='';
-  for(var i=o.last_day.length-1;i>=0;i--){
-    var v=o.last_day[i],h=(v/mx*100).toFixed(1);
-    bars+='<div style="flex:1;background:var(--accent);height:'+h+'%" title="'+v+'"></div>';
+  for(var i=23;i>=0;i--){
+    var v=o.last_day[i]||0,
+        h=v?(v/mx*100).toFixed(1)+'%':'3px',
+        bg=v?'var(--accent)':'var(--border)';
+    bars+='<div style="flex:1;min-width:0;background:'+bg+';height:'+h+';min-height:3px;max-height:100%" title="'+v+'"></div>';
   }
   byID('bc').innerHTML=bars;
   o.last_day.forEach(function(n,idx){
@@ -634,12 +669,13 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     if(idx==0)ed=new Date();
     if(idx==o.last_day.length-1&&sd<start)sd=start;
     var mins=(ed-sd)/60000;
-    rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+Math.ceil(n/mins)+'</td><td>'+(n/mins/o.ratio).toFixed(4)+'</td></tr>';
+    var uv=n/mins/o.ratio;
+    rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+Math.ceil(n/mins)+'</td><td class=usv data-uv="'+uv+'">'+uv.toFixed(4)+'</td></tr>';
   });
   tb.innerHTML=rows;
+  if(window.applyRad)applyRad();
 });
-</script>
-)HTML";
+)JS";
 
 static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
@@ -647,6 +683,15 @@ static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendChunk(FPSTR(HISTORY_BODY));
   WebPortal::sendPageTail(res);
   res.endChunked();
+}
+
+static void hHistJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
+#if EG_GZ_HIST_JS
+  res.sendGzipP(200, "application/javascript", HIST_JS_GZ, HIST_JS_GZ_LEN);
+#else
+  res.send(200, "application/javascript", FPSTR(HIST_JS));
+#endif
 }
 
 static void hLifeReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -659,6 +704,7 @@ void CounterRoutes::registerRoutes(EGHttpServer& http) {
   http.on("/lastdata", EGHttpRequest::GET,  hLastData);
   http.on("/json",     EGHttpRequest::GET,  hJson);
   http.on("/hist",     EGHttpRequest::GET,  hHistory);
+  http.on("/histjs",   EGHttpRequest::GET,  hHistJs);
   http.on("/life/reset", EGHttpRequest::POST, hLifeReset);
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   http.on("/cpm",      EGHttpRequest::GET,  hSetCPM);

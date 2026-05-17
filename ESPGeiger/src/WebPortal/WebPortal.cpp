@@ -393,17 +393,34 @@ void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t);
 !function(){
 var d=document.documentElement,L=addEventListener,
-TE=()=>dispatchEvent(new Event('themechange'));
+TE=()=>dispatchEvent(new Event('themechange')),
+AR=el=>{
+  var u=d.classList.contains('crt'),
+      list=el&&el.dataset?[el]:document.querySelectorAll('.usv');
+  list.forEach(e=>{
+    var v=parseFloat(e.dataset.uv);
+    if(isNaN(v))return;
+    e.textContent=u?(v*114).toFixed(v*114>=10?1:2):v.toFixed(3);
+    e.title=u?v.toFixed(3)+' µSv/h':'';
+  });
+  document.querySelectorAll('.usvL').forEach(e=>{e.textContent=u?(e.dataset.on||'µR/h'):(e.dataset.off||'µSv/h')});
+};
+window.setUsv=(el,v)=>{el.dataset.uv=v;AR(el)};
+window.applyRad=AR;
 function C(){var s=localStorage.crt,a=new Date();
 if(s==='1'||(s==null&&a.getMonth()===3&&a.getDate()===1))d.classList.add('crt');
-else if(s==='0')d.classList.remove('crt')}
+else if(s==='0')d.classList.remove('crt');
+AR();}
 window.theme=()=>{var t=d.dataset.theme=='dark'?'light':'dark';
 d.dataset.theme=localStorage.theme=t;TE()};
 d.dataset.theme=localStorage.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
 C();L('pageshow',C);
 var k=[38,38,40,40,37,39,37,39,66,65],i=0;
 L('keydown',e=>{i=e.keyCode===k[i]?i+1:0;
-if(i===k.length){localStorage.crt=d.classList.toggle('crt')?'1':'0';TE();i=0}})
+if(i===k.length){
+  localStorage.crt=d.classList.toggle('crt')?'1':'0';
+  AR();TE();i=0;
+}})
 }();)JS";
 #endif
 
@@ -1892,7 +1909,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <div id=g2></div>
 <table>
 <tr><th>CPM</th><td><span id=blip></span><span id=cpm>-</span></td><th>CPS</th><td><span id=cs>-</span></td></tr>
-<tr><th>&micro;Sv/h</th><td><span id=usv>-</span></td><th>Total clicks</th><td><span id=tc>-</span></td></tr>
+<tr><th><span class=usvL>&micro;Sv/h</span></th><td><span id=usv class=usv>-</span></td><th>Total clicks</th><td><span id=tc>-</span></td></tr>
 <tr><th>Uptime</th><td><span id=upt>-</span></td><th>Signal</th><td><span id=rssi>-</span></td></tr>
 </table>
 <h2>Console</h2>
@@ -2035,7 +2052,7 @@ setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
 var Q=function(){if(!window._csk){window._csk=1;O(f,100)}},t=function(){var n=new X;n.open("GET","/json",!0);
 n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText),u=o.ut;
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
-C.textContent=o.c.toFixed(2);T.textContent=o.tc;V.textContent=(o.c/o.r).toFixed(4);S.textContent=o.cs.toFixed(2);
+C.textContent=o.c.toFixed(2);T.textContent=o.tc;setUsv(V,o.c/o.r);S.textContent=o.cs.toFixed(2);
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));

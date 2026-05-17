@@ -26,7 +26,7 @@ Settings changed on the Config page take effect immediately (or on next submissi
 | Warning CPM | Int 0-9999 | `50` | CPM threshold for warning state |
 | Alert CPM | Int 0-9999 | `100` | CPM threshold for alert state |
 | Web password | String (32) | `(empty)` | Optional HTTP Basic Auth password (user is `admin`). Blank disables auth. Sensitive. |
-| Track lifetime | Boolean | `true` | Persist total clicks + first-boot timestamp across reboots. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
+| Track lifetime | Boolean | `true` | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
 
 ### Config import / export
 

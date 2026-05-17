@@ -187,7 +187,7 @@ class Counter {
       void set_first_boot_ts(uint32_t v) { _first_boot_ts = v; }
       uint32_t get_first_boot_ts() const { return _first_boot_ts; }
       void set_lifetime_seconds(unsigned long v) { _lifetime_seconds_saved = v; }
-      unsigned long get_lifetime_seconds() const { return _lifetime_seconds_saved; }
+      unsigned long get_lifetime_seconds() const;  // live: saved + uncommitted delta
       void save_lifetime();
       void reset_lifetime();
       CircularBuffer<int,45> cpm_history;
