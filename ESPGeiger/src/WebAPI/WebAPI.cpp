@@ -150,7 +150,8 @@ void WebAPI::loop(unsigned long now) {
 
 static uint32_t wallClockWaitMs(uint32_t k, uint32_t intervalMs, uint32_t period_s) {
   uint32_t target_ms = k % intervalMs;
-  uint32_t cur_ms    = (uint32_t)((time(NULL) % period_s) * 1000UL);
+  // Cast first - signed mod on negative time_t (post-2038) wraps cur_ms.
+  uint32_t cur_ms    = ((uint32_t)time(NULL) % period_s) * 1000UL;
   return (target_ms >= cur_ms) ? target_ms - cur_ms
                                : intervalMs - cur_ms + target_ms;
 }

@@ -76,7 +76,7 @@ void NTP_Client::setup()
     if (!ntpclient.synced) {
       ntpclient.synced = true;
       unsigned long uptime = ntpclient.getUptime() - start;
-      ntpclient.boot_epoch = int(time(NULL)-uptime);
+      ntpclient.boot_epoch = (unsigned long)time(NULL) - uptime;
       Log::console(PSTR("NTP: Synched"));
     }
   });
@@ -92,7 +92,7 @@ void NTP_Client::setup()
     if (!ntpclient.synced) {
       ntpclient.synced = true;
       unsigned long uptime = ntpclient.getUptime() - start;
-      ntpclient.boot_epoch = int(time(NULL)-uptime);
+      ntpclient.boot_epoch = (unsigned long)time(NULL) - uptime;
       Log::console(PSTR("NTP: Synched"));
     }
   });

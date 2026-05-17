@@ -22,6 +22,7 @@
 #include "logo.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../NTP/NTP.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/PinSafety.h"
 #include "../Util/StringUtil.h"
@@ -381,6 +382,7 @@ bool SSD1306Display::isScreenOnTime(unsigned long now) {
     s_sched_recompute_ms = 0;
   }
   if (s_sched_on_mins == -2) return true;
+  if (!ntpclient.synced) return true;
   if ((long)(now - s_sched_recompute_ms) < 0) return s_sched_cached;
   time_t currentTime = time(NULL);
   struct tm *timeinfo = localtime(&currentTime);

@@ -272,19 +272,21 @@ void MQTT_Client::publishAlert()
 void MQTT_Client::publishStatus()
 {
   led.Blink(500, 500);
-  time_t currentTime = time(NULL);
-  struct tm *timeinfo = gmtime(&currentTime);
 #ifdef ESP8266
   auto& buffer = s_pub_buffer;
 #else
   static char buffer[512];
 #endif
+  // Pre-NTP / post-2038 wrap: gmtime of a negative time_t gives a bad year.
   char dateTime[24];
-  if (timeinfo) {
-    snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02dZ"),
-      1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-  } else {
-    dateTime[0] = '\0';
+  dateTime[0] = '\0';
+  if (ntpclient.synced) {
+    time_t currentTime = time(NULL);
+    struct tm *timeinfo = gmtime(&currentTime);
+    if (timeinfo) {
+      snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02dZ"),
+        1900+timeinfo->tm_year, timeinfo->tm_mon+1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    }
   }
 
   size_t pos = 0;

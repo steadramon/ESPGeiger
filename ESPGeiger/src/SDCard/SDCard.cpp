@@ -21,6 +21,7 @@
 #include "SDCard.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../NTP/NTP.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/MathUtil.h"
 
@@ -108,10 +109,8 @@ void SDCard::s_tick(unsigned long stick_now)
     return;
   }
 
+  if (!ntpclient.synced) return;
   time_t currentTime = time (NULL);
-  if (currentTime == 0) {
-    return;
-  }
 
   // Fire once per new minute. Check minute bucket before gmtime - gmtime
   // is ~100us on ESP8266 so skipping it on 59/60 ticks saves real time.
