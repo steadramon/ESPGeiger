@@ -124,7 +124,7 @@ void Counter::secondticker(unsigned long stick_now) {
   if (++tick_cnt >= 15) tick_cnt = 0;
 
   time_t currentTime = time (NULL);
-  if (currentTime > 0) {
+  if (ntpclient.synced) {
     // Fire on each new hour (minute in test builds). gmtime() only on transition.
     // Cache next-fire time so we don't divide every tick - one-time alignment
     // divide on first sync, then pure compare-and-add.
@@ -178,7 +178,7 @@ void Counter::secondticker(unsigned long stick_now) {
     if (eventCounter > 0) {
       _rtc_unsaved_clicks += (uint32_t)eventCounter;
     }
-    if (_last_save_time_t == 0 && currentTime > 0) {
+    if (_last_save_time_t == 0 && ntpclient.synced) {
       _last_save_time_t = (uint32_t)currentTime;
     }
     // Stash every 30 s. Worst-case soft-reboot loss: 30 s of clicks + time
@@ -187,13 +187,13 @@ void Counter::secondticker(unsigned long stick_now) {
     if (++s_rtc_ctr >= 30) {
       s_rtc_ctr = 0;
       uint32_t delta_s = 0;
-      if (_last_save_time_t > 0 && currentTime > 0 &&
+      if (_last_save_time_t > 0 && ntpclient.synced &&
           (uint32_t)currentTime >= _last_save_time_t) {
         delta_s = (uint32_t)currentTime - _last_save_time_t;
       }
       rtc_life_stash(_rtc_unsaved_clicks, delta_s);
     }
-    if (_first_boot_ts == 0 && currentTime > 0) {
+    if (_first_boot_ts == 0 && ntpclient.synced) {
       _first_boot_ts = (uint32_t)currentTime;
       save_lifetime();
     }
@@ -212,11 +212,11 @@ void Counter::save_lifetime() {
   // Advance tracked seconds by the span since the previous save: keeps the
   // CPM denominator symmetric with the click numerator across reboots.
   time_t currentTime = time(nullptr);
-  if (_last_save_time_t > 0 && currentTime > 0 &&
+  if (_last_save_time_t > 0 && ntpclient.synced &&
       (uint32_t)currentTime >= _last_save_time_t) {
     _lifetime_seconds_saved += (uint32_t)currentTime - _last_save_time_t;
   }
-  if (currentTime > 0) _last_save_time_t = (uint32_t)currentTime;
+  if (ntpclient.synced) _last_save_time_t = (uint32_t)currentTime;
 
   char buf[16];
   snprintf(buf, sizeof(buf), "%lu", total_clicks_lifetime);
