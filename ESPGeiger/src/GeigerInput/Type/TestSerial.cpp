@@ -50,6 +50,12 @@ void GeigerTestSerial::begin() {
   Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
   geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
+  // 16-byte buffer fills in 160_000_000/baud us; iter ~18us, 6x safety
+  // margin. Lower base constant than GeigerSerial (16-byte vs 64-byte).
+  uint32_t skip = 1500000UL / baud;
+  if (skip < 5)   skip = 5;
+  if (skip > 500) skip = 500;
+  _poll_skip = (uint16_t)skip;
   CPMAdjuster();
 }
 
@@ -75,7 +81,7 @@ void GeigerTestSerial::pullSerial() {
 }
 
 void GeigerTestSerial::loop() {
-  if (_loop_c <= 5 && _serial_idx == 0) {
+  if (_loop_c < _poll_skip && _serial_idx == 0) {
     _loop_c++;
     return;
   }

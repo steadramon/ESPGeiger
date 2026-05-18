@@ -40,7 +40,8 @@ class GeigerTestSerial : public GeigerInputTest
 
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
-    uint8_t _loop_c = 0;
+    uint16_t _loop_c = 0;
+    uint16_t _poll_skip = 5;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
 };
 #endif
