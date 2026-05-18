@@ -53,6 +53,16 @@ void GeigerSerial::pullSerial() {
   uint8_t maxRead = sizeof(_serial_buffer);
   while (geigerPort.available() && maxRead--) {
     char input = geigerPort.read();
+    // Non-printable byte: discard the rest of this line, don't bother the parser.
+    if (input != '\n' && input != '\r' && !isPrintable((uint8_t)input)) {
+      _serial_idx = 0;
+      _serial_buffer[0] = '\0';
+      while (maxRead && geigerPort.available()) {
+        maxRead--;
+        if (geigerPort.read() == '\n') break;
+      }
+      continue;
+    }
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
       _serial_buffer[_serial_idx++] = '\0';
@@ -74,13 +84,8 @@ void GeigerSerial::loop() {
   }
   _loop_c = 0;
   pullSerial();
-  if (serial_value <= 0) {
-    serial_value = 0;
-    return;
-  }
-  if (millis() - last_serial > 10000) {
-    serial_value = 0;
-  }
+  if (serial_value <= 0) return;
+  if (millis() - last_serial > 10000) serial_value = 0;
 }
 
 void GeigerSerial::secondTicker() {
@@ -104,20 +109,29 @@ void GeigerSerial::secondTicker() {
 // Reset SoftSerial if we see this many consecutive un-parseable lines.
 #define GEIGERSERIAL_BAD_LIMIT 20
 
+void GeigerSerial::drainPort() {
+  unsigned long now = millis();
+  // Throttle console log to once a minute.
+  if (now - _last_drain_log > 60000UL) {
+    Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
+    _last_drain_log = now;
+  } else {
+    Log::debug(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
+  }
+  int n = geigerPort.available();
+  while (n-- > 0) geigerPort.read();
+  _serial_idx = 0;
+  _serial_buffer[0] = '\0';
+  _bad_streak = 0;
+  _last_drain = now;
+}
+
 void GeigerSerial::handleSerial(char* input) {
   int _scpm = 0;
   int _scps = -1;
   if (!SerialFormat::parse_cpm(_serial_type, input, &_scpm, &_scps)) {
     _bad_streak++;
-    if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) {
-      Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
-      int n = geigerPort.available();
-      while (n-- > 0) geigerPort.read();
-      _serial_idx = 0;
-      _serial_buffer[0] = '\0';
-      _bad_streak = 0;
-      _last_drain = millis();
-    }
+    if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) drainPort();
     return;
   }
 

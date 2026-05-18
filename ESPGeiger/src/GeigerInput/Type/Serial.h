@@ -47,8 +47,10 @@ class GeigerSerial : public GeigerInput
     unsigned long last_serial = 0;
     uint8_t _loop_c = 0;
     uint8_t _serial_type = GEIGER_SERIALTYPE;
-    uint16_t _bad_streak = 0;
+    uint8_t _bad_streak = 0;
     unsigned long _last_drain = 0;
+    unsigned long _last_drain_log = 0;
+    void drainPort();
     bool _use_cps = false;
 };
 #endif
