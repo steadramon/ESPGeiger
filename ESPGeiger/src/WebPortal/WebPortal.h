@@ -33,7 +33,8 @@ class WebPortal {
     // Shared page templates - modules call these inside their handler so the
     // page chrome (HEAD, CSS link, top nav, h1, back button, footer) is
     // consistent across the whole UI. Caller owns the chunked accumulator.
-    static void sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title);
+    static void sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
+                             const char* inlineSub = nullptr);
     static void sendPageTail(EGHttpResponse& res);
 
     // Credit + version → /about link. Bottom of / and /status. Kept

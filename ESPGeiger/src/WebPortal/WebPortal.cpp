@@ -290,7 +290,8 @@ void WebPortal::applyAuthFromPrefs() {
   }
 }
 
-void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title) {
+void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
+                             const char* inlineSub) {
   // <title>: "<page>  <friendly-or-hostname>". h1: <favicon> ESPGeiger - <page>.
   const char* fname = DeviceInfo::friendlyName();
   const char* devName = (fname && fname[0]) ? fname : DeviceInfo::hostname();
@@ -300,6 +301,13 @@ void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* tit
   sendHeadTail(res);
   res.sendChunk(F(THING_NAME " - "));
   res.sendChunk(title);
+  if (inlineSub && inlineSub[0]) {
+    char buf[112];
+    int n = snprintf_P(buf, sizeof(buf),
+      PSTR(" <span style=\"font-size:.6em;font-weight:500;color:var(--muted);margin-left:.7em;opacity:.85\">%s</span>"),
+      inlineSub);
+    if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+  }
   res.sendChunk(F("</h1></div>"));
 }
 
@@ -1926,7 +1934,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 
 void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
-  WebPortal::sendPageHead(res, F("Status"));
+  WebPortal::sendPageHead(res, F("Status"), DeviceInfo::friendlyName());
 
   // Seed the chart with the recent CPM history so it isn't blank for the
   // first 30s after page load. Step every 3rd sample to keep the inline
