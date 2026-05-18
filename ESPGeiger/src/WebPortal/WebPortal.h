@@ -71,6 +71,7 @@ class WebPortal {
     static void hInfo(EGHttpRequest&, EGHttpResponse&, void*);
     static void hAbout(EGHttpRequest&, EGHttpResponse&, void*);
     static void hOutputs(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hMetrics(EGHttpRequest&, EGHttpResponse&, void*);
     static void hFavicon(EGHttpRequest&, EGHttpResponse&, void*);
     static void hThemeJs(EGHttpRequest&, EGHttpResponse&, void*);
     static void hJs(EGHttpRequest&, EGHttpResponse&, void*);

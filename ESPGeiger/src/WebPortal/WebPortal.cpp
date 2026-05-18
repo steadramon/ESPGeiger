@@ -97,7 +97,14 @@ th{font-weight:500;color:var(--muted)}
 .devhead{margin:0 0 1em}
 .devhead h1{margin:0;font-size:1.65em;font-weight:700;display:flex;align-items:center;gap:.5em}
 .devhead h1 img{width:1.4em;height:1.4em;flex:0 0 auto}
+.devhead h1 .tag{font-size:.6em;font-weight:500;color:var(--muted);margin-left:.4em;opacity:.85}
+:root.crt .devhead h1 .tag{color:#0a0;text-shadow:none;opacity:1}
 .devhead .sub{color:var(--muted);font-size:.95em;margin-top:.2em}
+.back-row{margin-top:2em}
+.cred{margin-top:1.5em;font-size:.85em;color:var(--muted)}
+.cred a{color:inherit;text-decoration:none}
+.cred .brand{color:var(--fg);font-weight:bold}
+.btn-sm{font-size:.85em;padding:.2em .6em;width:auto}
 .back{display:inline-block;padding:.5em 1em;background:var(--accent);color:#fff;border-radius:4px;text-decoration:none;font-weight:500}
 .back:hover{opacity:.9;text-decoration:none}
 :root.crt{--bg:#000;--page:#000;--fg:#0f0;--muted:#080;--border:#050;--accent:#0a0;--card:#001a00}
@@ -121,7 +128,7 @@ static const char FAVICON_PATHS[] PROGMEM = R"SVG(
 )SVG";
 
 static const char PAGE_TAIL[] PROGMEM =
-  "<p style=margin-top:2em><a class=back href=/>\xe2\x86\x90 Home</a></p>"
+  "<p class=back-row><a class=back href=/>\xe2\x86\x90 Home</a></p>"
   "</body></html>";
 
 // Shared with hRoot to dedupe.
@@ -246,6 +253,7 @@ void WebPortal::begin(uint16_t port) {
   _http.on("/cs",        EGHttpRequest::GET, &WebPortal::hConsoleStream, nullptr);
   _http.on("/webcmd",    EGHttpRequest::POST, &WebPortal::hWebCmd,       nullptr);
   _http.on("/outputs",   EGHttpRequest::GET, &WebPortal::hOutputs,       nullptr);
+  _http.on("/metrics",   EGHttpRequest::GET, &WebPortal::hMetrics,       nullptr);
   _http.on("/param",     EGHttpRequest::GET, &WebPortal::hParam,         nullptr);
   _http.on("/param",     EGHttpRequest::POST, &WebPortal::hParam,        nullptr);
   _http.onUpload("/param", &WebPortal::hParamBody, nullptr);
@@ -302,10 +310,9 @@ void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* tit
   res.sendChunk(F(THING_NAME " - "));
   res.sendChunk(title);
   if (inlineSub && inlineSub[0]) {
-    char buf[112];
+    char buf[80];
     int n = snprintf_P(buf, sizeof(buf),
-      PSTR(" <span style=\"font-size:.6em;font-weight:500;color:var(--muted);margin-left:.7em;opacity:.85\">%s</span>"),
-      inlineSub);
+      PSTR("<span class=tag>%s</span>"), inlineSub);
     if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
   }
   res.sendChunk(F("</h1></div>"));
@@ -316,9 +323,9 @@ void WebPortal::sendPageTail(EGHttpResponse& res) {
 }
 
 void WebPortal::sendPageFooter(EGHttpResponse& res) {
-  res.sendKV(F("<p class=muted style='margin-top:1.5em;font-size:.85em'>"
-               "<a href='https://github.com/steadramon/ESPGeiger' target=_blank rel=noopener style='color:var(--fg);font-weight:bold;text-decoration:none'>ESPGeiger</a>"
-               " &middot; <a href='/about' style='color:inherit;text-decoration:none'>"),
+  res.sendKV(F("<p class=cred>"
+               "<a class=brand href='https://github.com/steadramon/ESPGeiger' target=_blank rel=noopener>ESPGeiger</a>"
+               " &middot; <a href='/about'>"),
              RELEASE_VERSION,
              F("</a></p>"));
 }
@@ -741,7 +748,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 <form method=POST action=/wifisave>
 <label style='display:flex;align-items:center;justify-content:space-between'>
   <span>Network</span>
-  <button type=button id=rescan style='font-size:.8em;padding:.2em .8em;background:transparent;color:var(--accent);border:1px solid var(--accent);width:auto'>Rescan</button>
+  <button type=button id=rescan class=btn-sm style='background:transparent;color:var(--accent);border:1px solid var(--accent)'>Rescan</button>
 </label>
 <select id=ws onchange="byID('s').value=this.options[this.selectedIndex].dataset.ssid||''">
 <option value=''>Scanning&hellip;</option>
@@ -1368,12 +1375,17 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       dst[cap - 1] = '\0';
       return dst;
     };
+    // Groups that expose lat+lon prefs get a "Find location" picker affordance
+    // (opens loc.espgeiger.com in a child window, receives coords via postMessage).
+    bool has_lat = false, has_lon = false;
 
     for (size_t j = 0; j < g->count; j++) {
       const EGPref& p = g->prefs[j];
       if (p.flags & EGP_HIDDEN) continue;
 
       const char* p_id    = P2S(p.id,      s_id,   sizeof(s_id));
+      if (strcmp(p_id, "lat") == 0) has_lat = true;
+      else if (strcmp(p_id, "lon") == 0) has_lon = true;
       const char* p_label = P2S(p.label,   s_lbl,  sizeof(s_lbl));
       const char* p_help  = P2S(p.help,    s_help, sizeof(s_help));
       const char* p_pat   = P2S(p.pattern, s_pat,  sizeof(s_pat));
@@ -1487,13 +1499,25 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       // so help text / line breaks between input and button don't matter.
       if ((p.flags & EGP_SENSITIVE) && cur[0]) {
         n = snprintf_P(buf + pos, sizeof(buf) - pos,
-          PSTR("<button type=button class=danger style='padding:.2em .6em;font-size:.85em;margin-top:.2em' "
+          PSTR("<button type=button class='danger btn-sm' style='margin-top:.2em' "
                "onclick=\"if(confirm('Clear stored value?')){byID('%s.%s').value='__CLEAR__';this.form.submit();}\""
                ">Clear</button>"),
           mid, pid);
         if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
       }
       res.sendChunk(buf, pos);
+    }
+    if (has_lat && has_lon) {
+      n = snprintf_P(buf, sizeof(buf), PSTR(
+        "<p><button type=button onclick=\"window.open('https://loc.espgeiger.com/','espgeiger-loc')\">Find location</button></p>"
+        "<script>window.addEventListener('message',function(e){"
+        "if(e.origin!=='https://loc.espgeiger.com')return;"
+        "var d=e.data;if(!d||d.type!=='espgeiger-location')return;"
+        "var la=byID('%s.lat'),lo=byID('%s.lon');"
+        "if(la&&typeof d.lat==='number')la.value=d.lat;"
+        "if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"),
+        g->module_id, g->module_id);
+      if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
     }
     res.sendChunk(F("</details>"));
   }
@@ -1960,7 +1984,7 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   res.sendChunk(FPSTR(STATUS_BODY));
   // Status page wants back link first, then the ESPGeiger credit.
-  res.sendChunk(F("<p style=margin-top:2em><a class=back href=/>\xe2\x86\x90 Home</a></p>"));
+  res.sendChunk(F("<p class=back-row><a class=back href=/>\xe2\x86\x90 Home</a></p>"));
   WebPortal::sendPageFooter(res);
   res.sendChunk(F("</body></html>"));
   res.endChunked();
@@ -1988,6 +2012,58 @@ void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   buf[pos++] = '}';
   res.beginChunked(200, "application/json");
   res.sendChunk(buf, pos);
+  res.endChunked();
+}
+
+void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // Prometheus text exposition. Per-metric sendChunk so a long friendly-name
+  // never overflows a single buffer.
+  const char* cid  = DeviceInfo::chipid();
+  const char* fn   = DeviceInfo::friendlyName();
+  const char* name = (fn && fn[0]) ? fn : DeviceInfo::hostname();
+  float ratio  = gcounter.get_ratio();
+  float cpm    = gcounter.get_cpmf();
+  float usv_h  = ratio > 0 ? cpm / ratio : 0.0f;
+  uint64_t lifeRaw = gcounter.get_lifetime_clicks_total();
+  unsigned long life = (lifeRaw > 0xFFFFFFFFULL) ? 0xFFFFFFFFUL : (unsigned long)lifeRaw;
+  res.beginChunked(200, "text/plain; version=0.0.4");
+  char buf[320];
+  int n;
+  // Emit HELP+TYPE for a metric name (call once per name).
+  #define HEAD(mname, mtype, mhelp) \
+    res.sendChunk(F("# HELP " mname " " mhelp "\n# TYPE " mname " " mtype "\n"))
+  // Emit a single value line. `extra` lets us add extra labels (eg window).
+  #define VAL(mname, extra, fmt, val) \
+    n = snprintf_P(buf, sizeof(buf), \
+      PSTR(mname "{chipid=\"%s\",name=\"%s\"" extra "} " fmt "\n"), \
+      cid, name, val); \
+    if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n)
+
+  HEAD("geiger_cpm", "gauge", "Counts per minute (window label selects averaging period)");
+  VAL ("geiger_cpm", ",window=\"1m\"",  "%.2f", cpm);
+  VAL ("geiger_cpm", ",window=\"5m\"",  "%.2f", gcounter.get_cpm5f());
+  VAL ("geiger_cpm", ",window=\"15m\"", "%.2f", gcounter.get_cpm15f());
+
+  HEAD("geiger_cps", "gauge", "Instantaneous counts per second");
+  VAL ("geiger_cps", "", "%.2f", gcounter.get_cps());
+
+  HEAD("geiger_usv_per_hour", "gauge", "Dose rate in microsieverts per hour");
+  VAL ("geiger_usv_per_hour", "", "%.4f", usv_h);
+
+  HEAD("geiger_lifetime_clicks_total", "counter", "Total clicks counted over device life");
+  VAL ("geiger_lifetime_clicks_total", "", "%lu", life);
+
+  HEAD("device_uptime_seconds", "gauge", "Seconds since boot");
+  VAL ("device_uptime_seconds", "", "%lu", (unsigned long)DeviceInfo::uptime());
+
+  HEAD("device_free_heap_bytes", "gauge", "Free heap memory");
+  VAL ("device_free_heap_bytes", "", "%u", (unsigned)DeviceInfo::freeHeap());
+
+  HEAD("device_wifi_rssi_dbm", "gauge", "WiFi signal strength");
+  VAL ("device_wifi_rssi_dbm", "", "%d", (int)Wifi::rssi);
+
+  #undef HEAD
+  #undef VAL
   res.endChunked();
 }
 
