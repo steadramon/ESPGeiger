@@ -28,7 +28,7 @@
 #include <string.h>
 
 #ifndef EGPREFS_MAX_GROUPS
-#define EGPREFS_MAX_GROUPS 16
+#define EGPREFS_MAX_GROUPS 32
 #endif
 
 #define EGPREFS_NAMESPACE    "prefs"

@@ -21,7 +21,7 @@
 
 #include "EGModule.h"
 
-#define EG_MAX_MODULES 24
+#define EG_MAX_MODULES 32
 
 class EGModuleRegistry {
   public:
