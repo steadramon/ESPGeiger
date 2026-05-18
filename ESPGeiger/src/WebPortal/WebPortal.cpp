@@ -1934,7 +1934,9 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 
 void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
-  WebPortal::sendPageHead(res, F("Status"), DeviceInfo::friendlyName());
+  const char* fn = DeviceInfo::friendlyName();
+  const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
+  WebPortal::sendPageHead(res, F("Status"), sub);
 
   // Seed the chart with the recent CPM history so it isn't blank for the
   // first 30s after page load. Step every 3rd sample to keep the inline
