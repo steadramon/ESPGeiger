@@ -1322,7 +1322,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // Stable-sort visible groups by display_order. Groups with order==0
   // have their own dedicated page (NTP, HV) and are skipped here.
   uint8_t gc = (uint8_t)EGPrefs::group_count();
-  uint8_t order[16];
+  uint8_t order[EG_MAX_MODULES];
   if (gc > sizeof(order)) gc = sizeof(order);
   for (uint8_t i = 0; i < gc; i++) order[i] = i;
   for (uint8_t i = 1; i < gc; i++) {
