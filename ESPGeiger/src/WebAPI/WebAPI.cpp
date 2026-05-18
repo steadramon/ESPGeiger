@@ -619,7 +619,7 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("ESPGeiger Network"));
   if (saved) {
-    res.sendChunk(F("<div class=card style='border-color:#5a5'>Saved.</div>"));
+    res.sendChunk(F("<div class='card card-ok'>Saved.</div>"));
   }
   res.sendChunk(F(
     "<p class=muted>ESPGeiger can share data with the public station "

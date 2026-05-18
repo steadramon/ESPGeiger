@@ -105,6 +105,7 @@ th{font-weight:500;color:var(--muted)}
 .cred a{color:inherit;text-decoration:none}
 .cred .brand{color:var(--fg);font-weight:bold}
 .btn-sm{font-size:.85em;padding:.2em .6em;width:auto}
+.card-ok{border-color:#5a5}
 .back{display:inline-block;padding:.5em 1em;background:var(--accent);color:#fff;border-radius:4px;text-decoration:none;font-weight:500}
 .back:hover{opacity:.9;text-decoration:none}
 :root.crt{--bg:#000;--page:#000;--fg:#0f0;--muted:#080;--border:#050;--accent:#0a0;--card:#001a00}
@@ -1328,7 +1329,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::sendPageHead(res, F("Config"));
   res.sendChunk(FPSTR(PARAM_STYLE));
   if (did_save) res.sendChunk(F(
-    "<div class=card style='border-color:#5a5'>Saved.</div>"));
+    "<div class='card card-ok'>Saved.</div>"));
   res.sendChunk(F("<form method=POST action=/param>"));
 
   char buf[512];
