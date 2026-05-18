@@ -45,7 +45,8 @@ class GeigerSerial : public GeigerInput
     float partial_clicks = 0;
     int serial_value = 0;
     unsigned long last_serial = 0;
-    uint8_t _loop_c = 0;
+    uint16_t _loop_c = 0;
+    uint16_t _poll_skip = 5;  // empty-buffer poll throttle, scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint8_t _bad_streak = 0;
     unsigned long _last_drain = 0;
