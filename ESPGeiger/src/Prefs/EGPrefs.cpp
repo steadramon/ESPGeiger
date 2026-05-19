@@ -34,15 +34,14 @@
 #define EGPREFS_NAMESPACE    "prefs"
 #define EGPREFS_MAX_GROUP_SZ 1024
 
-struct PrefShadow {
-  const char* value;   // points to schema default_val (flash) or strdup'd override (heap)
-  bool        is_heap; // true if value was malloc'd - must free before reassign
-};
-
+// Per-group shadow: array of pointers to current value (flash default or heap
+// override). is_heap status packed into heap_mask bitmap to save the 3 bytes
+// of padding a per-shadow bool would burn. Caps groups at 32 prefs.
 struct GroupShadow {
   const EGPrefGroup* group;
   EGModule*          module;
-  PrefShadow*        shadows;
+  const char**       values;
+  uint32_t           heap_mask;
   bool               dirty;
 };
 
@@ -52,20 +51,26 @@ static bool           s_begun = false;
 static bool           s_restart_pending = false;
 static EGPrefsStorage s_storage;
 
-// Set shadow to a heap-copied value, freeing any previous heap value.
-static void shadow_set(PrefShadow& s, const char* val, size_t len) {
-  if (s.is_heap) free((void*)s.value);
+static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
+  return (gs.heap_mask >> j) & 1u;
+}
+
+// Set shadow value (heap-copied), freeing any previous heap value.
+static void shadow_set(GroupShadow& gs, size_t j, const char* val, size_t len) {
+  if (shadow_is_heap(gs, j)) free((void*)gs.values[j]);
   char* copy = (char*)malloc(len + 1);
   if (copy) { memcpy(copy, val, len); copy[len] = '\0'; }
-  s.value = copy ? copy : "";
-  s.is_heap = (copy != nullptr);
+  gs.values[j] = copy ? copy : "";
+  if (copy) gs.heap_mask |=  (1u << j);
+  else      gs.heap_mask &= ~(1u << j);
 }
 
 // Reset shadow to schema default (flash pointer, no heap).
-static void shadow_reset(PrefShadow& s, const EGPref& p) {
-  if (s.is_heap) free((void*)s.value);
-  s.value = p.default_val ? p.default_val : "";
-  s.is_heap = false;
+static void shadow_reset(GroupShadow& gs, size_t j) {
+  if (shadow_is_heap(gs, j)) free((void*)gs.values[j]);
+  const char* dv = gs.group->prefs[j].default_val;
+  gs.values[j] = dv ? dv : "";
+  gs.heap_mask &= ~(1u << j);
 }
 
 namespace {
@@ -94,11 +99,11 @@ int find_pref_index(const EGPrefGroup* g, const char* key) {
   return -1;
 }
 
-const PrefShadow* find_shadow(const char* module, const char* key) {
+const char* find_value(const char* module, const char* key) {
   GroupShadow* gs = find_group(module);
   if (!gs) return nullptr;
   int idx = find_pref_index(gs->group, key);
-  return (idx < 0) ? nullptr : &gs->shadows[idx];
+  return (idx < 0) ? nullptr : gs->values[idx];
 }
 
 // Validate + normalize value into a stack buffer. Returns length, or -1 on failure.
@@ -153,7 +158,7 @@ void load_record_cb(void* ctx, const char* key, uint8_t klen,
   for (size_t j = 0; j < gs->group->count; j++) {
     const char* pid = gs->group->prefs[j].id;
     if (strlen_P(pid) == klen && strncmp_P(key, pid, klen) == 0) {
-      shadow_set(gs->shadows[j], val, vlen);
+      shadow_set(*gs, j, val, vlen);
       return;
     }
   }
@@ -163,7 +168,7 @@ bool write_group(GroupShadow& gs) {
   size_t total = 4;
   // p.id is PROGMEM-safe; use _P variants.
   for (size_t j = 0; j < gs.group->count; j++) {
-    total += 1 + strlen_P(gs.group->prefs[j].id) + 2 + strlen(gs.shadows[j].value);
+    total += 1 + strlen_P(gs.group->prefs[j].id) + 2 + strlen(gs.values[j]);
   }
   if (total > EGPREFS_MAX_GROUP_SZ) {
     Log::console(PSTR("prefs: group %s too large (%u)"), gs.group->module_id, (unsigned)total);
@@ -176,7 +181,7 @@ bool write_group(GroupShadow& gs) {
   for (size_t j = 0; j < gs.group->count; j++) {
     const char* key = gs.group->prefs[j].id;
     size_t klen = strlen_P(key);
-    const char* val = gs.shadows[j].value;
+    const char* val = gs.values[j];
     size_t vlen = strlen(val);
     buf[p++] = (uint8_t)klen;
     memcpy_P(&buf[p], key, klen); p += klen;
@@ -241,7 +246,7 @@ void import_legacy() {
       char normalized[128];
       int nlen = validate(&gs.group->prefs[idx], val, normalized, sizeof(normalized));
       if (nlen < 0) continue;
-      shadow_set(gs.shadows[idx], normalized, (size_t)nlen);
+      shadow_set(gs, idx, normalized, (size_t)nlen);
       any = true;
       imported++;
     }
@@ -272,15 +277,21 @@ void EGPrefs::begin() {
     const EGPrefGroup* g = m->prefs_group();
     if (!g) continue;
 
+    if (g->count > 32) {
+      Log::console(PSTR("prefs: %s has %u prefs, exceeds bitmap cap of 32 - skipped"),
+                   g->module_id, (unsigned)g->count);
+      continue;
+    }
+
     GroupShadow& gs = s_groups[s_group_count++];
     gs.group = g;
     gs.module = m;
     gs.dirty = false;
-    gs.shadows = new PrefShadow[g->count];
+    gs.heap_mask = 0;
+    gs.values = new const char*[g->count];
 
     for (size_t j = 0; j < g->count; j++) {
-      gs.shadows[j].value = g->prefs[j].default_val ? g->prefs[j].default_val : "";
-      gs.shadows[j].is_heap = false;
+      gs.values[j] = g->prefs[j].default_val ? g->prefs[j].default_val : "";
     }
     s_storage.readGroup(g->module_id, load_record_cb, &gs);
 
@@ -301,31 +312,30 @@ void EGPrefs::begin() {
 }
 
 const char* EGPrefs::getString(const char* module, const char* key) {
-  const PrefShadow* s = find_shadow(module, key);
-  if (!s || !s->value) return "";
-  return s->value;
+  const char* v = find_value(module, key);
+  return v ? v : "";
 }
 
 int32_t EGPrefs::getInt(const char* module, const char* key) {
-  const PrefShadow* s = find_shadow(module, key);
-  return s ? (int32_t)strtol(s->value, nullptr, 10) : 0;
+  const char* v = find_value(module, key);
+  return v ? (int32_t)strtol(v, nullptr, 10) : 0;
 }
 
 uint32_t EGPrefs::getUInt(const char* module, const char* key) {
-  const PrefShadow* s = find_shadow(module, key);
-  return s ? (uint32_t)strtoul(s->value, nullptr, 10) : 0;
+  const char* v = find_value(module, key);
+  return v ? (uint32_t)strtoul(v, nullptr, 10) : 0;
 }
 
 bool EGPrefs::getBool(const char* module, const char* key) {
-  const PrefShadow* s = find_shadow(module, key);
-  if (!s || s->value[0] == '\0') return false;
-  char c = s->value[0];
+  const char* v = find_value(module, key);
+  if (!v || v[0] == '\0') return false;
+  char c = v[0];
   return (c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y');
 }
 
 float EGPrefs::getFloat(const char* module, const char* key) {
-  const PrefShadow* s = find_shadow(module, key);
-  return s ? strtof(s->value, nullptr) : 0.0f;
+  const char* v = find_value(module, key);
+  return v ? strtof(v, nullptr) : 0.0f;
 }
 
 bool EGPrefs::put(const char* module, const char* key, const char* value) {
@@ -340,8 +350,8 @@ bool EGPrefs::put(const char* module, const char* key, const char* value) {
   int nlen = validate(&p, value, normalized, sizeof(normalized));
   if (nlen < 0) return false;
 
-  if (strcmp(normalized, gs->shadows[idx].value) != 0) {
-    shadow_set(gs->shadows[idx], normalized, (size_t)nlen);
+  if (strcmp(normalized, gs->values[idx]) != 0) {
+    shadow_set(*gs, idx, normalized, (size_t)nlen);
     gs->dirty = true;
   }
   return true;
@@ -367,7 +377,7 @@ bool EGPrefs::remove_group(const char* module) {
   if (!gs) return false;
   bool removed = s_storage.removeGroup(module);
   for (size_t j = 0; j < gs->group->count; j++) {
-    shadow_reset(gs->shadows[j], gs->group->prefs[j]);
+    shadow_reset(*gs, j);
   }
   gs->dirty = false;
   import_legacy();  // LEGACY IMPORT (remove after v1.0.0)
@@ -380,7 +390,7 @@ void EGPrefs::reset_all() {
     GroupShadow& gs = s_groups[i];
     s_storage.removeGroup(gs.group->module_id);
     for (size_t j = 0; j < gs.group->count; j++) {
-      shadow_reset(gs.shadows[j], gs.group->prefs[j]);
+      shadow_reset(gs, j);
     }
     gs.dirty = false;
   }
