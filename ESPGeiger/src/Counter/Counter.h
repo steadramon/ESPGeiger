@@ -210,6 +210,13 @@ class Counter {
       bool _bool_cpm_alert = false;
       bool _blip_led = true;
       bool _lifetime_enabled = true;
+      // Pending-work bitmap: single byte check in loop() instead of two bools.
+      // Bit 0 = RTC stash due, Bit 1 = save_lifetime() due. Single combined
+      // branch in the hot path of Counter::loop instead of two sequential ifs.
+      static constexpr uint8_t PENDING_RTC  = 1 << 0;
+      static constexpr uint8_t PENDING_SAVE = 1 << 1;
+      uint8_t  _pending_work = 0;
+      uint32_t _rtc_pending_now = 0;     // currentTime snapshot for pending stash
       uint32_t _first_boot_ts = 0;
       uint32_t _rtc_unsaved_clicks = 0;
       unsigned long _lifetime_seconds_saved = 0;

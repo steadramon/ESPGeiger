@@ -182,26 +182,22 @@ void Counter::secondticker(unsigned long stick_now) {
     if (_last_save_time_t == 0 && ntpclient.synced) {
       _last_save_time_t = (uint32_t)currentTime;
     }
-    // Stash every 30 s. Worst-case soft-reboot loss: 30 s of clicks + time
-    // (both drop symmetrically, so CPM math stays correct).
+    // Tick schedules, loop() does the writes. Keeps the ~100us RTC stash
+    // and the ~ms save_lifetime() flash write out of tick_max.
     static uint32_t s_rtc_ctr = 0;
     if (++s_rtc_ctr >= 30) {
       s_rtc_ctr = 0;
-      uint32_t delta_s = 0;
-      if (_last_save_time_t > 0 && ntpclient.synced &&
-          (uint32_t)currentTime >= _last_save_time_t) {
-        delta_s = (uint32_t)currentTime - _last_save_time_t;
-      }
-      rtc_life_stash(_rtc_unsaved_clicks, delta_s);
+      _rtc_pending_now = (uint32_t)currentTime;  // free here, computed at top
+      _pending_work |= PENDING_RTC;
     }
     if (_first_boot_ts == 0 && ntpclient.synced) {
       _first_boot_ts = (uint32_t)currentTime;
-      save_lifetime();
+      _pending_work |= PENDING_SAVE;
     }
     static uint32_t s_save_ctr = 0;
     if (++s_save_ctr >= 21600) {   // 6 h
       s_save_ctr = 0;
-      save_lifetime();
+      _pending_work |= PENDING_SAVE;
     }
   }
 
@@ -446,6 +442,27 @@ bool Counter::is_quiet_now() {
 }
 
 void Counter::loop() {
+  // Single combined check for both deferred items (RTC stash, save_lifetime).
+  // Bitmask: PENDING_RTC (bit 0), PENDING_SAVE (bit 1). Most iterations the
+  // byte is 0 and we skip with one branch. Keeps RTC + flash writes out of
+  // tick_max while paying only one predicted-false branch per loop iter.
+  if (_pending_work) {
+    uint8_t pw = _pending_work;
+    _pending_work = 0;
+    if (pw & PENDING_RTC) {
+      uint32_t delta_s = 0;
+      if (_last_save_time_t > 0 && _rtc_pending_now >= _last_save_time_t) {
+        delta_s = _rtc_pending_now - _last_save_time_t;
+      }
+      if (_rtc_unsaved_clicks > 0 || delta_s > 0) {
+        rtc_life_stash(_rtc_unsaved_clicks, delta_s);
+      }
+    }
+    if (pw & PENDING_SAVE) {
+      save_lifetime();
+    }
+  }
+
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
 #elif GEIGER_IS_UDPRX(GEIGER_TYPE)
