@@ -368,7 +368,7 @@ bool Wifi::connectOrPortal() {
   auto* portal = new EGPortal();
   portal->setTitle(THING_NAME);
   // EGPortal stores the pointer; buffer must outlive the portal.
-  static char s_portalNotice[160];
+  static char s_portalNotice[256];
   snprintf_P(s_portalNotice, sizeof(s_portalNotice),
     PSTR("<p style='margin:0 0 1em;background:#eef;padding:.6em .8em;"
          "border-radius:.3em;font-size:.85em;line-height:1.4'>"
