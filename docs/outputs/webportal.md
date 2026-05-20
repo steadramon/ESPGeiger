@@ -20,6 +20,12 @@ The main page has buttons to reach each area of configuration:
 * **NTP Config** - time zone and NTP server settings. See [NTP Configuration](/configuration/ntp).
 * **HV Config** - high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
 
+## Live blip indicator on `/status`
+
+The coloured dot next to the CPM reading on the `/status` page is a synchronised mirror of the [NeoPixel output](/output/neopixel) — it flashes at a rate proportional to the CPM-vs-CPM5 ratio and changes colour based on a Poisson z-score against the 5-minute baseline. See the [NeoPixel page](/output/neopixel#how-the-colour-and-flash-rate-are-derived) for the colour table and full derivation.
+
+It's an "activity trend" indicator rather than a per-click visualization. For per-click visual feedback, see the blip LED on supported builds. CRT theme on the web page also offers an optional WebAudio click ("Sound: on" toggle), which *is* Poisson-randomized to real clicks and gives the authentic Geiger crackle.
+
 ## Console log
 
 The Status page includes a live console tail of the device's log. Timestamps follow two formats:
