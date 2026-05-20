@@ -112,6 +112,12 @@ private:
   bool      _mdns_done = false;
   bool      _sys_phase = false;
   uint8_t   _emit_phase = 0;
+  // s_tick sets pending bits; loop() services them so the UDP send cost
+  // stays out of tick_max.
+  static constexpr uint8_t EMIT_RAD = 1 << 0;
+  static constexpr uint8_t EMIT_HV  = 1 << 1;
+  static constexpr uint8_t EMIT_SYS = 1 << 2;
+  uint8_t   _pending = 0;
   char      _click_path[20] = {0};
   uint8_t   _click_packet[32] = {0};  // /click OSC template; emitClick patches i32s at [24],[28]
   char      _rad_path[20]   = {0};

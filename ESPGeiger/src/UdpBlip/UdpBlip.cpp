@@ -338,20 +338,21 @@ void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
     return;
   }
 
+  // Schedule emits; loop() services the actual UDP sends.
   if (_emit_phase == 0) {
     if (++_stats_ticks * 1000UL >= UDPBLIP_STATS_INTERVAL_MS) {
       _stats_ticks = 0;
-      emitRad(millis());
+      _pending |= EMIT_RAD;
       _emit_phase = 1;
     }
   } else if (_emit_phase == 1) {
 #ifdef ESPG_HV_ADC
-    emitHv(millis());
+    _pending |= EMIT_HV;
 #endif
     _emit_phase = 2;
   } else {
     _sys_phase = !_sys_phase;
-    if (_sys_phase) emitSys(millis());
+    if (_sys_phase) _pending |= EMIT_SYS;
     _emit_phase = 0;
   }
 }
@@ -366,7 +367,18 @@ uint16_t UdpBlipModule::loop_interval_ms() {
 
 // Producer-only tail-catcher: flush any click counter the throttle deferred
 // when a burst ends without further notifyClick calls. No-op on UDPRX.
+// Also services pending telemetry emits set by s_tick - keeps the ~700us
+// UDP sends out of tick_max.
 void UdpBlipModule::loop(unsigned long now) {
+  if (_pending) {
+    uint8_t p = _pending;
+    _pending = 0;
+    if (p & EMIT_RAD) emitRad(millis());
+#ifdef ESPG_HV_ADC
+    if (p & EMIT_HV)  emitHv(millis());
+#endif
+    if (p & EMIT_SYS) emitSys(millis());
+  }
   tryEmitClick(now);
 }
 
