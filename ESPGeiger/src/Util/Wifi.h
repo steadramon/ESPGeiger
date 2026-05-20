@@ -29,8 +29,16 @@ namespace Wifi {
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[33];
   extern int16_t rssi;
+  extern unsigned long connected_at_ms;  // millis() of last clean STA association; 0 when down
 
   void tick(unsigned long now);
+
+  // True when wifi has been connected at least `ms`. EGModuleRegistry
+  // gates FLAG_REQUIRES_WIFI modules on this so AsyncTCP can drain stale
+  // callbacks after reconnect before we hand it new work.
+  inline bool stable_for(unsigned long ms) {
+    return connected_at_ms != 0 && (millis() - connected_at_ms) >= ms;
+  }
 
   // Format local_ip as dotted-quad into buf. Needs cap >= 16. Returns
   // chars written (excludes NUL). Use when a string form is needed for

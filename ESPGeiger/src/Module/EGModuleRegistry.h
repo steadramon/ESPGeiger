@@ -23,6 +23,12 @@
 
 #define EG_MAX_MODULES 32
 
+// Settle window after wifi reconnect before FLAG_REQUIRES_WIFI modules
+// fire. Drops the trigger conditions for AsyncTCP use-after-free races.
+#ifndef WIFI_SETTLE_MS
+#define WIFI_SETTLE_MS 3000
+#endif
+
 class EGModuleRegistry {
   public:
     static bool add(EGModule* m);

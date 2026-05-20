@@ -66,9 +66,9 @@ void EGModuleRegistry::loop_all(unsigned long now) {
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     if (!(s.flags & FLAG_HAS_LOOP)) continue;
-    // Matches begin_all()'s wifi gate: if wifi was disabled at boot,
-    // begin() was skipped so loop() has nothing to poll against.
-    if ((s.flags & FLAG_REQUIRES_WIFI) && Wifi::disabled) continue;
+    // Skip wifi-flagged modules until wifi has been stable a few seconds -
+    // lets AsyncTCP drain old callbacks before we issue new work.
+    if ((s.flags & FLAG_REQUIRES_WIFI) && !Wifi::stable_for(WIFI_SETTLE_MS)) continue;
 
     unsigned long due = s.loop_last + s.loop_interval;
     if ((long)(now - due) >= 0) {
@@ -83,7 +83,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 
 void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds) {
   if (ota_in_progress) return;
-  bool wifi_ok = !Wifi::disabled && Wifi::connected;
+  bool wifi_ok = Wifi::stable_for(WIFI_SETTLE_MS);
   bool ntp_ok = ntpclient.synced;
   bool seconds = false;
   for (uint8_t i = 0; i < _count; i++) {

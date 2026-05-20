@@ -46,6 +46,7 @@ namespace Wifi {
   IPAddress local_ip;
   char ssid[33] = "";
   int16_t rssi = 0;
+  unsigned long connected_at_ms = 0;
 
   size_t formatIP(char* buf, size_t cap) {
     return snprintf(buf, cap, "%u.%u.%u.%u",
@@ -73,6 +74,7 @@ void Wifi::tick(unsigned long now) {
       strncpy(Wifi::ssid, WiFi.SSID().c_str(), sizeof(Wifi::ssid) - 1);
       Wifi::ssid[sizeof(Wifi::ssid) - 1] = '\0';
       Wifi::rssi = WiFi.RSSI();
+      Wifi::connected_at_ms = now;   // start the stability timer
     }
   }
 
@@ -81,6 +83,7 @@ void Wifi::tick(unsigned long now) {
       if (was_connected) {
         was_connected = false;
         lost_at = now;
+        Wifi::connected_at_ms = 0;  // disconnect resets stability
         Log::console(PSTR("WiFi: Connection lost"));
       }
       unsigned long down_seconds = (now - lost_at) / 1000;
