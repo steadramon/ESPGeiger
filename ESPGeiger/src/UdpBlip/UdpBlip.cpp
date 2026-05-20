@@ -97,6 +97,8 @@ static size_t osc_f32(uint8_t* buf, size_t cap, size_t off, float v) {
 
 // ---------- Module ----------
 
+static constexpr size_t CLICK_PATH_LEN = 18;  // "/espg/CHIPID/click"
+
 void UdpBlipModule::begin() {
   readPrefs();
   _last_clicks = gcounter.total_clicks;
@@ -111,6 +113,9 @@ void UdpBlipModule::begin() {
   // chipid is fixed at boot - pre-format the OSC paths once.
   snprintf_P(_click_path, sizeof(_click_path),
              PSTR("/espg/%s/click"), DeviceInfo::chipid());
+  // /click OSC template: path+typetag baked here, emitClick patches the i32s.
+  memcpy(_click_packet, _click_path, CLICK_PATH_LEN);
+  _click_packet[20] = ','; _click_packet[21] = 'i'; _click_packet[22] = 'i';
   snprintf_P(_rad_path, sizeof(_rad_path),
              PSTR("/espg/%s/rad"), DeviceInfo::chipid());
   snprintf_P(_sys_path, sizeof(_sys_path),
@@ -217,17 +222,13 @@ bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   return true;
 }
 
-static constexpr size_t CLICK_PATH_LEN = 18;
-
 void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms) {
-  uint8_t buf[96];
-  size_t off = 0;
-  size_t n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, _click_path, CLICK_PATH_LEN))) return; off += n;
-  if (!(n = osc_strn(buf, sizeof(buf), off, ",ii", 3))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, counter))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, ts_ms))) return; off += n;
-  sendPacket(buf, off);
+  // Patch counter + ts_ms into the pre-built template (aligned word stores).
+  uint32_t cnt_be = __builtin_bswap32(counter);
+  uint32_t ts_be  = __builtin_bswap32(ts_ms);
+  memcpy(&_click_packet[24], &cnt_be, 4);
+  memcpy(&_click_packet[28], &ts_be,  4);
+  sendPacket(_click_packet, sizeof(_click_packet));
 }
 
 void UdpBlipModule::emitRad(uint32_t now) {
@@ -297,15 +298,17 @@ void UdpBlipModule::tryEmitClick(unsigned long now_ms) {
                         (uint32_t)(eventCounter1 + eventCounter2);
   if (true_count == _last_clicks) return;
 
-  // Token bucket; _last_token_ms only advances by converted intervals so
-  // sub-interval slack carries forward.
+  // Token bucket; _last_token_ms advances only by converted intervals so
+  // sub-interval slack carries forward. Common path fast-skips the divide.
   uint32_t elapsed = (uint32_t)(now_ms - _last_token_ms);
-  uint8_t  gained  = (uint8_t)(elapsed / UDPBLIP_CLICK_MIN_INTERVAL_MS);
-  if (gained > 0) {
-    uint16_t t = _burst_tokens + gained;
+  if (elapsed >= UDPBLIP_CLICK_MIN_INTERVAL_MS) {
+    uint32_t gained = (elapsed < UDPBLIP_CLICK_MIN_INTERVAL_MS * 2u)
+                      ? 1u
+                      : (elapsed / UDPBLIP_CLICK_MIN_INTERVAL_MS);
+    uint32_t t = _burst_tokens + gained;
     if (t > UDPBLIP_CLICK_BURST_TOKENS) t = UDPBLIP_CLICK_BURST_TOKENS;
     _burst_tokens = (uint8_t)t;
-    _last_token_ms += (uint32_t)gained * UDPBLIP_CLICK_MIN_INTERVAL_MS;
+    _last_token_ms += gained * UDPBLIP_CLICK_MIN_INTERVAL_MS;
   }
   if (_burst_tokens == 0) return;
   _burst_tokens--;

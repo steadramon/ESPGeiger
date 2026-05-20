@@ -113,6 +113,7 @@ private:
   bool      _sys_phase = false;
   uint8_t   _emit_phase = 0;
   char      _click_path[20] = {0};
+  uint8_t   _click_packet[32] = {0};  // /click OSC template; emitClick patches i32s at [24],[28]
   char      _rad_path[20]   = {0};
   char      _sys_path[20]   = {0};
 #ifdef ESPG_HV_ADC
