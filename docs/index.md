@@ -13,26 +13,28 @@ ESPGeiger is a free, open-source firmware allowing you to transform any compatib
 ## Features
 
 **Data Display & Analysis:**
-* 🔴 **Real-time Readings:** Live CPM and μSv/h displays.
-* 📈 **Web-based Graphing:** Integrated web server for visual data analysis.
-* 🔢 **Data Smoothing:** Exponentially smoothed values over 1, 5, and 15 minutes for stable readings.
-* 🖥️ **Local Display:** Support for SSD1306 OLED displays.
+* 🔴 **Real-time Readings:** Live CPM and μSv/h with 1, 5 and 15-minute smoothed averages.
+* 📈 **Web-based Graphing:** Built-in web portal with live charts and 24-hour history.
+* 🖥️ **Local Display:** SSD1306, SH1106 and SSD1309 OLEDs with runtime auto-detect.
+* 🕰️ **Lifetime Tracking:** Persistent total clicks, lifetime µSv and install age, surviving reboots.
 
 **Connectivity & Data Sharing:**
-* 🌐 **Online Data Export:** Compatible with Radmon.org, GMCMAP (gmcmap.com), and ThingSpeak.
-* 🏠 **Local Network Integration:** MQTT and Home Assistant automatic discovery for seamless LAN connectivity.
-* 💾 **Local Data Logging:** Save data to an SD card for offline analysis.
-* 🔌 **Offline Mode:** Disables all network functionality for standalone operation, activated by holding the onboard button during startup.
+* 🌐 **Online Data Export:** Radmon.org, GMCMAP, ThingSpeak, generic Webhook and GeigerLog.
+* 🏠 **Local Network:** MQTT with Home Assistant auto-discovery, and a Prometheus `/metrics` endpoint.
+* 📡 **UDP / OSC Broadcast:** Multicast clicks and telemetry over OSC to any tool on the LAN (Pure Data, TouchDesigner, Node-RED, etc).
+* 🛰️ **UDP-Receiver Mode:** A tubeless ESP can mirror another ESPGeiger over the air for fleet displays or aggregation.
+* 💾 **Local Data Logging:** SD card export for offline analysis.
+* 🔌 **Offline Mode:** Hold the onboard button at startup to disable all network functionality.
 
 **Hardware & Compatibility:**
-* ✅ **Wide Geiger Counter Compatibility:** Works with pulse output and serial-based counters.
-* 📟 **Accurate Counting:** Interrupt-driven and non-blocking functions, with hardware counter support (ESP32 PCNT).
-* 🎛️ **Noise Control:** Configurable filtering and debounce settings.
-* 💡 **Visual Feedback:** Customizable WS2812X NeoPixel for status indication.
+* ✅ **Wide Counter Compatibility:** Pulse-output and serial-based Geiger counters.
+* 📟 **Accurate Counting:** Interrupt-driven and non-blocking, with ESP32 PCNT hardware counter support.
+* 🎛️ **Noise Control:** Configurable filtering and debounce.
+* 💡 **Visual Feedback:** WS2812X NeoPixel with rate-scaled flash and z-score trend colour.
 
 **Ease of Use & Development:**
-* 😃 **Easy Installation & Configuration:** Get started quickly and contribute to monitoring.
-* ⏲️ **Independent Operation:** No reliance on external services for real-time counting.
+* 😃 **Easy Setup:** Captive-portal WiFi onboarding, friendly device naming, optional web password.
+* 🗂️ **Config Backup & Restore:** Portable backup blob of every editable setting, transferable between devices.
 * 🚧 **Emulation Tools:** Test builds for emulating pulse and serial counters.
 
 ## ESPGeiger-HW
