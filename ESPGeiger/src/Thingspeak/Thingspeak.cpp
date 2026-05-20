@@ -99,9 +99,6 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
     } else {
       Log::console(PSTR("Thingspeak: Error - %s"), request->responseHTTPString().c_str());
     }
-    // Drain remaining response so AsyncHTTPRequest's internal buffer releases.
-    char sink[64];
-    while (request->responseRead((uint8_t*)sink, sizeof(sink)) > 0) {}
     self->note_result(self->last_ok);
   }
 }
@@ -137,7 +134,6 @@ void Thingspeak::postMeasurement() {
     if (request->open("GET", url))
     {
       led.Blink(500, 500);
-      request->setReqHeader(F("Connection"), F("close"));
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->onReadyStateChange(httpRequestCb, this);
       request->setTimeout(5);

@@ -123,9 +123,6 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
     } else {
       Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
     }
-    // Drain remaining response so AsyncHTTPRequest's internal buffer releases.
-    char sink[128];
-    while (request->responseRead((uint8_t*)sink, sizeof(sink)) > 0) {}
     self->note_result(self->last_ok);
   }
 }
@@ -213,7 +210,6 @@ void Webhook::postMeasurement() {
     if (request->open("POST", url))
     {
       led.Blink(500, 500);
-      request->setReqHeader(F("Connection"), F("close"));
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->setReqHeader(F("Accept"), F("application/json"));
       request->setReqHeader(F("Content-Type"), F("application/json"));
