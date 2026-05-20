@@ -51,7 +51,6 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/about` | Build, hardware and module identity (useful for support / debugging) - see below |
 | `/network` | WiFi + static IP + NTP configuration - see [/network page](#network-page) |
 | `/outputs` | State of the configured third-party output modules - see below |
-| `/ntp` | NTP configuration page |
 | `/hv` | High-voltage tuning page (ESPGeiger-HW builds only) |
 | `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
 | `/screen` | Live OLED framebuffer preview (OLED builds only) - see [OLED](/output/oled#browser-screen-viewer) |
