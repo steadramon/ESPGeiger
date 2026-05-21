@@ -294,9 +294,7 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   // ESP8266 and ESP32 today, but keeping the check is ~10 cycles of
   // insurance against future stack changes.
   if (memcmp(buf + CHIPID_OFFSET, DeviceInfo::chipid(), CHIPID_LEN) == 0) return;
-  char src[CHIPID_LEN + 1];
-  memcpy(src, buf + CHIPID_OFFSET, CHIPID_LEN);
-  src[CHIPID_LEN] = '\0';
+  const char* src = (const char*)(buf + CHIPID_OFFSET);
   if (!acceptChipid(src)) return;
 
   uint32_t now_ms = millis();
