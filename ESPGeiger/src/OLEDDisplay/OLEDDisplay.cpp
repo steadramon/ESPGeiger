@@ -384,14 +384,13 @@ bool SSD1306Display::isScreenOnTime(unsigned long now) {
   if (s_sched_on_mins == -2) return true;
   if (!ntpclient.synced) return true;
   if ((long)(now - s_sched_recompute_ms) < 0) return s_sched_cached;
-  time_t currentTime = time(NULL);
-  struct tm *timeinfo = localtime(&currentTime);
-  if (!timeinfo) return true;
-  int now_mins = timeinfo->tm_hour * 60 + timeinfo->tm_min;
+  struct tm t;
+  if (!ntpclient.localTm(&t)) return true;
+  int now_mins = t.tm_hour * 60 + t.tm_min;
   s_sched_cached = (s_sched_on_mins < s_sched_off_mins)
     ? (now_mins >= s_sched_on_mins && now_mins < s_sched_off_mins)
     : (now_mins >= s_sched_on_mins || now_mins < s_sched_off_mins);
-  s_sched_recompute_ms = now + (60UL - timeinfo->tm_sec) * 1000UL;
+  s_sched_recompute_ms = now + (60UL - t.tm_sec) * 1000UL;
   return s_sched_cached;
 }
 

@@ -147,13 +147,9 @@ void Counter::secondticker(unsigned long stick_now) {
       while (currentTime >= nextBoundary) nextBoundary += kBoundarySecs;
     }
     if (fire) {
-      // Refresh cached UTC offset (also sets initial value on first sync).
-      // mktime with tm_isdst=-1 handles DST. Capture utc_hour before mktime,
-      // which may normalise gmt_tm in place.
-      struct tm gmt_tm = *gmtime(&currentTime);
-      int utc_hour = gmt_tm.tm_hour;
-      gmt_tm.tm_isdst = -1;
-      ntpclient.tz_offset_min = (int16_t)((currentTime - mktime(&gmt_tm)) / 60);
+      // currentTime is at the boundary so integer math gives the exact UTC
+      // hour; gmtime/mktime cost lives in NTP's sync callback instead.
+      int utc_hour = (int)((currentTime / 3600) % 24);
       if (boundaryArmed) {
         day_hourly_history.push(clicks_hour);
         clicks_hour = 0;
@@ -429,15 +425,14 @@ bool Counter::is_quiet_now() {
   unsigned long now_ms = millis();
   if ((long)(now_ms - s_quiet_recompute_ms) < 0) return s_quiet_cached;
 
-  time_t now = time(NULL);
-  struct tm* t = localtime(&now);
-  if (!t) return false;
-  int16_t m = t->tm_hour * 60 + t->tm_min;
+  struct tm t;
+  if (!ntpclient.localTm(&t)) return false;
+  int16_t m = t.tm_hour * 60 + t.tm_min;
 
   s_quiet_cached = (_quiet_from_min < _quiet_to_min)
     ? (m >= _quiet_from_min && m < _quiet_to_min)
     : (m >= _quiet_from_min || m < _quiet_to_min);
-  s_quiet_recompute_ms = now_ms + (60UL - t->tm_sec) * 1000UL;
+  s_quiet_recompute_ms = now_ms + (60UL - t.tm_sec) * 1000UL;
   return s_quiet_cached;
 }
 

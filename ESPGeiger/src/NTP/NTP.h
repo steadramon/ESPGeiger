@@ -52,6 +52,9 @@ class NTP_Client : public EGModule {
     const char* name() override { return "ntp"; }
     uint8_t priority() override { return EG_PRIORITY_INFRASTRUCTURE; }
     bool requires_wifi() override { return true; }
+    bool has_loop() override { return true; }
+    uint16_t loop_interval_ms() override { return 60000; }
+    void loop(unsigned long now) override;
     uint16_t warmup_seconds() override { return 0; }
     void begin() override { setup(); }
     void setup();
@@ -74,7 +77,19 @@ class NTP_Client : public EGModule {
     // Sticky: true once we ever sync (kept for boot_epoch validity).
     bool synced = false;
     unsigned long boot_epoch = 0;
-    int16_t tz_offset_min = 0;  // cached UTC offset (minutes); Counter refreshes hourly
+    // Cached UTC offset (minutes). Refreshed in the sync callback (initial +
+    // SDK auto-resync ~hourly) so the ~400us mktime(isdst=-1) cost stays off
+    // the tick path. Consumed by /cs for browser log-timestamp display.
+    int16_t tz_offset_min = 0;
+    void refresh_tz_offset_min();
+
+    // Fast local time via cheap gmtime + cached offset. False if !synced.
+    bool localTm(struct tm* out) const {
+      if (!synced) return false;
+      time_t local = time(NULL) + (time_t)tz_offset_min * 60;
+      gmtime_r(&local, out);
+      return true;
+    }
 
     // millis() at most-recent sync (every callback, not just first).
     // 0 until first sync. Use isFresh() for "is the time still trustworthy?"

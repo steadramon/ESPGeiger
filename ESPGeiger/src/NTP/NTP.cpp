@@ -60,6 +60,13 @@ const EGLegacyAlias* NTP_Client::legacy_aliases() { return NTP_LEGACY; }
 NTP_Client::NTP_Client() {
 }
 
+void NTP_Client::refresh_tz_offset_min() {
+  time_t now = time(NULL);
+  struct tm gmt_tm = *gmtime(&now);
+  gmt_tm.tm_isdst = -1;
+  tz_offset_min = (int16_t)((now - mktime(&gmt_tm)) / 60);
+}
+
 void NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
@@ -79,6 +86,7 @@ void NTP_Client::setup()
       ntpclient.boot_epoch = (unsigned long)time(NULL) - uptime;
       Log::console(PSTR("NTP: Synched"));
     }
+    ntpclient.refresh_tz_offset_min();
   });
 
   configTime(possixTZ, server);
@@ -95,6 +103,7 @@ void NTP_Client::setup()
       ntpclient.boot_epoch = (unsigned long)time(NULL) - uptime;
       Log::console(PSTR("NTP: Synched"));
     }
+    ntpclient.refresh_tz_offset_min();
   });
   configTime(0, 0, server); // 0, 0 because we will use TZ in the next line
   setenv("TZ", possixTZ, 1); // Set environment variable with your time zone
@@ -105,6 +114,11 @@ void NTP_Client::setup()
 
 void NTP_Client::on_prefs_saved() {
   setup();  // re-apply server/tz without reboot
+}
+
+void NTP_Client::loop(unsigned long now) {
+  // Catches DST transitions within 60s without waiting for SDK NTP poll.
+  if (synced) refresh_tz_offset_min();
 }
 
 // ---------- HTTP routes ----------
