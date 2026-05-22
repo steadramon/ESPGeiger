@@ -648,8 +648,8 @@ static const char HISTORY_BODY[] PROGMEM = R"HTML(
 </div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
 <h2>Inter-pulse intervals</h2>
 <div class=card style="margin:.4em 0">
-<div id=ph style="display:flex;align-items:flex-end;gap:1px;height:80px;max-height:80px;width:100%;overflow:hidden;margin:.4em 0;border-bottom:1px solid var(--border)"></div>
-<div id=phL style="display:flex;gap:1px;font-size:.65em;color:var(--muted);white-space:nowrap;overflow:hidden"></div>
+<div id=ph class=bar-row></div>
+<div id=phL class=bar-lbls></div>
 <div class=muted style="font-size:.85em;margin-top:.4em">log<sub>2</sub> buckets 64&micro;s to &ge;512s &middot; cumulative since boot</div>
 </div>
 <h2>Last 24 hours</h2>
@@ -660,7 +660,7 @@ static const char HISTORY_BODY[] PROGMEM = R"HTML(
 <div><span class=muted>24h peak CPM </span><b id=hsP>&mdash;</b></div>
 <div><span class=muted>Day rate vs yesterday </span><b id=hsD>&mdash;</b></div>
 </div></div>
-<div id=bc style="display:flex;align-items:flex-end;gap:1px;height:80px;max-height:80px;width:100%;overflow:hidden;margin:.4em 0 1em;border-bottom:1px solid var(--border)"></div>
+<div id=bc class="bar-row bot"></div>
 <table>
 <thead><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th><span class=usvL>&micro;Sv</span></th></tr></thead>
 <tbody id=tb></tbody>
@@ -712,7 +712,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     var v=o.last_day[i]||0,
         h=v?(v/mx*100).toFixed(1)+'%':'3px',
         bg=v?'var(--accent)':'var(--border)';
-    bars+='<div style="flex:1;min-width:0;background:'+bg+';height:'+h+';min-height:3px;max-height:100%" title="'+v+'"></div>';
+    bars+='<div class=bar-cell style="background:'+bg+';height:'+h+';min-height:3px" title="'+v+'"></div>';
   }
   byID('bc').innerHTML=bars;
   o.last_day.forEach(function(n,idx){
@@ -729,15 +729,16 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
   tb.innerHTML=rows;
   if(o.hist&&o.hist.length){
     var H=o.hist,mh=1,
-        L=['<64us','<128us','<256us','<512us','<1ms','<2ms','<4ms','<8ms','<16ms','<32ms','<64ms','<128ms','<256ms','<512ms','<1s','<2s','<4s','<8s','<16s','<32s','<64s','<128s','<256s','<512s','>512s'],
+        L=['<64us','<128us','<256us','<512us','<1ms','<2ms','<4ms','<8ms','<16ms','<32ms','<64ms','<128ms','<256ms','<512ms','<1s','<2s','<4s','<8s','<16s','<32s','<1m','<2m','<4m','<8m','>8m'],
         showL=[0,4,8,12,16,20,24];
     H.forEach(v=>{if(v>mh)mh=v});
     var hb='',lb='';
     for(var i=0;i<H.length;i++){
       var v=H[i],hp=v?(v/mh*100).toFixed(1)+'%':'2px',
-          bg=v?'var(--accent)':'var(--border)';
-      hb+='<div style="flex:1;min-width:0;background:'+bg+';height:'+hp+';min-height:2px" title="'+L[i]+': '+v+'"></div>';
-      lb+='<div style="flex:1;min-width:0;text-align:center">'+(showL.indexOf(i)>=0?L[i]:'')+'</div>';
+          bg=v?'var(--accent)':'var(--border)',
+          ta=i===0?'left':i===H.length-1?'right':'center';
+      hb+='<div class=bar-cell style="background:'+bg+';height:'+hp+';min-height:2px" title="'+L[i]+': '+v+'"></div>';
+      lb+='<div class=bar-cell style="text-align:'+ta+'">'+(showL.indexOf(i)>=0?L[i]:'')+'</div>';
     }
     $('ph').innerHTML=hb;
     $('phL').innerHTML=lb;
