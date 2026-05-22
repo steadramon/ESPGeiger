@@ -64,7 +64,7 @@
   #define EGHTTP_CHUNK_ACC 12288
 #endif
 #ifndef EGHTTP_MAX_ROUTES
-  #define EGHTTP_MAX_ROUTES 48
+  #define EGHTTP_MAX_ROUTES 64
 #endif
 
 class EGHttpServer;
