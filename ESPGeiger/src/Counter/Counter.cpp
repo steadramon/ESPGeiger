@@ -474,6 +474,23 @@ void Counter::loop() {
   unsigned long lb = _last_blip;
   if (_last_blip_seen != lb) {
     _last_blip_seen = lb;
+
+    if (_hist_primed) {
+      uint32_t d = (uint32_t)(lb - _prev_blip_us);   // unsigned, wrap-safe
+      uint8_t b;
+      if (d < 64) {
+        b = 0;
+      } else {
+        // d >= 64 here, so __builtin_clz(d) is well-defined.
+        int lg = 31 - __builtin_clz(d);              // floor(log2(d)), 6..31
+        b = (lg < 30) ? (uint8_t)(lg - 5) : 24;
+      }
+      _pulse_hist[b]++;
+    } else {
+      _hist_primed = true;
+    }
+    _prev_blip_us = lb;
+
 #ifndef DISABLE_BLIP
     this->blip();
 #endif
@@ -547,6 +564,21 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (n > 0) res.sendChunk(line, (size_t)n);
   }
 
+  // Inter-pulse-interval histogram (log2 buckets, 64us .. >=512s).
+  {
+    const uint32_t* hist = gcounter.pulse_histogram();
+    const uint8_t   nb   = Counter::pulse_histogram_buckets();
+    n = snprintf_P(line, sizeof(line),
+                   PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]);
+    if (n > 0) res.sendChunk(line, (size_t)n);
+    for (uint8_t b = 1; b < nb; b++) {
+      n = snprintf_P(line, sizeof(line), PSTR(",%lu"),
+                     (unsigned long)hist[b]);
+      if (n > 0) res.sendChunk(line, (size_t)n);
+    }
+    res.sendChunk(F("]"));
+  }
+
   res.sendChunk(F("}"));
   res.endChunked();
 }
@@ -609,18 +641,24 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static const char HISTORY_BODY[] PROGMEM = R"HTML(
 <div id=lf style=display:none><h2>Lifetime</h2><div class=card><div id=g2>
 <div><span class=muted>Clicks </span><b id=lfc>&mdash;</b></div>
-<div><span class=muted><span class=usvL data-on=µR data-off=µSv>&micro;Sv</span> </span><b id=lfs class=usv>&mdash;</b></div>
+<div><span class=muted>Dose </span><b id=lfs class=dose>&mdash;</b></div>
 <div><span class=muted>Tracked </span><b id=lfd>&mdash;</b></div>
 <div><span class=muted>Install age </span><b id=lfi>&mdash;</b></div>
 <div><span class=muted>Avg CPM </span><b id=lfa>&mdash;</b></div>
 </div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
+<h2>Inter-pulse intervals</h2>
+<div class=card style="margin:.4em 0">
+<div id=ph style="display:flex;align-items:flex-end;gap:1px;height:80px;max-height:80px;width:100%;overflow:hidden;margin:.4em 0;border-bottom:1px solid var(--border)"></div>
+<div id=phL style="display:flex;gap:1px;font-size:.65em;color:var(--muted);white-space:nowrap;overflow:hidden"></div>
+<div class=muted style="font-size:.85em;margin-top:.4em">log<sub>2</sub> buckets 64&micro;s to &ge;512s &middot; cumulative since boot</div>
+</div>
 <h2>Last 24 hours</h2>
 <div class=card style="margin:.4em 0"><div id=g2>
 <div><span class=muted>Today </span><b id=hsT>&mdash;</b></div>
 <div><span class=muted>Yesterday </span><b id=hsY>&mdash;</b></div>
 <div><span class=muted id=hsAL>24h avg CPM </span><b id=hsA>&mdash;</b></div>
 <div><span class=muted>24h peak CPM </span><b id=hsP>&mdash;</b></div>
-<div><span class=muted>Today vs yesterday </span><b id=hsD>&mdash;</b></div>
+<div><span class=muted>Day rate vs yesterday </span><b id=hsD>&mdash;</b></div>
 </div></div>
 <div id=bc style="display:flex;align-items:flex-end;gap:1px;height:80px;max-height:80px;width:100%;overflow:hidden;margin:.4em 0 1em;border-bottom:1px solid var(--border)"></div>
 <table>
@@ -641,7 +679,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
   if('life' in o){
     var L=o.life,ts=L.secs>0?L.secs:(L.fbt>0?N-L.fbt:0);
     $('lfc').textContent=L.clk.toLocaleString();
-    setUsv($('lfs'),L.clk/60/o.ratio);
+    setDose($('lfs'),L.clk/60/o.ratio);
     if(ts>0){$('lfd').textContent=F(ts);$('lfa').textContent=(L.clk*60/ts).toFixed(1)}
     if(L.fbt>0)$('lfi').textContent=F(N-L.fbt);
     $('lf').style.display='';
@@ -660,11 +698,14 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
       h60=rlv>=3600000&&es>=3600,
       cpmA=h60?((o.last_day[1]||0)*(60-new Date().getMinutes())/60+(o.last_day[0]||0))/60
               :es>0?sum*60/Math.min(es,86400):0,
-      p=Y>0?(T-Y)*100/Y:0;
+      M=N%86400,
+      ok=Y>0&&M>=3600&&'start' in o&&o.start<=N-M-86400,
+      Tp=M>0?T*86400/M:T,
+      p=ok?(Tp-Y)*100/Y:0;
   $('hsA').textContent=Math.round(cpmA);
   $('hsAL').textContent=(h60?'1h ':'')+'avg CPM ';
   $('hsP').textContent=Math.round(pk);
-  $('hsD').textContent=Y>0?(p>=0?'+':'')+p.toFixed(1)+'%':'—';
+  $('hsD').textContent=ok?(p>=0?'+':'')+p.toFixed(1)+'%':'—';
   if(mx<1)mx=1;
   var bars='';
   for(var i=23;i>=0;i--){
@@ -686,13 +727,30 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+(ok?Math.ceil(n/mins):'—')+'</td><td'+(ok?' class=usv data-uv="'+uv+'"':'')+'>'+(ok?uv.toFixed(4):'—')+'</td></tr>';
   });
   tb.innerHTML=rows;
+  if(o.hist&&o.hist.length){
+    var H=o.hist,mh=1,
+        L=['<64us','<128us','<256us','<512us','<1ms','<2ms','<4ms','<8ms','<16ms','<32ms','<64ms','<128ms','<256ms','<512ms','<1s','<2s','<4s','<8s','<16s','<32s','<64s','<128s','<256s','<512s','>512s'],
+        showL=[0,4,8,12,16,20,24];
+    H.forEach(v=>{if(v>mh)mh=v});
+    var hb='',lb='';
+    for(var i=0;i<H.length;i++){
+      var v=H[i],hp=v?(v/mh*100).toFixed(1)+'%':'2px',
+          bg=v?'var(--accent)':'var(--border)';
+      hb+='<div style="flex:1;min-width:0;background:'+bg+';height:'+hp+';min-height:2px" title="'+L[i]+': '+v+'"></div>';
+      lb+='<div style="flex:1;min-width:0;text-align:center">'+(showL.indexOf(i)>=0?L[i]:'')+'</div>';
+    }
+    $('ph').innerHTML=hb;
+    $('phL').innerHTML=lb;
+  }
   if(window.applyRad)applyRad();
 });
 )JS";
 
 static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
-  WebPortal::sendPageHead(res, F("History"));
+  const char* fn = DeviceInfo::friendlyName();
+  const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
+  WebPortal::sendPageHead(res, F("History"), sub);
   res.sendChunk(FPSTR(HISTORY_BODY));
   WebPortal::sendPageTail(res);
   res.endChunked();

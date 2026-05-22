@@ -190,6 +190,8 @@ class Counter {
       unsigned long get_lifetime_seconds() const;  // live: saved + uncommitted delta
       void save_lifetime();
       void reset_lifetime();
+      const uint32_t* pulse_histogram() const { return _pulse_hist; }
+      static constexpr uint8_t pulse_histogram_buckets() { return HIST_BUCKETS; }
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
 #ifdef GEIGER_BLIPLED
@@ -204,6 +206,13 @@ class Counter {
 #endif
     private:
       unsigned long _last_blip_seen = 0;
+      // Inter-pulse-interval histogram, log2 buckets from 0-64us up to >=537s.
+      // Bucket b covers [64us << (b-1), 64us << b); bucket 0 = 0-64us; bucket
+      // 24 saturates. Updated only on observed click in Counter::loop().
+      static constexpr uint8_t HIST_BUCKETS = 25;
+      uint32_t _pulse_hist[HIST_BUCKETS] = {0};
+      uint32_t _prev_blip_us = 0;
+      bool     _hist_primed  = false;
       int _cpm_warning = 50;
       int _cpm_alert = 100;
       bool _bool_cpm_warning = false;
