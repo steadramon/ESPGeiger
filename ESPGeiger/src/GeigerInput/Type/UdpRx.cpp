@@ -312,7 +312,13 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
 }
 
 void GeigerUdpRx::loop() {
+  // WiFi reconnect drops the IGMP membership; rebind the socket.
+  if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
+    Log::console(PSTR("UdpRx: WiFi reconnect, rebinding multicast"));
+    teardownUdp();
+  }
   if (!ensureUdp()) return;
+  _bound_at_ms = Wifi::connected_at_ms;
   uint8_t buf[128];
   int sz;
   while ((sz = _udp->parsePacket()) > 0) {

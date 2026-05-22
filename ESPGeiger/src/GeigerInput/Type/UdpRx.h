@@ -113,6 +113,7 @@ private:
 
   ProducerRecord _producers[UDPRX_PRODUCER_SLOTS] = {};
   uint8_t _producers_seen = 0;
+  unsigned long _bound_at_ms = 0;
 };
 
 #endif
