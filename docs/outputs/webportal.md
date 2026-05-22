@@ -43,7 +43,7 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 |---|---|
 | `/` | Main home page |
 | `/status` | Detailed device status page (live readings, uptime, build info) |
-| `/hist` | Rolling 24 h CPM history view with bar chart, hour-by-hour table, and (when enabled) a lifetime stats card with a **Reset lifetime** button |
+| `/hist` | Rolling 24 h click history, lifetime totals and inter pulse interval histogram - see [History page](/output/history) |
 | `/clicks` | JSON feed of the 24 h hourly bucket array plus today/yesterday totals and (when enabled) the lifetime block `{clk, fbt, secs}` - powers `/hist`. `secs` = tracked seconds (CPM denominator, advances only over persisted spans); `fbt` = first-boot epoch (install age). |
 | `/json` | Machine-readable status snapshot - see [JSON Endpoint](/output/integrations#json-endpoint) |
 | `/lastdata` | GeigerLog-compatible CSV line - see [GeigerLog](/output/integrations#geigerlog) |
