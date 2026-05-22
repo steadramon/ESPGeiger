@@ -90,6 +90,7 @@ th{font-weight:500;color:var(--muted)}
 .bar-row.bot{margin:.4em 0 1em}
 .bar-lbls{display:flex;gap:1px;font-size:.65em;color:var(--muted);white-space:nowrap;overflow:hidden}
 .bar-cell{flex:1;min-width:0}
+#dyB{position:fixed;top:0;left:0;right:0;padding:.5em;background:#fc3;color:#000;text-align:center;z-index:9999;cursor:pointer;font-size:.9em;font-weight:600}
 .menu{display:flex;flex-direction:column;gap:.85em;margin:1em auto;max-width:22em}
 .menu a,.back{background:var(--accent);color:#fff;font-weight:500;padding:.5em 1em;border-radius:4px}
 .menu a{display:block;text-align:center;font-size:1.15em;padding:.55em 1em;border-radius:6px}
@@ -412,7 +413,7 @@ void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if !EG_GZ_THEME_JS
 static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t);
 !function(){
-var d=document.documentElement,L=addEventListener,
+var d=document.documentElement,L=addEventListener,LS=localStorage,SS=sessionStorage,
 TE=()=>dispatchEvent(new Event('themechange')),
 AR=el=>{
   var u=d.classList.contains('crt'),
@@ -441,18 +442,24 @@ AD=el=>{
 window.setUsv=(el,v)=>{el.dataset.uv=v;AR(el)};
 window.setDose=(el,v)=>{el.dataset.dose=v;AD(el)};
 window.applyRad=AR;
-function C(){var s=localStorage.crt,a=new Date();
-if(s==='1'||(s==null&&a.getMonth()===3&&a.getDate()===1))d.classList.add('crt');
+window.toggleCrt=()=>{LS.crt=d.classList.toggle('crt')?'1':'0';AR();AD();TE()};
+function C(){var s=LS.crt,ds=new Date().toDateString().substr(4,6),hh=2166136261;
+for(var hi=0;hi<6;hi++)hh=Math.imul(hh^ds.charCodeAt(hi),16777619)>>>0;
+if(LS.xd==='1')hh=612193241;
+window.xd=hh===612193241;
+if(s==='1'||(s==null&&window.xd))d.classList.add('crt');
 else if(s==='0')d.classList.remove('crt');
-AR();AD();}
+AR();AD();
+var msg={612193241:'SGFwcHkgQXByaWwgRm9vbHMhIENsaWNrIHRvIGRpc21pc3MuIFR5cGUgY3J0IGluIHRoZSAvc3RhdHVzIGNtZCBib3ggdG8gZGlzYWJsZS4=',1332614041:'4piiIEhhcHB5IGJpcnRoZGF5IE1hcmllIEN1cmllIC0gYm9ybiAxODY3Lg==',1368767674:'8J+puyBIYXBweSBiaXJ0aGRheSBXaWxoZWxtIFLDtm50Z2VuIC0gYm9ybiAxODQ1Lg=='}[hh];
+if(msg&&location.pathname==='/'&&SS.dayDis!=hh&&!byID('dyB')){var p=document.createElement('div');p.id='dyB';p.textContent=atob(msg);p.onclick=()=>{SS.dayDis=hh;p.remove()};var ap=()=>document.body.appendChild(p);document.body?ap():L('DOMContentLoaded',ap)}}
 window.theme=()=>{var t=d.dataset.theme=='dark'?'light':'dark';
-d.dataset.theme=localStorage.theme=t;TE()};
-d.dataset.theme=localStorage.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-C();L('pageshow',C);
+d.dataset.theme=LS.theme=t;TE()};
+d.dataset.theme=LS.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+C();L('pageshow',e=>{if(e.persisted)C()});
 var k=[38,38,40,40,37,39,37,39,66,65],i=0;
 L('keydown',e=>{i=e.keyCode===k[i]?i+1:0;
 if(i===k.length){
-  localStorage.crt=d.classList.toggle('crt')?'1':'0';
+  LS.crt=d.classList.toggle('crt')?'1':'0';
   AR();AD();TE();i=0;
 }})
 }();)JS";
@@ -778,8 +785,6 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 <input id=p name=password type=password maxlength=64 placeholder='(blank for open networks)'>
 )HTML"));
 
-  // Server-rendered with current prefs prefilled; pattern enforces basic
-  // client-side validation. applyStaticConfig revalidates at boot.
   static const char IPV4_PATTERN_ATTR[] PROGMEM =
     " pattern='^(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3}$' value='";
   bool useStatic = EGPrefs::getBool("net", "static_ip");
@@ -1512,10 +1517,6 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
         n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("<small>%s</small>"), p_help);
         if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
       }
-      // Sensitive fields with a stored value get a clear button: sets the
-      // input to the __CLEAR__ sentinel so the POST handler erases it.
-      // Targets the input by id (mid.pid) instead of DOM-walking siblings,
-      // so help text / line breaks between input and button don't matter.
       if ((p.flags & EGP_SENSITIVE) && cur[0]) {
         n = snprintf_P(buf + pos, sizeof(buf) - pos,
           PSTR("<button type=button class='danger btn-sm' style='margin-top:.2em' "
@@ -1955,7 +1956,10 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <style>
 #blip{display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--border);margin-right:.5em;vertical-align:middle;transition:background-color .08s ease-out,box-shadow .08s ease-out}
 #blip.f{background:var(--blip,#0f0);box-shadow:0 0 6px var(--blip,#0f0)}
+#snd{display:none;width:auto;padding:.2em .8em;font-size:.85em;float:right;margin:0 0 .5em .5em}
+:root.crt #snd{display:inline-block}
 </style>
+<button id=snd>Sound: off</button>
 <canvas id=g1></canvas>
 <div id=g2></div>
 <table>
@@ -1971,7 +1975,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button type=submit style="width:auto">Send</button>
 </form>
 </details>
-<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;fetch('/webcmd',{method:'POST',body:v});i.value='';return!1}</script>
+<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else fetch('/webcmd',{method:'POST',body:v});i.value='';return!1}</script>
 <script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
 
@@ -1981,9 +1985,12 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
   WebPortal::sendPageHead(res, F("Status"), sub);
 
-  // Seed the chart with the recent CPM history so it isn't blank for the
-  // first 30s after page load. Step every 3rd sample to keep the inline
-  // payload small (15 points across the 45-deep buffer).
+  char chipscript[64];
+  int csn = snprintf_P(chipscript, sizeof(chipscript),
+                       PSTR("<script>window.CHIPID=\"%s\"</script>"),
+                       DeviceInfo::chipid());
+  if (csn > 0 && (size_t)csn < sizeof(chipscript)) res.sendChunk(chipscript, (size_t)csn);
+
   char seedBuf[240];
   size_t sp = 0;
   int sn = snprintf_P(seedBuf, sizeof(seedBuf), PSTR("<script>window._seedHist=["));
@@ -2176,6 +2183,19 @@ void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if !EG_GZ_JS_BUNDLE
 extern const char statusJS[] PROGMEM = R"JS(
 !function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);
+var ac,cps=0,nb,mu=$('snd'),mt=1,AC=window.AudioContext||window.webkitAudioContext;
+var LS=localStorage,sb=LS.sndBtn;
+mu.style.display=(sb==='1'||(window.xd&&sb!=='0'))?'':'none';
+function ensureAC(){if(!mt&&!ac&&AC){ac=new AC();var N=Math.floor(ac.sampleRate*.008);nb=ac.createBuffer(1,N,ac.sampleRate);var d=nb.getChannelData(0),sd=2166136261>>>0,cid=window.CHIPID||'0';for(var i=0;i<cid.length;i++)sd=Math.imul(sd^cid.charCodeAt(i),16777619)>>>0;if(!sd)sd=1;for(var i=0;i<N;i++){sd^=sd<<13;sd^=sd>>>17;sd^=sd<<5;d[i]=((sd&65535)/32768-1)*Math.exp(-i*.04)}}if(ac&&ac.resume)ac.resume()}
+mu.onclick=function(){mt=!mt;mu.textContent='Sound: '+(mt?'off':'on');ensureAC()};
+window.toggleTick=()=>{var nv=mu.style.display!=='none';LS.sndBtn=nv?0:1;mu.style.display=nv?'none':''};
+(function clk(){var n=500;
+if(cps>0&&!mt&&ac){
+var t=ac.currentTime,s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
+s.buffer=nb;f.type='bandpass';f.frequency.value=1200;f.Q.value=2;g.gain.value=.7;
+s.connect(f);f.connect(g);g.connect(ac.destination);s.start(t);
+n=Math.max(20,-Math.log(1-Math.random())/cps*1000)}
+O(clk,n)})();
 if(window._seedHist&&window._seedHist.length){var N=window._seedHist.length,w=D.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new D(w-(N-1-i)*3e3).toLocaleTimeString()))}
 var J,L=0,I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
 B.style.setProperty('--blip',K);
@@ -2207,7 +2227,6 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden){if(
 #endif
 
 // picographJS - shared graphing library used by /hvjs (HV) and /js
-// (status page). Lives here so non-HV builds still get the symbol.
 #if !EG_GZ_JS_BUNDLE || !EG_GZ_HVJS_BUNDLE
 extern const char picographJS[] PROGMEM = R"JS(
 var cVID=(t,s)=>t.map(x=>s+x.replace(" ","")+"value"),
