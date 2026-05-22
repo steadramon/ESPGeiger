@@ -97,7 +97,7 @@
 #endif
 
 #ifndef GEIGER_DEBOUNCE
-#define GEIGER_DEBOUNCE 500
+#define GEIGER_DEBOUNCE 200
 #endif
 
 extern volatile bool _eventFlipFlop;
