@@ -327,7 +327,14 @@ void UdpBlipModule::notifyClick(unsigned long now_ms) {
 void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
   if (_mode == 0 || ota_in_progress) return;
   if (!Wifi::connected) return;
+  // WiFi reconnect can leave egress netif + mDNS stale; rebind both.
+  if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
+    Log::console(PSTR("UdpBlip: WiFi reconnect, rebinding"));
+    teardown();
+    _mdns_done = false;
+  }
   if (!ensureUdp()) return;
+  _bound_at_ms = Wifi::connected_at_ms;
   if (!_mdns_done) announce_mdns();
 
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {

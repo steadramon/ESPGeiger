@@ -105,6 +105,7 @@ private:
   unsigned long _last_clicks = 0;
   unsigned long _last_click_emit_ms = 0;
   unsigned long _last_token_ms = 0;
+  unsigned long _bound_at_ms = 0;       // WiFi session id; rebind on change
   uint16_t      _stats_ticks = 0;      // seconds since last /rad emit
   uint16_t      _backoff_ticks = 0;    // seconds in fail-backoff
   uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
