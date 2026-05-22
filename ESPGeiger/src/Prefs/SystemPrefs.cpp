@@ -216,7 +216,7 @@ EG_PSTR(IN_H_PCP, "Pin pull (0=none, 1=up, 2=down)");
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
 EG_PSTR(IN_L_DBN, "Debounce");
-EG_PSTR(IN_H_DBN, "Debounce (us)");
+EG_PSTR(IN_H_DBN, "Pulse debounce (us). Filters electrical noise. 100-300 typical.");
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
 EG_PSTR(IN_L_PWU, "Pulse width");
