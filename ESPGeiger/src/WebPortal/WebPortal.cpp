@@ -420,13 +420,27 @@ AR=el=>{
     e.title=u?v.toFixed(3)+' µSv/h':'';
   });
   document.querySelectorAll('.usvL').forEach(e=>{e.textContent=u?(e.dataset.on||'µR/h'):(e.dataset.off||'µSv/h')});
+},
+AD=el=>{
+  var u=d.classList.contains('crt'),
+      list=el&&el.dataset?[el]:document.querySelectorAll('.dose');
+  list.forEach(e=>{
+    var v=parseFloat(e.dataset.dose);
+    if(isNaN(v))return;
+    var dv=u?v*114:v,s=u?'R':'Sv',p='µ',sc=1;
+    if(dv>=1e6){p='';sc=1e6}
+    else if(dv>=1e3){p='m';sc=1e3}
+    dv/=sc;
+    e.textContent=(dv>=10?dv.toFixed(1):dv.toFixed(2))+' '+p+s;
+  });
 };
 window.setUsv=(el,v)=>{el.dataset.uv=v;AR(el)};
+window.setDose=(el,v)=>{el.dataset.dose=v;AD(el)};
 window.applyRad=AR;
 function C(){var s=localStorage.crt,a=new Date();
 if(s==='1'||(s==null&&a.getMonth()===3&&a.getDate()===1))d.classList.add('crt');
 else if(s==='0')d.classList.remove('crt');
-AR();}
+AR();AD();}
 window.theme=()=>{var t=d.dataset.theme=='dark'?'light':'dark';
 d.dataset.theme=localStorage.theme=t;TE()};
 d.dataset.theme=localStorage.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
@@ -435,7 +449,7 @@ var k=[38,38,40,40,37,39,37,39,66,65],i=0;
 L('keydown',e=>{i=e.keyCode===k[i]?i+1:0;
 if(i===k.length){
   localStorage.crt=d.classList.toggle('crt')?'1':'0';
-  AR();TE();i=0;
+  AR();AD();TE();i=0;
 }})
 }();)JS";
 #endif
@@ -2063,6 +2077,32 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
   HEAD("device_wifi_rssi_dbm", "gauge", "WiFi signal strength");
   VAL ("device_wifi_rssi_dbm", "", "%d", (int)Wifi::rssi);
 
+  // Inter-pulse-interval histogram - cumulative Prometheus 'le' buckets.
+  // Bucket b upper bound = (64us << b); top bucket saturates as +Inf.
+  HEAD("geiger_pulse_interval_seconds", "histogram",
+       "Inter-pulse intervals in seconds, log2 buckets");
+  const uint32_t* hist = gcounter.pulse_histogram();
+  const uint8_t   nb   = Counter::pulse_histogram_buckets();
+  uint32_t cumul = 0;
+  for (uint8_t b = 0; b < nb; b++) {
+    cumul += hist[b];
+    if (b < nb - 1) {
+      float ub = (float)(64UL << b) / 1.0e6f;
+      n = snprintf_P(buf, sizeof(buf),
+        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",name=\"%s\",le=\"%g\"} %lu\n"),
+        cid, name, ub, (unsigned long)cumul);
+    } else {
+      n = snprintf_P(buf, sizeof(buf),
+        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",name=\"%s\",le=\"+Inf\"} %lu\n"),
+        cid, name, (unsigned long)cumul);
+    }
+    if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+  }
+  n = snprintf_P(buf, sizeof(buf),
+    PSTR("geiger_pulse_interval_seconds_count{chipid=\"%s\",name=\"%s\"} %lu\n"),
+    cid, name, (unsigned long)cumul);
+  if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+
   #undef HEAD
   #undef VAL
   res.endChunked();
@@ -2139,7 +2179,7 @@ setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
 var Q=function(){if(!window._csk){window._csk=1;O(f,100)}},t=function(){var n=new X;n.open("GET","/json",!0);
 n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText),u=o.ut;
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
-C.textContent=o.c.toFixed(2);T.textContent=o.tc;setUsv(V,o.c/o.r);S.textContent=o.cs.toFixed(2);
+C.textContent=o.c.toFixed(2);T.textContent=o.tc;setUsv(V,o.c/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));
