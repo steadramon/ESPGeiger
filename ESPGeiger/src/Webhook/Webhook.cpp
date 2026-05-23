@@ -22,6 +22,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
+#include "../EnvSensor/EnvSensor.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 #endif
@@ -191,6 +192,28 @@ void Webhook::postMeasurement() {
   n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"hv\":%s"), b_hv);
   advance_pos(pos, n, WEBHOOK_BUF_SIZE);
 #endif
+  if (envsensor.present()) {
+    // Each field is emitted only when the underlying sensor actually
+    // provides it: BMP280 has no humidity, AHT-only has no pressure,
+    // combo modules light all three.
+    float t = envsensor.tempC(), h = envsensor.humidity(), p = envsensor.pressure();
+    char fbuf[12];
+    if (!isnan(t)) {
+      format_f(fbuf, sizeof(fbuf), t);
+      n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"t\":%s"), fbuf);
+      advance_pos(pos, n, WEBHOOK_BUF_SIZE);
+    }
+    if (!isnan(h)) {
+      format_f(fbuf, sizeof(fbuf), h);
+      n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"h\":%s"), fbuf);
+      advance_pos(pos, n, WEBHOOK_BUF_SIZE);
+    }
+    if (!isnan(p)) {
+      format_f(fbuf, sizeof(fbuf), p);
+      n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"p\":%s"), fbuf);
+      advance_pos(pos, n, WEBHOOK_BUF_SIZE);
+    }
+  }
   n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos,
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
     gcounter.total_clicks, DeviceInfo::freeHeap(), (int)Wifi::rssi);
