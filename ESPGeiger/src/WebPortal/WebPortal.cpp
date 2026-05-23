@@ -1551,7 +1551,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
                   "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
                   " <button type=submit>Import</button></p></form>"
                   "<p style=\"color:var(--muted);font-size:.85em\">Import resets all config to defaults then applies the blob. WiFi and network settings are preserved. Device reboots automatically after import.</p>"
-                  "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains your saved passwords and API keys. Keep it private.</p>"
+                  "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains private information. Keep it private.</p>"
                   "</details>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
@@ -1575,7 +1575,7 @@ static bool is_skip_pref(const char* module_id, const char* key) {
   return false;
 }
 
-static constexpr uint32_t EXPORT_OBF_SEED = 0xE5A1E5A1u;
+static constexpr uint32_t EXPORT_OBF_SEED = 0xB11C5EEDu;
 
 struct B64Sink {
   EGHttpResponse* res;
@@ -1975,7 +1975,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <tr><th>CPM</th><td><span id=blip></span><span id=cpm>-</span></td><th>CPS</th><td><span id=cs>-</span></td></tr>
 <tr><th><span class=usvL>&micro;Sv/h</span></th><td><span id=usv class=usv>-</span></td><th>Total clicks</th><td><span id=tc>-</span></td></tr>
 <tr><th>Uptime</th><td><span id=upt>-</span></td><th>Signal</th><td><span id=rssi>-</span></td></tr>
-<tr id=envR style=display:none><th>Env</th><td colspan=3><span id=envV>-</span></td></tr>
+<tr id=envR style=display:none></tr>
 </table>
 <h2>Console</h2>
 <textarea readonly id=t1 wrap=off></textarea>
@@ -2260,7 +2260,7 @@ n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseT
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 C.textContent=o.c.toFixed(2);T.textContent=o.tc;setUsv(V,o.c/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
-if(o.t!=null||o.h!=null||o.p!=null){var ps=[],tu=o.tu|0,us=['\xb0C','\xb0F','K'];if(o.t!=null)ps.push(o.t.toFixed(1)+us[tu]);if(o.h!=null)ps.push(o.h.toFixed(0)+'%');if(o.p!=null)ps.push(o.p.toFixed(1)+' hPa');$('envR').style.display='';$('envV').textContent=ps.join('  ')}
+if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);$('envR').innerHTML=ps.map(function(p){return '<th>'+p[0]+'</th><td>'+p[1]+'</td>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
