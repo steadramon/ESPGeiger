@@ -49,6 +49,7 @@ A number of hardware specific builds are also made to support ESPGeiger-HW and E
 `espgeigerhw` | ESPGeiger-HW | Pulse | Build for the ESPGeiger-HW Geiger Counter. Controls PWM for HV along with other specifics for hardware.
 `espgeigerlog` | ESPGeiger Log | Pulse | A pulse based build for the ESPGeiger Log hardware with NeoPixel and SDCard output.
 `espgeigerlog_serial` | ESPGeiger Log | Serial | A serial based build for the ESPGeiger Log hardware. Select your counter type from the Config page.
+`espgeigerlog_udp` | ESPGeiger Log | UDP receiver | A UDP-receiver build for the ESPGeiger Log hardware. Logs clicks from any ESPGeiger device broadcasting `UdpBlip` on the LAN; useful as a headless aggregator that records to SD card.
 
 ## HV Builds
 

@@ -91,3 +91,136 @@ CPS: 0.53
 ```
 
 Turn it all off with `show 0` - periodic output stops and the regular log verbosity returns.
+
+## Output format
+
+The default output uses ESPGeiger's own labelled style, but the firmware can also emit lines in any of the protocols it supports on the input side. This is useful for piping data into existing tools that expect a particular counter's wire format, or for chaining ESPGeiger to a parent device that thinks it is talking to a real GC10 / MightyOhm.
+
+Set the format via the `sout.format` pref. The id values match the input-side protocol ids in the firmware.
+
+| `set sout.format N` | Wire format | Default baud |
+|---|---|---|
+| `0` | Labelled (default), driven by `show cpm` / `cps` / `usv` / `hv` | unchanged |
+| `4` | ESPGeiger labelled (`CPM: 30`), fixed - ignores `show` toggles | 115200 |
+| `5` | User template, see below | 115200 |
+| `3` | MightyOhm | 9600 |
+| `1` | GC10 (plain integer CPM per line) — serial-input builds only | 9600 |
+| `2` | GC10Next (plain integer CPM per line) — serial-input builds only | 115200 |
+
+On pulse-input builds (espgeigerhw, esp8266_pulse, esp8266oled_pulse etc) and UDP-RX builds, only the formats that don't require an input parser are kept: id `0`, `4`, `5`, `3`. GC10 / GC10Next (`1`, `2`) are dropped because their parsers can't be reached from a non-serial input source and the output is trivially reproducible with format `5` (template `{cpm}\r\n`). Existing prefs that select an unavailable format fall back to silent output.
+
+When `sout.format` is non-zero the `show` field toggles are ignored. Output still only runs when `show N` (or `show 1`) has set a non-zero period.
+
+Examples:
+
+```
+set sout.format 3       # MightyOhm
+show 1                  # 1 line/sec
+```
+
+produces:
+
+```
+CPS, 0, CPM, 28, uSv/hr, 0.16, SLOW
+CPS, 1, CPM, 30, uSv/hr, 0.17, SLOW
+CPS, 0, CPM, 30, uSv/hr, 0.17, SLOW
+```
+
+The CPS field is the literal count in the most recent second, not an average. At background levels (~30 CPM) most seconds read `0` with the odd `1`, which is also how a real MightyOhm behaves.
+
+The mode tag at the end of each line switches automatically:
+
+* `SLOW` when CPS is 0-15 (typical background up to roughly 900 CPM)
+* `FAST` when CPS is 16-255 (active source, faster sampling on the original hardware)
+* `INST` when CPS exceeds 255. CPM is reported as `CPS * 60` since the 8-bit sample buffer on a real MightyOhm overflows in this regime.
+
+GC10 / GC10Next produce just the integer CPM:
+
+```
+30
+32
+28
+```
+
+## User template (format 5)
+
+Format 5 emits whatever string you put in the `sout.tpl` pref, with `{var}` placeholders substituted on every line. Useful when you need to pipe data into a logger that expects its own line shape.
+
+```
+set sout.format 5
+set sout.tpl cpm={cpm}|cps={cps}|usv={usv}
+show 1
+```
+
+produces:
+
+```
+cpm=28|cps=0.50|usv=0.16
+cpm=30|cps=0.53|usv=0.17
+```
+
+### Variables
+
+| Name | Meaning |
+|---|---|
+| `{cpm}` | 1-minute CPM (integer) |
+| `{cps}` | Counts per second, rolling float |
+| `{cps_i}` | Counts in the most recent whole second (integer) |
+| `{cpm5}` | 5-minute CPM rolling average |
+| `{cpm15}` | 15-minute CPM rolling average |
+| `{usv}` | Dose rate in microsieverts per hour |
+| `{tc}` | Lifetime total clicks |
+| `{ut}` | Uptime in seconds |
+| `{id}` | Six-hex chip id |
+| `{name}` | Friendly name (or hostname) |
+| `{rssi}` | WiFi RSSI in dBm |
+| `{mem}` | Free heap in bytes |
+| `{mode}` | MightyOhm-style mode tag `SLOW` / `FAST` / `INST` |
+| `{hv}` | Measured HV in volts (ESPGeiger-HW only) |
+| `{t}` | Temperature in user-preferred unit (env.unit) |
+| `{h}` | Relative humidity % |
+| `{p}` | Pressure in hPa |
+
+Unknown placeholders render verbatim as `{whatever}`, so misspellings are visible on the wire. Sensor variables (`{hv}`, `{t}`, `{h}`, `{p}`) render as empty strings when the relevant hardware is absent.
+
+Visit `/vars.json` on the device to see the current rendered value of every variable - handy when authoring a template and checking that the field you want is actually populated on your build.
+
+### Escapes
+
+Backslash escapes work inside the template:
+
+| Sequence | Meaning |
+|---|---|
+| `\n` | Newline (0x0A) |
+| `\r` | Carriage return (0x0D) |
+| `\t` | Tab |
+| `\\` | Literal backslash |
+| `\{` `\}` | Literal brace |
+
+If you leave off the trailing newline the firmware adds one for you. Multi-line templates are fine - e.g. `cpm={cpm}\ncps={cps}\n` emits two lines per emit period.
+
+### Notes
+
+* Template max length is 128 characters; rendered line also caps at 128 bytes per emit.
+* MightyOhm output (format 3) stays its own special case because the mode tag (`SLOW`/`FAST`/`INST`) and CPM extrapolation in `INST` mode can't be expressed as a static template. For a MightyOhm-like line with your own labels, combine `{cps_i}` + `{cpm}` + `{mode}` - note that in the `INST` regime the CPM won't match MightyOhm's wire-exact behaviour.
+
+## Baud rate
+
+Set `sout.baud` to override the serial baud rate at runtime. The change applies immediately on platforms that have a real UART (ESP8266 and classic ESP32 builds). On ESP32-S3 native USB builds the baud is virtual and the option is a no-op.
+
+| `set sout.baud N` | Effect |
+|---|---|
+| `0` (default) | If `sout.format` is set to a known protocol, use that protocol's native baud. Otherwise keep the framework default (115200). |
+| Any non-zero value | Force this baud regardless of format. |
+
+After changing baud, reconnect your serial monitor at the new rate so it can decode the wire.
+
+Examples:
+
+```
+set sout.format 3       # MightyOhm: drops baud to 9600 automatically
+set sout.baud 19200     # override to 19200 regardless of format
+set sout.baud 0         # back to format-default (or framework default)
+```
+
+The `sout` prefs (`format`, `baud`, `interval`, `flags`) are command-driven and do not appear on the Config page.

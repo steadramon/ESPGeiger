@@ -244,6 +244,7 @@ These bases handle the platform setup, library dependencies and core feature fla
 | `espgeigerlite` | ESP8266 | Pulse | OLED, NeoPixel, PushButton |
 | `espgeigerlog` | ESP8266 | Pulse | OLED, NeoPixel, PushButton, SDCard |
 | `espgeigerlog_serial` | ESP8266 | Serial | OLED, NeoPixel, PushButton, SDCard |
+| `espgeigerlog_udp` | ESP8266 | UDP receiver | OLED, NeoPixel, PushButton, SDCard |
 
 ### Test Environments
 

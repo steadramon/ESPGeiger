@@ -16,10 +16,8 @@ Participation is opt-in, signed end-to-end, and privacy-respecting.
 
 ## What gets sent
 
-The device speaks **MessagePack** to the server - a compact binary
-encoding chosen to keep heap pressure low on ESP8266. The schemas
-below describe the logical contents; on the wire they're encoded as
-fixmaps with single- or two-letter keys.
+Posts and handshakes use **MessagePack** (compact binary). The schemas
+below list the logical fields.
 
 **Per-minute post** (CPM Readings mode):
 
@@ -30,6 +28,9 @@ fixmaps with single- or two-letter keys.
 | `c`   | float32 | Current CPM |
 | `u`   | float32 | Microsieverts per hour |
 | `hv`  | float32 | HV tube reading (ESPGeiger-HW only) |
+| `t`   | float32 | Temperature in °C ([environment sensor](/configuration/env) only) |
+| `h`   | float32 | Humidity in % (BME280 / AHT family only) |
+| `p`   | float32 | Pressure in hPa (BME280 / BMP280 only) |
 
 In **Heartbeat** mode the radiation fields (`c`/`u`/`hv`) are omitted
 - the post becomes a minimal `{id, n}` body so the server still sees the
@@ -101,34 +102,20 @@ field).
 
 ## Identity and signing
 
-Each device generates an ECC keypair (secp192r1) on first run and stores
-the private key in LittleFS. Every post and handshake is SHA-256'd and
-signed; the signature is base64-encoded P1363 (`r||s`) and sent in the
-`X-Auth` header. The server keeps your public key from the first
-handshake and refuses any post whose signature doesn't verify. This
-means:
+Each device generates an ECC keypair on first run; every post is signed
+with it. The server pins your public key on first handshake and refuses
+unsigned or wrong-key posts. No shared secrets, no passwords to leak,
+and your station can't be impersonated.
 
-- Your station can't be impersonated.
-- Losing the device's flash means a new keypair on next boot, which
-  registers as a new station (same chip ID, new server-side row).
-- No shared secrets to configure - no passwords to leak.
+The `/webapi` page's **Advanced** panel exposes two destructive actions:
 
-### Reset key
-
-The `/webapi` page's **Advanced → Reset key** button wipes the local
-private key and reboots. The next handshake registers a fresh station;
-the previous one is orphaned and eventually retired by server-side
-staleness rules. Useful if you want to migrate to a new identity but
-keep contributing data.
-
-### Forget station
-
-The `/webapi` page's **Advanced → Forget station** button sends a signed
-delete request to `/api/1/forget`. The server purges the station row,
-all readings, and all history. Sharing is then automatically switched
-to **Off**. This is irreversible - re-enabling later registers a
-brand-new station with no link to the deleted one. This is the GDPR
-right-to-erasure path.
+- **Reset key** wipes the local private key and reboots. The next
+  handshake registers a fresh station; the old one ages out server-side.
+  Use this to migrate to a new identity while still contributing data.
+- **Forget station** sends a signed delete to `/api/1/forget`. The server
+  purges the row, all readings, and all history, then sharing flips to
+  **Off**. Irreversible - re-enabling later registers as brand new. This
+  is the GDPR right-to-erasure path.
 
 ## Map presence
 
@@ -200,27 +187,15 @@ silence isn't a severity-banded anomaly.
 
 ## Endpoint
 
-The canonical URL is `http://api.espgeiger.com/api/1/`. HTTP-only is
-intentional - signatures provide tamper-resistance, TLS would just add
-heap pressure on ESP8266 without additional security in this threat
-model.
-
-Each request sends:
-
-- `Content-Type: application/msgpack`
-- `X-Auth: <base64(P1363 signature over the raw request body)>`
-- `User-Agent: ESPGeiger/<version> <chip> <build>`
-
-The `Accept` header is omitted; the server infers the response
-encoding from `Content-Type`.
-
-Routes:
+Canonical URL: `http://api.espgeiger.com/api/1/`. HTTP-only by design -
+the per-request signature provides tamper-resistance; TLS would add
+heap pressure on ESP8266 without improving the threat model.
 
 | Path             | Method | Purpose |
 |---|---|---|
 | `/api/1/handshake` | POST | Register or refresh station metadata |
-| `/api/1/post`      | POST | Submit a reading (and optionally a health snapshot) |
-| `/api/1/forget`    | POST | Right-to-erasure - purge station + all history |
+| `/api/1/post`      | POST | Submit a reading (+ optional health snapshot) |
+| `/api/1/forget`    | POST | Right-to-erasure - purge station + history |
 
 ## Opt-out at any time
 

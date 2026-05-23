@@ -28,3 +28,8 @@ ESPGeiger can be configured to send to a ThingSpeak Channel. ESPGeiger updates t
 | Field 2 | `μSv` |
 | Field 3 | `CPM5` |
 | Field 4 | `CPM15` |
+| Field 5 | `Temperature` (°C, when an [environment sensor](/configuration/env) is present) |
+| Field 6 | `Humidity` (%, BME280 / AHT family only) |
+| Field 7 | `Pressure` (hPa, BME280 / BMP280 only) |
+
+Fields 5-7 are only sent when the relevant sensor channel is available. Leave them unconfigured in your ThingSpeak channel if you don't have an environment sensor wired in.

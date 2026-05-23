@@ -34,9 +34,14 @@ ESPGeiger submits a JSON payload via HTTP POST with `Content-Type: application/j
 | `cpm15` | float | 15-minute smoothed CPM |
 | `usv` | float | Current microsieverts per hour (μSv/h) |
 | `hv` | float | High voltage reading in volts (ESPGeiger-HW only) |
+| `t` | float | Temperature in °C ([environment sensor](/configuration/env) only) |
+| `h` | float | Relative humidity in % (BME280 / AHT family only) |
+| `p` | float | Atmospheric pressure in hPa (BME280 / BMP280 only) |
 | `tc` | integer | Total accumulated click count since boot |
 | `mem` | integer | Free heap memory in bytes |
 | `rssi` | integer | WiFi signal strength in dBm |
+
+Environmental fields are emitted only when the corresponding sensor channel is available. A BMP280 ships `t` and `p` but not `h`; an AHT20 ships `t` and `h` but not `p`; a BME280 or AHT20+BMP280 combo ships all three.
 
 ## Example JSON Output
 

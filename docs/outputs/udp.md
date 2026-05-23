@@ -10,23 +10,64 @@ nav_order: 10
 
 ESPGeiger can broadcast click events and periodic stats to a UDP multicast group using the [Open Sound Control (OSC) 1.0](https://opensoundcontrol.stanford.edu/spec-1_0.html) wire format. Any OSC-aware tool on the same LAN (Pure Data, TouchDesigner, python-osc, Max/MSP, Node-RED) can subscribe and react to live radiation events without polling MQTT or HTTP.
 
-A matching receiver firmware variant (`UDP-Receiver`) lets a tubeless ESP device mirror another ESPGeiger over the air: display, MQTT, WebAPI, OLED and blip-LED all work as if a real tube were attached.
+A matching receiver firmware variant (`UDP-Receiver`) lets a tubeless ESP device mirror another ESPGeiger over the air. Display, MQTT, WebAPI, OLED and blip-LED all work as if a real tube were attached.
 
-- Multicast group: `239.255.86.86` (site-local, configurable)
+- Multicast group: `239.255.86.86` (configurable)
 - UDP port: `57340` (configurable)
 - Service announced via mDNS as `_osc._udp`
 
-## Output Modes
+## Quick Start
+
+You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer**) and one with a `*_udp` build (the **receiver**).
+
+**On the producer:**
+1. Note its 6-hex chipid, visible on the home page or `/info`.
+2. Go to **Config → Local Broadcast**, set Mode to `2` (telemetry + blips), Save.
+
+**On the receiver:**
+1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32oled_udp` build via the [Web Installer](https://install.espgeiger.com).
+2. Join your WiFi via the captive portal, same network as the producer.
+3. Open the device's web UI and go to **Config → Input**.
+4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
+5. Save.
+
+Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage, and the CPM number should track the producer's.
+
+### Not working?
+
+- **Same WiFi network and subnet.** Multicast does not cross routers or guest networks; both devices need to be on the same AP / SSID.
+- **Producer in Mode 2.** Mode 1 only sends stats every 30 s and produces no clicks.
+- **Receiver actually flashed as `*_udp`.** Check `/info` on the receiver shows a UDP build target.
+- **Loss percentage stuck high.** Try `udprx_rxmode = 1` (modem sleep, default) before `2` (none). `2` is usually worse on noisy LANs.
+- **Wrong producer locked.** In auto-mode the receiver latches onto the first producer heard. Set the chipid explicitly if you have multiple.
+
+## Output Modes (Producer)
 
 Configured on the **Config → Local Broadcast** page.
 
 | Mode | Behaviour |
 |---|---|
 | `0` (off) | No packets sent. Default. |
-| `1` (telemetry only) | Emits the periodic telemetry burst: `/rad` every 30 s, `/hv` alongside (on HV-equipped builds), `/sys` every other `/rad` (~60 s). No per-click traffic. |
-| `2` (telemetry + blips) | Periodic telemetry as above, plus one `/click` per radiation event, pushed in real time from the click-detection path. |
+| `1` (telemetry only) | `/rad`, `/hv`, `/sys` periodic bursts. No per-click traffic. |
+| `2` (telemetry + blips) | Periodic telemetry plus one `/click` per radiation event. |
 
-`/rad`, `/hv` and `/sys` are emitted on separate 1 s loop ticks (~1 s apart) so they don't burst together onto the wire.
+## Source Modes (Receiver)
+
+Configured on the **Config → Input** page (`udprx_mode`).
+
+| Mode | Behaviour |
+|---|---|
+| `0` (specific) | Accept clicks from a specific producer. With `udprx_chipid` blank, auto-latch onto the first producer heard and lock to it. |
+| `1` (sum) | Aggregate clicks from every producer heard. Up to 8 tracked. |
+
+## Build Targets
+
+| Target | Platform | Display |
+|---|---|---|
+| `esp8266_udp` | ESP8266 | headless |
+| `esp8266oled_udp` | ESP8266 | OLED |
+| `esp32_udp` | ESP32 | headless |
+| `esp32oled_udp` | ESP32 | OLED |
 
 ## OSC Message Schema
 
@@ -40,23 +81,21 @@ Emitted on every accepted click in mode 2.
   ts_ms   : int32   producer millis() at emit
 ```
 
-The OSC counter is synced to the live ISR-pending count, so bursts that fire faster than the main loop catches them still advance the counter by the true amount; receivers gap-fill the missing packets transparently.
-
 ### `/espg/<chipid>/rad`
 
-Radiation telemetry. Periodic heartbeat (30 s ± random per-boot jitter, see "Stats Jitter" below).
+Radiation telemetry. Periodic heartbeat (~30 s).
 
 ```
 ,ffsi
   cpm          : float    1-minute average
   usv          : float    µSv/h
   state        : string   "warming" | "healthy" | "warning" | "alert"
-  total_clicks : int32    producer's lifetime click count (1 Hz reconciled)
+  total_clicks : int32    producer's lifetime click count
 ```
 
 ### `/espg/<chipid>/hv`
 
-HV telemetry. Only emitted on HV-equipped builds (ESPG_HV_ADC). Same 30 s cadence as `/rad`.
+HV telemetry (HV-equipped builds only, same cadence as `/rad`).
 
 ```
 ,ffii
@@ -68,7 +107,7 @@ HV telemetry. Only emitted on HV-equipped builds (ESPG_HV_ADC). Same 30 s cadenc
 
 ### `/espg/<chipid>/sys`
 
-System telemetry. Fires every other `/rad` (~60 s) - system stats drift slower than radiation.
+System telemetry. Every other `/rad` (~60 s).
 
 ```
 ,iiii
@@ -78,137 +117,22 @@ System telemetry. Fires every other `/rad` (~60 s) - system stats drift slower t
   tick_max_us   : int32   worst main-loop iteration in last window
 ```
 
-### Per-click emit
+### `/espg/<chipid>/env`
 
-`/click` messages are pushed straight from the click-detection path in `Counter::loop` (via `UdpBlipModule::notifyClick`). Wire latency from blip to packet is tens of microseconds plus lwIP transmit; the receiver sees individual clicks rather than 1 Hz bursts.
+Environment telemetry. Only emitted when a supported [environment sensor](/configuration/env) is wired in. Same cadence as `/sys` (~60 s).
 
-The OSC counter on each `/click` is set to `gcounter.total_clicks + (eventCounter1 + eventCounter2)` - the secondticker-reconciled total plus the live ISR-pending count. This is exact at the moment of emit, so multi-ISR bursts between two main-loop iterations cause the counter to jump by the true amount and the receiver's gap-fill credits the missing clicks.
+```
+,fff
+  temp_c      : float    Temperature in °C, NaN when absent
+  humidity    : float    Relative humidity %, NaN on BMP280-only builds
+  pressure    : float    Atmospheric pressure in hPa, NaN on AHT-only builds
+```
 
-If WiFi is down or the producer is in failure-backoff, the counter still tracks the true ISR count so the gap is visible downstream once the link recovers.
+Fields that the local sensor doesn't provide are encoded as IEEE 754 NaN, not omitted - the tag string is always `,fff`. Receivers should check `isnan()` on each value.
 
-#### Send rate throttle
+## Receive Examples
 
-To bound CPU and WiFi load at high CPS, `/click` emits are rate-limited by a token bucket. Defaults (overridable via build flags - see [PlatformIO Build Options](/install/platformio#udp--osc-output)):
-
-- **`UDPBLIP_CLICK_MIN_INTERVAL_MS = 50`** - minimum interval between emits. 20 pps cap.
-- **`UDPBLIP_CLICK_BURST_TOKENS = 5`** - bucket depth. Idle time earns one token per `MIN_INTERVAL_MS`, capped here.
-
-Behaviour at different rates:
-
-| Rate | Behaviour |
-|---|---|
-| Background (< ~1200 CPM) | Every click emits its own packet. Bucket replenishes faster than it drains. |
-| Bursts after idle | First 5 clicks fire on consecutive 50 ms loop ticks (bucket spends down from full). |
-| Sustained > 1200 CPM | Emits hit the 20 pps cap. Each packet carries multiple clicks via the cumulative counter delta. Receiver gap-fill instant-credits up to 1024 per packet, rate-drains larger jumps. |
-| Saturation (any CPS) | Max ~20 pps. ~0.6 % CPU. |
-
-Counter accuracy is **independent of the throttle** - the receiver reconstructs the full click count from the counter delta regardless of how many real clicks were coalesced into one packet. The throttle only affects how many separate LED blips the receiver shows during heavy bursts.
-
-## Telemetry Jitter
-
-The first telemetry burst (`/rad` + `/hv` + `/sys`) is offset by a per-device `GRNG`-seeded random delay (default `UDPBLIP_STATS_JITTER_MS=7500` ms). A fleet of 100 devices booting together after a power cut spreads its telemetry across the 7.5 s window, averaging 75 ms between emissions, well clear of the receiver's lwIP UDP mbox (6-deep on ESP8266).
-
-The phase shift persists across all subsequent cycles. Override at compile time with `-DUDPBLIP_STATS_JITTER_MS=N`.
-
-## Discovery (mDNS)
-
-When mode > 0 and uptime ≥ 8 s, the producer announces an `_osc._udp` service with the configured port and the following TXT records:
-
-| Key | Value |
-|---|---|
-| `id` | 6-hex chipid |
-| `fname` | Friendly name from device prefs |
-| `group` | Multicast group IP |
-
-This follows the OSCQuery convention used by TouchDesigner / Ableton etc. Discovery is optional; pre-configured receivers just need the group + port.
-
-# UDP Receiver
-
-The `UDP-Receiver` firmware variant takes the multicast feed of one producer and behaves as if a real Geiger tube were attached. All outputs (MQTT, WebAPI, OLED, blip-LED) work unchanged; CPM, µSv/h and history all derive from the received clicks. Useful as:
-
-- A wall-mounted **remote display** in another room from the tube
-- A **mirror** for backup logging or alternative output sinks
-- A **fleet aggregator** in sum mode, totalising clicks from many producers
-
-## Quick Start
-
-You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer**) and one with a `*_udp` build (the **receiver**).
-
-**On the producer:**
-1. Note its 6-hex chipid, visible on the home page or `/info`.
-2. Go to **Config → Local Broadcast**, set Mode to `2` (stats + blips), Save.
-
-**On the receiver:**
-1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32oled_udp` build via the [Web Installer](https://install.espgeiger.com).
-2. Join your WiFi via the captive portal, same network as the producer.
-3. Open the device's web UI and go to **Config → Input**.
-4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
-5. Save.
-
-Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage, and the CPM number should track the producer's.
-
-### Not working?
-
-Quick things to check:
-
-- **Same WiFi network and subnet.** Multicast doesn't cross routers or guest networks; both devices need to be on the same AP / SSID.
-- **Producer in Mode 2.** Mode 1 only sends stats every 30 s and produces no clicks. The CPM on the receiver stays at 0.
-- **Receiver actually flashed as `*_udp`.** Check `/info` on the receiver shows a UDP build target. A regular pulse build with a blank input won't listen.
-- **Loss percentage stuck high or RX line blank.** Common on busy networks - try `udprx_rxmode = 1` (modem sleep, default) before `2` (none). `2` is usually *worse* on noisy LANs, not better.
-- **Wrong producer locked.** In auto-mode (`udprx_chipid` blank), the receiver latches onto the first producer heard. Set the chipid explicitly if you have multiple producers.
-- **Stats arriving but no clicks.** The producer just rebooted - mode 2 sends `/click` only for new events. Wait for activity.
-
-## Build Targets
-
-| Target | Platform | Display |
-|---|---|---|
-| `esp8266_udp` | ESP8266 | headless |
-| `esp8266oled_udp` | ESP8266 | SSD1306/SSD1309/SH1106 OLED |
-| `esp32_udp` | ESP32 | headless |
-| `esp32oled_udp` | ESP32 | OLED |
-
-## Source Modes
-
-Configured on the **Config → Input** page (`udprx_mode`).
-
-| Mode | Behaviour |
-|---|---|
-| `0` (specific) | If `udprx_chipid` is set, accept clicks only from that producer. If blank (default), auto-latch onto the first producer heard and lock to it. |
-| `1` (sum) | Aggregate clicks from every producer heard. Up to 8 tracked. |
-
-The producer chipid is the 6-hex device ID printed on its serial console and visible in its `/info` page. Leave it blank for the common "single producer in the room" case; the receiver will pick the first one it hears.
-
-## RX Sleep Mode (`udprx_rxmode`)
-
-Trade-off between LPS, power, and multicast reliability:
-
-| Mode | ESP8266 | ESP32 | Notes |
-|---|---|---|---|
-| `0` (light) | `WIFI_LIGHT_SLEEP, LI=1` | `WIFI_PS_MAX_MODEM` | DTIM-aligned wake, CPU naps. Lowest power. |
-| `1` (modem, default) | `WIFI_MODEM_SLEEP, LI=1` | `WIFI_PS_MIN_MODEM` | DTIM-aligned wake, CPU stays awake. Best balance. |
-| `2` (none) | `WIFI_NONE_SLEEP` | `WIFI_PS_NONE` | Radio always on. Pulls in LAN multicast noise, often *more* loss than modem on busy networks. |
-
-The listen-interval is forced to 1 (every beacon) so AP-buffered multicast is always caught. The factory default of `LI=3` was the cause of "30 CPM producer, 4-15 CPM receiver" observations on early prototypes.
-
-## Gap-Fill Recovery
-
-Every `/click` carries the producer's running counter value and `ts_ms` (producer's `millis()` at emit). The receiver tracks both per producer and detects packet loss as a gap in the sequence.
-
-| Gap size | Action |
-|---|---|
-| ≤ 1024 clicks | **Instant credit** into the current second's bucket. Typical multicast loss (≤ 1 % at low rates) is fully invisible. |
-| 1025 to 65535 clicks | **Rate-drain**: gap divided by its real duration (`ts_ms` delta), then bled into `_local_count` per second at that rate. Long outages and the producer's `MAX_BURST` summary path recover smoothly across CPM history rather than spiking one bucket. |
-| > 65535 clicks, or counter going backwards, or invalid duration | **Resync**: logged, no credit. Producer reboot or wildly malformed packets. |
-
-Loss percentage is shown on page 2 of the OLED and exposed via the receiver's accessors. Both instant-credited and drained clicks count toward `_gap_filled`, so `loss_pct` reflects the true fraction of clicks that came from recovery vs. live packets.
-
-## OLED Display
-
-`*oled_udp` builds show a UDP-specific line on page 2: `RX <chipid>` (or `Sum N src` in sum mode), with cumulative loss percentage right-aligned. Page 1 shows the standard CPM / µSv display unchanged, fed from the locally accumulated click count.
-
-# Receive Examples
-
-## python-osc
+### python-osc
 
 ```python
 from pythonosc import dispatcher, osc_server
@@ -219,27 +143,29 @@ def on_click(addr, counter, ts_ms):
 def on_rad(addr, cpm, usv, state, total_clicks):
     print(f"{addr} {cpm:.1f} CPM ({usv:.3f} uSv/h) {state}")
 
-def on_hv(addr, reading_v, target_v, duty, trim):
-    print(f"{addr} HV {reading_v:.1f}V (target {target_v:.0f}V)")
-
-def on_sys(addr, uptime_s, rssi, free_heap, heap_frag, lps, tick_max_us):
-    print(f"{addr} up={uptime_s}s rssi={rssi} heap={free_heap}B")
-
 d = dispatcher.Dispatcher()
 d.map("/espg/*/click", on_click)
 d.map("/espg/*/rad",   on_rad)
-d.map("/espg/*/hv",    on_hv)
-d.map("/espg/*/sys",   on_sys)
 
 server = osc_server.ThreadingOSCUDPServer(
     ("239.255.86.86", 57340), d, multicast=True)
 server.serve_forever()
 ```
 
-## Pure Data / TouchDesigner / Max
+### Pure Data / TouchDesigner / Max
 
-Subscribe to multicast group `239.255.86.86` on port `57340`. Filter on path `/espg/*/click` for live click events, `/espg/*/rad` for radiation telemetry, `/espg/*/hv` for high-voltage readings (HV builds only), or `/espg/*/sys` for system health.
+Subscribe to multicast group `239.255.86.86` on port `57340`. Filter on path `/espg/*/click` for live events, `/espg/*/rad` for radiation telemetry, `/espg/*/hv` for HV readings, or `/espg/*/sys` for system health.
 
-# Build Flags
+## Discovery (mDNS)
 
-All compile-time tunables (group, port, intervals, fleet jitter etc.) are documented in [PlatformIO Build Options → UDP / OSC Output](/install/platformio#udp--osc-output).
+When mode > 0 the producer announces an `_osc._udp` service with the configured port. TXT records: `id` (6-hex chipid), `fname` (friendly name), `group` (multicast IP). Discovery is optional; pre-configured receivers just need the group and port.
+
+## Reliability and tuning
+
+- **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Cumulative loss % is on the OLED and `/status`.
+- **Send throttle**: high-CPS producers cap `/click` emit rate at 20 pps. Counter accuracy is preserved because each packet carries the producer's running total.
+- **RX sleep mode** (`udprx_rxmode`): `1` (modem sleep, default) is the right balance on most networks. `0` saves more power, `2` keeps the radio always on but is often worse on busy LANs.
+
+## Build Flags
+
+All compile-time tunables (group, port, intervals, fleet jitter, throttle thresholds) are documented in [PlatformIO Build Options → UDP / OSC Output](/install/platformio#udp--osc-output).
