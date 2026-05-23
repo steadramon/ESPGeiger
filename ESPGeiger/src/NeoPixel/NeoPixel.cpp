@@ -29,7 +29,7 @@ EG_REGISTER_MODULE(neopixel)
 
 EG_PSTR(NP_L_BRT, "Brightness");
 EG_PSTR(NP_L_SWAP, "Swap R/G");
-EG_PSTR(NP_H_SWAP, "Enable if green appears as red. Standard WS2812B = off; some RGB-ordered clones = on.");
+EG_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");
 
 // Wire format is GRB on the chip side. ESP8266 boards have historically
 // shipped with RGB-ordered LEDs, so default the swap on there to preserve
