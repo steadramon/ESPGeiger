@@ -83,6 +83,9 @@ class Counter {
       Counter();
       void loop();
       float get_cps();
+      // Literal count of pulses in the most recent second. For MightyOhm-style
+      // protocols that want raw per-second integers, not the smoothed average.
+      int get_last_cps() const { return (int)geigerTicks.last(); }
       int get_cpm();
       float get_cpmf();
       int get_cpm5();
