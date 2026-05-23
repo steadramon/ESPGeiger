@@ -23,5 +23,6 @@ ESPGeiger supports pulse-based Geiger counters that sends a I/O pulse for each d
 [NetIO GC10](https://www.ebay.co.uk/usr/pelorymate) | ![NetIO GC10](img/gc10.jpg#img-thumbnail) | 
 [RHElectronics Counters](https://www.rhelectronics.store/diy-geiger-counter-kit) | ![RH-K-GK-2-A](img/RH-K-GK-2-A.jpg#img-thumbnail) | 
 [SparkFun Geiger Counter](https://www.sparkfun.com/products/retired/11345) | ![11345](img/sparkfun11345.jpg#img-thumbnail) |
+[Yaorea YRG01](https://s.click.aliexpress.com/e/_c3BZh7KV) | | Cheap handheld counter with a [pulse-tap mod](https://www.blinkyslab.co.uk/2025/04/a-little-gem-the-yaorea-yrg01-pt2-modding-for-radmonorg) to feed clicks into an ESPGeiger pulse input.
 
 Special thanks to all the above original creators. Without your hard work and inspiration this project would not be possible!
