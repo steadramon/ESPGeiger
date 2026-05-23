@@ -56,6 +56,14 @@ class EGRingAvg {
       return _count ? (T)(_value / (T)_count) : (T)0;
     }
 
+    // Most recently added value (0 before any add). For per-second buffers
+    // this is the literal count for the latest sample.
+    T last() const {
+      if (_count == 0) return (T)0;
+      uint16_t idx = (_pos == 0) ? (uint16_t)(_window - 1) : (uint16_t)(_pos - 1);
+      return _buf[idx];
+    }
+
     uint16_t window() const { return _window; }
     uint16_t count()  const { return _count; }
     bool     warm()   const { return _count >= _window; }
