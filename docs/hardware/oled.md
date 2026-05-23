@@ -33,8 +33,8 @@ Power: 3.3 V (most modules work with either 3.3 V or 5 V VCC, since they have on
 Search terms that get you the right thing:
 
 - **[0.96" I2C OLED 128x64 SSD1306](https://s.click.aliexpress.com/e/_c3u5P9N3)** - the default. White, blue, or yellow/blue dual-colour variants all work.
-- **[1.3" I2C OLED 128x64 SH1106](https://s.click.aliexpress.com/e/_c31PFyYl)** - if you want a bigger screen.
-- **[2.42" I2C OLED 128x64 SSD1309](https://s.click.aliexpress.com/e/_c4WsTkMd)** - for a really visible readout.
+- **[1.3" I2C OLED 128x64 SH1106](https://s.click.aliexpress.com/e/_c3erRT7r)** - if you want a bigger screen.
+- **[2.42" I2C OLED 128x64 SSD1309](https://s.click.aliexpress.com/e/_c4NSSuhr)** - for a really visible readout.
 
 Stay away from SPI modules unless you're building custom hardware - ESPGeiger's display driver is I2C-only. Modules with **4 pins** (VCC/GND/SCL/SDA) are I2C; **7-pin** modules are SPI and won't work without rewiring.
 
