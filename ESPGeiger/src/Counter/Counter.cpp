@@ -33,6 +33,9 @@
 #include "../WebPortal/WebPortal.h"
 #include "../UdpBlip/UdpBlip.h"
 #include "../EnvSensor/EnvSensor.h"
+#ifdef AUDIO_TICK
+#include "../AudioTick/AudioTick.h"
+#endif
 #include "HIST_JS.gz.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
@@ -496,6 +499,9 @@ void Counter::loop() {
     this->blip();
 #endif
     udpblip.notifyClick(millis());
+#ifdef AUDIO_TICK
+    audiotick.notifyClick(millis());
+#endif
   }
 }
 

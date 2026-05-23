@@ -35,11 +35,13 @@
 #include "../GRNG/sha256.h"
 #include "../GRNG/GRNG.h"
 #include "../Util/TickProfile.h"
+#include "../Util/CrashDump.h"
 #include "../WebPortal/WebPortal.h"
 #include "MsgPack.h"
 #include <FS.h>
 #include <LittleFS.h>
 #include <uECC.h>
+#include "../EnvSensor/EnvSensor.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 #endif
@@ -184,8 +186,9 @@ void WebAPI::doHandshake() {
 
   Log::debug(PSTR("WebAPI: Handshake -> %s/api/1/handshake"), WEBAPI_URL);
 
-  // 256B leaves headroom for long version strings (MsgPack encodes ~200B).
-  uint8_t buffer[256];
+  // 512B covers the steady state (~200B) plus a CrashDump payload on the
+  // first post-crash handshake (~180B: register set + 32-word stack window).
+  uint8_t buffer[512];
 
   // Append the git short-sha for non-tagged builds so the server can
   // distinguish multiple devel builds.
@@ -204,15 +207,36 @@ void WebAPI::doHandshake() {
   bool sendCoords = (latF != 0.0f || lonF != 0.0f);
 
   // Crash details on the FIRST post-boot handshake only, so we don't
-  // re-send the same exception across the rest of an uptime.
+  // re-send the same exception across the rest of an uptime. CrashDump's
+  // RTC snapshot (if present) is richer than ESP.getResetInfoPtr() - it
+  // also has epc2/epc3/depc/sp and a 32-word stack window captured at the
+  // exception. Fall back to plain rst_info if CrashDump didn't catch it
+  // (e.g. very-early-boot exception before custom_crash_callback ran).
+  const CrashDump::Snapshot* cd = nullptr;
   uint32_t epc1 = 0, excvaddr = 0;
-  uint8_t exccause = 0;
-  bool sendExc = !_exc_sent && DeviceInfo::resetExc(&epc1, &excvaddr, &exccause);
+  uint8_t  exccause = 0;
+  bool     sendExc = false;
+  bool     sendCd  = false;
+  if (!_exc_sent) {
+    cd = CrashDump::lastCrash();
+    if (cd) {
+      epc1     = cd->epc1;
+      excvaddr = cd->excvaddr;
+      exccause = (uint8_t)cd->exccause;
+      sendExc  = true;
+      sendCd   = (cd->word_count > 0) ||
+                  cd->epc2 || cd->epc3 || cd->depc || cd->sp;
+    } else if (DeviceInfo::resetExc(&epc1, &excvaddr, &exccause)) {
+      sendExc = true;
+    }
+  }
+  uint16_t stackBytes = (sendCd && cd) ? (cd->word_count * 4) : 0;
 
   MsgPack::Writer mp(buffer, sizeof(buffer));
   uint8_t entries = 11;
   if (sendCoords) entries += 2;
   if (sendExc)    entries += 3;   // ec, pc, va
+  if (sendCd)     entries += 5;   // e2, e3, dp, sp, st
   mp.map(entries);
   mp.kv("n",  (uint32_t)time(NULL));
   mp.kv("pk", pub_k_64);
@@ -233,6 +257,15 @@ void WebAPI::doHandshake() {
     mp.kv("ec", (uint32_t)exccause);
     mp.kv("pc", epc1);
     mp.kv("va", excvaddr);
+  }
+  if (sendCd) {
+    mp.kv("e2", cd->epc2);
+    mp.kv("e3", cd->epc3);
+    mp.kv("dp", cd->depc);
+    mp.kv("sp", cd->sp);
+    // Raw stack bytes, little-endian uint32 words (native ESP8266 order).
+    // Length = word_count * 4; decode server-side as N little-endian u32s.
+    mp.kv("st", (const uint8_t*)cd->stack, stackBytes);
   }
   if (mp.overflow) {
     Log::console(PSTR("WebAPI: Handshake encode overflow"));
@@ -354,12 +387,19 @@ void WebAPI::postMeasurement(bool censusOnly) {
 #ifdef ESPG_HV_ADC
   bool sendHv = sendRadiation && hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0;
 #endif
+  bool sendEnv = sendRadiation && envsensor.present();
+  bool envHasT = sendEnv && !isnan(envsensor.tempC());
+  bool envHasH = sendEnv && !isnan(envsensor.humidity());
+  bool envHasP = sendEnv && !isnan(envsensor.pressure());
   if (sendRadiation) {
     entries += 2;  // cpm, usv
   }
 #ifdef ESPG_HV_ADC
   if (sendHv) entries += 1;  // hv
 #endif
+  if (envHasT) entries += 1;
+  if (envHasH) entries += 1;
+  if (envHasP) entries += 1;
   if (sendHealth) entries += 5;  // ut, mem, lps, tk, rssi
 #ifdef WEBAPI_TESTMODE_POST
   if (sendHealth) entries += 1;  // lfb (largest-free-block low water, bytes)
@@ -378,6 +418,9 @@ void WebAPI::postMeasurement(bool censusOnly) {
 #ifdef ESPG_HV_ADC
   if (sendHv) mp.kv("hv", hv.hvReading.get());
 #endif
+  if (envHasT) mp.kv("t", envsensor.tempC());
+  if (envHasH) mp.kv("h", envsensor.humidity());
+  if (envHasP) mp.kv("p", envsensor.pressure());
 
   // Health snapshot rides the regular post every WEBAPI_HEALTH_EVERY ticks.
   if (sendHealth) {
