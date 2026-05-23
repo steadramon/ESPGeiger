@@ -125,29 +125,36 @@ void EnvSensor::loop(unsigned long /*now*/) {
     if (!tryDetect()) return;
   }
   if (!_st) return;
-  sample();
+  if (_phase == PHASE_IDLE) sampleStart();
+  else                      sampleFinish();
 }
 
-void EnvSensor::sample() {
-  float t = NAN, h = NAN, p = NAN;
-  bool any = false;
-  if (_drv_flags & DRV_BOSCH) {
-    float bt = NAN, bh = NAN, bp = NAN;
-    if (_bosch.read(bt, bh, bp)) {
-      t = bt; p = bp;
-      if (!isnan(bh)) h = bh;
-      any = true;
-    }
+void EnvSensor::sampleStart() {
+  _bt = NAN; _bh = NAN; _bp = NAN;
+  // Bosch is in normal/continuous mode - just fetch the latest registers.
+  if (_drv_flags & DRV_BOSCH) _bosch.read(_bt, _bh, _bp);
+  // AHT needs ~80 ms after trigger; defer the read to the next loop tick
+  // instead of blocking with delay(80).
+  if ((_drv_flags & DRV_AHT) && _aht.trigger()) {
+    _phase = PHASE_WAIT_AHT;
+    EGModuleRegistry::set_loop_interval(this, 80);
+    return;
   }
-  if (_drv_flags & DRV_AHT) {
-    float at = NAN, ah = NAN, ap = NAN;
-    if (_aht.read(at, ah, ap)) {
-      t = at; h = ah;
-      any = true;
-    }
+  if (!isnan(_bt) || !isnan(_bh) || !isnan(_bp)) emaUpdate(_bt, _bh, _bp);
+}
+
+void EnvSensor::sampleFinish() {
+  float at = NAN, ah = NAN, ap = NAN;
+  if (_aht.readResult(at, ah, ap)) {
+    // AHT temperature + humidity override Bosch readings (AHT humidity is
+    // more accurate; combo boards typically pair AHT20 with BMP280 which
+    // has no humidity at all).
+    if (!isnan(at)) _bt = at;
+    if (!isnan(ah)) _bh = ah;
   }
-  if (!any) return;
-  emaUpdate(t, h, p);
+  if (!isnan(_bt) || !isnan(_bh) || !isnan(_bp)) emaUpdate(_bt, _bh, _bp);
+  _phase = PHASE_IDLE;
+  EGModuleRegistry::set_loop_interval(this, ENV_SAMPLE_MS);
 }
 
 void EnvSensor::emaUpdate(float t, float h, float p) {

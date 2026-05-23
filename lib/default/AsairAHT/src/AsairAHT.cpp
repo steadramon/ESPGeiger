@@ -82,11 +82,9 @@ bool Sensor::begin(TwoWire& wire) {
   return true;
 }
 
-bool Sensor::read(float& t_c, float& h_pct, float& p_hpa) {
+bool Sensor::readResult(float& t_c, float& h_pct, float& p_hpa) {
   p_hpa = NAN;
   if (!_present) return false;
-  if (!trigger()) return false;
-  delay(80);
   uint8_t buf[7];
   if (_wire->requestFrom((int)ADDR, 7) != 7) return false;
   for (uint8_t i = 0; i < 7; i++) {
@@ -106,6 +104,12 @@ bool Sensor::read(float& t_c, float& h_pct, float& p_hpa) {
   if (h_pct < 0.0f)   h_pct = 0.0f;
   if (h_pct > 100.0f) h_pct = 100.0f;
   return true;
+}
+
+bool Sensor::read(float& t_c, float& h_pct, float& p_hpa) {
+  if (!_present || !trigger()) return false;
+  delay(80);
+  return readResult(t_c, h_pct, p_hpa);
 }
 
 }

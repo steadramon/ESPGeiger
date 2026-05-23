@@ -28,6 +28,12 @@ class Sensor {
   public:
     bool begin(TwoWire& wire);
 
+    // Two-phase: trigger() returns immediately, caller waits >= 80 ms,
+    // then readResult() pulls the data. Avoids stalling the main loop.
+    bool trigger();
+    bool readResult(float& t_c, float& h_pct, float& p_hpa);
+
+    // Synchronous convenience - internally trigger + delay(80) + readResult.
     bool read(float& t_c, float& h_pct, float& p_hpa);
 
     bool    present() const { return _present; }
@@ -37,7 +43,6 @@ class Sensor {
   private:
     bool status(uint8_t& s);
     bool sendInit();
-    bool trigger();
 
     TwoWire* _wire = nullptr;
     bool     _present = false;

@@ -99,8 +99,11 @@ class EnvSensor : public EGModule {
       float ema_p = NAN;
     };
 
+    enum : uint8_t { PHASE_IDLE = 0, PHASE_WAIT_AHT = 1 };
+
     void readPrefs();
-    void sample();
+    void sampleStart();
+    void sampleFinish();
     void emaUpdate(float t, float h, float p);
     bool tryDetect();
 
@@ -110,6 +113,11 @@ class EnvSensor : public EGModule {
     bool     _started = false;
     uint8_t  _drv_flags = 0;
     uint8_t  _detect_tries = 0;
+    uint8_t  _phase = PHASE_IDLE;
+    // Scratch between sampleStart and sampleFinish. Only valid in WAIT_AHT.
+    float    _bt = NAN;
+    float    _bh = NAN;
+    float    _bp = NAN;
     BoschTHP::Sensor _bosch;
     AsairAHT::Sensor _aht;
     State*   _st = nullptr;
