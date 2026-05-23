@@ -1551,21 +1551,12 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
                   "<p><textarea name=blob id=cfgB rows=4 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
                   "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
                   " <button type=submit>Import</button></p></form>"
-                  "<p style=\"color:var(--muted);font-size:.85em\">Import overlays blob values onto current config (keys not in blob are kept). Device reboots automatically after import.</p>"
+                  "<p style=\"color:var(--muted);font-size:.85em\">Import resets all config to defaults then applies the blob. WiFi and network settings are preserved. Device reboots automatically after import.</p>"
+                  "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains your saved passwords and API keys. Keep it private.</p>"
                   "</details>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
 }
-
-// ---------- /export + /import (config backup/restore) ----------
-
-// Wire format:
-//   magic(3B) = 0x11 0x23 0xC6 (base64s to "ESPG", visible in the blob)
-//   version(1B) | gcount(1B) | for each group:
-//     mid_len(1B) | module_id | pcount(1B) | for each pref:
-//       key_len(1B) | key | val_len(2B BE) | value
-//   crc32_be(4B)   // over all preceding bytes
-// sys.web_pass and the whole `net` group are skipped (device-local).
 
 static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
   crc = ~crc;
@@ -1579,15 +1570,14 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
   return ~crc;
 }
 
-// SRAM key in; callers strncpy_P first.
 static bool is_skip_pref(const char* module_id, const char* key) {
   if (strcmp(module_id, "sys") == 0 && strcmp(key, "web_pass") == 0) return true;
   if (strcmp(module_id, "net") == 0) return true;
   return false;
 }
 
-// Stack-only base64 sink: 3-byte triplet buffer, 256-char out buffer.
-// Tracks a running CRC32 over every raw byte fed in.
+static constexpr uint32_t EXPORT_OBF_SEED = 0xE5A1E5A1u;
+
 struct B64Sink {
   EGHttpResponse* res;
   uint8_t  tri[3];
@@ -1595,10 +1585,20 @@ struct B64Sink {
   char     out[256];
   size_t   outLen;
   uint32_t crc;
+  uint32_t obf_state;
+  bool     obf_on;
 };
 
 static void b64_init(B64Sink& s, EGHttpResponse& r) {
   s.res = &r; s.triLen = 0; s.outLen = 0; s.crc = 0;
+  s.obf_state = EXPORT_OBF_SEED; s.obf_on = false;
+}
+
+static inline uint8_t obf_step(uint32_t* st) {
+  uint32_t x = *st;
+  x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+  *st = x;
+  return (uint8_t)(x & 0xFF);
 }
 static void b64_flush_out(B64Sink& s) {
   if (s.outLen) { s.res->sendChunk(s.out, s.outLen); s.outLen = 0; }
@@ -1615,9 +1615,11 @@ static void b64_emit_quartet(B64Sink& s, uint8_t in_len) {
 }
 static void b64_write(B64Sink& s, const void* data, size_t len) {
   const uint8_t* p = (const uint8_t*)data;
-  s.crc = crc32_update(s.crc, p, len);
   for (size_t i = 0; i < len; i++) {
-    s.tri[s.triLen++] = p[i];
+    uint8_t b = p[i];
+    if (s.obf_on) b ^= obf_step(&s.obf_state);
+    s.crc = crc32_update(s.crc, &b, 1);
+    s.tri[s.triLen++] = b;
     if (s.triLen == 3) b64_emit_quartet(s, 3);
   }
 }
@@ -1656,10 +1658,10 @@ static void serializeExportStream(B64Sink& sink) {
     }
   }
 
-  // Magic bytes chosen so base64 prefix reads "ESPG".
   static const uint8_t MAGIC[3] = {0x11, 0x23, 0xC6};
   b64_write(sink, MAGIC, 3);
-  b64_write_u8(sink, 1);              // format version
+  b64_write_u8(sink, 1);
+  sink.obf_on = true;
   b64_write_u8(sink, group_count);
 
   for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
@@ -1700,21 +1702,26 @@ static void serializeExportStream(B64Sink& sink) {
   }
 }
 
-// Returns nullptr on valid format, else a short error string for the UI.
-static const char* validateImport(const uint8_t* buf, size_t len) {
+static void deobfuscate_payload(uint8_t* buf, size_t len) {
+  uint32_t st = EXPORT_OBF_SEED;
+  for (size_t i = 0; i < len; i++) buf[i] ^= obf_step(&st);
+}
+
+static const char* validateImport(uint8_t* buf, size_t len) {
   if (len < 10) return "too short";
   if (buf[0] != 0x11 || buf[1] != 0x23 || buf[2] != 0xC6) return "bad magic";
-  if (buf[3] != 1) return "bad version";
-  // Last 4 bytes are CRC32 BE of the preceding bytes.
+  if (buf[3] != 1) return "bad format";
   size_t payload_len = len - 4;
   uint32_t expected = ((uint32_t)buf[payload_len    ] << 24) |
                       ((uint32_t)buf[payload_len + 1] << 16) |
                       ((uint32_t)buf[payload_len + 2] <<  8) |
                       ((uint32_t)buf[payload_len + 3]      );
-  uint32_t actual = crc32_update(0, buf, payload_len);
+  uint32_t actual = crc32_update(0, buf, payload_len) ^ EXPORT_OBF_SEED;
   if (expected != actual) return "checksum mismatch";
 
-  size_t off = 4;                     // 3-byte magic + 1-byte version
+  deobfuscate_payload(buf + 4, payload_len - 4);
+
+  size_t off = 4;
   uint8_t gcount = buf[off++];
   for (uint8_t gi = 0; gi < gcount; gi++) {
     if (off + 1 > payload_len) return "truncated group hdr";
@@ -1736,16 +1743,19 @@ static const char* validateImport(const uint8_t* buf, size_t len) {
   return nullptr;
 }
 
-// Overlay semantics: blob values override matching keys; everything else
-// untouched. (Tried snapshot reset-to-default earlier - it fired too
-// many on_prefs_saved callbacks at commit time, hitting WDT.)
+// Reset-then-apply: wipe all user prefs to defaults (net group + sys.web_pass
+// preserved by reset_all(keep_network=true)), then overlay blob values on top.
+// Silent commit avoids the on_prefs_saved cascade that would WDT during bulk
+// apply; restart on success re-fires callbacks cleanly on next boot.
 // Returns count applied, or -1 on parse error (err_out gets a UI string).
-static int applyImport(const uint8_t* buf, size_t len, const char** err_out) {
+static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
   const char* err = validateImport(buf, len);
   if (err) { if (err_out) *err_out = err; return -1; }
 
+  EGPrefs::reset_all(/*keep_network=*/true);
+
   size_t payload_len = len - 4;   // CRC stripped
-  size_t off = 4;   // 3-byte magic + 1-byte version
+  size_t off = 4;
   uint8_t gcount = buf[off++];
   int applied = 0;
   (void)payload_len;
@@ -1784,7 +1794,7 @@ static int applyImport(const uint8_t* buf, size_t len, const char** err_out) {
       applied++;
     }
   }
-  EGPrefs::commit();
+  EGPrefs::commit(false);   // Silent: caller is about to restart, callbacks re-fire on boot.
   return applied;
 }
 
@@ -1796,9 +1806,7 @@ void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   B64Sink sink;
   b64_init(sink, res);
   serializeExportStream(sink);
-  // Append CRC32 of everything written so far, big-endian, then flush.
-  // Done before b64_finish so the CRC bytes go through the same encoder.
-  uint32_t crc = sink.crc;
+  uint32_t crc = sink.crc ^ EXPORT_OBF_SEED;
   uint8_t crc_be[4] = {
     (uint8_t)((crc >> 24) & 0xFF),
     (uint8_t)((crc >> 16) & 0xFF),
@@ -2064,6 +2072,8 @@ static size_t json_escape(const char* in, size_t in_len, char* out, size_t cap) 
 
 void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
+  // Walks every variable the template engine knows about and dumps its
+  // current rendered value. Useful for authoring sout.tpl templates.
   res.beginChunked(200, "application/json");
   res.sendChunk(F("{"));
   const OutputVars::VarDef* d = OutputVars::list();
@@ -2071,6 +2081,9 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   for (; d->key; d++) {
     char raw[64];
     size_t n = OutputVars::render(d->key, strlen(d->key), raw, sizeof(raw));
+    // Renderers return 0 when the underlying hardware is absent (humidity
+    // on BMP280, env vars when no sensor, etc). Omit the key entirely so
+    // /vars.json reflects what's actually queryable on this device.
     if (n == 0) continue;
     char esc[80];
     size_t en = json_escape(raw, n, esc, sizeof(esc));
