@@ -147,18 +147,23 @@ bool GeigerUdpRx::ensureUdp() {
     return false;
   }
   apply_rx_sleep_mode(_rx_mode);
+  bool ok;
+  if (Wifi::is_multicast(_group)) {
 #ifdef ESP8266
-  if (!_udp->beginMulticast(Wifi::local_ip, _group, _port)) {
-    teardownUdp();
-    return false;
-  }
+    ok = _udp->beginMulticast(Wifi::local_ip, _group, _port);
 #else
-  if (!_udp->beginMulticast(_group, _port)) {
+    ok = _udp->beginMulticast(_group, _port);
+#endif
+    if (ok) Log::console(PSTR("UdpRx: joined %s:%u"),
+                          EGPrefs::getString("input", "udprx_group"), _port);
+  } else {
+    ok = _udp->begin(_port);
+    if (ok) Log::console(PSTR("UdpRx: listening unicast on :%u"), _port);
+  }
+  if (!ok) {
     teardownUdp();
     return false;
   }
-#endif
-  Log::console(PSTR("UdpRx: joined %s:%u"), EGPrefs::getString("input", "udprx_group"), _port);
   return true;
 }
 
