@@ -209,6 +209,8 @@ void import_legacy() {
   const char* cached_file = nullptr;
   bool cached_ok = false;
   int imported = 0;
+  const char* drop[4] = {0};   // legacy files removed after a successful migration
+  size_t drop_n = 0;
 
   for (size_t gi = 0; gi < s_group_count; gi++) {
     GroupShadow& gs = s_groups[gi];
@@ -252,10 +254,23 @@ void import_legacy() {
     }
     if (any && !write_group(gs)) {
       Log::console(PSTR("prefs: legacy persist failed for %s"), gs.group->module_id);
+      continue;
+    }
+    if (any) {
+      bool seen = false;
+      for (size_t i = 0; i < drop_n; i++) {
+        if (strcmp(drop[i], path) == 0) { seen = true; break; }
+      }
+      if (!seen && drop_n < sizeof(drop) / sizeof(drop[0])) drop[drop_n++] = path;
     }
   }
   if (imported > 0) {
     Log::console(PSTR("Prefs: Imported %d legacy value(s)"), imported);
+  }
+  for (size_t i = 0; i < drop_n; i++) {
+    if (LittleFS.remove(drop[i])) {
+      Log::console(PSTR("Prefs: removed legacy %s"), drop[i]);
+    }
   }
 }
 // === END LEGACY IMPORT ===
