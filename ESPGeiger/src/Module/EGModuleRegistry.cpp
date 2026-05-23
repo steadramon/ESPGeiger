@@ -175,6 +175,17 @@ bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
   return false;
 }
 
+bool EGModuleRegistry::set_tick_enabled(EGModule* m, bool enabled) {
+  for (uint8_t i = 0; i < _count; i++) {
+    if (_slots[i].module == m) {
+      if (enabled) _slots[i].flags |=  FLAG_HAS_TICK;
+      else         _slots[i].flags &= ~FLAG_HAS_TICK;
+      return true;
+    }
+  }
+  return false;
+}
+
 bool EGModuleRegistry::sleep_until(EGModule* m, unsigned long now, unsigned long target_ms) {
   long until = (long)(target_ms - now);
   uint16_t interval;

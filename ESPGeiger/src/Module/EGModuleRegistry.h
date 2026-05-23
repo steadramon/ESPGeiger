@@ -44,6 +44,7 @@ class EGModuleRegistry {
     // <0 disables loop, 0 = every iteration, positive = ms (clamped to 65535).
     static bool set_loop_interval(EGModule* m, int32_t interval_ms);
     static bool sleep_until(EGModule* m, unsigned long now, unsigned long target_ms);
+    static bool set_tick_enabled(EGModule* m, bool enabled);
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);
