@@ -21,6 +21,7 @@
 #define PINSAFETY_H
 
 #include <Arduino.h>
+#include "Globals.h"
 
 namespace PinSafety {
 
@@ -32,12 +33,11 @@ inline const char* claim_output(int pin, const char* owner) {
   if (pin == -1) return nullptr;
 #ifdef ESP8266
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
-  if (pin < 0 || pin > 16)   return PSTR("out of range");
-#elif defined(ESP32)
+#elif defined(CONFIG_IDF_TARGET_ESP32)
   if (pin >= 6 && pin <= 11)  return PSTR("SPI flash");
   if (pin >= 34 && pin <= 39) return PSTR("input only");
-  if (pin < 0 || pin > 39)    return PSTR("out of range");
 #endif
+  if (pin < 0 || pin > MAX_GPIO_PIN) return PSTR("out of range");
   claim(pin, owner);
   return nullptr;
 }
@@ -47,11 +47,10 @@ inline const char* claim_input(int pin, const char* owner) {
   if (pin == -1) return nullptr;
 #ifdef ESP8266
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
-  if (pin < 0 || pin > 16)   return PSTR("out of range");
-#elif defined(ESP32)
+#elif defined(CONFIG_IDF_TARGET_ESP32)
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
-  if (pin < 0 || pin > 39)   return PSTR("out of range");
 #endif
+  if (pin < 0 || pin > MAX_GPIO_PIN) return PSTR("out of range");
   claim(pin, owner);
   return nullptr;
 }

@@ -20,6 +20,25 @@
 #ifndef UTIL_GLOBALS_H
 #define UTIL_GLOBALS_H
 
+// Highest valid GPIO number for pin-bounded prefs. Input-capable range.
+#ifndef MAX_GPIO_PIN
+  #if defined(CONFIG_IDF_TARGET_ESP32S3)
+    #define MAX_GPIO_PIN 48
+  #elif defined(CONFIG_IDF_TARGET_ESP32S2)
+    #define MAX_GPIO_PIN 46
+  #elif defined(CONFIG_IDF_TARGET_ESP32C6)
+    #define MAX_GPIO_PIN 30
+  #elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    #define MAX_GPIO_PIN 21
+  #elif defined(ESP32)
+    #define MAX_GPIO_PIN 39
+  #elif defined(ESP8266)
+    #define MAX_GPIO_PIN 16
+  #else
+    #define MAX_GPIO_PIN 39
+  #endif
+#endif
+
 // ESPGeiger-HW product identity implies a known set of capabilities. The
 // official base:espgeigerhw env sets these as build flags directly; this
 // block catches custom build paths that define only ESPGEIGER_HW.

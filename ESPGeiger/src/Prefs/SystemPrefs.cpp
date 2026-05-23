@@ -395,7 +395,7 @@ const EGLegacyAlias* InputPrefs::legacy_aliases() { return INPUT_LEGACY; }
 class LedPrefs : public EGModule {
 public:
   const char* name() override { return "led"; }
-  uint8_t display_order() override { return 13; }
+  uint8_t display_order() override { return 14; }
   const EGPrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
 };
@@ -479,7 +479,7 @@ EG_PSTR(HV_L_PWM, "HV PWM Pin");
 EG_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
 
 static const EGPref HV_PIN_PREF_ITEMS[] = {
-  {"pwm_pin", HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, 39, 0, EGP_INT, 0},
+  {"pwm_pin", HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
 };
 
 static const EGPrefGroup HV_PIN_PREF_GROUP = {
