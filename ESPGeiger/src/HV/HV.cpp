@@ -219,9 +219,9 @@ void HV::saveconfig() {
 // references them via extern decls in html.h until /hv legacy routes
 // are retired.
 
-extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(<style>.wa{padding:.8em 1em;margin:1em 0;background:#ffc40026;border-left:4px solid #ffc40099;border-radius:4px;font-size:.95em}.cl{float:right;cursor:pointer;font-size:1.3em;line-height:1;opacity:.6}.cl:hover{opacity:1}</style>
+extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
 <canvas id=g1></canvas><div id=g2></div>
-<div class="wa">
+<div class="a aw">
 <span class="cl" onclick="this.parentElement.style.display='none';">×</span>
 <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
 </div>

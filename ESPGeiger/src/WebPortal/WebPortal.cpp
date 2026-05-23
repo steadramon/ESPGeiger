@@ -91,6 +91,19 @@ th{font-weight:500;color:var(--muted)}
 .bar-row.bot{margin:.4em 0 1em}
 .bar-lbls{display:flex;gap:1px;font-size:.65em;color:var(--muted);white-space:nowrap;overflow:hidden}
 .bar-cell{flex:1;min-width:0}
+.a{padding:.5em .7em;margin:.6em 0;border-radius:4px;border-left:4px solid;font-size:.9em}
+.ak{background:#1f6f3a26;border-color:#1f6f3a}
+.aw{background:#ffc40026;border-color:#ffc40099}
+.ae{background:#c0392b26;border-color:#c0392b}
+.cl{float:right;cursor:pointer;font-size:1.3em;line-height:1;opacity:.6}.cl:hover{opacity:1}
+.il{display:inline-block;margin:.4em 1em .4em 0}.il input{width:auto;margin-right:.3em;vertical-align:middle}
+small{display:block;color:var(--muted);font-size:.85em;margin:.1em 0 .4em}
+hr{border:0;border-top:1px solid var(--border);margin:1em 0}
+h4{margin:.8em 0 .2em;font-size:1em;color:var(--muted)}
+output{display:inline-block;margin-left:.6em;color:var(--muted)}
+details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
+details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
+.fx{display:flex;gap:.5em}.mt{margin-top:.4em}.mn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 #dyB{position:fixed;top:0;left:0;right:0;padding:.5em;background:#fc3;color:#000;text-align:center;z-index:9999;cursor:pointer;font-size:.9em;font-weight:600}
 .menu{display:flex;flex-direction:column;gap:.85em;margin:1em auto;max-width:22em}
 .menu a,.back{background:var(--accent);color:#fff;font-weight:500;padding:.5em 1em;border-radius:4px}
@@ -1018,7 +1031,7 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 <p>Upload a firmware <code>.bin</code> built for this board. The device will reboot when the upload completes.</p>
 <form id=uf>
 <input type=file id=uf_file accept=".bin,application/octet-stream" required>
-<div id=uf_check style="margin:.6em 0;padding:.5em .7em;border-radius:4px;display:none;font-size:.9em"></div>
+<div id=uf_check class=a style=display:none></div>
 <button type=submit id=uf_btn disabled>Upload</button>
 </form>
 <progress id=uf_p style="width:100%;margin-top:.6em;display:none" value=0 max=1></progress>
@@ -1026,17 +1039,17 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 <script>
 (function(){
 var D=window._dev||{},F=byID('uf_file'),B=byID('uf_btn'),C=byID('uf_check'),S=byID('uf_st'),P=byID('uf_p');
-function sC(l,h){C.style.display='block';C.style.background=({ok:'#1f6f3a',warn:'#7a5a00',err:'#7a1f1f'})[l]||'#444';C.style.color='#fff';C.innerHTML=h}
+function sC(l,h){C.style.display='block';C.className='a a'+l;C.innerHTML=h}
 async function cF(f){
   if(!f){B.disabled=true;C.style.display='none';return}
   var u=new Uint8Array(await f.arrayBuffer());
-  if(u.length<8||(u[0]!==0xE9&&u[0]!==0xEA)){B.disabled=true;sC('err','Not an ESP firmware image.');return}
-  var t=new TextDecoder('latin1').decode(u),e=D.env||'',m=/^esp32/i.test(e)?'esp32':'esp8266',
-      b32=/\besp32[_a-z0-9]/i.test(t),b66=/\besp8266[_a-z0-9]|\bespgeiger(lite|log|hw)/i.test(t);
-  if((m==='esp8266'&&b32&&!b66)||(m==='esp32'&&b66&&!b32)){B.disabled=true;sC('err','<b>Refusing:</b> wrong platform firmware.');return}
+  if(u.length<8||(u[0]!==0xE9&&u[0]!==0xEA)){B.disabled=true;sC('e','Not an ESP firmware image.');return}
+  // Server-side validates entry_addr range and rejects wrong-platform bins
+  // before flashing. The env-tag scan is a friendly heads-up only.
+  var t=new TextDecoder('latin1').decode(u),e=D.env||'';
   B.disabled=false;
-  if(D.tag&&t.indexOf(D.tag)!==-1)sC('ok','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
-  else sC('warn','<b>Warning:</b> running <code>'+e+'</code> not found in file.');
+  if(D.tag&&t.indexOf(D.tag)!==-1)sC('k','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
+  else sC('w','<b>Warning:</b> running <code>'+e+'</code> not found in file. Upload anyway?');
 }
 F.addEventListener('change',function(){cF(this.files[0])});
 byID('uf').addEventListener('submit',function(e){
@@ -1230,19 +1243,6 @@ static size_t append_escaped(char* dst, size_t cap, size_t pos, const char* src)
   if ((pos) + _n < (cap)) { memcpy((buf)+(pos), lit, _n); (pos) += _n; } \
 } while (0)
 
-static const char PARAM_STYLE[] PROGMEM = R"HTML(
-<style>
-details{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
-summary{font-weight:500;cursor:pointer;color:var(--muted)}
-.il{display:inline-block;margin:.4em 1em .4em 0}
-.il input{width:auto;margin-right:.3em;vertical-align:middle}
-small{display:block;color:var(--muted);font-size:.85em;margin:.1em 0 .4em}
-hr{border:0;border-top:1px solid var(--border);margin:1em 0}
-h4{margin:.8em 0 .2em;font-size:1em;color:var(--muted)}
-output{display:inline-block;margin-left:.6em;color:var(--muted)}
-</style>
-)HTML";
-
 // Heap-alloc'd at BODY_BEGIN, freed in hParam. Zero cost when idle.
 static char*  s_paramBody    = nullptr;
 static size_t s_paramBodyLen = 0;
@@ -1352,9 +1352,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Config"));
-  res.sendChunk(FPSTR(PARAM_STYLE));
   if (did_save) res.sendChunk(F(
-    "<div class='card card-ok'>Saved.</div>"));
+    "<div class='a ak'>Saved.</div>"));
   res.sendChunk(F("<form method=POST action=/param>"));
 
   char buf[512];
@@ -1388,7 +1387,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
     if (!g || g->count == 0) continue;
 
-    n = snprintf_P(buf, sizeof(buf), PSTR("<details%s><summary>%s</summary>"),
+    n = snprintf_P(buf, sizeof(buf), PSTR("<details class=bx%s><summary>%s</summary>"),
                    first_emitted ? " open" : "",
                    g->label ? g->label : g->module_id);
     if (n > 0) res.sendChunk(buf, (size_t)n);
