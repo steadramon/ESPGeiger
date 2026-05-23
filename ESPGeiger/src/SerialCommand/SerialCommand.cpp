@@ -26,9 +26,7 @@
 void SerialCommand::reboot() { DeviceInfo::safeRestart(); }
 extern SerialCommand serialcmd;
 
-#ifndef DISABLE_SERIALRX
 EG_REGISTER_MODULE(serialcmd)
-#endif
 
 /**
  * Constructor makes sure some things are set.
@@ -235,7 +233,9 @@ void SerialCommand::get_hv() {
 #endif
 
 void SerialCommand::loop(unsigned long now) {
+#ifndef DISABLE_SERIALRX
   readSerial();
+#endif
 }
 
 void SerialCommand::dispatch(const char* line) {
