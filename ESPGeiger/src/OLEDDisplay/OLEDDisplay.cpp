@@ -45,7 +45,7 @@ EG_REGISTER_MODULE(display)
 // Stand-ins for ThingPulse's ArialMT_Plain_{10,16,24}.
 #define U8G2_FONT_ARIAL_10  u8g2_font_helvR08_tr
 #define U8G2_FONT_ARIAL_16  u8g2_font_helvR12_tr
-#define U8G2_FONT_ARIAL_24  u8g2_font_helvR18_tr
+#define U8G2_FONT_ARIAL_24  U8G2_FONT_ARIAL_16
 
 EG_PSTR(OL_L_BRT, "Brightness");
 #ifdef GEIGER_PUSHBUTTON
@@ -67,7 +67,7 @@ EG_PSTR(OL_L_SCL, "I2C SCL Pin");
 EG_PSTR(OL_H_RBA, "Reboot to apply");
 EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 EG_PSTR(OL_L_TYP, "Display Type");
-EG_PSTR(OL_H_TYP, "0 = SSD1306 128x64 (default), 1 = SH1106 128x64 (1.3in), 2 = SSD1309 128x64. Reboot to apply.");
+EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309. Reboot to apply.");
 #endif
 
 static const EGPref OLED_PREF_ITEMS[] = {
