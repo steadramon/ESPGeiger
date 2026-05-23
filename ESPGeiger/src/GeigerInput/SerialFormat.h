@@ -41,6 +41,10 @@ namespace SerialFormat {
 typedef size_t (*FormatFn)(char* buf, size_t cap);
 FormatFn    resolve(uint8_t type);
 
+// Direct exports - SerialOut bypasses TYPES so pulse builds GC it.
+size_t      fmt_mightyohm(char* buf, size_t cap);
+size_t      fmt_user_template(char* buf, size_t cap);
+
 // Single-shot format - convenient one-off path. Equivalent to
 // resolve(type) then calling the result.
 size_t      format_line(uint8_t type, char* buf, size_t cap);

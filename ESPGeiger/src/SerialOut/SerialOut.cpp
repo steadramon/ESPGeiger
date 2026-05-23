@@ -22,7 +22,6 @@
 #include <EGHttpServer.h>
 #include "SerialOut.h"
 #include "../GeigerInput/SerialFormat.h"
-#include "../GeigerInput/GeigerInput.h"   // GEIGER_IS_SERIAL macro
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
@@ -36,13 +35,9 @@ SerialOut serialout;
 EG_REGISTER_MODULE(serialout)
 
 EG_PSTR(SO_L_FMT,  "Wire format");
-#if GEIGER_IS_SERIAL(GEIGER_TYPE)
-EG_PSTR(SO_H_FMT,  "0=Labelled (default), 4=ESPGeiger, 5=User template, 1=GC10, 2=GC10Next, 3=MightyOhm");
-#else
-EG_PSTR(SO_H_FMT,  "0=Labelled (default), 4=ESPGeiger, 5=User template, 3=MightyOhm");
-#endif
+EG_PSTR(SO_H_FMT,  "0=Labelled (default), 1=MightyOhm, 2=User template");
 EG_PSTR(SO_L_TPL,  "Template");
-EG_PSTR(SO_H_TPL,  "format=5 only. See /vars.json for live values. Escapes: \\n \\r \\t");
+EG_PSTR(SO_H_TPL,  "format=2 only. See /vars.json for live values. Escapes: \\n \\r \\t");
 EG_PSTR(SO_L_BAUD, "Baud override");
 EG_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
 
@@ -51,9 +46,9 @@ EG_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
 static const EGPref SOUT_PREF_ITEMS[] = {
   {"interval", nullptr, nullptr,  "0",  nullptr, 0, 65535,  0,   EGP_UINT,   EGP_HIDDEN},
   {"flags",    nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   EGP_UINT,   EGP_HIDDEN},
-  {"format",   SO_L_FMT,  SO_H_FMT,  "0",  nullptr, 0, 5,      0,   EGP_UINT,   0},
+  {"format",   SO_L_FMT,  SO_H_FMT,  "0",  nullptr, 0, 2,      0,   EGP_UINT,   0},
   {"baud",     SO_L_BAUD, SO_H_BAUD, "0",  nullptr, 0, 921600, 0,   EGP_UINT,   EGP_ADVANCED},
-  {"tpl",      SO_L_TPL,  SO_H_TPL,  "",   nullptr, 0, 0,      128, EGP_STRING, 0},
+  {"tpl",      SO_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    128, EGP_STRING, 0},
 };
 static const EGPrefGroup SOUT_PREF_GROUP = {
   "sout", "Serial out", 1,
@@ -73,8 +68,25 @@ void SerialOut::on_prefs_loaded() {
   applyBaud();
 }
 
+// Output IDs 0..2 are independent of SerialFormat's input IDs.
+static SerialFormat::FormatFn sout_resolve(uint8_t fmt) {
+  switch (fmt) {
+    case 1:  return SerialFormat::fmt_mightyohm;
+    case 2:  return SerialFormat::fmt_user_template;
+    default: return nullptr;       // 0 = Labelled (legacy path)
+  }
+}
+
+// Only MightyOhm has a device-dictated wire baud; others use sout.baud.
+static uint32_t sout_baud(uint8_t fmt) {
+  switch (fmt) {
+    case 1:  return 9600;
+    default: return 0;
+  }
+}
+
 void SerialOut::resolveFormat() {
-  _fmt_fn = SerialFormat::resolve(_format);
+  _fmt_fn = sout_resolve(_format);
 }
 
 void SerialOut::save() {
@@ -94,7 +106,7 @@ void SerialOut::applyBaud() {
   // Resolution: explicit _baud wins; else if a protocol format is set use
   // its native baud; else keep whatever framework already configured.
   uint32_t target = _baud;
-  if (target == 0 && _format != 0) target = SerialFormat::baud_for(_format);
+  if (target == 0 && _format != 0) target = sout_baud(_format);
   if (target == 0) return;
   Serial.flush();
 #if !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT == 0

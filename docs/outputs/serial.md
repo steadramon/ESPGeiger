@@ -96,25 +96,20 @@ Turn it all off with `show 0` - periodic output stops and the regular log verbos
 
 The default output uses ESPGeiger's own labelled style, but the firmware can also emit lines in any of the protocols it supports on the input side. This is useful for piping data into existing tools that expect a particular counter's wire format, or for chaining ESPGeiger to a parent device that thinks it is talking to a real GC10 / MightyOhm.
 
-Set the format via the `sout.format` pref. The id values match the input-side protocol ids in the firmware.
+Set the format via the `sout.format` pref. Three contiguous IDs on the output side - separate from the input-side protocol IDs (which are stable across versions for backwards compatibility).
 
 | `set sout.format N` | Wire format | Default baud |
 |---|---|---|
 | `0` | Labelled (default), driven by `show cpm` / `cps` / `usv` / `hv` | unchanged |
-| `4` | ESPGeiger labelled (`CPM: 30`), fixed - ignores `show` toggles | 115200 |
-| `5` | User template, see below | 115200 |
-| `3` | MightyOhm | 9600 |
-| `1` | GC10 (plain integer CPM per line) — serial-input builds only | 9600 |
-| `2` | GC10Next (plain integer CPM per line) — serial-input builds only | 115200 |
-
-On pulse-input builds (espgeigerhw, esp8266_pulse, esp8266oled_pulse etc) and UDP-RX builds, only the formats that don't require an input parser are kept: id `0`, `4`, `5`, `3`. GC10 / GC10Next (`1`, `2`) are dropped because their parsers can't be reached from a non-serial input source and the output is trivially reproducible with format `5` (template `{cpm}\r\n`). Existing prefs that select an unavailable format fall back to silent output.
+| `1` | MightyOhm | 9600 |
+| `2` | User template, see below | 115200 |
 
 When `sout.format` is non-zero the `show` field toggles are ignored. Output still only runs when `show N` (or `show 1`) has set a non-zero period.
 
 Examples:
 
 ```
-set sout.format 3       # MightyOhm
+set sout.format 1       # MightyOhm
 show 1                  # 1 line/sec
 ```
 
@@ -134,20 +129,12 @@ The mode tag at the end of each line switches automatically:
 * `FAST` when CPS is 16-255 (active source, faster sampling on the original hardware)
 * `INST` when CPS exceeds 255. CPM is reported as `CPS * 60` since the 8-bit sample buffer on a real MightyOhm overflows in this regime.
 
-GC10 / GC10Next produce just the integer CPM:
+## User template (format 2)
+
+Format 2 emits whatever string you put in the `sout.tpl` pref, with `{var}` placeholders substituted on every line. Useful when you need to pipe data into a logger that expects its own line shape.
 
 ```
-30
-32
-28
-```
-
-## User template (format 5)
-
-Format 5 emits whatever string you put in the `sout.tpl` pref, with `{var}` placeholders substituted on every line. Useful when you need to pipe data into a logger that expects its own line shape.
-
-```
-set sout.format 5
+set sout.format 2
 set sout.tpl cpm={cpm}|cps={cps}|usv={usv}
 show 1
 ```
@@ -218,7 +205,7 @@ After changing baud, reconnect your serial monitor at the new rate so it can dec
 Examples:
 
 ```
-set sout.format 3       # MightyOhm: drops baud to 9600 automatically
+set sout.format 1       # MightyOhm: drops baud to 9600 automatically
 set sout.baud 19200     # override to 19200 regardless of format
 set sout.baud 0         # back to format-default (or framework default)
 ```

@@ -36,7 +36,7 @@ namespace SerialFormat {
 // MightyOhm wire constant: device's published uSv/hr = CPM / 175.
 static constexpr float MIGHTYOHM_USV_DIV = 175.0f;
 
-static size_t fmt_mightyohm(char* buf, size_t cap) {
+size_t fmt_mightyohm(char* buf, size_t cap) {
   int cps = gcounter.get_last_cps();
   int cpm = gcounter.get_cpm();
   const char* mode;
@@ -51,7 +51,7 @@ static size_t fmt_mightyohm(char* buf, size_t cap) {
   return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
 }
 
-static size_t fmt_user_template(char* buf, size_t cap) {
+size_t fmt_user_template(char* buf, size_t cap) {
   const char* tpl = EGPrefs::getString("sout", "tpl");
   if (!tpl || !*tpl) return 0;
   size_t n = OutputVars::renderTemplate(tpl, buf, cap);
@@ -83,11 +83,34 @@ static bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
   return true;
 }
 
-static bool parse_espg(const char* in, int* out_cpm, int* /*out_cps*/) {
-  int cpm = 0;
-  int n = sscanf(in, "CPM: %d", &cpm);
-  if (n != 1 || cpm < 0 || cpm > 1000000) return false;
+// Case-sensitive (ESPGeiger labelled and MightyOhm are uppercase).
+static int parse_label_value(const char* in, char tag) {
+  for (const char* p = in; p[0] && p[1] && p[2]; p++) {
+    if (p[0] == 'C' && p[1] == 'P' && p[2] == tag) {
+      p += 3;
+      while (*p == ':' || *p == ',' || *p == '=' || *p == ' ' || *p == '\t') p++;
+      if (*p == '-' || isDigit(*p)) return atoi(p);
+      return -1;
+    }
+  }
+  return -1;
+}
+
+// CPM by label, fallback to first int. CPS optional - left at -1 when
+// absent so the receiver knows to synthesise.
+static bool parse_template(const char* in, int* out_cpm, int* out_cps) {
+  int cpm = parse_label_value(in, 'M');
+  if (cpm < 0) {
+    while (*in && !isDigit(*in)) in++;
+    if (!*in) return false;
+    cpm = atoi(in);
+  }
+  if (cpm > 1000000) return false;
   *out_cpm = cpm;
+  if (out_cps) {
+    int cps = parse_label_value(in, 'S');
+    if (cps >= 0 && cps <= 1000000) *out_cps = cps;
+  }
   return true;
 }
 
@@ -124,13 +147,13 @@ struct TypeInfo {
 };
 
 static const TypeInfo TYPES[] = {
-  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger", "CPM: {cpm}\n", nullptr,            IF_PARSE(parse_espg),      false },
-  { GEIGER_STYPE_TEMPLATE,  115200, "Template",  nullptr,        fmt_user_template,  nullptr,                   false },
 #if EG_HAS_SERIAL_PARSERS
   { GEIGER_STYPE_GC10,      9600,   "GC10",      "{cpm}\r\n",    nullptr,            IF_PARSE(parse_gc10),      false },
   { GEIGER_STYPE_GC10NX,    115200, "GC10Next",  "{cpm}\r\n",    nullptr,            IF_PARSE(parse_gc10),      false },
 #endif
   { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm", nullptr,        fmt_mightyohm,      IF_PARSE(parse_mightyohm), true  },
+  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger", "CPM: {cpm}\n", nullptr,            IF_PARSE(parse_template),  false },
+  { GEIGER_STYPE_TEMPLATE,  115200, "Template",  nullptr,        fmt_user_template,  IF_PARSE(parse_template),  false },
 };
 static constexpr uint8_t TYPE_COUNT = sizeof(TYPES) / sizeof(TYPES[0]);
 
