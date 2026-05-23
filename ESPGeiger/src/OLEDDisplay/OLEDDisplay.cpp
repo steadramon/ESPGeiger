@@ -78,8 +78,8 @@ static const EGPref OLED_PREF_ITEMS[] = {
   {"on_time",    OL_L_ONT, OL_H_ONT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
   {"off_time",   OL_L_OFT, OL_H_OFT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
 #ifndef OLED_PINS_BLOCKED
-  {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, 39, 0, EGP_UINT, 0},
-  {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, 39, 0, EGP_UINT, 0},
+  {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
+  {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
   {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, 0},
   {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, 0},
 #endif
@@ -514,12 +514,16 @@ void SSD1306Display::setup() {
   sendBuffer();
 }
 
-void SSD1306Display::onButtonTap(unsigned long now) {
+void SSD1306Display::onButtonTap(unsigned long now, int8_t direction) {
   if (!_present) return;
+  // 5-rapid-tap gesture only counts on the forward button so users on
+  // back/forward setups don't get the hidden page 4 by accident.
   static unsigned long s_last_tap = 0;
   static uint8_t s_tap_count = 0;
-  s_tap_count = (now - s_last_tap < 400) ? (s_tap_count + 1) : 1;
-  s_last_tap = now;
+  if (direction > 0) {
+    s_tap_count = (now - s_last_tap < 400) ? (s_tap_count + 1) : 1;
+    s_last_tap = now;
+  }
 
   oled_timeout = now;
   if (!oled_on) {
@@ -527,16 +531,19 @@ void SSD1306Display::onButtonTap(unsigned long now) {
     setPowerSave(0);
     oled_on = true;
     EGModuleRegistry::set_loop_interval(this, 20);
-  } else if (s_tap_count >= 5) {
-    oled_page = 4;            // hidden 5-rapid-taps gesture
+  } else if (direction > 0 && s_tap_count >= 5) {
+    oled_page = 4;
     s_tap_count = 0;
-  } else {
+  } else if (direction > 0) {
     oled_page++;
-    if (oled_page > 3) oled_page = 1;   // rotation skips page 4
+    if (oled_page > 3) oled_page = 1;
+  } else {
+    if (oled_page <= 1) oled_page = 3;
+    else oled_page--;
   }
   oled_last_update = 0;
-  _send_rows_left = 0;        // abandon any in-flight progressive send
-  _next_render_due = 0;       // force immediate render
+  _send_rows_left = 0;
+  _next_render_due = 0;
   loop(now);
 }
 

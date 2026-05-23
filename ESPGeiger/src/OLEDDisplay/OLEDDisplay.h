@@ -68,7 +68,7 @@ public:
 
     SSD1306Display();
     const char* name() override { return "disp"; }
-    uint8_t display_order() override { return 15; }
+    uint8_t display_order() override { return 17; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint16_t warmup_seconds() override { return 0; }
     void pre_wifi() override {}
@@ -85,7 +85,7 @@ public:
     void wifiDisabled();
     void wipeCountdown(int seconds_left);
     void wipeReady();
-    void onButtonTap(unsigned long now);
+    void onButtonTap(unsigned long now, int8_t direction = 1);
     bool is_present() const { return _present; }
 
     void setBrightness(uint8_t brightness);
