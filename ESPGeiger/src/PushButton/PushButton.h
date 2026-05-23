@@ -28,6 +28,9 @@
 #ifndef PUSHBUTTON_PIN
 #define PUSHBUTTON_PIN -1
 #endif
+#ifndef PUSHBUTTON_PIN2
+#define PUSHBUTTON_PIN2 -1
+#endif
 
 extern Counter gcounter;
 
@@ -45,6 +48,7 @@ class PushButton : public EGModule {
     bool isPressed();
     bool is_active();
     void set_pin(int pin);
+    void set_pin2(int pin);
 #ifndef BTN_PIN_BLOCKED
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;

@@ -31,33 +31,46 @@ static const uint16_t POLL_MS      = 10;
 static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
-static Ticker buttonTicker;
-static volatile int s_pin = PUSHBUTTON_PIN;
-static volatile bool s_last_read = false;
-static volatile uint32_t s_last_change_ms = 0;
-static volatile uint32_t s_press_start_ms = 0;
-static volatile bool s_pressed = false;
-static volatile bool s_short_press_pending = false;
-static volatile bool s_long_press_fired = false;
+// Two-slot state array. Slot 0 = "primary" (legacy, advances page on tap).
+// Slot 1 = "secondary" (optional, retreats page on tap). Both share long-
+// press behaviour. Statics rather than members because the Ticker ISR
+// needs to reach them without going through an instance pointer.
+struct BtnState {
+  volatile int      pin = -1;
+  volatile bool     last_read = false;
+  volatile uint32_t last_change_ms = 0;
+  volatile uint32_t press_start_ms = 0;
+  volatile bool     pressed = false;
+  volatile bool     short_press_pending = false;
+  volatile bool     long_press_fired = false;
+};
+static BtnState s_btn[2];
 
-static void button_tick() {
-  if (s_pin < 0) return;
-  bool down = (digitalRead(s_pin) == LOW);
-  if (down != s_last_read) {
-    s_last_read = down;
-    s_last_change_ms = millis();
+static Ticker buttonTicker;
+
+static void tick_one(BtnState& b) {
+  if (b.pin < 0) return;
+  bool down = (digitalRead(b.pin) == LOW);
+  if (down != b.last_read) {
+    b.last_read = down;
+    b.last_change_ms = millis();
     return;
   }
-  if (down == s_pressed) return;
+  if (down == b.pressed) return;
   uint32_t now = millis();
-  if (now - s_last_change_ms < DEBOUNCE_MS) return;
-  s_pressed = down;
+  if (now - b.last_change_ms < DEBOUNCE_MS) return;
+  b.pressed = down;
   if (down) {
-    s_press_start_ms = now;
-    s_long_press_fired = false;
-  } else if (!s_long_press_fired) {
-    s_short_press_pending = true;
+    b.press_start_ms = now;
+    b.long_press_fired = false;
+  } else if (!b.long_press_fired) {
+    b.short_press_pending = true;
   }
+}
+
+static void button_tick() {
+  tick_one(s_btn[0]);
+  tick_one(s_btn[1]);
 }
 
 #ifdef SSD1306_DISPLAY
@@ -91,7 +104,7 @@ EG_PSTR(BTN_L_PIN, "Button Pin");
 EG_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
 
 static const EGPref BTN_PREF_ITEMS[] = {
-  {"pin", BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, 39, 0, EGP_INT, 0},
+  {"pin", BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
 };
 
 static const EGPrefGroup BTN_PREF_GROUP = {
@@ -103,80 +116,146 @@ static const EGPrefGroup BTN_PREF_GROUP = {
 const EGPrefGroup* PushButton::prefs_group() { return &BTN_PREF_GROUP; }
 
 void PushButton::on_prefs_loaded() {
-  int pin = (int)EGPrefs::getInt("btn", "pin");
-  set_pin(pin);
-  Log::console(PSTR("Btn: pin=%d"), pin);
-  EGModuleRegistry::set_loop_interval(this, pin < 0 ? 60000 : 50);
+  int pin1 = (int)EGPrefs::getInt("btn", "pin");
+  set_pin(pin1);
+  // pin2 is build-flag-only (PUSHBUTTON_PIN2); applied in begin().
+  if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
+  Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
+  EGModuleRegistry::set_loop_interval(this,
+    (pin1 < 0 && PUSHBUTTON_PIN2 < 0) ? 60000 : 50);
 }
 #endif
 
 PushButton::PushButton() {
 }
 
-void PushButton::set_pin(int pin) {
+// Configure a button slot. Detaches the shared ticker, reconfigures, then
+// re-attaches if anything is still wired up. Skipping the detach/reattach
+// when nothing changes keeps the on_prefs_loaded cascade quiet.
+static void set_pin_slot(uint8_t slot, int pin) {
+  if (slot >= 2) return;
+  BtnState& b = s_btn[slot];
   if (const char* why = PinSafety::claim_input(pin, PSTR("Btn"))) {
     Log::console(PSTR("Btn: pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
-  if (pin == s_pin && buttonTicker.active()) return;
+  if (pin == b.pin && buttonTicker.active()) return;
   buttonTicker.detach();
-  s_pressed = false;
-  s_last_read = false;
-  s_short_press_pending = false;
-  s_long_press_fired = false;
-  s_last_change_ms = millis();
-  s_press_start_ms = s_last_change_ms;
-  s_pin = pin;
+  b.pressed = false;
+  b.last_read = false;
+  b.short_press_pending = false;
+  b.long_press_fired = false;
+  b.last_change_ms = millis();
+  b.press_start_ms = b.last_change_ms;
+  b.pin = pin;
   if (pin >= 0) {
     pinMode(pin, INPUT_PULLUP);
     delayMicroseconds(20);
     bool down = (digitalRead(pin) == LOW);
-    s_last_read = down;
-    s_pressed = down;
-    s_long_press_fired = down;
+    b.last_read = down;
+    b.pressed = down;
+    b.long_press_fired = down;
+  }
+  // Re-attach if either slot is active.
+  if (s_btn[0].pin >= 0 || s_btn[1].pin >= 0) {
     buttonTicker.attach_ms(POLL_MS, button_tick);
   }
 }
+
+void PushButton::set_pin(int pin)  { set_pin_slot(0, pin); }
+void PushButton::set_pin2(int pin) { set_pin_slot(1, pin); }
 
 void PushButton::init()
 {
   static bool ready = false;
   if (ready) return;
-  if (s_pin >= 0) {
-    set_pin(s_pin);
-  }
+  if (s_btn[0].pin >= 0) set_pin_slot(0, s_btn[0].pin);
+  if (s_btn[1].pin >= 0) set_pin_slot(1, s_btn[1].pin);
   ready = true;
 }
 
 void PushButton::begin()
 {
+#ifdef BTN_PIN_BLOCKED
+  if (PUSHBUTTON_PIN  >= 0) set_pin(PUSHBUTTON_PIN);
+  if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
+  Log::console(PSTR("Btn: pin=%d pin2=%d"),
+               (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
+#endif
   init();
 }
 
 bool PushButton::isPressed()
 {
-  return s_pressed;
+  return s_btn[0].pressed || s_btn[1].pressed;
 }
 
 bool PushButton::is_active()
 {
-  return s_pin >= 0;
+  return s_btn[0].pin >= 0 || s_btn[1].pin >= 0;
 }
+
+#ifdef PIN_SCAN
+// Diagnostic: configure all safe GPIOs as INPUT_PULLUP at boot, then log
+// any transition. Press a button - whichever pin goes LOW is what it's
+// wired to. Skip already-claimed pins (I2C, NeoPixel, BOOT) to avoid
+// clobbering them.
+static void pin_scan_init() {
+  for (int p = 1; p <= 48; p++) {
+    if (p == 0 || p == 41 || p == 42 || p == 48) continue;
+    if (p >= 22 && p <= 25) continue;        // gap on S3
+    if (p >= 26 && p <= 37) continue;        // possible flash/PSRAM
+    pinMode(p, INPUT_PULLUP);
+  }
+}
+static void pin_scan_poll() {
+  static uint8_t last[49] = {0};
+  static bool primed = false;
+  if (!primed) {
+    delay(5);
+    for (int p = 1; p <= 48; p++) last[p] = digitalRead(p) ? 1 : 0;
+    primed = true;
+    return;
+  }
+  for (int p = 1; p <= 48; p++) {
+    if (p == 0 || p == 41 || p == 42 || p == 48) continue;
+    if (p >= 22 && p <= 25) continue;
+    if (p >= 26 && p <= 37) continue;
+    uint8_t cur = digitalRead(p) ? 1 : 0;
+    if (cur != last[p]) {
+      Log::console(PSTR("PinScan: GPIO%d %s"), p, cur ? "HIGH" : "LOW");
+      last[p] = cur;
+    }
+  }
+}
+#endif
 
 void PushButton::loop(unsigned long now)
 {
-  if (s_pin < 0) return;
+#ifdef PIN_SCAN
+  static bool inited = false;
+  if (!inited) { pin_scan_init(); inited = true; }
+  static unsigned long s_last = 0;
+  if (now - s_last >= 30) { s_last = now; pin_scan_poll(); }
+#endif
+  if (s_btn[0].pin < 0 && s_btn[1].pin < 0) return;
 #ifdef SSD1306_DISPLAY
-  if (s_pressed && !s_long_press_fired && (now - s_press_start_ms) >= LONG_PRESS_MS) {
-    s_long_press_fired = true;
-    do_longpress();
+  for (uint8_t i = 0; i < 2; i++) {
+    BtnState& b = s_btn[i];
+    if (b.pin < 0) continue;
+    if (b.pressed && !b.long_press_fired && (now - b.press_start_ms) >= LONG_PRESS_MS) {
+      b.long_press_fired = true;
+      do_longpress();
+    }
   }
 #endif
-  if (s_short_press_pending) {
-    s_short_press_pending = false;
+  for (uint8_t i = 0; i < 2; i++) {
+    BtnState& b = s_btn[i];
+    if (!b.short_press_pending) continue;
+    b.short_press_pending = false;
     led.Blink(200, 1);
 #ifdef SSD1306_DISPLAY
-    display.onButtonTap(now);
+    display.onButtonTap(now, i == 0 ? 1 : -1);
 #endif
     gcounter.reset_alarm();
   }
