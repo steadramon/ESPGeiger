@@ -200,7 +200,7 @@ static char serial_type_desc[48] = "";
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 EG_PSTR(IN_L_STY, "Serial Type");
 EG_PSTR(IN_L_CPW, "CPM Window (CPM-only counters)");
-EG_PSTR(IN_H_CPW, "Rolling CPM window (seconds). Lower=more responsive, higher=smoother. Reboot to apply.");
+EG_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth. Reboot.");
 #endif
 #ifndef RXPIN_BLOCKED
 EG_PSTR(IN_L_RXP, "RX Pin");
@@ -243,13 +243,13 @@ EG_PSTR(IN_H_URMD, "0=specific chipid (auto-latches first heard if blank), 1=sum
 EG_PSTR(IN_L_URCH, "Pin chipid");
 EG_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in pin mode (0)");
 EG_PSTR(IN_P_URCH, "[0-9a-fA-F]{0,6}");
-EG_PSTR(IN_L_URGP, "Multicast group");
-EG_PSTR(IN_H_URGP, "Must match producers (default 239.255.86.86)");
+EG_PSTR(IN_L_URGP, "Group / listen IP");
+EG_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen.");
 EG_PSTR(IN_P_URGP, "[0-9.]+");
 EG_PSTR(IN_L_URPT, "Port");
 EG_PSTR(IN_H_URPT, "UDP port (default 57340)");
 EG_PSTR(IN_L_URRM, "RX sleep");
-EG_PSTR(IN_H_URRM, "0=light (DTIM wake + CPU nap, lowest power), 1=modem (DTIM wake + CPU awake, balanced default), 2=none (radio always on, pulls LAN noise so often higher loss).");
+EG_PSTR(IN_H_URRM, "0=light (lowest power), 1=modem (balanced), 2=none (always on).");
 // Defined in UdpRx.cpp; routes prefs-saved notifications to GeigerUdpRx
 // without dragging WiFiUDP.h into this file.
 extern "C" void udprx_notify_prefs_saved();
