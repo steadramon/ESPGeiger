@@ -25,8 +25,6 @@
 #include "../Module/EGModule.h"
 #include "../Util/Globals.h"
 
-// Per-platform I2C defaults. Match the chips' conventional pins; users can
-// override via the env.sda / env.scl prefs or environments.ini build flags.
 #ifndef ENV_DEFAULT_SDA
   #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
     #define ENV_DEFAULT_SDA 8
@@ -51,8 +49,8 @@
   #endif
 #endif
 
-#define ENV_SAMPLE_MS    10000UL   // 10 s sample cadence
-#define ENV_EMA_ALPHA     0.1f     // ~60 s time constant at 10 s sample
+#define ENV_SAMPLE_MS    10000UL
+#define ENV_EMA_ALPHA     0.1f
 
 class EnvSensor : public EGModule {
   public:
@@ -73,9 +71,6 @@ class EnvSensor : public EGModule {
     void on_prefs_saved() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
 
-    // Driver-presence bitmask. Combo modules (AHT20 at 0x38 + BMP280 at
-    // 0x76 sold as "BME280 replacement") set both bits; sample() then
-    // composes T+H from AHT and P from Bosch.
     static constexpr uint8_t DRV_BOSCH = 1 << 0;
     static constexpr uint8_t DRV_AHT   = 1 << 1;
 
@@ -84,17 +79,12 @@ class EnvSensor : public EGModule {
     const __FlashStringHelper* chipName() const;
     uint8_t driverFlags() const { return _drv_flags; }
 
-    // EMA accessors, canonical units (degC / %RH / hPa). NAN when no sample
-    // has been taken yet (BMP280 always returns NAN for humidity).
     float tempC() const;
     float humidity() const;
     float pressure() const;
-    // Temperature in user-preferred unit, for display channels.
     float tempUser() const;
 
   private:
-    // Lazy heap state - only allocated on probe success. EMA values seed
-    // from the first sample.
     struct State {
       float ema_t = NAN;
       float ema_h = NAN;
@@ -111,7 +101,7 @@ class EnvSensor : public EGModule {
     uint8_t  _unit = UNIT_C;
     bool     _started = false;
     uint8_t  _drv_flags = 0;
-    uint8_t  _detect_tries = 0;   // gives up after a handful of failed probes
+    uint8_t  _detect_tries = 0;
     BoschTHP::Sensor _bosch;
     AsairAHT::Sensor _aht;
     State*   _st = nullptr;

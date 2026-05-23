@@ -63,8 +63,6 @@ void EnvSensor::on_prefs_loaded() {
 void EnvSensor::on_prefs_saved() {
   uint8_t old_sda = _sda, old_scl = _scl;
   readPrefs();
-  // Pin change needs a reboot - Wire.begin re-init mid-flight risks OLED
-  // glitching, and the cal block is already cached for the current chip.
   if (old_sda != _sda || old_scl != _scl) {
     Log::console(PSTR("Env: I2C pins changed, reboot to apply"));
   }
@@ -77,11 +75,6 @@ void EnvSensor::begin() {
   tryDetect();
 }
 
-// Probe both address spaces. Combo modules (AHT20+BMP280 sold as
-// "BME280 replacement") light both bits and we compose t/h/p from
-// whichever channel offers the best value. Returns true on success.
-// Called from begin() and (until it succeeds) from loop() so a sensor
-// that isn't powered up the moment we probe still gets picked up later.
 bool EnvSensor::tryDetect() {
   if (_drv_flags) return true;
   if (_detect_tries >= 3) return false;
@@ -103,7 +96,6 @@ bool EnvSensor::tryDetect() {
     EGModuleRegistry::set_loop_interval(this, -1);
     return false;
   }
-  // calloc zeros bytes; C++ default-member initialisers don't run for it.
   _st->ema_t = NAN;
   _st->ema_h = NAN;
   _st->ema_p = NAN;
@@ -131,7 +123,6 @@ void EnvSensor::loop(unsigned long /*now*/) {
 void EnvSensor::sample() {
   float t = NAN, h = NAN, p = NAN;
   bool any = false;
-  // BoschTHP first - gives pressure (always) and humidity (BME280 only).
   if (_drv_flags & DRV_BOSCH) {
     float bt = NAN, bh = NAN, bp = NAN;
     if (_bosch.read(bt, bh, bp)) {
@@ -140,8 +131,6 @@ void EnvSensor::sample() {
       any = true;
     }
   }
-  // AsairAHT overrides t (higher accuracy on AHT2x/AHT25) and supplies h.
-  // On the combo module this is the path that fills in humidity.
   if (_drv_flags & DRV_AHT) {
     float at = NAN, ah = NAN, ap = NAN;
     if (_aht.read(at, ah, ap)) {
