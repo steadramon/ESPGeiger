@@ -32,6 +32,7 @@
 #include "../GRNG/GRNG.h"
 #include "../WebPortal/WebPortal.h"
 #include "../UdpBlip/UdpBlip.h"
+#include "../EnvSensor/EnvSensor.h"
 #include "HIST_JS.gz.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
@@ -630,6 +631,28 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   n = snprintf_P(buf, sizeof(buf), PSTR(",\"hv\":%s"), hvBuf);
   if (n > 0) res.sendChunk(buf, (size_t)n);
 #endif
+  // /json is the live-display endpoint used by /status JS. Temperature
+  // ships in the user's preferred unit so the JS doesn't have to convert.
+  // External APIs (MQTT/WebAPI/webhook/UDP) still send canonical units.
+  if (envsensor.present()) {
+    float et = envsensor.tempUser(), eh = envsensor.humidity(), ep = envsensor.pressure();
+    char fbuf[12];
+    if (!isnan(et)) {
+      format_f(fbuf, sizeof(fbuf), et);
+      n = snprintf_P(buf, sizeof(buf), PSTR(",\"t\":%s,\"tu\":%u"), fbuf, envsensor.unit());
+      if (n > 0) res.sendChunk(buf, (size_t)n);
+    }
+    if (!isnan(eh)) {
+      format_f(fbuf, sizeof(fbuf), eh);
+      n = snprintf_P(buf, sizeof(buf), PSTR(",\"h\":%s"), fbuf);
+      if (n > 0) res.sendChunk(buf, (size_t)n);
+    }
+    if (!isnan(ep)) {
+      format_f(fbuf, sizeof(fbuf), ep);
+      n = snprintf_P(buf, sizeof(buf), PSTR(",\"p\":%s"), fbuf);
+      if (n > 0) res.sendChunk(buf, (size_t)n);
+    }
+  }
   n = snprintf_P(buf, sizeof(buf),
     PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u}"),
     TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
