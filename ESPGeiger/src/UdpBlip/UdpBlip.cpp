@@ -46,8 +46,8 @@ EG_REGISTER_MODULE(udpblip)
 
 EG_PSTR(UB_L_MODE,  "Mode");
 EG_PSTR(UB_H_MODE,  "0=off, 1=telemetry only, 2=telemetry + per-click broadcast");
-EG_PSTR(UB_L_GROUP, "Multicast group");
-EG_PSTR(UB_H_GROUP, "239.x.x.x site-local. All devices on a LAN share one group.");
+EG_PSTR(UB_L_GROUP, "Group / peer IP");
+EG_PSTR(UB_H_GROUP, "239.x = multicast, else unicast peer.");
 EG_PSTR(UB_P_GROUP, "[0-9.]+");
 EG_PSTR(UB_L_PORT,  "Port");
 
@@ -203,19 +203,20 @@ void UdpBlipModule::on_prefs_saved() {
 bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   if (!_udp) return false;
   if (!Wifi::connected) return false;
-  // ESP8266's WiFiUDP needs a multicast-specific begin that takes the
-  // source IP; ESP32 routes via standard beginPacket on 224.0.0.0/4 dest.
 #ifdef ESP8266
-  if (!_udp->beginPacketMulticast(_group, _port, Wifi::local_ip)) {
-    _fail_count++;
-    return false;
-  }
+  // beginPacketMulticast handles TTL=1 + source-IP binding for IGMP;
+  // beginPacket is the standard unicast path. ESP32's beginPacket covers
+  // both based on dest IP.
+  bool ok = Wifi::is_multicast(_group)
+              ? _udp->beginPacketMulticast(_group, _port, Wifi::local_ip)
+              : _udp->beginPacket(_group, _port);
 #else
-  if (!_udp->beginPacket(_group, _port)) {
+  bool ok = _udp->beginPacket(_group, _port);
+#endif
+  if (!ok) {
     _fail_count++;
     return false;
   }
-#endif
   _udp->write(buf, len);
   if (_udp->endPacket() == 0) {
     _fail_count++;
