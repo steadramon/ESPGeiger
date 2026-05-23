@@ -86,7 +86,7 @@ class HV : public EGModule {
 #ifdef ESPG_HV_ADC
       uint8_t display_order() override { return 0; }
 #else
-      uint8_t display_order() override { return 15; }
+      uint8_t display_order() override { return 16; }
 #endif
       uint16_t warmup_seconds() override { return 0; }
       bool has_loop() override { return true; }
