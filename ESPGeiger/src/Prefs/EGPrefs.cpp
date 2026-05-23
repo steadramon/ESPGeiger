@@ -357,7 +357,7 @@ bool EGPrefs::put(const char* module, const char* key, const char* value) {
   return true;
 }
 
-bool EGPrefs::commit() {
+bool EGPrefs::commit(bool fire_callbacks) {
   bool all_ok = true;
   for (size_t i = 0; i < s_group_count; i++) {
     GroupShadow& gs = s_groups[i];
@@ -367,7 +367,7 @@ bool EGPrefs::commit() {
       continue;
     }
     gs.dirty = false;
-    if (gs.module) gs.module->on_prefs_saved();
+    if (fire_callbacks && gs.module) gs.module->on_prefs_saved();
   }
   return all_ok;
 }
@@ -385,14 +385,24 @@ bool EGPrefs::remove_group(const char* module) {
   return removed;
 }
 
-void EGPrefs::reset_all() {
+void EGPrefs::reset_all(bool keep_network) {
   for (size_t i = 0; i < s_group_count; i++) {
     GroupShadow& gs = s_groups[i];
+    if (keep_network && strcmp(gs.group->module_id, "net") == 0) continue;
+    bool is_sys = keep_network && strcmp(gs.group->module_id, "sys") == 0;
     s_storage.removeGroup(gs.group->module_id);
+    bool kept_any = false;
     for (size_t j = 0; j < gs.group->count; j++) {
+      if (is_sys) {
+        char keybuf[16];
+        strncpy_P(keybuf, gs.group->prefs[j].id, sizeof(keybuf) - 1);
+        keybuf[sizeof(keybuf) - 1] = '\0';
+        if (strcmp(keybuf, "web_pass") == 0) { kept_any = true; continue; }
+      }
       shadow_reset(gs, j);
     }
-    gs.dirty = false;
+    // Sys: re-mark dirty so commit re-writes the file with web_pass preserved.
+    gs.dirty = kept_any;
   }
 }
 

@@ -87,9 +87,11 @@ public:
   static float       getFloat (const char* module, const char* key);
 
   static bool put(const char* module, const char* key, const char* value);
-  static bool commit();
+  static bool commit(bool fire_callbacks = true);
   static bool remove_group(const char* module);  // deletes stored file + resets shadow
-  static void reset_all();                        // wipes every group's storage + shadows
+  // Wipes every group's storage + shadows.
+  // keep_network=true preserves the net group + sys.web_pass (device-local).
+  static void reset_all(bool keep_network = false);
   static void request_restart();  // modules call this from on_prefs_saved if reboot needed
   static bool restart_pending();
 
