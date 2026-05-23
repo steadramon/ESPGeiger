@@ -62,6 +62,8 @@ SDCard::SDCard() {
 
 void SDCard::begin()
 {
+  // Default off; flipped on at the bottom only when init fully succeeds.
+  EGModuleRegistry::set_tick_enabled(this, false);
   Log::console(PSTR("SDCard: Init ..."));
   sd = new SdFat32();
   if (!sd->begin(GEIGER_SDCARD_CS))
@@ -101,6 +103,7 @@ void SDCard::begin()
   }
   Log::console(PSTR("SDCard: OK! %lu MB free."), (unsigned long)freespace);
   sdenabled = true;
+  EGModuleRegistry::set_tick_enabled(this, true);
 }
 
 void SDCard::s_tick(unsigned long stick_now)

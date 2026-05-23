@@ -74,7 +74,7 @@ const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
 
 void WebAPI::on_prefs_loaded() {
   _mode = (uint8_t)EGPrefs::getUInt("webapi", "mode");
-  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? 60000 : 1000);
+  EGModuleRegistry::set_loop_interval(this, _mode == 0 ? -1 : 1000);
 }
 
 static int webapi_rng(uint8_t *dest, unsigned size) {

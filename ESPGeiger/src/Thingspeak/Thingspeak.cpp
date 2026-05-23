@@ -54,7 +54,7 @@ size_t Thingspeak::status_json(char* buf, size_t cap, unsigned long now) {
 
 void Thingspeak::on_prefs_loaded() {
   _send_enabled = EGPrefs::getBool("thingspeak", "send");
-  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : -1);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===

@@ -90,7 +90,7 @@ void Radmon::on_prefs_loaded() {
   if (rtimer == 0) rtimer = RADMON_INTERVAL;
   setInterval(rtimer);
   _send_enabled = EGPrefs::getBool("radmon", "send");
-  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : -1);
 }
 
 void Radmon::loop(unsigned long now)

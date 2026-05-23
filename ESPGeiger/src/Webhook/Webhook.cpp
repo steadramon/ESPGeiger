@@ -88,7 +88,7 @@ void Webhook::on_prefs_loaded() {
   int iv = (int)EGPrefs::getUInt("webhook", "interval");
   if (iv > 0) setInterval(iv);
   _send_enabled = EGPrefs::getBool("webhook", "send");
-  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : 60000);
+  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : -1);
 }
 
 void Webhook::loop(unsigned long now)

@@ -143,6 +143,7 @@ void UdpBlipModule::readPrefs() {
   }
   uint32_t p = EGPrefs::getUInt("udpblip", "port");
   _port = (p > 0 && p < 65536) ? (uint16_t)p : 5005;
+  EGModuleRegistry::set_tick_enabled(this, _mode > 0);
 }
 
 void UdpBlipModule::teardown() {
@@ -204,9 +205,8 @@ bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   if (!_udp) return false;
   if (!Wifi::connected) return false;
 #ifdef ESP8266
-  // beginPacketMulticast handles TTL=1 + source-IP binding for IGMP;
-  // beginPacket is the standard unicast path. ESP32's beginPacket covers
-  // both based on dest IP.
+  // ESP8266 needs beginPacketMulticast for IGMP; ESP32's beginPacket
+  // handles either based on dest IP.
   bool ok = Wifi::is_multicast(_group)
               ? _udp->beginPacketMulticast(_group, _port, Wifi::local_ip)
               : _udp->beginPacket(_group, _port);

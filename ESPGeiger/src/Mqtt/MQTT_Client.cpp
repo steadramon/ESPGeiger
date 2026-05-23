@@ -920,9 +920,11 @@ void MQTT_Client::begin()
   if (_mqtt_server[0] == '\0') {
     mqttEnabled = false;
     Log::console(PSTR("MQTT: No server set"));
+    EGModuleRegistry::set_tick_enabled(this, false);
     return;
   }
   mqttEnabled = true;
+  EGModuleRegistry::set_tick_enabled(this, true);
 }
 
 void MQTT_Client::on_prefs_saved()
