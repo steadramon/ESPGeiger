@@ -159,10 +159,15 @@ void EGModuleRegistry::wake() {
   _next_loop_due = millis();
 }
 
-bool EGModuleRegistry::set_loop_interval(EGModule* m, uint16_t interval_ms) {
+bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
   for (uint8_t i = 0; i < _count; i++) {
     if (_slots[i].module == m) {
-      _slots[i].loop_interval = interval_ms;
+      if (interval_ms < 0) {
+        _slots[i].flags &= ~FLAG_HAS_LOOP;
+      } else {
+        _slots[i].flags |= FLAG_HAS_LOOP;
+        _slots[i].loop_interval = (interval_ms > 0xFFFF) ? 0xFFFF : (uint16_t)interval_ms;
+      }
       _next_loop_due = millis();
       return true;
     }
