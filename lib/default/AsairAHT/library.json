@@ -1,0 +1,9 @@
+{
+  "name": "AsairAHT",
+  "version": "0.1.0",
+  "description": "Lean Asair AHT10 / AHT20 temperature + humidity I2C driver. Probe, init, trigger, read with CRC8. No heap, no virtual dispatch.",
+  "keywords": "aht10, aht20, asair, aosong, i2c, esp8266, esp32, temperature, humidity",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}

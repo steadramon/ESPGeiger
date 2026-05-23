@@ -1,0 +1,9 @@
+{
+  "name": "BoschTHP",
+  "version": "0.1.0",
+  "description": "Lean BME280 / BMP280 temperature, humidity, pressure I2C driver. Probe + cal + compensation only. No heap, no virtual dispatch, no Adafruit_Sensor abstraction.",
+  "keywords": "bme280, bmp280, i2c, esp8266, esp32, temperature, humidity, pressure",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}
