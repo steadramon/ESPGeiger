@@ -22,10 +22,11 @@ import re
 import sys
 
 ASSETS = [
-    ("ESPGeiger/src/NTP/NTP.cpp",             "NTP_PAGE_JS", "application/javascript"),
-    ("ESPGeiger/src/WebPortal/WebPortal.cpp", "STYLE_CSS",   "text/css"),
-    ("ESPGeiger/src/WebPortal/WebPortal.cpp", "THEME_JS",    "application/javascript"),
-    ("ESPGeiger/src/Counter/Counter.cpp",     "HIST_JS",     "application/javascript"),
+    ("ESPGeiger/src/NTP/NTP.cpp",                 "NTP_PAGE_JS", "application/javascript"),
+    ("ESPGeiger/src/WebPortal/WebPortal.cpp",     "STYLE_CSS",   "text/css"),
+    ("ESPGeiger/src/WebPortal/WebPortal.cpp",     "THEME_JS",    "application/javascript"),
+    ("ESPGeiger/src/Counter/Counter.cpp",         "HIST_JS",     "application/javascript"),
+    ("ESPGeiger/src/OLEDDisplay/OLEDDisplay.cpp", "screenJS",    "application/javascript"),
 ]
 
 ASSETS_COMBINED = [
