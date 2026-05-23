@@ -21,6 +21,7 @@
 #include <Arduino.h>
 #include <EGHttpServer.h>
 #include "SerialOut.h"
+#include "../GeigerInput/SerialFormat.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
@@ -33,11 +34,21 @@
 SerialOut serialout;
 EG_REGISTER_MODULE(serialout)
 
-// State persisted across reboots so the user's last `show` selection
-// survives a restart. Hidden from /param - this group is command-driven.
+EG_PSTR(SO_L_FMT,  "Wire format");
+EG_PSTR(SO_H_FMT,  "0=Labelled (default), 1=GC10, 2=GC10Next, 3=MightyOhm, 5=User template");
+EG_PSTR(SO_L_TPL,  "Template");
+EG_PSTR(SO_H_TPL,  "Used when format=5. Vars: {cpm} {cps} {usv} {hv} {t} {h} {p} {tc} {ut} {id} {name} {rssi} {mem} {mode}. Escapes: \\n \\r \\t");
+EG_PSTR(SO_L_BAUD, "Baud override");
+EG_PSTR(SO_H_BAUD, "0 uses the format's native baud (or framework default). Non-zero forces this rate.");
+
+// interval / flags stay hidden - they're driven by `show N` / `show cpm`
+// commands. The format and template fields are user-facing.
 static const EGPref SOUT_PREF_ITEMS[] = {
-  {"interval", nullptr, nullptr, "0", nullptr, 0, 65535, 0, EGP_UINT, EGP_HIDDEN},
-  {"flags",    nullptr, nullptr, "0", nullptr, 0, 255,   0, EGP_UINT, EGP_HIDDEN},
+  {"interval", nullptr, nullptr,  "0",  nullptr, 0, 65535,  0,   EGP_UINT,   EGP_HIDDEN},
+  {"flags",    nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   EGP_UINT,   EGP_HIDDEN},
+  {"format",   SO_L_FMT,  SO_H_FMT,  "0",  nullptr, 0, 5,      0,   EGP_UINT,   0},
+  {"baud",     SO_L_BAUD, SO_H_BAUD, "0",  nullptr, 0, 921600, 0,   EGP_UINT,   EGP_ADVANCED},
+  {"tpl",      SO_L_TPL,  SO_H_TPL,  "",   nullptr, 0, 0,      128, EGP_STRING, 0},
 };
 static const EGPrefGroup SOUT_PREF_GROUP = {
   "sout", "Serial out", 1,
@@ -50,16 +61,41 @@ const EGPrefGroup* SerialOut::prefs_group() { return &SOUT_PREF_GROUP; }
 void SerialOut::on_prefs_loaded() {
   _interval   = (uint16_t)EGPrefs::getUInt("sout", "interval");
   _show_flags = (uint8_t)EGPrefs::getUInt("sout", "flags");
+  _format     = (uint8_t)EGPrefs::getUInt("sout", "format");
+  _baud       = (uint32_t)EGPrefs::getUInt("sout", "baud");
   Log::setSerialLogLevel(_interval == 0);
+  resolveFormat();
+  applyBaud();
+}
+
+void SerialOut::resolveFormat() {
+  _fmt_fn = SerialFormat::resolve(_format);
 }
 
 void SerialOut::save() {
-  char buf[8];
+  char buf[12];
   snprintf(buf, sizeof(buf), "%u", (unsigned)_interval);
   EGPrefs::put("sout", "interval", buf);
   snprintf(buf, sizeof(buf), "%u", (unsigned)_show_flags);
   EGPrefs::put("sout", "flags", buf);
+  snprintf(buf, sizeof(buf), "%u", (unsigned)_format);
+  EGPrefs::put("sout", "format", buf);
+  snprintf(buf, sizeof(buf), "%lu", (unsigned long)_baud);
+  EGPrefs::put("sout", "baud", buf);
   EGPrefs::commit();
+}
+
+void SerialOut::applyBaud() {
+  // Resolution: explicit _baud wins; else if a protocol format is set use
+  // its native baud; else keep whatever framework already configured.
+  uint32_t target = _baud;
+  if (target == 0 && _format != 0) target = SerialFormat::baud_for(_format);
+  if (target == 0) return;
+  Serial.flush();
+#if !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT == 0
+  // USB-CDC has no baud; updateBaudRate only exists on HardwareSerial.
+  Serial.updateBaudRate(target);
+#endif
 }
 
 SerialOut::SerialOut() {
@@ -96,16 +132,40 @@ void SerialOut::setInterval(uint16_t v) {
   save();
 }
 
+void SerialOut::setFormat(uint8_t f) {
+  _format = f;
+  resolveFormat();
+  save();
+  applyBaud();
+}
+
+void SerialOut::setBaud(uint32_t b) {
+  _baud = b;
+  save();
+  applyBaud();
+}
+
 void SerialOut::toggle_cpm() { _show_flags ^= SHOW_CPM; Log::setSerialLogLevel(_show_flags == 0); save(); }
 void SerialOut::toggle_usv() { _show_flags ^= SHOW_USV; Log::setSerialLogLevel(_show_flags == 0); save(); }
 void SerialOut::toggle_hv()  { _show_flags ^= SHOW_HV;  Log::setSerialLogLevel(_show_flags == 0); save(); }
 void SerialOut::toggle_cps() { _show_flags ^= SHOW_CPS; Log::setSerialLogLevel(_show_flags == 0); save(); }
 
 void SerialOut::loop(unsigned long now) {
-  if (_show_flags == 0) return;
   if (_interval == 0) return;
   if ((now - _last_fire) < (uint32_t)_interval * 1000UL) return;
   _last_fire = now;
+
+  // Protocol-format mode: cached formatter pointer, no per-emit dispatch.
+  // Custom formatters (MightyOhm, user-template) pull live values themselves;
+  // fixed-template protocols (GC10/Next/ESPGeiger) go through OutputVars.
+  if (_fmt_fn) {
+    char line[128];  // user template can be up to ~96 B after substitution
+    size_t n = _fmt_fn(line, sizeof(line));
+    if (n) Serial.write((const uint8_t*)line, n);
+    return;
+  }
+
+  if (_show_flags == 0) return;
 
   char buf[80];
   char f[12];
