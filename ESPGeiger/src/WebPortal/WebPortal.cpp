@@ -141,11 +141,10 @@ details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
 // Trefoil path data, single flash copy. Wrapped at emission time with either
 // the standalone <svg xmlns=...> (for /favicon.svg, tab icon) or the inline
 // <svg style=...> (for the page-header H1 logo).
-static const char FAVICON_PATHS[] PROGMEM = R"SVG(
-<path fill='#666' d='M256 0a256 256 0 1 1 0 512 256 256 0 0 1 0-512z'/>
-<path fill='#FB2' d='M256 36a220 220 0 1 1 0 440 220 220 0 0 1 0-440z'/>
-<path fill='#555' d='M256 286a30 30 0 1 0 0-60 30 30 0 0 0 0 60zm28-82 62-109a182 182 0 0 0-182 1l63 109a57 57 0 0 1 57-1zm155 51H313c0 21-11 39-28 49l64 108c54-32 90-90 90-157zM163 412l64-108a57 57 0 0 1-28-49H73c0 67 36 125 90 157z'/>
-)SVG";
+static const char FAVICON_PATHS[] PROGMEM =
+  "<circle cx='256' cy='256' r='256' fill='#666'/>"
+  "<circle cx='256' cy='256' r='220' fill='#FB2'/>"
+  "<path fill='#555' d='M256 286a30 30 0 1 0 0-60 30 30 0 0 0 0 60zm28-82 62-109a182 182 0 0 0-182 1l63 109a57 57 0 0 1 57-1zm155 51H313c0 21-11 39-28 49l64 108c54-32 90-90 90-157zM163 412l64-108a57 57 0 0 1-28-49H73c0 67 36 125 90 157z'/>";
 
 static const char PAGE_TAIL[] PROGMEM =
   "<p class=back-row><a class=back href=/>\xe2\x86\x90 Home</a></p>"
@@ -457,7 +456,7 @@ AD=el=>{
 window.setUsv=(el,v)=>{el.dataset.uv=v;AR(el)};
 window.setDose=(el,v)=>{el.dataset.dose=v;AD(el)};
 window.applyRad=AR;
-window.toggleCrt=()=>{LS.crt=d.classList.toggle('crt')?'1':'0';AR();AD();TE()};
+window.toggleCrt=()=>{LS.crt=d.classList.toggle('crt')?'1':'0';AR();AD();TE();window.applySnd&&window.applySnd()};
 function C(){var s=LS.crt,ds=new Date().toDateString().substr(4,6),hh=2166136261;
 for(var hi=0;hi<6;hi++)hh=Math.imul(hh^ds.charCodeAt(hi),16777619)>>>0;
 if(LS.xd==='1')hh=612193241;
@@ -2239,11 +2238,12 @@ void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
 extern const char statusJS[] PROGMEM = R"JS(
 !function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);
 var ac,cps=0,nb,mu=$('snd'),mt=1,AC=window.AudioContext||window.webkitAudioContext;
-var LS=localStorage,sb=LS.sndBtn;
-mu.style.display=(sb==='1'||(window.xd&&sb!=='0'))?'':'none';
+var LS=localStorage;
+function applySnd(){var s=LS.sndBtn,c=document.documentElement.classList.contains('crt');mu.style.display=(s==='1'||((window.xd||c)&&s!=='0'))?'':'none'}
+applySnd();window.applySnd=applySnd;
 function ensureAC(){if(!mt&&!ac&&AC){ac=new AC();var N=Math.floor(ac.sampleRate*.008);nb=ac.createBuffer(1,N,ac.sampleRate);var d=nb.getChannelData(0),sd=2166136261>>>0,cid=window.CHIPID||'0';for(var i=0;i<cid.length;i++)sd=Math.imul(sd^cid.charCodeAt(i),16777619)>>>0;if(!sd)sd=1;for(var i=0;i<N;i++){sd^=sd<<13;sd^=sd>>>17;sd^=sd<<5;d[i]=((sd&65535)/32768-1)*Math.exp(-i*.04)}}if(ac&&ac.resume)ac.resume()}
 mu.onclick=function(){mt=!mt;mu.textContent='Sound: '+(mt?'off':'on');ensureAC()};
-window.toggleTick=()=>{var nv=mu.style.display!=='none';LS.sndBtn=nv?0:1;mu.style.display=nv?'none':''};
+window.toggleTick=()=>{LS.sndBtn=LS.sndBtn==='1'?'0':'1';applySnd()};
 (function clk(){var n=500;
 if(cps>0&&!mt&&ac){
 var t=ac.currentTime,s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
