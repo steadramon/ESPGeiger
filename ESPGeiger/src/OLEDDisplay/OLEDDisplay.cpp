@@ -20,6 +20,7 @@
 #include "OLEDDisplay.h"
 #include "fonts.h"
 #include "logo.h"
+#include "screenJS.gz.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../NTP/NTP.h"
@@ -107,13 +108,6 @@ static unsigned long s_sched_recompute_ms = 0;
 static bool s_sched_cached = true;
 static bool s_oled_flipped = false;
 
-// Renders ThingPulse-format fonts (fonts.h) directly into the u8g2 buffer.
-// Both the font tables and our input strings are PROGMEM-safe via
-// pgm_read_byte; bare *p on flash crashes on ESP8266.
-//
-// ThingPulse fonts pack 8 vertical pixels per byte (bit 0 = top), same
-// layout as u8g2's buffer, so we OR whole bytes in - shifted by y_off when
-// y_top isn't page-aligned, spilling into the next page if needed.
 static void drawTPString(SSD1306Display& d, int16_t x, int16_t y_top,
                          const uint8_t* font, const char* str) {
   if (!font || !str) return;
@@ -1039,9 +1033,10 @@ static const char SCREEN_PAGE_BODY[] PROGMEM = R"HTML(
     <span class="fps" id="fps">--</span>
   </div>
 </div>
-<script>
-// Uint32Array view over imageData lets us write one pixel per assignment
-// (instead of 3 byte writes). Tint colour is precomputed once per frame.
+<script src=/screen.js)HTML" EG_CACHE_BUST R"HTML(></script>
+)HTML";
+
+extern const char screenJS[] PROGMEM = R"JS(
 const $=byID,
   C=$('oled'),x=C.getContext('2d'),I=x.createImageData(128,64),P=new Uint32Array(I.data.buffer),
   F=$('fps'),V=$('ivl'),M=$('col'),H=$('colt'),
@@ -1081,8 +1076,7 @@ $('tap').onclick=()=>fetch('/screen/tap',{cache:'no-store'});
 V.onchange=()=>{clearTimeout(t);r()};
 document.onvisibilitychange=()=>{if(!document.hidden){clearTimeout(t);r()}};
 r();
-</script>
-)HTML";
+)JS";
 
 static void hScreen(EGHttpRequest&, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
@@ -1092,8 +1086,18 @@ static void hScreen(EGHttpRequest&, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
+static void hScreenJs(EGHttpRequest&, EGHttpResponse& res, void*) {
+  res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
+#if EG_GZ_screenJS
+  res.sendGzipP(200, "application/javascript", screenJS_GZ, screenJS_GZ_LEN);
+#else
+  res.send(200, "application/javascript", FPSTR(screenJS));
+#endif
+}
+
 void SSD1306Display::registerRoutes(EGHttpServer& http) {
   http.on("/screen",     EGHttpRequest::GET, hScreen);
+  http.on("/screen.js",  EGHttpRequest::GET, hScreenJs);
   http.on("/screen.bmp", EGHttpRequest::GET, hScreenBmp,  this);
   http.on("/screen.bin", EGHttpRequest::GET, hScreenBin,  this);
   http.on("/screen/tap", EGHttpRequest::GET, hScreenTap,  this);
