@@ -33,124 +33,72 @@ extern Counter gcounter;
 
 namespace OutputVars {
 
-typedef size_t (*RenderFn)(char* buf, size_t cap);
+enum : uint8_t {
+  K_INT,       // signed-int producer (cpm, cps_i, rssi)
+  K_FLOAT,     // float producer, formatted via format_f
+  K_ULONG,     // unsigned long producer (tc, ut, mem)
+  K_STR,       // const char* producer (id, name)
+  K_MODE,      // inline MightyOhm-style mode tag
+  K_ENV_T,     // env temperature in user unit
+  K_ENV_H,     // env humidity %
+  K_ENV_P,     // env pressure hPa
+#ifdef ESPG_HV_ADC
+  K_HV,        // measured HV in volts
+#endif
+};
 
 struct Entry {
   const char* key;
-  RenderFn    render;
+  uint8_t     kind;
+  union {
+    int           (*fn_int)();
+    float         (*fn_float)();
+    unsigned long (*fn_ulong)();
+    const char*   (*fn_str)();
+  };
   const char* desc;
 };
 
-// Render helpers - one per variable. All produce SRAM C strings; the
-// template walker just memcpys the result. snprintf returns negative on
-// error which we coerce to 0.
-static inline size_t rn(int n, size_t cap) {
-  return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
-}
-
-static size_t r_cpm(char* buf, size_t cap) {
-  return rn(snprintf(buf, cap, "%d", gcounter.get_cpm()), cap);
-}
-static size_t r_cps(char* buf, size_t cap) {
-  char f[12]; format_f(f, sizeof(f), gcounter.get_cps());
-  return rn(snprintf(buf, cap, "%s", f), cap);
-}
-static size_t r_cpm5(char* buf, size_t cap) {
-  char f[12]; format_f(f, sizeof(f), gcounter.get_cpm5f());
-  return rn(snprintf(buf, cap, "%s", f), cap);
-}
-static size_t r_cpm15(char* buf, size_t cap) {
-  char f[12]; format_f(f, sizeof(f), gcounter.get_cpm15f());
-  return rn(snprintf(buf, cap, "%s", f), cap);
-}
-static size_t r_cps_int(char* buf, size_t cap) {
-  return rn(snprintf(buf, cap, "%d", gcounter.get_last_cps()), cap);
-}
-static size_t r_usv(char* buf, size_t cap) {
-  char f[12]; format_f(f, sizeof(f), gcounter.get_usv());
-  return rn(snprintf(buf, cap, "%s", f), cap);
-}
-static size_t r_tc(char* buf, size_t cap) {
-  return rn(snprintf(buf, cap, "%lu", (unsigned long)gcounter.total_clicks), cap);
-}
-static size_t r_ut(char* buf, size_t cap) {
-  return rn(snprintf(buf, cap, "%lu", (unsigned long)DeviceInfo::uptime()), cap);
-}
-static size_t r_id(char* buf, size_t cap) {
-  return rn(snprintf(buf, cap, "%s", DeviceInfo::chipid()), cap);
-}
-static size_t r_name(char* buf, size_t cap) {
+// Free-function adapters - tiny, often optimised to tail calls. We need
+// these because member-function pointers would inflate Entry by 4 bytes
+// per row and frustrate the union packing.
+static int           g_cpm()    { return gcounter.get_cpm(); }
+static int           g_cps_i()  { return gcounter.get_last_cps(); }
+static int           g_rssi()   { return (int)Wifi::rssi; }
+static float         g_cps()    { return gcounter.get_cps(); }
+static float         g_cpm5()   { return gcounter.get_cpm5f(); }
+static float         g_cpm15()  { return gcounter.get_cpm15f(); }
+static float         g_usv()    { return gcounter.get_usv(); }
+static unsigned long g_tc()     { return (unsigned long)gcounter.total_clicks; }
+static unsigned long g_ut()     { return (unsigned long)DeviceInfo::uptime(); }
+static unsigned long g_mem()    { return (unsigned long)DeviceInfo::freeHeap(); }
+static const char*   g_id()     { return DeviceInfo::chipid(); }
+static const char*   g_name() {
   const char* fn = DeviceInfo::friendlyName();
-  if (!fn || !fn[0]) fn = DeviceInfo::hostname();
-  return rn(snprintf(buf, cap, "%s", fn ? fn : ""), cap);
-}
-static size_t r_rssi(char* buf, size_t cap) {
-  return rn(snprintf(buf, cap, "%d", (int)Wifi::rssi), cap);
-}
-static size_t r_mem(char* buf, size_t cap) {
-  return rn(snprintf(buf, cap, "%lu", (unsigned long)DeviceInfo::freeHeap()), cap);
-}
-
-// MightyOhm-style mode tag from current CPS. Useful in user templates that
-// want to mimic the protocol shape without using format=3 exactly.
-static size_t r_mode(char* buf, size_t cap) {
-  int cps = gcounter.get_last_cps();
-  const char* m = (cps > 255) ? "INST" : (cps > 15) ? "FAST" : "SLOW";
-  return rn(snprintf(buf, cap, "%s", m), cap);
-}
-
-#ifdef ESPG_HV_ADC
-static size_t r_hv(char* buf, size_t cap) {
-  char f[12]; format_f(f, sizeof(f), hv.hvReading.get());
-  return rn(snprintf(buf, cap, "%s", f), cap);
-}
-#endif
-
-// Env vars - return empty (0) when sensor absent so the template gracefully
-// degrades. Temperature uses the user's preferred unit (env.unit pref).
-static size_t r_t(char* buf, size_t cap) {
-  if (!envsensor.present()) return 0;
-  float v = envsensor.tempUser();
-  if (isnan(v)) return 0;
-  char f[12]; format_f(f, sizeof(f), v);
-  return rn(snprintf(buf, cap, "%s", f), cap);
-}
-static size_t r_h(char* buf, size_t cap) {
-  if (!envsensor.present()) return 0;
-  float v = envsensor.humidity();
-  if (isnan(v)) return 0;
-  char f[12]; format_f(f, sizeof(f), v);
-  return rn(snprintf(buf, cap, "%s", f), cap);
-}
-static size_t r_p(char* buf, size_t cap) {
-  if (!envsensor.present()) return 0;
-  float v = envsensor.pressure();
-  if (isnan(v)) return 0;
-  char f[12]; format_f(f, sizeof(f), v);
-  return rn(snprintf(buf, cap, "%s", f), cap);
+  return (fn && fn[0]) ? fn : DeviceInfo::hostname();
 }
 
 static const Entry ENTRIES[] = {
-  {"cpm",   r_cpm,    "1-minute CPM (integer)"},
-  {"cps",   r_cps,    "Counts per second, rolling float"},
-  {"cps_i", r_cps_int,"Counts in the most recent whole second (integer)"},
-  {"cpm5",  r_cpm5,   "5-minute CPM rolling average"},
-  {"cpm15", r_cpm15,  "15-minute CPM rolling average"},
-  {"usv",   r_usv,    "Dose rate in microsieverts per hour"},
-  {"tc",    r_tc,     "Lifetime total clicks since first boot"},
-  {"ut",    r_ut,     "Uptime in seconds since boot"},
-  {"id",    r_id,     "Six-hex chip id"},
-  {"name",  r_name,   "Friendly name or hostname"},
-  {"rssi",  r_rssi,   "WiFi RSSI in dBm"},
-  {"mem",   r_mem,    "Free heap in bytes"},
-  {"mode",  r_mode,   "MightyOhm-style mode tag SLOW/FAST/INST"},
+  {"cpm",   K_INT,    {.fn_int   = g_cpm},   "1-minute CPM (integer)"},
+  {"cps",   K_FLOAT,  {.fn_float = g_cps},   "Counts per second, rolling float"},
+  {"cps_i", K_INT,    {.fn_int   = g_cps_i}, "Counts in the most recent whole second (integer)"},
+  {"cpm5",  K_FLOAT,  {.fn_float = g_cpm5},  "5-minute CPM rolling average"},
+  {"cpm15", K_FLOAT,  {.fn_float = g_cpm15}, "15-minute CPM rolling average"},
+  {"usv",   K_FLOAT,  {.fn_float = g_usv},   "Dose rate in microsieverts per hour"},
+  {"tc",    K_ULONG,  {.fn_ulong = g_tc},    "Lifetime total clicks since first boot"},
+  {"ut",    K_ULONG,  {.fn_ulong = g_ut},    "Uptime in seconds since boot"},
+  {"id",    K_STR,    {.fn_str   = g_id},    "Six-hex chip id"},
+  {"name",  K_STR,    {.fn_str   = g_name},  "Friendly name or hostname"},
+  {"rssi",  K_INT,    {.fn_int   = g_rssi},  "WiFi RSSI in dBm"},
+  {"mem",   K_ULONG,  {.fn_ulong = g_mem},   "Free heap in bytes"},
+  {"mode",  K_MODE,   {.fn_int   = nullptr}, "MightyOhm-style mode tag SLOW/FAST/INST"},
 #ifdef ESPG_HV_ADC
-  {"hv",    r_hv,     "Measured HV in volts"},
+  {"hv",    K_HV,     {.fn_int   = nullptr}, "Measured HV in volts"},
 #endif
-  {"t",     r_t,      "Temperature in user-preferred unit (env.unit)"},
-  {"h",     r_h,      "Relative humidity %"},
-  {"p",     r_p,      "Pressure in hPa"},
-  {nullptr, nullptr,  nullptr},
+  {"t",     K_ENV_T,  {.fn_int   = nullptr}, "Temperature in user-preferred unit (env.unit)"},
+  {"h",     K_ENV_H,  {.fn_int   = nullptr}, "Relative humidity %"},
+  {"p",     K_ENV_P,  {.fn_int   = nullptr}, "Pressure in hPa"},
+  {nullptr, 0,        {.fn_int   = nullptr}, nullptr},
 };
 
 static const Entry* find(const char* key, size_t klen) {
@@ -161,11 +109,58 @@ static const Entry* find(const char* key, size_t klen) {
   return nullptr;
 }
 
+static inline size_t rn(int n, size_t cap) {
+  return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
+}
+
+// Env helper - 3 entries collapse into this. Returns 0 (= "omit") when
+// the sensor is absent OR the field is not provided by this chip (e.g.
+// humidity on BMP280).
+static size_t render_env_float(float v, char* buf, size_t cap) {
+  if (!envsensor.present() || isnan(v)) return 0;
+  char f[12]; format_f(f, sizeof(f), v);
+  return rn(snprintf(buf, cap, "%s", f), cap);
+}
+
 size_t render(const char* key, size_t klen, char* buf, size_t cap) {
   if (!key || !buf || cap == 0) return 0;
   const Entry* e = find(key, klen);
   if (!e) return 0;
-  size_t n = e->render(buf, cap);
+  size_t n = 0;
+  switch (e->kind) {
+    case K_INT:
+      n = rn(snprintf(buf, cap, "%d", e->fn_int()), cap);
+      break;
+    case K_ULONG:
+      n = rn(snprintf(buf, cap, "%lu", e->fn_ulong()), cap);
+      break;
+    case K_STR: {
+      const char* s = e->fn_str();
+      n = rn(snprintf(buf, cap, "%s", s ? s : ""), cap);
+      break;
+    }
+    case K_FLOAT: {
+      char f[12]; format_f(f, sizeof(f), e->fn_float());
+      n = rn(snprintf(buf, cap, "%s", f), cap);
+      break;
+    }
+    case K_MODE: {
+      int cps = gcounter.get_last_cps();
+      const char* m = (cps > 255) ? "INST" : (cps > 15) ? "FAST" : "SLOW";
+      n = rn(snprintf(buf, cap, "%s", m), cap);
+      break;
+    }
+#ifdef ESPG_HV_ADC
+    case K_HV: {
+      char f[12]; format_f(f, sizeof(f), hv.hvReading.get());
+      n = rn(snprintf(buf, cap, "%s", f), cap);
+      break;
+    }
+#endif
+    case K_ENV_T: n = render_env_float(envsensor.tempUser(),  buf, cap); break;
+    case K_ENV_H: n = render_env_float(envsensor.humidity(),  buf, cap); break;
+    case K_ENV_P: n = render_env_float(envsensor.pressure(),  buf, cap); break;
+  }
   if (n < cap) buf[n] = '\0';
   return n;
 }
@@ -228,9 +223,8 @@ size_t renderTemplate(const char* tpl, char* buf, size_t cap) {
 }
 
 const VarDef* list() {
-  // Sentinel-terminated. Memory-aligned: VarDef has same layout as Entry's
-  // first three fields so we can reuse the same storage. Future-proof by
-  // building a real array if Entry diverges.
+  // Sentinel-terminated. Built once from ENTRIES so callers see only the
+  // public (key, desc) shape and can't accidentally invoke a renderer.
   static VarDef defs[sizeof(ENTRIES) / sizeof(ENTRIES[0])];
   static bool built = false;
   if (!built) {
