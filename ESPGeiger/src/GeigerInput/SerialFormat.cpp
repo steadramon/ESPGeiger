@@ -18,6 +18,7 @@
 */
 
 #include "SerialFormat.h"
+#include "GeigerInput.h"   // GEIGER_IS_SERIAL macro
 #include "../Util/StringUtil.h"
 #include "../Util/OutputVars.h"
 #include "../Counter/Counter.h"
@@ -28,17 +29,14 @@
 
 extern Counter gcounter;
 
+#define EG_HAS_SERIAL_PARSERS GEIGER_IS_SERIAL(GEIGER_TYPE)
+
 namespace SerialFormat {
 
 // MightyOhm wire constant: device's published uSv/hr = CPM / 175.
 static constexpr float MIGHTYOHM_USV_DIV = 175.0f;
 
-// Custom formatters that the template engine can't express. Both pull
-// live values directly so the dispatch shape (char*,size_t) stays simple.
-
 static size_t fmt_mightyohm(char* buf, size_t cap) {
-  // SLOW/FAST/INST mirrors the real device. In INST the CPM field is
-  // CPS*60 extrapolated from the current sample (8-bit overflow regime).
   int cps = gcounter.get_last_cps();
   int cpm = gcounter.get_cpm();
   const char* mode;
@@ -57,7 +55,6 @@ static size_t fmt_user_template(char* buf, size_t cap) {
   const char* tpl = EGPrefs::getString("sout", "tpl");
   if (!tpl || !*tpl) return 0;
   size_t n = OutputVars::renderTemplate(tpl, buf, cap);
-  // Auto-append newline if the user forgot one (common for one-line tpls).
   if (n > 0 && buf[n - 1] != '\n' && n < cap - 1) {
     buf[n++] = '\n';
     buf[n]   = '\0';
@@ -65,8 +62,7 @@ static size_t fmt_user_template(char* buf, size_t cap) {
   return n;
 }
 
-// Parsers. Each validates printability before sscanf to avoid pulling
-// garbage in from a flaky wire.
+#if EG_HAS_SERIAL_PARSERS
 
 static bool common_validate(const char* in, size_t len) {
   if (len == 0) return false;
@@ -109,6 +105,11 @@ static bool parse_gc10(const char* in, int* out_cpm, int* /*out_cps*/) {
   return true;
 }
 
+#define IF_PARSE(p) p
+#else
+#define IF_PARSE(p) nullptr
+#endif
+
 // Per-protocol metadata. Templates are SRAM literals - tiny strings used
 // only when a custom FormatFn isn't supplied. The template engine handles
 // the {cpm} substitution path.
@@ -123,11 +124,13 @@ struct TypeInfo {
 };
 
 static const TypeInfo TYPES[] = {
-  { GEIGER_STYPE_GC10,      9600,   "GC10",      "{cpm}\r\n",    nullptr,            parse_gc10,      false },
-  { GEIGER_STYPE_GC10NX,    115200, "GC10Next",  "{cpm}\r\n",    nullptr,            parse_gc10,      false },
-  { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm", nullptr,        fmt_mightyohm,      parse_mightyohm, true  },
-  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger", "CPM: {cpm}\n", nullptr,            parse_espg,      false },
-  { GEIGER_STYPE_TEMPLATE,  115200, "Template",  nullptr,        fmt_user_template,  nullptr,         false },
+  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger", "CPM: {cpm}\n", nullptr,            IF_PARSE(parse_espg),      false },
+  { GEIGER_STYPE_TEMPLATE,  115200, "Template",  nullptr,        fmt_user_template,  nullptr,                   false },
+#if EG_HAS_SERIAL_PARSERS
+  { GEIGER_STYPE_GC10,      9600,   "GC10",      "{cpm}\r\n",    nullptr,            IF_PARSE(parse_gc10),      false },
+  { GEIGER_STYPE_GC10NX,    115200, "GC10Next",  "{cpm}\r\n",    nullptr,            IF_PARSE(parse_gc10),      false },
+#endif
+  { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm", nullptr,        fmt_mightyohm,      IF_PARSE(parse_mightyohm), true  },
 };
 static constexpr uint8_t TYPE_COUNT = sizeof(TYPES) / sizeof(TYPES[0]);
 
@@ -157,8 +160,6 @@ size_t describe_types(char* buf, size_t cap) {
   return pos;
 }
 
-// Template renderer wired to OutputVars. Wrapped so we can hand a function
-// pointer to FormatFn for protocols whose template is fixed.
 static const char* g_resolve_tpl = nullptr;
 static size_t fmt_render_resolved_tpl(char* buf, size_t cap) {
   if (!g_resolve_tpl) return 0;
@@ -186,12 +187,17 @@ size_t format_line(uint8_t type, char* buf, size_t cap) {
 }
 
 bool parse_cpm(uint8_t type, const char* input, int* out_cpm, int* out_cps) {
+#if EG_HAS_SERIAL_PARSERS
   if (!input || !out_cpm) return false;
   size_t len = strlen(input);
   if (!common_validate(input, len)) return false;
   const TypeInfo* t = find(type);
   if (!t || !t->parser) return false;
   return t->parser(input, out_cpm, out_cps);
+#else
+  (void)type; (void)input; (void)out_cpm; (void)out_cps;
+  return false;
+#endif
 }
 
-}  // namespace SerialFormat
+}
