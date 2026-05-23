@@ -22,6 +22,7 @@
 #include <EGHttpServer.h>
 #include "SerialOut.h"
 #include "../GeigerInput/SerialFormat.h"
+#include "../GeigerInput/GeigerInput.h"   // GEIGER_IS_SERIAL macro
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
@@ -35,11 +36,15 @@ SerialOut serialout;
 EG_REGISTER_MODULE(serialout)
 
 EG_PSTR(SO_L_FMT,  "Wire format");
-EG_PSTR(SO_H_FMT,  "0=Labelled (default), 1=GC10, 2=GC10Next, 3=MightyOhm, 5=User template");
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+EG_PSTR(SO_H_FMT,  "0=Labelled (default), 4=ESPGeiger, 5=User template, 1=GC10, 2=GC10Next, 3=MightyOhm");
+#else
+EG_PSTR(SO_H_FMT,  "0=Labelled (default), 4=ESPGeiger, 5=User template, 3=MightyOhm");
+#endif
 EG_PSTR(SO_L_TPL,  "Template");
-EG_PSTR(SO_H_TPL,  "Used when format=5. Vars: {cpm} {cps} {usv} {hv} {t} {h} {p} {tc} {ut} {id} {name} {rssi} {mem} {mode}. Escapes: \\n \\r \\t");
+EG_PSTR(SO_H_TPL,  "format=5 only. See /vars.json for live values. Escapes: \\n \\r \\t");
 EG_PSTR(SO_L_BAUD, "Baud override");
-EG_PSTR(SO_H_BAUD, "0 uses the format's native baud (or framework default). Non-zero forces this rate.");
+EG_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
 
 // interval / flags stay hidden - they're driven by `show N` / `show cpm`
 // commands. The format and template fields are user-facing.
