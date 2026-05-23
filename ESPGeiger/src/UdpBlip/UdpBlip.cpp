@@ -27,6 +27,7 @@
 #include "../ArduinoOTA/ArduinoOTA.h"
 #include "../GRNG/GRNG.h"
 #include "../Util/TickProfile.h"
+#include "../EnvSensor/EnvSensor.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 extern HV hv;
@@ -120,6 +121,8 @@ void UdpBlipModule::begin() {
              PSTR("/espg/%s/rad"), DeviceInfo::chipid());
   snprintf_P(_sys_path, sizeof(_sys_path),
              PSTR("/espg/%s/sys"), DeviceInfo::chipid());
+  snprintf_P(_env_path, sizeof(_env_path),
+             PSTR("/espg/%s/env"), DeviceInfo::chipid());
 #ifdef ESPG_HV_ADC
   snprintf_P(_hv_path, sizeof(_hv_path),
              PSTR("/espg/%s/hv"), DeviceInfo::chipid());
@@ -266,6 +269,21 @@ void UdpBlipModule::emitHv(uint32_t now) {
 }
 #endif
 
+void UdpBlipModule::emitEnv(uint32_t now) {
+  // /espg/{id}/env ,fff  temp_c humidity pressure_hpa (humidity = NaN on BMP280)
+  if (!envsensor.present()) return;
+  uint8_t buf[64];
+  size_t off = 0;
+  size_t n;
+  if (!(n = osc_str(buf, sizeof(buf), off, _env_path))) return; off += n;
+  if (!(n = osc_strn(buf, sizeof(buf), off, ",fff", 4))) return; off += n;
+  if (!(n = osc_f32(buf, sizeof(buf), off, envsensor.tempC()))) return; off += n;
+  if (!(n = osc_f32(buf, sizeof(buf), off, envsensor.humidity()))) return; off += n;
+  if (!(n = osc_f32(buf, sizeof(buf), off, envsensor.pressure()))) return; off += n;
+  sendPacket(buf, off);
+  (void)now;
+}
+
 void UdpBlipModule::emitSys(uint32_t now) {
   uint8_t buf[64];
   size_t off = 0;
@@ -359,7 +377,7 @@ void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
     _emit_phase = 2;
   } else {
     _sys_phase = !_sys_phase;
-    if (_sys_phase) _pending |= EMIT_SYS;
+    if (_sys_phase) _pending |= EMIT_SYS | EMIT_ENV;
     _emit_phase = 0;
   }
 }
@@ -385,6 +403,7 @@ void UdpBlipModule::loop(unsigned long now) {
     if (p & EMIT_HV)  emitHv(millis());
 #endif
     if (p & EMIT_SYS) emitSys(millis());
+    if (p & EMIT_ENV) emitEnv(millis());
   }
   tryEmitClick(now);
 }

@@ -91,6 +91,7 @@ private:
   void tryEmitClick(unsigned long now_ms);
   void emitRad(uint32_t now);
   void emitSys(uint32_t now);
+  void emitEnv(uint32_t now);
 #ifdef ESPG_HV_ADC
   void emitHv(uint32_t now);
 #endif
@@ -118,11 +119,13 @@ private:
   static constexpr uint8_t EMIT_RAD = 1 << 0;
   static constexpr uint8_t EMIT_HV  = 1 << 1;
   static constexpr uint8_t EMIT_SYS = 1 << 2;
+  static constexpr uint8_t EMIT_ENV = 1 << 3;
   uint8_t   _pending = 0;
   char      _click_path[20] = {0};
   uint8_t   _click_packet[32] = {0};  // /click OSC template; emitClick patches i32s at [24],[28]
   char      _rad_path[20]   = {0};
   char      _sys_path[20]   = {0};
+  char      _env_path[20]   = {0};
 #ifdef ESPG_HV_ADC
   char      _hv_path[20]    = {0};
 #endif
