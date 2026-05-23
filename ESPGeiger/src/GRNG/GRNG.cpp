@@ -110,50 +110,46 @@ void GRNG::extract_fast(uint8_t* out, size_t n) {
 
 static const char RANDOM_PAGE_BODY_NEW[] PROGMEM = R"HTML(
 <style>
-.rg{margin:1em 0}
 .rg th{text-align:right;color:var(--muted);font-weight:normal;padding:.3em .7em .3em 0}
 .rg td{padding:.3em .4em}
 .rg input[type=number]{width:4em;padding:.3em .4em;text-align:center}
 .rg button{min-width:6em;padding:.4em .8em;width:auto}
-.rg .u{color:var(--muted);font-size:.9em}
-.rg .o{display:inline-block;width:18em;max-width:18em;min-height:1em;padding:.3em .6em;background:var(--card);border:1px solid var(--border);border-radius:4px;font-family:monospace;font-size:.92em;white-space:nowrap;overflow-x:auto;vertical-align:middle;box-sizing:border-box}
-.rg .o:empty::before{content:"\00a0";color:var(--muted)}
-.rg .o.flash{animation:rgflash .55s ease-out}
-@keyframes rgflash{0%{background:var(--accent);color:#fff}100%{background:var(--card);color:inherit}}
+.rg .o{display:inline-block;width:18em;padding:.3em .6em;background:var(--card);border:1px solid var(--border);border-radius:4px;font-family:monospace;font-size:.92em;white-space:nowrap;overflow-x:auto;vertical-align:middle;box-sizing:border-box}
+.rg .o.f{animation:rgf .55s ease-out}
+@keyframes rgf{0%{background:var(--accent);color:#fff}100%{background:var(--card);color:inherit}}
 </style>
-<table class=rg>
-<tr data-type=coin><th>Coin</th><td></td><td></td><td><button type=button onclick='r(this)'>Flip</button></td><td><span class=o></span></td></tr>
-<tr data-type=dice data-arg=sides><th>Dice D</th><td><input type=number value=6 min=2 max=10000></td><td></td><td><button type=button onclick='r(this)'>Roll</button></td><td><span class=o></span></td></tr>
-<tr data-type=password data-arg=len><th>Password</th><td><input type=number value=16 min=4 max=64></td><td class=u>chars</td><td><button type=button onclick='r(this)'>Generate</button></td><td><span class=o></span></td></tr>
-<tr data-type=hex data-arg=n><th>Hex</th><td><input type=number value=16 min=1 max=32></td><td class=u>bytes</td><td><button type=button onclick='r(this)'>Generate</button></td><td><span class=o></span></td></tr>
-<tr data-type=flip data-arg=n><th>Bias test</th><td><input type=number value=1000 min=10 max=10000></td><td class=u>flips</td><td><button type=button onclick='r(this)'>Run</button></td><td><span class=o></span></td></tr>
-<tr data-type=otp data-arg=n><th>One-time pad</th><td><input type=number value=256 min=16 max=1024></td><td class=u>bytes</td><td><button type=button onclick='d(this)'>Download</button></td><td><span class=o></span></td></tr>
-</table>
-<p class=muted style="margin-top:1.2em">Powered by accumulated radiation events.</p>
+<table class=rg id=rg></table>
+<p class=muted>Powered by accumulated radiation events.</p>
 <script>
+[['Coin','coin',null,'Flip'],
+ ['Dice D','dice',['sides',6,2,10000],'Roll'],
+ ['Password','password',['len',16,4,64],'Generate','chars'],
+ ['Hex','hex',['n',16,1,32],'Generate','bytes'],
+ ['Bias test','flip',['n',1000,10,10000],'Run','flips'],
+ ['OTP','otp',['n',256,16,1024],'Download','bytes',1]
+].forEach(c=>{
+  var t=document.createElement('tr'),
+      i=c[2]?'<input type=number value='+c[2][1]+' min='+c[2][2]+' max='+c[2][3]+'>':'',
+      u=c[4]?'<span class=muted>'+c[4]+'</span>':'';
+  t.innerHTML='<th>'+c[0]+'</th><td>'+i+'</td><td>'+u+'</td><td><button type=button>'+c[3]+'</button></td><td><span class=o></span></td>';
+  t.dataset.type=c[1];if(c[2])t.dataset.arg=c[2][0];if(c[5])t.dataset.dl=1;
+  t.querySelector('button').onclick=function(){r(this)};
+  document.getElementById('rg').appendChild(t);
+});
 function r(b){
-  var row=b.closest('tr');
-  var t=row.dataset.type, k=row.dataset.arg;
-  var i=row.querySelector('input'), o=row.querySelector('.o');
-  o.classList.remove('flash');b.disabled=true;
-  var u='/random.do?type='+t;
-  if(i&&k)u+='&'+k+'='+i.value;
+  var row=b.closest('tr'),t=row.dataset.type,k=row.dataset.arg,
+      i=row.querySelector('input'),o=row.querySelector('.o'),dl=row.dataset.dl;
+  o.classList.remove('f');b.disabled=true;
+  var u='/random.do?type='+t;if(i&&k)u+='&'+k+'='+i.value;
   fetch(u).then(r=>r.text()).then(x=>{
-    o.textContent=x;void o.offsetWidth;o.classList.add('flash');
-    b.disabled=false;
-  }).catch(()=>{o.textContent='(error)';b.disabled=false;});
-}
-function d(b){
-  var row=b.closest('tr'),i=row.querySelector('input'),o=row.querySelector('.o');
-  b.disabled=true;
-  fetch('/random.do?type=otp&n='+i.value).then(r=>r.text()).then(x=>{
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([x],{type:'text/plain'}));
-    a.download='otp-'+Date.now()+'.txt';
-    a.click();URL.revokeObjectURL(a.href);
-    o.textContent=i.value+' bytes ('+x.length+' hex chars) saved';
-    o.classList.remove('flash');void o.offsetWidth;o.classList.add('flash');
-    b.disabled=false;
+    if(dl){
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([x],{type:'text/plain'}));
+      a.download=t+'-'+Date.now()+'.txt';
+      a.click();URL.revokeObjectURL(a.href);
+      o.textContent=i.value+' bytes ('+x.length+' hex chars) saved';
+    }else o.textContent=x;
+    void o.offsetWidth;o.classList.add('f');b.disabled=false;
   }).catch(()=>{o.textContent='(error)';b.disabled=false;});
 }
 </script>

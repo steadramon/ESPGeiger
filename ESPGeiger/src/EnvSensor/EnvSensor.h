@@ -25,8 +25,14 @@
 #include "../Module/EGModule.h"
 #include "../Util/Globals.h"
 
+// If OLED is in the build it owns the I2C pin layout - share its pins so
+// EnvSensor doesn't reconfigure Wire underneath the display. Platform
+// defaults only kick in on headless builds (or where the user explicitly
+// overrides ENV_DEFAULT_*).
 #ifndef ENV_DEFAULT_SDA
-  #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
+  #if defined(OLED_SDA)
+    #define ENV_DEFAULT_SDA OLED_SDA
+  #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
     #define ENV_DEFAULT_SDA 8
   #elif defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
     #define ENV_DEFAULT_SDA 6
@@ -38,7 +44,9 @@
 #endif
 
 #ifndef ENV_DEFAULT_SCL
-  #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
+  #if defined(OLED_SCL)
+    #define ENV_DEFAULT_SCL OLED_SCL
+  #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
     #define ENV_DEFAULT_SCL 9
   #elif defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
     #define ENV_DEFAULT_SCL 7
