@@ -49,6 +49,7 @@ enum : uint8_t {
 
 struct Entry {
   const char* key;
+  uint8_t     klen;   // compile-time length of key; lets find() skip strlen
   uint8_t     kind;
   union {
     int           (*fn_int)();
@@ -58,6 +59,8 @@ struct Entry {
   };
   const char* desc;
 };
+
+#define EV_KEY(s) s, (uint8_t)(sizeof(s) - 1)
 
 // Free-function adapters - tiny, often optimised to tail calls. We need
 // these because member-function pointers would inflate Entry by 4 bytes
@@ -79,32 +82,31 @@ static const char*   g_name() {
 }
 
 static const Entry ENTRIES[] = {
-  {"cpm",   K_INT,    {.fn_int   = g_cpm},   "1-minute CPM (integer)"},
-  {"cps",   K_FLOAT,  {.fn_float = g_cps},   "Counts per second, rolling float"},
-  {"cps_i", K_INT,    {.fn_int   = g_cps_i}, "Counts in the most recent whole second (integer)"},
-  {"cpm5",  K_FLOAT,  {.fn_float = g_cpm5},  "5-minute CPM rolling average"},
-  {"cpm15", K_FLOAT,  {.fn_float = g_cpm15}, "15-minute CPM rolling average"},
-  {"usv",   K_FLOAT,  {.fn_float = g_usv},   "Dose rate in microsieverts per hour"},
-  {"tc",    K_ULONG,  {.fn_ulong = g_tc},    "Lifetime total clicks since first boot"},
-  {"ut",    K_ULONG,  {.fn_ulong = g_ut},    "Uptime in seconds since boot"},
-  {"id",    K_STR,    {.fn_str   = g_id},    "Six-hex chip id"},
-  {"name",  K_STR,    {.fn_str   = g_name},  "Friendly name or hostname"},
-  {"rssi",  K_INT,    {.fn_int   = g_rssi},  "WiFi RSSI in dBm"},
-  {"mem",   K_ULONG,  {.fn_ulong = g_mem},   "Free heap in bytes"},
-  {"mode",  K_MODE,   {.fn_int   = nullptr}, "MightyOhm-style mode tag SLOW/FAST/INST"},
+  {EV_KEY("cpm"),   K_INT,    {.fn_int   = g_cpm},   "1-minute CPM (integer)"},
+  {EV_KEY("cps"),   K_FLOAT,  {.fn_float = g_cps},   "Counts per second, rolling float"},
+  {EV_KEY("cps_i"), K_INT,    {.fn_int   = g_cps_i}, "Counts in the most recent whole second (integer)"},
+  {EV_KEY("cpm5"),  K_FLOAT,  {.fn_float = g_cpm5},  "5-minute CPM rolling average"},
+  {EV_KEY("cpm15"), K_FLOAT,  {.fn_float = g_cpm15}, "15-minute CPM rolling average"},
+  {EV_KEY("usv"),   K_FLOAT,  {.fn_float = g_usv},   "Dose rate in microsieverts per hour"},
+  {EV_KEY("tc"),    K_ULONG,  {.fn_ulong = g_tc},    "Lifetime total clicks since first boot"},
+  {EV_KEY("ut"),    K_ULONG,  {.fn_ulong = g_ut},    "Uptime in seconds since boot"},
+  {EV_KEY("id"),    K_STR,    {.fn_str   = g_id},    "Six-hex chip id"},
+  {EV_KEY("name"),  K_STR,    {.fn_str   = g_name},  "Friendly name or hostname"},
+  {EV_KEY("rssi"),  K_INT,    {.fn_int   = g_rssi},  "WiFi RSSI in dBm"},
+  {EV_KEY("mem"),   K_ULONG,  {.fn_ulong = g_mem},   "Free heap in bytes"},
+  {EV_KEY("mode"),  K_MODE,   {.fn_int   = nullptr}, "MightyOhm-style mode tag SLOW/FAST/INST"},
 #ifdef ESPG_HV_ADC
-  {"hv",    K_HV,     {.fn_int   = nullptr}, "Measured HV in volts"},
+  {EV_KEY("hv"),    K_HV,     {.fn_int   = nullptr}, "Measured HV in volts"},
 #endif
-  {"t",     K_ENV_T,  {.fn_int   = nullptr}, "Temperature in user-preferred unit (env.unit)"},
-  {"h",     K_ENV_H,  {.fn_int   = nullptr}, "Relative humidity %"},
-  {"p",     K_ENV_P,  {.fn_int   = nullptr}, "Pressure in hPa"},
-  {nullptr, 0,        {.fn_int   = nullptr}, nullptr},
+  {EV_KEY("t"),     K_ENV_T,  {.fn_int   = nullptr}, "Temperature in user-preferred unit (env.unit)"},
+  {EV_KEY("h"),     K_ENV_H,  {.fn_int   = nullptr}, "Relative humidity %"},
+  {EV_KEY("p"),     K_ENV_P,  {.fn_int   = nullptr}, "Pressure in hPa"},
+  {nullptr, 0, 0,             {.fn_int   = nullptr}, nullptr},
 };
 
 static const Entry* find(const char* key, size_t klen) {
   for (const Entry* e = ENTRIES; e->key; e++) {
-    size_t k = strlen(e->key);
-    if (k == klen && memcmp(e->key, key, k) == 0) return e;
+    if (e->klen == klen && memcmp(e->key, key, klen) == 0) return e;
   }
   return nullptr;
 }
