@@ -20,6 +20,9 @@
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/StringUtil.h"
+#include "../EnvSensor/EnvSensor.h"
+#include <math.h>
 
 extern uint8_t send_indicator;
 
@@ -123,8 +126,30 @@ void Thingspeak::postMeasurement() {
   float usv =  gcounter.get_usv();
   char usvChar[20];
   dtostrf(usv,1,5, usvChar);
-  char url[256];
-  snprintf_P(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
+  char url[320];
+  size_t up = snprintf_P(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
+  // Append env fields when sensor present and the channel value is real.
+  // Users with existing 4-field channels just leave 5/6/7 unconfigured.
+  if (envsensor.present() && up < sizeof(url)) {
+    char fbuf[12];
+    float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
+    int n;
+    if (!isnan(et)) {
+      format_f(fbuf, sizeof(fbuf), et);
+      n = snprintf_P(url + up, sizeof(url) - up, PSTR("&field5=%s"), fbuf);
+      if (n > 0 && (size_t)n < sizeof(url) - up) up += n;
+    }
+    if (!isnan(eh)) {
+      format_f(fbuf, sizeof(fbuf), eh);
+      n = snprintf_P(url + up, sizeof(url) - up, PSTR("&field6=%s"), fbuf);
+      if (n > 0 && (size_t)n < sizeof(url) - up) up += n;
+    }
+    if (!isnan(ep)) {
+      format_f(fbuf, sizeof(fbuf), ep);
+      n = snprintf_P(url + up, sizeof(url) - up, PSTR("&field7=%s"), fbuf);
+      if (n > 0 && (size_t)n < sizeof(url) - up) up += n;
+    }
+  }
 
   if (!request) request = new AsyncHTTPRequest();
   if (!request) { Log::console(PSTR("Thingspeak: alloc failed")); return; }
