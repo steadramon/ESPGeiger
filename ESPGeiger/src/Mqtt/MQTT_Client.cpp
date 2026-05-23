@@ -23,6 +23,8 @@
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
 #include "../Util/StringUtil.h"
+#include "../EnvSensor/EnvSensor.h"
+#include <math.h>
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 #endif
@@ -365,6 +367,23 @@ void MQTT_Client::publishPing()
       sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"hv\":%s"), b_hv);
     }
 #endif
+    if (envsensor.present()) {
+      // Emit each field only when the underlying sensor provides it.
+      float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
+      char bf[12];
+      if (!isnan(et)) {
+        format_f(bf, sizeof(bf), et);
+        sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"t\":%s"), bf);
+      }
+      if (!isnan(eh)) {
+        format_f(bf, sizeof(bf), eh);
+        sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"h\":%s"), bf);
+      }
+      if (!isnan(ep)) {
+        format_f(bf, sizeof(bf), ep);
+        sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR(",\"p\":%s"), bf);
+      }
+    }
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
       PSTR(",\"warn\":%d,\"alert\":%d}"),
       gcounter.is_warning() ? 1 : 0, gcounter.is_alert() ? 1 : 0);
@@ -413,6 +432,27 @@ void MQTT_Client::publishPing()
     MQTT_PUB_YIELD();
   }
 #endif
+  if (envsensor.present()) {
+    float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
+    if (!isnan(et)) {
+      format_f(valBuf, sizeof(valBuf), et);
+      buildTopic(topic, sizeof(topic), "stat", PSTR("T"));
+      mqttClient->publish(topic, 1, false, valBuf);
+      MQTT_PUB_YIELD();
+    }
+    if (!isnan(eh)) {
+      format_f(valBuf, sizeof(valBuf), eh);
+      buildTopic(topic, sizeof(topic), "stat", PSTR("H"));
+      mqttClient->publish(topic, 1, false, valBuf);
+      MQTT_PUB_YIELD();
+    }
+    if (!isnan(ep)) {
+      format_f(valBuf, sizeof(valBuf), ep);
+      buildTopic(topic, sizeof(topic), "stat", PSTR("P"));
+      mqttClient->publish(topic, 1, false, valBuf);
+      MQTT_PUB_YIELD();
+    }
+  }
   // ---- end LEGACY block ----
 
   send_indicator = 2;
@@ -530,6 +570,9 @@ static const char H_DC_DUR[]    PROGMEM = "duration";
 static const char H_DC_PROB[]   PROGMEM = "problem";
 static const char H_DC_SAFETY[] PROGMEM = "safety";
 static const char H_DC_CONN[]   PROGMEM = "connectivity";
+static const char H_DC_TEMP[]   PROGMEM = "temperature";
+static const char H_DC_HUMID[]  PROGMEM = "humidity";
+static const char H_DC_PRES[]   PROGMEM = "atmospheric_pressure";
 // entity_category.
 static const char H_EC_DIAG[]   PROGMEM = "diagnostic";
 // "not set" sentinel - consumers check pgm_read_byte(x) to skip.
@@ -576,6 +619,17 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
     S("hv",     "hv",       "HV",           "V",         "mdi:lightning-bolt", H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY);
   }
 #endif
+  if (envsensor.present()) {
+    if (!isnan(envsensor.tempC())) {
+      S("temp",     "t", "Temperature", "°C",  "mdi:thermometer",   H_ST_SENSOR, H_DC_TEMP,  H_SC_MEAS, H_EMPTY);
+    }
+    if (!isnan(envsensor.humidity())) {
+      S("humidity", "h", "Humidity",    "%",   "mdi:water-percent", H_ST_SENSOR, H_DC_HUMID, H_SC_MEAS, H_EMPTY);
+    }
+    if (!isnan(envsensor.pressure())) {
+      S("pressure", "p", "Pressure",    "hPa", "mdi:gauge",         H_ST_SENSOR, H_DC_PRES,  H_SC_MEAS, H_EMPTY);
+    }
+  }
   S("c_total",  "c_total",  "Total Clicks", "",          "mdi:counter",        H_ST_STATUS, H_EMPTY,  H_SC_TOTINC, H_EMPTY);
   // tele/status - diagnostic.
   S("tick",     "tick",     "tick",         "\u00B5s",   "mdi:timer-outline",  H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG);
