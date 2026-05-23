@@ -26,6 +26,7 @@
 #include "../Util/DeviceInfo.h"
 #include "../Util/CrashDump.h"
 #include "../Util/Wifi.h"
+#include "../Util/OutputVars.h"
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../NTP/NTP.h"
@@ -260,6 +261,7 @@ void WebPortal::begin(uint16_t port) {
   _http.on("/webcmd",    EGHttpRequest::POST, &WebPortal::hWebCmd,       nullptr);
   _http.on("/outputs",   EGHttpRequest::GET, &WebPortal::hOutputs,       nullptr);
   _http.on("/metrics",   EGHttpRequest::GET, &WebPortal::hMetrics,       nullptr);
+  _http.on("/vars.json", EGHttpRequest::GET, &WebPortal::hVars,          nullptr);
   _http.on("/param",     EGHttpRequest::GET, &WebPortal::hParam,         nullptr);
   _http.on("/param",     EGHttpRequest::POST, &WebPortal::hParam,        nullptr);
   _http.onUpload("/param", &WebPortal::hParamBody, nullptr);
@@ -1966,6 +1968,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <tr><th>CPM</th><td><span id=blip></span><span id=cpm>-</span></td><th>CPS</th><td><span id=cs>-</span></td></tr>
 <tr><th><span class=usvL>&micro;Sv/h</span></th><td><span id=usv class=usv>-</span></td><th>Total clicks</th><td><span id=tc>-</span></td></tr>
 <tr><th>Uptime</th><td><span id=upt>-</span></td><th>Signal</th><td><span id=rssi>-</span></td></tr>
+<tr id=envR style=display:none><th>Env</th><td colspan=3><span id=envV>-</span></td></tr>
 </table>
 <h2>Console</h2>
 <textarea readonly id=t1 wrap=off></textarea>
@@ -2038,6 +2041,46 @@ void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   buf[pos++] = '}';
   res.beginChunked(200, "application/json");
   res.sendChunk(buf, pos);
+  res.endChunked();
+}
+
+// JSON-escape a value into out. Returns chars written. Used by /vars.json
+// because friendly name etc could contain quotes / backslashes / control
+// chars and break the wire.
+static size_t json_escape(const char* in, size_t in_len, char* out, size_t cap) {
+  size_t pos = 0;
+  for (size_t i = 0; i < in_len; i++) {
+    char c = in[i];
+    if (pos + 6 >= cap) break;   // worst case \u00XX = 6 chars
+    if (c == '"' || c == '\\') { out[pos++] = '\\'; out[pos++] = c; }
+    else if (c == '\n')        { out[pos++] = '\\'; out[pos++] = 'n'; }
+    else if (c == '\r')        { out[pos++] = '\\'; out[pos++] = 'r'; }
+    else if (c == '\t')        { out[pos++] = '\\'; out[pos++] = 't'; }
+    else if ((uint8_t)c < 0x20) { /* drop other controls */ }
+    else                       { out[pos++] = c; }
+  }
+  return pos;
+}
+
+void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  (void)req;
+  res.beginChunked(200, "application/json");
+  res.sendChunk(F("{"));
+  const OutputVars::VarDef* d = OutputVars::list();
+  bool first = true;
+  for (; d->key; d++) {
+    char raw[64];
+    size_t n = OutputVars::render(d->key, strlen(d->key), raw, sizeof(raw));
+    if (n == 0) continue;
+    char esc[80];
+    size_t en = json_escape(raw, n, esc, sizeof(esc));
+    char line[128];
+    int m = snprintf_P(line, sizeof(line), PSTR("%s\"%s\":\"%.*s\""),
+                       first ? "" : ",", d->key, (int)en, esc);
+    if (m > 0 && (size_t)m < sizeof(line)) res.sendChunk(line, (size_t)m);
+    first = false;
+  }
+  res.sendChunk(F("}"));
   res.endChunked();
 }
 
@@ -2205,6 +2248,7 @@ n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseT
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 C.textContent=o.c.toFixed(2);T.textContent=o.tc;setUsv(V,o.c/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
+if(o.t!=null||o.h!=null||o.p!=null){var ps=[],tu=o.tu|0,us=['\xb0C','\xb0F','K'];if(o.t!=null)ps.push(o.t.toFixed(1)+us[tu]);if(o.h!=null)ps.push(o.h.toFixed(0)+'%');if(o.p!=null)ps.push(o.p.toFixed(1)+' hPa');$('envR').style.display='';$('envV').textContent=ps.join('  ')}
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
