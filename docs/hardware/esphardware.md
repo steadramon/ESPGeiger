@@ -18,6 +18,33 @@ The ESP8266 ESPGeiger build is the base firmware for the official ESPGeiger-base
 
 ## ESP32
 
+The **[ESP32 DevKit / WROOM-32](https://s.click.aliexpress.com/e/_c4MWYcBT)** (classic ESP32) is the recommended ESP32 target. Any 4 MB board built on the original ESP32 (Tensilica dual-core, IDF target `esp32`) should work with the `esp32_*` and `esp32oled_*` builds.
+
+### Variant support
+
+| Variant | Status | Notes |
+|---|---|---|
+| **ESP32 (classic)** | Fully supported | All `esp32_*` / `esp32oled_*` build envs. PCNT hardware counter. |
+| **ESP32-S3** | Partial | Used in the XH-S3E build (`xh_s3e_udp`). Generic `esp32s3_*` envs not yet shipped — pending hardware verification (PCNT on S3, HV ADC). |
+| **ESP32-S2** | Experimental | Base config present, no shipped end-user envs. |
+| **ESP32-C3 / C6 / H2** | Not supported | No build envs. RISC-V cores not tested. |
+
+### Boards with onboard OLED
+
+Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the same PCB. Most work with the existing `esp8266oled_*` / `esp32oled_*` builds — runtime pin settings on the Config page let you adjust SDA/SCL without rebuilding.
+
+| Board | MCU | OLED pins (SDA / SCL) | OLED RST | Build | Notes |
+|---|---|---|---|---|---|
+| **[NodeMCU + 0.96" OLED](https://s.click.aliexpress.com/e/_c3q9xiwZ)** | ESP8266 | 4 / 5 (default) | tied to 3V3 | `esp8266oled_*` | Works out of the box - matches firmware defaults. |
+| **Heltec WiFi Kit 32 V2** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32oled_*` + `-DOLED_SDA=4 -DOLED_SCL=15 -DOLED_RST=16` | Needs a custom build that sets the RST pin (see below). |
+| **Heltec WiFi LoRa 32 V3** | ESP32-S3 | 17 / 18 | GPIO 21 | Not yet supported | Waits on generic `esp32s3_*` build envs. |
+| **TTGO LoRa32 V1** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32oled_*` + `-DOLED_SDA=4 -DOLED_SCL=15 -DOLED_RST=16` | Same recipe as Heltec V2. |
+| **LilyGo T-Beam** | ESP32 classic | 21 / 22 (default) | none | `esp32oled_*` | Works with stock defaults. |
+
+Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need the firmware to pulse that pin at boot. The `-DOLED_RST=N` build flag enables that pulse; if omitted, the OLED stays in reset and shows a blank screen. Once defined, the pin is also runtime-adjustable from **Config → Display → Reset Pin**.
+
+If your board isn't listed but matches one of these patterns, the same recipe applies - set `OLED_SDA`, `OLED_SCL`, and `OLED_RST` (if relevant) in a custom build env.
+
 ### PCNT
 
 The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/pcnt.html) (`PCNT`). By default ESPGeiger uses the hardware PCNT on Pulse builds for ESP32 devices. A `no_pcnt` build is also available for ESP32 which uses the same Interrupt counter mechanism as the ESP8266 builds.
