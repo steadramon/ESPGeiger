@@ -107,10 +107,13 @@ void GeigerTestSerial::secondTicker() {
     if (c > 0) count = (int) c;
   }
 
-  // CPS = instant sample, CPM = Counter's smoothed value (matches real
-  // GC10 / MightyOhm wire behaviour).
+  // Ingest the simulated count before formatting so OutputVars (now the
+  // canonical source for {cpm}/{cps}/etc) sees the new state. Matches real
+  // hardware behaviour: the device counts then emits.
+  if (count > 0) setCounter(count, false);
+
   char line[80];
-  size_t n = SerialFormat::format_line(_serial_type, count, gcounter.get_cpm(), line, sizeof(line));
+  size_t n = SerialFormat::format_line(_serial_type, line, sizeof(line));
   if (n > 0) {
     char echo[80];
     memcpy(echo, line, n);
@@ -119,8 +122,6 @@ void GeigerTestSerial::secondTicker() {
     Log::console(PSTR("TestSerial TX: %s"), echo);
     geigerPort.write((const uint8_t*) line, strlen(line));
   }
-
-  if (count > 0) setCounter(count, false);
 }
 
 void GeigerTestSerial::handleSerial(char* input) {

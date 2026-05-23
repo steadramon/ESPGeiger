@@ -12,29 +12,43 @@
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 // Serial counter protocol codec. Shared by GeigerSerial (real external
-// devices) and GeigerTestSerial (simulated/loopback). Pure functions.
+// devices), GeigerTestSerial (simulated/loopback), and SerialOut. Each
+// protocol declares an output template plus a parser; only MightyOhm needs
+// a custom formatter because of its CPS-dependent mode tag.
 
 #ifndef GEIGER_SERIAL_FORMAT_H
 #define GEIGER_SERIAL_FORMAT_H
 
 #include <Arduino.h>
 
-// Protocol IDs - stable ints, persisted in prefs. New protocol: append
-// a value here + a row in TYPES[] + cases in format_line/parse_cpm.
+// Protocol IDs - stable ints, persisted in prefs. New protocol: append a
+// value here + a row in TYPES[] (declare template + parser).
 #define GEIGER_STYPE_GC10       1
 #define GEIGER_STYPE_GC10NX     2
 #define GEIGER_STYPE_MIGHTYOHM  3
 #define GEIGER_STYPE_ESPGEIGER  4
+#define GEIGER_STYPE_TEMPLATE   5
 
 namespace SerialFormat {
 
-size_t      format_line(uint8_t type, int cps, int cpm, char* buf, size_t cap);
+// Output: protocol formatter resolved once at config-change time. Custom
+// formatters (currently MightyOhm + user-template) bypass the template
+// engine entirely. The dispatcher returned by resolve() pulls live values
+// directly from gcounter / OutputVars so callers don't pass them in.
+typedef size_t (*FormatFn)(char* buf, size_t cap);
+FormatFn    resolve(uint8_t type);
+
+// Single-shot format - convenient one-off path. Equivalent to
+// resolve(type) then calling the result.
+size_t      format_line(uint8_t type, char* buf, size_t cap);
+
+// Input: parse a CPM line emitted by the named protocol. out_cps is
+// populated only for protocols whose wire carries a per-second count
+// (MightyOhm); other protocols leave it untouched.
+typedef bool (*ParseFn)(const char* input, int* out_cpm, int* out_cps);
 bool        parse_cpm(uint8_t type, const char* input, int* out_cpm, int* out_cps = nullptr);
 
 uint32_t    baud_for(uint8_t type);            // 0 if unknown
