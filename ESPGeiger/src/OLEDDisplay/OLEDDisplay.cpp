@@ -68,6 +68,10 @@ EG_PSTR(OL_H_RBA, "Reboot to apply");
 EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 EG_PSTR(OL_L_TYP, "Display Type");
 EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309. Reboot to apply.");
+#if OLED_RST != 255
+EG_PSTR(OL_L_RST, "Reset Pin");
+EG_PSTR(OL_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
+#endif
 #endif
 
 static const EGPref OLED_PREF_ITEMS[] = {
@@ -82,6 +86,9 @@ static const EGPref OLED_PREF_ITEMS[] = {
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
   {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, 0},
   {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, 0},
+#if OLED_RST != 255
+  {"rst",        OL_L_RST, OL_H_RST, OLED_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, 0},
+#endif
 #endif
 };
 
@@ -218,6 +225,21 @@ void SSD1306Display::on_prefs_loaded() {
       _pin_scl = scl;
     }
   }
+#if OLED_RST != 255
+  {
+    uint8_t rst = (uint8_t)EGPrefs::getUInt("display", "rst");
+    if (rst != 255) {
+      if (const char* why = PinSafety::claim_output((int)rst, PIN_OWNER)) {
+        Log::console(PSTR("OLED: rst=%u unsafe (%s) - keeping default %u"), rst, why, _pin_rst);
+        if (_pin_rst != 255) PinSafety::claim((int)_pin_rst, PIN_OWNER);
+      } else {
+        _pin_rst = rst;
+      }
+    } else {
+      _pin_rst = 255;
+    }
+  }
+#endif
   _pref_display_type = (uint8_t)EGPrefs::getUInt("display", "type");
 #else
   _pref_display_type = OLED_TYPE;
@@ -266,6 +288,10 @@ void SSD1306Display::on_prefs_saved() {
   uint8_t type = (uint8_t)EGPrefs::getUInt("display", "type");
   bool need_reboot = (sda != _pin_sda) || (scl != _pin_scl)
                   || (flip != s_oled_flipped) || (type != _pref_display_type);
+#if OLED_RST != 255
+  uint8_t rst = (uint8_t)EGPrefs::getUInt("display", "rst");
+  need_reboot = need_reboot || (rst != _pin_rst);
+#endif
   on_prefs_loaded();
   if (need_reboot) EGPrefs::request_restart();
 }
@@ -469,6 +495,15 @@ void SSD1306Display::setup() {
           u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
       break;
   }
+
+#if OLED_RST != 255
+  if (_pin_rst != 255) {
+    pinMode(_pin_rst, OUTPUT);
+    digitalWrite(_pin_rst, HIGH); delay(50);
+    digitalWrite(_pin_rst, LOW);  delay(10);
+    digitalWrite(_pin_rst, HIGH); delay(50);
+  }
+#endif
 
   Wire.begin(_pin_sda, _pin_scl);
 

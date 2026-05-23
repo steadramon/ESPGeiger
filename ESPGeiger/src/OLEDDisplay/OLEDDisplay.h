@@ -58,6 +58,12 @@ extern Counter gcounter;
 #define OLED_TYPE      0   // 0=SSD1306, 1=SH1106, 2=SSD1309
 #endif
 
+// 255 = unused. Set via -DOLED_RST=N at build time to enable the reset pulse
+// (Heltec WiFi Kit / TTGO LoRa32 boards tie the OLED RST to a GPIO).
+#ifndef OLED_RST
+#define OLED_RST      255
+#endif
+
 class SSD1306Display : public EGModule {
 public:
     enum DisplayType : uint8_t {
@@ -151,6 +157,7 @@ public:
     u8g2_t _u8g2 {};
     uint8_t _pin_sda = OLED_SDA;
     uint8_t _pin_scl = OLED_SCL;
+    uint8_t _pin_rst = OLED_RST;
     bool _present = false;
     uint8_t _oled_addr = 0;
     uint8_t _pref_display_type = OLED_TYPE;
