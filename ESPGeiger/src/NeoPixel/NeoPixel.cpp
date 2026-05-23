@@ -28,9 +28,24 @@ NeoPixel neopixel;
 EG_REGISTER_MODULE(neopixel)
 
 EG_PSTR(NP_L_BRT, "Brightness");
+EG_PSTR(NP_L_SWAP, "Swap R/G");
+EG_PSTR(NP_H_SWAP, "Enable if green appears as red. Standard WS2812B = off; some RGB-ordered clones = on.");
+
+// Wire format is GRB on the chip side. ESP8266 boards have historically
+// shipped with RGB-ordered LEDs, so default the swap on there to preserve
+// existing behaviour; ESP32 boards (XH-S3E onboard pixel etc) use the
+// standard GRB chip and need no swap.
+#ifndef NPX_DEFAULT_SWAP
+  #if defined(ESP32)
+    #define NPX_DEFAULT_SWAP "0"
+  #else
+    #define NPX_DEFAULT_SWAP "1"
+  #endif
+#endif
 
 static const EGPref NEOPIXEL_PREF_ITEMS[] = {
-  {"brightness", NP_L_BRT, nullptr, "15", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+  {"brightness", NP_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+  {"swap",       NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, 0},
 };
 
 static const EGPrefGroup NEOPIXEL_PREF_GROUP = {
@@ -43,6 +58,11 @@ const EGPrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }
 
 void NeoPixel::on_prefs_loaded() {
   setBrightness((int)EGPrefs::getUInt("neopixel", "brightness"));
+  _swap_rg = EGPrefs::getBool("neopixel", "swap");
+}
+
+RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
+  return _swap_rg ? RgbColor(g, r, b) : RgbColor(r, g, b);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -58,10 +78,11 @@ NeoPixel::NeoPixel() {
 
 void NeoPixel::setup()
 {
-#ifdef NEOPIXEL_BITBANG
-  this->controller_ = new NeoPixelBus<NeoRgbFeature, NeoEsp8266BitBangWs2812xMethod>(1, NEOPIXEL_PIN);
+#if !defined(ESP32) && !defined(NEOPIXEL_BITBANG)
+  // ESP8266 DMA mode locks to GPIO3 (RX0).
+  this->controller_ = new NeoController(1, 1);
 #else
-  this->controller_ = new NeoPixelBus<NeoRgbFeature, NeoEsp8266DmaWs2812xMethod>(1, 1);
+  this->controller_ = new NeoController(1, NEOPIXEL_PIN);
 #endif
   this->controller_->Begin();
   this->controller_->Show();
@@ -84,14 +105,14 @@ void NeoPixel::blip()
   }
 }
 
-void NeoPixel::blink(uint16 timer)
+void NeoPixel::blink(uint16_t timer)
 {
   if (colorSaturation == 0) {
     return;
   }
   float our_cpm = gcounter.get_cpmf();
   float our_5cpm = gcounter.get_cpm5f();
-  RgbColor rgb(0, colorSaturation, 0);
+  RgbColor rgb = color(0, colorSaturation, 0);
   if ((our_5cpm > 0) && (our_cpm > 0)) {
     float diff_ratio = (our_cpm / our_5cpm);
     nextInterval = clamp((unsigned long)(blinkInterval / diff_ratio), 100UL, 4000UL);
@@ -100,28 +121,28 @@ void NeoPixel::blink(uint16 timer)
       // need bigger absolute deltas to trigger, high rates trip on small.
       float z = (our_cpm - our_5cpm) / sqrtf(our_5cpm);
       if (z > 3.0f) {
-        rgb = RgbColor(colorSaturation, 0, 0);              // significant rise - red
+        rgb = color(colorSaturation, 0, 0);              // significant rise - red
       } else if (z > 1.5f) {
-        rgb = RgbColor(colorSaturation, colorSaturation, 0); // rising - yellow
+        rgb = color(colorSaturation, colorSaturation, 0); // rising - yellow
       } else if (z < -1.5f) {
-        rgb = RgbColor(colorSaturation, 0, colorSaturation); // dropping - purple
+        rgb = color(colorSaturation, 0, colorSaturation); // dropping - purple
       } else {
-        rgb = RgbColor(0, colorSaturation, 0);              // stable - green
+        rgb = color(0, colorSaturation, 0);              // stable - green
       }
     }
   } else {
     nextInterval = blinkInterval;
     if (this->neoPixelMode >= 2) {
-      rgb = RgbColor(0, 0, colorSaturation);              // no data - blue
+      rgb = color(0, 0, colorSaturation);              // no data - blue
     }
   }
   if (this->neoPixelMode == 1 || this->neoPixelMode == 3) {
     if (gcounter.is_alert()) {
-      rgb = RgbColor(colorSaturation, 0, 0);
+      rgb = color(colorSaturation, 0, 0);
     } else if (gcounter.is_warning()) {
-      rgb = RgbColor(colorSaturation, colorSaturation, 0);
+      rgb = color(colorSaturation, colorSaturation, 0);
     } else if (our_cpm < 0.01 && our_5cpm < 0.01) {
-      rgb = RgbColor(0, 0, colorSaturation);
+      rgb = color(0, 0, colorSaturation);
     }
   }
 
