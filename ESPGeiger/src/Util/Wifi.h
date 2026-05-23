@@ -45,6 +45,11 @@ namespace Wifi {
   // display or text protocols.
   size_t formatIP(char* buf, size_t cap);
 
+  // IPv4 multicast = 224.0.0.0/4.
+  inline bool is_multicast(const IPAddress& ip) {
+    return ip[0] >= 224 && ip[0] <= 239;
+  }
+
   // Boot-time WiFi association: try saved creds first, fall back to the
   // EGPortal captive setup AP. Implements a backup/revert protocol - if
   // a /wifi_backup file exists from a recent /wifisave attempt and the
