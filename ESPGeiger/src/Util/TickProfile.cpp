@@ -27,6 +27,8 @@ namespace TickProfile {
   uint32_t tick_us = 0;
   uint32_t tick_max_us = 0;
   uint32_t lps = 0;
+  uint32_t lps_ema = 0;
+  uint32_t lps_min_60s = 0;
   volatile uint32_t _lps_count = 0;
 }
 
@@ -55,6 +57,14 @@ void TickProfile::markModules() { t_after_modules = micros(); }
 void TickProfile::endTick() {
   TickProfile::lps = _lps_count;
   _lps_count = 0;
+  // Init both on first sample so EMA + min don't have to warm up from 0.
+  if (TickProfile::lps_ema == 0) {
+    TickProfile::lps_ema = TickProfile::lps;
+    TickProfile::lps_min_60s = TickProfile::lps;
+  } else {
+    TickProfile::lps_ema = (TickProfile::lps_ema * 15 + TickProfile::lps + 8) >> 4;
+    if (TickProfile::lps < TickProfile::lps_min_60s) TickProfile::lps_min_60s = TickProfile::lps;
+  }
   uint32_t this_tick = (uint32_t)(micros() - t_start);
   TickProfile::tick_us = (TickProfile::tick_us * 7 + this_tick) >> 3;
   if (this_tick > TickProfile::tick_max_us) TickProfile::tick_max_us = this_tick;
@@ -80,5 +90,6 @@ void TickProfile::endTick() {
 #endif
     EGModuleRegistry::log_activity_and_reset();
     TickProfile::tick_max_us = this_tick;
+    TickProfile::lps_min_60s = TickProfile::lps;
   }
 }

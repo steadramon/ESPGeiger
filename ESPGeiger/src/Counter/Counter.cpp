@@ -661,7 +661,7 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
   n = snprintf_P(buf, sizeof(buf),
     PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u}"),
-    TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
+    TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps_ema);
   if (n > 0) res.sendChunk(buf, (size_t)n);
   res.endChunked();
 }

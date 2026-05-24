@@ -27,6 +27,7 @@
 #include "../Util/CrashDump.h"
 #include "../Util/Wifi.h"
 #include "../Util/OutputVars.h"
+#include "../Util/TickProfile.h"
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../NTP/NTP.h"
@@ -221,12 +222,10 @@ static char s_pendingWifiPass[65] = {0};
 static WebPortal* s_activeWebPortal = nullptr;
 
 void WebPortal::tick(uint32_t now) {
-  // Throttle to match the legacy ESP8266 cadence (5 ms = 200 Hz).
-  // Faster than that wins nothing for HTTP responsiveness - AsyncTCP's
-  // own poll is ~20 ms - but every loop() iteration spent on a 5-slot
-  // state scan is the biggest post-migration LPS hit.
+  // 20 ms = max handler-dispatch latency. AsyncTCP marks slots READY on data
+  // arrival; we drain them here. Below human-perception threshold.
   static uint32_t last_ms = 0;
-  if (now - last_ms < 5) return;
+  if (now - last_ms < 20) return;
   last_ms = now;
 
   // Drive EGHttpServer dispatch (handlers run here, in main-loop context,
@@ -2141,6 +2140,15 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   HEAD("device_wifi_rssi_dbm", "gauge", "WiFi signal strength");
   VAL ("device_wifi_rssi_dbm", "", "%d", (int)Wifi::rssi);
+
+  HEAD("device_loops_per_second", "gauge", "Main-loop iterations/sec; ema=16s smoothed, min=lowest in last 60s window");
+  VAL ("device_loops_per_second", ",kind=\"ema\"",      "%u", (unsigned)TickProfile::lps_ema);
+  VAL ("device_loops_per_second", ",kind=\"snapshot\"", "%u", (unsigned)TickProfile::lps);
+  VAL ("device_loops_per_second", ",kind=\"min60\"",    "%u", (unsigned)TickProfile::lps_min_60s);
+
+  HEAD("device_tick_microseconds", "gauge", "sTickerCB duration; ema=8s smoothed, max=peak in last 60s window");
+  VAL ("device_tick_microseconds", ",kind=\"ema\"", "%u", (unsigned)TickProfile::tick_us);
+  VAL ("device_tick_microseconds", ",kind=\"max60\"", "%u", (unsigned)TickProfile::tick_max_us);
 
   // Inter-pulse-interval histogram - cumulative Prometheus 'le' buckets.
   // Bucket b upper bound = (64us << b); top bucket saturates as +Inf.

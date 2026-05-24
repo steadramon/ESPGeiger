@@ -294,7 +294,7 @@ void UdpBlipModule::emitSys(uint32_t now) {
   if (!(n = osc_strn(buf, sizeof(buf), off, ",iiii", 5))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(millis() / 1000UL)))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(int32_t)Wifi::rssi))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::lps))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::lps_ema))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::tick_max_us))) return; off += n;
   sendPacket(buf, off);
   (void)now;

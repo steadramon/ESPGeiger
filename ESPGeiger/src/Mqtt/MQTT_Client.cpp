@@ -302,7 +302,7 @@ void MQTT_Client::publishStatus()
     dateTime, DeviceInfo::uptime(),
     DeviceInfo::chipmodel(), DeviceInfo::geigermodel(),
     Wifi::ssid, ipStr, (int)Wifi::rssi,
-    gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
+    gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps_ema);
   advance_pos(pos, n, sizeof(buffer));
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
