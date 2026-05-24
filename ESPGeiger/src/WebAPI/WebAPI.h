@@ -43,6 +43,7 @@ class WebAPI : public EGModule {
     WebAPI();
     const char* name() override { return "wapi"; }
     bool requires_wifi() override { return true; }
+    bool requires_ntp() override { return true; }
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return 1000; }
     void begin() override;
@@ -67,7 +68,6 @@ class WebAPI : public EGModule {
     void doHandshake();
     // censusOnly: respect heartbeat-mode opt-out by omitting radiation fields.
     void postMeasurement(bool censusOnly = false);
-    unsigned long staggeredPingStart(unsigned long now) const;
     void loadConfig();
     void saveConfig();
 

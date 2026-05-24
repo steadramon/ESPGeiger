@@ -97,7 +97,7 @@ void Radmon::loop(unsigned long now)
 {
   if (!_send_enabled) return;
   if (lastPing == 0) {
-    lastPing = now - pingIntervalMs + random(pingIntervalMs);
+    lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
   } else if ((now - lastPing) >= pingIntervalMs) {
     // Advance by exact interval to keep the schedule drift-free.
     // If we were stalled long enough to still be >= one interval behind,

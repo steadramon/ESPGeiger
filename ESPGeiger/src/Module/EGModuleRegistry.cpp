@@ -20,6 +20,7 @@
 #include "EGModuleRegistry.h"
 #include "../Logger/Logger.h"
 #include "../Util/Wifi.h"
+#include "../Util/DeviceInfo.h"
 #include "../NTP/NTP.h"
 #include "../ArduinoOTA/ArduinoOTA.h"
 #include <string.h>
@@ -69,6 +70,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     // Skip wifi-flagged modules until wifi has been stable a few seconds -
     // lets AsyncTCP drain old callbacks before we issue new work.
     if ((s.flags & FLAG_REQUIRES_WIFI) && !Wifi::stable_for(WIFI_SETTLE_MS)) continue;
+    if ((s.flags & FLAG_REQUIRES_NTP) && !ntpclient.synced) continue;
 
     unsigned long due = s.loop_last + s.loop_interval;
     if ((long)(now - due) >= 0) {
@@ -184,6 +186,31 @@ bool EGModuleRegistry::set_tick_enabled(EGModule* m, bool enabled) {
     }
   }
   return false;
+}
+
+uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interval_ms) {
+  if (interval_ms == 0) return 0;
+  uint32_t h = 2166136261u;
+  for (const char* p = mod_name; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+  for (const char* p = DeviceInfo::chipid(); p && *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+  // Reserve [0, 1000ms) for SDCard's minute-boundary writes; others slot from 1s.
+  if (interval_ms >= 2000) return (h % (interval_ms - 1000)) + 1000;
+  return h % interval_ms;
+}
+
+unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long now,
+                                              uint32_t interval_ms) {
+  if (interval_ms == 0) return now;
+  uint32_t offset = initial_offset(mod_name, interval_ms);
+  uint32_t until;
+  uint32_t secs = interval_ms / 1000;
+  if (secs > 0 && ntpclient.synced) {
+    uint32_t wall_ms = ((uint32_t)time(NULL) % secs) * 1000UL;
+    until = (offset >= wall_ms) ? (offset - wall_ms) : (interval_ms - wall_ms + offset);
+  } else {
+    until = offset;
+  }
+  return now + until - interval_ms;
 }
 
 bool EGModuleRegistry::sleep_until(EGModule* m, unsigned long now, unsigned long target_ms) {

@@ -77,7 +77,7 @@ void GMC::loop(unsigned long now)
 {
   if (!_send_enabled) return;
   if (lastPing == 0) {
-    lastPing = now - pingIntervalMs + random(pingIntervalMs);
+    lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
   } else if ((now - lastPing) >= pingIntervalMs) {
     lastPing += pingIntervalMs;
     if ((now - lastPing) >= pingIntervalMs) lastPing = now;

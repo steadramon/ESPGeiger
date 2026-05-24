@@ -45,6 +45,13 @@ class EGModuleRegistry {
     static bool set_loop_interval(EGModule* m, int32_t interval_ms);
     static bool sleep_until(EGModule* m, unsigned long now, unsigned long target_ms);
     static bool set_tick_enabled(EGModule* m, bool enabled);
+
+    // Stable per-(module,device) offset in [0, interval_ms) — module+chipid hash.
+    static uint32_t initial_offset(const char* mod_name, uint32_t interval_ms);
+    // Returns the value to set lastPing= so the next fire lands on this
+    // module's stable slot. Wall-clock anchored when NTP is synced.
+    static unsigned long initial_ping(const char* mod_name, unsigned long now,
+                                      uint32_t interval_ms);
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);

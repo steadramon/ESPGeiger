@@ -109,10 +109,6 @@ void WebAPI::begin() {
 
 void WebAPI::loop(unsigned long now) {
   if (_mode == 0) return;
-  if (!ntpclient.synced) {
-    EGModuleRegistry::set_loop_interval(this, 1000);
-    return;
-  }
 
   // Signed deltas: backoff math can push lastHandshake into the future when
   // _hs_backoff_ms > WEBAPI_HANDSHAKE_MS - unsigned compare then underflows.
@@ -122,10 +118,10 @@ void WebAPI::loop(unsigned long now) {
     doHandshake();
   } else if (station_id != 0) {
     if (lastPing == 0) {
-      lastPing = staggeredPingStart(now);
+      lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
     } else if ((long)(now - lastPing) >= (long)pingIntervalMs) {
       lastPing += pingIntervalMs;
-      if ((long)(now - lastPing) >= (long)pingIntervalMs) lastPing = staggeredPingStart(now);
+      if ((long)(now - lastPing) >= (long)pingIntervalMs) lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
 
       const bool healthDue = (healthPostCounter == 0);
       if (_mode == 2 || healthDue) {
@@ -156,12 +152,6 @@ static uint32_t wallClockWaitMs(uint32_t k, uint32_t intervalMs, uint32_t period
   uint32_t cur_ms    = ((uint32_t)time(NULL) % period_s) * 1000UL;
   return (target_ms >= cur_ms) ? target_ms - cur_ms
                                : intervalMs - cur_ms + target_ms;
-}
-
-unsigned long WebAPI::staggeredPingStart(unsigned long now) const {
-  uint32_t k = ((uint32_t)pub_k[0] << 24) | ((uint32_t)pub_k[1] << 16)
-             | ((uint32_t)pub_k[2] << 8)  |  (uint32_t)pub_k[3];
-  return now + wallClockWaitMs(k, pingIntervalMs, 60) - pingIntervalMs;
 }
 
 void WebAPI::doHandshake() {
