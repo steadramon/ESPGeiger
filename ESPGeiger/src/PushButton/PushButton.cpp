@@ -122,7 +122,7 @@ void PushButton::on_prefs_loaded() {
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
   Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
   EGModuleRegistry::set_loop_interval(this,
-    (pin1 < 0 && PUSHBUTTON_PIN2 < 0) ? 60000 : 50);
+    (pin1 < 0 && PUSHBUTTON_PIN2 < 0) ? -1 : 50);
 }
 #endif
 
