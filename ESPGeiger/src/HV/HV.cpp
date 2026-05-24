@@ -121,7 +121,7 @@ void HV::set_pwm_pin(int pin) {
 void HV::begin() {
   if (_pwm_pin < 0) {
     Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
-    EGModuleRegistry::set_loop_interval(this, 60000);
+    EGModuleRegistry::set_loop_interval(this, -1);
   } else {
     Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
 #ifdef ESP8266
