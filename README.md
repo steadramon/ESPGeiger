@@ -10,6 +10,7 @@ ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-c
 - 🔴  Live CPM and μSv/h readings
 - 🔢  Smoothed values over 1, 5 and 15 minutes
 - 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED display and WS2812X NeoPixel status light
+- 🌡️   Optional BME280 / BMP280 / AHT environmental sensors - auto-detected over I2C
 - 📟  Accurate counting via interrupt or ESP32 hardware counter (PCNT)
 - 🌐  MQTT, Home Assistant auto-discovery, Radmon.org, GMCMAP, ThingSpeak, custom Webhooks
 - 📡  UDP/OSC receiver builds for tubeless mirror displays and fleet aggregators

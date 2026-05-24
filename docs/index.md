@@ -31,6 +31,7 @@ ESPGeiger is a free, open-source firmware allowing you to transform any compatib
 * 📟 **Accurate Counting:** Interrupt-driven and non-blocking, with ESP32 PCNT hardware counter support.
 * 🎛️ **Noise Control:** Configurable filtering and debounce.
 * 💡 **Visual Feedback:** WS2812X NeoPixel with rate-scaled flash and z-score trend colour.
+* 🌡️ **[Environment Sensors](/hardware/env):** Auto-detected BME280 / BMP280 / AHT10/20/25/30 over I2C - temperature, humidity, pressure.
 
 **Ease of Use & Development:**
 * 😃 **Easy Setup:** Captive-portal WiFi onboarding, friendly device naming, optional web password.
