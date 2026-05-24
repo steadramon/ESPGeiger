@@ -144,6 +144,7 @@ void UdpBlipModule::readPrefs() {
   uint32_t p = EGPrefs::getUInt("udpblip", "port");
   _port = (p > 0 && p < 65536) ? (uint16_t)p : 5005;
   EGModuleRegistry::set_tick_enabled(this, _mode > 0);
+  EGModuleRegistry::set_loop_interval(this, _mode > 0 ? (int32_t)loop_interval_ms() : -1);
 }
 
 void UdpBlipModule::teardown() {
