@@ -97,8 +97,7 @@ void Webhook::loop(unsigned long now)
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
   } else if ((now - lastPing) >= pingIntervalMs) {
-    lastPing += pingIntervalMs;
-    if ((now - lastPing) >= pingIntervalMs) lastPing = now;
+    while ((now - lastPing) >= pingIntervalMs) lastPing += pingIntervalMs;
     postMeasurement();
   }
   EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);

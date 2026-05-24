@@ -188,14 +188,33 @@ bool EGModuleRegistry::set_tick_enabled(EGModule* m, bool enabled) {
   return false;
 }
 
+static uint64_t s_claimed_secs = 0;  // bit i = second i taken on this device
+
 uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interval_ms) {
-  if (interval_ms == 0) return 0;
-  uint32_t h = 2166136261u;
+  if (interval_ms == 0 || !mod_name) return 0;
+  static uint32_t s_chip_h = 0;
+  if (s_chip_h == 0) {
+    s_chip_h = 2166136261u;
+    for (const char* p = DeviceInfo::chipid(); p && *p; p++) s_chip_h = (s_chip_h ^ (uint8_t)*p) * 16777619u;
+  }
+  uint32_t h = s_chip_h;
   for (const char* p = mod_name; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
-  for (const char* p = DeviceInfo::chipid(); p && *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
-  // Reserve [0, 1000ms) for SDCard's minute-boundary writes; others slot from 1s.
-  if (interval_ms >= 2000) return (h % (interval_ms - 1000)) + 1000;
-  return h % interval_ms;
+
+  // Available whole-second slots: [1, min(interval_s-1, 63)]. :00 reserved for SD.
+  uint8_t interval_s = interval_ms < 1000 ? 0 : (uint8_t)(interval_ms / 1000);
+  if (interval_s > 64) interval_s = 64;
+  if (interval_s < 2) return h % interval_ms;
+  uint8_t avail = interval_s - 1;
+  uint8_t sec = (uint8_t)((h % avail) + 1);
+  uint8_t tries = 0;
+  while ((s_claimed_secs & (1ULL << sec)) && tries < avail) {
+    sec = (uint8_t)((sec % avail) + 1);
+    tries++;
+  }
+  s_claimed_secs |= (1ULL << sec);
+  uint32_t off = (uint32_t)sec * 1000UL + (s_chip_h % 1000UL);
+  if (off >= interval_ms) off = (uint32_t)sec * 1000UL;
+  return off;
 }
 
 unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long now,

@@ -120,8 +120,7 @@ void WebAPI::loop(unsigned long now) {
     if (lastPing == 0) {
       lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
     } else if ((long)(now - lastPing) >= (long)pingIntervalMs) {
-      lastPing += pingIntervalMs;
-      if ((long)(now - lastPing) >= (long)pingIntervalMs) lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
+      while ((long)(now - lastPing) >= (long)pingIntervalMs) lastPing += pingIntervalMs;
 
       const bool healthDue = (healthPostCounter == 0);
       if (_mode == 2 || healthDue) {

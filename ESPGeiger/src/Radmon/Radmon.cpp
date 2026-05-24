@@ -99,11 +99,8 @@ void Radmon::loop(unsigned long now)
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
   } else if ((now - lastPing) >= pingIntervalMs) {
-    // Advance by exact interval to keep the schedule drift-free.
-    // If we were stalled long enough to still be >= one interval behind,
-    // snap to now rather than firing a burst of catch-up publishes.
-    lastPing += pingIntervalMs;
-    if ((now - lastPing) >= pingIntervalMs) lastPing = now;
+    // Advance by whole intervals to preserve slot offset across catch-up.
+    while ((now - lastPing) >= pingIntervalMs) lastPing += pingIntervalMs;
     postMeasurement();
   }
   EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
