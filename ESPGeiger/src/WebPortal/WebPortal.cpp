@@ -27,7 +27,6 @@
 #include "../Util/CrashDump.h"
 #include "../Util/Wifi.h"
 #include "../Util/OutputVars.h"
-#include "../Util/TickProfile.h"
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../NTP/NTP.h"
@@ -2140,15 +2139,6 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   HEAD("device_wifi_rssi_dbm", "gauge", "WiFi signal strength");
   VAL ("device_wifi_rssi_dbm", "", "%d", (int)Wifi::rssi);
-
-  HEAD("device_loops_per_second", "gauge", "Main-loop iterations/sec; ema=16s smoothed, min=lowest in last 60s window");
-  VAL ("device_loops_per_second", ",kind=\"ema\"",      "%u", (unsigned)TickProfile::lps_ema);
-  VAL ("device_loops_per_second", ",kind=\"snapshot\"", "%u", (unsigned)TickProfile::lps);
-  VAL ("device_loops_per_second", ",kind=\"min60\"",    "%u", (unsigned)TickProfile::lps_min_60s);
-
-  HEAD("device_tick_microseconds", "gauge", "sTickerCB duration; ema=8s smoothed, max=peak in last 60s window");
-  VAL ("device_tick_microseconds", ",kind=\"ema\"", "%u", (unsigned)TickProfile::tick_us);
-  VAL ("device_tick_microseconds", ",kind=\"max60\"", "%u", (unsigned)TickProfile::tick_max_us);
 
   // Inter-pulse-interval histogram - cumulative Prometheus 'le' buckets.
   // Bucket b upper bound = (64us << b); top bucket saturates as +Inf.

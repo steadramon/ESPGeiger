@@ -415,7 +415,7 @@ void WebAPI::postMeasurement(bool censusOnly) {
   if (sendHealth) {
     mp.kv("ut", (uint32_t)DeviceInfo::uptime());
     mp.kv("mh", DeviceInfo::freeHeap());
-    mp.kv("l",  (uint32_t)TickProfile::lps_ema);
+    mp.kv("l",  (uint32_t)TickProfile::lps);
     mp.kv("tk", (uint32_t)TickProfile::tick_max_us);
     mp.kv("rs", (int32_t)Wifi::rssi);
 #ifdef WEBAPI_TESTMODE_POST
