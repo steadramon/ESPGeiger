@@ -176,7 +176,7 @@ void SerialOut::loop(unsigned long now) {
   // Custom formatters (MightyOhm, user-template) pull live values themselves;
   // fixed-template protocols (GC10/Next/ESPGeiger) go through OutputVars.
   if (_fmt_fn) {
-    char line[128];  // user template can be up to ~96 B after substitution
+    char line[256];  // 128-char sout.tpl + worst-case var expansion
     size_t n = _fmt_fn(line, sizeof(line));
     if (n) Serial.write((const uint8_t*)line, n);
     return;
