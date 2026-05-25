@@ -1,0 +1,18 @@
+{
+  "name": "EGAsyncTCP",
+  "description": "ESPGeiger vendored fork of ESPAsyncTCP for ESP8266. Forked from ESP32Async/ESPAsyncTCP@2.0.0 to allow in-tree patching of known issues (ackLater, AsyncClient cleanup, IGMP rebind, onPoll cadence).",
+  "keywords": "async,tcp,esp8266",
+  "authors": [
+    {"name": "Hristo Gochkov"},
+    {"name": "ESP32Async"},
+    {"name": "ESPGeiger", "maintainer": true}
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/steadramon/ESPGeiger.git"
+  },
+  "version": "2.0.0-eg1",
+  "license": "LGPL-3.0",
+  "frameworks": "arduino",
+  "platforms": "espressif8266"
+}
