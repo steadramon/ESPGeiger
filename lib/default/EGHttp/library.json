@@ -7,7 +7,7 @@
   "frameworks": "arduino",
   "platforms": ["espressif8266", "espressif32"],
   "dependencies": [
-    {"name": "ESPAsyncTCP", "platforms": "espressif8266"},
+    {"name": "EGAsyncTCP", "platforms": "espressif8266"},
     {"name": "AsyncTCP", "platforms": "espressif32"}
   ]
 }

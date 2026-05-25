@@ -22,7 +22,7 @@
 #include <Arduino.h>
 
 #if defined(ESP8266)
-  #include <ESPAsyncTCP.h>
+  #include <EGAsyncTCP.h>
 #elif defined(ESP32)
   #include <AsyncTCP.h>
 #endif

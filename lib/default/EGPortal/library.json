@@ -8,7 +8,7 @@
   "platforms": ["espressif8266", "espressif32"],
   "dependencies": [
     {"name": "EGHttp"},
-    {"name": "ESPAsyncTCP", "platforms": "espressif8266"},
+    {"name": "EGAsyncTCP", "platforms": "espressif8266"},
     {"name": "AsyncTCP", "platforms": "espressif32"}
   ]
 }
