@@ -188,31 +188,66 @@ bool EGModuleRegistry::set_tick_enabled(EGModule* m, bool enabled) {
   return false;
 }
 
-static uint64_t s_claimed_secs = 0;  // bit i = second i taken on this device
+// Split 60-bit claim bitmap across two 32-bit halves: inner shift becomes a
+// native ESP8266 op rather than a runtime uint64 shift helper.
+static uint32_t s_claimed_lo = 0;
+static uint32_t s_claimed_hi = 0;
+
+static inline bool slot_taken(uint8_t s) {
+  return s < 32 ? ((s_claimed_lo >> s) & 1u) != 0
+                : ((s_claimed_hi >> (s - 32)) & 1u) != 0;
+}
+static inline void slot_claim(uint8_t s) {
+  if (s < 32) s_claimed_lo |= (1u << s);
+  else        s_claimed_hi |= (1u << (s - 32));
+}
 
 uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interval_ms) {
   if (interval_ms == 0 || !mod_name) return 0;
+
+  // Cache chipid hash + sub-second jitter once.
   static uint32_t s_chip_h = 0;
+  static uint16_t s_jitter = 0;
   if (s_chip_h == 0) {
     s_chip_h = 2166136261u;
     for (const char* p = DeviceInfo::chipid(); p && *p; p++) s_chip_h = (s_chip_h ^ (uint8_t)*p) * 16777619u;
+    s_jitter = (uint16_t)((s_chip_h >> 8) % 1000u);
   }
+  // Per-module hash: stable per (device, module) across firmware versions.
   uint32_t h = s_chip_h;
   for (const char* p = mod_name; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
 
-  // Available whole-second slots: [1, min(interval_s-1, 63)]. :00 reserved for SD.
-  uint8_t interval_s = interval_ms < 1000 ? 0 : (uint8_t)(interval_ms / 1000);
-  if (interval_s > 64) interval_s = 64;
-  if (interval_s < 2) return h % interval_ms;
-  uint8_t avail = interval_s - 1;
-  uint8_t sec = (uint8_t)((h % avail) + 1);
+  uint16_t interval_s = interval_ms < 1000 ? 0 : (uint16_t)(interval_ms / 1000);
+  if (interval_s < 2) return interval_ms >> 1;
+
+  uint8_t avail = interval_s > 63 ? 63 : (uint8_t)(interval_s - 1);
+  uint8_t step60 = (uint8_t)(interval_s % 60);
+  uint8_t orbit_n = 1;
+  if (step60 != 0) {
+    uint8_t a = step60, b = 60;
+    while (b) { uint8_t t = a % b; a = b; b = t; }
+    orbit_n = 60 / a;
+  }
+
+  uint8_t sec = (uint8_t)((h % avail) + 1u);
   uint8_t tries = 0;
-  while ((s_claimed_secs & (1ULL << sec)) && tries < avail) {
-    sec = (uint8_t)((sec % avail) + 1);
+  while (tries <= avail) {
+    bool clash = false;
+    uint8_t s = sec; if (s >= 60) s -= 60;
+    for (uint8_t k = 0; k < orbit_n; k++) {
+      if (s == 0 || slot_taken(s)) { clash = true; break; }
+      s += step60; if (s >= 60) s -= 60;
+    }
+    if (!clash) break;
+    sec++; if (sec > avail) sec = 1;
     tries++;
   }
-  s_claimed_secs |= (1ULL << sec);
-  uint32_t off = (uint32_t)sec * 1000UL + (s_chip_h % 1000UL);
+  uint8_t s = sec; if (s >= 60) s -= 60;
+  for (uint8_t k = 0; k < orbit_n; k++) {
+    slot_claim(s);
+    s += step60; if (s >= 60) s -= 60;
+  }
+  uint32_t off = (uint32_t)sec * 1000UL + s_jitter;
   if (off >= interval_ms) off = (uint32_t)sec * 1000UL;
   return off;
 }
