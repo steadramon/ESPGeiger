@@ -271,10 +271,13 @@ static void hRandomDo(EGHttpRequest& req, EGHttpResponse& res, void*) {
     const char* verdict = chi2 < 3.841f ? "fair"
                          : chi2 < 6.635f ? "suspect"
                                          : "biased";
+    uint32_t chi2_milli = (uint32_t)(chi2 * 1000.0f + 0.5f);
     outlen = snprintf_P(out, sizeof(out),
-                        PSTR("N=%ld H=%lu T=%lu chi2=%.3f (%s)"),
+                        PSTR("N=%ld H=%lu T=%lu chi2=%lu.%03lu (%s)"),
                         n, (unsigned long)heads, (unsigned long)tails,
-                        chi2, verdict);
+                        (unsigned long)(chi2_milli / 1000UL),
+                        (unsigned long)(chi2_milli % 1000UL),
+                        verdict);
   } else {
     res.send(400, "text/plain", "");
     return;
