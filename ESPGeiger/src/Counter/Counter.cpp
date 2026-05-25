@@ -498,9 +498,10 @@ void Counter::loop() {
 #ifndef DISABLE_BLIP
     this->blip();
 #endif
-    udpblip.notifyClick(millis());
+    unsigned long nowMs = millis();
+    udpblip.notifyClick(nowMs);
 #ifdef AUDIO_TICK
-    audiotick.notifyClick(millis());
+    audiotick.notifyClick(nowMs);
 #endif
   }
 }
