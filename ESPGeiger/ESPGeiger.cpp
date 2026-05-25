@@ -120,6 +120,7 @@ void setup()
     Log::console(PSTR("LittleFS Mount Failed"));
     return;
   }
+  Wifi::check_backup_state();
   LittleFS.end();
 
   EGModuleRegistry::pre_wifi_all();

@@ -47,6 +47,12 @@ namespace Wifi {
   char ssid[33] = "";
   int16_t rssi = 0;
   unsigned long connected_at_ms = 0;
+  bool backup_grace_done = false;
+
+  void check_backup_state() {
+    backup_grace_done = !LittleFS.exists(WIFI_BACKUP_PATH)
+                     && !LittleFS.exists(NET_BACKUP_PATH);
+  }
 
   size_t formatIP(char* buf, size_t cap) {
     return snprintf(buf, cap, "%u.%u.%u.%u",
@@ -104,8 +110,6 @@ void Wifi::tick(unsigned long now) {
     }
   }
 
-  // 5-min stable boot = success; retire both rollback safety nets.
-  static bool backup_grace_done = false;
   if (!backup_grace_done && Wifi::connected && now > 300000UL) {
     backup_grace_done = true;
     if (LittleFS.begin()) {
