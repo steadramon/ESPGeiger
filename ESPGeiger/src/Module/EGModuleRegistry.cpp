@@ -79,7 +79,9 @@ void EGModuleRegistry::loop_all(unsigned long now) {
       unsigned long t0 = micros();
       s.module->loop(now);
       uint32_t d = (uint32_t)(micros() - t0);
-      if (d > s.max_loop_us) s.max_loop_us = (d > 0xFFFF) ? 0xFFFF : (uint16_t)d;
+      if (d > s.max_loop_us) s.max_loop_us = d;
+      s.total_loop_us += d;
+      if (s.loop_calls < 0xFFFF) s.loop_calls++;
 #else
       s.module->loop(now);
 #endif
@@ -144,28 +146,33 @@ void EGModuleRegistry::log_profile_and_reset() {
 
 #ifdef LOOP_PROFILE
 void EGModuleRegistry::log_loop_profile_and_reset() {
-  // Per-module loop() max over the current window. Same shape as the tick
-  // variant. Useful for catching LPS regressions to a specific module.
-  char buf[200];
+  // Sort by total_loop_us so the biggest CPU consumers list first.
+  char buf[240];
   int pos = 0;
   uint32_t done = 0;
   while (true) {
     uint8_t best = 0xFF;
-    uint16_t bestv = 0;
+    uint32_t bestv = 0;
     for (uint8_t i = 0; i < _count && i < EG_MAX_MODULES; i++) {
       if (done & (1u << i)) continue;
-      uint16_t v = _slots[i].max_loop_us;
+      uint32_t v = _slots[i].total_loop_us;
       if (v > bestv) { bestv = v; best = i; }
     }
     if (best == 0xFF || bestv == 0) break;
     done |= (1u << best);
-    int n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%s%s=%u"),
-      pos ? " " : "", _slots[best].module->name(), bestv);
+    Slot& s = _slots[best];
+    int n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%s%s=%lu/%u/%lu"),
+      pos ? " " : "", s.module->name(),
+      (unsigned long)s.total_loop_us, s.loop_calls, (unsigned long)s.max_loop_us);
     if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
     pos += n;
   }
-  if (pos > 0) Log::console(PSTR("Loop max: %s"), buf);
-  for (uint8_t i = 0; i < _count; i++) _slots[i].max_loop_us = 0;
+  if (pos > 0) Log::console(PSTR("Loop total/calls/max: %s"), buf);
+  for (uint8_t i = 0; i < _count; i++) {
+    _slots[i].max_loop_us = 0;
+    _slots[i].total_loop_us = 0;
+    _slots[i].loop_calls = 0;
+  }
 }
 #endif
 

@@ -80,7 +80,9 @@ class EGModuleRegistry {
       uint16_t max_tick_us;      // 2 - slowest s_tick over current window
 #endif
 #ifdef LOOP_PROFILE
-      uint16_t max_loop_us;      // 2 - slowest loop() over current window
+      uint32_t max_loop_us;      // 4 - slowest loop() this window (32b so >65ms visible)
+      uint32_t total_loop_us;    // 4 - sum of loop() durations this window
+      uint16_t loop_calls;       // 2 - count of loop() invocations this window
 #endif
     };
     static Slot _slots[EG_MAX_MODULES];
