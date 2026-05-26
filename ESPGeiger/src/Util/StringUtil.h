@@ -58,6 +58,50 @@ static inline int format_f(char* buf, size_t bufsz, float v, uint8_t decimals = 
 }
 
 // ---------------------------------------------------------------------------
+// parse_f - Tiny decimal float parser.
+//
+// Replaces strtof() for EGPrefs / similar small-config use. Critical when
+// paired with the _printf_float stub in Util/no_float_printf.c -- together
+// they drop the entire newlib float-parse machinery (~16 KB).
+//
+// Format supported: optional sign, integer digits, optional '.' + fractional
+// digits. NOT supported: exponents (1.5e3), hex floats, INF/NAN, leading
+// whitespace.
+// ---------------------------------------------------------------------------
+static inline float parse_f(const char* s, char** endptr = nullptr) {
+  const char* p = s;
+  bool neg = false;
+  if (*p == '-') { neg = true; p++; }
+  else if (*p == '+') { p++; }
+  bool seen_digit = false;
+  float result = 0.0f;
+  while (*p >= '0' && *p <= '9') {
+    result = result * 10.0f + (*p - '0');
+    p++; seen_digit = true;
+  }
+  if (*p == '.') {
+    p++;
+    uint32_t frac_int = 0, frac_div = 1;
+    uint8_t fdigits = 0;
+    while (*p >= '0' && *p <= '9') {
+      if (fdigits < 9) {
+        frac_int = frac_int * 10 + (*p - '0');
+        frac_div *= 10;
+        fdigits++;
+      }
+      p++; seen_digit = true;
+    }
+    if (frac_div > 1) result += (float)frac_int / (float)frac_div;
+  }
+  if (!seen_digit) {
+    if (endptr) *endptr = (char*)s;
+    return 0.0f;
+  }
+  if (endptr) *endptr = (char*)p;
+  return neg ? -result : result;
+}
+
+// ---------------------------------------------------------------------------
 // parseTime - "HH:MM" → {hour, minute, isValid}.
 //
 // Strict format: exactly 5 chars with `:` at position 2, hour 0-23,
