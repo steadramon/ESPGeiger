@@ -22,6 +22,7 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/PinSafety.h"
+#include "../Util/FastMillis.h"
 #include <Ticker.h>
 #ifdef SSD1306_DISPLAY
 #include "../OLEDDisplay/OLEDDisplay.h"
@@ -53,11 +54,11 @@ static void tick_one(BtnState& b) {
   bool down = (digitalRead(b.pin) == LOW);
   if (down != b.last_read) {
     b.last_read = down;
-    b.last_change_ms = millis();
+    b.last_change_ms = fast_millis();
     return;
   }
   if (down == b.pressed) return;
-  uint32_t now = millis();
+  uint32_t now = fast_millis();
   if (now - b.last_change_ms < DEBOUNCE_MS) return;
   b.pressed = down;
   if (down) {
@@ -145,7 +146,7 @@ static void set_pin_slot(uint8_t slot, int pin) {
   b.last_read = false;
   b.short_press_pending = false;
   b.long_press_fired = false;
-  b.last_change_ms = millis();
+  b.last_change_ms = fast_millis();
   b.press_start_ms = b.last_change_ms;
   b.pin = pin;
   if (pin >= 0) {

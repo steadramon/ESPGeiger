@@ -21,6 +21,7 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 #include "../GeigerInput.h"
+#include "../../Util/FastMillis.h"
 
 #ifndef GEIGER_TXPIN
 #define GEIGER_TXPIN -1
@@ -34,7 +35,7 @@ class GeigerSerial : public GeigerInput
     void loop();
     void secondTicker();
     bool isHealthy() const override {
-      if (_last_drain != 0 && (millis() - _last_drain) < 60000) return false;
+      if (_last_drain != 0 && (fast_millis() - _last_drain) < 60000) return false;
       return true;
     }
   private:

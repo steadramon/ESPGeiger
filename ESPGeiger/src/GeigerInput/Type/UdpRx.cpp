@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "UdpRx.h"
+#include "../../Util/FastMillis.h"
 
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 
@@ -302,7 +303,7 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   const char* src = (const char*)(buf + CHIPID_OFFSET);
   if (!acceptChipid(src)) return;
 
-  uint32_t now_ms = millis();
+  uint32_t now_ms = fast_millis();
   ProducerRecord* p = findOrAllocProducer(src, now_ms);
   _last_packet_ms = now_ms;
 

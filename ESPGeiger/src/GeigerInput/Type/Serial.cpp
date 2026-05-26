@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Serial.h"
+#include "../../Util/FastMillis.h"
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 
@@ -90,7 +91,7 @@ void GeigerSerial::loop() {
   _loop_c = 0;
   pullSerial();
   if (serial_value <= 0) return;
-  if (millis() - last_serial > 10000) serial_value = 0;
+  if (fast_millis() - last_serial > 10000) serial_value = 0;
 }
 
 void GeigerSerial::secondTicker() {
@@ -117,7 +118,7 @@ void GeigerSerial::secondTicker() {
 #define GEIGERSERIAL_BAD_LIMIT 20
 
 void GeigerSerial::drainPort() {
-  unsigned long now = millis();
+  unsigned long now = fast_millis();
   // Throttle console log to once a minute.
   if (now - _last_drain_log > 60000UL) {
     Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
@@ -149,7 +150,7 @@ void GeigerSerial::handleSerial(char* input) {
     partial_clicks += (float)_scps;
     _use_cps = true;
   }
-  last_serial = millis();
+  last_serial = fast_millis();
   _bad_streak = max((int)_bad_streak - 3, 0);
 }
 #endif // GEIGER_IS_SERIAL

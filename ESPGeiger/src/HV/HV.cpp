@@ -139,7 +139,7 @@ void HV::begin() {
 #endif
 }
 
-void HV::loop(unsigned long /*now*/) {
+void HV::loop(unsigned long now) {
   // Runs every loop_interval_ms=1000. analogRead() on ESP8266 briefly yields
   // to the WiFi stack (shared RF ADC) and can block ~150-200us - kept out of
   // the 1Hz tick so that cost doesn't inflate tick_us.
@@ -164,7 +164,7 @@ void HV::loop(unsigned long /*now*/) {
   // Closed-loop trim - only after warmup, throttled, bounded ±TRIM_MAX.
   // Suppressed for TRIM_SETTLE_MS after duty/freq change so the dip from
   // apply_freq_duty_safe doesn't trick the loop into chasing transients.
-  if (_hv_target > 0 && gcounter.is_warm() && (long)(millis() - _trim_settle_until) >= 0) {
+  if (_hv_target > 0 && gcounter.is_warm() && (long)(now - _trim_settle_until) >= 0) {
     static uint8_t trim_cnt = 0;
     if (++trim_cnt >= TRIM_PERIOD_S) {
       trim_cnt = 0;

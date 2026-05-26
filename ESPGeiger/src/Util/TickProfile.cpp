@@ -28,6 +28,9 @@ namespace TickProfile {
   uint32_t tick_max_us = 0;
   uint32_t lps = 0;
   volatile uint32_t _lps_count = 0;
+#ifdef LOOP_PROFILE
+  uint32_t loop_body_us = 0;
+#endif
 }
 
 static unsigned long t_start = 0;
@@ -80,6 +83,15 @@ void TickProfile::endTick() {
 #endif
 #ifdef LOOP_PROFILE
     EGModuleRegistry::log_loop_profile_and_reset();
+    // Wall-time accounting: body_us is time spent inside loop() body.
+    // 60,000,000 us window - body = time stolen by interrupts/async/yield.
+    uint32_t body = loop_body_us;
+    loop_body_us = 0;
+    uint32_t stolen = (body > 60000000UL) ? 0 : (60000000UL - body);
+    Log::console(PSTR("Loop wall: body=%lums stolen=%lums (%lu%% async)"),
+      (unsigned long)(body / 1000UL),
+      (unsigned long)(stolen / 1000UL),
+      (unsigned long)(stolen / 600000UL));
 #endif
     EGModuleRegistry::log_activity_and_reset();
     TickProfile::tick_max_us = this_tick;

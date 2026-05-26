@@ -29,6 +29,11 @@ namespace TickProfile {
 
   inline void countIter() { ++_lps_count; }
 
+#ifdef LOOP_PROFILE
+  extern uint32_t loop_body_us;   // accumulated µs inside loop() body this window
+  inline void addLoopBody(uint32_t us) { loop_body_us += us; }
+#endif
+
   void beginTick();
 #ifdef TICK_PROFILE
   void markCounter();

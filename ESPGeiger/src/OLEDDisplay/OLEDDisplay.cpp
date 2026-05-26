@@ -902,7 +902,7 @@ void SSD1306Display::page_four_matrix() {
 }
 
 void SSD1306Display::page_four_static() {
-  unsigned long now = millis();
+  unsigned long now = fast_millis();
   if (_page4_num_last == 0 || now - _page4_num_last >= 1000) {
     _page4_num_last = now;
     uint16_t num;

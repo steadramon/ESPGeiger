@@ -31,6 +31,7 @@
 #include "src/Util/CrashDump.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
+#include "src/Util/FastMillis.h"
 #include "src/Module/EGModuleRegistry.h"
 #include "src/ArduinoOTA/ArduinoOTA.h"
 #include "src/Prefs/EGPrefs.h"
@@ -60,8 +61,12 @@ Ticker sTicker;
 bool past_warmup = false;
 uint8_t send_indicator = 0;
 
+// Definition for the extern declared in src/Util/FastMillis.h.
+volatile uint32_t _fast_ms_counter = 0;
+
 void msTickerCB()
 {
+  _fast_ms_counter++;
   led.Update();
 #ifdef GEIGER_BLIPLED
   gcounter.blip_led.Update();
@@ -170,11 +175,17 @@ void setup()
 
 void loop()
 {
+#ifdef LOOP_PROFILE
+  uint32_t _body_t0 = micros();
+#endif
   TickProfile::countIter();
-  unsigned long now = millis();
+  unsigned long now = fast_millis();
   if (!ota_in_progress) {
     gcounter.loop();
     s_webPortal.tick(now);
   }
   EGModuleRegistry::loop_all(now);
+#ifdef LOOP_PROFILE
+  TickProfile::addLoopBody((uint32_t)(micros() - _body_t0));
+#endif
 }

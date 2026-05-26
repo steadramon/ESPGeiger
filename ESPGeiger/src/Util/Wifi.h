@@ -22,6 +22,7 @@
 
 #include <Arduino.h>
 #include <IPAddress.h>
+#include "FastMillis.h"
 
 namespace Wifi {
   extern bool disabled;
@@ -39,7 +40,7 @@ namespace Wifi {
   // gates FLAG_REQUIRES_WIFI modules on this so AsyncTCP can drain stale
   // callbacks after reconnect before we hand it new work.
   inline bool stable_for(unsigned long ms) {
-    return connected_at_ms != 0 && (millis() - connected_at_ms) >= ms;
+    return connected_at_ms != 0 && (fast_millis() - connected_at_ms) >= ms;
   }
 
   // Format local_ip as dotted-quad into buf. Needs cap >= 16. Returns
