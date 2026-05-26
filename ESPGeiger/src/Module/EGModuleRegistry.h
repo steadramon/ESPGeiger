@@ -39,9 +39,6 @@ class EGModuleRegistry {
 #ifdef TICK_PROFILE
     static void log_profile_and_reset();
 #endif
-#ifdef LOOP_PROFILE
-    static void log_loop_profile_and_reset();
-#endif
     static void log_activity_and_reset();
     static void wake();
     // <0 disables loop, 0 = every iteration, positive = ms (clamped to 65535).
@@ -78,9 +75,6 @@ class EGModuleRegistry {
       uint8_t flags;             // 1 - packed module flags (see above)
 #ifdef TICK_PROFILE
       uint16_t max_tick_us;      // 2 - slowest s_tick over current window
-#endif
-#ifdef LOOP_PROFILE
-      uint16_t max_loop_us;      // 2 - slowest loop() over current window
 #endif
     };
     static Slot _slots[EG_MAX_MODULES];

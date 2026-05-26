@@ -63,26 +63,19 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     return;
   }
 
-  bool wifi_ok = Wifi::stable_for(WIFI_SETTLE_MS);
-  bool ntp_ok  = ntpclient.synced;
   unsigned long earliest = now + 0x7FFFFFFF;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     if (!(s.flags & FLAG_HAS_LOOP)) continue;
-    if ((s.flags & FLAG_REQUIRES_WIFI) && !wifi_ok) continue;
-    if ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok) continue;
+    // Skip wifi-flagged modules until wifi has been stable a few seconds -
+    // lets AsyncTCP drain old callbacks before we issue new work.
+    if ((s.flags & FLAG_REQUIRES_WIFI) && !Wifi::stable_for(WIFI_SETTLE_MS)) continue;
+    if ((s.flags & FLAG_REQUIRES_NTP) && !ntpclient.synced) continue;
 
     unsigned long due = s.loop_last + s.loop_interval;
     if ((long)(now - due) >= 0) {
       s.loop_last = now;
-#ifdef LOOP_PROFILE
-      unsigned long t0 = micros();
       s.module->loop(now);
-      uint32_t d = (uint32_t)(micros() - t0);
-      if (d > s.max_loop_us) s.max_loop_us = (d > 0xFFFF) ? 0xFFFF : (uint16_t)d;
-#else
-      s.module->loop(now);
-#endif
       due = now + s.loop_interval;
     }
     if ((long)(due - earliest) < 0) earliest = due;
@@ -139,33 +132,6 @@ void EGModuleRegistry::log_profile_and_reset() {
   }
   Log::console(PSTR("Mods max: %s"), buf);
   for (uint8_t i = 0; i < _count; i++) _slots[i].max_tick_us = 0;
-}
-#endif
-
-#ifdef LOOP_PROFILE
-void EGModuleRegistry::log_loop_profile_and_reset() {
-  // Per-module loop() max over the current window. Same shape as the tick
-  // variant. Useful for catching LPS regressions to a specific module.
-  char buf[200];
-  int pos = 0;
-  uint32_t done = 0;
-  while (true) {
-    uint8_t best = 0xFF;
-    uint16_t bestv = 0;
-    for (uint8_t i = 0; i < _count && i < EG_MAX_MODULES; i++) {
-      if (done & (1u << i)) continue;
-      uint16_t v = _slots[i].max_loop_us;
-      if (v > bestv) { bestv = v; best = i; }
-    }
-    if (best == 0xFF || bestv == 0) break;
-    done |= (1u << best);
-    int n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%s%s=%u"),
-      pos ? " " : "", _slots[best].module->name(), bestv);
-    if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
-    pos += n;
-  }
-  if (pos > 0) Log::console(PSTR("Loop max: %s"), buf);
-  for (uint8_t i = 0; i < _count; i++) _slots[i].max_loop_us = 0;
 }
 #endif
 
