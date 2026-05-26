@@ -22,6 +22,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Module/EGModule.h"
 #include "../Logger/Logger.h"
+#include "../Util/StringUtil.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <stdlib.h>
@@ -131,7 +132,7 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
     }
     case EGP_FLOAT: {
       char* end;
-      strtof(value, &end);
+      parse_f(value, &end);
       if (*end != '\0' || end == value) return -1;
       // Pass through as-is (avoid Arduino String(float) heap alloc)
       size_t len = strlen(value);
@@ -350,7 +351,7 @@ bool EGPrefs::getBool(const char* module, const char* key) {
 
 float EGPrefs::getFloat(const char* module, const char* key) {
   const char* v = find_value(module, key);
-  return v ? strtof(v, nullptr) : 0.0f;
+  return v ? parse_f(v, nullptr) : 0.0f;
 }
 
 bool EGPrefs::put(const char* module, const char* key, const char* value) {
