@@ -78,6 +78,9 @@ void TickProfile::endTick() {
     max_counter_us = max_wifi_us = max_modules_us = 0;
     min_free_heap = 0xFFFFFFFFu;
 #endif
+#ifdef LOOP_PROFILE
+    EGModuleRegistry::log_loop_profile_and_reset();
+#endif
     EGModuleRegistry::log_activity_and_reset();
     TickProfile::tick_max_us = this_tick;
   }
