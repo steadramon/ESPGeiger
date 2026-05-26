@@ -156,7 +156,7 @@ static uint32_t wallClockWaitMs(uint32_t k, uint32_t intervalMs, uint32_t period
 void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
-    lastHandshake = millis();
+    lastHandshake = fast_millis();
 #ifndef WEBAPI_TESTMODE_POST
     return;
 #endif
@@ -270,7 +270,7 @@ void WebAPI::doHandshake() {
   memcpy(shahash, Sha256.result(), HASH_LENGTH);
   optimistic_yield(100 * 1000);
   if (uECC_sign(priv_k, shahash, HASH_LENGTH, signature, uECC_secp192r1()) != 1) {
-    lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + _hs_backoff_ms;
+    lastHandshake = fast_millis() - WEBAPI_HANDSHAKE_MS + _hs_backoff_ms;
     _hs_backoff_ms = min(_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
     return;
   }
@@ -288,7 +288,7 @@ void WebAPI::doHandshake() {
       request.onReadyStateChange(httpHandshakeCb, this);
       request.setTimeout(10);
       request.send(buffer, bodyLen);
-      lastHandshake = millis();
+      lastHandshake = fast_millis();
       send_indicator = 2;
     }
   }
@@ -297,7 +297,7 @@ void WebAPI::doHandshake() {
 void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int readyState) {
   if (readyState != readyStateDone) return;
   WebAPI* self = static_cast<WebAPI*>(optParm);
-  self->last_attempt_ms = millis();
+  self->last_attempt_ms = fast_millis();
   self->last_ok = false;
   if (request->responseHTTPcode() == 200) {
     // String() round-trips raw bytes; treat as binary.
@@ -310,7 +310,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
     if (!reader.error) {
       if (id == 0) {
         Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
-        self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
+        self->lastHandshake = fast_millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
         self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
         EGModuleRegistry::set_loop_interval(self, 100);
         self->note_publish(false);
@@ -321,7 +321,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
         self->station_id = id;
         uint32_t k = ((uint32_t)self->pub_k[4] << 24) | ((uint32_t)self->pub_k[5] << 16)
                    | ((uint32_t)self->pub_k[6] << 8)  |  (uint32_t)self->pub_k[7];
-        self->lastHandshake = millis() + wallClockWaitMs(k, WEBAPI_HANDSHAKE_MS, 3600) - WEBAPI_HANDSHAKE_MS;
+        self->lastHandshake = fast_millis() + wallClockWaitMs(k, WEBAPI_HANDSHAKE_MS, 3600) - WEBAPI_HANDSHAKE_MS;
         EGModuleRegistry::set_loop_interval(self, 100);
       } else {
         Log::debug(PSTR("WebAPI: Handshake OK - station ID %u"), id);
@@ -344,7 +344,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
     }
   }
   // Backoff prevents a uECC_sign storm while the server is down.
-  self->lastHandshake = millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
+  self->lastHandshake = fast_millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
   self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
   EGModuleRegistry::set_loop_interval(self, 100);
   self->note_publish(false);
@@ -464,7 +464,7 @@ void WebAPI::postMeasurement(bool censusOnly) {
 void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState) {
   if (readyState != readyStateDone) return;
   WebAPI* self = static_cast<WebAPI*>(optParm);
-  self->last_attempt_ms = millis();
+  self->last_attempt_ms = fast_millis();
   self->last_ok = false;
   if (request->responseHTTPcode() == 200) {
     // Server returns MsgPack { "ok": true } on success. find_key skips
@@ -559,7 +559,7 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
   } else {
     Log::console(PSTR("WebAPI: Forget failed - %s"), request->responseHTTPString().c_str());
   }
-  self->last_attempt_ms = millis();
+  self->last_attempt_ms = fast_millis();
   self->note_publish(self->last_ok);
 }
 

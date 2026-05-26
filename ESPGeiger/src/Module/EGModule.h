@@ -20,6 +20,7 @@
 #define EGMODULE_H
 
 #include <Arduino.h>
+#include "../Util/FastMillis.h"
 
 struct EGPrefGroup;
 struct EGLegacyAlias;  // LEGACY IMPORT (remove after v1.0.0)
@@ -91,12 +92,12 @@ class EGModule {
 
     void note_publish(bool ok) {
       last_ok = ok;
-      last_attempt_ms = millis();
+      last_attempt_ms = fast_millis();
       if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
       else    { if (_pub_err < 0xFF) ++_pub_err; }
     }
     void note_attempt() {
-      last_attempt_ms = millis();
+      last_attempt_ms = fast_millis();
       last_ok = true;
       _publish_pending = 1;
       if (_pub_ok < 0xFF) ++_pub_ok;

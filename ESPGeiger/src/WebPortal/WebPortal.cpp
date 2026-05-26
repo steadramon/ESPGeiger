@@ -900,12 +900,12 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
     return;
   }
 
-  bool stale = (millis() - s_lastScan) > 60000UL;
+  bool stale = (fast_millis() - s_lastScan) > 60000UL;
   bool needScan = force || status <= 0 || stale;
   if (needScan) {
     if (status != WIFI_SCAN_RUNNING) WiFi.scanDelete();
     WiFi.scanNetworks(true /*async*/, false /*show_hidden*/);
-    s_lastScan = millis();
+    s_lastScan = fast_millis();
     res.send(200, "application/json", "{\"state\":\"scanning\"}");
     return;
   }
@@ -2042,7 +2042,7 @@ void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[512];
   size_t pos = 0;
   buf[pos++] = '{';
-  pos += EGModuleRegistry::collect_status_json(buf + pos, sizeof(buf) - pos - 2, millis());
+  pos += EGModuleRegistry::collect_status_json(buf + pos, sizeof(buf) - pos - 2, fast_millis());
   buf[pos++] = '}';
   res.beginChunked(200, "application/json");
   res.sendChunk(buf, pos);
