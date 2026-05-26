@@ -113,7 +113,9 @@ void WebAPI::loop(unsigned long now) {
   // Signed deltas: backoff math can push lastHandshake into the future when
   // _hs_backoff_ms > WEBAPI_HANDSHAKE_MS - unsigned compare then underflows.
   if (lastHandshake == 0) {
-    lastHandshake = now + random(11311) - WEBAPI_HANDSHAKE_MS;
+    // Slot-allocate so handshake won't share a second with any module's ping.
+    uint32_t off = EGModuleRegistry::initial_offset("wapi.hs", pingIntervalMs);
+    lastHandshake = now + off - WEBAPI_HANDSHAKE_MS;
   } else if ((long)(now - lastHandshake) >= (long)WEBAPI_HANDSHAKE_MS) {
     doHandshake();
   } else if (station_id != 0) {
