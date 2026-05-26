@@ -157,7 +157,7 @@ void HV::loop(unsigned long /*now*/) {
 #ifdef ESPG_HV_ADC
   if (_hw_vd_ratio == 0) return;
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
-  int volts = (int)((_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
+  int volts = (int)(((int64_t)_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
   hvReading.add((float)volts);
   addFast((float)volts);
 
