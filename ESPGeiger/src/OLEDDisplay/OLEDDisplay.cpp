@@ -307,17 +307,18 @@ void SSD1306Display::loop(unsigned long now) {
     if (oled_page != _last_page) {
       _last_page = oled_page;
       _next_render_due = 0;   // force immediate render on page change
-      // Page 4's render cadence is 80 ms; loop must tick fast enough so the
-      // 8-row drain finishes in 80 ms (8 * 10 = 80). Other pages happily
-      // drain in 80-160 ms at 20 ms.
-      EGModuleRegistry::set_loop_interval(this, oled_page == 4 ? 10 : 20);
+      // Headless: render at 4 Hz to stay ahead of /screen's 500 ms poll.
+      uint16_t interval;
+      if (_present) interval = (oled_page == 4 ? 10 : 20);
+      else          interval = (oled_page == 4 ? 80 : 250);
+      EGModuleRegistry::set_loop_interval(this, interval);
     }
     if (oled_page == 4) {
       oled_timeout = now;
     }
-    // Throttle render. Page 4 is animated (~12.5 Hz), others 2 Hz.
+    // Throttle: page 4 12.5 Hz, others 2 Hz on hardware / 4 Hz headless.
     if ((long)(now - _next_render_due) < 0) return;
-    _next_render_due = now + (oled_page == 4 ? 80UL : 500UL);
+    _next_render_due = now + (oled_page == 4 ? 80UL : (_present ? 500UL : 250UL));
     // Timeout/schedule only relevant when a real display is attached. Without
     // one we keep rendering into the FB so /screen still shows the live UI.
     if (_present) {
@@ -382,9 +383,9 @@ void SSD1306Display::loop(unsigned long now) {
       }
       dirty = DR_FULL;
     }
-    // Queue progressive send: one tile-row drained per loop tick above.
-    // Top half = ty 0..3, bottom half = ty 4..7, full = ty 0..7.
-    if (dirty != DR_NONE) {
+    // Queue progressive send (skipped headless - would block re-renders).
+    // Top = ty 0..3, bot = ty 4..7, full = 0..7.
+    if (dirty != DR_NONE && _present) {
       _send_cur = 0;
       if (dirty == DR_TOP)      { _send_ty = 0; _send_rows_left = 4; }
       else if (dirty == DR_BOT) { _send_ty = 4; _send_rows_left = 4; }
@@ -512,8 +513,8 @@ void SSD1306Display::setup() {
     _present = false;
     Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
                  _pin_sda, _pin_scl);
-    // Keep rendering into the FB so /screen still shows the UI. I2C sends
-    // are gated on _present in loop().
+    // FB still rendered for /screen viewers; I2C sends gated on _present.
+    EGModuleRegistry::set_loop_interval(this, 250);
     setFontPosTop();
     return;
   }
@@ -544,22 +545,20 @@ void SSD1306Display::setup() {
 }
 
 void SSD1306Display::onButtonTap(unsigned long now, int8_t direction) {
-  if (!_present) return;
-  // 5-rapid-tap gesture only counts on the forward button so users on
-  // back/forward setups don't get the hidden page 4 by accident.
   static unsigned long s_last_tap = 0;
   static uint8_t s_tap_count = 0;
   if (direction > 0) {
-    s_tap_count = (now - s_last_tap < 400) ? (s_tap_count + 1) : 1;
+    s_tap_count = (now - s_last_tap < 500) ? (s_tap_count + 1) : 1;
     s_last_tap = now;
   }
 
   oled_timeout = now;
   if (!oled_on) {
     oled_page = 1;
-    setPowerSave(0);
+    if (_present) setPowerSave(0);
     oled_on = true;
-    EGModuleRegistry::set_loop_interval(this, 20);
+    EGModuleRegistry::set_loop_interval(this,
+      _present ? 20 : (oled_page == 4 ? 80 : 250));
   } else if (direction > 0 && s_tap_count >= 5) {
     oled_page = 4;
     s_tap_count = 0;
@@ -945,7 +944,7 @@ void SSD1306Display::showOTABanner() {
 // Transposes from u8g2's page-major (8 vertical pixels per byte) layout.
 static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
   SSD1306Display* self = static_cast<SSD1306Display*>(ctx);
-  if (!self || !self->is_present()) {
+  if (!self) {
     res.send(503, "text/plain", "no display");
     return;
   }
@@ -990,7 +989,7 @@ static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
 // Raw 1024 B framebuffer in u8g2 page-major layout. Used by /screen's canvas.
 static void hScreenBin(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
   SSD1306Display* self = static_cast<SSD1306Display*>(ctx);
-  if (!self || !self->is_present()) {
+  if (!self) {
     res.send(503, "text/plain", "no display");
     return;
   }
@@ -1002,7 +1001,7 @@ static void hScreenBin(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
 // Virtual tap: routes through the physical-button path so /screen cycles pages.
 static void hScreenTap(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
   SSD1306Display* self = static_cast<SSD1306Display*>(ctx);
-  if (!self || !self->is_present()) {
+  if (!self) {
     res.send(503, "text/plain", "no display");
     return;
   }
