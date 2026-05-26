@@ -222,14 +222,10 @@ static char s_pendingWifiPass[65] = {0};
 static WebPortal* s_activeWebPortal = nullptr;
 
 void WebPortal::tick(uint32_t now) {
-  // 20 ms = max handler-dispatch latency. AsyncTCP marks slots READY on data
-  // arrival; we drain them here. Below human-perception threshold.
   static uint32_t last_ms = 0;
-  if (now - last_ms < 20) return;
+  if (now - last_ms < 13) return;
   last_ms = now;
 
-  // Drive EGHttpServer dispatch (handlers run here, in main-loop context,
-  // where yield() is safe).
   if (_active) _http.tick();
 
   if (s_restartAt != 0 && (int32_t)(now - s_restartAt) >= 0) {
@@ -1544,7 +1540,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendChunk(F("<hr><button type=submit>Save</button></form>"
                   "<hr>"
                   "<details><summary>Backup &amp; restore</summary>"
-                  "<form method=POST action=/import>"
+                  "<form method=POST action=/import onsubmit=\"return confirm('Replace all config and reboot?')\">"
                   "<p><textarea name=blob id=cfgB rows=4 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
                   "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
                   " <button type=submit>Import</button></p></form>"
