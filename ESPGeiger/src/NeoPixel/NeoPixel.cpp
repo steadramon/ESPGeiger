@@ -22,6 +22,7 @@
 #include "NeoPixel.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/FastMillis.h"
 #include "../Util/MathUtil.h"
 
 NeoPixel neopixel;
@@ -149,7 +150,7 @@ void NeoPixel::blink(uint16_t timer)
   this->controller_->SetPixelColor(0, rgb);
   this->controller_->Show();
   _is_off = false;
-  onTime = millis();
+  onTime = fast_millis();
   offTime = timer;
 }
 

@@ -30,6 +30,7 @@
 #include "../Util/MathUtil.h"
 #include "../Util/PinSafety.h"
 #include "../Util/StringUtil.h"
+#include "../Util/FastMillis.h"
 #include "../WebPortal/WebPortal.h"
 #include "HVJS_BUNDLE.gz.h"
 
@@ -193,7 +194,7 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   set_duty(new_duty);
   _cur_duty = -1;
   _duty_trim = 0;
-  _trim_settle_until = millis() + TRIM_SETTLE_MS;
+  _trim_settle_until = fast_millis() + TRIM_SETTLE_MS;
 }
 
 void HV::saveconfig() {

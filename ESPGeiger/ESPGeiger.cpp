@@ -78,7 +78,7 @@ void msTickerCB()
 void sTickerCB()
 {
   TickProfile::beginTick();
-  unsigned long stick_now = millis();
+  unsigned long stick_now = fast_millis();
 
   gcounter.secondticker(stick_now);
 #ifdef TICK_PROFILE

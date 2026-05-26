@@ -199,7 +199,7 @@ void EGModuleRegistry::log_activity_and_reset() {
 }
 
 void EGModuleRegistry::wake() {
-  _next_loop_due = millis();
+  _next_loop_due = fast_millis();
 }
 
 bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
@@ -211,7 +211,7 @@ bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
         _slots[i].flags |= FLAG_HAS_LOOP;
         _slots[i].loop_interval = (interval_ms > 0xFFFF) ? 0xFFFF : (uint16_t)interval_ms;
       }
-      _next_loop_due = millis();
+      _next_loop_due = fast_millis();
       return true;
     }
   }

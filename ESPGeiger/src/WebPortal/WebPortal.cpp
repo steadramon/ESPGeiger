@@ -204,7 +204,7 @@ static void renderMenuButton(EGHttpResponse& res, const EGMenuEntry& e) {
 static volatile uint32_t s_restartAt = 0;
 
 void WebPortal::requestRestart(uint32_t delayMs) {
-  uint32_t at = millis() + delayMs;
+  uint32_t at = fast_millis() + delayMs;
   if (at == 0) at = 1;          // 0 means "no restart pending"
   s_restartAt = at;
 }

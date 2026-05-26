@@ -20,6 +20,7 @@
 #define BOOT_HOOKS_H
 
 #include <Arduino.h>
+#include "FastMillis.h"
 
 #ifdef SSD1306_DISPLAY
 #include "../OLEDDisplay/OLEDDisplay.h"
@@ -54,7 +55,7 @@ namespace BootHooks {
 
   inline void displayResetTimeout() {
 #ifdef SSD1306_DISPLAY
-    display.oled_timeout = millis();
+    display.oled_timeout = fast_millis();
 #endif
   }
 
@@ -78,12 +79,12 @@ namespace BootHooks {
 
     Serial.println(F("BOOT: button held - offline mode, hold 5s for factory reset"));
     displayWifiDisabled();
-    uint32_t start = millis();
+    uint32_t start = fast_millis();
     int last_shown = 999;
     bool wipe = false;
 
     while (pushbutton.isPressed()) {
-      uint32_t held_ms = millis() - start;
+      uint32_t held_ms = fast_millis() - start;
       int remain = 5 - (int)(held_ms / 1000);
       if (remain != last_shown) {
         last_shown = remain;

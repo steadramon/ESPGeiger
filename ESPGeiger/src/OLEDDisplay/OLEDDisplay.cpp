@@ -801,7 +801,7 @@ void SSD1306Display::page_four_matrix() {
   }
 
   if (_page4_num_last == 0) {
-    _page4_num_last = millis();
+    _page4_num_last = fast_millis();
     last_blip_seen = gcounter.last_blip();
     for (uint8_t i = 0; i < MATRIX_DROPS; i++) drops[i].alive = false;
     size_t hist_n = gcounter.cpm_history.size();
@@ -1006,7 +1006,7 @@ static void hScreenTap(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
     res.send(503, "text/plain", "no display");
     return;
   }
-  self->onButtonTap(millis());
+  self->onButtonTap(fast_millis());
   res.send(200, "text/plain", "ok");
 }
 
