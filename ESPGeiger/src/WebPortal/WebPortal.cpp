@@ -27,6 +27,7 @@
 #include "../Util/CrashDump.h"
 #include "../Util/Wifi.h"
 #include "../Util/OutputVars.h"
+#include "../Util/StringUtil.h"
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../NTP/NTP.h"
@@ -2106,6 +2107,7 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
   unsigned long life = (lifeRaw > 0xFFFFFFFFULL) ? 0xFFFFFFFFUL : (unsigned long)lifeRaw;
   res.beginChunked(200, "text/plain; version=0.0.4");
   char buf[320];
+  char fb[24];
   int n;
   // Emit HELP+TYPE for a metric name (call once per name).
   #define HEAD(mname, mtype, mhelp) \
@@ -2118,15 +2120,15 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n)
 
   HEAD("geiger_cpm", "gauge", "Counts per minute (window label selects averaging period)");
-  VAL ("geiger_cpm", ",window=\"1m\"",  "%.2f", cpm);
-  VAL ("geiger_cpm", ",window=\"5m\"",  "%.2f", gcounter.get_cpm5f());
-  VAL ("geiger_cpm", ",window=\"15m\"", "%.2f", gcounter.get_cpm15f());
+  format_f(fb, sizeof(fb), cpm, 2);                   VAL ("geiger_cpm", ",window=\"1m\"",  "%s", fb);
+  format_f(fb, sizeof(fb), gcounter.get_cpm5f(), 2);  VAL ("geiger_cpm", ",window=\"5m\"",  "%s", fb);
+  format_f(fb, sizeof(fb), gcounter.get_cpm15f(), 2); VAL ("geiger_cpm", ",window=\"15m\"", "%s", fb);
 
   HEAD("geiger_cps", "gauge", "Instantaneous counts per second");
-  VAL ("geiger_cps", "", "%.2f", gcounter.get_cps());
+  format_f(fb, sizeof(fb), gcounter.get_cps(), 2);    VAL ("geiger_cps", "", "%s", fb);
 
   HEAD("geiger_usv_per_hour", "gauge", "Dose rate in microsieverts per hour");
-  VAL ("geiger_usv_per_hour", "", "%.4f", usv_h);
+  format_f(fb, sizeof(fb), usv_h, 4);                 VAL ("geiger_usv_per_hour", "", "%s", fb);
 
   HEAD("geiger_lifetime_clicks_total", "counter", "Total clicks counted over device life");
   VAL ("geiger_lifetime_clicks_total", "", "%lu", life);
@@ -2150,10 +2152,13 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
   for (uint8_t b = 0; b < nb; b++) {
     cumul += hist[b];
     if (b < nb - 1) {
-      float ub = (float)(64UL << b) / 1.0e6f;
+      uint32_t ub_us = 64UL << b;  // bucket upper bound in microseconds
       n = snprintf_P(buf, sizeof(buf),
-        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",name=\"%s\",le=\"%g\"} %lu\n"),
-        cid, name, ub, (unsigned long)cumul);
+        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",name=\"%s\",le=\"%lu.%06lu\"} %lu\n"),
+        cid, name,
+        (unsigned long)(ub_us / 1000000UL),
+        (unsigned long)(ub_us % 1000000UL),
+        (unsigned long)cumul);
     } else {
       n = snprintf_P(buf, sizeof(buf),
         PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",name=\"%s\",le=\"+Inf\"} %lu\n"),
