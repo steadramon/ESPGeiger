@@ -63,10 +63,20 @@ uint8_t send_indicator = 0;
 
 // Definition for the extern declared in src/Util/FastMillis.h.
 volatile uint32_t _fast_ms_counter = 0;
+// µs accumulator state for msTickerCB; primed in setup() before attach.
+static uint32_t _fast_ms_last_us  = 0;
+static uint32_t _fast_ms_accum_us = 0;
 
 void msTickerCB()
 {
-  _fast_ms_counter++;
+  // Accumulator catches up if Ticker is starved (no per-call divide).
+  uint32_t now_us = micros();
+  _fast_ms_accum_us += (now_us - _fast_ms_last_us);
+  while (_fast_ms_accum_us >= 1000) {
+    _fast_ms_counter++;
+    _fast_ms_accum_us -= 1000;
+  }
+  _fast_ms_last_us = now_us;
   led.Update();
 #ifdef GEIGER_BLIPLED
   gcounter.blip_led.Update();
@@ -132,6 +142,10 @@ void setup()
   EGPrefs::begin();
 
   delay(100);
+  // Prime fast_millis state to current wall clock so the first Ticker
+  // fire sees a real delta, not the whole uptime since boot.
+  _fast_ms_last_us = micros();
+  _fast_ms_counter = _fast_ms_last_us / 1000;
   msTicker.attach_ms(1, msTickerCB);
   if (start == 0) {
     auto action = BootHooks::checkStartupButtonHold();

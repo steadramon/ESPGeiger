@@ -400,12 +400,12 @@ void UdpBlipModule::loop(unsigned long now) {
   if (_pending) {
     uint8_t p = _pending;
     _pending = 0;
-    if (p & EMIT_RAD) emitRad(millis());
+    if (p & EMIT_RAD) emitRad(now);
 #ifdef ESPG_HV_ADC
-    if (p & EMIT_HV)  emitHv(millis());
+    if (p & EMIT_HV)  emitHv(now);
 #endif
-    if (p & EMIT_SYS) emitSys(millis());
-    if (p & EMIT_ENV) emitEnv(millis());
+    if (p & EMIT_SYS) emitSys(now);
+    if (p & EMIT_ENV) emitEnv(now);
   }
   tryEmitClick(now);
 }
