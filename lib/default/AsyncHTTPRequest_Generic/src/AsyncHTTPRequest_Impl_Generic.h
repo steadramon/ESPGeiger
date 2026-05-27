@@ -1228,6 +1228,8 @@ bool  AsyncHTTPRequest::_connect()
       return false;
   }
 
+  _client->setRxTimeout(_requestTimeout);
+
   SAFE_DELETE_ARRAY(_connectedHost)
 
   _connectedHost = new char[strlen(_URL->host) + 1];
