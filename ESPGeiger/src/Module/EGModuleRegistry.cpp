@@ -262,6 +262,13 @@ uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interva
   if (interval_s < 2) return interval_ms >> 1;
 
   uint8_t avail = interval_s > 63 ? 63 : (uint8_t)(interval_s - 1);
+  // :00 kept clear on SD builds for the per-minute CSV flush; non-SD reclaims it.
+#ifdef GEIGER_SDCARD
+  const uint8_t lo = 1;
+#else
+  const uint8_t lo = 0;
+#endif
+  uint8_t span = (uint8_t)(avail - lo + 1);   // slots over [lo, avail]
   uint8_t step60 = (uint8_t)(interval_s % 60);
   uint8_t orbit_n = 1;
   if (step60 != 0) {
@@ -270,17 +277,17 @@ uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interva
     orbit_n = 60 / a;
   }
 
-  uint8_t sec = (uint8_t)((h % avail) + 1u);
+  uint8_t sec = (uint8_t)(lo + (h % span));
   uint8_t tries = 0;
-  while (tries <= avail) {
+  while (tries < span) {
     bool clash = false;
     uint8_t s = sec; if (s >= 60) s -= 60;
     for (uint8_t k = 0; k < orbit_n; k++) {
-      if (s == 0 || slot_taken(s)) { clash = true; break; }
+      if ((s == 0 && lo != 0) || slot_taken(s)) { clash = true; break; }
       s += step60; if (s >= 60) s -= 60;
     }
     if (!clash) break;
-    sec++; if (sec > avail) sec = 1;
+    sec++; if (sec > avail) sec = lo;
     tries++;
   }
   uint8_t s = sec; if (s >= 60) s -= 60;
