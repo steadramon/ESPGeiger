@@ -66,9 +66,107 @@ The first two values are the current **CPM** and **CPS**. The remaining ten fiel
 * The endpoint is always available; there is no toggle in the ESPGeiger portal.
 * If you need richer data (5-minute or 15-minute CPM, HV, memory, RSSI) consume `/json` instead from your own tooling.
 
+## Prometheus (native `/metrics`)
+
+ESPGeiger exposes a native [Prometheus text exposition](https://prometheus.io/docs/instrumenting/exposition_formats/) endpoint at `/metrics`. No proxy or exporter needed.
+
+### Scrape config
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: espgeiger
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 192.168.1.100   # your device(s)
+          - 192.168.1.101
+```
+
+For automatic discovery, point Prometheus at all `_espgeiger._tcp` mDNS entries via your service discovery layer.
+
+### Sample output
+
+```
+# HELP device_info Device metadata; value always 1. Join via on(chipid) for naming.
+# TYPE device_info gauge
+device_info{chipid="d5536d",name="Garage",model="ESPGeiger-HW",ver="0.11.0",env="espgeigerhw"} 1
+
+# HELP geiger_cpm Counts per minute (window label selects averaging period)
+# TYPE geiger_cpm gauge
+geiger_cpm{chipid="d5536d",window="1m"} 31.50
+geiger_cpm{chipid="d5536d",window="5m"} 30.20
+geiger_cpm{chipid="d5536d",window="15m"} 29.80
+
+# HELP geiger_cps Instantaneous counts per second
+geiger_cps{chipid="d5536d"} 0.52
+
+# HELP geiger_usv_per_hour Dose rate in microsieverts per hour
+geiger_usv_per_hour{chipid="d5536d"} 0.2086
+
+# HELP geiger_lifetime_clicks_total Total clicks counted over device life
+# TYPE geiger_lifetime_clicks_total counter
+geiger_lifetime_clicks_total{chipid="d5536d"} 1845231
+
+# HELP device_uptime_seconds Seconds since boot
+device_uptime_seconds{chipid="d5536d"} 90523
+
+# HELP device_free_heap_bytes Free heap memory
+device_free_heap_bytes{chipid="d5536d"} 19432
+
+# HELP device_wifi_rssi_dbm WiFi signal strength
+device_wifi_rssi_dbm{chipid="d5536d"} -54
+
+# HELP geiger_pulse_interval_seconds Inter-pulse intervals in seconds, log2 buckets
+# TYPE geiger_pulse_interval_seconds histogram
+geiger_pulse_interval_seconds_bucket{chipid="d5536d",le="0.000064"} 0
+geiger_pulse_interval_seconds_bucket{chipid="d5536d",le="0.000128"} 0
+...
+geiger_pulse_interval_seconds_bucket{chipid="d5536d",le="+Inf"} 1845231
+geiger_pulse_interval_seconds_count{chipid="d5536d"} 1845231
+```
+
+### Label model
+
+Operational metrics carry only `chipid` (the stable, deterministic device MAC). Friendly name, model and firmware version live in the separate `device_info` metric. This means:
+
+* Renaming a device in the portal does **not** fork its historical time series.
+* Dashboard joins use `on(chipid) group_left(name)` to bring in the friendly name.
+
+### PromQL examples
+
+```promql
+# Current CPM with friendly name as legend
+geiger_cpm{window="1m"} * on(chipid) group_left(name) device_info
+
+# Dose rate averaged over 1 hour
+avg_over_time(geiger_usv_per_hour[1h])
+  * on(chipid) group_left(name) device_info
+
+# Alert when any device exceeds 1 µSv/h sustained for 5 min
+- alert: RadiationHigh
+  expr: avg_over_time(geiger_usv_per_hour[5m]) > 1
+  labels:
+    severity: warning
+  annotations:
+    summary: "{{ $labels.chipid }} dose rate sustained above 1 µSv/h"
+
+# Devices that haven't reported in 5 min
+time() - timestamp(geiger_cpm{window="1m"}) > 300
+```
+
+### Notes
+
+* The endpoint is always available; there is no toggle in the portal.
+* Histogram bucket boundaries are powers of two starting at 64 µs (inter-pulse interval). The top bucket is `+Inf`.
+* `geiger_lifetime_clicks_total` is a Prometheus counter (monotonically increasing); use `rate()` for click rate.
+
+---
+
 ## Prometheus via Telegraf
 
-[Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) can poll the JSON endpoint and expose the values as Prometheus metrics:
+If you'd rather pull from the `/json` endpoint (eg you already run Telegraf, or you want to add fields not in `/metrics`), [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) can poll JSON and expose Prometheus metrics:
 
 ```toml
 # telegraf.conf
