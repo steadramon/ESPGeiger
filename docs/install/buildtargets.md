@@ -16,7 +16,7 @@ Builds for a number of target counters are available.
 
 ## Pulse
 
-The pulse Geiger counter target is the widest compatible target. This is used for all Pulse type Geiger counters. A list of compatible and tested Pulse counters cant be found under the hardware section.
+The pulse target is the most widely compatible build, and works with all Pulse-type Geiger counters. You'll find a list of compatible and tested pulse counters in the hardware section.
 
 | Target Name | Target Counter | Notes |
 |---|---|---|

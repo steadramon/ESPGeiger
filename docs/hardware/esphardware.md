@@ -25,13 +25,13 @@ The **[ESP32 DevKit / WROOM-32](https://s.click.aliexpress.com/e/_c4MWYcBT)** (c
 | Variant | Status | Notes |
 |---|---|---|
 | **ESP32 (classic)** | Fully supported | All `esp32_*` / `esp32oled_*` build envs. PCNT hardware counter. |
-| **ESP32-S3** | Partial | Used in the XH-S3E build (`xh_s3e_udp`). Generic `esp32s3_*` envs not yet shipped — pending hardware verification (PCNT on S3, HV ADC). |
+| **ESP32-S3** | Partial | Used in the XH-S3E build (`xh_s3e_udp`). Generic `esp32s3_*` envs not yet shipped - pending hardware verification (PCNT on S3, HV ADC). |
 | **ESP32-S2** | Experimental | Base config present, no shipped end-user envs. |
 | **ESP32-C3 / C6 / H2** | Not supported | No build envs. RISC-V cores not tested. |
 
 ### Boards with onboard OLED
 
-Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the same PCB. Most work with the existing `esp8266oled_*` / `esp32oled_*` builds — runtime pin settings on the Config page let you adjust SDA/SCL without rebuilding.
+Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the same PCB. Most work with the existing `esp8266oled_*` / `esp32oled_*` builds - runtime pin settings on the Config page let you adjust SDA/SCL without rebuilding.
 
 | Board | MCU | OLED pins (SDA / SCL) | OLED RST | Build | Notes |
 |---|---|---|---|---|---|
@@ -75,9 +75,9 @@ The debounce value can be configured from the ESPGeiger web interface under __Co
 | Debounce Value | Pulses Rejected | Use Case |
 |---|---|---|
 | 0 | Disabled | No debounce |
-| 500 (default) | < 500μs apart | Suppresses typical switching noise, passes all real pulses |
+| 200 (default) | < 200μs apart | Suppresses typical switching noise, passes all real pulses |
 | 1000 | < 1ms apart | More aggressive for noisier setups |
 
-Real Geiger-Muller tube dead time is around 50-200μs, so the default value comfortably accommodates real events. The debounce only applies to the software interrupt path; PCNT builds use the PCNT Filter above instead.
+Real Geiger-Muller tube dead time is around 50-200μs, so the default sits just below the tube's own recovery time and passes real events. The debounce only applies to the software interrupt path; PCNT builds use the PCNT Filter above instead.
 
 The default can also be set at compile time with the `-D GEIGER_DEBOUNCE=N` build flag. See [Build Options](/install/platformio#geiger-counter-input) for details.

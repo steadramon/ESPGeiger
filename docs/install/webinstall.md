@@ -51,7 +51,7 @@ The installation process is powered by [ESP Web Tools](https://esphome.github.io
 
 The web installer requires the PC/Mac version of either Chrome or Edge.
 
-Ensure that the relevant drivers are installed for you device. Some information is provided on page if your device is not detected.
+Make sure the relevant drivers are installed for your device. If your device isn't detected, the installer page offers some guidance.
 
 - Select the relevant __Geiger Counter Type__ you wish to install firmware for and where available, if the OLED variant should be used.
 

@@ -8,7 +8,7 @@ nav_order: 2
 
 # Pulse Counters
 
-ESPGeiger supports pulse-based Geiger counters that sends a I/O pulse for each detected count.
+ESPGeiger supports pulse-based Geiger counters that send an I/O pulse for each detected count.
 
 | Counter | Image | Notes |
 |---|---|---|

@@ -29,7 +29,7 @@ _OR_
 
 ## Firmware Install
 
-The easiest way to install ESPGeiger is to visit the web based installed in your Chrome or Edge browser:
+The easiest way to install ESPGeiger is to use the web installer in your Chrome or Edge browser:
 
 1. Visit <https://install.espgeiger.com> and follow the instructions to install the latest firmware.
   - Select your Geiger Counter type from the dropdown list - in most cases this is "Pulse"
@@ -40,7 +40,7 @@ The easiest way to install ESPGeiger is to visit the web based installed in your
 
 ## Setup
 
-1. On your phone or computer, connect to to the new Wi-Fi network (**ESPGeiger-XXXXXX**)
+1. On your phone or computer, connect to the new Wi-Fi network (**ESPGeiger-XXXXXX**)
   - A configuration web page should appear once connected, if not browse to <http://192.168.4.1/>
   - Make a note of the name of the ESPGeiger (**ESPGeiger-XXXXXX**) - we will need this soon.
 2. Configure ESPGeiger to connect to your home Wi-Fi network

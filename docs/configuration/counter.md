@@ -32,7 +32,7 @@ ESPGeiger applies a statistical upward correction to the displayed CPS to compen
 
 | Setting | Default | Range |
 |---|---|---|
-| `input.dead_time_us` | 100 µs | 0 - 1000 µs |
+| `input.dead_time_us` | 0 µs (disabled) | 0 - 1000 µs |
 
 Set this to the value from your tube's datasheet. A short list of common tubes:
 

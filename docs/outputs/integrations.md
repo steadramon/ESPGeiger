@@ -37,9 +37,10 @@ Response:
 | `mem` | Free heap memory in bytes |
 | `rssi` | WiFi signal strength in dBm |
 | `hv` | HV reading in volts (ESPGeiger-HW only) |
-| `tick` | EMA-smoothed duration of the 1-second tick callback in microseconds (sTickerCB cost). Typical load indicator; α = 1/8 so single-tick spikes (MQTT publish, etc.) are averaged out. Lower is better. |
-| `t_max` | Peak `tick` observed in the current 60-tick window (rolling reset). Use alongside `tick` to see worst-case cost. |
-| `lps` | Loop iterations counted in the last second. |
+| `loss` | Packet loss on the feed, as a percentage (UDP-receiver builds only; appears once a producer has been heard) |
+| `tick` | Device load indicator: smoothed microseconds spent in the once-per-second housekeeping pass. Lower is better; brief spikes (e.g. an MQTT publish) are averaged out. |
+| `t_max` | The worst-case `tick` seen in the last 60 seconds. Pair with `tick` to spot occasional load peaks. |
+| `lps` | Main-loop iterations counted in the last second (higher is healthier). |
 
 ## GeigerLog
 
@@ -84,7 +85,7 @@ scrape_configs:
           - 192.168.1.101
 ```
 
-For automatic discovery, point Prometheus at all `_espgeiger._tcp` mDNS entries via your service discovery layer.
+For automatic discovery, each device advertises a `_geiger._tcp` mDNS service on port 80 (alongside the standard `_http._tcp`), so you can point your service-discovery layer at `_geiger._tcp` to find every ESPGeiger on the network.
 
 ### Sample output
 
@@ -129,7 +130,7 @@ geiger_pulse_interval_seconds_count{chipid="d5536d"} 1845231
 
 ### Label model
 
-Operational metrics carry only `chipid` (the stable, deterministic device MAC). Friendly name, model and firmware version live in the separate `device_info` metric. This means:
+Operational metrics carry only `chipid` - a stable device ID that never changes. Friendly name, model and firmware version live in the separate `device_info` metric. This means:
 
 * Renaming a device in the portal does **not** fork its historical time series.
 * Dashboard joins use `on(chipid) group_left(name)` to bring in the friendly name.

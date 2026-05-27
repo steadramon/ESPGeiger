@@ -8,7 +8,7 @@ nav_order: 1
 
 # Web Portal
 
-ESPGeiger comes with a built-in Web Portal, allowing you to easy configuration of your device, as well as giving the ability to view the live readings and status output on your laptop or mobile device.
+ESPGeiger comes with a built-in Web Portal that lets you configure your device and view the live readings and status output from your laptop or mobile device.
 
 ![Img](../img/ESPGeiger-anim.gif)
 
@@ -22,7 +22,7 @@ The main page has buttons to reach each area of configuration:
 
 ## Live blip indicator on `/status`
 
-The coloured dot next to the CPM reading on the `/status` page is a synchronised mirror of the [NeoPixel output](/output/neopixel) — it flashes at a rate proportional to the CPM-vs-CPM5 ratio and changes colour based on a Poisson z-score against the 5-minute baseline. See the [NeoPixel page](/output/neopixel#how-the-colour-and-flash-rate-are-derived) for the colour table and full derivation.
+The coloured dot next to the CPM reading on the `/status` page is a synchronised mirror of the [NeoPixel output](/output/neopixel) - it flashes at a rate proportional to the CPM-vs-CPM5 ratio and changes colour based on a Poisson z-score against the 5-minute baseline. See the [NeoPixel page](/output/neopixel#how-the-colour-and-flash-rate-are-derived) for the colour table and full derivation.
 
 It's an "activity trend" indicator rather than a per-click visualization. For per-click visual feedback, see the blip LED on supported builds. 
 

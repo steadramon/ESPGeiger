@@ -45,7 +45,7 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 | Geiger Counter | String (32) | `(varies)` | GM tube model name (e.g. SBM-20, J305). Pulse builds only. Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
 | PCNT Filter | Int 0-1023 | `200` | Glitch filter threshold (ESP32 PCNT builds only). `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT Pin Pull | Int 0-2 | `0` | PCNT input pin pull: `0`=none (floating), `1`=up, `2`=down. ESP32 PCNT builds only. Default floating suits most modules that drive the line actively both directions; change to pull-up for open-drain outputs or pull-down for active-high modules without their own idle pull. |
-| Debounce (us) | Int 0-10000 | `500` | Software interrupt debounce. Pulse builds without PCNT only. |
+| Debounce (us) | Int 0-10000 | `200` | Software interrupt debounce. Pulse builds without PCNT only. |
 | Tube dead time | Int 0-1000 | `0` | GM tube dead time in microseconds, used to compensate the rate at high CPS. Pulse builds only. `0` disables. Typical values: J305 = 50, SBM-20 = 150. |
 | α Alpha / β Beta / γ Gamma | Boolean | `false` | Which radiation types the connected tube detects. Surfaces alongside the **Geiger Counter** model field. Informational; consumed by upstream aggregators. Hidden on tests builds and when `-D GEIGER_MODEL_FIXED`. |
 | Pulse width (us) | Int 10-2000 | `(varies)` | Width of the simulated pulse on the TX pin. Test builds only (`test`, `testpulse`). |

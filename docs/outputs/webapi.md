@@ -64,8 +64,8 @@ are never aggregated into long-term history.
 | `fl`  | uint32  | Feature-flag bitmask (which optional output modules are compiled in) |
 | `rr`  | uint32  | Normalised last-reset reason |
 | `m`   | uint8   | Sharing mode: `1` = heartbeat-only, `2` = full readings (mode `0` doesn't handshake) |
-| `la`  | float32 | Optional. Latitude in degrees (−90..90), 2-decimal-place rounded on device for privacy (~1.1 km cells). Omitted when both `la` and `lo` are `0` (the "use IP" signal). |
-| `lo`  | float32 | Optional. Longitude in degrees (−180..180). Same rounding and omission rules as `la`. |
+| `la`  | float32 | Optional. Latitude in degrees (-90..90), 2-decimal-place rounded on device for privacy (~1.1 km cells). Omitted when both `la` and `lo` are `0` (the "use IP" signal). |
+| `lo`  | float32 | Optional. Longitude in degrees (-180..180). Same rounding and omission rules as `la`. |
 
 The handshake is what registers your station on the map and keeps the
 server's metadata (version, board, mode, etc.) current. The server
@@ -188,8 +188,9 @@ silence isn't a severity-banded anomaly.
 ## Endpoint
 
 Canonical URL: `http://api.espgeiger.com/api/1/`. HTTP-only by design -
-the per-request signature provides tamper-resistance; TLS would add
-heap pressure on ESP8266 without improving the threat model.
+each request is individually signed, so it can't be tampered with in
+transit, and adding TLS would cost a lot of memory on the ESP8266 for no
+real security gain.
 
 | Path             | Method | Purpose |
 |---|---|---|

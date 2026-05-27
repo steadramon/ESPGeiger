@@ -22,13 +22,13 @@ The flash **colour** is derived from a *Poisson z-score* against the 5-minute ba
 z = (CPM - CPM5) / sqrt(CPM5)
 ```
 
-This is noise-aware — at low rates a small absolute change carries little statistical weight, while at high rates even a modest absolute change can be significant. The colour buckets:
+This is noise-aware - at low rates a small absolute change carries little statistical weight, while at high rates even a modest absolute change can be significant. The colour buckets:
 
 | Condition | Colour | Meaning |
 |---|---|---|
 | `CPM < 0.01` and `CPM5 < 0.01` | __BLUE__ | No signal (no clicks observed) |
-| `z > 3` | __RED__ | Significant rise (≥3σ above baseline) — likely a real source |
-| `z > 1.5` | __YELLOW__ | Rising (≥1.5σ above baseline) — worth watching |
+| `z > 3` | __RED__ | Significant rise (≥3σ above baseline) - likely a real source |
+| `z > 1.5` | __YELLOW__ | Rising (≥1.5σ above baseline) - worth watching |
 | `z < -1.5` | __PURPLE__ | Dropping (≥1.5σ below baseline) |
 | _otherwise_ | __GREEN__ | Within normal variation around baseline |
 

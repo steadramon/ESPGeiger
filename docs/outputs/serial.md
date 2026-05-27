@@ -189,7 +189,7 @@ If you leave off the trailing newline the firmware adds one for you. Multi-line 
 ### Notes
 
 * Template max length is 128 characters; rendered line also caps at 128 bytes per emit.
-* MightyOhm output (format 3) stays its own special case because the mode tag (`SLOW`/`FAST`/`INST`) and CPM extrapolation in `INST` mode can't be expressed as a static template. For a MightyOhm-like line with your own labels, combine `{cps_i}` + `{cpm}` + `{mode}` - note that in the `INST` regime the CPM won't match MightyOhm's wire-exact behaviour.
+* MightyOhm output (format 1) stays its own special case because the mode tag (`SLOW`/`FAST`/`INST`) and CPM extrapolation in `INST` mode can't be expressed as a static template. For a MightyOhm-like line with your own labels, combine `{cps_i}` + `{cpm}` + `{mode}` - note that in the `INST` regime the CPM won't match MightyOhm's wire-exact behaviour.
 
 ## Baud rate
 

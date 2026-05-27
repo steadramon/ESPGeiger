@@ -12,7 +12,7 @@ Where the hardware is supported, ESPGeiger is able to output information to a SD
 
 Please note at this time only the [ESPGeiger Log](/hardware/espgeigerlog) hardware is supported, a Micro SD Card slot is included on the hardware board.
 
-Output to CSV files are written to a subdirectory of the SDCard, following the following format:
+CSV files are written to a subdirectory of the SD Card, using the following format:
 
 `<year><month>/<year><month><day>.csv`
 

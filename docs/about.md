@@ -8,14 +8,14 @@ parent: Home
 
 # About
 
-ESPGeiger offers broad compatibility, supporting both common pulse-based Geiger counters and specific models that utilise serial communication.
+ESPGeiger connects your Geiger counter to your network. It works with common pulse-based counters as well as a number of models that report over a serial link.
 
-By using ESPGeiger, you can transform your Geiger counter from a standalone device into a connected and informative tool. You can monitor radiation trends, share data with others, and contribute to scientific research.
+Once your counter is connected, you can watch radiation trends as they happen, keep a record over time, and share your readings with community monitoring networks if you wish.
 
-- __Internet Connectivity__: ESPGeiger bridges the gap between your Geiger counter and the online world.
-- __Integrated Web Interface__: Visualise the latest captured radiation data and change options easily from your Web browser.
-- __Recording and Reporting__: ESPGeiger goes beyond simple data display. It can record your Geiger counter's readings over time, allowing you to track radiation trends and analyze potential fluctuations.
-- __Data Sharing__:  ESPGeiger opens doors for data sharing with various platforms. Here are some popular options:
-    - __MQTT__: Publish your radiation data to your MQTT message broker for integration with other smart home devices or custom applications.
-    - __HomeAssistant__: Integrate your Geiger counter data into your Homeassistant dashboard for a centralized view of your smart home environment, including radiation levels.
-    - __radmon.org__: Contribute to the global radiation monitoring effort by submitting your data to radmon.org, a community platform for enthusiasts and researchers.
+- __Internet Connectivity__: Get your Geiger counter online, so its readings are available beyond the device itself.
+- __Integrated Web Interface__: View the latest readings and change settings from your web browser, no app required.
+- __Recording and Reporting__: ESPGeiger records your counter's readings over time, so you can follow radiation trends and spot any change in your background level.
+- __Data Sharing__: ESPGeiger can send your readings to a number of platforms. Some popular options:
+    - __MQTT__: Publish your readings to an MQTT broker to feed them into other smart home devices or your own applications.
+    - __Home Assistant__: Add your counter's readings to your Home Assistant dashboard, alongside the rest of your home's sensors.
+    - __radmon.org__: Submit your data to radmon.org, a community platform where enthusiasts and researchers pool their readings into a worldwide monitoring effort.

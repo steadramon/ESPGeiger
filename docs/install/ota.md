@@ -25,10 +25,10 @@ which one you need - **it must match the variant you originally installed**.
 For example:
 
 - `esp8266_pulse.v1.2.3.bin` - ESP8266 with a pulse-output tube
-- `esp8266_serial.v1.2.3.bin` - ESP8266 with a serial-output counter (GC10, MightyOhm, …)
+- `esp8266_serial.v1.2.3.bin` - ESP8266 with a serial-output counter (GC10, MightyOhm, ...)
 - `espgeigerhw.v1.2.3.bin` - ESPGeiger-HW board
 - `espgeigerlog_pulse.v1.2.3.bin` - ESPGeiger Log with a pulse tube
-- …etc
+- ...etc
 
 Not sure which one you're running? The web portal shows the build name on
 the **Info** page as `BUILD_ENV` - match that.
@@ -51,19 +51,19 @@ the firmware upload page.
 
 ## 4. Choose the `.bin` file
 
-Click **Browse…** and pick the `.bin` you downloaded in step 1.
+Click **Browse...** and pick the `.bin` you downloaded in step 1.
 
 ## 5. Click **Update**
 
 Click the **Update** button on the upload page. The device:
 
-- Shows *"Update in progress…"* on its OLED (if fitted)
+- Shows *"Update in progress..."* on its OLED (if fitted)
 - Lights the activity LED
 - Stops all regular activity (MQTT publishes, WebAPI posts, serial output)
   to avoid interfering with the flash write
 - Receives the new firmware, writes it, verifies it, and reboots
 
-Total time is typically **15–30 seconds** depending on your Wi-Fi. Don't
+Total time is typically **15-30 seconds** depending on your Wi-Fi. Don't
 close the browser tab until the upload bar finishes.
 
 ## After the update

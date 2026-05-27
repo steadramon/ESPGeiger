@@ -8,7 +8,7 @@ nav_order: 10
 
 # ThingSpeak Output
 
-ESPGeiger can be configured to send to a ThingSpeak Channel. ESPGeiger updates the channel every 90 seconds. This is intended that you will always be below the free account limit.
+ESPGeiger can be configured to send to a ThingSpeak Channel, updating it every 90 seconds. That cadence is chosen to keep you comfortably below the free account's update limit.
 
 ![ThingSpeak](/img/thingspeak.png)
 

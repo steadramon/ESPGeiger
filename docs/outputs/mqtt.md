@@ -12,7 +12,7 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 
 - ESPGeiger transmits radiation statistics every minute. This can be configured.
 - By default, it connects to the MQTT broker on the standard port `1883`
-- ESPGeiger publishes data to a base topic named: `ESPGeiger‑<device_id>`
+- ESPGeiger publishes data to a base topic named: `ESPGeiger-<device_id>`
 
 ## Published Topics
 
@@ -83,7 +83,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `ip` | Device IP address |
 | `rssi` | WiFi signal (dBm) |
 | `c_total` | Total clicks since boot |
-| `tick` | EMA-smoothed sTickerCB duration (μs) - device load signal |
+| `tick` | Smoothed device-load figure (μs spent in the once-per-second housekeeping pass) |
 | `t_max` | Peak `tick` in last 60 s |
 | `lps` | Loop iterations per second |
 | `free_mem` | Free heap (bytes) |

@@ -15,8 +15,8 @@ nav_order: 10
 Three settings on the **Display** config page control when the OLED is on:
 
 - **Timeout** *(push-button builds only)* - seconds of inactivity before the display turns off after a tap. `0` falls back to the On/Off Time schedule below.
-- **On Time / Off Time** - daily schedule; outside the window the display is off. Leave both blank for "always on". Window crosses midnight if `from > to` (e.g. `22:00`–`07:00`).
-- **Brightness** - 0–100 %.
+- **On Time / Off Time** - daily schedule; outside the window the display is off. Leave both blank for "always on". Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`).
+- **Brightness** - 0-100 %.
 
 On builds **without** a push button, only the schedule applies.
 

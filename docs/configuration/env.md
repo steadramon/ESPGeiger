@@ -8,9 +8,7 @@ parent: Configuration
 
 # Environment sensor
 
-ESPGeiger can read temperature, humidity, and atmospheric pressure from a supported I2C sensor wired to the device. Detection is automatic at boot - no build flag, no firmware variant. If a supported sensor is found, the values appear on the `/status` page below the radiation readings and on every output channel (MQTT, Webhook, WebAPI, UDP, Serial templates, Thingspeak).
-
-If no sensor is wired in, the firmware uses zero memory beyond the small probe at boot.
+ESPGeiger reads temperature, humidity and pressure off an I2C sensor wired to the device. Plug a supported one in, power up, and it's picked up automatically - nothing to flash, nothing to configure. The readings land on the `/status` page under the radiation numbers and go out on every channel (MQTT, Webhook, WebAPI, UDP, Serial templates, Thingspeak).
 
 ## Supported sensors
 
@@ -78,4 +76,4 @@ Visit `/vars.json` on the device to see the current rendered value of every vari
 * **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring, and the `env.sda` / `env.scl` pref values. Enable debug logging to see the probe attempt in the console.
 * **Humidity missing from the row.** You probably have a BMP280, not a BME280. The two parts look similar on a board but only BME280 has the humidity sensor. The boot log line `Env: <chip> detected` tells you which one you have (serial console, or the Console panel on the `/status` page).
 * **Pressure missing.** You probably have an AHT-only module without the paired BMP280. Add a BMP280 on the same I2C bus, or accept that pressure is not available.
-* **Wrong temperature just after boot.** The first sample seeds the EMA. Allow 30 seconds for the smoothed value to settle.
+* **Wrong temperature just after boot.** The first reading sets the baseline. Allow 30 seconds for the smoothed value to settle.
