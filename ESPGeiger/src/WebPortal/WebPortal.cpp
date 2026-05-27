@@ -2091,8 +2091,9 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // Prometheus text exposition. Per-metric sendChunk so a long friendly-name
-  // never overflows a single buffer.
+  // Prometheus text exposition. chipid is the only stable per-series label.
+  // Friendly name + build metadata are exposed via device_info so renaming
+  // a device doesn't fork its historical time series.
   const char* cid  = DeviceInfo::chipid();
   const char* fn   = DeviceInfo::friendlyName();
   const char* name = (fn && fn[0]) ? fn : DeviceInfo::hostname();
@@ -2111,9 +2112,16 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // Emit a single value line. `extra` lets us add extra labels (eg window).
   #define VAL(mname, extra, fmt, val) \
     n = snprintf_P(buf, sizeof(buf), \
-      PSTR(mname "{chipid=\"%s\",name=\"%s\"" extra "} " fmt "\n"), \
-      cid, name, val); \
+      PSTR(mname "{chipid=\"%s\"" extra "} " fmt "\n"), \
+      cid, val); \
     if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n)
+
+  HEAD("device_info", "gauge",
+       "Device metadata; value always 1. Join via on(chipid) for naming.");
+  n = snprintf_P(buf, sizeof(buf),
+    PSTR("device_info{chipid=\"%s\",name=\"%s\",model=\"%s\",ver=\"%s\",env=\"%s\"} 1\n"),
+    cid, name, GEIGER_MODEL, RELEASE_VERSION, BUILD_ENV);
+  if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
 
   HEAD("geiger_cpm", "gauge", "Counts per minute (window label selects averaging period)");
   format_f(fb, sizeof(fb), cpm, 2);                   VAL ("geiger_cpm", ",window=\"1m\"",  "%s", fb);
@@ -2150,21 +2158,21 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (b < nb - 1) {
       uint32_t ub_us = 64UL << b;  // bucket upper bound in microseconds
       n = snprintf_P(buf, sizeof(buf),
-        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",name=\"%s\",le=\"%lu.%06lu\"} %lu\n"),
-        cid, name,
+        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",le=\"%lu.%06lu\"} %lu\n"),
+        cid,
         (unsigned long)(ub_us / 1000000UL),
         (unsigned long)(ub_us % 1000000UL),
         (unsigned long)cumul);
     } else {
       n = snprintf_P(buf, sizeof(buf),
-        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",name=\"%s\",le=\"+Inf\"} %lu\n"),
-        cid, name, (unsigned long)cumul);
+        PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",le=\"+Inf\"} %lu\n"),
+        cid, (unsigned long)cumul);
     }
     if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
   }
   n = snprintf_P(buf, sizeof(buf),
-    PSTR("geiger_pulse_interval_seconds_count{chipid=\"%s\",name=\"%s\"} %lu\n"),
-    cid, name, (unsigned long)cumul);
+    PSTR("geiger_pulse_interval_seconds_count{chipid=\"%s\"} %lu\n"),
+    cid, (unsigned long)cumul);
   if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
 
   #undef HEAD
