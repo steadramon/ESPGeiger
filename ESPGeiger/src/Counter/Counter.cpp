@@ -151,17 +151,19 @@ void Counter::secondticker(unsigned long stick_now) {
       while (currentTime >= nextBoundary) nextBoundary += kBoundarySecs;
     }
     if (fire) {
-      // currentTime is at the boundary so integer math gives the exact UTC
-      // hour; gmtime/mktime cost lives in NTP's sync callback instead.
-      int utc_hour = (int)((currentTime / 3600) % 24);
+      // Track day index (epoch / 86400) so day rollover fires even when a
+      // catch-up jump (NTP step) skips past midnight without landing on it.
+      static uint32_t lastDay = 0;
+      uint32_t curDay = (uint32_t)(currentTime / 86400);
       if (boundaryArmed) {
         day_hourly_history.push(clicks_hour);
-        clicks_hour = 0;
-        if (utc_hour == 0) {
-          clicks_yesterday = clicks_today;
-          clicks_today = 0;
-        }
       }
+      clicks_hour = 0;
+      if (curDay != lastDay) {
+        if (boundaryArmed) clicks_yesterday = clicks_today;
+        clicks_today = 0;
+      }
+      lastDay = curDay;
       boundaryArmed = true;
     }
   }
