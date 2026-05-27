@@ -22,7 +22,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install 'platformio==6.1.9' 'intelhex==2.3.0'
       - name: Set version tag from git
-        run: sed -i "s/RELEASE_VERSION \"devel\"/RELEASE_VERSION \"${GITHUB_REF#refs/tags/}\"/g" ESPGeiger/src/Util/DeviceInfo.h
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${TAG#v}"   # drop a leading v (tag vX.Y.Z -> version X.Y.Z)
+          sed -i "s/RELEASE_VERSION \"devel\"/RELEASE_VERSION \"${TAG}\"/g" ESPGeiger/src/Util/DeviceInfo.h
       - name: Run PlatformIO
         run: platformio run
       - name: Prepare Release Assets
