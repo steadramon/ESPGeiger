@@ -453,7 +453,7 @@ void xbuf::remSeg()
 //**************************************************************************************************************
 AsyncHTTPRequest::AsyncHTTPRequest(): _readyState(readyStateUnsent), _HTTPcode(0), _chunked(false),
   _debug(DEBUG_IOTA_HTTP_SET)
-  , _timeout(DEFAULT_RX_TIMEOUT), _lastActivity(0), _requestStartTime(0), _requestEndTime(0), _URL(nullptr)
+  , _timeout(DEFAULT_RX_TIMEOUT), _requestTimeout(DEFAULT_RX_TIMEOUT), _lastActivity(0), _requestStartTime(0), _requestEndTime(0), _URL(nullptr)
   , _connectedHost(nullptr), _connectedPort(-1), _client(nullptr), _contentLength(0), _contentRead(0)
   , _readyStateChangeCB(nullptr), _readyStateChangeCBarg(nullptr), _onDataCB(nullptr), _onDataCBarg(nullptr)
   , _request(nullptr), _response(nullptr), _chunks(nullptr), _headers(nullptr)
@@ -637,6 +637,7 @@ void AsyncHTTPRequest::onReadyStateChange(readyStateChangeCB cb, void* arg)
 void  AsyncHTTPRequest::setTimeout(int seconds)
 {
   _timeout = seconds;
+  _requestTimeout = seconds;   // remembered so _send()'s connect-phase reset restores this, not the 3s default
 }
 
 ////////////////////////////////////////
@@ -1337,7 +1338,9 @@ size_t  AsyncHTTPRequest::_send()
   if ( ! _client->connected())
   {
     // KH fix bug https://github.com/khoih-prog/AsyncHTTPRequest_Generic/issues/38
-    _timeout = DEFAULT_RX_TIMEOUT;
+    // Restore the caller's setTimeout() value, not the 3s default - otherwise
+    // a per-request setTimeout(30) is silently clobbered during connect.
+    _timeout = _requestTimeout;
 
     return 0;
   }

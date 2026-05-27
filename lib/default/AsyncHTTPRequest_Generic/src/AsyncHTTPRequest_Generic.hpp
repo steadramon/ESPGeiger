@@ -399,6 +399,7 @@ class AsyncHTTPRequest
     bool            _chunked;                   // Processing chunked response
     bool            _debug;                     // Debug state
     uint32_t        _timeout;                   // Default or user overide RxTimeout in seconds
+    uint32_t        _requestTimeout;            // user setTimeout value, preserved across the connect-phase reset in _send()
     uint32_t        _lastActivity;              // Time of last activity
     uint32_t        _requestStartTime;          // Time last open() issued
     uint32_t        _requestEndTime;            // Time of last disconnect
