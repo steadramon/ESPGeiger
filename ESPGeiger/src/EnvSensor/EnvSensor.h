@@ -20,10 +20,13 @@
 #define ENVSENSOR_H
 
 #include <Arduino.h>
+#include "../Util/Globals.h"
+
+#ifndef DISABLE_ENVSENSOR
 #include <BoschTHP.h>
 #include <AsairAHT.h>
 #include "../Module/EGModule.h"
-#include "../Util/Globals.h"
+#endif
 
 // If OLED is in the build it owns the I2C pin layout - share its pins so
 // EnvSensor doesn't reconfigure Wire underneath the display. Platform
@@ -59,6 +62,8 @@
 
 #define ENV_SAMPLE_MS    10000UL
 #define ENV_EMA_ALPHA     0.1f
+
+#ifndef DISABLE_ENVSENSOR
 
 class EnvSensor : public EGModule {
   public:
@@ -122,6 +127,24 @@ class EnvSensor : public EGModule {
     AsairAHT::Sensor _aht;
     State*   _st = nullptr;
 };
+
+#else  // DISABLE_ENVSENSOR
+
+// Heap-regression / no-env build stub. No module registration, no library
+// pull-in, no I2C probe. All accessors return constants so callers'
+// `if (envsensor.present())` branches dead-code-eliminate at link time.
+class EnvSensor {
+  public:
+    enum Unit : uint8_t { UNIT_C = 0, UNIT_F = 1, UNIT_K = 2 };
+    bool    present() const   { return false; }
+    uint8_t unit() const      { return UNIT_C; }
+    float   tempC() const     { return NAN; }
+    float   humidity() const  { return NAN; }
+    float   pressure() const  { return NAN; }
+    float   tempUser() const  { return NAN; }
+};
+
+#endif  // DISABLE_ENVSENSOR
 
 extern EnvSensor envsensor;
 

@@ -17,6 +17,11 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EnvSensor.h"
+
+EnvSensor envsensor;
+
+#ifndef DISABLE_ENVSENSOR
+
 #include <Wire.h>
 #include <math.h>
 #include "../Logger/Logger.h"
@@ -24,7 +29,6 @@
 #include "../Prefs/EGPrefs.h"
 #include "../Util/StringUtil.h"
 
-EnvSensor envsensor;
 EG_REGISTER_MODULE(envsensor)
 
 EG_PSTR(EN_L_SDA,  "I2C SDA pin");
@@ -210,3 +214,5 @@ size_t EnvSensor::status_json(char* buf, size_t cap, unsigned long now) {
     PSTR("\"env\":{\"t\":%s,\"h\":null,\"p\":%s,\"u\":%u,\"chip\":\"%S\"}"),
     b_t, b_p, _unit, chipName());
 }
+
+#endif  // DISABLE_ENVSENSOR
