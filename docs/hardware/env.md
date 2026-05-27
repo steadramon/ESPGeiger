@@ -23,7 +23,7 @@ Either is fine for ESPGeiger's purposes — the combo board is usually cheaper a
 
 ## The BMP280-pretending-to-be-BME280 trap
 
-If you bought a "BME280" and the humidity row is missing on `/status`, you almost certainly got a BMP280. Check the actual chip name in `/info`; the firmware reports what it found. There's no firmware workaround — the chip physically doesn't have a humidity sensor. Either return it or accept temperature + pressure only.
+If you bought a "BME280" and the humidity row is missing on `/status`, you almost certainly got a BMP280. The firmware reports what it found at boot as `Env: <chip> detected` — check the serial console, or the Console panel on the `/status` page. There's no firmware workaround — the chip physically doesn't have a humidity sensor. Either return it or accept temperature + pressure only.
 
 ## AHT-only modules
 

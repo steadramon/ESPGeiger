@@ -53,7 +53,7 @@ If you need different pins, change them in **Configuration → Environment**. A 
 
 ## Combo modules
 
-The popular AliExpress "AHT20+BMP280" module has two chips on one board (AHT20 at 0x38, BMP280 at 0x76). ESPGeiger detects both, composes temperature and humidity from the AHT20 (higher precision), and pressure from the BMP280. The chip name in `/info` will show `AHTxx+BMP280`. The BMP280's own temperature reading is used internally for pressure compensation but not exposed.
+The popular AliExpress "AHT20+BMP280" module has two chips on one board (AHT20 at 0x38, BMP280 at 0x76). ESPGeiger detects both, composes temperature and humidity from the AHT20 (higher precision), and pressure from the BMP280. The boot log reports `Env: AHTxx+BMP280 detected` (serial console, or the Console panel on the `/status` page). The BMP280's own temperature reading is used internally for pressure compensation but not exposed.
 
 ## Output channels
 
@@ -76,6 +76,6 @@ Visit `/vars.json` on the device to see the current rendered value of every vari
 ## Troubleshooting
 
 * **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring, and the `env.sda` / `env.scl` pref values. Enable debug logging to see the probe attempt in the console.
-* **Humidity missing from the row.** You probably have a BMP280, not a BME280. The two parts look similar on a board but only BME280 has the humidity sensor. The chip name on `/info` will tell you which one you have.
+* **Humidity missing from the row.** You probably have a BMP280, not a BME280. The two parts look similar on a board but only BME280 has the humidity sensor. The boot log line `Env: <chip> detected` tells you which one you have (serial console, or the Console panel on the `/status` page).
 * **Pressure missing.** You probably have an AHT-only module without the paired BMP280. Add a BMP280 on the same I2C bus, or accept that pressure is not available.
 * **Wrong temperature just after boot.** The first sample seeds the EMA. Allow 30 seconds for the smoothed value to settle.
