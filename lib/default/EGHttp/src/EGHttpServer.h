@@ -254,9 +254,8 @@ class EGHttpServer {
     Slot* findSlot(AsyncClient* c);
     Slot* allocSlot(AsyncClient* c);
     void  resetSlot(Slot* s);
-    // Mark slot for tick reclaim. Frees buf early - dispatch and any
-    // chunked send are complete by here, so the request buffer (plus its
-    // chunkAcc tail) is no longer needed. resetSlot's null-check is idempotent.
+    // Mark slot for tick reclaim. Frees buf early - dispatch and chunked
+    // send are done by here, so the request buffer is no longer needed.
     inline void markDone(Slot* s) {
       if (s->buf) { free(s->buf); s->buf = nullptr; }
       s->chunkAcc       = nullptr;
