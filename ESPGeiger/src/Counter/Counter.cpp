@@ -662,6 +662,14 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (n > 0) res.sendChunk(buf, (size_t)n);
     }
   }
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  // UDP feed loss %; only once a producer is heard, so a fresh rx isn't 0.
+  if (gcounter.udp_rx() && gcounter.udp_rx()->packets_accepted() > 0) {
+    uint16_t lx10 = gcounter.udp_rx()->loss_pct_x10();
+    n = snprintf_P(buf, sizeof(buf), PSTR(",\"loss\":%u.%u"), lx10 / 10, lx10 % 10);
+    if (n > 0) res.sendChunk(buf, (size_t)n);
+  }
+#endif
   n = snprintf_P(buf, sizeof(buf),
     PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u}"),
     TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
