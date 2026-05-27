@@ -43,12 +43,13 @@ size_t render(const char* key, size_t keylen, char* buf, size_t cap);
 // or compile-time const). Output is always NUL-terminated.
 size_t renderTemplate(const char* tpl, char* buf, size_t cap);
 
-// Public introspection for /vars debug + docs generators.
+// Public introspection for /vars debug. count()/at() project from the
+// internal Entry table - no BSS cache.
 struct VarDef {
   const char* key;
-  const char* desc;
 };
-const VarDef* list();   // sentinel-terminated array
+size_t  count();
+VarDef  at(size_t i);   // {nullptr} when i >= count()
 
 }  // namespace OutputVars
 

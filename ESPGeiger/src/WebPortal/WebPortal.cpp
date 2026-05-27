@@ -2069,11 +2069,12 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // current rendered value. Useful for authoring sout.tpl templates.
   res.beginChunked(200, "application/json");
   res.sendChunk(F("{"));
-  const OutputVars::VarDef* d = OutputVars::list();
+  size_t total = OutputVars::count();
   bool first = true;
-  for (; d->key; d++) {
+  for (size_t i = 0; i < total; i++) {
+    OutputVars::VarDef v = OutputVars::at(i);
     char raw[64];
-    size_t n = OutputVars::render(d->key, strlen(d->key), raw, sizeof(raw));
+    size_t n = OutputVars::render(v.key, strlen(v.key), raw, sizeof(raw));
     // Renderers return 0 when the underlying hardware is absent (humidity
     // on BMP280, env vars when no sensor, etc). Omit the key entirely so
     // /vars.json reflects what's actually queryable on this device.
@@ -2082,7 +2083,7 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
     size_t en = json_escape(raw, n, esc, sizeof(esc));
     char line[128];
     int m = snprintf_P(line, sizeof(line), PSTR("%s\"%s\":\"%.*s\""),
-                       first ? "" : ",", d->key, (int)en, esc);
+                       first ? "" : ",", v.key, (int)en, esc);
     if (m > 0 && (size_t)m < sizeof(line)) res.sendChunk(line, (size_t)m);
     first = false;
   }

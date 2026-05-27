@@ -57,7 +57,6 @@ struct Entry {
     unsigned long (*fn_ulong)();
     const char*   (*fn_str)();
   };
-  const char* desc;
 };
 
 #define EV_KEY(s) s, (uint8_t)(sizeof(s) - 1)
@@ -82,26 +81,26 @@ static const char*   g_name() {
 }
 
 static const Entry ENTRIES[] = {
-  {EV_KEY("cpm"),   K_INT,    {.fn_int   = g_cpm},   "1-minute CPM (integer)"},
-  {EV_KEY("cps"),   K_FLOAT,  {.fn_float = g_cps},   "Counts per second, rolling float"},
-  {EV_KEY("cps_i"), K_INT,    {.fn_int   = g_cps_i}, "Counts in the most recent whole second (integer)"},
-  {EV_KEY("cpm5"),  K_FLOAT,  {.fn_float = g_cpm5},  "5-minute CPM rolling average"},
-  {EV_KEY("cpm15"), K_FLOAT,  {.fn_float = g_cpm15}, "15-minute CPM rolling average"},
-  {EV_KEY("usv"),   K_FLOAT,  {.fn_float = g_usv},   "Dose rate in microsieverts per hour"},
-  {EV_KEY("tc"),    K_ULONG,  {.fn_ulong = g_tc},    "Lifetime total clicks since first boot"},
-  {EV_KEY("ut"),    K_ULONG,  {.fn_ulong = g_ut},    "Uptime in seconds since boot"},
-  {EV_KEY("id"),    K_STR,    {.fn_str   = g_id},    "Six-hex chip id"},
-  {EV_KEY("name"),  K_STR,    {.fn_str   = g_name},  "Friendly name or hostname"},
-  {EV_KEY("rssi"),  K_INT,    {.fn_int   = g_rssi},  "WiFi RSSI in dBm"},
-  {EV_KEY("mem"),   K_ULONG,  {.fn_ulong = g_mem},   "Free heap in bytes"},
-  {EV_KEY("mode"),  K_MODE,   {.fn_int   = nullptr}, "MightyOhm-style mode tag SLOW/FAST/INST"},
+  {EV_KEY("cpm"),   K_INT,    {.fn_int   = g_cpm}},    // 1-minute CPM (integer)
+  {EV_KEY("cps"),   K_FLOAT,  {.fn_float = g_cps}},    // Counts per second, rolling float
+  {EV_KEY("cps_i"), K_INT,    {.fn_int   = g_cps_i}},  // Counts in the most recent whole second (integer)
+  {EV_KEY("cpm5"),  K_FLOAT,  {.fn_float = g_cpm5}},   // 5-minute CPM rolling average
+  {EV_KEY("cpm15"), K_FLOAT,  {.fn_float = g_cpm15}},  // 15-minute CPM rolling average
+  {EV_KEY("usv"),   K_FLOAT,  {.fn_float = g_usv}},    // Dose rate in microsieverts per hour
+  {EV_KEY("tc"),    K_ULONG,  {.fn_ulong = g_tc}},     // Lifetime total clicks since first boot
+  {EV_KEY("ut"),    K_ULONG,  {.fn_ulong = g_ut}},     // Uptime in seconds since boot
+  {EV_KEY("id"),    K_STR,    {.fn_str   = g_id}},     // Six-hex chip id
+  {EV_KEY("name"),  K_STR,    {.fn_str   = g_name}},   // Friendly name or hostname
+  {EV_KEY("rssi"),  K_INT,    {.fn_int   = g_rssi}},   // WiFi RSSI in dBm
+  {EV_KEY("mem"),   K_ULONG,  {.fn_ulong = g_mem}},    // Free heap in bytes
+  {EV_KEY("mode"),  K_MODE,   {.fn_int   = nullptr}},  // MightyOhm-style mode tag SLOW/FAST/INST
 #ifdef ESPG_HV_ADC
-  {EV_KEY("hv"),    K_HV,     {.fn_int   = nullptr}, "Measured HV in volts"},
+  {EV_KEY("hv"),    K_HV,     {.fn_int   = nullptr}},  // Measured HV in volts
 #endif
-  {EV_KEY("t"),     K_ENV_T,  {.fn_int   = nullptr}, "Temperature in user-preferred unit (env.unit)"},
-  {EV_KEY("h"),     K_ENV_H,  {.fn_int   = nullptr}, "Relative humidity %"},
-  {EV_KEY("p"),     K_ENV_P,  {.fn_int   = nullptr}, "Pressure in hPa"},
-  {nullptr, 0, 0,             {.fn_int   = nullptr}, nullptr},
+  {EV_KEY("t"),     K_ENV_T,  {.fn_int   = nullptr}},  // Temperature in user-preferred unit (env.unit)
+  {EV_KEY("h"),     K_ENV_H,  {.fn_int   = nullptr}},  // Relative humidity %
+  {EV_KEY("p"),     K_ENV_P,  {.fn_int   = nullptr}},  // Pressure in hPa
+  {nullptr, 0, 0,             {.fn_int   = nullptr}},
 };
 
 static const Entry* find(const char* key, size_t klen) {
@@ -224,22 +223,14 @@ size_t renderTemplate(const char* tpl, char* buf, size_t cap) {
   return pos;
 }
 
-const VarDef* list() {
-  // Sentinel-terminated. Built once from ENTRIES so callers see only the
-  // public (key, desc) shape and can't accidentally invoke a renderer.
-  static VarDef defs[sizeof(ENTRIES) / sizeof(ENTRIES[0])];
-  static bool built = false;
-  if (!built) {
-    size_t i = 0;
-    for (const Entry* e = ENTRIES; e->key; e++, i++) {
-      defs[i].key = e->key;
-      defs[i].desc = e->desc;
-    }
-    defs[i].key = nullptr;
-    defs[i].desc = nullptr;
-    built = true;
-  }
-  return defs;
+size_t count() {
+  return (sizeof(ENTRIES) / sizeof(ENTRIES[0])) - 1;  // -1 for trailing sentinel
+}
+
+VarDef at(size_t i) {
+  // Direct projection out of ENTRIES - no BSS cache.
+  if (i >= count()) return VarDef{nullptr};
+  return VarDef{ENTRIES[i].key};
 }
 
 }  // namespace OutputVars
