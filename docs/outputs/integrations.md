@@ -38,22 +38,22 @@ Response:
 | `rssi` | WiFi signal strength in dBm |
 | `hv` | HV reading in volts (ESPGeiger-HW only) |
 | `loss` | Packet loss on the feed, as a percentage (UDP-receiver builds only; appears once a producer has been heard) |
-| `tick` | Device load indicator: smoothed microseconds spent in the once-per-second housekeeping pass. Lower is better; brief spikes (e.g. an MQTT publish) are averaged out. |
-| `t_max` | The worst-case `tick` seen in the last 60 seconds. Pair with `tick` to spot occasional load peaks. |
-| `lps` | Main-loop iterations per second, smoothed (higher is healthier). |
 
-### Raw values (`?raw=1`)
+### Raw / diagnostic values (`?raw=1`)
 
-`mem` and `lps` are lightly smoothed so a single read can't catch a transient dip and report a phantom drop. For diagnostics where you want the instantaneous values, append `?raw=1`:
+`mem` is lightly smoothed so a single read can't catch a transient dip and report a phantom drop, and the device-load fields (`tick`, `t_max`, `lps`) are left off the default response to keep the frequently-polled `/json` small. Append `?raw=1` for diagnostics:
 
 ```
 http://192.168.1.100/json?raw=1
 ```
 
-In raw mode `mem` and `lps` are un-smoothed, and three heap-health fields are added:
+Raw mode reports `mem` un-smoothed and adds:
 
 | Field | Description |
 |---|---|
+| `tick` | Smoothed microseconds spent in the once-per-second housekeeping pass. Lower is better. |
+| `t_max` | Worst-case `tick` in the last 60 seconds. |
+| `lps` | Main-loop iterations per second, un-smoothed (last full second). |
 | `frag` | Heap fragmentation, percent |
 | `lfb` | Largest contiguous free block in bytes |
 | `lfblow` | Largest-free-block low-water mark since boot, in bytes |
