@@ -25,6 +25,7 @@ namespace TickProfile {
   extern uint32_t tick_us;      // sTickerCB duration, EMA-smoothed (alpha = 1/8)
   extern uint32_t tick_max_us;  // peak tick_us since last 60s window reset
   extern uint32_t lps;          // loop() iterations per second, EMA-smoothed (a=1/8)
+  extern uint32_t lps_raw;      // last full second's count, un-smoothed (?raw=1)
   extern volatile uint32_t _lps_count;
 
   inline void countIter() { ++_lps_count; }

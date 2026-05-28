@@ -27,6 +27,7 @@ namespace TickProfile {
   uint32_t tick_us = 0;
   uint32_t tick_max_us = 0;
   uint32_t lps = 0;
+  uint32_t lps_raw = 0;
   volatile uint32_t _lps_count = 0;
 #ifdef LOOP_PROFILE
   uint32_t loop_body_us = 0;
@@ -57,6 +58,7 @@ void TickProfile::markModules() { t_after_modules = micros(); }
 
 void TickProfile::endTick() {
   // EMA (a=1/8) in-place: smooths single-second dips so readers don't see phantom drops.
+  TickProfile::lps_raw = _lps_count;
   TickProfile::lps = (TickProfile::lps * 7 + _lps_count) >> 3;
   _lps_count = 0;
   uint32_t this_tick = (uint32_t)(micros() - t_start);

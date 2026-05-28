@@ -42,6 +42,24 @@ Response:
 | `t_max` | The worst-case `tick` seen in the last 60 seconds. Pair with `tick` to spot occasional load peaks. |
 | `lps` | Main-loop iterations per second, smoothed (higher is healthier). |
 
+### Raw values (`?raw=1`)
+
+`mem` and `lps` are lightly smoothed so a single read can't catch a transient dip and report a phantom drop. For diagnostics where you want the instantaneous values, append `?raw=1`:
+
+```
+http://192.168.1.100/json?raw=1
+```
+
+In raw mode `mem` and `lps` are un-smoothed, and three heap-health fields are added:
+
+| Field | Description |
+|---|---|
+| `frag` | Heap fragmentation, percent |
+| `lfb` | Largest contiguous free block in bytes |
+| `lfblow` | Largest-free-block low-water mark since boot, in bytes |
+
+`lfb` / `lfblow` are the honest measure of memory health: free heap can look fine while fragmentation quietly shrinks the largest block you can actually allocate.
+
 ## GeigerLog
 
 [GeigerLog](https://sourceforge.net/projects/geigerlog/) is a free cross-platform log/plot tool for Geiger counters. ESPGeiger exposes a GeigerLog-compatible endpoint at `/lastdata` that works with GeigerLog's built-in **WiFiClient** device.

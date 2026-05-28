@@ -90,7 +90,6 @@ public:
   const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
   void setInterval(int interval);
   int getInterval();
-  void sendStatus();
   void disconnect();
   void onMqttConnect(bool sessionPresent);
   void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
