@@ -56,7 +56,8 @@ void TickProfile::markModules() { t_after_modules = micros(); }
 #endif
 
 void TickProfile::endTick() {
-  TickProfile::lps = _lps_count;
+  // EMA (a=1/8) in-place: smooths single-second dips so readers don't see phantom drops.
+  TickProfile::lps = (TickProfile::lps * 7 + _lps_count) >> 3;
   _lps_count = 0;
   uint32_t this_tick = (uint32_t)(micros() - t_start);
   TickProfile::tick_us = (TickProfile::tick_us * 7 + this_tick) >> 3;
