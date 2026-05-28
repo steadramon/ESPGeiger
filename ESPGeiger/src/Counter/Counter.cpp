@@ -671,13 +671,12 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (n > 0) res.sendChunk(buf, (size_t)n);
   }
 #endif
-  n = snprintf_P(buf, sizeof(buf),
-    PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
-    TickProfile::tick_us, TickProfile::tick_max_us,
-    raw ? TickProfile::lps_raw : TickProfile::lps);
-  if (n > 0) res.sendChunk(buf, (size_t)n);
+  // tick/t_max/lps + heap diagnostics are not used by the status page; only
+  // emit under ?raw=1 to keep the polled /json lean.
   if (raw) {
-    n = snprintf_P(buf, sizeof(buf), PSTR(",\"frag\":%u,\"lfb\":%u,\"lfblow\":%u"),
+    n = snprintf_P(buf, sizeof(buf),
+      PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u,\"frag\":%u,\"lfb\":%u,\"lfblow\":%u"),
+      TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps_raw,
       (unsigned)DeviceInfo::heapFrag(),
       (unsigned)DeviceInfo::largestFreeBlock(),
       (unsigned)DeviceInfo::largestFreeBlockLow());
