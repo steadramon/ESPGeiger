@@ -40,7 +40,7 @@ Response:
 | `loss` | Packet loss on the feed, as a percentage (UDP-receiver builds only; appears once a producer has been heard) |
 | `tick` | Device load indicator: smoothed microseconds spent in the once-per-second housekeeping pass. Lower is better; brief spikes (e.g. an MQTT publish) are averaged out. |
 | `t_max` | The worst-case `tick` seen in the last 60 seconds. Pair with `tick` to spot occasional load peaks. |
-| `lps` | Main-loop iterations counted in the last second (higher is healthier). |
+| `lps` | Main-loop iterations per second, smoothed (higher is healthier). |
 
 ## GeigerLog
 
