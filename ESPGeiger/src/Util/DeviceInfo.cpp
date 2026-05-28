@@ -56,7 +56,8 @@ uint32_t DeviceInfo::freeHeap() {
   static uint32_t last_ms = 0;
   uint32_t now = millis();
   if (cached == 0 || now - last_ms >= 1000) {
-    cached = ESP.getFreeHeap();
+    uint32_t sample = ESP.getFreeHeap();
+    cached = (cached == 0) ? sample : ((cached * 7 + sample) >> 3);
     last_ms = now;
   }
   return cached;
