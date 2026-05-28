@@ -157,6 +157,7 @@ private:
   void removeHassTopic(const char* type, const char* id);
 #endif
   void onMqttMessage(char* topic, char* payload);
+  unsigned long statusSlotAnchor(unsigned long now_s);
   // s_tick raises bits in _pending; loop() drains one per call.
   void publishStatus();
   void publishPing();
@@ -167,6 +168,8 @@ private:
   static constexpr uint8_t PEND_WARN   = 1 << 2;
   static constexpr uint8_t PEND_ALERT  = 1 << 3;
   uint8_t _pending = 0;
+  bool _reanchor = false;   // set on (re)connect; s_tick re-derives slot phase
+  int16_t _slot_s = -1;     // claimed second-of-minute slot, computed once
   unsigned long lastPing = 0;
   unsigned long lastStatus = 0;
   unsigned long lastConnectionAttempt = 0;

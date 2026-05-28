@@ -134,6 +134,7 @@ void MQTT_Client::disconnect()
 void MQTT_Client::onMqttConnect(bool sessionPresent) {
   Log::console(PSTR("MQTT: Connected"));
   connected = true;
+  _reanchor = true;  // slot math runs in s_tick (cooperative ctx)
   reconnectAttempts = 0;
   mqttClient->publish(_lwt_topic, 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
@@ -190,6 +191,20 @@ int MQTT_Client::getInterval() {
   return (int)pingInterval;
 }
 
+// Phase onto the shared module slot grid so MQTT doesn't publish in the same
+// second as another module. Slot claimed once; later calls only re-phase.
+unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
+  if (_slot_s < 0)
+    _slot_s = (int16_t)(EGModuleRegistry::initial_offset(name(), statusInterval * 1000UL) / 1000UL);
+  uint32_t off_s = (uint32_t)_slot_s;
+  uint32_t until = off_s;
+  if (ntpclient.synced) {
+    uint32_t wall = (uint32_t)time(NULL) % statusInterval;
+    until = (off_s >= wall) ? (off_s - wall) : (statusInterval - wall + off_s);
+  }
+  return now_s + until - statusInterval;
+}
+
 void MQTT_Client::s_tick(unsigned long now)
 {
   if (!mqttEnabled) {
@@ -205,6 +220,14 @@ void MQTT_Client::s_tick(unsigned long now)
     onMqttConnect(true);
   }
 
+  if (_reanchor) {
+    _reanchor = false;
+    // Re-derive our slot on reconnect (no post-now: that would herd the broker).
+    // Ping trails status by half a slot so the two bursts don't stack.
+    lastStatus = statusSlotAnchor(now);
+    lastPing   = lastStatus + statusInterval + (statusInterval / 2) - pingInterval;
+  }
+
 #ifdef MQTTAUTODISCOVER
   if (_hass_next_publish && (long)(now - _hass_next_publish) >= 0) {
     triggerHassDiscovery();
@@ -216,10 +239,6 @@ void MQTT_Client::s_tick(unsigned long now)
     lastStatus += statusInterval;
     if ((now - lastStatus) > statusInterval) lastStatus = now;
     _pending |= PEND_STATUS;
-    // First-fire: stagger ping half an interval so their bursts don't stack.
-    if (lastPing == 0) {
-      lastPing = now - (pingInterval / 2);
-    }
   }
 
   if ((now - lastPing) > pingInterval) {
