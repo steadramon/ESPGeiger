@@ -617,6 +617,7 @@ static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // Live status as JSON. Chunked since ~250-320 B exceeds the inline-send cap.
+  bool raw = req.arg("raw") != nullptr;  // ?raw=1: un-smoothed heap + frag/lfb
   res.beginChunked(200, "application/json");
   char buf[200];
   char c[16], s[16], c5[16], c15[16], cs[16];
@@ -631,7 +632,7 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     c, s, c5, c15, cs,
     EGPrefs::getString("sys", "ratio"),
     gcounter.total_clicks,
-    DeviceInfo::freeHeap(),
+    raw ? ESP.getFreeHeap() : DeviceInfo::freeHeap(),
     (int)Wifi::rssi);
   if (n > 0) res.sendChunk(buf, (size_t)n);
 #ifdef ESPG_HV_ADC
@@ -671,9 +672,17 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
 #endif
   n = snprintf_P(buf, sizeof(buf),
-    PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u}"),
+    PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
     TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
   if (n > 0) res.sendChunk(buf, (size_t)n);
+  if (raw) {
+    n = snprintf_P(buf, sizeof(buf), PSTR(",\"frag\":%u,\"lfb\":%u,\"lfblow\":%u"),
+      (unsigned)DeviceInfo::heapFrag(),
+      (unsigned)DeviceInfo::largestFreeBlock(),
+      (unsigned)DeviceInfo::largestFreeBlockLow());
+    if (n > 0) res.sendChunk(buf, (size_t)n);
+  }
+  res.sendChunk("}", 1);
   res.endChunked();
 }
 
