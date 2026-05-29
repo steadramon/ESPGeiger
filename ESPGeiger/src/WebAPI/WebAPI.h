@@ -78,6 +78,9 @@ class WebAPI : public EGModule {
     static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
     unsigned long lastPing = 0;
     unsigned long lastHandshake = 0;
+    // claimed once; reused on forget/403 re-anchor so we don't leak a slot
+    uint32_t _hs_off = 0xFFFFFFFFu;
+    uint32_t _ping_off = 0xFFFFFFFFu;
     uint8_t healthPostCounter = 0;
     // 0 = off, 1 = heartbeat only, 2 = heartbeat + CPM.
     uint8_t _mode = 2;
