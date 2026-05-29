@@ -28,6 +28,7 @@
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
+#include "../Util/FastMillis.h"
 #include "../NTP/NTP.h"
 #include "../GRNG/GRNG.h"
 #include "../WebPortal/WebPortal.h"
@@ -428,7 +429,7 @@ bool Counter::is_quiet_now() {
   if (_quiet_from_min == _quiet_to_min)              return false;
   if (!ntpclient.synced)                             return false;
 
-  unsigned long now_ms = millis();
+  unsigned long now_ms = fast_millis();
   if ((long)(now_ms - s_quiet_recompute_ms) < 0) return s_quiet_cached;
 
   struct tm t;
@@ -500,7 +501,7 @@ void Counter::loop() {
 #ifndef DISABLE_BLIP
     this->blip();
 #endif
-    unsigned long nowMs = millis();
+    unsigned long nowMs = fast_millis();  // match UdpBlip loop()'s fast_millis time base
     udpblip.notifyClick(nowMs);
 #ifdef AUDIO_TICK
     audiotick.notifyClick(nowMs);
