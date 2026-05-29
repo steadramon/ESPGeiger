@@ -37,6 +37,12 @@
 
 extern uint8_t send_indicator;
 
+// Page-4 buffers: lazy-alloc on first render, freed on page exit (see loop()).
+struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; uint8_t seed; bool alive; };
+static const uint8_t MATRIX_DROPS = 32;
+static Drop*    s_matrix_drops = nullptr;
+static uint8_t* s_static_noise = nullptr;
+
 #define _OLED_STR(x) #x
 #define OLED_STR(x) _OLED_STR(x)
 
@@ -305,6 +311,10 @@ void SSD1306Display::loop(unsigned long now) {
       oled_page = 1;
     }
     if (oled_page != _last_page) {
+      if (_last_page == 4) {   // leaving page 4: reclaim its lazy buffers
+        if (s_matrix_drops) { free(s_matrix_drops); s_matrix_drops = nullptr; }
+        if (s_static_noise) { free(s_static_noise); s_static_noise = nullptr; }
+      }
       _last_page = oled_page;
       _next_render_due = 0;   // force immediate render on page change
       // Headless: render at 4 Hz to stay ahead of /screen's 500 ms poll.
@@ -788,9 +798,7 @@ static void compute_drop_speed_tail(unsigned long delta_ms, const MatrixCtx& ctx
 }  // namespace
 
 void SSD1306Display::page_four_matrix() {
-  static const uint8_t MATRIX_DROPS = 32;
-  struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; uint8_t seed; bool alive; };
-  static Drop* drops = nullptr;
+  Drop*& drops = s_matrix_drops;
   static unsigned long last_blip_seen = 0;
   static uint8_t last_col = 255;
 
@@ -909,7 +917,7 @@ void SSD1306Display::page_four_static() {
     num %= 1001;
     snprintf_P(_page4_num, sizeof(_page4_num), PSTR("%u"), num);
   }
-  static uint8_t* noise = nullptr;
+  uint8_t*& noise = s_static_noise;
   if (!noise) noise = (uint8_t*)malloc(1024);
   clearBuffer();
   if (noise) {
