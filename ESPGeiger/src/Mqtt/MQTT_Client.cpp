@@ -22,6 +22,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
+#include "../Util/FastMillis.h"
 #include "../Util/StringUtil.h"
 #include "../EnvSensor/EnvSensor.h"
 #include <math.h>
@@ -138,7 +139,7 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   reconnectAttempts = 0;
   mqttClient->publish(_lwt_topic, 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
-  unsigned long now_s = millis() / 1000UL;
+  unsigned long now_s = fast_millis() / 1000UL;
   if (_hass_next_publish == 0 || (long)(now_s - _hass_next_publish) >= 0) {
     _hass_next_publish = now_s + 2;
     if (_hass_next_publish == 0) _hass_next_publish = 1;
@@ -170,7 +171,7 @@ void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
   if (authFail && ++authFailures >= 3) {
     mqttEnabled = false;
   }
-  lastConnectionAttempt = millis();
+  lastConnectionAttempt = fast_millis();
   connected = false;
 #ifdef MQTTAUTODISCOVER
   if (_hass_walk_state) _hass_idx = 0;
@@ -357,7 +358,7 @@ void MQTT_Client::publishStatus()
   uint16_t pid = mqttClient->publish(topic, 1, false, buffer);
   Log::debug(PSTR("MQTT: Published"));
   send_indicator = 2;
-  last_attempt_ms = millis();
+  last_attempt_ms = fast_millis();
   last_ok = (pid != 0) && connected;
   note_publish(last_ok);
 }
@@ -475,7 +476,7 @@ void MQTT_Client::publishPing()
   // ---- end LEGACY block ----
 
   send_indicator = 2;
-  last_attempt_ms = millis();
+  last_attempt_ms = fast_millis();
   last_ok = connected;
 }
 
@@ -490,7 +491,7 @@ void MQTT_Client::reconnect()
   unsigned long backoff = 10000UL << min(reconnectAttempts, (uint8_t)5);
   if (backoff > 300000UL) backoff = 300000UL;
 
-  unsigned long now = millis();
+  unsigned long now = fast_millis();
   if (lastConnectionAttempt && now - lastConnectionAttempt < backoff) {
     return;
   }
@@ -765,7 +766,7 @@ void MQTT_Client::setupHassRemove() {
 
 void MQTT_Client::triggerHassDiscovery() {
   if (_hass_walk_state) return;
-  unsigned long now_s = millis() / 1000UL;
+  unsigned long now_s = fast_millis() / 1000UL;
   if (_hass_last_publish && (now_s - _hass_last_publish) < MQTT_HASS_MIN_INTERVAL_S) {
     Log::debug(PSTR("MQTT: HA discovery throttled (%lu s since last)"),
                now_s - _hass_last_publish);
@@ -785,7 +786,7 @@ void MQTT_Client::stepHassDiscovery() {
     _hass_idx++;
   } else {
     if (_hass_walk_state > 0) {
-      _hass_last_publish = millis() / 1000UL;
+      _hass_last_publish = fast_millis() / 1000UL;
       if (_hass_last_publish == 0) _hass_last_publish = 1;
     }
     _hass_walk_state = 0;

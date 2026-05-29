@@ -72,7 +72,7 @@ class EGModuleRegistry {
 
     struct Slot {
       EGModule* module;          // 4
-      unsigned long loop_last;   // 4 - last millis() loop() ran
+      unsigned long loop_last;   // 4 - last fast_millis() loop() ran
       uint16_t loop_interval;    // 2 - 0 = every iteration
       uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
       uint8_t flags;             // 1 - packed module flags (see above)

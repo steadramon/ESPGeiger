@@ -169,7 +169,7 @@ class HV : public EGModule {
       int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
       uint16_t _hv_target = 0;
       int8_t   _duty_trim = 0;
-      unsigned long _trim_settle_until = 0;  // suppress trim until this millis()
+      unsigned long _trim_settle_until = 0;  // suppress trim until this fast_millis()
       // Trim cadence retuned against Mr Blinky's Fluke 289 data
       // (1h capture, ESPG HW 004): autotrim at the previous (3-sample,
       // 4V hysteresis, 10s period) made HV 2.4x noisier than

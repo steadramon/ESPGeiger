@@ -30,7 +30,7 @@ namespace Wifi {
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[33];
   extern int16_t rssi;
-  extern unsigned long connected_at_ms;  // millis() of last clean STA association; 0 when down
+  extern unsigned long connected_at_ms;  // fast_millis() of last clean STA association; 0 when down
   extern bool backup_grace_done;
   void check_backup_state();  // call once at boot with LittleFS already mounted
 
