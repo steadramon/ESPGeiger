@@ -400,9 +400,10 @@ void Counter::set_ext_blip_pin(int pin) {
     pin = -1;
   }
   if (ext_blip_led) {
-    ext_blip_led->Off().Update();
-    delete ext_blip_led;
-    ext_blip_led = nullptr;
+    JLed* old = ext_blip_led;
+    ext_blip_led = nullptr;   // null before free: the 1kHz msTickerCB derefs this
+    old->Off().Update();
+    delete old;
   }
   if (pin >= 0) {
     ext_blip_led = new JLed(pin);
