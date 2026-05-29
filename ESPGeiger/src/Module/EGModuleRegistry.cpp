@@ -65,7 +65,8 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 
   bool wifi_ok = Wifi::stable_for(WIFI_SETTLE_MS);
   bool ntp_ok  = ntpclient.synced;
-  unsigned long earliest = now + 0x7FFFFFFF;
+  // idle re-check floor: if all loop modules gate out, don't park ~24.8d (WiFi/NTP recovery)
+  unsigned long earliest = now + 1000;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     if (!(s.flags & FLAG_HAS_LOOP)) continue;
@@ -300,10 +301,9 @@ uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interva
   return off;
 }
 
-unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long now,
-                                              uint32_t interval_ms) {
+unsigned long EGModuleRegistry::ping_from_offset(uint32_t offset, unsigned long now,
+                                                 uint32_t interval_ms) {
   if (interval_ms == 0) return now;
-  uint32_t offset = initial_offset(mod_name, interval_ms);
   uint32_t until;
   uint32_t secs = interval_ms / 1000;
   if (secs > 0 && ntpclient.synced) {
@@ -313,6 +313,12 @@ unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long
     until = offset;
   }
   return now + until - interval_ms;
+}
+
+unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long now,
+                                              uint32_t interval_ms) {
+  if (interval_ms == 0) return now;
+  return ping_from_offset(initial_offset(mod_name, interval_ms), now, interval_ms);
 }
 
 bool EGModuleRegistry::sleep_until(EGModule* m, unsigned long now, unsigned long target_ms) {

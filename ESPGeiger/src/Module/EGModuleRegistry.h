@@ -55,6 +55,9 @@ class EGModuleRegistry {
     // module's stable slot. Wall-clock anchored when NTP is synced.
     static unsigned long initial_ping(const char* mod_name, unsigned long now,
                                       uint32_t interval_ms);
+    // wall-align a precomputed offset without re-claiming a slot (re-anchor, no leak)
+    static unsigned long ping_from_offset(uint32_t offset, unsigned long now,
+                                          uint32_t interval_ms);
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);
