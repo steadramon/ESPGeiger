@@ -79,11 +79,13 @@ void NTP_Client::setup()
   const char *possixTZ = getPosixTZforOlson(tz);
 #ifdef ESP8266
   settimeofday_cb([](){
+    time_t now_t = time(NULL);
+    if ((unsigned long)now_t < 1000000000UL) return;  // ignore SDK's pre-sync clock-init fire
     ntpclient.last_sync_ms = millis();
     if (!ntpclient.synced) {
       ntpclient.synced = true;
       unsigned long uptime = ntpclient.getUptime() - start;
-      ntpclient.boot_epoch = (unsigned long)time(NULL) - uptime;
+      ntpclient.boot_epoch = (unsigned long)now_t - uptime;
       Log::console(PSTR("NTP: Synched"));
     }
     ntpclient.refresh_tz_offset_min();
