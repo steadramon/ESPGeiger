@@ -109,7 +109,7 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
       snprintf_P (timeStr, sizeof (timeStr), PSTR("%02d:%02d:%02d "), t.tm_hour, t.tm_min, t.tm_sec);
     } else {
       // Uptime when no wall-clock. Serial always sees plain uptime.
-      unsigned long u = millis() / 1000UL;
+      unsigned long u = ntpclient.getUptime();   // rollover-corrected, shared source
       snprintf_P (timeStr, sizeof (timeStr), PSTR("%02lu:%02lu:%02lu "),
         (u / 3600UL) % 24UL, (u / 60UL) % 60UL, u % 60UL);
     }
