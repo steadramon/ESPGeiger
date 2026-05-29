@@ -5,16 +5,18 @@
 ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-connected Geiger counter. It collects, calculates and reports radiation levels from a range of Geiger counters with pulse or serial outputs.
 
 - 😃  Easy to install via web browser - no compiler required
-- ✅  Works with generic pulse counters and GC10, GC10next, MightyOhm serial counters
-- 📈  Built-in web server with live graphing
-- 🔴  Live CPM and μSv/h readings
-- 🔢  Smoothed values over 1, 5 and 15 minutes
-- 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED display and WS2812X NeoPixel status light
+- 📈  Built-in web portal with live graphing and 24-hour history
+- 🔴  Live CPM and μSv/h with 1, 5 and 15-minute smoothed averages
+- 🕰️   Lifetime tracking - persistent total clicks and μSv across reboots
+- 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED and WS2812X NeoPixel status light
 - 🌡️   Optional BME280 / BMP280 / AHT environmental sensors - auto-detected over I2C
+- ✅  Works with pulse and GC10 / GC10next / MightyOhm serial counters
 - 📟  Accurate counting via interrupt or ESP32 hardware counter (PCNT)
-- 🌐  MQTT, Home Assistant auto-discovery, Radmon.org, GMCMAP, ThingSpeak, custom Webhooks
-- 📡  UDP/OSC receiver builds for tubeless mirror displays and fleet aggregators
+- 🎛️   Configurable noise filtering and debounce
+- 🌐  MQTT and Home Assistant auto-discovery, Radmon.org, GMCMAP, ThingSpeak, GeigerLog, custom Webhooks
+- 📡  UDP / OSC broadcast and receiver builds - mirror clicks to a tubeless ESP, or feed PD / TouchDesigner / Node-RED
 - 💾  Optional SD card logging
+- 🗂️   Portable config backup and restore - transferable between devices
 - 🚧  Test builds for emulating pulse and serial counters
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/hardware/img/ESPGeigerLog.png" width="50%"/>
