@@ -594,13 +594,35 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // GeigerLog WiFiServer 12-field order:
+  //   CPM,CPS,CPM1st,CPS1st,CPM2nd,CPS2nd,CPM3rd,CPS3rd,Temp,Press,Humid,Xtra
+  // Absent fields left empty (GeigerLog reads "" as missing).
+  char cpm[16], cps[16], cpm5[16], cpm15[16];
+  format_f(cpm,   sizeof(cpm),   gcounter.get_cpmf());
+  format_f(cps,   sizeof(cps),   gcounter.get_cps());
+  format_f(cpm5,  sizeof(cpm5),  gcounter.get_cpm5f());
+  format_f(cpm15, sizeof(cpm15), gcounter.get_cpm15f());
+
+  char t[16] = "", h[16] = "", p[16] = "";
+  if (envsensor.present()) {
+    float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
+    if (!isnan(et)) format_f(t, sizeof(t), et);
+    if (!isnan(eh)) format_f(h, sizeof(h), eh);
+    if (!isnan(ep)) format_f(p, sizeof(p), ep);
+  }
+
+  char xtra[16];   // HV on HW builds, else dose rate
+#ifdef ESPG_HV_ADC
+  if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0)
+    format_f(xtra, sizeof(xtra), hv.hvReading.get());
+  else
+#endif
+    format_f(xtra, sizeof(xtra), gcounter.get_usv());
+
   char out[128];
-  char cpm[16], cps[16];
-  format_f(cpm, sizeof(cpm), gcounter.get_cpmf());
-  format_f(cps, sizeof(cps), gcounter.get_cps());
   snprintf_P(out, sizeof(out),
-    PSTR("%s, %s, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan"),
-    cpm, cps);
+    PSTR("%s, %s, %s, , %s, , , , %s, %s, %s, %s"),
+    cpm, cps, cpm5, cpm15, t, p, h, xtra);
   res.send(200, "text/plain", out);
 }
 
