@@ -149,13 +149,25 @@ Contributions are welcome - please feel free to raise a Pull Request or open an 
 ## Thanks 🙏
 
 Supporting libraries:
-- [WiFiManager](https://github.com/tzapu/WiFiManager)
-- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
-- [ESPNtpClient](https://github.com/gmag11/ESPNtpClient)
-- [Smoothed](https://github.com/MattFryer/Smoothed)
 - [ArduinoJson](https://github.com/bblanchon/ArduinoJson)
+- [AsyncTCP](https://github.com/ESP32Async/AsyncTCP) / [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP)
+- [async-mqtt-client](https://github.com/marvinroger/async-mqtt-client)
+- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
+- [U8g2](https://github.com/olikraus/u8g2)
+- [JLed](https://github.com/jandelgado/jled)
+- [NeoPixelBus](https://github.com/Makuna/NeoPixelBus)
+- [EspSoftwareSerial](https://github.com/plerup/espsoftwareserial)
+- [SdFat](https://github.com/greiman/SdFat)
+- [micro-ecc](https://github.com/kmackay/micro-ecc)
+- [CircularBuffer](https://github.com/rlogiacco/CircularBuffer)
+- [base64_arduino](https://github.com/Densaugeo/base64_arduino) (basis for the bundled EGBase64)
+- [ESPNtpClient](https://github.com/gmag11/ESPNtpClient) (uptime tracking, now inlined)
 
 Inspiration:
 - [OpenMQTTGateway](https://github.com/1technophile/OpenMQTTGateway)
 - [tinyGS](https://github.com/G4lile0/tinyGS/)
 - [FreqCountESP](https://github.com/kapraran/FreqCountESP)
+
+With thanks to:
+- [Mr Blinky](https://www.blinkyslab.co.uk/) - feedback, inspiration and support
+- [Jander](https://r.jander.me.uk/) - tall robot guy

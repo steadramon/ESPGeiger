@@ -1,7 +1,8 @@
 /*
   EGBase64.h - Buffer-in / buffer-out base64 encode + decode.
 
-  Adapted from Densaugeo/base64_arduino:
+  Adapted from Densaugeo/base64_arduino (MIT, (c) 2016 Densaugeo; see LICENSE).
+  ESPGeiger changes are GPL-3.0.
     https://github.com/Densaugeo/base64_arduino/blob/d641350cfd2c3692a93969bfc324c3ce584cdebe/src/base64.hpp
 
   Renamed from <base64.h> to avoid colliding with the ESP8266/ESP32 core's
