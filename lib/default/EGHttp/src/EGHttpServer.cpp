@@ -137,6 +137,11 @@ static bool yield_write_str(EGHttpServer::Slot* s, const char* str) {
   return yield_write_sram(s, str, strlen(str));
 }
 
+// clamp snprintf's would-be length to the buffer (truncation must not over-read)
+static inline int eghttp_clamp_head(int n, size_t cap) {
+  return (n < 0) ? 0 : ((size_t)n >= cap ? (int)cap - 1 : n);
+}
+
 // ---------- EGHttpServer ----------
 
 void EGHttpServer::on(const char* path, EGHttpRequest::Method method, Handler h, void* user) {
@@ -180,7 +185,7 @@ void EGHttpServer::setBasicAuth(const char* user, const char* password,
     _authValue[0] = '\0';
     return;
   }
-  unsigned char encoded[128];
+  unsigned char encoded[132];  // base64 of <=95 raw bytes = 128 chars + NUL
   unsigned int elen = encode_base64((unsigned char*)raw, (unsigned int)rlen, encoded);
   encoded[elen] = '\0';
   int n = snprintf(_authValue, sizeof(_authValue), "Basic %s", (char*)encoded);
@@ -686,6 +691,7 @@ void EGHttpServer::dispatch(Slot* s) {
         PSTR("HTTP/1.1 401 Unauthorized\r\n"
              "WWW-Authenticate: Basic realm=\"%s\"\r\n"
              "%s%s\r\n"), _authRealm, CL0_CRLF, CONN_CLOSE_CR);
+      hn = eghttp_clamp_head(hn, sizeof(head));
       if (hn > 0 && s->client) {
         s->client->write(head, (size_t)hn);
         s->client->send();
@@ -870,6 +876,7 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
     int n = snprintf_P(head, sizeof(head),
       PSTR("HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: %u\r\n%s\r\n"),
       (unsigned)tlen, CONN_CLOSE_CR);
+    n = eghttp_clamp_head(n, sizeof(head));
     yield_write_sram(s, head, (size_t)n);
     yield_write_pgm(s, (PGM_P)too_big, tlen);
     _started = true; _done = true;
@@ -881,6 +888,7 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const char* 
   int n = snprintf_P(head, sizeof(head),
     PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n%s%s\r\n"),
     status, contentType, (unsigned)bodyLen, CONN_CLOSE_CR, _extraHeaders);
+  n = eghttp_clamp_head(n, sizeof(head));
   // Header + body in one write via accumulator when available; same
   // batch-everything motivation as chunked. Falls through to direct
   // writes when no accumulator is set (e.g. response before dispatch).
@@ -907,6 +915,7 @@ void EGHttpResponse::send(uint16_t status, const char* contentType, const __Flas
   int n = snprintf_P(head, sizeof(head),
     PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Length: %u\r\n%s%s\r\n"),
     status, contentType, (unsigned)bodyLen, CONN_CLOSE_CR, _extraHeaders);
+  n = eghttp_clamp_head(n, sizeof(head));
   // Bodies larger than the accumulator fall through to direct-write
   // mid-body via the append_pgm overflow branch.
   if (s->chunkAcc && s->chunkAccCap > 0) {
@@ -933,6 +942,7 @@ void EGHttpResponse::sendGzipP(uint16_t status, const char* contentType,
     PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nContent-Encoding: gzip\r\n"
          "Content-Length: %u\r\n%s%s\r\n"),
     status, contentType, (unsigned)len, CONN_CLOSE_CR, _extraHeaders);
+  n = eghttp_clamp_head(n, sizeof(head));
   if (s->chunkAcc && s->chunkAccCap > 0) {
     s->chunkAccLen = 0;
     bool ok = eghttp_acc_append(s, head, (size_t)n);
@@ -954,6 +964,7 @@ void EGHttpResponse::redirect(const char* location) {
   char head[256];
   int n = snprintf_P(head, sizeof(head),
     PSTR("HTTP/1.1 302 Found\r\nLocation: %s\r\n%s%s\r\n"), location, CL0_CRLF, CONN_CLOSE_CR);
+  n = eghttp_clamp_head(n, sizeof(head));
   yield_write_sram(s, head, (size_t)n);
   _started = true;
   _done    = true;
@@ -966,6 +977,7 @@ bool EGHttpResponse::beginChunked(uint16_t status, const char* contentType) {
   int n = snprintf_P(head, sizeof(head),
     PSTR("HTTP/1.1 %u OK\r\nContent-Type: %s\r\nTransfer-Encoding: chunked\r\n%s%s\r\n"),
     status, contentType, CONN_CLOSE_CR, _extraHeaders);
+  n = eghttp_clamp_head(n, sizeof(head));
   if (!yield_write_sram(s, head, (size_t)n)) { _done = true; return false; }
   _started = true;
   _chunked = true;
