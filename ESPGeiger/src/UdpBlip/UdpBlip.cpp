@@ -24,6 +24,7 @@
 #include "../Prefs/EGPrefs.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
+#include "../Util/FastMillis.h"
 #include "../ArduinoOTA/ArduinoOTA.h"
 #include "../GRNG/GRNG.h"
 #include "../Util/TickProfile.h"
@@ -177,7 +178,7 @@ void UdpBlipModule::announce_mdns() {
   if (_mdns_done || _mode == 0) return;
   // ArduinoOTA::begin starts the MDNS responder. We can't probe its state
   // cross-platform, so just defer by uptime to be safely after OTA::begin.
-  if (millis() < 8000) return;
+  if (fast_millis() < 8000) return;
   MDNS.addService("osc", "udp", _port);
   const char* fname = DeviceInfo::friendlyName();
   if (fname && fname[0]) MDNS.addServiceTxt("osc", "udp", "fname", fname);
@@ -292,7 +293,7 @@ void UdpBlipModule::emitSys(uint32_t now) {
   size_t n;
   if (!(n = osc_str(buf, sizeof(buf), off, _sys_path))) return; off += n;
   if (!(n = osc_strn(buf, sizeof(buf), off, ",iiii", 5))) return; off += n;
-  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(millis() / 1000UL)))) return; off += n;
+  if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(fast_millis() / 1000UL)))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, (uint32_t)(int32_t)Wifi::rssi))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::lps))) return; off += n;
   if (!(n = osc_i32(buf, sizeof(buf), off, TickProfile::tick_max_us))) return; off += n;

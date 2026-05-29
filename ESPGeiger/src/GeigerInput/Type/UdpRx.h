@@ -55,7 +55,7 @@ public:
     uint32_t last_seen_ms;
     uint32_t click_count;     // credited locally, including gap-fills
     uint32_t last_counter;    // producer's lifetime click number, for gap detection
-    uint32_t last_ts_ms;      // producer's millis() at last /click, for rate-drain
+    uint32_t last_ts_ms;      // producer's clock (ms) at last /click; deltas only, base-agnostic
   };
 
   uint8_t producer_count() const { return _producers_seen; }
