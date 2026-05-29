@@ -62,28 +62,39 @@ Raw mode reports `mem` un-smoothed and adds:
 
 ## GeigerLog
 
-[GeigerLog](https://sourceforge.net/projects/geigerlog/) is a free cross-platform log/plot tool for Geiger counters. ESPGeiger exposes a GeigerLog-compatible endpoint at `/lastdata` that works with GeigerLog's built-in **WiFiClient** device.
+[GeigerLog](https://sourceforge.net/projects/geigerlog/) is a free cross-platform log/plot tool for Geiger counters. ESPGeiger exposes a GeigerLog-compatible endpoint at `/lastdata` that works with GeigerLog's built-in **WiFiServer** device (the one that polls a device URL).
 
 ### Configure GeigerLog
 
-1. In GeigerLog open **Device → WiFiClient → Config WiFiClient Device**.
+1. In GeigerLog open **Device → WiFiServer → Config WiFiServer Device**.
 2. Set the IP address and port to the ESPGeiger device (port `80`).
 3. Point the data URL at `/lastdata`.
-4. Save, then connect the WiFiClient device.
+4. Save, then connect the WiFiServer device.
 
-The `/lastdata` endpoint returns a single comma-separated line matching the GeigerLog WiFiClient format:
+The `/lastdata` endpoint returns a single comma-separated line in GeigerLog's 12-variable order. Fields the device can't provide are left empty:
 
 ```
-22.50, 0.37, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan
+22.50, 0.37, 21.90, , 21.40, , , , 24.50, 1013.00, 48.00, 0.0720
 ```
 
-The first two values are the current **CPM** and **CPS**. The remaining ten fields are reported as `nan` - GeigerLog ignores them and plots only the two populated variables.
+| Position | GeigerLog variable | ESPGeiger value |
+|---|---|---|
+| 1 | CPM | Current CPM |
+| 2 | CPS | Current CPS |
+| 3 | CPM1st | 5-minute CPM |
+| 5 | CPM2nd | 15-minute CPM |
+| 9 | Temp | Temperature, if an environment sensor is fitted |
+| 10 | Press | Pressure, if fitted |
+| 11 | Humid | Humidity, if fitted |
+| 12 | Xtra | HV in volts (ESPGeiger-HW), otherwise dose rate in µSv/h |
+
+Positions 4, 6, 7 and 8 (CPS1st / CPS2nd / CPM3rd / CPS3rd) are always empty.
 
 ### Notes
 
 * Polling is driven by GeigerLog - ESPGeiger responds on each request, so cadence is whatever you configure on the GeigerLog side.
 * The endpoint is always available; there is no toggle in the ESPGeiger portal.
-* If you need richer data (5-minute or 15-minute CPM, HV, memory, RSSI) consume `/json` instead from your own tooling.
+* Environment fields appear only when a sensor is detected; otherwise those positions stay empty.
 
 ## Prometheus (native `/metrics`)
 
