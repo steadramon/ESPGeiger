@@ -253,6 +253,7 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
   if (!pcb){ //could not allocate pcb
     return false;
   }
+  _pcb = pcb;  // bind now so a mid-handshake destroy clears callbacks (UAF)
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
 #if ASYNC_TCP_SSL_ENABLED
@@ -265,6 +266,7 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
   if (err != ERR_OK) {
     clearTcpCallbacks(pcb);
     tcp_abort(pcb);
+    _pcb = NULL;  // aborted; don't double-close
     return false;
   }
   return true;
@@ -718,16 +720,29 @@ void AsyncClient::_dns_found(const ip_addr *ipaddr){
 }
 
 // lwIP Callbacks
+
+// reject a freed-client `arg` from a teardown-race callback (ESP8266 DRAM)
+static inline bool _acArgAlive(void* arg){
+#ifdef ESP8266
+  uintptr_t p = (uintptr_t)arg;
+  return p >= 0x3FFE8000UL && p < 0x40000000UL;
+#else
+  return arg != nullptr;
+#endif
+}
+
 #if LWIP_VERSION_MAJOR == 1
 void AsyncClient::_s_dns_found(const char *name, ip_addr_t *ipaddr, void *arg){
 #else
 void AsyncClient::_s_dns_found(const char *name, const ip_addr *ipaddr, void *arg){
 #endif
   (void)name;
+  if(!_acArgAlive(arg)) return;
   reinterpret_cast<AsyncClient*>(arg)->_dns_found(ipaddr);
 }
 
 err_t AsyncClient::_s_poll(void *arg, struct tcp_pcb *tpcb) {
+  if(!_acArgAlive(arg)){ tcp_abort(tpcb); return ERR_ABRT; }
   AsyncClient *c = reinterpret_cast<AsyncClient*>(arg);
   std::shared_ptr<ACErrorTracker>errorTracker = c->getACErrorTracker();
   c->_poll(errorTracker, tpcb);
@@ -735,6 +750,7 @@ err_t AsyncClient::_s_poll(void *arg, struct tcp_pcb *tpcb) {
 }
 
 err_t AsyncClient::_s_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *pb, err_t err) {
+  if(!_acArgAlive(arg)){ if(pb) pbuf_free(pb); tcp_abort(tpcb); return ERR_ABRT; }
   AsyncClient *c = reinterpret_cast<AsyncClient*>(arg);
   auto errorTracker = c->getACErrorTracker();
   c->_recv(errorTracker, tpcb, pb, err);
@@ -742,6 +758,7 @@ err_t AsyncClient::_s_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *pb, err
 }
 
 void AsyncClient::_s_error(void *arg, err_t err) {
+  if(!_acArgAlive(arg)) return;  // pcb already freed on error
   AsyncClient *c = reinterpret_cast<AsyncClient*>(arg);
   auto errorTracker = c->getACErrorTracker();
   errorTracker->setCloseError(err);
@@ -750,6 +767,7 @@ void AsyncClient::_s_error(void *arg, err_t err) {
 }
 
 err_t AsyncClient::_s_sent(void *arg, struct tcp_pcb *tpcb, uint16_t len) {
+  if(!_acArgAlive(arg)){ tcp_abort(tpcb); return ERR_ABRT; }
   AsyncClient *c = reinterpret_cast<AsyncClient*>(arg);
   auto errorTracker = c->getACErrorTracker();
   c->_sent(errorTracker, tpcb, len);
@@ -757,6 +775,7 @@ err_t AsyncClient::_s_sent(void *arg, struct tcp_pcb *tpcb, uint16_t len) {
 }
 
 err_t AsyncClient::_s_connected(void* arg, void* tpcb, err_t err){
+  if(!_acArgAlive(arg)){ if(tpcb) tcp_abort(reinterpret_cast<tcp_pcb*>(tpcb)); return ERR_ABRT; }
   AsyncClient *c = reinterpret_cast<AsyncClient*>(arg);
   auto errorTracker = c->getACErrorTracker();
   c->_connected(errorTracker, tpcb, err);
