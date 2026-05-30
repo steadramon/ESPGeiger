@@ -21,6 +21,9 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#ifdef ESP32
+#include "esp_log.h"   // quieten esp_littlefs INFO/WARN chatter on USB serial
+#endif
 #include <Ticker.h>
 #include "jled.h"
 // PlatformIO LDF anchor: modules include the .hpp variant only; LDF needs
@@ -117,6 +120,13 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   delay(100);
+
+#ifdef ESP32
+  // Drop INFO/WARN from the FS tags; failed mounts are still detected via begin()==false.
+  esp_log_level_set("esp_littlefs", ESP_LOG_ERROR);
+  esp_log_level_set("vfs_api",      ESP_LOG_ERROR);
+  esp_log_level_set("LITTLEFS",     ESP_LOG_ERROR);
+#endif
 
   CrashDump::begin();
 
