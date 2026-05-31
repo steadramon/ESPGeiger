@@ -101,6 +101,8 @@ By default `GEIGER_RXPIN` is set to GPIO13. Connect your Geiger counter's pulse 
 4. Once connected, browse to `http://ESPGeiger-XXXXXX.local` or the assigned IP
 5. Configure MQTT, Radmon, GMCMAP, ThingSpeak and other outputs from the Config page
 
+> 🔒 ESPGeiger is designed for LAN use. Don't port-forward it to the open internet - use a VPN for remote access, and push telemetry outward (MQTT / Radmon / ThingSpeak / Webhook) for remote monitoring. See [Network and security](https://docs.espgeiger.com/install/setup#network-and-security).
+
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-anim.gif" width="75%"/>
 
 ## Upgrading

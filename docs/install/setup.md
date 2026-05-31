@@ -65,3 +65,28 @@ The device performs a full factory reset, wiping all prefs (including the web pa
 ### 3. Reflash via the Web Installer
 
 Nuclear option: reflash the firmware from [install.espgeiger.com](https://install.espgeiger.com). This wipes everything (web password, WiFi credentials, all output configurations). Re-run Initial Setup afterwards.
+
+## Network and security
+
+ESPGeiger is designed to run on your **local network**, not on the open internet.
+
+The web interface uses HTTP Basic Auth (no TLS), the `/update` endpoint allows over-the-air firmware replacement to any authenticated caller, and the device intentionally has no rate-limiting or hardening against brute-force attack. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
+
+If you need to reach your device from outside your LAN, use one of:
+
+- **VPN** into your home network (WireGuard, Tailscale, ZeroTier, OpenVPN on your router).
+- **SSH tunnel** from a trusted jump host.
+- **Reverse proxy** (Nginx, Caddy) that terminates TLS and adds rate limiting in front of the device.
+
+Do **not** port-forward the device's HTTP port directly to the internet.
+
+### Remote monitoring done right
+
+If you want your readings visible without your control panel being exposed, push the data **out** rather than letting clients reach **in**. ESPGeiger supports this out of the box:
+
+- **MQTT** to a broker on the LAN, in your VPN, or on a trusted cloud provider - Home Assistant / Grafana / your dashboard subscribes there.
+- **Radmon.org, GMCMAP, ThingSpeak, GeigerLog** - citizen-science archives that ingest your data; nothing inbound to the device.
+- **Custom Webhook** to your own endpoint (HTTPS terminated by your server, not the device).
+- **WebAPI** (api.espgeiger.com) - signed posts, nothing inbound.
+
+This pattern (device pushes, clients subscribe) is also more bandwidth- and power-friendly than polling.
