@@ -75,6 +75,7 @@ GMC::GMC() {
 
 void GMC::loop(unsigned long now)
 {
+  if (Counter::external_paused()) return;
   if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
@@ -137,7 +138,7 @@ void GMC::postMeasurement() {
 
   Log::debug(PSTR("GMC: Uploading latest data ..."));
 
-  int avgcpm = gcounter.get_cpmf();
+  int avgcpm = gcounter.get_cpm_stable();
   char acpm[16], usv[16];
   format_f(acpm, sizeof(acpm), gcounter.get_cpm5f());
   format_f(usv,  sizeof(usv),  gcounter.get_usv5(), 4);

@@ -48,6 +48,7 @@ void SerialCommand::setup() {
   addCommand(PSTR("resetnet"), reset_net);
   addCommand(PSTR("get"), cmd_get);
   addCommand(PSTR("set"), cmd_set);
+  addCommand(PSTR("pause"), cmd_pause);
 #ifdef SERIALOUT
   addCommand(PSTR("cpm"), get_cpm);
   addCommand(PSTR("usv"), get_usv);
@@ -125,6 +126,22 @@ void SerialCommand::reset_wifi() {
     LittleFS.end();
   }
   reboot();
+}
+
+// Usage: `pause [seconds]`. No arg or `0` resumes; bare `pause` reports
+// remaining seconds. Cap at 24 h matches the /pause HTTP endpoint.
+void SerialCommand::cmd_pause() {
+  char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
+  if (arg) {
+    int n = atoi(arg);
+    if (n < 0) n = 0;
+    if (n > 86400) n = 86400;
+    Counter::pause_external((uint32_t)n * 1000U);
+    return;
+  }
+  uint32_t rem = Counter::pause_remaining_ms();
+  if (rem) Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)(rem / 1000U));
+  else     Log::console(PSTR("External posts: active"));
 }
 
 // Split "module.key" into separate strings. Mutates `arg` in place.

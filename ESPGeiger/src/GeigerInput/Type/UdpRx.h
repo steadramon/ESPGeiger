@@ -47,6 +47,7 @@ public:
   void secondTicker() override;
   int  collect() override;
   bool isHealthy() const override;
+  void appendJsonExtra(EGHttpResponse& res) override;
 
   void on_prefs_saved();
 

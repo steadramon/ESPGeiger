@@ -108,6 +108,7 @@ void WebAPI::begin() {
 }
 
 void WebAPI::loop(unsigned long now) {
+  if (Counter::external_paused()) return;
   if (_mode == 0) return;
 
   // Signed deltas: backoff math can push lastHandshake into the future when
@@ -406,8 +407,8 @@ void WebAPI::postMeasurement(bool censusOnly) {
 
   // float32 keeps the payload compact and avoids the soft-float printer.
   if (sendRadiation) {
-    mp.kv("c",  gcounter.get_cpmf());
-    mp.kv("u",  gcounter.get_usv());
+    mp.kv("c",  gcounter.get_cpmf_stable());
+    mp.kv("u",  gcounter.get_usv_stable());
   }
 #ifdef ESPG_HV_ADC
   if (sendHv) mp.kv("hv", hv.hvReading.get());

@@ -96,6 +96,7 @@ void Radmon::on_prefs_loaded() {
 void Radmon::loop(unsigned long now)
 {
   if (!_send_enabled) return;
+  if (Counter::external_paused()) return;
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
   } else if ((now - lastPing) >= pingIntervalMs) {
@@ -157,7 +158,7 @@ void Radmon::postMeasurement() {
   // keeps in sync with the saved pref.
   int avgcpm;
   if (pingInterval <= 90) {
-    avgcpm = gcounter.get_cpm();
+    avgcpm = gcounter.get_cpm_stable();   // external poster: bucket, mode-independent
   } else if (pingInterval <= 450) {
     avgcpm = gcounter.get_cpm5();
   } else {

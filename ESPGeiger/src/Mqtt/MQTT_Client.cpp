@@ -405,8 +405,14 @@ void MQTT_Client::publishPing()
       }
     }
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
-      PSTR(",\"warn\":%d,\"alert\":%d}"),
+      PSTR(",\"warn\":%d,\"alert\":%d"),
       gcounter.is_warning() ? 1 : 0, gcounter.is_alert() ? 1 : 0);
+#if !GEIGER_IS_SERIAL(GEIGER_TYPE)
+    // tube alive flag for pulse/PCNT/UDP; serial uses ser_ok in tele/state.
+    sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
+      PSTR(",\"tube\":%d"), gcounter.get_tube_alive() ? 1 : 0);
+#endif
+    sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR("}"));
     char topic[64];
     buildTopic(topic, sizeof(topic), "tele", "sensor");
     mqttClient->publish(topic, 1, false, sbuf);
@@ -675,6 +681,9 @@ void MQTT_Client::forEachHassBinarySensor(HassBinaryFn fn) {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   // Serial builds only - pulse builds have no external peer to track.
   B("ser_ok", "Serial Connected", "mdi:serial-port", H_ST_STATUS, H_DC_CONN);
+#else
+  // Pulse/PCNT/UDP: get_tube_alive() answers "are pulses arriving?".
+  B("tube", "Tube Active", "mdi:radioactive", H_ST_SENSOR, H_DC_CONN);
 #endif
 
   #undef B

@@ -100,16 +100,24 @@
 #define GEIGER_DEBOUNCE 200
 #endif
 
-extern volatile bool _eventFlipFlop;
+// micros() of last accepted input. Per-type semantic of "accepted":
+//   Pulse / PCNT / Test - tube pulse via countInterrupt / setCounter
+//   Serial              - parsed CPM line via setLastBlip
+//   UDP                 - accepted /click packet via queueBlip
 extern volatile unsigned long _last_blip;
-extern volatile int eventCounter1;
-extern volatile int eventCounter2;
+// Pending pulses since last collect(). Incremented in ISR, read-and-cleared
+// in cooperative context. Single counter (was ping-pong) - bounded critical
+// section is simpler than the flip-flop and saves a handful of BSS bytes.
+extern volatile uint32_t s_event_counter;
 
 extern volatile unsigned long _debounce;
 
 #ifdef ESP32
 extern portMUX_TYPE timerMux;
 #endif
+
+class EGHttpResponse;
+class EGHttpServer;
 
 class GeigerInput {
   public:
@@ -133,8 +141,16 @@ class GeigerInput {
     virtual void apply_pcnt_filter() {};
     virtual void set_pin_pull(int mode) {};   // 0=floating, 1=up, 2=down
     virtual bool has_pcnt() { return false; }
-    // Pulse doesn't have a real connection concept, serial does
+    // Input-link health. Default is "true" (no opinion) - pulse types
+    // delegate to Counter::get_tube_alive() for ratio-aware tube checks.
+    // Serial overrides for bad-line drain; UDP for producer keep-alive.
     virtual bool isHealthy() const { return true; }
+    virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
+    virtual void registerRoutes(EGHttpServer&) {}
+    virtual void appendJsonExtra(EGHttpResponse&) {}
+    virtual void appendClicksExtra(EGHttpResponse&) {}
+    // Test builds compress hourly bars to 60 s so they fill in a session.
+    virtual uint32_t boundary_seconds() const { return 3600; }
     virtual void stopForOTA() {}
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }

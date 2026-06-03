@@ -18,6 +18,11 @@
 */
 #include "GeigerInputTest.h"
 #include "../Logger/Logger.h"
+#include <EGHttpServer.h>
+
+void GeigerInputTest::appendClicksExtra(EGHttpResponse& res) {
+  res.sendChunk(F(",\"roll\":60"));
+}
 
 volatile int _pulse_width_us = GEIGER_PULSE_WIDTH;
 volatile uint32_t _pulse_width_ticks =

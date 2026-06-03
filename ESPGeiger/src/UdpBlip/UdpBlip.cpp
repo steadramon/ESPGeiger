@@ -18,7 +18,7 @@
 */
 #include "UdpBlip.h"
 #include "../Counter/Counter.h"
-#include "../GeigerInput/GeigerInput.h"  // eventCounter1/2 (ISR pending)
+#include "../GeigerInput/GeigerInput.h"  // s_event_counter (ISR pending)
 #include "../Module/EGModuleRegistry.h"
 #include "../Logger/Logger.h"
 #include "../Prefs/EGPrefs.h"
@@ -315,8 +315,7 @@ void UdpBlipModule::tryEmitClick(unsigned long now_ms) {
   if (!_udp) return;
   if (!Wifi::connected) return;
   if (ota_in_progress) return;
-  uint32_t true_count = (uint32_t)gcounter.total_clicks +
-                        (uint32_t)(eventCounter1 + eventCounter2);
+  uint32_t true_count = (uint32_t)gcounter.total_clicks + s_event_counter;
   if (true_count == _last_clicks) return;
 
   // Token bucket; _last_token_ms advances only by converted intervals so
