@@ -226,6 +226,11 @@ EG_PSTR(IN_H_PWU, "Simulated pulse width (us)");
 EG_PSTR(IN_L_DTU, "Tube dead time");
 EG_PSTR(IN_H_DTU, "GM tube dead time (us). 0=disabled. J305=50, SBM-20=150.");
 #endif
+// CPM mode pref - PCNT/serial/UDP now feed the ring via Counter::on_pulse_batch
+// (synthetic spacing), so every counter type has a meaningful ring to switch
+// on. min_pulse_us still only updates from true single-pulse hooks.
+EG_PSTR(IN_L_CMM, "CPM mode");
+EG_PSTR(IN_H_CMM, "0=auto, 1=live ring, 2=fixed 60s, 3=bucket (default), 4=adaptive fast");
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
 EG_PSTR(IN_L_GMD, "Geiger Counter");
 EG_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
@@ -279,6 +284,7 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
   {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, EGP_UINT, 0},
 #endif
+  {"cpm_mode", IN_L_CMM, IN_H_CMM, "3", nullptr, 0, 4, 0, EGP_UINT, 0},
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {"geiger_model", IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
   {"_tube_hdr", IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
@@ -349,6 +355,7 @@ void InputPrefs::on_prefs_loaded() {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
   gcounter.set_dead_time_us((uint16_t)EGPrefs::getUInt("input", "dead_time_us"));
 #endif
+  gcounter.set_cpm_mode((uint8_t)EGPrefs::getUInt("input", "cpm_mode"));
 }
 
 void InputPrefs::on_prefs_saved() {
