@@ -407,8 +407,7 @@ void MQTT_Client::publishPing()
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
       PSTR(",\"warn\":%d,\"alert\":%d"),
       gcounter.is_warning() ? 1 : 0, gcounter.is_alert() ? 1 : 0);
-#if !GEIGER_IS_SERIAL(GEIGER_TYPE)
-    // tube alive flag for pulse/PCNT/UDP; serial uses ser_ok in tele/state.
+#if !GEIGER_IS_SERIAL(GEIGER_TYPE)    // serial uses ser_ok in tele/state
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
       PSTR(",\"tube\":%d"), gcounter.get_tube_alive() ? 1 : 0);
 #endif

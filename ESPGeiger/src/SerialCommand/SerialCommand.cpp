@@ -128,8 +128,7 @@ void SerialCommand::reset_wifi() {
   reboot();
 }
 
-// Usage: `pause [seconds]`. No arg or `0` resumes; bare `pause` reports
-// remaining seconds. Cap at 24 h matches the /pause HTTP endpoint.
+// `pause [seconds]` - 0 resumes, no arg prints remaining. Cap 24 h.
 void SerialCommand::cmd_pause() {
   char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
   if (arg) {

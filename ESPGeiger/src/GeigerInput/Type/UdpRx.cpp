@@ -282,11 +282,7 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     _last_click_ms  = now_ms;
     _gap_filled    += gap_credit;
     gcounter.queueBlip(credit);
-    // Feed the Counter v2 pulse ring. Always use the batch path so the
-    // receiver-side micros() delta (network + cooperative-loop jitter) does
-    // not pollute s_min_pulse_us with sub-100us readings that aren't real
-    // tube intervals. credit==1 is a single-entry batch; credit>1 spreads
-    // across the producer-reported span.
+    // Batch-path always: receiver-side timing would lie to s_min_pulse_us.
     uint32_t now_us = (uint32_t)micros();
     if (credit == 1) {
       Counter::on_pulse_batch(1, now_us, 0);

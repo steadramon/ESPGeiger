@@ -88,17 +88,13 @@ class Counter {
       int get_last_cps() const { return (int)geigerTicks.last(); }
       int get_cpm();
       float get_cpmf();
-      // Bucket-derived, mode-independent. Public fleet posters (Radmon,
-      // URADMonitor, Safecast, WebAPI, GMC) use these so the fleet sees
-      // consistent data regardless of the user's UI cpm_mode. User-owned
-      // posters (MQTT, Webhook, Thingspeak) follow the mode via get_cpmf etc.
+      // Bucket-derived, mode-independent. Public fleet posters use these.
       float get_cps_stable()  const { return _cached_cps; }
       float get_cpmf_stable() const { return _cached_cps * 60.0f; }
       int   get_cpm_stable()  const { return (int)roundf(_cached_cps * 60.0f); }
       float get_usv_stable()  const { return _cached_cps * 60.0f * _ratio_inv; }
-      // External-post pause. Auto-expires so the user can't forget to resume.
-      // Cheap volatile-read + compare per module fire (~3 cycles).
-      static void     pause_external(uint32_t timeout_ms);   // 0 = resume now
+      // Auto-expiring pause on external posters. 0 ms = resume now.
+      static void     pause_external(uint32_t timeout_ms);
       static bool     external_paused();
       static uint32_t pause_remaining_ms();
       int get_cpm5();
@@ -115,28 +111,17 @@ class Counter {
       bool  get_tube_alive();
       // true when dead-time correction is near its 10x cap (very high rate).
       bool  get_saturated();
-      // Counter v2 ring-derived diagnostics (Phase A, see ideas/counter_v2.md).
-      // Empty / zero on counter types that do not feed the per-pulse ring
-      // (PCNT, serial, UDP); see comment on on_pulse() below.
-      float    get_cps_live();      // pure (N-1)/T from ring, 0 if N<2
-      uint16_t get_cps_n();         // N pulses currently in ring
-      uint32_t get_cps_win_us();    // microsecond span of those N pulses
-      uint32_t get_min_pulse_us();  // smallest inter-pulse interval since boot
-      // Per-pulse hook. Called from ISR on interrupt-driven pulse types and
-      // any future hook site that observes a single pulse. Records one
-      // timestamp into the ring and updates min-interval. Must stay
-      // integer-only, heap-free, FP-free.
+      // Ring-derived diagnostics. Zero on counter types that don't feed it.
+      float    get_cps_live();      // (N-1)/T from ring, 0 if N<2
+      uint16_t get_cps_n();
+      uint32_t get_cps_win_us();
+      uint32_t get_min_pulse_us();
+      // ISR hook for interrupt-driven types. Integer-only, FP-free, heap-free.
       static void IRAM_ATTR on_pulse(uint32_t now_us);
-      // Batch hook for paths that observe `count` pulses without per-pulse
-      // timestamps (PCNT collect, serial CPM lines, UDP gap-fill credits).
-      // Pushes `count` evenly-spaced synthetic timestamps ending at end_us
-      // spanning span_us. Does NOT update min_pulse_us - synthetic spacing
-      // doesn't reflect true tube dead-time, only real on_pulse() entries do.
+      // Batch hook for paths without per-pulse timestamps. Does not update
+      // min_pulse_us (synthetic spacing is not real tube physics).
       static void IRAM_ATTR on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
-      // Counter v2 Phase B - CPM calculation mode (counter_v2.md Section 4).
-      // 0=auto blend, 1=live ring, 2=fixed 60s, 3=bucket (default), 4=adaptive_fast.
-      // Setter is in the cpp so it can lazy-allocate the pulse ring on
-      // first opt-in to a non-bucket mode. Mode 3 default keeps ring at 0 B.
+      // 0=auto blend, 1=live, 2=fixed 60s, 3=bucket (default), 4=adaptive fast.
       void    set_cpm_mode(uint8_t m);
       uint8_t get_cpm_mode() const { return _cpm_mode; }
       void set_ratio(float ratio);
@@ -295,24 +280,16 @@ class Counter {
       unsigned long _lifetime_seconds_saved = 0;
       uint32_t      _last_save_time_t = 0;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
-      // Precomputed for mode 0 blend (avoids a float divide per get_cps call
-      // during the brief uptime in [w, 2w] window).
-      float   _cpm_window_inv = 1.0f / (float)GEIGER_CPM_COUNT;
+      float   _cpm_window_inv = 1.0f / (float)GEIGER_CPM_COUNT;   // for mode 0 blend
       mutable bool _warm_cached = false;
       int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled
       int16_t _quiet_to_min   = -1;
       float _ratio = GEIGER_RATIO;
-      float _ratio_inv = 1.0f / GEIGER_RATIO;   // reciprocal, kept in sync in set_ratio
-      // Tube-alive timeout, cached at set_ratio time: avoids a float divide
-      // + an int /1000 per get_tube_alive() call. Compared directly against
-      // (micros() - last_blip) in us.
+      float _ratio_inv = 1.0f / GEIGER_RATIO;
       uint32_t _tube_timeout_us = (uint32_t)(12000000000.0 / GEIGER_RATIO);
       uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
       float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
-      // Only _cached_cps earns a cache slot - geigerTicks.get() + dead-time
-      // correction is real work each tick. The other CPM/uSv/EMA values
-      // multiply through trivially at read time (counter_v2 RAM audit).
-      float _cached_cps = 0.0f;
+      float _cached_cps = 0.0f;     // updated each tick, dead-time corrected
       EGRingAvg<float, GEIGER_CPM_COUNT> geigerTicks;
 #ifdef GEIGER_SMOOTH_AVG
       EGRingAvg<float, GEIGER_CPM5_COUNT>  geigerTicks5;

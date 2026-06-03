@@ -44,8 +44,7 @@
 
 extern long start;  // boot epoch ref from main
 
-// Pulse-timestamp ring. Lazy heap allocation - mode 3 (default) skips it
-// entirely. Null-guarded on every access; never freed once allocated.
+// Pulse-timestamp ring. Lazy-allocated; null-guarded on access.
 namespace {
 constexpr uint16_t PULSE_RING_SIZE = 256;
 constexpr uint16_t PULSE_RING_MASK = PULSE_RING_SIZE - 1;
@@ -72,7 +71,6 @@ void Counter::set_cpm_mode(uint8_t m) {
   if (_cpm_mode != 3) ensure_pulse_ring();
 }
 
-// External-post pause. Single 4 B BSS scalar, signed-wrap-safe compare.
 static volatile uint32_t s_pause_until_ms = 0;
 
 void Counter::pause_external(uint32_t timeout_ms) {
@@ -104,8 +102,7 @@ uint32_t Counter::pause_remaining_ms() {
 }
 
 void IRAM_ATTR Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
-  // count entries evenly spaced ending at end_us. Caller knows N + the
-  // bracket but not per-pulse moments. Skips s_min_pulse_us by design.
+  // Synthetic timestamps; does not update s_min_pulse_us by design.
   if (!s_pulse_ring || count == 0) return;
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
@@ -129,9 +126,7 @@ void IRAM_ATTR Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t
 }
 
 void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
-  // Real single-pulse hook. Integer-only, FP-free.
-  // Min-interval observation runs regardless of ring allocation so the
-  // /history annotation still works for mode-3 (no ring) users.
+  // Min interval tracked even when ring is not allocated.
   if (s_prev_pulse_us) {
     uint32_t interval = now_us - s_prev_pulse_us;
     if (interval && interval < s_min_pulse_us) s_min_pulse_us = interval;
@@ -367,8 +362,7 @@ void Counter::reset_lifetime() {
 }
 
 float Counter::get_cps() {
-  // Phase B mode dispatch. Ring-derived modes fall back to _cached_cps when
-  // the ring has no usable data (lazy-alloc off, no pulses yet).
+  // Ring modes fall back to _cached_cps when the ring has no data.
   if (_cpm_mode == 3) return _cached_cps;
   auto ringOrBucket = [&](float v) -> float {
     return v > 0.0f ? apply_dead_time(v) : _cached_cps;
@@ -421,18 +415,13 @@ void Counter::set_ratio(float ratio) {
   if (ratio <= 0) return;
   _ratio = ratio;
   _ratio_inv = 1.0f / ratio;
-  // 12 billion us / ratio gives the timeout in us, assuming 0.05 uSv/h
-  // background. Floor at 30 min so shielded / low-rate setups (e.g. 0.5 CPM)
-  // don't false-alarm. Clamp at UINT32_MAX (~71 min = micros wrap).
+  // 30 min floor avoids false alarms on shielded / low-CPM setups.
   double t = 12000000000.0 / (double)ratio;
   if (t < 1800000000.0) t = 1800000000.0;
   _tube_timeout_us = (t >= 4.29e9) ? UINT32_MAX : (uint32_t)t;
 }
 
 bool Counter::get_tube_alive() {
-  // Timeout = 12000/ratio sec ~= time for 10 pulses at 0.05 uSv/h background.
-  // Sensitive tubes alarm fast (Si22G ~20s), insensitive slow (SBM-20 ~111s).
-  // _tube_timeout_us is precomputed in set_ratio so this path has no divides.
   if (_ratio <= 0.0f) return true;
   unsigned long lb_us = geigerinput->last_blip();
   if (lb_us == 0) return true;
@@ -440,7 +429,6 @@ bool Counter::get_tube_alive() {
 }
 
 bool Counter::get_saturated() {
-  // cps*dt > 0.875 -> non-paralyzable correction factor near its 10x cap.
   // Must use raw observed cps; corrected values feedback-loop near the cap.
   if (_dead_time_us == 0) return false;
   float cps = get_cps_live();
@@ -457,8 +445,7 @@ float Counter::get_cps_live() {
 }
 
 float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
-  // Walk backwards from newest while age < max_age_us AND take < max_pulses.
-  // Either limit 0 means "no cap on that dimension". 256 iter ~= 16 us.
+  // 0 on either limit means uncapped on that dimension.
   if (!s_pulse_ring) return 0.0f;
 #ifdef ESP32
   portENTER_CRITICAL(&s_pulse_mux);
@@ -493,15 +480,13 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
 }
 
 float Counter::apply_dead_time(float cps) const {
-  // Non-paralyzable correction, matches the secondticker bucket formula.
   if (_dead_time_us == 0 || cps <= 50.0f) return cps;
   float x = cps * _dead_time_sec;
   return cps * (1.0f + x * (1.0f + x));
 }
 
 uint16_t Counter::get_cps_n() {
-  // Single 16-bit aligned volatile read is atomic on Xtensa, no lock needed.
-  return s_pulse_count;
+  return s_pulse_count;     // aligned 16-bit volatile read is atomic on Xtensa
 }
 
 uint32_t Counter::get_cps_win_us() {
@@ -541,7 +526,6 @@ bool Counter::is_alert() {
 }
 
 float Counter::get_usv() {
-  // Routes through get_cpmf so dose follows the active CPM mode.
   return get_cpmf() * _ratio_inv;
 }
 
@@ -816,9 +800,7 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (n > 0) res.sendChunk(line, (size_t)n);
     }
     res.sendChunk(F("]"));
-    // Pairs with the histogram: actual smallest inter-pulse interval observed
-    // since boot (vs the log2-bucket floor). 0 if the ring has not yet seen
-    // two consecutive pulses on this counter type.
+    // Smallest inter-pulse interval since boot, paired with the histogram.
     uint32_t mp = gcounter.get_min_pulse_us();
     if (mp > 0) {
       n = snprintf_P(line, sizeof(line),
@@ -895,7 +877,6 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     raw ? ESP.getFreeHeap() : DeviceInfo::freeHeap(),
     (int)Wifi::rssi);
   if (n > 0) res.sendChunk(buf, (size_t)n);
-  // Operational flags: tube alive, dead-time saturation.
   n = snprintf_P(buf, sizeof(buf),
     PSTR(",\"tube\":%u,\"sat\":%u"),
     (unsigned)(gcounter.get_tube_alive() ? 1 : 0),
@@ -940,7 +921,6 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
       (unsigned)DeviceInfo::largestFreeBlock(),
       (unsigned)DeviceInfo::largestFreeBlockLow());
     if (n > 0) res.sendChunk(buf, (size_t)n);
-    // Ring diagnostics only when the ring has data (mode 3 default skips).
     if (gcounter.get_cps_n() >= 2) {
       char csl[16];
       format_f(csl, sizeof(csl), gcounter.get_cps_live());
@@ -956,9 +936,7 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// /s - lean status endpoint for /status JS polling. ~125 B vs /json's ~250.
-// Same fields /status JS actually reads; /json stays the general-purpose
-// endpoint for everything else.
+// /s - lean status endpoint for /status JS. /json stays general-purpose.
 static void hStatusJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char c[16], c5[16], c15[16], cs[16];
   format_f(c,   sizeof(c),   gcounter.get_cpmf());
@@ -1140,9 +1118,7 @@ static void hLifeReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, "text/plain", "OK");
 }
 
-// /pause?s=N - pause public-fleet posts (Radmon, URADMonitor, Safecast, GMC,
-// WebAPI, Webhook, Thingspeak) for N seconds. ?s=0 resumes. Capped at 24 h
-// so a forgotten pause auto-expires. GET to read current state, POST to set.
+// /pause[?s=N] - pause external posts. ?s=0 resumes. Capped at 24 h.
 static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* sec = req.arg("s");
   if (sec) {
