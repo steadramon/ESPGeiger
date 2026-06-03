@@ -144,6 +144,7 @@ class GeigerInput {
     virtual void appendClicksExtra(EGHttpResponse&) {}
     virtual uint32_t boundary_seconds() const { return 3600; }   // 60 in test
     virtual void stopForOTA() {}
+    virtual void restartAfterOTA() {}
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
     static void IRAM_ATTR countInterrupt();

@@ -61,6 +61,7 @@ class GeigerTestPulse : public GeigerInputTest
     void begin();
     void loop();
     void stopForOTA() override;
+    void restartAfterOTA() override;
     static void IRAM_ATTR pulseInterrupt();
     static void pulseInterrupt(void *data);
     void secondTicker();

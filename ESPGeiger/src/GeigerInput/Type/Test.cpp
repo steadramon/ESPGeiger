@@ -73,6 +73,15 @@ void GeigerTest::stopForOTA() {
 #endif
 }
 
+void GeigerTest::restartAfterOTA() {
+#ifdef ESP8266
+  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
+  timer1_write((unsigned long)_next_delay);
+#else
+  if (hdl_pulse_timer != NULL) esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
+#endif
+}
+
 void GeigerTest::loop() {
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;

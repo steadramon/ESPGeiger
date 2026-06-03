@@ -18,7 +18,7 @@
 */
 #include <Arduino.h>
 #include "GeigerInput.h"
-#include "../Counter/Counter.h"   // Counter::on_pulse() ring hook (Phase A)
+#include "../Counter/Counter.h"   // Counter::on_pulse() ring hook
 #include "../Logger/Logger.h"
 #include "../Util/PinSafety.h"
 

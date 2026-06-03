@@ -186,6 +186,9 @@ class Counter {
         if (_lifetime_enabled) save_lifetime();
         if (geigerinput) geigerinput->stopForOTA();
       }
+      void restart_after_ota() {
+        if (geigerinput) geigerinput->restartAfterOTA();
+      }
       unsigned long last_blip() {
         return geigerinput->last_blip();
       }
@@ -239,7 +242,7 @@ class Counter {
       void set_ext_blip_pulse_ms(uint8_t ms) { ext_blip_pulse_ms = ms ? ms : 1; }
 #endif
     private:
-      // Ring snapshot for cooperative-context readers. See counter_v2.md sec 3.5.
+      // Ring snapshot for cooperative-context readers.
       struct RingSnapshot {
         uint32_t newest_us;
         uint32_t oldest_us;

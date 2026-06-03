@@ -94,6 +94,15 @@ void GeigerTestPulseInt::stopForOTA() {
 #endif
 }
 
+void GeigerTestPulseInt::restartAfterOTA() {
+#ifdef ESP8266
+  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_LOOP);
+  timer1_write(_target_pwm);
+#else
+  if (hdl_pulse_timer != NULL) esp_timer_start_periodic(hdl_pulse_timer, _target_pwm);
+#endif
+}
+
 void IRAM_ATTR GeigerTestPulseInt::pulseInterrupt(void *data) {
   pulseInterrupt();
 }

@@ -71,6 +71,14 @@ void GeigerPulse::stopForOTA() {
 #endif
 }
 
+void GeigerPulse::restartAfterOTA() {
+#ifdef USE_PCNT
+  pcnt_counter_resume(PCNT_UNIT);
+#else
+  attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+#endif
+}
+
 #ifdef USE_PCNT
 int GeigerPulse::collect() {
   int16_t pulseCount;
@@ -80,7 +88,7 @@ int GeigerPulse::collect() {
   pcnt_counter_resume(PCNT_UNIT);
   if (pulseCount != 0) {
     setCounter(pulseCount);
-    // Synthesise per-pulse ring entries so Counter v2 modes work on PCNT.
+    // Synthesise per-pulse ring entries so ring-based CPM modes work on PCNT.
     // Spread across the last second (collect cadence) ending at now.
     Counter::on_pulse_batch((uint16_t)pulseCount, (uint32_t)micros(), 1000000UL);
   } else {
