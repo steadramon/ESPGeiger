@@ -22,6 +22,9 @@
 
 #include "../../Logger/Logger.h"
 #include "../../Util/MathUtil.h"
+#ifdef USE_PCNT
+#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
+#endif
 
 GeigerPulse::GeigerPulse() {
 };
@@ -77,6 +80,9 @@ int GeigerPulse::collect() {
   pcnt_counter_resume(PCNT_UNIT);
   if (pulseCount != 0) {
     setCounter(pulseCount);
+    // Synthesise per-pulse ring entries so Counter v2 modes work on PCNT.
+    // Spread across the last second (collect cadence) ending at now.
+    Counter::on_pulse_batch((uint16_t)pulseCount, (uint32_t)micros(), 1000000UL);
   } else {
     setCounter(pulseCount, false);
   }

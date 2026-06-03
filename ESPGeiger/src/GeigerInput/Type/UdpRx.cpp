@@ -26,6 +26,7 @@
 #include "../../Prefs/EGPrefs.h"
 #include "../../Util/DeviceInfo.h"
 #include "../../Util/Wifi.h"
+#include <EGHttpServer.h>
 #include <WiFiUdp.h>
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
@@ -281,6 +282,20 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     _last_click_ms  = now_ms;
     _gap_filled    += gap_credit;
     gcounter.queueBlip(credit);
+    // Feed the Counter v2 pulse ring. Always use the batch path so the
+    // receiver-side micros() delta (network + cooperative-loop jitter) does
+    // not pollute s_min_pulse_us with sub-100us readings that aren't real
+    // tube intervals. credit==1 is a single-entry batch; credit>1 spreads
+    // across the producer-reported span.
+    uint32_t now_us = (uint32_t)micros();
+    if (credit == 1) {
+      Counter::on_pulse_batch(1, now_us, 0);
+    } else {
+      uint32_t dt_ms = producer_ts - p->last_ts_ms;
+      uint32_t span_us = ((int32_t)dt_ms > 0 && dt_ms < 60000)
+                          ? dt_ms * 1000UL : 1000000UL;
+      Counter::on_pulse_batch((uint16_t)credit, now_us, span_us);
+    }
   }
   _local_count    += credit;
   p->click_count  += credit;
@@ -366,6 +381,15 @@ int GeigerUdpRx::collect() {
 
 bool GeigerUdpRx::isHealthy() const {
   return _producers_seen > 0;
+}
+
+void GeigerUdpRx::appendJsonExtra(EGHttpResponse& res) {
+  if (_packets_accepted == 0) return;
+  uint16_t lx10 = loss_pct_x10();
+  char buf[24];
+  int n = snprintf_P(buf, sizeof(buf), PSTR(",\"loss\":%u.%u"),
+                     (unsigned)(lx10 / 10), (unsigned)(lx10 % 10));
+  if (n > 0) res.sendChunk(buf, (size_t)n);
 }
 
 const char* GeigerUdpRx::locked_chipid() const {
