@@ -86,6 +86,11 @@ table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:.4em .6em;border-bottom:1px solid var(--border)}
 th{font-weight:500;color:var(--muted)}
 .muted{color:var(--muted);font-size:.9em}
+.stat{display:grid;grid-template-columns:auto 1fr auto 1fr;column-gap:2em}
+.stat>.row{display:grid;grid-template-columns:subgrid;grid-column:1/-1;padding:.4em .6em;border-bottom:1px solid var(--border);align-items:baseline}
+.stat>.row b{color:var(--muted);font-weight:500;font-family:inherit}
+.stat>.row.envflex{display:flex;gap:2em}
+.stat>.row.envflex>div{flex:1;display:flex;gap:2em;align-items:baseline}
 .card{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:1em;margin:1em 0}
 .card-ok{border-color:#5a5}
 .bar-row{display:flex;align-items:flex-end;gap:1px;height:80px;width:100%;overflow:hidden;margin:.4em 0;border-bottom:1px solid var(--border)}
@@ -1965,12 +1970,12 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button id=snd>Sound: off</button>
 <canvas id=g1></canvas>
 <div id=g2></div>
-<table>
-<tr><th>CPM</th><td><span id=blip></span><span id=cpm>-</span></td><th>CPS</th><td><span id=cs>-</span></td></tr>
-<tr><th><span class=usvL>&micro;Sv/h</span></th><td><span id=usv class=usv>-</span></td><th>Total clicks</th><td><span id=tc>-</span></td></tr>
-<tr><th>Uptime</th><td><span id=upt>-</span></td><th>Signal</th><td><span id=rssi>-</span></td></tr>
-<tr id=envR style=display:none></tr>
-</table>
+<div class=stat>
+<div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
+<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Total clicks</b><span id=tc>-</span></div>
+<div class=row><b>Uptime</b><span id=upt>-</span><b>Signal</b><span id=rssi>-</span></div>
+<div class=row id=envR style=display:none></div>
+</div>
 <h2>Console</h2>
 <textarea readonly id=t1 wrap=off></textarea>
 <details style="margin-top:.4em"><summary style="cursor:pointer;color:var(--muted);width:1.5em;list-style-position:inside">&nbsp;</summary>
@@ -2268,7 +2273,7 @@ n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseT
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 C.textContent=o.c.toFixed(2);T.textContent=o.tc;setUsv(V,o.c/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
-if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);$('envR').innerHTML=ps.map(function(p){return '<th>'+p[0]+'</th><td>'+p[1]+'</td>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
+if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
