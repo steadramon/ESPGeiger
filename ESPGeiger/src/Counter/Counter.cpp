@@ -53,8 +53,7 @@ volatile uint32_t* s_pulse_ring   = nullptr;
 volatile uint16_t  s_pulse_head   = 0;
 volatile uint16_t  s_pulse_count  = 0;
 volatile uint32_t  s_min_pulse_us = UINT32_MAX;
-// Tracked even when the ring is not allocated so the /history "observed min"
-// annotation works for default mode-3 users. Costs 4 B BSS, no other use.
+// Tracked without the ring so /history min_pulse_us works for default mode 3.
 volatile uint32_t  s_prev_pulse_us = 0;
 #ifdef ESP32
 portMUX_TYPE s_pulse_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -101,8 +100,8 @@ uint32_t Counter::pause_remaining_ms() {
   return d > 0 ? (uint32_t)d : 0;
 }
 
-void IRAM_ATTR Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
-  // Synthetic timestamps; does not update s_min_pulse_us by design.
+void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
+  // Synthetic timestamps; skips s_min_pulse_us by design.
   if (!s_pulse_ring || count == 0) return;
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
@@ -126,7 +125,7 @@ void IRAM_ATTR Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t
 }
 
 void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
-  // Min interval tracked even when ring is not allocated.
+  // Min interval runs without the ring.
   if (s_prev_pulse_us) {
     uint32_t interval = now_us - s_prev_pulse_us;
     if (interval && interval < s_min_pulse_us) s_min_pulse_us = interval;
@@ -146,7 +145,6 @@ void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
 }
 
 bool Counter::snapshot_ring(RingSnapshot& s) const {
-  // Atomic read of head/count + ring tail+head entries.
   if (!s_pulse_ring) { s.count = 0; return false; }
 #ifdef ESP32
   portENTER_CRITICAL(&s_pulse_mux);
@@ -168,8 +166,8 @@ bool Counter::snapshot_ring(RingSnapshot& s) const {
   return count >= 2;
 }
 
-// RTC stash for clicks + tracked-seconds since last flash save. Word 48 =
-// OTA-safe region, clear of CrashDump (0..41). Folded into flash on boot.
+// RTC stash for clicks + seconds since last flash save. Word 48: OTA-safe,
+// clear of CrashDump (0..41). Folded into flash on boot.
 #ifdef ESP8266
 namespace {
 constexpr uint32_t LIFE_RTC_OFFSET_WORDS = 48;
@@ -246,24 +244,22 @@ void Counter::secondticker() {
 
   time_t currentTime = time (NULL);
   if (ntpclient.synced) {
-    // Fire on each new hour (minute in test builds). Cache next-fire time
-    // so we don't divide every tick - one-time alignment then compare-add.
+    // Fires each hour (minute in test). Cached next-fire avoids divide-per-tick.
     time_t kBoundarySecs = (time_t)geigerinput->boundary_seconds();
     static time_t nextBoundary = 0;
     static bool boundaryArmed = false;
     bool fire = false;
     if (nextBoundary == 0) {
-      // First call after sync - align to wall-clock boundary; fire once for tz refresh.
+      // First sync: align and fire once for tz.
       nextBoundary = currentTime - (currentTime % kBoundarySecs) + kBoundarySecs;
       fire = true;
     } else if (currentTime >= nextBoundary) {
       fire = true;
-      // Advance past any missed boundaries (e.g. NTP step forward).
+      // Catch up after NTP step forward.
       while (currentTime >= nextBoundary) nextBoundary += kBoundarySecs;
     }
     if (fire) {
-      // Track day index (epoch / 86400) so day rollover fires even when a
-      // catch-up jump (NTP step) skips past midnight without landing on it.
+      // Day index so rollover survives NTP step past midnight.
       static uint32_t lastDay = 0;
       uint32_t curDay = (uint32_t)(currentTime / 86400);
       if (boundaryArmed) {
@@ -295,8 +291,7 @@ void Counter::secondticker() {
     if (_last_save_time_t == 0 && ntpclient.synced) {
       _last_save_time_t = (uint32_t)currentTime;
     }
-    // Tick schedules, loop() does the writes. Keeps the ~100us RTC stash
-    // and the ~ms save_lifetime() flash write out of tick_max.
+    // Tick schedules, loop() writes; keeps RTC + flash out of tick_max.
     static uint32_t s_rtc_ctr = 0;
     if (++s_rtc_ctr >= 30) {
       s_rtc_ctr = 0;
@@ -314,13 +309,23 @@ void Counter::secondticker() {
     }
   }
 
-  _bool_cpm_warning = (_cpm_warning < ccpm);
-  _bool_cpm_alert   = (_cpm_alert   < ccpm);
+  bool warn = (_cpm_warning < ccpm);
+  bool alrt = (_cpm_alert   < ccpm);
+  if (!warn && !alrt) _alarm_snoozed = false;     // auto re-arm when calm
+  _bool_cpm_warning = warn && !_alarm_snoozed;
+  _bool_cpm_alert   = alrt && !_alarm_snoozed;
+}
+
+void Counter::reset_alarm() {
+  if (!_bool_cpm_warning && !_bool_cpm_alert) return;
+  _alarm_snoozed    = true;
+  _bool_cpm_warning = false;
+  _bool_cpm_alert   = false;
+  Log::console(PSTR("Alarm: snoozed until level drops below warning"));
 }
 
 void Counter::save_lifetime() {
-  // Advance tracked seconds by the span since the previous save: keeps the
-  // CPM denominator symmetric with the click numerator across reboots.
+  // Advance tracked seconds since last save so lifetime CPM stays right across reboots.
   time_t currentTime = time(nullptr);
   if (_last_save_time_t > 0 && ntpclient.synced &&
       (uint32_t)currentTime >= _last_save_time_t) {
@@ -362,14 +367,14 @@ void Counter::reset_lifetime() {
 }
 
 float Counter::get_cps() {
-  // Ring modes fall back to _cached_cps when the ring has no data.
+  // Ring modes fall back to _cached_cps when ring is empty.
   if (_cpm_mode == 3) return _cached_cps;
   auto ringOrBucket = [&](float v) -> float {
     return v > 0.0f ? apply_dead_time(v) : _cached_cps;
   };
   switch (_cpm_mode) {
     case 1: return ringOrBucket(get_cps_live());
-    case 2: return ringOrBucket(cps_windowed(60UL * 1000000UL, 0));
+    case 2: return ringOrBucket(cps_windowed(60UL * 1000000UL, 64));
     case 4: return ringOrBucket(cps_windowed(5UL  * 1000000UL, 19));
     case 0: {                                  // auto: ring early, bucket warm
       float live = get_cps_live();
@@ -378,7 +383,7 @@ float Counter::get_cps() {
       uint32_t w  = _cpm_window;
       if (up <  w)      return apply_dead_time(live);
       if (up >= 2u * w) return _cached_cps;
-      // Linear blend uptime in [w, 2w]: bucket weight grows 0 -> 1.
+      // Linear blend over [w, 2w]: bucket weight 0 -> 1.
       float liveC = apply_dead_time(live);
       float a = (float)(up - w) * _cpm_window_inv;
       return liveC * (1.0f - a) + _cached_cps * a;
@@ -415,7 +420,7 @@ void Counter::set_ratio(float ratio) {
   if (ratio <= 0) return;
   _ratio = ratio;
   _ratio_inv = 1.0f / ratio;
-  // 30 min floor avoids false alarms on shielded / low-CPM setups.
+  // 30 min floor: shielded / low-CPM setups would false-alarm at the bare formula.
   double t = 12000000000.0 / (double)ratio;
   if (t < 1800000000.0) t = 1800000000.0;
   _tube_timeout_us = (t >= 4.29e9) ? UINT32_MAX : (uint32_t)t;
@@ -429,7 +434,7 @@ bool Counter::get_tube_alive() {
 }
 
 bool Counter::get_saturated() {
-  // Must use raw observed cps; corrected values feedback-loop near the cap.
+  // Raw cps only; corrected values feedback-loop near the cap.
   if (_dead_time_us == 0) return false;
   float cps = get_cps_live();
   if (cps <= 0.0f) cps = geigerTicks.get();
@@ -445,7 +450,7 @@ float Counter::get_cps_live() {
 }
 
 float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
-  // 0 on either limit means uncapped on that dimension.
+  // 0 = uncapped on that axis.
   if (!s_pulse_ring) return 0.0f;
 #ifdef ESP32
   portENTER_CRITICAL(&s_pulse_mux);
@@ -480,13 +485,15 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
 }
 
 float Counter::apply_dead_time(float cps) const {
+  // Non-paralyzable model, capped at 10x. Skip below 50 cps (factor < 1.005).
   if (_dead_time_us == 0 || cps <= 50.0f) return cps;
   float x = cps * _dead_time_sec;
-  return cps * (1.0f + x * (1.0f + x));
+  if (x > 0.9f) x = 0.9f;
+  return cps / (1.0f - x);
 }
 
 uint16_t Counter::get_cps_n() {
-  return s_pulse_count;     // aligned 16-bit volatile read is atomic on Xtensa
+  return s_pulse_count;     // 16-bit aligned volatile read is atomic on Xtensa
 }
 
 uint32_t Counter::get_cps_win_us() {
@@ -637,8 +644,7 @@ void Counter::set_quiet_hours(const char* from, const char* to) {
 }
 
 bool Counter::is_quiet_now() {
-  // Both ends must parse; either blank = feature off. Also require NTP so we
-  // don't silence the LED on unsynced boots (uptime-as-time would be wrong).
+  // Both ends must parse (blank = off) and NTP synced; uptime is not wall-clock.
   if (_quiet_from_min < 0 || _quiet_to_min < 0)      return false;
   if (_quiet_from_min == _quiet_to_min)              return false;
   if (!ntpclient.synced)                             return false;
@@ -658,10 +664,7 @@ bool Counter::is_quiet_now() {
 }
 
 void Counter::loop() {
-  // Single combined check for both deferred items (RTC stash, save_lifetime).
-  // Bitmask: PENDING_RTC (bit 0), PENDING_SAVE (bit 1). Most iterations the
-  // byte is 0 and we skip with one branch. Keeps RTC + flash writes out of
-  // tick_max while paying only one predicted-false branch per loop iter.
+  // Single byte check defers RTC stash + flash save out of tick_max.
   if (_pending_work) {
     uint8_t pw = _pending_work;
     _pending_work = 0;
@@ -715,7 +718,7 @@ void Counter::loop() {
 #ifndef DISABLE_BLIP
     this->blip();
 #endif
-    unsigned long nowMs = fast_millis();  // match UdpBlip loop()'s fast_millis time base
+    unsigned long nowMs = fast_millis();  // shared time base with UdpBlip::loop
     udpblip.notifyClick(nowMs);
 #ifdef AUDIO_TICK
     audiotick.notifyClick(nowMs);

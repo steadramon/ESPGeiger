@@ -25,6 +25,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../NTP/NTP.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/MathUtil.h"
 #include "../Util/PinSafety.h"
 #include "../Util/StringUtil.h"
 #include "../Util/Wifi.h"
@@ -686,14 +687,13 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   bool warming = !gcounter.is_warm();
   uint8_t snd = send_indicator;
   uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0);
-  // Trend: compare to history N samples back, with sqrt(N) Poisson threshold.
-  // Samples are pushed once per second, so 5 back = ~5 seconds of context.
+  // Trend vs 5s ago using a 1.5-Poisson-sigma threshold to suppress noise.
   int8_t trend = 0;
   uint16_t hsize = (uint16_t)gcounter.cpm_history.size();
   if (hsize >= 5) {
     int32_t past = gcounter.cpm_history[hsize - 5];
     int32_t diff = (int32_t)cpm - past;
-    int32_t thresh = (int32_t)(sqrtf((float)past) * 1.5f + 0.5f);
+    int32_t thresh = (int32_t)(poisson_std((float)past) * 1.5f + 0.5f);
     if (thresh < 2) thresh = 2;
     if (diff >  thresh) trend =  1;
     else if (diff < -thresh) trend = -1;

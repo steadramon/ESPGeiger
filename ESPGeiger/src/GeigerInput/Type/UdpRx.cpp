@@ -281,7 +281,7 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     _packets_accepted++;
     _last_click_ms  = now_ms;
     _gap_filled    += gap_credit;
-    gcounter.queueBlip(credit);
+    gcounter.queueBlip();
     // Batch-path always: receiver-side timing would lie to s_min_pulse_us.
     uint32_t now_us = (uint32_t)micros();
     if (credit == 1) {

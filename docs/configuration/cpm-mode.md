@@ -20,14 +20,30 @@ purpose.
 
 ESPGeiger keeps two measurement structures running at all times:
 
-1. **Bucket** - a sliding mean of per-second pulse counts over a
-   configurable window (60 seconds by default, 1-60 range). Fixed
-   cadence. The legacy and default source for CPS and CPM.
+1. **Bucket** - a sliding mean of per-second pulse counts. The window is
+   60 seconds on Pulse, UDP and Test builds (not user-tunable). On
+   Serial-CPM builds an `Input -> cpm_window` slider exposes 1-60 s with
+   default 30 s. The legacy and default source for CPS and CPM.
 2. **Pulse ring** - a 256 entry buffer of pulse timestamps, in
    microseconds. Each timestamp marks one real pulse. Only allocated when
    you pick a non-bucket mode, so default users pay 0 RAM for it.
 
 Different modes read from one, the other, or blend them.
+
+### Note on Serial CPM-every-second inputs
+
+Most CPM-every-second serial protocols (GC10, MightyOhm CPM mode, etc.)
+emit a number that has already been smoothed on the producer side -
+typically a ~5 second rolling window. Our bucket then averages those
+already-smoothed values over `cpm_window` seconds. This is **cascaded
+smoothing**, not a bug: it stacks the producer's filter with ours,
+trading response time for variance.
+
+Effective response to a step change is roughly `producer_window +
+cpm_window`. With defaults: ~5 s producer + 30 s bucket = ~35 s to
+settle. If your producer is one of the rare lab devices doing a
+full 60 s window, the bucket only adds smoothing on top - lower
+`cpm_window` if you want snappier display.
 
 ## The five modes
 
@@ -35,9 +51,9 @@ Different modes read from one, the other, or blend them.
 |---|---|---|---|
 | 0 | auto | ring early, blend, bucket warm | adaptive |
 | 1 | live | pulse ring (whatever it covers) | 0.3 s to 8 min |
-| 2 | fixed_60s | ring entries younger than 60 s | exactly 60 s |
-| 3 | bucket (default) | per-second mean over the bucket window | bucket window (60 s default) |
-| 4 | adaptive_fast | last 19 pulses or 5 s, whichever shorter | dynamic |
+| 2 | bounded_60s | ring entries within 60 s, capped 64 pulses | 60 s at low rate, shrinks at high rate |
+| 3 | bucket (default) | per-second mean over the bucket window | bucket window (see above) |
+| 4 | adaptive_fast | last 19 pulses or 5 s, whichever shorter | 5 s at low rate, shrinks at high rate |
 
 ### 0 - auto
 
@@ -59,26 +75,37 @@ Best confidence interval at low rates (more N over a longer span), most
 responsive at high rates. Stalest at very low rates: at 0.5 CPM the ring
 might span 8 minutes and a rate change takes 8 minutes to reflect.
 
-### 2 - fixed_60s
+### 2 - bounded_60s
 
-Walks the ring backwards counting entries with age below 60 seconds,
-computes `(N-1) / T` over that window.
+Walks the ring backwards taking the smaller of: entries within 60
+seconds, or 64 entries. Computes `(N-1) / T` over that window.
 
-Useful if you want a strict "last minute" semantic for time-series
-graphing or comparing devices. At very low rates may report 0 if no
-pulses landed in the last 60 s.
+At low rates (below ~64 CPM) the 64-pulse cap is irrelevant and you
+get a true 60 s window. Above that the cap binds and the effective
+window shrinks - at 1000 CPM you see roughly the last 4 s of data,
+at 6000 CPM roughly the last 0.6 s. The reading stays correct, just
+narrower-window than the name suggests.
+
+The cap bounds how long the ring walk holds interrupts off, so
+high-rate tubes do not stall their own ISR. At very low rates may
+report 0 if no pulses landed in the last 60 s.
 
 ### 3 - bucket (default)
 
 Identical behaviour to all previous firmware versions. Sliding mean of
-the last per-second pulse counts over the bucket window (60 seconds by
-default), with dead-time correction applied as the value updates. This
-path has no extra cost.
+the last per-second pulse counts over the bucket window, with dead-time
+correction applied as the value updates. This path has no extra cost
+and does not allocate the ring.
 
-Stable, predictable, and the slowest to respond to a rate change. At low
-rates the confidence interval is poor (~40% with 24 CPM background over
-60 s) but the window is fixed so output module consumers can reason
-about it.
+Stable, predictable, and the slowest to respond to a rate change. The
+window is fixed per build:
+
+* Pulse, UDP, Test: always 60 s (no pref)
+* Serial CPS-capable producer: forced to 60 s
+* Serial CPM-only: user-tunable 1-60 s via `cpm_window`, default 30 s
+
+Output module consumers can reason about the window since it does not
+change at runtime (other than from saving prefs).
 
 ### 4 - adaptive_fast
 
@@ -86,11 +113,16 @@ Walks back through the last 19 pulses **or** 5 seconds, whichever bound
 hits first. Designed for spike hunting and quick visible response when
 something changes.
 
-At background (0.5 cps) the 19-pulse floor kicks in and the effective
-window is about 38 s. At higher rates the 5 s cap takes over.
+* Below ~240 CPM the 5 s cap binds. You see only the handful of
+  pulses that landed in the last 5 s - a 30 CPM tube gives ~3 pulses
+  per 5 s, so the reading is very noisy at background.
+* Around 240 CPM (19 pulses in ~5 s) the two caps cross.
+* Above 240 CPM the 19-pulse cap binds and the window shrinks: at
+  1900 CPM you see roughly the last 0.6 s; at 6000 CPM the last 0.2 s.
 
-Best for users who want to see changes immediately. Noisy at low rates
-because the small N gives a wide confidence interval.
+Best for users who want to see changes immediately at a hot source.
+Will dance around violently at background rates - that is the price of
+a 5-second window.
 
 ## What changes when I switch modes
 
@@ -133,10 +165,45 @@ Quick guide:
   source.** Pick `4` (adaptive_fast).
 * **You want the most stable reading available at a steady rate
   source.** Pick `1` (live) - more pulses, smaller confidence interval.
-* **You want a strict 1 minute average for time series comparison.**
-  Pick `2` (fixed_60s).
+* **You want a bounded 1 minute window for time series comparison.**
+  Pick `2` (bounded_60s). At rates under ~64 CPM this is a true 60 s
+  window; above that it shrinks.
 * **You like the legacy behaviour and do not want surprises.** Stay on
   `3`. Or move to `0` (auto) if you want adaptive without thinking.
+
+### Do all five really earn their keep?
+
+Honestly, modes overlap. If we were starting from scratch we might
+ship only `3` (default, cheap), `4` (fast) and `1` (whole-ring
+adaptive). The other two are kept because:
+
+* `0` exists to remove the "warming" placeholder at boot for users
+  who pick a ring mode and find the first 60 s frustrating.
+* `2` exists to bound the ring walk and to give a name to "60 s if I
+  can have it" - useful when comparing devices but mostly equivalent
+  to `3` at typical background rates.
+
+They are intentionally not removed because device prefs would silently
+flip if we did. Pick what suits you; you do not need all five.
+
+## Maximum trackable rate
+
+None of the modes impose a CPM ceiling - the float CPS value has more
+headroom than the hardware will ever reach. The real limits sit
+elsewhere:
+
+* **Debounce** (default 200 us on raw-interrupt pulse builds): caps
+  the ISR at ~5000 CPS = 300 000 CPM. Pulses arriving inside the
+  debounce window are dropped.
+* **Dead time correction** (default 100 us on pulse): the correction
+  formula saturates near `cps * dead_time = 0.875`, i.e. ~8750 CPS =
+  525 000 CPM. Above that the tube is paralysed in any case.
+* **PCNT** (ESP32 with pulse counter): bounded by the input filter, not
+  by ISR throughput - typically higher headroom than interrupt mode.
+
+Practical fleet limit is whichever of debounce or dead-time you hit
+first. None of the CPM modes notice; they just report what the ring or
+bucket saw.
 
 ## Memory cost
 

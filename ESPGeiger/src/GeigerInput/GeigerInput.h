@@ -150,7 +150,6 @@ class GeigerInput {
     static void IRAM_ATTR countInterrupt();
     void setCounter(int val, bool update = true);
     void setLastBlip();
-    double generatePoissonRandom(double lambda);
   private:
     void (*callback)(void) = nullptr; // Member variable to store callback function pointer
   protected:

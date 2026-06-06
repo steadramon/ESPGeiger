@@ -83,8 +83,7 @@ class Counter {
       Counter();
       void loop();
       float get_cps();
-      // Literal count of pulses in the most recent second. For MightyOhm-style
-      // protocols that want raw per-second integers, not the smoothed average.
+      // Raw count from the most recent second. MightyOhm-style integer protocols.
       int get_last_cps() const { return (int)geigerTicks.last(); }
       int get_cpm();
       float get_cpmf();
@@ -106,21 +105,19 @@ class Counter {
       float get_usv5();
       float get_usv15();
       float get_millirem();
-      // false when no pulse seen within the sensitivity-derived window.
-      // Flags broken tube, missing HV, unplugged signal line.
+      // False = no pulse within timeout; tube/HV/wiring fault.
       bool  get_tube_alive();
-      // true when dead-time correction is near its 10x cap (very high rate).
+      // True near dead-time 10x cap (very high rate).
       bool  get_saturated();
       // Ring-derived diagnostics. Zero on counter types that don't feed it.
       float    get_cps_live();      // (N-1)/T from ring, 0 if N<2
       uint16_t get_cps_n();
       uint32_t get_cps_win_us();
       uint32_t get_min_pulse_us();
-      // ISR hook for interrupt-driven types. Integer-only, FP-free, heap-free.
+      // Per-pulse ISR hook (interrupt-driven types).
       static void IRAM_ATTR on_pulse(uint32_t now_us);
-      // Batch hook for paths without per-pulse timestamps. Does not update
-      // min_pulse_us (synthetic spacing is not real tube physics).
-      static void IRAM_ATTR on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
+      // Batch hook for paths without real timestamps; skips min_pulse_us (synthetic).
+      static void on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
       // 0=auto blend, 1=live, 2=fixed 60s, 3=bucket (default), 4=adaptive fast.
       void    set_cpm_mode(uint8_t m);
       uint8_t get_cpm_mode() const { return _cpm_mode; }
@@ -179,8 +176,7 @@ class Counter {
       bool is_warning();
       bool is_alert();
       bool is_healthy() const { return geigerinput && geigerinput->isHealthy(); }
-      // Base-class view of the active input. Used by /json, /clicks dispatch
-      // through virtuals so Counter doesn't need to know the concrete type.
+      // Active input as base type for virtual dispatch (/json, /clicks).
       GeigerInput* input() { return geigerinput; }
       void stop_for_ota() {
         if (_lifetime_enabled) save_lifetime();
@@ -192,10 +188,8 @@ class Counter {
       unsigned long last_blip() {
         return geigerinput->last_blip();
       }
-      void reset_alarm() {
-        // Todo
-        //_bool_cpm_alert = false;
-      }
+      // Button snooze; auto-clears when level drops below warning.
+      void reset_alarm();
 #if GEIGER_IS_TEST(GEIGER_TYPE)
       void set_target_cpm(float val) {
         geigerinput->setTargetCPM(val, true);
@@ -204,9 +198,9 @@ class Counter {
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
       GeigerUdpRx* udp_rx() { return geigerinput; }
 #endif
-      void queueBlip(uint32_t /*count*/ = 1) {
-        _last_blip = micros();
-      }
+      // Mark one click event; Counter::loop fans out LED/UdpBlip/Audio/histogram.
+      // CPM/total go through on_pulse_batch so multi-pulse batches still bump once.
+      void queueBlip() { _last_blip = micros(); }
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;
@@ -232,8 +226,7 @@ class Counter {
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
 #ifdef GEIGER_BLIPLED
-      // Compile-time pin: keep static-init so msTickerCB can inline Update()
-      // and pin 15 doesn't get pinMode'd in the HV PWM init window.
+      // Static-init so msTickerCB can inline Update() and pin 15 escapes the HV PWM init.
       JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
 #elif defined(HAS_EXT_BLIP)
       JLed* ext_blip_led = nullptr;
@@ -258,9 +251,8 @@ class Counter {
       float apply_dead_time(float cps) const;
       uint8_t _cpm_mode = 3;     // 3 = bucket; matches legacy behaviour
       unsigned long _last_blip_seen = 0;
-      // Inter-pulse-interval histogram, log2 buckets from 0-64us up to >=537s.
-      // Bucket b covers [64us << (b-1), 64us << b); bucket 0 = 0-64us; bucket
-      // 24 saturates. Updated only on observed click in Counter::loop().
+      // Inter-pulse-interval log2 histogram: bucket b covers [64us<<(b-1), 64us<<b),
+      // bucket 0 = <64us, bucket 24 saturates. Updated in Counter::loop on each click.
       static constexpr uint8_t HIST_BUCKETS = 25;
       uint32_t _pulse_hist[HIST_BUCKETS] = {0};
       uint32_t _prev_blip_us = 0;
@@ -269,11 +261,11 @@ class Counter {
       int _cpm_alert = 100;
       bool _bool_cpm_warning = false;
       bool _bool_cpm_alert = false;
+      bool _alarm_snoozed = false;   // set by button, auto-clears below warning
       bool _blip_led = true;
       bool _lifetime_enabled = true;
-      // Pending-work bitmap: single byte check in loop() instead of two bools.
-      // Bit 0 = RTC stash due, Bit 1 = save_lifetime() due. Single combined
-      // branch in the hot path of Counter::loop instead of two sequential ifs.
+      // Bit 0 = RTC stash due, bit 1 = save_lifetime() due. Single byte check
+      // in loop() defers both writes out of tick_max.
       static constexpr uint8_t PENDING_RTC  = 1 << 0;
       static constexpr uint8_t PENDING_SAVE = 1 << 1;
       uint8_t  _pending_work = 0;
@@ -289,7 +281,8 @@ class Counter {
       int16_t _quiet_to_min   = -1;
       float _ratio = GEIGER_RATIO;
       float _ratio_inv = 1.0f / GEIGER_RATIO;
-      uint32_t _tube_timeout_us = (uint32_t)(12000000000.0 / GEIGER_RATIO);
+      // Default to the 30 min floor; set_ratio() refines for high-sensitivity tubes.
+      uint32_t _tube_timeout_us = 1800000000UL;
       uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
       float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
       float _cached_cps = 0.0f;     // updated each tick, dead-time corrected

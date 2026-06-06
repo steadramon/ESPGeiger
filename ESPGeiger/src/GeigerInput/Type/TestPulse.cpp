@@ -24,6 +24,9 @@
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 
 #include "../../Logger/Logger.h"
+#ifdef USE_PCNT
+#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
+#endif
 
 GeigerTestPulse::GeigerTestPulse() {
   strcpy(_test_type, "TestPulse");
@@ -170,6 +173,7 @@ int GeigerTestPulse::collect() {
 #endif
   if (pulseCount != 0) {
     setCounter(pulseCount);
+    Counter::on_pulse_batch((uint16_t)pulseCount, (uint32_t)micros(), 1000000UL);
   } else {
     setCounter(pulseCount, false);
   }
