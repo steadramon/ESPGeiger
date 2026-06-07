@@ -190,7 +190,7 @@ void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
 
   // Stream chunked: PORTAL_HEAD is ~700 B PROGMEM with three %s slots
-  // (title × 2 + optional notice). Render expanded into a one-shot stack
+  // (title x2 + optional notice). Render expanded into a one-shot stack
   // buffer big enough for any plausible title/notice combination.
   res.beginChunked(200, "text/html");
   char head[1024];

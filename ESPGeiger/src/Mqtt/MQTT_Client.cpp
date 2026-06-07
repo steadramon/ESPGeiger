@@ -624,7 +624,7 @@ static int buildHassPath(char* buf, size_t sz, const char* disc,
 
 // Adding a sensor = one S(...) line. PSTR() only works in function
 // scope, so the catalog lives here rather than a file-scope array.
-// jKey is the tele/* JSON field - usually matches id (uptime→"ut" is
+// jKey is the tele/* JSON field; usually matches id (uptime as "ut" is
 // the sole oddity).
 void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   #define S(id_, jKey_, name_, unit_, icon_, stat_, dev_, state_, ent_) do { \

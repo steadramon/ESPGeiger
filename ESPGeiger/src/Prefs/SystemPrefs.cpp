@@ -133,7 +133,7 @@ const EGLegacyAlias* SystemPrefs::legacy_aliases() { return SYSTEM_LEGACY; }
 // === END LEGACY IMPORT ===
 
 // --- Network prefs (static IP / DHCP) ---
-// display_order==0 → hidden from /param. Edited via the dedicated /wifi
+// display_order==0 means hidden from /param. Edited via the dedicated /wifi
 // page which renders the form with current values prefilled. Applied at
 // boot in Wifi::connectOrPortal() before WiFi.begin().
 

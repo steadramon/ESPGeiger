@@ -90,7 +90,7 @@ void NeoPixel::setup()
 }
 
 void NeoPixel::setBrightness(int input) {
-  input = clamp(input * 128 / 100, 0, 128);  // 0-100% pref → 0-128 hw, int math
+  input = clamp(input * 128 / 100, 0, 128);  // 0-100% pref to 0-128 hw, int math
   if (input == 0) {
     RgbColor black(0);
     this->controller_->SetPixelColor(0, black);
