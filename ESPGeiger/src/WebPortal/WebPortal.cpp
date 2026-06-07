@@ -640,6 +640,27 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
     }
     INFO_ROW("Last reset", "%s", rstStr);
   }
+  if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) {
+    INFO_ROW("Exc cause", "%u",     (unsigned)cd->exccause);
+    INFO_ROW("Exc PC",    "0x%08x", (unsigned)cd->epc1);
+    INFO_ROW("Exc addr",  "0x%08x", (unsigned)cd->excvaddr);
+    if (cd->epc2) INFO_ROW("EPC2", "0x%08x", (unsigned)cd->epc2);
+    if (cd->epc3) INFO_ROW("EPC3", "0x%08x", (unsigned)cd->epc3);
+    if (cd->sp)   INFO_ROW("SP",   "0x%08x", (unsigned)cd->sp);
+    // Backtrace from coredump - all PCs are real code addresses, no need
+    // to filter the way we do for the ESP8266 stack snapshot.
+    if (cd->word_count) {
+      char framesbuf[256];
+      size_t fp = 0;
+      for (uint32_t i = 0; i < cd->word_count && fp < sizeof(framesbuf) - 12; i++) {
+        int wn = snprintf_P(framesbuf + fp, sizeof(framesbuf) - fp,
+                            PSTR("%s0x%08x"), i ? " " : "", (unsigned)cd->stack[i]);
+        if (wn > 0 && (size_t)wn < sizeof(framesbuf) - fp) fp += (size_t)wn;
+      }
+      framesbuf[fp] = '\0';
+      INFO_ROW("Backtrace", "<code>%s</code>", framesbuf);
+    }
+  }
 #endif
   res.sendChunk(F("</table></details>"));
 
