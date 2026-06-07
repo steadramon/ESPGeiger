@@ -27,6 +27,7 @@ EnvSensor envsensor;
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Util/FastMillis.h"
 #include "../Util/StringUtil.h"
 
 EG_REGISTER_MODULE(envsensor)
@@ -121,6 +122,7 @@ const __FlashStringHelper* EnvSensor::chipName() const {
   }
   if (_drv_flags & DRV_BOSCH) return _bosch.chipName();
   if (_drv_flags & DRV_AHT)   return _aht.chipName();
+  if (remoteFresh())          return F("UDP");
   return nullptr;
 }
 
@@ -177,24 +179,43 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
 }
 
 float EnvSensor::tempC() const {
-  return present() ? _st->ema_t : NAN;
+  if (localPresent()) return _st->ema_t;
+  if (remoteFresh())  return _r_t;
+  return NAN;
 }
 
 float EnvSensor::humidity() const {
-  return present() ? _st->ema_h : NAN;
+  if (localPresent()) return _st->ema_h;
+  if (remoteFresh())  return _r_h;
+  return NAN;
 }
 
 float EnvSensor::pressure() const {
-  return present() ? _st->ema_p : NAN;
+  if (localPresent()) return _st->ema_p;
+  if (remoteFresh())  return _r_p;
+  return NAN;
 }
 
 float EnvSensor::tempUser() const {
-  if (!present()) return NAN;
-  float c = _st->ema_t;
+  float c = tempC();
   if (isnan(c)) return NAN;
   if (_unit == UNIT_F) return c * 1.8f + 32.0f;
   if (_unit == UNIT_K) return c + 273.15f;
   return c;
+}
+
+bool EnvSensor::remoteFresh() const {
+  if (_r_last_ms == 0) return false;
+  return (uint32_t)(fast_millis() - _r_last_ms) < ENV_REMOTE_TTL_MS;
+}
+
+void EnvSensor::setRemote(float t, float h, float p) {
+  // Local hardware always wins; mirror is for headless receivers only.
+  if (localPresent()) return;
+  _r_t = t;
+  _r_h = h;
+  _r_p = p;
+  _r_last_ms = fast_millis();
 }
 
 size_t EnvSensor::status_json(char* buf, size_t cap, unsigned long now) {

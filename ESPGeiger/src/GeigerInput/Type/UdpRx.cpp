@@ -22,12 +22,14 @@
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 
 #include "../../Counter/Counter.h"
+#include "../../EnvSensor/EnvSensor.h"
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
 #include "../../Util/DeviceInfo.h"
 #include "../../Util/Wifi.h"
 #include <EGHttpServer.h>
 #include <WiFiUdp.h>
+#include <string.h>
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
 #else
@@ -49,10 +51,18 @@ static constexpr size_t     CHIPID_LEN      = 6;
 static constexpr size_t     SUFFIX_OFFSET   = 13;
 static constexpr size_t     PATH_FULL_LEN   = 20;
 static constexpr const char TAG_II[]        = ",ii";
+static constexpr const char TAG_FFF[]       = ",fff";
 
 static inline uint32_t rd_i32(const uint8_t* p) {
   return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
          ((uint32_t)p[2] <<  8) |  (uint32_t)p[3];
+}
+
+static inline float rd_f32(const uint8_t* p) {
+  uint32_t bits = rd_i32(p);
+  float f;
+  memcpy(&f, &bits, sizeof(f));
+  return f;
 }
 
 // Bridge from InputPrefs::on_prefs_saved (we piggyback on the "input" pref
@@ -325,7 +335,23 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   if (s[0] == 'c') {
     if (s[1] != 'l' || s[2] != 'i' || s[3] != 'c' || s[4] != 'k') return;
     processClick(buf, len, p, now_ms);
+  } else if (s[0] == 'e') {
+    if (s[1] != 'n' || s[2] != 'v' || s[3] != '\0') return;
+    processEnv(buf, len);
   }
+}
+
+void GeigerUdpRx::processEnv(const uint8_t* buf, size_t len) {
+  // ",fff\0\0\0\0" typetag (8 bytes) + 3 x f32 (12 bytes).
+  if (len < PATH_FULL_LEN + 8 + 12) return;
+  if (memcmp(buf + PATH_FULL_LEN, TAG_FFF, 4) != 0) return;
+  const uint8_t* args = buf + PATH_FULL_LEN + 8;
+  float t = rd_f32(args);
+  float h = rd_f32(args + 4);
+  float p = rd_f32(args + 8);
+  // EnvSensor::setRemote is a no-op when a local sensor is up, so receivers
+  // that ever get fitted with hardware still prefer their own readings.
+  envsensor.setRemote(t, h, p);
 }
 
 void GeigerUdpRx::loop() {

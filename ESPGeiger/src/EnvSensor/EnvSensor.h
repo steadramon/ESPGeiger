@@ -62,6 +62,9 @@
 
 #define ENV_SAMPLE_MS    10000UL
 #define ENV_EMA_ALPHA     0.1f
+// Receiver-mirror staleness window. /env packets arrive every ~10 s from
+// UdpBlip; 90 s = 9 missed before the mirror reports absent.
+#define ENV_REMOTE_TTL_MS 90000UL
 
 #ifndef DISABLE_ENVSENSOR
 
@@ -87,7 +90,8 @@ class EnvSensor : public EGModule {
     static constexpr uint8_t DRV_BOSCH = 1 << 0;
     static constexpr uint8_t DRV_AHT   = 1 << 1;
 
-    bool    present() const { return _drv_flags != 0 && _st != nullptr; }
+    bool    present() const { return localPresent() || remoteFresh(); }
+    bool    localPresent() const { return _drv_flags != 0 && _st != nullptr; }
     uint8_t unit() const    { return _unit; }
     const __FlashStringHelper* chipName() const;
     uint8_t driverFlags() const { return _drv_flags; }
@@ -96,6 +100,13 @@ class EnvSensor : public EGModule {
     float humidity() const;
     float pressure() const;
     float tempUser() const;
+
+    // Push values received over UDP (UdpBlip /env). When no local I2C
+    // driver came up, accessors fall through to these so downstream
+    // outputs see env data from the upstream producer. Mirror expires
+    // ENV_REMOTE_TTL_MS after the last call.
+    void setRemote(float t, float h, float p);
+    bool remoteFresh() const;
 
   private:
     struct State {
@@ -126,6 +137,11 @@ class EnvSensor : public EGModule {
     BoschTHP::Sensor _bosch;
     AsairAHT::Sensor _aht;
     State*   _st = nullptr;
+
+    float    _r_t = NAN;
+    float    _r_h = NAN;
+    float    _r_p = NAN;
+    uint32_t _r_last_ms = 0;
 };
 
 #else  // DISABLE_ENVSENSOR
@@ -137,11 +153,14 @@ class EnvSensor {
   public:
     enum Unit : uint8_t { UNIT_C = 0, UNIT_F = 1, UNIT_K = 2 };
     bool    present() const   { return false; }
+    bool    localPresent() const { return false; }
+    bool    remoteFresh() const  { return false; }
     uint8_t unit() const      { return UNIT_C; }
     float   tempC() const     { return NAN; }
     float   humidity() const  { return NAN; }
     float   pressure() const  { return NAN; }
     float   tempUser() const  { return NAN; }
+    void    setRemote(float, float, float) {}
 };
 
 #endif  // DISABLE_ENVSENSOR
