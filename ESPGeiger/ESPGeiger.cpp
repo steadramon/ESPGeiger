@@ -25,13 +25,13 @@
 #include "esp_log.h"   // quieten esp_littlefs INFO/WARN chatter on USB serial
 #endif
 #include <Ticker.h>
-#include "jled.h"
 // PlatformIO LDF anchor: modules include the .hpp variant only; LDF needs
 // the .h here in a project source to discover and link the library.
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/CrashDump.h"
+#include "src/Util/LedSignal.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
 #include "src/Util/FastMillis.h"
@@ -46,11 +46,6 @@
 #include "src/Util/BootHooks.h"
 
 long start = 0;
-#if LED_SEND_RECEIVE_ON == LOW
-JLed led = JLed(LED_SEND_RECEIVE).LowActive();
-#else
-JLed led = JLed(LED_SEND_RECEIVE);
-#endif
 
 Counter gcounter;
 GRNG grng;
@@ -80,12 +75,7 @@ void msTickerCB()
     _fast_ms_accum_us -= 1000;
   }
   _fast_ms_last_us = now_us;
-  led.Update();
-#ifdef GEIGER_BLIPLED
-  gcounter.blip_led.Update();
-#elif defined(HAS_EXT_BLIP)
-  if (gcounter.ext_blip_led) gcounter.ext_blip_led->Update();
-#endif
+  LedSignal::poll();
 }
 
 void sTickerCB()
@@ -128,6 +118,7 @@ void setup()
 #endif
 
   CrashDump::begin();
+  LedSignal::begin();
 
   DeviceInfo::begin();
 
@@ -192,7 +183,7 @@ void setup()
   start = ntpclient.getUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
-  led.Off().Update();
+  LedSignal::off();
   BootHooks::displayResetTimeout();
 }
 

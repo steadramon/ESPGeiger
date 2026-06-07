@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include "GMC.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 
 extern uint8_t send_indicator;
@@ -152,7 +153,7 @@ void GMC::postMeasurement() {
   {
     if (request->open("GET", url))
     {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->onReadyStateChange(httpRequestCb, this);
       request->setTimeout(30);

@@ -19,6 +19,7 @@
 #ifdef WEBHOOKOUT
 #include "Webhook.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
@@ -232,7 +233,7 @@ void Webhook::postMeasurement() {
   {
     if (request->open("POST", url))
     {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->setReqHeader(F("Accept"), F("application/json"));
       request->setReqHeader(F("Content-Type"), F("application/json"));

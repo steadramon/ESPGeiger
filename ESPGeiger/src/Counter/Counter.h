@@ -57,11 +57,6 @@
   #define GEIGER_DEAD_TIME_DEFAULT 0
 #endif
 
-// External blip-LED runtime path. Excluded on ESPGeiger-Log (SD+NeoPixel+OLED
-// uses all pins) and ESP8266 test builds (timer1/PWM collision).
-#if !defined(GEIGER_SDCARD) && !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
-  #define HAS_EXT_BLIP
-#endif
 
 #include "../Util/StringUtil.h"
 
@@ -225,15 +220,6 @@ class Counter {
       static constexpr uint8_t pulse_histogram_buckets() { return HIST_BUCKETS; }
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<int,24> day_hourly_history;
-#ifdef GEIGER_BLIPLED
-      // Static-init so msTickerCB can inline Update() and pin 15 escapes the HV PWM init.
-      JLed blip_led = JLed(GEIGER_BLIPLED).Stop();
-#elif defined(HAS_EXT_BLIP)
-      JLed* ext_blip_led = nullptr;
-      uint8_t ext_blip_pulse_ms = 2;
-      void set_ext_blip_pin(int pin);
-      void set_ext_blip_pulse_ms(uint8_t ms) { ext_blip_pulse_ms = ms ? ms : 1; }
-#endif
     private:
       // Ring snapshot for cooperative-context readers.
       struct RingSnapshot {

@@ -22,6 +22,7 @@
 #include "Counter.h"
 #include "../Logger/Logger.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Util/LedSignal.h"
 #include "../Util/StringUtil.h"
 #include "../Util/MathUtil.h"
 #include "../Util/PinSafety.h"
@@ -593,44 +594,12 @@ void Counter::begin() {
 void Counter::blip() {
     if (!_blip_led) return;
     if (is_quiet_now()) return;
-#ifndef DISABLE_INTERNAL_BLIP
-  #if defined(HAS_EXT_BLIP) && !defined(GEIGER_BLIPLED)
-    if (!ext_blip_led)
-  #endif
-    led.Blink(20, 20);
-#endif
-#ifdef GEIGER_BLIPLED
-    if (!blip_led.IsRunning()) blip_led.Blink(2, 1).Repeat(1);
-#elif defined(HAS_EXT_BLIP)
-    if (ext_blip_led && !ext_blip_led->IsRunning()) ext_blip_led->Blink(ext_blip_pulse_ms, 1).Repeat(1);
-#endif
+    LedSignal::click();
 }
 
 void Counter::set_blip_brightness(uint8_t level) {
-  led.MaxBrightness(level);
-#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
-  if (ext_blip_led) ext_blip_led->MaxBrightness(level);
-#endif
+  LedSignal::setBrightness(level);
 }
-
-#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
-void Counter::set_ext_blip_pin(int pin) {
-  if (const char* why = PinSafety::claim_output(pin, PSTR("LED"))) {
-    Log::console(PSTR("LED: blip_pin=%d unsafe (%s) - disabled"), pin, why);
-    pin = -1;
-  }
-  if (ext_blip_led) {
-    JLed* old = ext_blip_led;
-    ext_blip_led = nullptr;   // null before free: the 1kHz msTickerCB derefs this
-    old->Off().Update();
-    delete old;
-  }
-  if (pin >= 0) {
-    ext_blip_led = new JLed(pin);
-    ext_blip_led->Stop();
-  }
-}
-#endif
 
 static unsigned long s_quiet_recompute_ms = 0;
 static bool s_quiet_cached = false;

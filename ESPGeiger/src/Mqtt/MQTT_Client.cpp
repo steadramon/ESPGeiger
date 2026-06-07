@@ -19,6 +19,7 @@
 #ifdef MQTTOUT
 #include "MQTT_Client.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
@@ -293,7 +294,7 @@ void MQTT_Client::publishAlert()
 
 void MQTT_Client::publishStatus()
 {
-  led.Blink(500, 500);
+  LedSignal::activity();
 #ifdef ESP8266
   auto& buffer = s_pub_buffer;
 #else

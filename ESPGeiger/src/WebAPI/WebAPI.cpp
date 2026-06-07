@@ -27,6 +27,7 @@
 #include "WebAPI.h"
 #include <EGBase64.h>   // buffer-in/out, no heap (vs core's heap-using <base64.h>)
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/DeviceInfo.h"
@@ -287,7 +288,7 @@ void WebAPI::doHandshake() {
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
     if (request.open("POST", WEBAPI_URL "/api/1/handshake")) {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
@@ -455,7 +456,7 @@ void WebAPI::postMeasurement(bool censusOnly) {
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
     if (request.open("POST", WEBAPI_URL "/api/1/post")) {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
@@ -537,7 +538,7 @@ void WebAPI::forget() {
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
     if (request.open("POST", WEBAPI_URL "/api/1/forget")) {
       Log::console(PSTR("WebAPI: Forget station %u"), station_id);
-      led.Blink(500, 500);
+      LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
