@@ -29,6 +29,7 @@ jobs:
           - "esp32_cajoe_iotgm_no_pcnt"
           - "esp32_hv"
           - "esp32_serial"
+          - "esp32_test"
           - "esp32_testpulse"
           - "esp32_testpulseint"
           - "esp32_udp"
@@ -50,6 +51,15 @@ jobs:
           - "espgeigerlog"
           - "espgeigerlog_serial"
           - "espgeigerlog_testpulseint"
+          - "esp32s3_pulse"
+          - "esp32s3_pulse_no_pcnt"
+          - "esp32s3_serial"
+          - "esp32s3_udp"
+          - "esp32s3_test"
+          - "xh_s3e_pulse"
+          - "xh_s3e_udp"
+          - "esp32oled_audio_pulse"
+          - "esp32oled_audio_serial"
     runs-on: ubuntu-24.04
     name: Build with PlatformIO
     steps:
