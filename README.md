@@ -42,15 +42,16 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** - i
 | ESP8266 with SSD1306 OLED | `esp8266oled_pulse` |
 | ESP32 | `esp32_pulse` |
 | ESP32 with SSD1306 OLED | `esp32oled_pulse` |
+| ESP32-S3 (dev kits) | `esp32s3_pulse` |
 | CAJOE IoT-GM (ESP32 with built-in OLED) | `esp32_cajoe_iotgm` |
 
 ### I have an ESP + serial Geiger counter
 
 A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger). Select your counter type from the **Config** page after flashing.
 
-| ESP8266 Build | ESP32 Build |
-|---|---|
-| `esp8266_serial` | `esp32_serial` |
+| ESP8266 Build | ESP32 Build | ESP32-S3 Build |
+|---|---|---|
+| `esp8266_serial` | `esp32_serial` | `esp32s3_serial` |
 
 OLED variants: `esp8266oled_serial` / `esp32oled_serial`.
 
@@ -69,7 +70,7 @@ Test builds emulate a Geiger counter internally. You can also wire the `TXPIN` o
 
 | Build | Description |
 |---|---|
-| `esp8266_test` / `esp32_test` | Internal counter, no output |
+| `esp8266_test` / `esp32_test` / `esp32s3_test` | Internal counter, no output |
 | `esp8266_testpulse` / `esp32_testpulse` | Outputs Poisson-distributed pulses on TXPIN |
 | `esp8266_testserial` / `esp32_testserial` | Emulates a serial counter (type selectable via Config) |
 
@@ -81,6 +82,7 @@ UDP receiver builds listen for OSC multicast broadcasts from other ESPGeiger dev
 |---|---|
 | ESP8266 | `esp8266_udp` / `esp8266oled_udp` |
 | ESP32 | `esp32_udp` / `esp32oled_udp` |
+| ESP32-S3 | `esp32s3_udp` |
 
 Producers enable the broadcast via Config → Local broadcast → mode 2. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
 

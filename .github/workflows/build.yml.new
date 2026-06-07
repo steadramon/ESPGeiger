@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+
+# Subset of environments — the same selection that build.yml has historically
+# covered on every push/PR. Full ~40-environment matrix runs on release via
+# release.yml.
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      environments: |
+        [
+          "esp32_cajoe_iotgm",
+          "esp32_cajoe_iotgm_no_pcnt",
+          "esp32_hv",
+          "esp32_serial",
+          "esp32_testpulse",
+          "esp32_testpulseint",
+          "esp32oled_pulse",
+          "esp32oled_serial",
+          "esp8266_hv",
+          "esp8266_pulse",
+          "esp8266_pulsemin",
+          "esp8266_serial",
+          "esp8266_test",
+          "esp8266_testpulse",
+          "esp8266_testpulseint",
+          "esp8266oled_pulse",
+          "esp8266oled_serial",
+          "espgeigerhw",
+          "espgeigerlite",
+          "espgeigerlog",
+          "espgeigerlog_serial",
+          "espgeigerlog_testpulseint"
+        ]
