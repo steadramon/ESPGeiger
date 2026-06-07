@@ -25,6 +25,13 @@
 #include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
 #endif
 
+static int _pulse_tx_pin;
+static bool _bool_pulse_state = false;
+static unsigned long _last_b;
+#ifdef ESP32
+static esp_timer_handle_t hdl_pulse_timer = NULL;
+#endif
+
 GeigerTestPulseInt::GeigerTestPulseInt() {
   strcpy(_test_type, "TestPulsePWM");
 };

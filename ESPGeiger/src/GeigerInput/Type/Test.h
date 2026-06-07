@@ -26,13 +26,6 @@
 #define GEIGER_MODEL "test"
 #endif
 
-static unsigned long _last_b;
-static double _next_delay;
-
-#ifdef ESP32
-static esp_timer_handle_t hdl_pulse_timer = NULL;
-#endif
-
 class GeigerTest : public GeigerInputTest
 {
   public:
