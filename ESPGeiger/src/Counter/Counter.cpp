@@ -38,6 +38,9 @@
 #ifdef AUDIO_TICK
 #include "../AudioTick/AudioTick.h"
 #endif
+#ifdef PULSE_OUT
+#include "../PulseOut/PulseOut.h"
+#endif
 #include "HIST_JS.gz.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
@@ -691,6 +694,9 @@ void Counter::loop() {
     udpblip.notifyClick(nowMs);
 #ifdef AUDIO_TICK
     audiotick.notifyClick(nowMs);
+#endif
+#ifdef PULSE_OUT
+    pulseout.notifyClick(nowMs);
 #endif
   }
 }
