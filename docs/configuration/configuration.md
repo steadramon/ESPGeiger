@@ -56,8 +56,6 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 |---|---|---|---|
 | Blip LED | Boolean | `true` | Flash the onboard LED on each detected count. Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
 | Blip brightness | Int 0-100 | `80` | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
-| External LED Pin | Int -1 to 39 | `-1` | GPIO to mirror the blip on, for boards with an external LED but no `GEIGER_BLIPLED` compile-time pin. `-1` disables. Reboot required. Only shown on builds compiled with `HAS_EXT_BLIP` and without `GEIGER_BLIPLED`. |
-| External Pulse Width | Int 1-100 | `2` | Pulse width on the external blip pin (ms). |
 | Quiet from | Time HH:MM | `(empty)` | Silence the blip LED + beeper (ESPGeiger-HW) from this time. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
 | Quiet to | Time HH:MM | `(empty)` | End of quiet window. Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`). |
 
