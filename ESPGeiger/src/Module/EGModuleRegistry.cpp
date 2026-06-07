@@ -30,6 +30,8 @@ EGModuleRegistry::Slot EGModuleRegistry::_slots[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_count = 0;
 uint8_t EGModuleRegistry::_overflow = 0;
 unsigned long EGModuleRegistry::_next_loop_due = 0;
+uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
+uint8_t EGModuleRegistry::_due_count = 0;
 
 bool EGModuleRegistry::add(EGModule* m) {
   if (_count >= EG_MAX_MODULES) { _overflow++; return false; }
@@ -65,16 +67,21 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 
   bool wifi_ok = Wifi::stable_for(WIFI_SETTLE_MS);
   bool ntp_ok  = ntpclient.synced;
-  // idle re-check floor: if all loop modules gate out, don't park ~24.8d (WiFi/NTP recovery)
-  unsigned long earliest = now + 1000;
-  for (uint8_t i = 0; i < _count; i++) {
-    Slot& s = _slots[i];
-    if (!(s.flags & FLAG_HAS_LOOP)) continue;
-    if ((s.flags & FLAG_REQUIRES_WIFI) && !wifi_ok) continue;
-    if ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok) continue;
+  // Re-check at most this far in the future, even if no module is due.
+  // Covers WiFi/NTP gates that block all loop modules indefinitely.
+  unsigned long fallback = now + 1000;
 
-    unsigned long due = s.loop_last + s.loop_interval;
-    if ((long)(now - due) >= 0) {
+  // Walk the due-order index from the front. Stop at the first slot that
+  // is not yet due; everything behind it is due even later.
+  uint8_t k = 0;
+  while (k < _due_count) {
+    Slot& s = _slots[_due_order[k]];
+    if ((long)(now - s.next_due) < 0) break;
+    if (((s.flags & FLAG_REQUIRES_WIFI) && !wifi_ok) ||
+        ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok)) {
+      // Gate not yet open. Defer this slot a tick without firing loop().
+      s.next_due = now + 1;
+    } else {
       s.loop_last = now;
 #ifdef LOOP_PROFILE
       unsigned long t0 = micros();
@@ -86,11 +93,31 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 #else
       s.module->loop(now);
 #endif
-      due = now + s.loop_interval;
+      s.next_due = now + s.loop_interval;
     }
-    if ((long)(due - earliest) < 0) earliest = due;
+    // Re-position the slot we just processed so the front of _due_order
+    // is again sorted ascending. One bubble pass over the small queue
+    // typically moves the slot 0-3 positions back.
+    uint8_t cur = k;
+    while (cur + 1 < _due_count) {
+      Slot& a = _slots[_due_order[cur]];
+      Slot& b = _slots[_due_order[cur + 1]];
+      if ((long)(a.next_due - b.next_due) <= 0) break;
+      uint8_t tmp = _due_order[cur];
+      _due_order[cur] = _due_order[cur + 1];
+      _due_order[cur + 1] = tmp;
+      cur++;
+    }
+    // If the slot we processed stayed at position k (no swap), the next
+    // tick's first compare ensures we'd see it again only if still due.
+    // If it moved back, position k now holds a different slot which may
+    // also be due, so re-check from k without incrementing.
+    if (cur == k) k++;
   }
-  _next_loop_due = earliest;
+
+  unsigned long next = (_due_count > 0) ? _slots[_due_order[0]].next_due : fallback;
+  if ((long)(next - fallback) > 0) next = fallback;
+  _next_loop_due = next;
 }
 
 void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds) {
@@ -205,16 +232,42 @@ void EGModuleRegistry::wake() {
 
 bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
   for (uint8_t i = 0; i < _count; i++) {
-    if (_slots[i].module == m) {
-      if (interval_ms < 0) {
-        _slots[i].flags &= ~FLAG_HAS_LOOP;
-      } else {
-        _slots[i].flags |= FLAG_HAS_LOOP;
-        _slots[i].loop_interval = (interval_ms > 0xFFFF) ? 0xFFFF : (uint16_t)interval_ms;
-      }
-      _next_loop_due = fast_millis();
-      return true;
+    if (_slots[i].module != m) continue;
+    Slot& s = _slots[i];
+    bool was_loop = (s.flags & FLAG_HAS_LOOP) != 0;
+    bool now_loop = (interval_ms >= 0);
+    if (now_loop) {
+      s.flags |= FLAG_HAS_LOOP;
+      s.loop_interval = (interval_ms > 0xFFFF) ? 0xFFFF : (uint16_t)interval_ms;
+      s.next_due = s.loop_last + s.loop_interval;
+    } else {
+      s.flags &= ~FLAG_HAS_LOOP;
     }
+    if (was_loop && !now_loop) {
+      for (uint8_t k = 0; k < _due_count; k++) {
+        if (_due_order[k] == i) {
+          for (uint8_t j = k; j + 1 < _due_count; j++) _due_order[j] = _due_order[j + 1];
+          _due_count--;
+          break;
+        }
+      }
+    } else if (!was_loop && now_loop) {
+      if (_due_count < EG_MAX_MODULES) _due_order[_due_count++] = i;
+    }
+    // Insertion sort over the (small) due index so next_due ordering is
+    // restored after any flag/interval change.
+    for (uint8_t a = 1; a < _due_count; a++) {
+      uint8_t key = _due_order[a];
+      unsigned long key_due = _slots[key].next_due;
+      uint8_t b = a;
+      while (b > 0 && (long)(_slots[_due_order[b - 1]].next_due - key_due) > 0) {
+        _due_order[b] = _due_order[b - 1];
+        b--;
+      }
+      _due_order[b] = key;
+    }
+    _next_loop_due = fast_millis();
+    return true;
   }
   return false;
 }
@@ -361,11 +414,13 @@ void EGModuleRegistry::pre_wifi_all() {
     _slots[j] = cur;
   }
 
+  _due_count = 0;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     EGModule* m = s.module;
     s.loop_interval = m->loop_interval_ms();
     s.loop_last = 0;
+    s.next_due = 0;
     s.warmup_seconds = m->warmup_seconds();
     uint8_t f = 0;
     if (m->has_loop())       f |= FLAG_HAS_LOOP;
@@ -373,8 +428,10 @@ void EGModuleRegistry::pre_wifi_all() {
     if (m->requires_wifi())  f |= FLAG_REQUIRES_WIFI;
     if (m->requires_ntp())   f |= FLAG_REQUIRES_NTP;
     s.flags = f;
+    if (f & FLAG_HAS_LOOP) _due_order[_due_count++] = i;
     m->pre_wifi();
   }
+  _next_loop_due = 0;
 }
 
 size_t EGModuleRegistry::collect_status_json(char* buf, size_t cap, unsigned long now) {

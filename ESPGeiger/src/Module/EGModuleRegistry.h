@@ -76,6 +76,7 @@ class EGModuleRegistry {
     struct Slot {
       EGModule* module;          // 4
       unsigned long loop_last;   // 4 - last fast_millis() loop() ran
+      unsigned long next_due;    // 4 - fast_millis() target for next loop() fire
       uint16_t loop_interval;    // 2 - 0 = every iteration
       uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
       uint8_t flags;             // 1 - packed module flags (see above)
@@ -92,6 +93,11 @@ class EGModuleRegistry {
     static uint8_t _count;
     static uint8_t _overflow;             // dropped registrations (logged at begin_all)
     static unsigned long _next_loop_due;  // earliest pending loop() fire (millis)
+
+    // Slots sorted ascending by next_due. loop_all stops at the first
+    // not-due entry, so idle modules at the back cost no per-tick work.
+    static uint8_t _due_order[EG_MAX_MODULES];
+    static uint8_t _due_count;
 };
 
 #define EG_REGISTER_MODULE(instance) \
