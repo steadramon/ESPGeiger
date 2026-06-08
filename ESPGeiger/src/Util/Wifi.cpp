@@ -346,6 +346,7 @@ bool Wifi::applyStaticConfig() {
 bool Wifi::connectOrPortal() {
   if (Wifi::hasSavedCreds()) {
     WiFi.mode(WIFI_STA);
+    Wifi::applyRuntimeNetPrefs();
     bool staticOn = Wifi::applyStaticConfig();
     WiFi.begin();                            // uses NVS-stored creds
     if (waitForWifi(30000)) {
@@ -409,15 +410,14 @@ bool Wifi::connectOrPortal() {
 
   WiFi.mode(WIFI_STA);
   WiFi.persistent(true);
+  Wifi::applyRuntimeNetPrefs();
   Wifi::applyStaticConfig();
   WiFi.begin(s_portalSsid, s_portalPass);
   return waitForWifi(30000);
 }
 
 // ---------- Wi-Fi runtime prefs ----------
-// Hidden tunables under /pref?group=wifi&key=*. Lives here next to other
-// WiFi management rather than in SystemPrefs.cpp to avoid shifting flash
-// layout around hot prefs code.
+// Hidden tunables under /pref?group=wifi&key=*.
 
 class WifiPrefs : public EGModule {
 public:
@@ -452,14 +452,14 @@ static const EGPrefGroup WIFI_PREF_GROUP = {
 const EGPrefGroup* WifiPrefs::prefs_group() { return &WIFI_PREF_GROUP; }
 
 static void apply_wifi_sleep(uint8_t mode) {
+  // Always apply: the SDK persists sleep mode in NVS, so skipping the call
+  // on mode=1 leaves a previously-applied non-default in place across reboot.
 #ifdef ESP8266
-  // mode=1 matches the framework default; explicit setSleepMode here
-  // re-entered the SDK state machine and halved LPS on espgeigerhw.
-  if (mode == 1) return;
   switch (mode) {
     case 0:  WiFi.setSleepMode(WIFI_LIGHT_SLEEP); break;
     case 2:  WiFi.setSleepMode(WIFI_NONE_SLEEP);  break;
-    default: break;
+    case 1:
+    default: WiFi.setSleepMode(WIFI_MODEM_SLEEP); break;
   }
 #else
   switch (mode) {
@@ -519,7 +519,11 @@ static void apply_wifi_phy_mode(uint8_t mode) {
 }
 
 void WifiPrefs::on_prefs_loaded() {
-  apply_wifi_sleep   ((uint8_t)EGPrefs::getUInt  ("wifi", "sleep"));
+  // Sleep is safe pre-init; the rest deferred to Wifi::applyRuntimeNetPrefs.
+  apply_wifi_sleep((uint8_t)EGPrefs::getUInt("wifi", "sleep"));
+}
+
+void Wifi::applyRuntimeNetPrefs() {
   apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", "tx_power"));
   apply_wifi_country (         EGPrefs::getString("wifi", "country"));
   apply_wifi_phy_mode((uint8_t)EGPrefs::getUInt  ("wifi", "phy_mode"));

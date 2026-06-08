@@ -101,6 +101,9 @@ namespace Wifi {
   // Read /net_backup and write the values back into net.* prefs +
   // commit. Caller is expected to ESP.restart() afterwards.
   bool restoreNetBackup();
+
+  // Apply wifi.tx_power/country/phy_mode. Needs esp_wifi_init (post WiFi.mode()).
+  void applyRuntimeNetPrefs();
 }
 
 #endif
