@@ -62,6 +62,31 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 
 For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not** drive any pin until you've explicitly chosen one. After setting the pin in `/egprefs`, **reboot** for the change to take effect.
 
+## Audio Tick (ESP32 only)
+
+Builds with the [Audio Tick](/output/audiotick) output enabled. A per-pulse
+click is played through an I2S amplifier (e.g. MAX98357A). The XH-S3E set
+targets the **MINI ESP32-S3-N16R8** (sold as "XH-S3E-AI", a small purple
+ESP32-S3 board with onboard speaker, mic, button, NeoPixel and OLED);
+the `esp32oled_audio_*` set targets a generic ESP32 + OLED board with an
+externally wired amplifier (BCLK / WS / DOUT configurable from the
+**Config > tick** page).
+
+| Target Name | Hardware | Counter Type | Notes |
+|---|---|---|---|
+`xh_s3e_pulse` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | Pulse | Pulse input on GPIO 13. Pin map fixed. |
+`xh_s3e_serial` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | Serial | Serial input on GPIO 13/14. |
+`xh_s3e_udp` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | UDP receiver | Tubeless receiver, see UDP Receiver below. |
+`xh_s3e_test` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | n/a | Poisson simulator for tuning the click sound. |
+`esp32oled_audio_pulse` | ESP32 + OLED + amp | Pulse | PCNT-based pulse input. |
+`esp32oled_audio_pulse_no_pcnt` | ESP32 + OLED + amp | Pulse | Interrupt-based pulse input (use when PCNT can't latch the pulse). |
+`esp32oled_audio_serial` | ESP32 + OLED + amp | Serial | |
+`esp32oled_audio_test` | ESP32 + OLED + amp | n/a | Poisson simulator. |
+
+Audio Tick is disabled by default (`tick.enable=0`). Enable it from the
+Config page after flashing and, on the `esp32oled_audio_*` envs, set the
+three I2S pins to match your wiring before rebooting.
+
 ## UDP Receiver
 
 UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for [Local Broadcast](/output/udp) traffic from another ESPGeiger and behaves as if a real Geiger tube were attached. CPM/µSv/history/blip-LED/MQTT/WebAPI/OLED all derive from the received clicks. See [UDP / OSC Output](/output/udp) for the full protocol and configuration.

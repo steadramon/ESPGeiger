@@ -36,4 +36,4 @@ If a [warning or alert threshold](/configuration/configuration#counter-settings)
 
 ## Why the flashes look more regular than real clicks
 
-The NeoPixel pattern is a **trend indicator**, not a 1:1 click visualization. Real radioactive decay events follow a Poisson process so individual clicks are irregularly spaced; the NeoPixel deliberately smooths this into an evenly-paced flash whose rate reflects activity vs baseline. For per-click visual feedback, see the dedicated blip LED (`GEIGER_BLIPLED` build flag, also exposed as the "External LED Pin" configuration option on supported boards).
+The NeoPixel pattern is a **trend indicator**, not a 1:1 click visualization. Real radioactive decay events follow a Poisson process so individual clicks are irregularly spaced; the NeoPixel deliberately smooths this into an evenly-paced flash whose rate reflects activity vs baseline. For per-click visual feedback, use the [Pulse Out](/output/pulseout) module on any spare GPIO (configure `pulse.pin` + `pulse.mode`), or the dedicated blip LED on boards that fix the pin at build time via `GEIGER_BLIPLED` (ESPGeiger-HW).
