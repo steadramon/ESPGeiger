@@ -31,7 +31,7 @@ Cost on ESP8266 is ~360 B RAM + ~2.2 KB flash; on ESP32 ~56 B RAM +
 
 | Pref | Range | Default | Notes |
 |---|---|---|---|
-| `enable`   | 0 / 1     | `0`    | Reboot to apply after enabling. |
+| `enable`   | 0 / 1     | `0`    | Takes effect on save, no reboot needed. |
 | `pin`      | -1 to max | `-1`   | GPIO driving the load. `-1` keeps the pin idle. |
 | `mode`     | 0 / 1 / 2 | `0`    | `0` = single pulse, `1` = resonant burst, `2` = LED fade. |
 | `pulse_us` | 100-50000 | `500`  | Single-pulse width in microseconds. Sub-ms for audio, several ms for LEDs. |
