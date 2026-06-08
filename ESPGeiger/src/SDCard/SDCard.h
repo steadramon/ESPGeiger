@@ -43,7 +43,13 @@ class SDCard : public EGModule {
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
+    void registerRoutes(EGHttpServer& http) override;
+    const EGMenuEntry* menuEntries() override;
     void deleteOldest();
+    // Drop the writer's file handle so /sd routes can safely walk and read.
+    // s_tick will reopen on the next minute boundary.
+    void pauseWriter();
+    bool ready() const { return sdenabled; }
   protected:
     File32 myDataFile;
   private:

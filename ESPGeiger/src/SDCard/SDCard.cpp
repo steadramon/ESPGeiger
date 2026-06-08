@@ -18,12 +18,14 @@
 */
 #ifdef GEIGER_SDCARD
 #include <Arduino.h>
+#include <EGHttpServer.h>
 #include "SDCard.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../NTP/NTP.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/MathUtil.h"
+#include "../WebPortal/WebPortal.h"
 
 SdFat32* sd = nullptr;
 
@@ -289,5 +291,201 @@ void SDCard::deleteOldest(){
     sd->remove(oldestFile);
   }
   sd->chdir();
+}
+
+void SDCard::pauseWriter() {
+  if (myDataFile.isOpen()) {
+    myDataFile.sync();
+    myDataFile.close();
+  }
+  openFileDay = 0;
+  _unsynced_writes = 0;
+}
+
+// "YYYYMMDD.csv": 8 digits + ".csv". Strict check so /sd?f=... can't
+// be coaxed into ../ traversal or anything but a log filename.
+static bool valid_csv_name(const char* name) {
+  if (!name) return false;
+  size_t i = 0;
+  while (i < 8) {
+    if (name[i] < '0' || name[i] > '9') return false;
+    i++;
+  }
+  return name[8] == '.' && name[9] == 'c' && name[10] == 's' && name[11] == 'v' && name[12] == '\0';
+}
+
+struct CsvEntry {
+  uint32_t date;   // YYYYMMDD as a sortable integer
+  uint32_t size;   // bytes
+};
+
+static void hSdList(EGHttpResponse& res) {
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("SD Logs"));
+
+  if (!sdcard.ready() || !sd) {
+    res.sendChunk(F("<p>SD card not available.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  // Drop the writer's handle so we can walk + read without fighting it.
+  // s_tick will reopen on the next minute tick.
+  sdcard.pauseWriter();
+
+  constexpr uint16_t MAX_ENTRIES = 400;   // ~13 months of daily logs
+  CsvEntry* entries = (CsvEntry*)malloc(MAX_ENTRIES * sizeof(CsvEntry));
+  if (!entries) {
+    res.sendChunk(F("<p>Out of memory.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  uint16_t count = 0;
+  uint64_t totalBytes = 0;
+  File32 rootDir, subDir, file;
+  if (sd->chdir() && rootDir.open("/")) {
+    while (count < MAX_ENTRIES && subDir.openNext(&rootDir, O_RDONLY)) {
+      if (subDir.isSubDir() && !subDir.isHidden()) {
+        char dirName[13];
+        subDir.getName(dirName, sizeof(dirName));
+        bool isYymm = (strlen(dirName) == 6);
+        for (int i = 0; isYymm && i < 6; i++) {
+          if (dirName[i] < '0' || dirName[i] > '9') isYymm = false;
+        }
+        if (isYymm) {
+          while (count < MAX_ENTRIES && file.openNext(&subDir, O_RDONLY)) {
+            if (!file.isSubDir() && !file.isHidden()) {
+              char f_name[13];
+              file.getName(f_name, sizeof(f_name));
+              if (valid_csv_name(f_name)) {
+                entries[count].date = (uint32_t)atol(f_name);
+                entries[count].size = file.fileSize();
+                totalBytes += entries[count].size;
+                count++;
+              }
+            }
+            file.close();
+          }
+        }
+      }
+      subDir.close();
+    }
+    rootDir.close();
+  }
+
+  // Insertion sort by date desc - small N, O(n^2) is fine and uses no heap.
+  for (uint16_t i = 1; i < count; i++) {
+    CsvEntry tmp = entries[i];
+    uint16_t j = i;
+    while (j > 0 && entries[j - 1].date < tmp.date) {
+      entries[j] = entries[j - 1];
+      j--;
+    }
+    entries[j] = tmp;
+  }
+
+  uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+
+  char head[160];
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("<p>%u log%s, %lu KB total, %lu MB free.</p>"),
+    (unsigned)count, count == 1 ? "" : "s",
+    (unsigned long)((totalBytes + 1023) / 1024),
+    (unsigned long)freespace);
+  if (n > 0) res.sendChunk(head, (size_t)n);
+
+  if (count == 0) {
+    res.sendChunk(F("<p>No log files yet.</p>"));
+  } else {
+    res.sendChunk(F("<div class=menu>"));
+    for (uint16_t i = 0; i < count; i++) {
+      uint32_t d = entries[i].date;
+      char row[160];
+      n = snprintf_P(row, sizeof(row),
+        PSTR("<a href='/sd?f=%08lu.csv'>%04u-%02u-%02u <small>(%lu KB)</small></a>"),
+        (unsigned long)d,
+        (unsigned)(d / 10000), (unsigned)((d / 100) % 100), (unsigned)(d % 100),
+        (unsigned long)((entries[i].size + 1023) / 1024));
+      if (n > 0) res.sendChunk(row, (size_t)n);
+    }
+    res.sendChunk(F("</div>"));
+  }
+
+  free(entries);
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+static void hSdDownload(EGHttpRequest& req, EGHttpResponse& res, const char* f) {
+  // Copy out of arg()'s shared static buffer before any other arg/header call.
+  char filename[13];
+  for (int i = 0; i < 12; i++) filename[i] = f[i];
+  filename[12] = '\0';
+
+  if (!sdcard.ready() || !sd) {
+    res.send(503, "text/plain", "SD not ready");
+    return;
+  }
+
+  // Dir is the first 6 chars (YYYYMM).
+  char dir[7];
+  for (int i = 0; i < 6; i++) dir[i] = filename[i];
+  dir[6] = '\0';
+
+  sdcard.pauseWriter();
+
+  if (!sd->chdir() || !sd->chdir(dir)) {
+    sd->chdir();
+    res.send(404, "text/plain", "Not found");
+    return;
+  }
+
+  File32 fp;
+  if (!fp.open(filename, O_RDONLY)) {
+    sd->chdir();
+    res.send(404, "text/plain", "Not found");
+    return;
+  }
+
+  char disp[64];
+  snprintf_P(disp, sizeof(disp),
+             PSTR("attachment; filename=\"%s\""), filename);
+  res.addHeader("Content-Disposition", disp);
+  res.beginChunked(200, "text/csv");
+
+  uint8_t buf[1024];
+  while (true) {
+    int got = fp.read(buf, sizeof(buf));
+    if (got <= 0) break;
+    if (!res.sendChunk((const char*)buf, (size_t)got)) break;
+  }
+  fp.close();
+  sd->chdir();
+  res.endChunked();
+}
+
+static const EGMenuEntry SDCARD_MENU[] = {
+  {"/sd", "SD Logs"},
+  {nullptr, nullptr}
+};
+
+const EGMenuEntry* SDCard::menuEntries() {
+  return sdenabled ? SDCARD_MENU : nullptr;
+}
+
+void SDCard::registerRoutes(EGHttpServer& http) {
+  http.on("/sd", EGHttpRequest::GET,
+    [](EGHttpRequest& req, EGHttpResponse& res, void*) {
+      const char* f = req.arg("f");
+      if (f && *f) {
+        if (!valid_csv_name(f)) { res.send(400, "text/plain", "Bad name"); return; }
+        hSdDownload(req, res, f);
+      } else {
+        hSdList(res);
+      }
+    });
 }
 #endif
