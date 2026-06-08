@@ -1550,6 +1550,12 @@ void  AsyncHTTPRequest::_onDisconnect(AsyncClient* client)
   {
     _HTTPcode = HTTPCODE_NOT_CONNECTED;
   }
+  else if (_HTTPcode == 0)
+  {
+    // Peer closed after request, before any HTTP status line.
+    AHTTP_LOGDEBUG(F("_onDisconnect: HTTPCODE_CONNECTION_LOST (no response)"));
+    _HTTPcode = HTTPCODE_CONNECTION_LOST;
+  }
   else if (_HTTPcode > 0 &&
            (_readyState < readyStateHdrsRecvd || (_contentRead + _response->available()) < _contentLength))
   {
