@@ -193,8 +193,6 @@ class Counter {
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
       GeigerUdpRx* udp_rx() { return geigerinput; }
 #endif
-      // Mark one click event; Counter::loop fans out LED/UdpBlip/Audio/histogram.
-      // CPM/total go through on_pulse_batch so multi-pulse batches still bump once.
       void queueBlip() { _last_blip = micros(); }
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
@@ -228,12 +226,9 @@ class Counter {
         uint16_t count;
       };
       bool snapshot_ring(RingSnapshot& s) const;
-      // Walks ring backwards, returns (N-1)/T over the smaller of: max_age_us
-      // wall-clock window, max_pulses entries. Returns 0 if N<2. Backs the
-      // mode 2 (fixed_60s) and mode 4 (adaptive_fast) dispatch paths.
+      // (N-1)/T over min(max_age_us, max_pulses) ring entries; 0 if N<2.
       float cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const;
-      // Shared dead-time correction (non-paralyzable model, capped near 10x).
-      // Applied at the get_cps() dispatcher so all modes match bucket semantics.
+      // Non-paralyzable dead-time correction, capped near 10x.
       float apply_dead_time(float cps) const;
       uint8_t _cpm_mode = 3;     // 3 = bucket; matches legacy behaviour
       unsigned long _last_blip_seen = 0;
@@ -272,6 +267,7 @@ class Counter {
       uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
       float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
       float _cached_cps = 0.0f;     // updated each tick, dead-time corrected
+      float _cached_cpm_active = 0.0f;  // get_cps()*60, dispatched at tick
       EGRingAvg<float, GEIGER_CPM_COUNT> geigerTicks;
 #ifdef GEIGER_SMOOTH_AVG
       EGRingAvg<float, GEIGER_CPM5_COUNT>  geigerTicks5;

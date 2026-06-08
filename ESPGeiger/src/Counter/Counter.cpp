@@ -48,7 +48,7 @@
 
 extern long start;  // boot epoch ref from main
 
-// Pulse-timestamp ring. Lazy-allocated; null-guarded on access.
+// Pulse-timestamp ring (lazy alloc).
 namespace {
 constexpr uint16_t PULSE_RING_SIZE = 256;
 constexpr uint16_t PULSE_RING_MASK = PULSE_RING_SIZE - 1;
@@ -105,7 +105,7 @@ uint32_t Counter::pause_remaining_ms() {
 }
 
 void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
-  // Synthetic timestamps; skips s_min_pulse_us by design.
+  // Synthetic timestamps; min_pulse_us is real-only.
   if (!s_pulse_ring || count == 0) return;
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
@@ -234,7 +234,10 @@ void Counter::secondticker() {
   }
 
   _cached_cps = apply_dead_time(geigerTicks.get());
-  int ccpm = (int)roundf(_cached_cps * 60.0f);
+  // Cache dispatched CPM once per tick: hot reads skip the switch, warn
+  // tracks the value the user sees (relevant in non-bucket modes).
+  _cached_cpm_active = get_cps() * 60.0f;
+  int ccpm = (int)roundf(_cached_cpm_active);
 
   cpm_history.push(ccpm);
 
@@ -248,8 +251,8 @@ void Counter::secondticker() {
 
   time_t currentTime = time (NULL);
   if (ntpclient.synced) {
-    // Fires each hour (minute in test). Cached next-fire avoids divide-per-tick.
-    time_t kBoundarySecs = (time_t)geigerinput->boundary_seconds();
+    // Build-time constant per input type, evaluated once.
+    static const time_t kBoundarySecs = (time_t)geigerinput->boundary_seconds();
     static time_t nextBoundary = 0;
     static bool boundaryArmed = false;
     bool fire = false;
@@ -295,7 +298,7 @@ void Counter::secondticker() {
     if (_last_save_time_t == 0 && ntpclient.synced) {
       _last_save_time_t = (uint32_t)currentTime;
     }
-    // Tick schedules, loop() writes; keeps RTC + flash out of tick_max.
+    // Schedule here; loop() does the RTC + flash work.
     static uint32_t s_rtc_ctr = 0;
     if (++s_rtc_ctr >= 30) {
       s_rtc_ctr = 0;
@@ -380,14 +383,13 @@ float Counter::get_cps() {
     case 1: return ringOrBucket(get_cps_live());
     case 2: return ringOrBucket(cps_windowed(60UL * 1000000UL, 64));
     case 4: return ringOrBucket(cps_windowed(5UL  * 1000000UL, 19));
-    case 0: {                                  // auto: ring early, bucket warm
+    case 0: {
       float live = get_cps_live();
       if (live <= 0.0f) return _cached_cps;
       uint32_t up = DeviceInfo::uptime();
       uint32_t w  = _cpm_window;
       if (up <  w)      return apply_dead_time(live);
       if (up >= 2u * w) return _cached_cps;
-      // Linear blend over [w, 2w]: bucket weight 0 -> 1.
       float liveC = apply_dead_time(live);
       float a = (float)(up - w) * _cpm_window_inv;
       return liveC * (1.0f - a) + _cached_cps * a;
@@ -397,11 +399,11 @@ float Counter::get_cps() {
 }
 
 int Counter::get_cpm() {
-  return (int)roundf(get_cps() * 60.0f);
+  return (int)roundf(_cached_cpm_active);
 }
 
 float Counter::get_cpmf() {
-  return get_cps() * 60.0f;
+  return _cached_cpm_active;
 }
 
 int Counter::get_cpm5() {
