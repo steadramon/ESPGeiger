@@ -149,6 +149,17 @@ err_t ACErrorTracker::getCallbackCloseError(void){
 static size_t _connectionCount=0;
 #endif
 
+// Reject stale pcb before user-context deref. Counterpart to _acArgAlive.
+static inline bool _pcbAlive(const tcp_pcb* pcb){
+  if (!pcb) return false;
+#ifdef ESP8266
+  uintptr_t p = (uintptr_t)pcb;
+  return p >= 0x3FFE8000UL && p < 0x40000000UL;
+#else
+  return true;
+#endif
+}
+
 #if ASYNC_TCP_SSL_ENABLED
 AsyncClient::AsyncClient(tcp_pcb* pcb, SSL_CTX * ssl_ctx):
 #else
@@ -357,7 +368,7 @@ void AsyncClient::abort(){
 }
 
 void AsyncClient::close(bool now){
-  if(_pcb)
+  if(_pcbAlive(_pcb))
     tcp_recved(_pcb, _rx_ack_len);
   if(now) {
     ASYNC_TCP_DEBUG("close[%u]: AsyncClient 0x%" PRIXPTR "\n", getConnectionId(), uintptr_t(this));
@@ -394,7 +405,7 @@ size_t AsyncClient::write(const char* data, size_t size, uint8_t apiflags) {
 }
 
 size_t AsyncClient::add(const char* data, size_t size, uint8_t apiflags) {
-  if(!_pcb || size == 0 || data == NULL)
+  if(!_pcbAlive(_pcb) || size == 0 || data == NULL)
     return 0;
   size_t room = space();
   if(!room)
@@ -425,6 +436,8 @@ bool AsyncClient::send(){
   if(_pcb_secure)
     return true;
 #endif
+  if(!_pcbAlive(_pcb))
+    return false;
   err_t err = tcp_output(_pcb);
   if(err == ERR_OK){
     _pcb_busy = true;
@@ -439,7 +452,7 @@ bool AsyncClient::send(){
 size_t AsyncClient::ack(size_t len){
   if(len > _rx_ack_len)
     len = _rx_ack_len;
-  if(len)
+  if(len && _pcbAlive(_pcb))
     tcp_recved(_pcb, len);
   _rx_ack_len -= len;
   return len;
