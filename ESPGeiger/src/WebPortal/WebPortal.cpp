@@ -1592,6 +1592,7 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
 static bool is_skip_pref(const char* module_id, const char* key) {
   if (strcmp(module_id, "sys") == 0 && strcmp(key, "web_pass") == 0) return true;
   if (strcmp(module_id, "net") == 0) return true;
+  if (strcmp(module_id, "wifi") == 0) return true;
   return false;
 }
 
