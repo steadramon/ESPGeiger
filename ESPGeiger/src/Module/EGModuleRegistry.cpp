@@ -95,9 +95,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 #endif
       s.next_due = now + s.loop_interval;
     }
-    // Re-position the slot we just processed so the front of _due_order
-    // is again sorted ascending. One bubble pass over the small queue
-    // typically moves the slot 0-3 positions back.
+    // Bubble the just-processed slot back into ascending next_due order.
     uint8_t cur = k;
     while (cur + 1 < _due_count) {
       Slot& a = _slots[_due_order[cur]];
@@ -108,10 +106,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
       _due_order[cur + 1] = tmp;
       cur++;
     }
-    // If the slot we processed stayed at position k (no swap), the next
-    // tick's first compare ensures we'd see it again only if still due.
-    // If it moved back, position k now holds a different slot which may
-    // also be due, so re-check from k without incrementing.
+    // If the slot moved back, recheck position k; otherwise advance.
     if (cur == k) k++;
   }
 
@@ -227,7 +222,12 @@ void EGModuleRegistry::log_activity_and_reset() {
 }
 
 void EGModuleRegistry::wake() {
-  _next_loop_due = fast_millis();
+  // Bump every queued slot so the sort doesn't early-exit on a stale front.
+  unsigned long now = fast_millis();
+  for (uint8_t i = 0; i < _due_count; i++) {
+    _slots[_due_order[i]].next_due = now;
+  }
+  _next_loop_due = now;
 }
 
 bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
