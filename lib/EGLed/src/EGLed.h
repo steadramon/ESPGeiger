@@ -1,6 +1,15 @@
 /*
-  EGLed.h - Non-blocking LED driver. State machine over an injectable
-  millis source.
+  EGLed.h - Non-blocking LED driver with a tiny on/off state machine over
+  an injectable millis source.
+
+  Platform notes:
+    * ESP8266 uses arduino-esp8266's analogWrite (software PWM via the
+      waveform manager).
+    * ESP32 talks to the ESP-IDF LEDC driver directly, bypassing
+      arduino-esp32's analogWrite + the peripheral manager so that
+      digitalWrite/pinMode on the pin from elsewhere cannot strand the
+      output. Every write goes through one path; no analogWrite +
+      digitalWrite mixing.
 
   Copyright (C) 2026 @steadramon
 
@@ -44,14 +53,16 @@ class EGLed {
 
     bool isRunning() const { return _state != IDLE; }
 
-    // PWM duty 0-255. 255 uses digitalWrite, lower values use analogWrite.
+    // PWM duty 0-255. 255 = full bright.
     void setBrightness(uint8_t level) { _brightness = level; }
 
   private:
     enum : uint8_t { IDLE = 0, PHASE_ON = 1, PHASE_OFF = 2 };
 
-    void writeActive();
-    void writeIdle();
+    // Write `duty` (0..255) to the output, honouring low_active inversion.
+    // Single path for all transitions, so the off side cannot leave a stale
+    // PWM channel running.
+    void writeDuty(uint8_t duty);
 
     uint8_t  _pin;
     uint8_t  _state = IDLE;
@@ -61,6 +72,9 @@ class EGLed {
     uint16_t _on_ms  = 0;
     uint16_t _off_ms = 0;
     uint32_t _next_ms = 0;
+#ifdef ESP32
+    uint8_t  _chan;
+#endif
 };
 
 #endif
