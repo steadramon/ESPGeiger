@@ -83,6 +83,8 @@ void PulseOut::on_prefs_loaded() {
   if (_polarity > 1)     _polarity = 0;
   if (_fade_shift < 2)   _fade_shift = 2;
   if (_fade_shift > 4)   _fade_shift = 4;
+  // Re-arm registry on enable/pin change; begin() only runs once at boot.
+  EGModuleRegistry::set_loop_interval(this, (_enabled && _pin >= 0) ? 1 : -1);
 }
 
 void PulseOut::begin() {
@@ -95,9 +97,7 @@ void PulseOut::begin() {
   writeIdle();
   _pin_high = false;
 
-  // Per-device voice variation seeded from the chip ID. +/-15% on the
-  // single-pulse width, +/-3% on the burst frequency (kept tighter so the
-  // burst stays close to the piezo's resonance peak).
+  // Chip-id voice jitter: +/-15% pulse width, +/-3% burst freq.
 #ifdef ESP8266
   uint32_t mac = ESP.getChipId();
 #else
@@ -116,9 +116,7 @@ void PulseOut::begin() {
                (int)_pin, (unsigned)_mode, (unsigned)_polarity);
 }
 
-// Token-bucket throttle: 1 token per 50 ms idle, max 5 tokens. Caps clicks
-// at 20/sec so a high-CPS source can't keep launching new clicks on top
-// of unfinished ones.
+// Token bucket: 1 token per 50 ms, max 5. Caps clicks at 20/s.
 void PulseOut::notifyClick(unsigned long now_ms) {
   if (!_enabled || _pin < 0) return;
   unsigned long elapsed = now_ms - _last_token_ms;
@@ -137,7 +135,6 @@ void PulseOut::notifyClick(unsigned long now_ms) {
 
 void PulseOut::startClick() {
   if (_mode == 2) {
-    // Fade: jump to full brightness and let loop() decay it.
     _brightness = 255;
     analogWrite(_pin, _polarity ? 0 : 255);
     _phases_remaining = 0;
@@ -145,8 +142,7 @@ void PulseOut::startClick() {
     return;
   }
   if (_mode == 1) {
-    // Resonant burst: hardware timer via tone(). Microsecond-precise even
-    // at multi-kHz frequencies; non-blocking. State machine is bypassed.
+    // Resonant burst via tone(); bypasses the state machine.
     uint32_t freq = (uint32_t)(_freq_hz * _voice_freq);
     if (freq == 0) freq = 1;
     uint32_t duration_us = (uint32_t)_cycles * 1000000UL / freq;
@@ -156,7 +152,7 @@ void PulseOut::startClick() {
     _phases_remaining = 0;
     return;
   }
-  // Mode 0: single pulse via state machine, one transition after pulse_us.
+  // Mode 0: single pulse, one transition after pulse_us.
   writeActive();
   _pin_high = true;
   _phases_remaining = 1;
