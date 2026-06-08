@@ -601,7 +601,7 @@ static void hSdDownload(EGHttpRequest& req, EGHttpResponse& res, const char* f) 
   res.addHeader("Content-Disposition", disp);
   res.beginChunked(200, "text/csv");
 
-  uint8_t buf[1024];
+  uint8_t buf[512];
   while (true) {
     int got = fp.read(buf, sizeof(buf));
     if (got <= 0) break;
