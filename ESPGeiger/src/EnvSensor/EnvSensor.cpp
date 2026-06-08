@@ -76,12 +76,7 @@ void EnvSensor::on_prefs_saved() {
 void EnvSensor::begin() {
   if (_started) return;
   _started = true;
-  // On OLED builds the display module (HARDWARE priority, runs first) has
-  // already done Wire.begin() with its pin layout. Calling Wire.begin()
-  // here with the EnvSensor pref pins would silently re-map SDA/SCL under
-  // the OLED - on builds where the two configured pin sets disagree (e.g.
-  // espgeigerhw: OLED 5/4 vs EnvSensor old default 4/5) it freezes the
-  // display. Single-bus rule: whoever inits first wins.
+  // OLED runs Wire.begin() first; skip here or we remap SDA/SCL and freeze it.
 #ifndef SSD1306_DISPLAY
   Wire.begin(_sda, _scl);
 #endif

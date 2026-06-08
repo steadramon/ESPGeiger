@@ -1,15 +1,6 @@
 /*
-  EGLed.h - Non-blocking LED driver with a tiny on/off state machine over
-  an injectable millis source.
-
-  Platform notes:
-    * ESP8266 uses arduino-esp8266's analogWrite (software PWM via the
-      waveform manager).
-    * ESP32 talks to the ESP-IDF LEDC driver directly, bypassing
-      arduino-esp32's analogWrite + the peripheral manager so that
-      digitalWrite/pinMode on the pin from elsewhere cannot strand the
-      output. Every write goes through one path; no analogWrite +
-      digitalWrite mixing.
+  EGLed.h - Non-blocking LED driver with on/off state machine over an
+  injectable millis source. ESP32 goes direct to LEDC.
 
   Copyright (C) 2026 @steadramon
 

@@ -33,16 +33,7 @@ void EGLed::setClock(MillisFn fn) {
 #ifdef ESP32
 
 namespace {
-  // LOW_SPEED_MODE gives 8 channels on every ESP32 variant we ship for
-  // (classic / S2 / S3). Same timer for all EGLed instances; common
-  // 5 kHz LED PWM frequency is invisible to the eye and gentle on the
-  // peripheral. Co-existence with Arduino tone() is fine because tone()
-  // allocates its own timer.
-  //
-  // Static EGLed instances claim a fresh channel from a monotonic
-  // counter. With at most ~2-3 instances live at once across our builds
-  // (onboard + external blip + optional UI LED) there is no need for a
-  // full pin-to-channel mapper or reuse logic.
+  // Shared LEDC timer at 5 kHz; instances claim channels monotonically.
   constexpr uint8_t kChannels  = 8;
   constexpr int     kLedFreqHz = 5000;
 
@@ -70,9 +61,7 @@ EGLed::EGLed(uint8_t pin, bool low_active)
     : _pin(pin), _low_active(low_active) {
 #ifdef ESP32
   ensure_timer();
-  // % kChannels wraps if a build ever instantiates more than 8 EGLeds;
-  // collisions become visible immediately rather than silently corrupting
-  // earlier instances.
+  // Wraps at kChannels; collisions are visible, not silent.
   _chan = (uint8_t)(s_next_chan++ % kChannels);
   ledc_channel_config_t cfg = {};
   cfg.gpio_num   = _pin;

@@ -340,11 +340,7 @@ static float chip_voice_factor() {
   return factor;
 }
 
-// Chirp engine: 2*f_lo down to f_lo over 0.5 ms (snap attack), then a damped
-// sine body. The asymmetric kick produces the punch; the 1-pole DC blocker
-// on output strips the kick's DC residual so the AC-coupled speaker amp's
-// coupling cap doesn't bias-shift across clicks. HEADROOM keeps the asym
-// and body additions in range before the final clamp.
+// Chirp 2*f_lo->f_lo, damped sine body, asymmetric kick, DC blocker on out.
 void AudioTick::playClickChirp() {
   // +/-3% freq, +/-4% decay jitter per click.
   uint32_t r = ESP.getCycleCount();
@@ -407,9 +403,7 @@ void AudioTick::playClickChirp() {
   i2s_write(I2S_NUM_0, buf, sizeof(buf), &written, 10 / portTICK_PERIOD_MS);
 }
 
-// Pool engine: same chirp+sine voice as Chirp, but each click picks one of
-// 4 pool slots that vary the asym kick magnitude and body amp only. Tone
-// stays constant; only the punch level moves. +/-5% volume jitter per click.
+// Pool: Chirp voice but each click picks one of 4 asym/body slots.
 void AudioTick::playClickPool() {
   struct Variant { float asym, f2_amp; };
   static const Variant POOL[4] = {
