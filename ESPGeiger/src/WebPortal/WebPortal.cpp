@@ -1339,6 +1339,10 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
         const EGPrefGroup* g = EGPrefs::group_at(gi);
         if (!g) continue;
+        // Only touch prefs belonging to the tab the form was submitted from.
+        // Without this, BOOL fields on other tabs get cleared (absent in body
+        // = "off") on every save from another tab.
+        if (g->category != tab) continue;
         for (size_t j = 0; j < g->count; j++) {
           const EGPref& p = g->prefs[j];
           if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
