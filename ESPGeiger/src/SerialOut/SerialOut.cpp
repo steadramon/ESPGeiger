@@ -64,6 +64,7 @@ void SerialOut::on_prefs_loaded() {
   _format     = (uint8_t)EGPrefs::getUInt("sout", "format");
   _baud       = (uint32_t)EGPrefs::getUInt("sout", "baud");
   Log::setSerialLogLevel(_interval == 0);
+  EGModuleRegistry::set_loop_interval(this, _interval > 0 ? 500 : -1);
   resolveFormat();
   applyBaud();
 }

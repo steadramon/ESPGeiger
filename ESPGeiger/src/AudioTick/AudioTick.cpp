@@ -92,10 +92,7 @@ void AudioTick::on_prefs_loaded() {
 
 void AudioTick::begin() {
   if (_i2s_up) return;
-  if (!_enabled) {
-    Log::console(PSTR("Tick: disabled (set tick.enable=1 + reboot)"));
-    return;
-  }
+  if (!_enabled) return;
   i2s_config_t cfg = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
     .sample_rate = AUDIO_TICK_SAMPLE_RATE,

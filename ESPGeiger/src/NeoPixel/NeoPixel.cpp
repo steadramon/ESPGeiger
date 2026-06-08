@@ -58,8 +58,10 @@ static const EGPrefGroup NEOPIXEL_PREF_GROUP = {
 const EGPrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }
 
 void NeoPixel::on_prefs_loaded() {
-  setBrightness((int)EGPrefs::getUInt("neopixel", "brightness"));
+  int b = (int)EGPrefs::getUInt("neopixel", "brightness");
+  setBrightness(b);
   _swap_rg = EGPrefs::getBool("neopixel", "swap");
+  EGModuleRegistry::set_loop_interval(this, b > 0 ? 30 : -1);
 }
 
 RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {

@@ -87,8 +87,8 @@ void PulseOut::on_prefs_loaded() {
 
 void PulseOut::begin() {
   if (!_enabled || _pin < 0) {
-    if (!_enabled) Log::console(PSTR("PulseOut: disabled (set pulse.enable=1 + reboot)"));
-    else           Log::console(PSTR("PulseOut: no pin set (configure pulse.pin)"));
+    if (_enabled && _pin < 0) Log::console(PSTR("PulseOut: no pin set"));
+    EGModuleRegistry::set_loop_interval(this, -1);  // drop from registry walk; click path still works
     return;
   }
   pinMode(_pin, OUTPUT);

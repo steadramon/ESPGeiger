@@ -950,10 +950,12 @@ void MQTT_Client::begin()
     mqttEnabled = false;
     Log::console(PSTR("MQTT: No server set"));
     EGModuleRegistry::set_tick_enabled(this, false);
+    EGModuleRegistry::set_loop_interval(this, -1);
     return;
   }
   mqttEnabled = true;
   EGModuleRegistry::set_tick_enabled(this, true);
+  EGModuleRegistry::set_loop_interval(this, 500);
 }
 
 void MQTT_Client::on_prefs_saved()
