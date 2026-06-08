@@ -949,7 +949,6 @@ void MQTT_Client::begin()
   const char* _mqtt_server = EGPrefs::getString("mqtt", "server");
   if (_mqtt_server[0] == '\0') {
     mqttEnabled = false;
-    Log::console(PSTR("MQTT: No server set"));
     EGModuleRegistry::set_tick_enabled(this, false);
     EGModuleRegistry::set_loop_interval(this, -1);
     return;
