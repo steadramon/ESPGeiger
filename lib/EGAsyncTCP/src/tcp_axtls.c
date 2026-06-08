@@ -26,7 +26,7 @@
 // To handle all the definitions needed for debug printing, we need to delay
 // macro definitions till later.
 #define DEBUG_SKIP__DEBUG_PRINT_MACROS 1
-#include <async_config.h>
+#include "async_config.h"
 #undef DEBUG_SKIP__DEBUG_PRINT_MACROS
 
 #if ASYNC_TCP_SSL_ENABLED
@@ -38,11 +38,11 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <tcp_axtls.h>
+#include "tcp_axtls.h"
 
 // ets_uart_printf is defined in esp8266_undocumented.h, in newer Arduino ESP8266 Core.
 extern int ets_uart_printf(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
-#include <DebugPrintMacros.h>
+#include "DebugPrintMacros.h"
 #ifndef TCP_SSL_DEBUG
 #define TCP_SSL_DEBUG(...) do { (void)0;} while(false)
 #endif

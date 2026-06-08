@@ -101,6 +101,10 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
       continue;
     }
     size_t take = (len - sent) < can ? (len - sent) : can;
+    // AsyncClient::write internally calls both add() + send(); on ESP32
+    // each of those is a tcpip_api_call round-trip (~200-400 us), so a
+    // second send() right after is a pure no-op that still pays the
+    // dispatch cost. ESP8266 makes the same chain free.
     size_t wrote = s->client->write(data + sent, take);
     if (wrote == 0) {
       if (millis() - last_progress > EGHTTP_SEND_BUDGET_MS) {
@@ -112,7 +116,6 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
       EGHTTP_BACKPRESSURE_PAUSE();
       continue;
     }
-    s->client->send();
     sent += wrote;
     last_progress = millis();
     yield();
@@ -258,7 +261,6 @@ void EGHttpServer::sendStatusAndClose(Slot* s, const char* body, size_t len) {
   if (s->client) {
     if (body && len) {
       yield_write_pgm(s, (PGM_P)body, len);
-      s->client->send();
     }
     s->client->close();
   }
@@ -694,7 +696,6 @@ void EGHttpServer::dispatch(Slot* s) {
       hn = eghttp_clamp_head(hn, sizeof(head));
       if (hn > 0 && s->client) {
         s->client->write(head, (size_t)hn);
-        s->client->send();
       }
       return;     // tick() closes the connection
     }

@@ -25,7 +25,7 @@
 
 #ifndef DEBUG_SKIP__DEBUG_PRINT_MACROS
 
-#include <DebugPrintMacros.h>
+#include "DebugPrintMacros.h"
 
 #ifndef ASYNC_TCP_ASSERT
 #define ASYNC_TCP_ASSERT(...) do { (void)0;} while(false)

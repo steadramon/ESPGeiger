@@ -21,11 +21,7 @@
 
 #include <Arduino.h>
 
-#if defined(ESP8266)
-  #include <EGAsyncTCP.h>
-#elif defined(ESP32)
-  #include <AsyncTCP.h>
-#endif
+#include <EGAsyncTCP.h>
 
 #ifndef EGHTTP_MAX_CLIENTS
   // Queued clients silently lose inbound data: AsyncTCP ACKs and frees

@@ -29,7 +29,7 @@
 #ifndef CONST
 #define CONST
 #endif
-#include <async_config.h>
+#include "async_config.h"
 class cbuf;
 class AsyncClient;
 

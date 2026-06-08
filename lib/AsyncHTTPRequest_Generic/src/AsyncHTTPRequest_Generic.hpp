@@ -95,21 +95,19 @@
 
 ////////////////////////////////////////
 
+#include <EGAsyncTCP.h>
+
 #if ESP32
 
-  #include <AsyncTCP.h>
-  
   // KH mod
   #define MUTEX_LOCK_NR           if (xSemaphoreTakeRecursive(threadLock,portMAX_DELAY) != pdTRUE) { return;}
   #define MUTEX_LOCK(returnVal)   if (xSemaphoreTakeRecursive(threadLock,portMAX_DELAY) != pdTRUE) { return returnVal;}
-  
+
   #define _AHTTP_lock       xSemaphoreTakeRecursive(threadLock,portMAX_DELAY)
   #define _AHTTP_unlock     xSemaphoreGiveRecursive(threadLock)
-  
+
 #elif ESP8266
 
-  #include <EGAsyncTCP.h>
-  
   #define MUTEX_LOCK_NR
   #define MUTEX_LOCK(returnVal)
   

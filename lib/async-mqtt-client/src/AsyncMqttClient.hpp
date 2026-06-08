@@ -9,13 +9,9 @@
 #define MQTT_MIN_FREE_MEMORY 4096
 #endif
 
-#ifdef ESP32
-#include <AsyncTCP.h>
-#include <freertos/semphr.h>
-#elif defined(ESP8266)
 #include <EGAsyncTCP.h>
-#else
-#error Platform not supported
+#ifdef ESP32
+#include <freertos/semphr.h>
 #endif
 
 #if ASYNC_TCP_SSL_ENABLED

@@ -26,7 +26,7 @@
 #ifndef LWIPR_COMPAT_H
 #define LWIPR_COMPAT_H
 
-#include <async_config.h>
+#include "async_config.h"
 
 #if ASYNC_TCP_SSL_ENABLED
 
