@@ -571,8 +571,11 @@ static inline bool _pcb_is_active(const struct tcp_pcb *pcb) {
   if (pcb == NULL) {
     return false;
   }
+  // Reject pre-data, post-our-FIN, and gone-away states. Write/output
+  // hit lwIP assertions in FIN_WAIT_2/CLOSING/LAST_ACK.
   if (pcb->state == LISTEN || pcb->state == CLOSED ||
-      pcb->state == TIME_WAIT) {
+      pcb->state == TIME_WAIT || pcb->state == FIN_WAIT_2 ||
+      pcb->state == CLOSING || pcb->state == LAST_ACK) {
     return false;
   }
   return true;
@@ -627,10 +630,16 @@ static err_t _tcp_recved_api(struct tcpip_api_call_data *api_call_msg) {
     return msg->err;
   }
   // Clamp len to remaining rcv_wnd headroom; lwIP asserts on overflow.
+  // Guard against the transient rcv_wnd > TCP_WND_MAX (window-scaling
+  // / zero-probe edge); unsigned subtract would wrap and skip the clamp.
   size_t len = msg->received;
-  tcpwnd_size_t headroom = (tcpwnd_size_t)(TCP_WND_MAX(pcb) - pcb->rcv_wnd);
-  if (len > (size_t)headroom) {
-    len = (size_t)headroom;
+  if (pcb->rcv_wnd >= TCP_WND_MAX(pcb)) {
+    len = 0;
+  } else {
+    tcpwnd_size_t headroom = (tcpwnd_size_t)(TCP_WND_MAX(pcb) - pcb->rcv_wnd);
+    if (len > (size_t)headroom) {
+      len = (size_t)headroom;
+    }
   }
   msg->err = 0;
   if (len > 0) {
