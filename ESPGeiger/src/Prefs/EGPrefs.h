@@ -60,12 +60,23 @@ struct EGPref {
   uint8_t     flags;      // 1
 };                        // 32 bytes (was 40 - reordered to eliminate padding)
 
+// /param tab buckets. 0 = SYSTEM keeps existing literals safe (POD zero).
+// BACKUP is rendered specially (no pref groups), kept here for symmetry.
+enum EGPrefCategory : uint8_t {
+  EGP_CAT_SYSTEM = 0,
+  EGP_CAT_INPUT  = 1,
+  EGP_CAT_OUTPUT = 2,
+  EGP_CAT_UPLOAD = 3,
+  EGP_CAT_BACKUP = 4,
+};
+
 struct EGPrefGroup {
   const char* module_id;
   const char* label;
   uint16_t    version;   // bump to invalidate stored data on schema change
   const EGPref* prefs;
   size_t        count;
+  uint8_t       category;  // EGPrefCategory; defaults SYSTEM via POD zero-init
 };
 
 // === LEGACY IMPORT (remove after v1.0.0) ===

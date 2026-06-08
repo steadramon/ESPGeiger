@@ -80,6 +80,7 @@ class EGModuleRegistry {
       uint16_t loop_interval;    // 2 - 0 = every iteration
       uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
       uint8_t flags;             // 1 - packed module flags (see above)
+      uint8_t category;          // 1 - EGPrefCategory; /param tab + pause skip
 #ifdef TICK_PROFILE
       uint16_t max_tick_us;      // 2 - slowest s_tick over current window
 #endif

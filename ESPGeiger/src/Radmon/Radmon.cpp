@@ -45,6 +45,7 @@ static const EGPrefGroup RADMON_PREF_GROUP = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
@@ -97,7 +98,6 @@ void Radmon::on_prefs_loaded() {
 void Radmon::loop(unsigned long now)
 {
   if (!_send_enabled) return;
-  if (Counter::external_paused()) return;
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
   } else if ((now - lastPing) >= pingIntervalMs) {

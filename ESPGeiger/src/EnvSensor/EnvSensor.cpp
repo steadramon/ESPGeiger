@@ -50,6 +50,7 @@ static const EGPrefGroup ENV_PREF_GROUP = {
   "env", "Environment Sensor", 1,
   ENV_PREF_ITEMS,
   sizeof(ENV_PREF_ITEMS) / sizeof(ENV_PREF_ITEMS[0]),
+  EGP_CAT_INPUT,
 };
 
 const EGPrefGroup* EnvSensor::prefs_group() { return &ENV_PREF_GROUP; }

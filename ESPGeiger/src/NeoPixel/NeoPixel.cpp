@@ -53,6 +53,7 @@ static const EGPrefGroup NEOPIXEL_PREF_GROUP = {
   "neopixel", "NeoPixel", 1,
   NEOPIXEL_PREF_ITEMS,
   sizeof(NEOPIXEL_PREF_ITEMS) / sizeof(NEOPIXEL_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }

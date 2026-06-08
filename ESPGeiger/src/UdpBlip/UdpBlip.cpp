@@ -62,6 +62,7 @@ static const EGPrefGroup UDPBLIP_PREF_GROUP = {
   "udpblip", "Local Broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* UdpBlipModule::prefs_group() { return &UDPBLIP_PREF_GROUP; }

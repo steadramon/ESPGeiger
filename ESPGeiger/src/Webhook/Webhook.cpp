@@ -54,6 +54,7 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP = {
   "webhook", "Webhook", 1,
   WEBHOOK_PREF_ITEMS,
   sizeof(WEBHOOK_PREF_ITEMS) / sizeof(WEBHOOK_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
@@ -94,7 +95,6 @@ void Webhook::on_prefs_loaded() {
 
 void Webhook::loop(unsigned long now)
 {
-  if (Counter::external_paused()) return;
   if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);

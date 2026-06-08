@@ -44,6 +44,7 @@ static const EGPrefGroup TS_PREF_GROUP = {
   "thingspeak", "ThingSpeak", 1,
   TS_PREF_ITEMS,
   sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
@@ -72,7 +73,6 @@ Thingspeak::Thingspeak() {
 
 void Thingspeak::loop(unsigned long now)
 {
-  if (Counter::external_paused()) return;
   if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);

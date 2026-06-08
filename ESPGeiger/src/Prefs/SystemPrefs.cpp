@@ -317,6 +317,7 @@ static const EGPrefGroup INPUT_PREF_GROUP = {
   "input", INPUT_GROUP_TITLE, 1,
   INPUT_PREF_ITEMS,
   sizeof(INPUT_PREF_ITEMS) / sizeof(INPUT_PREF_ITEMS[0]),
+  EGP_CAT_INPUT,
 };
 
 const EGPrefGroup* InputPrefs::prefs_group() { return &INPUT_PREF_GROUP; }

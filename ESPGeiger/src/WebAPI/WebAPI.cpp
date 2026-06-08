@@ -69,6 +69,7 @@ static const EGPrefGroup WEBAPI_PREF_GROUP = {
   "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
@@ -109,7 +110,6 @@ void WebAPI::begin() {
 }
 
 void WebAPI::loop(unsigned long now) {
-  if (Counter::external_paused()) return;
   if (_mode == 0) return;
 
   // Signed deltas: backoff math can push lastHandshake into the future when

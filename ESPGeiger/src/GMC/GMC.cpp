@@ -47,6 +47,7 @@ static const EGPrefGroup GMC_PREF_GROUP = {
   "gmc", "GMC", 1,
   GMC_PREF_ITEMS,
   sizeof(GMC_PREF_ITEMS) / sizeof(GMC_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
@@ -76,7 +77,6 @@ GMC::GMC() {
 
 void GMC::loop(unsigned long now)
 {
-  if (Counter::external_paused()) return;
   if (!_send_enabled) return;
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);

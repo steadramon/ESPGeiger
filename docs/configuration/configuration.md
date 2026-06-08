@@ -17,6 +17,8 @@ Specialised pages with their own UI:
 
 Settings changed on the Config page take effect immediately (or on next submission cycle for output modules). Pin and serial type changes require a reboot.
 
+The Config page is split across five tabs: **System**, **Input**, **Output**, **Upload** and **Backup**.
+
 ## System Settings
 
 | Setting | Type | Default | Description |

@@ -23,6 +23,8 @@
 #include "../Util/DeviceInfo.h"
 #include "../NTP/NTP.h"
 #include "../ArduinoOTA/ArduinoOTA.h"
+#include "../Counter/Counter.h"
+#include "../Prefs/EGPrefs.h"
 #include <string.h>
 
 
@@ -67,19 +69,18 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 
   bool wifi_ok = Wifi::stable_for(WIFI_SETTLE_MS);
   bool ntp_ok  = ntpclient.synced;
+  bool paused  = Counter::external_paused();
   // Re-check at most this far in the future, even if no module is due.
-  // Covers WiFi/NTP gates that block all loop modules indefinitely.
   unsigned long fallback = now + 1000;
 
-  // Walk the due-order index from the front. Stop at the first slot that
-  // is not yet due; everything behind it is due even later.
   uint8_t k = 0;
   while (k < _due_count) {
     Slot& s = _slots[_due_order[k]];
     if ((long)(now - s.next_due) < 0) break;
     if (((s.flags & FLAG_REQUIRES_WIFI) && !wifi_ok) ||
-        ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok)) {
-      // Gate not yet open. Defer this slot a tick without firing loop().
+        ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok) ||
+        (paused && s.category == (uint8_t)EGP_CAT_UPLOAD)) {
+      // Gate closed (wifi/ntp/external-pause). Defer a tick without firing.
       s.next_due = now + 1;
     } else {
       s.loop_last = now;
@@ -428,6 +429,8 @@ void EGModuleRegistry::pre_wifi_all() {
     if (m->requires_wifi())  f |= FLAG_REQUIRES_WIFI;
     if (m->requires_ntp())   f |= FLAG_REQUIRES_NTP;
     s.flags = f;
+    const EGPrefGroup* g = m->prefs_group();
+    s.category = g ? g->category : (uint8_t)EGP_CAT_SYSTEM;
     if (f & FLAG_HAS_LOOP) _due_order[_due_count++] = i;
     m->pre_wifi();
   }

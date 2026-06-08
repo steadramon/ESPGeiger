@@ -43,6 +43,7 @@ static const EGPrefGroup SDCARD_PREF_GROUP = {
   "sdcard", "SD Card", 1,
   SDCARD_PREF_ITEMS,
   sizeof(SDCARD_PREF_ITEMS) / sizeof(SDCARD_PREF_ITEMS[0]),
+  EGP_CAT_SYSTEM,
 };
 
 const EGPrefGroup* SDCard::prefs_group() { return &SDCARD_PREF_GROUP; }

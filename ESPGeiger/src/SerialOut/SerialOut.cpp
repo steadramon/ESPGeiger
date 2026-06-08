@@ -54,6 +54,7 @@ static const EGPrefGroup SOUT_PREF_GROUP = {
   "sout", "Serial out", 1,
   SOUT_PREF_ITEMS,
   sizeof(SOUT_PREF_ITEMS) / sizeof(SOUT_PREF_ITEMS[0]),
+  EGP_CAT_SYSTEM,
 };
 
 const EGPrefGroup* SerialOut::prefs_group() { return &SOUT_PREF_GROUP; }

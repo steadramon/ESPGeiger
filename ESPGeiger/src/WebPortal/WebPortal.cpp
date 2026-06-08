@@ -109,6 +109,10 @@ h4{margin:.8em 0 .2em;font-size:1em;color:var(--muted)}
 output{display:inline-block;margin-left:.6em;color:var(--muted)}
 details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
 details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
+nav.tabs{display:flex;border-bottom:1px solid var(--border);margin:0 0 1em;gap:.4em;flex-wrap:wrap}
+nav.tabs a{padding:.5em .9em;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none}
+nav.tabs a:hover{color:var(--fg)}
+nav.tabs a.ac{color:var(--accent);border-bottom-color:var(--accent)}
 .fx{display:flex;gap:.5em}.mt{margin-top:.4em}.mn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 #dyB{position:fixed;top:0;left:0;right:0;padding:.5em;background:#fc3;color:#000;text-align:center;z-index:9999;cursor:pointer;font-size:.9em;font-weight:600}
 .menu{display:flex;flex-direction:column;gap:.85em;margin:1em auto;max-width:22em}
@@ -1313,6 +1317,13 @@ void WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 
 void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool did_save = false;
+  // Tab from ?tab=N. Default SYSTEM (0). Clamped to the four valid values.
+  uint8_t tab = (uint8_t)EGP_CAT_SYSTEM;
+  const char* tab_arg = req.arg("t");
+  if (tab_arg && tab_arg[0]) {
+    int t = atoi(tab_arg);
+    if (t >= 0 && t <= 4) tab = (uint8_t)t;
+  }
 
   if (req.method() == EGHttpRequest::POST) {
     // Body lives in the heap buffer accumulated by hParamBody. Use the
@@ -1374,7 +1385,37 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::sendPageHead(res, F("Config"));
   if (did_save) res.sendChunk(F(
     "<div class='a ak'>Saved.</div>"));
-  res.sendChunk(F("<form method=POST action=/param>"));
+
+  // Tab nav: five links, the current one carries class=ac for styling.
+  static const char* const TAB_NAMES[5] = {"System", "Input", "Output", "Upload", "Backup"};
+  res.sendChunk(F("<nav class=tabs>"));
+  char nav[96];
+  for (uint8_t t = 0; t < 5; t++) {
+    int nn = snprintf_P(nav, sizeof(nav),
+      PSTR("<a href='/param?t=%u'%s>%s</a>"),
+      (unsigned)t, t == tab ? " class=ac" : "", TAB_NAMES[t]);
+    if (nn > 0) res.sendChunk(nav, (size_t)nn);
+  }
+  res.sendChunk(F("</nav>"));
+
+  // Backup tab renders the import form only - skip the pref-group rendering.
+  if (tab == (uint8_t)EGP_CAT_BACKUP) {
+    res.sendChunk(F(
+      "<form method=POST action=/import onsubmit=\"return confirm('Replace all config and reboot?')\">"
+      "<p><textarea name=blob id=cfgB rows=5 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
+      "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
+      " <button type=submit>Import</button></p></form>"
+      "<p style=\"color:var(--muted);font-size:.85em\">Import resets all config to defaults then applies the blob. WiFi and network settings are preserved. Device reboots automatically after import.</p>"
+      "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains private information. Keep it private.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  char form_open[48];
+  int fo = snprintf_P(form_open, sizeof(form_open),
+    PSTR("<form method=POST action='/param?t=%u'>"), (unsigned)tab);
+  if (fo > 0) res.sendChunk(form_open, (size_t)fo);
 
   char buf[512];
   int n;
@@ -1400,18 +1441,16 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     order[j] = cur;
   }
 
-  bool first_emitted = true;
   for (uint8_t gi = 0; gi < gc; gi++) {
     EGModule* mod = EGPrefs::module_at(order[gi]);
     if (mod && mod->display_order() == 0) continue;
     const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
     if (!g || g->count == 0) continue;
+    if (g->category != tab) continue;
 
-    n = snprintf_P(buf, sizeof(buf), PSTR("<details class=bx%s><summary>%s</summary>"),
-                   first_emitted ? " open" : "",
+    n = snprintf_P(buf, sizeof(buf), PSTR("<details class=bx><summary>%s</summary>"),
                    g->label ? g->label : g->module_id);
     if (n > 0) res.sendChunk(buf, (size_t)n);
-    first_emitted = false;
 
     char s_id[32], s_lbl[80], s_help[120], s_pat[64];
     auto P2S = [](const char* fp, char* dst, size_t cap) -> const char* {
@@ -1563,16 +1602,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     res.sendChunk(F("</details>"));
   }
 
-  res.sendChunk(F("<hr><button type=submit>Save</button></form>"
-                  "<hr>"
-                  "<details><summary>Backup &amp; restore</summary>"
-                  "<form method=POST action=/import onsubmit=\"return confirm('Replace all config and reboot?')\">"
-                  "<p><textarea name=blob id=cfgB rows=4 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
-                  "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
-                  " <button type=submit>Import</button></p></form>"
-                  "<p style=\"color:var(--muted);font-size:.85em\">Import resets all config to defaults then applies the blob. WiFi and network settings are preserved. Device reboots automatically after import.</p>"
-                  "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains private information. Keep it private.</p>"
-                  "</details>"));
+  res.sendChunk(F("<hr><button type=submit>Save</button></form>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
 }

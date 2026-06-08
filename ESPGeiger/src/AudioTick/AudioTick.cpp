@@ -69,6 +69,7 @@ static const EGPrefGroup TICK_PREF_GROUP = {
   "tick", "Audio Tick", 1,
   TICK_PREF_ITEMS,
   sizeof(TICK_PREF_ITEMS) / sizeof(TICK_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* AudioTick::prefs_group() { return &TICK_PREF_GROUP; }

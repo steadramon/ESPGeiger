@@ -85,6 +85,7 @@ static const EGPrefGroup MQTT_PREF_GROUP = {
   "mqtt", "MQTT", 1,
   MQTT_PREF_ITEMS,
   sizeof(MQTT_PREF_ITEMS) / sizeof(MQTT_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* MQTT_Client::prefs_group() { return &MQTT_PREF_GROUP; }

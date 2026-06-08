@@ -59,6 +59,7 @@ static const EGPrefGroup PULSE_PREF_GROUP = {
   "pulse", "Pulse Out", 1,
   PULSE_PREF_ITEMS,
   sizeof(PULSE_PREF_ITEMS) / sizeof(PULSE_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* PulseOut::prefs_group() { return &PULSE_PREF_GROUP; }
