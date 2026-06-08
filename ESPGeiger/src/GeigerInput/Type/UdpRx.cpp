@@ -345,12 +345,20 @@ void GeigerUdpRx::processEnv(const uint8_t* buf, size_t len) {
   // ",fff\0\0\0\0" typetag (8 bytes) + 3 x f32 (12 bytes).
   if (len < PATH_FULL_LEN + 8 + 12) return;
   if (memcmp(buf + PATH_FULL_LEN, TAG_FFF, 4) != 0) return;
+  // Pin to the first producer that sends env. Stops sum/auto-mode receivers
+  // from flapping between mismatched sources.
+  static char s_env_chipid[CHIPID_LEN + 1] = {0};
+  const char* src = (const char*)(buf + CHIPID_OFFSET);
+  if (s_env_chipid[0] == '\0') {
+    memcpy(s_env_chipid, src, CHIPID_LEN);
+    s_env_chipid[CHIPID_LEN] = '\0';
+  } else if (memcmp(s_env_chipid, src, CHIPID_LEN) != 0) {
+    return;
+  }
   const uint8_t* args = buf + PATH_FULL_LEN + 8;
   float t = rd_f32(args);
   float h = rd_f32(args + 4);
   float p = rd_f32(args + 8);
-  // EnvSensor::setRemote is a no-op when a local sensor is up, so receivers
-  // that ever get fitted with hardware still prefer their own readings.
   envsensor.setRemote(t, h, p);
 }
 

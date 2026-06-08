@@ -274,7 +274,8 @@ void UdpBlipModule::emitHv(uint32_t now) {
 
 void UdpBlipModule::emitEnv(uint32_t now) {
   // /espg/{id}/env ,fff  temp_c humidity pressure_hpa (humidity = NaN on BMP280)
-  if (!envsensor.present()) return;
+  // localPresent() only - never re-broadcast values we received over UDP.
+  if (!envsensor.localPresent()) return;
   uint8_t buf[64];
   size_t off = 0;
   size_t n;
