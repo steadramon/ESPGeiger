@@ -1536,6 +1536,8 @@ void  AsyncHTTPRequest::_onError(AsyncClient* client, int8_t error)
   AHTTP_LOGERROR1(F("_onError handler error ="), client->errorToString(error));
 
   _HTTPcode = error;
+  // Some error paths don't disconnect; fire here too. setReadyState is idempotent.
+  _setReadyState(readyStateDone);
 }
 
 ////////////////////////////////////////
