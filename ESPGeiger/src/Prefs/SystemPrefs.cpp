@@ -23,6 +23,13 @@
 #include "../Util/DeviceInfo.h"
 #include "../Util/PinSafety.h"
 #include "../WebPortal/WebPortal.h"
+#ifdef ESP8266
+#include <ESP8266WiFi.h>
+#include <user_interface.h>
+#else
+#include <WiFi.h>
+#include <esp_wifi.h>
+#endif
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "../GeigerInput/GeigerInputTest.h"
 #endif
@@ -169,6 +176,118 @@ static const EGPrefGroup NET_PREF_GROUP = {
 };
 
 const EGPrefGroup* NetPrefs::prefs_group() { return &NET_PREF_GROUP; }
+
+// --- Wi-Fi prefs ---
+// All hidden, tunable via /pref?group=wifi&key=*. Defaults are platform-
+// sensible. On UdpRx builds udprx_rxmode loads later and overrides sleep.
+
+class WifiPrefs : public EGModule {
+public:
+  const char* name() override { return "wifi"; }
+  uint8_t display_order() override { return 0; }   // hidden from /param
+  const EGPrefGroup* prefs_group() override;
+  void on_prefs_loaded() override;
+};
+
+static WifiPrefs wifiprefs;
+EG_REGISTER_MODULE(wifiprefs)
+
+#ifdef ESP8266
+#define WIFI_SLEEP_DEFAULT "1"
+#else
+#define WIFI_SLEEP_DEFAULT "2"
+#endif
+
+static const EGPref WIFI_PREF_ITEMS[] = {
+  {"sleep",    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN},
+  // 0 = platform default; 1..20 = explicit dBm.
+  {"tx_power", nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN},
+  // ISO 2-char country (e.g. "GB", "US", "DE", "JP"). Empty = platform default.
+  {"country",  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN},
+  // 0 = default; 1 = 11b only; 2 = 11b/g; 3 = 11b/g/n. For old-router compat.
+  {"phy_mode", nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN},
+};
+
+static const EGPrefGroup WIFI_PREF_GROUP = {
+  "wifi", "Wi-Fi", 1,
+  WIFI_PREF_ITEMS,
+  sizeof(WIFI_PREF_ITEMS) / sizeof(WIFI_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* WifiPrefs::prefs_group() { return &WIFI_PREF_GROUP; }
+
+static void apply_wifi_sleep(uint8_t mode) {
+#ifdef ESP8266
+  switch (mode) {
+    case 0:  WiFi.setSleepMode(WIFI_LIGHT_SLEEP); break;
+    case 2:  WiFi.setSleepMode(WIFI_NONE_SLEEP);  break;
+    case 1:
+    default: WiFi.setSleepMode(WIFI_MODEM_SLEEP); break;
+  }
+#else
+  switch (mode) {
+    case 0:  WiFi.setSleep(WIFI_PS_MAX_MODEM); break;
+    case 2:  WiFi.setSleep(WIFI_PS_NONE);      break;
+    case 1:
+    default: WiFi.setSleep(WIFI_PS_MIN_MODEM); break;
+  }
+#endif
+}
+
+static void apply_wifi_tx_power(uint8_t dBm) {
+  if (dBm == 0) return;   // 0 = leave platform default alone
+#ifdef ESP8266
+  WiFi.setOutputPower((float)dBm);
+#else
+  // esp_wifi_set_max_tx_power takes 0.25 dBm units (so 20 dBm = 80).
+  esp_wifi_set_max_tx_power((int8_t)(dBm * 4));
+#endif
+}
+
+static void apply_wifi_country(const char* code) {
+  if (!code || !code[0]) return;
+#ifdef ESP8266
+  wifi_country_t c = {0};
+  strncpy(c.cc, code, 2);
+  c.cc[2] = '\0';
+  c.schan  = 1;
+  c.nchan  = 13;
+  c.policy = WIFI_COUNTRY_POLICY_MANUAL;
+  wifi_set_country(&c);
+#else
+  esp_wifi_set_country_code(code, true);
+#endif
+}
+
+static void apply_wifi_phy_mode(uint8_t mode) {
+  if (mode == 0) return;
+#ifdef ESP8266
+  WiFiPhyMode_t m;
+  switch (mode) {
+    case 1:  m = WIFI_PHY_MODE_11B; break;
+    case 2:  m = WIFI_PHY_MODE_11G; break;
+    case 3:  m = WIFI_PHY_MODE_11N; break;
+    default: return;
+  }
+  WiFi.setPhyMode(m);
+#else
+  uint8_t mask;
+  switch (mode) {
+    case 1:  mask = WIFI_PROTOCOL_11B; break;
+    case 2:  mask = WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G; break;
+    case 3:  mask = WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N; break;
+    default: return;
+  }
+  esp_wifi_set_protocol(WIFI_IF_STA, mask);
+#endif
+}
+
+void WifiPrefs::on_prefs_loaded() {
+  apply_wifi_sleep   ((uint8_t)EGPrefs::getUInt  ("wifi", "sleep"));
+  apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", "tx_power"));
+  apply_wifi_country (         EGPrefs::getString("wifi", "country"));
+  apply_wifi_phy_mode((uint8_t)EGPrefs::getUInt  ("wifi", "phy_mode"));
+}
 
 // --- Input prefs ---
 // Pin / serial-type changes trigger a reboot (pinMode + attachInterrupt

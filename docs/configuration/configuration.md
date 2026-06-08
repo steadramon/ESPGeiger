@@ -141,3 +141,22 @@ On push-button builds the long-press gesture toggles a permanent override that k
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | Brightness | Int 0-100 | `15` | NeoPixel brightness, 0 disables. Too low a value can cause inaccurate colours. |
+
+## Advanced Wi-Fi Tunables
+
+These do not appear on the Config page. The defaults suit almost every deployment; the table is here for the rare case where you need to override one (for example a router on a channel disabled by the device's default country code, or to reduce TX power on a battery build).
+
+Set a value via the device's `/pref` URL:
+
+```
+http://<device>.local/pref?group=wifi&key=<key>&value=<value>
+```
+
+Changes take effect on the next reboot.
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `sleep` | Int 0-2 | `1` ESP8266 / `2` ESP32 | Wi-Fi radio power save. `0` = light sleep (lowest power, ping varies the most), `1` = modem sleep (DTIM aligned, balanced), `2` = none (radio always on, snappiest ping, around 30 mA more current). USB-powered ESP32 devices benefit from `2`; battery builds usually prefer `1`. UDP-Receiver builds use the **RX sleep** setting in the input section instead of this one. |
+| `tx_power` | Int 0-20 | `0` | Transmit power in dBm. `0` keeps the platform default (typically around 20 dBm). Lower values can reduce coupling with sensitive analogue circuitry on the same board and save power on battery builds, at the cost of effective range. |
+| `country` | String (2) | `(empty)` | ISO 2-letter country code (for example `GB`, `US`, `DE`, `JP`). Empty uses the platform default, which restricts channels in some regions. Set this if your router is on channel 12 or 13 (EU) or 14 (JP) and the device cannot see or connect to it. |
+| `phy_mode` | Int 0-3 | `0` | Wi-Fi PHY lock-down. `0` lets the device negotiate (recommended). `1` = 802.11b only, `2` = b/g, `3` = b/g/n. Use this only as a workaround for routers that fail to negotiate higher rates cleanly. |
