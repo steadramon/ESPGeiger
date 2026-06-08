@@ -19,6 +19,7 @@
 #include "Wifi.h"
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
+#include <user_interface.h>
 #else
 #include <WiFi.h>
 #include <esp_wifi.h>   // esp_wifi_get_config() for direct NVS cred lookup
@@ -26,6 +27,8 @@
 #include <LittleFS.h>
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
+#include "../Module/EGModule.h"
+#include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
 #include "DeviceInfo.h"
 
@@ -409,4 +412,115 @@ bool Wifi::connectOrPortal() {
   Wifi::applyStaticConfig();
   WiFi.begin(s_portalSsid, s_portalPass);
   return waitForWifi(30000);
+}
+
+// ---------- Wi-Fi runtime prefs ----------
+// Hidden tunables under /pref?group=wifi&key=*. Lives here next to other
+// WiFi management rather than in SystemPrefs.cpp to avoid shifting flash
+// layout around hot prefs code.
+
+class WifiPrefs : public EGModule {
+public:
+  const char* name() override { return "wifi"; }
+  uint8_t display_order() override { return 0; }
+  const EGPrefGroup* prefs_group() override;
+  void on_prefs_loaded() override;
+};
+
+static WifiPrefs wifiprefs;
+EG_REGISTER_MODULE(wifiprefs)
+
+#ifdef ESP8266
+#define WIFI_SLEEP_DEFAULT "1"
+#else
+#define WIFI_SLEEP_DEFAULT "2"
+#endif
+
+static const EGPref WIFI_PREF_ITEMS[] = {
+  {"sleep",    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN},
+  {"tx_power", nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN},
+  {"country",  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN},
+  {"phy_mode", nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN},
+};
+
+static const EGPrefGroup WIFI_PREF_GROUP = {
+  "wifi", "Wi-Fi", 1,
+  WIFI_PREF_ITEMS,
+  sizeof(WIFI_PREF_ITEMS) / sizeof(WIFI_PREF_ITEMS[0]),
+};
+
+const EGPrefGroup* WifiPrefs::prefs_group() { return &WIFI_PREF_GROUP; }
+
+static void apply_wifi_sleep(uint8_t mode) {
+#ifdef ESP8266
+  // mode=1 matches the framework default; explicit setSleepMode here
+  // re-entered the SDK state machine and halved LPS on espgeigerhw.
+  if (mode == 1) return;
+  switch (mode) {
+    case 0:  WiFi.setSleepMode(WIFI_LIGHT_SLEEP); break;
+    case 2:  WiFi.setSleepMode(WIFI_NONE_SLEEP);  break;
+    default: break;
+  }
+#else
+  switch (mode) {
+    case 0:  WiFi.setSleep(WIFI_PS_MAX_MODEM); break;
+    case 2:  WiFi.setSleep(WIFI_PS_NONE);      break;
+    case 1:
+    default: WiFi.setSleep(WIFI_PS_MIN_MODEM); break;
+  }
+#endif
+}
+
+static void apply_wifi_tx_power(uint8_t dBm) {
+  if (dBm == 0) return;
+#ifdef ESP8266
+  WiFi.setOutputPower((float)dBm);
+#else
+  esp_wifi_set_max_tx_power((int8_t)(dBm * 4));
+#endif
+}
+
+static void apply_wifi_country(const char* code) {
+  if (!code || !code[0]) return;
+#ifdef ESP8266
+  wifi_country_t c = {0};
+  strncpy(c.cc, code, 2);
+  c.cc[2] = '\0';
+  c.schan  = 1;
+  c.nchan  = 13;
+  c.policy = WIFI_COUNTRY_POLICY_MANUAL;
+  wifi_set_country(&c);
+#else
+  esp_wifi_set_country_code(code, true);
+#endif
+}
+
+static void apply_wifi_phy_mode(uint8_t mode) {
+  if (mode == 0) return;
+#ifdef ESP8266
+  WiFiPhyMode_t m;
+  switch (mode) {
+    case 1:  m = WIFI_PHY_MODE_11B; break;
+    case 2:  m = WIFI_PHY_MODE_11G; break;
+    case 3:  m = WIFI_PHY_MODE_11N; break;
+    default: return;
+  }
+  WiFi.setPhyMode(m);
+#else
+  uint8_t mask;
+  switch (mode) {
+    case 1:  mask = WIFI_PROTOCOL_11B; break;
+    case 2:  mask = WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G; break;
+    case 3:  mask = WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N; break;
+    default: return;
+  }
+  esp_wifi_set_protocol(WIFI_IF_STA, mask);
+#endif
+}
+
+void WifiPrefs::on_prefs_loaded() {
+  apply_wifi_sleep   ((uint8_t)EGPrefs::getUInt  ("wifi", "sleep"));
+  apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", "tx_power"));
+  apply_wifi_country (         EGPrefs::getString("wifi", "country"));
+  apply_wifi_phy_mode((uint8_t)EGPrefs::getUInt  ("wifi", "phy_mode"));
 }
