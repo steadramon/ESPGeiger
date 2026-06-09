@@ -801,6 +801,8 @@ AsyncClient::AsyncClient(tcp_pcb *pcb)
 AsyncClient::~AsyncClient() {
   if (_pcb) {
     _close();
+  } else {
+    _remove_events_for_client(this);
   }
 }
 
