@@ -192,11 +192,12 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
   http.on("/numbers", EGHttpRequest::GET,
     [](EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (!audiotick._i2s_up) { res.send(503, "text/plain", "."); return; }
-      uint8_t pad[10];
-      AudioTick::numbersPad(pad);
-      char out[11];
-      for (int i = 0; i < 10; i++) out[i] = '0' + pad[i];
-      out[10] = '\0';
+      constexpr size_t PAD_LEN = 32;
+      uint8_t pad[PAD_LEN];
+      AudioTick::numbersPad(pad, PAD_LEN);
+      char out[PAD_LEN + 1];
+      for (size_t i = 0; i < PAD_LEN; i++) out[i] = '0' + pad[i];
+      out[PAD_LEN] = '\0';
       if (!s_nm_busy) {
         s_nm_busy = true;
         xTaskCreate(numbers_task, "nm", 4096, nullptr, 1, nullptr);
@@ -387,25 +388,29 @@ void AudioTick::chimeMorseCallsign() {
   }
 }
 
-void AudioTick::numbersPad(uint8_t out[10]) {
+void AudioTick::numbersPad(uint8_t* out, size_t n) {
   // LCG seeded from chipid: deterministic per device, unique across devices.
   uint64_t h = ESP.getEfuseMac();
-  for (int i = 0; i < 10; i++) {
+  for (size_t i = 0; i < n; i++) {
     h = h * 6364136223846793005ULL + 1442695040888963407ULL;
     out[i] = (uint8_t)((h >> 32) % 10);
   }
 }
 
-static void numbers_compute_cipher(uint8_t out[10]) {
-  static const uint8_t P[10] = { 0, 3, 2, 1, 1, 8, 0, 9, 0, 5 };
+static void numbers_payload(uint8_t out[10]) {
+  constexpr uint64_t K = 0xA5A5A5A5A5ULL;
+  constexpr uint64_t Q = 0xA684BDACA0ULL;
+  const uint64_t P = Q ^ K;
   uint8_t pad[10];
-  AudioTick::numbersPad(pad);
-  for (int i = 0; i < 10; i++) out[i] = (P[i] + pad[i]) % 10;
+  AudioTick::numbersPad(pad, 10);
+  for (int i = 0; i < 10; i++) {
+    out[i] = ((uint8_t)((P >> ((9 - i) * 4)) & 0x0F) + pad[i]) % 10;
+  }
 }
 
 void AudioTick::chimeNumbersStation() {
-  uint8_t CIPHER[10];
-  numbers_compute_cipher(CIPHER);
+  uint8_t msg[10];
+  numbers_payload(msg);
 
   chimeFolkMelody();
   voice.silence(800);
@@ -415,7 +420,7 @@ void AudioTick::chimeNumbersStation() {
       for (uint8_t d = 0; d < 5; d++) {
         const uint8_t idx = grp * 5 + d;
         const bool last = (d == 4);
-        voice.speakDigit(CIPHER[idx], last);
+        voice.speakDigit(msg[idx], last);
         voice.silence(last ? 600 : 200);
       }
       if (rep == 0) voice.silence(1200);

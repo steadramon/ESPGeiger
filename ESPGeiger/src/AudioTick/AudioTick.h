@@ -58,7 +58,7 @@ class AudioTick : public EGModule {
     // (numbers station, Klatt digit synth). While owned, ticks are dropped.
     static void setI2SOwned(bool owned);
     static bool isI2SOwned();
-    static void numbersPad(uint8_t out[10]);
+    static void numbersPad(uint8_t* out, size_t n);
 
   private:
     void playClick();
