@@ -21,7 +21,9 @@
 #ifdef AUDIO_TICK
 
 #include <Arduino.h>
+#include <driver/i2s.h>
 #include "../Module/EGModule.h"
+
 
 #ifndef AUDIO_TICK_BCLK
 #define AUDIO_TICK_BCLK 41
@@ -46,10 +48,17 @@ class AudioTick : public EGModule {
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
+    void registerRoutes(EGHttpServer& http) override;
 
     // Called from Counter when a pulse arrives. Token-bucket-throttled so
     // a high-rate source can't saturate the I2S TX buffer.
     void notifyClick(unsigned long now_ms);
+
+    // Acquire/release exclusive I2S ownership for long-running playback
+    // (numbers station, Klatt digit synth). While owned, ticks are dropped.
+    static void setI2SOwned(bool owned);
+    static bool isI2SOwned();
+    static void numbersPad(uint8_t out[10]);
 
   private:
     void playClick();
@@ -65,6 +74,8 @@ class AudioTick : public EGModule {
     void chimeMarioCoin();
     void chimeSputnik();
     void chimeItemGet();
+    void chimeMorseCallsign();    // chime 9
+    void chimeNumbersStation();   // /numbers route
     void playMelodyNote(uint16_t freq_hz, uint16_t ms, bool square = false,
                         uint16_t gap_ms = 30);
 
