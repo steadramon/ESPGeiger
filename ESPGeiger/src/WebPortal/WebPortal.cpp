@@ -1607,7 +1607,13 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     res.sendChunk(F("</details>"));
   }
 
-  res.sendChunk(F("<hr><button type=submit>Save</button></form>"));
+  res.sendChunk(F(
+    "<hr><div id=fErr class='a ae' style=display:none>"
+    "Some fields need fixing - check expanded sections.</div>"
+    "<button type=submit>Save</button>"
+    "<script>document.forms[0].addEventListener('invalid',e=>{"
+    "for(let n=e.target;n;n=n.parentNode)n.tagName=='DETAILS'&&(n.open=1);"
+    "fErr.style.display=''},true)</script></form>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
 }
