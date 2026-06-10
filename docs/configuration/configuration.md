@@ -32,7 +32,7 @@ The Config page is split across five tabs: **System**, **Input**, **Output**, **
 
 ### Config import / export
 
-The bottom of the Config page has a single textarea labelled **Backup / Restore**. Click **Export** to dump the entire prefs blob (skipping `sys.web_pass` and the whole `net` group as device-local) as base64 with a CRC32 trailer; copy or paste a previous export and click **Import** to restore. Import is overlay-only: keys in the blob overwrite existing values; everything else is left alone. The device reboots automatically on a successful import.
+The **Backup** tab has a single textarea labelled **Backup / Restore**. Click **Export** to dump the entire prefs blob (skipping `sys.web_pass` and the whole `net` group as device-local) as base64 with a CRC32 trailer; copy or paste a previous export and click **Import** to restore. Import is overlay-only: keys in the blob overwrite existing values; everything else is left alone. The device reboots automatically on a successful import.
 
 ## Input Settings
 
