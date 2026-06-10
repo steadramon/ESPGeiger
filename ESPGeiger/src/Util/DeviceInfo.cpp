@@ -22,6 +22,9 @@
 #include "../Counter/Counter.h"
 #include "Wifi.h"
 #include <LittleFS.h>
+#ifdef GEIGER_SDCARD
+#include "../SDCard/SDCard.h"
+#endif
 
 extern Counter gcounter;
 #ifdef ESP32
@@ -125,6 +128,9 @@ void DeviceInfo::largestFreeBlockLowReset() {
 
 void DeviceInfo::safeRestart(uint32_t delayMs) {
   gcounter.stop_for_ota();
+#ifdef GEIGER_SDCARD
+  sdcard.pauseWriter();
+#endif
   if (delayMs) delay(delayMs);
   ESP.restart();
 }

@@ -118,6 +118,7 @@ nav.tabs a.ac{color:var(--accent);border-bottom-color:var(--accent)}
 .menu{display:flex;flex-direction:column;gap:.85em;margin:1em auto;max-width:22em}
 .menu a,.back{background:var(--accent);color:#fff;font-weight:500;padding:.5em 1em;border-radius:4px}
 .menu a{display:block;text-align:center;font-size:1.15em;padding:.55em 1em;border-radius:6px}
+.menu.dense{gap:.35em}.menu.dense a{font-size:.95em;padding:.3em .8em}
 .back{display:inline-block}
 .menu a:hover,.back:hover{opacity:.9;text-decoration:none}
 .back-row{margin-top:2em}

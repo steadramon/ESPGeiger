@@ -497,36 +497,32 @@ static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
   sdcard.pauseWriter();
   res.sendChunk(F("<p><a href='/sd'>&larr; All months</a></p>"));
 
-  if (!sd->chdir() || !sd->chdir(dir)) {
-    sd->chdir();
+  constexpr uint8_t MAX_DAYS = 31;
+  DayEntry days[MAX_DAYS];
+  uint8_t count = 0;
+  uint32_t totalBytes = 0;
+  File32 subDir, file;
+  bool opened = sd->chdir() && subDir.open(dir, O_RDONLY);
+  if (!opened) {
     res.sendChunk(F("<p>Month not found.</p>"));
     WebPortal::sendPageTail(res);
     res.endChunked();
     return;
   }
-
-  constexpr uint8_t MAX_DAYS = 31;
-  DayEntry days[MAX_DAYS];
-  uint8_t count = 0;
-  uint32_t totalBytes = 0;
-  File32 cwd, file;
-  if (cwd.open(".")) {
-    while (count < MAX_DAYS && file.openNext(&cwd, O_RDONLY)) {
-      if (!file.isSubDir() && !file.isHidden()) {
-        char f_name[13];
-        file.getName(f_name, sizeof(f_name));
-        if (valid_csv_name(f_name) && strncmp(f_name, dir, 6) == 0) {
-          days[count].day   = (uint8_t)((f_name[6] - '0') * 10 + (f_name[7] - '0'));
-          days[count].bytes = file.fileSize();
-          totalBytes += days[count].bytes;
-          count++;
-        }
+  while (count < MAX_DAYS && file.openNext(&subDir, O_RDONLY)) {
+    if (!file.isSubDir() && !file.isHidden()) {
+      char f_name[13];
+      file.getName(f_name, sizeof(f_name));
+      if (valid_csv_name(f_name) && strncmp(f_name, dir, 6) == 0) {
+        days[count].day   = (uint8_t)((f_name[6] - '0') * 10 + (f_name[7] - '0'));
+        days[count].bytes = file.fileSize();
+        totalBytes += days[count].bytes;
+        count++;
       }
-      file.close();
     }
-    cwd.close();
+    file.close();
   }
-  sd->chdir();
+  subDir.close();
 
   for (uint8_t i = 1; i < count; i++) {
     DayEntry tmp = days[i];
@@ -548,7 +544,7 @@ static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
   if (count == 0) {
     res.sendChunk(F("<p>No log files in this month.</p>"));
   } else {
-    res.sendChunk(F("<div class=menu>"));
+    res.sendChunk(F("<div class=\"menu dense\">"));
     for (uint8_t i = 0; i < count; i++) {
       char row[160];
       int rn = snprintf_P(row, sizeof(row),
