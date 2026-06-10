@@ -129,7 +129,7 @@ void AudioTick::begin() {
     .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-    .dma_buf_count = 8,
+    .dma_buf_count = 4,
     .dma_buf_len = 256,
     .use_apll = false,
     .tx_desc_auto_clear = true,
@@ -558,10 +558,12 @@ void AudioTick::playClickPool() {
   };
   uint32_t r = ESP.getCycleCount();
   r ^= r << 13; r ^= r >> 17; r ^= r << 5;
-  const uint8_t which = (r >> 24) & 3;
-  const float   j_vol = 1.0f + (((int32_t)(r & 0xFF) - 128) * (0.05f/128.0f));
-  uint32_t nr         = r ^ 0xDEADBEEF;
-  const Variant v     = POOL[which];
+  const uint8_t which   = (r >> 24) & 3;
+  const float   j_vol   = 1.0f + (((int32_t)(r        & 0xFF) - 128) * (0.05f/128.0f));
+  const float   j_freq  = 1.0f + (((int32_t)((r >> 8) & 0xFF) - 128) * (0.03f/128.0f));
+  const float   j_decay = 1.0f + (((int32_t)((r >>16) & 0xFF) - 128) * (0.04f/128.0f));
+  uint32_t nr           = r ^ 0xDECADECA;
+  const Variant v       = POOL[which];
 
   constexpr uint16_t N           = 1024;
   constexpr uint16_t attack_ramp = 7;
@@ -573,8 +575,8 @@ void AudioTick::playClickPool() {
   const float fs     = (float)AUDIO_TICK_SAMPLE_RATE;
   const float inv_fs = 1.0f / fs;
   const float amp    = (_volume / 100.0f) * 32000.0f * j_vol;
-  const float tau    = (float)_decay_ms / 1000.0f;
-  const float f_lo   = (float)_freq_hz * chip_voice_factor();
+  const float tau    = (float)_decay_ms / 1000.0f * j_decay;
+  const float f_lo   = (float)_freq_hz * chip_voice_factor() * j_freq;
   const float f_hi   = f_lo * 2.0f;
   const float w_f2   = TWO_PI * f_lo * 0.55f * inv_fs;
   const float env_dec   = expf(-inv_fs / tau);
