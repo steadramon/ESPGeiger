@@ -602,6 +602,25 @@ void Counter::blip() {
     LedSignal::click();
 }
 
+void Counter::dispatchReceiverBlip() {
+  _last_blip = micros();
+  // Suppress Counter::loop's polling-based re-dispatch of this same blip,
+  // otherwise each receiver blip fires audio twice and would also bounce
+  // back out via udpblip.notifyClick on a UdpRx+UdpBlip combo device.
+  // OLED/NeoPixel still see _last_blip change via their own poll counters.
+  _last_blip_seen = _last_blip;
+#ifndef DISABLE_BLIP
+  this->blip();
+#endif
+  unsigned long nowMs = fast_millis();
+#ifdef AUDIO_TICK
+  audiotick.notifyClick(nowMs);
+#endif
+#ifdef PULSE_OUT
+  pulseout.notifyClick(nowMs);
+#endif
+}
+
 void Counter::set_blip_brightness(uint8_t level) {
   LedSignal::setBrightness(level);
 }

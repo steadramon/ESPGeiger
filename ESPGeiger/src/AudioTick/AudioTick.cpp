@@ -63,7 +63,9 @@ EG_PSTR(TK_H_FREQ,"Click centre frequency (300-4000 Hz)");
 EG_PSTR(TK_L_DEC, "Decay ms");
 EG_PSTR(TK_H_DEC, "Click decay time constant (2-100 ms)");
 EG_PSTR(TK_L_ENG, "Engine");
-EG_PSTR(TK_H_ENG, "0=Pool (4 punch-level variants), 1=Chirp (single voice)");
+EG_PSTR(TK_H_ENG, "0=Pool (4 variants), 1=Chirp (single voice)");
+EG_PSTR(TK_L_PK,  "Peak %");
+EG_PSTR(TK_H_PK,  "Click amplitude ceiling (1-100). Lower = quieter and below NCN trip.");
 EG_PSTR(TK_L_CHM, "Boot chime");
 EG_PSTR(TK_H_CHM, "0=off, 1=random");
 #ifndef AUDIO_TICK_PINS_BLOCKED
@@ -79,6 +81,7 @@ static const EGPref TICK_PREF_ITEMS[] = {
   {"freq",   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, EGP_UINT, 0},
   {"decay",  TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, EGP_UINT, 0},
   {"engine", TK_L_ENG,  TK_H_ENG,  "0",    nullptr, 0,   1,    0, EGP_UINT, 0},
+  {"peak",   TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, EGP_UINT, 0},
   {"chime",  TK_L_CHM,  TK_H_CHM,  "1",    nullptr, 0,   8,    0, EGP_UINT, 0},
 #ifndef AUDIO_TICK_PINS_BLOCKED
   {"bclk",   TK_L_BCLK, TK_H_PIN,  TICK_STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
@@ -102,9 +105,12 @@ void AudioTick::on_prefs_loaded() {
   _freq_hz  = (uint16_t)EGPrefs::getUInt("tick", "freq");
   _decay_ms = (uint8_t)EGPrefs::getUInt("tick", "decay");
   _engine   = (uint8_t)EGPrefs::getUInt("tick", "engine");
+  _peak     = (uint8_t)EGPrefs::getUInt("tick", "peak");
   _chime    = (uint8_t)EGPrefs::getUInt("tick", "chime");
   if (_volume > 100) _volume = 100;
   if (_engine > 1)   _engine = 0;
+  if (_peak < 1)     _peak  = 1;
+  if (_peak > 100)   _peak  = 100;
   if (_chime  > 8)   _chime  = 1;
 #ifndef AUDIO_TICK_PINS_BLOCKED
   _bclk = (uint8_t)EGPrefs::getUInt("tick", "bclk");
@@ -123,7 +129,7 @@ void AudioTick::begin() {
     .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-    .dma_buf_count = 4,
+    .dma_buf_count = 8,
     .dma_buf_len = 256,
     .use_apll = false,
     .tx_desc_auto_clear = true,
@@ -152,17 +158,20 @@ void AudioTick::begin() {
   playBootChime();
 }
 
-// Token-bucket throttle: 1 token per 50 ms idle, max 5 tokens. Caps audio
-// at 20 clicks/sec so a high-CPS source can't saturate the I2S TX buffer.
+// Token-bucket throttle. 30 ms refill gives a 33 Hz steady cap; 8-token
+// burst absorbs UdpRx gap-fill bunches. Click body is ~6 ms so even a
+// max burst stays under the speaker's mechanical recovery time.
 void AudioTick::notifyClick(unsigned long now_ms) {
   if (!_enabled || !_i2s_up || _volume == 0) return;
   if (s_nm_busy) return;
+  constexpr uint32_t TOKEN_REFILL_MS = 30;
+  constexpr uint8_t  TOKEN_MAX       = 8;
   unsigned long elapsed = now_ms - _last_token_ms;
-  if (elapsed >= 50) {
-    uint32_t gained = elapsed / 50;
-    if (_tokens + gained > 5) _tokens = 5;
+  if (elapsed >= TOKEN_REFILL_MS) {
+    uint32_t gained = elapsed / TOKEN_REFILL_MS;
+    if (_tokens + gained > TOKEN_MAX) _tokens = TOKEN_MAX;
     else _tokens += (uint8_t)gained;
-    _last_token_ms += gained * 50;
+    _last_token_ms += gained * TOKEN_REFILL_MS;
   }
   if (_tokens == 0) return;
   _tokens--;
@@ -173,11 +182,20 @@ void AudioTick::notifyClick(unsigned long now_ms) {
 void AudioTick::playBootChime() { play_chime_now(_chime); }
 
 void AudioTick::registerRoutes(EGHttpServer& http) {
-  // GET /tick           -> plays the configured chime
-  // GET /tick?c=N       -> plays chime N (1..8) for preview
+  // GET /tick            -> plays the configured chime
+  // GET /tick?c=N        -> plays chime N (1..8) for preview
+  // GET /tick?click=N    -> fires one Geiger click of engine N (0 or 1) for A/B
   http.on("/tick", EGHttpRequest::GET,
     [](EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (!audiotick._i2s_up) { res.send(503, "text/plain", "audio not ready"); return; }
+      const char* k = req.arg("click");
+      if (k && k[0]) {
+        uint8_t eng = (uint8_t)atoi(k);
+        if (eng > 1) { res.send(400, "text/plain", "0..1"); return; }
+        audiotick.playClick(eng);
+        res.send(200, "text/plain", k);
+        return;
+      }
       const char* c = req.arg("c");
       uint8_t which = (c && c[0]) ? (uint8_t)atoi(c) : audiotick._chime;
       if (which > 9) which = 0;
@@ -445,8 +463,9 @@ void AudioTick::chimeSputnik() {
   }
 }
 
-void AudioTick::playClick() {
-  switch (_engine) {
+void AudioTick::playClick(uint8_t engine_override) {
+  const uint8_t e = (engine_override <= 1) ? engine_override : _engine;
+  switch (e) {
     case 0: default: playClickPool();  break;
     case 1:          playClickChirp(); break;
   }
@@ -478,7 +497,7 @@ void AudioTick::playClickChirp() {
   constexpr uint16_t exit_ramp   = 16;
   constexpr float    asym        = 0.8f;
   constexpr float    f2_amp      = 0.35f;
-  constexpr float    HEADROOM    = 0.85f;
+  const float        peak_ceil   = (float)_peak / 100.0f;
   constexpr float    DC_R        = 0.997f;       // 1-pole DC blocker, ~50 Hz
   constexpr float    NOISE_MIX   = 0.10f;
   int16_t buf[N];
@@ -515,7 +534,7 @@ void AudioTick::playClickChirp() {
     sample += f2_amp * sinf(f2_phase) * f2_env;
     const float y = sample - dc_x + DC_R * dc_y;
     dc_x = sample; dc_y = y;
-    int32_t v = (int32_t)(y * amp * HEADROOM);
+    int32_t v = (int32_t)(y * amp * peak_ceil);
     if (v >  32767) v =  32767;
     if (v < -32768) v = -32768;
     buf[i] = (int16_t)v;
@@ -547,7 +566,7 @@ void AudioTick::playClickPool() {
   constexpr uint16_t N           = 1024;
   constexpr uint16_t attack_ramp = 7;
   constexpr uint16_t exit_ramp   = 16;
-  constexpr float    HEADROOM    = 0.85f;
+  const float        peak_ceil   = (float)_peak / 100.0f;
   constexpr float    DC_R        = 0.997f;
   constexpr float    NOISE_MIX   = 0.10f;
   int16_t buf[N];
@@ -583,7 +602,7 @@ void AudioTick::playClickPool() {
     sample += v.f2_amp * sinf(f2_phase) * f2_env;
     const float y = sample - dc_x + DC_R * dc_y;
     dc_x = sample; dc_y = y;
-    int32_t vi = (int32_t)(y * amp * HEADROOM);
+    int32_t vi = (int32_t)(y * amp * peak_ceil);
     if (vi >  32767) vi =  32767;
     if (vi < -32768) vi = -32768;
     buf[i] = (int16_t)vi;

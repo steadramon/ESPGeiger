@@ -194,6 +194,11 @@ class Counter {
       GeigerUdpRx* udp_rx() { return geigerinput; }
 #endif
       void queueBlip() { _last_blip = micros(); }
+      // For UDP-received clicks: bypass _last_blip polling (which collapses
+      // multiple blips into one when several arrive between Counter::loop
+      // ticks) by firing audio/LED/pulse consumers directly. Skips
+      // udpblip.notifyClick so a UdpRx+UdpBlip combo device doesn't echo.
+      void dispatchReceiverBlip();
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;

@@ -61,7 +61,7 @@ class AudioTick : public EGModule {
     static void numbersPad(uint8_t* out, size_t n);
 
   private:
-    void playClick();
+    void playClick(uint8_t engine_override = 255);
     void playClickPool();
     void playClickChirp();
     void playBootChime();
@@ -85,6 +85,7 @@ class AudioTick : public EGModule {
     uint16_t      _freq_hz  = 900;
     uint8_t       _decay_ms = 4;
     uint8_t       _engine   = 0;
+    uint8_t       _peak     = 85;   // amplitude ceiling 1-100% (NS4168 NCN-safe at 85)
     uint8_t       _chime    = 1;    // 0=off, 1=random, 2+ = specific
     uint8_t       _bclk     = AUDIO_TICK_BCLK;
     uint8_t       _ws       = AUDIO_TICK_WS;

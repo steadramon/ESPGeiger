@@ -291,7 +291,26 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     _packets_accepted++;
     _last_click_ms  = now_ms;
     _gap_filled    += gap_credit;
-    gcounter.queueBlip();
+    gcounter.dispatchReceiverBlip();
+    // Spread gap-fill clicks Poisson-style across the receive window
+    // so audio doesn't lump them into a single audible blip. Uniform
+    // random offsets in (0, window_ms] - which is the correct sampling
+    // of a Poisson process given N events in T window. Window capped
+    // at 50 ms = sender's UDPBLIP_CLICK_MIN_INTERVAL_MS, so all extras
+    // drain before the next packet is due from this producer.
+    if (gap_credit > 0) {
+      uint32_t window_ms = producer_ts - p->last_ts_ms;
+      if (window_ms == 0 || window_ms > 50) window_ms = 50;
+      uint32_t r = (uint32_t)micros();
+      for (uint32_t i = 0; i < gap_credit; i++) {
+        if (_gapfill_count >= UDPRX_GAPFILL_QUEUE) {
+          _gapfill_dropped += (gap_credit - i);
+          break;
+        }
+        r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+        _gapfill_due_ms[_gapfill_count++] = now_ms + (r % window_ms) + 1;
+      }
+    }
     // Batch-path always: receiver-side timing would lie to s_min_pulse_us.
     uint32_t now_us = (uint32_t)micros();
     if (credit == 1) {
@@ -385,6 +404,23 @@ void GeigerUdpRx::loop() {
     int got = _udp->read(buf, sz);
     if (got <= 0) continue;
     processDatagram(buf, (size_t)got);
+  }
+  // Drain due gap-fill blips. Entries are pushed with random offsets so
+  // the array isn't time-ordered - swap-with-last on remove keeps it
+  // packed without sorting. Bounded at UDPRX_GAPFILL_QUEUE so worst case
+  // is one cheap pass per loop iteration.
+  if (_gapfill_count > 0) {
+    uint32_t now_ms = fast_millis();
+    uint8_t i = 0;
+    while (i < _gapfill_count) {
+      if ((int32_t)(now_ms - _gapfill_due_ms[i]) >= 0) {
+        gcounter.dispatchReceiverBlip();
+        _gapfill_count--;
+        _gapfill_due_ms[i] = _gapfill_due_ms[_gapfill_count];
+      } else {
+        i++;
+      }
+    }
   }
 }
 

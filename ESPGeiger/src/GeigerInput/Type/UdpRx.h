@@ -37,6 +37,12 @@ class WiFiUDP;
 #ifndef UDPRX_PRODUCER_SLOTS
 #define UDPRX_PRODUCER_SLOTS 8
 #endif
+#ifndef UDPRX_GAPFILL_QUEUE
+// Holds Poisson-spread blip timestamps from packets carrying gap > 0.
+// 16 entries is comfortably above the worst typical fill (gap_credit
+// of 4-5 at sustained 6000 CPM, drained well before the next packet).
+#define UDPRX_GAPFILL_QUEUE 16
+#endif
 class GeigerUdpRx : public GeigerInput {
 public:
   GeigerUdpRx();
@@ -116,6 +122,15 @@ private:
   ProducerRecord _producers[UDPRX_PRODUCER_SLOTS] = {};
   uint8_t _producers_seen = 0;
   unsigned long _bound_at_ms = 0;
+
+  // Poisson gap-fill queue. processClick pushes (gap) deferred blip
+  // times into here when a packet credits more than one click; loop()
+  // pops any due and calls Counter::dispatchReceiverBlip. Scheduling
+  // window is capped at sender's throttle interval (50 ms) so the queue
+  // always drains before the next packet from the same producer arrives.
+  uint32_t _gapfill_due_ms[UDPRX_GAPFILL_QUEUE] = {0};
+  uint8_t  _gapfill_count = 0;
+  uint32_t _gapfill_dropped = 0;
 };
 
 #endif
