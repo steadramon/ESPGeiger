@@ -361,6 +361,8 @@ void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
 
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
     if (++_backoff_ticks * 1000UL >= UDPBLIP_FAIL_COOLDOWN_MS) {
+      teardown();
+      _mdns_done = false;
       _fail_count = 0;
       _backoff_ticks = 0;
     }

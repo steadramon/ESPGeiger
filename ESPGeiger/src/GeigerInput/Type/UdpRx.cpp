@@ -368,6 +368,11 @@ void GeigerUdpRx::loop() {
     Log::console(PSTR("UdpRx: WiFi reconnect, rebinding multicast"));
     teardownUdp();
   }
+  if (_udp && _last_packet_ms > 0 &&
+      (fast_millis() - _last_packet_ms) > 30000UL) {
+    teardownUdp();
+    _last_packet_ms = 0;  // don't immediately re-tear if producer is genuinely offline
+  }
   if (!ensureUdp()) return;
   _bound_at_ms = Wifi::connected_at_ms;
   uint8_t buf[128];
