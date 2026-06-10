@@ -996,7 +996,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
       start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
       rlv='roll' in o?o.roll*1000:3600000,
       rows='',mx=0,sum=0,
-      F=s=>s>=86400?(s/86400).toFixed(1)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?(s/60|0)+'m':s+'s';
+      F=s=>s>=31536000?(s/31536000).toFixed(1)+'y':s>=86400?(s/86400|0)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?(s/60|0)+'m':s+'s';
   if('life' in o){
     var L=o.life,ts=L.secs>0?L.secs:(L.fbt>0?N-L.fbt:0);
     $('lfc').textContent=L.clk.toLocaleString();
