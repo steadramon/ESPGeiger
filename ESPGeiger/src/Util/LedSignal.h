@@ -43,6 +43,12 @@ namespace LedSignal {
 
   void setBrightness(uint8_t level);
 
+  // Push the Blip LED pref group config into the engine. mode meaning is
+  // platform-specific (regular: 0=Pulse 1=Fade; ESPGEIGER_HW: 0=Click 1=Beep).
+  // Caller maps the UI value into the right engine mode.
+  void setBlipEngineConfig(uint8_t engine_mode, uint16_t pulse_us,
+                           uint16_t freq_hz, uint16_t cycles,
+                           uint8_t fade_shift_idx, uint8_t max_hz);
 }
 
 #endif

@@ -20,23 +20,36 @@
 #include <EGLed.h>
 #include "FastMillis.h"
 #include "Globals.h"
+#include "PulseEngine.h"
 
 namespace LedSignal {
 
   static EGLed s_onboard(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON == LOW);
 
 #ifdef GEIGER_BLIPLED
-  static EGLed s_external(GEIGER_BLIPLED);
+  // External buzzer/LED pin (ESPGeigerHW). PulseEngine owns this pin alone,
+  // so its digitalWrite path doesn't fight the LEDC-driven onboard LED.
+  static PulseEngine s_engine;
 #endif
+  // Receiver click params driven by setBlipEngineConfig.
+  static uint16_t s_click_pulse_ms = 20;
+  static uint8_t  s_click_mode     = 0;   // 0 = pulse, 2 = fade (matches PulseEngine)
+  static uint8_t  s_click_fade     = 3;
 
   void begin() {
     EGLed::setClock(fast_millis);
+#ifdef GEIGER_BLIPLED
+    s_engine.pin      = GEIGER_BLIPLED;
+    s_engine.polarity = 0;
+    s_engine.commitConfig();
+    s_engine.begin();
+#endif
   }
 
   void poll() {
     s_onboard.update();
 #ifdef GEIGER_BLIPLED
-    s_external.update();
+    s_engine.loop();
 #endif
   }
 
@@ -45,11 +58,14 @@ namespace LedSignal {
   }
 
   void click() {
-#ifndef DISABLE_INTERNAL_BLIP
-    s_onboard.blink(20, 20);
+#if defined(GEIGER_BLIPLED)
+    s_engine.notifyClick(fast_millis());
+#elif !defined(DISABLE_INTERNAL_BLIP)
+    if (s_onboard.isRunning()) return;
+#ifndef EGPE_NO_PWM
+    if (s_click_mode == 2) { s_onboard.fade(s_click_fade); return; }
 #endif
-#ifdef GEIGER_BLIPLED
-    if (!s_external.isRunning()) s_external.pulse(2);
+    s_onboard.pulse(s_click_pulse_ms);
 #endif
   }
 
@@ -61,20 +77,47 @@ namespace LedSignal {
     s_onboard.pulse(200);
   }
 
-  void displayEnabled() {
-#ifdef GEIGER_BLIPLED
-    s_external.blinkN(200, 100, 2);
-#endif
-  }
-
-  void displayDisabled() {
-#ifdef GEIGER_BLIPLED
-    s_external.pulse(200);
-#endif
-  }
+  void displayEnabled()  {}
+  void displayDisabled() {}
 
   void setBrightness(uint8_t level) {
     s_onboard.setBrightness(level);
+#ifdef GEIGER_BLIPLED
+    s_engine.active_level = level;
+#endif
+  }
+
+  void setBlipEngineConfig(uint8_t engine_mode, uint16_t pulse_us,
+                           uint16_t freq_hz, uint16_t cycles,
+                           uint8_t fade_shift_idx, uint8_t max_hz) {
+    if (engine_mode > 2) engine_mode = 0;
+    if (pulse_us < 100)   pulse_us = 100;
+    if (pulse_us > 50000) pulse_us = 50000;
+    if (freq_hz < 1000)   freq_hz = 1000;
+    if (freq_hz > 8000)   freq_hz = 8000;
+    if (cycles < 1)       cycles = 1;
+    if (cycles > 500)     cycles = 500;
+    if (fade_shift_idx > 2) fade_shift_idx = 1;
+    if (max_hz > 200) max_hz = 200;
+    // Receiver uses s_onboard.pulse(ms); cap at a sane visible range.
+    uint16_t ms = pulse_us / 1000;
+    if (ms < 1)   ms = 1;
+    if (ms > 100) ms = 100;
+    s_click_pulse_ms = ms;
+    s_click_mode     = engine_mode;
+    s_click_fade     = (uint8_t)(fade_shift_idx + 2);   // 2/3/4, same as PulseEngine
+#ifdef GEIGER_BLIPLED
+    s_engine.mode       = engine_mode;
+    s_engine.pulse_us   = pulse_us;
+    s_engine.freq_hz    = freq_hz;
+    s_engine.cycles     = cycles;
+    s_engine.fade_shift = fade_shift_idx + 2;
+    s_engine.max_hz     = max_hz;
+    s_engine.commitConfig();
+#else
+    (void)engine_mode; (void)freq_hz; (void)cycles;
+    (void)fade_shift_idx; (void)max_hz;
+#endif
   }
 
 }

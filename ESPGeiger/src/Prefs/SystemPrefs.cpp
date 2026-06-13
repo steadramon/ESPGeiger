@@ -21,6 +21,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../GeigerInput/GeigerInput.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/LedSignal.h"
 #include "../Util/PinSafety.h"
 #include "../WebPortal/WebPortal.h"
 #if GEIGER_IS_TEST(GEIGER_TYPE)
@@ -421,18 +422,39 @@ EG_PSTR(LD_L_BRT, "Blip brightness");
   #endif
 EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
 #endif
+#ifndef ESPGEIGER_HW
+EG_PSTR(LD_L_MOD, "Mode");
+EG_PSTR(LD_H_MOD, "0=Pulse, 1=Fade");
+EG_PSTR(LD_L_FAD, "Fade rate");
+EG_PSTR(LD_H_FAD, "0=fast, 1=medium, 2=slow");
 EG_PSTR(LD_L_QFR, "Quiet from");
 EG_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
 EG_PSTR(LD_L_QTO, "Quiet to");
 EG_PSTR(LD_H_QTO, "End of quiet window; crosses midnight if from > to");
+#endif
+EG_PSTR(LD_L_PUL, "Pulse width \xc2\xb5s");
+EG_PSTR(LD_H_PUL, "100-50000");
 
 static const EGPref LED_PREF_ITEMS[] = {
-  {"blip_led",    LD_L_BLP, LD_H_BLP, "1",  nullptr, 0, 1,   0, EGP_BOOL, 0},
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
-  {"blip_bright", LD_L_BRT, LD_H_BRT, "80", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+  {"blip_led",    LD_L_BLP, LD_H_BLP, "1",    nullptr, 0, 1,     0, EGP_BOOL, 0},
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(ESPGEIGER_HW)
+  {"blip_bright", LD_L_BRT, LD_H_BRT, "80",   nullptr, 0, 100,   0, EGP_UINT, EGP_SLIDER},
 #endif
-  {"quiet_from",  LD_L_QFR, LD_H_QFR, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
-  {"quiet_to",    LD_L_QTO, LD_H_QTO, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
+#ifdef ESPGEIGER_HW
+  // Only Pulse mode is available - HV holds Timer1 so tone()/PWM is unusable.
+  {"pulse_us",    LD_L_PUL, LD_H_PUL, "2000",  nullptr, 100, 50000, 0, EGP_UINT, 0},
+#else
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
+  // Fade needs PWM; ESP8266 test builds reserve Timer1 for the fake pulse gen.
+  {"mode",        LD_L_MOD, LD_H_MOD, "0",     nullptr, 0,   1,     0, EGP_UINT, 0},
+#endif
+  {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 100, 50000, 0, EGP_UINT, 0},
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
+  {"fade_shift",  LD_L_FAD, LD_H_FAD, "1",     nullptr, 0,   2,     0, EGP_UINT, 0},
+#endif
+  {"quiet_from",  LD_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME},
+  {"quiet_to",    LD_L_QTO, LD_H_QTO, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME},
+#endif
 };
 
 static const EGPrefGroup LED_PREF_GROUP = {
@@ -445,13 +467,31 @@ const EGPrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
 
 void LedPrefs::on_prefs_loaded() {
   gcounter.set_blip_led(EGPrefs::getBool("led", "blip_led"));
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
+#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(ESPGEIGER_HW)
   gcounter.set_blip_brightness((uint8_t)((EGPrefs::getUInt("led", "blip_bright") * 255 + 50) / 100));
+#else
+  gcounter.set_blip_brightness(255);
 #endif
+#ifdef ESPGEIGER_HW
+  uint8_t  engine_mode = 0;
+  uint8_t  fadeIdx     = 1;
+#else
+  // UI mode 1 (Fade) maps to engine MODE_FADE (=2); engine MODE_BURST is unused here.
+  uint8_t engine_mode  = (EGPrefs::getUInt("led", "mode") == 1) ? 2 : 0;
+  uint8_t fadeIdx      = (uint8_t)EGPrefs::getUInt("led", "fade_shift");
+#endif
+  LedSignal::setBlipEngineConfig(
+    engine_mode,
+    (uint16_t)EGPrefs::getUInt("led", "pulse_us"),
+    3500, 1, fadeIdx,
+    0
+  );
+#ifndef ESPGEIGER_HW
   gcounter.set_quiet_hours(
     EGPrefs::getString("led", "quiet_from"),
     EGPrefs::getString("led", "quiet_to")
   );
+#endif
 }
 #endif
 

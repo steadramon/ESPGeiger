@@ -23,6 +23,8 @@
 #include <Arduino.h>
 #include "../Module/EGModule.h"
 
+#include "../Util/PulseEngine.h"
+
 class PulseOut : public EGModule {
   public:
     PulseOut() {}
@@ -47,48 +49,14 @@ class PulseOut : public EGModule {
     void notifyClick(unsigned long now_ms);
 
   private:
-    void startClick();
-    inline void writeIdle()   { digitalWrite(_pin, _polarity ? HIGH : LOW); }
-    inline void writeActive() { digitalWrite(_pin, _polarity ? LOW  : HIGH); }
-
-    bool          _enabled    = false;
-    int8_t        _pin        = -1;
-    uint8_t       _mode       = 0;       // 0 = single pulse, 1 = resonant burst, 2 = LED fade
-    uint16_t      _pulse_us   = 500;
-    uint16_t      _freq_hz    = 3500;
-    uint8_t       _cycles     = 3;
-    uint8_t       _polarity   = 0;       // 0 = active high, 1 = active low
-    uint8_t       _fade_shift = 3;       // exponential decay: brightness -= brightness >> shift
-    uint8_t       _max_hz     = 20;      // 0 = unlimited
-    uint16_t      _token_interval_ms = 50;   // cached: 1000/_max_hz
-
-    // Per-device voice variation from the chip ID. Subtly different sound
-    // between adjacent units. Computed once in begin().
-    float         _voice_pulse = 1.0f;
-    float         _voice_freq  = 1.0f;
-    // Pre-jittered integers so the click hot path doesn't do float math.
-    uint32_t      _pulse_us_eff   = 500;
-    uint32_t      _burst_freq_eff = 3500;
-    void          recomputeEffective();
+    bool          _enabled = false;
+    PulseEngine   _engine;
 
     // Pulse Out has its own quiet window separate from Blip LED + Audio.
     int16_t       _q_from_min = -1;
     int16_t       _q_to_min   = -1;
     bool          isQuietNow();
 
-    // Click state machine. _phases_remaining counts down through the pin
-    // toggles for the current click; 0 means idle. _pin_high tracks the
-    // current logical level so loop() knows what to flip to. _brightness
-    // is the live PWM value for the fade mode.
-    uint8_t       _phases_remaining = 0;
-    bool          _pin_high          = false;
-    uint16_t      _brightness        = 0;       // 0..255, only used in fade mode
-    uint32_t      _next_us           = 0;       // micros() target for next step
-    uint32_t      _period_us         = 0;       // gap between steps
-
-    unsigned long _last_emit_ms  = 0;
-    uint8_t       _tokens        = 5;
-    unsigned long _last_token_ms = 0;
 };
 
 extern PulseOut pulseout;

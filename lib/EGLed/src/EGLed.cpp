@@ -118,9 +118,18 @@ void EGLed::blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count) {
   _next_ms = s_clock() + on_ms;
 }
 
+void EGLed::fade(uint8_t shift) {
+  _fade_shift = shift > 7 ? 7 : shift;
+  _fade_value = _brightness;
+  writeDuty(_fade_value);
+  _state   = PHASE_FADE;
+  _next_ms = s_clock() + 5;
+}
+
 void EGLed::off() {
   _state       = IDLE;
   _cycles_left = 0;
+  _fade_value  = 0;
   writeDuty(0);
 }
 
@@ -128,6 +137,20 @@ void EGLed::update() {
   if (_state == IDLE) return;
   uint32_t now = s_clock();
   if ((int32_t)(now - _next_ms) < 0) return;
+  if (_state == PHASE_FADE) {
+    uint8_t delta = _fade_value >> _fade_shift;
+    if (delta == 0) delta = 1;
+    if (_fade_value <= delta + 1) {
+      _fade_value = 0;
+      writeDuty(0);
+      _state = IDLE;
+      return;
+    }
+    _fade_value = (uint8_t)(_fade_value - delta);
+    writeDuty(_fade_value);
+    _next_ms = now + 5;
+    return;
+  }
   if (_state == PHASE_ON) {
     writeDuty(0);
     _state   = PHASE_OFF;

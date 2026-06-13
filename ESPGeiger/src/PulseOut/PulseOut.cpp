@@ -34,7 +34,7 @@ PulseOut pulseout;
 EG_REGISTER_MODULE(pulseout)
 
 EG_PSTR(PO_L_EN,   "Enable");
-EG_PSTR(PO_H_EN,   "Per-pulse GPIO output for piezo, speaker, LED or line-out");
+EG_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
 EG_PSTR(PO_L_PIN,  "GPIO");
 EG_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
 EG_PSTR(PO_L_MODE, "Mode");
@@ -51,6 +51,8 @@ EG_PSTR(PO_L_FSH,  "Fade rate");
 EG_PSTR(PO_H_FSH,  "0=fast, 1=medium, 2=slow");
 EG_PSTR(PO_L_MHZ,  "Max Hz");
 EG_PSTR(PO_H_MHZ,  "Cap clicks per second (0 = unlimited, 1-200)");
+EG_PSTR(PO_L_BRT,  "Brightness");
+EG_PSTR(PO_H_BRT,  "0-100% (LED only). Applies to Pulse + Fade modes.");
 EG_PSTR(PO_L_QFR,  "Quiet from");
 EG_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
 EG_PSTR(PO_L_QTO,  "Quiet to");
@@ -59,13 +61,22 @@ EG_PSTR(PO_H_QTO,  "End of quiet window; crosses midnight if from > to");
 static const EGPref PULSE_PREF_ITEMS[] = {
   {"enable",     PO_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
   {"pin",        PO_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, EGP_INT,  0},
+#ifndef EGPE_NO_PWM
+  // Burst (tone) and Fade (analogWrite) need Timer1, unavailable on ESP8266
+  // test + ESPGeigerHW builds; UI only offers them where they work.
   {"mode",       PO_L_MODE, PO_H_MODE, "0",    nullptr, 0,    2,     0, EGP_UINT, 0},
+#endif
   {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 100,  50000, 0, EGP_UINT, 0},
+#ifndef EGPE_NO_PWM
   {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, 0},
   {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, 0},
+#endif
   {"polarity",   PO_L_POL,  PO_H_POL,  "0",    nullptr, 0,    1,     0, EGP_UINT, 0},
+#ifndef EGPE_NO_PWM
   {"fade_shift", PO_L_FSH,  PO_H_FSH,  "1",    nullptr, 0,    2,     0, EGP_UINT, 0},
+#endif
   {"max_hz",     PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, 0},
+  {"brightness", PO_L_BRT,  PO_H_BRT,  "100",  nullptr, 0,    100,   0, EGP_UINT, EGP_SLIDER},
   {"quiet_from", PO_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
   {"quiet_to",   PO_L_QTO,  PO_H_QTO,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
 };
@@ -80,34 +91,36 @@ static const EGPrefGroup PULSE_PREF_GROUP = {
 const EGPrefGroup* PulseOut::prefs_group() { return &PULSE_PREF_GROUP; }
 
 void PulseOut::on_prefs_loaded() {
-  _enabled  = EGPrefs::getBool("pulse", "enable");
-  int p     = EGPrefs::getInt("pulse", "pin");
-  _pin      = (p < -1 || p > MAX_GPIO_PIN) ? -1 : (int8_t)p;
-  _mode     = (uint8_t)EGPrefs::getUInt("pulse", "mode");
-  _pulse_us = (uint16_t)EGPrefs::getUInt("pulse", "pulse_us");
-  _freq_hz  = (uint16_t)EGPrefs::getUInt("pulse", "freq");
-  _cycles   = (uint8_t)EGPrefs::getUInt("pulse", "cycles");
-  _polarity   = (uint8_t)EGPrefs::getUInt("pulse", "polarity");
+  _enabled        = EGPrefs::getBool("pulse", "enable");
+  int p           = EGPrefs::getInt("pulse", "pin");
+  _engine.pin     = (p < -1 || p > MAX_GPIO_PIN) ? -1 : (int8_t)p;
+  _engine.mode    = (uint8_t)EGPrefs::getUInt("pulse", "mode");
+  _engine.pulse_us= (uint16_t)EGPrefs::getUInt("pulse", "pulse_us");
+  _engine.freq_hz = (uint16_t)EGPrefs::getUInt("pulse", "freq");
+  _engine.cycles  = (uint16_t)EGPrefs::getUInt("pulse", "cycles");
+  _engine.polarity= (uint8_t)EGPrefs::getUInt("pulse", "polarity");
   uint8_t fade_idx = (uint8_t)EGPrefs::getUInt("pulse", "fade_shift");
   if (fade_idx > 2) fade_idx = 1;
-  _fade_shift = fade_idx + 2;
-  if (_mode > 2)         _mode = 0;
-  if (_pulse_us < 100)   _pulse_us = 100;
-  if (_pulse_us > 50000) _pulse_us = 50000;
-  if (_freq_hz < 1000)   _freq_hz = 1000;
-  if (_freq_hz > 8000)   _freq_hz = 8000;
-  if (_cycles < 1)       _cycles = 1;
-  if (_cycles > 10)      _cycles = 10;
-  if (_polarity > 1)     _polarity = 0;
-  _max_hz = (uint8_t)EGPrefs::getUInt("pulse", "max_hz");
-  if (_max_hz > 200) _max_hz = 200;
-  _token_interval_ms = _max_hz ? (uint16_t)(1000 / _max_hz) : 0;
+  _engine.fade_shift = fade_idx + 2;
+  if (_engine.mode > 2)         _engine.mode = 0;
+  if (_engine.pulse_us < 100)   _engine.pulse_us = 100;
+  if (_engine.pulse_us > 50000) _engine.pulse_us = 50000;
+  if (_engine.freq_hz < 1000)   _engine.freq_hz = 1000;
+  if (_engine.freq_hz > 8000)   _engine.freq_hz = 8000;
+  if (_engine.cycles < 1)       _engine.cycles = 1;
+  if (_engine.cycles > 10)      _engine.cycles = 10;
+  if (_engine.polarity > 1)     _engine.polarity = 0;
+  _engine.max_hz = (uint8_t)EGPrefs::getUInt("pulse", "max_hz");
+  if (_engine.max_hz > 200) _engine.max_hz = 200;
+  uint32_t br = EGPrefs::getUInt("pulse", "brightness");
+  if (br > 100) br = 100;
+  _engine.active_level = (uint8_t)((br * 255 + 50) / 100);
   ParsedTime qf = parseTime(EGPrefs::getString("pulse", "quiet_from"));
   ParsedTime qt = parseTime(EGPrefs::getString("pulse", "quiet_to"));
   _q_from_min = qf.isValid ? (int16_t)(qf.hour * 60 + qf.minute) : -1;
   _q_to_min   = qt.isValid ? (int16_t)(qt.hour * 60 + qt.minute) : -1;
-  recomputeEffective();
-  EGModuleRegistry::set_loop_interval(this, (_enabled && _pin >= 0) ? 1 : -1);
+  _engine.commitConfig();
+  EGModuleRegistry::set_loop_interval(this, (_enabled && _engine.pin >= 0) ? 1 : -1);
 }
 
 bool PulseOut::isQuietNow() {
@@ -208,15 +221,11 @@ static bool migrate_legacy_blip() {
 
 void PulseOut::begin() {
   if (migrate_legacy_blip()) on_prefs_loaded();
-  if (!_enabled || _pin < 0) {
-    if (_enabled && _pin < 0) Log::console(PSTR("PulseOut: no pin set"));
-    EGModuleRegistry::set_loop_interval(this, -1);  // drop from registry walk; click path still works
+  if (!_enabled || _engine.pin < 0) {
+    if (_enabled && _engine.pin < 0) Log::console(PSTR("PulseOut: no pin set"));
+    EGModuleRegistry::set_loop_interval(this, -1);
     return;
   }
-  pinMode(_pin, OUTPUT);
-  writeIdle();
-  _pin_high = false;
-
   // Chip-id voice jitter: +/-15% pulse width, +/-3% burst freq.
 #ifdef ESP8266
   uint32_t mac = ESP.getChipId();
@@ -227,93 +236,24 @@ void PulseOut::begin() {
   uint32_t r = mac;
   r ^= r << 13; r ^= r >> 17; r ^= r << 5;
   int32_t  s = (int32_t)(r & 0xFF) - 128;
-  _voice_pulse = 1.0f + s * (0.15f / 128.0f);
+  _engine.voice_pulse = 1.0f + s * (0.15f / 128.0f);
   r ^= r << 13; r ^= r >> 17; r ^= r << 5;
   s = (int32_t)(r & 0xFF) - 128;
-  _voice_freq  = 1.0f + s * (0.03f / 128.0f);
-  recomputeEffective();
-
+  _engine.voice_freq  = 1.0f + s * (0.03f / 128.0f);
+  _engine.commitConfig();
+  _engine.begin();
   Log::console(PSTR("PulseOut: GPIO%d mode=%u polarity=%u"),
-               (int)_pin, (unsigned)_mode, (unsigned)_polarity);
+               (int)_engine.pin, (unsigned)_engine.mode, (unsigned)_engine.polarity);
 }
 
-// Token bucket: 1 token per 50 ms, max 5. Caps clicks at 20/s.
 void PulseOut::notifyClick(unsigned long now_ms) {
-  if (!_enabled || _pin < 0) return;
+  if (!_enabled) return;
   if (isQuietNow()) return;
-  if (_token_interval_ms) {
-    while ((now_ms - _last_token_ms) >= _token_interval_ms && _tokens < 5) {
-      _last_token_ms += _token_interval_ms;
-      _tokens++;
-    }
-    if ((now_ms - _last_token_ms) > 5000) _last_token_ms = now_ms;
-    if (_tokens == 0) return;
-    _tokens--;
-  }
-  if (_phases_remaining != 0) return;
-  _last_emit_ms = now_ms;
-  startClick();
-}
-
-void PulseOut::startClick() {
-  if (_mode == 2) {
-    _brightness = 255;
-    analogWrite(_pin, _polarity ? 0 : 255);
-    _phases_remaining = 0;
-    _next_us = (uint32_t)micros() + 5000;
-    return;
-  }
-  if (_mode == 1) {
-    uint32_t duration_us = (uint32_t)_cycles * 1000000UL / _burst_freq_eff;
-    uint32_t duration_ms = (duration_us + 999u) / 1000u;
-    if (duration_ms == 0) duration_ms = 1;
-    tone(_pin, _burst_freq_eff, duration_ms);
-    _phases_remaining = 0;
-    return;
-  }
-  writeActive();
-  _pin_high = true;
-  _phases_remaining = 1;
-  _period_us = _pulse_us_eff;
-  _next_us = (uint32_t)micros() + _pulse_us_eff;
-}
-
-void PulseOut::recomputeEffective() {
-  _pulse_us_eff   = (uint32_t)(_pulse_us * _voice_pulse);
-  _burst_freq_eff = (uint32_t)(_freq_hz  * _voice_freq);
-  if (_burst_freq_eff == 0) _burst_freq_eff = 1;
+  _engine.notifyClick(now_ms);
 }
 
 void PulseOut::loop(unsigned long /*now_ms*/) {
-  // Fade mode runs an exponential decay on _brightness via one bitshift
-  // per 5 ms step. Order matters: check fade first so an in-flight fade
-  // doesn't collide with the pulse/burst state machine.
-  if (_mode == 2 && _brightness > 0) {
-    uint32_t now_us = (uint32_t)micros();
-    if ((int32_t)(now_us - _next_us) < 0) return;
-    _brightness -= _brightness >> _fade_shift;
-    if (_brightness < 2) {
-      _brightness = 0;
-      analogWrite(_pin, _polarity ? 255 : 0);
-      return;
-    }
-    analogWrite(_pin, _polarity ? (255 - _brightness) : _brightness);
-    _next_us = now_us + 5000;
-    return;
-  }
-
-  if (_phases_remaining == 0) return;
-  uint32_t now_us = (uint32_t)micros();
-  // Signed compare so wrap (every 71 min) doesn't strand a click.
-  if ((int32_t)(now_us - _next_us) < 0) return;
-
-  _pin_high = !_pin_high;
-  if (_pin_high) writeActive();
-  else           writeIdle();
-
-  _phases_remaining--;
-  if (_phases_remaining == 0) return;
-  _next_us = now_us + _period_us;
+  _engine.loop();
 }
 
 #endif
