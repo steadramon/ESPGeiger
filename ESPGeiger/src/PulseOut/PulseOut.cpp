@@ -24,25 +24,36 @@
 #include "../Prefs/EGPrefs.h"
 #include "../Util/Globals.h"
 
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+
+#include "../Util/FastMillis.h"
+#include "../Util/StringUtil.h"
+#include "../NTP/NTP.h"
+
 PulseOut pulseout;
 EG_REGISTER_MODULE(pulseout)
 
 EG_PSTR(PO_L_EN,   "Enable");
-EG_PSTR(PO_H_EN,   "Per-pulse output on a GPIO: piezo, speaker via MOSFET, LED, or line-out via attenuator");
-EG_PSTR(PO_L_PIN,  "GPIO Pin");
+EG_PSTR(PO_H_EN,   "Per-pulse GPIO output for piezo, speaker, LED or line-out");
+EG_PSTR(PO_L_PIN,  "GPIO");
 EG_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
-EG_PSTR(PO_L_MODE, "Drive mode");
-EG_PSTR(PO_H_MODE, "0=single pulse, 1=resonant burst, 2=LED fade (PWM, LED only)");
-EG_PSTR(PO_L_PW,   "Pulse width us");
-EG_PSTR(PO_H_PW,   "Single-pulse width in microseconds (100-50000). Sub-ms for audio, several ms for LEDs.");
-EG_PSTR(PO_L_FRQ,  "Burst freq Hz");
-EG_PSTR(PO_H_FRQ,  "Burst frequency; for a piezo, match its marked resonance (1000-8000 Hz)");
+EG_PSTR(PO_L_MODE, "Mode");
+EG_PSTR(PO_H_MODE, "0=Pulse, 1=Burst, 2=LED fade");
+EG_PSTR(PO_L_PW,   "Pulse width \xc2\xb5s");
+EG_PSTR(PO_H_PW,   "100-50000");
+EG_PSTR(PO_L_FRQ,  "Burst Hz");
+EG_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
 EG_PSTR(PO_L_CYC,  "Burst cycles");
-EG_PSTR(PO_H_CYC,  "Cycles per click in burst mode (1-10). More = louder + longer.");
+EG_PSTR(PO_H_CYC,  "1-10. More = louder and longer");
 EG_PSTR(PO_L_POL,  "Polarity");
-EG_PSTR(PO_H_POL,  "0=active high (most cases), 1=active low (common-anode LEDs, inverted drivers)");
-EG_PSTR(PO_L_FSH,  "Fade shift");
-EG_PSTR(PO_H_FSH,  "Exponential decay rate in fade mode. 2=fast (~100ms), 3=normal (~250ms), 4=slow (~500ms).");
+EG_PSTR(PO_H_POL,  "0=active high, 1=active low");
+EG_PSTR(PO_L_FSH,  "Fade rate");
+EG_PSTR(PO_H_FSH,  "2=fast, 3=medium, 4=slow");
+EG_PSTR(PO_L_QFR,  "Quiet from");
+EG_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
+EG_PSTR(PO_L_QTO,  "Quiet to");
+EG_PSTR(PO_H_QTO,  "End of quiet window; crosses midnight if from > to");
 
 static const EGPref PULSE_PREF_ITEMS[] = {
   {"enable",     PO_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
@@ -53,6 +64,8 @@ static const EGPref PULSE_PREF_ITEMS[] = {
   {"cycles",     PO_L_CYC,  PO_H_CYC,  "3",    nullptr, 1,    10,    0, EGP_UINT, 0},
   {"polarity",   PO_L_POL,  PO_H_POL,  "0",    nullptr, 0,    1,     0, EGP_UINT, 0},
   {"fade_shift", PO_L_FSH,  PO_H_FSH,  "3",    nullptr, 2,    4,     0, EGP_UINT, 0},
+  {"quiet_from", PO_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
+  {"quiet_to",   PO_L_QTO,  PO_H_QTO,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
 };
 
 static const EGPrefGroup PULSE_PREF_GROUP = {
@@ -84,11 +97,79 @@ void PulseOut::on_prefs_loaded() {
   if (_polarity > 1)     _polarity = 0;
   if (_fade_shift < 2)   _fade_shift = 2;
   if (_fade_shift > 4)   _fade_shift = 4;
+  ParsedTime qf = parseTime(EGPrefs::getString("pulse", "quiet_from"));
+  ParsedTime qt = parseTime(EGPrefs::getString("pulse", "quiet_to"));
+  _q_from_min = qf.isValid ? (int16_t)(qf.hour * 60 + qf.minute) : -1;
+  _q_to_min   = qt.isValid ? (int16_t)(qt.hour * 60 + qt.minute) : -1;
   // Re-arm registry on enable/pin change; begin() only runs once at boot.
   EGModuleRegistry::set_loop_interval(this, (_enabled && _pin >= 0) ? 1 : -1);
 }
 
+bool PulseOut::isQuietNow() {
+  if (_q_from_min < 0 || _q_to_min < 0) return false;
+  if (_q_from_min == _q_to_min)         return false;
+  // Hot path: cache result until the next minute boundary so localTm()
+  // (the expensive bit) only runs once per minute instead of per click.
+  static unsigned long s_recompute_ms = 0;
+  static bool s_cached = false;
+  unsigned long now_ms = fast_millis();
+  if ((long)(now_ms - s_recompute_ms) < 0) return s_cached;
+  if (!ntpclient.synced)                return false;
+  struct tm t;
+  if (!ntpclient.localTm(&t))           return false;
+  int16_t m = t.tm_hour * 60 + t.tm_min;
+  s_cached = (_q_from_min < _q_to_min)
+    ? (m >= _q_from_min && m < _q_to_min)
+    : (m >= _q_from_min || m < _q_to_min);
+  s_recompute_ms = now_ms + (60UL - t.tm_sec) * 1000UL;
+  return s_cached;
+}
+
+// === LEGACY IMPORT (remove after v1.0.0) ===
+// v0.11.0 had blip_pin (raw) + blip_pulse_ms in the `led` group; both now
+// live in `pulse` (with ms->us unit change). Standard legacy_aliases can't
+// transform values and deletes the source file after first use, so we do
+// it in-module and gate on a marker.
+static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
+
+static bool migrate_legacy_blip() {
+  if (LittleFS.exists(BLIP_MIG_MARKER)) return false;
+  if (!LittleFS.exists("/geigerconfig.json"))   { File f = LittleFS.open(BLIP_MIG_MARKER, "w"); if (f) f.close(); return false; }
+  File f = LittleFS.open("/geigerconfig.json", "r");
+  if (!f) return false;
+  DynamicJsonDocument doc(2048);
+  DeserializationError err = deserializeJson(doc, f);
+  f.close();
+  if (err) return false;
+  bool any = false;
+  const char* pin_val = doc["blip_pin"].as<const char*>();
+  if (pin_val) {
+    EGPrefs::put("pulse", "pin", pin_val);
+    any = true;
+  }
+  const char* ms_val = doc["blip_pulse_ms"].as<const char*>();
+  if (ms_val) {
+    char* endp = nullptr;
+    long ms = strtol(ms_val, &endp, 10);
+    if (endp != ms_val && ms > 0) {
+      long us = ms * 1000;
+      if (us < 100)   us = 100;
+      if (us > 50000) us = 50000;
+      char buf[16]; snprintf(buf, sizeof(buf), "%ld", us);
+      EGPrefs::put("pulse", "pulse_us", buf);
+      any = true;
+    }
+  }
+  // Commit before dropping the marker so a power cut retries on next boot.
+  if (any) EGPrefs::commit(false);
+  File mk = LittleFS.open(BLIP_MIG_MARKER, "w"); if (mk) mk.close();
+  if (any) Log::console(PSTR("PulseOut: migrated blip pin/pulse from legacy"));
+  return any;
+}
+// === END LEGACY IMPORT ===
+
 void PulseOut::begin() {
+  if (migrate_legacy_blip()) on_prefs_loaded();
   if (!_enabled || _pin < 0) {
     if (_enabled && _pin < 0) Log::console(PSTR("PulseOut: no pin set"));
     EGModuleRegistry::set_loop_interval(this, -1);  // drop from registry walk; click path still works
@@ -120,6 +201,7 @@ void PulseOut::begin() {
 // Token bucket: 1 token per 50 ms, max 5. Caps clicks at 20/s.
 void PulseOut::notifyClick(unsigned long now_ms) {
   if (!_enabled || _pin < 0) return;
+  if (isQuietNow()) return;
   unsigned long elapsed = now_ms - _last_token_ms;
   if (elapsed >= 50) {
     uint32_t gained = elapsed / 50;

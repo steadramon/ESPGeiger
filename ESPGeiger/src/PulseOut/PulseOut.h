@@ -65,6 +65,11 @@ class PulseOut : public EGModule {
     float         _voice_pulse = 1.0f;
     float         _voice_freq  = 1.0f;
 
+    // Pulse Out has its own quiet window separate from Blip LED + Audio.
+    int16_t       _q_from_min = -1;
+    int16_t       _q_to_min   = -1;
+    bool          isQuietNow();
+
     // Click state machine. _phases_remaining counts down through the pin
     // toggles for the current click; 0 means idle. _pin_high tracks the
     // current logical level so loop() knows what to flip to. _brightness
