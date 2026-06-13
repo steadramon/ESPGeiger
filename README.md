@@ -44,17 +44,20 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** - i
 | ESP32 with SSD1306 OLED | `esp32oled_pulse` |
 | ESP32-S3 (dev kits) | `esp32s3_pulse` |
 | ESP32-S3 with SSD1306 OLED | `esp32s3oled_pulse` |
+| ESP32-S3 with onboard amp + speaker (XH-S3E-AI) | `xh_s3e_pulse` |
+| ESP32-C3 (RISC-V, no PCNT - software pulse counter) | `esp32c3_pulse` |
+| ESP32-C3 with SSD1306 OLED | `esp32c3oled_pulse` |
 | CAJOE IoT-GM (ESP32 with built-in OLED) | `esp32_cajoe_iotgm` |
 
 ### I have an ESP + serial Geiger counter
 
 A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger). Select your counter type from the **Config** page after flashing.
 
-| ESP8266 Build | ESP32 Build | ESP32-S3 Build |
-|---|---|---|
-| `esp8266_serial` | `esp32_serial` | `esp32s3_serial` |
+| ESP8266 Build | ESP32 Build | ESP32-S3 Build | ESP32-C3 Build |
+|---|---|---|---|
+| `esp8266_serial` | `esp32_serial` | `esp32s3_serial` | `esp32c3_serial` |
 
-OLED variants: `esp8266oled_serial` / `esp32oled_serial` / `esp32s3oled_serial`.
+OLED variants: `esp8266oled_serial` / `esp32oled_serial` / `esp32s3oled_serial` / `esp32c3oled_serial`.
 
 ### I have an ESPGeiger-HW or ESPGeiger Log
 
