@@ -25,7 +25,6 @@
 #include "../Util/Globals.h"
 
 #include <LittleFS.h>
-#include <ArduinoJson.h>
 
 #include "../Util/FastMillis.h"
 #include "../Util/StringUtil.h"
@@ -49,7 +48,9 @@ EG_PSTR(PO_H_CYC,  "1-10. More = louder and longer");
 EG_PSTR(PO_L_POL,  "Polarity");
 EG_PSTR(PO_H_POL,  "0=active high, 1=active low");
 EG_PSTR(PO_L_FSH,  "Fade rate");
-EG_PSTR(PO_H_FSH,  "2=fast, 3=medium, 4=slow");
+EG_PSTR(PO_H_FSH,  "0=fast, 1=medium, 2=slow");
+EG_PSTR(PO_L_MHZ,  "Max Hz");
+EG_PSTR(PO_H_MHZ,  "Cap clicks per second (0 = unlimited, 1-200)");
 EG_PSTR(PO_L_QFR,  "Quiet from");
 EG_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
 EG_PSTR(PO_L_QTO,  "Quiet to");
@@ -59,11 +60,12 @@ static const EGPref PULSE_PREF_ITEMS[] = {
   {"enable",     PO_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
   {"pin",        PO_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, EGP_INT,  0},
   {"mode",       PO_L_MODE, PO_H_MODE, "0",    nullptr, 0,    2,     0, EGP_UINT, 0},
-  {"pulse_us",   PO_L_PW,   PO_H_PW,   "500",  nullptr, 100,  50000, 0, EGP_UINT, 0},
+  {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 100,  50000, 0, EGP_UINT, 0},
   {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, 0},
-  {"cycles",     PO_L_CYC,  PO_H_CYC,  "3",    nullptr, 1,    10,    0, EGP_UINT, 0},
+  {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, 0},
   {"polarity",   PO_L_POL,  PO_H_POL,  "0",    nullptr, 0,    1,     0, EGP_UINT, 0},
-  {"fade_shift", PO_L_FSH,  PO_H_FSH,  "3",    nullptr, 2,    4,     0, EGP_UINT, 0},
+  {"fade_shift", PO_L_FSH,  PO_H_FSH,  "1",    nullptr, 0,    2,     0, EGP_UINT, 0},
+  {"max_hz",     PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, 0},
   {"quiet_from", PO_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
   {"quiet_to",   PO_L_QTO,  PO_H_QTO,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
 };
@@ -86,7 +88,9 @@ void PulseOut::on_prefs_loaded() {
   _freq_hz  = (uint16_t)EGPrefs::getUInt("pulse", "freq");
   _cycles   = (uint8_t)EGPrefs::getUInt("pulse", "cycles");
   _polarity   = (uint8_t)EGPrefs::getUInt("pulse", "polarity");
-  _fade_shift = (uint8_t)EGPrefs::getUInt("pulse", "fade_shift");
+  uint8_t fade_idx = (uint8_t)EGPrefs::getUInt("pulse", "fade_shift");
+  if (fade_idx > 2) fade_idx = 1;
+  _fade_shift = fade_idx + 2;
   if (_mode > 2)         _mode = 0;
   if (_pulse_us < 100)   _pulse_us = 100;
   if (_pulse_us > 50000) _pulse_us = 50000;
@@ -95,13 +99,14 @@ void PulseOut::on_prefs_loaded() {
   if (_cycles < 1)       _cycles = 1;
   if (_cycles > 10)      _cycles = 10;
   if (_polarity > 1)     _polarity = 0;
-  if (_fade_shift < 2)   _fade_shift = 2;
-  if (_fade_shift > 4)   _fade_shift = 4;
+  _max_hz = (uint8_t)EGPrefs::getUInt("pulse", "max_hz");
+  if (_max_hz > 200) _max_hz = 200;
+  _token_interval_ms = _max_hz ? (uint16_t)(1000 / _max_hz) : 0;
   ParsedTime qf = parseTime(EGPrefs::getString("pulse", "quiet_from"));
   ParsedTime qt = parseTime(EGPrefs::getString("pulse", "quiet_to"));
   _q_from_min = qf.isValid ? (int16_t)(qf.hour * 60 + qf.minute) : -1;
   _q_to_min   = qt.isValid ? (int16_t)(qt.hour * 60 + qt.minute) : -1;
-  // Re-arm registry on enable/pin change; begin() only runs once at boot.
+  recomputeEffective();
   EGModuleRegistry::set_loop_interval(this, (_enabled && _pin >= 0) ? 1 : -1);
 }
 
@@ -126,29 +131,57 @@ bool PulseOut::isQuietNow() {
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
-// v0.11.0 had blip_pin (raw) + blip_pulse_ms in the `led` group; both now
-// live in `pulse` (with ms->us unit change). Standard legacy_aliases can't
-// transform values and deletes the source file after first use, so we do
-// it in-module and gate on a marker.
+// v0.11.0 stored blip_pin + blip_pulse_ms in /prefs/led.bin (binary
+// EGPrefsStorage format: 4-byte 'EGP1' magic, then klen/key/vlen/val).
+// v0.12 dropped those keys from the led group and they now live in
+// pulse.pin / pulse.pulse_us (with a ms->us unit change).
 static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 
 static bool migrate_legacy_blip() {
+#ifdef ESP8266
+  LittleFS.begin();
+#else
+  LittleFS.begin(true);
+#endif
   if (LittleFS.exists(BLIP_MIG_MARKER)) return false;
-  if (!LittleFS.exists("/geigerconfig.json"))   { File f = LittleFS.open(BLIP_MIG_MARKER, "w"); if (f) f.close(); return false; }
-  File f = LittleFS.open("/geigerconfig.json", "r");
-  if (!f) return false;
-  DynamicJsonDocument doc(2048);
-  DeserializationError err = deserializeJson(doc, f);
-  f.close();
-  if (err) return false;
+  const char* path = "/prefs/led.bin";
+  File f;
+  if (!LittleFS.exists(path) || !(f = LittleFS.open(path, "r"))) {
+    File mk = LittleFS.open(BLIP_MIG_MARKER, "w"); if (mk) mk.close();
+    return false;
+  }
+  uint8_t magic[4];
+  if (f.read(magic, 4) != 4 || memcmp(magic, "EGP1", 4) != 0) {
+    f.close();
+    File mk = LittleFS.open(BLIP_MIG_MARKER, "w"); if (mk) mk.close();
+    return false;
+  }
+  char pin_val[16]  = {0};
+  char ms_val[16]   = {0};
   bool any = false;
-  const char* pin_val = doc["blip_pin"].as<const char*>();
-  if (pin_val) {
+  char key[24];
+  char val[64];
+  while (f.available() > 0) {
+    uint8_t klen;
+    if (f.read(&klen, 1) != 1 || klen == 0 || klen >= sizeof(key)) break;
+    if (f.read((uint8_t*)key, klen) != klen) break;
+    uint8_t vb[2];
+    if (f.read(vb, 2) != 2) break;
+    uint16_t vlen = (uint16_t)vb[0] | ((uint16_t)vb[1] << 8);
+    if (vlen >= sizeof(val)) break;
+    if (vlen > 0 && f.read((uint8_t*)val, vlen) != vlen) break;
+    if (klen == 8  && strncmp(key, "blip_pin", 8) == 0 && vlen < sizeof(pin_val)) {
+      memcpy(pin_val, val, vlen); pin_val[vlen] = '\0';
+    } else if (klen == 13 && strncmp(key, "blip_pulse_ms", 13) == 0 && vlen < sizeof(ms_val)) {
+      memcpy(ms_val, val, vlen); ms_val[vlen] = '\0';
+    }
+  }
+  f.close();
+  if (pin_val[0]) {
     EGPrefs::put("pulse", "pin", pin_val);
     any = true;
   }
-  const char* ms_val = doc["blip_pulse_ms"].as<const char*>();
-  if (ms_val) {
+  if (ms_val[0]) {
     char* endp = nullptr;
     long ms = strtol(ms_val, &endp, 10);
     if (endp != ms_val && ms > 0) {
@@ -160,10 +193,15 @@ static bool migrate_legacy_blip() {
       any = true;
     }
   }
-  // Commit before dropping the marker so a power cut retries on next boot.
-  if (any) EGPrefs::commit(false);
+  if (any) {
+    EGPrefs::put("pulse", "enable", "1");
+    EGPrefs::commit(false);
+    Log::console(PSTR("PulseOut: migrated blip pin=%s pulse_ms=%s from v0.11"),
+                 pin_val[0] ? pin_val : "(none)", ms_val[0] ? ms_val : "(none)");
+  } else {
+    Log::console(PSTR("PulseOut: no blip pin/pulse keys in /prefs/led.bin"));
+  }
   File mk = LittleFS.open(BLIP_MIG_MARKER, "w"); if (mk) mk.close();
-  if (any) Log::console(PSTR("PulseOut: migrated blip pin/pulse from legacy"));
   return any;
 }
 // === END LEGACY IMPORT ===
@@ -193,6 +231,7 @@ void PulseOut::begin() {
   r ^= r << 13; r ^= r >> 17; r ^= r << 5;
   s = (int32_t)(r & 0xFF) - 128;
   _voice_freq  = 1.0f + s * (0.03f / 128.0f);
+  recomputeEffective();
 
   Log::console(PSTR("PulseOut: GPIO%d mode=%u polarity=%u"),
                (int)_pin, (unsigned)_mode, (unsigned)_polarity);
@@ -202,16 +241,16 @@ void PulseOut::begin() {
 void PulseOut::notifyClick(unsigned long now_ms) {
   if (!_enabled || _pin < 0) return;
   if (isQuietNow()) return;
-  unsigned long elapsed = now_ms - _last_token_ms;
-  if (elapsed >= 50) {
-    uint32_t gained = elapsed / 50;
-    if (_tokens + gained > 5) _tokens = 5;
-    else _tokens += (uint8_t)gained;
-    _last_token_ms += gained * 50;
+  if (_token_interval_ms) {
+    while ((now_ms - _last_token_ms) >= _token_interval_ms && _tokens < 5) {
+      _last_token_ms += _token_interval_ms;
+      _tokens++;
+    }
+    if ((now_ms - _last_token_ms) > 5000) _last_token_ms = now_ms;
+    if (_tokens == 0) return;
+    _tokens--;
   }
-  if (_tokens == 0) return;
-  if (_phases_remaining != 0) return;   // previous click still in flight
-  _tokens--;
+  if (_phases_remaining != 0) return;
   _last_emit_ms = now_ms;
   startClick();
 }
@@ -225,22 +264,24 @@ void PulseOut::startClick() {
     return;
   }
   if (_mode == 1) {
-    // Resonant burst via tone(); bypasses the state machine.
-    uint32_t freq = (uint32_t)(_freq_hz * _voice_freq);
-    if (freq == 0) freq = 1;
-    uint32_t duration_us = (uint32_t)_cycles * 1000000UL / freq;
+    uint32_t duration_us = (uint32_t)_cycles * 1000000UL / _burst_freq_eff;
     uint32_t duration_ms = (duration_us + 999u) / 1000u;
     if (duration_ms == 0) duration_ms = 1;
-    tone(_pin, freq, duration_ms);
+    tone(_pin, _burst_freq_eff, duration_ms);
     _phases_remaining = 0;
     return;
   }
-  // Mode 0: single pulse, one transition after pulse_us.
   writeActive();
   _pin_high = true;
   _phases_remaining = 1;
-  _period_us = (uint32_t)(_pulse_us * _voice_pulse);
-  _next_us = (uint32_t)micros() + _period_us;
+  _period_us = _pulse_us_eff;
+  _next_us = (uint32_t)micros() + _pulse_us_eff;
+}
+
+void PulseOut::recomputeEffective() {
+  _pulse_us_eff   = (uint32_t)(_pulse_us * _voice_pulse);
+  _burst_freq_eff = (uint32_t)(_freq_hz  * _voice_freq);
+  if (_burst_freq_eff == 0) _burst_freq_eff = 1;
 }
 
 void PulseOut::loop(unsigned long /*now_ms*/) {

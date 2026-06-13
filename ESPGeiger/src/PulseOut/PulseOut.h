@@ -59,11 +59,17 @@ class PulseOut : public EGModule {
     uint8_t       _cycles     = 3;
     uint8_t       _polarity   = 0;       // 0 = active high, 1 = active low
     uint8_t       _fade_shift = 3;       // exponential decay: brightness -= brightness >> shift
+    uint8_t       _max_hz     = 20;      // 0 = unlimited
+    uint16_t      _token_interval_ms = 50;   // cached: 1000/_max_hz
 
     // Per-device voice variation from the chip ID. Subtly different sound
     // between adjacent units. Computed once in begin().
     float         _voice_pulse = 1.0f;
     float         _voice_freq  = 1.0f;
+    // Pre-jittered integers so the click hot path doesn't do float math.
+    uint32_t      _pulse_us_eff   = 500;
+    uint32_t      _burst_freq_eff = 3500;
+    void          recomputeEffective();
 
     // Pulse Out has its own quiet window separate from Blip LED + Audio.
     int16_t       _q_from_min = -1;
