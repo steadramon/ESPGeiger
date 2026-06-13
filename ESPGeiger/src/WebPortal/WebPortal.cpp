@@ -871,7 +871,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   res.sendChunk(F(R"HTML(
 <details style='margin-top:1.5em'><summary>Advanced</summary>
-<p class=muted>Erase the saved WiFi credentials and reboot into the captive setup portal. Useful when neither the auto-revert nor a hardware reset button is available.</p>
+<p class=muted>Erase the saved WiFi credentials and reboot into the captive setup portal.</p>
 <form method=GET action=/erase onsubmit="return confirm('Erase saved WiFi credentials? Device will reboot into setup mode.')">
 <button type=submit class=danger>Erase WiFi config</button>
 </form>
