@@ -126,6 +126,8 @@ class EnvSensor : public EGModule {
     uint8_t  _sda = ENV_DEFAULT_SDA;
     uint8_t  _scl = ENV_DEFAULT_SCL;
     uint8_t  _unit = UNIT_C;
+    int8_t   _temp_offset_tenths = 0;
+    uint16_t _altitude_m = 0;
     bool     _started = false;
     uint8_t  _drv_flags = 0;
     uint8_t  _detect_tries = 0;

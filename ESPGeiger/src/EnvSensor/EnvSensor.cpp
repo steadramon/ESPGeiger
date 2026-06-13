@@ -36,14 +36,20 @@ EG_PSTR(EN_L_SDA,  "I2C SDA pin");
 EG_PSTR(EN_L_SCL,  "I2C SCL pin");
 EG_PSTR(EN_L_UNIT, "Temp unit");
 EG_PSTR(EN_H_UNIT, "0=Celsius 1=Fahrenheit 2=Kelvin");
+EG_PSTR(EN_L_TOF,  "Temp offset");
+EG_PSTR(EN_H_TOF,  "Calibration in 0.1 C, -100 to 100 (e.g. -25 = -2.5 C). Compensates sensor self-heating.");
+EG_PSTR(EN_L_ALT,  "Altitude (m)");
+EG_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = local station pressure).");
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
 static const EGPref ENV_PREF_ITEMS[] = {
-  {"sda",  EN_L_SDA,  nullptr,    STR(ENV_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"scl",  EN_L_SCL,  nullptr,    STR(ENV_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"unit", EN_L_UNIT, EN_H_UNIT,  "0",                  nullptr, 0, 2,           0, EGP_UINT, 0},
+  {"sda",         EN_L_SDA,  nullptr,    STR(ENV_DEFAULT_SDA), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, 0},
+  {"scl",         EN_L_SCL,  nullptr,    STR(ENV_DEFAULT_SCL), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, 0},
+  {"unit",        EN_L_UNIT, EN_H_UNIT,  "0",                  nullptr, 0,    2,            0, EGP_UINT, 0},
+  {"temp_offset", EN_L_TOF,  EN_H_TOF,   "0",                  nullptr, -100, 100,          0, EGP_INT,  0},
+  {"altitude_m",  EN_L_ALT,  EN_H_ALT,   "0",                  nullptr, 0,    9000,         0, EGP_UINT, 0},
 };
 
 static const EGPrefGroup ENV_PREF_GROUP = {
@@ -60,6 +66,8 @@ void EnvSensor::readPrefs() {
   _scl  = (uint8_t)EGPrefs::getUInt("env", "scl");
   _unit = (uint8_t)EGPrefs::getUInt("env", "unit");
   if (_unit > UNIT_K) _unit = UNIT_C;
+  _temp_offset_tenths = (int8_t)EGPrefs::getInt("env", "temp_offset");
+  _altitude_m         = (uint16_t)EGPrefs::getUInt("env", "altitude_m");
 }
 
 void EnvSensor::on_prefs_loaded() {
@@ -175,8 +183,12 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
 }
 
 float EnvSensor::tempC() const {
-  if (localPresent()) return _st->ema_t;
-  if (remoteFresh())  return _r_t;
+  if (localPresent()) {
+    float t = _st->ema_t;
+    if (isnan(t)) return NAN;
+    return t + (float)_temp_offset_tenths * 0.1f;
+  }
+  if (remoteFresh()) return _r_t;
   return NAN;
 }
 
@@ -187,8 +199,14 @@ float EnvSensor::humidity() const {
 }
 
 float EnvSensor::pressure() const {
-  if (localPresent()) return _st->ema_p;
-  if (remoteFresh())  return _r_p;
+  if (localPresent()) {
+    float p = _st->ema_p;
+    if (isnan(p) || _altitude_m == 0) return p;
+    // Barometric formula, sea-level reduction. p in hPa, altitude in metres.
+    float ratio = 1.0f - (float)_altitude_m / 44330.0f;
+    return p / powf(ratio, 5.255f);
+  }
+  if (remoteFresh()) return _r_p;
   return NAN;
 }
 
