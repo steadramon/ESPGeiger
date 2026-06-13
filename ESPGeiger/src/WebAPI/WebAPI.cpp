@@ -243,7 +243,7 @@ void WebAPI::doHandshake() {
   mp.kv("gc", DeviceInfo::geigermodel());
   mp.kv("td", (uint32_t)DeviceInfo::tubeDetection());
   mp.kv("fl", (uint32_t)DeviceInfo::featureFlags());
-  mp.kv("rr", DeviceInfo::resetReason());
+  mp.kv("rr", (uint32_t)DeviceInfo::resetReason());
   mp.kv("m",  (uint32_t)_mode);
   if (sendCoords) {
     mp.kv("la", (int32_t)(latF * 100.0f + (latF >= 0 ? 0.5f : -0.5f)) * 0.01f);
