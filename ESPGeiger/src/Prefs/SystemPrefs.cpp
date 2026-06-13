@@ -445,7 +445,7 @@ static const EGPref LED_PREF_ITEMS[] = {
   {"pulse_us",    LD_L_PUL, LD_H_PUL, "2000",  nullptr, 100, 50000, 0, EGP_UINT, 0},
 #else
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
-  // Fade needs PWM; ESP8266 test builds reserve Timer1 for the fake pulse gen.
+  // Fade needs Timer1; ESP8266 test builds use it for the fake pulse gen.
   {"mode",        LD_L_MOD, LD_H_MOD, "0",     nullptr, 0,   1,     0, EGP_UINT, 0},
 #endif
   {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 100, 50000, 0, EGP_UINT, 0},
