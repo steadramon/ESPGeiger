@@ -40,7 +40,7 @@ Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the
 | **Heltec WiFi LoRa 32 V3** | ESP32-S3 | 17 / 18 | GPIO 21 | `esp32s3_*` + `-DOLED_SDA=17 -DOLED_SCL=18 -DOLED_RST=21` | Custom build flags for the integrated OLED. Add `-DSSD1306_DISPLAY` and `${u8g2_flags.build_flags}` to enable the display. |
 | **TTGO LoRa32 V1** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32oled_*` + `-DOLED_SDA=4 -DOLED_SCL=15 -DOLED_RST=16` | Same recipe as Heltec V2. |
 | **LilyGo T-Beam** | ESP32 classic | 21 / 22 (default) | none | `esp32oled_*` | Works with stock defaults. |
-| **MINI ESP32-S3-N16R8** (sold as "XH-S3E-AI", small purple board with onboard speaker + mic + button + NeoPixel + OLED) | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; pin map hard-fixed in build flags. See [buildtargets](/install/buildtargets#audio-tick-esp32-only). |
+| **[MINI ESP32-S3-N16R8](https://s.click.aliexpress.com/e/_c3dXGAQt)** (sold as "XH-S3E-AI"; small purple board, onboard speaker + mic + button + NeoPixel + OLED header) <br><img src="img/xh-s3e-ai.png" width="240"/> | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; pin map hard-fixed in build flags. See [buildtargets](/install/buildtargets#audio-tick-esp32-only). |
 
 Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need the firmware to pulse that pin at boot. The `-DOLED_RST=N` build flag enables that pulse; if omitted, the OLED stays in reset and shows a blank screen. Once defined, the pin is also runtime-adjustable from **Config → Display → Reset Pin**.
 
