@@ -83,6 +83,11 @@ void sTickerCB()
 {
   TickProfile::beginTick();
   unsigned long stick_now = fast_millis();
+  static bool s_bg_marked = false;
+  if (!s_bg_marked && stick_now > 30000 && Wifi::stable_for(5000)) {
+    BootGuard::mark_ok();
+    s_bg_marked = true;
+  }
   gcounter.secondticker();
 #ifdef TICK_PROFILE
   TickProfile::markCounter();
@@ -196,11 +201,6 @@ void loop()
 #endif
   TickProfile::countIter();
   unsigned long now = fast_millis();
-  static bool s_bg_marked = false;
-  if (!s_bg_marked && now > 30000 && Wifi::stable_for(5000)) {
-    BootGuard::mark_ok();
-    s_bg_marked = true;
-  }
   if (!ota_in_progress) {
     gcounter.loop();
     s_webPortal.tick(now);
