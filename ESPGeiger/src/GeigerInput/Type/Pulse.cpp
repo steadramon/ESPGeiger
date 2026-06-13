@@ -24,6 +24,7 @@
 #include "../../Util/MathUtil.h"
 #ifdef USE_PCNT
 #include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
+#include "../../Util/FastMillis.h"   // fast_millis() - real millis() halves LPS
 #endif
 
 GeigerPulse::GeigerPulse() {
@@ -81,9 +82,8 @@ void GeigerPulse::restartAfterOTA() {
 
 #ifdef USE_PCNT
 void GeigerPulse::drain_pcnt() {
-  // Throttle to 50 Hz: enough latency drop vs the 1 Hz tick (20 ms worst case)
-  // without thrashing the pause/resume cycle on every main-loop iteration.
-  uint32_t now_ms_lo = (uint32_t)millis();
+  // 50 Hz throttle. fast_millis() not millis() - this runs every main-loop iter.
+  uint32_t now_ms_lo = fast_millis();
   if ((uint32_t)(now_ms_lo - _last_drain_ms) < 20) return;
   _last_drain_ms = now_ms_lo;
 

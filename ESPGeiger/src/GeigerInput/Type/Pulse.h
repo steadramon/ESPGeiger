@@ -64,10 +64,9 @@ class GeigerPulse : public GeigerInput
     }
 #ifdef USE_PCNT
     int collect();
-    // Main-loop drain: cheap when no pulses, otherwise folds them into
-    // s_event_counter and fires _last_blip so downstream consumers
-    // (audio/LED/UDP/PulseOut) dispatch in real time instead of waiting
-    // for the 1 Hz secondticker.
+    // 50 Hz drain that folds new PCNT counts into s_event_counter and bumps
+    // _last_blip so audio/LED/UDP/PulseOut fire on the click instead of the
+    // 1 Hz tick.
     void drain_pcnt();
     void set_pcnt_filter(int val);
     void apply_pcnt_filter();
@@ -76,8 +75,8 @@ class GeigerPulse : public GeigerInput
     uint16_t _pcnt_filter = 0;          // 0-1023 per PCNT hardware
     uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT; // 0-2
     int8_t   _pin_pull_last_logged = -1;        // -1 = never logged yet
-    uint32_t _last_drain_us = 0;        // micros() at last drain or collect
-    uint32_t _last_drain_ms = 0;        // throttle: skip drain if <20 ms ago
+    uint32_t _last_drain_us = 0;
+    uint32_t _last_drain_ms = 0;
 #endif
 };
 #endif
