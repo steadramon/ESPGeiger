@@ -62,8 +62,7 @@ static const EGPref PULSE_PREF_ITEMS[] = {
   {"enable",     PO_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
   {"pin",        PO_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, EGP_INT,  0},
 #ifndef EGPE_NO_PWM
-  // Burst (tone) and Fade (analogWrite) need Timer1, unavailable on ESP8266
-  // test + ESPGeigerHW builds; UI only offers them where they work.
+  // Burst (tone) and Fade (analogWrite) need Timer1.
   {"mode",       PO_L_MODE, PO_H_MODE, "0",    nullptr, 0,    2,     0, EGP_UINT, 0},
 #endif
   {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 100,  50000, 0, EGP_UINT, 0},
