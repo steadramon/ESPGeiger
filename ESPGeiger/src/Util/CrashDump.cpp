@@ -111,7 +111,13 @@ void begin() {
   esp_core_dump_summary_t sum{};
   if (esp_core_dump_get_summary(&sum) == ESP_OK) {
     Snapshot snap{};
-    snap.reason   = (uint32_t)rr;
+    snap.reason = (uint32_t)rr;
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32H2
+    // RISC-V cores - the summary union maps to a different layout. Capture
+    // only the reset reason and PC; the Xtensa backtrace/EPCx fields don't
+    // exist here. Saves a per-target struct walk that isn't worth it for C3.
+    snap.epc1 = sum.exc_pc;
+#else
     snap.exccause = sum.ex_info.exc_cause;
     snap.epc1     = sum.exc_pc;
     snap.epc2     = (sum.ex_info.epcx_reg_bits & (1u << 1)) ? sum.ex_info.epcx[1] : 0;
@@ -119,12 +125,11 @@ void begin() {
     snap.excvaddr = sum.ex_info.exc_vaddr;
     snap.depc     = 0;
     snap.sp       = sum.ex_info.exc_a[1];
-
     size_t depth = sum.exc_bt_info.depth;
     if (depth > STACK_WORDS) depth = STACK_WORDS;
     for (size_t i = 0; i < depth; i++) snap.stack[i] = sum.exc_bt_info.bt[i];
     snap.word_count = (uint32_t)depth;
-
+#endif
     s_recovered = snap;
     s_have = true;
   }
