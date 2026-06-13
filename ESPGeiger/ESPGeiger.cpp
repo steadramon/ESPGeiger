@@ -31,6 +31,7 @@
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/CrashDump.h"
+#include "src/Util/BootGuard.h"
 #include "src/Util/LedSignal.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
@@ -106,6 +107,7 @@ static WebPortal s_webPortal;
 
 void setup()
 {
+  BootGuard::on_boot();
   Serial.begin(115200);
   Serial.println();
   delay(100);
@@ -194,6 +196,11 @@ void loop()
 #endif
   TickProfile::countIter();
   unsigned long now = fast_millis();
+  static bool s_bg_marked = false;
+  if (!s_bg_marked && now > 30000 && Wifi::stable_for(5000)) {
+    BootGuard::mark_ok();
+    s_bg_marked = true;
+  }
   if (!ota_in_progress) {
     gcounter.loop();
     s_webPortal.tick(now);
