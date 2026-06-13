@@ -437,9 +437,6 @@ EG_PSTR(LD_H_PUL, "100-50000");
 
 static const EGPref LED_PREF_ITEMS[] = {
   {"blip_led",    LD_L_BLP, LD_H_BLP, "1",    nullptr, 0, 1,     0, EGP_BOOL, 0},
-#if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266)) && !defined(ESPGEIGER_HW)
-  {"blip_bright", LD_L_BRT, LD_H_BRT, "80",   nullptr, 0, 100,   0, EGP_UINT, EGP_SLIDER},
-#endif
 #ifdef ESPGEIGER_HW
   // Only Pulse mode is available - HV holds Timer1 so tone()/PWM is unusable.
   {"pulse_us",    LD_L_PUL, LD_H_PUL, "2000",  nullptr, 100, 50000, 0, EGP_UINT, 0},
@@ -451,6 +448,7 @@ static const EGPref LED_PREF_ITEMS[] = {
   {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 100, 50000, 0, EGP_UINT, 0},
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   {"fade_shift",  LD_L_FAD, LD_H_FAD, "1",     nullptr, 0,   2,     0, EGP_UINT, 0},
+  {"blip_bright", LD_L_BRT, LD_H_BRT, "80",    nullptr, 0,   100,   0, EGP_UINT, EGP_SLIDER},
 #endif
   {"quiet_from",  LD_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME},
   {"quiet_to",    LD_L_QTO, LD_H_QTO, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME},

@@ -61,6 +61,7 @@ EG_PSTR(PO_H_QTO,  "End of quiet window; crosses midnight if from > to");
 static const EGPref PULSE_PREF_ITEMS[] = {
   {"enable",     PO_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
   {"pin",        PO_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, EGP_INT,  0},
+  {"polarity",   PO_L_POL,  PO_H_POL,  "0",    nullptr, 0,    1,     0, EGP_UINT, 0},
 #ifndef EGPE_NO_PWM
   // Burst (tone) and Fade (analogWrite) need Timer1.
   {"mode",       PO_L_MODE, PO_H_MODE, "0",    nullptr, 0,    2,     0, EGP_UINT, 0},
@@ -69,13 +70,10 @@ static const EGPref PULSE_PREF_ITEMS[] = {
 #ifndef EGPE_NO_PWM
   {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, 0},
   {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, 0},
-#endif
-  {"polarity",   PO_L_POL,  PO_H_POL,  "0",    nullptr, 0,    1,     0, EGP_UINT, 0},
-#ifndef EGPE_NO_PWM
   {"fade_shift", PO_L_FSH,  PO_H_FSH,  "1",    nullptr, 0,    2,     0, EGP_UINT, 0},
 #endif
-  {"max_hz",     PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, 0},
   {"brightness", PO_L_BRT,  PO_H_BRT,  "100",  nullptr, 0,    100,   0, EGP_UINT, EGP_SLIDER},
+  {"max_hz",     PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, 0},
   {"quiet_from", PO_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
   {"quiet_to",   PO_L_QTO,  PO_H_QTO,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
 };
