@@ -46,6 +46,12 @@ namespace LedSignal {
   }
 
   void poll() {
+    if (!s_onboard.isRunning()
+#ifdef GEIGER_BLIPLED
+        && s_engine.phases_remaining == 0
+        && s_engine.brightness == 0
+#endif
+       ) return;
     s_onboard.update();
 #ifdef GEIGER_BLIPLED
     s_engine.loop();
