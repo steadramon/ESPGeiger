@@ -262,16 +262,28 @@ extern "C" void udprx_notify_prefs_saved();
 #endif
 
 static const EGPref INPUT_PREF_ITEMS[] = {
+  // Source selector
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   {"serial_type", IN_L_STY, serial_type_desc, STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
-  {"cpm_window",  IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER},
 #endif
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  {"udprx_mode",   IN_L_URMD, IN_H_URMD, "0",                  nullptr,     0, 1,     0,  EGP_UINT,   0},
+#endif
+  // Pins
 #ifndef RXPIN_BLOCKED
   {"rx_pin", IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
   {"tx_pin", IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
 #endif
+  // UDP source target
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  {"udprx_chipid", IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     6,  EGP_STRING, 0},
+  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.86.86",      IN_P_URGP,   0, 0,     24, EGP_STRING, 0},
+  {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   0},
+  {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   0},
+#endif
+  // Signal conditioning
 #ifdef USE_PCNT
   {"pcnt_filter", IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, 0},
   {"pcnt_pull",   IN_L_PCP, IN_H_PCP, STR(PCNT_PIN_PULL_DEFAULT), nullptr, 0, 2, 0, EGP_UINT, 0},
@@ -282,10 +294,12 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   {"pulse_width_us", IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE)
-  {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, EGP_UINT, 0},
+  // CPM calculation
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+  {"cpm_window",  IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER},
 #endif
   {"cpm_mode", IN_L_CMM, IN_H_CMM, "3", nullptr, 0, 4, 0, EGP_UINT, 0},
+  // Tube identity
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {"geiger_model", IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
   {"_tube_hdr", IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
@@ -293,12 +307,8 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"tube_beta",  IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
   {"tube_gamma", IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
 #endif
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  {"udprx_mode",   IN_L_URMD, IN_H_URMD, "0",                  nullptr,     0, 1,     0,  EGP_UINT,   0},
-  {"udprx_chipid", IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     6,  EGP_STRING, 0},
-  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.86.86",      IN_P_URGP,   0, 0,     24, EGP_STRING, 0},
-  {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   0},
-  {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   0},
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
+  {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, EGP_UINT, 0},
 #endif
 };
 
