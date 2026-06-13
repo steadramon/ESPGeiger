@@ -37,7 +37,7 @@ EG_PSTR(EN_L_SCL,  "I2C SCL pin");
 EG_PSTR(EN_L_UNIT, "Temp unit");
 EG_PSTR(EN_H_UNIT, "0=Celsius 1=Fahrenheit 2=Kelvin");
 EG_PSTR(EN_L_TOF,  "Temp offset");
-EG_PSTR(EN_H_TOF,  "Calibration in 0.1 C, -100 to 100 (e.g. -25 = -2.5 C). Compensates sensor self-heating.");
+EG_PSTR(EN_H_TOF,  "0.1 C steps. -25 = -2.5 C.");
 EG_PSTR(EN_L_ALT,  "Altitude (m)");
 EG_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = local station pressure).");
 
