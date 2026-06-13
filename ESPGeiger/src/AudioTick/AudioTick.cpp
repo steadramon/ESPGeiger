@@ -179,8 +179,7 @@ void AudioTick::begin() {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
     .sample_rate = AUDIO_TICK_SAMPLE_RATE,
     .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-    // ALL_LEFT broadcasts mono to both slots so any amp wiring picks it up.
-    .channel_format = I2S_CHANNEL_FMT_ALL_LEFT,
+    .channel_format = AUDIO_TICK_CHANNEL_FMT,
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
     .dma_buf_count = 4,

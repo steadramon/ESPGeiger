@@ -27,13 +27,12 @@ namespace LedSignal {
   static EGLed s_onboard(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON == LOW);
 
 #ifdef GEIGER_BLIPLED
-  // External buzzer/LED pin (ESPGeigerHW). PulseEngine owns this pin alone,
-  // so its digitalWrite path doesn't fight the LEDC-driven onboard LED.
+  // PulseEngine owns the external pin alone; its digitalWrite path would
+  // otherwise fight the LEDC-driven onboard LED.
   static PulseEngine s_engine;
 #endif
-  // Receiver click params driven by setBlipEngineConfig.
   static uint16_t s_click_pulse_ms = 20;
-  static uint8_t  s_click_mode     = 0;   // 0 = pulse, 2 = fade (matches PulseEngine)
+  static uint8_t  s_click_mode     = 0;   // 0=pulse, 2=fade
   static uint8_t  s_click_fade     = 3;
 
   void begin() {
@@ -99,13 +98,12 @@ namespace LedSignal {
     if (cycles > 500)     cycles = 500;
     if (fade_shift_idx > 2) fade_shift_idx = 1;
     if (max_hz > 200) max_hz = 200;
-    // Receiver uses s_onboard.pulse(ms); cap at a sane visible range.
     uint16_t ms = pulse_us / 1000;
     if (ms < 1)   ms = 1;
     if (ms > 100) ms = 100;
     s_click_pulse_ms = ms;
     s_click_mode     = engine_mode;
-    s_click_fade     = (uint8_t)(fade_shift_idx + 2);   // 2/3/4, same as PulseEngine
+    s_click_fade     = (uint8_t)(fade_shift_idx + 2);
 #ifdef GEIGER_BLIPLED
     s_engine.mode       = engine_mode;
     s_engine.pulse_us   = pulse_us;
@@ -115,8 +113,7 @@ namespace LedSignal {
     s_engine.max_hz     = max_hz;
     s_engine.commitConfig();
 #else
-    (void)engine_mode; (void)freq_hz; (void)cycles;
-    (void)fade_shift_idx; (void)max_hz;
+    (void)freq_hz; (void)cycles; (void)max_hz;
 #endif
   }
 

@@ -35,6 +35,17 @@
 #define AUDIO_TICK_DOUT 40
 #endif
 
+// ALL_LEFT broadcasts mono to both slots; ONLY_LEFT drives one slot.
+// ESP32-S3's I2S driver plays ALL_LEFT at 2x speed, so it defaults to
+// ONLY_LEFT there. Override per env via -DAUDIO_TICK_CHANNEL_FMT=.
+#ifndef AUDIO_TICK_CHANNEL_FMT
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#define AUDIO_TICK_CHANNEL_FMT I2S_CHANNEL_FMT_ONLY_LEFT
+#else
+#define AUDIO_TICK_CHANNEL_FMT I2S_CHANNEL_FMT_ALL_LEFT
+#endif
+#endif
+
 #define AUDIO_TICK_SAMPLE_RATE 22050
 
 // HTTP routes + alert paths enqueue here; a single worker drives I2S.
