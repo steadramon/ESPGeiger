@@ -47,7 +47,10 @@ namespace {
     cfg.duty_resolution = LEDC_TIMER_8_BIT;
     cfg.timer_num       = LEDC_TIMER_0;
     cfg.freq_hz         = kLedFreqHz;
-    cfg.clk_cfg         = LEDC_AUTO_CLK;
+    // Pin to APB explicitly. LEDC_AUTO_CLK on ESP32-S3 can pick APLL, which
+    // I2S also uses for its 22050 Hz sample rate - the two fight and audio
+    // plays back at the wrong rate.
+    cfg.clk_cfg         = LEDC_USE_APB_CLK;
     ledc_timer_config(&cfg);
     s_timer_ready = true;
   }
@@ -74,6 +77,12 @@ EGLed::EGLed(uint8_t pin, bool low_active)
   ledc_channel_config(&cfg);
 #else
   pinMode(_pin, OUTPUT);
+#ifdef ESP8266
+  // analogWrite only attaches a pin to Timer1 SoftPWM on the first mid-range
+  // call; extremes (0/PWMRANGE) just digitalWrite. Without this pre-warm,
+  // fade can silently fail on pins that only ever saw extreme writes.
+  analogWrite(_pin, 512);
+#endif
 #endif
   writeDuty(0);
 }
@@ -120,7 +129,10 @@ void EGLed::blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count) {
 
 void EGLed::fade(uint8_t shift) {
   _fade_shift = shift > 7 ? 7 : shift;
-  _fade_value = _brightness;
+  // Clamp to 254 so writeDuty never hits the analogWrite(0/1023) extremes
+  // that detach Timer1 PWM on ESP8266. Visually identical to 255.
+  uint8_t start = _brightness > 254 ? 254 : _brightness;
+  _fade_value = start;
   writeDuty(_fade_value);
   _state   = PHASE_FADE;
   _next_ms = s_clock() + 5;
