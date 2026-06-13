@@ -75,7 +75,7 @@ EG_PSTR(OL_L_SCL, "I2C SCL Pin");
 EG_PSTR(OL_H_RBA, "Reboot to apply");
 EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 EG_PSTR(OL_L_TYP, "Display Type");
-EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309. Reboot to apply.");
+EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309, 3=Tiny SSD1306 (0.42in 72x40). Reboot to apply.");
 #if OLED_RST != 255
 EG_PSTR(OL_L_RST, "Reset Pin");
 EG_PSTR(OL_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
@@ -93,7 +93,7 @@ static const EGPref OLED_PREF_ITEMS[] = {
   {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
   {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, 0},
-  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, 0},
+  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 3, 0, EGP_UINT, 0},
 #if OLED_RST != 255
   {"rst",        OL_L_RST, OL_H_RST, OLED_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, 0},
 #endif
@@ -355,7 +355,10 @@ void SSD1306Display::loop(unsigned long now) {
     }
     enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };
     uint8_t dirty = DR_NONE;
-    if (oled_page == 1) {
+    if (isTiny()) {
+      page_tiny();
+      dirty = DR_FULL;
+    } else if (oled_page == 1) {
       bool full_redraw = (now - oled_last_update >= 10000) || (oled_last_update == 0);
       if (full_redraw) {
         oled_last_update = now;
@@ -426,6 +429,18 @@ bool SSD1306Display::isScreenOnTime(unsigned long now) {
   return s_sched_cached;
 }
 
+void SSD1306Display::page_tiny() {
+  clearBuffer();
+  char buf[12];
+  snprintf_P(buf, sizeof(buf), PSTR("%u"), (unsigned)gcounter.get_cpm());
+  setFont(U8G2_FONT_ARIAL_16);
+  uint16_t w = u8g2_GetStrWidth(&_u8g2, buf);
+  int x = (72 - (int)w) / 2;
+  if (x < 0) x = 0;
+  drawStr(x, 28, buf);
+  if (Wifi::connected) drawPixel(71, 0);
+}
+
 void SSD1306Display::page_two_full() {
   clearBuffer();
   setFont(U8G2_FONT_ARIAL_10);
@@ -493,6 +508,10 @@ void SSD1306Display::setup() {
       break;
     case DISP_SSD1309:
       u8g2_Setup_ssd1309_i2c_128x64_noname0_f(&_u8g2, U8G2_R0,
+          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+      break;
+    case DISP_SSD1306_72X40:
+      u8g2_Setup_ssd1306_i2c_72x40_er_f(&_u8g2, U8G2_R0,
           u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
       break;
     case DISP_SSD1306:

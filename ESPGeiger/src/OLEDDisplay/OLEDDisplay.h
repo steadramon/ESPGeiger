@@ -67,10 +67,15 @@ extern Counter gcounter;
 class SSD1306Display : public EGModule {
 public:
     enum DisplayType : uint8_t {
-      DISP_SSD1306 = 0,
-      DISP_SH1106  = 1,
-      DISP_SSD1309 = 2,
+      DISP_SSD1306        = 0,
+      DISP_SH1106         = 1,
+      DISP_SSD1309        = 2,
+      DISP_SSD1306_72X40  = 3,   // 0.42" mini OLED (ESP32-C3 dev modules etc.)
     };
+
+    // True when the active panel is the 0.42" 72x40 variant - callers that
+    // assume 128x64 must fall back to a one-line/big-number layout.
+    bool isTiny() const { return _pref_display_type == DISP_SSD1306_72X40; }
 
     SSD1306Display();
     const char* name() override { return "disp"; }
@@ -116,6 +121,7 @@ public:
     bool page_one_values(unsigned long now);
     void page_two_full();
     void page_three_full();
+    void page_tiny();              // 0.42" 72x40 - CPM + single-pixel WiFi
     void page_four_static();
     void page_four_matrix();
     void showOTABanner();
