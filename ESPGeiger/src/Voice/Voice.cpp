@@ -54,11 +54,11 @@ EG_PSTR(VX_L_ARM, "RadMon up/down");
 EG_PSTR(VX_H_ARM, "Speak when RadMon goes online or offline");
 
 static const EGPref VOICE_PREF_ITEMS[] = {
-  {"voice_volume",      VX_L_VVOL, VX_H_VVOL, "80", nullptr,  1,  100,  0, EGP_UINT, 0},
   {"announce_enable",   VX_L_AEN,  VX_H_AEN,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
   {"announce_interval", VX_L_AIV,  VX_H_AIV,  "60", nullptr, 10, 3600,  0, EGP_UINT, 0},
   {"announce_usv",      VX_L_AUS,  VX_H_AUS,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
   {"announce_radmon",   VX_L_ARM,  VX_H_ARM,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
+  {"voice_volume",      VX_L_VVOL, VX_H_VVOL, "80", nullptr,  1,  100,  0, EGP_UINT, 0},
 };
 
 static const EGPrefGroup VOICE_PREF_GROUP = {
