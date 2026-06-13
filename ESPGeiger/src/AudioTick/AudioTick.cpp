@@ -27,6 +27,11 @@
 #include <EGHttpServer.h>
 #include <math.h>
 #include <driver/i2s.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+
+#include "../Voice/Voice.h"
 
 #define _TICK_STR(x) #x
 #define TICK_STR(x) _TICK_STR(x)
@@ -38,6 +43,49 @@ static volatile bool s_nm_busy = false;
 
 void AudioTick::setI2SOwned(bool owned) { s_nm_busy = owned; }
 bool AudioTick::isI2SOwned() { return s_nm_busy; }
+
+// ---------- Unified audio dispatch ----------
+
+static QueueHandle_t s_audio_q = nullptr;
+
+bool audio_enqueue(const AudioCmd& cmd) {
+  if (!s_audio_q) return false;
+  return xQueueSend(s_audio_q, &cmd, 0) == pdTRUE;
+}
+
+void AudioTick::dispatch(const AudioCmd& cmd) {
+  setI2SOwned(true);
+  switch (cmd.type) {
+    case AC_WORD:     voice.speakWord(cmd.s, 1.0f); break;
+    case AC_NUMBER:   voice.speakNumber(cmd.i32); break;
+    case AC_KLAXON:   voice.playKlaxon(cmd.i1); break;
+    case AC_ANNOUNCE: voice.announce(); break;
+    case AC_NUMBERS:  chimeNumbersStation(); break;
+    case AC_CHIME:    play_chime_now(cmd.i1); break;
+    case AC_CLICK:    playClick(cmd.i1); break;
+    default: break;
+  }
+  setI2SOwned(false);
+}
+
+static void audio_worker(void*) {
+  AudioCmd req;
+  for (;;) {
+    if (xQueueReceive(s_audio_q, &req, portMAX_DELAY) != pdTRUE) continue;
+    if (!audiotick.isI2SUp()) continue;
+    audiotick.dispatch(req);
+  }
+}
+
+static void audio_worker_start() {
+  if (s_audio_q) return;
+  s_audio_q = xQueueCreate(8, sizeof(AudioCmd));
+  if (!s_audio_q) {
+    Log::console(PSTR("Tick: audio queue alloc failed"));
+    return;
+  }
+  xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr);
+}
 
 // Morse 0..9. 0=dot, 1=dash.
 static const uint8_t MORSE_DIGIT[10][5] = {
@@ -122,16 +170,22 @@ void AudioTick::on_prefs_loaded() {
 void AudioTick::begin() {
   if (_i2s_up) return;
   if (!_enabled) return;
+  // ESP32 I2S channel naming is inverted from electrical convention:
+  // ONLY_LEFT actually drives the slot the NS4168 reads when its CTRL
+  // pin is biased to ~2.5V (datasheet "right channel" mode). Switching
+  // this to ONLY_RIGHT here results in silence. Confirmed empirically.
+  // use_apll=true gives accurate clocking at 22050 Hz.
   i2s_config_t cfg = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
     .sample_rate = AUDIO_TICK_SAMPLE_RATE,
     .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-    .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+    // ALL_LEFT broadcasts mono to both slots so any amp wiring picks it up.
+    .channel_format = I2S_CHANNEL_FMT_ALL_LEFT,
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,
     .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
     .dma_buf_count = 4,
     .dma_buf_len = 256,
-    .use_apll = false,
+    .use_apll = true,
     .tx_desc_auto_clear = true,
     .fixed_mclk = 0,
   };
@@ -153,6 +207,7 @@ void AudioTick::begin() {
   }
   i2s_zero_dma_buffer(I2S_NUM_0);
   _i2s_up = true;
+  audio_worker_start();
   Log::console(PSTR("Tick: I2S ready (BCLK=%u WS=%u DOUT=%u)"),
                (unsigned)_bclk, (unsigned)_ws, (unsigned)_dout);
   playBootChime();
@@ -188,25 +243,21 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
   http.on("/tick", EGHttpRequest::GET,
     [](EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (!audiotick._i2s_up) { res.send(503, "text/plain", "audio not ready"); return; }
+      AudioCmd cmd{};
       const char* k = req.arg("click");
       if (k && k[0]) {
         uint8_t eng = (uint8_t)atoi(k);
         if (eng > 1) { res.send(400, "text/plain", "0..1"); return; }
-        audiotick.playClick(eng);
-        res.send(200, "text/plain", k);
-        return;
+        cmd.type = AC_CLICK; cmd.i1 = eng;
+      } else {
+        const char* c = req.arg("c");
+        uint8_t which = (c && c[0]) ? (uint8_t)atoi(c) : audiotick._chime;
+        if (which > 9) which = 0;
+        cmd.type = AC_CHIME; cmd.i1 = which;
       }
-      const char* c = req.arg("c");
-      uint8_t which = (c && c[0]) ? (uint8_t)atoi(c) : audiotick._chime;
-      if (which > 9) which = 0;
-      audiotick.play_chime_now(which);
-      res.send(200, "text/plain", "ok");
+      if (audio_enqueue(cmd)) res.send(200, "text/plain", "queued");
+      else                    res.send(503, "text/plain", "queue full");
     });
-  static auto numbers_task = +[](void*) {
-    audiotick.chimeNumbersStation();
-    s_nm_busy = false;
-    vTaskDelete(nullptr);
-  };
   http.on("/numbers", EGHttpRequest::GET,
     [](EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (!audiotick._i2s_up) { res.send(503, "text/plain", "."); return; }
@@ -216,10 +267,9 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
       char out[PAD_LEN + 1];
       for (size_t i = 0; i < PAD_LEN; i++) out[i] = '0' + pad[i];
       out[PAD_LEN] = '\0';
-      if (!s_nm_busy) {
-        s_nm_busy = true;
-        xTaskCreate(numbers_task, "nm", 4096, nullptr, 1, nullptr);
-      }
+      AudioCmd cmd{};
+      cmd.type = AC_NUMBERS;
+      if (!audio_enqueue(cmd)) { res.send(503, "text/plain", "queue full"); return; }
       res.send(200, "text/plain", out);
     });
 }
@@ -285,7 +335,6 @@ void AudioTick::playMelodyNote(uint16_t freq_hz, uint16_t ms,
     i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 50 / portTICK_PERIOD_MS);
     out += n;
   }
-  // Variable-length gap, reusing buf as a silence buffer.
   if (gap_ms > 0) {
     for (uint16_t i = 0; i < CHUNK; i++) buf[i] = 0;
     uint32_t remaining = (uint32_t)gap_ms * AUDIO_TICK_SAMPLE_RATE / 1000;
@@ -429,10 +478,8 @@ static void numbers_payload(uint8_t out[10]) {
 void AudioTick::chimeNumbersStation() {
   uint8_t msg[10];
   numbers_payload(msg);
-
   chimeFolkMelody();
   voice.silence(800);
-
   for (uint8_t grp = 0; grp < 2; grp++) {
     for (uint8_t rep = 0; rep < 2; rep++) {
       for (uint8_t d = 0; d < 5; d++) {
@@ -445,7 +492,6 @@ void AudioTick::chimeNumbersStation() {
     }
     if (grp == 0) voice.silence(2200);
   }
-
   voice.silence(1000);
   chimeFolkMelody();
 }

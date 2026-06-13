@@ -37,6 +37,26 @@
 
 #define AUDIO_TICK_SAMPLE_RATE 22050
 
+// HTTP routes + alert paths enqueue here; a single worker drives I2S.
+enum AudioCmdType : uint8_t {
+  AC_WORD = 1,
+  AC_NUMBER,
+  AC_KLAXON,
+  AC_ANNOUNCE,
+  AC_NUMBERS,
+  AC_CHIME,
+  AC_CLICK,
+};
+
+struct AudioCmd {
+  uint8_t type;
+  uint8_t i1;
+  int32_t i32;
+  char    s[24];
+};
+
+bool audio_enqueue(const AudioCmd& cmd);
+
 class AudioTick : public EGModule {
   public:
     AudioTick() {}
@@ -58,6 +78,8 @@ class AudioTick : public EGModule {
     // (numbers station, Klatt digit synth). While owned, ticks are dropped.
     static void setI2SOwned(bool owned);
     static bool isI2SOwned();
+    bool        isI2SUp() const { return _i2s_up; }
+    void        dispatch(const struct AudioCmd& cmd);
     static void numbersPad(uint8_t* out, size_t n);
 
   private:
@@ -75,7 +97,7 @@ class AudioTick : public EGModule {
     void chimeSputnik();
     void chimeItemGet();
     void chimeMorseCallsign();    // chime 9
-    void chimeNumbersStation();   // /numbers route
+    void chimeNumbersStation();
     void playMelodyNote(uint16_t freq_hz, uint16_t ms, bool square = false,
                         uint16_t gap_ms = 30);
 
