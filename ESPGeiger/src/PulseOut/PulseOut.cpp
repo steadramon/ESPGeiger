@@ -119,7 +119,8 @@ void PulseOut::on_prefs_loaded() {
   _q_from_min = qf.isValid ? (int16_t)(qf.hour * 60 + qf.minute) : -1;
   _q_to_min   = qt.isValid ? (int16_t)(qt.hour * 60 + qt.minute) : -1;
   _engine.commitConfig();
-  EGModuleRegistry::set_loop_interval(this, (_enabled && _engine.pin >= 0) ? 1 : -1);
+  // notifyClick re-arms; loop() disables when the pulse completes.
+  EGModuleRegistry::set_loop_interval(this, -1);
 }
 
 bool PulseOut::isQuietNow() {
@@ -248,11 +249,20 @@ void PulseOut::begin() {
 void PulseOut::notifyClick(unsigned long now_ms) {
   if (!_enabled) return;
   if (isQuietNow()) return;
-  _engine.notifyClick(now_ms);
+  if (_engine.notifyClick(now_ms)) {
+    EGModuleRegistry::set_loop_interval(this, 1);
+  }
 }
 
 void PulseOut::loop(unsigned long /*now_ms*/) {
   _engine.loop();
+  if (_engine.phases_remaining == 0
+#ifndef EGPE_NO_PWM
+      && !(_engine.mode == PulseEngine::MODE_FADE && _engine.brightness > 0)
+#endif
+     ) {
+    EGModuleRegistry::set_loop_interval(this, -1);
+  }
 }
 
 #endif
