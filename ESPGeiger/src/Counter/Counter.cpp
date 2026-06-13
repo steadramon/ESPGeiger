@@ -678,7 +678,7 @@ void Counter::loop() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
 #elif GEIGER_IS_PULSE(GEIGER_TYPE) && defined(USE_PCNT)
-  // Sub-ms PCNT drain so audio/LED/UDP fire on the click, not the 1 Hz tick.
+  // 50 Hz PCNT drain so audio/LED/UDP fire on the click, not the 1 Hz tick.
   geigerinput->drain_pcnt();
 #elif GEIGER_IS_UDPRX(GEIGER_TYPE)
   #ifndef UDPRX_POLL_SKIP
