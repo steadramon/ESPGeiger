@@ -855,7 +855,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendChunk(F(R"HTML(
 <button type=submit>Save and reboot</button>
 </form>
-<p class=muted style='margin-top:1em'>After saving, the device reboots and tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute.</p>
+<p class=muted style='margin-top:1em'>If the new network is unreachable, the previous one is restored automatically after about a minute.</p>
 )HTML"));
 
   // Lazy-load the ~4 KB /ntpjs timezone payload on first expand.
