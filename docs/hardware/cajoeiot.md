@@ -32,7 +32,7 @@ The Cajoe GC-ESP32 has a inbuilt ESP32 to which ESPGeiger can be installed. The 
 
 ## Install
 
-- Follow the instructions for [installing ESPGeiger](/install/webinstaller) using the web installer at [https://install.espgeiger.com](https://install.espgeiger.com)
+- Follow the instructions for [installing ESPGeiger](/install/webinstall) using the web installer at [https://install.espgeiger.com](https://install.espgeiger.com)
 
 ## User Images
 
