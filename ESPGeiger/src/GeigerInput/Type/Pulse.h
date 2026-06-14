@@ -76,7 +76,6 @@ class GeigerPulse : public GeigerInput
     uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT; // 0-2
     int8_t   _pin_pull_last_logged = -1;        // -1 = never logged yet
     uint32_t _last_drain_us = 0;
-    uint32_t _last_drain_ms = 0;
 #endif
 };
 #endif

@@ -679,7 +679,14 @@ void Counter::loop() {
   geigerinput->loop();
 #elif GEIGER_IS_PULSE(GEIGER_TYPE) && defined(USE_PCNT)
   // 50 Hz PCNT drain so audio/LED/UDP fire on the click, not the 1 Hz tick.
-  geigerinput->drain_pcnt();
+  {
+    static uint32_t s_last_pcnt_ms = 0;
+    uint32_t pcnt_ms = fast_millis();
+    if ((uint32_t)(pcnt_ms - s_last_pcnt_ms) >= 20) {
+      s_last_pcnt_ms = pcnt_ms;
+      geigerinput->drain_pcnt();
+    }
+  }
 #elif GEIGER_IS_UDPRX(GEIGER_TYPE)
   #ifndef UDPRX_POLL_SKIP
   #define UDPRX_POLL_SKIP 500

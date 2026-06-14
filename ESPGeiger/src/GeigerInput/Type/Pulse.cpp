@@ -82,11 +82,7 @@ void GeigerPulse::restartAfterOTA() {
 
 #ifdef USE_PCNT
 void GeigerPulse::drain_pcnt() {
-  // 50 Hz throttle. fast_millis() not millis() - this runs every main-loop iter.
-  uint32_t now_ms_lo = fast_millis();
-  if ((uint32_t)(now_ms_lo - _last_drain_ms) < 20) return;
-  _last_drain_ms = now_ms_lo;
-
+  // Caller throttles to 50 Hz; this assumes a real drain is wanted.
   int16_t n = 0;
   pcnt_counter_pause(PCNT_UNIT);
   pcnt_get_counter_value(PCNT_UNIT, &n);
