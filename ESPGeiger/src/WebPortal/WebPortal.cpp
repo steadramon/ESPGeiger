@@ -133,7 +133,7 @@ nav.tabs a.ac{color:var(--accent);border-bottom-color:var(--accent)}
 .devhead .sub{color:var(--muted);font-size:.95em;margin-top:.2em}
 .cred{margin-top:1.5em;font-size:.85em;color:var(--muted)}
 .cred a{color:inherit}
-.cred .brand{color:var(--fg);font-weight:bold}
+.cred .brand{color:var(--fg);font-weight:bold;font-family:"Courier New",Courier,monospace}
 #g1{height:200px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px}
 #g2{display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.4em 0;font-size:1.05em}
 #t1{width:100%;height:250px;font-family:monospace;font-size:.8em;line-height:1.3;resize:vertical}
