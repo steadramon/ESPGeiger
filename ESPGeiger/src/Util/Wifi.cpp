@@ -28,6 +28,7 @@
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../Module/EGModule.h"
+#include "../ImprovSerial/ImprovSerial.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
 #include "DeviceInfo.h"
@@ -343,6 +344,15 @@ bool Wifi::applyStaticConfig() {
   return true;
 }
 
+void Wifi::onImprovCreds(const char* ssid, const char* pass) {
+  if (!ssid) return;
+  strncpy(s_portalSsid, ssid, sizeof(s_portalSsid) - 1);
+  s_portalSsid[sizeof(s_portalSsid) - 1] = '\0';
+  strncpy(s_portalPass, pass ? pass : "", sizeof(s_portalPass) - 1);
+  s_portalPass[sizeof(s_portalPass) - 1] = '\0';
+  s_portalGotCreds = true;
+}
+
 bool Wifi::connectOrPortal() {
   if (Wifi::hasSavedCreds()) {
     WiFi.mode(WIFI_STA);
@@ -400,6 +410,7 @@ bool Wifi::connectOrPortal() {
   Log::console(PSTR("WiFi: Setup portal up on AP %s"), DeviceInfo::hostname());
   while (!s_portalGotCreds) {
     portal->loop();
+    improvSerial.poll();
     delay(10);
     yield();
   }

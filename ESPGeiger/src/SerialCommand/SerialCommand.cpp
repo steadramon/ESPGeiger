@@ -21,6 +21,7 @@
 #include "../Prefs/EGPrefs.h"
 #include "../Logger/Logger.h"
 #include "../Util/DeviceInfo.h"
+#include "../ImprovSerial/ImprovSerial.h"
 #include <LittleFS.h>
 
 void SerialCommand::reboot() { DeviceInfo::safeRestart(); }
@@ -286,6 +287,9 @@ void SerialCommand::dispatch(const char* line) {
 void SerialCommand::readSerial() {
   while (Serial.available() > 0) {
     char inChar = Serial.read();   // Read single available character, there may be more waiting
+    // Improv WiFi provisioning frames arrive over the same serial port.
+    // If the parser is mid-frame it consumes the byte; otherwise we keep it.
+    if (improvSerial.consume_byte((uint8_t)inChar)) continue;
 
     // Accept either CR or LF as line terminator - saves users having to
     // configure their serial monitor's line-ending mode.

@@ -32,6 +32,7 @@
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/CrashDump.h"
 #include "src/Util/BootGuard.h"
+#include "src/ImprovSerial/ImprovSerial.h"
 #include "src/Util/LedSignal.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
@@ -116,6 +117,7 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   delay(100);
+  improvSerial.begin();
 
 #ifdef ESP32
   // Drop INFO/WARN from the FS tags; failed mounts are still detected via begin()==false.
