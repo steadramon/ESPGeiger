@@ -7,7 +7,7 @@ remote_theme: just-the-docs/just-the-docs
 permalink: pretty
 exclude: []
 
-avatar: /img/ESPGeiger.svg
+avatar: /favicon.svg
 
 aux_links:
   "ESPGeiger on GitHub":
