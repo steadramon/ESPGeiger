@@ -284,6 +284,27 @@ static size_t _remove_events_for_client(AsyncClient *client) {
   return count;
 };
 
+// pkt.client here is the pre-built AsyncClient that never reached _connect_cb.
+static size_t _remove_events_for_server(AsyncServer *server) {
+  lwip_tcp_event_packet_t *removed_event_chain;
+  {
+    queue_mutex_guard guard;
+    removed_event_chain = _async_queue.remove_if([=](lwip_tcp_event_packet_t &pkt) {
+      return pkt.event == LWIP_TCP_ACCEPT && pkt.accept.server == server;
+    });
+  }
+
+  size_t count = 0;
+  while (removed_event_chain) {
+    ++count;
+    auto t = removed_event_chain;
+    removed_event_chain = t->next;
+    delete t->client;
+    _free_event(t);
+  }
+  return count;
+}
+
 void AsyncTCP_detail::handle_async_event(lwip_tcp_event_packet_t *e) {
   if (e->client == NULL) {
     // do nothing when arg is NULL
@@ -783,6 +804,33 @@ static tcp_pcb *_tcp_listen_with_backlog(tcp_pcb *pcb, uint8_t backlog) {
   return pcb;
 }
 
+// Single tcpip_api_call so lwIP never observes a pcb without callbacks bound.
+// tcp_core_guard is a no-op without CONFIG_LWIP_TCPIP_CORE_LOCKING.
+struct tcp_new_client_api_call_t {
+  struct tcpip_api_call_data call;
+  u8_t addr_type;
+  AsyncClient *client;
+  tcp_pcb *pcb;
+};
+
+static err_t _tcp_new_client_api(struct tcpip_api_call_data *api_call_msg) {
+  auto *msg = reinterpret_cast<tcp_new_client_api_call_t *>(api_call_msg);
+  msg->pcb = tcp_new_ip_type(msg->addr_type);
+  if (msg->pcb) {
+    _bind_tcp_callbacks(msg->pcb, msg->client);
+  }
+  return ERR_OK;
+}
+
+static tcp_pcb *_tcp_new_client(u8_t addr_type, AsyncClient *client) {
+  tcp_new_client_api_call_t msg;
+  msg.addr_type = addr_type;
+  msg.client = client;
+  msg.pcb = nullptr;
+  tcpip_api_call(_tcp_new_client_api, reinterpret_cast<struct tcpip_api_call_data *>(&msg));
+  return msg.pcb;
+}
+
 /*
   Async TCP Client
  */
@@ -871,19 +919,14 @@ bool AsyncClient::connect(ip_addr_t addr, uint16_t port) {
     return false;
   }
 
-  tcp_pcb *pcb;
-  {
-    tcp_core_guard tcg;
 #if LWIP_IPV4 && LWIP_IPV6
-    pcb = tcp_new_ip_type(addr.type);
+  tcp_pcb *pcb = _tcp_new_client(addr.type, this);
 #else
-    pcb = tcp_new_ip_type(IPADDR_TYPE_V4);
+  tcp_pcb *pcb = _tcp_new_client(IPADDR_TYPE_V4, this);
 #endif
-    if (!pcb) {
-      async_tcp_log_e("pcb == NULL");
-      return false;
-    }
-    _bind_tcp_callbacks(pcb, this);
+  if (!pcb) {
+    async_tcp_log_e("pcb == NULL");
+    return false;
   }
 
   esp_err_t err = _tcp_connect(pcb, &addr, port, (tcp_connected_fn)&_tcp_connected);
@@ -1573,6 +1616,8 @@ void AsyncServer::end() {
     }
     _pcb = NULL;
   }
+  // Drop ACCEPT events queued before tcp_accept(NULL) detached the callback.
+  _remove_events_for_server(this);
 }
 
 // runs on LwIP thread
