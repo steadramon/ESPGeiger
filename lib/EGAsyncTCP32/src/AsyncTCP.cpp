@@ -831,6 +831,82 @@ static tcp_pcb *_tcp_new_client(u8_t addr_type, AsyncClient *client) {
   return msg.pcb;
 }
 
+// AsyncServer listen-pcb teardown. Detaches the lwIP accept callback then
+// closes the pcb in one tcpip_api_call so the caller has a sync barrier with
+// the lwIP task before purging the event queue.
+struct tcp_server_close_api_call_t {
+  struct tcpip_api_call_data call;
+  tcp_pcb **pcb;
+};
+
+static err_t _tcp_server_close_api(struct tcpip_api_call_data *api_call_msg) {
+  auto *msg = reinterpret_cast<tcp_server_close_api_call_t *>(api_call_msg);
+  if (*msg->pcb) {
+    tcp_arg(*msg->pcb, NULL);
+    tcp_accept(*msg->pcb, NULL);
+    if (tcp_close(*msg->pcb) != ERR_OK) {
+      tcp_abort(*msg->pcb);
+    }
+    *msg->pcb = NULL;
+  }
+  return ERR_OK;
+}
+
+static void _tcp_server_close(tcp_pcb **pcb) {
+  tcp_server_close_api_call_t msg;
+  msg.pcb = pcb;
+  tcpip_api_call(_tcp_server_close_api, reinterpret_cast<struct tcpip_api_call_data *>(&msg));
+}
+
+// AsyncServer listen-pcb arming. tcp_arg + tcp_accept wired atomically on
+// the lwIP thread so an incoming SYN can't observe a half-configured pcb.
+struct tcp_server_accept_api_call_t {
+  struct tcpip_api_call_data call;
+  tcp_pcb *pcb;
+  AsyncServer *server;
+};
+
+static err_t _tcp_server_accept_api(struct tcpip_api_call_data *api_call_msg) {
+  auto *msg = reinterpret_cast<tcp_server_accept_api_call_t *>(api_call_msg);
+  tcp_arg(msg->pcb, msg->server);
+  tcp_accept(msg->pcb, &AsyncTCP_detail::tcp_accept);
+  return ERR_OK;
+}
+
+static void _tcp_server_accept(tcp_pcb *pcb, AsyncServer *server) {
+  tcp_server_accept_api_call_t msg;
+  msg.pcb = pcb;
+  msg.server = server;
+  tcpip_api_call(_tcp_server_accept_api, reinterpret_cast<struct tcpip_api_call_data *>(&msg));
+}
+
+// dns_gethostbyname touches lwIP's DNS cache and pending-query slots that
+// the lwIP thread also reads when DNS responses land on UDP.
+struct tcp_dns_api_call_t {
+  struct tcpip_api_call_data call;
+  const char *host;
+  ip_addr_t *addr;
+  AsyncClient *client;
+  err_t err;
+};
+
+static err_t _tcp_dns_gethostbyname_api(struct tcpip_api_call_data *api_call_msg) {
+  auto *msg = reinterpret_cast<tcp_dns_api_call_t *>(api_call_msg);
+  msg->err = dns_gethostbyname(msg->host, msg->addr,
+                               (dns_found_callback)&_tcp_dns_found, msg->client);
+  return ERR_OK;
+}
+
+static err_t _tcp_dns_gethostbyname(const char *host, ip_addr_t *addr, AsyncClient *client) {
+  tcp_dns_api_call_t msg;
+  msg.host = host;
+  msg.addr = addr;
+  msg.client = client;
+  msg.err = ERR_VAL;
+  tcpip_api_call(_tcp_dns_gethostbyname_api, reinterpret_cast<struct tcpip_api_call_data *>(&msg));
+  return msg.err;
+}
+
 /*
   Async TCP Client
  */
@@ -969,11 +1045,7 @@ bool AsyncClient::connect(const char *host, uint16_t port) {
     return false;
   }
 
-  err_t err;
-  {
-    tcp_core_guard tcg;
-    err = dns_gethostbyname(host, &addr, (dns_found_callback)&_tcp_dns_found, this);
-  }
+  err_t err = _tcp_dns_gethostbyname(host, &addr, this);
 
   if (err == ERR_OK) {
 #if ESP_IDF_VERSION_MAJOR < 5
@@ -1601,21 +1673,11 @@ void AsyncServer::begin() {
     async_tcp_log_e("listen_pcb == NULL");
     return;
   }
-  tcp_core_guard tcg;
-  tcp_arg(_pcb, (void *)this);
-  tcp_accept(_pcb, &AsyncTCP_detail::tcp_accept);
+  _tcp_server_accept(_pcb, this);
 }
 
 void AsyncServer::end() {
-  if (_pcb) {
-    tcp_core_guard tcg;
-    tcp_arg(_pcb, NULL);
-    tcp_accept(_pcb, NULL);
-    if (tcp_close(_pcb) != ERR_OK) {
-      tcp_abort(_pcb);
-    }
-    _pcb = NULL;
-  }
+  _tcp_server_close(&_pcb);
   // Drop ACCEPT events queued before tcp_accept(NULL) detached the callback.
   _remove_events_for_server(this);
 }
