@@ -23,8 +23,11 @@
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Util/FastMillis.h"
 #include "../Util/Globals.h"
+#include "../Util/PinSafety.h"
 #include <EGHttpServer.h>
+#include <Ticker.h>
 #include <math.h>
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
@@ -54,6 +57,7 @@ bool audio_enqueue(const AudioCmd& cmd) {
 }
 
 void AudioTick::dispatch(const AudioCmd& cmd) {
+  if (_muted) return;
   setI2SOwned(true);
   switch (cmd.type) {
     case AC_WORD:     voice.speakWord(cmd.s, 1.0f); break;
@@ -85,6 +89,45 @@ static void audio_worker_start() {
     return;
   }
   xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr);
+}
+
+#ifndef AUDIO_MUTE_PIN
+#define AUDIO_MUTE_PIN -1
+#endif
+
+static Ticker s_mute_ticker;
+static volatile bool     s_mute_last_read       = false;
+static volatile bool     s_mute_pressed         = false;
+static volatile uint32_t s_mute_last_change_ms  = 0;
+
+static void mute_tick() {
+  bool down = (digitalRead(AUDIO_MUTE_PIN) == LOW);
+  uint32_t now = fast_millis();
+  if (down != s_mute_last_read) {
+    s_mute_last_read = down;
+    s_mute_last_change_ms = now;
+    return;
+  }
+  if (down == s_mute_pressed) return;
+  if (now - s_mute_last_change_ms < 30) return;
+  s_mute_pressed = down;
+  if (down) {
+    audiotick.toggleMute();
+  }
+}
+
+static void mute_btn_start() {
+  if (AUDIO_MUTE_PIN < 0) return;
+  if (const char* why = PinSafety::claim_input(AUDIO_MUTE_PIN, PSTR("AudioMute"))) {
+    Log::console(PSTR("Tick: mute pin=%d unsafe (%s)"), (int)AUDIO_MUTE_PIN, why);
+    return;
+  }
+  pinMode(AUDIO_MUTE_PIN, INPUT_PULLUP);
+  s_mute_last_read = (digitalRead(AUDIO_MUTE_PIN) == LOW);
+  s_mute_pressed = s_mute_last_read;
+  s_mute_last_change_ms = fast_millis();
+  s_mute_ticker.attach_ms(10, mute_tick);
+  Log::console(PSTR("Tick: mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
 }
 
 // Morse 0..9. 0=dot, 1=dash.
@@ -207,16 +250,22 @@ void AudioTick::begin() {
   i2s_zero_dma_buffer(I2S_NUM_0);
   _i2s_up = true;
   audio_worker_start();
+  mute_btn_start();
   Log::console(PSTR("Tick: I2S ready (BCLK=%u WS=%u DOUT=%u)"),
                (unsigned)_bclk, (unsigned)_ws, (unsigned)_dout);
   playBootChime();
+}
+
+void AudioTick::toggleMute() {
+  _muted = !_muted;
+  Log::console(_muted ? PSTR("Tick: muted") : PSTR("Tick: unmuted"));
 }
 
 // Token-bucket throttle. 30 ms refill gives a 33 Hz steady cap; 8-token
 // burst absorbs UdpRx gap-fill bunches. Click body is ~6 ms so even a
 // max burst stays under the speaker's mechanical recovery time.
 void AudioTick::notifyClick(unsigned long now_ms) {
-  if (!_enabled || !_i2s_up || _volume == 0) return;
+  if (!_enabled || !_i2s_up || _volume == 0 || _muted) return;
   if (s_nm_busy) return;
   constexpr uint32_t TOKEN_REFILL_MS = 30;
   constexpr uint8_t  TOKEN_MAX       = 8;

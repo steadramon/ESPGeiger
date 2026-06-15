@@ -93,6 +93,9 @@ class AudioTick : public EGModule {
     void        dispatch(const struct AudioCmd& cmd);
     static void numbersPad(uint8_t* out, size_t n);
 
+    bool muted() const { return _muted; }
+    void toggleMute();
+
   private:
     void playClick(uint8_t engine_override = 255);
     void playClickPool();
@@ -126,6 +129,7 @@ class AudioTick : public EGModule {
     unsigned long _last_emit_ms = 0;
     uint8_t       _tokens = 5;
     unsigned long _last_token_ms = 0;
+    bool          _muted = false;
 };
 
 extern AudioTick audiotick;
