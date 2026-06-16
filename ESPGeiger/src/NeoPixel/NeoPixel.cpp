@@ -64,6 +64,13 @@ static const EGPrefGroup NEOPIXEL_PREF_GROUP = {
 
 const EGPrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }
 
+// Channel mask per named colour, bit 2=R bit 1=G bit 0=B. 7 of the 8
+// entries are pure on/off per channel so the blink path is just a memcpy
+// of three precomputed bytes. Orange handled inline as a half-G special.
+static const uint8_t NAMED_MASK[8] = {
+  0b010, 0b100, 0b001, 0b110, 0b011, 0b101, 0b111, 0b100,
+};
+
 void NeoPixel::on_prefs_loaded() {
   int b = (int)EGPrefs::getUInt("neopixel", "brightness");
   setBrightness(b);
@@ -72,6 +79,12 @@ void NeoPixel::on_prefs_loaded() {
   neoPixelMode = m > 4 ? 4 : m;
   uint32_t c = EGPrefs::getUInt("neopixel", "color");
   _blip_colour_idx = c > 7 ? 0 : (uint8_t)c;
+  // Precompute the blip RGB so blink() does zero scaling work.
+  uint8_t mask = NAMED_MASK[_blip_colour_idx];
+  _blip_r = (mask & 0b100) ? colorSaturation : 0;
+  _blip_g = (mask & 0b010) ? colorSaturation : 0;
+  _blip_b = (mask & 0b001) ? colorSaturation : 0;
+  if (_blip_colour_idx == 7) _blip_g = colorSaturation >> 1;  // orange G ~50%
   // Self-disable when off (mode 0) or brightness 0.
   bool active = (b > 0) && (neoPixelMode > 0);
   EGModuleRegistry::set_loop_interval(this, active ? 30 : -1);
@@ -122,23 +135,16 @@ void NeoPixel::blink(uint16_t timer)
   RgbColor rgb;
 
   if (this->neoPixelMode == 1) {
-    // Plain blip, user-picked colour scaled to brightness.
-    static const uint8_t NAMED[8][3] = {
-      {0,255,0}, {255,0,0}, {0,0,255}, {255,255,0},
-      {0,255,255}, {255,0,255}, {255,255,255}, {255,128,0},
-    };
-    uint8_t idx = _blip_colour_idx < 8 ? _blip_colour_idx : 0;
-    uint8_t r = (uint8_t)(((uint16_t)NAMED[idx][0] * colorSaturation) / 255);
-    uint8_t g = (uint8_t)(((uint16_t)NAMED[idx][1] * colorSaturation) / 255);
-    uint8_t b = (uint8_t)(((uint16_t)NAMED[idx][2] * colorSaturation) / 255);
-    rgb = color(r, g, b);
+    // Precomputed in on_prefs_loaded; no scaling here.
+    rgb = color(_blip_r, _blip_g, _blip_b);
   } else {
     float our_cpm = gcounter.get_cpmf();
     float our_5cpm = gcounter.get_cpm5f();
     rgb = color(0, colorSaturation, 0);
     if ((our_5cpm > 0) && (our_cpm > 0)) {
-      float diff_ratio = (our_cpm / our_5cpm);
-      nextInterval = clamp((unsigned long)(blinkInterval / diff_ratio), 100UL, 4000UL);
+      // Equivalent to blinkInterval / (our_cpm / our_5cpm) but one divide.
+      nextInterval = clamp((unsigned long)(blinkInterval * our_5cpm / our_cpm),
+                           100UL, 4000UL);
       if (this->neoPixelMode >= 3) {
         // Noise-aware z-score: low rates need bigger deltas to trip.
         float z = poisson_z(our_cpm, our_5cpm);

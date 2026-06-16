@@ -70,6 +70,9 @@ class NeoPixel : public EGModule {
     const uint8_t PixelPin = NEOPIXEL_PIN;
     uint32_t neoPixelMode = 3;
     uint8_t  _blip_colour_idx = 0;
+    uint8_t  _blip_r = 0;
+    uint8_t  _blip_g = 0;
+    uint8_t  _blip_b = 0;
   protected:
     NeoController* controller_{nullptr};
   private:
