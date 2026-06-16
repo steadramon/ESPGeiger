@@ -987,8 +987,10 @@ static void hStatusJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// /hist body + /histjs. All values come from /clicks.
-static const char HISTORY_BODY[] PROGMEM = R"HTML(
+// /hist body + /histjs. All values come from /clicks. The body is split
+// around the inter-pulse-intervals section so UDP receiver builds can skip
+// it - their clicks arrive batched and the histogram stays empty.
+static const char HISTORY_BODY_LIFETIME[] PROGMEM = R"HTML(
 <div id=lf style=display:none><h2>Lifetime</h2><div class=card><div id=g2>
 <div><span class=muted>Clicks </span><b id=lfc>&mdash;</b></div>
 <div><span class=muted>Dose </span><b id=lfs class=dose>&mdash;</b></div>
@@ -996,12 +998,18 @@ static const char HISTORY_BODY[] PROGMEM = R"HTML(
 <div><span class=muted>Install age </span><b id=lfi>&mdash;</b></div>
 <div><span class=muted>Avg CPM </span><b id=lfa>&mdash;</b></div>
 </div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
+)HTML";
+
+static const char HISTORY_BODY_INTERPULSE[] PROGMEM = R"HTML(
 <h2>Inter-pulse intervals</h2>
 <div class=card style="margin:.4em 0">
 <div id=ph class=bar-row></div>
 <div id=phL class=bar-lbls></div>
 <div class=muted style="font-size:.85em;margin-top:.4em">log<sub>2</sub> buckets 64&micro;s to &ge;512s &middot; cumulative since boot<span id=mpW style=display:none> &middot; observed min <b id=mp>&mdash;</b></span></div>
 </div>
+)HTML";
+
+static const char HISTORY_BODY_LAST24[] PROGMEM = R"HTML(
 <h2>Last 24 hours</h2>
 <div class=card style="margin:.4em 0"><div id=g2>
 <div><span class=muted>Today </span><b id=hsT>&mdash;</b></div>
@@ -1108,7 +1116,14 @@ static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* fn = DeviceInfo::friendlyName();
   const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
   WebPortal::sendPageHead(res, F("History"), sub);
-  res.sendChunk(FPSTR(HISTORY_BODY));
+  res.sendChunk(FPSTR(HISTORY_BODY_LIFETIME));
+#if !GEIGER_IS_UDPRX(GEIGER_TYPE)
+  // Inter-pulse intervals only have meaning for builds that see per-click
+  // timing. UDP receivers get batched windows from the producer, so the
+  // histogram stays empty - hide it rather than ship a blank graph.
+  res.sendChunk(FPSTR(HISTORY_BODY_INTERPULSE));
+#endif
+  res.sendChunk(FPSTR(HISTORY_BODY_LAST24));
   WebPortal::sendPageTail(res);
   res.endChunked();
 }
