@@ -70,12 +70,18 @@ public:
       DISP_SSD1306        = 0,
       DISP_SH1106         = 1,
       DISP_SSD1309        = 2,
+#ifdef ESP32
       DISP_SSD1306_72X40  = 3,   // 0.42" mini OLED (ESP32-C3 dev modules etc.)
+#endif
     };
 
     // True when the active panel is the 0.42" 72x40 variant - callers that
     // assume 128x64 must fall back to a one-line/big-number layout.
+#ifdef ESP32
     bool isTiny() const { return _pref_display_type == DISP_SSD1306_72X40; }
+#else
+    bool isTiny() const { return false; }
+#endif
 
     SSD1306Display();
     const char* name() override { return "disp"; }
@@ -93,6 +99,7 @@ public:
 
     void setup();
     void setupWifi(const char* s);
+    void apOnlyMode(const char* host, const char* ip);
     void wifiDisabled();
     void wipeCountdown(int seconds_left);
     void wipeReady();
@@ -121,7 +128,7 @@ public:
     bool page_one_values(unsigned long now);
     void page_two_full();
     void page_three_full();
-    void page_tiny();              // 0.42" 72x40 - CPM + single-pixel WiFi
+    void page_tiny();              // 0.42" 72x40 - CPM + single-pixel WiFi (ESP32 only)
     void page_four_static();
     void page_four_matrix();
     void showOTABanner();
@@ -158,6 +165,9 @@ public:
     unsigned long oled_last_update = 0;
     bool oled_on = true;
     bool enable_oled_timeout = true;
+    // When true, loop() returns early so a setup page (AP-only mode etc.)
+    // stays visible and isn't overwritten by the normal page rotation.
+    bool _locked_page = false;
 
   private:
     u8g2_t _u8g2 {};

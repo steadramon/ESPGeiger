@@ -75,7 +75,11 @@ EG_PSTR(OL_L_SCL, "I2C SCL Pin");
 EG_PSTR(OL_H_RBA, "Reboot to apply");
 EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 EG_PSTR(OL_L_TYP, "Display Type");
+#ifdef ESP32
 EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309, 3=Tiny SSD1306 (0.42in 72x40). Reboot to apply.");
+#else
+EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309. Reboot to apply.");
+#endif
 #if OLED_RST != 255
 EG_PSTR(OL_L_RST, "Reset Pin");
 EG_PSTR(OL_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
@@ -93,7 +97,11 @@ static const EGPref OLED_PREF_ITEMS[] = {
   {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
   {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, 0},
+#ifdef ESP32
   {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 3, 0, EGP_UINT, 0},
+#else
+  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, 0},
+#endif
 #if OLED_RST != 255
   {"rst",        OL_L_RST, OL_H_RST, OLED_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, 0},
 #endif
@@ -299,6 +307,13 @@ void SSD1306Display::on_prefs_saved() {
 #endif
 
 void SSD1306Display::loop(unsigned long now) {
+    // A locked page (setup AP screen etc.) preserves whatever was drawn last
+    // and refuses to render anything else. Cheap loop_interval bump avoids
+    // burning a tick every 20 ms while locked.
+    if (_locked_page) {
+      EGModuleRegistry::set_loop_interval(this, 1000);
+      return;
+    }
     // Progressive send: if a previous render queued rows, drain one per tick.
     // Keeps blocking under ~1.6 ms per tick instead of 6.6-13 ms in one go.
     // Render is gated below so we only re-render once the queue is empty.
@@ -355,10 +370,13 @@ void SSD1306Display::loop(unsigned long now) {
     }
     enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };
     uint8_t dirty = DR_NONE;
+#ifdef ESP32
     if (isTiny()) {
       page_tiny();
       dirty = DR_FULL;
-    } else if (oled_page == 1) {
+    } else
+#endif
+    if (oled_page == 1) {
       bool full_redraw = (now - oled_last_update >= 10000) || (oled_last_update == 0);
       if (full_redraw) {
         oled_last_update = now;
@@ -429,6 +447,7 @@ bool SSD1306Display::isScreenOnTime(unsigned long now) {
   return s_sched_cached;
 }
 
+#ifdef ESP32
 void SSD1306Display::page_tiny() {
   clearBuffer();
   char buf[12];
@@ -440,6 +459,7 @@ void SSD1306Display::page_tiny() {
   drawStr(x, 28, buf);
   if (Wifi::connected) drawPixel(71, 0);
 }
+#endif  // ESP32 (page_tiny)
 
 void SSD1306Display::page_two_full() {
   clearBuffer();
@@ -510,10 +530,12 @@ void SSD1306Display::setup() {
       u8g2_Setup_ssd1309_i2c_128x64_noname0_f(&_u8g2, U8G2_R0,
           u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
       break;
+#ifdef ESP32
     case DISP_SSD1306_72X40:
       u8g2_Setup_ssd1306_i2c_72x40_er_f(&_u8g2, U8G2_R0,
           u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
       break;
+#endif
     case DISP_SSD1306:
     default:
       u8g2_Setup_ssd1306_i2c_128x64_noname_f(&_u8g2, U8G2_R0,
@@ -613,6 +635,19 @@ void SSD1306Display::setupWifi(const char* s) {
   drawTPString(*this, 0, 24, DialogInput_plain_12, PSTR("WiFi -"));
   drawTPString(*this, 0, 38, DialogInput_plain_12, s);
   sendBuffer();
+}
+
+void SSD1306Display::apOnlyMode(const char* host, const char* ip) {
+  if (!_present) return;
+  _send_rows_left = 0;
+  clearBuffer();
+  drawTPString(*this, 0, 10, DialogInput_plain_12, PSTR("Setup - Join AP"));
+  drawTPString(*this, 0, 24, DialogInput_plain_12, host ? host : "");
+  drawTPString(*this, 0, 38, DialogInput_plain_12, ip ? ip : "");
+  drawTPString(*this, 0, 52, DialogInput_plain_12, PSTR("Set region, restart"));
+  sendBuffer();
+  enable_oled_timeout = false;   // keep visible until reboot
+  _locked_page = true;           // freeze: no page rotation, no overdraws
 }
 
 void SSD1306Display::wifiDisabled() {
