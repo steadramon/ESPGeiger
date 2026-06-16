@@ -147,6 +147,16 @@ On push-button builds the long-press gesture toggles a permanent override that k
 | Blip colour | Int 0-7 | `0` (Green) | Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan 5=Magenta 6=White 7=Orange. |
 | Swap R/G | Bool | platform-dependent | Enable if green appears as red on RGB-ordered LED chips. |
 
+## Alert Out Settings
+
+Drives a GPIO when CPM crosses the alert threshold. See [Alert Out](/output/alertout) for wiring options.
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| GPIO | Int | `-1` | Output pin. `-1` disables the module. Reboot to apply. |
+| Polarity | Bool | `0` | `0` active high, `1` active low. |
+| Mode | Int 0-1 | `0` | `0` steady level while alerting, `1` 1 Hz square wave. |
+
 ## Advanced Wi-Fi Tunables
 
 These do not appear on the Config page. The defaults suit almost every deployment; the table is here for the rare case where you need to override one (for example a router on a channel disabled by the device's default country code, or to reduce TX power on a battery build).
