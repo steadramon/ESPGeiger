@@ -26,7 +26,11 @@
 #include "../Prefs/EGPrefs.h"
 
 #ifndef PUSHBUTTON_PIN
-#define PUSHBUTTON_PIN -1
+  #ifdef ESP32
+  #define PUSHBUTTON_PIN 0   // BOOT/PRG button is the universal default on ESP32 dev boards
+  #else
+  #define PUSHBUTTON_PIN -1
+  #endif
 #endif
 #ifndef PUSHBUTTON_PIN2
 #define PUSHBUTTON_PIN2 -1

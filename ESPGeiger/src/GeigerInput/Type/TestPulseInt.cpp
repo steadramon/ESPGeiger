@@ -21,6 +21,16 @@
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 
 #include "../../Logger/Logger.h"
+#ifdef USE_PCNT
+#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
+#endif
+
+static int _pulse_tx_pin;
+static bool _bool_pulse_state = false;
+static unsigned long _last_b;
+#ifdef ESP32
+static esp_timer_handle_t hdl_pulse_timer = NULL;
+#endif
 
 GeigerTestPulseInt::GeigerTestPulseInt() {
   strcpy(_test_type, "TestPulsePWM");
@@ -94,6 +104,15 @@ void GeigerTestPulseInt::stopForOTA() {
 #endif
 }
 
+void GeigerTestPulseInt::restartAfterOTA() {
+#ifdef ESP8266
+  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_LOOP);
+  timer1_write(_target_pwm);
+#else
+  if (hdl_pulse_timer != NULL) esp_timer_start_periodic(hdl_pulse_timer, _target_pwm);
+#endif
+}
+
 void IRAM_ATTR GeigerTestPulseInt::pulseInterrupt(void *data) {
   pulseInterrupt();
 }
@@ -155,6 +174,7 @@ int GeigerTestPulseInt::collect() {
 #endif
   if (pulseCount != 0) {
     setCounter(pulseCount);
+    Counter::on_pulse_batch((uint16_t)pulseCount, (uint32_t)micros(), 1000000UL);
   } else {
     setCounter(pulseCount, false);
   }

@@ -21,6 +21,7 @@
 #include "PushButton.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Util/LedSignal.h"
 #include "../Util/PinSafety.h"
 #include "../Util/FastMillis.h"
 #include <Ticker.h>
@@ -79,17 +80,9 @@ static void do_longpress() {
   display.enable_oled_timeout = !display.enable_oled_timeout;
   if (display.enable_oled_timeout) {
     display.oled_timeout = 0;
-#ifdef GEIGER_BLIPLED
-    gcounter.blip_led.Blink(200,100).Repeat(2);
-#elif defined(HAS_EXT_BLIP)
-    if (gcounter.ext_blip_led) gcounter.ext_blip_led->Blink(200,100).Repeat(2);
-#endif
+    LedSignal::displayEnabled();
   } else {
-#ifdef GEIGER_BLIPLED
-    gcounter.blip_led.Blink(200,1).Repeat(1);
-#elif defined(HAS_EXT_BLIP)
-    if (gcounter.ext_blip_led) gcounter.ext_blip_led->Blink(200,1).Repeat(1);
-#endif
+    LedSignal::displayDisabled();
   }
 }
 #endif
@@ -254,7 +247,7 @@ void PushButton::loop(unsigned long now)
     BtnState& b = s_btn[i];
     if (!b.short_press_pending) continue;
     b.short_press_pending = false;
-    led.Blink(200, 1);
+    LedSignal::shortPressAck();
 #ifdef SSD1306_DISPLAY
     display.onButtonTap(now, i == 0 ? 1 : -1);
 #endif

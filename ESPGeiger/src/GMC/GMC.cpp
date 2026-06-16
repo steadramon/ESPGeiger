@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include "GMC.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 
 extern uint8_t send_indicator;
@@ -46,6 +47,7 @@ static const EGPrefGroup GMC_PREF_GROUP = {
   "gmc", "GMC", 1,
   GMC_PREF_ITEMS,
   sizeof(GMC_PREF_ITEMS) / sizeof(GMC_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
@@ -137,7 +139,7 @@ void GMC::postMeasurement() {
 
   Log::debug(PSTR("GMC: Uploading latest data ..."));
 
-  int avgcpm = gcounter.get_cpmf();
+  int avgcpm = gcounter.get_cpm_stable();
   char acpm[16], usv[16];
   format_f(acpm, sizeof(acpm), gcounter.get_cpm5f());
   format_f(usv,  sizeof(usv),  gcounter.get_usv5(), 4);
@@ -151,7 +153,7 @@ void GMC::postMeasurement() {
   {
     if (request->open("GET", url))
     {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->onReadyStateChange(httpRequestCb, this);
       request->setTimeout(30);

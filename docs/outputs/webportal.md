@@ -54,7 +54,7 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/hv` | High-voltage tuning page (ESPGeiger-HW builds only) |
 | `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
 | `/screen` | Live OLED framebuffer preview (OLED builds only) - see [OLED](/output/oled#browser-screen-viewer) |
-| `/export` | Streaming base64+CRC32 dump of all prefs (skips `sys.web_pass` and the `net` group). UI lives at the bottom of the Config page. |
+| `/export` | Streaming base64+CRC32 dump of all prefs (skips `sys.web_pass` and the `net` group). UI lives on the Config page's Backup tab. |
 | `/import` (POST) | Apply a previously-exported blob (overlay-only; keys not in the blob are left alone). Reboots on success. |
 | `/life/reset` (POST) | Zero the lifetime click counter + first-boot timestamp. Button on `/hist`. |
 | `/erase` | Wipe saved WiFi credentials and reboot into the captive setup portal. Linked from `/network` → Erase WiFi config. |

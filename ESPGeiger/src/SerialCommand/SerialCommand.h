@@ -66,6 +66,7 @@ public:
     static void reset_net();
     static void cmd_get();
     static void cmd_set();
+    static void cmd_pause();
 #ifdef SERIALOUT
     static void get_cpm();
     static void get_usv();

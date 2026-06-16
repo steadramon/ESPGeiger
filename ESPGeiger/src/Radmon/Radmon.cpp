@@ -19,6 +19,7 @@
 #ifdef RADMONOUT
 #include "Radmon.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 
 extern uint8_t send_indicator;
@@ -44,6 +45,7 @@ static const EGPrefGroup RADMON_PREF_GROUP = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
@@ -157,7 +159,7 @@ void Radmon::postMeasurement() {
   // keeps in sync with the saved pref.
   int avgcpm;
   if (pingInterval <= 90) {
-    avgcpm = gcounter.get_cpm();
+    avgcpm = gcounter.get_cpm_stable();   // external poster: bucket, mode-independent
   } else if (pingInterval <= 450) {
     avgcpm = gcounter.get_cpm5();
   } else {
@@ -173,7 +175,7 @@ void Radmon::postMeasurement() {
   {
     if (request->open("GET", url))
     {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->onReadyStateChange(httpRequestCb, this);
       request->setTimeout(30);

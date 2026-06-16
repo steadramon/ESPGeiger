@@ -22,6 +22,7 @@
 #include "Counter.h"
 #include "../Logger/Logger.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Util/LedSignal.h"
 #include "../Util/StringUtil.h"
 #include "../Util/MathUtil.h"
 #include "../Util/PinSafety.h"
@@ -37,6 +38,9 @@
 #ifdef AUDIO_TICK
 #include "../AudioTick/AudioTick.h"
 #endif
+#ifdef PULSE_OUT
+#include "../PulseOut/PulseOut.h"
+#endif
 #include "HIST_JS.gz.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
@@ -44,8 +48,130 @@
 
 extern long start;  // boot epoch ref from main
 
-// RTC stash for clicks + tracked-seconds since last flash save. Word 48 =
-// OTA-safe region, clear of CrashDump (0..41). Folded into flash on boot.
+// Pulse-timestamp ring (lazy alloc).
+namespace {
+constexpr uint16_t PULSE_RING_SIZE = 256;
+constexpr uint16_t PULSE_RING_MASK = PULSE_RING_SIZE - 1;
+static_assert((PULSE_RING_SIZE & PULSE_RING_MASK) == 0, "must be power of 2");
+volatile uint32_t* s_pulse_ring   = nullptr;
+volatile uint16_t  s_pulse_head   = 0;
+volatile uint16_t  s_pulse_count  = 0;
+volatile uint32_t  s_min_pulse_us = UINT32_MAX;
+// Tracked without the ring so /history min_pulse_us works for default mode 3.
+volatile uint32_t  s_prev_pulse_us = 0;
+#ifdef ESP32
+portMUX_TYPE s_pulse_mux = portMUX_INITIALIZER_UNLOCKED;
+#endif
+
+void ensure_pulse_ring() {
+  if (s_pulse_ring) return;
+  s_pulse_ring = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
+}
+}  // namespace
+
+void Counter::set_cpm_mode(uint8_t m) {
+  _cpm_mode = (m > 4) ? 3 : m;
+  if (_cpm_mode != 3) ensure_pulse_ring();
+}
+
+static volatile uint32_t s_pause_until_ms = 0;
+
+void Counter::pause_external(uint32_t timeout_ms) {
+  if (timeout_ms == 0) {
+    s_pause_until_ms = 0;
+    Log::console(PSTR("External posts: resumed"));
+    return;
+  }
+  s_pause_until_ms = fast_millis() + timeout_ms;
+  Log::console(PSTR("External posts: paused for %u s"), (unsigned)(timeout_ms / 1000U));
+}
+
+bool Counter::external_paused() {
+  uint32_t until = s_pause_until_ms;
+  if (until == 0) return false;
+  if ((int32_t)(fast_millis() - until) >= 0) {
+    s_pause_until_ms = 0;
+    Log::console(PSTR("External posts: resumed (timeout)"));
+    return false;
+  }
+  return true;
+}
+
+uint32_t Counter::pause_remaining_ms() {
+  uint32_t until = s_pause_until_ms;
+  if (until == 0) return 0;
+  int32_t d = (int32_t)(until - fast_millis());
+  return d > 0 ? (uint32_t)d : 0;
+}
+
+void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
+  // Synthetic timestamps; min_pulse_us is real-only.
+  if (!s_pulse_ring || count == 0) return;
+  if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
+  uint32_t step = (count > 1) ? (span_us / count) : 0;
+  uint32_t t = end_us - (uint32_t)(count - 1) * step;
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&s_pulse_mux);
+#else
+  noInterrupts();
+#endif
+  for (uint16_t i = 0; i < count; i++) {
+    s_pulse_ring[s_pulse_head] = t;
+    s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
+    if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
+    t += step;
+  }
+#ifdef ESP32
+  portEXIT_CRITICAL_ISR(&s_pulse_mux);
+#else
+  interrupts();
+#endif
+}
+
+void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
+  // Min interval runs without the ring.
+  if (s_prev_pulse_us) {
+    uint32_t interval = now_us - s_prev_pulse_us;
+    if (interval && interval < s_min_pulse_us) s_min_pulse_us = interval;
+  }
+  s_prev_pulse_us = now_us;
+
+  if (!s_pulse_ring) return;
+#ifdef ESP32
+  portENTER_CRITICAL_ISR(&s_pulse_mux);
+#endif
+  s_pulse_ring[s_pulse_head] = now_us;
+  s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
+  if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
+#ifdef ESP32
+  portEXIT_CRITICAL_ISR(&s_pulse_mux);
+#endif
+}
+
+bool Counter::snapshot_ring(RingSnapshot& s) const {
+  if (!s_pulse_ring) { s.count = 0; return false; }
+#ifdef ESP32
+  portENTER_CRITICAL(&s_pulse_mux);
+#else
+  noInterrupts();
+#endif
+  uint16_t head  = s_pulse_head;
+  uint16_t count = s_pulse_count;
+  if (count >= 2) {
+    s.newest_us = s_pulse_ring[(head - 1)     & PULSE_RING_MASK];
+    s.oldest_us = s_pulse_ring[(head - count) & PULSE_RING_MASK];
+  }
+#ifdef ESP32
+  portEXIT_CRITICAL(&s_pulse_mux);
+#else
+  interrupts();
+#endif
+  s.count = count;
+  return count >= 2;
+}
+
+// RTC stash for clicks + seconds since last flash save. Word 48: OTA-safe,
+// clear of CrashDump (0..41). Folded into flash on boot.
 #ifdef ESP8266
 namespace {
 constexpr uint32_t LIFE_RTC_OFFSET_WORDS = 48;
@@ -91,7 +217,7 @@ Counter::Counter() {
 #endif
 }
 
-void Counter::secondticker(unsigned long stick_now) {
+void Counter::secondticker() {
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
@@ -107,53 +233,40 @@ void Counter::secondticker(unsigned long stick_now) {
     total_clicks_rollover++;
   }
 
-  _cached_cps  = geigerTicks.get();
-  if (_dead_time_us > 0 && _cached_cps > 50.0f) {
-    float x = _cached_cps * _dead_time_sec;
-    _cached_cps *= 1.0f + x * (1.0f + x);
-  }
-  _cached_cpmf = _cached_cps * 60.0f;
-  _cached_usv  = _cached_cpmf * _ratio_inv;
-  int ccpm = (int)roundf(_cached_cpmf);
+  _cached_cps = apply_dead_time(geigerTicks.get());
+  // Cache dispatched CPM once per tick: hot reads skip the switch, warn
+  // tracks the value the user sees (relevant in non-bucket modes).
+  _cached_cpm_active = get_cps() * 60.0f;
+  int ccpm = (int)roundf(_cached_cpm_active);
 
   cpm_history.push(ccpm);
 
   if (tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10) {
     geigerTicks5.add(_cached_cps);
-    float cps5 = geigerTicks5.get();
-    _cached_cpm5f = cps5 * 60.0f;
     if (tick_cnt == 0) {
-      geigerTicks15.add(cps5);
-      _cached_cpm15f = geigerTicks15.get() * 60.0f;
+      geigerTicks15.add(geigerTicks5.get());
     }
   }
   if (++tick_cnt >= 15) tick_cnt = 0;
 
   time_t currentTime = time (NULL);
   if (ntpclient.synced) {
-    // Fire on each new hour (minute in test builds). gmtime() only on transition.
-    // Cache next-fire time so we don't divide every tick - one-time alignment
-    // divide on first sync, then pure compare-and-add.
-#if GEIGER_IS_TEST(GEIGER_TYPE)
-    constexpr time_t kBoundarySecs = 60;
-#else
-    constexpr time_t kBoundarySecs = 3600;
-#endif
+    // Build-time constant per input type, evaluated once.
+    static const time_t kBoundarySecs = (time_t)geigerinput->boundary_seconds();
     static time_t nextBoundary = 0;
     static bool boundaryArmed = false;
     bool fire = false;
     if (nextBoundary == 0) {
-      // First call after sync - align to wall-clock boundary; fire once for tz refresh.
+      // First sync: align and fire once for tz.
       nextBoundary = currentTime - (currentTime % kBoundarySecs) + kBoundarySecs;
       fire = true;
     } else if (currentTime >= nextBoundary) {
       fire = true;
-      // Advance past any missed boundaries (e.g. NTP step forward).
+      // Catch up after NTP step forward.
       while (currentTime >= nextBoundary) nextBoundary += kBoundarySecs;
     }
     if (fire) {
-      // Track day index (epoch / 86400) so day rollover fires even when a
-      // catch-up jump (NTP step) skips past midnight without landing on it.
+      // Day index so rollover survives NTP step past midnight.
       static uint32_t lastDay = 0;
       uint32_t curDay = (uint32_t)(currentTime / 86400);
       if (boundaryArmed) {
@@ -185,8 +298,7 @@ void Counter::secondticker(unsigned long stick_now) {
     if (_last_save_time_t == 0 && ntpclient.synced) {
       _last_save_time_t = (uint32_t)currentTime;
     }
-    // Tick schedules, loop() does the writes. Keeps the ~100us RTC stash
-    // and the ~ms save_lifetime() flash write out of tick_max.
+    // Schedule here; loop() does the RTC + flash work.
     static uint32_t s_rtc_ctr = 0;
     if (++s_rtc_ctr >= 30) {
       s_rtc_ctr = 0;
@@ -204,13 +316,23 @@ void Counter::secondticker(unsigned long stick_now) {
     }
   }
 
-  _bool_cpm_warning = (_cpm_warning < ccpm);
-  _bool_cpm_alert   = (_cpm_alert   < ccpm);
+  bool warn = (_cpm_warning < ccpm);
+  bool alrt = (_cpm_alert   < ccpm);
+  if (!warn && !alrt) _alarm_snoozed = false;     // auto re-arm when calm
+  _bool_cpm_warning = warn && !_alarm_snoozed;
+  _bool_cpm_alert   = alrt && !_alarm_snoozed;
+}
+
+void Counter::reset_alarm() {
+  if (!_bool_cpm_warning && !_bool_cpm_alert) return;
+  _alarm_snoozed    = true;
+  _bool_cpm_warning = false;
+  _bool_cpm_alert   = false;
+  Log::console(PSTR("Alarm: snoozed until level drops below warning"));
 }
 
 void Counter::save_lifetime() {
-  // Advance tracked seconds by the span since the previous save: keeps the
-  // CPM denominator symmetric with the click numerator across reboots.
+  // Advance tracked seconds since last save so lifetime CPM stays right across reboots.
   time_t currentTime = time(nullptr);
   if (_last_save_time_t > 0 && ntpclient.synced &&
       (uint32_t)currentTime >= _last_save_time_t) {
@@ -252,39 +374,143 @@ void Counter::reset_lifetime() {
 }
 
 float Counter::get_cps() {
-  return _cached_cps;
+  // Ring modes fall back to _cached_cps when ring is empty.
+  if (_cpm_mode == 3) return _cached_cps;
+  auto ringOrBucket = [&](float v) -> float {
+    return v > 0.0f ? apply_dead_time(v) : _cached_cps;
+  };
+  switch (_cpm_mode) {
+    case 1: return ringOrBucket(get_cps_live());
+    case 2: return ringOrBucket(cps_windowed(60UL * 1000000UL, 64));
+    case 4: return ringOrBucket(cps_windowed(5UL  * 1000000UL, 19));
+    case 0: {
+      float live = get_cps_live();
+      if (live <= 0.0f) return _cached_cps;
+      uint32_t up = DeviceInfo::uptime();
+      uint32_t w  = _cpm_window;
+      if (up <  w)      return apply_dead_time(live);
+      if (up >= 2u * w) return _cached_cps;
+      float liveC = apply_dead_time(live);
+      float a = (float)(up - w) * _cpm_window_inv;
+      return liveC * (1.0f - a) + _cached_cps * a;
+    }
+    default: return _cached_cps;
+  }
 }
 
 int Counter::get_cpm() {
-  return (int)roundf(_cached_cpmf);
+  return (int)roundf(_cached_cpm_active);
 }
 
 float Counter::get_cpmf() {
-  return _cached_cpmf;
+  return _cached_cpm_active;
 }
 
 int Counter::get_cpm5() {
-  return (int)roundf(_cached_cpm5f);
+  return (int)roundf(get_cpm5f());
 }
 
 float Counter::get_cpm5f() {
-  return _cached_cpm5f;
+  return geigerTicks5.get() * 60.0f;
 }
 
 int Counter::get_cpm15() {
-  return (int)roundf(_cached_cpm15f);
+  return (int)roundf(get_cpm15f());
 }
 
 float Counter::get_cpm15f() {
-  return _cached_cpm15f;
+  return geigerTicks15.get() * 60.0f;
 }
 
 void Counter::set_ratio(float ratio) {
-  if (ratio > 0) {
-    _ratio = ratio;
-    _ratio_inv = 1.0f / ratio;                 // keep reciprocal in sync for hot-path multiplies
-    _cached_usv = _cached_cpmf * _ratio_inv;   // refresh cache so readers see new ratio immediately
+  if (ratio <= 0) return;
+  _ratio = ratio;
+  _ratio_inv = 1.0f / ratio;
+  // 30 min floor: shielded / low-CPM setups would false-alarm at the bare formula.
+  double t = 12000000000.0 / (double)ratio;
+  if (t < 1800000000.0) t = 1800000000.0;
+  _tube_timeout_us = (t >= 4.29e9) ? UINT32_MAX : (uint32_t)t;
+}
+
+bool Counter::get_tube_alive() {
+  if (_ratio <= 0.0f) return true;
+  unsigned long lb_us = geigerinput->last_blip();
+  if (lb_us == 0) return true;
+  return (micros() - lb_us) < _tube_timeout_us;
+}
+
+bool Counter::get_saturated() {
+  // Raw cps only; corrected values feedback-loop near the cap.
+  if (_dead_time_us == 0) return false;
+  float cps = get_cps_live();
+  if (cps <= 0.0f) cps = geigerTicks.get();
+  return cps * _dead_time_sec > 0.875f;
+}
+
+float Counter::get_cps_live() {
+  RingSnapshot s;
+  if (!snapshot_ring(s)) return 0.0f;
+  uint32_t span_us = s.newest_us - s.oldest_us;
+  if (span_us == 0) return 0.0f;
+  return (float)(s.count - 1) * 1.0e6f / (float)span_us;
+}
+
+float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
+  // 0 = uncapped on that axis.
+  if (!s_pulse_ring) return 0.0f;
+#ifdef ESP32
+  portENTER_CRITICAL(&s_pulse_mux);
+#else
+  noInterrupts();
+#endif
+  uint16_t head  = s_pulse_head;
+  uint16_t count = s_pulse_count;
+  uint32_t newest = 0, oldest = 0;
+  uint16_t take = 0;
+  if (count >= 2) {
+    newest = s_pulse_ring[(head - 1) & PULSE_RING_MASK];
+    oldest = newest;
+    take = 1;
+    uint16_t cap = (max_pulses && max_pulses < count) ? max_pulses : count;
+    for (uint16_t i = 2; i <= cap; i++) {
+      uint32_t t = s_pulse_ring[(head - i) & PULSE_RING_MASK];
+      if (max_age_us && (newest - t) > max_age_us) break;
+      oldest = t;
+      take = i;
+    }
   }
+#ifdef ESP32
+  portEXIT_CRITICAL(&s_pulse_mux);
+#else
+  interrupts();
+#endif
+  if (take < 2) return 0.0f;
+  uint32_t span = newest - oldest;
+  if (span == 0) return 0.0f;
+  return (float)(take - 1) * 1.0e6f / (float)span;
+}
+
+float Counter::apply_dead_time(float cps) const {
+  // Non-paralyzable model, capped at 10x. Skip below 50 cps (factor < 1.005).
+  if (_dead_time_us == 0 || cps <= 50.0f) return cps;
+  float x = cps * _dead_time_sec;
+  if (x > 0.9f) x = 0.9f;
+  return cps / (1.0f - x);
+}
+
+uint16_t Counter::get_cps_n() {
+  return s_pulse_count;     // 16-bit aligned volatile read is atomic on Xtensa
+}
+
+uint32_t Counter::get_cps_win_us() {
+  RingSnapshot s;
+  if (!snapshot_ring(s)) return 0;
+  return s.newest_us - s.oldest_us;
+}
+
+uint32_t Counter::get_min_pulse_us() {
+  uint32_t v = s_min_pulse_us;
+  return (v == UINT32_MAX) ? 0 : v;
 }
 
 void Counter::set_warning(int val) {
@@ -313,7 +539,7 @@ bool Counter::is_alert() {
 }
 
 float Counter::get_usv() {
-  return _cached_usv;
+  return get_cpmf() * _ratio_inv;
 }
 
 float Counter::get_totalusv() {
@@ -328,11 +554,11 @@ float Counter::get_totalusv() {
 }
 
 float Counter::get_usv5() {
-  return _cached_cpm5f * _ratio_inv;
+  return get_cpm5f() * _ratio_inv;
 }
 
 float Counter::get_usv15() {
-  return _cached_cpm15f * _ratio_inv;
+  return get_cpm15f() * _ratio_inv;
 }
 
 void Counter::begin() {
@@ -373,44 +599,31 @@ void Counter::begin() {
 void Counter::blip() {
     if (!_blip_led) return;
     if (is_quiet_now()) return;
-#ifndef DISABLE_INTERNAL_BLIP
-  #if defined(HAS_EXT_BLIP) && !defined(GEIGER_BLIPLED)
-    if (!ext_blip_led)
-  #endif
-    led.Blink(20, 20);
+    LedSignal::click();
+}
+
+void Counter::dispatchReceiverBlip() {
+  _last_blip = micros();
+  // Suppress Counter::loop's polling-based re-dispatch of this same blip,
+  // otherwise each receiver blip fires audio twice and would also bounce
+  // back out via udpblip.notifyClick on a UdpRx+UdpBlip combo device.
+  // OLED/NeoPixel still see _last_blip change via their own poll counters.
+  _last_blip_seen = _last_blip;
+#ifndef DISABLE_BLIP
+  this->blip();
 #endif
-#ifdef GEIGER_BLIPLED
-    if (!blip_led.IsRunning()) blip_led.Blink(2, 1).Repeat(1);
-#elif defined(HAS_EXT_BLIP)
-    if (ext_blip_led && !ext_blip_led->IsRunning()) ext_blip_led->Blink(ext_blip_pulse_ms, 1).Repeat(1);
+  unsigned long nowMs = fast_millis();
+#ifdef AUDIO_TICK
+  audiotick.notifyClick(nowMs);
+#endif
+#ifdef PULSE_OUT
+  pulseout.notifyClick(nowMs);
 #endif
 }
 
 void Counter::set_blip_brightness(uint8_t level) {
-  led.MaxBrightness(level);
-#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
-  if (ext_blip_led) ext_blip_led->MaxBrightness(level);
-#endif
+  LedSignal::setBrightness(level);
 }
-
-#if !defined(GEIGER_BLIPLED) && defined(HAS_EXT_BLIP)
-void Counter::set_ext_blip_pin(int pin) {
-  if (const char* why = PinSafety::claim_output(pin, PSTR("LED"))) {
-    Log::console(PSTR("LED: blip_pin=%d unsafe (%s) - disabled"), pin, why);
-    pin = -1;
-  }
-  if (ext_blip_led) {
-    JLed* old = ext_blip_led;
-    ext_blip_led = nullptr;   // null before free: the 1kHz msTickerCB derefs this
-    old->Off().Update();
-    delete old;
-  }
-  if (pin >= 0) {
-    ext_blip_led = new JLed(pin);
-    ext_blip_led->Stop();
-  }
-}
-#endif
 
 static unsigned long s_quiet_recompute_ms = 0;
 static bool s_quiet_cached = false;
@@ -424,8 +637,7 @@ void Counter::set_quiet_hours(const char* from, const char* to) {
 }
 
 bool Counter::is_quiet_now() {
-  // Both ends must parse; either blank = feature off. Also require NTP so we
-  // don't silence the LED on unsynced boots (uptime-as-time would be wrong).
+  // Both ends must parse (blank = off) and NTP synced; uptime is not wall-clock.
   if (_quiet_from_min < 0 || _quiet_to_min < 0)      return false;
   if (_quiet_from_min == _quiet_to_min)              return false;
   if (!ntpclient.synced)                             return false;
@@ -445,10 +657,7 @@ bool Counter::is_quiet_now() {
 }
 
 void Counter::loop() {
-  // Single combined check for both deferred items (RTC stash, save_lifetime).
-  // Bitmask: PENDING_RTC (bit 0), PENDING_SAVE (bit 1). Most iterations the
-  // byte is 0 and we skip with one branch. Keeps RTC + flash writes out of
-  // tick_max while paying only one predicted-false branch per loop iter.
+  // Single byte check defers RTC stash + flash save out of tick_max.
   if (_pending_work) {
     uint8_t pw = _pending_work;
     _pending_work = 0;
@@ -468,6 +677,16 @@ void Counter::loop() {
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
+#elif GEIGER_IS_PULSE(GEIGER_TYPE) && defined(USE_PCNT)
+  // 50 Hz PCNT drain so audio/LED/UDP fire on the click, not the 1 Hz tick.
+  {
+    static uint32_t s_last_pcnt_ms = 0;
+    uint32_t pcnt_ms = fast_millis();
+    if ((uint32_t)(pcnt_ms - s_last_pcnt_ms) >= 20) {
+      s_last_pcnt_ms = pcnt_ms;
+      geigerinput->drain_pcnt();
+    }
+  }
 #elif GEIGER_IS_UDPRX(GEIGER_TYPE)
   #ifndef UDPRX_POLL_SKIP
   #define UDPRX_POLL_SKIP 500
@@ -502,10 +721,13 @@ void Counter::loop() {
 #ifndef DISABLE_BLIP
     this->blip();
 #endif
-    unsigned long nowMs = fast_millis();  // match UdpBlip loop()'s fast_millis time base
+    unsigned long nowMs = fast_millis();  // shared time base with UdpBlip::loop
     udpblip.notifyClick(nowMs);
 #ifdef AUDIO_TICK
     audiotick.notifyClick(nowMs);
+#endif
+#ifdef PULSE_OUT
+    pulseout.notifyClick(nowMs);
 #endif
   }
 }
@@ -552,9 +774,7 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
     EGPrefs::getString("sys", "ratio"));
   if (n > 0) res.sendChunk(line, (size_t)n);
 
-#if GEIGER_IS_TEST(GEIGER_TYPE)
-  res.sendChunk(F(",\"roll\":60"));
-#endif
+  gcounter.input()->appendClicksExtra(res);
 
   if (ntpclient.synced) {
     n = snprintf_P(line, sizeof(line),
@@ -589,6 +809,13 @@ static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (n > 0) res.sendChunk(line, (size_t)n);
     }
     res.sendChunk(F("]"));
+    // Smallest inter-pulse interval since boot, paired with the histogram.
+    uint32_t mp = gcounter.get_min_pulse_us();
+    if (mp > 0) {
+      n = snprintf_P(line, sizeof(line),
+                     PSTR(",\"min_pulse_us\":%lu"), (unsigned long)mp);
+      if (n > 0) res.sendChunk(line, (size_t)n);
+    }
   }
 
   res.sendChunk(F("}"));
@@ -659,6 +886,11 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     raw ? ESP.getFreeHeap() : DeviceInfo::freeHeap(),
     (int)Wifi::rssi);
   if (n > 0) res.sendChunk(buf, (size_t)n);
+  n = snprintf_P(buf, sizeof(buf),
+    PSTR(",\"tube\":%u,\"sat\":%u"),
+    (unsigned)(gcounter.get_tube_alive() ? 1 : 0),
+    (unsigned)(gcounter.get_saturated() ? 1 : 0));
+  if (n > 0) res.sendChunk(buf, (size_t)n);
 #ifdef ESPG_HV_ADC
   char hvBuf[16];
   format_f(hvBuf, sizeof(hvBuf), hv.hvReading.get());
@@ -687,14 +919,7 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (n > 0) res.sendChunk(buf, (size_t)n);
     }
   }
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // UDP feed loss %; only once a producer is heard, so a fresh rx isn't 0.
-  if (gcounter.udp_rx() && gcounter.udp_rx()->packets_accepted() > 0) {
-    uint16_t lx10 = gcounter.udp_rx()->loss_pct_x10();
-    n = snprintf_P(buf, sizeof(buf), PSTR(",\"loss\":%u.%u"), lx10 / 10, lx10 % 10);
-    if (n > 0) res.sendChunk(buf, (size_t)n);
-  }
-#endif
+  gcounter.input()->appendJsonExtra(res);
   // tick/t_max/lps + heap diagnostics are not used by the status page; only
   // emit under ?raw=1 to keep the polled /json lean.
   if (raw) {
@@ -705,6 +930,58 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
       (unsigned)DeviceInfo::largestFreeBlock(),
       (unsigned)DeviceInfo::largestFreeBlockLow());
     if (n > 0) res.sendChunk(buf, (size_t)n);
+    if (gcounter.get_cps_n() >= 2) {
+      char csl[16];
+      format_f(csl, sizeof(csl), gcounter.get_cps_live());
+      n = snprintf_P(buf, sizeof(buf),
+        PSTR(",\"cs_live\":%s,\"cs_n\":%u,\"cs_win_us\":%lu"),
+        csl,
+        (unsigned)gcounter.get_cps_n(),
+        (unsigned long)gcounter.get_cps_win_us());
+      if (n > 0) res.sendChunk(buf, (size_t)n);
+    }
+  }
+  res.sendChunk("}", 1);
+  res.endChunked();
+}
+
+// /s - lean status endpoint for /status JS. /json stays general-purpose.
+static void hStatusJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  char c[16], c5[16], c15[16], cs[16];
+  format_f(c,   sizeof(c),   gcounter.get_cpmf());
+  format_f(c5,  sizeof(c5),  gcounter.get_cpm5f());
+  format_f(c15, sizeof(c15), gcounter.get_cpm15f());
+  format_f(cs,  sizeof(cs),  gcounter.get_cps());
+
+  res.beginChunked(200, "application/json");
+  char buf[200];
+  int n = snprintf_P(buf, sizeof(buf),
+    PSTR("{\"ut\":%lu,\"c\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,"
+         "\"r\":%s,\"tc\":%u,\"rssi\":%d"),
+    DeviceInfo::uptime(), c, c5, c15, cs,
+    EGPrefs::getString("sys", "ratio"),
+    gcounter.total_clicks,
+    (int)Wifi::rssi);
+  if (n > 0) res.sendChunk(buf, (size_t)n);
+
+  if (envsensor.present()) {
+    float et = envsensor.tempUser(), eh = envsensor.humidity(), ep = envsensor.pressure();
+    char fbuf[12];
+    if (!isnan(et)) {
+      format_f(fbuf, sizeof(fbuf), et);
+      n = snprintf_P(buf, sizeof(buf), PSTR(",\"t\":%s,\"tu\":%u"), fbuf, envsensor.unit());
+      if (n > 0) res.sendChunk(buf, (size_t)n);
+    }
+    if (!isnan(eh)) {
+      format_f(fbuf, sizeof(fbuf), eh);
+      n = snprintf_P(buf, sizeof(buf), PSTR(",\"h\":%s"), fbuf);
+      if (n > 0) res.sendChunk(buf, (size_t)n);
+    }
+    if (!isnan(ep)) {
+      format_f(fbuf, sizeof(fbuf), ep);
+      n = snprintf_P(buf, sizeof(buf), PSTR(",\"p\":%s"), fbuf);
+      if (n > 0) res.sendChunk(buf, (size_t)n);
+    }
   }
   res.sendChunk("}", 1);
   res.endChunked();
@@ -723,7 +1000,7 @@ static const char HISTORY_BODY[] PROGMEM = R"HTML(
 <div class=card style="margin:.4em 0">
 <div id=ph class=bar-row></div>
 <div id=phL class=bar-lbls></div>
-<div class=muted style="font-size:.85em;margin-top:.4em">log<sub>2</sub> buckets 64&micro;s to &ge;512s &middot; cumulative since boot</div>
+<div class=muted style="font-size:.85em;margin-top:.4em">log<sub>2</sub> buckets 64&micro;s to &ge;512s &middot; cumulative since boot<span id=mpW style=display:none> &middot; observed min <b id=mp>&mdash;</b></span></div>
 </div>
 <h2>Last 24 hours</h2>
 <div class=card style="margin:.4em 0"><div id=g2>
@@ -748,7 +1025,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
       start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
       rlv='roll' in o?o.roll*1000:3600000,
       rows='',mx=0,sum=0,
-      F=s=>s>=86400?(s/86400).toFixed(1)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?(s/60|0)+'m':s+'s';
+      F=s=>s>=31536000?(s/31536000).toFixed(1)+'y':s>=86400?(s/86400|0)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?(s/60|0)+'m':s+'s';
   if('life' in o){
     var L=o.life,ts=L.secs>0?L.secs:(L.fbt>0?N-L.fbt:0);
     $('lfc').textContent=L.clk.toLocaleString();
@@ -816,6 +1093,12 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     $('ph').innerHTML=hb;
     $('phL').innerHTML=lb;
   }
+  if(o.min_pulse_us){
+    var u=o.min_pulse_us,
+        s=u<1000?u+'µs':u<1e6?(u/1000).toFixed(u<10000?2:1)+'ms':(u/1e6).toFixed(2)+'s';
+    $('mp').textContent=s;
+    $('mpW').style.display='';
+  }
   if(window.applyRad)applyRad();
 });
 )JS";
@@ -844,13 +1127,31 @@ static void hLifeReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, "text/plain", "OK");
 }
 
+// /pause[?s=N] - pause external posts. ?s=0 resumes. Capped at 24 h.
+static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  const char* sec = req.arg("s");
+  if (sec) {
+    int n = atoi(sec);
+    if (n < 0) n = 0;
+    if (n > 86400) n = 86400;
+    Counter::pause_external((uint32_t)n * 1000U);
+  }
+  char body[40];
+  uint32_t rem = Counter::pause_remaining_ms();
+  snprintf_P(body, sizeof(body),
+             rem ? PSTR("PAUSED %u s") : PSTR("RESUMED"), (unsigned)(rem / 1000U));
+  res.send(200, "text/plain", body);
+}
+
 void CounterRoutes::registerRoutes(EGHttpServer& http) {
   http.on("/clicks",   EGHttpRequest::GET,  hClicks);
   http.on("/lastdata", EGHttpRequest::GET,  hLastData);
   http.on("/json",     EGHttpRequest::GET,  hJson);
+  http.on("/s",        EGHttpRequest::GET,  hStatusJson);
   http.on("/hist",     EGHttpRequest::GET,  hHistory);
   http.on("/histjs",   EGHttpRequest::GET,  hHistJs);
   http.on("/life/reset", EGHttpRequest::POST, hLifeReset);
+  http.on("/pause",      EGHttpRequest::GET,  hPause);
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   http.on("/cpm",      EGHttpRequest::GET,  hSetCPM);
 #endif

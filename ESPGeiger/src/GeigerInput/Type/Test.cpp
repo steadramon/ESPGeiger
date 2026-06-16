@@ -22,6 +22,12 @@
 
 #include "../../Logger/Logger.h"
 
+static unsigned long _last_b;
+static double _next_delay;
+#ifdef ESP32
+static esp_timer_handle_t hdl_pulse_timer = NULL;
+#endif
+
 GeigerTest::GeigerTest() {
   strcpy(_test_type, "TestGeiger");
 };
@@ -70,6 +76,15 @@ void GeigerTest::stopForOTA() {
   timer1_disable();
 #else
   if (hdl_pulse_timer != NULL) esp_timer_stop(hdl_pulse_timer);
+#endif
+}
+
+void GeigerTest::restartAfterOTA() {
+#ifdef ESP8266
+  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
+  timer1_write((unsigned long)_next_delay);
+#else
+  if (hdl_pulse_timer != NULL) esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
 #endif
 }
 

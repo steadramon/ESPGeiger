@@ -25,13 +25,15 @@
 #include "esp_log.h"   // quieten esp_littlefs INFO/WARN chatter on USB serial
 #endif
 #include <Ticker.h>
-#include "jled.h"
 // PlatformIO LDF anchor: modules include the .hpp variant only; LDF needs
 // the .h here in a project source to discover and link the library.
 #include "AsyncHTTPRequest_Generic.h"
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/CrashDump.h"
+#include "src/Util/BootGuard.h"
+#include "src/ImprovSerial/ImprovSerial.h"
+#include "src/Util/LedSignal.h"
 #include "src/Util/Wifi.h"
 #include "src/Util/TickProfile.h"
 #include "src/Util/FastMillis.h"
@@ -46,11 +48,6 @@
 #include "src/Util/BootHooks.h"
 
 long start = 0;
-#if LED_SEND_RECEIVE_ON == LOW
-JLed led = JLed(LED_SEND_RECEIVE).LowActive();
-#else
-JLed led = JLed(LED_SEND_RECEIVE);
-#endif
 
 Counter gcounter;
 GRNG grng;
@@ -80,20 +77,19 @@ void msTickerCB()
     _fast_ms_accum_us -= 1000;
   }
   _fast_ms_last_us = now_us;
-  led.Update();
-#ifdef GEIGER_BLIPLED
-  gcounter.blip_led.Update();
-#elif defined(HAS_EXT_BLIP)
-  if (gcounter.ext_blip_led) gcounter.ext_blip_led->Update();
-#endif
+  LedSignal::poll();
 }
 
 void sTickerCB()
 {
   TickProfile::beginTick();
   unsigned long stick_now = fast_millis();
-
-  gcounter.secondticker(stick_now);
+  static bool s_bg_marked = false;
+  if (!s_bg_marked && stick_now > 30000 && Wifi::stable_for(5000)) {
+    BootGuard::mark_ok();
+    s_bg_marked = true;
+  }
+  gcounter.secondticker();
 #ifdef TICK_PROFILE
   TickProfile::markCounter();
 #endif
@@ -117,9 +113,11 @@ static WebPortal s_webPortal;
 
 void setup()
 {
+  BootGuard::on_boot();
   Serial.begin(115200);
   Serial.println();
   delay(100);
+  improvSerial.begin();
 
 #ifdef ESP32
   // Drop INFO/WARN from the FS tags; failed mounts are still detected via begin()==false.
@@ -129,6 +127,7 @@ void setup()
 #endif
 
   CrashDump::begin();
+  LedSignal::begin();
 
   DeviceInfo::begin();
 
@@ -193,7 +192,7 @@ void setup()
   start = ntpclient.getUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
-  led.Off().Update();
+  LedSignal::off();
   BootHooks::displayResetTimeout();
 }
 

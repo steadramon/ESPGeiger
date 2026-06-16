@@ -87,6 +87,11 @@ namespace Wifi {
   bool validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
                       char* errbuf, size_t errlen);
 
+  // Pass new credentials from Improv into the captive-portal busy-wait so
+  // connectOrPortal() exits cleanly and runs its normal WiFi.begin path.
+  // No-op (just records the creds) when called outside the portal phase.
+  void onImprovCreds(const char* ssid, const char* pass);
+
   // Snapshot current net.* prefs to /net_backup for the auto-revert flow.
   // Refuses to overwrite an existing backup (a previous network change is
   // still pending verification - clobbering it would lose the
@@ -101,6 +106,9 @@ namespace Wifi {
   // Read /net_backup and write the values back into net.* prefs +
   // commit. Caller is expected to ESP.restart() afterwards.
   bool restoreNetBackup();
+
+  // Apply wifi.tx_power/country/phy_mode. Needs esp_wifi_init (post WiFi.mode()).
+  void applyRuntimeNetPrefs();
 }
 
 #endif

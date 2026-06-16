@@ -100,16 +100,19 @@
 #define GEIGER_DEBOUNCE 200
 #endif
 
-extern volatile bool _eventFlipFlop;
+// micros() of last accepted input (tube pulse, serial CPM line, or UDP /click).
 extern volatile unsigned long _last_blip;
-extern volatile int eventCounter1;
-extern volatile int eventCounter2;
+// Pending pulses since last collect(). ISR-write, cooperative read-and-clear.
+extern volatile uint32_t s_event_counter;
 
 extern volatile unsigned long _debounce;
 
 #ifdef ESP32
 extern portMUX_TYPE timerMux;
 #endif
+
+class EGHttpResponse;
+class EGHttpServer;
 
 class GeigerInput {
   public:
@@ -133,15 +136,20 @@ class GeigerInput {
     virtual void apply_pcnt_filter() {};
     virtual void set_pin_pull(int mode) {};   // 0=floating, 1=up, 2=down
     virtual bool has_pcnt() { return false; }
-    // Pulse doesn't have a real connection concept, serial does
+    // Input-link health. Pulse defers to Counter::get_tube_alive.
     virtual bool isHealthy() const { return true; }
+    virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
+    virtual void registerRoutes(EGHttpServer&) {}
+    virtual void appendJsonExtra(EGHttpResponse&) {}
+    virtual void appendClicksExtra(EGHttpResponse&) {}
+    virtual uint32_t boundary_seconds() const { return 3600; }   // 60 in test
     virtual void stopForOTA() {}
+    virtual void restartAfterOTA() {}
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
     static void IRAM_ATTR countInterrupt();
     void setCounter(int val, bool update = true);
     void setLastBlip();
-    double generatePoissonRandom(double lambda);
   private:
     void (*callback)(void) = nullptr; // Member variable to store callback function pointer
   protected:

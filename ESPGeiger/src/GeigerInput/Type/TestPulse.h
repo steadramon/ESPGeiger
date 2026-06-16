@@ -44,16 +44,6 @@ extern "C" {
 #define GEIGER_MODEL "genpulse"
 #endif
 
-static int _pulse_tx_pin;
-static bool _bool_pulse_state = false;
-static unsigned long _last_b;
-static double _this_delay;
-static double _next_delay;
-
-#ifdef ESP32
-static esp_timer_handle_t hdl_pulse_timer = NULL;
-#endif
-
 class GeigerTestPulse : public GeigerInputTest
 {
   public:
@@ -61,6 +51,7 @@ class GeigerTestPulse : public GeigerInputTest
     void begin();
     void loop();
     void stopForOTA() override;
+    void restartAfterOTA() override;
     static void IRAM_ATTR pulseInterrupt();
     static void pulseInterrupt(void *data);
     void secondTicker();

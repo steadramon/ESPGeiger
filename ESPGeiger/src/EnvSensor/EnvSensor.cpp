@@ -27,6 +27,7 @@ EnvSensor envsensor;
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
+#include "../Util/FastMillis.h"
 #include "../Util/StringUtil.h"
 
 EG_REGISTER_MODULE(envsensor)
@@ -35,20 +36,27 @@ EG_PSTR(EN_L_SDA,  "I2C SDA pin");
 EG_PSTR(EN_L_SCL,  "I2C SCL pin");
 EG_PSTR(EN_L_UNIT, "Temp unit");
 EG_PSTR(EN_H_UNIT, "0=Celsius 1=Fahrenheit 2=Kelvin");
+EG_PSTR(EN_L_TOF,  "Temp offset");
+EG_PSTR(EN_H_TOF,  "0.1 C steps. -25 = -2.5 C.");
+EG_PSTR(EN_L_ALT,  "Altitude (m)");
+EG_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = local station pressure).");
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
 static const EGPref ENV_PREF_ITEMS[] = {
-  {"sda",  EN_L_SDA,  nullptr,    STR(ENV_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"scl",  EN_L_SCL,  nullptr,    STR(ENV_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"unit", EN_L_UNIT, EN_H_UNIT,  "0",                  nullptr, 0, 2,           0, EGP_UINT, 0},
+  {"sda",         EN_L_SDA,  nullptr,    STR(ENV_DEFAULT_SDA), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, 0},
+  {"scl",         EN_L_SCL,  nullptr,    STR(ENV_DEFAULT_SCL), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, 0},
+  {"unit",        EN_L_UNIT, EN_H_UNIT,  "0",                  nullptr, 0,    2,            0, EGP_UINT, 0},
+  {"temp_offset", EN_L_TOF,  EN_H_TOF,   "0",                  nullptr, -100, 100,          0, EGP_INT,  0},
+  {"altitude_m",  EN_L_ALT,  EN_H_ALT,   "0",                  nullptr, 0,    9000,         0, EGP_UINT, 0},
 };
 
 static const EGPrefGroup ENV_PREF_GROUP = {
   "env", "Environment Sensor", 1,
   ENV_PREF_ITEMS,
   sizeof(ENV_PREF_ITEMS) / sizeof(ENV_PREF_ITEMS[0]),
+  EGP_CAT_INPUT,
 };
 
 const EGPrefGroup* EnvSensor::prefs_group() { return &ENV_PREF_GROUP; }
@@ -58,6 +66,8 @@ void EnvSensor::readPrefs() {
   _scl  = (uint8_t)EGPrefs::getUInt("env", "scl");
   _unit = (uint8_t)EGPrefs::getUInt("env", "unit");
   if (_unit > UNIT_K) _unit = UNIT_C;
+  _temp_offset_tenths = (int8_t)EGPrefs::getInt("env", "temp_offset");
+  _altitude_m         = (uint16_t)EGPrefs::getUInt("env", "altitude_m");
 }
 
 void EnvSensor::on_prefs_loaded() {
@@ -75,12 +85,7 @@ void EnvSensor::on_prefs_saved() {
 void EnvSensor::begin() {
   if (_started) return;
   _started = true;
-  // On OLED builds the display module (HARDWARE priority, runs first) has
-  // already done Wire.begin() with its pin layout. Calling Wire.begin()
-  // here with the EnvSensor pref pins would silently re-map SDA/SCL under
-  // the OLED - on builds where the two configured pin sets disagree (e.g.
-  // espgeigerhw: OLED 5/4 vs EnvSensor old default 4/5) it freezes the
-  // display. Single-bus rule: whoever inits first wins.
+  // OLED runs Wire.begin() first; skip here or we remap SDA/SCL and freeze it.
 #ifndef SSD1306_DISPLAY
   Wire.begin(_sda, _scl);
 #endif
@@ -121,6 +126,7 @@ const __FlashStringHelper* EnvSensor::chipName() const {
   }
   if (_drv_flags & DRV_BOSCH) return _bosch.chipName();
   if (_drv_flags & DRV_AHT)   return _aht.chipName();
+  if (remoteFresh())          return F("UDP");
   return nullptr;
 }
 
@@ -177,24 +183,53 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
 }
 
 float EnvSensor::tempC() const {
-  return present() ? _st->ema_t : NAN;
+  if (localPresent()) {
+    float t = _st->ema_t;
+    if (isnan(t)) return NAN;
+    return t + (float)_temp_offset_tenths * 0.1f;
+  }
+  if (remoteFresh()) return _r_t;
+  return NAN;
 }
 
 float EnvSensor::humidity() const {
-  return present() ? _st->ema_h : NAN;
+  if (localPresent()) return _st->ema_h;
+  if (remoteFresh())  return _r_h;
+  return NAN;
 }
 
 float EnvSensor::pressure() const {
-  return present() ? _st->ema_p : NAN;
+  if (localPresent()) {
+    float p = _st->ema_p;
+    if (isnan(p) || _altitude_m == 0) return p;
+    // Barometric formula, sea-level reduction. p in hPa, altitude in metres.
+    float ratio = 1.0f - (float)_altitude_m / 44330.0f;
+    return p / powf(ratio, 5.255f);
+  }
+  if (remoteFresh()) return _r_p;
+  return NAN;
 }
 
 float EnvSensor::tempUser() const {
-  if (!present()) return NAN;
-  float c = _st->ema_t;
+  float c = tempC();
   if (isnan(c)) return NAN;
   if (_unit == UNIT_F) return c * 1.8f + 32.0f;
   if (_unit == UNIT_K) return c + 273.15f;
   return c;
+}
+
+bool EnvSensor::remoteFresh() const {
+  if (_r_last_ms == 0) return false;
+  return (uint32_t)(fast_millis() - _r_last_ms) < ENV_REMOTE_TTL_MS;
+}
+
+void EnvSensor::setRemote(float t, float h, float p) {
+  // Local hardware always wins; mirror is for headless receivers only.
+  if (localPresent()) return;
+  _r_t = t;
+  _r_h = h;
+  _r_p = p;
+  _r_last_ms = fast_millis();
 }
 
 size_t EnvSensor::status_json(char* buf, size_t cap, unsigned long now) {

@@ -89,12 +89,64 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
   ESP.rtcUserMemoryWrite(RTC_OFFSET, (uint32_t*)&snap, sizeof(snap));
 }
 
-#else  // !ESP8266 - stub the namespace so callers compile.
+#elif defined(ESP32)
+// ESP32 path uses the IDF coredump partition; read summary then erase.
+#include <Arduino.h>
+#include <esp_core_dump.h>
+#include <esp_system.h>
 
+namespace CrashDump {
+
+static Snapshot s_recovered{};
+static bool     s_have = false;
+
+void begin() {
+  // Fast path: skip unless previous boot panicked and a coredump exists.
+  esp_reset_reason_t rr = esp_reset_reason();
+  bool was_panic = (rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
+                    rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT);
+  if (!was_panic) return;
+  if (esp_core_dump_image_check() != ESP_OK) return;
+
+  esp_core_dump_summary_t sum{};
+  if (esp_core_dump_get_summary(&sum) == ESP_OK) {
+    Snapshot snap{};
+    snap.reason = (uint32_t)rr;
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32H2
+    // RISC-V cores - the summary union maps to a different layout. Capture
+    // only the reset reason and PC; the Xtensa backtrace/EPCx fields don't
+    // exist here. Saves a per-target struct walk that isn't worth it for C3.
+    snap.epc1 = sum.exc_pc;
+#else
+    snap.exccause = sum.ex_info.exc_cause;
+    snap.epc1     = sum.exc_pc;
+    snap.epc2     = (sum.ex_info.epcx_reg_bits & (1u << 1)) ? sum.ex_info.epcx[1] : 0;
+    snap.epc3     = (sum.ex_info.epcx_reg_bits & (1u << 2)) ? sum.ex_info.epcx[2] : 0;
+    snap.excvaddr = sum.ex_info.exc_vaddr;
+    snap.depc     = 0;
+    snap.sp       = sum.ex_info.exc_a[1];
+    size_t depth = sum.exc_bt_info.depth;
+    if (depth > STACK_WORDS) depth = STACK_WORDS;
+    for (size_t i = 0; i < depth; i++) snap.stack[i] = sum.exc_bt_info.bt[i];
+    snap.word_count = (uint32_t)depth;
+#endif
+    s_recovered = snap;
+    s_have = true;
+  }
+
+  // Always erase so a bad image doesn't trip the same parse next boot.
+  esp_core_dump_image_erase();
+}
+
+bool hasCrash() { return s_have; }
+const Snapshot* lastCrash() { return s_have ? &s_recovered : nullptr; }
+
+} // namespace CrashDump
+
+#else  // Other targets - stub.
 namespace CrashDump {
 void begin() {}
 bool hasCrash() { return false; }
 const Snapshot* lastCrash() { return nullptr; }
 }
-
 #endif

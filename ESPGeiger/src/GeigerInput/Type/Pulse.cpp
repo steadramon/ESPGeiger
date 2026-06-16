@@ -22,6 +22,10 @@
 
 #include "../../Logger/Logger.h"
 #include "../../Util/MathUtil.h"
+#ifdef USE_PCNT
+#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
+#include "../../Util/FastMillis.h"   // fast_millis() - real millis() halves LPS
+#endif
 
 GeigerPulse::GeigerPulse() {
 };
@@ -68,19 +72,63 @@ void GeigerPulse::stopForOTA() {
 #endif
 }
 
+void GeigerPulse::restartAfterOTA() {
 #ifdef USE_PCNT
-int GeigerPulse::collect() {
-  int16_t pulseCount;
+  pcnt_counter_resume(PCNT_UNIT);
+#else
+  attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+#endif
+}
+
+#ifdef USE_PCNT
+void GeigerPulse::drain_pcnt() {
+  // Caller throttles to 50 Hz; this assumes a real drain is wanted.
+  int16_t n = 0;
   pcnt_counter_pause(PCNT_UNIT);
-  pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
+  pcnt_get_counter_value(PCNT_UNIT, &n);
+  if (n <= 0) {
+    pcnt_counter_resume(PCNT_UNIT);
+    return;
+  }
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
-  if (pulseCount != 0) {
-    setCounter(pulseCount);
-  } else {
-    setCounter(pulseCount, false);
+
+  uint32_t now_us = (uint32_t)micros();
+  uint32_t span_us = now_us - _last_drain_us;
+  if (span_us == 0 || span_us > 1000000UL) span_us = 1000000UL;
+  _last_drain_us = now_us;
+
+  portENTER_CRITICAL(&timerMux);
+  s_event_counter += (uint32_t)n;
+  portEXIT_CRITICAL(&timerMux);
+
+  _last_blip = now_us;
+  Counter::on_pulse_batch((uint16_t)n, now_us, span_us);
+}
+
+int GeigerPulse::collect() {
+  int16_t residual = 0;
+  pcnt_counter_pause(PCNT_UNIT);
+  pcnt_get_counter_value(PCNT_UNIT, &residual);
+  pcnt_counter_clear(PCNT_UNIT);
+  pcnt_counter_resume(PCNT_UNIT);
+
+  uint32_t now_us = (uint32_t)micros();
+
+  if (residual > 0) {
+    uint32_t span_us = now_us - _last_drain_us;
+    if (span_us == 0 || span_us > 1000000UL) span_us = 1000000UL;
+    Counter::on_pulse_batch((uint16_t)residual, now_us, span_us);
+    _last_blip = now_us;
   }
-  return pulseCount;
+  _last_drain_us = now_us;
+
+  portENTER_CRITICAL(&timerMux);
+  uint32_t pending = s_event_counter;
+  s_event_counter = 0;
+  portEXIT_CRITICAL(&timerMux);
+
+  return (int)(pending + (uint32_t)residual);
 }
 
 void GeigerPulse::set_pcnt_filter(int val) {

@@ -27,6 +27,7 @@
 #include "WebAPI.h"
 #include <EGBase64.h>   // buffer-in/out, no heap (vs core's heap-using <base64.h>)
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/DeviceInfo.h"
@@ -68,6 +69,7 @@ static const EGPrefGroup WEBAPI_PREF_GROUP = {
   "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
@@ -241,7 +243,7 @@ void WebAPI::doHandshake() {
   mp.kv("gc", DeviceInfo::geigermodel());
   mp.kv("td", (uint32_t)DeviceInfo::tubeDetection());
   mp.kv("fl", (uint32_t)DeviceInfo::featureFlags());
-  mp.kv("rr", DeviceInfo::resetReason());
+  mp.kv("rr", (uint32_t)DeviceInfo::resetReason());
   mp.kv("m",  (uint32_t)_mode);
   if (sendCoords) {
     mp.kv("la", (int32_t)(latF * 100.0f + (latF >= 0 ? 0.5f : -0.5f)) * 0.01f);
@@ -286,7 +288,7 @@ void WebAPI::doHandshake() {
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
     if (request.open("POST", WEBAPI_URL "/api/1/handshake")) {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
@@ -406,8 +408,8 @@ void WebAPI::postMeasurement(bool censusOnly) {
 
   // float32 keeps the payload compact and avoids the soft-float printer.
   if (sendRadiation) {
-    mp.kv("c",  gcounter.get_cpmf());
-    mp.kv("u",  gcounter.get_usv());
+    mp.kv("c",  gcounter.get_cpmf_stable());
+    mp.kv("u",  gcounter.get_usv_stable());
   }
 #ifdef ESPG_HV_ADC
   if (sendHv) mp.kv("hv", hv.hvReading.get());
@@ -454,7 +456,7 @@ void WebAPI::postMeasurement(bool censusOnly) {
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
     if (request.open("POST", WEBAPI_URL "/api/1/post")) {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
@@ -536,7 +538,7 @@ void WebAPI::forget() {
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
     if (request.open("POST", WEBAPI_URL "/api/1/forget")) {
       Log::console(PSTR("WebAPI: Forget station %u"), station_id);
-      led.Blink(500, 500);
+      LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);

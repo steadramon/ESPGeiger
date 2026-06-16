@@ -18,12 +18,14 @@
 */
 #ifdef GEIGER_SDCARD
 #include <Arduino.h>
+#include <EGHttpServer.h>
 #include "SDCard.h"
 #include "../Logger/Logger.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../NTP/NTP.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/MathUtil.h"
+#include "../WebPortal/WebPortal.h"
 
 SdFat32* sd = nullptr;
 
@@ -41,6 +43,7 @@ static const EGPrefGroup SDCARD_PREF_GROUP = {
   "sdcard", "SD Card", 1,
   SDCARD_PREF_ITEMS,
   sizeof(SDCARD_PREF_ITEMS) / sizeof(SDCARD_PREF_ITEMS[0]),
+  EGP_CAT_SYSTEM,
 };
 
 const EGPrefGroup* SDCard::prefs_group() { return &SDCARD_PREF_GROUP; }
@@ -289,5 +292,354 @@ void SDCard::deleteOldest(){
     sd->remove(oldestFile);
   }
   sd->chdir();
+}
+
+void SDCard::pauseWriter() {
+  if (myDataFile.isOpen()) {
+    myDataFile.sync();
+    myDataFile.close();
+  }
+  openFileDay = 0;
+  _unsynced_writes = 0;
+}
+
+// "YYYYMMDD.csv": 8 digits + ".csv". Strict check so /sd?f=... can't
+// be coaxed into ../ traversal or anything but a log filename.
+static bool valid_csv_name(const char* name) {
+  if (!name) return false;
+  size_t i = 0;
+  while (i < 8) {
+    if (name[i] < '0' || name[i] > '9') return false;
+    i++;
+  }
+  return name[8] == '.' && name[9] == 'c' && name[10] == 's' && name[11] == 'v' && name[12] == '\0';
+}
+
+static bool valid_yyyymm(const char* s) {
+  if (!s) return false;
+  for (int i = 0; i < 6; i++) {
+    if (s[i] < '0' || s[i] > '9') return false;
+  }
+  return s[6] == '\0';
+}
+
+static bool valid_year(const char* s) {
+  if (!s) return false;
+  for (int i = 0; i < 4; i++) {
+    if (s[i] < '0' || s[i] > '9') return false;
+  }
+  return s[4] == '\0';
+}
+
+struct MonthEntry {
+  uint32_t yyyymm;
+  uint16_t files;
+  uint32_t bytes;
+};
+
+struct DayEntry {
+  uint8_t  day;
+  uint32_t bytes;
+};
+
+// Top page: months for the selected year (or most recent if 0), newest first.
+// Year dropdown appears when more than one year is on disk.
+static void hSdList(EGHttpResponse& res, uint16_t selectedYear = 0) {
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("SD Logs"));
+
+  if (!sdcard.ready() || !sd) {
+    res.sendChunk(F("<p>SD card not available.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  sdcard.pauseWriter();
+
+  constexpr uint16_t MAX_MONTHS = 120;   // 10 years
+  MonthEntry* months = (MonthEntry*)malloc(MAX_MONTHS * sizeof(MonthEntry));
+  if (!months) {
+    res.sendChunk(F("<p>Out of memory.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  uint16_t count = 0;
+  uint64_t totalBytes = 0;
+  File32 rootDir, subDir, file;
+  if (sd->chdir() && rootDir.open("/")) {
+    while (count < MAX_MONTHS && subDir.openNext(&rootDir, O_RDONLY)) {
+      if (subDir.isSubDir() && !subDir.isHidden()) {
+        char dirName[13];
+        subDir.getName(dirName, sizeof(dirName));
+        if (valid_yyyymm(dirName)) {
+          MonthEntry& m = months[count];
+          m.yyyymm = (uint32_t)atol(dirName);
+          m.files  = 0;
+          m.bytes  = 0;
+          while (file.openNext(&subDir, O_RDONLY)) {
+            if (!file.isSubDir() && !file.isHidden()) {
+              char f_name[13];
+              file.getName(f_name, sizeof(f_name));
+              if (valid_csv_name(f_name)) {
+                m.files++;
+                m.bytes += file.fileSize();
+                totalBytes += file.fileSize();
+              }
+            }
+            file.close();
+          }
+          if (m.files > 0) count++;
+        }
+      }
+      subDir.close();
+    }
+    rootDir.close();
+  }
+
+  for (uint16_t i = 1; i < count; i++) {
+    MonthEntry tmp = months[i];
+    uint16_t j = i;
+    while (j > 0 && months[j - 1].yyyymm < tmp.yyyymm) {
+      months[j] = months[j - 1];
+      j--;
+    }
+    months[j] = tmp;
+  }
+
+  uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+
+  char head[160];
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("<p>%u month%s, %lu KB total, %lu MB free.</p>"),
+    (unsigned)count, count == 1 ? "" : "s",
+    (unsigned long)((totalBytes + 1023) / 1024),
+    (unsigned long)freespace);
+  if (n > 0) res.sendChunk(head, (size_t)n);
+
+  if (count == 0) {
+    res.sendChunk(F("<p>No log files yet.</p>"));
+    free(months);
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  // Unique years in descending order. months[] is already sorted desc,
+  // so consecutive entries with the same year collapse cleanly.
+  constexpr uint8_t MAX_YEARS = 30;
+  uint16_t years[MAX_YEARS];
+  uint8_t yearCount = 0;
+  for (uint16_t i = 0; i < count && yearCount < MAX_YEARS; i++) {
+    uint16_t y = (uint16_t)(months[i].yyyymm / 100);
+    if (yearCount == 0 || years[yearCount - 1] != y) {
+      years[yearCount++] = y;
+    }
+  }
+
+  uint16_t showYear = (selectedYear > 0) ? selectedYear : years[0];
+
+  if (yearCount > 1) {
+    res.sendChunk(F("<p>Year: <select onchange=\"location.href='/sd?y='+this.value\">"));
+    for (uint8_t i = 0; i < yearCount; i++) {
+      char opt[64];
+      int on = snprintf_P(opt, sizeof(opt),
+        PSTR("<option value='%u'%s>%u</option>"),
+        (unsigned)years[i],
+        years[i] == showYear ? " selected" : "",
+        (unsigned)years[i]);
+      if (on > 0) res.sendChunk(opt, (size_t)on);
+    }
+    res.sendChunk(F("</select></p>"));
+  }
+
+  bool any = false;
+  res.sendChunk(F("<div class=menu>"));
+  for (uint16_t i = 0; i < count; i++) {
+    uint32_t ym = months[i].yyyymm;
+    if ((uint16_t)(ym / 100) != showYear) continue;
+    any = true;
+    char row[160];
+    int rn = snprintf_P(row, sizeof(row),
+      PSTR("<a href='/sd?m=%06lu'>%04u-%02u <small>(%u file%s, %lu KB)</small></a>"),
+      (unsigned long)ym,
+      (unsigned)(ym / 100), (unsigned)(ym % 100),
+      (unsigned)months[i].files, months[i].files == 1 ? "" : "s",
+      (unsigned long)((months[i].bytes + 1023) / 1024));
+    if (rn > 0) res.sendChunk(row, (size_t)rn);
+  }
+  res.sendChunk(F("</div>"));
+  if (!any) res.sendChunk(F("<p>No log files in this year.</p>"));
+
+  free(months);
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+// Day list within one YYYYMM folder.
+static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
+  char dir[7];
+  for (int i = 0; i < 6; i++) dir[i] = yyyymm[i];
+  dir[6] = '\0';
+
+  res.beginChunked(200, "text/html");
+  WebPortal::sendPageHead(res, F("SD Logs"));
+
+  if (!sdcard.ready() || !sd) {
+    res.sendChunk(F("<p>SD card not available.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  sdcard.pauseWriter();
+  res.sendChunk(F("<p><a href='/sd'>&larr; All months</a></p>"));
+
+  constexpr uint8_t MAX_DAYS = 31;
+  DayEntry days[MAX_DAYS];
+  uint8_t count = 0;
+  uint32_t totalBytes = 0;
+  File32 subDir, file;
+  bool opened = sd->chdir() && subDir.open(dir, O_RDONLY);
+  if (!opened) {
+    res.sendChunk(F("<p>Month not found.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+  while (count < MAX_DAYS && file.openNext(&subDir, O_RDONLY)) {
+    if (!file.isSubDir() && !file.isHidden()) {
+      char f_name[13];
+      file.getName(f_name, sizeof(f_name));
+      if (valid_csv_name(f_name) && strncmp(f_name, dir, 6) == 0) {
+        days[count].day   = (uint8_t)((f_name[6] - '0') * 10 + (f_name[7] - '0'));
+        days[count].bytes = file.fileSize();
+        totalBytes += days[count].bytes;
+        count++;
+      }
+    }
+    file.close();
+  }
+  subDir.close();
+
+  for (uint8_t i = 1; i < count; i++) {
+    DayEntry tmp = days[i];
+    uint8_t j = i;
+    while (j > 0 && days[j - 1].day < tmp.day) {
+      days[j] = days[j - 1];
+      j--;
+    }
+    days[j] = tmp;
+  }
+
+  char head[80];
+  int n = snprintf_P(head, sizeof(head),
+    PSTR("<p>%u file%s, %lu KB.</p>"),
+    (unsigned)count, count == 1 ? "" : "s",
+    (unsigned long)((totalBytes + 1023) / 1024));
+  if (n > 0) res.sendChunk(head, (size_t)n);
+
+  if (count == 0) {
+    res.sendChunk(F("<p>No log files in this month.</p>"));
+  } else {
+    res.sendChunk(F("<div class=\"menu dense\">"));
+    for (uint8_t i = 0; i < count; i++) {
+      char row[160];
+      int rn = snprintf_P(row, sizeof(row),
+        PSTR("<a href='/sd?f=%s%02u.csv'>%.4s-%.2s-%02u <small>(%lu KB)</small></a>"),
+        dir, (unsigned)days[i].day,
+        dir, dir + 4, (unsigned)days[i].day,
+        (unsigned long)((days[i].bytes + 1023) / 1024));
+      if (rn > 0) res.sendChunk(row, (size_t)rn);
+    }
+    res.sendChunk(F("</div>"));
+  }
+
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
+static void hSdDownload(EGHttpRequest& req, EGHttpResponse& res, const char* f) {
+  // Copy out of arg()'s shared static buffer before any other arg/header call.
+  char filename[13];
+  for (int i = 0; i < 12; i++) filename[i] = f[i];
+  filename[12] = '\0';
+
+  if (!sdcard.ready() || !sd) {
+    res.send(503, "text/plain", "SD not ready");
+    return;
+  }
+
+  // Dir is the first 6 chars (YYYYMM).
+  char dir[7];
+  for (int i = 0; i < 6; i++) dir[i] = filename[i];
+  dir[6] = '\0';
+
+  sdcard.pauseWriter();
+
+  if (!sd->chdir() || !sd->chdir(dir)) {
+    sd->chdir();
+    res.send(404, "text/plain", "Not found");
+    return;
+  }
+
+  File32 fp;
+  if (!fp.open(filename, O_RDONLY)) {
+    sd->chdir();
+    res.send(404, "text/plain", "Not found");
+    return;
+  }
+
+  char disp[64];
+  snprintf_P(disp, sizeof(disp),
+             PSTR("attachment; filename=\"%s\""), filename);
+  res.addHeader("Content-Disposition", disp);
+  res.beginChunked(200, "text/csv");
+
+  uint8_t buf[512];
+  while (true) {
+    int got = fp.read(buf, sizeof(buf));
+    if (got <= 0) break;
+    if (!res.sendChunk((const char*)buf, (size_t)got)) break;
+  }
+  fp.close();
+  sd->chdir();
+  res.endChunked();
+}
+
+static const EGMenuEntry SDCARD_MENU[] = {
+  {"/sd", "SD Logs"},
+  {nullptr, nullptr}
+};
+
+const EGMenuEntry* SDCard::menuEntries() {
+  return sdenabled ? SDCARD_MENU : nullptr;
+}
+
+void SDCard::registerRoutes(EGHttpServer& http) {
+  http.on("/sd", EGHttpRequest::GET,
+    [](EGHttpRequest& req, EGHttpResponse& res, void*) {
+      const char* f = req.arg("f");
+      if (f && *f) {
+        if (!valid_csv_name(f)) { res.send(400, "text/plain", "Bad name"); return; }
+        hSdDownload(req, res, f);
+        return;
+      }
+      const char* m = req.arg("m");
+      if (m && *m) {
+        if (!valid_yyyymm(m)) { res.send(400, "text/plain", "Bad month"); return; }
+        hSdMonth(res, m);
+        return;
+      }
+      const char* y = req.arg("y");
+      uint16_t selYear = 0;
+      if (y && *y) {
+        if (!valid_year(y)) { res.send(400, "text/plain", "Bad year"); return; }
+        selYear = (uint16_t)atoi(y);
+      }
+      hSdList(res, selYear);
+    });
 }
 #endif

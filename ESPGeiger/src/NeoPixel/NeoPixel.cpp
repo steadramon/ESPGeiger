@@ -53,13 +53,16 @@ static const EGPrefGroup NEOPIXEL_PREF_GROUP = {
   "neopixel", "NeoPixel", 1,
   NEOPIXEL_PREF_ITEMS,
   sizeof(NEOPIXEL_PREF_ITEMS) / sizeof(NEOPIXEL_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }
 
 void NeoPixel::on_prefs_loaded() {
-  setBrightness((int)EGPrefs::getUInt("neopixel", "brightness"));
+  int b = (int)EGPrefs::getUInt("neopixel", "brightness");
+  setBrightness(b);
   _swap_rg = EGPrefs::getBool("neopixel", "swap");
+  EGModuleRegistry::set_loop_interval(this, b > 0 ? 30 : -1);
 }
 
 RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
@@ -90,7 +93,7 @@ void NeoPixel::setup()
 }
 
 void NeoPixel::setBrightness(int input) {
-  input = clamp(input * 128 / 100, 0, 128);  // 0-100% pref → 0-128 hw, int math
+  input = clamp(input * 128 / 100, 0, 128);  // 0-100% pref to 0-128 hw, int math
   if (input == 0) {
     RgbColor black(0);
     this->controller_->SetPixelColor(0, black);
@@ -118,9 +121,8 @@ void NeoPixel::blink(uint16_t timer)
     float diff_ratio = (our_cpm / our_5cpm);
     nextInterval = clamp((unsigned long)(blinkInterval / diff_ratio), 100UL, 4000UL);
     if (this->neoPixelMode >= 2) {
-      // z-score against Poisson std (sqrt of cpm5). Noise-aware: low rates
-      // need bigger absolute deltas to trigger, high rates trip on small.
-      float z = (our_cpm - our_5cpm) / sqrtf(our_5cpm);
+      // Noise-aware z-score: low rates need bigger absolute deltas to trip.
+      float z = poisson_z(our_cpm, our_5cpm);
       if (z > 3.0f) {
         rgb = color(colorSaturation, 0, 0);              // significant rise - red
       } else if (z > 1.5f) {

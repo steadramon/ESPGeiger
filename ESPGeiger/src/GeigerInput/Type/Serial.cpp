@@ -24,6 +24,7 @@
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
 #include "../../Util/DeviceInfo.h"
+#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (serial CPM/CPS)
 #include "../SerialFormat.h"
 
 static EspSoftwareSerial::UART geigerPort;
@@ -101,6 +102,7 @@ void GeigerSerial::secondTicker() {
     int c = (int)partial_clicks;
     partial_clicks = 0;
     setCounter(c, false);
+    if (c > 0) Counter::on_pulse_batch((uint16_t)c, (uint32_t)micros(), 1000000UL);
     _use_cps = false;
     return;
   }
@@ -111,6 +113,7 @@ void GeigerSerial::secondTicker() {
     int full_clicks = (int)partial_clicks;
     partial_clicks -= full_clicks;
     setCounter(full_clicks, false);
+    Counter::on_pulse_batch((uint16_t)full_clicks, (uint32_t)micros(), 1000000UL);
   }
 }
 

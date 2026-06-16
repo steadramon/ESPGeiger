@@ -44,14 +44,6 @@ extern "C" {
 
 #include "../GeigerInputTest.h"
 
-static int _pulse_tx_pin;
-static bool _bool_pulse_state = false;
-static unsigned long _last_b;
-
-#ifdef ESP32
-static esp_timer_handle_t hdl_pulse_timer = NULL;
-#endif
-
 class GeigerTestPulseInt : public GeigerInputTest
 {
   public:
@@ -59,6 +51,7 @@ class GeigerTestPulseInt : public GeigerInputTest
     void begin();
     void loop();
     void stopForOTA() override;
+    void restartAfterOTA() override;
     static void IRAM_ATTR pulseInterrupt();
     static void pulseInterrupt(void *data);
     double calcPWM();

@@ -20,10 +20,24 @@
 #ifndef MATHUTIL_H
 #define MATHUTIL_H
 
+#include <math.h>
+
 // Clamp `v` into [lo, hi]. constexpr so literal-bound calls fold at compile time.
 template <typename T>
 constexpr T clamp(T v, T lo, T hi) {
   return v < lo ? lo : (v > hi ? hi : v);
+}
+
+// Poisson standard deviation = sqrt(N). 0 when N is non-positive.
+inline float poisson_std(float N) {
+  return N > 0.0f ? sqrtf(N) : 0.0f;
+}
+
+// Deviation of `observed` from `expected` in Poisson standard deviations.
+// 0 when expected is too small for a meaningful z-score.
+inline float poisson_z(float observed, float expected) {
+  float s = poisson_std(expected);
+  return s > 0.0f ? (observed - expected) / s : 0.0f;
 }
 
 #endif

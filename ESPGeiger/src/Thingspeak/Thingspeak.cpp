@@ -19,6 +19,7 @@
 #ifdef THINGSPEAKOUT
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/StringUtil.h"
 #include "../EnvSensor/EnvSensor.h"
@@ -43,6 +44,7 @@ static const EGPrefGroup TS_PREF_GROUP = {
   "thingspeak", "ThingSpeak", 1,
   TS_PREF_ITEMS,
   sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
@@ -157,7 +159,7 @@ void Thingspeak::postMeasurement() {
   {
     if (request->open("GET", url))
     {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->onReadyStateChange(httpRequestCb, this);
       request->setTimeout(5);

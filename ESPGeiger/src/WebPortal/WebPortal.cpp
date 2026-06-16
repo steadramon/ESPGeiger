@@ -86,6 +86,11 @@ table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:.4em .6em;border-bottom:1px solid var(--border)}
 th{font-weight:500;color:var(--muted)}
 .muted{color:var(--muted);font-size:.9em}
+.stat{display:grid;grid-template-columns:auto 1fr auto 1fr;column-gap:2em}
+.stat>.row{display:grid;grid-template-columns:subgrid;grid-column:1/-1;padding:.4em .6em;border-bottom:1px solid var(--border);align-items:baseline}
+.stat>.row b{color:var(--muted);font-weight:500;font-family:inherit}
+.stat>.row.envflex{display:flex;gap:2em}
+.stat>.row.envflex>div{flex:1;display:flex;gap:2em;align-items:baseline}
 .card{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:1em;margin:1em 0}
 .card-ok{border-color:#5a5}
 .bar-row{display:flex;align-items:flex-end;gap:1px;height:80px;width:100%;overflow:hidden;margin:.4em 0;border-bottom:1px solid var(--border)}
@@ -104,11 +109,16 @@ h4{margin:.8em 0 .2em;font-size:1em;color:var(--muted)}
 output{display:inline-block;margin-left:.6em;color:var(--muted)}
 details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
 details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
+nav.tabs{display:flex;border-bottom:1px solid var(--border);margin:0 0 1em;gap:.4em;flex-wrap:wrap}
+nav.tabs a{padding:.5em .9em;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none}
+nav.tabs a:hover{color:var(--fg)}
+nav.tabs a.ac{color:var(--accent);border-bottom-color:var(--accent)}
 .fx{display:flex;gap:.5em}.mt{margin-top:.4em}.mn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 #dyB{position:fixed;top:0;left:0;right:0;padding:.5em;background:#fc3;color:#000;text-align:center;z-index:9999;cursor:pointer;font-size:.9em;font-weight:600}
 .menu{display:flex;flex-direction:column;gap:.85em;margin:1em auto;max-width:22em}
 .menu a,.back{background:var(--accent);color:#fff;font-weight:500;padding:.5em 1em;border-radius:4px}
 .menu a{display:block;text-align:center;font-size:1.15em;padding:.55em 1em;border-radius:6px}
+.menu.dense{gap:.35em}.menu.dense a{font-size:.95em;padding:.3em .8em}
 .back{display:inline-block}
 .menu a:hover,.back:hover{opacity:.9;text-decoration:none}
 .back-row{margin-top:2em}
@@ -123,7 +133,7 @@ details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
 .devhead .sub{color:var(--muted);font-size:.95em;margin-top:.2em}
 .cred{margin-top:1.5em;font-size:.85em;color:var(--muted)}
 .cred a{color:inherit}
-.cred .brand{color:var(--fg);font-weight:bold}
+.cred .brand{color:var(--fg);font-weight:bold;font-family:"Courier New",Courier,monospace}
 #g1{height:200px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px}
 #g2{display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.4em 0;font-size:1.05em}
 #t1{width:100%;height:250px;font-family:monospace;font-size:.8em;line-height:1.3;resize:vertical}
@@ -635,6 +645,27 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
     }
     INFO_ROW("Last reset", "%s", rstStr);
   }
+  if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) {
+    INFO_ROW("Exc cause", "%u",     (unsigned)cd->exccause);
+    INFO_ROW("Exc PC",    "0x%08x", (unsigned)cd->epc1);
+    INFO_ROW("Exc addr",  "0x%08x", (unsigned)cd->excvaddr);
+    if (cd->epc2) INFO_ROW("EPC2", "0x%08x", (unsigned)cd->epc2);
+    if (cd->epc3) INFO_ROW("EPC3", "0x%08x", (unsigned)cd->epc3);
+    if (cd->sp)   INFO_ROW("SP",   "0x%08x", (unsigned)cd->sp);
+    // Backtrace from coredump - all PCs are real code addresses, no need
+    // to filter the way we do for the ESP8266 stack snapshot.
+    if (cd->word_count) {
+      char framesbuf[256];
+      size_t fp = 0;
+      for (uint32_t i = 0; i < cd->word_count && fp < sizeof(framesbuf) - 12; i++) {
+        int wn = snprintf_P(framesbuf + fp, sizeof(framesbuf) - fp,
+                            PSTR("%s0x%08x"), i ? " " : "", (unsigned)cd->stack[i]);
+        if (wn > 0 && (size_t)wn < sizeof(framesbuf) - fp) fp += (size_t)wn;
+      }
+      framesbuf[fp] = '\0';
+      INFO_ROW("Backtrace", "<code>%s</code>", framesbuf);
+    }
+  }
 #endif
   res.sendChunk(F("</table></details>"));
 
@@ -824,7 +855,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendChunk(F(R"HTML(
 <button type=submit>Save and reboot</button>
 </form>
-<p class=muted style='margin-top:1em'>After saving, the device reboots and tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute.</p>
+<p class=muted style='margin-top:1em'>If the new network is unreachable, the previous one is restored automatically after about a minute.</p>
 )HTML"));
 
   // Lazy-load the ~4 KB /ntpjs timezone payload on first expand.
@@ -840,7 +871,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   res.sendChunk(F(R"HTML(
 <details style='margin-top:1.5em'><summary>Advanced</summary>
-<p class=muted>Erase the saved WiFi credentials and reboot into the captive setup portal. Useful when neither the auto-revert nor a hardware reset button is available.</p>
+<p class=muted>Erase the saved WiFi credentials and reboot into the captive setup portal.</p>
 <form method=GET action=/erase onsubmit="return confirm('Erase saved WiFi credentials? Device will reboot into setup mode.')">
 <button type=submit class=danger>Erase WiFi config</button>
 </form>
@@ -1287,6 +1318,13 @@ void WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 
 void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool did_save = false;
+  // Tab from ?tab=N. Default SYSTEM (0). Clamped to the four valid values.
+  uint8_t tab = (uint8_t)EGP_CAT_SYSTEM;
+  const char* tab_arg = req.arg("t");
+  if (tab_arg && tab_arg[0]) {
+    int t = atoi(tab_arg);
+    if (t >= 0 && t <= 4) tab = (uint8_t)t;
+  }
 
   if (req.method() == EGHttpRequest::POST) {
     // Body lives in the heap buffer accumulated by hParamBody. Use the
@@ -1302,6 +1340,10 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
         const EGPrefGroup* g = EGPrefs::group_at(gi);
         if (!g) continue;
+        // Only touch prefs belonging to the tab the form was submitted from.
+        // Without this, BOOL fields on other tabs get cleared (absent in body
+        // = "off") on every save from another tab.
+        if (g->category != tab) continue;
         for (size_t j = 0; j < g->count; j++) {
           const EGPref& p = g->prefs[j];
           if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
@@ -1348,7 +1390,37 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::sendPageHead(res, F("Config"));
   if (did_save) res.sendChunk(F(
     "<div class='a ak'>Saved.</div>"));
-  res.sendChunk(F("<form method=POST action=/param>"));
+
+  // Tab nav: five links, the current one carries class=ac for styling.
+  static const char* const TAB_NAMES[5] = {"System", "Input", "Output", "Upload", "Backup"};
+  res.sendChunk(F("<nav class=tabs>"));
+  char nav[96];
+  for (uint8_t t = 0; t < 5; t++) {
+    int nn = snprintf_P(nav, sizeof(nav),
+      PSTR("<a href='/param?t=%u'%s>%s</a>"),
+      (unsigned)t, t == tab ? " class=ac" : "", TAB_NAMES[t]);
+    if (nn > 0) res.sendChunk(nav, (size_t)nn);
+  }
+  res.sendChunk(F("</nav>"));
+
+  // Backup tab renders the import form only - skip the pref-group rendering.
+  if (tab == (uint8_t)EGP_CAT_BACKUP) {
+    res.sendChunk(F(
+      "<form method=POST action=/import onsubmit=\"return confirm('Replace all config and reboot?')\">"
+      "<p><textarea name=blob id=cfgB rows=5 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
+      "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
+      " <button type=submit>Import</button></p></form>"
+      "<p style=\"color:var(--muted);font-size:.85em\">Import resets all config to defaults then applies the blob. WiFi and network settings are preserved. Device reboots automatically after import.</p>"
+      "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains private information. Keep it private.</p>"));
+    WebPortal::sendPageTail(res);
+    res.endChunked();
+    return;
+  }
+
+  char form_open[48];
+  int fo = snprintf_P(form_open, sizeof(form_open),
+    PSTR("<form method=POST action='/param?t=%u'>"), (unsigned)tab);
+  if (fo > 0) res.sendChunk(form_open, (size_t)fo);
 
   char buf[512];
   int n;
@@ -1374,18 +1446,16 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     order[j] = cur;
   }
 
-  bool first_emitted = true;
   for (uint8_t gi = 0; gi < gc; gi++) {
     EGModule* mod = EGPrefs::module_at(order[gi]);
     if (mod && mod->display_order() == 0) continue;
     const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
     if (!g || g->count == 0) continue;
+    if (g->category != tab) continue;
 
-    n = snprintf_P(buf, sizeof(buf), PSTR("<details class=bx%s><summary>%s</summary>"),
-                   first_emitted ? " open" : "",
+    n = snprintf_P(buf, sizeof(buf), PSTR("<details class=bx><summary>%s</summary>"),
                    g->label ? g->label : g->module_id);
     if (n > 0) res.sendChunk(buf, (size_t)n);
-    first_emitted = false;
 
     char s_id[32], s_lbl[80], s_help[120], s_pat[64];
     auto P2S = [](const char* fp, char* dst, size_t cap) -> const char* {
@@ -1537,16 +1607,13 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     res.sendChunk(F("</details>"));
   }
 
-  res.sendChunk(F("<hr><button type=submit>Save</button></form>"
-                  "<hr>"
-                  "<details><summary>Backup &amp; restore</summary>"
-                  "<form method=POST action=/import onsubmit=\"return confirm('Replace all config and reboot?')\">"
-                  "<p><textarea name=blob id=cfgB rows=4 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
-                  "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
-                  " <button type=submit>Import</button></p></form>"
-                  "<p style=\"color:var(--muted);font-size:.85em\">Import resets all config to defaults then applies the blob. WiFi and network settings are preserved. Device reboots automatically after import.</p>"
-                  "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains private information. Keep it private.</p>"
-                  "</details>"));
+  res.sendChunk(F(
+    "<hr><div id=fErr class='a ae' style=display:none>"
+    "Some fields need fixing - check expanded sections.</div>"
+    "<button type=submit>Save</button>"
+    "<script>document.forms[0].addEventListener('invalid',e=>{"
+    "for(let n=e.target;n;n=n.parentNode)n.tagName=='DETAILS'&&(n.open=1);"
+    "fErr.style.display=''},true)</script></form>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
 }
@@ -1566,6 +1633,7 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
 static bool is_skip_pref(const char* module_id, const char* key) {
   if (strcmp(module_id, "sys") == 0 && strcmp(key, "web_pass") == 0) return true;
   if (strcmp(module_id, "net") == 0) return true;
+  if (strcmp(module_id, "wifi") == 0) return true;
   return false;
 }
 
@@ -1965,12 +2033,12 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button id=snd>Sound: off</button>
 <canvas id=g1></canvas>
 <div id=g2></div>
-<table>
-<tr><th>CPM</th><td><span id=blip></span><span id=cpm>-</span></td><th>CPS</th><td><span id=cs>-</span></td></tr>
-<tr><th><span class=usvL>&micro;Sv/h</span></th><td><span id=usv class=usv>-</span></td><th>Total clicks</th><td><span id=tc>-</span></td></tr>
-<tr><th>Uptime</th><td><span id=upt>-</span></td><th>Signal</th><td><span id=rssi>-</span></td></tr>
-<tr id=envR style=display:none></tr>
-</table>
+<div class=stat>
+<div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
+<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Total clicks</b><span id=tc>-</span></div>
+<div class=row><b>Uptime</b><span id=upt>-</span><b>Signal</b><span id=rssi>-</span></div>
+<div class=row id=envR style=display:none></div>
+</div>
 <h2>Console</h2>
 <textarea readonly id=t1 wrap=off></textarea>
 <details style="margin-top:.4em"><summary style="cursor:pointer;color:var(--muted);width:1.5em;list-style-position:inside">&nbsp;</summary>
@@ -2263,12 +2331,12 @@ if(window._seedHist&&window._seedHist.length){var N=window._seedHist.length,w=D.
 var J,L=0,I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
 B.style.setProperty('--blip',K);
 setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
-var Q=function(){if(!window._csk){window._csk=1;O(f,100)}},t=function(){var n=new X;n.open("GET","/json",!0);
+var Q=function(){if(!window._csk){window._csk=1;O(f,100)}},t=function(){var n=new X;n.open("GET","/s",!0);
 n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText),u=o.ut;
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 C.textContent=o.c.toFixed(2);T.textContent=o.tc;setUsv(V,o.c/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
-if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);$('envR').innerHTML=ps.map(function(p){return '<th>'+p[0]+'</th><td>'+p[1]+'</td>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
+if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
@@ -2276,7 +2344,7 @@ K=o.c<.01&&o.c5<.01?'#08f':z>3?'#f33':z>1.5?'#fa0':z<-1.5?'#c0f':'#0f0';
 B.style.setProperty('--blip',K)}L=D.now();Q();J=O(t,3e3)};
 n.onerror=function(){L=D.now();Q();J=O(t,6e3)};n.send()};
 O(t,250);document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(J);J=O(t,Math.max(0,3e3-(D.now()-L)))}})}();
-var DD=Date,lt,lc=0,x,id=0,M=1e4,dl=200,dz=0,T1;
+var DD=Date,lt,lc=0,x,id=0,M=1e4,dl=200,dz=0,T1,ci=3e3;
 function f(){clearTimeout(lt);T1=T1||byID("t1");x=new XMLHttpRequest;
 x.onload=function(){if(200==x.status){var n=x.responseText,nl=n.indexOf("\n"),ab=(T1.scrollHeight-T1.scrollTop-T1.clientHeight)<50,h=n.substr(0,nl).split(",");
 id=h[0];dz=+h[1]||0;var e=n.substr(nl+1);
@@ -2284,9 +2352,9 @@ if(e){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){
 var b=-new DD().getTimezoneOffset(),T=((+h*60+(+m)+b-dz)%1440+1440)%1440;
 return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s});
 T1.value+=e;var L=T1.value.split("\n");if(L.length>M)T1.value=L.slice(-(M-dl)).join("\n")}
-if(ab)T1.scrollTop=T1.scrollHeight}lc=DD.now();lt=setTimeout(f,3e3)};
+if(ab)T1.scrollTop=T1.scrollHeight}lc=DD.now();ci=e?3e3:Math.min(ci*1.5,8.3e3);lt=setTimeout(f,ci)};
 x.onerror=function(){lc=DD.now();lt=setTimeout(f,6e3)};x.open("GET","/cs?c1="+id,!0);x.send();return!1}
-document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lc&&DD.now()-lc>1.08e7)id=0;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(DD.now()-lc)))}});
+document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lc&&DD.now()-lc>1.08e7)id=0;ci=3e3;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(DD.now()-lc)))}});
 )JS";
 #endif
 

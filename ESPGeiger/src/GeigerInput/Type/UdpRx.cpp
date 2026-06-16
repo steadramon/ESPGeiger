@@ -22,11 +22,14 @@
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 
 #include "../../Counter/Counter.h"
+#include "../../EnvSensor/EnvSensor.h"
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
 #include "../../Util/DeviceInfo.h"
 #include "../../Util/Wifi.h"
+#include <EGHttpServer.h>
 #include <WiFiUdp.h>
+#include <string.h>
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
 #else
@@ -48,10 +51,18 @@ static constexpr size_t     CHIPID_LEN      = 6;
 static constexpr size_t     SUFFIX_OFFSET   = 13;
 static constexpr size_t     PATH_FULL_LEN   = 20;
 static constexpr const char TAG_II[]        = ",ii";
+static constexpr const char TAG_FFF[]       = ",fff";
 
 static inline uint32_t rd_i32(const uint8_t* p) {
   return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
          ((uint32_t)p[2] <<  8) |  (uint32_t)p[3];
+}
+
+static inline float rd_f32(const uint8_t* p) {
+  uint32_t bits = rd_i32(p);
+  float f;
+  memcpy(&f, &bits, sizeof(f));
+  return f;
 }
 
 // Bridge from InputPrefs::on_prefs_saved (we piggyback on the "input" pref
@@ -280,7 +291,36 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     _packets_accepted++;
     _last_click_ms  = now_ms;
     _gap_filled    += gap_credit;
-    gcounter.queueBlip(credit);
+    gcounter.dispatchReceiverBlip();
+    // Spread gap-fill clicks Poisson-style across the receive window
+    // so audio doesn't lump them into a single audible blip. Uniform
+    // random offsets in (0, window_ms] - which is the correct sampling
+    // of a Poisson process given N events in T window. Window capped
+    // at 50 ms = sender's UDPBLIP_CLICK_MIN_INTERVAL_MS, so all extras
+    // drain before the next packet is due from this producer.
+    if (gap_credit > 0) {
+      uint32_t window_ms = producer_ts - p->last_ts_ms;
+      if (window_ms == 0 || window_ms > 50) window_ms = 50;
+      uint32_t r = (uint32_t)micros();
+      for (uint32_t i = 0; i < gap_credit; i++) {
+        if (_gapfill_count >= UDPRX_GAPFILL_QUEUE) {
+          _gapfill_dropped += (gap_credit - i);
+          break;
+        }
+        r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+        _gapfill_due_ms[_gapfill_count++] = now_ms + (r % window_ms) + 1;
+      }
+    }
+    // Batch-path always: receiver-side timing would lie to s_min_pulse_us.
+    uint32_t now_us = (uint32_t)micros();
+    if (credit == 1) {
+      Counter::on_pulse_batch(1, now_us, 0);
+    } else {
+      uint32_t dt_ms = producer_ts - p->last_ts_ms;
+      uint32_t span_us = ((int32_t)dt_ms > 0 && dt_ms < 60000)
+                          ? dt_ms * 1000UL : 1000000UL;
+      Counter::on_pulse_batch((uint16_t)credit, now_us, span_us);
+    }
   }
   _local_count    += credit;
   p->click_count  += credit;
@@ -314,7 +354,31 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   if (s[0] == 'c') {
     if (s[1] != 'l' || s[2] != 'i' || s[3] != 'c' || s[4] != 'k') return;
     processClick(buf, len, p, now_ms);
+  } else if (s[0] == 'e') {
+    if (s[1] != 'n' || s[2] != 'v' || s[3] != '\0') return;
+    processEnv(buf, len);
   }
+}
+
+void GeigerUdpRx::processEnv(const uint8_t* buf, size_t len) {
+  // ",fff\0\0\0\0" typetag (8 bytes) + 3 x f32 (12 bytes).
+  if (len < PATH_FULL_LEN + 8 + 12) return;
+  if (memcmp(buf + PATH_FULL_LEN, TAG_FFF, 4) != 0) return;
+  // Pin to the first producer that sends env. Stops sum/auto-mode receivers
+  // from flapping between mismatched sources.
+  static char s_env_chipid[CHIPID_LEN + 1] = {0};
+  const char* src = (const char*)(buf + CHIPID_OFFSET);
+  if (s_env_chipid[0] == '\0') {
+    memcpy(s_env_chipid, src, CHIPID_LEN);
+    s_env_chipid[CHIPID_LEN] = '\0';
+  } else if (memcmp(s_env_chipid, src, CHIPID_LEN) != 0) {
+    return;
+  }
+  const uint8_t* args = buf + PATH_FULL_LEN + 8;
+  float t = rd_f32(args);
+  float h = rd_f32(args + 4);
+  float p = rd_f32(args + 8);
+  envsensor.setRemote(t, h, p);
 }
 
 void GeigerUdpRx::loop() {
@@ -322,6 +386,11 @@ void GeigerUdpRx::loop() {
   if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
     Log::console(PSTR("UdpRx: WiFi reconnect, rebinding multicast"));
     teardownUdp();
+  }
+  if (_udp && _last_packet_ms > 0 &&
+      (fast_millis() - _last_packet_ms) > 30000UL) {
+    teardownUdp();
+    _last_packet_ms = 0;  // don't immediately re-tear if producer is genuinely offline
   }
   if (!ensureUdp()) return;
   _bound_at_ms = Wifi::connected_at_ms;
@@ -335,6 +404,23 @@ void GeigerUdpRx::loop() {
     int got = _udp->read(buf, sz);
     if (got <= 0) continue;
     processDatagram(buf, (size_t)got);
+  }
+  // Drain due gap-fill blips. Entries are pushed with random offsets so
+  // the array isn't time-ordered - swap-with-last on remove keeps it
+  // packed without sorting. Bounded at UDPRX_GAPFILL_QUEUE so worst case
+  // is one cheap pass per loop iteration.
+  if (_gapfill_count > 0) {
+    uint32_t now_ms = fast_millis();
+    uint8_t i = 0;
+    while (i < _gapfill_count) {
+      if ((int32_t)(now_ms - _gapfill_due_ms[i]) >= 0) {
+        gcounter.dispatchReceiverBlip();
+        _gapfill_count--;
+        _gapfill_due_ms[i] = _gapfill_due_ms[_gapfill_count];
+      } else {
+        i++;
+      }
+    }
   }
 }
 
@@ -366,6 +452,15 @@ int GeigerUdpRx::collect() {
 
 bool GeigerUdpRx::isHealthy() const {
   return _producers_seen > 0;
+}
+
+void GeigerUdpRx::appendJsonExtra(EGHttpResponse& res) {
+  if (_packets_accepted == 0) return;
+  uint16_t lx10 = loss_pct_x10();
+  char buf[24];
+  int n = snprintf_P(buf, sizeof(buf), PSTR(",\"loss\":%u.%u"),
+                     (unsigned)(lx10 / 10), (unsigned)(lx10 % 10));
+  if (n > 0) res.sendChunk(buf, (size_t)n);
 }
 
 const char* GeigerUdpRx::locked_chipid() const {

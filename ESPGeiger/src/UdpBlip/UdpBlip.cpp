@@ -18,7 +18,7 @@
 */
 #include "UdpBlip.h"
 #include "../Counter/Counter.h"
-#include "../GeigerInput/GeigerInput.h"  // eventCounter1/2 (ISR pending)
+#include "../GeigerInput/GeigerInput.h"  // s_event_counter (ISR pending)
 #include "../Module/EGModuleRegistry.h"
 #include "../Logger/Logger.h"
 #include "../Prefs/EGPrefs.h"
@@ -62,6 +62,7 @@ static const EGPrefGroup UDPBLIP_PREF_GROUP = {
   "udpblip", "Local Broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* UdpBlipModule::prefs_group() { return &UDPBLIP_PREF_GROUP; }
@@ -274,7 +275,8 @@ void UdpBlipModule::emitHv(uint32_t now) {
 
 void UdpBlipModule::emitEnv(uint32_t now) {
   // /espg/{id}/env ,fff  temp_c humidity pressure_hpa (humidity = NaN on BMP280)
-  if (!envsensor.present()) return;
+  // localPresent() only - never re-broadcast values we received over UDP.
+  if (!envsensor.localPresent()) return;
   uint8_t buf[64];
   size_t off = 0;
   size_t n;
@@ -315,8 +317,7 @@ void UdpBlipModule::tryEmitClick(unsigned long now_ms) {
   if (!_udp) return;
   if (!Wifi::connected) return;
   if (ota_in_progress) return;
-  uint32_t true_count = (uint32_t)gcounter.total_clicks +
-                        (uint32_t)(eventCounter1 + eventCounter2);
+  uint32_t true_count = (uint32_t)gcounter.total_clicks + s_event_counter;
   if (true_count == _last_clicks) return;
 
   // Token bucket; _last_token_ms advances only by converted intervals so
@@ -360,6 +361,8 @@ void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
 
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
     if (++_backoff_ticks * 1000UL >= UDPBLIP_FAIL_COOLDOWN_MS) {
+      teardown();
+      _mdns_done = false;
       _fail_count = 0;
       _backoff_ticks = 0;
     }

@@ -37,7 +37,7 @@ class WebPortal {
                              const char* inlineSub = nullptr);
     static void sendPageTail(EGHttpResponse& res);
 
-    // Credit + version → /about link. Bottom of / and /status. Kept
+    // Credit + version linking to /about. Bottom of / and /status. Kept
     // separate from sendPageTail because hRoot emits its own closing
     // </body></html> and hStatus inlines a STATUS_BODY chunk; calling
     // this before either keeps the visual footer consistent across both.

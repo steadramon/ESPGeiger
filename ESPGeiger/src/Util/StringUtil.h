@@ -102,7 +102,7 @@ static inline float parse_f(const char* s, char** endptr = nullptr) {
 }
 
 // ---------------------------------------------------------------------------
-// parseTime - "HH:MM" → {hour, minute, isValid}.
+// parseTime: "HH:MM" to {hour, minute, isValid}.
 //
 // Strict format: exactly 5 chars with `:` at position 2, hour 0-23,
 // minute 0-59. Anything else returns isValid=false.

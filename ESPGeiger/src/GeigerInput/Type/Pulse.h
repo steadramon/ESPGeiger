@@ -54,6 +54,7 @@ class GeigerPulse : public GeigerInput
     GeigerPulse();
     void begin();
     void stopForOTA() override;
+    void restartAfterOTA() override;
     bool has_pcnt() override {
 #ifdef USE_PCNT
       return true;
@@ -63,6 +64,10 @@ class GeigerPulse : public GeigerInput
     }
 #ifdef USE_PCNT
     int collect();
+    // 50 Hz drain that folds new PCNT counts into s_event_counter and bumps
+    // _last_blip so audio/LED/UDP/PulseOut fire on the click instead of the
+    // 1 Hz tick.
+    void drain_pcnt();
     void set_pcnt_filter(int val);
     void apply_pcnt_filter();
     void set_pin_pull(int mode);   // 0=floating, 1=up, 2=down
@@ -70,6 +75,7 @@ class GeigerPulse : public GeigerInput
     uint16_t _pcnt_filter = 0;          // 0-1023 per PCNT hardware
     uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT; // 0-2
     int8_t   _pin_pull_last_logged = -1;        // -1 = never logged yet
+    uint32_t _last_drain_us = 0;
 #endif
 };
 #endif

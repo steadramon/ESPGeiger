@@ -65,14 +65,16 @@ void ArduinoOTAModule::begin() {
     }
   });
   ArduinoOTA.onError ([](ota_error_t error) {
-    Log::debug(PSTR("Error[%u]: %u"), error);
     digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
+    // If onStart already fired, the input source is detached - restart it.
+    if (ota_in_progress) gcounter.restart_after_ota();
     ota_in_progress = false;
-    if (error == OTA_AUTH_ERROR) Log::debug(PSTR("Auth Failed"));
-    else if (error == OTA_BEGIN_ERROR) Log::debug(PSTR("Begin Failed"));
-    else if (error == OTA_CONNECT_ERROR) Log::debug(PSTR("Connect Failed"));
-    else if (error == OTA_RECEIVE_ERROR) Log::debug(PSTR("Receive Failed"));
-    else if (error == OTA_END_ERROR) Log::debug(PSTR("End Failed"));
+    if      (error == OTA_AUTH_ERROR)    Log::console(PSTR("OTA: Auth Failed"));
+    else if (error == OTA_BEGIN_ERROR)   Log::console(PSTR("OTA: Begin Failed"));
+    else if (error == OTA_CONNECT_ERROR) Log::console(PSTR("OTA: Connect Failed"));
+    else if (error == OTA_RECEIVE_ERROR) Log::console(PSTR("OTA: Receive Failed"));
+    else if (error == OTA_END_ERROR)     Log::console(PSTR("OTA: End Failed"));
+    else                                 Log::console(PSTR("OTA: error %u"), error);
   });
 
   ArduinoOTA.setHostname(DeviceInfo::hostname());

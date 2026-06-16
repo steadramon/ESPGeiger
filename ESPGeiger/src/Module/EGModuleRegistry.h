@@ -49,7 +49,7 @@ class EGModuleRegistry {
     static bool sleep_until(EGModule* m, unsigned long now, unsigned long target_ms);
     static bool set_tick_enabled(EGModule* m, bool enabled);
 
-    // Stable per-(module,device) offset in [0, interval_ms) — module+chipid hash.
+    // Stable per-(module,device) offset in [0, interval_ms), from a module+chipid hash.
     static uint32_t initial_offset(const char* mod_name, uint32_t interval_ms);
     // Returns the value to set lastPing= so the next fire lands on this
     // module's stable slot. Wall-clock anchored when NTP is synced.
@@ -76,9 +76,11 @@ class EGModuleRegistry {
     struct Slot {
       EGModule* module;          // 4
       unsigned long loop_last;   // 4 - last fast_millis() loop() ran
+      unsigned long next_due;    // 4 - fast_millis() target for next loop() fire
       uint16_t loop_interval;    // 2 - 0 = every iteration
       uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
       uint8_t flags;             // 1 - packed module flags (see above)
+      uint8_t category;          // 1 - EGPrefCategory; /param tab + pause skip
 #ifdef TICK_PROFILE
       uint16_t max_tick_us;      // 2 - slowest s_tick over current window
 #endif
@@ -92,6 +94,11 @@ class EGModuleRegistry {
     static uint8_t _count;
     static uint8_t _overflow;             // dropped registrations (logged at begin_all)
     static unsigned long _next_loop_due;  // earliest pending loop() fire (millis)
+
+    // Slots sorted ascending by next_due. loop_all stops at the first
+    // not-due entry, so idle modules at the back cost no per-tick work.
+    static uint8_t _due_order[EG_MAX_MODULES];
+    static uint8_t _due_count;
 };
 
 #define EG_REGISTER_MODULE(instance) \

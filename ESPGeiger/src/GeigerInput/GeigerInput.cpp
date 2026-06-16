@@ -18,13 +18,12 @@
 */
 #include <Arduino.h>
 #include "GeigerInput.h"
+#include "../Counter/Counter.h"   // Counter::on_pulse() ring hook
 #include "../Logger/Logger.h"
 #include "../Util/PinSafety.h"
 
-volatile bool _eventFlipFlop = false;
 volatile unsigned long _last_blip = 0;
-volatile int eventCounter1 = 0;
-volatile int eventCounter2 = 0;
+volatile uint32_t s_event_counter = 0;
 
 volatile unsigned long _debounce = GEIGER_DEBOUNCE;
 
@@ -54,21 +53,18 @@ void GeigerInput::set_tx_pin(int pin) {
 
 int GeigerInput::collect() {
 #ifdef ESP32
-    portENTER_CRITICAL_ISR(&timerMux);
+  portENTER_CRITICAL(&timerMux);
+#else
+  noInterrupts();
 #endif
-  _eventFlipFlop = !_eventFlipFlop;
+  uint32_t n = s_event_counter;
+  s_event_counter = 0;
 #ifdef ESP32
-    portEXIT_CRITICAL_ISR(&timerMux);
+  portEXIT_CRITICAL(&timerMux);
+#else
+  interrupts();
 #endif
-  int current = 0;
-  if (_eventFlipFlop == false) {
-    current = eventCounter1;
-    eventCounter1 = 0;
-  } else {
-    current = eventCounter2;
-    eventCounter2 = 0;
-  }
-  return current;
+  return (int)n;
 }
 
 void GeigerInput::loop() {
@@ -89,14 +85,12 @@ void IRAM_ATTR GeigerInput::countInterrupt() {
 #ifdef ESP32
   portENTER_CRITICAL_ISR(&timerMux);
 #endif
-  if (_eventFlipFlop == true)
-    eventCounter1++;
-  else
-    eventCounter2++;
+  s_event_counter++;
 #ifdef ESP32
   portEXIT_CRITICAL_ISR(&timerMux);
 #endif
   _last_blip = cycles;
+  Counter::on_pulse((uint32_t)cycles);
 }
 
 void GeigerInput::setCounter(int val, bool update) {
@@ -107,10 +101,7 @@ void GeigerInput::setCounter(int val, bool update) {
     noInterrupts();
 #endif
   }
-  if (_eventFlipFlop == true)
-    eventCounter1 = val;
-  else
-    eventCounter2 = val;
+  s_event_counter = (uint32_t)val;
   if (update) {
 #ifdef ESP32
     portEXIT_CRITICAL(&timerMux);

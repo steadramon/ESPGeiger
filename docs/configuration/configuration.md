@@ -17,6 +17,8 @@ Specialised pages with their own UI:
 
 Settings changed on the Config page take effect immediately (or on next submission cycle for output modules). Pin and serial type changes require a reboot.
 
+The Config page is split across five tabs: **System**, **Input**, **Output**, **Upload** and **Backup**.
+
 ## System Settings
 
 | Setting | Type | Default | Description |
@@ -30,7 +32,7 @@ Settings changed on the Config page take effect immediately (or on next submissi
 
 ### Config import / export
 
-The bottom of the Config page has a single textarea labelled **Backup / Restore**. Click **Export** to dump the entire prefs blob (skipping `sys.web_pass` and the whole `net` group as device-local) as base64 with a CRC32 trailer; copy or paste a previous export and click **Import** to restore. Import is overlay-only: keys in the blob overwrite existing values; everything else is left alone. The device reboots automatically on a successful import.
+The **Backup** tab has a single textarea labelled **Backup / Restore**. Click **Export** to dump the entire prefs blob (skipping `sys.web_pass` and the whole `net` group as device-local) as base64 with a CRC32 trailer; copy or paste a previous export and click **Import** to restore. Import is overlay-only: keys in the blob overwrite existing values; everything else is left alone. The device reboots automatically on a successful import.
 
 ## Input Settings
 
@@ -56,8 +58,6 @@ Some settings only appear on specific builds. Pin and Serial Type changes trigge
 |---|---|---|---|
 | Blip LED | Boolean | `true` | Flash the onboard LED on each detected count. Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
 | Blip brightness | Int 0-100 | `80` | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
-| External LED Pin | Int -1 to 39 | `-1` | GPIO to mirror the blip on, for boards with an external LED but no `GEIGER_BLIPLED` compile-time pin. `-1` disables. Reboot required. Only shown on builds compiled with `HAS_EXT_BLIP` and without `GEIGER_BLIPLED`. |
-| External Pulse Width | Int 1-100 | `2` | Pulse width on the external blip pin (ms). |
 | Quiet from | Time HH:MM | `(empty)` | Silence the blip LED + beeper (ESPGeiger-HW) from this time. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
 | Quiet to | Time HH:MM | `(empty)` | End of quiet window. Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`). |
 
@@ -143,3 +143,22 @@ On push-button builds the long-press gesture toggles a permanent override that k
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | Brightness | Int 0-100 | `15` | NeoPixel brightness, 0 disables. Too low a value can cause inaccurate colours. |
+
+## Advanced Wi-Fi Tunables
+
+These do not appear on the Config page. The defaults suit almost every deployment; the table is here for the rare case where you need to override one (for example a router on a channel disabled by the device's default country code, or to reduce TX power on a battery build).
+
+Set a value via the device's `/pref` URL:
+
+```
+http://<device>.local/pref?group=wifi&key=<key>&value=<value>
+```
+
+Changes take effect on the next reboot.
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `sleep` | Int 0-2 | `1` ESP8266 / `2` ESP32 | Wi-Fi radio power save. `0` = light sleep (lowest power, ping varies the most), `1` = modem sleep (DTIM aligned, balanced), `2` = none (radio always on, snappiest ping, around 30 mA more current). USB-powered ESP32 devices benefit from `2`; battery builds usually prefer `1`. UDP-Receiver builds use the **RX sleep** setting on the Input tab instead of this one. |
+| `tx_power` | Int 0-20 | `0` | Transmit power in dBm. `0` keeps the platform default (typically around 20 dBm). Lower values can reduce coupling with sensitive analogue circuitry on the same board and save power on battery builds, at the cost of effective range. |
+| `country` | String (2) | `(empty)` | ISO 2-letter country code (for example `GB`, `US`, `DE`, `JP`). Empty uses the platform default, which restricts channels in some regions. Set this if your router is on channel 12 or 13 (EU) or 14 (JP) and the device cannot see or connect to it. |
+| `phy_mode` | Int 0-3 | `0` | Wi-Fi PHY lock-down. `0` lets the device negotiate (recommended). `1` = 802.11b only, `2` = b/g, `3` = b/g/n. Use this only as a workaround for routers that fail to negotiate higher rates cleanly. |

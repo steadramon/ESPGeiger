@@ -19,6 +19,7 @@
 #ifdef MQTTOUT
 #include "MQTT_Client.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/TickProfile.h"
@@ -84,6 +85,7 @@ static const EGPrefGroup MQTT_PREF_GROUP = {
   "mqtt", "MQTT", 1,
   MQTT_PREF_ITEMS,
   sizeof(MQTT_PREF_ITEMS) / sizeof(MQTT_PREF_ITEMS[0]),
+  EGP_CAT_OUTPUT,
 };
 
 const EGPrefGroup* MQTT_Client::prefs_group() { return &MQTT_PREF_GROUP; }
@@ -293,7 +295,7 @@ void MQTT_Client::publishAlert()
 
 void MQTT_Client::publishStatus()
 {
-  led.Blink(500, 500);
+  LedSignal::activity();
 #ifdef ESP8266
   auto& buffer = s_pub_buffer;
 #else
@@ -405,8 +407,13 @@ void MQTT_Client::publishPing()
       }
     }
     sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
-      PSTR(",\"warn\":%d,\"alert\":%d}"),
+      PSTR(",\"warn\":%d,\"alert\":%d"),
       gcounter.is_warning() ? 1 : 0, gcounter.is_alert() ? 1 : 0);
+#if !GEIGER_IS_SERIAL(GEIGER_TYPE)    // serial uses ser_ok in tele/state
+    sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp,
+      PSTR(",\"tube\":%d"), gcounter.get_tube_alive() ? 1 : 0);
+#endif
+    sp += snprintf_P(sbuf + sp, sizeof(sbuf) - sp, PSTR("}"));
     char topic[64];
     buildTopic(topic, sizeof(topic), "tele", "sensor");
     mqttClient->publish(topic, 1, false, sbuf);
@@ -619,7 +626,7 @@ static int buildHassPath(char* buf, size_t sz, const char* disc,
 
 // Adding a sensor = one S(...) line. PSTR() only works in function
 // scope, so the catalog lives here rather than a file-scope array.
-// jKey is the tele/* JSON field - usually matches id (uptime→"ut" is
+// jKey is the tele/* JSON field; usually matches id (uptime as "ut" is
 // the sole oddity).
 void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   #define S(id_, jKey_, name_, unit_, icon_, stat_, dev_, state_, ent_) do { \
@@ -675,6 +682,9 @@ void MQTT_Client::forEachHassBinarySensor(HassBinaryFn fn) {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   // Serial builds only - pulse builds have no external peer to track.
   B("ser_ok", "Serial Connected", "mdi:serial-port", H_ST_STATUS, H_DC_CONN);
+#else
+  // Pulse/PCNT/UDP: get_tube_alive() answers "are pulses arriving?".
+  B("tube", "Tube Active", "mdi:radioactive", H_ST_SENSOR, H_DC_CONN);
 #endif
 
   #undef B
@@ -939,12 +949,13 @@ void MQTT_Client::begin()
   const char* _mqtt_server = EGPrefs::getString("mqtt", "server");
   if (_mqtt_server[0] == '\0') {
     mqttEnabled = false;
-    Log::console(PSTR("MQTT: No server set"));
     EGModuleRegistry::set_tick_enabled(this, false);
+    EGModuleRegistry::set_loop_interval(this, -1);
     return;
   }
   mqttEnabled = true;
   EGModuleRegistry::set_tick_enabled(this, true);
+  EGModuleRegistry::set_loop_interval(this, 500);
 }
 
 void MQTT_Client::on_prefs_saved()

@@ -53,6 +53,8 @@ class GeigerInputTest : public GeigerInput
     virtual void begin();
     virtual void loop();
     virtual void secondTicker();
+    uint32_t boundary_seconds() const override { return 60; }
+    void appendClicksExtra(EGHttpResponse& res) override;
     void setTargetCPM(float target, bool manual);
     void setTargetCPS(float target);
     float getTargetCPS();

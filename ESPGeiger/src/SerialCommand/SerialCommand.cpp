@@ -21,6 +21,7 @@
 #include "../Prefs/EGPrefs.h"
 #include "../Logger/Logger.h"
 #include "../Util/DeviceInfo.h"
+#include "../ImprovSerial/ImprovSerial.h"
 #include <LittleFS.h>
 
 void SerialCommand::reboot() { DeviceInfo::safeRestart(); }
@@ -48,6 +49,7 @@ void SerialCommand::setup() {
   addCommand(PSTR("resetnet"), reset_net);
   addCommand(PSTR("get"), cmd_get);
   addCommand(PSTR("set"), cmd_set);
+  addCommand(PSTR("pause"), cmd_pause);
 #ifdef SERIALOUT
   addCommand(PSTR("cpm"), get_cpm);
   addCommand(PSTR("usv"), get_usv);
@@ -125,6 +127,21 @@ void SerialCommand::reset_wifi() {
     LittleFS.end();
   }
   reboot();
+}
+
+// `pause [seconds]` - 0 resumes, no arg prints remaining. Cap 24 h.
+void SerialCommand::cmd_pause() {
+  char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
+  if (arg) {
+    int n = atoi(arg);
+    if (n < 0) n = 0;
+    if (n > 86400) n = 86400;
+    Counter::pause_external((uint32_t)n * 1000U);
+    return;
+  }
+  uint32_t rem = Counter::pause_remaining_ms();
+  if (rem) Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)(rem / 1000U));
+  else     Log::console(PSTR("External posts: active"));
 }
 
 // Split "module.key" into separate strings. Mutates `arg` in place.
@@ -270,6 +287,9 @@ void SerialCommand::dispatch(const char* line) {
 void SerialCommand::readSerial() {
   while (Serial.available() > 0) {
     char inChar = Serial.read();   // Read single available character, there may be more waiting
+    // Improv WiFi provisioning frames arrive over the same serial port.
+    // If the parser is mid-frame it consumes the byte; otherwise we keep it.
+    if (improvSerial.consume_byte((uint8_t)inChar)) continue;
 
     // Accept either CR or LF as line terminator - saves users having to
     // configure their serial monitor's line-ending mode.

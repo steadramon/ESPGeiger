@@ -19,6 +19,7 @@
 #ifdef WEBHOOKOUT
 #include "Webhook.h"
 #include "../Logger/Logger.h"
+#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
@@ -53,6 +54,7 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP = {
   "webhook", "Webhook", 1,
   WEBHOOK_PREF_ITEMS,
   sizeof(WEBHOOK_PREF_ITEMS) / sizeof(WEBHOOK_PREF_ITEMS[0]),
+  EGP_CAT_UPLOAD,
 };
 
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
@@ -231,7 +233,7 @@ void Webhook::postMeasurement() {
   {
     if (request->open("POST", url))
     {
-      led.Blink(500, 500);
+      LedSignal::activity();
       request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request->setReqHeader(F("Accept"), F("application/json"));
       request->setReqHeader(F("Content-Type"), F("application/json"));

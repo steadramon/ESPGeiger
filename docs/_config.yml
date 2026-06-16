@@ -1,5 +1,6 @@
 title: "ESPGeiger"
 description: Create your IoT connected Geiger Counter
+url: https://docs.espgeiger.com
 color_scheme: nil
 
 remote_theme: just-the-docs/just-the-docs
@@ -7,7 +8,10 @@ remote_theme: just-the-docs/just-the-docs
 permalink: pretty
 exclude: []
 
-avatar: /img/ESPGeiger.svg
+plugins:
+  - jekyll-sitemap
+
+avatar: /favicon.svg
 
 aux_links:
   "ESPGeiger on GitHub":
