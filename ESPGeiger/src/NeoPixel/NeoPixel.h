@@ -28,10 +28,6 @@
 
 extern Counter gcounter;
 
-#ifndef NEOPIXEL_MODE
-#define NEOPIXEL_MODE 1
-#endif
-
 #ifndef NEOPIXEL_PIN
 #define NEOPIXEL_PIN 15
 #endif
@@ -67,13 +63,13 @@ class NeoPixel : public EGModule {
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return 30; }
     void setup();
-    void blip();
     void blink(uint16_t timer);
     void setBrightness(int input);
     RgbColor color(uint8_t r, uint8_t g, uint8_t b);
     const uint16_t PixelCount = 1;
     const uint8_t PixelPin = NEOPIXEL_PIN;
     uint32_t neoPixelMode = 3;
+    uint8_t  _blip_colour_idx = 0;
   protected:
     NeoController* controller_{nullptr};
   private:

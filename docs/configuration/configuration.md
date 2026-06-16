@@ -142,7 +142,10 @@ On push-button builds the long-press gesture toggles a permanent override that k
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| Brightness | Int 0-100 | `15` | NeoPixel brightness, 0 disables. Too low a value can cause inaccurate colours. |
+| Brightness | Int 0-100 | `15` | NeoPixel brightness, 0 disables and unloads the module. Too low a value can cause inaccurate colours. |
+| Mode | Int 0-4 | `4` | Render mode. 0=Off, 1=Blip, 2=Status blip, 3=Trend pulse, 4=Trend+status. See [NeoPixel output](/output/neopixel) for behaviour. |
+| Blip colour | Int 0-7 | `0` (Green) | Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan 5=Magenta 6=White 7=Orange. |
+| Swap R/G | Bool | platform-dependent | Enable if green appears as red on RGB-ordered LED chips. |
 
 ## Advanced Wi-Fi Tunables
 

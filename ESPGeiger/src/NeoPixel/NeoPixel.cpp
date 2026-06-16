@@ -28,9 +28,13 @@
 NeoPixel neopixel;
 EG_REGISTER_MODULE(neopixel)
 
-EG_PSTR(NP_L_BRT, "Brightness");
+EG_PSTR(NP_L_BRT,  "Brightness");
 EG_PSTR(NP_L_SWAP, "Swap R/G");
 EG_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");
+EG_PSTR(NP_L_MODE, "Mode");
+EG_PSTR(NP_H_MODE, "0=Off 1=Blip 2=Status blip 3=Trend pulse 4=Trend+status (default)");
+EG_PSTR(NP_L_COL,  "Blip colour");
+EG_PSTR(NP_H_COL,  "Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan 5=Magenta 6=White 7=Orange");
 
 // Wire format is GRB on the chip side. ESP8266 boards have historically
 // shipped with RGB-ordered LEDs, so default the swap on there to preserve
@@ -46,6 +50,8 @@ EG_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");
 
 static const EGPref NEOPIXEL_PREF_ITEMS[] = {
   {"brightness", NP_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+  {"mode",       NP_L_MODE, NP_H_MODE, "4",               nullptr, 0, 4,   0, EGP_UINT, 0},
+  {"color",      NP_L_COL,  NP_H_COL,  "0",               nullptr, 0, 7,   0, EGP_UINT, 0},
   {"swap",       NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, 0},
 };
 
@@ -62,7 +68,13 @@ void NeoPixel::on_prefs_loaded() {
   int b = (int)EGPrefs::getUInt("neopixel", "brightness");
   setBrightness(b);
   _swap_rg = EGPrefs::getBool("neopixel", "swap");
-  EGModuleRegistry::set_loop_interval(this, b > 0 ? 30 : -1);
+  uint32_t m = EGPrefs::getUInt("neopixel", "mode");
+  neoPixelMode = m > 4 ? 4 : m;
+  uint32_t c = EGPrefs::getUInt("neopixel", "color");
+  _blip_colour_idx = c > 7 ? 0 : (uint8_t)c;
+  // Self-disable when off (mode 0) or brightness 0.
+  bool active = (b > 0) && (neoPixelMode > 0);
+  EGModuleRegistry::set_loop_interval(this, active ? 30 : -1);
 }
 
 RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
@@ -102,50 +114,58 @@ void NeoPixel::setBrightness(int input) {
   colorSaturation = input;
 }
 
-void NeoPixel::blip()
-{
-  if (this->neoPixelMode == 0) {
-    blink(20);
-  }
-}
-
 void NeoPixel::blink(uint16_t timer)
 {
-  if (colorSaturation == 0) {
+  if (colorSaturation == 0 || neoPixelMode == 0) {
     return;
   }
-  float our_cpm = gcounter.get_cpmf();
-  float our_5cpm = gcounter.get_cpm5f();
-  RgbColor rgb = color(0, colorSaturation, 0);
-  if ((our_5cpm > 0) && (our_cpm > 0)) {
-    float diff_ratio = (our_cpm / our_5cpm);
-    nextInterval = clamp((unsigned long)(blinkInterval / diff_ratio), 100UL, 4000UL);
-    if (this->neoPixelMode >= 2) {
-      // Noise-aware z-score: low rates need bigger absolute deltas to trip.
-      float z = poisson_z(our_cpm, our_5cpm);
-      if (z > 3.0f) {
-        rgb = color(colorSaturation, 0, 0);              // significant rise - red
-      } else if (z > 1.5f) {
-        rgb = color(colorSaturation, colorSaturation, 0); // rising - yellow
-      } else if (z < -1.5f) {
-        rgb = color(colorSaturation, 0, colorSaturation); // dropping - purple
-      } else {
-        rgb = color(0, colorSaturation, 0);              // stable - green
+  RgbColor rgb;
+
+  if (this->neoPixelMode == 1) {
+    // Plain blip, user-picked colour scaled to brightness.
+    static const uint8_t NAMED[8][3] = {
+      {0,255,0}, {255,0,0}, {0,0,255}, {255,255,0},
+      {0,255,255}, {255,0,255}, {255,255,255}, {255,128,0},
+    };
+    uint8_t idx = _blip_colour_idx < 8 ? _blip_colour_idx : 0;
+    uint8_t r = (uint8_t)(((uint16_t)NAMED[idx][0] * colorSaturation) / 255);
+    uint8_t g = (uint8_t)(((uint16_t)NAMED[idx][1] * colorSaturation) / 255);
+    uint8_t b = (uint8_t)(((uint16_t)NAMED[idx][2] * colorSaturation) / 255);
+    rgb = color(r, g, b);
+  } else {
+    float our_cpm = gcounter.get_cpmf();
+    float our_5cpm = gcounter.get_cpm5f();
+    rgb = color(0, colorSaturation, 0);
+    if ((our_5cpm > 0) && (our_cpm > 0)) {
+      float diff_ratio = (our_cpm / our_5cpm);
+      nextInterval = clamp((unsigned long)(blinkInterval / diff_ratio), 100UL, 4000UL);
+      if (this->neoPixelMode >= 3) {
+        // Noise-aware z-score: low rates need bigger deltas to trip.
+        float z = poisson_z(our_cpm, our_5cpm);
+        if (z > 3.0f) {
+          rgb = color(colorSaturation, 0, 0);               // rise: red
+        } else if (z > 1.5f) {
+          rgb = color(colorSaturation, colorSaturation, 0); // rising: yellow
+        } else if (z < -1.5f) {
+          rgb = color(colorSaturation, 0, colorSaturation); // dropping: purple
+        } else {
+          rgb = color(0, colorSaturation, 0);               // stable: green
+        }
+      }
+    } else {
+      nextInterval = blinkInterval;
+      if (this->neoPixelMode >= 3) {
+        rgb = color(0, 0, colorSaturation);                 // no data: blue
       }
     }
-  } else {
-    nextInterval = blinkInterval;
-    if (this->neoPixelMode >= 2) {
-      rgb = color(0, 0, colorSaturation);              // no data - blue
-    }
-  }
-  if (this->neoPixelMode == 1 || this->neoPixelMode == 3) {
-    if (gcounter.is_alert()) {
-      rgb = color(colorSaturation, 0, 0);
-    } else if (gcounter.is_warning()) {
-      rgb = color(colorSaturation, colorSaturation, 0);
-    } else if (our_cpm < 0.01 && our_5cpm < 0.01) {
-      rgb = color(0, 0, colorSaturation);
+    if (this->neoPixelMode == 2 || this->neoPixelMode == 4) {
+      if (gcounter.is_alert()) {
+        rgb = color(colorSaturation, 0, 0);
+      } else if (gcounter.is_warning()) {
+        rgb = color(colorSaturation, colorSaturation, 0);
+      } else if (our_cpm < 0.01 && our_5cpm < 0.01) {
+        rgb = color(0, 0, colorSaturation);
+      }
     }
   }
 
@@ -168,7 +188,9 @@ void NeoPixel::loop(unsigned long now)
     this->controller_->Show();
     _is_off = true;
   }
-  if (this->neoPixelMode == 1) {
+  if (this->neoPixelMode <= 2) {
+    // Per-click for Blip + Status blip; works on receiver builds too via
+    // dispatchReceiverBlip updating last_blip.
     if (last_blip != gcounter.last_blip()) {
       last_blip = gcounter.last_blip();
       blink(20);
