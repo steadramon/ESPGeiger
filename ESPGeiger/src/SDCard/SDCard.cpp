@@ -98,15 +98,26 @@ void SDCard::begin()
     return;
   }
 
-  Log::console(PSTR("SDCard: Calculating free space, please wait"));
-  // sectors = freeClusterCount * sectorsPerCluster; MB = sectors / 2048 (1 sector = 512 B).
-  uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
-  if (freespace <= 8) {
-    deleteOldest();
-  }
-  Log::console(PSTR("SDCard: OK! %lu MB free."), (unsigned long)freespace);
+  // freeClusterCount walks the whole FAT; deferred to s_tick so a slow card
+  // can't block boot.
   sdenabled = true;
+  _freecheck_pending = true;
+  Log::console(PSTR("SDCard: Mounted."));
   EGModuleRegistry::set_tick_enabled(this, true);
+}
+
+static uint32_t packed_cutoff_year_ago() {
+  time_t now_t = time(nullptr);
+  time_t cutoff_t = now_t - (365L * 86400L);
+  struct tm tmv;
+  localtime_r(&cutoff_t, &tmv);
+  uint16_t date = (uint16_t)((((tmv.tm_year + 1900) - 1980) << 9) |
+                             ((tmv.tm_mon + 1) << 5) |
+                             tmv.tm_mday);
+  uint16_t timev = (uint16_t)((tmv.tm_hour << 11) |
+                              (tmv.tm_min << 5) |
+                              (tmv.tm_sec >> 1));
+  return ((uint32_t)date << 16) | timev;
 }
 
 void SDCard::s_tick(unsigned long stick_now)
@@ -116,6 +127,21 @@ void SDCard::s_tick(unsigned long stick_now)
   }
 
   if (!ntpclient.synced) return;
+
+  if (_freecheck_pending) {
+    _freecheck_pending = false;
+    Log::console(PSTR("SDCard: Calculating free space"));
+    uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+    Log::console(PSTR("SDCard: %lu MB free."), (unsigned long)freespace);
+    if (freespace <= 8) {
+      uint32_t cutoff = packed_cutoff_year_ago();
+      if (!deleteOldest(cutoff)) {
+        Log::console(PSTR("SDCard: low space, no files older than 1yr to delete"));
+      }
+    }
+    return;
+  }
+
   time_t currentTime = time (NULL);
 
   // Fire once per new minute. Check minute bucket before gmtime - gmtime
@@ -229,14 +255,15 @@ void SDCard::s_tick(unsigned long stick_now)
     }
     uint8_t maxDeletes = 10;
     uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+    uint32_t cutoff = packed_cutoff_year_ago();
     while (freespace <= 8 && maxDeletes-- > 0) {
-      deleteOldest();
+      if (!deleteOldest(cutoff)) break;
       freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
     }
   }
 }
 
-void SDCard::deleteOldest(){
+bool SDCard::deleteOldest(uint32_t cutoffPacked) {
   File32 rootDir;
   File32 subDir;
   File32 file;
@@ -244,14 +271,9 @@ void SDCard::deleteOldest(){
   char oldestFile[13] = "";
   uint32_t oldestModified = 0xFFFFFFFFul;
 
-  if (!sd->chdir()) {
-    return;
-  }
-  if (!rootDir.open("/")) {
-    return;
-  }
+  if (!sd->chdir()) return false;
+  if (!rootDir.open("/")) return false;
 
-  // Walk each YYYYMM/ subdirectory to find the oldest .csv
   while (subDir.openNext(&rootDir, O_RDONLY)) {
     if (subDir.isSubDir() && !subDir.isHidden()) {
       char dirName[13];
@@ -267,7 +289,7 @@ void SDCard::deleteOldest(){
             file.getModifyDateTime(&date_AGPS, &time_AGPS);
             uint32_t lastModified = (uint32_t(date_AGPS) << 16) | time_AGPS;
 
-            if (lastModified < oldestModified) {
+            if (lastModified < cutoffPacked && lastModified < oldestModified) {
               oldestModified = lastModified;
               strncpy(oldestDir, dirName, sizeof(oldestDir) - 1);
               oldestDir[sizeof(oldestDir) - 1] = '\0';
@@ -283,15 +305,32 @@ void SDCard::deleteOldest(){
   }
   rootDir.close();
 
-  if (oldestFile[0] == '\0') {
-    return;
-  }
+  if (oldestFile[0] == '\0') return false;
 
+  bool deleted = false;
   if (sd->chdir(oldestDir) && sd->exists(oldestFile)) {
     Log::console(PSTR("SDCard: Deleting old file %s/%s"), oldestDir, oldestFile);
-    sd->remove(oldestFile);
+    deleted = sd->remove(oldestFile);
   }
   sd->chdir();
+  return deleted;
+}
+
+void SDCard::reinit() {
+  if (myDataFile.isOpen()) {
+    myDataFile.sync();
+    myDataFile.close();
+  }
+  openFileDay = 0;
+  _unsynced_writes = 0;
+  if (sd) {
+    delete sd;
+    sd = nullptr;
+  }
+  sdenabled = false;
+  _freecheck_pending = true;
+  EGModuleRegistry::set_tick_enabled(this, false);
+  begin();
 }
 
 void SDCard::pauseWriter() {
@@ -619,6 +658,11 @@ const EGMenuEntry* SDCard::menuEntries() {
 }
 
 void SDCard::registerRoutes(EGHttpServer& http) {
+  http.on("/sd/reinit", EGHttpRequest::POST,
+    [](EGHttpRequest& req, EGHttpResponse& res, void*) {
+      sdcard.reinit();
+      res.send(200, "text/plain", sdcard.ready() ? "Reinit OK" : "Reinit failed");
+    });
   http.on("/sd", EGHttpRequest::GET,
     [](EGHttpRequest& req, EGHttpResponse& res, void*) {
       const char* f = req.arg("f");

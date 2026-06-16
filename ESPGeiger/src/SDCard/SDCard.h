@@ -45,10 +45,13 @@ class SDCard : public EGModule {
     void on_prefs_loaded() override;
     void registerRoutes(EGHttpServer& http) override;
     const EGMenuEntry* menuEntries() override;
-    void deleteOldest();
+    // Deletes the oldest .csv strictly older than cutoffPacked (DOS mtime,
+    // (date<<16)|time). Returns false if nothing matched.
+    bool deleteOldest(uint32_t cutoffPacked);
     // Drop the writer's file handle so /sd routes can safely walk and read.
     // s_tick will reopen on the next minute boundary.
     void pauseWriter();
+    void reinit();
     bool ready() const { return sdenabled; }
   protected:
     File32 myDataFile;
@@ -58,6 +61,7 @@ class SDCard : public EGModule {
     uint8_t _sync_min = 1;
     uint8_t _unsynced_writes = 0;
     bool sdenabled = false;
+    bool _freecheck_pending = true;
 };
 
 extern SDCard sdcard;
