@@ -56,6 +56,7 @@ class SDCard : public EGModule {
   protected:
     File32 myDataFile;
   private:
+    void disableFull();
     time_t lastWrittenMinute = 0;
     uint32_t openFileDay = 0;  // YYYYMMDD of currently-open file, 0 if closed
     uint8_t _sync_min = 1;

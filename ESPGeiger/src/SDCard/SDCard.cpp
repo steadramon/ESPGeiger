@@ -65,12 +65,10 @@ SDCard::SDCard() {
 
 void SDCard::begin()
 {
-  // Default off; flipped on at the bottom only when init fully succeeds.
   EGModuleRegistry::set_tick_enabled(this, false);
   Log::console(PSTR("SDCard: Init ..."));
   sd = new SdFat32();
-  if (!sd->begin(GEIGER_SDCARD_CS))
-  {
+  if (!sd->begin(GEIGER_SDCARD_CS)) {
     Log::console(PSTR("SDCard: Init failed ... Please check wiring or insert a card."));
     delete sd;
     sd = nullptr;
@@ -79,27 +77,14 @@ void SDCard::begin()
   FsDateTime::setCallback(dateTimeCB);
 
   if (!myDataFile.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC)) {
-    Log::console(PSTR("SDCard: Test file failed."));
+    Log::console(PSTR("SDCard: write probe failed - read-only or full?"));
     delete sd;
     sd = nullptr;
     return;
   }
-  if(sd->exists("TEST.TMP"))
-  {
-    sd->remove("TEST.TMP");
-  }
-
   myDataFile.close();
+  sd->remove("TEST.TMP");
 
-  if (!sd->volumeBegin()) {
-    Log::console(PSTR("SDCard: volumeBegin failed. Is the card formatted?"));
-    delete sd;
-    sd = nullptr;
-    return;
-  }
-
-  // freeClusterCount walks the whole FAT; deferred to s_tick so a slow card
-  // can't block boot.
   sdenabled = true;
   _freecheck_pending = true;
   Log::console(PSTR("SDCard: Mounted."));
@@ -135,9 +120,7 @@ void SDCard::s_tick(unsigned long stick_now)
     Log::console(PSTR("SDCard: %lu MB free."), (unsigned long)freespace);
     if (freespace <= 8) {
       uint32_t cutoff = packed_cutoff_year_ago();
-      if (!deleteOldest(cutoff)) {
-        Log::console(PSTR("SDCard: low space, no files older than 1yr to delete"));
-      }
+      if (!deleteOldest(cutoff)) disableFull();
     }
     return;
   }
@@ -195,7 +178,7 @@ void SDCard::s_tick(unsigned long stick_now)
 
     bool fileExists = sd->exists(timeStr);
     if (!myDataFile.open(timeStr, FILE_WRITE)) {
-      Log::console(PSTR("SDCard: Unable to create file."));
+      Log::console(PSTR("SDCard: Unable to create %s/%s"), dirStr, timeStr);
       forceCleanup = true;
     } else {
       if (!fileExists) {
@@ -260,7 +243,14 @@ void SDCard::s_tick(unsigned long stick_now)
       if (!deleteOldest(cutoff)) break;
       freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
     }
+    if (freespace <= 8) disableFull();
   }
+}
+
+void SDCard::disableFull() {
+  Log::console(PSTR("SDCard: disabled - card full"));
+  sdenabled = false;
+  EGModuleRegistry::set_tick_enabled(this, false);
 }
 
 bool SDCard::deleteOldest(uint32_t cutoffPacked) {
