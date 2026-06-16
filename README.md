@@ -1,6 +1,6 @@
 [![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)](https://github.com/steadramon/ESPGeiger/actions) [![Issues](https://img.shields.io/github/issues/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/issues) [![Stars](https://img.shields.io/github/stars/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/stargazers)
 
-# <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/favicon.svg" width="30px"/> ESPGeiger
+# <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/favicon.svg" width="30px"/> ESPGeiger
 
 ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-connected Geiger counter. It collects, calculates and reports radiation levels from a range of Geiger counters with pulse or serial outputs.
 
