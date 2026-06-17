@@ -56,9 +56,17 @@ static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
   return (gs.heap_mask >> j) & 1u;
 }
 
-// Set shadow value (heap-copied), freeing any previous heap value.
+// Set shadow value (heap-copied), freeing any previous heap value. Values
+// equal to the schema default reuse the flash default pointer and skip
+// heap entirely - saves ~30 B per pref where the user kept the default.
 static void shadow_set(GroupShadow& gs, size_t j, const char* val, size_t len) {
   if (shadow_is_heap(gs, j)) free((void*)gs.values[j]);
+  const char* dv = gs.group->prefs[j].default_val;
+  if (dv && strlen(dv) == len && memcmp(dv, val, len) == 0) {
+    gs.values[j] = dv;
+    gs.heap_mask &= ~(1u << j);
+    return;
+  }
   char* copy = (char*)malloc(len + 1);
   if (copy) { memcpy(copy, val, len); copy[len] = '\0'; }
   gs.values[j] = copy ? copy : "";
