@@ -945,48 +945,6 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// /s - lean status endpoint for /status JS. /json stays general-purpose.
-static void hStatusJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  char c[16], c5[16], c15[16], cs[16];
-  format_f(c,   sizeof(c),   gcounter.get_cpmf());
-  format_f(c5,  sizeof(c5),  gcounter.get_cpm5f());
-  format_f(c15, sizeof(c15), gcounter.get_cpm15f());
-  format_f(cs,  sizeof(cs),  gcounter.get_cps());
-
-  res.beginChunked(200, "application/json");
-  char buf[200];
-  int n = snprintf_P(buf, sizeof(buf),
-    PSTR("{\"ut\":%lu,\"c\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,"
-         "\"r\":%s,\"tc\":%u,\"rssi\":%d"),
-    DeviceInfo::uptime(), c, c5, c15, cs,
-    EGPrefs::getString("sys", "ratio"),
-    gcounter.total_clicks,
-    (int)Wifi::rssi);
-  if (n > 0) res.sendChunk(buf, (size_t)n);
-
-  if (envsensor.present()) {
-    float et = envsensor.tempUser(), eh = envsensor.humidity(), ep = envsensor.pressure();
-    char fbuf[12];
-    if (!isnan(et)) {
-      format_f(fbuf, sizeof(fbuf), et);
-      n = snprintf_P(buf, sizeof(buf), PSTR(",\"t\":%s,\"tu\":%u"), fbuf, envsensor.unit());
-      if (n > 0) res.sendChunk(buf, (size_t)n);
-    }
-    if (!isnan(eh)) {
-      format_f(fbuf, sizeof(fbuf), eh);
-      n = snprintf_P(buf, sizeof(buf), PSTR(",\"h\":%s"), fbuf);
-      if (n > 0) res.sendChunk(buf, (size_t)n);
-    }
-    if (!isnan(ep)) {
-      format_f(fbuf, sizeof(fbuf), ep);
-      n = snprintf_P(buf, sizeof(buf), PSTR(",\"p\":%s"), fbuf);
-      if (n > 0) res.sendChunk(buf, (size_t)n);
-    }
-  }
-  res.sendChunk("}", 1);
-  res.endChunked();
-}
-
 // /hist body + /histjs. All values come from /clicks. The body is split
 // around the inter-pulse-intervals section so UDP receiver builds can skip
 // it - their clicks arrive batched and the histogram stays empty.
@@ -1162,7 +1120,6 @@ void CounterRoutes::registerRoutes(EGHttpServer& http) {
   http.on("/clicks",   EGHttpRequest::GET,  hClicks);
   http.on("/lastdata", EGHttpRequest::GET,  hLastData);
   http.on("/json",     EGHttpRequest::GET,  hJson);
-  http.on("/s",        EGHttpRequest::GET,  hStatusJson);
   http.on("/hist",     EGHttpRequest::GET,  hHistory);
   http.on("/histjs",   EGHttpRequest::GET,  hHistJs);
   http.on("/life/reset", EGHttpRequest::POST, hLifeReset);
