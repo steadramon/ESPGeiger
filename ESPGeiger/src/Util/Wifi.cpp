@@ -133,8 +133,8 @@ void Wifi::tick(unsigned long now) {
 // ---------- boot-time association ----------
 
 static bool waitForWifi(uint32_t timeoutMs) {
-  uint32_t start = millis();
-  while ((millis() - start) < timeoutMs) {
+  uint32_t start = fast_millis();
+  while ((fast_millis() - start) < timeoutMs) {
     if (WiFi.status() == WL_CONNECTED) {
       IPAddress ipa = WiFi.localIP();
       Log::console(PSTR("WiFi: IP: %u.%u.%u.%u"),
