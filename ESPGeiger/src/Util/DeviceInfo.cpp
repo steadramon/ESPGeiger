@@ -57,7 +57,7 @@ static char s_friendlyname[33]   = "";
 uint32_t DeviceInfo::freeHeap() {
   static uint32_t cached = 0;
   static uint32_t last_ms = 0;
-  uint32_t now = millis();
+  uint32_t now = fast_millis();
   if (cached == 0 || now - last_ms >= 1000) {
     uint32_t sample = ESP.getFreeHeap();
     cached = (cached == 0) ? sample : ((cached * 7 + sample) >> 3);
@@ -73,7 +73,7 @@ static uint32_t s_lfb_low = 0;  // low-water mark since last reset; 0 = unset
 uint8_t DeviceInfo::heapFrag() {
   static uint8_t cached = 0;
   static uint32_t last_ms = 0;
-  uint32_t now = millis();
+  uint32_t now = fast_millis();
   if (last_ms == 0 || now - last_ms >= 10000) {
 #ifdef ESP8266
     uint32_t free_;

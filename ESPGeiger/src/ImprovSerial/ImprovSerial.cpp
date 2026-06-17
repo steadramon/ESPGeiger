@@ -27,6 +27,7 @@
 #include "../Logger/Logger.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/Wifi.h"
+#include "../Util/FastMillis.h"
 
 ImprovSerial improvSerial;
 
@@ -185,8 +186,8 @@ void ImprovSerial::handle_wifi_settings(const std::string& ssid,
   WiFi.persistent(true);
   WiFi.begin(ssid.c_str(), password.c_str());
 
-  uint32_t start = millis();
-  while (millis() - start < 30000) {
+  uint32_t start = fast_millis();
+  while (fast_millis() - start < 30000) {
     if (WiFi.status() == WL_CONNECTED) {
       set_state(improv::STATE_PROVISIONED);
       char url[48];
