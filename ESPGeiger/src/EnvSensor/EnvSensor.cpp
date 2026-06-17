@@ -232,22 +232,4 @@ void EnvSensor::setRemote(float t, float h, float p) {
   _r_last_ms = fast_millis();
 }
 
-size_t EnvSensor::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!present()) return 0;
-  (void)now;
-  char b_t[12], b_h[12], b_p[12];
-  format_f(b_t, sizeof(b_t), tempUser());
-  format_f(b_p, sizeof(b_p), pressure());
-  bool have_h = !isnan(humidity());
-  if (have_h) format_f(b_h, sizeof(b_h), humidity());
-  if (have_h) {
-    return snprintf_P(buf, cap,
-      PSTR("\"env\":{\"t\":%s,\"h\":%s,\"p\":%s,\"u\":%u,\"chip\":\"%S\"}"),
-      b_t, b_h, b_p, _unit, chipName());
-  }
-  return snprintf_P(buf, cap,
-    PSTR("\"env\":{\"t\":%s,\"h\":null,\"p\":%s,\"u\":%u,\"chip\":\"%S\"}"),
-    b_t, b_p, _unit, chipName());
-}
-
 #endif  // DISABLE_ENVSENSOR

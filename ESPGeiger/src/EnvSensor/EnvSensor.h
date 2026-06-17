@@ -85,7 +85,6 @@ class EnvSensor : public EGModule {
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
     void on_prefs_saved() override;
-    size_t status_json(char* buf, size_t cap, unsigned long now) override;
 
     static constexpr uint8_t DRV_BOSCH = 1 << 0;
     static constexpr uint8_t DRV_AHT   = 1 << 1;
