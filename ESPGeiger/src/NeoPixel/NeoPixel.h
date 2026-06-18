@@ -67,7 +67,8 @@ class NeoPixel : public EGModule {
     void setBrightness(int input);
     RgbColor color(uint8_t r, uint8_t g, uint8_t b);
     const uint16_t PixelCount = 1;
-    const uint8_t PixelPin = NEOPIXEL_PIN;
+    // -1 = no controller, module stays inert.
+    int8_t _pin = NEOPIXEL_PIN;
     uint32_t neoPixelMode = 3;
     uint8_t  _blip_colour_idx = 0;
     uint8_t  _blip_r = 0;

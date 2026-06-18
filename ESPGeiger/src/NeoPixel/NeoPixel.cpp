@@ -24,6 +24,10 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/FastMillis.h"
 #include "../Util/MathUtil.h"
+#include "../Util/PinSafety.h"
+
+#define _NPX_STR(x) #x
+#define NPX_STR(x) _NPX_STR(x)
 
 NeoPixel neopixel;
 EG_REGISTER_MODULE(neopixel)
@@ -35,6 +39,10 @@ EG_PSTR(NP_L_MODE, "Mode");
 EG_PSTR(NP_H_MODE, "0=Off 1=Blip 2=Status blip 3=Trend pulse 4=Trend+status (default)");
 EG_PSTR(NP_L_COL,  "Blip colour");
 EG_PSTR(NP_H_COL,  "Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan 5=Magenta 6=White 7=Orange");
+#ifndef NEOPIXEL_PIN_BLOCKED
+EG_PSTR(NP_L_PIN,  "Pin");
+EG_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
+#endif
 
 // Wire format is GRB on the chip side. ESP8266 boards have historically
 // shipped with RGB-ordered LEDs, so default the swap on there to preserve
@@ -49,6 +57,9 @@ EG_PSTR(NP_H_COL,  "Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan
 #endif
 
 static const EGPref NEOPIXEL_PREF_ITEMS[] = {
+#ifndef NEOPIXEL_PIN_BLOCKED
+  {"pin",        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
+#endif
   {"brightness", NP_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
   {"mode",       NP_L_MODE, NP_H_MODE, "4",               nullptr, 0, 4,   0, EGP_UINT, 0},
   {"color",      NP_L_COL,  NP_H_COL,  "0",               nullptr, 0, 7,   0, EGP_UINT, 0},
@@ -72,6 +83,21 @@ static const uint8_t NAMED_MASK[8] = {
 };
 
 void NeoPixel::on_prefs_loaded() {
+#ifndef NEOPIXEL_PIN_BLOCKED
+  int p = (int)EGPrefs::getInt("neopixel", "pin");
+  if (p >= 0) {
+    if (const char* why = PinSafety::claim_output(p, PSTR("NeoPx"))) {
+      Log::console(PSTR("NeoPixel: pin=%d unsafe (%s) - disabled"), p, why);
+      _pin = -1;
+    } else {
+      _pin = (int8_t)p;
+    }
+  } else {
+    _pin = -1;
+  }
+  // pre_wifi -> setup() runs before EGPrefs::begin; pick up _pin now.
+  if (!controller_ && _pin >= 0) setup();
+#endif
   int b = (int)EGPrefs::getUInt("neopixel", "brightness");
   setBrightness(b);
   _swap_rg = EGPrefs::getBool("neopixel", "swap");
@@ -85,8 +111,8 @@ void NeoPixel::on_prefs_loaded() {
   _blip_g = (mask & 0b010) ? colorSaturation : 0;
   _blip_b = (mask & 0b001) ? colorSaturation : 0;
   if (_blip_colour_idx == 7) _blip_g = colorSaturation >> 1;  // orange G ~50%
-  // Self-disable when off (mode 0) or brightness 0.
-  bool active = (b > 0) && (neoPixelMode > 0);
+  // Self-disable when off (mode 0), brightness 0, or no pin wired.
+  bool active = (b > 0) && (neoPixelMode > 0) && (_pin >= 0);
   EGModuleRegistry::set_loop_interval(this, active ? 30 : -1);
 }
 
@@ -107,11 +133,12 @@ NeoPixel::NeoPixel() {
 
 void NeoPixel::setup()
 {
+  if (_pin < 0) return;
 #if !defined(ESP32) && !defined(NEOPIXEL_BITBANG)
   // ESP8266 DMA mode locks to GPIO3 (RX0).
   this->controller_ = new NeoController(1, 1);
 #else
-  this->controller_ = new NeoController(1, NEOPIXEL_PIN);
+  this->controller_ = new NeoController(1, (uint8_t)_pin);
 #endif
   this->controller_->Begin();
   this->controller_->Show();
@@ -119,7 +146,7 @@ void NeoPixel::setup()
 
 void NeoPixel::setBrightness(int input) {
   input = clamp(input * 128 / 100, 0, 128);  // 0-100% pref to 0-128 hw, int math
-  if (input == 0) {
+  if (input == 0 && controller_) {
     RgbColor black(0);
     this->controller_->SetPixelColor(0, black);
     this->controller_->Show();
@@ -129,7 +156,7 @@ void NeoPixel::setBrightness(int input) {
 
 void NeoPixel::blink(uint16_t timer)
 {
-  if (colorSaturation == 0 || neoPixelMode == 0) {
+  if (colorSaturation == 0 || neoPixelMode == 0 || !controller_) {
     return;
   }
   RgbColor rgb;
@@ -184,7 +211,7 @@ void NeoPixel::blink(uint16_t timer)
 
 void NeoPixel::loop(unsigned long now)
 {
-  if (colorSaturation == 0) {
+  if (colorSaturation == 0 || !controller_) {
     return;
   }
   if (!_is_off && now - onTime >= offTime)
