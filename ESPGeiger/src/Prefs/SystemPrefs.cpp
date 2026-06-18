@@ -59,6 +59,10 @@ static const EGPref SYSTEM_PREF_ITEMS[] = {
   {"alert",    SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
   {"web_pass", SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    32, EGP_STRING, EGP_SENSITIVE},
   {"life_en",  SY_L_LE,  SY_H_LE,  "1",     nullptr, 0, 1,    0,  EGP_BOOL,   0},
+#ifdef ESP32
+  // 0=board default, else 80/160/240. C3 silicon caps at 160.
+  {"cpu_mhz",  nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  EGP_UINT,   EGP_HIDDEN},
+#endif
 };
 
 static const EGPrefGroup SYSTEM_PREF_GROUP = {
@@ -75,6 +79,14 @@ void SystemPrefs::on_prefs_loaded() {
   gcounter.set_alert((int)EGPrefs::getUInt("sys", "alert"));
   DeviceInfo::setFriendlyName(EGPrefs::getString("sys", "name"));
   gcounter.set_lifetime_enabled(EGPrefs::getUInt("sys", "life_en") != 0);
+#ifdef ESP32
+  uint32_t mhz = EGPrefs::getUInt("sys", "cpu_mhz");
+  if (mhz == 80 || mhz == 160 || mhz == 240) {
+    if (setCpuFrequencyMhz(mhz)) {
+      Log::console(PSTR("System: CPU set to %u MHz"), (unsigned)mhz);
+    }
+  }
+#endif
   // Push web_pass into the running EGHttpServer. on_prefs_loaded fires
   // at boot AND after a /param save (default on_prefs_saved chains here),
   // so this covers both initial config and live changes.
