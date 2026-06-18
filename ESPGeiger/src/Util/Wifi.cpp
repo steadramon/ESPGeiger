@@ -427,9 +427,6 @@ bool Wifi::connectOrPortal() {
   return waitForWifi(30000);
 }
 
-// ---------- Wi-Fi runtime prefs ----------
-// Hidden tunables under /pref?group=wifi&key=*.
-
 class WifiPrefs : public EGModule {
 public:
   const char* name() override { return "wifi"; }
