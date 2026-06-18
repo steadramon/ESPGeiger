@@ -586,6 +586,15 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   INFO_ROW("SDK version",   "%s",            ESP.getSdkVersion());
 #endif
   INFO_ROW("CPU frequency", "%u MHz",        (unsigned)ESP.getCpuFreqMHz());
+#ifdef ESP32
+  // Classic ESP32 silicon reads ~10-20 C high (uncalibrated); S2/S3/C3 are close.
+  {
+    float t = temperatureRead();
+    if (!isnan(t) && t > -40.0f && t < 150.0f) {
+      INFO_ROW("CPU temperature", "%.1f \xC2\xB0""C", t);
+    }
+  }
+#endif
   INFO_ROW("Free heap",     "%u bytes",      (unsigned)DeviceInfo::freeHeap());
   INFO_ROW("Sketch size",   "%u / %u bytes", (unsigned)ESP.getSketchSize(),
                                              (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
@@ -1627,6 +1636,7 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
 
 static bool is_skip_pref(const char* module_id, const char* key) {
   if (strcmp(module_id, "sys") == 0 && strcmp(key, "web_pass") == 0) return true;
+  if (strcmp(module_id, "sys") == 0 && strcmp(key, "cpu_mhz") == 0) return true;
   if (strcmp(module_id, "net") == 0) return true;
   if (strcmp(module_id, "wifi") == 0) return true;
   return false;
