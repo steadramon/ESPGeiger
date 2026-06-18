@@ -28,8 +28,7 @@ namespace PinSafety {
 // Register pin as in use. Same-owner re-claim is silent (pointer compare); different-owner warns.
 void claim(int pin, const char* owner);
 
-// Pins bonded to internal SPI flash / PSRAM. Same for input and output:
-// touching them locks up the bus, so we reject in both directions.
+// Pins bonded to internal flash/PSRAM: touching them locks the bus.
 inline const char* flash_reserved(int pin) {
 #ifdef ESP8266
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
@@ -38,12 +37,10 @@ inline const char* flash_reserved(int pin) {
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
   if (pin >= 26 && pin <= 32) return PSTR("SPI flash");
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-  // 26-32 flash; 33-37 PSRAM on octal-PSRAM modules (N8R2/N16R8 etc).
   if (pin >= 26 && pin <= 32) return PSTR("SPI flash");
-  if (pin >= 33 && pin <= 37) return PSTR("PSRAM");
+  if (pin >= 33 && pin <= 37) return PSTR("PSRAM");      // octal-PSRAM modules
 #elif defined(CONFIG_IDF_TARGET_ESP32C3)
-  // C3-MINI-1 / C3FH4 bonds 11-17 to the embedded flash die.
-  if (pin >= 11 && pin <= 17) return PSTR("SPI flash");
+  if (pin >= 11 && pin <= 17) return PSTR("SPI flash");  // C3FH4 embedded flash
 #endif
   return nullptr;
 }
