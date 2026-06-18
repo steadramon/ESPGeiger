@@ -28,13 +28,31 @@ namespace PinSafety {
 // Register pin as in use. Same-owner re-claim is silent (pointer compare); different-owner warns.
 void claim(int pin, const char* owner);
 
-// Returns nullptr if pin is safe for output (and claims it), else PROGMEM reason. -1 is no-op.
-inline const char* claim_output(int pin, const char* owner) {
-  if (pin == -1) return nullptr;
+// Pins bonded to internal SPI flash / PSRAM. Same for input and output:
+// touching them locks up the bus, so we reject in both directions.
+inline const char* flash_reserved(int pin) {
 #ifdef ESP8266
   if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
 #elif defined(CONFIG_IDF_TARGET_ESP32)
-  if (pin >= 6 && pin <= 11)  return PSTR("SPI flash");
+  if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  if (pin >= 26 && pin <= 32) return PSTR("SPI flash");
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+  // 26-32 flash; 33-37 PSRAM on octal-PSRAM modules (N8R2/N16R8 etc).
+  if (pin >= 26 && pin <= 32) return PSTR("SPI flash");
+  if (pin >= 33 && pin <= 37) return PSTR("PSRAM");
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+  // C3-MINI-1 / C3FH4 bonds 11-17 to the embedded flash die.
+  if (pin >= 11 && pin <= 17) return PSTR("SPI flash");
+#endif
+  return nullptr;
+}
+
+// Returns nullptr if pin is safe for output (and claims it), else PROGMEM reason. -1 is no-op.
+inline const char* claim_output(int pin, const char* owner) {
+  if (pin == -1) return nullptr;
+  if (const char* r = flash_reserved(pin)) return r;
+#if defined(CONFIG_IDF_TARGET_ESP32)
   if (pin >= 34 && pin <= 39) return PSTR("input only");
 #endif
   if (pin < 0 || pin > MAX_GPIO_PIN) return PSTR("out of range");
@@ -45,11 +63,7 @@ inline const char* claim_output(int pin, const char* owner) {
 // Returns nullptr if pin is safe for input (and claims it), else PROGMEM reason. -1 is no-op.
 inline const char* claim_input(int pin, const char* owner) {
   if (pin == -1) return nullptr;
-#ifdef ESP8266
-  if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
-#elif defined(CONFIG_IDF_TARGET_ESP32)
-  if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
-#endif
+  if (const char* r = flash_reserved(pin)) return r;
   if (pin < 0 || pin > MAX_GPIO_PIN) return PSTR("out of range");
   claim(pin, owner);
   return nullptr;
