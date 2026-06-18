@@ -200,6 +200,11 @@ elsewhere:
   525 000 CPM. Above that the tube is paralysed in any case.
 * **PCNT** (ESP32 with pulse counter): bounded by the input filter, not
   by ISR throughput - typically higher headroom than interrupt mode.
+* **Interrupt saturation guard** (raw-interrupt builds): if the raw
+  ISR-entry rate exceeds 10 000/sec (way above any tube, easy for a
+  floating pin or noisy cable to hit) the input is parked for 5 s and
+  the rest of the firmware keeps running. See [Interrupt Saturation
+  Guard](/hardware/esphardware#interrupt-saturation-guard).
 
 Practical fleet limit is whichever of debounce or dead-time you hit
 first. None of the CPM modes notice; they just report what the ring or

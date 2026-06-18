@@ -61,8 +61,6 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 `esp8266oled_hv` | ESP8266 + OLED | As `esp8266_hv` with SSD1306 OLED.
 `esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 80 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict).
 `esp32oled_hv` | ESP32 + OLED | As `esp32_hv` with SSD1306 OLED.
-`esp32c3_hv` | ESP32-C3 | RISC-V variant with software pulse counter and hardware LEDC PWM for HV.
-`esp32c3oled_hv` | ESP32-C3 + OLED | As `esp32c3_hv` with SSD1306 OLED.
 
 For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not** drive any pin until you've explicitly chosen one. After setting the pin in `/egprefs`, **reboot** for the change to take effect.
 
@@ -90,10 +88,6 @@ externally wired amplifier (BCLK / WS / DOUT configurable from the
 `esp32s3_audio_serial` | ESP32-S3 dev kit + amp | Serial | |
 `esp32s3oled_audio_pulse` | ESP32-S3 dev kit + OLED + amp | Pulse | |
 `esp32s3oled_audio_serial` | ESP32-S3 dev kit + OLED + amp | Serial | |
-`esp32c3_audio_pulse` | ESP32-C3 + amp | Pulse | Software pulse counter, I2S amplifier wired by the user. |
-`esp32c3_audio_serial` | ESP32-C3 + amp | Serial | |
-`esp32c3oled_audio_pulse` | ESP32-C3 + OLED + amp | Pulse | |
-`esp32c3oled_audio_serial` | ESP32-C3 + OLED + amp | Serial | |
 
 Audio Tick is disabled by default (`tick.enable=0`). Enable it from the
 Config page after flashing and, on the `esp32oled_audio_*` envs, set the

@@ -82,3 +82,21 @@ The debounce value can be configured from the ESPGeiger web interface under __Co
 Real Geiger-Muller tube dead time is around 50-200μs, so the default sits just below the tube's own recovery time and passes real events. The debounce only applies to the software interrupt path; PCNT builds use the PCNT Filter above instead.
 
 The default can also be set at compile time with the `-D GEIGER_DEBOUNCE=N` build flag. See [Build Options](/install/platformio#geiger-counter-input) for details.
+
+### Interrupt Saturation Guard
+
+On the same software-interrupt builds, ESPGeiger watches the raw ISR-entry rate (pre-debounce) once a second. If it exceeds 10,000 entries/second — a level no physical Geiger tube can produce, but trivially reached by a floating RX pin, an unshielded cable picking up mains hum, or a failed tube oscillating — the firmware detaches the interrupt for 5 seconds and logs:
+
+```
+GeigerPulse: ISR storm (N/s) - parked 5s
+```
+
+The rest of the firmware (WiFi, web UI, MQTT, outputs) keeps running, so the device stays reachable and the watchdog gets fed. After 5 seconds the interrupt is reattached and counting resumes:
+
+```
+GeigerPulse: re-armed after storm cooldown
+```
+
+If the input is still saturated on re-arm, the guard parks it again. If you've just wired a real tube during the cooldown, counting picks up cleanly on the next re-arm.
+
+The threshold is intentionally far above realistic radiation rates (typical strongest hand-held sources peak at ~1 kHz pulse rate) and is independent of the configured debounce, so it cannot be accidentally disabled by tuning. PCNT builds count edges in hardware without firing the ISR, so they don't need this guard.

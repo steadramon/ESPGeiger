@@ -83,7 +83,7 @@ build_flags =
 
 | Flag | Description |
 |---|---|
-| `-D GEIGER_RXPIN=N` | Set the geiger counter input pin (default `13`). |
+| `-D GEIGER_RXPIN=N` | Set the geiger counter input pin (default `13` on ESP8266 / ESP32, `4` on ESP32-C3). GPIO 11-17 are reserved for internal flash on C3-MINI-1 modules. |
 | `-D GEIGER_TXPIN=N` | Set the transmit pin for test builds (default `-1`). |
 | `-D GEIGER_DEBOUNCE=N` | Set the default pulse debounce time in microseconds (default `500`). This can also be configured at runtime from the web interface on builds that use software interrupt counting. |
 | `-D GEIGER_RATIO=N` | Set the default CPM to μSv/h conversion ratio (default `151.0`). |

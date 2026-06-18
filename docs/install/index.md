@@ -52,7 +52,7 @@ Congratulations! 🎉 ESPGeiger is installed
 
 ## Hardware connection
 
-Note: By default the RXPIN for ESPGeiger is set to `GPIO13` - this can be changed from the Web Portal.
+Note: By default the RXPIN for ESPGeiger is set to `GPIO13` on ESP8266 / ESP32, and `GPIO4` on ESP32-C3 (its GPIO 11-17 are bonded to internal flash). The pin can be changed from the Web Portal.
 
 <img src="/img/D1mini-basicwiring.png" title="D1 mini basic wiring">
 

@@ -142,6 +142,7 @@ On push-button builds the long-press gesture toggles a permanent override that k
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
+| Pin | Int -1 to MAX | platform-default | WS2812 data pin. `-1` leaves the module inert (no LED wired). Set to the GPIO your pixel is on. Reboot to apply. Hidden on boards that hard-wire the pin in the env (e.g. XH-S3E, ESPGeiger-Lite). |
 | Brightness | Int 0-100 | `15` | NeoPixel brightness, 0 disables and unloads the module. Too low a value can cause inaccurate colours. |
 | Mode | Int 0-4 | `4` | Render mode. 0=Off, 1=Blip, 2=Status blip, 3=Trend pulse, 4=Trend+status. See [NeoPixel output](/output/neopixel) for behaviour. |
 | Blip colour | Int 0-7 | `0` (Green) | Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan 5=Magenta 6=White 7=Orange. |
@@ -161,10 +162,12 @@ Drives a GPIO when CPM crosses the alert threshold. See [Alert Out](/output/aler
 
 These do not appear on the Config page. The defaults suit almost every deployment; the table is here for the rare case where you need to override one (for example a router on a channel disabled by the device's default country code, or to reduce TX power on a battery build).
 
-Set a value via the device's `/pref` URL:
+Set a value via the command box on the Status page (or over USB serial at 115200 baud) using the `set <module>.<key> <value>` form:
 
 ```
-http://<device>.local/pref?group=wifi&key=<key>&value=<value>
+set wifi.tx_power 8
+set wifi.country GB
+restart
 ```
 
 Changes take effect on the next reboot.
@@ -175,3 +178,14 @@ Changes take effect on the next reboot.
 | `tx_power` | Int 0-20 | `0` | Transmit power in dBm. `0` keeps the platform default (typically around 20 dBm). Lower values can reduce coupling with sensitive analogue circuitry on the same board and save power on battery builds, at the cost of effective range. |
 | `country` | String (2) | `(empty)` | ISO 2-letter country code (for example `GB`, `US`, `DE`, `JP`). Empty uses the platform default, which restricts channels in some regions. Set this if your router is on channel 12 or 13 (EU) or 14 (JP) and the device cannot see or connect to it. |
 | `phy_mode` | Int 0-3 | `0` | Wi-Fi PHY lock-down. `0` lets the device negotiate (recommended). `1` = 802.11b only, `2` = b/g, `3` = b/g/n. Use this only as a workaround for routers that fail to negotiate higher rates cleanly. |
+
+## CPU Frequency (ESP32 only)
+
+Hidden `sys.cpu_mhz` pref forces the CPU clock. `0` (default) leaves the board's default in place; `80`, `160` or `240` override (ESP32-C3 silicon caps at 160 MHz, so 240 is silently ignored there). Lowering the clock noticeably reduces power draw and die temperature on hot-running boards such as the ESP32-C3 Zero, at the cost of LPS headroom. The setting is per-device and is not included in config export blobs.
+
+Set via the Status-page command box or USB serial:
+
+```
+set sys.cpu_mhz 80
+restart
+```
