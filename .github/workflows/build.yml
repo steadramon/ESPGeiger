@@ -71,8 +71,6 @@ jobs:
           - "esp32oled_audio_serial"
           - "esp32c3_pulse"
           - "esp32c3oled_pulse"
-          - "esp32c3_hv"
-          - "esp32c3_audio_pulse"
           - "esp32s3_audio_pulse"
     runs-on: ubuntu-24.04
     name: Build with PlatformIO
