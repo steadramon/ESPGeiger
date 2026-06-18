@@ -94,7 +94,7 @@ See the full list of available builds on the [releases page](https://github.com/
 
 ## Hardware Connection
 
-By default `GEIGER_RXPIN` is set to GPIO13. Connect your Geiger counter's pulse or serial TX output to this pin. Don't forget a common ground.
+By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32, and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin. Don't forget a common ground.
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
