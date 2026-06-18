@@ -167,6 +167,9 @@ void IRAM_ATTR GeigerTestPulse::pulseInterrupt() {
 }
 
 void GeigerTestPulse::secondTicker() {
+#ifndef USE_PCNT
+  checkIsrStorm();
+#endif
   CPMAdjuster();
 }
 

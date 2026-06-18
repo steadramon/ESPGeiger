@@ -148,6 +148,8 @@ class GeigerInput {
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
     static void IRAM_ATTR countInterrupt();
+    // Self-heal an ISR storm (floating pin / EMI). Pulse mode calls this from s_tick.
+    void checkIsrStorm();
     void setCounter(int val, bool update = true);
     void setLastBlip();
   private:

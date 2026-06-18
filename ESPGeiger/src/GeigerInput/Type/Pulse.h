@@ -62,6 +62,9 @@ class GeigerPulse : public GeigerInput
       return false;
 #endif
     }
+#ifndef USE_PCNT
+    void secondTicker() override { checkIsrStorm(); }
+#endif
 #ifdef USE_PCNT
     int collect();
     // 50 Hz drain that folds new PCNT counts into s_event_counter and bumps

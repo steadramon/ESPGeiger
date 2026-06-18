@@ -24,8 +24,14 @@
 
 volatile unsigned long _last_blip = 0;
 volatile uint32_t s_event_counter = 0;
+volatile uint32_t s_isr_entries = 0;  // counted pre-debounce for storm-detect
 
 volatile unsigned long _debounce = GEIGER_DEBOUNCE;
+
+// 10000 ISR/s is ~600x any physically possible tube rate.
+static constexpr uint32_t ISR_STORM_THRESHOLD = 10000;
+static constexpr uint8_t  ISR_STORM_COOLDOWN_S = 5;
+static uint8_t s_isr_cooldown = 0;
 
 #ifdef ESP32
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -78,6 +84,7 @@ void GeigerInput::setLastBlip()  {
 }
 
 void IRAM_ATTR GeigerInput::countInterrupt() {
+  s_isr_entries++;
   unsigned long cycles = micros();
   if (cycles - _last_blip < _debounce) {
     return;
@@ -91,6 +98,29 @@ void IRAM_ATTR GeigerInput::countInterrupt() {
 #endif
   _last_blip = cycles;
   Counter::on_pulse((uint32_t)cycles);
+}
+
+// Park the ISR for a few seconds if it's storming (floating pin / EMI),
+// so the rest of the firmware keeps running and the WDT gets fed.
+void GeigerInput::checkIsrStorm() {
+  if (_rx_pin < 0) return;
+  uint32_t n = s_isr_entries;
+  s_isr_entries = 0;
+
+  if (s_isr_cooldown > 0) {
+    if (--s_isr_cooldown == 0) {
+      attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+      Log::console(PSTR("GeigerPulse: re-armed after storm cooldown"));
+    }
+    return;
+  }
+
+  if (n > ISR_STORM_THRESHOLD) {
+    detachInterrupt(digitalPinToInterrupt(_rx_pin));
+    s_isr_cooldown = ISR_STORM_COOLDOWN_S;
+    Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
+                 (unsigned)n, (unsigned)ISR_STORM_COOLDOWN_S);
+  }
 }
 
 void GeigerInput::setCounter(int val, bool update) {

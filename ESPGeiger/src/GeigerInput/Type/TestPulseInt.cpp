@@ -149,6 +149,9 @@ double GeigerTestPulseInt::calcPWM() {
 }
 
 void GeigerTestPulseInt::secondTicker() {
+#ifndef USE_PCNT
+  checkIsrStorm();
+#endif
   CPMAdjuster();
   _target_pwm = calcPWM();
   if (_target_pwm != _current_pwm) {
