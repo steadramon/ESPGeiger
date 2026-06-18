@@ -17,8 +17,6 @@ working on the device.
 ## What gets paused
 
 * [Radmon](/output/radmon)
-* URADMonitor
-* Safecast
 * WebAPI (stations.espgeiger.com)
 * [GMC / GeigerLog](/output/gmc)
 * [Webhook](/output/webhook)
