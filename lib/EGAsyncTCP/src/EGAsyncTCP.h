@@ -125,6 +125,10 @@ class AsyncClient {
     AcConnectHandler _poll_cb;
     void* _poll_cb_arg;
     bool _pcb_busy;
+    // True iff _pcb still points to a live lwIP pcb.
+    bool _pcb_alive = false;
+
+    bool _validate_pcb() const;
 #if ASYNC_TCP_SSL_ENABLED
     bool _pcb_secure;
     bool _handshake_done;
@@ -182,6 +186,8 @@ class AsyncClient {
 #else
     AsyncClient(tcp_pcb* pcb = 0);
 #endif
+    // Do not delete from inside one of this client's own callbacks - the
+    // dispatcher is still holding a reference. Out-of-callback deletes are safe.
     ~AsyncClient();
 
     AsyncClient & operator=(const AsyncClient &other);

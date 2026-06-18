@@ -16,6 +16,7 @@
 
 #include "lwip/ip6_addr.h"
 #include "lwip/ip_addr.h"
+#include <atomic>
 #include <functional>
 
 #ifndef LIBRETINY
@@ -273,6 +274,16 @@ protected:
   friend class AsyncServer;
 
   tcp_pcb *_pcb;
+  // True iff _pcb still points to a live lwIP pcb. Lock-step with every _pcb assignment.
+  std::atomic<bool> _pcb_alive{false};
+
+  bool _validate_pcb() const;
+
+public:
+  inline void _mark_pcb_dead() { _pcb_alive.store(false, std::memory_order_release); }
+  inline bool _is_pcb_alive() const { return _pcb_alive.load(std::memory_order_acquire); }
+
+protected:
 
   AcConnectHandler _connect_cb;
   void *_connect_cb_arg;

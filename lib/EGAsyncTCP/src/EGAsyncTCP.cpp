@@ -80,6 +80,7 @@ extern "C"{
   #include "lwip/inet.h"
   #include "lwip/dns.h"
   #include "lwip/init.h"
+  #include "lwip/priv/tcp_priv.h"  // tcp_active_pcbs / tcp_tw_pcbs
 }
 #include "tcp_axtls.h"
 
@@ -149,15 +150,59 @@ err_t ACErrorTracker::getCallbackCloseError(void){
 static size_t _connectionCount=0;
 #endif
 
-// Reject stale pcb before user-context deref. Counterpart to _acArgAlive.
+// ESP8266 is cooperative-multitask so no lock needed.
+static inline bool _pcb_in_active_lists(const tcp_pcb* pcb){
+  for (const tcp_pcb* p = tcp_active_pcbs; p; p = p->next) {
+    if (p == pcb) return true;
+  }
+  for (const tcp_pcb* p = tcp_tw_pcbs; p; p = p->next) {
+    if (p == pcb) return true;
+  }
+  return false;
+}
+
+// DRAM-range pre-filter then live-list walk; rejects stale pcbs that
+// would deref into freed memory.
 static inline bool _pcbAlive(const tcp_pcb* pcb){
   if (!pcb) return false;
 #ifdef ESP8266
   uintptr_t p = (uintptr_t)pcb;
-  return p >= 0x3FFE8000UL && p < 0x40000000UL;
-#else
-  return true;
+  if (p < 0x3FFE8000UL || p >= 0x40000000UL) return false;
 #endif
+  return _pcb_in_active_lists(pcb);
+}
+
+bool AsyncClient::_validate_pcb() const {
+  if (!_pcb_alive || !_pcb) return false;
+  return _pcb_in_active_lists(_pcb);
+}
+
+// Live AsyncServer registry: accept callback validates before deref.
+#define EGASYNC_SERVER_REG_MAX 4
+static AsyncServer* _live_servers[EGASYNC_SERVER_REG_MAX] = {};
+static uint8_t _live_server_count = 0;
+
+static void _register_server(AsyncServer* s) {
+  if (_live_server_count < EGASYNC_SERVER_REG_MAX) {
+    _live_servers[_live_server_count++] = s;
+  }
+}
+
+static void _unregister_server(AsyncServer* s) {
+  for (uint8_t i = 0; i < _live_server_count; i++) {
+    if (_live_servers[i] == s) {
+      _live_servers[i] = _live_servers[--_live_server_count];
+      _live_servers[_live_server_count] = nullptr;
+      return;
+    }
+  }
+}
+
+static bool _server_alive(const AsyncServer* s) {
+  for (uint8_t i = 0; i < _live_server_count; i++) {
+    if (_live_servers[i] == s) return true;
+  }
+  return false;
 }
 
 #if ASYNC_TCP_SSL_ENABLED
@@ -205,6 +250,7 @@ AsyncClient::AsyncClient(tcp_pcb* pcb):
 #endif
   _pcb = pcb;
   if(_pcb){
+    _pcb_alive = true;
     _rx_last_packet = millis();
     tcp_setprio(_pcb, TCP_PRIO_MIN);
     tcp_arg(_pcb, this);
@@ -265,6 +311,7 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
     return false;
   }
   _pcb = pcb;  // bind now so a mid-handshake destroy clears callbacks (UAF)
+  _pcb_alive = true;
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
 #if ASYNC_TCP_SSL_ENABLED
@@ -277,6 +324,7 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
   if (err != ERR_OK) {
     clearTcpCallbacks(pcb);
     tcp_abort(pcb);
+    _pcb_alive = false;
     _pcb = NULL;  // aborted; don't double-close
     return false;
   }
@@ -318,6 +366,7 @@ AsyncClient& AsyncClient::operator=(const AsyncClient& other){
   // close it? TODO: Look to see where this is used and how it might work.
   _pcb = other._pcb;
   if (_pcb) {
+    _pcb_alive = true;
     _rx_last_packet = millis();
     tcp_setprio(_pcb, TCP_PRIO_MIN);
     tcp_arg(_pcb, this);
@@ -343,7 +392,8 @@ AsyncClient& AsyncClient::operator=(const AsyncClient& other){
 }
 
 bool AsyncClient::operator==(const AsyncClient &other) {
-  return (_pcb != NULL && other._pcb != NULL && (IPAddress(_pcb->remote_ip) ==  IPAddress(other._pcb->remote_ip)) && (_pcb->remote_port == other._pcb->remote_port));
+  if (!_validate_pcb() || !other._validate_pcb()) return false;
+  return (IPAddress(_pcb->remote_ip) == IPAddress(other._pcb->remote_ip)) && (_pcb->remote_port == other._pcb->remote_port);
 }
 
 void AsyncClient::abort(){
@@ -360,6 +410,7 @@ void AsyncClient::abort(){
   // 6) Callbacks to _recv() or _connected() with err set, will result in _pcb
   //    set to NULL. Thus, preventing possible calls later to tcp_abort().
   if(_pcb) {
+    _pcb_alive = false;
     tcp_abort(_pcb);
     _pcb = NULL;
     setCloseError(ERR_ABRT);
@@ -383,10 +434,8 @@ void AsyncClient::stop() {
 }
 
 bool AsyncClient::free(){
-  if(!_pcb)
-    return true;
-  if(_pcb->state == 0 || _pcb->state > 4)
-    return true;
+  if(!_pcb_alive) return true;
+  if(_pcb->state == 0 || _pcb->state > 4) return true;
   return false;
 }
 
@@ -474,6 +523,7 @@ void AsyncClient::_connected(std::shared_ptr<ACErrorTracker>& errorTracker, void
     _pcb = reinterpret_cast<tcp_pcb*>(pcb);
     if (_pcb)
       clearTcpCallbacks(_pcb);
+    _pcb_alive = false;
     _pcb = NULL;
     _error(err);
     return;
@@ -481,6 +531,7 @@ void AsyncClient::_connected(std::shared_ptr<ACErrorTracker>& errorTracker, void
 
   _pcb = reinterpret_cast<tcp_pcb*>(pcb);
   if(_pcb){
+    _pcb_alive = true;
     _pcb_busy = false;
     _rx_last_packet = millis();
     tcp_setprio(_pcb, TCP_PRIO_MIN);
@@ -516,6 +567,7 @@ void AsyncClient::_close(){
     }
 #endif
     clearTcpCallbacks(_pcb);
+    _pcb_alive = false;
     err_t err = tcp_close(_pcb);
     if(ERR_OK == err) {
       setCloseError(err);
@@ -541,6 +593,7 @@ void AsyncClient::_error(err_t err) {
 #endif
     // At this callback _pcb is possible already freed. Thus, no calls are
     // made to set to NULL other callbacks.
+    _pcb_alive = false;
     _pcb = NULL;
   }
   if(_error_cb)
@@ -593,6 +646,7 @@ void AsyncClient::_recv(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
     _pcb = pcb;
     if(_pcb)
       clearTcpCallbacks(_pcb);
+    _pcb_alive = false;
     _pcb = NULL;
     // I think we are safe from being called from an interrupt context.
     // Best Hint that calling _error() is safe:
@@ -855,8 +909,7 @@ void AsyncClient::setAckTimeout(uint32_t timeout){
 }
 
 void AsyncClient::setNoDelay(bool nodelay){
-  if(!_pcb)
-    return;
+  if(!_validate_pcb()) return;
   if(nodelay)
     tcp_nagle_disable(_pcb);
   else
@@ -864,33 +917,28 @@ void AsyncClient::setNoDelay(bool nodelay){
 }
 
 bool AsyncClient::getNoDelay(){
-  if(!_pcb)
-    return false;
+  if(!_validate_pcb()) return false;
   return tcp_nagle_disabled(_pcb);
 }
 
 uint16_t AsyncClient::getMss(){
-  if(_pcb)
-    return tcp_mss(_pcb);
-  return 0;
+  if(!_validate_pcb()) return 0;
+  return tcp_mss(_pcb);
 }
 
 uint16_t AsyncClient::getRemotePort() {
-  if(!_pcb)
-    return 0;
+  if(!_validate_pcb()) return 0;
   return _pcb->remote_port;
 }
 
 
 uint16_t AsyncClient::getLocalPort() {
-  if(!_pcb)
-    return 0;
+  if(!_validate_pcb()) return 0;
   return _pcb->local_port;
 }
 
 IPAddress AsyncClient::remoteIP() {
-  if(!_pcb)
-    return IPAddress(0);
+  if(!_validate_pcb()) return IPAddress(0);
   return _pcb->remote_ip;
 }
 
@@ -899,8 +947,7 @@ uint16_t AsyncClient::remotePort() {
 }
 
 IPAddress AsyncClient::localIP() {
-  if(!_pcb)
-    return IPAddress(0);
+  if(!_validate_pcb()) return IPAddress(0);
   return _pcb->local_ip;
 }
 
@@ -918,14 +965,12 @@ SSL * AsyncClient::getSSL(){
 #endif
 
 uint8_t AsyncClient::state() {
-  if(!_pcb)
-    return 0;
+  if(!_pcb_alive) return 0;
   return _pcb->state;
 }
 
 bool AsyncClient::connected(){
-  if (!_pcb)
-    return false;
+  if(!_pcb_alive) return false;
 #if ASYNC_TCP_SSL_ENABLED
   return _pcb->state == 4 && _handshake_done;
 #else
@@ -934,26 +979,22 @@ bool AsyncClient::connected(){
 }
 
 bool AsyncClient::connecting(){
-  if (!_pcb)
-    return false;
+  if(!_pcb_alive) return false;
   return _pcb->state > 0 && _pcb->state < 4;
 }
 
 bool AsyncClient::disconnecting(){
-  if (!_pcb)
-    return false;
+  if(!_pcb_alive) return false;
   return _pcb->state > 4 && _pcb->state < 10;
 }
 
 bool AsyncClient::disconnected(){
-  if (!_pcb)
-    return true;
+  if(!_pcb_alive) return true;
   return _pcb->state == 0 || _pcb->state == 10;
 }
 
 bool AsyncClient::freeable(){
-  if (!_pcb)
-    return true;
+  if(!_pcb_alive) return true;
   return _pcb->state == 0 || _pcb->state > 4;
 }
 
@@ -1001,8 +1042,9 @@ void AsyncClient::onPoll(AcConnectHandler cb, void* arg){
 
 
 size_t AsyncClient::space(){
+  if(!_pcb_alive) return 0;
 #if ASYNC_TCP_SSL_ENABLED
-  if((_pcb != NULL) && (_pcb->state == 4) && _handshake_done){
+  if(_pcb->state == 4 && _handshake_done){
     uint16_t s = tcp_sndbuf(_pcb);
     if(_pcb_secure){
 #ifdef AXTLS_2_0_0_SNDBUF
@@ -1016,7 +1058,7 @@ size_t AsyncClient::space(){
     return s;
   }
 #else // ASYNC_TCP_SSL_ENABLED
-  if((_pcb != NULL) && (_pcb->state == 4)){
+  if(_pcb->state == 4){
     return tcp_sndbuf(_pcb);
   }
 #endif // ASYNC_TCP_SSL_ENABLED
@@ -1027,7 +1069,9 @@ void AsyncClient::ackPacket(struct pbuf * pb){
   if(!pb){
     return;
   }
-  tcp_recved(_pcb, pb->len);
+  if(_validate_pcb()) {
+    tcp_recved(_pcb, pb->len);
+  }
   pbuf_free(pb);
 }
 
@@ -1165,6 +1209,7 @@ void AsyncServer::begin(){
     return;
   }
   _pcb = listen_pcb;
+  _register_server(this);
   tcp_arg(_pcb, (void*) this);
   tcp_accept(_pcb, &_s_accept);
 }
@@ -1183,6 +1228,7 @@ void AsyncServer::beginSecure(const char *cert, const char *key, const char *pas
 #endif
 
 void AsyncServer::end(){
+  _unregister_server(this);
   if(_pcb){
     //cleanup all connections?
     tcp_arg(_pcb, NULL);
@@ -1331,7 +1377,13 @@ err_t AsyncServer::_accept(tcp_pcb* pcb, err_t err){
 }
 
 err_t AsyncServer::_s_accept(void *arg, tcp_pcb* pcb, err_t err){
-  return reinterpret_cast<AsyncServer*>(arg)->_accept(pcb, err);
+  AsyncServer* srv = reinterpret_cast<AsyncServer*>(arg);
+  if (!_server_alive(srv)) {
+    // Parent server was destroyed between tcp_accept queue and dispatch.
+    if (pcb) tcp_abort(pcb);
+    return ERR_ABRT;
+  }
+  return srv->_accept(pcb, err);
 }
 
 #if ASYNC_TCP_SSL_ENABLED

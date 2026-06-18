@@ -47,6 +47,7 @@ extern "C" {
 #include "lwip/opt.h"
 #include "lwip/tcp.h"
 #include "lwip/tcpip.h"
+#include "lwip/priv/tcp_priv.h"   // tcp_active_pcbs / tcp_tw_pcbs
 }
 
 #if CONFIG_ASYNC_TCP_USE_WDT
@@ -190,6 +191,59 @@ public:
 static SimpleIntrusiveList<lwip_tcp_event_packet_t> _async_queue;
 static TaskHandle_t _async_service_task_handle = NULL;
 
+// Serializes ~AsyncClient with in-flight callback dispatch. Recursive so
+// callbacks reentering the same client (onError -> close()) don't deadlock.
+static StaticSemaphore_t _lifetime_mtx_storage;
+static SemaphoreHandle_t _lifetime_mtx = nullptr;
+
+static inline void _lifetime_mtx_init() {
+  if (!_lifetime_mtx) {
+    _lifetime_mtx = xSemaphoreCreateRecursiveMutexStatic(&_lifetime_mtx_storage);
+  }
+}
+
+class lifetime_guard {
+public:
+  inline lifetime_guard() {
+    if (_lifetime_mtx) xSemaphoreTakeRecursive(_lifetime_mtx, portMAX_DELAY);
+  }
+  inline ~lifetime_guard() {
+    if (_lifetime_mtx) xSemaphoreGiveRecursive(_lifetime_mtx);
+  }
+};
+
+// Live AsyncServer registry: lwIP accept callback validates the arg
+// before deref. Typically 1 server (web portal); 8 is generous.
+#define ASYNC_SERVER_REG_MAX 8
+static AsyncServer *_live_servers[ASYNC_SERVER_REG_MAX] = {};
+static uint8_t _live_server_count = 0;
+
+static void _register_server(AsyncServer *s) {
+  queue_mutex_guard guard;
+  if (_live_server_count < ASYNC_SERVER_REG_MAX) {
+    _live_servers[_live_server_count++] = s;
+  }
+}
+
+static void _unregister_server(AsyncServer *s) {
+  queue_mutex_guard guard;
+  for (uint8_t i = 0; i < _live_server_count; i++) {
+    if (_live_servers[i] == s) {
+      _live_servers[i] = _live_servers[--_live_server_count];
+      _live_servers[_live_server_count] = nullptr;
+      return;
+    }
+  }
+}
+
+static bool _server_alive(const AsyncServer *s) {
+  queue_mutex_guard guard;
+  for (uint8_t i = 0; i < _live_server_count; i++) {
+    if (_live_servers[i] == s) return true;
+  }
+  return false;
+}
+
 static uint32_t _xor_shift_state = 31;  // any nonzero seed will do
 static uint32_t _xor_shift_next() {
   uint32_t x = _xor_shift_state;
@@ -306,6 +360,7 @@ static size_t _remove_events_for_server(AsyncServer *server) {
 }
 
 void AsyncTCP_detail::handle_async_event(lwip_tcp_event_packet_t *e) {
+  lifetime_guard guard;  // ~AsyncClient takes the same mutex.
   if (e->client == NULL) {
     // do nothing when arg is NULL
     // ets_printf("event arg == NULL: 0x%08x\n", e->recv.pcb);
@@ -397,6 +452,7 @@ static bool _start_async_task() {
       return false;
     }
   }
+  _lifetime_mtx_init();
 
   if (!_async_service_task_handle) {
     customTaskCreateUniversal(
@@ -517,6 +573,7 @@ void AsyncTCP_detail::tcp_error(void *arg, int8_t err) {
   AsyncClient *client = reinterpret_cast<AsyncClient *>(arg);
   if (client && client->_pcb) {
     // The pcb has already been freed by LwIP; do not attempt to clear the callbacks!
+    client->_pcb_alive.store(false, std::memory_order_release);
     _remove_events_for_client(client);
     client->_pcb = nullptr;
   }
@@ -585,21 +642,42 @@ typedef struct {
   };
 } tcp_api_call_t;
 
-// Teardown-race guard for the _tcp_*_api wrappers - PCB can close
-// between queue and dispatch. Drops doomed ops instead of asserting.
-// See upstream issues #74, #97, #30.
+// Caller must hold the lwIP core lock or be on the lwIP thread.
+static inline bool _pcb_in_active_lists(const struct tcp_pcb *pcb) {
+  for (const struct tcp_pcb *p = tcp_active_pcbs; p; p = p->next) {
+    if (p == pcb) return true;
+  }
+  for (const struct tcp_pcb *p = tcp_tw_pcbs; p; p = p->next) {
+    if (p == pcb) return true;
+  }
+  return false;
+}
+
+// FIN_WAIT_2 / CLOSING / LAST_ACK trip lwIP write/output assertions.
+static inline bool _pcb_state_writable(const struct tcp_pcb *pcb) {
+  switch (pcb->state) {
+    case LISTEN: case CLOSED: case TIME_WAIT:
+    case FIN_WAIT_2: case CLOSING: case LAST_ACK:
+      return false;
+    default:
+      return true;
+  }
+}
+
+// Used by the _tcp_*_api wrappers (lwIP thread).
 static inline bool _pcb_is_active(const struct tcp_pcb *pcb) {
-  if (pcb == NULL) {
-    return false;
-  }
-  // Reject pre-data, post-our-FIN, and gone-away states. Write/output
-  // hit lwIP assertions in FIN_WAIT_2/CLOSING/LAST_ACK.
-  if (pcb->state == LISTEN || pcb->state == CLOSED ||
-      pcb->state == TIME_WAIT || pcb->state == FIN_WAIT_2 ||
-      pcb->state == CLOSING || pcb->state == LAST_ACK) {
-    return false;
-  }
-  return true;
+  if (pcb == NULL) return false;
+  if (!_pcb_in_active_lists(pcb)) return false;
+  return _pcb_state_writable(pcb);
+}
+
+// User-thread variant. Atomic flag fast-rejects without taking the lock.
+bool AsyncClient::_validate_pcb() const {
+  if (!_pcb || !_pcb_alive.load(std::memory_order_acquire)) return false;
+  LOCK_TCPIP_CORE();
+  bool ok = _pcb_in_active_lists(_pcb) && _pcb_state_writable(_pcb);
+  UNLOCK_TCPIP_CORE();
+  return ok;
 }
 
 static err_t _tcp_output_api(struct tcpip_api_call_data *api_call_msg) {
@@ -693,6 +771,7 @@ static err_t _tcp_close_api(struct tcpip_api_call_data *api_call_msg) {
   msg->err = ERR_CONN;
   if (*msg->pcb) {
     tcp_pcb *pcb = *msg->pcb;
+    msg->close->_mark_pcb_dead();
     _reset_tcp_callbacks(pcb, msg->close);
     if (tcp_close(pcb) != ERR_OK) {
       // We do not permit failure here: abandon the pcb anyways.
@@ -721,6 +800,7 @@ static err_t _tcp_abort_api(struct tcpip_api_call_data *api_call_msg) {
   // Like close(), we must ensure that the queue is cleared
   tcp_api_call_t *msg = (tcp_api_call_t *)api_call_msg;
   if (*msg->pcb) {
+    msg->close->_mark_pcb_dead();
     tcp_abort(*msg->pcb);
     *msg->pcb = nullptr;  // PCB is now the property of LwIP
     msg->err = ERR_ABRT;
@@ -917,12 +997,14 @@ AsyncClient::AsyncClient(tcp_pcb *pcb)
     _rx_timeout(0), _rx_last_ack(0), _ack_timeout(CONFIG_ASYNC_TCP_MAX_ACK_TIME), _connect_port(0) {
   _pcb = pcb;
   if (_pcb) {
+    _pcb_alive.store(true, std::memory_order_release);
     _rx_last_packet = millis();
     _bind_tcp_callbacks(_pcb, this);
   }
 }
 
 AsyncClient::~AsyncClient() {
+  lifetime_guard guard;  // wait for in-flight handle_async_event for this client.
   if (_pcb) {
     _close();
   }
@@ -1081,7 +1163,8 @@ int8_t AsyncClient::abort() {
 }
 
 size_t AsyncClient::space() const {
-  if ((_pcb != NULL) && (_pcb->state == ESTABLISHED)) {
+  if (!_pcb_alive.load(std::memory_order_acquire)) return 0;
+  if (_pcb->state == ESTABLISHED) {
     return tcp_sndbuf(_pcb);
   }
   return 0;
@@ -1155,6 +1238,7 @@ int8_t AsyncClient::_close() {
 int8_t AsyncClient::_connected(tcp_pcb *pcb, int8_t err) {
   _pcb = reinterpret_cast<tcp_pcb *>(pcb);
   if (_pcb) {
+    _pcb_alive.store(true, std::memory_order_release);
     _rx_last_packet = millis();
   }
   _tx_last_packet = 0;
@@ -1180,6 +1264,7 @@ int8_t AsyncClient::_lwip_fin(tcp_pcb *pcb, int8_t err) {
     async_tcp_log_d("0x%08" PRIx32 " != 0x%08" PRIx32, (uint32_t)pcb, (uint32_t)_pcb);
     return ERR_OK;
   }
+  _pcb_alive.store(false, std::memory_order_release);
   _reset_tcp_callbacks(_pcb, this);
   if (tcp_close(_pcb) != ERR_OK) {
     tcp_abort(_pcb);
@@ -1282,12 +1367,8 @@ void AsyncClient::_dns_found(ip_addr_t *ipaddr) {
  * */
 
 bool AsyncClient::free() {
-  if (!_pcb) {
-    return true;
-  }
-  if (_pcb->state == CLOSED || _pcb->state > ESTABLISHED) {
-    return true;
-  }
+  if (!_pcb_alive.load(std::memory_order_acquire)) return true;
+  if (_pcb->state == CLOSED || _pcb->state > ESTABLISHED) return true;
   return false;
 }
 
@@ -1316,9 +1397,7 @@ void AsyncClient::setAckTimeout(uint32_t timeout) {
 }
 
 void AsyncClient::setNoDelay(bool nodelay) const {
-  if (!_pcb) {
-    return;
-  }
+  if (!_validate_pcb()) return;
   if (nodelay) {
     tcp_nagle_disable(_pcb);
   } else {
@@ -1327,35 +1406,29 @@ void AsyncClient::setNoDelay(bool nodelay) const {
 }
 
 bool AsyncClient::getNoDelay() {
-  if (!_pcb) {
-    return false;
-  }
+  if (!_validate_pcb()) return false;
   return tcp_nagle_disabled(_pcb);
 }
 
 void AsyncClient::setKeepAlive(uint32_t ms, uint8_t cnt) {
+  if (!_validate_pcb()) return;
   if (ms != 0) {
-    _pcb->so_options |= SOF_KEEPALIVE;  // Turn on TCP Keepalive for the given pcb
-    // Set the time between keepalive messages in milli-seconds
+    _pcb->so_options |= SOF_KEEPALIVE;
     _pcb->keep_idle = ms;
     _pcb->keep_intvl = ms;
-    _pcb->keep_cnt = cnt;  // The number of unanswered probes required to force closure of the socket
+    _pcb->keep_cnt = cnt;
   } else {
-    _pcb->so_options &= ~SOF_KEEPALIVE;  // Turn off TCP Keepalive for the given pcb
+    _pcb->so_options &= ~SOF_KEEPALIVE;
   }
 }
 
 uint16_t AsyncClient::getMss() const {
-  if (!_pcb) {
-    return 0;
-  }
+  if (!_validate_pcb()) return 0;
   return tcp_mss(_pcb);
 }
 
 uint32_t AsyncClient::getRemoteAddress() const {
-  if (!_pcb) {
-    return 0;
-  }
+  if (!_validate_pcb()) return 0;
 #if LWIP_IPV4 && LWIP_IPV6
   return _pcb->remote_ip.u_addr.ip4.addr;
 #else
@@ -1365,23 +1438,21 @@ uint32_t AsyncClient::getRemoteAddress() const {
 
 #if LWIP_IPV6
 ip6_addr_t AsyncClient::getRemoteAddress6() const {
-  if (_pcb && _pcb->remote_ip.type == IPADDR_TYPE_V6) {
+  if (_validate_pcb() && _pcb->remote_ip.type == IPADDR_TYPE_V6) {
     return _pcb->remote_ip.u_addr.ip6;
-  } else {
-    ip6_addr_t nulladdr;
-    ip6_addr_set_zero(&nulladdr);
-    return nulladdr;
   }
+  ip6_addr_t nulladdr;
+  ip6_addr_set_zero(&nulladdr);
+  return nulladdr;
 }
 
 ip6_addr_t AsyncClient::getLocalAddress6() const {
-  if (_pcb && _pcb->local_ip.type == IPADDR_TYPE_V6) {
+  if (_validate_pcb() && _pcb->local_ip.type == IPADDR_TYPE_V6) {
     return _pcb->local_ip.u_addr.ip6;
-  } else {
-    ip6_addr_t nulladdr;
-    ip6_addr_set_zero(&nulladdr);
-    return nulladdr;
   }
+  ip6_addr_t nulladdr;
+  ip6_addr_set_zero(&nulladdr);
+  return nulladdr;
 }
 #ifdef ARDUINO
 #if ESP_IDF_VERSION_MAJOR < 5
@@ -1394,18 +1465,14 @@ IPv6Address AsyncClient::localIP6() const {
 }
 #else
 IPAddress AsyncClient::remoteIP6() const {
-  if (!_pcb) {
-    return IPAddress(IPType::IPv6);
-  }
+  if (!_validate_pcb()) return IPAddress(IPType::IPv6);
   IPAddress ip;
   ip.from_ip_addr_t(&(_pcb->remote_ip));
   return ip;
 }
 
 IPAddress AsyncClient::localIP6() const {
-  if (!_pcb) {
-    return IPAddress(IPType::IPv6);
-  }
+  if (!_validate_pcb()) return IPAddress(IPType::IPv6);
   IPAddress ip;
   ip.from_ip_addr_t(&(_pcb->local_ip));
   return ip;
@@ -1415,16 +1482,12 @@ IPAddress AsyncClient::localIP6() const {
 #endif
 
 uint16_t AsyncClient::getRemotePort() const {
-  if (!_pcb) {
-    return 0;
-  }
+  if (!_validate_pcb()) return 0;
   return _pcb->remote_port;
 }
 
 uint32_t AsyncClient::getLocalAddress() const {
-  if (!_pcb) {
-    return 0;
-  }
+  if (!_validate_pcb()) return 0;
 #if LWIP_IPV4 && LWIP_IPV6
   return _pcb->local_ip.u_addr.ip4.addr;
 #else
@@ -1433,44 +1496,34 @@ uint32_t AsyncClient::getLocalAddress() const {
 }
 
 uint16_t AsyncClient::getLocalPort() const {
-  if (!_pcb) {
-    return 0;
-  }
+  if (!_validate_pcb()) return 0;
   return _pcb->local_port;
 }
 
 ip4_addr_t AsyncClient::getRemoteAddress4() const {
+  if (_validate_pcb()) {
 #if LWIP_IPV4 && LWIP_IPV6
-  if (_pcb && _pcb->remote_ip.type == IPADDR_TYPE_V4) {
-    return _pcb->remote_ip.u_addr.ip4;
-  }
+    if (_pcb->remote_ip.type == IPADDR_TYPE_V4) return _pcb->remote_ip.u_addr.ip4;
 #else
-  if (_pcb) {
     return _pcb->remote_ip;
-  }
 #endif
-  else {
-    ip4_addr_t nulladdr;
-    ip4_addr_set_zero(&nulladdr);
-    return nulladdr;
   }
+  ip4_addr_t nulladdr;
+  ip4_addr_set_zero(&nulladdr);
+  return nulladdr;
 }
 
 ip4_addr_t AsyncClient::getLocalAddress4() const {
+  if (_validate_pcb()) {
 #if LWIP_IPV4 && LWIP_IPV6
-  if (_pcb && _pcb->local_ip.type == IPADDR_TYPE_V4) {
-    return _pcb->local_ip.u_addr.ip4;
-  }
+    if (_pcb->local_ip.type == IPADDR_TYPE_V4) return _pcb->local_ip.u_addr.ip4;
 #else
-  if (_pcb) {
     return _pcb->local_ip;
-  }
 #endif
-  else {
-    ip4_addr_t nulladdr;
-    ip4_addr_set_zero(&nulladdr);
-    return nulladdr;
   }
+  ip4_addr_t nulladdr;
+  ip4_addr_set_zero(&nulladdr);
+  return nulladdr;
 }
 
 #ifdef ARDUINO
@@ -1478,9 +1531,7 @@ IPAddress AsyncClient::remoteIP() const {
 #if ESP_IDF_VERSION_MAJOR < 5
   return IPAddress(getRemoteAddress());
 #else
-  if (!_pcb) {
-    return IPAddress();
-  }
+  if (!_validate_pcb()) return IPAddress();
   IPAddress ip;
   ip.from_ip_addr_t(&(_pcb->remote_ip));
   return ip;
@@ -1491,9 +1542,7 @@ IPAddress AsyncClient::localIP() const {
 #if ESP_IDF_VERSION_MAJOR < 5
   return IPAddress(getLocalAddress());
 #else
-  if (!_pcb) {
-    return IPAddress();
-  }
+  if (!_validate_pcb()) return IPAddress();
   IPAddress ip;
   ip.from_ip_addr_t(&(_pcb->local_ip));
   return ip;
@@ -1502,44 +1551,32 @@ IPAddress AsyncClient::localIP() const {
 #endif
 
 uint8_t AsyncClient::state() const {
-  if (!_pcb) {
-    return 0;
-  }
+  if (!_pcb_alive.load(std::memory_order_acquire)) return 0;
   return _pcb->state;
 }
 
 bool AsyncClient::connected() const {
-  if (!_pcb) {
-    return false;
-  }
+  if (!_pcb_alive.load(std::memory_order_acquire)) return false;
   return _pcb->state == ESTABLISHED;
 }
 
 bool AsyncClient::connecting() const {
-  if (!_pcb) {
-    return false;
-  }
+  if (!_pcb_alive.load(std::memory_order_acquire)) return false;
   return _pcb->state > CLOSED && _pcb->state < ESTABLISHED;
 }
 
 bool AsyncClient::disconnecting() const {
-  if (!_pcb) {
-    return false;
-  }
+  if (!_pcb_alive.load(std::memory_order_acquire)) return false;
   return _pcb->state > ESTABLISHED && _pcb->state < TIME_WAIT;
 }
 
 bool AsyncClient::disconnected() const {
-  if (!_pcb) {
-    return true;
-  }
+  if (!_pcb_alive.load(std::memory_order_acquire)) return true;
   return _pcb->state == CLOSED || _pcb->state == TIME_WAIT;
 }
 
 bool AsyncClient::freeable() const {
-  if (!_pcb) {
-    return true;
-  }
+  if (!_pcb_alive.load(std::memory_order_acquire)) return true;
   return _pcb->state == CLOSED || _pcb->state > ESTABLISHED;
 }
 
@@ -1673,10 +1710,12 @@ void AsyncServer::begin() {
     async_tcp_log_e("listen_pcb == NULL");
     return;
   }
+  _register_server(this);
   _tcp_server_accept(_pcb, this);
 }
 
 void AsyncServer::end() {
+  _unregister_server(this);
   _tcp_server_close(&_pcb);
   // Drop ACCEPT events queued before tcp_accept(NULL) detached the callback.
   _remove_events_for_server(this);
@@ -1689,6 +1728,11 @@ int8_t AsyncTCP_detail::tcp_accept(void *arg, tcp_pcb *pcb, int8_t err) {
     return ERR_ABRT;
   }
   auto server = reinterpret_cast<AsyncServer *>(arg);
+  if (!_server_alive(server)) {
+    // Parent server was destroyed between tcp_accept queue and dispatch.
+    tcp_abort(pcb);
+    return ERR_ABRT;
+  }
   if (server->_connect_cb) {
     AsyncClient *c = new (std::nothrow) AsyncClient(pcb);
     if (c && c->pcb()) {
@@ -1705,6 +1749,7 @@ int8_t AsyncTCP_detail::tcp_accept(void *arg, tcp_pcb *pcb, int8_t err) {
 
       // Couldn't allocate accept event
       // We can't let the client object call in to close, as we're on the LWIP thread; it could deadlock trying to RPC to itself
+      c->_mark_pcb_dead();
       c->_pcb = nullptr;
       tcp_abort(pcb);
       async_tcp_log_e("_accept failed: couldn't accept client");
