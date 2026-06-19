@@ -15,10 +15,28 @@ VERSION_CLEAN="${VERSION#v}"
 echo "building ESP32 webinstall payload"
 python3 scripts/build_webinstall_payload.py "$VERSION_CLEAN"
 
+echo "extracting advanced test firmware bins to bundled zip"
+# Plain *_test envs (esp32_test, esp8266_test etc.) stay as standalone release
+# bins. The dev-oriented variants (testpulse / testpulseint / testserial) get
+# bundled into one zip to keep the release page tidy.
+mkdir -p test_advanced
+for env_dir in .pio/build/*_testpulse .pio/build/*_testpulseint .pio/build/*_testserial; do
+  [ -d "$env_dir" ] || continue
+  env_name="$(basename "$env_dir")"
+  for src in "$env_dir/firmware.bin" "$env_dir/firmware_merged.bin"; do
+    [ -f "$src" ] || continue
+    cp "$src" "test_advanced/${env_name}-$(basename "$src" .bin).${VERSION}.bin"
+    rm -f "$src"
+  done
+done
+if [ -n "$(ls -A test_advanced 2>/dev/null)" ]; then
+  zip -j "ESPGeiger_test_advanced.${VERSION}.zip" test_advanced/*.bin
+fi
+rm -rf test_advanced
+
 echo "renaming bin files with the environment name"
 rm -f .pio/build/*/bootloader.bin
 rm -f .pio/build/*/partitions.bin
-rm -f .pio/build/*/firmware_merged.bin
 rename -v 's/.bin/.'"$VERSION"'.bin/' .pio/build/*/*.bin
 rename -v 's/.elf/.'"$VERSION"'.elf/' .pio/build/*/*.elf
 rename -v 's:/:-:g' .pio/build/*/*.bin .pio/build/*/*.elf
