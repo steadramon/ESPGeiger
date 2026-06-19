@@ -1,6 +1,6 @@
 ---
 layout: page
-title: Home
+title: Documentation
 permalink: /
 nav_order: 0
 has_children: true
