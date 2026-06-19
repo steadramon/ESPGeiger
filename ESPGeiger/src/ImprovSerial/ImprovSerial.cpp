@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "ImprovSerial.h"
+#include <cstring>
 
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
@@ -145,9 +146,19 @@ void ImprovSerial::on_error(improv::Error err) {
 }
 
 void ImprovSerial::send_device_info() {
-  // Spec order: firmware name, version, chip family, device name.
+  std::string fw;
+#ifdef GEIGER_MODEL
+  const char* model = GEIGER_MODEL;
+  if (strncmp(model, "ESPGeiger-", 10) == 0) {
+    fw = model;
+  } else {
+    fw = std::string("ESPGeiger ") + model;
+  }
+#else
+  fw = "ESPGeiger";
+#endif
   std::vector<std::string> info = {
-    "ESPGeiger",
+    fw,
     RELEASE_VERSION,
     IMPROV_CHIPFAMILY,
     DeviceInfo::hostname(),
