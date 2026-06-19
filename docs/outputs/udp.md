@@ -25,7 +25,7 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 2. Go to **Config → Local Broadcast**, set Mode to `2` (telemetry + blips), Save.
 
 **On the receiver:**
-1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32oled_udp` build via the [Web Installer](https://install.espgeiger.com).
+1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32c3_udp` / `esp32s3_udp` build via the [Web Installer](https://install.espgeiger.com).
 2. Join your WiFi via the captive portal, same network as the producer.
 3. Open the device's web UI and go to **Config → Input**.
 4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
@@ -66,8 +66,9 @@ Configured on the **Config → Input** page (`udprx_mode`).
 |---|---|---|
 | `esp8266_udp` | ESP8266 | headless |
 | `esp8266oled_udp` | ESP8266 | OLED |
-| `esp32_udp` | ESP32 | headless |
-| `esp32oled_udp` | ESP32 | OLED |
+| `esp32_udp` | ESP32 | OLED auto-detected |
+| `esp32c3_udp` | ESP32-C3 | OLED auto-detected |
+| `esp32s3_udp` | ESP32-S3 | OLED auto-detected |
 
 ## OSC Message Schema
 

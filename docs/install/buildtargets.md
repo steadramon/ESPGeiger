@@ -23,6 +23,8 @@ The pulse target is the most widely compatible build, and works with all Pulse-t
 `pulse` | Pulse | ESP32 builds default to using built in hardware PCNT counter
 `pulse_no_pcnt` | Pulse | ESP32-only build disabling PCNT
 
+ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support; the panel is auto-detected at boot. No separate `oled_*` envs needed on the ESP32 family. ESP8266 still ships dedicated `oled_*` envs to avoid the runtime cost on the slower core.
+
 ## Serial
 
 A single unified serial build supports all serial Geiger counter types. The serial protocol is selected at runtime via the **Config** page (System > Serial Type).
@@ -59,8 +61,7 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 |---|---|---|
 `esp8266_hv` | ESP8266 | Pulse build with HV generator + ADC feedback. PWM frequency up to 40 kHz; PWM pin defaults to **-1 (disabled)** until set in the Config page.
 `esp8266oled_hv` | ESP8266 + OLED | As `esp8266_hv` with SSD1306 OLED.
-`esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 80 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict).
-`esp32oled_hv` | ESP32 + OLED | As `esp32_hv` with SSD1306 OLED.
+`esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 80 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict). SSD1306 OLED auto-detected at boot.
 
 For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not** drive any pin until you've explicitly chosen one. After setting the pin in `/egprefs`, **reboot** for the change to take effect.
 
@@ -70,9 +71,9 @@ Builds with the [Audio Tick](/output/audiotick) output enabled. A per-pulse
 click is played through an I2S amplifier (e.g. MAX98357A). The XH-S3E set
 targets the **MINI ESP32-S3-N16R8** (sold as "XH-S3E-AI", a small purple
 ESP32-S3 board with onboard speaker, mic, button, NeoPixel and OLED);
-the `esp32oled_audio_*` set targets a generic ESP32 + OLED board with an
-externally wired amplifier (BCLK / WS / DOUT configurable from the
-**Config > tick** page).
+the `esp32_audio_*` set targets a generic ESP32 board with an externally
+wired amplifier (BCLK / WS / DOUT configurable from the **Config > tick**
+page).
 
 | Target Name | Hardware | Counter Type | Notes |
 |---|---|---|---|
@@ -80,17 +81,15 @@ externally wired amplifier (BCLK / WS / DOUT configurable from the
 `xh_s3e_serial` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | Serial | Serial input on GPIO 13/14. |
 `xh_s3e_udp` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | UDP receiver | Tubeless receiver, see UDP Receiver below. |
 `xh_s3e_test` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | n/a | Poisson simulator for tuning the click sound. |
-`esp32oled_audio_pulse` | ESP32 + OLED + amp | Pulse | PCNT-based pulse input. |
-`esp32oled_audio_pulse_no_pcnt` | ESP32 + OLED + amp | Pulse | Interrupt-based pulse input (use when PCNT can't latch the pulse). |
-`esp32oled_audio_serial` | ESP32 + OLED + amp | Serial | |
-`esp32oled_audio_test` | ESP32 + OLED + amp | n/a | Poisson simulator. |
+`esp32_audio_pulse` | ESP32 + amp | Pulse | PCNT-based pulse input. |
+`esp32_audio_pulse_no_pcnt` | ESP32 + amp | Pulse | Interrupt-based pulse input (use when PCNT can't latch the pulse). |
+`esp32_audio_serial` | ESP32 + amp | Serial | |
+`esp32_audio_test` | ESP32 + amp | n/a | Poisson simulator. |
 `esp32s3_audio_pulse` | ESP32-S3 dev kit + amp | Pulse | Generic S3 board, externally wired I2S amplifier. |
 `esp32s3_audio_serial` | ESP32-S3 dev kit + amp | Serial | |
-`esp32s3oled_audio_pulse` | ESP32-S3 dev kit + OLED + amp | Pulse | |
-`esp32s3oled_audio_serial` | ESP32-S3 dev kit + OLED + amp | Serial | |
 
 Audio Tick is disabled by default (`tick.enable=0`). Enable it from the
-Config page after flashing and, on the `esp32oled_audio_*` envs, set the
+Config page after flashing and, on the `esp32_audio_*` envs, set the
 three I2S pins to match your wiring before rebooting.
 
 ## UDP Receiver
@@ -101,9 +100,9 @@ UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for
 |---|---|---|---|
 `esp8266_udp` | ESP8266 | none | Headless receiver. |
 `esp8266oled_udp` | ESP8266 | OLED | Receiver with display; shows producer chipid + loss% on page 2 and a feed-alive indicator on page 1. |
-`esp32_udp` | ESP32 | none | ESP32 headless receiver. More heap headroom; cleaner choice for fleet aggregator (sum mode). |
-`esp32oled_udp` | ESP32 | OLED | ESP32 receiver with display. |
-`esp32s3_udp` | ESP32-S3 | none | ESP32-S3 headless receiver. |
+`esp32_udp` | ESP32 | auto | ESP32 receiver. SSD1306 OLED auto-detected at boot; more heap headroom than ESP8266, cleaner choice for fleet aggregator (sum mode). |
+`esp32c3_udp` | ESP32-C3 | auto | ESP32-C3 receiver with bundled OLED. |
+`esp32s3_udp` | ESP32-S3 | auto | ESP32-S3 receiver with bundled OLED. |
 
 After flashing, configure the source mode (pin / sum / auto) and group/port from the **Config → Input** page.
 

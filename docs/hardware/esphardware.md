@@ -18,28 +18,29 @@ The ESP8266 ESPGeiger build is the base firmware for the official ESPGeiger-base
 
 ## ESP32
 
-The **[ESP32 DevKit / WROOM-32](https://s.click.aliexpress.com/e/_c4MWYcBT)** (classic ESP32) is the recommended ESP32 target. Any 4 MB board built on the original ESP32 (Tensilica dual-core, IDF target `esp32`) should work with the `esp32_*` and `esp32oled_*` builds.
+The **[ESP32 DevKit / WROOM-32](https://s.click.aliexpress.com/e/_c4MWYcBT)** (classic ESP32) is the recommended ESP32 target. Any 4 MB board built on the original ESP32 (Tensilica dual-core, IDF target `esp32`) should work with the `esp32_*` builds. ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect the panel at boot, so the same env works whether or not a display is fitted.
 
 ### Variant support
 
 | Variant | Status | Notes |
 |---|---|---|
-| **ESP32 (classic)** | Fully supported | All `esp32_*` / `esp32oled_*` build envs. PCNT hardware counter. |
-| **ESP32-S3** | Supported | Generic `esp32s3_pulse / _pulse_no_pcnt / _serial / _udp / _test` envs are available, plus `esp32s3oled_*` variants for boards with an onboard SSD1306. Defaults match ESP32 classic: `_pulse_no_pcnt` is the safe interrupt-based build, `_pulse` uses the PCNT hardware counter (opt-in). |
+| **ESP32 (classic)** | Fully supported | All `esp32_*` build envs. PCNT hardware counter. SSD1306 OLED bundled and auto-detected. |
+| **ESP32-S3** | Supported | Generic `esp32s3_pulse / _pulse_no_pcnt / _serial / _udp / _test` envs. Defaults match ESP32 classic: `_pulse_no_pcnt` is the safe interrupt-based build, `_pulse` uses the PCNT hardware counter (opt-in). SSD1306 OLED bundled and auto-detected. |
+| **ESP32-C3** | Supported | `esp32c3_*` envs (RISC-V, no PCNT - software pulse counter). SSD1306 OLED bundled with default SDA=5 / SCL=6. |
 | **ESP32-S2** | Experimental | Base config present, no shipped end-user envs. |
-| **ESP32-C3 / C6 / H2** | Not supported | No build envs. RISC-V cores not tested. |
+| **ESP32-C6 / H2** | Not supported | No build envs. RISC-V cores not tested. |
 
 ### Boards with onboard OLED
 
-Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the same PCB. Most work with the existing `esp8266oled_*` / `esp32oled_*` builds - runtime pin settings on the Config page let you adjust SDA/SCL without rebuilding.
+Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the same PCB. ESP32 family envs bundle OLED support and auto-detect the panel; just set SDA / SCL (and RST if your board wires it) from the Config page after flashing. ESP8266 still uses dedicated `esp8266oled_*` builds.
 
 | Board | MCU | OLED pins (SDA / SCL) | OLED RST | Build | Notes |
 |---|---|---|---|---|---|
 | **[NodeMCU + 0.96" OLED](https://s.click.aliexpress.com/e/_c3q9xiwZ)** | ESP8266 | 4 / 5 (default) | tied to 3V3 | `esp8266oled_*` | Works out of the box - matches firmware defaults. |
-| **Heltec WiFi Kit 32 V2** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32oled_*` + `-DOLED_SDA=4 -DOLED_SCL=15 -DOLED_RST=16` | Needs a custom build that sets the RST pin (see below). |
-| **Heltec WiFi LoRa 32 V3** | ESP32-S3 | 17 / 18 | GPIO 21 | `esp32s3_*` + `-DOLED_SDA=17 -DOLED_SCL=18 -DOLED_RST=21` | Custom build flags for the integrated OLED. Add `-DSSD1306_DISPLAY` and `${u8g2_flags.build_flags}` to enable the display. |
-| **TTGO LoRa32 V1** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32oled_*` + `-DOLED_SDA=4 -DOLED_SCL=15 -DOLED_RST=16` | Same recipe as Heltec V2. |
-| **LilyGo T-Beam** | ESP32 classic | 21 / 22 (default) | none | `esp32oled_*` | Works with stock defaults. |
+| **Heltec WiFi Kit 32 V2** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32_*` | Set SDA=4 / SCL=15 / RST=16 from Config page after flashing. |
+| **Heltec WiFi LoRa 32 V3** | ESP32-S3 | 17 / 18 | GPIO 21 | `esp32s3_*` | Set SDA=17 / SCL=18 / RST=21 from Config page after flashing. |
+| **TTGO LoRa32 V1** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32_*` | Same recipe as Heltec V2. |
+| **LilyGo T-Beam** | ESP32 classic | 21 / 22 (default) | none | `esp32_*` | Works with stock defaults. |
 | **[MINI ESP32-S3-N16R8](https://s.click.aliexpress.com/e/_c3dXGAQt)** (sold as "XH-S3E-AI"; small purple board, onboard speaker + mic + button + NeoPixel + OLED header) <br><img src="img/xh-s3e-ai.png" width="240"/> | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; pin map hard-fixed in build flags. See [buildtargets](/install/buildtargets#audio-tick-esp32-only). |
 
 Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need the firmware to pulse that pin at boot. The `-DOLED_RST=N` build flag enables that pulse; if omitted, the OLED stays in reset and shows a blank screen. Once defined, the pin is also runtime-adjustable from **Config → Display → Reset Pin**.

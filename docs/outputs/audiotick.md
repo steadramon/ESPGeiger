@@ -23,21 +23,23 @@ Enabled with `-DAUDIO_TICK`. Shipped in two env families:
 | Env | Hardware | Pins fixed at compile time? |
 |---|---|---|
 | `xh_s3e_pulse`, `xh_s3e_serial`, `xh_s3e_udp`, `xh_s3e_test` | MINI ESP32-S3-N16R8 (sold as "XH-S3E-AI") with on-board speaker | Yes (BCLK=15, WS=16, DOUT=7) |
-| `esp32oled_audio_pulse`, `esp32oled_audio_pulse_no_pcnt`, `esp32oled_audio_serial`, `esp32oled_audio_test` | Generic ESP32 + OLED, MAX98357A wired by the user | No, configurable at runtime |
+| `esp32_audio_pulse`, `esp32_audio_pulse_no_pcnt`, `esp32_audio_serial`, `esp32_audio_test` | Generic ESP32, MAX98357A wired by the user | No, configurable at runtime |
+| `esp32s3_audio_pulse`, `esp32s3_audio_serial` | Generic ESP32-S3, MAX98357A wired by the user | No, configurable at runtime |
 
 The XH-S3E envs hard-block the pin prefs with `-DAUDIO_TICK_PINS_BLOCKED`
-because that board's I2S routing is fixed. On the generic ESP32 + OLED
-envs you set the pins in the `tick` pref group after the first boot.
+because that board's I2S routing is fixed. On the generic `esp32_audio_*`
+and `esp32s3_audio_*` envs you set the pins in the `tick` pref group
+after the first boot.
 
 ## Pins
 
-| Build flag | Role | XH-S3E (N16R8) default | esp32oled_audio default |
-|---|---|---|---|
-| `AUDIO_TICK_BCLK` | I2S bit clock        | `15` | `26` |
-| `AUDIO_TICK_WS`   | I2S word select      | `16` | `25` |
-| `AUDIO_TICK_DOUT` | I2S data out to DIN  | `7`  | `22` |
+| Build flag | Role | XH-S3E (N16R8) default | esp32_audio default | esp32s3_audio default |
+|---|---|---|---|---|
+| `AUDIO_TICK_BCLK` | I2S bit clock        | `15` | `26` | `15` |
+| `AUDIO_TICK_WS`   | I2S word select      | `16` | `25` | `16` |
+| `AUDIO_TICK_DOUT` | I2S data out to DIN  | `7`  | `22` | `7`  |
 
-On the `esp32oled_audio_*` envs the build-flag values are just defaults;
+On the generic `*_audio_*` envs the build-flag values are just defaults;
 the runtime prefs (`tick.bclk` / `tick.ws` / `tick.dout`) override them
 on next boot. Verify your wiring matches before enabling.
 

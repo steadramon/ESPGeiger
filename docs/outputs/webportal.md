@@ -114,7 +114,7 @@ Example:
 |---|---|
 | `ver` | Firmware version (release) |
 | `git` | Short git commit the firmware was built from |
-| `env` | PlatformIO build environment name (e.g. `espgeigerlog`, `esp32oled_pulse`) |
+| `env` | PlatformIO build environment name (e.g. `espgeigerlog`, `esp32_pulse`) |
 | `b_date` | Build timestamp (compile-time `__DATE__ __TIME__`) |
 | `chip` | Chip model reported by the framework (`ESP8266` / `ESP32` / `ESP32-S2` etc.) |
 | `mac` | Device MAC address |

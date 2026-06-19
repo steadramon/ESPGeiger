@@ -211,12 +211,11 @@ Build environments are defined in `environments.ini`. Each environment extends a
 
 | Base | Platform | Description |
 |---|---|---|
-| `base:esp32_main` | ESP32 | Base ESP32 build (esp32dev board) |
+| `base:esp32_main` | ESP32 | Base ESP32 build (esp32dev board). Bundles SSD1306 OLED support (auto-detected at boot). |
 | `base:esp32d1_main` | ESP32 | ESP32 with RXPIN set to GPIO23 |
 | `base:esp32s2_main` | ESP32-S2 | ESP32-S2 build (Lolin S2 Pico) |
-| `base:esp32s3_main` | ESP32-S3 | Base ESP32-S3 build (esp32-s3-devkitc-1 board) |
-| `base:esp32_oled` | ESP32 | ESP32 with SSD1306 OLED display |
-| `base:esp32s3_oled` | ESP32-S3 | ESP32-S3 with SSD1306 OLED display |
+| `base:esp32s3_main` | ESP32-S3 | Base ESP32-S3 build (esp32-s3-devkitc-1 board). Bundles SSD1306 OLED support. |
+| `base:esp32c3_main` | ESP32-C3 | Base ESP32-C3 build (RISC-V, no PCNT). Bundles SSD1306 OLED support; defaults SDA=5 / SCL=6. |
 | `base:esp8266_main` | ESP8266 | Base ESP8266 build (NodeMCU v2) |
 | `base:esp8266_oled` | ESP8266 | ESP8266 with SSD1306 OLED display |
 | `base:esp8266_neopixel` | ESP8266 | ESP8266 with NeoPixel |
@@ -227,27 +226,28 @@ These bases handle the platform setup, library dependencies and core feature fla
 
 ### Production Environments
 
+All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot). Only the ESP8266 family keeps separate `_oled` variants because the slower core wants to skip the OLED render path entirely when no panel is connected.
+
 | Environment | Platform | Counter Type | Features |
 |---|---|---|---|
-| `esp32_pulse` | ESP32 | Pulse (PCNT) | |
-| `esp32_pulse_no_pcnt` | ESP32 | Pulse (interrupt) | PCNT disabled |
-| `esp32oled_pulse` | ESP32 | Pulse (PCNT) | OLED |
-| `esp32oled_pulse_no_pcnt` | ESP32 | Pulse (interrupt) | OLED, PCNT disabled |
-| `esp32_cajoe_iotgm` | ESP32 | Pulse (PCNT) | OLED, RXPIN 26, for Cajoe IoT GM |
-| `esp32_cajoe_iotgm_no_pcnt` | ESP32 | Pulse (interrupt) | OLED, RXPIN 26, PCNT disabled |
-| `esp32s3_pulse` | ESP32-S3 | Pulse (PCNT) | RXPIN 13 |
+| `esp32_pulse` | ESP32 | Pulse (PCNT) | OLED auto-detected |
+| `esp32_pulse_no_pcnt` | ESP32 | Pulse (interrupt) | OLED auto-detected, PCNT disabled |
+| `esp32_cajoe_iotgm` | ESP32 | Pulse (PCNT) | RXPIN 26, for Cajoe IoT GM |
+| `esp32_cajoe_iotgm_no_pcnt` | ESP32 | Pulse (interrupt) | RXPIN 26, PCNT disabled |
+| `esp32_hv` | ESP32 | Pulse (PCNT) | HV generator + ADC feedback |
+| `esp32c3_pulse` | ESP32-C3 | Pulse (interrupt) | RXPIN 4, NeoPixel pref, OLED auto-detected |
+| `esp32s3_pulse` | ESP32-S3 | Pulse (PCNT) | RXPIN 13, OLED auto-detected |
 | `esp32s3_pulse_no_pcnt` | ESP32-S3 | Pulse (interrupt) | RXPIN 13, PCNT disabled |
-| `esp32s3oled_pulse` | ESP32-S3 | Pulse (PCNT) | OLED, RXPIN 13 |
-| `esp32s3oled_pulse_no_pcnt` | ESP32-S3 | Pulse (interrupt) | OLED, RXPIN 13, PCNT disabled |
 | `esp8266_pulse` | ESP8266 | Pulse | |
 | `esp8266_pulsemin` | ESP8266 | Pulse | Minimal build, no cloud services |
 | `esp8266oled_pulse` | ESP8266 | Pulse | OLED |
 | `esp8266_serial` | ESP8266 | Serial | Runtime-selectable serial type |
 | `esp8266oled_serial` | ESP8266 | Serial | OLED |
 | `esp32_serial` | ESP32 | Serial | Runtime-selectable serial type |
-| `esp32oled_serial` | ESP32 | Serial | OLED |
+| `esp32c3_serial` | ESP32-C3 | Serial | |
 | `esp32s3_serial` | ESP32-S3 | Serial | RXPIN 13, TXPIN 14 |
-| `esp32s3oled_serial` | ESP32-S3 | Serial | OLED, RXPIN 13, TXPIN 14 |
+| `esp32_udp` | ESP32 | UDP receiver | Tubeless receiver |
+| `esp32c3_udp` | ESP32-C3 | UDP receiver | Tubeless receiver |
 | `esp32s3_udp` | ESP32-S3 | UDP receiver | Tubeless receiver |
 | `espgeigerhw` | ESP8266 | Pulse | OLED, PushButton, HV control |
 | `espgeigerlite` | ESP8266 | Pulse | OLED, NeoPixel, PushButton |
@@ -261,19 +261,16 @@ These bases handle the platform setup, library dependencies and core feature fla
 |---|---|---|---|
 | `esp8266_test` | ESP8266 | Internal counter | |
 | `esp8266oled_test` | ESP8266 | Internal counter | OLED |
-| `esp32_test` | ESP32 | Internal counter | |
-| `esp32oled_test` | ESP32 | Internal counter | OLED |
-| `esp32s3_test` | ESP32-S3 | Internal counter | |
-| `esp32s3oled_test` | ESP32-S3 | Internal counter | OLED |
+| `esp32_test` | ESP32 | Internal counter | OLED auto-detected |
+| `esp32s3_test` | ESP32-S3 | Internal counter | OLED auto-detected |
 | `esp8266_testpulse` | ESP8266 | Pulse output | |
 | `esp8266oled_testpulse` | ESP8266 | Pulse output | OLED |
-| `esp32_testpulse` | ESP32 | Pulse output | |
-| `esp32oled_testpulse` | ESP32 | Pulse output | OLED |
+| `esp32_testpulse` | ESP32 | Pulse output | OLED auto-detected |
 | `esp8266_testpulseint` | ESP8266 | PWM pulse output | |
 | `esp8266oled_testpulseint` | ESP8266 | PWM pulse output | OLED |
-| `esp32_testpulseint` | ESP32 | PWM pulse output | |
+| `esp32_testpulseint` | ESP32 | PWM pulse output | OLED auto-detected |
 | `esp8266_testserial` | ESP8266 | Serial emulated | Type selectable at runtime |
-| `esp32_testserial` | ESP32 | Serial emulated | Type selectable at runtime |
+| `esp32_testserial` | ESP32 | Serial emulated | OLED auto-detected, type selectable at runtime |
 | `espgeigerlite_test` | ESP8266 | Internal counter | OLED, NeoPixel, PushButton |
 | `espgeigerlite_testpulse` | ESP8266 | Pulse output | OLED, NeoPixel, PushButton |
 | `espgeigerlog_test` | ESP8266 | Internal counter | OLED, NeoPixel, PushButton, SDCard |
