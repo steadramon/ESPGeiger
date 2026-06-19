@@ -48,14 +48,9 @@ static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
 //
 // Avoids Arduino's %f (pulls in soft-float print) by doing fixed-point
 // conversion: multiply by 10^decimals, round, print as integer.decimal.
+// Defined out-of-line in StringUtil.cpp so GCC doesn't clone per call site.
 // ---------------------------------------------------------------------------
-static inline int format_f(char* buf, size_t bufsz, float v, uint8_t decimals = 2) {
-  if (v < 0) v = 0;
-  int32_t scale = 1;
-  for (uint8_t i = 0; i < decimals; i++) scale *= 10;
-  int32_t s = (int32_t)(v * (float)scale + 0.5f);
-  return snprintf_P(buf, bufsz, PSTR("%ld.%0*ld"), (long)(s / scale), (int)decimals, (long)(s % scale));
-}
+int format_f(char* buf, size_t bufsz, float v, uint8_t decimals = 2);
 
 // ---------------------------------------------------------------------------
 // parse_f - Tiny decimal float parser.
