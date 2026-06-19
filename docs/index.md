@@ -1,6 +1,8 @@
 ---
 layout: page
-title: Documentation
+title: Home
+seo:
+  title: "ESPGeiger: Documentation"
 permalink: /
 nav_order: 0
 has_children: true
