@@ -20,6 +20,7 @@
 #include "../Prefs/EGPrefs.h"
 #include "../Logger/Logger.h"
 #include "../Counter/Counter.h"
+#include "../OLEDDisplay/OLEDDisplay.h"
 #include "Wifi.h"
 #include <LittleFS.h>
 #ifdef GEIGER_SDCARD
@@ -130,6 +131,11 @@ void DeviceInfo::safeRestart(uint32_t delayMs) {
   gcounter.stop_for_ota();
 #ifdef GEIGER_SDCARD
   sdcard.pauseWriter();
+#endif
+#ifdef SSD1306_DISPLAY
+  // Blank the OLED so it doesn't sit on stale content through the reboot.
+  display.clearBuffer();
+  display.sendBuffer();
 #endif
   if (delayMs) delay(delayMs);
   ESP.restart();
