@@ -226,6 +226,9 @@ static volatile bool s_pendingWifiSave = false;
 static char s_pendingWifiSsid[33] = {0};
 static char s_pendingWifiPass[65] = {0};
 
+// Dropping STA from the handler kills the response mid-flight; defer to tick.
+static volatile bool s_pendingEraseCreds = false;
+
 // Static pointer to the active server. Lets the static
 // applyAuthFromPrefs() reach the right instance from SystemPrefs hooks
 // without WebPortal having to be an EGModule itself.
@@ -239,6 +242,11 @@ void WebPortal::tick(uint32_t now) {
   if (_active) _http.tick();
 
   if (s_restartAt != 0 && (int32_t)(now - s_restartAt) >= 0) {
+    // Hold restart until response drains; 10 s ceiling for stuck clients.
+    if (_active && _http.hasActiveClients()
+        && (int32_t)(now - s_restartAt) < 10000) {
+      return;
+    }
     if (s_pendingWifiSave) {
       Log::console(PSTR("WebPortal: applying new WiFi creds (ssid='%s')"),
                    s_pendingWifiSsid);
@@ -246,6 +254,11 @@ void WebPortal::tick(uint32_t now) {
       WiFi.begin(s_pendingWifiSsid, s_pendingWifiPass);
       s_pendingWifiSave = false;
       delay(150);                  // let SDK NVS write settle
+    }
+    if (s_pendingEraseCreds) {
+      Wifi::clearSavedCreds();
+      s_pendingEraseCreds = false;
+      delay(150);
     }
     Log::console(PSTR("WebPortal: restarting"));
     DeviceInfo::safeRestart(50);
@@ -798,15 +811,14 @@ void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // so the setup-mode portal doesn't try to bring up a static IP on the
   // captive AP. Other prefs (NTP, HV, WebAPI) survive.
   Log::console(PSTR("WebPortal: erasing WiFi credentials"));
-  Wifi::clearSavedCreds();
   EGPrefs::put("net", "static_ip", "0");
   EGPrefs::commit();
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Erase WiFi"));
-  res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device is restarting into setup mode.</p>"));
-  WebPortal::sendRestartCountdown(res);
+  res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device will reboot into Setup Mode.</p>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
+  s_pendingEraseCreds = true;
   WebPortal::requestRestart(1500);
 }
 
