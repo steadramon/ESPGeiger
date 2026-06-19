@@ -39,6 +39,8 @@ EG_PSTR(NP_L_MODE, "Mode");
 EG_PSTR(NP_H_MODE, "0=Off 1=Blip 2=Status blip 3=Trend pulse 4=Trend+status (default)");
 EG_PSTR(NP_L_COL,  "Blip colour");
 EG_PSTR(NP_H_COL,  "Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan 5=Magenta 6=White 7=Orange");
+EG_PSTR(NP_L_FAD,  "Fade rate");
+EG_PSTR(NP_H_FAD,  "Blip-mode fade-out. 0=off, 1=fast, 2=medium, 3=slow");
 #ifndef NEOPIXEL_PIN_BLOCKED
 EG_PSTR(NP_L_PIN,  "Pin");
 EG_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
@@ -63,6 +65,7 @@ static const EGPref NEOPIXEL_PREF_ITEMS[] = {
   {"brightness", NP_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
   {"mode",       NP_L_MODE, NP_H_MODE, "4",               nullptr, 0, 4,   0, EGP_UINT, 0},
   {"color",      NP_L_COL,  NP_H_COL,  "0",               nullptr, 0, 7,   0, EGP_UINT, 0},
+  {"fade",       NP_L_FAD,  NP_H_FAD,  "0",               nullptr, 0, 3,   0, EGP_UINT, 0},
   {"swap",       NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, 0},
 };
 
@@ -105,6 +108,8 @@ void NeoPixel::on_prefs_loaded() {
   neoPixelMode = m > 4 ? 4 : m;
   uint32_t c = EGPrefs::getUInt("neopixel", "color");
   _blip_colour_idx = c > 7 ? 0 : (uint8_t)c;
+  uint32_t f = EGPrefs::getUInt("neopixel", "fade");
+  _fade_rate = f > 3 ? 0 : (uint8_t)f;
   // Precompute the blip RGB so blink() does zero scaling work.
   uint8_t mask = NAMED_MASK[_blip_colour_idx];
   _blip_r = (mask & 0b100) ? colorSaturation : 0;
@@ -112,8 +117,10 @@ void NeoPixel::on_prefs_loaded() {
   _blip_b = (mask & 0b001) ? colorSaturation : 0;
   if (_blip_colour_idx == 7) _blip_g = colorSaturation >> 1;  // orange G ~50%
   // Self-disable when off (mode 0), brightness 0, or no pin wired.
+  // Tighter loop while fade is active so decay has enough frames.
   bool active = (b > 0) && (neoPixelMode > 0) && (_pin >= 0);
-  EGModuleRegistry::set_loop_interval(this, active ? 30 : -1);
+  bool fast_loop = (neoPixelMode == 1) && (_fade_rate > 0);
+  EGModuleRegistry::set_loop_interval(this, active ? (fast_loop ? 10 : 30) : -1);
 }
 
 RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
@@ -214,19 +221,38 @@ void NeoPixel::loop(unsigned long now)
   if (colorSaturation == 0 || !controller_) {
     return;
   }
-  if (!_is_off && now - onTime >= offTime)
-  {
-    RgbColor black(0);
-    this->controller_->SetPixelColor(0, black);
-    this->controller_->Show();
-    _is_off = true;
+  if (!_is_off) {
+    unsigned long elapsed = now - onTime;
+    if (elapsed >= offTime) {
+      RgbColor black(0);
+      this->controller_->SetPixelColor(0, black);
+      this->controller_->Show();
+      _is_off = true;
+    } else if (this->neoPixelMode == 1 && _fade_rate > 0) {
+      // Hold at peak, then gamma-2 decay across the rest of the envelope.
+      const uint16_t FADE_HOLD_MS = 20;
+      if (elapsed >= FADE_HOLD_MS) {
+        uint32_t fe = elapsed - FADE_HOLD_MS;
+        uint32_t fw = offTime - FADE_HOLD_MS;
+        uint32_t lin = ((fw - fe) * 256u) / fw;
+        uint32_t scale = (lin * lin) >> 8;
+        RgbColor f(
+          (uint8_t)((uint32_t)_blip_r * scale >> 8),
+          (uint8_t)((uint32_t)_blip_g * scale >> 8),
+          (uint8_t)((uint32_t)_blip_b * scale >> 8));
+        this->controller_->SetPixelColor(0, f);
+        this->controller_->Show();
+      }
+    }
   }
   if (this->neoPixelMode <= 2) {
     // Per-click for Blip + Status blip; works on receiver builds too via
     // dispatchReceiverBlip updating last_blip.
     if (last_blip != gcounter.last_blip()) {
       last_blip = gcounter.last_blip();
-      blink(20);
+      // Envelope ms per fade rate. Modes 2-4 stay binary at 20.
+      static const uint16_t FADE_MS[4] = {20, 80, 150, 300};
+      blink(this->neoPixelMode == 1 ? FADE_MS[_fade_rate] : 20);
     }
   } else {
     if (now - onTime >= nextInterval) {

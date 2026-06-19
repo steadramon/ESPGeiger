@@ -74,6 +74,7 @@ class NeoPixel : public EGModule {
     uint8_t  _blip_r = 0;
     uint8_t  _blip_g = 0;
     uint8_t  _blip_b = 0;
+    uint8_t  _fade_rate = 0;     // 0=off, 1=fast, 2=medium, 3=slow
   protected:
     NeoController* controller_{nullptr};
   private:
