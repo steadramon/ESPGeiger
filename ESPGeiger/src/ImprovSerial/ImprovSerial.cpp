@@ -116,24 +116,25 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
       handle_wifi_settings(cmd.ssid, cmd.password);
       break;
     case improv::GET_CURRENT_STATE: {
-      if (WiFi.status() == WL_CONNECTED &&
-          _state != improv::STATE_PROVISIONED) {
-        _state = improv::STATE_PROVISIONED;
-      } else if (_state != improv::STATE_PROVISIONED) {
-        static bool s_creds_cached = false;
-        static bool s_creds_value = false;
-        if (!s_creds_cached) {
-          s_creds_value = Wifi::hasSavedCreds();
-          s_creds_cached = true;
-        }
-        if (fast_millis() < 30000 && s_creds_value) {
-          _state = improv::STATE_PROVISIONING;
-        } else if (_state == improv::STATE_PROVISIONING) {
-          _state = improv::STATE_AUTHORIZED;
+      if (_state != improv::STATE_PROVISIONED) {
+        if (WiFi.status() == WL_CONNECTED) {
+          _state = improv::STATE_PROVISIONED;
+        } else {
+          // hasSavedCreds() can hit a 50 ms delay path on ESP32; cache it.
+          static bool s_creds_cached = false;
+          static bool s_creds_value = false;
+          if (!s_creds_cached) {
+            s_creds_value = Wifi::hasSavedCreds();
+            s_creds_cached = true;
+          }
+          if (fast_millis() < 30000 && s_creds_value) {
+            _state = improv::STATE_PROVISIONING;
+          } else if (_state == improv::STATE_PROVISIONING) {
+            _state = improv::STATE_AUTHORIZED;
+          }
         }
       }
       set_state(_state);
-      // RPC result echoes the cmd byte we're responding to (Improv spec).
       if (_state == improv::STATE_PROVISIONED) {
         char url[48];
         snprintf(url, sizeof(url), "http://%s/",
