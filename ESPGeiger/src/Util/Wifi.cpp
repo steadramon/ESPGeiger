@@ -141,6 +141,7 @@ static bool waitForWifi(uint32_t timeoutMs) {
                    ipa[0], ipa[1], ipa[2], ipa[3]);
       return true;
     }
+    improvSerial.poll();
     delay(100);
     yield();
   }
@@ -438,11 +439,7 @@ public:
 static WifiPrefs wifiprefs;
 EG_REGISTER_MODULE(wifiprefs)
 
-#ifdef ESP8266
 #define WIFI_SLEEP_DEFAULT "1"
-#else
-#define WIFI_SLEEP_DEFAULT "2"
-#endif
 
 static const EGPref WIFI_PREF_ITEMS[] = {
   {"sleep",    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN},
