@@ -132,8 +132,8 @@ void DeviceInfo::safeRestart(uint32_t delayMs) {
 #ifdef GEIGER_SDCARD
   sdcard.pauseWriter();
 #endif
-#ifdef SSD1306_DISPLAY
-  // Blank the OLED so it doesn't sit on stale content through the reboot.
+#if defined(SSD1306_DISPLAY) && defined(ESP32)
+  // ESP32 tiny OLEDs latch stale content on hardware reset; blank first.
   display.clearBuffer();
   display.sendBuffer();
 #endif
