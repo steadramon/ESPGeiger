@@ -1194,6 +1194,8 @@ void AsyncServer::begin(){
   }
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
+  // Allow rebind while previous clients on the same port are in TIME_WAIT.
+  ip_set_option(pcb, SOF_REUSEADDR);
   IPAddress local_addr;
   local_addr = _addr;
   err = tcp_bind(pcb, local_addr, _port);

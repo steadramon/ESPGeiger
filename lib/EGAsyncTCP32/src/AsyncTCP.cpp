@@ -1696,6 +1696,9 @@ void AsyncServer::begin() {
     return;
   }
 
+  // Allow rebind while previous clients on the same port are in TIME_WAIT.
+  ip_set_option(_pcb, SOF_REUSEADDR);
+
   err = _tcp_bind(&_pcb, &_addr, _port);
 
   if (err != ERR_OK) {
