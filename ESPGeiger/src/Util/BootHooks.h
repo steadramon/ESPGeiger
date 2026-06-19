@@ -28,6 +28,10 @@
 #ifdef GEIGER_PUSHBUTTON
 #include "../PushButton/PushButton.h"
 #endif
+#ifdef AUDIO_TICK
+#include "../AudioTick/AudioTick.h"
+#include "../Voice/Voice.h"
+#endif
 
 namespace BootHooks {
 
@@ -42,6 +46,13 @@ namespace BootHooks {
   }
 
   inline void displaySetupWifi(const char* host) {
+#ifdef AUDIO_TICK
+    // begin_all runs after WiFi connect, so I2S isn't up yet. begin() is
+    // idempotent.
+    audiotick.begin();
+    voice.silence(1000);
+    voice.speakWord("setup_wifi");
+#endif
 #ifdef SSD1306_DISPLAY
     display.setupWifi(host);
 #endif
