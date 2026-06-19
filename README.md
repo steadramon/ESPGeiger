@@ -41,13 +41,12 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** - i
 | ESP8266 (Wemos D1 Mini, NodeMCU, etc.) | `esp8266_pulse` |
 | ESP8266 with SSD1306 OLED | `esp8266oled_pulse` |
 | ESP32 | `esp32_pulse` |
-| ESP32 with SSD1306 OLED | `esp32oled_pulse` |
 | ESP32-S3 (dev kits) | `esp32s3_pulse` |
-| ESP32-S3 with SSD1306 OLED | `esp32s3oled_pulse` |
 | ESP32-S3 with onboard amp + speaker (XH-S3E-AI) | `xh_s3e_pulse` |
 | ESP32-C3 (RISC-V, no PCNT - software pulse counter) | `esp32c3_pulse` |
-| ESP32-C3 with SSD1306 OLED | `esp32c3oled_pulse` |
-| CAJOE IoT-GM (ESP32 with built-in OLED) | `esp32_cajoe_iotgm` |
+| CAJOE IoT-GM | `esp32_cajoe_iotgm` |
+
+ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect the panel at boot - no separate `oled_*` envs on the ESP32 family. ESP8266 still ships dedicated `esp8266oled_*` envs to avoid the runtime cost on the slower core.
 
 ### I have an ESP + serial Geiger counter
 
@@ -57,7 +56,7 @@ A single serial build supports all serial counter types (GC10, GC10Next, MightyO
 |---|---|---|---|
 | `esp8266_serial` | `esp32_serial` | `esp32s3_serial` | `esp32c3_serial` |
 
-OLED variants: `esp8266oled_serial` / `esp32oled_serial` / `esp32s3oled_serial` / `esp32c3oled_serial`.
+ESP8266 OLED variant: `esp8266oled_serial`. The ESP32 family bundles OLED so the same `esp32*_serial` envs work with or without a display.
 
 ### I have an ESPGeiger-HW or ESPGeiger Log
 
@@ -85,7 +84,8 @@ UDP receiver builds listen for OSC multicast broadcasts from other ESPGeiger dev
 | Hardware | Build |
 |---|---|
 | ESP8266 | `esp8266_udp` / `esp8266oled_udp` |
-| ESP32 | `esp32_udp` / `esp32oled_udp` |
+| ESP32 | `esp32_udp` |
+| ESP32-C3 | `esp32c3_udp` |
 | ESP32-S3 | `esp32s3_udp` |
 
 Producers enable the broadcast via Config → Local broadcast → mode 2. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
