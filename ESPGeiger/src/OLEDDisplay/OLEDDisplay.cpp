@@ -1334,46 +1334,37 @@ static const char SCREEN_PAGE_BODY[] PROGMEM = R"HTML(
 )HTML";
 
 extern const char screenJS[] PROGMEM = R"JS(
-const $=byID,
+const $=byID,D=document,LS=localStorage,DN=Date.now,
   C=$('oled'),x=C.getContext('2d'),
   F=$('fps'),V=$('ivl'),M=$('col'),H=$('colt'),
   N=()=>{let v=+V.value;return v<50?50:v>10000?10000:v},
-  OFF=0xFF000000>>>0;
+  OFF=0xFF000000>>>0,
+  hx=(s,i)=>parseInt(s.slice(i,i+2),16),
+  RE=/^#[0-9a-fA-F]{6}$/;
 let I=x.createImageData(128,64),P=new Uint32Array(I.data.buffer);
-let T=Date.now(),f=0,t=0,w=128,h=64;
-function tintABGR(){
-  // little-endian: bytes go R,G,B,A so uint32 = (A<<24)|(B<<16)|(G<<8)|R
-  const v=M.value,r=parseInt(v.slice(1,3),16),g=parseInt(v.slice(3,5),16),b=parseInt(v.slice(5,7),16);
-  return ((0xFF<<24)|(b<<16)|(g<<8)|r)>>>0;
-}
-function resize(nw,nh){
-  if(nw===w&&nh===h&&I.width===w)return;
-  w=nw;h=nh;
-  C.width=w;C.height=h;
-  // Keep apparent size roughly the same as the standard 128x64 viewer.
-  const zoom=w<=80?6:4;
-  C.style.width=(w*zoom)+'px';
-  C.style.height=(h*zoom)+'px';
-  I=x.createImageData(w,h);
-  P=new Uint32Array(I.data.buffer);
-}
-const TK='egoled_tint',sv=localStorage.getItem(TK);
-if(sv&&/^#[0-9a-fA-F]{6}$/.test(sv)){M.value=sv;H.value=sv}
-const sT=()=>localStorage.setItem(TK,M.value);
+let T=DN(),f=0,t=0,w=128,h=64;
+const TK='egoled_tint',sv=LS.getItem(TK);
+if(sv&&RE.test(sv)){M.value=sv;H.value=sv}
+const sT=()=>LS.setItem(TK,M.value);
 M.oninput=()=>{H.value=M.value;sT()};
-H.oninput=()=>{let v=H.value.trim();if(v[0]!=='#')v='#'+v;if(/^#[0-9a-fA-F]{6}$/.test(v)){M.value=v.toLowerCase();sT()}};
+H.oninput=()=>{let v=H.value.trim();if(v[0]!=='#')v='#'+v;if(RE.test(v)){M.value=v.toLowerCase();sT()}};
 async function r(){
   try{
     const R=await fetch('/screen.bin',{cache:'no-store'});
     if(R.ok){
       const b=new Uint8Array(await R.arrayBuffer());
       if(b.length>=4){
-        const nw=b[0]|(b[1]<<8),nh=b[2]|(b[3]<<8),pages=nh>>3;
-        const need=4+nw*pages;
-        if(b.length>=need){
-          resize(nw,nh);
-          const ON=tintABGR();
-          for(let p=0;p<pages;p++)for(let c=0;c<w;c++){
+        const nw=b[0]|(b[1]<<8),nh=b[2]|(b[3]<<8),pg=nh>>3;
+        if(b.length>=4+nw*pg){
+          if(nw!==w||nh!==h||I.width!==w){
+            w=nw;h=nh;C.width=w;C.height=h;
+            const z=w<=80?6:4;
+            C.style.width=(w*z)+'px';C.style.height=(h*z)+'px';
+            I=x.createImageData(w,h);P=new Uint32Array(I.data.buffer);
+          }
+          const v=M.value,
+            ON=((0xFF<<24)|(hx(v,5)<<16)|(hx(v,3)<<8)|hx(v,1))>>>0;
+          for(let p=0;p<pg;p++)for(let c=0;c<w;c++){
             const B=b[4+p*w+c],bs=p*8*w+c;
             for(let i=0;i<8;i++)P[bs+i*w]=B>>i&1?ON:OFF;
           }
@@ -1382,13 +1373,13 @@ async function r(){
       }
     }
   }catch(e){}
-  const n=Date.now();
+  const n=DN();
   if(n-T>=1000){F.textContent=(f*1000/(n-T)).toFixed(1)+' fps';T=n;f=0}
-  t=setTimeout(r,document.hidden?1000:N());
+  t=setTimeout(r,D.hidden?1000:N());
 }
 $('tap').onclick=()=>fetch('/screen/tap',{cache:'no-store'});
 V.onchange=()=>{clearTimeout(t);r()};
-document.onvisibilitychange=()=>{if(!document.hidden){clearTimeout(t);r()}};
+D.onvisibilitychange=()=>{if(!D.hidden){clearTimeout(t);r()}};
 r();
 )JS";
 
