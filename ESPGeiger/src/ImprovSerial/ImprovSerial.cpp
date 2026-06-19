@@ -55,6 +55,12 @@ void ImprovSerial::poll() {
 }
 
 bool ImprovSerial::consume_byte(uint8_t b) {
+  uint32_t now = fast_millis();
+  if (_last_byte_ms && (now - _last_byte_ms) > 2000) {
+    _position = 0;
+  }
+  _last_byte_ms = now;
+
   if (_position >= sizeof(_buffer)) _position = 0;
   _buffer[_position] = b;
   bool consumed = improv::parse_improv_serial_byte(
@@ -110,15 +116,24 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
       handle_wifi_settings(cmd.ssid, cmd.password);
       break;
     case improv::GET_CURRENT_STATE: {
-      // Reflect actual WiFi state so a saved-creds boot reports PROVISIONED.
       if (WiFi.status() == WL_CONNECTED &&
           _state != improv::STATE_PROVISIONED) {
         _state = improv::STATE_PROVISIONED;
+      } else if (_state != improv::STATE_PROVISIONED) {
+        static bool s_creds_cached = false;
+        static bool s_creds_value = false;
+        if (!s_creds_cached) {
+          s_creds_value = Wifi::hasSavedCreds();
+          s_creds_cached = true;
+        }
+        if (fast_millis() < 30000 && s_creds_value) {
+          _state = improv::STATE_PROVISIONING;
+        } else if (_state == improv::STATE_PROVISIONING) {
+          _state = improv::STATE_AUTHORIZED;
+        }
       }
       set_state(_state);
-      // Per the Improv spec, an already-provisioned device follows the
-      // state byte with the post-provisioning RPC result carrying the URL.
-      // RPC result command byte echoes the command we're answering.
+      // RPC result echoes the cmd byte we're responding to (Improv spec).
       if (_state == improv::STATE_PROVISIONED) {
         char url[48];
         snprintf(url, sizeof(url), "http://%s/",

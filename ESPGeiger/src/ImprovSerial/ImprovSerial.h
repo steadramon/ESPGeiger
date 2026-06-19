@@ -52,6 +52,7 @@ private:
   uint8_t       _buffer[128];
   size_t        _position = 0;
   improv::State _state = improv::STATE_AUTHORIZED;
+  uint32_t      _last_byte_ms = 0;
 };
 
 extern ImprovSerial improvSerial;
