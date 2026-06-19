@@ -213,6 +213,13 @@ void EGHttpServer::begin(uint16_t port) {
   _server->begin();
 }
 
+bool EGHttpServer::hasActiveClients() const {
+  for (auto& s : _slots) {
+    if (s.client) return true;
+  }
+  return false;
+}
+
 void EGHttpServer::end() {
   if (_server) { _server->end(); delete _server; _server = nullptr; }
   for (auto& s : _slots) {

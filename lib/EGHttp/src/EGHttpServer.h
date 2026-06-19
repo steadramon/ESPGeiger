@@ -157,6 +157,9 @@ class EGHttpServer {
     // Drives dispatch + slot reclaim. Call from loop().
     void tick();
 
+    // True while any slot still has a live AsyncClient.
+    bool hasActiveClients() const;
+
   public:
     enum SlotState : uint8_t { IDLE, RECEIVING, READY, RESPONDING, DONE };
 
