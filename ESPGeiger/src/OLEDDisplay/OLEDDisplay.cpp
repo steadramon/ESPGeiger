@@ -76,25 +76,21 @@ EG_PSTR(OL_H_RBA, "Reboot to apply");
 EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 EG_PSTR(OL_L_TYP, "Display Type");
 #ifdef ESP32
-EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309, 3=Tiny SSD1306 (0.42in 72x40). Reboot to apply.");
+EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106, 2=SSD1309, 3=Tiny SSD1306, 4=Tiny SH1106. Reboot to apply.");
 #else
 EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309. Reboot to apply.");
 #endif
-#if OLED_RST != 255
 EG_PSTR(OL_L_RST, "Reset Pin");
 EG_PSTR(OL_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
-#endif
 #endif
 
 static const EGPref OLED_PREF_ITEMS[] = {
 #ifndef OLED_PINS_BLOCKED
   {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-#if OLED_RST != 255
   {"rst",        OL_L_RST, OL_H_RST, OLED_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, 0},
-#endif
 #ifdef ESP32
-  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 3, 0, EGP_UINT, 0},
+  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 4, 0, EGP_UINT, 0},
 #else
   {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, 0},
 #endif
@@ -201,6 +197,30 @@ static uint16_t tpStringWidth(const uint8_t* font, const char* str) {
   return w;
 }
 
+void SSD1306Display::drawXBMPScaled(int16_t dx0, int16_t dy0,
+                                    int16_t src_w, int16_t src_h,
+                                    const uint8_t* bm, uint8_t scale) {
+  if (scale < 1) return;
+  uint16_t byte_w = (src_w + 7) / 8;
+  uint16_t dw = src_w / scale;
+  uint16_t dh = src_h / scale;
+  for (uint16_t dy = 0; dy < dh; dy++) {
+    for (uint16_t dx = 0; dx < dw; dx++) {
+      bool on = false;
+      for (uint8_t sy = 0; sy < scale && !on; sy++) {
+        uint16_t row = dy * scale + sy;
+        const uint8_t* row_p = bm + row * byte_w;
+        for (uint8_t sx = 0; sx < scale && !on; sx++) {
+          uint16_t col = dx * scale + sx;
+          uint8_t b = pgm_read_byte(row_p + (col >> 3));
+          if (b & (1u << (col & 7))) on = true;
+        }
+      }
+      if (on) drawPixel(dx0 + dx, dy0 + dy);
+    }
+  }
+}
+
 void SSD1306Display::drawStrP(int16_t x, int16_t y, const char* s) {
   if (!s) return;
   // Per-char DrawGlyph + pgm_read_byte: no temp buffer, no length cap.
@@ -234,7 +254,6 @@ void SSD1306Display::on_prefs_loaded() {
       _pin_scl = scl;
     }
   }
-#if OLED_RST != 255
   {
     uint8_t rst = (uint8_t)EGPrefs::getUInt("display", "rst");
     if (rst != 255) {
@@ -248,7 +267,6 @@ void SSD1306Display::on_prefs_loaded() {
       _pin_rst = 255;
     }
   }
-#endif
   _pref_display_type = (uint8_t)EGPrefs::getUInt("display", "type");
 #else
   _pref_display_type = OLED_TYPE;
@@ -297,10 +315,8 @@ void SSD1306Display::on_prefs_saved() {
   uint8_t type = (uint8_t)EGPrefs::getUInt("display", "type");
   bool need_reboot = (sda != _pin_sda) || (scl != _pin_scl)
                   || (flip != s_oled_flipped) || (type != _pref_display_type);
-#if OLED_RST != 255
   uint8_t rst = (uint8_t)EGPrefs::getUInt("display", "rst");
   need_reboot = need_reboot || (rst != _pin_rst);
-#endif
   on_prefs_loaded();
   if (need_reboot) EGPrefs::request_restart();
 }
@@ -372,7 +388,14 @@ void SSD1306Display::loop(unsigned long now) {
     uint8_t dirty = DR_NONE;
 #ifdef ESP32
     if (isTiny()) {
-      page_tiny();
+      // Pages 1-3 cycle on tap; page 4 (meter) only via 5 rapid taps.
+      if (oled_page < 1 || oled_page > 4) oled_page = 1;
+      switch (oled_page) {
+        case 2:  page_tiny_dose();  break;
+        case 3:  page_tiny_net();   break;
+        case 4:  page_tiny_meter(); break;
+        default: page_tiny();       break;
+      }
       dirty = DR_FULL;
     } else
 #endif
@@ -415,13 +438,21 @@ void SSD1306Display::loop(unsigned long now) {
       }
       dirty = DR_FULL;
     }
-    // Queue progressive send (skipped headless - would block re-renders).
-    // Top = ty 0..3, bot = ty 4..7, full = 0..7.
+    // Progressive send for 128x64 (top/bot/full = 4/4/8 tile rows). The
+    // tiny panel is 5 pages by 9 tiles, so the 8x16 row math runs off-end
+    // and confuses the controller; ship its 360 B buffer in one go.
     if (dirty != DR_NONE && _present) {
-      _send_cur = 0;
-      if (dirty == DR_TOP)      { _send_ty = 0; _send_rows_left = 4; }
-      else if (dirty == DR_BOT) { _send_ty = 4; _send_rows_left = 4; }
-      else                      { _send_ty = 0; _send_rows_left = 8; }
+#ifdef ESP32
+      if (isTiny()) {
+        sendBuffer();
+      } else
+#endif
+      {
+        _send_cur = 0;
+        if (dirty == DR_TOP)      { _send_ty = 0; _send_rows_left = 4; }
+        else if (dirty == DR_BOT) { _send_ty = 4; _send_rows_left = 4; }
+        else                      { _send_ty = 0; _send_rows_left = 8; }
+      }
     }
   }
 
@@ -453,12 +484,139 @@ void SSD1306Display::page_tiny() {
   char buf[12];
   snprintf_P(buf, sizeof(buf), PSTR("%u"), (unsigned)gcounter.get_cpm());
   setFont(U8G2_FONT_ARIAL_16);
-  uint16_t w = u8g2_GetStrWidth(&_u8g2, buf);
-  int x = (72 - (int)w) / 2;
-  if (x < 0) x = 0;
-  drawStr(x, 28, buf);
+  drawStr(0, 0, buf);
   if (Wifi::connected) drawPixel(71, 0);
+
+  // Sparkline anchored to the right edge so newest is always at x=71;
+  // mirrors page_one_graph, including the 10% min-reduction so the floor
+  // doesn't sit on CHART_BOT.
+  const int CHART_TOP = 18;
+  const int CHART_BOT = 39;
+  const int CHART_H   = CHART_BOT - CHART_TOP;
+  const int CHART_W   = 72;
+  uint16_t n = (uint16_t)gcounter.cpm_history.size();
+  uint16_t cap = (uint16_t)gcounter.cpm_history.capacity;
+  if (n < 2 || cap < 2) return;
+  int32_t mn = gcounter.cpm_history[0], mx = mn;
+  for (uint16_t i = 1; i < n; i++) {
+    int v = gcounter.cpm_history[i];
+    if (v < mn) mn = v;
+    if (v > mx) mx = v;
+  }
+  if (mn > 1) mn = mn * 9 / 10;
+  int32_t span = mx - mn;
+  int prev_x = 0, prev_y = 0;
+  for (uint16_t i = 0; i < n; i++) {
+    int v = gcounter.cpm_history[i];
+    int x = (CHART_W - 1) - ((n - 1 - i) * (CHART_W - 1)) / (cap - 1);
+    int y = span > 0 ? CHART_BOT - (int)(((int32_t)v - mn) * CHART_H / span)
+                     : CHART_TOP + CHART_H / 2;
+    if (i > 0) drawLine(prev_x, prev_y, x, y);
+    prev_x = x;
+    prev_y = y;
+  }
 }
+
+// Returns src if it fits, otherwise a static buffer with ".." appended.
+static const char* fitStr(SSD1306Display& d, const char* src, int max_w) {
+  static char buf[24];
+  if ((int)d.getStrWidth(src) <= max_w) return src;
+  size_t n = strlen(src);
+  if (n >= sizeof(buf)) n = sizeof(buf) - 1;
+  while (n > 0) {
+    n--;
+    snprintf(buf, sizeof(buf), "%.*s..", (int)n, src);
+    if ((int)d.getStrWidth(buf) <= max_w) return buf;
+  }
+  buf[0] = '\0';
+  return buf;
+}
+
+// Compact uptime: "Nd HH:MM" past a day, else "HH:MM:SS".
+static const char* tinyUptime() {
+  static char buf[12];
+  time_t up = ntpclient.getUptime();
+  uint16_t days = up / SECS_PER_DAY; up %= SECS_PER_DAY;
+  uint8_t hr = up / SECS_PER_HOUR;   up %= SECS_PER_HOUR;
+  uint8_t mn = up / SECS_PER_MIN;
+  uint8_t sc = up % SECS_PER_MIN;
+  if (days > 0) snprintf_P(buf, sizeof(buf), PSTR("%ud %02u:%02u"), days, hr, mn);
+  else          snprintf_P(buf, sizeof(buf), PSTR("%02u:%02u:%02u"),       hr, mn, sc);
+  return buf;
+}
+
+void SSD1306Display::page_tiny_dose() {
+  clearBuffer();
+  char buf[12];
+  format_f(buf, sizeof(buf), gcounter.get_usv(), 2);
+  setFont(U8G2_FONT_ARIAL_16);
+  drawStr(0, 0, buf);
+  if (Wifi::connected) drawPixel(71, 0);
+  setFont(U8G2_FONT_ARIAL_10);
+  drawStrP(0, 16, PSTR("uSv/h"));
+  snprintf_P(buf, sizeof(buf), PSTR("%u cpm"), (unsigned)gcounter.get_cpm());
+  drawStr(0, 28, buf);
+}
+
+void SSD1306Display::page_tiny_net() {
+  clearBuffer();
+  if (Wifi::connected) drawPixel(71, 0);
+  setFont(U8G2_FONT_ARIAL_10);
+  // Three lines max at this font size on 40 px tall.
+  if (Wifi::connected) {
+    char buf[20];
+    Wifi::formatIP(buf, sizeof(buf));
+    drawStr(0, 2,  fitStr(*this, buf, 71));
+    drawStr(0, 15, fitStr(*this, Wifi::ssid, 71));
+    snprintf_P(buf, sizeof(buf), PSTR("%d dBm"), (int)Wifi::rssi);
+    drawStr(0, 28, buf);
+  } else {
+    drawStrP(0, 2,  PSTR("WiFi off"));
+    drawStr (0, 15, fitStr(*this, DeviceInfo::hostname(), 71));
+    drawStr (0, 28, tinyUptime());
+  }
+}
+
+void SSD1306Display::page_tiny_meter() {
+  clearBuffer();
+  if (Wifi::connected) drawPixel(71, 0);
+  // Needle mapped log10(CPM) -> 180 deg sweep so 1..1000 CPM all fit.
+  const int px = 36;
+  const int py = 36;
+  const int r  = 28;
+  char buf[8];
+  snprintf_P(buf, sizeof(buf), PSTR("%u"), (unsigned)gcounter.get_cpm());
+  setFont(U8G2_FONT_ARIAL_10);
+  drawStr(0, 0, buf);
+  drawCircle(px, py, r, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
+  // Decade ticks at 1, 10, 100, 1000 CPM (longer at the ends).
+  for (int i = 0; i <= 3; i++) {
+    float t = (float)i / 3.0f;
+    float ang = (float)M_PI * (1.0f - t);
+    float c = cosf(ang), s = sinf(ang);
+    int len = (i == 0 || i == 3) ? 6 : 4;
+    drawLine(px + (int)(r * c),       py - (int)(r * s),
+             px + (int)((r - len) * c), py - (int)((r - len) * s));
+  }
+  // Half-decade ticks at 3, 30, 300.
+  for (int i = 0; i < 3; i++) {
+    float t = (float)i / 3.0f + (1.0f / 6.0f);
+    float ang = (float)M_PI * (1.0f - t);
+    float c = cosf(ang), s = sinf(ang);
+    drawLine(px + (int)(r * c),       py - (int)(r * s),
+             px + (int)((r - 2) * c), py - (int)((r - 2) * s));
+  }
+  float cpm = gcounter.get_cpmf();
+  if (cpm < 1.0f) cpm = 1.0f;
+  float t = log10f(cpm) / 3.0f;
+  if (t < 0.0f) t = 0.0f;
+  if (t > 1.0f) t = 1.0f;
+  float ang = (float)M_PI * (1.0f - t);
+  float c = cosf(ang), s = sinf(ang);
+  drawLine(px, py, px + (int)((r - 3) * c), py - (int)((r - 3) * s));
+  drawDisc(px, py, 2);   // pivot dot
+}
+
 #endif  // ESP32 (page_tiny)
 
 void SSD1306Display::page_two_full() {
@@ -535,6 +693,10 @@ void SSD1306Display::setup() {
       u8g2_Setup_ssd1306_i2c_72x40_er_f(&_u8g2, U8G2_R0,
           u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
       break;
+    case DISP_SH1106_72X40:
+      u8g2_Setup_sh1106_i2c_72x40_wise_f(&_u8g2, U8G2_R0,
+          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+      break;
 #endif
     case DISP_SSD1306:
     default:
@@ -543,23 +705,53 @@ void SSD1306Display::setup() {
       break;
   }
 
-#if OLED_RST != 255
   if (_pin_rst != 255) {
     pinMode(_pin_rst, OUTPUT);
     digitalWrite(_pin_rst, HIGH); delay(50);
     digitalWrite(_pin_rst, LOW);  delay(10);
     digitalWrite(_pin_rst, HIGH); delay(50);
   }
-#endif
 
+  // Boards without GPIO-controlled OLED RST (e.g. ESP32-C3 minis with a
+  // passive RC-POR network) can leave the controller half-stuck after a
+  // soft ESP reset - it ACKs but rejects GDDRAM writes. Force recovery
+  // on the tiny panel (always) and on a failed probe (other boards).
+  auto recover_bus = [&]() {
+    pinMode(_pin_sda, INPUT_PULLUP);
+    pinMode(_pin_scl, OUTPUT);
+    digitalWrite(_pin_scl, HIGH); delayMicroseconds(10);
+    for (uint8_t i = 0; i < 20; i++) {
+      digitalWrite(_pin_scl, LOW);  delayMicroseconds(10);
+      digitalWrite(_pin_scl, HIGH); delayMicroseconds(10);
+    }
+    pinMode(_pin_sda, OUTPUT);
+    digitalWrite(_pin_sda, HIGH); delayMicroseconds(10);
+    digitalWrite(_pin_sda, LOW);  delayMicroseconds(10);
+    digitalWrite(_pin_sda, HIGH); delayMicroseconds(10);
+  };
+#ifdef ESP32
+  if (_pref_display_type == DISP_SSD1306_72X40
+      || _pref_display_type == DISP_SH1106_72X40) {
+    recover_bus();
+  }
+#endif
   Wire.begin(_pin_sda, _pin_scl);
 
-  // SA0 pin low = 0x3C (common), high = 0x3D.
+  // SA0 low = 0x3C, high = 0x3D.
   static const uint8_t probe_addrs[] = { 0x3c, 0x3d };
-  _oled_addr = 0;
-  for (uint8_t i = 0; i < sizeof(probe_addrs); i++) {
-    Wire.beginTransmission(probe_addrs[i]);
-    if (Wire.endTransmission() == 0) { _oled_addr = probe_addrs[i]; break; }
+  auto probe = [&]() {
+    for (uint8_t i = 0; i < sizeof(probe_addrs); i++) {
+      Wire.beginTransmission(probe_addrs[i]);
+      if (Wire.endTransmission() == 0) return probe_addrs[i];
+    }
+    return (uint8_t)0;
+  };
+  _oled_addr = probe();
+  if (!_oled_addr) {
+    recover_bus();
+    Wire.begin(_pin_sda, _pin_scl);
+    delay(50);
+    _oled_addr = probe();
   }
   if (!_oled_addr) {
     _present = false;
@@ -576,7 +768,11 @@ void SSD1306Display::setup() {
   setBusClock(700000);
   u8g2_InitDisplay(&_u8g2);
   u8g2_SetPowerSave(&_u8g2, 0);
-  u8g2_ClearDisplay(&_u8g2);
+  // clearBuffer + sendBuffer rather than u8g2_ClearDisplay - the latter
+  // uses a direct hardware clear command that the half-stuck tiny SSD1306
+  // controller ignores after a soft ESP reset.
+  u8g2_ClearBuffer(&_u8g2);
+  u8g2_SendBuffer(&_u8g2);
   setFontPosTop();
 #ifdef OLED_PINS_BLOCKED
   s_oled_flipped = OLED_FLIP;
@@ -588,11 +784,20 @@ void SSD1306Display::setup() {
   setFlipMode(s_oled_flipped ? 0 : 1);
   setContrast(64);
   clearBuffer();
-  drawXBMP(0, 0, 51, 51, ESPLogo);
-  setFont(U8G2_FONT_ARIAL_10);
-  drawStrP(55, 10, PSTR("ESPGeiger"));
-  drawStrP(55, 24, RELEASE_VERSION);
-  drawStrP(55, 42, PSTR("Connecting .."));
+#ifdef ESP32
+  if (isTiny()) {
+    drawXBMP(0, 7, 25, 25, ESPLogoTiny);
+    setFont(U8G2_FONT_ARIAL_10);
+    drawStr(28, 14, RELEASE_VERSION);
+  } else
+#endif
+  {
+    drawXBMP(0, 0, 51, 51, ESPLogo);
+    setFont(U8G2_FONT_ARIAL_10);
+    drawStrP(55, 10, PSTR("ESPGeiger"));
+    drawStrP(55, 24, RELEASE_VERSION);
+    drawStrP(55, 42, PSTR("Connecting .."));
+  }
   sendBuffer();
 }
 
@@ -631,6 +836,19 @@ void SSD1306Display::setupWifi(const char* s) {
   if (!_present) return;
   _send_rows_left = 0;       // abandon in-flight progressive send; we'll do a full sync below
   clearBuffer();
+#ifdef ESP32
+  if (isTiny()) {
+    setFont(U8G2_FONT_ARIAL_10);
+    drawStrP(0, 2,  PSTR("Setup WiFi"));
+    const char* host = s ? s : "";
+    const char* dash = strrchr(host, '-');
+    char line[16];
+    snprintf_P(line, sizeof(line), PSTR("AP: %s"), dash ? dash + 1 : host);
+    drawStr(0, 15, line);
+    sendBuffer();
+    return;
+  }
+#endif
   drawTPString(*this, 0, 10, DialogInput_plain_12, PSTR("Setup - Connect to"));
   drawTPString(*this, 0, 24, DialogInput_plain_12, PSTR("WiFi -"));
   drawTPString(*this, 0, 38, DialogInput_plain_12, s);
@@ -1002,61 +1220,79 @@ void SSD1306Display::showOTABanner() {
 }
 
 // 1-bit monochrome BMP of the current framebuffer.
-// 62 B header + 1024 B pixel data, row-major bottom-up, MSB-first per byte.
-// Transposes from u8g2's page-major (8 vertical pixels per byte) layout.
+// BMP1 row-major bottom-up. Transposes from u8g2's page-major layout and
+// pads each row to a 4-byte boundary as the BMP spec requires.
 static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
   SSD1306Display* self = static_cast<SSD1306Display*>(ctx);
   if (!self) {
     res.send(503, "text/plain", "no display");
     return;
   }
+  uint16_t W = 128, H = 64;
+#ifdef ESP32
+  if (self->isTiny()) { W = 72; H = 40; }
+#endif
+  const uint16_t row_unpadded = (W + 7) / 8;
+  const uint16_t row_padded   = (row_unpadded + 3) & ~3;
+  const uint32_t pixel_bytes  = (uint32_t)row_padded * H;
+  const uint32_t file_size    = 62 + pixel_bytes;
+
   uint8_t hdr[62] = {0};
   hdr[0] = 'B'; hdr[1] = 'M';
-  uint32_t file_size = 1086;
   hdr[2] = file_size & 0xff; hdr[3] = (file_size >> 8) & 0xff;
   hdr[4] = (file_size >> 16) & 0xff; hdr[5] = (file_size >> 24) & 0xff;
-  hdr[10] = 62;   // pixel data offset
-  hdr[14] = 40;   // DIB header size
-  hdr[18] = 128;  // width
-  hdr[22] = 64;   // height (+ve = bottom-up)
-  hdr[26] = 1;    // planes
-  hdr[28] = 1;    // bits per pixel
-  hdr[46] = 2;    // palette entries
-  // Palette: 0 = black, 1 = white (BGRA per entry).
-  hdr[54] = 0;   hdr[55] = 0;   hdr[56] = 0;   hdr[57] = 0;
-  hdr[58] = 255; hdr[59] = 255; hdr[60] = 255; hdr[61] = 0;
+  hdr[10] = 62;
+  hdr[14] = 40;
+  hdr[18] = W & 0xff;  hdr[19] = (W >> 8) & 0xff;
+  hdr[22] = H & 0xff;  hdr[23] = (H >> 8) & 0xff;
+  hdr[26] = 1;
+  hdr[28] = 1;
+  hdr[46] = 2;
+  hdr[58] = 255; hdr[59] = 255; hdr[60] = 255;
 
   if (!res.beginChunked(200, "image/bmp")) return;
   res.sendChunk((const char*)hdr, sizeof(hdr));
 
   const uint8_t* buf = self->getBufferPtr();
-  uint8_t row[16];
-  for (int y_bmp = 0; y_bmp < 64; y_bmp++) {
-    int y_disp = 63 - y_bmp;
+  uint8_t row[24] = {0};
+  for (int y_bmp = 0; y_bmp < H; y_bmp++) {
+    int y_disp = H - 1 - y_bmp;
     int page = y_disp >> 3;
     int bit_in_page = y_disp & 7;
-    for (int x_byte = 0; x_byte < 16; x_byte++) {
+    for (uint16_t x_byte = 0; x_byte < row_padded; x_byte++) row[x_byte] = 0;
+    for (uint16_t x_byte = 0; x_byte < row_unpadded; x_byte++) {
       uint8_t b = 0;
-      const uint8_t* col_base = buf + page * 128 + x_byte * 8;
+      const uint8_t* col_base = buf + page * W + x_byte * 8;
       for (int i = 0; i < 8; i++) {
-        if ((col_base[i] >> bit_in_page) & 1) b |= (1 << (7 - i));
+        if ((x_byte * 8 + i) < W && ((col_base[i] >> bit_in_page) & 1)) {
+          b |= (1 << (7 - i));
+        }
       }
       row[x_byte] = b;
     }
-    res.sendChunk((const char*)row, sizeof(row));
+    res.sendChunk((const char*)row, row_padded);
   }
   res.endChunked();
 }
 
-// Raw 1024 B framebuffer in u8g2 page-major layout. Used by /screen's canvas.
+// Raw framebuffer prefixed with a 4-byte dimension header [w_lo, w_hi,
+// h_lo, h_hi] so the JS viewer can size its canvas to match the panel
+// (72x40 tiny or 128x64 standard).
 static void hScreenBin(EGHttpRequest&, EGHttpResponse& res, void* ctx) {
   SSD1306Display* self = static_cast<SSD1306Display*>(ctx);
   if (!self) {
     res.send(503, "text/plain", "no display");
     return;
   }
+  uint16_t W = 128, H = 64;
+#ifdef ESP32
+  if (self->isTiny()) { W = 72; H = 40; }
+#endif
   if (!res.beginChunked(200, "application/octet-stream")) return;
-  res.sendChunk((const char*)self->getBufferPtr(), 1024);
+  uint8_t hdr[4] = { (uint8_t)(W & 0xff), (uint8_t)(W >> 8),
+                     (uint8_t)(H & 0xff), (uint8_t)(H >> 8) };
+  res.sendChunk((const char*)hdr, 4);
+  res.sendChunk((const char*)self->getBufferPtr(), (size_t)W * (H / 8));
   res.endChunked();
 }
 
@@ -1099,15 +1335,27 @@ static const char SCREEN_PAGE_BODY[] PROGMEM = R"HTML(
 
 extern const char screenJS[] PROGMEM = R"JS(
 const $=byID,
-  C=$('oled'),x=C.getContext('2d'),I=x.createImageData(128,64),P=new Uint32Array(I.data.buffer),
+  C=$('oled'),x=C.getContext('2d'),
   F=$('fps'),V=$('ivl'),M=$('col'),H=$('colt'),
   N=()=>{let v=+V.value;return v<50?50:v>10000?10000:v},
   OFF=0xFF000000>>>0;
-let T=Date.now(),f=0,t=0;
+let I=x.createImageData(128,64),P=new Uint32Array(I.data.buffer);
+let T=Date.now(),f=0,t=0,w=128,h=64;
 function tintABGR(){
   // little-endian: bytes go R,G,B,A so uint32 = (A<<24)|(B<<16)|(G<<8)|R
   const v=M.value,r=parseInt(v.slice(1,3),16),g=parseInt(v.slice(3,5),16),b=parseInt(v.slice(5,7),16);
   return ((0xFF<<24)|(b<<16)|(g<<8)|r)>>>0;
+}
+function resize(nw,nh){
+  if(nw===w&&nh===h&&I.width===w)return;
+  w=nw;h=nh;
+  C.width=w;C.height=h;
+  // Keep apparent size roughly the same as the standard 128x64 viewer.
+  const zoom=w<=80?6:4;
+  C.style.width=(w*zoom)+'px';
+  C.style.height=(h*zoom)+'px';
+  I=x.createImageData(w,h);
+  P=new Uint32Array(I.data.buffer);
 }
 const TK='egoled_tint',sv=localStorage.getItem(TK);
 if(sv&&/^#[0-9a-fA-F]{6}$/.test(sv)){M.value=sv;H.value=sv}
@@ -1119,13 +1367,18 @@ async function r(){
     const R=await fetch('/screen.bin',{cache:'no-store'});
     if(R.ok){
       const b=new Uint8Array(await R.arrayBuffer());
-      if(b.length>=1024){
-        const ON=tintABGR();
-        for(let p=0;p<8;p++)for(let c=0;c<128;c++){
-          const B=b[(p<<7)+c],bs=(p<<10)+c;
-          for(let i=0;i<8;i++)P[bs+(i<<7)]=B>>i&1?ON:OFF;
+      if(b.length>=4){
+        const nw=b[0]|(b[1]<<8),nh=b[2]|(b[3]<<8),pages=nh>>3;
+        const need=4+nw*pages;
+        if(b.length>=need){
+          resize(nw,nh);
+          const ON=tintABGR();
+          for(let p=0;p<pages;p++)for(let c=0;c<w;c++){
+            const B=b[4+p*w+c],bs=p*8*w+c;
+            for(let i=0;i<8;i++)P[bs+i*w]=B>>i&1?ON:OFF;
+          }
+          x.putImageData(I,0,0);f++;
         }
-        x.putImageData(I,0,0);f++;
       }
     }
   }catch(e){}

@@ -71,14 +71,18 @@ public:
       DISP_SH1106         = 1,
       DISP_SSD1309        = 2,
 #ifdef ESP32
-      DISP_SSD1306_72X40  = 3,   // 0.42" mini OLED (ESP32-C3 dev modules etc.)
+      DISP_SSD1306_72X40  = 3,   // 0.42" mini OLED, SSD1306 controller
+      DISP_SH1106_72X40   = 4,   // 0.42" mini OLED, SH1106 controller
 #endif
     };
 
-    // True when the active panel is the 0.42" 72x40 variant - callers that
+    // True when the active panel is a 72x40 variant - callers that
     // assume 128x64 must fall back to a one-line/big-number layout.
 #ifdef ESP32
-    bool isTiny() const { return _pref_display_type == DISP_SSD1306_72X40; }
+    bool isTiny() const {
+      return _pref_display_type == DISP_SSD1306_72X40
+          || _pref_display_type == DISP_SH1106_72X40;
+    }
 #else
     bool isTiny() const { return false; }
 #endif
@@ -128,7 +132,10 @@ public:
     bool page_one_values(unsigned long now);
     void page_two_full();
     void page_three_full();
-    void page_tiny();              // 0.42" 72x40 - CPM + single-pixel WiFi (ESP32 only)
+    void page_tiny();              // 0.42" 72x40 page 1 - CPM + sparkline + single-pixel WiFi (ESP32 only)
+    void page_tiny_dose();         // page 2 - uSv/h dose + secondary CPM
+    void page_tiny_net();          // page 3 - SSID / RSSI / IP
+    void page_tiny_meter();        // page 4 (easter egg) - analog needle on log scale
     void page_four_static();
     void page_four_matrix();
     void showOTABanner();
@@ -154,9 +161,16 @@ public:
     void drawBox(int16_t x, int16_t y, int16_t w, int16_t h)     { u8g2_DrawBox(&_u8g2, x, y, w, h); }
     void drawFrame(int16_t x, int16_t y, int16_t w, int16_t h)   { u8g2_DrawFrame(&_u8g2, x, y, w, h); }
     void drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1){ u8g2_DrawLine(&_u8g2, x0, y0, x1, y1); }
+    void drawCircle(int16_t x, int16_t y, int16_t r, uint8_t opt) { u8g2_DrawCircle(&_u8g2, x, y, r, opt); }
+    void drawDisc(int16_t x, int16_t y, int16_t r)                { u8g2_DrawDisc(&_u8g2, x, y, r, U8G2_DRAW_ALL); }
     void drawPixel(int16_t x, int16_t y)        { u8g2_DrawPixel(&_u8g2, x, y); }
     void drawXBMP(int16_t x, int16_t y, int16_t w, int16_t h, const uint8_t* bm)
                                                 { u8g2_DrawXBMP(&_u8g2, x, y, w, h, bm); }
+    // OR-block downscale: dest pixel on if any source pixel in the
+    // scale x scale block is on. Preserves thin features that
+    // centre-sampling would drop.
+    void drawXBMPScaled(int16_t dx0, int16_t dy0, int16_t src_w, int16_t src_h,
+                        const uint8_t* bm, uint8_t scale);
     uint16_t getStrWidth(const char* s)         { return u8g2_GetStrWidth(&_u8g2, s); }
     uint8_t* getBufferPtr()                     { return u8g2_GetBufferPtr(&_u8g2); }
 
