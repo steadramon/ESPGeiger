@@ -488,10 +488,21 @@ void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #endif
 }
 
+// ESP8266 takes longer to come back than ESP32 (slower WiFi reassociation
+// + LittleFS mount), so allow a longer reload window before falling into
+// the indefinite /ping retry loop.
+#ifdef ESP8266
+#define RESTART_COUNTDOWN_SECS 20
+#else
+#define RESTART_COUNTDOWN_SECS 5
+#endif
+
 static const char RESTART_COUNTDOWN[] PROGMEM = R"HTML(
-<p class=muted>Reloading in <span id=ct>5</span>s&hellip;</p>
+<p class=muted id=ct></p>
 <script>
-var n=5,c=byID('ct');
+var n=window._rs,c=byID('ct');
+function sh(t){c.textContent=t}
+sh('Reloading in '+n+'s...');
 function p(){
   var a=new AbortController();
   setTimeout(()=>a.abort(),1000);
@@ -500,13 +511,17 @@ function p(){
     .catch(()=>setTimeout(p,0));
 }
 var t=setInterval(function(){
-  if(--n>0) c.textContent=n;
-  else { clearInterval(t); c.textContent='checking…'; p(); }
+  if(--n>0) sh('Reloading in '+n+'s...');
+  else { clearInterval(t); sh('Checking...'); p(); }
 },1000);
 </script>
 )HTML";
 
 void WebPortal::sendRestartCountdown(EGHttpResponse& res) {
+  char buf[40];
+  int n = snprintf_P(buf, sizeof(buf), PSTR("<script>window._rs=%u;</script>"),
+                     (unsigned)RESTART_COUNTDOWN_SECS);
+  if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
   res.sendChunk(FPSTR(RESTART_COUNTDOWN));
 }
 
@@ -1094,12 +1109,13 @@ byID('uf').addEventListener('submit',function(e){
   x.onload=function(){
     if(x.status===200){
       var R='<b style="color:#0a0">'+x.responseText+'</b><br>';
-      S.innerHTML=R+'Rebooting&hellip; this page will reload once the device is back.';
-      var n=5;
+      var n=D.rs;
+      function sh(t){S.innerHTML=R+t}
+      sh('Reloading in '+n+'s...');
       function pn(){var a=new AbortController();setTimeout(()=>a.abort(),1000);fetch('/ping',{cache:'no-store',signal:a.signal}).then(r=>location.href='/').catch(()=>setTimeout(pn,0))}
       var iv=setInterval(function(){
-        if(--n>0)S.innerHTML=R+'Reloading in '+n+'s…';
-        else{clearInterval(iv);S.innerHTML=R+'Checking…';pn()}
+        if(--n>0)sh('Reloading in '+n+'s...');
+        else{clearInterval(iv);sh('Checking...');pn()}
       },1000);
     }else{
       B.disabled=false;
@@ -1126,10 +1142,10 @@ static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
 void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Update"));
-  char dev[120];
+  char dev[140];
   int n = snprintf_P(dev, sizeof(dev),
-    PSTR("<script>window._dev={env:\"%s\",tag:\"%s\"};</script>"),
-    BUILD_ENV, EG_ENV_TAG);
+    PSTR("<script>window._dev={env:\"%s\",tag:\"%s\",rs:%u};</script>"),
+    BUILD_ENV, EG_ENV_TAG, (unsigned)RESTART_COUNTDOWN_SECS);
   if (n > 0 && (size_t)n < sizeof(dev)) res.sendChunk(dev, (size_t)n);
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
   WebPortal::sendPageTail(res);
