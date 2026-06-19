@@ -126,10 +126,12 @@ void IRAM_ATTR GeigerTestPulseInt::pulseInterrupt() {
     GPOC = (1 << _pulse_tx_pin);
   }
 #else
+  // Register-level write works across ESP32 / S2 / S3 / C3; the latter
+  // wraps out_w1ts in an unnamed union so direct struct assignment fails.
   if (_bool_pulse_state) {
-    GPIO.out_w1ts = ((uint32_t)1 << _pulse_tx_pin); // high
+    REG_WRITE(GPIO_OUT_W1TS_REG, ((uint32_t)1 << _pulse_tx_pin));
   } else {
-    GPIO.out_w1tc = ((uint32_t)1 << _pulse_tx_pin); // low
+    REG_WRITE(GPIO_OUT_W1TC_REG, ((uint32_t)1 << _pulse_tx_pin));
   }
 #endif
   if (!_bool_pulse_state) {
