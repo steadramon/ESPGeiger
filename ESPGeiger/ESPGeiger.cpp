@@ -77,7 +77,7 @@ void msTickerCB()
     _fast_ms_accum_us -= 1000;
   }
   _fast_ms_last_us = now_us;
-  LedSignal::poll();
+  if (LedSignal::s_any_active) LedSignal::poll();
 }
 
 void sTickerCB()
@@ -204,10 +204,12 @@ void loop()
   TickProfile::countIter();
   unsigned long now = fast_millis();
   if (!ota_in_progress) {
-    gcounter.loop();
-    s_webPortal.tick(now);
+    if (gcounter.needs_loop()) gcounter.loop();
+    if ((int32_t)(now - s_webPortal.next_tick_due()) >= 0)
+      s_webPortal.tick(now);
   }
-  EGModuleRegistry::loop_all(now);
+  if ((long)(now - EGModuleRegistry::next_loop_due()) >= 0)
+    EGModuleRegistry::loop_all(now);
 #ifdef LOOP_PROFILE
   TickProfile::addLoopBody((uint32_t)(micros() - _body_t0));
 #endif
