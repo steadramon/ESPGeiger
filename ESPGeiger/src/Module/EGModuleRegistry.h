@@ -36,6 +36,7 @@ class EGModuleRegistry {
     static void begin_all();
     static void loop_all(unsigned long now);
     static void tick_all(unsigned long now, unsigned long uptime_seconds);
+    static inline unsigned long next_loop_due() { return _next_loop_due; }
 #ifdef TICK_PROFILE
     static void log_profile_and_reset();
 #endif
