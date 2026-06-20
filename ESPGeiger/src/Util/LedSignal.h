@@ -23,8 +23,13 @@
 
 namespace LedSignal {
 
+  // Sticky activity flag. Set by click/activity/etc, cleared inside poll()
+  // when all LED state machines settle. Exposed so the Ticker site can
+  // gate the poll() call without paying function-call overhead at idle.
+  extern volatile bool s_any_active;
+
   // Lifecycle. begin() runs once from setup(), poll() runs from msTickerCB
-  // every 1 ms, off() turns the onboard LED off at the end of setup.
+  // when s_any_active is set, off() turns the onboard LED off at end of setup.
   void begin();
   void poll();
   void off();

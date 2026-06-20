@@ -34,6 +34,10 @@ namespace LedSignal {
   static uint16_t s_click_pulse_ms = 20;
   static uint8_t  s_click_mode     = 0;   // 0=pulse, 2=fade
   static uint8_t  s_click_fade     = 3;
+  // Sticky "something is animating" flag. Set by click/activity/etc;
+  // cleared in poll() once all sources settle. Exposed (not static) so
+  // the Ticker call site can skip the function call entirely when idle.
+  volatile bool s_any_active = false;
 
   void begin() {
     EGLed::setClock(fast_millis);
@@ -46,16 +50,19 @@ namespace LedSignal {
   }
 
   void poll() {
+    // Caller gates on s_any_active; we still verify it's worth running
+    // (handles direct callers that bypass the Ticker site).
+    if (!s_any_active) return;
+    s_onboard.update();
+#ifdef GEIGER_BLIPLED
+    s_engine.loop();
+#endif
     if (!s_onboard.isRunning()
 #ifdef GEIGER_BLIPLED
         && s_engine.phases_remaining == 0
         && s_engine.brightness == 0
 #endif
-       ) return;
-    s_onboard.update();
-#ifdef GEIGER_BLIPLED
-    s_engine.loop();
-#endif
+       ) s_any_active = false;
   }
 
   void off() {
@@ -65,21 +72,25 @@ namespace LedSignal {
   void click() {
 #if defined(GEIGER_BLIPLED)
     s_engine.notifyClick(fast_millis());
+    s_any_active = true;
 #elif !defined(DISABLE_INTERNAL_BLIP)
     if (s_onboard.isRunning()) return;
 #ifndef EGPE_NO_PWM
-    if (s_click_mode == 2) { s_onboard.fade(s_click_fade); return; }
+    if (s_click_mode == 2) { s_onboard.fade(s_click_fade); s_any_active = true; return; }
 #endif
     s_onboard.pulse(s_click_pulse_ms);
+    s_any_active = true;
 #endif
   }
 
   void activity() {
     s_onboard.blink(500, 500);
+    s_any_active = true;
   }
 
   void shortPressAck() {
     s_onboard.pulse(200);
+    s_any_active = true;
   }
 
   void displayEnabled()  {}
