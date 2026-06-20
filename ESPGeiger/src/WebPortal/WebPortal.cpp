@@ -241,11 +241,6 @@ void WebPortal::tick(uint32_t now) {
   if (_active) _http.tick();
 
   if (s_restartAt != 0 && (int32_t)(now - s_restartAt) >= 0) {
-    // Hold restart until response drains; 10 s ceiling for stuck clients.
-    if (_active && _http.hasActiveClients()
-        && (int32_t)(now - s_restartAt) < 10000) {
-      return;
-    }
     if (s_pendingWifiSave) {
       Log::console(PSTR("WebPortal: applying new WiFi creds (ssid='%s')"),
                    s_pendingWifiSsid);
