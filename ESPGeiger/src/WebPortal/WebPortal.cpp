@@ -1199,8 +1199,17 @@ void WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 #ifdef ESP8266
         // ESP8266 IROM0 flash window.
         bool plat_ok = (entry >= 0x40100000UL && entry < 0x40200000UL);
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+        // S3 main IRAM region.
+        bool plat_ok = (entry >= 0x40370000UL && entry < 0x403E0000UL);
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+        bool plat_ok = (entry >= 0x40020000UL && entry < 0x40050000UL);
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+        bool plat_ok = (entry >= 0x40380000UL && entry < 0x403E0000UL);
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+        bool plat_ok = (entry >= 0x40800000UL && entry < 0x40880000UL);
 #else
-        // ESP32 IRAM startup. S2/S3/C3/C6 variants need their own range.
+        // Original ESP32 IRAM startup.
         bool plat_ok = (entry >= 0x40080000UL && entry < 0x400A0000UL);
 #endif
         if (!plat_ok) {
