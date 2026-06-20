@@ -712,29 +712,34 @@ void SSD1306Display::setup() {
     digitalWrite(_pin_rst, HIGH); delay(50);
   }
 
-  // Boards without GPIO-controlled OLED RST (e.g. ESP32-C3 minis with a
-  // passive RC-POR network) can leave the controller half-stuck after a
-  // soft ESP reset - it ACKs but rejects GDDRAM writes. Force recovery
-  // on the tiny panel (always) and on a failed probe (other boards).
-  auto recover_bus = [&]() {
+#ifdef ESP32
+  // Tiny 72x40 panels use a passive RC-POR network (no GPIO RST) and
+  // can come up half-stuck after hardware boot - they ACK but reject
+  // GDDRAM writes. Standards-compliant recovery: pulse SCL 9 times to
+  // clock out any stuck transaction, then issue a CLEAN STOP (drive
+  // SDA low while SCL is low, raise SCL, then raise SDA - the SDA L->H
+  // edge while SCL high is the STOP). No spurious START, so other I2C
+  // slaves on the bus see only "end of transaction" and stay healthy.
+  // Gated to tiny panels so non-tiny ESP32 + sensor boards aren't
+  // bothered at all.
+  if (_pref_display_type == DISP_SSD1306_72X40
+      || _pref_display_type == DISP_SH1106_72X40) {
     pinMode(_pin_sda, INPUT_PULLUP);
     pinMode(_pin_scl, OUTPUT);
     digitalWrite(_pin_scl, HIGH); delayMicroseconds(10);
-    for (uint8_t i = 0; i < 20; i++) {
+    for (uint8_t i = 0; i < 9; i++) {
       digitalWrite(_pin_scl, LOW);  delayMicroseconds(10);
       digitalWrite(_pin_scl, HIGH); delayMicroseconds(10);
     }
+    digitalWrite(_pin_scl, LOW);  delayMicroseconds(10);
     pinMode(_pin_sda, OUTPUT);
-    digitalWrite(_pin_sda, HIGH); delayMicroseconds(10);
     digitalWrite(_pin_sda, LOW);  delayMicroseconds(10);
-    digitalWrite(_pin_sda, HIGH); delayMicroseconds(10);
-  };
-#ifdef ESP32
-  if (_pref_display_type == DISP_SSD1306_72X40
-      || _pref_display_type == DISP_SH1106_72X40) {
-    recover_bus();
+    digitalWrite(_pin_scl, HIGH); delayMicroseconds(10);
+    digitalWrite(_pin_sda, HIGH); delayMicroseconds(10);   // STOP
+    pinMode(_pin_sda, INPUT_PULLUP);
   }
 #endif
+
   Wire.begin(_pin_sda, _pin_scl);
 
   // SA0 low = 0x3C, high = 0x3D.
