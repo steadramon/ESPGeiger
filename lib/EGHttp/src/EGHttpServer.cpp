@@ -215,7 +215,10 @@ void EGHttpServer::begin(uint16_t port) {
 
 bool EGHttpServer::hasActiveClients() const {
   for (auto& s : _slots) {
-    if (s.client) return true;
+    if (!s.client) continue;
+    if (s.state == RECEIVING || s.state == READY || s.state == RESPONDING) {
+      return true;
+    }
   }
   return false;
 }
