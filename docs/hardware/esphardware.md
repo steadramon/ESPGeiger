@@ -20,10 +20,10 @@ The ESP8266 ESPGeiger build is the base firmware for the official ESPGeiger-base
 
 The **[ESP32 DevKit / WROOM-32](https://s.click.aliexpress.com/e/_c4MWYcBT)** (classic ESP32) is the recommended ESP32 target. Any 4 MB board built on the original ESP32 (Tensilica dual-core, IDF target `esp32`) should work with the `esp32_*` builds. ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect the panel at boot, so the same env works whether or not a display is fitted.
 
-For ESP32-S3, the **[ESP32-S3-WROOM-1 N16R8](https://s.click.aliexpress.com/e/_c40rZstr)** dev board (44-pin Type-C, 16 MB flash, 8 MB PSRAM, onboard NeoPixel on GPIO 48, no OLED) is a tested target for the `esp32s3_*` builds. The onboard NeoPixel can be driven by ESPGeiger as a click indicator via the standard NeoPixel module - add `-DGEIGER_NEOPIXEL -DNEOPIXEL_PIN=48` to a custom env.
-<img src="img/esp32s3-wroom.png" width="240"/>
+For ESP32-S3, the **[ESP32-S3-WROOM-1 N16R8](https://s.click.aliexpress.com/e/_c40rZstr)** dev board (44-pin Type-C, 16 MB flash, 8 MB PSRAM, onboard NeoPixel on GPIO 48) is a target for the `esp32s3_*` builds.
 
-For the **world's smallest ESPGeiger**, the **[Seeed Studio XIAO ESP32-C3](https://s.click.aliexpress.com/e/_c3OtwhXJ)** (21x17.5 mm, USB-C, BLE 5.0, external u.FL antenna, no OLED, no NeoPixel) flashes cleanly with the `esp32c3_*` builds. Bare-minimum receiver: just power, an attached tube or upstream UDP feed, and you have a working monitor in a footprint that fits inside almost any enclosure.
+For the **world's smallest ESPGeiger**, the **[Seeed Studio XIAO ESP32-C3](https://s.click.aliexpress.com/e/_c3OtwhXJ)** (21x17.5 mm, USB-C, BLE 5.0, external u.FL antenna) flashes cleanly with the `esp32c3_*` builds. Bare-minimum receiver: just power, an attached tube or upstream UDP feed, and you have a working monitor in a footprint that fits inside almost any enclosure.
+<br>
 <img src="img/xiao-esp32c3.png" width="240"/>
 
 ### Variant support
