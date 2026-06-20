@@ -748,12 +748,6 @@ void SSD1306Display::setup() {
   };
   _oled_addr = probe();
   if (!_oled_addr) {
-    recover_bus();
-    Wire.begin(_pin_sda, _pin_scl);
-    delay(50);
-    _oled_addr = probe();
-  }
-  if (!_oled_addr) {
     _present = false;
     Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
                  _pin_sda, _pin_scl);
