@@ -194,6 +194,22 @@ class Counter {
       GeigerUdpRx* udp_rx() { return geigerinput; }
 #endif
       void queueBlip() { _last_blip = micros(); }
+
+      // Inline gate so the main loop can skip the gcounter.loop() function
+      // call (and its first-cache-line touch) on the majority of iterations
+      // where there's nothing to do. Only meaningful for ISR-driven pulse
+      // builds; other input shapes always have per-iter work.
+      inline bool needs_loop() const {
+        if (_pending_work) return true;
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+        // ISR-pulse: wake only when a click landed since last drain.
+        extern volatile unsigned long _last_blip;
+        return _last_blip_seen != _last_blip;
+#else
+        // PCNT drain, UDP poll, serial input, test: always due.
+        return true;
+#endif
+      }
       // For UDP-received clicks: bypass _last_blip polling (which collapses
       // multiple blips into one when several arrive between Counter::loop
       // ticks) by firing audio/LED/pulse consumers directly. Skips
