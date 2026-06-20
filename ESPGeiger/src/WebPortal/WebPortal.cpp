@@ -235,9 +235,8 @@ static volatile bool s_pendingEraseCreds = false;
 static WebPortal* s_activeWebPortal = nullptr;
 
 void WebPortal::tick(uint32_t now) {
-  static uint32_t last_ms = 0;
-  if (now - last_ms < 13) return;
-  last_ms = now;
+  if (now - _tick_last_ms < 13) return;
+  _tick_last_ms = now;
 
   if (_active) _http.tick();
 

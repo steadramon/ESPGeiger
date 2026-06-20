@@ -24,10 +24,8 @@
 class WebPortal {
   public:
     void begin(uint16_t port);
-    // Drives EGHttpServer dispatch + the restart timer. Throttled to
-    // ~5 ms internally; passing `now` (millis) avoids a redundant time
-    // read on the hot path. Caller already has it for loop_all etc.
     void tick(uint32_t now);
+    inline uint32_t next_tick_due() const { return _tick_last_ms + 13; }
     bool active() const { return _active; }
 
     // Shared page templates - modules call these inside their handler so the
@@ -62,6 +60,7 @@ class WebPortal {
   private:
     EGHttpServer _http;
     bool _active = false;
+    uint32_t _tick_last_ms = 0;
 
     // Cross-cutting routes (owned here, not by any module).
     static void hRoot(EGHttpRequest&, EGHttpResponse&, void*);
