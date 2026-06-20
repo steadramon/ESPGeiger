@@ -53,6 +53,7 @@ private:
   size_t        _position = 0;
   improv::State _state = improv::STATE_AUTHORIZED;
   uint32_t      _last_byte_ms = 0;
+  bool          _in_wifi_settings = false;
 };
 
 extern ImprovSerial improvSerial;
