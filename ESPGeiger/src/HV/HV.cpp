@@ -159,8 +159,7 @@ void HV::loop(unsigned long now) {
   if (_hw_vd_ratio == 0) return;
   int sensorValue = analogRead(GEIGER_VFEEDBACKPIN);
   int volts = (int)((_hw_vd_ratio * sensorValue) >> 10) + _hw_vd_offset;
-  hvReading.add((float)volts);
-  addFast((float)volts);
+  hvReading.add((uint16_t)(volts < 0 ? 0 : volts));
 
   // Closed-loop trim - only after warmup, throttled, bounded ±TRIM_MAX.
   // Suppressed for TRIM_SETTLE_MS after duty/freq change so the dip from
@@ -340,10 +339,17 @@ static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 #ifdef ESPG_HV_ADC
 static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  // Fresh sample on demand. 3 quick reads averaged keeps the /hv page
+  // responsive without keeping a ring updated at idle.
+  int sum = 0;
+  for (uint8_t i = 0; i < 3; i++) sum += analogRead(GEIGER_VFEEDBACKPIN);
+  int sv = sum / 3;
+  int volts = (int)((hv.get_vd_ratio() * sv) >> 10) + hv.get_vd_offset();
+  if (volts < 0) volts = 0;
   char buf[256];
   snprintf_P(buf, sizeof(buf),
     PSTR("{\"volts\":%d,\"freq\":%d,\"duty\":%d,\"ratio\":%d,\"target\":%d,\"trim\":%d,\"fmax\":%d}"),
-    (int)hv.getFast(),
+    volts,
     hv.get_freq(),
     hv.get_duty(),
     hv.get_vd_ratio(),
