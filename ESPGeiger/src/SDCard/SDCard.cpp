@@ -68,6 +68,9 @@ void SDCard::begin()
   EGModuleRegistry::set_tick_enabled(this, false);
   Log::console(PSTR("SDCard: Init ..."));
   sd = new SdFat32();
+#ifdef ESP8266
+  ESP.wdtFeed();
+#endif
   if (!sd->begin(GEIGER_SDCARD_CS)) {
     Log::console(PSTR("SDCard: Init failed ... Please check wiring or insert a card."));
     delete sd;
