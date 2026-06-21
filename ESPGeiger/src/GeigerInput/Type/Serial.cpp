@@ -50,6 +50,7 @@ void GeigerSerial::begin() {
   }
   // 64-byte RX buffer at 115200 (GC10NX) gives ISR margin under WiFi PHY work.
   geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 64);
+  for (uint16_t i = 0; i < 256 && geigerPort.available(); i++) geigerPort.read();
   uint32_t skip = 6000000UL / baud;
   if (skip < 5)   skip = 5;
   if (skip > 500) skip = 500;
