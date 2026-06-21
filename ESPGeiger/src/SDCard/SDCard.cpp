@@ -296,6 +296,7 @@ bool SDCard::deleteOldest(uint32_t cutoffPacked) {
           }
         }
         file.close();
+        yield();   // each iter is SPI file open + stat; full walk can be seconds.
       }
     }
     subDir.close();
