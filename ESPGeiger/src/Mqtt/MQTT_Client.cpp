@@ -494,9 +494,15 @@ void MQTT_Client::reconnect()
     return;
   }
 
-  // Exponential backoff: 10s, 20s, 40s, 80s, 160s, capped at 300s
   unsigned long backoff = 10000UL << min(reconnectAttempts, (uint8_t)5);
   if (backoff > 300000UL) backoff = 300000UL;
+  static uint32_t s_jitter_ms = 0;
+  if (s_jitter_ms == 0) {
+    uint32_t h = 2166136261u;
+    for (const char* p = DeviceInfo::chipid(); p && *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+    s_jitter_ms = (h % 13u) * 1000u;   // 0..12 seconds, prime modulo
+  }
+  backoff += s_jitter_ms;
 
   unsigned long now = fast_millis();
   if (lastConnectionAttempt && now - lastConnectionAttempt < backoff) {
