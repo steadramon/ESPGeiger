@@ -55,6 +55,7 @@ void EGModuleRegistry::begin_all() {
     }
     Log::debug(PSTR("Module: Starting %s"), s.module->name());
     s.module->begin();
+    yield();
   }
 }
 
