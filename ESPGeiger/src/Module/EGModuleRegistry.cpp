@@ -434,6 +434,7 @@ void EGModuleRegistry::pre_wifi_all() {
     s.category = g ? g->category : (uint8_t)EGP_CAT_SYSTEM;
     if (f & FLAG_HAS_LOOP) _due_order[_due_count++] = i;
     m->pre_wifi();
+    yield();
   }
   _next_loop_due = 0;
 }
