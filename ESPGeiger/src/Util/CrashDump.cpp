@@ -27,7 +27,10 @@ extern "C" {
 
 namespace CrashDump {
 
-static constexpr uint32_t MAGIC = 0xC0DECAFE;
+// Magic bumped from 0xC0DECAFE to 0xC0DECAFF to discard pre-fingerprint
+// snapshots written by older firmwares; those crashes had addresses that
+// decode wrong against any newer ELF.
+static constexpr uint32_t MAGIC = 0xC0DECAFFu;
 // RTC user-memory offset (in 32-bit words). Owned by CrashDump - do not
 // reuse for other persistent state.
 static constexpr uint32_t RTC_OFFSET = 0;
@@ -39,11 +42,31 @@ static constexpr uint32_t DRAM_HI = 0x40000000u;
 
 static Snapshot s_recovered{};
 static bool     s_have = false;
+static uint32_t s_fw_fp = 0;
+
+// FNV1a hash of GIT_VERSION || BUILD_ENV. Identifies this build so a
+// snapshot written by a previous firmware (which survived OTA reboot in
+// RTC NOINIT) doesn't get reported with addresses that decode against
+// the wrong ELF.
+static uint32_t compute_fw_fp() {
+  uint32_t h = 2166136261u;
+  for (const char* s = GIT_VERSION; s && *s; ++s) h = (h ^ (uint8_t)*s) * 16777619u;
+  for (const char* s = BUILD_ENV;   s && *s; ++s) h = (h ^ (uint8_t)*s) * 16777619u;
+  if (h == 0) h = 1;   // 0 is the "never computed yet" sentinel
+  return h;
+}
 
 void begin() {
+  s_fw_fp = compute_fw_fp();
   Snapshot snap{};
   if (!ESP.rtcUserMemoryRead(RTC_OFFSET, (uint32_t*)&snap, sizeof(snap))) return;
   if (snap.magic != MAGIC) return;
+  if (snap.fw_fp != s_fw_fp) {
+    // Stale snapshot from a previous firmware. Wipe and move on.
+    uint32_t zero = 0;
+    ESP.rtcUserMemoryWrite(RTC_OFFSET, &zero, sizeof(zero));
+    return;
+  }
 
   s_recovered = snap;
   s_have = true;
@@ -67,6 +90,7 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
   using namespace CrashDump;
   Snapshot snap{};
   snap.magic    = MAGIC;
+  snap.fw_fp    = s_fw_fp;   // 0 if begin() hasn't run yet (very early boot crash)
   snap.reason   = rst_info ? rst_info->reason   : 0;
   snap.exccause = rst_info ? rst_info->exccause : 0;
   snap.epc1     = rst_info ? rst_info->epc1     : 0;
@@ -94,6 +118,8 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
 #include <Arduino.h>
 #include <esp_core_dump.h>
 #include <esp_system.h>
+#include <esp_ota_ops.h>
+#include <string.h>
 
 namespace CrashDump {
 
@@ -110,6 +136,16 @@ void begin() {
 
   esp_core_dump_summary_t sum{};
   if (esp_core_dump_get_summary(&sum) == ESP_OK) {
+    // Discard the coredump if it was written by a previous firmware - its
+    // addresses decode against the old ELF and would mislead diagnosis.
+    // esp_ota_get_app_description returns the running image's descriptor;
+    // app_elf_sha256 is the ELF-file SHA stamped at build time.
+    const esp_app_desc_t* desc = esp_ota_get_app_description();
+    if (desc && memcmp(sum.app_elf_sha256, desc->app_elf_sha256,
+                       sizeof(desc->app_elf_sha256)) != 0) {
+      esp_core_dump_image_erase();
+      return;
+    }
     Snapshot snap{};
     snap.reason = (uint32_t)rr;
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32H2

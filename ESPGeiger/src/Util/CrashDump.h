@@ -28,6 +28,7 @@ static constexpr size_t STACK_WORDS = 32;   // ~128 B of stack snapshot
 
 struct Snapshot {
   uint32_t magic;
+  uint32_t fw_fp;       // FNV1a(GIT_VERSION || BUILD_ENV); discards stale OTA snapshots
   uint32_t reason;
   uint32_t exccause;
   uint32_t epc1;
