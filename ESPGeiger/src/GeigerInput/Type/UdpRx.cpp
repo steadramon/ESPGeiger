@@ -392,8 +392,16 @@ void GeigerUdpRx::loop() {
     teardownUdp();
     _last_packet_ms = 0;  // don't immediately re-tear if producer is genuinely offline
   }
+  // Re-emit IGMP join every 5 min; aggressive routers age out the group
+  // membership and lwIP's beginMulticast() can no-op if it thinks we're still in.
+  if (_udp && _last_rebind_ms && (fast_millis() - _last_rebind_ms) > 300000UL) {
+    Log::console(PSTR("UdpRx: 5 min refresh - rebinding multicast"));
+    teardownUdp();
+  }
+  bool was_unbound = (_udp == nullptr);
   if (!ensureUdp()) return;
   _bound_at_ms = Wifi::connected_at_ms;
+  if (was_unbound) _last_rebind_ms = fast_millis();
   uint8_t buf[128];
   int sz;
   while ((sz = _udp->parsePacket()) > 0) {
