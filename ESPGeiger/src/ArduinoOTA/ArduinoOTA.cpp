@@ -22,6 +22,8 @@
 #include "../Util/Globals.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/DeviceInfo.h"
+#include "../Util/FastMillis.h"
+#include "../Util/IgmpRefresh.h"
 #include "../Counter/Counter.h"
 #ifdef SSD1306_DISPLAY
 #include "../OLEDDisplay/OLEDDisplay.h"
@@ -79,11 +81,6 @@ void ArduinoOTAModule::begin() {
 
   ArduinoOTA.setHostname(DeviceInfo::hostname());
   ArduinoOTA.begin();
-  reregister_services();
-}
-
-// Re-add the mDNS records owned by this module after a refresh restart.
-void ArduinoOTAModule::reregister_services() {
   MDNS.addService("http",   "tcp", 80);
   MDNS.addService("geiger", "tcp", 80);
   const char* fname = DeviceInfo::friendlyName();
@@ -94,14 +91,11 @@ void ArduinoOTAModule::reregister_services() {
 
 void ArduinoOTAModule::loop(unsigned long now) {
   ArduinoOTA.handle();
-  // Hourly mDNS restart to force a fresh IGMP join before the router ages us out.
-  static unsigned long s_last_mdns_refresh = 0;
-  if (s_last_mdns_refresh == 0) s_last_mdns_refresh = now;
-  if ((unsigned long)(now - s_last_mdns_refresh) > 3600000UL) {
-    s_last_mdns_refresh = now;
-    Log::console(PSTR("OTA: hourly mDNS refresh"));
-    MDNS.end();
-    MDNS.begin(DeviceInfo::hostname());
-    reregister_services();
+  // Keep mDNS multicast subscription alive.
+  static unsigned long s_last_igmp_refresh = 0;
+  if (s_last_igmp_refresh == 0) s_last_igmp_refresh = now;
+  if ((unsigned long)(now - s_last_igmp_refresh) > 300000UL) {
+    s_last_igmp_refresh = now;
+    IgmpRefresh::refresh();
   }
 }

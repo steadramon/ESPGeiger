@@ -46,10 +46,6 @@ class ArduinoOTAModule : public EGModule {
     void loop(unsigned long now) override;
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return OTA_POLL_INTERVAL_MS; }
-
-  private:
-    // (Re-)register the http and geiger mDNS records owned by this module.
-    void reregister_services();
 };
 
 extern ArduinoOTAModule ota;

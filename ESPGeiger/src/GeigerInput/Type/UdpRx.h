@@ -121,8 +121,8 @@ private:
 
   ProducerRecord _producers[UDPRX_PRODUCER_SLOTS] = {};
   uint8_t _producers_seen = 0;
-  unsigned long _bound_at_ms = 0;        // Wifi::connected_at_ms when we bound
-  unsigned long _last_rebind_ms = 0;     // fast_millis() of last (re)bind
+  unsigned long _bound_at_ms = 0;
+  unsigned long _last_igmp_refresh_ms = 0;
 
   // Poisson gap-fill queue. processClick pushes (gap) deferred blip
   // times into here when a packet credits more than one click; loop()
