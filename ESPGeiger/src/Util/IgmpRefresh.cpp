@@ -20,7 +20,8 @@
 
 #ifdef ESP32
 #include "Wifi.h"
-#include <tcpip_adapter.h>
+#include <esp_netif.h>
+#include <esp_netif_net_stack.h>
 #include <lwip/netif.h>
 #include <lwip/igmp.h>
 #include <lwip/tcpip.h>
@@ -35,8 +36,10 @@ static void report_groups_cb(void* ctx) {
 
 void refresh() {
   if (!Wifi::connected) return;
-  void* nif = nullptr;
-  if (tcpip_adapter_get_netif(TCPIP_ADAPTER_IF_STA, &nif) != ESP_OK || !nif) return;
+  esp_netif_t* sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+  if (!sta) return;
+  void* nif = esp_netif_get_netif_impl(sta);
+  if (!nif) return;
   tcpip_callback(report_groups_cb, nif);
 }
 
