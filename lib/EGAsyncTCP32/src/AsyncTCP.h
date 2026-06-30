@@ -276,11 +276,18 @@ protected:
   tcp_pcb *_pcb;
   // True iff _pcb still points to a live lwIP pcb. Lock-step with every _pcb assignment.
   std::atomic<bool> _pcb_alive{false};
+  // Sticky once-closed flag; never reset. Lets _connected (registered via
+  // tcp_connect, outside _bind_tcp_callbacks) bail on events queued by
+  // lwIP before the close drain ran.
+  std::atomic<bool> _closed{false};
 
   bool _validate_pcb() const;
 
 public:
-  inline void _mark_pcb_dead() { _pcb_alive.store(false, std::memory_order_release); }
+  inline void _mark_pcb_dead() {
+    _pcb_alive.store(false, std::memory_order_release);
+    _closed.store(true, std::memory_order_release);
+  }
   inline bool _is_pcb_alive() const { return _pcb_alive.load(std::memory_order_acquire); }
 
 protected:

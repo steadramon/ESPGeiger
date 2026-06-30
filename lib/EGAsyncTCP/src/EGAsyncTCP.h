@@ -127,6 +127,9 @@ class AsyncClient {
     bool _pcb_busy;
     // True iff _pcb still points to a live lwIP pcb.
     bool _pcb_alive = false;
+    // Sticky once-closed flag. Lets _connected bail on events queued by lwIP
+    // before close ran. Same role as the ESP32 _closed atomic.
+    bool _closed = false;
 
     bool _validate_pcb() const;
 #if ASYNC_TCP_SSL_ENABLED

@@ -1004,6 +1004,7 @@ AsyncClient::AsyncClient(tcp_pcb *pcb)
 }
 
 AsyncClient::~AsyncClient() {
+  _closed.store(true, std::memory_order_release);  // before guard so concurrent dispatch can see it
   lifetime_guard guard;  // wait for in-flight handle_async_event for this client.
   if (_pcb) {
     _close();
@@ -1236,6 +1237,8 @@ int8_t AsyncClient::_close() {
  * */
 
 int8_t AsyncClient::_connected(tcp_pcb *pcb, int8_t err) {
+  // Stale event: close already ran. Don't re-arm a dead client.
+  if (_closed.load(std::memory_order_acquire)) return ERR_OK;
   _pcb = reinterpret_cast<tcp_pcb *>(pcb);
   if (_pcb) {
     _pcb_alive.store(true, std::memory_order_release);
