@@ -507,20 +507,16 @@ void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static const char RESTART_COUNTDOWN[] PROGMEM = R"HTML(
 <p class=muted id=ct></p>
 <script>
-var n=window._rs,c=byID('ct');
-function sh(t){c.textContent=t}
-sh('Reloading in '+n+'s...');
+var n=window._rs,c=byID('ct'),a=null,T=setTimeout,sh=t=>c.textContent=t,rl=()=>sh('Reloading in '+n+'s...');
+rl();
 function p(){
-  var a=new AbortController();
-  setTimeout(()=>a.abort(),1000);
-  fetch('/ping',{cache:'no-store',signal:a.signal})
-    .then(r=>location.href='/')
-    .catch(()=>setTimeout(p,0));
+  if(document.hidden){T(p,1000);return}
+  if(a)a.abort();
+  var b=a=new AbortController();
+  T(()=>b.abort(),1000);
+  fetch('/ping',{cache:'no-store',signal:b.signal}).then(r=>location.href='/').catch(()=>T(p,500));
 }
-var t=setInterval(function(){
-  if(--n>0) sh('Reloading in '+n+'s...');
-  else { clearInterval(t); sh('Checking...'); p(); }
-},1000);
+var t=setInterval(()=>--n>0?rl():(clearInterval(t),sh('Checking...'),p()),1000);
 </script>
 )HTML";
 
@@ -1118,7 +1114,14 @@ byID('uf').addEventListener('submit',function(e){
       var n=D.rs;
       function sh(t){S.innerHTML=R+t}
       sh('Reloading in '+n+'s...');
-      function pn(){var a=new AbortController();setTimeout(()=>a.abort(),1000);fetch('/ping',{cache:'no-store',signal:a.signal}).then(r=>location.href='/').catch(()=>setTimeout(pn,0))}
+      var pa=null,T=setTimeout;
+      function pn(){
+        if(document.hidden){T(pn,1000);return}
+        if(pa)pa.abort();
+        var b=pa=new AbortController();
+        T(()=>b.abort(),1000);
+        fetch('/ping',{cache:'no-store',signal:b.signal}).then(r=>location.href='/').catch(()=>T(pn,500));
+      }
       var iv=setInterval(function(){
         if(--n>0)sh('Reloading in '+n+'s...');
         else{clearInterval(iv);sh('Checking...');pn()}
