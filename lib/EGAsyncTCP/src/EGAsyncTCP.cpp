@@ -510,6 +510,9 @@ size_t AsyncClient::ack(size_t len){
 // Private Callbacks
 
 void AsyncClient::_connected(std::shared_ptr<ACErrorTracker>& errorTracker, void* pcb, err_t err){
+  // Stale event after close: would re-arm a dead client. _acArgAlive only
+  // filters bad arg pointers, not this race.
+  if (!_pcb_alive && _pcb == NULL) return;
   //(void)err; // LWIP v1.4 appears to always call with ERR_OK
   // Documentation for 2.1.0 also says:
   //   "err	- An unused error code, always ERR_OK currently ;-)"

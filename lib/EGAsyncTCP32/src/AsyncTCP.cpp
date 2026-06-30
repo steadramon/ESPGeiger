@@ -1236,6 +1236,9 @@ int8_t AsyncClient::_close() {
  * */
 
 int8_t AsyncClient::_connected(tcp_pcb *pcb, int8_t err) {
+  // Stale event after close: would re-arm a dead client. Connect callback
+  // is registered via tcp_connect so it sits outside the e985e4c drain.
+  if (!_pcb_alive.load(std::memory_order_acquire) && _pcb == nullptr) return ERR_OK;
   _pcb = reinterpret_cast<tcp_pcb *>(pcb);
   if (_pcb) {
     _pcb_alive.store(true, std::memory_order_release);
