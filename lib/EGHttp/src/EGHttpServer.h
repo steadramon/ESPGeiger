@@ -62,6 +62,17 @@
 #ifndef EGHTTP_MAX_ROUTES
   #define EGHTTP_MAX_ROUTES 64
 #endif
+#ifndef EGHTTP_MAX_INFLIGHT
+  // Cap concurrent in-flight clients; close past this so burst floods do
+  // not queue request work. Roughly doubles the ESP8266 burst threshold
+  // (~15 -> 30-40 concurrent). Use FIN-close not RST-abort: RST triggers
+  // more lwIP teardown work in the moment and tested measurably worse.
+  #ifdef ESP32
+    #define EGHTTP_MAX_INFLIGHT 10
+  #else
+    #define EGHTTP_MAX_INFLIGHT 8
+  #endif
+#endif
 
 class EGHttpServer;
 
@@ -238,6 +249,10 @@ class EGHttpServer {
     // anything for tick to do. Cleared optimistically at top of tick; any
     // callback that fires during the body will re-set it.
     volatile bool     _tickWanted = false;
+
+    // Accept-cap accounting; rejected (over-cap) clients never increment.
+    volatile uint8_t  _inFlight    = 0;
+    volatile uint16_t _rejectCount = 0;
 
 #ifdef ESP32
     // Dispatch-shared chunk accumulator. Lazy-alloc on first dispatch,

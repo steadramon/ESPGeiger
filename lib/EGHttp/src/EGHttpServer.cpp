@@ -382,10 +382,29 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
 
 void EGHttpServer::onClient(AsyncClient* c) {
   _tickWanted = true;   // any accept = work for tick (alloc or 503)
+
+  // Accept-cap reject: close before queueing any request work.
+  if (_inFlight >= EGHTTP_MAX_INFLIGHT) {
+    _rejectCount++;
+    if (_rejectCount == 1 || (_rejectCount % 100) == 0) {
+      Serial.printf_P(PSTR("[EGHttp] accept-cap reject #%u (in-flight=%u/%u)\n"),
+                      (unsigned)_rejectCount, (unsigned)_inFlight,
+                      (unsigned)EGHTTP_MAX_INFLIGHT);
+    }
+    // Deleter only; over-cap clients skip the _inFlight decrement path.
+    c->onDisconnect([](void* /*arg*/, AsyncClient* cli) {
+      delete cli;
+    }, nullptr);
+    c->close();
+    return;
+  }
+  _inFlight++;
+
   // onDisconnect first - every accepted client must clean up, whether it
   // ended up in a slot or sat in the wait queue.
   c->onDisconnect([](void* arg, AsyncClient* cli) {
     auto* self = static_cast<EGHttpServer*>(arg);
+    if (self->_inFlight > 0) self->_inFlight--;
     Slot* sl = self->findSlot(cli);
     if (sl && sl->streaming && !sl->stream_ended) {
       Serial.printf_P(PSTR("[EGHttp] onDisconnect mid-stream cli=%p acked=%u/%u\n"),
