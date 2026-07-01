@@ -137,68 +137,52 @@ works but is quieter. Keep the flyback diode either way.
 Recommended settings: `mode=1`, `cycles=2`, `freq=2500`. Tune `freq` to
 taste; lower sounds woodier, higher sounds tinnier.
 
-## Ideas: giving your Geiger counter a voice
+## Ideas
 
-The patterns above cover the basics. Some less obvious things you can
-do once Pulse Out is wired up:
+Some less obvious things you can do once Pulse Out is wired up.
 
-### Make the LED feel like radiation
+### LED fade that reads as intensity
 
-The `mode=2` exponential fade with `fade_shift=3` (the default) is
-already the classic "ping and afterglow" look that old physical Geiger
-counters had. Try `fade_shift=4` for a longer, dreamier decay (~500
-ms). At high CPS the LED hovers near full brightness because each click
-retriggers the fade; at background CPM the LED settles between
-flashes. The result reads as "intensity" without any sigma calculation.
+The `mode=2` exponential fade with `fade_shift=3` (default) is the
+classic "ping and afterglow" look. Try `fade_shift=4` for a longer
+decay (~500 ms). At high CPS the LED hovers near full brightness
+because each click retriggers the fade; at background CPM it settles
+between flashes.
 
 ### High-visibility tube indicator
 
 Pair Pulse Out with a high-current LED (or a chain of LEDs through a
 MOSFET driver) on a desk-mounted lamp. `mode=2`, `fade_shift=2` (~100
 ms fade) on a 1 W LED makes a desk lamp react to background radiation
-visibly across a room. Useful for demos and classroom kit.
+visibly across a room. Good for demos and classroom kit.
 
 ### Click-and-flash in sync
 
 If you're already running [Audio Tick](/output/audiotick) on an ESP32,
-also configure Pulse Out on a free GPIO with `mode=0`,
-`pulse_us=20000`. Each pulse fires both at the same time, so the
-audible click and the visible flash arrive together. Cheap "stereo
-feedback" that costs one LED and one resistor.
+also configure Pulse Out on a free GPIO with `mode=0`, `pulse_us=20000`.
+Each pulse fires both at the same time, so the audible click and the
+visible LED flash arrive together.
 
-### Multi-station "wave"
+### Multi-station variation
 
-If you have several ESPGeiger units side by side (a teaching kit, a
-fleet of test stations, a sensor array), give each one Pulse Out on an
-LED in `mode=2`. The per-device voice variation means their fades have
-slightly different decay characters and click widths, so the array
-flickers asymmetrically rather than all flashing in identical lockstep.
-A small detail, but it makes a group of units look alive instead of
-identical.
+Several ESPGeigers side by side (teaching kit, test fleet, sensor
+array): give each one Pulse Out on an LED in `mode=2`. The per-device
+voice variation gives each unit a slightly different fade decay and
+click width, so the array doesn't flash in identical lockstep.
 
-### Telltale "I am alive" pip
+### Background-CPM piezo tick
 
 Pair a low-CPS source with `mode=1`, `cycles=2`, `freq=4000` driving a
 passive piezo. Even at background CPM (~30/min) the piezo fires a
 clean short tick every couple of seconds, audible across a small room
-without being intrusive. Drop the buzzer into the case as a soft
-heartbeat for the device.
+without being intrusive.
 
 ### Headphone tick output
 
 `mode=0`, `pulse_us=300-800` straight into the attenuator pattern (10
 kohm + 4.7 kohm + 1 uF, see Patterns above) plugged into headphones
-gives you a portable Geiger counter you can wear with the device
-sitting on a desk. Great for field walks if your tube has decent
-sensitivity.
-
-### Door / motion-sensor feel
-
-Wire Pulse Out as `mode=2` LED fade into a window-mounted bright LED
-or a strip of NeoPixels (drive them through a level shifter). The
-afterglow plus the per-device voice character makes the system feel
-like a science-fiction prop rather than a piece of test equipment.
-Lean into it.
+gives you a portable Geiger counter you can wear while the device sits
+on a desk. Good for field walks if the tube has decent sensitivity.
 
 ## Comparison with Audio Tick
 
