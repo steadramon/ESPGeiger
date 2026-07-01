@@ -12,11 +12,9 @@ A configurable GPIO that follows the Counter alert state. Drives a relay, sounde
 
 The pin idles at its inactive level and switches to the active level once the alert threshold is breached. Two output modes: steady level or a 1 Hz square wave while alerting.
 
-## Build flag
+Included in every shipped ESP build. Disabled by default; set the pin from **Config > Alert Out** after flashing.
 
-Enabled with `-DALERT_OUT`, set in the common `[com-esp]` block so every shipped ESP build includes it. The module is disabled by default (`alert.pin = -1`); set the pin from the **Config > Alert Out** page after flashing.
-
-## Settings (`alert` pref group)
+## Settings
 
 | Setting | Type | Default | Description |
 |---|---|---|---|

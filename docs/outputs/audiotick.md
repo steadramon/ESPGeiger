@@ -16,40 +16,22 @@ so you know the audio path is alive.
 available on the ESP8266. See "Audible feedback on ESP8266" below for
 the alternative.
 
-## Build flag and envs
+## Shipped builds
 
-Enabled with `-DAUDIO_TICK`. Shipped in two env families:
-
-| Env | Hardware | Pins fixed at compile time? |
+| Env family | Hardware | I2S pins |
 |---|---|---|
-| `xh_s3e_pulse`, `xh_s3e_serial`, `xh_s3e_udp`, `xh_s3e_test` | MINI ESP32-S3-N16R8 (sold as "XH-S3E-AI") with on-board speaker | Yes (BCLK=15, WS=16, DOUT=7) |
-| `esp32_audio_pulse`, `esp32_audio_pulse_no_pcnt`, `esp32_audio_serial`, `esp32_audio_test` | Generic ESP32, MAX98357A wired by the user | No, configurable at runtime |
-| `esp32s3_audio_pulse`, `esp32s3_audio_serial` | Generic ESP32-S3, MAX98357A wired by the user | No, configurable at runtime |
+| `xh_s3e_*` | MINI ESP32-S3-N16R8 ("XH-S3E-AI") with on-board speaker | Fixed at BCLK=15, WS=16, DOUT=7 |
+| `esp32_audio_*` | Generic ESP32 + MAX98357A wired by you | Configurable in **Config > Audio Tick** (defaults BCLK=26, WS=25, DOUT=22) |
+| `esp32s3_audio_*` | Generic ESP32-S3 + MAX98357A wired by you | Configurable in **Config > Audio Tick** (defaults BCLK=15, WS=16, DOUT=7) |
 
-The XH-S3E envs hard-block the pin prefs with `-DAUDIO_TICK_PINS_BLOCKED`
-because that board's I2S routing is fixed. On the generic `esp32_audio_*`
-and `esp32s3_audio_*` envs you set the pins in the `tick` pref group
-after the first boot.
-
-## Pins
-
-| Build flag | Role | XH-S3E (N16R8) default | esp32_audio default | esp32s3_audio default |
-|---|---|---|---|---|
-| `AUDIO_TICK_BCLK` | I2S bit clock        | `15` | `26` | `15` |
-| `AUDIO_TICK_WS`   | I2S word select      | `16` | `25` | `16` |
-| `AUDIO_TICK_DOUT` | I2S data out to DIN  | `7`  | `22` | `7`  |
-
-On the generic `*_audio_*` envs the build-flag values are just defaults;
-the runtime prefs (`tick.bclk` / `tick.ws` / `tick.dout`) override them
-on next boot. Verify your wiring matches before enabling.
+On the generic families, verify your wiring matches the pins in Config before
+enabling. The XH-S3E envs have the pins locked to match the on-board speaker.
 
 ## Audible feedback on ESP8266
 
-The chirp/pool engines depend on the ESP-IDF I2S driver and don't port to
-the ESP8266. For per-pulse audio on an ESP8266 use [Pulse Out](/output/pulseout):
-single GPIO into a piezo, or a small speaker via a MOSFET, or an
-attenuator into a powered speaker. Same per-pulse hook, non-blocking
-state machine, no I2S amplifier required.
+For per-pulse audio on an ESP8266 use [Pulse Out](/output/pulseout): single
+GPIO into a piezo, or a small speaker via a MOSFET, or an attenuator into a
+powered speaker. No I2S amplifier required.
 
 ## Settings (`tick` pref group)
 
@@ -64,9 +46,8 @@ state machine, no I2S amplifier required.
 
 ## Throttle
 
-Audio is rate-limited to 20 clicks/second through a 5-token bucket. Above
-that the audio thins out while the underlying counter still tracks every
-pulse. Background CPM keeps the bucket full.
+Audio is rate-limited to 20 clicks/second. Above that the audio thins out
+while the counter still tracks every pulse.
 
 ## Voice announcer
 

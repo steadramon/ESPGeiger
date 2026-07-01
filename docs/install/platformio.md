@@ -29,6 +29,9 @@ The following build flags can be added to your environment's `build_flags` to cu
 | `-D SERIALOUT` | Enable serial CPM/uSv output. |
 | `-D GEIGER_SDCARD` | Enable SD card data logging. |
 | `-D SDCARD_EXTENDEDLOG` | Add extra columns (free memory) to the SD card CSV output. Requires `GEIGER_SDCARD`. |
+| `-D PULSE_OUT` | Enable Pulse Out (per-pulse GPIO for piezo, speaker, LED). Ships in every stock ESP build. |
+| `-D ALERT_OUT` | Enable Alert Out (rising-edge alert GPIO). Ships in every stock ESP build. |
+| `-D AUDIO_TICK` | Enable Audio Tick (synthesised click via I2S amplifier, ESP32 only). |
 
 ### Display & LEDs
 

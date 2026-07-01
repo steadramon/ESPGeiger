@@ -17,17 +17,10 @@ This is the lightweight cousin of the [Audio Tick](/output/audiotick)
 output: no I2S, no amplifier IC, no synthesis. A real mechanical tick
 per pulse, available on every ESP build.
 
-## Build flag
+Included in every shipped ESP build. Disabled by default; set the pin
+and enable it from **Config > Pulse Out** after flashing.
 
-Enabled with `-DPULSE_OUT`, which is set in the common `[com-esp]` block
-so every shipped ESP build includes it. The module is disabled by
-default (`pulse.enable=0`); set the pin and enable it from the **Config
-> pulse** page after flashing.
-
-Cost on ESP8266 is ~360 B RAM + ~2.2 KB flash; on ESP32 ~56 B RAM +
-~2.2 KB flash.
-
-## Settings (`pulse` pref group)
+## Settings
 
 | Pref | Range | Default | Notes |
 |---|---|---|---|
@@ -40,30 +33,14 @@ Cost on ESP8266 is ~360 B RAM + ~2.2 KB flash; on ESP32 ~56 B RAM +
 | `polarity` | 0 / 1     | `0`    | `0` = active high (most cases). `1` = active low (common-anode LEDs, inverted MOSFET drivers). |
 | `fade_shift` | 2-4     | `3`    | Fade decay rate. `2` ≈ 100 ms total, `3` ≈ 250 ms, `4` ≈ 500 ms. |
 
-Output is rate-limited to 20 clicks/second through a 5-token bucket. At
-high CPS the audio thins out while the underlying counter still tracks
-every pulse.
-
-## Non-blocking
-
-Two different mechanisms keep clicks off the main loop:
-
-* Single pulse and LED fade run on a state machine polled at 1 ms cadence.
-  `notifyClick()` flips the pin and registers a deadline; the registry
-  loop picks up the trailing edge on a later tick.
-* Resonant burst uses Arduino's `tone()`, which schedules a hardware
-  timer (timer1 on ESP8266, LEDC on ESP32). Microsecond-precise transitions
-  at any audible frequency, also fully non-blocking.
-
-This matters for longer pulses (e.g. 5-20 ms LED flashes) and for high
-CPS, where a blocking implementation would tie up the loop and starve
-other modules.
+Output is rate-limited to 20 clicks/second. At high CPS the audio thins
+out while the counter still tracks every pulse.
 
 ## Per-device voice variation
 
 Each device picks a small offset on `pulse_us` and `freq` based on its
-chip ID. Two units next to each other sound subtly different rather
-than identical. Computed once at boot.
+chip ID, so two units next to each other sound subtly different rather
+than identical.
 
 ## Use as an LED blink or fade
 
@@ -78,19 +55,12 @@ to the chosen GPIO and pick a mode:
 * `polarity=0` if the LED's anode is on the GPIO side, `polarity=1` if
   the cathode is on the GPIO side (common-anode wiring).
 
-The fade mode uses `analogWrite` for PWM. On ESP8266 the PWM frequency
-is set globally; if HV is enabled it picks HV's frequency (smooth), if
-not it defaults to 1 kHz (works but a careful eye may see slight
-flicker on the brightest steps). On ESP32 the LEDC channel handles this
-natively.
-
 Note: fade mode is **LED only**. Feeding PWM into a piezo or speaker
 would produce a soft sustained tone, not a click.
 
-This overlaps the existing runtime-configurable blip LED. The blip LED
-uses JLed for asynchronous scheduling on a build-flag-fixed or
-runtime-set pin; Pulse Out uses the state machine described above. Both
-ship; pick whichever fits your build.
+Fade mode overlaps the built-in Blip LED. Both ship; pick whichever
+fits your wiring — Blip LED lives on the board's dedicated pin,
+Pulse Out on any GPIO you choose.
 
 ## Patterns
 
@@ -235,13 +205,11 @@ Lean into it.
 | | Pulse Out | [Audio Tick](/output/audiotick) |
 |---|---|---|
 | Platforms | ESP8266 + ESP32 | ESP32 only |
-| Hardware  | 1 piezo, or 1 piezo + MOSFET + speaker, or attenuator + powered speaker | I2S amplifier IC + speaker |
+| Hardware  | Piezo, small speaker (via MOSFET), or line-out into a powered speaker | I2S amplifier IC + speaker |
 | Sound     | Mechanical tick | Synthesised click with chirp + decay |
 | Boot chime | None | 7 chimes + random |
-| CPU cost  | Negligible (a few digitalWrites per click, non-blocking) | Moderate (per-sample synthesis, throttled) |
 
-Run both at once if you like; they share the per-pulse hook and the
-20 clicks/sec throttle.
+Run both at once if you like — they share the same 20 clicks/sec cap.
 
 ## See also
 
