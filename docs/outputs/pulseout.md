@@ -59,7 +59,7 @@ Note: fade mode is **LED only**. Feeding PWM into a piezo or speaker
 would produce a soft sustained tone, not a click.
 
 Fade mode overlaps the built-in Blip LED. Both ship; pick whichever
-fits your wiring — Blip LED lives on the board's dedicated pin,
+fits your wiring. Blip LED lives on the board's dedicated pin,
 Pulse Out on any GPIO you choose.
 
 ## Patterns
@@ -209,7 +209,7 @@ Lean into it.
 | Sound     | Mechanical tick | Synthesised click with chirp + decay |
 | Boot chime | None | 7 chimes + random |
 
-Run both at once if you like — they share the same 20 clicks/sec cap.
+Run both at once if you like. They share the same 20 clicks/sec cap.
 
 ## See also
 

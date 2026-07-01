@@ -100,7 +100,7 @@ The default can also be set at compile time with the `-D GEIGER_DEBOUNCE=N` buil
 
 ### Interrupt Saturation Guard
 
-On the same software-interrupt builds, ESPGeiger watches the raw ISR-entry rate (pre-debounce) once a second. If it exceeds 10,000 entries/second — a level no physical Geiger tube can produce, but trivially reached by a floating RX pin, an unshielded cable picking up mains hum, or a failed tube oscillating — the firmware detaches the interrupt for 5 seconds and logs:
+On the same software-interrupt builds, ESPGeiger watches the raw ISR-entry rate (pre-debounce) once a second. If it exceeds 10,000 entries/second (a level no physical Geiger tube can produce, but trivially reached by a floating RX pin, an unshielded cable picking up mains hum, or a failed tube oscillating) the firmware detaches the interrupt for 5 seconds and logs:
 
 ```
 GeigerPulse: ISR storm (N/s) - parked 5s
