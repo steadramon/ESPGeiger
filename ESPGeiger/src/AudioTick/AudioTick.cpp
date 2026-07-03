@@ -453,7 +453,8 @@ void AudioTick::chimeDtmf() {
       i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 50 / portTICK_PERIOD_MS);
       out += n;
     }
-    int16_t gap[1100] = {0};   // 50 ms gap between digits
+    // 50 ms of silence between digits
+    static const int16_t gap[1100] = {0};
     size_t written = 0;
     i2s_write(I2S_NUM_0, gap, sizeof(gap), &written, 80 / portTICK_PERIOD_MS);
   }
