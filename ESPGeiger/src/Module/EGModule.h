@@ -90,29 +90,62 @@ class EGModule {
     uint8_t _publish_pending : 1;
     unsigned long last_attempt_ms = 0;
 
+#ifdef ESP32
+    static portMUX_TYPE& _pub_mux() {
+      static portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
+      return m;
+    }
+#define EGMOD_PUB_LOCK()   portENTER_CRITICAL(&EGModule::_pub_mux())
+#define EGMOD_PUB_UNLOCK() portEXIT_CRITICAL(&EGModule::_pub_mux())
+#else
+#define EGMOD_PUB_LOCK()
+#define EGMOD_PUB_UNLOCK()
+#endif
+
     void note_publish(bool ok) {
+      unsigned long now_ms = fast_millis();
+      EGMOD_PUB_LOCK();
       last_ok = ok;
-      last_attempt_ms = fast_millis();
+      last_attempt_ms = now_ms;
       if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
       else    { if (_pub_err < 0xFF) ++_pub_err; }
+      EGMOD_PUB_UNLOCK();
     }
     void note_attempt() {
-      last_attempt_ms = fast_millis();
+      unsigned long now_ms = fast_millis();
+      EGMOD_PUB_LOCK();
+      last_attempt_ms = now_ms;
       last_ok = true;
       _publish_pending = 1;
       if (_pub_ok < 0xFF) ++_pub_ok;
+      EGMOD_PUB_UNLOCK();
     }
     void note_result(bool ok) {
-      if (!_publish_pending) return;
-      _publish_pending = 0;
-      last_ok = ok;
-      if (!ok) {
-        if (_pub_ok > 0) --_pub_ok;
-        if (_pub_err < 0xFF) ++_pub_err;
+      EGMOD_PUB_LOCK();
+      if (_publish_pending) {
+        _publish_pending = 0;
+        last_ok = ok;
+        if (!ok) {
+          if (_pub_ok > 0) --_pub_ok;
+          if (_pub_err < 0xFF) ++_pub_err;
+        }
       }
+      EGMOD_PUB_UNLOCK();
     }
-    uint8_t take_publish_ok()  { uint8_t v = _pub_ok;  _pub_ok  = 0; return v; }
-    uint8_t take_publish_err() { uint8_t v = _pub_err; _pub_err = 0; return v; }
+    uint8_t take_publish_ok() {
+      EGMOD_PUB_LOCK();
+      uint8_t v = _pub_ok;
+      _pub_ok = 0;
+      EGMOD_PUB_UNLOCK();
+      return v;
+    }
+    uint8_t take_publish_err() {
+      EGMOD_PUB_LOCK();
+      uint8_t v = _pub_err;
+      _pub_err = 0;
+      EGMOD_PUB_UNLOCK();
+      return v;
+    }
 
   private:
     uint8_t _pub_ok  = 0;
