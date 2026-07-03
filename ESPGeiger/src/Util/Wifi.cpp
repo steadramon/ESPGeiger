@@ -95,6 +95,8 @@ void Wifi::tick(unsigned long now) {
         lost_at = now;
         Wifi::connected_at_ms = 0;  // disconnect resets stability
         Log::console(PSTR("WiFi: Connection lost"));
+      } else if (lost_at == 0) {
+        lost_at = now;
       }
       unsigned long down_seconds = (now - lost_at) / 1000;
       if (down_seconds > 0 && down_seconds % 30 == 0) {
@@ -388,6 +390,11 @@ bool Wifi::connectOrPortal() {
   // Captive setup AP. Static config (if any) carries over to picked SSID.
   s_portalGotCreds = false;
   auto* portal = new EGPortal();
+  if (!portal) {
+    Log::console(PSTR("WiFi: Portal alloc failed, rebooting"));
+    DeviceInfo::safeRestart(500);
+    return false;
+  }
   portal->setTitle(THING_NAME);
   // Heap-alloc'd for the portal's lifetime - a static buffer would burn
   // 256 B BSS permanently on this setup-only path.
