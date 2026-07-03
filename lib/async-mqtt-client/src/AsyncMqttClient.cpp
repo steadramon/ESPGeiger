@@ -303,6 +303,14 @@ void AsyncMqttClient::_onData(char* data, size_t len) {
         break;
       case AsyncMqttClientInternals::BufferState::REMAINING_LENGTH:
         currentByte = data[currentBytePosition++];
+        // MQTT-2.2.3: at most 4 remaining-length bytes; a 5th continuation
+        // byte is a protocol violation.
+        if (_remainingLengthBufferPosition >= sizeof(_remainingLengthBuffer)) {
+          log_i("rcv PROTOCOL VIOLATION (remaining length)");
+          _remainingLengthBufferPosition = 0;
+          disconnect(true);
+          return;
+        }
         _remainingLengthBuffer[_remainingLengthBufferPosition++] = currentByte;
         if (currentByte >> 7 == 0) {
           _parsingInformation.remainingLength = AsyncMqttClientInternals::Helpers::decodeRemainingLength(_remainingLengthBuffer);
