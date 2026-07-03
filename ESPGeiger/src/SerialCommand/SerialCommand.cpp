@@ -76,7 +76,10 @@ void SerialCommand::addCommand(const char *command, void (*function)()) {
     return;
   }
   commandList = tmp;
-  strncpy(commandList[commandCount].command, command, SERIALCOMMAND_MAXCOMMANDLENGTH);
+  // command is a PSTR; the slot is uninitialised realloc memory and
+  // strncpy_P does not terminate when the source fills the field.
+  strncpy_P(commandList[commandCount].command, command, SERIALCOMMAND_MAXCOMMANDLENGTH);
+  commandList[commandCount].command[SERIALCOMMAND_MAXCOMMANDLENGTH] = '\0';
   commandList[commandCount].function = function;
   commandCount++;
 }
