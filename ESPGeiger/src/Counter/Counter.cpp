@@ -66,6 +66,7 @@ portMUX_TYPE s_pulse_mux = portMUX_INITIALIZER_UNLOCKED;
 void ensure_pulse_ring() {
   if (s_pulse_ring) return;
   s_pulse_ring = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
+  if (!s_pulse_ring) Log::console(PSTR("Counter: pulse ring alloc failed"));
 }
 }  // namespace
 
