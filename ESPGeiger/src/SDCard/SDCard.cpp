@@ -57,7 +57,8 @@ static void dateTimeCB(uint16_t *dosYear, uint16_t *dosTime) {
     now = time(nullptr);
     struct tm *tiempo = localtime(&now);
     *dosYear = ((tiempo->tm_year - 80) << 9) | ((tiempo->tm_mon + 1) << 5) | tiempo->tm_mday;
-    *dosTime = (tiempo->tm_hour << 11) | (tiempo->tm_min << 5) | tiempo->tm_sec;
+    // FAT stores seconds in 2-second units (5 bits, 0-29).
+    *dosTime = (tiempo->tm_hour << 11) | (tiempo->tm_min << 5) | (tiempo->tm_sec >> 1);
 }
 
 SDCard::SDCard() {
