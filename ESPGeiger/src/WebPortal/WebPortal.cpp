@@ -802,12 +802,12 @@ void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // captive AP. Other prefs (NTP, HV, WebAPI) survive.
   Log::console(PSTR("WebPortal: erasing WiFi credentials"));
   EGPrefs::put("net", "static_ip", "0");
-  EGPrefs::commit();
   res.beginChunked(200, "text/html");
   WebPortal::sendPageHead(res, F("Erase WiFi"));
   res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device will reboot into Setup Mode.</p>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
+  EGPrefs::commit();
   s_pendingEraseCreds = true;
   WebPortal::requestRestart(1500);
 }
