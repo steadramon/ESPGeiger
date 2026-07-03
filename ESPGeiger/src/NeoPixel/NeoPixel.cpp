@@ -231,7 +231,7 @@ void NeoPixel::loop(unsigned long now)
     } else if (this->neoPixelMode == 1 && _fade_rate > 0) {
       // Hold at peak, then gamma-2 decay across the rest of the envelope.
       const uint16_t FADE_HOLD_MS = 20;
-      if (elapsed >= FADE_HOLD_MS) {
+      if (elapsed >= FADE_HOLD_MS && offTime > FADE_HOLD_MS) {
         uint32_t fe = elapsed - FADE_HOLD_MS;
         uint32_t fw = offTime - FADE_HOLD_MS;
         uint32_t lin = ((fw - fe) * 256u) / fw;
