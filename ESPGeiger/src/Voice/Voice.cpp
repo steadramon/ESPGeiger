@@ -266,7 +266,10 @@ static void adpcm_speak_word(const VocabADPCM* info, float pitch_scale) {
         need_low = false;
       } else {
         byte_pos++;
-        if (byte_pos >= info->byte_count) break;
+        if (byte_pos >= info->byte_count) {
+          consumed = total_in;
+          break;
+        }
         pending_byte = pgm_read_byte(&info->data[byte_pos]);
         sample = adpcm_decode_nibble((pending_byte >> 4) & 0x0F);
         need_low = true;
