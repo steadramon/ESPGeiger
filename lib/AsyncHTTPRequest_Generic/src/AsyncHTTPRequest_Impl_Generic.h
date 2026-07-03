@@ -213,6 +213,7 @@ size_t xbuf::peek(uint8_t* buf, const size_t len)
     {
       seg = seg->next;
       offset = 0;
+      if (!seg) break;
     }
   }
 
@@ -401,6 +402,8 @@ void xbuf::flush()
 
 void xbuf::addSeg()
 {
+  bool added = false;
+
   if (_tail)
   {
     _tail->next = (xseg*) new uint32_t[_segSize / 4 + 1];
@@ -412,6 +415,7 @@ void xbuf::addSeg()
     else
     {
       _tail = _tail->next;
+      added = true;
     }
   }
   else
@@ -419,13 +423,21 @@ void xbuf::addSeg()
     _tail = _head = (xseg*) new uint32_t[_segSize / 4 + 1];
 
     if (_tail == NULL)
+    {
       AHTTP_LOGERROR(F("xbuf::addSeg: error new 2"));
+    }
+    else
+    {
+      added = true;
+    }
   }
 
   if (_tail)
     _tail->next = nullptr;
 
-  _free += _segSize;
+  // Only credit free space for a segment that was actually allocated.
+  if (added)
+    _free += _segSize;
 }
 
 ////////////////////////////////////////
@@ -1429,7 +1441,7 @@ void  AsyncHTTPRequest::_processChunks()
     size_t chunkLength = strtol(chunkHeader.c_str(), nullptr, 16);
     _contentLength += chunkLength;
 
-    if (chunkHeader == "0\r\n")
+    if (chunkLength == 0)
     {
       char* connectionHdr = respHeaderValue("connection");
 
