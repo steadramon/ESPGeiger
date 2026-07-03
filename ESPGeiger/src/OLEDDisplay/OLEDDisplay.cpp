@@ -938,8 +938,9 @@ bool SSD1306Display::page_one_graph() {
       drawTPString(*this, 93, 55, Open_Sans_Digits_10, graphBuf);
       return true;
     }
+    long mapMax = (maxValue == minValue) ? (long)maxValue + 1 : (long)maxValue;
     for (decltype(gcounter.cpm_history)::index_t i = 0; i < histSize; i++) {
-      int location = ((map((long)gcounter.cpm_history[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
+      int location = ((map((long)gcounter.cpm_history[i], (long)minValue, mapMax, 0, 24 )) * (-1)) + 62;
       drawFrame(x_start + i * 2, location, 2, (63 - location));
     }
     snprintf_P(graphBuf, sizeof(graphBuf), PSTR("%d"), (int)minValue);
