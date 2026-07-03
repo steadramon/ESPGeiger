@@ -27,6 +27,7 @@
 #include <LittleFS.h>
 #include <stdlib.h>
 #include <string.h>
+#include <new>  // std::nothrow
 
 #ifndef EGPREFS_MAX_GROUPS
 #define EGPREFS_MAX_GROUPS 32
@@ -135,7 +136,9 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
       char* end;
       unsigned long v = strtoul(value, &end, 10);
       if (*end != '\0' || end == value) return -1;
-      if (p->min_i != p->max_i && ((int32_t)v < p->min_i || (int32_t)v > p->max_i)) return -1;
+      // Compare unsigned: values above INT32_MAX must not wrap negative.
+      if (p->min_i != p->max_i &&
+          (v < (uint32_t)p->min_i || v > (uint32_t)p->max_i)) return -1;
       return snprintf_P(out, outsz, PSTR("%lu"), v);
     }
     case EGP_FLOAT: {
@@ -307,12 +310,17 @@ void EGPrefs::begin() {
       continue;
     }
 
-    GroupShadow& gs = s_groups[s_group_count++];
+    GroupShadow& gs = s_groups[s_group_count];
     gs.group = g;
     gs.module = m;
     gs.dirty = false;
     gs.heap_mask = 0;
-    gs.values = new const char*[g->count];
+    gs.values = new (std::nothrow) const char*[g->count];
+    if (!gs.values) {
+      Log::console(PSTR("prefs: %s value alloc failed - skipped"), g->module_id);
+      continue;
+    }
+    s_group_count++;
 
     for (size_t j = 0; j < g->count; j++) {
       gs.values[j] = g->prefs[j].default_val ? g->prefs[j].default_val : "";
