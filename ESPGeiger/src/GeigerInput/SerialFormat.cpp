@@ -41,7 +41,11 @@ size_t fmt_mightyohm(char* buf, size_t cap) {
   int cpm = gcounter.get_cpm();
   const char* mode;
   int reported_cpm = cpm;
-  if (cps > 255)      { mode = "INST"; reported_cpm = cps * 60; }
+  if (cps > 255) {
+    mode = "INST";
+    // cps*60 overflows int above ~35.8M cps
+    reported_cpm = (cps > 35791394) ? 2147483647 : cps * 60;
+  }
   else if (cps > 15)  { mode = "FAST"; }
   else                { mode = "SLOW"; }
   char usv_str[12];
