@@ -33,6 +33,17 @@
 
 extern uint8_t send_indicator;
 
+// Cross-task read-modify-writes between the AsyncMqttClient callbacks
+// (AsyncTCP task) and the main loop need a critical section on ESP32.
+// ESP8266 callbacks run interleaved with loop() on the one core: no-op.
+#ifdef ESP32
+#define MQTT_CB_LOCK()   portENTER_CRITICAL(&_cbMux)
+#define MQTT_CB_UNLOCK() portEXIT_CRITICAL(&_cbMux)
+#else
+#define MQTT_CB_LOCK()
+#define MQTT_CB_UNLOCK()
+#endif
+
 AsyncMqttClient* mqttClient;
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
@@ -141,11 +152,8 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   reconnectAttempts = 0;
   mqttClient->publish(_lwt_topic, 1, true, lwtOnline);
 #ifdef MQTTAUTODISCOVER
-  unsigned long now_s = fast_millis() / 1000UL;
-  if (_hass_next_publish == 0 || (long)(now_s - _hass_next_publish) >= 0) {
-    _hass_next_publish = now_s + 2;
-    if (_hass_next_publish == 0) _hass_next_publish = 1;
-  }
+  // s_tick owns _hass_next_publish; discovery scheduling runs there off
+  // _reanchor. This callback is on the AsyncTCP task and only subscribes.
   this->setupHassCB();
 #endif
 }
@@ -170,11 +178,14 @@ void MQTT_Client::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
      text = PSTR("UNKNOWN"); break;
   }
   Log::console(PSTR("MQTT: Disconnected (%s)"), text);
+  unsigned long now_ms = fast_millis();
+  MQTT_CB_LOCK();
   if (authFail && ++authFailures >= 3) {
     mqttEnabled = false;
   }
-  lastConnectionAttempt = fast_millis();
+  lastConnectionAttempt = now_ms;
   connected = false;
+  MQTT_CB_UNLOCK();
 #ifdef MQTTAUTODISCOVER
   if (_hass_walk_state) _hass_idx = 0;
 #endif
@@ -229,9 +240,20 @@ void MQTT_Client::s_tick(unsigned long now)
     // Ping trails status by half a slot so the two bursts don't stack.
     lastStatus = statusSlotAnchor(now);
     lastPing   = lastStatus + statusInterval + (statusInterval / 2) - pingInterval;
+#ifdef MQTTAUTODISCOVER
+    // Publish discovery shortly after (re)connect.
+    if (_hass_next_publish == 0 || (long)(now - _hass_next_publish) >= 0) {
+      _hass_next_publish = now + 2;
+      if (_hass_next_publish == 0) _hass_next_publish = 1;
+    }
+#endif
   }
 
 #ifdef MQTTAUTODISCOVER
+  if (_hass_retrigger) {
+    _hass_retrigger = false;
+    triggerHassDiscovery();
+  }
   if (_hass_next_publish && (long)(now - _hass_next_publish) >= 0) {
     triggerHassDiscovery();
   }
@@ -494,7 +516,7 @@ void MQTT_Client::reconnect()
     return;
   }
 
-  unsigned long backoff = 10000UL << min(reconnectAttempts, (uint8_t)5);
+  unsigned long backoff = 10000UL << min((uint8_t)reconnectAttempts, (uint8_t)5);
   if (backoff > 300000UL) backoff = 300000UL;
   static uint32_t s_jitter_ms = 0;
   if (s_jitter_ms == 0) {
@@ -944,7 +966,9 @@ void MQTT_Client::onMqttMessage(char* topic, char* payload)
     if (!EGPrefs::getBool("mqtt", "hass_enabled")) return;
     if (strcmp(payload, "online") == 0) {
       Log::debug(PSTR("MQTT: HA is back online"));
-      this->triggerHassDiscovery();
+      // Callback context (AsyncTCP task on ESP32); the discovery walk state
+      // is main-task-only, so just flag it and let s_tick run the trigger.
+      _hass_retrigger = true;
     }
   }
 #endif
@@ -972,9 +996,11 @@ void MQTT_Client::on_prefs_saved()
   needs_hass_remove = (connected && !EGPrefs::getBool("mqtt", "hass_enabled"));
 #endif
   disconnect();
+  MQTT_CB_LOCK();
   reconnectAttempts = 0;
   authFailures = 0;
   lastConnectionAttempt = 0;
+  MQTT_CB_UNLOCK();
 #ifdef MQTTAUTODISCOVER
   if (needs_hass_remove) setupHassRemove();
 #endif
