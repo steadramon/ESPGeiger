@@ -144,7 +144,7 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
     it++;                                // Skip delimiting "\1"
     memmove(log, it, MAX_LOG_SIZE -(it-log));  // Move buffer forward to remove oldest log line
   }
-  
+
   size_t logLen = strlen(log);
   snprintf_P(log + logLen, sizeof(log) - logLen, PSTR("%c%s%s\1"), logIdx++, timeStr, logData);
 
@@ -159,19 +159,23 @@ void Log::getLog(uint32_t idx, char** entry_pp, size_t* len_p)
   size_t len = 0;
 
   if (idx) {
-    char* it = log;
-    do {
-      uint32_t cur_idx = *it;
+    char* it  = log;
+    char* end = log + MAX_LOG_SIZE;
+    // Each entry is [index][data]['\1']; walk without ever reading past the
+    // buffer even if the '\1' terminator is missing (corruption / full buf).
+    while (it < end && *it != '\0') {
+      uint32_t cur_idx = (uint8_t)*it;
       it++;
-      size_t tmp = strchrspn(it, '\1');
-      tmp++;                             // Skip terminating '\1'
+      char* delim = (char*)memchr(it, '\1', (size_t)(end - it));
+      if (!delim) break;                 // malformed tail; stop rather than run off
+      size_t tmp = (size_t)(delim - it) + 1;  // include the '\1'
       if (cur_idx == idx) {              // Found the requested entry
         len = tmp;
         entry_p = it;
         break;
       }
       it += tmp;
-    } while (it < log + MAX_LOG_SIZE && *it != '\0');
+    }
   }
   *entry_pp = entry_p;
   *len_p = len;
