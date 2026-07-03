@@ -88,7 +88,7 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
   if (readyState == readyStateDone)
   {
     Thingspeak* self = static_cast<Thingspeak*>(optParm);
-    self->last_ok = false;
+    bool ok = false;
     if (request->responseHTTPcode() == 200)
     {
       char r[32];
@@ -96,14 +96,14 @@ void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int rea
       r[got] = 0;
       if (strcmp(r, "0") != 0) {
         Log::debug(PSTR("Thingspeak: Upload OK"));
-        self->last_ok = true;
+        ok = true;
       } else {
         Log::console(PSTR("Thingspeak: Error!"));
       }
     } else {
       Log::console(PSTR("Thingspeak: Error - %s"), request->responseHTTPString().c_str());
     }
-    self->note_result(self->last_ok);
+    self->note_result(ok);
   }
 }
 

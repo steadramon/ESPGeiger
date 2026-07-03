@@ -110,7 +110,7 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
   if (readyState == readyStateDone)
   {
     Webhook* self = static_cast<Webhook*>(optParm);
-    self->last_ok = false;
+    bool ok = false;
     if (request->responseHTTPcode() == 200)
     {
       char r[128];
@@ -118,14 +118,14 @@ void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyS
       r[got] = 0;
       if (strstr(r, "OK")) {
         Log::debug(PSTR("Webhook: Upload OK"));
-        self->last_ok = true;
+        ok = true;
       } else {
         Log::console(PSTR("Webhook: Error - %s"), r);
       }
     } else {
       Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
     }
-    self->note_result(self->last_ok);
+    self->note_result(ok);
   }
 }
 

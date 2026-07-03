@@ -113,7 +113,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
   if (readyState == readyStateDone)
   {
     Radmon* self = static_cast<Radmon*>(optParm);
-    self->last_ok = false;
+    bool ok = false;
     if (request->responseHTTPcode() == 200)
     {
       char r[64];
@@ -121,7 +121,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
       r[got] = 0;
       if (strstr(r, "OK")) {
         Log::debug(PSTR("Radmon: Upload OK"));
-        self->last_ok = true;
+        ok = true;
       } else if (strstr(r, "Incorrect")) {
         Log::console(PSTR("Radmon: Password incorrect, please check"));
       } else if (strstr(r, "register")) {
@@ -134,7 +134,7 @@ void Radmon::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     } else {
       Log::console(PSTR("Radmon: Error - %s"), request->responseHTTPString().c_str());
     }
-    self->note_result(self->last_ok);
+    self->note_result(ok);
   }
 }
 
