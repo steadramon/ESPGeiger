@@ -176,7 +176,10 @@ class queue_mutex_guard {
   bool holds_mutex;
 
 public:
-  inline queue_mutex_guard() : holds_mutex(xSemaphoreTake(_async_queue_mutex, portMAX_DELAY)){};
+  // Null-tolerant: AsyncClient's constructor can run before
+  // _start_async_task() creates the mutex; everything is single-threaded
+  // until that task (and the lwIP callbacks) exist.
+  inline queue_mutex_guard() : holds_mutex(_async_queue_mutex ? xSemaphoreTake(_async_queue_mutex, portMAX_DELAY) : false){};
   inline ~queue_mutex_guard() {
     if (holds_mutex) {
       xSemaphoreGive(_async_queue_mutex);
@@ -242,6 +245,55 @@ static bool _server_alive(const AsyncServer *s) {
     if (_live_servers[i] == s) return true;
   }
   return false;
+}
+
+// Live AsyncClient registry: a queued event can reference an already-deleted
+// client, so dispatch must prove the pointer live before dereferencing it.
+// Mutations hold the queue mutex. A positive result stays valid only while
+// the caller holds a mutex ~AsyncClient also takes (lifetime mutex in
+// handle_async_event, queue mutex in tcp_error); the destructor unregisters
+// under those before freeing the memory.
+#define ASYNC_CLIENT_REG_MAX 32
+static AsyncClient *_live_clients[ASYNC_CLIENT_REG_MAX] = {};
+static uint8_t _live_client_count = 0;
+static uint8_t _untracked_clients = 0;  // registry overflow; guard degrades to fail-open
+
+static bool _client_alive_unlocked(const AsyncClient *c) {
+  for (uint8_t i = 0; i < _live_client_count; i++) {
+    if (_live_clients[i] == c) return true;
+  }
+  // Overflowed clients were never registered and cannot be proven dead;
+  // fail open so their events still dispatch.
+  return _untracked_clients > 0;
+}
+
+static bool _client_alive(const AsyncClient *c) {
+  queue_mutex_guard guard;
+  return _client_alive_unlocked(c);
+}
+
+static void _register_client(AsyncClient *c) {
+  queue_mutex_guard guard;
+  if (_live_client_count < ASYNC_CLIENT_REG_MAX) {
+    _live_clients[_live_client_count++] = c;
+  } else {
+    ++_untracked_clients;
+    async_tcp_log_e("client registry full; UAF guard degraded");
+  }
+}
+
+static void _unregister_client(AsyncClient *c) {
+  queue_mutex_guard guard;
+  for (uint8_t i = 0; i < _live_client_count; i++) {
+    if (_live_clients[i] == c) {
+      _live_clients[i] = _live_clients[--_live_client_count];
+      _live_clients[_live_client_count] = nullptr;
+      return;
+    }
+  }
+  if (_untracked_clients) {
+    --_untracked_clients;
+  }
 }
 
 static uint32_t _xor_shift_state = 31;  // any nonzero seed will do
@@ -361,9 +413,14 @@ static size_t _remove_events_for_server(AsyncServer *server) {
 
 void AsyncTCP_detail::handle_async_event(lwip_tcp_event_packet_t *e) {
   lifetime_guard guard;  // ~AsyncClient takes the same mutex.
-  if (e->client == NULL) {
-    // do nothing when arg is NULL
+  if (e->client == NULL || !_client_alive(e->client)) {
+    // NULL arg, or the client was destroyed after this event was queued
+    // (or popped): drop the event instead of dispatching into freed memory.
     // ets_printf("event arg == NULL: 0x%08x\n", e->recv.pcb);
+  } else if (e->event == LWIP_TCP_ACCEPT && !_server_alive(e->accept.server)) {
+    // Server destroyed while its accept event was in flight; the pre-built
+    // client will never be handed to user code, so dispose of it here.
+    delete e->client;
   } else if (e->event == LWIP_TCP_RECV) {
     // ets_printf("-R: 0x%08x\n", e->recv.pcb);
     e->client->_recv(e->recv.pcb, e->recv.pb, e->recv.err);
@@ -400,7 +457,16 @@ static void _async_service_task(void *pvParameters) {
   }
 #endif
   for (;;) {
-    while (auto packet = _get_async_event()) {
+    for (;;) {
+      // Guard spans pop + dispatch: a popped event is invisible to
+      // ~AsyncClient's purge, so the destructor must stay excluded until the
+      // event is handled. Per-event scope lets deletions interleave between
+      // events and never holds across the idle sleep.
+      lifetime_guard guard;
+      auto packet = _get_async_event();
+      if (!packet) {
+        break;
+      }
       AsyncTCP_detail::handle_async_event(packet);
 #if CONFIG_ASYNC_TCP_USE_WDT
       esp_task_wdt_reset();
@@ -571,11 +637,23 @@ int8_t AsyncTCP_detail::tcp_sent(void *arg, struct tcp_pcb *pcb, uint16_t len) {
 void AsyncTCP_detail::tcp_error(void *arg, int8_t err) {
   // ets_printf("+E: 0x%08x\n", arg);
   AsyncClient *client = reinterpret_cast<AsyncClient *>(arg);
-  if (client && client->_pcb) {
-    // The pcb has already been freed by LwIP; do not attempt to clear the callbacks!
-    client->_pcb_alive.store(false, std::memory_order_release);
+  if (client) {
+    // lwIP-task context: `arg` may point at an already-freed client.
+    // ~AsyncClient unregisters under the queue mutex before the memory is
+    // released, so a positive check keeps the client valid while the guard
+    // is held.
+    queue_mutex_guard guard;
+    if (!_client_alive_unlocked(client)) {
+      return;  // freed while this callback was in flight; nothing to do
+    }
+    if (client->_pcb) {
+      // The pcb has already been freed by LwIP; do not attempt to clear the callbacks!
+      client->_pcb_alive.store(false, std::memory_order_release);
+      client->_pcb = nullptr;
+    }
+  }
+  if (client) {
     _remove_events_for_client(client);
-    client->_pcb = nullptr;
   }
 
   // enqueue event to be processed in the async task for the user callback
@@ -996,6 +1074,7 @@ AsyncClient::AsyncClient(tcp_pcb *pcb)
     _recv_cb_arg(0), _pb_cb(0), _pb_cb_arg(0), _timeout_cb(0), _timeout_cb_arg(0), _poll_cb(0), _poll_cb_arg(0), _ack_pcb(true), _tx_last_packet(0),
     _rx_timeout(0), _rx_last_ack(0), _ack_timeout(CONFIG_ASYNC_TCP_MAX_ACK_TIME), _connect_port(0) {
   _pcb = pcb;
+  _register_client(this);
   if (_pcb) {
     _pcb_alive.store(true, std::memory_order_release);
     _rx_last_packet = millis();
@@ -1004,8 +1083,8 @@ AsyncClient::AsyncClient(tcp_pcb *pcb)
 }
 
 AsyncClient::~AsyncClient() {
-  _closed.store(true, std::memory_order_release);  // before guard so concurrent dispatch can see it
   lifetime_guard guard;  // wait for in-flight handle_async_event for this client.
+  _unregister_client(this);  // from here on, dispatch drops this client's events
   if (_pcb) {
     _close();
   }
@@ -1237,8 +1316,8 @@ int8_t AsyncClient::_close() {
  * */
 
 int8_t AsyncClient::_connected(tcp_pcb *pcb, int8_t err) {
-  // Stale event: close already ran. Don't re-arm a dead client.
-  if (_closed.load(std::memory_order_acquire)) return ERR_OK;
+  // No dead-client check here: handle_async_event drops freed-client events
+  // via the live-client registry. A stale check here would strand reconnects.
   _pcb = reinterpret_cast<tcp_pcb *>(pcb);
   if (_pcb) {
     _pcb_alive.store(true, std::memory_order_release);
