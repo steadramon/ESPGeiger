@@ -277,8 +277,7 @@ void WebAPI::doHandshake() {
   memcpy(shahash, Sha256.result(), HASH_LENGTH);
   optimistic_yield(100 * 1000);
   if (uECC_sign(priv_k, shahash, HASH_LENGTH, signature, uECC_secp192r1()) != 1) {
-    lastHandshake = fast_millis() - WEBAPI_HANDSHAKE_MS + _hs_backoff_ms;
-    _hs_backoff_ms = min(_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+    backoffHandshake();
     return;
   }
   optimistic_yield(100 * 1000);
@@ -301,11 +300,21 @@ void WebAPI::doHandshake() {
   }
 }
 
+// Called from sendHandshake (main loop) and httpHandshakeCb (AsyncTCP task
+// on ESP32); the read-modify-write must be atomic across tasks.
+void WebAPI::backoffHandshake() {
+  unsigned long now_ms = fast_millis();
+  EGMOD_PUB_LOCK();
+  lastHandshake = now_ms - WEBAPI_HANDSHAKE_MS + _hs_backoff_ms;
+  _hs_backoff_ms = min(_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+  EGMOD_PUB_UNLOCK();
+}
+
 void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int readyState) {
   if (readyState != readyStateDone) return;
   WebAPI* self = static_cast<WebAPI*>(optParm);
-  self->last_attempt_ms = fast_millis();
-  self->last_ok = false;
+  // Every exit path must call note_publish(), which sets last_ok and
+  // last_attempt_ms under the publish lock; no direct bitfield writes here.
   if (request->responseHTTPcode() == 200) {
     // String() round-trips raw bytes; treat as binary.
     String r = request->responseText();
@@ -317,8 +326,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
     if (!reader.error) {
       if (id == 0) {
         Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
-        self->lastHandshake = fast_millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
-        self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+        self->backoffHandshake();
         EGModuleRegistry::set_loop_interval(self, 100);
         self->note_publish(false);
         return;
@@ -333,10 +341,9 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
       } else {
         Log::debug(PSTR("WebAPI: Handshake OK - station ID %u"), id);
       }
-      self->last_ok = true;
       self->_hs_backoff_ms = 30000UL;
       self->_exc_sent = true;     // crash info delivered (or none was sent)
-      self->note_publish(true);
+      self->note_publish(true);   // sets last_ok under the publish lock
       return;
     }
     Log::debug(PSTR("WebAPI: Handshake parse error"));
@@ -351,8 +358,7 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
     }
   }
   // Backoff prevents a uECC_sign storm while the server is down.
-  self->lastHandshake = fast_millis() - WEBAPI_HANDSHAKE_MS + self->_hs_backoff_ms;
-  self->_hs_backoff_ms = min(self->_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+  self->backoffHandshake();
   EGModuleRegistry::set_loop_interval(self, 100);
   self->note_publish(false);
 }
