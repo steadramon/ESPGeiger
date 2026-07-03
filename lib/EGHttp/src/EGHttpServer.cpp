@@ -706,10 +706,12 @@ void EGHttpServer::dispatch(Slot* s) {
     bool authOk = false;
     for (size_t i = 0; i + 14 < s->headerEnd; i++) {
       if (strncasecmp(s->buf + i, "Authorization:", 14) == 0) {
+        const char* hend = s->buf + s->headerEnd;
         const char* p = s->buf + i + 14;
-        while (*p == ' ' || *p == '\t') p++;
+        while (p < hend && (*p == ' ' || *p == '\t')) p++;
         size_t vlen = strlen(_authValue);
-        if (strncmp(p, _authValue, vlen) == 0 &&
+        if ((size_t)(hend - p) > vlen &&
+            strncmp(p, _authValue, vlen) == 0 &&
             (p[vlen] == '\r' || p[vlen] == '\n' || p[vlen] == '\0')) {
           authOk = true;
         }
@@ -790,6 +792,13 @@ void EGHttpServer::tick() {
 
 // ---------- EGHttpRequest ----------
 
+static inline int eghttp_hexval(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
 static bool find_arg_in(const char* region, size_t regionLen,
                         const char* name, size_t nameLen,
                         char* out, size_t outCap) {
@@ -802,9 +811,11 @@ static bool find_arg_in(const char* region, size_t regionLen,
       p += nameLen + 1;
       size_t o = 0;
       while (p < end && *p != '&' && o < outCap - 1) {
-        if (*p == '%' && p + 2 < end) {
-          char hex[3] = { p[1], p[2], 0 };
-          out[o++] = (char)strtol(hex, nullptr, 16);
+        if (*p == '%' && p + 2 < end &&
+            eghttp_hexval(p[1]) >= 0 && eghttp_hexval(p[2]) >= 0) {
+          // Only decode %XX with two hex digits; malformed escapes fall
+          // through and are copied literally.
+          out[o++] = (char)((eghttp_hexval(p[1]) << 4) | eghttp_hexval(p[2]));
           p += 3;
         } else if (*p == '+') {
           out[o++] = ' '; p++;
