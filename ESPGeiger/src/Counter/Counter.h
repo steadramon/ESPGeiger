@@ -87,6 +87,8 @@ class Counter {
       float get_cpmf_stable() const { return _cached_cps * 60.0f; }
       int   get_cpm_stable()  const { return (int)roundf(_cached_cps * 60.0f); }
       float get_usv_stable()  const { return _cached_cps * 60.0f * _ratio_inv; }
+      float get_cpmf_adaptive() const;
+      float get_usvf_adaptive() const { return get_cpmf_adaptive() * _ratio_inv; }
       // Auto-expiring pause on external posters. 0 ms = resume now.
       static void     pause_external(uint32_t timeout_ms);
       static bool     external_paused();

@@ -423,6 +423,13 @@ float Counter::get_cpm15f() {
   return geigerTicks15.get() * 60.0f;
 }
 
+float Counter::get_cpmf_adaptive() const {
+  float cpm = _cached_cps * 60.0f;
+  if (cpm < 10.0f) cpm = geigerTicks5.get()  * 60.0f;
+  if (cpm < 2.0f)  cpm = geigerTicks15.get() * 60.0f;
+  return cpm;
+}
+
 void Counter::set_ratio(float ratio) {
   if (ratio <= 0) return;
   _ratio = ratio;
