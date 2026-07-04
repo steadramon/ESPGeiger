@@ -38,6 +38,12 @@
 
 extern uint8_t send_indicator;
 
+// One decimal under 10 (so 0.7 doesn't render as "0"), integer above.
+static void format_cpm(char* buf, size_t bufsz, float cpm) {
+  if (cpm < 10.0f) format_f(buf, bufsz, cpm, 1);
+  else             snprintf_P(buf, bufsz, PSTR("%u"), (unsigned)(cpm + 0.5f));
+}
+
 // Page-4 buffers: lazy-alloc on first render, freed on page exit (see loop()).
 struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; uint8_t seed; bool alive; };
 static const uint8_t MATRIX_DROPS = 32;
@@ -482,7 +488,7 @@ bool SSD1306Display::isScreenOnTime(unsigned long now) {
 void SSD1306Display::page_tiny() {
   clearBuffer();
   char buf[12];
-  snprintf_P(buf, sizeof(buf), PSTR("%u"), (unsigned)gcounter.get_cpm());
+  format_cpm(buf, sizeof(buf), gcounter.get_cpmf());
   setFont(U8G2_FONT_ARIAL_16);
   drawStr(0, 0, buf);
   if (Wifi::connected) drawPixel(71, 0);
@@ -554,7 +560,9 @@ void SSD1306Display::page_tiny_dose() {
   if (Wifi::connected) drawPixel(71, 0);
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 16, PSTR("uSv/h"));
-  snprintf_P(buf, sizeof(buf), PSTR("%u cpm"), (unsigned)gcounter.get_cpm());
+  char cpmbuf[8];
+  format_cpm(cpmbuf, sizeof(cpmbuf), gcounter.get_cpmf());
+  snprintf_P(buf, sizeof(buf), PSTR("%s cpm"), cpmbuf);
   drawStr(0, 28, buf);
 }
 
@@ -585,7 +593,7 @@ void SSD1306Display::page_tiny_meter() {
   const int py = 36;
   const int r  = 28;
   char buf[8];
-  snprintf_P(buf, sizeof(buf), PSTR("%u"), (unsigned)gcounter.get_cpm());
+  format_cpm(buf, sizeof(buf), gcounter.get_cpmf());
   setFont(U8G2_FONT_ARIAL_10);
   drawStr(0, 0, buf);
   drawCircle(px, py, r, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
@@ -954,7 +962,8 @@ bool SSD1306Display::page_one_graph() {
 bool SSD1306Display::page_one_values(unsigned long now) {
   // Cache-skip when nothing visible changed. WiFi + trend state included so
   // those refresh promptly, not only on the 10s page_one_clear cycle.
-  uint32_t cpm = (uint32_t)gcounter.get_cpm();
+  // cpm_x10 keeps 0.1-CPM precision so fractional changes still trigger redraw.
+  uint32_t cpm_x10 = (uint32_t)(gcounter.get_cpmf() * 10.0f + 0.5f);
   int32_t  usv_x100 = (int32_t)(gcounter.get_usv() * 100.0f + 0.5f);
   bool warming = !gcounter.is_warm();
   uint8_t snd = send_indicator;
@@ -964,18 +973,18 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   uint16_t hsize = (uint16_t)gcounter.cpm_history.size();
   if (hsize >= 5) {
     int32_t past = gcounter.cpm_history[hsize - 5];
-    int32_t diff = (int32_t)cpm - past;
+    int32_t diff = (int32_t)(cpm_x10 / 10) - past;
     int32_t thresh = (int32_t)(poisson_std((float)past) * 1.5f + 0.5f);
     if (thresh < 2) thresh = 2;
     if (diff >  thresh) trend =  1;
     else if (diff < -thresh) trend = -1;
   }
-  if (cpm == _p1v_last_cpm && usv_x100 == _p1v_last_usv_x100
+  if (cpm_x10 == _p1v_last_cpm && usv_x100 == _p1v_last_usv_x100
       && warming == _p1v_last_warming && snd == _p1v_last_send_ind
       && wifi == _p1v_last_wifi && trend == _p1v_last_trend) {
     return false;
   }
-  _p1v_last_cpm = cpm;
+  _p1v_last_cpm = cpm_x10;
   _p1v_last_usv_x100 = usv_x100;
   _p1v_last_warming = warming;
   _p1v_last_send_ind = snd;
@@ -990,7 +999,7 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   if (trend > 0)      drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_up);
   else if (trend < 0) drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_down);
   char oledBuf[16];
-  snprintf_P(oledBuf, sizeof(oledBuf), PSTR("%d"), (int)cpm);
+  format_cpm(oledBuf, sizeof(oledBuf), cpm_x10 * 0.1f);
   drawTPString(*this, 45, 0, DialogInput_Digits_17, oledBuf);
   format_f(oledBuf, sizeof(oledBuf), gcounter.get_usv());
   drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);
