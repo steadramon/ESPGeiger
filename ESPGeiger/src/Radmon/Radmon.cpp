@@ -156,16 +156,7 @@ void Radmon::postMeasurement() {
 
   Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
-  // Window selection follows the live ping cadence, which on_prefs_loaded
-  // keeps in sync with the saved pref.
-  float avgcpm;
-  if (pingInterval <= 90) {
-    avgcpm = gcounter.get_cpmf_stable();   // external poster: bucket, mode-independent
-  } else if (pingInterval <= 450) {
-    avgcpm = gcounter.get_cpm5f();
-  } else {
-    avgcpm = gcounter.get_cpm15f();
-  }
+  float avgcpm = gcounter.get_cpmf_adaptive();
   char cpmbuf[12];
   format_f(cpmbuf, sizeof(cpmbuf), avgcpm, 1);
   char url[256];
