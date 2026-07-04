@@ -414,8 +414,8 @@ void WebAPI::postMeasurement(bool censusOnly) {
 
   // float32 keeps the payload compact and avoids the soft-float printer.
   if (sendRadiation) {
-    mp.kv("c",  gcounter.get_cpmf_stable());
-    mp.kv("u",  gcounter.get_usv_stable());
+    mp.kv("c",  gcounter.get_cpmf_adaptive());
+    mp.kv("u",  gcounter.get_usvf_adaptive());
   }
 #ifdef ESPG_HV_ADC
   if (sendHv) mp.kv("hv", hv.hvReading.get());
