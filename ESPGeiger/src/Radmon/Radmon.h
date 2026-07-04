@@ -38,7 +38,7 @@ extern Counter gcounter;
 #define RADMON_INTERVAL_MIN 30 
 #define RADMON_INTERVAL_MAX 1800
 
-const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%d&unit=CPM";
+const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%s&unit=CPM";
 
 class Radmon : public EGModule {
   public:

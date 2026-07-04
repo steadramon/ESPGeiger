@@ -20,6 +20,7 @@
 #include "Radmon.h"
 #include "../Logger/Logger.h"
 #include "../Util/LedSignal.h"
+#include "../Util/StringUtil.h"
 #include "../Module/EGModuleRegistry.h"
 
 extern uint8_t send_indicator;
@@ -157,16 +158,18 @@ void Radmon::postMeasurement() {
 
   // Window selection follows the live ping cadence, which on_prefs_loaded
   // keeps in sync with the saved pref.
-  int avgcpm;
+  float avgcpm;
   if (pingInterval <= 90) {
-    avgcpm = gcounter.get_cpm_stable();   // external poster: bucket, mode-independent
+    avgcpm = gcounter.get_cpmf_stable();   // external poster: bucket, mode-independent
   } else if (pingInterval <= 450) {
-    avgcpm = gcounter.get_cpm5();
+    avgcpm = gcounter.get_cpm5f();
   } else {
-    avgcpm = gcounter.get_cpm15();
+    avgcpm = gcounter.get_cpm15f();
   }
+  char cpmbuf[12];
+  format_f(cpmbuf, sizeof(cpmbuf), avgcpm, (avgcpm < 10.0f) ? 2 : 0);
   char url[256];
-  snprintf_P(url, sizeof(url), RADMON_URI, _api_user, _api_key, avgcpm);
+  snprintf_P(url, sizeof(url), RADMON_URI, _api_user, _api_key, cpmbuf);
 
   if (!request) request = new AsyncHTTPRequest();
   if (!request) { Log::console(PSTR("Radmon: alloc failed")); return; }
