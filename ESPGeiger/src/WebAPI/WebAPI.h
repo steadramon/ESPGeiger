@@ -71,13 +71,13 @@ class WebAPI : public EGModule {
     void loadConfig();
     void saveConfig();
 
-    volatile uint32_t station_id = 0;
+    EG_XTASK_VOLATILE uint32_t station_id = 0;
     uint8_t priv_k[24] = {0};
     uint8_t pub_k[48] = {0};
     char pub_k_64[65] = "";  // base64 of pub_k (no padding) + null
     static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
     unsigned long lastPing = 0;
-    volatile unsigned long lastHandshake = 0;
+    EG_XTASK_VOLATILE unsigned long lastHandshake = 0;
     // claimed once; reused on forget/403 re-anchor so we don't leak a slot
     uint32_t _hs_off = 0xFFFFFFFFu;
     uint32_t _ping_off = 0xFFFFFFFFu;
@@ -85,12 +85,12 @@ class WebAPI : public EGModule {
     // 0 = off, 1 = heartbeat only, 2 = heartbeat + CPM.
     uint8_t _mode = 2;
     // Doubles on each handshake failure, capped at 5min, reset on success.
-    volatile uint32_t _hs_backoff_ms = 30000UL;
+    EG_XTASK_VOLATILE uint32_t _hs_backoff_ms = 30000UL;
     void backoffHandshake();
     // Set after the first handshake that successfully reported the
     // boot-time exception details. Stops us re-sending the same crash
     // info on every subsequent hourly handshake.
-    volatile bool _exc_sent = false;
+    EG_XTASK_VOLATILE bool _exc_sent = false;
 };
 
 extern WebAPI webapi;

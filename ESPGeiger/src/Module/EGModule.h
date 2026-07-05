@@ -22,6 +22,14 @@
 #include <Arduino.h>
 #include "../Util/FastMillis.h"
 
+// Cross-task field qualifier: volatile on ESP32 (callbacks run on the AsyncTCP
+// task), empty on ESP8266 (callbacks run in the main thread).
+#ifdef ESP32
+#define EG_XTASK_VOLATILE volatile
+#else
+#define EG_XTASK_VOLATILE
+#endif
+
 struct EGPrefGroup;
 struct EGLegacyAlias;  // LEGACY IMPORT (remove after v1.0.0)
 class EGHttpServer;    // forward decl for registerRoutes override
@@ -102,66 +110,22 @@ class EGModule {
 #define EGMOD_PUB_UNLOCK()
 #endif
 
-    void note_publish(bool ok) {
-      unsigned long now_ms = fast_millis();
-      EGMOD_PUB_LOCK();
-      last_ok = ok;
-      last_attempt_ms = now_ms;
-      if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
-      else    { if (_pub_err < 0xFF) ++_pub_err; }
-      EGMOD_PUB_UNLOCK();
-    }
-    void note_attempt() {
-      unsigned long now_ms = fast_millis();
-      EGMOD_PUB_LOCK();
-      last_attempt_ms = now_ms;
-      last_ok = true;
-      _publish_pending = 1;
-      if (_pub_ok < 0xFF) ++_pub_ok;
-      EGMOD_PUB_UNLOCK();
-    }
-    void note_result(bool ok) {
-      EGMOD_PUB_LOCK();
-      if (_publish_pending) {
-        _publish_pending = 0;
-        last_ok = ok;
-        if (!ok) {
-          if (_pub_ok > 0) --_pub_ok;
-          if (_pub_err < 0xFF) ++_pub_err;
-        }
-      }
-      EGMOD_PUB_UNLOCK();
-    }
-    uint8_t take_publish_ok() {
-      EGMOD_PUB_LOCK();
-      uint8_t v = _pub_ok;
-      _pub_ok = 0;
-      EGMOD_PUB_UNLOCK();
-      return v;
-    }
-    uint8_t take_publish_err() {
-      EGMOD_PUB_LOCK();
-      uint8_t v = _pub_err;
-      _pub_err = 0;
-      EGMOD_PUB_UNLOCK();
-      return v;
-    }
+    // Publish accounting; bodies in EGModule.cpp.
+    void note_publish(bool ok);
+    void note_attempt();
+    void note_result(bool ok);
+    uint8_t take_publish_ok();
+    uint8_t take_publish_err();
 
   private:
     uint8_t _pub_ok  = 0;
     uint8_t _pub_err = 0;
 
   protected:
-    // Standard ok/age shape used by every sender module.
+    // Standard ok/age shape used by every sender module. Defined in EGModule.cpp.
     static size_t write_status_json(char* buf, size_t cap, const char* key,
                                     bool ok, unsigned long last_attempt_ms,
-                                    unsigned long now) {
-      if (last_attempt_ms == 0) {
-        return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":false,\"age\":null}"), key);
-      }
-      return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":%s,\"age\":%lu}"), key,
-                      ok ? "true" : "false", (now - last_attempt_ms) / 1000);
-    }
+                                    unsigned long now);
 };
 
 #endif

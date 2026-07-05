@@ -97,9 +97,9 @@ public:
 #endif
   char _lwt_topic[64] = "";
   // Written from the AsyncMqttClient callbacks (AsyncTCP task on ESP32),
-  // read from s_tick/loop: volatile for cross-task visibility. RMW on these
-  // must hold MQTT_CB_LOCK (see onMqttDisconnect / on_prefs_saved).
-  volatile bool connected = false;
+  // read from s_tick/loop: EG_XTASK_VOLATILE for cross-task visibility. RMW on
+  // these must hold MQTT_CB_LOCK (see onMqttDisconnect / on_prefs_saved).
+  EG_XTASK_VOLATILE bool connected = false;
 protected:
   void reconnect();
 
@@ -170,14 +170,14 @@ private:
   static constexpr uint8_t PEND_WARN   = 1 << 2;
   static constexpr uint8_t PEND_ALERT  = 1 << 3;
   uint8_t _pending = 0;
-  volatile bool _reanchor = false;   // set on (re)connect; s_tick re-derives slot phase
+  EG_XTASK_VOLATILE bool _reanchor = false;   // set on (re)connect; s_tick re-derives slot phase
   int16_t _slot_s = -1;     // claimed second-of-minute slot, computed once
   unsigned long lastPing = 0;
   unsigned long lastStatus = 0;
-  volatile unsigned long lastConnectionAttempt = 0;
-  volatile bool mqttEnabled = true;
-  volatile uint8_t reconnectAttempts = 0;
-  volatile uint8_t authFailures = 0;
+  EG_XTASK_VOLATILE unsigned long lastConnectionAttempt = 0;
+  EG_XTASK_VOLATILE bool mqttEnabled = true;
+  EG_XTASK_VOLATILE uint8_t reconnectAttempts = 0;
+  EG_XTASK_VOLATILE uint8_t authFailures = 0;
 #ifdef ESP32
   // Callbacks run on the AsyncTCP task; guards the few cross-task RMWs.
   portMUX_TYPE _cbMux = portMUX_INITIALIZER_UNLOCKED;
@@ -188,7 +188,7 @@ private:
 #ifdef MQTTAUTODISCOVER
   // onMqttMessage (AsyncTCP task) may not touch the walk state; it raises
   // this flag and s_tick runs triggerHassDiscovery in cooperative context.
-  volatile bool _hass_retrigger = false;
+  EG_XTASK_VOLATILE bool _hass_retrigger = false;
   unsigned long _hass_next_publish = 0;
   unsigned long _hass_last_publish = 0;
   int8_t  _hass_walk_state = 0;
