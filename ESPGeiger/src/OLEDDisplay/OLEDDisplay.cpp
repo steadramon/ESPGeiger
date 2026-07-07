@@ -44,6 +44,13 @@ static void format_cpm(char* buf, size_t bufsz, float cpm) {
   else             snprintf_P(buf, bufsz, PSTR("%u"), (unsigned)(cpm + 0.5f));
 }
 
+// Displayed CPM: the CPM-mode value, or the 5-minute average once it drops
+// below 10, so low readings stay steady instead of jumping between integers.
+static float disp_cpm() {
+  float cpm = gcounter.get_cpmf();
+  return (cpm < 10.0f) ? gcounter.get_cpm5f() : cpm;
+}
+
 // Page-4 buffers: lazy-alloc on first render, freed on page exit (see loop()).
 struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; uint8_t seed; bool alive; };
 static const uint8_t MATRIX_DROPS = 32;
@@ -488,7 +495,7 @@ bool SSD1306Display::isScreenOnTime(unsigned long now) {
 void SSD1306Display::page_tiny() {
   clearBuffer();
   char buf[12];
-  format_cpm(buf, sizeof(buf), gcounter.get_cpmf());
+  format_cpm(buf, sizeof(buf), disp_cpm());
   setFont(U8G2_FONT_ARIAL_16);
   drawStr(0, 0, buf);
   if (Wifi::connected) drawPixel(71, 0);
@@ -561,7 +568,7 @@ void SSD1306Display::page_tiny_dose() {
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 16, PSTR("uSv/h"));
   char cpmbuf[8];
-  format_cpm(cpmbuf, sizeof(cpmbuf), gcounter.get_cpmf());
+  format_cpm(cpmbuf, sizeof(cpmbuf), disp_cpm());
   snprintf_P(buf, sizeof(buf), PSTR("%s cpm"), cpmbuf);
   drawStr(0, 28, buf);
 }
@@ -593,7 +600,7 @@ void SSD1306Display::page_tiny_meter() {
   const int py = 36;
   const int r  = 28;
   char buf[8];
-  format_cpm(buf, sizeof(buf), gcounter.get_cpmf());
+  format_cpm(buf, sizeof(buf), disp_cpm());
   setFont(U8G2_FONT_ARIAL_10);
   drawStr(0, 0, buf);
   drawCircle(px, py, r, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
@@ -614,7 +621,7 @@ void SSD1306Display::page_tiny_meter() {
     drawLine(px + (int)(r * c),       py - (int)(r * s),
              px + (int)((r - 2) * c), py - (int)((r - 2) * s));
   }
-  float cpm = gcounter.get_cpmf();
+  float cpm = disp_cpm();
   if (cpm < 1.0f) cpm = 1.0f;
   float t = log10f(cpm) / 3.0f;
   if (t < 0.0f) t = 0.0f;
@@ -963,8 +970,14 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   // Cache-skip when nothing visible changed. WiFi + trend state included so
   // those refresh promptly, not only on the 10s page_one_clear cycle.
   // cpm_x10 keeps 0.1-CPM precision so fractional changes still trigger redraw.
-  uint32_t cpm_x10 = (uint32_t)(gcounter.get_cpmf() * 10.0f + 0.5f);
-  int32_t  usv_x100 = (int32_t)(gcounter.get_usv() * 100.0f + 0.5f);
+  // uSv derives from the same displayed CPM so the two never disagree at
+  // low counts. dcpm/ratio == get_usv() at normal counts (get_usv is
+  // get_cpmf * ratio_inv), and follows the 5-minute value when low.
+  float dcpm = disp_cpm();
+  float dratio = gcounter.get_ratio();
+  float dusv = (dratio > 0.0f) ? dcpm / dratio : 0.0f;
+  uint32_t cpm_x10 = (uint32_t)(dcpm * 10.0f + 0.5f);
+  int32_t  usv_x100 = (int32_t)(dusv * 100.0f + 0.5f);
   bool warming = !gcounter.is_warm();
   uint8_t snd = send_indicator;
   uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0);
@@ -1001,7 +1014,7 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   char oledBuf[16];
   format_cpm(oledBuf, sizeof(oledBuf), cpm_x10 * 0.1f);
   drawTPString(*this, 45, 0, DialogInput_Digits_17, oledBuf);
-  format_f(oledBuf, sizeof(oledBuf), gcounter.get_usv());
+  format_f(oledBuf, sizeof(oledBuf), dusv);
   drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);
   if (warming) {
     drawTPString(*this, 98, 2, DialogInput_plain_12, PSTR("W"));
