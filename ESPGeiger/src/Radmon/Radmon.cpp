@@ -156,7 +156,10 @@ void Radmon::postMeasurement() {
 
   Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
-  float avgcpm = gcounter.get_cpmf_adaptive();
+  float avgcpm;
+  if      (pingInterval <= 90)  avgcpm = gcounter.get_cpmf_stable();
+  else if (pingInterval <= 450) avgcpm = gcounter.get_cpm5f();
+  else                          avgcpm = gcounter.get_cpm15f();
   char cpmbuf[12];
   format_f(cpmbuf, sizeof(cpmbuf), avgcpm, 1);
   char url[256];
