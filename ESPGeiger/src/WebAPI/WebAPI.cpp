@@ -209,30 +209,40 @@ void WebAPI::doHandshake() {
   // exception. Fall back to plain rst_info if CrashDump didn't catch it
   // (e.g. very-early-boot exception before custom_crash_callback ran).
   const CrashDump::Snapshot* cd = nullptr;
-  uint32_t epc1 = 0, excvaddr = 0;
+  uint32_t epc1 = 0, excvaddr = 0, epc2 = 0, epc3 = 0, depc = 0;
   uint8_t  exccause = 0;
-  bool     sendExc = false;
-  bool     sendCd  = false;
+  bool     sendExc   = false;   // ec, pc, va (either source)
+  bool     sendExtra = false;   // e2, e3, dp (either source)
+  bool     sendStack = false;   // sp, st (RTC snapshot only)
   if (!_exc_sent) {
     cd = CrashDump::lastCrash();
     if (cd) {
       epc1     = cd->epc1;
       excvaddr = cd->excvaddr;
       exccause = (uint8_t)cd->exccause;
-      sendExc  = true;
-      sendCd   = (cd->word_count > 0) ||
-                  cd->epc2 || cd->epc3 || cd->depc || cd->sp;
-    } else if (DeviceInfo::resetExc(&epc1, &excvaddr, &exccause)) {
-      sendExc = true;
+      epc2     = cd->epc2;
+      epc3     = cd->epc3;
+      depc     = cd->depc;
+      sendExc   = true;
+      sendExtra = epc2 || epc3 || depc;
+      sendStack = (cd->word_count > 0) || cd->sp;
+    } else if (DeviceInfo::resetExc(&epc1, &excvaddr, &exccause,
+                                    &epc2, &epc3, &depc)) {
+      // No RTC snapshot: rst_info still carries the extra PCs. depc is the
+      // faulting PC of a double-exception (load/store during handling);
+      // epc1 is not. No stack window is available on this path.
+      sendExc   = true;
+      sendExtra = epc2 || epc3 || depc;
     }
   }
-  uint16_t stackBytes = (sendCd && cd) ? (cd->word_count * 4) : 0;
+  uint16_t stackBytes = (cd && cd->word_count > 0) ? (cd->word_count * 4) : 0;
 
   MsgPack::Writer mp(buffer, sizeof(buffer));
   uint8_t entries = 11;
   if (sendCoords) entries += 2;
   if (sendExc)    entries += 3;   // ec, pc, va
-  if (sendCd)     entries += 5;   // e2, e3, dp, sp, st
+  if (sendExtra)  entries += 3;   // e2, e3, dp
+  if (sendStack)  entries += 2;   // sp, st
   mp.map(entries);
   mp.kv("n",  (uint32_t)time(NULL));
   mp.kv("pk", pub_k_64);
@@ -254,10 +264,12 @@ void WebAPI::doHandshake() {
     mp.kv("pc", epc1);
     mp.kv("va", excvaddr);
   }
-  if (sendCd) {
-    mp.kv("e2", cd->epc2);
-    mp.kv("e3", cd->epc3);
-    mp.kv("dp", cd->depc);
+  if (sendExtra) {
+    mp.kv("e2", epc2);
+    mp.kv("e3", epc3);
+    mp.kv("dp", depc);
+  }
+  if (sendStack) {
     mp.kv("sp", cd->sp);
     // Raw stack bytes, little-endian uint32 words (native ESP8266 order).
     // Length = word_count * 4; decode server-side as N little-endian u32s.

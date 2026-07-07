@@ -264,16 +264,21 @@ const char* DeviceInfo::chipmodel() {
 #endif
 }
 
-bool DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause) {
+bool DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
+                          uint32_t* epc2, uint32_t* epc3, uint32_t* depc) {
 #ifdef ESP8266
   rst_info* ri = ESP.getResetInfoPtr();
   if (!ri || ri->reason != REASON_EXCEPTION_RST) return false;
   if (epc1)     *epc1     = ri->epc1;
   if (excvaddr) *excvaddr = ri->excvaddr;
   if (exccause) *exccause = (uint8_t)ri->exccause;
+  if (epc2)     *epc2     = ri->epc2;
+  if (epc3)     *epc3     = ri->epc3;
+  if (depc)     *depc     = ri->depc;
   return true;
 #else
   (void)epc1; (void)excvaddr; (void)exccause;
+  (void)epc2; (void)epc3; (void)depc;
   return false;
 #endif
 }

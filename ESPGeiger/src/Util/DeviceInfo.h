@@ -92,7 +92,12 @@ namespace DeviceInfo {
   void safeRestart(uint32_t delayMs = 0);
 
   // Returns false when not available (ESP32 lacks per-fault details).
-  bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause);
+  // epc2/epc3/depc are optional; depc holds the faulting PC of a
+  // double-exception (load/store during exception handling), which epc1
+  // does not. Pass nullptr to skip any of them.
+  bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
+                uint32_t* epc2 = nullptr, uint32_t* epc3 = nullptr,
+                uint32_t* depc = nullptr);
 
   // Compile-time optional-module bitmask. Bits are frozen - never reassign.
   //   bit 0  MQTT          (MQTTOUT)
