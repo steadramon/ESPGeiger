@@ -26,6 +26,10 @@
 
 namespace Wifi {
   extern bool disabled;
+  // True only when offline was chosen deliberately (boot button-hold). When
+  // offline was forced by a failed connection this stays false and the tick
+  // periodically re-probes the saved network.
+  extern bool offline_forced;
   extern bool connected;
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[33];

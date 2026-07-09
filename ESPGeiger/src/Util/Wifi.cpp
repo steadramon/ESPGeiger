@@ -46,6 +46,7 @@ static volatile bool s_portalGotCreds = false;
 
 namespace Wifi {
   bool disabled = false;
+  bool offline_forced = false;
   bool connected = false;
   IPAddress local_ip;
   char ssid[33] = "";
@@ -66,6 +67,9 @@ namespace Wifi {
 
 static bool was_connected = false;
 static unsigned long lost_at = 0;
+static unsigned long s_offline_retry_at = 0;
+// Involuntary-offline self-heal: re-probe the saved network this often.
+static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;
 
 void Wifi::tick(unsigned long now) {
   wl_status_t wifi_status = WiFi.status();
@@ -113,6 +117,21 @@ void Wifi::tick(unsigned long now) {
         unsigned long down_seconds = (now - lost_at) / 1000;
         Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
       }
+    }
+  } else if (!Wifi::offline_forced) {
+    // Offline because no connection was available at boot, not a deliberate
+    // button-hold. Re-probe the saved network periodically; reboot to bring
+    // services up cleanly once it is back.
+    if (Wifi::connected) {
+      Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
+      DeviceInfo::safeRestart(500);
+    } else if (s_offline_retry_at == 0) {
+      s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
+    } else if ((long)(now - s_offline_retry_at) >= 0) {
+      s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
+      Log::console(PSTR("WiFi: Offline - re-probing saved network"));
+      WiFi.mode(WIFI_STA);
+      WiFi.begin();
     }
   }
 
@@ -361,8 +380,15 @@ bool Wifi::connectOrPortal() {
     WiFi.mode(WIFI_STA);
     Wifi::applyRuntimeNetPrefs();
     bool staticOn = Wifi::applyStaticConfig();
-    WiFi.begin();                            // uses NVS-stored creds
-    if (waitForWifi(30000)) {
+    // Retry the saved network a couple of times before giving up: a slow AP
+    // after a shared power blip should not drop us straight to the portal.
+    bool associated = false;
+    for (uint8_t attempt = 0; attempt < 3 && !associated; attempt++) {
+      if (attempt > 0) Log::console(PSTR("WiFi: Retrying saved network (%u/2)"), attempt);
+      WiFi.begin();                          // uses NVS-stored creds
+      associated = waitForWifi(attempt == 0 ? 30000 : 15000);
+    }
+    if (associated) {
       // Probe-and-revert: associated radio-side but maybe unreachable
       // (bad gateway/subnet). Backup is left by /wifisave; tick clears
       // it after a 5-min stable boot.
@@ -385,6 +411,11 @@ bool Wifi::connectOrPortal() {
     }
     Log::console(PSTR("WiFi: Saved creds failed to associate"));
     if (tryRestoreBackup()) return true;
+#if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
+    // Headless product: keep counting offline and let the tick self-heal,
+    // rather than block on a captive portal with no local screen to use it.
+    return false;
+#endif
   }
 
   // Captive setup AP. Static config (if any) carries over to picked SSID.

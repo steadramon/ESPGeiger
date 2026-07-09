@@ -163,6 +163,7 @@ void setup()
       DeviceInfo::safeRestart(500);
     } else if (action == BootHooks::ButtonHold::OFFLINE) {
       Wifi::disabled = true;
+      Wifi::offline_forced = true;   // deliberate: the tick must not self-heal
     }
   }
   if (!Wifi::hasSavedCreds()) {
@@ -172,9 +173,9 @@ void setup()
     bool res = Wifi::connectOrPortal();
     if (!res) {
 #if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
-      if (!Wifi::hasSavedCreds()) {
-        Wifi::disabled = true;
-      }
+      // Run offline and let the Wifi tick re-probe the saved network.
+      // Involuntary, so offline_forced stays false.
+      Wifi::disabled = true;
 #else
       Log::console(PSTR("WiFi not connecting ... Restarting ... "));
       DeviceInfo::safeRestart(1000);
