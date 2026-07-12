@@ -45,10 +45,10 @@ EG_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = loc
 #define STR(x) _STR(x)
 
 static const EGPref ENV_PREF_ITEMS[] = {
-  {"sda",         EN_L_SDA,  nullptr,    STR(ENV_DEFAULT_SDA), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"scl",         EN_L_SCL,  nullptr,    STR(ENV_DEFAULT_SCL), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, 0},
+  {"sda",         EN_L_SDA,  nullptr,    STR(ENV_DEFAULT_SDA), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
+  {"scl",         EN_L_SCL,  nullptr,    STR(ENV_DEFAULT_SCL), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
   {"unit",        EN_L_UNIT, EN_H_UNIT,  "0",                  nullptr, 0,    2,            0, EGP_UINT, 0},
-  {"temp_offset", EN_L_TOF,  EN_H_TOF,   "0",                  nullptr, -100, 100,          0, EGP_INT,  0},
+  {"temp_offset", EN_L_TOF,  EN_H_TOF,   "0",                  nullptr, -100, 100,          0, EGP_INT,  EGP_ADVANCED},
   {"altitude_m",  EN_L_ALT,  EN_H_ALT,   "0",                  nullptr, 0,    9000,         0, EGP_UINT, 0},
 };
 

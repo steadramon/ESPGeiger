@@ -57,8 +57,8 @@ static const EGPref SYSTEM_PREF_ITEMS[] = {
   {"ratio",    SY_L_RAT, SY_H_RAT, "151.0", nullptr, 0, 0,    0,  EGP_FLOAT,  0},
   {"warn",     SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
   {"alert",    SY_L_ALR, SY_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
-  {"web_pass", SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    32, EGP_STRING, EGP_SENSITIVE},
-  {"life_en",  SY_L_LE,  SY_H_LE,  "1",     nullptr, 0, 1,    0,  EGP_BOOL,   0},
+  {"web_pass", SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    32, EGP_STRING, EGP_SENSITIVE | EGP_ADVANCED},
+  {"life_en",  SY_L_LE,  SY_H_LE,  "1",     nullptr, 0, 1,    0,  EGP_BOOL,   EGP_ADVANCED},
 #ifdef ESP32
   // 0=board default, else 80/160/240. C3 silicon caps at 160.
   {"cpu_mhz",  nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  EGP_UINT,   EGP_HIDDEN},
@@ -286,31 +286,31 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"rx_pin", IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {"tx_pin", IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
+  {"tx_pin", IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, 0, 0, 0, EGP_UINT, EGP_ADVANCED},
 #endif
   // UDP source target
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   {"udprx_chipid", IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     6,  EGP_STRING, 0},
-  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.86.86",      IN_P_URGP,   0, 0,     24, EGP_STRING, 0},
-  {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   0},
-  {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   0},
+  {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.86.86",      IN_P_URGP,   0, 0,     24, EGP_STRING, EGP_ADVANCED},
+  {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   EGP_ADVANCED},
+  {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   EGP_ADVANCED},
 #endif
   // Signal conditioning
 #ifdef USE_PCNT
-  {"pcnt_filter", IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, 0},
-  {"pcnt_pull",   IN_L_PCP, IN_H_PCP, STR(PCNT_PIN_PULL_DEFAULT), nullptr, 0, 2, 0, EGP_UINT, 0},
+  {"pcnt_filter", IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, EGP_ADVANCED},
+  {"pcnt_pull",   IN_L_PCP, IN_H_PCP, STR(PCNT_PIN_PULL_DEFAULT), nullptr, 0, 2, 0, EGP_UINT, EGP_ADVANCED},
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-  {"debounce", IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, 0},
+  {"debounce", IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, EGP_ADVANCED},
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  {"pulse_width_us", IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, 0},
+  {"pulse_width_us", IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, EGP_ADVANCED},
 #endif
   // CPM calculation
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  {"cpm_window",  IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER},
+  {"cpm_window",  IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER | EGP_ADVANCED},
 #endif
-  {"cpm_mode", IN_L_CMM, IN_H_CMM, "3", nullptr, 0, 4, 0, EGP_UINT, 0},
+  {"cpm_mode", IN_L_CMM, IN_H_CMM, "3", nullptr, 0, 4, 0, EGP_UINT, EGP_ADVANCED},
   // Tube identity
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {"geiger_model", IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
@@ -320,7 +320,7 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"tube_gamma", IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-  {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, EGP_UINT, 0},
+  {"dead_time_us", IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, EGP_UINT, EGP_ADVANCED},
 #endif
 };
 
@@ -461,19 +461,19 @@ static const EGPref LED_PREF_ITEMS[] = {
   {"blip_led",    LD_L_BLP, LD_H_BLP, "1",    nullptr, 0, 1,     0, EGP_BOOL, 0},
 #ifdef ESPGEIGER_HW
   // Only Pulse mode is available - HV holds Timer1 so tone()/PWM is unusable.
-  {"pulse_us",    LD_L_PUL, LD_H_PUL, "2000",  nullptr, 100, 50000, 0, EGP_UINT, 0},
+  {"pulse_us",    LD_L_PUL, LD_H_PUL, "2000",  nullptr, 100, 50000, 0, EGP_UINT, EGP_ADVANCED},
 #else
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   // Fade needs Timer1; ESP8266 test builds use it for the fake pulse gen.
-  {"mode",        LD_L_MOD, LD_H_MOD, "0",     nullptr, 0,   1,     0, EGP_UINT, 0},
+  {"mode",        LD_L_MOD, LD_H_MOD, "0",     nullptr, 0,   1,     0, EGP_UINT, EGP_ADVANCED},
 #endif
-  {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 100, 50000, 0, EGP_UINT, 0},
+  {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 100, 50000, 0, EGP_UINT, EGP_ADVANCED},
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
-  {"fade_shift",  LD_L_FAD, LD_H_FAD, "1",     nullptr, 0,   2,     0, EGP_UINT, 0},
+  {"fade_shift",  LD_L_FAD, LD_H_FAD, "1",     nullptr, 0,   2,     0, EGP_UINT, EGP_ADVANCED},
   {"blip_bright", LD_L_BRT, LD_H_BRT, "80",    nullptr, 0,   100,   0, EGP_UINT, EGP_SLIDER},
 #endif
-  {"quiet_from",  LD_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME},
-  {"quiet_to",    LD_L_QTO, LD_H_QTO, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME},
+  {"quiet_from",  LD_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
+  {"quiet_to",    LD_L_QTO, LD_H_QTO, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
 #endif
 };
 

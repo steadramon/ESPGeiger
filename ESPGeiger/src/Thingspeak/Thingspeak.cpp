@@ -44,7 +44,7 @@ static const EGPrefGroup TS_PREF_GROUP = {
   "thingspeak", "ThingSpeak", 1,
   TS_PREF_ITEMS,
   sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD,
+  EGP_CAT_UPLOAD, "send",
 };
 
 const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }

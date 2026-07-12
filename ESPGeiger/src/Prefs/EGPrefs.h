@@ -77,6 +77,9 @@ struct EGPrefGroup {
   const EGPref* prefs;
   size_t        count;
   uint8_t       category;  // EGPrefCategory; defaults SYSTEM via POD zero-init
+  // Optional: pref key whose value drives the group's on/off badge in the
+  // config UI (off when unset or "0"). nullptr = no toggle, always shown plain.
+  const char*   enable_key;
 };
 
 // === LEGACY IMPORT (remove after v1.0.0) ===

@@ -66,23 +66,23 @@ static const EGPref PULSE_PREF_ITEMS[] = {
   // Burst (tone) and Fade (analogWrite) need Timer1.
   {"mode",       PO_L_MODE, PO_H_MODE, "0",    nullptr, 0,    2,     0, EGP_UINT, 0},
 #endif
-  {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 100,  50000, 0, EGP_UINT, 0},
+  {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 100,  50000, 0, EGP_UINT, EGP_ADVANCED},
 #ifndef EGPE_NO_PWM
-  {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, 0},
-  {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, 0},
-  {"fade_shift", PO_L_FSH,  PO_H_FSH,  "1",    nullptr, 0,    2,     0, EGP_UINT, 0},
+  {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, EGP_ADVANCED},
+  {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, EGP_ADVANCED},
+  {"fade_shift", PO_L_FSH,  PO_H_FSH,  "1",    nullptr, 0,    2,     0, EGP_UINT, EGP_ADVANCED},
 #endif
-  {"brightness", PO_L_BRT,  PO_H_BRT,  "100",  nullptr, 0,    100,   0, EGP_UINT, EGP_SLIDER},
-  {"max_hz",     PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, 0},
-  {"quiet_from", PO_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
-  {"quiet_to",   PO_L_QTO,  PO_H_QTO,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME},
+  {"brightness", PO_L_BRT,  PO_H_BRT,  "100",  nullptr, 0,    100,   0, EGP_UINT, EGP_SLIDER | EGP_ADVANCED},
+  {"max_hz",     PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, EGP_ADVANCED},
+  {"quiet_from", PO_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
+  {"quiet_to",   PO_L_QTO,  PO_H_QTO,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
 };
 
 static const EGPrefGroup PULSE_PREF_GROUP = {
   "pulse", "Pulse Out", 1,
   PULSE_PREF_ITEMS,
   sizeof(PULSE_PREF_ITEMS) / sizeof(PULSE_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT,
+  EGP_CAT_OUTPUT, "enable",
 };
 
 const EGPrefGroup* PulseOut::prefs_group() { return &PULSE_PREF_GROUP; }

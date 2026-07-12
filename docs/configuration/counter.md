@@ -8,7 +8,7 @@ parent: Configuration
 
 # Counter Configuration
 
-Two settings on the Config page that often get confused: **Debounce** and **Tube dead time**. They are related but serve different jobs, and getting them right matters at high count rates.
+Two settings on the Config page, both under the **Advanced** section of the Input tab, that often get confused: **Debounce** and **Tube dead time**. They are related but serve different jobs, and getting them right matters at high count rates.
 
 ## Debounce
 

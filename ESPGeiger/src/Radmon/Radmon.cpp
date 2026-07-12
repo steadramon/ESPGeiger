@@ -39,14 +39,14 @@ static const EGPref RADMON_PREF_ITEMS[] = {
   {"send",     RM_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  EGP_BOOL,   0},
   {"user",     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  32, EGP_STRING, 0},
   {"password", RM_L_PWD, nullptr,  "",   nullptr, 0, 0,  64, EGP_STRING, EGP_SENSITIVE},
-  {"interval", RM_L_INT, RM_H_INT, "60", nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, 0},
+  {"interval", RM_L_INT, RM_H_INT, "60", nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, EGP_ADVANCED},
 };
 
 static const EGPrefGroup RADMON_PREF_GROUP = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD,
+  EGP_CAT_UPLOAD, "send",
 };
 
 const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }

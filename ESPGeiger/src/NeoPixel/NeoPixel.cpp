@@ -60,13 +60,13 @@ EG_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
 
 static const EGPref NEOPIXEL_PREF_ITEMS[] = {
 #ifndef NEOPIXEL_PIN_BLOCKED
-  {"pin",        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
+  {"pin",        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED},
 #endif
   {"brightness", NP_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
   {"mode",       NP_L_MODE, NP_H_MODE, "4",               nullptr, 0, 4,   0, EGP_UINT, 0},
   {"color",      NP_L_COL,  NP_H_COL,  "0",               nullptr, 0, 7,   0, EGP_UINT, 0},
-  {"fade",       NP_L_FAD,  NP_H_FAD,  "0",               nullptr, 0, 3,   0, EGP_UINT, 0},
-  {"swap",       NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, 0},
+  {"fade",       NP_L_FAD,  NP_H_FAD,  "0",               nullptr, 0, 3,   0, EGP_UINT, EGP_ADVANCED},
+  {"swap",       NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, EGP_ADVANCED},
 };
 
 static const EGPrefGroup NEOPIXEL_PREF_GROUP = {

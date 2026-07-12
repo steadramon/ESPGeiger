@@ -54,7 +54,7 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP = {
   "webhook", "Webhook", 1,
   WEBHOOK_PREF_ITEMS,
   sizeof(WEBHOOK_PREF_ITEMS) / sizeof(WEBHOOK_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD,
+  EGP_CAT_UPLOAD, "send",
 };
 
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }

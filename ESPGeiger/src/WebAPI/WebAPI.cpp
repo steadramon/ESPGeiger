@@ -69,7 +69,7 @@ static const EGPrefGroup WEBAPI_PREF_GROUP = {
   "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD,
+  EGP_CAT_UPLOAD, "mode",
 };
 
 const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }

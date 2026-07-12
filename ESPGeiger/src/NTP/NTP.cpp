@@ -36,7 +36,7 @@ EG_PSTR(NT_L_TZ,  "Timezone");
 EG_PSTR(NT_H_TZ,  "Olson name");
 
 static const EGPref NTP_PREF_ITEMS[] = {
-  {"server", NT_L_SRV, nullptr,  NTP_SERVER, nullptr, 0, 0, 64, EGP_STRING, 0},
+  {"server", NT_L_SRV, nullptr,  NTP_SERVER, nullptr, 0, 0, 64, EGP_STRING, EGP_ADVANCED},
   {"tz",     NT_L_TZ,  NT_H_TZ,  NTP_TZ,     nullptr, 0, 0, 64, EGP_STRING, 0},
 };
 

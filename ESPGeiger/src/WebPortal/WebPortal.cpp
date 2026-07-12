@@ -109,6 +109,9 @@ h4{margin:.8em 0 .2em;font-size:1em;color:var(--muted)}
 output{display:inline-block;margin-left:.6em;color:var(--muted)}
 details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
 details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
+details.adv{margin:.5em 0 0;border:0;padding:0}details.adv>summary{color:var(--muted);font-size:.85em;font-weight:400}
+details.bx.off>summary{opacity:.55}
+.gb{font-size:.68em;font-weight:400;padding:.05em .45em;border-radius:3px;margin-left:.5em;border:1px solid var(--border);color:var(--muted)}.gb.on{color:var(--accent);border-color:var(--accent)}
 nav.tabs{display:flex;border-bottom:1px solid var(--border);margin:0 0 1em;gap:.4em;flex-wrap:wrap}
 nav.tabs a{padding:.5em .9em;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none}
 nav.tabs a:hover{color:var(--fg)}
@@ -1463,8 +1466,16 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[512];
   int n;
 
-  // Stable-sort visible groups by display_order. Groups with order==0
-  // have their own dedicated page (NTP, HV) and are skipped here.
+  // Stable-sort visible groups: enabled groups float above disabled ones, then
+  // by display_order within each. Groups with order==0 have their own dedicated
+  // page (NTP, HV) and are skipped here.
+  // "on" = no enable_key (always shown) or its enable pref is set and not "0".
+  auto grp_on_at = [](uint8_t gi) -> bool {
+    const EGPrefGroup* g = EGPrefs::group_at(gi);
+    if (!g || !g->enable_key) return true;
+    const char* ev = EGPrefs::getString(g->module_id, g->enable_key);
+    return ev[0] != '\0' && strcmp(ev, "0") != 0;
+  };
   uint8_t gc = (uint8_t)EGPrefs::group_count();
   uint8_t order[EG_MAX_MODULES];
   if (gc > sizeof(order)) gc = sizeof(order);
@@ -1473,11 +1484,14 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     uint8_t cur = order[i];
     EGModule* m_cur = EGPrefs::module_at(cur);
     uint8_t o_cur = m_cur ? m_cur->display_order() : 50;
+    bool en_cur = grp_on_at(cur);
     uint8_t j = i;
     while (j > 0) {
       EGModule* m_prev = EGPrefs::module_at(order[j - 1]);
       uint8_t o_prev = m_prev ? m_prev->display_order() : 50;
-      if (o_prev <= o_cur) break;
+      bool en_prev = grp_on_at(order[j - 1]);
+      bool prev_first = (en_prev != en_cur) ? en_prev : (o_prev <= o_cur);
+      if (prev_first) break;
       order[j] = order[j - 1];
       j--;
     }
@@ -1491,8 +1505,20 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (!g || g->count == 0) continue;
     if (g->category != tab) continue;
 
-    n = snprintf_P(buf, sizeof(buf), PSTR("<details class=bx><summary>%s</summary>"),
-                   g->label ? g->label : g->module_id);
+    // A group with an enable_key gets an on/off badge and is dimmed when off.
+    // On == value set and not "0".
+    bool has_toggle = (g->enable_key != nullptr);
+    bool grp_on = true;
+    if (has_toggle) {
+      const char* ev = EGPrefs::getString(g->module_id, g->enable_key);
+      grp_on = (ev[0] != '\0' && strcmp(ev, "0") != 0);
+    }
+    n = snprintf_P(buf, sizeof(buf),
+                   PSTR("<details class='bx%s'><summary>%s%s</summary>"),
+                   (has_toggle && !grp_on) ? " off" : "",
+                   g->label ? g->label : g->module_id,
+                   has_toggle ? (grp_on ? " <span class='gb on'>on</span>"
+                                        : " <span class='gb off'>off</span>") : "");
     if (n > 0) res.sendChunk(buf, (size_t)n);
 
     char s_id[32], s_lbl[80], s_help[120], s_pat[64];
@@ -1506,10 +1532,10 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     // (opens loc.espgeiger.com in a child window, receives coords via postMessage).
     bool has_lat = false, has_lon = false;
 
-    for (size_t j = 0; j < g->count; j++) {
-      const EGPref& p = g->prefs[j];
-      if (p.flags & EGP_HIDDEN) continue;
-
+    // Emit one field. Called twice per group: the common fields, then the
+    // EGP_ADVANCED fields inside a nested "Advanced" disclosure. Array order
+    // does not matter.
+    auto emit_field = [&](const EGPref& p) {
       const char* p_id    = P2S(p.id,      s_id,   sizeof(s_id));
       if (strcmp(p_id, "lat") == 0) has_lat = true;
       else if (strcmp(p_id, "lon") == 0) has_lon = true;
@@ -1520,12 +1546,12 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       if (p.type == EGP_LABEL) {
         n = snprintf_P(buf, sizeof(buf), PSTR("<label>%s</label>"), p.label ? p_label : "");
         if (n > 0) res.sendChunk(buf, (size_t)n);
-        continue;
+        return;
       }
       if (p.type == EGP_HEADER) {
         n = snprintf_P(buf, sizeof(buf), PSTR("<h4>%s</h4>"), p.label ? p_label : "");
         if (n > 0) res.sendChunk(buf, (size_t)n);
-        continue;
+        return;
       }
 
       const char* cur = EGPrefs::getString(g->module_id, p_id);
@@ -1629,6 +1655,13 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
         if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
       }
       res.sendChunk(buf, pos);
+    };
+
+    // Pass 1: common fields.
+    for (size_t j = 0; j < g->count; j++) {
+      const EGPref& p = g->prefs[j];
+      if (p.flags & (EGP_HIDDEN | EGP_ADVANCED)) continue;
+      emit_field(p);
     }
     if (has_lat && has_lon) {
       n = snprintf_P(buf, sizeof(buf), PSTR(
@@ -1642,6 +1675,18 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
         g->module_id, g->module_id);
       if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
     }
+    // Pass 2: advanced fields, folded into a nested disclosure.
+    bool adv_open = false;
+    for (size_t j = 0; j < g->count; j++) {
+      const EGPref& p = g->prefs[j];
+      if ((p.flags & EGP_HIDDEN) || !(p.flags & EGP_ADVANCED)) continue;
+      if (!adv_open) {
+        res.sendChunk(F("<details class=adv><summary>Advanced</summary>"));
+        adv_open = true;
+      }
+      emit_field(p);
+    }
+    if (adv_open) res.sendChunk(F("</details>"));
     res.sendChunk(F("</details>"));
   }
 
@@ -2362,7 +2407,7 @@ window.toggleTick=()=>{LS.sndBtn=LS.sndBtn==='1'?'0':'1';applySnd()};
 (function clk(){var n=500;
 if(cps>0&&!mt&&ac){
 var t=ac.currentTime,s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
-s.buffer=nb;f.type='bandpass';f.frequency.value=1200;f.Q.value=2;g.gain.value=.7;
+s.buffer=nb;f.type='bandpass';f.frequency.value=1200;f.Q.value=2;g.gain.value=1.1;
 s.connect(f);f.connect(g);g.connect(ac.destination);s.start(t);
 n=Math.max(20,-Math.log(1-Math.random())/cps*1000)}
 O(clk,n)})();

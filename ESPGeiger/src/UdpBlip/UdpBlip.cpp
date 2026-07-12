@@ -54,15 +54,15 @@ EG_PSTR(UB_L_PORT,  "Port");
 
 static const EGPref UDPBLIP_PREF_ITEMS[] = {
   {"mode",  UB_L_MODE,  UB_H_MODE,  "0",                    nullptr,    0, 2, 0,  EGP_UINT,   0},
-  {"group", UB_L_GROUP, UB_H_GROUP, UDPBLIP_DEFAULT_GROUP,  UB_P_GROUP, 0, 0, 24, EGP_STRING, 0},
-  {"port",  UB_L_PORT,  nullptr,    UDPBLIP_DEFAULT_PORT,   nullptr,    1, 65535, 0, EGP_UINT, 0},
+  {"group", UB_L_GROUP, UB_H_GROUP, UDPBLIP_DEFAULT_GROUP,  UB_P_GROUP, 0, 0, 24, EGP_STRING, EGP_ADVANCED},
+  {"port",  UB_L_PORT,  nullptr,    UDPBLIP_DEFAULT_PORT,   nullptr,    1, 65535, 0, EGP_UINT, EGP_ADVANCED},
 };
 
 static const EGPrefGroup UDPBLIP_PREF_GROUP = {
   "udpblip", "Local Broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT,
+  EGP_CAT_OUTPUT, "mode",
 };
 
 const EGPrefGroup* UdpBlipModule::prefs_group() { return &UDPBLIP_PREF_GROUP; }

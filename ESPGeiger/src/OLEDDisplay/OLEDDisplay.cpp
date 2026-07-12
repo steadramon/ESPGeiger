@@ -99,22 +99,22 @@ EG_PSTR(OL_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to ap
 
 static const EGPref OLED_PREF_ITEMS[] = {
 #ifndef OLED_PINS_BLOCKED
-  {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"rst",        OL_L_RST, OL_H_RST, OLED_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, 0},
+  {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
+  {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
+  {"rst",        OL_L_RST, OL_H_RST, OLED_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, EGP_ADVANCED},
 #ifdef ESP32
-  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 4, 0, EGP_UINT, 0},
+  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 4, 0, EGP_UINT, EGP_ADVANCED},
 #else
-  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, 0},
+  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, EGP_ADVANCED},
 #endif
-  {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, 0},
+  {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, EGP_ADVANCED},
 #endif
   {"brightness", OL_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
 #ifdef GEIGER_PUSHBUTTON
   {"timeout",    OL_L_TMO, OL_H_TMO, "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
 #endif
-  {"on_time",    OL_L_ONT, OL_H_ONT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
-  {"off_time",   OL_L_OFT, OL_H_OFT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME},
+  {"on_time",    OL_L_ONT, OL_H_ONT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
+  {"off_time",   OL_L_OFT, OL_H_OFT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
 };
 
 static const EGPrefGroup OLED_PREF_GROUP = {

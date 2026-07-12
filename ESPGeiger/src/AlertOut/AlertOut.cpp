@@ -48,7 +48,7 @@ static const EGPrefGroup ALERT_PREF_GROUP = {
   "alert", "Alert Out", 1,
   ALERT_PREF_ITEMS,
   sizeof(ALERT_PREF_ITEMS) / sizeof(ALERT_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT,
+  EGP_CAT_OUTPUT, "mode",
 };
 
 const EGPrefGroup* AlertOut::prefs_group() { return &ALERT_PREF_GROUP; }

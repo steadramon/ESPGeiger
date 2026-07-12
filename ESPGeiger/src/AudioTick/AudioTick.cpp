@@ -169,15 +169,15 @@ EG_PSTR(TK_H_PIN, "Reboot to apply");
 static const EGPref TICK_PREF_ITEMS[] = {
   {"enable", TK_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, EGP_BOOL, 0},
   {"volume", TK_L_VOL,  TK_H_VOL,  "60",   nullptr, 0,   100,  0, EGP_UINT, 0},
-  {"freq",   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, EGP_UINT, 0},
-  {"decay",  TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, EGP_UINT, 0},
-  {"engine", TK_L_ENG,  TK_H_ENG,  "0",    nullptr, 0,   1,    0, EGP_UINT, 0},
-  {"peak",   TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, EGP_UINT, 0},
+  {"freq",   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, EGP_UINT, EGP_ADVANCED},
+  {"decay",  TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, EGP_UINT, EGP_ADVANCED},
+  {"engine", TK_L_ENG,  TK_H_ENG,  "0",    nullptr, 0,   1,    0, EGP_UINT, EGP_ADVANCED},
+  {"peak",   TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, EGP_UINT, EGP_ADVANCED},
   {"chime",  TK_L_CHM,  TK_H_CHM,  "1",    nullptr, 0,   8,    0, EGP_UINT, 0},
 #ifndef AUDIO_TICK_PINS_BLOCKED
-  {"bclk",   TK_L_BCLK, TK_H_PIN,  TICK_STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"ws",     TK_L_WS,   TK_H_PIN,  TICK_STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
-  {"dout",   TK_L_DOUT, TK_H_PIN,  TICK_STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
+  {"bclk",   TK_L_BCLK, TK_H_PIN,  TICK_STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
+  {"ws",     TK_L_WS,   TK_H_PIN,  TICK_STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
+  {"dout",   TK_L_DOUT, TK_H_PIN,  TICK_STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
 #endif
 };
 
@@ -185,7 +185,7 @@ static const EGPrefGroup TICK_PREF_GROUP = {
   "tick", "Audio Tick", 1,
   TICK_PREF_ITEMS,
   sizeof(TICK_PREF_ITEMS) / sizeof(TICK_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT,
+  EGP_CAT_OUTPUT, "enable",
 };
 
 const EGPrefGroup* AudioTick::prefs_group() { return &TICK_PREF_GROUP; }

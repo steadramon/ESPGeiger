@@ -10,7 +10,7 @@ parent: Configuration
 
 Pulse-driven builds (and any test build that uses the pulse path) can pick
 how the displayed CPM is calculated. The setting lives on the Config page
-under **Pulse Input -> CPM mode** and takes effect immediately, no reboot.
+under **Pulse Input -> Advanced -> CPM mode** and takes effect immediately, no reboot.
 
 Default is `3` (bucket). If you do not know what to pick, leave it at the
 default. This page explains the trade-offs so you can change it on

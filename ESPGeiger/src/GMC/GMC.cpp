@@ -47,7 +47,7 @@ static const EGPrefGroup GMC_PREF_GROUP = {
   "gmc", "GMC", 1,
   GMC_PREF_ITEMS,
   sizeof(GMC_PREF_ITEMS) / sizeof(GMC_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD,
+  EGP_CAT_UPLOAD, "send",
 };
 
 const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
