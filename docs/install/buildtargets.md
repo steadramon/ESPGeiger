@@ -65,15 +65,16 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 
 For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not** drive any pin until you've explicitly chosen one. After setting the pin in `/egprefs`, **reboot** for the change to take effect.
 
-## Audio Tick (ESP32 only)
+## Audio Tick (ESP32-S3 only)
 
 Builds with the [Audio Tick](/output/audiotick) output enabled. A per-pulse
 click is played through an I2S amplifier (e.g. MAX98357A). The XH-S3E set
 targets the **MINI ESP32-S3-N16R8** (sold as "XH-S3E-AI", a small purple
 ESP32-S3 board with onboard speaker, mic, button, NeoPixel and OLED);
-the `esp32_audio_*` set targets a generic ESP32 board with an externally
-wired amplifier (BCLK / WS / DOUT configurable from the **Config > tick**
-page).
+the `esp32s3_audio_*` set targets a generic ESP32-S3 dev kit with an
+externally wired amplifier (BCLK / WS / DOUT configurable from the
+**Config > tick** page). Audio is S3-only: the extra SRAM and headroom
+keep speech synthesis and the click engine clear of the counting path.
 
 | Target Name | Hardware | Counter Type | Notes |
 |---|---|---|---|
@@ -81,15 +82,11 @@ page).
 `xh_s3e_serial` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | Serial | Serial input on GPIO 13/14. |
 `xh_s3e_udp` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | UDP receiver | Tubeless receiver, see UDP Receiver below. |
 `xh_s3e_test` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | n/a | Poisson simulator for tuning the click sound. |
-`esp32_audio_pulse` | ESP32 + amp | Pulse | PCNT-based pulse input. |
-`esp32_audio_pulse_no_pcnt` | ESP32 + amp | Pulse | Interrupt-based pulse input (use when PCNT can't latch the pulse). |
-`esp32_audio_serial` | ESP32 + amp | Serial | |
-`esp32_audio_test` | ESP32 + amp | n/a | Poisson simulator. |
 `esp32s3_audio_pulse` | ESP32-S3 dev kit + amp | Pulse | Generic S3 board, externally wired I2S amplifier. |
 `esp32s3_audio_serial` | ESP32-S3 dev kit + amp | Serial | |
 
 Audio Tick is disabled by default (`tick.enable=0`). Enable it from the
-Config page after flashing and, on the `esp32_audio_*` envs, set the
+Config page after flashing and, on the `esp32s3_audio_*` envs, set the
 three I2S pins to match your wiring before rebooting.
 
 ## UDP Receiver
