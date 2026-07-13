@@ -21,7 +21,6 @@ the alternative.
 | Env family | Hardware | I2S pins |
 |---|---|---|
 | `xh_s3e_*` | MINI ESP32-S3-N16R8 ("XH-S3E-AI") with on-board speaker | Fixed at BCLK=15, WS=16, DOUT=7 |
-| `esp32_audio_*` | Generic ESP32 + MAX98357A wired by you | Configurable in **Config > Audio Tick** (defaults BCLK=26, WS=25, DOUT=22) |
 | `esp32s3_audio_*` | Generic ESP32-S3 + MAX98357A wired by you | Configurable in **Config > Audio Tick** (defaults BCLK=15, WS=16, DOUT=7) |
 
 On the generic families, verify your wiring matches the pins in Config before
