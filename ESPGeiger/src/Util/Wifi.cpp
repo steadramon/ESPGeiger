@@ -70,6 +70,8 @@ static unsigned long lost_at = 0;
 static unsigned long s_offline_retry_at = 0;
 // Involuntary-offline self-heal: re-probe the saved network this often.
 static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;
+static const uint32_t PORTAL_RETRY_MS = 600000UL;   // 10 min
+static const uint32_t WIFI_OFFLINE_MAX_MS = 3600000UL;   // 1 hour
 
 void Wifi::tick(unsigned long now) {
   wl_status_t wifi_status = WiFi.status();
@@ -124,6 +126,9 @@ void Wifi::tick(unsigned long now) {
     // services up cleanly once it is back.
     if (Wifi::connected) {
       Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
+      DeviceInfo::safeRestart(500);
+    } else if (now > WIFI_OFFLINE_MAX_MS) {
+      Log::console(PSTR("WiFi: Offline 1h, rebooting to retry"));
       DeviceInfo::safeRestart(500);
     } else if (s_offline_retry_at == 0) {
       s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
@@ -412,8 +417,6 @@ bool Wifi::connectOrPortal() {
     Log::console(PSTR("WiFi: Saved creds failed to associate"));
     if (tryRestoreBackup()) return true;
 #if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
-    // Headless product: keep counting offline and let the tick self-heal,
-    // rather than block on a captive portal with no local screen to use it.
     return false;
 #endif
   }
@@ -447,11 +450,20 @@ bool Wifi::connectOrPortal() {
   });
   portal->begin(DeviceInfo::hostname());
   Log::console(PSTR("WiFi: Setup portal up on AP %s"), DeviceInfo::hostname());
+  bool haveCreds = Wifi::hasSavedCreds();
+  unsigned long portal_idle_since = fast_millis();
   while (!s_portalGotCreds) {
     portal->loop();
     improvSerial.poll();
     delay(10);
     yield();
+    if (!haveCreds) continue;   // first setup: wait indefinitely for the user
+    if (WiFi.softAPgetStationNum() > 0) portal_idle_since = fast_millis();
+    if ((fast_millis() - portal_idle_since) >= PORTAL_RETRY_MS ||
+        fast_millis() >= WIFI_OFFLINE_MAX_MS) {
+      Log::console(PSTR("WiFi: Portal timeout, rebooting to retry saved network"));
+      DeviceInfo::safeRestart(500);
+    }
   }
   portal->end();
   delete portal;
