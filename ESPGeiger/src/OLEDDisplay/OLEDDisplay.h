@@ -100,6 +100,7 @@ public:
 #endif
     const EGLegacyAlias* legacy_aliases() override;
     void registerRoutes(EGHttpServer& http) override;
+    bool hw_present() override { return is_present(); }
 
     void setup();
     void setupWifi(const char* s);

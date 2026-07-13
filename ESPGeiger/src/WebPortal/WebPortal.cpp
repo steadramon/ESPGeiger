@@ -1471,6 +1471,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // page (NTP, HV) and are skipped here.
   // "on" = no enable_key (always shown) or its enable pref is set and not "0".
   auto grp_on_at = [](uint8_t gi) -> bool {
+    EGModule* m = EGPrefs::module_at(gi);
+    if (m && !m->hw_present()) return false;
     const EGPrefGroup* g = EGPrefs::group_at(gi);
     if (!g || !g->enable_key) return true;
     const char* ev = EGPrefs::getString(g->module_id, g->enable_key);
@@ -1513,12 +1515,15 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       const char* ev = EGPrefs::getString(g->module_id, g->enable_key);
       grp_on = (ev[0] != '\0' && strcmp(ev, "0") != 0);
     }
+    bool hw_absent = (mod && !mod->hw_present());
+    const char* badge = hw_absent ? " <span class='gb off'>not detected</span>"
+                        : !has_toggle ? ""
+                        : grp_on ? " <span class='gb on'>on</span>"
+                                 : " <span class='gb off'>off</span>";
     n = snprintf_P(buf, sizeof(buf),
                    PSTR("<details class='bx%s'><summary>%s%s</summary>"),
-                   (has_toggle && !grp_on) ? " off" : "",
-                   g->label ? g->label : g->module_id,
-                   has_toggle ? (grp_on ? " <span class='gb on'>on</span>"
-                                        : " <span class='gb off'>off</span>") : "");
+                   (hw_absent || (has_toggle && !grp_on)) ? " off" : "",
+                   g->label ? g->label : g->module_id, badge);
     if (n > 0) res.sendChunk(buf, (size_t)n);
 
     char s_id[32], s_lbl[80], s_help[120], s_pat[64];

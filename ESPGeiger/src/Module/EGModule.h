@@ -82,6 +82,7 @@ class EGModule {
     virtual const EGMenuEntry* menuEntries() { return nullptr; }
     virtual void on_prefs_saved() { on_prefs_loaded(); }
     virtual uint8_t display_order() { return 50; }  // /egprefs render order - lower first, 0 = hidden
+    virtual bool hw_present() { return true; }
 
     // LEGACY IMPORT (remove after v1.0.0) - sentinel-terminated {nullptr,nullptr}
     virtual const EGLegacyAlias* legacy_aliases() { return nullptr; }

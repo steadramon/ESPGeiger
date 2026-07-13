@@ -481,6 +481,7 @@ static const EGPrefGroup LED_PREF_GROUP = {
   "led", "Blip LED", 1,
   LED_PREF_ITEMS,
   sizeof(LED_PREF_ITEMS) / sizeof(LED_PREF_ITEMS[0]),
+  EGP_CAT_SYSTEM, "blip_led",
 };
 
 const EGPrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
