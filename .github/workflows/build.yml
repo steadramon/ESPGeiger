@@ -35,8 +35,6 @@ jobs:
           - "esp32_pulse"
           - "esp32_pulse_no_pcnt"
           - "esp32_udp"
-          - "esp32_audio_pulse"
-          - "esp32_audio_serial"
           - "esp32c3_pulse"
           - "esp32c3_serial"
           - "esp32c3_udp"
