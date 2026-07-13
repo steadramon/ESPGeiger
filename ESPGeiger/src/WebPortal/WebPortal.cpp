@@ -1451,8 +1451,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       "<p><textarea name=blob id=cfgB rows=5 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
       "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
       " <button type=submit>Import</button></p></form>"
-      "<p style=\"color:var(--muted);font-size:.85em\">Import resets all config to defaults then applies the blob. WiFi and network settings are preserved. Device reboots automatically after import.</p>"
-      "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> the exported blob contains private information. Keep it private.</p>"));
+      "<p style=\"color:var(--muted);font-size:.85em\">WiFi and network settings are preserved. Device reboots automatically after import.</p>"
+      "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> The exported blob contains private information. Keep it private.</p>"));
     WebPortal::sendPageTail(res);
     res.endChunked();
     return;
