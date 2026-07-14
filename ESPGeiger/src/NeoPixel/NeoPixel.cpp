@@ -36,11 +36,13 @@ EG_PSTR(NP_L_BRT,  "Brightness");
 EG_PSTR(NP_L_SWAP, "Swap R/G");
 EG_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");
 EG_PSTR(NP_L_MODE, "Mode");
-EG_PSTR(NP_H_MODE, "0=Off 1=Blip 2=Status blip 3=Trend pulse 4=Trend+status (default)");
+EG_PSTR(NP_O_MODE, "Off|Blip|Status blip|Trend pulse|Trend+status");
 EG_PSTR(NP_L_COL,  "Blip colour");
-EG_PSTR(NP_H_COL,  "Colour for mode 1 only. 0=Green 1=Red 2=Blue 3=Yellow 4=Cyan 5=Magenta 6=White 7=Orange");
+EG_PSTR(NP_H_COL,  "Blip mode only.");
+EG_PSTR(NP_O_COL,  "Green|Red|Blue|Yellow|Cyan|Magenta|White|Orange");
 EG_PSTR(NP_L_FAD,  "Fade rate");
-EG_PSTR(NP_H_FAD,  "Blip-mode fade-out. 0=off, 1=fast, 2=medium, 3=slow");
+EG_PSTR(NP_H_FAD,  "Blip mode only.");
+EG_PSTR(NP_O_FAD,  "Off|Fast|Medium|Slow");
 #ifndef NEOPIXEL_PIN_BLOCKED
 EG_PSTR(NP_L_PIN,  "Pin");
 EG_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
@@ -63,9 +65,9 @@ static const EGPref NEOPIXEL_PREF_ITEMS[] = {
   {"pin",        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED},
 #endif
   {"brightness", NP_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
-  {"mode",       NP_L_MODE, NP_H_MODE, "4",               nullptr, 0, 4,   0, EGP_UINT, 0},
-  {"color",      NP_L_COL,  NP_H_COL,  "0",               nullptr, 0, 7,   0, EGP_UINT, 0},
-  {"fade",       NP_L_FAD,  NP_H_FAD,  "0",               nullptr, 0, 3,   0, EGP_UINT, EGP_ADVANCED},
+  {"mode",       NP_L_MODE, nullptr,   "4",               NP_O_MODE, 0, 4, 0, EGP_ENUM, 0},
+  {"color",      NP_L_COL,  NP_H_COL,  "0",               NP_O_COL, 0, 7,  0, EGP_ENUM, 0},
+  {"fade",       NP_L_FAD,  NP_H_FAD,  "0",               NP_O_FAD, 0, 3,  0, EGP_ENUM, EGP_ADVANCED},
   {"swap",       NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, EGP_ADVANCED},
 };
 

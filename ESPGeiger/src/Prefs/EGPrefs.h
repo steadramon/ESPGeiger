@@ -30,6 +30,7 @@ enum EGPrefType : uint8_t {
   EGP_STRING,
   EGP_LABEL,
   EGP_HEADER,
+  EGP_ENUM,     // <select>; options pipe-delimited in pattern, value = index 0..n-1
 };
 
 static constexpr uint8_t EGP_SENSITIVE = 1 << 0;

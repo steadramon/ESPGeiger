@@ -38,7 +38,7 @@ EG_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
 EG_PSTR(PO_L_PIN,  "GPIO");
 EG_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
 EG_PSTR(PO_L_MODE, "Mode");
-EG_PSTR(PO_H_MODE, "0=Pulse, 1=Burst, 2=LED fade");
+EG_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
 EG_PSTR(PO_L_PW,   "Pulse width \xc2\xb5s");
 EG_PSTR(PO_H_PW,   "100-50000");
 EG_PSTR(PO_L_FRQ,  "Burst Hz");
@@ -46,9 +46,9 @@ EG_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
 EG_PSTR(PO_L_CYC,  "Burst cycles");
 EG_PSTR(PO_H_CYC,  "1-10. More = louder and longer");
 EG_PSTR(PO_L_POL,  "Polarity");
-EG_PSTR(PO_H_POL,  "0=active high, 1=active low");
+EG_PSTR(PO_O_POL,  "Active high|Active low");
 EG_PSTR(PO_L_FSH,  "Fade rate");
-EG_PSTR(PO_H_FSH,  "0=fast, 1=medium, 2=slow");
+EG_PSTR(PO_O_FSH,  "Fast|Medium|Slow");
 EG_PSTR(PO_L_MHZ,  "Max Hz");
 EG_PSTR(PO_H_MHZ,  "Cap clicks per second (0 = unlimited, 1-200)");
 EG_PSTR(PO_L_BRT,  "Brightness");
@@ -61,16 +61,16 @@ EG_PSTR(PO_H_QTO,  "End of quiet window; crosses midnight if from > to");
 static const EGPref PULSE_PREF_ITEMS[] = {
   {"enable",     PO_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
   {"pin",        PO_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, EGP_INT,  0},
-  {"polarity",   PO_L_POL,  PO_H_POL,  "0",    nullptr, 0,    1,     0, EGP_UINT, 0},
+  {"polarity",   PO_L_POL,  nullptr,   "0",    PO_O_POL, 0,   1,     0, EGP_ENUM, 0},
 #ifndef EGPE_NO_PWM
   // Burst (tone) and Fade (analogWrite) need Timer1.
-  {"mode",       PO_L_MODE, PO_H_MODE, "0",    nullptr, 0,    2,     0, EGP_UINT, 0},
+  {"mode",       PO_L_MODE, nullptr,   "0",    PO_O_MODE, 0,  2,     0, EGP_ENUM, 0},
 #endif
   {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 100,  50000, 0, EGP_UINT, EGP_ADVANCED},
 #ifndef EGPE_NO_PWM
   {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, EGP_ADVANCED},
   {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, EGP_ADVANCED},
-  {"fade_shift", PO_L_FSH,  PO_H_FSH,  "1",    nullptr, 0,    2,     0, EGP_UINT, EGP_ADVANCED},
+  {"fade_shift", PO_L_FSH,  nullptr,   "1",    PO_O_FSH, 0,   2,     0, EGP_ENUM, EGP_ADVANCED},
 #endif
   {"brightness", PO_L_BRT,  PO_H_BRT,  "100",  nullptr, 0,    100,   0, EGP_UINT, EGP_SLIDER | EGP_ADVANCED},
   {"max_hz",     PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, EGP_ADVANCED},

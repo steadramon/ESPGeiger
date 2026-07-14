@@ -46,14 +46,14 @@ UdpBlipModule& udpblip = UdpBlipModule::getInstance();
 EG_REGISTER_MODULE(udpblip)
 
 EG_PSTR(UB_L_MODE,  "Mode");
-EG_PSTR(UB_H_MODE,  "0=off, 1=telemetry only, 2=telemetry + per-click broadcast");
+EG_PSTR(UB_O_MODE,  "Off|Telemetry only|Telemetry + per-click");
 EG_PSTR(UB_L_GROUP, "Group / peer IP");
 EG_PSTR(UB_H_GROUP, "239.x = multicast, else unicast peer.");
 EG_PSTR(UB_P_GROUP, "[0-9.]+");
 EG_PSTR(UB_L_PORT,  "Port");
 
 static const EGPref UDPBLIP_PREF_ITEMS[] = {
-  {"mode",  UB_L_MODE,  UB_H_MODE,  "0",                    nullptr,    0, 2, 0,  EGP_UINT,   0},
+  {"mode",  UB_L_MODE,  nullptr,    "0",                    UB_O_MODE,  0, 2, 0,  EGP_ENUM,   0},
   {"group", UB_L_GROUP, UB_H_GROUP, UDPBLIP_DEFAULT_GROUP,  UB_P_GROUP, 0, 0, 24, EGP_STRING, EGP_ADVANCED},
   {"port",  UB_L_PORT,  nullptr,    UDPBLIP_DEFAULT_PORT,   nullptr,    1, 65535, 0, EGP_UINT, EGP_ADVANCED},
 };

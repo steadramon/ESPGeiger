@@ -129,7 +129,7 @@ EG_REGISTER_MODULE(klaxonprefs)
 EG_PSTR(KX_L_EN,  "Klaxon on alert");
 EG_PSTR(KX_H_EN,  "Sound a klaxon when CPM crosses the alert threshold");
 EG_PSTR(KX_L_TY,  "Pattern");
-EG_PSTR(KX_H_TY,  "0=Alarm, 1=Two-Tone, 2=Wail, 3=Horn, 4=Voice");
+EG_PSTR(KX_O_TY,  "Alarm|Two-Tone|Wail|Horn|Voice");
 EG_PSTR(KX_L_VOL, "Volume");
 EG_PSTR(KX_H_VOL, "0-100");
 EG_PSTR(KX_L_CD,  "Cooldown");
@@ -141,7 +141,7 @@ EG_PSTR(KX_H_QTO, "End of quiet window; crosses midnight if from > to");
 
 static const EGPref KLAXON_PREF_ITEMS[] = {
   {"enable",     KX_L_EN,  KX_H_EN,  "0",  nullptr, 0, 0,   0, EGP_BOOL, 0},
-  {"type",       KX_L_TY,  KX_H_TY,  "0",  nullptr, 0, 4,   0, EGP_UINT, 0},
+  {"type",       KX_L_TY,  nullptr,  "0",  KX_O_TY, 0, 4,   0, EGP_ENUM, 0},
   {"volume",     KX_L_VOL, KX_H_VOL, "55", nullptr, 1, 100, 0, EGP_UINT, 0},
   {"cooldown",   KX_L_CD,  KX_H_CD,  "5",  nullptr, 1, 60,  0, EGP_UINT, EGP_ADVANCED},
   {"quiet_from", KX_L_QFR, KX_H_QFR, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},

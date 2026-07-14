@@ -35,9 +35,9 @@ SerialOut serialout;
 EG_REGISTER_MODULE(serialout)
 
 EG_PSTR(SO_L_FMT,  "Wire format");
-EG_PSTR(SO_H_FMT,  "0=Labelled (default), 1=MightyOhm, 2=User template");
+EG_PSTR(SO_O_FMT,  "Labelled|MightyOhm|User template");
 EG_PSTR(SO_L_TPL,  "Template");
-EG_PSTR(SO_H_TPL,  "format=2 only. See /vars.json for live values. Escapes: \\n \\r \\t");
+EG_PSTR(SO_H_TPL,  "User template. See /vars.json for live values. Escapes: \\n \\r \\t");
 EG_PSTR(SO_L_BAUD, "Baud override");
 EG_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
 
@@ -46,7 +46,7 @@ EG_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
 static const EGPref SOUT_PREF_ITEMS[] = {
   {"interval", nullptr, nullptr,  "0",  nullptr, 0, 65535,  0,   EGP_UINT,   EGP_HIDDEN},
   {"flags",    nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   EGP_UINT,   EGP_HIDDEN},
-  {"format",   SO_L_FMT,  SO_H_FMT,  "0",  nullptr, 0, 2,      0,   EGP_UINT,   0},
+  {"format",   SO_L_FMT,  nullptr,   "0",  SO_O_FMT, 0, 2,     0,   EGP_ENUM,   0},
   {"baud",     SO_L_BAUD, SO_H_BAUD, "0",  nullptr, 0, 921600, 0,   EGP_UINT,   EGP_ADVANCED},
   {"tpl",      SO_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    128, EGP_STRING, 0},
 };

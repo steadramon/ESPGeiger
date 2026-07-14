@@ -225,7 +225,7 @@ EG_PSTR(IN_L_TXP, "TX Pin");
 EG_PSTR(IN_L_PCF, "PCNT Filter");
 EG_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0=off)");
 EG_PSTR(IN_L_PCP, "PCNT Pull");
-EG_PSTR(IN_H_PCP, "Pin pull (0=none, 1=up, 2=down)");
+EG_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
 EG_PSTR(IN_L_DBN, "Debounce");
@@ -243,7 +243,7 @@ EG_PSTR(IN_H_DTU, "GM tube dead time (us). 0=disabled. J305=50, SBM-20=150.");
 // (synthetic spacing), so every counter type has a meaningful ring to switch
 // on. min_pulse_us still only updates from true single-pulse hooks.
 EG_PSTR(IN_L_CMM, "CPM mode");
-EG_PSTR(IN_H_CMM, "0=auto, 1=live ring, 2=fixed 60s, 3=bucket (default), 4=adaptive fast");
+EG_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
 EG_PSTR(IN_L_GMD, "Geiger Counter");
 EG_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
@@ -257,9 +257,10 @@ EG_PSTR(IN_H_TBG, "Detects gamma radiation");
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 EG_PSTR(IN_L_URMD, "Source Mode");
-EG_PSTR(IN_H_URMD, "0=specific chipid (auto-latches first heard if blank), 1=sum all producers heard");
+EG_PSTR(IN_O_URMD, "Specific device|Sum all sources");
+EG_PSTR(IN_H_URMD, "Specific uses the Pin chipid below, auto-latching the first source heard if left blank.");
 EG_PSTR(IN_L_URCH, "Pin chipid");
-EG_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in pin mode (0)");
+EG_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in Specific device mode");
 EG_PSTR(IN_P_URCH, "[0-9a-fA-F]{0,6}");
 EG_PSTR(IN_L_URGP, "Group / listen IP");
 EG_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen.");
@@ -267,7 +268,7 @@ EG_PSTR(IN_P_URGP, "[0-9.]+");
 EG_PSTR(IN_L_URPT, "Port");
 EG_PSTR(IN_H_URPT, "UDP port (default 57340)");
 EG_PSTR(IN_L_URRM, "RX sleep");
-EG_PSTR(IN_H_URRM, "0=light (lowest power), 1=modem (balanced), 2=none (always on).");
+EG_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
 // Defined in UdpRx.cpp; routes prefs-saved notifications to GeigerUdpRx
 // without dragging WiFiUDP.h into this file.
 extern "C" void udprx_notify_prefs_saved();
@@ -279,7 +280,7 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"serial_type", IN_L_STY, serial_type_desc, STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  {"udprx_mode",   IN_L_URMD, IN_H_URMD, "0",                  nullptr,     0, 1,     0,  EGP_UINT,   0},
+  {"udprx_mode",   IN_L_URMD, IN_H_URMD, "0",                  IN_O_URMD,   0, 1,     0,  EGP_ENUM,   0},
 #endif
   // Pins
 #ifndef RXPIN_BLOCKED
@@ -293,12 +294,12 @@ static const EGPref INPUT_PREF_ITEMS[] = {
   {"udprx_chipid", IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     6,  EGP_STRING, 0},
   {"udprx_group",  IN_L_URGP, IN_H_URGP, "239.255.86.86",      IN_P_URGP,   0, 0,     24, EGP_STRING, EGP_ADVANCED},
   {"udprx_port",   IN_L_URPT, IN_H_URPT, "57340",              nullptr,     1, 65535, 0,  EGP_UINT,   EGP_ADVANCED},
-  {"udprx_rxmode", IN_L_URRM, IN_H_URRM, "1",                  nullptr,     0, 2,     0,  EGP_UINT,   EGP_ADVANCED},
+  {"udprx_rxmode", IN_L_URRM, nullptr,   "1",                  IN_O_URRM,   0, 2,     0,  EGP_ENUM,   EGP_ADVANCED},
 #endif
   // Signal conditioning
 #ifdef USE_PCNT
   {"pcnt_filter", IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, EGP_ADVANCED},
-  {"pcnt_pull",   IN_L_PCP, IN_H_PCP, STR(PCNT_PIN_PULL_DEFAULT), nullptr, 0, 2, 0, EGP_UINT, EGP_ADVANCED},
+  {"pcnt_pull",   IN_L_PCP, nullptr,  STR(PCNT_PIN_PULL_DEFAULT), IN_O_PCP, 0, 2, 0, EGP_ENUM, EGP_ADVANCED},
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
   {"debounce", IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, EGP_ADVANCED},
@@ -310,7 +311,7 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   {"cpm_window",  IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER | EGP_ADVANCED},
 #endif
-  {"cpm_mode", IN_L_CMM, IN_H_CMM, "3", nullptr, 0, 4, 0, EGP_UINT, EGP_ADVANCED},
+  {"cpm_mode", IN_L_CMM, nullptr, "3", IN_O_CMM, 0, 4, 0, EGP_ENUM, EGP_ADVANCED},
   // Tube identity
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {"geiger_model", IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, 32, EGP_STRING, 0},
@@ -446,9 +447,9 @@ EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
 #endif
 #ifndef ESPGEIGER_HW
 EG_PSTR(LD_L_MOD, "Mode");
-EG_PSTR(LD_H_MOD, "0=Pulse, 1=Fade");
+EG_PSTR(LD_O_MOD, "Pulse|Fade");
 EG_PSTR(LD_L_FAD, "Fade rate");
-EG_PSTR(LD_H_FAD, "0=fast, 1=medium, 2=slow");
+EG_PSTR(LD_O_FAD, "Fast|Medium|Slow");
 EG_PSTR(LD_L_QFR, "Quiet from");
 EG_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
 EG_PSTR(LD_L_QTO, "Quiet to");
@@ -465,11 +466,11 @@ static const EGPref LED_PREF_ITEMS[] = {
 #else
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   // Fade needs Timer1; ESP8266 test builds use it for the fake pulse gen.
-  {"mode",        LD_L_MOD, LD_H_MOD, "0",     nullptr, 0,   1,     0, EGP_UINT, EGP_ADVANCED},
+  {"mode",        LD_L_MOD, nullptr,  "0",     LD_O_MOD, 0,  1,     0, EGP_ENUM, EGP_ADVANCED},
 #endif
   {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 100, 50000, 0, EGP_UINT, EGP_ADVANCED},
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
-  {"fade_shift",  LD_L_FAD, LD_H_FAD, "1",     nullptr, 0,   2,     0, EGP_UINT, EGP_ADVANCED},
+  {"fade_shift",  LD_L_FAD, nullptr,  "1",     LD_O_FAD, 0,  2,     0, EGP_ENUM, EGP_ADVANCED},
   {"blip_bright", LD_L_BRT, LD_H_BRT, "80",    nullptr, 0,   100,   0, EGP_UINT, EGP_SLIDER},
 #endif
   {"quiet_from",  LD_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     5, EGP_STRING, EGP_TIME | EGP_ADVANCED},

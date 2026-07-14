@@ -132,7 +132,8 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
       if (p->min_i != p->max_i && (v < p->min_i || v > p->max_i)) return -1;
       return snprintf_P(out, outsz, PSTR("%ld"), v);
     }
-    case EGP_UINT: {
+    case EGP_UINT:
+    case EGP_ENUM: {   // ENUM validates as its index (min_i..max_i)
       char* end;
       unsigned long v = strtoul(value, &end, 10);
       if (*end != '\0' || end == value) return -1;

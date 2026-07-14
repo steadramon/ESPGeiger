@@ -89,9 +89,9 @@ EG_PSTR(OL_H_RBA, "Reboot to apply");
 EG_PSTR(OL_L_FLP, "Flip 180\xC2\xB0");
 EG_PSTR(OL_L_TYP, "Display Type");
 #ifdef ESP32
-EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106, 2=SSD1309, 3=Tiny SSD1306, 4=Tiny SH1106. Reboot to apply.");
+EG_PSTR(OL_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106");
 #else
-EG_PSTR(OL_H_TYP, "0=SSD1306, 1=SH1106 (1.3in), 2=SSD1309. Reboot to apply.");
+EG_PSTR(OL_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");
 #endif
 EG_PSTR(OL_L_RST, "Reset Pin");
 EG_PSTR(OL_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
@@ -103,9 +103,9 @@ static const EGPref OLED_PREF_ITEMS[] = {
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
   {"rst",        OL_L_RST, OL_H_RST, OLED_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, EGP_ADVANCED},
 #ifdef ESP32
-  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 4, 0, EGP_UINT, EGP_ADVANCED},
+  {"type",       OL_L_TYP, OL_H_RBA, OLED_STR(OLED_TYPE), OL_O_TYP, 0, 4, 0, EGP_ENUM, EGP_ADVANCED},
 #else
-  {"type",       OL_L_TYP, OL_H_TYP, OLED_STR(OLED_TYPE), nullptr, 0, 2, 0, EGP_UINT, EGP_ADVANCED},
+  {"type",       OL_L_TYP, OL_H_RBA, OLED_STR(OLED_TYPE), OL_O_TYP, 0, 2, 0, EGP_ENUM, EGP_ADVANCED},
 #endif
   {"flip",       OL_L_FLP, OL_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, EGP_ADVANCED},
 #endif

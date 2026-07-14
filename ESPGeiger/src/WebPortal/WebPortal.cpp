@@ -1526,7 +1526,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
                    g->label ? g->label : g->module_id, badge);
     if (n > 0) res.sendChunk(buf, (size_t)n);
 
-    char s_id[32], s_lbl[80], s_help[120], s_pat[64];
+    char s_id[32], s_lbl[80], s_help[120], s_pat[128];
     auto P2S = [](const char* fp, char* dst, size_t cap) -> const char* {
       if (!fp) return "";
       strncpy_P(dst, fp, cap - 1);
@@ -1588,6 +1588,32 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
                        (cur[0] == '1') ? " checked" : "",
                        ro ? " disabled" : "");
         if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
+      } else if (p.type == EGP_ENUM) {
+        // Streamed per-option so a long option list can't overflow buf.
+        if (pos) { res.sendChunk(buf, pos); pos = 0; }
+        long cur_idx = strtol(cur, nullptr, 10);
+        long def_idx = p.default_val ? strtol(p.default_val, nullptr, 10) : -1;
+        n = snprintf_P(buf, sizeof(buf),
+                       PSTR("<select id='%s.%s' name='%s.%s'%s>"),
+                       mid, pid, mid, pid, ro ? " disabled" : "");
+        if (n > 0) res.sendChunk(buf, (size_t)n);
+        const char* opt = p_pat;
+        long idx = 0;
+        while (*opt) {
+          const char* bar = strchr(opt, '|');
+          size_t olen = bar ? (size_t)(bar - opt) : strlen(opt);
+          n = snprintf_P(buf, sizeof(buf),
+                         PSTR("<option value=%ld%s>%.*s%s</option>"),
+                         idx, (idx == cur_idx) ? " selected" : "",
+                         (int)olen, opt, (idx == def_idx) ? " (default)" : "");
+          if (n > 0) res.sendChunk(buf, (size_t)n);
+          if (!bar) break;
+          opt = bar + 1;
+          idx++;
+        }
+        n = snprintf_P(buf, sizeof(buf), PSTR("</select><br>"));
+        if (n > 0) res.sendChunk(buf, (size_t)n);
+        pos = 0;  // trailing help (if any) builds into a fresh buf below
       } else {
         const bool slider = (p.type == EGP_INT || p.type == EGP_UINT)
                          && (p.flags & EGP_SLIDER)
@@ -1611,8 +1637,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
           APPEND_LIT(buf, pos, sizeof(buf), " value='");
           pos = append_escaped(buf, sizeof(buf), pos, cur);
           if (pos + 1 < sizeof(buf)) buf[pos++] = '\'';
-          if (!slider && cur[0] == '\0'
-              && p.default_val && p.default_val[0]
+          // Placeholder always carries the default, so clearing the box reveals it.
+          if (!slider && p.default_val && p.default_val[0]
               && !(p.flags & EGP_TIME)) {
             n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" placeholder='%s'"), p.default_val);
             if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
