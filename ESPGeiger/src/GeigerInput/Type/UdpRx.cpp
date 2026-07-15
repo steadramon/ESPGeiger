@@ -382,27 +382,55 @@ void GeigerUdpRx::processEnv(const uint8_t* buf, size_t len) {
   envsensor.setRemote(t, h, p);
 }
 
+void GeigerUdpRx::do_refresh() {
+  if (IgmpRefresh::refresh()) _refresh_count++;
+  else                        _refresh_noop_count++;
+}
+
 void GeigerUdpRx::loop() {
+  uint32_t now = fast_millis();
   // WiFi reconnect drops the IGMP membership; rebind the socket.
   if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
     Log::console(PSTR("UdpRx: WiFi reconnect, rebinding multicast"));
     teardownUdp();
   }
-  if (_udp && _last_packet_ms > 0 &&
-      (fast_millis() - _last_packet_ms) > 30000UL) {
-    teardownUdp();
-    _last_packet_ms = 0;  // don't immediately re-tear if producer is genuinely offline
-  }
   bool was_unbound = (_udp == nullptr);
   if (!ensureUdp()) return;
   if (was_unbound) {
     _bound_at_ms = Wifi::connected_at_ms;
-    _last_igmp_refresh_ms = fast_millis();
+    _last_igmp_refresh_ms = now;
+    do_refresh();   // refresh membership now, don't wait out the recovery cadence
   }
-  // Keep router's multicast subscription alive.
-  if ((fast_millis() - _last_igmp_refresh_ms) > 300000UL) {
-    IgmpRefresh::refresh();
-    _last_igmp_refresh_ms = fast_millis();
+
+  // Silent-RX recovery ladder, armed once a producer has been heard
+  // (_last_packet_ms>0). A 30s+ gap means lwIP aged our multicast membership
+  // out or the socket went stale. First two attempts re-emit an IGMP report;
+  // after that, force a leave+rejoin. Cadence backs off 60s to 5 min once the
+  // producer looks genuinely offline.
+  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > 30000UL) {
+    uint32_t step_ms = (_recovery_steps < 10) ? 60000UL : 300000UL;
+    if (_recovery_at_ms == 0 || (uint32_t)(now - _recovery_at_ms) >= step_ms) {
+      _recovery_at_ms = now;
+      if (_recovery_steps < 2) {
+        do_refresh();
+      } else {
+        teardownUdp();
+        if (ensureUdp()) _bound_at_ms = Wifi::connected_at_ms;
+        _rebind_count++;
+        do_refresh();
+      }
+      _recovery_steps++;
+      _last_igmp_refresh_ms = now;
+    }
+    if (!_udp) return;   // a rejoin above may have failed; try again next loop
+  } else {
+    _recovery_steps = 0;
+    _recovery_at_ms = 0;
+    // Keep router's multicast subscription alive while healthy.
+    if ((uint32_t)(now - _last_igmp_refresh_ms) > 300000UL) {
+      do_refresh();
+      _last_igmp_refresh_ms = now;
+    }
   }
   uint8_t buf[128];
   int sz;
@@ -465,12 +493,22 @@ bool GeigerUdpRx::isHealthy() const {
 }
 
 void GeigerUdpRx::appendJsonExtra(EGHttpResponse& res) {
+  // RX-health diagnostics, always emitted: quiet = seconds since last packet,
+  // rebind = leave+rejoin recovery cycles, igmp = IGMP reports queued, igmpx =
+  // refreshes that early-returned (no STA netif = the refresh is a no-op).
+  uint32_t quiet_s = _last_packet_ms
+                     ? (uint32_t)(fast_millis() - _last_packet_ms) / 1000u : 0;
+  char buf[96];
+  int n = snprintf_P(buf, sizeof(buf),
+      PSTR(",\"quiet\":%u,\"rebind\":%u,\"igmp\":%u,\"igmpx\":%u"),
+      (unsigned)quiet_s, (unsigned)_rebind_count,
+      (unsigned)_refresh_count, (unsigned)_refresh_noop_count);
+  if (n > 0) res.sendChunk(buf, (size_t)n);
   if (_packets_accepted == 0) return;
   uint16_t lx10 = loss_pct_x10();
-  char buf[24];
-  int n = snprintf_P(buf, sizeof(buf), PSTR(",\"loss\":%u.%u"),
+  int m = snprintf_P(buf, sizeof(buf), PSTR(",\"loss\":%u.%u"),
                      (unsigned)(lx10 / 10), (unsigned)(lx10 % 10));
-  if (n > 0) res.sendChunk(buf, (size_t)n);
+  if (m > 0) res.sendChunk(buf, (size_t)m);
 }
 
 const char* GeigerUdpRx::locked_chipid() const {

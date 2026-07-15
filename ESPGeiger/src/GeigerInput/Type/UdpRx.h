@@ -124,6 +124,15 @@ private:
   unsigned long _bound_at_ms = 0;
   unsigned long _last_igmp_refresh_ms = 0;
 
+  // Silent-RX recovery ladder. Arms only after the first packet ever seen.
+  void do_refresh();            // fire IgmpRefresh + tally the outcome
+  unsigned long _recovery_at_ms = 0;   // last recovery action (0 = idle)
+  uint16_t _recovery_steps = 0;        // escalation counter while silent
+  // Field diagnostics for the ESP32 multicast dropout, surfaced via appendJsonExtra.
+  uint16_t _rebind_count = 0;          // stale-socket leave+rejoin cycles
+  uint16_t _refresh_count = 0;         // IgmpRefresh reports queued
+  uint16_t _refresh_noop_count = 0;    // refresh early-returned (no netif)
+
   // Poisson gap-fill queue. processClick pushes (gap) deferred blip
   // times into here when a packet credits more than one click; loop()
   // pops any due and calls Counter::dispatchReceiverBlip. Scheduling

@@ -34,19 +34,20 @@ static void report_groups_cb(void* ctx) {
   igmp_report_groups((struct netif*)ctx);
 }
 
-void refresh() {
-  if (!Wifi::connected) return;
+bool refresh() {
+  if (!Wifi::connected) return false;
   esp_netif_t* sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-  if (!sta) return;
+  if (!sta) return false;
   void* nif = esp_netif_get_netif_impl(sta);
-  if (!nif) return;
+  if (!nif) return false;
   tcpip_callback(report_groups_cb, nif);
+  return true;
 }
 
 }
 
 #else  // ESP8266 or other targets - bug doesn't manifest here.
 
-namespace IgmpRefresh { void refresh() {} }
+namespace IgmpRefresh { bool refresh() { return false; } }
 
 #endif

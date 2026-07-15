@@ -23,7 +23,9 @@ namespace IgmpRefresh {
 
 // Re-emit IGMP Membership Report for every group joined on the STA netif.
 // No-op on ESP8266 and when WiFi is down.
-void refresh();
+// Returns true if the report was queued on the tcpip thread, false if it
+// early-returned (WiFi down or the STA netif handle was unresolvable).
+bool refresh();
 
 }
 
