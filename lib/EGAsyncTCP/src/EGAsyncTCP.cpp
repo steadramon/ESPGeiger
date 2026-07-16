@@ -205,6 +205,39 @@ static bool _server_alive(const AsyncServer* s) {
   return false;
 }
 
+// Clients with an in-flight dns_gethostbyname. The found-callback fires from a
+// timer with no pcb to clear, so a client freed mid-lookup is a UAF. A DRAM
+// range check misses it (freed-then-reused stays in range); gate on membership.
+#define EGASYNC_DNS_REG_MAX 8
+static AsyncClient* _dns_pending[EGASYNC_DNS_REG_MAX] = {};
+static uint8_t _dns_pending_count = 0;
+
+static void _dns_register(AsyncClient* c) {
+  for (uint8_t i = 0; i < _dns_pending_count; i++) {
+    if (_dns_pending[i] == c) return;
+  }
+  if (_dns_pending_count < EGASYNC_DNS_REG_MAX) {
+    _dns_pending[_dns_pending_count++] = c;
+  }
+}
+
+static void _dns_unregister(AsyncClient* c) {
+  for (uint8_t i = 0; i < _dns_pending_count; i++) {
+    if (_dns_pending[i] == c) {
+      _dns_pending[i] = _dns_pending[--_dns_pending_count];
+      _dns_pending[_dns_pending_count] = nullptr;
+      return;
+    }
+  }
+}
+
+static bool _dns_alive(const AsyncClient* c) {
+  for (uint8_t i = 0; i < _dns_pending_count; i++) {
+    if (_dns_pending[i] == c) return true;
+  }
+  return false;
+}
+
 #if ASYNC_TCP_SSL_ENABLED
 AsyncClient::AsyncClient(tcp_pcb* pcb, SSL_CTX * ssl_ctx):
 #else
@@ -278,6 +311,7 @@ AsyncClient::AsyncClient(tcp_pcb* pcb):
 
 AsyncClient::~AsyncClient(){
   _closed = true;
+  _dns_unregister(this);   // drop any in-flight DNS registration
   if(_pcb)
     _close();
 
@@ -351,6 +385,7 @@ bool AsyncClient::connect(const char* host, uint16_t port){
     _handshake_done = !secure;
 #endif
     _connect_port = port;
+    _dns_register(this);   // pending lookup: gate the found-callback
     return true;
   }
   return false;
@@ -809,7 +844,10 @@ void AsyncClient::_s_dns_found(const char *name, const ip_addr *ipaddr, void *ar
 #endif
   (void)name;
   if(!_acArgAlive(arg)) return;
-  reinterpret_cast<AsyncClient*>(arg)->_dns_found(ipaddr);
+  AsyncClient* ac = reinterpret_cast<AsyncClient*>(arg);
+  if(!_dns_alive(ac)) return;   // freed mid-lookup: drop instead of deref
+  _dns_unregister(ac);          // lookup delivered
+  ac->_dns_found(ipaddr);
 }
 
 err_t AsyncClient::_s_poll(void *arg, struct tcp_pcb *tpcb) {
