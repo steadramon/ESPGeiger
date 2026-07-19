@@ -99,13 +99,13 @@ class NTP_Client : public EGModule {
       return last_sync_ms && (millis() - last_sync_ms) < maxAgeMs;
     }
 
-    // Inlined ex-ESPNtpClient uptime tracker. millis() rollover correction
-    // every 49.7d. Single source of truth for "seconds since boot".
+    // Seconds since boot, counting millis() wraps (49.7d). Needs calling at
+    // least once per wrap; it is (~1Hz).
     time_t getUptime() {
       unsigned long now_ms = ::millis();
-      if (_uptime * 1000UL > now_ms) _rolloverMillis++;
-      _uptime = now_ms / 1000UL + (unsigned long)_rolloverMillis * 4294967UL;
-      return _uptime;
+      if (now_ms < _last_ms) _rolloverMillis++;   // wrapped past 2^32
+      _last_ms = now_ms;
+      return now_ms / 1000UL + (unsigned long)_rolloverMillis * 4294967UL;
     }
     int64_t getMillisEpoch() {
       timeval t;
@@ -113,7 +113,7 @@ class NTP_Client : public EGModule {
       return (int64_t)t.tv_sec * 1000L + t.tv_usec / 1000L;
     }
   private:
-    unsigned long _uptime = 0;
+    unsigned long _last_ms = 0;
     uint16_t _rolloverMillis = 0;
 };
 
