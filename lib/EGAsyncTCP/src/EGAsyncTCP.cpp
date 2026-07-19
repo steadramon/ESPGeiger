@@ -736,7 +736,7 @@ void AsyncClient::_recv(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
     // IF this callback function returns ERR_OK or ERR_ABRT
     // then it is assummed we freed the pbufs.
     // https://www.nongnu.org/lwip/2_1_x/group__tcp__raw.html#ga8afd0b316a87a5eeff4726dc95006ed0
-    if(!errorTracker->hasClient()){
+    if(!errorTracker->hasClient() || !_pcbAlive(pcb)){
       while(pb != NULL){
         pbuf *b = pb;
         pb = b->next;
@@ -755,7 +755,7 @@ void AsyncClient::_recv(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
       _recv_pbuf_flags = b->flags;
       _recv_cb(_recv_cb_arg, this, b->payload, b->len);
     }
-    if(errorTracker->hasClient()){
+    if(errorTracker->hasClient() && _pcbAlive(pcb)){
       if(!_ack_pcb)
         _rx_ack_len += b->len;
       else
