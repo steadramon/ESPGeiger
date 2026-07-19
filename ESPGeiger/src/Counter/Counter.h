@@ -253,6 +253,8 @@ class Counter {
       float apply_dead_time(float cps) const;
       uint8_t _cpm_mode = 3;     // 3 = bucket; matches legacy behaviour
       unsigned long _last_blip_seen = 0;
+      unsigned long _tube_alive_lb = 0;
+      bool _tube_dead = false;
       // Inter-pulse-interval log2 histogram: bucket b covers [64us<<(b-1), 64us<<b),
       // bucket 0 = <64us, bucket 24 saturates. Updated in Counter::loop on each click.
       static constexpr uint8_t HIST_BUCKETS = 25;

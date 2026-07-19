@@ -430,14 +430,23 @@ void Counter::set_ratio(float ratio) {
   // 30 min floor: shielded / low-CPM setups would false-alarm at the bare formula.
   double t = 12000000000.0 / (double)ratio;
   if (t < 1800000000.0) t = 1800000000.0;
-  _tube_timeout_us = (t >= 4.29e9) ? UINT32_MAX : (uint32_t)t;
+  // Cap below the ~71.58min micros() wrap so the dead-tube latch reliably trips.
+  _tube_timeout_us = (t >= 4200000000.0) ? 4200000000UL : (uint32_t)t;
 }
 
 bool Counter::get_tube_alive() {
   if (_ratio <= 0.0f) return true;
   unsigned long lb_us = geigerinput->last_blip();
   if (lb_us == 0) return true;
-  return (micros() - lb_us) < _tube_timeout_us;
+  // micros() wraps every ~71min, so a raw compare flaps a dead tube alive again.
+  // Latch dead until a new pulse (lb_us changes) clears it.
+  if (lb_us != _tube_alive_lb) {
+    _tube_alive_lb = lb_us;
+    _tube_dead = false;
+  } else if ((micros() - lb_us) >= _tube_timeout_us) {
+    _tube_dead = true;
+  }
+  return !_tube_dead;
 }
 
 bool Counter::get_saturated() {
