@@ -167,7 +167,7 @@ Set a value via the command box on the Status page (or over USB serial at 115200
 ```
 set wifi.tx_power 8
 set wifi.country GB
-restart
+reboot
 ```
 
 Changes take effect on the next reboot.
