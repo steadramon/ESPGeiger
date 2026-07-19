@@ -2162,7 +2162,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button type=submit style="width:auto">Send</button>
 </form>
 </details>
-<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else fetch('/webcmd',{method:'POST',body:v});i.value='';return!1}</script>
+<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1}</script>
 <script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
 
@@ -2470,6 +2470,7 @@ T1.value+=e;var L=T1.value.split("\n");if(L.length>M)T1.value=L.slice(-(M-dl)).j
 if(ab)T1.scrollTop=T1.scrollHeight}lc=DD.now();ci=e?3e3:Math.min(ci*1.5,8.3e3);lt=setTimeout(f,ci)};
 x.onerror=function(){lc=DD.now();lt=setTimeout(f,6e3)};x.open("GET","/cs?c1="+id,!0);x.send();return!1}
 document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lc&&DD.now()-lc>1.08e7)id=0;ci=3e3;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(DD.now()-lc)))}});
+window._boost=function(){ci=3e3;clearTimeout(lt);lt=setTimeout(f,200)};
 )JS";
 #endif
 
