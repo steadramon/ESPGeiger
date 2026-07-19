@@ -247,6 +247,7 @@ void AsyncMqttClient::_onAck(size_t len) {
 
 void AsyncMqttClient::_onData(char* data, size_t len) {
   log_i("data rcv (%u)", len);
+  if (len == 0) return;
   size_t currentBytePosition = 0;
   char currentByte;
   _lastServerActivity = millis();
@@ -298,7 +299,7 @@ void AsyncMqttClient::_onData(char* data, size_t len) {
           default:
             log_i("rcv PROTOCOL VIOLATION");
             disconnect(true);
-            break;
+            return;
         }
         break;
       case AsyncMqttClientInternals::BufferState::REMAINING_LENGTH:
@@ -520,8 +521,8 @@ void AsyncMqttClient::_onConnAck(bool sessionPresent, uint8_t connectReturnCode)
     _state = CONNECTED;
     if (_onConnectUserCallback) _onConnectUserCallback(sessionPresent);
   } else {
-    // Callbacks are handled by the onDisconnect function which is called from the AsyncTcp lib
     _disconnectReason = static_cast<AsyncMqttClientDisconnectReason>(connectReturnCode);
+    disconnect(true);
     return;
   }
   _handleQueue();  // send any remaining data from continued session
