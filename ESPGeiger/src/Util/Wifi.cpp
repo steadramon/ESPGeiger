@@ -528,8 +528,14 @@ static void apply_wifi_sleep(uint8_t mode) {
 #endif
 }
 
+#define WIFI_TX_POWER_MIN_DBM 2
+
 static void apply_wifi_tx_power(uint8_t dBm) {
-  if (dBm == 0) return;
+  if (dBm == 0) return;   // 0 = leave at default (full)
+  if (dBm < WIFI_TX_POWER_MIN_DBM) {
+    Log::console(PSTR("WiFi: tx_power %u too low, using %u dBm"), dBm, WIFI_TX_POWER_MIN_DBM);
+    dBm = WIFI_TX_POWER_MIN_DBM;
+  }
 #ifdef ESP8266
   WiFi.setOutputPower((float)dBm);
 #else
