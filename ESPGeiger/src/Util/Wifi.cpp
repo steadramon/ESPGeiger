@@ -109,8 +109,10 @@ void Wifi::tick(unsigned long now) {
         Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
         WiFi.reconnect();
       }
-      if (down_seconds > 300) {
-        Log::console(PSTR("WiFi: Down for 5 minutes, rebooting"));
+      // Stay counting through the outage; reconnect on cadence and let modules
+      // re-arm via stable_for(). 1h backstop matches the boot-offline self-heal.
+      if (down_seconds > 3600) {
+        Log::console(PSTR("WiFi: Down for 1 hour, rebooting"));
         DeviceInfo::safeRestart(100);
       }
     } else if (!was_connected) {
