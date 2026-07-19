@@ -284,10 +284,10 @@ static const EGPref INPUT_PREF_ITEMS[] = {
 #endif
   // Pins
 #ifndef RXPIN_BLOCKED
-  {"rx_pin", IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, 0, 0, 0, EGP_UINT, 0},
+  {"rx_pin", IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, 0},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {"tx_pin", IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, 0, 0, 0, EGP_UINT, EGP_ADVANCED},
+  {"tx_pin", IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
 #endif
   // UDP source target
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
