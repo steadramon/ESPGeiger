@@ -187,5 +187,5 @@ Set via the Status-page command box or USB serial:
 
 ```
 set sys.cpu_mhz 80
-restart
+reboot
 ```
