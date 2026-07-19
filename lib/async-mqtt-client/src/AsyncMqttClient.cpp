@@ -697,19 +697,23 @@ void AsyncMqttClient::connect() {
 
   _client.setRxTimeout(_keepAlive);
 
+  bool ok;
 #if ASYNC_TCP_SSL_ENABLED
   if (_useIp) {
-    _client.connect(_ip, _port, _secure);
+    ok = _client.connect(_ip, _port, _secure);
   } else {
-    _client.connect(_host, _port, _secure);
+    ok = _client.connect(_host, _port, _secure);
   }
 #else
   if (_useIp) {
-    _client.connect(_ip, _port);
+    ok = _client.connect(_ip, _port);
   } else {
-    _client.connect(_host, _port);
+    ok = _client.connect(_host, _port);
   }
 #endif
+  // connect() didn't start, so no callback will clear CONNECTING; reset here or
+  // every future connect() no-ops (wedged until reboot).
+  if (!ok) _state = DISCONNECTED;
 }
 
 void AsyncMqttClient::disconnect(bool force) {
