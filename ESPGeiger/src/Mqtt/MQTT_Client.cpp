@@ -219,6 +219,20 @@ unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
   return now_s + until - statusInterval;
 }
 
+#ifdef MQTTAUTODISCOVER
+// Per-device offset (0..SPREAD s) from the chip id so a fleet staggers its
+// HA-birth re-announce instead of hitting the broker together.
+static uint32_t hass_spread_offset_s() {
+  static uint32_t off = 0xFFFFFFFFu;
+  if (off == 0xFFFFFFFFu) {
+    uint32_t h = 2166136261u;
+    for (const char* p = DeviceInfo::chipid(); p && *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+    off = h % (MQTT_HASS_BIRTH_SPREAD_S + 1);
+  }
+  return off;
+}
+#endif
+
 void MQTT_Client::s_tick(unsigned long now)
 {
   if (!mqttEnabled) {
@@ -252,7 +266,9 @@ void MQTT_Client::s_tick(unsigned long now)
 #ifdef MQTTAUTODISCOVER
   if (_hass_retrigger) {
     _hass_retrigger = false;
-    triggerHassDiscovery();
+    // HA back online: re-announce, staggered per-device so a fleet doesn't stampede.
+    _hass_next_publish = now + hass_spread_offset_s();
+    if (_hass_next_publish == 0) _hass_next_publish = 1;
   }
   if (_hass_next_publish && (long)(now - _hass_next_publish) >= 0) {
     triggerHassDiscovery();
@@ -548,7 +564,7 @@ void MQTT_Client::reconnect()
       onMqttConnect(sessionPresent);
     });
     mqttClient->onMessage([this] (char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
-      onMqttMessage(topic, payload);
+      onMqttMessage(topic, payload, len);
     });
     mqttClient->onDisconnect([this] (AsyncMqttClientDisconnectReason reason) {
       onMqttDisconnect(reason);
@@ -954,7 +970,7 @@ void MQTT_Client::removeHassTopic(const char* type, const char* id)
 }
 #endif
 
-void MQTT_Client::onMqttMessage(char* topic, char* payload)
+void MQTT_Client::onMqttMessage(char* topic, char* payload, size_t len)
 {
 #ifdef MQTTAUTODISCOVER
   const char* _discovery_topic = EGPrefs::getString("mqtt", "hass_topic");
@@ -964,7 +980,8 @@ void MQTT_Client::onMqttMessage(char* topic, char* payload)
 
   if (strcmp(path, topic) == 0 ) {
     if (!EGPrefs::getBool("mqtt", "hass_enabled")) return;
-    if (strcmp(payload, "online") == 0) {
+    // Payload is a raw buffer slice, not NUL-terminated: match on length.
+    if (len == 6 && strncmp(payload, "online", 6) == 0) {
       Log::debug(PSTR("MQTT: HA is back online"));
       // Callback context (AsyncTCP task on ESP32); the discovery walk state
       // is main-task-only, so just flag it and let s_tick run the trigger.

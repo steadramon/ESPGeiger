@@ -59,6 +59,10 @@
 #define MQTT_HASS_MIN_INTERVAL_S 30UL
 #endif
 
+#ifndef MQTT_HASS_BIRTH_SPREAD_S
+#define MQTT_HASS_BIRTH_SPREAD_S 30UL   // stagger a fleet's re-announce on HA birth
+#endif
+
 constexpr auto MQTT_LWT_ONLINE PROGMEM = "Online";
 constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
 
@@ -158,7 +162,7 @@ private:
                         const HassExtra* extras, size_t n_extras);
   void removeHassTopic(const char* type, const char* id);
 #endif
-  void onMqttMessage(char* topic, char* payload);
+  void onMqttMessage(char* topic, char* payload, size_t len);
   unsigned long statusSlotAnchor(unsigned long now_s);
   // s_tick raises bits in _pending; loop() drains one per call.
   void publishStatus();
