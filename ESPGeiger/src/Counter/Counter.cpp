@@ -549,7 +549,8 @@ float Counter::get_totalusv() {
     return 0;
   }
   const float inv_uptime = 1.0f / uptime;
-  float totalUsv  = (float)__LONG_MAX__ * inv_uptime * (float)total_clicks_rollover;
+  // total_clicks wraps at 2^32; weight each rollover by 2^32.
+  float totalUsv  = 4294967296.0f * inv_uptime * (float)total_clicks_rollover;
   totalUsv       += total_clicks * inv_uptime;
   return totalUsv * _ratio_inv;
 }
