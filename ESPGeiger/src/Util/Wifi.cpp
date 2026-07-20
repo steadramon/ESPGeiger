@@ -382,6 +382,8 @@ void Wifi::onImprovCreds(const char* ssid, const char* pass) {
   s_portalGotCreds = true;
 }
 
+static void reset_wifi_tx_power_default();
+
 bool Wifi::connectOrPortal() {
   if (Wifi::hasSavedCreds()) {
     WiFi.mode(WIFI_STA);
@@ -451,6 +453,7 @@ bool Wifi::connectOrPortal() {
     s_portalGotCreds = true;
   });
   portal->begin(DeviceInfo::hostname());
+  reset_wifi_tx_power_default();   // keep the setup AP at full strength, after its mode switch
   Log::console(PSTR("WiFi: Setup portal up on AP %s"), DeviceInfo::hostname());
   bool haveCreds = Wifi::hasSavedCreds();
   unsigned long portal_idle_since = fast_millis();
@@ -540,6 +543,14 @@ static void apply_wifi_tx_power(uint8_t dBm) {
   WiFi.setOutputPower((float)dBm);
 #else
   esp_wifi_set_max_tx_power((int8_t)(dBm * 4));
+#endif
+}
+
+static void reset_wifi_tx_power_default() {
+#ifdef ESP8266
+  WiFi.setOutputPower(20.5f);
+#else
+  esp_wifi_set_max_tx_power(80);
 #endif
 }
 
