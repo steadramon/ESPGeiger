@@ -76,34 +76,32 @@ void GRNG::extract(uint8_t* out, size_t n) {
 }
 
 uint32_t GRNG::fast_uint32() {
-  static uint8_t s_call_count = 0;
-  if ((++s_call_count & 0x3F) == 0) stir();
-#ifdef ESP8266
-  return RANDOM_REG32;
-#else
-  return esp_random();
-#endif
+  static uint8_t buf[32];
+  static uint8_t pos = sizeof(buf);
+  if (pos >= sizeof(buf)) {
+    extract(buf, sizeof(buf));
+    pos = 0;
+  }
+  uint32_t r;
+  memcpy(&r, buf + pos, sizeof(r));
+  pos += sizeof(r);
+  return r;
 }
 
 void GRNG::extract_fast(uint8_t* out, size_t n) {
-  stir();
-  while (n >= 4) {
-#ifdef ESP8266
-    *(uint32_t*)out = RANDOM_REG32;
-#else
-    *(uint32_t*)out = esp_random();
-#endif
-    out += 4;
-    n -= 4;
+  static uint32_t s_xs = 0;
+  uint32_t x = s_xs ^ fast_uint32();
+  if (x == 0) x = 0x6b8b4567;
+  while (n > 0) {
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    size_t take = n > 4 ? 4 : n;
+    memcpy(out, &x, take);
+    out += take;
+    n -= take;
   }
-  if (n > 0) {
-#ifdef ESP8266
-    uint32_t r = RANDOM_REG32;
-#else
-    uint32_t r = esp_random();
-#endif
-    memcpy(out, &r, n);
-  }
+  s_xs = x;
 }
 
 // ---------- /random and /random.do handlers ----------
