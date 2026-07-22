@@ -18,60 +18,75 @@
 */
 #include "GRNG.h"
 #include "../Logger/Logger.h"
+#include "../Module/EGModule.h"
 #include "../WebPortal/WebPortal.h"
 #include "sha256.h"
 #include <EGHttpServer.h>
 #include <string.h>
 #include <stdlib.h>
 
-static volatile uint32_t s_pool = 0;
+static EG_XTASK_VOLATILE uint32_t s_pool[8] = {0};
+static uint8_t s_mix_idx = 0;
+
+static inline uint32_t hw_word() {
+#ifdef ESP8266
+  return RANDOM_REG32;
+#else
+  return esp_random();
+#endif
+}
+
+#ifndef ESP8266
+static uint8_t s_boot_sram[256] __attribute__((section(".noinit")));
+#endif
 
 GRNG::GRNG() {
 };
 
 void GRNG::begin() {
+  Sha256.init();
 #ifdef ESP8266
-  mix(RANDOM_REG32);
+  Sha256.write((const uint8_t*)(0x3FFFC000 - 0x800), 0x800);
 #else
-  mix(esp_random());
+  Sha256.write(s_boot_sram, sizeof(s_boot_sram));
 #endif
+  uint32_t cc = ESP.getCycleCount();
+  Sha256.write((const uint8_t*)&cc, sizeof(cc));
+  uint8_t* h = Sha256.result();
+  for (uint8_t i = 0; i < 8; i++) s_pool[i] ^= ((uint32_t*)h)[i];
+#ifndef ESP8266
+  memcpy(s_boot_sram, h, 32);
+#endif
+  for (uint8_t i = 0; i < 8; i++) mix(hw_word());
   stir();
 }
 
 void GRNG::mix(uint32_t bits) {
-  s_pool ^= bits;
+  s_pool[s_mix_idx++ & 7] ^= bits;
 }
 
 uint32_t GRNG::stir() {
-#ifdef ESP8266
-  uint32_t hw = RANDOM_REG32;
-#else
-  uint32_t hw = esp_random();
-#endif
-  uint32_t e = hw ^ ESP.getCycleCount() ^ s_pool;
-  s_pool ^= e;
-  randomSeed(e);
+  uint32_t e = hw_word() ^ ESP.getCycleCount();
+  mix(e);
+  randomSeed(e ^ s_pool[0]);
   return e;
 }
 
 void GRNG::extract(uint8_t* out, size_t n) {
   while (n > 0) {
     Sha256.init();
-    Sha256.write((const uint8_t*)&s_pool, sizeof(s_pool));
+    Sha256.write((const uint8_t*)s_pool, sizeof(s_pool));
     uint32_t cc = ESP.getCycleCount();
     Sha256.write((const uint8_t*)&cc, sizeof(cc));
-#ifdef ESP8266
-    uint32_t hw = RANDOM_REG32;
-#else
-    uint32_t hw = esp_random();
-#endif
-    Sha256.write((const uint8_t*)&hw, sizeof(hw));
+    uint32_t hw[4];
+    for (uint8_t i = 0; i < 4; i++) hw[i] = hw_word();
+    Sha256.write((const uint8_t*)hw, sizeof(hw));
     uint8_t* h = Sha256.result();
     size_t take = n > 32 ? 32 : n;
     memcpy(out, h, take);
     out += take;
     n -= take;
-    s_pool ^= ((uint32_t*)h)[0];
+    for (uint8_t i = 0; i < 8; i++) s_pool[i] ^= ((uint32_t*)h)[i];
   }
 }
 
