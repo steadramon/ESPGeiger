@@ -222,9 +222,6 @@ void Counter::secondticker() {
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
-  if (eventCounter > 0) {
-    GRNG::mix((uint32_t)geigerinput->last_blip() ^ ESP.getCycleCount());
-  }
   static uint8_t tick_cnt = 0;
   geigerTicks.add(eventCounter);
   unsigned long previous_total_clicks = total_clicks;
@@ -728,6 +725,8 @@ void Counter::loop() {
       _hist_primed = true;
     }
     _prev_blip_us = lb;
+
+    GRNG::mix((uint32_t)lb ^ ESP.getCycleCount());
 
 #ifndef DISABLE_BLIP
     this->blip();
