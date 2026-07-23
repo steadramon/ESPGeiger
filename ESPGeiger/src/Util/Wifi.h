@@ -113,6 +113,10 @@ namespace Wifi {
 
   // Apply wifi.tx_power/country/phy_mode. Needs esp_wifi_init (post WiFi.mode()).
   void applyRuntimeNetPrefs();
+
+  int txPowerQdbm();
+  const char* phyModeStr();
+  const char* sleepModeStr();
 }
 
 #endif

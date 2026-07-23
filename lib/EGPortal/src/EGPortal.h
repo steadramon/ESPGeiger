@@ -35,6 +35,7 @@
 class EGPortal {
   public:
     using SaveCallback = void(*)(const char* ssid, const char* password, void* user);
+    using ResetCallback = void(*)(void* user);
 
     // Bring up AP, DNS catchall, and HTTP. AP password may be nullptr (open).
     void begin(const char* apSsid, const char* apPassword = nullptr);
@@ -44,6 +45,13 @@ class EGPortal {
     // Fires on POST /save with valid creds. Pointers are owned by the portal
     // and remain valid only for the duration of the callback. Copy them.
     void onSave(SaveCallback cb, void* user = nullptr);
+
+    // Optional factory-reset hook. When set, the setup page shows a
+    // two-step confirm flow (GET /reset -> POST /reset_go); the callback
+    // fires after the confirmation response is queued. Do NOT restart
+    // inside the callback - set a flag and restart from the pump loop so
+    // the HTTP response can flush first.
+    void onReset(ResetCallback cb, void* user = nullptr);
 
     // Branding. Pointers must outlive the portal (PROGMEM / static).
     void setTitle(const char* t)  { _title  = t; }
@@ -73,6 +81,9 @@ class EGPortal {
     SaveCallback _onSave = nullptr;
     void* _onSaveUser = nullptr;
 
+    ResetCallback _onReset = nullptr;
+    void* _onResetUser = nullptr;
+
     const char* _title  = "Setup";
     const char* _notice = nullptr;
 
@@ -88,6 +99,8 @@ class EGPortal {
     static void hRescan(EGHttpRequest&, EGHttpResponse&, void*);
     static void hSave(EGHttpRequest&, EGHttpResponse&, void*);
     static void hCaptive(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hResetConfirm(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hResetGo(EGHttpRequest&, EGHttpResponse&, void*);
 
     void refreshScan(int n);
     void kickScan();

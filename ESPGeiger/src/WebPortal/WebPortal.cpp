@@ -278,8 +278,8 @@ void WebPortal::begin(uint16_t port) {
   _http.on("/favicon.ico", EGHttpRequest::GET, &WebPortal::hFavicon,     nullptr);
   _http.on("/theme.js",    EGHttpRequest::GET, &WebPortal::hThemeJs,     nullptr);
   _http.on("/restart",   EGHttpRequest::GET, &WebPortal::hRestart,       nullptr);
-  _http.on("/reset",     EGHttpRequest::GET, &WebPortal::hReset,         nullptr);
-  _http.on("/erase",     EGHttpRequest::GET, &WebPortal::hEraseWifi,     nullptr);
+  _http.on("/reset",     EGHttpRequest::POST, &WebPortal::hReset,        nullptr);
+  _http.on("/erase",     EGHttpRequest::POST, &WebPortal::hEraseWifi,    nullptr);
   _http.on("/info",      EGHttpRequest::GET, &WebPortal::hInfo,          nullptr);
   _http.on("/about",     EGHttpRequest::GET, &WebPortal::hAbout,         nullptr);
   _http.on("/status",    EGHttpRequest::GET, &WebPortal::hStatus,        nullptr);
@@ -706,6 +706,13 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   INFO_ROW("Station MAC",    "%s",     mac);
   INFO_ROW("RSSI",           "%d dBm", (int)Wifi::rssi);
   INFO_ROW("BSSID",          "%s",     bssid);
+  INFO_ROW("Channel",        "%d",     (int)WiFi.channel());
+  {
+    int q = Wifi::txPowerQdbm();
+    if (q >= 0) INFO_ROW("TX power", "%d.%02d dBm", q / 4, (q % 4) * 25);
+  }
+  INFO_ROW("PHY mode",       "%s",     Wifi::phyModeStr());
+  INFO_ROW("Radio sleep",    "%s",     Wifi::sleepModeStr());
   INFO_ROW("Autoconnect",    "%s",     WiFi.getAutoReconnect() ? "Enabled" : "Disabled");
   INFO_ROW("AP SSID",        "%s",     ap_ssid[0] ? ap_ssid : "(not active)");
   INFO_ROW("AP IP",          "%s",     ap_ip);
@@ -896,8 +903,12 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendChunk(F(R"HTML(
 <details style='margin-top:1.5em'><summary>Advanced</summary>
 <p class=muted>Erase the saved WiFi credentials and reboot into the captive setup portal.</p>
-<form method=GET action=/erase onsubmit="return confirm('Erase saved WiFi credentials? Device will reboot into setup mode.')">
+<form method=POST action=/erase onsubmit="return confirm('Erase saved WiFi credentials? Device will reboot into setup mode.')">
 <button type=submit class=danger>Erase WiFi config</button>
+</form>
+<p class=muted style=margin-top:1em>Factory reset: erase <b>all</b> settings and calibration, then reboot into the setup portal.</p>
+<form method=POST action=/reset onsubmit="return confirm('Erase ALL settings and reboot into setup mode? This cannot be undone.')">
+<button type=submit class=danger>Factory reset</button>
 </form>
 </details>
 <script>
@@ -1452,7 +1463,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
       "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
       " <button type=submit>Import</button></p></form>"
       "<p style=\"color:var(--muted);font-size:.85em\">WiFi and network settings are preserved. Device reboots automatically after import.</p>"
-      "<p style=\"color:#c0392b;font-size:.85em\"><b>Note:</b> The exported blob contains private information. Keep it private.</p>"));
+      "<p class=\"a aw\" style=\"font-size:.85em\"><b>Note:</b> The exported blob contains private information. Keep it private.</p>"));
     WebPortal::sendPageTail(res);
     res.endChunked();
     return;
@@ -1508,12 +1519,12 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (g->category != tab) continue;
 
     // A group with an enable_key gets an on/off badge and is dimmed when off.
-    // On == value set and not "0".
+    // Off == unset, "0", or "-1" (the pin "disabled" sentinel).
     bool has_toggle = (g->enable_key != nullptr);
     bool grp_on = true;
     if (has_toggle) {
       const char* ev = EGPrefs::getString(g->module_id, g->enable_key);
-      grp_on = (ev[0] != '\0' && strcmp(ev, "0") != 0);
+      grp_on = (ev[0] != '\0' && strcmp(ev, "0") != 0 && strcmp(ev, "-1") != 0);
     }
     bool hw_absent = (mod && !mod->hw_present());
     const char* badge = hw_absent ? " <span class='gb off'>not detected</span>"
@@ -2148,6 +2159,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button id=snd>Sound: off</button>
 <canvas id=g1></canvas>
 <div id=g2></div>
+<p id=tw class="a aw" style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
 <div class=stat>
 <div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
 <div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Total clicks</b><span id=tc>-</span></div>
@@ -2451,6 +2463,7 @@ n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseT
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 var dc=o.c<10?o.c5:o.c;C.textContent=dc.toFixed(2);T.textContent=o.tc;setUsv(V,dc/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
+var w=$('tw');if(w)w.style.display=o.tube===0&&u>=60?'':'none';
 if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));

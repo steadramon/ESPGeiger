@@ -43,6 +43,7 @@ static const char NET_BACKUP_PATH[] = "/net_backup";
 static char     s_portalSsid[33];
 static char     s_portalPass[65];
 static volatile bool s_portalGotCreds = false;
+static volatile bool s_portalDoReset  = false;
 
 namespace Wifi {
   bool disabled = false;
@@ -452,6 +453,7 @@ bool Wifi::connectOrPortal() {
     s_portalPass[sizeof(s_portalPass) - 1] = '\0';
     s_portalGotCreds = true;
   });
+  portal->onReset([](void*) { s_portalDoReset = true; });
   portal->begin(DeviceInfo::hostname());
   reset_wifi_tx_power_default();   // keep the setup AP at full strength, after its mode switch
   Log::console(PSTR("WiFi: Setup portal up on AP %s"), DeviceInfo::hostname());
@@ -462,6 +464,19 @@ bool Wifi::connectOrPortal() {
     improvSerial.poll();
     delay(10);
     yield();
+    if (s_portalDoReset) {
+      // Keep pumping briefly so the confirmation page flushes to the client
+      // before the wipe + restart.
+      unsigned long flush_until = fast_millis() + 1200;
+      while ((long)(flush_until - fast_millis()) > 0) {
+        portal->loop();
+        delay(10);
+        yield();
+      }
+      Log::console(PSTR("WiFi: Factory reset from setup portal"));
+      DeviceInfo::factoryReset();
+      DeviceInfo::safeRestart(200);
+    }
     if (!haveCreds) continue;   // first setup: wait indefinitely for the user
     if (WiFi.softAPgetStationNum() > 0) portal_idle_since = fast_millis();
     if ((fast_millis() - portal_idle_since) >= PORTAL_RETRY_MS ||
@@ -601,4 +616,48 @@ void Wifi::applyRuntimeNetPrefs() {
   apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", "tx_power"));
   apply_wifi_country (         EGPrefs::getString("wifi", "country"));
   apply_wifi_phy_mode((uint8_t)EGPrefs::getUInt  ("wifi", "phy_mode"));
+}
+
+int Wifi::txPowerQdbm() {
+#ifdef ESP8266
+  uint8_t dBm = (uint8_t)EGPrefs::getUInt("wifi", "tx_power");
+  if (dBm == 0) return 82;   // core default 20.5 dBm
+  if (dBm < WIFI_TX_POWER_MIN_DBM) dBm = WIFI_TX_POWER_MIN_DBM;
+  return (int)dBm * 4;
+#else
+  int8_t q = 0;
+  if (esp_wifi_get_max_tx_power(&q) != ESP_OK) return -1;
+  return (int)q;
+#endif
+}
+
+const char* Wifi::phyModeStr() {
+#ifdef ESP8266
+  switch (WiFi.getPhyMode()) {
+    case WIFI_PHY_MODE_11B: return "11b";
+    case WIFI_PHY_MODE_11G: return "11g";
+    case WIFI_PHY_MODE_11N: return "11n";
+    default:                return "?";
+  }
+#else
+  uint8_t mask = 0;
+  if (esp_wifi_get_protocol(WIFI_IF_STA, &mask) != ESP_OK) return "?";
+  if (mask & WIFI_PROTOCOL_11N) return "11n";
+  if (mask & WIFI_PROTOCOL_11G) return "11g";
+  if (mask & WIFI_PROTOCOL_11B) return "11b";
+  return "?";
+#endif
+}
+
+const char* Wifi::sleepModeStr() {
+#ifdef ESP8266
+  switch (WiFi.getSleepMode()) {
+    case WIFI_NONE_SLEEP:  return "None";
+    case WIFI_LIGHT_SLEEP: return "Light";
+    case WIFI_MODEM_SLEEP: return "Modem";
+    default:               return "?";
+  }
+#else
+  return WiFi.getSleep() ? "Modem" : "None";
+#endif
 }

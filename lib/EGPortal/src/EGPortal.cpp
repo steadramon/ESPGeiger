@@ -50,8 +50,41 @@ static const char PORTAL_TAIL[] PROGMEM =
   "<label>Password <input name=password type=password maxlength=64></label>"
   "<button>Save</button></form>"
   "<form action=/rescan method=get style=margin-top:1em>"
-  "<button type=submit style=background:#888>Rescan networks</button></form>"
+  "<button type=submit style=background:#888>Rescan networks</button></form>";
+
+static const char PORTAL_RESET_BTN[] PROGMEM =
+  "<form action=/reset method=get style=margin-top:2.5em>"
+  "<button type=submit style=\"background:#fff;color:#c0392b;border:1px solid #c0392b\">"
+  "Factory reset&hellip;</button></form>";
+
+static const char PORTAL_END[] PROGMEM = "</body></html>";
+
+static const char RESET_CONFIRM_HTML[] PROGMEM =
+  "<!doctype html><html><head><meta charset=utf-8>"
+  "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
+  "<title>Factory reset</title><style>"
+  "body{font-family:sans-serif;max-width:420px;margin:2em auto;padding:0 1em}"
+  "h1{font-size:1.4em;color:#c0392b}"
+  "button,a.c{width:100%;padding:.6em;font-size:1em;box-sizing:border-box;border-radius:.3em;display:block;text-align:center}"
+  "button{background:#c0392b;color:#fff;border:0;cursor:pointer}"
+  "a.c{margin-top:1em;background:#eee;color:#333;text-decoration:none;border:1px solid #bbb}"
+  "</style></head><body>"
+  "<h1>Factory reset</h1>"
+  "<p>This erases <b>all settings</b>: WiFi credentials, module configuration "
+  "and calibration. The device restarts into this setup portal as if new.</p>"
+  "<form action=/reset_go method=post><button>Erase everything</button></form>"
+  "<a class=c href=/>Cancel</a>"
   "</body></html>";
+
+static const char RESET_DONE_HTML[] PROGMEM =
+  "<!doctype html><html><head><meta charset=utf-8>"
+  "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
+  "<title>Resetting</title><style>"
+  "body{font-family:sans-serif;max-width:420px;margin:3em auto;padding:0 1em;text-align:center}"
+  "</style></head><body>"
+  "<h1>Erasing&hellip;</h1>"
+  "<p>All settings cleared. The device is restarting and will reopen "
+  "the setup AP in a few seconds.</p></body></html>";
 
 static const char RESCAN_HTML[] PROGMEM =
   "<!doctype html><html><head><meta charset=utf-8>"
@@ -99,6 +132,8 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
   _http.on("/scan",     EGHttpRequest::GET,  &EGPortal::hScan, this);
   _http.on("/rescan",   EGHttpRequest::GET,  &EGPortal::hRescan, this);
   _http.on("/save",     EGHttpRequest::POST, &EGPortal::hSave, this);
+  _http.on("/reset",    EGHttpRequest::GET,  &EGPortal::hResetConfirm, this);
+  _http.on("/reset_go", EGHttpRequest::POST, &EGPortal::hResetGo, this);
   _http.onNotFound(&EGPortal::hCaptive, this);
   _http.begin(80);
 
@@ -136,6 +171,11 @@ void EGPortal::end() {
 void EGPortal::onSave(SaveCallback cb, void* user) {
   _onSave = cb;
   _onSaveUser = user;
+}
+
+void EGPortal::onReset(ResetCallback cb, void* user) {
+  _onReset = cb;
+  _onResetUser = user;
 }
 
 size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
@@ -209,6 +249,8 @@ void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   }
 
   res.sendChunk(FPSTR(PORTAL_TAIL));
+  if (self->_onReset) res.sendChunk(FPSTR(PORTAL_RESET_BTN));
+  res.sendChunk(FPSTR(PORTAL_END));
   res.endChunked();
 }
 
@@ -262,6 +304,19 @@ void EGPortal::hRescan(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
   self->kickScan();
   res.send(200, "text/html", FPSTR(RESCAN_HTML));
+}
+
+void EGPortal::hResetConfirm(EGHttpRequest& req, EGHttpResponse& res, void* user) {
+  EGPortal* self = static_cast<EGPortal*>(user);
+  if (!self->_onReset) { res.redirect("/"); return; }
+  res.send(200, "text/html", FPSTR(RESET_CONFIRM_HTML));
+}
+
+void EGPortal::hResetGo(EGHttpRequest& req, EGHttpResponse& res, void* user) {
+  EGPortal* self = static_cast<EGPortal*>(user);
+  if (!self->_onReset) { res.redirect("/"); return; }
+  res.send(200, "text/html", FPSTR(RESET_DONE_HTML));
+  self->_onReset(self->_onResetUser);
 }
 
 void EGPortal::hCaptive(EGHttpRequest& req, EGHttpResponse& res, void*) {
