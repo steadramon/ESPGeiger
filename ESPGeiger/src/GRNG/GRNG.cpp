@@ -28,6 +28,10 @@
 static EG_XTASK_VOLATILE uint32_t s_pool[8] = {0};
 static uint8_t s_mix_idx = 0;
 
+// Private hasher: extract() runs inside uECC_sign via the RNG callback, so it
+// must not clobber the shared global Sha256 a caller may have in flight.
+static Sha256Class s_sha;
+
 static inline uint32_t hw_word() {
 #ifdef ESP8266
   return RANDOM_REG32;
@@ -44,15 +48,15 @@ GRNG::GRNG() {
 };
 
 void GRNG::begin() {
-  Sha256.init();
+  s_sha.init();
 #ifdef ESP8266
-  Sha256.write((const uint8_t*)(0x3FFFC000 - 0x800), 0x800);
+  s_sha.write((const uint8_t*)(0x3FFFC000 - 0x800), 0x800);
 #else
-  Sha256.write(s_boot_sram, sizeof(s_boot_sram));
+  s_sha.write(s_boot_sram, sizeof(s_boot_sram));
 #endif
   uint32_t cc = ESP.getCycleCount();
-  Sha256.write((const uint8_t*)&cc, sizeof(cc));
-  uint8_t* h = Sha256.result();
+  s_sha.write((const uint8_t*)&cc, sizeof(cc));
+  uint8_t* h = s_sha.result();
   for (uint8_t i = 0; i < 8; i++) s_pool[i] ^= ((uint32_t*)h)[i];
 #ifndef ESP8266
   memcpy(s_boot_sram, h, 32);
@@ -74,14 +78,14 @@ uint32_t GRNG::stir() {
 
 void GRNG::extract(uint8_t* out, size_t n) {
   while (n > 0) {
-    Sha256.init();
-    Sha256.write((const uint8_t*)s_pool, sizeof(s_pool));
+    s_sha.init();
+    s_sha.write((const uint8_t*)s_pool, sizeof(s_pool));
     uint32_t cc = ESP.getCycleCount();
-    Sha256.write((const uint8_t*)&cc, sizeof(cc));
+    s_sha.write((const uint8_t*)&cc, sizeof(cc));
     uint32_t hw[4];
     for (uint8_t i = 0; i < 4; i++) hw[i] = hw_word();
-    Sha256.write((const uint8_t*)hw, sizeof(hw));
-    uint8_t* h = Sha256.result();
+    s_sha.write((const uint8_t*)hw, sizeof(hw));
+    uint8_t* h = s_sha.result();
     size_t take = n > 32 ? 32 : n;
     memcpy(out, h, take);
     out += take;
