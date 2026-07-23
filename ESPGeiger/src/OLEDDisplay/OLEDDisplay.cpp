@@ -980,7 +980,8 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   int32_t  usv_x100 = (int32_t)(dusv * 100.0f + 0.5f);
   bool warming = !gcounter.is_warm();
   uint8_t snd = send_indicator;
-  uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0);
+  uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0)
+               | (gcounter.counts_missing() ? 4 : 0);
   // Trend vs 5s ago using a 1.5-Poisson-sigma threshold to suppress noise.
   int8_t trend = 0;
   uint16_t hsize = (uint16_t)gcounter.cpm_history.size();
@@ -1014,8 +1015,13 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   char oledBuf[16];
   format_cpm(oledBuf, sizeof(oledBuf), cpm_x10 * 0.1f);
   drawTPString(*this, 45, 0, DialogInput_Digits_17, oledBuf);
-  format_f(oledBuf, sizeof(oledBuf), dusv);
-  drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);
+  if (wifi & 4) {
+    // No counts: the 0.00 uSv line is dead weight; use it for the hint.
+    drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("check wiring?"));
+  } else {
+    format_f(oledBuf, sizeof(oledBuf), dusv);
+    drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);
+  }
   if (warming) {
     drawTPString(*this, 98, 2, DialogInput_plain_12, PSTR("W"));
   }
