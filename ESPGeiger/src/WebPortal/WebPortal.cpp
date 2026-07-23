@@ -2184,15 +2184,11 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
   WebPortal::sendPageHead(res, F("Status"), sub);
 
-  char chipscript[64];
-  int csn = snprintf_P(chipscript, sizeof(chipscript),
-                       PSTR("<script>window.CHIPID=\"%s\"</script>"),
-                       DeviceInfo::chipid());
-  if (csn > 0 && (size_t)csn < sizeof(chipscript)) res.sendChunk(chipscript, (size_t)csn);
-
   char seedBuf[240];
   size_t sp = 0;
-  int sn = snprintf_P(seedBuf, sizeof(seedBuf), PSTR("<script>window._seedHist=["));
+  int sn = snprintf_P(seedBuf, sizeof(seedBuf),
+                      PSTR("<script>window.CHIPID=\"%s\";window.GPIN=%d;window._seedHist=["),
+                      DeviceInfo::chipid(), gcounter.input_pin());
   if (sn > 0 && (size_t)sn < sizeof(seedBuf)) sp += (size_t)sn;
   int histSize = gcounter.cpm_history.size();
   bool first = true;
@@ -2439,7 +2435,8 @@ void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // (see html.h).
 #if !EG_GZ_JS_BUNDLE
 extern const char statusJS[] PROGMEM = R"JS(
-!function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);
+!function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);
+if(W&&window.GPIN>=0)W.innerHTML+=' (GPIO '+window.GPIN+')';
 var ac,cps=0,nb,mu=$('snd'),mt=1,AC=window.AudioContext||window.webkitAudioContext;
 var LS=localStorage;
 function applySnd(){var s=LS.sndBtn,c=document.documentElement.classList.contains('crt');mu.style.display=(s==='1'||(c&&s!=='0'))?'':'none'}
@@ -2463,7 +2460,7 @@ n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseT
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 var dc=o.c<10?o.c5:o.c;C.textContent=dc.toFixed(2);T.textContent=o.tc;setUsv(V,dc/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
-var w=$('tw');if(w)w.style.display=o.tube===0&&u>=60?'':'none';
+if(W)W.style.display=(o.tc===0&&u>=60)||o.tube===0?'':'none';
 if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));

@@ -102,6 +102,14 @@ class Counter {
       float get_millirem();
       // False = no pulse within timeout; tube/HV/wiring fault.
       bool  get_tube_alive();
+      // Advisory wiring hint: Poisson on the same silence clock, 10 expected
+      // background counts (>= 60 s). Softer surfaces only (banner/console/
+      // display).
+      bool  counts_missing();
+      // Runtime input pin for pulse variants, -1 otherwise (for messages).
+      // Out-of-line: Counter.h is widely included and inline bodies here
+      // cascade into every TU (known LPS hazard).
+      int input_pin();
       // True near dead-time 10x cap (very high rate).
       bool  get_saturated();
       // Ring-derived diagnostics. Zero on counter types that don't feed it.
@@ -253,8 +261,9 @@ class Counter {
       float apply_dead_time(float cps) const;
       uint8_t _cpm_mode = 3;     // 3 = bucket; matches legacy behaviour
       unsigned long _last_blip_seen = 0;
-      unsigned long _tube_alive_lb = 0;
-      bool _tube_dead = false;
+      // Uptime seconds of the last collected count; 0 = none since boot.
+      // Feeds both get_tube_alive() and counts_missing().
+      uint32_t _last_count_up_s = 0;
       // Inter-pulse-interval log2 histogram: bucket b covers [64us<<(b-1), 64us<<b),
       // bucket 0 = <64us, bucket 24 saturates. Updated in Counter::loop on each click.
       static constexpr uint8_t HIST_BUCKETS = 25;
@@ -286,7 +295,7 @@ class Counter {
       float _ratio = GEIGER_RATIO;
       float _ratio_inv = 1.0f / GEIGER_RATIO;
       // Default to the 30 min floor; set_ratio() refines for high-sensitivity tubes.
-      uint32_t _tube_timeout_us = 1800000000UL;
+      uint32_t _tube_timeout_s = 1800;
       uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
       float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
       float _cached_cps = 0.0f;     // updated each tick, dead-time corrected
