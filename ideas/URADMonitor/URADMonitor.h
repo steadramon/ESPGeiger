@@ -21,8 +21,8 @@
 #define URADMONITOR_H
 #ifdef URADMONITOROUT
 #include <Arduino.h>
-#include "../Util/Globals.h"
-#include "../Util/DeviceInfo.h"
+#include "../System/Globals.h"
+#include "../System/DeviceInfo.h"
 #include "../Counter/Counter.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
