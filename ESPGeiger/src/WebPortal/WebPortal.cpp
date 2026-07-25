@@ -2160,6 +2160,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <canvas id=g1></canvas>
 <div id=g2></div>
 <p id=tw class="a aw" style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
+<p id=bw class="a aw" style=display:none><b>&#9888; Brownout reset detected</b> - check the power supply.</p>
 <div class=stat>
 <div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
 <div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Total clicks</b><span id=tc>-</span></div>
@@ -2184,11 +2185,16 @@ void WebPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
   WebPortal::sendPageHead(res, F("Status"), sub);
 
+#ifdef ESP32
+  int bo = (esp_reset_reason() == ESP_RST_BROWNOUT) ? 1 : 0;
+#else
+  int bo = 0;  // ESP8266 has no brownout detector
+#endif
   char seedBuf[240];
   size_t sp = 0;
   int sn = snprintf_P(seedBuf, sizeof(seedBuf),
-                      PSTR("<script>window.CHIPID=\"%s\";window.GPIN=%d;window._seedHist=["),
-                      DeviceInfo::chipid(), gcounter.input_pin());
+                      PSTR("<script>var w=window;w.CHIPID=\"%s\";w.GPIN=%d;w.BO=%d;w._seedHist=["),
+                      DeviceInfo::chipid(), gcounter.input_pin(), bo);
   if (sn > 0 && (size_t)sn < sizeof(seedBuf)) sp += (size_t)sn;
   int histSize = gcounter.cpm_history.size();
   bool first = true;
@@ -2437,6 +2443,7 @@ void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
 extern const char statusJS[] PROGMEM = R"JS(
 !function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",15,null,0,!0,!0,5,5);
 if(W&&window.GPIN>=0)W.innerHTML+=' (GPIO '+window.GPIN+')';
+if(window.BO)$('bw').style.display='';
 var ac,cps=0,nb,mu=$('snd'),mt=1,AC=window.AudioContext||window.webkitAudioContext;
 var LS=localStorage;
 function applySnd(){var s=LS.sndBtn,c=document.documentElement.classList.contains('crt');mu.style.display=(s==='1'||(c&&s!=='0'))?'':'none'}
