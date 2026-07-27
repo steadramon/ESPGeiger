@@ -1,0 +1,4 @@
+#!/bin/sh
+# Merges bring in code already on the other branch; CI checks those.
+git rev-parse -q --verify MERGE_HEAD >/dev/null && exit 0
+exec python3 scripts/lint_style.py --staged --fix
