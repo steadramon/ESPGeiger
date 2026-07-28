@@ -12,9 +12,9 @@ jobs:
     runs-on: ubuntu-24.04
     name: Build and upload Assets to Release
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install platformio
@@ -25,7 +25,8 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           TAG="${TAG#v}"   # drop a leading v (tag vX.Y.Z -> version X.Y.Z)
-          sed -i "s/RELEASE_VERSION \"devel\"/RELEASE_VERSION \"${TAG}\"/g" ESPGeiger/src/Util/DeviceInfo.h
+          sed -i "s/RELEASE_VERSION \"devel\"/RELEASE_VERSION \"${TAG}\"/g" ESPGeiger/Version.h
+          grep -q "RELEASE_VERSION \"${TAG}\"" ESPGeiger/Version.h || { echo "Version.h was not stamped with ${TAG}"; exit 1; }
       - name: Run PlatformIO
         run: platformio run
       - name: Prepare Release Assets
