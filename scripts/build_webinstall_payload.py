@@ -1,19 +1,8 @@
 #!/usr/bin/env python3
-"""
-Build the ESPGeiger web installer payload.
+"""Builds ESPGeiger_webinstall.<version>.zip, a folder + offsets.json per env
 
-For each ESP32-family build (anything with a bootloader.bin in .pio/build/),
-emit a folder containing:
-  - bootloader.bin
-  - partitions.bin
-  - boot_app0.bin
-  - firmware.bin
-  - offsets.json       (chipFamily + part-offset map, source of truth)
-
-Then pack everything into ESPGeiger_webinstall.<version>.zip.
-
-The webinstaller repo reads each offsets.json to assemble its manifest.json,
-so adding a new chip family is a one-line lookup change here only.
+The webinstaller repo reads each offsets.json for its manifest.json, so a new
+chip family is one line in INCLUDE_TO_CHIP.
 """
 from __future__ import annotations
 import json
@@ -61,7 +50,6 @@ def pio_metadata(env: str) -> dict:
 
 
 def env_payload(env: str, env_build: Path, dest_root: Path) -> bool:
-    """Materialise one env's payload folder. Return True on success."""
     meta = pio_metadata(env)
     flash_images = meta.get("extra", {}).get("flash_images", [])
     app_offset = meta.get("extra", {}).get("application_offset")

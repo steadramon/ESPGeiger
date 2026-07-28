@@ -62,7 +62,6 @@ def parse_msg(buf):
 
 
 def format_msg(m):
-    """Render a parsed tuple with labelled fields."""
     if m[0] == "click":
         _, chipid, counter, ts_ms = m
         return f"click  {chipid}  c={counter:<6}  ts={ts_ms}"

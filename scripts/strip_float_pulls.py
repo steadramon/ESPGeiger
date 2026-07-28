@@ -2,8 +2,7 @@
 # can dead-code-strip newlib's float printf/scanf chain when nothing references
 # it. Saves ~12 KB on ESP8266 builds with no %f/%g/%e usage.
 #
-# Safe-by-construction: if future code does use %f, the linker pulls the chain
-# in normally — no silent garbage like a strong stub override would cause.
+# %f in use still pulls the chain in
 #
 # To re-enable framework default: remove this from extra_scripts in platformio.ini.
 # ESP8266 only; ESP32 doesn't carry these flags.
