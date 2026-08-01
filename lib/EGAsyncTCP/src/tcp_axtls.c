@@ -238,6 +238,7 @@ int tcp_ssl_new_server(struct tcp_pcb *tcp, SSL_CTX* ssl_ctx){
   return tcp_ssl->fd;
 }
 
+// NOLINTNEXTLINE(complexity) axtls, compiled out, kept as is
 int tcp_ssl_free(struct tcp_pcb *tcp) {
 
   if(tcp == NULL) {
@@ -362,6 +363,7 @@ int tcp_ssl_write(struct tcp_pcb *tcp, uint8_t *data, size_t len) {
  *      < 0 - when there is an error
  *      > 0 - the length of the clear text characters that were read
  */
+// NOLINTNEXTLINE(complexity) axtls, compiled out, kept as is
 int tcp_ssl_read(struct tcp_pcb *tcp, struct pbuf *p) {
   if(tcp == NULL) {
     return -1;

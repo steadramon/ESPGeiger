@@ -21,7 +21,7 @@
 /*
 Changes for July 2019
 
-The operator "new ..." was changed to "new (std::nothrow) ...", which will
+The operator "new ..." is "new (std::nothrow) ...", which will
 return NULL when the heap is out of memory. Without the change "soft WDT"
 was the result, starting with Arduino ESP8266 Core 2.5.0. (Note, RE:"soft
 WDT" - the error  reporting may improve with core 2.6.) With proir core
@@ -94,22 +94,7 @@ ACErrorTracker::ACErrorTracker(AsyncClient *c):
     _client(c)
   , _close_error(ERR_OK)
   , _errored(EE_OK)
-#ifdef DEBUG_MORE
-  , _error_event_cb(NULL)
-  , _error_event_cb_arg(NULL)
-#endif
 {}
-
-#ifdef DEBUG_MORE
-/**
- * This is not necessary, but a start at gathering some statistics on
- * errored out connections. Used from AsyncServer.
- */
-void ACErrorTracker::onErrorEvent(AsNotifyHandler cb, void *arg) {
-  _error_event_cb = cb;
-  _error_event_cb_arg = arg;
-}
-#endif
 
 void ACErrorTracker::setCloseError(err_t e) {
   if (e != ERR_OK)
@@ -125,10 +110,6 @@ void ACErrorTracker::setCloseError(err_t e) {
 void ACErrorTracker::setErrored(size_t errorEvent){
   if(EE_OK == _errored)
     _errored = errorEvent;
-#ifdef DEBUG_MORE
-  if (_error_event_cb)
-    _error_event_cb(_error_event_cb_arg, errorEvent);
-#endif
 }
 /**
  * Used by callback functions only. Used for proper ERR_ABRT return value
@@ -150,7 +131,7 @@ err_t ACErrorTracker::getCallbackCloseError(void){
 static size_t _connectionCount=0;
 #endif
 
-// ESP8266 is cooperative-multitask so no lock needed.
+// single task, no lock
 static inline bool _pcb_in_active_lists(const tcp_pcb* pcb){
   for (const tcp_pcb* p = tcp_active_pcbs; p; p = p->next) {
     if (p == pcb) return true;
@@ -161,8 +142,6 @@ static inline bool _pcb_in_active_lists(const tcp_pcb* pcb){
   return false;
 }
 
-// DRAM-range pre-filter then live-list walk; rejects stale pcbs that
-// would deref into freed memory.
 static inline bool _pcbAlive(const tcp_pcb* pcb){
   if (!pcb) return false;
 #ifdef ESP8266
@@ -177,7 +156,6 @@ bool AsyncClient::_validate_pcb() const {
   return _pcb_in_active_lists(_pcb);
 }
 
-// Live AsyncServer registry: accept callback validates before deref.
 #define EGASYNC_SERVER_REG_MAX 4
 static AsyncServer* _live_servers[EGASYNC_SERVER_REG_MAX] = {};
 static uint8_t _live_server_count = 0;
@@ -205,20 +183,17 @@ static bool _server_alive(const AsyncServer* s) {
   return false;
 }
 
-// Clients with an in-flight dns_gethostbyname. The found-callback fires from a
-// timer with no pcb to clear, so a client freed mid-lookup is a UAF. A DRAM
-// range check misses it (freed-then-reused stays in range); gate on membership.
 #define EGASYNC_DNS_REG_MAX 8
 static AsyncClient* _dns_pending[EGASYNC_DNS_REG_MAX] = {};
 static uint8_t _dns_pending_count = 0;
 
-static void _dns_register(AsyncClient* c) {
+static bool _dns_register(AsyncClient* c) {
   for (uint8_t i = 0; i < _dns_pending_count; i++) {
-    if (_dns_pending[i] == c) return;
+    if (_dns_pending[i] == c) return true;
   }
-  if (_dns_pending_count < EGASYNC_DNS_REG_MAX) {
-    _dns_pending[_dns_pending_count++] = c;
-  }
+  if (_dns_pending_count >= EGASYNC_DNS_REG_MAX) return false;
+  _dns_pending[_dns_pending_count++] = c;
+  return true;
 }
 
 static void _dns_unregister(AsyncClient* c) {
@@ -274,8 +249,6 @@ AsyncClient::AsyncClient(tcp_pcb* pcb):
   , _connect_port(0)
   , _recv_pbuf_flags(0)
   , _errorTracker(NULL)
-  , prev(NULL)
-  , next(NULL)
 {
   _errorTracker = std::make_shared<ACErrorTracker>(this);
 #if DEBUG_ESP_ASYNC_TCP
@@ -311,11 +284,10 @@ AsyncClient::AsyncClient(tcp_pcb* pcb):
 
 AsyncClient::~AsyncClient(){
   _closed = true;
-  _dns_unregister(this);   // drop any in-flight DNS registration
+  _dns_unregister(this);
+  _errorTracker->clearClient();
   if(_pcb)
     _close();
-
-  _errorTracker->clearClient();
 }
 
 inline void clearTcpCallbacks(tcp_pcb* pcb){
@@ -335,18 +307,14 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
     return false;
   IPAddress addr;
   addr = ip;
-#if LWIP_VERSION_MAJOR == 1
-  netif* interface = ip_route(&addr);
-  if (!interface){ //no route to host
-    return false;
-  }
-#endif
   tcp_pcb* pcb = tcp_new();
   if (!pcb){ //could not allocate pcb
     return false;
   }
-  _pcb = pcb;  // bind now so a mid-handshake destroy clears callbacks (UAF)
+  _pcb = pcb;  // so a destroy clears callbacks
   _pcb_alive = true;
+  _closed = false;  // client gets reused
+  _rx_ack_len = 0;
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
 #if ASYNC_TCP_SSL_ENABLED
@@ -360,7 +328,7 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
     clearTcpCallbacks(pcb);
     tcp_abort(pcb);
     _pcb_alive = false;
-    _pcb = NULL;  // aborted; don't double-close
+    _pcb = NULL;
     return false;
   }
   return true;
@@ -371,6 +339,9 @@ bool AsyncClient::connect(const char* host, uint16_t port, bool secure){
 #else
 bool AsyncClient::connect(const char* host, uint16_t port){
 #endif
+  if (_pcb) //already connected
+    return false;
+  _closed = false;  // close() can stop the lookup
   IPAddress addr;
   err_t err = dns_gethostbyname(host, addr, (dns_found_callback)&_s_dns_found, this);
   if(err == ERR_OK) {
@@ -385,46 +356,11 @@ bool AsyncClient::connect(const char* host, uint16_t port){
     _handshake_done = !secure;
 #endif
     _connect_port = port;
-    _dns_register(this);   // pending lookup: gate the found-callback
+    if(!_dns_register(this))
+      return false;
     return true;
   }
   return false;
-}
-
-AsyncClient& AsyncClient::operator=(const AsyncClient& other){
-  if (_pcb) {
-    ASYNC_TCP_DEBUG("operator=[%u]: Abandoned _pcb(0x%" PRIXPTR ") forced close.\n", getConnectionId(), uintptr_t(_pcb));
-    _close();
-  }
-  _errorTracker = other._errorTracker;
-
-  // I am confused when "other._pcb" falls out of scope the destructor will
-  // close it? TODO: Look to see where this is used and how it might work.
-  _pcb = other._pcb;
-  if (_pcb) {
-    _pcb_alive = true;
-    _rx_last_packet = millis();
-    tcp_setprio(_pcb, TCP_PRIO_MIN);
-    tcp_arg(_pcb, this);
-    tcp_recv(_pcb, &_s_recv);
-    tcp_sent(_pcb, &_s_sent);
-    tcp_err(_pcb, &_s_error);
-    tcp_poll(_pcb, &_s_poll, 1);
-#if ASYNC_TCP_SSL_ENABLED
-    if(tcp_ssl_has(_pcb)){
-      _pcb_secure = true;
-      _handshake_done = false;
-      tcp_ssl_arg(_pcb, this);
-      tcp_ssl_data(_pcb, &_s_data);
-      tcp_ssl_handshake(_pcb, &_s_handshake);
-      tcp_ssl_err(_pcb, &_s_ssl_error);
-    } else {
-      _pcb_secure = false;
-      _handshake_done = true;
-    }
-#endif
-  }
-  return *this;
 }
 
 bool AsyncClient::operator==(const AsyncClient &other) {
@@ -446,10 +382,12 @@ void AsyncClient::abort(){
   // 6) Callbacks to _recv() or _connected() with err set, will result in _pcb
   //    set to NULL. Thus, preventing possible calls later to tcp_abort().
   if(_pcb) {
+    // tcp_abort may free this, nothing after
+    tcp_pcb* pcb = _pcb;
     _pcb_alive = false;
-    tcp_abort(_pcb);
     _pcb = NULL;
     setCloseError(ERR_ABRT);
+    tcp_abort(pcb);
   }
   return;
 }
@@ -547,8 +485,8 @@ size_t AsyncClient::ack(size_t len){
 // Private Callbacks
 
 void AsyncClient::_connected(std::shared_ptr<ACErrorTracker>& errorTracker, void* pcb, err_t err){
-  // Stale event: close already ran. Don't re-arm a dead client.
-  if (_closed) return;
+  // stale event
+  if (_closed || (pcb && pcb != _pcb)) return;
   //(void)err; // LWIP v1.4 appears to always call with ERR_OK
   // Documentation for 2.1.0 also says:
   //   "err	- An unused error code, always ERR_OK currently ;-)"
@@ -616,7 +554,7 @@ void AsyncClient::_close(){
       abort();
     }
     _pcb = NULL;
-    if(_discard_cb)
+    if(_errorTracker->hasClient() && _discard_cb)
       _discard_cb(_discard_cb_arg, this);
   }
   return;
@@ -635,11 +573,11 @@ void AsyncClient::_error(err_t err) {
     _pcb_alive = false;
     _pcb = NULL;
   }
+  // callback may delete this
+  auto tracker = _errorTracker;
   if(_error_cb)
     _error_cb(_error_cb_arg, this, err);
-  // If _error_cb deleted us, _errorTracker->clearClient() ran in ~AsyncClient.
-  // Skip _discard_cb to avoid use-after-free.
-  if(_errorTracker->hasClient() && _discard_cb)
+  if(tracker->hasClient() && _discard_cb)
     _discard_cb(_discard_cb_arg, this);
 }
 
@@ -736,7 +674,8 @@ void AsyncClient::_recv(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
     // IF this callback function returns ERR_OK or ERR_ABRT
     // then it is assummed we freed the pbufs.
     // https://www.nongnu.org/lwip/2_1_x/group__tcp__raw.html#ga8afd0b316a87a5eeff4726dc95006ed0
-    if(!errorTracker->hasClient()){
+    // data after close() dropped
+    if(!errorTracker->hasClient() || !_pcbAlive(pcb) || _closed){
       while(pb != NULL){
         pbuf *b = pb;
         pb = b->next;
@@ -755,7 +694,7 @@ void AsyncClient::_recv(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
       _recv_pbuf_flags = b->flags;
       _recv_cb(_recv_cb_arg, this, b->payload, b->len);
     }
-    if(errorTracker->hasClient()){
+    if(errorTracker->hasClient() && _pcbAlive(pcb)){
       if(!_ack_pcb)
         _rx_ack_len += b->len;
       else
@@ -806,28 +745,24 @@ void AsyncClient::_poll(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
   return;
 }
 
-#if LWIP_VERSION_MAJOR == 1
-void AsyncClient::_dns_found(struct ip_addr *ipaddr){
-#else
 void AsyncClient::_dns_found(const ip_addr *ipaddr){
-#endif
-  if(ipaddr){
+  if(_closed || _pcb) return;
 #if ASYNC_TCP_SSL_ENABLED
-    connect(ipaddr, _connect_port, _pcb_secure);
+  if(ipaddr && connect(ipaddr, _connect_port, _pcb_secure)) return;
 #else
-    connect(ipaddr, _connect_port);
+  if(ipaddr && connect(ipaddr, _connect_port)) return;
 #endif
-  } else {
-    if(_error_cb)
-      _error_cb(_error_cb_arg, this, -55);
-    if(_errorTracker->hasClient() && _discard_cb)
-      _discard_cb(_discard_cb_arg, this);
-  }
+  // tell the owner, else it waits forever
+  auto tracker = _errorTracker;
+  if(_error_cb)
+    _error_cb(_error_cb_arg, this, ipaddr ? ERR_CONN : -55);
+  if(tracker->hasClient() && _discard_cb)
+    _discard_cb(_discard_cb_arg, this);
 }
 
 // lwIP Callbacks
 
-// reject a freed-client `arg` from a teardown-race callback (ESP8266 DRAM)
+// range check only, cant see a freed client
 static inline bool _acArgAlive(void* arg){
 #ifdef ESP8266
   uintptr_t p = (uintptr_t)arg;
@@ -837,16 +772,12 @@ static inline bool _acArgAlive(void* arg){
 #endif
 }
 
-#if LWIP_VERSION_MAJOR == 1
-void AsyncClient::_s_dns_found(const char *name, ip_addr_t *ipaddr, void *arg){
-#else
 void AsyncClient::_s_dns_found(const char *name, const ip_addr *ipaddr, void *arg){
-#endif
   (void)name;
   if(!_acArgAlive(arg)) return;
   AsyncClient* ac = reinterpret_cast<AsyncClient*>(arg);
-  if(!_dns_alive(ac)) return;   // freed mid-lookup: drop instead of deref
-  _dns_unregister(ac);          // lookup delivered
+  if(!_dns_alive(ac)) return;   // freed mid-lookup
+  _dns_unregister(ac);
   ac->_dns_found(ipaddr);
 }
 
@@ -918,21 +849,6 @@ void AsyncClient::_s_ssl_error(void *arg, struct tcp_pcb *tcp, int8_t err){
   reinterpret_cast<AsyncClient*>(arg)->_ssl_error(err);
 }
 #endif
-
-// Operators
-
-AsyncClient & AsyncClient::operator+=(const AsyncClient &other) {
-  if(next == NULL){
-    next = (AsyncClient*)(&other);
-    next->prev = this;
-  } else {
-    AsyncClient *c = next;
-    while(c->next != NULL) c = c->next;
-    c->next =(AsyncClient*)(&other);
-    c->next->prev = c;
-  }
-  return *this;
-}
 
 void AsyncClient::setRxTimeout(uint32_t timeout){
   _rx_since_timeout = timeout;
@@ -1133,9 +1049,7 @@ const char * AsyncClient::errorToString(err_t error) {
     case ERR_CONN:       return "Not connected";
     case ERR_ARG:        return "Illegal argument";
     case ERR_USE:        return "Address in use";
-#if defined(LWIP_VERSION_MAJOR) && (LWIP_VERSION_MAJOR > 1)
     case ERR_ALREADY:    return "Already connectioning";
-#endif
     case ERR_IF:         return "Low-level netif error";
     case ERR_ISCONN:     return "Connection already established";
     case -55:            return "DNS failed";
@@ -1183,10 +1097,6 @@ AsyncServer::AsyncServer(IPAddress addr, uint16_t port)
   , _file_cb_arg(0)
 #endif
 {
-#ifdef DEBUG_MORE
-  for (size_t i=0; i<EE_MAX; ++i)
-    _event_count[i] = 0;
-#endif
 }
 
 AsyncServer::AsyncServer(uint16_t port)
@@ -1203,10 +1113,6 @@ AsyncServer::AsyncServer(uint16_t port)
   , _file_cb_arg(0)
 #endif
   {
-#ifdef DEBUG_MORE
-    for (size_t i=0; i<EE_MAX; ++i)
-      _event_count[i] = 0;
-#endif
   }
 
 AsyncServer::~AsyncServer(){
@@ -1236,7 +1142,7 @@ void AsyncServer::begin(){
   }
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
-  // Allow rebind while previous clients on the same port are in TIME_WAIT.
+  // rebind with clients in TIME_WAIT
   ip_set_option(pcb, SOF_REUSEADDR);
   IPAddress local_addr;
   local_addr = _addr;
@@ -1324,9 +1230,6 @@ err_t AsyncServer::_accept(tcp_pcb* pcb, err_t err){
     // eg. 2.1.0 could call with error on failure to allocate pcb.
     ASYNC_TCP_DEBUG("_accept:%s err: %ld\n", ((NULL == pcb) ? " NULL == pcb!," : ""), err);
     ASYNC_TCP_ASSERT(ERR_ABRT != err);
-#ifdef DEBUG_MORE
-    incEventCount(EE_ACCEPT_CB);
-#endif
     return ERR_OK;
   }
 
@@ -1394,11 +1297,6 @@ err_t AsyncServer::_accept(tcp_pcb* pcb, err_t err){
 
       if(c){
         auto errorTracker = c->getACErrorTracker();
-#ifdef DEBUG_MORE
-        errorTracker->onErrorEvent(
-          [](void *obj, size_t ee){ ((AsyncServer*)(obj))->incEventCount(ee); },
-          this);
-#endif
         ASYNC_TCP_DEBUG("_accept[%u]: connected\n", errorTracker->getConnectionId());
         _connect_cb(_connect_cb_arg, c);
         return errorTracker->getCallbackCloseError();
@@ -1423,7 +1321,6 @@ err_t AsyncServer::_accept(tcp_pcb* pcb, err_t err){
 err_t AsyncServer::_s_accept(void *arg, tcp_pcb* pcb, err_t err){
   AsyncServer* srv = reinterpret_cast<AsyncServer*>(arg);
   if (!_server_alive(srv)) {
-    // Parent server was destroyed between tcp_accept queue and dispatch.
     if (pcb) tcp_abort(pcb);
     return ERR_ABRT;
   }

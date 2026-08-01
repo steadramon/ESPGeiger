@@ -54,9 +54,7 @@ typedef std::function<void(void*, AsyncClient*)> AcConnectHandler;
 typedef std::function<void(void*, AsyncClient*, size_t len, uint32_t time)> AcAckHandler;
 typedef std::function<void(void*, AsyncClient*, err_t error)> AcErrorHandler;
 typedef std::function<void(void*, AsyncClient*, void *data, size_t len)> AcDataHandler;
-typedef std::function<void(void*, AsyncClient*, struct pbuf *pb)> AcPacketHandler;
 typedef std::function<void(void*, AsyncClient*, uint32_t time)> AcTimeoutHandler;
-typedef std::function<void(void*, size_t event)> AsNotifyHandler;
 
 enum error_events {
   EE_OK = 0,
@@ -67,9 +65,7 @@ enum error_events {
   EE_ACCEPT_CB,
   EE_MAX
 };
-// DEBUG_MORE is for gathering more information on which CBs close events are
-// occuring and count.
-// #define DEBUG_MORE 1
+
 class ACErrorTracker {
   private:
     AsyncClient *_client;
@@ -78,17 +74,10 @@ class ACErrorTracker {
 #if DEBUG_ESP_ASYNC_TCP
     size_t _connectionId;
 #endif
-#ifdef DEBUG_MORE
-    AsNotifyHandler _error_event_cb;
-    void* _error_event_cb_arg;
-#endif
 
   protected:
     friend class AsyncClient;
     friend class AsyncServer;
-#ifdef DEBUG_MORE
-    void onErrorEvent(AsNotifyHandler cb, void *arg);
-#endif
 #if DEBUG_ESP_ASYNC_TCP
     void setConnectionId(size_t id) { _connectionId=id;}
     size_t getConnectionId(void) { return _connectionId;}
@@ -107,7 +96,6 @@ class ACErrorTracker {
 
 class AsyncClient {
   protected:
-    friend class AsyncTCPbuffer;
     friend class AsyncServer;
     tcp_pcb* _pcb;
     AcConnectHandler _connect_cb;
@@ -125,11 +113,8 @@ class AsyncClient {
     AcConnectHandler _poll_cb;
     void* _poll_cb_arg;
     bool _pcb_busy;
-    // True iff _pcb still points to a live lwIP pcb.
     bool _pcb_alive = false;
-    // Sticky once-closed flag. Lets _connected bail on events queued by lwIP
-    // before close ran. Same role as the ESP32 _closed atomic.
-    bool _closed = false;
+    bool _closed = false;   // sticky
 
     bool _validate_pcb() const;
 #if ASYNC_TCP_SSL_ENABLED
@@ -157,21 +142,13 @@ class AsyncClient {
 #endif
     void _poll(std::shared_ptr<ACErrorTracker>& closeAbort, tcp_pcb* pcb);
     void _sent(std::shared_ptr<ACErrorTracker>& closeAbort, tcp_pcb* pcb, uint16_t len);
-#if LWIP_VERSION_MAJOR == 1
-    void _dns_found(struct ip_addr *ipaddr);
-#else
     void _dns_found(const ip_addr *ipaddr);
-#endif
     static err_t _s_poll(void *arg, struct tcp_pcb *tpcb);
     static err_t _s_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *pb, err_t err);
     static void _s_error(void *arg, err_t err);
     static err_t _s_sent(void *arg, struct tcp_pcb *tpcb, uint16_t len);
     static err_t _s_connected(void* arg, void* tpcb, err_t err);
-#if LWIP_VERSION_MAJOR == 1
-    static void _s_dns_found(const char *name, struct ip_addr *ipaddr, void *arg);
-#else
     static void _s_dns_found(const char *name, const ip_addr *ipaddr, void *arg);
-#endif
 #if ASYNC_TCP_SSL_ENABLED
     static void _s_data(void *arg, struct tcp_pcb *tcp, uint8_t * data, size_t len);
     static void _s_handshake(void *arg, struct tcp_pcb *tcp, SSL *ssl);
@@ -181,20 +158,15 @@ class AsyncClient {
     void setCloseError(err_t e) const { _errorTracker->setCloseError(e);}
 
   public:
-    AsyncClient* prev;
-    AsyncClient* next;
-
 #if ASYNC_TCP_SSL_ENABLED
     AsyncClient(tcp_pcb* pcb = 0, SSL_CTX * ssl_ctx = NULL);
 #else
     AsyncClient(tcp_pcb* pcb = 0);
 #endif
-    // Do not delete from inside one of this client's own callbacks - the
-    // dispatcher is still holding a reference. Out-of-callback deletes are safe.
-    ~AsyncClient();
+    ~AsyncClient();   // not from inside its own callbacks
 
-    AsyncClient & operator=(const AsyncClient &other);
-    AsyncClient & operator+=(const AsyncClient &other);
+    AsyncClient(const AsyncClient &) = delete;
+    AsyncClient & operator=(const AsyncClient &) = delete;
 
     bool operator==(const AsyncClient &other);
 
@@ -209,6 +181,7 @@ class AsyncClient {
     bool connect(const char* host, uint16_t port);
 #endif
     void close(bool now = false);
+    void release() { delete this; }   // one task, frees now
     void stop();
     void abort();
     bool free();
@@ -288,9 +261,6 @@ class AsyncServer {
     AcSSlFileHandler _file_cb;
     void* _file_cb_arg;
 #endif
-#ifdef DEBUG_MORE
-    int _event_count[EE_MAX];
-#endif
 
   public:
 
@@ -307,15 +277,9 @@ class AsyncServer {
     void setNoDelay(bool nodelay);
     bool getNoDelay();
     uint8_t status();
-#ifdef DEBUG_MORE
-    int getEventCount(size_t ee) const { return _event_count[ee];}
-#endif
   protected:
     err_t _accept(tcp_pcb* newpcb, err_t err);
     static err_t _s_accept(void *arg, tcp_pcb* newpcb, err_t err);
-#ifdef DEBUG_MORE
-    int incEventCount(size_t ee) { return ++_event_count[ee];}
-#endif
 #if ASYNC_TCP_SSL_ENABLED
     int _cert(const char *filename, uint8_t **buf);
     err_t _poll(tcp_pcb* pcb);
