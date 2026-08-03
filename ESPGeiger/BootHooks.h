@@ -20,69 +20,73 @@
 #define BOOT_HOOKS_H
 
 #include <Arduino.h>
-#include "FastMillis.h"
+#include "src/Corium/System/FastMillis.h"
 
 #ifdef SSD1306_DISPLAY
-#include "../OLEDDisplay/OLEDDisplay.h"
+#include "src/Display/Display.h"
 #endif
 #ifdef GEIGER_PUSHBUTTON
-#include "../PushButton/PushButton.h"
+#include "src/PushButton/PushButton.h"
 #endif
 #ifdef AUDIO_TICK
-#include "../AudioTick/AudioTick.h"
-#include "../Voice/Voice.h"
+#include "src/AudioTick/AudioTick.h"
+#include "src/Voice/Voice.h"
 #endif
 
 namespace BootHooks {
 
-  // Hold ladder: released <5s = OFFLINE, held >=5s = FULL_RESET
-  // (wipes prefs/WiFi but keeps /api.key so station ID survives).
+  // under 5s offline, 5s+ full reset (keeps /api.key)
   enum class ButtonHold : uint8_t { NONE = 0, OFFLINE = 1, FULL_RESET = 2 };
 
   inline void displayWifiDisabled() {
-#ifdef SSD1306_DISPLAY
-    display.wifiDisabled();
+#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
+    display.offline();
 #endif
   }
 
   inline void displaySetupWifi(const char* host) {
 #ifdef AUDIO_TICK
-    // begin_all runs after WiFi connect, so I2S isn't up yet. begin() is
-    // idempotent.
+    // I2S not up yet
     audiotick.begin();
     voice.silence(1000);
     voice.speakWord("setup_wifi");
 #endif
 #ifdef SSD1306_DISPLAY
-    display.setupWifi(host);
+    display.setup_wifi(host);
+#endif
+  }
+
+  inline void displaySafeMode() {
+#ifdef SSD1306_DISPLAY
+    display.backend()->safe_mode();
 #endif
   }
 
   inline void displayDisableTimeout() {
 #ifdef SSD1306_DISPLAY
-    display.enable_oled_timeout = false;
+    display.keep_on();
 #endif
   }
 
   inline void displayResetTimeout() {
 #ifdef SSD1306_DISPLAY
-    display.oled_timeout = fast_millis();
+    display.wake(fast_millis());
 #endif
   }
 
   inline void displayWipeCountdown(int s) {
-#ifdef SSD1306_DISPLAY
-    display.wipeCountdown(s);
+#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
+    display.wipe(s);
 #endif
   }
 
   inline void displayWipeReady() {
-#ifdef SSD1306_DISPLAY
-    display.wipeReady();
+#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
+    display.wipe(0);
 #endif
   }
 
-  // Blocks until button released. OLED counts down; serial logs transitions.
+  // Blocks until released
   inline ButtonHold checkStartupButtonHold() {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();

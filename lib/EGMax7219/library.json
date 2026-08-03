@@ -1,0 +1,9 @@
+{
+  "name": "EGMax7219",
+  "version": "0.1.0",
+  "description": "Bit-banged MAX7219 and TM1637 drivers, 7-segment digit codes and a bar graph. Write-only, no heap, no SPI peripheral.",
+  "keywords": "max7219, tm1637, 7-segment, led, display, esp8266, esp32",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}
