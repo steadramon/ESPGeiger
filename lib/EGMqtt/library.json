@@ -1,0 +1,9 @@
+{
+  "name": "EGMqtt",
+  "version": "0.1.0",
+  "description": "MQTT 3.1.1 client for ESP8266/ESP32, run from the main loop on EGTcpConn.",
+  "keywords": "mqtt, esp8266, esp32, iot",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}
