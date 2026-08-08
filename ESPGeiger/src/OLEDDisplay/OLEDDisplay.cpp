@@ -380,6 +380,7 @@ void SSD1306Display::loop(unsigned long now) {
       if (enable_oled_timeout && _lcd_timeout_ms > 0 &&
           (now - oled_timeout > _lcd_timeout_ms)) {
         if (oled_on) { clearBuffer(); setPowerSave(1); oled_on = false; _send_rows_left = 0; }
+        EGModuleRegistry::set_loop_interval(this, 250);
         return;
       }
       if (_lcd_timeout_ms == 0
