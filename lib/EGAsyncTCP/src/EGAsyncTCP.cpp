@@ -205,20 +205,17 @@ static bool _server_alive(const AsyncServer* s) {
   return false;
 }
 
-// Clients with an in-flight dns_gethostbyname. The found-callback fires from a
-// timer with no pcb to clear, so a client freed mid-lookup is a UAF. A DRAM
-// range check misses it (freed-then-reused stays in range); gate on membership.
 #define EGASYNC_DNS_REG_MAX 8
 static AsyncClient* _dns_pending[EGASYNC_DNS_REG_MAX] = {};
 static uint8_t _dns_pending_count = 0;
 
-static void _dns_register(AsyncClient* c) {
+static bool _dns_register(AsyncClient* c) {
   for (uint8_t i = 0; i < _dns_pending_count; i++) {
-    if (_dns_pending[i] == c) return;
+    if (_dns_pending[i] == c) return true;
   }
-  if (_dns_pending_count < EGASYNC_DNS_REG_MAX) {
-    _dns_pending[_dns_pending_count++] = c;
-  }
+  if (_dns_pending_count >= EGASYNC_DNS_REG_MAX) return false;
+  _dns_pending[_dns_pending_count++] = c;
+  return true;
 }
 
 static void _dns_unregister(AsyncClient* c) {
@@ -385,7 +382,8 @@ bool AsyncClient::connect(const char* host, uint16_t port){
     _handshake_done = !secure;
 #endif
     _connect_port = port;
-    _dns_register(this);   // pending lookup: gate the found-callback
+    if(!_dns_register(this))
+      return false;
     return true;
   }
   return false;
