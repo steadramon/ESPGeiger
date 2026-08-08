@@ -35,6 +35,15 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+// libstdc++ uses these as parameter names, so a function-like macro breaks any
+// header that reaches <algorithm>. libc++ does not, which hides it locally.
+#ifdef min
+#error "min must not be a macro in the shim"
+#endif
+#ifdef max
+#error "max must not be a macro in the shim"
+#endif
+
 // Fails the build if a seam's arithmetic type is not the 32 bits the target
 // gives it. Use on the expression, not the declaration, so an implicit
 // promotion inside the expression is caught too.

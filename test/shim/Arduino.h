@@ -137,16 +137,15 @@ typedef int portMUX_TYPE;
 #define lowByte(w)              ((uint8_t)((w) & 0xff))
 #define highByte(w)             ((uint8_t)((w) >> 8))
 
-// Templates, not macros: the ESP8266/ESP32 cores do the same, and a macro
-// min/max collides with the C++ standard headers.
-template <typename T, typename U> constexpr auto eg_min(T a, U b) -> decltype(a < b ? a : b) { return a < b ? a : b; }
-template <typename T, typename U> constexpr auto eg_max(T a, U b) -> decltype(a > b ? a : b) { return a > b ? a : b; }
-#ifndef min
-#define min(a, b) eg_min(a, b)
-#endif
-#ifndef max
-#define max(a, b) eg_max(a, b)
-#endif
+// Must NOT be macros: libstdc++ uses `min`/`max` as parameter names, so a
+// macro breaks any header that reaches <algorithm>. Both ESP cores pull in
+// std::min/std::max for C++ and keep only the underscored macros.
+#include <algorithm>
+using std::max;
+using std::min;
+
+#define _min(a, b) ((a) < (b) ? (a) : (b))
+#define _max(a, b) ((a) > (b) ? (a) : (b))
 
 // Same integer truncation as the core. A zero in_max-in_min span divides by
 // zero here exactly as it faults on target; see the OLED graph regression.

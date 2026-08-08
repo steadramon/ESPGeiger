@@ -222,11 +222,16 @@ public:
       case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
       case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false; *out = v; return true; }
       case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false;
-                         int8_t  s = (int8_t)v;  if (s < 0) break; *out = (uint32_t)s; return true; }
+                         int8_t  s = (int8_t)v;
+                         if (s < 0) break;
+                         *out = (uint32_t)s; return true; }
       case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false;
-                         int16_t s = (int16_t)v; if (s < 0) break; *out = (uint32_t)s; return true; }
+                         int16_t s = (int16_t)v;
+                         if (s < 0) break;
+                         *out = (uint32_t)s; return true; }
       case TAG_INT32:  { uint32_t v; if (!get_u32(&v)) return false;
-                         if ((int32_t)v < 0) break; *out = v; return true; }
+                         if ((int32_t)v < 0) break;
+                         *out = v; return true; }
     }
     error = true; return false;
   }
