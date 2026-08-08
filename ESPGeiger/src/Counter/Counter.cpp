@@ -218,15 +218,16 @@ Counter::Counter() {
 #endif
 }
 
-void Counter::secondticker() {
+void Counter::secondticker(uint32_t uptime_s) {
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
-  if (eventCounter > 0) _last_count_up_s = (uint32_t)DeviceInfo::uptime();
+  if (eventCounter > 0) _last_count_up_s = uptime_s;
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
   {
     static bool cm_logged = false;
-    bool cm = counts_missing();
+    bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s,
+                                           (uint32_t)total_clicks);
     if (cm && !cm_logged) {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
       Log::console(PSTR("Counter: no counts detected - check tube and wiring (GPIO %d)"), input_pin());
@@ -250,7 +251,8 @@ void Counter::secondticker() {
   // Cache dispatched CPM once per tick: hot reads skip the switch, warn
   // tracks the value the user sees (relevant in non-bucket modes).
   _cached_cpm_active = get_cps() * 60.0f;
-  int ccpm = (int)roundf(_cached_cpm_active);
+  // CPM is non-negative, so this is roundf() without the soft-float call.
+  int ccpm = (int)(_cached_cpm_active + 0.5f);
 
   cpm_history.push(ccpm);
 
@@ -264,8 +266,10 @@ void Counter::secondticker() {
 
   time_t currentTime = time (NULL);
   if (ntpclient.synced) {
-    // Build-time constant per input type, evaluated once.
-    static const time_t kBoundarySecs = (time_t)geigerinput->boundary_seconds();
+    // Resolved in begin(), not a function-local static: a dynamically
+    // initialised static costs two __cxa_guard calls into libstdc++ on every
+    // tick, and on a 1 Hz path that code is never cache-resident.
+    const time_t kBoundarySecs = (time_t)_boundary_secs;
     static time_t nextBoundary = 0;
     static bool boundaryArmed = false;
     bool fire = false;
@@ -435,20 +439,8 @@ float Counter::get_cpm15f() {
   return geigerTicks15.get() * 60.0f;
 }
 
-void Counter::set_ratio(float ratio) {
-  if (ratio <= 0) return;
-  _ratio = ratio;
-  _ratio_inv = 1.0f / ratio;
-  // 30 min floor: shielded / low-CPM setups would false-alarm at the bare formula.
-  uint32_t t = (uint32_t)(12000.0 / (double)ratio);
-  _tube_timeout_s = (t < 1800) ? 1800 : t;
-}
-
 bool Counter::get_tube_alive() {
-  if (_ratio <= 0.0f) return true;
-  // Silence measured in uptime seconds from the last collected count, so a
-  // tube that has never counted since boot also goes dead once past timeout.
-  return ((uint32_t)DeviceInfo::uptime() - _last_count_up_s) < _tube_timeout_s;
+  return tube_alive((uint32_t)DeviceInfo::uptime(), _last_count_up_s);
 }
 
 int Counter::input_pin() {
@@ -463,33 +455,16 @@ bool Counter::counts_missing() {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   return false;
 #else
-  // 10 expected counts of silence (Poisson, P ~ 5e-5). Expected rate is the
-  // assumed background (0.1 uSv/h through the ratio) until the first count,
-  // then the observed lifetime rate, so unset ratios and quiet sites
-  // self-calibrate. Cap at the dead-tube timeout: the advisory must never
-  // be slower than the hard latch.
-  if (_ratio <= 0.0f) return false;
-  uint32_t up = (uint32_t)DeviceInfo::uptime();
-  uint32_t silence = up - _last_count_up_s;
-  // Below the 60 s floor no threshold can fire; skip the soft-float and
-  // 64-bit divides on the healthy-station common path.
-  if (silence < 60) return false;
-  uint32_t thresh = (uint32_t)(6000.0f / _ratio);
-  if (total_clicks > 0) {
-    uint32_t obs = (uint32_t)((10ULL * up) / total_clicks);
-    if (obs > thresh) thresh = obs;
-  }
-  if (thresh > _tube_timeout_s) thresh = _tube_timeout_s;
-  return silence >= thresh;
+  return CounterMaths::counts_missing((uint32_t)DeviceInfo::uptime(),
+                                      _last_count_up_s,
+                                      (uint32_t)total_clicks);
 #endif
 }
 
 bool Counter::get_saturated() {
-  // Raw cps only; corrected values feedback-loop near the cap.
-  if (_dead_time_us == 0) return false;
   float cps = get_cps_live();
   if (cps <= 0.0f) cps = geigerTicks.get();
-  return cps * _dead_time_sec > 0.875f;
+  return saturated_at(cps);
 }
 
 float Counter::get_cps_live() {
@@ -533,14 +508,6 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
   uint32_t span = newest - oldest;
   if (span == 0) return 0.0f;
   return (float)(take - 1) * 1.0e6f / (float)span;
-}
-
-float Counter::apply_dead_time(float cps) const {
-  // Non-paralyzable model, capped at 10x. Skip below 50 cps (factor < 1.005).
-  if (_dead_time_us == 0 || cps <= 50.0f) return cps;
-  float x = cps * _dead_time_sec;
-  if (x > 0.9f) x = 0.9f;
-  return cps / (1.0f - x);
 }
 
 uint16_t Counter::get_cps_n() {
@@ -635,6 +602,7 @@ void Counter::begin() {
 #endif
 
   geigerinput->begin();
+  _boundary_secs = (uint16_t)geigerinput->boundary_seconds();
   apply_pcnt_filter();
 
   uint32_t rtc_delta_clicks = 0, rtc_delta_seconds = 0;

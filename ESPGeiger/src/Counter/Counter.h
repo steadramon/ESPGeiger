@@ -43,19 +43,18 @@
 #include "../GeigerInput/Type/TestPulseInt.h"
 #endif
 
-#ifndef GEIGER_RATIO
-  #define GEIGER_RATIO 151.0
-#endif
-
 #ifndef GEIGER_DEAD_TIME_US
   #define GEIGER_DEAD_TIME_US 100
 #endif
 
+// Must be settled before CounterMaths.h, which uses it for the member default.
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   #define GEIGER_DEAD_TIME_DEFAULT GEIGER_DEAD_TIME_US
 #else
   #define GEIGER_DEAD_TIME_DEFAULT 0
 #endif
+
+#include "CounterMaths.h"
 
 
 #include "../Util/StringUtil.h"
@@ -73,7 +72,7 @@ extern NTP_Client ntpclient;
 #define GEIGER_CPM15_COUNT 60
 #endif
 
-class Counter {
+class Counter : public CounterMaths {
     public:
       Counter();
       void loop();
@@ -124,13 +123,10 @@ class Counter {
       // 0=auto blend, 1=live, 2=fixed 60s, 3=bucket (default), 4=adaptive fast.
       void    set_cpm_mode(uint8_t m);
       uint8_t get_cpm_mode() const { return _cpm_mode; }
-      void set_ratio(float ratio);
-      float get_ratio() {
-        return _ratio;
-      };
       void blip();
       void begin();
-      void secondticker();
+      // uptime_s: raw DeviceInfo::uptime(), passed in so the tick computes it once.
+      void secondticker(uint32_t uptime_s);
       void set_cpm_window(uint8_t n) {
         if (n < 1) n = 1;
         if (n > GEIGER_CPM_COUNT) n = GEIGER_CPM_COUNT;
@@ -159,8 +155,6 @@ class Counter {
       void set_debounce(int val) {
         geigerinput->set_debounce(val);
       };
-      void set_dead_time_us(uint16_t us) { _dead_time_us = us; _dead_time_sec = us * 1e-6f; }
-      uint16_t get_dead_time_us() const { return _dead_time_us; }
       void apply_pcnt_filter() {
         geigerinput->apply_pcnt_filter();
       };
@@ -257,8 +251,9 @@ class Counter {
       bool snapshot_ring(RingSnapshot& s) const;
       // (N-1)/T over min(max_age_us, max_pulses) ring entries; 0 if N<2.
       float cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const;
-      // Non-paralyzable dead-time correction, capped near 10x.
-      float apply_dead_time(float cps) const;
+      // Boundary period for the hourly/daily rollover, from the input type.
+      // Resolved once in begin(): see secondticker.
+      uint16_t _boundary_secs = 3600;
       uint8_t _cpm_mode = 3;     // 3 = bucket; matches legacy behaviour
       unsigned long _last_blip_seen = 0;
       // Uptime seconds of the last collected count; 0 = none since boot.
@@ -292,12 +287,6 @@ class Counter {
       mutable bool _warm_cached = false;
       int16_t _quiet_from_min = -1;  // minutes since midnight; -1 = disabled
       int16_t _quiet_to_min   = -1;
-      float _ratio = GEIGER_RATIO;
-      float _ratio_inv = 1.0f / GEIGER_RATIO;
-      // Default to the 30 min floor; set_ratio() refines for high-sensitivity tubes.
-      uint32_t _tube_timeout_s = 1800;
-      uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
-      float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
       float _cached_cps = 0.0f;     // updated each tick, dead-time corrected
       float _cached_cpm_active = 0.0f;  // get_cps()*60, dispatched at tick
       EGRingAvg<float, GEIGER_CPM_COUNT> geigerTicks;
