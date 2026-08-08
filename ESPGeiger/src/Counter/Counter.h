@@ -125,7 +125,7 @@ class Counter : public CounterMaths {
       uint8_t get_cpm_mode() const { return _cpm_mode; }
       void blip();
       void begin();
-      // uptime_s: raw DeviceInfo::uptime(), passed in so the tick computes it once.
+      // uptime_s: DeviceInfo::uptime(), passed in so the tick computes it once.
       void secondticker(uint32_t uptime_s);
       void set_cpm_window(uint8_t n) {
         if (n < 1) n = 1;
@@ -251,8 +251,8 @@ class Counter : public CounterMaths {
       bool snapshot_ring(RingSnapshot& s) const;
       // (N-1)/T over min(max_age_us, max_pulses) ring entries; 0 if N<2.
       float cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const;
-      // Boundary period for the hourly/daily rollover, from the input type.
-      // Resolved once in begin(): see secondticker.
+      // Rollover period from the input type. Resolved in begin(), not on the
+      // tick: see secondticker.
       uint16_t _boundary_secs = 3600;
       uint8_t _cpm_mode = 3;     // 3 = bucket; matches legacy behaviour
       unsigned long _last_blip_seen = 0;

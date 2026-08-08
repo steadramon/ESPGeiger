@@ -17,17 +17,13 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Rate, dose and health arithmetic, split from Counter so it can be tested
-// without an input type, a clock or a network stack.
+// Rate, dose and health arithmetic. Reads no clock, pref or log; uptime and
+// click totals arrive as arguments.
 //
-// Nothing here reads a clock, a pref or a log. Uptime and click totals arrive
-// as arguments; Counter supplies them.
+// Keep bodies in-class. Callers run on the 1 Hz tick, where an out-of-line
+// call into another TU costs an instruction fetch.
 //
-// Bodies in-class. These run only in the 1 Hz tick, which is cold code where
-// a call to another TU costs an instruction fetch. Inlining measured ~30 us
-// better on ctr with no LPS cost, despite the header reaching 22 TUs.
-//
-// Non-virtual base: Counter has no vtable and must not gain one.
+// Non-virtual base. Counter must not gain a vtable.
 
 #ifndef COUNTERMATHS_H
 #define COUNTERMATHS_H
@@ -38,8 +34,8 @@
   #define GEIGER_RATIO 151.0
 #endif
 
-// Counter.h picks this from the input type before including us. Standalone
-// (host tests) gets no correction until a caller sets one.
+// Counter.h settles this from the input type before including. Standalone
+// builds get no correction until set_dead_time_us().
 #ifndef GEIGER_DEAD_TIME_DEFAULT
   #define GEIGER_DEAD_TIME_DEFAULT 0
 #endif
@@ -55,8 +51,8 @@
 
 class CounterMaths {
   public:
-    // CPM per uSv/h. Non-positive values are ignored; also refreshes the
-    // dead-tube timeout, which is derived from the ratio.
+    // CPM per uSv/h. Non-positive ignored. Also refreshes the tube timeout,
+    // which derives from the ratio.
     void set_ratio(float ratio) {
       if (ratio <= 0) return;
       _ratio = ratio;
@@ -71,11 +67,9 @@ class CounterMaths {
 
     uint32_t get_tube_timeout_s() const { return _tube_timeout_s; }
 
-    // Non-paralyzable correction, capped at 10x. Below the skip threshold the
-    // input is returned unchanged, so the output steps at that boundary by
-    // whatever the correction would have been there. The 50 cps constant is
-    // calibrated for the 100 us default; a longer dead time makes the step
-    // proportionally larger.
+    // Non-paralyzable correction, capped at 10x. Below 50 cps the input passes
+    // through, so the output steps at that boundary. The 50 cps constant suits
+    // the 100 us default; longer dead times make the step larger.
     float apply_dead_time(float cps) const {
       if (_dead_time_us == 0 || cps <= 50.0f) return cps;
       float x = cps * _dead_time_sec;
@@ -91,20 +85,17 @@ class CounterMaths {
       return cps * _dead_time_sec > 0.875f;
     }
 
-    // Silence shorter than the dead-tube timeout. True when no ratio is set:
-    // without one there is no basis to call a tube dead. Silence is measured
-    // from the last collected count in uptime seconds, so a tube that has
-    // never counted since boot also goes dead once past timeout.
+    // True when no ratio is set: without one there is no basis to call a tube
+    // dead. Silence runs from the last count in uptime seconds, so a tube that
+    // has never counted since boot goes dead once past the timeout.
     bool tube_alive(uint32_t uptime_s, uint32_t last_count_up_s) const {
       if (_ratio <= 0.0f) return true;
       return (uptime_s - last_count_up_s) < _tube_timeout_s;
     }
 
-    // Seconds of silence that should be treated as "not counting". Expected
-    // rate is the assumed background until the first count, then the observed
-    // lifetime rate, so unset ratios and quiet sites self-calibrate. Never
-    // exceeds the dead-tube timeout: the advisory must not be slower than the
-    // hard latch.
+    // Seconds of silence that count as "not counting". Expected rate is the
+    // assumed background until the first count, then the observed lifetime
+    // rate. Capped at the tube timeout: the advisory must not lag the latch.
     uint32_t missing_threshold_s(uint32_t uptime_s, uint32_t total_clicks) const {
       if (_ratio <= 0.0f) return 0;
       uint32_t thresh = (uint32_t)((GEIGER_MISSING_COUNTS * 60.0f)
@@ -117,8 +108,8 @@ class CounterMaths {
       return thresh;
     }
 
-    // False when no ratio is set, or below a 60 s floor where no threshold can
-    // fire, so the healthy-station path skips the soft-float and 64-bit divides.
+    // False below a 60 s floor where no threshold can fire, keeping the
+    // soft-float and 64-bit divides off the healthy path.
     bool counts_missing(uint32_t uptime_s, uint32_t last_count_up_s,
                         uint32_t total_clicks) const {
       if (_ratio <= 0.0f) return false;
@@ -127,8 +118,8 @@ class CounterMaths {
       return silence >= missing_threshold_s(uptime_s, total_clicks);
     }
 
-    // (N-1)/T in Hz across N timestamps spanning span_us. 0 if under two
-    // samples or the span collapsed.
+    // (N-1)/T in Hz across N timestamps spanning span_us. 0 under two samples
+    // or on a collapsed span.
     static float cps_from_span(uint16_t count, uint32_t span_us) {
       if (count < 2 || span_us == 0) return 0.0f;
       return (float)(count - 1) * 1.0e6f / (float)span_us;

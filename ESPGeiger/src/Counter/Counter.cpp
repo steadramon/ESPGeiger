@@ -266,9 +266,8 @@ void Counter::secondticker(uint32_t uptime_s) {
 
   time_t currentTime = time (NULL);
   if (ntpclient.synced) {
-    // Resolved in begin(), not a function-local static: a dynamically
-    // initialised static costs two __cxa_guard calls into libstdc++ on every
-    // tick, and on a 1 Hz path that code is never cache-resident.
+    // Not a function-local static: a dynamic initialiser costs two
+    // __cxa_guard calls into libstdc++ on every tick.
     const time_t kBoundarySecs = (time_t)_boundary_secs;
     static time_t nextBoundary = 0;
     static bool boundaryArmed = false;
