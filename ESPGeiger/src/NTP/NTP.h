@@ -23,6 +23,7 @@
 #include <sys/time.h>
 #include "timezones.h"
 #include "../Util/Globals.h"
+#include "../Util/UptimeCounter.h"
 #include "../Module/EGModule.h"
 #include "../Prefs/EGPrefs.h"
 
@@ -101,20 +102,14 @@ class NTP_Client : public EGModule {
 
     // Seconds since boot, counting millis() wraps (49.7d). Needs calling at
     // least once per wrap; it is (~1Hz).
-    time_t getUptime() {
-      unsigned long now_ms = ::millis();
-      if (now_ms < _last_ms) _rolloverMillis++;   // wrapped past 2^32
-      _last_ms = now_ms;
-      return now_ms / 1000UL + (unsigned long)_rolloverMillis * 4294967UL;
-    }
+    time_t getUptime() { return _uptime.tick((uint32_t)::millis()); }
     int64_t getMillisEpoch() {
       timeval t;
       gettimeofday(&t, nullptr);
       return (int64_t)t.tv_sec * 1000L + t.tv_usec / 1000L;
     }
   private:
-    unsigned long _last_ms = 0;
-    uint16_t _rolloverMillis = 0;
+    UptimeCounter _uptime;
 };
 
 extern NTP_Client ntpclient;
