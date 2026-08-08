@@ -88,12 +88,13 @@ void sTickerCB()
     BootGuard::mark_ok();
     s_bg_marked = true;
   }
-  gcounter.secondticker();
+  uint32_t up_raw = (uint32_t)ntpclient.getUptime();
+  gcounter.secondticker(up_raw);
 #ifdef TICK_PROFILE
   TickProfile::markCounter();
 #endif
 
-  unsigned long uptime = ntpclient.getUptime() - start;
+  unsigned long uptime = up_raw - start;
   if (!past_warmup && uptime > ESPG_WARMUP_S) past_warmup = true;
   Wifi::tick(stick_now);
 #ifdef TICK_PROFILE
