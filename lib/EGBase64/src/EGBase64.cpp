@@ -33,7 +33,9 @@ unsigned int decode_base64_length(unsigned char input[]) {
 
 unsigned int decode_base64_length(unsigned char input[], unsigned int input_length) {
   unsigned char *start = input;
-  while (base64_to_binary(input[0]) < 64 && (unsigned int)(input - start) < input_length) {
+  // Bounds first: the alphabet test dereferences, and would read one byte past
+  // input_length on a buffer with no trailing sentinel.
+  while ((unsigned int)(input - start) < input_length && base64_to_binary(input[0]) < 64) {
     ++input;
   }
   input_length = input - start;

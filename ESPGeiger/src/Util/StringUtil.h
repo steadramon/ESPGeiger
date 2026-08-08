@@ -49,6 +49,10 @@ static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
 // Avoids Arduino's %f (pulls in soft-float print) by doing fixed-point
 // conversion: multiply by 10^decimals, round, print as integer.decimal.
 // Defined out-of-line in StringUtil.cpp so GCC doesn't clone per call site.
+//
+// CONTRACT: decimals >= 1. At 0 the "%0*ld" width collapses and the output
+// still carries a point and a zero ("42.0"); use snprintf("%ld") for integers.
+// Negative v clamps to 0.
 // ---------------------------------------------------------------------------
 int format_f(char* buf, size_t bufsz, float v, uint8_t decimals = 2);
 
@@ -99,8 +103,12 @@ static inline float parse_f(const char* s, char** endptr = nullptr) {
 // ---------------------------------------------------------------------------
 // parseTime: "HH:MM" to {hour, minute, isValid}.
 //
-// Strict format: exactly 5 chars with `:` at position 2, hour 0-23,
-// minute 0-59. Anything else returns isValid=false.
+// Strict format: exactly 5 chars, all four positions around the `:` must be
+// digits, hour 0-23, minute 0-59. Anything else returns isValid=false.
+//
+// Keep the digit check. atoi() maps non-numeric text to 0, so "ab:cd" would
+// parse as a valid midnight and a garbage pref would become a real quiet
+// window.
 // ---------------------------------------------------------------------------
 struct ParsedTime {
   int hour;
@@ -111,14 +119,13 @@ struct ParsedTime {
 inline ParsedTime parseTime(const char* timeStr) {
   ParsedTime pt = { -1, -1, false };
   if (!timeStr || strlen(timeStr) != 5 || timeStr[2] != ':') return pt;
-  char tmp[6];
-  strncpy(tmp, timeStr, 5);
-  tmp[5] = '\0';
-  char* h = strtok(tmp, ":");
-  char* m = strtok(NULL, ":");
-  if (!h || !m) return pt;
-  int hv = atoi(h), mv = atoi(m);
-  if (hv >= 0 && hv <= 23 && mv >= 0 && mv <= 59) {
+  for (uint8_t i = 0; i < 5; i++) {
+    if (i == 2) continue;
+    if (timeStr[i] < '0' || timeStr[i] > '9') return pt;
+  }
+  int hv = (timeStr[0] - '0') * 10 + (timeStr[1] - '0');
+  int mv = (timeStr[3] - '0') * 10 + (timeStr[4] - '0');
+  if (hv <= 23 && mv <= 59) {
     pt.hour = hv; pt.minute = mv; pt.isValid = true;
   }
   return pt;
