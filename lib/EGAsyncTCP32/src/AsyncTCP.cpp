@@ -254,6 +254,8 @@ static bool _server_alive(const AsyncServer *s) {
 // handle_async_event, queue mutex in tcp_error); the destructor unregisters
 // under those before freeing the memory.
 #define ASYNC_CLIENT_REG_MAX 32
+static_assert(ASYNC_CLIENT_REG_MAX >= 2 * MEMP_NUM_TCP_PCB,
+              "client registry too small for MEMP_NUM_TCP_PCB: UAF guard would fail open");
 static AsyncClient *_live_clients[ASYNC_CLIENT_REG_MAX] = {};
 static uint8_t _live_client_count = 0;
 static uint8_t _untracked_clients = 0;  // registry overflow; guard degrades to fail-open
