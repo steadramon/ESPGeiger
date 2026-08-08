@@ -25,9 +25,8 @@
 #include "esp_log.h"   // quieten esp_littlefs INFO/WARN chatter on USB serial
 #endif
 #include <Ticker.h>
-// PlatformIO LDF anchor: modules include the .hpp variant only; LDF needs
-// the .h here in a project source to discover and link the library.
-#include "AsyncHTTPRequest_Generic.h"
+// AsyncHTTPRequest_Generic is anchored in src/Util/AsyncHTTPAnchor.cpp.
+// Including it here would put ~10 KB of HTTP client code in the tick-path TU.
 #include "src/Logger/Logger.h"
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/CrashDump.h"
