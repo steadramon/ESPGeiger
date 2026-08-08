@@ -209,7 +209,27 @@ public:
     error = true; return false;
   }
 
-  bool read_uint(uint32_t* out) { int32_t s; if (!read_int(&s)) return false; *out = (uint32_t)s; return true; }
+  // Not via read_int: that collapses "negative was encoded" and "uint32 above
+  // INT32_MAX was encoded" into one result, letting a peer turn -1 into
+  // 4294967295. Unsigned tags pass at full width; signed tags reject if < 0.
+  bool read_uint(uint32_t* out) {
+    uint8_t t;
+    if (!get_u8(&t)) return false;
+    if ((t & 0x80) == 0)    { *out = t; return true; }          // pos fixint
+    if ((t & 0xe0) == 0xe0) { error = true; return false; }     // neg fixint
+    switch (t) {
+      case TAG_UINT8:  { uint8_t  v; if (!get_u8(&v))  return false; *out = v; return true; }
+      case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
+      case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false; *out = v; return true; }
+      case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false;
+                         int8_t  s = (int8_t)v;  if (s < 0) break; *out = (uint32_t)s; return true; }
+      case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false;
+                         int16_t s = (int16_t)v; if (s < 0) break; *out = (uint32_t)s; return true; }
+      case TAG_INT32:  { uint32_t v; if (!get_u32(&v)) return false;
+                         if ((int32_t)v < 0) break; *out = v; return true; }
+    }
+    error = true; return false;
+  }
 
   bool read_float(float* out) {
     uint8_t t; if (!get_u8(&t)) return false;
@@ -275,8 +295,9 @@ public:
         pos += this_len;
         return true;
       }
+      // Check before advancing, or `pos` lands past `cap` on truncated input.
+      if (pos + this_len > cap) { error = true; return false; }
       pos += this_len;
-      if (pos > cap) { error = true; return false; }
       if (!skip()) return false;
     }
     return false;

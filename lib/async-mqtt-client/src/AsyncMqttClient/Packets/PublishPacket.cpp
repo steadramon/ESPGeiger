@@ -41,7 +41,9 @@ void PublishPacket::parseVariableHeader(char* data, size_t len, size_t* currentB
   if (_bytePosition == 0) {
     _topicLengthMsb = currentByte;
   } else if (_bytePosition == 1) {
-    _topicLength = currentByte | _topicLengthMsb << 8;
+    // Cast through uint8_t: raw network bytes, and char is signed on some
+    // toolchains. Sign extension breaks any length with bit 7 set.
+    _topicLength = (uint8_t)currentByte | (uint8_t)_topicLengthMsb << 8;
     if (_topicLength > _parsingInformation->maxTopicLength) {
       _ignore = true;
     } else {
@@ -57,7 +59,7 @@ void PublishPacket::parseVariableHeader(char* data, size_t len, size_t* currentB
   } else if (_bytePosition == 2 + _topicLength) {
     _packetIdMsb = currentByte;
   } else {
-    _packetId = currentByte | _packetIdMsb << 8;
+    _packetId = (uint8_t)currentByte | (uint8_t)_packetIdMsb << 8;   // raw bytes, see above
     _preparePayloadHandling(_parsingInformation->remainingLength - (_bytePosition + 1));
   }
   _bytePosition++;

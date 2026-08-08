@@ -133,8 +133,8 @@ uint8_t* Sha256Class::result(void) {
 #define HMAC_IPAD 0x36
 #define HMAC_OPAD 0x5c
 
-uint8_t keyBuffer[BLOCK_LENGTH]; // K0 in FIPS-198a
-uint8_t innerHash[HASH_LENGTH];
+// keyBuffer (K0 in FIPS-198a) and innerHash are members, in sha256.h. Do not
+// add file-scope copies: the member wins name lookup inside these functions.
 
 void Sha256Class::initHmac(const uint8_t* key, int keyLength) {
   uint8_t i;

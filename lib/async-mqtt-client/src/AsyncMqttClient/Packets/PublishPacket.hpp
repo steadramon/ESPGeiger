@@ -26,7 +26,10 @@ class PublishPacket : public Packet {
   uint8_t _qos;
   bool _retain;
 
-  uint8_t _bytePosition;
+  // uint16_t: compared against `2 + _topicLength`, and _topicLength is bounded
+  // only by maxTopicLength (public uint16_t setter). At uint8_t, any
+  // maxTopicLength above 253 wrapped this and wedged the parser.
+  uint16_t _bytePosition;
   char _topicLengthMsb;
   uint16_t _topicLength;
   bool _ignore;
