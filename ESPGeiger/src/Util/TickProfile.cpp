@@ -28,7 +28,7 @@ namespace TickProfile {
   uint32_t tick_max_us = 0;
   uint32_t lps = 0;
   uint32_t lps_raw = 0;
-  volatile uint32_t _lps_count = 0;
+  EG_TP_XTASK uint32_t _lps_count = 0;
 #ifdef LOOP_PROFILE
   uint32_t loop_body_us = 0;
 #endif
