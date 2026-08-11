@@ -1577,10 +1577,9 @@ void  AsyncHTTPRequest::_onDisconnect(AsyncClient* client)
     _HTTPcode = HTTPCODE_CONNECTION_LOST;
   }
 
-  // KH, New test in AsyncHTTPRequest, v1.10.0
-  SAFE_DELETE(_client)
-
+  AsyncClient* to_free = _client;
   _client = nullptr;
+  SAFE_DELETE(to_free)
   //////
 
   SAFE_DELETE_ARRAY(_connectedHost)
