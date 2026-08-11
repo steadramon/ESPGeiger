@@ -27,7 +27,8 @@
 #include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (serial CPM/CPS)
 #include "../SerialFormat.h"
 
-static EspSoftwareSerial::UART geigerPort;
+// 64-byte RX buffer at 115200 (GC10NX) gives ISR margin under WiFi PHY work.
+static GeigerPort<64> geigerPort;
 
 GeigerSerial::GeigerSerial() {
 };
@@ -48,8 +49,9 @@ void GeigerSerial::begin() {
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
     Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
   }
-  // 64-byte RX buffer at 115200 (GC10NX) gives ISR margin under WiFi PHY work.
-  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 64);
+  if (!geigerPort.begin(baud, _rx_pin, _tx_pin)) {
+    Log::console(PSTR("GeigerSerial: ERROR port would not open"));
+  }
   for (uint16_t i = 0; i < 256 && geigerPort.available(); i++) geigerPort.read();
   uint32_t skip = 6000000UL / baud;
   if (skip < 5)   skip = 5;
@@ -57,10 +59,39 @@ void GeigerSerial::begin() {
   _poll_skip = (uint16_t)skip;
 }
 
+// A partial line no longer counts as activity after this, and is discarded.
+// Well clear of a full 64-byte line at the slowest supported baud (~67 ms).
+#define GEIGERSERIAL_LINE_TIMEOUT_MS 1000
+
+// TEMPORARY - GC10Next hardware-watchdog hunt. Remove with the matching rows
+// in WebPortal's /info handler.
+namespace GeigerSerialDiag {
+  uint32_t      ovf        = 0;   // decoder outrun since boot
+  uint32_t      buf_ovf    = 0;   // byte-buffer overruns since boot
+  uint32_t      isr_drops  = 0;   // declined or muted by the admission budget
+  uint32_t      framing    = 0;   // EGTinySerial only
+  uint32_t      coalesced  = 0;   // EGTinySerial only
+  uint32_t      breaks     = 0;   // EGTinySerial only
+  uint32_t      rx_bytes   = 0;   // EGTinySerial only
+  uint32_t      isr_calls  = 0;   // EG_TINYSERIAL_BENCH only
+  uint32_t      isr_max    = 0;   // EG_TINYSERIAL_BENCH only
+  uint32_t      lines_ok   = 0;   // lines that parsed
+  uint8_t       bad_peak   = 0;   // worst consecutive unparseable lines
+  uint8_t       max_bytes  = 0;   // most bytes taken in one pullSerial call
+  unsigned long last_drain = 0;
+  uint32_t      drains     = 0;
+}
+
 void GeigerSerial::pullSerial() {
+  static_assert(sizeof(_serial_buffer) < 256,
+                "maxRead is uint8_t: a 256-byte buffer truncates it to 0 and stops all input");
   uint8_t maxRead = sizeof(_serial_buffer);
+  bool got_any = false;
+  uint8_t took = 0;                     // TEMPORARY diag
   while (geigerPort.available() && maxRead--) {
     char input = geigerPort.read();
+    got_any = true;
+    took++;
     // Non-printable byte: discard the rest of this line, don't bother the parser.
     if (input != '\n' && input != '\r' && !isPrintable((uint8_t)input)) {
       _serial_idx = 0;
@@ -83,9 +114,32 @@ void GeigerSerial::pullSerial() {
       _serial_buffer[0] = '\0';
     }
   }
+  if (got_any) _line_ms = fast_millis();
+  // TEMPORARY diag. The port's counters are monotonic, so copy rather than
+  // accumulate. pollStats() is where a read-and-clear backend samples.
+  geigerPort.pollStats();
+  const GeigerPortStats ps = geigerPort.stats();
+  GeigerSerialDiag::ovf       = ps.isr_ovf;
+  GeigerSerialDiag::buf_ovf   = ps.buf_ovf;
+  GeigerSerialDiag::isr_drops = ps.declined;
+  GeigerSerialDiag::framing   = ps.framing;
+  GeigerSerialDiag::coalesced = ps.coalesced;
+  GeigerSerialDiag::breaks    = ps.breaks;
+  GeigerSerialDiag::rx_bytes  = ps.bytes;
+  GeigerSerialDiag::isr_calls = ps.isr_calls;
+  GeigerSerialDiag::isr_max   = ps.isr_max;
+  if (took > GeigerSerialDiag::max_bytes) GeigerSerialDiag::max_bytes = took;
 }
 
 void GeigerSerial::loop() {
+  // Drop a line that stopped arriving. The throttle below is skipped while a
+  // line is part-read, so a stray byte with no terminator would pin
+  // _serial_idx non-zero and poll every iteration. Nothing else clears it:
+  // the 10 s timeout resets serial_value, and drainPort needs bad lines.
+  if (_serial_idx != 0 && (fast_millis() - _line_ms) > GEIGERSERIAL_LINE_TIMEOUT_MS) {
+    _serial_idx = 0;
+    _serial_buffer[0] = '\0';
+  }
   if (_loop_c < _poll_skip && _serial_idx == 0) {
     _loop_c++;
     return;
@@ -96,14 +150,35 @@ void GeigerSerial::loop() {
   if (fast_millis() - last_serial > 10000) serial_value = 0;
 }
 
+// Counter::on_pulse_batch is uint16_t wide. Saturating keeps a wild value
+// looking wild instead of wrapping it into the normal range.
+static inline uint16_t clamp_batch(int n) {
+  if (n < 0)      return 0;
+  if (n > 0xFFFF) return 0xFFFF;
+  return (uint16_t)n;
+}
+
+void GeigerSerial::stopForOTA() {
+  geigerPort.pause();
+}
+
+void GeigerSerial::restartAfterOTA() {
+  _serial_idx = 0;
+  _serial_buffer[0] = '\0';
+  geigerPort.resume();
+}
+
 void GeigerSerial::secondTicker() {
+  geigerPort.tick();   // re-derives the bit period if the CPU clock moved
   // _use_cps is a per-second flag (set in handleSerial when wire CPS
   // arrived, reset here) so a producer can toggle `show cps` mid-run.
   if (_use_cps) {
     int c = (int)partial_clicks;
     partial_clicks = 0;
     setCounter(c, false);
-    if (c > 0) Counter::on_pulse_batch((uint16_t)c, (uint32_t)micros(), 1000000UL);
+    // on_pulse_batch takes uint16_t. A plain cast wraps: 1000000 arrives as
+    // 16960, which is small and plausible and therefore invisible. Saturate.
+    if (c > 0) Counter::on_pulse_batch(clamp_batch(c), (uint32_t)micros(), 1000000UL);
     _use_cps = false;
     return;
   }
@@ -114,7 +189,7 @@ void GeigerSerial::secondTicker() {
     int full_clicks = (int)partial_clicks;
     partial_clicks -= full_clicks;
     setCounter(full_clicks, false);
-    Counter::on_pulse_batch((uint16_t)full_clicks, (uint32_t)micros(), 1000000UL);
+    Counter::on_pulse_batch(clamp_batch(full_clicks), (uint32_t)micros(), 1000000UL);
   }
 }
 
@@ -136,6 +211,8 @@ void GeigerSerial::drainPort() {
   _serial_buffer[0] = '\0';
   _bad_streak = 0;
   _last_drain = now;
+  GeigerSerialDiag::last_drain = now;   // TEMPORARY diag
+  GeigerSerialDiag::drains++;
 }
 
 void GeigerSerial::handleSerial(char* input) {
@@ -143,10 +220,12 @@ void GeigerSerial::handleSerial(char* input) {
   int _scps = -1;
   if (!SerialFormat::parse_cpm(_serial_type, input, &_scpm, &_scps)) {
     _bad_streak++;
+    if (_bad_streak > GeigerSerialDiag::bad_peak) GeigerSerialDiag::bad_peak = _bad_streak;  // TEMPORARY diag
     if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) drainPort();
     return;
   }
 
+  GeigerSerialDiag::lines_ok++;
   Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
   setLastBlip();
   serial_value = _scpm;
