@@ -482,6 +482,9 @@ AsyncHTTPRequest::~AsyncHTTPRequest()
   if (_client)
     _client->close(true);
 
+  AsyncClient* to_free = _client;
+  _client = nullptr;
+  SAFE_DELETE(to_free)
 
   SAFE_DELETE(_URL)
   SAFE_DELETE(_headers)
@@ -1211,12 +1214,24 @@ bool  AsyncHTTPRequest::_parseURL(const String& url)
   if (queryBeg < 0)
     queryBeg = url.length();
 
-  _URL->path = new char[queryBeg - pathBeg + 1];
+  if (pathBeg < 0 || pathBeg > queryBeg)
+  {
+    _URL->path = new char[2];
 
-  if (_URL->path == nullptr)
-    return false;
+    if (_URL->path == nullptr)
+      return false;
 
-  strcpy(_URL->path, url.substring(pathBeg, queryBeg).c_str());
+    strcpy(_URL->path, "/");
+  }
+  else
+  {
+    _URL->path = new char[queryBeg - pathBeg + 1];
+
+    if (_URL->path == nullptr)
+      return false;
+
+    strcpy(_URL->path, url.substring(pathBeg, queryBeg).c_str());
+  }
 
   _URL->query = new char[url.length() - queryBeg + 1];
 
