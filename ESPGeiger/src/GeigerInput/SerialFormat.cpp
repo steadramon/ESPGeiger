@@ -18,6 +18,7 @@
 */
 
 #include "SerialFormat.h"
+#include "SerialParse.h"
 #include "GeigerInput.h"   // GEIGER_IS_SERIAL macro
 #include "../Util/StringUtil.h"
 #include "../Util/OutputVars.h"
@@ -67,71 +68,6 @@ size_t fmt_user_template(char* buf, size_t cap) {
 }
 
 #if EG_HAS_SERIAL_PARSERS
-
-static bool common_validate(const char* in, size_t len) {
-  if (len == 0) return false;
-  for (size_t i = 0; i < len; i++) {
-    char c = in[i];
-    if (!isPrintable(c) && c != '\r' && c != '\n') return false;
-  }
-  return true;
-}
-
-static bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
-  int cpm = 0, cps = 0;
-  int n = sscanf(in, "CPS, %d, CPM, %d", &cps, &cpm);
-  if (n != 2) return false;
-  if (cpm < 0 || cpm > 1000000) return false;
-  *out_cpm = cpm;
-  if (out_cps && cps >= 0) *out_cps = cps;
-  return true;
-}
-
-// Case-sensitive (ESPGeiger labelled and MightyOhm are uppercase).
-static int parse_label_value(const char* in, char tag) {
-  for (const char* p = in; p[0] && p[1] && p[2]; p++) {
-    if (p[0] == 'C' && p[1] == 'P' && p[2] == tag) {
-      p += 3;
-      while (*p == ':' || *p == ',' || *p == '=' || *p == ' ' || *p == '\t') p++;
-      if (*p == '-' || isDigit(*p)) return atoi(p);
-      return -1;
-    }
-  }
-  return -1;
-}
-
-// CPM by label, fallback to first int. CPS optional - left at -1 when
-// absent so the receiver knows to synthesise.
-static bool parse_template(const char* in, int* out_cpm, int* out_cps) {
-  int cpm = parse_label_value(in, 'M');
-  if (cpm < 0) {
-    while (*in && !isDigit(*in)) in++;
-    if (!*in) return false;
-    cpm = atoi(in);
-  }
-  if (cpm > 1000000) return false;
-  *out_cpm = cpm;
-  if (out_cps) {
-    int cps = parse_label_value(in, 'S');
-    if (cps >= 0 && cps <= 1000000) *out_cps = cps;
-  }
-  return true;
-}
-
-static bool parse_gc10(const char* in, int* out_cpm, int* /*out_cps*/) {
-  // Digits-only (plus CR/LF). Rejects garbage that happens to lead with a
-  // digit.
-  for (size_t i = 0; in[i]; i++) {
-    char c = in[i];
-    if (!isDigit(c) && c != '\r' && c != '\n') return false;
-  }
-  int cpm = 0;
-  int n = sscanf(in, "%d", &cpm);
-  if (n != 1 || cpm < 0 || cpm > 1000000) return false;
-  *out_cpm = cpm;
-  return true;
-}
-
 #define IF_PARSE(p) p
 #else
 #define IF_PARSE(p) nullptr

@@ -96,6 +96,27 @@ void GeigerSerial::loop() {
   if (fast_millis() - last_serial > 10000) serial_value = 0;
 }
 
+// Counter::on_pulse_batch is uint16_t wide. Saturating keeps a wild value
+// looking wild instead of wrapping it into the normal range: a plain cast
+// turns 1000000 into 16960, which is small enough to pass for a reading.
+static inline uint16_t clamp_batch(int n) {
+  if (n < 0)      return 0;
+  if (n > 0xFFFF) return 0xFFFF;
+  return (uint16_t)n;
+}
+
+// The RX interrupt has no business running during a flash write, and
+// anything received mid-update is stale.
+void GeigerSerial::stopForOTA() {
+  geigerPort.enableRx(false);
+}
+
+void GeigerSerial::restartAfterOTA() {
+  _serial_idx = 0;
+  _serial_buffer[0] = '\0';
+  geigerPort.enableRx(true);
+}
+
 void GeigerSerial::secondTicker() {
   // _use_cps is a per-second flag (set in handleSerial when wire CPS
   // arrived, reset here) so a producer can toggle `show cps` mid-run.
@@ -103,7 +124,7 @@ void GeigerSerial::secondTicker() {
     int c = (int)partial_clicks;
     partial_clicks = 0;
     setCounter(c, false);
-    if (c > 0) Counter::on_pulse_batch((uint16_t)c, (uint32_t)micros(), 1000000UL);
+    if (c > 0) Counter::on_pulse_batch(clamp_batch(c), (uint32_t)micros(), 1000000UL);
     _use_cps = false;
     return;
   }
@@ -114,7 +135,7 @@ void GeigerSerial::secondTicker() {
     int full_clicks = (int)partial_clicks;
     partial_clicks -= full_clicks;
     setCounter(full_clicks, false);
-    Counter::on_pulse_batch((uint16_t)full_clicks, (uint32_t)micros(), 1000000UL);
+    Counter::on_pulse_batch(clamp_batch(full_clicks), (uint32_t)micros(), 1000000UL);
   }
 }
 
