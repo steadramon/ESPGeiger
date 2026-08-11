@@ -24,7 +24,7 @@
 namespace BootGuard {
 
 static constexpr uint32_t MAGIC      = 0xE56B0007;
-static constexpr uint32_t RTC_OFFSET = 40;
+static constexpr uint32_t RTC_OFFSET = 43;
 
 struct State {
   uint32_t magic;

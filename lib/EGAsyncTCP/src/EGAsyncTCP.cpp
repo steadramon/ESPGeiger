@@ -309,10 +309,9 @@ AsyncClient::AsyncClient(tcp_pcb* pcb):
 AsyncClient::~AsyncClient(){
   _closed = true;
   _dns_unregister(this);   // drop any in-flight DNS registration
+  _errorTracker->clearClient();
   if(_pcb)
     _close();
-
-  _errorTracker->clearClient();
 }
 
 inline void clearTcpCallbacks(tcp_pcb* pcb){
@@ -614,7 +613,7 @@ void AsyncClient::_close(){
       abort();
     }
     _pcb = NULL;
-    if(_discard_cb)
+    if(_errorTracker->hasClient() && _discard_cb)
       _discard_cb(_discard_cb_arg, this);
   }
   return;

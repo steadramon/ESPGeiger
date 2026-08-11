@@ -10,8 +10,10 @@
   any local action. Future versions add a threshold-triggered recovery
   action.
 
-  RTC layout: 4 bytes at user-memory word offset 40 (CrashDump owns
-  0..39; see CrashDump.cpp).
+  RTC layout: 8 bytes at user-memory word offset 43. CrashDump owns 0..42:
+  an 11-word header plus STACK_WORDS(32) of stack snapshot. Overlapping it
+  corrupts the captured stack, which is the only usable evidence in a heap
+  crash. See CrashDump.h.
 
   Copyright (C) 2026 @steadramon
 
