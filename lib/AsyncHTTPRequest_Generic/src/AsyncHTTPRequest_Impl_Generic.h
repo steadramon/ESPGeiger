@@ -47,6 +47,8 @@
 
 #define CANT_SEND_BAD_REQUEST       F("Can't send() bad request")
 
+#include "UrlParse.h"
+
 // Merge xbuf
 ////////////////////////////////////////
 
@@ -1135,110 +1137,61 @@ String AsyncHTTPRequest::version()
 
 ////////////////////////////////////////
 
-bool  AsyncHTTPRequest::_parseURL(const char* url)
+bool  AsyncHTTPRequest::_parseURL(const String& url)
 {
-  return _parseURL(String(url));
+  return _parseURL(url.c_str());
 }
 
 ////////////////////////////////////////
 
-bool  AsyncHTTPRequest::_parseURL(const String& url)
+// Allocation only. The splitting is in UrlParse.cpp, which carries no String
+// and is host tested.
+bool  AsyncHTTPRequest::_parseURL(const char* url)
 {
   SAFE_DELETE(_URL)
 
-  int hostBeg = 0;
-
   _URL = new URL;
 
-  if (_URL)
-  {
-    _URL->scheme = new char[strlen(ASYNC_HTTP_PREFIX) + 1];
+  if (!_URL)
+    return false;
 
-    if (! (_URL->scheme) )
-      return false;
-  }
-  else
+  _URL->scheme = new char[strlen(ASYNC_HTTP_PREFIX) + 1];
+
+  if (! (_URL->scheme) )
     return false;
 
   strcpy(_URL->scheme, ASYNC_HTTP_PREFIX);
 
-  if (url.substring(0, strlen(ASYNC_HTTP_PREFIX)).equalsIgnoreCase(ASYNC_HTTP_PREFIX))
-  {
-    hostBeg += strlen(ASYNC_HTTP_PREFIX);
-  }
-  else if (url.substring(0, strlen(ASYNC_HTTPS_PREFIX)).equalsIgnoreCase(ASYNC_HTTPS_PREFIX) )
-  {
+  EGUrlParts parts;
+
+  if (!eg_parse_url(url, &parts))
     return false;
-  }
 
-  int pathBeg = url.indexOf('/', hostBeg);
-  
-  int hostEnd;
-  int portBeg;
-  
-  if (pathBeg < 0)
-  {
-    if ( url.indexOf(':', hostBeg) < 0 )
-    {
-      // No port, just https://www.aaa.com
-      hostEnd = url.length();
-    }
-    else
-    {
-      // with port, https://www.aaa.com:443
-      hostEnd = url.indexOf(':', hostBeg);
-    }
-  }
-  else
-  {
-    hostEnd = pathBeg;
-  }
+  _URL->port = parts.port;
 
-  portBeg = url.indexOf(':', hostBeg);
-
-  if (portBeg > 0 && portBeg < pathBeg)
-  {
-    _URL->port = url.substring(portBeg + 1, pathBeg).toInt();
-    hostEnd = portBeg;
-  }
-
-  _URL->host = new char[hostEnd - hostBeg + 1];
+  _URL->host = new char[parts.host_len + 1];
 
   if (_URL->host == nullptr)
     return false;
 
-  strcpy(_URL->host, url.substring(hostBeg, hostEnd).c_str());
+  memcpy(_URL->host, parts.host, parts.host_len);
+  _URL->host[parts.host_len] = '\0';
 
-  int queryBeg = url.indexOf('?');
+  _URL->path = new char[parts.path_len + 1];
 
-  if (queryBeg < 0)
-    queryBeg = url.length();
+  if (_URL->path == nullptr)
+    return false;
 
-  if (pathBeg < 0 || pathBeg > queryBeg)
-  {
-    _URL->path = new char[2];
+  memcpy(_URL->path, parts.path, parts.path_len);
+  _URL->path[parts.path_len] = '\0';
 
-    if (_URL->path == nullptr)
-      return false;
-
-    strcpy(_URL->path, "/");
-  }
-  else
-  {
-    _URL->path = new char[queryBeg - pathBeg + 1];
-
-    if (_URL->path == nullptr)
-      return false;
-
-    strcpy(_URL->path, url.substring(pathBeg, queryBeg).c_str());
-  }
-
-  _URL->query = new char[url.length() - queryBeg + 1];
+  _URL->query = new char[parts.query_len + 1];
 
   if (_URL->query == nullptr)
     return false;
 
-  strcpy(_URL->query, url.substring(queryBeg).c_str());
+  memcpy(_URL->query, parts.query, parts.query_len);
+  _URL->query[parts.query_len] = '\0';
 
   return true;
 }

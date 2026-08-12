@@ -107,7 +107,6 @@ class ACErrorTracker {
 
 class AsyncClient {
   protected:
-    friend class AsyncTCPbuffer;
     friend class AsyncServer;
     tcp_pcb* _pcb;
     AcConnectHandler _connect_cb;
