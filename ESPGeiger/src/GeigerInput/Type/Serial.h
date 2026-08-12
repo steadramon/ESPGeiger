@@ -64,8 +64,6 @@ class GeigerSerial : public GeigerInput
       if (_last_drain != 0 && (fast_millis() - _last_drain) < 60000) return false;
       return true;
     }
-    void stopForOTA() override;
-    void restartAfterOTA() override;
   private:
     void pullSerial();
     char _serial_buffer[64];

@@ -1,0 +1,9 @@
+{
+  "name": "EGTinySerial",
+  "version": "0.1.0",
+  "description": "Receive-first software serial for ESP8266 and ESP32. 8N1 only, no heap, no Stream. Decodes in the interrupt handler and pushes bytes rather than buffering edge timestamps, so the receive buffer is a fixed array in .bss. Bounded handler cost with a per-window admission budget that masks the pin rather than declining a frame. The bit level decoder is a pure unit with host tests.",
+  "keywords": "serial, uart, softwareserial, esp8266, esp32",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}

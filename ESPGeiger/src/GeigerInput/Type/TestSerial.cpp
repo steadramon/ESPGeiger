@@ -29,7 +29,7 @@
 
 extern Counter gcounter;
 
-static EspSoftwareSerial::UART geigerPort;
+static GeigerPort<16> geigerPort;
 
 GeigerTestSerial::GeigerTestSerial() {
   strcpy(_test_type, "TestSerial");
@@ -49,7 +49,7 @@ void GeigerTestSerial::begin() {
 #ifdef GEIGER_COUNT_TXPULSE
   Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
-  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
+  geigerPort.begin(baud, _rx_pin, _tx_pin);
   // 16-byte buffer fills in 160_000_000/baud us; iter ~18us, 6x safety
   // margin. Lower base constant than GeigerSerial (16-byte vs 64-byte).
   uint32_t skip = 1500000UL / baud;
@@ -90,6 +90,7 @@ void GeigerTestSerial::loop() {
 }
 
 void GeigerTestSerial::secondTicker() {
+  geigerPort.tick();
   CPMAdjuster();
   int count = 0;
   double target = (double) GeigerInputTest::getTargetCPS();

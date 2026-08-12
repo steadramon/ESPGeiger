@@ -19,12 +19,13 @@
 #ifndef GEIGERTESTSRL_H
 #define GEIGERTESTSRL_H
 #include <Arduino.h>
-#include <SoftwareSerial.h>
 
+// Before GeigerInputTest.h, which reaches GeigerInput.h and seeds _tx_pin.
 #ifndef GEIGER_TXPIN
 #define GEIGER_TXPIN 12
 #endif
 
+#include "SerialPort.h"
 #include "../GeigerInputTest.h"
 
 class GeigerTestSerial : public GeigerInputTest
