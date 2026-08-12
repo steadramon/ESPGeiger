@@ -132,9 +132,6 @@ void MQTT_Client::disconnect()
   if (!mqttClient) {
     return;
   }
-  if (!connected) {
-    return;
-  }
   mqttClient->disconnect(true);
   mqttEnabled = true;
   reconnectAttempts = 0;
@@ -532,6 +529,14 @@ void MQTT_Client::reconnect()
     return;
   }
 
+  if (mqttClient && mqttClient->connecting()) {
+    if ((fast_millis() - lastConnectionAttempt) < MQTT_CONNECT_TIMEOUT_MS)
+      return;
+    Log::console(PSTR("MQTT: Connect attempt stalled, resetting client"));
+    mqttClient->disconnect(true);
+    return;
+  }
+
   unsigned long backoff = 10000UL << min((uint8_t)reconnectAttempts, (uint8_t)5);
   if (backoff > 300000UL) backoff = 300000UL;
   static uint32_t s_jitter_ms = 0;
@@ -589,8 +594,12 @@ void MQTT_Client::reconnect()
     Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
   }
   if (reconnectAttempts < 10) reconnectAttempts++;
+
+  if (!mqttClient->connect()) {
+    Log::console(PSTR("MQTT: Connect refused by client (attempt %d)"), reconnectAttempts);
+    return;
+  }
   Log::console(PSTR("MQTT: Connecting (attempt %d) ... %s:%d"), reconnectAttempts, _mqtt_server, mqtt_port);
-  mqttClient->connect();
 }
 
 const char* MQTT_Client::getRootTopic()

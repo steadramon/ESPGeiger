@@ -50,6 +50,8 @@
 #define MQTT_MIN_TIME 5
 #define MQTT_MAX_TIME 3600
 #define MQTT_STATUS_INTERVAL 60
+// Above the lwIP SYN give-up (~31s) and the 15s RX timeout.
+#define MQTT_CONNECT_TIMEOUT_MS 45000UL
 
 #ifndef MQTT_HASS_REFRESH_S
 #define MQTT_HASS_REFRESH_S 3600UL
