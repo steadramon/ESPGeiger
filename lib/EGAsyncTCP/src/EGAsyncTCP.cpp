@@ -343,6 +343,7 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
   }
   _pcb = pcb;  // bind now so a mid-handshake destroy clears callbacks (UAF)
   _pcb_alive = true;
+  _closed = false;  // reusable client; a stale latch mutes every later connect
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
 #if ASYNC_TCP_SSL_ENABLED
@@ -544,8 +545,8 @@ size_t AsyncClient::ack(size_t len){
 // Private Callbacks
 
 void AsyncClient::_connected(std::shared_ptr<ACErrorTracker>& errorTracker, void* pcb, err_t err){
-  // Stale event: close already ran. Don't re-arm a dead client.
-  if (_closed) return;
+  // Stale event. A NULL pcb must fall through to the error branch below.
+  if (_closed || (pcb && pcb != _pcb)) return;
   //(void)err; // LWIP v1.4 appears to always call with ERR_OK
   // Documentation for 2.1.0 also says:
   //   "err	- An unused error code, always ERR_OK currently ;-)"

@@ -690,8 +690,12 @@ bool AsyncMqttClient::connected() const {
   return _state == CONNECTED;
 }
 
-void AsyncMqttClient::connect() {
-  if (_state != DISCONNECTED) return;
+bool AsyncMqttClient::connecting() const {
+  return _state == CONNECTING;
+}
+
+bool AsyncMqttClient::connect() {
+  if (_state != DISCONNECTED) return false;
   log_i("CONNECTING");
   _state = CONNECTING;
   _disconnectReason = AsyncMqttClientDisconnectReason::TCP_DISCONNECTED;  // reset any previous
@@ -715,6 +719,7 @@ void AsyncMqttClient::connect() {
   // connect() didn't start, so no callback will clear CONNECTING; reset here or
   // every future connect() no-ops (wedged until reboot).
   if (!ok) _state = DISCONNECTED;
+  return ok;
 }
 
 void AsyncMqttClient::disconnect(bool force) {
