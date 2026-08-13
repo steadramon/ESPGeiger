@@ -111,7 +111,7 @@ void PulseOut::on_prefs_loaded() {
   if (_engine.max_hz > 200) _engine.max_hz = 200;
   uint32_t br = EGPrefs::getUInt("pulse", "brightness");
   if (br > 100) br = 100;
-  _engine.active_level = (uint8_t)((br * 255 + 50) / 100);
+  _engine.active_level = PulseEngine::levelFromPercent(br);
   ParsedTime qf = parseTime(EGPrefs::getString("pulse", "quiet_from"));
   ParsedTime qt = parseTime(EGPrefs::getString("pulse", "quiet_to"));
   _q_from_min = qf.isValid ? (int16_t)(qf.hour * 60 + qf.minute) : -1;

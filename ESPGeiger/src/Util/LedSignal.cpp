@@ -97,9 +97,9 @@ namespace LedSignal {
   void displayDisabled() {}
 
   void setBrightness(uint8_t level) {
-    s_onboard.setBrightness(level);
+    s_onboard.setBrightness(level);   // EGLed's API is 8-bit
 #ifdef GEIGER_BLIPLED
-    s_engine.active_level = level;
+    s_engine.active_level = PulseEngine::levelFrom8bit(level);
 #endif
   }
 
