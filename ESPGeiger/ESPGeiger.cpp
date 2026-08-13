@@ -126,6 +126,9 @@ void setup()
 #endif
 
   CrashDump::begin();
+#ifdef ESP8266
+  analogWriteRange(1023);
+#endif
   LedSignal::begin();
 
   DeviceInfo::begin();
