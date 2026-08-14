@@ -17,46 +17,44 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _EGLED_H
-#define _EGLED_H
+#ifndef EGLED_H
+#define EGLED_H
 
 #include <Arduino.h>
+
+#ifdef ESP32
+// Arduino ledc channels, timer = (ch / 2) % 4. analogWrite takes from the top
+#define EGLED_HV_CHANNEL   0
+#define EGLED_TONE_CHANNEL 2   // own timer, else tone() retimes hv
+#endif
 
 class EGLed {
   public:
     using MillisFn = uint32_t (*)();
 
-    EGLed(uint8_t pin, bool low_active = false);
+    static constexpr uint8_t NO_PIN = 255;   // dark, writes dropped
 
-    // Application-wide millis source. Defaults to Arduino's millis().
+    EGLed(uint8_t pin, bool low_active = false);
+    void attach(uint8_t pin, bool low_active);   // once, for a pin known later
+
     static void setClock(MillisFn fn);
 
-    // One on+off cycle: pin active for on_ms, idle for off_ms, then idle.
     void blink(uint16_t on_ms, uint16_t off_ms);
-    // Single short pulse: on_ms active, 1 ms idle, then idle.
     void pulse(uint16_t on_ms);
-    // count cycles of blink(on_ms, off_ms), then idle. count=0 stops.
-    void blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count);
-    // Decay from current brightness to 0 with delta = value >> shift each
-    // 5 ms tick, floored at 1. Larger shift = slower fade.
-    void fade(uint8_t shift);
-    // Force idle, cancelling any in-flight effect.
+    void blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count);   // 0 stops
+    void fade(uint8_t shift);   // bigger shift = slower
+    void on();    // steady
     void off();
-    // Advance the state machine. Call from a 1 kHz timer or every loop.
-    void update();
+    void update();   // 1 kHz or every loop
 
     bool isRunning() const { return _state != IDLE; }
 
-    // PWM duty 0-255. 255 = full bright.
     void setBrightness(uint8_t level) { _brightness = level; }
 
   private:
     enum : uint8_t { IDLE = 0, PHASE_ON = 1, PHASE_OFF = 2, PHASE_FADE = 3 };
 
-    // Write `duty` (0..255) to the output, honouring low_active inversion.
-    // Single path for all transitions, so the off side cannot leave a stale
-    // PWM channel running.
-    void writeDuty(uint8_t duty);
+    void writeDuty(uint8_t duty);   // only writer
 
     uint8_t  _pin;
     uint8_t  _state = IDLE;
