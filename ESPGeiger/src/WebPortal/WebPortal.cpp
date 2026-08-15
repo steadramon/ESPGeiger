@@ -25,6 +25,7 @@
 #include "../GeigerInput/GeigerInput.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/CrashDump.h"
+#include "../Util/HangWatch.h"
 #include "../Util/Wifi.h"
 #include "../Util/OutputVars.h"
 #include "../Util/StringUtil.h"
@@ -621,6 +622,46 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
                                              (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
 #ifdef ESP8266
   INFO_ROW("Last reset",    "%s",            ESP.getResetReason().c_str());
+  if (HangWatch::had_hang()) {
+    const HangWatch::Crumb& h = HangWatch::last();
+    INFO_ROW("Hang at",     "uptime %lus, heap %lu",
+             (unsigned long)h.uptime_s, (unsigned long)h.heap);
+    INFO_ROW("Hang serial", "isr %lu (max %lu cyc), muted %lu, coalesced %lu",
+             (unsigned long)h.isr_calls, (unsigned long)h.isr_max,
+             (unsigned long)h.muted, (unsigned long)h.coalesced);
+  }
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  // TEMPORARY - GC10Next hardware-watchdog hunt. Remove with the counters in
+  // GeigerInput/Type/Serial.cpp. A hardware WDT leaves no exception frame,
+  // so these counters are the only evidence a burst left behind.
+  {
+    namespace D = GeigerSerialDiag;
+    INFO_ROW("SW serial ovf",  "isr %lu, buf %lu, dropped %lu",
+             (unsigned long)D::ovf, (unsigned long)D::buf_ovf,
+             (unsigned long)D::isr_drops);
+    // lines_ok counts in handleSerial, so it is backend independent: it is
+    // the one figure that compares the two serial libraries directly.
+    INFO_ROW("SW serial peak", "%u bytes/poll, %u bad, %lu lines ok",
+             (unsigned)D::max_bytes, (unsigned)D::bad_peak,
+             (unsigned long)D::lines_ok);
+    INFO_ROW("SW serial drains", "%lu (last %lus ago)", (unsigned long)D::drains,
+             D::last_drain ? (unsigned long)((fast_millis() - D::last_drain) / 1000UL) : 0UL);
+#ifdef EG_USE_TINYSERIAL
+    // coalesced is the one that decides whether the edge handler can hold
+    // 115200: two transitions delivered as one is the failure the old library
+    // turned into a silently wrong byte.
+    INFO_ROW("SW serial frames", "framing %lu, coalesced %lu, breaks %lu, stalls %lu",
+             (unsigned long)D::framing, (unsigned long)D::coalesced,
+             (unsigned long)D::breaks, (unsigned long)D::stalls);
+    // bytes against lines is the loss rate. One handler entry per frame is
+    // the target: far fewer means start edges are being missed, far more
+    // means it is being re-entered mid frame.
+    INFO_ROW("SW serial rx", "%lu bytes, %lu isr (max %lu cyc)",
+             (unsigned long)D::rx_bytes,
+             (unsigned long)D::isr_calls, (unsigned long)D::isr_max);
+#endif
+  }
+#endif
   {
     rst_info* ri = ESP.getResetInfoPtr();
     if (ri && ri->reason == REASON_EXCEPTION_RST) {

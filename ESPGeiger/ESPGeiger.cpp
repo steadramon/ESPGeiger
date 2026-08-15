@@ -31,6 +31,7 @@
 #include "src/Util/DeviceInfo.h"
 #include "src/Util/CrashDump.h"
 #include "src/Util/BootGuard.h"
+#include "src/Util/HangWatch.h"
 #include "src/ImprovSerial/ImprovSerial.h"
 #include "src/Util/LedSignal.h"
 #include "src/Util/Wifi.h"
@@ -90,6 +91,7 @@ void sTickerCB()
   }
   uint32_t up_raw = (uint32_t)ntpclient.getUptime();
   gcounter.secondticker(up_raw);
+  HangWatch::tick(up_raw);
 #ifdef TICK_PROFILE
   TickProfile::markCounter();
 #endif
@@ -127,6 +129,8 @@ void setup()
 #endif
 
   CrashDump::begin();
+  // After CrashDump: both read RTC, and this one clears its own window.
+  HangWatch::begin();
   LedSignal::begin();
 
   DeviceInfo::begin();

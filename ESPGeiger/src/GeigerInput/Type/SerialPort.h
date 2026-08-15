@@ -42,6 +42,7 @@ struct GeigerPortStats {
   uint32_t bytes     = 0;   // EGTinySerial only: delivered to the ring
   uint32_t isr_calls = 0;   // EG_TINYSERIAL_BENCH only
   uint32_t isr_max   = 0;   // EG_TINYSERIAL_BENCH only: worst handler, cycles
+  uint32_t stalls    = 0;   // EGTinySerial only: handler gave up on its own deadline
 };
 
 #ifdef EG_USE_TINYSERIAL
@@ -75,6 +76,7 @@ class GeigerPort {
       o.coalesced = s.coalesced;
       o.breaks    = s.breaks;
       o.bytes     = s.bytes;
+      o.stalls    = s.stalls;
 #ifdef EG_TINYSERIAL_BENCH
       o.isr_calls = s.isrCalls;
       o.isr_max   = s.isrMaxCycles;

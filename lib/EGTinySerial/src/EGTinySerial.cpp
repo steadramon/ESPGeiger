@@ -176,9 +176,23 @@ void IRAM_ATTR Core::isrSync(void* arg) {
   // 115200, and that is what centres the sample. Adding another half pushes it
   // against the far edge of the bit, where the stop bit is the first to fall
   // out. This is the offset upstream uses and it is the one that works.
+  // Hard ceiling on the whole handler, two bits past the last one we sample.
+  // The spin below waits on a cycle deadline with the pin masked, so a period
+  // that never arrives starves the timer interrupt the soft watchdog rides on
+  // and the reset arrives as a hardware watchdog with no stack to read. Give
+  // up the frame instead and count it.
+  const uint32_t bail = entry + (Decoder::PDU_BITS + 2) * cpb;
+
   for (uint32_t i = 1; i <= Decoder::PDU_BITS; i++) {
     const uint32_t at = entry + i * cpb;
-    while ((int32_t)(egtsTicks() - at) < 0) { }
+    while ((int32_t)(egtsTicks() - at) < 0) {
+      if ((int32_t)(egtsTicks() - bail) >= 0) {
+        egtsUnmutePin((uint8_t)self->m_rxPin, self->m_isrMode);
+        self->m_dec.reset(egtsTicks(), true);
+        self->m_stats.stalls++;
+        return;
+      }
+    }
     const bool now = EGTS_PIN_READ(self->m_rxReg, self->m_rxMask);
     // Re-arm as soon as the last data bit has been read, and before the work
     // below, which can run a few microseconds. A masked edge is gone rather

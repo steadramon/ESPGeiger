@@ -82,7 +82,9 @@ public:
   void configure(uint32_t cyclesPerBit);
 
   // Drop any part-built frame and adopt the line as it stands.
-  void reset(uint32_t tick, bool level);
+  // In IRAM: the sampling handler calls this when it abandons a frame on
+  // its own deadline, and a flash call from an ISR faults during an OTA.
+  EGTS_ISR_ATTR void reset(uint32_t tick, bool level);
 
   // A transition to `level` observed at `tick`. Reached from the handler.
   EGTS_ISR_ATTR Emit edge(uint32_t tick, bool level);

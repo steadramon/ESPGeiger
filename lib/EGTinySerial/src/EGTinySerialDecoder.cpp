@@ -39,7 +39,7 @@ void Decoder::configure(uint32_t cyclesPerBit) {
   m_resync       = false;
 }
 
-void Decoder::reset(uint32_t tick, bool level) {
+EGTS_ISR_ATTR void Decoder::reset(uint32_t tick, bool level) {
   m_lastTick  = tick;
   m_lastLevel = level;
   m_bitPos    = -1;

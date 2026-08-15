@@ -75,6 +75,7 @@ struct Stats {
   uint32_t coalesced = 0;   // a transition the handler did not observe
   uint32_t breaks    = 0;   // line held low past a whole frame
   uint32_t muted     = 0;   // windows the pin interrupt was masked
+  uint32_t stalls    = 0;   // handler abandoned a frame on its own deadline
 #ifdef EG_TINYSERIAL_BENCH
   uint32_t isrCalls    = 0;
   uint32_t isrMaxCycles = 0;

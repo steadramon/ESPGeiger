@@ -38,6 +38,7 @@ namespace GeigerSerialDiag {
   extern uint32_t      coalesced;  // EGTinySerial only
   extern uint32_t      breaks;     // EGTinySerial only
   extern uint32_t      rx_bytes;   // EGTinySerial only
+  extern uint32_t      stalls;     // EGTinySerial only
   extern uint32_t      isr_calls;  // EG_TINYSERIAL_BENCH only
   extern uint32_t      isr_max;    // EG_TINYSERIAL_BENCH only
   extern uint32_t      lines_ok;   // lines that parsed

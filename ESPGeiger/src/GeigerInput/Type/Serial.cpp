@@ -24,6 +24,7 @@
 #include "../../Logger/Logger.h"
 #include "../../Prefs/EGPrefs.h"
 #include "../../Util/DeviceInfo.h"
+#include "../../Util/HangWatch.h"
 #include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (serial CPM/CPS)
 #include "../SerialFormat.h"
 
@@ -73,6 +74,7 @@ namespace GeigerSerialDiag {
   uint32_t      coalesced  = 0;   // EGTinySerial only
   uint32_t      breaks     = 0;   // EGTinySerial only
   uint32_t      rx_bytes   = 0;   // EGTinySerial only
+  uint32_t      stalls     = 0;   // EGTinySerial only
   uint32_t      isr_calls  = 0;   // EG_TINYSERIAL_BENCH only
   uint32_t      isr_max    = 0;   // EG_TINYSERIAL_BENCH only
   uint32_t      lines_ok   = 0;   // lines that parsed
@@ -126,6 +128,7 @@ void GeigerSerial::pullSerial() {
   GeigerSerialDiag::coalesced = ps.coalesced;
   GeigerSerialDiag::breaks    = ps.breaks;
   GeigerSerialDiag::rx_bytes  = ps.bytes;
+  GeigerSerialDiag::stalls    = ps.stalls;
   GeigerSerialDiag::isr_calls = ps.isr_calls;
   GeigerSerialDiag::isr_max   = ps.isr_max;
   if (took > GeigerSerialDiag::max_bytes) GeigerSerialDiag::max_bytes = took;
@@ -170,6 +173,10 @@ void GeigerSerial::restartAfterOTA() {
 
 void GeigerSerial::secondTicker() {
   geigerPort.tick();   // re-derives the bit period if the CPU clock moved
+  // Into RTC, so the values survive a hardware watchdog. Nothing else about
+  // the hang does.
+  HangWatch::set_serial(GeigerSerialDiag::isr_calls, GeigerSerialDiag::isr_max,
+                        GeigerSerialDiag::isr_drops, GeigerSerialDiag::coalesced);
   // _use_cps is a per-second flag (set in handleSerial when wire CPS
   // arrived, reset here) so a producer can toggle `show cps` mid-run.
   if (_use_cps) {
