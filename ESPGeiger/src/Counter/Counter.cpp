@@ -469,12 +469,12 @@ bool Counter::counts_missing() {
   // then the observed lifetime rate, so unset ratios and quiet sites
   // self-calibrate. Cap at the dead-tube timeout: the advisory must never
   // be slower than the hard latch.
-  if (_ratio <= 0.0f) return false;
-  uint32_t up = (uint32_t)DeviceInfo::uptime();
-  uint32_t silence = up - _last_count_up_s;
   // Below the floor no threshold can fire; skip the soft-float and 64-bit
   // divides on the healthy-station common path.
+  uint32_t up = (uint32_t)DeviceInfo::uptime();
+  uint32_t silence = up - _last_count_up_s;
   if (silence < MIN_SILENCE_S) return false;
+  if (_ratio <= 0.0f) return false;
   uint32_t thresh = (uint32_t)(6000.0f / _ratio);
   if (total_clicks > 0) {
     uint32_t obs = (uint32_t)((10ULL * up) / total_clicks);
