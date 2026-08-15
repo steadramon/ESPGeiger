@@ -105,6 +105,9 @@ class Counter {
       // Advisory wiring hint: Poisson on the same silence clock, 10 expected
       // background counts (>= 60 s). Softer surfaces only (banner/console/
       // display).
+      // Per-tick callers must test this inline; the body opens on a
+      // soft-float compare.
+      static constexpr uint32_t MIN_SILENCE_S = 60;
       bool  counts_missing();
       // Runtime input pin for pulse variants, -1 otherwise (for messages).
       // Out-of-line: Counter.h is widely included and inline bodies here
