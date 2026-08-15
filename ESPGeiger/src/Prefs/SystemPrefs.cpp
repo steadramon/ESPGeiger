@@ -456,19 +456,19 @@ EG_PSTR(LD_L_QTO, "Quiet to");
 EG_PSTR(LD_H_QTO, "End of quiet window; crosses midnight if from > to");
 #endif
 EG_PSTR(LD_L_PUL, "Pulse width \xc2\xb5s");
-EG_PSTR(LD_H_PUL, "100-50000");
+EG_PSTR(LD_H_PUL, "1000-50000, rounded up to the next 1ms");
 
 static const EGPref LED_PREF_ITEMS[] = {
   {"blip_led",    LD_L_BLP, LD_H_BLP, "1",    nullptr, 0, 1,     0, EGP_BOOL, 0},
 #ifdef ESPGEIGER_HW
   // Only Pulse mode is available - HV holds Timer1 so tone()/PWM is unusable.
-  {"pulse_us",    LD_L_PUL, LD_H_PUL, "2000",  nullptr, 100, 50000, 0, EGP_UINT, EGP_ADVANCED},
+  {"pulse_us",    LD_L_PUL, LD_H_PUL, "2000",  nullptr, 1000, 50000, 0, EGP_UINT, EGP_ADVANCED},
 #else
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   // Fade needs Timer1; ESP8266 test builds use it for the fake pulse gen.
   {"mode",        LD_L_MOD, nullptr,  "0",     LD_O_MOD, 0,  1,     0, EGP_ENUM, EGP_ADVANCED},
 #endif
-  {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 100, 50000, 0, EGP_UINT, EGP_ADVANCED},
+  {"pulse_us",    LD_L_PUL, LD_H_PUL, "20000", nullptr, 1000, 50000, 0, EGP_UINT, EGP_ADVANCED},
 #if !(GEIGER_IS_TEST(GEIGER_TYPE) && defined(ESP8266))
   {"fade_shift",  LD_L_FAD, nullptr,  "1",     LD_O_FAD, 0,  2,     0, EGP_ENUM, EGP_ADVANCED},
   {"blip_bright", LD_L_BRT, LD_H_BRT, "80",    nullptr, 0,   100,   0, EGP_UINT, EGP_SLIDER},

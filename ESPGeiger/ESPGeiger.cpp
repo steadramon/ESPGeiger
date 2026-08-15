@@ -42,6 +42,7 @@
 #include "src/NTP/NTP.h"
 #include "src/GRNG/GRNG.h"
 #include "src/Counter/Counter.h"
+#include "src/PulseOut/PulseOut.h"
 #include "src/WebPortal/WebPortal.h"
 #include "src/SerialCommand/SerialCommand.h"
 #include "src/Util/BootHooks.h"
@@ -77,6 +78,9 @@ void msTickerCB()
   }
   _fast_ms_last_us = now_us;
   if (LedSignal::s_any_active) LedSignal::poll();
+#ifdef PULSE_OUT
+  if (PulseOut::s_active) pulseout.poll();
+#endif
 }
 
 void sTickerCB()
