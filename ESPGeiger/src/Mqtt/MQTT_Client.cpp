@@ -245,6 +245,10 @@ void MQTT_Client::s_tick(unsigned long now)
     onMqttConnect(true);
   }
 
+#ifdef MQTTAUTODISCOVER
+  const unsigned long up_s = (unsigned long)DeviceInfo::uptime();
+#endif
+
   if (_reanchor) {
     _reanchor = false;
     // Re-derive our slot on reconnect (no post-now: that would herd the broker).
@@ -253,8 +257,8 @@ void MQTT_Client::s_tick(unsigned long now)
     lastPing   = lastStatus + statusInterval + (statusInterval / 2) - pingInterval;
 #ifdef MQTTAUTODISCOVER
     // Publish discovery shortly after (re)connect.
-    if (_hass_next_publish == 0 || (long)(now - _hass_next_publish) >= 0) {
-      _hass_next_publish = now + 2;
+    if (_hass_next_publish == 0 || (long)(up_s - _hass_next_publish) >= 0) {
+      _hass_next_publish = up_s + 2;
       if (_hass_next_publish == 0) _hass_next_publish = 1;
     }
 #endif
@@ -264,10 +268,10 @@ void MQTT_Client::s_tick(unsigned long now)
   if (_hass_retrigger) {
     _hass_retrigger = false;
     // HA back online: re-announce, staggered per-device so a fleet doesn't stampede.
-    _hass_next_publish = now + hass_spread_offset_s();
+    _hass_next_publish = up_s + hass_spread_offset_s();
     if (_hass_next_publish == 0) _hass_next_publish = 1;
   }
-  if (_hass_next_publish && (long)(now - _hass_next_publish) >= 0) {
+  if (_hass_next_publish && (long)(up_s - _hass_next_publish) >= 0) {
     triggerHassDiscovery();
   }
 #endif
@@ -829,7 +833,7 @@ void MQTT_Client::setupHassRemove() {
 
 void MQTT_Client::triggerHassDiscovery() {
   if (_hass_walk_state) return;
-  unsigned long now_s = fast_millis() / 1000UL;
+  unsigned long now_s = (unsigned long)DeviceInfo::uptime();
   if (_hass_last_publish && (now_s - _hass_last_publish) < MQTT_HASS_MIN_INTERVAL_S) {
     Log::debug(PSTR("MQTT: HA discovery throttled (%lu s since last)"),
                now_s - _hass_last_publish);
@@ -849,7 +853,7 @@ void MQTT_Client::stepHassDiscovery() {
     _hass_idx++;
   } else {
     if (_hass_walk_state > 0) {
-      _hass_last_publish = fast_millis() / 1000UL;
+      _hass_last_publish = (unsigned long)DeviceInfo::uptime();
       if (_hass_last_publish == 0) _hass_last_publish = 1;
     }
     _hass_walk_state = 0;
