@@ -41,8 +41,8 @@ EG_PSTR(PO_L_PIN,  "GPIO");
 EG_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
 EG_PSTR(PO_L_MODE, "Mode");
 EG_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
-EG_PSTR(PO_L_PW,   "Pulse width \xc2\xb5s");
-EG_PSTR(PO_H_PW,   "1000-50000, rounded up to the next 1ms");
+EG_PSTR(PO_L_PW,   "Pulse width ms");
+EG_PSTR(PO_H_PW,   "1-50");
 EG_PSTR(PO_L_FRQ,  "Burst Hz");
 EG_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
 EG_PSTR(PO_L_CYC,  "Burst cycles");
@@ -68,7 +68,7 @@ static const EGPref PULSE_PREF_ITEMS[] = {
   // Burst (tone) and Fade (analogWrite) need Timer1.
   {"mode",       PO_L_MODE, nullptr,   "0",    PO_O_MODE, 0,  2,     0, EGP_ENUM, 0},
 #endif
-  {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 1000, 50000, 0, EGP_UINT, EGP_ADVANCED},
+  {"pulse_ms",   PO_L_PW,   PO_H_PW,   "5",    nullptr, 1,    50,    0, EGP_UINT, EGP_ADVANCED},
 #ifndef EGPE_NO_PWM
   {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, EGP_ADVANCED},
   {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, EGP_ADVANCED},
@@ -94,7 +94,7 @@ void PulseOut::on_prefs_loaded() {
   int p           = EGPrefs::getInt("pulse", "pin");
   _engine.pin     = (p < -1 || p > MAX_GPIO_PIN) ? -1 : (int8_t)p;
   _engine.mode    = (uint8_t)EGPrefs::getUInt("pulse", "mode");
-  _engine.pulse_us= (uint16_t)EGPrefs::getUInt("pulse", "pulse_us");
+  _engine.pulse_us= (uint16_t)(EGPrefs::getUInt("pulse", "pulse_ms") * 1000);
   _engine.freq_hz = (uint16_t)EGPrefs::getUInt("pulse", "freq");
   _engine.cycles  = (uint16_t)EGPrefs::getUInt("pulse", "cycles");
   _engine.polarity= (uint8_t)EGPrefs::getUInt("pulse", "polarity");
@@ -146,7 +146,7 @@ bool PulseOut::isQuietNow() {
 // v0.11.0 stored blip_pin + blip_pulse_ms in /prefs/led.bin (binary
 // EGPrefsStorage format: 4-byte 'EGP1' magic, then klen/key/vlen/val).
 // v0.12 dropped those keys from the led group and they now live in
-// pulse.pin / pulse.pulse_us (with a ms->us unit change).
+// pulse.pin / pulse.pulse_ms, same unit.
 static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 
 static bool migrate_legacy_blip() {
@@ -197,11 +197,9 @@ static bool migrate_legacy_blip() {
     char* endp = nullptr;
     long ms = strtol(ms_val, &endp, 10);
     if (endp != ms_val && ms > 0) {
-      long us = ms * 1000;
-      if (us < 100)   us = 100;
-      if (us > 50000) us = 50000;
-      char buf[16]; snprintf(buf, sizeof(buf), "%ld", us);
-      EGPrefs::put("pulse", "pulse_us", buf);
+      if (ms > 50) ms = 50;
+      char buf[16]; snprintf(buf, sizeof(buf), "%ld", ms);
+      EGPrefs::put("pulse", "pulse_ms", buf);
       any = true;
     }
   }
