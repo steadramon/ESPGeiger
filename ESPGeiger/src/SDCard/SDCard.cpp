@@ -113,7 +113,7 @@ static uint32_t packed_cutoff_year_ago() {
   return ((uint32_t)date << 16) | timev;
 }
 
-void SDCard::s_tick(unsigned long stick_now)
+void SDCard::s_tick(unsigned long /*now_s*/)
 {
   if (!sdenabled) {
     return;
