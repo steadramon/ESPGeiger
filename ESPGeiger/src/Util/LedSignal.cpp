@@ -107,7 +107,7 @@ namespace LedSignal {
                            uint16_t freq_hz, uint16_t cycles,
                            uint8_t fade_shift_idx, uint8_t max_hz) {
     if (engine_mode > 2) engine_mode = 0;
-    if (pulse_us < 100)   pulse_us = 100;
+    if (pulse_us < 1000)  pulse_us = 1000;
     if (pulse_us > 50000) pulse_us = 50000;
     if (freq_hz < 1000)   freq_hz = 1000;
     if (freq_hz > 8000)   freq_hz = 8000;

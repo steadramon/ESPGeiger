@@ -222,11 +222,12 @@ void Counter::secondticker() {
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
-  if (eventCounter > 0) _last_count_up_s = (uint32_t)DeviceInfo::uptime();
+  uint32_t up_s = (uint32_t)DeviceInfo::uptime();
+  if (eventCounter > 0) _last_count_up_s = up_s;
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
   {
     static bool cm_logged = false;
-    bool cm = counts_missing();
+    bool cm = (up_s - _last_count_up_s) >= MIN_SILENCE_S && counts_missing();
     if (cm && !cm_logged) {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
       Log::console(PSTR("Counter: no counts detected - check tube and wiring (GPIO %d)"), input_pin());
@@ -471,9 +472,9 @@ bool Counter::counts_missing() {
   if (_ratio <= 0.0f) return false;
   uint32_t up = (uint32_t)DeviceInfo::uptime();
   uint32_t silence = up - _last_count_up_s;
-  // Below the 60 s floor no threshold can fire; skip the soft-float and
-  // 64-bit divides on the healthy-station common path.
-  if (silence < 60) return false;
+  // Below the floor no threshold can fire; skip the soft-float and 64-bit
+  // divides on the healthy-station common path.
+  if (silence < MIN_SILENCE_S) return false;
   uint32_t thresh = (uint32_t)(6000.0f / _ratio);
   if (total_clicks > 0) {
     uint32_t obs = (uint32_t)((10ULL * up) / total_clicks);
