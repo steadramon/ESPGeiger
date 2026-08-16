@@ -39,13 +39,20 @@ public:
   uint32_t tick(uint32_t now_ms) {
     if (now_ms < _last_ms) _wraps++;
     _last_ms = now_ms;
-    return now_ms / 1000UL + (uint32_t)_wraps * 4294967UL;
+    _value = now_ms / 1000UL + (uint32_t)_wraps * 4294967UL;
+    return _value;
   }
+
+  // Result of the last tick(). tick() is a read-modify-write, so it needs a
+  // single writer; every other reader takes this instead. Zero until the
+  // first tick().
+  uint32_t value() const { return _value; }
 
   uint16_t wraps() const { return _wraps; }
 
 private:
   uint32_t _last_ms = 0;
+  uint32_t _value   = 0;
   uint16_t _wraps   = 0;
 };
 

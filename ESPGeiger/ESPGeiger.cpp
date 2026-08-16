@@ -97,7 +97,7 @@ void sTickerCB()
   TickProfile::markCounter();
 #endif
 
-  unsigned long uptime = ntpclient.getUptime() - start;
+  unsigned long uptime = ntpclient.tickUptime() - start;
   if (!past_warmup && uptime > ESPG_WARMUP_S) past_warmup = true;
   Wifi::tick(stick_now);
 #ifdef TICK_PROFILE
@@ -135,6 +135,8 @@ void setup()
 #endif
   LedSignal::begin();
 
+  // Prime before anything reads it; the ticker is not attached yet.
+  ntpclient.tickUptime();
   DeviceInfo::begin();
 
   Log::banner(PSTR("   ___"));
@@ -196,7 +198,7 @@ void setup()
   grng.begin();
   gcounter.begin();
   EGModuleRegistry::begin_all();
-  start = ntpclient.getUptime() + 1;
+  start = ntpclient.tickUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
   LedSignal::off();
