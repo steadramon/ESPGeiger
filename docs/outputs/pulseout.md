@@ -32,9 +32,27 @@ and enable it from **Config > Pulse Out** after flashing.
 | `cycles`   | 1-10      | `1`    | Cycles per burst. More = louder + slightly longer. |
 | `polarity` | 0 / 1     | `0`    | `0` = active high (most cases). `1` = active low (common-anode LEDs, inverted MOSFET drivers). |
 | `fade_shift` | 0 / 1 / 2 | `1`  | Fade decay rate. `0` = Fast (~100 ms), `1` = Medium (~250 ms), `2` = Slow (~500 ms). |
+| `max_hz`   | 0-200     | `20`   | Cap on clicks per second. `0` removes the cap. |
 
-Output is rate-limited to 20 clicks/second. At high CPS the audio thins
-out while the counter still tracks every pulse.
+Output is rate-limited to `max_hz` clicks per second, 20 by default. At high
+CPS the audio thins out while the counter still tracks every pulse.
+
+## Driving another counter
+
+Pulse Out is an indicator, not a count relay. At the default `max_hz` of 20 a
+downstream counter stops seeing new pulses above **1200 CPM** and reads a flat
+line, not an error.
+
+To relay counts instead, set `max_hz` to `0` and `pulse_ms` to `1`. The output
+then follows every count up to roughly **500 per second (30,000 CPM)**, above
+which a new count arriving mid-pulse is dropped.
+
+Two things to know before relying on it:
+
+- Per-device voice variation jitters `pulse_ms` by a few percent (see below).
+  Harmless for a counter reading edges, wrong if the receiver measures width.
+- Quiet hours silence the output. A relay set up inside a quiet window looks
+  like a dead tube at the far end.
 
 ## Per-device voice variation
 
