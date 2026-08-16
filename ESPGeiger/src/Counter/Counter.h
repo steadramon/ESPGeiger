@@ -44,7 +44,7 @@
 #endif
 
 #ifndef GEIGER_RATIO
-  #define GEIGER_RATIO 151.0
+  #define GEIGER_RATIO 151.0f
 #endif
 
 #ifndef GEIGER_DEAD_TIME_US
