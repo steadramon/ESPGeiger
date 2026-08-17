@@ -18,8 +18,9 @@
 */
 #include "TestSerial.h"
 
-#if GEIGER_IS_TEST(GEIGER_TYPE)
+#if GEIGER_IS_TEST(GEIGER_TYPE) && GEIGER_IS_SERIAL(GEIGER_TYPE)
 
+#include <SoftwareSerial.h>
 #include "../../Logger/Logger.h"
 #include "../../Util/StringUtil.h"
 #include "../../Prefs/EGPrefs.h"
@@ -130,4 +131,4 @@ void GeigerTestSerial::handleSerial(char* input) {
     Log::console(PSTR("TestSerial RX: %d"), _scpm);
   }
 }
-#endif // GEIGER_IS_TEST
+#endif // GEIGER_IS_TEST && GEIGER_IS_SERIAL

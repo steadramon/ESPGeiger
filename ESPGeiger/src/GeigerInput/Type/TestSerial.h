@@ -19,7 +19,6 @@
 #ifndef GEIGERTESTSRL_H
 #define GEIGERTESTSRL_H
 #include <Arduino.h>
-#include <SoftwareSerial.h>
 
 #ifndef GEIGER_TXPIN
 #define GEIGER_TXPIN 12
