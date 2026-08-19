@@ -40,7 +40,7 @@ bool Sensor::begin(TwoWire& wire, uint8_t addr) {
   } else {
     if (!probe(0x76) && !probe(0x77)) return false;
   }
-  // Soft reset; chip needs ~2 ms before NVM copy completes.
+  // ~2 ms for the NVM copy
   write8(REG_RESET, 0xB6);
   delay(5);
   if (!readCal()) { _chip = CHIP_NONE; return false; }
@@ -60,9 +60,8 @@ bool Sensor::probe(uint8_t addr) {
 }
 
 bool Sensor::readCal() {
-  uint8_t buf[26];
-  if (!readN(REG_CAL_TP, buf, 24)) return false;
-  // All little-endian, signed where appropriate per datasheet.
+  uint8_t buf[24];
+  if (!readN(REG_CAL_TP, buf, sizeof(buf))) return false;
   T1 = (uint16_t)(buf[0]  | (buf[1]  << 8));
   T2 = (int16_t) (buf[2]  | (buf[3]  << 8));
   T3 = (int16_t) (buf[4]  | (buf[5]  << 8));
@@ -76,12 +75,11 @@ bool Sensor::readCal() {
   P8 = (int16_t) (buf[20] | (buf[21] << 8));
   P9 = (int16_t) (buf[22] | (buf[23] << 8));
   if (_chip != CHIP_BME280) return true;
-  // Humidity cal lives in two non-contiguous chunks.
   if (!read8(REG_CAL_H1, H1)) return false;
   if (!readN(REG_CAL_H2_6, buf, 7)) return false;
   H2 = (int16_t)(buf[0] | (buf[1] << 8));
   H3 = buf[2];
-  // H4 / H5 are packed nibbles. Datasheet 4.2.2 table 16.
+  // nibbles, datasheet 4.2.2
   H4 = (int16_t)((((int8_t)buf[3]) << 4) | (buf[4] & 0x0F));
   H5 = (int16_t)((((int8_t)buf[5]) << 4) | (buf[4] >> 4));
   H6 = (int8_t)buf[6];
@@ -89,12 +87,13 @@ bool Sensor::readCal() {
 }
 
 bool Sensor::configure() {
-  // BME280 humidity oversample must be set before ctrl_meas latches.
+  // before ctrl_meas
   if (_chip == CHIP_BME280) {
     if (!write8(REG_CTRL_HUM, 0x01)) return false;       // osrs_h x1
   }
-  if (!write8(REG_CTRL_MEAS, 0x27)) return false;
+  // ignored in normal mode, so before ctrl_meas too
   if (!write8(REG_CONFIG, 0x60)) return false;
+  if (!write8(REG_CTRL_MEAS, 0x27)) return false;
   return true;
 }
 
@@ -107,22 +106,24 @@ bool Sensor::read(float& t_c, float& h_pct, float& p_hpa) {
   int32_t adc_T = ((int32_t)buf[3] << 12) | ((int32_t)buf[4] << 4) | (buf[5] >> 4);
   int32_t adc_H = (_chip == CHIP_BME280)
                   ? (((int32_t)buf[6] << 8) | buf[7]) : 0;
+  // reset value, reads as a believable 26 C / 820 hPa
+  if (adc_T == 0x80000 && adc_P == 0x80000) return false;
 
-  // Temperature - Bosch reference formula in float.
+  // Bosch reference
   float v1 = ((float)adc_T / 16384.0f - (float)T1 / 1024.0f) * (float)T2;
   float v2 = ((float)adc_T / 131072.0f - (float)T1 / 8192.0f);
   v2 = v2 * v2 * (float)T3;
   float t_fine = v1 + v2;
   t_c = t_fine * (1.0f / 5120.0f);
 
-  // Pressure - returns Pa, we hand back hPa.
+  // Pa, returned as hPa
   v1 = (t_fine * 0.5f) - 64000.0f;
   v2 = v1 * v1 * (float)P6 * (1.0f / 32768.0f);
   v2 = v2 + v1 * (float)P5 * 2.0f;
   v2 = (v2 * 0.25f) + ((float)P4 * 65536.0f);
   v1 = ((float)P3 * v1 * v1 * (1.0f / 524288.0f) + (float)P2 * v1) * (1.0f / 524288.0f);
   v1 = (1.0f + v1 * (1.0f / 32768.0f)) * (float)P1;
-  if (v1 == 0.0f) { p_hpa = 0.0f; }
+  if (v1 == 0.0f) { p_hpa = NAN; }
   else {
     float p = 1048576.0f - (float)adc_P;
     p = (p - (v2 * (1.0f / 4096.0f))) * 6250.0f / v1;
@@ -132,7 +133,6 @@ bool Sensor::read(float& t_c, float& h_pct, float& p_hpa) {
     p_hpa = p * 0.01f;
   }
 
-  // Humidity - BME280 only.
   if (_chip == CHIP_BME280) {
     float h = t_fine - 76800.0f;
     h = ((float)adc_H - ((float)H4 * 64.0f + (float)H5 * (1.0f / 16384.0f) * h))
@@ -184,4 +184,4 @@ bool Sensor::write8(uint8_t reg, uint8_t val) {
   return _wire->endTransmission() == 0;
 }
 
-} 
+}
