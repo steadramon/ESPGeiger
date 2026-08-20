@@ -97,6 +97,10 @@ void sTickerCB()
   TickProfile::markCounter();
 #endif
 
+#ifdef ESP32
+  DeviceInfo::chipTempSample();
+#endif
+
   unsigned long uptime = ntpclient.tickUptime() - start;
   if (!past_warmup && uptime > ESPG_WARMUP_S) past_warmup = true;
   Wifi::tick(stick_now);
