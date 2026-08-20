@@ -94,18 +94,20 @@ void EnvSensor::begin() {
 
 bool EnvSensor::tryDetect() {
   if (_drv_flags) return true;
-  if (_detect_tries >= 3) return false;
+  if (_detect_tries >= 3 && !_st) return false;
   if (_bosch.begin(Wire)) _drv_flags |= DRV_BOSCH;
   if (_aht.begin(Wire))   _drv_flags |= DRV_AHT;
   if (_drv_flags == 0) {
     _detect_tries++;
     if (_detect_tries >= 3) {
-      Log::debug(PSTR("Env: no sensor after %u tries, giving up"), _detect_tries);
-      EGModuleRegistry::set_loop_interval(this, -1);
+      // Detected once, so keep retrying.
+      if (!_st) Log::debug(PSTR("Env: no sensor after %u tries, giving up"), _detect_tries);
+      EGModuleRegistry::set_loop_interval(this, _st ? ENV_RETRY_MS : -1);
     }
     return false;
   }
-  _st = (State*)calloc(1, sizeof(State));
+  // Re-detect reuses the State; allocating again leaks it.
+  if (!_st) _st = (State*)calloc(1, sizeof(State));
   if (!_st) {
     Log::console(PSTR("Env: calloc(%u) failed"), (unsigned)sizeof(State));
     _drv_flags = 0;
@@ -116,6 +118,12 @@ bool EnvSensor::tryDetect() {
   _st->ema_t = NAN;
   _st->ema_h = NAN;
   _st->ema_p = NAN;
+  _st->prev_t = NAN;
+  _st->prev_h = NAN;
+  _st->prev_p = NAN;
+  _st->stuck = 0;
+  // Detect can land on the retry cadence.
+  EGModuleRegistry::set_loop_interval(this, ENV_SAMPLE_MS);
   Log::console(PSTR("Env: %S detected"), chipName());
   return true;
 }
@@ -168,6 +176,22 @@ void EnvSensor::sampleFinish() {
 }
 
 void EnvSensor::emaUpdate(float t, float h, float p) {
+  // NAN never equals itself, so a failed read breaks the run.
+  bool same = true, any = false;
+  if (!isnan(t)) { any = true; if (t != _st->prev_t) same = false; }
+  if (!isnan(h)) { any = true; if (h != _st->prev_h) same = false; }
+  if (!isnan(p)) { any = true; if (p != _st->prev_p) same = false; }
+  _st->prev_t = t; _st->prev_h = h; _st->prev_p = p;
+  if (any && same) {
+    if (++_st->stuck >= ENV_STUCK_SAMPLES) {
+      Log::console(PSTR("Env: %S stuck, re-initialising"), chipName());
+      _drv_flags = 0;      // tryDetect() re-runs and soft-resets the chip
+      return;
+    }
+  } else {
+    _st->stuck = 0;
+  }
+
   if (isnan(_st->ema_t)) {
     _st->ema_t = t;
     _st->ema_p = p;
