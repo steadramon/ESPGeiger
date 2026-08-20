@@ -608,10 +608,9 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #endif
   INFO_ROW("CPU frequency", "%u MHz",        (unsigned)ESP.getCpuFreqMHz());
 #ifdef ESP32
-  // Classic ESP32 silicon reads ~10-20 C high (uncalibrated); S2/S3/C3 are close.
   {
-    float t = temperatureRead();
-    if (!isnan(t) && t > -40.0f && t < 150.0f) {
+    float t = DeviceInfo::chipTempC();
+    if (!isnan(t)) {
       INFO_ROW("CPU temperature", "%.1f \xC2\xB0""C", t);
     }
   }
