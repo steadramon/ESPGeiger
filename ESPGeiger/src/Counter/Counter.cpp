@@ -449,7 +449,14 @@ bool Counter::get_tube_alive() {
   if (_ratio <= 0.0f) return true;
   // Silence measured in uptime seconds from the last collected count, so a
   // tube that has never counted since boot also goes dead once past timeout.
-  return ((uint32_t)DeviceInfo::uptime() - _last_count_up_s) < _tube_timeout_s;
+  uint32_t up = (uint32_t)DeviceInfo::uptime();
+  uint32_t silence = up - _last_count_up_s;
+  if (silence < _tube_timeout_s) return true;
+  if (total_clicks == 0) return false;
+  // 20 expected counts, double the advisory.
+  uint32_t obs = (uint32_t)((20ULL * up) / total_clicks);
+  if (obs > TUBE_DEAD_MAX_S) obs = TUBE_DEAD_MAX_S;
+  return silence < obs;
 }
 
 int Counter::input_pin() {

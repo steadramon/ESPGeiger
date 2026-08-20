@@ -108,6 +108,8 @@ class Counter {
       // Per-tick callers must test this inline; the body opens on a
       // soft-float compare.
       static constexpr uint32_t MIN_SILENCE_S = 60;
+      // A tube that died under 20 clicks outruns its threshold without this.
+      static constexpr uint32_t TUBE_DEAD_MAX_S = 21600;
       bool  counts_missing();
       // Runtime input pin for pulse variants, -1 otherwise (for messages).
       // Out-of-line: Counter.h is widely included and inline bodies here
