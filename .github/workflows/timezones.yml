@@ -1,0 +1,45 @@
+name: Timezones Check
+
+on:
+  push:
+    paths:
+      - 'ESPGeiger/src/NTP/**'
+      - 'lib/EGTimeZone/**'
+      - '.github/workflows/timezones.yml'
+  pull_request:
+    paths:
+      - 'ESPGeiger/src/NTP/**'
+      - 'lib/EGTimeZone/**'
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  pinned:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r lib/EGTimeZone/tools/requirements.txt
+      - run: python3 lib/EGTimeZone/tools/gen_timezones.py --check
+
+  upstream:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --upgrade tzdata
+      - name: Check against the latest tzdb
+        run: |
+          python3 -c "import tzdata; print('latest tzdb', tzdata.IANA_VERSION)"
+          python3 lib/EGTimeZone/tools/gen_timezones.py --check || {
+            echo "::warning::tzdb moved. Bump lib/EGTimeZone/tools/requirements.txt,"
+            echo "::warning::rerun gen_timezones.py, and commit the diff."
+            exit 1
+          }

@@ -78,7 +78,7 @@ input[type=radio],input[type=checkbox]{width:auto;margin:0 .4em 0 0;vertical-ali
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px #0066cc26}
 button,input[type=submit]{background:var(--accent);color:#fff;border:0;cursor:pointer;width:auto;padding:.5em 1em}
 form>button[type=submit]{margin-top:.8em}
-button.danger{background:#c0392b}button.danger:hover{background:#a02a1f}
+button.danger{background:#c0392b}button.danger:hover{background:#a02a1f}.btn-o{background:transparent;color:var(--accent);border:1px solid var(--accent)}.btn-o:hover{background:var(--accent);color:#fff}.r{display:block;margin:.5em 0 0 auto}
 details{margin:.6em 0}
 fieldset{border:1px solid var(--border);border-radius:4px;padding:.8em 1em;margin:1em 0}
 legend{padding:0 .3em;color:var(--muted)}
@@ -147,7 +147,7 @@ nav.tabs a.ac{color:var(--accent);border-bottom-color:var(--accent)}
 :root.crt body{font-family:Consolas,Menlo,monospace;font-weight:600;box-shadow:none}
 :root.crt :is(h1,h2,h3){color:#0f0;text-shadow:0 0 4px #0f0;font-weight:700}
 :root.crt :is(th,td,p,span,div){font-weight:600}
-:root.crt :is(button,input[type=submit],.menu a,.back){color:#000;text-shadow:none}
+:root.crt :is(button:not(.btn-o),input[type=submit],.menu a,.back){color:#000;text-shadow:none}
 :root.crt .devhead h1 .tag{color:#0a0;text-shadow:none;opacity:1}
 :root.crt::after{content:'';position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0,rgba(0,0,0,.18) 1px,transparent 1px,transparent 3px);z-index:9998;animation:crtroll 4s linear infinite}
 @keyframes crtroll{to{background-position:0 3px}})CSS";
@@ -885,7 +885,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 <form method=POST action=/wifisave>
 <label style='display:flex;align-items:center;justify-content:space-between'>
   <span>Network</span>
-  <button type=button id=rescan class=btn-sm style='background:transparent;color:var(--accent);border:1px solid var(--accent)'>Rescan</button>
+  <button type=button id=rescan class='btn-sm btn-o'>Rescan</button>
 </label>
 <select id=ws onchange="byID('s').value=this.options[this.selectedIndex].dataset.ssid||''">
 <option value=''>Scanning&hellip;</option>
@@ -2212,7 +2212,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <details style="margin-top:.4em"><summary style="cursor:pointer;color:var(--muted);width:1.5em;list-style-position:inside">&nbsp;</summary>
 <form id=cf style="display:flex;gap:.5em;margin-top:.4em" onsubmit="return cmdSend(event)">
 <input id=ci placeholder="cmd" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:.95em" autocomplete=off spellcheck=false>
-<button type=submit style="width:auto">Send</button>
+<button type=submit>Send</button>
 </form>
 </details>
 <script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1}</script>

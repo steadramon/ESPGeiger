@@ -1,0 +1,3 @@
+# IANA tz database, for gen_timezones.py. Pinned so the generated
+# tables depend on a version rather than on whoever ran the script.
+tzdata==2026.3

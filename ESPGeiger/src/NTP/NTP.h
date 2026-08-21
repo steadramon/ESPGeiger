@@ -21,7 +21,7 @@
 #include <Arduino.h>
 #include <time.h>
 #include <sys/time.h>
-#include "timezones.h"
+#include <EGTimeZone.h>
 #include "../Util/Globals.h"
 #include "../Util/UptimeCounter.h"
 #include "../Module/EGModule.h"

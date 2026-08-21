@@ -62,6 +62,10 @@
 
 #define ENV_SAMPLE_MS    10000UL
 #define ENV_EMA_ALPHA     0.1f
+// 30 min at ENV_SAMPLE_MS. A working sensor never repeats to 0.01.
+#define ENV_STUCK_SAMPLES 180
+// Re-probe cadence. Clamped by the registry at 0xFFFF.
+#define ENV_RETRY_MS      60000UL
 // Receiver-mirror staleness window. /env packets arrive every ~10 s from
 // UdpBlip; 90 s = 9 missed before the mirror reports absent.
 #define ENV_REMOTE_TTL_MS 90000UL
@@ -113,6 +117,10 @@ class EnvSensor : public EGModule {
       float ema_t = NAN;
       float ema_h = NAN;
       float ema_p = NAN;
+      float prev_t = NAN;
+      float prev_h = NAN;
+      float prev_p = NAN;
+      uint16_t stuck = 0;
     };
 
     enum : uint8_t { PHASE_IDLE = 0, PHASE_WAIT_AHT = 1 };
