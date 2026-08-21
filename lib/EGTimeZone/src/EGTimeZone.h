@@ -1,7 +1,7 @@
 /*
   EGTimeZone.h - Olson name to POSIX TZ rule.
-  
-  Copyright (C) 2023 @steadramon
+
+  Copyright (C) 2026 @steadramon
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by

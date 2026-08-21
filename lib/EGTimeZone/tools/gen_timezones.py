@@ -41,7 +41,7 @@ LICENCE = """/*
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */"""
 
-# Must match timezones.cpp.
+# Must match EGTimeZone.cpp.
 FNV_PRIME = 16777619
 OFFSET_BASIS = 2166136261
 HASH_MASK = 0x1FFFFF
@@ -214,14 +214,14 @@ def render(zones, version):
         for h in clash:
             print("collision %d: %s" % (h, [n for x, _, n in entries if x == h]),
                   file=sys.stderr)
-        sys.exit("hash collision; widen the hash field here and in timezones.cpp")
+        sys.exit("hash collision; widen the hash field here and in EGTimeZone.cpp")
 
     out = [LICENCE]
     add = out.append
     add("#ifndef EGTIMEZONE_TABLE_H")
     add("#define EGTIMEZONE_TABLE_H")
     add("")
-    add("// IANA tzdb %s. Rerun scripts/gen_timezones.py; never edit." % version)
+    add("// IANA tzdb %s. Rerun tools/gen_timezones.py; never edit." % version)
     add("// Included only by EGTimeZone.cpp.")
     add("")
     add("// NUL separated; zones[].offset indexes into this.")
