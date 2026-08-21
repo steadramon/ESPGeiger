@@ -76,7 +76,11 @@ void NTP_Client::setup()
   if (tz[0] == '\0') tz = NTP_TZ;
 
   Log::console(PSTR("NTP: Starting ... %s"), server);
-  const char *possixTZ = getPosixTZforOlson(tz);
+  const char *possixTZ = EGTimeZone::posixFor(tz);
+  if (!possixTZ) {
+    Log::console(PSTR("NTP: timezone '%s' not known, using UTC"), tz);
+    possixTZ = PSTR("UTC0");
+  }
 #ifdef ESP8266
   settimeofday_cb([](){
     time_t now_t = time(NULL);
@@ -127,45 +131,38 @@ void NTP_Client::loop(unsigned long now) {
 
 // When EG_GZ_NTP_PAGE_JS is set the gzipped blob in NTP_PAGE_JS.gz.h
 // replaces this; the raw R"..." then compiles out.
+//
+// No comments below this line: the body ships to every browser. The var L line
+// is written by scripts/gen_timezones.py. pick() inserts a zone the dropdown
+// omits, since the device still resolves legacy aliases, and Detect feeds it
+// whatever Intl reports.
 #if !EG_GZ_NTP_PAGE_JS
 extern const char NTP_PAGE_JS[] PROGMEM = R"HTML(
-var locations = {
-  af:{af:["Abidjan","Algiers","Bissau","Cairo","Casablanca","El_Aaiun","Johannesburg","Juba","Khartoum","Lagos","Maputo","Monrovia","Nairobi","Ndjamena","Sao_Tome","Tripoli","Tunis","Windhoek"],at:["Cape_Verde"],in:["Mauritius"],},
-  aq:["Casey","Davis","Macquarie","Mawson","Palmer","Rothera","Troll"],
-  as:{as:["Almaty","Amman","Aqtau","Aqtobe","Ashgabat","Atyrau","Baghdad","Baku","Bangkok","Beirut","Bishkek","Choibalsan","Colombo","Damascus","Dhaka","Dili","Dubai","Dushanbe","Famagusta","Gaza","Hebron","Ho_Chi_Minh","Hong_Kong","Hovd","Jakarta","Jayapura","Jerusalem","Kabul","Karachi","Kathmandu","Kolkata","Kuching","Macau","Makassar","Manila","Nicosia","Oral","Pontianak","Pyongyang","Qatar","Qostanay","Qyzylorda","Riyadh","Samarkand","Seoul","Shanghai","Singapore","Taipei","Tashkent","Tbilisi","Tehran","Thimphu","Tokyo","Ulaanbaatar","Urumqi","Yangon","Yerevan"],in:["Chagos","Maldives"],},
-  au:["Perth","Eucla","Adelaide","Broken_Hill","Darwin","Brisbane","Hobart","Lindeman","Melbourne","Sydney","Lord_Howe"],
-  eu:{eu:["Andorra","Astrakhan","Athens","Belgrade","Berlin","Brussels","Bucharest","Budapest","Chisinau","Dublin","Gibraltar","Helsinki","Istanbul","Kaliningrad","Kirov","Kyiv","Lisbon","London","Madrid","Malta","Minsk","Moscow","Paris","Prague","Riga","Rome","Samara","Saratov","Simferopol","Sofia","Tallinn","Tirane","Ulyanovsk","Vienna","Vilnius","Volgograd","Warsaw","Zurich"],af:["Ceuta"],am:["Danmarkshavn","Nuuk","Scoresbysund","Thule"],as:["Anadyr","Barnaul","Chita","Irkutsk","Kamchatka","Khandyga","Krasnoyarsk","Magadan","Novokuznetsk","Novosibirsk","Omsk","Sakhalin","Srednekolymsk","Tomsk","Ust-Nera","Vladivostok","Yakutsk","Yekaterinburg"],at:["Azores","Canary","Faroe","Madeira"],},
-  na:{am:["Adak","Anchorage","Bahia_Banderas","Barbados","Belize","Boise","Cambridge_Bay","Cancun","Chicago","Chihuahua","Ciudad_Juarez","Costa_Rica","Dawson","Dawson_Creek","Denver","Detroit","Edmonton","El_Salvador","Fort_Nelson","Glace_Bay","Goose_Bay","Grand_Turk","Guatemala","Halifax","Havana","Hermosillo","Indiana/Indianapolis","Indiana/Knox","Indiana/Marengo","Indiana/Petersburg","Indiana/Tell_City","Indiana/Vevay","Indiana/Vincennes","Indiana/Winamac","Inuvik","Iqaluit","Jamaica","Juneau","Kentucky/Louisville","Kentucky/Monticello","Los_Angeles","Managua","Martinique","Matamoros","Mazatlan","Menominee","Merida","Metlakatla","Mexico_City","Miquelon","Moncton","Monterrey","New_York","Nome","North_Dakota/Beulah","North_Dakota/Center","North_Dakota/New_Salem","Ojinaga","Panama","Phoenix","Port-au-Prince","Puerto_Rico","Rankin_Inlet","Regina","Resolute","Santo_Domingo","Sitka","St_Johns","Swift_Current","Tegucigalpa","Tijuana","Toronto","Vancouver","Whitehorse","Winnipeg","Yakutat"],pa:["Honolulu"],at:["Bermuda"],},
-  sa:{am:["Araguaina","Argentina/Buenos_Aires","Argentina/Catamarca","Argentina/Cordoba","Argentina/Jujuy","Argentina/La_Rioja","Argentina/Mendoza","Argentina/Rio_Gallegos","Argentina/Salta","Argentina/San_Juan","Argentina/San_Luis","Argentina/Tucuman","Argentina/Ushuaia","Asuncion","Bahia","Belem","Boa_Vista","Bogota","Campo_Grande","Caracas","Cayenne","Cuiaba","Eirunepe","Fortaleza","Guayaquil","Guyana","La_Paz","Lima","Maceio","Manaus","Montevideo","Noronha","Paramaribo","Porto_Velho","Punta_Arenas","Recife","Rio_Branco","Santarem","Santiago","Sao_Paulo"],pa:["Easter","Galapagos"],aq:["Palmer"],at:["Stanley","South_Georgia"]},
-  pa:["Apia","Auckland","Bougainville","Chatham","Efate","Fakaofo","Fiji","Gambier","Guadalcanal","Guam","Kanton","Kiritimati","Kosrae","Kwajalein","Marquesas","Nauru","Niue","Norfolk","Noumea","Pago_Pago","Palau","Pitcairn","Port_Moresby","Rarotonga","Tahiti","Tarawa","Tongatapu"],
-  etc:["Greenwich","Universal","Zulu","GMT-14","GMT-13","GMT-12","GMT-11","GMT-10","GMT-9","GMT-8","GMT-7","GMT-6","GMT-5","GMT-4","GMT-3","GMT-2","GMT-1","GMT","GMT+1","GMT+2","GMT+3","GMT+4","GMT+5","GMT+6","GMT+7","GMT+8","GMT+9","GMT+10","GMT+11","GMT+12","UCT","UTC"]
-};
-var regions={as:"Asia",af:"Africa",eu:"Europe",na:"North America",sa:"South America",au:"Australia",pa:"Pacific",aq:"Antarctica",etc:"Etc"};
-var prefix={am:"America",at:"Atlantic",in:"Indian",pa:"Pacific"};
+var L={"Asia":{"Asia":["Almaty","Amman","Aqtau","Aqtobe","Ashgabat","Atyrau","Baghdad","Baku","Bangkok","Beirut","Bishkek","Colombo","Damascus","Dhaka","Dili","Dubai","Dushanbe","Famagusta","Gaza","Hebron","Ho_Chi_Minh","Hong_Kong","Hovd","Jakarta","Jayapura","Jerusalem","Kabul","Karachi","Kathmandu","Kolkata","Kuching","Macau","Makassar","Manila","Nicosia","Oral","Pontianak","Pyongyang","Qatar","Qostanay","Qyzylorda","Riyadh","Samarkand","Seoul","Shanghai","Singapore","Taipei","Tashkent","Tbilisi","Tehran","Thimphu","Tokyo","Ulaanbaatar","Urumqi","Yangon","Yerevan"],"Indian":["Chagos","Maldives"]},"Africa":{"Africa":["Abidjan","Algiers","Bissau","Cairo","Casablanca","El_Aaiun","Johannesburg","Juba","Khartoum","Lagos","Maputo","Monrovia","Nairobi","Ndjamena","Sao_Tome","Tripoli","Tunis","Windhoek"],"Atlantic":["Cape_Verde"],"Indian":["Mauritius"]},"Europe":{"Africa":["Ceuta"],"America":["Danmarkshavn","Nuuk","Scoresbysund","Thule"],"Asia":["Anadyr","Barnaul","Chita","Irkutsk","Kamchatka","Khandyga","Krasnoyarsk","Magadan","Novokuznetsk","Novosibirsk","Omsk","Sakhalin","Srednekolymsk","Tomsk","Ust-Nera","Vladivostok","Yakutsk","Yekaterinburg"],"Atlantic":["Azores","Canary","Faroe","Madeira"],"Europe":["Andorra","Astrakhan","Athens","Belgrade","Berlin","Brussels","Bucharest","Budapest","Chisinau","Dublin","Gibraltar","Helsinki","Istanbul","Kaliningrad","Kirov","Kyiv","Lisbon","London","Madrid","Malta","Minsk","Moscow","Paris","Prague","Riga","Rome","Samara","Saratov","Simferopol","Sofia","Tallinn","Tirane","Ulyanovsk","Vienna","Vilnius","Volgograd","Warsaw","Zurich"]},"North America":{"America":["Adak","Anchorage","Bahia_Banderas","Barbados","Belize","Boise","Cambridge_Bay","Cancun","Chicago","Chihuahua","Ciudad_Juarez","Costa_Rica","Dawson","Dawson_Creek","Denver","Detroit","Edmonton","El_Salvador","Fort_Nelson","Glace_Bay","Goose_Bay","Grand_Turk","Guatemala","Halifax","Havana","Hermosillo","Indiana/Indianapolis","Indiana/Knox","Indiana/Marengo","Indiana/Petersburg","Indiana/Tell_City","Indiana/Vevay","Indiana/Vincennes","Indiana/Winamac","Inuvik","Iqaluit","Jamaica","Juneau","Kentucky/Louisville","Kentucky/Monticello","Los_Angeles","Managua","Martinique","Matamoros","Mazatlan","Menominee","Merida","Metlakatla","Mexico_City","Miquelon","Moncton","Monterrey","New_York","Nome","North_Dakota/Beulah","North_Dakota/Center","North_Dakota/New_Salem","Ojinaga","Panama","Phoenix","Port-au-Prince","Puerto_Rico","Rankin_Inlet","Regina","Resolute","Santo_Domingo","Sitka","St_Johns","Swift_Current","Tegucigalpa","Tijuana","Toronto","Vancouver","Whitehorse","Winnipeg","Yakutat"],"Atlantic":["Bermuda"],"Pacific":["Honolulu"]},"South America":{"America":["Araguaina","Argentina/Buenos_Aires","Argentina/Catamarca","Argentina/Cordoba","Argentina/Jujuy","Argentina/La_Rioja","Argentina/Mendoza","Argentina/Rio_Gallegos","Argentina/Salta","Argentina/San_Juan","Argentina/San_Luis","Argentina/Tucuman","Argentina/Ushuaia","Asuncion","Bahia","Belem","Boa_Vista","Bogota","Campo_Grande","Caracas","Cayenne","Coyhaique","Cuiaba","Eirunepe","Fortaleza","Guayaquil","Guyana","La_Paz","Lima","Maceio","Manaus","Montevideo","Noronha","Paramaribo","Porto_Velho","Punta_Arenas","Recife","Rio_Branco","Santarem","Santiago","Sao_Paulo"],"Atlantic":["South_Georgia","Stanley"],"Pacific":["Easter","Galapagos"]},"Australia":{"Australia":["Adelaide","Brisbane","Broken_Hill","Darwin","Eucla","Hobart","Lindeman","Lord_Howe","Melbourne","Perth","Sydney"]},"Pacific":{"Pacific":["Apia","Auckland","Bougainville","Chatham","Efate","Fakaofo","Fiji","Gambier","Guadalcanal","Guam","Kanton","Kiritimati","Kosrae","Kwajalein","Marquesas","Nauru","Niue","Norfolk","Noumea","Pago_Pago","Palau","Pitcairn","Port_Moresby","Rarotonga","Tahiti","Tarawa","Tongatapu"]},"Antarctica":{"Antarctica":["Casey","Davis","Macquarie","Mawson","Palmer","Rothera","Troll","Vostok"]},"Etc":{"Etc":["GMT-14","GMT-13","GMT-12","GMT-11","GMT-10","GMT-9","GMT-8","GMT-7","GMT-6","GMT-5","GMT-4","GMT-3","GMT-2","GMT-1","GMT-0","GMT","GMT+0","GMT+1","GMT+2","GMT+3","GMT+4","GMT+5","GMT+6","GMT+7","GMT+8","GMT+9","GMT+10","GMT+11","GMT+12","GMT0","Greenwich","UCT","UTC","Universal","Zulu"]}};
 var x = byID("tz");
 var sel = x.getAttribute('data-option')||'Etc/UTC';
-Object.entries(regions).forEach(entry => {
-  const [k, v] = entry;
+var known = x.getAttribute('data-u')!='1';
+var found = false;
+Object.keys(L).forEach(c => {
   var og = document.createElement("optgroup");
-  og.label = (k in regions) ? regions[k]:v;
+  og.label = c;
+  Object.keys(L[c]).forEach(p => L[c][p].forEach(t => {
+    var z = p + '/' + t;
+    og.appendChild(new Option(z, z, false, z == sel));
+    if (z == sel) found = true;
+  }));
   x.add(og);
-  Object.entries(locations[k]).sort().forEach(ls => {
-    var [k1, l] = ls;
-    if (typeof l == "string") {
-      l = [l];
-      k1 = k;
-    }
-    Object.values(l).sort().forEach(t => {
-      var opt = document.createElement("option");
-      var v = (k1 in prefix) ? prefix[k1]:(k1 in regions) ? regions[k1]:k1;
-      opt.text = v + '/' + t;
-      if (opt.text == sel) {
-        opt.selected=true;
-      }
-      x.add(opt);
-    });
-  });
 });
+function pick(v, label) {
+  if (![...x.options].some(o => o.value == v)) x.insertBefore(new Option(label||v, v), x.firstChild);
+  x.value = v;
+}
+if (!found) pick(sel, sel + (known ? ' (not listed)' : ' (not recognised - please reselect)'));
+var b = document.createElement("button");
+x.parentNode.insertBefore(b, x.nextSibling);
+b.type = 'button';
+b.textContent = 'Detect';
+b.onclick = () => { var t = Intl.DateTimeFormat().resolvedOptions().timeZone; if (t) pick(t); };
 )HTML";
 #endif
 
@@ -174,9 +171,13 @@ Object.entries(regions).forEach(entry => {
 // lazily on <details ontoggle> so users who don't open the NTP section
 // don't fetch the ~4 KB timezone payload.
 void NTP_Client::renderInlineForm(EGHttpResponse& res) {
+  // data-u = 1 when the stored name does not resolve, so the page can say which.
   res.sendKV(F("<form method=POST action=/ntpset>"
                "<label for=tz>Timezone</label>"
-               "<select name=t id=tz data-option='"),
+               "<select name=t id=tz data-u='"),
+             EGTimeZone::posixFor(get_tz()) ? "0" : "1",
+             F("' data-option='"));
+  res.sendKV(nullptr,
              get_tz(),
              F("'></select>"
                "<label for=ntps>NTP Server</label>"

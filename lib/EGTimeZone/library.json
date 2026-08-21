@@ -1,0 +1,9 @@
+{
+  "name": "EGTimeZone",
+  "version": "0.1.0",
+  "description": "Olson timezone name to POSIX TZ rule for ESP8266/ESP32. Names are never stored: a zone is 21 bits of FNV-1a hash and an offset into a deduplicated rule blob, so all 597 IANA zones including backward aliases cost under 4 KB of flash and no heap. Tables are generated from a pinned IANA tzdb by tools/gen_timezones.py, never hand-edited.",
+  "keywords": "timezone, tz, olson, iana, ntp, esp8266, esp32",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}
