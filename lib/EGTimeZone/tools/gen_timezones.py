@@ -50,9 +50,8 @@ SKIP_DIRS = {"right", "posix"}
 SKIP_NAMES = {"posixrules", "Factory", "localtime"}
 
 # Country to dropdown region. Derived once from UN M49 via pycountry-convert so
-# the generator keeps tzdata as its only dependency. A code that appears in
-# neither this nor OVERRIDE is a hard error, so a new country cannot quietly
-# land in the wrong group or vanish.
+# the generator keeps tzdata as its only dependency. A code in neither this nor
+# OVERRIDE is a hard error, so a new country cannot land in the wrong group.
 REGION_OF = {
     "AD":"eu", "AE":"as", "AF":"as", "AL":"eu", "AM":"as", "AR":"sa",
     "AS":"pa", "AT":"eu", "AZ":"as", "BB":"na", "BD":"as", "BE":"eu",
@@ -89,8 +88,7 @@ OVERRIDE = {
     "AQ": "aq", "EH": "af", "PN": "pa", "TL": "as",   # absent from M49
 }
 
-# Group order and labels. Continent population descending (UN WPP 2024), so the
-# likeliest regions need no scrolling.
+# Continent population descending (UN WPP 2024): likeliest regions first.
 REGIONS = [("as", "Asia"), ("af", "Africa"), ("eu", "Europe"),
            ("na", "North America"), ("sa", "South America"), ("au", "Australia"),
            ("pa", "Pacific"), ("aq", "Antarctica")]
@@ -137,17 +135,19 @@ def collect(root):
             rule = posix_rule(path)
             if rule:
                 zones[name] = rule
-    return zones
+    # Sorted: os.walk order is platform-dependent.
+    return dict(sorted(zones.items()))
 
 
 def etc_order(zone):
-    """Etc/GMT-14 .. Etc/GMT+12 by offset, then the aliases."""
+    """Offset order, then aliases. GMT, GMT+0 and GMT-0 are all zero, so the
+    name breaks the tie rather than leaving it to input order."""
     tail = zone[4:]
     m = re.match(r"GMT([+-])(\d+)$", tail)
     if m:
         n = int(m.group(2))
-        return (0, -n if m.group(1) == "-" else n)
-    return (0, 0) if tail == "GMT" else (1, tail)
+        return (0, -n if m.group(1) == "-" else n, tail)
+    return (0, 0, tail) if tail == "GMT" else (1, 0, tail)
 
 
 def ui_groups(root, zones):
@@ -176,8 +176,8 @@ def ui_groups(root, zones):
 
 
 def write_js(groups):
-    # Factored region -> Olson prefix -> tails. The page rebuilds the full name,
-    # which is smaller on the wire than repeating the prefix on every entry.
+    # region -> prefix -> tails; the page rebuilds the name. Smaller than
+    # repeating the prefix on every entry.
     body = []
     for label, zs in groups:
         if not zs:
@@ -190,8 +190,8 @@ def write_js(groups):
             '"%s":[%s]' % (head, ",".join('"%s"' % t for t in tails))
             for head, tails in bucket.items())))
     body = ",".join(body)
-    # Replaces the whole one-line var L={...}; declaration. No marker comments:
-    # everything in that raw string is served to the browser.
+    # Replaces the one-line var L={...}; declaration. No marker comments: that
+    # raw string is served to the browser.
     out = []
     for line in open(NTP_CPP).read().splitlines(True):
         out.append(ANCHOR + body + "};\n" if line.startswith(ANCHOR) else line)
@@ -245,8 +245,7 @@ def render(zones, version):
 
 
 def report(name, have, want):
-    """Say what differs. The generated data is one very long line, so point at
-    the offset rather than dumping it."""
+    """Point at the offset: the data is one very long line."""
     hl, wl = have.splitlines(), want.splitlines()
     for line in difflib.unified_diff(hl, wl, "committed", "generated",
                                      lineterm="", n=0):
