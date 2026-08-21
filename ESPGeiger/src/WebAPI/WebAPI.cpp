@@ -405,6 +405,10 @@ void WebAPI::postMeasurement(bool censusOnly) {
   bool envHasT = sendEnv && !isnan(envsensor.tempC());
   bool envHasH = sendEnv && !isnan(envsensor.humidity());
   bool envHasP = sendEnv && !isnan(envsensor.pressure());
+#ifdef ESP32
+  // Sampled once: the entry count and the emit must agree.
+  float chipTemp = sendHealth ? DeviceInfo::chipTempC() : NAN;
+#endif
   if (sendRadiation) {
     entries += 2;  // cpm, usv
   }
@@ -415,6 +419,9 @@ void WebAPI::postMeasurement(bool censusOnly) {
   if (envHasH) entries += 1;
   if (envHasP) entries += 1;
   if (sendHealth) entries += 5;  // ut, mem, lps, tk, rssi
+#ifdef ESP32
+  if (!isnan(chipTemp)) entries += 1;  // ct
+#endif
 #ifdef WEBAPI_TESTMODE_POST
   if (sendHealth) entries += 1;  // lfb (largest-free-block low water, bytes)
 #endif
@@ -443,6 +450,9 @@ void WebAPI::postMeasurement(bool censusOnly) {
     mp.kv("l",  (uint32_t)TickProfile::lps);
     mp.kv("tk", (uint32_t)TickProfile::tick_max_us);
     mp.kv("rs", (int32_t)Wifi::rssi);
+#ifdef ESP32
+    if (!isnan(chipTemp)) mp.kv("ct", chipTemp);
+#endif
 #ifdef WEBAPI_TESTMODE_POST
     // Worst-case largest free block across the window, bytes.
     mp.kv("lfb", DeviceInfo::largestFreeBlockLow());

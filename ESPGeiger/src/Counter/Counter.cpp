@@ -439,7 +439,8 @@ float Counter::get_cpm15f() {
 }
 
 bool Counter::get_tube_alive() {
-  return tube_alive((uint32_t)DeviceInfo::uptime(), _last_count_up_s);
+  return tube_alive((uint32_t)DeviceInfo::uptime(), _last_count_up_s,
+                    (uint32_t)total_clicks);
 }
 
 int Counter::input_pin() {

@@ -35,6 +35,24 @@ class PulseEngine {
 public:
   enum Mode : uint8_t { MODE_PULSE = 0, MODE_BURST = 1, MODE_FADE = 2 };
 
+  // Full scale for analogWrite, per platform. ESP8266 matches the
+  // analogWriteRange() set in setup(); Arduino-ESP32's analogWrite defaults to
+  // 8-bit (esp32-hal-ledc.c analog_resolution) and HV drives LEDC directly.
+#ifdef ESP8266
+  static constexpr uint16_t FULL = 1023;
+#else
+  static constexpr uint16_t FULL = 255;
+#endif
+
+  // Every conversion to FULL scale must go through these. A caller that scales
+  // to 255 by hand yields FULL/4 duty and silently loses the digitalWrite path.
+  static constexpr uint16_t levelFromPercent(uint32_t pct) {
+    return (uint16_t)(((pct > 100 ? 100 : pct) * FULL + 50) / 100);
+  }
+  static constexpr uint16_t levelFrom8bit(uint32_t v) {
+    return (uint16_t)(((v > 255 ? 255 : v) * FULL + 127) / 255);
+  }
+
   // Config - owner writes from prefs then calls commitConfig().
   int8_t   pin        = -1;
   uint8_t  mode       = MODE_PULSE;
@@ -44,7 +62,7 @@ public:
   uint8_t  polarity   = 0;
   uint8_t  fade_shift = 3;
   uint8_t  max_hz     = 20;
-  uint8_t  active_level = 255;  // 255 = digitalWrite, lower = analogWrite
+  uint16_t active_level = FULL;  // FULL = digitalWrite, lower = analogWrite
 
   // Per-device chip-id jitter, optional.
   float    voice_pulse = 1.0f;
@@ -60,7 +78,7 @@ public:
   bool     pin_high        = false;
   uint32_t next_us         = 0;
   uint32_t period_us       = 0;
-  uint8_t  brightness      = 0;
+  uint16_t brightness      = 0;
 
   void begin() {
     if (pin < 0) return;
@@ -103,15 +121,15 @@ public:
     if (mode == MODE_FADE && brightness > 0) {
       uint32_t now_us = (uint32_t)micros();
       if ((int32_t)(now_us - next_us) < 0) return;
-      uint8_t delta = brightness >> fade_shift;
+      uint16_t delta = brightness >> fade_shift;
       if (delta == 0) delta = 1;
       brightness -= delta;
-      if (brightness < 2) {
+      if (brightness < 8) {
         brightness = 0;
-        analogWrite(pin, polarity ? 255 : 0);
+        analogWrite(pin, polarity ? FULL : 0);
         return;
       }
-      analogWrite(pin, polarity ? (255 - brightness) : brightness);
+      analogWrite(pin, polarity ? (FULL - brightness) : brightness);
       next_us = now_us + 5000;
       return;
     }
@@ -133,7 +151,7 @@ private:
   inline void startClick() {
     if (mode == MODE_FADE) {
       brightness = active_level;
-      analogWrite(pin, polarity ? (255 - active_level) : active_level);
+      analogWrite(pin, polarity ? (FULL - active_level) : active_level);
       phases_remaining = 0;
       next_us = (uint32_t)micros() + 5000;
       return;
@@ -146,10 +164,10 @@ private:
       phases_remaining = 0;
       return;
     }
-    if (active_level >= 255) {
+    if (active_level >= FULL) {
       writeActive();
     } else {
-      analogWrite(pin, polarity ? (255 - active_level) : active_level);
+      analogWrite(pin, polarity ? (FULL - active_level) : active_level);
     }
     pin_high = true;
     phases_remaining = 1;

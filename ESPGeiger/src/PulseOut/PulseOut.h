@@ -32,16 +32,14 @@ class PulseOut : public EGModule {
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 14; }
     uint16_t warmup_seconds() override { return 0; }
-    // 1 ms cadence is fine for the single-pulse mode (sub-ms pulses get
-    // stretched up to 1 ms but the LED / piezo response is still sharp)
-    // and the LED fade mode (5 ms step interval). Resonant-burst mode at
-    // multi-kHz frequencies is limited to 1 ms transition resolution.
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 1; }
     void begin() override;
-    void loop(unsigned long now_ms) override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
+
+    // Driven from msTickerCB: a stalled main loop would stretch the pulse.
+    // Burst mode is fire-and-forget via tone() and does not pass through here.
+    static volatile bool s_active;   // gate, so idle costs one read
+    void poll();
 
     // Called from Counter when a pulse arrives. Token-bucket-throttled so
     // a high-rate source can't keep launching new clicks on top of each

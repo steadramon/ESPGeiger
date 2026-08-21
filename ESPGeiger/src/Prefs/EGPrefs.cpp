@@ -159,6 +159,10 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
       memcpy(out, value, len + 1);
       return (int)len;
     }
+    // Form decoration, never carries a stored value.
+    case EGP_LABEL:
+    case EGP_HEADER:
+      return -1;
   }
   return -1;
 }

@@ -136,10 +136,6 @@ static bool yield_write_pgm(EGHttpServer::Slot* s, PGM_P data, size_t len) {
   return true;
 }
 
-static bool yield_write_str(EGHttpServer::Slot* s, const char* str) {
-  return yield_write_sram(s, str, strlen(str));
-}
-
 // clamp snprintf's would-be length to the buffer (truncation must not over-read)
 static inline int eghttp_clamp_head(int n, size_t cap) {
   return (n < 0) ? 0 : ((size_t)n >= cap ? (int)cap - 1 : n);

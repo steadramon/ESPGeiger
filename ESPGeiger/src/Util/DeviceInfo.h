@@ -83,6 +83,15 @@ namespace DeviceInfo {
   uint32_t largestFreeBlockLow();
   void     largestFreeBlockLowReset();
 
+#ifdef ESP32
+  // Die temperature in C, NAN when unavailable. Not ambient. Classic ESP32
+  // is uncalibrated and reads high.
+  float chipTempC();
+
+  // Call at 1 Hz. Feeds chipTempC().
+  void chipTempSample();
+#endif
+
   // Cross-platform reset-reason. Codes are frozen - never renumber.
   //   0 unknown   1 power-on     2 external reset   3 software restart
   //   4 exception 5 watchdog     6 brown-out        7 deep-sleep wake

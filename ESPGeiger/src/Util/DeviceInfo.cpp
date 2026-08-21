@@ -127,6 +127,21 @@ void DeviceInfo::largestFreeBlockLowReset() {
   s_lfb_low = s_lfb_cur;
 }
 
+#ifdef ESP32
+static float   s_ct      = NAN;
+static uint8_t s_ct_wait = 0;
+
+void DeviceInfo::chipTempSample() {
+  if (s_ct_wait) { s_ct_wait--; return; }
+  s_ct_wait = 45 + (uint8_t)(esp_random() % 31);
+  float t = temperatureRead();
+  if (isnan(t) || t <= -40.0f || t >= 150.0f) return;
+  s_ct = isnan(s_ct) ? t : s_ct + (t - s_ct) * 0.0625f;
+}
+
+float DeviceInfo::chipTempC() { return s_ct; }
+#endif
+
 void DeviceInfo::safeRestart(uint32_t delayMs) {
   gcounter.stop_for_ota();
 #ifdef GEIGER_SDCARD

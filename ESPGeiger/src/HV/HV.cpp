@@ -127,7 +127,6 @@ void HV::begin() {
     Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
 #ifdef ESP8266
     pinMode(_pwm_pin, OUTPUT);
-    analogWriteRange(1023);
     analogWrite (_pwm_pin, 0) ;
     analogWriteFreq(_hw_freq);
 #else

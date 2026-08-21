@@ -43,6 +43,7 @@
 #include "src/NTP/NTP.h"
 #include "src/GRNG/GRNG.h"
 #include "src/Counter/Counter.h"
+#include "src/PulseOut/PulseOut.h"
 #include "src/WebPortal/WebPortal.h"
 #include "src/SerialCommand/SerialCommand.h"
 #include "src/Util/BootHooks.h"
@@ -78,6 +79,9 @@ void msTickerCB()
   }
   _fast_ms_last_us = now_us;
   if (LedSignal::s_any_active) LedSignal::poll();
+#ifdef PULSE_OUT
+  if (PulseOut::s_active) pulseout.poll();
+#endif
 }
 
 void sTickerCB()
@@ -89,11 +93,15 @@ void sTickerCB()
     BootGuard::mark_ok();
     s_bg_marked = true;
   }
-  uint32_t up_raw = (uint32_t)ntpclient.getUptime();
+  uint32_t up_raw = (uint32_t)ntpclient.tickUptime();
   gcounter.secondticker(up_raw);
   HangWatch::tick(up_raw);
 #ifdef TICK_PROFILE
   TickProfile::markCounter();
+#endif
+
+#ifdef ESP32
+  DeviceInfo::chipTempSample();
 #endif
 
   unsigned long uptime = up_raw - start;
@@ -131,8 +139,13 @@ void setup()
   CrashDump::begin();
   // After CrashDump: both read RTC, and this one clears its own window.
   HangWatch::begin();
+#ifdef ESP8266
+  analogWriteRange(1023);
+#endif
   LedSignal::begin();
 
+  // Prime before anything reads it; the ticker is not attached yet.
+  ntpclient.tickUptime();
   DeviceInfo::begin();
 
   Log::banner(PSTR("   ___"));
@@ -194,7 +207,7 @@ void setup()
   grng.begin();
   gcounter.begin();
   EGModuleRegistry::begin_all();
-  start = ntpclient.getUptime() + 1;
+  start = ntpclient.tickUptime() + 1;
   sTicker.attach(1, sTickerCB);
   
   LedSignal::off();

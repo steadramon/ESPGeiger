@@ -33,14 +33,16 @@
 PulseOut pulseout;
 EG_REGISTER_MODULE(pulseout)
 
+volatile bool PulseOut::s_active = false;
+
 EG_PSTR(PO_L_EN,   "Enable");
 EG_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
 EG_PSTR(PO_L_PIN,  "GPIO");
 EG_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
 EG_PSTR(PO_L_MODE, "Mode");
 EG_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
-EG_PSTR(PO_L_PW,   "Pulse width \xc2\xb5s");
-EG_PSTR(PO_H_PW,   "100-50000");
+EG_PSTR(PO_L_PW,   "Pulse width ms");
+EG_PSTR(PO_H_PW,   "1-50");
 EG_PSTR(PO_L_FRQ,  "Burst Hz");
 EG_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
 EG_PSTR(PO_L_CYC,  "Burst cycles");
@@ -66,7 +68,7 @@ static const EGPref PULSE_PREF_ITEMS[] = {
   // Burst (tone) and Fade (analogWrite) need Timer1.
   {"mode",       PO_L_MODE, nullptr,   "0",    PO_O_MODE, 0,  2,     0, EGP_ENUM, 0},
 #endif
-  {"pulse_us",   PO_L_PW,   PO_H_PW,   "5000", nullptr, 100,  50000, 0, EGP_UINT, EGP_ADVANCED},
+  {"pulse_ms",   PO_L_PW,   PO_H_PW,   "5",    nullptr, 1,    50,    0, EGP_UINT, EGP_ADVANCED},
 #ifndef EGPE_NO_PWM
   {"freq",       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, EGP_ADVANCED},
   {"cycles",     PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, EGP_ADVANCED},
@@ -92,7 +94,7 @@ void PulseOut::on_prefs_loaded() {
   int p           = EGPrefs::getInt("pulse", "pin");
   _engine.pin     = (p < -1 || p > MAX_GPIO_PIN) ? -1 : (int8_t)p;
   _engine.mode    = (uint8_t)EGPrefs::getUInt("pulse", "mode");
-  _engine.pulse_us= (uint16_t)EGPrefs::getUInt("pulse", "pulse_us");
+  _engine.pulse_us= (uint16_t)(EGPrefs::getUInt("pulse", "pulse_ms") * 1000);
   _engine.freq_hz = (uint16_t)EGPrefs::getUInt("pulse", "freq");
   _engine.cycles  = (uint16_t)EGPrefs::getUInt("pulse", "cycles");
   _engine.polarity= (uint8_t)EGPrefs::getUInt("pulse", "polarity");
@@ -100,7 +102,8 @@ void PulseOut::on_prefs_loaded() {
   if (fade_idx > 2) fade_idx = 1;
   _engine.fade_shift = fade_idx + 2;
   if (_engine.mode > 2)         _engine.mode = 0;
-  if (_engine.pulse_us < 100)   _engine.pulse_us = 100;
+  // The 1ms poll cannot resolve anything shorter.
+  if (_engine.pulse_us < 1000)  _engine.pulse_us = 1000;
   if (_engine.pulse_us > 50000) _engine.pulse_us = 50000;
   if (_engine.freq_hz < 1000)   _engine.freq_hz = 1000;
   if (_engine.freq_hz > 8000)   _engine.freq_hz = 8000;
@@ -111,14 +114,12 @@ void PulseOut::on_prefs_loaded() {
   if (_engine.max_hz > 200) _engine.max_hz = 200;
   uint32_t br = EGPrefs::getUInt("pulse", "brightness");
   if (br > 100) br = 100;
-  _engine.active_level = (uint8_t)((br * 255 + 50) / 100);
+  _engine.active_level = PulseEngine::levelFromPercent(br);
   ParsedTime qf = parseTime(EGPrefs::getString("pulse", "quiet_from"));
   ParsedTime qt = parseTime(EGPrefs::getString("pulse", "quiet_to"));
   _q_from_min = qf.isValid ? (int16_t)(qf.hour * 60 + qf.minute) : -1;
   _q_to_min   = qt.isValid ? (int16_t)(qt.hour * 60 + qt.minute) : -1;
   _engine.commitConfig();
-  // notifyClick re-arms; loop() disables when the pulse completes.
-  EGModuleRegistry::set_loop_interval(this, -1);
 }
 
 bool PulseOut::isQuietNow() {
@@ -145,7 +146,7 @@ bool PulseOut::isQuietNow() {
 // v0.11.0 stored blip_pin + blip_pulse_ms in /prefs/led.bin (binary
 // EGPrefsStorage format: 4-byte 'EGP1' magic, then klen/key/vlen/val).
 // v0.12 dropped those keys from the led group and they now live in
-// pulse.pin / pulse.pulse_us (with a ms->us unit change).
+// pulse.pin / pulse.pulse_ms, same unit.
 static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 
 static bool migrate_legacy_blip() {
@@ -196,11 +197,9 @@ static bool migrate_legacy_blip() {
     char* endp = nullptr;
     long ms = strtol(ms_val, &endp, 10);
     if (endp != ms_val && ms > 0) {
-      long us = ms * 1000;
-      if (us < 100)   us = 100;
-      if (us > 50000) us = 50000;
-      char buf[16]; snprintf(buf, sizeof(buf), "%ld", us);
-      EGPrefs::put("pulse", "pulse_us", buf);
+      if (ms > 50) ms = 50;
+      char buf[16]; snprintf(buf, sizeof(buf), "%ld", ms);
+      EGPrefs::put("pulse", "pulse_ms", buf);
       any = true;
     }
   }
@@ -221,7 +220,6 @@ void PulseOut::begin() {
   if (migrate_legacy_blip()) on_prefs_loaded();
   if (!_enabled || _engine.pin < 0) {
     if (_enabled && _engine.pin < 0) Log::console(PSTR("PulseOut: no pin set"));
-    EGModuleRegistry::set_loop_interval(this, -1);
     return;
   }
   // Chip-id voice jitter: +/-15% pulse width, +/-3% burst freq.
@@ -248,18 +246,18 @@ void PulseOut::notifyClick(unsigned long now_ms) {
   if (!_enabled) return;
   if (isQuietNow()) return;
   if (_engine.notifyClick(now_ms)) {
-    EGModuleRegistry::set_loop_interval(this, 1);
+    s_active = true;
   }
 }
 
-void PulseOut::loop(unsigned long /*now_ms*/) {
+void PulseOut::poll() {
   _engine.loop();
   if (_engine.phases_remaining == 0
 #ifndef EGPE_NO_PWM
       && !(_engine.mode == PulseEngine::MODE_FADE && _engine.brightness > 0)
 #endif
      ) {
-    EGModuleRegistry::set_loop_interval(this, -1);
+    s_active = false;
   }
 }
 

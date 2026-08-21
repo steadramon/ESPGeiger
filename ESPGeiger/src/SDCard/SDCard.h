@@ -39,7 +39,7 @@ class SDCard : public EGModule {
     uint8_t display_order() override { return 20; }
     bool requires_ntp() override { return true; }
     bool has_tick() override { return true; }
-    void s_tick(unsigned long stick_now) override;
+    void s_tick(unsigned long now_s) override;
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;

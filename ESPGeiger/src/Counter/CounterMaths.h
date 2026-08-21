@@ -31,7 +31,7 @@
 #include <stdint.h>
 
 #ifndef GEIGER_RATIO
-  #define GEIGER_RATIO 151.0
+  #define GEIGER_RATIO 151.0f
 #endif
 
 // Counter.h settles this from the input type before including. Standalone
@@ -43,6 +43,11 @@
 // Silence equal to this many expected counts reads as "not counting".
 // P(zero counts) = e^-10, about 5e-5.
 #define GEIGER_MISSING_COUNTS 10
+// The latch drives the wiring banner, so it needs a longer silence than the
+// advisory. Ceiling: a tube that died under this many clicks outruns its own
+// threshold and never latches.
+#define GEIGER_DEAD_COUNTS 20
+#define GEIGER_TUBE_DEAD_MAX_S 21600
 // Assumed background until the tube has counted anything, uSv/h.
 #define GEIGER_ASSUMED_BG_USVH 0.1f
 // Floor for the dead-tube timeout. Shielded or low-CPM setups false-alarm on
@@ -88,9 +93,15 @@ class CounterMaths {
     // True when no ratio is set: without one there is no basis to call a tube
     // dead. Silence runs from the last count in uptime seconds, so a tube that
     // has never counted since boot goes dead once past the timeout.
-    bool tube_alive(uint32_t uptime_s, uint32_t last_count_up_s) const {
+    bool tube_alive(uint32_t uptime_s, uint32_t last_count_up_s,
+                    uint32_t total_clicks) const {
       if (_ratio <= 0.0f) return true;
-      return (uptime_s - last_count_up_s) < _tube_timeout_s;
+      uint32_t silence = uptime_s - last_count_up_s;
+      if (silence < _tube_timeout_s) return true;
+      if (total_clicks == 0) return false;
+      uint32_t obs = (uint32_t)(((uint64_t)GEIGER_DEAD_COUNTS * uptime_s) / total_clicks);
+      if (obs > GEIGER_TUBE_DEAD_MAX_S) obs = GEIGER_TUBE_DEAD_MAX_S;
+      return silence < obs;
     }
 
     // Seconds of silence that count as "not counting". Expected rate is the

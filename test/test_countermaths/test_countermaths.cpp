@@ -68,15 +68,39 @@ static void test_tube_timeout_floors_at_30_minutes(void) {
 
 static void test_tube_alive_until_the_timeout(void) {
   m.set_ratio(1.0f);              // timeout 12000 s
-  TEST_ASSERT_TRUE (m.tube_alive(11999u, 0u));
-  TEST_ASSERT_FALSE(m.tube_alive(12000u, 0u));
-  TEST_ASSERT_TRUE (m.tube_alive(20000u, 19000u));   // counted recently
+  TEST_ASSERT_TRUE (m.tube_alive(11999u, 0u, 0u));
+  TEST_ASSERT_FALSE(m.tube_alive(12000u, 0u, 0u));
+  TEST_ASSERT_TRUE (m.tube_alive(20000u, 19000u, 0u));   // counted recently
 }
 
 // A tube that has never counted since boot must still go dead.
 static void test_tube_dead_when_it_never_counted(void) {
   m.set_ratio(1.0f);
-  TEST_ASSERT_FALSE(m.tube_alive(50000u, 0u));
+  TEST_ASSERT_FALSE(m.tube_alive(50000u, 0u, 0u));
+}
+
+// The ratio-derived timeout is a floor, not the whole answer: a slow tube's
+// own rate carries the latch past it. 0.31 CPM over a week is a 191 s mean
+// gap, so the latch sits near 3870 s and a real 33 min silence is not death.
+static void test_tube_alive_uses_the_observed_rate(void) {
+  m.set_ratio(6.8f);                              // 12000/6.8 floors at 1800 s
+  const uint32_t up = 604800u, tc = 3125u;
+  TEST_ASSERT_TRUE (m.tube_alive(up, up - 1980u, tc));
+  TEST_ASSERT_FALSE(m.tube_alive(up, up - 4200u, tc));
+}
+
+// Without the ceiling a tube that died under GEIGER_DEAD_COUNTS clicks grows
+// its own threshold faster than the silence and never latches.
+static void test_tube_dead_capped_so_few_clicks_still_latch(void) {
+  m.set_ratio(151.0f);
+  TEST_ASSERT_FALSE(m.tube_alive(28800u, 100u, 5u));   // 8 h uptime, 5 clicks
+}
+
+// Fast tubes are untouched: 20 x a 3 s gap is far under the timeout.
+static void test_tube_alive_unchanged_for_a_fast_tube(void) {
+  m.set_ratio(151.0f);                            // timeout 1800 s
+  const uint32_t up = 604800u, tc = 201600u;      // 20 CPM
+  TEST_ASSERT_FALSE(m.tube_alive(up, up - 1860u, tc));
 }
 
 // --- dead time --------------------------------------------------------------
@@ -196,8 +220,8 @@ static void test_counts_missing_survives_uptime_wrap(void) {
 static void test_tube_alive_survives_uptime_wrap(void) {
   m.set_ratio(1.0f);                   // timeout 12000 s
   uint32_t last = 0xFFFFFFF0u;
-  TEST_ASSERT_TRUE (m.tube_alive(10u, last));           // 26 s of silence
-  TEST_ASSERT_FALSE(m.tube_alive(last + 12001u, last));
+  TEST_ASSERT_TRUE (m.tube_alive(10u, last, 0u));           // 26 s of silence
+  TEST_ASSERT_FALSE(m.tube_alive(last + 12001u, last, 0u));
 }
 
 // --- rate from a timestamp span ---------------------------------------------
@@ -224,6 +248,9 @@ int main(void) {
   RUN_TEST(test_tube_timeout_floors_at_30_minutes);
   RUN_TEST(test_tube_alive_until_the_timeout);
   RUN_TEST(test_tube_dead_when_it_never_counted);
+  RUN_TEST(test_tube_alive_uses_the_observed_rate);
+  RUN_TEST(test_tube_dead_capped_so_few_clicks_still_latch);
+  RUN_TEST(test_tube_alive_unchanged_for_a_fast_tube);
   RUN_TEST(test_dead_time_zero_is_a_passthrough);
   RUN_TEST(test_dead_time_matches_the_non_paralyzable_model);
   RUN_TEST(test_dead_time_correction_caps_at_ten_x);

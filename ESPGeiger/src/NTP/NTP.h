@@ -100,9 +100,14 @@ class NTP_Client : public EGModule {
       return last_sync_ms && (millis() - last_sync_ms) < maxAgeMs;
     }
 
-    // Seconds since boot, counting millis() wraps (49.7d). Needs calling at
-    // least once per wrap; it is (~1Hz).
-    time_t getUptime() { return _uptime.tick((uint32_t)::millis()); }
+    // Seconds since boot, counting millis() wraps (49.7d).
+    //
+    // tickUptime() is the only writer and belongs to the 1 Hz ticker alone:
+    // the wrap count is a read-modify-write, and on ESP32 the ticker and the
+    // main loop are separate tasks. Everything else reads the cached value,
+    // which is a plain 32-bit load.
+    time_t getUptime() const { return _uptime.value(); }
+    time_t tickUptime() { return _uptime.tick((uint32_t)::millis()); }
     int64_t getMillisEpoch() {
       timeval t;
       gettimeofday(&t, nullptr);

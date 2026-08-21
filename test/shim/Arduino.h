@@ -180,6 +180,8 @@ inline void digitalWrite(uint8_t pin, uint8_t val) {}
 inline int  digitalRead(uint8_t pin)               { return LOW; }
 inline int  analogRead(uint8_t pin)                { return 0; }
 inline void analogWrite(uint8_t pin, int val)      {}
+inline void tone(uint8_t pin, unsigned int freq, unsigned long dur = 0) {}
+inline void noTone(uint8_t pin)                    {}
 
 // getCycleCount derives from the fake clock at a nominal 80 MHz, so it is
 // deterministic and advances only when a test advances time.
