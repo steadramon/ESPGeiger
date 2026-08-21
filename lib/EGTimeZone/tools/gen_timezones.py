@@ -11,6 +11,7 @@
 
 import argparse
 import collections
+import difflib
 import os
 import re
 import sys
@@ -243,6 +244,25 @@ def render(zones, version):
     return "\n".join(out) + "\n", rules, entries
 
 
+def report(name, have, want):
+    """Say what differs. The generated data is one very long line, so point at
+    the offset rather than dumping it."""
+    hl, wl = have.splitlines(), want.splitlines()
+    for line in difflib.unified_diff(hl, wl, "committed", "generated",
+                                     lineterm="", n=0):
+        print("%s: %s" % (name, line[:120]), file=sys.stderr)
+    for a, b in zip(hl, wl):
+        if a == b:
+            continue
+        i = next((k for k in range(min(len(a), len(b))) if a[k] != b[k]),
+                 min(len(a), len(b)))
+        print("%s: first difference at column %d of %d/%d" % (name, i, len(a), len(b)),
+              file=sys.stderr)
+        print("%s:   committed ...%s..." % (name, a[max(0, i - 30):i + 40]), file=sys.stderr)
+        print("%s:   generated ...%s..." % (name, b[max(0, i - 30):i + 40]), file=sys.stderr)
+        break
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true",
@@ -260,12 +280,17 @@ def main():
     js = write_js(groups)
 
     if args.check:
-        stale = [n for n, want, have in (("EGTimeZoneTable.h", text, open(HEADER).read()),
-                                         ("NTP.cpp", js, open(NTP_CPP).read()))
-                 if want != have]
+        stale = []
+        for name, want, path in (("EGTimeZoneTable.h", text, HEADER),
+                                 ("NTP.cpp", js, NTP_CPP)):
+            have = open(path).read()
+            if want == have:
+                continue
+            stale.append(name)
+            report(name, have, want)
         if stale:
-            print("stale, rerun scripts/gen_timezones.py: %s" % ", ".join(stale),
-                  file=sys.stderr)
+            print("stale, rerun lib/EGTimeZone/tools/gen_timezones.py: %s"
+                  % ", ".join(stale), file=sys.stderr)
             return 1
         print("up to date (tzdb %s)" % version)
         return 0
