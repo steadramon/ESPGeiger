@@ -99,6 +99,10 @@ void SDCard::begin()
   EGModuleRegistry::set_tick_enabled(this, true);
 }
 
+static uint32_t freeMB() {
+  return (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+}
+
 static uint32_t packed_cutoff_year_ago() {
   time_t now_t = time(nullptr);
   time_t cutoff_t = now_t - (365L * 86400L);
@@ -120,16 +124,11 @@ void SDCard::s_tick(unsigned long /*now_s*/)
   }
 
   if (!ntpclient.synced) return;
+  if (_busy) return;
 
   if (_freecheck_pending) {
     _freecheck_pending = false;
-    Log::console(PSTR("SDCard: Calculating free space"));
-    uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
-    Log::console(PSTR("SDCard: %lu MB free."), (unsigned long)freespace);
-    if (freespace <= 8) {
-      uint32_t cutoff = packed_cutoff_year_ago();
-      if (!deleteOldest(cutoff)) disableFull();
-    }
+    scheduleCleanup(CLEAN_FREECHECK);
     return;
   }
 
@@ -233,23 +232,37 @@ void SDCard::s_tick(unsigned long /*now_s*/)
     }
   }
 
-  static uint8_t clean_sec = 0;
+  // Only reached on a new minute, so this counts minutes.
   static uint16_t clean_min = 0;
   bool clean_due = false;
-  if (++clean_sec >= 60) { clean_sec = 0; if (++clean_min >= 1440) { clean_min = 0; clean_due = true; } }
-  if (clean_due || forceCleanup) {
-    // Close before cleanup so deleteOldest never races our handle.
-    if (myDataFile.isOpen()) {
-      myDataFile.close();
-      openFileDay = 0;
-      _unsynced_writes = 0;
-    }
+  if (++clean_min >= 1440) { clean_min = 0; clean_due = true; }
+  if (clean_due || forceCleanup) scheduleCleanup(CLEAN_FULL);
+}
+
+// One byte, so the ticker may call it. set_loop_interval may not: it shifts
+// _due_order under loop_all's walk.
+void SDCard::scheduleCleanup(uint8_t what) {
+  if (what > _cleanup) _cleanup = what;
+}
+
+void SDCard::loop(unsigned long /*now*/) {
+  const uint8_t what = _cleanup;
+  _cleanup = CLEAN_NONE;
+  if (!sdenabled || what == CLEAN_NONE) return;
+
+  Hold hold;
+  if (what == CLEAN_FREECHECK) {
+    Log::console(PSTR("SDCard: Calculating free space"));
+    uint32_t freespace = freeMB();
+    Log::console(PSTR("SDCard: %lu MB free."), (unsigned long)freespace);
+    if (freespace <= 8 && !deleteOldest(packed_cutoff_year_ago())) disableFull();
+  } else {
     uint8_t maxDeletes = 10;
-    uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+    uint32_t freespace = freeMB();
     uint32_t cutoff = packed_cutoff_year_ago();
     while (freespace <= 8 && maxDeletes-- > 0) {
       if (!deleteOldest(cutoff)) break;
-      freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+      freespace = freeMB();
     }
     if (freespace <= 8) disableFull();
   }
@@ -316,6 +329,8 @@ bool SDCard::deleteOldest(uint32_t cutoffPacked) {
 }
 
 void SDCard::reinit() {
+  // First: s_tick gates on this, and clearing it late leaves sd null but live.
+  sdenabled = false;
   if (myDataFile.isOpen()) {
     myDataFile.sync();
     myDataFile.close();
@@ -326,11 +341,13 @@ void SDCard::reinit() {
     delete sd;
     sd = nullptr;
   }
-  sdenabled = false;
   _freecheck_pending = true;
   EGModuleRegistry::set_tick_enabled(this, false);
   begin();
 }
+
+SDCard::Hold::Hold()  { sdcard.pauseWriter(); sdcard._busy = true; }
+SDCard::Hold::~Hold() { sdcard._busy = false; }
 
 void SDCard::pauseWriter() {
   if (myDataFile.isOpen()) {
@@ -393,7 +410,7 @@ static void hSdList(EGHttpResponse& res, uint16_t selectedYear = 0) {
     return;
   }
 
-  sdcard.pauseWriter();
+  SDCard::Hold hold;
 
   constexpr uint16_t MAX_MONTHS = 120;   // 10 years
   MonthEntry* months = (MonthEntry*)malloc(MAX_MONTHS * sizeof(MonthEntry));
@@ -447,7 +464,7 @@ static void hSdList(EGHttpResponse& res, uint16_t selectedYear = 0) {
     months[j] = tmp;
   }
 
-  uint32_t freespace = (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+  uint32_t freespace = freeMB();
 
   char head[160];
   int n = snprintf_P(head, sizeof(head),
@@ -532,7 +549,7 @@ static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
     return;
   }
 
-  sdcard.pauseWriter();
+  SDCard::Hold hold;
   res.sendChunk(F("<p><a href='/sd'>&larr; All months</a></p>"));
 
   constexpr uint8_t MAX_DAYS = 31;
@@ -615,7 +632,7 @@ static void hSdDownload(EGHttpRequest& req, EGHttpResponse& res, const char* f) 
   for (int i = 0; i < 6; i++) dir[i] = filename[i];
   dir[6] = '\0';
 
-  sdcard.pauseWriter();
+  SDCard::Hold hold;
 
   if (!sd->chdir() || !sd->chdir(dir)) {
     sd->chdir();

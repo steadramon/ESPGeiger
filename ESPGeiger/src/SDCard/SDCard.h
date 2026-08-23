@@ -40,6 +40,11 @@ class SDCard : public EGModule {
     bool requires_ntp() override { return true; }
     bool has_tick() override { return true; }
     void s_tick(unsigned long now_s) override;
+    // Never s_tick: that is the ticker, where yield() is a panic().
+    bool has_loop() override { return true; }
+    // Never 0: that polls every iteration.
+    uint16_t loop_interval_ms() override { return 1000; }
+    void loop(unsigned long now) override;
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
@@ -51,6 +56,12 @@ class SDCard : public EGModule {
     // Drop the writer's file handle so /sd routes can safely walk and read.
     // s_tick will reopen on the next minute boundary.
     void pauseWriter();
+    // These paths all yield, and SdFat is not reentrant, so s_tick has to stay
+    // off the card for the scope.
+    struct Hold {
+      Hold();
+      ~Hold();
+    };
     void reinit();
     bool ready() const { return sdenabled; }
   protected:
@@ -63,6 +74,10 @@ class SDCard : public EGModule {
     uint8_t _unsynced_writes = 0;
     bool sdenabled = false;
     bool _freecheck_pending = true;
+    enum : uint8_t { CLEAN_NONE = 0, CLEAN_FREECHECK, CLEAN_FULL };
+    uint8_t _cleanup = CLEAN_NONE;
+    bool _busy = false;
+    void scheduleCleanup(uint8_t what);
 };
 
 extern SDCard sdcard;
