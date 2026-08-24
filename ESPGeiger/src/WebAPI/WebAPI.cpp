@@ -112,14 +112,12 @@ void WebAPI::begin() {
 void WebAPI::loop(unsigned long now) {
   if (_mode == 0) return;
 
-  // Signed deltas: backoff math can push lastHandshake into the future when
-  // _hs_backoff_ms > WEBAPI_HANDSHAKE_MS - unsigned compare then underflows.
-  if (lastHandshake == 0) {
+  if (!_hs.anchored()) {
     // Slot-allocate (once) so handshake won't share a second with a ping; 403 re-anchor reuses it.
     if (_hs_off == 0xFFFFFFFFu)
       _hs_off = EGModuleRegistry::initial_offset("wapi.hs", pingIntervalMs);
-    lastHandshake = now + _hs_off - WEBAPI_HANDSHAKE_MS;
-  } else if ((long)(now - lastHandshake) >= (long)WEBAPI_HANDSHAKE_MS) {
+    _hs.anchor((uint32_t)now, _hs_off);
+  } else if (_hs.due((uint32_t)now)) {
     doHandshake();
   } else if (station_id != 0) {
     if (lastPing == 0) {
@@ -144,7 +142,7 @@ void WebAPI::loop(unsigned long now) {
   // Sleep until whichever target fires next: handshake or ping. station_id
   // gate means before the first handshake completes we only watch the
   // handshake target.
-  unsigned long target = lastHandshake + WEBAPI_HANDSHAKE_MS;
+  unsigned long target = _hs.target();
   if (station_id != 0 && lastPing != 0) {
     unsigned long ping_target = lastPing + pingIntervalMs;
     if ((long)(ping_target - target) < 0) target = ping_target;
@@ -152,18 +150,10 @@ void WebAPI::loop(unsigned long now) {
   EGModuleRegistry::sleep_until(this, now, target);
 }
 
-static uint32_t wallClockWaitMs(uint32_t k, uint32_t intervalMs, uint32_t period_s) {
-  uint32_t target_ms = k % intervalMs;
-  // Cast first - signed mod on negative time_t (post-2038) wraps cur_ms.
-  uint32_t cur_ms    = ((uint32_t)time(NULL) % period_s) * 1000UL;
-  return (target_ms >= cur_ms) ? target_ms - cur_ms
-                               : intervalMs - cur_ms + target_ms;
-}
-
 void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("WebAPI: Testmode"));
-    lastHandshake = fast_millis();
+    _hs.sent(fast_millis());
 #ifndef WEBAPI_TESTMODE_POST
     return;
 #endif
@@ -307,7 +297,7 @@ void WebAPI::doHandshake() {
       request.setReqHeader(F("X-Auth"), basesig);
       request.setTimeout(10);
       if (request.send(buffer, bodyLen)) {
-        lastHandshake = fast_millis();
+        _hs.sent(fast_millis());
         send_indicator = 2;
       } else {
         Log::console(PSTR("WebAPI: Handshake send failed"));
@@ -321,10 +311,9 @@ void WebAPI::doHandshake() {
 // Called from sendHandshake (main loop) and httpHandshakeCb (AsyncTCP task
 // on ESP32); the read-modify-write must be atomic across tasks.
 void WebAPI::backoffHandshake() {
-  unsigned long now_ms = fast_millis();
+  uint32_t now_ms = fast_millis();
   EGMOD_PUB_LOCK();
-  lastHandshake = now_ms - WEBAPI_HANDSHAKE_MS + _hs_backoff_ms;
-  _hs_backoff_ms = min(_hs_backoff_ms * 2, (uint32_t)(5UL * 60UL * 1000UL));
+  _hs.retry(now_ms);
   EGMOD_PUB_UNLOCK();
 }
 
@@ -354,12 +343,13 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
         self->station_id = id;
         uint32_t k = ((uint32_t)self->pub_k[4] << 24) | ((uint32_t)self->pub_k[5] << 16)
                    | ((uint32_t)self->pub_k[6] << 8)  |  (uint32_t)self->pub_k[7];
-        self->lastHandshake = fast_millis() + wallClockWaitMs(k, WEBAPI_HANDSHAKE_MS, 3600) - WEBAPI_HANDSHAKE_MS;
+        self->_hs.accepted(fast_millis(),
+          wall_clock_wait_ms(k, WEBAPI_HANDSHAKE_MS, 3600, (uint32_t)time(NULL)));
         EGModuleRegistry::set_loop_interval(self, 100);
       } else {
         Log::debug(PSTR("WebAPI: Handshake OK - station ID %u"), id);
+        self->_hs.reset_backoff();
       }
-      self->_hs_backoff_ms = 30000UL;
       self->_exc_sent = true;     // crash info delivered (or none was sent)
       self->note_publish(true);   // sets last_ok under the publish lock
       return;
@@ -529,7 +519,7 @@ void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
     Log::debug(PSTR("WebAPI: Error %d - %s"), code, request->responseHTTPString().c_str());
     if (code == 403) {
       self->station_id = 0;
-      self->lastHandshake = 0;
+      self->_hs.unanchor();
       EGModuleRegistry::set_loop_interval(self, 100);
     } else if (code == 409) {
       Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
@@ -598,7 +588,7 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
   if (code == 200 || code == 403) {
     Log::console(PSTR("WebAPI: Station forgotten (HTTP %d)"), code);
     self->station_id = 0;
-    self->lastHandshake = 0;
+    self->_hs.unanchor();
     self->lastPing = 0;
     self->healthPostCounter = 0;
     self->last_ok = true;

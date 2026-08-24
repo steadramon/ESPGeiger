@@ -23,6 +23,7 @@
 #include <Arduino.h>
 #include "AsyncHTTPRequest_Generic.hpp"
 #include "../Module/EGModule.h"
+#include "WebAPISchedule.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/Globals.h"
 #include "../Counter/Counter.h"
@@ -77,15 +78,13 @@ class WebAPI : public EGModule {
     char pub_k_64[65] = "";  // base64 of pub_k (no padding) + null
     static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
     unsigned long lastPing = 0;
-    EG_XTASK_VOLATILE unsigned long lastHandshake = 0;
+    WebAPISchedule _hs{WEBAPI_HANDSHAKE_MS};
     // claimed once; reused on forget/403 re-anchor so we don't leak a slot
     uint32_t _hs_off = 0xFFFFFFFFu;
     uint32_t _ping_off = 0xFFFFFFFFu;
     uint8_t healthPostCounter = 0;
     // 0 = off, 1 = heartbeat only, 2 = heartbeat + CPM.
     uint8_t _mode = 2;
-    // Doubles on each handshake failure, capped at 5min, reset on success.
-    EG_XTASK_VOLATILE uint32_t _hs_backoff_ms = 30000UL;
     void backoffHandshake();
     // Set after the first handshake that successfully reported the
     // boot-time exception details. Stops us re-sending the same crash
