@@ -169,6 +169,8 @@ void WebAPI::doHandshake() {
 #endif
   }
 
+  backoffHandshake();
+
   GRNG::stir();
 
   if (priv_k[0] == 0) {
@@ -289,7 +291,6 @@ void WebAPI::doHandshake() {
   memcpy(shahash, Sha256.result(), HASH_LENGTH);
   optimistic_yield(100 * 1000);
   if (uECC_sign(priv_k, shahash, HASH_LENGTH, signature, uECC_secp192r1()) != 1) {
-    backoffHandshake();
     return;
   }
   optimistic_yield(100 * 1000);
@@ -298,16 +299,21 @@ void WebAPI::doHandshake() {
   encode_base64(signature, sizeof(signature), (uint8_t *)basesig);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
+    request.onReadyStateChange(httpHandshakeCb, this);
     if (request.open("POST", WEBAPI_URL "/api/1/handshake")) {
       LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
-      request.onReadyStateChange(httpHandshakeCb, this);
       request.setTimeout(10);
-      request.send(buffer, bodyLen);
-      lastHandshake = fast_millis();
-      send_indicator = 2;
+      if (request.send(buffer, bodyLen)) {
+        lastHandshake = fast_millis();
+        send_indicator = 2;
+      } else {
+        Log::console(PSTR("WebAPI: Handshake send failed"));
+      }
+    } else {
+      Log::console(PSTR("WebAPI: Handshake connect failed"));
     }
   }
 }
@@ -483,15 +489,18 @@ void WebAPI::postMeasurement(bool censusOnly) {
   encode_base64(signature, sizeof(signature), (uint8_t *)basesig);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
+    // Before open(), which connects; see doHandshake.
+    request.onReadyStateChange(httpRequestCb, this);
     if (request.open("POST", WEBAPI_URL "/api/1/post")) {
       LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
-      request.onReadyStateChange(httpRequestCb, this);
       request.setTimeout(10);
       request.send(buffer, bodyLen);
       send_indicator = 2;
+    } else {
+      Log::console(PSTR("WebAPI: Post connect failed"));
     }
   }
 }
@@ -564,16 +573,19 @@ void WebAPI::forget() {
   encode_base64(signature, sizeof(signature), (uint8_t *)basesig);
 
   if (request.readyState() == readyStateUnsent || request.readyState() == readyStateDone) {
+    // Before open(), which connects; see doHandshake.
+    request.onReadyStateChange(httpForgetCb, this);
     if (request.open("POST", WEBAPI_URL "/api/1/forget")) {
       Log::console(PSTR("WebAPI: Forget station %u"), station_id);
       LedSignal::activity();
       request.setReqHeader(F("User-Agent"), DeviceInfo::useragent());
       request.setReqHeader(F("Content-Type"), F("application/msgpack"));
       request.setReqHeader(F("X-Auth"), basesig);
-      request.onReadyStateChange(httpForgetCb, this);
       request.setTimeout(10);
       request.send(buffer, bodyLen);
       send_indicator = 2;
+    } else {
+      Log::console(PSTR("WebAPI: Forget connect failed"));
     }
   }
 }
