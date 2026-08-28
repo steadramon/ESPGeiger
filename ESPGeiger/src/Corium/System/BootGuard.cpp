@@ -17,56 +17,73 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "BootGuard.h"
-
-#ifdef ESP8266
+#include "BootGuardState.h"
+#include "CrashDump.h"
+#include "DeviceInfo.h"
 #include <Arduino.h>
 
+#ifdef ESP8266
+#include "RtcMap.h"
+#else
+#include <esp_attr.h>
+#endif
+
 namespace BootGuard {
 
-static constexpr uint32_t MAGIC      = 0xE56B0007;
-static constexpr uint32_t RTC_OFFSET = 40;
+static constexpr uint32_t MAGIC = 0xE56B0014;
 
-struct State {
-  uint32_t magic;
-  uint8_t  count;
-  uint8_t  pad[3];
-};
+#ifdef ESP8266
+typedef RtcSlot<State, RtcMap::BOOTGUARD_AT, RtcMap::BOOTGUARD_WORDS> Slot;
+static State s;
 
-static State s = { 0, 0, { 0, 0, 0 } };
+static void load() {
+  if (!Slot::read(s)) s.magic = 0;
+}
+static void save() {
+  Slot::write(s);
+}
+#else
+static RTC_NOINIT_ATTR State s;   // garbage after power-on, magic catches it
+
+static void load() {}
+static void save() {}
+#endif
+
+static uint32_t s_retry_ms = 0;
+static bool     s_entered = false;
 
 void on_boot() {
-  State stored;
-  if (!ESP.rtcUserMemoryRead(RTC_OFFSET, (uint32_t*)&stored, sizeof(stored))) {
-    stored.magic = 0;
+  load();
+  bool was_safe = s.safe;
+  Ending end = ending(DeviceInfo::resetReason());
+  if (CrashDump::hasCrash()) end = END_CRASH;   // esp8266 abort() looks like a restart
+  apply(s, MAGIC, DeviceInfo::fwFingerprint(), end);
+  if (s.safe) {
+    s_entered = !was_safe;
+    s_retry_ms = retry_ms(s.retries);
+    if (s.retries < 255) s.retries++;
   }
-  if (stored.magic != MAGIC) {
-    s.magic = MAGIC;
-    s.count = 0;
-  } else {
-    s = stored;
-  }
-  if (s.count < 255) s.count++;
-  ESP.rtcUserMemoryWrite(RTC_OFFSET, (uint32_t*)&s, sizeof(s));
+  save();
 }
 
-void mark_ok() {
-  s.magic = MAGIC;
-  s.count = 0;
-  ESP.rtcUserMemoryWrite(RTC_OFFSET, (uint32_t*)&s, sizeof(s));
+void request_safe() {
+  s.enter = 1;
+  save();
 }
 
-uint8_t boot_count() { return s.count; }
-
-} // namespace BootGuard
-
-#else  // ESP32: stubbed for v0.12.0. v0.13.x replaces this with
-       // esp_ota_mark_app_valid_cancel_rollback() against the OTA
-       // partition state, which gives true bootloader-level rollback.
-
-namespace BootGuard {
-void    on_boot()    {}
-void    mark_ok()    {}
-uint8_t boot_count() { return 0; }
+void mark_lived() {
+  s.lived = 1;
+  save();
 }
 
-#endif
+void mark_day() {
+  s.retries = 0;
+  save();
+}
+
+bool     safe_mode()    { return s.safe; }
+bool     entered()      { return s_entered; }
+uint32_t retry_after()  { return s_retry_ms; }
+uint8_t  crash_streak() { return s.crash_streak; }
+
+}

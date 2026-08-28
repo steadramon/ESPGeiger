@@ -18,58 +18,54 @@
 */
 
 #include "ArduinoOTA.h"
-#include "../Logger/Logger.h"
-#include "../Util/Globals.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Util/DeviceInfo.h"
-#include "../Util/FastMillis.h"
-#include "../Util/IgmpRefresh.h"
-#include "../Counter/Counter.h"
-#ifdef SSD1306_DISPLAY
-#include "../OLEDDisplay/OLEDDisplay.h"
-#endif
-
-extern Counter gcounter;
+#include "../Corium/Logger/Logger.h"
+#include "../Corium/System/Globals.h"
+#include "../Corium/Module/EGModuleRegistry.h"
+#include "../Corium/System/DeviceInfo.h"
+#include "../Corium/System/FastMillis.h"
+#include "../Corium/Net/IgmpRefresh.h"
+#include "../Corium/System/Lifecycle.h"
+#include "../Corium/Output/LedSignal.h"
 
 ArduinoOTAModule ota;
 EG_REGISTER_MODULE(ota)
-
-volatile bool ota_in_progress = false;
 
 void ArduinoOTAModule::begin() {
   ArduinoOTA.onStart ([]() {
     const char* type;
     if (ArduinoOTA.getCommand () == U_FLASH)
-      type = "sketch";
+      type = PSTR("sketch");
     else // U_SPIFFS
-      type = "filesystem";
-#ifdef SSD1306_DISPLAY
-    display.showOTABanner();
-#endif
+      type = PSTR("filesystem");
     ota_in_progress = true;
     EGModuleRegistry::wake();
-    gcounter.stop_for_ota();
-    digitalWrite(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON);
+    Lifecycle::send(Lifecycle::OTA_START);
+    LedSignal::lit(true);
     Log::console(PSTR("Start updating %s"), type);
   });
   ArduinoOTA.onEnd ([]() {
     Log::console(PSTR("End"));
-    digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
+    LedSignal::lit(false);
     ota_in_progress = false;
+    // core restarts, not safeRestart()
+    Lifecycle::send(Lifecycle::SHUTDOWN);
   });
   ArduinoOTA.onProgress ([](unsigned int progress, unsigned int total) {
+#ifdef ESP32
+    feedLoopWDT();   // handle() blocks for the whole transfer
+#endif
     static uint8_t lastValue = 255;
-    uint8_t nextValue = progress / (total / 100);
+    if (total == 0) return;
+    uint8_t nextValue = (uint8_t)((uint64_t)progress * 100 / total);
     if (lastValue != nextValue) {
       Log::debug(PSTR("Progress: %u%%\r"), nextValue);
       lastValue = nextValue;
-      digitalWrite(LED_SEND_RECEIVE, (nextValue % 2));
+      LedSignal::lit(nextValue % 2);
     }
   });
   ArduinoOTA.onError ([](ota_error_t error) {
-    digitalWrite(LED_SEND_RECEIVE, !LED_SEND_RECEIVE_ON);
-    // If onStart already fired, the input source is detached - restart it.
-    if (ota_in_progress) gcounter.restart_after_ota();
+    LedSignal::lit(false);
+    if (ota_in_progress) Lifecycle::send(Lifecycle::OTA_FAILED);
     ota_in_progress = false;
     if      (error == OTA_AUTH_ERROR)    Log::console(PSTR("OTA: Auth Failed"));
     else if (error == OTA_BEGIN_ERROR)   Log::console(PSTR("OTA: Begin Failed"));
@@ -81,17 +77,16 @@ void ArduinoOTAModule::begin() {
 
   ArduinoOTA.setHostname(DeviceInfo::hostname());
   ArduinoOTA.begin();
-  MDNS.addService("http",   "tcp", 80);
-  MDNS.addService("geiger", "tcp", 80);
+  MDNS.addService("http",   "tcp", 80);  // NOLINT(dram)
+  MDNS.addService("geiger", "tcp", 80);  // NOLINT(dram)
   const char* fname = DeviceInfo::friendlyName();
   if (fname && fname[0]) {
-    MDNS.addServiceTxt("geiger", "tcp", "fname", fname);
+    MDNS.addServiceTxt("geiger", "tcp", "fname", fname);  // NOLINT(dram)
   }
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {
   ArduinoOTA.handle();
-  // Keep mDNS multicast subscription alive.
   static unsigned long s_last_igmp_refresh = 0;
   if (s_last_igmp_refresh == 0) s_last_igmp_refresh = now;
   if ((unsigned long)(now - s_last_igmp_refresh) > 300000UL) {

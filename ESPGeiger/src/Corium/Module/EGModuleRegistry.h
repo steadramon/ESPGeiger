@@ -21,10 +21,14 @@
 
 #include "EGModule.h"
 
+#ifndef EG_MAX_MODULES
 #define EG_MAX_MODULES 32
+#endif
+#if defined(TICK_PROFILE) || defined(LOOP_PROFILE)
+static_assert(EG_MAX_MODULES <= 32, "profile done mask is 32 bits");
+#endif
 
-// Settle window after wifi reconnect before FLAG_REQUIRES_WIFI modules
-// fire. Drops the trigger conditions for AsyncTCP use-after-free races.
+// settle after reconnect, AsyncTCP UAF
 #ifndef WIFI_SETTLE_MS
 #define WIFI_SETTLE_MS 3000
 #endif
@@ -36,7 +40,7 @@ class EGModuleRegistry {
     static void begin_all();
     static void loop_all(unsigned long now);
     static void tick_all(unsigned long now, unsigned long uptime_seconds);
-    static inline unsigned long next_loop_due() { return _next_loop_due; }
+    static inline uint32_t next_loop_due() { return _next_loop_due; }
 #ifdef TICK_PROFILE
     static void log_profile_and_reset();
 #endif
@@ -45,18 +49,18 @@ class EGModuleRegistry {
 #endif
     static void log_activity_and_reset();
     static void wake();
-    // <0 disables loop, 0 = every iteration, positive = ms (clamped to 65535).
+    // <0 = off, else ms 1-65535. Any task
     static bool set_loop_interval(EGModule* m, int32_t interval_ms);
     static bool sleep_until(EGModule* m, unsigned long now, unsigned long target_ms);
     static bool set_tick_enabled(EGModule* m, bool enabled);
 
-    // Stable per-(module,device) offset in [0, interval_ms), from a module+chipid hash.
+    static void set_safe_mode(bool on);   // before pre_wifi_all
+    static bool quarantined(EGModule* m);
+
     static uint32_t initial_offset(const char* mod_name, uint32_t interval_ms);
-    // Returns the value to set lastPing= so the next fire lands on this
-    // module's stable slot. Wall-clock anchored when NTP is synced.
+    // wall clock once ntp synced
     static unsigned long initial_ping(const char* mod_name, unsigned long now,
                                       uint32_t interval_ms);
-    // wall-align a precomputed offset without re-claiming a slot (re-anchor, no leak)
     static unsigned long ping_from_offset(uint32_t offset, unsigned long now,
                                           uint32_t interval_ms);
     static uint8_t count();
@@ -64,8 +68,6 @@ class EGModuleRegistry {
     static EGModule* find(const char* name);
     static bool has(const char* name) { return find(name) != nullptr; }
 
-    // Walks modules, asks each to status_json(). Comma-joins non-empty
-    // fragments. No outer braces (caller supplies them).
     static size_t collect_status_json(char* buf, size_t cap, unsigned long now);
 
   private:
@@ -73,34 +75,66 @@ class EGModuleRegistry {
     static constexpr uint8_t FLAG_REQUIRES_WIFI = 1 << 1;
     static constexpr uint8_t FLAG_REQUIRES_NTP  = 1 << 2;
     static constexpr uint8_t FLAG_HAS_TICK      = 1 << 3;
+    static constexpr uint8_t FLAG_QUARANTINED   = 1 << 4;
+    static constexpr uint8_t FLAG_DURING_OTA    = 1 << 5;
+    static bool _safe_mode;
 
     struct Slot {
-      EGModule* module;          // 4
-      unsigned long loop_last;   // 4 - last fast_millis() loop() ran
-      unsigned long next_due;    // 4 - fast_millis() target for next loop() fire
-      uint16_t loop_interval;    // 2 - 0 = every iteration
-      uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
-      uint8_t flags;             // 1 - packed module flags (see above)
-      uint8_t category;          // 1 - EGPrefCategory; /param tab + pause skip
+      EGModule* module;
+      uint32_t loop_last;
+      uint32_t next_due;
+      uint16_t loop_interval;
+      uint16_t warmup_seconds;
+      uint8_t flags;
+      uint8_t category;
+      int32_t pending_ms;        // NO_REQUEST if none
 #ifdef TICK_PROFILE
-      uint16_t max_tick_us;      // 2 - slowest s_tick over current window
+      uint16_t max_tick_us;
 #endif
 #ifdef LOOP_PROFILE
-      uint32_t max_loop_us;      // 4 - slowest loop() this window (32b so >65ms visible)
-      uint32_t total_loop_us;    // 4 - sum of loop() durations this window
-      uint16_t loop_calls;       // 2 - count of loop() invocations this window
+      uint32_t max_loop_us;      // 32 bit, can pass 65 ms
+      uint32_t total_loop_us;
+      uint16_t loop_calls;
 #endif
     };
     static Slot _slots[EG_MAX_MODULES];
     static uint8_t _count;
-    static uint8_t _overflow;             // dropped registrations (logged at begin_all)
-    static unsigned long _next_loop_due;  // earliest pending loop() fire (millis)
+    static uint8_t _overflow;
+    static uint32_t _next_loop_due;
 
-    // Slots sorted ascending by next_due. loop_all stops at the first
-    // not-due entry, so idle modules at the back cost no per-tick work.
+    // sorted by next_due
     static uint8_t _due_order[EG_MAX_MODULES];
     static uint8_t _due_count;
+    static void rebuild_due();
+    static void sort_by_priority();
+
+    // one caller each, folds inline
+    static inline uint8_t unmet_requirements();
+    static inline void fire_slot(Slot& s, unsigned long now);
+    static inline uint8_t sift_due(uint8_t k);
+    static inline uint32_t next_wake(unsigned long now);
+    static inline void tick_slot(Slot& s, unsigned long now_s);
+
+    // RMW, lock on esp32
+    static constexpr int32_t NO_REQUEST = INT32_MIN;
+    static EG_XTASK_VOLATILE bool _pending;
+    static void apply_pending();
+#ifdef ESP32
+  public:
+    static portMUX_TYPE& _mux() {
+      static portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
+      return m;
+    }
+#endif
 };
+
+#ifdef ESP32
+#define EGREG_LOCK()   portENTER_CRITICAL(&EGModuleRegistry::_mux())
+#define EGREG_UNLOCK() portEXIT_CRITICAL(&EGModuleRegistry::_mux())
+#else
+#define EGREG_LOCK()
+#define EGREG_UNLOCK()
+#endif
 
 #define EG_REGISTER_MODULE(instance) \
   static bool _reg_##instance = EGModuleRegistry::add(&instance);
