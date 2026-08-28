@@ -30,11 +30,10 @@
 
 class EGPrefsStorage {
   public:
-    // Called for each decoded record during readGroup(). Pointers are NOT
-    // null-terminated and are valid only for the duration of the call.
+    // not NUL-terminated, valid during the call only
     typedef void (*ReadCb)(void* ctx,
                            const char* key, uint8_t key_len,
-                           const char* val, uint16_t val_len);
+                           const char* value, uint16_t val_len);
 
     EGPrefsStorage();
     ~EGPrefsStorage();
@@ -47,9 +46,10 @@ class EGPrefsStorage {
     bool writeGroup(const char* module_id, const void* buf, size_t len);
     bool removeGroup(const char* module_id);
 
+    static constexpr size_t DIR_NAME_MAX = 15;
+
   private:
-    void ensure_mounted();  // idempotent remount (other code may end() LittleFS)
-    String _path;
+    char   _path[DIR_NAME_MAX + 3];   // "/name/"
     bool   _started;
     bool   _readOnly;
 };

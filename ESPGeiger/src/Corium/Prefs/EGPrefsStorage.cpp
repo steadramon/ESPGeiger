@@ -18,125 +18,124 @@
 */
 
 #include "EGPrefsStorage.h"
+#include "EGPrefs.h"
 #include "../Logger/Logger.h"
+#include "../System/Fs.h"
 
-#define EGPS_MAX_GROUP_BYTES  1024
 #define EGPS_STAGING_SUFFIX   ".new"
 #define EGPS_PATH_BUFSZ       96
 #define EGPS_KEY_BUFSZ        64
-#define EGPS_VAL_BUFSZ        512   // generous - stack is only used during boot readGroup
+#define EGPS_VAL_BUFSZ        512   // stack, boot only
 
 namespace {
 
-// char[] version - avoids a String heap alloc per call.
 void group_path(char* out, size_t sz, const char* base, const char* mid) {
   snprintf_P(out, sz, PSTR("%s%s.bin"), base, mid);
+}
+
+bool read_magic(File& f) {
+  uint8_t magic[4];
+  return f.read(magic, 4) == 4 &&
+         magic[0] == 'E' && magic[1] == 'G' && magic[2] == 'P' && magic[3] == '1';
+}
+
+// u8 klen, key, u16le vlen, value
+bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen) {
+  if (f.read(klen, 1) != 1) return false;
+  if (*klen == 0 || *klen >= EGPS_KEY_BUFSZ) return false;
+  if (f.read((uint8_t*)key, *klen) != *klen) return false;
+  uint8_t vlen_bytes[2];
+  if (f.read(vlen_bytes, 2) != 2) return false;
+  *vlen = (uint16_t)vlen_bytes[0] | ((uint16_t)vlen_bytes[1] << 8);
+  if (*vlen >= EGPS_VAL_BUFSZ) return false;
+  if (*vlen > 0 && f.read((uint8_t*)value, *vlen) != *vlen) return false;
+  return true;
 }
 
 } // anonymous namespace
 
 EGPrefsStorage::EGPrefsStorage()
-  : _path(), _started(false), _readOnly(false)
+  : _path{}, _started(false), _readOnly(false)
 {}
 
 EGPrefsStorage::~EGPrefsStorage() {
   end();
 }
 
-void EGPrefsStorage::ensure_mounted() {
-#ifdef ESP8266
-  LittleFS.begin();
-#else
-  LittleFS.begin(true);
-#endif
-}
-
 bool EGPrefsStorage::begin(const char* name, bool readOnly) {
-  if (_started || !name || !*name) return false;
+  if (_started || !name || !*name || strlen(name) > DIR_NAME_MAX) return false;
+  if (!Fs::begin()) return false;   // prefs run on defaults
   _readOnly = readOnly;
-  ensure_mounted();
-  String dir = String("/") + name;
+  char dir[DIR_NAME_MAX + 2];
+  snprintf_P(dir, sizeof(dir), PSTR("/%s"), name);
   if (!_readOnly) {
-    if (LittleFS.exists(dir.c_str())) {
-      File chk = LittleFS.open(dir.c_str(), "r");
+    if (LittleFS.exists(dir)) {
+      File chk = LittleFS.open(dir, "r");
       if (chk && !chk.isDirectory()) {
         chk.close();
-        LittleFS.remove(dir.c_str());
-        Log::console(PSTR("prefs: cleared rogue file at %s"), dir.c_str());
+        LittleFS.remove(dir);
+        Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
       } else if (chk) {
         chk.close();
       }
     }
-    if (!LittleFS.exists(dir.c_str())) {
-      LittleFS.mkdir(dir.c_str());
+    if (!LittleFS.exists(dir)) {
+      LittleFS.mkdir(dir);
     }
   }
-  _path = dir + "/";
+  snprintf_P(_path, sizeof(_path), PSTR("%s/"), dir);
   _started = true;
-  Log::debug(PSTR("prefs: storage mounted at %s"), _path.c_str());
+  Log::debug(PSTR("prefs: storage mounted at %s"), _path);
   return true;
 }
 
 void EGPrefsStorage::end() {
   if (!_started) return;
-  LittleFS.end();
-  _path = "";
+  _path[0] = '\0';
   _started = false;
 }
 
 bool EGPrefsStorage::has(const char* module_id) {
   if (!_started || !module_id) return false;
-  ensure_mounted();
   char path[EGPS_PATH_BUFSZ];
-  group_path(path, sizeof(path), _path.c_str(), module_id);
+  group_path(path, sizeof(path), _path, module_id);
   return LittleFS.exists(path);
 }
 
 bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
   if (!_started || !module_id || !cb) return false;
-  ensure_mounted();
   char path[EGPS_PATH_BUFSZ];
-  group_path(path, sizeof(path), _path.c_str(), module_id);
+  group_path(path, sizeof(path), _path, module_id);
   File f = LittleFS.open(path, "r");
   if (!f) return false;
   size_t sz = f.size();
-  if (sz < 4 || sz > EGPS_MAX_GROUP_BYTES) { f.close(); return false; }
+  if (sz < 4 || sz > EGPREFS_MAX_GROUP_SZ) { f.close(); return false; }
 
-  // Validate magic header.
-  uint8_t magic[4];
-  if (f.read(magic, 4) != 4 ||
-      magic[0] != 'E' || magic[1] != 'G' || magic[2] != 'P' || magic[3] != '1') {
+  if (!read_magic(f)) {
     f.close();
     return false;
   }
 
-  // Stream records directly from the File - avoids a transient ~1KB heap
-  // allocation. LittleFS internally caches reads so small reads stay fast.
+  // stream it, no ~1 KB heap
   char key[EGPS_KEY_BUFSZ];
-  char val[EGPS_VAL_BUFSZ];
+  char value[EGPS_VAL_BUFSZ];
   bool ok = true;
   while (f.available() > 0) {
     uint8_t klen;
-    if (f.read(&klen, 1) != 1) { ok = false; break; }
-    if (klen == 0 || klen >= sizeof(key)) { ok = false; break; }
-    if (f.read((uint8_t*)key, klen) != klen) { ok = false; break; }
-    uint8_t vlen_bytes[2];
-    if (f.read(vlen_bytes, 2) != 2) { ok = false; break; }
-    uint16_t vlen = (uint16_t)vlen_bytes[0] | ((uint16_t)vlen_bytes[1] << 8);
-    if (vlen >= sizeof(val)) { ok = false; break; }
-    if (vlen > 0 && f.read((uint8_t*)val, vlen) != vlen) { ok = false; break; }
-    cb(ctx, key, klen, val, vlen);
+    uint16_t vlen;
+    if (!read_record(f, key, &klen, value, &vlen)) { ok = false; break; }
+    cb(ctx, key, klen, value, vlen);
   }
   f.close();
   return ok;
 }
 
+// stage and rename, never a partial write
 bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t len) {
   if (!_started || _readOnly || !module_id || !buf) return false;
-  if (len < 4 || len > EGPS_MAX_GROUP_BYTES) return false;
-  ensure_mounted();
+  if (len < 4 || len > EGPREFS_MAX_GROUP_SZ) return false;
   char final_path[EGPS_PATH_BUFSZ];
-  group_path(final_path, sizeof(final_path), _path.c_str(), module_id);
+  group_path(final_path, sizeof(final_path), _path, module_id);
   char staging[EGPS_PATH_BUFSZ];
   snprintf_P(staging, sizeof(staging), PSTR("%s%s"), final_path, EGPS_STAGING_SUFFIX);
   {
@@ -149,7 +148,7 @@ bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t l
       return false;
     }
   }
-  if (LittleFS.exists(final_path)) LittleFS.remove(final_path);
+  // don't remove first, rename replaces in one step
   if (!LittleFS.rename(staging, final_path)) {
     LittleFS.remove(staging);
     return false;
@@ -159,8 +158,7 @@ bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t l
 
 bool EGPrefsStorage::removeGroup(const char* module_id) {
   if (!_started || _readOnly || !module_id) return false;
-  ensure_mounted();
   char path[EGPS_PATH_BUFSZ];
-  group_path(path, sizeof(path), _path.c_str(), module_id);
+  group_path(path, sizeof(path), _path, module_id);
   return LittleFS.remove(path);
 }
