@@ -25,46 +25,41 @@
 
 namespace PinSafety {
 
-// Register pin as in use. Same-owner re-claim is silent (pointer compare); different-owner warns.
-void claim(int pin, const char* owner);
+extern const char I2C[];   // shared bus, one owner
 
-// Pins bonded to internal flash/PSRAM: touching them locks the bus.
-inline const char* flash_reserved(int pin) {
-#ifdef ESP8266
-  if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
-#elif defined(CONFIG_IDF_TARGET_ESP32)
-  if (pin >= 6 && pin <= 11) return PSTR("SPI flash");
-#elif defined(CONFIG_IDF_TARGET_ESP32S2)
-  if (pin >= 26 && pin <= 32) return PSTR("SPI flash");
-#elif defined(CONFIG_IDF_TARGET_ESP32S3)
-  if (pin >= 26 && pin <= 32) return PSTR("SPI flash");
-  if (pin >= 33 && pin <= 37) return PSTR("PSRAM");      // octal-PSRAM modules
-#elif defined(CONFIG_IDF_TARGET_ESP32C3)
-  if (pin >= 11 && pin <= 17) return PSTR("SPI flash");  // C3FH4 embedded flash
-#endif
-  return nullptr;
-}
+// nullptr = ok, else why or the other owner (PROGMEM)
+const char* claim(int pin, const char* owner);
+const char* claim_output(int pin, const char* owner);
+const char* claim_input(int pin, const char* owner);
+const char* claim_button(int pin, const char* owner);   // input, no strap note
 
-// Returns nullptr if pin is safe for output (and claims it), else PROGMEM reason. -1 is no-op.
-inline const char* claim_output(int pin, const char* owner) {
-  if (pin == -1) return nullptr;
-  if (const char* r = flash_reserved(pin)) return r;
-#if defined(CONFIG_IDF_TARGET_ESP32)
-  if (pin >= 34 && pin <= 39) return PSTR("input only");
-#endif
-  if (pin < 0 || pin > MAX_GPIO_PIN) return PSTR("out of range");
-  claim(pin, owner);
-  return nullptr;
-}
+enum PinKind : uint8_t {
+  PK_FLASH,       // refused
+  PK_PSRAM,       // refused
+  PK_MISSING,     // no such GPIO, refused
+  PK_USB,         // refused when USB is the console
+  PK_INPUT_ONLY,  // outputs refused
+  PK_STRAP,       // inputs warned, a pull the wrong way at power-on stops boot
+  PK_NO_PULL,     // inputs warned, no internal pull-up
+};
 
-// Returns nullptr if pin is safe for input (and claims it), else PROGMEM reason. -1 is no-op.
-inline const char* claim_input(int pin, const char* owner) {
-  if (pin == -1) return nullptr;
-  if (const char* r = flash_reserved(pin)) return r;
-  if (pin < 0 || pin > MAX_GPIO_PIN) return PSTR("out of range");
-  claim(pin, owner);
-  return nullptr;
-}
+// lo..hi inclusive, a lo of PIN_END ends the table
+struct PinRule { uint8_t lo, hi; PinKind kind; };
+constexpr uint8_t PIN_END = 255;
+
+// one per chip, the build uses its own
+extern const PinRule ESP8266_PINS[];
+extern const PinRule ESP32_PINS[];
+extern const PinRule ESP32S2_PINS[];
+extern const PinRule ESP32S3_PINS[];
+extern const PinRule ESP32C3_PINS[];
+extern const PinRule ESP32C6_PINS[];
+
+// nullptr = ok, else why; *warn = a note worth logging
+const char* check(const PinRule* rows, int pin, bool out, bool usb, const char** warn);
+
+// this chip's table only, no claim; -1 = no pin
+const char* refuse(int pin, bool out);
 
 }  // namespace PinSafety
 
