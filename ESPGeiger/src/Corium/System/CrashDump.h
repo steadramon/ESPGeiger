@@ -16,19 +16,19 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _ESPG_CRASHDUMP_H
-#define _ESPG_CRASHDUMP_H
+#ifndef ESPG_CRASHDUMP_H
+#define ESPG_CRASHDUMP_H
 
 #include <stdint.h>
 #include <stddef.h>
 
 namespace CrashDump {
 
-static constexpr size_t STACK_WORDS = 32;   // ~128 B of stack snapshot
+static constexpr size_t STACK_WORDS = 32;
 
 struct Snapshot {
   uint32_t magic;
-  uint32_t fw_fp;       // FNV1a(GIT_VERSION || BUILD_ENV); discards stale OTA snapshots
+  uint32_t fw_fp;
   uint32_t reason;
   uint32_t exccause;
   uint32_t epc1;
@@ -41,15 +41,8 @@ struct Snapshot {
   uint32_t stack[STACK_WORDS];
 };
 
-// Early in setup(): reads RTC user RAM. If a fresh snapshot is present,
-// stages it for accessors and clears RTC so the next clean boot doesn't
-// re-report it. Cheap when there's nothing to recover.
-void begin();
-
-// True if a valid snapshot was found at boot.
+void begin();   // early in setup()
 bool hasCrash();
-
-// Pointer to the staged snapshot, or nullptr if hasCrash() is false.
 const Snapshot* lastCrash();
 
 } // namespace CrashDump

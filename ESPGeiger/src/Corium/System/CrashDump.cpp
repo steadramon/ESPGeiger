@@ -17,8 +17,11 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "CrashDump.h"
+#include <new>
 
 #ifdef ESP8266
+#include "RtcMap.h"
+#include "DeviceInfo.h"
 #include <Arduino.h>
 #include <user_interface.h>
 extern "C" {
@@ -27,70 +30,39 @@ extern "C" {
 
 namespace CrashDump {
 
-// Magic bumped from 0xC0DECAFE to 0xC0DECAFF to discard pre-fingerprint
-// snapshots written by older firmwares; those crashes had addresses that
-// decode wrong against any newer ELF.
 static constexpr uint32_t MAGIC = 0xC0DECAFFu;
-// RTC user-memory offset (in 32-bit words). Owned by CrashDump - do not
-// reuse for other persistent state.
-static constexpr uint32_t RTC_OFFSET = 0;
-static constexpr size_t   WORDS_TOTAL = sizeof(Snapshot) / 4;
+typedef RtcSlot<Snapshot, RtcMap::CRASHDUMP_AT, RtcMap::CRASHDUMP_WORDS> Slot;
 
-// DRAM stack range (heap+stack live in 0x3FFE0000..0x40000000).
+// DRAM
 static constexpr uint32_t DRAM_LO = 0x3FFE0000u;
 static constexpr uint32_t DRAM_HI = 0x40000000u;
 
-static Snapshot s_recovered{};
-static bool     s_have = false;
-static uint32_t s_fw_fp = 0;
-
-// FNV1a hash of GIT_VERSION || BUILD_ENV. Identifies this build so a
-// snapshot written by a previous firmware (which survived OTA reboot in
-// RTC NOINIT) doesn't get reported with addresses that decode against
-// the wrong ELF.
-static uint32_t compute_fw_fp() {
-  uint32_t h = 2166136261u;
-  for (const char* s = GIT_VERSION; s && *s; ++s) h = (h ^ (uint8_t)*s) * 16777619u;
-  for (const char* s = BUILD_ENV;   s && *s; ++s) h = (h ^ (uint8_t)*s) * 16777619u;
-  if (h == 0) h = 1;   // 0 is the "never computed yet" sentinel
-  return h;
-}
+static Snapshot* s_recovered = nullptr;   // crash boots only
+static uint32_t  s_fw_fp = 0;
 
 void begin() {
-  s_fw_fp = compute_fw_fp();
+  s_fw_fp = DeviceInfo::fwFingerprint();
   Snapshot snap{};
-  if (!ESP.rtcUserMemoryRead(RTC_OFFSET, (uint32_t*)&snap, sizeof(snap))) return;
+  if (!Slot::read(snap)) return;
   if (snap.magic != MAGIC) return;
-  if (snap.fw_fp != s_fw_fp) {
-    // Stale snapshot from a previous firmware. Wipe and move on.
-    uint32_t zero = 0;
-    ESP.rtcUserMemoryWrite(RTC_OFFSET, &zero, sizeof(zero));
-    return;
-  }
-
-  s_recovered = snap;
-  s_have = true;
-
-  // Wipe the magic so we don't re-report on the next clean boot.
-  uint32_t zero = 0;
-  ESP.rtcUserMemoryWrite(RTC_OFFSET, &zero, sizeof(zero));
+  Slot::clear();
+  if (snap.fw_fp != s_fw_fp) return;
+  if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
 }
 
-bool hasCrash() { return s_have; }
-const Snapshot* lastCrash() { return s_have ? &s_recovered : nullptr; }
+bool hasCrash() { return s_recovered != nullptr; }
+const Snapshot* lastCrash() { return s_recovered; }
 
 } // namespace CrashDump
 
-// Override the weak Arduino-core hook. Fires from the exception handler
-// with the live stack window. Must be ISR-safe: no heap, no Serial, no
-// libc beyond plain memory ops.
+// Exception handler - no heap, Serial or libc
 extern "C" void custom_crash_callback(struct rst_info* rst_info,
                                       uint32_t stack,
                                       uint32_t stack_end) {
   using namespace CrashDump;
   Snapshot snap{};
   snap.magic    = MAGIC;
-  snap.fw_fp    = s_fw_fp;   // 0 if begin() hasn't run yet (very early boot crash)
+  snap.fw_fp    = s_fw_fp;   // 0 = crashed before begin()
   snap.reason   = rst_info ? rst_info->reason   : 0;
   snap.exccause = rst_info ? rst_info->exccause : 0;
   snap.epc1     = rst_info ? rst_info->epc1     : 0;
@@ -110,11 +82,11 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
     snap.word_count = avail;
   }
 
-  ESP.rtcUserMemoryWrite(RTC_OFFSET, (uint32_t*)&snap, sizeof(snap));
+  Slot::write(snap);
 }
 
 #elif defined(ESP32)
-// ESP32 path uses the IDF coredump partition; read summary then erase.
+// IDF coredump partition
 #include <Arduino.h>
 #include <esp_core_dump.h>
 #include <esp_system.h>
@@ -123,11 +95,9 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
 
 namespace CrashDump {
 
-static Snapshot s_recovered{};
-static bool     s_have = false;
+static Snapshot* s_recovered = nullptr;   // crash boots only
 
 void begin() {
-  // Fast path: skip unless previous boot panicked and a coredump exists.
   esp_reset_reason_t rr = esp_reset_reason();
   bool was_panic = (rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
                     rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT);
@@ -136,20 +106,17 @@ void begin() {
 
   esp_core_dump_summary_t sum{};
   if (esp_core_dump_get_summary(&sum) == ESP_OK) {
-    // Discard the coredump if it was written by a previous firmware - its
-    // addresses decode against the old ELF and would mislead diagnosis.
-    // esp_ota_get_app_description returns the running image's descriptor;
-    // app_elf_sha256 is the ELF-file SHA stamped at build time.
-    const esp_app_desc_t* desc = esp_ota_get_app_description();
-    if (desc && memcmp(sum.app_elf_sha256, desc->app_elf_sha256,
-                       sizeof(desc->app_elf_sha256)) != 0) {
+    // Old firmware, wrong ELF
+    char sha[APP_ELF_SHA256_SZ];
+    esp_ota_get_app_elf_sha256(sha, sizeof(sha));
+    if (strncmp((const char*)sum.app_elf_sha256, sha, sizeof(sha)) != 0) {
       esp_core_dump_image_erase();
       return;
     }
     Snapshot snap{};
     snap.reason = (uint32_t)rr;
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32H2
-    // RISC-V cores: different union layout, byte stackdump (not pre-walked PCs).
+    // RISC-V, raw stack bytes not PCs
     snap.epc1     = sum.exc_pc;
     snap.exccause = sum.ex_info.mcause;
     snap.excvaddr = sum.ex_info.mtval;
@@ -171,16 +138,15 @@ void begin() {
     for (size_t i = 0; i < depth; i++) snap.stack[i] = sum.exc_bt_info.bt[i];
     snap.word_count = (uint32_t)depth;
 #endif
-    s_recovered = snap;
-    s_have = true;
+    if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
   }
 
-  // Always erase so a bad image doesn't trip the same parse next boot.
+  // always, or a bad image loops
   esp_core_dump_image_erase();
 }
 
-bool hasCrash() { return s_have; }
-const Snapshot* lastCrash() { return s_have ? &s_recovered : nullptr; }
+bool hasCrash() { return s_recovered != nullptr; }
+const Snapshot* lastCrash() { return s_recovered; }
 
 } // namespace CrashDump
 
