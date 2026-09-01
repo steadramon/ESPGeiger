@@ -22,97 +22,53 @@
 
 #include <Arduino.h>
 #include <IPAddress.h>
-#include "FastMillis.h"
+#include "../System/FastMillis.h"
+#include "WifiStable.h"
+
+#define WIFI_SSID_MAX 32   // 802.11
 
 namespace Wifi {
   extern bool disabled;
-  // True only when offline was chosen deliberately (boot button-hold). When
-  // offline was forced by a failed connection this stays false and the tick
-  // periodically re-probes the saved network.
-  extern bool offline_forced;
+  extern bool offline_forced;    // button-hold only, else tick retries
   extern bool connected;
   extern IPAddress local_ip;     // refreshed on connect + once a minute
-  extern char ssid[33];
+  extern char ssid[WIFI_SSID_MAX + 1];
   extern int16_t rssi;
-  extern unsigned long connected_at_ms;  // fast_millis() of last clean STA association; 0 when down
   extern bool backup_grace_done;
-  void check_backup_state();  // call once at boot with LittleFS already mounted
+  void check_backup_state();  // LittleFS mounted
 
   void tick(unsigned long now);
 
-  // True when wifi has been connected at least `ms`. EGModuleRegistry
-  // gates FLAG_REQUIRES_WIFI modules on this so AsyncTCP can drain stale
-  // callbacks after reconnect before we hand it new work.
-  inline bool stable_for(unsigned long ms) {
-    return connected_at_ms != 0 && (fast_millis() - connected_at_ms) >= ms;
-  }
+  size_t formatIP(char* buf, size_t cap);   // cap >= 16
+  size_t formatIP(char* buf, size_t cap, const IPAddress& a);
 
-  // Format local_ip as dotted-quad into buf. Needs cap >= 16. Returns
-  // chars written (excludes NUL). Use when a string form is needed for
-  // display or text protocols.
-  size_t formatIP(char* buf, size_t cap);
-
-  // IPv4 multicast = 224.0.0.0/4.
   inline bool is_multicast(const IPAddress& ip) {
     return ip[0] >= 224 && ip[0] <= 239;
   }
 
-  // Boot-time WiFi association: try saved creds first, fall back to the
-  // EGPortal captive setup AP. Implements a backup/revert protocol - if
-  // a /wifi_backup file exists from a recent /wifisave attempt and the
-  // current creds fail, the backup is restored before dropping into
-  // setup mode. Returns true on success.
   bool connectOrPortal();
-
-  // Returns true if the SDK has STA credentials stored. Used to skip the
-  // 30 s connect timeout when there's nothing to try yet.
   bool hasSavedCreds();
-
-  // Persist current STA SSID/PSK to /wifi_backup so a failed /wifisave
-  // can revert. Call BEFORE WiFi.begin(new_ssid, new_pass).
-  bool saveBackupCreds();
-
-  // Erase the SDK-stored STA credentials. Replaces WiFiManager::
-  // resetSettings() so the WiFiManager dependency can be dropped.
+  bool saveBackupCreds();   // before WiFi.begin()
   void clearSavedCreds();
-
-  // Read net.* prefs and call WiFi.config() with static IP/gw/sn/dns when
-  // net.static_ip is set. No-op when DHCP is selected. Must be called
-  // BEFORE WiFi.begin(); ESP8266/ESP32 latch the addressing mode at the
-  // point begin() runs. Returns true if static config was applied.
-  bool applyStaticConfig();
-
-  // Validate string-form static IP config (parses + subnet-sanity).
-  // Returns true if the values would yield a usable LAN config. On
-  // failure, writes a human-readable reason into errbuf if provided.
-  // Used by /wifisave for immediate form-time feedback, and by
-  // applyStaticConfig at boot - single source of truth so the two paths
-  // can't drift.
+  bool applyStaticConfig();   // before WiFi.begin()
   bool validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
                       char* errbuf, size_t errlen);
-
-  // Pass new credentials from Improv into the captive-portal busy-wait so
-  // connectOrPortal() exits cleanly and runs its normal WiFi.begin path.
-  // No-op (just records the creds) when called outside the portal phase.
   void onImprovCreds(const char* ssid, const char* pass);
+  // heap from save to beginHeld(), false = too long or no memory
+  bool holdCreds(const char* ssid, const char* pass);
+  const char* heldSsid();   // "" if none
+  bool beginHeld();   // WiFi.begin() then frees, false = none held
+  bool saveNetBackup();   // won't overwrite a pending backup
+  bool probeReachability();   // blocks, lwIP timeout ~14s
+  bool restoreNetBackup();   // restart after
+  // on reset, else a later failed save reverts
+  void dropNetBackup();
+  void applyRuntimeNetPrefs();   // after WiFi.mode()
+  void rx_sleep(int8_t mode);   // UdpRx's sleep mode, -1 = the wifi.sleep pref
 
-  // Snapshot current net.* prefs to /net_backup for the auto-revert flow.
-  // Refuses to overwrite an existing backup (a previous network change is
-  // still pending verification - clobbering it would lose the
-  // last-known-good state). Call before EGPrefs::put for net.* keys.
-  bool saveNetBackup();
-
-  // Reachability probe - `WiFi.hostByName` against pool.ntp.org. lwIP
-  // default timeout (~14 s). Routes through the gateway and DNS, so it
-  // catches both bad gateway and bad DNS configs in one shot.
-  bool probeReachability();
-
-  // Read /net_backup and write the values back into net.* prefs +
-  // commit. Caller is expected to ESP.restart() afterwards.
-  bool restoreNetBackup();
-
-  // Apply wifi.tx_power/country/phy_mode. Needs esp_wifi_init (post WiFi.mode()).
-  void applyRuntimeNetPrefs();
+  int txPowerQdbm();
+  const char* phyModeStr();
+  const char* sleepModeStr();
 }
 
 #endif

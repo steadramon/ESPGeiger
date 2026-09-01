@@ -16,16 +16,12 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _ESPG_IGMP_REFRESH_H
-#define _ESPG_IGMP_REFRESH_H
+#ifndef ESPG_IGMP_REFRESH_H
+#define ESPG_IGMP_REFRESH_H
 
 namespace IgmpRefresh {
 
-// Re-emit IGMP Membership Report for every group joined on the STA netif.
-// No-op on ESP8266 and when WiFi is down.
-// Returns true if the report was queued on the tcpip thread, false if it
-// early-returned (WiFi down or the STA netif handle was unresolvable).
-bool refresh();
+bool refresh();   // esp32 only
 
 }
 
