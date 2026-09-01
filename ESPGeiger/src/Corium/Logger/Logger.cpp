@@ -1,6 +1,6 @@
 /*
   Logger.cpp - Log class
-  
+
   Copyright (C) 2022 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -18,100 +18,90 @@
 */
 
 #include "Logger.h"
-#include "../Util/Wifi.h"
-#include "../NTP/NTP.h"
+#include "../Net/Wifi.h"
+#include "../System/Clock.h"
+#include "../System/Uptime.h"
 
 char Log::logIdx = 1;
 Log::LoggingLevels Log::logLevel = LOG_LEVEL;
 char Log::log[MAX_LOG_SIZE] = "";
 bool Log::serialLog = true;
 
-#ifdef ESP8266
-static char s_log_buf[256];
-  #define LOG_BUF s_log_buf
-  #define LOG_BUF_SIZE sizeof(s_log_buf)
+// esp32: mqtt, audio and the loop all log
+#ifdef ESP32
+#include <freertos/semphr.h>
+static SemaphoreHandle_t s_lock = nullptr;   // first log is in setup
+#define LOG_LOCK()   do { if (!s_lock) s_lock = xSemaphoreCreateMutex(); \
+                          xSemaphoreTake(s_lock, portMAX_DELAY); } while (0)
+#define LOG_UNLOCK() xSemaphoreGive(s_lock)
 #else
-  #define LOG_BUF buffer
-  #define LOG_BUF_SIZE sizeof(buffer)
+#define LOG_LOCK()
+#define LOG_UNLOCK()
 #endif
+
+static char s_log_buf[256];
+
+void Log::vlog(LoggingLevels level, bool withTimestamp, const char* formatP, va_list arg)
+{
+  if (level > logLevel) return;
+  LOG_LOCK();
+  vsnprintf_P(s_log_buf, sizeof(s_log_buf), formatP, arg);
+  AddLog(level, s_log_buf, withTimestamp);
+  LOG_UNLOCK();
+}
 
 void Log::console(const char* formatP, ...)
 {
   va_list arg;
-#ifndef ESP8266
-  static char buffer[256];
-#endif
   va_start(arg, formatP);
-  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
+  vlog(LOG_LEVEL_CONSOLE, true, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_CONSOLE, LOG_BUF);
 }
 
 void Log::error(const char* formatP, ...)
 {
   va_list arg;
-#ifndef ESP8266
-  static char buffer[256];
-#endif
   va_start(arg, formatP);
-  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
+  vlog(LOG_LEVEL_ERROR, true, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_ERROR, LOG_BUF);
 }
 
 void Log::info(const char* formatP, ...)
 {
   va_list arg;
-#ifndef ESP8266
-  static char buffer[256];
-#endif
   va_start(arg, formatP);
-  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
+  vlog(LOG_LEVEL_INFO, true, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_INFO, LOG_BUF);
 }
 
 void Log::debug(const char* formatP, ...)
 {
   va_list arg;
-#ifndef ESP8266
-  static char buffer[256];
-#endif
   va_start(arg, formatP);
-  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
+  vlog(LOG_LEVEL_DEBUG, true, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_DEBUG, LOG_BUF);
 }
 
 void Log::banner(const char* formatP, ...)
 {
   va_list arg;
-#ifndef ESP8266
-  static char buffer[256];
-#endif
   va_start(arg, formatP);
-  vsnprintf_P(LOG_BUF, LOG_BUF_SIZE, formatP, arg);
+  vlog(LOG_LEVEL_CONSOLE, false, formatP, arg);
   va_end(arg);
-  AddLog(LOG_LEVEL_CONSOLE, LOG_BUF, false);
 }
 
 // Based on arendst/Tasmota addLog (support.ino)
 void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimestamp)
 {
-  if (level > Log::logLevel)
-    return;
-
-  char timeStr[10] = "";  // "13:45:21 " synced, "HH:MM:SS " offline uptime, empty for banners
+  char timeStr[10] = "";
 #ifndef DISABLE_LOG_TS
   if (withTimestamp) {
     struct tm t;
-    if (ntpclient.localTm(&t)) {
+    if (Clock::localTm(&t)) {
       snprintf_P (timeStr, sizeof (timeStr), PSTR("%02d:%02d:%02d "), t.tm_hour, t.tm_min, t.tm_sec);
     } else {
-      // Uptime when no wall-clock. Serial always sees plain uptime.
-      unsigned long u = ntpclient.getUptime();   // rollover-corrected, shared source
-      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02lu:%02lu:%02lu "),
-        (u / 3600UL) % 24UL, (u / 60UL) % 60UL, u % 60UL);
+      Uptime::Split u = Uptime::split((uint32_t)Uptime::seconds());
+      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02u:%02u:%02u "), u.h, u.m, u.s);
     }
   }
 #endif
@@ -120,13 +110,11 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
     Serial.println(logData);
   }
 
-  // Offline: no web, so skip the 4KB ring-buffer bookkeeping (strlen + memmove).
   if (Wifi::disabled) return;
 
 #ifndef DISABLE_LOG_TS
-  // Web log gets '*' suffix only when NTP may still sync - tells the JS regex
-  // not to re-interpret this uptime as wall-clock.
-  if (timeStr[0] && !ntpclient.synced) {
+  // * = uptime, not clock
+  if (timeStr[0] && !Clock::synced) {
     size_t tsLen = strlen(timeStr);
     if (tsLen > 0) timeStr[tsLen-1] = '*';
   }
@@ -149,56 +137,44 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
   snprintf_P(log + logLen, sizeof(log) - logLen, PSTR("%c%s%s\1"), logIdx++, timeStr, logData);
 
   logIdx &= 0xFF;
-  if (!logIdx) 
+  if (!logIdx)
     logIdx++;       // Index 0 is not allowed as it is the end of char string*/
 }
 
-void Log::getLog(uint32_t idx, char** entry_pp, size_t* len_p)
+size_t Log::copyLog(uint32_t idx, char* out, size_t cap)
 {
-  char* entry_p = nullptr;
-  size_t len = 0;
-
-  if (idx) {
-    char* it  = log;
-    char* end = log + MAX_LOG_SIZE;
-    // Each entry is [index][data]['\1']; walk without ever reading past the
-    // buffer even if the '\1' terminator is missing (corruption / full buf).
-    while (it < end && *it != '\0') {
-      uint32_t cur_idx = (uint8_t)*it;
-      it++;
-      char* delim = (char*)memchr(it, '\1', (size_t)(end - it));
-      if (!delim) break;                 // malformed tail; stop rather than run off
-      size_t tmp = (size_t)(delim - it) + 1;  // include the '\1'
-      if (cur_idx == idx) {              // Found the requested entry
-        len = tmp;
-        entry_p = it;
-        break;
-      }
-      it += tmp;
+  if (!idx || cap < 2) return 0;
+  size_t n = 0;
+  LOG_LOCK();
+  const char* it  = log;
+  const char* end = log + MAX_LOG_SIZE;
+  while (it < end && *it != '\0') {
+    uint32_t cur_idx = (uint8_t)*it;
+    it++;
+    const char* delim = (const char*)memchr(it, '\1', (size_t)(end - it));
+    if (!delim) break;
+    size_t span = (size_t)(delim - it) + 1;
+    if (cur_idx == idx) {
+      n = span < cap - 1 ? span : cap - 1;
+      memcpy(out, it, n);
+      break;
     }
+    it += span;
   }
-  *entry_pp = entry_p;
-  *len_p = len;
+  LOG_UNLOCK();
+  return n;
 }
 
 // Get span until single character in string
 size_t Log::strchrspn(const char *str1, int character)
 {
-  size_t ret = 0;
-  char *start = (char*)str1;
-  char *end = strchr(str1, character);
-  if (end) ret = end - start;
-  return ret;
+  const char *end = strchr(str1, character);
+  return end ? (size_t)(end - str1) : 0;
 }
 
 char Log::getLogIdx()
 {
   return logIdx;
-}
-
-void Log::setLogLevel(LoggingLevels level)
-{
-  logLevel = level;
 }
 
 void Log::setSerialLogLevel(bool level)
