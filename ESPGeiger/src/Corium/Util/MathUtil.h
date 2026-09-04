@@ -21,20 +21,23 @@
 #define MATHUTIL_H
 
 #include <math.h>
+#include <stdint.h>
 
-// Clamp `v` into [lo, hi]. constexpr so literal-bound calls fold at compile time.
 template <typename T>
 constexpr T clamp(T v, T lo, T hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// Poisson standard deviation = sqrt(N). 0 when N is non-positive.
+// 0-100 -> 0..top, squared: eyes see the low end
+inline uint32_t brightness_curve(uint32_t pct, uint32_t top) {
+  if (pct > 100) pct = 100;
+  return (pct * pct * top + 5000) / 10000;
+}
+
 inline float poisson_std(float N) {
   return N > 0.0f ? sqrtf(N) : 0.0f;
 }
 
-// Deviation of `observed` from `expected` in Poisson standard deviations.
-// 0 when expected is too small for a meaningful z-score.
 inline float poisson_z(float observed, float expected) {
   float s = poisson_std(expected);
   return s > 0.0f ? (observed - expected) / s : 0.0f;

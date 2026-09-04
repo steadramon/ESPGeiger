@@ -20,22 +20,11 @@
 #ifndef STRINGUTIL_H
 #define STRINGUTIL_H
 
-#include <Arduino.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
-// ---------------------------------------------------------------------------
-// advance_pos - safe snprintf-advance.
-//
-// snprintf returns what it WOULD have written, not what it did. Naively
-// doing `pos += n` after a truncated write walks `pos` past the buffer,
-// and the next `snprintf(buf + pos, ...)` scribbles over stack frames,
-// which has caused garbled pages + reboots. Always use this helper after
-// every `pos += snprintf(buf + pos, sizeof(buf) - pos, ...)`-style call.
-//
-// Usage:
-//   int n = snprintf(buf + pos, sizeof(buf) - pos, "...");
-//   advance_pos(pos, n, sizeof(buf));
-// ---------------------------------------------------------------------------
+// Use after every snprintf, it returns the untruncated length
 static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
   if (nret <= 0) return;
   size_t want = (size_t) nret;
@@ -43,35 +32,21 @@ static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
   pos += (want < room) ? want : room;
 }
 
-// ---------------------------------------------------------------------------
-// format_f - Fast integer-scaled float-to-string helper.
-//
-// Avoids Arduino's %f (pulls in soft-float print) by doing fixed-point
-// conversion: multiply by 10^decimals, round, print as integer.decimal.
-// Defined out-of-line in StringUtil.cpp so GCC doesn't clone per call site.
-// ---------------------------------------------------------------------------
-int format_f(char* buf, size_t bufsz, float v, uint8_t decimals = 2);
+// 2n chars, no NUL
+void hex_encode(char* out, const uint8_t* in, size_t n);
+// exactly 2n hex chars, anything else is false and out untouched
+bool hex_decode(uint8_t* out, const char* in, size_t n);
 
-// ---------------------------------------------------------------------------
-// parse_f - Tiny decimal float parser.
-//
-// Replaces strtof() for EGPrefs / similar small-config use. Critical when
-// paired with the _printf_float stub in Util/no_float_printf.c -- together
-// they drop the entire newlib float-parse machinery (~16 KB).
-//
-// Format supported: optional sign, integer digits, optional '.' + fractional
-// digits. NOT supported: exponents (1.5e3), hex floats, INF/NAN, leading
-// whitespace.
-// ---------------------------------------------------------------------------
+// no exponent, hex or INF/NAN, keeps newlib strtof out
 static inline float parse_f(const char* s, char** endptr = nullptr) {
   const char* p = s;
   bool neg = false;
   if (*p == '-') { neg = true; p++; }
   else if (*p == '+') { p++; }
   bool seen_digit = false;
-  float result = 0.0f;
+  float mag = 0.0f;
   while (*p >= '0' && *p <= '9') {
-    result = result * 10.0f + (*p - '0');
+    mag = mag * 10.0f + (*p - '0');
     p++; seen_digit = true;
   }
   if (*p == '.') {
@@ -86,22 +61,23 @@ static inline float parse_f(const char* s, char** endptr = nullptr) {
       }
       p++; seen_digit = true;
     }
-    if (frac_div > 1) result += (float)frac_int / (float)frac_div;
+    if (frac_div > 1) mag += (float)frac_int / (float)frac_div;
   }
   if (!seen_digit) {
     if (endptr) *endptr = (char*)s;
     return 0.0f;
   }
   if (endptr) *endptr = (char*)p;
-  return neg ? -result : result;
+  return neg ? -mag : mag;
 }
 
-// ---------------------------------------------------------------------------
-// parseTime: "HH:MM" to {hour, minute, isValid}.
-//
-// Strict format: exactly 5 chars with `:` at position 2, hour 0-23,
-// minute 0-59. Anything else returns isValid=false.
-// ---------------------------------------------------------------------------
+// false leaves *out alone. end null = whole string
+bool parse_i32(const char* s, int32_t* out, const char** end = nullptr);
+
+// In place, fields point into buf. Missing lines are ""
+uint8_t split_lines(char* buf, char** fields, uint8_t n);
+
+// strict "HH:MM", keep the digit check
 struct ParsedTime {
   int hour;
   int minute;
@@ -111,14 +87,13 @@ struct ParsedTime {
 inline ParsedTime parseTime(const char* timeStr) {
   ParsedTime pt = { -1, -1, false };
   if (!timeStr || strlen(timeStr) != 5 || timeStr[2] != ':') return pt;
-  char tmp[6];
-  strncpy(tmp, timeStr, 5);
-  tmp[5] = '\0';
-  char* h = strtok(tmp, ":");
-  char* m = strtok(NULL, ":");
-  if (!h || !m) return pt;
-  int hv = atoi(h), mv = atoi(m);
-  if (hv >= 0 && hv <= 23 && mv >= 0 && mv <= 59) {
+  for (uint8_t i = 0; i < 5; i++) {
+    if (i == 2) continue;
+    if (timeStr[i] < '0' || timeStr[i] > '9') return pt;
+  }
+  int hv = (timeStr[0] - '0') * 10 + (timeStr[1] - '0');
+  int mv = (timeStr[3] - '0') * 10 + (timeStr[4] - '0');
+  if (hv <= 23 && mv <= 59) {
     pt.hour = hv; pt.minute = mv; pt.isValid = true;
   }
   return pt;
