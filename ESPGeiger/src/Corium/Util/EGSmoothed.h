@@ -17,9 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// EGRingAvg<T,MaxN> (in-class buffer) and EGEma<T> (no buffer). Heap-free,
-// safe on ISR-adjacent paths. Kept in sync between ESPGeiger firmware and
-// ESPGeiger-Gadget; treat both copies as one file.
+// Same file in ESPGeiger-Gadget, keep in sync
 
 #pragma once
 
@@ -30,7 +28,7 @@ class EGRingAvg {
 public:
   EGRingAvg() { reset(); _window = MaxN; }
 
-  // Configure runtime window (1..MaxN). Resets running state.
+  // resets state
   void begin(uint16_t window = MaxN) {
     if (window < 1)    window = 1;
     if (window > MaxN) window = MaxN;
@@ -53,24 +51,19 @@ public:
     if (_count < _window)  _count++;
   }
 
-  // Mean of populated slots. 0 before the first add().
   T get() const {
     return _count ? (T)(_value / (T)_count) : (T)0;
   }
 
-  // Running sum of populated slots, O(1).
   T sum() const { return _value; }
 
-  // Most recently added value. Equivalent to at(count()-1) without the
-  // wrap-aware index math.
   T last() const {
     if (_count == 0) return (T)0;
     uint16_t idx = (_pos == 0) ? (uint16_t)(_window - 1) : (uint16_t)(_pos - 1);
     return _buf[idx];
   }
 
-  // Slot i in chronological order (0 = oldest, count-1 = newest). For
-  // sparkline / chart draws without copying the buffer.
+  // 0 = oldest
   T at(uint16_t i) const {
     if (!_count) return (T)0;
     if (i >= _count) i = _count - 1;
@@ -86,30 +79,35 @@ public:
 
 private:
   T        _buf[MaxN];
-  T        _value;        // running sum
+  T        _value;        // sum
   uint16_t _window;
   uint16_t _pos;
   uint16_t _count;
 };
 
+// mean until factor samples, then EMA
 template<typename T>
 class EGEma {
 public:
-  EGEma() : _value((T)0), _alpha(0.0f) {}
+  EGEma() : _value((T)0), _alpha(0.0f), _factor(1), _n(0) {}
 
   void begin(uint16_t factor) {
     if (factor < 1) factor = 1;
-    _alpha = 1.0f / (float)factor;
-    _value = (T)0;
+    _factor = factor;
+    _n      = 0;
+    _value  = (T)0;
   }
 
   void add(T value) {
+    if (_n < _factor) _alpha = 1.0f / (float)++_n;
     _value = (T)(value * _alpha + _value * (1.0f - _alpha));
   }
 
   T get() const { return _value; }
 
 private:
-  T     _value;
-  float _alpha;
+  T        _value;
+  float    _alpha;
+  uint16_t _factor;
+  uint16_t _n;
 };
