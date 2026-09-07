@@ -1,6 +1,6 @@
 /*
   GeigerInput/Type/Pulse.h - Class for Pulse type counter
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -21,17 +21,9 @@
 
 #include <Arduino.h>
 #include "../GeigerInput.h"
+#include "Pcnt.h"
 
 #ifdef USE_PCNT
-extern "C" {
-  #include "soc/pcnt_struct.h"
-}
-#include <driver/pcnt.h>
-#define PCNT_HIGH_LIMIT 32767  // largest +ve value for int16_t.
-#define PCNT_LOW_LIMIT  0
-
-#define PCNT_UNIT PCNT_UNIT_0
-#define PCNT_CHANNEL PCNT_CHANNEL_0
 #define PCNT_PULL_FLOATING 0
 #define PCNT_PULL_UP       1
 #define PCNT_PULL_DOWN     2
@@ -67,17 +59,15 @@ class GeigerPulse : public GeigerInput
 #endif
 #ifdef USE_PCNT
     int collect();
-    // 50 Hz drain that folds new PCNT counts into s_event_counter and bumps
-    // _last_blip so audio/LED/UDP/PulseOut fire on the click instead of the
-    // 1 Hz tick.
+    // 50 Hz
     void drain_pcnt();
     void set_pcnt_filter(int val);
     void apply_pcnt_filter();
     void set_pin_pull(int mode);   // 0=floating, 1=up, 2=down
   private:
-    uint16_t _pcnt_filter = 0;          // 0-1023 per PCNT hardware
-    uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT; // 0-2
-    int8_t   _pin_pull_last_logged = -1;        // -1 = never logged yet
+    uint16_t _pcnt_filter = 0;          // 0-1023
+    uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT;
+    int8_t   _pin_pull_last_logged = -1;        // -1 = not logged
     uint32_t _last_drain_us = 0;
 #endif
 };

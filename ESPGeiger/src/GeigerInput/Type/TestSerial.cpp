@@ -18,54 +18,50 @@
 */
 #include "TestSerial.h"
 
-#if GEIGER_IS_TEST(GEIGER_TYPE)
+#if GEIGER_IS_TEST(GEIGER_TYPE) && GEIGER_IS_SERIAL(GEIGER_TYPE)
 
-#include "../../Logger/Logger.h"
-#include "../../Util/StringUtil.h"
-#include "../../Prefs/EGPrefs.h"
-#include "../../Util/DeviceInfo.h"
+#include <SoftwareSerial.h>
+#include "../../Corium/Logger/Logger.h"
+#include "../../Corium/Util/StringUtil.h"
+#include "../../Corium/Prefs/EGPrefs.h"
+#include "../../GeigerPrefs/GeigerKeys.h"
+#include "../../Corium/System/DeviceInfo.h"
 #include "../../Counter/Counter.h"
+#include "../../Counter/Tube.h"
 #include "../SerialFormat.h"
 
-extern Counter gcounter;
-
-static EspSoftwareSerial::UART geigerPort;
+static GeigerPort<16> geigerPort;
 
 GeigerTestSerial::GeigerTestSerial() {
-  strcpy(_test_type, "TestSerial");
+  strlcpy(_test_type, "TestSerial", sizeof(_test_type));
 };
 
 void GeigerTestSerial::begin() {
-  uint8_t st = (uint8_t)EGPrefs::getUInt("input", "serial_type");
+  uint8_t st = (uint8_t)EGPrefs::getUInt("counter", EG_K_SERIAL_TYPE);
   if (SerialFormat::is_known(st)) _serial_type = st;
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;
-  if (name && EGPrefs::getString("input", "geiger_model")[0] == '\0') {
-    DeviceInfo::setGeigermodel(name);
+  if (name && EGPrefs::getString("counter", EG_K_GEIGER_MODEL)[0] == '\0') {
+    Tube::set_model(name);
   }
   Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
-               name ? name : "?", _serial_type, baud, _rx_pin, _tx_pin);
+               name ? name : PSTR("?"), _serial_type, baud, _rx_pin, _tx_pin);
 #ifdef GEIGER_COUNT_TXPULSE
   Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
-  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 16);
-  // 16-byte buffer fills in 160_000_000/baud us; iter ~18us, 6x safety
-  // margin. Lower base constant than GeigerSerial (16-byte vs 64-byte).
+  geigerPort.begin(baud, _rx_pin, _tx_pin);
   uint32_t skip = 1500000UL / baud;
   if (skip < 5)   skip = 5;
   if (skip > 500) skip = 500;
-  _poll_skip = (uint16_t)skip;
+  _idle_skip = (uint16_t)skip;
+  _poll_skip = _idle_skip;
   CPMAdjuster();
 }
 
 void GeigerTestSerial::pullSerial() {
   while (geigerPort.available()) {
     char input = geigerPort.read();
-#ifdef ESP8266
-    ESP.wdtFeed();
-#endif
-    delay(1);
     _serial_buffer[_serial_idx++] = input;
     if (input == '\n') {
       _serial_buffer[_serial_idx++] = '\0';
@@ -81,12 +77,8 @@ void GeigerTestSerial::pullSerial() {
 }
 
 void GeigerTestSerial::loop() {
-  if (_loop_c < _poll_skip && _serial_idx == 0) {
-    _loop_c++;
-    return;
-  }
-  _loop_c = 0;
   pullSerial();
+  _poll_skip = _serial_idx ? 0 : _idle_skip;   // mid line, every pass
 }
 
 void GeigerTestSerial::secondTicker() {
@@ -95,21 +87,14 @@ void GeigerTestSerial::secondTicker() {
   double target = (double) GeigerInputTest::getTargetCPS();
   if (target > 0) {
     double u1, u2;
-#ifdef ESP8266
-    u1 = (RANDOM_REG32 + 1.0) / (0xFFFFFFFF + 2.0);
-    u2 = (RANDOM_REG32 + 1.0) / (0xFFFFFFFF + 2.0);
-#else
-    u1 = (esp_random() + 1.0) / (0xFFFFFFFF + 2.0);
-    u2 = (esp_random() + 1.0) / (0xFFFFFFFF + 2.0);
-#endif
-    double z = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
-    long c = (long) (target + sqrt(target) * z + 0.5);
+    u1 = ((double)DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
+    u2 = ((double)DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
+    double z = sqrt(-2 * log(u1)) * cos(2 * M_PI * u2);
+    long c = lround(target + sqrt(target) * z);
     if (c > 0) count = (int) c;
   }
 
-  // Ingest the simulated count before formatting so OutputVars (now the
-  // canonical source for {cpm}/{cps}/etc) sees the new state. Matches real
-  // hardware behaviour: the device counts then emits.
+  // count first, like the device
   if (count > 0) setCounter(count, false);
 
   char line[80];
@@ -130,4 +115,4 @@ void GeigerTestSerial::handleSerial(char* input) {
     Log::console(PSTR("TestSerial RX: %d"), _scpm);
   }
 }
-#endif // GEIGER_IS_TEST
+#endif // GEIGER_IS_TEST && GEIGER_IS_SERIAL

@@ -1,6 +1,6 @@
 /*
   GeigerInput/Type/Test.h - Class for Test type counter
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,6 @@ class GeigerTest : public GeigerInputTest
     void secondTicker();
     void stopForOTA() override;
     void restartAfterOTA() override;
-    static void IRAM_ATTR testInterrupt();
-    static void testInterrupt(void *data);
+    static uint32_t IRAM_ATTR testInterrupt();
 };
 #endif

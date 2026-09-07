@@ -1,6 +1,6 @@
 /*
   GeigerInput/Type/TestPulseInt.h - Class for Test Pulse Interrupt type counter
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -21,18 +21,7 @@
 
 #include <Arduino.h>
 #include "../GeigerInput.h"
-
-#ifdef USE_PCNT
-extern "C" {
-  #include "soc/pcnt_struct.h"
-}
-#include <driver/pcnt.h>
-#define PCNT_HIGH_LIMIT 32767  // largest +ve value for int16_t.
-#define PCNT_LOW_LIMIT  0
-
-#define PCNT_UNIT PCNT_UNIT_0
-#define PCNT_CHANNEL PCNT_CHANNEL_0
-#endif
+#include "Pcnt.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "genpulse"
@@ -52,8 +41,7 @@ class GeigerTestPulseInt : public GeigerInputTest
     void loop();
     void stopForOTA() override;
     void restartAfterOTA() override;
-    static void IRAM_ATTR pulseInterrupt();
-    static void pulseInterrupt(void *data);
+    static uint32_t IRAM_ATTR pulseInterrupt();
     double calcPWM();
     void secondTicker();
 #ifdef USE_PCNT

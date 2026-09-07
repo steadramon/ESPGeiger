@@ -20,84 +20,45 @@
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 
-#include "../../Logger/Logger.h"
+#include "../../Corium/Logger/Logger.h"
+#include "TestTimer.h"
 
-static unsigned long _last_b;
-static double _next_delay;
-#ifdef ESP32
-static esp_timer_handle_t hdl_pulse_timer = NULL;
-#endif
+static volatile unsigned long _last_b;
+// ticks, no libgcc in the isr
+static volatile uint32_t _next_delay;
 
 GeigerTest::GeigerTest() {
-  strcpy(_test_type, "TestGeiger");
+  strlcpy(_test_type, "TestGeiger", sizeof(_test_type));
 };
 
 void GeigerTest::begin() {
   GeigerInputTest::begin();
   set_debounce(0);
   CPMAdjuster();
-  _next_delay = calcDelay();
-#ifdef ESP8266
-  timer1_disable();
-  timer1_attachInterrupt(testInterrupt);
-  timer1_isr_init();
-  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
-  timer1_write((unsigned long)_next_delay);
-#else
-  const esp_timer_create_args_t cfg_et = {
-    .callback = &testInterrupt,
-    .name = "testint",
-  };
-  esp_timer_create(&cfg_et, &hdl_pulse_timer);
-  esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
-#endif
+  _next_delay = (uint32_t)calcDelay();
+  TestTimer::start(testInterrupt, _next_delay);
 }
 
 void GeigerTest::secondTicker() {
   CPMAdjuster();
 }
 
-void GeigerTest::testInterrupt(void *data) {
-  testInterrupt();
-}
-
-void ICACHE_RAM_ATTR GeigerTest::testInterrupt() {
-  GeigerInputTest::countInterrupt();
-#ifdef ESP8266
-  timer1_write((unsigned long)_next_delay);
-#else
-  esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
-#endif
+// returns ticks to the next
+uint32_t IRAM_ATTR GeigerTest::testInterrupt() {
+  GeigerInputTest::timerPulse();
   _last_b = micros();
+  return _next_delay;
 }
 
-void GeigerTest::stopForOTA() {
-#ifdef ESP8266
-  timer1_disable();
-#else
-  if (hdl_pulse_timer != NULL) esp_timer_stop(hdl_pulse_timer);
-#endif
-}
+void GeigerTest::stopForOTA() { TestTimer::stop(); }
 
-void GeigerTest::restartAfterOTA() {
-#ifdef ESP8266
-  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
-  timer1_write((unsigned long)_next_delay);
-#else
-  if (hdl_pulse_timer != NULL) esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
-#endif
-}
+void GeigerTest::restartAfterOTA() { TestTimer::start(testInterrupt, _next_delay); }
 
 void GeigerTest::loop() {
+  countTimerPulses();
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;
-#ifdef ESP8266
-    _next_delay = calcDelay();
-#else
-    portENTER_CRITICAL_ISR(&timerMux);
-    _next_delay = calcDelay();
-    portEXIT_CRITICAL_ISR(&timerMux);
-#endif
+    _next_delay = (uint32_t)calcDelay();   // one word, the isr reads it whole
   }
 }
 #endif // GEIGER_IS_TEST

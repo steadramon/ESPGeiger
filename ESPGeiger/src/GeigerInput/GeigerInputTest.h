@@ -1,6 +1,6 @@
 /*
   GeigerInputTest.h - Base class for test-type Geiger inputs
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -31,18 +31,15 @@
 #endif
 
 #ifdef ESP8266
-#define GEIGER_TEST_TIMER_FREQ TIM_DIV256
+// 3.2 us units, EGTimer1 takes them << 8
 #define GEIGER_TEST_TIMER_DIV 312500
+#define GEIGER_TEST_TICK_SHIFT 8
 #else
-#define GEIGER_TEST_TIMER_FREQ 80
 #define GEIGER_TEST_TIMER_DIV 1000000
 #endif
 
-//#define DISABLE_GEIGER_POISSON
-
 extern volatile int _pulse_width_us;
-// Precomputed: _pulse_width_us scaled to timer ticks. Read from IRAM ISRs;
-// updated only via set_pulse_width_us() to keep them in sync.
+// isr reads it
 extern volatile uint32_t _pulse_width_ticks;
 void set_pulse_width_us(int us);
 
@@ -63,8 +60,15 @@ class GeigerInputTest : public GeigerInput
     char _test_type[16];
     unsigned long _last_pulse_test = 0;
     double _remainder = 0;
-    long getRandom();
     double generatePoissonRand(double lambda);
+    // timer side, stamp only, count in loop()
+    static void IRAM_ATTR timerPulse();
+    // every pass, keep inline
+    static void countTimerPulses() { if (_tp_head != _tp_tail) drainTimerPulses(); }
+    static void drainTimerPulses();
+    int collect() override;
+    static volatile uint8_t _tp_head;   // handler
+    static volatile uint8_t _tp_tail;   // loop
   private:
     float _target_cps = 0;
     int _current_selection = -1;

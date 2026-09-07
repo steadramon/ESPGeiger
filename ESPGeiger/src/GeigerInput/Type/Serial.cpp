@@ -17,58 +17,79 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Serial.h"
-#include "../../Util/FastMillis.h"
+#include "../../Corium/System/FastMillis.h"
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 
-#include "../../Logger/Logger.h"
-#include "../../Prefs/EGPrefs.h"
-#include "../../Util/DeviceInfo.h"
-#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (serial CPM/CPS)
+#include "../../Corium/Logger/Logger.h"
+#include "../../Corium/Prefs/EGPrefs.h"
+#include "../../GeigerPrefs/GeigerKeys.h"
+#include "../../Counter/Counter.h"
+#include "../../Counter/Tube.h"
 #include "../SerialFormat.h"
 
-static EspSoftwareSerial::UART geigerPort;
+// isr margin at 115200
+static GeigerPort<64> geigerPort;
 
 GeigerSerial::GeigerSerial() {
 };
 
 void GeigerSerial::begin() {
-  uint8_t st = (uint8_t)EGPrefs::getUInt("input", "serial_type");
+  uint8_t st = (uint8_t)EGPrefs::getUInt("counter", EG_K_SERIAL_TYPE);
   if (SerialFormat::is_known(st)) _serial_type = st;
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
-  if (baud == 0) baud = 9600;    // safety fallback for an unknown saved pref
+  if (baud == 0) baud = 9600;    // unknown pref
   _use_cps = false;
-  if (name && EGPrefs::getString("input", "geiger_model")[0] == '\0') {
-    DeviceInfo::setGeigermodel(name);
+  if (name && EGPrefs::getString("counter", EG_K_GEIGER_MODEL)[0] == '\0') {
+    Tube::set_model(name);
   }
   Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d hasCPS=%d"),
-               name ? name : "?", _serial_type, baud, _rx_pin,
+               name ? name : PSTR("?"), _serial_type, baud, _rx_pin,
                SerialFormat::has_cps(_serial_type) ? 1 : 0);
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
     Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
   }
-  // 64-byte RX buffer at 115200 (GC10NX) gives ISR margin under WiFi PHY work.
-  geigerPort.begin(baud, SWSERIAL_8N1, _rx_pin, _tx_pin, false, 64);
-  for (uint16_t i = 0; i < 256 && geigerPort.available(); i++) geigerPort.read();
+  if (!geigerPort.begin(baud, _rx_pin, _tx_pin)) {
+    Log::console(PSTR("GeigerSerial: ERROR port would not open"));
+  }
+  geigerPort.flush();
   uint32_t skip = 6000000UL / baud;
   if (skip < 5)   skip = 5;
   if (skip > 500) skip = 500;
-  _poll_skip = (uint16_t)skip;
+  _idle_skip = (uint16_t)skip;
+  _poll_skip = _idle_skip;
+}
+
+// well over a 64 B line at the slowest baud
+#define GEIGERSERIAL_LINE_TIMEOUT_MS 1000
+
+// bad lines in a row before a drain
+#define GEIGERSERIAL_BAD_LIMIT 20
+
+// its tail would parse as a line of its own
+void GeigerSerial::drop_line() {
+  _serial_idx = 0;
+  _serial_buffer[0] = '\0';
+  _discard = true;
+  _bad_streak++;
+  if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) drainPort();
 }
 
 void GeigerSerial::pullSerial() {
+  static_assert(sizeof(_serial_buffer) < 256,
+                "maxRead is uint8_t: a 256-byte buffer truncates it to 0 and stops all input");
   uint8_t maxRead = sizeof(_serial_buffer);
+  bool got_any = false;
   while (geigerPort.available() && maxRead--) {
     char input = geigerPort.read();
-    // Non-printable byte: discard the rest of this line, don't bother the parser.
+    got_any = true;
+    if (_discard) {
+      if (input == '\n') _discard = false;
+      continue;
+    }
     if (input != '\n' && input != '\r' && !isPrintable((uint8_t)input)) {
-      _serial_idx = 0;
-      _serial_buffer[0] = '\0';
-      while (maxRead && geigerPort.available()) {
-        maxRead--;
-        if (geigerPort.read() == '\n') break;
-      }
+      drop_line();
       continue;
     }
     _serial_buffer[_serial_idx++] = input;
@@ -77,61 +98,74 @@ void GeigerSerial::pullSerial() {
       handleSerial(_serial_buffer);
       _serial_idx = 0;
       _serial_buffer[0] = '\0';
-    }
-    if (_serial_idx >= sizeof(_serial_buffer) - 2) {
-      _serial_idx = 0;
-      _serial_buffer[0] = '\0';
+    } else if (_serial_idx >= sizeof(_serial_buffer) - 2) {
+      drop_line();   // too long
     }
   }
+  if (got_any) _line_ms = fast_millis();
 }
 
 void GeigerSerial::loop() {
-  if (_loop_c < _poll_skip && _serial_idx == 0) {
-    _loop_c++;
-    return;
+  // else a stray byte polls every pass
+  if ((_serial_idx != 0 || _discard) && (fast_millis() - _line_ms) > GEIGERSERIAL_LINE_TIMEOUT_MS) {
+    _serial_idx = 0;
+    _serial_buffer[0] = '\0';
+    _discard = false;
   }
-  _loop_c = 0;
   pullSerial();
+  _poll_skip = (_serial_idx || _discard) ? 0 : _idle_skip;   // mid line, every pass
   if (serial_value <= 0) return;
   if (fast_millis() - last_serial > 10000) serial_value = 0;
 }
 
+// saturate, don't wrap
+static inline uint16_t clamp_batch(int n) {
+  if (n < 0)      return 0;
+  if (n > 0xFFFF) return 0xFFFF;
+  return (uint16_t)n;
+}
+
+void GeigerSerial::stopForOTA() {
+  geigerPort.pause();
+}
+
+void GeigerSerial::restartAfterOTA() {
+  _serial_idx = 0;
+  _serial_buffer[0] = '\0';
+  _discard = false;
+  geigerPort.resume();
+}
+
 void GeigerSerial::secondTicker() {
-  // _use_cps is a per-second flag (set in handleSerial when wire CPS
-  // arrived, reset here) so a producer can toggle `show cps` mid-run.
+  // sender can toggle cps
   if (_use_cps) {
     int c = (int)partial_clicks;
     partial_clicks = 0;
     setCounter(c, false);
-    if (c > 0) Counter::on_pulse_batch((uint16_t)c, (uint32_t)micros(), 1000000UL);
+    if (c > 0) Counter::on_pulse_batch(clamp_batch(c), (uint32_t)micros(), 1000000UL);
     _use_cps = false;
     return;
   }
-  // CPM path: synthesise fractional clicks. INV_60 avoids the soft-float divide.
+  // no soft-float divide
   static constexpr float INV_60 = 1.0f / 60.0f;
   partial_clicks += (float)serial_value * INV_60;
   if (partial_clicks >= 1.0f) {
     int full_clicks = (int)partial_clicks;
     partial_clicks -= full_clicks;
     setCounter(full_clicks, false);
-    Counter::on_pulse_batch((uint16_t)full_clicks, (uint32_t)micros(), 1000000UL);
+    Counter::on_pulse_batch(clamp_batch(full_clicks), (uint32_t)micros(), 1000000UL);
   }
 }
 
-// Reset SoftSerial if we see this many consecutive un-parseable lines.
-#define GEIGERSERIAL_BAD_LIMIT 20
-
 void GeigerSerial::drainPort() {
   unsigned long now = fast_millis();
-  // Throttle console log to once a minute.
   if (now - _last_drain_log > 60000UL) {
     Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
     _last_drain_log = now;
   } else {
     Log::debug(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
   }
-  int n = geigerPort.available();
-  while (n-- > 0) geigerPort.read();
+  geigerPort.flush();
   _serial_idx = 0;
   _serial_buffer[0] = '\0';
   _bad_streak = 0;
@@ -157,4 +191,5 @@ void GeigerSerial::handleSerial(char* input) {
   last_serial = fast_millis();
   _bad_streak = max((int)_bad_streak - 3, 0);
 }
+
 #endif // GEIGER_IS_SERIAL
