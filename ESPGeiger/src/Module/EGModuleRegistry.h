@@ -100,6 +100,10 @@ class EGModuleRegistry {
     // not-due entry, so idle modules at the back cost no per-tick work.
     static uint8_t _due_order[EG_MAX_MODULES];
     static uint8_t _due_count;
+    // Editing _due_order inside loop() shifts it under the walk. Defer.
+    static bool _walking;
+    static bool _due_dirty;
+    static void rebuild_due();
 };
 
 #define EG_REGISTER_MODULE(instance) \

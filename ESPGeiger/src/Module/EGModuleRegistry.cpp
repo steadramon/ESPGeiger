@@ -34,6 +34,23 @@ uint8_t EGModuleRegistry::_overflow = 0;
 unsigned long EGModuleRegistry::_next_loop_due = 0;
 uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_due_count = 0;
+bool EGModuleRegistry::_walking = false;
+bool EGModuleRegistry::_due_dirty = false;
+
+// Sorted, because loop_all takes the next wake time from _due_order[0].
+void EGModuleRegistry::rebuild_due() {
+  _due_count = 0;
+  for (uint8_t i = 0; i < _count; i++) {
+    if (!(_slots[i].flags & FLAG_HAS_LOOP)) continue;
+    uint8_t j = _due_count;
+    while (j > 0 && (long)(_slots[_due_order[j - 1]].next_due - _slots[i].next_due) > 0) {
+      _due_order[j] = _due_order[j - 1];
+      j--;
+    }
+    _due_order[j] = i;
+    _due_count++;
+  }
+}
 
 bool EGModuleRegistry::add(EGModule* m) {
   if (_count >= EG_MAX_MODULES) { _overflow++; return false; }
@@ -75,6 +92,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
   unsigned long fallback = now + 1000;
 
   uint8_t k = 0;
+  _walking = true;
   while (k < _due_count) {
     Slot& s = _slots[_due_order[k]];
     if ((long)(now - s.next_due) < 0) break;
@@ -111,6 +129,8 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     // If the slot moved back, recheck position k; otherwise advance.
     if (cur == k) k++;
   }
+  _walking = false;
+  if (_due_dirty) { _due_dirty = false; rebuild_due(); }
 
   unsigned long next = (_due_count > 0) ? _slots[_due_order[0]].next_due : fallback;
   if ((long)(next - fallback) > 0) next = fallback;
@@ -236,38 +256,15 @@ bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
   for (uint8_t i = 0; i < _count; i++) {
     if (_slots[i].module != m) continue;
     Slot& s = _slots[i];
-    bool was_loop = (s.flags & FLAG_HAS_LOOP) != 0;
-    bool now_loop = (interval_ms >= 0);
-    if (now_loop) {
+    if (interval_ms >= 0) {
       s.flags |= FLAG_HAS_LOOP;
       s.loop_interval = (interval_ms > 0xFFFF) ? 0xFFFF : (uint16_t)interval_ms;
       s.next_due = s.loop_last + s.loop_interval;
     } else {
       s.flags &= ~FLAG_HAS_LOOP;
     }
-    if (was_loop && !now_loop) {
-      for (uint8_t k = 0; k < _due_count; k++) {
-        if (_due_order[k] == i) {
-          for (uint8_t j = k; j + 1 < _due_count; j++) _due_order[j] = _due_order[j + 1];
-          _due_count--;
-          break;
-        }
-      }
-    } else if (!was_loop && now_loop) {
-      if (_due_count < EG_MAX_MODULES) _due_order[_due_count++] = i;
-    }
-    // Insertion sort over the (small) due index so next_due ordering is
-    // restored after any flag/interval change.
-    for (uint8_t a = 1; a < _due_count; a++) {
-      uint8_t key = _due_order[a];
-      unsigned long key_due = _slots[key].next_due;
-      uint8_t b = a;
-      while (b > 0 && (long)(_slots[_due_order[b - 1]].next_due - key_due) > 0) {
-        _due_order[b] = _due_order[b - 1];
-        b--;
-      }
-      _due_order[b] = key;
-    }
+    if (_walking) _due_dirty = true;
+    else          rebuild_due();
     _next_loop_due = fast_millis();
     return true;
   }
