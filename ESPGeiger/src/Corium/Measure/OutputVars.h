@@ -20,36 +20,15 @@
 #define OUTPUTVARS_H
 
 #include <Arduino.h>
+#include "EGMeasure.h"
 
-// Single source of truth for variables available to user templates and
-// any output module that wants to share value lookup. Each variable knows
-// how to render itself into a buffer; lookup is a linear scan keyed on the
-// short name (the same name authors use in {curly} substitution).
 namespace OutputVars {
 
-// Render the named variable's current value into buf as a NUL-terminated
-// string. Returns bytes written (0 on unknown key or render failure).
-// keylen is the length of the key in source (may not be NUL-terminated).
+// key not NUL-terminated, may carry :spec. 0 = unknown or bad spec
 size_t render(const char* key, size_t keylen, char* buf, size_t cap);
 
-// Walk a user template and produce its substituted form into buf.
-//
-// Syntax:
-//   {name}     - variable substitution. Unknown vars render as literal
-//                "{name}" so misspellings are visible to the author.
-//   \n \r \t   - whitespace escapes.
-//   \\ \{ \}   - literal backslash, brace.
-// Anything else passes through verbatim. Input is SRAM (heap pref shadow
-// or compile-time const). Output is always NUL-terminated.
+// {name} {name:F1} \n \r \t \\ \{ \}, unknown left as written. tpl in SRAM
 size_t renderTemplate(const char* tpl, char* buf, size_t cap);
-
-// Public introspection for /vars debug. count()/at() project from the
-// internal Entry table - no BSS cache.
-struct VarDef {
-  const char* key;
-};
-size_t  count();
-VarDef  at(size_t i);   // {nullptr} when i >= count()
 
 }  // namespace OutputVars
 

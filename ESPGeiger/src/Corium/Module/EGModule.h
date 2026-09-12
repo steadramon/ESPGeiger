@@ -20,33 +20,26 @@
 #define EGMODULE_H
 
 #include <Arduino.h>
-#include "../Util/FastMillis.h"
+#include "../System/FastMillis.h"
+#include "../Prefs/EGPrefs.h"
+#include "../Measure/EGMeasure.h"
 
-// Cross-task field qualifier: volatile on ESP32 (callbacks run on the AsyncTCP
-// task), empty on ESP8266 (callbacks run in the main thread).
+// esp32 callbacks run on the AsyncTCP task
 #ifdef ESP32
 #define EG_XTASK_VOLATILE volatile
 #else
 #define EG_XTASK_VOLATILE
 #endif
 
-struct EGPrefGroup;
-struct EGLegacyAlias;  // LEGACY IMPORT (remove after v1.0.0)
-class EGHttpServer;    // forward decl for registerRoutes override
+class EGHttpServer;
 
-// Menu entry exposed on the WebPortal home page. Modules return a
-// sentinel-terminated array (final entry has path == nullptr).
+// PROGMEM, ends with an empty path
 struct EGMenuEntry {
-  const char* path;     // e.g. "/hv"
-  const char* label;    // e.g. "HV"
+  char path[12];
+  char label[20];
 };
 
-// Lower priority values run first during begin() and tick().
-// Suggested values:
-//   10  - Hardware initialisation (HV, power, display, LEDs, etc.)
-//   20  - Infrastructure (NTP, networking services)
-//   50  - Default / standard modules (outputs, submissions)
-//   90  - Modules that should run last
+// lower runs first
 #define EG_PRIORITY_HARDWARE       10
 #define EG_PRIORITY_INFRASTRUCTURE 20
 #define EG_PRIORITY_DEFAULT        50
@@ -57,8 +50,8 @@ class EGModule {
     virtual ~EGModule() {}
     virtual const char* name() = 0;
     virtual uint8_t priority() { return EG_PRIORITY_DEFAULT; }
-    virtual void pre_wifi() {}   // Called before WiFi autoConnect. No network available.
-    virtual void begin() {}      // Called after WiFi autoConnect (or offline mode).
+    virtual void pre_wifi() {}   // no network yet
+    virtual void begin() {}      // after wifi, or offline
     virtual void loop(unsigned long now) {}
     virtual bool has_loop() { return false; }
 
@@ -69,32 +62,32 @@ class EGModule {
     virtual bool requires_wifi() { return false; }
     virtual bool requires_ntp() { return false; }
     virtual uint16_t warmup_seconds() { return 10; }
+    // safe mode keeps these
+    virtual bool core_module() { return false; }
+    // loops during OTA
+    virtual bool runs_during_ota() { return false; }
 
     virtual const EGPrefGroup* prefs_group() { return nullptr; }
+    virtual const EGPrefShow* prefs_show() { return nullptr; }   // /param rows by another pref
     virtual void on_prefs_loaded() {}
 
-    // Override to expose HTTP routes. WebPortal walks EGModuleRegistry at
-    // boot and calls this on each registered module - no manual list.
     virtual void registerRoutes(EGHttpServer& http) { (void)http; }
 
-    // Override to contribute entries to the WebPortal home-page launcher.
-    // Return a sentinel-terminated array (final entry has path == nullptr).
     virtual const EGMenuEntry* menuEntries() { return nullptr; }
     virtual void on_prefs_saved() { on_prefs_loaded(); }
-    virtual uint8_t display_order() { return 50; }  // /egprefs render order - lower first, 0 = hidden
+    virtual uint8_t display_order() { return 50; }  // lower first, 0 = hidden
     virtual bool hw_present() { return true; }
 
-    // LEGACY IMPORT (remove after v1.0.0) - sentinel-terminated {nullptr,nullptr}
-    virtual const EGLegacyAlias* legacy_aliases() { return nullptr; }
-    // Source JSON file for legacy_aliases. Default = /geigerconfig.json.
+    // LEGACY IMPORT (remove after v1.0.0) - PROGMEM table ending with {}
+    virtual EGLegacyRows legacy_aliases() { return EGLegacyRows(); }
     virtual const char* legacy_file() { return "/geigerconfig.json"; }
 
-    // Optional: write a "name":{...} fragment to buf for /outputs. Return
-    // bytes written, 0 = not emitting (not configured / disabled).
-    // Caller handles outer braces and comma separation.
+    virtual EGMeasureRows measurements() { return EGMeasureRows(); }
+
+    // /outputs fragment, 0 = not sending
     virtual size_t status_json(char* buf, size_t cap, unsigned long now) { return 0; }
 
-    // Two 1-bit bitfields share one byte; full uint8_t for _pub_ok keeps 0-255 range.
+    // share a byte, set via note_publish() only
     uint8_t last_ok          : 1;
     uint8_t _publish_pending : 1;
     unsigned long last_attempt_ms = 0;
@@ -111,7 +104,6 @@ class EGModule {
 #define EGMOD_PUB_UNLOCK()
 #endif
 
-    // Publish accounting; bodies in EGModule.cpp.
     void note_publish(bool ok);
     void note_attempt();
     void note_result(bool ok);
@@ -123,7 +115,6 @@ class EGModule {
     uint8_t _pub_err = 0;
 
   protected:
-    // Standard ok/age shape used by every sender module. Defined in EGModule.cpp.
     static size_t write_status_json(char* buf, size_t cap, const char* key,
                                     bool ok, unsigned long last_attempt_ms,
                                     unsigned long now);
