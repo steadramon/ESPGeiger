@@ -1,5 +1,5 @@
 /*
-  SystemPrefs.h - Core geiger system prefs module.
+  SystemPrefs.h - The device's own prefs: system and network.
 
   Copyright (C) 2025 @steadramon
 
@@ -21,17 +21,16 @@
 
 #include "../Module/EGModule.h"
 #include "EGPrefs.h"
-#include "../Counter/Counter.h"
 
-extern Counter gcounter;
+#define WEB_PASS_MAX 32
 
 class SystemPrefs : public EGModule {
   public:
-    const char* name() override { return "sys"; }
+    const char* name() override { return PSTR("sys"); }
+    bool core_module() override { return true; }
     uint8_t display_order() override { return 10; }
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
-    const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
 };
 
 extern SystemPrefs sysprefs;
