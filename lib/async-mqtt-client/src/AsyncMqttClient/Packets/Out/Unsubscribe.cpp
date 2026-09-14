@@ -21,6 +21,8 @@ UnsubscribeOutPacket::UnsubscribeOutPacket(const char* topic) {
   neededSpace += 2;
   neededSpace += topicLength;
 
+  _data.reserve(neededSpace);
+
   _packetId = _getNextPacketId();
   char packetIdBytes[2];
   packetIdBytes[0] = _packetId >> 8;

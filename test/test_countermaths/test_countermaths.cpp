@@ -17,16 +17,14 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// No Arduino, no input type, no clock. Uptime and click totals are arguments,
-// so the header stands alone.
+// No Arduino, no input type, no clock.
 
 #include <unity.h>
 #include <math.h>
 
 #include "Counter/CounterMaths.h"
 
-// Members are protected for Counter's benefit; some tests read the derived
-// timeout.
+// Members are protected; some tests read the derived timeout.
 class Maths : public CounterMaths {};
 
 static Maths m;
@@ -48,7 +46,7 @@ static void test_set_ratio_changes_conversion(void) {
   TEST_ASSERT_FLOAT_WITHIN(0.0001f, 2.0f, m.usv_from_cpm(200.0f));
 }
 
-// A bad ratio would divide by zero or invert the dose scale.
+// A bad ratio divides by zero or inverts the dose scale.
 static void test_set_ratio_rejects_non_positive(void) {
   m.set_ratio(100.0f);
   m.set_ratio(0.0f);
@@ -73,15 +71,14 @@ static void test_tube_alive_until_the_timeout(void) {
   TEST_ASSERT_TRUE (m.tube_alive(20000u, 19000u, 0u));   // counted recently
 }
 
-// A tube that has never counted since boot must still go dead.
+// Never counted since boot still goes dead.
 static void test_tube_dead_when_it_never_counted(void) {
   m.set_ratio(1.0f);
   TEST_ASSERT_FALSE(m.tube_alive(50000u, 0u, 0u));
 }
 
-// The ratio-derived timeout is a floor, not the whole answer: a slow tube's
-// own rate carries the latch past it. 0.31 CPM over a week is a 191 s mean
-// gap, so the latch sits near 3870 s and a real 33 min silence is not death.
+// The ratio timeout is a floor; a slow tube's own rate carries the latch past
+// it. 0.31 CPM is a 191 s mean gap, so 33 min of silence is not death.
 static void test_tube_alive_uses_the_observed_rate(void) {
   m.set_ratio(6.8f);                              // 12000/6.8 floors at 1800 s
   const uint32_t up = 604800u, tc = 3125u;
@@ -89,14 +86,13 @@ static void test_tube_alive_uses_the_observed_rate(void) {
   TEST_ASSERT_FALSE(m.tube_alive(up, up - 4200u, tc));
 }
 
-// Without the ceiling a tube that died under GEIGER_DEAD_COUNTS clicks grows
-// its own threshold faster than the silence and never latches.
+// Without the ceiling a tube dead under GEIGER_DEAD_COUNTS clicks never latches.
 static void test_tube_dead_capped_so_few_clicks_still_latch(void) {
   m.set_ratio(151.0f);
   TEST_ASSERT_FALSE(m.tube_alive(28800u, 100u, 5u));   // 8 h uptime, 5 clicks
 }
 
-// Fast tubes are untouched: 20 x a 3 s gap is far under the timeout.
+// Fast tubes: 20 x a 3 s gap is far under the timeout.
 static void test_tube_alive_unchanged_for_a_fast_tube(void) {
   m.set_ratio(151.0f);                            // timeout 1800 s
   const uint32_t up = 604800u, tc = 201600u;      // 20 CPM
@@ -125,8 +121,8 @@ static void test_dead_time_correction_caps_at_ten_x(void) {
   TEST_ASSERT_FLOAT_WITHIN(10.0f, 1000000.0f, m.apply_dead_time(100000.0f));
 }
 
-// CONTRACT: below 50 cps the input is returned uncorrected, so the output
-// steps at that boundary. Under 1% at the 100 us default.
+// CONTRACT: below 50 cps the input is returned uncorrected; the step is under
+// 1% at the 100 us default.
 static void test_dead_time_skip_boundary_is_negligible_at_the_default(void) {
   m.set_dead_time_us(100);
   TEST_ASSERT_EQUAL_FLOAT(50.0f, m.apply_dead_time(50.0f));
@@ -135,9 +131,7 @@ static void test_dead_time_skip_boundary_is_negligible_at_the_default(void) {
   TEST_ASSERT_TRUE((just_over / 50.01f) < 1.006f);
 }
 
-// The 50 cps constant is fixed, but the factor it approximates scales with
-// dead time, and dead_time_us is a 0..1000 pref. At the top of that range the
-// step exceeds 5%, a visible jump in dose at ~3000 CPM.
+// The step scales with dead time; at the 1000 us pref ceiling it exceeds 5%.
 static void test_dead_time_skip_boundary_steps_at_a_long_dead_time(void) {
   m.set_dead_time_us(1000);
   TEST_ASSERT_EQUAL_FLOAT(50.0f, m.apply_dead_time(50.0f));
@@ -159,26 +153,23 @@ static void test_saturation_impossible_without_dead_time(void) {
 
 // --- missing counts advisory ------------------------------------------------
 
-// Before the first count the expected rate is the assumed background, so the
-// threshold is the time to accumulate GEIGER_MISSING_COUNTS at that rate.
+// Before the first count the expected rate is the assumed background.
 static void test_missing_threshold_uses_assumed_background_first(void) {
   m.set_ratio(151.0f);
-  // 10 counts at 0.1 uSv/h * 151 CPM = 15.1 CPM -> 10/15.1 min = 39.7 s,
-  // but the tube timeout floor does not apply below itself, so expect 39.
+  // 10 counts at 0.1 uSv/h * 151 CPM = 15.1 CPM -> 39.7 s; floor does not apply.
   TEST_ASSERT_EQUAL_UINT32(39u, m.missing_threshold_s(0u, 0u));
 }
 
-// Once counting, the observed lifetime rate takes over if it is slower, so a
-// genuinely quiet site does not false-alarm.
+// Once counting, the observed rate takes over if slower.
 static void test_missing_threshold_self_calibrates_to_observed_rate(void) {
   m.set_ratio(151.0f);
   // 100 clicks in 10000 s = 0.01/s -> 10 counts takes 1000 s.
   TEST_ASSERT_EQUAL_UINT32(1000u, m.missing_threshold_s(10000u, 100u));
-  // A fast site stays on the background figure, which is larger here.
+  // A fast site stays on the background figure.
   TEST_ASSERT_EQUAL_UINT32(39u, m.missing_threshold_s(10000u, 100000u));
 }
 
-// The advisory must never be slower than the hard dead-tube latch.
+// Never slower than the dead-tube latch.
 static void test_missing_threshold_capped_by_tube_timeout(void) {
   m.set_ratio(151.0f);            // timeout floors at 1800
   // 1 click in 1e6 s would want 1e7 s; must clamp.
@@ -192,8 +183,7 @@ static void test_counts_missing_fires_past_the_threshold(void) {
   TEST_ASSERT_TRUE (m.counts_missing(61u, 0u, 0u));
 }
 
-// CONTRACT: below 60 s no threshold can fire, so the healthy path skips the
-// soft-float and 64-bit divides entirely.
+// CONTRACT: below 60 s nothing fires, so the healthy path skips the divides.
 static void test_counts_missing_has_a_sixty_second_floor(void) {
   m.set_ratio(151.0f);
   for (uint32_t s = 0; s < 60; s++) {
@@ -207,8 +197,7 @@ static void test_counts_missing_quiet_when_counting(void) {
   TEST_ASSERT_FALSE(m.counts_missing(10000u, 9995u, 5000u));
 }
 
-// Silence is measured against the last count, and both are uptime seconds, so
-// this must survive a 32-bit wrap of the uptime counter.
+// Must survive a 32-bit wrap of uptime.
 static void test_counts_missing_survives_uptime_wrap(void) {
   m.set_ratio(151.0f);
   uint32_t last = 0xFFFFFFF0u;
@@ -232,8 +221,8 @@ static void test_cps_from_span_is_n_minus_one_over_t(void) {
   TEST_ASSERT_EQUAL_FLOAT(1.0f,  CounterMaths::cps_from_span(2, 1000000u));
 }
 
-// A single sample carries no interval, and a collapsed span would divide by
-// zero. Same fault class as the OLED graph; must not reach the divide.
+// A single sample has no interval; must not reach the divide.
+
 static void test_cps_from_span_guards_degenerate_input(void) {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, CounterMaths::cps_from_span(0, 1000000u));
   TEST_ASSERT_EQUAL_FLOAT(0.0f, CounterMaths::cps_from_span(1, 1000000u));

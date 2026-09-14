@@ -17,9 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// EGRingAvg keeps a running sum rather than re-adding the window per read.
-// The sum must shed the slot it overwrites, against the runtime window rather
-// than the template capacity.
+// The running sum must shed the slot it overwrites, at the runtime window.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -44,9 +42,7 @@ static void test_empty_reads_are_zero(void) {
 
 // --- partial fill -----------------------------------------------------------
 
-// The mean is over populated slots only. Dividing by the window instead would
-// drag every fresh average toward zero, which is exactly the low-count display
-// smoothing bug shape.
+// Mean over populated slots only.
 static void test_partial_fill_averages_over_count_not_window(void) {
   EGRingAvg<int32_t, 8> r;
   r.add(10);
@@ -83,7 +79,7 @@ static void test_wrap_evicts_oldest(void) {
   TEST_ASSERT_EQUAL_INT32(26, r.sum());        // 5+6+7+8
 }
 
-// The running sum must not drift away from a recomputed one over many wraps.
+// No drift from a recomputed sum over many wraps.
 static void test_running_sum_matches_recompute_over_many_wraps(void) {
   const uint16_t W = 6;
   EGRingAvg<int32_t, 6> r;
@@ -106,8 +102,7 @@ static void test_running_sum_matches_recompute_over_many_wraps(void) {
 
 // --- chronological access ---------------------------------------------------
 
-// at() is what the sparkline draws from, so 0 must be the oldest live sample
-// both before and after the buffer has wrapped.
+// at(0) is the oldest live sample, before and after the wrap.
 static void test_at_is_chronological(void) {
   EGRingAvg<int32_t, 4> r;
 
@@ -121,7 +116,7 @@ static void test_at_is_chronological(void) {
   TEST_ASSERT_EQUAL_INT32(4, r.at(2));
   TEST_ASSERT_EQUAL_INT32(5, r.at(3));
 
-  // Past the end clamps to the newest rather than reading a stale slot.
+  // Past the end clamps to the newest.
   TEST_ASSERT_EQUAL_INT32(5, r.at(4));
   TEST_ASSERT_EQUAL_INT32(5, r.at(9999));
 }
@@ -145,8 +140,7 @@ static void test_begin_clamps_window(void) {
   r.begin(99);  TEST_ASSERT_EQUAL_UINT16(8, r.window());
 }
 
-// A window below the template capacity has to wrap at the window, not at
-// MaxN, or the sum sheds a slot it never wrote.
+// Wraps at the window, not at MaxN.
 static void test_runtime_window_shorter_than_capacity(void) {
   EGRingAvg<int32_t, 8> r;
   r.begin(3);
@@ -214,8 +208,8 @@ static void test_ema_converges_and_never_overshoots(void) {
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, e.get());
 }
 
-// factor 1 makes the EMA a passthrough; factor 0 is clamped to that rather
-// than dividing by zero.
+// factor 1 is a passthrough; factor 0 clamps to it.
+
 static void test_ema_factor_bounds(void) {
   EGEma<float> e;
   e.begin(1);

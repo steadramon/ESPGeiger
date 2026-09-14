@@ -17,12 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Enough of the core's Print for derived classes to reach their byte sink.
-// Sha256Class overrides write(uint8_t) and pulls in the buffer overload via
-// `using Print::write`.
-//
-// No print()/println(). A unit needing those is formatting output, not logic,
-// and probably does not belong in a host suite.
+// Enough of Print for a derived class to reach its byte sink. No print().
+
 
 #ifndef EG_TEST_PRINT_H
 #define EG_TEST_PRINT_H

@@ -1,9 +1,5 @@
-// lwIP platform layer for the host build.
-//
-// Replaces the ESP8266 SDK's arch/cc.h, which pulls in the SDK headers. lwIP
-// needs the integer types, byte order, printf specifiers and the diagnostic
-// hooks; nothing here is target-specific because the fake never touches a
-// netif or a real packet.
+// lwIP platform layer for the host build, in place of the SDK's arch/cc.h.
+
 
 #ifndef FAKE_ARCH_CC_H
 #define FAKE_ARCH_CC_H

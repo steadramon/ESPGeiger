@@ -1,8 +1,5 @@
-// Fake lwIP implementation. Lives in the suite directory because a .cpp under
-// a shared test/ directory is compiled but never linked.
-//
-// Callbacks live in the real tcp_pcb slots that LWIP_CALLBACK_API defines, so
-// the client registers them exactly as it does on device.
+// Fake lwIP. In the suite directory because a .cpp under shared test/ never
+// links. Callbacks live in the real tcp_pcb slots.
 
 #include "fake_lwip.h"
 
@@ -13,13 +10,11 @@
 
 extern "C" {
 
-// The client's liveness guards walk these. lwIP declares them in
-// lwip/priv/tcp_priv.h; here the fake owns them.
+// The client's liveness guards walk these.
 struct tcp_pcb* tcp_active_pcbs = nullptr;
 struct tcp_pcb* tcp_tw_pcbs     = nullptr;
 
-// IP4_ADDR_ANY / IP_ANY_TYPE resolve to these. AsyncServer's port-only
-// constructor takes their address.
+// IP4_ADDR_ANY / IP_ANY_TYPE.
 const ip_addr_t ip_addr_any       = IPADDR4_INIT(IPADDR_ANY);
 const ip_addr_t ip_addr_broadcast = IPADDR4_INIT(IPADDR_BROADCAST);
 
@@ -40,7 +35,7 @@ struct PendingDns {
 };
 std::vector<PendingDns> g_dns;
 
-// Every pcb the fake handed out and has not freed. reset() drains it.
+// Live pcbs; reset() drains it.
 std::vector<tcp_pcb*> g_live;
 
 // pcbs lwIP keeps past a close, and the accept callback per listening pcb.
@@ -53,8 +48,7 @@ bool is_pinned(const tcp_pcb* pcb) {
   return false;
 }
 
-// A pcb the fake still owns. Anything else has been freed, and touching it
-// would be the fault under test.
+// Anything not here has been freed.
 bool is_allocated(const tcp_pcb* pcb) {
   for (const tcp_pcb* p : g_live) if (p == pcb) return true;
   return false;
@@ -139,9 +133,7 @@ bool has_recv_cb(const tcp_pcb* pcb) { return pcb && pcb->recv != nullptr; }
 
 err_t fire_connected(tcp_pcb* pcb, err_t err) {
   if (!pcb || !pcb->connected) return ERR_VAL;
-  // lwIP has completed the handshake before it calls back. The client reads
-  // pcb->state directly in connected() and space(), so it must be ESTABLISHED
-  // by now or neither reports the connection as usable.
+  // The client reads pcb->state in connected() and space().
   if (err == ERR_OK) pcb->state = ESTABLISHED;
   return pcb->connected(pcb->callback_arg, pcb, err);
 }
@@ -190,8 +182,7 @@ void fire_accept(tcp_pcb* listen_pcb, tcp_pcb* new_pcb, err_t err) {
 
 err_t fire_recv(tcp_pcb* pcb, pbuf* pb, err_t err) {
   if (!pcb || !pcb->recv) return ERR_VAL;
-  // Snapshot before dispatch: the handler may retire this pcb, and lwIP holds
-  // the callback itself rather than re-reading it afterwards.
+  // Snapshot: the handler may retire this pcb.
   tcp_recv_fn fn = pcb->recv;
   void* arg = pcb->callback_arg;
   return fn(arg, pcb, pb, err);
@@ -215,7 +206,7 @@ void fire_error(tcp_pcb* pcb, err_t err) {
   if (!pcb || !pcb->errf) return;
   tcp_err_fn fn = pcb->errf;
   void* arg = pcb->callback_arg;
-  // lwIP has already freed the pcb by the time it calls the error callback.
+  // Freed before the error callback, as lwIP does.
   free_pcb(pcb);
   fn(arg, err);
 }
@@ -263,7 +254,7 @@ extern "C" {
 struct tcp_pcb* tcp_new(void) {
   g_counts.tcp_new++;
   tcp_pcb* pcb = FakeLwip::new_pcb();
-  // Not connected yet: tcp_new hands back a fresh pcb in CLOSED.
+  // CLOSED, as tcp_new does.
   pcb->state = CLOSED;
   return pcb;
 }
@@ -274,8 +265,7 @@ void tcp_arg(struct tcp_pcb* pcb, void* arg)          { if (pcb) pcb->callback_a
 void tcp_recv(struct tcp_pcb* pcb, tcp_recv_fn f)     { if (pcb) pcb->recv = f; }
 void tcp_sent(struct tcp_pcb* pcb, tcp_sent_fn f)     { if (pcb) pcb->sent = f; }
 void tcp_err(struct tcp_pcb* pcb, tcp_err_fn f)       { if (pcb) pcb->errf = f; }
-// The accept slot lives on tcp_pcb_listen, not tcp_pcb, so the fake keeps it
-// on the side.
+// The accept slot is on tcp_pcb_listen, not tcp_pcb.
 void tcp_accept(struct tcp_pcb* pcb, tcp_accept_fn f) {
   if (!pcb) return;
   for (AcceptReg& a : g_accept) {
@@ -295,9 +285,7 @@ void tcp_recved(struct tcp_pcb* pcb, u16_t len) {
   g_counts.tcp_recved++;
   if (!pcb) return;
   if (!in_list(tcp_active_pcbs, pcb) && !in_list(tcp_tw_pcbs, pcb)) {
-    // The caller acked against a pcb lwIP has already freed. Record it rather
-    // than dereference, so the failure is a clear assertion instead of an
-    // ASan report in whichever test happens to run first.
+    // Record, do not dereference: a clear assertion rather than an ASan report.
     g_counts.recved_on_dead_pcb++;
     return;
   }
@@ -349,9 +337,8 @@ err_t tcp_close(struct tcp_pcb* pcb) {
   g_counts.tcp_close++;
   if (!pcb) return ERR_ARG;
   if (!is_allocated(pcb)) { g_counts.closed_dead_pcb++; return ERR_ARG; }
-  // lwIP frees the pcb on a successful close, so the caller's pointer is
-  // dangling from here on. A pinned pcb is only unlinked: it models one lwIP
-  // still owns, which is the only way a later callback is reachable.
+  // Freed on close; a pinned pcb is only unlinked so a later callback can reach it.
+
   if (is_pinned(pcb)) {
     list_remove(&tcp_active_pcbs, pcb);
     list_remove(&tcp_tw_pcbs, pcb);

@@ -17,13 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// The client holds one AsyncClient for its whole life, so every reconnect
-// reuses it. A guard that survives a close therefore silences the client
-// permanently: connect() no-ops from any state but DISCONNECTED, nothing
-// times CONNECTING out, and only a reboot recovers. Shipped that way in
-// 0.12.5 through 0.12.7.
-//
-// Drives the real client over the fake lwIP from test_asynctcp.
+// One AsyncClient for the life of the process, so every close must leave it
+// able to reconnect. Real client over the fake lwIP from test_asynctcp.
 
 #include <unity.h>
 #include <string.h>
@@ -45,7 +40,7 @@ void tearDown(void) {
   FakeLwip::reset();
 }
 
-// Starts an attempt and returns the pcb lwIP handed out.
+// Returns the pcb lwIP handed out.
 static tcp_pcb* dispatch(AsyncMqttClient* cl) {
   TEST_ASSERT_TRUE(cl->connect());
   tcp_pcb* pcb = tcp_active_pcbs;
@@ -88,8 +83,7 @@ static void test_connack_completes_the_connection(void) {
   TEST_ASSERT_FALSE(m->connecting());
 }
 
-// The field bug, end to end at the layer it bit. A broker restart, a WiFi
-// blip or a prefs save all reach this path.
+// Broker restart, WiFi blip and prefs save all reach this path.
 static void test_a_disconnected_client_connects_again(void) {
   connect_fully(m);
   TEST_ASSERT_TRUE(m->connected());
@@ -102,9 +96,7 @@ static void test_a_disconnected_client_connects_again(void) {
   TEST_ASSERT_TRUE(m->connected());
 }
 
-// CHARACTERISATION: _error() never routes through close(), so this path was
-// reusable even while the close() paths were latched shut. A broker that RST
-// recovered on its own; one that went quiet and failed the keepalive did not.
+// CHARACTERISATION: _error() does not route through close().
 static void test_a_client_whose_peer_reset_connects_again(void) {
   tcp_pcb* pcb = connect_fully(m);
   FakeLwip::fire_error(pcb, ERR_RST);
@@ -114,8 +106,8 @@ static void test_a_client_whose_peer_reset_connects_again(void) {
   TEST_ASSERT_TRUE(m->connected());
 }
 
-// Nothing times CONNECTING out, so a forced disconnect is the only way back
-// and it has to leave the client able to retry.
+// Nothing times CONNECTING out; a forced disconnect must leave retry possible.
+
 static void test_forced_disconnect_from_connecting_allows_a_retry(void) {
   dispatch(m);
   TEST_ASSERT_TRUE(m->connecting());

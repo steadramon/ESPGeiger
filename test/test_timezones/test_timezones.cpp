@@ -17,13 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Europe/Kyiv resolved to UTC0 with no log for two years: the table knew only
-// Europe/Kiev, the hash missed, and the miss was silent. The table stores no
-// names, so nothing in the lookup can notice a table that breaks its own
-// preconditions. Those preconditions are asserted here.
-//
-// The generator enforces the same rules at build time. This suite asserts them
-// against the committed artifact, which is what the device actually runs.
+// The table stores hashes, not names, so its preconditions are asserted here
+// against the committed artifact.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -32,8 +27,7 @@
 
 #include "../../lib/EGTimeZone/src/EGTimeZone.h"
 
-// A second copy of the generated data, private to this TU. The production one
-// is deliberately visible only to EGTimeZone.cpp, and these tests walk it.
+// Private copy of the generated data; the production one is file-local.
 #include "../../lib/EGTimeZone/src/EGTimeZoneTable.h"
 
 static const uint32_t NUM_ZONES = sizeof(zones) / sizeof(zones[0]);
@@ -43,9 +37,7 @@ void tearDown(void) {}
 
 // --- the generated table ----------------------------------------------------
 
-// posixFor() binary searches. Unsorted, it silently misses zones that are
-// present. Strictly increasing also proves no two zones share a hash, which
-// at 21 bits is not free.
+// posixFor() binary searches; strictly increasing also proves no hash collision.
 static void test_table_is_sorted_and_collision_free(void) {
   for (uint32_t i = 1; i < NUM_ZONES; i++) {
     char msg[64];
@@ -54,8 +46,7 @@ static void test_table_is_sorted_and_collision_free(void) {
   }
 }
 
-// offset is 11 bits, so a blob past 2048 bytes truncates into a wrong rule
-// rather than failing to build.
+// offset is 11 bits.
 static void test_rules_blob_fits_the_offset_field(void) {
   TEST_ASSERT_LESS_OR_EQUAL_UINT32(2048, (uint32_t)sizeof(TZ_RULES));
 }
@@ -73,8 +64,7 @@ static void test_offsets_land_on_rule_starts(void) {
   }
 }
 
-// The blob is deduplicated by hand-free construction; a rule nothing points at
-// is flash spent on nothing.
+// A rule nothing points at is wasted flash.
 static void test_every_rule_is_referenced(void) {
   const uint32_t blob = sizeof(TZ_RULES);
   bool used[sizeof(TZ_RULES)] = { false };
@@ -105,8 +95,7 @@ static void assertResolves(const Zone *z, size_t n) {
 static void test_known_zones(void) {
   static const Zone golden[] = {
     { "Europe/London",    "GMT0BST,M3.5.0/1,M10.5.0" },
-    // Apple's zoneinfo gives GMT0IST here at the same tzdb version. The
-    // generator refuses the system tree so Ireland cannot drift.
+    // Apple's zoneinfo gives GMT0IST here.
     { "Europe/Dublin",    "IST-1GMT0,M10.5.0,M3.5.0/1" },
     { "America/New_York", "EST5EDT,M3.2.0,M11.1.0" },
     { "Australia/Sydney", "AEST-10AEDT,M10.1.0,M4.1.0/3" },
@@ -118,8 +107,7 @@ static void test_known_zones(void) {
   assertResolves(golden, sizeof(golden) / sizeof(golden[0]));
 }
 
-// The three upstream renames the hand-maintained table had missed, plus the
-// old names, which stay reachable so a stored config keeps working.
+// Upstream renames; old names stay reachable for stored configs.
 static void test_renamed_zones_resolve(void) {
   static const Zone renamed[] = {
     { "Europe/Kyiv",           "EET-2EEST,M3.5.0/3,M10.5.0/4" },
@@ -141,11 +129,7 @@ static void test_aliases_share_one_rule(void) {
                         EGTimeZone::posixFor("UTC"));
 }
 
-// A miss must be nullptr. Returning UTC0 instead is the bug this API replaced.
-//
-// Names are not stored, so a miss is proven only to 21 bits: an unknown name
-// colliding with a real hash gets that zone's rule. These cases are checked
-// clear of the current table; a tzdb bump could in principle claim one.
+// A miss is nullptr. Proven only to 21 bits; a tzdb bump could claim one.
 static void test_unknown_returns_null(void) {
   static const char *const unknown[] = {
     "",
@@ -157,8 +141,7 @@ static void test_unknown_returns_null(void) {
     TEST_ASSERT_NULL_MESSAGE(EGTimeZone::posixFor(unknown[i]), unknown[i]);
 }
 
-// The stored name is compared whole. A prefix or a stray space is a different
-// zone, not a near miss to be forgiven.
+// Whole-name compare.
 static void test_lookup_is_exact(void) {
   static const char *const wrong[] = {
     "europe/london",
@@ -172,8 +155,8 @@ static void test_lookup_is_exact(void) {
     TEST_ASSERT_NULL_MESSAGE(EGTimeZone::posixFor(wrong[i]), wrong[i]);
 }
 
-// Drives the search down many paths, including both ends of the table. Under
-// native_asan this is also the check that a miss never probes out of range.
+// Both ends of the table; under native_asan also checks a miss stays in range.
+
 static void test_misses_stay_inside_the_table(void) {
   for (int i = 0; i < 1000; i++) {
     char name[16];

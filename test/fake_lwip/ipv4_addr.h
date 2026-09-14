@@ -1,6 +1,6 @@
-// ESP8266 SDK type. The core's IPAddress.h derives struct ip_addr from this
-// when IPv6 is off, which is what lets a `const ip_addr*` bind to an IPAddress
-// parameter. Layout matches ip4_addr_t; the core relies on that.
+// SDK type the core's IPAddress.h derives struct ip_addr from. Layout matches
+// ip4_addr_t.
+
 
 #ifndef FAKE_IPV4_ADDR_H
 #define FAKE_IPV4_ADDR_H

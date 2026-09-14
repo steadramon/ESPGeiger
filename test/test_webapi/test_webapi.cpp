@@ -17,15 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// On 2026-08-24 a server-side outage produced one minute of `wapi=0/145`: 145
-// signed handshakes, all failed, ~410ms apart. The arm was only advanced inside
-// the send-succeeded branch, so a connect that failed synchronously left the
-// handshake due and the module re-attempted at the registry's 100ms floor.
-//
-// The suite asserts the property that was violated - an attempt advances the
-// arm before it can fail - and carries the unsigned compare the class rejects,
-// asserting it is broken. A guard test is worth nothing unless it fails on the
-// code it is guarding against.
+// An attempt must advance the arm before anything that can fail, or a server
+// failing instantly spins the module at the registry's 100 ms floor.
 
 #include <unity.h>
 #include <stdint.h>
@@ -39,8 +32,7 @@ static const uint32_t HOUR_MS = 60UL * 60UL * 1000UL;
 static const uint32_t MIN_BACKOFF = 30000UL;
 static const uint32_t MAX_BACKOFF = 300000UL;
 
-// The registry floors an overdue module at 100ms, so "still due" and "spins"
-// are the same statement.
+// Still due after an attempt means a spin.
 static const uint32_t LOOP_FLOOR_MS = 100UL;
 
 // --- anchoring --------------------------------------------------------------
@@ -72,8 +64,7 @@ static void test_unanchor_reopens_the_first_arm(void) {
   TEST_ASSERT_FALSE(s.anchored());
 }
 
-// 0 is the unanchored sentinel and is also a value the arithmetic can land on.
-// A schedule that anchors itself into "never armed" is due forever.
+// 0 is the unanchored sentinel; the arithmetic must never land on it.
 static void test_the_arm_never_lands_on_the_sentinel(void) {
   // anchor(): now + offset - interval == 0
   WebAPISchedule a(HOUR_MS);
@@ -157,13 +148,12 @@ static void test_acceptance_lands_on_the_slot(void) {
   }
 }
 
-// The field symptom, as a bound. A server that fails every attempt instantly
-// must not let the module attempt more than a handful of times a minute.
+// A server failing every attempt instantly gets a handful of attempts a minute.
 static void test_a_dead_server_cannot_produce_a_burst(void) {
   WebAPISchedule s(HOUR_MS);
   s.anchor(0, 0);
 
-  // ~410ms per attempt was the measured cost of a sign plus an instant failure.
+  // ~410 ms: a sign plus an instant failure.
   const uint32_t ATTEMPT_MS = 410;
   const uint32_t WINDOW_MS  = 60000;
 
@@ -178,7 +168,7 @@ static void test_a_dead_server_cannot_produce_a_burst(void) {
       window_start = now;
     }
     if (!s.due(now)) continue;
-    // doHandshake: the arm moves before any work that can fail.
+    // Arm moves first, as in doHandshake.
     s.retry(now);
     attempts_in_window++;
     now += ATTEMPT_MS;
@@ -191,16 +181,13 @@ static void test_a_dead_server_cannot_produce_a_burst(void) {
 
 // --- signed compare ---------------------------------------------------------
 
-// What due() would be with an unsigned compare. Carried so the case below
-// demonstrably fails on it; if this starts agreeing, the suite has stopped
-// testing anything.
+// due() with an unsigned compare. Must keep failing the case below.
 static bool due_unsigned(uint32_t now, uint32_t last, uint32_t interval) {
   return (now - last) >= interval;
 }
 
-// Backoff can exceed the interval when the interval is short. The arm then sits
-// in the future, and an unsigned delta underflows into a huge number: due
-// forever, which is the spin.
+// Backoff past a short interval puts the arm in the future; an unsigned delta
+// underflows to due forever.
 static void test_backoff_past_the_interval_is_not_due(void) {
   const uint32_t SHORT = 60000;
   WebAPISchedule s(SHORT);
@@ -215,8 +202,7 @@ static void test_backoff_past_the_interval_is_not_due(void) {
   TEST_ASSERT_FALSE(s.due(now + MAX_BACKOFF - 1));
   TEST_ASSERT_TRUE(s.due(now + MAX_BACKOFF));
 
-  // The arm is at now - SHORT + 300000. An unsigned compare calls that due
-  // immediately, and keeps calling it due.
+  // Arm is at now - SHORT + 300000.
   const uint32_t last = now - SHORT + MAX_BACKOFF;
   TEST_ASSERT_TRUE(due_unsigned(now, last, SHORT));
   TEST_ASSERT_TRUE(due_unsigned(now + LOOP_FLOOR_MS, last, SHORT));
@@ -267,9 +253,8 @@ static void test_slot_wait_lands_on_the_target_second(void) {
   TEST_ASSERT_EQUAL_UINT32(0, wall_clock_wait_ms(60000, HOUR_MS, 3600, 60));
 }
 
-// time_t goes negative on a 32-bit signed clock in 2038. The cast to uint32_t
-// happens at the call site; this pins that an epoch past INT32_MAX still lands
-// inside the interval rather than wrapping the result.
+// An epoch past INT32_MAX must still land inside the interval.
+
 static void test_slot_wait_past_2038(void) {
   const uint32_t y2038 = 2147483648u;    // INT32_MAX + 1
   const uint32_t epochs[] = { y2038, y2038 + 1, y2038 + 3599, 4294967295u };

@@ -1,3 +1,3 @@
-// Pulls the production splitter into this suite. No String, no Print, no
-// AsyncTCP: that is the whole point of the seam.
+// No String, no Print, no AsyncTCP.
+
 #include "../../lib/AsyncHTTPRequest_Generic/src/UrlParse.cpp"

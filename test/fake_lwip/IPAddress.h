@@ -1,14 +1,5 @@
-// Minimal IPAddress for the async TCP suite.
-//
-// Lives here rather than in test/shim because it is lwIP-coupled: the client
-// passes an IPAddress straight to tcp_connect and dns_gethostbyname, which is
-// what the implicit ip_addr_t conversions are for. Only suites with the lwIP
-// headers on their include path can use it.
-//
-// The type relationships mirror the ESP8266 core's IPAddress.h and must keep
-// mirroring it. In particular `struct ip_addr` derives from the SDK's
-// ipv4_addr when IPv6 is off, which is the only reason the client's
-// `connect(const ip_addr*, port)` in _dns_found resolves.
+// Minimal IPAddress, lwIP-coupled so it lives here rather than in shim/. The
+// type relationships must keep mirroring the ESP8266 core's IPAddress.h.
 
 #ifndef FAKE_IPADDRESS_H
 #define FAKE_IPADDRESS_H
@@ -29,8 +20,7 @@ class IPAddress {
   public:
     IPAddress() { ip_addr_set_zero(&_ip); }
 
-    // The core carries all three integer widths; IPAddress(0) is ambiguous
-    // without the int overload.
+    // IPAddress(0) is ambiguous without the int overload.
     IPAddress(uint32_t a)      { ip_addr_set_ip4_u32(&_ip, a); }
     IPAddress(unsigned long a) { ip_addr_set_ip4_u32(&_ip, (uint32_t)a); }
     IPAddress(int a)           { ip_addr_set_ip4_u32(&_ip, (uint32_t)a); }
@@ -43,7 +33,8 @@ class IPAddress {
     IPAddress(const ip_addr_t* a) { if (a) ip_addr_copy(_ip, *a); else ip_addr_set_zero(&_ip); }
 
 #if !LWIP_IPV6
-    // Reached via the derived-to-base conversion from `const ip_addr*`.
+    // Via derived-to-base from `const ip_addr*`.
+
     IPAddress(const ipv4_addr& a) { ip_addr_set_ip4_u32(&_ip, a.addr); }
     IPAddress(const ipv4_addr* a) { ip_addr_set_ip4_u32(&_ip, a ? a->addr : 0); }
 #endif

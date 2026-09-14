@@ -17,9 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// poisson_z backs the counts_missing advisory, so the guard values matter more
-// than the arithmetic: a divide by a zero sigma or a NaN reaching a threshold
-// compare would read as a dead tube.
+// The guard values matter more than the arithmetic: a zero sigma or a NaN at
+// a threshold compare reads as a dead tube.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -59,7 +58,7 @@ static void test_clamp_holds_for_unsigned_and_wide_types(void) {
   TEST_ASSERT_EQUAL_INT32(-2147483647 - 1, clamp<int32_t>(-2147483647 - 1, -2147483647 - 1, 0));
 }
 
-// Literal-bound calls must fold, or the hot-path callers pay a real call.
+// Literal bounds must fold.
 static void test_clamp_folds_at_compile_time(void) {
   static_assert(clamp(11, 0, 10) == 10, "clamp must be usable in a constant expression");
   static_assert(clamp(-1, 0, 10) == 0,  "clamp must be usable in a constant expression");
@@ -80,8 +79,7 @@ static void test_poisson_std_floors_at_zero(void) {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, poisson_std(-1e9f));
 }
 
-// sqrtf(negative) is NaN, so the N > 0 guard is what keeps a NaN out of every
-// downstream threshold compare.
+// sqrtf(negative) is NaN; the N > 0 guard keeps it out.
 static void test_poisson_std_never_returns_nan(void) {
   TEST_ASSERT_FALSE(isnan(poisson_std(-4.0f)));
   TEST_ASSERT_FALSE(isnan(poisson_std(0.0f)));
@@ -106,24 +104,20 @@ static void test_poisson_z_sign_marks_direction(void) {
   TEST_ASSERT_TRUE(poisson_z(50.0f,  100.0f) < 0.0f);   // fewer, the dead-tube direction
 }
 
-// A zero or negative expectation has no meaningful sigma. Returning 0 keeps
-// "no evidence" from reading as a large deviation at either sign.
+// Zero or negative expectation returns 0, not a large deviation.
 static void test_poisson_z_guards_a_zero_expectation(void) {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, poisson_z(500.0f, 0.0f));
   TEST_ASSERT_EQUAL_FLOAT(0.0f, poisson_z(0.0f,   0.0f));
   TEST_ASSERT_EQUAL_FLOAT(0.0f, poisson_z(500.0f, -3.0f));
 }
 
-// Zero observed against a real expectation is the dead-tube signal itself and
-// must NOT be swallowed by a guard.
+// Zero observed is the dead-tube signal and must not be swallowed.
 static void test_poisson_z_reports_a_silent_tube(void) {
   TEST_ASSERT_EQUAL_FLOAT(-10.0f, poisson_z(0.0f, 100.0f));
   TEST_ASSERT_EQUAL_FLOAT(-30.0f, poisson_z(0.0f, 900.0f));
 }
 
-// Sensitivity scales as sqrt(N): the same fractional drop is more significant
-// from a larger expectation. Hence the advisory needs a count floor, not a
-// fixed CPM threshold.
+// Sensitivity scales as sqrt(N).
 static void test_poisson_z_scales_with_expectation(void) {
   float small = poisson_z(9.0f,   10.0f);      // -10% of 10
   float large = poisson_z(900.0f, 1000.0f);    // -10% of 1000
@@ -132,8 +126,8 @@ static void test_poisson_z_scales_with_expectation(void) {
   TEST_ASSERT_FLOAT_WITHIN(0.01f, -3.1623f, large);
 }
 
-// A NaN observation propagates: every comparison against it is false, so a
-// threshold test silently reports "not deviating". Callers must not feed one.
+// A NaN observation propagates; callers must not feed one.
+
 static void test_poisson_z_propagates_a_nan_observation(void) {
   TEST_ASSERT_TRUE(isnan(poisson_z(NAN, 100.0f)));
   TEST_ASSERT_FALSE(poisson_z(NAN, 100.0f) < -3.0f);

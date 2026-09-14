@@ -1,3 +1,3 @@
-// Pulls the production client into this suite. Including the .cpp also reaches
-// its file statics, which is where the DNS-pending registry lives.
+// Including the .cpp reaches the file statics, where the DNS registry lives.
+
 #include "EGAsyncTCP.cpp"

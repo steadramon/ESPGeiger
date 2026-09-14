@@ -17,9 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Carries a copy of the pre-8c57420c formula and asserts it is broken. A wrap
-// regression test is worthless unless it demonstrably fails on the buggy code.
-// If OldUptimeCounter starts passing, this suite has stopped testing anything.
+// OldUptimeCounter is the previous formula and must keep failing here.
 
 #include <unity.h>
 #include <stdint.h>
@@ -29,9 +27,7 @@
 void setUp(void)    {}
 void tearDown(void) {}
 
-// One second per wrap is lost to weighting a wrap 4294967 s instead of
-// 4294967.296. Tests that span wraps allow for it explicitly rather than
-// papering over it with a loose tolerance.
+// A wrap is weighted 4294967 s, not 4294967.296, so one second is lost per wrap.
 static const uint32_t WRAP_S   = 4294967u;
 static const uint64_t WRAP_MS  = 4294967296ULL;
 
@@ -69,9 +65,7 @@ static void test_single_wrap_is_counted_once(void) {
   TEST_ASSERT_EQUAL_UINT32(WRAP_S + 1, after);
 }
 
-// The regression proper. Every extra call inside the sub-second window after a
-// wrap must be a no-op. The old formula bumped the wrap count on each one,
-// which is why one device reported 149 days: 3 x 49.71.
+// Extra calls inside the sub-second window after a wrap must be no-ops.
 static void test_repeated_calls_after_wrap_do_not_re_trigger(void) {
   UptimeCounter u;
   u.tick(millis_at(WRAP_MS - 500));
@@ -84,10 +78,7 @@ static void test_repeated_calls_after_wrap_do_not_re_trigger(void) {
   }
 }
 
-// Ticking once per wrap period is NOT enough if every tick lands at the same
-// phase: millis() reads the same value each time and never appears to go
-// backwards, so no wrap is ever seen. The contract is "at least once per
-// wrap", and this samples four times per period to honour it.
+// Contract is at least one tick per wrap; four per period here.
 static void test_many_wraps_accumulate(void) {
   UptimeCounter u;
   const uint64_t STEP = WRAP_MS / 4;
@@ -102,10 +93,7 @@ static void test_many_wraps_accumulate(void) {
   }
 }
 
-// The other half of that contract, stated as a test: sampling at exactly one
-// wrap period sees no wrap at all and the count stays frozen at boot. This is
-// a property of any wrap-counting scheme, not a defect, but a caller that
-// stops ticking for 49.7 days silently loses time.
+// CONTRACT: a tick exactly once per wrap period sees no wrap.
 static void test_sampling_at_exactly_one_wrap_period_sees_nothing(void) {
   UptimeCounter u;
   for (int w = 0; w <= 5; w++) {
@@ -116,8 +104,7 @@ static void test_sampling_at_exactly_one_wrap_period_sees_nothing(void) {
 
 // --- properties over a long run ---------------------------------------------
 
-// Two years, sampled hourly. Never steps backwards, never reads high, and
-// never drifts low by more than the one-second-per-wrap truncation.
+// Two years hourly: never backwards, never high, low by at most 1 s per wrap.
 static void test_monotonic_and_bounded_drift_over_two_years(void) {
   UptimeCounter u;
   uint32_t prev = 0;
@@ -135,9 +122,7 @@ static void test_monotonic_and_bounded_drift_over_two_years(void) {
   TEST_ASSERT_EQUAL_UINT16(14, u.wraps());     // 730 d / 49.71 d
 }
 
-// --- the pre-fix formula, asserted broken -----------------------------------
-
-// Verbatim shape of the pre-8c57420c code, in faithful 32-bit types.
+// --- the previous formula, asserted broken ----------------------------------
 class OldUptimeCounter {
 public:
   uint32_t tick(uint32_t now_ms) {
@@ -151,7 +136,7 @@ private:
   uint16_t _wraps  = 0;
 };
 
-// Both agree right up to the wrap. The bug is not a slow drift; it is a cliff.
+// Both agree up to the wrap.
 static void test_old_formula_agrees_before_the_wrap(void) {
   UptimeCounter neu;
   OldUptimeCounter old;
@@ -161,7 +146,7 @@ static void test_old_formula_agrees_before_the_wrap(void) {
   }
 }
 
-// ...and the old one detonates at the first wrap while the new one does not.
+// Old is wrong from the second call after the wrap.
 static void test_old_formula_is_wrong_at_the_first_wrap(void) {
   UptimeCounter neu;
   OldUptimeCounter old;
@@ -178,18 +163,14 @@ static void test_old_formula_is_wrong_at_the_first_wrap(void) {
   TEST_ASSERT_UINT32_WITHIN(2, truth, n);          // new: right
   TEST_ASSERT_EQUAL_UINT32(truth, o);              // old: also right, ONCE
 
-  // The damage is on the next call in the same second: the old formula
-  // re-tests a reconstructed time that is still larger than the tiny now_ms,
-  // so it counts a second wrap that never happened.
+  // Next call in the same second counts a second wrap.
   uint32_t n2 = neu.tick(millis_at(after + 100));
   uint32_t o2 = old.tick(millis_at(after + 100));
   TEST_ASSERT_UINT32_WITHIN(2, truth, n2);
   TEST_ASSERT_GREATER_THAN_UINT32(truth + 86400u, o2);   // out by >1 day
 }
 
-// The reported value scales with how often the getter happens to be called
-// inside that window. Three calls is 149 days, which is the number the field
-// device showed and the reason the bug is remembered by it.
+// Old error scales with calls inside the window: three calls is 149 days.
 static void test_old_formula_jump_scales_with_call_count(void) {
   for (int calls = 2; calls <= 4; calls++) {
     OldUptimeCounter old;
@@ -203,7 +184,8 @@ static void test_old_formula_jump_scales_with_call_count(void) {
     TEST_ASSERT_EQUAL_UINT32((uint32_t)calls * WRAP_S, last);
   }
 
-  // Spelled out for the case that was actually seen in the field.
+  // Three calls.
+
   OldUptimeCounter three;
   three.tick(millis_at(WRAP_MS - 500));
   three.tick(millis_at(WRAP_MS + 10));

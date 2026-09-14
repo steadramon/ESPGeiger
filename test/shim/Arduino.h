@@ -17,14 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Stands in for the core's <Arduino.h> on the host. Keep it thin: if faking a
-// dependency needs more code than the unit under test, extract a seam instead.
-//
-// Header-only. PlatformIO does not compile a non-suite directory under
-// test_dir into each test binary, so a shim .cpp never links.
-//
-// Absent by design: String, Stream, Serial, WiFi, EEPROM. Test the char*
-// paths; add a stub only when a unit worth testing needs it.
+// Host stand-in for <Arduino.h>. Header-only: a .cpp here never links.
+// Absent by design: String, Stream, Serial, WiFi, EEPROM.
 
 #ifndef EG_TEST_ARDUINO_H
 #define EG_TEST_ARDUINO_H
@@ -39,27 +33,20 @@
 #include "pgmspace.h"
 
 // ---------------------------------------------------------------------------
-// Fake clock
-//
-// Returns uint32_t, not the core's `unsigned long`: host `unsigned long` is
-// 64-bit, so a seam holding time in one cannot wrap and a rollover test
-// against it passes for the wrong reason.
-//
-// Time moves only when a test moves it. Held as uint64_t microseconds so a
-// test can park below a millis() wrap and step across.
+// Fake clock. uint32_t, not `unsigned long`, so a rollover test can wrap.
+// Moves only when a test moves it.
 // ---------------------------------------------------------------------------
 inline uint64_t& eg_clock_ref() { static uint64_t us = 0; return us; }
 
 inline uint32_t millis() { return (uint32_t)(eg_clock_ref() / 1000ULL); }
 inline uint32_t micros() { return (uint32_t)eg_clock_ref(); }
 
-// Advance the fake clock. There is no real sleep.
+// No real sleep.
 inline void delay(uint32_t ms)             { eg_clock_ref() += (uint64_t)ms * 1000ULL; }
 inline void delayMicroseconds(uint32_t us) { eg_clock_ref() += us; }
 inline void yield()                        {}
 
-// Test control. Call eg_clock_reset() from setUp() so cases cannot leak time
-// into each other.
+// Call eg_clock_reset() from setUp().
 inline void     eg_clock_reset()                 { eg_clock_ref() = 0; }
 inline void     eg_clock_set_ms(uint32_t ms)     { eg_clock_ref() = (uint64_t)ms * 1000ULL; }
 inline void     eg_clock_advance_ms(uint32_t ms) { eg_clock_ref() += (uint64_t)ms * 1000ULL; }
@@ -92,15 +79,13 @@ inline uint64_t eg_clock_us()                    { return eg_clock_ref(); }
 typedef uint8_t byte;
 typedef bool    boolean;
 
-// Placement attributes. No IRAM on a host, and the target rules they encode
-// (ISR-safety, no flash access) are not observable here.
+// Placement attributes; nothing they encode is observable here.
 #define IRAM_ATTR
 #define ICACHE_RAM_ATTR
 #define ICACHE_FLASH_ATTR
 #define DRAM_ATTR
 
-// Interrupts are never delivered here; a unit under test drives its ISR by
-// calling it. These exist so registration code links.
+// No interrupts; a unit drives its ISR by calling it. Here so registration links.
 #define digitalPinToInterrupt(p) (p)
 inline void attachInterrupt(uint8_t pin, void (*fn)(), int mode) {}
 inline void detachInterrupt(uint8_t pin) {}
@@ -137,9 +122,7 @@ typedef int portMUX_TYPE;
 #define lowByte(w)              ((uint8_t)((w) & 0xff))
 #define highByte(w)             ((uint8_t)((w) >> 8))
 
-// Must NOT be macros: libstdc++ uses `min`/`max` as parameter names, so a
-// macro breaks any header that reaches <algorithm>. Both ESP cores pull in
-// std::min/std::max for C++ and keep only the underscored macros.
+// Not macros: libstdc++ uses `min`/`max` as parameter names.
 #include <algorithm>
 using std::max;
 using std::min;
@@ -147,16 +130,13 @@ using std::min;
 #define _min(a, b) ((a) < (b) ? (a) : (b))
 #define _max(a, b) ((a) > (b) ? (a) : (b))
 
-// Same integer truncation as the core. A zero in_max-in_min span divides by
-// zero here exactly as it faults on target; see the OLED graph regression.
+// Same integer truncation as the core; a zero span divides by zero as on target.
 inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-// Hardware RNG stand-in. Entropy quality is a device property and untestable
-// here; what is testable is that the mixing and extraction logic handles
-// whatever words it is given. Default 0 is the adversarial case: a stuck
-// source must not degenerate the pool. Install a hook for anything else.
+// Hardware RNG stand-in. Default 0 is a stuck source; install a hook for
+// anything else.
 typedef uint32_t (*eg_hw_word_fn)();
 inline eg_hw_word_fn& eg_hw_word_hook() { static eg_hw_word_fn f = nullptr; return f; }
 inline void eg_set_hw_word(eg_hw_word_fn f) { eg_hw_word_hook() = f; }
@@ -166,15 +146,14 @@ inline uint32_t esp_random() {
   return f ? f() : 0u;
 }
 
-// Arduino's PRNG. GRNG::stir() seeds it; nothing under test reads it back.
+// GRNG::stir() seeds it; nothing under test reads it back.
 inline void randomSeed(unsigned long seed) { srand((unsigned)seed); }
 inline long random(long howbig) { return howbig > 0 ? (rand() % howbig) : 0; }
 inline long random(long howsmall, long howbig) {
   return howbig > howsmall ? howsmall + random(howbig - howsmall) : howsmall;
 }
 
-// GPIO is a no-op. Nothing that only wiggles pins earns a host test; these
-// exist so a unit with an incidental pinMode() still links.
+// GPIO is a no-op, here so an incidental pinMode() links.
 inline void pinMode(uint8_t pin, uint8_t mode)     {}
 inline void digitalWrite(uint8_t pin, uint8_t val) {}
 inline int  digitalRead(uint8_t pin)               { return LOW; }
@@ -183,8 +162,7 @@ inline void analogWrite(uint8_t pin, int val)      {}
 inline void tone(uint8_t pin, unsigned int freq, unsigned long dur = 0) {}
 inline void noTone(uint8_t pin)                    {}
 
-// getCycleCount derives from the fake clock at a nominal 80 MHz, so it is
-// deterministic and advances only when a test advances time.
+// From the fake clock at a nominal 80 MHz.
 class EspClass {
 public:
   uint32_t getCycleCount() const       { return (uint32_t)(eg_clock_ref() * 80ULL); }
@@ -198,12 +176,12 @@ public:
   void     wdtDisable() const          {}
   void     wdtEnable(uint32_t) const   {}
 
-  // A unit that reboots mid-test is a bug in the unit, not something to
-  // emulate. Counted so a test can assert it did NOT happen.
+  // Counted so a test can assert it did not happen.
   void     restart()                   { _restarts++; }
   uint32_t eg_restarts() const         { return _restarts; }
 
-  // Test control for the heap figures above.
+  // Test control.
+
   void eg_set_free_heap(uint32_t v)      { _free_heap = v; }
   void eg_set_max_free_block(uint32_t v) { _max_block = v; }
 

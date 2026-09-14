@@ -3,7 +3,9 @@ import subprocess
 revision = ""
 try:
     revision = (
-        subprocess.check_output(["git", "describe", "--always"], stderr=subprocess.DEVNULL)
+        # Without --dirty a modified tree reports the last commit, which is not
+        # the code that ran.
+        subprocess.check_output(["git", "describe", "--always", "--dirty"], stderr=subprocess.DEVNULL)
         .strip()
         .decode("utf-8")
     )

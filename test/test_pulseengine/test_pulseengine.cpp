@@ -17,14 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// The level helpers are the whole reason this suite exists. active_level is
-// FULL-scale, and FULL is 1023 on ESP8266; a caller assigning a raw 8-bit value
-// lands at FULL/4 and drops off the digitalWrite path, so the LED goes dim or
-// dark instead of bright. Naming FULL, levelFromPercent and levelFrom8bit here
-// also means removing them is a build failure rather than a dark LED.
-//
-// FULL is 255 on the host, so these assert relationships to FULL rather than
-// absolute values. The endpoint cases are the load-bearing ones.
+// active_level is FULL-scale (1023 on ESP8266, 255 here), so a raw 8-bit value
+// lands at FULL/4. Relationships to FULL, not absolute values.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -51,7 +45,7 @@ static void test_percent_clamps_above_100(void) {
 
 static void test_8bit_endpoints(void) {
   TEST_ASSERT_EQUAL_UINT16(0,    PulseEngine::levelFrom8bit(0));
-  // The regression this guards: 255 must reach FULL, not stay 255.
+  // 255 must reach FULL.
   TEST_ASSERT_EQUAL_UINT16(FULL, PulseEngine::levelFrom8bit(255));
 }
 
@@ -60,9 +54,7 @@ static void test_8bit_clamps_above_255(void) {
   TEST_ASSERT_EQUAL_UINT16(FULL, PulseEngine::levelFrom8bit(0xFFFFFFFFu));
 }
 
-// Half the input is half the output, to within 1% of full scale. Stated as a
-// property rather than the formula: repeating the expression here would pass
-// for any formula, including a wrong one.
+// Half in is half out, within 1% of full scale.
 static void test_half_input_gives_half_output(void) {
   const uint16_t tol = (uint16_t)(FULL / 100) + 1;
   TEST_ASSERT_UINT16_WITHIN(tol, FULL / 2, PulseEngine::levelFromPercent(50));
@@ -84,7 +76,7 @@ static void test_scaling_is_monotonic(void) {
   }
 }
 
-// A default-constructed engine must already sit on the digitalWrite path.
+// Default-constructed sits on the digitalWrite path.
 static void test_default_active_level_is_full(void) {
   PulseEngine e;
   TEST_ASSERT_EQUAL_UINT16(FULL, e.active_level);
@@ -105,7 +97,7 @@ static void test_commit_token_interval_from_max_hz(void) {
   TEST_ASSERT_EQUAL_UINT16(50, e.token_interval_ms);
   e.max_hz = 200; e.commitConfig();
   TEST_ASSERT_EQUAL_UINT16(5, e.token_interval_ms);
-  // 0 disables throttling entirely rather than dividing by zero.
+  // 0 disables throttling.
   e.max_hz = 0;   e.commitConfig();
   TEST_ASSERT_EQUAL_UINT16(0, e.token_interval_ms);
 }
@@ -140,7 +132,7 @@ static void test_click_declines_with_no_tokens(void) {
   PulseEngine e = makeEngine();
   e.last_token_ms = 10000;
   e.tokens = 0;
-  // Same instant as the last token: nothing has accrued.
+  // Same instant: nothing accrued.
   TEST_ASSERT_FALSE(e.notifyClick(10000));
 }
 
@@ -152,8 +144,8 @@ static void test_tokens_accrue_at_the_interval(void) {
   TEST_ASSERT_EQUAL_UINT8(0, e.tokens);
 }
 
-// A long idle gap must not bank unlimited clicks. 100 intervals accrue, the
-// bucket stops at 5, and the click being served spends one.
+// A long idle gap banks at most the bucket.
+
 static void test_tokens_cap_at_five(void) {
   PulseEngine e = makeEngine();
   e.last_token_ms = 10000;

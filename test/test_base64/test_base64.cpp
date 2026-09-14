@@ -26,8 +26,7 @@
 void setUp(void)    {}
 void tearDown(void) {}
 
-// Poisoned buffer so an over-write past the contract is visible. 0x5A is not
-// a base64 character, so a stray one cannot be mistaken for output.
+// Poisoned with 0x5A, not a base64 character.
 static const unsigned char POISON = 0x5A;
 
 struct EncBuf {
@@ -132,7 +131,7 @@ static void test_round_trip_all_lengths(void) {
   }
 }
 
-// Every byte value survives, not just the friendly ASCII ones.
+// Every byte value.
 static void test_round_trip_full_byte_range(void) {
   unsigned char in[256];
   for (unsigned i = 0; i < 256; i++) in[i] = (unsigned char)i;
@@ -147,14 +146,10 @@ static void test_round_trip_full_byte_range(void) {
   TEST_ASSERT_EQUAL_UINT8_ARRAY(in, dec, 256);
 }
 
-// --- the NUL-terminator regression ------------------------------------------
+// --- the NUL terminator -----------------------------------------------------
 
-// encode_base64 returns 4*ceil(N/3) but WRITES that many bytes plus a NUL.
-// A streaming caller that reserves only the return value, then encodes the
-// next chunk at buf + return, has the NUL land on the previous chunk's last
-// character. The contract is return + 1; this pins it for every remainder
-// class, including the 1-and-2-mod-3 tails where the tail block writes 5 bytes
-// from the block start rather than 4.
+// encode_base64 returns 4*ceil(N/3) and writes one more byte, the NUL, for
+// every remainder class.
 static void test_encode_writes_exactly_length_plus_nul(void) {
   unsigned char in[16];
   for (unsigned i = 0; i < sizeof(in); i++) in[i] = (unsigned char)(0xA0 + i);
@@ -172,8 +167,7 @@ static void test_encode_writes_exactly_length_plus_nul(void) {
   }
 }
 
-// The concrete shape of the bug: back-to-back encodes into one rolling buffer
-// at buf + return_value corrupt the tail of the previous chunk.
+// Back-to-back encodes at buf + return_value clobber the previous chunk.
 static void test_streaming_encode_needs_scratch_or_room_for_nul(void) {
   unsigned char in[3] = { 'M', 'a', 'n' };
 
@@ -185,8 +179,7 @@ static void test_streaming_encode_needs_scratch_or_room_for_nul(void) {
   TEST_ASSERT_EQUAL_UINT(8, p);
   TEST_ASSERT_EQUAL_STRING("TWFuTWFu", (const char*)rolling);
 
-  // The failing shape is a partial tail: its NUL lands inside the next chunk's
-  // first character if the caller advances by the return value alone.
+  // A partial tail's NUL lands on the next chunk's first character.
   unsigned char one[1] = { 'M' };
   memset(rolling, POISON, sizeof(rolling));
   p = 0;
@@ -215,8 +208,8 @@ static void test_decode_empty(void) {
   TEST_ASSERT_EQUAL_UINT8(POISON, out[0]);
 }
 
-// A NUL-terminated buffer decodes without an explicit length: the single-arg
-// overload scans to the first non-alphabet byte, which the terminator is.
+// The single-arg overload scans to the first non-alphabet byte.
+
 static void test_decode_without_explicit_length(void) {
   unsigned char in[] = "Zm9vYmFy";
   unsigned char out[16];

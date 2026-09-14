@@ -1,3 +1,3 @@
-// Pulls the production unit into this suite. Keeping it in its own TU means
-// the test file includes only the header, exactly as a caller does.
+// Own TU, so the suite sees only the header.
+
 #include "../../lib/EGTimeZone/src/EGTimeZone.cpp"

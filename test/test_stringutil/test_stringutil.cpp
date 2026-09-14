@@ -17,9 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// advance_pos exists because snprintf returns what it WOULD have written.
-// Getting it wrong walks the cursor past the buffer and the next snprintf
-// scribbles the stack. The truncation cases are the ones that matter.
+// snprintf returns what it would have written; advance_pos must not follow it
+// past the buffer.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -40,8 +39,7 @@ static void test_advance_pos_normal(void) {
   TEST_ASSERT_EQUAL_size_t(12, pos);
 }
 
-// snprintf returns a negative on encoding error and 0 for an empty write.
-// Neither may move the cursor.
+// Negative (encoding error) and 0 must not move the cursor.
 static void test_advance_pos_ignores_non_positive(void) {
   size_t pos = 4;
   advance_pos(pos, 0, 32);
@@ -50,8 +48,7 @@ static void test_advance_pos_ignores_non_positive(void) {
   TEST_ASSERT_EQUAL_size_t(4, pos);
 }
 
-// The whole point: a truncated write must leave pos where the NUL is, never
-// where snprintf claims it would have finished.
+// A truncated write leaves pos on the NUL.
 static void test_advance_pos_clamps_on_truncation(void) {
   size_t pos = 0;
   advance_pos(pos, 100, 8);
@@ -66,7 +63,7 @@ static void test_advance_pos_clamps_on_truncation(void) {
   TEST_ASSERT_EQUAL_size_t(7, pos);
 }
 
-// A cursor at or past the end must be idempotent, not wrap or run away.
+// At or past the end is idempotent.
 static void test_advance_pos_saturated_cursor(void) {
   size_t pos = 8;
   advance_pos(pos, 100, 8);
@@ -81,8 +78,7 @@ static void test_advance_pos_saturated_cursor(void) {
   TEST_ASSERT_EQUAL_size_t(0, pos);
 }
 
-// The exact boundary between "fits" and "truncated". want == room is already
-// truncation, because the NUL takes the last byte.
+// want == room is already truncation: the NUL takes the last byte.
 static void test_advance_pos_fit_boundary(void) {
   size_t pos = 0;
   advance_pos(pos, 6, 8);        // room = 7, fits
@@ -97,8 +93,7 @@ static void test_advance_pos_fit_boundary(void) {
   TEST_ASSERT_EQUAL_size_t(7, pos);
 }
 
-// The usage that motivates it, driven until the buffer fills. Every write
-// stays in bounds and the result stays NUL-terminated.
+// Driven until the buffer fills.
 static void test_advance_pos_loop_never_leaves_the_buffer(void) {
   char buf[16];
   memset(buf, 0x7F, sizeof(buf));
@@ -141,27 +136,21 @@ static void test_format_f_rounds_half_up(void) {
   format_f(b, sizeof(b), 9.995f);  TEST_ASSERT_EQUAL_STRING("10.00", b);
 }
 
-// Negatives are clamped to zero, not printed. Every caller feeds a rate, a
-// dose or a temperature delta that cannot legitimately go below zero.
+// Negatives clamp to zero.
 static void test_format_f_clamps_negative_to_zero(void) {
   char b[32];
   format_f(b, sizeof(b), -1.0f);   TEST_ASSERT_EQUAL_STRING("0.00", b);
   format_f(b, sizeof(b), -0.001f); TEST_ASSERT_EQUAL_STRING("0.00", b);
 }
 
-// OUT OF CONTRACT. format_f documents decimals >= 1; at 0 the "%0*ld" width
-// collapses and the output still carries a point and a zero. Not fixed on
-// purpose: the fix needs a branch inside a function kept out-of-line so GCC
-// does not clone it per call site, and no caller passes 0. Recorded so the
-// behaviour of an out-of-contract input is visible if it ever changes.
+// CHARACTERISATION: decimals 0 is out of contract and still prints ".0".
 static void test_format_f_zero_decimals_is_out_of_contract(void) {
   char b[32];
   format_f(b, sizeof(b), 42.4f, 0);
   TEST_ASSERT_EQUAL_STRING("42.0", b);
 }
 
-// snprintf semantics all the way down: truncation is silent, and the return
-// is the would-have-written length. Callers must run it through advance_pos.
+// snprintf semantics: silent truncation, would-have-written return.
 static void test_format_f_truncates_silently(void) {
   char b[4];
   memset(b, 0x7F, sizeof(b));
@@ -194,8 +183,7 @@ static void test_parse_f_round_trips_with_format_f(void) {
   }
 }
 
-// Non-numeric input yields 0 with endptr parked at the start, which is how a
-// caller distinguishes "the config said 0" from "the config was garbage".
+// Non-numeric: 0 with endptr at the start.
 static void test_parse_f_rejects_non_numeric(void) {
   const char* s = "abc";
   char* end = nullptr;
@@ -212,8 +200,7 @@ static void test_parse_f_rejects_non_numeric(void) {
   TEST_ASSERT_EQUAL_PTR(m, end);
 }
 
-// Exponents, hex floats and leading whitespace are not supported. Parsing
-// stops at the first character it does not understand and endptr says where.
+// No exponents, hex floats or leading whitespace.
 static void test_parse_f_stops_at_unsupported_syntax(void) {
   char* end = nullptr;
 
@@ -228,8 +215,7 @@ static void test_parse_f_stops_at_unsupported_syntax(void) {
   TEST_ASSERT_EQUAL_PTR(ws, end);
 }
 
-// Fraction digits past the ninth are consumed but do not contribute, which
-// keeps the scaling integer from overflowing.
+// Fraction digits past the ninth are consumed, not scaled.
 static void test_parse_f_long_fraction_does_not_overflow(void) {
   char* end = nullptr;
   float v = parse_f("1.123456789987654321", &end);
@@ -267,10 +253,8 @@ static void test_parse_time_rejects_bad_shape(void) {
   }
 }
 
-// REGRESSION. The fields were parsed with atoi, which maps anything
-// non-numeric to 0, so a well-shaped string of letters returned a valid
-// midnight. A garbage quiet-hours pref silently became a 00:00-00:00 window
-// instead of being rejected. Every position around the colon must be a digit.
+// Every position around the colon must be a digit; atoi would read letters as 0.
+
 static void test_parse_time_rejects_non_digits(void) {
   const char* bad[] = {
     "ab:cd", "1a:00", "a1:00", "00:1a", "00:a1", "  :  ", "+1:00",

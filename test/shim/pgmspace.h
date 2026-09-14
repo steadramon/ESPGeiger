@@ -17,12 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Flash strings are plain SRAM on the host: PROGMEM is a no-op, pgm_read_* are
-// plain derefs.
-//
-// This cannot catch PROGMEM misuse. Placement, the strcmp_P-needs-SRAM-arg1
-// rule and the don't-subscript-PROGMEM rule are target-only; passing here says
-// nothing about them.
+// PROGMEM is a no-op and pgm_read_* are derefs. Passing here says nothing
+// about placement.
+
 
 #ifndef EG_TEST_PGMSPACE_H
 #define EG_TEST_PGMSPACE_H

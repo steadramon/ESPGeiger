@@ -14,10 +14,10 @@ The `-c test.ini` is required. `test.ini` is not in `platformio.ini`'s
 
 ## What belongs here
 
-Logic that has bitten us and is host-reproducible. Prefer table-driven boundary
-cases over volume: rollover tests straddle the exact wrap value, encoder tests
-compare golden bytes. Modules with no logic (pin wiggling, registers) get no
-host test. Coverage numbers are not a goal.
+Host-reproducible logic. Prefer boundary cases over volume: rollover tests
+straddle the exact wrap value, encoder tests compare golden bytes. Modules with
+no logic (pin wiggling, registers) get no host test. Coverage numbers are not a
+goal.
 
 Out of scope, and passing here says nothing about them: AsyncTCP/MQTT
 lifecycle, WiFi and portal flows, OTA, icache and LPS, PROGMEM placement,
@@ -68,10 +68,8 @@ in a plain `char` widens differently, so a test fails on correct code.
 `test.ini` passes `-fno-signed-char`.
 
 Canaries for both live in `test_hostmodel`. `size_t` (8 vs 4 bytes) is a third
-candidate, not yet audited.
-
-A `-m32` CI job would make the width case belt-and-braces. Needs `gcc-multilib`,
-Linux only, worth adding once M2 lands.
+candidate, not yet audited. A `-m32` CI job would cover the width case
+properly; needs `gcc-multilib`, Linux only.
 
 ## Tests assert correct behaviour
 
@@ -80,12 +78,13 @@ code. Pinning a defect turns a bug into a specification.
 
 Two exceptions, each named in a comment:
 
-- **`CONTRACT`** — deliberate API behaviour that looks surprising but is right
+- **`CONTRACT`**: deliberate API behaviour that looks surprising but is right
   (`Sha256::result()` finalising once; the shared `Sha256` needing `init()`).
   Assert these: a silent change breaks callers.
-- **`CHARACTERISATION`** — vendored code we do not own, described before
-  deciding whether to replace it (CircularBuffer against EGRingAvg).
+- **`CHARACTERISATION`**: vendored or out-of-contract behaviour, described
+  before deciding whether to change it (CircularBuffer against EGRingAvg).
 
 Anything else broken gets fixed, or gets a test asserting correct behaviour
 wrapped in `TEST_IGNORE_MESSAGE` so the run reports IGNORED rather than passing.
-A green suite must never mean "we decided to live with it".
+A green suite never means a known defect was accepted.
+

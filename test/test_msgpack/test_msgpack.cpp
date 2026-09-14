@@ -17,9 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Golden bytes, not round trips. The encoder is half a contract with
-// StationsAPI; a round trip against our own decoder stays green through a
-// change that breaks the server.
+// Golden bytes, not round trips: the wire format is a contract with StationsAPI.
 
 #include <unity.h>
 #include <string.h>
@@ -97,8 +95,7 @@ static void test_sint_narrowing_boundaries(void) {
   { auto mp = w(); mp.sint(INT32_MIN); ASSERT_BYTES(mp, 0xd2, 0x80, 0x00, 0x00, 0x00); }
 }
 
-// float32 goes out as the raw IEEE-754 bit pattern, big-endian. Pinning the
-// bytes catches an endian or width slip that a float compare would not.
+// Raw IEEE-754 bits, big-endian.
 static void test_f32_bit_patterns(void) {
   { auto mp = w(); mp.f32(0.0f);   ASSERT_BYTES(mp, 0xca, 0x00, 0x00, 0x00, 0x00); }
   { auto mp = w(); mp.f32(1.0f);   ASSERT_BYTES(mp, 0xca, 0x3f, 0x80, 0x00, 0x00); }
@@ -141,9 +138,7 @@ static void test_bin_widths(void) {
 
 // --- a whole payload --------------------------------------------------------
 
-// The shape a telemetry post takes: fixmap, short keys, narrowed ints, a
-// float32 and a signature blob. Byte-for-byte so a key rename or a width
-// change is a test failure rather than a server-side surprise.
+// The shape of a telemetry post, byte for byte.
 static void test_payload_golden_bytes(void) {
   const uint8_t sig[4] = { 0xde, 0xad, 0xbe, 0xef };
   auto mp = w();
@@ -163,8 +158,7 @@ static void test_payload_golden_bytes(void) {
 
 // --- overflow ---------------------------------------------------------------
 
-// On overflow the writer must stop, not truncate-and-advance: a caller that
-// ignores the flag and sends length() bytes must never send more than cap.
+// On overflow the writer stops; length() never exceeds cap.
 static void test_overflow_stops_short_and_flags(void) {
   { // multi-byte scalar that does not fit at all
     auto mp = w(3);
@@ -223,8 +217,7 @@ static void test_reader_round_trips_scalars(void) {
     TEST_ASSERT_EQUAL_STRING("hello", s); }
 }
 
-// find_key has to step over whatever type sits under the keys it rejects,
-// including nested containers.
+// find_key steps over any value type, including nested containers.
 static void test_find_key_skips_nested_values(void) {
   auto mp = w();
   mp.map(3);
@@ -277,8 +270,7 @@ static void test_reader_rejects_type_mismatch(void) {
   TEST_ASSERT_TRUE(r.error);
 }
 
-// Truncation must fail closed. Every prefix short of the whole payload has to
-// refuse, never hand back a half-read value.
+// Every truncated prefix must refuse.
 static void test_reader_handles_truncated_input(void) {
   auto mp = w();
   mp.map(2);
@@ -301,10 +293,7 @@ static void test_reader_handles_truncated_input(void) {
   TEST_ASSERT_EQUAL_UINT32(0x55667788u, v);
 }
 
-// REGRESSION. find_key used to add a declared key length to `pos` before
-// bounds-checking it, so a failed lookup on a truncated buffer left the public
-// `pos` past the end and `buf + r.pos` was an out-of-range pointer. The guard
-// now runs before the add: pos must never leave the buffer, whatever the input.
+// pos must never leave the buffer, whatever the input.
 static void test_find_key_pos_never_leaves_the_buffer(void) {
   auto mp = w();
   mp.map(1);
@@ -321,9 +310,7 @@ static void test_find_key_pos_never_leaves_the_buffer(void) {
   }
 }
 
-// REGRESSION. read_uint used to route through read_int, so an encoded -1 came
-// back as 4294967295 with no error. A peer could turn a negative into a huge
-// unsigned. Negatives must now be refused.
+// read_uint refuses negatives.
 static void test_read_uint_rejects_negatives(void) {
   struct { const char* label; int32_t v; } negatives[] = {
     { "neg fixint", -1 }, { "neg fixint low", -32 },
@@ -345,8 +332,8 @@ static void test_read_uint_rejects_negatives(void) {
   }
 }
 
-// ...while genuinely unsigned values keep their full 32-bit range. This is the
-// case a naive `if (s < 0) reject` after read_int would have broken.
+// Unsigned values keep the full 32-bit range.
+
 static void test_read_uint_keeps_full_unsigned_range(void) {
   uint32_t values[] = { 0u, 1u, 127u, 128u, 255u, 256u, 65535u, 65536u,
                         0x7FFFFFFFu, 0x80000000u, 0xFFFFFFFFu };

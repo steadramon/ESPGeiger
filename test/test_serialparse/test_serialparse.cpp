@@ -17,9 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Untrusted input off a wire. A value escaping a bound here reaches
-// Counter::on_pulse_batch, so the rejection cases matter more than the
-// happy path.
+// Untrusted input off a wire; anything escaping a bound reaches
+// Counter::on_pulse_batch.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -33,7 +32,7 @@ using SerialFormat::parse_mightyohm;
 using SerialFormat::parse_template;
 using SerialFormat::SERIAL_MAX_COUNT;
 
-static const int NOPE = -424242;   // sentinel: parser must not have written
+static const int NOPE = -424242;   // parser must not have written
 
 void setUp(void)    {}
 void tearDown(void) {}
@@ -82,8 +81,7 @@ static void test_gc10_rejects_anything_but_digits(void) {
   TEST_ASSERT_EQUAL_INT(NOPE, cpm);
 }
 
-// A bare terminator is all the device sends when it has nothing to say. It
-// must not read as zero counts.
+// A bare terminator is not zero counts.
 static void test_gc10_rejects_a_line_with_no_digits(void) {
   int cpm = NOPE;
   TEST_ASSERT_FALSE(parse_gc10("\r\n", &cpm, nullptr));
@@ -128,9 +126,7 @@ static void test_mightyohm_rejects_cpm_above_the_bound(void) {
   TEST_ASSERT_FALSE(parse_mightyohm(line, &cpm, &cps));
 }
 
-// cps is added straight to partial_clicks and handed to
-// Counter::on_pulse_batch, so it needs the same bound cpm has. It did not
-// have one: parse_template bounded both and this bounded only cpm.
+// cps goes straight to partial_clicks, so it needs the same bound as cpm.
 static void test_mightyohm_bounds_cps_like_cpm(void) {
   int cpm = NOPE, cps = NOPE;
   char line[64];
@@ -178,10 +174,8 @@ static void test_template_reads_both_labels(void) {
   TEST_ASSERT_EQUAL_INT(1, cps);
 }
 
-// CHARACTERISATION. With no CPM tag it takes the first number on the line,
-// whatever surrounds it. That is deliberate, because the user template is
-// arbitrary, but it means almost nothing is rejected: _bad_streak barely
-// moves and drainPort effectively never fires for this protocol.
+// CHARACTERISATION: with no CPM tag it takes the first number on the line, so
+// almost nothing is rejected and drainPort effectively never fires.
 static void test_template_falls_back_to_the_first_number(void) {
   int cpm = NOPE;
   TEST_ASSERT_TRUE(parse_template("total garbage 42 more\n", &cpm, nullptr));
@@ -202,8 +196,7 @@ static void test_template_rejects_above_the_bound(void) {
   TEST_ASSERT_EQUAL_INT(NOPE, cpm);
 }
 
-// A negative label value returns -1 from the label reader, which is the same
-// signal as "tag absent", so it must not slip through as a count.
+// A negative label reads as tag absent.
 static void test_template_rejects_a_negative_count(void) {
   int cpm = NOPE;
   TEST_ASSERT_FALSE(parse_template("CPM: -5\n", &cpm, nullptr));
@@ -233,8 +226,8 @@ static void test_null_arguments_are_refused(void) {
   TEST_ASSERT_FALSE(parse_template("CPM: 1\n", nullptr, nullptr));
 }
 
-// A byte >= 0x80 held in a plain char widens differently on host and target.
-// -fno-signed-char makes the host match; this pins it.
+// -fno-signed-char: a byte >= 0x80 in a char must widen as on target.
+
 static void test_high_bytes_do_not_pass_validation(void) {
   const char line[] = { 'C', 'P', 'M', ':', ' ', '1', (char)0x92, '\0' };
   TEST_ASSERT_FALSE(common_validate(line, strlen(line)));

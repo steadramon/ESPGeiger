@@ -17,11 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// The caller sizes an allocation from each length here and copies that many
-// bytes, so a length that disagrees with its pointer is a heap overflow. The
-// original String version got this wrong for a url with a query and no path,
-// copying the query into a buffer sized for the path. Reachable from a
-// webhook.url of the shape host?query.
+// The caller allocates from each length and copies that many bytes, so a
+// length that disagrees with its pointer is a heap overflow.
 
 #include <unity.h>
 #include <string.h>
@@ -73,8 +70,7 @@ static void test_a_port_before_a_path_is_taken(void) {
   TEST_ASSERT_EQUAL_INT(8080, p.port);
 }
 
-// A port needs no path after it. The String version only read one when a '/'
-// followed, so this shape silently stayed on 80.
+// A port needs no path after it.
 static void test_a_port_with_no_path_is_taken(void) {
   TEST_ASSERT_TRUE(eg_parse_url("http://example.com:8080", &p));
   assert_part("host", p.host, p.host_len, "example.com");
@@ -97,9 +93,7 @@ static void test_a_colon_inside_the_query_is_not_a_port(void) {
   TEST_ASSERT_EQUAL_INT(80, p.port);
 }
 
-// path is the literal "/", not a view sized from a negative pathBeg. That is
-// the overrun the String version had. The host stops at the '?', which it did
-// not: it resolved a hostname of "example.com?a=1&b=2".
+// Query and no path: path is the literal "/" and the host stops at the '?'.
 static void test_a_query_with_no_path_yields_a_root_path(void) {
   TEST_ASSERT_TRUE(eg_parse_url("http://example.com?a=1&b=2", &p));
   assert_part("host", p.host, p.host_len, "example.com");
@@ -107,8 +101,8 @@ static void test_a_query_with_no_path_yields_a_root_path(void) {
   assert_part("query", p.query, p.query_len, "?a=1&b=2");
 }
 
-// The sibling: the only '/' sits inside the query, so pathBeg is past queryBeg
-// and the path length would go negative.
+// The only '/' is inside the query.
+
 static void test_a_slash_inside_the_query_is_not_a_path(void) {
   TEST_ASSERT_TRUE(eg_parse_url("http://example.com?url=a/b", &p));
   assert_part("host", p.host, p.host_len, "example.com");

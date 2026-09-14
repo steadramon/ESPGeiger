@@ -1,10 +1,6 @@
-// Pulls the production client and its packet units into this suite, over the
-// same fake lwIP that drives test_asynctcp.
-//
-// Helpers.hpp only defines these for ARDUINO_ARCH_ESP32/ESP8266. Supplying host
-// versions here is deliberate: claiming an architecture would also switch on
-// EGAsyncTCP's ESP8266 DRAM range check, which rejects every host pointer.
-// None of them appear in a class body, so both TUs see the same layout.
+// Helpers.hpp only defines these for ESP32/ESP8266. Claiming an architecture
+// would also switch on EGAsyncTCP's DRAM range check, so host versions here.
+
 #define SEMAPHORE_TAKE(...)  ((void)0)
 #define SEMAPHORE_GIVE()     ((void)0)
 #define GET_FREE_MEMORY()    ESP.getMaxFreeBlockSize()

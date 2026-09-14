@@ -17,9 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Characterisation, not verification. CircularBuffer and EGRingAvg may be
-// unified; this pins what the vendored one does first. Cases the library
-// documents as undefined (pop/shift on empty) are not asserted.
+// CHARACTERISATION of the vendored library ahead of unifying it with EGRingAvg.
+// Documented-undefined cases (pop/shift on empty) are not asserted.
 
 #include <unity.h>
 #include <CircularBuffer.hpp>
@@ -40,8 +39,7 @@ static void test_empty_state(void) {
   TEST_ASSERT_EQUAL_UINT(4, decltype(b)::capacity);
 }
 
-// The index type narrows with capacity. That is what keeps the buffer cheap on
-// an 8266, and a widened index would be a silent size regression.
+// The index type narrows with capacity.
 static void test_index_type_narrows_with_capacity(void) {
   TEST_ASSERT_EQUAL_size_t(1, sizeof(CircularBuffer<int, 200>::index_t));
   TEST_ASSERT_EQUAL_size_t(2, sizeof(CircularBuffer<int, 300>::index_t));
@@ -65,8 +63,7 @@ static void test_push_then_shift_is_fifo(void) {
   TEST_ASSERT_TRUE(b.isEmpty());
 }
 
-// push() returns false exactly when it overwrote a live element. That return
-// is the only overflow signal a caller gets.
+// push() returns false when it overwrote a live element.
 static void test_push_reports_overwrite(void) {
   CircularBuffer<int, 3> b;
   TEST_ASSERT_TRUE(b.push(1));
@@ -175,10 +172,7 @@ static void test_clear_then_reuse(void) {
   TEST_ASSERT_EQUAL_INT(42, b[0]);
 }
 
-// CHARACTERISATION of vendored behaviour, not a defect. At capacity 1 push()
-// on a full buffer advances head and tail together, so the slot is replaced -
-// which is what overwrite-on-full should do. Recorded because this library is
-// a candidate for replacement by EGRingAvg and the replacement must match.
+// CHARACTERISATION: at capacity 1, push() on full replaces the slot.
 static void test_capacity_one(void) {
   CircularBuffer<int, 1> b;
   TEST_ASSERT_TRUE(b.push(1));
@@ -191,9 +185,7 @@ static void test_capacity_one(void) {
 
 // --- overlap with EGRingAvg -------------------------------------------------
 
-// Where the two overlap they must agree, or unifying them silently changes
-// every average on the device. Integer type and one division at the end on
-// both sides, so this is an exact compare, not a tolerance.
+// Where the two overlap they must agree exactly.
 static void test_agrees_with_egringavg_mean(void) {
   const int W = 6;
   CircularBuffer<int32_t, 6> cb;
@@ -211,7 +203,8 @@ static void test_agrees_with_egringavg_mean(void) {
     TEST_ASSERT_EQUAL_INT32(sum, ra.sum());
     TEST_ASSERT_EQUAL_INT32(sum / (int32_t)cb.size(), ra.get());
 
-    // Chronological order matches slot for slot.
+    // Slot for slot.
+
     for (decltype(cb)::index_t k = 0; k < cb.size(); k++) {
       TEST_ASSERT_EQUAL_INT32(cb[k], ra.at((uint16_t)k));
     }

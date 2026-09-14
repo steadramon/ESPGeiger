@@ -17,13 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// SCOPE: these do not establish that the RNG is secure. Statistical batteries
-// only rule out gross structure - a counter through AES passes them all.
-// Hardware entropy and the boot SRAM seed are device properties; measure those
-// by dumping off a real board and running PractRand offline.
-//
-// Testable here: the mixing and extraction logic behaves correctly on whatever
-// words the hardware supplies, and fails safe when that hardware misbehaves.
+// Mixing and extraction on whatever words the hardware supplies. Says nothing
+// about entropy quality; measure that off a board with PractRand.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -62,8 +57,7 @@ static void test_extract_fills_exactly_and_no_more(void) {
   }
 }
 
-// The pool must actually advance. If extract() left it untouched, two
-// consecutive draws would be identical and the RNG would be a constant.
+// The pool must advance between draws.
 static void test_extract_advances_the_pool(void) {
   uint8_t a[32], b[32];
   GRNG::extract(a, sizeof(a));
@@ -71,8 +65,7 @@ static void test_extract_advances_the_pool(void) {
   TEST_ASSERT_TRUE_MESSAGE(memcmp(a, b, 32) != 0, "two draws were identical");
 }
 
-// A stuck hardware source is the failure that matters: the pool must still
-// advance from its own feedback rather than emitting one block forever.
+// A stuck source: the pool must still advance from its own feedback.
 static void test_stuck_hardware_source_still_advances(void) {
   eg_set_hw_word(hw_stuck_zero);
   uint8_t a[32], b[32], c[32];
@@ -90,8 +83,7 @@ static void test_stuck_hardware_source_still_advances(void) {
   TEST_ASSERT_TRUE(memcmp(d, e, 32) != 0);
 }
 
-// Changing any input source must change the output. This is an avalanche
-// check on the construction, not a randomness claim.
+// Any input change changes the output.
 static void test_output_depends_on_the_hardware_words(void) {
   uint8_t with_counter[32], with_zero[32];
 
@@ -107,7 +99,7 @@ static void test_output_depends_on_the_hardware_words(void) {
   TEST_ASSERT_TRUE(memcmp(with_counter, with_zero, 32) != 0);
 }
 
-// mix() folds caller entropy in. Two pools fed different bits must diverge.
+// Two pools fed different bits diverge.
 static void test_mix_changes_subsequent_output(void) {
   eg_set_hw_word(hw_stuck_zero);      // isolate mix() as the only variable
 
@@ -121,9 +113,7 @@ static void test_mix_changes_subsequent_output(void) {
   TEST_ASSERT_TRUE(memcmp(a, b, 32) != 0);
 }
 
-// mix() walks all 8 pool words rather than repeatedly hitting one, so eight
-// successive mixes must each land somewhere new. Feeding 8 words then drawing
-// must differ from feeding the same value 8 times.
+// mix() walks all 8 pool words.
 static void test_mix_walks_the_whole_pool(void) {
   eg_set_hw_word(hw_stuck_zero);
 
@@ -139,18 +129,17 @@ static void test_mix_walks_the_whole_pool(void) {
 
 // --- fast_uint32 ------------------------------------------------------------
 
-// The buffer holds 32 bytes and hands out 4 at a time, so it must refill on
-// exactly the 9th call. Counting hardware reads is how we see the refill.
+// 32 bytes, 4 per call: refill on exactly the 9th. Hardware reads show it.
 static void test_fast_uint32_refills_every_eight_calls(void) {
   eg_set_hw_word(hw_counting);
 
-  // Drain to a known boundary first: one refill consumes 4 hw words.
+  // Drain to a boundary: one refill is 4 hw words.
   s_hw_counter = 0;
   uint32_t before = 0;
   for (int i = 0; i < 8; i++) { GRNG::fast_uint32(); }
   before = s_hw_counter;
 
-  // The next 8 calls must trigger exactly one more refill (4 hw words).
+  // Next 8 calls: exactly one more refill.
   for (int i = 0; i < 8; i++) { GRNG::fast_uint32(); }
   uint32_t after = s_hw_counter;
 
@@ -161,8 +150,7 @@ static void test_fast_uint32_refills_every_eight_calls(void) {
 static void test_fast_uint32_values_vary(void) {
   std::set<uint32_t> seen;
   for (int i = 0; i < 256; i++) seen.insert(GRNG::fast_uint32());
-  // 256 draws from a good source should essentially never collide; allow a
-  // couple in case, but a constant generator would collapse to 1.
+  // A couple of collisions allowed; a constant generator collapses to 1.
   TEST_ASSERT_GREATER_THAN_size_t(250, seen.size());
 }
 
@@ -177,9 +165,7 @@ static void test_extract_fast_fills_exactly(void) {
   }
 }
 
-// The xorshift zero-guard. A zero state is an absorbing point: x stays 0
-// forever and the stream is all zeros. The 0x6b8b4567 fallback exists to make
-// that unreachable, and this is the catastrophic failure it prevents.
+// Zero is absorbing for xorshift; the 0x6b8b4567 fallback keeps it unreachable.
 static void test_xorshift_never_emits_an_all_zero_window(void) {
   eg_set_hw_word(hw_stuck_zero);      // worst case: no fresh entropy at all
 
@@ -194,8 +180,7 @@ static void test_xorshift_never_emits_an_all_zero_window(void) {
   }
 }
 
-// Successive extract_fast calls must not repeat: the xorshift state carries
-// across calls rather than restarting from the same seed.
+// State carries across calls.
 static void test_extract_fast_state_carries_between_calls(void) {
   eg_set_hw_word(hw_stuck_zero);
   uint8_t a[64], b[64];
@@ -207,9 +192,8 @@ static void test_extract_fast_state_carries_between_calls(void) {
 
 // --- construction -----------------------------------------------------------
 
-// extract() hashes pool(32) + cycle count(4) + 4 hardware words(16) = 52 bytes,
-// which fits one 64-byte SHA-256 compression block with room for padding. If
-// this ever exceeds 55 the extract cost silently doubles.
+// extract() hashes 52 bytes; past 55 the cost is two SHA-256 blocks.
+
 static void test_extract_input_stays_one_compression_block(void) {
   const size_t pool_bytes = 8 * sizeof(uint32_t);
   const size_t cc_bytes   = sizeof(uint32_t);

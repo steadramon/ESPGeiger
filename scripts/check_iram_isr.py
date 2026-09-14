@@ -43,8 +43,8 @@ def _walk_objs(d):
 
 
 # Ours is src/ plus the build's copy of anything that lives in the repo's lib/.
-# The rest of lib*/ is a lib_deps install, so a finding there is upstream's and
-# cannot be fixed here without vendoring it.
+# The rest of lib*/ is a framework-bundled or lib_deps library, so a finding
+# there is upstream's and cannot be fixed without vendoring it into lib/.
 def _obj_groups(build_dir):
     proj = os.path.abspath(os.path.join(build_dir, "..", "..", ".."))
     repo = os.path.join(proj, "lib")
@@ -162,7 +162,7 @@ def check(build_dir, prefix="xtensa-lx106-elf-"):
     else:
         lines.append("%d of our IRAM functions, none reach flash" % scanned)
     if bad["ext"]:
-        lines += report(bad["ext"], "%d in lib_deps, upstream, not blocking:")
+        lines += report(bad["ext"], "%d outside repo lib/, upstream, not blocking:")
     return (1 if bad["ours"] else 0), "\n".join(lines)
 
 

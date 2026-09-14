@@ -46,9 +46,8 @@ struct EdgeList {
   }
 };
 
-// One 8N1 frame per byte, back to back. `line` carries the current level in
-// and out so callers can splice runs together. Returns the tick one frame
-// past the last stop bit.
+// 8N1 frames back to back. `line` is the level in and out so runs splice.
+// Returns the tick one frame past the last stop bit.
 static uint32_t encode(EdgeList& out, const uint8_t* bytes, size_t n,
                        uint32_t t0, uint32_t cpb, bool& line) {
   uint32_t t = t0;
@@ -89,9 +88,7 @@ static void feedIdle(Decoder& d, Run& r, uint32_t at) {
   r.take(d.idle(at, true));
 }
 
-// Encode, feed, then flush. This is the whole real path: a byte is only
-// emitted once its stop bit run ends, so every byte needs either a following
-// start bit or this flush.
+// A byte is only emitted once its stop bit run ends, hence the flush.
 static void roundTrip(Decoder& d, Run& r, const uint8_t* bytes, size_t n,
                       uint32_t cpb, uint32_t t0 = 0) {
   EdgeList e;
@@ -128,8 +125,7 @@ static void test_single_byte_at_115200(void) {
   TEST_ASSERT_EQUAL_HEX8(0x41, r.bytes[0]);
 }
 
-// Bit 7 clear means the stop bit is not preceded by a transition, so nothing
-// is emitted until the run ends. Every ASCII byte is this case.
+// Bit 7 clear: no transition before the stop bit, so nothing until the run ends.
 static void test_pending_byte_needs_the_idle_flush(void) {
   const uint8_t in[] = { '4' };
   EdgeList e;
@@ -149,8 +145,7 @@ static void test_pending_byte_needs_the_idle_flush(void) {
   TEST_ASSERT_FALSE(d.midFrame());
 }
 
-// A one bit start pulse and then nine high bits with no transition anywhere.
-// Only the flush can count them out.
+// Start pulse then nine high bits; only the flush can count them out.
 static void test_all_ones_byte_ends_with_no_edge(void) {
   const uint8_t in[] = { 0xFF };
   EdgeList e;
@@ -171,8 +166,7 @@ static void test_all_ones_byte_ends_with_no_edge(void) {
   TEST_ASSERT_EQUAL_HEX8(0xFF, r.bytes[0]);
 }
 
-// Mirror case: start plus eight zero data bits are one nine-bit low run, so a
-// single rising edge carries the whole byte.
+// Start plus eight zero bits is one nine-bit low run.
 static void test_zero_byte_is_one_low_run(void) {
   const uint8_t in[] = { 0x00 };
   EdgeList e;
@@ -216,8 +210,7 @@ static void test_framing_error_discards_the_byte(void) {
   TEST_ASSERT_FALSE(d.midFrame());
 }
 
-// Manufacturing a stop bit purely on elapsed time invents a byte out of a
-// held-low line. The level argument is what stops that.
+// A held-low line must not become a byte on elapsed time alone.
 static void test_break_emits_nothing(void) {
   Decoder d; Run r;
   d.configure(CPB_115);
@@ -230,8 +223,7 @@ static void test_break_emits_nothing(void) {
   TEST_ASSERT_FALSE(d.midFrame());
 }
 
-// After a break the line comes back up. The tail of the break is not a start
-// bit, and treating it as one would fabricate a byte on every recovery.
+// The tail of a break is not a start bit.
 static void test_break_resyncs_without_a_phantom_byte(void) {
   Decoder d; Run r;
   d.configure(CPB_115);
@@ -257,8 +249,7 @@ static void test_break_resyncs_without_a_phantom_byte(void) {
   TEST_ASSERT_EQUAL_HEX8(0x5A, r.bytes[0]);
 }
 
-// Byte N's pending stop bit is resolved by byte N+1's start edge instead of
-// by the flush. Both routes must produce the same value.
+// Stop bit resolved by the next start edge rather than the flush.
 static void test_back_to_back_frames_match_the_flush_path(void) {
   const uint8_t in[] = { '1', '2', '3', '4', '\r', '\n' };
   Decoder d; Run r;
@@ -279,8 +270,7 @@ static void test_tick_counter_wrap(void) {
   TEST_ASSERT_EQUAL_UINT32(0, r.framing);
 }
 
-// Any gap past one frame is idle whatever the exact figure, so a delta the
-// clock cannot have measured honestly still leaves the decoder consistent.
+// Any gap past one frame is idle, whatever the figure.
 static void test_absurd_deltas_are_treated_as_idle(void) {
   Decoder d; Run r;
   d.configure(CPB_115);
@@ -291,8 +281,7 @@ static void test_absurd_deltas_are_treated_as_idle(void) {
   TEST_ASSERT_FALSE(d.midFrame());
 }
 
-// The point of measuring deltas rather than absolute times: interrupt entry
-// latency is common to both endpoints and cancels.
+// Interrupt latency is common to both edges and cancels.
 static void test_constant_latency_offset_cancels(void) {
   const uint8_t in[] = { 'H', 'i', '!' };
   EdgeList e;
@@ -326,11 +315,8 @@ static void test_single_edge_jitter_within_tolerance(void) {
   TEST_ASSERT_EQUAL_HEX8(0x0F, r.bytes[0]);
 }
 
-// CHARACTERISATION. Run length decoding carries no redundancy, so an edge
-// displaced past half a bit moves a bit between runs and yields a wrong byte
-// rather than an error. There is no framing check that can catch it. This is
-// why the port counts coalesced edges and why the sampling arm is decided by
-// measurement rather than argument.
+// CHARACTERISATION: an edge displaced past half a bit yields a wrong byte, not
+// an error. No framing check can catch it.
 static void test_edge_jitter_past_tolerance_corrupts_silently(void) {
   const uint8_t in[] = { 0x0F };
   EdgeList e;
@@ -348,9 +334,7 @@ static void test_edge_jitter_past_tolerance_corrupts_silently(void) {
   TEST_ASSERT_NOT_EQUAL_HEX8(0x0F, r.bytes[0]);
 }
 
-// A 2% clock mismatch accumulates 0.2 of a bit over a whole frame, inside the
-// rounding margin. The old library's 8.5 against 8.68 microsecond bit period
-// was this case.
+// A 2% clock mismatch is 0.2 bit over a frame, inside the rounding margin.
 static void test_two_percent_clock_mismatch_still_decodes(void) {
   const uint8_t in[] = { 0x55, 0x33, 0x0F };
   EdgeList e;
@@ -366,9 +350,7 @@ static void test_two_percent_clock_mismatch_still_decodes(void) {
   TEST_ASSERT_EQUAL_HEX8_ARRAY(in, r.bytes, 3);
 }
 
-// Two transitions arriving before the handler reads the pin are delivered as
-// one, with the level already back where it started. That is impossible for a
-// genuine transition, so it is caught here instead of becoming a wrong byte.
+// Two transitions before the pin is read arrive as one with the level unchanged.
 static void test_coalesced_edge_is_detected(void) {
   Decoder d; Run r;
   d.configure(CPB_115);
@@ -394,11 +376,8 @@ static void test_sub_bit_glitch_leaves_no_state(void) {
   TEST_ASSERT_FALSE(d.midFrame());
 }
 
-// CHARACTERISATION. A glitch longer than half a bit is indistinguishable from
-// a start bit, so it yields a spurious byte. A hardware UART does the same. The
-// defence is at the line level, where GeigerSerial drops unprintable bytes and
-// drains the port after a streak of unparseable lines. What matters here is
-// that the decoder returns to idle rather than staying wedged mid frame.
+// CHARACTERISATION: a glitch past half a bit is a start bit, as on a hardware
+// UART. The decoder must return to idle afterwards.
 static void test_noise_pulse_yields_a_spurious_byte_then_recovers(void) {
   Decoder d; Run r;
   d.configure(CPB_9K6);
@@ -456,7 +435,7 @@ static void test_cycles_per_bit(void) {
   TEST_ASSERT_EQUAL_UINT32(694,  EGTinySerial::cyclesPerBit(115200, CPU_HZ));
   TEST_ASSERT_EQUAL_UINT32(1389, EGTinySerial::cyclesPerBit(115200, 160000000UL));
   TEST_ASSERT_EQUAL_UINT32(2083, EGTinySerial::cyclesPerBit(115200, 240000000UL));
-  // Refusals, so a port declines to open rather than running slow and wrong.
+  // Refused, so the port declines to open.
   TEST_ASSERT_EQUAL_UINT32(0, EGTinySerial::cyclesPerBit(0,        CPU_HZ));
   TEST_ASSERT_EQUAL_UINT32(0, EGTinySerial::cyclesPerBit(115200,   0));
   TEST_ASSERT_EQUAL_UINT32(0, EGTinySerial::cyclesPerBit(20000000, CPU_HZ));
@@ -494,8 +473,7 @@ static void test_ring_wraps_at_capacity(void) {
   TEST_ASSERT_EQUAL_UINT32(0, q.available());
 }
 
-// CONTRACT. Overwriting the oldest byte would corrupt the front of a line the
-// consumer is part way through parsing. Losing the tail costs one line.
+// CONTRACT: drop the newest, not the oldest, so a half-parsed line survives.
 static void test_ring_full_drops_the_newest(void) {
   uint8_t storage[8];
   SpscRing q;
@@ -534,8 +512,7 @@ static void test_ring_clear_from_the_consumer(void) {
   TEST_ASSERT_EQUAL_INT(42, q.pop());
 }
 
-// The indices are free running counters, so their own wrap has to be a
-// non-event. Walk one right through it.
+// Free-running indices; walk one through its own wrap.
 static void test_ring_index_counter_wrap(void) {
   uint8_t storage[8];
   SpscRing q;
@@ -574,8 +551,9 @@ static void test_line_lands_in_the_ring(void) {
   for (size_t i = 0; i < 6; i++) TEST_ASSERT_EQUAL_INT(in[i], q.pop());
 }
 
-// The terminator is the byte the flush has to deliver, and a line whose last
-// data byte has bit 7 set exercises the other flush route.
+// The terminator is delivered by the flush; bit 7 set on the last byte takes
+// the other route.
+
 static void test_line_ending_in_a_high_bit_byte(void) {
   const uint8_t in[] = { 0xC3, 0xFF, '\n' };
   Decoder d; Run r;

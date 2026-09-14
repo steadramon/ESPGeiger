@@ -17,11 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Known-answer vectors from FIPS 180-2 and RFC 4231. Known-answer, not
-// self-consistency: hashing twice with our own code proves nothing.
-//
-// GRNG extract, WebAPI signing and coredump identity all depend on this. A
-// wrong digest is silent - a plausible 32 bytes the server disagrees with.
+// Known-answer vectors from FIPS 180-2 and RFC 4231. A wrong digest is silent.
 
 #include <unity.h>
 #include <string.h>
@@ -43,7 +39,7 @@ static std::string hex(const uint8_t* p, size_t n) {
   return s;
 }
 
-// Hash a buffer byte-by-byte through write(uint8_t).
+// Byte by byte through write(uint8_t).
 static std::string sha_bytes(const uint8_t* p, size_t n) {
   Sha256.init();
   for (size_t i = 0; i < n; i++) Sha256.write(p[i]);
@@ -70,10 +66,10 @@ static void test_fips_180_2_vectors(void) {
               sha_str(""));
   ASSERT_HASH("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
               sha_str("abc"));
-  // 56 bytes: the exact length that forces padding into a second block.
+  // 56 bytes forces padding into a second block.
   ASSERT_HASH("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
               sha_str("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"));
-  // 112 bytes: exactly two blocks of message.
+  // 112 bytes: two blocks.
   ASSERT_HASH("cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1",
               sha_str("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmn"
                       "hijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"));
@@ -81,9 +77,7 @@ static void test_fips_180_2_vectors(void) {
 
 // --- padding boundaries -----------------------------------------------------
 
-// Where a SHA implementation breaks is the padding arithmetic: 55 is the last
-// length that fits its 0x80 + length field in one block, 56 forces a second,
-// and each multiple of 64 repeats the cliff. This walks every one of them.
+// 55 is the last length that pads in one block; every multiple of 64 repeats it.
 static void test_block_boundary_lengths(void) {
   struct { size_t n; const char* want; } cases[] = {
     {   0, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
@@ -108,8 +102,7 @@ static void test_block_boundary_lengths(void) {
   }
 }
 
-// The length field is a bit count derived from a uint32 byte counter. A long
-// message exercises the multi-block path and the counter shifts in pad().
+// Multi-block path and the counter shifts in pad().
 static void test_one_million_a(void) {
   Sha256.init();
   uint8_t chunk[1000];
@@ -119,9 +112,7 @@ static void test_one_million_a(void) {
               hex(Sha256.result(), HASH_LENGTH));
 }
 
-// The buffer overload inherited from Print must agree with byte-at-a-time.
-// That path is what callers actually use, and it is only reachable because
-// sha256.h says `using Print::write`.
+// The Print buffer overload must agree with byte-at-a-time.
 static void test_buffer_write_matches_byte_write(void) {
   const char* msg = "The quick brown fox jumps over the lazy dog";
   size_t len = strlen(msg);
@@ -134,8 +125,7 @@ static void test_buffer_write_matches_byte_write(void) {
   ASSERT_HASH("d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592", bulk);
 }
 
-// Splitting a message across write() calls must not change the digest,
-// including splits that land mid-block.
+// Splits across write() calls, including mid-block.
 static void test_incremental_writes_are_split_invariant(void) {
   const char* msg = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
   const char* want = "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1";
@@ -178,8 +168,7 @@ static void test_rfc4231_hmac_vectors(void) {
   }
 }
 
-// Keys longer than the 64-byte block must be hashed down first. This is a
-// distinct code path in initHmac and the easiest part of HMAC to get wrong.
+// Keys past the 64-byte block are hashed down first.
 static void test_rfc4231_oversized_key(void) {
   uint8_t k[131];
   memset(k, 0xaa, sizeof(k));
@@ -196,8 +185,7 @@ static void test_rfc4231_oversized_key(void) {
               hmac(k, sizeof(k), (const uint8_t*)d6, strlen(d6)));
 }
 
-// A key of exactly the block length is used verbatim, neither hashed nor
-// re-padded. The boundary between the two branches of initHmac.
+// A block-length key is used verbatim.
 static void test_hmac_key_exactly_block_length(void) {
   uint8_t k64[64], k65[65];
   memset(k64, 0xaa, sizeof(k64));
@@ -205,17 +193,13 @@ static void test_hmac_key_exactly_block_length(void) {
   std::string a = hmac(k64, 64, (const uint8_t*)"x", 1);
   std::string b = hmac(k65, 65, (const uint8_t*)"x", 1);
   TEST_ASSERT_EQUAL_size_t(64, a.size());
-  // 64 goes down the verbatim branch, 65 down the hash-first branch, so they
-  // must differ. Equal would mean the boundary test is inverted.
+  // 64 verbatim, 65 hashed; equal would mean the boundary is inverted.
   TEST_ASSERT_TRUE(a != b);
 }
 
 // --- contract / quirks ------------------------------------------------------
 
-// CONTRACT, not a defect. result() finalises: it calls pad(), which mutates
-// buffer and state, so it is a one-shot exactly like mbedtls_sha256_finish or
-// EVP_DigestFinal. Callers copy the 32 bytes out and do not call it twice.
-// Asserted so the one-shot semantics cannot change silently.
+// CONTRACT: result() finalises, one shot, like mbedtls_sha256_finish.
 static void test_result_is_destructive(void) {
   Sha256.init();
   Sha256.write((const uint8_t*)"abc", 3);
@@ -225,14 +209,11 @@ static void test_result_is_destructive(void) {
   TEST_ASSERT_TRUE_MESSAGE(first != second, "result() unexpectedly idempotent");
 }
 
-// CONTRACT, not a defect. Sha256 is a shared global with no implicit reset;
-// every call site must init() first. GRNG keeps its own private Sha256Class
-// precisely because extract() runs inside the uECC signing callback and must
-// not clobber a hash a caller has in flight. This pins why that matters.
+// CONTRACT: the shared Sha256 has no implicit reset; init() first.
 static void test_global_instance_requires_init(void) {
   Sha256.init();
   Sha256.write((const uint8_t*)"leftover", 8);
-  // no result(), no init(): state is dirty
+  // No result(), no init(): dirty.
 
   Sha256.write((const uint8_t*)"abc", 3);
   std::string dirty = hex(Sha256.result(), HASH_LENGTH);
@@ -244,10 +225,8 @@ static void test_global_instance_requires_init(void) {
               sha_str("abc"));
 }
 
-// The implementation stores its working buffer byte-swapped (`buffer.b[off ^ 3]`)
-// and ships a byte-swapped init state, so it is correct only on a little-endian
-// machine. ESP8266, ESP32 and every host we test on are little-endian; this
-// asserts the assumption rather than leaving it implicit.
+// `buffer.b[off ^ 3]` and the init state assume little-endian.
+
 static void test_little_endian_assumption_holds(void) {
   union { uint32_t w; uint8_t b[4]; } probe;
   probe.w = 0x01020304u;

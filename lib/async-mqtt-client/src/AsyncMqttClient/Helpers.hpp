@@ -55,7 +55,16 @@ class Helpers {
     #define log_w(...)
   #endif
 #else
-  #pragma error "No valid architecture"
+  // The host test build lands here, and may define these itself.
+  #ifndef log_i
+    #define log_i(...)
+  #endif
+  #ifndef log_e
+    #define log_e(...)
+  #endif
+  #ifndef log_w
+    #define log_w(...)
+  #endif
 #endif
 
 }  // namespace AsyncMqttClientInternals
