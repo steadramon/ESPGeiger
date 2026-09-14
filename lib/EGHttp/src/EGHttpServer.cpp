@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpServer.h"
+#include "EGHttpHeaders.h"
 #include <string.h>
 #include <stdlib.h>
 #include <EGBase64.h>   // buffer-in/out, no heap (vs core's heap-using <base64.h>)
@@ -36,6 +37,10 @@
 static const char CL0_CRLF[]      PROGMEM = "Content-Length: 0\r\n";
 static const char CONN_CLOSE_CR[] PROGMEM = "Connection: close\r\n";
 
+static const char R400[] PROGMEM =
+  "HTTP/1.1 400 Bad Request\r\n"
+  "Content-Length: 0\r\n"
+  "Connection: close\r\n\r\n";
 static const char R413[] PROGMEM =
   "HTTP/1.1 413 Payload Too Large\r\n"
   "Content-Length: 0\r\n"
@@ -461,14 +466,9 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
     }
     if (!s->headersDone) return;
 
-    s->contentLength = 0;
-    for (size_t i = 0; i + 16 < s->headerEnd; i++) {
-      if (strncasecmp(s->buf + i, "Content-Length:", 15) == 0) {
-        const char* p = s->buf + i + 15;
-        while (*p == ' ') p++;
-        s->contentLength = (size_t)atol(p);
-        break;
-      }
+    if (eghttp_content_length(s->buf, s->headerEnd, &s->contentLength) == EGHTTP_CL_BAD) {
+      sendStatusAndClose(s, R400, sizeof(R400) - 1);
+      return;
     }
 
     identifyRoute(s);
@@ -502,6 +502,11 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
       return;
     }
 
+    // >= keeps one byte for the body's NUL.
+    if (s->contentLength >= EGHTTP_REQ_BUF - s->headerEnd) {
+      sendStatusAndClose(s, R413, sizeof(R413) - 1);
+      return;
+    }
     if (s->len >= s->headerEnd + s->contentLength) {
       s->state = READY;
     }
