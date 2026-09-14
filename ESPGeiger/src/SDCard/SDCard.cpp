@@ -239,8 +239,7 @@ void SDCard::s_tick(unsigned long /*now_s*/)
   if (clean_due || forceCleanup) scheduleCleanup(CLEAN_FULL);
 }
 
-// One byte, so the ticker may call it. set_loop_interval may not: it shifts
-// _due_order under loop_all's walk.
+// One byte, so the ticker may call it.
 void SDCard::scheduleCleanup(uint8_t what) {
   if (what > _cleanup) _cleanup = what;
 }

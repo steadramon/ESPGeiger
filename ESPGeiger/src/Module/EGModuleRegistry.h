@@ -46,6 +46,7 @@ class EGModuleRegistry {
     static void log_activity_and_reset();
     static void wake();
     // <0 disables loop, 0 = every iteration, positive = ms (clamped to 65535).
+    // Any task. Applied by loop_all, so _due_order is never edited mid-walk.
     static bool set_loop_interval(EGModule* m, int32_t interval_ms);
     static bool sleep_until(EGModule* m, unsigned long now, unsigned long target_ms);
     static bool set_tick_enabled(EGModule* m, bool enabled);
@@ -82,6 +83,7 @@ class EGModuleRegistry {
       uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
       uint8_t flags;             // 1 - packed module flags (see above)
       uint8_t category;          // 1 - EGPrefCategory; /param tab + pause skip
+      int32_t pending_ms;        // 4 - requested interval, NO_REQUEST if none
 #ifdef TICK_PROFILE
       uint16_t max_tick_us;      // 2 - slowest s_tick over current window
 #endif
@@ -100,11 +102,28 @@ class EGModuleRegistry {
     // not-due entry, so idle modules at the back cost no per-tick work.
     static uint8_t _due_order[EG_MAX_MODULES];
     static uint8_t _due_count;
-    // Editing _due_order inside loop() shifts it under the walk. Defer.
-    static bool _walking;
-    static bool _due_dirty;
     static void rebuild_due();
+
+    // The exchange is an RMW, hence the lock on ESP32.
+    static constexpr int32_t NO_REQUEST = INT32_MIN;
+    static EG_XTASK_VOLATILE bool _pending;
+    static void apply_pending();
+#ifdef ESP32
+  public:
+    static portMUX_TYPE& _mux() {
+      static portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
+      return m;
+    }
+#endif
 };
+
+#ifdef ESP32
+#define EGREG_LOCK()   portENTER_CRITICAL(&EGModuleRegistry::_mux())
+#define EGREG_UNLOCK() portEXIT_CRITICAL(&EGModuleRegistry::_mux())
+#else
+#define EGREG_LOCK()
+#define EGREG_UNLOCK()
+#endif
 
 #define EG_REGISTER_MODULE(instance) \
   static bool _reg_##instance = EGModuleRegistry::add(&instance);
