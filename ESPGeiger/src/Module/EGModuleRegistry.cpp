@@ -34,8 +34,7 @@ uint8_t EGModuleRegistry::_overflow = 0;
 unsigned long EGModuleRegistry::_next_loop_due = 0;
 uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_due_count = 0;
-bool EGModuleRegistry::_walking = false;
-bool EGModuleRegistry::_due_dirty = false;
+EG_XTASK_VOLATILE bool EGModuleRegistry::_pending = false;
 
 // Sorted, because loop_all takes the next wake time from _due_order[0].
 void EGModuleRegistry::rebuild_due() {
@@ -55,6 +54,7 @@ void EGModuleRegistry::rebuild_due() {
 bool EGModuleRegistry::add(EGModule* m) {
   if (_count >= EG_MAX_MODULES) { _overflow++; return false; }
   _slots[_count].module = m;
+  _slots[_count].pending_ms = NO_REQUEST;
   _count++;
   return true;
 }
@@ -77,6 +77,7 @@ void EGModuleRegistry::begin_all() {
 }
 
 void EGModuleRegistry::loop_all(unsigned long now) {
+  if (_pending) apply_pending();
   if ((long)(now - _next_loop_due) < 0) return;
 
   if (ota_in_progress) {
@@ -92,7 +93,6 @@ void EGModuleRegistry::loop_all(unsigned long now) {
   unsigned long fallback = now + 1000;
 
   uint8_t k = 0;
-  _walking = true;
   while (k < _due_count) {
     Slot& s = _slots[_due_order[k]];
     if ((long)(now - s.next_due) < 0) break;
@@ -129,8 +129,6 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     // If the slot moved back, recheck position k; otherwise advance.
     if (cur == k) k++;
   }
-  _walking = false;
-  if (_due_dirty) { _due_dirty = false; rebuild_due(); }
 
   unsigned long next = (_due_count > 0) ? _slots[_due_order[0]].next_due : fallback;
   if ((long)(next - fallback) > 0) next = fallback;
@@ -255,7 +253,26 @@ void EGModuleRegistry::wake() {
 bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
   for (uint8_t i = 0; i < _count; i++) {
     if (_slots[i].module != m) continue;
+    EGREG_LOCK();
+    _slots[i].pending_ms = interval_ms;
+    _pending = true;
+    EGREG_UNLOCK();
+    return true;
+  }
+  return false;
+}
+
+void EGModuleRegistry::apply_pending() {
+  EGREG_LOCK();
+  _pending = false;
+  EGREG_UNLOCK();
+  for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
+    EGREG_LOCK();
+    int32_t interval_ms = s.pending_ms;
+    s.pending_ms = NO_REQUEST;
+    EGREG_UNLOCK();
+    if (interval_ms == NO_REQUEST) continue;
     if (interval_ms >= 0) {
       s.flags |= FLAG_HAS_LOOP;
       s.loop_interval = (interval_ms > 0xFFFF) ? 0xFFFF : (uint16_t)interval_ms;
@@ -263,12 +280,9 @@ bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
     } else {
       s.flags &= ~FLAG_HAS_LOOP;
     }
-    if (_walking) _due_dirty = true;
-    else          rebuild_due();
-    _next_loop_due = fast_millis();
-    return true;
   }
-  return false;
+  rebuild_due();
+  _next_loop_due = fast_millis();
 }
 
 bool EGModuleRegistry::set_tick_enabled(EGModule* m, bool enabled) {
@@ -421,6 +435,7 @@ void EGModuleRegistry::pre_wifi_all() {
     s.loop_last = 0;
     s.next_due = 0;
     s.warmup_seconds = m->warmup_seconds();
+    s.pending_ms = NO_REQUEST;
     uint8_t f = 0;
     if (m->has_loop())       f |= FLAG_HAS_LOOP;
     if (m->has_tick())       f |= FLAG_HAS_TICK;
