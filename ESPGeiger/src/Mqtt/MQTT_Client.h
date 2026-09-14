@@ -175,6 +175,7 @@ private:
   static constexpr uint8_t PEND_PING   = 1 << 1;
   static constexpr uint8_t PEND_WARN   = 1 << 2;
   static constexpr uint8_t PEND_ALERT  = 1 << 3;
+  static constexpr uint8_t PEND_CONNECT = 1 << 4;
   uint8_t _pending = 0;
   EG_XTASK_VOLATILE bool _reanchor = false;   // set on (re)connect; s_tick re-derives slot phase
   int16_t _slot_s = -1;     // claimed second-of-minute slot, computed once

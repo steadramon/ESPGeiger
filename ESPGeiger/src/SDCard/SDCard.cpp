@@ -146,7 +146,12 @@ void SDCard::s_tick(unsigned long /*now_s*/)
     return;
   }
   lastWrittenMinute = thisMinute;
+  _write_due = true;
+}
 
+void SDCard::writeMinute()
+{
+  time_t currentTime = time (NULL);
   struct tm *timeinfo = gmtime (&currentTime);
 
   bool forceCleanup = false;
@@ -245,9 +250,14 @@ void SDCard::scheduleCleanup(uint8_t what) {
 }
 
 void SDCard::loop(unsigned long /*now*/) {
+  if (!sdenabled) return;
+  if (_write_due && !_busy) {
+    _write_due = false;
+    writeMinute();
+  }
   const uint8_t what = _cleanup;
   _cleanup = CLEAN_NONE;
-  if (!sdenabled || what == CLEAN_NONE) return;
+  if (what == CLEAN_NONE) return;
 
   Hold hold;
   if (what == CLEAN_FREECHECK) {

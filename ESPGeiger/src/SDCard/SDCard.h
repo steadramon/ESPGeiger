@@ -54,10 +54,10 @@ class SDCard : public EGModule {
     // (date<<16)|time). Returns false if nothing matched.
     bool deleteOldest(uint32_t cutoffPacked);
     // Drop the writer's file handle so /sd routes can safely walk and read.
-    // s_tick will reopen on the next minute boundary.
+    // The writer reopens on the next minute boundary.
     void pauseWriter();
-    // These paths all yield, and SdFat is not reentrant, so s_tick has to stay
-    // off the card for the scope.
+    // These paths all yield, and SdFat is not reentrant, so the writer has to
+    // stay off the card for the scope.
     struct Hold {
       Hold();
       ~Hold();
@@ -77,6 +77,9 @@ class SDCard : public EGModule {
     enum : uint8_t { CLEAN_NONE = 0, CLEAN_FREECHECK, CLEAN_FULL };
     uint8_t _cleanup = CLEAN_NONE;
     bool _busy = false;
+    // s_tick marks the minute; loop() does the card I/O.
+    bool _write_due = false;
+    void writeMinute();
     void scheduleCleanup(uint8_t what);
 };
 

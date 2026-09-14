@@ -237,7 +237,7 @@ void MQTT_Client::s_tick(unsigned long now)
   }
 
   if (!mqttClient || !mqttClient->connected()) {
-    reconnect();
+    _pending |= PEND_CONNECT;
     return;
   }
 
@@ -307,6 +307,7 @@ void MQTT_Client::s_tick(unsigned long now)
 void MQTT_Client::loop(unsigned long /*now*/)
 {
   if (!mqttEnabled) return;
+  if (_pending & PEND_CONNECT) { _pending &= ~PEND_CONNECT; reconnect(); return; }
   if (!mqttClient || !mqttClient->connected()) return;
   // One drain per call - prioritise alarm latency over throughput.
   if (_pending & PEND_WARN)       { _pending &= ~PEND_WARN;   publishWarn();   return; }

@@ -349,20 +349,17 @@ void UdpBlipModule::notifyClick(unsigned long now_ms) {
 void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
   if (_mode == 0 || ota_in_progress) return;
   if (!Wifi::connected) return;
-  // WiFi reconnect can leave egress netif + mDNS stale; rebind both.
+  // WiFi reconnect can leave egress netif + mDNS stale; loop() rebinds both.
   if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
     Log::console(PSTR("UdpBlip: WiFi reconnect, rebinding"));
-    teardown();
-    _mdns_done = false;
+    _pending |= REBIND;
+  } else if (!_udp || !_mdns_done) {
+    _pending |= BIND;
   }
-  if (!ensureUdp()) return;
-  _bound_at_ms = Wifi::connected_at_ms;
-  if (!_mdns_done) announce_mdns();
 
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
     if (++_backoff_ticks * 1000UL >= UDPBLIP_FAIL_COOLDOWN_MS) {
-      teardown();
-      _mdns_done = false;
+      _pending |= REBIND;
       _fail_count = 0;
       _backoff_ticks = 0;
     }
@@ -390,7 +387,7 @@ void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
 
 uint16_t UdpBlipModule::loop_interval_ms() {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  return 60000;   // UDPRX: tryEmitClick is a no-op; loop body is empty
+  return 1000;    // no clicks to emit; s_tick raises the rest at 1 Hz
 #else
   return UDPBLIP_CLICK_MIN_INTERVAL_MS;
 #endif
@@ -404,6 +401,13 @@ void UdpBlipModule::loop(unsigned long now) {
   if (_pending) {
     uint8_t p = _pending;
     _pending = 0;
+    if (p & (BIND | REBIND)) {
+      if (p & REBIND) teardown();
+      if (ensureUdp()) {
+        _bound_at_ms = Wifi::connected_at_ms;
+        announce_mdns();
+      }
+    }
     if (p & EMIT_RAD) emitRad(now);
 #ifdef ESPG_HV_ADC
     if (p & EMIT_HV)  emitHv(now);
