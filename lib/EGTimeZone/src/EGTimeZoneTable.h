@@ -19,7 +19,7 @@
 #ifndef EGTIMEZONE_TABLE_H
 #define EGTIMEZONE_TABLE_H
 
-// IANA tzdb 2026c. Rerun tools/gen_timezones.py; never edit.
+// IANA tzdb 2026d. Rerun tools/gen_timezones.py; never edit.
 // Included only by EGTimeZone.cpp.
 
 // NUL separated; zones[].offset indexes into this.
@@ -357,7 +357,7 @@ PROGMEM static const struct TZoneH {
     {845698, 227},   // Pacific/Port_Moresby
     {845934, 1181},  // America/St_Johns
     {853628, 948},   // Africa/Cairo
-    {853804, 1158},  // America/Inuvik
+    {853804, 811},   // America/Inuvik
     {857365, 69},    // Asia/Kuwait
     {857780, 983},   // America/Indiana/Marengo
     {861210, 816},   // America/Indiana/Tell_City
