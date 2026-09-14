@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Regenerates EGTimeZoneTable.h and the ESPGeiger dropdown list from the IANA tz
+# Regenerates src/EGTimeZoneTable.h and extras/zones.json from the IANA tz
 # database. NOT a build step: run it when tzdb releases, review the diff, commit.
 #
 # Source is the `tzdata` PyPI package, never the system zoneinfo tree, which
@@ -12,15 +12,13 @@
 import argparse
 import collections
 import difflib
+import json
 import os
-import re
 import sys
 
 LIB = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPO = os.path.dirname(os.path.dirname(LIB))
 HEADER = os.path.join(LIB, "src", "EGTimeZoneTable.h")
-NTP_CPP = os.path.join(REPO, "ESPGeiger", "src", "NTP", "NTP.cpp")
-ANCHOR = "var L={"
+ZONES_JSON = os.path.join(LIB, "extras", "zones.json")
 
 LICENCE = """/*
   EGTimeZoneTable.h - Generated from the IANA tz database.
@@ -48,51 +46,6 @@ HASH_MASK = 0x1FFFFF
 
 SKIP_DIRS = {"right", "posix"}
 SKIP_NAMES = {"posixrules", "Factory", "localtime"}
-
-# Country to dropdown region. Derived once from UN M49 via pycountry-convert so
-# the generator keeps tzdata as its only dependency. A code in neither this nor
-# OVERRIDE is a hard error, so a new country cannot land in the wrong group.
-REGION_OF = {
-    "AD":"eu", "AE":"as", "AF":"as", "AL":"eu", "AM":"as", "AR":"sa",
-    "AS":"pa", "AT":"eu", "AZ":"as", "BB":"na", "BD":"as", "BE":"eu",
-    "BG":"eu", "BM":"na", "BO":"sa", "BR":"sa", "BT":"as", "BY":"eu",
-    "BZ":"na", "CA":"na", "CH":"eu", "CI":"af", "CK":"pa", "CL":"sa",
-    "CN":"as", "CO":"sa", "CR":"na", "CU":"na", "CV":"af", "CY":"as",
-    "CZ":"eu", "DE":"eu", "DO":"na", "DZ":"af", "EC":"sa", "EE":"eu",
-    "EG":"af", "ES":"eu", "FI":"eu", "FJ":"pa", "FK":"sa", "FM":"pa",
-    "FO":"eu", "FR":"eu", "GB":"eu", "GE":"as", "GF":"sa", "GI":"eu",
-    "GR":"eu", "GS":"sa", "GT":"na", "GU":"pa", "GW":"af", "GY":"sa",
-    "HK":"as", "HN":"na", "HT":"na", "HU":"eu", "ID":"as", "IE":"eu",
-    "IL":"as", "IN":"as", "IO":"as", "IQ":"as", "IR":"as", "IT":"eu",
-    "JM":"na", "JO":"as", "JP":"as", "KE":"af", "KG":"as", "KI":"pa",
-    "KP":"as", "KR":"as", "KZ":"as", "LB":"as", "LK":"as", "LR":"af",
-    "LT":"eu", "LV":"eu", "LY":"af", "MA":"af", "MD":"eu", "MH":"pa",
-    "MM":"as", "MN":"as", "MO":"as", "MQ":"na", "MT":"eu", "MU":"af",
-    "MV":"as", "MX":"na", "MY":"as", "MZ":"af", "NA":"af", "NC":"pa",
-    "NF":"pa", "NG":"af", "NI":"na", "NP":"as", "NR":"pa", "NU":"pa",
-    "NZ":"pa", "PA":"na", "PE":"sa", "PF":"pa", "PG":"pa", "PH":"as",
-    "PK":"as", "PL":"eu", "PM":"na", "PR":"na", "PS":"as", "PT":"eu",
-    "PW":"pa", "PY":"sa", "QA":"as", "RO":"eu", "RS":"eu", "RU":"eu",
-    "SA":"as", "SB":"pa", "SD":"af", "SG":"as", "SR":"sa", "SS":"af",
-    "ST":"af", "SV":"na", "SY":"as", "TC":"na", "TD":"af", "TH":"as",
-    "TJ":"as", "TK":"pa", "TM":"as", "TN":"af", "TO":"pa", "TW":"as",
-    "UA":"eu", "US":"na", "UY":"sa", "UZ":"as", "VE":"sa", "VN":"as",
-    "VU":"pa", "WS":"pa", "ZA":"af",
-}
-
-# Where M49 disagrees with where a user looks for their zone.
-OVERRIDE = {
-    "AU": "au",   # its own group rather than lumped into Oceania
-    "GL": "eu",   # Greenland is Denmark
-    "TR": "eu",   # Europe/Istanbul
-    "AQ": "aq", "EH": "af", "PN": "pa", "TL": "as",   # absent from M49
-}
-
-# Continent population descending (UN WPP 2024): likeliest regions first.
-REGIONS = [("as", "Asia"), ("af", "Africa"), ("eu", "Europe"),
-           ("na", "North America"), ("sa", "South America"), ("au", "Australia"),
-           ("pa", "Pacific"), ("aq", "Antarctica")]
-
 
 def fnv_hash(name):
     h = OFFSET_BASIS
@@ -139,63 +92,22 @@ def collect(root):
     return dict(sorted(zones.items()))
 
 
-def etc_order(zone):
-    """Offset order, then aliases. GMT, GMT+0 and GMT-0 are all zero, so the
-    name breaks the tie rather than leaving it to input order."""
-    tail = zone[4:]
-    m = re.match(r"GMT([+-])(\d+)$", tail)
-    if m:
-        n = int(m.group(2))
-        return (0, -n if m.group(1) == "-" else n, tail)
-    return (0, 0, tail) if tail == "GMT" else (1, 0, tail)
-
-
-def ui_groups(root, zones):
-    """Dropdown contents: canonical zones by region, then the fixed offsets."""
-    by_region = collections.defaultdict(list)
+def canonical(root):
+    """Canonical zones with their country codes, from zone1970.tab."""
+    out = []
     for line in open(os.path.join(root, "zone1970.tab"), encoding="utf-8"):
         if line.startswith("#") or not line.strip():
             continue
         fields = line.rstrip("\n").split("\t")
-        code, name = fields[0].split(",")[0], fields[2]
-        # A research station belongs to Antarctica whoever operates it.
-        region = "aq" if name.startswith("Antarctica/") else (
-            OVERRIDE.get(code) or REGION_OF.get(code))
-        if not region:
-            sys.exit("country %s (%s) is in no region; add it to OVERRIDE" % (code, name))
-        by_region[region].append(name)
-
-    groups = [(label, sorted(by_region[key])) for key, label in REGIONS if by_region[key]]
-    groups.append(("Etc", sorted((z for z in zones if z.startswith("Etc/")), key=etc_order)))
-
-    listed = [z for _, zs in groups for z in zs]
-    missing = [z for z in listed if z not in zones]
-    if missing:
-        sys.exit("dropdown would offer unresolvable zones: %s" % missing)
-    return groups, listed
+        out.append({"name": fields[2], "countries": fields[0].split(",")})
+    return sorted(out, key=lambda z: z["name"])
 
 
-def write_js(groups):
-    # region -> prefix -> tails; the page rebuilds the name. Smaller than
-    # repeating the prefix on every entry.
-    body = []
-    for label, zs in groups:
-        if not zs:
-            continue
-        bucket = collections.OrderedDict()
-        for z in zs:
-            head, _, tail = z.partition("/")
-            bucket.setdefault(head, []).append(tail or z)
-        body.append('"%s":{%s}' % (label, ",".join(
-            '"%s":[%s]' % (head, ",".join('"%s"' % t for t in tails))
-            for head, tails in bucket.items())))
-    body = ",".join(body)
-    # Replaces the one-line var L={...}; declaration. No marker comments: that
-    # raw string is served to the browser.
-    out = []
-    for line in open(NTP_CPP).read().splitlines(True):
-        out.append(ANCHOR + body + "};\n" if line.startswith(ANCHOR) else line)
-    return "".join(out)
+def render_json(zones, root, version):
+    doc = {"tzdb": version,
+           "zones": sorted(zones),
+           "canonical": canonical(root)}
+    return json.dumps(doc, indent=1) + "\n"
 
 
 def render(zones, version):
@@ -274,14 +186,12 @@ def main():
         sys.exit("no zones found under " + root)
 
     text, rules, entries = render(zones, version)
-
-    groups, listed = ui_groups(root, zones)
-    js = write_js(groups)
+    data = render_json(zones, root, version)
 
     if args.check:
         stale = []
         for name, want, path in (("EGTimeZoneTable.h", text, HEADER),
-                                 ("NTP.cpp", js, NTP_CPP)):
+                                 ("zones.json", data, ZONES_JSON)):
             have = open(path).read()
             if want == have:
                 continue
@@ -294,14 +204,14 @@ def main():
         print("up to date (tzdb %s)" % version)
         return 0
 
+    os.makedirs(os.path.dirname(ZONES_JSON), exist_ok=True)
     open(HEADER, "w").write(text)
-    open(NTP_CPP, "w").write(js)
+    open(ZONES_JSON, "w").write(data)
     print("tzdb %s" % version)
     print("device: %d zones, %d unique rules" % (len(entries), len(rules)))
     blob = sum(len(r) + 1 for r in rules)
     print("flash:  zones %d B + rule blob %d B = %d B (offset field allows 2048)"
           % (len(entries) * 4, blob, len(entries) * 4 + blob))
-    print("dropdown: %d zones in %d groups" % (len(listed), len(groups)))
     return 0
 
 

@@ -5,11 +5,13 @@ on:
     paths:
       - 'ESPGeiger/src/NTP/**'
       - 'lib/EGTimeZone/**'
+      - 'scripts/gen_tz_dropdown.py'
       - '.github/workflows/timezones.yml'
   pull_request:
     paths:
       - 'ESPGeiger/src/NTP/**'
       - 'lib/EGTimeZone/**'
+      - 'scripts/gen_tz_dropdown.py'
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
@@ -25,6 +27,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -r lib/EGTimeZone/tools/requirements.txt
       - run: python3 lib/EGTimeZone/tools/gen_timezones.py --check
+      - run: python3 scripts/gen_tz_dropdown.py --check
 
   upstream:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
