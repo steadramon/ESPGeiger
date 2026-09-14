@@ -31,7 +31,7 @@
 EGModuleRegistry::Slot EGModuleRegistry::_slots[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_count = 0;
 uint8_t EGModuleRegistry::_overflow = 0;
-unsigned long EGModuleRegistry::_next_loop_due = 0;
+uint32_t EGModuleRegistry::_next_loop_due = 0;
 uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_due_count = 0;
 EG_XTASK_VOLATILE bool EGModuleRegistry::_pending = false;
@@ -42,7 +42,7 @@ void EGModuleRegistry::rebuild_due() {
   for (uint8_t i = 0; i < _count; i++) {
     if (!(_slots[i].flags & FLAG_HAS_LOOP)) continue;
     uint8_t j = _due_count;
-    while (j > 0 && (long)(_slots[_due_order[j - 1]].next_due - _slots[i].next_due) > 0) {
+    while (j > 0 && (int32_t)(_slots[_due_order[j - 1]].next_due - _slots[i].next_due) > 0) {
       _due_order[j] = _due_order[j - 1];
       j--;
     }
@@ -78,7 +78,7 @@ void EGModuleRegistry::begin_all() {
 
 void EGModuleRegistry::loop_all(unsigned long now) {
   if (_pending) apply_pending();
-  if ((long)(now - _next_loop_due) < 0) return;
+  if ((int32_t)(now - _next_loop_due) < 0) return;
 
   if (ota_in_progress) {
     ota.loop(now);
@@ -90,12 +90,12 @@ void EGModuleRegistry::loop_all(unsigned long now) {
   bool ntp_ok  = ntpclient.synced;
   bool paused  = Counter::external_paused();
   // Re-check at most this far in the future, even if no module is due.
-  unsigned long fallback = now + 1000;
+  uint32_t fallback = now + 1000;
 
   uint8_t k = 0;
   while (k < _due_count) {
     Slot& s = _slots[_due_order[k]];
-    if ((long)(now - s.next_due) < 0) break;
+    if ((int32_t)(now - s.next_due) < 0) break;
     if (((s.flags & FLAG_REQUIRES_WIFI) && !wifi_ok) ||
         ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok) ||
         (paused && s.category == (uint8_t)EGP_CAT_UPLOAD)) {
@@ -120,7 +120,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     while (cur + 1 < _due_count) {
       Slot& a = _slots[_due_order[cur]];
       Slot& b = _slots[_due_order[cur + 1]];
-      if ((long)(a.next_due - b.next_due) <= 0) break;
+      if ((int32_t)(a.next_due - b.next_due) <= 0) break;
       uint8_t tmp = _due_order[cur];
       _due_order[cur] = _due_order[cur + 1];
       _due_order[cur + 1] = tmp;
@@ -130,8 +130,8 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     if (cur == k) k++;
   }
 
-  unsigned long next = (_due_count > 0) ? _slots[_due_order[0]].next_due : fallback;
-  if ((long)(next - fallback) > 0) next = fallback;
+  uint32_t next = (_due_count > 0) ? _slots[_due_order[0]].next_due : fallback;
+  if ((int32_t)(next - fallback) > 0) next = fallback;
   _next_loop_due = next;
 }
 
@@ -150,6 +150,7 @@ void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds)
       now = now / 1000;
       seconds = true;
     }
+    // A blocking s_tick stops the ticker that would record it, so mark first.
 #ifdef TICK_PROFILE
     unsigned long t0 = micros();
     s.module->s_tick(now);
@@ -388,7 +389,7 @@ unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long
 }
 
 bool EGModuleRegistry::sleep_until(EGModule* m, unsigned long now, unsigned long target_ms) {
-  long until = (long)(target_ms - now);
+  int32_t until = (int32_t)(target_ms - now);
   uint16_t interval;
   if (until <= 0)         interval = 100;
   else if (until > 60000) interval = 60000;
@@ -463,6 +464,10 @@ size_t EGModuleRegistry::collect_status_json(char* buf, size_t cap, unsigned lon
     size_t n = s.module->status_json(buf + pos, cap - pos, now);
     if (n == 0) {
       pos = before;
+    } else if (n >= cap - pos) {
+      // snprintf length, so a truncated fragment is dropped, not sent.
+      pos = before;
+      break;
     } else {
       pos += n;
       first = false;

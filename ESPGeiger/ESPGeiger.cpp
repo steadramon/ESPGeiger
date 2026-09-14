@@ -78,9 +78,9 @@ void msTickerCB()
     _fast_ms_accum_us -= 1000;
   }
   _fast_ms_last_us = now_us;
-  if (LedSignal::s_any_active) LedSignal::poll();
+  if (LedSignal::s_any_active) LedSignal::poll(now_us);
 #ifdef PULSE_OUT
-  if (PulseOut::s_active) pulseout.poll();
+  if (PulseOut::s_active) pulseout.poll(now_us);
 #endif
 }
 
