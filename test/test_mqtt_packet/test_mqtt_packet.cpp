@@ -17,11 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Parses bytes straight off the network from an untrusted broker, so the
-// hostile cases matter most: topic length disagreeing with the packet, a short
-// remaining-length, a payload split at an awkward offset.
-//
-// Run under native_asan; only the sanitizer catches an out-of-bounds read.
+// Untrusted bytes from the broker. Run under native_asan: only the sanitizer
+// catches an out-of-bounds read.
 
 #include <unity.h>
 #include <Arduino.h>
@@ -37,14 +34,13 @@ using AsyncMqttClientInternals::BufferState;
 
 // --- harness ----------------------------------------------------------------
 
-// Mirrors AsyncMqttClient: topicBuffer is new char[maxTopicLength + 1], and
-// the guard byte past the end catches a one-off overflow.
+// topicBuffer is maxTopicLength + 1 as in AsyncMqttClient, plus a guard byte.
 struct Harness {
   ParsingInformation pi{};
   std::vector<char>  topic_storage;
   uint16_t           max_topic;
 
-  // what the callbacks saw
+  // Seen by the callbacks.
   int         data_calls    = 0;
   int         complete_calls= 0;
   std::string last_topic;
@@ -80,7 +76,7 @@ struct Harness {
   }
 };
 
-// Build a PUBLISH variable header: 2-byte topic length, topic, [packet id].
+// 2-byte topic length, topic, optional packet id.
 static std::vector<char> var_header(const std::string& topic, bool with_id,
                                     uint16_t id = 0x1234) {
   std::vector<char> v;
@@ -91,7 +87,7 @@ static std::vector<char> var_header(const std::string& topic, bool with_id,
   return v;
 }
 
-// Feed the variable header one byte at a time, exactly as the client does.
+// One byte at a time, as the client does.
 static void feed_header(PublishPacket* p, std::vector<char>& buf, Harness& h) {
   size_t pos = 0;
   while (pos < buf.size() && h.pi.bufferState == BufferState::VARIABLE_HEADER) {
@@ -143,7 +139,7 @@ static void test_qos0_with_payload(void) {
   delete p;
 }
 
-// QoS 1 and 2 carry a packet id between topic and payload.
+// QoS 1 and 2 carry a packet id after the topic.
 static void test_qos1_has_packet_id(void) {
   Harness h;
   h.pi.packetFlags = 0x02;                    // QOS1
@@ -163,9 +159,7 @@ static void test_qos1_has_packet_id(void) {
   delete p;
 }
 
-// A payload arriving across several TCP segments must reassemble, with index
-// and total tracking correctly. This is the normal case for a big retained
-// message and the one most likely to be got wrong.
+// Payload across several TCP segments.
 static void test_payload_split_across_segments(void) {
   Harness h;
   std::string topic = "t";
@@ -195,19 +189,8 @@ static void test_payload_split_across_segments(void) {
 
 // --- topic length boundaries ------------------------------------------------
 
-// LATENT HAZARD, not a live bug. parseVariableHeader does
-//   _topicLength = currentByte | _topicLengthMsb << 8;
-// with `char currentByte`, and the packet id does the same with
-// `char _packetIdMsb`. Both are only correct because every ESP toolchain
-// (xtensa-lx106, xtensa-esp32, riscv32-esp) defaults to UNSIGNED char.
-//
-// Build with -fsigned-char, or port to a target whose char is signed, and the
-// low byte sign-extends: every topic whose length has bit 7 set (128..255,
-// 384..511, ...) computes a nonsense length and is silently dropped, and every
-// packet id >= 0x8000 is mangled, which breaks QoS 1 and 2 acknowledgement.
-//
-// test.ini passes -fno-signed-char so this suite matches the device. This test
-// asserts the assumption directly rather than relying on it silently.
+// Length and packet id bytes are held in char; test.ini passes -fno-signed-char
+// to match the device and this fails if that is dropped.
 static void test_parser_depends_on_unsigned_char(void) {
   char low = (char)200;
   uint16_t len = (uint16_t)(low | (char)0 << 8);
@@ -220,10 +203,7 @@ static void test_parser_depends_on_unsigned_char(void) {
     "packet ids >= 0x8000 mangle under signed char");
 }
 
-// Exactly maxTopicLength is the last accepted size. The NUL lands on the final
-// byte of the maxTopicLength+1 allocation, so the guard past it must survive.
-// 128 is also the first length whose low byte has bit 7 set, so this is the
-// case that fails outright on a signed-char build.
+// Last accepted size; the NUL lands on the final byte of the allocation.
 static void test_topic_exactly_max_length(void) {
   Harness h(128);
   std::string topic(128, 'x');
@@ -239,7 +219,7 @@ static void test_topic_exactly_max_length(void) {
   delete p;
 }
 
-// One over the limit must be dropped silently, with no callback and no write.
+// One over the limit: no callback, no write.
 static void test_topic_over_max_is_ignored(void) {
   Harness h(128);
   std::string topic(129, 'x');
@@ -256,24 +236,40 @@ static void test_topic_over_max_is_ignored(void) {
 
 // --- hostile input ----------------------------------------------------------
 
-// A broker that declares a remainingLength smaller than the variable header it
-// then sends. The payload length is computed as
-// `remainingLength - (_bytePosition + 1)` in uint32, so a short declaration
-// underflows to ~4 GB.
+// Header then payload until NONE or end of input; returns bytes consumed.
+static size_t feed_packet(PublishPacket* p, std::vector<char>& buf, Harness& h) {
+  size_t pos = 0;
+  while (pos < buf.size() && h.pi.bufferState != BufferState::NONE) {
+    if (h.pi.bufferState == BufferState::VARIABLE_HEADER) {
+      p->parseVariableHeader(buf.data(), buf.size(), &pos);
+    } else {
+      p->parsePayload(buf.data(), buf.size(), &pos);
+    }
+  }
+  return pos;
+}
+
+// No callback, back in NONE, exactly remainingLength consumed, buffer intact.
+static void assert_swallowed(Harness& h, size_t consumed) {
+  TEST_ASSERT_EQUAL_INT_MESSAGE(0, h.data_calls, "malformed packet reached the data callback");
+  TEST_ASSERT_EQUAL_INT_MESSAGE(0, h.complete_calls, "malformed packet reached the complete callback");
+  TEST_ASSERT_EQUAL_MESSAGE(BufferState::NONE, h.pi.bufferState, "parser did not finish the packet");
+  TEST_ASSERT_EQUAL_UINT32_MESSAGE(h.pi.remainingLength, (uint32_t)consumed, "consumed a different number of bytes than the packet declared");
+  TEST_ASSERT_TRUE(h.guard_intact());
+}
+
+// remainingLength smaller than the variable header: the uint32 payload length
+// underflows without the check.
 static void test_remaining_length_shorter_than_header(void) {
   Harness h;
   std::string topic = "0123456789";        // 10 bytes -> header is 12
   auto vh = var_header(topic, false);
+  vh.insert(vh.end(), 64, 'Z');            // the stream continues past the packet
   h.pi.remainingLength = 5;                // lies: smaller than the header
 
   PublishPacket* p = h.make();
-  feed_header(p, vh, h);
-
-  if (h.pi.bufferState == BufferState::PAYLOAD) {
-    TEST_ASSERT_LESS_OR_EQUAL_MESSAGE(1024u * 1024u, (unsigned)h.last_total,
-      "underflowed remaining length produced an absurd payload size");
-  }
-  TEST_ASSERT_TRUE(h.guard_intact());
+  size_t consumed = feed_packet(p, vh, h);
+  assert_swallowed(h, consumed);
   delete p;
 }
 
@@ -286,28 +282,78 @@ static void test_topic_length_longer_than_data(void) {
   const char* got = "short";
   vh.insert(vh.end(), got, got + strlen(got));
   h.pi.remainingLength = vh.size();
+  vh.insert(vh.end(), 64, 'Z');
 
   PublishPacket* p = h.make();
-  size_t pos = 0;
-  while (pos < vh.size() && h.pi.bufferState == BufferState::VARIABLE_HEADER) {
-    p->parseVariableHeader(vh.data(), vh.size(), &pos);
-  }
-  // Must not have completed on a truncated topic, and must not have run off
-  // the buffer. ASan enforces the second part.
-  TEST_ASSERT_TRUE(h.guard_intact());
+  size_t consumed = feed_packet(p, vh, h);
+  assert_swallowed(h, consumed);
   delete p;
 }
 
-// REGRESSION. _bytePosition used to be uint8_t while being compared against
-// `2 + _topicLength`, and _topicLength is bounded only by maxTopicLength - a
-// public uint16_t setter. Above 253 the terminating comparison became
-// unreachable, the position wrapped, the completion branch never fired and the
-// parser wedged in VARIABLE_HEADER forever, silently killing MQTT for the rest
-// of the connection.
-//
-// Never reachable as shipped (the constructor pins 128 and we never override
-// it), but the ceiling was undocumented. Widened to uint16_t; this proves a
-// large topic now parses through to completion.
+// QoS 1 needs two packet-id bytes after the topic.
+static void test_qos1_without_room_for_packet_id(void) {
+  Harness h;
+  h.pi.packetFlags = 0x02;                 // QoS 1
+  std::string topic = "t/x";
+  auto vh = var_header(topic, false);      // no id bytes
+  h.pi.remainingLength = vh.size();
+  vh.insert(vh.end(), 8, 'Z');
+
+  PublishPacket* p = h.make();
+  size_t consumed = feed_packet(p, vh, h);
+  assert_swallowed(h, consumed);
+  delete p;
+}
+
+// remainingLength 1 cannot even hold the topic length field.
+static void test_remaining_length_one(void) {
+  Harness h;
+  std::vector<char> vh = {0x00, 0x03, 'a', 'b', 'c'};
+  h.pi.remainingLength = 1;
+
+  PublishPacket* p = h.make();
+  size_t consumed = feed_packet(p, vh, h);
+  assert_swallowed(h, consumed);
+  delete p;
+}
+
+// Empty topic is a protocol violation.
+static void test_empty_topic(void) {
+  Harness h;
+  std::vector<char> vh = {0x00, 0x00, 'p', 'a', 'y'};
+  h.pi.remainingLength = vh.size();
+
+  PublishPacket* p = h.make();
+  size_t consumed = feed_packet(p, vh, h);
+  assert_swallowed(h, consumed);
+  delete p;
+}
+
+// A swallowed packet must not affect the next one.
+static void test_well_formed_after_malformed(void) {
+  Harness h;
+  std::string topic = "0123456789";
+  auto bad = var_header(topic, false);
+  h.pi.remainingLength = 5;
+  PublishPacket* p = h.make();
+  feed_packet(p, bad, h);
+  delete p;
+
+  h.pi.bufferState = BufferState::VARIABLE_HEADER;
+  std::string body = "ok";
+  auto good = var_header(topic, false);
+  good.insert(good.end(), body.begin(), body.end());
+  h.pi.remainingLength = good.size();
+  p = h.make();
+  size_t consumed = feed_packet(p, good, h);
+  TEST_ASSERT_EQUAL_UINT32(good.size(), (uint32_t)consumed);
+  TEST_ASSERT_EQUAL_STRING(topic.c_str(), h.last_topic.c_str());
+  TEST_ASSERT_EQUAL_STRING(body.c_str(), h.payload_seen.c_str());
+  TEST_ASSERT_EQUAL_INT(1, h.complete_calls);
+  delete p;
+}
+
+// _bytePosition must cover the full uint16_t maxTopicLength range.
 static void test_large_max_topic_length_still_completes(void) {
   Harness h(300);
   std::string topic(300, 'x');
@@ -333,9 +379,7 @@ static void test_large_max_topic_length_still_completes(void) {
   delete p;
 }
 
-// The topic length is carried in two raw network bytes. Lengths whose low byte
-// has bit 7 set are the ones sign extension used to destroy, so walk a spread
-// of them and confirm each parses to its true value.
+// Lengths whose low byte has bit 7 set.
 static void test_topic_lengths_with_high_bit_set(void) {
   for (size_t len : { (size_t)128, (size_t)129, (size_t)200, (size_t)255,
                       (size_t)256, (size_t)384 }) {
@@ -354,7 +398,8 @@ static void test_topic_lengths_with_high_bit_set(void) {
   }
 }
 
-// Packet ids at or above 0x8000 come through the same raw-byte path.
+// Packet ids at or above 0x8000.
+
 static void test_packet_id_high_bit_set(void) {
   Harness h;
   h.pi.packetFlags = 0x02;                    // QOS1
@@ -385,6 +430,10 @@ int main(void) {
   RUN_TEST(test_topic_over_max_is_ignored);
   RUN_TEST(test_remaining_length_shorter_than_header);
   RUN_TEST(test_topic_length_longer_than_data);
+  RUN_TEST(test_qos1_without_room_for_packet_id);
+  RUN_TEST(test_remaining_length_one);
+  RUN_TEST(test_empty_topic);
+  RUN_TEST(test_well_formed_after_malformed);
   RUN_TEST(test_large_max_topic_length_still_completes);
   RUN_TEST(test_topic_lengths_with_high_bit_set);
   RUN_TEST(test_packet_id_high_bit_set);

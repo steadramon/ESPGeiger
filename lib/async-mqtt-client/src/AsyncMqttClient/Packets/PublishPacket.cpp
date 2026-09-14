@@ -40,10 +40,22 @@ void PublishPacket::parseVariableHeader(char* data, size_t len, size_t* currentB
   char currentByte = data[(*currentBytePosition)++];
   if (_bytePosition == 0) {
     _topicLengthMsb = currentByte;
+    if (_parsingInformation->remainingLength < 2) {
+      _ignore = true;
+      _preparePayloadHandling(0);
+      return;
+    }
   } else if (_bytePosition == 1) {
     // Cast through uint8_t: raw network bytes, and char is signed on some
     // toolchains. Sign extension breaks any length with bit 7 set.
     _topicLength = (uint8_t)currentByte | (uint8_t)_topicLengthMsb << 8;
+    // Header must fit in remainingLength or the payload length underflows.
+    uint32_t need = 2u + _topicLength + (_qos ? 2u : 0u);
+    if (_topicLength == 0 || need > _parsingInformation->remainingLength) {
+      _ignore = true;
+      _preparePayloadHandling(_parsingInformation->remainingLength - 2u);
+      return;
+    }
     if (_topicLength > _parsingInformation->maxTopicLength) {
       _ignore = true;
     } else {
