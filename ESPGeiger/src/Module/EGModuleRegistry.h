@@ -36,7 +36,7 @@ class EGModuleRegistry {
     static void begin_all();
     static void loop_all(unsigned long now);
     static void tick_all(unsigned long now, unsigned long uptime_seconds);
-    static inline unsigned long next_loop_due() { return _next_loop_due; }
+    static inline uint32_t next_loop_due() { return _next_loop_due; }
 #ifdef TICK_PROFILE
     static void log_profile_and_reset();
 #endif
@@ -77,8 +77,8 @@ class EGModuleRegistry {
 
     struct Slot {
       EGModule* module;          // 4
-      unsigned long loop_last;   // 4 - last fast_millis() loop() ran
-      unsigned long next_due;    // 4 - fast_millis() target for next loop() fire
+      uint32_t loop_last;        // 4 - last fast_millis() loop() ran
+      uint32_t next_due;         // 4 - fast_millis() target for next loop() fire
       uint16_t loop_interval;    // 2 - 0 = every iteration
       uint16_t warmup_seconds;   // 2 - cached, tick_all skips if uptime < this
       uint8_t flags;             // 1 - packed module flags (see above)
@@ -96,7 +96,7 @@ class EGModuleRegistry {
     static Slot _slots[EG_MAX_MODULES];
     static uint8_t _count;
     static uint8_t _overflow;             // dropped registrations (logged at begin_all)
-    static unsigned long _next_loop_due;  // earliest pending loop() fire (millis)
+    static uint32_t _next_loop_due;       // earliest pending loop() fire (millis)
 
     // Slots sorted ascending by next_due. loop_all stops at the first
     // not-due entry, so idle modules at the back cost no per-tick work.

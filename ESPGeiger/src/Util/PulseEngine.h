@@ -73,7 +73,7 @@ public:
   uint32_t burst_freq_eff = 3500;
   uint16_t token_interval_ms = 50;
   uint8_t  tokens          = 0;
-  unsigned long last_token_ms = 0;
+  uint32_t last_token_ms   = 0;
   uint8_t  phases_remaining = 0;
   bool     pin_high        = false;
   uint32_t next_us         = 0;
@@ -99,7 +99,7 @@ public:
   }
 
   // Returns true if this click fired. Caller passes now_ms (one clock read).
-  inline bool notifyClick(unsigned long now_ms) {
+  inline bool notifyClick(uint32_t now_ms) {
     if (pin < 0) return false;
     if (token_interval_ms) {
       while ((now_ms - last_token_ms) >= token_interval_ms && tokens < 5) {
@@ -116,10 +116,9 @@ public:
   }
 
   // Per-tick state advance. Cheap when idle (single compare).
-  inline void loop() {
+  inline void loop(uint32_t now_us) {
 #ifndef EGPE_NO_PWM
     if (mode == MODE_FADE && brightness > 0) {
-      uint32_t now_us = (uint32_t)micros();
       if ((int32_t)(now_us - next_us) < 0) return;
       uint16_t delta = brightness >> fade_shift;
       if (delta == 0) delta = 1;
@@ -135,7 +134,6 @@ public:
     }
 #endif
     if (phases_remaining == 0) return;
-    uint32_t now_us = (uint32_t)micros();
     if ((int32_t)(now_us - next_us) < 0) return;
     pin_high = !pin_high;
     if (pin_high) writeActive(); else writeIdle();

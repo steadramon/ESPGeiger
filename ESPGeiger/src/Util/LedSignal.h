@@ -31,7 +31,7 @@ namespace LedSignal {
   // Lifecycle. begin() runs once from setup(), poll() runs from msTickerCB
   // when s_any_active is set, off() turns the onboard LED off at end of setup.
   void begin();
-  void poll();
+  void poll(uint32_t now_us);
   void off();
 
   // Per-pulse click feedback. Caller is responsible for the master

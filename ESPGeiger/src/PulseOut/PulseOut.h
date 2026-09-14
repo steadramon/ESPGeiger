@@ -39,7 +39,7 @@ class PulseOut : public EGModule {
     // Driven from msTickerCB: a stalled main loop would stretch the pulse.
     // Burst mode is fire-and-forget via tone() and does not pass through here.
     static volatile bool s_active;   // gate, so idle costs one read
-    void poll();
+    void poll(uint32_t now_us);
 
     // Called from Counter when a pulse arrives. Token-bucket-throttled so
     // a high-rate source can't keep launching new clicks on top of each

@@ -136,6 +136,7 @@ void SerialOut::print_usv() {
 
 void SerialOut::set_show(int var) {
   _interval = (uint16_t)clamp(var, 0, (int)UINT16_MAX);
+  EGModuleRegistry::set_loop_interval(this, 100);
   // Preserve _show_flags across off->on transitions so `show 0` then bare
   // `show` restores the last selection. Default to CPM only when nothing
   // is remembered.
@@ -148,6 +149,7 @@ void SerialOut::set_show(int var) {
 
 void SerialOut::setInterval(uint16_t v) {
   _interval = v;
+  EGModuleRegistry::set_loop_interval(this, 100);
   save();
 }
 
@@ -170,9 +172,17 @@ void SerialOut::toggle_hv()  { _show_flags ^= SHOW_HV;  Log::setSerialLogLevel(_
 void SerialOut::toggle_cps() { _show_flags ^= SHOW_CPS; Log::setSerialLogLevel(_show_flags == 0); save(); }
 
 void SerialOut::loop(unsigned long now) {
-  if (_interval == 0) return;
-  if ((now - _last_fire) < (uint32_t)_interval * 1000UL) return;
+  if (_interval == 0) {
+    EGModuleRegistry::set_loop_interval(this, -1);
+    return;
+  }
+  uint32_t period = (uint32_t)_interval * 1000UL;
+  if ((now - _last_fire) < period) {
+    EGModuleRegistry::sleep_until(this, now, _last_fire + period);
+    return;
+  }
   _last_fire = now;
+  EGModuleRegistry::sleep_until(this, now, now + period);
 
   // Protocol-format mode: cached formatter pointer, no per-emit dispatch.
   // Custom formatters (MightyOhm, user-template) pull live values themselves;

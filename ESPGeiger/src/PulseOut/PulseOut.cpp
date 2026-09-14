@@ -250,8 +250,8 @@ void PulseOut::notifyClick(unsigned long now_ms) {
   }
 }
 
-void PulseOut::poll() {
-  _engine.loop();
+void PulseOut::poll(uint32_t now_us) {
+  _engine.loop(now_us);
   if (_engine.phases_remaining == 0
 #ifndef EGPE_NO_PWM
       && !(_engine.mode == PulseEngine::MODE_FADE && _engine.brightness > 0)

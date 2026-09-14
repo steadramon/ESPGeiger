@@ -49,13 +49,13 @@ namespace LedSignal {
 #endif
   }
 
-  void poll() {
+  void poll(uint32_t now_us) {
     // Caller gates on s_any_active; we still verify it's worth running
     // (handles direct callers that bypass the Ticker site).
     if (!s_any_active) return;
     s_onboard.update();
 #ifdef GEIGER_BLIPLED
-    s_engine.loop();
+    s_engine.loop(now_us);
 #endif
     if (!s_onboard.isRunning()
 #ifdef GEIGER_BLIPLED

@@ -123,9 +123,10 @@ class CounterMaths {
     // soft-float and 64-bit divides off the healthy path.
     bool counts_missing(uint32_t uptime_s, uint32_t last_count_up_s,
                         uint32_t total_clicks) const {
-      if (_ratio <= 0.0f) return false;
+      // Integer guard first: the float compare is a libgcc call on ESP8266.
       uint32_t silence = uptime_s - last_count_up_s;
       if (silence < 60) return false;
+      if (_ratio <= 0.0f) return false;
       return silence >= missing_threshold_s(uptime_s, total_clicks);
     }
 
