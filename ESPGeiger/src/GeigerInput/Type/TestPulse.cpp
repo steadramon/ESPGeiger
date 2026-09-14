@@ -31,8 +31,9 @@
 static int _pulse_tx_pin;
 static bool _bool_pulse_state = false;
 static unsigned long _last_b;
-static double _this_delay;
-static double _next_delay;
+// Ticks, not double: the ISR is in IRAM and must not reach libgcc.
+static volatile uint32_t _this_delay;
+static volatile uint32_t _next_delay;
 #ifdef ESP32
 static esp_timer_handle_t hdl_pulse_timer = NULL;
 #endif
@@ -79,7 +80,7 @@ void GeigerTestPulse::begin() {
   pinMode(_tx_pin, OUTPUT);
   _pulse_tx_pin = _tx_pin;
   CPMAdjuster();
-  _next_delay = calcDelay();
+  _next_delay = (uint32_t)calcDelay();
   _this_delay = _next_delay;
 #ifdef ESP8266
   timer1_disable();
@@ -118,10 +119,10 @@ void GeigerTestPulse::loop() {
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;
 #ifdef ESP8266
-    _next_delay = calcDelay();
+    _next_delay = (uint32_t)calcDelay();
 #else
     portENTER_CRITICAL_ISR(&timerMux);
-    _next_delay = calcDelay();
+    _next_delay = (uint32_t)calcDelay();
     portEXIT_CRITICAL_ISR(&timerMux);
 #endif
   }
@@ -148,15 +149,15 @@ void IRAM_ATTR GeigerTestPulse::pulseInterrupt() {
     REG_WRITE(GPIO_OUT_W1TC_REG, ((uint32_t)1 << _pulse_tx_pin));
   }
 #endif
-  unsigned long _our_delay = 0;
-  uint32_t pulseWidthTicks = _pulse_width_ticks;  // precomputed; ISR stays float-free
+  uint32_t _our_delay = 0;
+  uint32_t pulseWidthTicks = _pulse_width_ticks;
   if (!_bool_pulse_state) {
 #ifdef GEIGER_COUNT_TXPULSE
     GeigerInputTest::countInterrupt();
 #endif
     _last_b = micros();
-    _this_delay = _next_delay - pulseWidthTicks;
-    if (_this_delay < pulseWidthTicks) _this_delay = pulseWidthTicks;
+    uint32_t next = _next_delay;
+    _this_delay = (next > 2 * pulseWidthTicks) ? next - pulseWidthTicks : pulseWidthTicks;
     _our_delay = _this_delay;
   } else {
     _our_delay = pulseWidthTicks;
