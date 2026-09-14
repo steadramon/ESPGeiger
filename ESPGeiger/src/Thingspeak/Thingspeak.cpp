@@ -19,13 +19,10 @@
 #ifdef THINGSPEAKOUT
 #include "Thingspeak.h"
 #include "../Logger/Logger.h"
-#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/StringUtil.h"
 #include "../EnvSensor/EnvSensor.h"
 #include <math.h>
-
-extern uint8_t send_indicator;
 
 Thingspeak thingspeak;
 EG_REGISTER_MODULE(thingspeak)
@@ -49,14 +46,8 @@ static const EGPrefGroup TS_PREF_GROUP = {
 
 const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
 
-size_t Thingspeak::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!_send_enabled) return 0;
-  return write_status_json(buf, cap, "thingspeak", last_ok, last_attempt_ms, now);
-}
-
 void Thingspeak::on_prefs_loaded() {
-  _send_enabled = EGPrefs::getBool("thingspeak", "send");
-  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : -1);
+  set_enabled(EGPrefs::getBool("thingspeak", "send"));
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -69,54 +60,29 @@ const EGLegacyAlias* Thingspeak::legacy_aliases() { return TS_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Thingspeak::Thingspeak() {
+  pingIntervalMs = (uint32_t)THINGSPEAK_INTERVAL * 1000UL;
 }
 
-void Thingspeak::loop(unsigned long now)
+bool Thingspeak::interpret(const char* r)
 {
-  if (!_send_enabled) return;
-  if (lastPing == 0) {
-    lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
-  } else if ((now - lastPing) >= pingIntervalMs) {
-    while ((now - lastPing) >= pingIntervalMs) lastPing += pingIntervalMs;
-    postMeasurement();
+  if (strcmp(r, "0") != 0) {
+    Log::debug(PSTR("Thingspeak: Upload OK"));
+    return true;
   }
-  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
+  Log::console(PSTR("Thingspeak: Error!"));
+  return false;
 }
 
-void Thingspeak::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)
-{
-  if (readyState == readyStateDone)
-  {
-    Thingspeak* self = static_cast<Thingspeak*>(optParm);
-    bool ok = false;
-    if (request->responseHTTPcode() == 200)
-    {
-      char r[32];
-      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
-      r[got] = 0;
-      if (strcmp(r, "0") != 0) {
-        Log::debug(PSTR("Thingspeak: Upload OK"));
-        ok = true;
-      } else {
-        Log::console(PSTR("Thingspeak: Error!"));
-      }
-    } else {
-      Log::console(PSTR("Thingspeak: Error - %s"), request->responseHTTPString().c_str());
-    }
-    self->note_result(ok);
-  }
-}
-
-void Thingspeak::postMeasurement() {
-  if (!gcounter.is_warm()) return;
+bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
+  if (!gcounter.is_warm()) return false;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Thingspeak: Testmode"));
-    return;
+    return false;
   }
 
   const char* _ts_channel_key = EGPrefs::getString("thingspeak", "channel_key");
-  if (_ts_channel_key[0] == '\0') return;
+  if (_ts_channel_key[0] == '\0') return false;
 
   Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
 
@@ -127,50 +93,30 @@ void Thingspeak::postMeasurement() {
   float usv =  gcounter.get_usv();
   char usvChar[20];
   dtostrf(usv,1,5, usvChar);
-  char url[320];
-  size_t up = snprintf_P(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
+  size_t up = snprintf_P(url, cap, TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
   // Append env fields when sensor present and the channel value is real.
   // Users with existing 4-field channels just leave 5/6/7 unconfigured.
-  if (envsensor.present() && up < sizeof(url)) {
+  if (envsensor.present() && up < cap) {
     char fbuf[12];
     float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
     int n;
     if (!isnan(et)) {
       format_f(fbuf, sizeof(fbuf), et);
-      n = snprintf_P(url + up, sizeof(url) - up, PSTR("&field5=%s"), fbuf);
-      if (n > 0 && (size_t)n < sizeof(url) - up) up += n;
+      n = snprintf_P(url + up, cap - up, PSTR("&field5=%s"), fbuf);
+      if (n > 0 && (size_t)n < cap - up) up += n;
     }
     if (!isnan(eh)) {
       format_f(fbuf, sizeof(fbuf), eh);
-      n = snprintf_P(url + up, sizeof(url) - up, PSTR("&field6=%s"), fbuf);
-      if (n > 0 && (size_t)n < sizeof(url) - up) up += n;
+      n = snprintf_P(url + up, cap - up, PSTR("&field6=%s"), fbuf);
+      if (n > 0 && (size_t)n < cap - up) up += n;
     }
     if (!isnan(ep)) {
       format_f(fbuf, sizeof(fbuf), ep);
-      n = snprintf_P(url + up, sizeof(url) - up, PSTR("&field7=%s"), fbuf);
-      if (n > 0 && (size_t)n < sizeof(url) - up) up += n;
+      n = snprintf_P(url + up, cap - up, PSTR("&field7=%s"), fbuf);
+      if (n > 0 && (size_t)n < cap - up) up += n;
     }
   }
 
-  if (!request) request = new AsyncHTTPRequest();
-  if (!request) { Log::console(PSTR("Thingspeak: alloc failed")); return; }
-
-  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
-  {
-    if (request->open("GET", url))
-    {
-      LedSignal::activity();
-      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request->onReadyStateChange(httpRequestCb, this);
-      request->setTimeout(5);
-      request->send();
-      note_attempt();
-      send_indicator = 2;
-    }
-    else
-    {
-      Log::console(PSTR("Thingspeak: Can't send request"));
-    }
-  }
+  return true;
 }
 #endif

@@ -19,7 +19,6 @@
 #ifdef WEBHOOKOUT
 #include "Webhook.h"
 #include "../Logger/Logger.h"
-#include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
@@ -27,8 +26,6 @@
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
 #endif
-
-extern uint8_t send_indicator;
 
 Webhook webhook;
 EG_REGISTER_MODULE(webhook)
@@ -59,11 +56,6 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP = {
 
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
 
-size_t Webhook::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!_send_enabled) return 0;
-  return write_status_json(buf, cap, "webhook", last_ok, last_attempt_ms, now);
-}
-
 // === LEGACY IMPORT (remove after v1.0.0) ===
 static const EGLegacyAlias WEBHOOK_LEGACY[] = {
   {"whSend", "send"},
@@ -76,6 +68,7 @@ const EGLegacyAlias* Webhook::legacy_aliases() { return WEBHOOK_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Webhook::Webhook() {
+  pingIntervalMs = (uint32_t)WEBHOOK_INTERVAL * 1000UL;
 }
 
 void Webhook::setInterval(int interval)
@@ -89,44 +82,23 @@ void Webhook::setInterval(int interval)
 void Webhook::on_prefs_loaded() {
   int iv = (int)EGPrefs::getUInt("webhook", "interval");
   if (iv > 0) setInterval(iv);
-  _send_enabled = EGPrefs::getBool("webhook", "send");
-  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : -1);
+  set_enabled(EGPrefs::getBool("webhook", "send"));
 }
 
-void Webhook::loop(unsigned long now)
+bool Webhook::interpret(const char* r)
 {
-  if (!_send_enabled) return;
-  if (lastPing == 0) {
-    lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
-  } else if ((now - lastPing) >= pingIntervalMs) {
-    while ((now - lastPing) >= pingIntervalMs) lastPing += pingIntervalMs;
-    postMeasurement();
+  if (strstr(r, "OK")) {
+    Log::debug(PSTR("Webhook: Upload OK"));
+    return true;
   }
-  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
+  Log::console(PSTR("Webhook: Error - %s"), r);
+  return false;
 }
 
-void Webhook::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)
+void Webhook::add_headers(AsyncHTTPRequest* r)
 {
-  if (readyState == readyStateDone)
-  {
-    Webhook* self = static_cast<Webhook*>(optParm);
-    bool ok = false;
-    if (request->responseHTTPcode() == 200)
-    {
-      char r[128];
-      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
-      r[got] = 0;
-      if (strstr(r, "OK")) {
-        Log::debug(PSTR("Webhook: Upload OK"));
-        ok = true;
-      } else {
-        Log::console(PSTR("Webhook: Error - %s"), r);
-      }
-    } else {
-      Log::console(PSTR("Webhook: Error %d - %s"), request->responseHTTPcode(), request->responseHTTPString().c_str());
-    }
-    self->note_result(ok);
-  }
+  r->setReqHeader(F("Accept"), F("application/json"));
+  r->setReqHeader(F("Content-Type"), F("application/json"));
 }
 
 const char* Webhook::cleanHTTP(const char* url) {
@@ -139,15 +111,15 @@ const char* Webhook::cleanHTTP(const char* url) {
   return url;
 }
 
-void Webhook::postMeasurement() {
-  if (!gcounter.is_warm()) return;
+bool Webhook::prepare(char* url, size_t cap, const char** body) {
+  if (!gcounter.is_warm()) return false;
 
   const char* whURL = EGPrefs::getString("webhook", "url");
-  if (whURL[0] == '\0') return;
+  if (whURL[0] == '\0') return false;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("Webhook: Testmode"));
-    return;
+    return false;
   }
 
   Log::debug(PSTR("Webhook: Uploading latest data ..."));
@@ -164,7 +136,7 @@ void Webhook::postMeasurement() {
     buffer = (char*)malloc(WEBHOOK_BUF_SIZE);
     if (!buffer) {
       Log::console(PSTR("Webhook: malloc(%u) failed"), (unsigned)WEBHOOK_BUF_SIZE);
-      return;
+      return false;
     }
   }
   char b_cps[12], b_cpm[12], b_cpm5[12], b_cpm15[12], b_usv[12];
@@ -221,32 +193,10 @@ void Webhook::postMeasurement() {
   advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   buffer[pos] = '\0';
 
-  char url[256];
   const char* trimmedURL = cleanHTTP(whURL);
 
-  snprintf_P(url, sizeof(url), PSTR("http://%s"), trimmedURL);
-
-  if (!request) request = new AsyncHTTPRequest();
-  if (!request) { Log::console(PSTR("Webhook: alloc failed")); return; }
-
-  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
-  {
-    if (request->open("POST", url))
-    {
-      LedSignal::activity();
-      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request->setReqHeader(F("Accept"), F("application/json"));
-      request->setReqHeader(F("Content-Type"), F("application/json"));
-      request->onReadyStateChange(httpRequestCb, this);
-      request->setTimeout(10);
-      request->send(buffer);
-      note_attempt();
-      send_indicator = 2;
-    }
-    else
-    {
-      Serial.println(F("Can't send - bad request"));
-    }
-  }
+  snprintf_P(url, cap, PSTR("http://%s"), trimmedURL);
+  *body = buffer;
+  return true;
 }
 #endif

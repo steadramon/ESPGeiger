@@ -22,9 +22,8 @@
 #include "../Util/Globals.h"
 #include "../Util/DeviceInfo.h"
 #include "../Counter/Counter.h"
-#include "../Module/EGModule.h"
+#include "../Module/EGHttpPoster.h"
 #include "../Prefs/EGPrefs.h"
-#include "AsyncHTTPRequest_Generic.hpp"
 
 
 extern Counter gcounter;
@@ -39,29 +38,27 @@ extern Counter gcounter;
 #define WEBHOOK_INTERVAL 60
 #endif
 
-class Webhook : public EGModule {
+class Webhook : public EGHttpPoster {
   public:
     Webhook();
     const char* name() override { return "whook"; }
-    bool requires_wifi() override { return true; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 500; }
-    void loop(unsigned long now) override;
     void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
-    size_t status_json(char* buf, size_t cap, unsigned long now) override;
     const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
-    void postMeasurement();
     void setInterval(int interval);
     int getInterval() { return pingInterval; }
     const char* cleanHTTP(const char* url);
-    AsyncHTTPRequest* request = nullptr;
+  protected:
+    bool prepare(char* url, size_t cap, const char** body) override;
+    bool interpret(const char* reply) override;
+    const char* log_tag() override { return "Webhook"; }
+    const char* status_key() override { return "webhook"; }
+    const char* method() const override { return "POST"; }
+    uint16_t timeout_s() const override { return 10; }
+    size_t reply_cap() const override { return 128; }
+    void add_headers(AsyncHTTPRequest* r) override;
   private:
-    unsigned long lastPing = 0;
     uint16_t pingInterval = WEBHOOK_INTERVAL;
-    uint32_t pingIntervalMs = (uint32_t)WEBHOOK_INTERVAL * 1000UL;  // precomputed
-    bool _send_enabled = false;
-    static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
 extern Webhook webhook;

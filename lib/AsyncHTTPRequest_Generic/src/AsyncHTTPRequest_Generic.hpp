@@ -361,6 +361,7 @@ class AsyncHTTPRequest
     size_t      responseLength();                                       // indicated response length or sum of chunks to date
     int         responseHTTPcode();                                     // HTTP response code or (negative) error code
     String      responseHTTPString();
+    const __FlashStringHelper* responseHTTPStringF();               // same table, no heap
     String      responseText();                                         // response (whole* or partial* as string)
     size_t      responseRead(uint8_t* buffer, size_t len);              // Read response into buffer (stack-friendly, no heap)
     uint32_t    elapsedTime();                                          // Elapsed time of in progress transaction or last completed (ms)

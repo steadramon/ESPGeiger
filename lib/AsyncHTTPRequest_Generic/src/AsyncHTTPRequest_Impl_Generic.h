@@ -842,7 +842,7 @@ int AsyncHTTPRequest::responseHTTPcode()
 
 ////////////////////////////////////////
 
-String AsyncHTTPRequest::responseHTTPString()
+const __FlashStringHelper* AsyncHTTPRequest::responseHTTPStringF()
 {
   switch (_HTTPcode)
   {
@@ -1004,8 +1004,15 @@ String AsyncHTTPRequest::responseHTTPString()
       return F("HTTP Version not supported");
 
     default:
-      return "UNKNOWN";
+      return F("UNKNOWN");
   }
+}
+
+////////////////////////////////////////
+
+String AsyncHTTPRequest::responseHTTPString()
+{
+  return String(responseHTTPStringF());
 }
 
 ////////////////////////////////////////
