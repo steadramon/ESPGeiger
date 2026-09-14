@@ -279,6 +279,14 @@ class EGHttpServer {
       s->delete_pending = true;
       _tickWanted       = true;
     }
+    // From the AsyncTCP task: flags only, the main task may still be writing
+    // into buf. resetSlot frees it.
+    inline void markDoneAsync(Slot* s) {
+      s->send_aborted   = true;
+      s->state          = DONE;
+      s->delete_pending = true;
+      _tickWanted       = true;
+    }
     // Write status template + close + markDone. body=nullptr = close only.
     void  sendStatusAndClose(Slot* s, const char* body, size_t len);
 

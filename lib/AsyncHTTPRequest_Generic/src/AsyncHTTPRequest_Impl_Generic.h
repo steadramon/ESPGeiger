@@ -671,7 +671,11 @@ bool AsyncHTTPRequest::send()
   MUTEX_LOCK(false)
 
   if ( ! _buildRequest())
+  {
+    _AHTTP_unlock;
+
     return false;
+  }
 
   _send();
 
@@ -1039,7 +1043,8 @@ String AsyncHTTPRequest::responseText()
     AHTTP_LOGWARN(F("!responseText() no buffer"))
 
     _HTTPcode = HTTPCODE_TOO_LESS_RAM;
-    _client->abort();
+    // Done callbacks run after _onDisconnect has nulled _client.
+    if (_client) _client->abort();
     _AHTTP_unlock;
 
     return String();

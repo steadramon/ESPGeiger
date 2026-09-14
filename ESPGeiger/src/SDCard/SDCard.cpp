@@ -294,38 +294,51 @@ bool SDCard::deleteOldest(uint32_t cutoffPacked) {
   if (!sd->chdir()) return false;
   if (!rootDir.open("/")) return false;
 
+  // Directories are YYYYMM, so only the lowest one needs walking.
   while (subDir.openNext(&rootDir, O_RDONLY)) {
     if (subDir.isSubDir() && !subDir.isHidden()) {
       char dirName[13];
       subDir.getName(dirName, sizeof(dirName));
-
-      while (file.openNext(&subDir, O_RDONLY)) {
-        if (!file.isSubDir() && !file.isHidden()) {
-          char f_name[13];
-          file.getName(f_name, sizeof(f_name));
-          size_t nameLen = strlen(f_name);
-          if (nameLen >= 4 && strcmp(f_name + nameLen - 4, ".csv") == 0) {
-            uint16_t date_AGPS, time_AGPS;
-            file.getModifyDateTime(&date_AGPS, &time_AGPS);
-            uint32_t lastModified = (uint32_t(date_AGPS) << 16) | time_AGPS;
-
-            if (lastModified < cutoffPacked && lastModified < oldestModified) {
-              oldestModified = lastModified;
-              strncpy(oldestDir, dirName, sizeof(oldestDir) - 1);
-              oldestDir[sizeof(oldestDir) - 1] = '\0';
-              strncpy(oldestFile, f_name, sizeof(oldestFile) - 1);
-              oldestFile[sizeof(oldestFile) - 1] = '\0';
-            }
-          }
-        }
-        file.close();
-        yield();   // each iter is SPI file open + stat; full walk can be seconds.
+      bool yyyymm = strlen(dirName) == 6;
+      for (int i = 0; yyyymm && i < 6; i++) yyyymm = (dirName[i] >= '0' && dirName[i] <= '9');
+      if (yyyymm && (oldestDir[0] == '\0' || strcmp(dirName, oldestDir) < 0)) {
+        strncpy(oldestDir, dirName, sizeof(oldestDir) - 1);
+        oldestDir[sizeof(oldestDir) - 1] = '\0';
       }
     }
     subDir.close();
+    yield();
   }
   rootDir.close();
+  if (oldestDir[0] == '\0') return false;
 
+  if (!subDir.open(oldestDir, O_RDONLY)) return false;
+  bool any_csv = false;
+  while (file.openNext(&subDir, O_RDONLY)) {
+    if (!file.isSubDir() && !file.isHidden()) {
+      char f_name[13];
+      file.getName(f_name, sizeof(f_name));
+      size_t nameLen = strlen(f_name);
+      if (nameLen >= 4 && strcmp(f_name + nameLen - 4, ".csv") == 0) {
+        any_csv = true;
+        uint16_t date_AGPS, time_AGPS;
+        file.getModifyDateTime(&date_AGPS, &time_AGPS);
+        uint32_t lastModified = (uint32_t(date_AGPS) << 16) | time_AGPS;
+
+        if (lastModified < cutoffPacked && lastModified < oldestModified) {
+          oldestModified = lastModified;
+          strncpy(oldestFile, f_name, sizeof(oldestFile) - 1);
+          oldestFile[sizeof(oldestFile) - 1] = '\0';
+        }
+      }
+    }
+    file.close();
+    yield();   // each iter is SPI file open + stat.
+  }
+  subDir.close();
+
+  // An emptied month directory is progress too; the next call sees the next one.
+  if (!any_csv) return sd->rmdir(oldestDir);
   if (oldestFile[0] == '\0') return false;
 
   bool deleted = false;

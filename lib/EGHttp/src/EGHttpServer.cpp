@@ -88,6 +88,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
   size_t sent = 0;
   uint32_t last_progress = millis();
   while (sent < len) {
+    if (s->send_aborted) return false;
     if (!s->client || !s->client->connected()) {
       Serial.printf_P(PSTR("[EGHttp] send aborted, client gone after %u/%u B\n"),
                       (unsigned)sent, (unsigned)len);
@@ -363,7 +364,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
                     cli, (int)err, sl ? (int)sl->streaming : -1,
                     sl ? (unsigned)sl->bodyAcked : 0u);
     if (sl) {
-      self->markDone(sl);
+      self->markDoneAsync(sl);
       cli->close();   // force onDisconnect so the client gets deleted
     }
   }, this);
@@ -375,7 +376,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
                     cli, (unsigned)time, sl ? (int)sl->streaming : -1,
                     sl ? (unsigned)sl->bodyAcked : 0u);
     if (sl) {
-      self->markDone(sl);
+      self->markDoneAsync(sl);
       cli->close();
     }
   }, this);
