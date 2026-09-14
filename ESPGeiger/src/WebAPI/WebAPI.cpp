@@ -134,7 +134,9 @@ void WebAPI::loop(unsigned long now) {
         postMeasurement(_mode != 2);
       } else {
         // Heartbeat skip: keep the per-15-min cadence aligned.
+        EGMOD_PUB_LOCK();
         if (++healthPostCounter >= WEBAPI_HEALTH_EVERY) healthPostCounter = 0;
+        EGMOD_PUB_UNLOCK();
       }
     }
   }
@@ -180,7 +182,8 @@ void WebAPI::doHandshake() {
 
   // Append the git short-sha for non-tagged builds so the server can
   // distinguish multiple devel builds.
-  char versionStr[32];
+  // Wide enough for a tag describe plus the -dirty suffix.
+  char versionStr[48];
   if (GIT_VERSION[0] != '\0') {
     snprintf_P(versionStr, sizeof(versionStr), PSTR("%s/%s"), RELEASE_VERSION, GIT_VERSION);
   } else {
@@ -323,9 +326,10 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
   // Every exit path must call note_publish(), which sets last_ok and
   // last_attempt_ms under the publish lock; no direct bitfield writes here.
   if (request->responseHTTPcode() == 200) {
-    // String() round-trips raw bytes; treat as binary.
-    String r = request->responseText();
-    MsgPack::Reader reader((const uint8_t*)r.c_str(), r.length());
+    // {error, id} is ~20 bytes; no heap on the AsyncTCP task.
+    uint8_t r[64];
+    size_t n = request->responseRead(r, sizeof(r));
+    MsgPack::Reader reader(r, n);
     uint32_t id = 0;
     if (reader.find_key("id")) {
       reader.read_uint(&id);
@@ -357,8 +361,10 @@ void WebAPI::httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int ready
     Log::debug(PSTR("WebAPI: Handshake parse error"));
   } else {
     int code = request->responseHTTPcode();
-    Log::debug(PSTR("WebAPI: Handshake error %d - %s"),
-      code, request->responseHTTPString().c_str());
+    char why[32];
+    strncpy_P(why, (PGM_P)request->responseHTTPStringF(), sizeof(why) - 1);
+    why[sizeof(why) - 1] = '\0';
+    Log::debug(PSTR("WebAPI: Handshake error %d - %s"), code, why);
     if (code == 429) {
       Log::debug(PSTR("WebAPI: Rate-limited; waiting for next scheduled interval"));
       self->note_publish(false);
@@ -498,25 +504,28 @@ void WebAPI::postMeasurement(bool censusOnly) {
 void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState) {
   if (readyState != readyStateDone) return;
   WebAPI* self = static_cast<WebAPI*>(optParm);
-  self->last_attempt_ms = fast_millis();
-  self->last_ok = false;
+  bool ok = false;
   if (request->responseHTTPcode() == 200) {
-    // Server returns MsgPack { "ok": true } on success. find_key skips
-    // any future advisory fields without breaking older firmware.
-    String r = request->responseText();
-    MsgPack::Reader reader((const uint8_t*)r.c_str(), r.length());
-    bool ok = false;
+    // MsgPack { "ok": true }; find_key skips any future fields.
+    uint8_t r[64];
+    size_t n = request->responseRead(r, sizeof(r));
+    MsgPack::Reader reader(r, n);
     if (reader.find_key("ok")) reader.read_bool(&ok);
-    if (!reader.error && ok) {
+    if (reader.error) ok = false;
+    if (ok) {
       Log::debug(PSTR("WebAPI: Post OK - station %u"), self->station_id);
-      self->last_ok = true;
+      EGMOD_PUB_LOCK();
       if (++self->healthPostCounter >= WEBAPI_HEALTH_EVERY) self->healthPostCounter = 0;
+      EGMOD_PUB_UNLOCK();
     } else {
       Log::debug(PSTR("WebAPI: Post response not ok"));
     }
   } else {
     int code = request->responseHTTPcode();
-    Log::debug(PSTR("WebAPI: Error %d - %s"), code, request->responseHTTPString().c_str());
+    char why[32];
+    strncpy_P(why, (PGM_P)request->responseHTTPStringF(), sizeof(why) - 1);
+    why[sizeof(why) - 1] = '\0';
+    Log::debug(PSTR("WebAPI: Error %d - %s"), code, why);
     if (code == 403) {
       self->station_id = 0;
       self->_hs.unanchor();
@@ -525,7 +534,7 @@ void WebAPI::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readySt
       Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
     }
   }
-  self->note_publish(self->last_ok);
+  self->note_publish(ok);
 }
 
 void WebAPI::forget() {
@@ -585,19 +594,21 @@ void WebAPI::httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readySta
   WebAPI* self = static_cast<WebAPI*>(optParm);
   int code = request->responseHTTPcode();
   // 403 = unknown station, treat as already-gone.
-  if (code == 200 || code == 403) {
+  bool ok = (code == 200 || code == 403);
+  if (ok) {
     Log::console(PSTR("WebAPI: Station forgotten (HTTP %d)"), code);
     self->station_id = 0;
     self->_hs.unanchor();
     self->lastPing = 0;
     self->healthPostCounter = 0;
-    self->last_ok = true;
     EGModuleRegistry::set_loop_interval(self, 100);
   } else {
-    Log::console(PSTR("WebAPI: Forget failed - %s"), request->responseHTTPString().c_str());
+    char why[32];
+    strncpy_P(why, (PGM_P)request->responseHTTPStringF(), sizeof(why) - 1);
+    why[sizeof(why) - 1] = '\0';
+    Log::console(PSTR("WebAPI: Forget failed - %s"), why);
   }
-  self->last_attempt_ms = fast_millis();
-  self->note_publish(self->last_ok);
+  self->note_publish(ok);
 }
 
 void WebAPI::saveConfig() {
