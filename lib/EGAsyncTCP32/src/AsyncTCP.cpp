@@ -1337,7 +1337,7 @@ void AsyncClient::_error(int8_t err) {
   if (_error_cb) {
     _error_cb(_error_cb_arg, this, err);
   }
-  if (_discard_cb) {
+  if (_client_alive(this) && _discard_cb) {
     _discard_cb(_discard_cb_arg, this);
   }
 }
@@ -1381,10 +1381,22 @@ int8_t AsyncClient::_recv(tcp_pcb *pcb, pbuf *pb, int8_t err) {
     b->next = NULL;
     if (_pb_cb) {
       _pb_cb(_pb_cb_arg, this, b);
-    } else {
-      if (_recv_cb) {
-        _recv_cb(_recv_cb_arg, this, b->payload, b->len);
+      b = NULL;
+    } else if (_recv_cb) {
+      _recv_cb(_recv_cb_arg, this, b->payload, b->len);
+    }
+    // close() is synchronous here, so a callback may have deleted this.
+    if (!_client_alive(this)) {
+      if (b) pbuf_free(b);
+      while (pb != NULL) {
+        b = pb;
+        pb = b->next;
+        b->next = NULL;
+        pbuf_free(b);
       }
+      return ERR_OK;
+    }
+    if (b) {
       if (!_ack_pcb) {
         _rx_ack_len += b->len;
       } else if (_pcb) {
@@ -1440,7 +1452,7 @@ void AsyncClient::_dns_found(ip_addr_t *ipaddr) {
     if (_error_cb) {
       _error_cb(_error_cb_arg, this, -55);
     }
-    if (_discard_cb) {
+    if (_client_alive(this) && _discard_cb) {
       _discard_cb(_discard_cb_arg, this);
     }
   }
