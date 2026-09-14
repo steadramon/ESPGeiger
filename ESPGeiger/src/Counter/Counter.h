@@ -27,21 +27,7 @@
 
 #include "../GeigerInput/GeigerInput.h"
 
-#if GEIGER_TYPE == GEIGER_TYPE_PULSE
-#include "../GeigerInput/Type/Pulse.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-#include "../GeigerInput/Type/Serial.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
-#include "../GeigerInput/Type/UdpRx.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TEST
-#include "../GeigerInput/Type/Test.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-#include "../GeigerInput/Type/TestPulse.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-#include "../GeigerInput/Type/TestSerial.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
-#include "../GeigerInput/Type/TestPulseInt.h"
-#endif
+class GeigerUdpRx;
 
 #ifndef GEIGER_DEAD_TIME_US
   #define GEIGER_DEAD_TIME_US 100
@@ -86,10 +72,6 @@ class Counter : public CounterMaths {
       float get_cpmf_stable() const { return _cached_cps * 60.0f; }
       int   get_cpm_stable()  const { return (int)roundf(_cached_cps * 60.0f); }
       float get_usv_stable()  const { return _cached_cps * 60.0f * _ratio_inv; }
-      // Auto-expiring pause on external posters. 0 ms = resume now.
-      static void     pause_external(uint32_t timeout_ms);
-      static bool     external_paused();
-      static uint32_t pause_remaining_ms();
       int get_cpm5();
       float get_cpm5f();
       int get_cpm15();
@@ -190,12 +172,10 @@ class Counter : public CounterMaths {
       // Button snooze; auto-clears when level drops below warning.
       void reset_alarm();
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-      void set_target_cpm(float val) {
-        geigerinput->setTargetCPM(val, true);
-      }
+      void set_target_cpm(float val);
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
-      GeigerUdpRx* udp_rx() { return geigerinput; }
+      GeigerUdpRx* udp_rx();
 #endif
       void queueBlip() { _last_blip = micros(); }
 
@@ -299,20 +279,7 @@ class Counter : public CounterMaths {
       EGEma<float> geigerTicks5;
       EGEma<float> geigerTicks15;
 #endif
-#if GEIGER_TYPE == GEIGER_TYPE_PULSE
-      GeigerPulse* geigerinput;
-#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-      GeigerSerial* geigerinput;
-#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
-      GeigerUdpRx* geigerinput;
-#elif GEIGER_TYPE == GEIGER_TYPE_TEST
-      GeigerTest* geigerinput;
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-      GeigerTestPulse* geigerinput;
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-      GeigerTestSerial* geigerinput;
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
-      GeigerTestPulseInt* geigerinput;
-#endif
+      // Concrete type is chosen by the factory in Counter.cpp.
+      GeigerInput* geigerinput;
 };
 #endif

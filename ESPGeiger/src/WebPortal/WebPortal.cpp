@@ -23,6 +23,7 @@
 #include "../Prefs/EGPrefs.h"
 #include "../Counter/Counter.h"
 #include "../GeigerInput/GeigerInput.h"
+#include "../GeigerInput/Type/Serial.h"
 #include "../Util/DeviceInfo.h"
 #include "../Util/CrashDump.h"
 #include "../Util/HangWatch.h"

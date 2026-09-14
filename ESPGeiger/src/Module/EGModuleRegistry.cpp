@@ -23,7 +23,7 @@
 #include "../Util/DeviceInfo.h"
 #include "../NTP/NTP.h"
 #include "../ArduinoOTA/ArduinoOTA.h"
-#include "../Counter/Counter.h"
+#include "../Counter/ExternalPause.h"
 #include "../Prefs/EGPrefs.h"
 #include <string.h>
 
@@ -88,7 +88,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 
   bool wifi_ok = Wifi::stable_for(WIFI_SETTLE_MS);
   bool ntp_ok  = ntpclient.synced;
-  bool paused  = Counter::external_paused();
+  bool paused  = ExternalPause::active();
   // Re-check at most this far in the future, even if no module is due.
   uint32_t fallback = now + 1000;
 

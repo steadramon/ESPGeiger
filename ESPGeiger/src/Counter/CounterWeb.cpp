@@ -22,6 +22,7 @@
 #include <Arduino.h>
 #include <EGHttpServer.h>
 #include "Counter.h"
+#include "ExternalPause.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/StringUtil.h"
 #include "../Util/DeviceInfo.h"
@@ -410,10 +411,10 @@ static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
     int n = atoi(sec);
     if (n < 0) n = 0;
     if (n > 86400) n = 86400;
-    Counter::pause_external((uint32_t)n * 1000U);
+    ExternalPause::start((uint32_t)n * 1000U);
   }
   char body[40];
-  uint32_t rem = Counter::pause_remaining_ms();
+  uint32_t rem = ExternalPause::remaining_ms();
   snprintf_P(body, sizeof(body),
              rem ? PSTR("PAUSED %u s") : PSTR("RESUMED"), (unsigned)(rem / 1000U));
   res.send(200, "text/plain", body);

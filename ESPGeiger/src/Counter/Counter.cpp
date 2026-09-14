@@ -20,6 +20,21 @@
 #include <Arduino.h>
 #include <EGHttpServer.h>
 #include "Counter.h"
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
+#include "../GeigerInput/Type/Pulse.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
+#include "../GeigerInput/Type/Serial.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
+#include "../GeigerInput/Type/UdpRx.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TEST
+#include "../GeigerInput/Type/Test.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+#include "../GeigerInput/Type/TestPulse.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+#include "../GeigerInput/Type/TestSerial.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
+#include "../GeigerInput/Type/TestPulseInt.h"
+#endif
 #include "../Logger/Logger.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Util/LedSignal.h"
@@ -75,35 +90,14 @@ void Counter::set_cpm_mode(uint8_t m) {
   if (_cpm_mode != 3) ensure_pulse_ring();
 }
 
-static volatile uint32_t s_pause_until_ms = 0;
-
-void Counter::pause_external(uint32_t timeout_ms) {
-  if (timeout_ms == 0) {
-    s_pause_until_ms = 0;
-    Log::console(PSTR("External posts: resumed"));
-    return;
-  }
-  s_pause_until_ms = fast_millis() + timeout_ms;
-  Log::console(PSTR("External posts: paused for %u s"), (unsigned)(timeout_ms / 1000U));
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+void Counter::set_target_cpm(float val) {
+  static_cast<GeigerInputTest*>(geigerinput)->setTargetCPM(val, true);
 }
-
-bool Counter::external_paused() {
-  uint32_t until = s_pause_until_ms;
-  if (until == 0) return false;
-  if ((int32_t)(fast_millis() - until) >= 0) {
-    s_pause_until_ms = 0;
-    Log::console(PSTR("External posts: resumed (timeout)"));
-    return false;
-  }
-  return true;
-}
-
-uint32_t Counter::pause_remaining_ms() {
-  uint32_t until = s_pause_until_ms;
-  if (until == 0) return 0;
-  int32_t d = (int32_t)(until - fast_millis());
-  return d > 0 ? (uint32_t)d : 0;
-}
+#endif
+#if GEIGER_TYPE == GEIGER_TYPE_UDPRX
+GeigerUdpRx* Counter::udp_rx() { return static_cast<GeigerUdpRx*>(geigerinput); }
+#endif
 
 void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
   // Synthetic timestamps; min_pulse_us is real-only.
@@ -698,7 +692,7 @@ void Counter::loop() {
     uint32_t pcnt_ms = fast_millis();
     if ((uint32_t)(pcnt_ms - s_last_pcnt_ms) >= 20) {
       s_last_pcnt_ms = pcnt_ms;
-      geigerinput->drain_pcnt();
+      static_cast<GeigerPulse*>(geigerinput)->drain_pcnt();
     }
   }
 #elif GEIGER_IS_UDPRX(GEIGER_TYPE)

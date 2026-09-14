@@ -31,6 +31,7 @@
 #include "../Util/Wifi.h"
 #include "../GRNG/GRNG.h"
 #include "../WebPortal/WebPortal.h"
+#include "../GeigerInput/Type/UdpRx.h"
 #include <EGHttpServer.h>
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"

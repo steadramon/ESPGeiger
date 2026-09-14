@@ -18,6 +18,7 @@
 */
 #include "SerialCommand.h"
 #include "../Module/EGModuleRegistry.h"
+#include "../Counter/ExternalPause.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Logger/Logger.h"
 #include "../Util/DeviceInfo.h"
@@ -139,10 +140,10 @@ void SerialCommand::cmd_pause() {
     int n = atoi(arg);
     if (n < 0) n = 0;
     if (n > 86400) n = 86400;
-    Counter::pause_external((uint32_t)n * 1000U);
+    ExternalPause::start((uint32_t)n * 1000U);
     return;
   }
-  uint32_t rem = Counter::pause_remaining_ms();
+  uint32_t rem = ExternalPause::remaining_ms();
   if (rem) Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)(rem / 1000U));
   else     Log::console(PSTR("External posts: active"));
 }
