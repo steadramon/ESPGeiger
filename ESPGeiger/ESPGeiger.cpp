@@ -140,6 +140,10 @@ void setup()
   // After CrashDump: both read RTC, and this one clears its own window.
   HangWatch::begin();
 #ifdef ESP8266
+#ifdef EG_PWM_PHASE
+  // Referencing this links the core's phase-locked waveform generator.
+  enablePhaseLockedWaveform();
+#endif
   analogWriteRange(1023);
 #endif
   LedSignal::begin();
