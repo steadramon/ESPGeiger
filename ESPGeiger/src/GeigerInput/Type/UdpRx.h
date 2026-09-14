@@ -128,10 +128,13 @@ private:
   void do_refresh();            // fire IgmpRefresh + tally the outcome
   unsigned long _recovery_at_ms = 0;   // last recovery action (0 = idle)
   uint16_t _recovery_steps = 0;        // escalation counter while silent
+  uint32_t _ps_bounce_until_ms = 0;    // sleep mode restored at this time (0 = idle)
   // Field diagnostics for the ESP32 multicast dropout, surfaced via appendJsonExtra.
   uint16_t _rebind_count = 0;          // stale-socket leave+rejoin cycles
   uint16_t _refresh_count = 0;         // IgmpRefresh reports queued
   uint16_t _refresh_noop_count = 0;    // refresh early-returned (no netif)
+  uint16_t _ps_bounce_count = 0;       // power-save off/on cycles
+  uint16_t _reassoc_count = 0;         // WiFi reassociations
 
   // Poisson gap-fill queue. processClick pushes (gap) deferred blip
   // times into here when a packet credits more than one click; loop()

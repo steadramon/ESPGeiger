@@ -402,28 +402,53 @@ void GeigerUdpRx::loop() {
     do_refresh();   // refresh membership now, don't wait out the recovery cadence
   }
 
+  if (_ps_bounce_until_ms && (int32_t)(now - _ps_bounce_until_ms) >= 0) {
+    _ps_bounce_until_ms = 0;
+    apply_rx_sleep_mode(_rx_mode);
+  }
+
   // Silent-RX recovery ladder, armed once a producer has been heard
-  // (_last_packet_ms>0). A 30s+ gap means lwIP aged our multicast membership
-  // out or the socket went stale. First two attempts re-emit an IGMP report;
-  // after that, force a leave+rejoin. Cadence backs off 60s to 5 min once the
-  // producer looks genuinely offline.
+  // (_last_packet_ms>0). Rungs at 30s then every 60s: IGMP report x2,
+  // leave+rejoin, power-save bounce, WiFi reassociate; then leave+rejoin
+  // every 5 min while the producer looks genuinely offline. Each rung is
+  // pure so the resume log says which one worked.
   if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > 30000UL) {
-    uint32_t step_ms = (_recovery_steps < 10) ? 60000UL : 300000UL;
+    uint32_t step_ms = (_recovery_steps < 5) ? 60000UL : 300000UL;
     if (_recovery_at_ms == 0 || (uint32_t)(now - _recovery_at_ms) >= step_ms) {
       _recovery_at_ms = now;
-      if (_recovery_steps < 2) {
-        do_refresh();
-      } else {
-        teardownUdp();
-        if (ensureUdp()) _bound_at_ms = Wifi::connected_at_ms;
-        _rebind_count++;
-        do_refresh();
+      switch (_recovery_steps) {
+        case 0:
+        case 1:
+          do_refresh();
+          break;
+        case 3:
+          Log::console(PSTR("UdpRx: silent %us, bouncing power save"),
+                       (unsigned)((now - _last_packet_ms) / 1000u));
+          apply_rx_sleep_mode(2);
+          _ps_bounce_until_ms = now + 5000u;
+          _ps_bounce_count++;
+          break;
+        case 4:
+          Log::console(PSTR("UdpRx: silent %us, reassociating WiFi"),
+                       (unsigned)((now - _last_packet_ms) / 1000u));
+          _reassoc_count++;
+          WiFi.reconnect();
+          break;
+        default:
+          teardownUdp();
+          if (ensureUdp()) _bound_at_ms = Wifi::connected_at_ms;
+          _rebind_count++;
+          do_refresh();
+          break;
       }
       _recovery_steps++;
       _last_igmp_refresh_ms = now;
     }
     if (!_udp) return;   // a rejoin above may have failed; try again next loop
   } else {
+    if (_recovery_steps) {
+      Log::console(PSTR("UdpRx: rx resumed after rung %u"), _recovery_steps);
+    }
     _recovery_steps = 0;
     _recovery_at_ms = 0;
     // Keep router's multicast subscription alive while healthy.
@@ -434,7 +459,9 @@ void GeigerUdpRx::loop() {
   }
   uint8_t buf[128];
   int sz;
-  while ((sz = _udp->parsePacket()) > 0) {
+  // Bounded so a flood cannot hold loop() indefinitely.
+  uint8_t budget = 32;
+  while (budget-- && (sz = _udp->parsePacket()) > 0) {
     if ((size_t)sz > sizeof(buf)) {
       while (_udp->available()) _udp->read();
       continue;
@@ -495,14 +522,16 @@ bool GeigerUdpRx::isHealthy() const {
 void GeigerUdpRx::appendJsonExtra(EGHttpResponse& res) {
   // RX-health diagnostics, always emitted: quiet = seconds since last packet,
   // rebind = leave+rejoin recovery cycles, igmp = IGMP reports queued, igmpx =
-  // refreshes that early-returned (no STA netif = the refresh is a no-op).
+  // refreshes that early-returned (no STA netif = the refresh is a no-op),
+  // psb = power-save bounces, reassoc = WiFi reassociations.
   uint32_t quiet_s = _last_packet_ms
                      ? (uint32_t)(fast_millis() - _last_packet_ms) / 1000u : 0;
-  char buf[96];
+  char buf[112];
   int n = snprintf_P(buf, sizeof(buf),
-      PSTR(",\"quiet\":%u,\"rebind\":%u,\"igmp\":%u,\"igmpx\":%u"),
+      PSTR(",\"quiet\":%u,\"rebind\":%u,\"igmp\":%u,\"igmpx\":%u,\"psb\":%u,\"reassoc\":%u"),
       (unsigned)quiet_s, (unsigned)_rebind_count,
-      (unsigned)_refresh_count, (unsigned)_refresh_noop_count);
+      (unsigned)_refresh_count, (unsigned)_refresh_noop_count,
+      (unsigned)_ps_bounce_count, (unsigned)_reassoc_count);
   if (n > 0) res.sendChunk(buf, (size_t)n);
   if (_packets_accepted == 0) return;
   uint16_t lx10 = loss_pct_x10();
