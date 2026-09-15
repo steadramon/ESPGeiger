@@ -37,7 +37,7 @@ AsyncMqttClient::AsyncMqttClient()
 , _onUnsubscribeUserCallback(nullptr)
 , _onMessageUserCallback(nullptr)
 , _onPublishUserCallback(nullptr)
-, _parsingInformation { .bufferState = AsyncMqttClientInternals::BufferState::NONE }
+, _parsingInformation { .bufferState = AsyncMqttClientInternals::BufferState::NONE, .maxTopicLength = 0, .topicBuffer = nullptr, .packetType = 0, .packetFlags = 0, .remainingLength = 0 }
 , _currentParsedPacket(nullptr)
 , _remainingLengthBufferPosition(0)
 , _remainingLengthBuffer{0}
