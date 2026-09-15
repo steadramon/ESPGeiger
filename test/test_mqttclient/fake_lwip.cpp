@@ -154,22 +154,22 @@ Snapshot snapshot_cbs(const tcp_pcb* pcb) {
 }
 
 err_t deliver_recv(const Snapshot& s, tcp_pcb* pcb, pbuf* pb, err_t err) {
-  return s.recv ? s.recv(s.arg, pcb, pb, err) : ERR_VAL;
+  return s.recv ? s.recv(s.arg, pcb, pb, err) : (err_t)ERR_VAL;
 }
 err_t deliver_sent(const Snapshot& s, tcp_pcb* pcb, uint16_t len) {
-  return s.sent ? s.sent(s.arg, pcb, len) : ERR_VAL;
+  return s.sent ? s.sent(s.arg, pcb, len) : (err_t)ERR_VAL;
 }
 err_t deliver_poll(const Snapshot& s, tcp_pcb* pcb) {
-  return s.poll ? s.poll(s.arg, pcb) : ERR_VAL;
+  return s.poll ? s.poll(s.arg, pcb) : (err_t)ERR_VAL;
 }
 err_t deliver_connected(const Snapshot& s, tcp_pcb* pcb, err_t err) {
-  return s.connected ? s.connected(s.arg, pcb, err) : ERR_VAL;
+  return s.connected ? s.connected(s.arg, pcb, err) : (err_t)ERR_VAL;
 }
 void deliver_error(const Snapshot& s, err_t err) {
   if (s.errf) s.errf(s.arg, err);
 }
 err_t deliver_accept(const Snapshot& s, tcp_pcb* new_pcb, err_t err) {
-  return s.accept ? s.accept(s.arg, new_pcb, err) : ERR_VAL;
+  return s.accept ? s.accept(s.arg, new_pcb, err) : (err_t)ERR_VAL;
 }
 
 void pin_pcb(tcp_pcb* pcb) { if (pcb) g_pinned.push_back(pcb); }
