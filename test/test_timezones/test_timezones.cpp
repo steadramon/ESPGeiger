@@ -159,7 +159,7 @@ static void test_lookup_is_exact(void) {
 
 static void test_misses_stay_inside_the_table(void) {
   for (int i = 0; i < 1000; i++) {
-    char name[16];
+    char name[20];
     snprintf(name, sizeof(name), "Zone/%03d", i);
     TEST_ASSERT_NULL_MESSAGE(EGTimeZone::posixFor(name), name);
   }
