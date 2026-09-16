@@ -1,6 +1,5 @@
 /*
-  EGBase64.cpp - Definitions for the buffer-in / buffer-out base64 codec.
-  Adapted from Densaugeo/base64_arduino. See EGBase64.h for context.
+  EGBase64.cpp - Based on Densaugeo/base64_arduino, see EGBase64.h
 */
 
 #include "EGBase64.h"
@@ -24,23 +23,20 @@ unsigned char base64_to_binary(unsigned char c) {
 }
 
 unsigned int encode_base64_length(unsigned int input_length) {
-  return (input_length + 2) / 3 * 4;
+  return EGB64_LEN(input_length);
 }
 
-unsigned int decode_base64_length(unsigned char input[]) {
-  return decode_base64_length(input, -1);
-}
-
-unsigned int decode_base64_length(unsigned char input[], unsigned int input_length) {
-  unsigned char *start = input;
-  while (base64_to_binary(input[0]) < 64 && (unsigned int)(input - start) < input_length) {
+unsigned int decode_base64_length(const unsigned char input[], unsigned int input_length) {
+  const unsigned char *start = input;
+  // bounds first, no sentinel
+  while ((unsigned int)(input - start) < input_length && base64_to_binary(input[0]) < 64) {
     ++input;
   }
   input_length = input - start;
   return input_length / 4 * 3 + (input_length % 4 ? input_length % 4 - 1 : 0);
 }
 
-unsigned int encode_base64(unsigned char input[], unsigned int input_length, unsigned char output[]) {
+unsigned int encode_base64(const unsigned char input[], unsigned int input_length, unsigned char output[]) {
   unsigned int full_sets = input_length / 3;
   for (unsigned int i = 0; i < full_sets; ++i) {
     output[0] = binary_to_base64(                         input[0] >> 2);
@@ -72,11 +68,7 @@ unsigned int encode_base64(unsigned char input[], unsigned int input_length, uns
   return encode_base64_length(input_length);
 }
 
-unsigned int decode_base64(unsigned char input[], unsigned char output[]) {
-  return decode_base64(input, -1, output);
-}
-
-unsigned int decode_base64(unsigned char input[], unsigned int input_length, unsigned char output[]) {
+unsigned int decode_base64(const unsigned char input[], unsigned int input_length, unsigned char output[]) {
   unsigned int output_length = decode_base64_length(input, input_length);
   for (unsigned int i = 2; i < output_length; i += 3) {
     output[0] = base64_to_binary(input[0]) << 2 | base64_to_binary(input[1]) >> 4;
