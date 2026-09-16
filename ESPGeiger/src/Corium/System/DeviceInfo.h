@@ -21,96 +21,83 @@
 #define DEVICEINFO_H
 
 #include <Arduino.h>
-#include "../NTP/NTP.h"
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
 #endif
 
-// Query-string suffix for static assets. Compile-time concat - browsers
-// treat /style.css?v=<hash> as a new URL per firmware, busting stale
-// JS/CSS automatically. Empty GIT_VERSION emits `?v=` which is harmless.
 #define EG_CACHE_BUST "?v=" GIT_VERSION
 
-#ifndef RELEASE_VERSION
-#define RELEASE_VERSION "devel"
-#endif
+#include "../../../Version.h"
+#include "../../../AppConfig.h"
 
 #ifndef BUILD_ENV
 #define BUILD_ENV "unknown"
 #endif
 
-#ifndef THING_NAME
-#define THING_NAME "ESPGeiger"
-#endif
+#define CHIPID_LEN 6   // low 24 bits, hex
 
 namespace DeviceInfo {
-  // Populates identity buffers; call once early in setup() before any
-  // module that publishes hostname/mac/etc.
-  void begin();
-
-  // Wipes prefs + WiFi backup + SDK creds. KEEPS /api.key so the WebAPI
-  // station identity survives. EGPrefs must already be initialised.
+  void begin();   // early in setup()
   void factoryReset();
 
   const char* hostname();
   const char* chipid();
   const char* useragent();
   const char* chipmodel();
-  const char* geigermodel();
-  void setGeigermodel(const char* s);
-  // Bitflag: bit 0 = alpha, bit 1 = beta, bit 2 = gamma.
-  uint8_t tubeDetection();
   const char* friendlyName();
   void setFriendlyName(const char* s);
   const char* mac();
+  const char* flashInfo();   // "ef4016 DIO 40MHz"
+  uint64_t hwid();   // chip id, efuse mac on esp32
 
-  inline unsigned long uptime() { return ntpclient.getUptime(); }
+  inline uint32_t hwRandom() {
+#ifdef ESP8266
+    return RANDOM_REG32;
+#else
+    return esp_random();
+#endif
+  }
+
+  unsigned long uptime();
 
   char* uptimeString();
 
   uint32_t freeHeap();
 
-  // Heap fragmentation 0-100 %, cached 10 s. Denominator-sensitive across
-  // builds; prefer largestFreeBlock() for cross-build comparisons.
-  uint8_t heapFrag();
-  uint8_t heapFragPeak();
-  void    heapFragPeakReset();
+  uint8_t heapFrag();   // %
 
-  // Largest contiguous free block in bytes. Honest cross-build metric.
-  // *Low()*  = low-water mark since last reset.
   uint32_t largestFreeBlock();
   uint32_t largestFreeBlockLow();
   void     largestFreeBlockLowReset();
 
-  // Cross-platform reset-reason. Codes are frozen - never renumber.
-  //   0 unknown   1 power-on     2 external reset   3 software restart
-  //   4 exception 5 watchdog     6 brown-out        7 deep-sleep wake
-  uint8_t resetReason();
+#ifdef ESP32
+  float chipTempC();   // die not ambient, classic esp32 reads high
+  void chipTempSample();   // 1 Hz
+#endif
 
-  // The only ESP.restart() in the codebase. Flushes lifetime to flash first.
+  // Sent to WebAPI, never renumber
+  enum ResetReason : uint8_t {
+    RR_UNKNOWN    = 0,
+    RR_POWER_ON   = 1,
+    RR_PIN        = 2,
+    RR_RESTART    = 3,
+    RR_EXCEPTION  = 4,
+    RR_WDT        = 5,
+    RR_BROWNOUT   = 6,
+    RR_DEEP_SLEEP = 7,
+  };
+  uint8_t resetReason();
+  const char* resetText();   // /info text
+
+  uint32_t fwFingerprint();   // never 0
+
   void safeRestart(uint32_t delayMs = 0);
 
-  // Returns false when not available (ESP32 lacks per-fault details).
-  // epc2/epc3/depc are optional; depc holds the faulting PC of a
-  // double-exception (load/store during exception handling), which epc1
-  // does not. Pass nullptr to skip any of them.
+  // false on esp32
   bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
                 uint32_t* epc2 = nullptr, uint32_t* epc3 = nullptr,
                 uint32_t* depc = nullptr);
-
-  // Compile-time optional-module bitmask. Bits are frozen - never reassign.
-  //   bit 0  MQTT          (MQTTOUT)
-  //   bit 1  Radmon        (RADMONOUT)
-  //   bit 2  ThingSpeak    (THINGSPEAKOUT)
-  //   bit 3  Webhook       (WEBHOOKOUT)
-  //   bit 4  Serial out    (SERIALOUT)
-  //   bit 5  GMC out       (GMCOUT)
-  //   bit 6  OLED display  (SSD1306_DISPLAY)
-  //   bit 7  Push button   (GEIGER_PUSHBUTTON)
-  //   bit 8  SD logger     (GEIGER_SDCARD)
-  //   bit 9  NeoPixel      (GEIGER_NEOPIXEL)
-  uint16_t featureFlags();
 }
 
 #endif

@@ -22,141 +22,163 @@
 #include <user_interface.h>
 #else
 #include <WiFi.h>
-#include <esp_wifi.h>   // esp_wifi_get_config() for direct NVS cred lookup
+#include <esp_wifi.h>
 #endif
-#include <LittleFS.h>
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../Module/EGModule.h"
 #include "../ImprovSerial/ImprovSerial.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Prefs/EGPrefs.h"
-#include "DeviceInfo.h"
+#include "../System/DeviceInfo.h"
+#include "../System/Fs.h"
+#include "../System/Lifecycle.h"
+#include "../Util/StringUtil.h"
 
-// SSID\nPSK\n - cleared on revert or 5-min stable boot.
-static const char WIFI_BACKUP_PATH[] = "/wifi_backup";
+EG_PSTR(K_SLEEP,    "sleep");
+EG_PSTR(K_TX_POWER, "tx_power");
+EG_PSTR(K_COUNTRY,  "country");
+EG_PSTR(K_PHY_MODE, "phy_mode");
 
-// static_ip\nip\ngw\nsn\ndns\n - restored on probe fail or 5-min stable.
-static const char NET_BACKUP_PATH[] = "/net_backup";
+// SSID\nPSK\n
+static const char WIFI_BACKUP_P[] PROGMEM = "/wifi_backup";
+#define WIFI_BACKUP_PATH FPSTR(WIFI_BACKUP_P)
 
-// Captive-portal handoff, captured by EGPortal::onSave.
-static char     s_portalSsid[33];
-static char     s_portalPass[65];
+// static_ip\nip\ngw\nsn\ndns\n
+static const char NET_BACKUP_P[] PROGMEM = "/net_backup";
+#define NET_BACKUP_PATH FPSTR(NET_BACKUP_P)
+
+static_assert(WIFI_SSID_MAX == EGPORTAL_SSID_MAX, "one ssid max");
+
+// save to WiFi.begin() only
+struct Creds { char ssid[EGPORTAL_SSID_MAX + 1]; char pass[EGPORTAL_PASS_MAX + 1]; };
+static Creds* s_creds = nullptr;
+
+static bool          s_inPortal       = false;
 static volatile bool s_portalGotCreds = false;
+static volatile bool s_portalDoReset  = false;
 
 namespace Wifi {
   bool disabled = false;
   bool offline_forced = false;
   bool connected = false;
   IPAddress local_ip;
-  char ssid[33] = "";
+  char ssid[WIFI_SSID_MAX + 1] = "";
   int16_t rssi = 0;
-  unsigned long connected_at_ms = 0;
+  uint32_t connected_at_ms = 0;
   bool backup_grace_done = false;
 
   void check_backup_state() {
-    backup_grace_done = !LittleFS.exists(WIFI_BACKUP_PATH)
-                     && !LittleFS.exists(NET_BACKUP_PATH);
+    backup_grace_done = !Fs::exists(WIFI_BACKUP_PATH)
+                     && !Fs::exists(NET_BACKUP_PATH);
+  }
+
+  size_t formatIP(char* buf, size_t cap, const IPAddress& a) {
+    return snprintf_P(buf, cap, PSTR("%u.%u.%u.%u"), a[0], a[1], a[2], a[3]);
   }
 
   size_t formatIP(char* buf, size_t cap) {
-    return snprintf(buf, cap, "%u.%u.%u.%u",
-                    local_ip[0], local_ip[1], local_ip[2], local_ip[3]);
+    return formatIP(buf, cap, local_ip);
   }
 }
 
 static bool was_connected = false;
 static unsigned long lost_at = 0;
 static unsigned long s_offline_retry_at = 0;
-// Involuntary-offline self-heal: re-probe the saved network this often.
 static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;
 static const uint32_t PORTAL_RETRY_MS = 600000UL;   // 10 min
-static const uint32_t WIFI_OFFLINE_MAX_MS = 3600000UL;   // 1 hour
+#ifndef WIFI_DOWN_MAX_S
+#define WIFI_DOWN_MAX_S 3600
+#endif
+static const uint32_t WIFI_OFFLINE_MAX_MS = WIFI_DOWN_MAX_S * 1000UL;
+
+static void refresh_link_cache(bool just_connected, unsigned long now) {
+  static uint8_t rssi_cnt = 0;
+  if (++rssi_cnt >= 60) {
+    rssi_cnt = 0;
+    Wifi::rssi = WiFi.RSSI();
+    Wifi::local_ip = WiFi.localIP();
+  }
+  if (just_connected) {
+    Wifi::local_ip = WiFi.localIP();
+    strlcpy(Wifi::ssid, WiFi.SSID().c_str(), sizeof(Wifi::ssid));
+    Wifi::rssi = WiFi.RSSI();
+    Wifi::connected_at_ms = now;
+  }
+}
+
+static void track_outage(unsigned long now) {
+  if (was_connected) {
+    was_connected = false;
+    lost_at = now;
+    Wifi::connected_at_ms = 0;
+    Log::console(PSTR("WiFi: Connection lost"));
+  } else if (lost_at == 0) {
+    lost_at = now;
+  }
+  unsigned long down_seconds = (now - lost_at) / 1000;
+  if (down_seconds > 0 && down_seconds % 30 == 0) {
+    Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
+    WiFi.reconnect();
+  }
+  if (down_seconds > WIFI_DOWN_MAX_S) {
+    Log::console(PSTR("WiFi: Down for %lus, rebooting"), down_seconds);
+    Lifecycle::request_restart(now, 100);
+  }
+}
+
+static void note_reconnected(unsigned long now) {
+  was_connected = true;
+  if (lost_at > 0) {
+    unsigned long down_seconds = (now - lost_at) / 1000;
+    Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
+  }
+}
+
+static void reprobe_saved_network(unsigned long now) {
+  if (Wifi::connected) {
+    Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
+    Lifecycle::request_restart(now, 500);
+  } else if (now > WIFI_OFFLINE_MAX_MS) {
+    Log::console(PSTR("WiFi: Offline %lus, rebooting to retry"), now / 1000);
+    Lifecycle::request_restart(now, 500);
+  } else if (s_offline_retry_at == 0) {
+    s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
+  } else if ((long)(now - s_offline_retry_at) >= 0) {
+    s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
+    Log::console(PSTR("WiFi: Offline - re-probing saved network"));
+    WiFi.mode(WIFI_STA);
+    WiFi.begin();
+  }
+}
+
+static void clear_backups_once_stable() {
+  Wifi::backup_grace_done = true;
+  if (Fs::remove(WIFI_BACKUP_PATH)) {
+    Log::console(PSTR("WiFi: New creds stable for 5 min, backup cleared"));
+  }
+  if (Fs::remove(NET_BACKUP_PATH)) {
+    Log::console(PSTR("WiFi: Static IP stable for 5 min, net backup cleared"));
+  }
+}
 
 void Wifi::tick(unsigned long now) {
   wl_status_t wifi_status = WiFi.status();
   bool prev = Wifi::connected;
   Wifi::connected = (wifi_status == WL_CONNECTED);
-  if (Wifi::connected) {
-    static uint8_t rssi_cnt = 0;
-    if (++rssi_cnt >= 60) {
-      rssi_cnt = 0;
-      Wifi::rssi = WiFi.RSSI();
-      // Refresh IP cache once a minute to catch DHCP renewals.
-      Wifi::local_ip = WiFi.localIP();
-    }
-    if (!prev) {
-      Wifi::local_ip = WiFi.localIP();
-      strncpy(Wifi::ssid, WiFi.SSID().c_str(), sizeof(Wifi::ssid) - 1);
-      Wifi::ssid[sizeof(Wifi::ssid) - 1] = '\0';
-      Wifi::rssi = WiFi.RSSI();
-      Wifi::connected_at_ms = now;   // start the stability timer
-    }
-  }
+  if (Wifi::connected) refresh_link_cache(!prev, now);
 
   if (!Wifi::disabled) {
-    if (wifi_status != WL_CONNECTED) {
-      if (was_connected) {
-        was_connected = false;
-        lost_at = now;
-        Wifi::connected_at_ms = 0;  // disconnect resets stability
-        Log::console(PSTR("WiFi: Connection lost"));
-      } else if (lost_at == 0) {
-        lost_at = now;
-      }
-      unsigned long down_seconds = (now - lost_at) / 1000;
-      if (down_seconds > 0 && down_seconds % 30 == 0) {
-        Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
-        WiFi.reconnect();
-      }
-      if (down_seconds > 300) {
-        Log::console(PSTR("WiFi: Down for 5 minutes, rebooting"));
-        DeviceInfo::safeRestart(100);
-      }
-    } else if (!was_connected) {
-      was_connected = true;
-      if (lost_at > 0) {
-        unsigned long down_seconds = (now - lost_at) / 1000;
-        Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
-      }
-    }
+    if (wifi_status != WL_CONNECTED) track_outage(now);
+    else if (!was_connected) note_reconnected(now);
   } else if (!Wifi::offline_forced) {
-    // Offline because no connection was available at boot, not a deliberate
-    // button-hold. Re-probe the saved network periodically; reboot to bring
-    // services up cleanly once it is back.
-    if (Wifi::connected) {
-      Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
-      DeviceInfo::safeRestart(500);
-    } else if (now > WIFI_OFFLINE_MAX_MS) {
-      Log::console(PSTR("WiFi: Offline 1h, rebooting to retry"));
-      DeviceInfo::safeRestart(500);
-    } else if (s_offline_retry_at == 0) {
-      s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
-    } else if ((long)(now - s_offline_retry_at) >= 0) {
-      s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
-      Log::console(PSTR("WiFi: Offline - re-probing saved network"));
-      WiFi.mode(WIFI_STA);
-      WiFi.begin();
-    }
+    reprobe_saved_network(now);
   }
 
-  if (!backup_grace_done && Wifi::connected && now > 300000UL) {
-    backup_grace_done = true;
-    if (LittleFS.begin()) {
-      if (LittleFS.exists(WIFI_BACKUP_PATH)) {
-        LittleFS.remove(WIFI_BACKUP_PATH);
-        Log::console(PSTR("WiFi: New creds stable for 5 min, backup cleared"));
-      }
-      if (LittleFS.exists(NET_BACKUP_PATH)) {
-        LittleFS.remove(NET_BACKUP_PATH);
-        Log::console(PSTR("WiFi: Static IP stable for 5 min, net backup cleared"));
-      }
-      LittleFS.end();
-    }
-  }
+  if (!backup_grace_done && Wifi::connected && now > 300000UL) clear_backups_once_stable();
 }
 
-// ---------- boot-time association ----------
+// Boot association
 
 static bool waitForWifi(uint32_t timeoutMs) {
   uint32_t start = fast_millis();
@@ -177,13 +199,13 @@ static bool waitForWifi(uint32_t timeoutMs) {
 bool Wifi::hasSavedCreds() {
   WiFi.mode(WIFI_STA);
 #ifdef ESP32
-  // WiFi.SSID() can lie right after mode change; query the SDK directly.
+  // WiFi.SSID() can lie here
   wifi_config_t conf = {};
   if (esp_wifi_get_config(WIFI_IF_STA, &conf) == ESP_OK &&
       conf.sta.ssid[0] != '\0') {
     return true;
   }
-  delay(50);   // belt-and-braces for SDK timing edge cases
+  delay(50);   // SDK timing
   return WiFi.SSID().length() > 0;
 #else
   return WiFi.SSID().length() > 0;
@@ -193,73 +215,70 @@ bool Wifi::hasSavedCreds() {
 void Wifi::clearSavedCreds() {
 #ifdef ESP8266
   WiFi.persistent(true);
-  WiFi.disconnect(true);          // wifioff=true also clears stored creds
+  WiFi.disconnect(true);          // also clears creds
 #else
   WiFi.persistent(true);
   WiFi.disconnect(true, true);    // disable + eraseAP
 #endif
+  Fs::remove(WIFI_BACKUP_PATH);
+  Fs::remove(NET_BACKUP_PATH);
   Log::console(PSTR("WiFi: SDK creds cleared"));
 }
 
+// SDK fields aren't NUL-ended at full length
+static bool sdk_creds(Creds& c) {
+#ifdef ESP32
+  wifi_config_t conf = {};
+  if (esp_wifi_get_config(WIFI_IF_STA, &conf) != ESP_OK) return false;
+  memcpy(c.ssid, conf.sta.ssid, EGPORTAL_SSID_MAX);
+  memcpy(c.pass, conf.sta.password, EGPORTAL_PASS_MAX);
+#else
+  struct station_config conf;
+  if (!wifi_station_get_config(&conf)) return false;
+  memcpy(c.ssid, conf.ssid, EGPORTAL_SSID_MAX);
+  memcpy(c.pass, conf.password, EGPORTAL_PASS_MAX);
+#endif
+  c.ssid[EGPORTAL_SSID_MAX] = '\0';
+  c.pass[EGPORTAL_PASS_MAX] = '\0';
+  return c.ssid[0] != '\0';
+}
+
 bool Wifi::saveBackupCreds() {
-  String ssid = WiFi.SSID();
-  if (ssid.length() == 0) return false;     // nothing to back up
-  if (!LittleFS.begin()) return false;
-  File f = LittleFS.open(WIFI_BACKUP_PATH, "w");
-  if (!f) { LittleFS.end(); return false; }
-  f.print(ssid);
+  Creds c;
+  if (!sdk_creds(c)) return false;
+  if (!Fs::begin()) return false;
+  File f = Fs::open_w(WIFI_BACKUP_PATH);
+  if (!f) return false;
+  f.print(c.ssid);
   f.print('\n');
-  f.print(WiFi.psk());
+  f.print(c.pass);
   f.print('\n');
   f.close();
-  LittleFS.end();
-  Log::console(PSTR("WiFi: Backup saved (ssid=%s)"), ssid.c_str());
+  Log::console(PSTR("WiFi: Backup saved (ssid=%s)"), c.ssid);
   return true;
 }
 
-// Parse up to nFields newline-delimited records from f into buf, NUL
-// each. fields[i] points into buf. No heap (vs String/readStringUntil).
 static uint8_t readLines(File& f, char* buf, size_t bufLen,
                          char** fields, uint8_t nFields) {
   if (bufLen == 0 || nFields == 0) return 0;
   int n = f.read((uint8_t*)buf, bufLen - 1);
   if (n < 0) n = 0;
   buf[n] = '\0';
-  uint8_t idx = 0;
-  fields[idx++] = buf;
-  for (char* p = buf; *p && idx < nFields; p++) {
-    if (*p == '\n') { *p = '\0'; fields[idx++] = p + 1; }
-  }
-  // Pad remaining slots with empty string + trim each populated field.
-  for (uint8_t i = 0; i < nFields; i++) {
-    if (i >= idx) { fields[i] = (char*)""; continue; }
-    char* s = fields[i];
-    size_t l = strlen(s);
-    while (l > 0) {
-      char c = s[l - 1];
-      if (c == '\r' || c == ' ' || c == '\t') s[--l] = '\0';
-      else break;
-    }
-  }
-  return idx;
+  return split_lines(buf, fields, nFields);
 }
 
-// On success, removes backup so next boot uses SDK NVS creds.
 static bool tryRestoreBackup() {
-  if (!LittleFS.begin()) return false;
-  if (!LittleFS.exists(WIFI_BACKUP_PATH)) { LittleFS.end(); return false; }
-  File f = LittleFS.open(WIFI_BACKUP_PATH, "r");
-  if (!f) { LittleFS.end(); return false; }
-  // 33 + 1 + 64 + 1 = 99; round up to 128 for headroom.
-  char raw[128];
+  File f = Fs::open_r(WIFI_BACKUP_PATH);
+  if (!f) return false;
+  // SSID\nPSK\n
+  char raw[EGPORTAL_SSID_MAX + EGPORTAL_PASS_MAX + 3];
   char* fields[2];
   readLines(f, raw, sizeof(raw), fields, 2);
   f.close();
   const char* ssid = fields[0];
   const char* pass = fields[1];
   if (!*ssid) {
-    LittleFS.remove(WIFI_BACKUP_PATH);
-    LittleFS.end();
+    Fs::remove(WIFI_BACKUP_PATH);
     return false;
   }
   Log::console(PSTR("WiFi: Restoring backup creds (ssid=%s)"), ssid);
@@ -267,58 +286,52 @@ static bool tryRestoreBackup() {
   WiFi.begin(ssid, pass);
   bool ok = waitForWifi(30000);
   if (ok) {
-    LittleFS.remove(WIFI_BACKUP_PATH);
+    Fs::remove(WIFI_BACKUP_PATH);
     Log::console(PSTR("WiFi: Reverted to backup creds"));
   }
-  LittleFS.end();
   return ok;
 }
 
 bool Wifi::saveNetBackup() {
-  if (!LittleFS.begin()) return false;
-  // Don't clobber a pending backup - we'd lose last-known-good.
-  if (LittleFS.exists(NET_BACKUP_PATH)) {
-    LittleFS.end();
-    return false;
-  }
-  File f = LittleFS.open(NET_BACKUP_PATH, "w");
-  if (!f) { LittleFS.end(); return false; }
+  if (!Fs::begin()) return false;
+  // keep last good
+  if (Fs::exists(NET_BACKUP_PATH)) return false;
+  File f = Fs::open_w(NET_BACKUP_PATH);
+  if (!f) return false;
   f.printf("%s\n%s\n%s\n%s\n%s\n",
-           EGPrefs::getBool("net", "static_ip") ? "1" : "0",
-           EGPrefs::getString("net", "ip"),
-           EGPrefs::getString("net", "gw"),
-           EGPrefs::getString("net", "sn"),
-           EGPrefs::getString("net", "dns"));
+           EGPrefs::getBool("net", EG_K_STATIC_IP) ? "1" : "0",
+           EGPrefs::getString("net", EG_K_IP),
+           EGPrefs::getString("net", EG_K_GW),
+           EGPrefs::getString("net", EG_K_SN),
+           EGPrefs::getString("net", EG_K_DNS));
   f.close();
-  LittleFS.end();
   return true;
 }
 
 bool Wifi::probeReachability() {
   IPAddress dummy;
-  return WiFi.hostByName("pool.ntp.org", dummy);
+  return WiFi.hostByName("pool.ntp.org", dummy);  // NOLINT(dram)
 }
 
 bool Wifi::restoreNetBackup() {
-  if (!LittleFS.begin()) return false;
-  if (!LittleFS.exists(NET_BACKUP_PATH)) { LittleFS.end(); return false; }
-  File f = LittleFS.open(NET_BACKUP_PATH, "r");
-  if (!f) { LittleFS.end(); return false; }
-  // 5 fields × max 16 (IPv4 string) + newlines = ~85 B; 96 has headroom.
+  File f = Fs::open_r(NET_BACKUP_PATH);
+  if (!f) return false;
+  // 5 IPs + newlines
   char raw[96];
   char* fields[5];
   readLines(f, raw, sizeof(raw), fields, 5);
   f.close();
-  EGPrefs::put("net", "static_ip", fields[0]);
-  EGPrefs::put("net", "ip",        fields[1]);
-  EGPrefs::put("net", "gw",        fields[2]);
-  EGPrefs::put("net", "sn",        fields[3]);
-  EGPrefs::put("net", "dns",       fields[4]);
+  EGPrefs::put("net", EG_K_STATIC_IP, fields[0]);
+  EGPrefs::put("net", EG_K_IP,     fields[1]);
+  EGPrefs::put("net", EG_K_GW,     fields[2]);
+  EGPrefs::put("net", EG_K_SN,     fields[3]);
+  EGPrefs::put("net", EG_K_DNS,    fields[4]);
   EGPrefs::commit();
-  LittleFS.remove(NET_BACKUP_PATH);
-  LittleFS.end();
+  Fs::remove(NET_BACKUP_PATH);
   return true;
 }
+
+void Wifi::dropNetBackup() { Fs::remove(NET_BACKUP_PATH); }
 
 bool Wifi::validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
                           char* errbuf, size_t errlen) {
@@ -335,8 +348,6 @@ bool Wifi::validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
     if (errbuf) snprintf_P(errbuf, errlen, PSTR("invalid subnet mask: %s"), s_sn);
     return false;
   }
-  // Gateway must share the subnet, else ARP can't reach it. The
-  // DNS probe doesn't catch the case where DNS lives on the local subnet.
   if (((uint32_t)ip & (uint32_t)sn) != ((uint32_t)gw & (uint32_t)sn)) {
     if (errbuf) snprintf_P(errbuf, errlen,
       PSTR("gateway %s outside subnet %s/%s"), s_gw, s_ip, s_sn);
@@ -346,11 +357,11 @@ bool Wifi::validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
 }
 
 bool Wifi::applyStaticConfig() {
-  if (!EGPrefs::getBool("net", "static_ip")) return false;
-  const char* s_ip  = EGPrefs::getString("net", "ip");
-  const char* s_gw  = EGPrefs::getString("net", "gw");
-  const char* s_sn  = EGPrefs::getString("net", "sn");
-  const char* s_dns = EGPrefs::getString("net", "dns");
+  if (!EGPrefs::getBool("net", EG_K_STATIC_IP)) return false;
+  const char* s_ip  = EGPrefs::getString("net", EG_K_IP);
+  const char* s_gw  = EGPrefs::getString("net", EG_K_GW);
+  const char* s_sn  = EGPrefs::getString("net", EG_K_SN);
+  const char* s_dns = EGPrefs::getString("net", EG_K_DNS);
   char err[96];
   if (!Wifi::validateStatic(s_ip, s_gw, s_sn, err, sizeof(err))) {
     Log::console(PSTR("WiFi: Static IP rejected (%s); using DHCP"), err);
@@ -360,7 +371,6 @@ bool Wifi::applyStaticConfig() {
   ip.fromString(s_ip);
   gw.fromString(s_gw);
   sn.fromString(s_sn);
-  // DNS is optional - fall back to gateway if blank/invalid.
   if (!dns.fromString(s_dns)) dns = gw;
   WiFi.config(ip, gw, sn, dns);
   Log::console(PSTR("WiFi: Static %u.%u.%u.%u gw=%u.%u.%u.%u sn=%u.%u.%u.%u dns=%u.%u.%u.%u"),
@@ -371,67 +381,66 @@ bool Wifi::applyStaticConfig() {
   return true;
 }
 
-void Wifi::onImprovCreds(const char* ssid, const char* pass) {
-  if (!ssid) return;
-  strncpy(s_portalSsid, ssid, sizeof(s_portalSsid) - 1);
-  s_portalSsid[sizeof(s_portalSsid) - 1] = '\0';
-  strncpy(s_portalPass, pass ? pass : "", sizeof(s_portalPass) - 1);
-  s_portalPass[sizeof(s_portalPass) - 1] = '\0';
-  s_portalGotCreds = true;
+// too long is refused, a cut one would never join
+bool Wifi::holdCreds(const char* ssid, const char* pass) {
+  if (!ssid) return false;
+  if (!pass) pass = "";
+  size_t sl = strlen(ssid), pl = strlen(pass);
+  if (sl > EGPORTAL_SSID_MAX || pl > EGPORTAL_PASS_MAX) return false;
+  if (!s_creds) s_creds = (Creds*)malloc(sizeof(Creds));
+  if (!s_creds) return false;
+  memcpy(s_creds->ssid, ssid, sl + 1);
+  memcpy(s_creds->pass, pass, pl + 1);
+  return true;
 }
 
-bool Wifi::connectOrPortal() {
-  if (Wifi::hasSavedCreds()) {
-    WiFi.mode(WIFI_STA);
-    Wifi::applyRuntimeNetPrefs();
-    bool staticOn = Wifi::applyStaticConfig();
-    // Retry the saved network a couple of times before giving up: a slow AP
-    // after a shared power blip should not drop us straight to the portal.
-    bool associated = false;
-    for (uint8_t attempt = 0; attempt < 3 && !associated; attempt++) {
-      if (attempt > 0) Log::console(PSTR("WiFi: Retrying saved network (%u/2)"), attempt);
-      WiFi.begin();                          // uses NVS-stored creds
-      associated = waitForWifi(attempt == 0 ? 30000 : 15000);
-    }
-    if (associated) {
-      // Probe-and-revert: associated radio-side but maybe unreachable
-      // (bad gateway/subnet). Backup is left by /wifisave; tick clears
-      // it after a 5-min stable boot.
-      bool hasBackup = false;
-      if (LittleFS.begin()) {
-        hasBackup = LittleFS.exists(NET_BACKUP_PATH);
-        LittleFS.end();
-      }
-      if (staticOn && hasBackup) {
-        Log::console(PSTR("WiFi: Probing reachability of new static config"));
-        if (Wifi::probeReachability()) {
-          Log::console(PSTR("WiFi: Static config probe OK"));
-        } else {
-          Log::console(PSTR("WiFi: Static config probe failed, reverting"));
-          Wifi::restoreNetBackup();
-          DeviceInfo::safeRestart(500);
-        }
-      }
-      return true;
-    }
-    Log::console(PSTR("WiFi: Saved creds failed to associate"));
-    if (tryRestoreBackup()) return true;
-#if (defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT))
-    return false;
-#endif
-  }
+const char* Wifi::heldSsid() { return s_creds ? s_creds->ssid : ""; }
 
-  // Captive setup AP. Static config (if any) carries over to picked SSID.
-  s_portalGotCreds = false;
-  auto* portal = new EGPortal();
-  if (!portal) {
-    Log::console(PSTR("WiFi: Portal alloc failed, rebooting"));
-    DeviceInfo::safeRestart(500);
-    return false;
+bool Wifi::beginHeld() {
+  if (!s_creds) return false;
+  WiFi.persistent(true);
+  WiFi.begin(s_creds->ssid, s_creds->pass);
+  free(s_creds);
+  s_creds = nullptr;
+  return true;
+}
+
+// outside the portal Improv joins by itself
+void Wifi::onImprovCreds(const char* ssid, const char* pass) {
+  if (s_inPortal && Wifi::holdCreds(ssid, pass)) s_portalGotCreds = true;
+}
+
+static void reset_wifi_tx_power_default();
+
+// retries, slow AP after a power blip
+static bool join_saved_network() {
+  bool associated = false;
+  for (uint8_t attempt = 0; attempt < 3 && !associated; attempt++) {
+    if (attempt > 0) Log::console(PSTR("WiFi: Retrying saved network (%u/2)"), attempt);
+    WiFi.begin();                          // uses NVS-stored creds
+    associated = waitForWifi(attempt == 0 ? 30000 : 15000);
   }
+  return associated;
+}
+
+// associated but may not route
+static void probe_new_static_config(bool staticOn) {
+  bool hasBackup = Fs::exists(NET_BACKUP_PATH);
+  if (staticOn && hasBackup) {
+    Log::console(PSTR("WiFi: Probing reachability of new static config"));
+    if (Wifi::probeReachability()) {
+      Log::console(PSTR("WiFi: Static config probe OK"));
+    } else {
+      Log::console(PSTR("WiFi: Static config probe failed, reverting"));
+      Wifi::restoreNetBackup();
+      DeviceInfo::safeRestart(500);
+    }
+  }
+}
+
+// caller frees
+static char* setup_portal(EGPortal* portal) {
   portal->setTitle(THING_NAME);
-  // Heap-alloc'd for the portal's lifetime - a static buffer would burn
-  // 256 B BSS permanently on this setup-only path.
   char* notice = (char*)malloc(256);
   if (notice) {
     snprintf_P(notice, 256,
@@ -442,22 +451,38 @@ bool Wifi::connectOrPortal() {
     portal->setNotice(notice);
   }
   portal->onSave([](const char* ssid, const char* pw, void*) {
-    strncpy(s_portalSsid, ssid, sizeof(s_portalSsid) - 1);
-    s_portalSsid[sizeof(s_portalSsid) - 1] = '\0';
-    strncpy(s_portalPass, pw, sizeof(s_portalPass) - 1);
-    s_portalPass[sizeof(s_portalPass) - 1] = '\0';
-    s_portalGotCreds = true;
+    if (Wifi::holdCreds(ssid, pw)) s_portalGotCreds = true;
   });
+  portal->onReset([](void*) { s_portalDoReset = true; });
   portal->begin(DeviceInfo::hostname());
+  reset_wifi_tx_power_default();   // after begin(), full power
   Log::console(PSTR("WiFi: Setup portal up on AP %s"), DeviceInfo::hostname());
-  bool haveCreds = Wifi::hasSavedCreds();
+  return notice;
+}
+
+static void portal_factory_reset(EGPortal* portal) {
+  // let the page flush
+  unsigned long flush_until = fast_millis() + 1200;
+  while ((long)(flush_until - fast_millis()) > 0) {
+    portal->loop();
+    delay(10);
+    yield();
+  }
+  Log::console(PSTR("WiFi: Factory reset from setup portal"));
+  DeviceInfo::factoryReset();
+  DeviceInfo::safeRestart(200);
+}
+
+// hasSavedCreds() here drops the AP
+static void run_portal(EGPortal* portal, bool haveCreds) {
   unsigned long portal_idle_since = fast_millis();
   while (!s_portalGotCreds) {
     portal->loop();
     improvSerial.poll();
     delay(10);
     yield();
-    if (!haveCreds) continue;   // first setup: wait indefinitely for the user
+    if (s_portalDoReset) portal_factory_reset(portal);
+    if (!haveCreds) continue;   // first setup, wait forever
     if (WiFi.softAPgetStationNum() > 0) portal_idle_since = fast_millis();
     if ((fast_millis() - portal_idle_since) >= PORTAL_RETRY_MS ||
         fast_millis() >= WIFI_OFFLINE_MAX_MS) {
@@ -465,22 +490,52 @@ bool Wifi::connectOrPortal() {
       DeviceInfo::safeRestart(500);
     }
   }
+}
+
+bool Wifi::connectOrPortal() {
+  bool haveCreds = Wifi::hasSavedCreds();
+  if (haveCreds) {
+    WiFi.mode(WIFI_STA);
+    Wifi::applyRuntimeNetPrefs();
+    bool staticOn = Wifi::applyStaticConfig();
+    if (join_saved_network()) {
+      probe_new_static_config(staticOn);
+      return true;
+    }
+    Log::console(PSTR("WiFi: Saved creds failed to associate"));
+    if (tryRestoreBackup()) return true;
+#ifdef APP_OFFLINE_OK
+    return false;
+#endif
+  }
+
+  s_portalGotCreds = false;
+  auto* portal = new EGPortal();
+  if (!portal) {
+    Log::console(PSTR("WiFi: Portal alloc failed, rebooting"));
+    DeviceInfo::safeRestart(500);
+    return false;
+  }
+  char* notice = setup_portal(portal);
+  s_inPortal = true;
+  run_portal(portal, haveCreds);
+  s_inPortal = false;
   portal->end();
   delete portal;
-  free(notice);  // safe on nullptr
+  free(notice);
   delay(500);
 
   WiFi.mode(WIFI_STA);
-  WiFi.persistent(true);
   Wifi::applyRuntimeNetPrefs();
   Wifi::applyStaticConfig();
-  WiFi.begin(s_portalSsid, s_portalPass);
+  if (!Wifi::beginHeld()) return false;
   return waitForWifi(30000);
 }
 
 class WifiPrefs : public EGModule {
 public:
-  const char* name() override { return "wifi"; }
+  const char* name() override { return PSTR("wifi"); }
+  bool core_module() override { return true; }
   uint8_t display_order() override { return 0; }
   const EGPrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
@@ -491,14 +546,14 @@ EG_REGISTER_MODULE(wifiprefs)
 
 #define WIFI_SLEEP_DEFAULT "1"
 
-static const EGPref WIFI_PREF_ITEMS[] = {
-  {"sleep",    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN},
-  {"tx_power", nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN},
-  {"country",  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN},
-  {"phy_mode", nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN},
+static const EGPref WIFI_PREF_ITEMS[] PROGMEM = {
+  {K_SLEEP,    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN},
+  {K_TX_POWER, nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN},
+  {K_COUNTRY,  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN},
+  {K_PHY_MODE, nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN},
 };
 
-static const EGPrefGroup WIFI_PREF_GROUP = {
+static const EGPrefGroup WIFI_PREF_GROUP PROGMEM = {
   "wifi", "Wi-Fi", 1,
   WIFI_PREF_ITEMS,
   sizeof(WIFI_PREF_ITEMS) / sizeof(WIFI_PREF_ITEMS[0]),
@@ -506,15 +561,20 @@ static const EGPrefGroup WIFI_PREF_GROUP = {
 
 const EGPrefGroup* WifiPrefs::prefs_group() { return &WIFI_PREF_GROUP; }
 
-static void apply_wifi_sleep(uint8_t mode) {
-  // Always apply: the SDK persists sleep mode in NVS, so skipping the call
-  // on mode=1 leaves a previously-applied non-default in place across reboot.
+static int8_t s_rx_sleep = -1;   // UdpRx's, wins over the pref
+
+static void apply_wifi_sleep() {
+  // always, SDK keeps it in NVS
+  bool rx = s_rx_sleep >= 0;
+  uint8_t mode = rx ? (uint8_t)s_rx_sleep : (uint8_t)EGPrefs::getUInt("wifi", K_SLEEP);
 #ifdef ESP8266
+  // multicast: listen interval 1, default 3 drops frames
+  uint8_t listen = rx ? 1 : 0;
   switch (mode) {
-    case 0:  WiFi.setSleepMode(WIFI_LIGHT_SLEEP); break;
+    case 0:  WiFi.setSleepMode(WIFI_LIGHT_SLEEP, listen); break;
     case 2:  WiFi.setSleepMode(WIFI_NONE_SLEEP);  break;
     case 1:
-    default: WiFi.setSleepMode(WIFI_MODEM_SLEEP); break;
+    default: WiFi.setSleepMode(WIFI_MODEM_SLEEP, listen); break;
   }
 #else
   switch (mode) {
@@ -526,8 +586,14 @@ static void apply_wifi_sleep(uint8_t mode) {
 #endif
 }
 
+#define WIFI_TX_POWER_MIN_DBM 2
+
 static void apply_wifi_tx_power(uint8_t dBm) {
-  if (dBm == 0) return;
+  if (dBm == 0) return;   // 0 = leave at default (full)
+  if (dBm < WIFI_TX_POWER_MIN_DBM) {
+    Log::console(PSTR("WiFi: tx_power %u too low, using %u dBm"), dBm, WIFI_TX_POWER_MIN_DBM);
+    dBm = WIFI_TX_POWER_MIN_DBM;
+  }
 #ifdef ESP8266
   WiFi.setOutputPower((float)dBm);
 #else
@@ -535,12 +601,19 @@ static void apply_wifi_tx_power(uint8_t dBm) {
 #endif
 }
 
+static void reset_wifi_tx_power_default() {
+#ifdef ESP8266
+  WiFi.setOutputPower(20.5f);
+#else
+  esp_wifi_set_max_tx_power(80);
+#endif
+}
+
 static void apply_wifi_country(const char* code) {
   if (!code || !code[0]) return;
 #ifdef ESP8266
   wifi_country_t c = {0};
-  strncpy(c.cc, code, 2);
-  c.cc[2] = '\0';
+  strlcpy(c.cc, code, sizeof(c.cc));
   c.schan  = 1;
   c.nchan  = 13;
   c.policy = WIFI_COUNTRY_POLICY_MANUAL;
@@ -574,12 +647,61 @@ static void apply_wifi_phy_mode(uint8_t mode) {
 }
 
 void WifiPrefs::on_prefs_loaded() {
-  // Sleep is safe pre-init; the rest deferred to Wifi::applyRuntimeNetPrefs.
-  apply_wifi_sleep((uint8_t)EGPrefs::getUInt("wifi", "sleep"));
+  // rest needs WiFi.mode() first
+  apply_wifi_sleep();
+}
+
+void Wifi::rx_sleep(int8_t mode) {
+  s_rx_sleep = mode;
+  apply_wifi_sleep();
 }
 
 void Wifi::applyRuntimeNetPrefs() {
-  apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", "tx_power"));
-  apply_wifi_country (         EGPrefs::getString("wifi", "country"));
-  apply_wifi_phy_mode((uint8_t)EGPrefs::getUInt  ("wifi", "phy_mode"));
+  apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", K_TX_POWER));
+  apply_wifi_country (         EGPrefs::getString("wifi", K_COUNTRY));
+  apply_wifi_phy_mode((uint8_t)EGPrefs::getUInt  ("wifi", K_PHY_MODE));
+}
+
+int Wifi::txPowerQdbm() {
+#ifdef ESP8266
+  uint8_t dBm = (uint8_t)EGPrefs::getUInt("wifi", K_TX_POWER);
+  if (dBm == 0) return 82;   // core default 20.5 dBm
+  if (dBm < WIFI_TX_POWER_MIN_DBM) dBm = WIFI_TX_POWER_MIN_DBM;
+  return (int)dBm * 4;
+#else
+  int8_t q = 0;
+  if (esp_wifi_get_max_tx_power(&q) != ESP_OK) return -1;
+  return (int)q;
+#endif
+}
+
+const char* Wifi::phyModeStr() {
+#ifdef ESP8266
+  switch (WiFi.getPhyMode()) {
+    case WIFI_PHY_MODE_11B: return PSTR("11b");
+    case WIFI_PHY_MODE_11G: return PSTR("11g");
+    case WIFI_PHY_MODE_11N: return PSTR("11n");
+    default:                return PSTR("?");
+  }
+#else
+  uint8_t mask = 0;
+  if (esp_wifi_get_protocol(WIFI_IF_STA, &mask) != ESP_OK) return PSTR("?");
+  if (mask & WIFI_PROTOCOL_11N) return PSTR("11n");
+  if (mask & WIFI_PROTOCOL_11G) return PSTR("11g");
+  if (mask & WIFI_PROTOCOL_11B) return PSTR("11b");
+  return PSTR("?");
+#endif
+}
+
+const char* Wifi::sleepModeStr() {
+#ifdef ESP8266
+  switch (WiFi.getSleepMode()) {
+    case WIFI_NONE_SLEEP:  return PSTR("None");
+    case WIFI_LIGHT_SLEEP: return PSTR("Light");
+    case WIFI_MODEM_SLEEP: return PSTR("Modem");
+    default:               return PSTR("?");
+  }
+#else
+  return WiFi.getSleep() ? PSTR("Modem") : PSTR("None");
+#endif
 }

@@ -19,15 +19,12 @@
 #include "DeviceInfo.h"
 #include "../Prefs/EGPrefs.h"
 #include "../Logger/Logger.h"
-#include "../Counter/Counter.h"
-#include "../OLEDDisplay/OLEDDisplay.h"
-#include "Wifi.h"
-#include <LittleFS.h>
-#ifdef GEIGER_SDCARD
-#include "../SDCard/SDCard.h"
-#endif
+#include "Uptime.h"
+#include "Lifecycle.h"
+#include "../Net/Wifi.h"
+#include "../Util/Fnv.h"
+#include "Fs.h"
 
-extern Counter gcounter;
 #ifdef ESP32
 #include <math.h>
 #include <esp_chip_info.h>
@@ -42,18 +39,12 @@ extern "C" {
 #include <WiFi.h>
 #endif
 
-#ifndef GEIGER_MODEL
-#define GEIGER_MODEL ""
-#endif
-
-// Module-owned identity buffers populated by begin(). hostname is
-// "<THING_NAME>-<chipid>" e.g. "ESPGeiger-d5536d".
-static char s_hostname_buf[24]   = "";
-static char s_chipid_buf[8]      = "";
-static char s_useragent_buf[80]  = "";
+static char s_hostname_buf[sizeof(THING_NAME "-") + CHIPID_LEN] = "";
+static char s_chipid_buf[CHIPID_LEN + 1] = "";
+static char s_useragent_buf[sizeof(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; )") + CHIPID_LEN] = "";
 static char s_mac_buf[18]        = "";
-static char s_geigermodel[33]    = GEIGER_MODEL;
-static char s_friendlyname[33]   = "";
+static char s_flash_buf[24]      = "";
+static char s_friendlyname[EG_NAME_MAX + 1] = "";
 
 uint32_t DeviceInfo::freeHeap() {
   static uint32_t cached = 0;
@@ -67,9 +58,8 @@ uint32_t DeviceInfo::freeHeap() {
   return cached;
 }
 
-static uint8_t  s_hf_peak = 0;
-static uint32_t s_lfb_cur = 0;  // current largest free block (bytes)
-static uint32_t s_lfb_low = 0;  // low-water mark since last reset; 0 = unset
+static uint32_t s_lfb_cur = 0;
+static uint32_t s_lfb_low = 0;  // 0 = unset
 
 uint8_t DeviceInfo::heapFrag() {
   static uint8_t cached = 0;
@@ -84,8 +74,7 @@ uint8_t DeviceInfo::heapFrag() {
     cached = frag_;
     s_lfb_cur = max_;
 #else
-    // Sqrt-weighted to match ESP8266 umm_malloc semantics. ESP32 has an FPU
-    // so sqrtf is a single instruction; this runs at 1 Hz, negligible cost.
+    // same as umm_malloc on the 8266
     uint32_t free_ = ESP.getFreeHeap();
     uint32_t max_  = ESP.getMaxAllocHeap();
     s_lfb_cur = max_;
@@ -97,23 +86,13 @@ uint8_t DeviceInfo::heapFrag() {
     }
 #endif
     last_ms = now;
-    if (cached > s_hf_peak) s_hf_peak = cached;
     if (s_lfb_low == 0 || s_lfb_cur < s_lfb_low) s_lfb_low = s_lfb_cur;
   }
   return cached;
 }
 
-uint8_t DeviceInfo::heapFragPeak() {
-  heapFrag();  // refresh cache + peak if stale
-  return s_hf_peak;
-}
-
-void DeviceInfo::heapFragPeakReset() {
-  s_hf_peak = heapFrag();
-}
-
 uint32_t DeviceInfo::largestFreeBlock() {
-  heapFrag();  // shared 10s cache refresh
+  heapFrag();
   return s_lfb_cur;
 }
 
@@ -127,22 +106,36 @@ void DeviceInfo::largestFreeBlockLowReset() {
   s_lfb_low = s_lfb_cur;
 }
 
+#ifdef ESP32
+static float   s_ct      = NAN;
+static uint8_t s_ct_wait = 0;
+
+void DeviceInfo::chipTempSample() {
+  if (s_ct_wait) { s_ct_wait--; return; }
+  s_ct_wait = 45 + (uint8_t)(esp_random() % 31);
+  float t = temperatureRead();
+  if (isnan(t) || t <= -40.0f || t >= 150.0f) return;
+  s_ct = isnan(s_ct) ? t : s_ct + (t - s_ct) * 0.0625f;
+}
+
+float DeviceInfo::chipTempC() { return s_ct; }
+#endif
+
 void DeviceInfo::safeRestart(uint32_t delayMs) {
-  gcounter.stop_for_ota();
-#ifdef GEIGER_SDCARD
-  sdcard.pauseWriter();
-#endif
-#if defined(SSD1306_DISPLAY) && defined(ESP32)
-  // ESP32 tiny OLEDs latch stale content on hardware reset; blank first.
-  display.clearBuffer();
-  display.sendBuffer();
-#endif
+  Lifecycle::send(Lifecycle::SHUTDOWN);
   if (delayMs) delay(delayMs);
-  ESP.restart();
+  ESP.restart();  // NOLINT(restart-call) the one restart path
+}
+
+uint64_t DeviceInfo::hwid() {
+#ifdef ESP8266
+  return ESP.getChipId();
+#else
+  return ESP.getEfuseMac();
+#endif
 }
 
 void DeviceInfo::begin() {
-  // chipid: low 24 bits of native chip identifier, hex-formatted.
 #ifdef ESP8266
   uint32_t tchipId = ESP.getChipId();
 #else
@@ -154,7 +147,7 @@ void DeviceInfo::begin() {
   snprintf_P(s_chipid_buf, sizeof(s_chipid_buf), PSTR("%06lx"),
              (unsigned long)(tchipId & 0xFFFFFFul));
 
-  // hostname = "ESPGeiger-d5536d"
+  // ESPGeiger-d5536d
   snprintf_P(s_hostname_buf, sizeof(s_hostname_buf), PSTR("%s-%s"),
              THING_NAME, s_chipid_buf);
 
@@ -163,10 +156,18 @@ void DeviceInfo::begin() {
              THING_NAME, RELEASE_VERSION, GIT_VERSION,
              BUILD_ENV, s_chipid_buf);
 
-  // WiFi.mode(WIFI_STA) idempotent + makes MAC + DHCP-hostname both
-  // valid even though Wifi::connectOrPortal hasn't run yet. Otherwise
-  // WiFi.macAddress() can return all-FF on first call before the SDK
-  // has populated its station struct.
+  const uint8_t fm = (uint8_t)ESP.getFlashChipMode();
+  const char* mode = fm == 0 ? PSTR("QIO") : fm == 1 ? PSTR("QOUT") :
+                     fm == 2 ? PSTR("DIO") : fm == 3 ? PSTR("DOUT") : PSTR("?");
+  const unsigned long mhz = (unsigned long)(ESP.getFlashChipSpeed() / 1000000ul);
+#ifdef ESP8266
+  snprintf_P(s_flash_buf, sizeof(s_flash_buf), PSTR("%06lx %s %luMHz"),
+             (unsigned long)(ESP.getFlashChipId() & 0xFFFFFFul), mode, mhz);
+#else
+  snprintf_P(s_flash_buf, sizeof(s_flash_buf), PSTR("%s %luMHz"), mode, mhz);
+#endif
+
+  // else the MAC can read all FF
 #ifdef ESP8266
   WiFi.mode(WIFI_STA);
   WiFi.hostname(s_hostname_buf);
@@ -174,91 +175,50 @@ void DeviceInfo::begin() {
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(s_hostname_buf);
 #endif
-  strncpy(s_mac_buf, WiFi.macAddress().c_str(), sizeof(s_mac_buf) - 1);
-  s_mac_buf[sizeof(s_mac_buf) - 1] = '\0';
+  strlcpy(s_mac_buf, WiFi.macAddress().c_str(), sizeof(s_mac_buf));
 }
 
 const char* DeviceInfo::hostname()    { return s_hostname_buf; }
 const char* DeviceInfo::chipid()      { return s_chipid_buf; }
 const char* DeviceInfo::useragent()   { return s_useragent_buf; }
 const char* DeviceInfo::mac()         { return s_mac_buf; }
+const char* DeviceInfo::flashInfo()   { return s_flash_buf; }
 
 void DeviceInfo::factoryReset() {
-  // Wipes every module's pref JSON (via EGPrefs) + the WiFi auto-revert
-  // backup + any legacy ConfigManager-era config + SDK-stored WiFi creds.
-  // /api.key is untouched: not in the EGPrefs file set, not in our
-  // explicit remove list - survives by exclusion.
+  // keeps /api.key
   Log::console(PSTR("Factory reset"));
   EGPrefs::reset_all();
-  if (LittleFS.begin()) {
-    LittleFS.remove("/wifi_backup");
-    LittleFS.remove("/geigerconfig.json");      // legacy ConfigManager
-    LittleFS.end();
-  }
+  Fs::remove(F("/geigerconfig.json"));   // legacy ConfigManager
   Wifi::clearSavedCreds();
-}
-const char* DeviceInfo::geigermodel() { return s_geigermodel; }
-
-void DeviceInfo::setGeigermodel(const char* s) {
-  if (s && s[0]) {
-    strncpy(s_geigermodel, s, sizeof(s_geigermodel) - 1);
-  } else {
-    strncpy(s_geigermodel, GEIGER_MODEL, sizeof(s_geigermodel) - 1);
-  }
-  s_geigermodel[sizeof(s_geigermodel) - 1] = '\0';
-}
-
-uint8_t DeviceInfo::tubeDetection() {
-  uint8_t f = 0;
-  if (EGPrefs::getBool("input", "tube_alpha")) f |= 0x01;
-  if (EGPrefs::getBool("input", "tube_beta"))  f |= 0x02;
-  if (EGPrefs::getBool("input", "tube_gamma")) f |= 0x04;
-  return f;
 }
 
 const char* DeviceInfo::friendlyName() { return s_friendlyname; }
 
 void DeviceInfo::setFriendlyName(const char* s) {
-  if (s && s[0]) {
-    strncpy(s_friendlyname, s, sizeof(s_friendlyname) - 1);
-  } else {
-    s_friendlyname[0] = '\0';
-  }
-  s_friendlyname[sizeof(s_friendlyname) - 1] = '\0';
+  strlcpy(s_friendlyname, s ? s : "", sizeof(s_friendlyname));
 }
 
+// NOLINTNEXTLINE(complexity) one case per chip
 const char* DeviceInfo::chipmodel() {
-#ifdef ESP8266
-  #ifdef ESPGEIGER_HW
-    return "ESPG-HW";
-  #elif defined(ESPGEIGER_LT)
-    #ifdef GEIGER_SDCARD
-    return "ESPG-LOG";
-    #else
-    return "ESPG-LT";
-    #endif
-  #else
-    return "ESP8266";
-  #endif
+#ifdef APP_BOARD
+  return APP_BOARD;
+#elif defined(ESP8266)
+  return "ESP8266";
 #elif defined(ESP32)
-  #ifdef ESPGEIGER_HW
-    return "ESPG32-HW";
-  #else
-    esp_chip_info_t chipInfo;
-    esp_chip_info(&chipInfo);
-    switch ((int)chipInfo.model) {
-      case 0:  return "ESP8266";
-      case (int)esp_chip_model_t::CHIP_ESP32:   return "ESP32";
-      case (int)esp_chip_model_t::CHIP_ESP32S2: return "ESP32-S2";
-      case (int)esp_chip_model_t::CHIP_ESP32S3: return "ESP32-S3";
-      case (int)esp_chip_model_t::CHIP_ESP32C3: return "ESP32-C3";
-      case 6:  return "ESP32-H4";
-      case 12: return "ESP32-C2";
-      case 13: return "ESP32-C6";
-      case 16: return "ESP32-H2";
-      default: return "ESP32";
-    }
-  #endif
+  esp_chip_info_t chipInfo;
+  esp_chip_info(&chipInfo);
+  switch ((int)chipInfo.model) {
+    case 0:  return "ESP8266";
+    case (int)esp_chip_model_t::CHIP_ESP32:   return "ESP32";
+    case (int)esp_chip_model_t::CHIP_ESP32S2: return "ESP32-S2";
+    case (int)esp_chip_model_t::CHIP_ESP32S3: return "ESP32-S3";
+    case (int)esp_chip_model_t::CHIP_ESP32C3: return "ESP32-C3";
+    case 6:  return "ESP32-H4";
+    case 12: return "ESP32-C2";
+    case 13: return "ESP32-C6";
+    case 16: return "ESP32-H2";
+    default: return "ESP32";
+  }
 #else
   return "UNKNOWN";
 #endif
@@ -283,91 +243,78 @@ bool DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
 #endif
 }
 
+// NOLINTNEXTLINE(complexity) one case per reset cause
 uint8_t DeviceInfo::resetReason() {
 #ifdef ESP8266
-  // ESP8266 rst_info::reason values from user_interface.h:
-  //   0 = REASON_DEFAULT_RST (power-on)
-  //   1 = REASON_WDT_RST (hardware watchdog)
-  //   2 = REASON_EXCEPTION_RST
-  //   3 = REASON_SOFT_WDT_RST (software watchdog)
-  //   4 = REASON_SOFT_RESTART (ESP.restart())
-  //   5 = REASON_DEEP_SLEEP_AWAKE
-  //   6 = REASON_EXT_SYS_RST (reset pin / button)
   uint32_t r = ESP.getResetInfoPtr()->reason;
   switch (r) {
-    case 0: return 1;
-    case 6: return 2;
-    case 4: return 3;
-    case 2: return 4;
-    case 1: case 3: return 5;
-    case 5: return 7;
-    default: return 0;
+    case REASON_DEFAULT_RST:      return RR_POWER_ON;
+    case REASON_EXT_SYS_RST:      return RR_PIN;
+    case REASON_SOFT_RESTART:     return RR_RESTART;
+    case REASON_EXCEPTION_RST:    return RR_EXCEPTION;
+    case REASON_WDT_RST:
+    case REASON_SOFT_WDT_RST:     return RR_WDT;
+    case REASON_DEEP_SLEEP_AWAKE: return RR_DEEP_SLEEP;
+    default:                      return RR_UNKNOWN;
   }
 #elif defined(ESP32)
   switch (esp_reset_reason()) {
-    case ESP_RST_POWERON:   return 1;
-    case ESP_RST_EXT:       return 2;
-    case ESP_RST_SW:        return 3;
-    case ESP_RST_PANIC:     return 4;
+    case ESP_RST_POWERON:   return RR_POWER_ON;
+    case ESP_RST_EXT:       return RR_PIN;
+    case ESP_RST_SW:        return RR_RESTART;
+    case ESP_RST_PANIC:     return RR_EXCEPTION;
     case ESP_RST_INT_WDT:
     case ESP_RST_TASK_WDT:
-    case ESP_RST_WDT:       return 5;
-    case ESP_RST_BROWNOUT:  return 6;
-    case ESP_RST_DEEPSLEEP: return 7;
-    default:                return 0;
+    case ESP_RST_WDT:       return RR_WDT;
+    case ESP_RST_BROWNOUT:  return RR_BROWNOUT;
+    case ESP_RST_DEEPSLEEP: return RR_DEEP_SLEEP;
+    default:                return RR_UNKNOWN;
   }
 #else
-  return 0;
+  return RR_UNKNOWN;
 #endif
 }
 
-uint16_t DeviceInfo::featureFlags() {
-  uint16_t f = 0;
-#ifdef MQTTOUT
-  f |= 1 << 0;
+// NOLINTNEXTLINE(complexity) one case per reset cause
+const char* DeviceInfo::resetText() {
+#ifdef ESP8266
+  switch (ESP.getResetInfoPtr()->reason) {
+    case REASON_DEFAULT_RST:      return PSTR("Power On");
+    case REASON_WDT_RST:          return PSTR("Hardware Watchdog");
+    case REASON_EXCEPTION_RST:    return PSTR("Exception");
+    case REASON_SOFT_WDT_RST:     return PSTR("Software Watchdog");
+    case REASON_SOFT_RESTART:     return PSTR("Software/System restart");
+    case REASON_DEEP_SLEEP_AWAKE: return PSTR("Deep-Sleep Wake");
+    case REASON_EXT_SYS_RST:      return PSTR("External System");
+    default:                      return PSTR("Unknown");
+  }
+#else
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:   return "Power on";
+    case ESP_RST_EXT:       return "External reset";
+    case ESP_RST_SW:        return "Software restart";
+    case ESP_RST_PANIC:     return "Exception/panic";
+    case ESP_RST_INT_WDT:   return "Interrupt watchdog";
+    case ESP_RST_TASK_WDT:  return "Task watchdog";
+    case ESP_RST_WDT:       return "Watchdog";
+    case ESP_RST_BROWNOUT:  return "Brownout";
+    case ESP_RST_DEEPSLEEP: return "Deep sleep wake";
+    default:                return "Unknown";
+  }
 #endif
-#ifdef RADMONOUT
-  f |= 1 << 1;
-#endif
-#ifdef THINGSPEAKOUT
-  f |= 1 << 2;
-#endif
-#ifdef WEBHOOKOUT
-  f |= 1 << 3;
-#endif
-#ifdef SERIALOUT
-  f |= 1 << 4;
-#endif
-#ifdef GMCOUT
-  f |= 1 << 5;
-#endif
-#ifdef SSD1306_DISPLAY
-  f |= 1 << 6;
-#endif
-#ifdef GEIGER_PUSHBUTTON
-  f |= 1 << 7;
-#endif
-#ifdef GEIGER_SDCARD
-  f |= 1 << 8;
-#endif
-#ifdef GEIGER_NEOPIXEL
-  f |= 1 << 9;
-#endif
-#ifdef ESPG_HV
-  f |= 1 << 10;
-#endif
-  return f;
 }
+
+uint32_t DeviceInfo::fwFingerprint() {
+  uint32_t h = fnv1a(BUILD_ENV, fnv1a(GIT_VERSION));
+  if (h == 0) h = 1;   // 0 = not computed
+  return h;
+}
+
+unsigned long DeviceInfo::uptime() { return Uptime::seconds(); }
 
 char* DeviceInfo::uptimeString() {
   static char buf[20];
-  time_t uptime = ntpclient.getUptime();
-  uint16_t days = uptime / SECS_PER_DAY;
-  uptime %= SECS_PER_DAY;
-  uint8_t hours = uptime / SECS_PER_HOUR;
-  uptime %= SECS_PER_HOUR;
-  uint8_t minutes = uptime / SECS_PER_MIN;
-  uint8_t seconds = uptime % SECS_PER_MIN;
-  snprintf_P(buf, sizeof(buf), PSTR("%dT%02d:%02d:%02d"), days, hours, minutes, seconds);
+  Uptime::Split u = Uptime::split((uint32_t)Uptime::seconds());
+  snprintf_P(buf, sizeof(buf), PSTR("%uT%02u:%02u:%02u"), u.d, u.h, u.m, u.s);
   return buf;
 }

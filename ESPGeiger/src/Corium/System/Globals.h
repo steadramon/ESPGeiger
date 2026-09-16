@@ -20,7 +20,7 @@
 #ifndef UTIL_GLOBALS_H
 #define UTIL_GLOBALS_H
 
-// Highest valid GPIO number for pin-bounded prefs. Input-capable range.
+// Max input pin
 #ifndef MAX_GPIO_PIN
   #if defined(CONFIG_IDF_TARGET_ESP32S3)
     #define MAX_GPIO_PIN 48
@@ -39,25 +39,20 @@
   #endif
 #endif
 
-// ESPGeiger-HW product identity implies a known set of capabilities. The
-// official base:espgeigerhw env sets these as build flags directly; this
-// block catches custom build paths that define only ESPGEIGER_HW.
-#ifdef ESPGEIGER_HW
-#ifndef GEIGER_BLIPLED
-#define GEIGER_BLIPLED 15
-#endif
-#ifndef ESPG_HV
-#define ESPG_HV
-#endif
-#ifndef ESPG_HV_ADC
-#define ESPG_HV_ADC
-#endif
-#endif
+#include "../../../AppConfig.h"
 
 #include <Arduino.h>
 
+// default for led.pin, -1 = none
 #ifndef LED_SEND_RECEIVE
+#if defined(ESP8266) || defined(CONFIG_IDF_TARGET_ESP32)
 #define LED_SEND_RECEIVE 2
+#else
+#define LED_SEND_RECEIVE -1   // C3/S3 boards have no plain LED on 2
+#endif
+#endif
+#ifdef ESP8266
+#define LED_PIN_BLOCKED   // every esp8266 module has it on 2
 #endif
 #ifndef LED_SEND_RECEIVE_ON
 #ifdef ESP8266
@@ -71,8 +66,7 @@
 #define ESPG_WARMUP_S 10
 #endif
 
-extern long start;             // ntpclient.getUptime() at end of setup()
-extern bool past_warmup;       // flips true ESPG_WARMUP_S seconds after setup
-extern uint8_t send_indicator; // senders set to 2; OLED decrements as it paints
+extern long start;
+extern uint8_t send_indicator; // senders set 2, OLED counts down
 
 #endif

@@ -28,44 +28,29 @@ class WebPortal {
     inline uint32_t next_tick_due() const { return _tick_last_ms + 13; }
     bool active() const { return _active; }
 
-    // Shared page templates - modules call these inside their handler so the
-    // page chrome (HEAD, CSS link, top nav, h1, back button, footer) is
-    // consistent across the whole UI. Caller owns the chunked accumulator.
+    // Shared page templates
     static void sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
                              const char* inlineSub = nullptr);
-    static void sendPageTail(EGHttpResponse& res);
-
-    // Credit + version linking to /about. Bottom of / and /status. Kept
-    // separate from sendPageTail because hRoot emits its own closing
-    // </body></html> and hStatus inlines a STATUS_BODY chunk; calling
-    // this before either keeps the visual footer consistent across both.
+    static void sendPageTail(EGHttpResponse& res, bool footer = false);
     static void sendPageFooter(EGHttpResponse& res);
+    static void infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...);   // key, fmt in flash
+    static void metricsLine(EGHttpResponse& res, PGM_P fmt, ...);
 
-    // Schedule ESP.restart() to fire after `delayMs`, giving in-flight async
-    // responses time to drain. Safe to call from AsyncTCP callback context.
-    static void requestRestart(uint32_t delayMs = 1500);
-
-    // Emit a shared "restarting" countdown that auto-reloads / after ~20s.
-    // Handlers emit their action-specific message first, then call this.
-    // Auto-reload fails gracefully when the device moves networks
-    // (reset/erase/wifisave); the countdown UX is the consistent part.
+    static void requestRestart(uint32_t delayMs = 1500);   // ok from async callbacks
     static void sendRestartCountdown(EGHttpResponse& res);
 
-    // Re-read sys.web_pass and reconfigure the underlying EGHttpServer's
-    // Basic Auth. Called from SystemPrefs::on_prefs_loaded (boot) and
-    // on_prefs_saved (after /param POST). Cheap when called rarely; do
-    // NOT put this in the loop hot path - getString walks pref tables.
-    static void applyAuthFromPrefs();
+    static void applyAuthFromPrefs();   // not in loop, walks pref tables
 
   private:
     EGHttpServer _http;
     bool _active = false;
     uint32_t _tick_last_ms = 0;
 
-    // Cross-cutting routes (owned here, not by any module).
+    // Non-module routes
     static void hRoot(EGHttpRequest&, EGHttpResponse&, void*);
     static void hStyleCss(EGHttpRequest&, EGHttpResponse&, void*);
     static void hRestart(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hGuard(EGHttpRequest&, EGHttpResponse&, void*);
     static void hReset(EGHttpRequest&, EGHttpResponse&, void*);
     static void hInfo(EGHttpRequest&, EGHttpResponse&, void*);
     static void hAbout(EGHttpRequest&, EGHttpResponse&, void*);
@@ -74,8 +59,6 @@ class WebPortal {
     static void hVars(EGHttpRequest&, EGHttpResponse&, void*);
     static void hFavicon(EGHttpRequest&, EGHttpResponse&, void*);
     static void hThemeJs(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hJs(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hStatus(EGHttpRequest&, EGHttpResponse&, void*);
     static void hConsoleStream(EGHttpRequest&, EGHttpResponse&, void*);
     static void hWebCmd(EGHttpRequest&, EGHttpResponse&, void*);
     static void hEraseWifi(EGHttpRequest&, EGHttpResponse&, void*);
@@ -84,6 +67,7 @@ class WebPortal {
                            const char*, size_t, void*);
     static void hUpdateForm(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateDone(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hUpdateProgress(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                             const char*, size_t, void*);
     static void hWifi(EGHttpRequest&, EGHttpResponse&, void*);

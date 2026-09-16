@@ -26,14 +26,14 @@
 #endif
 
 #include "../Logger/Logger.h"
-#include "../Util/DeviceInfo.h"
-#include "../Util/Wifi.h"
-#include "../Util/FastMillis.h"
+#include "../System/DeviceInfo.h"
+#include "../Net/Wifi.h"
+#include "../System/FastMillis.h"
 
 ImprovSerial improvSerial;
 
 #if defined(ESP8266)
-  static const char* IMPROV_CHIPFAMILY = "ESP8266";
+  static const char* IMPROV_CHIPFAMILY = "ESP8266";  // NOLINT(dram)
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
   static const char* IMPROV_CHIPFAMILY = "ESP32-S3";
 #elif defined(CONFIG_IDF_TARGET_ESP32C3)
@@ -42,10 +42,16 @@ ImprovSerial improvSerial;
   static const char* IMPROV_CHIPFAMILY = "ESP32";
 #endif
 
+static std::string device_url() {
+  char ip[16], url[32];
+  Wifi::formatIP(ip, sizeof(ip), WiFi.localIP());
+  snprintf_P(url, sizeof(url), PSTR("http://%s/"), ip);
+  return std::string(url);
+}
+
 void ImprovSerial::begin() {
   _position = 0;
   _state = improv::STATE_AUTHORIZED;
-  // Drop boot-ROM noise so it can't be misparsed as a frame start.
   while (Serial.available()) Serial.read();
 }
 
@@ -84,9 +90,7 @@ void ImprovSerial::set_state(improv::State s) {
 
 void ImprovSerial::send_frame(improv::ImprovSerialType type,
                               const std::vector<uint8_t>& payload) {
-  // Stack buffer sized for the largest frame we send (device info /
-  // WiFi network list / URL). 11 byte overhead + payload, single write.
-  uint8_t frame[256];
+  uint8_t frame[256];   // 11 bytes framing + payload
   size_t pos = 0;
   if (payload.size() > sizeof(frame) - 11) return;
   frame[pos++] = 'I'; frame[pos++] = 'M'; frame[pos++] = 'P';
@@ -104,8 +108,8 @@ void ImprovSerial::send_frame(improv::ImprovSerialType type,
 
 void ImprovSerial::send_response_data(improv::Command cmd,
                                      const std::vector<std::string>& datum) {
-  auto data = improv::build_rpc_response(cmd, datum, false);
-  send_frame(improv::TYPE_RPC_RESPONSE, data);
+  auto payload = improv::build_rpc_response(cmd, datum, false);
+  send_frame(improv::TYPE_RPC_RESPONSE, payload);
 }
 
 void ImprovSerial::send_error(improv::Error err) {
@@ -122,7 +126,7 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
         if (WiFi.status() == WL_CONNECTED) {
           _state = improv::STATE_PROVISIONED;
         } else {
-          // hasSavedCreds() can hit a 50 ms delay path on ESP32; cache it.
+          // can take 50ms on esp32
           static bool s_creds_cached = false;
           static bool s_creds_value = false;
           if (!s_creds_cached) {
@@ -137,12 +141,9 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
         }
       }
       set_state(_state);
-      // Skip URL piggy-back during WIFI_SETTINGS; its own RPC result carries it.
+      // WIFI_SETTINGS result has the URL
       if (_state == improv::STATE_PROVISIONED && !_in_wifi_settings) {
-        char url[48];
-        snprintf(url, sizeof(url), "http://%s/",
-                 WiFi.localIP().toString().c_str());
-        send_response_data(improv::GET_CURRENT_STATE, { std::string(url) });
+        send_response_data(improv::GET_CURRENT_STATE, { device_url() });
       }
       break;
     }
@@ -156,27 +157,24 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
       send_error(improv::ERROR_UNKNOWN_RPC);
       break;
   }
-  // Return false so consume_byte resets _position after a complete frame.
-  return false;
+  return false;   // resets _position
 }
 
 void ImprovSerial::on_error(improv::Error err) {
-  // Don't echo parser errors back; frame is discarded, installer retries.
+  // no reply, installer retries
   Log::debug(PSTR("Improv: parser error %u"), (unsigned)err);
 }
 
 void ImprovSerial::send_device_info() {
   std::string fw;
-#ifdef GEIGER_MODEL
-  const char* model = GEIGER_MODEL;
-  if (strncmp(model, "ESPGeiger-", 10) == 0) {
+  const char* model = APP_MODEL;
+  if (!model[0]) {
+    fw = THING_NAME;
+  } else if (strncmp(model, THING_NAME "-", sizeof(THING_NAME)) == 0) {
     fw = model;
   } else {
-    fw = std::string("ESPGeiger ") + model;
+    fw = std::string(THING_NAME " ") + model;
   }
-#else
-  fw = "ESPGeiger";
-#endif
   std::vector<std::string> info = {
     fw,
     RELEASE_VERSION,
@@ -188,7 +186,6 @@ void ImprovSerial::send_device_info() {
 
 void ImprovSerial::send_wifi_networks() {
   int n = WiFi.scanNetworks();
-  // Dedup by SSID, keep best RSSI. Mesh / extenders broadcast duplicates.
   int8_t best_idx[16];
   uint8_t kept = 0;
   for (int i = 0; i < n && kept < 16; i++) {
@@ -216,12 +213,11 @@ void ImprovSerial::send_wifi_networks() {
     std::vector<std::string> entry = {
       std::string(WiFi.SSID(i).c_str()),
       String(WiFi.RSSI(i)).c_str(),
-      open ? "NO" : "YES"
+      open ? "NO" : "YES"  // NOLINT(dram)
     };
     send_response_data(improv::GET_WIFI_NETWORKS, entry);
   }
-  // Empty payload terminates the list per protocol.
-  send_response_data(improv::GET_WIFI_NETWORKS, {});
+  send_response_data(improv::GET_WIFI_NETWORKS, {});   // empty = end of list
 }
 
 void ImprovSerial::handle_wifi_settings(const std::string& ssid,
@@ -229,29 +225,23 @@ void ImprovSerial::handle_wifi_settings(const std::string& ssid,
   _in_wifi_settings = true;
   set_state(improv::STATE_PROVISIONING);
   Wifi::saveBackupCreds();
-  // Signals the captive-portal busy-wait (if active) to exit with these
-  // creds. No-op when called outside the portal phase.
   Wifi::onImprovCreds(ssid.c_str(), password.c_str());
-  // Drop any prior STA so the wait loop doesn't reply with the stale IP.
+  // else the wait loop sends the old IP
   WiFi.disconnect(false);
   WiFi.persistent(true);
   WiFi.begin(ssid.c_str(), password.c_str());
 
-  // esp-web-tools' provision() times out at 30000ms; finish before that.
+  // esp-web-tools gives up at 30s
   uint32_t start = fast_millis();
   while (fast_millis() - start < 25000) {
     if (WiFi.status() == WL_CONNECTED) {
       set_state(improv::STATE_PROVISIONED);
-      char url[48];
-      snprintf(url, sizeof(url), "http://%s/",
-               WiFi.localIP().toString().c_str());
-      send_response_data(improv::WIFI_SETTINGS, { std::string(url) });
+      send_response_data(improv::WIFI_SETTINGS, { device_url() });
       Log::console(PSTR("Improv: provisioned ssid='%s' ip=%s"),
                    ssid.c_str(), WiFi.localIP().toString().c_str());
       _in_wifi_settings = false;
       return;
     }
-    // Service watchdog and keep parsing Improv bytes during the wait.
     yield();
     while (Serial.available()) {
       consume_byte((uint8_t)Serial.read());
@@ -259,7 +249,7 @@ void ImprovSerial::handle_wifi_settings(const std::string& ssid,
     delay(50);
   }
   Log::console(PSTR("Improv: WiFi connect timeout for ssid='%s'"), ssid.c_str());
-  // Give up the background connect so we don't associate after the installer quit.
+  // installer gone, stop connecting
   WiFi.disconnect(true);
   set_state(improv::STATE_AUTHORIZED);
   send_error(improv::ERROR_UNABLE_TO_CONNECT);
