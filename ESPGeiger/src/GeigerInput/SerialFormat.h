@@ -14,18 +14,12 @@
   GNU General Public License for more details.
 */
 
-// Serial counter protocol codec. Shared by GeigerSerial (real external
-// devices), GeigerTestSerial (simulated/loopback), and SerialOut. Each
-// protocol declares an output template plus a parser; only MightyOhm needs
-// a custom formatter because of its CPS-dependent mode tag.
-
 #ifndef GEIGER_SERIAL_FORMAT_H
 #define GEIGER_SERIAL_FORMAT_H
 
 #include <Arduino.h>
 
-// Protocol IDs - stable ints, persisted in prefs. New protocol: append a
-// value here + a row in TYPES[] (declare template + parser).
+// stored in prefs, append only
 #define GEIGER_STYPE_GC10       1
 #define GEIGER_STYPE_GC10NX     2
 #define GEIGER_STYPE_MIGHTYOHM  3
@@ -34,32 +28,25 @@
 
 namespace SerialFormat {
 
-// Output: protocol formatter resolved once at config-change time. Custom
-// formatters (currently MightyOhm + user-template) bypass the template
-// engine entirely. The dispatcher returned by resolve() pulls live values
-// directly from gcounter / OutputVars so callers don't pass them in.
 typedef size_t (*FormatFn)(char* buf, size_t cap);
-FormatFn    resolve(uint8_t type);
 
-// Direct exports - SerialOut bypasses TYPES so pulse builds GC it.
+// direct, so pulse builds drop TYPES
 size_t      fmt_mightyohm(char* buf, size_t cap);
 size_t      fmt_user_template(char* buf, size_t cap);
 
-// Single-shot format - convenient one-off path. Equivalent to
-// resolve(type) then calling the result.
+const char* mohm_mode(int cps);   // flash
+
 size_t      format_line(uint8_t type, char* buf, size_t cap);
 
-// Input: parse a CPM line emitted by the named protocol. out_cps is
-// populated only for protocols whose wire carries a per-second count
-// (MightyOhm); other protocols leave it untouched.
+// out_cps only set by MightyOhm
 typedef bool (*ParseFn)(const char* input, int* out_cpm, int* out_cps);
 bool        parse_cpm(uint8_t type, const char* input, int* out_cpm, int* out_cps = nullptr);
 
 uint32_t    baud_for(uint8_t type);            // 0 if unknown
-const char* name_for(uint8_t type);            // nullptr if unknown
+const char* name_for(uint8_t type);            // flash, nullptr if unknown
 bool        is_known(uint8_t type);
-bool        has_cps(uint8_t type);             // true if protocol emits per-second count
-size_t      describe_types(char* buf, size_t cap);   // "1=GC10 2=GC10Next ..."
+bool        has_cps(uint8_t type);
+extern const char TYPE_OPTS[];                 // flash, ids from 1
 
 }
 
