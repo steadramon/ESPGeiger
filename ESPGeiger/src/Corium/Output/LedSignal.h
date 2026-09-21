@@ -16,43 +16,39 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _LEDSIGNAL_H
-#define _LEDSIGNAL_H
+#ifndef LEDSIGNAL_H
+#define LEDSIGNAL_H
 
 #include <stdint.h>
 
 namespace LedSignal {
 
-  // Sticky activity flag. Set by click/activity/etc, cleared inside poll()
-  // when all LED state machines settle. Exposed so the Ticker site can
-  // gate the poll() call without paying function-call overhead at idle.
-  extern volatile bool s_any_active;
+  // poll() owns the pins, the rest queue for it
+  extern volatile uint8_t s_head;
+  extern volatile uint8_t s_tail;
+  extern bool s_busy;
+  inline bool due() { return s_head != s_tail || s_busy; }
 
-  // Lifecycle. begin() runs once from setup(), poll() runs from msTickerCB
-  // when s_any_active is set, off() turns the onboard LED off at end of setup.
   void begin();
-  void poll();
+  void use_pin(int pin, bool low_active);   // led.pin, -1 = none
+  void attach();           // last in setup()
+  void poll(uint32_t now_us);
   void off();
+  void lit(bool on);   // steady
 
-  // Per-pulse click feedback. Caller is responsible for the master
-  // enable and quiet-hours gates.
+  // caller checks enable and quiet hours
   void click();
 
-  // Network-post-in-flight indicator.
   void activity();
 
-  // Push-button feedback.
   void shortPressAck();
   void displayEnabled();
   void displayDisabled();
 
   void setBrightness(uint8_t level);
 
-  // Push the Blip LED pref group config into the engine. mode meaning is
-  // platform-specific (regular: 0=Pulse 1=Fade; ESPGEIGER_HW: 0=Click 1=Beep).
-  // Caller maps the UI value into the right engine mode.
+  // PulseEngine::Mode, caller maps the UI value
   void setBlipEngineConfig(uint8_t engine_mode, uint16_t pulse_us,
-                           uint16_t freq_hz, uint16_t cycles,
                            uint8_t fade_shift_idx, uint8_t max_hz);
 }
 

@@ -18,120 +18,145 @@
 */
 #include "LedSignal.h"
 #include <EGLed.h>
-#include "FastMillis.h"
-#include "Globals.h"
+#include "../Logger/Logger.h"
+#include "../System/FastMillis.h"
+#include "../System/Globals.h"
+#include "../System/PinSafety.h"
 #include "PulseEngine.h"
 
 namespace LedSignal {
 
-  static EGLed s_onboard(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON == LOW);
+  // dark till attach(), the pin comes from led.pin
+  static EGLed s_onboard(EGLed::NO_PIN);
+  static int8_t s_pin = -1;   // none in safe mode, prefs never load
+  static bool   s_low = false;
 
-#ifdef GEIGER_BLIPLED
-  // PulseEngine owns the external pin alone; its digitalWrite path would
-  // otherwise fight the LEDC-driven onboard LED.
+#ifdef BLIP_LED_PIN
+  // PulseEngine owns the external pin
   static PulseEngine s_engine;
 #endif
   static uint16_t s_click_pulse_ms = 20;
-  static uint8_t  s_click_mode     = 0;   // 0=pulse, 2=fade
+  static uint8_t  s_click_mode     = PulseEngine::MODE_PULSE;
   static uint8_t  s_click_fade     = 3;
-  // Sticky "something is animating" flag. Set by click/activity/etc;
-  // cleared in poll() once all sources settle. Exposed (not static) so
-  // the Ticker call site can skip the function call entirely when idle.
-  volatile bool s_any_active = false;
+
+  enum : uint8_t { DO_CLICK, DO_ACTIVITY, DO_ACK, DO_DISP_ON, DO_DISP_OFF, DO_ON, DO_OFF, DO_ATTACH };
+  static volatile uint8_t s_todo[8];
+  volatile uint8_t s_head = 0;   // loop writes
+  volatile uint8_t s_tail = 0;   // poll writes
+  bool s_busy = false;
+
+  // full drops it
+  static void post(uint8_t what) {
+    uint8_t h = s_head;
+    if ((uint8_t)(h - s_tail) >= sizeof(s_todo)) return;
+    s_todo[h % sizeof(s_todo)] = what;
+    s_head = h + 1;
+  }
+
+  static void run(uint8_t what) {
+    switch (what) {
+      case DO_CLICK:
+#ifdef BLIP_LED_PIN
+        s_engine.start();
+#else
+        if (s_onboard.isRunning()) break;
+        if (s_click_mode == PulseEngine::MODE_FADE) s_onboard.fade(s_click_fade);
+        else s_onboard.pulse(s_click_pulse_ms);
+#endif
+        break;
+      case DO_ACTIVITY: s_onboard.blink(500, 500); break;
+      case DO_ACK:      s_onboard.pulse(200); break;
+      // two blinks = auto off, long = always on
+      case DO_DISP_ON:  s_onboard.blinkN(200, 100, 2); break;
+      case DO_DISP_OFF: s_onboard.pulse(600); break;
+      case DO_ON:       s_onboard.on(); break;
+      case DO_ATTACH:   s_onboard.attach((uint8_t)s_pin, s_low); break;
+      default:          s_onboard.off(); break;
+    }
+  }
+
+  void use_pin(int pin, bool low_active) {
+    s_pin = pin < 0 ? -1 : (int8_t)pin;
+    s_low = low_active;
+  }
+
+  // after the modules, a pin one took stays theirs
+  void attach() {
+    if (s_pin < 0) return;
+    if (const char* why = PinSafety::claim_output(s_pin, PSTR("LED"))) {
+      Log::console(PSTR("LED: pin=%d unsafe (%s) - off"), s_pin, why);
+      s_pin = -1;
+      return;
+    }
+    post(DO_ATTACH);
+  }
 
   void begin() {
     EGLed::setClock(fast_millis);
-#ifdef GEIGER_BLIPLED
-    s_engine.pin      = GEIGER_BLIPLED;
+#ifdef BLIP_LED_PIN
+    s_engine.pin      = BLIP_LED_PIN;
     s_engine.polarity = 0;
     s_engine.commitConfig();
     s_engine.begin();
 #endif
   }
 
-  void poll() {
-    // Caller gates on s_any_active; we still verify it's worth running
-    // (handles direct callers that bypass the Ticker site).
-    if (!s_any_active) return;
+  void poll(uint32_t now_us) {
+    while (s_tail != s_head) {
+      uint8_t t = s_tail;
+      run(s_todo[t % sizeof(s_todo)]);
+      s_tail = t + 1;
+    }
     s_onboard.update();
-#ifdef GEIGER_BLIPLED
-    s_engine.loop();
+#ifdef BLIP_LED_PIN
+    s_engine.loop(now_us);
+    s_busy = s_onboard.isRunning() || s_engine.busy();
+#else
+    s_busy = s_onboard.isRunning();
 #endif
-    if (!s_onboard.isRunning()
-#ifdef GEIGER_BLIPLED
-        && s_engine.phases_remaining == 0
-        && s_engine.brightness == 0
-#endif
-       ) s_any_active = false;
   }
 
-  void off() {
-    s_onboard.off();
-  }
+  void off() { post(DO_OFF); }
+  void lit(bool on) { post(on ? DO_ON : DO_OFF); }
 
   void click() {
-#if defined(GEIGER_BLIPLED)
-    s_engine.notifyClick(fast_millis());
-    s_any_active = true;
+#if defined(BLIP_LED_PIN)
+    if (s_engine.take(fast_millis())) post(DO_CLICK);
 #elif !defined(DISABLE_INTERNAL_BLIP)
-    if (s_onboard.isRunning()) return;
-#ifndef EGPE_NO_PWM
-    if (s_click_mode == 2) { s_onboard.fade(s_click_fade); s_any_active = true; return; }
-#endif
-    s_onboard.pulse(s_click_pulse_ms);
-    s_any_active = true;
+    if (s_pin < 0) return;   // no LED, nothing per count
+    post(DO_CLICK);
 #endif
   }
 
-  void activity() {
-    s_onboard.blink(500, 500);
-    s_any_active = true;
-  }
-
-  void shortPressAck() {
-    s_onboard.pulse(200);
-    s_any_active = true;
-  }
-
-  void displayEnabled()  {}
-  void displayDisabled() {}
+  void activity()        { post(DO_ACTIVITY); }
+  void shortPressAck()   { post(DO_ACK); }
+  void displayEnabled()  { post(DO_DISP_ON); }
+  void displayDisabled() { post(DO_DISP_OFF); }
 
   void setBrightness(uint8_t level) {
-    s_onboard.setBrightness(level);
-#ifdef GEIGER_BLIPLED
-    s_engine.active_level = level;
+    s_onboard.setBrightness(level);   // 8-bit
+#ifdef BLIP_LED_PIN
+    s_engine.active_level = PulseEngine::levelFrom8bit(level);
 #endif
   }
 
   void setBlipEngineConfig(uint8_t engine_mode, uint16_t pulse_us,
-                           uint16_t freq_hz, uint16_t cycles,
                            uint8_t fade_shift_idx, uint8_t max_hz) {
-    if (engine_mode > 2) engine_mode = 0;
-    if (pulse_us < 100)   pulse_us = 100;
-    if (pulse_us > 50000) pulse_us = 50000;
-    if (freq_hz < 1000)   freq_hz = 1000;
-    if (freq_hz > 8000)   freq_hz = 8000;
-    if (cycles < 1)       cycles = 1;
-    if (cycles > 500)     cycles = 500;
-    if (fade_shift_idx > 2) fade_shift_idx = 1;
-    if (max_hz > 200) max_hz = 200;
-    uint16_t ms = pulse_us / 1000;
-    if (ms < 1)   ms = 1;
-    if (ms > 100) ms = 100;
-    s_click_pulse_ms = ms;
-    s_click_mode     = engine_mode;
-    s_click_fade     = (uint8_t)(fade_shift_idx + 2);
-#ifdef GEIGER_BLIPLED
+#ifdef BLIP_LED_PIN
     s_engine.mode       = engine_mode;
     s_engine.pulse_us   = pulse_us;
-    s_engine.freq_hz    = freq_hz;
-    s_engine.cycles     = cycles;
-    s_engine.fade_shift = fade_shift_idx + 2;
+    s_engine.fade_shift = (uint8_t)(fade_shift_idx + 2);
     s_engine.max_hz     = max_hz;
     s_engine.commitConfig();
 #else
-    (void)freq_hz; (void)cycles; (void)max_hz;
+    (void)max_hz;
 #endif
+    // onboard led, same limits
+    if (fade_shift_idx > 2) fade_shift_idx = 1;
+    s_click_pulse_ms = (uint16_t)(constrain((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
+                                            PulseEngine::PULSE_US_MAX) / 1000);
+    s_click_mode     = engine_mode;
+    s_click_fade     = (uint8_t)(fade_shift_idx + 2);
   }
 
 }

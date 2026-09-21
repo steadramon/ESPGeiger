@@ -22,66 +22,98 @@
 #define PULSE_ENGINE_H
 
 #include <Arduino.h>
-#include "../GeigerInput/GeigerInput.h"
-
-// ESP8266 Timer1 is owned by the fake pulse generator (test builds) or the
-// HV booster PWM (ESPGeigerHW). tone() and analogWrite() both need Timer1, so
-// Burst and Fade modes can't run there - fall back to plain Pulse.
-#if defined(ESP8266) && (GEIGER_IS_TEST(GEIGER_TYPE) || defined(ESPGEIGER_HW))
-#define EGPE_NO_PWM
+#ifdef ESP32
+#include <EGLed.h>
 #endif
 
 class PulseEngine {
 public:
   enum Mode : uint8_t { MODE_PULSE = 0, MODE_BURST = 1, MODE_FADE = 2 };
 
-  // Config - owner writes from prefs then calls commitConfig().
+  // analogWrite full scale, esp32 is 8-bit
+#ifdef ESP8266
+  static constexpr uint16_t FULL = 1023;
+#else
+  static constexpr uint16_t FULL = 255;
+#endif
+
+  // always convert through these
+  static constexpr uint16_t levelFromPercent(uint32_t pct) {
+    return (uint16_t)(((pct > 100 ? 100 : pct) * FULL + 50) / 100);
+  }
+  static constexpr uint16_t levelFrom8bit(uint32_t v) {
+    return (uint16_t)(((v > 255 ? 255 : v) * FULL + 127) / 255);
+  }
+
+  // Config, then commitConfig()
+  // wide so a bad pref clamps, not wraps
   int8_t   pin        = -1;
   uint8_t  mode       = MODE_PULSE;
-  uint16_t pulse_us   = 5000;
-  uint16_t freq_hz    = 3500;
-  uint16_t cycles     = 1;
+  uint32_t pulse_us   = 5000;
+  uint32_t freq_hz    = 3500;
+  uint32_t cycles     = 1;
   uint8_t  polarity   = 0;
-  uint8_t  fade_shift = 3;
-  uint8_t  max_hz     = 20;
-  uint8_t  active_level = 255;  // 255 = digitalWrite, lower = analogWrite
+  uint8_t  fade_shift = FADE_SHIFT_DEFAULT;
+  uint32_t max_hz     = 20;
+  uint16_t active_level = FULL;  // FULL = digitalWrite
 
-  // Per-device chip-id jitter, optional.
   float    voice_pulse = 1.0f;
   float    voice_freq  = 1.0f;
 
-  // Caches + runtime state.
+  // Caches + runtime state
   uint32_t pulse_us_eff   = 5000;
   uint32_t burst_freq_eff = 3500;
   uint16_t token_interval_ms = 50;
   uint8_t  tokens          = 0;
-  unsigned long last_token_ms = 0;
+  uint32_t last_token_ms   = 0;
   uint8_t  phases_remaining = 0;
   bool     pin_high        = false;
   uint32_t next_us         = 0;
   uint32_t period_us       = 0;
-  uint8_t  brightness      = 0;
+  uint16_t brightness      = 0;
 
   void begin() {
     if (pin < 0) return;
     pinMode(pin, OUTPUT);
+#ifdef ESP32
+    // level the pin falls back to when tone() lets go
+    digitalWrite(pin, polarity ? HIGH : LOW);
+#endif
     writeIdle();
     pin_high = false;
     commitConfig();
   }
 
+  static constexpr uint32_t PULSE_US_MIN = 1000;   // 1 ms poll
+  static constexpr uint32_t PULSE_US_MAX = 50000;
+  static constexpr uint32_t FREQ_MIN = 1000;
+  static constexpr uint32_t FREQ_MAX = 8000;
+  static constexpr uint32_t CYCLES_MAX = 10;
+  static constexpr uint32_t MAX_HZ_MAX = 200;
+  static constexpr uint8_t  FADE_SHIFT_MIN = 2;
+  static constexpr uint8_t  FADE_SHIFT_MAX = 4;
+  static constexpr uint8_t  FADE_SHIFT_DEFAULT = 3;
+
+  // callers pass prefs straight in
   void commitConfig() {
+    if (mode > MODE_FADE) mode = MODE_PULSE;
+    if (pulse_us < PULSE_US_MIN) pulse_us = PULSE_US_MIN;
+    if (pulse_us > PULSE_US_MAX) pulse_us = PULSE_US_MAX;
+    if (freq_hz < FREQ_MIN) freq_hz = FREQ_MIN;
+    if (freq_hz > FREQ_MAX) freq_hz = FREQ_MAX;
+    if (cycles < 1) cycles = 1;
+    if (cycles > CYCLES_MAX) cycles = CYCLES_MAX;
+    if (polarity > 1) polarity = 0;
+    if (max_hz > MAX_HZ_MAX) max_hz = MAX_HZ_MAX;
+    if (fade_shift < FADE_SHIFT_MIN || fade_shift > FADE_SHIFT_MAX) fade_shift = FADE_SHIFT_DEFAULT;
     pulse_us_eff   = (uint32_t)(pulse_us * voice_pulse);
     burst_freq_eff = (uint32_t)(freq_hz  * voice_freq);
     if (burst_freq_eff == 0) burst_freq_eff = 1;
     token_interval_ms = max_hz ? (uint16_t)(1000 / max_hz) : 0;
-#ifdef EGPE_NO_PWM
-    if (mode != MODE_PULSE) mode = MODE_PULSE;
-#endif
   }
 
-  // Returns true if this click fired. Caller passes now_ms (one clock read).
-  inline bool notifyClick(unsigned long now_ms) {
+  // loop side, rate cap only, never the pin
+  inline bool take(uint32_t now_ms) {
     if (pin < 0) return false;
     if (token_interval_ms) {
       while ((now_ms - last_token_ms) >= token_interval_ms && tokens < 5) {
@@ -92,32 +124,35 @@ public:
       if (tokens == 0) return false;
       tokens--;
     }
-    if (phases_remaining != 0) return false;
-    startClick();
     return true;
   }
 
-  // Per-tick state advance. Cheap when idle (single compare).
-  inline void loop() {
-#ifndef EGPE_NO_PWM
+  // poll side from here
+  inline void start() {
+    if (phases_remaining == 0) startClick();
+  }
+
+  inline bool busy() const {
+    return phases_remaining != 0 || (mode == MODE_FADE && brightness > 0);
+  }
+
+  // one compare when idle
+  inline void loop(uint32_t now_us) {
     if (mode == MODE_FADE && brightness > 0) {
-      uint32_t now_us = (uint32_t)micros();
       if ((int32_t)(now_us - next_us) < 0) return;
-      uint8_t delta = brightness >> fade_shift;
+      uint16_t delta = brightness >> fade_shift;
       if (delta == 0) delta = 1;
       brightness -= delta;
-      if (brightness < 2) {
+      if (brightness < 8) {
         brightness = 0;
-        analogWrite(pin, polarity ? 255 : 0);
+        analogWrite(pin, polarity ? FULL : 0);
         return;
       }
-      analogWrite(pin, polarity ? (255 - brightness) : brightness);
+      analogWrite(pin, polarity ? (FULL - brightness) : brightness);
       next_us = now_us + 5000;
       return;
     }
-#endif
     if (phases_remaining == 0) return;
-    uint32_t now_us = (uint32_t)micros();
     if ((int32_t)(now_us - next_us) < 0) return;
     pin_high = !pin_high;
     if (pin_high) writeActive(); else writeIdle();
@@ -127,13 +162,19 @@ public:
   }
 
 private:
+#ifdef ESP32
+  // once ledc has the pin digitalWrite does nothing
+  inline void writeIdle()   { analogWrite(pin, polarity ? FULL : 0); }
+  inline void writeActive() { analogWrite(pin, polarity ? 0 : FULL); }
+#else
   inline void writeIdle()   { digitalWrite(pin, polarity ? HIGH : LOW); }
   inline void writeActive() { digitalWrite(pin, polarity ? LOW  : HIGH); }
+#endif
 
   inline void startClick() {
     if (mode == MODE_FADE) {
       brightness = active_level;
-      analogWrite(pin, polarity ? (255 - active_level) : active_level);
+      analogWrite(pin, polarity ? (FULL - active_level) : active_level);
       phases_remaining = 0;
       next_us = (uint32_t)micros() + 5000;
       return;
@@ -142,14 +183,22 @@ private:
       uint32_t duration_us = (uint32_t)cycles * 1000000UL / burst_freq_eff;
       uint32_t duration_ms = (duration_us + 999u) / 1000u;
       if (duration_ms == 0) duration_ms = 1;
+#ifdef ESP32
+      // queued ahead of the tone, task only made on first burst
+      static bool s_tone_chan = false;
+      if (!s_tone_chan) {
+        setToneChannel(EGLED_TONE_CHANNEL);
+        s_tone_chan = true;
+      }
+#endif
       tone(pin, burst_freq_eff, duration_ms);
       phases_remaining = 0;
       return;
     }
-    if (active_level >= 255) {
+    if (active_level >= FULL) {
       writeActive();
     } else {
-      analogWrite(pin, polarity ? (255 - active_level) : active_level);
+      analogWrite(pin, polarity ? (FULL - active_level) : active_level);
     }
     pin_high = true;
     phases_remaining = 1;

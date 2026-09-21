@@ -21,12 +21,12 @@
 #ifdef ALERT_OUT
 
 #include <Arduino.h>
-#include "../Module/EGModule.h"
+#include "../Corium/Module/EGModule.h"
 
 class AlertOut : public EGModule {
   public:
     AlertOut() {}
-    const char* name() override { return "alertout"; }
+    const char* name() override { return PSTR("alertout"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 18; }
     uint16_t warmup_seconds() override { return 0; }
@@ -41,7 +41,7 @@ class AlertOut : public EGModule {
 
     int8_t   _pin       = -1;
     uint8_t  _invert    = 0;     // 0 = active-high, 1 = active-low
-    uint8_t  _mode      = 0;     // 0 = steady level, 1 = 1 Hz pulse while alerting
+    uint8_t  _mode      = 0;     // 0 = steady, 1 = 1 Hz pulse
     bool     _last_state = false;
 };
 

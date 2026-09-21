@@ -21,41 +21,40 @@
 #ifdef PULSE_OUT
 
 #include <Arduino.h>
-#include "../Module/EGModule.h"
+#include "../Corium/Module/EGModule.h"
 
-#include "../Util/PulseEngine.h"
+#include "../Corium/Output/PulseEngine.h"
+#include "../Corium/Output/QuietWindow.h"
 
 class PulseOut : public EGModule {
   public:
     PulseOut() {}
-    const char* name() override { return "pulse"; }
+    const char* name() override { return PSTR("pulse"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 14; }
     uint16_t warmup_seconds() override { return 0; }
-    // 1 ms cadence is fine for the single-pulse mode (sub-ms pulses get
-    // stretched up to 1 ms but the LED / piezo response is still sharp)
-    // and the LED fade mode (5 ms step interval). Resonant-burst mode at
-    // multi-kHz frequencies is limited to 1 ms transition resolution.
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 1; }
     void begin() override;
-    void loop(unsigned long now_ms) override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
-    // Called from Counter when a pulse arrives. Token-bucket-throttled so
-    // a high-rate source can't keep launching new clicks on top of each
-    // other before the previous one finishes.
+    // msTickerCB owns the pin, clicks post s_req
+    static volatile uint8_t s_req;
+    static uint8_t s_seen;
+    static bool s_busy;
+    static inline bool due() { return s_req != s_seen || s_busy; }
+    void poll(uint32_t now_us);
+
     void notifyClick(unsigned long now_ms);
 
   private:
+    void read_pin(bool was_enabled);
+
     bool          _enabled = false;
+    bool          _begun = false;
+    int8_t        _pin = -1;   // boot pref, msTicker owns the pin after begin
     PulseEngine   _engine;
 
-    // Pulse Out has its own quiet window separate from Blip LED + Audio.
-    int16_t       _q_from_min = -1;
-    int16_t       _q_to_min   = -1;
-    bool          isQuietNow();
+    QuietWindow   _quiet;   // own, not the Blip LED one
 
 };
 
