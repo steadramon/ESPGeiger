@@ -1,6 +1,6 @@
 /*
   SerialOut.h - Serial Output class
-  
+
   Copyright (C) 2023 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -21,12 +21,10 @@
 #define SERIALOUT_H
 #ifdef SERIALOUT
 #include <Arduino.h>
-#include "../Util/Globals.h"
+#include "../Corium/System/Globals.h"
 #include "../Counter/Counter.h"
-#include "../Module/EGModule.h"
+#include "../Corium/Module/EGModule.h"
 #include "../GeigerInput/SerialFormat.h"
-
-extern Counter gcounter;
 
 class SerialOut : public EGModule {
     public:
@@ -36,7 +34,7 @@ class SerialOut : public EGModule {
       static constexpr uint8_t SHOW_CPS = 1 << 3;
 
       SerialOut();
-      const char* name() override { return "sout"; }
+      const char* name() override { return PSTR("sout"); }
       uint16_t warmup_seconds() override { return 0; }
       bool has_loop() override { return true; }
       uint16_t loop_interval_ms() override { return 500; }
@@ -55,9 +53,7 @@ class SerialOut : public EGModule {
       uint16_t interval() const { return _interval; }
       void setInterval(uint16_t v);
       uint8_t format() const { return _format; }
-      void setFormat(uint8_t f);
       uint32_t baud() const { return _baud; }
-      void setBaud(uint32_t b);
     private:
       void save();
       void applyBaud();
@@ -65,9 +61,9 @@ class SerialOut : public EGModule {
       unsigned long _last_fire = 0;
       uint8_t _show_flags = 0;
       uint16_t _interval = 0;
-      uint8_t _format = 0;     // 0 = labeled (default); 1..4 = SerialFormat protocols
+      uint8_t _format = 0;     // 0 = labelled
       uint32_t _baud = 0;      // 0 = framework default (115200)
-      SerialFormat::FormatFn _fmt_fn = nullptr;  // pre-resolved formatter
+      SerialFormat::FormatFn _fmt_fn = nullptr;
 };
 
 extern SerialOut serialout;

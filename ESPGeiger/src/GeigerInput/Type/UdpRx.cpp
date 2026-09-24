@@ -17,18 +17,18 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "UdpRx.h"
-#include "../../Util/FastMillis.h"
-#include "../../Util/IgmpRefresh.h"
+#include "../../Corium/System/FastMillis.h"
+#include "../../Corium/Net/IgmpRefresh.h"
 
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 
 #include "../../Counter/Counter.h"
 #include "../../EnvSensor/EnvSensor.h"
-#include "../../Logger/Logger.h"
-#include "../../Prefs/EGPrefs.h"
-#include "../../Util/DeviceInfo.h"
-#include "../../Util/Wifi.h"
-#include <EGHttpServer.h>
+#include "../../Corium/Logger/Logger.h"
+#include "../../Corium/Prefs/EGPrefs.h"
+#include "../../GeigerPrefs/GeigerKeys.h"
+#include "../../Corium/System/DeviceInfo.h"
+#include "../../Corium/Net/Wifi.h"
 #include <WiFiUdp.h>
 #include <string.h>
 #ifdef ESP8266
@@ -37,22 +37,14 @@
 #include <WiFi.h>
 #endif
 
-extern Counter gcounter;
-
-// Routed back to the live instance by InputPrefs::on_prefs_saved (see
-// udprx_notify_prefs_saved below).
 static GeigerUdpRx* s_udprx_instance = nullptr;
 
-// Path layout: "/espg/XXXXXX/click" or ".../stats", 18 chars + NUL + pad
-// to 20 bytes. Fixed offsets let us skip strchr/regex on every packet.
 static constexpr const char PATH_PREFIX[]  = "/espg/";
-static constexpr size_t     PATH_PREFIX_LEN = 6;
-static constexpr size_t     CHIPID_OFFSET   = 6;
-static constexpr size_t     CHIPID_LEN      = 6;
-static constexpr size_t     SUFFIX_OFFSET   = 13;
-static constexpr size_t     PATH_FULL_LEN   = 20;
 static constexpr const char TAG_II[]        = ",ii";
 static constexpr const char TAG_FFF[]       = ",fff";
+// "env" includes its NUL
+static constexpr const char SUFFIX_CLICK[]  = "click";
+static constexpr const char SUFFIX_ENV[]    = "env";
 
 static inline uint32_t rd_i32(const uint8_t* p) {
   return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
@@ -66,8 +58,6 @@ static inline float rd_f32(const uint8_t* p) {
   return f;
 }
 
-// Bridge from InputPrefs::on_prefs_saved (we piggyback on the "input" pref
-// group rather than registering our own module).
 extern "C" void udprx_notify_prefs_saved() {
   if (s_udprx_instance) s_udprx_instance->on_prefs_saved();
 }
@@ -76,50 +66,34 @@ GeigerUdpRx::GeigerUdpRx() { s_udprx_instance = this; }
 GeigerUdpRx::~GeigerUdpRx() { s_udprx_instance = nullptr; teardownUdp(); }
 
 void GeigerUdpRx::begin() {
+  _poll_skip = UDPRX_POLL_SKIP - 1;
   readPrefs();
   _last_seen_count = _local_count;
   Log::console(PSTR("UdpRx: mode=%u group=%s port=%u rxmode=%u"),
-               _mode, EGPrefs::getString("input", "udprx_group"),
+               _mode, EGPrefs::getString("counter", EG_K_UDPRX_GROUP),
                _port, _rx_mode);
 }
 
 void GeigerUdpRx::readPrefs() {
-  _mode = (uint8_t)EGPrefs::getUInt("input", "udprx_mode");
-  if (_mode > 1) _mode = 0;   // legacy: mode 2 (auto) folded into mode 0 + empty chipid
-  const char* pin = EGPrefs::getString("input", "udprx_chipid");
+  _mode = (uint8_t)EGPrefs::getUInt("counter", EG_K_UDPRX_MODE);
+  if (_mode > 1) _mode = 0;   // legacy 2 = auto
+  const char* pin = EGPrefs::getString("counter", EG_K_UDPRX_CHIPID);
   size_t n = strlen(pin);
-  if (n > sizeof(_pinned_chipid) - 1) n = sizeof(_pinned_chipid) - 1;
+  if (n && n != BLIP_ID_LEN) {   // a short pin would match nothing
+    Log::console(PSTR("UdpRx: pin %s is not %u chars, ignored"), pin, (unsigned)BLIP_ID_LEN);
+    n = 0;
+  }
   memcpy(_pinned_chipid, pin, n);
   _pinned_chipid[n] = '\0';
 
-  const char* g = EGPrefs::getString("input", "udprx_group");
+  const char* g = EGPrefs::getString("counter", EG_K_UDPRX_GROUP);
   if (!g || !g[0] || !_group.fromString(g)) {
     _group.fromString(UDPRX_DEFAULT_GROUP);
   }
-  uint32_t p = EGPrefs::getUInt("input", "udprx_port");
-  _port = (p > 0 && p < 65536) ? (uint16_t)p : 57340;
-  uint32_t rm = EGPrefs::getUInt("input", "udprx_rxmode");
+  uint32_t p = EGPrefs::getUInt("counter", EG_K_UDPRX_PORT);
+  _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPRX_DEFAULT_PORT;
+  uint32_t rm = EGPrefs::getUInt("counter", EG_K_UDPRX_RXMODE);
   _rx_mode = (rm <= 2) ? (uint8_t)rm : 1;
-}
-
-// Listen interval forced to 1: the SDK default of 3 dropped ~50% of
-// multicast frames between DTIM windows. rx_mode 0/1/2 = light/modem/none.
-static void apply_rx_sleep_mode(uint8_t rx_mode) {
-#ifdef ESP8266
-  switch (rx_mode) {
-    case 0: WiFi.setSleepMode(WIFI_LIGHT_SLEEP, 1); break;
-    case 2: WiFi.setSleepMode(WIFI_NONE_SLEEP);     break;
-    case 1:
-    default: WiFi.setSleepMode(WIFI_MODEM_SLEEP, 1); break;
-  }
-#else
-  switch (rx_mode) {
-    case 0: WiFi.setSleep(WIFI_PS_MAX_MODEM); break;
-    case 2: WiFi.setSleep(WIFI_PS_NONE);      break;
-    case 1:
-    default: WiFi.setSleep(WIFI_PS_MIN_MODEM); break;
-  }
-#endif
 }
 
 void GeigerUdpRx::on_prefs_saved() {
@@ -132,12 +106,11 @@ void GeigerUdpRx::on_prefs_saved() {
   if (net_changed) {
     teardownUdp();
   }
-  // Mode change in isolation just affects the filter; UDP socket can stay.
   if (old_mode != _mode) {
-    _locked_chipid[0] = '\0';   // re-latch on next click in auto mode
+    _locked_chipid[0] = '\0';   // re-latch next click
   }
   if (old_rx_mode != _rx_mode && _udp) {
-    apply_rx_sleep_mode(_rx_mode);
+    Wifi::rx_sleep(_rx_mode);
   }
   Log::console(PSTR("UdpRx: prefs saved, mode=%u port=%u rxmode=%u"),
                _mode, _port, _rx_mode);
@@ -159,7 +132,7 @@ bool GeigerUdpRx::ensureUdp() {
     Log::console(PSTR("UdpRx: WiFiUDP alloc failed"));
     return false;
   }
-  apply_rx_sleep_mode(_rx_mode);
+  Wifi::rx_sleep(_rx_mode);
   bool ok;
   if (Wifi::is_multicast(_group)) {
 #ifdef ESP8266
@@ -168,7 +141,7 @@ bool GeigerUdpRx::ensureUdp() {
     ok = _udp->beginMulticast(_group, _port);
 #endif
     if (ok) Log::console(PSTR("UdpRx: joined %s:%u"),
-                          EGPrefs::getString("input", "udprx_group"), _port);
+                          EGPrefs::getString("counter", EG_K_UDPRX_GROUP), _port);
   } else {
     ok = _udp->begin(_port);
     if (ok) Log::console(PSTR("UdpRx: listening unicast on :%u"), _port);
@@ -182,44 +155,45 @@ bool GeigerUdpRx::ensureUdp() {
 
 bool GeigerUdpRx::acceptChipid(const char* src_chipid) {
   if (_mode == 1) return true;   // sum
-  // mode 0: pinned chipid wins; if blank, latch the first chipid heard.
+  // pinned chipid, else first heard
   if (_pinned_chipid[0]) {
-    return memcmp(_pinned_chipid, src_chipid, CHIPID_LEN) == 0;
+    return memcmp(_pinned_chipid, src_chipid, BLIP_ID_LEN) == 0;
   }
   if (_locked_chipid[0] == '\0') {
-    memcpy(_locked_chipid, src_chipid, CHIPID_LEN);
-    _locked_chipid[CHIPID_LEN] = '\0';
+    memcpy(_locked_chipid, src_chipid, BLIP_ID_LEN);
+    _locked_chipid[BLIP_ID_LEN] = '\0';
     Log::console(PSTR("UdpRx: locked to %s"), _locked_chipid);
     return true;
   }
-  return memcmp(_locked_chipid, src_chipid, CHIPID_LEN) == 0;
+  return memcmp(_locked_chipid, src_chipid, BLIP_ID_LEN) == 0;
 }
 
 GeigerUdpRx::ProducerRecord* GeigerUdpRx::findOrAllocProducer(const char* chipid,
                                                               uint32_t now_ms) {
   for (uint8_t i = 0; i < _producers_seen; i++) {
-    if (memcmp(_producers[i].chipid, chipid, CHIPID_LEN) == 0) {
+    if (memcmp(_producers[i].chipid, chipid, BLIP_ID_LEN) == 0) {
       _producers[i].last_seen_ms = now_ms;
       return &_producers[i];
     }
   }
-  // LRU-evict when the 8 slots are full.
+  // evict by age, wrap safe
   uint8_t slot;
   if (_producers_seen < UDPRX_PRODUCER_SLOTS) {
     slot = _producers_seen++;
   } else {
     slot = 0;
-    uint32_t oldest = _producers[0].last_seen_ms;
+    uint32_t oldest = now_ms - _producers[0].last_seen_ms;
     for (uint8_t i = 1; i < UDPRX_PRODUCER_SLOTS; i++) {
-      if (_producers[i].last_seen_ms < oldest) {
+      uint32_t age = now_ms - _producers[i].last_seen_ms;
+      if (age > oldest) {
         slot = i;
-        oldest = _producers[i].last_seen_ms;
+        oldest = age;
       }
     }
   }
-  memcpy(_producers[slot].chipid, chipid, CHIPID_LEN);
-  _producers[slot].chipid[CHIPID_LEN] = '\0';
-  _producers[slot].chipid[CHIPID_LEN + 1] = '\0';
+  memcpy(_producers[slot].chipid, chipid, BLIP_ID_LEN);
+  _producers[slot].chipid[BLIP_ID_LEN] = '\0';
+  _producers[slot].chipid[BLIP_ID_LEN + 1] = '\0';
   _producers[slot].last_seen_ms = now_ms;
   _producers[slot].click_count  = 0;
   _producers[slot].last_counter = 0;
@@ -227,19 +201,89 @@ GeigerUdpRx::ProducerRecord* GeigerUdpRx::findOrAllocProducer(const char* chipid
   return &_producers[slot];
 }
 
+// <= 1024 now, to 65535 drained, more = resync
+uint32_t GeigerUdpRx::creditForwardGap(const ProducerRecord* p, uint32_t producer_counter,
+                                       uint32_t producer_ts) {
+  uint32_t gap = producer_counter - p->last_counter - 1;
+  if (gap <= 1024) return gap;
+  if (gap <= 65535) {
+    uint32_t dt_ms = producer_ts - p->last_ts_ms;
+    if (dt_ms > 100 && dt_ms < 60000) {
+      _drain_pending += (float)gap;
+      float r = (float)gap * 1000.0f / (float)dt_ms;
+      if (r > _drain_rate) _drain_rate = r;
+      _draining = true;
+    } else {
+      _resync_count++;
+      Log::console(PSTR("UdpRx: %s drain rejected, gap=%u dt=%ums"),
+                   p->chipid, (unsigned)gap, (unsigned)dt_ms);
+    }
+    return 0;
+  }
+  _resync_count++;
+  Log::console(PSTR("UdpRx: %s resync, gap=%u (counter %u -> %u)"),
+               p->chipid, (unsigned)gap,
+               (unsigned)p->last_counter, (unsigned)producer_counter);
+  return 0;
+}
+
+// small = reorder, big or ts back = producer reboot
+bool GeigerUdpRx::producerRestarted(const ProducerRecord* p, uint32_t producer_counter,
+                                    uint32_t producer_ts) {
+  uint32_t back = p->last_counter - producer_counter;
+  bool ts_reset = (int32_t)(producer_ts - p->last_ts_ms) < -60000;
+  if (back > 1024 || ts_reset) {
+    _resync_count++;
+    Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
+                 p->chipid,
+                 (unsigned)p->last_counter, (unsigned)producer_counter);
+    return true;
+  }
+  return false;
+}
+
+// Poisson spread over <= 50 ms
+void GeigerUdpRx::scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint32_t now_ms) {
+  if (window_ms == 0 || window_ms > 50) window_ms = 50;
+  uint32_t r = (uint32_t)micros();
+  for (uint32_t i = 0; i < gap_credit; i++) {
+    if (_gapfill_count >= UDPRX_GAPFILL_QUEUE) {
+      _gapfill_dropped += (gap_credit - i);
+      break;
+    }
+    r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+    _gapfill_due_ms[_gapfill_count++] = now_ms + (r % window_ms) + 1;
+  }
+}
+
+void GeigerUdpRx::creditClicks(uint32_t credit, uint32_t gap_credit, const ProducerRecord* p,
+                               uint32_t producer_ts, uint32_t now_ms) {
+  _packets_accepted++;
+  _last_click_ms  = now_ms;
+  _gap_filled    += gap_credit;
+  gcounter.dispatchReceiverBlip();
+  if (gap_credit > 0) scheduleGapfill(gap_credit, producer_ts - p->last_ts_ms, now_ms);
+  // batch, receiver timing would lie
+  uint32_t now_us = (uint32_t)micros();
+  if (credit == 1) {
+    Counter::on_pulse_batch(1, now_us, 0);
+  } else {
+    uint32_t dt_ms = producer_ts - p->last_ts_ms;
+    uint32_t span_us = ((int32_t)dt_ms > 0 && dt_ms < 60000)
+                        ? dt_ms * 1000UL : 1000000UL;
+    Counter::on_pulse_batch((uint16_t)credit, now_us, span_us);
+  }
+}
+
 void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms) {
-  // Tag string ",ii\0" = 4 bytes padded; args = 2 x int32 = 8 bytes.
-  if (len < PATH_FULL_LEN + 4 + 8) return;
-  if (buf[SUFFIX_OFFSET + 5] != '\0') return;
-  if (memcmp(buf + PATH_FULL_LEN, TAG_II, 4) != 0) return;
+  // ",ii\0" + 2 x int32
+  if (len < BLIP_CLICK_LEN) return;
+  if (buf[BLIP_SUFFIX_AT + 5] != '\0') return;
+  if (memcmp(buf + BLIP_ARGS_AT, TAG_II, 4) != 0) return;
 
-  const uint8_t* args = buf + PATH_FULL_LEN + 4;
-  uint32_t producer_counter = rd_i32(args);
-  uint32_t producer_ts      = rd_i32(args + 4);
+  uint32_t producer_counter = rd_i32(buf + BLIP_CLICK_COUNT_AT);
+  uint32_t producer_ts      = rd_i32(buf + BLIP_CLICK_MS_AT);
 
-  // Gap-fill tiers: <=1024 instant credit, 1024..65535 rate-drained over
-  // dt_ms, bigger = resync, small backwards = reorder of an already-credited
-  // future click (silently dropped to avoid double-count).
   uint32_t credit = 1;
   uint32_t gap_credit = 0;
   bool     advance_anchor = true;
@@ -247,82 +291,14 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
     if (producer_counter == p->last_counter) {
       credit = 0;   // dup
     } else if (producer_counter > p->last_counter) {
-      uint32_t gap = producer_counter - p->last_counter - 1;
-      if (gap == 0) {
-        // perfect sequence
-      } else if (gap <= 1024) {
-        credit += gap;
-        gap_credit = gap;
-      } else if (gap <= 65535) {
-        uint32_t dt_ms = producer_ts - p->last_ts_ms;
-        if (dt_ms > 100 && dt_ms < 60000) {
-          _drain_pending += (float)gap;
-          float r = (float)gap * 1000.0f / (float)dt_ms;
-          if (r > _drain_rate) _drain_rate = r;
-        } else {
-          _resync_count++;
-          Log::console(PSTR("UdpRx: %s drain rejected, gap=%u dt=%ums"),
-                       p->chipid, (unsigned)gap, (unsigned)dt_ms);
-        }
-      } else {
-        _resync_count++;
-        Log::console(PSTR("UdpRx: %s resync, gap=%u (counter %u -> %u)"),
-                     p->chipid, (unsigned)gap,
-                     (unsigned)p->last_counter, (unsigned)producer_counter);
-      }
-    } else {
-      // Backwards. Small = UDP reorder (we already gap-filled this number
-      // when the future packet arrived). Big = producer reboot.
-      // Producer ts_ms going way backwards also indicates a reboot, which
-      // catches the case where it rebooted before counter reached 1024.
-      uint32_t back = p->last_counter - producer_counter;
-      bool ts_reset = (int32_t)(producer_ts - p->last_ts_ms) < -60000;
-      if (back > 1024 || ts_reset) {
-        _resync_count++;
-        Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
-                     p->chipid,
-                     (unsigned)p->last_counter, (unsigned)producer_counter);
-      } else {
-        credit = 0;
-        advance_anchor = false;
-      }
+      gap_credit = creditForwardGap(p, producer_counter, producer_ts);
+      credit += gap_credit;
+    } else if (!producerRestarted(p, producer_counter, producer_ts)) {
+      credit = 0;
+      advance_anchor = false;
     }
   }
-  if (credit > 0) {
-    _packets_accepted++;
-    _last_click_ms  = now_ms;
-    _gap_filled    += gap_credit;
-    gcounter.dispatchReceiverBlip();
-    // Spread gap-fill clicks Poisson-style across the receive window
-    // so audio doesn't lump them into a single audible blip. Uniform
-    // random offsets in (0, window_ms] - which is the correct sampling
-    // of a Poisson process given N events in T window. Window capped
-    // at 50 ms = sender's UDPBLIP_CLICK_MIN_INTERVAL_MS, so all extras
-    // drain before the next packet is due from this producer.
-    if (gap_credit > 0) {
-      uint32_t window_ms = producer_ts - p->last_ts_ms;
-      if (window_ms == 0 || window_ms > 50) window_ms = 50;
-      uint32_t r = (uint32_t)micros();
-      for (uint32_t i = 0; i < gap_credit; i++) {
-        if (_gapfill_count >= UDPRX_GAPFILL_QUEUE) {
-          _gapfill_dropped += (gap_credit - i);
-          break;
-        }
-        r ^= r << 13; r ^= r >> 17; r ^= r << 5;
-        _gapfill_due_ms[_gapfill_count++] = now_ms + (r % window_ms) + 1;
-      }
-    }
-    // Batch-path always: receiver-side timing would lie to s_min_pulse_us.
-    uint32_t now_us = (uint32_t)micros();
-    if (credit == 1) {
-      Counter::on_pulse_batch(1, now_us, 0);
-    } else {
-      uint32_t dt_ms = producer_ts - p->last_ts_ms;
-      uint32_t span_us = ((int32_t)dt_ms > 0 && dt_ms < 60000)
-                          ? dt_ms * 1000UL : 1000000UL;
-      Counter::on_pulse_batch((uint16_t)credit, now_us, span_us);
-    }
-  }
+  if (credit > 0) creditClicks(credit, gap_credit, p, producer_ts, now_ms);
   _local_count    += credit;
   p->click_count  += credit;
   if (advance_anchor) {
@@ -332,50 +308,40 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
 }
 
 void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
-  // buf[12] is the '/' between chipid and suffix - rejects anything that
-  // isn't shaped like /espg/XXXXXX/ in a single byte.
-  if (len < PATH_FULL_LEN + 4) return;
-  if (buf[CHIPID_OFFSET + CHIPID_LEN] != '/') return;
-  if (memcmp(buf, "/espg/", 6) != 0) return;
-  // Silent self-loop reject. lwIP suppresses multicast loopback on both
-  // ESP8266 and ESP32 today, but keeping the check is ~10 cycles of
-  // insurance against future stack changes.
-  if (memcmp(buf + CHIPID_OFFSET, DeviceInfo::chipid(), CHIPID_LEN) == 0) return;
-  const char* src = (const char*)(buf + CHIPID_OFFSET);
+  if (len < BLIP_ARGS_AT + 4) return;
+  if (buf[BLIP_ID_AT + BLIP_ID_LEN] != '/') return;
+  if (memcmp(buf, PATH_PREFIX, BLIP_ID_AT) != 0) return;
+  // own packets
+  if (memcmp(buf + BLIP_ID_AT, DeviceInfo::chipid(), BLIP_ID_LEN) == 0) return;
+  const char* src = (const char*)(buf + BLIP_ID_AT);
   if (!acceptChipid(src)) return;
 
   uint32_t now_ms = fast_millis();
   ProducerRecord* p = findOrAllocProducer(src, now_ms);
   _last_packet_ms = now_ms;
 
-  // /rad and /sys: path validated, producer keep-alive already bumped
-  // by findOrAllocProducer + _last_packet_ms above. No payload decode
-  // until /producers (or similar) lands.
-  const uint8_t* s = buf + SUFFIX_OFFSET;
-  if (s[0] == 'c') {
-    if (s[1] != 'l' || s[2] != 'i' || s[3] != 'c' || s[4] != 'k') return;
+  // other paths only keep the producer alive
+  const uint8_t* s = buf + BLIP_SUFFIX_AT;
+  if (memcmp(s, SUFFIX_CLICK, 5) == 0) {
     processClick(buf, len, p, now_ms);
-  } else if (s[0] == 'e') {
-    if (s[1] != 'n' || s[2] != 'v' || s[3] != '\0') return;
+  } else if (memcmp(s, SUFFIX_ENV, 4) == 0) {
     processEnv(buf, len);
   }
 }
 
 void GeigerUdpRx::processEnv(const uint8_t* buf, size_t len) {
-  // ",fff\0\0\0\0" typetag (8 bytes) + 3 x f32 (12 bytes).
-  if (len < PATH_FULL_LEN + 8 + 12) return;
-  if (memcmp(buf + PATH_FULL_LEN, TAG_FFF, 4) != 0) return;
-  // Pin to the first producer that sends env. Stops sum/auto-mode receivers
-  // from flapping between mismatched sources.
-  static char s_env_chipid[CHIPID_LEN + 1] = {0};
-  const char* src = (const char*)(buf + CHIPID_OFFSET);
-  if (s_env_chipid[0] == '\0') {
-    memcpy(s_env_chipid, src, CHIPID_LEN);
-    s_env_chipid[CHIPID_LEN] = '\0';
-  } else if (memcmp(s_env_chipid, src, CHIPID_LEN) != 0) {
+  // ",fff" padded to 8 + 3 x f32
+  if (len < BLIP_ENV_LEN) return;
+  if (memcmp(buf + BLIP_ARGS_AT, TAG_FFF, 4) != 0) return;
+  // first env producer only
+  const char* src = (const char*)(buf + BLIP_ID_AT);
+  if (_env_chipid[0] == '\0') {
+    memcpy(_env_chipid, src, BLIP_ID_LEN);
+    _env_chipid[BLIP_ID_LEN] = '\0';
+  } else if (memcmp(_env_chipid, src, BLIP_ID_LEN) != 0) {
     return;
   }
-  const uint8_t* args = buf + PATH_FULL_LEN + 8;
+  const uint8_t* args = buf + BLIP_ENV_AT;
   float t = rd_f32(args);
   float h = rd_f32(args + 4);
   float p = rd_f32(args + 8);
@@ -387,54 +353,58 @@ void GeigerUdpRx::do_refresh() {
   else                        _refresh_noop_count++;
 }
 
-void GeigerUdpRx::loop() {
-  uint32_t now = fast_millis();
-  // WiFi reconnect drops the IGMP membership; rebind the socket.
-  if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
+// rebind after a wifi reconnect, igmp is lost
+bool GeigerUdpRx::ensureBound(uint32_t now) {
+  if (_udp && Wifi::connected_at_ms == _bound_at_ms) return true;
+  if (_udp) {
     Log::console(PSTR("UdpRx: WiFi reconnect, rebinding multicast"));
     teardownUdp();
   }
-  bool was_unbound = (_udp == nullptr);
-  if (!ensureUdp()) return;
-  if (was_unbound) {
-    _bound_at_ms = Wifi::connected_at_ms;
-    _last_igmp_refresh_ms = now;
-    do_refresh();   // refresh membership now, don't wait out the recovery cadence
-  }
+  if (!ensureUdp()) return false;
+  _bound_at_ms = Wifi::connected_at_ms;
+  _last_igmp_refresh_ms = now;
+  do_refresh();
+  return true;
+}
 
-  // Silent-RX recovery ladder, armed once a producer has been heard
-  // (_last_packet_ms>0). A 30s+ gap means lwIP aged our multicast membership
-  // out or the socket went stale. First two attempts re-emit an IGMP report;
-  // after that, force a leave+rejoin. Cadence backs off 60s to 5 min once the
-  // producer looks genuinely offline.
-  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > 30000UL) {
-    uint32_t step_ms = (_recovery_steps < 10) ? 60000UL : 300000UL;
-    if (_recovery_at_ms == 0 || (uint32_t)(now - _recovery_at_ms) >= step_ms) {
-      _recovery_at_ms = now;
-      if (_recovery_steps < 2) {
-        do_refresh();
-      } else {
-        teardownUdp();
-        if (ensureUdp()) _bound_at_ms = Wifi::connected_at_ms;
-        _rebind_count++;
-        do_refresh();
-      }
-      _recovery_steps++;
-      _last_igmp_refresh_ms = now;
-    }
-    if (!_udp) return;   // a rejoin above may have failed; try again next loop
-  } else {
-    _recovery_steps = 0;
-    _recovery_at_ms = 0;
-    // Keep router's multicast subscription alive while healthy.
-    if ((uint32_t)(now - _last_igmp_refresh_ms) > 300000UL) {
+// Silent rx recovery, one action a rung
+void GeigerUdpRx::climbRecoveryLadder(uint32_t now) {
+  uint32_t step_ms = (_recovery_steps < 5) ? 60000UL : 300000UL;
+  if (_recovery_at_ms != 0 && (uint32_t)(now - _recovery_at_ms) < step_ms) return;
+  _recovery_at_ms = now;
+  switch (_recovery_steps) {
+    case 0:
+    case 1:
       do_refresh();
-      _last_igmp_refresh_ms = now;
-    }
+      break;
+    case 3:
+      Log::console(PSTR("UdpRx: silent %us, bouncing power save"),
+                   (unsigned)((now - _last_packet_ms) / 1000u));
+      Wifi::rx_sleep(2);
+      _ps_bounce_until_ms = now + 5000u;
+      break;
+    case 4:
+      Log::console(PSTR("UdpRx: silent %us, reassociating WiFi"),
+                   (unsigned)((now - _last_packet_ms) / 1000u));
+      WiFi.reconnect();
+      break;
+    default:
+      teardownUdp();
+      if (ensureUdp()) _bound_at_ms = Wifi::connected_at_ms;
+      _rebind_count++;
+      do_refresh();
+      break;
   }
+  _recovery_steps++;
+  _last_igmp_refresh_ms = now;
+}
+
+void GeigerUdpRx::readDatagrams() {
   uint8_t buf[128];
   int sz;
-  while ((sz = _udp->parsePacket()) > 0) {
+  // a flood can't hold loop()
+  uint8_t budget = 32;
+  while (budget-- && (sz = _udp->parsePacket()) > 0) {
     if ((size_t)sz > sizeof(buf)) {
       while (_udp->available()) _udp->read();
       continue;
@@ -443,28 +413,53 @@ void GeigerUdpRx::loop() {
     if (got <= 0) continue;
     processDatagram(buf, (size_t)got);
   }
-  // Drain due gap-fill blips. Entries are pushed with random offsets so
-  // the array isn't time-ordered - swap-with-last on remove keeps it
-  // packed without sorting. Bounded at UDPRX_GAPFILL_QUEUE so worst case
-  // is one cheap pass per loop iteration.
-  if (_gapfill_count > 0) {
-    uint32_t now_ms = fast_millis();
-    uint8_t i = 0;
-    while (i < _gapfill_count) {
-      if ((int32_t)(now_ms - _gapfill_due_ms[i]) >= 0) {
-        gcounter.dispatchReceiverBlip();
-        _gapfill_count--;
-        _gapfill_due_ms[i] = _gapfill_due_ms[_gapfill_count];
-      } else {
-        i++;
-      }
+}
+
+// not time ordered, swap with last
+void GeigerUdpRx::fireDueGapfills() {
+  uint32_t now_ms = fast_millis();
+  uint8_t i = 0;
+  while (i < _gapfill_count) {
+    if ((int32_t)(now_ms - _gapfill_due_ms[i]) >= 0) {
+      gcounter.dispatchReceiverBlip();
+      _gapfill_count--;
+      _gapfill_due_ms[i] = _gapfill_due_ms[_gapfill_count];
+    } else {
+      i++;
     }
   }
 }
 
+void GeigerUdpRx::loop() {
+  uint32_t now = fast_millis();
+  if (!ensureBound(now)) return;
+
+  if (_ps_bounce_until_ms && (int32_t)(now - _ps_bounce_until_ms) >= 0) {
+    _ps_bounce_until_ms = 0;
+    Wifi::rx_sleep(_rx_mode);
+  }
+
+  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > 30000UL) {
+    climbRecoveryLadder(now);
+    if (!_udp) return;
+  } else {
+    if (_recovery_steps) {
+      Log::console(PSTR("UdpRx: rx resumed after rung %u"), _recovery_steps);
+    }
+    _recovery_steps = 0;
+    _recovery_at_ms = 0;
+    // keep the router subscription
+    if ((uint32_t)(now - _last_igmp_refresh_ms) > 300000UL) {
+      do_refresh();
+      _last_igmp_refresh_ms = now;
+    }
+  }
+  readDatagrams();
+  if (_gapfill_count > 0) fireDueGapfills();
+}
+
 void GeigerUdpRx::secondTicker() {
-  // Float-accumulator drain matching GeigerSerial::partial_clicks shape.
-  if (_drain_rate <= 0.0f) return;
+  if (!_draining) return;
   float step = _drain_rate;
   if (step > _drain_pending) step = _drain_pending;
   _drain_pending -= step;
@@ -472,6 +467,7 @@ void GeigerUdpRx::secondTicker() {
   if (_drain_pending <= 0.0f) {
     _drain_pending = 0.0f;
     _drain_rate    = 0.0f;
+    _draining      = false;
   }
   if (_drain_partial >= 1.0f) {
     uint32_t emit = (uint32_t)_drain_partial;
@@ -492,27 +488,37 @@ bool GeigerUdpRx::isHealthy() const {
   return _producers_seen > 0;
 }
 
-void GeigerUdpRx::appendJsonExtra(EGHttpResponse& res) {
-  // RX-health diagnostics, always emitted: quiet = seconds since last packet,
-  // rebind = leave+rejoin recovery cycles, igmp = IGMP reports queued, igmpx =
-  // refreshes that early-returned (no STA netif = the refresh is a no-op).
-  uint32_t quiet_s = _last_packet_ms
-                     ? (uint32_t)(fast_millis() - _last_packet_ms) / 1000u : 0;
-  char buf[96];
-  int n = snprintf_P(buf, sizeof(buf),
-      PSTR(",\"quiet\":%u,\"rebind\":%u,\"igmp\":%u,\"igmpx\":%u"),
-      (unsigned)quiet_s, (unsigned)_rebind_count,
-      (unsigned)_refresh_count, (unsigned)_refresh_noop_count);
-  if (n > 0) res.sendChunk(buf, (size_t)n);
-  if (_packets_accepted == 0) return;
-  uint16_t lx10 = loss_pct_x10();
-  int m = snprintf_P(buf, sizeof(buf), PSTR(",\"loss\":%u.%u"),
-                     (unsigned)(lx10 / 10), (unsigned)(lx10 % 10));
-  if (m > 0) res.sendChunk(buf, (size_t)m);
+uint32_t GeigerUdpRx::quiet_s() const {
+  return _last_packet_ms ? (uint32_t)(fast_millis() - _last_packet_ms) / 1000u : 0;
 }
 
+// igmpx = no netif
+static bool m_quiet(EGMValue* v)   { v->u = s_udprx_instance->quiet_s(); return true; }
+static bool m_rebind(EGMValue* v)  { v->u = s_udprx_instance->rebind_count(); return true; }
+static bool m_igmp(EGMValue* v)    { v->u = s_udprx_instance->refresh_count(); return true; }
+static bool m_igmpx(EGMValue* v)   { v->u = s_udprx_instance->refresh_noop_count(); return true; }
+
+static bool m_loss(EGMValue* v) {
+  if (s_udprx_instance->packets_accepted() == 0) return false;
+  v->f = s_udprx_instance->loss_pct_x10() / 10.0f;
+  return true;
+}
+
+static const char MP_LOSS[] PROGMEM = "geiger_udp_loss_percent";
+static const char MH_LOSS[] PROGMEM = "Packet loss on the UDP feed";
+
+static const EGMeasure UDP_ROWS[] PROGMEM = {
+  EGM_ROW("quiet",    "", m_quiet,   EGM_U32, 0, EGMU_SEC,   EGM_OUT_JSON, 0),
+  EGM_ROW("rebind",   "", m_rebind,  EGM_U32, 0, EGMU_COUNT, EGM_OUT_JSON, 0),
+  EGM_ROW("igmp",     "", m_igmp,    EGM_U32, 0, EGMU_COUNT, EGM_OUT_JSON, 0),
+  EGM_ROW("igmpx",    "", m_igmpx,   EGM_U32, 0, EGMU_COUNT, EGM_OUT_JSON, 0),
+  EGM_PROW("loss",    "", m_loss,    EGM_F32, 1, EGMU_PCT,   EGM_OUT_JSON, 0, MP_LOSS, MH_LOSS, nullptr),
+};
+
+EGMeasureRows GeigerUdpRx::measurements() { return EGMeasureRows(UDP_ROWS); }
+
 const char* GeigerUdpRx::locked_chipid() const {
-  if (_mode == 1) return nullptr;   // sum mode: caller uses producer_count
+  if (_mode == 1) return nullptr;   // sum mode
   if (_pinned_chipid[0]) return _pinned_chipid;
   if (_locked_chipid[0]) return _locked_chipid;
   return nullptr;

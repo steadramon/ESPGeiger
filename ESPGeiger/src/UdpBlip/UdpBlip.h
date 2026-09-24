@@ -16,12 +16,13 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _UDP_BLIP_H
-#define _UDP_BLIP_H
+#ifndef UDP_BLIP_H
+#define UDP_BLIP_H
 
 #include <Arduino.h>
 #include <IPAddress.h>
-#include "../Module/EGModule.h"
+#include "../Corium/Module/EGModule.h"
+#include "BlipPacket.h"
 
 class WiFiUDP;
 
@@ -29,15 +30,14 @@ class WiFiUDP;
 #define UDPBLIP_DEFAULT_GROUP "239.255.86.86"
 #endif
 #ifndef UDPBLIP_DEFAULT_PORT
-#define UDPBLIP_DEFAULT_PORT  "57340"
+#define UDPBLIP_DEFAULT_PORT  57340
 #endif
 #ifndef UDPBLIP_STATS_INTERVAL_MS
 #define UDPBLIP_STATS_INTERVAL_MS 30000UL
 #endif
+// env every 2nd stats cycle
+#define UDPBLIP_ENV_PERIOD_MS (2 * (UDPBLIP_STATS_INTERVAL_MS + 2000UL))
 #ifndef UDPBLIP_FAIL_COOLDOWN_MS
-// How long to sit in the fail-backoff state before resetting _fail_count
-// and re-trying. Decoupled from STATS_INTERVAL_MS so telemetry cadence and
-// recovery cadence can be tuned independently.
 #define UDPBLIP_FAIL_COOLDOWN_MS 10000UL
 #endif
 #ifndef UDPBLIP_STATS_JITTER_MS
@@ -47,16 +47,9 @@ class WiFiUDP;
 #define UDPBLIP_FAIL_BACKOFF 8
 #endif
 #ifndef UDPBLIP_CLICK_MIN_INTERVAL_MS
-// Cap /click emit rate. Deferred clicks accumulate in the cumulative counter
-// so the receiver gap-fills regardless. 50 ms = 20 pps cap (~1200 CPM
-// unthrottled), ~0.6 % CPU at saturation.
 #define UDPBLIP_CLICK_MIN_INTERVAL_MS 50
 #endif
 #ifndef UDPBLIP_CLICK_BURST_TOKENS
-// Token-bucket depth. Idle time earns 1 token per CLICK_MIN_INTERVAL_MS up
-// to this cap; each emit spends one. Lets a sudden cluster of clicks after
-// idle fire as separate packets (visible blips on the receiver) before the
-// steady-state throttle kicks in.
 #define UDPBLIP_CLICK_BURST_TOKENS 5
 #endif
 
@@ -66,7 +59,7 @@ public:
     static UdpBlipModule instance;
     return instance;
   }
-  const char* name() override { return "udpblip"; }
+  const char* name() override { return PSTR("udpblip"); }
   bool requires_wifi() override { return true; }
   bool has_tick() override { return true; }
   bool has_loop() override { return true; }
@@ -77,7 +70,7 @@ public:
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
   void on_prefs_saved() override;
-  uint8_t display_order() override { return 20; }  // first output: minimal config
+  uint8_t display_order() override { return 20; }
   size_t status_json(char* buf, size_t cap, unsigned long now) override;
   void notifyClick(unsigned long now_ms);
 
@@ -96,6 +89,7 @@ private:
   void emitHv(uint32_t now);
 #endif
   bool sendPacket(const uint8_t* buf, size_t len);
+  const char* path(const char* suffix);   // suffix flash
   void announce_mdns();
 
   WiFiUDP*  _udp = nullptr;
@@ -106,29 +100,24 @@ private:
   unsigned long _last_clicks = 0;
   unsigned long _last_click_emit_ms = 0;
   unsigned long _last_token_ms = 0;
-  unsigned long _bound_at_ms = 0;       // WiFi session id; rebind on change
-  uint16_t      _stats_ticks = 0;      // seconds since last /rad emit
-  uint16_t      _backoff_ticks = 0;    // seconds in fail-backoff
+  uint32_t _bound_at_ms = 0;            // wifi session, rebind on change
+  uint16_t      _stats_ticks = 0;      // s
+  uint16_t      _backoff_ticks = 0;    // s
   uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
   uint8_t   _fail_count = 0;
   bool      _mdns_done = false;
   bool      _sys_phase = false;
   uint8_t   _emit_phase = 0;
-  // s_tick sets pending bits; loop() services them so the UDP send cost
-  // stays out of tick_max.
+  // s_tick sets, loop() sends
   static constexpr uint8_t EMIT_RAD = 1 << 0;
   static constexpr uint8_t EMIT_HV  = 1 << 1;
   static constexpr uint8_t EMIT_SYS = 1 << 2;
   static constexpr uint8_t EMIT_ENV = 1 << 3;
+  static constexpr uint8_t BIND     = 1 << 4;
+  static constexpr uint8_t REBIND   = 1 << 5;
   uint8_t   _pending = 0;
-  char      _click_path[20] = {0};
-  uint8_t   _click_packet[32] = {0};  // /click OSC template; emitClick patches i32s at [24],[28]
-  char      _rad_path[20]   = {0};
-  char      _sys_path[20]   = {0};
-  char      _env_path[20]   = {0};
-#ifdef ESPG_HV_ADC
-  char      _hv_path[20]    = {0};
-#endif
+  uint8_t   _click_packet[BLIP_CLICK_LEN] = {0};
+  char      _path[BLIP_ARGS_AT] = {0};   // "/espg/<id>/" then the suffix
 };
 
 extern UdpBlipModule& udpblip;
