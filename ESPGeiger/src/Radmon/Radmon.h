@@ -21,48 +21,37 @@
 #define RADMON_H
 #ifdef RADMONOUT
 #include <Arduino.h>
-#include "../Util/Globals.h"
-#include "../Util/DeviceInfo.h"
-#include "../Counter/Counter.h"
-#include "../Module/EGModule.h"
-#include "../Prefs/EGPrefs.h"
-#include "AsyncHTTPRequest_Generic.hpp"
-
-
-extern Counter gcounter;
+#include "../Corium/System/Globals.h"
+#include "../Corium/System/DeviceInfo.h"
+#include "../GeigerInput/GeigerInput.h"
+#include "../Corium/Net/EGHttpPoster.h"
+#include "../Corium/Prefs/EGPrefs.h"
 
 #ifndef RADMON_INTERVAL
 #define RADMON_INTERVAL 60
 #endif
 
-#define RADMON_INTERVAL_MIN 30 
+#define RADMON_INTERVAL_MIN 30
 #define RADMON_INTERVAL_MAX 1800
 
 const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%s&unit=CPM";
 
-class Radmon : public EGModule {
+class Radmon : public EGHttpPoster {
   public:
     Radmon();
-    const char* name() override { return "radmon"; }
-    bool requires_wifi() override { return true; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 500; }
-    void loop(unsigned long now) override;
+    const char* name() override { return PSTR("radmon"); }
     void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
     uint8_t display_order() override { return 30; }
-    size_t status_json(char* buf, size_t cap, unsigned long now) override;
-    const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
-    void postMeasurement();
+    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void setInterval(int interval);
     int getInterval();
-    AsyncHTTPRequest* request = nullptr;
+  protected:
+    bool prepare(char* url, size_t cap, const char** body) override;
+    bool interpret(const char* reply) override;
+    const char* log_tag() override { return PSTR("Radmon"); }
   private:
-    unsigned long lastPing = 0;
     uint16_t pingInterval = RADMON_INTERVAL;
-    uint32_t pingIntervalMs = (uint32_t)RADMON_INTERVAL * 1000UL;  // precomputed - no mul per check
-    bool _send_enabled = false;
-    static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
 extern Radmon radmon;

@@ -19,15 +19,11 @@
 #ifndef WEBHOOK_H
 #define WEBHOOK_H
 #include <Arduino.h>
-#include "../Util/Globals.h"
-#include "../Util/DeviceInfo.h"
-#include "../Counter/Counter.h"
-#include "../Module/EGModule.h"
-#include "../Prefs/EGPrefs.h"
-#include "AsyncHTTPRequest_Generic.hpp"
-
-
-extern Counter gcounter;
+#include "../Corium/System/Globals.h"
+#include "../Corium/System/DeviceInfo.h"
+#include "../GeigerInput/GeigerInput.h"
+#include "../Corium/Net/EGHttpPoster.h"
+#include "../Corium/Prefs/EGPrefs.h"
 
 #ifndef WEBHOOK_INTERVAL_MIN
 #define WEBHOOK_INTERVAL_MIN 10
@@ -39,29 +35,27 @@ extern Counter gcounter;
 #define WEBHOOK_INTERVAL 60
 #endif
 
-class Webhook : public EGModule {
+class Webhook : public EGHttpPoster {
   public:
     Webhook();
-    const char* name() override { return "whook"; }
-    bool requires_wifi() override { return true; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 500; }
-    void loop(unsigned long now) override;
+    const char* name() override { return PSTR("whook"); }
     void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
-    size_t status_json(char* buf, size_t cap, unsigned long now) override;
-    const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
-    void postMeasurement();
+    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void setInterval(int interval);
     int getInterval() { return pingInterval; }
     const char* cleanHTTP(const char* url);
-    AsyncHTTPRequest* request = nullptr;
+  protected:
+    bool prepare(char* url, size_t cap, const char** body) override;
+    bool interpret(const char* reply) override;
+    const char* log_tag() override { return PSTR("Webhook"); }
+    const char* status_key() override { return PSTR("webhook"); }
+    const char* method() const override { return "POST"; }  // NOLINT(dram)
+    uint16_t timeout_s() const override { return 10; }
+    size_t reply_cap() const override { return 128; }
+    void add_headers(EGHttpClient* r) override;
   private:
-    unsigned long lastPing = 0;
     uint16_t pingInterval = WEBHOOK_INTERVAL;
-    uint32_t pingIntervalMs = (uint32_t)WEBHOOK_INTERVAL * 1000UL;  // precomputed
-    bool _send_enabled = false;
-    static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
 };
 
 extern Webhook webhook;
