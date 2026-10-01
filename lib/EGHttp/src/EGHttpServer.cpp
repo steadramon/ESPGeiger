@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpServer.h"
+#include "EGHttpForm.h"
 #include "EGHttpHeaders.h"
 #include <string.h>
 #include <stdlib.h>
@@ -794,67 +795,19 @@ void EGHttpServer::tick() {
 
 // ---------- EGHttpRequest ----------
 
-static inline int eghttp_hexval(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-static bool find_arg_in(const char* region, size_t regionLen,
-                        const char* name, size_t nameLen,
-                        char* out, size_t outCap) {
-  if (!region || regionLen == 0) return false;
-  const char* p   = region;
-  const char* end = region + regionLen;
-  while (p < end) {
-    if ((size_t)(end - p) > nameLen + 1 &&
-        memcmp(p, name, nameLen) == 0 && p[nameLen] == '=') {
-      p += nameLen + 1;
-      size_t o = 0;
-      while (p < end && *p != '&' && o < outCap - 1) {
-        if (*p == '%' && p + 2 < end &&
-            eghttp_hexval(p[1]) >= 0 && eghttp_hexval(p[2]) >= 0) {
-          // Only decode %XX with two hex digits; malformed escapes fall
-          // through and are copied literally.
-          out[o++] = (char)((eghttp_hexval(p[1]) << 4) | eghttp_hexval(p[2]));
-          p += 3;
-        } else if (*p == '+') {
-          out[o++] = ' '; p++;
-        } else {
-          out[o++] = *p++;
-        }
-      }
-      out[o] = '\0';
-      return true;
-    }
-    while (p < end && *p != '&') p++;
-    if (p < end) p++;
-  }
-  return false;
-}
-
-// Shared between arg() and decodeArg(); consume before the next call.
+// Shared by arg() calls; consume before the next call.
 static char s_arg_decoded[128];
 
 const char* EGHttpRequest::arg(const char* name) const {
-  if (!name) return nullptr;
-  size_t nameLen = strlen(name);
-  if (find_arg_in(_query, _queryLen, name, nameLen, s_arg_decoded, sizeof(s_arg_decoded)))
-    return s_arg_decoded;
-  if (find_arg_in(_body,  _bodyLen,  name, nameLen, s_arg_decoded, sizeof(s_arg_decoded)))
+  if (eghttp_form_find(_query, _queryLen, name, s_arg_decoded, sizeof(s_arg_decoded)) ||
+      eghttp_form_find(_body,  _bodyLen,  name, s_arg_decoded, sizeof(s_arg_decoded)))
     return s_arg_decoded;
   return nullptr;
 }
 
 const char* EGHttpRequest::decodeArg(const char* body, size_t bodyLen,
-                                       const char* name) {
-  if (!body || bodyLen == 0 || !name) return nullptr;
-  if (find_arg_in(body, bodyLen, name, strlen(name),
-                  s_arg_decoded, sizeof(s_arg_decoded))) {
-    return s_arg_decoded;
-  }
-  return nullptr;
+                                       const char* name, char* out, size_t cap) {
+  return eghttp_form_find(body, bodyLen, name, out, cap) ? out : nullptr;
 }
 
 // Append-or-flush on overflow. ESP32 has a 12 KB shared accumulator so

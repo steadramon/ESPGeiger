@@ -1379,7 +1379,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (s_paramBodyOk && body) {
       char name[64];
       char id_buf[32];
-      char val_copy[160];
+      char val[256];   // longest string pref is 255
       for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
         const EGPrefGroup* g = EGPrefs::group_at(gi);
         if (!g) continue;
@@ -1396,10 +1396,10 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
           snprintf_P(name, sizeof(name), PSTR("%s.%s"), g->module_id, id_buf);
 
           if (p.type == EGP_BOOL) {
-            const char* one = EGHttpRequest::decodeArg(body, bodyLen, name) ? "1" : "0";
+            const char* one = EGHttpRequest::decodeArg(body, bodyLen, name, val, sizeof(val)) ? "1" : "0";
             EGPrefs::put(g->module_id, id_buf, one);
           } else {
-            const char* v = EGHttpRequest::decodeArg(body, bodyLen, name);
+            const char* v = EGHttpRequest::decodeArg(body, bodyLen, name, val, sizeof(val));
             if (!v) continue;
             if (p.flags & EGP_SENSITIVE) {
               if (strcmp(v, "__CLEAR__") == 0) {
@@ -1408,9 +1408,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
               }
               if (v[0] == '\0') continue;
             }
-            strncpy(val_copy, v, sizeof(val_copy) - 1);
-            val_copy[sizeof(val_copy) - 1] = '\0';
-            EGPrefs::put(g->module_id, id_buf, val_copy);
+            EGPrefs::put(g->module_id, id_buf, v);
           }
         }
       }
@@ -2046,8 +2044,7 @@ void WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 
 // Inline url-decode of form body for `blob=...` only. Mutates buf to
 // place the decoded value in-place; returns pointer to it (NUL-terminated).
-// Avoids EGHttpRequest::decodeArg's 128-byte static buffer which truncates
-// our multi-KB blob.
+// The blob is multi-KB, so it decodes in place rather than via decodeArg.
 static char* extract_blob_field(char* body, size_t bodyLen, size_t* out_len) {
   if (bodyLen < 5) return nullptr;
   char* eq = nullptr;
