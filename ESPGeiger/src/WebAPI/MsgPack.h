@@ -43,6 +43,18 @@ static constexpr uint8_t TAG_STR8    = 0xd9;
 static constexpr uint8_t TAG_STR16   = 0xda;
 static constexpr uint8_t TAG_ARRAY16 = 0xdc;
 static constexpr uint8_t TAG_MAP16   = 0xde;
+static constexpr uint8_t TAG_BIN32   = 0xc6;
+static constexpr uint8_t TAG_EXT8    = 0xc7;
+static constexpr uint8_t TAG_EXT16   = 0xc8;
+static constexpr uint8_t TAG_EXT32   = 0xc9;
+static constexpr uint8_t TAG_FLOAT64 = 0xcb;
+static constexpr uint8_t TAG_UINT64  = 0xcf;
+static constexpr uint8_t TAG_INT64   = 0xd3;
+static constexpr uint8_t TAG_FIXEXT1 = 0xd4;
+static constexpr uint8_t TAG_FIXEXT16 = 0xd8;
+static constexpr uint8_t TAG_STR32   = 0xdb;
+static constexpr uint8_t TAG_ARRAY32 = 0xdd;
+static constexpr uint8_t TAG_MAP32   = 0xdf;
 
 // Float bit-pattern punning - no libm, no copy via memcpy in tight code.
 static inline uint32_t f32_bits(float f) {
@@ -182,6 +194,7 @@ public:
     if (!peek(&t)) return 0;
     if ((t & 0xf0) == 0x80)  { pos++; return t & 0x0f; }
     if (t == TAG_MAP16)      { pos++; uint16_t n; return get_u16(&n) ? n : 0; }
+    if (t == TAG_MAP32)      { pos++; uint32_t n; return get_u32(&n) ? count16(n) : 0; }
     error = true; return 0;
   }
   uint16_t read_array() {
@@ -189,6 +202,7 @@ public:
     if (!peek(&t)) return 0;
     if ((t & 0xf0) == 0x90)  { pos++; return t & 0x0f; }
     if (t == TAG_ARRAY16)    { pos++; uint16_t n; return get_u16(&n) ? n : 0; }
+    if (t == TAG_ARRAY32)    { pos++; uint32_t n; return get_u32(&n) ? count16(n) : 0; }
     error = true; return 0;
   }
 
@@ -201,7 +215,8 @@ public:
     switch (t) {
       case TAG_UINT8:  { uint8_t  v; if (!get_u8(&v))  return false; *out = (int32_t)v; return true; }
       case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = (int32_t)v; return true; }
-      case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false; *out = (int32_t)v; return true; }
+      case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false;
+                         if (v > 0x7fffffffu) break; *out = (int32_t)v; return true; }
       case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false; *out = (int32_t)(int8_t)v; return true; }
       case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false; *out = (int32_t)(int16_t)v; return true; }
       case TAG_INT32:  { uint32_t v; if (!get_u32(&v)) return false; *out = (int32_t)v; return true; }
@@ -249,36 +264,47 @@ public:
   // type mismatch or insufficient capacity.
   bool read_str(char* out, size_t out_cap) {
     size_t len; if (!read_str_len(&len)) return false;
-    if (len + 1 > out_cap || pos + len > cap) { error = true; return false; }
+    if (len >= out_cap || len > cap - pos) { error = true; return false; }
     if (len) memcpy(out, buf + pos, len);
     out[len] = '\0';
     pos += len;
     return true;
   }
 
-  // Skip the current value (any type). Recurses into containers.
-  bool skip() {
+  // Skip the current value, any type in the MessagePack spec. Containers
+  // nest at most SKIP_DEPTH deep.
+  static constexpr uint8_t SKIP_DEPTH = 16;
+  bool skip(uint8_t depth = 0) {
+    if (depth > SKIP_DEPTH) { error = true; return false; }
     uint8_t t; if (!get_u8(&t)) return false;
-    // pos fixint
-    if ((t & 0x80) == 0)    return true;
-    // neg fixint
-    if ((t & 0xe0) == 0xe0) return true;
-    // fixmap / fixarray / fixstr
-    if ((t & 0xf0) == 0x80) return skip_map(t & 0x0f);
-    if ((t & 0xf0) == 0x90) return skip_array(t & 0x0f);
-    if ((t & 0xe0) == 0xa0) return advance(t & 0x1f);
+    if ((t & 0x80) == 0)    return true;                    // pos fixint
+    if ((t & 0xe0) == 0xe0) return true;                    // neg fixint
+    if ((t & 0xf0) == 0x80) return skip_n(2u * (t & 0x0f), depth);  // fixmap
+    if ((t & 0xf0) == 0x90) return skip_n(t & 0x0f, depth);          // fixarray
+    if ((t & 0xe0) == 0xa0) return advance(t & 0x1f);                // fixstr
+    if (t >= TAG_FIXEXT1 && t <= TAG_FIXEXT16)              // type byte + 1..16
+      return advance(1u + (1u << (t - TAG_FIXEXT1)));
+    uint32_t n;
     switch (t) {
       case TAG_NIL: case TAG_TRUE: case TAG_FALSE: return true;
       case TAG_UINT8:  case TAG_INT8:    return advance(1);
       case TAG_UINT16: case TAG_INT16:   return advance(2);
       case TAG_UINT32: case TAG_INT32:
       case TAG_FLOAT32:                  return advance(4);
-      case TAG_STR8:   case TAG_BIN8:    { uint8_t  n; return get_u8(&n)  && advance(n); }
-      case TAG_STR16:  case TAG_BIN16:   { uint16_t n; return get_u16(&n) && advance(n); }
-      case TAG_ARRAY16: { uint16_t n; return get_u16(&n) && skip_array(n); }
-      case TAG_MAP16:   { uint16_t n; return get_u16(&n) && skip_map(n); }
+      case TAG_UINT64: case TAG_INT64:
+      case TAG_FLOAT64:                  return advance(8);
+      case TAG_STR8:  case TAG_BIN8:     return get_len(1, &n) && advance(n);
+      case TAG_STR16: case TAG_BIN16:    return get_len(2, &n) && advance(n);
+      case TAG_STR32: case TAG_BIN32:    return get_len(4, &n) && advance(n);
+      case TAG_EXT8:                     return get_len(1, &n) && advance(1) && advance(n);
+      case TAG_EXT16:                    return get_len(2, &n) && advance(1) && advance(n);
+      case TAG_EXT32:                    return get_len(4, &n) && advance(1) && advance(n);
+      case TAG_ARRAY16:                  return get_len(2, &n) && skip_n(n, depth);
+      case TAG_ARRAY32:                  return get_len(4, &n) && skip_n(n, depth);
+      case TAG_MAP16:                    return get_len(2, &n) && skip_n(2u * n, depth);
+      case TAG_MAP32:                    return get_len(4, &n) && n <= 0x7fffffffu && skip_n(2u * n, depth);
     }
-    error = true; return false;
+    error = true; return false;   // 0xc1, never used
   }
 
   // Find a key in the map currently at `pos`. On success leaves pos on
@@ -290,13 +316,13 @@ public:
     for (uint16_t i = 0; i < n; i++) {
       size_t this_len;
       if (!read_str_len(&this_len)) return false;
-      if (this_len == klen && pos + this_len <= cap &&
+      if (this_len == klen && this_len <= cap - pos &&
           memcmp(buf + pos, key, this_len) == 0) {
         pos += this_len;
         return true;
       }
       // Check before advancing, or `pos` lands past `cap` on truncated input.
-      if (pos + this_len > cap) { error = true; return false; }
+      if (this_len > cap - pos) { error = true; return false; }
       pos += this_len;
       if (!skip()) return false;
     }
@@ -326,18 +352,33 @@ private:
     pos += 4; return true;
   }
   bool advance(size_t n) {
-    if (pos + n > cap) { error = true; return false; }
+    if (n > cap - pos) { error = true; return false; }
     pos += n; return true;
+  }
+  bool get_len(uint8_t width, uint32_t* out) {
+    if (width == 1) { uint8_t  v; if (!get_u8(&v))  return false; *out = v; return true; }
+    if (width == 2) { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
+    return get_u32(out);
+  }
+  // Each element is at least one byte, so a count past the buffer fails at
+  // the end of the data, not after 2^32 iterations.
+  bool skip_n(uint32_t n, uint8_t depth) {
+    if (n > cap - pos) { error = true; return false; }
+    for (uint32_t i = 0; i < n; i++) if (!skip(depth + 1)) return false;
+    return true;
+  }
+  uint16_t count16(uint32_t n) {
+    if (n > 0xffffu) { error = true; return 0; }
+    return (uint16_t)n;
   }
   bool read_str_len(size_t* out) {
     uint8_t t; if (!get_u8(&t)) return false;
     if ((t & 0xe0) == 0xa0) { *out = t & 0x1f; return true; }
     if (t == TAG_STR8)      { uint8_t  n; if (!get_u8(&n))  return false; *out = n; return true; }
     if (t == TAG_STR16)     { uint16_t n; if (!get_u16(&n)) return false; *out = n; return true; }
+    if (t == TAG_STR32)     { uint32_t n; if (!get_u32(&n)) return false; *out = n; return true; }
     error = true; return false;
   }
-  bool skip_map(uint16_t n)   { for (uint16_t i = 0; i < n; i++) { if (!skip()) return false; if (!skip()) return false; } return true; }
-  bool skip_array(uint16_t n) { for (uint16_t i = 0; i < n; i++) { if (!skip()) return false; } return true; }
 };
 
 }
