@@ -145,8 +145,9 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
     }
     case EGP_FLOAT: {
       char* end;
-      parse_f(value, &end);
+      float v = parse_f(value, &end);
       if (*end != '\0' || end == value) return -1;
+      if (p->min_i != p->max_i && (v < p->min_i || v > p->max_i)) return -1;
       // Pass through as-is (avoid Arduino String(float) heap alloc)
       size_t len = strlen(value);
       if (len >= outsz) return -1;
