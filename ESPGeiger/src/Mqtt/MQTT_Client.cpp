@@ -80,7 +80,7 @@ EG_PSTR(MQ_H_HTP, "HA discovery prefix");
 EG_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
 #endif
 
-static const EGPref MQTT_PREF_ITEMS[] = {
+static const EGPref MQTT_PREF_ITEMS[] PROGMEM = {
   {"server",   MQ_L_SRV, MQ_H_SRV, "",               MQ_P_SRV, 0, 0, 64, EGP_STRING, 0},
   {"port",     MQ_L_PRT, nullptr,  "1883",           nullptr,  1, 65535, 0,  EGP_UINT,   0},
   {"user",     MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     64, EGP_STRING, 0},

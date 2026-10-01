@@ -52,7 +52,7 @@ EG_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin). 
 EG_PSTR(SY_L_LE,  "Track lifetime");
 EG_PSTR(SY_H_LE,  "Persist total clicks + exposure across reboots.");
 
-static const EGPref SYSTEM_PREF_ITEMS[] = {
+static const EGPref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {"name",     SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    32, EGP_STRING, 0},
   {"ratio",    SY_L_RAT, SY_H_RAT, "151.0", nullptr, 0, 0,    0,  EGP_FLOAT,  0},
   {"warn",     SY_L_WRN, SY_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
@@ -109,7 +109,7 @@ public:
 static LifePrefs lifeprefs;
 EG_REGISTER_MODULE(lifeprefs)
 
-static const EGPref LIFE_PREF_ITEMS[] = {
+static const EGPref LIFE_PREF_ITEMS[] PROGMEM = {
   {"clk",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
   {"clkr", nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
   {"fbt",  nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
@@ -167,7 +167,7 @@ EG_PSTR(NT_L_SN,  "Subnet mask");
 EG_PSTR(NT_L_DNS, "DNS server");
 EG_PSTR(NT_P_IP,  "^(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3}$");
 
-static const EGPref NET_PREF_ITEMS[] = {
+static const EGPref NET_PREF_ITEMS[] PROGMEM = {
   {"static_ip", NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
   {"ip",        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
   {"gw",        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
@@ -274,7 +274,7 @@ EG_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
 extern "C" void udprx_notify_prefs_saved();
 #endif
 
-static const EGPref INPUT_PREF_ITEMS[] = {
+static const EGPref INPUT_PREF_ITEMS[] PROGMEM = {
   // Source selector
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   {"serial_type", IN_L_STY, serial_type_desc, STR(GEIGER_SERIALTYPE), nullptr, 1, 255, 0, EGP_UINT, 0},
@@ -458,7 +458,7 @@ EG_PSTR(LD_H_QTO, "End of quiet window; crosses midnight if from > to");
 EG_PSTR(LD_L_PUL, "Pulse width ms");
 EG_PSTR(LD_H_PUL, "1-50");
 
-static const EGPref LED_PREF_ITEMS[] = {
+static const EGPref LED_PREF_ITEMS[] PROGMEM = {
   {"blip_led",    LD_L_BLP, LD_H_BLP, "1",    nullptr, 0, 1,     0, EGP_BOOL, 0},
 #ifdef ESPGEIGER_HW
   // Only Pulse mode is available - HV holds Timer1 so tone()/PWM is unusable.
@@ -534,7 +534,7 @@ EG_REGISTER_MODULE(hvpinprefs)
 EG_PSTR(HV_L_PWM, "HV PWM Pin");
 EG_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
 
-static const EGPref HV_PIN_PREF_ITEMS[] = {
+static const EGPref HV_PIN_PREF_ITEMS[] PROGMEM = {
   {"pwm_pin", HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
 };
 

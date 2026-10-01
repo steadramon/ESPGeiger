@@ -37,7 +37,7 @@ EG_PSTR(GM_L_GID, "Geiger Counter ID");
 EG_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
 EG_PSTR(GM_P_GID, "\\d{1,20}");
 
-static const EGPref GMC_PREF_ITEMS[] = {
+static const EGPref GMC_PREF_ITEMS[] PROGMEM = {
   {"send", GM_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
   {"aid",  GM_L_AID, GM_H_AID, "",  GM_P_AID, 0, 0, 20, EGP_STRING, 0},
   {"gcid", GM_L_GID, GM_H_GID, "",  GM_P_GID, 0, 0, 20, EGP_STRING, 0},

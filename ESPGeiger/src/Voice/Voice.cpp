@@ -53,7 +53,7 @@ EG_PSTR(VX_H_AUS, "Include micro sievert per hour with the announcement");
 EG_PSTR(VX_L_ARM, "RadMon up/down");
 EG_PSTR(VX_H_ARM, "Speak when RadMon goes online or offline");
 
-static const EGPref VOICE_PREF_ITEMS[] = {
+static const EGPref VOICE_PREF_ITEMS[] PROGMEM = {
   {"announce_enable",   VX_L_AEN,  VX_H_AEN,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
   {"announce_interval", VX_L_AIV,  VX_H_AIV,  "60", nullptr, 10, 3600,  0, EGP_UINT, EGP_ADVANCED},
   {"announce_usv",      VX_L_AUS,  VX_H_AUS,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
@@ -139,7 +139,7 @@ EG_PSTR(KX_H_QFR, "Silence klaxon + voice from this time (blank = off)");
 EG_PSTR(KX_L_QTO, "Quiet to");
 EG_PSTR(KX_H_QTO, "End of quiet window; crosses midnight if from > to");
 
-static const EGPref KLAXON_PREF_ITEMS[] = {
+static const EGPref KLAXON_PREF_ITEMS[] PROGMEM = {
   {"enable",     KX_L_EN,  KX_H_EN,  "0",  nullptr, 0, 0,   0, EGP_BOOL, 0},
   {"type",       KX_L_TY,  nullptr,  "0",  KX_O_TY, 0, 4,   0, EGP_ENUM, 0},
   {"volume",     KX_L_VOL, KX_H_VOL, "55", nullptr, 1, 100, 0, EGP_UINT, 0},

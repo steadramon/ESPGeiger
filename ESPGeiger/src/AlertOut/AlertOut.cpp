@@ -38,7 +38,7 @@ EG_PSTR(AO_O_INV,  "Active high|Active low");
 EG_PSTR(AO_L_MOD,  "Mode");
 EG_PSTR(AO_O_MOD,  "Steady level|1 Hz pulse");
 
-static const EGPref ALERT_PREF_ITEMS[] = {
+static const EGPref ALERT_PREF_ITEMS[] PROGMEM = {
   {"pin",      AO_L_PIN, AO_H_PIN, "-1", nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT,  0},
   {"polarity", AO_L_INV, nullptr,  "0",  AO_O_INV, 0, 1,            0, EGP_ENUM, 0},
   {"mode",     AO_L_MOD, nullptr,  "0",  AO_O_MOD, 0, 1,            0, EGP_ENUM, 0},

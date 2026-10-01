@@ -1388,7 +1388,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
         // = "off") on every save from another tab.
         if (g->category != tab) continue;
         for (size_t j = 0; j < g->count; j++) {
-          const EGPref& p = g->prefs[j];
+          const EGPref p = g->prefs.row(j);
           if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
           if (p.type == EGP_LABEL || p.type == EGP_HEADER) continue;
           strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
@@ -1693,7 +1693,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
     // Pass 1: common fields.
     for (size_t j = 0; j < g->count; j++) {
-      const EGPref& p = g->prefs[j];
+      const EGPref p = g->prefs.row(j);
       if (p.flags & (EGP_HIDDEN | EGP_ADVANCED)) continue;
       emit_field(p);
     }
@@ -1712,7 +1712,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     // Pass 2: advanced fields, folded into a nested disclosure.
     bool adv_open = false;
     for (size_t j = 0; j < g->count; j++) {
-      const EGPref& p = g->prefs[j];
+      const EGPref p = g->prefs.row(j);
       if ((p.flags & EGP_HIDDEN) || !(p.flags & EGP_ADVANCED)) continue;
       if (!adv_open) {
         res.sendChunk(F("<details class=adv><summary>Advanced</summary>"));
@@ -1827,10 +1827,10 @@ static void serializeExportStream(B64Sink& sink) {
     if (!g || g->count == 0) continue;
     for (size_t j = 0; j < g->count; j++) {
       char id_buf[32];
-      strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+      strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
       const char* val;
-      if (is_exportable_pref(g, g->prefs[j], id_buf, val)) {
+      if (is_exportable_pref(g, g->prefs.row(j), id_buf, val)) {
         group_count++;
         break;
       }
@@ -1849,10 +1849,10 @@ static void serializeExportStream(B64Sink& sink) {
     uint8_t emitted_prefs = 0;
     for (size_t j = 0; j < g->count; j++) {
       char id_buf[32];
-      strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+      strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
       const char* val;
-      if (is_exportable_pref(g, g->prefs[j], id_buf, val)) emitted_prefs++;
+      if (is_exportable_pref(g, g->prefs.row(j), id_buf, val)) emitted_prefs++;
     }
     if (emitted_prefs == 0) continue;
 
@@ -1863,7 +1863,7 @@ static void serializeExportStream(B64Sink& sink) {
     b64_write_u8(sink, emitted_prefs);
 
     for (size_t j = 0; j < g->count; j++) {
-      const EGPref& p = g->prefs[j];
+      const EGPref p = g->prefs.row(j);
       char id_buf[32];
       strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
@@ -1963,7 +1963,7 @@ static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
         if (!g || strcmp(g->module_id, module_id) != 0) continue;
         for (size_t j = 0; j < g->count; j++) {
           char id_buf[32];
-          strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+          strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
           id_buf[sizeof(id_buf) - 1] = '\0';
           if (strcmp(id_buf, key) == 0) { known = true; break; }
         }

@@ -511,7 +511,7 @@ EG_REGISTER_MODULE(wifiprefs)
 
 #define WIFI_SLEEP_DEFAULT "1"
 
-static const EGPref WIFI_PREF_ITEMS[] = {
+static const EGPref WIFI_PREF_ITEMS[] PROGMEM = {
   {"sleep",    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN},
   {"tx_power", nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN},
   {"country",  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN},

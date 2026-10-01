@@ -97,7 +97,7 @@ EG_REGISTER_MODULE(pushbutton)
 EG_PSTR(BTN_L_PIN, "Button Pin");
 EG_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
 
-static const EGPref BTN_PREF_ITEMS[] = {
+static const EGPref BTN_PREF_ITEMS[] PROGMEM = {
   {"pin", BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
 };
 

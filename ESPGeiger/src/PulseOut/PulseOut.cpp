@@ -60,7 +60,7 @@ EG_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
 EG_PSTR(PO_L_QTO,  "Quiet to");
 EG_PSTR(PO_H_QTO,  "End of quiet window; crosses midnight if from > to");
 
-static const EGPref PULSE_PREF_ITEMS[] = {
+static const EGPref PULSE_PREF_ITEMS[] PROGMEM = {
   {"enable",     PO_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
   {"pin",        PO_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, EGP_INT,  0},
   {"polarity",   PO_L_POL,  nullptr,   "0",    PO_O_POL, 0,   1,     0, EGP_ENUM, 0},

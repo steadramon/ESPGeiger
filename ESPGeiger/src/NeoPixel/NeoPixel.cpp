@@ -60,7 +60,7 @@ EG_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
   #endif
 #endif
 
-static const EGPref NEOPIXEL_PREF_ITEMS[] = {
+static const EGPref NEOPIXEL_PREF_ITEMS[] PROGMEM = {
 #ifndef NEOPIXEL_PIN_BLOCKED
   {"pin",        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED},
 #endif

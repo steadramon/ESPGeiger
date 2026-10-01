@@ -167,7 +167,7 @@ EG_PSTR(TK_L_DOUT,"I2S DOUT Pin");
 EG_PSTR(TK_H_PIN, "Reboot to apply");
 #endif
 
-static const EGPref TICK_PREF_ITEMS[] = {
+static const EGPref TICK_PREF_ITEMS[] PROGMEM = {
   {"enable", TK_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, EGP_BOOL, 0},
   {"volume", TK_L_VOL,  TK_H_VOL,  "60",   nullptr, 0,   100,  0, EGP_UINT, 0},
   {"freq",   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, EGP_UINT, EGP_ADVANCED},

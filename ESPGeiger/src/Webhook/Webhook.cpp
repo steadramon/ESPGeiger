@@ -44,7 +44,7 @@ EG_PSTR(WH_H_KEY, "Optional shared secret sent as \"key\"");
 EG_PSTR(WH_L_INT, "Interval");
 EG_PSTR(WH_H_INT, "POST interval (sec)");
 
-static const EGPref WEBHOOK_PREF_ITEMS[] = {
+static const EGPref WEBHOOK_PREF_ITEMS[] PROGMEM = {
   {"send",     WH_L_EN,  WH_H_EN,  "0",  nullptr,  0, 0,    0,   EGP_BOOL,   0},
   {"url",      WH_L_URL, WH_H_URL, "",   WH_P_URL, 0, 0,    255, EGP_STRING, 0},
   {"key",      WH_L_KEY, WH_H_KEY, "",   nullptr,  0, 0,    255, EGP_STRING, EGP_SENSITIVE},

@@ -97,7 +97,7 @@ EG_PSTR(OL_L_RST, "Reset Pin");
 EG_PSTR(OL_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
 #endif
 
-static const EGPref OLED_PREF_ITEMS[] = {
+static const EGPref OLED_PREF_ITEMS[] PROGMEM = {
 #ifndef OLED_PINS_BLOCKED
   {"sda",        OL_L_SDA, OL_H_RBA, OLED_STR(OLED_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
   {"scl",        OL_L_SCL, OL_H_RBA, OLED_STR(OLED_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},

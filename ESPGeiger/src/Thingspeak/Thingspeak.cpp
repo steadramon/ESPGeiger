@@ -36,7 +36,7 @@ EG_PSTR(TS_H_EN,  "Upload to ThingSpeak");
 EG_PSTR(TS_L_CK,  "Channel Key");
 EG_PSTR(TS_H_CK,  "ThingSpeak channel write API key");
 
-static const EGPref TS_PREF_ITEMS[] = {
+static const EGPref TS_PREF_ITEMS[] PROGMEM = {
   {"send",        TS_L_EN, TS_H_EN, "0", nullptr, 0, 0, 0,  EGP_BOOL,   0},
   {"channel_key", TS_L_CK, TS_H_CK, "",  nullptr, 0, 0, 16, EGP_STRING, EGP_SENSITIVE},
 };

@@ -59,7 +59,7 @@ EG_PSTR(WA_H_LAT, "Station latitude  (-90..90, 0 = use IP)");
 EG_PSTR(WA_L_LON, "Longitude");
 EG_PSTR(WA_H_LON, "Station longitude (-180..180, 0 = use IP)");
 
-static const EGPref WEBAPI_PREF_ITEMS[] = {
+static const EGPref WEBAPI_PREF_ITEMS[] PROGMEM = {
   {"mode",   WA_L_MD,  nullptr,  "2", WA_O_MD, 0,    2,   0, EGP_ENUM,  0},
   {"lat",    WA_L_LAT, WA_H_LAT, "0", nullptr, -90,  90,  0, EGP_FLOAT, 0},
   {"lon",    WA_L_LON, WA_H_LON, "0", nullptr, -180, 180, 0, EGP_FLOAT, 0},

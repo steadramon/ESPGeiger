@@ -55,7 +55,7 @@ EG_PSTR(HW_L_TGT, "HV target");
 EG_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage (0 = open loop, ±5 LSB max correction)");
 #endif
 
-static const EGPref HW_PREF_ITEMS[] = {
+static const EGPref HW_PREF_ITEMS[] PROGMEM = {
   {"freq",   HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, EGP_ADVANCED},
   {"duty",   HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, 1023, 0, EGP_UINT, EGP_ADVANCED},
 #ifdef ESPG_HV_ADC

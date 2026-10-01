@@ -44,22 +44,41 @@ static constexpr uint8_t EGP_INLINE    = 1 << 7;
 
 // Declare a PROGMEM pref string. label/help/pattern fields in EGPref tables
 // can be set to one of these (PSTR() can't appear in static initializers).
-// id and default_val must stay SRAM - getString returns default_val to
-// callers that may do strcmp without _P, and find_pref does strcmp on id.
+// default_val must stay SRAM: getString returns it to callers that may do
+// strcmp without _P.
 #define EG_PSTR(name, val) static const char name[] PROGMEM = val
 
+// Tables are PROGMEM: declare them `static const EGPref X[] PROGMEM`.
 struct EGPref {
-  const char* id;         // 4  (SRAM)
-  const char* label;      // 4  (SRAM or PROGMEM)
-  const char* help;       // 4  (SRAM or PROGMEM)
-  const char* default_val;// 4  (SRAM)
-  const char* pattern;    // 4  (regex for HTML5 validation, SRAM or PROGMEM, or nullptr)
-  int32_t     min_i;      // 4  (min range, or 0 if unconstrained)
-  int32_t     max_i;      // 4  (max range, same as min_i = unconstrained)
-  uint16_t    max_len;    // 2  (max string length, 0 = unlimited)
-  EGPrefType  type;       // 1
-  uint8_t     flags;      // 1
-};                        // 32 bytes (was 40 - reordered to eliminate padding)
+  char        id[18];     // in the row, so it lives in flash with it
+  const char* label;      // SRAM or PROGMEM
+  const char* help;       // SRAM or PROGMEM
+  const char* default_val;// SRAM
+  const char* pattern;    // regex for HTML5 validation, SRAM or PROGMEM, or nullptr
+  int32_t     min_i;      // min range, or 0 if unconstrained
+  int32_t     max_i;      // max range, same as min_i = unconstrained
+  uint16_t    max_len;    // max string length, 0 = unlimited
+  EGPrefType  type;
+  uint8_t     flags;
+};
+
+// A PROGMEM table. Flash takes only aligned 32-bit loads, so a row is
+// copied out whole rather than read in place.
+class EGPrefRows {
+public:
+  constexpr EGPrefRows(const EGPref* rows) : _rows(rows) {}
+  EGPref row(size_t j) const {
+    EGPref r;
+    memcpy_P(&r, &_rows[j], sizeof(r));
+    return r;
+  }
+  const char* id_P(size_t j) const { return _rows[j].id; }
+  const char* default_val(size_t j) const {
+    return (const char*)pgm_read_ptr(&_rows[j].default_val);
+  }
+private:
+  const EGPref* _rows;
+};
 
 // /param tab buckets. 0 = SYSTEM keeps existing literals safe (POD zero).
 // BACKUP is rendered specially (no pref groups), kept here for symmetry.
@@ -75,7 +94,7 @@ struct EGPrefGroup {
   const char* module_id;
   const char* label;
   uint16_t    version;   // bump to invalidate stored data on schema change
-  const EGPref* prefs;
+  EGPrefRows    prefs;
   size_t        count;
   uint8_t       category;  // EGPrefCategory; defaults SYSTEM via POD zero-init
   // Optional: pref key whose value drives the group's on/off badge in the
@@ -113,7 +132,7 @@ public:
   static size_t              group_count();
   static const EGPrefGroup*  group_at(size_t idx);
   static class EGModule*     module_at(size_t idx);  // for display_order() etc.
-  static const EGPref*       find_pref(const char* module, const char* key);
+  static bool                find_pref(const char* module, const char* key, EGPref* out);
 };
 
 #endif
