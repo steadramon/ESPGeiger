@@ -92,7 +92,7 @@ static const TypeInfo TYPES[] = {
   { GEIGER_STYPE_GC10NX,    115200, "GC10Next",  "{cpm}\r\n",    nullptr,            IF_PARSE(parse_gc10),      false },
 #endif
   { GEIGER_STYPE_MIGHTYOHM, 9600,   "MightyOhm", nullptr,        fmt_mightyohm,      IF_PARSE(parse_mightyohm), true  },
-  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger", "CPM: {cpm}\n", nullptr,            IF_PARSE(parse_template),  false },
+  { GEIGER_STYPE_ESPGEIGER, 115200, "ESPGeiger", "CPM: {cpm}\n", nullptr,            IF_PARSE(parse_espgeiger), false },
   { GEIGER_STYPE_TEMPLATE,  115200, "Template",  nullptr,        fmt_user_template,  IF_PARSE(parse_template),  false },
 };
 static constexpr uint8_t TYPE_COUNT = sizeof(TYPES) / sizeof(TYPES[0]);

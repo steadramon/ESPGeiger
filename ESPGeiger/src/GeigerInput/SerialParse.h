@@ -42,6 +42,7 @@ bool common_validate(const char* in, size_t len);
 
 bool parse_gc10(const char* in, int* out_cpm, int* out_cps);
 bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps);
+bool parse_espgeiger(const char* in, int* out_cpm, int* out_cps);
 bool parse_template(const char* in, int* out_cpm, int* out_cps);
 
 }

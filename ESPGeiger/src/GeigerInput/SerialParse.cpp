@@ -90,10 +90,11 @@ static bool parse_label_value(const char* in, char tag, int* out) {
   return false;
 }
 
-bool parse_template(const char* in, int* out_cpm, int* out_cps) {
+static bool parse_labelled(const char* in, int* out_cpm, int* out_cps, bool loose) {
   if (!in || !out_cpm) return false;
   int cpm = 0;
   if (!parse_label_value(in, 'M', &cpm)) {
+    if (!loose) return false;
     // No CPM tag: fall back to the first number on the line. Deliberately
     // loose, because the user template is arbitrary.
     const char* p = in;
@@ -110,6 +111,16 @@ bool parse_template(const char* in, int* out_cpm, int* out_cps) {
     }
   }
   return true;
+}
+
+// The sender also writes boot logs and banners to the same UART, so its own
+// format needs the CPM label.
+bool parse_espgeiger(const char* in, int* out_cpm, int* out_cps) {
+  return parse_labelled(in, out_cpm, out_cps, false);
+}
+
+bool parse_template(const char* in, int* out_cpm, int* out_cps) {
+  return parse_labelled(in, out_cpm, out_cps, true);
 }
 
 }
