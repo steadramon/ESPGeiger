@@ -518,7 +518,7 @@ static const EGPref WIFI_PREF_ITEMS[] PROGMEM = {
   {"phy_mode", nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN},
 };
 
-static const EGPrefGroup WIFI_PREF_GROUP = {
+static const EGPrefGroup WIFI_PREF_GROUP PROGMEM = {
   "wifi", "Wi-Fi", 1,
   WIFI_PREF_ITEMS,
   sizeof(WIFI_PREF_ITEMS) / sizeof(WIFI_PREF_ITEMS[0]),

@@ -51,7 +51,7 @@ static const EGPref WEBHOOK_PREF_ITEMS[] PROGMEM = {
   {"interval", WH_L_INT, WH_H_INT, "60", nullptr,  WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX, 0, EGP_UINT, 0},
 };
 
-static const EGPrefGroup WEBHOOK_PREF_GROUP = {
+static const EGPrefGroup WEBHOOK_PREF_GROUP PROGMEM = {
   "webhook", "Webhook", 1,
   WEBHOOK_PREF_ITEMS,
   sizeof(WEBHOOK_PREF_ITEMS) / sizeof(WEBHOOK_PREF_ITEMS[0]),

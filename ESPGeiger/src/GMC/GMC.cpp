@@ -43,7 +43,7 @@ static const EGPref GMC_PREF_ITEMS[] PROGMEM = {
   {"gcid", GM_L_GID, GM_H_GID, "",  GM_P_GID, 0, 0, 20, EGP_STRING, 0},
 };
 
-static const EGPrefGroup GMC_PREF_GROUP = {
+static const EGPrefGroup GMC_PREF_GROUP PROGMEM = {
   "gmc", "GMC", 1,
   GMC_PREF_ITEMS,
   sizeof(GMC_PREF_ITEMS) / sizeof(GMC_PREF_ITEMS[0]),

@@ -80,7 +80,7 @@ static const EGPref PULSE_PREF_ITEMS[] PROGMEM = {
   {"quiet_to",   PO_L_QTO,  PO_H_QTO,  "",     nullptr, 0,    0,     5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
 };
 
-static const EGPrefGroup PULSE_PREF_GROUP = {
+static const EGPrefGroup PULSE_PREF_GROUP PROGMEM = {
   "pulse", "Pulse Out", 1,
   PULSE_PREF_ITEMS,
   sizeof(PULSE_PREF_ITEMS) / sizeof(PULSE_PREF_ITEMS[0]),

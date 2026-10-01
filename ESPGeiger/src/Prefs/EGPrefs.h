@@ -80,6 +80,22 @@ private:
   const EGPref* _rows;
 };
 
+// A non-pointer field of a PROGMEM struct. A narrow, or narrowed, read of
+// flash faults, so the value is only reachable through get().
+template <typename T>
+class EGFlash {
+public:
+  constexpr EGFlash() : _v() {}
+  constexpr EGFlash(T v) : _v(v) {}
+  T get() const {
+    T v;
+    memcpy_P(&v, &_v, sizeof(v));
+    return v;
+  }
+private:
+  T _v;
+};
+
 // /param tab buckets. 0 = SYSTEM keeps existing literals safe (POD zero).
 // BACKUP is rendered specially (no pref groups), kept here for symmetry.
 enum EGPrefCategory : uint8_t {
@@ -90,16 +106,21 @@ enum EGPrefCategory : uint8_t {
   EGP_CAT_BACKUP = 4,
 };
 
+// Groups are PROGMEM: declare them `static const EGPrefGroup X PROGMEM`.
 struct EGPrefGroup {
   const char* module_id;
-  const char* label;
-  uint16_t    version;   // bump to invalidate stored data on schema change
+  char        label[20];  // in flash: _P functions or %s only
+  EGFlash<uint16_t> version;  // bump to invalidate stored data on schema change
   EGPrefRows    prefs;
-  size_t        count;
-  uint8_t       category;  // EGPrefCategory; defaults SYSTEM via POD zero-init
+  EGFlash<size_t>   count;
+  EGFlash<uint8_t>  category;  // EGPrefCategory; defaults SYSTEM when omitted
   // Optional: pref key whose value drives the group's on/off badge in the
   // config UI (off when unset or "0"). nullptr = no toggle, always shown plain.
   const char*   enable_key;
+
+  // A copy could read flash a byte at a time.
+  EGPrefGroup(const EGPrefGroup&) = delete;
+  EGPrefGroup& operator=(const EGPrefGroup&) = delete;
 };
 
 // === LEGACY IMPORT (remove after v1.0.0) ===

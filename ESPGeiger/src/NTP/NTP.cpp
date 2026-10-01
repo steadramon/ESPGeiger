@@ -40,7 +40,7 @@ static const EGPref NTP_PREF_ITEMS[] PROGMEM = {
   {"tz",     NT_L_TZ,  NT_H_TZ,  NTP_TZ,     nullptr, 0, 0, 64, EGP_STRING, 0},
 };
 
-static const EGPrefGroup NTP_PREF_GROUP = {
+static const EGPrefGroup NTP_PREF_GROUP PROGMEM = {
   "ntp", "NTP", 1,
   NTP_PREF_ITEMS,
   sizeof(NTP_PREF_ITEMS) / sizeof(NTP_PREF_ITEMS[0]),

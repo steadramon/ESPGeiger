@@ -52,7 +52,7 @@ static const EGPref ENV_PREF_ITEMS[] PROGMEM = {
   {"altitude_m",  EN_L_ALT,  EN_H_ALT,   "0",                  nullptr, 0,    9000,         0, EGP_UINT, 0},
 };
 
-static const EGPrefGroup ENV_PREF_GROUP = {
+static const EGPrefGroup ENV_PREF_GROUP PROGMEM = {
   "env", "Environment Sensor", 1,
   ENV_PREF_ITEMS,
   sizeof(ENV_PREF_ITEMS) / sizeof(ENV_PREF_ITEMS[0]),

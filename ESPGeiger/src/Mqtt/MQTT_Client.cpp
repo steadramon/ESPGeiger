@@ -93,7 +93,7 @@ static const EGPref MQTT_PREF_ITEMS[] PROGMEM = {
 #endif
 };
 
-static const EGPrefGroup MQTT_PREF_GROUP = {
+static const EGPrefGroup MQTT_PREF_GROUP PROGMEM = {
   "mqtt", "MQTT", 1,
   MQTT_PREF_ITEMS,
   sizeof(MQTT_PREF_ITEMS) / sizeof(MQTT_PREF_ITEMS[0]),

@@ -1386,8 +1386,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
         // Only touch prefs belonging to the tab the form was submitted from.
         // Without this, BOOL fields on other tabs get cleared (absent in body
         // = "off") on every save from another tab.
-        if (g->category != tab) continue;
-        for (size_t j = 0; j < g->count; j++) {
+        if (g->category.get() != tab) continue;
+        for (size_t j = 0; j < g->count.get(); j++) {
           const EGPref p = g->prefs.row(j);
           if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
           if (p.type == EGP_LABEL || p.type == EGP_HEADER) continue;
@@ -1504,8 +1504,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     EGModule* mod = EGPrefs::module_at(order[gi]);
     if (mod && mod->display_order() == 0) continue;
     const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
-    if (!g || g->count == 0) continue;
-    if (g->category != tab) continue;
+    if (!g || g->count.get() == 0) continue;
+    if (g->category.get() != tab) continue;
 
     // A group with an enable_key gets an on/off badge and is dimmed when off.
     // Off == unset, "0", or "-1" (the pin "disabled" sentinel).
@@ -1523,7 +1523,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     n = snprintf_P(buf, sizeof(buf),
                    PSTR("<details class='bx%s'><summary>%s%s</summary>"),
                    (hw_absent || (has_toggle && !grp_on)) ? " off" : "",
-                   g->label ? g->label : g->module_id, badge);
+                   g->label, badge);
     if (n > 0) res.sendChunk(buf, (size_t)n);
 
     char s_id[32], s_lbl[80], s_help[120], s_pat[128];
@@ -1692,7 +1692,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     };
 
     // Pass 1: common fields.
-    for (size_t j = 0; j < g->count; j++) {
+    for (size_t j = 0; j < g->count.get(); j++) {
       const EGPref p = g->prefs.row(j);
       if (p.flags & (EGP_HIDDEN | EGP_ADVANCED)) continue;
       emit_field(p);
@@ -1711,7 +1711,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     }
     // Pass 2: advanced fields, folded into a nested disclosure.
     bool adv_open = false;
-    for (size_t j = 0; j < g->count; j++) {
+    for (size_t j = 0; j < g->count.get(); j++) {
       const EGPref p = g->prefs.row(j);
       if ((p.flags & EGP_HIDDEN) || !(p.flags & EGP_ADVANCED)) continue;
       if (!adv_open) {
@@ -1824,8 +1824,8 @@ static void serializeExportStream(B64Sink& sink) {
   uint8_t group_count = 0;
   for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
     const EGPrefGroup* g = EGPrefs::group_at(gi);
-    if (!g || g->count == 0) continue;
-    for (size_t j = 0; j < g->count; j++) {
+    if (!g || g->count.get() == 0) continue;
+    for (size_t j = 0; j < g->count.get(); j++) {
       char id_buf[32];
       strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
@@ -1845,9 +1845,9 @@ static void serializeExportStream(B64Sink& sink) {
 
   for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
     const EGPrefGroup* g = EGPrefs::group_at(gi);
-    if (!g || g->count == 0) continue;
+    if (!g || g->count.get() == 0) continue;
     uint8_t emitted_prefs = 0;
-    for (size_t j = 0; j < g->count; j++) {
+    for (size_t j = 0; j < g->count.get(); j++) {
       char id_buf[32];
       strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
@@ -1862,7 +1862,7 @@ static void serializeExportStream(B64Sink& sink) {
     b64_write(sink, g->module_id, mid_len);
     b64_write_u8(sink, emitted_prefs);
 
-    for (size_t j = 0; j < g->count; j++) {
+    for (size_t j = 0; j < g->count.get(); j++) {
       const EGPref p = g->prefs.row(j);
       char id_buf[32];
       strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
@@ -1961,7 +1961,7 @@ static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
       for (size_t gi2 = 0; gi2 < EGPrefs::group_count() && !known; gi2++) {
         const EGPrefGroup* g = EGPrefs::group_at(gi2);
         if (!g || strcmp(g->module_id, module_id) != 0) continue;
-        for (size_t j = 0; j < g->count; j++) {
+        for (size_t j = 0; j < g->count.get(); j++) {
           char id_buf[32];
           strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
           id_buf[sizeof(id_buf) - 1] = '\0';

@@ -41,7 +41,7 @@ static const EGPref TS_PREF_ITEMS[] PROGMEM = {
   {"channel_key", TS_L_CK, TS_H_CK, "",  nullptr, 0, 0, 16, EGP_STRING, EGP_SENSITIVE},
 };
 
-static const EGPrefGroup TS_PREF_GROUP = {
+static const EGPrefGroup TS_PREF_GROUP PROGMEM = {
   "thingspeak", "ThingSpeak", 1,
   TS_PREF_ITEMS,
   sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),

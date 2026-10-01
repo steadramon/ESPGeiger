@@ -71,7 +71,7 @@ static const EGPref NEOPIXEL_PREF_ITEMS[] PROGMEM = {
   {"swap",       NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, EGP_ADVANCED},
 };
 
-static const EGPrefGroup NEOPIXEL_PREF_GROUP = {
+static const EGPrefGroup NEOPIXEL_PREF_GROUP PROGMEM = {
   "neopixel", "NeoPixel", 1,
   NEOPIXEL_PREF_ITEMS,
   sizeof(NEOPIXEL_PREF_ITEMS) / sizeof(NEOPIXEL_PREF_ITEMS[0]),

@@ -39,7 +39,7 @@ static const EGPref SDCARD_PREF_ITEMS[] PROGMEM = {
   {"sync_min", SD_L_SI, SD_H_SI, "1", nullptr, 1, 5, 0, EGP_UINT, 0},
 };
 
-static const EGPrefGroup SDCARD_PREF_GROUP = {
+static const EGPrefGroup SDCARD_PREF_GROUP PROGMEM = {
   "sdcard", "SD Card", 1,
   SDCARD_PREF_ITEMS,
   sizeof(SDCARD_PREF_ITEMS) / sizeof(SDCARD_PREF_ITEMS[0]),

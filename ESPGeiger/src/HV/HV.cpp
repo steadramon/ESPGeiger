@@ -65,7 +65,7 @@ static const EGPref HW_PREF_ITEMS[] PROGMEM = {
 #endif
 };
 
-static const EGPrefGroup HW_PREF_GROUP = {
+static const EGPrefGroup HW_PREF_GROUP PROGMEM = {
   "espghw", "HV Generator", 1,
   HW_PREF_ITEMS,
   sizeof(HW_PREF_ITEMS) / sizeof(HW_PREF_ITEMS[0]),

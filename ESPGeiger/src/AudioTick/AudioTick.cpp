@@ -182,7 +182,7 @@ static const EGPref TICK_PREF_ITEMS[] PROGMEM = {
 #endif
 };
 
-static const EGPrefGroup TICK_PREF_GROUP = {
+static const EGPrefGroup TICK_PREF_GROUP PROGMEM = {
   "tick", "Audio Tick", 1,
   TICK_PREF_ITEMS,
   sizeof(TICK_PREF_ITEMS) / sizeof(TICK_PREF_ITEMS[0]),

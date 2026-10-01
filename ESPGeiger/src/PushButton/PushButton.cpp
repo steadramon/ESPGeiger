@@ -101,7 +101,7 @@ static const EGPref BTN_PREF_ITEMS[] PROGMEM = {
   {"pin", BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
 };
 
-static const EGPrefGroup BTN_PREF_GROUP = {
+static const EGPrefGroup BTN_PREF_GROUP PROGMEM = {
   "btn", "Button", 1,
   BTN_PREF_ITEMS,
   sizeof(BTN_PREF_ITEMS) / sizeof(BTN_PREF_ITEMS[0]),

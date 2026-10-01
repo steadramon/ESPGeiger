@@ -65,7 +65,7 @@ static const EGPref WEBAPI_PREF_ITEMS[] PROGMEM = {
   {"lon",    WA_L_LON, WA_H_LON, "0", nullptr, -180, 180, 0, EGP_FLOAT, 0},
 };
 
-static const EGPrefGroup WEBAPI_PREF_GROUP = {
+static const EGPrefGroup WEBAPI_PREF_GROUP PROGMEM = {
   "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),

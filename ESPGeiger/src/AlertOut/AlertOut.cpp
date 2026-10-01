@@ -44,7 +44,7 @@ static const EGPref ALERT_PREF_ITEMS[] PROGMEM = {
   {"mode",     AO_L_MOD, nullptr,  "0",  AO_O_MOD, 0, 1,            0, EGP_ENUM, 0},
 };
 
-static const EGPrefGroup ALERT_PREF_GROUP = {
+static const EGPrefGroup ALERT_PREF_GROUP PROGMEM = {
   "alert", "Alert Out", 1,
   ALERT_PREF_ITEMS,
   sizeof(ALERT_PREF_ITEMS) / sizeof(ALERT_PREF_ITEMS[0]),

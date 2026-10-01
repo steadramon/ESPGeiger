@@ -61,7 +61,7 @@ static const EGPref VOICE_PREF_ITEMS[] PROGMEM = {
   {"voice_volume",      VX_L_VVOL, VX_H_VVOL, "80", nullptr,  1,  100,  0, EGP_UINT, 0},
 };
 
-static const EGPrefGroup VOICE_PREF_GROUP = {
+static const EGPrefGroup VOICE_PREF_GROUP PROGMEM = {
   "klaxon", "Voice", 1,
   VOICE_PREF_ITEMS,
   sizeof(VOICE_PREF_ITEMS) / sizeof(VOICE_PREF_ITEMS[0]),
@@ -148,7 +148,7 @@ static const EGPref KLAXON_PREF_ITEMS[] PROGMEM = {
   {"quiet_to",   KX_L_QTO, KX_H_QTO, "",   nullptr, 0, 0,   5, EGP_STRING, EGP_TIME},
 };
 
-static const EGPrefGroup KLAXON_PREF_GROUP = {
+static const EGPrefGroup KLAXON_PREF_GROUP PROGMEM = {
   "klax", "Alert Klaxon", 1,
   KLAXON_PREF_ITEMS,
   sizeof(KLAXON_PREF_ITEMS) / sizeof(KLAXON_PREF_ITEMS[0]),

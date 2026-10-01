@@ -43,7 +43,7 @@ static const EGPref RADMON_PREF_ITEMS[] PROGMEM = {
   {"interval", RM_L_INT, RM_H_INT, "60", nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, EGP_ADVANCED},
 };
 
-static const EGPrefGroup RADMON_PREF_GROUP = {
+static const EGPrefGroup RADMON_PREF_GROUP PROGMEM = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),

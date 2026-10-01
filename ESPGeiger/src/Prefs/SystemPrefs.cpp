@@ -65,7 +65,7 @@ static const EGPref SYSTEM_PREF_ITEMS[] PROGMEM = {
 #endif
 };
 
-static const EGPrefGroup SYSTEM_PREF_GROUP = {
+static const EGPrefGroup SYSTEM_PREF_GROUP PROGMEM = {
   "sys", "System", 1,
   SYSTEM_PREF_ITEMS,
   sizeof(SYSTEM_PREF_ITEMS) / sizeof(SYSTEM_PREF_ITEMS[0]),
@@ -116,7 +116,7 @@ static const EGPref LIFE_PREF_ITEMS[] PROGMEM = {
   {"secs", nullptr, nullptr, "0", nullptr, 0, 0, 12, EGP_STRING, EGP_HIDDEN},
 };
 
-static const EGPrefGroup LIFE_PREF_GROUP = {
+static const EGPrefGroup LIFE_PREF_GROUP PROGMEM = {
   "life", "Lifetime", 1,
   LIFE_PREF_ITEMS,
   sizeof(LIFE_PREF_ITEMS) / sizeof(LIFE_PREF_ITEMS[0]),
@@ -175,7 +175,7 @@ static const EGPref NET_PREF_ITEMS[] PROGMEM = {
   {"dns",       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, 15, EGP_STRING, 0},
 };
 
-static const EGPrefGroup NET_PREF_GROUP = {
+static const EGPrefGroup NET_PREF_GROUP PROGMEM = {
   "net", "Network", 1,
   NET_PREF_ITEMS,
   sizeof(NET_PREF_ITEMS) / sizeof(NET_PREF_ITEMS[0]),
@@ -337,7 +337,7 @@ static const EGPref INPUT_PREF_ITEMS[] PROGMEM = {
   #define INPUT_GROUP_TITLE "Input"
 #endif
 
-static const EGPrefGroup INPUT_PREF_GROUP = {
+static const EGPrefGroup INPUT_PREF_GROUP PROGMEM = {
   "input", INPUT_GROUP_TITLE, 1,
   INPUT_PREF_ITEMS,
   sizeof(INPUT_PREF_ITEMS) / sizeof(INPUT_PREF_ITEMS[0]),
@@ -478,7 +478,7 @@ static const EGPref LED_PREF_ITEMS[] PROGMEM = {
 #endif
 };
 
-static const EGPrefGroup LED_PREF_GROUP = {
+static const EGPrefGroup LED_PREF_GROUP PROGMEM = {
   "led", "Blip LED", 1,
   LED_PREF_ITEMS,
   sizeof(LED_PREF_ITEMS) / sizeof(LED_PREF_ITEMS[0]),
@@ -538,7 +538,7 @@ static const EGPref HV_PIN_PREF_ITEMS[] PROGMEM = {
   {"pwm_pin", HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
 };
 
-static const EGPrefGroup HV_PIN_PREF_GROUP = {
+static const EGPrefGroup HV_PIN_PREF_GROUP PROGMEM = {
   "hvpin", "HV Hardware", 1,
   HV_PIN_PREF_ITEMS,
   sizeof(HV_PIN_PREF_ITEMS) / sizeof(HV_PIN_PREF_ITEMS[0]),

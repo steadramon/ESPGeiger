@@ -58,7 +58,7 @@ static const EGPref UDPBLIP_PREF_ITEMS[] PROGMEM = {
   {"port",  UB_L_PORT,  nullptr,    UDPBLIP_DEFAULT_PORT,   nullptr,    1, 65535, 0, EGP_UINT, EGP_ADVANCED},
 };
 
-static const EGPrefGroup UDPBLIP_PREF_GROUP = {
+static const EGPrefGroup UDPBLIP_PREF_GROUP PROGMEM = {
   "udpblip", "Local Broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),

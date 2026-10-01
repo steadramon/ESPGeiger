@@ -117,7 +117,7 @@ static const EGPref OLED_PREF_ITEMS[] PROGMEM = {
   {"off_time",   OL_L_OFT, OL_H_OFT, "", nullptr, 0, 0, 5, EGP_STRING, EGP_TIME | EGP_ADVANCED},
 };
 
-static const EGPrefGroup OLED_PREF_GROUP = {
+static const EGPrefGroup OLED_PREF_GROUP PROGMEM = {
   "display", "Display", 1,
   OLED_PREF_ITEMS,
   sizeof(OLED_PREF_ITEMS) / sizeof(OLED_PREF_ITEMS[0]),
