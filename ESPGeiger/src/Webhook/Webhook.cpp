@@ -23,6 +23,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include "../EnvSensor/EnvSensor.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
@@ -180,7 +181,11 @@ void Webhook::postMeasurement() {
     PSTR("{\"id\":\"%s\""), DeviceInfo::chipid());
   advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   if (key[0] != '\0') {
-    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"key\":\"%s\""), key);
+    // Escaped in place: a 255-byte key is too big to escape on the stack.
+    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"key\":\""));
+    advance_pos(pos, n, WEBHOOK_BUF_SIZE);
+    advance_pos(pos, egesc_json(buffer + pos, WEBHOOK_BUF_SIZE - pos, key), WEBHOOK_BUF_SIZE);
+    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR("\""));
     advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   }
   n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos,
@@ -219,7 +224,10 @@ void Webhook::postMeasurement() {
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
     gcounter.total_clicks, DeviceInfo::freeHeap(), (int)Wifi::rssi);
   advance_pos(pos, n, WEBHOOK_BUF_SIZE);
-  buffer[pos] = '\0';
+  if (pos >= WEBHOOK_BUF_SIZE - 1) {
+    Log::console(PSTR("Webhook: body too long, not sent"));
+    return;
+  }
 
   char url[256];
   const char* trimmedURL = cleanHTTP(whURL);

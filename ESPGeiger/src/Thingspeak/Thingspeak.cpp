@@ -22,6 +22,7 @@
 #include "../Util/LedSignal.h"
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include "../EnvSensor/EnvSensor.h"
 #include <math.h>
 
@@ -128,7 +129,9 @@ void Thingspeak::postMeasurement() {
   char usvChar[20];
   dtostrf(usv,1,5, usvChar);
   char url[320];
-  size_t up = snprintf_P(url, sizeof(url), TS_URI, _ts_channel_key, avgcpm, usvChar, avgcpm5, avgcpm15);
+  char key[3 * 16 + 1];
+  egesc_url(key, sizeof(key), _ts_channel_key);
+  size_t up = snprintf_P(url, sizeof(url), TS_URI, key, avgcpm, usvChar, avgcpm5, avgcpm15);
   // Append env fields when sensor present and the channel value is real.
   // Users with existing 4-field channels just leave 5/6/7 unconfigured.
   if (envsensor.present() && up < sizeof(url)) {

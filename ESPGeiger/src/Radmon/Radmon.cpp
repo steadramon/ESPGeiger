@@ -21,6 +21,7 @@
 #include "../Logger/Logger.h"
 #include "../Util/LedSignal.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include "../Module/EGModuleRegistry.h"
 
 extern uint8_t send_indicator;
@@ -162,8 +163,11 @@ void Radmon::postMeasurement() {
   else                          avgcpm = gcounter.get_cpm15f();
   char cpmbuf[12];
   format_f(cpmbuf, sizeof(cpmbuf), avgcpm, 1);
-  char url[256];
-  snprintf_P(url, sizeof(url), RADMON_URI, _api_user, _api_key, cpmbuf);
+  char user[3 * 32 + 1], pass[3 * 64 + 1];
+  egesc_url(user, sizeof(user), _api_user);
+  egesc_url(pass, sizeof(pass), _api_key);
+  char url[384];
+  snprintf_P(url, sizeof(url), RADMON_URI, user, pass, cpmbuf);
 
   if (!request) request = new AsyncHTTPRequest();
   if (!request) { Log::console(PSTR("Radmon: alloc failed")); return; }

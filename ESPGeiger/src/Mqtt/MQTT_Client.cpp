@@ -25,6 +25,7 @@
 #include "../Util/TickProfile.h"
 #include "../Util/FastMillis.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include "../EnvSensor/EnvSensor.h"
 #include <math.h>
 #ifdef ESPG_HV_ADC
@@ -356,13 +357,16 @@ void MQTT_Client::publishStatus()
   int n;
   char ipStr[16];
   Wifi::formatIP(ipStr, sizeof(ipStr));
+  char model[6 * 32 + 1], ssid[6 * 32 + 1];
+  egesc_json(model, sizeof(model), DeviceInfo::geigermodel());
+  egesc_json(ssid, sizeof(ssid), Wifi::ssid);
   n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"time\":\"%s\",\"ut\":%lu,\"board\":\"%s\",\"model\":\"%s\""
          ",\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"c_total\":%u"
          ",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
     dateTime, DeviceInfo::uptime(),
-    DeviceInfo::chipmodel(), DeviceInfo::geigermodel(),
-    Wifi::ssid, ipStr, (int)Wifi::rssi,
+    DeviceInfo::chipmodel(), model,
+    ssid, ipStr, (int)Wifi::rssi,
     gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
   advance_pos(pos, n, sizeof(buffer));
 #ifdef MQTT_MEM_DEBUG
