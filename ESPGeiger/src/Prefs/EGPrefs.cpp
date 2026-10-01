@@ -35,6 +35,7 @@
 
 #define EGPREFS_NAMESPACE    "prefs"
 #define EGPREFS_MAX_GROUP_SZ 1024
+#define EGPREFS_MAX_VALUE    255   // longest string max_len (webhook url/key)
 
 // Per-group shadow: array of pointers to current value (flash default or heap
 // override). is_heap status packed into heap_mask bitmap to save the 3 bytes
@@ -262,7 +263,7 @@ void import_legacy() {
       if (!val) continue;
       int idx = find_pref_index(gs.group, a->new_key);
       if (idx < 0) continue;
-      char normalized[128];
+      char normalized[EGPREFS_MAX_VALUE + 1];
       int nlen = validate(&gs.group->prefs[idx], val, normalized, sizeof(normalized));
       if (nlen < 0) continue;
       shadow_set(gs, idx, normalized, (size_t)nlen);
@@ -383,7 +384,7 @@ bool EGPrefs::put(const char* module, const char* key, const char* value) {
   const EGPref& p = gs->group->prefs[idx];
   if (p.flags & EGP_READONLY) return false;
 
-  char normalized[128];
+  char normalized[EGPREFS_MAX_VALUE + 1];
   int nlen = validate(&p, value, normalized, sizeof(normalized));
   if (nlen < 0) return false;
 
