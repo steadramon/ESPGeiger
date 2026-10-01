@@ -20,11 +20,12 @@
 #include "EGHttpHeaders.h"
 #include <string.h>
 #include <strings.h>
+#include <pgmspace.h>
 
 EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* out) {
   *out = 0;
   for (size_t i = 0; i + 16 < headerEnd; i++) {
-    if (strncasecmp(hdr + i, "Content-Length:", 15) != 0) continue;
+    if (strncasecmp_P(hdr + i, PSTR("Content-Length:"), 15) != 0) continue;
     const char* p = hdr + i + 15;
     const char* end = hdr + headerEnd;
     while (p < end && *p == ' ') p++;
