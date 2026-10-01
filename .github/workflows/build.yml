@@ -66,11 +66,11 @@ jobs:
     runs-on: ubuntu-24.04
     name: Build with PlatformIO
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install platformio
@@ -80,7 +80,7 @@ jobs:
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.environments }}
       - name: Upload Assets
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.environments }}
           path: |
