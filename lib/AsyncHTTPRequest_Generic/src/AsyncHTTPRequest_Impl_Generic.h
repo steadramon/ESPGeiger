@@ -1411,6 +1411,17 @@ void  AsyncHTTPRequest::_processChunks()
 
     String chunkHeader = _chunks->readStringUntil("\r\n");
 
+    if (chunkHeader.length() == 2)
+      continue;
+
+    if ( ! isxdigit((unsigned char) chunkHeader[0]))
+    {
+      _HTTPcode = HTTPCODE_ENCODING;
+      _client->close();
+
+      return;
+    }
+
     size_t chunkLength = strtol(chunkHeader.c_str(), nullptr, 16);
     _contentLength += chunkLength;
 
