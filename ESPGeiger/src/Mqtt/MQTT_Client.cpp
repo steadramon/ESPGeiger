@@ -80,11 +80,11 @@ EG_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
 #endif
 
 static const EGPref MQTT_PREF_ITEMS[] = {
-  {"server",   MQ_L_SRV, MQ_H_SRV, "",               MQ_P_SRV, 0, 0, 16, EGP_STRING, 0},
+  {"server",   MQ_L_SRV, MQ_H_SRV, "",               MQ_P_SRV, 0, 0, 64, EGP_STRING, 0},
   {"port",     MQ_L_PRT, nullptr,  "1883",           nullptr,  1, 65535, 0,  EGP_UINT,   0},
-  {"user",     MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     32, EGP_STRING, 0},
-  {"password", MQ_L_PWD, nullptr,  "",               nullptr,  0, 0,     32, EGP_STRING, EGP_SENSITIVE},
-  {"topic",    MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, 16, EGP_STRING, EGP_ADVANCED},
+  {"user",     MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     64, EGP_STRING, 0},
+  {"password", MQ_L_PWD, nullptr,  "",               nullptr,  0, 0,     64, EGP_STRING, EGP_SENSITIVE},
+  {"topic",    MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, 28, EGP_STRING, EGP_ADVANCED},
   {"interval", MQ_L_INT, MQ_H_INT, "60",             nullptr,  MQTT_MIN_TIME, MQTT_MAX_TIME, 0, EGP_UINT, 0},
 #ifdef MQTTAUTODISCOVER
   {"hass_enabled", MQ_L_HEN, MQ_H_HEN, MQTT_HASS_DEFAULT,    nullptr,  0, 0, 0,  EGP_BOOL,   EGP_ADVANCED},

@@ -32,15 +32,15 @@ EG_PSTR(GM_L_EN,  "Enable");
 EG_PSTR(GM_H_EN,  "Upload to gmcmap.com");
 EG_PSTR(GM_L_AID, "Account ID");
 EG_PSTR(GM_H_AID, "gmcmap.com account ID");
-EG_PSTR(GM_P_AID, "\\d{1,5}");
+EG_PSTR(GM_P_AID, "\\d{1,20}");
 EG_PSTR(GM_L_GID, "Geiger Counter ID");
 EG_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
-EG_PSTR(GM_P_GID, "\\d{1,12}");
+EG_PSTR(GM_P_GID, "\\d{1,20}");
 
 static const EGPref GMC_PREF_ITEMS[] = {
   {"send", GM_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
-  {"aid",  GM_L_AID, GM_H_AID, "",  GM_P_AID, 0, 0, 12, EGP_STRING, 0},
-  {"gcid", GM_L_GID, GM_H_GID, "",  GM_P_GID, 0, 0, 12, EGP_STRING, 0},
+  {"aid",  GM_L_AID, GM_H_AID, "",  GM_P_AID, 0, 0, 20, EGP_STRING, 0},
+  {"gcid", GM_L_GID, GM_H_GID, "",  GM_P_GID, 0, 0, 20, EGP_STRING, 0},
 };
 
 static const EGPrefGroup GMC_PREF_GROUP = {
