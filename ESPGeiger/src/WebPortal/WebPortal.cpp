@@ -28,6 +28,7 @@
 #include "../Util/Wifi.h"
 #include "../Util/OutputVars.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../NTP/NTP.h"
@@ -338,17 +339,17 @@ void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* tit
   // <title>: "<page>  <friendly-or-hostname>". h1: <favicon> ESPGeiger - <page>.
   const char* fname = DeviceInfo::friendlyName();
   const char* devName = (fname && fname[0]) ? fname : DeviceInfo::hostname();
+  char esc[6 * 32 + 1];
+  egesc_html(esc, sizeof(esc), devName);
   res.sendChunk(FPSTR(HEAD_OPEN));
   res.sendChunk(title);
-  res.sendKV(F(" \xc2\xb7 "), devName);
+  res.sendKV(F(" \xc2\xb7 "), esc);
   sendHeadTail(res);
   res.sendChunk(F(THING_NAME " - "));
   res.sendChunk(title);
   if (inlineSub && inlineSub[0]) {
-    char buf[80];
-    int n = snprintf_P(buf, sizeof(buf),
-      PSTR("<span class=tag>%s</span>"), inlineSub);
-    if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+    egesc_html(esc, sizeof(esc), inlineSub);
+    res.sendKV(F("<span class=tag>"), esc, F("</span>"));
   }
   res.sendChunk(F("</h1></div>"));
 }
@@ -385,9 +386,12 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   IPAddress ipa = WiFi.localIP();
   snprintf(ipBuf, sizeof(ipBuf), "%u.%u.%u.%u", ipa[0], ipa[1], ipa[2], ipa[3]);
 
+  char esc[6 * 32 + 1];
+  egesc_html(esc, sizeof(esc), fname);
+
   // Emitted twice; keep one source of truth.
   auto emitIdentity = [&]() {
-    if (hasFriendly) res.sendKV(F(WEBPORTAL_BASE_NAME " - "), fname);
+    if (hasFriendly) res.sendKV(F(WEBPORTAL_BASE_NAME " - "), esc);
     else             res.sendChunk(F(WEBPORTAL_BASE_NAME));
   };
 
@@ -739,7 +743,9 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   INFO_ROW("Git",          "%s",    GIT_VERSION);
   INFO_ROW("Build env",    "%s",    BUILD_ENV);
   INFO_ROW("Build date",   "%s %s", __DATE__, __TIME__);
-  INFO_ROW("Geiger",       "%s",    DeviceInfo::geigermodel());
+  char model[6 * 32 + 1];
+  egesc_html(model, sizeof(model), DeviceInfo::geigermodel());
+  INFO_ROW("Geiger",       "%s",    model);
   INFO_ROW("Feature flags","0x%04x",(unsigned)DeviceInfo::featureFlags());
   res.sendChunk(F("</table></details>"));
 
@@ -758,6 +764,8 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   snprintf_P(mac_str, sizeof(mac_str), PSTR("%02X%02X%02X%02X%02X%02X"),
     macb[0], macb[1], macb[2], macb[3], macb[4], macb[5]);
 
+  char model[6 * 32 + 1];
+  egesc_json(model, sizeof(model), DeviceInfo::geigermodel());
   char buf[400];
   int n = snprintf_P(buf, sizeof(buf),
     PSTR("{\"ver\":\"%s\",\"git\":\"%s\",\"env\":\"%s\","
@@ -770,7 +778,7 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
     DeviceInfo::chipmodel(),
     mac_str,
     DeviceInfo::hostname(),
-    DeviceInfo::geigermodel(),
+    model,
     GEIGER_IS_PULSE(GEIGER_TYPE)  ? "pulse" :
     GEIGER_IS_SERIAL(GEIGER_TYPE) ? "serial" : "none",
     GEIGER_IS_TEST(GEIGER_TYPE)   ? "true" : "false",
@@ -978,17 +986,19 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   res.beginChunked(200, "application/json");
   res.sendChunk(F("{\"state\":\"complete\",\"aps\":["));
-  char row[140];
+  char ssid[6 * 32 + 1];
+  char row[240];
   for (size_t i = 0; i < count; i++) {
 #ifdef ESP8266
     int open = (aps[i].enc == ENC_TYPE_NONE) ? 1 : 0;
 #else
     int open = (aps[i].enc == WIFI_AUTH_OPEN) ? 1 : 0;
 #endif
+    egesc_json(ssid, sizeof(ssid), aps[i].ssid);
     int n = snprintf_P(row, sizeof(row),
       PSTR("%s{\"ssid\":\"%s\",\"rssi\":%d,\"open\":%d}"),
-      i > 0 ? "," : "", aps[i].ssid, (int)aps[i].rssi, open);
-    if (n > 0) res.sendChunk(row, (size_t)n);
+      i > 0 ? "," : "", ssid, (int)aps[i].rssi, open);
+    if (n > 0 && (size_t)n < sizeof(row)) res.sendChunk(row, (size_t)n);
   }
   res.sendChunk(F("]}"));
   res.endChunked();
@@ -1295,24 +1305,6 @@ void WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 // ---------- /param (EGPrefs flag-driven config UI) ----------
-
-// HTML-escape, stopping cleanly before an entity would overflow.
-static size_t append_escaped(char* dst, size_t cap, size_t pos, const char* src) {
-  while (*src && pos + 6 < cap) {
-    char c = *src++;
-    const char* rep = nullptr;
-    switch (c) {
-      case '<':  rep = "&lt;";   break;
-      case '>':  rep = "&gt;";   break;
-      case '&':  rep = "&amp;";  break;
-      case '"':  rep = "&quot;"; break;
-      case '\'': rep = "&#39;";  break;
-    }
-    if (rep) { size_t n = strlen(rep); memcpy(dst + pos, rep, n); pos += n; }
-    else     { dst[pos++] = c; }
-  }
-  return pos;
-}
 
 #define APPEND_LIT(buf, pos, cap, lit) do {                              \
   size_t _n = sizeof(lit) - 1;                                           \
@@ -1644,9 +1636,12 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
           n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" value='' placeholder='%s'"), ph);
           if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
         } else {
+          if (pos) { res.sendChunk(buf, pos); pos = 0; }
           APPEND_LIT(buf, pos, sizeof(buf), " value='");
-          pos = append_escaped(buf, sizeof(buf), pos, cur);
+          egesc_html(buf + pos, sizeof(buf) - pos, cur);
+          pos += strlen(buf + pos);
           if (pos + 1 < sizeof(buf)) buf[pos++] = '\'';
+          res.sendChunk(buf, pos); pos = 0;
           // Placeholder always carries the default, so clearing the box reveals it.
           if (!slider && p.default_val && p.default_val[0]
               && !(p.flags & EGP_TIME)) {
@@ -2241,24 +2236,6 @@ void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// JSON-escape a value into out. Returns chars written. Used by /vars.json
-// because friendly name etc could contain quotes / backslashes / control
-// chars and break the wire.
-static size_t json_escape(const char* in, size_t in_len, char* out, size_t cap) {
-  size_t pos = 0;
-  for (size_t i = 0; i < in_len; i++) {
-    char c = in[i];
-    if (pos + 6 >= cap) break;   // worst case \u00XX = 6 chars
-    if (c == '"' || c == '\\') { out[pos++] = '\\'; out[pos++] = c; }
-    else if (c == '\n')        { out[pos++] = '\\'; out[pos++] = 'n'; }
-    else if (c == '\r')        { out[pos++] = '\\'; out[pos++] = 'r'; }
-    else if (c == '\t')        { out[pos++] = '\\'; out[pos++] = 't'; }
-    else if ((uint8_t)c < 0x20) { /* drop other controls */ }
-    else                       { out[pos++] = c; }
-  }
-  return pos;
-}
-
 void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
   // Walks every variable the template engine knows about and dumps its
@@ -2276,10 +2253,10 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
     // /vars.json reflects what's actually queryable on this device.
     if (n == 0) continue;
     char esc[80];
-    size_t en = json_escape(raw, n, esc, sizeof(esc));
+    egesc_json(esc, sizeof(esc), raw);
     char line[128];
-    int m = snprintf_P(line, sizeof(line), PSTR("%s\"%s\":\"%.*s\""),
-                       first ? "" : ",", v.key, (int)en, esc);
+    int m = snprintf_P(line, sizeof(line), PSTR("%s\"%s\":\"%s\""),
+                       first ? "" : ",", v.key, esc);
     if (m > 0 && (size_t)m < sizeof(line)) res.sendChunk(line, (size_t)m);
     first = false;
   }
@@ -2315,9 +2292,11 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   HEAD("device_info", "gauge",
        "Device metadata; value always 1. Join via on(chipid) for naming.");
+  char esc_name[3 * 32 + 1];
+  egesc_prom(esc_name, sizeof(esc_name), name);
   n = snprintf_P(buf, sizeof(buf),
     PSTR("device_info{chipid=\"%s\",name=\"%s\",model=\"%s\",ver=\"%s\",env=\"%s\"} 1\n"),
-    cid, name, GEIGER_MODEL, RELEASE_VERSION, BUILD_ENV);
+    cid, esc_name, GEIGER_MODEL, RELEASE_VERSION, BUILD_ENV);
   if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
 
   HEAD("geiger_cpm", "gauge", "Counts per minute (window label selects averaging period)");
