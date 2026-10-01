@@ -89,10 +89,10 @@ class EGHttpRequest {
     // Result points into a static decode buffer; copy before next arg().
     const char* arg(const char* name) const;
 
-    // For streaming routes that hold the body in their own buffer.
-    // Same static-decode-buffer caveat as arg().
+    // For streaming routes that hold the body in their own buffer. Decodes
+    // into out; nullptr when absent or longer than cap - 1.
     static const char* decodeArg(const char* body, size_t bodyLen,
-                                  const char* name);
+                                  const char* name, char* out, size_t cap);
 
   private:
     friend class EGHttpServer;
@@ -275,6 +275,14 @@ class EGHttpServer {
       s->chunkAcc       = nullptr;
       s->chunkAccLen    = 0;
       s->chunkAccCap    = 0;
+      s->state          = DONE;
+      s->delete_pending = true;
+      _tickWanted       = true;
+    }
+    // From the AsyncTCP task: flags only, the main task may still be writing
+    // into buf. resetSlot frees it.
+    inline void markDoneAsync(Slot* s) {
+      s->send_aborted   = true;
       s->state          = DONE;
       s->delete_pending = true;
       _tickWanted       = true;

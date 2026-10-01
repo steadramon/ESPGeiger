@@ -24,22 +24,20 @@
 
 // Monotonic seconds since boot across the 49.71 day millis() wrap.
 //
-// tick() must be called at least once per wrap or the wrap is missed and the
-// count stays 49.71 days low. Compare RAW millis only: comparing a
-// reconstructed time overflows uint32 at 4294967 s, the same instant millis()
-// wraps, so the check fails exactly when it is needed.
+// tick() must be called at least once per wrap or a whole wrap is lost. The
+// unsigned delta is correct across the wrap. Do not scale or compare a
+// reconstructed time: it overflows uint32 at 4294967 s, the instant millis()
+// wraps.
 //
 // Types are uint32_t, not `unsigned long`: same width on target, 64-bit on a
 // host, where a wrap test would silently never fire.
-//
-// A wrap weighs 4294967 s, not 4294967.296, so the count runs ~0.3 s low per
-// wrap (22 s per decade). Never steps backwards.
 class UptimeCounter {
 public:
   uint32_t tick(uint32_t now_ms) {
     if (now_ms < _last_ms) _wraps++;
+    _acc += now_ms - _last_ms;
     _last_ms = now_ms;
-    _value = now_ms / 1000UL + (uint32_t)_wraps * 4294967UL;
+    while (_acc >= 1000u) { _acc -= 1000u; _value++; }
     return _value;
   }
 
@@ -48,10 +46,12 @@ public:
   // first tick().
   uint32_t value() const { return _value; }
 
+  // Diagnostic; tick() does not use it.
   uint16_t wraps() const { return _wraps; }
 
 private:
   uint32_t _last_ms = 0;
+  uint32_t _acc     = 0;   // ms not yet counted, always < 1000 after tick()
   uint32_t _value   = 0;
   uint16_t _wraps   = 0;
 };

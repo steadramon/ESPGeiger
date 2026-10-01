@@ -11,9 +11,14 @@
 # in list order, then gzipped as a single stream (browsers don't reliably
 # handle RFC 1952 multi-member gzip; one stream is mandatory).
 #
-# Per-asset fallback: any failure writes the header with EG_GZ_<NAME> 0.
-# Consumers then fall through to the raw R"..." path. Whole build never
-# fails because of this script.
+# Per-asset fallback: an unexpected failure writes the header with
+# EG_GZ_<NAME> 0 and consumers fall through to the raw R"..." path, so a
+# surprise here never breaks the build.
+#
+# A missing file or symbol is different: the table above is stale and the
+# asset ships uncompressed forever with nobody looking. That is a build
+# error. HIST_JS sat unnoticed that way from b026bb7d until 2026-09-25.
+# Set EG_GZ_ALLOW_STALE=1 to downgrade it to the raw fallback.
 
 import gzip
 import io
@@ -25,7 +30,7 @@ ASSETS = [
     ("ESPGeiger/src/NTP/NTP.cpp",                 "NTP_PAGE_JS", "application/javascript"),
     ("ESPGeiger/src/WebPortal/WebPortal.cpp",     "STYLE_CSS",   "text/css"),
     ("ESPGeiger/src/WebPortal/WebPortal.cpp",     "THEME_JS",    "application/javascript"),
-    ("ESPGeiger/src/Counter/Counter.cpp",         "HIST_JS",     "application/javascript"),
+    ("ESPGeiger/src/Counter/CounterWeb.cpp",      "HIST_JS",     "application/javascript"),
     ("ESPGeiger/src/OLEDDisplay/OLEDDisplay.cpp", "screenJS",    "application/javascript"),
 ]
 
@@ -47,12 +52,21 @@ RAW_RE_TMPL = (
 )
 
 
-def extract_raw(src_path, sym):
+class StaleAsset(Exception):
+    """A configured source file or symbol does not exist."""
+
+
+ALLOW_STALE = os.environ.get("EG_GZ_ALLOW_STALE") == "1"
+
+
+def extract_raw(src_path, rel_path, sym):
+    if not os.path.isfile(src_path):
+        raise StaleAsset(f"{sym}: no such file {rel_path}")
     with open(src_path, "r", encoding="utf-8") as f:
         text = f.read()
     m = re.search(RAW_RE_TMPL.format(name=re.escape(sym)), text, re.DOTALL)
     if not m:
-        return None
+        raise StaleAsset(f"{sym}: symbol not found in {rel_path}")
     return m.group(2).encode("utf-8")
 
 
@@ -95,16 +109,15 @@ def emit_header(out_path, name, ok, blob=None, raw_len=0):
 def process_single(project_dir, gen_dir, rel_path, sym):
     out_path = os.path.join(gen_dir, f"{sym}.gz.h")
     try:
-        raw = extract_raw(os.path.join(project_dir, rel_path), sym)
-        if raw is None:
-            print(f"[gzip_assets] {sym}: extract miss in {rel_path}; raw fallback")
-            emit_header(out_path, sym, ok=False)
-            return 0, 0
+        raw = extract_raw(os.path.join(project_dir, rel_path), rel_path, sym)
         blob = gzip_bytes(raw)
         emit_header(out_path, sym, ok=True, blob=blob, raw_len=len(raw))
         print(f"[gzip_assets] {sym}: {len(raw)} -> {len(blob)} B "
               f"({100 * len(blob) // len(raw)}%)")
         return len(raw), len(blob)
+    except StaleAsset:
+        emit_header(out_path, sym, ok=False)
+        raise
     except Exception as e:
         print(f"[gzip_assets] {sym}: {e}; raw fallback")
         emit_header(out_path, sym, ok=False)
@@ -116,19 +129,17 @@ def process_combined(project_dir, gen_dir, name, parts):
     try:
         chunks = []
         for rel_path, sym in parts:
-            raw = extract_raw(os.path.join(project_dir, rel_path), sym)
-            if raw is None:
-                print(f"[gzip_assets] {name}: extract miss for {sym} in "
-                      f"{rel_path}; raw fallback")
-                emit_header(out_path, name, ok=False)
-                return 0, 0
-            chunks.append(raw)
+            chunks.append(extract_raw(
+                os.path.join(project_dir, rel_path), rel_path, sym))
         raw = b"".join(chunks)
         blob = gzip_bytes(raw)
         emit_header(out_path, name, ok=True, blob=blob, raw_len=len(raw))
         print(f"[gzip_assets] {name} ({'+'.join(s for _, s in parts)}): "
               f"{len(raw)} -> {len(blob)} B ({100 * len(blob) // len(raw)}%)")
         return len(raw), len(blob)
+    except StaleAsset:
+        emit_header(out_path, name, ok=False)
+        raise
     except Exception as e:
         print(f"[gzip_assets] {name}: {e}; raw fallback")
         emit_header(out_path, name, ok=False)
@@ -139,17 +150,36 @@ def run(project_dir, gen_dir):
     os.makedirs(gen_dir, exist_ok=True)
     total_raw = 0
     total_gz = 0
+    stale = []
+
+    def collect(fn, *a):
+        nonlocal total_raw, total_gz
+        try:
+            r, g = fn(project_dir, gen_dir, *a)
+        except StaleAsset as e:
+            stale.append(str(e))
+            return
+        total_raw += r
+        total_gz += g
+
     for rel_path, sym, _ct in ASSETS:
-        r, g = process_single(project_dir, gen_dir, rel_path, sym)
-        total_raw += r
-        total_gz += g
+        collect(process_single, rel_path, sym)
     for name, parts, _ct in ASSETS_COMBINED:
-        r, g = process_combined(project_dir, gen_dir, name, parts)
-        total_raw += r
-        total_gz += g
+        collect(process_combined, name, parts)
     if total_raw:
         print(f"[gzip_assets] total {total_raw} -> {total_gz} B "
               f"(saved {total_raw - total_gz} B)")
+
+    if stale:
+        for s in stale:
+            print(f"[gzip_assets] STALE {s}")
+        if ALLOW_STALE:
+            print(f"[gzip_assets] {len(stale)} stale, allowed; raw fallback")
+            return
+        raise SystemExit(
+            f"[gzip_assets] {len(stale)} stale asset(s): the table in "
+            f"{os.path.basename(__file__)} no longer matches the tree. Fix "
+            f"the path/symbol, or set EG_GZ_ALLOW_STALE=1 to ship raw.")
 
 
 # PIO entry point: pre-script invoked from platformio.ini.

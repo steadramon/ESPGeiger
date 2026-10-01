@@ -28,6 +28,7 @@
 #include "../Util/Wifi.h"
 #include "../Util/OutputVars.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include <EGPortal.h>
 #include "../Logger/Logger.h"
 #include "../NTP/NTP.h"
@@ -338,17 +339,17 @@ void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* tit
   // <title>: "<page>  <friendly-or-hostname>". h1: <favicon> ESPGeiger - <page>.
   const char* fname = DeviceInfo::friendlyName();
   const char* devName = (fname && fname[0]) ? fname : DeviceInfo::hostname();
+  char esc[6 * 32 + 1];
+  egesc_html(esc, sizeof(esc), devName);
   res.sendChunk(FPSTR(HEAD_OPEN));
   res.sendChunk(title);
-  res.sendKV(F(" \xc2\xb7 "), devName);
+  res.sendKV(F(" \xc2\xb7 "), esc);
   sendHeadTail(res);
   res.sendChunk(F(THING_NAME " - "));
   res.sendChunk(title);
   if (inlineSub && inlineSub[0]) {
-    char buf[80];
-    int n = snprintf_P(buf, sizeof(buf),
-      PSTR("<span class=tag>%s</span>"), inlineSub);
-    if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+    egesc_html(esc, sizeof(esc), inlineSub);
+    res.sendKV(F("<span class=tag>"), esc, F("</span>"));
   }
   res.sendChunk(F("</h1></div>"));
 }
@@ -385,9 +386,12 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   IPAddress ipa = WiFi.localIP();
   snprintf(ipBuf, sizeof(ipBuf), "%u.%u.%u.%u", ipa[0], ipa[1], ipa[2], ipa[3]);
 
+  char esc[6 * 32 + 1];
+  egesc_html(esc, sizeof(esc), fname);
+
   // Emitted twice; keep one source of truth.
   auto emitIdentity = [&]() {
-    if (hasFriendly) res.sendKV(F(WEBPORTAL_BASE_NAME " - "), fname);
+    if (hasFriendly) res.sendKV(F(WEBPORTAL_BASE_NAME " - "), esc);
     else             res.sendChunk(F(WEBPORTAL_BASE_NAME));
   };
 
@@ -739,7 +743,9 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   INFO_ROW("Git",          "%s",    GIT_VERSION);
   INFO_ROW("Build env",    "%s",    BUILD_ENV);
   INFO_ROW("Build date",   "%s %s", __DATE__, __TIME__);
-  INFO_ROW("Geiger",       "%s",    DeviceInfo::geigermodel());
+  char model[6 * 32 + 1];
+  egesc_html(model, sizeof(model), DeviceInfo::geigermodel());
+  INFO_ROW("Geiger",       "%s",    model);
   INFO_ROW("Feature flags","0x%04x",(unsigned)DeviceInfo::featureFlags());
   res.sendChunk(F("</table></details>"));
 
@@ -758,6 +764,8 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   snprintf_P(mac_str, sizeof(mac_str), PSTR("%02X%02X%02X%02X%02X%02X"),
     macb[0], macb[1], macb[2], macb[3], macb[4], macb[5]);
 
+  char model[6 * 32 + 1];
+  egesc_json(model, sizeof(model), DeviceInfo::geigermodel());
   char buf[400];
   int n = snprintf_P(buf, sizeof(buf),
     PSTR("{\"ver\":\"%s\",\"git\":\"%s\",\"env\":\"%s\","
@@ -770,7 +778,7 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
     DeviceInfo::chipmodel(),
     mac_str,
     DeviceInfo::hostname(),
-    DeviceInfo::geigermodel(),
+    model,
     GEIGER_IS_PULSE(GEIGER_TYPE)  ? "pulse" :
     GEIGER_IS_SERIAL(GEIGER_TYPE) ? "serial" : "none",
     GEIGER_IS_TEST(GEIGER_TYPE)   ? "true" : "false",
@@ -978,17 +986,19 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   res.beginChunked(200, "application/json");
   res.sendChunk(F("{\"state\":\"complete\",\"aps\":["));
-  char row[140];
+  char ssid[6 * 32 + 1];
+  char row[240];
   for (size_t i = 0; i < count; i++) {
 #ifdef ESP8266
     int open = (aps[i].enc == ENC_TYPE_NONE) ? 1 : 0;
 #else
     int open = (aps[i].enc == WIFI_AUTH_OPEN) ? 1 : 0;
 #endif
+    egesc_json(ssid, sizeof(ssid), aps[i].ssid);
     int n = snprintf_P(row, sizeof(row),
       PSTR("%s{\"ssid\":\"%s\",\"rssi\":%d,\"open\":%d}"),
-      i > 0 ? "," : "", aps[i].ssid, (int)aps[i].rssi, open);
-    if (n > 0) res.sendChunk(row, (size_t)n);
+      i > 0 ? "," : "", ssid, (int)aps[i].rssi, open);
+    if (n > 0 && (size_t)n < sizeof(row)) res.sendChunk(row, (size_t)n);
   }
   res.sendChunk(F("]}"));
   res.endChunked();
@@ -1296,24 +1306,6 @@ void WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 // ---------- /param (EGPrefs flag-driven config UI) ----------
 
-// HTML-escape, stopping cleanly before an entity would overflow.
-static size_t append_escaped(char* dst, size_t cap, size_t pos, const char* src) {
-  while (*src && pos + 6 < cap) {
-    char c = *src++;
-    const char* rep = nullptr;
-    switch (c) {
-      case '<':  rep = "&lt;";   break;
-      case '>':  rep = "&gt;";   break;
-      case '&':  rep = "&amp;";  break;
-      case '"':  rep = "&quot;"; break;
-      case '\'': rep = "&#39;";  break;
-    }
-    if (rep) { size_t n = strlen(rep); memcpy(dst + pos, rep, n); pos += n; }
-    else     { dst[pos++] = c; }
-  }
-  return pos;
-}
-
 #define APPEND_LIT(buf, pos, cap, lit) do {                              \
   size_t _n = sizeof(lit) - 1;                                           \
   if ((pos) + _n < (cap)) { memcpy((buf)+(pos), lit, _n); (pos) += _n; } \
@@ -1387,16 +1379,16 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (s_paramBodyOk && body) {
       char name[64];
       char id_buf[32];
-      char val_copy[160];
+      char val[256];   // longest string pref is 255
       for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
         const EGPrefGroup* g = EGPrefs::group_at(gi);
         if (!g) continue;
         // Only touch prefs belonging to the tab the form was submitted from.
         // Without this, BOOL fields on other tabs get cleared (absent in body
         // = "off") on every save from another tab.
-        if (g->category != tab) continue;
-        for (size_t j = 0; j < g->count; j++) {
-          const EGPref& p = g->prefs[j];
+        if (g->category.get() != tab) continue;
+        for (size_t j = 0; j < g->count.get(); j++) {
+          const EGPref p = g->prefs.row(j);
           if (p.flags & (EGP_HIDDEN | EGP_READONLY)) continue;
           if (p.type == EGP_LABEL || p.type == EGP_HEADER) continue;
           strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
@@ -1404,10 +1396,10 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
           snprintf_P(name, sizeof(name), PSTR("%s.%s"), g->module_id, id_buf);
 
           if (p.type == EGP_BOOL) {
-            const char* one = EGHttpRequest::decodeArg(body, bodyLen, name) ? "1" : "0";
+            const char* one = EGHttpRequest::decodeArg(body, bodyLen, name, val, sizeof(val)) ? "1" : "0";
             EGPrefs::put(g->module_id, id_buf, one);
           } else {
-            const char* v = EGHttpRequest::decodeArg(body, bodyLen, name);
+            const char* v = EGHttpRequest::decodeArg(body, bodyLen, name, val, sizeof(val));
             if (!v) continue;
             if (p.flags & EGP_SENSITIVE) {
               if (strcmp(v, "__CLEAR__") == 0) {
@@ -1416,9 +1408,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
               }
               if (v[0] == '\0') continue;
             }
-            strncpy(val_copy, v, sizeof(val_copy) - 1);
-            val_copy[sizeof(val_copy) - 1] = '\0';
-            EGPrefs::put(g->module_id, id_buf, val_copy);
+            EGPrefs::put(g->module_id, id_buf, v);
           }
         }
       }
@@ -1514,8 +1504,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     EGModule* mod = EGPrefs::module_at(order[gi]);
     if (mod && mod->display_order() == 0) continue;
     const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
-    if (!g || g->count == 0) continue;
-    if (g->category != tab) continue;
+    if (!g || g->count.get() == 0) continue;
+    if (g->category.get() != tab) continue;
 
     // A group with an enable_key gets an on/off badge and is dimmed when off.
     // Off == unset, "0", or "-1" (the pin "disabled" sentinel).
@@ -1533,7 +1523,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     n = snprintf_P(buf, sizeof(buf),
                    PSTR("<details class='bx%s'><summary>%s%s</summary>"),
                    (hw_absent || (has_toggle && !grp_on)) ? " off" : "",
-                   g->label ? g->label : g->module_id, badge);
+                   g->label, badge);
     if (n > 0) res.sendChunk(buf, (size_t)n);
 
     char s_id[32], s_lbl[80], s_help[120], s_pat[128];
@@ -1644,9 +1634,12 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
           n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR(" value='' placeholder='%s'"), ph);
           if (n > 0) pos += (size_t)n < (sizeof(buf) - pos) ? (size_t)n : (sizeof(buf) - pos - 1);
         } else {
+          if (pos) { res.sendChunk(buf, pos); pos = 0; }
           APPEND_LIT(buf, pos, sizeof(buf), " value='");
-          pos = append_escaped(buf, sizeof(buf), pos, cur);
+          egesc_html(buf + pos, sizeof(buf) - pos, cur);
+          pos += strlen(buf + pos);
           if (pos + 1 < sizeof(buf)) buf[pos++] = '\'';
+          res.sendChunk(buf, pos); pos = 0;
           // Placeholder always carries the default, so clearing the box reveals it.
           if (!slider && p.default_val && p.default_val[0]
               && !(p.flags & EGP_TIME)) {
@@ -1699,8 +1692,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     };
 
     // Pass 1: common fields.
-    for (size_t j = 0; j < g->count; j++) {
-      const EGPref& p = g->prefs[j];
+    for (size_t j = 0; j < g->count.get(); j++) {
+      const EGPref p = g->prefs.row(j);
       if (p.flags & (EGP_HIDDEN | EGP_ADVANCED)) continue;
       emit_field(p);
     }
@@ -1718,8 +1711,8 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
     }
     // Pass 2: advanced fields, folded into a nested disclosure.
     bool adv_open = false;
-    for (size_t j = 0; j < g->count; j++) {
-      const EGPref& p = g->prefs[j];
+    for (size_t j = 0; j < g->count.get(); j++) {
+      const EGPref p = g->prefs.row(j);
       if ((p.flags & EGP_HIDDEN) || !(p.flags & EGP_ADVANCED)) continue;
       if (!adv_open) {
         res.sendChunk(F("<details class=adv><summary>Advanced</summary>"));
@@ -1831,13 +1824,13 @@ static void serializeExportStream(B64Sink& sink) {
   uint8_t group_count = 0;
   for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
     const EGPrefGroup* g = EGPrefs::group_at(gi);
-    if (!g || g->count == 0) continue;
-    for (size_t j = 0; j < g->count; j++) {
+    if (!g || g->count.get() == 0) continue;
+    for (size_t j = 0; j < g->count.get(); j++) {
       char id_buf[32];
-      strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+      strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
       const char* val;
-      if (is_exportable_pref(g, g->prefs[j], id_buf, val)) {
+      if (is_exportable_pref(g, g->prefs.row(j), id_buf, val)) {
         group_count++;
         break;
       }
@@ -1852,14 +1845,14 @@ static void serializeExportStream(B64Sink& sink) {
 
   for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
     const EGPrefGroup* g = EGPrefs::group_at(gi);
-    if (!g || g->count == 0) continue;
+    if (!g || g->count.get() == 0) continue;
     uint8_t emitted_prefs = 0;
-    for (size_t j = 0; j < g->count; j++) {
+    for (size_t j = 0; j < g->count.get(); j++) {
       char id_buf[32];
-      strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+      strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
       const char* val;
-      if (is_exportable_pref(g, g->prefs[j], id_buf, val)) emitted_prefs++;
+      if (is_exportable_pref(g, g->prefs.row(j), id_buf, val)) emitted_prefs++;
     }
     if (emitted_prefs == 0) continue;
 
@@ -1869,8 +1862,8 @@ static void serializeExportStream(B64Sink& sink) {
     b64_write(sink, g->module_id, mid_len);
     b64_write_u8(sink, emitted_prefs);
 
-    for (size_t j = 0; j < g->count; j++) {
-      const EGPref& p = g->prefs[j];
+    for (size_t j = 0; j < g->count.get(); j++) {
+      const EGPref p = g->prefs.row(j);
       char id_buf[32];
       strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
       id_buf[sizeof(id_buf) - 1] = '\0';
@@ -1968,9 +1961,9 @@ static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
       for (size_t gi2 = 0; gi2 < EGPrefs::group_count() && !known; gi2++) {
         const EGPrefGroup* g = EGPrefs::group_at(gi2);
         if (!g || strcmp(g->module_id, module_id) != 0) continue;
-        for (size_t j = 0; j < g->count; j++) {
+        for (size_t j = 0; j < g->count.get(); j++) {
           char id_buf[32];
-          strncpy_P(id_buf, g->prefs[j].id, sizeof(id_buf) - 1);
+          strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
           id_buf[sizeof(id_buf) - 1] = '\0';
           if (strcmp(id_buf, key) == 0) { known = true; break; }
         }
@@ -2051,8 +2044,7 @@ void WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 
 // Inline url-decode of form body for `blob=...` only. Mutates buf to
 // place the decoded value in-place; returns pointer to it (NUL-terminated).
-// Avoids EGHttpRequest::decodeArg's 128-byte static buffer which truncates
-// our multi-KB blob.
+// The blob is multi-KB, so it decodes in place rather than via decodeArg.
 static char* extract_blob_field(char* body, size_t bodyLen, size_t* out_len) {
   if (bodyLen < 5) return nullptr;
   char* eq = nullptr;
@@ -2241,24 +2233,6 @@ void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// JSON-escape a value into out. Returns chars written. Used by /vars.json
-// because friendly name etc could contain quotes / backslashes / control
-// chars and break the wire.
-static size_t json_escape(const char* in, size_t in_len, char* out, size_t cap) {
-  size_t pos = 0;
-  for (size_t i = 0; i < in_len; i++) {
-    char c = in[i];
-    if (pos + 6 >= cap) break;   // worst case \u00XX = 6 chars
-    if (c == '"' || c == '\\') { out[pos++] = '\\'; out[pos++] = c; }
-    else if (c == '\n')        { out[pos++] = '\\'; out[pos++] = 'n'; }
-    else if (c == '\r')        { out[pos++] = '\\'; out[pos++] = 'r'; }
-    else if (c == '\t')        { out[pos++] = '\\'; out[pos++] = 't'; }
-    else if ((uint8_t)c < 0x20) { /* drop other controls */ }
-    else                       { out[pos++] = c; }
-  }
-  return pos;
-}
-
 void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
   // Walks every variable the template engine knows about and dumps its
@@ -2276,10 +2250,10 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
     // /vars.json reflects what's actually queryable on this device.
     if (n == 0) continue;
     char esc[80];
-    size_t en = json_escape(raw, n, esc, sizeof(esc));
+    egesc_json(esc, sizeof(esc), raw);
     char line[128];
-    int m = snprintf_P(line, sizeof(line), PSTR("%s\"%s\":\"%.*s\""),
-                       first ? "" : ",", v.key, (int)en, esc);
+    int m = snprintf_P(line, sizeof(line), PSTR("%s\"%s\":\"%s\""),
+                       first ? "" : ",", v.key, esc);
     if (m > 0 && (size_t)m < sizeof(line)) res.sendChunk(line, (size_t)m);
     first = false;
   }
@@ -2315,9 +2289,11 @@ void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   HEAD("device_info", "gauge",
        "Device metadata; value always 1. Join via on(chipid) for naming.");
+  char esc_name[3 * 32 + 1];
+  egesc_prom(esc_name, sizeof(esc_name), name);
   n = snprintf_P(buf, sizeof(buf),
     PSTR("device_info{chipid=\"%s\",name=\"%s\",model=\"%s\",ver=\"%s\",env=\"%s\"} 1\n"),
-    cid, name, GEIGER_MODEL, RELEASE_VERSION, BUILD_ENV);
+    cid, esc_name, GEIGER_MODEL, RELEASE_VERSION, BUILD_ENV);
   if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
 
   HEAD("geiger_cpm", "gauge", "Counts per minute (window label selects averaging period)");

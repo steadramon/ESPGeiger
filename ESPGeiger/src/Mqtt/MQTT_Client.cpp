@@ -25,6 +25,7 @@
 #include "../Util/TickProfile.h"
 #include "../Util/FastMillis.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include "../EnvSensor/EnvSensor.h"
 #include <math.h>
 #ifdef ESPG_HV_ADC
@@ -79,12 +80,12 @@ EG_PSTR(MQ_H_HTP, "HA discovery prefix");
 EG_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
 #endif
 
-static const EGPref MQTT_PREF_ITEMS[] = {
-  {"server",   MQ_L_SRV, MQ_H_SRV, "",               MQ_P_SRV, 0, 0, 16, EGP_STRING, 0},
+static const EGPref MQTT_PREF_ITEMS[] PROGMEM = {
+  {"server",   MQ_L_SRV, MQ_H_SRV, "",               MQ_P_SRV, 0, 0, 64, EGP_STRING, 0},
   {"port",     MQ_L_PRT, nullptr,  "1883",           nullptr,  1, 65535, 0,  EGP_UINT,   0},
-  {"user",     MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     32, EGP_STRING, 0},
-  {"password", MQ_L_PWD, nullptr,  "",               nullptr,  0, 0,     32, EGP_STRING, EGP_SENSITIVE},
-  {"topic",    MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, 16, EGP_STRING, EGP_ADVANCED},
+  {"user",     MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     64, EGP_STRING, 0},
+  {"password", MQ_L_PWD, nullptr,  "",               nullptr,  0, 0,     64, EGP_STRING, EGP_SENSITIVE},
+  {"topic",    MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, 28, EGP_STRING, EGP_ADVANCED},
   {"interval", MQ_L_INT, MQ_H_INT, "60",             nullptr,  MQTT_MIN_TIME, MQTT_MAX_TIME, 0, EGP_UINT, 0},
 #ifdef MQTTAUTODISCOVER
   {"hass_enabled", MQ_L_HEN, MQ_H_HEN, MQTT_HASS_DEFAULT,    nullptr,  0, 0, 0,  EGP_BOOL,   EGP_ADVANCED},
@@ -92,7 +93,7 @@ static const EGPref MQTT_PREF_ITEMS[] = {
 #endif
 };
 
-static const EGPrefGroup MQTT_PREF_GROUP = {
+static const EGPrefGroup MQTT_PREF_GROUP PROGMEM = {
   "mqtt", "MQTT", 1,
   MQTT_PREF_ITEMS,
   sizeof(MQTT_PREF_ITEMS) / sizeof(MQTT_PREF_ITEMS[0]),
@@ -356,13 +357,16 @@ void MQTT_Client::publishStatus()
   int n;
   char ipStr[16];
   Wifi::formatIP(ipStr, sizeof(ipStr));
+  char model[6 * 32 + 1], ssid[6 * 32 + 1];
+  egesc_json(model, sizeof(model), DeviceInfo::geigermodel());
+  egesc_json(ssid, sizeof(ssid), Wifi::ssid);
   n = snprintf_P(buffer, sizeof(buffer),
     PSTR("{\"time\":\"%s\",\"ut\":%lu,\"board\":\"%s\",\"model\":\"%s\""
          ",\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"c_total\":%u"
          ",\"tick\":%u,\"t_max\":%u,\"lps\":%u"),
     dateTime, DeviceInfo::uptime(),
-    DeviceInfo::chipmodel(), DeviceInfo::geigermodel(),
-    Wifi::ssid, ipStr, (int)Wifi::rssi,
+    DeviceInfo::chipmodel(), model,
+    ssid, ipStr, (int)Wifi::rssi,
     gcounter.total_clicks, TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps);
   advance_pos(pos, n, sizeof(buffer));
 #ifdef MQTT_MEM_DEBUG

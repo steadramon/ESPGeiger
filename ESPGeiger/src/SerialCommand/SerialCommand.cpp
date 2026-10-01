@@ -165,13 +165,13 @@ void SerialCommand::cmd_get() {
     Log::console(PSTR("Usage: get <module>.<key>"));
     return;
   }
-  const EGPref* p = EGPrefs::find_pref(mod, key);
-  if (!p) {
+  EGPref p;
+  if (!EGPrefs::find_pref(mod, key, &p)) {
     Log::console(PSTR("Unknown pref: %s.%s"), mod, key);
     return;
   }
   const char* v = EGPrefs::getString(mod, key);
-  if (p->flags & EGP_SENSITIVE) {
+  if (p.flags & EGP_SENSITIVE) {
     Log::console(PSTR("%s.%s=%s"), mod, key, (v && *v) ? "***" : "");
   } else {
     Log::console(PSTR("%s.%s=%s"), mod, key, v ? v : "");
@@ -185,8 +185,8 @@ void SerialCommand::cmd_set() {
     Log::console(PSTR("Usage: set <module>.<key> <value>"));
     return;
   }
-  const EGPref* p = EGPrefs::find_pref(mod, key);
-  if (!p) {
+  EGPref p;
+  if (!EGPrefs::find_pref(mod, key, &p)) {
     Log::console(PSTR("Unknown pref: %s.%s"), mod, key);
     return;
   }
@@ -211,7 +211,7 @@ void SerialCommand::cmd_set() {
     Log::console(PSTR("Commit failed"));
     return;
   }
-  if (p->flags & EGP_SENSITIVE) {
+  if (p.flags & EGP_SENSITIVE) {
     Log::console(PSTR("OK: %s.%s set"), mod, key);
   } else {
     Log::console(PSTR("OK: %s.%s=%s"), mod, key, EGPrefs::getString(mod, key));

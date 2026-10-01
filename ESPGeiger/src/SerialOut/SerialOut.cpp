@@ -43,14 +43,14 @@ EG_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
 
 // interval / flags stay hidden - they're driven by `show N` / `show cpm`
 // commands. The format and template fields are user-facing.
-static const EGPref SOUT_PREF_ITEMS[] = {
+static const EGPref SOUT_PREF_ITEMS[] PROGMEM = {
   {"interval", nullptr, nullptr,  "0",  nullptr, 0, 65535,  0,   EGP_UINT,   EGP_HIDDEN},
   {"flags",    nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   EGP_UINT,   EGP_HIDDEN},
   {"format",   SO_L_FMT,  nullptr,   "0",  SO_O_FMT, 0, 2,     0,   EGP_ENUM,   0},
   {"baud",     SO_L_BAUD, SO_H_BAUD, "0",  nullptr, 0, 921600, 0,   EGP_UINT,   EGP_ADVANCED},
   {"tpl",      SO_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    128, EGP_STRING, 0},
 };
-static const EGPrefGroup SOUT_PREF_GROUP = {
+static const EGPrefGroup SOUT_PREF_GROUP PROGMEM = {
   "sout", "Serial out", 1,
   SOUT_PREF_ITEMS,
   sizeof(SOUT_PREF_ITEMS) / sizeof(SOUT_PREF_ITEMS[0]),

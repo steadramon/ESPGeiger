@@ -17,6 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpServer.h"
+#include "EGHttpForm.h"
+#include "EGHttpHeaders.h"
 #include <string.h>
 #include <stdlib.h>
 #include <EGBase64.h>   // buffer-in/out, no heap (vs core's heap-using <base64.h>)
@@ -36,6 +38,10 @@
 static const char CL0_CRLF[]      PROGMEM = "Content-Length: 0\r\n";
 static const char CONN_CLOSE_CR[] PROGMEM = "Connection: close\r\n";
 
+static const char R400[] PROGMEM =
+  "HTTP/1.1 400 Bad Request\r\n"
+  "Content-Length: 0\r\n"
+  "Connection: close\r\n\r\n";
 static const char R413[] PROGMEM =
   "HTTP/1.1 413 Payload Too Large\r\n"
   "Content-Length: 0\r\n"
@@ -83,6 +89,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
   size_t sent = 0;
   uint32_t last_progress = millis();
   while (sent < len) {
+    if (s->send_aborted) return false;
     if (!s->client || !s->client->connected()) {
       Serial.printf_P(PSTR("[EGHttp] send aborted, client gone after %u/%u B\n"),
                       (unsigned)sent, (unsigned)len);
@@ -358,7 +365,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
                     cli, (int)err, sl ? (int)sl->streaming : -1,
                     sl ? (unsigned)sl->bodyAcked : 0u);
     if (sl) {
-      self->markDone(sl);
+      self->markDoneAsync(sl);
       cli->close();   // force onDisconnect so the client gets deleted
     }
   }, this);
@@ -370,7 +377,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
                     cli, (unsigned)time, sl ? (int)sl->streaming : -1,
                     sl ? (unsigned)sl->bodyAcked : 0u);
     if (sl) {
-      self->markDone(sl);
+      self->markDoneAsync(sl);
       cli->close();
     }
   }, this);
@@ -461,14 +468,9 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
     }
     if (!s->headersDone) return;
 
-    s->contentLength = 0;
-    for (size_t i = 0; i + 16 < s->headerEnd; i++) {
-      if (strncasecmp(s->buf + i, "Content-Length:", 15) == 0) {
-        const char* p = s->buf + i + 15;
-        while (*p == ' ') p++;
-        s->contentLength = (size_t)atol(p);
-        break;
-      }
+    if (eghttp_content_length(s->buf, s->headerEnd, &s->contentLength) == EGHTTP_CL_BAD) {
+      sendStatusAndClose(s, R400, sizeof(R400) - 1);
+      return;
     }
 
     identifyRoute(s);
@@ -502,6 +504,11 @@ void EGHttpServer::onData(Slot* s, void* data, size_t len) {
       return;
     }
 
+    // >= keeps one byte for the body's NUL.
+    if (s->contentLength >= EGHTTP_REQ_BUF - s->headerEnd) {
+      sendStatusAndClose(s, R413, sizeof(R413) - 1);
+      return;
+    }
     if (s->len >= s->headerEnd + s->contentLength) {
       s->state = READY;
     }
@@ -788,67 +795,19 @@ void EGHttpServer::tick() {
 
 // ---------- EGHttpRequest ----------
 
-static inline int eghttp_hexval(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-static bool find_arg_in(const char* region, size_t regionLen,
-                        const char* name, size_t nameLen,
-                        char* out, size_t outCap) {
-  if (!region || regionLen == 0) return false;
-  const char* p   = region;
-  const char* end = region + regionLen;
-  while (p < end) {
-    if ((size_t)(end - p) > nameLen + 1 &&
-        memcmp(p, name, nameLen) == 0 && p[nameLen] == '=') {
-      p += nameLen + 1;
-      size_t o = 0;
-      while (p < end && *p != '&' && o < outCap - 1) {
-        if (*p == '%' && p + 2 < end &&
-            eghttp_hexval(p[1]) >= 0 && eghttp_hexval(p[2]) >= 0) {
-          // Only decode %XX with two hex digits; malformed escapes fall
-          // through and are copied literally.
-          out[o++] = (char)((eghttp_hexval(p[1]) << 4) | eghttp_hexval(p[2]));
-          p += 3;
-        } else if (*p == '+') {
-          out[o++] = ' '; p++;
-        } else {
-          out[o++] = *p++;
-        }
-      }
-      out[o] = '\0';
-      return true;
-    }
-    while (p < end && *p != '&') p++;
-    if (p < end) p++;
-  }
-  return false;
-}
-
-// Shared between arg() and decodeArg(); consume before the next call.
+// Shared by arg() calls; consume before the next call.
 static char s_arg_decoded[128];
 
 const char* EGHttpRequest::arg(const char* name) const {
-  if (!name) return nullptr;
-  size_t nameLen = strlen(name);
-  if (find_arg_in(_query, _queryLen, name, nameLen, s_arg_decoded, sizeof(s_arg_decoded)))
-    return s_arg_decoded;
-  if (find_arg_in(_body,  _bodyLen,  name, nameLen, s_arg_decoded, sizeof(s_arg_decoded)))
+  if (eghttp_form_find(_query, _queryLen, name, s_arg_decoded, sizeof(s_arg_decoded)) ||
+      eghttp_form_find(_body,  _bodyLen,  name, s_arg_decoded, sizeof(s_arg_decoded)))
     return s_arg_decoded;
   return nullptr;
 }
 
 const char* EGHttpRequest::decodeArg(const char* body, size_t bodyLen,
-                                       const char* name) {
-  if (!body || bodyLen == 0 || !name) return nullptr;
-  if (find_arg_in(body, bodyLen, name, strlen(name),
-                  s_arg_decoded, sizeof(s_arg_decoded))) {
-    return s_arg_decoded;
-  }
-  return nullptr;
+                                       const char* name, char* out, size_t cap) {
+  return eghttp_form_find(body, bodyLen, name, out, cap) ? out : nullptr;
 }
 
 // Append-or-flush on overflow. ESP32 has a 12 KB shared accumulator so

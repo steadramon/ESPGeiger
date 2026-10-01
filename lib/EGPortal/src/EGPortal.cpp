@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGPortal.h"
+#include <EGEscape.h>
 
 #if defined(ESP8266)
   #include <ESP8266WiFi.h>
@@ -233,19 +234,22 @@ void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   // (title x2 + optional notice). Render expanded into a one-shot stack
   // buffer big enough for any plausible title/notice combination.
   res.beginChunked(200, "text/html");
-  char head[1024];
-  int n = snprintf_P(head, sizeof(head), PORTAL_HEAD,
-                     self->_title, self->_title,
-                     self->_notice ? self->_notice : "");
-  if (n > 0 && (size_t)n < sizeof(head)) res.sendChunk(head, (size_t)n);
+  {
+    char head[1024];
+    int n = snprintf_P(head, sizeof(head), PORTAL_HEAD,
+                       self->_title, self->_title,
+                       self->_notice ? self->_notice : "");
+    if (n > 0 && (size_t)n < sizeof(head)) res.sendChunk(head, (size_t)n);
+  }
 
-  char opt[128];
+  char ssid[6 * EGPORTAL_SSID_MAX + 1];
+  char opt[2 * sizeof(ssid) + 40];
   for (uint8_t i = 0; i < self->_scanCount; i++) {
+    egesc_html(ssid, sizeof(ssid), self->_scan[i].ssid);
     int m = snprintf(opt, sizeof(opt),
                      "<option value='%s'>%s (%d dBm)</option>",
-                     self->_scan[i].ssid, self->_scan[i].ssid,
-                     (int)self->_scan[i].rssi);
-    if (m > 0) res.sendChunk(opt, (size_t)m);
+                     ssid, ssid, (int)self->_scan[i].rssi);
+    if (m > 0 && (size_t)m < sizeof(opt)) res.sendChunk(opt, (size_t)m);
   }
 
   res.sendChunk(FPSTR(PORTAL_TAIL));
@@ -263,13 +267,15 @@ void EGPortal::hScan(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   }
   res.beginChunked(200, "application/json");
   res.sendChunk(F("["));
-  char row[64];
+  char ssid[6 * EGPORTAL_SSID_MAX + 1];
+  char row[sizeof(ssid) + 24];
   for (uint8_t i = 0; i < self->_scanCount; i++) {
+    egesc_json(ssid, sizeof(ssid), self->_scan[i].ssid);
     int n = snprintf(row, sizeof(row),
                      "%s{\"s\":\"%s\",\"r\":%d}",
                      i ? "," : "",
-                     self->_scan[i].ssid, (int)self->_scan[i].rssi);
-    if (n > 0) res.sendChunk(row, (size_t)n);
+                     ssid, (int)self->_scan[i].rssi);
+    if (n > 0 && (size_t)n < sizeof(row)) res.sendChunk(row, (size_t)n);
   }
   res.sendChunk(F("]"));
   res.endChunked();

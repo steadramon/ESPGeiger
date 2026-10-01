@@ -44,7 +44,7 @@ EG_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = loc
 #define _STR(x) #x
 #define STR(x) _STR(x)
 
-static const EGPref ENV_PREF_ITEMS[] = {
+static const EGPref ENV_PREF_ITEMS[] PROGMEM = {
   {"sda",         EN_L_SDA,  nullptr,    STR(ENV_DEFAULT_SDA), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
   {"scl",         EN_L_SCL,  nullptr,    STR(ENV_DEFAULT_SCL), nullptr, 0,    MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED},
   {"unit",        EN_L_UNIT, nullptr,    "0",                  EN_O_UNIT, 0,  2,            0, EGP_ENUM, 0},
@@ -52,7 +52,7 @@ static const EGPref ENV_PREF_ITEMS[] = {
   {"altitude_m",  EN_L_ALT,  EN_H_ALT,   "0",                  nullptr, 0,    9000,         0, EGP_UINT, 0},
 };
 
-static const EGPrefGroup ENV_PREF_GROUP = {
+static const EGPrefGroup ENV_PREF_GROUP PROGMEM = {
   "env", "Environment Sensor", 1,
   ENV_PREF_ITEMS,
   sizeof(ENV_PREF_ITEMS) / sizeof(ENV_PREF_ITEMS[0]),

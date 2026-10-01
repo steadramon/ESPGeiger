@@ -23,6 +23,7 @@
 #include "../Module/EGModuleRegistry.h"
 #include "../Util/Wifi.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include "../EnvSensor/EnvSensor.h"
 #ifdef ESPG_HV_ADC
 #include "../HV/HV.h"
@@ -43,14 +44,14 @@ EG_PSTR(WH_H_KEY, "Optional shared secret sent as \"key\"");
 EG_PSTR(WH_L_INT, "Interval");
 EG_PSTR(WH_H_INT, "POST interval (sec)");
 
-static const EGPref WEBHOOK_PREF_ITEMS[] = {
+static const EGPref WEBHOOK_PREF_ITEMS[] PROGMEM = {
   {"send",     WH_L_EN,  WH_H_EN,  "0",  nullptr,  0, 0,    0,   EGP_BOOL,   0},
   {"url",      WH_L_URL, WH_H_URL, "",   WH_P_URL, 0, 0,    255, EGP_STRING, 0},
   {"key",      WH_L_KEY, WH_H_KEY, "",   nullptr,  0, 0,    255, EGP_STRING, EGP_SENSITIVE},
   {"interval", WH_L_INT, WH_H_INT, "60", nullptr,  WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX, 0, EGP_UINT, 0},
 };
 
-static const EGPrefGroup WEBHOOK_PREF_GROUP = {
+static const EGPrefGroup WEBHOOK_PREF_GROUP PROGMEM = {
   "webhook", "Webhook", 1,
   WEBHOOK_PREF_ITEMS,
   sizeof(WEBHOOK_PREF_ITEMS) / sizeof(WEBHOOK_PREF_ITEMS[0]),
@@ -180,7 +181,11 @@ void Webhook::postMeasurement() {
     PSTR("{\"id\":\"%s\""), DeviceInfo::chipid());
   advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   if (key[0] != '\0') {
-    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"key\":\"%s\""), key);
+    // Escaped in place: a 255-byte key is too big to escape on the stack.
+    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR(",\"key\":\""));
+    advance_pos(pos, n, WEBHOOK_BUF_SIZE);
+    advance_pos(pos, egesc_json(buffer + pos, WEBHOOK_BUF_SIZE - pos, key), WEBHOOK_BUF_SIZE);
+    n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos, PSTR("\""));
     advance_pos(pos, n, WEBHOOK_BUF_SIZE);
   }
   n = snprintf_P(buffer + pos, WEBHOOK_BUF_SIZE - pos,
@@ -219,7 +224,10 @@ void Webhook::postMeasurement() {
     PSTR(",\"tc\":%u,\"mem\":%u,\"rssi\":%d}"),
     gcounter.total_clicks, DeviceInfo::freeHeap(), (int)Wifi::rssi);
   advance_pos(pos, n, WEBHOOK_BUF_SIZE);
-  buffer[pos] = '\0';
+  if (pos >= WEBHOOK_BUF_SIZE - 1) {
+    Log::console(PSTR("Webhook: body too long, not sent"));
+    return;
+  }
 
   char url[256];
   const char* trimmedURL = cleanHTTP(whURL);

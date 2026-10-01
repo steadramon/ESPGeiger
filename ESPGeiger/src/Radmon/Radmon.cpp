@@ -21,6 +21,7 @@
 #include "../Logger/Logger.h"
 #include "../Util/LedSignal.h"
 #include "../Util/StringUtil.h"
+#include <EGEscape.h>
 #include "../Module/EGModuleRegistry.h"
 
 extern uint8_t send_indicator;
@@ -35,14 +36,14 @@ EG_PSTR(RM_L_PWD, "Password");
 EG_PSTR(RM_L_INT, "Interval");
 EG_PSTR(RM_H_INT, "Upload interval (sec)");
 
-static const EGPref RADMON_PREF_ITEMS[] = {
+static const EGPref RADMON_PREF_ITEMS[] PROGMEM = {
   {"send",     RM_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  EGP_BOOL,   0},
   {"user",     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  32, EGP_STRING, 0},
   {"password", RM_L_PWD, nullptr,  "",   nullptr, 0, 0,  64, EGP_STRING, EGP_SENSITIVE},
   {"interval", RM_L_INT, RM_H_INT, "60", nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, EGP_ADVANCED},
 };
 
-static const EGPrefGroup RADMON_PREF_GROUP = {
+static const EGPrefGroup RADMON_PREF_GROUP PROGMEM = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
@@ -162,8 +163,11 @@ void Radmon::postMeasurement() {
   else                          avgcpm = gcounter.get_cpm15f();
   char cpmbuf[12];
   format_f(cpmbuf, sizeof(cpmbuf), avgcpm, 1);
-  char url[256];
-  snprintf_P(url, sizeof(url), RADMON_URI, _api_user, _api_key, cpmbuf);
+  char user[3 * 32 + 1], pass[3 * 64 + 1];
+  egesc_url(user, sizeof(user), _api_user);
+  egesc_url(pass, sizeof(pass), _api_key);
+  char url[384];
+  snprintf_P(url, sizeof(url), RADMON_URI, user, pass, cpmbuf);
 
   if (!request) request = new AsyncHTTPRequest();
   if (!request) { Log::console(PSTR("Radmon: alloc failed")); return; }

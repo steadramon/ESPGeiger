@@ -35,6 +35,7 @@
 
 #define EGPREFS_NAMESPACE    "prefs"
 #define EGPREFS_MAX_GROUP_SZ 1024
+#define EGPREFS_MAX_VALUE    255   // longest string max_len (webhook url/key)
 
 // Per-group shadow: array of pointers to current value (flash default or heap
 // override). is_heap status packed into heap_mask bitmap to save the 3 bytes
@@ -62,7 +63,7 @@ static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
 // heap entirely - saves ~30 B per pref where the user kept the default.
 static void shadow_set(GroupShadow& gs, size_t j, const char* val, size_t len) {
   if (shadow_is_heap(gs, j)) free((void*)gs.values[j]);
-  const char* dv = gs.group->prefs[j].default_val;
+  const char* dv = gs.group->prefs.default_val(j);
   if (dv && strlen(dv) == len && memcmp(dv, val, len) == 0) {
     gs.values[j] = dv;
     gs.heap_mask &= ~(1u << j);
@@ -78,7 +79,7 @@ static void shadow_set(GroupShadow& gs, size_t j, const char* val, size_t len) {
 // Reset shadow to schema default (flash pointer, no heap).
 static void shadow_reset(GroupShadow& gs, size_t j) {
   if (shadow_is_heap(gs, j)) free((void*)gs.values[j]);
-  const char* dv = gs.group->prefs[j].default_val;
+  const char* dv = gs.group->prefs.default_val(j);
   gs.values[j] = dv ? dv : "";
   gs.heap_mask &= ~(1u << j);
 }
@@ -102,9 +103,9 @@ GroupShadow* find_group(const char* module_id) {
 
 int find_pref_index(const EGPrefGroup* g, const char* key) {
   if (!g || !key) return -1;
-  // p.id may be PROGMEM. strcmp_P needs SRAM-first arg, so key first.
-  for (size_t i = 0; i < g->count; i++) {
-    if (strcmp_P(key, g->prefs[i].id) == 0) return (int)i;
+  // strcmp_P needs SRAM-first arg, so key first.
+  for (size_t i = 0; i < g->count.get(); i++) {
+    if (strcmp_P(key, g->prefs.id_P(i)) == 0) return (int)i;
   }
   return -1;
 }
@@ -144,8 +145,9 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
     }
     case EGP_FLOAT: {
       char* end;
-      parse_f(value, &end);
+      float v = parse_f(value, &end);
       if (*end != '\0' || end == value) return -1;
+      if (p->min_i != p->max_i && (v < p->min_i || v > p->max_i)) return -1;
       // Pass through as-is (avoid Arduino String(float) heap alloc)
       size_t len = strlen(value);
       if (len >= outsz) return -1;
@@ -171,9 +173,8 @@ int validate(const EGPref* p, const char* value, char* out, size_t outsz) {
 void load_record_cb(void* ctx, const char* key, uint8_t klen,
                     const char* val, uint16_t vlen) {
   GroupShadow* gs = (GroupShadow*)ctx;
-  // p.id may be PROGMEM; key is SRAM (from storage read).
-  for (size_t j = 0; j < gs->group->count; j++) {
-    const char* pid = gs->group->prefs[j].id;
+  for (size_t j = 0; j < gs->group->count.get(); j++) {
+    const char* pid = gs->group->prefs.id_P(j);
     if (strlen_P(pid) == klen && strncmp_P(key, pid, klen) == 0) {
       shadow_set(*gs, j, val, vlen);
       return;
@@ -183,9 +184,8 @@ void load_record_cb(void* ctx, const char* key, uint8_t klen,
 
 bool write_group(GroupShadow& gs) {
   size_t total = 4;
-  // p.id is PROGMEM-safe; use _P variants.
-  for (size_t j = 0; j < gs.group->count; j++) {
-    total += 1 + strlen_P(gs.group->prefs[j].id) + 2 + strlen(gs.values[j]);
+  for (size_t j = 0; j < gs.group->count.get(); j++) {
+    total += 1 + strlen_P(gs.group->prefs.id_P(j)) + 2 + strlen(gs.values[j]);
   }
   if (total > EGPREFS_MAX_GROUP_SZ) {
     Log::console(PSTR("prefs: group %s too large (%u)"), gs.group->module_id, (unsigned)total);
@@ -195,8 +195,8 @@ bool write_group(GroupShadow& gs) {
   if (!buf) return false;
   size_t p = 0;
   buf[p++] = 'E'; buf[p++] = 'G'; buf[p++] = 'P'; buf[p++] = '1';
-  for (size_t j = 0; j < gs.group->count; j++) {
-    const char* key = gs.group->prefs[j].id;
+  for (size_t j = 0; j < gs.group->count.get(); j++) {
+    const char* key = gs.group->prefs.id_P(j);
     size_t klen = strlen_P(key);
     const char* val = gs.values[j];
     size_t vlen = strlen(val);
@@ -262,8 +262,9 @@ void import_legacy() {
       if (!val) continue;
       int idx = find_pref_index(gs.group, a->new_key);
       if (idx < 0) continue;
-      char normalized[128];
-      int nlen = validate(&gs.group->prefs[idx], val, normalized, sizeof(normalized));
+      char normalized[EGPREFS_MAX_VALUE + 1];
+      EGPref p = gs.group->prefs.row(idx);
+      int nlen = validate(&p, val, normalized, sizeof(normalized));
       if (nlen < 0) continue;
       shadow_set(gs, idx, normalized, (size_t)nlen);
       any = true;
@@ -309,9 +310,9 @@ void EGPrefs::begin() {
     const EGPrefGroup* g = m->prefs_group();
     if (!g) continue;
 
-    if (g->count > 32) {
+    if (g->count.get() > 32) {
       Log::console(PSTR("prefs: %s has %u prefs, exceeds bitmap cap of 32 - skipped"),
-                   g->module_id, (unsigned)g->count);
+                   g->module_id, (unsigned)g->count.get());
       continue;
     }
 
@@ -320,20 +321,21 @@ void EGPrefs::begin() {
     gs.module = m;
     gs.dirty = false;
     gs.heap_mask = 0;
-    gs.values = new (std::nothrow) const char*[g->count];
+    gs.values = new (std::nothrow) const char*[g->count.get()];
     if (!gs.values) {
       Log::console(PSTR("prefs: %s value alloc failed - skipped"), g->module_id);
       continue;
     }
     s_group_count++;
 
-    for (size_t j = 0; j < g->count; j++) {
-      gs.values[j] = g->prefs[j].default_val ? g->prefs[j].default_val : "";
+    for (size_t j = 0; j < g->count.get(); j++) {
+      const char* dv = g->prefs.default_val(j);
+      gs.values[j] = dv ? dv : "";
     }
     s_storage.readGroup(g->module_id, load_record_cb, &gs);
 
     Log::debug(PSTR("prefs: %s (%u keys, v%u)"),
-               g->module_id, (unsigned)g->count, (unsigned)g->version);
+               g->module_id, (unsigned)g->count.get(), (unsigned)g->version.get());
   }
 
   import_legacy();  // LEGACY IMPORT (remove after v1.0.0)
@@ -380,10 +382,10 @@ bool EGPrefs::put(const char* module, const char* key, const char* value) {
   if (!gs) return false;
   int idx = find_pref_index(gs->group, key);
   if (idx < 0) return false;
-  const EGPref& p = gs->group->prefs[idx];
+  const EGPref p = gs->group->prefs.row(idx);
   if (p.flags & EGP_READONLY) return false;
 
-  char normalized[128];
+  char normalized[EGPREFS_MAX_VALUE + 1];
   int nlen = validate(&p, value, normalized, sizeof(normalized));
   if (nlen < 0) return false;
 
@@ -413,7 +415,7 @@ bool EGPrefs::remove_group(const char* module) {
   GroupShadow* gs = find_group(module);
   if (!gs) return false;
   bool removed = s_storage.removeGroup(module);
-  for (size_t j = 0; j < gs->group->count; j++) {
+  for (size_t j = 0; j < gs->group->count.get(); j++) {
     shadow_reset(*gs, j);
   }
   gs->dirty = false;
@@ -429,12 +431,10 @@ void EGPrefs::reset_all(bool keep_network) {
     bool is_sys = keep_network && strcmp(gs.group->module_id, "sys") == 0;
     s_storage.removeGroup(gs.group->module_id);
     bool kept_any = false;
-    for (size_t j = 0; j < gs.group->count; j++) {
-      if (is_sys) {
-        char keybuf[16];
-        strncpy_P(keybuf, gs.group->prefs[j].id, sizeof(keybuf) - 1);
-        keybuf[sizeof(keybuf) - 1] = '\0';
-        if (strcmp(keybuf, "web_pass") == 0) { kept_any = true; continue; }
+    for (size_t j = 0; j < gs.group->count.get(); j++) {
+      if (is_sys && strcmp_P("web_pass", gs.group->prefs.id_P(j)) == 0) {
+        kept_any = true;
+        continue;
       }
       shadow_reset(gs, j);
     }
@@ -460,9 +460,11 @@ EGModule* EGPrefs::module_at(size_t idx) {
   return s_groups[idx].module;
 }
 
-const EGPref* EGPrefs::find_pref(const char* module, const char* key) {
+bool EGPrefs::find_pref(const char* module, const char* key, EGPref* out) {
   GroupShadow* gs = find_group(module);
-  if (!gs) return nullptr;
+  if (!gs) return false;
   int idx = find_pref_index(gs->group, key);
-  return (idx < 0) ? nullptr : &gs->group->prefs[idx];
+  if (idx < 0) return false;
+  if (out) *out = gs->group->prefs.row(idx);
+  return true;
 }
