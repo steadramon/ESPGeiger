@@ -46,13 +46,13 @@ static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
 // ---------------------------------------------------------------------------
 // format_f - Fast integer-scaled float-to-string helper.
 //
-// Avoids Arduino's %f (pulls in soft-float print) by doing fixed-point
-// conversion: multiply by 10^decimals, round, print as integer.decimal.
-// Defined out-of-line in StringUtil.cpp so GCC doesn't clone per call site.
+// Avoids Arduino's %f (pulls in soft-float print). Output matches
+// printf("%.*f") for |v| < 2^32, including -0.00, nan and inf; larger
+// values saturate. Defined out-of-line in StringUtil.cpp so GCC doesn't
+// clone per call site.
 //
-// CONTRACT: decimals >= 1. At 0 the "%0*ld" width collapses and the output
-// still carries a point and a zero ("42.0"); use snprintf("%ld") for integers.
-// Negative v clamps to 0.
+// CONTRACT: 1 <= decimals <= 9. At 0 the output still carries a point and a
+// zero ("42.0"); use snprintf("%ld") for integers.
 // ---------------------------------------------------------------------------
 int format_f(char* buf, size_t bufsz, float v, uint8_t decimals = 2);
 
