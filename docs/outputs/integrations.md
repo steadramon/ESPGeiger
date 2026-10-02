@@ -21,7 +21,7 @@ http://192.168.1.100/json
 Response:
 
 ```json
-{"ut":5025,"c":42.00,"s":0.28,"c5":41.50,"c15":40.90,"cs":0.70,"r":151.0,"tc":9876,"mem":19088,"rssi":-45}
+{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"hv":394.00,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
 ```
 
 | Field | Description |
@@ -36,8 +36,32 @@ Response:
 | `tc` | Total clicks since boot |
 | `mem` | Free heap memory in bytes |
 | `rssi` | WiFi signal strength in dBm |
+| `tube` | `1` while counts are arriving, `0` once the tube has been silent longer than expected for its count rate |
+| `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `hv` | HV reading in volts (ESPGeiger-HW only) |
-| `loss` | Packet loss on the feed, as a percentage (UDP-receiver builds only; appears once a producer has been heard) |
+
+#### Environmental sensor
+
+Present only when a BME280, BMP280, AHTxx or AHT20 + BMP280 combo sensor is detected. Each field is left out when the sensor does not measure it, for example `h` on a BMP280.
+
+| Field | Description |
+|---|---|
+| `t` | Temperature, in the unit chosen in the sensor settings |
+| `tu` | Temperature unit: `0` °C, `1` °F, `2` K |
+| `h` | Relative humidity, % |
+| `p` | Pressure in hPa, corrected to sea level when an elevation is set |
+
+MQTT, WebAPI, the webhook and UDP always send temperature in °C; only `/json` follows the display unit.
+
+#### UDP receiver builds
+
+| Field | Description |
+|---|---|
+| `quiet` | Seconds since the last packet |
+| `rebind` | Times the receiver has left and rejoined the multicast group to recover |
+| `igmp` | Multicast membership refreshes sent |
+| `igmpx` | Refreshes skipped because WiFi was not connected |
+| `loss` | Packet loss on the feed, as a percentage (appears once a producer has been heard) |
 
 ### Raw / diagnostic values (`?raw=1`)
 
@@ -57,6 +81,9 @@ Raw mode reports `mem` un-smoothed and adds:
 | `frag` | Heap fragmentation, percent |
 | `lfb` | Largest contiguous free block in bytes |
 | `lfblow` | Largest-free-block low-water mark since boot, in bytes |
+| `cs_live` | CPS from the recent pulse timestamps, un-smoothed (once at least two pulses are held) |
+| `cs_n` | Number of pulses `cs_live` is based on |
+| `cs_win_us` | Time span those pulses cover, in microseconds |
 
 `lfb` / `lfblow` are the honest measure of memory health: free heap can look fine while fragmentation quietly shrinks the largest block you can actually allocate.
 
