@@ -1,6 +1,6 @@
 /*
   SerialCommand.cpp - Serial Command class
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -17,15 +17,30 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "SerialCommand.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Prefs/EGPrefs.h"
-#include "../Logger/Logger.h"
-#include "../Util/DeviceInfo.h"
-#include "../ImprovSerial/ImprovSerial.h"
-#include <LittleFS.h>
+#include "../Corium/Module/EGModuleRegistry.h"
+#include "../Corium/Module/ExternalPause.h"
+#include "../Corium/Prefs/EGPrefs.h"
+#include "../Corium/Logger/Logger.h"
+#include "../Corium/System/DeviceInfo.h"
+#include "../Corium/System/BootGuard.h"
+#include "../Corium/System/Fs.h"
+#include "../Corium/Util/StringUtil.h"
+#include "../Corium/ImprovSerial/ImprovSerial.h"
 
 void SerialCommand::reboot() { DeviceInfo::safeRestart(); }
-extern SerialCommand serialcmd;
+static void safe() {
+  BootGuard::request_safe();
+  DeviceInfo::safeRestart();
+}
+
+// setup site reads this
+static const char VER_LINE[] PROGMEM = "ESPGeiger " RELEASE_VERSION " " BUILD_ENV;
+static void ver() {
+  Log::console(VER_LINE);
+  // show streaming turns console logging off
+  if (!Log::serialOn()) Serial.println(FPSTR(VER_LINE));
+}
+SerialCommand serialcmd;
 
 EG_REGISTER_MODULE(serialcmd)
 
@@ -33,83 +48,98 @@ EG_REGISTER_MODULE(serialcmd)
  * Constructor makes sure some things are set.
  */
 SerialCommand::SerialCommand()
-  : commandList(NULL),
-    commandCount(0),
-    defaultHandler(NULL),
+  : defaultHandler(NULL),
     term('\n'),           // default terminator for commands, newline character
     last(NULL)
 {
-  strcpy(delim, " "); // strtok_r needs a null-terminated string
+  delim[0] = ' ';
+  delim[1] = '\0';
   clearBuffer();
 }
 
-void SerialCommand::setup() {
-  addCommand(PSTR("reboot"), reboot);
-  addCommand(PSTR("resetwifi"), reset_wifi);
-  addCommand(PSTR("resetnet"), reset_net);
-  addCommand(PSTR("get"), cmd_get);
-  addCommand(PSTR("set"), cmd_set);
-  addCommand(PSTR("pause"), cmd_pause);
+#ifdef EG_HV_STALL_TEST
+static void t1stop() { timer1_disable(); }
+#endif
+
+struct Cmd {
+  const char* name;
+  void (*fn)();
+};
+
+static const char C_REBOOT[] PROGMEM = "reboot";
+static const char C_SAFE[] PROGMEM = "safe";
+static const char C_RESETWIFI[] PROGMEM = "resetwifi";
+static const char C_RESETNET[] PROGMEM = "resetnet";
+static const char C_GET[] PROGMEM = "get";
+static const char C_SET[] PROGMEM = "set";
+static const char C_PAUSE[] PROGMEM = "pause";
+static const char C_VER[] PROGMEM = "ver";
 #ifdef SERIALOUT
-  addCommand(PSTR("cpm"), get_cpm);
-  addCommand(PSTR("usv"), get_usv);
-  addCommand(PSTR("show"), set_show);
+static const char C_CPM[] PROGMEM = "cpm";
+static const char C_USV[] PROGMEM = "usv";
+static const char C_SHOW[] PROGMEM = "show";
 #endif
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-  addCommand(PSTR("target"), set_cpm);
+static const char C_TARGET[] PROGMEM = "target";
 #endif
 #ifdef ESPG_HV_ADC
-  addCommand(PSTR("hv"), get_hv);
+static const char C_HV[] PROGMEM = "hv";
 #endif
+#ifdef EG_HV_STALL_TEST
+static const char C_T1STOP[] PROGMEM = "t1stop";
+#endif
+
+// in flash, no RAM copy
+static const Cmd CMDS[] PROGMEM = {
+  { C_REBOOT, SerialCommand::reboot },
+  { C_SAFE, safe },
+  { C_RESETWIFI, SerialCommand::reset_wifi },
+  { C_RESETNET, SerialCommand::reset_net },
+  { C_GET, SerialCommand::cmd_get },
+  { C_SET, SerialCommand::cmd_set },
+  { C_PAUSE, SerialCommand::cmd_pause },
+  { C_VER, ver },
+#ifdef SERIALOUT
+  { C_CPM, SerialCommand::get_cpm },
+  { C_USV, SerialCommand::get_usv },
+  { C_SHOW, SerialCommand::set_show },
+#endif
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+  { C_TARGET, SerialCommand::set_cpm },
+#endif
+#ifdef ESPG_HV_ADC
+  { C_HV, SerialCommand::get_hv },
+#endif
+#ifdef EG_HV_STALL_TEST
+  { C_T1STOP, t1stop },
+#endif
+};
+#ifdef SERIALOUT
+static bool show_toggle(const char* arg) {
+  if      (strcmp_P(arg, PSTR("cpm")) == 0) serialout.toggle_cpm();
+  else if (strcmp_P(arg, PSTR("usv")) == 0) serialout.toggle_usv();
+  else if (strcmp_P(arg, PSTR("cps")) == 0) serialout.toggle_cps();
+  else if (strcmp_P(arg, PSTR("hv"))  == 0) {
+#ifdef ESPG_HV_ADC
+    serialout.toggle_hv();
+#endif
+  }
+  else return false;
+  return true;
 }
 
-void SerialCommand::addCommand(const char *command, void (*function)()) {
-  #ifdef SERIALCOMMAND_DEBUG
-    Serial.print(F("Adding command ("));
-    Serial.print(commandCount);
-    Serial.print(F("): "));
-    Serial.println(command);
-  #endif
-
-  SerialCommandCallback *tmp = (SerialCommandCallback *) realloc(commandList, (commandCount + 1) * sizeof(SerialCommandCallback));
-  if (tmp == NULL) {
+void SerialCommand::set_show() {
+  char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
+  if (arg == NULL) {
+    // bare show toggles, on = 1 s
+    serialout.set_show(serialout.interval() > 0 ? 0 : 1);
     return;
   }
-  commandList = tmp;
-  // command is a PSTR; the slot is uninitialised realloc memory and
-  // strncpy_P does not terminate when the source fills the field.
-  strncpy_P(commandList[commandCount].command, command, SERIALCOMMAND_MAXCOMMANDLENGTH);
-  commandList[commandCount].command[SERIALCOMMAND_MAXCOMMANDLENGTH] = '\0';
-  commandList[commandCount].function = function;
-  commandCount++;
-}
-#ifdef SERIALOUT
-void SerialCommand::set_show() {
-  char *arg;
-  int aNumber;
-  arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
-  if (arg != NULL) {
-    if (strcmp(arg, "cpm") == 0) { serialout.toggle_cpm(); return; }
-    if (strcmp(arg, "usv") == 0) { serialout.toggle_usv(); return; }
-    if (strcmp(arg, "cps") == 0) { serialout.toggle_cps(); return; }
-    if (strcmp(arg, "hv")  == 0) {
-#ifdef ESPG_HV_ADC
-      serialout.toggle_hv();
-#endif
-      return;
-    }
-    if (strcmp(arg, "off") == 0) { serialout.set_show(0); return; }
-    if (isDigit(arg[0])) {
-      aNumber = atoi(arg);
-      serialout.set_show(aNumber);
-      return;
-    }
-    Log::console(PSTR("show: unknown arg '%s'"), arg);
-  } else {
-    // Bare `show` toggles: off if currently running, otherwise default-on
-    // (1-second interval, CPM if no fields previously selected).
-    serialout.set_show(serialout.interval() > 0 ? 0 : 1);
-  }
+  if (show_toggle(arg)) return;
+  int32_t aNumber;
+  if (strcmp_P(arg, PSTR("off")) == 0) serialout.set_show(0);
+  else if (isDigit(arg[0]) && parse_i32(arg, &aNumber)) serialout.set_show((int)aNumber);
+  else Log::console(PSTR("show: unknown arg '%s'"), arg);
 }
 
 void SerialCommand::get_cpm() {
@@ -123,31 +153,23 @@ void SerialCommand::get_usv() {
 #endif
 void SerialCommand::reset_wifi() {
   Wifi::clearSavedCreds();
-  // Also drop /net_backup so a stuck static-IP probe doesn't fire after
-  // the user reconfigures via the captive setup portal.
-  if (LittleFS.begin()) {
-    LittleFS.remove("/net_backup");
-    LittleFS.end();
-  }
   reboot();
 }
 
-// `pause [seconds]` - 0 resumes, no arg prints remaining. Cap 24 h.
+// pause [s], 0 resumes
 void SerialCommand::cmd_pause() {
   char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
   if (arg) {
-    int n = atoi(arg);
-    if (n < 0) n = 0;
-    if (n > 86400) n = 86400;
-    Counter::pause_external((uint32_t)n * 1000U);
+    if (!ExternalPause::start_s(arg)) Log::console(PSTR("pause [seconds], 0 resumes"));
     return;
   }
-  uint32_t rem = Counter::pause_remaining_ms();
+  uint32_t rem = ExternalPause::remaining_ms();
   if (rem) Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)(rem / 1000U));
   else     Log::console(PSTR("External posts: active"));
 }
 
-// Split "module.key" into separate strings. Mutates `arg` in place.
+static const char UNKNOWN_PREF[] PROGMEM = "Unknown pref: %s.%s";
+
 static bool split_modkey(char* arg, const char** mod, const char** key) {
   if (!arg) return false;
   char* dot = strchr(arg, '.');
@@ -165,17 +187,14 @@ void SerialCommand::cmd_get() {
     Log::console(PSTR("Usage: get <module>.<key>"));
     return;
   }
-  const EGPref* p = EGPrefs::find_pref(mod, key);
-  if (!p) {
-    Log::console(PSTR("Unknown pref: %s.%s"), mod, key);
+  EGPref p;
+  if (!EGPrefs::find_pref(mod, key, &p)) {
+    Log::console(UNKNOWN_PREF, mod, key);
     return;
   }
   const char* v = EGPrefs::getString(mod, key);
-  if (p->flags & EGP_SENSITIVE) {
-    Log::console(PSTR("%s.%s=%s"), mod, key, (v && *v) ? "***" : "");
-  } else {
-    Log::console(PSTR("%s.%s=%s"), mod, key, v ? v : "");
-  }
+  if (p.flags & EGP_SENSITIVE) v = (v && *v) ? PSTR("***") : PSTR("");
+  Log::console(PSTR("%s.%s=%s"), mod, key, v ? v : "");
 }
 
 void SerialCommand::cmd_set() {
@@ -185,20 +204,15 @@ void SerialCommand::cmd_set() {
     Log::console(PSTR("Usage: set <module>.<key> <value>"));
     return;
   }
-  const EGPref* p = EGPrefs::find_pref(mod, key);
-  if (!p) {
-    Log::console(PSTR("Unknown pref: %s.%s"), mod, key);
+  EGPref p;
+  if (!EGPrefs::find_pref(mod, key, &p)) {
+    Log::console(UNKNOWN_PREF, mod, key);
     return;
   }
-  // Use the rest of the buffer verbatim - preserves embedded spaces in
-  // string values (passwords, friendly names). last points just past the
-  // null we wrote at the end of the previous token.
+  // rest of line, keeps spaces
   char* value = serialcmd.last;
   if (!value) value = (char*)"";
-  // Skip leading spaces from the delimiter.
   while (*value == ' ') value++;
-  // Trim trailing whitespace (the readSerial loop strips the terminator
-  // but a stray CR can sneak through if both CR and LF arrived together).
   size_t vlen = strlen(value);
   while (vlen > 0 && (value[vlen-1] == ' ' || value[vlen-1] == '\r' || value[vlen-1] == '\n')) {
     value[--vlen] = '\0';
@@ -211,29 +225,23 @@ void SerialCommand::cmd_set() {
     Log::console(PSTR("Commit failed"));
     return;
   }
-  if (p->flags & EGP_SENSITIVE) {
+  if (p.flags & EGP_SENSITIVE) {
     Log::console(PSTR("OK: %s.%s set"), mod, key);
   } else {
     Log::console(PSTR("OK: %s.%s=%s"), mod, key, EGPrefs::getString(mod, key));
   }
+  if (EGPrefs::restart_pending()) Log::console(PSTR("Reboot to apply"));
 }
 
-// Recovery hatch - wipes net.* prefs only (static_ip + ip/gw/sn/dns).
-// Use when a bad static IP makes the web UI unreachable but WiFi creds
-// are still good. Less destructive than `resetwifi` (preserves the AP
-// association) and FULL_RESET (preserves all other prefs).
 void SerialCommand::reset_net() {
   Log::console(PSTR("Clearing net.* prefs and rebooting"));
-  EGPrefs::put("net", "static_ip", "0");
-  EGPrefs::put("net", "ip",        "");
-  EGPrefs::put("net", "gw",        "");
-  EGPrefs::put("net", "sn",        "");
-  EGPrefs::put("net", "dns",       "");
+  EGPrefs::put("net", EG_K_STATIC_IP, "0");
+  EGPrefs::put("net", EG_K_IP,     "");
+  EGPrefs::put("net", EG_K_GW,     "");
+  EGPrefs::put("net", EG_K_SN,     "");
+  EGPrefs::put("net", EG_K_DNS,    "");
   EGPrefs::commit();
-  if (LittleFS.begin()) {
-    LittleFS.remove("/net_backup");
-    LittleFS.end();
-  }
+  Wifi::dropNetBackup();
   reboot();
 }
 
@@ -241,8 +249,8 @@ void SerialCommand::reset_net() {
 void SerialCommand::set_cpm() {
   char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
   if (arg == NULL) return;
-  int aNumber = atoi(arg);
-  if (aNumber > 0) gcounter.set_target_cpm(aNumber);
+  int32_t aNumber;
+  if (parse_i32(arg, &aNumber) && aNumber > 0) gcounter.set_target_cpm(aNumber);
 }
 #endif
 
@@ -258,26 +266,32 @@ void SerialCommand::loop(unsigned long now) {
 #endif
 }
 
+// a cut line could still save
+static void too_long() {
+  Log::console(PSTR("Command too long, max %u chars"), (unsigned)SERIALCOMMAND_BUFFER);
+}
+
 void SerialCommand::dispatch(const char* line) {
   if (!line) return;
-  // Copy into the shared buffer so strtok_r can mutate it; truncate if
-  // the caller's line is too long.
-  size_t n = 0;
-  while (n < SERIALCOMMAND_BUFFER && line[n]) {
-    buffer[n] = line[n];
-    n++;
-  }
+  size_t n = strnlen(line, SERIALCOMMAND_BUFFER + 1);
+  if (n > SERIALCOMMAND_BUFFER) { too_long(); return; }
+  memcpy(buffer, line, n);
   buffer[n] = '\0';
   bufPos = n;
-  // Echo via Log so the web /cs stream picks it up too (plain Serial
-  // output bypasses the rotating log buffer).
+  // via Log so /cs sees it
   Log::console(PSTR("> %s"), buffer);
+  run_buffer();
+}
+
+void SerialCommand::run_buffer() {
   char* command = strtok_r(buffer, delim, &last);
   if (command) {
     bool matched = false;
-    for (int i = 0; i < commandCount; i++) {
-      if (strncmp(command, commandList[i].command, SERIALCOMMAND_MAXCOMMANDLENGTH) == 0) {
-        (*commandList[i].function)();
+    for (const Cmd& row : CMDS) {
+      Cmd c;
+      memcpy_P(&c, &row, sizeof(c));
+      if (strncmp_P(command, c.name, SERIALCOMMAND_MAXCOMMANDLENGTH) == 0) {
+        c.fn();
         matched = true;
         break;
       }
@@ -287,71 +301,37 @@ void SerialCommand::dispatch(const char* line) {
   clearBuffer();
 }
 
+void SerialCommand::edit_line(char inChar) {
+  if (inChar == 0x08 || inChar == 0x7f) {  // BS or DEL
+    if (bufPos > 0) {
+      buffer[--bufPos] = '\0';
+      Serial.write("\b \b", 3);
+    }
+  } else if (isprint(inChar)) {
+    if (bufPos >= SERIALCOMMAND_BUFFER) { overflow = true; return; }
+    buffer[bufPos++] = inChar;
+    buffer[bufPos] = '\0';
+    Serial.write(inChar);
+  }
+}
+
 void SerialCommand::readSerial() {
   while (Serial.available() > 0) {
-    char inChar = Serial.read();   // Read single available character, there may be more waiting
-    // Improv WiFi provisioning frames arrive over the same serial port.
-    // If the parser is mid-frame it consumes the byte; otherwise we keep it.
+    char inChar = Serial.read();
     if (improvSerial.consume_byte((uint8_t)inChar)) continue;
 
-    // Accept either CR or LF as line terminator - saves users having to
-    // configure their serial monitor's line-ending mode.
     if (inChar == term || inChar == '\r' || inChar == '\n') {
-      // Echo a newline so the next log line starts on its own row;
-      // suppress empty lines (common when CRLF arrives - first char
-      // dispatched the command, second char hits an empty buffer).
+      // CRLF gives an empty line
       if (bufPos > 0) Serial.println();
-      #ifdef SERIALCOMMAND_DEBUG
-        Serial.print(F("Received: "));
-        Serial.println(buffer);
-      #endif
-      char *command = strtok_r(buffer, delim, &last);   // Search for command at start of buffer
-      if (command != NULL) {
-        boolean matched = false;
-        for (int i = 0; i < commandCount; i++) {
-          #ifdef SERIALCOMMAND_DEBUG
-            Serial.print(F("Comparing ["));
-            Serial.print(command);
-            Serial.print(F("] to ["));
-            Serial.print(commandList[i].command);
-            Serial.println(F("]"));
-          #endif
-
-          // Compare the found command against the list of known commands for a match
-          if (strncmp(command, commandList[i].command, SERIALCOMMAND_MAXCOMMANDLENGTH) == 0) {
-            #ifdef SERIALCOMMAND_DEBUG
-              Serial.print(F("Matched Command: "));
-              Serial.println(command);
-            #endif
-
-            // Execute the stored handler function for the command
-            (*commandList[i].function)();
-            matched = true;
-            break;
-          }
-        }
-        if (!matched && (defaultHandler != NULL)) {
-          (*defaultHandler)(command);
-        }
-      }
-      clearBuffer();
-    }
-    else if (inChar == 0x08 || inChar == 0x7f) {  // BS or DEL
-      if (bufPos > 0) {
-        buffer[--bufPos] = '\0';
-        Serial.write("\b \b", 3);   // back, space, back - visually wipes
-      }
-    }
-    else if (isprint(inChar)) {     // Only printable characters into the buffer
-      if (bufPos < SERIALCOMMAND_BUFFER) {
-        buffer[bufPos++] = inChar;  // Put character into buffer
-        buffer[bufPos] = '\0';      // Null terminate
-        Serial.write(inChar);       // Echo so the user sees what they typed
+      if (overflow) {
+        too_long();
+        clearBuffer();
+        overflow = false;
       } else {
-        #ifdef SERIALCOMMAND_DEBUG
-          Serial.println(F("Line buffer is full - increase SERIALCOMMAND_BUFFER"));
-        #endif
+        run_buffer();
       }
+    } else {
+      edit_line(inChar);
     }
   }
 }

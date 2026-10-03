@@ -1,6 +1,6 @@
 /*
   Logger.h - Log class
-  
+
   Copyright (C) 2022 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -33,12 +33,14 @@ public:
   static void info(const char* logData, ...);
   static void debug(const char* logData, ...);
   static void banner(const char* logData, ...);  // raw serial, no timestamp
-  static void getLog(uint32_t idx, char** entry_pp, size_t* len_p);
+  // line idx ending '\1', at most cap-1 bytes; 0 if gone
+  static size_t copyLog(uint32_t idx, char* out, size_t cap);
   static char getLogIdx();
-  static void setLogLevel(LoggingLevels level);
   static void setSerialLogLevel(bool level);
+  static bool serialOn() { return serialLog; }
 
 private:
+  static void vlog(LoggingLevels level, bool withTimestamp, const char* formatP, va_list arg);
   static void AddLog(LoggingLevels logLevel, const char* logData, bool withTimestamp = true);
   static size_t strchrspn(const char *str1, int character);
   static char log[MAX_LOG_SIZE];
