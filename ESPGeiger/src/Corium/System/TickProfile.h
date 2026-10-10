@@ -21,17 +21,18 @@
 
 #include <Arduino.h>
 
+// loop and the tick only, esp32 runs the tick on loop too: no volatile
 namespace TickProfile {
-  extern uint32_t tick_us;      // sTickerCB duration, EMA-smoothed (alpha = 1/8)
-  extern uint32_t tick_max_us;  // peak tick_us since last 60s window reset
-  extern uint32_t lps;          // loop() iterations per second, EMA-smoothed (a=1/8)
-  extern uint32_t lps_raw;      // last full second's count, un-smoothed (?raw=1)
-  extern volatile uint32_t _lps_count;
+  extern uint32_t tick_us;
+  extern uint32_t tick_max_us;  // 60s
+  extern uint32_t lps;
+  extern uint32_t lps_raw;
+  extern uint32_t _lps_count;    // free-running, never reset
 
   inline void countIter() { ++_lps_count; }
 
 #ifdef LOOP_PROFILE
-  extern uint32_t loop_body_us;   // accumulated µs inside loop() body this window
+  extern uint32_t loop_body_us;
   inline void addLoopBody(uint32_t us) { loop_body_us += us; }
 #endif
 

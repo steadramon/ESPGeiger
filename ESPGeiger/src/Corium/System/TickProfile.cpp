@@ -28,7 +28,7 @@ namespace TickProfile {
   uint32_t tick_max_us = 0;
   uint32_t lps = 0;
   uint32_t lps_raw = 0;
-  volatile uint32_t _lps_count = 0;
+  uint32_t _lps_count = 0;
 #ifdef LOOP_PROFILE
   uint32_t loop_body_us = 0;
 #endif
@@ -57,10 +57,13 @@ void TickProfile::markModules() { t_after_modules = micros(); }
 #endif
 
 void TickProfile::endTick() {
-  // EMA (a=1/8) in-place: smooths single-second dips so readers don't see phantom drops.
-  TickProfile::lps_raw = _lps_count;
-  TickProfile::lps = (TickProfile::lps * 7 + _lps_count) >> 3;
-  _lps_count = 0;
+  // never reset, esp32 loop() is on the other core
+  static uint32_t s_lps_last = 0;
+  uint32_t n = _lps_count;
+  uint32_t count = n - s_lps_last;
+  s_lps_last = n;
+  TickProfile::lps_raw = count;
+  TickProfile::lps = (TickProfile::lps * 7 + count) >> 3;
   uint32_t this_tick = (uint32_t)(micros() - t_start);
   TickProfile::tick_us = (TickProfile::tick_us * 7 + this_tick) >> 3;
   if (this_tick > TickProfile::tick_max_us) TickProfile::tick_max_us = this_tick;
@@ -86,8 +89,6 @@ void TickProfile::endTick() {
 #endif
 #ifdef LOOP_PROFILE
     EGModuleRegistry::log_loop_profile_and_reset();
-    // Wall-time accounting: body_us is time spent inside loop() body.
-    // 60,000,000 us window - body = time stolen by interrupts/async/yield.
     uint32_t body = loop_body_us;
     loop_body_us = 0;
     uint32_t stolen = (body > 60000000UL) ? 0 : (60000000UL - body);
