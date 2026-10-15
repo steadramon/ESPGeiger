@@ -18,40 +18,53 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 
 ## Measurement entities
 
-| Value | Description | Example | Publish Interval |
-|---|---|---|---|
-| `ESPGeiger-<device_id> CPM` | Current CPM value | `30.0` | 60 s |
-| `ESPGeiger-<device_id> CPM5` | 5-minute smoothed CPM | `30.0` | 60 s |
-| `ESPGeiger-<device_id> CPM15` | 15-minute smoothed CPM | `30.0` | 60 s |
-| `ESPGeiger-<device_id> µSv/h` | μSv/h value | `0.10` | 60 s |
-| `ESPGeiger-<device_id> HV` | High-voltage reading - ESPGeiger-HW only | `400.1` | 60 s |
-| `ESPGeiger-<device_id> Temperature` | Temperature in °C - [environment sensor](/configuration/env) only | `22.4` | 60 s |
-| `ESPGeiger-<device_id> Humidity` | Relative humidity in % - BME280 / AHT family only | `45.6` | 60 s |
-| `ESPGeiger-<device_id> Pressure` | Atmospheric pressure in hPa - BME280 / BMP280 only | `1013.2` | 60 s |
-| `ESPGeiger-<device_id> Total Clicks` | Cumulative clicks since boot. | `43200` | 60 s |
+<!-- gen:ha sensor -->
+
+| Value | Unit | Description | Example | Publish Interval |
+|---|---|---|---|---|
+| `ESPGeiger-<device_id> CPM` | CPM | Current CPM value | `30.0` | 60 s |
+| `ESPGeiger-<device_id> CPM5` | CPM | 5-minute smoothed CPM | `30.0` | 60 s |
+| `ESPGeiger-<device_id> CPM15` | CPM | 15-minute smoothed CPM | `30.0` | 60 s |
+| `ESPGeiger-<device_id> µSv/h` | µSv/h | μSv/h value | `0.10` | 60 s |
+| `ESPGeiger-<device_id> HV` | V | High-voltage reading - ESPGeiger-HW only | `400.1` | 60 s |
+| `ESPGeiger-<device_id> Temperature` | °C | Temperature in °C - [environment sensor](/configuration/env) only | `22.4` | 60 s |
+| `ESPGeiger-<device_id> Humidity` | % | Relative humidity in % - BME280 / AHT family only | `45.6` | 60 s |
+| `ESPGeiger-<device_id> Pressure` | hPa | Atmospheric pressure in hPa - BME280 / BMP280 only | `1013.2` | 60 s |
+| `ESPGeiger-<device_id> Total Clicks` | | Cumulative clicks since boot. | `43200` | 60 s |
+
+<!-- /gen -->
 
 ## Threshold alerts (binary sensors)
 
 Triggered when CPM crosses the configured warning / alert thresholds. Consumed via `value_template` from `tele/sensor` JSON. Good targets for HA automations (notifications, lights, sirens).
 
-| Value | Description | Device class |
-|---|---|---|
-| `ESPGeiger-<device_id> Warning` | CPM above configured warning threshold | `problem` |
-| `ESPGeiger-<device_id> Alert` | CPM above configured alert threshold | `safety` |
-| `ESPGeiger-<device_id> Serial Connected` | Serial counter has reported within the last 60 s. Published only on serial builds - pulse builds have no external peer to monitor. | `connectivity` |
+<!-- gen:ha binary -->
+
+| Value | Description | Device class | Builds |
+|---|---|---|---|
+| `ESPGeiger-<device_id> Warning` | CPM above configured warning threshold | `problem` | all |
+| `ESPGeiger-<device_id> Alert` | CPM above configured alert threshold | `safety` | all |
+| `ESPGeiger-<device_id> Serial Connected` | Serial counter has reported within the last 60 s. | `connectivity` | serial builds |
+| `ESPGeiger-<device_id> Tube Active` | Pulses are arriving from the tube (or, on UDP builds, from the source device). Takes the place of Serial Connected, which needs an external peer. | `connectivity` | pulse, UDP and test builds |
+
+<!-- /gen -->
 
 ## Diagnostic entities
 
 Appear under the device's **Diagnostic** section in Home Assistant, not the main dashboard.
 
-| Value | Description | Example | Publish Interval |
-|---|---|---|---|
-| `ESPGeiger-<device_id> tick` | Smoothed device-load figure in µs (time in the once-per-second housekeeping pass) | `953` | 60 s |
-| `ESPGeiger-<device_id> tick max` | Peak `tick` observed in last 60 s | `4870` | 60 s |
-| `ESPGeiger-<device_id> LPS` | Loop iterations per second | `58733` | 60 s |
-| `ESPGeiger-<device_id> RSSI` | WiFi signal strength (dBm) | `-37` | 60 s |
-| `ESPGeiger-<device_id> Uptime` | Seconds since boot | `120` | 60 s |
-| `ESPGeiger-<device_id> Free Memory` | Free heap in bytes | `16928` | 60 s |
+<!-- gen:ha diag -->
+
+| Value | Unit | Description | Example | Publish Interval |
+|---|---|---|---|---|
+| `ESPGeiger-<device_id> tick` | µs | Smoothed device-load figure in µs (time in the once-per-second housekeeping pass) | `953` | 60 s |
+| `ESPGeiger-<device_id> tick max` | µs | Peak `tick` observed in last 60 s | `4870` | 60 s |
+| `ESPGeiger-<device_id> LPS` | 1/s | Loop iterations per second | `58733` | 60 s |
+| `ESPGeiger-<device_id> RSSI` | dBm | WiFi signal strength (dBm) | `-37` | 60 s |
+| `ESPGeiger-<device_id> Uptime` | s | Seconds since boot | `120` | 60 s |
+| `ESPGeiger-<device_id> Free Memory` | B | Free heap in bytes | `16928` | 60 s |
+
+<!-- /gen -->
 
 
 ## Domoticz Autodiscovery

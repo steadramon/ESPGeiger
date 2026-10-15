@@ -6,17 +6,17 @@ nav_order: 10
 parent: Configuration
 ---
 
-# NTP Configuration
+# Time and NTP
 
-ESPGeiger makes use of Network Time Protocol to keep time within the firmware. NTP is automatically kept in synch using the built-in system functions of the ESP firmware.
+ESPGeiger sets its clock from the internet using NTP. Set the time zone and NTP server on the **Network Config** page (`/network`): expand **Time / NTP**.
 
-NTP synchronisation is required for a number of functions within the firmware, including:
+- **Timezone** - the zone used for times shown on the device.
+- **NTP Server** - the server to sync with. An IP address or host name. Default `pool.ntp.org`.
 
-- Accurate SD Card writing
+Only canonical time zone names are listed. If yours is missing, pick a zone it links to. See the [list of tz database time zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
 
-## Options
+Until the clock is set:
 
-- Timezone - The timezone for locally shown times.
-- NTP Server - The server to contact for NTP time, accepts IP address or domain name.
-
-Please note that only the Canonical timezones are supported - in case your specific zone is not listed, a linked timezone can be used. See [https://en.wikipedia.org/wiki/List_of_tz_database_time_zones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for more information.
+- [SD card](/output/sdcard) logging pauses.
+- Quiet hours for the blip LED are ignored.
+- The display On Time / Off Time schedule is ignored and the display stays on.

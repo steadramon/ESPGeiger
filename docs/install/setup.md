@@ -53,14 +53,14 @@ To set a new password later: `set sys.web_pass MyNewPassword`.
 
 ### 2. Hardware button factory reset
 
-On builds with a user button (ESPGeiger-HW, ESPGeigerLog, and ESP boards wired to `GEIGER_BUTTON`):
+On builds with a push button (such as ESPGeiger-HW and ESPGeiger Log):
 
 1. Power off the device.
-2. **Hold the user button.**
+2. **Hold the push button.**
 3. Power on while still holding.
-4. Keep holding for **at least 15 seconds**, then release.
+4. Keep holding for **at least 5 seconds** (the display counts down), then release.
 
-The device performs a full factory reset, wiping all prefs (including the web password and the WiFi credentials). You will need to re-run [Initial Setup](#initial-setup) from the top of this page.
+The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity is kept. Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before 5 seconds starts [Offline Mode](/configuration/offlinemode) instead.
 
 ### 3. Reflash via the Web Installer
 
@@ -82,11 +82,4 @@ Do **not** port-forward the device's HTTP port directly to the internet.
 
 ### Remote monitoring done right
 
-If you want your readings visible without your control panel being exposed, push the data **out** rather than letting clients reach **in**. ESPGeiger supports this out of the box:
-
-- **MQTT** to a broker on the LAN, in your VPN, or on a trusted cloud provider - Home Assistant / Grafana / your dashboard subscribes there.
-- **Radmon.org, GMCMAP, ThingSpeak, GeigerLog** - citizen-science archives that ingest your data; nothing inbound to the device.
-- **Custom Webhook** to your own endpoint (HTTPS terminated by your server, not the device).
-- **WebAPI** (api.espgeiger.com) - signed posts, nothing inbound.
-
-This pattern (device pushes, clients subscribe) is also more bandwidth- and power-friendly than polling.
+To share readings without exposing the device, let it push data **out**: [MQTT](/output/mqtt) to your own broker, a [Webhook](/output/webhook), or public services such as [Radmon](/output/radmon), [GMC](/output/gmc), [ThingSpeak](/output/thingspeak) and [ESPGeiger Stations](/output/webapi). None of these need inbound access.

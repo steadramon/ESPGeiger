@@ -10,7 +10,7 @@ nav_order: 10
 
 The NeoPixel output gives intuitive visual feedback by means of colour and flash pattern.
 
-Brightness, render mode, and (for the simple blip mode) colour are all configured under **Outputs &raquo; NeoPixel** in the Web interface. Setting brightness to `0` or mode to `Off` disables the NeoPixel and unloads the module from the scheduler.
+Set brightness, mode and blip colour on the [Config page](/configuration#neopixel-settings-neopixel-builds) under **Output > NeoPixel**. Brightness `0` or mode `Off` turns the NeoPixel off.
 
 ## Modes
 
@@ -18,11 +18,11 @@ Brightness, render mode, and (for the simple blip mode) colour are all configure
 |---|---|---|
 | 0 - Off | nothing | LED dark, module unloaded |
 | 1 - Blip | every click | fixed (user-chosen colour, default green) |
-| 2 - Status blip | every click | green normally; yellow on warning, red on alert, blue if no clicks |
+| 2 - Blip+status | every click | green normally; yellow on warning, red on alert, blue if no clicks |
 | 3 - Trend pulse | periodic, rate-derived interval | rate trend (see below) |
 | 4 - Trend + status (default) | periodic, rate-derived interval | rate trend, with warning / alert / no-data overrides |
 
-Modes 1 and 2 produce one short flash per click and work on receiver builds (UDP RX, LoRa RX) too, where the click stream is the producer's batched window.
+Modes 1 and 2 flash once per click. On UDP receiver builds the flashes follow packet arrival from the producer, not the tube itself.
 
 Modes 3 and 4 produce a regular *pulse* whose rate scales with how the current 1-minute CPM compares to the 5-minute average. The pulse is a trend indicator, not a 1:1 click visualisation.
 
@@ -63,7 +63,7 @@ This is noise-aware: at low rates a small absolute change carries little statist
 | `z < -1.5` | __PURPLE__ | Dropping (≥1.5σ below baseline) |
 | _otherwise_ | __GREEN__ | Within normal variation around baseline |
 
-In mode 4, if a [warning or alert threshold](/configuration/configuration#counter-settings) is configured and the current CPM crosses it, the NeoPixel switches to __YELLOW__ (warning) or __RED__ (alert) regardless of the z-score above. Mode 3 ignores the thresholds and shows only the trend colour.
+In mode 4, if a [warning or alert threshold](/configuration#system-settings) is configured and the current CPM crosses it, the NeoPixel switches to __YELLOW__ (warning) or __RED__ (alert) regardless of the z-score above. Mode 3 ignores the thresholds and shows only the trend colour.
 
 ## Why mode 3/4 flashes look more regular than real clicks
 

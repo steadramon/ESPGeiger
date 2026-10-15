@@ -42,4 +42,4 @@ Stay away from SPI modules unless you're building custom hardware - ESPGeiger's 
 
 ## Disabling
 
-Set `display.brightness = 0` to blank the panel without disconnecting it. To remove OLED support entirely from a custom build, omit the `-DSSD1306_DISPLAY` build flag (see [PlatformIO Build Options](/install/platformio)).
+Set Display **Brightness** to `0` to blank the panel without disconnecting it. Custom builds can leave out OLED support entirely; see [Build Options](/dev/platformio#display--leds).

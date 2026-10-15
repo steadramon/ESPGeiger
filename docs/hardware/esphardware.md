@@ -39,7 +39,7 @@ Other variants and devboards for the ESP classic, C3 and S3 should all be suppor
 | Variant | Status | Notes |
 |---|---|---|
 | **ESP32 (classic)** | Fully supported | All `esp32_*` build envs. PCNT hardware counter. SSD1306 OLED bundled and auto-detected. |
-| **ESP32-S3** | Supported | Generic `esp32s3_pulse / _pulse_no_pcnt / _serial / _udp / _test` envs. Defaults match ESP32 classic: `_pulse_no_pcnt` is the safe interrupt-based build, `_pulse` uses the PCNT hardware counter (opt-in). SSD1306 OLED bundled and auto-detected. |
+| **ESP32-S3** | Supported | Generic `esp32s3_pulse / _pulse_no_pcnt / _serial / _udp / _test` envs. As on ESP32 classic, `_pulse` uses the PCNT hardware counter and `_pulse_no_pcnt` uses the interrupt counter. SSD1306 OLED bundled and auto-detected. |
 | **ESP32-C3** | Supported | `esp32c3_*` envs (RISC-V, no PCNT - software pulse counter). SSD1306 OLED bundled with default SDA=5 / SCL=6. |
 | **ESP32-S2** | Experimental | Base config present, no shipped end-user envs. |
 | **ESP32-C6 / H2** | Not supported | No build envs. RISC-V cores not tested. |
@@ -55,7 +55,7 @@ Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the
 | **Heltec WiFi LoRa 32 V3** | ESP32-S3 | 17 / 18 | GPIO 21 | `esp32s3_*` | Set SDA=17 / SCL=18 / RST=21 from Config page after flashing. |
 | **TTGO LoRa32 V1** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32_*` | Same recipe as Heltec V2. |
 | **LilyGo T-Beam** | ESP32 classic | 21 / 22 (default) | none | `esp32_*` | Works with stock defaults. |
-| **[MINI ESP32-S3-N16R8](https://s.click.aliexpress.com/e/_c3dXGAQt)** (sold as "XH-S3E-AI"; small purple board, onboard speaker + mic + button + NeoPixel + OLED header) <br><img src="img/xh-s3e-ai.png" width="240"/> | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; pin map hard-fixed in build flags. See [buildtargets](/install/buildtargets#audio-tick-esp32-only). |
+| **[MINI ESP32-S3-N16R8](https://s.click.aliexpress.com/e/_c3dXGAQt)** (sold as "XH-S3E-AI"; small purple board, onboard speaker + mic + button + NeoPixel + OLED header) <br><img src="img/xh-s3e-ai.png" width="240"/> | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; pin map hard-fixed in build flags. See [buildtargets](/install/buildtargets#audio-tick-esp32-s3-only). |
 
 Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need the firmware to pulse that pin at boot. The `-DOLED_RST=N` build flag enables that pulse; if omitted, the OLED stays in reset and shows a blank screen. Once defined, the pin is also runtime-adjustable from **Config → Display → Reset Pin**.
 
@@ -63,7 +63,9 @@ If your board isn't listed but matches one of these patterns, the same recipe ap
 
 ### PCNT
 
-The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/pcnt.html) (`PCNT`). By default ESPGeiger uses the hardware PCNT on Pulse builds for ESP32 devices. A `no_pcnt` build is also available for ESP32 which uses the same Interrupt counter mechanism as the ESP8266 builds.
+The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/pcnt.html) (`PCNT`). The ESP32 and ESP32-S3 `_pulse` builds count with PCNT. The `_no_pcnt` builds use the same interrupt counter as the ESP8266 builds. The [Web Installer](/install/webinstall) offers the interrupt build as its standard Pulse option and PCNT as a separate choice. ESP32-C3 has no PCNT and always uses the interrupt counter.
+
+The PCNT input pin floats by default, which suits modules that drive the line both ways. Change **PCNT Pull** in the Input tab's advanced settings to pull-up for open-drain outputs, or pull-down for active-high modules with no idle pull of their own.
 
 ### PCNT Filter
 
@@ -74,13 +76,13 @@ The filter value can be configured from the ESPGeiger web interface under __Conf
 | Filter Value | Pulse Duration Filtered | Use Case |
 |---|---|---|
 | 0 | Disabled | No filtering |
-| 100 (default) | < 1.25μs | Filters electrical noise while passing all real geiger pulses |
+| 200 (default) | < 2.5μs | Filters electrical noise while passing all real geiger pulses |
 | 500 | < 6.25μs | More aggressive filtering for noisy environments |
 | 1023 | < 12.8μs | Maximum filtering |
 
 Real Geiger-Muller tube pulses are typically 50-200μs in duration, so even the maximum filter value will not affect real readings. The filter is only available on ESP32 PCNT builds.
 
-The filter value can also be set at compile time with the `-D PCNT_FILTER=N` build flag. See [Build Options](/install/platformio#esp32-hardware-counter-pcnt) for details.
+Custom builds can change the starting value. See [Build Options](/dev/platformio#esp32-hardware-counter-pcnt).
 
 ### Interrupt Debounce
 
@@ -96,22 +98,8 @@ The debounce value can be configured from the ESPGeiger web interface under __Co
 
 Real Geiger-Muller tube dead time is around 50-200μs, so the default sits just below the tube's own recovery time and passes real events. The debounce only applies to the software interrupt path; PCNT builds use the PCNT Filter above instead.
 
-The default can also be set at compile time with the `-D GEIGER_DEBOUNCE=N` build flag. See [Build Options](/install/platformio#geiger-counter-input) for details.
+Custom builds can change the default. See [Build Options](/dev/platformio#geiger-counter-input).
 
 ### Interrupt Saturation Guard
 
-On the same software-interrupt builds, ESPGeiger watches the raw ISR-entry rate (pre-debounce) once a second. If it exceeds 10,000 entries/second (a level no physical Geiger tube can produce, but trivially reached by a floating RX pin, an unshielded cable picking up mains hum, or a failed tube oscillating) the firmware detaches the interrupt for 5 seconds and logs:
-
-```
-GeigerPulse: ISR storm (N/s) - parked 5s
-```
-
-The rest of the firmware (WiFi, web UI, MQTT, outputs) keeps running, so the device stays reachable and the watchdog gets fed. After 5 seconds the interrupt is reattached and counting resumes:
-
-```
-GeigerPulse: re-armed after storm cooldown
-```
-
-If the input is still saturated on re-arm, the guard parks it again. If you've just wired a real tube during the cooldown, counting picks up cleanly on the next re-arm.
-
-The threshold is intentionally far above realistic radiation rates (typical strongest hand-held sources peak at ~1 kHz pulse rate) and is independent of the configured debounce, so it cannot be accidentally disabled by tuning. PCNT builds count edges in hardware without firing the ISR, so they don't need this guard.
+On interrupt-counting builds, an input flooded with far more edges than any tube can produce is paused for 5 seconds at a time while the rest of the device keeps running. The log shows `ISR storm`. See [Troubleshooting](/troubleshooting#log-shows-isr-storm) for causes.

@@ -21,7 +21,7 @@ http://192.168.1.100/json
 Response:
 
 ```json
-{"ut":5025,"c":42.00,"s":0.28,"c5":41.50,"c15":40.90,"cs":0.70,"r":151.0,"tc":9876,"mem":19088,"rssi":-45}
+{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"hv":394.00,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
 ```
 
 | Field | Description |
@@ -36,29 +36,30 @@ Response:
 | `tc` | Total clicks since boot |
 | `mem` | Free heap memory in bytes |
 | `rssi` | WiFi signal strength in dBm |
+| `tube` | `1` while counts are arriving, `0` once the tube has been silent longer than expected for its count rate |
+| `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `hv` | HV reading in volts (ESPGeiger-HW only) |
-| `loss` | Packet loss on the feed, as a percentage (UDP-receiver builds only; appears once a producer has been heard) |
 
-### Raw / diagnostic values (`?raw=1`)
+#### Environmental sensor
 
-`mem` is lightly smoothed so a single read can't catch a transient dip and report a phantom drop, and the device-load fields (`tick`, `t_max`, `lps`) are left off the default response to keep the frequently-polled `/json` small. Append `?raw=1` for diagnostics:
-
-```
-http://192.168.1.100/json?raw=1
-```
-
-Raw mode reports `mem` un-smoothed and adds:
+Present only when a BME280, BMP280, AHTxx or AHT20 + BMP280 combo sensor is detected. Each field is left out when the sensor does not measure it, for example `h` on a BMP280.
 
 | Field | Description |
 |---|---|
-| `tick` | Smoothed microseconds spent in the once-per-second housekeeping pass. Lower is better. |
-| `t_max` | Worst-case `tick` in the last 60 seconds. |
-| `lps` | Main-loop iterations per second, un-smoothed (last full second). |
-| `frag` | Heap fragmentation, percent |
-| `lfb` | Largest contiguous free block in bytes |
-| `lfblow` | Largest-free-block low-water mark since boot, in bytes |
+| `t` | Temperature, in the unit chosen in the sensor settings |
+| `tu` | Temperature unit: `0` °C, `1` °F, `2` K |
+| `h` | Relative humidity, % |
+| `p` | Pressure in hPa, corrected to sea level when an elevation is set |
 
-`lfb` / `lfblow` are the honest measure of memory health: free heap can look fine while fragmentation quietly shrinks the largest block you can actually allocate.
+MQTT, WebAPI, the webhook and UDP always send temperature in °C; only `/json` follows the display unit.
+
+#### UDP receiver builds
+
+| Field | Description |
+|---|---|
+| `loss` | Packet loss on the feed, as a percentage (appears once a producer has been heard) |
+
+`/json?raw=1` adds memory and load diagnostics; see [HTTP endpoint schemas](/dev/http-endpoints#jsonraw1).
 
 ## GeigerLog
 
@@ -148,6 +149,27 @@ device_free_heap_bytes{chipid="d5536d"} 19432
 # HELP device_wifi_rssi_dbm WiFi signal strength
 device_wifi_rssi_dbm{chipid="d5536d"} -54
 
+# HELP geiger_usv_ratio CPM per uSv/h conversion ratio
+geiger_usv_ratio{chipid="d5536d"} 151.00
+
+# HELP geiger_tube_alive 1 while counts arrive, 0 once silent longer than expected for the rate
+geiger_tube_alive{chipid="d5536d"} 1
+
+# HELP geiger_saturated 1 when the count rate is near the dead-time limit
+geiger_saturated{chipid="d5536d"} 0
+
+# HELP device_hv_volts Tube high voltage
+device_hv_volts{chipid="d5536d"} 392.00
+
+# HELP env_temperature_celsius Temperature
+env_temperature_celsius{chipid="d5536d"} 21.63
+
+# HELP env_humidity_percent Relative humidity
+env_humidity_percent{chipid="d5536d"} 48.20
+
+# HELP env_pressure_hpa Pressure, sea-level corrected when an elevation is set
+env_pressure_hpa{chipid="d5536d"} 1026.38
+
 # HELP geiger_pulse_interval_seconds Inter-pulse intervals in seconds, log2 buckets
 # TYPE geiger_pulse_interval_seconds histogram
 geiger_pulse_interval_seconds_bucket{chipid="d5536d",le="0.000064"} 0
@@ -156,6 +178,30 @@ geiger_pulse_interval_seconds_bucket{chipid="d5536d",le="0.000128"} 0
 geiger_pulse_interval_seconds_bucket{chipid="d5536d",le="+Inf"} 1845231
 geiger_pulse_interval_seconds_count{chipid="d5536d"} 1845231
 ```
+
+### Metrics
+
+| Metric | Type | Description |
+|---|---|---|
+| `device_info` | gauge | Always 1; labels carry name, model, firmware version and build |
+| `geiger_cpm` | gauge | Counts per minute; `window` label is `1m`, `5m` or `15m` |
+| `geiger_cps` | gauge | Counts per second |
+| `geiger_usv_per_hour` | gauge | Dose rate in μSv/h |
+| `geiger_usv_ratio` | gauge | CPM per μSv/h conversion ratio |
+| `geiger_lifetime_clicks_total` | counter | Clicks over the device's life |
+| `geiger_tube_alive` | gauge | `1` while counts arrive, `0` once the tube has been silent longer than expected for its count rate |
+| `geiger_saturated` | gauge | `1` when the count rate is close to the tube's dead-time limit |
+| `geiger_pulse_interval_seconds` | histogram | Time between pulses, cumulative since boot |
+| `device_uptime_seconds` | gauge | Seconds since boot |
+| `device_free_heap_bytes` | gauge | Free heap memory |
+| `device_wifi_rssi_dbm` | gauge | WiFi signal strength |
+| `device_hv_volts` | gauge | Tube high voltage (ESPGeiger-HW only) |
+| `env_temperature_celsius` | gauge | Temperature, always °C |
+| `env_humidity_percent` | gauge | Relative humidity |
+| `env_pressure_hpa` | gauge | Pressure in hPa, corrected to sea level when an elevation is set |
+| `geiger_udp_loss_percent` | gauge | Packet loss on the feed (UDP receiver builds, once a producer has been heard) |
+
+The `env_` metrics appear only when a sensor is detected, and each only if the sensor measures it.
 
 ### Label model
 
@@ -192,23 +238,15 @@ time() - timestamp(geiger_cpm{window="1m"}) > 300
 * Histogram bucket boundaries are powers of two starting at 64 µs (inter-pulse interval). The top bucket is `+Inf`.
 * `geiger_lifetime_clicks_total` is a Prometheus counter (monotonically increasing); use `rate()` for click rate.
 
----
+## InfluxDB via Telegraf
 
-## Prometheus via Telegraf
-
-If you'd rather pull from the `/json` endpoint (eg you already run Telegraf, or you want to add fields not in `/metrics`), [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) can poll JSON and expose Prometheus metrics:
+[Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) can poll `/json` and write to InfluxDB. Add one `field` block per [JSON field](#json-endpoint) you want:
 
 ```toml
-# telegraf.conf
-
 [[inputs.http]]
   urls = ["http://192.168.1.100/json"]
-  method = "GET"
-  timeout = "5s"
   data_format = "json_v2"
   name_override = "espgeiger"
-  [[inputs.http.tags]]
-    device = "espgeiger-xxxxxx"
   [[inputs.http.json_v2]]
     [[inputs.http.json_v2.field]]
       path = "c"
@@ -218,77 +256,6 @@ If you'd rather pull from the `/json` endpoint (eg you already run Telegraf, or 
       path = "s"
       rename = "usv_h"
       type = "float"
-    [[inputs.http.json_v2.field]]
-      path = "c5"
-      rename = "cpm5"
-      type = "float"
-    [[inputs.http.json_v2.field]]
-      path = "c15"
-      rename = "cpm15"
-      type = "float"
-    [[inputs.http.json_v2.field]]
-      path = "cs"
-      rename = "cps"
-      type = "float"
-    [[inputs.http.json_v2.field]]
-      path = "tc"
-      rename = "total_clicks"
-      type = "int"
-    [[inputs.http.json_v2.field]]
-      path = "ut"
-      rename = "uptime_seconds"
-      type = "int"
-    [[inputs.http.json_v2.field]]
-      path = "mem"
-      rename = "free_heap"
-      type = "int"
-    [[inputs.http.json_v2.field]]
-      path = "rssi"
-      rename = "wifi_rssi"
-      type = "int"
-
-[[outputs.prometheus_client]]
-  listen = ":9273"
-```
-
-Prometheus can then scrape `http://<telegraf-host>:9273/metrics`.
-
-## Prometheus via MQTT Exporter
-
-If you are already publishing via MQTT, the [mqtt2prometheus](https://github.com/hikhvar/mqtt2prometheus) exporter converts MQTT topics into Prometheus metrics:
-
-```yaml
-# mqtt2prometheus.yaml
-mqtt:
-  server: tcp://mqtt-broker:1883
-  topic_path: ESPGeiger-+/stat/+
-  device_id_regex: "ESPGeiger-(?P<deviceid>[0-9a-f]+)/stat/.+"
-  qos: 0
-metrics:
-  - prom_name: espgeiger_cpm
-    mqtt_name: CPM
-    help: Current counts per minute
-    type: gauge
-  - prom_name: espgeiger_usv
-    mqtt_name: uSv
-    help: Current microsieverts per hour
-    type: gauge
-  - prom_name: espgeiger_cpm5
-    mqtt_name: CPM5
-    help: 5-minute smoothed CPM
-    type: gauge
-```
-
-## InfluxDB via Telegraf
-
-To write directly to InfluxDB instead of Prometheus:
-
-```toml
-[[inputs.http]]
-  urls = ["http://192.168.1.100/json"]
-  data_format = "json_v2"
-  name_override = "espgeiger"
-  # ... field config as above ...
 
 [[outputs.influxdb_v2]]
   urls = ["http://influxdb:8086"]
@@ -325,7 +292,7 @@ Wire `poll → http → your destination` (MQTT, database, dashboard, webhook, e
 
 ## Home Assistant
 
-If using MQTT with Home Assistant autodiscovery enabled, ESPGeiger sensors appear automatically. See [Home Assistant](/output/homeassistant) for details.
+If using MQTT with Home Assistant autodiscovery enabled, ESPGeiger sensors appear automatically. See [Home Assistant](/output/ha) for details.
 
 For REST polling without MQTT:
 
@@ -353,15 +320,4 @@ rest:
 
 ## Grafana Dashboard
 
-Once data is in Prometheus or InfluxDB, Grafana can visualise it. A simple dashboard query for Prometheus:
-
-```promql
-# Current CPM
-espgeiger_cpm
-
-# 5 minute average
-avg_over_time(espgeiger_cpm[5m])
-
-# Alert when above threshold
-espgeiger_cpm > 100
-```
+Once data is in Prometheus or InfluxDB, Grafana can chart it. For Prometheus, start from the [PromQL examples](#promql-examples) above, for example `geiger_cpm{window="1m"}`.

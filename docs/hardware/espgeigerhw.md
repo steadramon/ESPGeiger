@@ -80,22 +80,38 @@ The following commonly available tubes are known to be compatible with the ESPGe
 
 | Tube Name | Length | Operating Voltage | Suggested Ratios | Notes |
 |---|---|---|---|---|
-SBM-20 (СБМ-20) | 108 ± 3.5 | 400V | 158 / 175 | 
-SBM-19 (СБМ-19) | 195mm | 400V | 666 / 928 | External connection
-SBM-21 (СБМ-21) | 108 ± 3.5 | 400V | 21 | External Connection
-STS-5 (CTC-5) | 111mm | 390-400V | 150 / 175 | 
-SI22G (СИ22Г) | 220mm | 390-400V | 583 / 729 | External connection
-J305 | 105mm | 400V | 123.0 | [Discussion](https://iot-devices.com.ua/en/geiger-tube-j305-how-to-calculate-the-conversion-factor-of-cpm-technical-note-en)
+SBM-20 (СБМ-20) | 108 ± 3.5 | 400V | 175 ([D][d]), 158 ([U][u]), 108 ([RL][rl]) | 
+SBM-19 (СБМ-19) | 195mm | 400V | 667 ([U][u]), 928 ([A][a]) | External connection
+SBM-21 (СБМ-21) | 108 ± 3.5 | 400V | 20.8 ([U][u], [A][a]) | External Connection
+STS-5 (CTC-5) | 111mm | 390-400V | 150 ([U][u]) | 
+SI22G (СИ22Г) | 220mm | 390-400V | 583 ([U][u]), 792 ([A][a]) | External connection
+J305 | 105mm | 400V | 123 ([J][j]), 181 ([RL][rl]) | 
 J305 | 90mm | 400V | - | 
 J321 | 86mm | 400V | - | *may* fit
-M4011 | 90mm | 400V | - | 
-ROBOTRON 70 013 | 163mm | 500V | 600 / 0.001667 | External connection
+M4011 | 90mm | 400V | 151 ([I][i]), 154 ([D][d]), 146 ([RL][rl]) | 
+ROBOTRON 70 013 | 163mm | 500V | 600 per µGy/h, Cs-137 ([V](#tube-references)) | External connection
+
+Ratios are CPM per µSv/h. There is no single right figure: each depends on the source the tube was measured against, which is why sources disagree. Rad Lab figures are simulated for natural background, the right reference for a station measuring background.
+
+The firmware's default ratio, 151, is the M4011 figure from [I][i]. Set your own for any other tube.
 
 ## Tube References
 
-- [https://andkom.github.io/gmcalc/](https://andkom.github.io/gmcalc/)
-- [https://arduino-geiger-pcb.blogspot.com/2017/03/conversion-rates-for-soviet-made-geiger.html](https://arduino-geiger-pcb.blogspot.com/2017/03/conversion-rates-for-soviet-made-geiger.html)
-- [https://www.uradmonitor.com/topic/hardware-conversion-factor/](https://www.uradmonitor.com/topic/hardware-conversion-factor/)
+- [D] [GM Tubes Supported (diygeigercounter)](https://www.sites.google.com/site/diygeigercounter/technical/gm-tubes-supported)
+- [U] [uRADMonitor hardware conversion factor](https://www.uradmonitor.com/topic/hardware-conversion-factor/), given as µSv/h per CPM
+- [A] [Conversion rates for Soviet made Geiger tubes](https://arduino-geiger-pcb.blogspot.com/2017/03/conversion-rates-for-soviet-made-geiger.html)
+- [RL] [Rad Lab](https://github.com/Gissio/radlab) tube simulations, natural background
+- [J] [J305 conversion factor technical note](https://iot-devices.com.ua/en/geiger-tube-j305-how-to-calculate-the-conversion-factor-of-cpm-technical-note-en/)
+- [I] [Geiger Counter With Arduino Uno (Instructables)](https://instructables.com/Geiger-Counter)
+- [V] VACUTEC 70 013 datasheet: 10 counts/s per µGy/h at 662 keV (Cs-137)
+- [gmcalc](https://andkom.github.io/gmcalc/) tube data and calculator
+
+[d]: https://www.sites.google.com/site/diygeigercounter/technical/gm-tubes-supported
+[u]: https://www.uradmonitor.com/topic/hardware-conversion-factor/
+[a]: https://arduino-geiger-pcb.blogspot.com/2017/03/conversion-rates-for-soviet-made-geiger.html
+[rl]: https://github.com/Gissio/radlab
+[j]: https://iot-devices.com.ua/en/geiger-tube-j305-how-to-calculate-the-conversion-factor-of-cpm-technical-note-en/
+[i]: https://instructables.com/Geiger-Counter
 
 ### Possibly Compatible
 {: .no_toc }

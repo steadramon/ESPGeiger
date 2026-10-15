@@ -35,23 +35,25 @@ Connect SDA, SCL, VCC (3.3 V), GND. Default pins:
 | ESP32-S2 / S3 | 8 | 9 |
 | ESP32-C3 / C6 | 6 | 7 |
 
-If your build also has an OLED, the sensor must share the same I2C pins as the OLED. ESPGeiger uses a single I2C bus.
-
-If you need different pins, change them in **Configuration → Environment**. A reboot is required to apply pin changes.
+ESPGeiger uses a single I2C bus, shared with the OLED. OLED builds default to the OLED's pins. Change the pins in the **I2C Bus** section of the [Config page](/configuration). A reboot is required to apply pin changes.
 
 ## Settings
 
-| Setting | Default | Range |
-|---|---|---|
-| `env.sda` | platform default | 0 - MAX_GPIO |
-| `env.scl` | platform default | 0 - MAX_GPIO |
-| `env.unit` | 0 (°C) | 0=°C, 1=°F, 2=K |
+<!-- gen:prefs env -->
+
+| Setting | Key | Type | Default | Description |
+|---|---|---|---|---|
+| Temp unit | `env.unit` | `0` Celsius, `1` Fahrenheit, `2` Kelvin | `0` Celsius | Unit for the local display and Serial templates. |
+| Temp offset | `env.temp_offset` | Int -100 to 100 | `0` | 0.1 C steps. -25 = -2.5 C. |
+| Altitude (m) | `env.altitude_m` | Int 0-9000 | `0` | Elevation in metres. Corrects pressure to sea level (0 = local station pressure). |
+
+<!-- /gen -->
 
 `env.unit` only affects what is shown on the local `/status` page and Serial templates. All outputs (MQTT, Webhook, WebAPI, UDP, Thingspeak) always publish in canonical units (°C, %RH, hPa) so consumers can convert if they want.
 
 ## Combo modules
 
-The popular AliExpress "AHT20+BMP280" module has two chips on one board (AHT20 at 0x38, BMP280 at 0x76). ESPGeiger detects both, composes temperature and humidity from the AHT20 (higher precision), and pressure from the BMP280. The boot log reports `Env: AHTxx+BMP280 detected` (serial console, or the Console panel on the `/status` page). The BMP280's own temperature reading is used internally for pressure compensation but not exposed.
+The popular AliExpress "AHT20+BMP280" module has two chips on one board (AHT20 at 0x38, BMP280 at 0x76). ESPGeiger detects both, takes temperature and humidity from the AHT20 (higher precision), and pressure from the BMP280.
 
 ## Output channels
 
@@ -63,7 +65,7 @@ When a sensor is present, the firmware adds the relevant fields to each output c
 * **WebAPI**: MsgPack payload gains `t` / `h` / `p`.
 * **UDP / OSC**: new `/espg/<id>/env` schema `,fff` (temp, humidity, pressure) every 60 s.
 * **Thingspeak**: maps temp / humidity / pressure to `field5` / `field6` / `field7`. Configure those fields in your Thingspeak channel UI.
-* **Serial template** (`sout.format=5`): variables `{t}` `{h}` `{p}` available for substitution.
+* **Serial template** (`sout.format=2`): variables `{t}` `{h}` `{p}` available for substitution.
 
 Historical trends are not stored on the device - if you want a 24-hour chart, point your MQTT broker at Home Assistant, Grafana, or any other dashboard tool.
 

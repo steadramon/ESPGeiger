@@ -1,4 +1,4 @@
-[![Build](https://github.com/steadramon/ESPGeiger/workflows/Build/badge.svg?branch=main)](https://github.com/steadramon/ESPGeiger/actions) [![Issues](https://img.shields.io/github/issues/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/issues) [![Stars](https://img.shields.io/github/stars/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/stargazers)
+[![Build](https://github.com/steadramon/ESPGeiger/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/steadramon/ESPGeiger/actions/workflows/build.yml) [![Issues](https://img.shields.io/github/issues/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/issues) [![Stars](https://img.shields.io/github/stars/steadramon/ESPGeiger)](https://github.com/steadramon/ESPGeiger/stargazers)
 
 # <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/favicon.svg" width="30px"/> ESPGeiger
 
@@ -123,7 +123,7 @@ Full documentation is available at **[docs.espgeiger.com](https://docs.espgeiger
 
 ## Building from Source
 
-If you want to customise the firmware or create a build for unsupported hardware, you can build from source using PlatformIO. See the [Platformio Build documentation](https://docs.espgeiger.com/install/platformio) for details.
+If you want to customise the firmware or create a build for unsupported hardware, you can build from source using PlatformIO. See the [Platformio Build documentation](https://docs.espgeiger.com/dev/platformio) for details.
 
 ## Compatible Geiger Counters
 

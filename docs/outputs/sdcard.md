@@ -34,9 +34,13 @@ A SD Card of up to 16GB usually takes < 2 seconds to initialise.
 
 The SD Card module exposes one setting on the `/param` configuration page:
 
-| Setting | Default | Range | Description |
-|---|---|---|---|
-| `Sync Interval (min)` | `1` | `1`-`5` | Minutes between syncs to the card. |
+<!-- gen:prefs sdcard -->
+
+| Setting | Key | Type | Default | Description |
+|---|---|---|---|---|
+| Sync Interval (min) | `sdcard.sync_min` | Int 1-5 | `1` | Minutes between syncs to the card. |
+
+<!-- /gen -->
 
 Each minute the firmware appends one CSV row. The file stays open between minutes to avoid the cost of re-opening on every write. Data is only physically committed to the card on sync - between syncs, rows sit in the firmware's RAM buffer.
 

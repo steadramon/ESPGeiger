@@ -17,12 +17,12 @@ ESPGeiger comes with a built-in Web Portal that lets you configure your device a
 The main page has buttons to reach each area of configuration:
 
 * **Config** - all general device and output settings. See the [Configuration reference](/configuration) for the full list of options, value ranges and defaults.
-* **NTP Config** - time zone and NTP server settings. See [NTP Configuration](/configuration/ntp).
+* **Network Config** - Wi-Fi, static IP, time zone and NTP server. See [/network page](#network-page) and [Time and NTP](/configuration/ntp).
 * **HV Config** - high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
 
 ## Live blip indicator on `/status`
 
-The coloured dot next to the CPM reading on the `/status` page is a synchronised mirror of the [NeoPixel output](/output/neopixel) - it flashes at a rate proportional to the CPM-vs-CPM5 ratio and changes colour based on a Poisson z-score against the 5-minute baseline. See the [NeoPixel page](/output/neopixel#how-the-colour-and-flash-rate-are-derived) for the colour table and full derivation.
+The coloured dot next to the CPM reading on the `/status` page is a synchronised mirror of the [NeoPixel output](/output/neopixel) - it flashes at a rate proportional to the CPM-vs-CPM5 ratio and changes colour based on a Poisson z-score against the 5-minute baseline. See the [NeoPixel page](/output/neopixel#how-the-trend-colour-and-flash-rate-are-derived-modes-3-and-4) for the colour table and full derivation.
 
 It's an "activity trend" indicator rather than a per-click visualization. For per-click visual feedback, see the blip LED on supported builds. 
 
@@ -48,12 +48,12 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/json` | Machine-readable status snapshot - see [JSON Endpoint](/output/integrations#json-endpoint) |
 | `/lastdata` | GeigerLog-compatible CSV line - see [GeigerLog](/output/integrations#geigerlog) |
 | `/info` | Human-readable HTML page with full device + network identity - see [/info page](#info-page) |
-| `/about` | Build, hardware and module identity (useful for support / debugging) - see below |
+| `/about` | Build, hardware and module identity, as JSON (useful for support) |
 | `/network` | WiFi + static IP + NTP configuration - see [/network page](#network-page) |
-| `/outputs` | State of the configured third-party output modules - see below |
+| `/outputs` | Whether each enabled upload service is working, as JSON |
 | `/hv` | High-voltage tuning page (ESPGeiger-HW builds only) |
 | `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
-| `/screen` | Live OLED framebuffer preview (OLED builds only) - see [OLED](/output/oled#browser-screen-viewer) |
+| `/screen` | Live display preview (OLED and MAX7219/TM1637 builds) - see [OLED](/output/oled#browser-screen-viewer) |
 | `/export` | Streaming base64+CRC32 dump of all prefs (skips `sys.web_pass` and the `net` group). UI lives on the Config page's Backup tab. |
 | `/import` (POST) | Apply a previously-exported blob (overlay-only; keys not in the blob are left alone). Reboots on success. |
 | `/life/reset` (POST) | Zero the lifetime click counter + first-boot timestamp. Button on `/hist`. |
@@ -62,68 +62,7 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 
 For the `/json` response schema and examples of integrating `/json` or `/lastdata` with external tools (GeigerLog, Home Assistant, Prometheus, InfluxDB, Node-RED, Grafana), see [Integrations](/output/integrations).
 
-### `/outputs` response
-
-Returns a JSON object keyed by module name, describing the state of each configured third-party output. Only modules that are **enabled** in the Config page appear - unconfigured or disabled modules are omitted. An empty object `{}` means no third-party outputs are active.
-
-Possible keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`.
-
-Example:
-
-```json
-{
-  "mqtt":       {"ok":true,  "age":42},
-  "radmon":     {"ok":true,  "age":17},
-  "thingspeak": {"ok":false, "age":91},
-  "gmc":        {"ok":true,  "age":230},
-  "webhook":    {"ok":false, "age":null}
-}
-```
-
-| Field | Meaning |
-|---|---|
-| `ok` | `true` if the last submission was accepted by the remote service. For MQTT this reflects the live connection plus a successful recent publish. |
-| `age` | Seconds since the last submission attempt completed, or `null` if the module is enabled but has not yet attempted a submission (e.g. just after boot). |
-
-This is intended as a lightweight health check - useful for local dashboards, scripts, or Home Assistant REST sensors that want to know whether a given remote integration is working without subscribing to MQTT or scraping the logs.
-
-### `/about` response
-
-Static identity information about the device and firmware, plus the list of compiled-in modules. Useful for support tickets and remote inventory. Things that change at runtime (uptime, memory, RSSI) live in `/json` instead.
-
-Example:
-
-```json
-{
-  "ver": "0.8.0",
-  "git": "06a2d9d",
-  "env": "espgeigerlog",
-  "date": "Apr 15 2026 12:34:56",
-  "chip": "ESP8266",
-  "mac": "AABBCCDDEEFF",
-  "host": "ESPGeiger-a1b2c3",
-  "g_mod": "genpulse",
-  "g_type": "pulse",
-  "g_test": false,
-  "g_pcnt": true,
-  "modules": ["disp","neopx","button","ntp","mqtt","radmon","whook","sercmd","serout"]
-}
-```
-
-| Field | Meaning |
-|---|---|
-| `ver` | Firmware version (release) |
-| `git` | Short git commit the firmware was built from |
-| `env` | PlatformIO build environment name (e.g. `espgeigerlog`, `esp32_pulse`) |
-| `b_date` | Build timestamp (compile-time `__DATE__ __TIME__`) |
-| `chip` | Chip model reported by the framework (`ESP8266` / `ESP32` / `ESP32-S2` etc.) |
-| `mac` | Device MAC address |
-| `host` | Configured hostname |
-| `g_mod` | Geiger model name set by the build / config. For serial builds this identifies the protocol (`GC10`, `GC10Next`, `MightyOhm`, `ESPG`). |
-| `g_type` | Counter input type: `"pulse"`, `"serial"`, or `"none"` (pure test build with no hardware input) |
-| `g_test` | `true` if the build is a test / simulation variant (generates pulses internally) |
-| `g_pcnt` | `true` if the build uses the ESP32 PCNT hardware counter for pulse counting (false on ESP8266 builds, and on ESP32 builds compiled with `-D IGNORE_PCNT`) |
-| `modules` | List of module identifiers compiled into this firmware |
+The `/outputs` and `/about` response formats are on the [HTTP endpoint schemas](/dev/http-endpoints) developer page.
 
 ### `/info` page
 
