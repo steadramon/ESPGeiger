@@ -137,7 +137,8 @@ bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t l
   char final_path[EGPS_PATH_BUFSZ];
   group_path(final_path, sizeof(final_path), _path, module_id);
   char staging[EGPS_PATH_BUFSZ];
-  snprintf_P(staging, sizeof(staging), PSTR("%s%s"), final_path, EGPS_STAGING_SUFFIX);
+  int sn = snprintf_P(staging, sizeof(staging), PSTR("%s%s"), final_path, EGPS_STAGING_SUFFIX);
+  if (sn < 0 || sn >= (int)sizeof(staging)) return false;
   {
     File f = LittleFS.open(staging, "w");
     if (!f) return false;

@@ -227,7 +227,8 @@ public:
       case TAG_UINT8:  { uint8_t  v; if (!get_u8(&v))  return false; *out = v; return true; }
       case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
       case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false;
-                         if (v > 0x7fffffffu) break; *out = (int32_t)v; return true; }
+                         if (v > 0x7fffffffu) break;
+                         *out = (int32_t)v; return true; }
       case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false; *out = (int8_t)v; return true; }
       case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false; *out = (int16_t)v; return true; }
       case TAG_INT32:  { uint32_t v; if (!get_u32(&v)) return false; *out = (int32_t)v; return true; }
@@ -247,11 +248,14 @@ public:
       case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
       case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false; *out = v; return true; }
       case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false;
-                         if ((int8_t)v < 0) break; *out = v; return true; }
+                         if ((int8_t)v < 0) break;
+                         *out = v; return true; }
       case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false;
-                         if ((int16_t)v < 0) break; *out = v; return true; }
+                         if ((int16_t)v < 0) break;
+                         *out = v; return true; }
       case TAG_INT32:  { uint32_t v; if (!get_u32(&v)) return false;
-                         if ((int32_t)v < 0) break; *out = v; return true; }
+                         if ((int32_t)v < 0) break;
+                         *out = v; return true; }
     }
     error = true; return false;
   }

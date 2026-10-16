@@ -53,52 +53,79 @@ static size_t osc_f32(uint8_t* buf, size_t cap, size_t off, float v) {
 
 size_t blip_click(uint8_t* buf, size_t cap, const char* path) {
   size_t off = 0, n;
-  if (!(n = osc_str(buf, cap, off, path))) return 0; off += n;
-  if (!(n = osc_strn(buf, cap, off, PSTR(",ii"), 3))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, 0))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, 0))) return 0; off += n;
+  if (!(n = osc_str(buf, cap, off, path))) return 0;
+  off += n;
+  if (!(n = osc_strn(buf, cap, off, PSTR(",ii"), 3))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, 0))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, 0))) return 0;
+  off += n;
   return off;
 }
 
 size_t blip_rad(uint8_t* buf, size_t cap, const char* path, const BlipRad& r) {
   size_t off = 0, n;
-  if (!(n = osc_str(buf, cap, off, path))) return 0; off += n;
-  if (!(n = osc_strn(buf, cap, off, PSTR(",ffsi"), 5))) return 0; off += n;
-  if (!(n = osc_f32(buf, cap, off, r.cpm))) return 0; off += n;
-  if (!(n = osc_f32(buf, cap, off, r.usv))) return 0; off += n;
-  if (!(n = osc_str(buf, cap, off, r.state))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, r.clicks))) return 0; off += n;
+  if (!(n = osc_str(buf, cap, off, path))) return 0;
+  off += n;
+  if (!(n = osc_strn(buf, cap, off, PSTR(",ffsi"), 5))) return 0;
+  off += n;
+  if (!(n = osc_f32(buf, cap, off, r.cpm))) return 0;
+  off += n;
+  if (!(n = osc_f32(buf, cap, off, r.usv))) return 0;
+  off += n;
+  if (!(n = osc_str(buf, cap, off, r.state))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, r.clicks))) return 0;
+  off += n;
   return off;
 }
 
 size_t blip_hv(uint8_t* buf, size_t cap, const char* path, const BlipHv& h) {
   size_t off = 0, n;
-  if (!(n = osc_str(buf, cap, off, path))) return 0; off += n;
-  if (!(n = osc_strn(buf, cap, off, PSTR(",ffii"), 5))) return 0; off += n;
-  if (!(n = osc_f32(buf, cap, off, h.v))) return 0; off += n;
-  if (!(n = osc_f32(buf, cap, off, h.target))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, h.duty))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, (uint32_t)h.trim))) return 0; off += n;
+  if (!(n = osc_str(buf, cap, off, path))) return 0;
+  off += n;
+  if (!(n = osc_strn(buf, cap, off, PSTR(",ffii"), 5))) return 0;
+  off += n;
+  if (!(n = osc_f32(buf, cap, off, h.v))) return 0;
+  off += n;
+  if (!(n = osc_f32(buf, cap, off, h.target))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, h.duty))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, (uint32_t)h.trim))) return 0;
+  off += n;
   return off;
 }
 
 size_t blip_env(uint8_t* buf, size_t cap, const char* path, float t, float h, float p) {
   size_t off = 0, n;
-  if (!(n = osc_str(buf, cap, off, path))) return 0; off += n;
-  if (!(n = osc_strn(buf, cap, off, PSTR(",fff"), 4))) return 0; off += n;
-  if (!(n = osc_f32(buf, cap, off, t))) return 0; off += n;
-  if (!(n = osc_f32(buf, cap, off, h))) return 0; off += n;
-  if (!(n = osc_f32(buf, cap, off, p))) return 0; off += n;
+  if (!(n = osc_str(buf, cap, off, path))) return 0;
+  off += n;
+  if (!(n = osc_strn(buf, cap, off, PSTR(",fff"), 4))) return 0;
+  off += n;
+  if (!(n = osc_f32(buf, cap, off, t))) return 0;
+  off += n;
+  if (!(n = osc_f32(buf, cap, off, h))) return 0;
+  off += n;
+  if (!(n = osc_f32(buf, cap, off, p))) return 0;
+  off += n;
   return off;
 }
 
 size_t blip_sys(uint8_t* buf, size_t cap, const char* path, const BlipSys& s) {
   size_t off = 0, n;
-  if (!(n = osc_str(buf, cap, off, path))) return 0; off += n;
-  if (!(n = osc_strn(buf, cap, off, PSTR(",iiii"), 5))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, s.uptime))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, (uint32_t)s.rssi))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, s.lps))) return 0; off += n;
-  if (!(n = osc_i32(buf, cap, off, s.tick_max))) return 0; off += n;
+  if (!(n = osc_str(buf, cap, off, path))) return 0;
+  off += n;
+  if (!(n = osc_strn(buf, cap, off, PSTR(",iiii"), 5))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, s.uptime))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, (uint32_t)s.rssi))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, s.lps))) return 0;
+  off += n;
+  if (!(n = osc_i32(buf, cap, off, s.tick_max))) return 0;
+  off += n;
   return off;
 }

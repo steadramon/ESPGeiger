@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <stdarg.h>
 #include "Logger.h"
 #include "../Net/Wifi.h"
 #include "../System/Clock.h"
@@ -93,7 +94,7 @@ void Log::banner(const char* formatP, ...)
 // Based on arendst/Tasmota addLog (support.ino)
 void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimestamp)
 {
-  char timeStr[10] = "";
+  char timeStr[13] = "";
 #ifndef DISABLE_LOG_TS
   if (withTimestamp) {
     struct tm t;
