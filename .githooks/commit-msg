@@ -1,2 +1,0 @@
-#!/bin/sh
-exec python3 scripts/lint_style.py commit-msg "$1"

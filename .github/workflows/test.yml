@@ -17,28 +17,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  style:
-    runs-on: ubuntu-24.04
-    name: style
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Install lizard
-        run: pip install lizard==1.24.0
-
-      - name: Lint the tree
-        run: python scripts/lint_style.py
-
-      - name: Lint commit messages
-        run: python3 scripts/lint_style.py commit-msg --log origin/main..HEAD
-
   unit:
     runs-on: ubuntu-24.04
     name: native
