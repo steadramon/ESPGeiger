@@ -183,6 +183,20 @@ static bool _server_alive(const AsyncServer* s) {
   return false;
 }
 
+// closed, peer silent this long: abort, else lwIP retries 30+ min
+#ifndef EGASYNC_CLOSE_LINGER_S
+#define EGASYNC_CLOSE_LINGER_S 180
+#endif
+#define EGASYNC_LINGER_POLL 10   // 500 ms ticks
+
+// tmr = last heard
+static err_t _linger_poll(void* arg, tcp_pcb* pcb) {
+  (void)arg;
+  if (tcp_ticks - pcb->tmr < EGASYNC_CLOSE_LINGER_S * 1000UL / TCP_SLOW_INTERVAL) return ERR_OK;
+  tcp_abort(pcb);
+  return ERR_ABRT;
+}
+
 #define EGASYNC_DNS_REG_MAX 8
 static AsyncClient* _dns_pending[EGASYNC_DNS_REG_MAX] = {};
 static uint8_t _dns_pending_count = 0;
@@ -545,6 +559,8 @@ void AsyncClient::_close(){
 #endif
     clearTcpCallbacks(_pcb);
     _pcb_alive = false;
+    // before tcp_close, it can free the pcb
+    tcp_poll(_pcb, &_linger_poll, EGASYNC_LINGER_POLL);
     err_t err = tcp_close(_pcb);
     if(ERR_OK == err) {
       setCloseError(err);

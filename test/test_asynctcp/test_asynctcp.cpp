@@ -304,8 +304,9 @@ static void dtor_mid_handshake(void) {
   TEST_ASSERT_NULL(pcb->recv);
   TEST_ASSERT_NULL(pcb->sent);
   TEST_ASSERT_NULL(pcb->errf);
-  TEST_ASSERT_NULL(pcb->poll);
   TEST_ASSERT_NULL(pcb->callback_arg);
+  // linger poll only, never the client
+  TEST_ASSERT_EQUAL_INT(ERR_OK, FakeLwip::fire_poll(pcb));
 }
 
 // Callbacks after the client is gone
@@ -367,6 +368,52 @@ static void close_freed_pcb(void) {
   strand_client(c);
   c->close(true);
   TEST_ASSERT_EQUAL_INT(0, FakeLwip::counts().recved_on_dead_pcb);
+}
+
+// 180 s of silence, 360 ticks
+static void linger_abort(void) {
+  tcp_pcb* pcb = connect_and_establish(c);
+  FakeLwip::linger_on_close(true);
+  c->close(true);
+  TEST_ASSERT_TRUE(FakeLwip::is_active(pcb));
+  TEST_ASSERT_NULL(pcb->recv);
+  TEST_ASSERT_NULL(pcb->errf);
+  TEST_ASSERT_NULL(pcb->callback_arg);
+  FakeLwip::tick(359);
+  TEST_ASSERT_EQUAL_INT(ERR_OK, FakeLwip::fire_poll(pcb));
+  TEST_ASSERT_EQUAL_INT(0, FakeLwip::counts().tcp_abort);
+  TEST_ASSERT_TRUE(FakeLwip::is_active(pcb));
+  FakeLwip::tick(1);
+  TEST_ASSERT_EQUAL_INT(ERR_ABRT, FakeLwip::fire_poll(pcb));
+  TEST_ASSERT_EQUAL_INT(1, FakeLwip::counts().tcp_abort);
+  TEST_ASSERT_FALSE(FakeLwip::is_active(pcb));
+}
+
+// peer still acking, kept
+static void linger_heard(void) {
+  tcp_pcb* pcb = connect_and_establish(c);
+  FakeLwip::linger_on_close(true);
+  c->close(true);
+  FakeLwip::tick(300);
+  pcb->tmr = tcp_ticks;
+  FakeLwip::tick(300);
+  TEST_ASSERT_EQUAL_INT(ERR_OK, FakeLwip::fire_poll(pcb));
+  TEST_ASSERT_TRUE(FakeLwip::is_active(pcb));
+}
+
+// ticks wrap
+static void dtor_lingers(void) {
+  FakeLwip::tick(0xFFFFFFFFu - 100);
+  tcp_pcb* pcb = connect_and_establish(c);
+  FakeLwip::linger_on_close(true);
+  delete c;
+  c = nullptr;
+  FakeLwip::tick(200);
+  TEST_ASSERT_EQUAL_INT(ERR_OK, FakeLwip::fire_poll(pcb));
+  TEST_ASSERT_TRUE(FakeLwip::is_active(pcb));
+  FakeLwip::tick(160);
+  TEST_ASSERT_EQUAL_INT(ERR_ABRT, FakeLwip::fire_poll(pcb));
+  TEST_ASSERT_FALSE(FakeLwip::is_active(pcb));
 }
 
 static int s_data_seen = 0;
@@ -527,6 +574,9 @@ int main(int, char**) {
   RUN_TEST(error_gone);
   RUN_TEST(write_freed_pcb);
   RUN_TEST(close_freed_pcb);
+  RUN_TEST(linger_abort);
+  RUN_TEST(linger_heard);
+  RUN_TEST(dtor_lingers);
   RUN_TEST(recv_freed_pcb);
   RUN_TEST(accept_gone);
   RUN_TEST(connect_by_name);

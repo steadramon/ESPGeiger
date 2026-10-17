@@ -105,6 +105,8 @@ void fail_next_dns(err_t err);     // one shot
 void fail_next_pcb();              // one shot, tcp_new gives nullptr
 
 void ack_on_output(bool on);   // peer acks at once
+void linger_on_close(bool on); // close keeps it in FIN_WAIT_1, data unacked
+void tick(u32_t n);            // tcp_ticks, 500 ms each
 
 // kept until reset()
 struct Conn {

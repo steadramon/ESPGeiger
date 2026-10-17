@@ -30,6 +30,7 @@ extern "C" {
 
 struct tcp_pcb* tcp_active_pcbs = nullptr;
 struct tcp_pcb* tcp_tw_pcbs     = nullptr;
+u32_t tcp_ticks = 0;
 
 // IP4_ADDR_ANY / IP_ANY_TYPE
 const ip_addr_t ip_addr_any       = IPADDR4_INIT(IPADDR_ANY);
@@ -47,6 +48,7 @@ bool     g_write_fail_armed = false;
 bool     g_ack_on_output = false;
 err_t    g_dns_fail      = ERR_OK;
 bool     g_pcb_fail      = false;
+bool     g_linger        = false;
 
 struct PendingDns {
   std::string  name;
@@ -126,9 +128,13 @@ void reset() {
   g_ack_on_output = false;
   g_dns_fail = ERR_OK;
   g_pcb_fail = false;
+  g_linger = false;
+  tcp_ticks = 0;
 }
 
 void ack_on_output(bool on) { g_ack_on_output = on; }
+void linger_on_close(bool on) { g_linger = on; }
+void tick(u32_t n) { tcp_ticks += n; }
 
 Conn* conn_of(const tcp_pcb* pcb) {
   if (!pcb) return nullptr;
@@ -141,6 +147,7 @@ tcp_pcb* new_pcb() {
   pcb->state    = ESTABLISHED;
   pcb->mss      = TCP_MSS;
   pcb->snd_buf  = g_sndbuf;
+  pcb->tmr      = tcp_ticks;
   list_push(&tcp_active_pcbs, pcb);
   g_live.push_back(pcb);
   g_conns.push_back(new Conn{ pcb, std::string(), 0, false });
@@ -393,6 +400,10 @@ err_t tcp_close(struct tcp_pcb* pcb) {
   if (is_pinned(pcb)) {
     list_remove(&tcp_active_pcbs, pcb);
     list_remove(&tcp_tw_pcbs, pcb);
+    return ERR_OK;
+  }
+  if (g_linger) {
+    pcb->state = FIN_WAIT_1;
     return ERR_OK;
   }
   FakeLwip::retire_pcb(pcb);
