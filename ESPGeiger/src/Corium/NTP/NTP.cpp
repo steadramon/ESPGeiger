@@ -118,11 +118,10 @@ static void take_sync() {
   if (Clock::on_sync()) Log::console(PSTR("NTP: Synched"));
 }
 
-// first sync only, loop() takes resyncs
+// first sync only, loop() takes resyncs; off once either has it
 void NTP_Client::s_tick(unsigned long) {
-  if (!s_synced) return;
-  take_sync();
-  EGModuleRegistry::set_tick_enabled(this, false);
+  if (s_synced) take_sync();
+  if (Clock::synced) EGModuleRegistry::set_tick_enabled(this, false);
 }
 
 void NTP_Client::loop(unsigned long now) {
