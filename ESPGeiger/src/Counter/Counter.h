@@ -153,16 +153,20 @@ class Counter : public CounterMaths {
 
       // inline gate
       inline bool needs_loop() {
-        if (_pending_work) return true;
-#ifdef GEIGER_COUNTS_IN_ISR
-        return _last_blip_seen != _last_blip;
+#if GEIGER_IS_TEST(GEIGER_TYPE) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !defined(GEIGER_COUNTS_IN_ISR)
+        return true;   // drains every pass anyway
 #else
+        if (_pending_work) return true;
+  #ifdef GEIGER_COUNTS_IN_ISR
+        return _last_blip_seen != _last_blip;
+  #else
         if (!_running) return false;
         if (_last_blip_seen != _last_blip) return true;
-  #ifdef COUNTER_DRAINS_PCNT
+    #ifdef COUNTER_DRAINS_PCNT
         return (uint32_t)(fast_millis() - _pcnt_ms) >= PCNT_DRAIN_MS;
-  #else
+    #else
         return geigerinput->poll_due();
+    #endif
   #endif
 #endif
       }
