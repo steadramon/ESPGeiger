@@ -279,13 +279,13 @@ uint8_t DeviceInfo::resetReason() {
 const char* DeviceInfo::resetText() {
 #ifdef ESP8266
   switch (ESP.getResetInfoPtr()->reason) {
-    case REASON_DEFAULT_RST:      return PSTR("Power On");
-    case REASON_WDT_RST:          return PSTR("Hardware Watchdog");
+    case REASON_DEFAULT_RST:      return PSTR("Power on");
+    case REASON_WDT_RST:          return PSTR("Hardware watchdog");
     case REASON_EXCEPTION_RST:    return PSTR("Exception");
-    case REASON_SOFT_WDT_RST:     return PSTR("Software Watchdog");
-    case REASON_SOFT_RESTART:     return PSTR("Software/System restart");
-    case REASON_DEEP_SLEEP_AWAKE: return PSTR("Deep-Sleep Wake");
-    case REASON_EXT_SYS_RST:      return PSTR("External System");
+    case REASON_SOFT_WDT_RST:     return PSTR("Software watchdog");
+    case REASON_SOFT_RESTART:     return PSTR("Software restart");
+    case REASON_DEEP_SLEEP_AWAKE: return PSTR("Deep sleep wake");
+    case REASON_EXT_SYS_RST:      return PSTR("External reset");
     default:                      return PSTR("Unknown");
   }
 #else
@@ -293,7 +293,7 @@ const char* DeviceInfo::resetText() {
     case ESP_RST_POWERON:   return "Power on";
     case ESP_RST_EXT:       return "External reset";
     case ESP_RST_SW:        return "Software restart";
-    case ESP_RST_PANIC:     return "Exception/panic";
+    case ESP_RST_PANIC:     return "Exception";
     case ESP_RST_INT_WDT:   return "Interrupt watchdog";
     case ESP_RST_TASK_WDT:  return "Task watchdog";
     case ESP_RST_WDT:       return "Watchdog";

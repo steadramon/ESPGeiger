@@ -27,7 +27,7 @@ chip protected itself by resetting. The usual suspects, in order:
   mystery resets.
 
 ESP8266 boards have no brownout detector, so an undervoltage problem shows
-up differently: random resets ("Hardware Watchdog"), WiFi dropouts, or
+up differently: random resets ("Hardware watchdog"), WiFi dropouts, or
 crashes that never repeat in the same place. If a device misbehaves
 erratically and the crash reasons keep changing, try a better power supply
 before anything else.
