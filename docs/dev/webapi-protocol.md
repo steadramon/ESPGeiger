@@ -38,6 +38,7 @@ Added to the post every 15 minutes:
 | `l`   | uint32 | Loop iterations per second |
 | `tk`  | uint32 | Peak ticker duration in the last 60 s (µs) |
 | `rs`  | int32  | WiFi signal strength (dBm) |
+| `ct`  | float32 | Chip temperature in °C (ESP32 family only) |
 
 Health fields live only in the raw tier server-side. They age out and are never aggregated into long-term history.
 
