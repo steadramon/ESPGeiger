@@ -7,12 +7,12 @@ nav_order: 7
 
 # Troubleshooting
 
-Common problems, what they look like, and where to look first.
+Common problems, what they look like and where to look first.
 
 ## Device restarts by itself / "Last reset: Brownout"
 
 **Sort out your power supply.** This is by far the most common hardware
-problem, and almost never a firmware issue.
+problem and almost never a firmware issue.
 
 On ESP32 boards the `/info` page reports it directly: **Last reset:
 Brownout** means the supply voltage dipped below the safe threshold and the
@@ -35,7 +35,7 @@ before anything else.
 ## Device is online but shows 0 CPM
 
 The firmware warns about this on the Status page ("No counts detected -
-check tube and input wiring", with the input GPIO), in the console log, and
+check tube and input wiring", with the input GPIO), in the console log and
 on the OLED display. Zero is never a valid reading - normal background is
 roughly 10-40 CPM for common tubes - so a silent counter means the pulses
 are not reaching the board:
@@ -66,12 +66,12 @@ Geiger tube. Counting pauses for 5 seconds, then retries. The usual causes:
   HV switching noise. Shorten it, shield it, or route it away from the HV side.
 - **Failed tube** oscillating instead of producing clean pulses.
 
-Counting resumes by itself once the input is quiet, and the log shows
+Counting resumes by itself once the input is quiet and the log shows
 `GeigerPulse: re-armed after storm cooldown`. WiFi, the web pages and MQTT
 keep running while counting is paused.
 
 This check is on builds that count pulses with an interrupt: all ESP8266 and
-ESP32-C3 pulse builds, and ESP32 `no_pcnt` builds. Other ESP32 builds count
+ESP32-C3 pulse builds and ESP32 `no_pcnt` builds. Other ESP32 builds count
 in hardware and don't need it.
 
 ## WiFi keeps dropping
@@ -86,7 +86,7 @@ in hardware and don't need it.
 ## Readings look wrong
 
 - **uSv/h is off but CPM looks right**: check the tube ratio setting -
-  dose rate is derived from CPM through the ratio, and the default only
+  dose rate is derived from CPM through the ratio and the default only
   suits common tube types.
 - **CPM much higher than expected**: look for electrical noise pickup -
   long unshielded pulse wires near the HV side can double-count.

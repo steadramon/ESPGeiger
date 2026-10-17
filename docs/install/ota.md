@@ -61,7 +61,7 @@ Click the **Update** button on the upload page. The device:
 - Lights the activity LED
 - Stops all regular activity (MQTT publishes, WebAPI posts, serial output)
   to avoid interfering with the flash write
-- Receives the new firmware, writes it, verifies it, and reboots
+- Receives the new firmware, writes it, verifies it and reboots
 
 Total time is typically **15-30 seconds** depending on your Wi-Fi. Don't
 close the browser tab until the upload bar finishes.
@@ -82,7 +82,7 @@ the update - only the firmware code is replaced.
 - **Device unreachable after update** - usually the wrong `.bin` variant.
   See the warning in step 1. Recover with the Web Installer over USB.
 - **Upload stalls partway** - usually Wi-Fi instability. Move closer to the
-  router or use a wired-closer AP, and retry.
+  router or use a wired-closer AP and retry.
 
 ## Advanced: command-line OTA
 
@@ -100,7 +100,7 @@ curl --data-binary @esp8266_pulse.v1.2.3.bin \
 
 > Don't use `-F image=@file` - that posts a `multipart/form-data` envelope
 > and the device sees the boundary dashes (`----...`) as the first bytes,
-> reads them as the entry-address, and refuses the upload as
+> reads them as the entry-address and refuses the upload as
 > wrong-platform (`entry=0x2d2d2d2d`).
 
 If you've set a portal password under **Config -> System -> Web password**,

@@ -23,7 +23,7 @@
 // http URLs split as CPython urllib.parse.urlsplit does, with .hostname and
 // .port rules. No scheme means http. Rejected: other schemes, an empty host,
 // userinfo and [IPv6] (the client cannot honour them), a port that .port
-// would refuse, and any space or control byte (urlsplit strips tab and
+// would refuse and any space or control byte (urlsplit strips tab and
 // CR/LF; here they could reach the request line).
 
 static bool is_http(const char* s, size_t n) {

@@ -8,7 +8,7 @@ parent: Configuration
 
 # Counter Configuration
 
-Two settings on the Config page, both under the **Advanced** section of the Input tab, that often get confused: **Debounce** and **Tube dead time**. They are related but serve different jobs, and getting them right matters at high count rates.
+Two settings on the Config page, both under the **Advanced** section of the Input tab, that often get confused: **Debounce** and **Tube dead time**. They are related but serve different jobs and getting them right matters at high count rates.
 
 ## Debounce
 
@@ -66,7 +66,7 @@ The recommended rule of thumb:
 * Set dead time from the tube datasheet. This is fixed physics.
 * Set debounce as low as your front end allows without false counts. This depends on your hardware.
 
-A reasonable setup has `debounce <= dead_time + a small margin`. If your debounce is much larger than your dead time, you are filtering pulses the tube did produce, and the dead time correction will not recover them because it assumes the only thing lost was tube recovery.
+A reasonable setup has `debounce <= dead_time + a small margin`. If your debounce is much larger than your dead time, you are filtering pulses the tube did produce and the dead time correction will not recover them because it assumes the only thing lost was tube recovery.
 
 If you need a large debounce to reject hardware noise, that is a sign the front end could be improved (better shielding, lower impedance, an output buffer on the tube amplifier).
 

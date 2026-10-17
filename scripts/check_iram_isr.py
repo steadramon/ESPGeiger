@@ -1,16 +1,16 @@
 """Fails the build if one of our IRAM functions can reach flash.
 
-IRAM_ATTR keeps a function callable while the flash cache is unmapped, and a
+IRAM_ATTR keeps a function callable while the flash cache is unmapped; a
 flash-resident callee defeats that. A near call is `call0 <addr>`; IRAM to flash
 is past call0 range, so the compiler emits `l32r` + `callx0`, or `l32r` + `jx`
-for a tail call, and those forms have to be resolved. A plain `j` cannot reach
+for a tail call; those forms have to be resolved. A plain `j` cannot reach
 flash from IRAM. Scope is symbols from our own objects (src/ and lib*/, never
 FrameworkArduino), which keeps the ~20 SDK and core cases out.
 
 Handlers reached through a pointer are checked where they are registered: a
 function address passed to attachInterrupt, EGTimer1::timer_start or the NMI
 attach must itself be in IRAM. A pointer that is stored and passed on later is
-not traced, and flash data reads (PROGMEM, rodata) are out of scope.
+not traced; flash data reads (PROGMEM, rodata) are out of scope.
 
 Run standalone: python3 scripts/check_iram_isr.py <build_dir> [tool-prefix]
 """

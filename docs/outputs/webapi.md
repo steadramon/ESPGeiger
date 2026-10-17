@@ -12,7 +12,7 @@ published: true
 ESPGeiger can optionally contribute its readings to the public map at
 [stations.espgeiger.com](https://stations.espgeiger.com), a global
 radiation-monitoring grid built from community-run Geiger counters.
-Participation is opt-in, signed end-to-end, and privacy-respecting.
+Participation is opt-in, signed end-to-end and privacy-respecting.
 
 ## What is shared
 
@@ -67,7 +67,7 @@ The `/webapi` page's **Advanced** panel exposes two destructive actions:
   handshake registers a fresh station; the old one ages out server-side.
   Use this to migrate to a new identity while still contributing data.
 - **Forget station** sends a signed delete request. The server
-  purges the row, all readings, and all history, then sharing flips to
+  purges the row, all readings and all history, then sharing flips to
   **Off**. Irreversible - re-enabling later registers as brand new. This
   is the GDPR right-to-erasure path.
 
@@ -103,7 +103,7 @@ small cluster; Silent and New stations never tint a cluster.
 
 The **Events** panel on the station page lists each excursion with the
 same badge as the pin colour, plus direction (↑ above baseline, ↓
-below), duration, peak score, and `(ongoing)` if still active.
+below), duration, peak score and `(ongoing)` if still active.
 **Offline events** use a separate grey badge with no severity.
 
 ## Opt-out at any time

@@ -94,7 +94,7 @@ Test routes:
 
 Five klaxon patterns are synthesised on-device and fire automatically when
 CPM crosses the alert threshold (rising edge only). A configurable cooldown
-prevents repeated triggering during a sustained alert, and the audio
+prevents repeated triggering during a sustained alert and the audio
 quiet-hours window suppresses the klaxon at night.
 
 | Pattern | Name | Sound |

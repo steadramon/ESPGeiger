@@ -8,9 +8,9 @@ nav_order: 6
 
 # Environment Sensors
 
-ESPGeiger can read temperature, humidity, and atmospheric pressure from a cheap I2C sensor on the same bus as the OLED. Detection is automatic at boot. Add a sensor and the values appear on `/status` and relevant outputs.
+ESPGeiger can read temperature, humidity and atmospheric pressure from a cheap I2C sensor on the same bus as the OLED. Detection is automatic at boot. Add a sensor and the values appear on `/status` and relevant outputs.
 
-For wiring, pins, and per-output details see the [Environment sensor configuration page](/configuration/env).
+For wiring, pins and per-output details see the [Environment sensor configuration page](/configuration/env).
 
 ## Which one to buy
 

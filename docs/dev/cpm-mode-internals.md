@@ -13,7 +13,7 @@ Implementation notes for the [CPM mode](/configuration/cpm-mode) setting (`count
 ## The two underlying calculations
 
 1. **Bucket** - a sliding mean of per-second pulse counts. The window is
-   60 seconds on Pulse, UDP and Test builds, and on serial builds whose
+   60 seconds on Pulse, UDP and Test builds and on serial builds whose
    counter reports CPS (MightyOhm). On CPM-only serial builds the
    `counter.cpm_window` pref sets it, 1-60 s, default 30 s.
 2. **Pulse ring** - a 256-entry buffer of pulse timestamps in

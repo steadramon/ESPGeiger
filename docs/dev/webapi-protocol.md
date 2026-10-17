@@ -44,7 +44,7 @@ Health fields live only in the raw tier server-side. They age out and are never 
 
 ## Handshake
 
-Sent once per hour, and on first boot or reset:
+Sent once per hour and on first boot or reset:
 
 | Field | Type    | Description |
 |---|---|---|
@@ -66,7 +66,7 @@ The server responds with the assigned station ID, which the device uses as `id` 
 
 ## Endpoint
 
-Canonical URL: `http://api.espgeiger.com/api/1/`. HTTP-only by design: each request is individually signed, so it cannot be tampered with in transit, and TLS would cost a lot of memory on the ESP8266 for no real security gain.
+Canonical URL: `http://api.espgeiger.com/api/1/`. HTTP-only by design: each request is individually signed, so it cannot be tampered with in transit and TLS would cost a lot of memory on the ESP8266 for no real security gain.
 
 | Path             | Method | Purpose |
 |---|---|---|

@@ -10,7 +10,7 @@ parent: Home
 
 ESPGeiger connects your Geiger counter to your network. It works with common pulse-based counters as well as a number of models that report over a serial link.
 
-Once your counter is connected, you can watch radiation trends as they happen, keep a record over time, and share your readings with community monitoring networks if you wish.
+Once your counter is connected, you can watch radiation trends as they happen, keep a record over time and share your readings with community monitoring networks if you wish.
 
 - __Internet Connectivity__: Get your Geiger counter online, so its readings are available beyond the device itself.
 - __Integrated Web Interface__: View the latest readings and change settings from your web browser, no app required.

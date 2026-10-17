@@ -23,7 +23,7 @@
 
 namespace Fs {
   bool begin();   // first call only, formats after 3 failed mounts
-  // all mount first, and check before touching: esp32 logs a missing file
+  // all mount first and check before touching: esp32 logs a missing file
   File open_r(const char* path);   // empty File if not there
   bool remove(const char* path);   // false if not there
   void touch(const char* path);

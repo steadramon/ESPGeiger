@@ -34,4 +34,4 @@ Alert Out will not take a GPIO already used by another feature (Pulse Out, blip 
 
 ## Combining with other outputs
 
-Independent of [Audio Tick](/output/audiotick), [Pulse Out](/output/pulseout), and [NeoPixel](/output/neopixel). Run any combination on a single device.
+Independent of [Audio Tick](/output/audiotick), [Pulse Out](/output/pulseout) and [NeoPixel](/output/neopixel). Run any combination on a single device.

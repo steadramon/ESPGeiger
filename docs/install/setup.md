@@ -70,7 +70,7 @@ Nuclear option: reflash the firmware from [install.espgeiger.com](https://instal
 
 ESPGeiger is designed to run on your **local network**, not on the open internet.
 
-The web interface uses HTTP Basic Auth (no TLS), the `/update` endpoint allows over-the-air firmware replacement to any authenticated caller, and the device intentionally has no rate-limiting or hardening against brute-force attack. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
+The web interface uses HTTP Basic Auth (no TLS), the `/update` endpoint allows over-the-air firmware replacement to any authenticated caller and the device intentionally has no rate-limiting or hardening against brute-force attack. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
 
 If you need to reach your device from outside your LAN, use one of:
 

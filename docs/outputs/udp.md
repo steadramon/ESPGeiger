@@ -31,7 +31,7 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
 5. Save.
 
-Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage, and the CPM number should track the producer's.
+Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage and the CPM number should track the producer's.
 
 ### Not working?
 

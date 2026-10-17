@@ -28,7 +28,7 @@ For ESP32-S3, the **[ESP32-S3-WROOM-1 N16R8](https://s.click.aliexpress.com/e/_c
 
 ### ESP-C3
 
-For the **world's smallest ESPGeiger**, the **[Seeed Studio XIAO ESP32-C3](https://s.click.aliexpress.com/e/_c3OtwhXJ)** (21x17.5 mm, USB-C, BLE 5.0, external u.FL antenna) flashes cleanly with the `esp32c3_*` builds. Bare-minimum receiver: just power, an attached tube or upstream UDP feed, and you have a working monitor in a footprint that fits inside almost any enclosure.
+For the **world's smallest ESPGeiger**, the **[Seeed Studio XIAO ESP32-C3](https://s.click.aliexpress.com/e/_c3OtwhXJ)** (21x17.5 mm, USB-C, BLE 5.0, external u.FL antenna) flashes cleanly with the `esp32c3_*` builds. Bare-minimum receiver: just power, an attached tube or upstream UDP feed and you have a working monitor in a footprint that fits inside almost any enclosure.
 <br>
 <img src="img/xiao-esp32c3.png" width="240"/>
 
@@ -59,7 +59,7 @@ Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the
 
 Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need the firmware to pulse that pin at boot. The `-DOLED_RST=N` build flag enables that pulse; if omitted, the OLED stays in reset and shows a blank screen. Once defined, the pin is also runtime-adjustable from **Config → Display → Reset Pin**.
 
-If your board isn't listed but matches one of these patterns, the same recipe applies - set `OLED_SDA`, `OLED_SCL`, and `OLED_RST` (if relevant) in a custom build env.
+If your board isn't listed but matches one of these patterns, the same recipe applies - set `OLED_SDA`, `OLED_SCL` and `OLED_RST` (if relevant) in a custom build env.
 
 ### PCNT
 
@@ -86,7 +86,7 @@ Custom builds can change the starting value. See [Build Options](/dev/platformio
 
 ### Interrupt Debounce
 
-On builds that use software interrupt counting instead of PCNT (all ESP8266 pulse builds, and ESP32 `no_pcnt` builds), a debounce window rejects any edge that arrives within a configurable number of microseconds of the previously accepted pulse. This serves the same purpose as the PCNT filter - suppressing electrical noise and contact bounce without affecting real tube pulses.
+On builds that use software interrupt counting instead of PCNT (all ESP8266 pulse builds and ESP32 `no_pcnt` builds), a debounce window rejects any edge that arrives within a configurable number of microseconds of the previously accepted pulse. This serves the same purpose as the PCNT filter - suppressing electrical noise and contact bounce without affecting real tube pulses.
 
 The debounce value can be configured from the ESPGeiger web interface under __Config__. The value is in microseconds, with a range of 0 to 10000. A value of 0 disables the debounce.
 

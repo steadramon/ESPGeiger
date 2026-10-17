@@ -14,7 +14,7 @@ Response formats for the diagnostic endpoints listed on the [Web Portal](/output
 
 A JSON object keyed by module name, describing each enabled third-party output. Disabled or unconfigured modules are left out; `{}` means none are active.
 
-Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi`, and `udpblip` when Local Broadcast is on.
+Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi` and `udpblip` when Local Broadcast is on.
 
 ```json
 {

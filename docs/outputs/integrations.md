@@ -201,7 +201,7 @@ geiger_pulse_interval_seconds_count{chipid="d5536d"} 1845231
 | `env_pressure_hpa` | gauge | Pressure in hPa, corrected to sea level when an elevation is set |
 | `geiger_udp_loss_percent` | gauge | Packet loss on the feed (UDP receiver builds, once a producer has been heard) |
 
-The `env_` metrics appear only when a sensor is detected, and each only if the sensor measures it.
+The `env_` metrics appear only when a sensor is detected and each only if the sensor measures it.
 
 ### Label model
 

@@ -32,7 +32,7 @@ The Config page is split across five tabs: **System**, **Input**, **Output**, **
 
 ### Config import / export
 
-On the **Backup** tab, **Export** copies all settings except the web password and network settings into the text box. Paste a saved export and click **Import** to restore it; settings not in the export are left alone, and the device reboots.
+On the **Backup** tab, **Export** copies all settings except the web password and network settings into the text box. Paste a saved export and click **Import** to restore it; settings not in the export are left alone and the device reboots.
 
 ## Counter Settings
 
@@ -210,7 +210,7 @@ Shown while Display Type is a MAX7219 layout: `7-Seg` (up to 8 digits), `Round` 
 
 The TM1637 has two wires: its DIO goes on the Data Pin and its CLK on the CLK Pin. CS is not used.
 
-The `Round` arc (MottramLabs MAX7219 Power Display) lights green up to the System **warn** CPM, orange up to **alert**, and red up to twice **alert**. On the VU page the digits hold CPM and each count kicks the arc, which falls back like a needle and auto-ranges so the usual rate bobs around the green/orange border. The board is built for 5V logic: from an ESP, power it from 3V3 or put a level shifter on DIN, CLK and CS.
+The `Round` arc (MottramLabs MAX7219 Power Display) lights green up to the System **warn** CPM, orange up to **alert** and red up to twice **alert**. On the VU page the digits hold CPM and each count kicks the arc, which falls back like a needle and auto-ranges so the usual rate bobs around the green/orange border. The board is built for 5V logic: from an ESP, power it from 3V3 or put a level shifter on DIN, CLK and CS.
 
 <!-- gen:prefs max7219 -->
 

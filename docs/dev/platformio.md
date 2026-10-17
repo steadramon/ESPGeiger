@@ -134,8 +134,8 @@ See [UDP / OSC Output](/output/udp) for the full protocol. Tunables for the prod
 
 | Flag | Default | Description |
 |---|---|---|
-| `-D UDPBLIP_DEFAULT_GROUP="239.x.x.x"` | `"239.255.86.86"` | Default multicast group. Used by producers, and by receivers unless `UDPRX_DEFAULT_GROUP` overrides. |
-| `-D UDPBLIP_DEFAULT_PORT=N` | `57340` | Producer's default UDP port, and the fallback for a bad port setting. |
+| `-D UDPBLIP_DEFAULT_GROUP="239.x.x.x"` | `"239.255.86.86"` | Default multicast group. Used by producers and by receivers unless `UDPRX_DEFAULT_GROUP` overrides. |
+| `-D UDPBLIP_DEFAULT_PORT=N` | `57340` | Producer's default UDP port and the fallback for a bad port setting. |
 | `-D UDPBLIP_STATS_INTERVAL_MS=N` | `30000` | Interval between telemetry bursts (`/rad` cadence; `/hv` rides alongside, `/sys` fires every other cycle). |
 | `-D UDPBLIP_STATS_JITTER_MS=N` | `7500` | First-emission GRNG offset range so fleet boots don't synchronize. |
 | `-D UDPBLIP_FAIL_BACKOFF=N` | `8` | Consecutive send failures before entering the cool-off state. |
@@ -162,7 +162,7 @@ The HV codepath splits into two independent capabilities, gated separately so th
 |---|---|
 | `-D ESPG_HV` | Enable PWM HV generator: ESPGHW module, `freq`/`duty` prefs, /hv page (only when paired with `ESPG_HV_ADC`), serial commands `freq` and `duty`. |
 | `-D EG_TIMER1_PWM` | EGTimer1 PWM output. ESP8266 `ESPG_HV` builds need it. |
-| `-D ESPG_HV_ADC` | Enable ADC HV feedback divider: `ratio`/`offset` calibration prefs, live HV readout on /hv, /info, /status, OLED, and as the `hv` field on every output module (WebAPI, MQTT, Webhook, SerialOut). Requires `ESPG_HV`. |
+| `-D ESPG_HV_ADC` | Enable ADC HV feedback divider: `ratio`/`offset` calibration prefs, live HV readout on /hv, /info, /status, OLED and as the `hv` field on every output module (WebAPI, MQTT, Webhook, SerialOut). Requires `ESPG_HV`. |
 | `-D GEIGER_PWMPIN=N` | Set the HV PWM output pin (default `12`). Requires `ESPG_HV`. |
 | `-D GEIGER_VFEEDBACKPIN=N` | Set the HV voltage feedback ADC pin (default `A0`). Requires `ESPG_HV_ADC`. |
 | `-D GEIGERHW_FREQ=N` | Set the default HV PWM frequency in Hz (default `6000`). Requires `ESPG_HV`. |
@@ -170,7 +170,7 @@ The HV codepath splits into two independent capabilities, gated separately so th
 | `-D GEIGERHW_ADC_RATIO=N` | Set the ADC voltage divider ratio for HV reading (default `1035`). Requires `ESPG_HV_ADC`. |
 | `-D GEIGERHW_ADC_OFFSET=N` | Set the ADC offset for HV reading calibration (default `0`). Requires `ESPG_HV_ADC`. |
 
-When `ESPG_HV` is defined without `ESPG_HV_ADC` (a board that drives HV via PWM but has no real feedback divider), the espghw prefs surface in the regular `/param` UI rather than `/hv`, and no `hv` field is emitted on outputs.
+When `ESPG_HV` is defined without `ESPG_HV_ADC` (a board that drives HV via PWM but has no real feedback divider), the espghw prefs surface in the regular `/param` UI rather than `/hv` and no `hv` field is emitted on outputs.
 
 ### Product Identity
 
@@ -291,7 +291,7 @@ PlatformIO is configured to automatically load any file matching `*_env.ini` in 
 
 Say you've built your own hardware with an ESP8266, a serial Geiger counter, a NeoPixel LED and an SSD1306 OLED display. You want the serial input on GPIO5 and a push button on GPIO14.
 
-Start by choosing the right base. `base:esp8266_neopixel` gives you ESP8266 with NeoPixel support. Then add the OLED, counter type, and pin configuration on top:
+Start by choosing the right base. `base:esp8266_neopixel` gives you ESP8266 with NeoPixel support. Then add the OLED, counter type and pin configuration on top:
 
 ```ini
 [env:my_serial_neopixel_oled]

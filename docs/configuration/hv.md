@@ -34,17 +34,17 @@ When changing settings:
 
 - Always **disconnect the Geiger tube** before adjusting frequency or duty
 - After submitting changes, the firmware briefly drops PWM low to avoid voltage spikes during the transition
-- The closed-loop trim is suppressed for 30 seconds after changes, and for 5 minutes after boot while HV settles, so it doesn't chase the transient
+- The closed-loop trim is suppressed for 30 seconds after changes and for 5 minutes after boot while HV settles, so it doesn't chase the transient
 
 ## Protection
 
 - ESPGeiger-HW caps duty at 600, well above its usual ~320, so a typo can't saturate the coil.
-- ESPGeiger-HW drops duty to minimum if HV reads over 530 V for 3 seconds. It stays there until settings are saved or the device restarts, and `/hv` shows the cut-off.
+- ESPGeiger-HW drops duty to minimum if HV reads over 530 V for 3 seconds. It stays there until settings are saved or the device restarts and `/hv` shows the cut-off.
 - On ESP8266 the HV pin is held low if the PWM generator stops.
 
 ## Calibration with a Multimeter
 
-> ⚠️ **HV is dangerous.** 400 V at the tube is well above the let-go threshold and the boost-cap can hold charge after PWM stops. Wear gloves where practical, keep one hand in your pocket, and discharge the output cap with a 1 MΩ resistor across it before touching the rail.
+> ⚠️ **HV is dangerous.** 400 V at the tube is well above the let-go threshold and the boost-cap can hold charge after PWM stops. Wear gloves where practical, keep one hand in your pocket and discharge the output cap with a 1 MΩ resistor across it before touching the rail.
 
 A standard digital multimeter has roughly **10 MΩ** input impedance. Probing the HV rail directly will load it down hard - you'll read maybe 200 V on a supply that's actually delivering 400 V into the tube - and the meter sees its full input rating rather than a scaled-down reading. The fix is a high-value series resistor in front of the meter that turns the meter input into the low side of a voltage divider.
 

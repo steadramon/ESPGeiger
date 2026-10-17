@@ -50,7 +50,7 @@ In these test build modes, you can connect the `TXPIN` (transmit pin) of one ESP
 
 ### TestPulse → esp8266_pulse cross-device setup
 
-To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13), and share GND between the two boards. Both devices then post to the WebAPI independently and their CPM readings should agree within Poisson noise.
+To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13) and share GND between the two boards. Both devices then post to the WebAPI independently and their CPM readings should agree within Poisson noise.
 
 Notes:
 

@@ -8,14 +8,14 @@ nav_order: 2
 
 # History page
 
-The `/hist` page gives a longer term view of activity on the device. It shows totals for today and yesterday, a 24 hour bar chart, an hour by hour table, and (when enabled) a lifetime totals card and an inter pulse interval histogram.
+The `/hist` page gives a longer term view of activity on the device. It shows totals for today and yesterday, a 24 hour bar chart, an hour by hour table and (when enabled) a lifetime totals card and an inter pulse interval histogram.
 
 ## Lifetime card
 
 When lifetime tracking is enabled, a Lifetime card appears showing cumulative state since the device was first set up:
 
 - **Clicks** is the total number of clicks ever recorded. Survives reboots.
-- **Dose** is the cumulative absorbed dose using the configured tube ratio. It scales automatically: micro sieverts for small values, milli sieverts at 1000 µSv and above, and full sieverts at 1 Sv and above.
+- **Dose** is the cumulative absorbed dose using the configured tube ratio. It scales automatically: micro sieverts for small values, milli sieverts from 1000 µSv, full sieverts from 1 Sv.
 - **Tracked** is the number of seconds the device has been counting toward the dose denominator. It pauses whilst the device is off and resumes from saved state on the next boot.
 - **Install age** is wall clock time since first boot.
 - **Avg CPM** is lifetime clicks divided by tracked seconds, multiplied by 60.
@@ -32,13 +32,13 @@ The summary card at the top of the page shows five figures:
 - **24h peak CPM** is the highest hourly rate seen in the last 24 hours.
 - **Day rate vs yesterday** projects today's clicks to a full day at the current rate and compares that with yesterday.
 
-The day rate shows a dash until the device has run through a full UTC day, at least one hour of today has passed, and yesterday has at least one click.
+The day rate shows a dash until the device has run through a full UTC day, at least one hour of today has passed and yesterday has at least one click.
 
 ## 24 hour bar chart and table
 
 The bar chart shows the click count for each of the last 24 hours, with the current partial hour as the right hand bar.
 
-The table below repeats the same data with timestamps in your browser's local time, the average CPM for that hour, and (whilst the configured tube ratio is non zero) the derived µSv per hour.
+The table below repeats the same data with timestamps in your browser's local time, the average CPM for that hour and (whilst the configured tube ratio is non zero) the derived µSv per hour.
 
 ## Inter pulse interval histogram
 

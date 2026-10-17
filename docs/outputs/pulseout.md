@@ -9,7 +9,7 @@ nav_order: 12
 # Pulse Out
 
 A general-purpose per-pulse GPIO output. One module covers piezo, small
-speaker via a transistor, LED, and attenuated line-out into a powered
+speaker via a transistor, LED and attenuated line-out into a powered
 speaker. Single edge or resonant burst, configurable polarity, all
 non-blocking.
 
