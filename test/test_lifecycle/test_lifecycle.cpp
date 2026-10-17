@@ -1,5 +1,5 @@
 /*
-  test_lifecycle - events in the order added, and the restart the main loop runs.
+  test_lifecycle - events in the order added and the restart the main loop runs.
 
   Copyright (C) 2026 @steadramon
 

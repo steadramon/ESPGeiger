@@ -247,7 +247,7 @@ void EGMqtt::loop() {
     uint32_t now = millis();
     if (_phase == DIAL) dial(now);
     if (_phase == HELLO || _phase == UP) receive();
-    // closed, and nothing left it can read
+    // closed, nothing left it can read
     bool gone = _tcp.state() == EGTcpConn::CLOSED && (!_tcp.available() || !acks_fit());
     if (_phase != IDLE && _phase != DIAL && gone) end(CONNECTION_LOST);
     if (_state != DISCONNECTED) timers(now);

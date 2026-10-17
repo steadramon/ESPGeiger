@@ -94,7 +94,7 @@ See the full list of available builds on the [releases page](https://github.com/
 
 ## Hardware Connection
 
-By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32, and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin. Don't forget a common ground.
+By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32 and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin. Don't forget a common ground.
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
@@ -107,7 +107,7 @@ By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32, and GPIO4 on ESP3
 4. Once connected, browse to `http://ESPGeiger-XXXXXX.local` or the assigned IP
 5. Configure MQTT, Radmon, GMCMAP, ThingSpeak and other outputs from the Config page
 
-> 🔒 ESPGeiger is designed for LAN use. Don't port-forward it to the open internet - use a VPN for remote access, and push telemetry outward (MQTT / Radmon / ThingSpeak / Webhook) for remote monitoring. See [Network and security](https://docs.espgeiger.com/install/setup#network-and-security).
+> 🔒 ESPGeiger is designed for LAN use. Don't port-forward it to the open internet - use a VPN for remote access and push telemetry outward (MQTT / Radmon / ThingSpeak / Webhook) for remote monitoring. See [Network and security](https://docs.espgeiger.com/install/setup#network-and-security).
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/ESPGeiger-anim.gif" width="75%"/>
 
