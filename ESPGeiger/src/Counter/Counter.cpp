@@ -472,6 +472,9 @@ float Counter::get_cpm15f() {
 }
 
 bool Counter::get_tube_alive() {
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  if (udp_rx()->heard()) return true;
+#endif
   return tube_alive((uint32_t)DeviceInfo::uptime(), _last_count_up_s,
                     (uint32_t)total_clicks);
 }
