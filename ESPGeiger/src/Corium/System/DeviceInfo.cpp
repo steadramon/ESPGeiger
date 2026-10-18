@@ -107,12 +107,11 @@ void DeviceInfo::largestFreeBlockLowReset() {
 }
 
 #ifdef ESP32
-static float   s_ct      = NAN;
-static uint8_t s_ct_wait = 0;
+static float s_ct = NAN;
+uint8_t DeviceInfo::ct_wait = 0;
 
-void DeviceInfo::chipTempSample() {
-  if (s_ct_wait) { s_ct_wait--; return; }
-  s_ct_wait = 45 + (uint8_t)(esp_random() % 31);
+void DeviceInfo::chipTempRead() {
+  ct_wait = 45 + (uint8_t)(esp_random() % 31);
   float t = temperatureRead();
   if (isnan(t) || t <= -40.0f || t >= 150.0f) return;
   s_ct = isnan(s_ct) ? t : s_ct + (t - s_ct) * 0.0625f;

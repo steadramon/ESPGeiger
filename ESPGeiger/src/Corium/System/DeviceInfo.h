@@ -73,7 +73,13 @@ namespace DeviceInfo {
 
 #ifdef ESP32
   float chipTempC();   // die not ambient, classic esp32 reads high
-  void chipTempSample();   // 1 Hz
+  extern uint8_t ct_wait;
+  void chipTempRead();
+  // 1 Hz, no call till a read is due
+  inline void chipTempSample() {
+    if (ct_wait) { ct_wait--; return; }
+    chipTempRead();
+  }
 #endif
 
   // Sent to WebAPI, never renumber
