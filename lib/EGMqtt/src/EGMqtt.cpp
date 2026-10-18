@@ -455,9 +455,9 @@ void EGMqtt::compact() {
 void EGMqtt::rewind() {
   for (size_t off = 0; off < _outLen; off = next(off)) {
     Rec* r = rec(off);
+    r->at = 0;
     if (r->sent != S_SENT) continue;
     r->sent = S_NEW;
-    r->at = 0;
     if (r->kind == K_PUB1 || r->kind == K_PUB2) {
       uint8_t* first = _m->out + off + sizeof(Rec);
       if (_session) *first |= DUP;
