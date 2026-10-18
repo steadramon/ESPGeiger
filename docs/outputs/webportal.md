@@ -104,7 +104,7 @@ GET /cpm?v=<target_cpm>
 
 | Parameter | Meaning |
 |---|---|
-| `v` | Target CPM. Must be a positive integer; values ≤ 0 are ignored. |
+| `v` | Target CPM, up to two decimals (`0.4`, `2.25`). Values ≤ 0 are ignored. |
 
 The internal test counter retargets to generate pulses at the given rate (Poisson-distributed for pulse-type test builds). Response body is `OK` on success.
 
