@@ -364,7 +364,7 @@ bool AsyncClient::connect(const char* host, uint16_t port){
     return false;
   _closed = false;  // close() can stop the lookup
   IPAddress addr;
-  err_t err = dns_gethostbyname(host, addr, (dns_found_callback)&_s_dns_found, this);
+  err_t err = dns_gethostbyname(host, addr, &_s_dns_found, this);
   if(err == ERR_OK) {
 #if ASYNC_TCP_SSL_ENABLED
     return connect(addr, port, secure);
@@ -768,7 +768,7 @@ void AsyncClient::_poll(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
   return;
 }
 
-void AsyncClient::_dns_found(const ip_addr *ipaddr){
+void AsyncClient::_dns_found(const ip_addr_t *ipaddr){
   if(_closed || _pcb) return;
 #if ASYNC_TCP_SSL_ENABLED
   if(ipaddr && connect(ipaddr, _connect_port, _pcb_secure)) return;
@@ -795,7 +795,7 @@ static inline bool _acArgAlive(void* arg){
 #endif
 }
 
-void AsyncClient::_s_dns_found(const char *name, const ip_addr *ipaddr, void *arg){
+void AsyncClient::_s_dns_found(const char *name, const ip_addr_t *ipaddr, void *arg){
   (void)name;
   if(!_acArgAlive(arg)) return;
   AsyncClient* ac = reinterpret_cast<AsyncClient*>(arg);

@@ -638,7 +638,7 @@ void AsyncTCP_detail::tcp_error(void *arg, int8_t err) {
   _send_async_event(e);
 }
 
-static void _tcp_dns_found(const char *, ip_addr_t *ipaddr, void *arg) {
+static void _tcp_dns_found(const char *, const ip_addr_t *ipaddr, void *arg) {
   auto ask = reinterpret_cast<dns_ask *>(arg);
   AsyncClient *client = ask->client;
   uint32_t id = ask->id;
@@ -1035,7 +1035,7 @@ struct tcp_dns_api_call_t {
 static err_t _tcp_dns_gethostbyname_api(struct tcpip_api_call_data *api_call_msg) {
   auto *msg = reinterpret_cast<tcp_dns_api_call_t *>(api_call_msg);
   msg->err = dns_gethostbyname(msg->host, msg->addr,
-                               (dns_found_callback)&_tcp_dns_found, msg->ask);
+                               &_tcp_dns_found, msg->ask);
   return ERR_OK;
 }
 

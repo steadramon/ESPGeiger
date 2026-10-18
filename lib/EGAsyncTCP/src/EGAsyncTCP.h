@@ -42,7 +42,6 @@ class ACErrorTracker;
 #define ASYNC_WRITE_FLAG_MORE 0x02 //will not send PSH flag, meaning that there should be more data to be sent before the application should react.
 
 struct tcp_pcb;
-struct ip_addr;
 #if ASYNC_TCP_SSL_ENABLED
 struct SSL_;
 typedef struct SSL_ SSL;
@@ -142,13 +141,13 @@ class AsyncClient {
 #endif
     void _poll(std::shared_ptr<ACErrorTracker>& closeAbort, tcp_pcb* pcb);
     void _sent(std::shared_ptr<ACErrorTracker>& closeAbort, tcp_pcb* pcb, uint16_t len);
-    void _dns_found(const ip_addr *ipaddr);
+    void _dns_found(const ip_addr_t *ipaddr);
     static err_t _s_poll(void *arg, struct tcp_pcb *tpcb);
     static err_t _s_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *pb, err_t err);
     static void _s_error(void *arg, err_t err);
     static err_t _s_sent(void *arg, struct tcp_pcb *tpcb, uint16_t len);
     static err_t _s_connected(void* arg, void* tpcb, err_t err);
-    static void _s_dns_found(const char *name, const ip_addr *ipaddr, void *arg);
+    static void _s_dns_found(const char *name, const ip_addr_t *ipaddr, void *arg);
 #if ASYNC_TCP_SSL_ENABLED
     static void _s_data(void *arg, struct tcp_pcb *tcp, uint8_t * data, size_t len);
     static void _s_handshake(void *arg, struct tcp_pcb *tcp, SSL *ssl);
