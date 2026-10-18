@@ -439,7 +439,7 @@ void GeigerUdpRx::loop() {
     Wifi::rx_sleep(_rx_mode);
   }
 
-  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > 30000UL) {
+  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > 3 * UDPBLIP_STATS_INTERVAL_MS) {
     climbRecoveryLadder(now);
     if (!_udp) return;
   } else {
