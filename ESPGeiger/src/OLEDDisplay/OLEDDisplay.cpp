@@ -936,7 +936,11 @@ void SSD1306Display::draw_p1_values(uint32_t cpm_x10, float dusv, bool warming,
   format_cpm(oledBuf, sizeof(oledBuf), cpm_x10 * 0.1f);
   drawTPString(*this, 45, 0, DialogInput_Digits_17, oledBuf);
   if (wifi & 4) {
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+    drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("no signal?"));
+#else
     drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("check tube?"));
+#endif
   } else {
     format_f(oledBuf, sizeof(oledBuf), dusv);
     drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);

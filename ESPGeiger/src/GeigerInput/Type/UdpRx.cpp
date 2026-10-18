@@ -439,7 +439,7 @@ void GeigerUdpRx::loop() {
     Wifi::rx_sleep(_rx_mode);
   }
 
-  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > 3 * UDPBLIP_STATS_INTERVAL_MS) {
+  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > UDPRX_QUIET_MS) {
     climbRecoveryLadder(now);
     if (!_udp) return;
   } else {
@@ -490,6 +490,10 @@ bool GeigerUdpRx::isHealthy() const {
 
 uint32_t GeigerUdpRx::quiet_s() const {
   return _last_packet_ms ? (uint32_t)(fast_millis() - _last_packet_ms) / 1000u : 0;
+}
+
+bool GeigerUdpRx::heard() const {
+  return _last_packet_ms && (uint32_t)(fast_millis() - _last_packet_ms) <= UDPRX_QUIET_MS;
 }
 
 // igmpx = no netif

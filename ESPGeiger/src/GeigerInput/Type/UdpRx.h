@@ -40,6 +40,9 @@ class WiFiUDP;
 #ifndef UDPRX_POLL_SKIP
 #define UDPRX_POLL_SKIP 500      // loop passes per drain
 #endif
+#ifndef UDPRX_QUIET_MS
+#define UDPRX_QUIET_MS (3 * UDPBLIP_STATS_INTERVAL_MS)   // 3 heartbeats
+#endif
 class GeigerUdpRx : public GeigerInput {
 public:
   GeigerUdpRx();
@@ -82,6 +85,7 @@ public:
     return (uint16_t)((g * 1000u) / total);
   }
   uint32_t quiet_s() const;   // 0 before the first
+  bool heard() const;
   uint16_t rebind_count() const       { return _rebind_count; }
   uint16_t refresh_count() const      { return _refresh_count; }
   uint16_t refresh_noop_count() const { return _refresh_noop_count; }

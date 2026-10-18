@@ -223,6 +223,9 @@ uint32_t s_save_ctr       = 0;
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
 inline void Counter::note_counts_missing(uint32_t uptime_s) {
   bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s, (uint32_t)total_clicks);
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  cm = cm && !udp_rx()->heard();   // quiet tube, not a dead one
+#endif
   if (cm && !s_missing_logged) {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
     Log::console(PSTR("Counter: no counts detected - check tube and wiring (GPIO %d)"), input_pin());
@@ -464,9 +467,13 @@ bool Counter::counts_missing() {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   return false;
 #else
-  return CounterMaths::counts_missing((uint32_t)DeviceInfo::uptime(),
-                                      _last_count_up_s,
-                                      (uint32_t)total_clicks);
+  bool cm = CounterMaths::counts_missing((uint32_t)DeviceInfo::uptime(),
+                                         _last_count_up_s,
+                                         (uint32_t)total_clicks);
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  cm = cm && !udp_rx()->heard();
+#endif
+  return cm;
 #endif
 }
 
