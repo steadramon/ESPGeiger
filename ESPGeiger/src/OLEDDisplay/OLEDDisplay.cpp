@@ -384,8 +384,9 @@ void SSD1306Display::loop(unsigned long now) {
 }
 
 // floor 90% of the low, 5 span min; false = no counts
-static bool hist_range(const int* h, uint16_t n, int32_t& lo, int32_t& hi) {
+static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi) {
   const int32_t SPAN = 5;
+  display_hist(h, n, egm_f(M_CPM5));
   lo = hi = h[0];
   for (uint16_t i = 1; i < n; i++) {
     if (h[i] < lo) lo = h[i];

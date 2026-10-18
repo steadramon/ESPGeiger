@@ -31,6 +31,14 @@ inline float display_cpm(float cpm, float cpm5) {
   return d * d < 9.0f * cpm5 ? cpm5 : cpm;
 }
 
+// graph as the number
+inline void display_hist(int* h, int n, float cpm5) {
+  if (cpm5 >= 10.0f) return;
+  for (int i = 0; i < n; i++) {
+    if (h[i] < 10) h[i] = (int)(display_cpm((float)h[i], cpm5) + 0.5f);
+  }
+}
+
 class Display : public EGModule {
   public:
     const char* name() override { return PSTR("disp"); }
