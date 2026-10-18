@@ -180,7 +180,7 @@ public:
     void render_saver(unsigned long now);
     void render_tiny();
     void queue_rows(uint8_t dirty);
-    void draw_p1_values(uint32_t cpm_x10, float usv, bool warming,
+    void draw_p1_values(uint32_t cpm_x10, float usv, uint8_t mode,
                         uint8_t snd, uint8_t wifi, int8_t trend);
     void setup_driver();
     void reset_panel();
@@ -203,7 +203,7 @@ public:
     uint32_t _p1v_last_cpm = 0xFFFFFFFFu;
     int32_t  _p1v_last_usv_x100 = -1;
     uint8_t  _p1v_last_send_ind = 0;
-    bool     _p1v_last_warming = false;
+    uint8_t  _p1v_last_mode = 0;   // 1 W, 2 S
     uint8_t  _p1v_last_wifi = 0xFFu;  // bits: disabled, connected, no counts
     int8_t   _p1v_last_trend = 0;
     uint8_t _send_ty = 0;

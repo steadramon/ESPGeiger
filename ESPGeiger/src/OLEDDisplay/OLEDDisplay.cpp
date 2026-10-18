@@ -900,32 +900,34 @@ static int8_t cpm_trend(uint32_t cpm) {
 
 // false = nothing changed, no redraw
 bool SSD1306Display::page_one_values(unsigned long now) {
-  float dcpm = disp_cpm();
+  float c = egm_f(M_CPM), c5 = c < 10.0f ? egm_f(M_CPM5) : c;
+  bool slow = use_cpm5(c, c5);
+  float dcpm = slow ? c5 : c;
   float dratio = egm_f(M_RATIO);
   float dusv = (dratio > 0.0f) ? dcpm / dratio : 0.0f;
   uint32_t cpm_x10 = (uint32_t)(dcpm * 10.0f + 0.5f);
   int32_t  usv_x100 = (int32_t)(dusv * 100.0f + 0.5f);
-  bool warming = !egm_b(M_WARM);
+  uint8_t mode = !egm_b(M_WARM) ? 1 : slow ? 2 : 0;
   uint8_t snd = send_indicator;
   uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0)
                | (egm_b(M_NONE) ? 4 : 0);
   int8_t trend = cpm_trend(cpm_x10 / 10);
   if (cpm_x10 == _p1v_last_cpm && usv_x100 == _p1v_last_usv_x100
-      && warming == _p1v_last_warming && snd == _p1v_last_send_ind
+      && mode == _p1v_last_mode && snd == _p1v_last_send_ind
       && wifi == _p1v_last_wifi && trend == _p1v_last_trend) {
     return false;
   }
   _p1v_last_cpm = cpm_x10;
   _p1v_last_usv_x100 = usv_x100;
-  _p1v_last_warming = warming;
+  _p1v_last_mode = mode;
   _p1v_last_send_ind = snd;
   _p1v_last_wifi = wifi;
   _p1v_last_trend = trend;
-  draw_p1_values(cpm_x10, dusv, warming, snd, wifi, trend);
+  draw_p1_values(cpm_x10, dusv, mode, snd, wifi, trend);
   return true;
 }
 
-void SSD1306Display::draw_p1_values(uint32_t cpm_x10, float dusv, bool warming,
+void SSD1306Display::draw_p1_values(uint32_t cpm_x10, float dusv, uint8_t mode,
                                     uint8_t snd, uint8_t wifi, int8_t trend) {
   setDrawColor(0);
   drawBox(36, 0, 92, 32);
@@ -945,8 +947,8 @@ void SSD1306Display::draw_p1_values(uint32_t cpm_x10, float dusv, bool warming,
     format_f(oledBuf, sizeof(oledBuf), dusv);
     drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);
   }
-  if (warming) {
-    drawTPString(*this, 98, 2, DialogInput_plain_12, PSTR("W"));
+  if (mode) {
+    drawTPString(*this, 98, 2, DialogInput_plain_12, mode == 1 ? PSTR("W") : PSTR("S"));
   }
   if (snd) {
     drawXBMP(110, 0, 8, 16, _iconimage_remotext);
