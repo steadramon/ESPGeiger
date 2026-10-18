@@ -1192,7 +1192,7 @@ void SSD1306Display::showOTABanner() {
   _ota_lock = true;
 }
 
-// failed, back to the pages with a full redraw
+// failed, redraw
 void SSD1306Display::endOTABanner() {
   if (!_ota_lock) return;
   _ota_lock = false;

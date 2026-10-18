@@ -225,7 +225,7 @@ uint32_t s_save_ctr       = 0;
 inline void Counter::note_counts_missing(uint32_t uptime_s) {
   bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s, (uint32_t)total_clicks);
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  cm = cm && !udp_rx()->heard();   // quiet tube, not a dead one
+  cm = cm && !udp_rx()->heard();
 #endif
   if (cm && !s_missing_logged) {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
@@ -308,7 +308,6 @@ inline void Counter::update_alarms(int cpm) {
 #define TICK_ATTR
 #endif
 
-// cpm tenths
 static inline uint16_t cps_x600(float cps) {
   uint32_t t = (uint32_t)(cps * 600.0f + 0.5f);
   return t > 0xFFFFu ? 0xFFFFu : (uint16_t)t;

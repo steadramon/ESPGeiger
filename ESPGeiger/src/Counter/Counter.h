@@ -195,7 +195,7 @@ class Counter : public CounterMaths {
       const uint32_t* pulse_histogram() const { return _pulse_hist; }
       static constexpr uint8_t pulse_histogram_buckets() { return HIST_BUCKETS; }
       CircularBuffer<int,45> cpm_history;
-      CircularBuffer<uint16_t,45>* cpm5_history = nullptr;   // tenths, made on first ask
+      CircularBuffer<uint16_t,45>* cpm5_history = nullptr;   // tenths
       void want_cpm5_history();
       CircularBuffer<int,24> day_hourly_history;
     private:

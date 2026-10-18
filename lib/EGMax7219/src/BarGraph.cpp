@@ -19,7 +19,7 @@
 #include "BarGraph.h"
 #include <math.h>
 
-// floor 90% of the low, 5 span min, as the OLED
+// floor 90% of the low, as the OLED
 void barColumns(const int* hist, int n, uint8_t* cols, int w) {
   const int SPAN = 5;
   if (n > w) {

@@ -39,7 +39,7 @@ bool parse_i32(const char* s, int32_t* out, const char** end) {
   return true;
 }
 
-// "2", "0.4", "2.25" as hundredths
+// hundredths
 bool parse_centi(const char* s, int32_t* out) {
   if (!s || *s < '0' || *s > '9') return false;
   const char* p;
