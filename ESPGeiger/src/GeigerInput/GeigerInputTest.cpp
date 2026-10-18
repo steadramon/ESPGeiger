@@ -97,10 +97,7 @@ double GeigerInputTest::calcDelay() {
   }
   r = mult * interval;
 #endif
-#ifdef ESP8266
-  // 26.8 s, fits EGTimer1 once << 8
-  if (r > 8388607) r = 8388607;
-#endif
+  if (r > UINT32_MAX) r = UINT32_MAX;
   return r;
 }
 

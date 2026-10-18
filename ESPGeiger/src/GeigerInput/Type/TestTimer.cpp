@@ -41,12 +41,21 @@ bool TestTimer::tx_pin(int pin, uint32_t& mask, bool& hi) {
 #ifdef ESP8266
 #include <EGTimer1.h>
 
+// 26.8 s, fits EGTimer1 once << 8
+static const uint32_t TT_MAX = (1u << 23) - 1;
+static uint32_t s_wait;
+
 // EGTimer1 counts cpu ticks
-static uint32_t IRAM_ATTR on_nmi() { return s_fn() << GEIGER_TEST_TICK_SHIFT; }
+static uint32_t IRAM_ATTR arm(uint32_t t) {
+  s_wait = t > TT_MAX ? t - TT_MAX : 0;
+  return (t > TT_MAX ? TT_MAX : t) << GEIGER_TEST_TICK_SHIFT;
+}
+
+static uint32_t IRAM_ATTR on_nmi() { return arm(s_wait ? s_wait : s_fn()); }
 
 void TestTimer::start(uint32_t (*fn)(), uint32_t first) {
   s_fn = fn;
-  EGTimer1::timer_start(on_nmi, first << GEIGER_TEST_TICK_SHIFT);
+  EGTimer1::timer_start(on_nmi, arm(first));
 }
 
 void TestTimer::stop() { EGTimer1::timer_stop(); }

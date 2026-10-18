@@ -105,10 +105,7 @@ double GeigerTestPulseInt::calcPWM() {
   // 0 re-fires nonstop
   if (r < _pulse_width_ticks) r = _pulse_width_ticks;
   if (r < 1) r = 1;
-#ifdef ESP8266
-  // timer1 is 23-bit
-  if (r > 8388607) r = 8388607;
-#endif
+  if (r > UINT32_MAX) r = UINT32_MAX;
   return r;
 }
 
