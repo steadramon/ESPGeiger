@@ -39,6 +39,24 @@ bool parse_i32(const char* s, int32_t* out, const char** end) {
   return true;
 }
 
+// "2", "0.4", "2.25" as hundredths
+bool parse_centi(const char* s, int32_t* out) {
+  if (!s || *s < '0' || *s > '9') return false;
+  const char* p;
+  int32_t whole;
+  if (!parse_i32(s, &whole, &p) || whole > INT32_MAX / 100 - 1) return false;
+  int32_t frac = 0;
+  if (*p == '.') {
+    p++;
+    if (*p < '0' || *p > '9') return false;
+    frac = (*p++ - '0') * 10;
+    if (*p >= '0' && *p <= '9') frac += *p++ - '0';
+  }
+  if (*p) return false;
+  *out = whole * 100 + frac;
+  return true;
+}
+
 void hex_encode(char* out, const uint8_t* in, size_t n) {
   for (size_t i = 0; i < n; i++) {
     uint8_t hi = in[i] >> 4, lo = in[i] & 0xF;

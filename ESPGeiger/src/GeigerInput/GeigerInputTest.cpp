@@ -102,7 +102,8 @@ double GeigerInputTest::calcDelay() {
 }
 
 void GeigerInputTest::setTargetCPM(float target, bool manual = false) {
-  Log::console(PSTR("%s: Setting CPM to: %d"), _test_type, (int)target);
+  int c = (int)(target * 100 + 0.5f);
+  Log::console(PSTR("%s: Setting CPM to: %d.%02d"), _test_type, c / 100, c % 100);
   _manual = manual;
   setTargetCPS(target/60.0f);
 };

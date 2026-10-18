@@ -153,7 +153,7 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
   int32_t target;
-  if (parse_i32(req.arg(F("v")), &target) && target > 0) gcounter.set_target_cpm(target);
+  if (parse_centi(req.arg(F("v")), &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 #endif

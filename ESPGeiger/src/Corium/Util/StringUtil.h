@@ -73,6 +73,7 @@ static inline float parse_f(const char* s, char** endptr = nullptr) {
 
 // false leaves *out alone. end null = whole string
 bool parse_i32(const char* s, int32_t* out, const char** end = nullptr);
+bool parse_centi(const char* s, int32_t* out);
 
 // In place, fields point into buf. Missing lines are ""
 uint8_t split_lines(char* buf, char** fields, uint8_t n);

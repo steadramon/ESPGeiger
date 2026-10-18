@@ -249,7 +249,7 @@ void SerialCommand::set_cpm() {
   char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
   if (arg == NULL) return;
   int32_t aNumber;
-  if (parse_i32(arg, &aNumber) && aNumber > 0) gcounter.set_target_cpm(aNumber);
+  if (parse_centi(arg, &aNumber) && aNumber > 0) gcounter.set_target_cpm(aNumber / 100.0f);
 }
 #endif
 
