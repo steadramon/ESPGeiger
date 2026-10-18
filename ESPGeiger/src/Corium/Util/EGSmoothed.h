@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
 
 template<typename T, uint16_t MaxN>
 class EGRingAvg {

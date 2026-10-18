@@ -46,7 +46,6 @@ class GeigerUdpRx;
 #endif
 
 #include "CounterMaths.h"
-#include "Corium/Util/StringUtil.h"
 
 #define GEIGER_CPM_COUNT 60
 

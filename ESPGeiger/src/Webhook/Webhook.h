@@ -19,7 +19,6 @@
 #ifndef WEBHOOK_H
 #define WEBHOOK_H
 #include <Arduino.h>
-#include "Corium/System/Globals.h"
 #include "Corium/System/DeviceInfo.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Net/EGHttpPoster.h"

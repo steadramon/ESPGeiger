@@ -20,7 +20,6 @@
 #define ENVSENSOR_H
 
 #include <Arduino.h>
-#include "Corium/System/Globals.h"
 #include "UdpBlip/UdpBlip.h"
 
 #ifndef DISABLE_ENVSENSOR

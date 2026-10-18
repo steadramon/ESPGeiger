@@ -16,14 +16,12 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include <Arduino.h>
 #include <time.h>
 #include <sys/time.h>
 #include <EGHttpServer.h>
 #include <EGTimeZone.h>
 #include <EGEscape.h>
 #include "NTP.h"
-#include "Corium/System/Globals.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"

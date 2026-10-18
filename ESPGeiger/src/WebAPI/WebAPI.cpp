@@ -22,7 +22,6 @@
 #define WEBAPI_URL "http://api.espgeiger.com"
 #endif
 
-#include <Arduino.h>
 #include <EGHttpServer.h>
 #include "WebAPI.h"
 #include "Features.h"

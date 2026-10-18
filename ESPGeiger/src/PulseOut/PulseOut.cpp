@@ -27,7 +27,6 @@
 #include "Corium/System/Globals.h"
 #include "Corium/System/PinSafety.h"
 
-#include "Corium/System/FastMillis.h"
 #include "Corium/Util/StringUtil.h"
 
 EG_PSTR(K_CYCLES, "cycles");

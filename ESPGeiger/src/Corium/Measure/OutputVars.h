@@ -19,7 +19,8 @@
 #ifndef OUTPUTVARS_H
 #define OUTPUTVARS_H
 
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
 #include "EGMeasure.h"
 
 namespace OutputVars {

@@ -18,7 +18,6 @@
 */
 #ifdef GEIGER_NEOPIXEL
 
-#include <Arduino.h>
 #include "NeoPixel.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"

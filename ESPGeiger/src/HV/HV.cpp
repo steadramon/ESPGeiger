@@ -16,10 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include "Corium/System/Globals.h"  // before the ESPG_HV gate
 #ifdef ESPG_HV
 
-#include <Arduino.h>
 #include <EGHttpServer.h>
 #include "HV.h"
 #include "Corium/Logger/Logger.h"

@@ -22,7 +22,6 @@
 
 #include <SoftwareSerial.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Util/StringUtil.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Corium/System/DeviceInfo.h"

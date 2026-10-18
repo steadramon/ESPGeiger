@@ -18,7 +18,7 @@
 */
 #ifndef EG_DISPLAYBACKEND_H
 #define EG_DISPLAYBACKEND_H
-#include <Arduino.h>
+#include <stdint.h>
 
 class DisplayBackend {
   public:

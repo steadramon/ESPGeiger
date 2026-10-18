@@ -24,7 +24,6 @@
 #include "Corium/Util/MathUtil.h"
 #ifdef USE_PCNT
 #include "Counter/Counter.h"
-#include "Corium/System/FastMillis.h"   // millis() halves lps
 #endif
 
 GeigerPulse::GeigerPulse() {

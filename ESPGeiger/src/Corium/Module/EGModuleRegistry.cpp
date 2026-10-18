@@ -26,7 +26,6 @@
 #include "ExternalPause.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/Fnv.h"
-#include <string.h>
 #ifdef ESP32
 #include <esp_attr.h>
 #endif

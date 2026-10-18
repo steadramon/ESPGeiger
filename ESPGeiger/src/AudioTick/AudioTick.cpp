@@ -36,7 +36,6 @@
 #include <freertos/queue.h>
 #include <freertos/task.h>
 
-#include "Voice/Voice.h"
 
 EG_PSTR(K_DECAY,  "decay");
 EG_PSTR(K_ENGINE, "engine");

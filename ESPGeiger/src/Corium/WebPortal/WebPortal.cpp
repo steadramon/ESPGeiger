@@ -26,7 +26,6 @@
 #include "Corium/System/CrashDump.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/Net/Wifi.h"
-#include "Corium/Measure/OutputVars.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/System/Lifecycle.h"

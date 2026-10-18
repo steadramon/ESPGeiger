@@ -27,8 +27,6 @@
 #include "Counter/Counter.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
 
 #define EG_HAS_SERIAL_PARSERS GEIGER_IS_SERIAL(GEIGER_TYPE)
 

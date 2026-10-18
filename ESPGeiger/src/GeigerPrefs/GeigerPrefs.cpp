@@ -22,7 +22,6 @@
 #include "GeigerKeys.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
-#include "Corium/System/PinSafety.h"
 #include "Corium/Output/LedSignal.h"
 #include "Corium/Output/PulseEngine.h"
 #include "Corium/Util/MathUtil.h"

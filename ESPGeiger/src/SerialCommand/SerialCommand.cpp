@@ -23,7 +23,6 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/BootGuard.h"
-#include "Corium/System/Fs.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
 

@@ -17,7 +17,6 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h>
 #include "Counter.h"
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
 #include "GeigerInput/Type/Pulse.h"
@@ -37,7 +36,6 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Output/LedSignal.h"
-#include "Corium/Util/StringUtil.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/System/RtcMap.h"
 #ifdef ESP32
@@ -45,7 +43,6 @@
 #endif
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/DeviceInfo.h"
-#include "Corium/System/TickProfile.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Uptime.h"
 #include "Corium/System/Clock.h"

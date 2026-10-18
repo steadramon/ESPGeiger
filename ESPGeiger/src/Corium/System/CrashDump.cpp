@@ -87,7 +87,6 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
 
 #elif defined(ESP32)
 // IDF coredump partition
-#include <Arduino.h>
 #include <esp_core_dump.h>
 #include <esp_system.h>
 #include <esp_ota_ops.h>

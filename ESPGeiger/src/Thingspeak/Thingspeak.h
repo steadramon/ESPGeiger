@@ -20,8 +20,6 @@
 #define THINGSPEAK_H
 #ifdef THINGSPEAKOUT
 #include <Arduino.h>
-#include "Corium/System/Globals.h"
-#include "Corium/System/DeviceInfo.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Net/EGHttpPoster.h"
 #include "Corium/Prefs/EGPrefs.h"

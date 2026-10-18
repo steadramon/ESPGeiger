@@ -18,7 +18,6 @@
 */
 #ifdef SERIALOUT
 
-#include <Arduino.h>
 #include <EGFormat.h>
 #include <EGHttpServer.h>
 #include "SerialOut.h"

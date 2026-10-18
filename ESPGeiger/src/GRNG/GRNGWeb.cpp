@@ -21,8 +21,6 @@
 #include "Corium/WebPortal/WebPortal.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGHttpServer.h>
-#include <string.h>
-#include <stdlib.h>
 
 static const char PW_CHARS[] PROGMEM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 

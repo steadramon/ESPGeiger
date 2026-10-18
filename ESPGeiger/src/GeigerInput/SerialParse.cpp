@@ -19,9 +19,6 @@
 
 #include "SerialParse.h"
 #include "Corium/Util/StringUtil.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <ctype.h>
 
 namespace SerialFormat {

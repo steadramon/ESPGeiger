@@ -1,7 +1,6 @@
 #ifndef Sha256_h
 #define Sha256_h
 
-#include <inttypes.h>
 #include "Print.h"
 
 #define HASH_LENGTH 32

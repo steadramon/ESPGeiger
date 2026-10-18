@@ -20,7 +20,6 @@
 #include "Radmon.h"
 #include <EGFormat.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include <EGEscape.h>
 #include "Corium/Module/EGModuleRegistry.h"
