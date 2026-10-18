@@ -18,6 +18,7 @@
 */
 
 #include "Counter.h"
+#include <new>
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
 #include "GeigerInput/Type/Pulse.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
@@ -307,6 +308,12 @@ inline void Counter::update_alarms(int cpm) {
 #define TICK_ATTR
 #endif
 
+// cpm tenths
+static inline uint16_t cps_x600(float cps) {
+  uint32_t t = (uint32_t)(cps * 600.0f + 0.5f);
+  return t > 0xFFFFu ? 0xFFFFu : (uint16_t)t;
+}
+
 void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
   if (!_running) return;
   geigerinput->secondTicker();
@@ -331,13 +338,15 @@ void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
 
   cpm_history.push(ccpm);
 
-  if (tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10) {
+  bool add5 = tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10;
+  if (add5) {
     geigerTicks5.add(_cached_cps);
     if (tick_cnt == 0) {
       geigerTicks15.add(geigerTicks5.get());
     }
   }
   if (++tick_cnt >= 15) tick_cnt = 0;
+  if (cpm5_history) push_cpm5(add5);
 
   time_t currentTime = Clock::synced ? s_clock.step(s_next_boundary, time) : 0;
   if (Clock::synced) hour_rollover(currentTime);
@@ -440,6 +449,18 @@ int Counter::get_cpm5() {
 
 float Counter::get_cpm5f() {
   return geigerTicks5.get() * 60.0f;
+}
+
+// out of the tick
+void __attribute__((noinline)) Counter::push_cpm5(bool fresh) {
+  if (fresh) _cpm5_x10 = cps_x600(geigerTicks5.get());
+  cpm5_history->push(_cpm5_x10);
+}
+
+void Counter::want_cpm5_history() {
+  if (cpm5_history) return;
+  _cpm5_x10 = cps_x600(geigerTicks5.get());
+  cpm5_history = new (std::nothrow) CircularBuffer<uint16_t,45>();
 }
 
 int Counter::get_cpm15() {

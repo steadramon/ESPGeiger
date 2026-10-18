@@ -171,6 +171,17 @@ size_t egm_history(int* out, size_t cap) {
   return n;
 }
 
+size_t egm_cpm5_history(uint16_t* out, size_t cap) {
+  gcounter.want_cpm5_history();
+  if (!gcounter.cpm5_history) return 0;
+  CircularBuffer<uint16_t,45>& b = *gcounter.cpm5_history;
+  size_t n = b.size();
+  if (n > cap) n = cap;
+  size_t skip = b.size() - n;
+  for (size_t i = 0; i < n; i++) out[i] = b[skip + i];
+  return n;
+}
+
 EGMeasureRows egm_input_rows() {
   GeigerInput* in = gcounter.input();
   return in ? in->measurements() : EGMeasureRows();

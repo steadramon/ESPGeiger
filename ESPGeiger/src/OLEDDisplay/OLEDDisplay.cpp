@@ -383,20 +383,29 @@ void SSD1306Display::loop(unsigned long now) {
   if (dirty != DR_NONE && _present) queue_rows(dirty);
 }
 
-// tenths, floor 90% of the low, 1 span min, whole ends; false = no counts
-static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi) {
-  const int32_t SPAN = 10;
-  display_hist(h, n, egm_f(M_CPM5), 10);
+static void hist_min_max(const int* h, uint16_t n, int32_t& lo, int32_t& hi) {
   lo = hi = h[0];
   for (uint16_t i = 1; i < n; i++) {
     if (h[i] < lo) lo = h[i];
     if (h[i] > hi) hi = h[i];
   }
+}
+
+// k 10 = tenths, only under 10; false = no counts
+static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
+  hist_min_max(h, n, lo, hi);
+  k = 1;
+  if (lo < 10) {
+    uint16_t c5[HIST];
+    int m = egm_f(M_CPM5) < 10.0f && egm_b(M_WARM) ? (int)egm_cpm5_history(c5, n) : 0;
+    display_hist_was(h, n, c5, m);
+    hist_min_max(h, n, lo, hi);
+    k = 10;
+  }
   bool counts = hi > 0;
-  if (lo > 10) lo = lo * 9 / 10;
-  if (hi - lo < SPAN) { lo = hi > SPAN ? hi - SPAN : 0; hi = lo + SPAN; }
-  lo = lo / 10 * 10;
-  hi = (hi + 9) / 10 * 10;
+  if (lo > k) lo = lo * 9 / 10;
+  if (hi - lo < k) { lo = hi > k ? hi - k : 0; hi = lo + k; }
+  if (k > 1) { lo = lo / 10 * 10; hi = (hi + 9) / 10 * 10; }
   return counts;
 }
 
@@ -417,7 +426,8 @@ void SSD1306Display::page_tiny() {
   uint16_t n = (uint16_t)egm_history(hist, HIST);
   if (n < 2) return;
   int32_t mn, mx;
-  hist_range(hist, n, mn, mx);
+  int k;
+  hist_range(hist, n, mn, mx, k);
   int32_t span = mx - mn;
   int prev_x = 0, prev_y = 0;
   for (uint16_t i = 0; i < n; i++) {
@@ -858,7 +868,8 @@ bool SSD1306Display::page_one_graph() {
   uint16_t histSize = (uint16_t)egm_history(hist, HIST);
   int32_t minValue = 0;
   int32_t maxValue = 0;
-  bool counts = histSize > 0 && hist_range(hist, histSize, minValue, maxValue);
+  int k = 1;
+  bool counts = histSize > 0 && hist_range(hist, histSize, minValue, maxValue, k);
 
   setDrawColor(0);
   drawBox(0, 35, OLED_WIDTH, 29);
@@ -877,9 +888,10 @@ bool SSD1306Display::page_one_graph() {
       int location = ((map((long)hist[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
       drawFrame(x_start + i * 2, location, 2, (63 - location));
     }
-    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)(minValue / 10));
+    if (k > 1) { minValue /= 10; maxValue /= 10; }
+    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)minValue);
     drawTPString(*this, 93, 55, Open_Sans_Digits_10, graphBuf);
-    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)(maxValue / 10));
+    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)maxValue);
     drawTPString(*this, 93, 35, Open_Sans_Digits_10, graphBuf);
   }
   return true;

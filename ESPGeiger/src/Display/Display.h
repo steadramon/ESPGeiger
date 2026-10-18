@@ -35,6 +35,15 @@ inline float display_cpm(float cpm, float cpm5) {
   return use_cpm5(cpm, cpm5) ? cpm5 : cpm;
 }
 
+// as the number was, tenths; c5 newest aligned, none = raw
+inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
+  for (int i = 0; i < n; i++) {
+    int j = i - (n - m);
+    if (j >= 0 && h[i] < 10 && c5[j] < 100 && use_cpm5((float)h[i], c5[j] * 0.1f)) h[i] = c5[j];
+    else h[i] *= 10;
+  }
+}
+
 // graph as the number, k 10 = tenths
 inline void display_hist(int* h, int n, float cpm5, int k) {
   bool low = cpm5 < 10.0f;

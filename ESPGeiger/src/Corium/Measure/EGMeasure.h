@@ -161,6 +161,8 @@ EGMRead egm_core_read(const char* id, EGMKind kind);
 
 // oldest first, one a second
 size_t egm_history(int* out, size_t cap);
+// cpm5 tenths, same ticks; made on first call
+size_t egm_cpm5_history(uint16_t* out, size_t cap);
 
 // env.unit order
 enum EGMTempUnit : uint8_t { EGMT_C = 0, EGMT_F = 1, EGMT_K = 2 };

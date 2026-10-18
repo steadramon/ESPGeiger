@@ -94,6 +94,8 @@ class Counter {
     unsigned long last_blip()      { return more.blip; }
     unsigned long total_clicks = 0;
     CircularBuffer<int, 45> cpm_history;
+    CircularBuffer<uint16_t, 45>* cpm5_history = nullptr;
+    void want_cpm5_history() {}
 };
 extern Counter gcounter;
 
