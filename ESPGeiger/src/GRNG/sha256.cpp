@@ -59,11 +59,11 @@ void Sha256Class::hashBlock() {
       buffer.w[i&15] = t1;
     }
     t1 = h;
-    t1 += ror32(e,6) ^ ror32(e,11) ^ ror32(e,25); // ∑1(e)
+    t1 += ror32(e,6) ^ ror32(e,11) ^ ror32(e,25); // Sum1(e)
     t1 += g ^ (e & (g ^ f)); // Ch(e,f,g)
     t1 += pgm_read_dword(sha256K+i); // Ki
     t1 += buffer.w[i&15]; // Wi
-    t2 = ror32(a,2) ^ ror32(a,13) ^ ror32(a,22); // ∑0(a)
+    t2 = ror32(a,2) ^ ror32(a,13) ^ ror32(a,22); // Sum0(a)
     t2 += ((b & c) | (a & (b | c))); // Maj(a,b,c)
     h=g; g=f; f=e; e=d+t1; d=c; c=b; b=a; a=t1+t2;
   }
@@ -93,7 +93,7 @@ WRITE_RET_TYPE Sha256Class::write(uint8_t data) {
 }
 
 void Sha256Class::pad() {
-  // Implement SHA-256 padding (fips180-2 §5.1.1)
+  // Implement SHA-256 padding (fips180-2 5.1.1)
 
   // Pad with 0x80 followed by 0x00 until the end of the block
   addUncounted(0x80);
@@ -133,8 +133,7 @@ uint8_t* Sha256Class::result(void) {
 #define HMAC_IPAD 0x36
 #define HMAC_OPAD 0x5c
 
-// keyBuffer (K0 in FIPS-198a) and innerHash are members, in sha256.h. Do not
-// add file-scope copies: the member wins name lookup inside these functions.
+// keyBuffer and innerHash are members, no file-scope copies
 
 void Sha256Class::initHmac(const uint8_t* key, int keyLength) {
   uint8_t i;
@@ -165,4 +164,3 @@ uint8_t* Sha256Class::resultHmac(void) {
   for (i=0; i<HASH_LENGTH; i++) write(innerHash[i]);
   return result();
 }
-Sha256Class Sha256;

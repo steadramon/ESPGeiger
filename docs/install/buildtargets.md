@@ -16,7 +16,7 @@ Builds for a number of target counters are available.
 
 ## Pulse
 
-The pulse target is the most widely compatible build, and works with all Pulse-type Geiger counters. You'll find a list of compatible and tested pulse counters in the hardware section.
+The pulse target is the most widely compatible build and works with all Pulse-type Geiger counters. You'll find a list of compatible and tested pulse counters in the hardware section.
 
 | Target Name | Target Counter | Notes |
 |---|---|---|
@@ -27,20 +27,25 @@ ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support; the panel is aut
 
 ## Serial
 
-A single unified serial build supports all serial Geiger counter types. The serial protocol is selected at runtime via the **Config** page (System > Serial Type).
+A single unified serial build supports all serial Geiger counter types. Select the serial protocol on the [Config page](/configuration) under **Input > Serial Type**.
 
 | Target Name | Notes |
 |---|---|
-`serial` | Unified serial build. Supports GC10, GC10Next, MightyOhm and ESPGeiger protocols. Select your counter type from the Config page after flashing.
+`serial` | Unified serial build. Supports every serial type listed below. Select your counter type from the Config page after flashing.
 
 Supported serial types:
 
+<!-- gen:stypes -->
+
 | Type ID | Counter | Baud Rate | Serial Format |
 |---|---|---|---|
-1 | GC10 | 9600 | `60\n` (plain integer)
-2 | GC10Next | 115200 | `60\n` (plain integer)
-3 | MightyOhm | 9600 | `CPS, 1, CPM, 60, uSv/hr, 1.23, INST\n`
-4 | ESPGeiger | 115200 | `CPM: 60\n`
+| 1 | GC10 | 9600 | `60\n` (plain integer) |
+| 2 | GC10Next | 115200 | `60\n` (plain integer) |
+| 3 | MightyOhm | 9600 | `CPS, 1, CPM, 60, uSv/hr, 1.23, INST\n` |
+| 4 | ESPGeiger | 115200 | `CPM: 60\n` |
+| 5 | Template | 115200 | Any line: the number after `CPM`, else the first number |
+
+<!-- /gen -->
 
 ## Hardware Specific Builds
 
@@ -63,7 +68,7 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 `esp8266oled_hv` | ESP8266 + OLED | As `esp8266_hv` with SSD1306 OLED.
 `esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 80 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict). SSD1306 OLED auto-detected at boot.
 
-For safety the PWM pin defaults to `-1` so freshly flashed firmware does **not** drive any pin until you've explicitly chosen one. After setting the pin in `/egprefs`, **reboot** for the change to take effect.
+For safety the PWM pin defaults to `-1`, so a freshly flashed board drives no pin until you choose one. Set **HV PWM Pin** on the [Config page](/configuration) (System tab, **HV Hardware**), then **reboot**.
 
 ## Audio Tick (ESP32-S3 only)
 
@@ -72,8 +77,8 @@ click is played through an I2S amplifier (e.g. MAX98357A). The XH-S3E set
 targets the **MINI ESP32-S3-N16R8** (sold as "XH-S3E-AI", a small purple
 ESP32-S3 board with onboard speaker, mic, button, NeoPixel and OLED);
 the `esp32s3_audio_*` set targets a generic ESP32-S3 dev kit with an
-externally wired amplifier (BCLK / WS / DOUT configurable from the
-**Config > tick** page). Audio is S3-only: the extra SRAM and headroom
+externally wired amplifier (BCLK / WS / DOUT set on the Config page,
+**Output > Audio Tick**). Audio is S3-only: the extra SRAM and headroom
 keep speech synthesis and the click engine clear of the counting path.
 
 | Target Name | Hardware | Counter Type | Notes |
@@ -85,9 +90,8 @@ keep speech synthesis and the click engine clear of the counting path.
 `esp32s3_audio_pulse` | ESP32-S3 dev kit + amp | Pulse | Generic S3 board, externally wired I2S amplifier. |
 `esp32s3_audio_serial` | ESP32-S3 dev kit + amp | Serial | |
 
-Audio Tick is disabled by default (`tick.enable=0`). Enable it from the
-Config page after flashing and, on the `esp32s3_audio_*` envs, set the
-three I2S pins to match your wiring before rebooting.
+Audio Tick is on by default. On the `esp32s3_audio_*` envs, set the
+three I2S pins on the Config page to match your wiring, then reboot.
 
 ## UDP Receiver
 
@@ -103,31 +107,6 @@ UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for
 
 After flashing, configure the source mode (pin / sum / auto) and group/port from the **Config → Input** page.
 
-## Test
+## Test and Custom Builds
 
-Test builds can be used to emulate a Geiger counter with your board. You can connect the ESPGeiger `RXPIN` and `TXPIN` together, or connect one ESPGeiger `TXPIN` to the `RXPIN` on another ESPGeiger.
-
-_Note_: No values are submitted to public services with Test builds.
-
-By default the Test output cycles through several ranges of reading, switching each 5 minute period:
-
-- 0.5 CPS / 30 CPM
-- 1 CPS / 60 CPM
-- 1.66 CPS / 100 CPM
-- 2 CPS / 120 CPM
-
-| Target Name | Target Counter | Notes |
-|---|---|---|
-`test` | n/a | Internal interrupt based counter. No output, mostly for testing the `Counter.h` functionality.
-`testpulse` | Pulse | Test build which outputs a Poisson distributed pulse on the TXPIN
-`testpulsepwm` | Pulse | Test build which outputs a interrupt generated pulse on the TXPIN
-`testserial` | Serial | Test build which outputs emulated serial data on the TXPIN. Serial format selectable at runtime via Config page.
-
-### Test Build Options
-
-## Hardware Specific Test Builds
-
-| Target Name | Target Counter | Counter Type | Notes |
-|---|---|---|---|
-`espgeigerlog_test` | ESPGeiger Log | n/a | A test build for the ESPGeiger Log hardware. Internal interrupt based counter. No output, mostly for testing the ESPGeiger Log functionality.
-`espgeigerlog_testpulse` | ESPGeiger Log | Pulse | A test build for the ESPGeiger Log hardware. Test build which outputs a pulse on the PLS pin.
+Test builds simulate a Geiger counter and never upload to public services. They are described in [Testing & Development](/dev#test-builds). To build your own firmware, see [Platform.io Build](/dev/platformio).

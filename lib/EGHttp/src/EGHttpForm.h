@@ -22,6 +22,6 @@
 
 // First value for name, decoded as the WHATWG urlencoded parser and CPython
 // parse_qsl(keep_blank_values=True) do. False when absent, when the value
-// does not fit in cap, or when it decodes to a NUL byte.
+// does not fit in cap, or when it decodes to a NUL byte. name may be PROGMEM.
 bool eghttp_form_find(const char* region, size_t len, const char* name,
                       char* out, size_t cap);

@@ -19,15 +19,16 @@
 #ifdef GEIGER_PUSHBUTTON
 #ifndef PUSHBUTTON_H
 #define PUSHBUTTON_H
-#include <Arduino.h>
-#include "../Util/Globals.h"
-#include "../Counter/Counter.h"
-#include "../Module/EGModule.h"
-#include "../Prefs/EGPrefs.h"
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
+#include "Corium/System/Globals.h"
+#include "Counter/Counter.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 #ifndef PUSHBUTTON_PIN
   #ifdef ESP32
-  #define PUSHBUTTON_PIN 0   // BOOT/PRG button is the universal default on ESP32 dev boards
+  #define PUSHBUTTON_PIN 0   // BOOT button
   #else
   #define PUSHBUTTON_PIN -1
   #endif
@@ -36,12 +37,10 @@
 #define PUSHBUTTON_PIN2 -1
 #endif
 
-extern Counter gcounter;
-
 class PushButton : public EGModule {
   public:
     PushButton();
-    const char* name() override { return "btn"; }
+    const char* name() override { return PSTR("btn"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint16_t warmup_seconds() override { return 0; }
     void loop(unsigned long now) override;

@@ -1,6 +1,6 @@
 /*
   GeigerInput/Type/TestPulse.cpp - Class for Test Pulse type counter
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -18,27 +18,24 @@
 */
 #include "TestPulse.h"
 
-// Only meaningful on test builds. ISR uses Xtensa-specific GPIO register
-// access that doesn't compile on ESP32-C3; gating here also saves compile
-// time on builds that never instantiate this class.
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 
-#include "../../Logger/Logger.h"
+#include "Corium/Logger/Logger.h"
 #ifdef USE_PCNT
-#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
+#include "Counter/Counter.h"
 #endif
+#include "TestTimer.h"
 
-static int _pulse_tx_pin;
+static uint32_t s_tx_mask;   // 0 = no TX pin
+static bool s_tx_hi;
 static bool _bool_pulse_state = false;
-static unsigned long _last_b;
-static double _this_delay;
-static double _next_delay;
-#ifdef ESP32
-static esp_timer_handle_t hdl_pulse_timer = NULL;
-#endif
+static volatile unsigned long _last_b;
+// ticks, no libgcc in the isr
+static volatile uint32_t _this_delay;
+static volatile uint32_t _next_delay;
 
 GeigerTestPulse::GeigerTestPulse() {
-  strcpy(_test_type, "TestPulse");
+  strlcpy(_test_type, "TestPulse", sizeof(_test_type));
 };
 
 void GeigerTestPulse::begin() {
@@ -76,96 +73,52 @@ void GeigerTestPulse::begin() {
 #endif
 
   Log::console(PSTR("TestPulse: Test TXPIN: %d"), _tx_pin);
-  pinMode(_tx_pin, OUTPUT);
-  _pulse_tx_pin = _tx_pin;
+  if (TestTimer::tx_pin(_tx_pin, s_tx_mask, s_tx_hi)) {
+    pinMode(_tx_pin, OUTPUT);
+  } else if (_tx_pin >= 0) {
+    Log::console(PSTR("TestPulse: TXPIN %d can't be driven, no TX"), _tx_pin);
+  }
   CPMAdjuster();
-  _next_delay = calcDelay();
+  _next_delay = (uint32_t)calcDelay();
   _this_delay = _next_delay;
-#ifdef ESP8266
-  timer1_disable();
-  timer1_attachInterrupt(pulseInterrupt);
-  timer1_isr_init();
-  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
-  timer1_write(_next_delay);
-#else
-  const esp_timer_create_args_t cfg_et = {
-    .callback = &pulseInterrupt,
-    .name = "pulseint",
-  };
-  esp_timer_create(&cfg_et, &hdl_pulse_timer);
-  esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
-#endif
+  TestTimer::start(pulseInterrupt, _next_delay);
 }
 
-void GeigerTestPulse::stopForOTA() {
-#ifdef ESP8266
-  timer1_disable();
-#else
-  if (hdl_pulse_timer != NULL) esp_timer_stop(hdl_pulse_timer);
-#endif
-}
+void GeigerTestPulse::stopForOTA() { TestTimer::stop(); }
 
-void GeigerTestPulse::restartAfterOTA() {
-#ifdef ESP8266
-  timer1_enable(GEIGER_TEST_TIMER_FREQ, TIM_EDGE, TIM_SINGLE);
-  timer1_write((unsigned long)_next_delay);
-#else
-  if (hdl_pulse_timer != NULL) esp_timer_start_once(hdl_pulse_timer, (unsigned long)_next_delay);
-#endif
-}
+void GeigerTestPulse::restartAfterOTA() { TestTimer::start(pulseInterrupt, _next_delay); }
 
 void GeigerTestPulse::loop() {
+  countTimerPulses();
+  if (_retarget && !_bool_pulse_state) {
+    _retarget = false;
+    _next_delay = (uint32_t)calcDelay();
+    TestTimer::restart((uint32_t)calcDelay());
+  }
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;
-#ifdef ESP8266
-    _next_delay = calcDelay();
-#else
-    portENTER_CRITICAL_ISR(&timerMux);
-    _next_delay = calcDelay();
-    portEXIT_CRITICAL_ISR(&timerMux);
-#endif
+    _next_delay = (uint32_t)calcDelay();   // one word, the isr reads it whole
   }
 }
 
-void IRAM_ATTR GeigerTestPulse::pulseInterrupt(void *data) {
-  pulseInterrupt();
-}
-
-void IRAM_ATTR GeigerTestPulse::pulseInterrupt() {
+// returns ticks to the next
+uint32_t IRAM_ATTR GeigerTestPulse::pulseInterrupt() {
   _bool_pulse_state = !_bool_pulse_state;
-#ifdef ESP8266
-  if (_bool_pulse_state) {
-    GPOS = (1 << _pulse_tx_pin);
-  } else {
-    GPOC = (1 << _pulse_tx_pin);
-  }
-#else
-  // Register-level write works across ESP32 / S2 / S3 / C3; the latter
-  // wraps out_w1ts in an unnamed union so direct struct assignment fails.
-  if (_bool_pulse_state) {
-    REG_WRITE(GPIO_OUT_W1TS_REG, ((uint32_t)1 << _pulse_tx_pin));
-  } else {
-    REG_WRITE(GPIO_OUT_W1TC_REG, ((uint32_t)1 << _pulse_tx_pin));
-  }
-#endif
-  unsigned long _our_delay = 0;
-  uint32_t pulseWidthTicks = _pulse_width_ticks;  // precomputed; ISR stays float-free
+  TestTimer::tx(s_tx_mask, s_tx_hi, _bool_pulse_state);
+  uint32_t _our_delay = 0;
+  uint32_t pulseWidthTicks = _pulse_width_ticks;
   if (!_bool_pulse_state) {
 #ifdef GEIGER_COUNT_TXPULSE
-    GeigerInputTest::countInterrupt();
+    GeigerInputTest::timerPulse();
 #endif
     _last_b = micros();
-    _this_delay = _next_delay - pulseWidthTicks;
-    if (_this_delay < pulseWidthTicks) _this_delay = pulseWidthTicks;
+    uint32_t next = _next_delay;
+    _this_delay = (next > 2 * pulseWidthTicks) ? next - pulseWidthTicks : pulseWidthTicks;
     _our_delay = _this_delay;
   } else {
     _our_delay = pulseWidthTicks;
   }
-  #ifdef ESP8266
-    timer1_write((unsigned long)_our_delay);
-  #else
-    esp_timer_start_once(hdl_pulse_timer, (unsigned long)_our_delay);
-  #endif
+  return _our_delay;
 }
 
 void GeigerTestPulse::secondTicker() {
@@ -176,22 +129,19 @@ void GeigerTestPulse::secondTicker() {
 }
 
 #ifdef USE_PCNT
+// s_event_counter stays 0, UdpBlip adds it to total_clicks
 int GeigerTestPulse::collect() {
-  int16_t pulseCount;
-  pcnt_counter_pause(PCNT_UNIT);
-  pcnt_get_counter_value(PCNT_UNIT, &pulseCount);
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
 #ifdef GEIGER_COUNT_TXPULSE
+  pcnt_take();   // keep the unit empty
   return GeigerInput::collect();
-#endif
-  if (pulseCount != 0) {
-    setCounter(pulseCount);
-    Counter::on_pulse_batch((uint16_t)pulseCount, (uint32_t)micros(), 1000000UL);
-  } else {
-    setCounter(pulseCount, false);
+#else
+  int16_t n = pcnt_take();
+  if (n > 0) {
+    setLastBlip();
+    Counter::on_pulse_batch((uint16_t)n, (uint32_t)micros(), 1000000UL);
   }
-  return pulseCount;
+  return n;
+#endif
 }
 #endif
 #endif // GEIGER_IS_TEST

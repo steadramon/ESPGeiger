@@ -1,6 +1,6 @@
 /*
   Counter.cpp - Geiger Counter class
-  
+
   Copyright (C) 2023 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -17,39 +17,44 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h>
-#include <EGHttpServer.h>
 #include "Counter.h"
-#include "../Logger/Logger.h"
-#include "../Prefs/EGPrefs.h"
-#include "../Util/LedSignal.h"
-#include "../Util/StringUtil.h"
-#include "../Util/MathUtil.h"
-#include "../Util/PinSafety.h"
-#include "../Util/DeviceInfo.h"
-#include "../Util/Wifi.h"
-#include "../Util/TickProfile.h"
-#include "../Util/FastMillis.h"
-#include "../NTP/NTP.h"
-#include "../GRNG/GRNG.h"
-#include "../WebPortal/WebPortal.h"
-#include "../UdpBlip/UdpBlip.h"
-#include "../EnvSensor/EnvSensor.h"
-#ifdef AUDIO_TICK
-#include "../AudioTick/AudioTick.h"
+#include <new>
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
+#include "GeigerInput/Type/Pulse.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
+#include "GeigerInput/Type/Serial.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
+#include "GeigerInput/Type/UdpRx.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TEST
+#include "GeigerInput/Type/Test.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+#include "GeigerInput/Type/TestPulse.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
+#include "GeigerInput/Type/TestSerial.h"
+#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
+#include "GeigerInput/Type/TestPulseInt.h"
 #endif
-#ifdef PULSE_OUT
-#include "../PulseOut/PulseOut.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/System/RtcMap.h"
+#ifdef ESP32
+#include <esp_attr.h>
 #endif
-#include "HIST_JS.gz.h"
-#ifdef ESPG_HV_ADC
-#include "../HV/HV.h"
-#endif
+#include "Corium/System/Lifecycle.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Uptime.h"
+#include "Corium/System/Clock.h"
+#include "TickClock.h"
+#include "App/ClickHooks.h"
 
-extern long start;  // boot epoch ref from main
+Counter gcounter;
 
-// Pulse-timestamp ring (lazy alloc).
 namespace {
+constexpr uint32_t RTC_STASH_S     = 30;
+constexpr uint32_t LIFETIME_SAVE_S = 6 * 3600;
 constexpr uint16_t PULSE_RING_SIZE = 256;
 constexpr uint16_t PULSE_RING_MASK = PULSE_RING_SIZE - 1;
 static_assert((PULSE_RING_SIZE & PULSE_RING_MASK) == 0, "must be power of 2");
@@ -57,8 +62,9 @@ volatile uint32_t* s_pulse_ring   = nullptr;
 volatile uint16_t  s_pulse_head   = 0;
 volatile uint16_t  s_pulse_count  = 0;
 volatile uint32_t  s_min_pulse_us = UINT32_MAX;
-// Tracked without the ring so /history min_pulse_us works for default mode 3.
 volatile uint32_t  s_prev_pulse_us = 0;
+// isr owns the histogram once set
+volatile bool      s_hist_from_isr = false;
 #ifdef ESP32
 portMUX_TYPE s_pulse_mux = portMUX_INITIALIZER_UNLOCKED;
 #endif
@@ -75,38 +81,17 @@ void Counter::set_cpm_mode(uint8_t m) {
   if (_cpm_mode != 3) ensure_pulse_ring();
 }
 
-static volatile uint32_t s_pause_until_ms = 0;
-
-void Counter::pause_external(uint32_t timeout_ms) {
-  if (timeout_ms == 0) {
-    s_pause_until_ms = 0;
-    Log::console(PSTR("External posts: resumed"));
-    return;
-  }
-  s_pause_until_ms = fast_millis() + timeout_ms;
-  Log::console(PSTR("External posts: paused for %u s"), (unsigned)(timeout_ms / 1000U));
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+void Counter::set_target_cpm(float val) {
+  static_cast<GeigerInputTest*>(geigerinput)->setTargetCPM(val, true);
 }
-
-bool Counter::external_paused() {
-  uint32_t until = s_pause_until_ms;
-  if (until == 0) return false;
-  if ((int32_t)(fast_millis() - until) >= 0) {
-    s_pause_until_ms = 0;
-    Log::console(PSTR("External posts: resumed (timeout)"));
-    return false;
-  }
-  return true;
-}
-
-uint32_t Counter::pause_remaining_ms() {
-  uint32_t until = s_pause_until_ms;
-  if (until == 0) return 0;
-  int32_t d = (int32_t)(until - fast_millis());
-  return d > 0 ? (uint32_t)d : 0;
-}
+#endif
+#if GEIGER_TYPE == GEIGER_TYPE_UDPRX
+GeigerUdpRx* Counter::udp_rx() { return static_cast<GeigerUdpRx*>(geigerinput); }
+#endif
 
 void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
-  // Synthetic timestamps; min_pulse_us is real-only.
+  // synthetic, no min_pulse_us
   if (!s_pulse_ring || count == 0) return;
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
@@ -129,13 +114,16 @@ void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) 
 #endif
 }
 
+uint32_t Counter::_pulse_hist[Counter::HIST_BUCKETS] = {0};
+
 void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
-  // Min interval runs without the ring.
   if (s_prev_pulse_us) {
     uint32_t interval = now_us - s_prev_pulse_us;
     if (interval && interval < s_min_pulse_us) s_min_pulse_us = interval;
+    _pulse_hist[interval_bucket(interval)]++;
   }
   s_prev_pulse_us = now_us;
+  s_hist_from_isr = true;
 
   if (!s_pulse_ring) return;
 #ifdef ESP32
@@ -171,34 +159,37 @@ bool Counter::snapshot_ring(RingSnapshot& s) const {
   return count >= 2;
 }
 
-// RTC stash for clicks + seconds since last flash save. Word 48: OTA-safe,
-// clear of CrashDump (0..41). Folded into flash on boot.
-#ifdef ESP8266
+// RTC stash, survives a crash not a power cut
 namespace {
-constexpr uint32_t LIFE_RTC_OFFSET_WORDS = 48;
-constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11D;  // bumped: layout grew delta_seconds
+constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11D;  // bump on layout change
 struct LifeRtc { uint32_t magic; uint32_t delta_clicks; uint32_t delta_seconds; };
 
+#ifdef ESP8266
+typedef RtcSlot<LifeRtc, RtcMap::APP1_AT, RtcMap::APP1_WORDS> LifeSlot;
+bool life_read(LifeRtc& r) { return LifeSlot::read(r); }
+void life_write(const LifeRtc& r) { LifeSlot::write(r); }
+void life_clear() { LifeSlot::clear(); }
+#else
+RTC_NOINIT_ATTR LifeRtc s_life;   // garbage after power-on
+bool life_read(LifeRtc& r) { r = s_life; return true; }
+void life_write(const LifeRtc& r) { s_life = r; }
+void life_clear() { s_life.magic = 0; }
+#endif
+
 void rtc_life_stash(uint32_t delta_clicks, uint32_t delta_seconds) {
-  LifeRtc r{LIFE_RTC_MAGIC, delta_clicks, delta_seconds};
-  ESP.rtcUserMemoryWrite(LIFE_RTC_OFFSET_WORDS, (uint32_t*)&r, sizeof(r));
+  life_write(LifeRtc{LIFE_RTC_MAGIC, delta_clicks, delta_seconds});
 }
 bool rtc_life_recover_and_clear(uint32_t* out_clicks, uint32_t* out_seconds) {
   LifeRtc r{};
   *out_clicks = 0; *out_seconds = 0;
-  if (!ESP.rtcUserMemoryRead(LIFE_RTC_OFFSET_WORDS, (uint32_t*)&r, sizeof(r))) return false;
+  if (!life_read(r)) return false;
   if (r.magic != LIFE_RTC_MAGIC) return false;
-  uint32_t zero[3] = {0, 0, 0};
-  ESP.rtcUserMemoryWrite(LIFE_RTC_OFFSET_WORDS, zero, sizeof(zero));
+  life_clear();
   *out_clicks  = r.delta_clicks;
   *out_seconds = r.delta_seconds;
   return true;
 }
 }
-#else
-static inline void rtc_life_stash(uint32_t, uint32_t) {}
-static inline bool rtc_life_recover_and_clear(uint32_t* c, uint32_t* s) { *c=0; *s=0; return false; }
-#endif
 
 Counter::Counter() {
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
@@ -218,123 +209,152 @@ Counter::Counter() {
 #endif
 }
 
-void Counter::secondticker() {
+namespace {
+#if !GEIGER_IS_TEST(GEIGER_TYPE)
+bool     s_missing_logged = false;
+#endif
+time_t   s_next_boundary  = 0;
+TickClock s_clock;
+bool     s_boundary_armed = false;
+uint32_t s_last_day       = 0;
+uint32_t s_rtc_ctr        = 0;
+uint32_t s_save_ctr       = 0;
+}  // namespace
+
+#if !GEIGER_IS_TEST(GEIGER_TYPE)
+inline void Counter::note_counts_missing(uint32_t uptime_s) {
+  bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s, (uint32_t)total_clicks);
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  cm = cm && !udp_rx()->heard();
+#endif
+  if (cm && !s_missing_logged) {
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
+    Log::console(PSTR("Counter: no counts detected - check tube and wiring (GPIO %d)"), input_pin());
+#else
+    Log::console(PSTR("Counter: no counts detected - check tube/input wiring"));
+#endif
+  }
+  s_missing_logged = cm;
+}
+#endif
+
+inline void Counter::hour_rollover(time_t now) {
+  // not static, guard runs every tick
+  const time_t kBoundarySecs = (time_t)_boundary_secs;
+  bool fire = false;
+  if (s_next_boundary == 0) {
+    // first sync
+    s_next_boundary = now - (now % kBoundarySecs) + kBoundarySecs;
+    fire = true;
+  } else if (now >= s_next_boundary) {
+    fire = true;
+    // ntp stepped forward
+    while (now >= s_next_boundary) s_next_boundary += kBoundarySecs;
+  }
+  if (!fire) return;
+  uint32_t curDay = (uint32_t)(now / 86400);
+  if (s_boundary_armed) {
+    day_hourly_history.push(clicks_hour);
+  }
+  clicks_hour = 0;
+  if (curDay != s_last_day) {
+    if (s_boundary_armed) clicks_yesterday = clicks_today;
+    clicks_today = 0;
+  }
+  s_last_day = curDay;
+  s_boundary_armed = true;
+}
+
+inline void Counter::lifetime_tick(int counts, time_t now) {
+  unsigned long prev_lifetime = total_clicks_lifetime;
+  total_clicks_lifetime += counts;
+  if (prev_lifetime > total_clicks_lifetime) {
+    total_clicks_lifetime_rollover++;
+  }
+  if (counts > 0) {
+    _rtc_unsaved_clicks += (uint32_t)counts;
+  }
+  if (_last_save_time_t == 0 && Clock::synced) {
+    _last_save_time_t = (uint32_t)now;
+  }
+  if (++s_rtc_ctr >= RTC_STASH_S) {
+    s_rtc_ctr = 0;
+    _rtc_pending_now = (uint32_t)now;
+    _pending_work |= PENDING_RTC;
+  }
+  if (_first_boot_ts == 0 && Clock::synced) {
+    _first_boot_ts = (uint32_t)now;
+    _pending_work |= PENDING_SAVE;
+  }
+  if (++s_save_ctr >= LIFETIME_SAVE_S) {
+    s_save_ctr = 0;
+    _pending_work |= PENDING_SAVE;
+  }
+}
+
+inline void Counter::update_alarms(int cpm) {
+  bool warm = geigerTicks.warm();
+  bool warn = alarm_over(cpm, _cpm_warning, warm);
+  bool alrt = alarm_over(cpm, _cpm_alert, warm);
+  if (!warn && !alrt) _alarm_snoozed = false;
+  _bool_cpm_warning = warn && !_alarm_snoozed;
+  _bool_cpm_alert   = alrt && !_alarm_snoozed;
+}
+
+// esp32: once a second from flash misses the cache
+#ifdef ESP32
+#define TICK_ATTR IRAM_ATTR
+#else
+#define TICK_ATTR
+#endif
+
+static inline uint16_t cps_x600(float cps) {
+  uint32_t t = (uint32_t)(cps * 600.0f + 0.5f);
+  return t > 0xFFFFu ? 0xFFFFu : (uint16_t)t;
+}
+
+void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
+  if (!_running) return;
   geigerinput->secondTicker();
 
   int eventCounter = geigerinput->collect();
-  uint32_t up_s = (uint32_t)DeviceInfo::uptime();
-  if (eventCounter > 0) _last_count_up_s = up_s;
+  if (eventCounter > 0) _last_count_up_s = uptime_s;
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
-  {
-    static bool cm_logged = false;
-    bool cm = (up_s - _last_count_up_s) >= MIN_SILENCE_S && counts_missing();
-    if (cm && !cm_logged) {
-#if GEIGER_IS_PULSE(GEIGER_TYPE)
-      Log::console(PSTR("Counter: no counts detected - check tube and wiring (GPIO %d)"), input_pin());
-#else
-      Log::console(PSTR("Counter: no counts detected - check tube/input wiring"));
-#endif
-    }
-    cm_logged = cm;
-  }
+  note_counts_missing(uptime_s);
 #endif
   static uint8_t tick_cnt = 0;
   geigerTicks.add(eventCounter);
   unsigned long previous_total_clicks = total_clicks;
   total_clicks += eventCounter;
-  if (previous_total_clicks > total_clicks) {
-    total_clicks = eventCounter;
+  if (previous_total_clicks > total_clicks) {   // wrapped
     total_clicks_rollover++;
   }
 
   _cached_cps = apply_dead_time(geigerTicks.get());
-  // Cache dispatched CPM once per tick: hot reads skip the switch, warn
-  // tracks the value the user sees (relevant in non-bucket modes).
   _cached_cpm_active = get_cps() * 60.0f;
-  int ccpm = (int)roundf(_cached_cpm_active);
+  // roundf without soft-float, cpm >= 0
+  int ccpm = (int)(_cached_cpm_active + 0.5f);
 
   cpm_history.push(ccpm);
 
-  if (tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10) {
+  bool add5 = tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10;
+  if (add5) {
     geigerTicks5.add(_cached_cps);
     if (tick_cnt == 0) {
       geigerTicks15.add(geigerTicks5.get());
     }
   }
   if (++tick_cnt >= 15) tick_cnt = 0;
+  if (cpm5_history) push_cpm5(add5);
 
-  time_t currentTime = time (NULL);
-  if (ntpclient.synced) {
-    // Build-time constant per input type, evaluated once.
-    static const time_t kBoundarySecs = (time_t)geigerinput->boundary_seconds();
-    static time_t nextBoundary = 0;
-    static bool boundaryArmed = false;
-    bool fire = false;
-    if (nextBoundary == 0) {
-      // First sync: align and fire once for tz.
-      nextBoundary = currentTime - (currentTime % kBoundarySecs) + kBoundarySecs;
-      fire = true;
-    } else if (currentTime >= nextBoundary) {
-      fire = true;
-      // Catch up after NTP step forward.
-      while (currentTime >= nextBoundary) nextBoundary += kBoundarySecs;
-    }
-    if (fire) {
-      // Day index so rollover survives NTP step past midnight.
-      static uint32_t lastDay = 0;
-      uint32_t curDay = (uint32_t)(currentTime / 86400);
-      if (boundaryArmed) {
-        day_hourly_history.push(clicks_hour);
-      }
-      clicks_hour = 0;
-      if (curDay != lastDay) {
-        if (boundaryArmed) clicks_yesterday = clicks_today;
-        clicks_today = 0;
-      }
-      lastDay = curDay;
-      boundaryArmed = true;
-    }
-  }
+  time_t currentTime = Clock::synced ? s_clock.step(s_next_boundary, time) : 0;
+  if (Clock::synced) hour_rollover(currentTime);
 
   clicks_today += eventCounter;
   clicks_hour += eventCounter;
 
-  if (_lifetime_enabled) {
-    unsigned long prev_lifetime = total_clicks_lifetime;
-    total_clicks_lifetime += eventCounter;
-    if (prev_lifetime > total_clicks_lifetime) {
-      total_clicks_lifetime = eventCounter;
-      total_clicks_lifetime_rollover++;
-    }
-    if (eventCounter > 0) {
-      _rtc_unsaved_clicks += (uint32_t)eventCounter;
-    }
-    if (_last_save_time_t == 0 && ntpclient.synced) {
-      _last_save_time_t = (uint32_t)currentTime;
-    }
-    // Schedule here; loop() does the RTC + flash work.
-    static uint32_t s_rtc_ctr = 0;
-    if (++s_rtc_ctr >= 30) {
-      s_rtc_ctr = 0;
-      _rtc_pending_now = (uint32_t)currentTime;  // free here, computed at top
-      _pending_work |= PENDING_RTC;
-    }
-    if (_first_boot_ts == 0 && ntpclient.synced) {
-      _first_boot_ts = (uint32_t)currentTime;
-      _pending_work |= PENDING_SAVE;
-    }
-    static uint32_t s_save_ctr = 0;
-    if (++s_save_ctr >= 21600) {   // 6 h
-      s_save_ctr = 0;
-      _pending_work |= PENDING_SAVE;
-    }
-  }
-
-  bool warn = (_cpm_warning < ccpm);
-  bool alrt = (_cpm_alert   < ccpm);
-  if (!warn && !alrt) _alarm_snoozed = false;     // auto re-arm when calm
-  _bool_cpm_warning = warn && !_alarm_snoozed;
-  _bool_cpm_alert   = alrt && !_alarm_snoozed;
+  if (_lifetime_enabled) lifetime_tick(eventCounter, currentTime);
+  update_alarms(ccpm);
 }
 
 void Counter::reset_alarm() {
@@ -346,23 +366,16 @@ void Counter::reset_alarm() {
 }
 
 void Counter::save_lifetime() {
-  // Advance tracked seconds since last save so lifetime CPM stays right across reboots.
-  time_t currentTime = time(nullptr);
-  if (_last_save_time_t > 0 && ntpclient.synced &&
-      (uint32_t)currentTime >= _last_save_time_t) {
-    _lifetime_seconds_saved += (uint32_t)currentTime - _last_save_time_t;
+  uint32_t now = Clock::epoch();
+  if (_last_save_time_t > 0 && Clock::synced && now >= _last_save_time_t) {
+    _lifetime_seconds_saved += now - _last_save_time_t;
   }
-  if (ntpclient.synced) _last_save_time_t = (uint32_t)currentTime;
+  if (Clock::synced) _last_save_time_t = now;
 
-  char buf[16];
-  snprintf(buf, sizeof(buf), "%lu", total_clicks_lifetime);
-  EGPrefs::put("life", "clk", buf);
-  snprintf(buf, sizeof(buf), "%lu", total_clicks_lifetime_rollover);
-  EGPrefs::put("life", "clkr", buf);
-  snprintf(buf, sizeof(buf), "%lu", (unsigned long)_first_boot_ts);
-  EGPrefs::put("life", "fbt", buf);
-  snprintf(buf, sizeof(buf), "%lu", _lifetime_seconds_saved);
-  EGPrefs::put("life", "secs", buf);
+  EGPrefs::putUInt("life", EG_K_CLK, total_clicks_lifetime);
+  EGPrefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover);
+  EGPrefs::putUInt("life", EG_K_FBT, _first_boot_ts);
+  EGPrefs::putUInt("life", EG_K_SECS, _lifetime_seconds_saved);
   EGPrefs::commit();
   _rtc_unsaved_clicks = 0;
   rtc_life_stash(0, 0);
@@ -370,11 +383,21 @@ void Counter::save_lifetime() {
 
 unsigned long Counter::get_lifetime_seconds() const {
   unsigned long live = _lifetime_seconds_saved;
-  if (_last_save_time_t > 0 && ntpclient.synced) {
-    time_t now = time(nullptr);
-    if ((uint32_t)now >= _last_save_time_t) live += (uint32_t)now - _last_save_time_t;
+  if (_last_save_time_t > 0 && Clock::synced) {
+    uint32_t now = Clock::epoch();
+    if (now >= _last_save_time_t) live += now - _last_save_time_t;
   }
   return live;
+}
+
+void Counter::clock_stepped(int32_t delta_s) {
+  if (_last_save_time_t) _last_save_time_t += delta_s;
+  // stamped from the bad time this boot
+  if (_first_boot_ts && _first_boot_ts >= (uint32_t)(Clock::boot_epoch - delta_s)) {
+    _first_boot_ts += delta_s;
+    _pending_work |= PENDING_SAVE;
+  }
+  s_next_boundary = 0;
 }
 
 void Counter::reset_lifetime() {
@@ -388,7 +411,6 @@ void Counter::reset_lifetime() {
 }
 
 float Counter::get_cps() {
-  // Ring modes fall back to _cached_cps when ring is empty.
   if (_cpm_mode == 3) return _cached_cps;
   auto ringOrBucket = [&](float v) -> float {
     return v > 0.0f ? apply_dead_time(v) : _cached_cps;
@@ -428,6 +450,18 @@ float Counter::get_cpm5f() {
   return geigerTicks5.get() * 60.0f;
 }
 
+// out of the tick
+void __attribute__((noinline)) Counter::push_cpm5(bool fresh) {
+  if (fresh) _cpm5_x10 = cps_x600(geigerTicks5.get());
+  cpm5_history->push(_cpm5_x10);
+}
+
+void Counter::want_cpm5_history() {
+  if (cpm5_history) return;
+  _cpm5_x10 = cps_x600(geigerTicks5.get());
+  cpm5_history = new (std::nothrow) CircularBuffer<uint16_t,45>();
+}
+
 int Counter::get_cpm15() {
   return (int)roundf(get_cpm15f());
 }
@@ -436,27 +470,12 @@ float Counter::get_cpm15f() {
   return geigerTicks15.get() * 60.0f;
 }
 
-void Counter::set_ratio(float ratio) {
-  if (ratio <= 0) return;
-  _ratio = ratio;
-  _ratio_inv = 1.0f / ratio;
-  // 30 min floor: shielded / low-CPM setups would false-alarm at the bare formula.
-  uint32_t t = (uint32_t)(12000.0 / (double)ratio);
-  _tube_timeout_s = (t < 1800) ? 1800 : t;
-}
-
 bool Counter::get_tube_alive() {
-  if (_ratio <= 0.0f) return true;
-  // Silence measured in uptime seconds from the last collected count, so a
-  // tube that has never counted since boot also goes dead once past timeout.
-  uint32_t up = (uint32_t)DeviceInfo::uptime();
-  uint32_t silence = up - _last_count_up_s;
-  if (silence < _tube_timeout_s) return true;
-  if (total_clicks == 0) return false;
-  // 20 expected counts, double the advisory.
-  uint32_t obs = (uint32_t)((20ULL * up) / total_clicks);
-  if (obs > TUBE_DEAD_MAX_S) obs = TUBE_DEAD_MAX_S;
-  return silence < obs;
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  if (udp_rx()->heard()) return true;
+#endif
+  return tube_alive((uint32_t)DeviceInfo::uptime(), _last_count_up_s,
+                    (uint32_t)total_clicks);
 }
 
 int Counter::input_pin() {
@@ -471,33 +490,20 @@ bool Counter::counts_missing() {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   return false;
 #else
-  // 10 expected counts of silence (Poisson, P ~ 5e-5). Expected rate is the
-  // assumed background (0.1 uSv/h through the ratio) until the first count,
-  // then the observed lifetime rate, so unset ratios and quiet sites
-  // self-calibrate. Cap at the dead-tube timeout: the advisory must never
-  // be slower than the hard latch.
-  // Below the floor no threshold can fire; skip the soft-float and 64-bit
-  // divides on the healthy-station common path.
-  uint32_t up = (uint32_t)DeviceInfo::uptime();
-  uint32_t silence = up - _last_count_up_s;
-  if (silence < MIN_SILENCE_S) return false;
-  if (_ratio <= 0.0f) return false;
-  uint32_t thresh = (uint32_t)(6000.0f / _ratio);
-  if (total_clicks > 0) {
-    uint32_t obs = (uint32_t)((10ULL * up) / total_clicks);
-    if (obs > thresh) thresh = obs;
-  }
-  if (thresh > _tube_timeout_s) thresh = _tube_timeout_s;
-  return silence >= thresh;
+  bool cm = CounterMaths::counts_missing((uint32_t)DeviceInfo::uptime(),
+                                         _last_count_up_s,
+                                         (uint32_t)total_clicks);
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+  cm = cm && !udp_rx()->heard();
+#endif
+  return cm;
 #endif
 }
 
 bool Counter::get_saturated() {
-  // Raw cps only; corrected values feedback-loop near the cap.
-  if (_dead_time_us == 0) return false;
   float cps = get_cps_live();
   if (cps <= 0.0f) cps = geigerTicks.get();
-  return cps * _dead_time_sec > 0.875f;
+  return saturated_at(cps);
 }
 
 float Counter::get_cps_live() {
@@ -509,7 +515,7 @@ float Counter::get_cps_live() {
 }
 
 float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
-  // 0 = uncapped on that axis.
+  // 0 = uncapped
   if (!s_pulse_ring) return 0.0f;
 #ifdef ESP32
   portENTER_CRITICAL(&s_pulse_mux);
@@ -543,16 +549,8 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
   return (float)(take - 1) * 1.0e6f / (float)span;
 }
 
-float Counter::apply_dead_time(float cps) const {
-  // Non-paralyzable model, capped at 10x. Skip below 50 cps (factor < 1.005).
-  if (_dead_time_us == 0 || cps <= 50.0f) return cps;
-  float x = cps * _dead_time_sec;
-  if (x > 0.9f) x = 0.9f;
-  return cps / (1.0f - x);
-}
-
 uint16_t Counter::get_cps_n() {
-  return s_pulse_count;     // 16-bit aligned volatile read is atomic on Xtensa
+  return s_pulse_count;     // atomic on xtensa
 }
 
 uint32_t Counter::get_cps_win_us() {
@@ -570,15 +568,8 @@ void Counter::set_blip_brightness(uint8_t level) {
   LedSignal::setBrightness(level);
 }
 
-static unsigned long s_quiet_recompute_ms = 0;
-static bool s_quiet_cached = false;
-
 void Counter::set_quiet_hours(const char* from, const char* to) {
-  ParsedTime f = parseTime(from);
-  ParsedTime t = parseTime(to);
-  _quiet_from_min = f.isValid ? (f.hour * 60 + f.minute) : -1;
-  _quiet_to_min   = t.isValid ? (t.hour * 60 + t.minute) : -1;
-  s_quiet_recompute_ms = 0;
+  _quiet.set(from, to);
 }
 
 void Counter::set_warning(int val) {
@@ -598,37 +589,20 @@ bool Counter::is_warm() const {
   return false;
 }
 
-bool Counter::is_warning() {
-  return _bool_cpm_warning;
-}
-
-bool Counter::is_alert() {
-  return _bool_cpm_alert;
-}
-
 float Counter::get_usv() {
   return get_cpmf() * _ratio_inv;
-}
-
-float Counter::get_totalusv() {
-  unsigned long long uptime = ntpclient.getUptime ();
-  if (uptime < 1) {
-    return 0;
-  }
-  const float inv_uptime = 1.0f / uptime;
-  // total_clicks wraps at 2^32; weight each rollover by 2^32.
-  float totalUsv  = 4294967296.0f * inv_uptime * (float)total_clicks_rollover;
-  totalUsv       += total_clicks * inv_uptime;
-  return totalUsv * _ratio_inv;
 }
 
 float Counter::get_usv5() {
   return get_cpm5f() * _ratio_inv;
 }
 
-float Counter::get_usv15() {
-  return get_cpm15f() * _ratio_inv;
+static void counter_lifecycle(Lifecycle::Event e) {
+  if (e == Lifecycle::OTA_FAILED) gcounter.restart_after_ota();
+  else gcounter.stop_for_ota();
 }
+
+static void counter_clock_stepped(int32_t delta_s) { gcounter.clock_stepped(delta_s); }
 
 void Counter::begin() {
   geigerTicks.begin(_cpm_window);
@@ -643,7 +617,10 @@ void Counter::begin() {
 #endif
 
   geigerinput->begin();
+  _boundary_secs = (uint16_t)geigerinput->boundary_seconds();
   apply_pcnt_filter();
+  Lifecycle::on(counter_lifecycle);
+  Clock::on_step(counter_clock_stepped);
 
   uint32_t rtc_delta_clicks = 0, rtc_delta_seconds = 0;
   bool rtc_ok = rtc_life_recover_and_clear(&rtc_delta_clicks, &rtc_delta_seconds);
@@ -652,7 +629,6 @@ void Counter::begin() {
       unsigned long prev = total_clicks_lifetime;
       total_clicks_lifetime += rtc_delta_clicks;
       if (prev > total_clicks_lifetime) {
-        total_clicks_lifetime = rtc_delta_clicks;
         total_clicks_lifetime_rollover++;
       }
     }
@@ -663,55 +639,30 @@ void Counter::begin() {
                    (unsigned long)rtc_delta_seconds);
     }
   }
+  _running = true;
 }
 
-void Counter::blip() {
-    if (!_blip_led) return;
-    if (is_quiet_now()) return;
-    LedSignal::click();
+bool Counter::blip_led() {
+#ifdef DISABLE_BLIP
+  return false;
+#else
+  return _blip_led && !is_quiet_now();
+#endif
 }
 
 void Counter::dispatchReceiverBlip() {
   _last_blip = micros();
-  // Suppress Counter::loop's polling-based re-dispatch of this same blip,
-  // otherwise each receiver blip fires audio twice and would also bounce
-  // back out via udpblip.notifyClick on a UdpRx+UdpBlip combo device.
-  // OLED/NeoPixel still see _last_blip change via their own poll counters.
+  // else audio fires twice and udpblip echoes
   _last_blip_seen = _last_blip;
-#ifndef DISABLE_BLIP
-  this->blip();
-#endif
-  unsigned long nowMs = fast_millis();
-#ifdef AUDIO_TICK
-  audiotick.notifyClick(nowMs);
-#endif
-#ifdef PULSE_OUT
-  pulseout.notifyClick(nowMs);
-#endif
+  ClickHooks::rx_click(blip_led());
 }
 
 bool Counter::is_quiet_now() {
-  // Both ends must parse (blank = off) and NTP synced; uptime is not wall-clock.
-  if (_quiet_from_min < 0 || _quiet_to_min < 0)      return false;
-  if (_quiet_from_min == _quiet_to_min)              return false;
-  if (!ntpclient.synced)                             return false;
-
-  unsigned long now_ms = fast_millis();
-  if ((long)(now_ms - s_quiet_recompute_ms) < 0) return s_quiet_cached;
-
-  struct tm t;
-  if (!ntpclient.localTm(&t)) return false;
-  int16_t m = t.tm_hour * 60 + t.tm_min;
-
-  s_quiet_cached = (_quiet_from_min < _quiet_to_min)
-    ? (m >= _quiet_from_min && m < _quiet_to_min)
-    : (m >= _quiet_from_min || m < _quiet_to_min);
-  s_quiet_recompute_ms = now_ms + (60UL - t.tm_sec) * 1000UL;
-  return s_quiet_cached;
+  return _quiet.active();
 }
 
+// NOLINTNEXTLINE(complexity) hot path
 void Counter::loop() {
-  // Single byte check defers RTC stash + flash save out of tick_max.
   if (_pending_work) {
     uint8_t pw = _pending_work;
     _pending_work = 0;
@@ -731,60 +682,28 @@ void Counter::loop() {
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
   geigerinput->loop();
-#elif GEIGER_IS_PULSE(GEIGER_TYPE) && defined(USE_PCNT)
-  // 50 Hz PCNT drain so audio/LED/UDP fire on the click, not the 1 Hz tick.
+#elif defined(COUNTER_DRAINS_PCNT)
   {
-    static uint32_t s_last_pcnt_ms = 0;
     uint32_t pcnt_ms = fast_millis();
-    if ((uint32_t)(pcnt_ms - s_last_pcnt_ms) >= 20) {
-      s_last_pcnt_ms = pcnt_ms;
-      geigerinput->drain_pcnt();
+    if ((uint32_t)(pcnt_ms - _pcnt_ms) >= PCNT_DRAIN_MS) {
+      _pcnt_ms = pcnt_ms;
+      static_cast<GeigerPulse*>(geigerinput)->drain_pcnt();
     }
   }
 #elif GEIGER_IS_UDPRX(GEIGER_TYPE)
-  #ifndef UDPRX_POLL_SKIP
-  #define UDPRX_POLL_SKIP 500
-  #endif
-  static uint16_t s_udp_skip = 0;
-  if (++s_udp_skip >= UDPRX_POLL_SKIP) {
-    s_udp_skip = 0;
-    geigerinput->loop();
-  }
+  geigerinput->loop();
 #endif
 
   unsigned long lb = _last_blip;
   if (_last_blip_seen != lb) {
     _last_blip_seen = lb;
 
-    if (_hist_primed) {
-      uint32_t d = (uint32_t)(lb - _prev_blip_us);   // unsigned, wrap-safe
-      uint8_t b;
-      if (d < 64) {
-        b = 0;
-      } else {
-        // d >= 64 here, so __builtin_clz(d) is well-defined.
-        int lg = 31 - __builtin_clz(d);              // floor(log2(d)), 6..31
-        b = (lg < 30) ? (uint8_t)(lg - 5) : 24;
-      }
-      _pulse_hist[b]++;
-    } else {
-      _hist_primed = true;
+    if (!s_hist_from_isr) {
+      if (_hist_primed) _pulse_hist[interval_bucket((uint32_t)(lb - _prev_blip_us))]++;
+      else _hist_primed = true;
+      _prev_blip_us = lb;
     }
-    _prev_blip_us = lb;
 
-    GRNG::mix((uint32_t)lb ^ ESP.getCycleCount());
-
-#ifndef DISABLE_BLIP
-    this->blip();
-#endif
-    unsigned long nowMs = fast_millis();  // shared time base with UdpBlip::loop
-    udpblip.notifyClick(nowMs);
-#ifdef AUDIO_TICK
-    audiotick.notifyClick(nowMs);
-#endif
-#ifdef PULSE_OUT
-    pulseout.notifyClick(nowMs);
-#endif
+    ClickHooks::click((uint32_t)lb, blip_led());
   }
 }
-

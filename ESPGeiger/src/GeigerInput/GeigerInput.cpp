@@ -1,6 +1,6 @@
 /*
   GeigerInput/GeigerInput.cpp - Geiger Counter Input Class
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -16,19 +16,18 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include <Arduino.h>
 #include "GeigerInput.h"
-#include "../Counter/Counter.h"   // Counter::on_pulse() ring hook
-#include "../Logger/Logger.h"
-#include "../Util/PinSafety.h"
+#include "Counter/Counter.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/PinSafety.h"
 
 volatile unsigned long _last_blip = 0;
 volatile uint32_t s_event_counter = 0;
-volatile uint32_t s_isr_entries = 0;  // counted pre-debounce for storm-detect
+volatile uint32_t s_isr_entries = 0;  // before debounce
 
 volatile unsigned long _debounce = GEIGER_DEBOUNCE;
 
-// 10000 ISR/s is ~600x any physically possible tube rate.
+// ~600x any real tube
 static constexpr uint32_t ISR_STORM_THRESHOLD = 10000;
 static constexpr uint8_t  ISR_STORM_COOLDOWN_S = 5;
 static uint8_t s_isr_cooldown = 0;
@@ -42,7 +41,12 @@ void GeigerInput::begin() {
 }
 
 void GeigerInput::set_rx_pin(int pin) {
-  if (const char* why = PinSafety::claim_input(pin, PSTR("RX"))) {
+  const char* why = nullptr;
+#ifdef ESP8266
+  if (pin == 16) why = PSTR("no interrupt on GPIO16");
+#endif
+  if (!why) why = PinSafety::claim_input(pin, PSTR("RX"));
+  if (why) {
     Log::console(PSTR("Counter: rx_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
@@ -83,9 +87,9 @@ void GeigerInput::setLastBlip()  {
   _last_blip = micros();
 }
 
-void IRAM_ATTR GeigerInput::countInterrupt() {
+// inline, isr stays one IRAM function
+static inline __attribute__((always_inline)) void count_at(unsigned long cycles) {
   s_isr_entries++;
-  unsigned long cycles = micros();
   if (cycles - _last_blip < _debounce) {
     return;
   }
@@ -100,8 +104,15 @@ void IRAM_ATTR GeigerInput::countInterrupt() {
   Counter::on_pulse((uint32_t)cycles);
 }
 
-// Park the ISR for a few seconds if it's storming (floating pin / EMI),
-// so the rest of the firmware keeps running and the WDT gets fed.
+void IRAM_ATTR GeigerInput::countInterrupt() {
+  count_at(micros());
+}
+
+void GeigerInput::countAt(unsigned long us) {
+  count_at(us);
+}
+
+// floating pin, EMI
 void GeigerInput::checkIsrStorm() {
   if (_rx_pin < 0) return;
   uint32_t n = s_isr_entries;

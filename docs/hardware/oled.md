@@ -8,7 +8,7 @@ nav_order: 5
 
 # OLED Displays
 
-ESPGeiger supports cheap, widely-available I2C OLED panels for live readout of CPM, μSv/h, history graphs, and status. A small SSD1306 module slotted into an ESP8266 build adds a complete on-device UI for around $3-5.
+ESPGeiger supports cheap, widely-available I2C OLED panels for live readout of CPM, μSv/h, history graphs and status. A small SSD1306 module slotted into an ESP8266 build adds a complete on-device UI for around $3-5.
 
 ## Supported chips
 
@@ -24,7 +24,7 @@ If a module arrives and the display looks wrong (wrong characters, half the scre
 
 ## Connection
 
-Four pins: VCC, GND, SCL, SDA. The default I2C pin assignment for `nodemcuv2`-based ESP8266 builds is **SDA = GPIO 4 (D2)**, **SCL = GPIO 5 (D1)**. These are configurable per build via `-DOLED_SDA=N`/`-DOLED_SCL=N` build flags, and most builds also expose them as runtime prefs on the Config page (the exception is fixed-hardware builds like `espgeigerhw`, where the pins are blocked).
+Four pins: VCC, GND, SCL, SDA. The default I2C pin assignment for `nodemcuv2`-based ESP8266 builds is **SDA = GPIO 4 (D2)**, **SCL = GPIO 5 (D1)**. These are configurable per build via `-DOLED_SDA=N`/`-DOLED_SCL=N` build flags and most builds also expose them as runtime prefs on the Config page (the exception is fixed-hardware builds like `espgeigerhw`, where the pins are blocked).
 
 Power: 3.3 V (most modules work with either 3.3 V or 5 V VCC, since they have onboard regulators; but 3.3 V is safer and matches the ESP).
 
@@ -42,4 +42,4 @@ Stay away from SPI modules unless you're building custom hardware - ESPGeiger's 
 
 ## Disabling
 
-Set `display.brightness = 0` to blank the panel without disconnecting it. To remove OLED support entirely from a custom build, omit the `-DSSD1306_DISPLAY` build flag (see [PlatformIO Build Options](/install/platformio)).
+Set Display **Brightness** to `0` to blank the panel without disconnecting it. Custom builds can leave out OLED support entirely; see [Build Options](/dev/platformio#display--leds).

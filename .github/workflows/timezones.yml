@@ -3,13 +3,13 @@ name: Timezones Check
 on:
   push:
     paths:
-      - 'ESPGeiger/src/NTP/**'
+      - 'ESPGeiger/src/Corium/NTP/**'
       - 'lib/EGTimeZone/**'
       - 'scripts/gen_tz_dropdown.py'
       - '.github/workflows/timezones.yml'
   pull_request:
     paths:
-      - 'ESPGeiger/src/NTP/**'
+      - 'ESPGeiger/src/Corium/NTP/**'
       - 'lib/EGTimeZone/**'
       - 'scripts/gen_tz_dropdown.py'
   schedule:

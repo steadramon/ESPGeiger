@@ -1,6 +1,6 @@
 /*
   GeigerInput/Type/Pulse.cpp - Class for Pulse type counter
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,10 @@
 
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
 
-#include "../../Logger/Logger.h"
-#include "../../Util/MathUtil.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Util/MathUtil.h"
 #ifdef USE_PCNT
-#include "../../Counter/Counter.h"   // Counter::on_pulse_batch ring synth (PCNT)
-#include "../../Util/FastMillis.h"   // fast_millis() - real millis() halves LPS
+#include "Counter/Counter.h"
 #endif
 
 GeigerPulse::GeigerPulse() {
@@ -34,9 +33,7 @@ void GeigerPulse::begin() {
   GeigerInput::begin();
 #ifdef USE_PCNT
   Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
-  // Force pull-up during PCNT init: the channel counts on falling edges,
-  // so the edge detector needs a HIGH prior-state to latch against. We
-  // restore the user-configured pull after the counter is running.
+  // pull-up for PCNT init, user pull after
   gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
   pcnt_config_t pcntConfig = {
     .pulse_gpio_num = _rx_pin,
@@ -82,16 +79,9 @@ void GeigerPulse::restartAfterOTA() {
 
 #ifdef USE_PCNT
 void GeigerPulse::drain_pcnt() {
-  // Caller throttles to 50 Hz; this assumes a real drain is wanted.
-  int16_t n = 0;
-  pcnt_counter_pause(PCNT_UNIT);
-  pcnt_get_counter_value(PCNT_UNIT, &n);
-  if (n <= 0) {
-    pcnt_counter_resume(PCNT_UNIT);
-    return;
-  }
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
+  // caller throttles to 50 Hz
+  int16_t n = pcnt_take();
+  if (n <= 0) return;
 
   uint32_t now_us = (uint32_t)micros();
   uint32_t span_us = now_us - _last_drain_us;
@@ -107,11 +97,7 @@ void GeigerPulse::drain_pcnt() {
 }
 
 int GeigerPulse::collect() {
-  int16_t residual = 0;
-  pcnt_counter_pause(PCNT_UNIT);
-  pcnt_get_counter_value(PCNT_UNIT, &residual);
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
+  int16_t residual = pcnt_take();
 
   uint32_t now_us = (uint32_t)micros();
 

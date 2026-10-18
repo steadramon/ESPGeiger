@@ -1,12 +1,6 @@
-#ifndef _DEBUG_PRINT_MACROS_H
-#define _DEBUG_PRINT_MACROS_H
+#ifndef DEBUG_PRINT_MACROS_H
+#define DEBUG_PRINT_MACROS_H
 // Some customizable print macros to suite the debug needs de jour.
-
-// Debug macros
-// #include <pgmspace.h>
-// https://stackoverflow.com/questions/8487986/file-macro-shows-full-path
-// This value is resolved at compile time.
-#define _FILENAME_ strrchr("/" __FILE__, '/')
 
 // #define DEBUG_ESP_ASYNC_TCP 1
 // #define DEBUG_ESP_TCP_SSL 1
@@ -43,13 +37,6 @@ inline struct _DEBUG_TIME_STAMP debugTimeStamp(void) {
 
 #endif
 
-#if defined(DEBUG_ESP_PORT) && !defined(DEBUG_GENERIC)
-  #define DEBUG_GENERIC( module, format, ... ) \
-    do { \
-      struct _DEBUG_TIME_STAMP st = debugTimeStamp(); \
-      DEBUG_ESP_PORT_PRINTF( (DEBUG_TIME_STAMP_FMT module " " format), st.whole, st.dec, ##__VA_ARGS__ ); \
-    } while(false)
-#endif
 #if defined(DEBUG_ESP_PORT) && !defined(DEBUG_GENERIC_F)
   #define DEBUG_GENERIC_F( module, format, ... ) \
     do { \
@@ -58,15 +45,6 @@ inline struct _DEBUG_TIME_STAMP debugTimeStamp(void) {
     } while(false)
 #endif
 
-#if defined(DEBUG_GENERIC) && !defined(ASSERT_GENERIC)
-#define ASSERT_GENERIC( a, module ) \
-  do { \
-    if ( !(a) ) { \
-      DEBUG_GENERIC( module, "%s:%s:%u: ASSERT("#a") failed!\n", __FILE__, __func__, __LINE__); \
-      DEBUG_ESP_PORT_FLUSH(); \
-    } \
-  } while(false)
-#endif
 #if defined(DEBUG_GENERIC_F) && !defined(ASSERT_GENERIC_F)
 #define ASSERT_GENERIC_F( a, module ) \
   do { \
@@ -77,24 +55,12 @@ inline struct _DEBUG_TIME_STAMP debugTimeStamp(void) {
   } while(false)
 #endif
 
-#ifndef DEBUG_GENERIC
-#define DEBUG_GENERIC(...) do { (void)0;} while(false)
-#endif
-
 #ifndef DEBUG_GENERIC_F
 #define DEBUG_GENERIC_F(...) do { (void)0;} while(false)
 #endif
 
-#ifndef ASSERT_GENERIC
-#define ASSERT_GENERIC(...) do { (void)0;} while(false)
-#endif
-
 #ifndef ASSERT_GENERIC_F
 #define ASSERT_GENERIC_F(...) do { (void)0;} while(false)
-#endif
-
-#ifndef DEBUG_ESP_PRINTF
-#define DEBUG_ESP_PRINTF( format, ...) DEBUG_GENERIC_F("[%s]", format, &_FILENAME_[1], ##__VA_ARGS__)
 #endif
 
 #if defined(DEBUG_ESP_ASYNC_TCP) && !defined(ASYNC_TCP_DEBUG)
@@ -109,4 +75,4 @@ inline struct _DEBUG_TIME_STAMP debugTimeStamp(void) {
 #define TCP_SSL_DEBUG( format, ...) DEBUG_GENERIC_F("[TCP_SSL]", format, ##__VA_ARGS__)
 #endif
 
-#endif //_DEBUG_PRINT_MACROS_H
+#endif //DEBUG_PRINT_MACROS_H

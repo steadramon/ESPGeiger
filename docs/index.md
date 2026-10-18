@@ -22,7 +22,7 @@ ESPGeiger is a free, open-source firmware allowing you to transform any compatib
 
 **Connectivity & Data Sharing:**
 * 🌐 **Online Data Export:** Radmon.org, GMCMAP, ThingSpeak, generic Webhook and GeigerLog.
-* 🏠 **Local Network:** MQTT with Home Assistant auto-discovery, and a Prometheus `/metrics` endpoint.
+* 🏠 **Local Network:** MQTT with Home Assistant auto-discovery and a Prometheus `/metrics` endpoint.
 * 📡 **UDP / OSC Broadcast:** Multicast clicks and telemetry over OSC to any tool on the LAN (Pure Data, TouchDesigner, Node-RED, etc).
 * 🛰️ **UDP-Receiver Mode:** A tubeless ESP can mirror another ESPGeiger over the air for fleet displays or aggregation.
 * 💾 **Local Data Logging:** SD card export for offline analysis.

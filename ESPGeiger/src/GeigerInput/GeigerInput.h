@@ -1,6 +1,6 @@
 /*
   GeigerInput/GeigerInput.h - Geiger Counter Input Class
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -21,18 +21,16 @@
 #ifndef GEIGERINPUT_H
 #define GEIGERINPUT_H
 #include <Arduino.h>
-#include "../Util/Globals.h"
+#include "Corium/System/Globals.h"
+#include "Corium/Measure/EGMeasure.h"
 
-// GEIGER_TYPE bitfield. Bit 7 partitions test (>=128) from real (<128) builds;
-// bits 0-2 describe the input pipeline; bits 3-6 reserved for future variants.
-// PCNT (ESP32 hardware pulse counter) is an implementation detail of the pulse
-// input path, controlled separately via the IGNORE_PCNT compile-time flag.
-#define GEIGER_FLAG_PULSE   0x01   // bit 0 - hardware pulse input
-#define GEIGER_FLAG_SERIAL  0x02   // bit 1 - UART input
-#define GEIGER_FLAG_INTPWM  0x04   // bit 2 - internal PWM generation (modifier on PULSE)
-#define GEIGER_FLAG_UDPRX   0x08   // bit 3 - clicks arrive over UDP/OSC multicast
+// GEIGER_TYPE bits, test builds >= 128
+#define GEIGER_FLAG_PULSE   0x01
+#define GEIGER_FLAG_SERIAL  0x02
+#define GEIGER_FLAG_INTPWM  0x04   // modifier on PULSE
+#define GEIGER_FLAG_UDPRX   0x08
 // bits 4-6 reserved
-#define GEIGER_FLAG_TEST    0x80   // bit 7 - test/simulation build (real <128, test >=128)
+#define GEIGER_FLAG_TEST    0x80
 
 #define GEIGER_TYPE_PULSE         (GEIGER_FLAG_PULSE)
 #define GEIGER_TYPE_SERIAL        (GEIGER_FLAG_SERIAL)
@@ -48,15 +46,23 @@
 #define GEIGER_IS_TEST(t)    ((t) & GEIGER_FLAG_TEST)
 #define GEIGER_HAS_INTPWM(t) ((t) & GEIGER_FLAG_INTPWM)
 
-// Central decision for PCNT usage. Previously duplicated in three Type headers;
-// now the single source of truth. ESP32-only hardware. Opt-out via -D IGNORE_PCNT.
-// Disabled when GEIGER_COUNT_TXPULSE is active (that build counts internal TX
-// pulses, not input pin edges, so PCNT isn't relevant).
-#if defined(ESP32) && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
+#ifdef ESP32
+#include <soc/soc_caps.h>
+#endif
+
+// TXPULSE counts internal pulses, C3 has no PCNT
+#if defined(ESP32) && SOC_PCNT_SUPPORTED && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
 #define USE_PCNT
 #endif
 
-// UDPRX has no tube and no click pin - block hardware-input prefs.
+// esp8266 test pulses count in loop()
+#if defined(ESP8266) && GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#define GEIGER_COUNTS_IN_ISR
+#elif defined(ESP32) && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+#define GEIGER_COUNTS_IN_ISR
+#endif
+
+// no tube, no click pin
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   #ifndef RXPIN_BLOCKED
     #define RXPIN_BLOCKED
@@ -79,7 +85,6 @@
 #define GEIGER_RXPIN -1
 #endif
 
-// Fallback MODEL for builds that set only GEIGER_SERIALTYPE.
 #ifndef GEIGER_MODEL
   #if GEIGER_SERIALTYPE == GEIGER_STYPE_GC10
     #define GEIGER_MODEL "GC10"
@@ -100,10 +105,8 @@
 #define GEIGER_DEBOUNCE 200
 #endif
 
-// micros() of last accepted input (tube pulse, serial CPM line, or UDP /click).
-extern volatile unsigned long _last_blip;
-// Pending pulses since last collect(). ISR-write, cooperative read-and-clear.
-extern volatile uint32_t s_event_counter;
+extern volatile unsigned long _last_blip;   // micros()
+extern volatile uint32_t s_event_counter;   // isr writes, loop reads and clears
 
 extern volatile unsigned long _debounce;
 
@@ -136,11 +139,10 @@ class GeigerInput {
     virtual void apply_pcnt_filter() {};
     virtual void set_pin_pull(int mode) {};   // 0=floating, 1=up, 2=down
     virtual bool has_pcnt() { return false; }
-    // Input-link health. Pulse defers to Counter::get_tube_alive.
     virtual bool isHealthy() const { return true; }
     virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
     virtual void registerRoutes(EGHttpServer&) {}
-    virtual void appendJsonExtra(EGHttpResponse&) {}
+    virtual EGMeasureRows measurements() { return EGMeasureRows(); }
     virtual void appendClicksExtra(EGHttpResponse&) {}
     virtual uint32_t boundary_seconds() const { return 3600; }   // 60 in test
     virtual void stopForOTA() {}
@@ -148,13 +150,25 @@ class GeigerInput {
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
     static void IRAM_ATTR countInterrupt();
-    // Self-heal an ISR storm (floating pin / EMI). Pulse mode calls this from s_tick.
+    // main code only, interrupts off
+    static void countAt(unsigned long us);
     void checkIsrStorm();
     void setCounter(int val, bool update = true);
     void setLastBlip();
+    // inline gate
+    bool poll_due() {
+      if (_poll_c < _poll_skip) {
+        _poll_c++;
+        return false;
+      }
+      _poll_c = 0;
+      return true;
+    }
   private:
-    void (*callback)(void) = nullptr; // Member variable to store callback function pointer
+    void (*callback)(void) = nullptr;
   protected:
+    uint16_t _poll_c = 0;
+    uint16_t _poll_skip = 0;   // passes between polls
 #ifdef GEIGER_TXPIN
     int _tx_pin = GEIGER_TXPIN;
 #else

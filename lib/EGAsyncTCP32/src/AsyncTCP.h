@@ -72,6 +72,7 @@ typedef std::function<void(void *, AsyncClient *, struct pbuf *pb)> AcPacketHand
 typedef std::function<void(void *, AsyncClient *, uint32_t time)> AcTimeoutHandler;
 
 struct tcp_pcb;
+struct lwip_tcp_event_packet_t;
 class AsyncTCP_detail;
 
 class AsyncClient {
@@ -119,6 +120,8 @@ public:
      * @brief close connection
      */
   void close();
+  // not delete, off the async task
+  void release();
 
   int8_t abort();
   bool free();
@@ -261,9 +264,6 @@ public:
     _ack_pcb = false;
   }
 
-  static const char *errorToString(int8_t error);
-  const char *stateToString() const;
-
   int8_t _recv(tcp_pcb *pcb, pbuf *pb, int8_t err);
   tcp_pcb *pcb() {
     return _pcb;
@@ -274,16 +274,18 @@ protected:
   friend class AsyncServer;
 
   tcp_pcb *_pcb;
-  // True iff _pcb still points to a live lwIP pcb. Lock-step with every _pcb assignment.
-  std::atomic<bool> _pcb_alive{false};
+  std::atomic<bool> _pcb_alive{false};   // set with every _pcb assignment
 
-  bool _validate_pcb() const;
+  // tiT can null _pcb, read once
+  tcp_pcb *_validate_pcb() const;
+  inline tcp_pcb *_live_pcb() const {
+    return _pcb_alive.load(std::memory_order_acquire) ? _pcb : nullptr;
+  }
 
 public:
   inline void _mark_pcb_dead() {
     _pcb_alive.store(false, std::memory_order_release);
   }
-  inline bool _is_pcb_alive() const { return _pcb_alive.load(std::memory_order_acquire); }
 
 protected:
 
@@ -305,8 +307,15 @@ protected:
   void *_poll_cb_arg;
 
   bool _ack_pcb;
+  bool _closed = false;   // by the owner
+  bool _told = false;     // onDisconnect ran
+  std::atomic<bool> _released{false};
+  std::atomic<bool> _close_wanted{false};   // next poll closes
+  lwip_tcp_event_packet_t *_release_ev = nullptr;   // so release() can't fail
+  std::atomic<uint32_t> _dns_id{0};   // older answers dropped
+  uint8_t _gen = 0;   // per connect
   uint32_t _tx_last_packet;
-  uint32_t _rx_ack_len;
+  std::atomic<uint32_t> _rx_ack_len{0};   // async_tcp adds, loop acks
   uint32_t _rx_last_packet;
   uint32_t _rx_timeout;
   uint32_t _rx_last_ack;
@@ -319,8 +328,8 @@ protected:
   int8_t _poll(tcp_pcb *pcb);
   int8_t _sent(tcp_pcb *pcb, uint16_t len);
   int8_t _fin(tcp_pcb *pcb, int8_t err);
-  int8_t _lwip_fin(tcp_pcb *pcb, int8_t err);
   void _dns_found(ip_addr_t *ipaddr);
+  bool _connect_to(ip_addr_t addr, uint16_t port);
 };
 
 class AsyncServer {
@@ -340,6 +349,8 @@ public:
   void setNoDelay(bool nodelay);
   bool getNoDelay() const;
   uint8_t status() const;
+  // before begin(), lwIP drops SYNs past n
+  void setMaxClients(uint8_t n) { _maxClients = n; }
 
 protected:
   friend class AsyncTCP_detail;
@@ -347,6 +358,7 @@ protected:
   uint16_t _port;
   ip_addr_t _addr;
   bool _noDelay;
+  uint8_t _maxClients = 0;   // 0 = lwIP's 5 half-open
   tcp_pcb *_pcb;
   AcConnectHandler _connect_cb;
   void *_connect_cb_arg;

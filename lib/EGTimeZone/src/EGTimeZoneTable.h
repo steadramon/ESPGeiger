@@ -19,7 +19,7 @@
 #ifndef EGTIMEZONE_TABLE_H
 #define EGTIMEZONE_TABLE_H
 
-// IANA tzdb 2026d. Rerun tools/gen_timezones.py; never edit.
+// IANA tzdb 2026e. Rerun tools/gen_timezones.py; never edit.
 // Included only by EGTimeZone.cpp.
 
 // NUL separated; zones[].offset indexes into this.
@@ -206,7 +206,7 @@ PROGMEM static const struct TZoneH {
     {289636, 709},   // America/Moncton
     {290785, 425},   // America/Punta_Arenas
     {296680, 1241},  // Asia/Manila
-    {300125, 816},   // Canada/Central
+    {300125, 978},   // Canada/Central
     {303007, 1158},  // America/Shiprock
     {303455, 145},   // Asia/Bishkek
     {307480, 124},   // Asia/Aqtau
@@ -222,7 +222,7 @@ PROGMEM static const struct TZoneH {
     {329953, 811},   // Mexico/General
     {335595, 1153},  // Mexico/BajaSur
     {337525, 983},   // America/Thunder_Bay
-    {344612, 816},   // America/Rainy_River
+    {344612, 978},   // America/Rainy_River
     {346512, 778},   // Asia/Taipei
     {349954, 1006},  // Africa/Nouakchott
     {350456, 847},   // Africa/Dar_es_Salaam
@@ -555,7 +555,7 @@ PROGMEM static const struct TZoneH {
     {1462267, 512},  // Pacific/Easter
     {1475245, 704},  // America/St_Kitts
     {1475507, 1006}, // Africa/Monrovia
-    {1485189, 816},  // America/Winnipeg
+    {1485189, 978},  // America/Winnipeg
     {1495084, 432},  // America/Miquelon
     {1504159, 1153}, // MST
     {1505373, 153},  // Indian/Christmas

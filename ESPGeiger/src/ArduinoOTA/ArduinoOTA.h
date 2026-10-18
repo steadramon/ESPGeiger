@@ -17,10 +17,11 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef _ARDUINO_OTA_h
-#define _ARDUINO_OTA_h
+#ifndef ARDUINO_OTA_h
+#define ARDUINO_OTA_h
 
-#include "Arduino.h"
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
 #ifdef ESP8266
 #include <ESP8266mDNS.h>
@@ -29,29 +30,25 @@
 #include <Update.h>
 #endif
 #include <ArduinoOTA.h>
-#include "../Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 
-// Polling cadence in ms for the OTA UDP socket. Negotiation handshake
-// spans seconds, so 100 ms is plenty responsive while saving CPU.
 #ifndef OTA_POLL_INTERVAL_MS
 #define OTA_POLL_INTERVAL_MS 100
 #endif
 
 class ArduinoOTAModule : public EGModule {
   public:
-    const char* name() override { return "ota"; }
+    const char* name() override { return PSTR("ota"); }
     bool requires_wifi() override { return true; }
+    bool core_module() override { return true; }
     uint16_t warmup_seconds() override { return 0; }
     void begin() override;
     void loop(unsigned long now) override;
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return OTA_POLL_INTERVAL_MS; }
+    bool runs_during_ota() override { return true; }
 };
 
 extern ArduinoOTAModule ota;
-
-// True mid-flash. EGModuleRegistry pauses everything else while set.
-// Reset on OTA error so a failed negotiation isn't terminal.
-extern volatile bool ota_in_progress;
 
 #endif

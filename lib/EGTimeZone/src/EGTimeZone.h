@@ -21,9 +21,7 @@
 
 namespace EGTimeZone {
 
-// Olson name ("Europe/London") to the POSIX rule setenv("TZ", ...) wants
-// ("GMT0BST,M3.5.0/1,M10.5.0"). Returns PROGMEM, valid for the program's life.
-// nullptr on a miss, so a tzdb rename cannot pass silently.
+// PROGMEM or nullptr; hash only, a miss can match another zone
 const char *posixFor(const char *olson);
 
 }

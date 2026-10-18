@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
-# Regenerates src/EGTimeZoneTable.h and extras/zones.json from the IANA tz
-# database. NOT a build step: run it when tzdb releases, review the diff, commit.
-#
-# Source is the `tzdata` PyPI package, never the system zoneinfo tree, which
-# varies per machine and per OS vendor.
-#
-# Aliases are emitted too. Names are not stored on device, only a hash and a
-# rule offset, so full coverage is nearly free and every legacy name a user
-# might carry keeps resolving across a tzdb rename.
+# Makes src/EGTimeZoneTable.h and extras/zones.json, run on a new tzdb
+# not a build step, tzdata from PyPI not the system tree
 
 import argparse
 import collections
@@ -39,7 +32,7 @@ LICENCE = """/*
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */"""
 
-# Must match EGTimeZone.cpp.
+# must match EGTimeZone.cpp
 FNV_PRIME = 16777619
 OFFSET_BASIS = 2166136261
 HASH_MASK = 0x1FFFFF
@@ -88,7 +81,7 @@ def collect(root):
             rule = posix_rule(path)
             if rule:
                 zones[name] = rule
-    # Sorted: os.walk order is platform-dependent.
+    # os.walk order varies
     return dict(sorted(zones.items()))
 
 

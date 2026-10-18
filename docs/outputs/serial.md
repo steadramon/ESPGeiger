@@ -23,8 +23,8 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | `reboot` | Reboot ESPGeiger | `reboot` |
 | `resetwifi` | Erase WiFi credentials and drop into setup mode | `resetwifi` |
 | `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
-| `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get sys.ratio` |
-| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set sys.ratio 151.0` |
+| `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
+| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set counter.ratio 151.0` |
 | `cpm` | Return current CPM value | |
 | `usv` | Return current μSv/h value | |
 | `show` | Enable 1-second CPM output | |
@@ -40,17 +40,17 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 
 ### Setting prefs
 
-Use `get` and `set` for every persisted pref. `get` with no `<module>.<key>` echoes nothing. The names match the `/egprefs` JSON dumps and the pref keys on the Configuration page.
+Use `get` and `set` for any saved setting. Keys take the form `<group>.<key>`, using the same names as the [Config page](/configuration).
 
-Common examples:
+Examples:
 
-| Was | Now |
+| Command | Effect |
 |---|---|
-| `ratio 151.0` | `set sys.ratio 151.0` |
-| `duty 50` | `set espghw.duty 50` |
-| `freq 6000` | `set espghw.freq 6000` |
-| `vratio 1000` | `set espghw.ratio 1000` |
-| `voffset -10` | `set espghw.offset -10` |
+| `set counter.ratio 151.0` | CPM to µSv/h ratio |
+| `set espghw.duty 50` | HV duty (HV builds) |
+| `set espghw.freq 6000` | HV frequency (HV builds) |
+| `set espghw.ratio 1000` | HV divider ratio (HV builds) |
+| `set espghw.offset -10` | HV divider offset (HV builds) |
 
 ## Example Output
 
@@ -96,7 +96,7 @@ Turn it all off with `show 0` - periodic output stops and the regular log verbos
 
 The default output uses ESPGeiger's own labelled style, but the firmware can also emit lines in any of the protocols it supports on the input side. This is useful for piping data into existing tools that expect a particular counter's wire format, or for chaining ESPGeiger to a parent device that thinks it is talking to a real GC10 / MightyOhm.
 
-Set the format via the `sout.format` pref. Three contiguous IDs on the output side - separate from the input-side protocol IDs (which are stable across versions for backwards compatibility).
+Set the format with the `sout.format` pref. These IDs are separate from the input-side Serial Type IDs.
 
 | `set sout.format N` | Wire format | Default baud |
 |---|---|---|
@@ -148,27 +148,38 @@ cpm=30|cps=0.53|usv=0.17
 
 ### Variables
 
+<!-- gen:vars -->
+
 | Name | Meaning |
 |---|---|
+| `{ut}` | Uptime in seconds since boot |
 | `{cpm}` | 1-minute CPM (integer) |
-| `{cps}` | Counts per second, rolling float |
-| `{cps_i}` | Counts in the most recent whole second (integer) |
 | `{cpm5}` | 5-minute CPM rolling average |
 | `{cpm15}` | 15-minute CPM rolling average |
 | `{usv}` | Dose rate in microsieverts per hour |
-| `{tc}` | Lifetime total clicks |
-| `{ut}` | Uptime in seconds |
-| `{id}` | Six-hex chip id |
-| `{name}` | Friendly name (or hostname) |
-| `{rssi}` | WiFi RSSI in dBm |
+| `{cps}` | Counts per second, rolling float |
+| `{cps_i}` | Counts in the most recent whole second (integer) |
+| `{tc}` | Total clicks since boot |
+| `{life}` | Lifetime total clicks since first boot |
 | `{mem}` | Free heap in bytes |
-| `{mode}` | MightyOhm-style mode tag `SLOW` / `FAST` / `INST` |
-| `{hv}` | Measured HV in volts (ESPGeiger-HW only) |
+| `{rssi}` | WiFi RSSI in dBm |
+| `{id}` | Six-hex chip id |
+| `{name}` | Friendly name or hostname |
+| `{mode}` | MightyOhm-style mode tag SLOW/FAST/INST |
+| `{tube}` | 1 while pulses arrive, 0 after a silence long enough to suggest a tube, HV or wiring fault |
+| `{sat}` | 1 when the rate is near the tube's dead-time limit |
+| `{warn}` | 1 while CPM is over the warning level |
+| `{alert}` | 1 while CPM is over the alert level |
+| `{hv}` | Measured HV in volts (HV ADC builds only) |
 | `{t}` | Temperature in user-preferred unit (env.unit) |
 | `{h}` | Relative humidity % |
 | `{p}` | Pressure in hPa |
 
-Unknown placeholders render verbatim as `{whatever}`, so misspellings are visible on the wire. Sensor variables (`{hv}`, `{t}`, `{h}`, `{p}`) render as empty strings when the relevant hardware is absent.
+<!-- /gen -->
+
+A suffix after a colon picks the unit and decimals: `{t:F}` is Fahrenheit, `{usv:2}` two decimals, `{t:K1}` Kelvin to one decimal. Units work on `{t}` only; decimals on `{cps}`, `{cpm5}`, `{cpm15}`, `{usv}`, `{t}`, `{h}` and `{p}`. Any other suffix renders the placeholder verbatim.
+
+Unknown placeholders render verbatim as `{whatever}`, so misspellings are visible on the wire. Sensor variables (`{hv}`, `{t}`, `{h}`, `{p}`) also render verbatim when the sensor is absent or does not report that value.
 
 Visit `/vars.json` on the device to see the current rendered value of every variable - handy when authoring a template and checking that the field you want is actually populated on your build.
 
@@ -176,19 +187,25 @@ Visit `/vars.json` on the device to see the current rendered value of every vari
 
 Backslash escapes work inside the template:
 
+<!-- gen:escapes -->
+
 | Sequence | Meaning |
 |---|---|
 | `\n` | Newline (0x0A) |
 | `\r` | Carriage return (0x0D) |
-| `\t` | Tab |
+| `\t` | Tab (0x09) |
 | `\\` | Literal backslash |
-| `\{` `\}` | Literal brace |
+| `\{` | Literal `{` |
+| `\}` | Literal `}` |
+| `\0` | NUL byte (0x00) |
+
+<!-- /gen -->
 
 If you leave off the trailing newline the firmware adds one for you. Multi-line templates are fine - e.g. `cpm={cpm}\ncps={cps}\n` emits two lines per emit period.
 
 ### Notes
 
-* Template max length is 128 characters; rendered line also caps at 128 bytes per emit.
+* Template max length is 128 characters; a rendered line caps at 255 bytes.
 * MightyOhm output (format 1) stays its own special case because the mode tag (`SLOW`/`FAST`/`INST`) and CPM extrapolation in `INST` mode can't be expressed as a static template. For a MightyOhm-like line with your own labels, combine `{cps_i}` + `{cpm}` + `{mode}` - note that in the `INST` regime the CPM won't match MightyOhm's wire-exact behaviour.
 
 ## Baud rate

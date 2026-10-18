@@ -1,6 +1,6 @@
 /*
   GeigerInput/GeigerInputTest.cpp - Base class for test-type Geiger inputs
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "GeigerInputTest.h"
-#include "../Logger/Logger.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/FastMillis.h"
 #include <EGHttpServer.h>
 
 void GeigerInputTest::appendClicksExtra(EGHttpResponse& res) {
@@ -26,15 +28,44 @@ void GeigerInputTest::appendClicksExtra(EGHttpResponse& res) {
 
 volatile int _pulse_width_us = GEIGER_PULSE_WIDTH;
 volatile uint32_t _pulse_width_ticks =
-    (uint32_t)((double)GEIGER_PULSE_WIDTH * GEIGER_TEST_TIMER_DIV / 1000000.0);
+    (uint32_t)((double)GEIGER_PULSE_WIDTH * GEIGER_TEST_TIMER_DIV / 1000000);
 
 void set_pulse_width_us(int us) {
   _pulse_width_us = us;
-  _pulse_width_ticks = (uint32_t)((double)us * GEIGER_TEST_TIMER_DIV / 1000000.0);
+  _pulse_width_ticks = (uint32_t)((double)us * GEIGER_TEST_TIMER_DIV / 1000000);
 }
 
 GeigerInputTest::GeigerInputTest() {
 };
+
+// one writer each side, cross core on esp32
+static constexpr uint8_t TP_RING = 64;
+static volatile uint32_t s_tp_at[TP_RING];
+volatile uint8_t GeigerInputTest::_tp_head;
+volatile uint8_t GeigerInputTest::_tp_tail;
+
+void IRAM_ATTR GeigerInputTest::timerPulse() {
+  uint8_t h = _tp_head;
+  if ((uint8_t)(h - _tp_tail) >= TP_RING) return;   // full, dropped
+  s_tp_at[h % TP_RING] = micros();
+  _tp_head = h + 1;
+}
+
+void GeigerInputTest::drainTimerPulses() {
+  uint8_t t = _tp_tail;
+  while (t != _tp_head) {
+    uint32_t at = s_tp_at[t % TP_RING];
+    noInterrupts();   // a pin interrupt may count too
+    countAt(at);
+    interrupts();
+    _tp_tail = ++t;
+  }
+}
+
+int GeigerInputTest::collect() {
+  countTimerPulses();
+  return GeigerInput::collect();
+}
 
 void GeigerInputTest::begin() {
   Log::console(PSTR("%s: Setting up test geiger ..."), _test_type);
@@ -44,12 +75,8 @@ void GeigerInputTest::begin() {
 double GeigerInputTest::generatePoissonRand(double lambda) {
   // https://tomroelandts.com/articles/simulating-a-geiger-counter
   double u;
-#ifdef ESP8266
-  u = (1.0 * RANDOM_REG32) / (0xFFFFFFFF + 1.0);
-#else
-  u = (1.0 * esp_random()) / (0xFFFFFFFF + 1.0);
-#endif
-  return -log(1.0 - u) / lambda;
+  u = (double)DeviceInfo::hwRandom() / ((double)0xFFFFFFFF + 1);
+  return -log(1 - u) / lambda;
 }
 
 double GeigerInputTest::calcDelay() {
@@ -59,29 +86,27 @@ double GeigerInputTest::calcDelay() {
 #ifdef DISABLE_GEIGER_POISSON
   r = mult / cps;
 #else
-  // Debt carries forward unclamped so long-run rate stays Poisson-correct
-  // up to the pulse-width floor; above the floor output saturates cleanly.
-  double result       = generatePoissonRand(cps) + _remainder;
-  double min_interval = _pulse_width_us * 0.000001;
-  if (result < min_interval) {
-    _remainder = result - min_interval;   // unclamped - may be deeply negative
-    result     = min_interval;
+  // debt unclamped, keeps it Poisson
+  double interval     = generatePoissonRand(cps) + _remainder;
+  double min_interval = (double)_pulse_width_us / 1000000;
+  if (interval < min_interval) {
+    _remainder = interval - min_interval;
+    interval   = min_interval;
   } else {
     _remainder = 0;
   }
-  r = mult * result;
+  r = mult * interval;
 #endif
-#ifdef ESP8266
-  // timer1 is 23-bit; cap so very low cps doesn't wrap into a small fast rate.
-  if (r > 8388607) r = 8388607;
-#endif
+  if (r > UINT32_MAX) r = UINT32_MAX;
   return r;
 }
 
 void GeigerInputTest::setTargetCPM(float target, bool manual = false) {
-  Log::console(PSTR("%s: Setting CPM to: %d"), _test_type, (int)target);
+  int c = (int)(target * 100 + 0.5f);
+  Log::console(PSTR("%s: Setting CPM to: %d.%02d"), _test_type, c / 100, c % 100);
   _manual = manual;
   setTargetCPS(target/60.0f);
+  _retarget = true;
 };
 
 void GeigerInputTest::setTargetCPS(float target) {
@@ -89,9 +114,7 @@ void GeigerInputTest::setTargetCPS(float target) {
 };
 
 float GeigerInputTest::getTargetCPS() {
-  // Clamp literal 0 to a tiny epsilon so callers can divide without checking.
-  // Result-capping in calcDelay/calcPWM handles the timer1 overflow case,
-  // so any positive cps is safe here.
+  // never 0, callers divide
   return (_target_cps > 0) ? _target_cps : 1e-6f;
 }
 
@@ -107,7 +130,7 @@ void GeigerInputTest::CPMAdjuster() {
     return;
   }
 #ifndef GEIGER_TEST_FIXEDCPM
-  int selection = (millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
+  int selection = (fast_millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
     _current_selection = selection;
     int _targetCPM = 30;

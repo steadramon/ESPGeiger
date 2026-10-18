@@ -2,7 +2,8 @@
 // Cori (en_GB) vocabulary IMA ADPCM streams, 4 bits/sample,
 // 7350 Hz. Firmware looks up by name via Voice::speakWord().
 #pragma once
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
 #define VOCAB_ADPCM_RATE 7350
 

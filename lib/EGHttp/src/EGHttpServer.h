@@ -22,57 +22,43 @@
 #include <Arduino.h>
 
 #include <EGAsyncTCP.h>
+#include <EGBase64.h>
+
+#include "EGHttpStrings.h"
 
 #ifndef EGHTTP_MAX_CLIENTS
-  // Queued clients silently lose inbound data: AsyncTCP ACKs and frees
-  // pbufs on connections that don't yet have onData registered. Slot
-  // pool must directly cover the realistic parallel-fetch burst. ESP8266
-  // trades depth for heap; 3 slots fits a typical home-page in practice.
   #ifdef ESP32
     #define EGHTTP_MAX_CLIENTS 6
   #else
     #define EGHTTP_MAX_CLIENTS 5
   #endif
 #endif
-#ifndef EGHTTP_WAIT_QUEUE
-  // Last-resort overflow only; queued clients lose inbound data. Deeper
-  // queue on ESP8266 compensates for the smaller slot pool.
-  #ifdef ESP32
-    #define EGHTTP_WAIT_QUEUE 1
-  #else
-    #define EGHTTP_WAIT_QUEUE 3
-  #endif
-#endif
 #ifndef EGHTTP_REQ_BUF
-  // Browsers send 700-900 B of headers (sec-ch-ua + Sec-Fetch-* + cookies).
   #define EGHTTP_REQ_BUF 1536
 #endif
-#ifndef EGHTTP_BODY_SCRATCH
-  // Max inline body for res.send(char*, ...); larger needs beginChunked.
-  #define EGHTTP_BODY_SCRATCH 128
-#endif
 #ifndef EGHTTP_CHUNK_ACC
-  // ESP32: dedicated chunked-response accumulator. Single flush at endChunked
-  // closes the AsyncTCP-task-race window that truncates mid-response.
-  // ESP8266: not used as a separate alloc - the slot's request buffer
-  // (Slot::buf, EGHTTP_REQ_BUF bytes) is repurposed as the accumulator
-  // during RESPONDING using its tail (after request headers + body).
+  // esp32 only, esp8266 uses the Slot::buf tail
   #define EGHTTP_CHUNK_ACC 12288
 #endif
-#ifndef EGHTTP_MAX_ROUTES
-  #define EGHTTP_MAX_ROUTES 64
+#ifndef EGHTTP_MAX_UPLOADS
+  #define EGHTTP_MAX_UPLOADS 4
+#endif
+#ifndef EGHTTP_ARG_MAX
+  #define EGHTTP_ARG_MAX 127   // longest arg() value
+#endif
+#ifndef EGHTTP_AUTH_MAX
+  // user:password bytes
+  #define EGHTTP_AUTH_MAX 64
 #endif
 #ifndef EGHTTP_MAX_INFLIGHT
-  // Cap concurrent in-flight clients; close past this so burst floods do
-  // not queue request work. Roughly doubles the ESP8266 burst threshold
-  // (~15 -> 30-40 concurrent). Use FIN-close not RST-abort: RST triggers
-  // more lwIP teardown work in the moment and tested measurably worse.
+  // FIN past this
   #ifdef ESP32
     #define EGHTTP_MAX_INFLIGHT 10
   #else
     #define EGHTTP_MAX_INFLIGHT 8
   #endif
 #endif
+// EGHTTP_DEBUG traces to Serial
 
 class EGHttpServer;
 
@@ -81,16 +67,15 @@ class EGHttpRequest {
     enum Method : uint8_t { GET = 1, POST = 2, ANY = 0xFF };
 
     Method method() const { return _method; }
-    const char* path() const { return _path; }
+    const char* path() const { return _path; }   // PROGMEM for body handlers
     const char* query() const { return _query; }
     const char* body() const { return _body; }
     size_t bodyLen() const { return _bodyLen; }
 
-    // Result points into a static decode buffer; copy before next arg().
-    const char* arg(const char* name) const;
+    // static buffer, copy before next arg()
+    const char* arg(const __FlashStringHelper* name) const;
 
-    // For streaming routes that hold the body in their own buffer. Decodes
-    // into out; nullptr when absent or longer than cap - 1.
+    // name may be PROGMEM
     static const char* decodeArg(const char* body, size_t bodyLen,
                                   const char* name, char* out, size_t cap);
 
@@ -106,106 +91,98 @@ class EGHttpRequest {
 
 class EGHttpResponse {
   public:
-    void send(uint16_t status, const char* contentType, const char* body);
-    void send(uint16_t status, const char* contentType, const __FlashStringHelper* body);
-    // Length-prefixed PROGMEM body with Content-Encoding: gzip header.
-    void sendGzipP(uint16_t status, const char* contentType,
+    void send(uint16_t status, const __FlashStringHelper* contentType, const char* body);
+    void send(uint16_t status, const __FlashStringHelper* contentType, const __FlashStringHelper* body);
+    void sendGzipP(uint16_t status, const __FlashStringHelper* contentType,
                    const uint8_t* body, size_t len);
     void redirect(const char* location);
+    void redirect(const __FlashStringHelper* location);
 
-    // Returns false if connection dropped mid-response.
-    bool beginChunked(uint16_t status, const char* contentType);
+    bool beginChunked(uint16_t status, const __FlashStringHelper* contentType);
     bool sendChunk(const char* data, size_t len);
-    bool sendChunk(const char* data);   // strlen()s internally
+    bool sendChunk(const char* data);
     bool sendChunk(const __FlashStringHelper* data);
-    // One-chunk PROGMEM-prefix + value, saves per-chunk framing.
     bool sendKV(const __FlashStringHelper* prefix, const char* value);
     bool sendKV(const __FlashStringHelper* prefix, const char* value,
                 const __FlashStringHelper* suffix);
     bool endChunked();
 
-    void addHeader(const char* name, const char* value);
+    void addHeader(const __FlashStringHelper* name, const char* value);
+    void addHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
 
   private:
     friend class EGHttpServer;
     void* _slot = nullptr;        // EGHttpServer::Slot*
     char _extraHeaders[128] = {0};
     size_t _extraLen = 0;
-    bool _started = false;        // headers emitted
+    bool _started = false;
     bool _chunked = false;
     bool _done = false;
+
+    bool chunkOpen() const { return _slot && _chunked && !_done; }
+    void addHeaderP(const __FlashStringHelper* name, PGM_P value);
+    void redirectP(PGM_P location);
+    void writeHeadAndBodyP(const char* head, size_t headLen, PGM_P body, size_t bodyLen);
 };
 
 class EGHttpServer {
   public:
     using Handler = void(*)(EGHttpRequest& req, EGHttpResponse& res, void* user);
 
-    // Streaming-body POST. BodyHandler runs in main-loop context so
-    // flash writes are safe. Register onUpload(path, ...) AFTER on(); the
-    // main handler runs once after BODY_END to send the final response.
-    //
-    //   BODY_BEGIN  headers parsed, body about to start
-    //   BODY_DATA   chunk arrived
-    //   BODY_END    Content-Length reached cleanly
-    //   BODY_ABORT  connection lost / error mid-body
+    EGHttpServer() = default;
+    ~EGHttpServer() { end(); free(_routes); }
+    EGHttpServer(const EGHttpServer&) = delete;
+    EGHttpServer& operator=(const EGHttpServer&) = delete;
+
+    // main loop, register after on()
     enum BodyEvent : uint8_t {
       BODY_BEGIN = 1, BODY_DATA = 2, BODY_END = 3, BODY_ABORT = 4
     };
     using BodyHandler = void(*)(EGHttpRequest& req, BodyEvent ev,
-                                const char* data, size_t len, void* user);
+                                const char* chunk, size_t len, void* user);
 
-    void on(const char* path, EGHttpRequest::Method method, Handler h, void* user = nullptr);
-    void onUpload(const char* path, BodyHandler bh, void* user = nullptr);
+    bool on(const __FlashStringHelper* path, EGHttpRequest::Method method, Handler h, void* user = nullptr);
+    bool onUpload(const __FlashStringHelper* path, BodyHandler bh, void* user = nullptr);
     void onNotFound(Handler h, void* user = nullptr);
 
-    // Empty/null password disables auth. Effective on next request.
-    void setBasicAuth(const char* user, const char* password,
-                      const char* realm = "ESPGeiger");
+    // empty = no auth
+    void setBasicAuth(const __FlashStringHelper* user, const char* password,
+                      const __FlashStringHelper* realm = nullptr);
+
+    void setMaxClients(uint8_t n) { _maxClients = n < EGHTTP_MAX_CLIENTS ? n : EGHTTP_MAX_CLIENTS; }
 
     void begin(uint16_t port);
     void end();
 
-    // Drives dispatch + slot reclaim. Call from loop().
-    void tick();
+    void tick();   // call from loop()
 
-    // True while any slot still has a live AsyncClient.
     bool hasActiveClients() const;
 
   public:
     enum SlotState : uint8_t { IDLE, RECEIVING, READY, RESPONDING, DONE };
 
     struct Slot {
-      // ESP32 AsyncTCP writes from its own task; without volatile the
-      // main task can miss updates and the slot wedges forever.
+      // esp32 AsyncTCP task writes these
       AsyncClient* client = nullptr;
       volatile SlotState state = IDLE;
       volatile bool delete_pending = false;
-      // buf heap-alloc'd at allocSlot, freed at resetSlot. Same-size
-      // allocs let umm reuse freed buffers without fragmenting.
+      volatile bool gone = false;   // resetSlot deletes client
       char* buf = nullptr;
       volatile size_t len = 0;
       volatile bool headersDone = false;
       size_t contentLength = 0;
       size_t headerEnd = 0;
-      // onData buffers into shared _streamBuf (Update.write/yield panic
-      // from lwIP context); tick() drains in main-loop context.
+      // lwIP can't yield, tick() drains
       volatile bool streaming = false;
       volatile bool stream_begun = false;
       volatile bool stream_ended = false;
       volatile bool stream_aborted = false;
       volatile bool ack_paused = false;
+      uint16_t ack_owed = 0;   // header bytes in first pbuf
       volatile size_t bodyAcked = 0;
-      // Sticky once a send fails (timeout, disconnect, write rejected).
-      // Subsequent sendChunk calls fast-return false without spinning, so
-      // handlers that ignore return values don't pay 1 budget per chunk.
-      volatile bool send_aborted = false;
-      uint8_t routeIdx = 0xFF;
-      // Chunked-response accumulator. ESP32: points into a server-owned
-      // 12 KB heap buffer claimed at dispatch entry. ESP8266: points into
-      // the slot's own request buffer tail (Slot::buf + headerEnd + bodyLen),
-      // reusing already-allocated heap. chunkAccCap is the available size
-      // (fixed on ESP32, variable per-request on ESP8266). dispatch() is
-      // serialised in tick() so a single accumulator across slots is safe.
+      volatile bool send_aborted = false;   // sticky
+      bool responded = false;
+      uint8_t routeIdx = 0xFF;   // 0xFF = no route
       char*  chunkAcc    = nullptr;
       size_t chunkAccLen = 0;
       size_t chunkAccCap = 0;
@@ -213,29 +190,29 @@ class EGHttpServer {
 
   private:
     struct Route {
-      const char* path;
+      PGM_P path;
       EGHttpRequest::Method method;
       Handler handler;
       void* user;
-      BodyHandler bodyHandler;
-      void* bodyUser;
     };
-    Route _routes[EGHTTP_MAX_ROUTES];
+    struct Upload {
+      uint8_t route;
+      BodyHandler handler;
+      void* user;
+    };
+    Route* _routes = nullptr;
     uint8_t _routeCount = 0;
+    uint8_t _routeCap = 0;
+    Upload _uploads[EGHTTP_MAX_UPLOADS];
+    uint8_t _uploadCount = 0;
     Handler _notFound = nullptr;
     void* _notFoundUser = nullptr;
 
     AsyncServer* _server = nullptr;
     Slot _slots[EGHTTP_MAX_CLIENTS];
+    uint8_t _maxClients = EGHTTP_MAX_CLIENTS;
 
-    // Pointers only; lwIP buffers their inbound data until promotion.
-    AsyncClient* _waitQueue[EGHTTP_WAIT_QUEUE] = {};
-    uint8_t      _waitCount = 0;
-
-    // Streaming-body buffer, alloc'd only while a stream is active.
-    // Must hold one TCP receive window so the peer's initial burst fits
-    // before we ack. After that, ackLater-per-packet throttles to ~1 seg
-    // per RTT so sustained traffic doesn't need more headroom.
+    // one TCP window
 #ifdef ESP32
     static constexpr size_t STREAM_BUF_SIZE = 16384;   // TCP_WND ~16 KB
 #else
@@ -245,61 +222,54 @@ class EGHttpServer {
     volatile size_t   _streamLen  = 0;
     Slot*             _streamOwner = nullptr;
 
-    // tick() fast-path skip. Set by callbacks and dispatch when there's
-    // anything for tick to do. Cleared optimistically at top of tick; any
-    // callback that fires during the body will re-set it.
     volatile bool     _tickWanted = false;
 
-    // Accept-cap accounting; rejected (over-cap) clients never increment.
     volatile uint8_t  _inFlight    = 0;
     volatile uint16_t _rejectCount = 0;
 
 #ifdef ESP32
-    // Dispatch-shared chunk accumulator. Lazy-alloc on first dispatch,
-    // kept alive (one-time cost, no per-request churn).
     char*  _dispatchChunkAcc    = nullptr;
 #endif
 
-    // _authValue: precomputed "Basic <base64(user:pass)>" for strncmp.
     bool _authEnabled = false;
-    char _authValue[96] = {0};
+    char _authValue[6 + EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {0};   // "Basic " + base64
     char _authRealm[40] = "ESPGeiger";
 
     Slot* findSlot(AsyncClient* c);
     Slot* allocSlot(AsyncClient* c);
     void  resetSlot(Slot* s);
-    // Mark slot for tick reclaim. Frees buf early - dispatch and chunked
-    // send are done by here, so the request buffer is no longer needed.
-    inline void markDone(Slot* s) {
-      if (s->buf) { free(s->buf); s->buf = nullptr; }
-      s->chunkAcc       = nullptr;
-      s->chunkAccLen    = 0;
-      s->chunkAccCap    = 0;
-      s->state          = DONE;
-      s->delete_pending = true;
-      _tickWanted       = true;
-    }
-    // From the AsyncTCP task: flags only, the main task may still be writing
-    // into buf. resetSlot frees it.
-    inline void markDoneAsync(Slot* s) {
-      s->send_aborted   = true;
-      s->state          = DONE;
-      s->delete_pending = true;
-      _tickWanted       = true;
-    }
-    // Write status template + close + markDone. body=nullptr = close only.
-    void  sendStatusAndClose(Slot* s, const char* body, size_t len);
+    void  markDone(Slot* s);
+    // AsyncTCP task, flag only
+    bool markDoneAsync(AsyncClient* c, int* streaming, unsigned* acked);
+    void  sendStatusAndClose(Slot* s, const char* body, size_t len);   // nullptr = close only
 
-    bool  enqueueWaiter(AsyncClient* c);
-    void  dropWaiter(AsyncClient* c);
-    void  promoteWaiters();
     void  wireSlotCallbacks(Slot* s, AsyncClient* c);
+    bool  growRoutes();
+    const Upload* uploadFor(uint8_t route) const;
+
+    Route* matchedRoute(Slot* s) {
+      if (s->routeIdx == 0xFF || s->routeIdx >= _routeCount) return nullptr;
+      return &_routes[s->routeIdx];
+    }
+    inline uint8_t findRoute(const char* path, EGHttpRequest::Method method) const;
 
     void onClient(AsyncClient* c);
-    void onData(Slot* s, void* data, size_t len);
-    void parseRequest(Slot* s);
+    void onDisconnect(AsyncClient* c);
+    void onData(Slot* s, AsyncClient* c, void* data, size_t len);
+    void takeData(Slot* s, AsyncClient* c, void* data, size_t len);
+    void takeStream(Slot* s, AsyncClient* c, void* data, size_t len);
+    inline void receiveHeaders(Slot* s, void* data, size_t len);
+    inline void beginStream(Slot* s, size_t len);
+    void releaseStream();
     void identifyRoute(Slot* s);
     void drainStream(Slot* s);
-    void deliverBodyEvent(Slot* s, BodyEvent ev, const char* data, size_t len);
+    void deliverBodyEvent(Slot* s, BodyEvent ev, const char* chunk, size_t len);
+    inline void reclaimSlot(Slot* s);
+    inline void respond(Slot* s);
+    inline void claimChunkAcc(Slot* s);
+    void dropChunkAcc(Slot* s);
+    inline bool readRequest(Slot* s, EGHttpRequest& req);
+    inline bool authorized(const Slot* s) const;
+    void sendUnauthorized(Slot* s);
     void dispatch(Slot* s);
 };

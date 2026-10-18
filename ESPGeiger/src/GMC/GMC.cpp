@@ -17,154 +17,108 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #ifdef GMCOUT
-#include <Arduino.h>
+#include <EGFormat.h>
 #include "GMC.h"
-#include "../Logger/Logger.h"
-#include "../Util/LedSignal.h"
-#include "../Module/EGModuleRegistry.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Util/Words.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/EGMeasure.h"
 
-extern uint8_t send_indicator;
+EG_PSTR(K_AID,  "aid");
+EG_PSTR(K_GCID, "gcid");
 
 GMC gmc;
 EG_REGISTER_MODULE(gmc)
 
-EG_PSTR(GM_L_EN,  "Enable");
+EG_PSTR(M_WARM,   "warm");
+EG_PSTR(M_CPM_ST, "cpm_st");
+EG_PSTR(M_CPM5,   "cpm5");
+EG_PSTR(M_USV5,   "usv5");
+
 EG_PSTR(GM_H_EN,  "Upload to gmcmap.com");
 EG_PSTR(GM_L_AID, "Account ID");
 EG_PSTR(GM_H_AID, "gmcmap.com account ID");
-EG_PSTR(GM_P_AID, "\\d{1,20}");
+EG_PSTR(GM_P_ID,  "\\d{1,20}");
 EG_PSTR(GM_L_GID, "Geiger Counter ID");
 EG_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
-EG_PSTR(GM_P_GID, "\\d{1,20}");
 
 static const EGPref GMC_PREF_ITEMS[] PROGMEM = {
-  {"send", GM_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
-  {"aid",  GM_L_AID, GM_H_AID, "",  GM_P_AID, 0, 0, 20, EGP_STRING, 0},
-  {"gcid", GM_L_GID, GM_H_GID, "",  GM_P_GID, 0, 0, 20, EGP_STRING, 0},
+  {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
+  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, 20, EGP_STRING, 0},
+  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, 20, EGP_STRING, 0},
 };
 
 static const EGPrefGroup GMC_PREF_GROUP PROGMEM = {
   "gmc", "GMC", 1,
   GMC_PREF_ITEMS,
   sizeof(GMC_PREF_ITEMS) / sizeof(GMC_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, "send",
+  EGP_CAT_UPLOAD, EG_K_SEND,
 };
 
 const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
 
-size_t GMC::status_json(char* buf, size_t cap, unsigned long now) {
-  if (!_send_enabled) return 0;
-  return write_status_json(buf, cap, "gmc", last_ok, last_attempt_ms, now);
-}
-
 void GMC::on_prefs_loaded() {
-  _send_enabled = EGPrefs::getBool("gmc", "send");
-  EGModuleRegistry::set_loop_interval(this, _send_enabled ? 500 : -1);
+  set_enabled(EGPrefs::getBool("gmc", EG_K_SEND));
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
-static const EGLegacyAlias GMC_LEGACY[] = {
+static const EGLegacyAlias GMC_LEGACY[] PROGMEM = {
   {"gmcSend", "send"},
   {"gmcAID",  "aid"},
   {"gmcGCID", "gcid"},
-  {nullptr, nullptr},
+  {},
 };
-const EGLegacyAlias* GMC::legacy_aliases() { return GMC_LEGACY; }
+EGLegacyRows GMC::legacy_aliases() { return GMC_LEGACY; }
 // === END LEGACY IMPORT ===
 
 GMC::GMC() {
+  pingIntervalMs = (uint32_t)GMC_INTERVAL * 1000UL;
 }
 
-void GMC::loop(unsigned long now)
+// "OK.ERR0" on success
+bool GMC::interpret(const char* r)
 {
-  if (!_send_enabled) return;
-  if (lastPing == 0) {
-    lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
-  } else if ((now - lastPing) >= pingIntervalMs) {
-    while ((now - lastPing) >= pingIntervalMs) lastPing += pingIntervalMs;
-    postMeasurement();
+  size_t n = strlen(r);
+  char code = (n >= 5 && strncmp_P(r + n - 5, PSTR(".ERR"), 4) == 0) ? r[n - 1] : 0;
+  if (code == '0') {
+    Log::debug(PSTR("GMC: Upload OK"));
+    return true;
+  } else if (code == '1') {
+    Log::console(PSTR("GMC: User is not found"));
+  } else if (code == '2') {
+    Log::console(PSTR("GMC: Geiger Counter is not found"));
+  } else {
+    Log::console(PSTR("GMC: Error"));
   }
-  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
+  return false;
 }
 
-void GMC::httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState)
-{
-  if (readyState == readyStateDone)
-  {
-    GMC* self = static_cast<GMC*>(optParm);
-    self->last_ok = false;
-    if (request->responseHTTPcode() == 200)
-    {
-      char r[64];
-      size_t got = request->responseRead((uint8_t*)r, sizeof(r) - 1);
-      r[got] = 0;
-      if (strstr(r, "OK")) {
-        Log::debug(PSTR("GMC: Upload OK"));
-        self->last_ok = true;
-      } else if (strstr(r, "ERR1")) {
-        Log::console(PSTR("GMC: User is not found"));
-      } else if (strstr(r, "ERR2")) {
-        Log::console(PSTR("GMC: Geiger Counter is not found"));
-      } else {
-        Log::console(PSTR("GMC: Error"));
-      }
-    } else {
-      Log::console(PSTR("GMC: Error - %s"), request->responseHTTPString().c_str());
-    }
-    self->note_result(self->last_ok);
-  }
-}
+bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
+  if (!egm_b(M_WARM)) return false;
 
-void GMC::postMeasurement() {
-  if (!gcounter.is_warm()) return;
-
-  const char* _api_id    = EGPrefs::getString("gmc", "aid");
-  const char* _api_gc_id = EGPrefs::getString("gmc", "gcid");
+  const char* _api_id    = EGPrefs::getString("gmc", K_AID);
+  const char* _api_gc_id = EGPrefs::getString("gmc", K_GCID);
   bool has_id   = (_api_id[0]    != '\0');
   bool has_gcid = (_api_gc_id[0] != '\0');
 
-  // Nothing configured at all - stay silent so unconfigured units don't spam.
-  if (!has_id && !has_gcid) return;
+  if (!has_id && !has_gcid) return false;
 
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     Log::console(PSTR("GMC: Testmode"));
-    return;
+    return false;
   }
 
-  // Partially configured - log a hint.
   if (!has_id || !has_gcid) {
     Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
-    return;
+    return false;
   }
 
   Log::debug(PSTR("GMC: Uploading latest data ..."));
 
-  int avgcpm = gcounter.get_cpm_stable();
+  int avgcpm = (int)roundf(egm_f(M_CPM_ST));
   char acpm[16], usv[16];
-  format_f(acpm, sizeof(acpm), gcounter.get_cpm5f());
-  format_f(usv,  sizeof(usv),  gcounter.get_usv5(), 4);
-  char url[256];
-  snprintf_P(url, sizeof(url), GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv);
-
-  if (!request) request = new AsyncHTTPRequest();
-  if (!request) { Log::console(PSTR("GMC: alloc failed")); return; }
-
-  if (request->readyState() == readyStateUnsent || request->readyState() == readyStateDone)
-  {
-    if (request->open("GET", url))
-    {
-      LedSignal::activity();
-      request->setReqHeader(F("User-Agent"), DeviceInfo::useragent());
-      request->onReadyStateChange(httpRequestCb, this);
-      request->setTimeout(30);
-      request->send();
-      note_attempt();
-      send_indicator = 2;
-    }
-    else
-    {
-      Log::console(PSTR("GMC: Can't send request"));
-    }
-  }
+  format_f(acpm, sizeof(acpm), egm_f(M_CPM5));
+  format_f(usv,  sizeof(usv),  egm_f(M_USV5), 4);
+  return url_fits(snprintf_P(url, cap, GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv), cap);
 }
 #endif

@@ -31,14 +31,14 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
 5. Save.
 
-Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage, and the CPM number should track the producer's.
+Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage and the CPM number should track the producer's.
 
 ### Not working?
 
 - **Same WiFi network and subnet.** Multicast does not cross routers or guest networks; both devices need to be on the same AP / SSID.
 - **Producer in Mode 2.** Mode 1 only sends stats every 30 s and produces no clicks.
 - **Receiver actually flashed as `*_udp`.** Check `/info` on the receiver shows a UDP build target.
-- **Loss percentage stuck high.** Try `udprx_rxmode = 1` (modem sleep, default) before `2` (none). `2` is usually worse on noisy LANs.
+- **Loss percentage high or clicks missing (ESP32 receivers).** With WiFi power save on (the default), the classic ESP32 can miss most multicast packets on some access points. CPM still tracks, since each packet carries the running total, but clicks are lost. Set the producer's group to the receiver's IP address instead: unicast isn't affected. Failing that, `udprx_rxmode = 2` keeps the radio always on (runs warmer).
 - **Wrong producer locked.** In auto-mode the receiver latches onto the first producer heard. Set the chipid explicitly if you have multiple.
 
 ## Output Modes (Producer)
@@ -165,8 +165,8 @@ When mode > 0 the producer announces an `_osc._udp` service with the configured 
 
 - **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Cumulative loss % is on the OLED and `/status`.
 - **Send throttle**: high-CPS producers cap `/click` emit rate at 20 pps. Counter accuracy is preserved because each packet carries the producer's running total.
-- **RX sleep mode** (`udprx_rxmode`): `1` (modem sleep, default) is the right balance on most networks. `0` saves more power, `2` keeps the radio always on but is often worse on busy LANs.
+- **RX sleep mode** (`udprx_rxmode`): `1` (modem sleep, default) suits most networks. `0` saves more power. `2` keeps the radio always on and runs warmer; try unicast first if packets go missing. The original ESP32 (not C3/S3) defaults to `2`: on modem sleep it misses most multicast.
 
 ## Build Flags
 
-All compile-time tunables (group, port, intervals, fleet jitter, throttle thresholds) are documented in [PlatformIO Build Options → UDP / OSC Output](/install/platformio#udp--osc-output).
+Custom builds can change the defaults (group, port, intervals, throttle). See [Build Options](/dev/platformio#udp--osc-output).

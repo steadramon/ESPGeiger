@@ -19,24 +19,21 @@
 #ifdef GEIGER_PUSHBUTTON
 
 #include "PushButton.h"
-#include "../Logger/Logger.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Util/LedSignal.h"
-#include "../Util/PinSafety.h"
-#include "../Util/FastMillis.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/System/FastMillis.h"
 #include <Ticker.h>
 #ifdef SSD1306_DISPLAY
-#include "../OLEDDisplay/OLEDDisplay.h"
+#include "Display/Display.h"
 #endif
 
 static const uint16_t POLL_MS      = 10;
 static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
-// Two-slot state array. Slot 0 = "primary" (legacy, advances page on tap).
-// Slot 1 = "secondary" (optional, retreats page on tap). Both share long-
-// press behaviour. Statics rather than members because the Ticker ISR
-// needs to reach them without going through an instance pointer.
+// 0 = next page, 1 = back
 struct BtnState {
   volatile int      pin = -1;
   volatile bool     last_read = false;
@@ -45,10 +42,20 @@ struct BtnState {
   volatile bool     pressed = false;
   volatile bool     short_press_pending = false;
   volatile bool     long_press_fired = false;
+  volatile bool     long_press_pending = false;
 };
 static BtnState s_btn[2];
 
 static Ticker buttonTicker;
+
+// long or short, never both
+static void check_long(BtnState& b) {
+#ifdef SSD1306_DISPLAY
+  if (b.long_press_fired || fast_millis() - b.press_start_ms < LONG_PRESS_MS) return;
+  b.long_press_fired = true;
+  b.long_press_pending = true;
+#endif
+}
 
 static void tick_one(BtnState& b) {
   if (b.pin < 0) return;
@@ -58,7 +65,10 @@ static void tick_one(BtnState& b) {
     b.last_change_ms = fast_millis();
     return;
   }
-  if (down == b.pressed) return;
+  if (down == b.pressed) {
+    if (down) check_long(b);
+    return;
+  }
   uint32_t now = fast_millis();
   if (now - b.last_change_ms < DEBOUNCE_MS) return;
   b.pressed = down;
@@ -76,10 +86,9 @@ static void button_tick() {
 }
 
 #ifdef SSD1306_DISPLAY
-static void do_longpress() {
-  display.enable_oled_timeout = !display.enable_oled_timeout;
-  if (display.enable_oled_timeout) {
-    display.oled_timeout = 0;
+static void do_longpress(unsigned long now) {
+  Log::console(PSTR("Btn: long"));
+  if (display.toggle_auto_off(now)) {
     LedSignal::displayEnabled();
   } else {
     LedSignal::displayDisabled();
@@ -91,14 +100,14 @@ PushButton pushbutton;
 EG_REGISTER_MODULE(pushbutton)
 
 #ifndef BTN_PIN_BLOCKED
-#define _BTN_STR(x) #x
-#define BTN_STR(x)  _BTN_STR(x)
+#define BTN_STR_(x) #x
+#define BTN_STR(x)  BTN_STR_(x)
 
 EG_PSTR(BTN_L_PIN, "Button Pin");
 EG_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
 
 static const EGPref BTN_PREF_ITEMS[] PROGMEM = {
-  {"pin", BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, 0},
+  {EG_K_PIN, BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_PIN},
 };
 
 static const EGPrefGroup BTN_PREF_GROUP PROGMEM = {
@@ -110,9 +119,9 @@ static const EGPrefGroup BTN_PREF_GROUP PROGMEM = {
 const EGPrefGroup* PushButton::prefs_group() { return &BTN_PREF_GROUP; }
 
 void PushButton::on_prefs_loaded() {
-  int pin1 = (int)EGPrefs::getInt("btn", "pin");
+  int pin1 = (int)EGPrefs::getInt("btn", EG_K_PIN);
   set_pin(pin1);
-  // pin2 is build-flag-only (PUSHBUTTON_PIN2); applied in begin().
+  // pin2 build flag only
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
   Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
   EGModuleRegistry::set_loop_interval(this,
@@ -123,13 +132,11 @@ void PushButton::on_prefs_loaded() {
 PushButton::PushButton() {
 }
 
-// Configure a button slot. Detaches the shared ticker, reconfigures, then
-// re-attaches if anything is still wired up. Skipping the detach/reattach
-// when nothing changes keeps the on_prefs_loaded cascade quiet.
+// detach only on change, keeps the prefs cascade quiet
 static void set_pin_slot(uint8_t slot, int pin) {
   if (slot >= 2) return;
   BtnState& b = s_btn[slot];
-  if (const char* why = PinSafety::claim_input(pin, PSTR("Btn"))) {
+  if (const char* why = PinSafety::claim_button(pin, PSTR("Btn"))) {
     Log::console(PSTR("Btn: pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
@@ -139,6 +146,7 @@ static void set_pin_slot(uint8_t slot, int pin) {
   b.last_read = false;
   b.short_press_pending = false;
   b.long_press_fired = false;
+  b.long_press_pending = false;
   b.last_change_ms = fast_millis();
   b.press_start_ms = b.last_change_ms;
   b.pin = pin;
@@ -150,7 +158,6 @@ static void set_pin_slot(uint8_t slot, int pin) {
     b.pressed = down;
     b.long_press_fired = down;
   }
-  // Re-attach if either slot is active.
   if (s_btn[0].pin >= 0 || s_btn[1].pin >= 0) {
     buttonTicker.attach_ms(POLL_MS, button_tick);
   }
@@ -190,18 +197,20 @@ bool PushButton::is_active()
 }
 
 #ifdef PIN_SCAN
-// Diagnostic: configure all safe GPIOs as INPUT_PULLUP at boot, then log
-// any transition. Press a button - whichever pin goes LOW is what it's
-// wired to. Skip already-claimed pins (I2C, NeoPixel, BOOT) to avoid
-// clobbering them.
+// Diagnostic, logs any pin going LOW
+static bool pin_scan_skips(int p) {
+  if (p == 0 || p == 41 || p == 42 || p == 48) return true;
+  if (p >= 22 && p <= 25) return true;      // gap on S3
+  return p >= 26 && p <= 37;                // possible flash/PSRAM
+}
+
 static void pin_scan_init() {
   for (int p = 1; p <= 48; p++) {
-    if (p == 0 || p == 41 || p == 42 || p == 48) continue;
-    if (p >= 22 && p <= 25) continue;        // gap on S3
-    if (p >= 26 && p <= 37) continue;        // possible flash/PSRAM
+    if (pin_scan_skips(p)) continue;
     pinMode(p, INPUT_PULLUP);
   }
 }
+
 static void pin_scan_poll() {
   static uint8_t last[49] = {0};
   static bool primed = false;
@@ -212,9 +221,7 @@ static void pin_scan_poll() {
     return;
   }
   for (int p = 1; p <= 48; p++) {
-    if (p == 0 || p == 41 || p == 42 || p == 48) continue;
-    if (p >= 22 && p <= 25) continue;
-    if (p >= 26 && p <= 37) continue;
+    if (pin_scan_skips(p)) continue;
     uint8_t cur = digitalRead(p) ? 1 : 0;
     if (cur != last[p]) {
       Log::console(PSTR("PinScan: GPIO%d %s"), p, cur ? "HIGH" : "LOW");
@@ -222,36 +229,44 @@ static void pin_scan_poll() {
     }
   }
 }
-#endif
 
-void PushButton::loop(unsigned long now)
-{
-#ifdef PIN_SCAN
+static void pin_scan_loop(unsigned long now) {
   static bool inited = false;
   if (!inited) { pin_scan_init(); inited = true; }
   static unsigned long s_last = 0;
   if (now - s_last >= 30) { s_last = now; pin_scan_poll(); }
+}
+#endif
+
+#ifdef SSD1306_DISPLAY
+static void take_long_press(BtnState& b, unsigned long now) {
+  if (!b.long_press_pending) return;
+  b.long_press_pending = false;
+  do_longpress(now);
+}
+#endif
+
+static void take_short_press(uint8_t i, unsigned long now) {
+  BtnState& b = s_btn[i];
+  if (!b.short_press_pending) return;
+  b.short_press_pending = false;
+  Log::console(PSTR("Btn: short"));
+  LedSignal::shortPressAck();
+#ifdef SSD1306_DISPLAY
+  display.button(now, i == 0 ? 1 : -1);
+#endif
+  gcounter.reset_alarm();
+}
+
+void PushButton::loop(unsigned long now)
+{
+#ifdef PIN_SCAN
+  pin_scan_loop(now);
 #endif
   if (s_btn[0].pin < 0 && s_btn[1].pin < 0) return;
 #ifdef SSD1306_DISPLAY
-  for (uint8_t i = 0; i < 2; i++) {
-    BtnState& b = s_btn[i];
-    if (b.pin < 0) continue;
-    if (b.pressed && !b.long_press_fired && (now - b.press_start_ms) >= LONG_PRESS_MS) {
-      b.long_press_fired = true;
-      do_longpress();
-    }
-  }
+  for (uint8_t i = 0; i < 2; i++) take_long_press(s_btn[i], now);
 #endif
-  for (uint8_t i = 0; i < 2; i++) {
-    BtnState& b = s_btn[i];
-    if (!b.short_press_pending) continue;
-    b.short_press_pending = false;
-    LedSignal::shortPressAck();
-#ifdef SSD1306_DISPLAY
-    display.onButtonTap(now, i == 0 ? 1 : -1);
-#endif
-    gcounter.reset_alarm();
-  }
+  for (uint8_t i = 0; i < 2; i++) take_short_press(i, now);
 }
 #endif

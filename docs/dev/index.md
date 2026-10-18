@@ -33,6 +33,15 @@ By default the Test output cycles through several ranges of reading, switch each
 - 1.66 CPS / 100 CPM
 - 2 CPS / 120 CPM
 
+| Target Name | Target Counter | Notes |
+|---|---|---|
+| `test` | n/a | Internal interrupt based counter, no pin output. |
+| `testpulse` | Pulse | Poisson-distributed pulses on the TX pin. |
+| `testpulseint` | Pulse | Timer-generated (PWM) pulses on the TX pin. |
+| `testserial` | Serial | Emulated serial data on the TX pin. Format selectable on the Config page. |
+
+ESPGeiger Log has its own `espgeigerlog_test`, `espgeigerlog_testpulse`, `espgeigerlog_testpulseint` and `espgeigerlog_testserial` builds; the test pulse comes out on the PLS pin.
+
 A build option is available to count the number of CPM sent on the local device, note that if this option is enabled and the `RXPIN` and `TXPIN` of the same device are connected together, counted values will be doubled *unless the debounce window filters the duplicate* - see below.
 
 ## Emulation and Communication
@@ -41,19 +50,19 @@ In these test build modes, you can connect the `TXPIN` (transmit pin) of one ESP
 
 ### TestPulse → esp8266_pulse cross-device setup
 
-To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13), and share GND between the two boards. Both devices then post to the WebAPI independently and their CPM readings should agree within Poisson noise.
+To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13) and share GND between the two boards. Both devices then post to the WebAPI independently and their CPM readings should agree within Poisson noise.
 
 Notes:
 
 - Idle line level is LOW; each simulated count is a ~500µs HIGH pulse. The receiver counts on the falling edge at pulse end. This is inverted-polarity from a real Geiger tube (idles HIGH, pulses LOW) but the count is the same.
-- `GEIGER_COUNT_TXPULSE` is enabled in the default builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX↔RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 500µs) drops the duplicate edge that arrives immediately after.
+- `GEIGER_COUNT_TXPULSE` is enabled in the default builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX↔RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 200µs) drops the duplicate edge that arrives immediately after.
 
 ### Pushing the rate ceiling
 
 Default settings give a practical ceiling of roughly 120k CPM on both sides:
 
 - TX side: `pulse_width_us` pref sets the simulated pulse high-time (default 500µs). Below the pulse width, the Poisson inter-arrival sampler saturates rather than producing overlapping pulses - the long-run rate is Poisson-correct up to that floor, then plateaus.
-- RX side: `debounce` pref discards edges arriving closer than its value (default 500µs).
+- RX side: `debounce` pref discards edges arriving closer than its value (default 200µs).
 
 To stress-test beyond 120k CPM:
 

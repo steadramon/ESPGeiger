@@ -1,0 +1,12 @@
+{
+  "name": "EGTimer1",
+  "version": "0.1.0",
+  "description": "ESP8266 Timer1 owner: one NMI handler for a precise PWM channel, soft PWM channels (analogWrite, tone), a timed callback and serial receive. Replaces the core's waveform generator. Built with -DEG_TIMER1.",
+  "keywords": "timer1, pwm, waveform, nmi, esp8266",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266"],
+  "build": {
+    "libArchive": false
+  }
+}

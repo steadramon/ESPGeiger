@@ -18,15 +18,12 @@
 */
 
 #include "SerialParse.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "Corium/Util/StringUtil.h"
 #include <ctype.h>
 
 namespace SerialFormat {
 
-// ctype takes an int that must be representable as unsigned char. Every ESP
-// toolchain has unsigned char, hosts do not, so cast rather than rely on it.
+// cast, char is signed on host
 static inline bool is_digit(char c) { return isdigit((unsigned char)c) != 0; }
 static inline bool is_printable(char c) {
   const unsigned char u = (unsigned char)c;
@@ -42,7 +39,7 @@ bool common_validate(const char* in, size_t len) {
   return true;
 }
 
-// Digits only, plus CR/LF. Rejects garbage that happens to lead with a digit.
+// digits and CR/LF only
 bool parse_gc10(const char* in, int* out_cpm, int* /*out_cps*/) {
   if (!in || !out_cpm) return false;
   bool any = false;
@@ -52,39 +49,64 @@ bool parse_gc10(const char* in, int* out_cpm, int* /*out_cps*/) {
     if (c != '\r' && c != '\n') return false;
   }
   if (!any) return false;
-  int cpm = 0;
-  if (sscanf(in, "%d", &cpm) != 1) return false;
+  // not sscanf, it wraps
+  int32_t cpm;
+  const char* end;
+  if (!parse_i32(in, &cpm, &end)) return false;
   if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
-  *out_cpm = cpm;
+  *out_cpm = (int)cpm;
   return true;
 }
 
+static const char* skip_ws(const char* p) {
+  while (isspace((unsigned char)*p)) p++;
+  return p;
+}
+
+// "CPx,"
+static bool cp_tag(const char* p, char c) {
+  return p[0] == 'C' && p[1] == 'P' && p[2] == c && p[3] == ',';
+}
+
+// as %d, too big is -1. nullptr = no number
+static const char* scan_int(const char* p, int32_t* v) {
+  const char* end;
+  if (parse_i32(p, v, &end)) return end;
+  p = skip_ws(p);
+  if (*p == '+' || *p == '-') p++;
+  if (!is_digit(*p)) return nullptr;
+  while (is_digit(*p)) p++;
+  *v = -1;
+  return p;
+}
+
+// as sscanf "CPS, %d, CPM, %d"
 bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
   if (!in || !out_cpm) return false;
-  int cpm = 0, cps = 0;
-  if (sscanf(in, "CPS, %d, CPM, %d", &cps, &cpm) != 2) return false;
+  int32_t cpm, cps;
+  const char* p = in;
+  if (!cp_tag(p, 'S') || !(p = scan_int(p + 4, &cps)) || *p != ',') return false;
+  p = skip_ws(p + 1);
+  if (!cp_tag(p, 'M') || !scan_int(p + 4, &cpm)) return false;
   if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
-  // cps is bounded on the same terms as cpm. It is added straight to
-  // partial_clicks and handed to Counter::on_pulse_batch, so an unbounded
-  // value off the wire lands in the counter.
-  if (out_cps && cps >= 0 && cps <= SERIAL_MAX_COUNT) *out_cps = cps;
-  *out_cpm = cpm;
+  // bound cps too, it goes in the counter
+  if (out_cps && cps >= 0 && cps <= SERIAL_MAX_COUNT) *out_cps = (int)cps;
+  *out_cpm = (int)cpm;
   return true;
 }
 
-// "CPM: 123", "CPM=123", "CPS,4". Returns false when the tag is absent or is
-// not followed by a number.
-//
-// Presence and value are reported separately on purpose. Folding them into a
-// negative return conflates "no tag" with "the device said -5", and the
-// caller then falls through to its untagged path and reads the 5.
+// "CPM: 123", "CPM=123", "CPS,4"
 static bool parse_label_value(const char* in, char tag, int* out) {
   for (const char* p = in; p[0] && p[1] && p[2]; p++) {
     if (p[0] == 'C' && p[1] == 'P' && p[2] == tag) {
       p += 3;
       while (*p == ':' || *p == ',' || *p == '=' || *p == ' ' || *p == '\t') p++;
-      if (*p == '-' || is_digit(*p)) { *out = atoi(p); return true; }
-      return false;
+      if (*p != '-' && !is_digit(*p)) return false;
+      // still present, -1 fails the bounds
+      int32_t v;
+      const char* end;
+      *out = parse_i32(p, &v, &end) ? (int)v : -1;
+      return true;
     }
   }
   return false;
@@ -95,12 +117,13 @@ static bool parse_labelled(const char* in, int* out_cpm, int* out_cps, bool loos
   int cpm = 0;
   if (!parse_label_value(in, 'M', &cpm)) {
     if (!loose) return false;
-    // No CPM tag: fall back to the first number on the line. Deliberately
-    // loose, because the user template is arbitrary.
+    // no tag, first number, loose on purpose
     const char* p = in;
     while (*p && !is_digit(*p)) p++;
-    if (!*p) return false;
-    cpm = atoi(p);
+    int32_t v;
+    const char* end;
+    if (!*p || !parse_i32(p, &v, &end)) return false;
+    cpm = (int)v;
   }
   if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
   *out_cpm = cpm;
@@ -113,8 +136,7 @@ static bool parse_labelled(const char* in, int* out_cpm, int* out_cps, bool loos
   return true;
 }
 
-// The sender also writes boot logs and banners to the same UART, so its own
-// format needs the CPM label.
+// needs the label, boot logs share the uart
 bool parse_espgeiger(const char* in, int* out_cpm, int* out_cps) {
   return parse_labelled(in, out_cpm, out_cps, false);
 }

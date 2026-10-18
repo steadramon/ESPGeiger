@@ -1,6 +1,6 @@
 /*
   SerialCommand.h - Serial Command class
-  
+
   Copyright (C) 2024 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -16,27 +16,22 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _SERIALCOMMAND_h_
-#define _SERIALCOMMAND_h_
+#ifndef SERIALCOMMAND_h_
+#define SERIALCOMMAND_h_
 #include <Arduino.h>
-#include "../Counter/Counter.h"
-#include "../Util/Wifi.h"
-#include "../Module/EGModule.h"
+#include "Counter/Counter.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/Module/EGModule.h"
 
 #ifdef ESPG_HV
-#include "../HV/HV.h"
-extern HV hv;
+#include "HV/HV.h"
 #endif
 
 #define SERIALCOMMAND_MAXCOMMANDLENGTH 12
-#define SERIALCOMMAND_BUFFER 32
-#define MAX_COMMANDS 32
-//#define SERIALCOMMAND_DEBUG true
+#define SERIALCOMMAND_BUFFER 64
 
-extern Counter gcounter;
 #ifdef SERIALOUT
-#include "../SerialOut/SerialOut.h"
-extern SerialOut serialout;
+#include "SerialOut/SerialOut.h"
 #endif
 
 typedef void (* cbFunction)(char*);
@@ -44,22 +39,15 @@ typedef void (* cbFunction)(char*);
 class SerialCommand : public EGModule {
 public:
     SerialCommand();
-    const char* name() override { return "scmd"; }
+    const char* name() override { return PSTR("scmd"); }
     uint16_t warmup_seconds() override { return 0; }
-    void begin() override { setup(); }
+    bool core_module() override { return true; }
     void loop(unsigned long now) override;
     bool has_loop() override { return true; }
     uint16_t loop_interval_ms() override { return 10; }
-    void setup();
     void readSerial();
     void clearBuffer();
     char *next();
-    void addCommand(const char *command, void(*function)());
-    // Run a command line (e.g. from the web UI) through the same dispatch
-    // path Serial input uses. The line is parsed identically - first
-    // whitespace-token is the command, remainder is consumed via
-    // strtok_r/`last` by individual handlers. Output goes to Serial like
-    // any other command, so the web /cs stream picks it up.
     void dispatch(const char* line);
     static void reboot();
     static void reset_wifi();
@@ -79,18 +67,17 @@ public:
     static void get_hv();
 #endif
 private:
-    struct SerialCommandCallback {
-      char command[SERIALCOMMAND_MAXCOMMANDLENGTH + 1];
-      void (*function)();
-    };
-    SerialCommandCallback *commandList;
-    byte commandCount;
+    void run_buffer();
+    void edit_line(char inChar);
     void (*defaultHandler)(const char *);
-    
+
     char delim[2]; // null-terminated list of character to be used as delimeters for tokenizing (default " ")
     char term;     // Character that signals end of command (default '\n')
     char buffer[SERIALCOMMAND_BUFFER + 1]; // Buffer of stored characters while waiting for terminator character
     byte bufPos;                        // Current position in the buffer
-    char *last;                         // State variable used by strtok_r during processing
+    bool overflow = false;              // too long, dropped
+    char *last;                        // State variable used by strtok_r during processing
 };
+
+extern SerialCommand serialcmd;
 #endif

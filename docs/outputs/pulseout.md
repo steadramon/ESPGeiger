@@ -9,7 +9,7 @@ nav_order: 12
 # Pulse Out
 
 A general-purpose per-pulse GPIO output. One module covers piezo, small
-speaker via a transistor, LED, and attenuated line-out into a powered
+speaker via a transistor, LED and attenuated line-out into a powered
 speaker. Single edge or resonant burst, configurable polarity, all
 non-blocking.
 
@@ -22,17 +22,24 @@ and enable it from **Config > Pulse Out** after flashing.
 
 ## Settings
 
-| Pref | Range | Default | Notes |
-|---|---|---|---|
-| `enable`   | 0 / 1     | `0`    | Takes effect on save, no reboot needed. |
-| `pin`      | -1 to max | `-1`   | GPIO driving the load. `-1` keeps the pin idle. |
-| `mode`     | 0 / 1 / 2 | `0`    | `0` = single pulse, `1` = resonant burst, `2` = LED fade. |
-| `pulse_ms` | 1-50      | `5`    | Single-pulse width in milliseconds. 1 ms for audio, several ms for LEDs. |
-| `freq`     | 1000-8000 | `3500` | Burst frequency in Hz. For a piezo, match its marked resonance. |
-| `cycles`   | 1-10      | `1`    | Cycles per burst. More = louder + slightly longer. |
-| `polarity` | 0 / 1     | `0`    | `0` = active high (most cases). `1` = active low (common-anode LEDs, inverted MOSFET drivers). |
-| `fade_shift` | 0 / 1 / 2 | `1`  | Fade decay rate. `0` = Fast (~100 ms), `1` = Medium (~250 ms), `2` = Slow (~500 ms). |
-| `max_hz`   | 0-200     | `20`   | Cap on clicks per second. `0` removes the cap. |
+<!-- gen:prefs pulse -->
+
+| Setting | Key | Type | Default | Description |
+|---|---|---|---|---|
+| Enable | `pulse.enable` | Boolean | `0` off | Takes effect on save, no reboot needed. |
+| GPIO | `pulse.pin` | Int -1 to max GPIO | `-1` | GPIO driving the load. `-1` keeps the pin idle. |
+| Polarity | `pulse.polarity` | `0` Active high, `1` Active low | `0` Active high | Active high suits most cases. Active low is for common-anode LEDs and inverted MOSFET drivers. |
+| Mode | `pulse.mode` | `0` Pulse, `1` Burst, `2` LED fade | `0` Pulse | Single pulse, resonant burst (for a piezo or speaker) or LED fade. |
+| Pulse width ms | `pulse.pulse_ms` | Int 1-50 | `5` | Single-pulse width in milliseconds. 1 ms for audio, several ms for LEDs. |
+| Burst Hz | `pulse.freq` | Int 1000-8000 | `3500` | Burst frequency in Hz. For a piezo, match its marked resonance. |
+| Burst cycles | `pulse.cycles` | Int 1-10 | `1` | Cycles per burst. More = louder + slightly longer. |
+| Fade rate | `pulse.fade_shift` | `0` Fast, `1` Medium, `2` Slow | `1` Medium | Fade decay rate: Fast is ~100 ms, Medium ~250 ms, Slow ~500 ms. |
+| Brightness | `pulse.brightness` | Int 0-100 | `100` | LED brightness in percent (LED loads only). Applies to Pulse and Fade modes. |
+| Max Hz | `pulse.max_hz` | Int 0-200 | `20` | Cap on clicks per second. `0` removes the cap. |
+| Quiet from | `pulse.quiet_from` | Time HH:MM | (empty) | Silence clicks from this time. Blank = off. |
+| Quiet to | `pulse.quiet_to` | Time HH:MM | (empty) | End of the quiet window; crosses midnight if from > to. |
+
+<!-- /gen -->
 
 Output is rate-limited to `max_hz` clicks per second, 20 by default. At high
 CPS the audio thins out while the counter still tracks every pulse.
@@ -157,50 +164,14 @@ taste; lower sounds woodier, higher sounds tinnier.
 
 ## Ideas
 
-Some less obvious things you can do once Pulse Out is wired up.
-
-### LED fade that reads as intensity
-
-The `mode=2` exponential fade with `fade_shift=1` (default) is the
-classic "ping and afterglow" look. Try `fade_shift=2` for a longer
-decay (~500 ms). At high CPS the LED hovers near full brightness
-because each click retriggers the fade; at background CPM it settles
-between flashes.
-
-### High-visibility tube indicator
-
-Pair Pulse Out with a high-current LED (or a chain of LEDs through a
-MOSFET driver) on a desk-mounted lamp. `mode=2`, `fade_shift=0` (~100
-ms fade) on a 1 W LED makes a desk lamp react to background radiation
-visibly across a room. Good for demos and classroom kit.
-
-### Click-and-flash in sync
-
-If you're already running [Audio Tick](/output/audiotick) on an ESP32,
-also configure Pulse Out on a free GPIO with `mode=0`, `pulse_ms=20`.
-Each pulse fires both at the same time, so the audible click and the
-visible LED flash arrive together.
-
-### Multi-station variation
-
-Several ESPGeigers side by side (teaching kit, test fleet, sensor
-array): give each one Pulse Out on an LED in `mode=2`. The per-device
-voice variation gives each unit a slightly different fade decay and
-click width, so the array doesn't flash in identical lockstep.
-
-### Background-CPM piezo tick
-
-Pair a low-CPS source with `mode=1`, `cycles=2`, `freq=4000` driving a
-passive piezo. Even at background CPM (~30/min) the piezo fires a
-clean short tick every couple of seconds, audible across a small room
-without being intrusive.
-
-### Headphone tick output
-
-`mode=0`, `pulse_ms=1` straight into the attenuator pattern (10
-kohm + 4.7 kohm + 1 uF, see Patterns above) plugged into headphones
-gives you a portable Geiger counter you can wear while the device sits
-on a desk. Good for field walks if the tube has decent sensitivity.
+- **Glowing LED**: `mode=2` fades the LED after each click. Try
+  `fade_shift=2` for a longer afterglow; drive a 1 W LED through a
+  MOSFET for a desk lamp that reacts across a room.
+- **Click and flash together**: with [Audio Tick](/output/audiotick)
+  running, add Pulse Out on a spare GPIO with `mode=0`, `pulse_ms=20`.
+- **Headphones**: `mode=0`, `pulse_ms=1` into the attenuator pattern
+  above (10 kohm + 4.7 kohm + 1 uF) gives a tick you can listen to on
+  headphones.
 
 ## Comparison with Audio Tick
 

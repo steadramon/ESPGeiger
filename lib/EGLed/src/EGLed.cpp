@@ -29,13 +29,17 @@ void EGLed::setClock(MillisFn fn) {
   s_clock = (fn != nullptr) ? fn : default_millis;
 }
 
-// ---------- ESP32 LEDC bookkeeping ----------
 #ifdef ESP32
 
 namespace {
-  // Shared LEDC timer at 5 kHz; instances claim channels monotonically.
-  constexpr uint8_t kChannels  = 8;
+  constexpr uint8_t kChannels  = SOC_LEDC_CHANNEL_NUM;
   constexpr int     kLedFreqHz = 5000;
+#ifdef SOC_LEDC_SUPPORT_HS_MODE
+  constexpr ledc_timer_t kTimer = LEDC_TIMER_0;
+#else
+  // timers 0 and 1 belong to hv and tone
+  constexpr ledc_timer_t kTimer = LEDC_TIMER_3;
+#endif
 
   uint8_t s_next_chan   = 0;
   bool    s_timer_ready = false;
@@ -45,62 +49,68 @@ namespace {
     ledc_timer_config_t cfg = {};
     cfg.speed_mode      = LEDC_LOW_SPEED_MODE;
     cfg.duty_resolution = LEDC_TIMER_8_BIT;
-    cfg.timer_num       = LEDC_TIMER_0;
+    cfg.timer_num       = kTimer;
     cfg.freq_hz         = kLedFreqHz;
-    // Pin to APB explicitly. LEDC_AUTO_CLK on ESP32-S3 can pick APLL, which
-    // I2S also uses for its 22050 Hz sample rate - the two fight and audio
-    // plays back at the wrong rate.
+    // APB, on S3 APLL fights I2S
     cfg.clk_cfg         = LEDC_USE_APB_CLK;
     ledc_timer_config(&cfg);
     s_timer_ready = true;
+  }
+
+  uint8_t next_chan() {
+    uint8_t c = (uint8_t)(s_next_chan++ % kChannels);
+#ifndef SOC_LEDC_SUPPORT_HS_MODE
+    // low speed only, same numbers as Arduino's
+    while (c == EGLED_HV_CHANNEL || c == EGLED_TONE_CHANNEL)
+      c = (uint8_t)(s_next_chan++ % kChannels);
+#endif
+    return c;
   }
 }  // namespace
 
 #endif  // ESP32
 
-// ---------- EGLed ----------
-
 EGLed::EGLed(uint8_t pin, bool low_active)
-    : _pin(pin), _low_active(low_active) {
+    : _pin(NO_PIN), _low_active(low_active) {
 #ifdef ESP32
   ensure_timer();
-  // Wraps at kChannels; collisions are visible, not silent.
-  _chan = (uint8_t)(s_next_chan++ % kChannels);
+  _chan = next_chan();
+#endif
+  attach(pin, low_active);
+}
+
+void EGLed::attach(uint8_t pin, bool low_active) {
+  if (pin == NO_PIN) return;
+  _low_active = low_active;
+#ifdef ESP32
   ledc_channel_config_t cfg = {};
-  cfg.gpio_num   = _pin;
+  cfg.gpio_num   = pin;
   cfg.speed_mode = LEDC_LOW_SPEED_MODE;
   cfg.channel    = (ledc_channel_t)_chan;
   cfg.intr_type  = LEDC_INTR_DISABLE;
-  cfg.timer_sel  = LEDC_TIMER_0;
+  cfg.timer_sel  = kTimer;
   cfg.duty       = 0;
   cfg.hpoint     = 0;
   ledc_channel_config(&cfg);
 #else
-  pinMode(_pin, OUTPUT);
-#ifdef ESP8266
-  // analogWrite only attaches a pin to Timer1 SoftPWM on the first mid-range
-  // call; extremes (0/PWMRANGE) just digitalWrite. Without this pre-warm,
-  // fade can silently fail on pins that only ever saw extreme writes.
-  analogWrite(_pin, 512);
+  pinMode(pin, OUTPUT);
 #endif
-#endif
+  _pin = pin;
   writeDuty(0);
 }
 
 void EGLed::writeDuty(uint8_t duty) {
+  if (_pin == NO_PIN) return;
   const uint8_t out = _low_active ? (uint8_t)(255 - duty) : duty;
 #ifdef ESP8266
-  // Scale 8-bit -> arduino-esp8266's default 10-bit range. The +3 nudge
-  // brings the "barely on" end closer to a visible glow.
+  // 10 bit, +3 so the low end glows
   uint16_t d;
   if (out == 0)        d = 0;
   else if (out == 255) d = 1023;
   else                 d = ((uint16_t)out << 2) + 3;
   analogWrite(_pin, d);
 #elif defined(ESP32)
-  // At 8-bit LEDC resolution the duty register holds 0..255 over a 256-tick
-  // period. duty=255 gives 99.6% DC (one low tick remains). Bumping to 256
-  // gives true 100% DC.
+  // 256 = 100%, 255 leaves one low tick
   const uint32_t d = (out == 255) ? 256u : out;
   ledc_set_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)_chan, d);
   ledc_update_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)_chan);
@@ -129,13 +139,18 @@ void EGLed::blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count) {
 
 void EGLed::fade(uint8_t shift) {
   _fade_shift = shift > 7 ? 7 : shift;
-  // Clamp to 254 so writeDuty never hits the analogWrite(0/1023) extremes
-  // that detach Timer1 PWM on ESP8266. Visually identical to 255.
+  // 255 detaches pwm on esp8266
   uint8_t start = _brightness > 254 ? 254 : _brightness;
   _fade_value = start;
   writeDuty(_fade_value);
   _state   = PHASE_FADE;
   _next_ms = s_clock() + 5;
+}
+
+void EGLed::on() {
+  _state       = IDLE;
+  _cycles_left = 0;
+  writeDuty(_brightness);
 }
 
 void EGLed::off() {

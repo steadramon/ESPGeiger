@@ -20,28 +20,34 @@
 #define WEBAPI_H
 #ifdef WEBAPIOUT
 
-#include <Arduino.h>
-#include "AsyncHTTPRequest_Generic.hpp"
-#include "../Module/EGModule.h"
-#include "../Prefs/EGPrefs.h"
-#include "../Util/Globals.h"
-#include "../Counter/Counter.h"
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
+#include <EGHttpClient.h>
+#include <EGBase64.h>
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "GeigerInput/GeigerInput.h"
 
 #define WEBAPI_INTERVAL      60
 
 #ifndef WEBAPI_STATION_URL
 #define WEBAPI_STATION_URL "https://stations.espgeiger.com/station/%u"
 #endif
-#define WEBAPI_HANDSHAKE_MS  (1UL * 60UL * 60UL * 1000UL)  // 1 hour
-// Cadence of the health snapshot piggyback on the regular post.
+#define WEBAPI_HANDSHAKE_MS  (1UL * 60UL * 60UL * 1000UL)
+#define WEBAPI_BACKOFF_MS    30000UL
+#define WEBAPI_BACKOFF_MAX   (5UL * 60UL * 1000UL)
 #define WEBAPI_HEALTH_EVERY  15
 
-extern Counter gcounter;
+// secp192r1, public key and signature are 2x
+#define WEBAPI_PRIV_LEN      24
+#define WEBAPI_SIG_LEN       (2 * WEBAPI_PRIV_LEN)
 
 class WebAPI : public EGModule {
   public:
     WebAPI();
-    const char* name() override { return "wapi"; }
+    const char* name() override { return PSTR("wapi"); }
     bool requires_wifi() override { return true; }
     bool requires_ntp() override { return true; }
     bool has_loop() override { return true; }
@@ -55,41 +61,43 @@ class WebAPI : public EGModule {
     const EGMenuEntry* menuEntries() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
 
-    AsyncHTTPRequest request;
+    EGHttpClient request;
 
     uint32_t getStationId() const { return station_id; }
-    // Signed server-side delete; local key + station_id stay intact.
-    void forget();
+    void forget() { _forget = true; }   // sent when idle, even once off
 
   private:
-    static void httpRequestCb(void *optParm, AsyncHTTPRequest *request, int readyState);
-    static void httpHandshakeCb(void *optParm, AsyncHTTPRequest *request, int readyState);
-    static void httpForgetCb(void *optParm, AsyncHTTPRequest *request, int readyState);
+    bool _forget = false;
+    void sendForget();
+    enum Sent : uint8_t { SENT_NONE, SENT_HS, SENT_POST, SENT_FORGET };
+    uint8_t _sent = SENT_NONE;   // what the reply is for
+    void take_reply();
+    void onHandshake();
+    void onPost();
+    void onForget();
     void doHandshake();
-    // censusOnly: respect heartbeat-mode opt-out by omitting radiation fields.
+    void pingIfDue(unsigned long now);
+    unsigned long wakeTarget();
     void postMeasurement(bool censusOnly = false);
     void loadConfig();
     void saveConfig();
 
     EG_XTASK_VOLATILE uint32_t station_id = 0;
-    uint8_t priv_k[24] = {0};
-    uint8_t pub_k[48] = {0};
-    char pub_k_64[65] = "";  // base64 of pub_k (no padding) + null
+    bool _have_key = false;   // a key can start with 0
+    uint8_t priv_k[WEBAPI_PRIV_LEN] = {0};
+    uint8_t pub_k[2 * WEBAPI_PRIV_LEN] = {0};
+    char pub_k_64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = "";  // base64, no padding
     static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
     unsigned long lastPing = 0;
-    EG_XTASK_VOLATILE unsigned long lastHandshake = 0;
-    // claimed once; reused on forget/403 re-anchor so we don't leak a slot
+    EG_XTASK_VOLATILE uint32_t nextHandshake = 0;   // 0 = not set
+    EG_XTASK_VOLATILE uint32_t _hs_backoff_ms = WEBAPI_BACKOFF_MS;
+    void handshakeAt(uint32_t at);
+    // claimed once, reused
     uint32_t _hs_off = 0xFFFFFFFFu;
     uint32_t _ping_off = 0xFFFFFFFFu;
     uint8_t healthPostCounter = 0;
-    // 0 = off, 1 = heartbeat only, 2 = heartbeat + CPM.
-    uint8_t _mode = 2;
-    // Doubles on each handshake failure, capped at 5min, reset on success.
-    EG_XTASK_VOLATILE uint32_t _hs_backoff_ms = 30000UL;
+    uint8_t _mode = 2;   // 0 off, 1 heartbeat, 2 + CPM
     void backoffHandshake();
-    // Set after the first handshake that successfully reported the
-    // boot-time exception details. Stops us re-sending the same crash
-    // info on every subsequent hourly handshake.
     EG_XTASK_VOLATILE bool _exc_sent = false;
 };
 

@@ -20,15 +20,17 @@
 #define PULSEOUT_H
 #ifdef PULSE_OUT
 
-#include <Arduino.h>
-#include "../Module/EGModule.h"
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
+#include "Corium/Module/EGModule.h"
 
-#include "../Util/PulseEngine.h"
+#include "Corium/Output/PulseEngine.h"
+#include "Corium/Output/QuietWindow.h"
 
 class PulseOut : public EGModule {
   public:
     PulseOut() {}
-    const char* name() override { return "pulse"; }
+    const char* name() override { return PSTR("pulse"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 14; }
     uint16_t warmup_seconds() override { return 0; }
@@ -36,24 +38,24 @@ class PulseOut : public EGModule {
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
-    // Driven from msTickerCB: a stalled main loop would stretch the pulse.
-    // Burst mode is fire-and-forget via tone() and does not pass through here.
-    static volatile bool s_active;   // gate, so idle costs one read
-    void poll();
+    // msTickerCB owns the pin, clicks post s_req
+    static volatile uint8_t s_req;
+    static uint8_t s_seen;
+    static bool s_busy;
+    static inline bool due() { return s_req != s_seen || s_busy; }
+    void poll(uint32_t now_us);
 
-    // Called from Counter when a pulse arrives. Token-bucket-throttled so
-    // a high-rate source can't keep launching new clicks on top of each
-    // other before the previous one finishes.
     void notifyClick(unsigned long now_ms);
 
   private:
+    void read_pin(bool was_enabled);
+
     bool          _enabled = false;
+    bool          _begun = false;
+    int8_t        _pin = -1;   // boot pref, msTicker owns the pin after begin
     PulseEngine   _engine;
 
-    // Pulse Out has its own quiet window separate from Blip LED + Audio.
-    int16_t       _q_from_min = -1;
-    int16_t       _q_to_min   = -1;
-    bool          isQuietNow();
+    QuietWindow   _quiet;   // own, not the Blip LED one
 
 };
 

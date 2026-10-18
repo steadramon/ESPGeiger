@@ -19,7 +19,9 @@
 #ifndef GRNG_H
 #define GRNG_H
 
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 
 class EGHttpServer;
 

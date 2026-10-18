@@ -16,32 +16,32 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _GEIGER_UDPRX_H
-#define _GEIGER_UDPRX_H
+#ifndef GEIGER_UDPRX_H
+#define GEIGER_UDPRX_H
 
-#include "../GeigerInput.h"
+#include "GeigerInput/GeigerInput.h"
+#include "UdpBlip/UdpBlip.h"
 #include <IPAddress.h>
 
 class WiFiUDP;
 
 #ifndef UDPRX_DEFAULT_GROUP
-  #ifdef UDPBLIP_DEFAULT_GROUP
-    #define UDPRX_DEFAULT_GROUP UDPBLIP_DEFAULT_GROUP
-  #else
-    #define UDPRX_DEFAULT_GROUP "239.255.86.86"
-  #endif
+#define UDPRX_DEFAULT_GROUP UDPBLIP_DEFAULT_GROUP
 #endif
 #ifndef UDPRX_DEFAULT_PORT
-#define UDPRX_DEFAULT_PORT  "57340"
+#define UDPRX_DEFAULT_PORT  UDPBLIP_DEFAULT_PORT
 #endif
 #ifndef UDPRX_PRODUCER_SLOTS
 #define UDPRX_PRODUCER_SLOTS 8
 #endif
 #ifndef UDPRX_GAPFILL_QUEUE
-// Holds Poisson-spread blip timestamps from packets carrying gap > 0.
-// 16 entries is comfortably above the worst typical fill (gap_credit
-// of 4-5 at sustained 6000 CPM, drained well before the next packet).
 #define UDPRX_GAPFILL_QUEUE 16
+#endif
+#ifndef UDPRX_POLL_SKIP
+#define UDPRX_POLL_SKIP 500      // loop passes per drain
+#endif
+#ifndef UDPRX_QUIET_MS
+#define UDPRX_QUIET_MS (3 * UDPBLIP_STATS_INTERVAL_MS)   // 3 heartbeats
 #endif
 class GeigerUdpRx : public GeigerInput {
 public:
@@ -53,16 +53,16 @@ public:
   void secondTicker() override;
   int  collect() override;
   bool isHealthy() const override;
-  void appendJsonExtra(EGHttpResponse& res) override;
+  EGMeasureRows measurements() override;
 
   void on_prefs_saved();
 
   struct ProducerRecord {
-    char     chipid[8];       // 6 hex + NUL + pad
+    char     chipid[BLIP_ID_LEN + 2];   // NUL + pad
     uint32_t last_seen_ms;
-    uint32_t click_count;     // credited locally, including gap-fills
-    uint32_t last_counter;    // producer's lifetime click number, for gap detection
-    uint32_t last_ts_ms;      // producer's clock (ms) at last /click; deltas only, base-agnostic
+    uint32_t click_count;
+    uint32_t last_counter;    // producer's count, gap detect
+    uint32_t last_ts_ms;      // producer clock, deltas only
   };
 
   uint8_t producer_count() const { return _producers_seen; }
@@ -75,10 +75,8 @@ public:
   uint32_t gap_filled()       const { return _gap_filled; }
   uint32_t resync_count()     const { return _resync_count; }
   uint32_t last_click_ms()    const { return _last_click_ms; }
-  // Bumped on any accepted message (click or stats). Use for "producer
-  // alive?" UI; survives quiet feeds where stats still arrives every 60s.
+  // any message
   uint32_t last_packet_ms()   const { return _last_packet_ms; }
-  // Gap-fill credits as % of total credited clicks, x10 (0..1000).
   uint16_t loss_pct_x10() const {
     uint32_t total = _local_count;
     if (total == 0) return 0;
@@ -86,23 +84,38 @@ public:
     if (g >= total) return 1000;
     return (uint16_t)((g * 1000u) / total);
   }
+  uint32_t quiet_s() const;   // 0 before the first
+  bool heard() const;
+  uint16_t rebind_count() const       { return _rebind_count; }
+  uint16_t refresh_count() const      { return _refresh_count; }
+  uint16_t refresh_noop_count() const { return _refresh_noop_count; }
 
 private:
   void readPrefs();
   void teardownUdp();
   bool ensureUdp();
+  bool ensureBound(uint32_t now);
+  void climbRecoveryLadder(uint32_t now);
+  void readDatagrams();
+  void fireDueGapfills();
   bool acceptChipid(const char* src_chipid);
   void processDatagram(uint8_t* buf, size_t len);
   void processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
+  uint32_t creditForwardGap(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
+  bool producerRestarted(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
+  void creditClicks(uint32_t credit, uint32_t gap_credit, const ProducerRecord* p,
+                    uint32_t producer_ts, uint32_t now_ms);
+  void scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint32_t now_ms);
   void processEnv(const uint8_t* buf, size_t len);
   ProducerRecord* findOrAllocProducer(const char* chipid, uint32_t now_ms);
 
   WiFiUDP*  _udp = nullptr;
   IPAddress _group;
-  uint16_t  _port = 57340;
-  uint8_t   _mode = 2;          // 0=pin 1=sum 2=auto
-  char      _pinned_chipid[8] = {0};
-  char      _locked_chipid[8] = {0};
+  uint16_t  _port = UDPRX_DEFAULT_PORT;
+  uint8_t   _mode = 2;          // 0=pin 1=sum, 2 legacy auto
+  char      _pinned_chipid[BLIP_ID_LEN + 1] = {0};
+  char      _locked_chipid[BLIP_ID_LEN + 1] = {0};
+  char      _env_chipid[BLIP_ID_LEN + 1] = {0};
   uint8_t   _rx_mode = 1;       // 0=light 1=modem 2=none
 
   volatile uint32_t _local_count = 0;
@@ -112,32 +125,25 @@ private:
   uint32_t _resync_count = 0;
   uint32_t _last_click_ms = 0;
   uint32_t _last_packet_ms = 0;
-  // Rate-drain for large gaps. Mirrors GeigerSerial::partial_clicks:
-  // pending decrements as rate is drained per second, partial carries
-  // the sub-1 fraction between emits.
   float _drain_pending = 0.0f;
   float _drain_rate    = 0.0f;
   float _drain_partial = 0.0f;
+  bool  _draining      = false;   // int guard
 
   ProducerRecord _producers[UDPRX_PRODUCER_SLOTS] = {};
   uint8_t _producers_seen = 0;
-  unsigned long _bound_at_ms = 0;
+  uint32_t _bound_at_ms = 0;
   unsigned long _last_igmp_refresh_ms = 0;
 
-  // Silent-RX recovery ladder. Arms only after the first packet ever seen.
-  void do_refresh();            // fire IgmpRefresh + tally the outcome
-  unsigned long _recovery_at_ms = 0;   // last recovery action (0 = idle)
-  uint16_t _recovery_steps = 0;        // escalation counter while silent
-  // Field diagnostics for the ESP32 multicast dropout, surfaced via appendJsonExtra.
-  uint16_t _rebind_count = 0;          // stale-socket leave+rejoin cycles
-  uint16_t _refresh_count = 0;         // IgmpRefresh reports queued
-  uint16_t _refresh_noop_count = 0;    // refresh early-returned (no netif)
+  void do_refresh();
+  unsigned long _recovery_at_ms = 0;   // 0 = idle
+  uint16_t _recovery_steps = 0;
+  uint32_t _ps_bounce_until_ms = 0;    // 0 = idle
+  // Diags
+  uint16_t _rebind_count = 0;
+  uint16_t _refresh_count = 0;
+  uint16_t _refresh_noop_count = 0;    // no netif
 
-  // Poisson gap-fill queue. processClick pushes (gap) deferred blip
-  // times into here when a packet credits more than one click; loop()
-  // pops any due and calls Counter::dispatchReceiverBlip. Scheduling
-  // window is capped at sender's throttle interval (50 ms) so the queue
-  // always drains before the next packet from the same producer arrives.
   uint32_t _gapfill_due_ms[UDPRX_GAPFILL_QUEUE] = {0};
   uint8_t  _gapfill_count = 0;
   uint32_t _gapfill_dropped = 0;

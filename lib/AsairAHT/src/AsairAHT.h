@@ -28,24 +28,30 @@ class Sensor {
   public:
     bool begin(TwoWire& wire);
 
-    // Two-phase: trigger() returns immediately, caller waits >= 80 ms,
-    // then readResult() pulls the data. Avoids stalling the main loop.
+    // wait >= 80 ms between
     bool trigger();
     bool readResult(float& t_c, float& h_pct, float& p_hpa);
 
-    // Synchronous convenience - internally trigger + delay(80) + readResult.
     bool read(float& t_c, float& h_pct, float& p_hpa);
 
     bool    present() const { return _present; }
-    uint8_t i2cAddr() const { return 0x38; }
+    uint8_t i2cAddr() const { return ADDR; }
     const __FlashStringHelper* chipName() const { return F("AHTxx"); }
 
   private:
+    static constexpr uint8_t ADDR = 0x38;
+
     bool status(uint8_t& s);
-    bool sendInit();
+    bool sendInit(const uint8_t* seq);
+    bool trusted(const uint8_t* buf);
+
+    // AHT10/15 send no CRC
+    enum Kind : uint8_t { KIND_UNKNOWN, KIND_CRC, KIND_PLAIN };
 
     TwoWire* _wire = nullptr;
     bool     _present = false;
+    uint8_t  _kind = KIND_UNKNOWN;
+    uint8_t  _misses = 0;
 };
 
 }

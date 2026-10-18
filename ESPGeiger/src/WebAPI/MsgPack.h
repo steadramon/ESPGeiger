@@ -23,10 +23,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <pgmspace.h>
 
 namespace MsgPack {
 
-// Type tags (the bytes that identify a value's encoding).
 static constexpr uint8_t TAG_NIL     = 0xc0;
 static constexpr uint8_t TAG_FALSE   = 0xc2;
 static constexpr uint8_t TAG_TRUE    = 0xc3;
@@ -56,7 +56,6 @@ static constexpr uint8_t TAG_STR32   = 0xdb;
 static constexpr uint8_t TAG_ARRAY32 = 0xdd;
 static constexpr uint8_t TAG_MAP32   = 0xdf;
 
-// Float bit-pattern punning - no libm, no copy via memcpy in tight code.
 static inline uint32_t f32_bits(float f) {
   union { float f; uint32_t u; } x;
   x.f = f; return x.u;
@@ -66,19 +65,6 @@ static inline float bits_to_f32(uint32_t u) {
   x.u = u; return x.f;
 }
 
-// ---------------------------------------------------------------------------
-// Writer - encode MessagePack into a caller-supplied buffer.
-//
-// Usage:
-//   uint8_t buf[256];
-//   MsgPack::Writer mp(buf, sizeof(buf));
-//   mp.map(3);
-//   mp.kv("cid", chip_id);
-//   mp.kv("cpm", 42);
-//   mp.kv("usv", 0.21f);
-//   if (mp.overflow) { ... }
-//   send(buf, mp.length());
-// ---------------------------------------------------------------------------
 class Writer {
 public:
   uint8_t* buf;
@@ -90,22 +76,43 @@ public:
 
   size_t length() const { return pos; }
 
-  // ---- containers -------------------------------------------------------
+  // containers
   void map(uint16_t n) {
     if (n <= 15) put_u8((uint8_t)(0x80 | n));
     else { put_u8(TAG_MAP16); put_u16(n); }
+  }
+
+  // count set in map_end, one at a time
+  void map_begin() {
+    _map_at = pos;
+    _map_n = 0;
+    put_u8(0x80);
+  }
+  void map_end() {
+    if (overflow) return;
+    if (_map_n <= 15) {
+      buf[_map_at] = (uint8_t)(0x80 | _map_n);
+      return;
+    }
+    // map16, shift entries up 2
+    if (pos + 2 > cap) { overflow = true; return; }
+    memmove(buf + _map_at + 3, buf + _map_at + 1, pos - _map_at - 1);
+    buf[_map_at]     = TAG_MAP16;
+    buf[_map_at + 1] = (uint8_t)(_map_n >> 8);
+    buf[_map_at + 2] = (uint8_t)_map_n;
+    pos += 2;
   }
   void array(uint16_t n) {
     if (n <= 15) put_u8((uint8_t)(0x90 | n));
     else { put_u8(TAG_ARRAY16); put_u16(n); }
   }
 
-  // ---- scalars (explicit width) -----------------------------------------
+  // scalars
   void nil()             { put_u8(TAG_NIL); }
   void b(bool v)         { put_u8(v ? TAG_TRUE : TAG_FALSE); }
   void f32(float v)      { put_u8(TAG_FLOAT32); put_u32(f32_bits(v)); }
 
-  // ---- ints (auto-narrow to smallest viable encoding) -------------------
+  // ints, smallest encoding
   void uint(uint32_t v) {
     if      (v <= 0x7f)    put_u8((uint8_t)v);             // pos fixint
     else if (v <= 0xff)    { put_u8(TAG_UINT8);  put_u8((uint8_t)v); }
@@ -120,12 +127,10 @@ public:
     else                   { put_u8(TAG_INT32); put_u32((uint32_t)v); }
   }
 
-  // ---- strings + binary -------------------------------------------------
+  // strings + binary
   void str(const char* s)              { str(s, s ? strlen(s) : 0); }
   void str(const char* s, size_t len) {
-    if (len <= 31)         put_u8((uint8_t)(0xa0 | len));   // fixstr
-    else if (len <= 0xff)  { put_u8(TAG_STR8);  put_u8((uint8_t)len); }
-    else                   { put_u8(TAG_STR16); put_u16((uint16_t)len); }
+    str_hdr(len);
     put_bytes((const uint8_t*)s, len);
   }
   void bin(const uint8_t* p, size_t len) {
@@ -134,8 +139,15 @@ public:
     put_bytes(p, len);
   }
 
-  // ---- key + key/value shorthand ---------------------------------------
-  void key(const char* k) { str(k); }
+  // keys, may be PROGMEM
+  void key(const char* k) {
+    _map_n++;
+    size_t len = strlen_P(k);
+    str_hdr(len);
+    if (pos + len > cap) { overflow = true; return; }
+    memcpy_P(buf + pos, k, len);
+    pos += len;
+  }
 
   void kv(const char* k, int32_t v)               { key(k); sint(v); }
   void kv(const char* k, uint32_t v)              { key(k); uint(v); }
@@ -146,6 +158,14 @@ public:
   void kv(const char* k, const uint8_t* p, size_t len) { key(k); bin(p, len); }
 
 private:
+  size_t   _map_at = 0;
+  uint16_t _map_n = 0;
+
+  void str_hdr(size_t len) {
+    if (len <= 31)         put_u8((uint8_t)(0xa0 | len));   // fixstr
+    else if (len <= 0xff)  { put_u8(TAG_STR8);  put_u8((uint8_t)len); }
+    else                   { put_u8(TAG_STR16); put_u16((uint16_t)len); }
+  }
   void put_u8(uint8_t v) {
     if (pos + 1 > cap) { overflow = true; return; }
     buf[pos++] = v;
@@ -169,14 +189,6 @@ private:
   }
 };
 
-// ---------------------------------------------------------------------------
-// Reader - decode MessagePack from a caller-supplied buffer.
-//
-// Usage:
-//   MsgPack::Reader r(buf, len);
-//   if (!r.find_key("sid")) return;
-//   int32_t sid; if (!r.read_int(&sid)) return;
-// ---------------------------------------------------------------------------
 class Reader {
 public:
   const uint8_t* buf;
@@ -188,7 +200,6 @@ public:
 
   bool eof() const { return pos >= cap; }
 
-  // Read a map header. Returns entry count, or 0 with error=true on mismatch.
   uint16_t read_map() {
     uint8_t t;
     if (!peek(&t)) return 0;
@@ -206,42 +217,45 @@ public:
     error = true; return 0;
   }
 
-  // Read any int variant into int32_t. Out-of-range = error.
+  // NOLINTNEXTLINE(complexity) a case a tag
   bool read_int(int32_t* out) {
     uint8_t t;
     if (!get_u8(&t)) return false;
-    if ((t & 0x80) == 0)   { *out = (int32_t)t; return true; }    // pos fixint
-    if ((t & 0xe0) == 0xe0){ *out = (int32_t)(int8_t)t; return true; }  // neg fixint
+    if (t <= 0x7f) { *out = t; return true; }            // pos fixint
+    if (t >= 0xe0) { *out = (int8_t)t; return true; }    // neg fixint
     switch (t) {
-      case TAG_UINT8:  { uint8_t  v; if (!get_u8(&v))  return false; *out = (int32_t)v; return true; }
-      case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = (int32_t)v; return true; }
+      case TAG_UINT8:  { uint8_t  v; if (!get_u8(&v))  return false; *out = v; return true; }
+      case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
       case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false;
-                         if (v > 0x7fffffffu) break; *out = (int32_t)v; return true; }
-      case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false; *out = (int32_t)(int8_t)v; return true; }
-      case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false; *out = (int32_t)(int16_t)v; return true; }
+                         if (v > 0x7fffffffu) break;
+                         *out = (int32_t)v; return true; }
+      case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false; *out = (int8_t)v; return true; }
+      case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false; *out = (int16_t)v; return true; }
       case TAG_INT32:  { uint32_t v; if (!get_u32(&v)) return false; *out = (int32_t)v; return true; }
     }
     error = true; return false;
   }
 
-  // Not via read_int: that collapses "negative was encoded" and "uint32 above
-  // INT32_MAX was encoded" into one result, letting a peer turn -1 into
-  // 4294967295. Unsigned tags pass at full width; signed tags reject if < 0.
+  // -1 must not pass as uint
+  // NOLINTNEXTLINE(complexity) a case a tag
   bool read_uint(uint32_t* out) {
     uint8_t t;
     if (!get_u8(&t)) return false;
-    if ((t & 0x80) == 0)    { *out = t; return true; }          // pos fixint
-    if ((t & 0xe0) == 0xe0) { error = true; return false; }     // neg fixint
+    if (t <= 0x7f) { *out = t; return true; }            // pos fixint
+    if (t >= 0xe0) { error = true; return false; }       // neg fixint
     switch (t) {
       case TAG_UINT8:  { uint8_t  v; if (!get_u8(&v))  return false; *out = v; return true; }
       case TAG_UINT16: { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
       case TAG_UINT32: { uint32_t v; if (!get_u32(&v)) return false; *out = v; return true; }
       case TAG_INT8:   { uint8_t  v; if (!get_u8(&v))  return false;
-                         int8_t  s = (int8_t)v;  if (s < 0) break; *out = (uint32_t)s; return true; }
+                         if ((int8_t)v < 0) break;
+                         *out = v; return true; }
       case TAG_INT16:  { uint16_t v; if (!get_u16(&v)) return false;
-                         int16_t s = (int16_t)v; if (s < 0) break; *out = (uint32_t)s; return true; }
+                         if ((int16_t)v < 0) break;
+                         *out = v; return true; }
       case TAG_INT32:  { uint32_t v; if (!get_u32(&v)) return false;
-                         if ((int32_t)v < 0) break; *out = v; return true; }
+                         if ((int32_t)v < 0) break;
+                         *out = v; return true; }
     }
     error = true; return false;
   }
@@ -260,8 +274,6 @@ public:
     error = true; return false;
   }
 
-  // Copy string into caller's buffer (NUL-terminated). Returns false on
-  // type mismatch or insufficient capacity.
   bool read_str(char* out, size_t out_cap) {
     size_t len; if (!read_str_len(&len)) return false;
     if (len >= out_cap || len > cap - pos) { error = true; return false; }
@@ -271,17 +283,15 @@ public:
     return true;
   }
 
-  // Skip the current value, any type in the MessagePack spec. Containers
-  // nest at most SKIP_DEPTH deep.
   static constexpr uint8_t SKIP_DEPTH = 16;
+  // NOLINTNEXTLINE(complexity) a case a tag
   bool skip(uint8_t depth = 0) {
     if (depth > SKIP_DEPTH) { error = true; return false; }
     uint8_t t; if (!get_u8(&t)) return false;
-    if ((t & 0x80) == 0)    return true;                    // pos fixint
-    if ((t & 0xe0) == 0xe0) return true;                    // neg fixint
-    if ((t & 0xf0) == 0x80) return skip_n(2u * (t & 0x0f), depth);  // fixmap
-    if ((t & 0xf0) == 0x90) return skip_n(t & 0x0f, depth);          // fixarray
-    if ((t & 0xe0) == 0xa0) return advance(t & 0x1f);                // fixstr
+    if (t <= 0x7f || t >= 0xe0) return true;                // fixint
+    if (t <= 0x8f) return skip_n(2u * (t & 0x0f), depth);   // fixmap
+    if (t <= 0x9f) return skip_n(t & 0x0f, depth);          // fixarray
+    if (t <= 0xbf) return advance(t & 0x1f);                // fixstr
     if (t >= TAG_FIXEXT1 && t <= TAG_FIXEXT16)              // type byte + 1..16
       return advance(1u + (1u << (t - TAG_FIXEXT1)));
     uint32_t n;
@@ -302,26 +312,25 @@ public:
       case TAG_ARRAY16:                  return get_len(2, &n) && skip_n(n, depth);
       case TAG_ARRAY32:                  return get_len(4, &n) && skip_n(n, depth);
       case TAG_MAP16:                    return get_len(2, &n) && skip_n(2u * n, depth);
-      case TAG_MAP32:                    return get_len(4, &n) && n <= 0x7fffffffu && skip_n(2u * n, depth);
+      case TAG_MAP32:                    return get_len(4, &n) && skip_map(n, depth);
     }
     error = true; return false;   // 0xc1, never used
   }
 
-  // Find a key in the map currently at `pos`. On success leaves pos on
-  // the value. On miss leaves pos at end of map.
+  // key may be PROGMEM
   bool find_key(const char* key) {
     uint16_t n = read_map();
     if (error) return false;
-    size_t klen = strlen(key);
+    size_t klen = strlen_P(key);
     for (uint16_t i = 0; i < n; i++) {
       size_t this_len;
       if (!read_str_len(&this_len)) return false;
       if (this_len == klen && this_len <= cap - pos &&
-          memcmp(buf + pos, key, this_len) == 0) {
+          memcmp_P(buf + pos, key, this_len) == 0) {
         pos += this_len;
         return true;
       }
-      // Check before advancing, or `pos` lands past `cap` on truncated input.
+      // check first, truncated input
       if (this_len > cap - pos) { error = true; return false; }
       pos += this_len;
       if (!skip()) return false;
@@ -360,12 +369,15 @@ private:
     if (width == 2) { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
     return get_u32(out);
   }
-  // Each element is at least one byte, so a count past the buffer fails at
-  // the end of the data, not after 2^32 iterations.
+  // count can't outrun the data
   bool skip_n(uint32_t n, uint8_t depth) {
     if (n > cap - pos) { error = true; return false; }
     for (uint32_t i = 0; i < n; i++) if (!skip(depth + 1)) return false;
     return true;
+  }
+  bool skip_map(uint32_t n, uint8_t depth) {
+    if (n > 0x7fffffffu) { error = true; return false; }
+    return skip_n(2u * n, depth);
   }
   uint16_t count16(uint32_t n) {
     if (n > 0xffffu) { error = true; return 0; }

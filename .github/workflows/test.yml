@@ -1,0 +1,96 @@
+name: Unit tests
+
+# Host-native logic tests, kept out of the firmware matrix so a logic break
+# fails in a minute rather than twenty.
+on:
+  push:
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    name: native
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-py3.11-pio6.1.9
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.platformio/lib
+          key: pio-native-${{ runner.os }}-pio6.1.9-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'platformio==6.1.9'
+
+      - name: Install ESP8266 framework
+        # Real lwIP headers for test_asynctcp; -e reuses the platformio.ini pin.
+        run: pio pkg install -e esp8266_pulse
+
+      - name: Run tests
+        run: pio test -c test.ini -e native
+
+  sanitize:
+    runs-on: ubuntu-24.04
+    name: native + asan/ubsan
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-py3.11-pio6.1.9
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.platformio/lib
+          key: pio-native-${{ runner.os }}-pio6.1.9-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'platformio==6.1.9'
+
+      - name: Install ESP8266 framework
+        # Real lwIP headers for test_asynctcp; -e reuses the platformio.ini pin.
+        run: pio pkg install -e esp8266_pulse
+
+      - name: Run tests under sanitizers
+        run: pio test -c test.ini -e native_asan

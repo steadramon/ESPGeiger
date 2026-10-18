@@ -1,6 +1,10 @@
 // Simple intrusive list class
 #pragma once
 
+#include <cstddef>
+#include <type_traits>
+#include <utility>
+
 template<typename T> class SimpleIntrusiveList {
   static_assert(std::is_same<decltype(std::declval<T>().next), T *>::value, "Template type must have public 'T* next' member");
 
@@ -29,7 +33,7 @@ public:
 public:
   // Object methods
 
-  SimpleIntrusiveList() : _head(nullptr), _tail(&_head) {}
+  SimpleIntrusiveList() : _head(nullptr), _tail(&_head), _size(0) {}
   ~SimpleIntrusiveList() {
     clear();
   }

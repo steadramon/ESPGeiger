@@ -18,13 +18,16 @@
 */
 #ifndef GEIGERTESTSRL_H
 #define GEIGERTESTSRL_H
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
+// before GeigerInputTest.h
 #ifndef GEIGER_TXPIN
 #define GEIGER_TXPIN 12
 #endif
 
-#include "../GeigerInputTest.h"
+#include "SerialPort.h"
+#include "GeigerInput/GeigerInputTest.h"
 
 class GeigerTestSerial : public GeigerInputTest
 {
@@ -39,8 +42,7 @@ class GeigerTestSerial : public GeigerInputTest
 
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
-    uint16_t _loop_c = 0;
-    uint16_t _poll_skip = 5;  // scaled to baud in begin()
+    uint16_t _idle_skip = 5;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
 };
 #endif

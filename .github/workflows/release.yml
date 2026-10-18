@@ -25,7 +25,8 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           TAG="${TAG#v}"   # drop a leading v (tag vX.Y.Z -> version X.Y.Z)
-          sed -i "s/RELEASE_VERSION \"devel\"/RELEASE_VERSION \"${TAG}\"/g" ESPGeiger/src/Util/DeviceInfo.h
+          sed -i "s/RELEASE_VERSION \"devel\"/RELEASE_VERSION \"${TAG}\"/g" ESPGeiger/src/App/Version.h
+          grep -q "RELEASE_VERSION \"${TAG}\"" ESPGeiger/src/App/Version.h || { echo "Version.h was not stamped with ${TAG}"; exit 1; }
       - name: Run PlatformIO
         run: platformio run
       - name: Prepare Release Assets

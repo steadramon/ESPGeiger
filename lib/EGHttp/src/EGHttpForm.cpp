@@ -17,26 +17,38 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpForm.h"
+#include "RespParse.h"
 
 #include <string.h>
+#include <pgmspace.h>
 
 namespace {
 
-inline int hexval(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-// One decoded byte. A % without two hex digits after it is literal.
 inline unsigned char next_byte(const char*& p, const char* end) {
   if (*p == '+') { p++; return ' '; }
   if (*p == '%' && end - p >= 3) {
-    int hi = hexval(p[1]), lo = hexval(p[2]);
+    int hi = eg_http_hex(p[1]), lo = eg_http_hex(p[2]);
     if (hi >= 0 && lo >= 0) { p += 3; return (unsigned char)(hi << 4 | lo); }
   }
   return (unsigned char)*p++;
+}
+
+inline bool name_matches(const char* p, const char* name_end, const char* name) {
+  const char* q = p;
+  const char* t = name;
+  while (q < name_end && pgm_read_byte(t) && next_byte(q, name_end) == pgm_read_byte(t)) t++;
+  return q == name_end && pgm_read_byte(t) == '\0';
+}
+
+inline bool decode_value(const char* q, const char* seg_end, char* out, size_t cap) {
+  size_t o = 0;
+  while (q < seg_end) {
+    unsigned char c = next_byte(q, seg_end);
+    if (c == 0 || o + 1 >= cap) return false;
+    out[o++] = (char)c;
+  }
+  out[o] = '\0';
+  return true;
 }
 
 }  // namespace
@@ -52,20 +64,8 @@ bool eghttp_form_find(const char* region, size_t len, const char* name,
     const char* eq = (const char*)memchr(p, '=', (size_t)(seg_end - p));
     const char* name_end = eq ? eq : seg_end;
 
-    const char* q = p;
-    const char* t = name;
-    while (q < name_end && *t && next_byte(q, name_end) == (unsigned char)*t) t++;
-    if (q == name_end && *t == '\0' && seg_end != p) {
-      size_t o = 0;
-      q = eq ? eq + 1 : seg_end;
-      while (q < seg_end) {
-        unsigned char c = next_byte(q, seg_end);
-        if (c == 0 || o + 1 >= cap) return false;
-        out[o++] = (char)c;
-      }
-      out[o] = '\0';
-      return true;
-    }
+    if (name_matches(p, name_end, name) && seg_end != p)
+      return decode_value(eq ? eq + 1 : seg_end, seg_end, out, cap);
     p = amp ? amp + 1 : end;
   }
   return false;

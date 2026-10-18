@@ -8,7 +8,7 @@ parent: Configuration
 
 # Environment sensor
 
-ESPGeiger reads temperature, humidity and pressure off an I2C sensor wired to the device. Plug a supported one in, power up, and it's picked up automatically - nothing to flash, nothing to configure. The readings land on the `/status` page under the radiation numbers and go out on every channel (MQTT, Webhook, WebAPI, UDP, Serial templates, Thingspeak).
+ESPGeiger reads temperature, humidity and pressure off an I2C sensor wired to the device. Plug a supported one in, power up and it's picked up automatically - nothing to flash, nothing to configure. The readings land on the `/status` page under the radiation numbers and go out on every channel (MQTT, Webhook, WebAPI, UDP, Serial templates, Thingspeak).
 
 ## Supported sensors
 
@@ -35,35 +35,37 @@ Connect SDA, SCL, VCC (3.3 V), GND. Default pins:
 | ESP32-S2 / S3 | 8 | 9 |
 | ESP32-C3 / C6 | 6 | 7 |
 
-If your build also has an OLED, the sensor must share the same I2C pins as the OLED. ESPGeiger uses a single I2C bus.
-
-If you need different pins, change them in **Configuration → Environment**. A reboot is required to apply pin changes.
+ESPGeiger uses a single I2C bus, shared with the OLED. OLED builds default to the OLED's pins. Change the pins in the **I2C Bus** section of the [Config page](/configuration). A reboot is required to apply pin changes.
 
 ## Settings
 
-| Setting | Default | Range |
-|---|---|---|
-| `env.sda` | platform default | 0 - MAX_GPIO |
-| `env.scl` | platform default | 0 - MAX_GPIO |
-| `env.unit` | 0 (°C) | 0=°C, 1=°F, 2=K |
+<!-- gen:prefs env -->
+
+| Setting | Key | Type | Default | Description |
+|---|---|---|---|---|
+| Temp unit | `env.unit` | `0` Celsius, `1` Fahrenheit, `2` Kelvin | `0` Celsius | Unit for the local display and Serial templates. |
+| Temp offset | `env.temp_offset` | Int -100 to 100 | `0` | 0.1 C steps. -25 = -2.5 C. |
+| Altitude (m) | `env.altitude_m` | Int 0-9000 | `0` | Elevation in metres. Corrects pressure to sea level (0 = local station pressure). |
+
+<!-- /gen -->
 
 `env.unit` only affects what is shown on the local `/status` page and Serial templates. All outputs (MQTT, Webhook, WebAPI, UDP, Thingspeak) always publish in canonical units (°C, %RH, hPa) so consumers can convert if they want.
 
 ## Combo modules
 
-The popular AliExpress "AHT20+BMP280" module has two chips on one board (AHT20 at 0x38, BMP280 at 0x76). ESPGeiger detects both, composes temperature and humidity from the AHT20 (higher precision), and pressure from the BMP280. The boot log reports `Env: AHTxx+BMP280 detected` (serial console, or the Console panel on the `/status` page). The BMP280's own temperature reading is used internally for pressure compensation but not exposed.
+The popular AliExpress "AHT20+BMP280" module has two chips on one board (AHT20 at 0x38, BMP280 at 0x76). ESPGeiger detects both, takes temperature and humidity from the AHT20 (higher precision) and pressure from the BMP280.
 
 ## Output channels
 
 When a sensor is present, the firmware adds the relevant fields to each output channel. Each field is sent independently, so a BMP280 ships temp + pressure but not humidity, an AHT alone ships temp + humidity but not pressure.
 
 * **`/status` page**: a single "Env" row appears under the radiation readings, e.g. `22.4°C  45%  1013 hPa`. Updates live with the rest of the status polling.
-* **MQTT**: `tele/sensor` JSON gains `t` / `h` / `p`, and the legacy topics `stat/T` / `stat/H` / `stat/P`. Home Assistant autodiscovery publishes one sensor entity per available field.
+* **MQTT**: `tele/sensor` JSON gains `t` / `h` / `p` and the legacy topics `stat/T` / `stat/H` / `stat/P`. Home Assistant autodiscovery publishes one sensor entity per available field.
 * **Webhook**: JSON body gains `t` / `h` / `p`.
 * **WebAPI**: MsgPack payload gains `t` / `h` / `p`.
 * **UDP / OSC**: new `/espg/<id>/env` schema `,fff` (temp, humidity, pressure) every 60 s.
 * **Thingspeak**: maps temp / humidity / pressure to `field5` / `field6` / `field7`. Configure those fields in your Thingspeak channel UI.
-* **Serial template** (`sout.format=5`): variables `{t}` `{h}` `{p}` available for substitution.
+* **Serial template** (`sout.format=2`): variables `{t}` `{h}` `{p}` available for substitution.
 
 Historical trends are not stored on the device - if you want a 24-hour chart, point your MQTT broker at Home Assistant, Grafana, or any other dashboard tool.
 
@@ -73,7 +75,7 @@ Visit `/vars.json` on the device to see the current rendered value of every vari
 
 ## Troubleshooting
 
-* **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring, and the `env.sda` / `env.scl` pref values. Enable debug logging to see the probe attempt in the console.
+* **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring and the `env.sda` / `env.scl` pref values. Enable debug logging to see the probe attempt in the console.
 * **Humidity missing from the row.** You probably have a BMP280, not a BME280. The two parts look similar on a board but only BME280 has the humidity sensor. The boot log line `Env: <chip> detected` tells you which one you have (serial console, or the Console panel on the `/status` page).
 * **Pressure missing.** You probably have an AHT-only module without the paired BMP280. Add a BMP280 on the same I2C bus, or accept that pressure is not available.
 * **Wrong temperature just after boot.** The first reading sets the baseline. Allow 30 seconds for the smoothed value to settle.

@@ -21,236 +21,173 @@
 */
 #include <Arduino.h>
 #include <EGHttpServer.h>
+#include <EGJson.h>
 #include "Counter.h"
-#include "../Prefs/EGPrefs.h"
-#include "../Util/StringUtil.h"
-#include "../Util/DeviceInfo.h"
-#include "../Util/Wifi.h"
-#include "../Util/FastMillis.h"
-#include "../Util/TickProfile.h"
-#include "../WebPortal/WebPortal.h"
-#include "../EnvSensor/EnvSensor.h"
+#include "Corium/Module/ExternalPause.h"
+#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/Util/Words.h"
+#include "Corium/System/Clock.h"
+#include "Corium/System/Uptime.h"
+#include "Corium/WebPortal/WebPortal.h"
 #include "HIST_JS.gz.h"
-#ifdef ESPG_HV_ADC
-#include "../HV/HV.h"
+#include "JS_BUNDLE.gz.h"
+#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+#include <EGTimer1.h>
 #endif
-
-// ---------- HTTP routes ----------
-
-extern Counter gcounter;
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 
-// uint64 -> decimal ASCII (nano-libc has no %llu).
+extern const char picographJS[] PROGMEM;
+extern const char statusJS[]    PROGMEM;
+
+// no %llu in nano libc
 static void fmt_u64(char* out, size_t cap, uint64_t v) {
-  char tmp[24];
+  char digits[24];
   int n = 0;
-  if (v == 0) { tmp[n++] = '0'; }
-  else { while (v > 0 && n < (int)sizeof(tmp)) { tmp[n++] = (char)('0' + v % 10); v /= 10; } }
+  if (v == 0) { digits[n++] = '0'; }
+  else { while (v > 0 && n < (int)sizeof(digits)) { digits[n++] = (char)('0' + v % 10); v /= 10; } }
   size_t o = 0;
-  while (n > 0 && o + 1 < cap) out[o++] = tmp[--n];
+  while (n > 0 && o + 1 < cap) out[o++] = digits[--n];
   out[o] = 0;
 }
 
-static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // /clicks JSON can run ~250 B with full 24h history; chunked to be safe.
-  res.beginChunked(200, "application/json");
+// snprintf returns the untruncated length
+static void send_n(EGHttpResponse& res, const char* line, size_t cap, int n) {
+  if (n <= 0) return;
+  res.sendChunk(line, (size_t)n < cap ? (size_t)n : cap - 1);
+}
 
-  char line[160];
-  int n;
-
-  n = snprintf_P(line, sizeof(line),
-    PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour);
-  if (n > 0) res.sendChunk(line, (size_t)n);
+static void clicks_day(EGHttpResponse& res, char* line, size_t cap) {
+  send_n(res, line, cap, snprintf_P(line, cap,
+    PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour));
 
   const int histSize = gcounter.day_hourly_history.size();
   for (int i = histSize; i > 0; i--) {
-    n = snprintf_P(line, sizeof(line), PSTR(",%d"),
-                   (int)gcounter.day_hourly_history[i - 1]);
-    if (n > 0) res.sendChunk(line, (size_t)n);
+    send_n(res, line, cap, snprintf_P(line, cap, PSTR(",%d"),
+                                 (int)gcounter.day_hourly_history[i - 1]));
   }
 
-  n = snprintf_P(line, sizeof(line),
+  send_n(res, line, cap, snprintf_P(line, cap,
     PSTR("],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\""),
     (int)gcounter.clicks_today,
     (int)gcounter.clicks_yesterday,
-    EGPrefs::getString("sys", "ratio"));
-  if (n > 0) res.sendChunk(line, (size_t)n);
+    EGPrefs::getString("counter", EG_K_RATIO)));
+}
 
-  gcounter.input()->appendClicksExtra(res);
-
-  if (ntpclient.synced) {
-    n = snprintf_P(line, sizeof(line),
-      PSTR(",\"start\":%lu"), (unsigned long)ntpclient.boot_epoch);
+static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
+  int n;
+  if (Clock::synced) {
+    n = snprintf_P(line, cap,
+      PSTR(",\"start\":%lu"), (unsigned long)Clock::boot_epoch);
   } else {
-    unsigned long uptime = ntpclient.getUptime() - start;
-    n = snprintf_P(line, sizeof(line),
+    unsigned long uptime = Uptime::seconds() - start;
+    n = snprintf_P(line, cap,
       PSTR(",\"uptime\":%lu"), uptime);
   }
-  if (n > 0) res.sendChunk(line, (size_t)n);
+  send_n(res, line, cap, n);
+}
 
-  if (gcounter.get_lifetime_enabled()) {
-    char clkBuf[24];
-    fmt_u64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
-    n = snprintf_P(line, sizeof(line),
-      PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu,\"secs\":%lu}"),
-      clkBuf, (unsigned long)gcounter.get_first_boot_ts(),
-      gcounter.get_lifetime_seconds());
-    if (n > 0) res.sendChunk(line, (size_t)n);
+static void clicks_life(EGHttpResponse& res, char* line, size_t cap) {
+  char clkBuf[24];
+  fmt_u64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
+  send_n(res, line, cap, snprintf_P(line, cap,
+    PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu,\"secs\":%lu}"),
+    clkBuf, (unsigned long)gcounter.get_first_boot_ts(),
+    gcounter.get_lifetime_seconds()));
+}
+
+// log2 buckets, 64 us to 512 s+
+static void clicks_hist(EGHttpResponse& res, char* line, size_t cap) {
+  const uint32_t* hist = gcounter.pulse_histogram();
+  const uint8_t   nb   = Counter::pulse_histogram_buckets();
+  send_n(res, line, cap, snprintf_P(line, cap,
+                               PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]));
+  for (uint8_t b = 1; b < nb; b++) {
+    send_n(res, line, cap, snprintf_P(line, cap, PSTR(",%lu"),
+                                 (unsigned long)hist[b]));
   }
-
-  // Inter-pulse-interval histogram (log2 buckets, 64us .. >=512s).
-  {
-    const uint32_t* hist = gcounter.pulse_histogram();
-    const uint8_t   nb   = Counter::pulse_histogram_buckets();
-    n = snprintf_P(line, sizeof(line),
-                   PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]);
-    if (n > 0) res.sendChunk(line, (size_t)n);
-    for (uint8_t b = 1; b < nb; b++) {
-      n = snprintf_P(line, sizeof(line), PSTR(",%lu"),
-                     (unsigned long)hist[b]);
-      if (n > 0) res.sendChunk(line, (size_t)n);
-    }
-    res.sendChunk(F("]"));
-    // Smallest inter-pulse interval since boot, paired with the histogram.
-    uint32_t mp = gcounter.get_min_pulse_us();
-    if (mp > 0) {
-      n = snprintf_P(line, sizeof(line),
-                     PSTR(",\"min_pulse_us\":%lu"), (unsigned long)mp);
-      if (n > 0) res.sendChunk(line, (size_t)n);
-    }
+  res.sendChunk(F("]"));
+  uint32_t mp = gcounter.get_min_pulse_us();
+  if (mp > 0) {
+    send_n(res, line, cap, snprintf_P(line, cap,
+                                 PSTR(",\"min_pulse_us\":%lu"), (unsigned long)mp));
   }
+}
 
+static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.beginChunked(200, FPSTR(HTTP_CT_JSON));
+  char line[160];
+  clicks_day(res, line, sizeof(line));
+  gcounter.input()->appendClicksExtra(res);
+  clicks_since(res, line, sizeof(line));
+  if (gcounter.get_lifetime_enabled()) clicks_life(res, line, sizeof(line));
+  clicks_hist(res, line, sizeof(line));
   res.sendChunk(F("}"));
   res.endChunked();
 }
 
 static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // GeigerLog WiFiServer 12-field order:
-  //   CPM,CPS,CPM1st,CPS1st,CPM2nd,CPS2nd,CPM3rd,CPS3rd,Temp,Press,Humid,Xtra
-  // Absent fields left empty (GeigerLog reads "" as missing).
-  char cpm[16], cps[16], cpm5[16], cpm15[16];
-  format_f(cpm,   sizeof(cpm),   gcounter.get_cpmf());
-  format_f(cps,   sizeof(cps),   gcounter.get_cps());
-  format_f(cpm5,  sizeof(cpm5),  gcounter.get_cpm5f());
-  format_f(cpm15, sizeof(cpm15), gcounter.get_cpm15f());
-
-  char t[16] = "", h[16] = "", p[16] = "";
-  if (envsensor.present()) {
-    float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
-    if (!isnan(et)) format_f(t, sizeof(t), et);
-    if (!isnan(eh)) format_f(h, sizeof(h), eh);
-    if (!isnan(ep)) format_f(p, sizeof(p), ep);
-  }
-
-  char xtra[16];   // HV on HW builds, else dose rate
-#ifdef ESPG_HV_ADC
-  if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0)
-    format_f(xtra, sizeof(xtra), hv.hvReading.get());
-  else
-#endif
-    format_f(xtra, sizeof(xtra), gcounter.get_usv());
+  // GeigerLog field order, keep it
+  // CPM,CPS,CPM1st,CPS1st,CPM2nd,CPS2nd,CPM3rd,CPS3rd,Temp,Press,Humid,Xtra
+  char cpm[16], cps[16], cpm5[16], cpm15[16], t[16], h[16], p[16], xtra[16];
+  egm_text(PSTR("cpm"),   EGM_OUT_JSON, cpm,   sizeof(cpm));
+  egm_text(PSTR("cps"),   EGM_OUT_JSON, cps,   sizeof(cps));
+  egm_text(PSTR("cpm5"),  EGM_OUT_JSON, cpm5,  sizeof(cpm5));
+  egm_text(PSTR("cpm15"), EGM_OUT_JSON, cpm15, sizeof(cpm15));
+  egm_text(PSTR("t"),     EGM_OUT_JSON, t,     sizeof(t));
+  egm_text(PSTR("h"),     EGM_OUT_JSON, h,     sizeof(h));
+  egm_text(PSTR("p"),     EGM_OUT_JSON, p,     sizeof(p));
+  if (!egm_text(PSTR("hv"), EGM_OUT_JSON, xtra, sizeof(xtra)))
+    egm_text(PSTR("usv"), EGM_OUT_JSON, xtra, sizeof(xtra));
 
   char out[128];
   snprintf_P(out, sizeof(out),
     PSTR("%s, %s, %s, , %s, , , , %s, %s, %s, %s"),
     cpm, cps, cpm5, cpm15, t, p, h, xtra);
-  res.send(200, "text/plain", out);
+  res.send(200, FPSTR(HTTP_CT_PLAIN), out);
 }
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  const char* v = req.arg("v");
-  if (v) {
-    int target = atoi(v);
-    if (target > 0) gcounter.set_target_cpm(target);
-  }
-  res.send(200, "text/plain", "OK");
+  int32_t target;
+  if (parse_centi(req.arg(F("v")), &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
+  res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 #endif
 
-static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // Live status as JSON. Chunked since ~250-320 B exceeds the inline-send cap.
-  bool raw = req.arg("raw") != nullptr;  // ?raw=1: un-smoothed heap + frag/lfb
-  res.beginChunked(200, "application/json");
+#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+// diag only, not a measurement
+static void json_timer1_stats(EGHttpResponse& res) {
   char buf[200];
-  char c[16], s[16], c5[16], c15[16], cs[16];
-  format_f(c,   sizeof(c),   gcounter.get_cpmf());
-  format_f(s,   sizeof(s),   gcounter.get_usv());
-  format_f(c5,  sizeof(c5),  gcounter.get_cpm5f());
-  format_f(c15, sizeof(c15), gcounter.get_cpm15f());
-  format_f(cs,  sizeof(cs),  gcounter.get_cps());
-  int n = snprintf_P(buf, sizeof(buf),
-    PSTR("{\"ut\":%lu,\"c\":%s,\"s\":%s,\"c5\":%s,\"c15\":%s,\"cs\":%s,\"r\":%s,\"tc\":%u,\"mem\":%u,\"rssi\":%d"),
-    DeviceInfo::uptime(),
-    c, s, c5, c15, cs,
-    EGPrefs::getString("sys", "ratio"),
-    gcounter.total_clicks,
-    raw ? ESP.getFreeHeap() : DeviceInfo::freeHeap(),
-    (int)Wifi::rssi);
-  if (n > 0) res.sendChunk(buf, (size_t)n);
-  n = snprintf_P(buf, sizeof(buf),
-    PSTR(",\"tube\":%u,\"sat\":%u"),
-    (unsigned)(gcounter.get_tube_alive() ? 1 : 0),
-    (unsigned)(gcounter.get_saturated() ? 1 : 0));
-  if (n > 0) res.sendChunk(buf, (size_t)n);
-#ifdef ESPG_HV_ADC
-  char hvBuf[16];
-  format_f(hvBuf, sizeof(hvBuf), hv.hvReading.get());
-  n = snprintf_P(buf, sizeof(buf), PSTR(",\"hv\":%s"), hvBuf);
-  if (n > 0) res.sendChunk(buf, (size_t)n);
+  int n;
+  for (uint8_t i = 0; (n = EGTimer1::stats_json(buf, sizeof(buf), i)) > 0; i++) {
+    if ((size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+  }
+}
 #endif
-  // /json is the live-display endpoint used by /status JS. Temperature
-  // ships in the user's preferred unit so the JS doesn't have to convert.
-  // External APIs (MQTT/WebAPI/webhook/UDP) still send canonical units.
-  if (envsensor.present()) {
-    float et = envsensor.tempUser(), eh = envsensor.humidity(), ep = envsensor.pressure();
-    char fbuf[12];
-    if (!isnan(et)) {
-      format_f(fbuf, sizeof(fbuf), et);
-      n = snprintf_P(buf, sizeof(buf), PSTR(",\"t\":%s,\"tu\":%u"), fbuf, envsensor.unit());
-      if (n > 0) res.sendChunk(buf, (size_t)n);
-    }
-    if (!isnan(eh)) {
-      format_f(fbuf, sizeof(fbuf), eh);
-      n = snprintf_P(buf, sizeof(buf), PSTR(",\"h\":%s"), fbuf);
-      if (n > 0) res.sendChunk(buf, (size_t)n);
-    }
-    if (!isnan(ep)) {
-      format_f(fbuf, sizeof(fbuf), ep);
-      n = snprintf_P(buf, sizeof(buf), PSTR(",\"p\":%s"), fbuf);
-      if (n > 0) res.sendChunk(buf, (size_t)n);
-    }
-  }
-  gcounter.input()->appendJsonExtra(res);
-  // tick/t_max/lps + heap diagnostics are not used by the status page; only
-  // emit under ?raw=1 to keep the polled /json lean.
-  if (raw) {
-    n = snprintf_P(buf, sizeof(buf),
-      PSTR(",\"tick\":%u,\"t_max\":%u,\"lps\":%u,\"frag\":%u,\"lfb\":%u,\"lfblow\":%u"),
-      TickProfile::tick_us, TickProfile::tick_max_us, TickProfile::lps_raw,
-      (unsigned)DeviceInfo::heapFrag(),
-      (unsigned)DeviceInfo::largestFreeBlock(),
-      (unsigned)DeviceInfo::largestFreeBlockLow());
-    if (n > 0) res.sendChunk(buf, (size_t)n);
-    if (gcounter.get_cps_n() >= 2) {
-      char csl[16];
-      format_f(csl, sizeof(csl), gcounter.get_cps_live());
-      n = snprintf_P(buf, sizeof(buf),
-        PSTR(",\"cs_live\":%s,\"cs_n\":%u,\"cs_win_us\":%lu"),
-        csl,
-        (unsigned)gcounter.get_cps_n(),
-        (unsigned long)gcounter.get_cps_win_us());
-      if (n > 0) res.sendChunk(buf, (size_t)n);
-    }
-  }
-  res.sendChunk("}", 1);
+
+static void send_part(void* arg, const char* s, size_t n) {
+  static_cast<EGHttpResponse*>(arg)->sendChunk(s, n);
+}
+
+static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  bool raw = req.arg(F("raw")) != nullptr;
+  res.beginChunked(200, FPSTR(HTTP_CT_JSON));
+  char out[256];
+  EGJson j(out, sizeof(out), send_part, &res);
+  j.map_begin();
+  egm_json_display(j, raw);
+  j.flush();   // closed by hand
+#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+  if (raw) json_timer1_stats(res);
+#endif
+  res.sendChunk(F("}"));
   res.endChunked();
 }
 
-// /hist body + /histjs. All values come from /clicks. The body is split
-// around the inter-pulse-intervals section so UDP receiver builds can skip
-// it - their clicks arrive batched and the histogram stays empty.
 static const char HISTORY_BODY_LIFETIME[] PROGMEM = R"HTML(
 <div id=lf style=display:none><h2>Lifetime</h2><div class=card><div id=g2>
 <div><span class=muted>Clicks </span><b id=lfc>&mdash;</b></div>
@@ -373,15 +310,13 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
 )JS";
 
 static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, "text/html");
+  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   const char* fn = DeviceInfo::friendlyName();
   const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
   WebPortal::sendPageHead(res, F("History"), sub);
   res.sendChunk(FPSTR(HISTORY_BODY_LIFETIME));
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // Inter-pulse intervals only have meaning for builds that see per-click
-  // timing. UDP receivers get batched windows from the producer, so the
-  // histogram stays empty - hide it rather than ship a blank graph.
+  // udp rx is batched, no intervals
   res.sendChunk(FPSTR(HISTORY_BODY_INTERPULSE));
 #endif
   res.sendChunk(FPSTR(HISTORY_BODY_LAST24));
@@ -390,44 +325,167 @@ static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static void hHistJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_HIST_JS
-  res.sendGzipP(200, "application/javascript", HIST_JS_GZ, HIST_JS_GZ_LEN);
+  res.sendGzipP(200, FPSTR(HTTP_CT_JS), HIST_JS_GZ, HIST_JS_GZ_LEN);
 #else
-  res.send(200, "application/javascript", FPSTR(HIST_JS));
+  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(HIST_JS));
 #endif
 }
 
 static void hLifeReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   gcounter.reset_lifetime();
-  res.send(200, "text/plain", "OK");
+  res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 
-// /pause[?s=N] - pause external posts. ?s=0 resumes. Capped at 24 h.
+// /pause?s=N, 0 resumes, max 24 h
 static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  const char* sec = req.arg("s");
-  if (sec) {
-    int n = atoi(sec);
-    if (n < 0) n = 0;
-    if (n > 86400) n = 86400;
-    Counter::pause_external((uint32_t)n * 1000U);
+  const char* sec = req.arg(F("s"));
+  if (sec && !ExternalPause::start_s(sec)) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), F("s is seconds, 0 resumes"));
+    return;
   }
   char body[40];
-  uint32_t rem = Counter::pause_remaining_ms();
+  uint32_t rem = ExternalPause::remaining_ms();
   snprintf_P(body, sizeof(body),
              rem ? PSTR("PAUSED %u s") : PSTR("RESUMED"), (unsigned)(rem / 1000U));
-  res.send(200, "text/plain", body);
+  res.send(200, FPSTR(HTTP_CT_PLAIN), body);
+}
+
+// /status pollers, /json and /cs
+#if !EG_GZ_JS_BUNDLE
+extern const char statusJS[] PROGMEM = R"JS(
+!function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",5,null,0,!0,!0,5,15);e.av=3;
+if(W&&window.GPIN>=0)W.innerHTML+=' (GPIO '+window.GPIN+')';
+if(window.BO)$('bw').style.display='';
+var ac,cps=0,nb,mu=$('snd'),mt=1,AC=window.AudioContext||window.webkitAudioContext;
+var LS=localStorage;
+function applySnd(){var s=LS.sndBtn,c=document.documentElement.classList.contains('crt');mu.style.display=(s==='1'||(c&&s!=='0'))?'':'none'}
+applySnd();window.applySnd=applySnd;
+function ensureAC(){if(!mt&&!ac&&AC){ac=new AC();var N=Math.floor(ac.sampleRate*.008);nb=ac.createBuffer(1,N,ac.sampleRate);var d=nb.getChannelData(0),sd=2166136261>>>0,cid=window.CHIPID||'0';for(var i=0;i<cid.length;i++)sd=Math.imul(sd^cid.charCodeAt(i),16777619)>>>0;if(!sd)sd=1;for(var i=0;i<N;i++){sd^=sd<<13;sd^=sd>>>17;sd^=sd<<5;d[i]=((sd&65535)/32768-1)*Math.exp(-i*.04)}}if(ac&&ac.resume)ac.resume()}
+mu.onclick=function(){mt=!mt;mu.textContent='Sound: '+(mt?'off':'on');ensureAC()};
+window.toggleTick=()=>{LS.sndBtn=LS.sndBtn==='1'?'0':'1';applySnd()};
+(function clk(){var n=500;
+if(cps>0&&!mt&&ac){
+var t=ac.currentTime,s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
+s.buffer=nb;f.type='bandpass';f.frequency.value=1200;f.Q.value=2;g.gain.value=1.1;
+s.connect(f);f.connect(g);g.connect(ac.destination);s.start(t);
+n=Math.max(20,-Math.log(1-Math.random())/cps*1000)}
+O(clk,n)})();
+if(window._seedHist&&window._seedHist.length){var N=window._seedHist.length,w=D.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new D(w-(N-1-i)*1e3).toLocaleTimeString()))}
+var J,L=0,I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
+B.style.setProperty('--blip',K);
+setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
+var Q=function(){if(!window._csk){window._csk=1;O(f,100)}},t=function(){var n=new X;n.open("GET","/json",!0);
+n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText),u=o.ut;
+U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
+var dd=o.c-o.c5,dc=o.c<10&&o.c5<10&&dd*dd<9*o.c5?o.c5:o.c;C.textContent=dc.toFixed(2);T.textContent=o.tc;setUsv(V,dc/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
+var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
+if(W)W.style.display=(o.tc===0&&u>=Math.max(60,6e3/o.r))||o.tube===0?'':'none';
+if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
+e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
+I=Math.max(100,Math.min(4e3,2e3/r));
+var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
+K=o.c<.01&&o.c5<.01?'#08f':z>3?'#f33':z>1.5?'#fa0':z<-1.5?'#c0f':'#0f0';
+B.style.setProperty('--blip',K)}L=D.now();Q();J=O(t,1e3)};
+n.onerror=function(){L=D.now();Q();J=O(t,6e3)};n.send()};
+O(t,250);document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(J);J=O(t,Math.max(0,1e3-(D.now()-L)))}})}();
+var DD=Date,lt,lc=0,x,id=0,M=1e4,dl=200,dz=0,T1,ci=3e3;
+function f(){clearTimeout(lt);T1=T1||byID("t1");x=new XMLHttpRequest;
+x.onload=function(){if(200==x.status){var n=x.responseText,nl=n.indexOf("\n"),ab=(T1.scrollHeight-T1.scrollTop-T1.clientHeight)<50,h=n.substr(0,nl).split(",");
+id=h[0];dz=+h[1]||0;var e=n.substr(nl+1);
+if(e){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){
+var b=-new DD().getTimezoneOffset(),T=((+h*60+(+m)+b-dz)%1440+1440)%1440;
+return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s});
+T1.value+=e;var L=T1.value.split("\n");if(L.length>M)T1.value=L.slice(-(M-dl)).join("\n")}
+if(ab)T1.scrollTop=T1.scrollHeight}lc=DD.now();ci=e?3e3:Math.min(ci*1.5,8.3e3);lt=setTimeout(f,ci)};
+x.onerror=function(){lc=DD.now();lt=setTimeout(f,6e3)};x.open("GET","/cs?c1="+id,!0);x.send();return!1}
+document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lc&&DD.now()-lc>1.08e7)id=0;ci=3e3;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(DD.now()-lc)))}});
+window._boost=function(){ci=3e3;clearTimeout(lt);lt=setTimeout(f,200)};
+)JS";
+#endif
+
+// light canvas, picograph has no theme
+static const char STATUS_BODY[] PROGMEM = R"HTML(
+<style>
+#blip{display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--border);margin-right:.5em;vertical-align:middle;transition:background-color .08s ease-out,box-shadow .08s ease-out}
+#blip.f{background:var(--blip,#0f0);box-shadow:0 0 6px var(--blip,#0f0)}
+#snd{display:none;width:auto;padding:.2em .8em;font-size:.85em;float:right;margin:0 0 .5em .5em}
+:root.crt #snd{display:inline-block}
+</style>
+<button id=snd>Sound: off</button>
+<canvas id=g1></canvas>
+<div id=g2></div>
+<p id=tw class="a aw" style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
+<p id=bw class="a aw" style=display:none><b>&#9888; Brownout reset detected</b> - check the power supply.</p>
+<div class=stat>
+<div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
+<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Total clicks</b><span id=tc>-</span></div>
+<div class=row><b>Uptime</b><span id=upt>-</span><b>Signal</b><span id=rssi>-</span></div>
+<div class=row id=envR style=display:none></div>
+</div>
+<h2>Console</h2>
+<textarea readonly id=t1 wrap=off></textarea>
+<details style="margin-top:.4em"><summary style="cursor:pointer;color:var(--muted);width:1.5em;list-style-position:inside">&nbsp;</summary>
+<form id=cf style="display:flex;gap:.5em;margin-top:.4em" onsubmit="return cmdSend(event)">
+<input id=ci placeholder="cmd" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:.95em" autocomplete=off spellcheck=false>
+<button type=submit>Send</button>
+</form>
+</details>
+<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1}</script>
+<script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
+)HTML";
+
+static void status_seed(EGHttpResponse& res) {
+  int bo = DeviceInfo::resetReason() == DeviceInfo::RR_BROWNOUT;
+  char buf[400];
+  size_t sp = 0;
+  advance_pos(sp, snprintf_P(buf, sizeof(buf),
+              PSTR("<script>var w=window;w.CHIPID=\"%s\";w.GPIN=%d;w.BO=%d;w._seedHist=["),
+              DeviceInfo::chipid(), gcounter.input_pin(), bo), sizeof(buf));
+  int histSize = gcounter.cpm_history.size();
+  for (int i = 0; i < histSize && sp + sizeof(",-2147483648") <= sizeof(buf); i++) {
+    advance_pos(sp, snprintf_P(buf + sp, sizeof(buf) - sp, i ? PSTR(",%d") : W_FMT_D,
+                gcounter.cpm_history[i]), sizeof(buf));
+  }
+  res.sendChunk(buf, sp);
+  res.sendChunk(F("]</script>"));
+}
+
+static void hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
+  const char* fn = DeviceInfo::friendlyName();
+  const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
+  WebPortal::sendPageHead(res, F("Status"), sub);
+  status_seed(res);
+  res.sendChunk(FPSTR(STATUS_BODY));
+  WebPortal::sendPageTail(res, true);
+  res.endChunked();
+}
+
+static void hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+#if EG_GZ_JS_BUNDLE
+  res.sendGzipP(200, FPSTR(HTTP_CT_JS), JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
+#else
+  res.beginChunked(200, FPSTR(HTTP_CT_JS));
+  res.sendChunk(FPSTR(picographJS));
+  res.sendChunk(FPSTR(statusJS));
+  res.endChunked();
+#endif
 }
 
 void CounterRoutes::registerRoutes(EGHttpServer& http) {
-  http.on("/clicks",   EGHttpRequest::GET,  hClicks);
-  http.on("/lastdata", EGHttpRequest::GET,  hLastData);
-  http.on("/json",     EGHttpRequest::GET,  hJson);
-  http.on("/hist",     EGHttpRequest::GET,  hHistory);
-  http.on("/histjs",   EGHttpRequest::GET,  hHistJs);
-  http.on("/life/reset", EGHttpRequest::POST, hLifeReset);
-  http.on("/pause",      EGHttpRequest::GET,  hPause);
+  http.on(F("/status"),   EGHttpRequest::GET,  hStatus);
+  http.on(F("/js"),       EGHttpRequest::GET,  hJs);
+  http.on(F("/clicks"),   EGHttpRequest::GET,  hClicks);
+  http.on(F("/lastdata"), EGHttpRequest::GET,  hLastData);
+  http.on(F("/json"),     EGHttpRequest::GET,  hJson);
+  http.on(F("/hist"),     EGHttpRequest::GET,  hHistory);
+  http.on(F("/histjs"),   EGHttpRequest::GET,  hHistJs);
+  http.on(F("/life/reset"), EGHttpRequest::POST, hLifeReset);
+  http.on(F("/pause"),      EGHttpRequest::GET,  hPause);
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-  http.on("/cpm",      EGHttpRequest::GET,  hSetCPM);
+  http.on(F("/cpm"),      EGHttpRequest::GET,  hSetCPM);
 #endif
 }

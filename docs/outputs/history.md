@@ -8,23 +8,19 @@ nav_order: 2
 
 # History page
 
-The `/hist` page gives a longer term view of activity on the device. It shows totals for today and yesterday, a 24 hour bar chart, an hour by hour table, and (when enabled) a lifetime totals card and an inter pulse interval histogram.
+The `/hist` page gives a longer term view of activity on the device. It shows totals for today and yesterday, a 24 hour bar chart, an hour by hour table and (when enabled) a lifetime totals card and an inter pulse interval histogram.
 
 ## Lifetime card
 
 When lifetime tracking is enabled, a Lifetime card appears showing cumulative state since the device was first set up:
 
 - **Clicks** is the total number of clicks ever recorded. Survives reboots.
-- **Dose** is the cumulative absorbed dose using the configured tube ratio. It scales automatically: micro sieverts for small values, milli sieverts at 1000 µSv and above, and full sieverts at 1 Sv and above.
+- **Dose** is the cumulative absorbed dose using the configured tube ratio. It scales automatically: micro sieverts for small values, milli sieverts from 1000 µSv, full sieverts from 1 Sv.
 - **Tracked** is the number of seconds the device has been counting toward the dose denominator. It pauses whilst the device is off and resumes from saved state on the next boot.
 - **Install age** is wall clock time since first boot.
 - **Avg CPM** is lifetime clicks divided by tracked seconds, multiplied by 60.
 
 A **Reset lifetime** button at the bottom of the card zeros every field in the card, including the saved totals that normally survive a reboot.
-
-## Inter pulse interval histogram
-
-This is a histogram of the time gaps between consecutive clicks. Buckets are log base 2 and double in size from `<64µs` up to `>=512s`. The data is cumulative since the last reboot.
 
 ## Today, yesterday and the day rate
 
@@ -34,27 +30,19 @@ The summary card at the top of the page shows five figures:
 - **Yesterday** is the total clicks for the previous UTC day.
 - **1h avg CPM** is the device's most recent rolling rate.
 - **24h peak CPM** is the highest hourly rate seen in the last 24 hours.
-- **Day rate vs yesterday** is a rate based percentage comparison.
+- **Day rate vs yesterday** projects today's clicks to a full day at the current rate and compares that with yesterday.
 
-The "Day rate vs yesterday" line isn't a raw total comparison. Comparing eight hours of today against twenty four hours of yesterday would always read as a big drop, which isn't useful. Instead, today's clicks are projected to a full 24 hour day at the current rate and that projection is compared to yesterday's full day.
-
-The line shows a dash until all of these conditions are met:
-
-- The device has been running long enough that yesterday was a full UTC day. The boot time must be before yesterday's UTC midnight.
-- At least one hour of today has passed, so the projection isn't wild.
-- Yesterday has at least one recorded click.
-
-A freshly flashed device stays empty on this line until it has observed its first full day.
+The day rate shows a dash until the device has run through a full UTC day, at least one hour of today has passed and yesterday has at least one click.
 
 ## 24 hour bar chart and table
 
-The bar chart shows the click count for each of the last 24 hours, with the current partial hour as the right hand bar. The bars use the same accent colour as the rest of the UI.
+The bar chart shows the click count for each of the last 24 hours, with the current partial hour as the right hand bar.
 
-The table below repeats the same data with timestamps in your browser's local time, the average CPM for that hour, and (whilst the configured tube ratio is non zero) the derived µSv per hour.
+The table below repeats the same data with timestamps in your browser's local time, the average CPM for that hour and (whilst the configured tube ratio is non zero) the derived µSv per hour.
 
-### Why log buckets
+## Inter pulse interval histogram
 
-A radiation counter handles a huge dynamic range. Background pulses might be tens of seconds apart whilst a hot source could fire several times in a millisecond. A linear histogram would need thousands of bins to cover both regimes. The log base 2 layout covers the same range in 25 buckets, which only costs the device 100 bytes of RAM.
+This is a histogram of the time gaps between consecutive clicks. Buckets double in size from `<64µs` up to `>=512s`, so one chart covers both slow background and a hot source. The data is cumulative since the last reboot.
 
 ### What healthy looks like
 

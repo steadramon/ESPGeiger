@@ -16,30 +16,21 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-// RNG core only. The /random page lives in GRNGWeb.cpp; keep WebPortal and
-// EGHttpServer out of this TU so it stays host-buildable.
+// keep host-buildable, web stuff in GRNGWeb.cpp
 
 #include "GRNG.h"
-#include "../Module/EGModule.h"   // EG_XTASK_VOLATILE
+#include "Corium/Module/EGModule.h"   // EG_XTASK_VOLATILE
+#include "Corium/System/DeviceInfo.h"
 #include "sha256.h"
 #include <string.h>
 
 static EG_XTASK_VOLATILE uint32_t s_pool[8] = {0};
 static uint8_t s_mix_idx = 0;
 
-// Private hasher: extract() runs inside uECC_sign via the RNG callback, so it
-// must not clobber the shared global Sha256 a caller may have in flight.
+// own hasher, runs inside uECC_sign
 static Sha256Class s_sha;
 
-static inline uint32_t hw_word() {
-#ifdef ESP8266
-  return RANDOM_REG32;
-#else
-  return esp_random();
-#endif
-}
-
-// Survives a warm reset so the boot seed differs per restart.
+// survives warm reset
 #ifdef NATIVE_TEST
 #  define EG_NOINIT
 #else
@@ -67,7 +58,7 @@ void GRNG::begin() {
 #ifndef ESP8266
   memcpy(s_boot_sram, h, 32);
 #endif
-  for (uint8_t i = 0; i < 8; i++) mix(hw_word());
+  for (uint8_t i = 0; i < 8; i++) mix(DeviceInfo::hwRandom());
   stir();
 }
 
@@ -76,11 +67,16 @@ void GRNG::mix(uint32_t bits) {
 }
 
 uint32_t GRNG::stir() {
-  uint32_t e = hw_word() ^ ESP.getCycleCount();
+  uint32_t e = DeviceInfo::hwRandom() ^ ESP.getCycleCount();
   mix(e);
   randomSeed(e ^ s_pool[0]);
   return e;
 }
+
+static constexpr uint8_t EXTRACT_HW_WORDS = 4;
+// 55 bytes a block, more costs two
+static_assert(sizeof(s_pool) + sizeof(uint32_t) + EXTRACT_HW_WORDS * sizeof(uint32_t) <= 55,
+              "extract() input past one SHA-256 block");
 
 void GRNG::extract(uint8_t* out, size_t n) {
   while (n > 0) {
@@ -88,8 +84,8 @@ void GRNG::extract(uint8_t* out, size_t n) {
     s_sha.write((const uint8_t*)s_pool, sizeof(s_pool));
     uint32_t cc = ESP.getCycleCount();
     s_sha.write((const uint8_t*)&cc, sizeof(cc));
-    uint32_t hw[4];
-    for (uint8_t i = 0; i < 4; i++) hw[i] = hw_word();
+    uint32_t hw[EXTRACT_HW_WORDS];
+    for (uint8_t i = 0; i < EXTRACT_HW_WORDS; i++) hw[i] = DeviceInfo::hwRandom();
     s_sha.write((const uint8_t*)hw, sizeof(hw));
     uint8_t* h = s_sha.result();
     size_t take = n > 32 ? 32 : n;

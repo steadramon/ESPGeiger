@@ -1,6 +1,6 @@
 /*
   MQTT_Client.h - MQTT connection class
-  
+
   Copyright (C) 2023 @steadramon
 
   This program is free software: you can redistribute it and/or modify
@@ -22,18 +22,21 @@
 #ifdef MQTTOUT
 #define LOG_TAG "MQTT"
 
-#include "../Util/Globals.h"
-#include "../Util/DeviceInfo.h"
-#include "../Counter/Counter.h"
-#include "../Module/EGModule.h"
-#include "../Prefs/EGPrefs.h"
-#include <AsyncMqttClient.h>
+#include "Corium/System/Globals.h"
+#include "Corium/System/DeviceInfo.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
 #include <WiFiClient.h>
 
 
 #ifndef MQTT_DISCOVERY_TOPIC
 #define MQTT_DISCOVERY_TOPIC "homeassistant"
 #endif
+#define MQTT_HASS_TOPIC_MAX 32
+#define MQTT_TOPIC_PREF_MAX 28
+#define MQTT_ROOT_MAX  (MQTT_TOPIC_PREF_MAX * CHIPID_LEN / (sizeof("{id}") - 1))   // all {id}
+#define MQTT_TOPIC_LEN (MQTT_ROOT_MAX + sizeof("/tele/status"))
 
 #ifndef MQTT_HASS_DEFAULT
 #if GEIGER_IS_TEST(GEIGER_TYPE)
@@ -49,9 +52,12 @@
 #endif
 #define MQTT_MIN_TIME 5
 #define MQTT_MAX_TIME 3600
+#ifndef MQTT_INTERVAL
+#define MQTT_INTERVAL 60
+#endif
 #define MQTT_STATUS_INTERVAL 60
-// Above the lwIP SYN give-up (~31s) and the 15s RX timeout.
-#define MQTT_CONNECT_TIMEOUT_MS 45000UL
+#define MQTT_KEEPALIVE_S 15
+#define MQTT_TIMEOUT_S 15   // connect, ping reply
 
 #ifndef MQTT_HASS_REFRESH_S
 #define MQTT_HASS_REFRESH_S 3600UL
@@ -62,16 +68,8 @@
 #endif
 
 #ifndef MQTT_HASS_BIRTH_SPREAD_S
-#define MQTT_HASS_BIRTH_SPREAD_S 30UL   // stagger a fleet's re-announce on HA birth
+#define MQTT_HASS_BIRTH_SPREAD_S 30UL   // stagger a fleet on HA birth
 #endif
-
-constexpr auto MQTT_LWT_ONLINE PROGMEM = "Online";
-constexpr auto MQTT_LWT_OFFLINE PROGMEM = "Offline";
-
-constexpr auto MQTT_TOPIC_LWT PROGMEM = "lwt";
-constexpr auto MQTT_TOPIC_STATUS PROGMEM = "status";
-
-extern Counter gcounter;
 
 class MQTT_Client : public EGModule {
 public:
@@ -80,7 +78,7 @@ public:
     static MQTT_Client instance;
     return instance;
   }
-  const char* name() override { return "mqtt"; }
+  const char* name() override { return PSTR("mqtt"); }
   bool requires_wifi() override { return true; }
   bool has_tick() override { return true; }
   bool has_loop() override { return true; }
@@ -90,30 +88,33 @@ public:
   void s_tick(unsigned long now) override;
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
-  void on_prefs_saved() override;  // reconnects with new settings
+  void on_prefs_saved() override;
   uint8_t display_order() override { return 25; }
   size_t status_json(char* buf, size_t cap, unsigned long now) override;
-  const EGLegacyAlias* legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+  EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
   void setInterval(int interval);
   int getInterval();
   void disconnect();
   void onMqttConnect(bool sessionPresent);
-  void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
-#ifdef MQTTAUTODISCOVER
-#endif
-  char _lwt_topic[64] = "";
-  // Written from the AsyncMqttClient callbacks (AsyncTCP task on ESP32),
-  // read from s_tick/loop: EG_XTASK_VOLATILE for cross-task visibility. RMW on
-  // these must hold MQTT_CB_LOCK (see onMqttDisconnect / on_prefs_saved).
-  EG_XTASK_VOLATILE bool connected = false;
+  void onMqttDisconnect(int8_t err);
+  void onMqttMessage(const char* topic, const char* payload, size_t len);
+  void onMqttAck(uint16_t id);
+  char _lwt_topic[MQTT_ROOT_MAX + sizeof("/tele/lwt")] = "";
+  bool connected = false;
 protected:
   void reconnect();
 
 private:
   MQTT_Client();
+  bool clientBusy();
+  void applyIntervalPref();
+  void queueTimedPublishes(unsigned long now);
+#ifdef MQTTAUTODISCOVER
+  void scheduleHassDiscovery(bool reconnected);
+#endif
   void buildTopic(char* out, size_t outsz, const char* middle, const char* cmd);
   const char* getRootTopic();
-  char _cachedRootTopic[64] = "";
+  char _cachedRootTopic[MQTT_ROOT_MAX + 1] = "";
   bool _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
@@ -124,9 +125,7 @@ private:
   void stepHassDiscovery();
   void setupHassCB();
   struct HassExtra { const char* key; const char* value; };
-  // Rows filled in by the forEach*Hass* walkers. Every member is
-  // PGM_P - assembled from PSTR() literals + palette constants in
-  // MQTT_Client.cpp.
+  // all PGM_P
   struct HassSensorRow {
     const char* id;
     const char* name;
@@ -137,6 +136,7 @@ private:
     const char* dev_cla;
     const char* state_cla;
     const char* ent_cat;
+    const char* precision;  // "" = HA default
   };
   struct HassBinaryRow {
     const char* id;
@@ -158,57 +158,60 @@ private:
   void hassPublishBinarySensor(const HassBinaryRow& r);
   void hassRemoveSensor(const HassSensorRow& r);
   void hassRemoveBinarySensor(const HassBinaryRow& r);
-  void publishHassTopic(const char* type, const char* id, const char* displayName,
-                        const char* devCla, const char* stateCla, const char* entCat,
-                        const char* cmdTopic,
-                        const HassExtra* extras, size_t n_extras);
+  struct HassTopic {
+    const char* type;
+    const char* id;
+    const char* displayName;
+    const char* devCla;
+    const char* stateCla;
+    const char* entCat;
+    const char* cmdTopic;
+  };
+  void publishHassTopic(const HassTopic& t, const HassExtra* extras, size_t n_extras);
   void removeHassTopic(const char* type, const char* id);
 #endif
-  void onMqttMessage(char* topic, char* payload, size_t len);
   unsigned long statusSlotAnchor(unsigned long now_s);
-  // s_tick raises bits in _pending; loop() drains one per call.
-  void publishStatus();
+  bool publishStatus();
   void publishPing();
-  void publishWarn();
-  void publishAlert();
+  uint16_t publishSensor();
+  void track(uint16_t pid);
+  uint16_t _ack_pid = 0;   // the publish whose ack decides last_ok
+  void publishStat(const char* cmd, const char* text);
+  bool sendHello();
+  bool publishWarn();
+  bool publishAlert();
   static constexpr uint8_t PEND_STATUS = 1 << 0;
   static constexpr uint8_t PEND_PING   = 1 << 1;
   static constexpr uint8_t PEND_WARN   = 1 << 2;
   static constexpr uint8_t PEND_ALERT  = 1 << 3;
+  static constexpr uint8_t PEND_CONNECT = 1 << 4;
+  static constexpr uint8_t PEND_LWT    = 1 << 5;
+  static constexpr uint8_t PEND_SUB    = 1 << 6;
   uint8_t _pending = 0;
-  EG_XTASK_VOLATILE bool _reanchor = false;   // set on (re)connect; s_tick re-derives slot phase
-  int16_t _slot_s = -1;     // claimed second-of-minute slot, computed once
+  bool _status_late = false;   // refused, waiting for room
+  bool _reanchor = false;
+  int16_t _slot_s = -1;
   unsigned long lastPing = 0;
   unsigned long lastStatus = 0;
-  EG_XTASK_VOLATILE unsigned long lastConnectionAttempt = 0;
-  EG_XTASK_VOLATILE bool mqttEnabled = true;
-  EG_XTASK_VOLATILE uint8_t reconnectAttempts = 0;
-  EG_XTASK_VOLATILE uint8_t authFailures = 0;
-#ifdef ESP32
-  // Callbacks run on the AsyncTCP task; guards the few cross-task RMWs.
-  portMUX_TYPE _cbMux = portMUX_INITIALIZER_UNLOCKED;
-#endif
+  unsigned long lastConnectionAttempt = 0;
+  bool mqttEnabled = true;
+  uint8_t reconnectAttempts = 0;
+  uint8_t authFailures = 0;
 
   uint16_t statusInterval = MQTT_STATUS_INTERVAL;
-  uint16_t pingInterval = 60;
+  uint16_t pingInterval = MQTT_INTERVAL;
 #ifdef MQTTAUTODISCOVER
-  // onMqttMessage (AsyncTCP task) may not touch the walk state; it raises
-  // this flag and s_tick runs triggerHassDiscovery in cooperative context.
-  EG_XTASK_VOLATILE bool _hass_retrigger = false;
+  bool _hass_retrigger = false;   // HA came back, s_tick spreads it
+  bool _hass_listen = false;
+  char _hass_status[MQTT_HASS_TOPIC_MAX + sizeof("/status")] = "";
   unsigned long _hass_next_publish = 0;
   unsigned long _hass_last_publish = 0;
   int8_t  _hass_walk_state = 0;
   uint8_t _hass_idx = 0;
   uint8_t _hass_walk_cursor = 0;
   bool    _hass_walk_done = false;
-  const char* _hass_active_disc = nullptr;
 #endif
 
-  const char* topicStatus = MQTT_TOPIC_STATUS;
-  const char* topicLWT = MQTT_TOPIC_LWT;
-
-  const char* lwtOnline = MQTT_LWT_ONLINE;
-  const char* lwtOffline = MQTT_LWT_OFFLINE;
   bool warnSent = false;
   bool alertSent = false;
 };

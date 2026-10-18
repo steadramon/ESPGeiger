@@ -30,7 +30,7 @@ working on the device.
 * [OLED](/output/oled)
 * [UDP local broadcast](/output/udp)
 
-Counting, history, and lifetime totals also keep going.
+Counting, history and lifetime totals also keep going.
 
 ## Console command
 

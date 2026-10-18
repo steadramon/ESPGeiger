@@ -23,7 +23,7 @@
 namespace EGTimeZone {
 namespace {
 
-// Names are not stored: 21 bits of hash, then an offset into TZ_RULES.
+// 21 bit hash, then offset, no names
 const uint32_t HASH_MASK = 0x1fffff;
 const uint32_t NUM_ZONES = sizeof(zones) / sizeof(zones[0]);
 
@@ -39,6 +39,7 @@ uint32_t fnv1a(const char *s) {
 }  // namespace
 
 const char *posixFor(const char *olson) {
+  if (!olson) return nullptr;
   uint32_t want = fnv1a(olson) & HASH_MASK;
   uint32_t lo = 0, hi = NUM_ZONES;
   while (lo < hi) {

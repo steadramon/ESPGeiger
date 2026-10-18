@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-# Regenerates the timezone dropdown in ESPGeiger/src/NTP/NTP.cpp from
-# lib/EGTimeZone/extras/zones.json. NOT a build step: rerun after
-# lib/EGTimeZone/tools/gen_timezones.py, review the diff, commit.
+# Makes the tz dropdown in NTP.cpp from zones.json
+# not a build step, rerun after gen_timezones.py
 
 import argparse
 import collections
@@ -13,12 +12,10 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ZONES_JSON = os.path.join(REPO, "lib", "EGTimeZone", "extras", "zones.json")
-NTP_CPP = os.path.join(REPO, "ESPGeiger", "src", "NTP", "NTP.cpp")
+NTP_CPP = os.path.join(REPO, "ESPGeiger", "src", "Corium", "NTP", "NTP.cpp")
 ANCHOR = "var L={"
 
-# Country to dropdown region. Derived once from UN M49 via pycountry-convert.
-# A code in neither this nor OVERRIDE is a hard error, so a new country cannot
-# land in the wrong group.
+# Country to dropdown region, from UN M49 via pycountry-convert
 REGION_OF = {
     "AD":"eu", "AE":"as", "AF":"as", "AL":"eu", "AM":"as", "AR":"sa",
     "AS":"pa", "AT":"eu", "AZ":"as", "BB":"na", "BD":"as", "BE":"eu",
@@ -47,7 +44,7 @@ REGION_OF = {
     "VU":"pa", "WS":"pa", "ZA":"af",
 }
 
-# Where M49 disagrees with where a user looks for their zone.
+# M49 exceptions
 OVERRIDE = {
     "AU": "au",   # its own group rather than lumped into Oceania
     "GL": "eu",   # Greenland is Denmark
@@ -55,15 +52,14 @@ OVERRIDE = {
     "AQ": "aq", "EH": "af", "PN": "pa", "TL": "as",   # absent from M49
 }
 
-# Continent population descending (UN WPP 2024): likeliest regions first.
+# biggest population first (UN WPP 2024)
 REGIONS = [("as", "Asia"), ("af", "Africa"), ("eu", "Europe"),
            ("na", "North America"), ("sa", "South America"), ("au", "Australia"),
            ("pa", "Pacific"), ("aq", "Antarctica")]
 
 
 def etc_order(zone):
-    """Offset order, then aliases. GMT, GMT+0 and GMT-0 are all zero, so the
-    name breaks the tie rather than leaving it to input order."""
+    """Offset order, then aliases. GMT, GMT+0 and GMT-0 tie on name"""
     tail = zone[4:]
     m = re.match(r"GMT([+-])(\d+)$", tail)
     if m:
@@ -96,8 +92,7 @@ def ui_groups(doc):
 
 
 def write_js(groups):
-    # region -> prefix -> tails; the page rebuilds the name. Smaller than
-    # repeating the prefix on every entry.
+    # region -> prefix -> tails
     body = []
     for label, zs in groups:
         if not zs:
@@ -110,8 +105,7 @@ def write_js(groups):
             '"%s":[%s]' % (head, ",".join('"%s"' % t for t in tails))
             for head, tails in bucket.items())))
     body = ",".join(body)
-    # Replaces the one-line var L={...}; declaration. No marker comments: that
-    # raw string is served to the browser.
+    # no marker comments, the raw string is served
     out = []
     for line in open(NTP_CPP).read().splitlines(True):
         out.append(ANCHOR + body + "};\n" if line.startswith(ANCHOR) else line)

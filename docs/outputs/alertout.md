@@ -16,18 +16,22 @@ Included in every shipped ESP build. Disabled by default; set the pin from **Con
 
 ## Settings
 
-| Setting | Type | Default | Description |
-|---|---|---|---|
-| GPIO | Int | `-1` | Output pin. `-1` disables the module. Reboot to apply a change. |
-| Polarity | Bool | `0` (active high) | `0` drives the pin HIGH on alert, LOW otherwise. `1` inverts both. |
-| Mode | Enum | `0` (steady) | `0` holds the pin at the active level for the duration of the alert. `1` toggles at 1 Hz (50% duty) while alerting. |
+<!-- gen:prefs alert -->
 
-The alert threshold itself lives under [Counter Settings](/configuration/configuration#counter-settings) (`counter.alert_cpm`). Alert Out only reacts to the alert threshold; the warning threshold is not surfaced here.
+| Setting | Key | Type | Default | Description |
+|---|---|---|---|---|
+| GPIO | `alert.pin` | Int -1 to max GPIO | `-1` | Output pin. `-1` disables the module. Reboot to apply a change. |
+| Polarity | `alert.polarity` | `0` Active high, `1` Active low | `0` Active high | Active high drives the pin HIGH on alert, LOW otherwise. Active low inverts both. |
+| Mode | `alert.mode` | `0` Steady level, `1` 1 Hz pulse | `0` Steady level | Steady holds the pin at the active level for the duration of the alert. 1 Hz pulse toggles it at 1 Hz (50% duty) while alerting. |
+
+<!-- /gen -->
+
+Set the threshold with **Alert CPM** under [System Settings](/configuration#system-settings). Alert Out ignores the warning threshold.
 
 ## Pin safety
 
-Alert Out uses the shared **PinSafety** registry, so it won't claim a GPIO already taken by another module (Pulse Out, blip LED, NeoPixel, OLED bus, geiger pulse input). On conflict the module logs the reason at boot and stays inactive.
+Alert Out will not take a GPIO already used by another feature (Pulse Out, blip LED, NeoPixel, OLED, Geiger input). On a clash it logs the reason at boot and stays off.
 
 ## Combining with other outputs
 
-Independent of [Audio Tick](/output/audiotick), [Pulse Out](/output/pulseout), and [NeoPixel](/output/neopixel). Run any combination on a single device.
+Independent of [Audio Tick](/output/audiotick), [Pulse Out](/output/pulseout) and [NeoPixel](/output/neopixel). Run any combination on a single device.

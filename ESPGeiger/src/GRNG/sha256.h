@@ -1,7 +1,6 @@
 #ifndef Sha256_h
 #define Sha256_h
 
-#include <inttypes.h>
 #include "Print.h"
 
 #define HASH_LENGTH 32
@@ -39,6 +38,5 @@ class Sha256Class : public Print
     uint8_t keyBuffer[BLOCK_LENGTH];
     uint8_t innerHash[HASH_LENGTH];
 };
-extern Sha256Class Sha256;
 
 #endif

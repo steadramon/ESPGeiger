@@ -1,0 +1,26 @@
+--- a/uECC.c
++++ b/uECC.c
+@@ -340,9 +340,8 @@
+     wordcount_t i;
+     for (i = 0; i < num_words; ++i) {
+         uECC_word_t sum = left[i] + right[i] + carry;
+-        if (sum != left[i]) {
+-            carry = (sum < left[i]);
+-        }
++        /* Carry out of the top bit, by bit operations: no compare to branch on. */
++        carry = ((left[i] & right[i]) | ((left[i] | right[i]) & ~sum)) >> (uECC_WORD_BITS - 1);
+         result[i] = sum;
+     }
+     return carry;
+@@ -359,9 +358,8 @@
+     wordcount_t i;
+     for (i = 0; i < num_words; ++i) {
+         uECC_word_t diff = left[i] - right[i] - borrow;
+-        if (diff != left[i]) {
+-            borrow = (diff > left[i]);
+-        }
++        /* Borrow out of the top bit, by bit operations: no compare to branch on. */
++        borrow = ((~left[i] & right[i]) | (~(left[i] ^ right[i]) & diff)) >> (uECC_WORD_BITS - 1);
+         result[i] = diff;
+     }
+     return borrow;

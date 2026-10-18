@@ -20,17 +20,17 @@
 #ifndef OLEDDISP_H
 #define OLEDDISP_H
 #ifdef SSD1306_DISPLAY
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include <Wire.h>
 #include <U8g2lib.h>
-#include "../Util/Globals.h"
-#include "../Counter/Counter.h"
-#include "../Module/EGModule.h"
-#include "../Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "Counter/Counter.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Display/DisplayBackend.h"
 
 class EGHttpServer;
-
-extern Counter gcounter;
 
 #ifndef OLED_PAGES
 #define OLED_PAGES 4
@@ -58,26 +58,23 @@ extern Counter gcounter;
 #define OLED_TYPE      0   // 0=SSD1306, 1=SH1106, 2=SSD1309
 #endif
 
-// 255 = unused. Set via -DOLED_RST=N at build time to enable the reset pulse
-// (Heltec WiFi Kit / TTGO LoRa32 boards tie the OLED RST to a GPIO).
+// 255 = none, Heltec and TTGO boards use one
 #ifndef OLED_RST
 #define OLED_RST      255
 #endif
 
-class SSD1306Display : public EGModule {
+class SSD1306Display : public EGModule, public DisplayBackend {
 public:
     enum DisplayType : uint8_t {
       DISP_SSD1306        = 0,
       DISP_SH1106         = 1,
       DISP_SSD1309        = 2,
 #ifdef ESP32
-      DISP_SSD1306_72X40  = 3,   // 0.42" mini OLED, SSD1306 controller
-      DISP_SH1106_72X40   = 4,   // 0.42" mini OLED, SH1106 controller
+      DISP_SSD1306_72X40  = 3,
+      DISP_SH1106_72X40   = 4,
 #endif
     };
 
-    // True when the active panel is a 72x40 variant - callers that
-    // assume 128x64 must fall back to a one-line/big-number layout.
 #ifdef ESP32
     bool isTiny() const {
       return _pref_display_type == DISP_SSD1306_72X40
@@ -88,19 +85,24 @@ public:
 #endif
 
     SSD1306Display();
-    const char* name() override { return "disp"; }
-    uint8_t display_order() override { return 17; }
+    const char* name() override { return PSTR("oled"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint16_t warmup_seconds() override { return 0; }
-    void pre_wifi() override {}
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
-#ifndef OLED_PINS_BLOCKED
-    void on_prefs_saved() override;
+
+    void start() override;
+    void button(unsigned long now, int8_t dir) override { onButtonTap(now, dir); }
+    bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) override;
+    void reload() override;
+    bool present() override { return _present; }
+    void setup_wifi(const char* host) override { setupWifi(host); }
+    void safe_mode() override;
+#ifdef GEIGER_PUSHBUTTON
+    void offline() override { wifiDisabled(); }
+    void wipe(int seconds) override { if (seconds > 0) wipeCountdown(seconds); else wipeReady(); }
+    void screen_mode(unsigned long now, bool auto_off) override;
 #endif
-    const EGLegacyAlias* legacy_aliases() override;
-    void registerRoutes(EGHttpServer& http) override;
-    bool hw_present() override { return is_present(); }
+
+    void load_pins();   // also the env sensor's i2c pins
 
     void setup();
     void setupWifi(const char* s);
@@ -113,19 +115,11 @@ public:
 
     void setBrightness(uint8_t brightness);
 
-    // u8g2_DrawStr does bare *str++ which crashes on ESP8266 for flash
-    // addresses. This wrapper iterates via pgm_read_byte so RAM and PROGMEM
-    // strings both work.
+    // u8g2_DrawStr crashes on PROGMEM
     void drawStrP(int16_t x, int16_t y, const char* s);
-
-    bool isScreenOnTime(unsigned long now);
 
     void loop(unsigned long now) override;
     bool has_loop() override { return true; }
-    // 20 ms = 50 Hz. Each loop call either drains one row of a pending send
-    // (~1.6 ms peak) or, every 500 ms, renders the next frame. Spreads the
-    // sendBuffer blocking time across multiple ticks so no single tick costs
-    // the full 6.6-13 ms.
     uint16_t loop_interval_ms() override { return 20; }
 
     void page_one_clear();
@@ -133,17 +127,14 @@ public:
     bool page_one_values(unsigned long now);
     void page_two_full();
     void page_three_full();
-    void page_tiny();              // 0.42" 72x40 page 1 - CPM + sparkline + single-pixel WiFi (ESP32 only)
-    void page_tiny_dose();         // page 2 - uSv/h dose + secondary CPM
-    void page_tiny_net();          // page 3 - SSID / RSSI / IP
-    void page_tiny_meter();        // page 4 (easter egg) - analog needle on log scale
+    void page_tiny();              // esp32 only
+    void page_tiny_dose();
+    void page_tiny_net();
+    void page_tiny_meter();
     void page_four_static();
     void page_four_matrix();
     void showOTABanner();
-
-    void setTimeout(uint32_t seconds) {
-      _lcd_timeout_ms = seconds * 1000;
-    }
+    void endOTABanner();
 
     void clearBuffer()                          { u8g2_ClearBuffer(&_u8g2); }
     void sendBuffer()                           { u8g2_SendBuffer(&_u8g2); }
@@ -155,7 +146,7 @@ public:
     void setContrast(uint8_t c)                 { u8g2_SetContrast(&_u8g2, c); }
     void setFlipMode(uint8_t m)                 { u8g2_SetFlipMode(&_u8g2, m); }
     void setPowerSave(uint8_t s)                { u8g2_SetPowerSave(&_u8g2, s); }
-    // No function in the u8g2 C API for these; poke the u8x8 fields directly.
+    // no u8g2 api for these
     void setBusClock(uint32_t c)                { _u8g2.u8x8.bus_clock = c; }
     void setI2CAddress(uint8_t a)               { _u8g2.u8x8.i2c_address = a; }
     void drawStr(int16_t x, int16_t y, const char* s)            { u8g2_DrawStr(&_u8g2, x, y, s); }
@@ -167,54 +158,61 @@ public:
     void drawPixel(int16_t x, int16_t y)        { u8g2_DrawPixel(&_u8g2, x, y); }
     void drawXBMP(int16_t x, int16_t y, int16_t w, int16_t h, const uint8_t* bm)
                                                 { u8g2_DrawXBMP(&_u8g2, x, y, w, h, bm); }
-    // OR-block downscale: dest pixel on if any source pixel in the
-    // scale x scale block is on. Preserves thin features that
-    // centre-sampling would drop.
-    void drawXBMPScaled(int16_t dx0, int16_t dy0, int16_t src_w, int16_t src_h,
-                        const uint8_t* bm, uint8_t scale);
     uint16_t getStrWidth(const char* s)         { return u8g2_GetStrWidth(&_u8g2, s); }
     uint8_t* getBufferPtr()                     { return u8g2_GetBufferPtr(&_u8g2); }
 
-    uint8_t oled_page = 1;
-    unsigned long oled_timeout = 0;
+    enum : uint8_t { PAGE_MAIN = 1, PAGE_LAST = 3, PAGE_SAVER = 4 };
+    uint8_t oled_page = PAGE_MAIN;
     unsigned long oled_last_update = 0;
     bool oled_on = true;
-    bool enable_oled_timeout = true;
-    // When true, loop() returns early so a setup page (AP-only mode etc.)
-    // stays visible and isn't overwritten by the normal page rotation.
     bool _locked_page = false;
+    bool _ota_lock = false;   // OTA banner up
 
   private:
+    enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };
+    void page_changed();
+    uint16_t tick_ms() const;
+    unsigned long frame_ms() const;
+    bool awake(unsigned long now);
+    bool due(unsigned long now, unsigned long every);
+    uint8_t render(unsigned long now);
+    uint8_t render_main(unsigned long now);
+    void render_saver(unsigned long now);
+    void render_tiny();
+    void queue_rows(uint8_t dirty);
+    void draw_p1_values(uint32_t cpm_x10, float usv, uint8_t mode,
+                        uint8_t snd, uint8_t wifi, int8_t trend);
+    void setup_driver();
+    void reset_panel();
+    void draw_splash();
     u8g2_t _u8g2 {};
+    uint8_t* _frame = nullptr;
+    bool _started = false;
     uint8_t _pin_sda = OLED_SDA;
     uint8_t _pin_scl = OLED_SCL;
     uint8_t _pin_rst = OLED_RST;
     bool _present = false;
     uint8_t _oled_addr = 0;
     uint8_t _pref_display_type = OLED_TYPE;
-    uint32_t _lcd_timeout_ms = 0;   // 0 = use schedule
     unsigned long _page4_num_last = 0;
     char _page4_num[8] = "";
     uint8_t _page4_variant = 0;
     uint8_t _last_page = 0;
     bool _p1_alt = false;
-    // Page-1 values cache; 0xFF... sentinels force a render on first call
-    // and after page_one_clear.
+    // 0xFF.. = force a render
     uint32_t _p1v_last_cpm = 0xFFFFFFFFu;
     int32_t  _p1v_last_usv_x100 = -1;
     uint8_t  _p1v_last_send_ind = 0;
-    bool     _p1v_last_warming = false;
-    uint8_t  _p1v_last_wifi = 0xFFu;  // bit0=disabled, bit1=connected
-    int8_t   _p1v_last_trend = 0;     // -1=down, 0=flat, +1=up
-    // Progressive send queue: drained one tile-row per loop() call.
-    // rows_left=0 means idle. OOB FB writers zero rows_left to abandon.
+    uint8_t  _p1v_last_mode = 0;   // 1 W, 2 S
+    uint8_t  _p1v_last_wifi = 0xFFu;  // bits: disabled, connected, no counts
+    int8_t   _p1v_last_trend = 0;
     uint8_t _send_ty = 0;
     uint8_t _send_cur = 0;
-    uint8_t _send_rows_left = 0;
+    uint8_t _send_rows_left = 0;      // 0 = idle, direct draws zero it
     unsigned long _next_render_due = 0;
 };
 
-extern SSD1306Display display;
+extern SSD1306Display oled;
 
 #endif
 #endif

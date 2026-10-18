@@ -28,7 +28,9 @@ enum EGHttpCLResult : unsigned char {
   EGHTTP_CL_BAD           // sign, junk, empty, or more than 8 digits
 };
 
-// Scans [hdr, hdr+headerEnd) for the first Content-Length header.
 EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* out);
+
+// just past PROGMEM "Name:", or nullptr
+const char* eghttp_find_header(const char* hdr, size_t headerEnd, const char* name);
 
 #endif

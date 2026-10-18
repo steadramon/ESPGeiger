@@ -18,14 +18,18 @@
 */
 #ifndef GEIGERINPUTSRL_H
 #define GEIGERINPUTSRL_H
-#include <Arduino.h>
-#include <SoftwareSerial.h>
-#include "../GeigerInput.h"
-#include "../../Util/FastMillis.h"
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
+// before GeigerInput.h
 #ifndef GEIGER_TXPIN
 #define GEIGER_TXPIN -1
 #endif
+
+#include "SerialPort.h"
+
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/System/FastMillis.h"
 
 class GeigerSerial : public GeigerInput
 {
@@ -34,22 +38,24 @@ class GeigerSerial : public GeigerInput
     void begin();
     void loop();
     void secondTicker();
+    void stopForOTA() override;
+    void restartAfterOTA() override;
     bool isHealthy() const override {
       if (_last_drain != 0 && (fast_millis() - _last_drain) < 60000) return false;
       return true;
     }
-    void stopForOTA() override;
-    void restartAfterOTA() override;
   private:
     void pullSerial();
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
+    bool _discard = false;   // rest of a bad line, up to its \n
+    void drop_line();
+    unsigned long _line_ms = 0;   // fast_millis()
     void handleSerial(char* input);
     float partial_clicks = 0;
     int serial_value = 0;
     unsigned long last_serial = 0;
-    uint16_t _loop_c = 0;
-    uint16_t _poll_skip = 5;  // empty-buffer poll throttle, scaled to baud in begin()
+    uint16_t _idle_skip = 5;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint8_t _bad_streak = 0;
     unsigned long _last_drain = 0;

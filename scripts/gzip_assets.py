@@ -15,10 +15,7 @@
 # EG_GZ_<NAME> 0 and consumers fall through to the raw R"..." path, so a
 # surprise here never breaks the build.
 #
-# A missing file or symbol is different: the table above is stale and the
-# asset ships uncompressed forever with nobody looking. That is a build
-# error. HIST_JS sat unnoticed that way from b026bb7d until 2026-09-25.
-# Set EG_GZ_ALLOW_STALE=1 to downgrade it to the raw fallback.
+# Missing file or symbol is a build error, EG_GZ_ALLOW_STALE=1 for raw
 
 import gzip
 import io
@@ -27,20 +24,20 @@ import re
 import sys
 
 ASSETS = [
-    ("ESPGeiger/src/NTP/NTP.cpp",                 "NTP_PAGE_JS", "application/javascript"),
-    ("ESPGeiger/src/WebPortal/WebPortal.cpp",     "STYLE_CSS",   "text/css"),
-    ("ESPGeiger/src/WebPortal/WebPortal.cpp",     "THEME_JS",    "application/javascript"),
+    ("ESPGeiger/src/Corium/NTP/NTP.cpp",          "NTP_PAGE_JS", "application/javascript"),
+    ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "STYLE_CSS", "text/css"),
+    ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "THEME_JS",  "application/javascript"),
     ("ESPGeiger/src/Counter/CounterWeb.cpp",      "HIST_JS",     "application/javascript"),
-    ("ESPGeiger/src/OLEDDisplay/OLEDDisplay.cpp", "screenJS",    "application/javascript"),
+    ("ESPGeiger/src/Display/Display.cpp",         "screenJS",    "application/javascript"),
 ]
 
 ASSETS_COMBINED = [
     ("JS_BUNDLE", [
-        ("ESPGeiger/src/WebPortal/WebPortal.cpp", "picographJS"),
-        ("ESPGeiger/src/WebPortal/WebPortal.cpp", "statusJS"),
+        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "picographJS"),
+        ("ESPGeiger/src/Counter/CounterWeb.cpp",      "statusJS"),
     ], "application/javascript"),
     ("HVJS_BUNDLE", [
-        ("ESPGeiger/src/WebPortal/WebPortal.cpp", "picographJS"),
+        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "picographJS"),
         ("ESPGeiger/src/HV/HV.cpp",               "hvJS"),
     ], "application/javascript"),
 ]

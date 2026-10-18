@@ -8,9 +8,9 @@ nav_order: 6
 
 # Environment Sensors
 
-ESPGeiger can read temperature, humidity, and atmospheric pressure from a cheap I2C sensor on the same bus as the OLED. Detection is automatic at boot. Add a sensor and the values appear on `/status` and relevant outputs.
+ESPGeiger can read temperature, humidity and atmospheric pressure from a cheap I2C sensor on the same bus as the OLED. Detection is automatic at boot. Add a sensor and the values appear on `/status` and relevant outputs.
 
-For wiring, pins, and per-output details see the [Environment sensor configuration page](/configuration/env).
+For wiring, pins and per-output details see the [Environment sensor configuration page](/configuration/env).
 
 ## Which one to buy
 
@@ -23,7 +23,7 @@ Either is fine for ESPGeiger's purposes - the combo board is usually cheaper and
 
 ## The BMP280-pretending-to-be-BME280 trap
 
-If you bought a "BME280" and the humidity row is missing on `/status`, you almost certainly got a BMP280. The firmware reports what it found at boot as `Env: <chip> detected` - check the serial console, or the Console panel on the `/status` page. There's no firmware workaround - the chip physically doesn't have a humidity sensor. Either return it or accept temperature + pressure only.
+If you bought a "BME280" and humidity is missing on `/status`, you almost certainly got a BMP280, which has no humidity sensor. See [Troubleshooting](/configuration/env#troubleshooting) to confirm which chip was found.
 
 ## AHT-only modules
 
