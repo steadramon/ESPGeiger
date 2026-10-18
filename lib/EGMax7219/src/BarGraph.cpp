@@ -19,8 +19,9 @@
 #include "BarGraph.h"
 #include <math.h>
 
-// floor 90% of the low, as the OLED; no spread = 1 high
+// floor 90% of the low, 5 span min, as the OLED
 void barColumns(const int* hist, int n, uint8_t* cols, int w) {
+  const int SPAN = 5;
   if (n > w) {
     hist += n - w;
     n = w;
@@ -32,9 +33,10 @@ void barColumns(const int* hist, int n, uint8_t* cols, int w) {
     if (hist[i] > hi) hi = hist[i];
   }
   if (lo > 1) lo = lo * 9 / 10;
+  if (hi - lo < SPAN) { lo = hi > SPAN ? hi - SPAN : 0; hi = lo + SPAN; }
   int span = hi - lo;
   for (int i = 0; i < n; i++) {
-    int h = span ? 1 + (hist[i] - lo) * 7 / span : 1;
+    int h = 1 + (hist[i] - lo) * 7 / span;
     cols[w - n + i] = (uint8_t)(0xFF << (8 - h));
   }
 }

@@ -383,6 +383,19 @@ void SSD1306Display::loop(unsigned long now) {
   if (dirty != DR_NONE && _present) queue_rows(dirty);
 }
 
+// floor 90% of the low, 5 span min; false = no counts
+static bool hist_range(const int* h, uint16_t n, int32_t& lo, int32_t& hi) {
+  const int32_t SPAN = 5;
+  lo = hi = h[0];
+  for (uint16_t i = 1; i < n; i++) {
+    if (h[i] < lo) lo = h[i];
+    if (h[i] > hi) hi = h[i];
+  }
+  bool counts = hi > 0;
+  if (lo > 1) lo = lo * 9 / 10;
+  if (hi - lo < SPAN) { lo = hi > SPAN ? hi - SPAN : 0; hi = lo + SPAN; }
+  return counts;
+}
 
 #ifdef ESP32
 void SSD1306Display::page_tiny() {
@@ -400,20 +413,14 @@ void SSD1306Display::page_tiny() {
   int hist[HIST];
   uint16_t n = (uint16_t)egm_history(hist, HIST);
   if (n < 2) return;
-  int32_t mn = hist[0], mx = mn;
-  for (uint16_t i = 1; i < n; i++) {
-    int v = hist[i];
-    if (v < mn) mn = v;
-    if (v > mx) mx = v;
-  }
-  if (mn > 1) mn = mn * 9 / 10;
+  int32_t mn, mx;
+  hist_range(hist, n, mn, mx);
   int32_t span = mx - mn;
   int prev_x = 0, prev_y = 0;
   for (uint16_t i = 0; i < n; i++) {
     int v = hist[i];
     int x = (CHART_W - 1) - ((n - 1 - i) * (CHART_W - 1)) / (HIST - 1);
-    int y = span > 0 ? CHART_BOT - (int)(((int32_t)v - mn) * CHART_H / span)
-                     : CHART_TOP + CHART_H / 2;
+    int y = CHART_BOT - (int)(((int32_t)v - mn) * CHART_H / span);
     if (i > 0) drawLine(prev_x, prev_y, x, y);
     prev_x = x;
     prev_y = y;
@@ -848,15 +855,7 @@ bool SSD1306Display::page_one_graph() {
   uint16_t histSize = (uint16_t)egm_history(hist, HIST);
   int32_t minValue = 0;
   int32_t maxValue = 0;
-  if (histSize > 0) {
-    minValue = maxValue = hist[0];
-    for (uint16_t i = 1; i < histSize; i++) {
-      int v = hist[i];
-      if (v > maxValue) maxValue = v;
-      if (v < minValue) minValue = v;
-    }
-    if (minValue > 1) minValue = minValue * 9 / 10;
-  }
+  bool counts = histSize > 0 && hist_range(hist, histSize, minValue, maxValue);
 
   setDrawColor(0);
   drawBox(0, 35, OLED_WIDTH, 29);
@@ -866,14 +865,13 @@ bool SSD1306Display::page_one_graph() {
   if (histSize > 0) {
     int x_start = 2 * (HIST - histSize);
     char graphBuf[8];
-    if (maxValue == 0) {
-      snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)minValue);
+    if (!counts) {
+      snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, 0);
       drawTPString(*this, 93, 55, Open_Sans_Digits_10, graphBuf);
       return true;
     }
-    long mapMax = (maxValue == minValue) ? (long)maxValue + 1 : (long)maxValue;
     for (uint16_t i = 0; i < histSize; i++) {
-      int location = ((map((long)hist[i], (long)minValue, mapMax, 0, 24 )) * (-1)) + 62;
+      int location = ((map((long)hist[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
       drawFrame(x_start + i * 2, location, 2, (63 - location));
     }
     snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)minValue);
