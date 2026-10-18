@@ -383,9 +383,9 @@ void SSD1306Display::loop(unsigned long now) {
   if (dirty != DR_NONE && _present) queue_rows(dirty);
 }
 
-// tenths, floor 90% of the low, 5 span min, whole ends; false = no counts
+// tenths, floor 90% of the low, 1 span min, whole ends; false = no counts
 static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi) {
-  const int32_t SPAN = 50;
+  const int32_t SPAN = 10;
   display_hist(h, n, egm_f(M_CPM5), 10);
   lo = hi = h[0];
   for (uint16_t i = 1; i < n; i++) {
