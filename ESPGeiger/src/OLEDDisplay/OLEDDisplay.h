@@ -134,6 +134,7 @@ public:
     void page_four_static();
     void page_four_matrix();
     void showOTABanner();
+    void endOTABanner();
 
     void clearBuffer()                          { u8g2_ClearBuffer(&_u8g2); }
     void sendBuffer()                           { u8g2_SendBuffer(&_u8g2); }
@@ -165,6 +166,7 @@ public:
     unsigned long oled_last_update = 0;
     bool oled_on = true;
     bool _locked_page = false;
+    bool _ota_lock = false;   // OTA banner up
 
   private:
     enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };

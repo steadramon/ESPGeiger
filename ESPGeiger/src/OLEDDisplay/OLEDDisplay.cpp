@@ -362,7 +362,7 @@ void SSD1306Display::loop(unsigned long now) {
     EGModuleRegistry::set_loop_interval(this, -1);
     return;
   }
-  if (_locked_page) {
+  if (_locked_page || _ota_lock) {
     EGModuleRegistry::set_loop_interval(this, LOCKED_TICK_MS);
     return;
   }
@@ -658,6 +658,7 @@ void SSD1306Display::draw_splash() {
 
 static void oled_lifecycle(Lifecycle::Event e) {
   if (e == Lifecycle::OTA_START) oled.showOTABanner();
+  if (e == Lifecycle::OTA_FAILED) oled.endOTABanner();
 #ifdef ESP32
   // tiny keeps its image over a reset
   if (e == Lifecycle::SHUTDOWN && oled.is_present()) {
@@ -1169,6 +1170,16 @@ void SSD1306Display::showOTABanner() {
   setPowerSave(0);
   oled_on = true;
   sendBuffer();
+  _ota_lock = true;
+}
+
+// failed, back to the pages with a full redraw
+void SSD1306Display::endOTABanner() {
+  if (!_ota_lock) return;
+  _ota_lock = false;
+  oled_last_update = 0;
+  _next_render_due = 0;
+  EGModuleRegistry::set_loop_interval(this, tick_ms());
 }
 
 bool SSD1306Display::screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) {
