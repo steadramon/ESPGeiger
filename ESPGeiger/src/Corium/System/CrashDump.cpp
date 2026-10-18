@@ -22,7 +22,9 @@
 #ifdef ESP8266
 #include "RtcMap.h"
 #include "DeviceInfo.h"
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 #include <user_interface.h>
 extern "C" {
 #include "cont.h"

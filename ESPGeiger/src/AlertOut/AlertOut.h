@@ -20,7 +20,8 @@
 #define ALERTOUT_H
 #ifdef ALERT_OUT
 
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include "Corium/Module/EGModule.h"
 
 class AlertOut : public EGModule {

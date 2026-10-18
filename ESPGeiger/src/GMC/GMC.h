@@ -20,7 +20,8 @@
 #ifndef GMC_H
 #define GMC_H
 #ifdef GMCOUT
-#include <Arduino.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Net/EGHttpPoster.h"
 #include "Corium/Prefs/EGPrefs.h"

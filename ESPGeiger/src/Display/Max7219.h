@@ -22,7 +22,9 @@
 #ifndef SSD1306_DISPLAY
 #error "MAX7219_DISPLAY needs SSD1306_DISPLAY: the Display layer is built with the OLED"
 #endif
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 #include <Max7219Driver.h>
 #include <Tm1637Driver.h>
 #include <SevenSeg.h>

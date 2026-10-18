@@ -20,7 +20,9 @@
 #ifndef RADMON_H
 #define RADMON_H
 #ifdef RADMONOUT
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Net/EGHttpPoster.h"
 #include "Corium/Prefs/EGPrefs.h"

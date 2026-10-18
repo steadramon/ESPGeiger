@@ -18,7 +18,8 @@
 */
 #ifndef GEIGERTESTSRL_H
 #define GEIGERTESTSRL_H
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
 // before GeigerInputTest.h
 #ifndef GEIGER_TXPIN

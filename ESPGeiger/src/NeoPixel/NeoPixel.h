@@ -19,7 +19,8 @@
 #ifndef NEOPIXEL_h
 #define NEOPIXEL_h
 #ifdef GEIGER_NEOPIXEL
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include <NeoPixelBus.h>
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"

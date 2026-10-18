@@ -19,7 +19,9 @@
 #ifndef THINGSPEAK_H
 #define THINGSPEAK_H
 #ifdef THINGSPEAKOUT
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Net/EGHttpPoster.h"
 #include "Corium/Prefs/EGPrefs.h"

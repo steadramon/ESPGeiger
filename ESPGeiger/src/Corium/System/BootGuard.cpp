@@ -20,7 +20,8 @@
 #include "BootGuardState.h"
 #include "CrashDump.h"
 #include "DeviceInfo.h"
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
 #ifdef ESP8266
 #include "RtcMap.h"

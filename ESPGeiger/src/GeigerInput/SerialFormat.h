@@ -17,7 +17,9 @@
 #ifndef GEIGER_SERIAL_FORMAT_H
 #define GEIGER_SERIAL_FORMAT_H
 
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 
 // stored in prefs, append only
 #define GEIGER_STYPE_GC10       1

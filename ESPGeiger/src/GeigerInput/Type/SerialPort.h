@@ -22,7 +22,7 @@
 #ifndef GEIGERSERIALPORT_H
 #define GEIGERSERIALPORT_H
 
-#include <Arduino.h>
+#include "Corium/Platform/Flash.h"
 #include <stdint.h>
 #include <stddef.h>
 

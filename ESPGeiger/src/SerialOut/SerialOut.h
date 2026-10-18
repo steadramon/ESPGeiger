@@ -20,7 +20,8 @@
 #ifndef SERIALOUT_H
 #define SERIALOUT_H
 #ifdef SERIALOUT
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
 #include "GeigerInput/SerialFormat.h"

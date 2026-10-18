@@ -19,7 +19,8 @@
 #ifndef GEIGERINPUTPLS_H
 #define GEIGERINPUTPLS_H
 
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
 

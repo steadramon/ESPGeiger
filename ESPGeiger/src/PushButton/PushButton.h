@@ -19,7 +19,8 @@
 #ifdef GEIGER_PUSHBUTTON
 #ifndef PUSHBUTTON_H
 #define PUSHBUTTON_H
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include "Corium/System/Globals.h"
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"

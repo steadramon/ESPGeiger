@@ -19,7 +19,8 @@
 
 #ifndef HV_H
 #define HV_H
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/EGSmoothed.h"

@@ -20,7 +20,8 @@
 #ifndef OLEDDISP_H
 #define OLEDDISP_H
 #ifdef SSD1306_DISPLAY
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include <Wire.h>
 #include <U8g2lib.h>
 #include "Corium/System/Globals.h"

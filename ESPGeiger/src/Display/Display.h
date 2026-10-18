@@ -19,7 +19,8 @@
 #ifndef EG_DISPLAY_H
 #define EG_DISPLAY_H
 #ifdef SSD1306_DISPLAY
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include "DisplayBackend.h"
 #include "Corium/Module/EGModule.h"
 

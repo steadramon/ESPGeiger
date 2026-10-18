@@ -12,7 +12,8 @@
 #define VOICE_H
 #ifdef AUDIO_TICK
 
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Output/QuietWindow.h"
 

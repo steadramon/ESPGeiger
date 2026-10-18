@@ -19,7 +19,9 @@
 #ifndef UDP_BLIP_H
 #define UDP_BLIP_H
 
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 #include <IPAddress.h>
 #include "Corium/Module/EGModule.h"
 #include "BlipPacket.h"

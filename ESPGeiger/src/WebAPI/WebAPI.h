@@ -20,7 +20,9 @@
 #define WEBAPI_H
 #ifdef WEBAPIOUT
 
-#include <Arduino.h>
+#include <stdint.h>
+#include <stddef.h>
+#include "Corium/Platform/Flash.h"
 #include <EGHttpClient.h>
 #include <EGBase64.h>
 #include "Corium/Module/EGModule.h"

@@ -20,7 +20,8 @@
 #ifndef ARDUINO_OTA_h
 #define ARDUINO_OTA_h
 
-#include "Arduino.h"
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
 #ifdef ESP8266
 #include <ESP8266mDNS.h>

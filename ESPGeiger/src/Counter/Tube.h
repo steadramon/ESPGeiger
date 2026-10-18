@@ -19,7 +19,8 @@
 #ifndef COUNTER_TUBE_H
 #define COUNTER_TUBE_H
 
-#include <Arduino.h>
+#include <stdint.h>
+#include "Corium/Platform/Flash.h"
 
 namespace Tube {
   const char* model();
