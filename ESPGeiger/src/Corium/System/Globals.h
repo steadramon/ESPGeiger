@@ -39,7 +39,7 @@
   #endif
 #endif
 
-#include "../../../AppConfig.h"
+#include "App/AppConfig.h"
 
 #include <Arduino.h>
 

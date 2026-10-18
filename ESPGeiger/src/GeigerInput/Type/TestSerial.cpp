@@ -21,14 +21,14 @@
 #if GEIGER_IS_TEST(GEIGER_TYPE) && GEIGER_IS_SERIAL(GEIGER_TYPE)
 
 #include <SoftwareSerial.h>
-#include "../../Corium/Logger/Logger.h"
-#include "../../Corium/Util/StringUtil.h"
-#include "../../Corium/Prefs/EGPrefs.h"
-#include "../../GeigerPrefs/GeigerKeys.h"
-#include "../../Corium/System/DeviceInfo.h"
-#include "../../Counter/Counter.h"
-#include "../../Counter/Tube.h"
-#include "../SerialFormat.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "GeigerPrefs/GeigerKeys.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Counter/Counter.h"
+#include "Counter/Tube.h"
+#include "GeigerInput/SerialFormat.h"
 
 static GeigerPort<16> geigerPort;
 

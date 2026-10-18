@@ -18,10 +18,10 @@
 */
 #ifdef WEBHOOKOUT
 #include "Webhook.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Measure/EGMeasure.h"
-#include "../Corium/Util/Words.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Util/Words.h"
 #include <EGEscape.h>
 #include <EGJson.h>
 #include <EGHttpStrings.h>

@@ -24,13 +24,13 @@ EnvSensor envsensor;
 
 #include <Wire.h>
 #include <math.h>
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Measure/EGMeasure.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/System/I2CBus.h"
-#include "../Corium/Util/StringUtil.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/I2CBus.h"
+#include "Corium/Util/StringUtil.h"
 
 EG_PSTR(K_UNIT,        "unit");
 EG_PSTR(K_TEMP_OFFSET, "temp_offset");

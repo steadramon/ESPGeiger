@@ -19,12 +19,12 @@
 #ifdef ALERT_OUT
 
 #include "AlertOut.h"
-#include "../Counter/Counter.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/System/Globals.h"
-#include "../Corium/System/PinSafety.h"
+#include "Counter/Counter.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/PinSafety.h"
 
 AlertOut alertout;
 EG_REGISTER_MODULE(alertout)

@@ -21,10 +21,10 @@
 #ifdef PULSE_OUT
 
 #include <Arduino.h>
-#include "../Corium/Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 
-#include "../Corium/Output/PulseEngine.h"
-#include "../Corium/Output/QuietWindow.h"
+#include "Corium/Output/PulseEngine.h"
+#include "Corium/Output/QuietWindow.h"
 
 class PulseOut : public EGModule {
   public:

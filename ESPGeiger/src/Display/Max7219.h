@@ -29,8 +29,8 @@
 #include <BarGraph.h>
 #include "DisplayType.h"
 #include "DisplayBackend.h"
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 class Max7219Display : public EGModule, public DisplayBackend {
   public:

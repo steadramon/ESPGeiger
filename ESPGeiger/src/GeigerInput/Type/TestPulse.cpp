@@ -20,9 +20,9 @@
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 
-#include "../../Corium/Logger/Logger.h"
+#include "Corium/Logger/Logger.h"
 #ifdef USE_PCNT
-#include "../../Counter/Counter.h"
+#include "Counter/Counter.h"
 #endif
 #include "TestTimer.h"
 

@@ -19,14 +19,14 @@
 #ifdef GEIGER_PUSHBUTTON
 
 #include "PushButton.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Output/LedSignal.h"
-#include "../Corium/System/PinSafety.h"
-#include "../Corium/System/FastMillis.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/System/FastMillis.h"
 #include <Ticker.h>
 #ifdef SSD1306_DISPLAY
-#include "../Display/Display.h"
+#include "Display/Display.h"
 #endif
 
 static const uint16_t POLL_MS      = 10;

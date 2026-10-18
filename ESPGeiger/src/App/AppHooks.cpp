@@ -19,17 +19,17 @@
 #include <Arduino.h>
 #include <EGHttpServer.h>
 #include <EGEscape.h>
-#include "src/Corium/System/AppHooks.h"
-#include "src/Corium/Prefs/EGPrefs.h"
-#include "src/Corium/Util/StringUtil.h"
-#include "src/Corium/Util/Words.h"
-#include "src/Corium/Module/EGModule.h"
-#include "src/Corium/WebPortal/WebPortal.h"
-#include "src/Counter/Counter.h"
-#include "src/Counter/Tube.h"
-#include "src/GRNG/GRNG.h"
-#include "src/SerialCommand/SerialCommand.h"
-#include "src/WebAPI/Features.h"
+#include "Corium/System/AppHooks.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/WebPortal/WebPortal.h"
+#include "Counter/Counter.h"
+#include "Counter/Tube.h"
+#include "GRNG/GRNG.h"
+#include "SerialCommand/SerialCommand.h"
+#include "WebAPI/Features.h"
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 

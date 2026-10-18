@@ -18,14 +18,14 @@
 */
 
 #include "ArduinoOTA.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/System/Globals.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/Net/IgmpRefresh.h"
-#include "../Corium/System/Lifecycle.h"
-#include "../Corium/Output/LedSignal.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/Globals.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Net/IgmpRefresh.h"
+#include "Corium/System/Lifecycle.h"
+#include "Corium/Output/LedSignal.h"
 
 ArduinoOTAModule ota;
 EG_REGISTER_MODULE(ota)

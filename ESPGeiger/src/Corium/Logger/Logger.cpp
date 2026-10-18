@@ -19,9 +19,9 @@
 
 #include <stdarg.h>
 #include "Logger.h"
-#include "../Net/Wifi.h"
-#include "../System/Clock.h"
-#include "../System/Uptime.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/System/Clock.h"
+#include "Corium/System/Uptime.h"
 
 char Log::logIdx = 1;
 Log::LoggingLevels Log::logLevel = LOG_LEVEL;

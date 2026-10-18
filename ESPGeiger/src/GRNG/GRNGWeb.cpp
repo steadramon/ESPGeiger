@@ -18,8 +18,8 @@
 */
 
 #include "GRNG.h"
-#include "../Corium/WebPortal/WebPortal.h"
-#include "../Corium/Util/StringUtil.h"
+#include "Corium/WebPortal/WebPortal.h"
+#include "Corium/Util/StringUtil.h"
 #include <EGHttpServer.h>
 #include <string.h>
 #include <stdlib.h>

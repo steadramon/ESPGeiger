@@ -13,8 +13,8 @@
 #ifdef AUDIO_TICK
 
 #include <Arduino.h>
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Output/QuietWindow.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Output/QuietWindow.h"
 
 class Voice : public EGModule {
   public:

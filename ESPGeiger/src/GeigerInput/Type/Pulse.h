@@ -20,7 +20,7 @@
 #define GEIGERINPUTPLS_H
 
 #include <Arduino.h>
-#include "../GeigerInput.h"
+#include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
 
 #ifdef USE_PCNT

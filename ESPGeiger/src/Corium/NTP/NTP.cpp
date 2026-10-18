@@ -23,12 +23,12 @@
 #include <EGTimeZone.h>
 #include <EGEscape.h>
 #include "NTP.h"
-#include "../System/Globals.h"
-#include "../Logger/Logger.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Prefs/EGPrefs.h"
-#include "../System/Clock.h"
-#include "../WebPortal/WebPortal.h"
+#include "Corium/System/Globals.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Clock.h"
+#include "Corium/WebPortal/WebPortal.h"
 #include "NTP_PAGE_JS.gz.h"
 
 NTP_Client ntpclient = NTP_Client();

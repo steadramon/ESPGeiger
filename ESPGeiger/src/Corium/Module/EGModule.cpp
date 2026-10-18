@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGModule.h"
-#include "../Util/Words.h"
+#include "Corium/Util/Words.h"
 
 // read the time before the lock, keeps esp32 crit short
 

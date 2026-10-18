@@ -21,11 +21,11 @@
 #include <EGFormat.h>
 #include "SerialParse.h"
 #include "GeigerInput.h"
-#include "../Corium/Util/StringUtil.h"
-#include "../Corium/Measure/OutputVars.h"
-#include "../Corium/Util/Words.h"
-#include "../Counter/Counter.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Measure/OutputVars.h"
+#include "Corium/Util/Words.h"
+#include "Counter/Counter.h"
+#include "Corium/Prefs/EGPrefs.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>

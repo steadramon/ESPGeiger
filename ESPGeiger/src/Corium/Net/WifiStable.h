@@ -21,7 +21,7 @@
 #define UTIL_WIFISTABLE_H
 
 #include <stdint.h>
-#include "../System/FastMillis.h"
+#include "Corium/System/FastMillis.h"
 
 namespace Wifi {
   extern uint32_t connected_at_ms;  // 0 when down

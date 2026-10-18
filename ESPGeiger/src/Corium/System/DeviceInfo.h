@@ -28,8 +28,8 @@
 
 #define EG_CACHE_BUST "?v=" GIT_VERSION
 
-#include "../../../Version.h"
-#include "../../../AppConfig.h"
+#include "App/Version.h"
+#include "App/AppConfig.h"
 
 #ifndef BUILD_ENV
 #define BUILD_ENV "unknown"

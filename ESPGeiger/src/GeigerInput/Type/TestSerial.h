@@ -26,7 +26,7 @@
 #endif
 
 #include "SerialPort.h"
-#include "../GeigerInputTest.h"
+#include "GeigerInput/GeigerInputTest.h"
 
 class GeigerTestSerial : public GeigerInputTest
 {

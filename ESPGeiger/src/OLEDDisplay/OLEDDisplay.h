@@ -23,11 +23,11 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <U8g2lib.h>
-#include "../Corium/System/Globals.h"
-#include "../Counter/Counter.h"
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Display/DisplayBackend.h"
+#include "Corium/System/Globals.h"
+#include "Counter/Counter.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Display/DisplayBackend.h"
 
 class EGHttpServer;
 

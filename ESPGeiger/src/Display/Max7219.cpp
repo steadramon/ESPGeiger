@@ -18,15 +18,15 @@
 */
 #include "Max7219.h"
 #ifdef MAX7219_DISPLAY
-#include "../Corium/System/Globals.h"
+#include "Corium/System/Globals.h"
 #include <EGFormat.h>
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Measure/EGMeasure.h"
-#include "../Corium/System/PinSafety.h"
-#include "../Corium/Util/MathUtil.h"
-#include "../Corium/Util/Words.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Measure/EGMeasure.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/Util/Words.h"
 #include "Display.h"
 
 EG_PSTR(M_CPM,   "cpm");

@@ -16,27 +16,27 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
 #include "GeigerKeys.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/PinSafety.h"
-#include "../Corium/Output/LedSignal.h"
-#include "../Corium/Output/PulseEngine.h"
-#include "../Corium/Util/MathUtil.h"
-#include "../Counter/Counter.h"
-#include "../Counter/Tube.h"
-#include "../GeigerInput/GeigerInput.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/Output/PulseEngine.h"
+#include "Corium/Util/MathUtil.h"
+#include "Counter/Counter.h"
+#include "Counter/Tube.h"
+#include "GeigerInput/GeigerInput.h"
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-#include "../GeigerInput/GeigerInputTest.h"
+#include "GeigerInput/GeigerInputTest.h"
 #endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-#include "../GeigerInput/SerialFormat.h"
+#include "GeigerInput/SerialFormat.h"
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-#include "../GeigerInput/Type/UdpRx.h"
+#include "GeigerInput/Type/UdpRx.h"
 #endif
 
 EG_PSTR(K_WARN,           "warn");
@@ -449,7 +449,7 @@ void LedPrefs::on_prefs_loaded() {
 }
 
 #if defined(ESPG_HV) && !defined(ESPGEIGER_HW)
-#include "../HV/HV.h"
+#include "HV/HV.h"
 
 class HVPinPrefs : public EGModule {
 public:

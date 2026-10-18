@@ -21,8 +21,8 @@
 #ifndef GEIGERINPUT_H
 #define GEIGERINPUT_H
 #include <Arduino.h>
-#include "../Corium/System/Globals.h"
-#include "../Corium/Measure/EGMeasure.h"
+#include "Corium/System/Globals.h"
+#include "Corium/Measure/EGMeasure.h"
 
 // GEIGER_TYPE bits, test builds >= 128
 #define GEIGER_FLAG_PULSE   0x01

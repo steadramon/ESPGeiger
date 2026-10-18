@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "TickProfile.h"
-#include "../Logger/Logger.h"
-#include "../Module/EGModuleRegistry.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
 #ifdef TICK_PROFILE
 #include "DeviceInfo.h"
 #endif

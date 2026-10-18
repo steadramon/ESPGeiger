@@ -21,10 +21,10 @@
 #define SERIALOUT_H
 #ifdef SERIALOUT
 #include <Arduino.h>
-#include "../Corium/System/Globals.h"
-#include "../Counter/Counter.h"
-#include "../Corium/Module/EGModule.h"
-#include "../GeigerInput/SerialFormat.h"
+#include "Corium/System/Globals.h"
+#include "Counter/Counter.h"
+#include "Corium/Module/EGModule.h"
+#include "GeigerInput/SerialFormat.h"
 
 class SerialOut : public EGModule {
     public:

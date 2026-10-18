@@ -18,9 +18,9 @@
 */
 
 #include "ExternalPause.h"
-#include "../Logger/Logger.h"
-#include "../System/FastMillis.h"
-#include "../Util/StringUtil.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Util/StringUtil.h"
 
 static const int32_t PAUSE_MAX_S = 86400;
 

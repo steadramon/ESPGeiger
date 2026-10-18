@@ -18,10 +18,10 @@
 */
 #include "LedSignal.h"
 #include <EGLed.h>
-#include "../Logger/Logger.h"
-#include "../System/FastMillis.h"
-#include "../System/Globals.h"
-#include "../System/PinSafety.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/PinSafety.h"
 #include "PulseEngine.h"
 
 namespace LedSignal {

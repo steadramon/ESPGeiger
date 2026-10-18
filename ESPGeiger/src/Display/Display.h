@@ -21,7 +21,7 @@
 #ifdef SSD1306_DISPLAY
 #include <Arduino.h>
 #include "DisplayBackend.h"
-#include "../Corium/Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 
 class Display : public EGModule {
   public:

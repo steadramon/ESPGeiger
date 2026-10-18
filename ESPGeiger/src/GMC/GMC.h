@@ -21,11 +21,11 @@
 #define GMC_H
 #ifdef GMCOUT
 #include <Arduino.h>
-#include "../Corium/System/Globals.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../GeigerInput/GeigerInput.h"
-#include "../Corium/Net/EGHttpPoster.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/DeviceInfo.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/Net/EGHttpPoster.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 #ifndef GMC_INTERVAL
 #define GMC_INTERVAL 300

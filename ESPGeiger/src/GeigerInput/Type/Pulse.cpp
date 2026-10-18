@@ -20,11 +20,11 @@
 
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
 
-#include "../../Corium/Logger/Logger.h"
-#include "../../Corium/Util/MathUtil.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Util/MathUtil.h"
 #ifdef USE_PCNT
-#include "../../Counter/Counter.h"
-#include "../../Corium/System/FastMillis.h"   // millis() halves lps
+#include "Counter/Counter.h"
+#include "Corium/System/FastMillis.h"   // millis() halves lps
 #endif
 
 GeigerPulse::GeigerPulse() {

@@ -19,7 +19,7 @@
 #ifndef SYSTEMPREFS_H
 #define SYSTEMPREFS_H
 
-#include "../Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 #include "EGPrefs.h"
 
 #define WEB_PASS_MAX 32

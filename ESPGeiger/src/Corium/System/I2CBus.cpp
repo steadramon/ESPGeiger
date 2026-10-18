@@ -20,10 +20,10 @@
 
 #include "I2CBus.h"
 #include <Wire.h>
-#include "../Logger/Logger.h"
-#include "../Module/EGModule.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Prefs/EGPrefs.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
 #include "Globals.h"
 #include "PinSafety.h"
 

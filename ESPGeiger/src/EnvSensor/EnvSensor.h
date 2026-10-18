@@ -20,13 +20,13 @@
 #define ENVSENSOR_H
 
 #include <Arduino.h>
-#include "../Corium/System/Globals.h"
-#include "../UdpBlip/UdpBlip.h"
+#include "Corium/System/Globals.h"
+#include "UdpBlip/UdpBlip.h"
 
 #ifndef DISABLE_ENVSENSOR
 #include <BoschTHP.h>
 #include <AsairAHT.h>
-#include "../Corium/Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 #endif
 
 #define ENV_SAMPLE_MS    10000UL

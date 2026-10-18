@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Features.h"
-#include "../Corium/System/Globals.h"
+#include "Corium/System/Globals.h"
 
 // add bits only, never renumber
 uint16_t Features::flags() {

@@ -18,9 +18,9 @@
 */
 #include <Arduino.h>
 #include "GeigerInput.h"
-#include "../Counter/Counter.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/System/PinSafety.h"
+#include "Counter/Counter.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/PinSafety.h"
 
 volatile unsigned long _last_blip = 0;
 volatile uint32_t s_event_counter = 0;

@@ -20,14 +20,14 @@
 #define GEIGERTESTPLS_H
 
 #include <Arduino.h>
-#include "../GeigerInput.h"
+#include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
 
 #ifndef GEIGER_TXPIN
 #define GEIGER_TXPIN 12
 #endif
 
-#include "../GeigerInputTest.h"
+#include "GeigerInput/GeigerInputTest.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "genpulse"

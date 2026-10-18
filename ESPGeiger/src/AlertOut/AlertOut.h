@@ -21,7 +21,7 @@
 #ifdef ALERT_OUT
 
 #include <Arduino.h>
-#include "../Corium/Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 
 class AlertOut : public EGModule {
   public:

@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Tube.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../GeigerPrefs/GeigerKeys.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "GeigerPrefs/GeigerKeys.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL ""

@@ -18,7 +18,7 @@
 */
 
 #include "Words.h"
-#include "../../../AppConfig.h"
+#include "App/AppConfig.h"
 
 const char W_OK_TEXT[]     PROGMEM = "OK";
 const char W_TRUE[]        PROGMEM = "true";

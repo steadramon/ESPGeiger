@@ -20,10 +20,10 @@
 #include <Arduino.h>
 #include <EGFormat.h>
 #include "GMC.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Util/Words.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Measure/EGMeasure.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Util/Words.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/EGMeasure.h"
 
 EG_PSTR(K_AID,  "aid");
 EG_PSTR(K_GCID, "gcid");

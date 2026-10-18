@@ -18,8 +18,8 @@
 */
 
 #include "QuietWindow.h"
-#include "../System/FastMillis.h"
-#include "../System/Clock.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Clock.h"
 
 void QuietWindow::set(const char* from, const char* to) {
   _from = quiet_minute(from);

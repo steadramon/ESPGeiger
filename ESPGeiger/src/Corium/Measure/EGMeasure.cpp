@@ -20,9 +20,9 @@
 #include "EGMeasure.h"
 #include <EGFormat.h>
 #include <EGJson.h>
-#include "../Module/EGModule.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Util/StringUtil.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Util/StringUtil.h"
 
 EGMeasureIter::EGMeasureIter(uint8_t output, bool diag, const char* id)
   : _src(egm_core_rows()), _j(0), _mod(0), _out(output), _diag(diag), _input(false),

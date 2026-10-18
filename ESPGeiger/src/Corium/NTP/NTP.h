@@ -19,8 +19,8 @@
 #ifndef NTP_h
 #define NTP_h
 #include <Arduino.h>
-#include "../Module/EGModule.h"
-#include "../Prefs/EGPrefs.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 #ifndef NTP_SERVER
 #  define NTP_SERVER "pool.ntp.org"

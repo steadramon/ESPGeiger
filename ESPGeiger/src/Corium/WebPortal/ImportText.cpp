@@ -19,7 +19,7 @@
 
 #include "ImportText.h"
 #include <string.h>
-#include "../Prefs/EGPrefs.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 // too long = false
 template <size_t N>

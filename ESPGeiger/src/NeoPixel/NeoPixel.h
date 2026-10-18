@@ -21,9 +21,9 @@
 #ifdef GEIGER_NEOPIXEL
 #include <Arduino.h>
 #include <NeoPixelBus.h>
-#include "../Counter/Counter.h"
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Counter/Counter.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 #ifndef NEOPIXEL_PIN
 #define NEOPIXEL_PIN 15

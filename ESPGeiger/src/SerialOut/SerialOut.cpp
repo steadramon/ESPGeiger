@@ -22,15 +22,15 @@
 #include <EGFormat.h>
 #include <EGHttpServer.h>
 #include "SerialOut.h"
-#include "../GeigerInput/SerialFormat.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/Util/StringUtil.h"
-#include "../Corium/Util/Words.h"
-#include "../Corium/Util/MathUtil.h"
+#include "GeigerInput/SerialFormat.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
+#include "Corium/Util/MathUtil.h"
 #ifdef ESPG_HV_ADC
-#include "../HV/HV.h"
+#include "HV/HV.h"
 #endif
 
 EG_PSTR(K_FLAGS,  "flags");

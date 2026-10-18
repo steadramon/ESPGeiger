@@ -19,11 +19,11 @@
 #ifndef WEBHOOK_H
 #define WEBHOOK_H
 #include <Arduino.h>
-#include "../Corium/System/Globals.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../GeigerInput/GeigerInput.h"
-#include "../Corium/Net/EGHttpPoster.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/DeviceInfo.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/Net/EGHttpPoster.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 #ifndef WEBHOOK_INTERVAL_MIN
 #define WEBHOOK_INTERVAL_MIN 10

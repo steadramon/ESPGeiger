@@ -22,7 +22,7 @@
 
 #include <Arduino.h>
 #include <driver/i2s.h>
-#include "../Corium/Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 
 
 #ifndef AUDIO_TICK_BCLK

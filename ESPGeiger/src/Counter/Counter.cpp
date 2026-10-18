@@ -20,37 +20,37 @@
 #include <Arduino.h>
 #include "Counter.h"
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
-#include "../GeigerInput/Type/Pulse.h"
+#include "GeigerInput/Type/Pulse.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-#include "../GeigerInput/Type/Serial.h"
+#include "GeigerInput/Type/Serial.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
-#include "../GeigerInput/Type/UdpRx.h"
+#include "GeigerInput/Type/UdpRx.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
-#include "../GeigerInput/Type/Test.h"
+#include "GeigerInput/Type/Test.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-#include "../GeigerInput/Type/TestPulse.h"
+#include "GeigerInput/Type/TestPulse.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-#include "../GeigerInput/Type/TestSerial.h"
+#include "GeigerInput/Type/TestSerial.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
-#include "../GeigerInput/Type/TestPulseInt.h"
+#include "GeigerInput/Type/TestPulseInt.h"
 #endif
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/Output/LedSignal.h"
-#include "../Corium/Util/StringUtil.h"
-#include "../Corium/Util/MathUtil.h"
-#include "../Corium/System/RtcMap.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/System/RtcMap.h"
 #ifdef ESP32
 #include <esp_attr.h>
 #endif
-#include "../Corium/System/Lifecycle.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/TickProfile.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/System/Uptime.h"
-#include "../Corium/System/Clock.h"
+#include "Corium/System/Lifecycle.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/TickProfile.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Uptime.h"
+#include "Corium/System/Clock.h"
 #include "TickClock.h"
-#include "../../ClickHooks.h"
+#include "App/ClickHooks.h"
 
 Counter gcounter;
 

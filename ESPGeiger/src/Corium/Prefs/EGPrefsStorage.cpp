@@ -19,8 +19,8 @@
 
 #include "EGPrefsStorage.h"
 #include "EGPrefs.h"
-#include "../Logger/Logger.h"
-#include "../System/Fs.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/Fs.h"
 
 #define EGPS_STAGING_SUFFIX   ".new"
 #define EGPS_PATH_BUFSZ       96

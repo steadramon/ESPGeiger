@@ -20,7 +20,7 @@
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 
-#include "../../Corium/Logger/Logger.h"
+#include "Corium/Logger/Logger.h"
 #include "TestTimer.h"
 
 static volatile unsigned long _last_b;

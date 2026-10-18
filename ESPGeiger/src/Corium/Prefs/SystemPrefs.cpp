@@ -17,10 +17,10 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "SystemPrefs.h"
-#include "../Logger/Logger.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../System/DeviceInfo.h"
-#include "../WebPortal/WebPortal.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/WebPortal/WebPortal.h"
 
 EG_PSTR(K_NAME,           "name");
 EG_PSTR(K_CPU_MHZ,        "cpu_mhz");

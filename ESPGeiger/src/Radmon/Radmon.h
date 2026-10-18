@@ -21,11 +21,11 @@
 #define RADMON_H
 #ifdef RADMONOUT
 #include <Arduino.h>
-#include "../Corium/System/Globals.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../GeigerInput/GeigerInput.h"
-#include "../Corium/Net/EGHttpPoster.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/DeviceInfo.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/Net/EGHttpPoster.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 #ifndef RADMON_INTERVAL
 #define RADMON_INTERVAL 60

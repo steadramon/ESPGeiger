@@ -19,8 +19,8 @@
 #ifndef GEIGER_UDPRX_H
 #define GEIGER_UDPRX_H
 
-#include "../GeigerInput.h"
-#include "../../UdpBlip/UdpBlip.h"
+#include "GeigerInput/GeigerInput.h"
+#include "UdpBlip/UdpBlip.h"
 #include <IPAddress.h>
 
 class WiFiUDP;

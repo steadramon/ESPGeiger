@@ -17,9 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "GeigerInputTest.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/FastMillis.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/FastMillis.h"
 #include <EGHttpServer.h>
 
 void GeigerInputTest::appendClicksExtra(EGHttpResponse& res) {

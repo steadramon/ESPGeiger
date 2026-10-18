@@ -21,7 +21,7 @@
 #define UTIL_QUIETWINDOW_H
 
 #include <stdint.h>
-#include "../Util/StringUtil.h"
+#include "Corium/Util/StringUtil.h"
 
 // -1 = blank or invalid
 inline int16_t quiet_minute(const char* hhmm) {

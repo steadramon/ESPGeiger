@@ -22,11 +22,11 @@
 #ifdef MQTTOUT
 #define LOG_TAG "MQTT"
 
-#include "../Corium/System/Globals.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../GeigerInput/GeigerInput.h"
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/DeviceInfo.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
 #include <WiFiClient.h>
 
 

@@ -23,10 +23,10 @@
 #include <Arduino.h>
 #include <EGHttpClient.h>
 #include <EGBase64.h>
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/System/Globals.h"
-#include "../GeigerInput/GeigerInput.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/Globals.h"
+#include "GeigerInput/GeigerInput.h"
 
 #define WEBAPI_INTERVAL      60
 

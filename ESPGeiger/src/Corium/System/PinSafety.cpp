@@ -18,7 +18,7 @@
 */
 
 #include "PinSafety.h"
-#include "../Logger/Logger.h"
+#include "Corium/Logger/Logger.h"
 
 const char PinSafety::I2C[] PROGMEM = "I2C";
 

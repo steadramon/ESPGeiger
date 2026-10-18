@@ -29,7 +29,7 @@
 #include <Update.h>
 #endif
 #include <ArduinoOTA.h>
-#include "../Corium/Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 
 #ifndef OTA_POLL_INTERVAL_MS
 #define OTA_POLL_INTERVAL_MS 100

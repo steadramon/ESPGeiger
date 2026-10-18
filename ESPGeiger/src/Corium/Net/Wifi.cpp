@@ -25,15 +25,15 @@
 #include <esp_wifi.h>
 #endif
 #include <EGPortal.h>
-#include "../Logger/Logger.h"
-#include "../Module/EGModule.h"
-#include "../ImprovSerial/ImprovSerial.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Prefs/EGPrefs.h"
-#include "../System/DeviceInfo.h"
-#include "../System/Fs.h"
-#include "../System/Lifecycle.h"
-#include "../Util/StringUtil.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/ImprovSerial/ImprovSerial.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Fs.h"
+#include "Corium/System/Lifecycle.h"
+#include "Corium/Util/StringUtil.h"
 
 EG_PSTR(K_SLEEP,    "sleep");
 EG_PSTR(K_TX_POWER, "tx_power");

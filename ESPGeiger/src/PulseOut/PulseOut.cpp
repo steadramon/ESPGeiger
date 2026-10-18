@@ -19,16 +19,16 @@
 #ifdef PULSE_OUT
 
 #include "PulseOut.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/Fs.h"
-#include "../Corium/System/Globals.h"
-#include "../Corium/System/PinSafety.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Fs.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/PinSafety.h"
 
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/Util/StringUtil.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Util/StringUtil.h"
 
 EG_PSTR(K_CYCLES, "cycles");
 EG_PSTR(K_MAX_HZ, "max_hz");

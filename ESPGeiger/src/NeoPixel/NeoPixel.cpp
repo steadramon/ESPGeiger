@@ -20,11 +20,11 @@
 
 #include <Arduino.h>
 #include "NeoPixel.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/Util/MathUtil.h"
-#include "../Corium/System/PinSafety.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/System/PinSafety.h"
 
 EG_PSTR(K_COLOR, "color");
 EG_PSTR(K_FADE,  "fade");

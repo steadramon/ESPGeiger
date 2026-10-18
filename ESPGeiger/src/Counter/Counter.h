@@ -21,12 +21,12 @@
 #define COUNTER_H
 #include <Arduino.h>
 #include <CircularBuffer.hpp>
-#include "../Corium/System/Globals.h"
-#include "../Corium/Util/EGSmoothed.h"
-#include "../Corium/Output/QuietWindow.h"
+#include "Corium/System/Globals.h"
+#include "Corium/Util/EGSmoothed.h"
+#include "Corium/Output/QuietWindow.h"
 
-#include "../GeigerInput/GeigerInput.h"
-#include "../Corium/System/FastMillis.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/System/FastMillis.h"
 
 #if defined(USE_PCNT) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   #define COUNTER_DRAINS_PCNT
@@ -46,7 +46,7 @@ class GeigerUdpRx;
 #endif
 
 #include "CounterMaths.h"
-#include "../Corium/Util/StringUtil.h"
+#include "Corium/Util/StringUtil.h"
 
 #define GEIGER_CPM_COUNT 60
 

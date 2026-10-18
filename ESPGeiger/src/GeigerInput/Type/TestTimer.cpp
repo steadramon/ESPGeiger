@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "TestTimer.h"
-#include "../GeigerInputTest.h"
+#include "GeigerInput/GeigerInputTest.h"
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 

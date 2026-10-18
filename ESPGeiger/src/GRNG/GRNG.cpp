@@ -19,8 +19,8 @@
 // keep host-buildable, web stuff in GRNGWeb.cpp
 
 #include "GRNG.h"
-#include "../Corium/Module/EGModule.h"   // EG_XTASK_VOLATILE
-#include "../Corium/System/DeviceInfo.h"
+#include "Corium/Module/EGModule.h"   // EG_XTASK_VOLATILE
+#include "Corium/System/DeviceInfo.h"
 #include "sha256.h"
 #include <string.h>
 

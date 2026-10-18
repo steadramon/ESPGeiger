@@ -19,12 +19,12 @@
 #ifdef THINGSPEAKOUT
 #include "Thingspeak.h"
 #include <EGFormat.h>
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Util/StringUtil.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Util/StringUtil.h"
 #include <EGEscape.h>
-#include "../EnvSensor/EnvSensor.h"
-#include "../Corium/Measure/EGMeasure.h"
+#include "EnvSensor/EnvSensor.h"
+#include "Corium/Measure/EGMeasure.h"
 #include <math.h>
 
 EG_PSTR(K_CHANNEL_KEY, "channel_key");

@@ -18,23 +18,23 @@
 */
 #ifdef MQTTOUT
 #include "MQTT_Client.h"
-#include "../Counter/Counter.h"
-#include "../Counter/Tube.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Output/LedSignal.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Measure/EGMeasure.h"
-#include "../Corium/System/Clock.h"
-#include "../Corium/Net/Wifi.h"
-#include "../Corium/System/TickProfile.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/Util/Words.h"
+#include "Counter/Counter.h"
+#include "Counter/Tube.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/EGMeasure.h"
+#include "Corium/System/Clock.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/System/TickProfile.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Util/Words.h"
 #include <EGJson.h>
 #include <EGMqtt.h>
-#include "../EnvSensor/EnvSensor.h"
+#include "EnvSensor/EnvSensor.h"
 #include <math.h>
 #ifdef ESPG_HV_ADC
-#include "../HV/HV.h"
+#include "HV/HV.h"
 #endif
 
 EG_PSTR(K_TOPIC,        "topic");

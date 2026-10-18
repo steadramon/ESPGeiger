@@ -18,14 +18,14 @@
 */
 
 #include "EGModuleRegistry.h"
-#include "../Logger/Logger.h"
-#include "../Net/Wifi.h"
-#include "../System/DeviceInfo.h"
-#include "../System/Lifecycle.h"
-#include "../System/Clock.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Lifecycle.h"
+#include "Corium/System/Clock.h"
 #include "ExternalPause.h"
-#include "../Prefs/EGPrefs.h"
-#include "../Util/Fnv.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/Fnv.h"
 #include <string.h>
 #ifdef ESP32
 #include <esp_attr.h>

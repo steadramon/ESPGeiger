@@ -19,12 +19,12 @@
 #ifdef RADMONOUT
 #include "Radmon.h"
 #include <EGFormat.h>
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Util/StringUtil.h"
-#include "../Corium/Util/Words.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
 #include <EGEscape.h>
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Measure/EGMeasure.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/EGMeasure.h"
 
 Radmon radmon;
 EG_REGISTER_MODULE(radmon)

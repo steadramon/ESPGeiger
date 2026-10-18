@@ -18,22 +18,22 @@
 */
 #include "UdpBlip.h"
 #include "BlipPacket.h"
-#include "../Counter/Counter.h"
-#include "../GeigerInput/GeigerInput.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/Net/Wifi.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/System/Lifecycle.h"
-#include "../GRNG/GRNG.h"
-#include "../Corium/System/TickProfile.h"
-#include "../EnvSensor/EnvSensor.h"
-#include "../Corium/Util/StringUtil.h"
+#include "Counter/Counter.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Lifecycle.h"
+#include "GRNG/GRNG.h"
+#include "Corium/System/TickProfile.h"
+#include "EnvSensor/EnvSensor.h"
+#include "Corium/Util/StringUtil.h"
 #include <EGEscape.h>
 #ifdef ESPG_HV_ADC
-#include "../HV/HV.h"
+#include "HV/HV.h"
 #endif
 #include <WiFiUdp.h>
 #ifdef ESP8266

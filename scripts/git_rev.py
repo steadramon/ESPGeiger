@@ -9,7 +9,7 @@ try:
     )
     # Version.h stamped by the release workflow
     changed = subprocess.call(
-        ["git", "diff", "--quiet", "HEAD", "--", ".", ":!ESPGeiger/Version.h"],
+        ["git", "diff", "--quiet", "HEAD", "--", ".", ":!ESPGeiger/src/App/Version.h"],
         stderr=subprocess.DEVNULL) == 1
     # an untracked source still builds
     untracked = subprocess.check_output(

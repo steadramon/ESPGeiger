@@ -20,15 +20,15 @@
 #define CLICK_HOOKS_H
 
 #include <Arduino.h>
-#include "src/Corium/System/FastMillis.h"
-#include "src/Corium/Output/LedSignal.h"
-#include "src/GRNG/GRNG.h"
-#include "src/UdpBlip/UdpBlip.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Output/LedSignal.h"
+#include "GRNG/GRNG.h"
+#include "UdpBlip/UdpBlip.h"
 #ifdef AUDIO_TICK
-#include "src/AudioTick/AudioTick.h"
+#include "AudioTick/AudioTick.h"
 #endif
 #ifdef PULSE_OUT
-#include "src/PulseOut/PulseOut.h"
+#include "PulseOut/PulseOut.h"
 #endif
 
 namespace ClickHooks {

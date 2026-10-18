@@ -20,17 +20,17 @@
 #define BOOT_HOOKS_H
 
 #include <Arduino.h>
-#include "src/Corium/System/FastMillis.h"
+#include "Corium/System/FastMillis.h"
 
 #ifdef SSD1306_DISPLAY
-#include "src/Display/Display.h"
+#include "Display/Display.h"
 #endif
 #ifdef GEIGER_PUSHBUTTON
-#include "src/PushButton/PushButton.h"
+#include "PushButton/PushButton.h"
 #endif
 #ifdef AUDIO_TICK
-#include "src/AudioTick/AudioTick.h"
-#include "src/Voice/Voice.h"
+#include "AudioTick/AudioTick.h"
+#include "Voice/Voice.h"
 #endif
 
 namespace BootHooks {

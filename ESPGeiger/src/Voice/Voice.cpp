@@ -17,14 +17,14 @@
 #ifdef AUDIO_TICK
 
 #include "Voice.h"
-#include "../AudioTick/AudioTick.h"
-#include "../Counter/Counter.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/System/Globals.h"
-#include "../Corium/Util/StringUtil.h"
+#include "AudioTick/AudioTick.h"
+#include "Counter/Counter.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Globals.h"
+#include "Corium/Util/StringUtil.h"
 #include <EGHttpServer.h>
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
@@ -32,7 +32,7 @@
 #include <string.h>
 
 #include "vocab_adpcm.h"
-#include "../AudioTick/AudioTick.h"
+#include "AudioTick/AudioTick.h"
 
 EG_PSTR(K_ANNOUNCE_ENABLE,   "announce_enable");
 EG_PSTR(K_ANNOUNCE_INTERVAL, "announce_interval");

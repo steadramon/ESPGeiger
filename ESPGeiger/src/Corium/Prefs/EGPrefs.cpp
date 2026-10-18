@@ -19,11 +19,11 @@
 
 #include "EGPrefs.h"
 #include "EGPrefsStorage.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Module/EGModule.h"
-#include "../Logger/Logger.h"
-#include "../System/PinSafety.h"
-#include "../Util/StringUtil.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/Util/StringUtil.h"
 #include <ArduinoJson.h>
 #include <EGEscape.h>
 #include <LittleFS.h>

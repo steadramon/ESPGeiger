@@ -20,7 +20,7 @@
 #define GEIGERTESTPLSPWM_H
 
 #include <Arduino.h>
-#include "../GeigerInput.h"
+#include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
 
 #ifndef GEIGER_MODEL
@@ -31,7 +31,7 @@
 #define GEIGER_TXPIN 12
 #endif
 
-#include "../GeigerInputTest.h"
+#include "GeigerInput/GeigerInputTest.h"
 
 class GeigerTestPulseInt : public GeigerInputTest
 {

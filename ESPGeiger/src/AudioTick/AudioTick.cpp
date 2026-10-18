@@ -19,15 +19,15 @@
 #ifdef AUDIO_TICK
 
 #include "AudioTick.h"
-#include "../Voice/Voice.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/System/Globals.h"
-#include "../Corium/System/PinSafety.h"
-#include "../Corium/Util/StringUtil.h"
+#include "Voice/Voice.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Globals.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/Util/StringUtil.h"
 #include <EGHttpServer.h>
 #include <Ticker.h>
 #include <math.h>
@@ -36,7 +36,7 @@
 #include <freertos/queue.h>
 #include <freertos/task.h>
 
-#include "../Voice/Voice.h"
+#include "Voice/Voice.h"
 
 EG_PSTR(K_DECAY,  "decay");
 EG_PSTR(K_ENGINE, "engine");

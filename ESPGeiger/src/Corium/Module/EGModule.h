@@ -20,9 +20,9 @@
 #define EGMODULE_H
 
 #include <Arduino.h>
-#include "../System/FastMillis.h"
-#include "../Prefs/EGPrefs.h"
-#include "../Measure/EGMeasure.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Measure/EGMeasure.h"
 
 // esp32 callbacks run on the AsyncTCP task
 #ifdef ESP32

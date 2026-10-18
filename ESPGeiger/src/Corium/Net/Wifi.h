@@ -22,7 +22,7 @@
 
 #include <Arduino.h>
 #include <IPAddress.h>
-#include "../System/FastMillis.h"
+#include "Corium/System/FastMillis.h"
 #include "WifiStable.h"
 
 #define WIFI_SSID_MAX 32   // 802.11

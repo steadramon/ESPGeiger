@@ -20,7 +20,7 @@
 #define GEIGERTEST_H
 
 #include <Arduino.h>
-#include "../GeigerInputTest.h"
+#include "GeigerInput/GeigerInputTest.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "test"

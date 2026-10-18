@@ -20,15 +20,15 @@
 #include <Arduino.h>
 #include <EGHttpServer.h>
 #include "SDCard.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/Measure/EGMeasure.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Corium/System/Clock.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/Lifecycle.h"
-#include "../Corium/Util/MathUtil.h"
-#include "../Corium/Util/StringUtil.h"
-#include "../Corium/WebPortal/WebPortal.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/System/Clock.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Lifecycle.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/WebPortal/WebPortal.h"
 
 EG_PSTR(K_SYNC_MIN, "sync_min");
 

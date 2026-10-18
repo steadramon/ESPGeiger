@@ -19,7 +19,7 @@
 #ifndef GEIGER_PCNT_H
 #define GEIGER_PCNT_H
 
-#include "../GeigerInput.h"  // USE_PCNT
+#include "GeigerInput/GeigerInput.h"  // USE_PCNT
 
 #ifdef USE_PCNT
 extern "C" {

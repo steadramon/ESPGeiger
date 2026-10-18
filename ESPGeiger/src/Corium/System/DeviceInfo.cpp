@@ -17,12 +17,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "DeviceInfo.h"
-#include "../Prefs/EGPrefs.h"
-#include "../Logger/Logger.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Logger/Logger.h"
 #include "Uptime.h"
 #include "Lifecycle.h"
-#include "../Net/Wifi.h"
-#include "../Util/Fnv.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/Util/Fnv.h"
 #include "Fs.h"
 
 #ifdef ESP32

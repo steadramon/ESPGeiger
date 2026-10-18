@@ -17,12 +17,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpPoster.h"
-#include "../Module/EGModuleRegistry.h"
-#include "../Logger/Logger.h"
-#include "../Output/LedSignal.h"
-#include "../System/DeviceInfo.h"
-#include "../System/Globals.h"
-#include "../Prefs/EGPrefs.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Globals.h"
+#include "Corium/Prefs/EGPrefs.h"
 #include <EGHttpStrings.h>
 
 static_assert(EGHTTP_HOST_MAX >= EG_HOST_MAX, "a host pref must fit the client");

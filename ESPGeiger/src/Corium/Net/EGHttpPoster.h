@@ -20,7 +20,7 @@
 #define EGHTTPPOSTER_H
 
 #include <Arduino.h>
-#include "../Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 #include <EGHttpClient.h>
 
 class EGHttpPoster : public EGModule {

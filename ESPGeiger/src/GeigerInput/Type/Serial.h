@@ -27,8 +27,8 @@
 
 #include "SerialPort.h"
 
-#include "../GeigerInput.h"
-#include "../../Corium/System/FastMillis.h"
+#include "GeigerInput/GeigerInput.h"
+#include "Corium/System/FastMillis.h"
 
 class GeigerSerial : public GeigerInput
 {

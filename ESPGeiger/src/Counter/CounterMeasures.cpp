@@ -17,12 +17,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "../Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Counter.h"
-#include "../GeigerInput/SerialFormat.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/System/TickProfile.h"
-#include "../Corium/Net/Wifi.h"
+#include "GeigerInput/SerialFormat.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/System/TickProfile.h"
+#include "Corium/Net/Wifi.h"
 
 static bool m_cpmf(EGMValue* v)  { v->f = gcounter.get_cpmf(); return true; }
 static bool m_cpm_i(EGMValue* v) { v->i = gcounter.get_cpm(); return true; }

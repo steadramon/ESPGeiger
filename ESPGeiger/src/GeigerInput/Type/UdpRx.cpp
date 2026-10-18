@@ -17,18 +17,18 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "UdpRx.h"
-#include "../../Corium/System/FastMillis.h"
-#include "../../Corium/Net/IgmpRefresh.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Net/IgmpRefresh.h"
 
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 
-#include "../../Counter/Counter.h"
-#include "../../EnvSensor/EnvSensor.h"
-#include "../../Corium/Logger/Logger.h"
-#include "../../Corium/Prefs/EGPrefs.h"
-#include "../../GeigerPrefs/GeigerKeys.h"
-#include "../../Corium/System/DeviceInfo.h"
-#include "../../Corium/Net/Wifi.h"
+#include "Counter/Counter.h"
+#include "EnvSensor/EnvSensor.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "GeigerPrefs/GeigerKeys.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/Net/Wifi.h"
 #include <WiFiUdp.h>
 #include <string.h>
 #ifdef ESP8266

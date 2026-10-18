@@ -17,16 +17,16 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Serial.h"
-#include "../../Corium/System/FastMillis.h"
+#include "Corium/System/FastMillis.h"
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 
-#include "../../Corium/Logger/Logger.h"
-#include "../../Corium/Prefs/EGPrefs.h"
-#include "../../GeigerPrefs/GeigerKeys.h"
-#include "../../Counter/Counter.h"
-#include "../../Counter/Tube.h"
-#include "../SerialFormat.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "GeigerPrefs/GeigerKeys.h"
+#include "Counter/Counter.h"
+#include "Counter/Tube.h"
+#include "GeigerInput/SerialFormat.h"
 
 // isr margin at 115200
 static GeigerPort<64> geigerPort;

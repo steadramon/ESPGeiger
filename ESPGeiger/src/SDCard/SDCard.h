@@ -21,9 +21,9 @@
 #ifdef GEIGER_SDCARD
 #include <SPI.h>
 #include <SdFat.h>
-#include "../Counter/Counter.h"
-#include "../Corium/Module/EGModule.h"
-#include "../Corium/Prefs/EGPrefs.h"
+#include "Counter/Counter.h"
+#include "Corium/Module/EGModule.h"
+#include "Corium/Prefs/EGPrefs.h"
 
 #ifndef GEIGER_SDCARD_CS
 #define GEIGER_SDCARD_CS 16

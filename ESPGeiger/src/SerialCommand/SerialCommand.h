@@ -19,19 +19,19 @@
 #ifndef SERIALCOMMAND_h_
 #define SERIALCOMMAND_h_
 #include <Arduino.h>
-#include "../Counter/Counter.h"
-#include "../Corium/Net/Wifi.h"
-#include "../Corium/Module/EGModule.h"
+#include "Counter/Counter.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/Module/EGModule.h"
 
 #ifdef ESPG_HV
-#include "../HV/HV.h"
+#include "HV/HV.h"
 #endif
 
 #define SERIALCOMMAND_MAXCOMMANDLENGTH 12
 #define SERIALCOMMAND_BUFFER 64
 
 #ifdef SERIALOUT
-#include "../SerialOut/SerialOut.h"
+#include "SerialOut/SerialOut.h"
 #endif
 
 typedef void (* cbFunction)(char*);

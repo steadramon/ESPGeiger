@@ -16,23 +16,23 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include "../Corium/System/Globals.h"  // before the ESPG_HV gate
+#include "Corium/System/Globals.h"  // before the ESPG_HV gate
 #ifdef ESPG_HV
 
 #include <Arduino.h>
 #include <EGHttpServer.h>
 #include "HV.h"
-#include "../Corium/Logger/Logger.h"
-#include "../Corium/System/DeviceInfo.h"
-#include "../Corium/Module/EGModuleRegistry.h"
-#include "../Counter/Counter.h"
-#include "../Corium/Prefs/EGPrefs.h"
-#include "../Corium/Util/MathUtil.h"
-#include "../Corium/System/PinSafety.h"
-#include "../Corium/Util/StringUtil.h"
-#include "../Corium/Util/Words.h"
-#include "../Corium/System/FastMillis.h"
-#include "../Corium/System/Lifecycle.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/Module/EGModuleRegistry.h"
+#include "Counter/Counter.h"
+#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Lifecycle.h"
 #ifdef ESP8266
 #ifndef EG_TIMER1
 #error "ESP8266 HV runs on EGTimer1 (EG_TIMER1)"
@@ -42,7 +42,7 @@
 #endif
 #include <EGTimer1.h>
 #endif
-#include "../Corium/WebPortal/WebPortal.h"
+#include "Corium/WebPortal/WebPortal.h"
 #include "HVJS_BUNDLE.gz.h"
 
 EG_PSTR(K_DUTY,   "duty");

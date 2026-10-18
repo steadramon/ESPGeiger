@@ -21,7 +21,7 @@
 
 #include <Arduino.h>
 #include <IPAddress.h>
-#include "../Corium/Module/EGModule.h"
+#include "Corium/Module/EGModule.h"
 #include "BlipPacket.h"
 
 class WiFiUDP;

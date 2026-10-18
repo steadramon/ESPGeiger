@@ -25,10 +25,10 @@
 #include <WiFi.h>
 #endif
 
-#include "../Logger/Logger.h"
-#include "../System/DeviceInfo.h"
-#include "../Net/Wifi.h"
-#include "../System/FastMillis.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/DeviceInfo.h"
+#include "Corium/Net/Wifi.h"
+#include "Corium/System/FastMillis.h"
 
 ImprovSerial improvSerial;
 

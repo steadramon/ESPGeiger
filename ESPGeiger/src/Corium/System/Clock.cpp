@@ -20,7 +20,7 @@
 #include "Clock.h"
 #include "Globals.h"
 #include "Uptime.h"
-#include "../Logger/Logger.h"
+#include "Corium/Logger/Logger.h"
 
 namespace Clock {
 
