@@ -60,12 +60,25 @@ void TestTimer::start(uint32_t (*fn)(), uint32_t first) {
 
 void TestTimer::stop() { EGTimer1::timer_stop(); }
 
+void TestTimer::restart(uint32_t first) {
+  EGTimer1::timer_stop();
+  start(s_fn, first);
+}
+
 #else
 static esp_timer_handle_t s_hdl = NULL;
-static int64_t s_due;   // us
+static int64_t s_due;   // us, timer task only
+static volatile bool s_rearm;
+static volatile uint32_t s_first;
 
 // from when it was due, lag doesn't add up
 static void IRAM_ATTR on_timer(void*) {
+  if (s_rearm) {   // new rate, from loop
+    s_rearm = false;
+    s_due = esp_timer_get_time() + s_first;
+    esp_timer_start_once(s_hdl, s_first);
+    return;
+  }
   uint32_t next = s_fn();
   if (!next) return;
   int64_t now = esp_timer_get_time();
@@ -86,6 +99,15 @@ void TestTimer::start(uint32_t (*fn)(), uint32_t first) {
 }
 
 void TestTimer::stop() { if (s_hdl) esp_timer_stop(s_hdl); }
+
+// fire now, the timer task re-arms
+void TestTimer::restart(uint32_t first) {
+  if (!s_hdl) return;
+  s_first = first;
+  s_rearm = true;
+  esp_timer_stop(s_hdl);
+  esp_timer_start_once(s_hdl, 1);
+}
 #endif
 
 #endif

@@ -25,6 +25,7 @@
 namespace TestTimer {
   void start(uint32_t (*fn)(), uint32_t first);
   void stop();
+  void restart(uint32_t first);
   // false: no fast write for this pin
   bool tx_pin(int pin, uint32_t& mask, bool& hi);
 

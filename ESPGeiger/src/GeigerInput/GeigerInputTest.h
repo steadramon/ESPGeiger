@@ -69,6 +69,8 @@ class GeigerInputTest : public GeigerInput
     int collect() override;
     static volatile uint8_t _tp_head;   // handler
     static volatile uint8_t _tp_tail;   // loop
+  protected:
+    bool _retarget = false;
   private:
     float _target_cps = 0;
     int _current_selection = -1;

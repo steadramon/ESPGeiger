@@ -90,6 +90,11 @@ void GeigerTestPulse::restartAfterOTA() { TestTimer::start(pulseInterrupt, _next
 
 void GeigerTestPulse::loop() {
   countTimerPulses();
+  if (_retarget && !_bool_pulse_state) {
+    _retarget = false;
+    _next_delay = (uint32_t)calcDelay();
+    TestTimer::restart((uint32_t)calcDelay());
+  }
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;
     _next_delay = (uint32_t)calcDelay();   // one word, the isr reads it whole
