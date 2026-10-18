@@ -383,18 +383,20 @@ void SSD1306Display::loop(unsigned long now) {
   if (dirty != DR_NONE && _present) queue_rows(dirty);
 }
 
-// floor 90% of the low, 5 span min; false = no counts
+// tenths, floor 90% of the low, 5 span min, whole ends; false = no counts
 static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi) {
-  const int32_t SPAN = 5;
-  display_hist(h, n, egm_f(M_CPM5));
+  const int32_t SPAN = 50;
+  display_hist(h, n, egm_f(M_CPM5), 10);
   lo = hi = h[0];
   for (uint16_t i = 1; i < n; i++) {
     if (h[i] < lo) lo = h[i];
     if (h[i] > hi) hi = h[i];
   }
   bool counts = hi > 0;
-  if (lo > 1) lo = lo * 9 / 10;
+  if (lo > 10) lo = lo * 9 / 10;
   if (hi - lo < SPAN) { lo = hi > SPAN ? hi - SPAN : 0; hi = lo + SPAN; }
+  lo = lo / 10 * 10;
+  hi = (hi + 9) / 10 * 10;
   return counts;
 }
 
@@ -875,9 +877,9 @@ bool SSD1306Display::page_one_graph() {
       int location = ((map((long)hist[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
       drawFrame(x_start + i * 2, location, 2, (63 - location));
     }
-    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)minValue);
+    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)(minValue / 10));
     drawTPString(*this, 93, 55, Open_Sans_Digits_10, graphBuf);
-    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)maxValue);
+    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)(maxValue / 10));
     drawTPString(*this, 93, 35, Open_Sans_Digits_10, graphBuf);
   }
   return true;

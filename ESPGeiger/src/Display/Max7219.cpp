@@ -755,7 +755,7 @@ void Max7219Display::renderMatrixContent(unsigned long now) {
   if (_cur_page == PAGE_GRAPH) {
     int hist[sizeof(_mfb)];
     int n = (int)egm_history(hist, (size_t)W);
-    display_hist(hist, n, rf(s_cpm5));
+    display_hist(hist, n, rf(s_cpm5), 1);
     barColumns(hist, n, _mfb, W);
     return;
   }

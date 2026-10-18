@@ -25,17 +25,24 @@
 #include "Corium/Module/EGModule.h"
 
 // under 10 the 5 min avg, unless 3 sigma off
-inline float display_cpm(float cpm, float cpm5) {
-  if (cpm >= 10.0f || cpm5 >= 10.0f) return cpm;
+inline bool use_cpm5(float cpm, float cpm5) {
+  if (cpm >= 10.0f || cpm5 >= 10.0f) return false;
   float d = cpm - cpm5;
-  return d * d < 9.0f * cpm5 ? cpm5 : cpm;
+  return d * d < 9.0f * cpm5;
 }
 
-// graph as the number
-inline void display_hist(int* h, int n, float cpm5) {
-  if (cpm5 >= 10.0f) return;
+inline float display_cpm(float cpm, float cpm5) {
+  return use_cpm5(cpm, cpm5) ? cpm5 : cpm;
+}
+
+// graph as the number, k 10 = tenths
+inline void display_hist(int* h, int n, float cpm5, int k) {
+  bool low = cpm5 < 10.0f;
+  if (!low && k == 1) return;
+  int c5k = (int)(cpm5 * k + 0.5f);
   for (int i = 0; i < n; i++) {
-    if (h[i] < 10) h[i] = (int)(display_cpm((float)h[i], cpm5) + 0.5f);
+    if (low && h[i] < 10 && use_cpm5((float)h[i], cpm5)) h[i] = c5k;
+    else                                              h[i] *= k;
   }
 }
 
