@@ -24,6 +24,13 @@
 #include "DisplayBackend.h"
 #include "Corium/Module/EGModule.h"
 
+// under 10 the 5 min avg, unless 3 sigma off
+inline float display_cpm(float cpm, float cpm5) {
+  if (cpm >= 10.0f || cpm5 >= 10.0f) return cpm;
+  float d = cpm - cpm5;
+  return d * d < 9.0f * cpm5 ? cpm5 : cpm;
+}
+
 class Display : public EGModule {
   public:
     const char* name() override { return PSTR("disp"); }

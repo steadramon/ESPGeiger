@@ -62,8 +62,8 @@ static void format_cpm(char* buf, size_t bufsz, float cpm) {
 }
 
 static float disp_cpm() {
-  float cpm = egm_f(M_CPM);
-  return (cpm < 10.0f) ? egm_f(M_CPM5) : cpm;
+  float c = egm_f(M_CPM);
+  return c < 10.0f ? display_cpm(c, egm_f(M_CPM5)) : c;
 }
 
 // Page 4 only, freed on exit

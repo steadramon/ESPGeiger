@@ -383,8 +383,7 @@ void Max7219Display::apply() {
 }
 
 float Max7219Display::currentCPM() {
-  float cpm = rf(s_cpm);
-  return (cpm < 10.0f) ? rf(s_cpm5) : cpm;
+  return display_cpm(rf(s_cpm), rf(s_cpm5));
 }
 
 #define MX_PAGE_DWELL_MS 5000UL
