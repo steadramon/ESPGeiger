@@ -20,14 +20,17 @@
 #define LEDSIGNAL_H
 
 #include <stdint.h>
+#include <atomic>
 
 namespace LedSignal {
 
   // poll() owns the pins, the rest queue for it
-  extern volatile uint8_t s_head;
-  extern volatile uint8_t s_tail;
+  extern std::atomic<uint8_t> s_head;
+  extern std::atomic<uint8_t> s_tail;
   extern bool s_busy;
-  inline bool due() { return s_head != s_tail || s_busy; }
+  inline bool due() {
+    return s_head.load(std::memory_order_acquire) != s_tail.load(std::memory_order_acquire) || s_busy;
+  }
 
   void begin();
   void use_pin(int pin, bool low_active);   // led.pin, -1 = none

@@ -40,17 +40,17 @@ namespace LedSignal {
   static uint8_t  s_click_fade     = 3;
 
   enum : uint8_t { DO_CLICK, DO_ACTIVITY, DO_ACK, DO_DISP_ON, DO_DISP_OFF, DO_ON, DO_OFF, DO_ATTACH };
-  static volatile uint8_t s_todo[8];
-  volatile uint8_t s_head = 0;   // loop writes
-  volatile uint8_t s_tail = 0;   // poll writes
+  static uint8_t s_todo[8];   // head's release/acquire orders it
+  std::atomic<uint8_t> s_head{0};   // loop writes
+  std::atomic<uint8_t> s_tail{0};   // poll writes
   bool s_busy = false;
 
   // full drops it
   static void post(uint8_t what) {
-    uint8_t h = s_head;
-    if ((uint8_t)(h - s_tail) >= sizeof(s_todo)) return;
+    uint8_t h = s_head.load(std::memory_order_relaxed);
+    if ((uint8_t)(h - s_tail.load(std::memory_order_acquire)) >= sizeof(s_todo)) return;
     s_todo[h % sizeof(s_todo)] = what;
-    s_head = h + 1;
+    s_head.store(h + 1, std::memory_order_release);
   }
 
   static void run(uint8_t what) {
@@ -102,10 +102,11 @@ namespace LedSignal {
   }
 
   void poll(uint32_t now_us) {
-    while (s_tail != s_head) {
-      uint8_t t = s_tail;
+    uint8_t t = s_tail.load(std::memory_order_relaxed);
+    while (t != s_head.load(std::memory_order_acquire)) {
       run(s_todo[t % sizeof(s_todo)]);
-      s_tail = t + 1;
+      t = t + 1;
+      s_tail.store(t, std::memory_order_release);
     }
     s_onboard.update();
 #ifdef BLIP_LED_PIN
