@@ -95,7 +95,6 @@ void UdpBlipModule::readPrefs() {
   }
   uint32_t p = EGPrefs::getUInt("udpblip", EG_K_PORT);
   _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPBLIP_DEFAULT_PORT;
-  EGModuleRegistry::set_tick_enabled(this, _mode > 0);
   EGModuleRegistry::set_loop_interval(this, _mode > 0 ? (int32_t)loop_interval_ms() : -1);
 }
 
@@ -269,7 +268,7 @@ void UdpBlipModule::notifyClick(unsigned long now_ms) {
   tryEmitClick(now_ms);
 }
 
-void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
+void UdpBlipModule::second() {
   if (_mode == 0 || ota_in_progress) return;
   if (!Wifi::connected) return;
   if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
@@ -287,7 +286,10 @@ void UdpBlipModule::s_tick(unsigned long /*now_s*/) {
     }
     return;
   }
+  stats_phase();
+}
 
+void UdpBlipModule::stats_phase() {
   if (_emit_phase == 0) {
     if (++_stats_ticks * 1000UL >= UDPBLIP_STATS_INTERVAL_MS) {
       _stats_ticks = 0;
@@ -314,17 +316,22 @@ uint16_t UdpBlipModule::loop_interval_ms() {
 #endif
 }
 
+void UdpBlipModule::bind(bool fresh) {
+  if (fresh) teardown();
+  if (!ensureUdp()) return;
+  _bound_at_ms = Wifi::connected_at_ms;
+  announce_mdns();
+}
+
 void UdpBlipModule::loop(unsigned long now) {
+  if ((int32_t)((uint32_t)now - _next_sec_ms) >= 0) {
+    _next_sec_ms = (uint32_t)now + 1000;
+    second();
+  }
   if (_pending) {
     uint8_t p = _pending;
     _pending = 0;
-    if (p & (BIND | REBIND)) {
-      if (p & REBIND) teardown();
-      if (ensureUdp()) {
-        _bound_at_ms = Wifi::connected_at_ms;
-        announce_mdns();
-      }
-    }
+    if (p & (BIND | REBIND)) bind(p & REBIND);
     if (p & EMIT_RAD) emitRad(now);
 #ifdef ESPG_HV_ADC
     if (p & EMIT_HV)  emitHv(now);

@@ -63,12 +63,10 @@ public:
   }
   const char* name() override { return PSTR("udpblip"); }
   bool requires_wifi() override { return true; }
-  bool has_tick() override { return true; }
   bool has_loop() override { return true; }
   uint16_t loop_interval_ms() override;
   uint16_t warmup_seconds() override { return 0; }
   void begin() override;
-  void s_tick(unsigned long now_s) override;
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
   void on_prefs_saved() override;
@@ -93,6 +91,9 @@ private:
   bool sendPacket(const uint8_t* buf, size_t len);
   const char* path(const char* suffix);   // suffix flash
   void announce_mdns();
+  void second();
+  void stats_phase();
+  void bind(bool fresh);
 
   WiFiUDP*  _udp = nullptr;
   uint8_t   _mode = 0;
@@ -103,6 +104,7 @@ private:
   unsigned long _last_click_emit_ms = 0;
   unsigned long _last_token_ms = 0;
   uint32_t _bound_at_ms = 0;            // wifi session, rebind on change
+  uint32_t _next_sec_ms = 0;
   uint16_t      _stats_ticks = 0;      // s
   uint16_t      _backoff_ticks = 0;    // s
   uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
@@ -110,7 +112,7 @@ private:
   bool      _mdns_done = false;
   bool      _sys_phase = false;
   uint8_t   _emit_phase = 0;
-  // s_tick sets, loop() sends
+  // second() sets, loop() sends
   static constexpr uint8_t EMIT_RAD = 1 << 0;
   static constexpr uint8_t EMIT_HV  = 1 << 1;
   static constexpr uint8_t EMIT_SYS = 1 << 2;
