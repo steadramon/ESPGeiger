@@ -224,7 +224,8 @@ class EGHttpServer {
 
     volatile bool     _tickWanted = false;
 
-    volatile uint8_t  _inFlight    = 0;
+    AsyncClient*      _open[EGHTTP_MAX_INFLIGHT] = {};   // till onDisconnect
+    uint8_t           _openCount   = 0;
     volatile uint16_t _rejectCount = 0;
 
 #ifdef ESP32
@@ -238,6 +239,8 @@ class EGHttpServer {
     Slot* findSlot(AsyncClient* c);
     Slot* allocSlot(AsyncClient* c);
     void  resetSlot(Slot* s);
+    void  forgetOpen(AsyncClient* c);   // lock held
+    void  abortStream(Slot* s);
     void  markDone(Slot* s);
     // AsyncTCP task, flag only
     bool markDoneAsync(AsyncClient* c, int* streaming, unsigned* acked);

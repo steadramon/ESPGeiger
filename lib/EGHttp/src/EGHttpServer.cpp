@@ -305,8 +305,17 @@ bool EGHttpServer::hasActiveClients() const {
 
 void EGHttpServer::end() {
   if (_server) { _server->end(); delete _server; _server = nullptr; }
+  // slot or not
+  EGHTTP_LOCK();
+  AsyncClient* open[EGHTTP_MAX_INFLIGHT];
+  uint8_t n = _openCount;
+  memcpy(open, _open, n * sizeof(open[0]));
+  _openCount = 0;
+  EGHTTP_UNLOCK();
+  for (uint8_t i = 0; i < n; i++) open[i]->release();
   for (auto& s : _slots) {
-    if (s.client) s.client->release();
+    abortStream(&s);
+    if (s.client && s.gone) s.client->release();
     s.client = nullptr;
     s.state  = IDLE;
     s.gone   = false;
@@ -424,6 +433,26 @@ void EGHttpServer::resetSlot(Slot* s) {
   if (dead) dead->release();
 }
 
+void EGHttpServer::forgetOpen(AsyncClient* c) {
+  for (uint8_t i = 0; i < _openCount; i++) {
+    if (_open[i] != c) continue;
+    _open[i] = _open[--_openCount];
+    _open[_openCount] = nullptr;
+    return;
+  }
+}
+
+static bool eghttp_stream_open(const EGHttpServer::Slot* s) {
+  return s->streaming && s->stream_begun && !s->stream_ended;
+}
+
+// handler hears it once
+void EGHttpServer::abortStream(Slot* s) {
+  if (!eghttp_stream_open(s) || s->stream_aborted) return;
+  s->stream_aborted = true;
+  deliverBodyEvent(s, BODY_ABORT, nullptr, 0);
+}
+
 bool EGHttpServer::markDoneAsync(AsyncClient* c, int* streaming, unsigned* acked) {
   EGHTTP_LOCK();
   Slot* s = findSlot(c);
@@ -480,9 +509,9 @@ void EGHttpServer::onClient(AsyncClient* c) {
 
   // main's close() can run onDisconnect
   EGHTTP_LOCK();
-  uint8_t flying = _inFlight;
+  uint8_t flying = _openCount;
   bool full = flying >= EGHTTP_MAX_INFLIGHT;
-  if (!full) _inFlight++;
+  if (!full) _open[_openCount++] = c;
   EGHTTP_UNLOCK();
   if (full) {
 #ifdef EGHTTP_DEBUG
@@ -518,7 +547,7 @@ void EGHttpServer::onDisconnect(AsyncClient* c) {
   EGHTTP_LOCK();
   Slot* sl = findSlot(c);
   if (sl && sl->gone) { EGHTTP_UNLOCK(); return; }   // close on a gone client
-  if (_inFlight > 0) _inFlight--;
+  forgetOpen(c);
 #ifdef EGHTTP_DEBUG
   bool mid_stream = sl && sl->streaming && !sl->stream_ended;
   unsigned acked = sl ? (unsigned)sl->bodyAcked : 0u;
@@ -909,10 +938,6 @@ void EGHttpServer::tick() {
   }
 }
 
-static bool eghttp_stream_open(const EGHttpServer::Slot* s) {
-  return s->streaming && s->stream_begun && !s->stream_ended;
-}
-
 void EGHttpServer::reclaimSlot(Slot* s) {
   EGHTTP_LOCK();
   bool left = _streamOwner == s && _streamLen > 0;
@@ -922,10 +947,7 @@ void EGHttpServer::reclaimSlot(Slot* s) {
   }
   // whole body came, handler frees
   if (s->stream_ended && !s->responded) respond(s);
-  if (eghttp_stream_open(s) && !s->stream_aborted) {
-    s->stream_aborted = true;
-    deliverBodyEvent(s, BODY_ABORT, nullptr, 0);
-  }
+  abortStream(s);
   EGHTTP_LOCK();
   bool owner = _streamOwner == s;
   EGHTTP_UNLOCK();
