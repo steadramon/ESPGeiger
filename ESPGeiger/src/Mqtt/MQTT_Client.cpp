@@ -415,6 +415,9 @@ bool MQTT_Client::publishStatus()
 #else
   j.uint(PSTR("free_mem"), DeviceInfo::freeHeap());
 #endif
+#ifdef ESP32
+  j.fixed(PSTR("cpu_temp"), DeviceInfo::chipTempC(), 1);
+#endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   j.uint(PSTR("ser_ok"), egm_b(M_SER_OK) ? 1 : 0);
 #endif
@@ -726,6 +729,9 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   S("rssi",     "rssi",     "RSSI",         "dBm",       "mdi:wifi",           H_ST_STATUS, H_DC_SIG, H_SC_MEAS,   H_EC_DIAG, "");
   S("uptime",   "ut",       "Uptime",       "s",         "mdi:clock-outline",  H_ST_STATUS, H_DC_DUR, H_SC_TOTINC, H_EC_DIAG, "");
   S("free_mem", "free_mem", "Free Memory",  "B",         "mdi:memory",         H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG, "");
+#ifdef ESP32
+  S("cpu_temp", "cpu_temp", "CPU Temperature", "°C",      "mdi:chip",           H_ST_STATUS, H_DC_TEMP, H_SC_MEAS,  H_EC_DIAG, "1");
+#endif
 
   #undef S
 }

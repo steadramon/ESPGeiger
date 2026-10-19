@@ -87,4 +87,5 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `t_max` | Peak `tick` in last 60 s |
 | `lps` | Loop iterations per second |
 | `free_mem` | Free heap (bytes) |
+| `cpu_temp` | Chip die temperature (°C), not ambient. ESP32 only. |
 | `ser_ok` | `1` when the external serial counter has sent a valid line within the last 60 s, `0` otherwise. Serial builds only - absent from pulse builds. |

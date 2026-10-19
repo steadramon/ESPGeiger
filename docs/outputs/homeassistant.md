@@ -63,6 +63,7 @@ Appear under the device's **Diagnostic** section in Home Assistant, not the main
 | `ESPGeiger-<device_id> RSSI` | dBm | WiFi signal strength (dBm) | `-37` | 60 s |
 | `ESPGeiger-<device_id> Uptime` | s | Seconds since boot | `120` | 60 s |
 | `ESPGeiger-<device_id> Free Memory` | B | Free heap in bytes | `16928` | 60 s |
+| `ESPGeiger-<device_id> CPU Temperature` | °C | Chip die temperature, not ambient (ESP32 only) | `45.3` | 60 s |
 
 <!-- /gen -->
 
