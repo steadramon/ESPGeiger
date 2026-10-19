@@ -23,6 +23,8 @@
 #ifdef ESP32
 #include "esp_log.h"
 #include "esp_task_wdt.h"
+#else
+#include <EGAsyncTCP.h>
 #endif
 #include <Ticker.h>
 #include "Corium/Logger/Logger.h"
@@ -148,6 +150,17 @@ static void boot_button() {
   }
 }
 
+// before wifi, tcp times from it
+static void start_clock() {
+  // else first tick sees all of uptime
+  _fast_ms_last_us = micros();
+  _fast_ms_counter = _fast_ms_last_us / 1000;
+  msTicker.attach_ms(1, msTickerCB);
+#ifdef ESP8266
+  AsyncClient::setClock(fast_millis);
+#endif
+}
+
 static void boot_wifi() {
   if (Wifi::connectOrPortal()) return;
 #ifdef APP_OFFLINE_OK
@@ -202,10 +215,7 @@ void setup()
   if (BootGuard::entered()) BootHooks::displaySafeMode();
 
   delay(100);
-  // else first tick sees all of uptime
-  _fast_ms_last_us = micros();
-  _fast_ms_counter = _fast_ms_last_us / 1000;
-  msTicker.attach_ms(1, msTickerCB);
+  start_clock();
   if (start == 0 && !safe) boot_button();
   if (!Wifi::hasSavedCreds() && !safe) {
     BootHooks::displaySetupWifi(DeviceInfo::hostname());

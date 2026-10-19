@@ -131,6 +131,13 @@ err_t ACErrorTracker::getCallbackCloseError(void){
 static size_t _connectionCount=0;
 #endif
 
+static uint32_t default_millis() { return ::millis(); }
+static AsyncClient::MillisFn s_clock = default_millis;
+
+void AsyncClient::setClock(MillisFn fn) {
+  s_clock = (fn != nullptr) ? fn : default_millis;
+}
+
 // single task, no lock
 static inline bool _pcb_in_active_lists(const tcp_pcb* pcb){
   for (const tcp_pcb* p = tcp_active_pcbs; p; p = p->next) {
@@ -271,7 +278,7 @@ AsyncClient::AsyncClient(tcp_pcb* pcb):
   _pcb = pcb;
   if(_pcb){
     _pcb_alive = true;
-    _rx_last_packet = millis();
+    _rx_last_packet = s_clock();
     tcp_setprio(_pcb, TCP_PRIO_MIN);
     tcp_arg(_pcb, this);
     tcp_recv(_pcb, &_s_recv);
@@ -479,7 +486,7 @@ bool AsyncClient::send(){
   err_t err = tcp_output(_pcb);
   if(err == ERR_OK){
     _pcb_busy = true;
-    _pcb_sent_at = millis();
+    _pcb_sent_at = s_clock();
     return true;
   }
 
@@ -524,7 +531,7 @@ void AsyncClient::_connected(std::shared_ptr<ACErrorTracker>& errorTracker, void
   if(_pcb){
     _pcb_alive = true;
     _pcb_busy = false;
-    _rx_last_packet = millis();
+    _rx_last_packet = s_clock();
     tcp_setprio(_pcb, TCP_PRIO_MIN);
     tcp_recv(_pcb, &_s_recv);
     tcp_sent(_pcb, &_s_sent);
@@ -610,7 +617,7 @@ void AsyncClient::_sent(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
   if (_pcb_secure && !_handshake_done)
     return;
 #endif
-  _rx_last_packet = millis();
+  _rx_last_packet = s_clock();
   _tx_unacked_len -= len;
   _tx_acked_len += len;
   ASYNC_TCP_DEBUG("_sent[%u]: %4u, unacked=%4u, acked=%4u, space=%4u\n", errorTracker->getConnectionId(), len, _tx_unacked_len, _tx_acked_len, space());
@@ -618,7 +625,7 @@ void AsyncClient::_sent(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
     _pcb_busy = false;
     errorTracker->setCloseError(ERR_OK);
     if(_sent_cb) {
-      _sent_cb(_sent_cb_arg, this, _tx_acked_len, (millis() - _pcb_sent_at));
+      _sent_cb(_sent_cb_arg, this, _tx_acked_len, (s_clock() - _pcb_sent_at));
       if(!errorTracker->hasClient())
         return;
     }
@@ -671,7 +678,7 @@ void AsyncClient::_recv(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
     _close();
     return;
   }
-  _rx_last_packet = millis();
+  _rx_last_packet = s_clock();
   errorTracker->setCloseError(ERR_OK);
 #if ASYNC_TCP_SSL_ENABLED
   if(_pcb_secure){
@@ -732,7 +739,7 @@ void AsyncClient::_poll(std::shared_ptr<ACErrorTracker>& errorTracker, tcp_pcb* 
     _close();
     return;
   }
-  uint32_t now = millis();
+  uint32_t now = s_clock();
 
   // ACK Timeout
   if(_pcb_busy && _ack_timeout && (now - _pcb_sent_at) >= _ack_timeout){
