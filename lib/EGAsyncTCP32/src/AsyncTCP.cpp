@@ -1950,7 +1950,7 @@ int8_t AsyncTCP_detail::tcp_accept(void *arg, tcp_pcb *pcb, int8_t err) {
     async_tcp_log_e("_accept failed: no onConnect callback");
   }
   tcp_abort(pcb);
-  return ERR_OK;
+  return ERR_ABRT;
 }
 
 int8_t AsyncServer::_accepted(AsyncClient *client) {
