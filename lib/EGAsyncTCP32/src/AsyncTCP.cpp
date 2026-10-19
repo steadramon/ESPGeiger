@@ -859,6 +859,20 @@ static esp_err_t _tcp_recved(tcp_pcb **pcb, size_t len) {
   return msg.err;
 }
 
+// closed, peer silent this long: abort, else lwIP retries for minutes
+#ifndef EGASYNC_CLOSE_LINGER_S
+#define EGASYNC_CLOSE_LINGER_S 180
+#endif
+#define EGASYNC_LINGER_POLL 10   // 500 ms ticks
+
+// tmr = last heard
+static err_t _linger_poll(void *arg, tcp_pcb *pcb) {
+  (void)arg;
+  if (tcp_ticks - pcb->tmr < EGASYNC_CLOSE_LINGER_S * 1000UL / TCP_SLOW_INTERVAL) return ERR_OK;
+  tcp_abort(pcb);
+  return ERR_ABRT;
+}
+
 static err_t _tcp_close_api(struct tcpip_api_call_data *api_call_msg) {
   // Unlike the other calls, this is not a direct wrapper of the LwIP function;
   // we perform the AsyncClient teardown interlocked safely with the LwIP task.
@@ -875,6 +889,7 @@ static err_t _tcp_close_api(struct tcpip_api_call_data *api_call_msg) {
     msg->close->_mark_pcb_dead();
     _reset_tcp_callbacks(pcb, msg->close);
     tcp_backlog_accepted(pcb);   // frees the backlog slot
+    tcp_poll(pcb, &_linger_poll, EGASYNC_LINGER_POLL);   // before tcp_close, it can free the pcb
     if (tcp_close(pcb) != ERR_OK) {
       // We do not permit failure here: abandon the pcb anyways.
       tcp_abort(pcb);
