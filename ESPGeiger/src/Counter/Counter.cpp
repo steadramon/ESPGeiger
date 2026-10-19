@@ -308,8 +308,8 @@ inline void Counter::update_alarms(int cpm) {
 #endif
 
 static inline uint16_t cps_x600(float cps) {
-  uint32_t t = (uint32_t)(cps * 600.0f + 0.5f);
-  return t > 0xFFFFu ? 0xFFFFu : (uint16_t)t;
+  float t = cps * 600.0f + 0.5f;
+  return t >= 65535.0f ? 0xFFFFu : (uint16_t)t;
 }
 
 void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
