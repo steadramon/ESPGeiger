@@ -316,7 +316,7 @@ void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
   if (!_running) return;
   geigerinput->secondTicker();
 
-  int eventCounter = geigerinput->collect();
+  int eventCounter = clamp_counts(geigerinput->collect());
   if (eventCounter > 0) _last_count_up_s = uptime_s;
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
   note_counts_missing(uptime_s);
@@ -329,10 +329,9 @@ void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
     total_clicks_rollover++;
   }
 
-  _cached_cps = apply_dead_time(geigerTicks.get());
+  _cached_cps = apply_dead_time(geigerTicks.mean());
   _cached_cpm_active = get_cps() * 60.0f;
-  // roundf without soft-float, cpm >= 0
-  int ccpm = (int)(_cached_cpm_active + 0.5f);
+  int ccpm = to_int(_cached_cpm_active);
 
   cpm_history.push(ccpm);
 
@@ -435,7 +434,7 @@ float Counter::get_cps() {
 }
 
 int Counter::get_cpm() {
-  return (int)roundf(_cached_cpm_active);
+  return to_int(_cached_cpm_active);
 }
 
 float Counter::get_cpmf() {
@@ -443,7 +442,7 @@ float Counter::get_cpmf() {
 }
 
 int Counter::get_cpm5() {
-  return (int)roundf(get_cpm5f());
+  return to_int(get_cpm5f());
 }
 
 float Counter::get_cpm5f() {
@@ -463,7 +462,7 @@ void Counter::want_cpm5_history() {
 }
 
 int Counter::get_cpm15() {
-  return (int)roundf(get_cpm15f());
+  return to_int(get_cpm15f());
 }
 
 float Counter::get_cpm15f() {
@@ -502,7 +501,7 @@ bool Counter::counts_missing() {
 
 bool Counter::get_saturated() {
   float cps = get_cps_live();
-  if (cps <= 0.0f) cps = geigerTicks.get();
+  if (cps <= 0.0f) cps = geigerTicks.mean();
   return saturated_at(cps);
 }
 

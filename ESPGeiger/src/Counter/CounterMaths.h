@@ -62,6 +62,22 @@ class CounterMaths {
   public:
     static constexpr uint8_t  HIST_BUCKETS = 25;
     static constexpr uint32_t HIST_BASE_US = 64;
+    // x10 dead time, x60 cpm, still an int
+    static constexpr float CPS_MAX = (float)(INT32_MAX / 600);
+
+    // floating pin
+    static int clamp_counts(int n) {
+      if (n < 0) return 0;
+      if (n > (int)CPS_MAX) return (int)CPS_MAX;
+      return n;
+    }
+
+    // NaN and below 0 read 0
+    static int to_int(float v) {
+      if (!(v > 0.0f)) return 0;
+      if (v >= (float)INT32_MAX) return INT32_MAX;
+      return (int)(v + 0.5f);
+    }
 
     // CPM per uSv/h
     void set_ratio(float ratio) {
@@ -79,6 +95,8 @@ class CounterMaths {
 
     // Non-paralyzable, 10x cap, off below 50 cps
     float apply_dead_time(float cps) const {
+      if (!(cps > 0.0f)) return 0.0f;
+      if (cps > CPS_MAX) cps = CPS_MAX;
       if (_dead_time_us == 0 || cps <= 50.0f) return cps;
       float x = cps * _dead_time_sec;
       if (x > 0.9f) x = 0.9f;

@@ -70,6 +70,17 @@ static void wrap_evicts_oldest(void) {
   TEST_ASSERT_EQUAL_INT32(26, r.sum());        // 5+6+7+8
 }
 
+// a float sum loses the 1, then reads below 0
+static void mean_exact(void) {
+  EGRingAvg<uint32_t, 2> r;
+  r.add(1); r.add(16777216);
+  TEST_ASSERT_EQUAL_UINT32(16777217u, r.sum());
+  r.add(0); r.add(0);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, r.mean());
+  r.add(3);
+  TEST_ASSERT_EQUAL_FLOAT(1.5f, r.mean());
+}
+
 static void running_sum(void) {
   const uint16_t W = 6;
   EGRingAvg<int32_t, 6> r;
@@ -229,6 +240,7 @@ int main(void) {
   RUN_TEST(empty_zero);
   RUN_TEST(partial_fill);
   RUN_TEST(wrap_evicts_oldest);
+  RUN_TEST(mean_exact);
   RUN_TEST(running_sum);
   RUN_TEST(at_is_chronological);
   RUN_TEST(last_newest);

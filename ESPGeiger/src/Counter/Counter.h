@@ -59,7 +59,7 @@ class Counter : public CounterMaths {
       float get_cpmf();
       float get_cps_stable()  const { return _cached_cps; }
       float get_cpmf_stable() const { return _cached_cps * 60.0f; }
-      int   get_cpm_stable()  const { return (int)roundf(_cached_cps * 60.0f); }
+      int   get_cpm_stable()  const { return to_int(_cached_cps * 60.0f); }
       float get_usv_stable()  const { return _cached_cps * 60.0f * _ratio_inv; }
       int get_cpm5();
       float get_cpm5f();
@@ -246,7 +246,7 @@ class Counter : public CounterMaths {
       QuietWindow _quiet;
       float _cached_cps = 0.0f;
       float _cached_cpm_active = 0.0f;
-      EGRingAvg<float, GEIGER_CPM_COUNT> geigerTicks;
+      EGRingAvg<uint32_t, GEIGER_CPM_COUNT> geigerTicks;   // counts, exact sum
 #ifdef GEIGER_SMOOTH_AVG
       EGRingAvg<float, GEIGER_CPM5_COUNT>  geigerTicks5;
       EGRingAvg<float, GEIGER_CPM15_COUNT> geigerTicks15;

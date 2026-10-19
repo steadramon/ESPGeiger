@@ -55,6 +55,10 @@ public:
     return _count ? (T)(_value / (T)_count) : (T)0;
   }
 
+  float mean() const {
+    return _count ? (float)_value / (float)_count : 0.0f;
+  }
+
   T sum() const { return _value; }
 
   T last() const {

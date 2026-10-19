@@ -99,6 +99,33 @@ static void dead_time_cap(void) {
   TEST_ASSERT_FLOAT_WITHIN(10.0f, 1000000.0f, m.apply_dead_time(100000.0f));
 }
 
+// floating pin, cpm still fits an int
+static void dead_time_bounds(void) {
+  m.set_dead_time_us(100);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, m.apply_dead_time(-5.0f));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, m.apply_dead_time(NAN));
+  TEST_ASSERT_TRUE(m.apply_dead_time(1e12f) * 60.0f < 2.2e9f);
+  m.set_dead_time_us(0);
+  TEST_ASSERT_EQUAL_FLOAT(CounterMaths::CPS_MAX, m.apply_dead_time(1e12f));
+}
+
+static void counts_clamp(void) {
+  TEST_ASSERT_EQUAL_INT(0, CounterMaths::clamp_counts(-1));
+  TEST_ASSERT_EQUAL_INT(40, CounterMaths::clamp_counts(40));
+  TEST_ASSERT_EQUAL_INT((int)CounterMaths::CPS_MAX, CounterMaths::clamp_counts(INT32_MAX));
+}
+
+// volatile, else a folded cast hides it
+static void to_int_sat(void) {
+  volatile float nan = NAN, neg = -3.0f, huge = 1e20f;
+  TEST_ASSERT_EQUAL_INT(0, CounterMaths::to_int(nan));
+  TEST_ASSERT_EQUAL_INT(0, CounterMaths::to_int(neg));
+  TEST_ASSERT_EQUAL_INT(0, CounterMaths::to_int(-0.05f));
+  TEST_ASSERT_EQUAL_INT(2, CounterMaths::to_int(2.49f));
+  TEST_ASSERT_EQUAL_INT(3, CounterMaths::to_int(2.5f));
+  TEST_ASSERT_EQUAL_INT(INT32_MAX, CounterMaths::to_int(huge));
+}
+
 // none below 50 cps
 static void dead_time_skip(void) {
   m.set_dead_time_us(100);
@@ -273,6 +300,9 @@ int main(void) {
   RUN_TEST(dead_time_zero);
   RUN_TEST(dead_time_model);
   RUN_TEST(dead_time_cap);
+  RUN_TEST(dead_time_bounds);
+  RUN_TEST(counts_clamp);
+  RUN_TEST(to_int_sat);
   RUN_TEST(dead_time_skip);
   RUN_TEST(long_tau);
   RUN_TEST(saturation_rate);
