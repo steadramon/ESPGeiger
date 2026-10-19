@@ -101,6 +101,7 @@ size_t bytes_written();
 void   set_sndbuf(uint16_t bytes);
 
 void fail_next_write(err_t err);   // one shot
+void fail_next_output(err_t err);  // one shot, data stays queued
 void fail_next_dns(err_t err);     // one shot
 void fail_next_pcb();              // one shot, tcp_new gives nullptr
 

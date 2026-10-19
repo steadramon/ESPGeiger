@@ -1523,12 +1523,11 @@ bool AsyncClient::free() {
   return !p || p->state == CLOSED || p->state > ESTABLISHED;
 }
 
+// queued is sent, a failed output retries itself
 size_t AsyncClient::write(const char *data, size_t size, uint8_t apiflags) {
-  size_t will_send = add(data, size, apiflags);
-  if (!will_send || !send()) {
-    return 0;
-  }
-  return will_send;
+  size_t n = add(data, size, apiflags);
+  if (n) send();
+  return n;
 }
 
 void AsyncClient::setRxTimeout(uint32_t timeout) {

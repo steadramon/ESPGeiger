@@ -45,6 +45,8 @@ size_t   g_bytes_written = 0;
 uint16_t g_sndbuf        = 4 * TCP_MSS;
 err_t    g_write_fail    = ERR_OK;
 bool     g_write_fail_armed = false;
+err_t    g_output_fail   = ERR_OK;
+bool     g_output_fail_armed = false;
 bool     g_ack_on_output = false;
 err_t    g_dns_fail      = ERR_OK;
 bool     g_pcb_fail      = false;
@@ -125,6 +127,8 @@ void reset() {
   g_sndbuf = 4 * TCP_MSS;
   g_write_fail = ERR_OK;
   g_write_fail_armed = false;
+  g_output_fail = ERR_OK;
+  g_output_fail_armed = false;
   g_ack_on_output = false;
   g_dns_fail = ERR_OK;
   g_pcb_fail = false;
@@ -275,6 +279,7 @@ void set_sndbuf(uint16_t bytes) {
 }
 
 void fail_next_write(err_t err) { g_write_fail = err; g_write_fail_armed = true; }
+void fail_next_output(err_t err) { g_output_fail = err; g_output_fail_armed = true; }
 void fail_next_dns(err_t err) { g_dns_fail = err; }
 void fail_next_pcb() { g_pcb_fail = true; }
 
@@ -382,6 +387,7 @@ err_t tcp_write(struct tcp_pcb* pcb, const void* dataptr, u16_t len, u8_t apifla
 err_t tcp_output(struct tcp_pcb* pcb) {
   g_counts.tcp_output++;
   if (!pcb) return ERR_ARG;
+  if (g_output_fail_armed) { g_output_fail_armed = false; return g_output_fail; }
   if (g_ack_on_output) pcb->snd_buf = g_sndbuf;
   return ERR_OK;
 }

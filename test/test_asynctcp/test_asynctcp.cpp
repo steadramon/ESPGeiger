@@ -279,6 +279,14 @@ static void write_sndbuf(void) {
   TEST_ASSERT_EQUAL_size_t(8, FakeLwip::bytes_written());
 }
 
+// queued, a retry would send it twice
+static void write_output_fail(void) {
+  connect_and_establish(c);
+  FakeLwip::fail_next_output(ERR_MEM);
+  TEST_ASSERT_EQUAL_size_t(10, c->write("0123456789", 10));
+  TEST_ASSERT_EQUAL_size_t(10, FakeLwip::bytes_written());
+}
+
 static void write_after_close(void) {
   connect_and_establish(c);
   c->close(true);
@@ -564,6 +572,7 @@ int main(int, char**) {
   RUN_TEST(error_deletes);
   RUN_TEST(dns_fail_deletes);
   RUN_TEST(write_sndbuf);
+  RUN_TEST(write_output_fail);
   RUN_TEST(write_after_close);
   RUN_TEST(dtor_closes);
   RUN_TEST(dtor_mid_handshake);
