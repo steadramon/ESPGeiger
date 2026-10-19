@@ -1197,9 +1197,15 @@ bool AsyncClient::_connect_to(ip_addr_t addr, uint16_t port) {
     async_tcp_log_e("pcb == NULL");
     return false;
   }
+  _pcb = pcb;  // so a destroy clears callbacks
+  _pcb_alive.store(true, std::memory_order_release);
 
   esp_err_t err = _tcp_connect(pcb, &addr, port, (tcp_connected_fn)&_tcp_connected);
-  return err == ESP_OK;
+  if (err != ESP_OK) {
+    _tcp_close(&_pcb, this);   // no discard, caller sees false
+    return false;
+  }
+  return true;
 }
 
 #ifdef ARDUINO
