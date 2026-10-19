@@ -389,7 +389,8 @@ static inline lwip_tcp_event_packet_t *_get_async_event() {
   }
 }
 
-static size_t _remove_events_for_client(AsyncClient *client) {
+// accepted: a queued accept went, the server never saw it
+static size_t _remove_events_for_client(AsyncClient *client, bool *accepted = nullptr) {
   lwip_tcp_event_packet_t *removed_event_chain;
   {
     queue_mutex_guard guard;
@@ -404,6 +405,7 @@ static size_t _remove_events_for_client(AsyncClient *client) {
     ++count;
     auto t = removed_event_chain;
     removed_event_chain = t->next;
+    if (accepted && t->event == LWIP_TCP_ACCEPT) *accepted = true;
     _free_event(t);
   }
   return count;
@@ -661,8 +663,17 @@ void AsyncTCP_detail::tcp_error(void *arg, int8_t err) {
       client->_pcb = nullptr;
     }
   }
+  bool unseen = false;
   if (client) {
-    _remove_events_for_client(client);
+    _remove_events_for_client(client, &unseen);
+  }
+  if (unseen && client->_release_ev) {
+    // server never had it: free, no error
+    lwip_tcp_event_packet_t *r = client->_release_ev;
+    client->_release_ev = nullptr;
+    queue_mutex_guard guard;
+    _send_async_event(r);
+    return;
   }
 
   // enqueue event to be processed in the async task for the user callback
