@@ -23,6 +23,7 @@
 #define COUNTERMATHS_H
 
 #include <stdint.h>
+#include <string.h>
 
 #ifndef GEIGER_RATIO
   #define GEIGER_RATIO 151.0  // NOLINT(float-literal) pref default is STR() of it
@@ -72,10 +73,14 @@ class CounterMaths {
       return n;
     }
 
+    // int compares, a float compare is a soft-float call
+    static int32_t fbits(float v) { int32_t b; memcpy(&b, &v, 4); return b; }
+
     // NaN and below 0 read 0
     static int to_int(float v) {
-      if (!(v > 0.0f)) return 0;
-      if (v >= (float)INT32_MAX) return INT32_MAX;
+      int32_t b = fbits(v);
+      if (b <= 0 || b > 0x7F800000) return 0;   // <= 0, NaN
+      if (b >= 0x4F000000) return INT32_MAX;     // 2^31
       return (int)(v + 0.5f);
     }
 
@@ -95,8 +100,9 @@ class CounterMaths {
 
     // Non-paralyzable, 10x cap, off below 50 cps
     float apply_dead_time(float cps) const {
-      if (!(cps > 0.0f)) return 0.0f;
-      if (cps > CPS_MAX) cps = CPS_MAX;
+      int32_t b = fbits(cps);
+      if (b <= 0 || b > 0x7F800000) return 0.0f;
+      if (b >= 0x4A000000 && cps > CPS_MAX) cps = CPS_MAX;   // 2^21 first
       if (_dead_time_us == 0 || cps <= 50.0f) return cps;
       float x = cps * _dead_time_sec;
       if (x > 0.9f) x = 0.9f;
