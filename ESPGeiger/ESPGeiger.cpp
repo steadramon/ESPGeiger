@@ -288,3 +288,15 @@ void loop()
   pass();
 #endif
 }
+
+#ifdef ESP8266
+extern "C" void __preloop_update_frequency();
+// core sets it every pass, once a second is plenty
+extern "C" void preloop_update_frequency() {
+  static uint32_t s_next;
+  uint32_t now = fast_millis();
+  if ((int32_t)(now - s_next) < 0) return;
+  s_next = now + 1000;
+  __preloop_update_frequency();
+}
+#endif
