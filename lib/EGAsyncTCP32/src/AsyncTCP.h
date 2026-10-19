@@ -72,8 +72,65 @@ typedef std::function<void(void *, AsyncClient *, struct pbuf *pb)> AcPacketHand
 typedef std::function<void(void *, AsyncClient *, uint32_t time)> AcTimeoutHandler;
 
 struct tcp_pcb;
-struct lwip_tcp_event_packet_t;
+class AsyncServer;
 class AsyncTCP_detail;
+
+typedef enum {
+  LWIP_TCP_SENT,
+  LWIP_TCP_RECV,
+  LWIP_TCP_FIN,
+  LWIP_TCP_ERROR,
+  LWIP_TCP_POLL,
+  LWIP_TCP_ACCEPT,
+  LWIP_TCP_CONNECTED,
+  LWIP_TCP_DNS,
+  LWIP_TCP_CLOSE,     // from another task
+  LWIP_TCP_RELEASE    // from another task, frees it
+} lwip_tcp_event_t;
+
+struct lwip_tcp_event_packet_t {
+  lwip_tcp_event_packet_t *next;
+  lwip_tcp_event_t event;
+  AsyncClient *client;
+  union {
+    struct {
+      tcp_pcb *pcb;
+      int8_t err;
+    } connected;
+    struct {
+      int8_t err;
+    } error;
+    struct {
+      tcp_pcb *pcb;
+      uint16_t len;
+    } sent;
+    struct {
+      tcp_pcb *pcb;
+      pbuf *pb;
+      int8_t err;
+    } recv;
+    struct {
+      tcp_pcb *pcb;
+      int8_t err;
+    } fin;
+    struct {
+      tcp_pcb *pcb;
+    } poll;
+    struct {
+      AsyncServer *server;
+    } accept;
+    struct {
+      ip_addr_t addr;
+      uint32_t id;
+      bool found;    // false = failed
+    } dns;
+    struct {
+      uint8_t gen;   // a reconnect makes it stale
+    } close;
+  };
+
+  inline lwip_tcp_event_packet_t(lwip_tcp_event_t _event, AsyncClient *_client) : next(nullptr), event(_event), client(_client){};
+};
 
 class AsyncClient {
 public:
@@ -311,7 +368,7 @@ protected:
   bool _told = false;     // onDisconnect ran
   std::atomic<bool> _released{false};
   std::atomic<bool> _close_wanted{false};   // next poll closes
-  lwip_tcp_event_packet_t *_release_ev = nullptr;   // so release() can't fail
+  lwip_tcp_event_packet_t _release_ev{LWIP_TCP_RELEASE, this};   // release() never allocs
   std::atomic<uint32_t> _dns_id{0};   // older answers dropped
   uint8_t _gen = 0;   // per connect
   uint32_t _tx_last_packet;

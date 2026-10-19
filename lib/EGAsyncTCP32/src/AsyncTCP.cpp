@@ -101,63 +101,6 @@ struct tcp_core_guard {
  * TCP/IP Event Task
  * */
 
-typedef enum {
-  LWIP_TCP_SENT,
-  LWIP_TCP_RECV,
-  LWIP_TCP_FIN,
-  LWIP_TCP_ERROR,
-  LWIP_TCP_POLL,
-  LWIP_TCP_ACCEPT,
-  LWIP_TCP_CONNECTED,
-  LWIP_TCP_DNS,
-  LWIP_TCP_CLOSE,     // from another task
-  LWIP_TCP_RELEASE    // from another task, frees it
-} lwip_tcp_event_t;
-
-struct lwip_tcp_event_packet_t {
-  lwip_tcp_event_packet_t *next;
-  lwip_tcp_event_t event;
-  AsyncClient *client;
-  union {
-    struct {
-      tcp_pcb *pcb;
-      int8_t err;
-    } connected;
-    struct {
-      int8_t err;
-    } error;
-    struct {
-      tcp_pcb *pcb;
-      uint16_t len;
-    } sent;
-    struct {
-      tcp_pcb *pcb;
-      pbuf *pb;
-      int8_t err;
-    } recv;
-    struct {
-      tcp_pcb *pcb;
-      int8_t err;
-    } fin;
-    struct {
-      tcp_pcb *pcb;
-    } poll;
-    struct {
-      AsyncServer *server;
-    } accept;
-    struct {
-      ip_addr_t addr;
-      uint32_t id;
-      bool found;    // false = failed
-    } dns;
-    struct {
-      uint8_t gen;   // a reconnect makes it stale
-    } close;
-  };
-
-  inline lwip_tcp_event_packet_t(lwip_tcp_event_t _event, AsyncClient *_client) : next(nullptr), event(_event), client(_client){};
-};
-
 // lwIP's arg till it answers
 struct dns_ask {
   AsyncClient *client;
@@ -171,6 +114,7 @@ public:
   // Helper functions
   static void __attribute__((visibility("internal"))) handle_async_event(lwip_tcp_event_packet_t *event);
   static bool __attribute__((visibility("internal"))) owner_event(lwip_tcp_event_packet_t *event);
+  static void __attribute__((visibility("internal"))) user_event(lwip_tcp_event_packet_t *event);
 
   // LwIP TCP event callbacks that (will) require privileged access
   static int8_t __attribute__((visibility("internal"))) tcp_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *pb, int8_t err);
@@ -224,6 +168,8 @@ public:
     if (_lifetime_mtx) xSemaphoreGiveRecursive(_lifetime_mtx);
   }
 };
+
+static std::atomic<AsyncClient *> _dispatching{nullptr};
 
 #define ASYNC_SERVER_REG_MAX 8
 static AsyncServer *_live_servers[ASYNC_SERVER_REG_MAX] = {};
@@ -309,6 +255,9 @@ static uint32_t _xor_shift_next() {
 }
 
 static void _free_event(lwip_tcp_event_packet_t *evpkt) {
+  if (evpkt->event == LWIP_TCP_RELEASE) {
+    return;   // lives in the client
+  }
   if ((evpkt->event == LWIP_TCP_RECV) && (evpkt->recv.pb != nullptr)) {
     pbuf_free(evpkt->recv.pb);
   }
@@ -389,7 +338,7 @@ static inline lwip_tcp_event_packet_t *_get_async_event() {
   }
 }
 
-// accepted: a queued accept went, the server never saw it
+// accepted: an unseen accept went
 static size_t _remove_events_for_client(AsyncClient *client, bool *accepted = nullptr) {
   lwip_tcp_event_packet_t *removed_event_chain;
   {
@@ -455,36 +404,39 @@ static ip_addr_t *dns_answer(lwip_tcp_event_packet_t *e) {
   return e->dns.found ? &e->dns.addr : nullptr;
 }
 
+void AsyncTCP_detail::user_event(lwip_tcp_event_packet_t *e) {
+  AsyncClient *c = e->client;
+  switch (e->event) {
+    case LWIP_TCP_RECV:
+      c->_recv(e->recv.pcb, e->recv.pb, e->recv.err);
+      e->recv.pb = nullptr;  // given to client
+      break;
+    case LWIP_TCP_FIN:       c->_fin(e->fin.pcb, e->fin.err); break;
+    case LWIP_TCP_SENT:      c->_sent(e->sent.pcb, e->sent.len); break;
+    case LWIP_TCP_POLL:      c->_poll(e->poll.pcb); break;
+    case LWIP_TCP_ERROR:     c->_error(e->error.err); break;
+    case LWIP_TCP_CONNECTED: c->_connected(e->connected.pcb, e->connected.err); break;
+    case LWIP_TCP_ACCEPT:    e->accept.server->_accepted(c); break;
+    case LWIP_TCP_DNS:
+      if (e->dns.id == c->_dns_id) c->_dns_found(dns_answer(e));
+      break;
+    default: break;
+  }
+}
+
 void AsyncTCP_detail::handle_async_event(lwip_tcp_event_packet_t *e) {
   lifetime_guard guard;
+  _dispatching = e->client;   // before _released is read
+  bool in_client = e->event == LWIP_TCP_RELEASE;   // goes with it
   if (e->client == NULL || !_client_alive(e->client)) {
     // client gone
   } else if (e->event == LWIP_TCP_ACCEPT && !_server_alive(e->accept.server)) {
-    // never handed to user code
-    delete e->client;
-  } else if (owner_event(e)) {
-    // done
-  } else if (e->event == LWIP_TCP_RECV) {
-    e->client->_recv(e->recv.pcb, e->recv.pb, e->recv.err);
-    e->recv.pb = nullptr;  // given to client
-  } else if (e->event == LWIP_TCP_FIN) {
-    e->client->_fin(e->fin.pcb, e->fin.err);
-  } else if (e->event == LWIP_TCP_SENT) {
-    e->client->_sent(e->sent.pcb, e->sent.len);
-  } else if (e->event == LWIP_TCP_POLL) {
-    e->client->_poll(e->poll.pcb);
-  } else if (e->event == LWIP_TCP_ERROR) {
-    e->client->_error(e->error.err);
-  } else if (e->event == LWIP_TCP_CONNECTED) {
-    e->client->_connected(e->connected.pcb, e->connected.err);
-  } else if (e->event == LWIP_TCP_ACCEPT) {
-    e->accept.server->_accepted(e->client);
-  } else if (e->event == LWIP_TCP_DNS) {
-    if (e->dns.id == e->client->_dns_id) {
-      e->client->_dns_found(dns_answer(e));
-    }
+    delete e->client;   // never handed to user code
+  } else if (!owner_event(e)) {
+    user_event(e);
   }
-  _free_event(e);
+  if (!in_client) _free_event(e);
+  _dispatching = nullptr;
 }
 
 static void _async_service_task(void *pvParameters) {
@@ -667,12 +619,10 @@ void AsyncTCP_detail::tcp_error(void *arg, int8_t err) {
   if (client) {
     _remove_events_for_client(client, &unseen);
   }
-  if (unseen && client->_release_ev) {
-    // server never had it: free, no error
-    lwip_tcp_event_packet_t *r = client->_release_ev;
-    client->_release_ev = nullptr;
+  if (unseen) {
+    // server never had it
     queue_mutex_guard guard;
-    _send_async_event(r);
+    _send_async_event(&client->_release_ev);
     return;
   }
 
@@ -1109,7 +1059,6 @@ AsyncClient::AsyncClient(tcp_pcb *pcb)
     _recv_cb_arg(0), _pb_cb(0), _pb_cb_arg(0), _timeout_cb(0), _timeout_cb_arg(0), _poll_cb(0), _poll_cb_arg(0), _ack_pcb(true), _tx_last_packet(0),
     _rx_timeout(0), _rx_last_ack(0), _ack_timeout(CONFIG_ASYNC_TCP_MAX_ACK_TIME), _connect_port(0) {
   _pcb = pcb;
-  _release_ev = new (std::nothrow) lwip_tcp_event_packet_t{LWIP_TCP_RELEASE, this};
   _register_client(this);
   if (_pcb) {
     _pcb_alive.store(true, std::memory_order_release);
@@ -1120,12 +1069,12 @@ AsyncClient::AsyncClient(tcp_pcb *pcb)
 
 AsyncClient::~AsyncClient() {
   lifetime_guard guard;  // waits for dispatch
-  _unregister_client(this);
+  // still registered, tcp_error clears _pcb
   if (_pcb) {
     _close();
   }
+  _unregister_client(this);
   _remove_events_for_client(this);
-  delete _release_ev;   // unless release() took it
 }
 
 /*
@@ -1217,7 +1166,7 @@ bool AsyncClient::_connect_to(ip_addr_t addr, uint16_t port) {
 
   esp_err_t err = _tcp_connect(pcb, &addr, port, (tcp_connected_fn)&_tcp_connected);
   if (err != ESP_OK) {
-    _tcp_close(&_pcb, this);   // no discard, caller sees false
+    _tcp_close(&_pcb, this);   // no discard cb
     return false;
   }
   return true;
@@ -1273,6 +1222,7 @@ bool AsyncClient::connect(const char *host, uint16_t port) {
   if (!ask) {
     return false;
   }
+  _connect_port = port;   // answer can come first
   err_t err = _tcp_dns_gethostbyname(host, &addr, ask);
   if (err != ERR_INPROGRESS) {
     delete ask;
@@ -1292,7 +1242,6 @@ bool AsyncClient::connect(const char *host, uint16_t port) {
     return connect(addr, port);
 #endif
   } else if (err == ERR_INPROGRESS) {
-    _connect_port = port;
     return true;
   }
   async_tcp_log_d("error: %d", err);
@@ -1319,21 +1268,19 @@ void AsyncClient::close() {
   _close();
 }
 
-// any task, never waits
+// any task, no callbacks after
 void AsyncClient::release() {
-  _released = true;
+  if (_released.exchange(true)) {
+    return;   // once
+  }
   if (!_off_task()) {
     delete this;
     return;
   }
-  lwip_tcp_event_packet_t *e = _release_ev;
-  _release_ev = nullptr;
-  if (!e) {
-    // leak beats use after free
-    async_tcp_log_e("release: no event, client leaked");
-    return;
+  if (_dispatching == this) {
+    lifetime_guard wait;   // its callback is running
   }
-  _queue_for_task(e);
+  _queue_for_task(&_release_ev);
 }
 
 int8_t AsyncClient::abort() {
@@ -1421,8 +1368,10 @@ int8_t AsyncClient::_close() {
  * */
 
 int8_t AsyncClient::_connected(tcp_pcb *pcb, int8_t err) {
-  // no stale check, breaks reconnects
-  _pcb = reinterpret_cast<tcp_pcb *>(pcb);
+  // stale, error took it
+  if (pcb != _pcb) {
+    return ERR_OK;
+  }
   if (_pcb) {
     _pcb_alive.store(true, std::memory_order_release);
     _rx_last_packet = millis();
@@ -1904,53 +1853,32 @@ int8_t AsyncTCP_detail::tcp_accept(void *arg, tcp_pcb *pcb, int8_t err) {
     return ERR_ABRT;
   }
   auto server = reinterpret_cast<AsyncServer *>(arg);
-  if (!_server_alive(server)) {
+  // event first, a failed client has nothing to undo
+  lwip_tcp_event_packet_t *e = nullptr;
+  if (_server_alive(server) && server->_connect_cb) {
+    e = new (std::nothrow) lwip_tcp_event_packet_t{LWIP_TCP_ACCEPT, nullptr};
+  }
+  AsyncClient *c = e ? new (std::nothrow) AsyncClient(pcb) : nullptr;
+  if (!c) {
+    delete e;
+    async_tcp_log_e("_accept failed");
     tcp_abort(pcb);
     return ERR_ABRT;
   }
-  if (server->_connect_cb) {
-    AsyncClient *c = new (std::nothrow) AsyncClient(pcb);
-    if (c && c->pcb()) {
-      // core lock held, not setNoDelay()
-      if (server->_noDelay) {
-        tcp_nagle_disable(pcb);
-      } else {
-        tcp_nagle_enable(pcb);
-      }
-
-      lwip_tcp_event_packet_t *e = new (std::nothrow) lwip_tcp_event_packet_t{LWIP_TCP_ACCEPT, c};
-      if (e) {
-        e->accept.server = server;
-        // holds a backlog slot till freed
-        if (server->_maxClients) tcp_backlog_delayed(pcb);
-
-        queue_mutex_guard guard;
-        _prepend_async_event(e);
-        return ERR_OK;  // success
-      }
-
-      // Couldn't allocate accept event
-      // We can't let the client object call in to close, as we're on the LWIP thread; it could deadlock trying to RPC to itself
-      c->_mark_pcb_dead();
-      c->_pcb = nullptr;
-      tcp_abort(pcb);
-      async_tcp_log_e("_accept failed: couldn't accept client");
-      return ERR_ABRT;
-    }
-    if (c) {
-      // Couldn't complete setup
-      // pcb has already been aborted
-      delete c;
-      pcb = nullptr;
-      async_tcp_log_e("_accept failed: couldn't complete setup");
-      return ERR_ABRT;
-    }
-    async_tcp_log_e("_accept failed: couldn't allocate client");
+  // core lock held, not setNoDelay()
+  if (server->_noDelay) {
+    tcp_nagle_disable(pcb);
   } else {
-    async_tcp_log_e("_accept failed: no onConnect callback");
+    tcp_nagle_enable(pcb);
   }
-  tcp_abort(pcb);
-  return ERR_ABRT;
+  e->client = c;
+  e->accept.server = server;
+  // holds a backlog slot till freed
+  if (server->_maxClients) tcp_backlog_delayed(pcb);
+
+  queue_mutex_guard guard;
+  _prepend_async_event(e);
+  return ERR_OK;
 }
 
 int8_t AsyncServer::_accepted(AsyncClient *client) {
