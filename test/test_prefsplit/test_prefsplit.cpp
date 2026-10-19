@@ -48,6 +48,7 @@ static const EGPref COUNTER_PREFS[] PROGMEM = {
   ROW("ratio", "151", 1, 100000),
   ROW("warn", "50", 0, 9999),
   ROW("alert", "100", 0, 9999),
+  {"gain", "", "", "1", nullptr, 0, 0, 0, EGP_FLOAT, 0},   // no range
 };
 static const EGPref I2C_PREFS[] PROGMEM = {
   ROW("sda", "21", 0, 48),
@@ -133,6 +134,13 @@ static void old_names(void) {
   TEST_ASSERT_FALSE(EGPrefs::find_pref("sys", "nope", nullptr));
 }
 
+// overflows to inf, no range to catch it
+static void float_inf(void) {
+  TEST_ASSERT_FALSE(EGPrefs::put("counter", "gain", "1000000000000000000000000000000000000000"));
+  TEST_ASSERT_TRUE(EGPrefs::put("counter", "gain", "1.5"));
+  TEST_ASSERT_EQUAL_FLOAT(1.5f, EGPrefs::getFloat("counter", "gain"));
+}
+
 // a reset leaves no old file to hand back
 static void reset_drops(void) {
   EGPrefs::reset_all(false);
@@ -195,6 +203,7 @@ int main(int, char**) {
   RUN_TEST(sys_keeps);
   RUN_TEST(first_wins);
   RUN_TEST(old_names);
+  RUN_TEST(float_inf);
   RUN_TEST(reset_drops);
   RUN_TEST(import_old);
   RUN_TEST(import_new);

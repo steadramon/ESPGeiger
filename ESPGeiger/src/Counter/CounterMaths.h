@@ -65,7 +65,7 @@ class CounterMaths {
 
     // CPM per uSv/h
     void set_ratio(float ratio) {
-      if (ratio <= 0) return;
+      if (!(ratio >= 1.0f)) return;   // pref min, NaN too
       _ratio = ratio;
       _ratio_inv = 1.0f / ratio;
       float bg_cpm = GEIGER_ASSUMED_BG_USVH * ratio;

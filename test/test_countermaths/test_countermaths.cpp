@@ -42,6 +42,10 @@ static void bad_ratio(void) {
   TEST_ASSERT_EQUAL_FLOAT(100.0f, m.get_ratio());
   m.set_ratio(-5.0f);
   TEST_ASSERT_EQUAL_FLOAT(100.0f, m.get_ratio());
+  m.set_ratio(1e-6f);
+  TEST_ASSERT_EQUAL_FLOAT(100.0f, m.get_ratio());
+  m.set_ratio(NAN);
+  TEST_ASSERT_EQUAL_FLOAT(100.0f, m.get_ratio());
 }
 
 static void alive_to_timeout(void) {

@@ -28,6 +28,7 @@
 #include <EGEscape.h>
 #include <LittleFS.h>
 #include <errno.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <new>  // std::nothrow
@@ -312,7 +313,7 @@ int valid_uint(const EGPref* p, const char* value, char* out, size_t outsz) {
 int valid_float(const EGPref* p, const char* value, char* out, size_t outsz) {
   char* end;
   float v = parse_f(value, &end);
-  if (*end != '\0' || end == value) return -1;
+  if (*end != '\0' || end == value || !isfinite(v)) return -1;   // 40 digits is inf
   if (ranged(p) && (v < p->min_i || v > p->max_i)) return -1;
   return copy_value(value, out, outsz);
 }
