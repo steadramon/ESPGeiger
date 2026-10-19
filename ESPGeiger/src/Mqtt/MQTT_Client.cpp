@@ -1009,6 +1009,7 @@ void MQTT_Client::begin()
     return;
   }
   mqttEnabled = true;
+  EGMqtt::setClock(fast_millis);
   s_mq.setKeepAlive(MQTT_KEEPALIVE_S);
   s_mq.setTimeout(MQTT_TIMEOUT_S);
   s_mq.onConnect(mq_up, this);

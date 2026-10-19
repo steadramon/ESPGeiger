@@ -74,6 +74,9 @@ class EGMqtt {
     typedef void (*OnMessage)(void* arg, const Message& m);
     typedef void (*OnAck)(void* arg, const Ack& a);
 
+    using MillisFn = uint32_t (*)();
+    static void setClock(MillisFn fn);   // before the first connect, nullptr = millis()
+
     EGMqtt() { sized(); }
     ~EGMqtt();
     EGMqtt(const EGMqtt&) = delete;

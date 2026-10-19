@@ -32,6 +32,13 @@ static const size_t HEADER_MAX = 5;         // first byte and 4 length bytes
 // records sit on 4 byte offsets, so a Rec's fields are aligned
 static size_t padded(size_t n) { return (n + 3) & ~(size_t)3; }
 
+static uint32_t default_millis() { return ::millis(); }
+static EGMqtt::MillisFn s_clock = default_millis;
+
+void EGMqtt::setClock(MillisFn fn) {
+  s_clock = (fn != nullptr) ? fn : default_millis;
+}
+
 EGMqtt::~EGMqtt() {
   _tcp.close();
   delete _m;
@@ -182,7 +189,7 @@ bool EGMqtt::connect() {
   _err = OK;
   _state = CONNECTING;
   _phase = DIAL;
-  _phaseMs = millis();
+  _phaseMs = s_clock();
   return true;
 }
 
@@ -244,7 +251,7 @@ void EGMqtt::end(int8_t err) {
 // callbacks last
 void EGMqtt::loop() {
   if (_state != DISCONNECTED) {
-    uint32_t now = millis();
+    uint32_t now = s_clock();
     if (_phase == DIAL) dial(now);
     if (_phase == HELLO || _phase == UP) receive();
     // closed, nothing left it can read
@@ -423,11 +430,11 @@ void EGMqtt::flush() {
     size_t n = _tcp.write(p + _txOff, r->len - _txOff);
     _txOff += n;
     if (_txOff < r->len) {
-      if (n || !r->at) r->at = millis();   // stuck() times the wait
+      if (n || !r->at) r->at = s_clock();   // stuck() times the wait
       break;
     }
     _txOff = 0;
-    _txMs = r->at = millis();
+    _txMs = r->at = s_clock();
     if (r->kind == K_PING) {
       _pingSent = true;   // the reply's deadline runs from here
       _pingMs = _txMs;
@@ -659,7 +666,7 @@ void EGMqtt::pick(uint32_t at, uint8_t b) {
 }
 
 void EGMqtt::handle() {
-  _rxMs = millis();
+  _rxMs = s_clock();
   Type t = type_of(_first);
   if (_phase == HELLO) {
     if (t == CONNACK) on_connack();
@@ -698,7 +705,7 @@ void EGMqtt::on_connack() {
   _state = CONNECTED;
   _upNew = true;
   _pingOut = _pingSent = false;
-  _txMs = _rxMs = millis();
+  _txMs = _rxMs = s_clock();
   if (!session) {
     memset(_q2, 0, sizeof(_q2));   // a new session, any id is a new message
     settle();
