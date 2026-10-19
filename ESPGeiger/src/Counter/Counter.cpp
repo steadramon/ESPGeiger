@@ -179,12 +179,11 @@ void life_clear() { s_life.magic = 0; }
 void rtc_life_stash(uint32_t delta_clicks, uint32_t delta_seconds) {
   life_write(LifeRtc{LIFE_RTC_MAGIC, delta_clicks, delta_seconds});
 }
-bool rtc_life_recover_and_clear(uint32_t* out_clicks, uint32_t* out_seconds) {
+bool rtc_life_recover(uint32_t* out_clicks, uint32_t* out_seconds) {
   LifeRtc r{};
   *out_clicks = 0; *out_seconds = 0;
   if (!life_read(r)) return false;
   if (r.magic != LIFE_RTC_MAGIC) return false;
-  life_clear();
   *out_clicks  = r.delta_clicks;
   *out_seconds = r.delta_seconds;
   return true;
@@ -378,6 +377,7 @@ void Counter::save_lifetime() {
   EGPrefs::putUInt("life", EG_K_SECS, _lifetime_seconds_saved);
   EGPrefs::commit();
   _rtc_unsaved_clicks = 0;
+  _rtc_carry_s = 0;
   rtc_life_stash(0, 0);
 }
 
@@ -623,8 +623,13 @@ void Counter::begin() {
   Clock::on_step(counter_clock_stepped);
 
   uint32_t rtc_delta_clicks = 0, rtc_delta_seconds = 0;
-  bool rtc_ok = rtc_life_recover_and_clear(&rtc_delta_clicks, &rtc_delta_seconds);
-  if (rtc_ok && _lifetime_enabled) {
+  bool rtc_ok = rtc_life_recover(&rtc_delta_clicks, &rtc_delta_seconds);
+  if (rtc_ok && !_lifetime_enabled) {
+    life_clear();
+  } else if (rtc_ok) {
+    // till a flash save
+    _rtc_unsaved_clicks = rtc_delta_clicks;
+    _rtc_carry_s = rtc_delta_seconds;
     if (rtc_delta_clicks > 0) {
       unsigned long prev = total_clicks_lifetime;
       total_clicks_lifetime += rtc_delta_clicks;
@@ -671,6 +676,7 @@ void Counter::loop() {
       if (_last_save_time_t > 0 && _rtc_pending_now >= _last_save_time_t) {
         delta_s = _rtc_pending_now - _last_save_time_t;
       }
+      delta_s += _rtc_carry_s;
       if (_rtc_unsaved_clicks > 0 || delta_s > 0) {
         rtc_life_stash(_rtc_unsaved_clicks, delta_s);
       }

@@ -237,6 +237,7 @@ class Counter : public CounterMaths {
       uint32_t _rtc_pending_now = 0;
       uint32_t _first_boot_ts = 0;
       uint32_t _rtc_unsaved_clicks = 0;
+      uint32_t _rtc_carry_s = 0;
       unsigned long _lifetime_seconds_saved = 0;
       uint32_t      _last_save_time_t = 0;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
