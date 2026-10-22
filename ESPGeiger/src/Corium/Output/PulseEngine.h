@@ -22,6 +22,8 @@
 #define PULSE_ENGINE_H
 
 #include <Arduino.h>
+#include "Corium/System/FastMillis.h"
+#include "Corium/Util/MathUtil.h"
 #ifdef ESP32
 #include <EGLed.h>
 #endif
@@ -94,15 +96,17 @@ public:
   static constexpr uint8_t  FADE_SHIFT_MAX = 4;
   static constexpr uint8_t  FADE_SHIFT_DEFAULT = 3;
 
+  // ui 0..2 = shift 2..4
+  static constexpr uint8_t fadeShiftFromUi(uint32_t idx) {
+    return (uint8_t)(idx + FADE_SHIFT_MIN);
+  }
+
   // callers pass prefs straight in
   void commitConfig() {
     if (mode > MODE_FADE) mode = MODE_PULSE;
-    if (pulse_us < PULSE_US_MIN) pulse_us = PULSE_US_MIN;
-    if (pulse_us > PULSE_US_MAX) pulse_us = PULSE_US_MAX;
-    if (freq_hz < FREQ_MIN) freq_hz = FREQ_MIN;
-    if (freq_hz > FREQ_MAX) freq_hz = FREQ_MAX;
-    if (cycles < 1) cycles = 1;
-    if (cycles > CYCLES_MAX) cycles = CYCLES_MAX;
+    pulse_us = clamp(pulse_us, PULSE_US_MIN, PULSE_US_MAX);
+    freq_hz  = clamp(freq_hz, FREQ_MIN, FREQ_MAX);
+    cycles   = clamp<uint32_t>(cycles, 1, CYCLES_MAX);
     if (polarity > 1) polarity = 0;
     if (max_hz > MAX_HZ_MAX) max_hz = MAX_HZ_MAX;
     if (fade_shift < FADE_SHIFT_MIN || fade_shift > FADE_SHIFT_MAX) fade_shift = FADE_SHIFT_DEFAULT;
@@ -139,7 +143,7 @@ public:
   // one compare when idle
   inline void loop(uint32_t now_us) {
     if (mode == MODE_FADE && brightness > 0) {
-      if ((int32_t)(now_us - next_us) < 0) return;
+      if (!reached(now_us, next_us)) return;
       uint16_t delta = brightness >> fade_shift;
       if (delta == 0) delta = 1;
       brightness -= delta;
@@ -153,7 +157,7 @@ public:
       return;
     }
     if (phases_remaining == 0) return;
-    if ((int32_t)(now_us - next_us) < 0) return;
+    if (!reached(now_us, next_us)) return;
     pin_high = !pin_high;
     if (pin_high) writeActive(); else writeIdle();
     phases_remaining--;

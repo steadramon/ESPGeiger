@@ -83,6 +83,7 @@ void GeigerTestPulseInt::begin() {
 }
 
 void GeigerTestPulseInt::loop() {
+  take();
   countTimerPulses();
 }
 

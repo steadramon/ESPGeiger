@@ -24,6 +24,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <pgmspace.h>
+#include "Corium/Util/Bytes.h"
 
 namespace MsgPack {
 
@@ -97,9 +98,8 @@ public:
     // map16, shift entries up 2
     if (pos + 2 > cap) { overflow = true; return; }
     memmove(buf + _map_at + 3, buf + _map_at + 1, pos - _map_at - 1);
-    buf[_map_at]     = TAG_MAP16;
-    buf[_map_at + 1] = (uint8_t)(_map_n >> 8);
-    buf[_map_at + 2] = (uint8_t)_map_n;
+    buf[_map_at] = TAG_MAP16;
+    wr_be16(buf + _map_at + 1, _map_n);
     pos += 2;
   }
   void array(uint16_t n) {
@@ -172,15 +172,13 @@ private:
   }
   void put_u16(uint16_t v) {
     if (pos + 2 > cap) { overflow = true; return; }
-    buf[pos++] = (uint8_t)(v >> 8);
-    buf[pos++] = (uint8_t)v;
+    wr_be16(buf + pos, v);
+    pos += 2;
   }
   void put_u32(uint32_t v) {
     if (pos + 4 > cap) { overflow = true; return; }
-    buf[pos++] = (uint8_t)(v >> 24);
-    buf[pos++] = (uint8_t)(v >> 16);
-    buf[pos++] = (uint8_t)(v >> 8);
-    buf[pos++] = (uint8_t)v;
+    wr_be32(buf + pos, v);
+    pos += 4;
   }
   void put_bytes(const uint8_t* p, size_t len) {
     if (pos + len > cap) { overflow = true; return; }
@@ -217,7 +215,7 @@ public:
     error = true; return 0;
   }
 
-  // NOLINTNEXTLINE(complexity) a case a tag
+  // a case a tag
   bool read_int(int32_t* out) {
     uint8_t t;
     if (!get_u8(&t)) return false;
@@ -237,7 +235,7 @@ public:
   }
 
   // -1 must not pass as uint
-  // NOLINTNEXTLINE(complexity) a case a tag
+  // a case a tag
   bool read_uint(uint32_t* out) {
     uint8_t t;
     if (!get_u8(&t)) return false;
@@ -284,7 +282,7 @@ public:
   }
 
   static constexpr uint8_t SKIP_DEPTH = 16;
-  // NOLINTNEXTLINE(complexity) a case a tag
+  // a case a tag
   bool skip(uint8_t depth = 0) {
     if (depth > SKIP_DEPTH) { error = true; return false; }
     uint8_t t; if (!get_u8(&t)) return false;
@@ -349,15 +347,12 @@ private:
   }
   bool get_u16(uint16_t* out) {
     if (pos + 2 > cap) { error = true; return false; }
-    *out = ((uint16_t)buf[pos] << 8) | buf[pos + 1];
+    *out = rd_be16(buf + pos);
     pos += 2; return true;
   }
   bool get_u32(uint32_t* out) {
     if (pos + 4 > cap) { error = true; return false; }
-    *out = ((uint32_t)buf[pos]     << 24) |
-           ((uint32_t)buf[pos + 1] << 16) |
-           ((uint32_t)buf[pos + 2] <<  8) |
-            (uint32_t)buf[pos + 3];
+    *out = rd_be32(buf + pos);
     pos += 4; return true;
   }
   bool advance(size_t n) {

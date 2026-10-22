@@ -21,6 +21,7 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
 #include <EGEscape.h>
 #include <EGJson.h>
@@ -75,8 +76,7 @@ Webhook::Webhook() {
 
 void Webhook::setInterval(int interval)
 {
-  if (interval < WEBHOOK_INTERVAL_MIN) interval = WEBHOOK_INTERVAL_MIN;
-  if (interval > WEBHOOK_INTERVAL_MAX) interval = WEBHOOK_INTERVAL_MAX;
+  interval = clamp(interval, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX);
   pingInterval = interval;
   pingIntervalMs = (uint32_t)interval * 1000UL;
 }

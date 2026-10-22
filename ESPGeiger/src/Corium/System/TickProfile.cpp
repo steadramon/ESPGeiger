@@ -19,6 +19,7 @@
 #include "TickProfile.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Util/MathUtil.h"
 #ifdef TICK_PROFILE
 #include "DeviceInfo.h"
 #endif
@@ -63,9 +64,9 @@ void TickProfile::endTick() {
   uint32_t count = n - s_lps_last;
   s_lps_last = n;
   TickProfile::lps_raw = count;
-  TickProfile::lps = (TickProfile::lps * 7 + count) >> 3;
+  TickProfile::lps = ema8(TickProfile::lps, count);
   uint32_t this_tick = (uint32_t)(micros() - t_start);
-  TickProfile::tick_us = (TickProfile::tick_us * 7 + this_tick) >> 3;
+  TickProfile::tick_us = ema8(TickProfile::tick_us, this_tick);
   if (this_tick > TickProfile::tick_max_us) TickProfile::tick_max_us = this_tick;
 #ifdef TICK_PROFILE
   uint32_t counter_us = (uint32_t)(t_after_counter - t_start);

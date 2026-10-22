@@ -1,5 +1,5 @@
 /*
-  EGPortal.cpp - Captive WiFi setup portal on AsyncTCP.
+  EGPortal.cpp - Captive WiFi setup portal on EGTcp.
 
   Copyright (C) 2026 @steadramon
 
@@ -162,6 +162,7 @@ void EGPortal::takeScan(int n) {
 void EGPortal::loop() {
   if (!_active) return;
   _dns.processNextRequest();
+  EGTcp::poll();   // runs in setup, before loop()
   _http.tick();
   int n = WiFi.scanComplete();
   if (n >= 0) takeScan(n);

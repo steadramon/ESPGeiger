@@ -55,8 +55,8 @@ struct Creds { char ssid[EGPORTAL_SSID_MAX + 1]; char pass[EGPORTAL_PASS_MAX + 1
 static Creds* s_creds = nullptr;
 
 static bool          s_inPortal       = false;
-static volatile bool s_portalGotCreds = false;
-static volatile bool s_portalDoReset  = false;
+static bool s_portalGotCreds = false;
+static bool s_portalDoReset  = false;
 
 namespace Wifi {
   bool disabled = false;
@@ -144,7 +144,7 @@ static void reprobe_saved_network(unsigned long now) {
     Lifecycle::request_restart(now, 500);
   } else if (s_offline_retry_at == 0) {
     s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
-  } else if ((long)(now - s_offline_retry_at) >= 0) {
+  } else if (reached(now, s_offline_retry_at)) {
     s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
     Log::console(PSTR("WiFi: Offline - re-probing saved network"));
     WiFi.mode(WIFI_STA);
@@ -310,7 +310,7 @@ bool Wifi::saveNetBackup() {
 
 bool Wifi::probeReachability() {
   IPAddress dummy;
-  return WiFi.hostByName("pool.ntp.org", dummy);  // NOLINT(dram)
+  return WiFi.hostByName("pool.ntp.org", dummy);
 }
 
 bool Wifi::restoreNetBackup() {
@@ -463,7 +463,7 @@ static char* setup_portal(EGPortal* portal) {
 static void portal_factory_reset(EGPortal* portal) {
   // let the page flush
   unsigned long flush_until = fast_millis() + 1200;
-  while ((long)(flush_until - fast_millis()) > 0) {
+  while (!reached(fast_millis(), flush_until)) {
     portal->loop();
     delay(10);
     yield();

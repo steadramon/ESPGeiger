@@ -103,14 +103,14 @@ void SDCard::begin()
   }
   FsDateTime::setCallback(dateTimeCB);
 
-  if (!myDataFile.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC)) {  // NOLINT(dram)
+  if (!myDataFile.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC)) {
     Log::console(PSTR("SDCard: write probe failed - read-only or full?"));
     delete sd;
     sd = nullptr;
     return;
   }
   myDataFile.close();
-  sd->remove("TEST.TMP");  // NOLINT(dram)
+  sd->remove("TEST.TMP");
 
   sdenabled = true;
   _freecheck_pending = true;
@@ -340,7 +340,7 @@ static bool oldest_month_after(const char* after, char* out, size_t cap) {
   out[0] = '\0';
 
   if (!sd->chdir()) return false;
-  if (!rootDir.open("/")) return false;  // NOLINT(dram)
+  if (!rootDir.open("/")) return false;
 
   while (subDir.openNext(&rootDir, O_RDONLY)) {
     if (subDir.isSubDir() && !subDir.isHidden()) {

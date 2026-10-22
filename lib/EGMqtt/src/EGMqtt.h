@@ -21,7 +21,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <EGTcpConn.h>
+#include <EGTcp.h>
 #include "EGMqttWire.h"
 
 class __FlashStringHelper;   // F("...")
@@ -75,9 +75,9 @@ class EGMqtt {
     typedef void (*OnAck)(void* arg, const Ack& a);
 
     using MillisFn = uint32_t (*)();
-    static void setClock(MillisFn fn);   // before the first connect, nullptr = millis()
+    static void setClock(MillisFn fn);   // before the first connect, nullptr = EGTcp's
 
-    EGMqtt() { sized(); }
+    EGMqtt();
     ~EGMqtt();
     EGMqtt(const EGMqtt&) = delete;
     EGMqtt& operator=(const EGMqtt&) = delete;
@@ -197,7 +197,7 @@ class EGMqtt {
     void lost();
     void sized();
 
-    EGTcpConn _tcp;
+    EGTcpClient _tcp;
     Mem* _m = nullptr;
     char* _strs = nullptr;
     uint16_t _at[F_COUNT] = {};

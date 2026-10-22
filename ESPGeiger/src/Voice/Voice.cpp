@@ -23,6 +23,7 @@
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGHttpServer.h>
 #include <driver/i2s.h>
@@ -152,13 +153,9 @@ static int16_t adpcm_decode_nibble(uint8_t code) {
   int32_t pred = adpcm_pred;
   if (code & 8) pred -= diff;
   else          pred += diff;
-  if (pred >  32767) pred =  32767;
-  if (pred < -32768) pred = -32768;
-  adpcm_pred = (int16_t)pred;
+  adpcm_pred = sat16(pred);
   int8_t new_idx = adpcm_idx + IMA_INDEX_TABLE[code];
-  if (new_idx < 0)  new_idx = 0;
-  if (new_idx > 88) new_idx = 88;
-  adpcm_idx = new_idx;
+  adpcm_idx = clamp<int8_t>(new_idx, 0, 88);
   return adpcm_pred;
 }
 
@@ -201,7 +198,7 @@ static void adpcm_flush(int16_t* out, int oc, int out_cap, int16_t final_sample)
 
 // tail must be the scaled value
 static void adpcm_fade_out(int16_t tail) {
-  constexpr int FADE_SAMPLES = 22050 * 20 / 1000;
+  constexpr int FADE_SAMPLES = ms_to_samples(20);
   int16_t fade_buf[FADE_SAMPLES];
   for (int i = 0; i < FADE_SAMPLES; i++) {
     fade_buf[i] = (int16_t)((int32_t)tail * (FADE_SAMPLES - 1 - i) / (FADE_SAMPLES - 1));
@@ -275,7 +272,7 @@ static void klaxon_square_tone(uint16_t freq_hz, uint16_t ms, int peak) {
   int oc = 0;
   const uint32_t half_period = (22050 / freq_hz) / 2;
   uint32_t phase = 0;
-  const uint32_t total = (uint32_t)ms * 22050 / 1000;
+  const uint32_t total = ms_to_samples(ms);
   constexpr int ramp = 220;
   for (uint32_t i = 0; i < total; i++) {
     int env = peak;
@@ -306,7 +303,7 @@ static void klaxon_square_sweep(float f_start, float f_end, uint16_t ms, int pea
   int oc = 0;
   constexpr float inv_fs = 1.0f / 22050.0f;
   float phase = 0.0f;
-  const uint32_t total = (uint32_t)ms * 22050 / 1000;
+  const uint32_t total = ms_to_samples(ms);
   constexpr int ramp = 220;
   const float fr = (float)total;
   for (uint32_t i = 0; i < total; i++) {
@@ -337,7 +334,7 @@ static void klaxon_silence(uint16_t ms) {
   if (ms == 0) return;
   constexpr int OUT_CHUNK = 256;
   static const int16_t zeros[OUT_CHUNK] = {0};
-  uint32_t remaining = (uint32_t)ms * 22050 / 1000;
+  uint32_t remaining = ms_to_samples(ms);
   while (remaining > 0) {
     const uint16_t n = (remaining > OUT_CHUNK) ? OUT_CHUNK : (uint16_t)remaining;
     size_t w;
@@ -384,7 +381,8 @@ void Voice::queueAnnouncement() {
 // not at boot
 void Voice::queueRadmonChange() {
   EGModule* m = EGModuleRegistry::find("radmon");
-  if (m && m->last_attempt_ms != 0 &&
+  // last_ok is only the answer once the reply is in
+  if (m && m->last_attempt_ms != 0 && !m->_publish_pending &&
       m->last_attempt_ms != _radmon_last_attempt) {
     const bool ok = m->last_ok;
     if (_radmon_known && ok != _radmon_was_ok) {
@@ -436,7 +434,7 @@ void Voice::silence(uint16_t ms) {
   if (ms == 0) return;
   constexpr uint16_t CHUNK = 256;
   static const int16_t zeros[CHUNK] = {0};
-  uint32_t remaining = (uint32_t)ms * AUDIO_TICK_SAMPLE_RATE / 1000;
+  uint32_t remaining = ms_to_samples(ms);
   while (remaining > 0) {
     const uint16_t n = (remaining > CHUNK) ? CHUNK : (uint16_t)remaining;
     size_t w;

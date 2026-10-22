@@ -1,5 +1,5 @@
 /*
-  EGHttpHeaders.h - request header recognisers, no String, no AsyncTCP.
+  EGHttpHeaders.h - request header recognisers, no String, no TCP.
 
   Copyright (C) 2026 @steadramon
 

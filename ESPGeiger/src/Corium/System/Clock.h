@@ -41,7 +41,7 @@ namespace Clock {
   void on_step(StepFn fn);
 
   // WebAPI 403 "Clock off", resync at most every 5 min
-  extern volatile bool resync;   // http callback sets it
+  extern bool resync;
   extern unsigned long resync_ms;
   bool resync_due(unsigned long now);
 

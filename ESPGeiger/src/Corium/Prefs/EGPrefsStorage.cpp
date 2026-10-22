@@ -21,6 +21,7 @@
 #include "EGPrefs.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/Fs.h"
+#include "Corium/Util/Bytes.h"
 
 #define EGPS_STAGING_SUFFIX   ".new"
 #define EGPS_PATH_BUFSZ       96
@@ -46,7 +47,7 @@ bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen)
   if (f.read((uint8_t*)key, *klen) != *klen) return false;
   uint8_t vlen_bytes[2];
   if (f.read(vlen_bytes, 2) != 2) return false;
-  *vlen = (uint16_t)vlen_bytes[0] | ((uint16_t)vlen_bytes[1] << 8);
+  *vlen = rd_le16(vlen_bytes);
   if (*vlen >= EGPS_VAL_BUFSZ) return false;
   if (*vlen > 0 && f.read((uint8_t*)value, *vlen) != *vlen) return false;
   return true;

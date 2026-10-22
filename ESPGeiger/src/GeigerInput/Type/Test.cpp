@@ -54,6 +54,7 @@ void GeigerTest::stopForOTA() { TestTimer::stop(); }
 void GeigerTest::restartAfterOTA() { TestTimer::start(testInterrupt, _next_delay); }
 
 void GeigerTest::loop() {
+  take();
   countTimerPulses();
   if (_retarget) {
     _retarget = false;

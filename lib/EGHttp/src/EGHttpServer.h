@@ -1,6 +1,6 @@
 /*
-  EGHttpServer.h - Minimal HTTP/1.1 server on (ESP)AsyncTCP, dispatched from
-  the main loop.
+  EGHttpServer.h - Minimal HTTP/1.1 server on EGTcp, dispatched from the
+  main loop.
 
   Copyright (C) 2026 @steadramon
 
@@ -21,7 +21,7 @@
 
 #include <Arduino.h>
 
-#include <EGAsyncTCP.h>
+#include <EGTcp.h>
 #include <EGBase64.h>
 
 #include "EGHttpStrings.h"
@@ -51,7 +51,7 @@
   #define EGHTTP_AUTH_MAX 64
 #endif
 #ifndef EGHTTP_MAX_INFLIGHT
-  // FIN past this
+  // lwIP drops SYNs past this
   #ifdef ESP32
     #define EGHTTP_MAX_INFLIGHT 10
   #else
@@ -162,30 +162,30 @@ class EGHttpServer {
     enum SlotState : uint8_t { IDLE, RECEIVING, READY, RESPONDING, DONE };
 
     struct Slot {
-      // esp32 AsyncTCP task writes these
-      AsyncClient* client = nullptr;
-      volatile SlotState state = IDLE;
-      volatile bool delete_pending = false;
-      volatile bool gone = false;   // resetSlot deletes client
+      EGTcpClient* client = nullptr;   // resetSlot deletes it
+      SlotState state = IDLE;
+      bool delete_pending = false;
       char* buf = nullptr;
-      volatile size_t len = 0;
-      volatile bool headersDone = false;
+      size_t len = 0;
+      bool headersDone = false;
       size_t contentLength = 0;
       size_t headerEnd = 0;
-      // lwIP can't yield, tick() drains
-      volatile bool streaming = false;
-      volatile bool stream_begun = false;
-      volatile bool stream_ended = false;
-      volatile bool stream_aborted = false;
-      volatile bool ack_paused = false;
+      // onData can't yield, tick() drains
+      bool streaming = false;
+      bool stream_begun = false;
+      bool stream_ended = false;
+      bool stream_aborted = false;
+      bool ack_paused = false;
       uint16_t ack_owed = 0;   // header bytes in first pbuf
-      volatile size_t bodyAcked = 0;
-      volatile bool send_aborted = false;   // sticky
+      size_t bodyAcked = 0;
+      bool send_aborted = false;   // sticky
       bool responded = false;
       uint8_t routeIdx = 0xFF;   // 0xFF = no route
       char*  chunkAcc    = nullptr;
       size_t chunkAccLen = 0;
       size_t chunkAccCap = 0;
+      PGM_P  tail        = nullptr;   // static body left, onSent sends it
+      size_t tailLen     = 0;
     };
 
   private:
@@ -208,7 +208,7 @@ class EGHttpServer {
     Handler _notFound = nullptr;
     void* _notFoundUser = nullptr;
 
-    AsyncServer* _server = nullptr;
+    EGTcpServer* _server = nullptr;
     Slot _slots[EGHTTP_MAX_CLIENTS];
     uint8_t _maxClients = EGHTTP_MAX_CLIENTS;
 
@@ -219,14 +219,10 @@ class EGHttpServer {
     static constexpr size_t STREAM_BUF_SIZE = 6144;    // TCP_WND ~5840
 #endif
     uint8_t*          _streamBuf  = nullptr;
-    volatile size_t   _streamLen  = 0;
+    size_t            _streamLen  = 0;
     Slot*             _streamOwner = nullptr;
 
-    volatile bool     _tickWanted = false;
-
-    AsyncClient*      _open[EGHTTP_MAX_INFLIGHT] = {};   // till onDisconnect
-    uint8_t           _openCount   = 0;
-    volatile uint16_t _rejectCount = 0;
+    bool              _tickWanted = false;
 
 #ifdef ESP32
     char*  _dispatchChunkAcc    = nullptr;
@@ -236,17 +232,13 @@ class EGHttpServer {
     char _authValue[6 + EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {0};   // "Basic " + base64
     char _authRealm[40] = "ESPGeiger";
 
-    Slot* findSlot(AsyncClient* c);
-    Slot* allocSlot(AsyncClient* c);
+    Slot* allocSlot(EGTcpClient* c);
     void  resetSlot(Slot* s);
-    void  forgetOpen(AsyncClient* c);   // lock held
     void  abortStream(Slot* s);
     void  markDone(Slot* s);
-    // AsyncTCP task, flag only
-    bool markDoneAsync(AsyncClient* c, int* streaming, unsigned* acked);
     void  sendStatusAndClose(Slot* s, const char* body, size_t len);   // nullptr = close only
 
-    void  wireSlotCallbacks(Slot* s, AsyncClient* c);
+    void  wireSlotCallbacks(Slot* s, EGTcpClient* c);
     bool  growRoutes();
     const Upload* uploadFor(uint8_t route) const;
 
@@ -256,12 +248,11 @@ class EGHttpServer {
     }
     inline uint8_t findRoute(const char* path, EGHttpRequest::Method method) const;
 
-    void onClient(AsyncClient* c);
-    void onDisconnect(AsyncClient* c);
-    void onData(Slot* s, AsyncClient* c, void* data, size_t len);
-    void takeData(Slot* s, AsyncClient* c, void* data, size_t len);
-    void takeStream(Slot* s, AsyncClient* c, void* data, size_t len);
-    inline void receiveHeaders(Slot* s, void* data, size_t len);
+    void onClient(EGTcpClient* c);
+    void onClosed(Slot* s);
+    void takeData(Slot* s, const uint8_t* data, size_t len);
+    void takeStream(Slot* s, const uint8_t* data, size_t len);
+    inline void receiveHeaders(Slot* s, const uint8_t* data, size_t len);
     inline void beginStream(Slot* s, size_t len);
     void releaseStream();
     void identifyRoute(Slot* s);
@@ -269,6 +260,8 @@ class EGHttpServer {
     void deliverBodyEvent(Slot* s, BodyEvent ev, const char* chunk, size_t len);
     inline void reclaimSlot(Slot* s);
     inline void respond(Slot* s);
+    void finish(Slot* s);
+    void sentMore(Slot* s);
     inline void claimChunkAcc(Slot* s);
     void dropChunkAcc(Slot* s);
     inline bool readRequest(Slot* s, EGHttpRequest& req);

@@ -28,6 +28,8 @@
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/TickProfile.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/Util/Fnv.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
 #include <EGJson.h>
 #include <EGMqtt.h>
@@ -198,13 +200,7 @@ void MQTT_Client::onMqttDisconnect(int8_t err) {
 }
 
 void MQTT_Client::setInterval(int interval) {
-  if (interval < MQTT_MIN_TIME) {
-    interval = MQTT_MIN_TIME;
-  }
-  if (interval > MQTT_MAX_TIME) {
-    interval = MQTT_MAX_TIME;
-  }
-  pingInterval = interval;
+  pingInterval = clamp(interval, MQTT_MIN_TIME, MQTT_MAX_TIME);
 }
 
 int MQTT_Client::getInterval() {
@@ -227,9 +223,7 @@ unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
 static uint32_t hass_spread_offset_s() {
   static uint32_t off = 0xFFFFFFFFu;
   if (off == 0xFFFFFFFFu) {
-    uint32_t h = 2166136261u;
-    for (const char* p = DeviceInfo::chipid(); p && *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
-    off = h % (MQTT_HASS_BIRTH_SPREAD_S + 1);
+    off = fnv1a(DeviceInfo::chipid()) % (MQTT_HASS_BIRTH_SPREAD_S + 1);
   }
   return off;
 }
@@ -239,7 +233,7 @@ static uint32_t hass_spread_offset_s() {
 void MQTT_Client::scheduleHassDiscovery(bool reconnected)
 {
   const unsigned long up_s = (unsigned long)DeviceInfo::uptime();
-  if (reconnected && (_hass_next_publish == 0 || (long)(up_s - _hass_next_publish) >= 0)) {
+  if (reconnected && (_hass_next_publish == 0 || reached(up_s, _hass_next_publish))) {
     _hass_next_publish = up_s + 2;
     if (_hass_next_publish == 0) _hass_next_publish = 1;
   }
@@ -248,7 +242,7 @@ void MQTT_Client::scheduleHassDiscovery(bool reconnected)
     _hass_next_publish = up_s + hass_spread_offset_s();
     if (_hass_next_publish == 0) _hass_next_publish = 1;
   }
-  if (_hass_next_publish && (long)(up_s - _hass_next_publish) >= 0) {
+  if (_hass_next_publish && reached(up_s, _hass_next_publish)) {
     triggerHassDiscovery();
   }
 }
@@ -519,9 +513,7 @@ static unsigned long reconnect_backoff_ms(uint8_t attempts)
   if (backoff > 300000UL) backoff = 300000UL;
   static uint32_t s_jitter_ms = 0;
   if (s_jitter_ms == 0) {
-    uint32_t h = 2166136261u;
-    for (const char* p = DeviceInfo::chipid(); p && *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
-    s_jitter_ms = (h % 13u) * 1000u;   // 0..12 s
+    s_jitter_ms = (fnv1a(DeviceInfo::chipid()) % 13u) * 1000u;   // 0..12 s
   }
   backoff += s_jitter_ms;
   return backoff;
@@ -1015,7 +1007,6 @@ void MQTT_Client::begin()
     return;
   }
   mqttEnabled = true;
-  EGMqtt::setClock(fast_millis);
   s_mq.setKeepAlive(MQTT_KEEPALIVE_S);
   s_mq.setTimeout(MQTT_TIMEOUT_S);
   s_mq.onConnect(mq_up, this);

@@ -21,9 +21,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <lwip/err.h>
 #include "RespParse.h"
 #include "UrlParse.h"
+
+// the stack's wakes only send, the reply waits for idle()
+EGHttpClient::EGHttpClient() {
+  _tcp.onConnect([this]() { send_more(); });
+  _tcp.onSent([this](size_t) { send_more(); });
+}
 
 EGHttpClient::~EGHttpClient() {
   drop();
@@ -64,7 +69,7 @@ bool EGHttpClient::open(const char* method, const char* url) {
   _bad = false;
   _hops = 0;
   _sink = nullptr;
-  _startMs = millis();
+  _startMs = EGTcp::now();
 
   size_t n = strlen(method);
   int err = HTTPCODE_NOT_CONNECTED;
@@ -122,7 +127,7 @@ int EGHttpClient::start(const char* url) {
   _held = false;
   fresh_reply();
 
-  _heardMs = millis();
+  _heardMs = EGTcp::now();
   _phase = DIAL;
   if (!_tcp.connect(_host, _port)) return HTTPCODE_NOT_CONNECTED;
   return 0;
@@ -225,7 +230,7 @@ void EGHttpClient::step() {
   do {
     was = _phase;
     if (_phase == IDLE || _phase == DONE) return;
-    uint32_t now = millis();
+    uint32_t now = EGTcp::now();
     if (_held) _heardMs = now;   // sink waiting, not the server
     bool late = _deadlineMs && now - _startMs >= _deadlineMs;
     if (late || now - _heardMs >= _timeoutS * 1000UL) {
@@ -244,12 +249,12 @@ void EGHttpClient::step() {
 }
 
 void EGHttpClient::dial() {
-  EGTcpConn::State s = _tcp.state();
-  if (s == EGTcpConn::CLOSED) {
+  EGTcpClient::State s = _tcp.state();
+  if (s == EGTcpClient::CLOSED) {
     // lwIP gave up
-    end(_tcp.error() == ERR_ABRT ? HTTPCODE_TIMEOUT : HTTPCODE_NOT_CONNECTED);
-  } else if (s == EGTcpConn::OPEN && _ready) {
-    _heardMs = millis();
+    end(_tcp.error() == EGTcpClient::E_ABRT ? HTTPCODE_TIMEOUT : HTTPCODE_NOT_CONNECTED);
+  } else if (s == EGTcpClient::OPEN && _ready) {
+    _heardMs = EGTcp::now();
     _phase = SEND;
   }
 }
@@ -260,14 +265,19 @@ void EGHttpClient::push() {
     listen();
     return;
   }
-  if (_tcp.state() != EGTcpConn::OPEN) {
+  if (_tcp.state() != EGTcpClient::OPEN) {
     end(HTTPCODE_CONNECTION_LOST);
     return;
   }
   size_t n = _tcp.write(_req.p + _sent, _req.len - _sent);
-  if (n) _heardMs = millis();
+  if (n) _heardMs = EGTcp::now();
   _sent += n;
   if (_sent == _req.len) listen();
+}
+
+void EGHttpClient::send_more() {
+  if (_phase == DIAL) dial();
+  if (_phase == SEND) push();
 }
 
 void EGHttpClient::listen() {
@@ -287,13 +297,13 @@ size_t EGHttpClient::fill() {
   if (_inOff == _inLen) {
     _inLen = _tcp.read(_in, IN_CAP);
     _inOff = 0;
-    if (_inLen) _heardMs = millis();
+    if (_inLen) _heardMs = EGTcp::now();
   }
   return _inLen - _inOff;
 }
 
 bool EGHttpClient::gone() {
-  return _inOff == _inLen && !_tcp.available() && _tcp.state() == EGTcpConn::CLOSED;
+  return _inOff == _inLen && !_tcp.available() && _tcp.state() == EGTcpClient::CLOSED;
 }
 
 // false = not all here yet
@@ -567,7 +577,9 @@ void EGHttpClient::end(int err) {
   _err = (int16_t)err;
   _phase = DONE;
   _pending = true;
-  _tcp.close();
+  // errors drop it now, no linger
+  if (err) _tcp.abort();
+  else _tcp.close();
   drop();
 }
 

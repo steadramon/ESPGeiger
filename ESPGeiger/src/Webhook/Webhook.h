@@ -51,7 +51,7 @@ class Webhook : public EGHttpPoster {
     bool interpret(const char* reply) override;
     const char* log_tag() override { return PSTR("Webhook"); }
     const char* status_key() override { return PSTR("webhook"); }
-    const char* method() const override { return "POST"; }  // NOLINT(dram)
+    const char* method() const override { return "POST"; }
     uint16_t timeout_s() const override { return 10; }
     size_t reply_cap() const override { return 128; }
     void add_headers(EGHttpClient* r) override;

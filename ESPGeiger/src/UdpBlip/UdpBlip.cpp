@@ -27,6 +27,7 @@
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
+#include "Corium/System/Uptime.h"
 #include "GRNG/GRNG.h"
 #include "Corium/System/TickProfile.h"
 #include "EnvSensor/EnvSensor.h"
@@ -125,11 +126,11 @@ bool UdpBlipModule::ensureUdp() {
 void UdpBlipModule::announce_mdns() {
   if (_mdns_done || _mode == 0) return;
   // after ArduinoOTA starts mDNS
-  if (fast_millis() < 8000) return;
-  MDNS.addService("osc", "udp", _port);  // NOLINT(dram)
+  if (Uptime::seconds() < 8) return;
+  MDNS.addService("osc", "udp", _port);
   const char* fname = DeviceInfo::friendlyName();
-  if (fname && fname[0]) MDNS.addServiceTxt("osc", "udp", "fname", fname);  // NOLINT(dram)
-  MDNS.addServiceTxt("osc", "udp", "id", DeviceInfo::chipid());  // NOLINT(dram)
+  if (fname && fname[0]) MDNS.addServiceTxt("osc", "udp", "fname", fname);
+  MDNS.addServiceTxt("osc", "udp", "id", DeviceInfo::chipid());
   MDNS.addServiceTxt("osc", "udp", "group", EGPrefs::getString("udpblip", K_GROUP));
   _mdns_done = true;
 }
@@ -226,7 +227,7 @@ void UdpBlipModule::emitSys(uint32_t now) {
 static_assert(BLIP_ID_LEN == CHIPID_LEN, "blip id is the chip id");
 
 const char* UdpBlipModule::path(const char* suffix) {
-  strncpy_P(_path + BLIP_SUFFIX_AT, suffix, sizeof(_path) - BLIP_SUFFIX_AT - 1);
+  flash_to_ram(suffix, _path + BLIP_SUFFIX_AT, sizeof(_path) - BLIP_SUFFIX_AT);
   return _path;
 }
 
@@ -324,7 +325,7 @@ void UdpBlipModule::bind(bool fresh) {
 }
 
 void UdpBlipModule::loop(unsigned long now) {
-  if ((int32_t)((uint32_t)now - _next_sec_ms) >= 0) {
+  if (reached(now, _next_sec_ms)) {
     _next_sec_ms = (uint32_t)now + 1000;
     second();
   }

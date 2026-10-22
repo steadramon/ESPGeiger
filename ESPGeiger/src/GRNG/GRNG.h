@@ -35,6 +35,7 @@ class GRNG
     static void extract(uint8_t* out, size_t n);
     static uint32_t fast_uint32();
     static void extract_fast(uint8_t* out, size_t n);
+    static void pick(char* out, size_t n, PGM_P set, uint8_t set_len);
 };
 
 namespace GRNGRoutes {

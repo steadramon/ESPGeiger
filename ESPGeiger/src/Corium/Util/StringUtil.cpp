@@ -21,8 +21,16 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <pgmspace.h>
 #include <stdlib.h>
 #include <string.h>
+
+const char* flash_to_ram(const char* fp, char* dst, size_t cap) {
+  if (!fp) { dst[0] = '\0'; return dst; }
+  strncpy_P(dst, fp, cap - 1);
+  dst[cap - 1] = '\0';
+  return dst;
+}
 
 bool parse_i32(const char* s, int32_t* out, const char** end) {
   if (!s || !*s) return false;

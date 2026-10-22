@@ -20,11 +20,12 @@
 #include "ExternalPause.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 
 static const int32_t PAUSE_MAX_S = 86400;
 
-static volatile uint32_t s_pause_until_ms = 0;
+static uint32_t s_pause_until_ms = 0;
 
 void ExternalPause::start(uint32_t timeout_ms) {
   if (timeout_ms == 0) {
@@ -41,16 +42,14 @@ void ExternalPause::start(uint32_t timeout_ms) {
 bool ExternalPause::start_s(const char* secs) {
   int32_t n;
   if (!parse_i32(secs, &n)) return false;
-  if (n < 0) n = 0;
-  if (n > PAUSE_MAX_S) n = PAUSE_MAX_S;
-  start((uint32_t)n * 1000U);
+  start((uint32_t)clamp<int32_t>(n, 0, PAUSE_MAX_S) * 1000U);
   return true;
 }
 
 bool ExternalPause::active() {
   uint32_t until = s_pause_until_ms;
   if (until == 0) return false;
-  if ((int32_t)(fast_millis() - until) >= 0) {
+  if (reached(fast_millis(), until)) {
     s_pause_until_ms = 0;
     Log::console(PSTR("External posts: resumed (timeout)"));
     return false;

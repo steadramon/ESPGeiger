@@ -28,7 +28,7 @@
 
 static uint32_t s_tx_mask;   // 0 = no TX pin
 static bool s_tx_hi;
-static bool _bool_pulse_state = false;
+static volatile bool _bool_pulse_state = false;   // loop reads it
 static volatile unsigned long _last_b;
 // ticks, no libgcc in the isr
 static volatile uint32_t _this_delay;
@@ -89,11 +89,17 @@ void GeigerTestPulse::stopForOTA() { TestTimer::stop(); }
 void GeigerTestPulse::restartAfterOTA() { TestTimer::start(pulseInterrupt, _next_delay); }
 
 void GeigerTestPulse::loop() {
+  take();
   countTimerPulses();
-  if (_retarget && !_bool_pulse_state) {
-    _retarget = false;
-    _next_delay = (uint32_t)calcDelay();
-    TestTimer::restart((uint32_t)calcDelay());
+  if (_retarget) {
+    // between pulses only
+    if (_bool_pulse_state) {
+      post();
+    } else {
+      _retarget = false;
+      _next_delay = (uint32_t)calcDelay();
+      TestTimer::restart((uint32_t)calcDelay());
+    }
   }
   if (_last_pulse_test != _last_b) {
     _last_pulse_test = _last_b;
@@ -112,6 +118,7 @@ uint32_t IRAM_ATTR GeigerTestPulse::pulseInterrupt() {
     GeigerInputTest::timerPulse();
 #endif
     _last_b = micros();
+    GeigerInputTest::post();
     uint32_t next = _next_delay;
     _this_delay = (next > 2 * pulseWidthTicks) ? next - pulseWidthTicks : pulseWidthTicks;
     _our_delay = _this_delay;

@@ -19,12 +19,12 @@
 // keep host-buildable, web stuff in GRNGWeb.cpp
 
 #include "GRNG.h"
-#include "Corium/Module/EGModule.h"   // EG_XTASK_VOLATILE
 #include "Corium/System/DeviceInfo.h"
+#include "Corium/Util/MathUtil.h"
 #include "sha256.h"
 #include <string.h>
 
-static EG_XTASK_VOLATILE uint32_t s_pool[8] = {0};
+static uint32_t s_pool[8] = {0};
 static uint8_t s_mix_idx = 0;
 
 // own hasher, runs inside uECC_sign
@@ -96,6 +96,20 @@ void GRNG::extract(uint8_t* out, size_t n) {
   }
 }
 
+// no modulo bias, drops bytes past the last whole set
+void GRNG::pick(char* out, size_t n, PGM_P set, uint8_t set_len) {
+  const uint16_t top = 256 - 256 % set_len;
+  uint8_t buf[32];
+  while (n > 0) {
+    extract(buf, sizeof(buf));
+    for (size_t i = 0; i < sizeof(buf) && n > 0; i++) {
+      if (buf[i] >= top) continue;
+      *out++ = pgm_read_byte(&set[buf[i] % set_len]);
+      n--;
+    }
+  }
+}
+
 uint32_t GRNG::fast_uint32() {
   static uint8_t buf[32];
   static uint8_t pos = sizeof(buf);
@@ -114,9 +128,7 @@ void GRNG::extract_fast(uint8_t* out, size_t n) {
   uint32_t x = s_xs ^ fast_uint32();
   if (x == 0) x = 0x6b8b4567;
   while (n > 0) {
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
+    x = xorshift32(x);
     size_t take = n > 4 ? 4 : n;
     memcpy(out, &x, take);
     out += take;

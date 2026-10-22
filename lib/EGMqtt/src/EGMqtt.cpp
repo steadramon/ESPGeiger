@@ -32,11 +32,20 @@ static const size_t HEADER_MAX = 5;         // first byte and 4 length bytes
 // records sit on 4 byte offsets, so a Rec's fields are aligned
 static size_t padded(size_t n) { return (n + 3) & ~(size_t)3; }
 
-static uint32_t default_millis() { return ::millis(); }
-static EGMqtt::MillisFn s_clock = default_millis;
+static EGMqtt::MillisFn s_clock = EGTcp::now;
 
 void EGMqtt::setClock(MillisFn fn) {
-  s_clock = (fn != nullptr) ? fn : default_millis;
+  s_clock = (fn != nullptr) ? fn : EGTcp::now;
+}
+
+// the stack's wakes only send, callbacks wait for loop()
+EGMqtt::EGMqtt() {
+  sized();
+  _tcp.onConnect([this]() {
+    if (_phase == DIAL) dial(s_clock());
+    flush();
+  });
+  _tcp.onSent([this](size_t) { flush(); });
 }
 
 EGMqtt::~EGMqtt() {
@@ -225,7 +234,9 @@ void EGMqtt::stop() {
 // QoS 1 and 2 wait for the next connection
 void EGMqtt::end(int8_t err) {
   if (_state == DISCONNECTED) return;
-  _tcp.close();
+  // errors drop it now, no linger
+  if (err) _tcp.abort();
+  else _tcp.close();
   _state = DISCONNECTED;
   _phase = IDLE;
   _err = err;
@@ -255,7 +266,7 @@ void EGMqtt::loop() {
     if (_phase == DIAL) dial(now);
     if (_phase == HELLO || _phase == UP) receive();
     // closed, nothing left it can read
-    bool gone = _tcp.state() == EGTcpConn::CLOSED && (!_tcp.available() || !acks_fit());
+    bool gone = _tcp.state() == EGTcpClient::CLOSED && (!_tcp.available() || !acks_fit());
     if (_phase != IDLE && _phase != DIAL && gone) end(CONNECTION_LOST);
     if (_state != DISCONNECTED) timers(now);
     if (_state != DISCONNECTED) flush();
@@ -291,13 +302,13 @@ void EGMqtt::lost() {
 }
 
 void EGMqtt::dial(uint32_t now) {
-  EGTcpConn::State s = _tcp.state();
-  if (s == EGTcpConn::CLOSED) {
+  EGTcpClient::State s = _tcp.state();
+  if (s == EGTcpClient::CLOSED) {
     // no answer, lwIP gave up
-    end(_tcp.error() == EGTcpConn::E_ABRT ? TIMEOUT : TCP_FAILED);
+    end(_tcp.error() == EGTcpClient::E_ABRT ? TIMEOUT : TCP_FAILED);
     return;
   }
-  if (s != EGTcpConn::OPEN) return;
+  if (s != EGTcpClient::OPEN) return;
   // CONNECT first, alone till the CONNACK
   size_t cap;
   uint8_t* p = tail(&cap, false);   // compacts, so _outLen after this
@@ -421,7 +432,7 @@ uint16_t EGMqtt::next_id() {
 
 // in order, as far as the TCP window takes; only CONNECT before the CONNACK
 void EGMqtt::flush() {
-  if (!_m || _tcp.state() != EGTcpConn::OPEN) return;
+  if (!_m || _tcp.state() != EGTcpClient::OPEN) return;
   for (size_t off = 0; off < _outLen; off = next(off)) {
     Rec* r = rec(off);
     if (r->sent != S_NEW) continue;

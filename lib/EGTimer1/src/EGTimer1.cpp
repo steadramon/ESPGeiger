@@ -535,7 +535,7 @@ static bool IRAM_ATTR post(uint8_t op, uint32_t mask, uint32_t high, uint32_t lo
 // whole core waveform API, missing one = duplicate symbol
 extern "C" {
 
-int startWaveformClockCycles(uint8_t pin, uint32_t high, uint32_t low, uint32_t run,  // NOLINT(mixed-case,complexity) core API
+int startWaveformClockCycles(uint8_t pin, uint32_t high, uint32_t low, uint32_t run,  // core API
                              int8_t, uint32_t, bool) {
   if (pin > 16 || isFlashInterfacePin(pin) || pin == s_pwm_pin) return false;
   init_timer();
@@ -550,7 +550,7 @@ int startWaveformClockCycles(uint8_t pin, uint32_t high, uint32_t low, uint32_t 
   return post(EGT1_CMD_START, bit, high, low, run);
 }
 
-int startWaveform(uint8_t pin, uint32_t high_us, uint32_t low_us, uint32_t run_us,  // NOLINT(mixed-case,complexity) core API
+int startWaveform(uint8_t pin, uint32_t high_us, uint32_t low_us, uint32_t run_us,  // core API
                   int8_t align, uint32_t offset_us, bool auto_pwm) {
   return startWaveformClockCycles(pin, microsecondsToClockCycles(high_us),
                                   microsecondsToClockCycles(low_us),
@@ -558,18 +558,18 @@ int startWaveform(uint8_t pin, uint32_t high_us, uint32_t low_us, uint32_t run_u
                                   microsecondsToClockCycles(offset_us), auto_pwm);
 }
 
-IRAM_ATTR int stopWaveform(uint8_t pin) {  // NOLINT(mixed-case) core API
+IRAM_ATTR int stopWaveform(uint8_t pin) {  // core API
   if (pin > 16 || !(vload(g.soft_mask) & (1u << pin))) return false;
   return post(EGT1_CMD_STOP, 1u << pin, 0, 0, 0);
 }
 
 // refused, nothing else gets Timer1
-void setTimer1Callback(uint32_t (*fn)()) { (void)fn; }  // NOLINT(mixed-case) core API
+void setTimer1Callback(uint32_t (*fn)()) { (void)fn; }  // core API
 
 // false = analogWrite uses the waveform path
-void _setPWMFreq(uint32_t freq) { (void)freq; }  // NOLINT(mixed-case) core API
-IRAM_ATTR bool _stopPWM(uint8_t pin) { (void)pin; return false; }  // NOLINT(mixed-case) core API
-bool _setPWM(int pin, uint32_t val, uint32_t range) {  // NOLINT(mixed-case) core API
+void _setPWMFreq(uint32_t freq) { (void)freq; }  // core API
+IRAM_ATTR bool _stopPWM(uint8_t pin) { (void)pin; return false; }  // core API
+bool _setPWM(int pin, uint32_t val, uint32_t range) {  // core API
   (void)pin; (void)val; (void)range;
   return false;
 }

@@ -24,6 +24,7 @@
 #include "Corium/Module/EGModule.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/EGSmoothed.h"
+#include "Corium/Util/MathUtil.h"
 #include "HVTrim.h"
 #ifdef ESP32
 #include <EGLed.h>
@@ -144,14 +145,9 @@ class HV : public EGModule {
       EGMeasureRows measurements() override;
 #endif
       EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
-      const char* legacy_file() override { return "/espgeigerhw.json"; }  // NOLINT(dram) LEGACY IMPORT
+      const char* legacy_file() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
       void set_freq( int freq) {
-        if (freq > GEIGERHW_MAX_FREQ) {
-          freq = GEIGERHW_MAX_FREQ;
-        }
-        if (freq < GEIGERHW_MIN_FREQ) {
-          freq = GEIGERHW_MIN_FREQ;
-        }
+        freq = clamp(freq, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ);
       #ifdef ESP8266
         _cur_duty = -1;  // loop() posts freq and duty together
       #else
@@ -168,15 +164,10 @@ class HV : public EGModule {
         return _hw_duty;
       }
       void set_vd_ratio(int ratio) {
-        // 0 = ADC off
-        if (ratio < 0)     ratio = 0;
-        if (ratio > 50000) ratio = 50000;
-        _hw_vd_ratio = ratio;
+        _hw_vd_ratio = clamp(ratio, 0, 50000);   // 0 = ADC off
       }
       void set_vd_offset(int offset) {
-        if (offset < -100) offset = -100;
-        if (offset >  100) offset =  100;
-        _hw_vd_offset = offset;
+        _hw_vd_offset = clamp(offset, -100, 100);
       }
       int get_vd_ratio() {
         return _hw_vd_ratio;

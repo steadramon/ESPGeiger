@@ -36,6 +36,12 @@ namespace Uptime {
   inline time_t seconds() { return counter.value(); }
   inline time_t tick() { return counter.tick((uint32_t)::millis()); }
 
+  // 0 before from
+  inline uint32_t since(long from) {
+    uint32_t up = counter.value();
+    return (long)up > from ? up - from : 0;
+  }
+
   struct Split { uint16_t d; uint8_t h, m, s; };
   // 32 bit maths, time_t is 64 on some cores
   inline Split split(uint32_t t) {

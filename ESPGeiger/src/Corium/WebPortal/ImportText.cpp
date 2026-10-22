@@ -20,6 +20,7 @@
 #include "ImportText.h"
 #include <string.h>
 #include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/Bytes.h"
 
 // too long = false
 template <size_t N>
@@ -90,7 +91,7 @@ const char* ImportText::blob_error(const uint8_t* p, size_t len) {
       uint8_t klen = p[off++];
       if (off + klen + 2 > len) return PSTR("bad pref key");
       off += klen;
-      uint16_t vlen = ((uint16_t)p[off] << 8) | p[off + 1];
+      uint16_t vlen = rd_be16(p + off);
       off += 2;
       if (off + vlen > len) return PSTR("truncated pref value");
       off += vlen;
@@ -129,7 +130,7 @@ static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
       uint8_t klen = p[off++];
       char key[EGPREF_ID_MAX + 1];
       take_id(key, p + off, klen); off += klen;
-      uint16_t vlen = ((uint16_t)p[off] << 8) | p[off + 1];
+      uint16_t vlen = rd_be16(p + off);
       off += 2;
       char value[EGPREFS_MAX_VALUE + 1];
       if (!mine || vlen >= sizeof(value)) { off += vlen; continue; }

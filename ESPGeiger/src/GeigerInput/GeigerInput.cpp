@@ -32,9 +32,7 @@ static constexpr uint32_t ISR_STORM_THRESHOLD = 10000;
 static constexpr uint8_t  ISR_STORM_COOLDOWN_S = 5;
 static uint8_t s_isr_cooldown = 0;
 
-#ifdef ESP32
-portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-#endif
+IsrLock::Mux timerMux;
 
 void GeigerInput::begin() {
 
@@ -62,18 +60,10 @@ void GeigerInput::set_tx_pin(int pin) {
 }
 
 int GeigerInput::collect() {
-#ifdef ESP32
-  portENTER_CRITICAL(&timerMux);
-#else
-  noInterrupts();
-#endif
+  IsrLock::enter(timerMux);
   uint32_t n = s_event_counter;
   s_event_counter = 0;
-#ifdef ESP32
-  portEXIT_CRITICAL(&timerMux);
-#else
-  interrupts();
-#endif
+  IsrLock::leave(timerMux);
   return (int)n;
 }
 
@@ -93,13 +83,9 @@ static inline __attribute__((always_inline)) void count_at(unsigned long cycles)
   if (cycles - _last_blip < _debounce) {
     return;
   }
-#ifdef ESP32
-  portENTER_CRITICAL_ISR(&timerMux);
-#endif
+  IsrLock::enter_isr(timerMux);
   s_event_counter++;
-#ifdef ESP32
-  portEXIT_CRITICAL_ISR(&timerMux);
-#endif
+  IsrLock::leave_isr(timerMux);
   _last_blip = cycles;
   Counter::on_pulse((uint32_t)cycles);
 }
@@ -115,8 +101,10 @@ void GeigerInput::countAt(unsigned long us) {
 // floating pin, EMI
 void GeigerInput::checkIsrStorm() {
   if (_rx_pin < 0) return;
+  IsrLock::enter(timerMux);
   uint32_t n = s_isr_entries;
   s_isr_entries = 0;
+  IsrLock::leave(timerMux);
 
   if (s_isr_cooldown > 0) {
     if (--s_isr_cooldown == 0) {
@@ -135,20 +123,10 @@ void GeigerInput::checkIsrStorm() {
 }
 
 void GeigerInput::setCounter(int val, bool update) {
-  if (update) {
-#ifdef ESP32
-    portENTER_CRITICAL(&timerMux);
-#else
-    noInterrupts();
-#endif
-  }
+  if (update) IsrLock::enter(timerMux);
   s_event_counter = (uint32_t)val;
   if (update) {
-#ifdef ESP32
-    portEXIT_CRITICAL(&timerMux);
-#else
-    interrupts();
-#endif
+    IsrLock::leave(timerMux);
     _last_blip = micros();
   }
 }

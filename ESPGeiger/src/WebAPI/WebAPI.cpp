@@ -37,6 +37,7 @@
 #include "GRNG/GRNG.h"
 #include "Corium/System/TickProfile.h"
 #include "Corium/System/CrashDump.h"
+#include "Corium/Util/Bytes.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/WebPortal/WebPortal.h"
@@ -188,7 +189,7 @@ void WebAPI::loop(unsigned long now) {
     if (first)
       _hs_off = EGModuleRegistry::initial_offset(PSTR("wapi.hs"), pingIntervalMs);
     handshakeAt((uint32_t)now + (first && crash_to_send() ? 0 : _hs_off));
-  } else if ((int32_t)((uint32_t)now - nextHandshake) >= 0) {
+  } else if (reached(now, nextHandshake)) {
     doHandshake();
   } else if (station_id != 0) {
     pingIfDue(now);
@@ -404,8 +405,7 @@ void WebAPI::onHandshake() {
       if (station_id != id) {
         Log::console(HS_OK, id);
         station_id = id;
-        uint32_t k = ((uint32_t)pub_k[4] << 24) | ((uint32_t)pub_k[5] << 16)
-                   | ((uint32_t)pub_k[6] << 8)  |  (uint32_t)pub_k[7];
+        uint32_t k = rd_be32(pub_k + 4);
         handshakeAt(fast_millis() +
           wall_clock_wait_ms(k, WEBAPI_HANDSHAKE_MS, 3600, Clock::epoch()));
         EGModuleRegistry::set_loop_interval(this, 100);
@@ -421,8 +421,7 @@ void WebAPI::onHandshake() {
   } else {
     int code = request.responseHTTPcode();
     char why[32];
-    strncpy_P(why, (PGM_P)request.responseHTTPStringF(), sizeof(why) - 1);
-    why[sizeof(why) - 1] = '\0';
+    flash_to_ram((PGM_P)request.responseHTTPStringF(), why, sizeof(why));
     Log::debug(PSTR("WebAPI: Handshake error %d - %s"), code, why);
     if (code == 403) denied(&request);
     if (code == 429) {
@@ -552,8 +551,7 @@ void WebAPI::onPost() {
   } else {
     int code = request.responseHTTPcode();
     char why[32];
-    strncpy_P(why, (PGM_P)request.responseHTTPStringF(), sizeof(why) - 1);
-    why[sizeof(why) - 1] = '\0';
+    flash_to_ram((PGM_P)request.responseHTTPStringF(), why, sizeof(why));
     Log::debug(PSTR("WebAPI: Error %d - %s"), code, why);
     if (code == 403) {
       denied(&request);
@@ -626,8 +624,7 @@ void WebAPI::onForget() {
     EGModuleRegistry::set_loop_interval(this, 100);
   } else {
     char why[32];
-    strncpy_P(why, (PGM_P)request.responseHTTPStringF(), sizeof(why) - 1);
-    why[sizeof(why) - 1] = '\0';
+    flash_to_ram((PGM_P)request.responseHTTPStringF(), why, sizeof(why));
     Log::console(PSTR("WebAPI: Forget failed - %s"), why);
   }
   note_publish(ok);

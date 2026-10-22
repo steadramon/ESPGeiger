@@ -23,6 +23,7 @@
 #include <Arduino.h>
 #include "Corium/System/Globals.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Corium/System/IsrLock.h"
 
 // GEIGER_TYPE bits, test builds >= 128
 #define GEIGER_FLAG_PULSE   0x01
@@ -110,9 +111,7 @@ extern volatile uint32_t s_event_counter;   // isr writes, loop reads and clears
 
 extern volatile unsigned long _debounce;
 
-#ifdef ESP32
-extern portMUX_TYPE timerMux;
-#endif
+extern IsrLock::Mux timerMux;
 
 class EGHttpResponse;
 class EGHttpServer;

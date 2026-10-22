@@ -37,7 +37,7 @@ uint8_t EGModuleRegistry::_overflow = 0;
 uint32_t EGModuleRegistry::_next_loop_due = 0;
 uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_due_count = 0;
-EG_XTASK_VOLATILE bool EGModuleRegistry::_pending = false;
+bool EGModuleRegistry::_pending = false;
 bool EGModuleRegistry::_safe_mode = false;
 
 // min 1 ms, 0 refires in the same pass
@@ -136,7 +136,7 @@ inline uint32_t EGModuleRegistry::next_wake(unsigned long now) {
 
 void EGModuleRegistry::loop_all(unsigned long now) {
   if (_pending) apply_pending();
-  if ((int32_t)(now - _next_loop_due) < 0) return;
+  if (!reached(now, _next_loop_due)) return;
 
   if (ota_in_progress) {
     for (uint8_t i = 0; i < _count; i++) {
@@ -154,7 +154,7 @@ void EGModuleRegistry::loop_all(unsigned long now) {
   while (k < _due_count) {
     uint8_t idx = _due_order[k];
     Slot& s = _slots[idx];
-    if ((int32_t)(now - s.next_due) < 0) break;
+    if (!reached(now, s.next_due)) break;
     if ((s.flags & unmet) || (paused && s.category == (uint8_t)EGP_CAT_UPLOAD)) {
       // gate closed, retry within 1 s
       s.next_due = now + (s.loop_interval < 1000 ? s.loop_interval : 1000);
@@ -289,26 +289,20 @@ bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
   for (uint8_t i = 0; i < _count; i++) {
     if (_slots[i].module != m) continue;
     if (_slots[i].flags & FLAG_QUARANTINED) return false;
-    EGREG_LOCK();
     _slots[i].pending_ms = interval_ms;
     _pending = true;
-    EGREG_UNLOCK();
     return true;
   }
   return false;
 }
 
 void EGModuleRegistry::apply_pending() {
-  EGREG_LOCK();
   _pending = false;
-  EGREG_UNLOCK();
   uint32_t now = fast_millis();
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
-    EGREG_LOCK();
     int32_t interval_ms = s.pending_ms;
     s.pending_ms = NO_REQUEST;
-    EGREG_UNLOCK();
     if (interval_ms == NO_REQUEST) continue;
     if (interval_ms >= 0) {
       s.flags |= FLAG_HAS_LOOP;

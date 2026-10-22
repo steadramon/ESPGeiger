@@ -21,6 +21,7 @@
 
 #include "GeigerInput/GeigerInput.h"
 #include "UdpBlip/UdpBlip.h"
+#include "Corium/Util/MathUtil.h"
 #include <IPAddress.h>
 
 class WiFiUDP;
@@ -77,13 +78,7 @@ public:
   uint32_t last_click_ms()    const { return _last_click_ms; }
   // any message
   uint32_t last_packet_ms()   const { return _last_packet_ms; }
-  uint16_t loss_pct_x10() const {
-    uint32_t total = _local_count;
-    if (total == 0) return 0;
-    uint32_t g = _gap_filled;
-    if (g >= total) return 1000;
-    return (uint16_t)((g * 1000u) / total);
-  }
+  uint16_t loss_pct_x10() const { return per_mille(_gap_filled, _local_count); }
   uint32_t quiet_s() const;   // 0 before the first
   bool heard() const;
   uint16_t rebind_count() const       { return _rebind_count; }
@@ -118,7 +113,7 @@ private:
   char      _env_chipid[BLIP_ID_LEN + 1] = {0};
   uint8_t   _rx_mode = 1;       // 0=light 1=modem 2=none
 
-  volatile uint32_t _local_count = 0;
+  uint32_t _local_count = 0;
   uint32_t _last_seen_count = 0;
   uint32_t _packets_accepted = 0;
   uint32_t _gap_filled = 0;

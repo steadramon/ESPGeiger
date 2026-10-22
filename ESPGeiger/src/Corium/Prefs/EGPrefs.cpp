@@ -23,6 +23,7 @@
 #include "Corium/Module/EGModule.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/PinSafety.h"
+#include "Corium/Util/Bytes.h"
 #include "Corium/Util/StringUtil.h"
 #include <ArduinoJson.h>
 #include <EGEscape.h>
@@ -389,8 +390,7 @@ bool write_group(GroupShadow& gs) {
     size_t vlen = strlen(value);
     buf[p++] = (uint8_t)klen;
     memcpy_P(&buf[p], key, klen); p += klen;
-    buf[p++] = (uint8_t)(vlen & 0xFF);
-    buf[p++] = (uint8_t)((vlen >> 8) & 0xFF);
+    wr_le16(&buf[p], (uint16_t)vlen); p += 2;
     memcpy(&buf[p], value, vlen); p += vlen;
   }
   bool ok = s_storage.writeGroup(gs.group->module_id, buf, total);
@@ -455,7 +455,7 @@ void drop_stale_legacy() {
   }
 }
 
-// NOLINTNEXTLINE(complexity) one-off migration
+// one-off migration
 void import_legacy() {
   bool any_missing = false;
   for (size_t gi = 0; gi < s_group_count; gi++) {

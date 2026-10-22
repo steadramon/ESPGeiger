@@ -32,6 +32,9 @@ static inline void advance_pos(size_t& pos, int nret, size_t bufsz) {
   pos += (want < room) ? want : room;
 }
 
+// null fp = ""
+const char* flash_to_ram(const char* fp, char* dst, size_t cap);
+
 // 2n chars, no NUL
 void hex_encode(char* out, const uint8_t* in, size_t n);
 // exactly 2n hex chars, anything else is false and out untouched

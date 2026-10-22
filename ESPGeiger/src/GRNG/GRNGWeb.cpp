@@ -19,6 +19,8 @@
 
 #include "GRNG.h"
 #include "Corium/WebPortal/WebPortal.h"
+#include "Corium/Util/Bytes.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGHttpServer.h>
 
@@ -98,9 +100,7 @@ static void send_hex(EGHttpResponse& res, long n, size_t per_chunk) {
 static void random_otp(EGHttpRequest& req, EGHttpResponse& res) {
   int32_t n = 256;
   parse_i32(req.arg(F("n")), &n);
-  if (n < 16)   n = 16;
-  if (n > 1024) n = 1024;
-  send_hex(res, n, 64);
+  send_hex(res, clamp<int32_t>(n, 16, 1024), 64);
 }
 
 static void random_hex(EGHttpRequest& req, EGHttpResponse& res) {
@@ -127,8 +127,7 @@ static size_t random_dice(EGHttpRequest& req, char* out, size_t cap) {
   if (sides > 10000) sides = 10000;
   uint8_t bytes[4];
   GRNG::extract(bytes, 4);
-  uint32_t r = ((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) |
-               ((uint32_t)bytes[2] <<  8) |  (uint32_t)bytes[3];
+  uint32_t r = rd_be32(bytes);
   long roll = (long)(r % (uint32_t)sides) + 1;
   return snprintf_P(out, cap, PSTR("%ld"), roll);
 }
@@ -139,9 +138,7 @@ static size_t random_password(EGHttpRequest& req, char* out) {
   parse_i32(req.arg(F("len")), &len);
   if (len < 4)  len = 16;
   if (len > 64) len = 64;
-  uint8_t bytes[64];
-  GRNG::extract(bytes, len);
-  for (long i = 0; i < len; i++) out[i] = pgm_read_byte(&PW_CHARS[bytes[i] % (sizeof(PW_CHARS) - 1)]);
+  GRNG::pick(out, len, PW_CHARS, sizeof(PW_CHARS) - 1);
   return len;
 }
 
@@ -168,8 +165,7 @@ static size_t random_flip(EGHttpRequest& req, char* out, size_t cap) {
   // chi^2 1 dof, < 3.841 fair, < 6.635 suspect
   int32_t n = 1000;
   parse_i32(req.arg(F("n")), &n);
-  if (n < 10)    n = 10;
-  if (n > 10000) n = 10000;
+  n = clamp<int32_t>(n, 10, 10000);
   uint32_t heads = count_heads(n);
   uint32_t tails = (uint32_t)n - heads;
   float diff = (float)heads - (float)n / 2.0f;

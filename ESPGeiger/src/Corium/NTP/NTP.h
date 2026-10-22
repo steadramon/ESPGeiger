@@ -57,7 +57,7 @@ class NTP_Client : public EGModule {
 
     void renderInlineForm(class EGHttpResponse& res);
     EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
-    const char* legacy_file() override { return "/ntp.json"; }  // NOLINT(dram) LEGACY IMPORT
+    const char* legacy_file() override { return "/ntp.json"; }  // LEGACY IMPORT
 
     const char* get_server() { return EGPrefs::getString("ntp", EG_K_SERVER); }
     const char* get_tz()     { return EGPrefs::getString("ntp", EG_K_TZ); }

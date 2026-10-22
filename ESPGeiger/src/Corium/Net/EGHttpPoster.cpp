@@ -23,6 +23,7 @@
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Globals.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/StringUtil.h"
 #include <EGHttpStrings.h>
 
 static_assert(EGHTTP_HOST_MAX >= EG_HOST_MAX, "a host pref must fit the client");
@@ -77,8 +78,7 @@ void EGHttpPoster::take_reply()
     ok = interpret(r);
   } else {
     char why[32];
-    strncpy_P(why, (PGM_P)request->responseHTTPStringF(), sizeof(why) - 1);
-    why[sizeof(why) - 1] = '\0';
+    flash_to_ram((PGM_P)request->responseHTTPStringF(), why, sizeof(why));
     Log::console(PSTR("%s: Error %d - %s"), log_tag(), request->responseHTTPcode(), why);
   }
   note_result(ok);

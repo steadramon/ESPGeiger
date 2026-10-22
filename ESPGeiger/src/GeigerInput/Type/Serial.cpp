@@ -23,6 +23,7 @@
 
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/MathUtil.h"
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
@@ -54,10 +55,7 @@ void GeigerSerial::begin() {
     Log::console(PSTR("GeigerSerial: ERROR port would not open"));
   }
   geigerPort.flush();
-  uint32_t skip = 6000000UL / baud;
-  if (skip < 5)   skip = 5;
-  if (skip > 500) skip = 500;
-  _idle_skip = (uint16_t)skip;
+  _idle_skip = (uint16_t)clamp<uint32_t>(6000000UL / baud, 5, 500);
   _poll_skip = _idle_skip;
 }
 

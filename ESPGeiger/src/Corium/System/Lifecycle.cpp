@@ -17,8 +17,9 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Lifecycle.h"
+#include "FastMillis.h"
 
-volatile bool ota_in_progress = false;
+bool ota_in_progress = false;
 
 namespace Lifecycle {
 
@@ -36,7 +37,7 @@ void send(Event e) {
   for (uint8_t i = 0; i < s_count; i++) s_handlers[i](e);
 }
 
-static volatile uint32_t s_restart_at = 0;   // 0 = none
+static uint32_t s_restart_at = 0;   // 0 = none
 
 void request_restart(uint32_t now, uint32_t delay_ms) {
   uint32_t at = now + delay_ms;
@@ -44,8 +45,7 @@ void request_restart(uint32_t now, uint32_t delay_ms) {
 }
 
 bool restart_due(uint32_t now) {
-  uint32_t at = s_restart_at;
-  return at != 0 && (int32_t)(now - at) >= 0;
+  return s_restart_at != 0 && reached(now, s_restart_at);
 }
 
 }

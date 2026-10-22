@@ -82,15 +82,15 @@ class WebAPI : public EGModule {
     void loadConfig();
     void saveConfig();
 
-    EG_XTASK_VOLATILE uint32_t station_id = 0;
+    uint32_t station_id = 0;
     bool _have_key = false;   // a key can start with 0
     uint8_t priv_k[WEBAPI_PRIV_LEN] = {0};
     uint8_t pub_k[2 * WEBAPI_PRIV_LEN] = {0};
     char pub_k_64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = "";  // base64, no padding
     static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
     unsigned long lastPing = 0;
-    EG_XTASK_VOLATILE uint32_t nextHandshake = 0;   // 0 = not set
-    EG_XTASK_VOLATILE uint32_t _hs_backoff_ms = WEBAPI_BACKOFF_MS;
+    uint32_t nextHandshake = 0;   // 0 = not set
+    uint32_t _hs_backoff_ms = WEBAPI_BACKOFF_MS;
     void handshakeAt(uint32_t at);
     // claimed once, reused
     uint32_t _hs_off = 0xFFFFFFFFu;
@@ -98,7 +98,7 @@ class WebAPI : public EGModule {
     uint8_t healthPostCounter = 0;
     uint8_t _mode = 2;   // 0 off, 1 heartbeat, 2 + CPM
     void backoffHandshake();
-    EG_XTASK_VOLATILE bool _exc_sent = false;
+    bool _exc_sent = false;
 };
 
 extern WebAPI webapi;

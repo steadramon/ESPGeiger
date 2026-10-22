@@ -1,6 +1,6 @@
 # EGMqtt
 
-MQTT 3.1.1 client for ESP8266 and ESP32, run from the main loop on EGTcpConn.
+MQTT 3.1.1 client for ESP8266 and ESP32, run from the main loop on EGTcp.
 QoS 0, 1 and 2, callbacks from `loop()`, no TLS. `EGMqttWire` builds and
 parses the packets on its own, with no I/O.
 

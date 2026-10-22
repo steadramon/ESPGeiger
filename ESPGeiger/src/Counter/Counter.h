@@ -32,6 +32,14 @@
   #define COUNTER_DRAINS_PCNT
 #endif
 
+// test timers post their work, nothing to poll
+#if GEIGER_IS_TEST(GEIGER_TYPE) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !defined(GEIGER_COUNTS_IN_ISR)
+  #define TEST_POSTS_WORK 1
+  #include "GeigerInput/GeigerInputTest.h"
+#else
+  #define TEST_POSTS_WORK 0
+#endif
+
 class GeigerUdpRx;
 
 #ifndef GEIGER_DEAD_TIME_US
@@ -152,20 +160,21 @@ class Counter : public CounterMaths {
 
       // inline gate
       inline bool needs_loop() {
-#if GEIGER_IS_TEST(GEIGER_TYPE) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !defined(GEIGER_COUNTS_IN_ISR)
-        return true;   // drains every pass anyway
-#else
         if (_pending_work) return true;
-  #ifdef GEIGER_COUNTS_IN_ISR
+#if TEST_POSTS_WORK
+        if (GeigerInputTest::work()) return true;
+#endif
+#ifdef GEIGER_COUNTS_IN_ISR
         return _last_blip_seen != _last_blip;
-  #else
+#else
         if (!_running) return false;
         if (_last_blip_seen != _last_blip) return true;
-    #ifdef COUNTER_DRAINS_PCNT
+  #ifdef COUNTER_DRAINS_PCNT
         return (uint32_t)(fast_millis() - _pcnt_ms) >= PCNT_DRAIN_MS;
-    #else
+  #elif TEST_POSTS_WORK
+        return false;
+  #else
         return geigerinput->poll_due();
-    #endif
   #endif
 #endif
       }

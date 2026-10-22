@@ -88,9 +88,9 @@ void GeigerPulse::drain_pcnt() {
   if (span_us == 0 || span_us > 1000000UL) span_us = 1000000UL;
   _last_drain_us = now_us;
 
-  portENTER_CRITICAL(&timerMux);
+  IsrLock::enter(timerMux);
   s_event_counter += (uint32_t)n;
-  portEXIT_CRITICAL(&timerMux);
+  IsrLock::leave(timerMux);
 
   _last_blip = now_us;
   Counter::on_pulse_batch((uint16_t)n, now_us, span_us);
@@ -109,10 +109,10 @@ int GeigerPulse::collect() {
   }
   _last_drain_us = now_us;
 
-  portENTER_CRITICAL(&timerMux);
+  IsrLock::enter(timerMux);
   uint32_t pending = s_event_counter;
   s_event_counter = 0;
-  portEXIT_CRITICAL(&timerMux);
+  IsrLock::leave(timerMux);
 
   return (int)(pending + (uint32_t)residual);
 }

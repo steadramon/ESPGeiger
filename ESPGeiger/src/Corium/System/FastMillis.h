@@ -28,4 +28,7 @@ extern volatile uint32_t _fast_ms_counter;
 
 static inline uint32_t fast_millis() { return _fast_ms_counter; }
 
+// at or past, wrap-safe, any unit
+static inline bool reached(uint32_t now, uint32_t at) { return (int32_t)(now - at) >= 0; }
+
 #endif

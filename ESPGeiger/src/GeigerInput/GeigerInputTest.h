@@ -20,6 +20,7 @@
 #define GEIGERINPUTTEST_H
 
 #include <Arduino.h>
+#include <atomic>
 #include "GeigerInput.h"
 
 #ifndef GEIGER_TESTPULSE_ADJUSTTIME
@@ -63,12 +64,20 @@ class GeigerInputTest : public GeigerInput
     double generatePoissonRand(double lambda);
     // timer side, stamp only, count in loop()
     static void IRAM_ATTR timerPulse();
-    // every pass, keep inline
-    static void countTimerPulses() { if (_tp_head != _tp_tail) drainTimerPulses(); }
+    // every pass, keep inline. relaxed, no memw a pass
+    static void countTimerPulses() {
+      if (_tp_head.load(std::memory_order_relaxed) != _tp_tail.load(std::memory_order_relaxed))
+        drainTimerPulses();
+    }
     static void drainTimerPulses();
     int collect() override;
-    static volatile uint8_t _tp_head;   // handler
-    static volatile uint8_t _tp_tail;   // loop
+    static std::atomic<uint8_t> _tp_head;   // handler
+    static std::atomic<uint8_t> _tp_tail;   // loop
+    // stamp, pulse or retarget; loop() clears it first, collect() sweeps the rest
+    static std::atomic<bool> _tp_work;
+    static void post() { _tp_work.store(true, std::memory_order_relaxed); }
+    static bool work() { return _tp_work.load(std::memory_order_relaxed); }
+    static void take() { _tp_work.store(false, std::memory_order_relaxed); }
   protected:
     bool _retarget = false;
   private:

@@ -239,7 +239,7 @@ void HV::loop(unsigned long now) {
   if (_pwm_pin >= 0) write_duty();
 #ifdef ESPG_HV_ADC
   if (_hw_vd_ratio == 0) return;
-  bool settled = gcounter.is_warm() && (long)(now - _trim_settle_until) >= 0;
+  bool settled = gcounter.is_warm() && reached(now, _trim_settle_until);
   int volts = read_hv();
   check_overvoltage(volts);
   if (_hv_target > 0 && !_ov_trip && settled) trim_step();

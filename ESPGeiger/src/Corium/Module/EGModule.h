@@ -24,13 +24,6 @@
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Measure/EGMeasure.h"
 
-// esp32 callbacks run on the AsyncTCP task
-#ifdef ESP32
-#define EG_XTASK_VOLATILE volatile
-#else
-#define EG_XTASK_VOLATILE
-#endif
-
 class EGHttpServer;
 
 // PROGMEM, ends with an empty path
@@ -47,7 +40,6 @@ struct EGMenuEntry {
 
 class EGModule {
   public:
-    virtual ~EGModule() {}
     virtual const char* name() = 0;
     virtual uint8_t priority() { return EG_PRIORITY_DEFAULT; }
     virtual void pre_wifi() {}   // no network yet
@@ -92,18 +84,6 @@ class EGModule {
     uint8_t _publish_pending : 1;
     unsigned long last_attempt_ms = 0;
 
-#ifdef ESP32
-    static portMUX_TYPE& _pub_mux() {
-      static portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
-      return m;
-    }
-#define EGMOD_PUB_LOCK()   portENTER_CRITICAL(&EGModule::_pub_mux())
-#define EGMOD_PUB_UNLOCK() portEXIT_CRITICAL(&EGModule::_pub_mux())
-#else
-#define EGMOD_PUB_LOCK()
-#define EGMOD_PUB_UNLOCK()
-#endif
-
     void note_publish(bool ok);
     void note_attempt();
     void note_result(bool ok);
@@ -115,6 +95,8 @@ class EGModule {
     uint8_t _pub_err = 0;
 
   protected:
+    // statics, never deleted
+    ~EGModule() = default;
     static size_t write_status_json(char* buf, size_t cap, const char* key,
                                     bool ok, unsigned long last_attempt_ms,
                                     unsigned long now);

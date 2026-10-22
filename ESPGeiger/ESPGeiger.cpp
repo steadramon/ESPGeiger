@@ -23,9 +23,8 @@
 #ifdef ESP32
 #include "esp_log.h"
 #include "esp_task_wdt.h"
-#else
-#include <EGAsyncTCP.h>
 #endif
+#include <EGTcp.h>
 #include <Ticker.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
@@ -156,9 +155,7 @@ static void start_clock() {
   _fast_ms_last_us = micros();
   _fast_ms_counter = _fast_ms_last_us / 1000;
   msTicker.attach_ms(1, msTickerCB);
-#ifdef ESP8266
-  AsyncClient::setClock(fast_millis);
-#endif
+  EGTcp::setClock(fast_millis);
 }
 
 static void boot_wifi() {
@@ -264,15 +261,16 @@ static inline void pass()
     esp_task_wdt_reset();
   }
 #endif
+  if (!ota_in_progress && gcounter.needs_loop()) gcounter.loop();
   unsigned long now = fast_millis();
-  if (!ota_in_progress) {
-    if (gcounter.needs_loop()) gcounter.loop();
-    if ((int32_t)(now - s_webPortal.next_tick_due()) >= 0) {
-      s_webPortal.tick(now);
-    }
-  }
-  if ((long)(now - EGModuleRegistry::next_loop_due()) >= 0) {
-    EGModuleRegistry::loop_all(now);
+  // the rest runs on ms, once a ms is plenty
+  static unsigned long s_ms;
+  if (now != s_ms) {
+    s_ms = now;
+    // tcp callbacks, ota needs them too
+    EGTcp::poll();
+    if (!ota_in_progress && reached(now, s_webPortal.next_tick_due())) s_webPortal.tick(now);
+    if (reached(now, EGModuleRegistry::next_loop_due())) EGModuleRegistry::loop_all(now);
   }
 #ifdef LOOP_PROFILE
   TickProfile::addLoopBody((uint32_t)(micros() - _body_t0));
@@ -295,7 +293,7 @@ extern "C" void __preloop_update_frequency();
 extern "C" void preloop_update_frequency() {
   static uint32_t s_next;
   uint32_t now = fast_millis();
-  if ((int32_t)(now - s_next) < 0) return;
+  if (!reached(now, s_next)) return;
   s_next = now + 1000;
   __preloop_update_frequency();
 }

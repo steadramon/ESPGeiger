@@ -146,7 +146,7 @@ namespace LedSignal {
 #ifdef BLIP_LED_PIN
     s_engine.mode       = engine_mode;
     s_engine.pulse_us   = pulse_us;
-    s_engine.fade_shift = (uint8_t)(fade_shift_idx + 2);
+    s_engine.fade_shift = PulseEngine::fadeShiftFromUi(fade_shift_idx);
     s_engine.max_hz     = max_hz;
     s_engine.commitConfig();
 #else
@@ -154,10 +154,10 @@ namespace LedSignal {
 #endif
     // onboard led, same limits
     if (fade_shift_idx > 2) fade_shift_idx = 1;
-    s_click_pulse_ms = (uint16_t)(constrain((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
-                                            PulseEngine::PULSE_US_MAX) / 1000);
+    s_click_pulse_ms = (uint16_t)(clamp((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
+                                        PulseEngine::PULSE_US_MAX) / 1000);
     s_click_mode     = engine_mode;
-    s_click_fade     = (uint8_t)(fade_shift_idx + 2);
+    s_click_fade     = PulseEngine::fadeShiftFromUi(fade_shift_idx);
   }
 
 }

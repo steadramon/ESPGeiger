@@ -27,6 +27,8 @@
 #include "Corium/System/Globals.h"
 #include "Corium/System/PinSafety.h"
 
+#include "Corium/Util/Bytes.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 
 EG_PSTR(K_CYCLES, "cycles");
@@ -99,7 +101,7 @@ void PulseOut::on_prefs_loaded() {
   _engine.freq_hz  = EGPrefs::getUInt("pulse", EG_K_FREQ);
   _engine.cycles   = EGPrefs::getUInt("pulse", K_CYCLES);
   _engine.polarity = (uint8_t)EGPrefs::getUInt("pulse", EG_K_POLARITY);
-  _engine.fade_shift = (uint8_t)(EGPrefs::getUInt("pulse", EG_K_FADE_SHIFT) + 2);   // ui index
+  _engine.fade_shift = PulseEngine::fadeShiftFromUi(EGPrefs::getUInt("pulse", EG_K_FADE_SHIFT));
   _engine.max_hz   = EGPrefs::getUInt("pulse", K_MAX_HZ);
   _engine.active_level = PulseEngine::levelFromPercent(EGPrefs::getUInt("pulse", EG_K_BRIGHTNESS));
   _quiet.set(EGPrefs::getString("pulse", EG_K_QUIET_FROM),
@@ -111,7 +113,7 @@ void PulseOut::on_prefs_loaded() {
 // v0.11 led.bin blip_pin, blip_pulse_ms to pulse.*
 static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 
-// NOLINTNEXTLINE(complexity) one-off migration
+// one-off migration
 static bool migrate_legacy_blip() {
   if (!Fs::begin() || LittleFS.exists(BLIP_MIG_MARKER)) return false;
   File f = Fs::open_r("/prefs/led.bin");
@@ -136,7 +138,7 @@ static bool migrate_legacy_blip() {
     if (f.read((uint8_t*)key, klen) != klen) break;
     uint8_t vb[2];
     if (f.read(vb, 2) != 2) break;
-    uint16_t vlen = (uint16_t)vb[0] | ((uint16_t)vb[1] << 8);
+    uint16_t vlen = rd_le16(vb);
     if (vlen >= sizeof(value)) break;
     if (vlen > 0 && f.read((uint8_t*)value, vlen) != vlen) break;
     if (klen == 8  && strncmp(key, "blip_pin", 8) == 0 && vlen < sizeof(pin_val)) {
@@ -181,12 +183,10 @@ void PulseOut::begin() {
     return;
   }
   // chip-id jitter, +/-15% width, +/-3% freq
-  uint64_t id = DeviceInfo::hwid();
-  uint32_t r = (uint32_t)id ^ (uint32_t)(id >> 32);
-  r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+  uint32_t r = xorshift32(fold32(DeviceInfo::hwid()));
   int32_t  s = (int32_t)(r & 0xFF) - 128;
   _engine.voice_pulse = 1.0f + s * (0.15f / 128.0f);
-  r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+  r = xorshift32(r);
   s = (int32_t)(r & 0xFF) - 128;
   _engine.voice_freq  = 1.0f + s * (0.03f / 128.0f);
   _engine.commitConfig();

@@ -30,6 +30,7 @@ EnvSensor envsensor;
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/I2CBus.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 
 EG_PSTR(K_UNIT,        "unit");
@@ -248,12 +249,15 @@ bool EnvSensor::remoteFresh() const {
   return (uint32_t)(fast_millis() - _r_last_ms) < ENV_REMOTE_TTL_MS;
 }
 
+// off the wire, inf reads as missing
+static float or_nan(float v) { return is_finite(v) ? v : NAN; }
+
 void EnvSensor::setRemote(float t, float h, float p) {
   // local wins
   if (localPresent()) return;
-  _r_t = t;
-  _r_h = h;
-  _r_p = p;
+  _r_t = or_nan(t);
+  _r_h = or_nan(h);
+  _r_p = or_nan(p);
   _r_last_ms = fast_millis();
 }
 

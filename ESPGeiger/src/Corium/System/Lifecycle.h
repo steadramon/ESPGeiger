@@ -41,6 +41,6 @@ bool restart_due(uint32_t now);
 
 }
 
-extern volatile bool ota_in_progress;
+extern bool ota_in_progress;
 
 #endif

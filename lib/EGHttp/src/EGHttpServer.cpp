@@ -1,5 +1,5 @@
 /*
-  EGHttpServer.cpp - Main-loop-dispatched HTTP/1.1 server on (ESP)AsyncTCP.
+  EGHttpServer.cpp - Main-loop-dispatched HTTP/1.1 server on EGTcp.
 
   Copyright (C) 2026 @steadramon
 
@@ -22,17 +22,6 @@
 #include "RespParse.h"
 #include <string.h>
 #include <stdlib.h>
-
-// esp32 only, esp8266 is one task
-#ifdef ESP32
-  #include <freertos/portmacro.h>
-  static portMUX_TYPE s_eghttp_mux = portMUX_INITIALIZER_UNLOCKED;
-  #define EGHTTP_LOCK()   portENTER_CRITICAL(&s_eghttp_mux)
-  #define EGHTTP_UNLOCK() portEXIT_CRITICAL(&s_eghttp_mux)
-#elif !defined(EGHTTP_UNLOCK)   // host tests set them
-  #define EGHTTP_LOCK()   ((void)0)
-  #define EGHTTP_UNLOCK() ((void)0)
-#endif
 
 static const char CL0_CRLF[]      PROGMEM = "Content-Length: 0\r\n";
 static const char CLOSE_NOSNIFF[] PROGMEM = "Connection: close\r\nX-Content-Type-Options: nosniff\r\n";
@@ -75,7 +64,7 @@ static const size_t STATUS_MAX = 96;
 static_assert(sizeof(R503_RETRY5) <= STATUS_MAX, "canned reply over STATUS_MAX");
 static_assert(sizeof(R413) <= STATUS_MAX, "canned reply over STATUS_MAX");
 
-static void write_status(AsyncClient* c, PGM_P r, size_t len) {
+static void write_status(EGTcpClient* c, PGM_P r, size_t len) {
   char buf[STATUS_MAX];
   if (!c || !r || !len || len > sizeof(buf) || c->space() < len) return;
   memcpy_P(buf, r, len);
@@ -94,7 +83,7 @@ static const uint32_t EGHTTP_SEND_BUDGET_MS = 2500;
 static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
   if (!s || s->send_aborted) return false;
   size_t sent = 0;
-  uint32_t last_progress = millis();
+  uint32_t last_progress = EGTcp::now();
   while (sent < len) {
     if (s->send_aborted) return false;
     if (!s->client || !s->client->connected()) {
@@ -107,7 +96,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     }
     size_t can = s->client->space();
     if (can == 0) {
-      if (millis() - last_progress > EGHTTP_SEND_BUDGET_MS) {
+      if (EGTcp::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
 #ifdef EGHTTP_DEBUG
         Serial.printf_P(PSTR("[EGHttp] send aborted, %ums no-progress at %u/%u B\n"),
                         (unsigned)EGHTTP_SEND_BUDGET_MS, (unsigned)sent, (unsigned)len);
@@ -122,7 +111,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     // write() already sends
     size_t wrote = s->client->write(data + sent, take);
     if (wrote == 0) {
-      if (millis() - last_progress > EGHTTP_SEND_BUDGET_MS) {
+      if (EGTcp::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
 #ifdef EGHTTP_DEBUG
         Serial.printf_P(PSTR("[EGHttp] send aborted, write stuck at %u/%u B\n"),
                         (unsigned)sent, (unsigned)len);
@@ -134,7 +123,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
       continue;
     }
     sent += wrote;
-    last_progress = millis();
+    last_progress = EGTcp::now();
     yield();
   }
   return true;
@@ -150,6 +139,30 @@ static bool yield_write_pgm(EGHttpServer::Slot* s, PGM_P data, size_t len) {
     off += take;
   }
   return true;
+}
+
+// what fits now, onSent sends the rest
+static void send_tail(EGHttpServer::Slot* s) {
+  while (s->tailLen && s->client) {
+    size_t can = s->client->space();
+    size_t n = s->tailLen < can ? s->tailLen : can;
+    if (!n) return;
+#ifdef ESP8266
+    // flash isn't byte readable here
+    char b[512];
+    if (n > sizeof(b)) n = sizeof(b);
+    memcpy_P(b, s->tail, n);
+    const char* from = b;
+#else
+    const char* from = s->tail;
+#endif
+    uint8_t f = EGTcpClient::COPY;
+    if (n < s->tailLen && n < can) f |= EGTcpClient::MORE;
+    size_t w = s->client->write(from, n, f);
+    if (!w) return;
+    s->tail += w;
+    s->tailLen -= w;
+  }
 }
 
 // a cut head has no blank line, send none
@@ -203,7 +216,7 @@ bool EGHttpServer::growRoutes() {
   return true;
 }
 
-// before begin() only, esp32 task reads it
+// before begin() only
 bool EGHttpServer::on(const __FlashStringHelper* path, EGHttpRequest::Method method, Handler h, void* user) {
   if (_server || (_routeCount == _routeCap && !growRoutes())) {
     Serial.printf_P(PSTR("[EGHttp] route not added: %s\n"), (PGM_P)path);
@@ -282,15 +295,12 @@ void EGHttpServer::begin(uint16_t port) {
       _routeCap = _routeCount;
     }
   }
-  _server = new AsyncServer(port);
+  _server = new EGTcpServer();
 #ifdef ESP32
-  // lwIP drops SYNs past the cap
   _server->setMaxClients(EGHTTP_MAX_INFLIGHT);
 #endif
-  _server->onClient([](void* arg, AsyncClient* c) {
-    static_cast<EGHttpServer*>(arg)->onClient(c);
-  }, this);
-  _server->begin();
+  _server->onAccept([this](EGTcpClient* c) { onClient(c); });
+  _server->begin(port);
 }
 
 bool EGHttpServer::hasActiveClients() const {
@@ -305,21 +315,9 @@ bool EGHttpServer::hasActiveClients() const {
 
 void EGHttpServer::end() {
   if (_server) { _server->end(); delete _server; _server = nullptr; }
-  // slot or not
-  EGHTTP_LOCK();
-  AsyncClient* open[EGHTTP_MAX_INFLIGHT];
-  uint8_t n = _openCount;
-  memcpy(open, _open, n * sizeof(open[0]));
-  _openCount = 0;
-  EGHTTP_UNLOCK();
-  for (uint8_t i = 0; i < n; i++) open[i]->release();
   for (auto& s : _slots) {
     abortStream(&s);
-    if (s.client && s.gone) s.client->release();
-    s.client = nullptr;
-    s.state  = IDLE;
-    s.gone   = false;
-    if (s.buf) { free(s.buf); s.buf = nullptr; }
+    resetSlot(&s);
   }
   releaseStream();
 #ifdef ESP32
@@ -327,90 +325,13 @@ void EGHttpServer::end() {
 #endif
 }
 
-EGHttpServer::Slot* EGHttpServer::findSlot(AsyncClient* c) {
-  for (auto& s : _slots) if (s.client == c) return &s;
-  return nullptr;
-}
-
-// state under lock
-static EGHttpServer::SlotState slot_state(const EGHttpServer::Slot* s) {
-  EGHTTP_LOCK();
-  EGHttpServer::SlotState st = s->state;
-  EGHTTP_UNLOCK();
-  return st;
-}
-
-static void set_state(EGHttpServer::Slot* s, EGHttpServer::SlotState st) {
-  EGHTTP_LOCK();
-  s->state = st;
-  EGHTTP_UNLOCK();
-}
-
-EGHttpServer::Slot* EGHttpServer::allocSlot(AsyncClient* c) {
-  Slot* s = nullptr;
-  EGHTTP_LOCK();
-  for (uint8_t i = 0; i < _maxClients && !s; i++) {
-    if (_slots[i].state != IDLE || _slots[i].client != nullptr) continue;
-    s = &_slots[i];
-    s->client         = c;
-    s->delete_pending = false;
-    s->gone           = false;
-    s->len            = 0;
-    s->headersDone    = false;
-    s->contentLength  = 0;
-    s->headerEnd      = 0;
-    s->streaming      = false;
-    s->stream_begun   = false;
-    s->stream_ended   = false;
-    s->stream_aborted = false;
-    s->ack_paused     = false;
-    s->ack_owed       = 0;
-    s->bodyAcked      = 0;
-    s->send_aborted   = false;
-    s->responded      = false;
-    s->routeIdx       = 0xFF;
-  }
-  EGHTTP_UNLOCK();
-  if (!s) return nullptr;
-  if (!s->buf) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
-  if (!s->buf) {
-    EGHTTP_LOCK();
-    s->client = nullptr;
-    EGHTTP_UNLOCK();
-    return nullptr;
-  }
-  set_state(s, RECEIVING);
-  return s;
-}
-
-void EGHttpServer::markDone(Slot* s) {
-  if (s->buf) { free(s->buf); s->buf = nullptr; }
-  s->chunkAcc       = nullptr;
-  s->chunkAccLen    = 0;
-  s->chunkAccCap    = 0;
-  EGHTTP_LOCK();
-  s->state          = DONE;
-  s->delete_pending = true;
-  EGHTTP_UNLOCK();
-  _tickWanted       = true;
-}
-
-// done first, close() runs onDisconnect
-void EGHttpServer::sendStatusAndClose(Slot* s, const char* body, size_t len) {
-  AsyncClient* c = s->gone ? nullptr : s->client;
-  markDone(s);
-  if (c) {
-    write_status(c, (PGM_P)body, len);
-    c->close();
-  }
-}
-
-// IDLE last, else buf freed under a new client
-void EGHttpServer::resetSlot(Slot* s) {
-  if (s->buf) { free(s->buf); s->buf = nullptr; }
-  EGHTTP_LOCK();
+// fresh slot, buf kept
+static void clear_slot(EGHttpServer::Slot* s) {
+  s->delete_pending = false;
   s->len            = 0;
   s->headersDone    = false;
+  s->contentLength  = 0;
+  s->headerEnd      = 0;
   s->streaming      = false;
   s->stream_begun   = false;
   s->stream_ended   = false;
@@ -421,25 +342,52 @@ void EGHttpServer::resetSlot(Slot* s) {
   s->send_aborted   = false;
   s->responded      = false;
   s->routeIdx       = 0xFF;
-  s->chunkAcc    = nullptr;
-  s->chunkAccLen = 0;
-  s->chunkAccCap = 0;
-  AsyncClient* dead = s->gone ? s->client : nullptr;
-  s->client         = nullptr;
-  s->state          = IDLE;
-  s->delete_pending = false;
-  s->gone           = false;
-  EGHTTP_UNLOCK();
-  if (dead) dead->release();
+  s->chunkAcc       = nullptr;
+  s->chunkAccLen    = 0;
+  s->chunkAccCap    = 0;
+  s->tail           = nullptr;
+  s->tailLen        = 0;
 }
 
-void EGHttpServer::forgetOpen(AsyncClient* c) {
-  for (uint8_t i = 0; i < _openCount; i++) {
-    if (_open[i] != c) continue;
-    _open[i] = _open[--_openCount];
-    _open[_openCount] = nullptr;
-    return;
+EGHttpServer::Slot* EGHttpServer::allocSlot(EGTcpClient* c) {
+  for (uint8_t i = 0; i < _maxClients; i++) {
+    Slot* s = &_slots[i];
+    if (s->state != IDLE || s->client) continue;
+    if (!s->buf) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
+    if (!s->buf) return nullptr;
+    clear_slot(s);
+    s->client = c;
+    s->state  = RECEIVING;
+    return s;
   }
+  return nullptr;
+}
+
+void EGHttpServer::markDone(Slot* s) {
+  if (s->buf) { free(s->buf); s->buf = nullptr; }
+  s->chunkAcc       = nullptr;
+  s->chunkAccLen    = 0;
+  s->chunkAccCap    = 0;
+  s->state          = DONE;
+  s->delete_pending = true;
+  _tickWanted       = true;
+}
+
+// the slot keeps the client till reclaimed
+void EGHttpServer::sendStatusAndClose(Slot* s, const char* body, size_t len) {
+  markDone(s);
+  if (!s->client) return;
+  write_status(s->client, (PGM_P)body, len);
+  s->client->close();
+}
+
+void EGHttpServer::resetSlot(Slot* s) {
+  if (s->buf) { free(s->buf); s->buf = nullptr; }
+  clear_slot(s);
+  EGTcpClient* c = s->client;
+  s->client = nullptr;
+  s->state  = IDLE;
+  delete c;   // closes it if still open
 }
 
 static bool eghttp_stream_open(const EGHttpServer::Slot* s) {
@@ -453,165 +401,72 @@ void EGHttpServer::abortStream(Slot* s) {
   deliverBodyEvent(s, BODY_ABORT, nullptr, 0);
 }
 
-bool EGHttpServer::markDoneAsync(AsyncClient* c, int* streaming, unsigned* acked) {
-  EGHTTP_LOCK();
-  Slot* s = findSlot(c);
-  *streaming = s ? (int)s->streaming : -1;
-  *acked     = s ? (unsigned)s->bodyAcked : 0u;
-  if (s) {
-    s->state          = DONE;
-    s->delete_pending = true;
-    _tickWanted       = true;
-  }
-  EGHTTP_UNLOCK();
-  return s != nullptr;
+void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
+  c->setIdleTimeout(60000);
+  c->setAckTimeout(5000);
+  c->onSent([this, s](size_t) { sentMore(s); });
+  c->onData([this, s](const uint8_t* data, size_t len) {
+    if (s->state != RECEIVING) return;
+    takeData(s, data, len);
+    _tickWanted = true;
+  });
+  c->onClose([this, s](int8_t err) {
+#ifdef EGHTTP_DEBUG
+    Serial.printf_P(PSTR("[EGHttp] closed err=%d streaming=%d acked=%u/%u\n"),
+                    (int)err, (int)s->streaming, (unsigned)s->bodyAcked,
+                    (unsigned)s->contentLength);
+#else
+    (void)err;
+#endif
+    onClosed(s);
+  });
 }
 
-void EGHttpServer::wireSlotCallbacks(Slot* /*s*/, AsyncClient* c) {
-  c->setRxTimeout(60);   // seconds
-
-  c->onData([](void* arg, AsyncClient* cli, void* data, size_t len) {
-    auto* self = static_cast<EGHttpServer*>(arg);
-    EGHTTP_LOCK();
-    Slot* sl = self->findSlot(cli);
-    bool live = sl && sl->state == RECEIVING;
-    EGHTTP_UNLOCK();
-    if (live) self->onData(sl, cli, data, len);
-  }, this);
-
-  c->onError([](void* arg, AsyncClient* cli, int8_t err) {
-    auto* self = static_cast<EGHttpServer*>(arg);
-    int streaming;
-    unsigned acked;
-    bool found = self->markDoneAsync(cli, &streaming, &acked);
-#ifdef EGHTTP_DEBUG
-    Serial.printf_P(PSTR("[EGHttp] onError cli=%p err=%d streaming=%d acked=%u\n"),
-                    cli, (int)err, streaming, acked);
-#endif
-    if (found) cli->close();   // onDisconnect deletes it
-  }, this);
-
-  c->onTimeout([](void* arg, AsyncClient* cli, uint32_t time) {
-    auto* self = static_cast<EGHttpServer*>(arg);
-    int streaming;
-    unsigned acked;
-    bool found = self->markDoneAsync(cli, &streaming, &acked);
-#ifdef EGHTTP_DEBUG
-    Serial.printf_P(PSTR("[EGHttp] onTimeout cli=%p t=%u streaming=%d acked=%u\n"),
-                    cli, (unsigned)time, streaming, acked);
-#endif
-    if (found) cli->close();
-  }, this);
-}
-
-void EGHttpServer::onClient(AsyncClient* c) {
+void EGHttpServer::onClient(EGTcpClient* c) {
   _tickWanted = true;
-
-  // main's close() can run onDisconnect
-  EGHTTP_LOCK();
-  uint8_t flying = _openCount;
-  bool full = flying >= EGHTTP_MAX_INFLIGHT;
-  if (!full) _open[_openCount++] = c;
-  EGHTTP_UNLOCK();
-  if (full) {
-#ifdef EGHTTP_DEBUG
-    _rejectCount++;
-    if (_rejectCount == 1 || (_rejectCount % 100) == 0) {
-      Serial.printf_P(PSTR("[EGHttp] accept-cap reject #%u (in-flight=%u/%u)\n"),
-                      (unsigned)_rejectCount, (unsigned)flying,
-                      (unsigned)EGHTTP_MAX_INFLIGHT);
-    }
-#endif
-    c->onDisconnect([](void* /*arg*/, AsyncClient* cli) {
-      cli->release();
-    }, nullptr);
-    c->close();
-    return;
-  }
-
-  // first, every client must clean up
-  c->onDisconnect([](void* arg, AsyncClient* cli) {
-    static_cast<EGHttpServer*>(arg)->onDisconnect(cli);
-  }, this);
-
   Slot* s = allocSlot(c);
   if (s) { wireSlotCallbacks(s, c); return; }
 
   // full, 503 as queueing drops pbufs
   write_status(c, R503_RETRY1, sizeof(R503_RETRY1) - 1);
   c->close();
+  delete c;
 }
 
-// must hold lock vs resetSlot
-void EGHttpServer::onDisconnect(AsyncClient* c) {
-  EGHTTP_LOCK();
-  Slot* sl = findSlot(c);
-  if (sl && sl->gone) { EGHTTP_UNLOCK(); return; }   // close on a gone client
-  forgetOpen(c);
-#ifdef EGHTTP_DEBUG
-  bool mid_stream = sl && sl->streaming && !sl->stream_ended;
-  unsigned acked = sl ? (unsigned)sl->bodyAcked : 0u;
-  unsigned total = sl ? (unsigned)sl->contentLength : 0u;
-#endif
-  if (sl) {
-    sl->state          = DONE;
-    sl->delete_pending = true;
-    sl->gone           = true;
-    _tickWanted        = true;
-  }
-  EGHTTP_UNLOCK();
-#ifdef EGHTTP_DEBUG
-  if (mid_stream) {
-    Serial.printf_P(PSTR("[EGHttp] onDisconnect mid-stream cli=%p acked=%u/%u\n"),
-                    c, acked, total);
-  }
-#endif
-  if (!sl) c->release();
+// peer, error or timeout; tick() reclaims
+void EGHttpServer::onClosed(Slot* s) {
+  s->state          = DONE;
+  s->delete_pending = true;
+  _tickWanted       = true;
 }
 
-void EGHttpServer::onData(Slot* s, AsyncClient* c, void* data, size_t len) {
-  takeData(s, c, data, len);
-  // flag last, tick() may be mid-scan
-  _tickWanted = true;
-}
-
-// lock vs drainStream, releaseStream
-void EGHttpServer::takeStream(Slot* s, AsyncClient* c, void* data, size_t len) {
-  EGHTTP_LOCK();
-  bool mine = _streamOwner == s && _streamBuf && s->client == c;
-  if (mine) {
-    // past Content-Length is dropped
-    size_t have = s->bodyAcked + _streamLen;
-    size_t room = s->contentLength > have ? s->contentLength - have : 0;
-    if (len > room) len = room;
-  }
-  bool overflow = mine && (_streamLen + len > STREAM_BUF_SIZE);
-  if (mine && !overflow) {
-    memcpy(_streamBuf + _streamLen, data, len);
-    _streamLen += len;
-    s->ack_paused = true;
-  }
-  EGHTTP_UNLOCK();
-  if (!mine || !len) return;   // past the body
-
-  if (overflow) {
+void EGHttpServer::takeStream(Slot* s, const uint8_t* data, size_t len) {
+  if (_streamOwner != s || !_streamBuf) return;
+  // past Content-Length is dropped
+  size_t have = s->bodyAcked + _streamLen;
+  size_t room = s->contentLength > have ? s->contentLength - have : 0;
+  if (len > room) len = room;
+  if (!len) return;
+  if (_streamLen + len > STREAM_BUF_SIZE) {
     Serial.printf_P(PSTR("[EGHttp] stream buf overflow: %u+%u>%u, aborting\n"),
                     (unsigned)_streamLen, (unsigned)len, (unsigned)STREAM_BUF_SIZE);
     sendStatusAndClose(s, nullptr, 0);
     return;
   }
-  c->ackLater();
+  memcpy(_streamBuf + _streamLen, data, len);
+  _streamLen += len;
+  s->ack_paused = true;
+  s->client->ackLater();
 }
 
-// c alive till return, main may reset s
-void EGHttpServer::takeData(Slot* s, AsyncClient* c, void* data, size_t len) {
+void EGHttpServer::takeData(Slot* s, const uint8_t* data, size_t len) {
   if (!s->headersDone) {
     receiveHeaders(s, data, len);
     return;
   }
 
   if (s->streaming) {
-    takeStream(s, c, data, len);
+    takeStream(s, data, len);
     return;
   }
 
@@ -622,10 +477,10 @@ void EGHttpServer::takeData(Slot* s, AsyncClient* c, void* data, size_t len) {
   memcpy(s->buf + s->len, data, len);
   s->len += len;
   if (s->len < s->headerEnd + s->contentLength) return;
-  set_state(s, READY);
+  s->state = READY;
 }
 
-void EGHttpServer::receiveHeaders(Slot* s, void* data, size_t len) {
+void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
   if (s->len + len > EGHTTP_REQ_BUF) {
     Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
                     (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
@@ -663,16 +518,12 @@ void EGHttpServer::receiveHeaders(Slot* s, void* data, size_t len) {
     return;
   }
   if (s->len >= s->headerEnd + s->contentLength) {
-    set_state(s, READY);
+    s->state = READY;
   }
 }
 
-// AsyncTCP only claims, main only releases
 void EGHttpServer::beginStream(Slot* s, size_t len) {
-  EGHTTP_LOCK();
-  bool busy = _streamOwner != nullptr;
-  EGHTTP_UNLOCK();
-  if (busy) {
+  if (_streamOwner) {
     sendStatusAndClose(s, R503_RETRY5, sizeof(R503_RETRY5) - 1);
     return;
   }
@@ -687,29 +538,21 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   if (inBuf > s->contentLength) inBuf = s->contentLength;
   if (inBuf) memcpy(buf, s->buf + s->headerEnd, inBuf);
   s->len = s->headerEnd;
-  // esp8266 clamps an ack inside onData to 0
+  // an ack inside onData is clamped to 0
   s->ack_owed = (uint16_t)(len - inBuf);
-  // main may reset s once streaming
-  AsyncClient* c = s->client;
-  EGHTTP_LOCK();
   _streamBuf    = buf;
   _streamLen    = inBuf;
   _streamOwner  = s;
   s->ack_paused = true;
   s->streaming  = true;
-  EGHTTP_UNLOCK();
-  c->ackLater();
+  s->client->ackLater();
 }
 
-// lock vs onData, free outside it
 void EGHttpServer::releaseStream() {
-  EGHTTP_LOCK();
-  uint8_t* buf = _streamBuf;
+  free(_streamBuf);
   _streamBuf   = nullptr;
   _streamLen   = 0;
   _streamOwner = nullptr;
-  EGHTTP_UNLOCK();
-  free(buf);
 }
 
 // writes NULs into s->buf
@@ -760,11 +603,9 @@ void EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
 }
 
 void EGHttpServer::drainStream(Slot* s) {
-  // snapshot, Update.write yields
-  EGHTTP_LOCK();
+  // snapshot, a handler that polls adds more
   bool mine = s->streaming && _streamOwner == s;
   size_t toDeliver = _streamLen;
-  EGHTTP_UNLOCK();
   if (!mine || s->stream_ended) return;
 
   if (!s->stream_begun) {
@@ -780,21 +621,18 @@ void EGHttpServer::drainStream(Slot* s) {
     deliverBodyEvent(s, BODY_DATA, (const char*)_streamBuf, toDeliver);
     // a second ackLater() loses bytes
     if (s->client) s->client->ack(toDeliver);
-    // lock vs onData
-    EGHTTP_LOCK();
     s->bodyAcked += toDeliver;
     size_t leftover = (_streamLen > toDeliver) ? _streamLen - toDeliver : 0;
     if (leftover > 0) {
       memmove(_streamBuf, _streamBuf + toDeliver, leftover);
     }
     _streamLen = leftover;
-    EGHTTP_UNLOCK();
   }
 
   if (s->bodyAcked >= s->contentLength) {
     s->stream_ended = true;
     deliverBodyEvent(s, BODY_END, nullptr, 0);
-    set_state(s, READY);
+    s->state = READY;
     releaseStream();
   }
 }
@@ -919,52 +757,48 @@ void EGHttpServer::tick() {
   _tickWanted = false;
 
   for (auto& s : _slots) {
-    EGHTTP_LOCK();
-    bool del = s.delete_pending;
-    SlotState st = s.state;
-    bool streaming = s.streaming;
-    EGHTTP_UNLOCK();
-    if (del) {
+    if (s.delete_pending) {
       reclaimSlot(&s);
       continue;
     }
-    if (st == RECEIVING && streaming) {
-      drainStream(&s);
-      st = slot_state(&s);
-    }
-    if (st == READY) {
-      respond(&s);
-    }
+    if (s.state == RECEIVING && s.streaming) drainStream(&s);
+    if (s.state == READY) respond(&s);
   }
 }
 
 void EGHttpServer::reclaimSlot(Slot* s) {
-  EGHTTP_LOCK();
-  bool left = _streamOwner == s && _streamLen > 0;
-  EGHTTP_UNLOCK();
-  if (eghttp_stream_open(s) && left) {
+  if (eghttp_stream_open(s) && _streamOwner == s && _streamLen > 0) {
     drainStream(s);
   }
   // whole body came, handler frees
   if (s->stream_ended && !s->responded) respond(s);
   abortStream(s);
-  EGHTTP_LOCK();
-  bool owner = _streamOwner == s;
-  EGHTTP_UNLOCK();
-  if (owner) {
-    releaseStream();
-  }
-  // onDisconnect deletes client
+  if (_streamOwner == s) releaseStream();
   resetSlot(s);
 }
 
 void EGHttpServer::respond(Slot* s) {
   s->responded = true;
-  set_state(s, RESPONDING);
+  s->state = RESPONDING;
   dispatch(s);
-  // esp32 onDisconnect can lag
-  if (s->client && s->client->connected()) s->client->close();
+  if (!s->tailLen || !s->client || s->send_aborted) {
+    finish(s);
+    return;
+  }
+  // body goes as acks come, the request isn't needed
+  free(s->buf);
+  s->buf = nullptr;
+}
+
+void EGHttpServer::finish(Slot* s) {
+  if (s->client) s->client->close();
   markDone(s);
+}
+
+void EGHttpServer::sentMore(Slot* s) {
+  if (!s->tailLen) return;
+  send_tail(s);
+  if (!s->tailLen && s->state == RESPONDING) finish(s);
 }
 
 // ---------- EGHttpRequest ----------
@@ -1101,19 +935,17 @@ void EGHttpResponse::sendGzipP(uint16_t status, const __FlashStringHelper* conte
 void EGHttpResponse::writeHeadAndBodyP(const char* head, size_t headLen,
                                        PGM_P body, size_t bodyLen) {
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
-  if (s->chunkAcc && s->chunkAccCap > 0) {
-    s->chunkAccLen = 0;
-    bool ok = eghttp_acc_append(s, head, headLen);
-    if (ok && bodyLen > 0) ok = eghttp_acc_append_pgm(s, body, bodyLen);
-    if (ok) eghttp_acc_flush(s);
-    _started = true;
-    _done    = true;
+  _started = true;
+  _done    = true;
+  // first write, the head fits; MORE keeps it with the body
+  uint8_t f = bodyLen ? EGTcpClient::COPY | EGTcpClient::MORE : EGTcpClient::COPY;
+  if (!s->client || s->client->write(head, headLen, f) < headLen) {
+    s->send_aborted = true;
     return;
   }
-  if (!yield_write_sram(s, head, headLen)) { _done = true; return; }
-  _started = true;
-  if (bodyLen > 0) yield_write_pgm(s, body, bodyLen);
-  _done = true;
+  s->tail    = body;
+  s->tailLen = bodyLen;
+  send_tail(s);
 }
 
 void EGHttpResponse::redirectP(PGM_P location) {

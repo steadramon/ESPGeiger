@@ -23,6 +23,7 @@
 #include <SoftwareSerial.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/MathUtil.h"
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Counter/Counter.h"
@@ -50,10 +51,7 @@ void GeigerTestSerial::begin() {
   Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
   geigerPort.begin(baud, _rx_pin, _tx_pin);
-  uint32_t skip = 1500000UL / baud;
-  if (skip < 5)   skip = 5;
-  if (skip > 500) skip = 500;
-  _idle_skip = (uint16_t)skip;
+  _idle_skip = (uint16_t)clamp<uint32_t>(1500000UL / baud, 5, 500);
   _poll_skip = _idle_skip;
   CPMAdjuster();
 }

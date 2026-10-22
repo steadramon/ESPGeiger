@@ -1,5 +1,5 @@
 /*
-  EGPortal.h - Captive WiFi setup portal on AsyncTCP.
+  EGPortal.h - Captive WiFi setup portal on EGTcp.
 
   Copyright (C) 2026 @steadramon
 

@@ -29,6 +29,8 @@
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
+#include "Corium/Util/Bytes.h"
+#include "Corium/Util/MathUtil.h"
 #include <WiFiUdp.h>
 #include <string.h>
 #ifdef ESP8266
@@ -46,13 +48,8 @@ static constexpr const char TAG_FFF[]       = ",fff";
 static constexpr const char SUFFIX_CLICK[]  = "click";
 static constexpr const char SUFFIX_ENV[]    = "env";
 
-static inline uint32_t rd_i32(const uint8_t* p) {
-  return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
-         ((uint32_t)p[2] <<  8) |  (uint32_t)p[3];
-}
-
 static inline float rd_f32(const uint8_t* p) {
-  uint32_t bits = rd_i32(p);
+  uint32_t bits = rd_be32(p);
   float f;
   memcpy(&f, &bits, sizeof(f));
   return f;
@@ -251,7 +248,7 @@ void GeigerUdpRx::scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint3
       _gapfill_dropped += (gap_credit - i);
       break;
     }
-    r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+    r = xorshift32(r);
     _gapfill_due_ms[_gapfill_count++] = now_ms + (r % window_ms) + 1;
   }
 }
@@ -281,8 +278,8 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
   if (buf[BLIP_SUFFIX_AT + 5] != '\0') return;
   if (memcmp(buf + BLIP_ARGS_AT, TAG_II, 4) != 0) return;
 
-  uint32_t producer_counter = rd_i32(buf + BLIP_CLICK_COUNT_AT);
-  uint32_t producer_ts      = rd_i32(buf + BLIP_CLICK_MS_AT);
+  uint32_t producer_counter = rd_be32(buf + BLIP_CLICK_COUNT_AT);
+  uint32_t producer_ts      = rd_be32(buf + BLIP_CLICK_MS_AT);
 
   uint32_t credit = 1;
   uint32_t gap_credit = 0;
@@ -420,7 +417,7 @@ void GeigerUdpRx::fireDueGapfills() {
   uint32_t now_ms = fast_millis();
   uint8_t i = 0;
   while (i < _gapfill_count) {
-    if ((int32_t)(now_ms - _gapfill_due_ms[i]) >= 0) {
+    if (reached(now_ms, _gapfill_due_ms[i])) {
       gcounter.dispatchReceiverBlip();
       _gapfill_count--;
       _gapfill_due_ms[i] = _gapfill_due_ms[_gapfill_count];
@@ -434,7 +431,7 @@ void GeigerUdpRx::loop() {
   uint32_t now = fast_millis();
   if (!ensureBound(now)) return;
 
-  if (_ps_bounce_until_ms && (int32_t)(now - _ps_bounce_until_ms) >= 0) {
+  if (_ps_bounce_until_ms && reached(now, _ps_bounce_until_ms)) {
     _ps_bounce_until_ms = 0;
     Wifi::rx_sleep(_rx_mode);
   }

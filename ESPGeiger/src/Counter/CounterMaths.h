@@ -26,7 +26,7 @@
 #include <string.h>
 
 #ifndef GEIGER_RATIO
-  #define GEIGER_RATIO 151.0  // NOLINT(float-literal) pref default is STR() of it
+  #define GEIGER_RATIO 151.0  // pref default is STR() of it
 #endif
 
 // set by Counter.h
@@ -82,6 +82,12 @@ class CounterMaths {
       if (b <= 0 || b > 0x7F800000) return 0;   // <= 0, NaN
       if (b >= 0x4F000000) return INT32_MAX;     // 2^31
       return (int)(v + 0.5f);
+    }
+
+    // cpm x10, 0xFFFF cap
+    static uint16_t cps_x600(float cps) {
+      int t = to_int(cps * 600.0f);
+      return t > 0xFFFF ? 0xFFFF : (uint16_t)t;
     }
 
     // CPM per uSv/h

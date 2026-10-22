@@ -29,11 +29,12 @@
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/System/Uptime.h"
 
 ImprovSerial improvSerial;
 
 #if defined(ESP8266)
-  static const char* IMPROV_CHIPFAMILY = "ESP8266";  // NOLINT(dram)
+  static const char* IMPROV_CHIPFAMILY = "ESP8266";
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
   static const char* IMPROV_CHIPFAMILY = "ESP32-S3";
 #elif defined(CONFIG_IDF_TARGET_ESP32C3)
@@ -133,7 +134,7 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
             s_creds_value = Wifi::hasSavedCreds();
             s_creds_cached = true;
           }
-          if (fast_millis() < 30000 && s_creds_value) {
+          if (Uptime::seconds() < 30 && s_creds_value) {
             _state = improv::STATE_PROVISIONING;
           } else if (_state == improv::STATE_PROVISIONING) {
             _state = improv::STATE_AUTHORIZED;
@@ -213,7 +214,7 @@ void ImprovSerial::send_wifi_networks() {
     std::vector<std::string> entry = {
       std::string(WiFi.SSID(i).c_str()),
       String(WiFi.RSSI(i)).c_str(),
-      open ? "NO" : "YES"  // NOLINT(dram)
+      open ? "NO" : "YES"
     };
     send_response_data(improv::GET_WIFI_NETWORKS, entry);
   }

@@ -22,6 +22,7 @@
 #include <EGJson.h>
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Util/MathUtil.h"
 
 EGMeasureIter::EGMeasureIter(uint8_t output, bool diag, const char* id)
   : _src(egm_core_rows()), _j(0), _mod(0), _out(output), _diag(diag), _input(false),
@@ -45,7 +46,7 @@ bool EGMeasureIter::next_source() {
   return false;
 }
 
-// Skips other outputs, diag rows, absent and NaN
+// Skips other outputs, diag rows, absent, NaN and inf
 bool EGMeasureIter::next() {
   for (;;) {
     if (_j >= _src.size()) {
@@ -58,7 +59,7 @@ bool EGMeasureIter::next() {
     if ((_row.flags & EGM_NODIAG) && _diag) continue;
     if (_id && strcmp_P(_row.id, _id) != 0) continue;
     if (!_row.read || !_row.read(&_val)) continue;
-    if (_row.kind == EGM_F32 && isnan(_val.f)) continue;
+    if (_row.kind == EGM_F32 && !is_finite(_val.f)) continue;
     return true;
   }
 }
@@ -86,7 +87,7 @@ size_t egm_format(const EGMeasure& m, const EGMValue& v, char* buf, size_t cap) 
   int n;
   switch (m.kind) {
     case EGM_F32:
-      if (m.decimals < 1 || m.decimals > 9 || isnan(v.f)) return 0;
+      if (m.decimals < 1 || m.decimals > 9 || !is_finite(v.f)) return 0;
       n = format_f(buf, cap, v.f, m.decimals);
       break;
     case EGM_U32:

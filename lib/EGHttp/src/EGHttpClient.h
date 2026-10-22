@@ -20,7 +20,7 @@
 #define EGHTTPCLIENT_H
 
 #include <Arduino.h>
-#include <EGTcpConn.h>
+#include <EGTcp.h>
 
 // below 0 = client side
 #define HTTPCODE_NOT_CONNECTED   (-4)
@@ -46,7 +46,7 @@ class EGHttpClient {
     static const size_t HEAD_CAP = 8192;   // all headers
     static const size_t IN_CAP = 256;
 
-    EGHttpClient() {}
+    EGHttpClient();
     ~EGHttpClient();
     EGHttpClient(const EGHttpClient&) = delete;
     EGHttpClient& operator=(const EGHttpClient&) = delete;
@@ -96,6 +96,7 @@ class EGHttpClient {
     void step();
     void dial();
     void push();
+    void send_more();
     void listen();
     void head();
     void status_line();
@@ -116,7 +117,7 @@ class EGHttpClient {
     void drop();
     void forget();
 
-    EGTcpConn _tcp;
+    EGTcpClient _tcp;
     Phase _phase = IDLE;
     bool _pending = false;     // done, not taken yet
     bool _taken = false;       // freed on next call

@@ -26,7 +26,9 @@
 #include "Corium/Measure/EGMeasure.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/Util/MathUtil.h"
+#include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
+#include "Counter/CounterMaths.h"
 #include "Display.h"
 
 EG_PSTR(M_CPM,   "cpm");
@@ -461,10 +463,8 @@ uint8_t Max7219Display::adaptiveLevel(uint8_t maxLevel) {
   float full = base * (float)_bar_gain;
   const float MIN_FULL = 20.0f;   // cpm
   if (full < MIN_FULL) full = MIN_FULL;
-  long lvl = (long)((cur / full) * (float)maxLevel + 0.5f);
-  if (lvl < 0) lvl = 0;
-  if (lvl > maxLevel) lvl = maxLevel;
-  return (uint8_t)lvl;
+  int lvl = CounterMaths::to_int((cur / full) * (float)maxLevel);
+  return lvl > maxLevel ? maxLevel : (uint8_t)lvl;
 }
 
 void Max7219Display::pushNumber(uint8_t first_digit, uint8_t ndigits, float value,
@@ -512,9 +512,7 @@ void Max7219Display::tmSend(const uint8_t* segs, uint8_t n) {
 // regs 5-7, from the top
 void Max7219Display::pushArc(uint8_t level) {
   for (uint8_t s = 0; s < 3; s++) {
-    int k = (int)level - 8 * (int)s;
-    if (k < 0) k = 0;
-    if (k > 8) k = 8;
+    int k = clamp((int)level - 8 * (int)s, 0, 8);
     uint8_t fill = k ? (uint8_t)(0xFF << (8 - k)) : 0;
     _drv.write(0, Max7219Driver::REG_DIGIT0 + 4 + s, fill);
   }
@@ -739,10 +737,9 @@ void Max7219Display::s_tick(unsigned long now) {
 void Max7219Display::matrixValueUnit(char* val, size_t vc, char* unit, size_t uc) {
   float v; uint8_t dec; const char* u;
   pageInfo(_cur_page, v, dec, u);
-  if (dec == 0) snprintf_P(val, vc, PSTR("%ld"), (long)lroundf(v));
+  if (dec == 0) snprintf_P(val, vc, PSTR("%d"), CounterMaths::to_int(v));
   else          format_f(val, vc, v, dec);
-  strncpy_P(unit, u, uc - 1);
-  unit[uc - 1] = '\0';
+  flash_to_ram(u, unit, uc);
 }
 
 // works without pins, for /screen
@@ -907,8 +904,8 @@ void Max7219Display::fxFrame(int W) {
 }
 
 bool Max7219Display::fxScroll(int W) {
-  char text[12] = {};
-  strncpy_P(text, W_APP_NAME, sizeof(text) - 1);
+  char text[12];
+  flash_to_ram(W_APP_NAME, text, sizeof(text));
   int x = W - (int)_fx;
   int end = mxDraw(_mfb, W, x, text, MX_SMALL);
   for (int c = 0; c < W; c++) {

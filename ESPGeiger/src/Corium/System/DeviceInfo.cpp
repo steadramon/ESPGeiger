@@ -23,6 +23,7 @@
 #include "Lifecycle.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Util/Fnv.h"
+#include "Corium/Util/MathUtil.h"
 #include "Fs.h"
 
 #ifdef ESP32
@@ -52,7 +53,7 @@ uint32_t DeviceInfo::freeHeap() {
   uint32_t now = fast_millis();
   if (cached == 0 || now - last_ms >= 1000) {
     uint32_t sample = ESP.getFreeHeap();
-    cached = (cached == 0) ? sample : ((cached * 7 + sample) >> 3);
+    cached = (cached == 0) ? sample : ema8(cached, sample);
     last_ms = now;
   }
   return cached;
@@ -123,7 +124,7 @@ float DeviceInfo::chipTempC() { return s_ct; }
 void DeviceInfo::safeRestart(uint32_t delayMs) {
   Lifecycle::send(Lifecycle::SHUTDOWN);
   if (delayMs) delay(delayMs);
-  ESP.restart();  // NOLINT(restart-call) the one restart path
+  ESP.restart();  // the one restart path
 }
 
 uint64_t DeviceInfo::hwid() {
@@ -197,7 +198,7 @@ void DeviceInfo::setFriendlyName(const char* s) {
   strlcpy(s_friendlyname, s ? s : "", sizeof(s_friendlyname));
 }
 
-// NOLINTNEXTLINE(complexity) one case per chip
+// one case per chip
 const char* DeviceInfo::chipmodel() {
 #ifdef APP_BOARD
   return APP_BOARD;
@@ -242,7 +243,7 @@ bool DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
 #endif
 }
 
-// NOLINTNEXTLINE(complexity) one case per reset cause
+// one case per reset cause
 uint8_t DeviceInfo::resetReason() {
 #ifdef ESP8266
   uint32_t r = ESP.getResetInfoPtr()->reason;
@@ -274,7 +275,7 @@ uint8_t DeviceInfo::resetReason() {
 #endif
 }
 
-// NOLINTNEXTLINE(complexity) one case per reset cause
+// one case per reset cause
 const char* DeviceInfo::resetText() {
 #ifdef ESP8266
   switch (ESP.getResetInfoPtr()->reason) {

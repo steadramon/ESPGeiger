@@ -115,26 +115,11 @@ class EGModuleRegistry {
     static inline uint32_t next_wake(unsigned long now);
     static inline void tick_slot(Slot& s, unsigned long now_s);
 
-    // RMW, lock on esp32
+    // set mid-walk, applied before the next
     static constexpr int32_t NO_REQUEST = INT32_MIN;
-    static EG_XTASK_VOLATILE bool _pending;
+    static bool _pending;
     static void apply_pending();
-#ifdef ESP32
-  public:
-    static portMUX_TYPE& _mux() {
-      static portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
-      return m;
-    }
-#endif
 };
-
-#ifdef ESP32
-#define EGREG_LOCK()   portENTER_CRITICAL(&EGModuleRegistry::_mux())
-#define EGREG_UNLOCK() portEXIT_CRITICAL(&EGModuleRegistry::_mux())
-#else
-#define EGREG_LOCK()
-#define EGREG_UNLOCK()
-#endif
 
 #define EG_REGISTER_MODULE(instance) \
   static bool _reg_##instance = EGModuleRegistry::add(&instance);

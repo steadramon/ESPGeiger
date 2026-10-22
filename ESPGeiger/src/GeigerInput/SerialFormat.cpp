@@ -121,9 +121,7 @@ const char TYPE_OPTS[] PROGMEM =
 
 static size_t render_tpl_P(const char* tpl, char* buf, size_t cap) {
   char t[16];
-  strncpy_P(t, tpl, sizeof(t) - 1);
-  t[sizeof(t) - 1] = '\0';
-  return OutputVars::renderTemplate(t, buf, cap);
+  return OutputVars::renderTemplate(flash_to_ram(tpl, t, sizeof(t)), buf, cap);
 }
 
 size_t format_line(uint8_t type, char* buf, size_t cap) {

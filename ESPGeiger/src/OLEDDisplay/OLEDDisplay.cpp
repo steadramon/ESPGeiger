@@ -36,6 +36,7 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Util/Words.h"
+#include "Counter/CounterMaths.h"
 #include "GRNG/GRNG.h"
 #include "GeigerInput/Type/UdpRx.h"
 #ifdef ESPG_HV_ADC
@@ -58,7 +59,7 @@ static const uint8_t HIST = 45;   // seconds
 
 static void format_cpm(char* buf, size_t bufsz, float cpm) {
   if (cpm < 10.0f) format_f(buf, bufsz, cpm, 1);
-  else             snprintf_P(buf, bufsz, W_FMT_U, (unsigned)(cpm + 0.5f));
+  else             snprintf_P(buf, bufsz, W_FMT_U, (unsigned)CounterMaths::to_int(cpm));
 }
 
 static float disp_cpm() {
@@ -100,7 +101,7 @@ EG_REGISTER_MODULE(oled)
 
 static const char PIN_OWNER[] PROGMEM = "OLED";
 
-// NOLINTNEXTLINE(complexity) hot path
+// hot path
 static void drawTPString(SSD1306Display& d, int16_t x, int16_t y_top,
                          const uint8_t* font, const char* str) {
   if (!font || !str) return;
@@ -376,7 +377,7 @@ void SSD1306Display::loop(unsigned long now) {
   if (oled_page > OLED_PAGES) oled_page = PAGE_MAIN;
   if (oled_page != _last_page) page_changed();
   if (oled_page == PAGE_SAVER) display.wake(now);
-  if ((long)(now - _next_render_due) < 0) return;
+  if (!reached(now, _next_render_due)) return;
   _next_render_due = now + frame_ms();
   if (!awake(now)) return;
   uint8_t dirty = render(now);
@@ -524,9 +525,7 @@ void SSD1306Display::page_tiny_meter() {
   }
   float cpm = disp_cpm();
   if (cpm < 1.0f) cpm = 1.0f;
-  float t = log10f(cpm) / 3.0f;
-  if (t < 0.0f) t = 0.0f;
-  if (t > 1.0f) t = 1.0f;
+  float t = clamp(log10f(cpm) / 3.0f, 0.0f, 1.0f);
   float ang = (float)M_PI * (1.0f - t);
   float c = cosf(ang), s = sinf(ang);
   drawLine(px, py, px + (int)((r - 3) * c), py - (int)((r - 3) * s));
@@ -917,8 +916,8 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   float dcpm = slow ? c5 : c;
   float dratio = egm_f(M_RATIO);
   float dusv = (dratio > 0.0f) ? dcpm / dratio : 0.0f;
-  uint32_t cpm_x10 = (uint32_t)(dcpm * 10.0f + 0.5f);
-  int32_t  usv_x100 = (int32_t)(dusv * 100.0f + 0.5f);
+  uint32_t cpm_x10 = (uint32_t)CounterMaths::to_int(dcpm * 10.0f);
+  int32_t  usv_x100 = CounterMaths::to_int(dusv * 100.0f);
   uint8_t mode = !egm_b(M_WARM) ? 1 : slow ? 2 : 0;
   uint8_t snd = send_indicator;
   uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0)

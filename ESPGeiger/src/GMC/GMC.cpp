@@ -18,7 +18,9 @@
 */
 #ifdef GMCOUT
 #include <EGFormat.h>
+#include <EGEscape.h>
 #include "GMC.h"
+#include "Counter/CounterMaths.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/Words.h"
 #include "Corium/Module/EGModuleRegistry.h"
@@ -42,10 +44,12 @@ EG_PSTR(GM_P_ID,  "\\d{1,20}");
 EG_PSTR(GM_L_GID, "Geiger Counter ID");
 EG_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
 
+#define GMC_ID_MAX 20
+
 static const EGPref GMC_PREF_ITEMS[] PROGMEM = {
   {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
-  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, 20, EGP_STRING, 0},
-  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, 20, EGP_STRING, 0},
+  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, EGP_STRING, 0},
+  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, EGP_STRING, 0},
 };
 
 static const EGPrefGroup GMC_PREF_GROUP PROGMEM = {
@@ -115,10 +119,13 @@ bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
 
   Log::debug(PSTR("GMC: Uploading latest data ..."));
 
-  int avgcpm = (int)roundf(egm_f(M_CPM_ST));
+  char aid[3 * GMC_ID_MAX + 1], gid[3 * GMC_ID_MAX + 1];
+  egesc_url(aid, sizeof(aid), _api_id);
+  egesc_url(gid, sizeof(gid), _api_gc_id);
+  int avgcpm = CounterMaths::to_int(egm_f(M_CPM_ST));
   char acpm[16], usv[16];
   format_f(acpm, sizeof(acpm), egm_f(M_CPM5));
   format_f(usv,  sizeof(usv),  egm_f(M_USV5), 4);
-  return url_fits(snprintf_P(url, cap, GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv), cap);
+  return url_fits(snprintf_P(url, cap, GMC_URI, aid, gid, avgcpm, acpm, usv), cap);
 }
 #endif

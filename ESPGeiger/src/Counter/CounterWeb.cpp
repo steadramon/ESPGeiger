@@ -83,9 +83,8 @@ static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
     n = snprintf_P(line, cap,
       PSTR(",\"start\":%lu"), (unsigned long)Clock::boot_epoch);
   } else {
-    unsigned long uptime = Uptime::seconds() - start;
     n = snprintf_P(line, cap,
-      PSTR(",\"uptime\":%lu"), uptime);
+      PSTR(",\"uptime\":%lu"), (unsigned long)Uptime::since(start));
   }
   send_n(res, line, cap, n);
 }

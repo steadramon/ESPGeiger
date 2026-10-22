@@ -25,6 +25,7 @@
 #include <EGEscape.h>
 #include "EnvSensor/EnvSensor.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Counter/CounterMaths.h"
 #include <math.h>
 
 EG_PSTR(K_CHANNEL_KEY, "channel_key");
@@ -103,9 +104,9 @@ bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
 
   Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
 
-  int avgcpm = (int)roundf(egm_f(M_CPM));
-  int avgcpm5 = (int)roundf(egm_f(M_CPM5));
-  int avgcpm15 = (int)roundf(egm_f(M_CPM15));
+  int avgcpm = CounterMaths::to_int(egm_f(M_CPM));
+  int avgcpm5 = CounterMaths::to_int(egm_f(M_CPM5));
+  int avgcpm15 = CounterMaths::to_int(egm_f(M_CPM15));
 
   char usvChar[20];
   format_f(usvChar, sizeof(usvChar), egm_f(M_USV), 5);

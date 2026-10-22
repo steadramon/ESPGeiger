@@ -21,6 +21,7 @@
 #ifdef AUDIO_TICK
 
 #include <Arduino.h>
+#include <atomic>
 #include <driver/i2s.h>
 #include "Corium/Module/EGModule.h"
 
@@ -45,6 +46,10 @@
 #endif
 
 #define AUDIO_TICK_SAMPLE_RATE 22050
+
+constexpr uint32_t ms_to_samples(uint32_t ms) {
+  return ms * AUDIO_TICK_SAMPLE_RATE / 1000;
+}
 
 // one worker task owns I2S
 enum AudioCmdType : uint8_t {
@@ -74,6 +79,7 @@ class AudioTick : public EGModule {
     uint8_t display_order() override { return 17; }
     uint16_t warmup_seconds() override { return 0; }
     bool has_loop() override { return false; }
+    void s_tick(unsigned long now) override;
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
@@ -87,13 +93,15 @@ class AudioTick : public EGModule {
     void        dispatch(const struct AudioCmd& cmd);
     static void numbersPad(uint8_t* out, size_t n);
 
-    bool muted() const { return _muted; }
-    void toggleMute();
+    bool muted() const { return _muted.load(std::memory_order_relaxed); }
+    // timer task, the tick logs it
+    void toggleMute() { _muted.store(!muted(), std::memory_order_relaxed); }
 
   private:
     void playClick(uint8_t engine_override = 255);
     void playClickPool();
     void playClickChirp();
+    void synthClick(float asym, float f2_amp, float amp, float tau, float f_lo, uint32_t nr);
     void playBootChime();
     void play_chime_now(uint8_t c);
     void chimeThreeBeeps();
@@ -122,7 +130,8 @@ class AudioTick : public EGModule {
     unsigned long _last_emit_ms = 0;
     uint8_t       _tokens = 5;
     unsigned long _last_token_ms = 0;
-    bool          _muted = false;
+    std::atomic<bool> _muted{false};
+    bool          _muted_logged = false;
 };
 
 extern AudioTick audiotick;

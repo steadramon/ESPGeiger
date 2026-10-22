@@ -65,9 +65,7 @@ volatile uint32_t  s_min_pulse_us = UINT32_MAX;
 volatile uint32_t  s_prev_pulse_us = 0;
 // isr owns the histogram once set
 volatile bool      s_hist_from_isr = false;
-#ifdef ESP32
-portMUX_TYPE s_pulse_mux = portMUX_INITIALIZER_UNLOCKED;
-#endif
+IsrLock::Mux s_pulse_mux;
 
 void ensure_pulse_ring() {
   if (s_pulse_ring) return;
@@ -96,22 +94,14 @@ void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) 
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
   uint32_t t = end_us - (uint32_t)(count - 1) * step;
-#ifdef ESP32
-  portENTER_CRITICAL_ISR(&s_pulse_mux);
-#else
-  noInterrupts();
-#endif
+  IsrLock::enter(s_pulse_mux);
   for (uint16_t i = 0; i < count; i++) {
     s_pulse_ring[s_pulse_head] = t;
     s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
     if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
     t += step;
   }
-#ifdef ESP32
-  portEXIT_CRITICAL_ISR(&s_pulse_mux);
-#else
-  interrupts();
-#endif
+  IsrLock::leave(s_pulse_mux);
 }
 
 uint32_t Counter::_pulse_hist[Counter::HIST_BUCKETS] = {0};
@@ -126,35 +116,23 @@ void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
   s_hist_from_isr = true;
 
   if (!s_pulse_ring) return;
-#ifdef ESP32
-  portENTER_CRITICAL_ISR(&s_pulse_mux);
-#endif
+  IsrLock::enter_isr(s_pulse_mux);
   s_pulse_ring[s_pulse_head] = now_us;
   s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
   if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
-#ifdef ESP32
-  portEXIT_CRITICAL_ISR(&s_pulse_mux);
-#endif
+  IsrLock::leave_isr(s_pulse_mux);
 }
 
 bool Counter::snapshot_ring(RingSnapshot& s) const {
   if (!s_pulse_ring) { s.count = 0; return false; }
-#ifdef ESP32
-  portENTER_CRITICAL(&s_pulse_mux);
-#else
-  noInterrupts();
-#endif
+  IsrLock::enter(s_pulse_mux);
   uint16_t head  = s_pulse_head;
   uint16_t count = s_pulse_count;
   if (count >= 2) {
     s.newest_us = s_pulse_ring[(head - 1)     & PULSE_RING_MASK];
     s.oldest_us = s_pulse_ring[(head - count) & PULSE_RING_MASK];
   }
-#ifdef ESP32
-  portEXIT_CRITICAL(&s_pulse_mux);
-#else
-  interrupts();
-#endif
+  IsrLock::leave(s_pulse_mux);
   s.count = count;
   return count >= 2;
 }
@@ -306,11 +284,6 @@ inline void Counter::update_alarms(int cpm) {
 #else
 #define TICK_ATTR
 #endif
-
-static inline uint16_t cps_x600(float cps) {
-  float t = cps * 600.0f + 0.5f;
-  return t >= 65535.0f ? 0xFFFFu : (uint16_t)t;
-}
 
 void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
   if (!_running) return;
@@ -516,11 +489,7 @@ float Counter::get_cps_live() {
 float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
   // 0 = uncapped
   if (!s_pulse_ring) return 0.0f;
-#ifdef ESP32
-  portENTER_CRITICAL(&s_pulse_mux);
-#else
-  noInterrupts();
-#endif
+  IsrLock::enter(s_pulse_mux);
   uint16_t head  = s_pulse_head;
   uint16_t count = s_pulse_count;
   uint32_t newest = 0, oldest = 0;
@@ -537,11 +506,7 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
       take = i;
     }
   }
-#ifdef ESP32
-  portEXIT_CRITICAL(&s_pulse_mux);
-#else
-  interrupts();
-#endif
+  IsrLock::leave(s_pulse_mux);
   if (take < 2) return 0.0f;
   uint32_t span = newest - oldest;
   if (span == 0) return 0.0f;
@@ -665,7 +630,7 @@ bool Counter::is_quiet_now() {
   return _quiet.active();
 }
 
-// NOLINTNEXTLINE(complexity) hot path
+// hot path
 void Counter::loop() {
   if (_pending_work) {
     uint8_t pw = _pending_work;

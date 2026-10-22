@@ -19,37 +19,11 @@
 #include <atomic>
 #include <functional>
 
-#ifndef LIBRETINY
 #include "sdkconfig.h"
 extern "C" {
 #include "freertos/semphr.h"
 #include "lwip/pbuf.h"
 }
-#else
-extern "C" {
-#include <lwip/pbuf.h>
-#include <FreeRTOS.h>
-#include <semphr.h>
-}
-#endif
-
-// If core is not defined, then we are running in Arduino or PIO
-#ifndef CONFIG_ASYNC_TCP_RUNNING_CORE
-#define CONFIG_ASYNC_TCP_RUNNING_CORE -1  // any available core
-#endif
-
-// guard AsyncTCP task with watchdog
-#ifndef CONFIG_ASYNC_TCP_USE_WDT
-#define CONFIG_ASYNC_TCP_USE_WDT 1
-#endif
-
-#ifndef CONFIG_ASYNC_TCP_STACK_SIZE
-#define CONFIG_ASYNC_TCP_STACK_SIZE 8192 * 2
-#endif
-
-#ifndef CONFIG_ASYNC_TCP_PRIORITY
-#define CONFIG_ASYNC_TCP_PRIORITY 10
-#endif
 
 #ifndef CONFIG_ASYNC_TCP_QUEUE_SIZE
 #define CONFIG_ASYNC_TCP_QUEUE_SIZE 64
@@ -60,9 +34,13 @@ extern "C" {
 #endif
 
 class AsyncClient;
+class AsyncServer;
+class AsyncTCP_detail;
+struct tcp_pcb;
+struct dns_ask;
 
-#define ASYNC_WRITE_FLAG_COPY 0x01  // will allocate new buffer to hold the data while sending (else will hold reference to the data given)
-#define ASYNC_WRITE_FLAG_MORE 0x02  // will not send PSH flag, meaning that there should be more data to be sent before the application should react.
+#define ASYNC_WRITE_FLAG_COPY 0x01  // copy into lwIP, else data must outlive the send
+#define ASYNC_WRITE_FLAG_MORE 0x02  // no PSH, more to come
 
 typedef std::function<void(void *, AsyncClient *)> AcConnectHandler;
 typedef std::function<void(void *, AsyncClient *, size_t len, uint32_t time)> AcAckHandler;
@@ -71,9 +49,23 @@ typedef std::function<void(void *, AsyncClient *, void *data, size_t len)> AcDat
 typedef std::function<void(void *, AsyncClient *, struct pbuf *pb)> AcPacketHandler;
 typedef std::function<void(void *, AsyncClient *, uint32_t time)> AcTimeoutHandler;
 
-struct tcp_pcb;
-class AsyncServer;
-class AsyncTCP_detail;
+/*
+  Two threads. lwIP's tcpip thread (tiT) runs lwIP and only queues events.
+  The owner, one task (the Arduino loop), calls AsyncTCP::poll() every pass:
+  the callbacks run there, and every AsyncClient/AsyncServer call comes from
+  there. Same shape as the 8266.
+
+  Only tiT writes _pcb or touches a tcp_pcb. The owner tests _pcb for null,
+  reads the copy tiT keeps (_st, _snd), or makes one tcpip_api_call.
+*/
+namespace AsyncTCP {
+extern std::atomic<bool> pending;
+void run();
+// every loop pass, cheap when idle
+inline void poll() {
+  if (pending.load(std::memory_order_relaxed)) run();
+}
+}  // namespace AsyncTCP
 
 typedef enum {
   LWIP_TCP_SENT,
@@ -84,38 +76,24 @@ typedef enum {
   LWIP_TCP_ACCEPT,
   LWIP_TCP_CONNECTED,
   LWIP_TCP_DNS,
-  LWIP_TCP_CLOSE,     // from another task
-  LWIP_TCP_RELEASE    // from another task, frees it
+  LWIP_TCP_RELEASE    // an accept the server never saw
 } lwip_tcp_event_t;
 
+// no pcb in here, a dropped pcb purges its events
 struct lwip_tcp_event_packet_t {
   lwip_tcp_event_packet_t *next;
   lwip_tcp_event_t event;
   AsyncClient *client;
   union {
     struct {
-      tcp_pcb *pcb;
-      int8_t err;
-    } connected;
-    struct {
       int8_t err;
     } error;
     struct {
-      tcp_pcb *pcb;
       uint16_t len;
     } sent;
     struct {
-      tcp_pcb *pcb;
       pbuf *pb;
-      int8_t err;
     } recv;
-    struct {
-      tcp_pcb *pcb;
-      int8_t err;
-    } fin;
-    struct {
-      tcp_pcb *pcb;
-    } poll;
     struct {
       AsyncServer *server;
     } accept;
@@ -124,9 +102,6 @@ struct lwip_tcp_event_packet_t {
       uint32_t id;
       bool found;    // false = failed
     } dns;
-    struct {
-      uint8_t gen;   // a reconnect makes it stale
-    } close;
   };
 
   inline lwip_tcp_event_packet_t(lwip_tcp_event_t _event, AsyncClient *_client) : next(nullptr), event(_event), client(_client){};
@@ -137,19 +112,16 @@ public:
   AsyncClient(tcp_pcb *pcb = 0);
   ~AsyncClient();
 
-  // Noncopyable
   AsyncClient(const AsyncClient &) = delete;
   AsyncClient &operator=(const AsyncClient &) = delete;
-
-  // Nonmovable
   AsyncClient(AsyncClient &&) = delete;
   AsyncClient &operator=(AsyncClient &&) = delete;
 
   bool operator==(const AsyncClient &other) const;
-
   bool operator!=(const AsyncClient &other) const {
     return !(*this == other);
   }
+
   bool connect(ip_addr_t addr, uint16_t port);
 #ifdef ARDUINO
   bool connect(const IPAddress &ip, uint16_t port);
@@ -159,11 +131,6 @@ public:
 #endif
   bool connect(const char *host, uint16_t port);
 
-  /**
-     * @brief close connection
-     *
-     * @param now - ignored
-     */
   [[deprecated("Use AsyncClient::close() instead")]]
   void close(bool now) {
     close();
@@ -173,11 +140,8 @@ public:
     close();
   };
 
-  /**
-     * @brief close connection
-     */
   void close();
-  // not delete, off the async task
+  // close and delete, no callbacks after; safe in its own callback
   void release();
 
   int8_t abort();
@@ -188,93 +152,50 @@ public:
   // TCP buffer space available
   size_t space() const;
 
-  /**
-     * @brief add data to be send (but do not send yet)
-     * @note add() would call lwip's tcp_write()
-        By default apiflags=ASYNC_WRITE_FLAG_COPY
-        You could try to use apiflags with this flag unset to pass data by reference and avoid copy to socket buffer,
-        but looks like it does not work for Arduino's lwip in ESP32/IDF at least
-        it is enforced in https://github.com/espressif/esp-lwip/blob/0606eed9d8b98a797514fdf6eabb4daf1c8c8cd9/src/core/tcp_out.c#L422C5-L422C30
-        if LWIP_NETIF_TX_SINGLE_PBUF is set, and it is set indeed in IDF
-        https://github.com/espressif/esp-idf/blob/a0f798cfc4bbd624aab52b2c194d219e242d80c1/components/lwip/port/include/lwipopts.h#L744
-     *
-     * @param data
-     * @param size
-     * @param apiflags
-     * @return size_t amount of data that has been copied
-     */
+  // queue, send later; returns bytes taken
   size_t add(const char *data, size_t size, uint8_t apiflags = ASYNC_WRITE_FLAG_COPY);
-
-  /**
-     * @brief send data previously add()'ed
-     *
-     * @return true on success
-     * @return false on error
-     */
+  // send what add() queued
   bool send();
-
-  /**
-     * @brief add and enqueue data for sending
-     * @note it is same as add() + send()
-     * @note only make sense when canSend() == true
-     *
-     * @param data
-     * @param size
-     * @param apiflags
-     * @return size_t
-     */
+  // add + send in one trip; queued counts as taken
   size_t write(const char *data, size_t size, uint8_t apiflags = ASYNC_WRITE_FLAG_COPY);
-
-  /**
-     * @brief add and enqueue data for sending
-     * @note treats data as null-terminated string
-     *
-     * @param data
-     * @return size_t
-     */
   size_t write(const char *data) {
     return data == NULL ? 0 : write(data, strlen(data));
   };
 
+  // tiT's copy, one event behind at most
   uint8_t state() const;
   bool connecting() const;
   bool connected() const;
   bool disconnecting() const;
   bool disconnected() const;
-
   // disconnected or disconnecting
   bool freeable() const;
 
+  // these ask tiT
   uint16_t getMss() const;
-
-  uint32_t getRxTimeout() const;
-  // no RX data timeout for the connection in seconds
-  void setRxTimeout(uint32_t timeout);
-
-  uint32_t getAckTimeout() const;
-  // no ACK timeout for the last sent packet in milliseconds
-  void setAckTimeout(uint32_t timeout);
-
   void setNoDelay(bool nodelay) const;
   bool getNoDelay();
-
   void setKeepAlive(uint32_t ms, uint8_t cnt);
+
+  uint32_t getRxTimeout() const;
+  // no RX data timeout, seconds
+  void setRxTimeout(uint32_t timeout);
+  uint32_t getAckTimeout() const;
+  // no ACK timeout for the last send, ms
+  void setAckTimeout(uint32_t timeout);
 
   uint32_t getRemoteAddress() const;
   uint16_t getRemotePort() const;
   uint16_t remotePort() const {
     return getRemotePort();
   }
-
   uint32_t getLocalAddress() const;
   uint16_t getLocalPort() const;
   uint16_t localPort() const {
     return getLocalPort();
   }
-
   ip4_addr_t getRemoteAddress4() const;
   ip4_addr_t getLocalAddress4() const;
-
 #if LWIP_IPV6
   ip6_addr_t getRemoteAddress6() const;
   ip6_addr_t getLocalAddress6() const;
@@ -288,103 +209,84 @@ public:
 #endif
 #endif
 #endif
-
 #ifdef ARDUINO
   IPAddress remoteIP() const;
   IPAddress localIP() const;
 #endif
 
-  // set callback - on successful connect
   void onConnect(AcConnectHandler cb, void *arg = 0);
-  // set callback - disconnected
   void onDisconnect(AcConnectHandler cb, void *arg = 0);
-  // set callback - ack received
   void onAck(AcAckHandler cb, void *arg = 0);
-  // set callback - unsuccessful connect or error
+  // failed connect or error
   void onError(AcErrorHandler cb, void *arg = 0);
-  // set callback - data received (called if onPacket is not used)
+  // data, if onPacket is not set
   void onData(AcDataHandler cb, void *arg = 0);
-  // set callback - data received
-  // !!! You MUST call ackPacket() or free the pbuf yourself to prevent memory leaks
+  // you own the pbuf: ackPacket() it or free it
   void onPacket(AcPacketHandler cb, void *arg = 0);
-  // set callback - ack timeout
   void onTimeout(AcTimeoutHandler cb, void *arg = 0);
-  // set callback - every 125ms when connected
+  // every 500 ms when connected
   void onPoll(AcConnectHandler cb, void *arg = 0);
 
-  // ack pbuf from onPacket
   void ackPacket(struct pbuf *pb);
-  // ack data that you have not acked using the method below
   size_t ack(size_t len);
-  // will not ack the current packet. Call from onData
+  // from onData: ack() it yourself later
   void ackLater() {
     _ack_pcb = false;
   }
 
-  int8_t _recv(tcp_pcb *pcb, pbuf *pb, int8_t err);
+  // lwIP thread only
   tcp_pcb *pcb() {
-    return _pcb;
+    return _pcb.load();
   }
+  void _own(tcp_pcb *pcb);     // lwIP thread: take or drop it
+  void _cache(tcp_pcb *pcb);   // lwIP thread: refresh _st, _snd
 
 protected:
   friend class AsyncTCP_detail;
   friend class AsyncServer;
 
-  tcp_pcb *_pcb;
-  std::atomic<bool> _pcb_alive{false};   // set with every _pcb assignment
-
-  // tiT can null _pcb, read once
-  tcp_pcb *_validate_pcb() const;
-  inline tcp_pcb *_live_pcb() const {
-    return _pcb_alive.load(std::memory_order_acquire) ? _pcb : nullptr;
-  }
-
-public:
-  inline void _mark_pcb_dead() {
-    _pcb_alive.store(false, std::memory_order_release);
-  }
-
-protected:
+  std::atomic<tcp_pcb *> _pcb{nullptr};
+  std::atomic<uint8_t> _st{0};    // tcp_state, 0 = CLOSED
+  std::atomic<uint16_t> _snd{0};  // tcp_sndbuf
 
   AcConnectHandler _connect_cb;
-  void *_connect_cb_arg;
+  void *_connect_cb_arg = nullptr;
   AcConnectHandler _discard_cb;
-  void *_discard_cb_arg;
+  void *_discard_cb_arg = nullptr;
   AcAckHandler _sent_cb;
-  void *_sent_cb_arg;
+  void *_sent_cb_arg = nullptr;
   AcErrorHandler _error_cb;
-  void *_error_cb_arg;
+  void *_error_cb_arg = nullptr;
   AcDataHandler _recv_cb;
-  void *_recv_cb_arg;
+  void *_recv_cb_arg = nullptr;
   AcPacketHandler _pb_cb;
-  void *_pb_cb_arg;
+  void *_pb_cb_arg = nullptr;
   AcTimeoutHandler _timeout_cb;
-  void *_timeout_cb_arg;
+  void *_timeout_cb_arg = nullptr;
   AcConnectHandler _poll_cb;
-  void *_poll_cb_arg;
+  void *_poll_cb_arg = nullptr;
 
-  bool _ack_pcb;
-  bool _closed = false;   // by the owner
-  bool _told = false;     // onDisconnect ran
-  std::atomic<bool> _released{false};
-  std::atomic<bool> _close_wanted{false};   // next poll closes
-  lwip_tcp_event_packet_t _release_ev{LWIP_TCP_RELEASE, this};   // release() never allocs
-  std::atomic<uint32_t> _dns_id{0};   // older answers dropped
-  uint8_t _gen = 0;   // per connect
-  uint32_t _tx_last_packet;
-  std::atomic<uint32_t> _rx_ack_len{0};   // async_tcp adds, loop acks
-  uint32_t _rx_last_packet;
-  uint32_t _rx_timeout;
-  uint32_t _rx_last_ack;
-  uint32_t _ack_timeout;
-  uint16_t _connect_port;
+  bool _ack_pcb = true;
+  bool _closed = false;     // by the owner
+  bool _told = false;       // onDisconnect ran
+  bool _released = false;   // no more callbacks
+  lwip_tcp_event_packet_t _release_ev{LWIP_TCP_RELEASE, this};   // never allocs
+  dns_ask *_ask = nullptr;  // lwIP's till it answers, queue lock
+  uint32_t _dns_id = 0;     // older answers dropped
+  uint32_t _tx_last_packet = 0;
+  uint32_t _rx_ack_len = 0;
+  uint32_t _rx_last_packet = 0;
+  uint32_t _rx_timeout = 0;
+  uint32_t _rx_last_ack = 0;
+  uint32_t _ack_timeout = CONFIG_ASYNC_TCP_MAX_ACK_TIME;
+  uint16_t _connect_port = 0;
 
   int8_t _close();
-  int8_t _connected(tcp_pcb *pcb, int8_t err);
+  void _connected();
   void _error(int8_t err);
-  int8_t _poll(tcp_pcb *pcb);
-  int8_t _sent(tcp_pcb *pcb, uint16_t len);
-  int8_t _fin(tcp_pcb *pcb, int8_t err);
+  void _poll();
+  void _sent(uint16_t len);
+  void _recv(pbuf *pb);
   void _dns_found(ip_addr_t *ipaddr);
   bool _connect_to(ip_addr_t addr, uint16_t port);
 };
@@ -407,21 +309,20 @@ public:
   bool getNoDelay() const;
   uint8_t status() const;
   // before begin(), lwIP drops SYNs past n
-  void setMaxClients(uint8_t n) { _maxClients = n; }
+  void setMaxClients(uint8_t n) {
+    _maxClients = n;
+  }
 
 protected:
   friend class AsyncTCP_detail;
 
   uint16_t _port;
   ip_addr_t _addr;
-  bool _noDelay;
+  bool _noDelay = false;
   uint8_t _maxClients = 0;   // 0 = lwIP's 5 half-open
-  tcp_pcb *_pcb;
+  tcp_pcb *_pcb = nullptr;   // listening; tiT reads it only in calls
   AcConnectHandler _connect_cb;
-  void *_connect_cb_arg;
-
-  int8_t _accept(tcp_pcb *newpcb, int8_t err);
-  int8_t _accepted(AsyncClient *client);
+  void *_connect_cb_arg = nullptr;
 };
 
 #endif /* ASYNCTCP_H_ */

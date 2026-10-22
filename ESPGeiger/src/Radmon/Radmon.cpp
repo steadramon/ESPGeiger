@@ -20,6 +20,7 @@
 #include "Radmon.h"
 #include <EGFormat.h>
 #include "Corium/Logger/Logger.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
 #include <EGEscape.h>
 #include "Corium/Module/EGModuleRegistry.h"
@@ -76,12 +77,7 @@ void Radmon::setInterval(int interval) {
   if (interval == pingInterval) {
     return;
   }
-  if (interval > RADMON_INTERVAL_MAX) {
-    interval = RADMON_INTERVAL_MAX;
-  }
-  if (interval < RADMON_INTERVAL_MIN) {
-    interval = RADMON_INTERVAL_MIN;
-  }
+  interval = clamp(interval, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX);
   pingInterval = interval;
   pingIntervalMs = (uint32_t)interval * 1000UL;
 }

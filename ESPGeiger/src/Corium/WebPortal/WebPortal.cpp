@@ -26,10 +26,13 @@
 #include "Corium/System/CrashDump.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/Net/Wifi.h"
+#include "Corium/Util/Bytes.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/System/Lifecycle.h"
 #include <EGEscape.h>
+#include <EGHttpForm.h>
 #include <EGJson.h>
 #include <EGPortal.h>
 #include "Corium/Logger/Logger.h"
@@ -245,10 +248,10 @@ void WebPortal::requestRestart(uint32_t delayMs) {
 }
 
 // tick() applies these, page drains first
-static volatile bool s_pendingWifiSave = false;   // creds in Wifi::holdCreds
+static bool s_pendingWifiSave = false;   // creds in Wifi::holdCreds
 
-static volatile bool s_pendingEraseCreds = false;
-static volatile bool s_pendingFactoryReset = false;
+static bool s_pendingEraseCreds = false;
+static bool s_pendingFactoryReset = false;
 
 static WebPortal* s_activeWebPortal = nullptr;
 
@@ -264,17 +267,17 @@ void WebPortal::tick(uint32_t now) {
                    Wifi::heldSsid());
       Wifi::beginHeld();
       s_pendingWifiSave = false;
-      delay(150);  // NOLINT(loop-block) restart follows, NVS settle
+      delay(150);  // restart follows, NVS settle
     }
     if (s_pendingEraseCreds) {
       Wifi::clearSavedCreds();
       s_pendingEraseCreds = false;
-      delay(150);  // NOLINT(loop-block) restart follows
+      delay(150);  // restart follows
     }
     if (s_pendingFactoryReset) {
       DeviceInfo::factoryReset();
       s_pendingFactoryReset = false;
-      delay(150);  // NOLINT(loop-block) restart follows
+      delay(150);  // restart follows
     }
     Log::console(PSTR("WebPortal: restarting"));
     DeviceInfo::safeRestart(50);
@@ -1135,7 +1138,6 @@ byID('uf').addEventListener('submit',function(e){
   x.open('POST','/update',!0);
   x.setRequestHeader('Content-Type','application/octet-stream');
   var dv=0;
-  x.upload.onprogress=function(v){if(!dv&&v.lengthComputable)P.value=v.loaded/v.total};
   x.upload.onload=function(){if(!dv){P.removeAttribute('value');S.textContent='Sent, device still writing...'}};
   var pt=setInterval(function(){
     fetch('/update/progress',{cache:'no-store'}).then(r=>r.json()).then(j=>{if(j.total){dv=1;P.value=j.done/j.total}}).catch(()=>{});
@@ -1445,8 +1447,7 @@ static void param_save_pref(const char* mid, const EGPref& p,
   char name[2 * EGPREF_ID_MAX + 2];   // mid.id
   char id_buf[EGPREF_ID_MAX + 1];
   char field[EGPREFS_MAX_VALUE + 1];
-  strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
-  id_buf[sizeof(id_buf) - 1] = '\0';
+  flash_to_ram(p.id, id_buf, sizeof(id_buf));
   snprintf_P(name, sizeof(name), PSTR("%s.%s"), mid, id_buf);
 
   if (p.type == EGP_BOOL) {
@@ -1559,13 +1560,6 @@ struct ParamCtx {
   char        s_show[2 * EGPREF_ID_MAX + 32];   // data-w='mid.key' data-m=N
 };
 
-static const char* flash_to_ram(const char* fp, char* dst, size_t cap) {
-  if (!fp) { dst[0] = '\0'; return dst; }
-  strncpy_P(dst, fp, cap - 1);
-  dst[cap - 1] = '\0';
-  return dst;
-}
-
 static void param_appendf(ParamCtx& c, PGM_P fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -1628,8 +1622,9 @@ static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
 
 // sent per option, a long list can't overflow buf
 static void param_emit_options(ParamCtx& c, const EGPref& p) {
-  long cur_idx = strtol(c.cur, nullptr, 10);
-  long def_idx = p.default_val ? strtol(p.default_val, nullptr, 10) : -1;
+  int32_t cur_idx = 0, def_idx = -1;
+  parse_i32(c.cur, &cur_idx);
+  parse_i32(p.default_val, &def_idx);
   const char* opt = c.s_pat;
   long idx = p.min_i;
   while (*opt) {
@@ -1953,8 +1948,7 @@ static void b64_init(B64Sink& s, EGHttpResponse& r) {
 }
 
 static inline uint8_t obf_step(uint32_t* st) {
-  uint32_t x = *st;
-  x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+  uint32_t x = xorshift32(*st);
   *st = x;
   return (uint8_t)(x & 0xFF);
 }
@@ -2000,8 +1994,7 @@ static bool is_exportable_pref(const EGPrefGroup* g, const EGPref& p,
 static bool group_has_export(const EGPrefGroup* g) {
   for (size_t j = 0; j < g->count.get(); j++) {
     char id_buf[EGPREF_ID_MAX + 1];
-    strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
-    id_buf[sizeof(id_buf) - 1] = '\0';
+    flash_to_ram(g->prefs.id_P(j), id_buf, sizeof(id_buf));
     const char* cur;
     if (is_exportable_pref(g, g->prefs.row(j), id_buf, cur)) return true;
   }
@@ -2012,8 +2005,7 @@ static uint8_t group_export_count(const EGPrefGroup* g) {
   uint8_t emitted_prefs = 0;
   for (size_t j = 0; j < g->count.get(); j++) {
     char id_buf[EGPREF_ID_MAX + 1];
-    strncpy_P(id_buf, g->prefs.id_P(j), sizeof(id_buf) - 1);
-    id_buf[sizeof(id_buf) - 1] = '\0';
+    flash_to_ram(g->prefs.id_P(j), id_buf, sizeof(id_buf));
     const char* cur;
     if (is_exportable_pref(g, g->prefs.row(j), id_buf, cur)) emitted_prefs++;
   }
@@ -2030,8 +2022,7 @@ static void export_write_group(B64Sink& sink, const EGPrefGroup* g, uint8_t emit
   for (size_t j = 0; j < g->count.get(); j++) {
     const EGPref p = g->prefs.row(j);
     char id_buf[EGPREF_ID_MAX + 1];
-    strncpy_P(id_buf, p.id, sizeof(id_buf) - 1);
-    id_buf[sizeof(id_buf) - 1] = '\0';
+    flash_to_ram(p.id, id_buf, sizeof(id_buf));
     const char* cur;
     if (!is_exportable_pref(g, p, id_buf, cur)) continue;
     size_t klen = strlen(id_buf);
@@ -2039,8 +2030,9 @@ static void export_write_group(B64Sink& sink, const EGPrefGroup* g, uint8_t emit
     if (klen > 255 || vlen > 65535) continue;
     b64_write_u8(sink, (uint8_t)klen);
     b64_write(sink, id_buf, klen);
-    b64_write_u8(sink, (uint8_t)((vlen >> 8) & 0xFF));
-    b64_write_u8(sink, (uint8_t)(vlen & 0xFF));
+    uint8_t vb[2];
+    wr_be16(vb, (uint16_t)vlen);
+    b64_write(sink, vb, 2);
     b64_write(sink, cur, vlen);
   }
 }
@@ -2078,10 +2070,7 @@ static const char* validateImport(uint8_t* buf, size_t len) {
   if (buf[0] != 0x11 || buf[1] != 0x23 || buf[2] != 0xC6) return PSTR("bad magic");
   if (buf[3] != 1) return PSTR("bad format");
   size_t payload_len = len - 4;
-  uint32_t expected = ((uint32_t)buf[payload_len    ] << 24) |
-                      ((uint32_t)buf[payload_len + 1] << 16) |
-                      ((uint32_t)buf[payload_len + 2] <<  8) |
-                      ((uint32_t)buf[payload_len + 3]      );
+  uint32_t expected = rd_be32(buf + payload_len);
   uint32_t actual = crc32_update(0, buf, payload_len) ^ EXPORT_OBF_SEED;
   if (expected != actual) return PSTR("checksum mismatch");
 
@@ -2113,12 +2102,8 @@ void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   b64_init(sink, res);
   serializeExportStream(sink);
   uint32_t crc = sink.crc ^ EXPORT_OBF_SEED;
-  uint8_t crc_be[4] = {
-    (uint8_t)((crc >> 24) & 0xFF),
-    (uint8_t)((crc >> 16) & 0xFF),
-    (uint8_t)((crc >> 8)  & 0xFF),
-    (uint8_t)( crc        & 0xFF),
-  };
+  uint8_t crc_be[4];
+  wr_be32(crc_be, crc);
   // not b64_write, the CRC isn't hashed
   for (int i = 0; i < 4; i++) {
     sink.tri[sink.triLen++] = crc_be[i];
@@ -2146,47 +2131,6 @@ void WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
   }
 }
 
-static int hex_nyb(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  return -1;
-}
-
-static char* find_blob_value(char* body, size_t bodyLen) {
-  for (size_t i = 0; i + 5 <= bodyLen; i++) {
-    bool at_start = (i == 0 || body[i - 1] == '&');
-    if (at_start && memcmp_P(body + i, PSTR("blob="), 5) == 0) return body + i + 5;
-  }
-  return nullptr;
-}
-
-static char* url_decode_in_place(char* src, char* end) {
-  char* dst = src;
-  while (src < end && *src != '&') {
-    if (*src == '+') { *dst++ = ' '; src++; }
-    else if (*src == '%' && src + 2 < end) {
-      int hi = hex_nyb(src[1]);
-      int lo = hex_nyb(src[2]);
-      if (hi >= 0 && lo >= 0) { *dst++ = (char)((hi << 4) | lo); src += 3; }
-      else                    { *dst++ = *src++; }
-    }
-    else { *dst++ = *src++; }
-  }
-  return dst;
-}
-
-// decodes in place
-static char* extract_blob_field(char* body, size_t bodyLen, size_t* out_len) {
-  if (bodyLen < 5) return nullptr;
-  char* eq = find_blob_value(body, bodyLen);
-  if (!eq) return nullptr;
-  char* dst = url_decode_in_place(eq, body + bodyLen);
-  *dst = '\0';
-  if (out_len) *out_len = dst - eq;
-  return eq;
-}
-
 static void import_fail(EGHttpResponse& res, const char* msg) {
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   WebPortal::sendPageHead(res, F("Import"));
@@ -2205,7 +2149,7 @@ static char* import_field(size_t* len, const char** err) {
     *err = PSTR("no body");
     return nullptr;
   }
-  char* field = extract_blob_field(s_importBody.buf, s_importBody.len, len);
+  char* field = eghttp_form_take(s_importBody.buf, s_importBody.len, PSTR("blob"), len);
   if (!field || *len == 0) {
     *err = PSTR("missing blob");
     return nullptr;

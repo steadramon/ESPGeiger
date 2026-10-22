@@ -28,7 +28,7 @@ bool synced = false;
 unsigned long boot_epoch = 0;
 int16_t tz_offset_min = 0;
 unsigned long last_sync_ms = 0;
-volatile bool resync = false;
+bool resync = false;
 unsigned long resync_ms = 0;
 
 static const unsigned long RESYNC_MS = 5UL * 60UL * 1000UL;
@@ -47,7 +47,7 @@ void refresh_tz_offset_min() {
 bool on_sync() {
   last_sync_ms = millis();
   bool first = !synced;
-  unsigned long uptime = Uptime::seconds() - start;
+  unsigned long uptime = Uptime::since(start);
   if (first) {
     synced = true;
     boot_epoch = epoch() - uptime;

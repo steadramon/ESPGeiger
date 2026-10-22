@@ -323,14 +323,10 @@ static const EGPrefGroup LIFE_PREF_GROUP PROGMEM = {
 const EGPrefGroup* LifePrefs::prefs_group() { return &LIFE_PREF_GROUP; }
 
 void LifePrefs::on_prefs_loaded() {
-  const char* lc = EGPrefs::getString("life", EG_K_CLK);
-  gcounter.set_lifetime_clicks(lc ? strtoul(lc, nullptr, 10) : 0);
-  const char* lcr = EGPrefs::getString("life", EG_K_CLKR);
-  gcounter.set_lifetime_rollover(lcr ? strtoul(lcr, nullptr, 10) : 0);
-  const char* fbt = EGPrefs::getString("life", EG_K_FBT);
-  gcounter.set_first_boot_ts(fbt ? (uint32_t)strtoul(fbt, nullptr, 10) : 0);
-  const char* secs = EGPrefs::getString("life", EG_K_SECS);
-  gcounter.set_lifetime_seconds(secs ? strtoul(secs, nullptr, 10) : 0);
+  gcounter.set_lifetime_clicks(EGPrefs::getUInt("life", EG_K_CLK));
+  gcounter.set_lifetime_rollover(EGPrefs::getUInt("life", EG_K_CLKR));
+  gcounter.set_first_boot_ts(EGPrefs::getUInt("life", EG_K_FBT));
+  gcounter.set_lifetime_seconds(EGPrefs::getUInt("life", EG_K_SECS));
 }
 
 #if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)

@@ -1,5 +1,5 @@
 /*
-  EGTcpLock.h - short lock between the AsyncTCP task and the loop.
+  EGTcpLock.h - short lock between the stack's thread and the loop.
 
   Copyright (C) 2026 @steadramon
 
