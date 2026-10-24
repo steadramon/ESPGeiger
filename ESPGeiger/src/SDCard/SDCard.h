@@ -28,6 +28,7 @@
 #ifndef GEIGER_SDCARD_CS
 #define GEIGER_SDCARD_CS 16
 #endif
+#define SD_EDGE_MS 50   // past :00, the clock has rolled
 
 extern SdFat32* sd;
 
@@ -37,10 +38,6 @@ class SDCard : public EGModule {
     const char* name() override { return PSTR("sdcard"); }
     uint8_t display_order() override { return 20; }
     bool requires_ntp() override { return true; }
-    bool has_tick() override { return true; }
-    void s_tick(unsigned long now_s) override;
-    bool has_loop() override { return true; }   // not s_tick, yield panics there
-    uint16_t loop_interval_ms() override { return 1000; }   // never 0
     void loop(unsigned long now) override;
     void begin() override;
     const EGPrefGroup* prefs_group() override;
@@ -49,10 +46,9 @@ class SDCard : public EGModule {
     const EGMenuEntry* menuEntries() override;
     bool deleteOldest(uint32_t cutoffPacked);   // DOS (date<<16)|time
     void pauseWriter();
-    // SdFat not reentrant
+    // SdFat not reentrant, closes the day file first
     struct Hold {
       Hold();
-      ~Hold();
     };
     void reinit();
     bool ready() const { return sdenabled; }
@@ -68,8 +64,7 @@ class SDCard : public EGModule {
     bool _freecheck_pending = true;
     enum : uint8_t { CLEAN_NONE = 0, CLEAN_FREECHECK, CLEAN_FULL };
     uint8_t _cleanup = CLEAN_NONE;
-    bool _busy = false;
-    bool _write_due = false;
+    void minuteEdge();
     void writeMinute();
     bool openDayFile(const char* dirStr, const char* timeStr, uint32_t day, bool& failed);
     void scheduleCleanup(uint8_t what);

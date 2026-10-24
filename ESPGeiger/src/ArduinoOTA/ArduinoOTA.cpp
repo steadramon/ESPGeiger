@@ -36,7 +36,7 @@ void ArduinoOTAModule::begin() {
     else // U_SPIFFS
       type = PSTR("filesystem");
     ota_in_progress = true;
-    EGModuleRegistry::wake();
+    EGModuleRegistry::post(&ota);
     Lifecycle::send(Lifecycle::OTA_START);
     LedSignal::lit(true);
     Log::console(PSTR("Start updating %s"), type);
@@ -81,6 +81,7 @@ void ArduinoOTAModule::begin() {
   if (fname && fname[0]) {
     MDNS.addServiceTxt("geiger", "tcp", "fname", fname);
   }
+  EGModuleRegistry::every(this, OTA_POLL_INTERVAL_MS);
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {

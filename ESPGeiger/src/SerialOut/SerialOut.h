@@ -35,9 +35,8 @@ class SerialOut : public EGModule {
 
       SerialOut();
       const char* name() override { return PSTR("sout"); }
-      uint16_t warmup_seconds() override { return 0; }
-      bool has_loop() override { return true; }
-      uint16_t loop_interval_ms() override { return 500; }
+      static constexpr uint16_t LOOP_MS = 500;
+      static constexpr uint16_t REPLAN_MS = 100;
       void loop(unsigned long now) override;
       void registerRoutes(EGHttpServer& http) override;
       const EGPrefGroup* prefs_group() override;

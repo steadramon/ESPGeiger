@@ -38,7 +38,6 @@ class Max7219Display : public EGModule, public DisplayBackend {
   public:
     const char* name() override { return "max72"; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
     uint8_t display_order() override;
     bool hw_present() override { return true; }   // write only, no probe
     bool screenBuffer(const uint8_t*& buf, uint16_t& w, uint16_t& h);
@@ -46,6 +45,7 @@ class Max7219Display : public EGModule, public DisplayBackend {
     void begin() override;
     void start() override;
     void button(unsigned long now, int8_t dir) override { onButtonTap(now, dir); }
+    void fx(unsigned long now) override;
     bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) override {
       return screenBuffer(buf, w, h);
     }
@@ -54,18 +54,16 @@ class Max7219Display : public EGModule, public DisplayBackend {
     const EGPrefGroup* prefs_group() override;
     const EGPrefShow* prefs_show() override;
     void on_prefs_loaded() override;
-    bool has_tick() override { return true; }
-    void s_tick(unsigned long now) override;   // 7-seg / round
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 60; }
+    static constexpr uint16_t LOOP_MS = 60;
     void loop(unsigned long now) override;      // matrix scroll
 
   private:
+    void second();   // 7-seg / round, on new counts
     void read_prefs();
     bool claim_pins();
     void apply();
     void applyTm();
-    void update_power(unsigned long now);
+    void update_power();
     uint8_t adaptiveLevel(uint8_t maxLevel);
     uint8_t arcLevel();
     float   currentCPM();
@@ -92,7 +90,6 @@ class Max7219Display : public EGModule, public DisplayBackend {
     Tm1637Driver  _tm;            // DIN = DIO
     bool    _tm_acked = true;
     uint8_t _tm_wait = 0;
-    bool    _tm_due = false;      // bit-banged in loop, not the ticker
     uint8_t _tm_fails = 0;
     bool    _tm_off = false;      // gave up, until reboot (as the OLED)
     static const uint8_t TM_RETRY_S = 10;
@@ -133,7 +130,6 @@ class Max7219Display : public EGModule, public DisplayBackend {
     uint8_t _mfb[Max7219Driver::MAX_CHIPS * 8];   // page-major, 8 high
     uint16_t _mfb_w = 0;
 
-    bool    fxTap(unsigned long now);
     void    fxFrame(int W);
     bool    fxScroll(int W);
     void    fxPlasma(int W);
@@ -144,8 +140,6 @@ class Max7219Display : public EGModule, public DisplayBackend {
     bool    _fx_on = false;
     uint8_t _fx_part = 0;
     uint16_t _fx = 0;
-    uint8_t _taps = 0;
-    unsigned long _tap_ms = 0;
 };
 
 extern Max7219Display max7219;

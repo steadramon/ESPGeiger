@@ -259,6 +259,10 @@ void SerialCommand::get_hv() {
 }
 #endif
 
+void SerialCommand::begin() {
+  EGModuleRegistry::every(this, LOOP_MS);
+}
+
 void SerialCommand::loop(unsigned long now) {
 #ifndef DISABLE_SERIALRX
   readSerial();

@@ -120,6 +120,7 @@ static void mute_tick() {
   s_mute_pressed = down;
   if (down) {
     audiotick.toggleMute();
+    EGModuleRegistry::post(&audiotick);
   }
 }
 
@@ -134,7 +135,6 @@ static void mute_btn_start() {
   s_mute_pressed = s_mute_last_read;
   s_mute_last_change_ms = fast_millis();
   s_mute_ticker.attach_ms(10, mute_tick);
-  EGModuleRegistry::set_tick_enabled(&audiotick, true);
   Log::console(PSTR("Tick: mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
 }
 
@@ -264,8 +264,8 @@ void AudioTick::begin() {
   playBootChime();
 }
 
-// on only with a mute button
-void AudioTick::s_tick(unsigned long) {
+// only posted, by the mute button
+void AudioTick::loop(unsigned long) {
   bool m = muted();
   if (m == _muted_logged) return;
   _muted_logged = m;

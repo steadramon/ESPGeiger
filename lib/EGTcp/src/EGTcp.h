@@ -118,9 +118,9 @@ class EGTcpClient {
     void onClose(std::function<void(int8_t err)> cb) { _on_close = cb; }
 
     // ms, 0 = off; ends with E_TIMEOUT
-    void setConnectTimeout(uint32_t ms) { _to_connect = ms; }
-    void setIdleTimeout(uint32_t ms) { _to_idle = ms; }
-    void setAckTimeout(uint32_t ms) { _to_ack = ms; }
+    void setConnectTimeout(uint32_t ms) { _to_connect = ms; rearm(); }
+    void setIdleTimeout(uint32_t ms) { _to_idle = ms; rearm(); }
+    void setAckTimeout(uint32_t ms) { _to_ack = ms; rearm(); }
     void setNoDelay(bool on);
     void setKeepAlive(uint32_t idle_ms, uint8_t count);
 
@@ -148,7 +148,8 @@ class EGTcpClient {
     void opened();
     void delivered();
     void acked(uint32_t n);
-    bool due(uint32_t now) const;   // read only, the stack's poll asks
+    bool due(uint32_t now) const;
+    void rearm();   // after anything due() reads changes
     void timers();
     void ended(int8_t err);
     void resolved(bool ok, const EGTcpAddr& a, uint32_t id);
@@ -174,6 +175,8 @@ class EGTcpClient {
     bool _ev_found = false;
     EGTcpServer* _srv = nullptr;            // accepted, not handed over
     EGTcpAsk* _ask = nullptr;               // dns, the stack's till it answers
+    // owner writes, the stack's poll compares; 0 = nothing timed
+    std::atomic<uint32_t> _due_at{0};
 
     // owner only
     State _state = IDLE;

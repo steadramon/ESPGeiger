@@ -33,6 +33,7 @@
 #define ENV_STUCK_SAMPLES 180   // 30 min
 #define ENV_FAIL_SAMPLES  6     // 1 min
 #define ENV_RETRY_MS      60000UL   // max 0xFFFF
+#define ENV_AHT_WAIT_MS   80
 // 2 lost /env, third up to half a period late
 #define ENV_REMOTE_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
 
@@ -46,9 +47,6 @@ class EnvSensor : public EGModule {
     const char* name() override { return PSTR("env"); }
     uint8_t priority() override { return EG_PRIORITY_DEFAULT; }
     uint8_t display_order() override { return 13; }   // after Input (12)
-    uint16_t warmup_seconds() override { return 0; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return ENV_SAMPLE_MS; }
     void begin() override;
     void loop(unsigned long now) override;
     const EGPrefGroup* prefs_group() override;

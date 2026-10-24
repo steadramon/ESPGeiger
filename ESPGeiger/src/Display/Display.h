@@ -20,9 +20,12 @@
 #define EG_DISPLAY_H
 #ifdef SSD1306_DISPLAY
 #include <stdint.h>
+#include <math.h>
 #include "Corium/Platform/Flash.h"
 #include "DisplayBackend.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
 
 // under 10 the 5 min avg, unless 3 sigma off
 inline bool use_cpm5(float cpm, float cpm5) {
@@ -44,22 +47,10 @@ inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
   }
 }
 
-// k 10 = tenths
-inline void display_hist(int* h, int n, float cpm5, int k) {
-  bool low = cpm5 < 10.0f;
-  if (!low && k == 1) return;
-  int c5k = (int)(cpm5 * k + 0.5f);
-  for (int i = 0; i < n; i++) {
-    if (low && h[i] < 10 && use_cpm5((float)h[i], cpm5)) h[i] = c5k;
-    else                                              h[i] *= k;
-  }
-}
-
 class Display : public EGModule {
   public:
     const char* name() override { return PSTR("disp"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
     uint8_t display_order() override { return 17; }
     bool hw_present() override { return backend()->present(); }
     const EGPrefGroup* prefs_group() override;
@@ -79,12 +70,83 @@ class Display : public EGModule {
     void wipe(int seconds)            { backend()->wipe(seconds); }
 #endif
     void keep_on()                    { _auto_off = false; }
-    void wake(unsigned long now)      { _woken = now; }
+    void wake(unsigned long now) {
+      _woken = now;
+      if (!_lit) refresh(now);
+    }
 
     enum Sleep : uint8_t { AWAKE, TIMED_OUT, OFF_HOURS };
     Sleep sleep(unsigned long now);
+    // looked at on new counts, taps and wakes
+    void loop(unsigned long now) override { refresh(now); }
+    // lit or dark changed, from loop()
+    static constexpr uint8_t TOPIC_POWER = EG_TOPIC_APP + 2;
+    bool lit() const { return _lit; }
+
+    // core rows, found at the first prefs load
+    float cpm()       { return f(_cpm); }
+    float cpm5()      { return f(_cpm5); }
+    float cpm15()     { return f(_cpm15); }
+    float cps()       { return f(_cps); }
+    float usv()       { return f(_usv); }
+    float ratio()     { return f(_ratio); }
+    bool  warm()      { return b(_warm); }
+    bool  no_counts() { return b(_none); }
+    bool  alert()     { return b(_alert); }
+    uint32_t blip() {
+      EGMValue v;
+      return (_blip && _blip(&v)) ? v.u : 0;
+    }
+    // the 5 min avg under 10
+    float shown_cpm() {
+      float c = cpm();
+      return c < 10.0f ? display_cpm(c, cpm5()) : c;
+    }
+    // a graph under 10 goes to tenths, each second with its 5 min avg; 10 = tenths
+    static const uint8_t HIST_MAX = 64;
+    int tenths(int* h, uint16_t n) {
+      int lo = n ? h[0] : 10;
+      for (uint16_t i = 1; i < n; i++) if (h[i] < lo) lo = h[i];
+      if (lo >= 10 || n > HIST_MAX) return 1;
+      uint16_t c5[HIST_MAX];
+      int m = cpm5() < 10.0f && warm() ? (int)egm_cpm5_history(c5, n) : 0;
+      display_hist_was(h, n, c5, m);
+      return 10;
+    }
 
   private:
+    void refresh(unsigned long now) {
+      bool lit = sleep(now) == AWAKE;
+      if (lit == _lit) return;
+      _lit = lit;
+      EGModuleRegistry::emit(TOPIC_POWER);
+    }
+    bool _lit = true;
+    uint8_t _taps = 0;
+    unsigned long _tap_ms = 0;
+    void find_rows() {
+      _cpm   = egm_core_read(PSTR("cpm"),       EGM_F32);
+      _cpm5  = egm_core_read(PSTR("cpm5"),      EGM_F32);
+      _cpm15 = egm_core_read(PSTR("cpm15"),     EGM_F32);
+      _cps   = egm_core_read(PSTR("cps"),       EGM_F32);
+      _usv   = egm_core_read(PSTR("usv"),       EGM_F32);
+      _ratio = egm_core_read(PSTR("ratio"),     EGM_F32);
+      _warm  = egm_core_read(PSTR("warm"),      EGM_BOOL);
+      _none  = egm_core_read(PSTR("no_counts"), EGM_BOOL);
+      _alert = egm_core_read(PSTR("alert"),     EGM_BOOL);
+      _blip  = egm_core_read(PSTR("blip"),      EGM_U32);
+    }
+    static float f(EGMRead r) {
+      EGMValue v;
+      return (r && r(&v)) ? v.f : NAN;
+    }
+    static bool b(EGMRead r) {
+      EGMValue v;
+      return r && r(&v) && v.b;
+    }
+    EGMRead _cpm = nullptr, _cpm5 = nullptr, _cpm15 = nullptr, _cps = nullptr, _usv = nullptr;
+    EGMRead _ratio = nullptr, _warm = nullptr, _none = nullptr, _alert = nullptr, _blip = nullptr;
+
     bool on_hours();
     bool _started = false;
     bool _auto_off = true;

@@ -42,13 +42,9 @@ class NTP_Client : public EGModule {
     const char* name() override { return PSTR("ntp"); }
     uint8_t priority() override { return EG_PRIORITY_INFRASTRUCTURE; }
     bool requires_wifi() override { return true; }
-    bool has_loop() override { return true; }
-    bool has_tick() override { return true; }
-    void s_tick(unsigned long now) override;
-    uint16_t loop_interval_ms() override { return 60000; }
+    static constexpr uint16_t LOOP_MS = 60000;
     void loop(unsigned long now) override;
-    uint16_t warmup_seconds() override { return 0; }
-    void begin() override { setup(); }
+    void begin() override;
     void setup();
     const EGPrefGroup* prefs_group() override;
     void on_prefs_saved() override;

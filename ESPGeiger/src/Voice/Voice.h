@@ -23,9 +23,7 @@ class Voice : public EGModule {
     const char* name() override { return PSTR("voice"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 18; }
-    uint16_t warmup_seconds() override { return 0; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 1000; }
+    static constexpr uint16_t LOOP_MS = 1000;
     void begin() override;
     void loop(unsigned long now) override;
     void registerRoutes(EGHttpServer& http) override;

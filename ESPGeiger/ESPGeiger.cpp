@@ -22,7 +22,6 @@
 #include <Arduino.h>
 #ifdef ESP32
 #include "esp_log.h"
-#include "esp_task_wdt.h"
 #endif
 #include <EGTcp.h>
 #include <Ticker.h>
@@ -38,6 +37,7 @@
 #include "Corium/System/FastMillis.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/System/Lifecycle.h"
+#include "Corium/System/Reactor.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/Uptime.h"
 #include "GRNG/GRNG.h"
@@ -54,7 +54,6 @@ long start = 0;
 GRNG grng;
 
 Ticker msTicker;
-Ticker sTicker;
 
 uint8_t send_indicator = 0;
 
@@ -105,25 +104,12 @@ void sTickerCB()
     BootGuard::mark_lived();
     s_bg_lived = true;
   }
-  Wifi::tick(stick_now);
 #ifdef TICK_PROFILE
   TickProfile::markWifi();
 #endif
 
-  EGModuleRegistry::tick_all(stick_now, uptime);
-#ifdef TICK_PROFILE
-  TickProfile::markModules();
-#endif
-
   TickProfile::endTick();
 }
-
-#ifdef ESP32
-// timer only counts, loop runs the tick like esp8266
-static volatile uint8_t s_ticks = 0;
-static uint8_t s_ticks_run = 0;
-static void sTickerPost() { s_ticks++; }
-#endif
 
 static WebPortal s_webPortal;
 
@@ -232,59 +218,20 @@ void setup()
   LedSignal::attach();
   start = Uptime::tick() + 1;
   if (safe) Lifecycle::request_restart(fast_millis(), BootGuard::retry_after());
-#ifdef ESP32
-  sTicker.attach(1, sTickerPost);
-#else
-  sTicker.attach(1, sTickerCB);
-#endif
+  Reactor::begin(sTickerCB);
 
   LedSignal::off();
   BootHooks::displayResetTimeout();
-#ifdef ESP32
-  // the tick in loop feeds it
-  esp_task_wdt_add(NULL);
-#endif
 }
 
-static inline void pass()
+static inline void counter_pass(unsigned long now)
 {
-#ifdef LOOP_PROFILE
-  uint32_t _body_t0 = micros();
-#endif
-  TickProfile::countIter();
-#ifdef ESP32
-  // one a pass, a stall catches up
-  if (s_ticks != s_ticks_run) {
-    s_ticks_run++;
-    sTickerCB();
-    // once a tick, not each pass
-    esp_task_wdt_reset();
-  }
-#endif
-  if (!ota_in_progress && gcounter.needs_loop()) gcounter.loop();
-  unsigned long now = fast_millis();
-  // the rest runs on ms, once a ms is plenty
-  static unsigned long s_ms;
-  if (now != s_ms) {
-    s_ms = now;
-    // tcp callbacks, ota needs them too
-    EGTcp::poll();
-    if (!ota_in_progress && reached(now, s_webPortal.next_tick_due())) s_webPortal.tick(now);
-    if (reached(now, EGModuleRegistry::next_loop_due())) EGModuleRegistry::loop_all(now);
-  }
-#ifdef LOOP_PROFILE
-  TickProfile::addLoopBody((uint32_t)(micros() - _body_t0));
-#endif
+  if (!ota_in_progress && gcounter.needs_loop(now)) gcounter.loop();
 }
 
 void loop()
 {
-#if defined(ESP32) && !CONFIG_FREERTOS_UNICORE
-  // never returns
-  for (;;) pass();
-#else
-  pass();
-#endif
+  Reactor::run<counter_pass, sTickerCB>(s_webPortal);
 }
 
 #ifdef ESP8266

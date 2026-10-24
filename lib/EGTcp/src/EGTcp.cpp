@@ -271,6 +271,7 @@ bool EGTcpClient::dial(const EGTcpAddr& a, uint16_t port) {
   if (e == 0) return true;
   _state = CLOSED;
   _err = e;
+  rearm();
   return false;
 }
 
@@ -281,6 +282,7 @@ bool EGTcpClient::connect(const EGTcpAddr& a, uint16_t port) {
   _err = 0;
   _t_start = EGTcpCore::now();
   _state = CONNECTING;
+  rearm();
   return dial(a, port);
 }
 
@@ -293,12 +295,14 @@ bool EGTcpClient::connect(const char* host, uint16_t port) {
   _dns_id++;
   _t_start = EGTcpCore::now();
   _state = CONNECTING;
+  rearm();
   EGTcpAddr a;
   int8_t e = _ops->resolve(this, host, &a);
   if (e == 0) return dial(a, port);   // cached
   if (e == EGTCP_LATER) return true;
   _state = CLOSED;
   _err = E_DNS;
+  rearm();
   return false;
 }
 
@@ -308,12 +312,14 @@ void EGTcpClient::close() {
   forget(false);
   _state = IDLE;
   _err = 0;
+  rearm();
 }
 
 void EGTcpClient::abort() {
   forget(true);
   _state = IDLE;
   _err = 0;
+  rearm();
 }
 
 void EGTcpClient::shutdown() {
@@ -331,6 +337,7 @@ size_t EGTcpClient::write(const void* data, size_t len, uint8_t flags) {
   if (n) {
     _unacked += n;
     _t_tx = EGTcpCore::now();
+    rearm();
   }
   return n;
 }
@@ -444,11 +451,13 @@ void EGTcpClient::opened() {
   if (_state != CONNECTING || !_h.load()) return;   // an error took it
   _state = OPEN;
   _t_rx = _t_tx = EGTcpCore::now();
+  rearm();
   if (_on_connect) _on_connect();
 }
 
 void EGTcpClient::delivered() {
   _t_rx = EGTcpCore::now();
+  rearm();
   if (!_on_data) return;   // pull, it waits
   for (;;) {
     size_t n = 0;
@@ -474,6 +483,7 @@ void EGTcpClient::delivered() {
 void EGTcpClient::acked(uint32_t n) {
   _unacked = n > _unacked ? 0 : _unacked - n;
   _t_rx = EGTcpCore::now();
+  rearm();
   if (_on_sent) _on_sent(n);
 }
 
@@ -486,6 +496,22 @@ bool EGTcpClient::due(uint32_t now) const {
   return (_state == CONNECTING && late(now, _t_start, _to_connect)) ||
          (_state == OPEN && late(now, heard, _to_idle)) ||
          (_unacked && late(now, _t_tx, _to_ack));
+}
+
+// the soonest due() could say yes, for the stack's poll
+void EGTcpClient::rearm() {
+  uint32_t at = 0;
+  bool any = false;
+  auto sooner = [&](uint32_t since, uint32_t limit) {
+    if (!limit) return;
+    uint32_t t = since + limit;
+    if (!any || (int32_t)(t - at) < 0) at = t;
+    any = true;
+  };
+  if (_state == CONNECTING) sooner(_t_start, _to_connect);
+  if (_state == OPEN) sooner((int32_t)(_t_rx - _t_tx) > 0 ? _t_rx : _t_tx, _to_idle);
+  if (_unacked) sooner(_t_tx, _to_ack);
+  _due_at.store(any ? (at ? at : 1) : 0, std::memory_order_relaxed);
 }
 
 void EGTcpClient::timers() {
@@ -503,6 +529,7 @@ void EGTcpClient::ended(int8_t err) {
   }
   _state = CLOSED;
   if (!_err) _err = err;
+  rearm();
   if (_on_close) _on_close(err);
 }
 

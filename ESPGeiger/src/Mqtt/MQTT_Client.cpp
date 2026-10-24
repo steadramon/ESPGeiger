@@ -33,11 +33,6 @@
 #include "Corium/Util/Words.h"
 #include <EGJson.h>
 #include <EGMqtt.h>
-#include "EnvSensor/EnvSensor.h"
-#include <math.h>
-#ifdef ESPG_HV_ADC
-#include "HV/HV.h"
-#endif
 
 EG_PSTR(K_TOPIC,        "topic");
 EG_PSTR(K_HASS_ENABLED, "hass_enabled");
@@ -45,6 +40,9 @@ EG_PSTR(K_HASS_TOPIC,   "hass_topic");
 
 EG_PSTR(M_TC,     "tc");
 EG_PSTR(M_SER_OK, "ser_ok");
+EG_PSTR(M_WARM,   "warm");
+EG_PSTR(M_WARN,   "warn");
+EG_PSTR(M_ALERT,  "alert");
 
 static const char T_STAT[] PROGMEM = "stat";
 static const char T_TELE[] PROGMEM = "tele";
@@ -193,6 +191,7 @@ void MQTT_Client::onMqttDisconnect(int8_t err) {
   }
   lastConnectionAttempt = now_ms;
   connected = false;
+  wakeSoon();
   if (latched) Log::console(PSTR("MQTT: Credentials rejected 3 times, stopped until settings are saved"));
 #ifdef MQTTAUTODISCOVER
   if (_hass_walk_state) _hass_idx = 0;
@@ -263,7 +262,7 @@ void MQTT_Client::queueTimedPublishes(unsigned long now)
   }
 }
 
-void MQTT_Client::s_tick(unsigned long now)
+void MQTT_Client::second(unsigned long now)
 {
   if (!mqttEnabled) {
     return;
@@ -287,30 +286,34 @@ void MQTT_Client::s_tick(unsigned long now)
 #endif
 
   queueTimedPublishes(now);
+}
 
-  // wait for a full CPM bucket
-  if (!gcounter.is_warm()) {
-    return;
-  }
-
-  bool warn = gcounter.is_warning();
+// once warm, a full CPM bucket
+void MQTT_Client::checkAlarms()
+{
+  if (!(_pending & PEND_ALARMS) || !egm_b(M_WARM)) return;
+  _pending &= ~PEND_ALARMS;
+  bool warn = egm_b(M_WARN);
   if (warn != warnSent) {
     warnSent = warn;
     _pending |= PEND_WARN;
   }
-  bool alert = gcounter.is_alert();
+  bool alert = egm_b(M_ALERT);
   if (alert != alertSent) {
     alertSent = alert;
     _pending |= PEND_ALERT;
   }
 }
 
-void MQTT_Client::loop(unsigned long /*now*/)
+void MQTT_Client::loop(unsigned long now)
 {
+  timers(now);   // before the client's news, as the tick was
   s_mq.loop();   // its callbacks run from here
+  if (EGModuleRegistry::events(this)) _pending |= PEND_ALARMS;
   if (!mqttEnabled) return;
   if (_pending & PEND_CONNECT) { _pending &= ~PEND_CONNECT; reconnect(); return; }
   if (!s_mq.connected()) return;
+  checkAlarms();
   // one per call, hello then alarms; these stay till the outbox takes them
   if (sendHello()) return;
   if (_pending & PEND_WARN)       { if (publishWarn())  _pending &= ~PEND_WARN;  return; }
@@ -552,6 +555,52 @@ static bool in_backoff(unsigned long last, unsigned long now, uint8_t attempts)
   return last && now - last < backoff;
 }
 
+// as queueTimedPublishes: fires once now - last > interval
+static uint32_t left_s(unsigned long last, uint16_t interval, unsigned long now)
+{
+  if ((now - last) > interval) return 1;
+  return (uint32_t)(last + interval + 1 - now);
+}
+
+// the tick's old work, only when a timer is due
+void MQTT_Client::timers(unsigned long now)
+{
+  if (!reached(now, _due_ms)) return;
+  second(now / 1000);
+  _due_ms = (now / 1000 + nextDue(now / 1000)) * 1000;
+}
+
+// seconds to the first timer that can fire, at least 1
+uint32_t MQTT_Client::nextDue(unsigned long now)
+{
+  if (!mqttEnabled) return 3600;   // begin() wakes it
+  if (!s_mq.connected()) {
+    // each second while connecting, as the tick was
+    if (!lastConnectionAttempt || s_mq.state() == EGMqtt::CONNECTING) return 1;
+    uint32_t at = lastConnectionAttempt + reconnect_backoff_ms(reconnectAttempts);
+    long s = (long)((at + 999) / 1000 - now);
+    return s > 0 ? (uint32_t)s : 1;
+  }
+  if (_reanchor) return 1;
+  uint32_t s = left_s(lastStatus, statusInterval, now);
+  uint32_t p = left_s(lastPing, pingInterval, now);
+  if (p < s) s = p;
+#ifdef MQTTAUTODISCOVER
+  if (_hass_retrigger) return 1;
+  if (_hass_next_publish) {
+    long h = (long)(_hass_next_publish - (unsigned long)DeviceInfo::uptime());
+    if (h < (long)s) s = h > 0 ? (uint32_t)h : 1;
+  }
+#endif
+  return s;
+}
+
+// a callback moved a timer, look on the next second
+void MQTT_Client::wakeSoon()
+{
+  _due_ms = (fast_millis() / 1000 + 1) * 1000;
+}
+
 static int mqtt_port()
 {
   int port = (int)EGPrefs::getUInt("mqtt", EG_K_PORT);
@@ -678,6 +727,12 @@ static const char* hass_disc() {
   return d[0] ? d : H_DISC_DEFAULT;
 }
 
+// id PROGMEM, absent or NaN = no entity
+static bool has_row(const char* id) {
+  EGMeasureIter it(EGM_OUT_MQTT, false, id);
+  return it.next();
+}
+
 static int buildHassPath(char* buf, size_t sz, const char* disc,
                           const char* type, const char* name) {
   return snprintf_P(buf, sz, PSTR("%s/%s/%s-%s/config"), disc, type, DeviceInfo::hostname(), name);
@@ -697,21 +752,17 @@ void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
   S("cpm5",     "cpm5",     "CPM5",         "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "");
   S("cpm15",    "cpm15",    "CPM15",        "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "");
   S("usv",      "usv",      "\u00B5Sv/h",   "\u00B5Sv/h", "mdi:radioactive",    H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "2");
-#ifdef ESPG_HV_ADC
-  if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0) {
+  if (has_row(PSTR("hv"))) {
     S("hv",     "hv",       "HV",           "V",         "mdi:lightning-bolt", H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "");
   }
-#endif
-  if (envsensor.present()) {
-    if (!isnan(envsensor.tempC())) {
-      S("temp",     "t", "Temperature", "°C",  "mdi:thermometer",   H_ST_SENSOR, H_DC_TEMP,  H_SC_MEAS, H_EMPTY, "");
-    }
-    if (!isnan(envsensor.humidity())) {
-      S("humidity", "h", "Humidity",    "%",   "mdi:water-percent", H_ST_SENSOR, H_DC_HUMID, H_SC_MEAS, H_EMPTY, "");
-    }
-    if (!isnan(envsensor.pressure())) {
-      S("pressure", "p", "Pressure",    "hPa", "mdi:gauge",         H_ST_SENSOR, H_DC_PRES,  H_SC_MEAS, H_EMPTY, "");
-    }
+  if (has_row(PSTR("t"))) {
+    S("temp",     "t", "Temperature", "°C",  "mdi:thermometer",   H_ST_SENSOR, H_DC_TEMP,  H_SC_MEAS, H_EMPTY, "");
+  }
+  if (has_row(PSTR("h"))) {
+    S("humidity", "h", "Humidity",    "%",   "mdi:water-percent", H_ST_SENSOR, H_DC_HUMID, H_SC_MEAS, H_EMPTY, "");
+  }
+  if (has_row(PSTR("p"))) {
+    S("pressure", "p", "Pressure",    "hPa", "mdi:gauge",         H_ST_SENSOR, H_DC_PRES,  H_SC_MEAS, H_EMPTY, "");
   }
   S("c_total",  "c_total",  "Total Clicks", "",          "mdi:counter",        H_ST_STATUS, H_EMPTY,  H_SC_TOTINC, H_EMPTY, "");
   // tele/status
@@ -989,6 +1040,7 @@ void MQTT_Client::onMqttMessage(const char* topic, const char* payload, size_t l
     if (len == 6 && strncmp_P(payload, PSTR("online"), 6) == 0) {
       Log::debug(PSTR("MQTT: HA is back online"));
       _hass_retrigger = true;
+      wakeSoon();
     }
   }
 #else
@@ -1002,19 +1054,20 @@ void MQTT_Client::begin()
   if (_mqtt_server[0] == '\0') {
     mqttEnabled = false;
     s_mq.stop();
-    EGModuleRegistry::set_tick_enabled(this, false);
-    EGModuleRegistry::set_loop_interval(this, -1);
+    EGModuleRegistry::every(this, 0);
     return;
   }
   mqttEnabled = true;
+  wakeSoon();
   s_mq.setKeepAlive(MQTT_KEEPALIVE_S);
   s_mq.setTimeout(MQTT_TIMEOUT_S);
   s_mq.onConnect(mq_up, this);
   s_mq.onDisconnect(mq_down, this);
   s_mq.onMessage(mq_message, this);
   s_mq.onAck(mq_ack, this);
-  EGModuleRegistry::set_tick_enabled(this, true);
-  EGModuleRegistry::set_loop_interval(this, 500);
+  EGModuleRegistry::every(this, LOOP_MS);
+  EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
+  _pending |= PEND_ALARMS;   // an alarm already up when turned on
 }
 
 void MQTT_Client::on_prefs_saved()

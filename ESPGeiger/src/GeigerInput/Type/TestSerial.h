@@ -29,20 +29,20 @@
 #include "SerialPort.h"
 #include "GeigerInput/GeigerInputTest.h"
 
-class GeigerTestSerial : public GeigerInputTest
+class GeigerTestSerial final : public GeigerInputTest
 {
   public:
     GeigerTestSerial();
-    void begin();
-    void loop();
-    void secondTicker();
+    void begin() override;
+    void loop() override;
+    void secondTicker() override;
   private:
     void pullSerial();
     void handleSerial(char* input);
 
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
-    uint16_t _idle_skip = 5;  // scaled to baud in begin()
+    uint8_t _idle_ms = 1;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
 };
 #endif

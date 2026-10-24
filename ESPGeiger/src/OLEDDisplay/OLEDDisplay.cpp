@@ -46,25 +46,11 @@
 EG_PSTR(K_RST,  "rst");
 EG_PSTR(K_FLIP, "flip");
 
-EG_PSTR(M_CPM,   "cpm");
-EG_PSTR(M_CPM5,  "cpm5");
-EG_PSTR(M_USV,   "usv");
-EG_PSTR(M_CPS,   "cps");
-EG_PSTR(M_RATIO, "ratio");
-EG_PSTR(M_WARM,  "warm");
-EG_PSTR(M_NONE,  "no_counts");
-EG_PSTR(M_BLIP,  "blip");
-
 static const uint8_t HIST = 45;   // seconds
 
 static void format_cpm(char* buf, size_t bufsz, float cpm) {
   if (cpm < 10.0f) format_f(buf, bufsz, cpm, 1);
   else             snprintf_P(buf, bufsz, W_FMT_U, (unsigned)CounterMaths::to_int(cpm));
-}
-
-static float disp_cpm() {
-  float c = egm_f(M_CPM);
-  return c < 10.0f ? display_cpm(c, egm_f(M_CPM5)) : c;
 }
 
 // Page 4 only, freed on exit
@@ -78,7 +64,6 @@ static const uint16_t TICK_MS           = 20;
 static const uint16_t SAVER_TICK_MS     = 10;
 static const uint16_t NOPANEL_TICK_MS   = 250;
 static const uint16_t NOPANEL_SAVER_MS  = 80;
-static const uint16_t ASLEEP_TICK_MS    = 250;
 static const uint16_t DARK_TICK_MS      = 30000;
 static const uint16_t LOCKED_TICK_MS    = 1000;
 // redraws, ms
@@ -219,7 +204,8 @@ void SSD1306Display::start() {
   if (!_frame) return;
   _started = true;
   setBrightness((uint8_t)EGPrefs::getUInt("display", EG_K_BRIGHTNESS));
-  EGModuleRegistry::set_loop_interval(this, TICK_MS);
+  EGModuleRegistry::on(Display::TOPIC_POWER, this);
+  EGModuleRegistry::every(this, TICK_MS);
 }
 
 void SSD1306Display::reload() {
@@ -253,16 +239,15 @@ void SSD1306Display::page_changed() {
   }
   _last_page = oled_page;
   _next_render_due = 0;
-  EGModuleRegistry::set_loop_interval(this, tick_ms());
+  EGModuleRegistry::every(this, tick_ms());
 }
 
 // false = asleep, nothing to draw
 bool SSD1306Display::awake(unsigned long now) {
   if (!_present) return true;
-  Display::Sleep sleep = display.sleep(now);
-  if (sleep != Display::AWAKE) {
+  if (!display.lit()) {
     if (oled_on) { clearBuffer(); setPowerSave(1); oled_on = false; _send_rows_left = 0; }
-    EGModuleRegistry::set_loop_interval(this, sleep == Display::TIMED_OUT ? ASLEEP_TICK_MS : DARK_TICK_MS);
+    EGModuleRegistry::every(this, DARK_TICK_MS);   // not 0, power events still land
     return false;
   }
   if (!oled_on) {
@@ -270,7 +255,7 @@ bool SSD1306Display::awake(unsigned long now) {
     oled_page = PAGE_MAIN;
     oled_on = true;
     oled_last_update = now - MAIN_FULL_MS;
-    EGModuleRegistry::set_loop_interval(this, TICK_MS);
+    EGModuleRegistry::every(this, TICK_MS);
   }
   return true;
 }
@@ -360,11 +345,11 @@ void SSD1306Display::queue_rows(uint8_t dirty) {
 
 void SSD1306Display::loop(unsigned long now) {
   if (!_started) {
-    EGModuleRegistry::set_loop_interval(this, -1);
+    EGModuleRegistry::every(this, 0);
     return;
   }
   if (_locked_page || _ota_lock) {
-    EGModuleRegistry::set_loop_interval(this, LOCKED_TICK_MS);
+    EGModuleRegistry::every(this, LOCKED_TICK_MS);
     return;
   }
   // one row a tick
@@ -377,6 +362,7 @@ void SSD1306Display::loop(unsigned long now) {
   if (oled_page > OLED_PAGES) oled_page = PAGE_MAIN;
   if (oled_page != _last_page) page_changed();
   if (oled_page == PAGE_SAVER) display.wake(now);
+  if (EGModuleRegistry::events(this)) _next_render_due = now;   // lit or dark
   if (!reached(now, _next_render_due)) return;
   _next_render_due = now + frame_ms();
   if (!awake(now)) return;
@@ -394,15 +380,8 @@ static void hist_min_max(const int* h, uint16_t n, int32_t& lo, int32_t& hi) {
 
 // k 10 = tenths, only under 10; false = no counts
 static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
+  k = display.tenths(h, n);
   hist_min_max(h, n, lo, hi);
-  k = 1;
-  if (lo < 10) {
-    uint16_t c5[HIST];
-    int m = egm_f(M_CPM5) < 10.0f && egm_b(M_WARM) ? (int)egm_cpm5_history(c5, n) : 0;
-    display_hist_was(h, n, c5, m);
-    hist_min_max(h, n, lo, hi);
-    k = 10;
-  }
   bool counts = hi > 0;
   if (lo > k) lo = lo * 9 / 10;
   if (hi - lo < k) { lo = hi > k ? hi - k : 0; hi = lo + k; }
@@ -414,7 +393,7 @@ static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
 void SSD1306Display::page_tiny() {
   clearBuffer();
   char buf[12];
-  format_cpm(buf, sizeof(buf), disp_cpm());
+  format_cpm(buf, sizeof(buf), display.shown_cpm());
   setFont(U8G2_FONT_ARIAL_16);
   drawStr(0, 0, buf);
   if (Wifi::connected) drawPixel(71, 0);
@@ -466,14 +445,14 @@ static const char* tinyUptime() {
 void SSD1306Display::page_tiny_dose() {
   clearBuffer();
   char buf[12];
-  format_f(buf, sizeof(buf), egm_f(M_USV), 2);
+  format_f(buf, sizeof(buf), display.usv(), 2);
   setFont(U8G2_FONT_ARIAL_16);
   drawStr(0, 0, buf);
   if (Wifi::connected) drawPixel(71, 0);
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 16, PSTR("uSv/h"));
   char cpmbuf[8];
-  format_cpm(cpmbuf, sizeof(cpmbuf), disp_cpm());
+  format_cpm(cpmbuf, sizeof(cpmbuf), display.shown_cpm());
   snprintf_P(buf, sizeof(buf), PSTR("%s cpm"), cpmbuf);
   drawStr(0, 28, buf);
 }
@@ -504,7 +483,7 @@ void SSD1306Display::page_tiny_meter() {
   const int py = 36;
   const int r  = 28;
   char buf[8];
-  format_cpm(buf, sizeof(buf), disp_cpm());
+  format_cpm(buf, sizeof(buf), display.shown_cpm());
   setFont(U8G2_FONT_ARIAL_10);
   drawStr(0, 0, buf);
   drawCircle(px, py, r, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
@@ -523,7 +502,7 @@ void SSD1306Display::page_tiny_meter() {
     drawLine(px + (int)(r * c),       py - (int)(r * s),
              px + (int)((r - 2) * c), py - (int)((r - 2) * s));
   }
-  float cpm = disp_cpm();
+  float cpm = display.shown_cpm();
   if (cpm < 1.0f) cpm = 1.0f;
   float t = clamp(log10f(cpm) / 3.0f, 0.0f, 1.0f);
   float ang = (float)M_PI * (1.0f - t);
@@ -704,7 +683,7 @@ void SSD1306Display::setup() {
     _present = false;
     Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
                  _pin_sda, _pin_scl);
-    EGModuleRegistry::set_loop_interval(this, 250);
+    EGModuleRegistry::every(this, NOPANEL_TICK_MS);
     setFontPosTop();
     return;
   }
@@ -729,30 +708,24 @@ void SSD1306Display::setup() {
   draw_splash();
 }
 
-// first tap only wakes
+// lit only, Display wakes
 void SSD1306Display::onButtonTap(unsigned long now, int8_t direction) {
-  static unsigned long s_last_tap = 0;
-  static uint8_t s_tap_count = 0;
   if (direction > 0) {
-    s_tap_count = (now - s_last_tap < 500) ? (s_tap_count + 1) : 1;
-    s_last_tap = now;
-  }
-
-  if (!oled_on) {
-    oled_page = PAGE_MAIN;
-    if (_present) setPowerSave(0);
-    oled_on = true;
-    EGModuleRegistry::set_loop_interval(this, tick_ms());
-  } else if (direction > 0 && s_tap_count >= 5) {
-    oled_page = PAGE_SAVER;
-    s_tap_count = 0;
-  } else if (direction > 0) {
     oled_page++;
     if (oled_page > PAGE_LAST) oled_page = PAGE_MAIN;
   } else {
     if (oled_page <= PAGE_MAIN) oled_page = PAGE_LAST;
     else oled_page--;
   }
+  redraw(now);
+}
+
+void SSD1306Display::fx(unsigned long now) {
+  oled_page = PAGE_SAVER;
+  redraw(now);
+}
+
+void SSD1306Display::redraw(unsigned long now) {
   oled_last_update = 0;
   _send_rows_left = 0;
   _next_render_due = 0;
@@ -858,7 +831,7 @@ void SSD1306Display::screen_mode(unsigned long now, bool auto_off) {
   oled_on = true;
   oled_last_update = 0;
   _next_render_due = now + 1500;   // message stays up
-  EGModuleRegistry::set_loop_interval(this, TICK_MS);
+  EGModuleRegistry::every(this, TICK_MS);
 }
 #endif
 
@@ -911,17 +884,17 @@ static int8_t cpm_trend(uint32_t cpm) {
 
 // false = nothing changed, no redraw
 bool SSD1306Display::page_one_values(unsigned long now) {
-  float c = egm_f(M_CPM), c5 = c < 10.0f ? egm_f(M_CPM5) : c;
+  float c = display.cpm(), c5 = c < 10.0f ? display.cpm5() : c;
   bool slow = use_cpm5(c, c5);
   float dcpm = slow ? c5 : c;
-  float dratio = egm_f(M_RATIO);
+  float dratio = display.ratio();
   float dusv = (dratio > 0.0f) ? dcpm / dratio : 0.0f;
   uint32_t cpm_x10 = (uint32_t)CounterMaths::to_int(dcpm * 10.0f);
   int32_t  usv_x100 = CounterMaths::to_int(dusv * 100.0f);
-  uint8_t mode = !egm_b(M_WARM) ? 1 : slow ? 2 : 0;
+  uint8_t mode = !display.warm() ? 1 : slow ? 2 : 0;
   uint8_t snd = send_indicator;
   uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0)
-               | (egm_b(M_NONE) ? 4 : 0);
+               | (display.no_counts() ? 4 : 0);
   int8_t trend = cpm_trend(cpm_x10 / 10);
   if (cpm_x10 == _p1v_last_cpm && usv_x100 == _p1v_last_usv_x100
       && mode == _p1v_last_mode && snd == _p1v_last_send_ind
@@ -1034,11 +1007,11 @@ static uint8_t s_mtx_col = 255;                  // 255 = none yet
 
 // opening rain, speeds from the CPM history
 static void seed_drops(Drop* drops) {
-  s_mtx_blip = egm_u(M_BLIP);
+  s_mtx_blip = display.blip();
   for (uint8_t i = 0; i < MATRIX_DROPS; i++) drops[i].alive = false;
   int hist[HIST];
   size_t hist_n = egm_history(hist, HIST);
-  float cps = egm_f(M_CPS);
+  float cps = display.cps();
   unsigned long typical = (cps > 0.05f) ? (unsigned long)(1000.0f / cps) : MTX_IDLE_MS;
   MatrixCtx ctx = compute_matrix_ctx(typical);
   for (uint8_t i = 0; i < MTX_SEED_DROPS; i++) {
@@ -1142,7 +1115,7 @@ void SSD1306Display::page_four_matrix() {
     _page4_num_last = fast_millis();
     seed_drops(drops);
   }
-  unsigned long now_blip = egm_u(M_BLIP);
+  unsigned long now_blip = display.blip();
   if (now_blip != s_mtx_blip) spawn_drops(drops, now_blip);
 
   clearBuffer();
@@ -1197,7 +1170,7 @@ void SSD1306Display::endOTABanner() {
   _ota_lock = false;
   oled_last_update = 0;
   _next_render_due = 0;
-  EGModuleRegistry::set_loop_interval(this, tick_ms());
+  EGModuleRegistry::every(this, tick_ms());
 }
 
 bool SSD1306Display::screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) {

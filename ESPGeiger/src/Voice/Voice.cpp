@@ -345,6 +345,9 @@ static void klaxon_silence(uint16_t ms) {
 }
 
 void Voice::begin() {
+  EGModuleRegistry::every(this, LOOP_MS);
+  // klaxon on the edge, not the next second
+  EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
 }
 
 static const char* DIGIT_NAMES[10] = {

@@ -29,7 +29,7 @@
 
 namespace Wifi {
   extern bool disabled;
-  extern bool offline_forced;    // button-hold only, else tick retries
+  extern bool offline_forced;    // button-hold only, else the wifi loop retries
   extern bool connected;
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[WIFI_SSID_MAX + 1];
@@ -37,7 +37,7 @@ namespace Wifi {
   extern bool backup_grace_done;
   void check_backup_state();  // LittleFS mounted
 
-  void tick(unsigned long now);
+  constexpr uint8_t TOPIC_CHANGED = 0;   // up or down
 
   size_t formatIP(char* buf, size_t cap);   // cap >= 16
   size_t formatIP(char* buf, size_t cap, const IPAddress& a);

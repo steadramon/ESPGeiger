@@ -20,13 +20,21 @@
 #define EGMODULEREGISTRY_H
 
 #include "EGModule.h"
+#include "Corium/System/IsrLock.h"
 
 #ifndef EG_MAX_MODULES
 #define EG_MAX_MODULES 32
 #endif
-#if defined(TICK_PROFILE) || defined(LOOP_PROFILE)
-static_assert(EG_MAX_MODULES <= 32, "profile done mask is 32 bits");
+static_assert(EG_MAX_MODULES <= 32, "post and profile masks are 32 bits");
+
+// a pass stops starting loops past this
+#ifndef EG_LOOP_BUDGET_US
+#define EG_LOOP_BUDGET_US 2000
 #endif
+
+// topics 0-7 Corium's, an app numbers its own from EG_TOPIC_APP
+#define EG_TOPIC_APP 8
+#define EG_MAX_TOPICS 16
 
 // settle after reconnect, AsyncTCP UAF
 #ifndef WIFI_SETTLE_MS
@@ -39,20 +47,22 @@ class EGModuleRegistry {
     static void pre_wifi_all();
     static void begin_all();
     static void loop_all(unsigned long now);
-    static void tick_all(unsigned long now, unsigned long uptime_seconds);
-    static inline uint32_t next_loop_due() { return _next_loop_due; }
-#ifdef TICK_PROFILE
-    static void log_profile_and_reset();
-#endif
+    static inline bool due(uint32_t now) { return _posted.any() || reached(now, _next_loop_due); }
 #ifdef LOOP_PROFILE
     static void log_loop_profile_and_reset();
 #endif
     static void log_activity_and_reset();
-    static void wake();
-    // <0 = off, else ms 1-65535. Any task
-    static bool set_loop_interval(EGModule* m, int32_t interval_ms);
-    static bool sleep_until(EGModule* m, unsigned long now, unsigned long target_ms);
-    static bool set_tick_enabled(EGModule* m, bool enabled);
+    // a module schedules itself, from the loop task
+    static bool every(EGModule* m, uint32_t ms);   // 0 = off
+    static bool due_at(EGModule* m, uint32_t t);   // once, keeps every()
+    static bool due_in(EGModule* m, uint32_t ms) { return due_at(m, fast_millis() + ms); }
+    // due now, from any task, not an isr
+    static void post(EGModule* m);
+
+    // topics: emit() posts every module on() it, from the loop task; on() from begin()
+    static bool on(uint8_t topic, EGModule* m);
+    static void emit(uint8_t topic);
+    static uint16_t events(EGModule* m);   // bit per topic since the last call
 
     static void set_safe_mode(bool on);   // before pre_wifi_all
     static bool quarantined(EGModule* m);
@@ -71,26 +81,23 @@ class EGModuleRegistry {
     static size_t collect_status_json(char* buf, size_t cap, unsigned long now);
 
   private:
-    static constexpr uint8_t FLAG_HAS_LOOP      = 1 << 0;
+    static constexpr uint8_t FLAG_ARMED         = 1 << 0;   // next_due is set
     static constexpr uint8_t FLAG_REQUIRES_WIFI = 1 << 1;
     static constexpr uint8_t FLAG_REQUIRES_NTP  = 1 << 2;
-    static constexpr uint8_t FLAG_HAS_TICK      = 1 << 3;
     static constexpr uint8_t FLAG_QUARANTINED   = 1 << 4;
     static constexpr uint8_t FLAG_DURING_OTA    = 1 << 5;
+    static constexpr uint8_t FLAG_OFF           = 1 << 6;   // never started
     static bool _safe_mode;
 
     struct Slot {
       EGModule* module;
       uint32_t loop_last;
       uint32_t next_due;
-      uint16_t loop_interval;
-      uint16_t warmup_seconds;
+      uint32_t period;           // 0 = none
+      uint16_t topics;           // on()
+      uint16_t events;           // emitted, not taken yet
       uint8_t flags;
       uint8_t category;
-      int32_t pending_ms;        // NO_REQUEST if none
-#ifdef TICK_PROFILE
-      uint16_t max_tick_us;
-#endif
 #ifdef LOOP_PROFILE
       uint32_t max_loop_us;      // 32 bit, can pass 65 ms
       uint32_t total_loop_us;
@@ -102,23 +109,24 @@ class EGModuleRegistry {
     static uint8_t _overflow;
     static uint32_t _next_loop_due;
 
-    // sorted by next_due
+    // armed slots, sorted by next_due
     static uint8_t _due_order[EG_MAX_MODULES];
     static uint8_t _due_count;
+    static bool _resort;          // a slot changed outside its own loop
+    static uint8_t _firing;       // slot in its loop, 0xFF = none
+    static IsrLock::Bits _posted;   // bit per slot
     static void rebuild_due();
     static void sort_by_priority();
+    static Slot* slot_of(EGModule* m);
+    static void changed(Slot& s);
+    static void take_posts(unsigned long now);
 
     // one caller each, folds inline
     static inline uint8_t unmet_requirements();
-    static inline void fire_slot(Slot& s, unsigned long now);
+    static inline void walk(unsigned long now);
+    static inline void fire_slot(uint8_t idx, unsigned long now);
     static inline uint8_t sift_due(uint8_t k);
     static inline uint32_t next_wake(unsigned long now);
-    static inline void tick_slot(Slot& s, unsigned long now_s);
-
-    // set mid-walk, applied before the next
-    static constexpr int32_t NO_REQUEST = INT32_MIN;
-    static bool _pending;
-    static void apply_pending();
 };
 
 #define EG_REGISTER_MODULE(instance) \

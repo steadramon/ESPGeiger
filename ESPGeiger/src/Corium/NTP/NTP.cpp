@@ -48,7 +48,7 @@ static const EGPref NTP_PREF_ITEMS[] PROGMEM = {
 
 // sntp keeps the pointer, a save frees the pref's
 static char s_server[EG_HOST_MAX + 1];
-// set by sntp, the tick applies it
+// set by sntp, the loop applies it
 static volatile bool s_synced = false;
 
 static const EGPrefGroup NTP_PREF_GROUP PROGMEM = {
@@ -71,6 +71,11 @@ EGLegacyRows NTP_Client::legacy_aliases() { return NTP_LEGACY; }
 NTP_Client::NTP_Client() {
 }
 
+void NTP_Client::begin() {
+  setup();
+  EGModuleRegistry::every(this, LOOP_MS);
+}
+
 void NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
@@ -91,6 +96,7 @@ void NTP_Client::setup()
   settimeofday_cb([](){
     if (Clock::epoch() < Clock::MIN_EPOCH) return;  // SDK fires once before sync
     s_synced = true;
+    EGModuleRegistry::post(&ntpclient);
   });
 
   configTime(possixTZ, server);
@@ -99,6 +105,7 @@ void NTP_Client::setup()
   sntp_set_time_sync_notification_cb([](struct timeval *t){
     if (!t || (uint32_t)t->tv_sec < Clock::MIN_EPOCH) return;
     s_synced = true;
+    EGModuleRegistry::post(&ntpclient);
   });
   configTime(0, 0, server); // TZ set below
   setenv("TZ", possixTZ, 1); // Set environment variable with your time zone
@@ -111,19 +118,12 @@ void NTP_Client::on_prefs_saved() {
   setup();
 }
 
-static void take_sync() {
-  s_synced = false;
-  if (Clock::on_sync()) Log::console(PSTR("NTP: Synched"));
-}
-
-// first sync only, loop() takes resyncs; off once either has it
-void NTP_Client::s_tick(unsigned long) {
-  if (s_synced) take_sync();
-  if (Clock::synced) EGModuleRegistry::set_tick_enabled(this, false);
-}
-
+// posted on each sync, else every LOOP_MS for resyncs
 void NTP_Client::loop(unsigned long now) {
-  if (s_synced) take_sync();
+  if (s_synced) {
+    s_synced = false;
+    if (Clock::on_sync()) Log::console(PSTR("NTP: Synched"));
+  }
   if (Clock::resync_due(now)) setup();
   if (Clock::synced) Clock::refresh_tz_offset_min();
 }

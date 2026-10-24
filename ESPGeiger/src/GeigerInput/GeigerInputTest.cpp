@@ -45,7 +45,6 @@ static_assert((256 % TP_RING) == 0, "u8 index wraps, ring must divide 256");
 static uint32_t s_tp_at[TP_RING];   // head's release/acquire orders it
 std::atomic<uint8_t> GeigerInputTest::_tp_head{0};
 std::atomic<uint8_t> GeigerInputTest::_tp_tail{0};
-std::atomic<bool> GeigerInputTest::_tp_work{false};
 
 void IRAM_ATTR GeigerInputTest::timerPulse() {
   uint8_t h = _tp_head.load(std::memory_order_relaxed);

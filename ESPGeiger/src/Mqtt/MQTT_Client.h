@@ -27,7 +27,6 @@
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Prefs/EGPrefs.h"
-#include <WiFiClient.h>
 
 
 #ifndef MQTT_DISCOVERY_TOPIC
@@ -80,12 +79,8 @@ public:
   }
   const char* name() override { return PSTR("mqtt"); }
   bool requires_wifi() override { return true; }
-  bool has_tick() override { return true; }
-  bool has_loop() override { return true; }
-  uint16_t loop_interval_ms() override { return 500; }
-  uint16_t warmup_seconds() override { return 0; }
+  static constexpr uint16_t LOOP_MS = 500;
   void begin() override;
-  void s_tick(unsigned long now) override;
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
   void on_prefs_saved() override;
@@ -106,6 +101,11 @@ protected:
 
 private:
   MQTT_Client();
+  void timers(unsigned long now);
+  void second(unsigned long now);
+  uint32_t nextDue(unsigned long now);
+  void wakeSoon();
+  uint32_t _due_ms = 0;   // timers next run
   bool clientBusy();
   void applyIntervalPref();
   void queueTimedPublishes(unsigned long now);
@@ -187,7 +187,9 @@ private:
   static constexpr uint8_t PEND_CONNECT = 1 << 4;
   static constexpr uint8_t PEND_LWT    = 1 << 5;
   static constexpr uint8_t PEND_SUB    = 1 << 6;
+  static constexpr uint8_t PEND_ALARMS = 1 << 7;   // Counter's alarm changed, compare once warm
   uint8_t _pending = 0;
+  void checkAlarms();
   bool _status_late = false;   // refused, waiting for room
   bool _reanchor = false;
   int16_t _slot_s = -1;
@@ -201,7 +203,7 @@ private:
   uint16_t statusInterval = MQTT_STATUS_INTERVAL;
   uint16_t pingInterval = MQTT_INTERVAL;
 #ifdef MQTTAUTODISCOVER
-  bool _hass_retrigger = false;   // HA came back, s_tick spreads it
+  bool _hass_retrigger = false;   // HA came back, the timers spread it
   bool _hass_listen = false;
   char _hass_status[MQTT_HASS_TOPIC_MAX + sizeof("/status")] = "";
   unsigned long _hass_next_publish = 0;
@@ -212,6 +214,7 @@ private:
   bool    _hass_walk_done = false;
 #endif
 
+  // what the broker was last told
   bool warnSent = false;
   bool alertSent = false;
 };

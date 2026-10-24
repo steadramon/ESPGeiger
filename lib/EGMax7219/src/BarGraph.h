@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 // oldest first, newest lands in the last column; bit 7 = bottom row
-void barColumns(const int* hist, int n, uint8_t* cols, int w);
+void barColumns(const int* hist, int n, uint8_t* cols, int w, int min_span = 5);
 
 // LEDs lit: green to warn, orange to alert, red to 2x alert
 uint8_t zoneLevel(float cpm, float warn, float alert,

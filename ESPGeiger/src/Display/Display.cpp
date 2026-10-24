@@ -26,6 +26,7 @@
 #include "Corium/System/FastMillis.h"
 #include "Corium/Output/QuietWindow.h"
 #include "Corium/WebPortal/WebPortal.h"
+#include "Counter/Counter.h"
 #include <EGHttpServer.h>
 #ifdef MAX7219_DISPLAY
 #include "Max7219.h"
@@ -163,6 +164,8 @@ void Display::on_prefs_loaded() {
   read_timing(_timeout_ms);
   if (_started) return;
   _started = true;
+  find_rows();
+  EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
   s_backend = chosen();
 #ifdef MAX7219_DISPLAY
   if (s_backend != &oled) oled.load_pins();   // env sensor needs i2c
@@ -175,8 +178,22 @@ void Display::on_prefs_saved() {
   s_backend->reload();
 }
 
+// first tap only wakes
 void Display::button(unsigned long now, int8_t dir) {
   _woken = now;
+  if (!_lit) {
+    refresh(now);
+    return;
+  }
+  if (dir > 0) {
+    _taps = (now - _tap_ms < 500) ? _taps + 1 : 1;
+    _tap_ms = now;
+    if (_taps >= 5) {
+      _taps = 0;
+      backend()->fx(now);
+      return;
+    }
+  }
   backend()->button(now, dir);
 }
 
@@ -184,6 +201,7 @@ void Display::button(unsigned long now, int8_t dir) {
 bool Display::toggle_auto_off(unsigned long now) {
   _auto_off = !_auto_off;
   _woken = now;
+  refresh(now);
   backend()->screen_mode(now, _auto_off);
   return _auto_off;
 }

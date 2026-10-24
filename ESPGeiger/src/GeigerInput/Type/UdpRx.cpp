@@ -63,7 +63,8 @@ GeigerUdpRx::GeigerUdpRx() { s_udprx_instance = this; }
 GeigerUdpRx::~GeigerUdpRx() { s_udprx_instance = nullptr; teardownUdp(); }
 
 void GeigerUdpRx::begin() {
-  _poll_skip = UDPRX_POLL_SKIP - 1;
+  _poll_at = fast_millis() + UDPRX_POLL_MS;
+  _polls = true;
   readPrefs();
   _last_seen_count = _local_count;
   Log::console(PSTR("UdpRx: mode=%u group=%s port=%u rxmode=%u"),
@@ -429,6 +430,7 @@ void GeigerUdpRx::fireDueGapfills() {
 
 void GeigerUdpRx::loop() {
   uint32_t now = fast_millis();
+  _poll_at = now + UDPRX_POLL_MS;
   if (!ensureBound(now)) return;
 
   if (_ps_bounce_until_ms && reached(now, _ps_bounce_until_ms)) {

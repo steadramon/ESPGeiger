@@ -20,20 +20,28 @@
 #define ISRLOCK_H
 
 #include <Arduino.h>
+#include <atomic>
+#ifdef NATIVE_TEST
+#include <mutex>
+#endif
 
 namespace IsrLock {
 
-  // esp32 isr may be on the other core, 8266 just masks
+  // esp32 isr may be on the other core, 8266 just masks, host a real lock for tsan
   struct Mux {
-#ifdef ESP32
+#if defined(ESP32)
     portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
+#elif defined(NATIVE_TEST)
+    std::mutex m;
 #endif
   };
 
   // from the loop
   static inline __attribute__((always_inline)) void enter(Mux& x) {
-#ifdef ESP32
+#if defined(ESP32)
     portENTER_CRITICAL(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.lock();
 #else
     (void)x;
     noInterrupts();
@@ -41,8 +49,10 @@ namespace IsrLock {
   }
 
   static inline __attribute__((always_inline)) void leave(Mux& x) {
-#ifdef ESP32
+#if defined(ESP32)
     portEXIT_CRITICAL(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.unlock();
 #else
     (void)x;
     interrupts();
@@ -51,20 +61,45 @@ namespace IsrLock {
 
   // in the isr, 8266 isrs don't nest
   static inline __attribute__((always_inline)) void enter_isr(Mux& x) {
-#ifdef ESP32
+#if defined(ESP32)
     portENTER_CRITICAL_ISR(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.lock();
 #else
     (void)x;
 #endif
   }
 
   static inline __attribute__((always_inline)) void leave_isr(Mux& x) {
-#ifdef ESP32
+#if defined(ESP32)
     portEXIT_CRITICAL_ISR(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.unlock();
 #else
     (void)x;
 #endif
   }
+
+  // bits set from another task, read lock-free by the loop, taken under the lock
+  // load + store, 8266 has no atomic or
+  struct Bits {
+    Mux mux;
+    std::atomic<uint32_t> w{0};
+
+    void set(uint32_t b) {
+      enter(mux);
+      w.store(w.load(std::memory_order_relaxed) | b, std::memory_order_relaxed);
+      leave(mux);
+    }
+    bool any() const { return w.load(std::memory_order_relaxed) != 0; }
+    uint32_t take() {
+      enter(mux);
+      uint32_t v = w.load(std::memory_order_relaxed);
+      w.store(0, std::memory_order_relaxed);
+      leave(mux);
+      return v;
+    }
+  };
 
 }
 

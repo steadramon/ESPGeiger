@@ -128,13 +128,6 @@ class HV : public EGModule {
 #else
       uint8_t display_order() override { return 16; }
 #endif
-      uint16_t warmup_seconds() override { return 0; }
-      bool has_loop() override { return true; }
-#ifdef ESP8266
-      uint16_t loop_interval_ms() override { return 1000 / LOOP_SLOW; }
-#else
-      uint16_t loop_interval_ms() override { return 1000; }
-#endif
       void loop(unsigned long now) override;
       void begin() override;
       const EGPrefGroup* prefs_group() override;
@@ -224,6 +217,7 @@ class HV : public EGModule {
 #else
       static constexpr uint8_t LOOP_SLOW = 1;
 #endif
+      static constexpr uint16_t LOOP_MS = 1000 / LOOP_SLOW;
 };
 
 extern HV hv;

@@ -77,9 +77,7 @@ class AudioTick : public EGModule {
     const char* name() override { return PSTR("tick"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 17; }
-    uint16_t warmup_seconds() override { return 0; }
-    bool has_loop() override { return false; }
-    void s_tick(unsigned long now) override;
+    void loop(unsigned long now) override;
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
@@ -94,7 +92,7 @@ class AudioTick : public EGModule {
     static void numbersPad(uint8_t* out, size_t n);
 
     bool muted() const { return _muted.load(std::memory_order_relaxed); }
-    // timer task, the tick logs it
+    // timer task, posts the loop to log it
     void toggleMute() { _muted.store(!muted(), std::memory_order_relaxed); }
 
   private:

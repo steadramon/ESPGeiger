@@ -67,8 +67,7 @@ int GeigerInput::collect() {
   return (int)n;
 }
 
-void GeigerInput::loop() {
-}
+std::atomic<bool> GeigerInput::s_posted{false};
 
 void GeigerInput::secondTicker() {
 }

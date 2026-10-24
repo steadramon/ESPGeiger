@@ -26,6 +26,7 @@
 #include "ExternalPause.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/Fnv.h"
+#include "Corium/System/IsrLock.h"
 #ifdef ESP32
 #include <esp_attr.h>
 #endif
@@ -37,21 +38,17 @@ uint8_t EGModuleRegistry::_overflow = 0;
 uint32_t EGModuleRegistry::_next_loop_due = 0;
 uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_due_count = 0;
-bool EGModuleRegistry::_pending = false;
+bool EGModuleRegistry::_resort = false;
+uint8_t EGModuleRegistry::_firing = 0xFF;
+IsrLock::Bits EGModuleRegistry::_posted;
 bool EGModuleRegistry::_safe_mode = false;
-
-// min 1 ms, 0 refires in the same pass
-static uint16_t loop_interval_from(int32_t ms) {
-  if (ms < 1) return 1;
-  if (ms > 0xFFFF) return 0xFFFF;
-  return (uint16_t)ms;
-}
 
 // keep sorted, loop_all reads [0]
 void EGModuleRegistry::rebuild_due() {
+  _resort = false;
   _due_count = 0;
   for (uint8_t i = 0; i < _count; i++) {
-    if (!(_slots[i].flags & FLAG_HAS_LOOP)) continue;
+    if (!(_slots[i].flags & FLAG_ARMED)) continue;
     uint8_t j = _due_count;
     while (j > 0 && (int32_t)(_slots[_due_order[j - 1]].next_due - _slots[i].next_due) > 0) {
       _due_order[j] = _due_order[j - 1];
@@ -65,7 +62,7 @@ void EGModuleRegistry::rebuild_due() {
 bool EGModuleRegistry::add(EGModule* m) {
   if (_count >= EG_MAX_MODULES) { _overflow++; return false; }
   _slots[_count].module = m;
-  _slots[_count].pending_ms = NO_REQUEST;
+  m->_slot = _count;
   _count++;
   return true;
 }
@@ -82,6 +79,8 @@ void EGModuleRegistry::begin_all() {
     }
     if ((s.flags & FLAG_REQUIRES_WIFI) && Wifi::disabled) {
       Log::debug(PSTR("Module: Skipping %s (wifi disabled)"), s.module->name());
+      s.flags = (s.flags | FLAG_OFF) & ~FLAG_ARMED;
+      _resort = true;
       continue;
     }
     Log::debug(PSTR("Module: Starting %s"), s.module->name());
@@ -97,8 +96,13 @@ inline uint8_t EGModuleRegistry::unmet_requirements() {
   return unmet;
 }
 
-inline void EGModuleRegistry::fire_slot(Slot& s, unsigned long now) {
+// period re-armed first, the loop's own due_at wins
+inline void EGModuleRegistry::fire_slot(uint8_t idx, unsigned long now) {
+  Slot& s = _slots[idx];
   s.loop_last = now;
+  if (s.period) s.next_due = now + s.period;
+  else s.flags &= ~FLAG_ARMED;
+  _firing = idx;
 #ifdef LOOP_PROFILE
   unsigned long t0 = micros();
   s.module->loop(now);
@@ -109,33 +113,74 @@ inline void EGModuleRegistry::fire_slot(Slot& s, unsigned long now) {
 #else
   s.module->loop(now);
 #endif
-  s.next_due = now + s.loop_interval;
+  _firing = 0xFF;
+  if (!(s.flags & FLAG_ARMED)) _resort = true;
 }
 
+// later only, all before [k] are due already; equal stays
 inline uint8_t EGModuleRegistry::sift_due(uint8_t k) {
-  uint8_t cur = k;
-  while (cur + 1 < _due_count) {
-    Slot& a = _slots[_due_order[cur]];
-    Slot& b = _slots[_due_order[cur + 1]];
-    if ((int32_t)(a.next_due - b.next_due) <= 0) break;
-    uint8_t idx = _due_order[cur];
-    _due_order[cur] = _due_order[cur + 1];
-    _due_order[cur + 1] = idx;
-    cur++;
+  uint8_t idx = _due_order[k];
+  uint32_t due = _slots[idx].next_due;
+  while (k + 1 < _due_count && (int32_t)(due - _slots[_due_order[k + 1]].next_due) > 0) {
+    _due_order[k] = _due_order[k + 1];
+    k++;
   }
-  return cur;
+  _due_order[k] = idx;
+  return k;
 }
 
-// at most 1 s ahead
+// nothing armed, look again in a minute
 inline uint32_t EGModuleRegistry::next_wake(unsigned long now) {
-  uint32_t fallback = now + 1000;
-  uint32_t next = (_due_count > 0) ? _slots[_due_order[0]].next_due : fallback;
-  if ((int32_t)(next - fallback) > 0) next = fallback;
-  return next;
+  return _due_count ? _slots[_due_order[0]].next_due : now + 60000;
+}
+
+void EGModuleRegistry::take_posts(unsigned long now) {
+  uint32_t p = _posted.take();
+  for (uint8_t i = 0; p && i < _count; i++, p >>= 1) {
+    Slot& s = _slots[i];
+    // off drops it, a closed gate holds it
+    if (!(p & 1) || (s.flags & FLAG_OFF)) continue;
+    s.next_due = now;
+    s.flags |= FLAG_ARMED;
+  }
+  _resort = true;
+  _next_loop_due = now;
+}
+
+// gate closed, retry within 1 s
+static inline uint32_t retry_in(uint32_t period) {
+  return period && period < 1000 ? period : 1000;
+}
+
+inline void EGModuleRegistry::walk(unsigned long now) {
+  uint8_t unmet = unmet_requirements();
+  bool paused = ExternalPause::active();
+  uint32_t t0 = micros();
+  uint32_t fired = 0;
+
+  uint8_t k = 0;
+  while (k < _due_count) {
+    uint8_t idx = _due_order[k];
+    Slot& s = _slots[idx];
+    if (!reached(now, s.next_due)) break;
+    // once a pass, due_in(0) runs on the next
+    if (fired & (1u << idx)) { k++; continue; }
+    if ((s.flags & unmet) || (paused && s.category == (uint8_t)EGP_CAT_UPLOAD)) {
+      s.next_due = now + retry_in(s.period);
+    } else {
+      fired |= 1u << idx;
+      fire_slot(idx, now);
+    }
+    if (_resort) { rebuild_due(); k = 0; }
+    else if (sift_due(k) == k) k++;
+    // the rest next pass
+    if (fired && (uint32_t)(micros() - t0) >= EG_LOOP_BUDGET_US) break;
+  }
 }
 
 void EGModuleRegistry::loop_all(unsigned long now) {
-  if (_pending) apply_pending();
+  if (_posted.any()) take_posts(now);
+  if (_resort) rebuild_due();
   if (!reached(now, _next_loop_due)) return;
 
   if (ota_in_progress) {
@@ -146,80 +191,10 @@ void EGModuleRegistry::loop_all(unsigned long now) {
     _next_loop_due = now;
     return;
   }
-
-  uint8_t unmet = unmet_requirements();
-  bool paused = ExternalPause::active();
-
-  uint8_t k = 0;
-  while (k < _due_count) {
-    uint8_t idx = _due_order[k];
-    Slot& s = _slots[idx];
-    if (!reached(now, s.next_due)) break;
-    if ((s.flags & unmet) || (paused && s.category == (uint8_t)EGP_CAT_UPLOAD)) {
-      // gate closed, retry within 1 s
-      s.next_due = now + (s.loop_interval < 1000 ? s.loop_interval : 1000);
-    } else {
-      fire_slot(s, now);
-    }
-    if (sift_due(k) == k) k++;
-  }
+  walk(now);
+  if (_resort) rebuild_due();
   _next_loop_due = next_wake(now);
 }
-
-inline void EGModuleRegistry::tick_slot(Slot& s, unsigned long now_s) {
-#ifdef TICK_PROFILE
-  unsigned long t0 = micros();
-  s.module->s_tick(now_s);
-  uint32_t d = (uint32_t)(micros() - t0);
-  if (d > s.max_tick_us) s.max_tick_us = (d > 0xFFFF) ? 0xFFFF : (uint16_t)d;
-#else
-  s.module->s_tick(now_s);
-#endif
-}
-
-void EGModuleRegistry::tick_all(unsigned long now, unsigned long uptime_seconds) {
-  if (ota_in_progress) return;
-  bool wifi_ok = Wifi::stable_for(WIFI_SETTLE_MS);
-  bool ntp_ok = Clock::synced;
-  bool seconds = false;
-  for (uint8_t i = 0; i < _count; i++) {
-    Slot& s = _slots[i];
-    if (!(s.flags & FLAG_HAS_TICK)) continue;
-    if (uptime_seconds < s.warmup_seconds) continue;
-    if ((s.flags & FLAG_REQUIRES_WIFI) && !wifi_ok) continue;
-    if ((s.flags & FLAG_REQUIRES_NTP) && !ntp_ok) continue;
-    if (!seconds) {
-      now = now / 1000;
-      seconds = true;
-    }
-    tick_slot(s, now);
-  }
-}
-
-#ifdef TICK_PROFILE
-void EGModuleRegistry::log_profile_and_reset() {
-  char buf[200];
-  int pos = 0;
-  uint32_t done = 0;  // printed slots
-  while (true) {
-    uint8_t best = 0xFF;
-    uint16_t bestv = 0;
-    for (uint8_t i = 0; i < _count && i < EG_MAX_MODULES; i++) {
-      if (done & (1u << i)) continue;
-      uint16_t v = _slots[i].max_tick_us;
-      if (v > bestv) { bestv = v; best = i; }
-    }
-    if (best == 0xFF || bestv == 0) break;
-    done |= (1u << best);
-    int n = snprintf_P(buf + pos, sizeof(buf) - pos, PSTR("%s%s=%u"),
-      pos ? PSTR(" ") : PSTR(""), _slots[best].module->name(), bestv);
-    if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
-    pos += n;
-  }
-  Log::console(PSTR("Mods max: %s"), buf);
-  for (uint8_t i = 0; i < _count; i++) _slots[i].max_tick_us = 0;
-}
-#endif
 
 #ifdef LOOP_PROFILE
 // biggest total_loop_us first
@@ -276,58 +251,77 @@ void EGModuleRegistry::log_activity_and_reset() {
   if (any) Log::console(PSTR("Activity: %s"), buf);
 }
 
-void EGModuleRegistry::wake() {
-  // all of them, a stale front stops the walk
-  unsigned long now = fast_millis();
-  for (uint8_t i = 0; i < _due_count; i++) {
-    _slots[_due_order[i]].next_due = now;
-  }
-  _next_loop_due = now;
+EGModuleRegistry::Slot* EGModuleRegistry::slot_of(EGModule* m) {
+  uint8_t i = m->_slot;
+  if (i >= _count || (_slots[i].flags & FLAG_OFF)) return nullptr;
+  return &_slots[i];
 }
 
-bool EGModuleRegistry::set_loop_interval(EGModule* m, int32_t interval_ms) {
-  for (uint8_t i = 0; i < _count; i++) {
-    if (_slots[i].module != m) continue;
-    if (_slots[i].flags & FLAG_QUARANTINED) return false;
-    _slots[i].pending_ms = interval_ms;
-    _pending = true;
-    return true;
-  }
-  return false;
+// the walk sorts its own slot
+void EGModuleRegistry::changed(Slot& s) {
+  if (&s - _slots == _firing) return;
+  _resort = true;
+  _next_loop_due = fast_millis();
 }
 
-void EGModuleRegistry::apply_pending() {
-  _pending = false;
-  uint32_t now = fast_millis();
-  for (uint8_t i = 0; i < _count; i++) {
-    Slot& s = _slots[i];
-    int32_t interval_ms = s.pending_ms;
-    s.pending_ms = NO_REQUEST;
-    if (interval_ms == NO_REQUEST) continue;
-    if (interval_ms >= 0) {
-      s.flags |= FLAG_HAS_LOOP;
-      s.loop_interval = loop_interval_from(interval_ms);
-      // overdue, or idle past 2^31 ms
-      if ((uint32_t)(now - s.loop_last) >= s.loop_interval) s.next_due = now;
-      else s.next_due = s.loop_last + s.loop_interval;
-    } else {
-      s.flags &= ~FLAG_HAS_LOOP;
-    }
+bool EGModuleRegistry::every(EGModule* m, uint32_t ms) {
+  Slot* s = slot_of(m);
+  if (!s) return false;
+  s->period = ms;
+  if (!ms) {
+    s->flags &= ~FLAG_ARMED;
+  } else {
+    uint32_t now = fast_millis();
+    // off to on runs now; overdue, or idle past 2^31 ms
+    bool start = !(s->flags & FLAG_ARMED);
+    s->next_due = start || (uint32_t)(now - s->loop_last) >= ms ? now : s->loop_last + ms;
+    s->flags |= FLAG_ARMED;
   }
-  rebuild_due();
-  _next_loop_due = now;
+  changed(*s);
+  return true;
 }
 
-bool EGModuleRegistry::set_tick_enabled(EGModule* m, bool enabled) {
+bool EGModuleRegistry::due_at(EGModule* m, uint32_t t) {
+  Slot* s = slot_of(m);
+  if (!s) return false;
+  s->next_due = t;
+  s->flags |= FLAG_ARMED;
+  changed(*s);
+  return true;
+}
+
+void EGModuleRegistry::post(EGModule* m) {
+  uint8_t i = m->_slot;
+  if (i >= EG_MAX_MODULES) return;
+  _posted.set(1u << i);
+}
+
+bool EGModuleRegistry::on(uint8_t topic, EGModule* m) {
+  Slot* s = slot_of(m);
+  if (!s || topic >= EG_MAX_TOPICS) return false;
+  s->topics |= 1u << topic;
+  return true;
+}
+
+void EGModuleRegistry::emit(uint8_t topic) {
+  if (topic >= EG_MAX_TOPICS) return;
+  uint16_t bit = 1u << topic;
+  uint32_t to = 0;
   for (uint8_t i = 0; i < _count; i++) {
-    if (_slots[i].module == m) {
-      if (_slots[i].flags & FLAG_QUARANTINED) return false;
-      if (enabled) _slots[i].flags |=  FLAG_HAS_TICK;
-      else         _slots[i].flags &= ~FLAG_HAS_TICK;
-      return true;
-    }
+    if (!(_slots[i].topics & bit)) continue;
+    _slots[i].events |= bit;
+    to |= 1u << i;
   }
-  return false;
+  if (!to) return;
+  _posted.set(to);
+}
+
+uint16_t EGModuleRegistry::events(EGModule* m) {
+  Slot* s = slot_of(m);
+  if (!s) return 0;
+  uint16_t e = s->events;
+  s->events = 0;
+  return e;
 }
 
 // two halves, no uint64 shift helper
@@ -430,16 +424,6 @@ unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long
   return ping_from_offset(initial_offset(mod_name, interval_ms), now, interval_ms);
 }
 
-bool EGModuleRegistry::sleep_until(EGModule* m, unsigned long now, unsigned long target_ms) {
-  int32_t until = (int32_t)(target_ms - now);
-  uint16_t interval;
-  if (until <= 0)         interval = 100;
-  else if (until > 60000) interval = 60000;
-  else if (until > 2000)  interval = (uint16_t)(until - 1000);
-  else                    interval = 200;
-  return set_loop_interval(m, interval);
-}
-
 uint8_t EGModuleRegistry::count() {
   return _count;
 }
@@ -472,38 +456,38 @@ void EGModuleRegistry::sort_by_priority() {
   }
 }
 
-// cached, no virtual calls in loop_all()
+// cached, no virtual calls in loop_all(); nothing armed till a module asks
 void EGModuleRegistry::pre_wifi_all() {
   sort_by_priority();
 
+  uint32_t now = fast_millis();
+  _posted.take();   // bits were registration order
   _due_count = 0;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     EGModule* m = s.module;
-    s.loop_last = 0;
-    s.next_due = 0;
-    s.pending_ms = NO_REQUEST;
+    m->_slot = i;
+    s.loop_last = now;
+    s.next_due = now;
+    s.period = 0;
+    s.topics = 0;
+    s.events = 0;
     if (_safe_mode && !m->core_module()) {
-      s.flags = FLAG_QUARANTINED;
+      s.flags = FLAG_QUARANTINED | FLAG_OFF;
       s.category = (uint8_t)EGP_CAT_SYSTEM;
       continue;
     }
-    s.loop_interval = loop_interval_from(m->loop_interval_ms());
-    s.warmup_seconds = m->warmup_seconds();
     uint8_t f = 0;
-    if (m->has_loop())       f |= FLAG_HAS_LOOP;
-    if (m->has_tick())       f |= FLAG_HAS_TICK;
     if (m->requires_wifi())  f |= FLAG_REQUIRES_WIFI;
     if (m->requires_ntp())   f |= FLAG_REQUIRES_NTP;
     if (m->runs_during_ota()) f |= FLAG_DURING_OTA;
     s.flags = f;
     const EGPrefGroup* g = m->prefs_group();
     s.category = g ? g->category.get() : (uint8_t)EGP_CAT_SYSTEM;
-    if (f & FLAG_HAS_LOOP) _due_order[_due_count++] = i;
     m->pre_wifi();
     yield();
   }
-  _next_loop_due = 0;
+  _next_loop_due = now;
 }
 
 void EGModuleRegistry::set_safe_mode(bool on) {

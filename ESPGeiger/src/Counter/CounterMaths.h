@@ -63,6 +63,7 @@ class CounterMaths {
   public:
     static constexpr uint8_t  HIST_BUCKETS = 25;
     static constexpr uint32_t HIST_BASE_US = 64;
+    static constexpr uint32_t MISSING_MIN_S = 60;   // never sooner
     // x10 dead time, x60 cpm, still an int
     static constexpr float CPS_MAX = (float)(INT32_MAX / 600);
 
@@ -89,6 +90,25 @@ class CounterMaths {
       int t = to_int(cps * 600.0f);
       return t > 0xFFFF ? 0xFFFF : (uint16_t)t;
     }
+
+    // full window multiplies, a divide is soft-float from flash
+    static float window_mean(uint32_t sum, uint16_t n, uint16_t window, float window_inv) {
+      if (!n) return 0.0f;
+      return n == window ? (float)sum * window_inv : (float)sum / (float)n;
+    }
+
+    // inputs of the last cps, same again needs no maths
+    struct CpsInputs {
+      uint32_t sum = 0;
+      uint16_t n = 0xFFFF;   // none yet
+      uint16_t dt = 0;
+      bool same(uint32_t s, uint16_t c, uint16_t d) {
+        if (s == sum && c == n && d == dt) return true;
+        sum = s; n = c; dt = d;
+        return false;
+      }
+      void reset() { n = 0xFFFF; }
+    };
 
     // CPM per uSv/h
     void set_ratio(float ratio) {
@@ -149,7 +169,7 @@ class CounterMaths {
                         uint32_t total_clicks) const {
       // int guard first
       uint32_t silence = uptime_s - last_count_up_s;
-      if (silence < 60) return false;
+      if (silence < MISSING_MIN_S) return false;
       if (_ratio <= 0.0f) return false;
       return silence >= missing_threshold_s(uptime_s, total_clicks);
     }

@@ -81,9 +81,10 @@ void EnvSensor::begin() {
   if (_started) return;
   _started = true;
   if (!I2CBus::begin()) {
-    EGModuleRegistry::set_loop_interval(this, -1);
+    EGModuleRegistry::every(this, 0);
     return;
   }
+  EGModuleRegistry::every(this, ENV_SAMPLE_MS);
   tryDetect();
 }
 
@@ -96,7 +97,7 @@ bool EnvSensor::tryDetect() {
     _detect_tries++;
     if (_detect_tries >= 3) {
       if (!_st) Log::debug(PSTR("Env: no sensor after %u tries, giving up"), _detect_tries);
-      EGModuleRegistry::set_loop_interval(this, _st ? ENV_RETRY_MS : -1);
+      EGModuleRegistry::every(this, _st ? ENV_RETRY_MS : 0);
     }
     return false;
   }
@@ -106,7 +107,7 @@ bool EnvSensor::tryDetect() {
     Log::console(PSTR("Env: calloc(%u) failed"), (unsigned)sizeof(State));
     _drv_flags = 0;
     _detect_tries = 3;
-    EGModuleRegistry::set_loop_interval(this, -1);
+    EGModuleRegistry::every(this, 0);
     return false;
   }
   _st->ema_t = NAN;
@@ -117,7 +118,7 @@ bool EnvSensor::tryDetect() {
   _st->prev_p = NAN;
   _st->stuck = 0;
   _st->fails = 0;
-  EGModuleRegistry::set_loop_interval(this, ENV_SAMPLE_MS);
+  EGModuleRegistry::every(this, ENV_SAMPLE_MS);
   Log::console(PSTR("Env: %S detected"), chipName());
   return true;
 }
@@ -150,7 +151,7 @@ void EnvSensor::sampleStart() {
   if (_drv_flags & DRV_AHT) {
     if (_aht.trigger()) {
       _phase = PHASE_WAIT_AHT;
-      EGModuleRegistry::set_loop_interval(this, 80);
+      EGModuleRegistry::due_in(this, ENV_AHT_WAIT_MS);
       return;
     }
     _failed = true;
@@ -168,7 +169,7 @@ void EnvSensor::sampleFinish() {
     _failed = true;
   }
   _phase = PHASE_IDLE;
-  EGModuleRegistry::set_loop_interval(this, ENV_SAMPLE_MS);
+  EGModuleRegistry::every(this, ENV_SAMPLE_MS);
   sampleDone();
 }
 

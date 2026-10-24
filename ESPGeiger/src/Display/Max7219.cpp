@@ -28,17 +28,12 @@
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
+#include "Counter/Counter.h"
 #include "Counter/CounterMaths.h"
 #include "Display.h"
 
-EG_PSTR(M_CPM,   "cpm");
-EG_PSTR(M_CPM5,  "cpm5");
-EG_PSTR(M_CPM15, "cpm15");
-EG_PSTR(M_USV,   "usv");
-EG_PSTR(M_ALERT, "alert");
 EG_PSTR(M_TEMP,  "t");
 EG_PSTR(M_HUM,   "h");
-EG_PSTR(M_BLIP,  "blip");
 EG_PSTR(K_SYS_WARN,  "warn");
 EG_PSTR(K_SYS_ALERT, "alert");
 
@@ -48,24 +43,12 @@ EG_REGISTER_MODULE(max7219)
 enum { PAGE_CPM = 0, PAGE_USV = 1, PAGE_TEMP = 2, PAGE_HUM = 3, PAGE_GRAPH = 4, PAGE_VU = 5 };
 static const uint8_t MAX_PAGES = 5;
 
-// found once at start, an egm_f walks every row
-static EGMRead s_cpm, s_cpm5, s_cpm15, s_usv, s_alert, s_blip;
 // slow reads, see slow_reads()
 static float s_t = NAN, s_h = NAN;
 static float s_warn = 0, s_alert_cpm = 0;
 // matrix: a still page draws once a second
 static bool s_still = false;
 static bool s_redraw = true;
-
-static float rf(EGMRead r) {
-  EGMValue v;
-  return (r && r(&v)) ? v.f : NAN;
-}
-
-static bool rb(EGMRead r) {
-  EGMValue v;
-  return r && r(&v) && v.b;
-}
 
 // all every 30 s, the shown page each second
 static void slow_reads(uint8_t page) {
@@ -241,22 +224,20 @@ const EGPrefShow* Max7219Display::prefs_show() { return MAX7219_SHOW; }
 // always on the page, so always posted
 uint8_t Max7219Display::display_order() { return 18; }
 
-// not the display: no tick, no loop
+// not the display: no counts, no loop
 void Max7219Display::begin() {
-  if (display.backend() == this) return;
-  EGModuleRegistry::set_tick_enabled(this, false);
-  EGModuleRegistry::set_loop_interval(this, -1);
+  if (display.backend() == this) {
+    EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
+    EGModuleRegistry::on(Display::TOPIC_POWER, this);
+    EGModuleRegistry::every(this, LOOP_MS);
+    return;
+  }
+  EGModuleRegistry::every(this, 0);
 }
 
 void Max7219Display::start() {
   _layout = (uint8_t)EGPrefs::getUInt("display", EG_K_TYPE);
   _active = true;
-  s_cpm   = egm_core_read(M_CPM,   EGM_F32);
-  s_cpm5  = egm_core_read(M_CPM5,  EGM_F32);
-  s_cpm15 = egm_core_read(M_CPM15, EGM_F32);
-  s_usv   = egm_core_read(M_USV,   EGM_F32);
-  s_alert = egm_core_read(M_ALERT, EGM_BOOL);
-  s_blip  = egm_core_read(M_BLIP,  EGM_U32);
   // boot only, EGP_REBOOT
   _din = (int8_t)EGPrefs::getInt("max7219", K_DIN);
   _clk = (int8_t)EGPrefs::getInt("max7219", EG_K_CLK);
@@ -385,7 +366,7 @@ void Max7219Display::apply() {
 }
 
 float Max7219Display::currentCPM() {
-  return display_cpm(rf(s_cpm), rf(s_cpm5));
+  return display.shown_cpm();
 }
 
 #define MX_PAGE_DWELL_MS 5000UL
@@ -415,8 +396,10 @@ void Max7219Display::updatePage() {
   _cur_page = list[_page];
 }
 
-void Max7219Display::update_power(unsigned long now) {
-  bool on = display.sleep(now) == Display::AWAKE;
+// no pins, stays lit for /screen
+void Max7219Display::update_power() {
+  if (!(tm() ? _tm.ready() : _drv.ready())) return;
+  bool on = display.lit();
   if (on == _lit) return;
   _lit = on;
   s_redraw = true;
@@ -426,11 +409,10 @@ void Max7219Display::update_power(unsigned long now) {
 
 void Max7219Display::onButtonTap(unsigned long now, int8_t dir) {
   s_redraw = true;
-  if (!_lit) {   // first tap only wakes
-    update_power(now);
+  if (_fx_on) {   // any tap ends it
+    _fx_on = false;
     return;
   }
-  if (fxTap(now)) return;
   uint8_t list[MAX_PAGES];
   uint8_t n = buildPages(list);
   if (n <= 1) return;
@@ -449,7 +431,7 @@ static const char* temp_unit() {
 
 void Max7219Display::pageInfo(uint8_t page, float& value, uint8_t& dec, const char*& unit) {
   switch (page) {
-    case PAGE_USV:  value = rf(s_usv);     dec = _decimals; unit = PSTR("~Sv/h"); break;
+    case PAGE_USV:  value = display.usv(); dec = _decimals; unit = PSTR("~Sv/h"); break;
     case PAGE_TEMP: value = egm_celsius_to(s_t, egm_temp_unit()); dec = 1; unit = temp_unit(); break;
     case PAGE_HUM:  value = s_h;           dec = 0;         unit = PSTR("%");     break;
     default:        value = currentCPM(); dec = value < 10.0f ? 1 : 0; unit = PSTR("CPM"); break;   // as the OLED
@@ -457,9 +439,9 @@ void Max7219Display::pageInfo(uint8_t page, float& value, uint8_t& dec, const ch
 }
 
 uint8_t Max7219Display::adaptiveLevel(uint8_t maxLevel) {
-  if (rb(s_alert)) return maxLevel;
+  if (display.alert()) return maxLevel;
   float cur  = currentCPM();
-  float base = rf(_bar_win == 0 ? s_cpm5 : s_cpm15);
+  float base = _bar_win == 0 ? display.cpm5() : display.cpm15();
   float full = base * (float)_bar_gain;
   const float MIN_FULL = 20.0f;   // cpm
   if (full < MIN_FULL) full = MIN_FULL;
@@ -716,22 +698,19 @@ void Max7219Display::roundBoot() {
   roundDigits(0, 0);
 }
 
-void Max7219Display::s_tick(unsigned long now) {
-  (void)now;   // seconds
+void Max7219Display::second() {
   if (!_active) return;
   slow_reads(_cur_page);
   s_redraw = true;   // /screen draws the matrix without pins too
   if (!(tm() ? _tm.ready() : _drv.ready())) return;
-  update_power(fast_millis());
   if (!tm()) _drv.heal();
   if (_layout == DISP_MAX7219_MATRIX || !_lit) return;
   // no ack, try every 10 s
   if (tm() && (_tm_off || (!_tm_acked && ++_tm_wait < TM_RETRY_S))) return;
   _tm_wait = 0;
   updatePage();
-  if (tm())                               _tm_due = true;   // esp8266 ticker is SYS
-  else if (_layout == DISP_MAX7219_ROUND) renderRound();
-  else                                    render7seg();
+  if (_layout == DISP_MAX7219_ROUND) renderRound();
+  else                               render7seg();
 }
 
 void Max7219Display::matrixValueUnit(char* val, size_t vc, char* unit, size_t uc) {
@@ -752,8 +731,9 @@ void Max7219Display::renderMatrixContent(unsigned long now) {
   if (_cur_page == PAGE_GRAPH) {
     int hist[sizeof(_mfb)];
     int n = (int)egm_history(hist, (size_t)W);
-    display_hist(hist, n, rf(s_cpm5), 1);
-    barColumns(hist, n, _mfb, W);
+    // tenths at least 1 cpm tall, as the OLED
+    if (display.tenths(hist, (uint16_t)n) == 10) barColumns(hist, n, _mfb, W, 10);
+    else                                        barColumns(hist, n, _mfb, W);
     return;
   }
 
@@ -834,11 +814,10 @@ int Max7219Display::mxText(uint8_t* fb, int W, int x, const char* s, bool draw, 
 }
 
 void Max7219Display::loop(unsigned long now) {
+  uint16_t ev = EGModuleRegistry::events(this);
+  if (ev & (1u << Display::TOPIC_POWER)) update_power();
+  if (ev & (1u << Counter::TOPIC_COUNTS)) second();
   if (!_active || !_lit) return;
-  if (_tm_due) {
-    _tm_due = false;
-    render7seg();
-  }
   if (vu()) vuFrame();
   if (_layout != DISP_MAX7219_MATRIX) return;
   if (!_fx_on && s_still && !s_redraw) return;
@@ -849,25 +828,21 @@ void Max7219Display::loop(unsigned long now) {
   _drv.drawMatrix(_mfb, _orient);   // no-op without pins
 }
 
-bool Max7219Display::fxTap(unsigned long now) {
-  _taps = (now - _tap_ms < 500) ? _taps + 1 : 1;
-  _tap_ms = now;
-  if (_fx_on) {
-    _fx_on = false;
-    return true;
+// matrix only, else a plain tap
+void Max7219Display::fx(unsigned long now) {
+  if (_fx_on || _layout != DISP_MAX7219_MATRIX) {
+    onButtonTap(now, 1);
+    return;
   }
-  if (_taps < 5 || _layout != DISP_MAX7219_MATRIX) return false;
+  s_redraw = true;
   _fx_on = true;
   _fx_part = 0;
   _fx = 0;
-  _taps = 0;
-  return true;
 }
 
 // arc in 1/16 LEDs
 void Max7219Display::vuFrame() {
-  EGMValue b;
-  uint32_t blip = (s_blip && s_blip(&b)) ? b.u : 0;
+  uint32_t blip = display.blip();
   unsigned long now = fast_millis();
   bool fresh = now - _vu_ms > 1000;   // page just shown, no backlog kick
   _vu_ms = now;
@@ -876,7 +851,7 @@ void Max7219Display::vuFrame() {
   float kick = 0;
   if (counts) {
     kick = 8 * 16;   // one count, 8 LEDs at most
-    float perFrame = currentCPM() * loop_interval_ms() / 60000.0f;
+    float perFrame = currentCPM() * LOOP_MS / 60000.0f;
     // at the last green LED the level falls 9 a frame
     if (perFrame > 0 && 9 / perFrame < kick) kick = 9 / perFrame;
   }

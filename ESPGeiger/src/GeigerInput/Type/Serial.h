@@ -31,13 +31,13 @@
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/System/FastMillis.h"
 
-class GeigerSerial : public GeigerInput
+class GeigerSerial final : public GeigerInput
 {
   public:
     GeigerSerial();
-    void begin();
-    void loop();
-    void secondTicker();
+    void begin() override;
+    void loop() override;
+    void secondTicker() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
     bool isHealthy() const override {
@@ -55,7 +55,7 @@ class GeigerSerial : public GeigerInput
     float partial_clicks = 0;
     int serial_value = 0;
     unsigned long last_serial = 0;
-    uint16_t _idle_skip = 5;  // scaled to baud in begin()
+    uint8_t _idle_ms = 4;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint8_t _bad_streak = 0;
     unsigned long _last_drain = 0;

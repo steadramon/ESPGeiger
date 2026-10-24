@@ -33,19 +33,19 @@
 
 #include "GeigerInput/GeigerInputTest.h"
 
-class GeigerTestPulseInt : public GeigerInputTest
+class GeigerTestPulseInt final : public GeigerInputTest
 {
   public:
     GeigerTestPulseInt();
-    void begin();
-    void loop();
+    void begin() override;
+    void loop() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
     static uint32_t IRAM_ATTR pulseInterrupt();
     double calcPWM();
-    void secondTicker();
+    void secondTicker() override;
 #ifdef USE_PCNT
-    int collect();
+    int collect() override;
 #endif
   private:
     int _target_pwm = 0;

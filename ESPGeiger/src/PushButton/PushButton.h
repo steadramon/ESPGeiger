@@ -42,10 +42,8 @@ class PushButton : public EGModule {
     PushButton();
     const char* name() override { return PSTR("btn"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
     void loop(unsigned long now) override;
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 50; }
+    static constexpr uint16_t LOOP_MS = 50;
     void begin() override;
     void init();
     bool isPressed();

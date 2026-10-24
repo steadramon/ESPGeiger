@@ -199,7 +199,7 @@ void HV::set_pwm_pin(int pin) {
 void HV::begin() {
   if (_pwm_pin < 0) {
     Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
-    EGModuleRegistry::set_loop_interval(this, -1);
+    EGModuleRegistry::every(this, 0);
   } else {
     Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
 #ifdef ESP8266
@@ -208,13 +208,16 @@ void HV::begin() {
     if (!EGTimer1::pwm_begin(_pwm_pin)) {
       Log::console(PSTR("HV: pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
       _pwm_pin = -1;
-      EGModuleRegistry::set_loop_interval(this, -1);
+      EGModuleRegistry::every(this, 0);
     }
 #else
     ledcSetup(EGLED_HV_CHANNEL, _hw_freq, HV_PWM_BITS);
     ledcAttachPin(_pwm_pin, EGLED_HV_CHANNEL);
 #endif
-    if (_pwm_pin >= 0) Lifecycle::on(hv_lifecycle);
+    if (_pwm_pin >= 0) {
+      Lifecycle::on(hv_lifecycle);
+      EGModuleRegistry::every(this, LOOP_MS);
+    }
   }
 #ifdef ESPG_HV_ADC
   hvReading.begin();

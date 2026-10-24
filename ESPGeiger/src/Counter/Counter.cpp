@@ -76,6 +76,7 @@ void ensure_pulse_ring() {
 
 void Counter::set_cpm_mode(uint8_t m) {
   _cpm_mode = (m > 4) ? 3 : m;
+  _cps_in.reset();
   if (_cpm_mode != 3) ensure_pulse_ring();
 }
 
@@ -168,22 +169,25 @@ bool rtc_life_recover(uint32_t* out_clicks, uint32_t* out_seconds) {
 }
 }
 
-Counter::Counter() {
+// final, so the tick calls it direct
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
-  geigerinput = new GeigerPulse();
+using InputType = GeigerPulse;
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-  geigerinput = new GeigerSerial();
+using InputType = GeigerSerial;
 #elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
-  geigerinput = new GeigerUdpRx();
+using InputType = GeigerUdpRx;
 #elif GEIGER_TYPE == GEIGER_TYPE_TEST
-  geigerinput = new GeigerTest();
+using InputType = GeigerTest;
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  geigerinput = new GeigerTestPulse();
+using InputType = GeigerTestPulse;
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  geigerinput = new GeigerTestSerial();
+using InputType = GeigerTestSerial;
 #elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
-  geigerinput = new GeigerTestPulseInt();
+using InputType = GeigerTestPulseInt;
 #endif
+
+Counter::Counter() {
+  geigerinput = new InputType();
 }
 
 namespace {
@@ -194,12 +198,22 @@ time_t   s_next_boundary  = 0;
 TickClock s_clock;
 bool     s_boundary_armed = false;
 uint32_t s_last_day       = 0;
-uint32_t s_rtc_ctr        = 0;
+uint8_t  s_life_left      = RTC_STASH_S;
 uint32_t s_save_ctr       = 0;
 }  // namespace
 
+// once a second from flash misses the cache
+#ifdef ESP32
+#define TICK_ATTR IRAM_ATTR
+#define TICK_COLD inline
+#else
+#define TICK_ATTR
+// the tick's work, from flash only when it has some
+#define TICK_COLD __attribute__((noinline))
+#endif
+
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
-inline void Counter::note_counts_missing(uint32_t uptime_s) {
+TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
   bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s, (uint32_t)total_clicks);
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   cm = cm && !udp_rx()->heard();
@@ -215,7 +229,7 @@ inline void Counter::note_counts_missing(uint32_t uptime_s) {
 }
 #endif
 
-inline void Counter::hour_rollover(time_t now) {
+TICK_COLD void Counter::hour_rollover(time_t now) {
   // not static, guard runs every tick
   const time_t kBoundarySecs = (time_t)_boundary_secs;
   bool fire = false;
@@ -242,31 +256,53 @@ inline void Counter::hour_rollover(time_t now) {
   s_boundary_armed = true;
 }
 
-inline void Counter::lifetime_tick(int counts, time_t now) {
+// time(), the hour and the first sync stamps, on read ticks
+TICK_COLD uint32_t Counter::clock_read() {
+  uint32_t now = (uint32_t)time(nullptr);
+  if (!s_next_boundary || now >= s_next_boundary) hour_rollover(now);
+  if (_lifetime_enabled) {
+    if (_last_save_time_t == 0) _last_save_time_t = now;
+    if (_first_boot_ts == 0) {
+      _first_boot_ts = now;
+      _pending_work |= PENDING_SAVE;
+    }
+  }
+  s_clock.read(now, (uint32_t)s_next_boundary);
+  return now;
+}
+
+inline void Counter::lifetime_tick(int counts, uint32_t now) {
   unsigned long prev_lifetime = total_clicks_lifetime;
   total_clicks_lifetime += counts;
   if (prev_lifetime > total_clicks_lifetime) {
     total_clicks_lifetime_rollover++;
   }
-  if (counts > 0) {
-    _rtc_unsaved_clicks += (uint32_t)counts;
-  }
-  if (_last_save_time_t == 0 && Clock::synced) {
-    _last_save_time_t = (uint32_t)now;
-  }
-  if (++s_rtc_ctr >= RTC_STASH_S) {
-    s_rtc_ctr = 0;
-    _rtc_pending_now = (uint32_t)now;
-    _pending_work |= PENDING_RTC;
-  }
-  if (_first_boot_ts == 0 && Clock::synced) {
-    _first_boot_ts = (uint32_t)now;
-    _pending_work |= PENDING_SAVE;
-  }
-  if (++s_save_ctr >= LIFETIME_SAVE_S) {
+  _rtc_unsaved_clicks += (uint32_t)counts;
+  if (!--s_life_left) life_work(now);
+}
+
+// the rtc stash every 30 s, the save every 6 h
+TICK_COLD void Counter::life_work(uint32_t now) {
+  s_life_left = RTC_STASH_S;
+  _rtc_pending_now = now;
+  _pending_work |= PENDING_RTC;
+  s_save_ctr += RTC_STASH_S;
+  if (s_save_ctr >= LIFETIME_SAVE_S) {
     s_save_ctr = 0;
     _pending_work |= PENDING_SAVE;
   }
+}
+
+// the counts moved or the mode reads live
+TICK_COLD void Counter::cpm_work(bool fresh) {
+  if (fresh) _cached_cps = apply_dead_time(window_mean(_cps_in.sum, _cps_in.n, _cpm_window, _cpm_window_inv));
+  _cached_cpm_active = (_cpm_mode == 3 ? _cached_cps : get_cps()) * 60.0f;
+  _cached_ccpm = (int)(_cached_cpm_active + 0.5f);   // capped by apply_dead_time
+}
+
+TICK_COLD void Counter::ema_work(bool add15) {
+  geigerTicks5.add(_cached_cps);
+  if (add15) geigerTicks15.add(geigerTicks5.get());
 }
 
 inline void Counter::update_alarms(int cpm) {
@@ -276,23 +312,22 @@ inline void Counter::update_alarms(int cpm) {
   if (!warn && !alrt) _alarm_snoozed = false;
   _bool_cpm_warning = warn && !_alarm_snoozed;
   _bool_cpm_alert   = alrt && !_alarm_snoozed;
+  uint8_t bits = _bool_cpm_warning | (_bool_cpm_alert << 1) | (warm << 2);
+  if (bits != _alarm_bits) {
+    _alarm_bits = bits;
+    _pending_work |= PENDING_ALARM;
+  }
 }
-
-// esp32: once a second from flash misses the cache
-#ifdef ESP32
-#define TICK_ATTR IRAM_ATTR
-#else
-#define TICK_ATTR
-#endif
 
 void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
   if (!_running) return;
-  geigerinput->secondTicker();
+  InputType* in = static_cast<InputType*>(geigerinput);
+  in->secondTicker();
 
-  int eventCounter = clamp_counts(geigerinput->collect());
+  int eventCounter = clamp_counts(in->collect());
   if (eventCounter > 0) _last_count_up_s = uptime_s;
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
-  note_counts_missing(uptime_s);
+  if (uptime_s - _last_count_up_s >= MISSING_MIN_S || s_missing_logged) note_counts_missing(uptime_s);
 #endif
   static uint8_t tick_cnt = 0;
   geigerTicks.add(eventCounter);
@@ -302,30 +337,27 @@ void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
     total_clicks_rollover++;
   }
 
-  _cached_cps = apply_dead_time(geigerTicks.mean());
-  _cached_cpm_active = get_cps() * 60.0f;
-  int ccpm = to_int(_cached_cpm_active);
+  // same counts, same cps
+  bool fresh = !_cps_in.same(geigerTicks.sum(), geigerTicks.count(), _dead_time_us);
+  if (fresh || _cpm_mode != 3) cpm_work(fresh);
+  int ccpm = _cached_ccpm;
 
   cpm_history.push(ccpm);
 
   bool add5 = tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10;
-  if (add5) {
-    geigerTicks5.add(_cached_cps);
-    if (tick_cnt == 0) {
-      geigerTicks15.add(geigerTicks5.get());
-    }
-  }
+  if (add5) ema_work(tick_cnt == 0);
   if (++tick_cnt >= 15) tick_cnt = 0;
   if (cpm5_history) push_cpm5(add5);
 
-  time_t currentTime = Clock::synced ? s_clock.step(s_next_boundary, time) : 0;
-  if (Clock::synced) hour_rollover(currentTime);
+  uint32_t currentTime = 0;
+  if (Clock::synced) currentTime = s_clock.count() ? s_clock.now : clock_read();
 
   clicks_today += eventCounter;
   clicks_hour += eventCounter;
 
   if (_lifetime_enabled) lifetime_tick(eventCounter, currentTime);
   update_alarms(ccpm);
+  _pending_work |= PENDING_COUNTS;
 }
 
 void Counter::reset_alarm() {
@@ -370,6 +402,7 @@ void Counter::clock_stepped(int32_t delta_s) {
     _pending_work |= PENDING_SAVE;
   }
   s_next_boundary = 0;
+  s_clock.read_next();
 }
 
 void Counter::reset_lifetime() {
@@ -379,6 +412,7 @@ void Counter::reset_lifetime() {
   _lifetime_seconds_saved = 0;
   _last_save_time_t = 0;
   save_lifetime();
+  s_clock.read_next();   // stamps the first boot again
   Log::console(PSTR("Lifetime: reset"));
 }
 
@@ -392,12 +426,13 @@ float Counter::get_cps() {
     case 2: return ringOrBucket(cps_windowed(60UL * 1000000UL, 64));
     case 4: return ringOrBucket(cps_windowed(5UL  * 1000000UL, 19));
     case 0: {
-      float live = get_cps_live();
-      if (live <= 0.0f) return _cached_cps;
       uint32_t up = DeviceInfo::uptime();
       uint32_t w  = _cpm_window;
-      if (up <  w)      return apply_dead_time(live);
+      // warm, no ring read
       if (up >= 2u * w) return _cached_cps;
+      float live = get_cps_live();
+      if (live <= 0.0f) return _cached_cps;
+      if (up <  w)      return apply_dead_time(live);
       float liveC = apply_dead_time(live);
       float a = (float)(up - w) * _cpm_window_inv;
       return liveC * (1.0f - a) + _cached_cps * a;
@@ -648,21 +683,11 @@ void Counter::loop() {
     if (pw & PENDING_SAVE) {
       save_lifetime();
     }
+    if (pw & PENDING_ALARM) EGModuleRegistry::emit(TOPIC_ALARM);
+    if (pw & PENDING_COUNTS) EGModuleRegistry::emit(TOPIC_COUNTS);
   }
 
-#if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
-  geigerinput->loop();
-#elif defined(COUNTER_DRAINS_PCNT)
-  {
-    uint32_t pcnt_ms = fast_millis();
-    if ((uint32_t)(pcnt_ms - _pcnt_ms) >= PCNT_DRAIN_MS) {
-      _pcnt_ms = pcnt_ms;
-      static_cast<GeigerPulse*>(geigerinput)->drain_pcnt();
-    }
-  }
-#elif GEIGER_IS_UDPRX(GEIGER_TYPE)
-  geigerinput->loop();
-#endif
+  static_cast<InputType*>(geigerinput)->loop();
 
   unsigned long lb = _last_blip;
   if (_last_blip_seen != lb) {

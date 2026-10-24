@@ -41,11 +41,11 @@
 #define GEIGER_MODEL "genpulse"
 #endif
 
-class GeigerPulse : public GeigerInput
+class GeigerPulse final : public GeigerInput
 {
   public:
     GeigerPulse();
-    void begin();
+    void begin() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
     bool has_pcnt() override {
@@ -59,12 +59,13 @@ class GeigerPulse : public GeigerInput
     void secondTicker() override { checkIsrStorm(); }
 #endif
 #ifdef USE_PCNT
-    int collect();
-    // 50 Hz
+    int collect() override;
+    void loop() override;
+    static constexpr uint32_t DRAIN_MS = 20;   // 50 Hz
     void drain_pcnt();
-    void set_pcnt_filter(int val);
-    void apply_pcnt_filter();
-    void set_pin_pull(int mode);   // 0=floating, 1=up, 2=down
+    void set_pcnt_filter(int val) override;
+    void apply_pcnt_filter() override;
+    void set_pin_pull(int mode) override;   // 0=floating, 1=up, 2=down
   private:
     uint16_t _pcnt_filter = 0;          // 0-1023
     uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT;

@@ -24,21 +24,10 @@
 #include "Corium/System/Globals.h"
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Output/QuietWindow.h"
+#include "Corium/Module/EGModuleRegistry.h"
 
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/System/FastMillis.h"
-
-#if defined(USE_PCNT) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  #define COUNTER_DRAINS_PCNT
-#endif
-
-// test timers post their work, nothing to poll
-#if GEIGER_IS_TEST(GEIGER_TYPE) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !defined(GEIGER_COUNTS_IN_ISR)
-  #define TEST_POSTS_WORK 1
-  #include "GeigerInput/GeigerInputTest.h"
-#else
-  #define TEST_POSTS_WORK 0
-#endif
 
 class GeigerUdpRx;
 
@@ -137,6 +126,10 @@ class Counter : public CounterMaths {
       bool is_quiet_now();
       bool is_warning() const { return _bool_cpm_warning; }
       bool is_alert() const { return _bool_cpm_alert; }
+      // warn, alert or warm changed, from loop()
+      static constexpr uint8_t TOPIC_ALARM = EG_TOPIC_APP;
+      // a second counted, from loop()
+      static constexpr uint8_t TOPIC_COUNTS = EG_TOPIC_APP + 1;
       bool is_healthy() const { return geigerinput && geigerinput->isHealthy(); }
       GeigerInput* input() { return geigerinput; }
       void stop_for_ota() {
@@ -159,24 +152,8 @@ class Counter : public CounterMaths {
       void queueBlip() { _last_blip = micros(); }
 
       // inline gate
-      inline bool needs_loop() {
-        if (_pending_work) return true;
-#if TEST_POSTS_WORK
-        if (GeigerInputTest::work()) return true;
-#endif
-#ifdef GEIGER_COUNTS_IN_ISR
-        return _last_blip_seen != _last_blip;
-#else
-        if (!_running) return false;
-        if (_last_blip_seen != _last_blip) return true;
-  #ifdef COUNTER_DRAINS_PCNT
-        return (uint32_t)(fast_millis() - _pcnt_ms) >= PCNT_DRAIN_MS;
-  #elif TEST_POSTS_WORK
-        return false;
-  #else
-        return geigerinput->poll_due();
-  #endif
-#endif
+      inline bool needs_loop(uint32_t now) {
+        return _pending_work || _last_blip_seen != _last_blip || geigerinput->due(now);
       }
       // direct, polling merges blips
       void dispatchReceiverBlip();
@@ -219,7 +196,11 @@ class Counter : public CounterMaths {
       float cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const;
       void note_counts_missing(uint32_t uptime_s);
       void hour_rollover(time_t now);
-      void lifetime_tick(int counts, time_t now);
+      uint32_t clock_read();
+      void lifetime_tick(int counts, uint32_t now);
+      void life_work(uint32_t now);
+      void cpm_work(bool fresh);
+      void ema_work(bool add15);
       void update_alarms(int cpm);
       uint16_t _boundary_secs = 3600;
       uint8_t _cpm_mode = 3;     // bucket
@@ -236,13 +217,12 @@ class Counter : public CounterMaths {
       bool _blip_led = true;
       bool _lifetime_enabled = true;
       bool _running = false;
-      static constexpr uint8_t PENDING_RTC  = 1 << 0;
-      static constexpr uint8_t PENDING_SAVE = 1 << 1;
+      static constexpr uint8_t PENDING_RTC   = 1 << 0;
+      static constexpr uint8_t PENDING_SAVE  = 1 << 1;
+      static constexpr uint8_t PENDING_ALARM = 1 << 2;
+      static constexpr uint8_t PENDING_COUNTS = 1 << 3;
       uint8_t  _pending_work = 0;
-#ifdef COUNTER_DRAINS_PCNT
-      static constexpr uint32_t PCNT_DRAIN_MS = 20;   // 50 Hz
-      uint32_t _pcnt_ms = 0;
-#endif
+      uint8_t  _alarm_bits = 0;   // warn, alert, warm as last emitted
       uint32_t _rtc_pending_now = 0;
       uint32_t _first_boot_ts = 0;
       uint32_t _rtc_unsaved_clicks = 0;
@@ -255,6 +235,8 @@ class Counter : public CounterMaths {
       QuietWindow _quiet;
       float _cached_cps = 0.0f;
       float _cached_cpm_active = 0.0f;
+      int   _cached_ccpm = 0;
+      CpsInputs _cps_in;
       EGRingAvg<uint32_t, GEIGER_CPM_COUNT> geigerTicks;   // counts, exact sum
 #ifdef GEIGER_SMOOTH_AVG
       EGRingAvg<float, GEIGER_CPM5_COUNT>  geigerTicks5;

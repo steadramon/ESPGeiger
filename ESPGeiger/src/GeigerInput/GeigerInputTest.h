@@ -73,11 +73,6 @@ class GeigerInputTest : public GeigerInput
     int collect() override;
     static std::atomic<uint8_t> _tp_head;   // handler
     static std::atomic<uint8_t> _tp_tail;   // loop
-    // stamp, pulse or retarget; loop() clears it first, collect() sweeps the rest
-    static std::atomic<bool> _tp_work;
-    static void post() { _tp_work.store(true, std::memory_order_relaxed); }
-    static bool work() { return _tp_work.load(std::memory_order_relaxed); }
-    static void take() { _tp_work.store(false, std::memory_order_relaxed); }
   protected:
     bool _retarget = false;
   private:

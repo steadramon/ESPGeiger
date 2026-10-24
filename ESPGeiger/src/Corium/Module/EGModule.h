@@ -44,16 +44,11 @@ class EGModule {
     virtual uint8_t priority() { return EG_PRIORITY_DEFAULT; }
     virtual void pre_wifi() {}   // no network yet
     virtual void begin() {}      // after wifi, or offline
+    // runs once every() / due_at() / post() asks
     virtual void loop(unsigned long now) {}
-    virtual bool has_loop() { return false; }
 
-    virtual uint16_t loop_interval_ms() { return 0; }
-    virtual void s_tick(unsigned long now) {}
-
-    virtual bool has_tick() { return false; }
     virtual bool requires_wifi() { return false; }
     virtual bool requires_ntp() { return false; }
-    virtual uint16_t warmup_seconds() { return 10; }
     // safe mode keeps these
     virtual bool core_module() { return false; }
     // loops during OTA
@@ -91,8 +86,10 @@ class EGModule {
     uint8_t take_publish_err();
 
   private:
+    friend class EGModuleRegistry;
     uint8_t _pub_ok  = 0;
     uint8_t _pub_err = 0;
+    uint8_t _slot = 0xFF;   // registry's, 0xFF = not added
 
   protected:
     // statics, never deleted

@@ -70,7 +70,7 @@ void SerialOut::on_prefs_loaded() {
   _format     = (uint8_t)EGPrefs::getUInt("sout", K_FORMAT);
   _baud       = (uint32_t)EGPrefs::getUInt("sout", K_BAUD);
   Log::setSerialLogLevel(_interval == 0);
-  EGModuleRegistry::set_loop_interval(this, _interval > 0 ? 500 : -1);
+  EGModuleRegistry::every(this, _interval > 0 ? LOOP_MS : 0);
   resolveFormat();
   applyBaud();
 }
@@ -132,7 +132,7 @@ void SerialOut::print_usv() {
 
 void SerialOut::set_show(int var) {
   _interval = (uint16_t)clamp(var, 0, (int)UINT16_MAX);
-  EGModuleRegistry::set_loop_interval(this, 100);
+  EGModuleRegistry::due_in(this, REPLAN_MS);
   // keep flags for a bare show
   if (_interval > 0 && _show_flags == 0) {
     _show_flags = SHOW_CPM;
@@ -143,7 +143,7 @@ void SerialOut::set_show(int var) {
 
 void SerialOut::setInterval(uint16_t v) {
   _interval = v;
-  EGModuleRegistry::set_loop_interval(this, 100);
+  EGModuleRegistry::due_in(this, REPLAN_MS);
   save();
 }
 
@@ -189,16 +189,16 @@ static size_t labelled_line(char* buf, size_t cap, const Line& v) {
 
 void SerialOut::loop(unsigned long now) {
   if (_interval == 0) {
-    EGModuleRegistry::set_loop_interval(this, -1);
+    EGModuleRegistry::every(this, 0);
     return;
   }
   uint32_t period = (uint32_t)_interval * 1000UL;
   if ((now - _last_fire) < period) {
-    EGModuleRegistry::sleep_until(this, now, _last_fire + period);
+    EGModuleRegistry::due_at(this, _last_fire + period);
     return;
   }
   _last_fire = now;
-  EGModuleRegistry::sleep_until(this, now, now + period);
+  EGModuleRegistry::due_at(this, now + period);
 
   if (_fmt_fn) {
     char line[SOUT_TPL_MAX * 2];  // vars grow it, cut cleanly past this

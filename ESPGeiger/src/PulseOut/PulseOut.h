@@ -33,7 +33,6 @@ class PulseOut : public EGModule {
     const char* name() override { return PSTR("pulse"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 14; }
-    uint16_t warmup_seconds() override { return 0; }
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;

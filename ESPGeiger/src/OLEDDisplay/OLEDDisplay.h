@@ -87,10 +87,10 @@ public:
     SSD1306Display();
     const char* name() override { return PSTR("oled"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
 
     void start() override;
     void button(unsigned long now, int8_t dir) override { onButtonTap(now, dir); }
+    void fx(unsigned long now) override;
     bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) override;
     void reload() override;
     bool present() override { return _present; }
@@ -119,8 +119,6 @@ public:
     void drawStrP(int16_t x, int16_t y, const char* s);
 
     void loop(unsigned long now) override;
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 20; }
 
     void page_one_clear();
     bool page_one_graph();
@@ -171,6 +169,7 @@ public:
   private:
     enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };
     void page_changed();
+    void redraw(unsigned long now);   // a frame now, page changed
     uint16_t tick_ms() const;
     unsigned long frame_ms() const;
     bool awake(unsigned long now);

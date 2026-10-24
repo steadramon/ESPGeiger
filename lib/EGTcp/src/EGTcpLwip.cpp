@@ -229,8 +229,9 @@ struct EGTcpLwip {
     EGTcpClient* c = (EGTcpClient*)arg;
     if (!c) return ERR_OK;
     cache(c, p);   // backstop
-    // idle costs the loop nothing, a missed race is the next poll's
-    if (c->due(EGTcpCore::now())) post(c, EV_POLL);
+    // one word the owner keeps, idle costs the loop nothing
+    uint32_t at = c->_due_at.load(std::memory_order_relaxed);
+    if (at && (int32_t)(EGTcpCore::now() - at) >= 0) post(c, EV_POLL);
     return ERR_OK;
   }
 

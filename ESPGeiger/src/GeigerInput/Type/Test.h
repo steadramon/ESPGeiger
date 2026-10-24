@@ -26,13 +26,13 @@
 #define GEIGER_MODEL "test"
 #endif
 
-class GeigerTest : public GeigerInputTest
+class GeigerTest final : public GeigerInputTest
 {
   public:
     GeigerTest();
-    void begin();
-    void loop();
-    void secondTicker();
+    void begin() override;
+    void loop() override;
+    void secondTicker() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
     static uint32_t IRAM_ATTR testInterrupt();

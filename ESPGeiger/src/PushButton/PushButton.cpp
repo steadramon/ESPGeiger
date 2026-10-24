@@ -124,8 +124,8 @@ void PushButton::on_prefs_loaded() {
   // pin2 build flag only
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
   Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
-  EGModuleRegistry::set_loop_interval(this,
-    (pin1 < 0 && PUSHBUTTON_PIN2 < 0) ? -1 : 50);
+  EGModuleRegistry::every(this,
+    (pin1 < 0 && PUSHBUTTON_PIN2 < 0) ? 0 : LOOP_MS);
 }
 #endif
 
@@ -182,6 +182,7 @@ void PushButton::begin()
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
   Log::console(PSTR("Btn: pin=%d pin2=%d"),
                (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
+  EGModuleRegistry::every(this, LOOP_MS);
 #endif
   init();
 }

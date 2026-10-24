@@ -20,8 +20,7 @@
 #include <math.h>
 
 // floor 90% of the low, as the OLED
-void barColumns(const int* hist, int n, uint8_t* cols, int w) {
-  const int SPAN = 5;
+void barColumns(const int* hist, int n, uint8_t* cols, int w, int min_span) {
   if (n > w) {
     hist += n - w;
     n = w;
@@ -33,7 +32,7 @@ void barColumns(const int* hist, int n, uint8_t* cols, int w) {
     if (hist[i] > hi) hi = hist[i];
   }
   if (lo > 1) lo = lo * 9 / 10;
-  if (hi - lo < SPAN) { lo = hi > SPAN ? hi - SPAN : 0; hi = lo + SPAN; }
+  if (hi - lo < min_span) { lo = hi > min_span ? hi - min_span : 0; hi = lo + min_span; }
   int span = hi - lo;
   for (int i = 0; i < n; i++) {
     int h = 1 + (hist[i] - lo) * 7 / span;

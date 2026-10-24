@@ -44,6 +44,7 @@
 #include "MsgPack.h"
 #include <FS.h>
 #include "Corium/System/Fs.h"
+#include "Corium/System/KeyStore.h"
 #include <uECC.h>
 #include "EnvSensor/EnvSensor.h"
 #include "Counter/Tube.h"
@@ -84,7 +85,7 @@ const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
 void WebAPI::on_prefs_loaded() {
   _mode = (uint8_t)EGPrefs::getUInt("webapi", EG_K_MODE);
   bool off = _mode == 0 && !_forget && request.idle();
-  EGModuleRegistry::set_loop_interval(this, off ? -1 : 1000);
+  EGModuleRegistry::every(this, off ? 0 : LOOP_MS);
 }
 
 static int webapi_rng(uint8_t *dest, unsigned size) {
@@ -179,7 +180,7 @@ void WebAPI::loop(unsigned long now) {
   }
   if (_mode == 0) {
     // forget reply still due
-    EGModuleRegistry::set_loop_interval(this, request.idle() ? -1 : loop_interval_ms());
+    EGModuleRegistry::every(this, request.idle() ? 0 : POLL_MS);
     return;
   }
 
@@ -195,10 +196,10 @@ void WebAPI::loop(unsigned long now) {
     pingIfDue(now);
   }
   if (!request.idle()) {
-    EGModuleRegistry::set_loop_interval(this, loop_interval_ms());   // reply due, poll
+    EGModuleRegistry::every(this, POLL_MS);   // reply due, poll
     return;
   }
-  EGModuleRegistry::sleep_until(this, now, wakeTarget());
+  EGModuleRegistry::due_at(this, wakeTarget());
 }
 
 void WebAPI::take_reply() {
@@ -398,7 +399,7 @@ void WebAPI::onHandshake() {
       if (id == 0) {
         Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
         backoffHandshake();
-        EGModuleRegistry::set_loop_interval(this, 100);
+        EGModuleRegistry::due_in(this, REPLAN_MS);
         note_publish(false);
         return;
       }
@@ -408,7 +409,7 @@ void WebAPI::onHandshake() {
         uint32_t k = rd_be32(pub_k + 4);
         handshakeAt(fast_millis() +
           wall_clock_wait_ms(k, WEBAPI_HANDSHAKE_MS, 3600, Clock::epoch()));
-        EGModuleRegistry::set_loop_interval(this, 100);
+        EGModuleRegistry::due_in(this, REPLAN_MS);
       } else {
         Log::debug(HS_OK, id);
       }
@@ -432,7 +433,7 @@ void WebAPI::onHandshake() {
   }
   // backoff, uECC_sign is slow
   backoffHandshake();
-  EGModuleRegistry::set_loop_interval(this, 100);
+  EGModuleRegistry::due_in(this, REPLAN_MS);
   note_publish(false);
 }
 
@@ -557,7 +558,7 @@ void WebAPI::onPost() {
       denied(&request);
       station_id = 0;
       nextHandshake = 0;
-      EGModuleRegistry::set_loop_interval(this, 100);
+      EGModuleRegistry::due_in(this, REPLAN_MS);
     } else if (code == 409) {
       Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
     }
@@ -621,7 +622,7 @@ void WebAPI::onForget() {
     nextHandshake = 0;
     lastPing = 0;
     healthPostCounter = 0;
-    EGModuleRegistry::set_loop_interval(this, 100);
+    EGModuleRegistry::due_in(this, REPLAN_MS);
   } else {
     char why[32];
     flash_to_ram((PGM_P)request.responseHTTPStringF(), why, sizeof(why));
@@ -635,40 +636,66 @@ static const char API_BAD_P[] PROGMEM = "/api.bad";
 #define API_KEY_PATH FPSTR(API_KEY_P)
 #define API_BAD_PATH FPSTR(API_BAD_P)
 
-void WebAPI::saveConfig() {
-  Log::console(PSTR("WebAPI: Saving key ..."));
+// file only, the key store has it
+static void write_key_file(const uint8_t* priv) {
   File f = Fs::open_w(API_KEY_PATH);
   if (!f) {
     Log::console(PSTR("WebAPI: Failed to open api.key"));
     return;
   }
   char private_key[2 * WEBAPI_PRIV_LEN + 1] = "";
-  bytestostr(priv_k, sizeof(priv_k), private_key);
+  bytestostr(priv, WEBAPI_PRIV_LEN, private_key);
   f.println(private_key);
   f.close();
 }
 
-void WebAPI::loadConfig() {
+// key reset; factory reset keeps the station
+static void forget_key() {
+  Fs::remove(API_KEY_PATH);
+  KeyStore::clear();
+}
+
+void WebAPI::saveConfig() {
+  Log::console(PSTR("WebAPI: Saving key ..."));
+  KeyStore::write(priv_k, sizeof(priv_k));
+  write_key_file(priv_k);
+}
+
+// a cut or bad file would sign as some other station
+bool WebAPI::readKeyFile() {
   File f = Fs::open_r(API_KEY_PATH);
-  if (!f) return;
+  if (!f) return false;
   char key_hex[2 * WEBAPI_PRIV_LEN + 2];   // hex, \r
   size_t n = f.readBytesUntil('\n', key_hex, sizeof(key_hex) - 1);
   key_hex[n] = '\0';
   f.close();
   if (n && key_hex[n - 1] == '\r') key_hex[n - 1] = '\0';
-  // a cut or bad file would sign as some other station
-  _have_key = hex_decode(priv_k, key_hex, sizeof(priv_k)) &&
-              uECC_compute_public_key(priv_k, pub_k, uECC_secp192r1()) == 1;
+  if (hex_decode(priv_k, key_hex, sizeof(priv_k)) &&
+      uECC_compute_public_key(priv_k, pub_k, uECC_secp192r1()) == 1) return true;
+  memset(priv_k, 0, sizeof(priv_k));
+  // kept to look at
+  Fs::remove(API_BAD_PATH);
+  Fs::rename(API_KEY_PATH, API_BAD_PATH);
+  Log::console(PSTR("WebAPI: Stored key invalid, kept as api.bad"));
+  return false;
+}
+
+// the file wins, the key store is its copy outside LittleFS
+void WebAPI::loadConfig() {
+  uint8_t kept[WEBAPI_PRIV_LEN];
+  bool have_kept = KeyStore::read(kept, sizeof(kept));
+  _have_key = readKeyFile();
   if (_have_key) {
-    encode_base64(pub_k, sizeof(pub_k), (uint8_t *)pub_k_64);
-    Log::console(PSTR("WebAPI: Key loaded"));
-  } else {
-    memset(priv_k, 0, sizeof(priv_k));
-    // kept to look at
-    Fs::remove(API_BAD_PATH);
-    Fs::rename(API_KEY_PATH, API_BAD_PATH);
-    Log::console(PSTR("WebAPI: Stored key invalid, kept as api.bad"));
+    if (!have_kept || memcmp(kept, priv_k, sizeof(kept)) != 0) KeyStore::write(priv_k, sizeof(priv_k));
+  } else if (have_kept && uECC_compute_public_key(kept, pub_k, uECC_secp192r1()) == 1) {
+    memcpy(priv_k, kept, sizeof(priv_k));
+    _have_key = true;
+    write_key_file(priv_k);
+    Log::console(PSTR("WebAPI: Key restored from backup"));
   }
+  if (!_have_key) return;
+  encode_base64(pub_k, sizeof(pub_k), (uint8_t *)pub_k_64);
+  Log::console(PSTR("WebAPI: Key loaded"));
 }
 
 size_t WebAPI::status_json(char* buf, size_t cap, unsigned long now) {
@@ -791,7 +818,7 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   Log::console(PSTR("WebAPI: Resetting api.key"));
-  Fs::remove(API_KEY_PATH);
+  forget_key();
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   WebPortal::sendPageHead(res, F("Key Reset"));
   res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));

@@ -55,8 +55,8 @@ void GeigerSerial::begin() {
     Log::console(PSTR("GeigerSerial: ERROR port would not open"));
   }
   geigerPort.flush();
-  _idle_skip = (uint16_t)clamp<uint32_t>(6000000UL / baud, 5, 500);
-  _poll_skip = _idle_skip;
+  _idle_ms = (uint8_t)clamp<uint32_t>(50000UL / baud, 1, 4);   // ~5 chars
+  _polls = true;
 }
 
 // well over a 64 B line at the slowest baud
@@ -111,7 +111,8 @@ void GeigerSerial::loop() {
     _discard = false;
   }
   pullSerial();
-  _poll_skip = (_serial_idx || _discard) ? 0 : _idle_skip;   // mid line, every pass
+  uint32_t now = fast_millis();
+  _poll_at = (_serial_idx || _discard) ? now : now + _idle_ms;   // mid line, every pass
   if (serial_value <= 0) return;
   if (fast_millis() - last_serial > 10000) serial_value = 0;
 }

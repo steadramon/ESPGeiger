@@ -43,14 +43,13 @@ class NeoPixel : public EGModule {
     const char* name() override { return PSTR("neopx"); }
     uint8_t display_order() override { return 16; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
     void pre_wifi() override { setup(); }
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
     EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     void loop(unsigned long now) override;
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 30; }
+    static constexpr uint16_t LOOP_MS = 30;
+    static constexpr uint16_t FAST_LOOP_MS = 10;
     void setup();
     void blink(uint16_t timer);
     void setBrightness(int input);

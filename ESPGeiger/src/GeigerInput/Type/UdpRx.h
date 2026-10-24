@@ -38,13 +38,13 @@ class WiFiUDP;
 #ifndef UDPRX_GAPFILL_QUEUE
 #define UDPRX_GAPFILL_QUEUE 16
 #endif
-#ifndef UDPRX_POLL_SKIP
-#define UDPRX_POLL_SKIP 500      // loop passes per drain
+#ifndef UDPRX_POLL_MS
+#define UDPRX_POLL_MS 4          // ms per drain, ~500 8266 passes
 #endif
 #ifndef UDPRX_QUIET_MS
 #define UDPRX_QUIET_MS (3 * UDPBLIP_STATS_INTERVAL_MS)   // 3 heartbeats
 #endif
-class GeigerUdpRx : public GeigerInput {
+class GeigerUdpRx final : public GeigerInput {
 public:
   GeigerUdpRx();
   ~GeigerUdpRx() override;

@@ -30,7 +30,7 @@
 #include "Counter/Tube.h"
 #include "GeigerInput/SerialFormat.h"
 
-static GeigerPort<16> geigerPort;
+static GeigerPort<64> geigerPort;   // 1 ms idle polls at 115200
 
 GeigerTestSerial::GeigerTestSerial() {
   strlcpy(_test_type, "TestSerial", sizeof(_test_type));
@@ -51,8 +51,8 @@ void GeigerTestSerial::begin() {
   Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
   geigerPort.begin(baud, _rx_pin, _tx_pin);
-  _idle_skip = (uint16_t)clamp<uint32_t>(1500000UL / baud, 5, 500);
-  _poll_skip = _idle_skip;
+  _idle_ms = (uint8_t)clamp<uint32_t>(12500UL / baud, 1, 4);   // ~1 char
+  _polls = true;
   CPMAdjuster();
 }
 
@@ -75,7 +75,8 @@ void GeigerTestSerial::pullSerial() {
 
 void GeigerTestSerial::loop() {
   pullSerial();
-  _poll_skip = _serial_idx ? 0 : _idle_skip;   // mid line, every pass
+  uint32_t now = fast_millis();
+  _poll_at = _serial_idx ? now : now + _idle_ms;   // mid line, every pass
 }
 
 void GeigerTestSerial::secondTicker() {

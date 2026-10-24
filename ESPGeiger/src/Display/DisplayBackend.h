@@ -24,6 +24,7 @@ class DisplayBackend {
   public:
     virtual void start() = 0;
     virtual void button(unsigned long now, int8_t dir) = 0;
+    virtual void fx(unsigned long now) { button(now, 1); }
     // page-major, h 0 = round, false = none
     virtual bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) = 0;
     virtual void reload() {}

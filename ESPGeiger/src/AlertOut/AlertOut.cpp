@@ -51,22 +51,21 @@ void AlertOut::on_prefs_loaded() {
   _invert = (uint8_t)EGPrefs::getUInt("alert", EG_K_POLARITY) & 1;
   _mode   = (uint8_t)EGPrefs::getUInt("alert", EG_K_MODE) & 1;
   // pin only at begin(), PinSafety holds the claim
+  _pulsing = false;
+  EGModuleRegistry::post(this);
 }
 
 void AlertOut::begin() {
   int p = EGPrefs::getInt("alert", EG_K_PIN);
-  if (p < 0 || p > MAX_GPIO_PIN) {
-    EGModuleRegistry::set_tick_enabled(this, false);
-    return;
-  }
+  if (p < 0 || p > MAX_GPIO_PIN) return;
   if (const char* why = PinSafety::claim_output(p, PSTR("AlertOut"))) {
     Log::console(PSTR("AlertOut: pin=%d unsafe (%s)"), p, why);
-    EGModuleRegistry::set_tick_enabled(this, false);
     return;
   }
   _pin = (int8_t)p;
   pinMode(_pin, OUTPUT);
   apply_level(false);
+  EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
   Log::console(PSTR("AlertOut: pin=%d polarity=%u mode=%u"),
                (int)_pin, (unsigned)_invert, (unsigned)_mode);
 }
@@ -76,16 +75,26 @@ void AlertOut::apply_level(bool active) {
   digitalWrite(_pin, (active ^ _invert) ? HIGH : LOW);
 }
 
-void AlertOut::s_tick(unsigned long now_s) {
-  if (_pin < 0) return;
+// on alarm changes; while pulsing, at each flip
+void AlertOut::loop(unsigned long now) {
   bool active = gcounter.is_alert();
-  if (_mode == 1 && active) {
-    // 1 Hz square
-    apply_level((now_s & 1u) == 0);
-  } else if (active != _last_state) {
+  if (_mode != 1 || !active) {
+    _pulsing = false;
     apply_level(active);
+    return;
   }
-  _last_state = active;
+  // other alarm changes don't move the flips
+  if (!_pulsing) {
+    _pulsing = true;
+    _high = false;
+    _flip_at = now;
+  }
+  if (reached(now, _flip_at)) {
+    _high = !_high;
+    apply_level(_high);
+    _flip_at = now + FLIP_MS;
+  }
+  EGModuleRegistry::due_at(this, _flip_at);
 }
 
 #endif

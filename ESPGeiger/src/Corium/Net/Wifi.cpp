@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Wifi.h"
+#include "WifiLink.h"
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
 #include <user_interface.h>
@@ -32,21 +33,12 @@
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
-#include "Corium/System/Lifecycle.h"
 #include "Corium/Util/StringUtil.h"
 
 EG_PSTR(K_SLEEP,    "sleep");
 EG_PSTR(K_TX_POWER, "tx_power");
 EG_PSTR(K_COUNTRY,  "country");
 EG_PSTR(K_PHY_MODE, "phy_mode");
-
-// SSID\nPSK\n
-static const char WIFI_BACKUP_P[] PROGMEM = "/wifi_backup";
-#define WIFI_BACKUP_PATH FPSTR(WIFI_BACKUP_P)
-
-// static_ip\nip\ngw\nsn\ndns\n
-static const char NET_BACKUP_P[] PROGMEM = "/net_backup";
-#define NET_BACKUP_PATH FPSTR(NET_BACKUP_P)
 
 static_assert(WIFI_SSID_MAX == EGPORTAL_SSID_MAX, "one ssid max");
 
@@ -61,17 +53,6 @@ static bool s_portalDoReset  = false;
 namespace Wifi {
   bool disabled = false;
   bool offline_forced = false;
-  bool connected = false;
-  IPAddress local_ip;
-  char ssid[WIFI_SSID_MAX + 1] = "";
-  int16_t rssi = 0;
-  uint32_t connected_at_ms = 0;
-  bool backup_grace_done = false;
-
-  void check_backup_state() {
-    backup_grace_done = !Fs::exists(WIFI_BACKUP_PATH)
-                     && !Fs::exists(NET_BACKUP_PATH);
-  }
 
   size_t formatIP(char* buf, size_t cap, const IPAddress& a) {
     return snprintf_P(buf, cap, PSTR("%u.%u.%u.%u"), a[0], a[1], a[2], a[3]);
@@ -82,101 +63,7 @@ namespace Wifi {
   }
 }
 
-static bool was_connected = false;
-static unsigned long lost_at = 0;
-static unsigned long s_offline_retry_at = 0;
-static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;
 static const uint32_t PORTAL_RETRY_MS = 600000UL;   // 10 min
-#ifndef WIFI_DOWN_MAX_S
-#define WIFI_DOWN_MAX_S 3600
-#endif
-static const uint32_t WIFI_OFFLINE_MAX_MS = WIFI_DOWN_MAX_S * 1000UL;
-
-static void refresh_link_cache(bool just_connected, unsigned long now) {
-  static uint8_t rssi_cnt = 0;
-  if (++rssi_cnt >= 60) {
-    rssi_cnt = 0;
-    Wifi::rssi = WiFi.RSSI();
-    Wifi::local_ip = WiFi.localIP();
-  }
-  if (just_connected) {
-    Wifi::local_ip = WiFi.localIP();
-    strlcpy(Wifi::ssid, WiFi.SSID().c_str(), sizeof(Wifi::ssid));
-    Wifi::rssi = WiFi.RSSI();
-    Wifi::connected_at_ms = now;
-  }
-}
-
-static void track_outage(unsigned long now) {
-  if (was_connected) {
-    was_connected = false;
-    lost_at = now;
-    Wifi::connected_at_ms = 0;
-    Log::console(PSTR("WiFi: Connection lost"));
-  } else if (lost_at == 0) {
-    lost_at = now;
-  }
-  unsigned long down_seconds = (now - lost_at) / 1000;
-  if (down_seconds > 0 && down_seconds % 30 == 0) {
-    Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
-    WiFi.reconnect();
-  }
-  if (down_seconds > WIFI_DOWN_MAX_S) {
-    Log::console(PSTR("WiFi: Down for %lus, rebooting"), down_seconds);
-    Lifecycle::request_restart(now, 100);
-  }
-}
-
-static void note_reconnected(unsigned long now) {
-  was_connected = true;
-  if (lost_at > 0) {
-    unsigned long down_seconds = (now - lost_at) / 1000;
-    Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
-  }
-}
-
-static void reprobe_saved_network(unsigned long now) {
-  if (Wifi::connected) {
-    Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
-    Lifecycle::request_restart(now, 500);
-  } else if (now > WIFI_OFFLINE_MAX_MS) {
-    Log::console(PSTR("WiFi: Offline %lus, rebooting to retry"), now / 1000);
-    Lifecycle::request_restart(now, 500);
-  } else if (s_offline_retry_at == 0) {
-    s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
-  } else if (reached(now, s_offline_retry_at)) {
-    s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
-    Log::console(PSTR("WiFi: Offline - re-probing saved network"));
-    WiFi.mode(WIFI_STA);
-    WiFi.begin();
-  }
-}
-
-static void clear_backups_once_stable() {
-  Wifi::backup_grace_done = true;
-  if (Fs::remove(WIFI_BACKUP_PATH)) {
-    Log::console(PSTR("WiFi: New creds stable for 5 min, backup cleared"));
-  }
-  if (Fs::remove(NET_BACKUP_PATH)) {
-    Log::console(PSTR("WiFi: Static IP stable for 5 min, net backup cleared"));
-  }
-}
-
-void Wifi::tick(unsigned long now) {
-  wl_status_t wifi_status = WiFi.status();
-  bool prev = Wifi::connected;
-  Wifi::connected = (wifi_status == WL_CONNECTED);
-  if (Wifi::connected) refresh_link_cache(!prev, now);
-
-  if (!Wifi::disabled) {
-    if (wifi_status != WL_CONNECTED) track_outage(now);
-    else if (!was_connected) note_reconnected(now);
-  } else if (!Wifi::offline_forced) {
-    reprobe_saved_network(now);
-  }
-
-  if (!backup_grace_done && Wifi::connected && now > 300000UL) clear_backups_once_stable();
-}
 
 // Boot association
 
@@ -532,17 +419,29 @@ bool Wifi::connectOrPortal() {
   return waitForWifi(30000);
 }
 
-class WifiPrefs : public EGModule {
+// the one writer of Wifi::*
+class WifiModule : public EGModule {
 public:
   const char* name() override { return PSTR("wifi"); }
   bool core_module() override { return true; }
   uint8_t display_order() override { return 0; }
   const EGPrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
+  void begin() override;
+  void loop(unsigned long now) override;
 };
 
-static WifiPrefs wifiprefs;
-EG_REGISTER_MODULE(wifiprefs)
+static WifiModule wifimodule;
+EG_REGISTER_MODULE(wifimodule)
+
+// SDK events cost the 8266 ~1.2 KB
+void WifiModule::begin() {
+  EGModuleRegistry::every(this, 1000);
+}
+
+void WifiModule::loop(unsigned long now) {
+  if (Wifi::look(now)) EGModuleRegistry::emit(Wifi::TOPIC_CHANGED);
+}
 
 #define WIFI_SLEEP_DEFAULT "1"
 
@@ -559,7 +458,7 @@ static const EGPrefGroup WIFI_PREF_GROUP PROGMEM = {
   sizeof(WIFI_PREF_ITEMS) / sizeof(WIFI_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* WifiPrefs::prefs_group() { return &WIFI_PREF_GROUP; }
+const EGPrefGroup* WifiModule::prefs_group() { return &WIFI_PREF_GROUP; }
 
 static int8_t s_rx_sleep = -1;   // UdpRx's, wins over the pref
 
@@ -646,7 +545,7 @@ static void apply_wifi_phy_mode(uint8_t mode) {
 #endif
 }
 
-void WifiPrefs::on_prefs_loaded() {
+void WifiModule::on_prefs_loaded() {
   // rest needs WiFi.mode() first
   apply_wifi_sleep();
 }

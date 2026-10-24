@@ -18,6 +18,7 @@
 */
 #ifdef GEIGER_SDCARD
 #include <Arduino.h>
+#include <sys/time.h>
 #include <EGHttpServer.h>
 #include "SDCard.h"
 #include "Corium/Logger/Logger.h"
@@ -85,7 +86,6 @@ static void sd_lifecycle(Lifecycle::Event e) {
 
 void SDCard::begin()
 {
-  EGModuleRegistry::set_tick_enabled(this, false);
   Log::console(PSTR("SDCard: Init ..."));
   sd = new SdFat32();
 #ifdef ESP8266
@@ -115,7 +115,7 @@ void SDCard::begin()
   sdenabled = true;
   _freecheck_pending = true;
   Log::console(PSTR("SDCard: Mounted."));
-  EGModuleRegistry::set_tick_enabled(this, true);
+  EGModuleRegistry::due_in(this, 0);
   // remount runs begin() again
   static bool listening = false;
   if (!listening) listening = Lifecycle::on(sd_lifecycle);
@@ -159,33 +159,20 @@ static bool valid_year(const char* s) {
   return s[4] == '\0';
 }
 
-void SDCard::s_tick(unsigned long /*now_s*/)
+// just past the next :00
+static uint32_t ms_to_minute() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  return (59 - tv.tv_sec % 60) * 1000UL + (1000 - tv.tv_usec / 1000) + SD_EDGE_MS;
+}
+
+// first minute seen is only noted, a row needs a whole one
+void SDCard::minuteEdge()
 {
-  if (!sdenabled) {
-    return;
-  }
-
-  if (!Clock::synced) return;
-  if (_busy) return;
-
-  if (_freecheck_pending) {
-    _freecheck_pending = false;
-    scheduleCleanup(CLEAN_FREECHECK);
-    return;
-  }
-
-  time_t currentTime = time (NULL);
-
-  time_t thisMinute = currentTime / 60;
-  if (thisMinute == lastWrittenMinute) {
-    return;
-  }
-  if (lastWrittenMinute == 0) {
-    lastWrittenMinute = thisMinute;
-    return;
-  }
+  time_t thisMinute = time(NULL) / 60;
+  if (thisMinute == lastWrittenMinute) return;
+  if (lastWrittenMinute) writeMinute();
   lastWrittenMinute = thisMinute;
-  _write_due = true;
 }
 
 static void write_header(File32& f) {
@@ -299,11 +286,15 @@ void SDCard::scheduleCleanup(uint8_t what) {
   if (what > _cleanup) _cleanup = what;
 }
 
+// once a minute, not re-armed once off
 void SDCard::loop(unsigned long /*now*/) {
   if (!sdenabled) return;
-  if (_write_due && !_busy) {
-    _write_due = false;
-    writeMinute();
+  EGModuleRegistry::due_in(this, ms_to_minute());
+  if (_freecheck_pending) {
+    _freecheck_pending = false;
+    scheduleCleanup(CLEAN_FREECHECK);
+  } else {
+    minuteEdge();
   }
   const uint8_t what = _cleanup;
   _cleanup = CLEAN_NONE;
@@ -330,7 +321,6 @@ void SDCard::loop(unsigned long /*now*/) {
 void SDCard::disableFull() {
   Log::console(PSTR("SDCard: disabled - card full"));
   sdenabled = false;
-  EGModuleRegistry::set_tick_enabled(this, false);
 }
 
 // leaves cwd at root
@@ -421,7 +411,7 @@ bool SDCard::deleteOldest(uint32_t cutoffPacked) {
 }
 
 void SDCard::reinit() {
-  // first, s_tick gates on it
+  // first, the loop checks it
   sdenabled = false;
   if (myDataFile.isOpen()) {
     myDataFile.sync();
@@ -434,12 +424,10 @@ void SDCard::reinit() {
     sd = nullptr;
   }
   _freecheck_pending = true;
-  EGModuleRegistry::set_tick_enabled(this, false);
   begin();
 }
 
-SDCard::Hold::Hold()  { sdcard.pauseWriter(); sdcard._busy = true; }
-SDCard::Hold::~Hold() { sdcard._busy = false; }
+SDCard::Hold::Hold()  { sdcard.pauseWriter(); }
 
 void SDCard::pauseWriter() {
   if (myDataFile.isOpen()) {

@@ -45,6 +45,12 @@
 
 EG_PSTR(K_GROUP, "group");
 
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+static constexpr uint16_t LOOP_MS = 1000;
+#else
+static constexpr uint16_t LOOP_MS = UDPBLIP_CLICK_MIN_INTERVAL_MS;
+#endif
+
 UdpBlipModule& udpblip = UdpBlipModule::getInstance();
 EG_REGISTER_MODULE(udpblip)
 
@@ -75,9 +81,9 @@ void UdpBlipModule::begin() {
   // jitter so a fleet doesn't send at once
   uint16_t jitter_s = UDPBLIP_STATS_JITTER_MS
                     ? (uint16_t)((GRNG::fast_uint32() % UDPBLIP_STATS_JITTER_MS) / 1000UL) : 0;
-  _stats_ticks = jitter_s;
-  _backoff_ticks = 0;
+  _jitter_ms = jitter_s * 1000;
   _fail_count = 0;
+  EGModuleRegistry::on(Wifi::TOPIC_CHANGED, this);
   snprintf_P(_path, sizeof(_path), PSTR("/espg/%s/"), DeviceInfo::chipid());
   blip_click(_click_packet, sizeof(_click_packet), path(PSTR("click")));
   if (_mode > 0) {
@@ -96,7 +102,7 @@ void UdpBlipModule::readPrefs() {
   }
   uint32_t p = EGPrefs::getUInt("udpblip", EG_K_PORT);
   _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPBLIP_DEFAULT_PORT;
-  EGModuleRegistry::set_loop_interval(this, _mode > 0 ? (int32_t)loop_interval_ms() : -1);
+  EGModuleRegistry::every(this, _mode > 0 ? LOOP_MS : 0);
 }
 
 void UdpBlipModule::teardown() {
@@ -146,7 +152,6 @@ void UdpBlipModule::on_prefs_saved() {
   _fail_count = 0;
   // no burst of stale clicks
   _last_clicks = (uint32_t)gcounter.total_clicks;
-  _stats_ticks = 0;
   Log::console(PSTR("UdpBlip: prefs saved, mode=%u port=%u"), _mode, _port);
 }
 
@@ -269,77 +274,52 @@ void UdpBlipModule::notifyClick(unsigned long now_ms) {
   tryEmitClick(now_ms);
 }
 
-void UdpBlipModule::second() {
-  if (_mode == 0 || ota_in_progress) return;
-  if (!Wifi::connected) return;
-  if (_udp && Wifi::connected_at_ms != _bound_at_ms) {
-    Log::console(PSTR("UdpBlip: WiFi reconnect, rebinding"));
-    _pending |= REBIND;
-  } else if (!_udp || !_mdns_done) {
-    _pending |= BIND;
-  }
-
-  if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
-    if (++_backoff_ticks * 1000UL >= UDPBLIP_FAIL_COOLDOWN_MS) {
-      _pending |= REBIND;
-      _fail_count = 0;
-      _backoff_ticks = 0;
-    }
-    return;
-  }
-  stats_phase();
-}
-
-void UdpBlipModule::stats_phase() {
+// rad, hv a second on, sys + env every other cycle
+void UdpBlipModule::stats(uint32_t now) {
   if (_emit_phase == 0) {
-    if (++_stats_ticks * 1000UL >= UDPBLIP_STATS_INTERVAL_MS) {
-      _stats_ticks = 0;
-      _pending |= EMIT_RAD;
-      _emit_phase = 1;
-    }
+    emitRad(now);
   } else if (_emit_phase == 1) {
 #ifdef ESPG_HV_ADC
-    _pending |= EMIT_HV;
+    emitHv(now);
 #endif
-    _emit_phase = 2;
   } else {
     _sys_phase = !_sys_phase;
-    if (_sys_phase) _pending |= EMIT_SYS | EMIT_ENV;
-    _emit_phase = 0;
+    if (_sys_phase) {
+      emitSys(now);
+      emitEnv(now);
+    }
   }
+  _stats_at = now + (_emit_phase == 2 ? UDPBLIP_STATS_INTERVAL_MS : 1000);
+  _emit_phase = (_emit_phase + 1) % 3;
 }
 
-uint16_t UdpBlipModule::loop_interval_ms() {
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  return 1000;
-#else
-  return UDPBLIP_CLICK_MIN_INTERVAL_MS;
-#endif
-}
-
-void UdpBlipModule::bind(bool fresh) {
-  if (fresh) teardown();
-  if (!ensureUdp()) return;
+// a new socket starts the cycle, as at boot
+void UdpBlipModule::bind(uint32_t now) {
+  if (!_udp) {
+    if (!ensureUdp()) return;
+    _stats_at = now + UDPBLIP_STATS_INTERVAL_MS - 1000 - _jitter_ms;   // bind second counts
+    _emit_phase = 0;
+    _sys_phase = false;
+  }
   _bound_at_ms = Wifi::connected_at_ms;
   announce_mdns();
 }
 
 void UdpBlipModule::loop(unsigned long now) {
-  if (reached(now, _next_sec_ms)) {
-    _next_sec_ms = (uint32_t)now + 1000;
-    second();
+  if (_mode == 0) return;
+  if (EGModuleRegistry::events(this) && _udp && Wifi::connected_at_ms != _bound_at_ms) {
+    Log::console(PSTR("UdpBlip: WiFi reconnect, rebinding"));
+    teardown();
   }
-  if (_pending) {
-    uint8_t p = _pending;
-    _pending = 0;
-    if (p & (BIND | REBIND)) bind(p & REBIND);
-    if (p & EMIT_RAD) emitRad(now);
-#ifdef ESPG_HV_ADC
-    if (p & EMIT_HV)  emitHv(now);
-#endif
-    if (p & EMIT_SYS) emitSys(now);
-    if (p & EMIT_ENV) emitEnv(now);
+  if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
+    if (!_backoff_at) _backoff_at = now + UDPBLIP_FAIL_COOLDOWN_MS;
+    if (!reached(now, _backoff_at)) return;
+    _backoff_at = 0;
+    _fail_count = 0;
+    teardown();
   }
+  if (!_udp || !_mdns_done) bind(now);
+  if (reached(now, _stats_at)) stats(now);
   tryEmitClick(now);
 }
 

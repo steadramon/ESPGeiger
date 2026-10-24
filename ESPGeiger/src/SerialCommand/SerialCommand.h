@@ -40,11 +40,10 @@ class SerialCommand : public EGModule {
 public:
     SerialCommand();
     const char* name() override { return PSTR("scmd"); }
-    uint16_t warmup_seconds() override { return 0; }
     bool core_module() override { return true; }
+    static constexpr uint16_t LOOP_MS = 10;
+    void begin() override;
     void loop(unsigned long now) override;
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 10; }
     void readSerial();
     void clearBuffer();
     char *next();

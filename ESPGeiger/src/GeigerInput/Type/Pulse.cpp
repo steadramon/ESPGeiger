@@ -54,6 +54,7 @@ void GeigerPulse::begin() {
   pcnt_counter_clear(PCNT_UNIT);
   pcnt_counter_resume(PCNT_UNIT);
   set_pin_pull(_pin_pull);
+  _polls = true;
 #else
   Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);
@@ -78,8 +79,15 @@ void GeigerPulse::restartAfterOTA() {
 }
 
 #ifdef USE_PCNT
+// wakes run it too, so it keeps its own time
+void GeigerPulse::loop() {
+  uint32_t now = fast_millis();
+  if (!reached(now, _poll_at)) return;
+  _poll_at = now + DRAIN_MS;
+  drain_pcnt();
+}
+
 void GeigerPulse::drain_pcnt() {
-  // caller throttles to 50 Hz
   int16_t n = pcnt_take();
   if (n <= 0) return;
 

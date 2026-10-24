@@ -123,7 +123,7 @@ void NeoPixel::on_prefs_loaded() {
   precompute_blip();
   bool active = (b > 0) && (neoPixelMode > 0) && (_pin >= 0);
   bool fast_loop = (neoPixelMode == 1) && (_fade_rate > 0);
-  EGModuleRegistry::set_loop_interval(this, active ? (fast_loop ? 10 : 30) : -1);
+  EGModuleRegistry::every(this, active ? (fast_loop ? FAST_LOOP_MS : LOOP_MS) : 0);
 }
 
 RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {

@@ -30,20 +30,21 @@ class AlertOut : public EGModule {
     const char* name() override { return PSTR("alertout"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 18; }
-    uint16_t warmup_seconds() override { return 0; }
-    bool has_tick() override { return true; }
     void begin() override;
-    void s_tick(unsigned long now_s) override;
+    void loop(unsigned long now) override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
   private:
     void apply_level(bool active);
 
+    static constexpr uint16_t FLIP_MS = 1000;   // pulse mode level flips
     int8_t   _pin       = -1;
     uint8_t  _invert    = 0;     // 0 = active-high, 1 = active-low
     uint8_t  _mode      = 0;     // 0 = steady, 1 = 1 Hz pulse
-    bool     _last_state = false;
+    bool     _pulsing   = false;
+    bool     _high      = false;
+    uint32_t _flip_at   = 0;
 };
 
 extern AlertOut alertout;

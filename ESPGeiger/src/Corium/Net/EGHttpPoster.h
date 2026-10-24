@@ -26,8 +26,8 @@
 class EGHttpPoster : public EGModule {
   public:
     bool requires_wifi() override { return true; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 500; }
+    static constexpr uint16_t LOOP_MS = 500;
+    static constexpr uint16_t POLL_MS = 500;
     void loop(unsigned long now) override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
     EGHttpClient* request = nullptr;

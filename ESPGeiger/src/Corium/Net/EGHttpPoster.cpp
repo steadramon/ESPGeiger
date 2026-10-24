@@ -31,7 +31,7 @@ static_assert(EGHTTP_HOST_MAX >= EG_HOST_MAX, "a host pref must fit the client")
 // off mid-post: loop() still reaps the reply, then sleeps
 void EGHttpPoster::set_enabled(bool on) {
   _send_enabled = on;
-  EGModuleRegistry::set_loop_interval(this, (on || request) ? 500 : -1);
+  EGModuleRegistry::every(this, (on || request) ? LOOP_MS : 0);
 }
 
 size_t EGHttpPoster::status_json(char* buf, size_t cap, unsigned long now) {
@@ -48,7 +48,7 @@ void EGHttpPoster::loop(unsigned long now)
     request = nullptr;
   }
   if (!_send_enabled) {
-    if (!request) EGModuleRegistry::set_loop_interval(this, -1);
+    if (!request) EGModuleRegistry::every(this, 0);
     return;
   }
   if (lastPing == 0) {
@@ -59,10 +59,10 @@ void EGHttpPoster::loop(unsigned long now)
     post();
   }
   if (request && !request->idle()) {
-    EGModuleRegistry::set_loop_interval(this, loop_interval_ms());   // reply due, poll
+    EGModuleRegistry::every(this, POLL_MS);   // reply due, poll
     return;
   }
-  EGModuleRegistry::sleep_until(this, now, lastPing + pingIntervalMs);
+  EGModuleRegistry::due_at(this, lastPing + pingIntervalMs);
 }
 
 void EGHttpPoster::take_reply()

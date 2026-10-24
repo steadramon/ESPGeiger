@@ -21,7 +21,9 @@
 #ifndef GEIGERINPUT_H
 #define GEIGERINPUT_H
 #include <Arduino.h>
+#include <atomic>
 #include "Corium/System/Globals.h"
+#include "Corium/System/FastMillis.h"
 #include "Corium/Measure/EGMeasure.h"
 #include "Corium/System/IsrLock.h"
 
@@ -119,7 +121,7 @@ class EGHttpServer;
 class GeigerInput {
   public:
     virtual ~GeigerInput() {};
-    virtual void loop();
+    virtual void loop() {}
     virtual void secondTicker();
     virtual int collect();
     virtual void begin();
@@ -154,20 +156,27 @@ class GeigerInput {
     void checkIsrStorm();
     void setCounter(int val, bool update = true);
     void setLastBlip();
-    // inline gate
-    bool poll_due() {
-      if (_poll_c < _poll_skip) {
-        _poll_c++;
-        return false;
-      }
-      _poll_c = 0;
-      return true;
+    // inline gate: posted, or the poll time came
+#if defined(GEIGER_COUNTS_IN_ISR) && !GEIGER_IS_TEST(GEIGER_TYPE)
+    bool due(uint32_t) const { return false; }   // isr counts, nothing to poll
+#else
+    bool due(uint32_t now) const {
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+      // only test timers post, the atomic costs a memw a pass
+      if (s_posted.load(std::memory_order_relaxed)) return true;
+#endif
+      return _polls && reached(now, _poll_at);
     }
+#endif
+    // test stamp, pulse or retarget; loop() takes it first, collect() sweeps the rest
+    static void post() { s_posted.store(true, std::memory_order_relaxed); }
+    static void take() { s_posted.store(false, std::memory_order_relaxed); }
   private:
     void (*callback)(void) = nullptr;
   protected:
-    uint16_t _poll_c = 0;
-    uint16_t _poll_skip = 0;   // passes between polls
+    static std::atomic<bool> s_posted;
+    uint32_t _poll_at = 0;   // fast_millis()
+    bool     _polls = false;
 #ifdef GEIGER_TXPIN
     int _tx_pin = GEIGER_TXPIN;
 #else

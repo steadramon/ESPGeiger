@@ -50,8 +50,9 @@ class WebAPI : public EGModule {
     const char* name() override { return PSTR("wapi"); }
     bool requires_wifi() override { return true; }
     bool requires_ntp() override { return true; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 1000; }
+    static constexpr uint16_t LOOP_MS = 1000;
+    static constexpr uint16_t POLL_MS = 1000;
+    static constexpr uint16_t REPLAN_MS = 100;
     void begin() override;
     void loop(unsigned long now) override;
     const EGPrefGroup* prefs_group() override;
@@ -80,6 +81,7 @@ class WebAPI : public EGModule {
     unsigned long wakeTarget();
     void postMeasurement(bool censusOnly = false);
     void loadConfig();
+    bool readKeyFile();
     void saveConfig();
 
     uint32_t station_id = 0;

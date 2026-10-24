@@ -40,7 +40,6 @@ namespace TickProfile {
 #ifdef TICK_PROFILE
   void markCounter();
   void markWifi();
-  void markModules();
 #endif
   void endTick();
 }
