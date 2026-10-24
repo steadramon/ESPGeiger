@@ -1,5 +1,5 @@
 /*
-  PulseEngine.h - GPIO state machine for Pulse Out / Blip LED.
+  PulseEngine.h - GPIO state machine for a pulse or LED pin.
   Three modes (Pulse, Burst, Fade) + token-bucket rate cap.
   Header-only for inlining on ESP8266.
 
@@ -133,7 +133,7 @@ public:
 
   // poll side from here
   inline void start() {
-    if (phases_remaining == 0) startClick();
+    if (phases_remaining == 0) fire();
   }
 
   inline bool busy() const {
@@ -175,7 +175,7 @@ private:
   inline void writeActive() { digitalWrite(pin, polarity ? LOW  : HIGH); }
 #endif
 
-  inline void startClick() {
+  inline void fire() {
     if (mode == MODE_FADE) {
       brightness = active_level;
       analogWrite(pin, polarity ? (FULL - active_level) : active_level);

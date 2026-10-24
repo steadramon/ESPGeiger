@@ -71,6 +71,7 @@ static const char C_RESETWIFI[] PROGMEM = "resetwifi";
 static const char C_RESETNET[] PROGMEM = "resetnet";
 static const char C_GET[] PROGMEM = "get";
 static const char C_SET[] PROGMEM = "set";
+static const char C_RESET[] PROGMEM = "reset";
 static const char C_PAUSE[] PROGMEM = "pause";
 static const char C_VER[] PROGMEM = "ver";
 #ifdef SERIALOUT
@@ -96,6 +97,7 @@ static const Cmd CMDS[] PROGMEM = {
   { C_RESETNET, SerialCommand::reset_net },
   { C_GET, SerialCommand::cmd_get },
   { C_SET, SerialCommand::cmd_set },
+  { C_RESET, SerialCommand::cmd_reset },
   { C_PAUSE, SerialCommand::cmd_pause },
   { C_VER, ver },
 #ifdef SERIALOUT
@@ -229,6 +231,31 @@ void SerialCommand::cmd_set() {
   } else {
     Log::console(PSTR("OK: %s.%s=%s"), mod, key, EGPrefs::getString(mod, key));
   }
+  if (EGPrefs::restart_pending()) Log::console(PSTR("Reboot to apply"));
+}
+
+// back to defaults, never reboots or wipes
+void SerialCommand::cmd_reset() {
+  char* arg = strtok_r(NULL, serialcmd.delim, &serialcmd.last);
+  if (!arg || !*arg) {
+    Log::console(PSTR("Usage: reset <module>.<key> | reset <module>"));
+    return;
+  }
+  const char* key = nullptr;
+  char* dot = strchr(arg, '.');
+  if (dot) {
+    *dot = '\0';
+    key = dot + 1;
+  }
+  if (!EGPrefs::reset(arg, key)) {
+    Log::console(PSTR("Rejected: reset %s%s%s"), arg, key ? "." : "", key ? key : "");
+    return;
+  }
+  if (!EGPrefs::commit()) {
+    Log::console(PSTR("Commit failed"));
+    return;
+  }
+  Log::console(PSTR("OK: %s%s%s reset"), arg, key ? "." : "", key ? key : "");
   if (EGPrefs::restart_pending()) Log::console(PSTR("Reboot to apply"));
 }
 

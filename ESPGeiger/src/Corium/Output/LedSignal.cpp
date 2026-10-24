@@ -35,11 +35,11 @@ namespace LedSignal {
   // PulseEngine owns the external pin
   static PulseEngine s_engine;
 #endif
-  static uint16_t s_click_pulse_ms = 20;
-  static uint8_t  s_click_mode     = PulseEngine::MODE_PULSE;
-  static uint8_t  s_click_fade     = 3;
+  static uint16_t s_flash_pulse_ms = 20;
+  static uint8_t  s_flash_mode     = PulseEngine::MODE_PULSE;
+  static uint8_t  s_flash_fade     = 3;
 
-  enum : uint8_t { DO_CLICK, DO_ACTIVITY, DO_ACK, DO_DISP_ON, DO_DISP_OFF, DO_ON, DO_OFF, DO_ATTACH };
+  enum : uint8_t { DO_FLASH, DO_ACTIVITY, DO_ACK, DO_DISP_ON, DO_DISP_OFF, DO_ON, DO_OFF, DO_ATTACH };
   static uint8_t s_todo[8];   // head's release/acquire orders it
   std::atomic<uint8_t> s_head{0};   // loop writes
   std::atomic<uint8_t> s_tail{0};   // poll writes
@@ -55,13 +55,13 @@ namespace LedSignal {
 
   static void run(uint8_t what) {
     switch (what) {
-      case DO_CLICK:
+      case DO_FLASH:
 #ifdef BLIP_LED_PIN
         s_engine.start();
 #else
         if (s_onboard.isRunning()) break;
-        if (s_click_mode == PulseEngine::MODE_FADE) s_onboard.fade(s_click_fade);
-        else s_onboard.pulse(s_click_pulse_ms);
+        if (s_flash_mode == PulseEngine::MODE_FADE) s_onboard.fade(s_flash_fade);
+        else s_onboard.pulse(s_flash_pulse_ms);
 #endif
         break;
       case DO_ACTIVITY: s_onboard.blink(500, 500); break;
@@ -120,12 +120,12 @@ namespace LedSignal {
   void off() { post(DO_OFF); }
   void lit(bool on) { post(on ? DO_ON : DO_OFF); }
 
-  void click() {
+  void flash() {
 #if defined(BLIP_LED_PIN)
-    if (s_engine.take(fast_millis())) post(DO_CLICK);
+    if (s_engine.take(fast_millis())) post(DO_FLASH);
 #elif !defined(DISABLE_INTERNAL_BLIP)
     if (s_pin < 0) return;   // no LED, nothing per count
-    post(DO_CLICK);
+    post(DO_FLASH);
 #endif
   }
 
@@ -141,7 +141,7 @@ namespace LedSignal {
 #endif
   }
 
-  void setBlipEngineConfig(uint8_t engine_mode, uint16_t pulse_us,
+  void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us,
                            uint8_t fade_shift_idx, uint8_t max_hz) {
 #ifdef BLIP_LED_PIN
     s_engine.mode       = engine_mode;
@@ -154,10 +154,10 @@ namespace LedSignal {
 #endif
     // onboard led, same limits
     if (fade_shift_idx > 2) fade_shift_idx = 1;
-    s_click_pulse_ms = (uint16_t)(clamp((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
+    s_flash_pulse_ms = (uint16_t)(clamp((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
                                         PulseEngine::PULSE_US_MAX) / 1000);
-    s_click_mode     = engine_mode;
-    s_click_fade     = PulseEngine::fadeShiftFromUi(fade_shift_idx);
+    s_flash_mode     = engine_mode;
+    s_flash_fade     = PulseEngine::fadeShiftFromUi(fade_shift_idx);
   }
 
 }

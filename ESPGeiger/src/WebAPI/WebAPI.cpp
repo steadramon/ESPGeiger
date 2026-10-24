@@ -450,7 +450,7 @@ static void write_readings(MsgPack::Writer& mp) {
   mp.kv(PSTR("c"),  egm_f(M_CPM_ST));
   mp.kv(PSTR("u"),  egm_f(M_USV_ST));
 #ifdef ESPG_HV_ADC
-  if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0) mp.kv(PSTR("hv"), hv.hvReading.get());
+  if (hv.get_pwm_pin() >= 0 && hv.get_vd_ratio() != 0) mp.kv(PSTR("hv"), (int32_t)hv.hvReading.get());
 #endif
   write_env(mp);
 }

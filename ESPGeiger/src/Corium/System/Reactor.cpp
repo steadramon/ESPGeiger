@@ -1,5 +1,5 @@
 /*
-  Reactor.cpp - the 1 s ticker, run from the loop on esp32.
+  Reactor.cpp - the 1 s tick: a Ticker on esp8266, due in the loop on esp32.
 
   Copyright (C) 2026 @steadramon
 
@@ -17,21 +17,20 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Reactor.h"
-#include <Ticker.h>
-
-static Ticker sTicker;
 
 #ifdef ESP32
-volatile uint8_t Reactor::s_ticks = 0;
-uint8_t Reactor::s_ticks_run = 0;
-static void sTickerPost() { Reactor::s_ticks++; }
+uint32_t Reactor::s_next_sec = 0;
 
 void Reactor::begin(void (*)()) {
-  sTicker.attach(1, sTickerPost);
+  s_next_sec = fast_millis() + 1000;
   // the tick in loop feeds it
   esp_task_wdt_add(NULL);
 }
 #else
+#include <Ticker.h>
+
+static Ticker sTicker;
+
 void Reactor::begin(void (*second)()) {
   sTicker.attach(1, second);
 }

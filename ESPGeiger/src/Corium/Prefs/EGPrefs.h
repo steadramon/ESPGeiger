@@ -242,6 +242,8 @@ public:
   static bool putInt(const char* module, const char* key, int32_t value);
   static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);
+  // back to the row default, put() rules; no key = the whole group
+  static bool reset(const char* module, const char* key = nullptr);
   static bool remove_group(const char* module);
   // keep_network keeps net + web_pass
   static void reset_all(bool keep_network = false);

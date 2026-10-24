@@ -97,6 +97,7 @@ void SDCard::begin()
 #endif
   if (!ok) {
     Log::console(PSTR("SDCard: Init failed ... Please check wiring or insert a card."));
+    if (sd->sdErrorCode() != SD_CARD_ERROR_CMD0) fault();   // CMD0 = no card
     delete sd;
     sd = nullptr;
     return;
@@ -105,6 +106,7 @@ void SDCard::begin()
 
   if (!myDataFile.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC)) {
     Log::console(PSTR("SDCard: write probe failed - read-only or full?"));
+    fault();
     delete sd;
     sd = nullptr;
     return;
@@ -113,6 +115,7 @@ void SDCard::begin()
   sd->remove("TEST.TMP");
 
   sdenabled = true;
+  _fault = false;
   _freecheck_pending = true;
   Log::console(PSTR("SDCard: Mounted."));
   EGModuleRegistry::due_in(this, 0);
@@ -229,6 +232,7 @@ bool SDCard::openDayFile(const char* dirStr, const char* timeStr, uint32_t day, 
   bool fileExists = sd->exists(timeStr);
   if (!myDataFile.open(timeStr, FILE_WRITE)) {
     Log::console(PSTR("SDCard: Unable to create %s/%s"), dirStr, timeStr);
+    fault();
     failed = true;
   } else {
     if (!fileExists) write_header(myDataFile);
@@ -321,6 +325,13 @@ void SDCard::loop(unsigned long /*now*/) {
 void SDCard::disableFull() {
   Log::console(PSTR("SDCard: disabled - card full"));
   sdenabled = false;
+  fault();
+}
+
+void SDCard::fault() {
+  if (_fault) return;
+  _fault = true;
+  EGModuleRegistry::emit(TOPIC_ERROR);
 }
 
 // leaves cwd at root

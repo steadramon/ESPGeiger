@@ -253,6 +253,7 @@ static void take_short_press(uint8_t i, unsigned long now) {
   b.short_press_pending = false;
   Log::console(PSTR("Btn: short"));
   LedSignal::shortPressAck();
+  EGModuleRegistry::emit(PushButton::TOPIC_PRESS);
 #ifdef SSD1306_DISPLAY
   display.button(now, i == 0 ? 1 : -1);
 #endif

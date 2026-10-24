@@ -40,7 +40,7 @@ namespace LedSignal {
   void lit(bool on);   // steady
 
   // caller checks enable and quiet hours
-  void click();
+  void flash();
 
   void activity();
 
@@ -51,7 +51,7 @@ namespace LedSignal {
   void setBrightness(uint8_t level);
 
   // PulseEngine::Mode, caller maps the UI value
-  void setBlipEngineConfig(uint8_t engine_mode, uint16_t pulse_us,
+  void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us,
                            uint8_t fade_shift_idx, uint8_t max_hz);
 }
 

@@ -106,6 +106,10 @@ void HV::on_prefs_loaded() {
   set_vd_offset((int)EGPrefs::getInt("espghw", K_OFFSET));
   set_hv_target((uint16_t)EGPrefs::getUInt("espghw", K_TARGET));
   _ov_v = (uint16_t)EGPrefs::getUInt("espghw", K_OV_V);
+#ifdef ESPGEIGER_HW32
+  // pref can only lower it
+  if (_ov_v == 0 || _ov_v > GEIGERHW_OV_V) _ov_v = GEIGERHW_OV_V;
+#endif
   _ov_trip_s = (uint8_t)EGPrefs::getUInt("espghw", K_OV_S);
   _trim_max = (uint8_t)EGPrefs::getUInt("espghw", K_TRIM_MAX);
   _trim_s = (uint8_t)EGPrefs::getUInt("espghw", K_TRIM_S);
@@ -137,8 +141,35 @@ EGLegacyRows HV::legacy_aliases() { return HW_LEGACY; }
 HV::HV() {
 }
 
+void HV::set_freq(int freq) {
+  freq = clamp(freq, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ);
+#ifdef ESP8266
+  _cur_duty = -1;  // loop() posts freq and duty together
+#else
+#ifdef GEIGERHW_MAX_ON_US
+  // old duty at a lower freq is a longer on-time, duty first
+  int cap = hv_duty_cap(freq, GEIGERHW_MAX_ON_US);
+  if (_cur_duty > cap) {
+    ledcWrite(EGLED_HV_CHANNEL, cap);
+    _cur_duty = cap;
+  }
+#endif
+  ledcChangeFrequency(EGLED_HV_CHANNEL, freq, HV_PWM_BITS);
+#endif
+  _hw_freq = freq;
+}
+
+int HV::max_duty() const {
+#ifdef GEIGERHW_MAX_ON_US
+  int cap = hv_duty_cap(_hw_freq, GEIGERHW_MAX_ON_US);
+  return cap < GEIGERHW_MAX_DUTY ? cap : GEIGERHW_MAX_DUTY;
+#else
+  return GEIGERHW_MAX_DUTY;
+#endif
+}
+
 void HV::set_duty(int duty) {
-  _hw_duty = clamp(duty, 1, GEIGERHW_MAX_DUTY);
+  _hw_duty = clamp(duty, 1, max_duty());
 }
 
 void HV::clear_ov() {
@@ -150,7 +181,10 @@ void HV::clear_ov() {
 }
 
 void HV::write_duty() {
-  int eff_duty = (_ov_trip || _held) ? 1 : clamp(_hw_duty + _duty_trim, 1, GEIGERHW_MAX_DUTY);
+#ifdef ESPGEIGER_HW32
+  if (_fb_fault) return;   // pin let go
+#endif
+  int eff_duty = (_ov_trip || _held) ? 1 : clamp(_hw_duty + _duty_trim, 1, max_duty());
   if (_cur_duty == eff_duty) return;
 #ifdef ESP8266
   EGTimer1::pwm_set((uint32_t)_hw_freq, (uint32_t)eff_duty, HV_PWM_MAX);
@@ -227,8 +261,7 @@ void HV::begin() {
 
 void HV::loop(unsigned long now) {
 #ifdef ESPG_HV_ADC
-  // median drops wifi ADC spikes
-  if (_adc_n < HV_ADC_MAX) _adc[_adc_n++] = analogRead(GEIGER_VFEEDBACKPIN);
+  sample_adc();
 #endif
 #ifdef ESP8266
   check_handler();
@@ -241,6 +274,9 @@ void HV::loop(unsigned long now) {
 #endif
   if (_pwm_pin >= 0) write_duty();
 #ifdef ESPG_HV_ADC
+#ifdef ESPGEIGER_HW32
+  check_feedback();   // ratio 0 doesn't turn this off
+#endif
   if (_hw_vd_ratio == 0) return;
   bool settled = gcounter.is_warm() && reached(now, _trim_settle_until);
   int volts = read_hv();
@@ -275,6 +311,16 @@ void HV::check_handler() {
 #endif
 
 #ifdef ESPG_HV_ADC
+// median drops wifi ADC spikes
+void HV::sample_adc() {
+  if (_adc_n >= HV_ADC_MAX) return;
+#ifdef ESPGEIGER_HW32
+  _adc[_adc_n++] = analogReadMilliVolts(GEIGER_VFEEDBACKPIN);   // calibrated, ratio in mV
+#else
+  _adc[_adc_n++] = analogRead(GEIGER_VFEEDBACKPIN);
+#endif
+}
+
 int HV::read_hv() {
   int volts = hv_volts(_hw_vd_ratio, hv_median2(_adc, _adc_n), 2, _hw_vd_offset);
   _adc_n = 0;
@@ -295,12 +341,29 @@ void HV::check_overvoltage(int volts) {
                volts, _ov_v);
 }
 
+#ifdef ESPGEIGER_HW32
+// divider open reads ~0 while driving, low leg open the ADC top
+void HV::check_feedback() {
+  if (_fb_fault || _pwm_pin < 0 || !_adc_n) return;
+  int mv = (int)(hv_median2(_adc, _adc_n) / 2);
+  _fb_bad_s = hv_bad_count(_fb_bad_s, mv, _cur_duty > 1, GEIGERHW_FB_LOW_MV, GEIGERHW_FB_HIGH_MV);
+  if (_fb_bad_s < GEIGERHW_FB_BAD_S) return;
+  _fb_fault = true;
+  ledcWrite(EGLED_HV_CHANNEL, 0);
+  ledcDetachPin(_pwm_pin);
+  pinMode(_pwm_pin, INPUT);   // base pull-down holds it off
+  Log::console(PSTR("HV: feedback %d mV makes no sense - HV off until restart"), mv);
+  EGModuleRegistry::emit(TOPIC_FAULT);
+}
+#endif
+
 void HV::trim_step() {
   static uint8_t secs = 0;
   if (++secs < _trim_s) return;
   secs = 0;
   int err = (int)_hv_target - (int)hvReading.get();
   int band = hvtrim_band(_hw_vd_ratio);
+  if (band < GEIGERHW_TRIM_BAND_MIN) band = GEIGERHW_TRIM_BAND_MIN;
   int8_t old_trim = _duty_trim;
   if      (err >  band && _duty_trim <  _trim_max) _duty_trim++;
   else if (err < -band && _duty_trim > -_trim_max) _duty_trim--;
@@ -379,7 +442,7 @@ function gethv(){
         SF.value=o.freq;SD.value=o.duty;ton();
         SB.disabled=!1;SB.textContent='Submit';
       }
-      ST.textContent=o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
+      ST.textContent=o.ov>1?'(feedback fault: HV off until restart)':o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
     }
     lf=D.now();lt=O(gethv,1e3);
   };
@@ -475,7 +538,7 @@ static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     hv.get_duty_trim(),
     GEIGERHW_MAX_FREQ,
     GEIGERHW_MAX_DUTY,
-    hv.ov_tripped() ? 1 : 0);
+    hv.fb_fault() ? 2 : hv.ov_tripped() ? 1 : 0);
   res.send(200, FPSTR(HTTP_CT_JSON), buf);
 }
 

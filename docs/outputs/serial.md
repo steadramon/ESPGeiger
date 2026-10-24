@@ -25,6 +25,7 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
 | `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
 | `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set counter.ratio 151.0` |
+| `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never reboots or wipes anything else. | `reset counter.ratio` |
 | `cpm` | Return current CPM value | |
 | `usv` | Return current μSv/h value | |
 | `show` | Enable 1-second CPM output | |

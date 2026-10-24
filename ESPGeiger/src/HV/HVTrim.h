@@ -53,4 +53,15 @@ inline uint8_t hv_over_count(uint8_t count, int volts, int limit) {
   return count < UINT8_MAX ? count + 1 : count;
 }
 
+// most duty (of 1024) that keeps the on-time under max_us
+inline int hv_duty_cap(int freq, int max_us) {
+  return (int)((uint32_t)max_us * (uint32_t)freq * 1024u / 1000000u);
+}
+
+// ~0 while driving or the ADC top, in a row
+inline uint8_t hv_bad_count(uint8_t count, int mv, bool driving, int low_mv, int high_mv) {
+  if (mv < high_mv && (!driving || mv >= low_mv)) return 0;
+  return count < UINT8_MAX ? count + 1 : count;
+}
+
 #endif

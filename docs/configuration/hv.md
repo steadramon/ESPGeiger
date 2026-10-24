@@ -22,9 +22,9 @@ The `/hv` page edits the `espghw` prefs:
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| PWM Frequency | `espghw.freq` | Int 100-9000/40000/80000 | `6000` | all | PWM frequency in Hz. ESPGeiger-HW max 9000 Hz; `esp8266_hv` max 40000 Hz; `esp32_hv` max 80000 Hz. |
-| PWM Duty | `espghw.duty` | Int 1-600/1023 | `280` | all | PWM duty (1-1023, 10-bit). Each step is ~0.1 % of period. |
-| ADC VD Ratio | `espghw.ratio` | Int 0-50000 | `1035` | HV ADC builds | Voltage divider scale factor - converts ADC counts to displayed volts. Calibrate with an external HV meter. `0` disables the ADC readout. |
+| PWM Frequency | `espghw.freq` | Int 100-6000/9000/40000/80000 | `6000` | all | PWM frequency in Hz. ESPGeiger-HW max 9000 Hz; `esp8266_hv` max 40000 Hz; `esp32_hv` max 80000 Hz. |
+| PWM Duty | `espghw.duty` | Int 1-282/600/1023 | varies by build | all | PWM duty (1-1023, 10-bit). Each step is ~0.1 % of period. |
+| ADC VD Ratio | `espghw.ratio` | Int 0-50000 | varies by build | HV ADC builds | Voltage divider scale factor - converts ADC counts to displayed volts. Calibrate with an external HV meter. `0` disables the ADC readout. |
 | ADC VD Offset | `espghw.offset` | Int -100 to 100 | `0` | HV ADC builds | Fixed offset added to the displayed voltage after scaling. |
 | HV target | `espghw.target` | Int 0-500/700 | `0` | HV ADC builds | Auto-trim target voltage (0 = open loop, disabled). When non-zero, firmware trims duty by a few steps to hold target. See [Closed-Loop Trim](#closed-loop-trim). |
 

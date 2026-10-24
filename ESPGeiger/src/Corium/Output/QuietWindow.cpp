@@ -27,7 +27,7 @@ void QuietWindow::set(const char* from, const char* to) {
   _recompute_ms = fast_millis();
 }
 
-// every click, cached to the minute, localTm() is slow
+// every call, cached to the minute, localTm() is slow
 bool QuietWindow::active() {
   if (_from < 0 || _to < 0 || _from == _to) return false;   // off
   if (!Clock::synced) return false;

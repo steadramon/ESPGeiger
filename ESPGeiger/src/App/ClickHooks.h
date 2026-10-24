@@ -30,12 +30,18 @@
 #ifdef PULSE_OUT
 #include "PulseOut/PulseOut.h"
 #endif
+#ifdef GEIGER_BUZZER
+#include "Sound/Sound.h"
+#endif
 
 namespace ClickHooks {
 
   inline void click(uint32_t blip_us, bool led) {
     GRNG::mix(blip_us ^ ESP.getCycleCount());
-    if (led) LedSignal::click();
+    if (led) LedSignal::flash();
+#ifdef GEIGER_BUZZER
+    sound.click((uint32_t)micros());
+#endif
     unsigned long now_ms = fast_millis();
     udpblip.notifyClick(now_ms);
 #ifdef AUDIO_TICK
@@ -48,7 +54,7 @@ namespace ClickHooks {
 
   // udp receiver, no echo
   inline void rx_click(bool led) {
-    if (led) LedSignal::click();
+    if (led) LedSignal::flash();
 #if defined(AUDIO_TICK) || defined(PULSE_OUT)
     unsigned long now_ms = fast_millis();
 #endif

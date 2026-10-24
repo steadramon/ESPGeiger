@@ -49,7 +49,10 @@
 #endif
 
 // board name, not the chip
-#if defined(ESPGEIGER_HW)
+#if defined(ESPGEIGER_HW32)
+  #define APP_HOME_NAME "ESPGeiger-HW32"
+  #define APP_BOARD "ESPG-HW32"
+#elif defined(ESPGEIGER_HW)
   #define APP_HOME_NAME "ESPGeiger-HW"
   #ifdef ESP8266
     #define APP_BOARD "ESPG-HW"

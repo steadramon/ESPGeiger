@@ -45,6 +45,7 @@
 #include "PulseOut/PulseOut.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "App/BootHooks.h"
+#include "App/Board.h"
 #ifdef ESPGEIGER_HW
 #include "HV/HV.h"
 #endif
@@ -200,6 +201,7 @@ void setup()
   delay(100);
   start_clock();
   if (start == 0 && !safe) boot_button();
+  Board::detect();
   if (!Wifi::hasSavedCreds() && !safe) {
     BootHooks::displaySetupWifi(DeviceInfo::hostname());
   }

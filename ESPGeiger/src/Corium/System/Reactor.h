@@ -34,9 +34,8 @@
 namespace Reactor {
 
 #ifdef ESP32
-  // timer only counts, loop runs the tick like esp8266
-  extern volatile uint8_t s_ticks;
-  extern uint8_t s_ticks_run;
+  // loop runs the tick like esp8266, due on the ms edge
+  extern uint32_t s_next_sec;
 #endif
 
   // end of setup
@@ -48,21 +47,20 @@ namespace Reactor {
     uint32_t _body_t0 = micros();
 #endif
     TickProfile::countIter();
-#ifdef ESP32
-    // one a pass, a stall catches up
-    if (s_ticks != s_ticks_run) {
-      s_ticks_run++;
-      second();
-      // once a tick, not each pass
-      esp_task_wdt_reset();
-    }
-#endif
     unsigned long now = fast_millis();
     hot(now);
     // the rest runs on ms, once a ms is plenty
     static unsigned long s_ms;
     if (now != s_ms) {
       s_ms = now;
+#ifdef ESP32
+      // one a ms, a stall catches up
+      if (reached(now, s_next_sec)) {
+        s_next_sec += 1000;
+        second();
+        esp_task_wdt_reset();
+      }
+#endif
       // tcp callbacks, ota needs them too
       EGTcp::poll();
       if (!ota_in_progress && reached(now, portal.next_tick_due())) portal.tick(now);

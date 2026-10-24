@@ -24,6 +24,7 @@
 #include "Corium/System/Globals.h"
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 
 #ifndef PUSHBUTTON_PIN
@@ -44,6 +45,8 @@ class PushButton : public EGModule {
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     void loop(unsigned long now) override;
     static constexpr uint16_t LOOP_MS = 50;
+    // short press, from loop()
+    static constexpr uint8_t TOPIC_PRESS = EG_TOPIC_APP + 5;
     void begin() override;
     void init();
     bool isPressed();

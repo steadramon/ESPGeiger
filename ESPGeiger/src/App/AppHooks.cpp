@@ -30,6 +30,10 @@
 #include "GRNG/GRNG.h"
 #include "SerialCommand/SerialCommand.h"
 #include "WebAPI/Features.h"
+#include "App/Board.h"
+#ifdef GEIGER_BUZZER
+#include "Corium/Output/Buzzer.h"
+#endif
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 
@@ -62,6 +66,10 @@ void AppHooks::info_rows(EGHttpResponse& res) {
   egesc_html(model, sizeof(model), Tube::model());
   WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
   WebPortal::infoRow(res, PSTR("Feature flags"), PSTR("0x%04x"), (unsigned)Features::flags());
+  if (Board::rev()) WebPortal::infoRow(res, PSTR("Board"), PSTR("v%u"), (unsigned)Board::rev());
+#ifdef GEIGER_BUZZER
+  if (Buzzer::faulted()) WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
+#endif
 }
 
 static const char* geiger_type_name() {

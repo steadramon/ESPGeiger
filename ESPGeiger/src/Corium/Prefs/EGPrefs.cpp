@@ -25,7 +25,9 @@
 #include "Corium/System/PinSafety.h"
 #include "Corium/Util/Bytes.h"
 #include "Corium/Util/StringUtil.h"
+#ifndef EGPREFS_NO_LEGACY
 #include <ArduinoJson.h>
+#endif
 #include <EGEscape.h>
 #include <LittleFS.h>
 #include <errno.h>
@@ -436,6 +438,9 @@ void drop_moved() {
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
+#ifdef EGPREFS_NO_LEGACY
+void import_legacy() {}   // new boards, nothing to import
+#else
 // stale once every group has its own file
 void drop_stale_legacy() {
   const char* seen[4] = {0};
@@ -537,6 +542,7 @@ void import_legacy() {
     }
   }
 }
+#endif
 // === END LEGACY IMPORT ===
 
 static bool runs(EGModule* m) { return m && !EGModuleRegistry::quarantined(m); }
@@ -689,6 +695,22 @@ bool EGPrefs::commit(bool fire_callbacks) {
     if (fire_callbacks && runs(gs.module)) gs.module->on_prefs_saved();
   }
   return all_ok;
+}
+
+bool EGPrefs::reset(const char* module, const char* key) {
+  if (key) {
+    EGPref p;
+    return find_pref(module, key, &p) && put(module, key, p.default_val);
+  }
+  GroupShadow* gs = find_group(module);
+  if (!gs) return false;
+  bool ok = true;
+  for (size_t j = 0; j < gs->group->count.get(); j++) {
+    EGPref p = gs->group->prefs.row(j);
+    if (p.flags & EGP_READONLY) continue;
+    ok = put(module, p.id, p.default_val) && ok;
+  }
+  return ok;
 }
 
 bool EGPrefs::remove_group(const char* module) {

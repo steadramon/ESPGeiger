@@ -428,7 +428,7 @@ void LedPrefs::on_prefs_loaded() {
   bool fade            = (EGPrefs::getUInt("led", EG_K_MODE) == 1);
   uint8_t engine_mode  = fade ? PulseEngine::MODE_FADE : PulseEngine::MODE_PULSE;
   uint8_t fadeIdx      = (uint8_t)EGPrefs::getUInt("led", EG_K_FADE_SHIFT);
-  LedSignal::setBlipEngineConfig(
+  LedSignal::setFlashConfig(
     engine_mode,
     (uint16_t)(EGPrefs::getUInt("led", EG_K_PULSE_MS) * 1000),
     fadeIdx,

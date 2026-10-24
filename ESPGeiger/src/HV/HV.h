@@ -22,12 +22,29 @@
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
 #include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Util/MathUtil.h"
 #include "HVTrim.h"
 #ifdef ESP32
 #include <EGLed.h>
+#endif
+
+// hw32: the board's hard limits (firmware brief), not prefs
+#ifdef ESPGEIGER_HW32
+#define GEIGER_PWMPIN 7
+#define GEIGER_VFEEDBACKPIN 4
+#define GEIGERHW_MAX_FREQ 6000
+#define GEIGERHW_DUTY 150           // ~24 us at 6 kHz
+#define GEIGERHW_MAX_ON_US 46       // brief's ceiling, bring-up may lower it
+#define GEIGERHW_MAX_DUTY 282       // MAX_ON_US at MAX_FREQ
+#define GEIGERHW_ADC_RATIO 336      // 328.3 in mV
+#define GEIGERHW_OV_V 730
+#define GEIGERHW_TRIM_BAND_MIN 3    // volts, the mV ratio gives 0
+#define GEIGERHW_FB_LOW_MV 150      // ~50 V while driving: divider open
+#define GEIGERHW_FB_HIGH_MV 2400    // ADC top: low leg open
+#define GEIGERHW_FB_BAD_S 5
 #endif
 
 #ifndef GEIGER_PWMPIN
@@ -96,9 +113,18 @@ static_assert(HV_PWM_MAX == (1 << HV_PWM_BITS) - 1, "HV_PWM_MAX is the top of HV
 #endif
 #endif
 
+#ifdef GEIGERHW_MAX_ON_US
+static_assert(GEIGERHW_MAX_DUTY <= GEIGERHW_MAX_ON_US * GEIGERHW_MAX_FREQ * 1024LL / 1000000,
+              "GEIGERHW_MAX_DUTY over the on-time cap");
+#endif
+
 // volts, 0 = off
 #ifndef GEIGERHW_OV_V
 #define GEIGERHW_OV_V 0
+#endif
+
+#ifndef GEIGERHW_TRIM_BAND_MIN
+#define GEIGERHW_TRIM_BAND_MIN 0
 #endif
 
 // set espghw.<key> over serial
@@ -139,15 +165,7 @@ class HV : public EGModule {
 #endif
       EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
       const char* legacy_file() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
-      void set_freq( int freq) {
-        freq = clamp(freq, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ);
-      #ifdef ESP8266
-        _cur_duty = -1;  // loop() posts freq and duty together
-      #else
-        ledcChangeFrequency(EGLED_HV_CHANNEL, freq, HV_PWM_BITS);
-      #endif
-        _hw_freq = freq;
-      };
+      void set_freq(int freq);
       int get_freq() {
         return _hw_freq;
       }
@@ -177,6 +195,13 @@ class HV : public EGModule {
       uint16_t get_hv_target() const { return _hv_target; }
       int8_t get_duty_trim() const { return _duty_trim; }
       bool ov_tripped() const { return _ov_trip; }
+      // feedback latch, from loop()
+      static constexpr uint8_t TOPIC_FAULT = EG_TOPIC_APP + 3;
+#ifdef ESPGEIGER_HW32
+      bool fb_fault() const { return _fb_fault; }
+#else
+      bool fb_fault() const { return false; }
+#endif
       void clear_ov();
       void write_duty();
       // release_hold() if the OTA fails
@@ -187,9 +212,16 @@ class HV : public EGModule {
       EGRingAvg<uint16_t, HV_TRIM_N> hvReading;
     private:
       void check_handler();
+      void sample_adc();
       int read_hv();
       void check_overvoltage(int volts);
       void trim_step();
+      int max_duty() const;
+#ifdef ESPGEIGER_HW32
+      void check_feedback();
+      bool    _fb_fault = false;   // till restart
+      uint8_t _fb_bad_s = 0;
+#endif
       int _pwm_pin = GEIGER_PWMPIN;
       int _hw_freq = GEIGERHW_FREQ;
       int _hw_duty = GEIGERHW_DUTY;

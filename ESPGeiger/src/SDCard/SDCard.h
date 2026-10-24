@@ -23,6 +23,7 @@
 #include <SdFat.h>
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 
 #ifndef GEIGER_SDCARD_CS
@@ -52,10 +53,15 @@ class SDCard : public EGModule {
     };
     void reinit();
     bool ready() const { return sdenabled; }
+    // a card there that won't mount or write, once till it mounts
+    static constexpr uint8_t TOPIC_ERROR = EG_TOPIC_APP + 4;
+    bool faulted() const { return _fault; }
   protected:
     File32 myDataFile;
   private:
     void disableFull();
+    void fault();
+    bool _fault = false;
     time_t lastWrittenMinute = 0;
     uint32_t openFileDay = 0;  // YYYYMMDD, 0 = closed
     uint8_t _sync_min = 1;
