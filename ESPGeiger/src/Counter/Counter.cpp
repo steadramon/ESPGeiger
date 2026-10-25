@@ -36,6 +36,7 @@
 #endif
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "App/AppKeys.h"
 #include "Corium/Output/LedSignal.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/System/RtcMap.h"
@@ -48,7 +49,11 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/System/Clock.h"
 #include "TickClock.h"
-#include "App/ClickHooks.h"
+#include "GRNG/GRNG.h"
+
+#ifndef ESPG_WARMUP_S
+#define ESPG_WARMUP_S 10
+#endif
 
 Counter gcounter;
 
@@ -107,7 +112,7 @@ void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) 
 
 uint32_t Counter::_pulse_hist[Counter::HIST_BUCKETS] = {0};
 
-void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
+void EG_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
   if (s_prev_pulse_us) {
     uint32_t interval = now_us - s_prev_pulse_us;
     if (interval && interval < s_min_pulse_us) s_min_pulse_us = interval;
@@ -204,7 +209,7 @@ uint32_t s_save_ctr       = 0;
 
 // once a second from flash misses the cache
 #ifdef ESP32
-#define TICK_ATTR IRAM_ATTR
+#define TICK_ATTR EG_ISR_ATTR
 #define TICK_COLD inline
 #else
 #define TICK_ATTR
@@ -603,7 +608,25 @@ static void counter_lifecycle(Lifecycle::Event e) {
 
 static void counter_clock_stepped(int32_t delta_s) { gcounter.clock_stepped(delta_s); }
 
+bool ClickFns::add(ClickFn f) {
+  if (!f || n >= MAX) return false;
+  fn[n++] = f;
+  return true;
+}
+
+void ClickFns::fire(uint32_t us) const {
+  for (uint8_t i = 0; i < n; i++) fn[i](us);
+}
+
+static void grng_click(uint32_t us) { GRNG::mix(us ^ DeviceInfo::cycles()); }
+static void led_click(uint32_t) { if (gcounter.blip_led()) LedSignal::flash(); }
+
 void Counter::begin() {
+  _clicks.add(grng_click);
+#ifndef DISABLE_BLIP
+  _clicks.add(led_click);
+  _rx_clicks.add(led_click);
+#endif
   geigerTicks.begin(_cpm_window);
 #ifndef GEIGER_SMOOTH_AVG
   Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), _cpm_window);
@@ -658,7 +681,7 @@ void Counter::dispatchReceiverBlip() {
   _last_blip = micros();
   // else audio fires twice and udpblip echoes
   _last_blip_seen = _last_blip;
-  ClickHooks::rx_click(blip_led());
+  _rx_clicks.fire((uint32_t)_last_blip_seen);
 }
 
 bool Counter::is_quiet_now() {
@@ -699,6 +722,6 @@ void Counter::loop() {
       _prev_blip_us = lb;
     }
 
-    ClickHooks::click((uint32_t)lb, blip_led());
+    _clicks.fire((uint32_t)lb);
   }
 }

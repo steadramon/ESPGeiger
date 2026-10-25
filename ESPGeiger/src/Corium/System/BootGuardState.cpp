@@ -33,8 +33,10 @@ Ending ending(uint8_t reset_reason) {
   }
 }
 
+static_assert((uint64_t)BOOTGUARD_RETRY_MS << 5 <= UINT32_MAX, "retry doubling runs past 32 bits");
+
 uint32_t retry_ms(uint8_t retries) {
-  return (30UL * 60 * 1000) << (retries < 5 ? retries : 5);
+  return BOOTGUARD_RETRY_MS << (retries < 5 ? retries : 5);
 }
 
 void apply(State& s, uint32_t magic, uint32_t fw, Ending end) {

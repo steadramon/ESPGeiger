@@ -44,29 +44,11 @@ void GeigerTestPulseInt::begin() {
 
 #ifdef USE_PCNT
   Log::console(PSTR("TestPulsePWM: PCNT RXPIN: %d"), _rx_pin);
-  pcnt_config_t pcntConfig = {
-    .pulse_gpio_num = _rx_pin,
-    .ctrl_gpio_num = -1,
-    .pos_mode = PCNT_CHANNEL_EDGE_ACTION_HOLD,
-    .neg_mode = PCNT_CHANNEL_EDGE_ACTION_INCREASE,
-    .counter_h_lim = PCNT_HIGH_LIMIT,
-    .counter_l_lim = PCNT_LOW_LIMIT,
-    .unit = PCNT_UNIT,
-    .channel = PCNT_CHANNEL,
-  };
-  pcnt_unit_config(&pcntConfig);
-  pcnt_counter_pause(PCNT_UNIT);
-  #ifdef PCNT_FILTER
-  pcnt_set_filter_value(PCNT_UNIT, PCNT_FILTER);
-  pcnt_filter_enable(PCNT_UNIT);
-  #endif
-  gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLDOWN_ONLY);
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
+  pcnt_begin(_rx_pin, GPIO_PULLDOWN_ONLY);
 #else
   Log::console(PSTR("TestPulsePWM: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+  IsrLock::pin_on_fall(_rx_pin, countInterrupt);
 #endif
 
   Log::console(PSTR("TestPulsePWM: Test TXPIN: %d"), _tx_pin);
@@ -92,7 +74,7 @@ void GeigerTestPulseInt::stopForOTA() { TestTimer::stop(); }
 void GeigerTestPulseInt::restartAfterOTA() { TestTimer::start(pulseInterrupt, s_half); }
 
 // returns ticks to the next
-uint32_t IRAM_ATTR GeigerTestPulseInt::pulseInterrupt() {
+uint32_t EG_ISR_ATTR GeigerTestPulseInt::pulseInterrupt() {
   _bool_pulse_state = !_bool_pulse_state;
   TestTimer::tx(s_tx_mask, s_tx_hi, _bool_pulse_state);
 #ifdef GEIGER_COUNT_TXPULSE

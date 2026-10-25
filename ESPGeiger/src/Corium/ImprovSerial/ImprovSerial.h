@@ -33,7 +33,7 @@ public:
   // for out-of-frame bytes, which the caller keeps.
   bool consume_byte(uint8_t b);
   // Pull pending Serial bytes through the parser. Only call from contexts
-  // where SerialCommand's main-loop polling isn't running (setup, the
+  // where the console's main-loop polling isn't running (setup, the
   // captive-portal busy-wait); otherwise the two race on Serial.read().
   void poll();
   bool isProvisioning() const { return _state == improv::STATE_PROVISIONING; }

@@ -23,11 +23,11 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
-#include <EGHttpClient.h>
+#include "Corium/Net/EGHttpDriver.h"
 #include <EGBase64.h>
 #include "Corium/Module/EGModule.h"
 #include "Corium/Prefs/EGPrefs.h"
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "GeigerInput/GeigerInput.h"
 
 #define WEBAPI_INTERVAL      60
@@ -44,14 +44,13 @@
 #define WEBAPI_PRIV_LEN      24
 #define WEBAPI_SIG_LEN       (2 * WEBAPI_PRIV_LEN)
 
-class WebAPI : public EGModule {
+class WebAPI : public EGSender {
   public:
     WebAPI();
     const char* name() override { return PSTR("wapi"); }
     bool requires_wifi() override { return true; }
     bool requires_ntp() override { return true; }
     static constexpr uint16_t LOOP_MS = 1000;
-    static constexpr uint16_t POLL_MS = 1000;
     static constexpr uint16_t REPLAN_MS = 100;
     void begin() override;
     void loop(unsigned long now) override;
@@ -62,7 +61,7 @@ class WebAPI : public EGModule {
     const EGMenuEntry* menuEntries() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
 
-    EGHttpClient request;
+    EGHttpDriver request;
 
     uint32_t getStationId() const { return station_id; }
     void forget() { _forget = true; }   // sent when idle, even once off
@@ -72,10 +71,12 @@ class WebAPI : public EGModule {
     void sendForget();
     enum Sent : uint8_t { SENT_NONE, SENT_HS, SENT_POST, SENT_FORGET };
     uint8_t _sent = SENT_NONE;   // what the reply is for
+    EGHttpDriver::Sent send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
+                                   const char* sig);
     void take_reply();
-    void onHandshake();
-    void onPost();
-    void onForget();
+    void onHandshake(int code, const uint8_t* r, size_t n);
+    void onPost(int code, const uint8_t* r, size_t n);
+    void onForget(int code, const uint8_t* r, size_t n);
     void doHandshake();
     void pingIfDue(unsigned long now);
     unsigned long wakeTarget();
@@ -88,7 +89,7 @@ class WebAPI : public EGModule {
     bool _have_key = false;   // a key can start with 0
     uint8_t priv_k[WEBAPI_PRIV_LEN] = {0};
     uint8_t pub_k[2 * WEBAPI_PRIV_LEN] = {0};
-    char pub_k_64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = "";  // base64, no padding
+    char pub_k_64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = {};  // base64, no padding
     static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
     unsigned long lastPing = 0;
     uint32_t nextHandshake = 0;   // 0 = not set

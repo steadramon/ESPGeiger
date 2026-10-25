@@ -25,7 +25,18 @@
 #include <mutex>
 #endif
 
+// isr code kept in ram
+#define EG_ISR_ATTR IRAM_ATTR
+
 namespace IsrLock {
+
+  static inline __attribute__((always_inline)) void pin_on_fall(int pin, void (*fn)()) {
+    attachInterrupt(digitalPinToInterrupt(pin), fn, FALLING);
+  }
+
+  static inline __attribute__((always_inline)) void pin_off(int pin) {
+    detachInterrupt(digitalPinToInterrupt(pin));
+  }
 
   // esp32 isr may be on the other core, 8266 just masks, host a real lock for tsan
   struct Mux {

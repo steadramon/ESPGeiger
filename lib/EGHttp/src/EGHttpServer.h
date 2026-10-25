@@ -113,7 +113,7 @@ class EGHttpResponse {
   private:
     friend class EGHttpServer;
     void* _slot = nullptr;        // EGHttpServer::Slot*
-    char _extraHeaders[128] = {0};
+    char _extraHeaders[128] = {};
     size_t _extraLen = 0;
     bool _started = false;
     bool _chunked = false;
@@ -129,7 +129,7 @@ class EGHttpServer {
   public:
     using Handler = void(*)(EGHttpRequest& req, EGHttpResponse& res, void* user);
 
-    EGHttpServer() = default;
+    EGHttpServer() { strncpy_P(_authRealm, PSTR("Login"), sizeof(_authRealm) - 1); }
     ~EGHttpServer() { end(); free(_routes); }
     EGHttpServer(const EGHttpServer&) = delete;
     EGHttpServer& operator=(const EGHttpServer&) = delete;
@@ -230,7 +230,7 @@ class EGHttpServer {
 
     bool _authEnabled = false;
     char _authValue[6 + EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {0};   // "Basic " + base64
-    char _authRealm[40] = "ESPGeiger";
+    char _authRealm[40] = {};
 
     Slot* allocSlot(EGTcpClient* c);
     void  resetSlot(Slot* s);

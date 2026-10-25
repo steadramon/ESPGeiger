@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef ESPG_CRASHDUMP_H
-#define ESPG_CRASHDUMP_H
+#ifndef CRASHDUMP_H
+#define CRASHDUMP_H
 
 #include <stdint.h>
 #include <stddef.h>

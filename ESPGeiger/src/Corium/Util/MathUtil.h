@@ -60,6 +60,13 @@ inline uint32_t ema8(uint32_t avg, uint32_t v) {
   return (avg * 7 + v) >> 3;
 }
 
+// NAN avg takes v, NAN v keeps avg
+inline float ema_nan(float avg, float v, float alpha) {
+  if (isnan(v)) return avg;
+  if (isnan(avg)) return v;
+  return avg * (1.0f - alpha) + v * alpha;
+}
+
 // marsaglia 13/17/5, 0 stays 0
 inline uint32_t xorshift32(uint32_t x) {
   x ^= x << 13;
@@ -71,15 +78,6 @@ inline uint32_t xorshift32(uint32_t x) {
 // hwid seed, hi ^ lo
 inline uint32_t fold32(uint64_t v) {
   return (uint32_t)(v ^ (v >> 32));
-}
-
-inline float poisson_std(float N) {
-  return N > 0.0f ? sqrtf(N) : 0.0f;
-}
-
-inline float poisson_z(float observed, float expected) {
-  float s = poisson_std(expected);
-  return s > 0.0f ? (observed - expected) / s : 0.0f;
 }
 
 #endif

@@ -23,7 +23,10 @@
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Output/LedSignal.h"
 #include "Corium/System/PinSafety.h"
+#include "App/AppKeys.h"
+#include "App/LedPatterns.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/Util/Debounce.h"
 #include <Ticker.h>
 #ifdef SSD1306_DISPLAY
 #include "Display/Display.h"
@@ -33,65 +36,40 @@ static const uint16_t POLL_MS      = 10;
 static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
-// 0 = next page, 1 = back
+// 0 = next page, 1 = back. loop task only, pin set with the ticker off
 struct BtnState {
-  volatile int      pin = -1;
-  volatile bool     last_read = false;
-  volatile uint32_t last_change_ms = 0;
-  volatile uint32_t press_start_ms = 0;
-  volatile bool     pressed = false;
-  volatile bool     short_press_pending = false;
-  volatile bool     long_press_fired = false;
-  volatile bool     long_press_pending = false;
+  int      pin = -1;
+  Debounce deb;
+  uint32_t press_start_ms = 0;
+  bool     long_fired = false;
 };
 static BtnState s_btn[2];
 
 static Ticker buttonTicker;
+static bool s_raw[2];   // ticker only
 
-// long or short, never both
-static void check_long(BtnState& b) {
-#ifdef SSD1306_DISPLAY
-  if (b.long_press_fired || fast_millis() - b.press_start_ms < LONG_PRESS_MS) return;
-  b.long_press_fired = true;
-  b.long_press_pending = true;
-#endif
-}
+static bool read_down(const BtnState& b) { return digitalRead(b.pin) == LOW; }
 
-static void tick_one(BtnState& b) {
-  if (b.pin < 0) return;
-  bool down = (digitalRead(b.pin) == LOW);
-  if (down != b.last_read) {
-    b.last_read = down;
-    b.last_change_ms = fast_millis();
-    return;
-  }
-  if (down == b.pressed) {
-    if (down) check_long(b);
-    return;
-  }
-  uint32_t now = fast_millis();
-  if (now - b.last_change_ms < DEBOUNCE_MS) return;
-  b.pressed = down;
-  if (down) {
-    b.press_start_ms = now;
-    b.long_press_fired = false;
-  } else if (!b.long_press_fired) {
-    b.short_press_pending = true;
-  }
-}
-
+// samples, a change wakes the loop
 static void button_tick() {
-  tick_one(s_btn[0]);
-  tick_one(s_btn[1]);
+  bool moved = false;
+  for (uint8_t i = 0; i < 2; i++) {
+    if (s_btn[i].pin < 0) continue;
+    bool down = read_down(s_btn[i]);
+    if (down == s_raw[i]) continue;
+    s_raw[i] = down;
+    moved = true;
+  }
+  if (moved) EGModuleRegistry::post(&pushbutton);
 }
 
 #ifdef SSD1306_DISPLAY
 static void do_longpress(unsigned long now) {
   Log::console(PSTR("Btn: long"));
   if (display.toggle_auto_off(now)) {
-    LedSignal::displayEnabled();
+    LedSignal::play(LED_DISP_ON);
   } else {
-    LedSignal::displayDisabled();
+    LedSignal::play(LED_DISP_OFF);
   }
 }
 #endif
@@ -124,8 +102,6 @@ void PushButton::on_prefs_loaded() {
   // pin2 build flag only
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
   Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
-  EGModuleRegistry::every(this,
-    (pin1 < 0 && PUSHBUTTON_PIN2 < 0) ? 0 : LOOP_MS);
 }
 #endif
 
@@ -142,22 +118,19 @@ static void set_pin_slot(uint8_t slot, int pin) {
   }
   if (pin == b.pin && buttonTicker.active()) return;
   buttonTicker.detach();
-  b.pressed = false;
-  b.last_read = false;
-  b.short_press_pending = false;
-  b.long_press_fired = false;
-  b.long_press_pending = false;
-  b.last_change_ms = fast_millis();
-  b.press_start_ms = b.last_change_ms;
+  uint32_t now = fast_millis();
+  bool down = false;
   b.pin = pin;
   if (pin >= 0) {
     pinMode(pin, INPUT_PULLUP);
     delayMicroseconds(20);
-    bool down = (digitalRead(pin) == LOW);
-    b.last_read = down;
-    b.pressed = down;
-    b.long_press_fired = down;
+    down = read_down(b);
   }
+  // held at boot: no short on release
+  b.deb.reset(down, now);
+  b.press_start_ms = now;
+  b.long_fired = down;
+  s_raw[slot] = down;
   if (s_btn[0].pin >= 0 || s_btn[1].pin >= 0) {
     buttonTicker.attach_ms(POLL_MS, button_tick);
   }
@@ -182,14 +155,21 @@ void PushButton::begin()
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
   Log::console(PSTR("Btn: pin=%d pin2=%d"),
                (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
+#endif
+#ifdef PIN_SCAN
   EGModuleRegistry::every(this, LOOP_MS);
 #endif
   init();
 }
 
+// samples too, setup has no loop
 bool PushButton::isPressed()
 {
-  return s_btn[0].pressed || s_btn[1].pressed;
+  uint32_t now = fast_millis();
+  for (BtnState& b : s_btn) {
+    if (b.pin >= 0) b.deb.step(read_down(b), now, DEBOUNCE_MS);
+  }
+  return s_btn[0].deb.level || s_btn[1].deb.level;
 }
 
 bool PushButton::is_active()
@@ -239,20 +219,9 @@ static void pin_scan_loop(unsigned long now) {
 }
 #endif
 
-#ifdef SSD1306_DISPLAY
-static void take_long_press(BtnState& b, unsigned long now) {
-  if (!b.long_press_pending) return;
-  b.long_press_pending = false;
-  do_longpress(now);
-}
-#endif
-
-static void take_short_press(uint8_t i, unsigned long now) {
-  BtnState& b = s_btn[i];
-  if (!b.short_press_pending) return;
-  b.short_press_pending = false;
+static void short_press(uint8_t i, unsigned long now) {
   Log::console(PSTR("Btn: short"));
-  LedSignal::shortPressAck();
+  LedSignal::play(LED_ACK);
   EGModuleRegistry::emit(PushButton::TOPIC_PRESS);
 #ifdef SSD1306_DISPLAY
   display.button(now, i == 0 ? 1 : -1);
@@ -260,15 +229,47 @@ static void take_short_press(uint8_t i, unsigned long now) {
   gcounter.reset_alarm();
 }
 
+static void soonest(Deadline& next, uint32_t t) {
+  if (!next.armed() || !reached(t, next.at)) next.set(t);
+}
+
+// long or short, never both
+static void check_long(BtnState& b, unsigned long now, Deadline& next) {
+#ifdef SSD1306_DISPLAY
+  if (b.long_fired) return;
+  if (now - b.press_start_ms < LONG_PRESS_MS) {
+    soonest(next, b.press_start_ms + LONG_PRESS_MS);
+    return;
+  }
+  b.long_fired = true;
+  do_longpress(now);
+#endif
+}
+
+static void step_one(uint8_t i, unsigned long now, Deadline& next) {
+  BtnState& b = s_btn[i];
+  if (b.pin < 0) return;
+  bool down = read_down(b);
+  if (b.deb.step(down, now, DEBOUNCE_MS)) {
+    if (down) {
+      b.press_start_ms = now;
+      b.long_fired = false;
+    } else if (!b.long_fired) {
+      short_press(i, now);
+    }
+  }
+  if (b.deb.read != b.deb.level) soonest(next, b.deb.since + DEBOUNCE_MS);   // settling
+  else if (b.deb.level) check_long(b, now, next);
+}
+
+// woken by the ticker on a change, else the debounce or long press due
 void PushButton::loop(unsigned long now)
 {
 #ifdef PIN_SCAN
   pin_scan_loop(now);
 #endif
-  if (s_btn[0].pin < 0 && s_btn[1].pin < 0) return;
-#ifdef SSD1306_DISPLAY
-  for (uint8_t i = 0; i < 2; i++) take_long_press(s_btn[i], now);
-#endif
-  for (uint8_t i = 0; i < 2; i++) take_short_press(i, now);
+  Deadline next;
+  for (uint8_t i = 0; i < 2; i++) step_one(i, now, next);
+  if (next.armed()) EGModuleRegistry::due_at(this, next.at);
 }
 #endif

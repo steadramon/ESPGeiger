@@ -44,6 +44,7 @@ class NeoPixel : public EGModule {
     uint8_t display_order() override { return 16; }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     void pre_wifi() override { setup(); }
+    void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
     EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
@@ -72,7 +73,8 @@ class NeoPixel : public EGModule {
     unsigned long offTime = 0;
     unsigned long blinkInterval = 2000;
     unsigned long nextInterval = 2000;
-    unsigned long last_blip = 0;
+    static void on_click(uint32_t us);
+    bool _blip = false;
     int colorSaturation = 15;
     bool _is_off = true;
     bool _swap_rg = false;

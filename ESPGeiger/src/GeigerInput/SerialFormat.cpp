@@ -22,10 +22,12 @@
 #include "SerialParse.h"
 #include "GeigerInput.h"
 #include "Corium/Util/StringUtil.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Measure/OutputVars.h"
 #include "Corium/Util/Words.h"
-#include "Counter/Counter.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include <string.h>
 
 #define EG_HAS_SERIAL_PARSERS GEIGER_IS_SERIAL(GEIGER_TYPE)
@@ -40,8 +42,8 @@ const char* mohm_mode(int cps) {
 }
 
 size_t fmt_mightyohm(char* buf, size_t cap) {
-  int cps = gcounter.get_last_cps();
-  int reported_cpm = gcounter.get_cpm();
+  int cps = (int)egm_i(M_CPS_I);
+  int reported_cpm = (int)egm_i(M_CPM);
   // cps*60 overflows int above ~35.8M cps
   if (cps > 255) reported_cpm = (cps > 35791394) ? 2147483647 : cps * 60;
   char usv_str[12];

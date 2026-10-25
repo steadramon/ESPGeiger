@@ -35,30 +35,13 @@ void GeigerPulse::begin() {
   Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
   // pull-up for PCNT init, user pull after
   gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
-  pcnt_config_t pcntConfig = {
-    .pulse_gpio_num = _rx_pin,
-    .ctrl_gpio_num = -1,
-    .pos_mode = PCNT_CHANNEL_EDGE_ACTION_HOLD,
-    .neg_mode = PCNT_CHANNEL_EDGE_ACTION_INCREASE,
-    .counter_h_lim = PCNT_HIGH_LIMIT,
-    .counter_l_lim = PCNT_LOW_LIMIT,
-    .unit = PCNT_UNIT,
-    .channel = PCNT_CHANNEL,
-  };
-  pcnt_unit_config(&pcntConfig);
-  pcnt_counter_pause(PCNT_UNIT);
-  #ifdef PCNT_FILTER
-  pcnt_set_filter_value(PCNT_UNIT, PCNT_FILTER);
-  pcnt_filter_enable(PCNT_UNIT);
-  #endif
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
+  pcnt_begin(_rx_pin, GPIO_PULLUP_ONLY);
   set_pin_pull(_pin_pull);
   _polls = true;
 #else
   Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+  IsrLock::pin_on_fall(_rx_pin, countInterrupt);
 #endif
 }
 
@@ -66,7 +49,7 @@ void GeigerPulse::stopForOTA() {
 #ifdef USE_PCNT
   pcnt_counter_pause(PCNT_UNIT);
 #else
-  detachInterrupt(digitalPinToInterrupt(_rx_pin));
+  IsrLock::pin_off(_rx_pin);
 #endif
 }
 
@@ -74,7 +57,7 @@ void GeigerPulse::restartAfterOTA() {
 #ifdef USE_PCNT
   pcnt_counter_resume(PCNT_UNIT);
 #else
-  attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+  IsrLock::pin_on_fall(_rx_pin, countInterrupt);
 #endif
 }
 
@@ -82,8 +65,7 @@ void GeigerPulse::restartAfterOTA() {
 // wakes run it too, so it keeps its own time
 void GeigerPulse::loop() {
   uint32_t now = fast_millis();
-  if (!reached(now, _poll_at)) return;
-  _poll_at = now + DRAIN_MS;
+  if (!due_every(now, _poll_at, DRAIN_MS)) return;
   drain_pcnt();
 }
 

@@ -17,7 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "ExternalPause.h"
+#include "App/ExternalPause.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/MathUtil.h"
@@ -25,16 +26,15 @@
 
 static const int32_t PAUSE_MAX_S = 86400;
 
-static uint32_t s_pause_until_ms = 0;
+static Deadline s_pause;
 
 void ExternalPause::start(uint32_t timeout_ms) {
   if (timeout_ms == 0) {
-    s_pause_until_ms = 0;
+    s_pause.clear();
     Log::console(PSTR("External posts: resumed"));
     return;
   }
-  uint32_t until = fast_millis() + timeout_ms;
-  s_pause_until_ms = until ? until : 1;   // 0 = not paused
+  s_pause.set(fast_millis() + timeout_ms);
   Log::console(PSTR("External posts: paused for %u s"), (unsigned)(timeout_ms / 1000U));
 }
 
@@ -47,19 +47,31 @@ bool ExternalPause::start_s(const char* secs) {
 }
 
 bool ExternalPause::active() {
-  uint32_t until = s_pause_until_ms;
-  if (until == 0) return false;
-  if (reached(fast_millis(), until)) {
-    s_pause_until_ms = 0;
+  if (!s_pause.armed()) return false;
+  if (s_pause.due(fast_millis())) {
+    s_pause.clear();
     Log::console(PSTR("External posts: resumed (timeout)"));
     return false;
   }
   return true;
 }
 
+// a query logs the end too
 uint32_t ExternalPause::remaining_ms() {
-  uint32_t until = s_pause_until_ms;
-  if (until == 0) return 0;
-  int32_t d = (int32_t)(until - fast_millis());
+  if (!active()) return 0;
+  int32_t d = (int32_t)(s_pause.at - fast_millis());
   return d > 0 ? (uint32_t)d : 0;
 }
+
+// pause [s], 0 resumes
+static void cmd_pause() {
+  char* arg = Console::next();
+  if (arg) {
+    if (!ExternalPause::start_s(arg)) Log::console(PSTR("pause [seconds], 0 resumes"));
+    return;
+  }
+  uint32_t rem = ExternalPause::remaining_ms();
+  if (rem) Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)(rem / 1000U));
+  else     Log::console(PSTR("External posts: active"));
+}
+EG_REGISTER_CMD(pause, cmd_pause)

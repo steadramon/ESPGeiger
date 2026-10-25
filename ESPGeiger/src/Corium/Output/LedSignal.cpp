@@ -20,7 +20,7 @@
 #include <EGLed.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
 #include "PulseEngine.h"
 
@@ -31,15 +31,22 @@ namespace LedSignal {
   static int8_t s_pin = -1;   // none in safe mode, prefs never load
   static bool   s_low = false;
 
-#ifdef BLIP_LED_PIN
+  // the app's, from begin()
+  static const Pattern* s_rows = nullptr;
+  static uint8_t s_rows_n = 0;
+
+#ifdef LED_FLASH_ENGINE
   // PulseEngine owns the external pin
   static PulseEngine s_engine;
+#else
+  static bool s_flash_led = false;
 #endif
   static uint16_t s_flash_pulse_ms = 20;
   static uint8_t  s_flash_mode     = PulseEngine::MODE_PULSE;
-  static uint8_t  s_flash_fade     = 3;
+  static uint8_t  s_flash_fade     = PulseEngine::FADE_SHIFT_DEFAULT;
 
-  enum : uint8_t { DO_FLASH, DO_ACTIVITY, DO_ACK, DO_DISP_ON, DO_DISP_OFF, DO_ON, DO_OFF, DO_ATTACH };
+  // rows go in as is, these sit above them
+  enum : uint8_t { DO_FLASH = 252, DO_ON, DO_OFF, DO_ATTACH };
   static uint8_t s_todo[8];   // head's release/acquire orders it
   std::atomic<uint8_t> s_head{0};   // loop writes
   std::atomic<uint8_t> s_tail{0};   // poll writes
@@ -56,7 +63,7 @@ namespace LedSignal {
   static void run(uint8_t what) {
     switch (what) {
       case DO_FLASH:
-#ifdef BLIP_LED_PIN
+#ifdef LED_FLASH_ENGINE
         s_engine.start();
 #else
         if (s_onboard.isRunning()) break;
@@ -64,14 +71,15 @@ namespace LedSignal {
         else s_onboard.pulse(s_flash_pulse_ms);
 #endif
         break;
-      case DO_ACTIVITY: s_onboard.blink(500, 500); break;
-      case DO_ACK:      s_onboard.pulse(200); break;
-      // two blinks = auto off, long = always on
-      case DO_DISP_ON:  s_onboard.blinkN(200, 100, 2); break;
-      case DO_DISP_OFF: s_onboard.pulse(600); break;
       case DO_ON:       s_onboard.on(); break;
+      case DO_OFF:      s_onboard.off(); break;
       case DO_ATTACH:   s_onboard.attach((uint8_t)s_pin, s_low); break;
-      default:          s_onboard.off(); break;
+      default: {
+        Pattern p;
+        memcpy_P(&p, &s_rows[what], sizeof(p));
+        s_onboard.blinkN(p.on_ms, p.off_ms, p.count);
+        break;
+      }
     }
   }
 
@@ -91,13 +99,18 @@ namespace LedSignal {
     post(DO_ATTACH);
   }
 
-  void begin() {
-    EGLed::setClock(fast_millis);
-#ifdef BLIP_LED_PIN
-    s_engine.pin      = BLIP_LED_PIN;
+  void begin(const Pattern* rows, uint8_t count, int flash_pin, bool flash_led) {
+    s_rows   = rows;
+    s_rows_n = count < DO_FLASH ? count : DO_FLASH;
+#ifdef LED_FLASH_ENGINE
+    (void)flash_led;
+    s_engine.pin      = flash_pin < 0 ? -1 : (int8_t)flash_pin;
     s_engine.polarity = 0;
     s_engine.commitConfig();
     s_engine.begin();
+#else
+    (void)flash_pin;
+    s_flash_led = flash_led;
 #endif
   }
 
@@ -109,7 +122,7 @@ namespace LedSignal {
       s_tail.store(t, std::memory_order_release);
     }
     s_onboard.update();
-#ifdef BLIP_LED_PIN
+#ifdef LED_FLASH_ENGINE
     s_engine.loop(now_us);
     s_busy = s_onboard.isRunning() || s_engine.busy();
 #else
@@ -121,29 +134,28 @@ namespace LedSignal {
   void lit(bool on) { post(on ? DO_ON : DO_OFF); }
 
   void flash() {
-#if defined(BLIP_LED_PIN)
+#ifdef LED_FLASH_ENGINE
     if (s_engine.take(fast_millis())) post(DO_FLASH);
-#elif !defined(DISABLE_INTERNAL_BLIP)
-    if (s_pin < 0) return;   // no LED, nothing per count
+#else
+    if (s_pin < 0 || !s_flash_led) return;   // no LED, no flash
     post(DO_FLASH);
 #endif
   }
 
-  void activity()        { post(DO_ACTIVITY); }
-  void shortPressAck()   { post(DO_ACK); }
-  void displayEnabled()  { post(DO_DISP_ON); }
-  void displayDisabled() { post(DO_DISP_OFF); }
+  void play(uint8_t row) {
+    if (row < s_rows_n) post(row);
+  }
 
   void setBrightness(uint8_t level) {
     s_onboard.setBrightness(level);   // 8-bit
-#ifdef BLIP_LED_PIN
+#ifdef LED_FLASH_ENGINE
     s_engine.active_level = PulseEngine::levelFrom8bit(level);
 #endif
   }
 
   void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us,
                            uint8_t fade_shift_idx, uint8_t max_hz) {
-#ifdef BLIP_LED_PIN
+#ifdef LED_FLASH_ENGINE
     s_engine.mode       = engine_mode;
     s_engine.pulse_us   = pulse_us;
     s_engine.fade_shift = PulseEngine::fadeShiftFromUi(fade_shift_idx);

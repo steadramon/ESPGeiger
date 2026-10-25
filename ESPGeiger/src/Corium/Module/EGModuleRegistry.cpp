@@ -1,5 +1,5 @@
 /*
-  EGModuleRegistry.cpp - Registry of ESPGeiger modules
+  EGModuleRegistry.cpp - Registry of modules
 
   Copyright (C) 2026 @steadramon
 
@@ -23,8 +23,6 @@
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Clock.h"
-#include "ExternalPause.h"
-#include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/Fnv.h"
 #include "Corium/System/IsrLock.h"
 #ifdef ESP32
@@ -154,7 +152,6 @@ static inline uint32_t retry_in(uint32_t period) {
 
 inline void EGModuleRegistry::walk(unsigned long now) {
   uint8_t unmet = unmet_requirements();
-  bool paused = ExternalPause::active();
   uint32_t t0 = micros();
   uint32_t fired = 0;
 
@@ -165,7 +162,7 @@ inline void EGModuleRegistry::walk(unsigned long now) {
     if (!reached(now, s.next_due)) break;
     // once a pass, due_in(0) runs on the next
     if (fired & (1u << idx)) { k++; continue; }
-    if ((s.flags & unmet) || (paused && s.category == (uint8_t)EGP_CAT_UPLOAD)) {
+    if (s.flags & unmet) {
       s.next_due = now + retry_in(s.period);
     } else {
       fired |= 1u << idx;
@@ -234,8 +231,10 @@ void EGModuleRegistry::log_activity_and_reset() {
   bool any = false;
   for (uint8_t i = 0; i < _count; i++) {
     EGModule* m = _slots[i].module;
-    uint8_t ok = m->take_publish_ok();
-    uint8_t err = m->take_publish_err();
+    EGSender* s = m->sender();
+    if (!s) continue;
+    uint8_t ok = s->take_publish_ok();
+    uint8_t err = s->take_publish_err();
     if (ok == 0 && err == 0) continue;
     any = true;
     PGM_P sep = pos ? PSTR(" ") : PSTR("");
@@ -337,17 +336,6 @@ static inline void slot_claim(uint8_t s) {
   else        s_claimed_hi |= (1u << (s - 32));
 }
 
-static uint32_t chip_hash_cached(uint16_t* jitter) {
-  static uint32_t s_chip_h = 0;
-  static uint16_t s_jitter = 0;
-  if (s_chip_h == 0) {
-    s_chip_h = fnv1a(DeviceInfo::chipid());
-    s_jitter = (uint16_t)((s_chip_h >> 8) % 1000u);
-  }
-  *jitter = s_jitter;
-  return s_chip_h;
-}
-
 // 60 / gcd(step, 60)
 static uint8_t orbit_length(uint8_t step60) {
   if (step60 == 0) return 1;
@@ -376,8 +364,9 @@ static void orbit_claim(uint8_t sec, uint8_t step60, uint8_t orbit_n) {
 uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interval_ms) {
   if (interval_ms == 0 || !mod_name) return 0;
 
-  uint16_t jitter;
-  uint32_t h = fnv1a_P(mod_name, chip_hash_cached(&jitter));
+  const uint32_t chip = DeviceInfo::chipHash();
+  const uint16_t jitter = (uint16_t)((chip >> 8) % 1000u);
+  uint32_t h = fnv1a_P(mod_name, chip);
 
   uint16_t interval_s = interval_ms < 1000 ? 0 : (uint16_t)(interval_ms / 1000);
   if (interval_s < 2) return interval_ms >> 1;
@@ -474,7 +463,6 @@ void EGModuleRegistry::pre_wifi_all() {
     s.events = 0;
     if (_safe_mode && !m->core_module()) {
       s.flags = FLAG_QUARANTINED | FLAG_OFF;
-      s.category = (uint8_t)EGP_CAT_SYSTEM;
       continue;
     }
     uint8_t f = 0;
@@ -482,8 +470,6 @@ void EGModuleRegistry::pre_wifi_all() {
     if (m->requires_ntp())   f |= FLAG_REQUIRES_NTP;
     if (m->runs_during_ota()) f |= FLAG_DURING_OTA;
     s.flags = f;
-    const EGPrefGroup* g = m->prefs_group();
-    s.category = g ? g->category.get() : (uint8_t)EGP_CAT_SYSTEM;
     m->pre_wifi();
     yield();
   }

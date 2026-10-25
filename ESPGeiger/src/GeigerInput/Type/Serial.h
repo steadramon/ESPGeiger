@@ -41,8 +41,7 @@ class GeigerSerial final : public GeigerInput
     void stopForOTA() override;
     void restartAfterOTA() override;
     bool isHealthy() const override {
-      if (_last_drain != 0 && (fast_millis() - _last_drain) < 60000) return false;
-      return true;
+      return !fresh(fast_millis(), _last_drain, 60000);
     }
   private:
     void pullSerial();

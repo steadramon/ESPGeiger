@@ -21,6 +21,14 @@
 #define EGMEASURE_H
 
 #include <Arduino.h>
+#include "App/AppConfig.h"
+
+#ifndef EGM_ID_MAX
+#define EGM_ID_MAX   9
+#endif
+#ifndef EGM_JSON_MAX
+#define EGM_JSON_MAX 3   // /json key
+#endif
 
 enum EGMKind : uint8_t {
   EGM_F32,   // decimals 1..9
@@ -32,10 +40,6 @@ enum EGMKind : uint8_t {
 
 enum EGMUnit : uint8_t {
   EGMU_NONE,
-  EGMU_CPM,
-  EGMU_CPS,
-  EGMU_USVH,
-  EGMU_COUNT,
   EGMU_SEC,
   EGMU_BYTES,
   EGMU_DBM,
@@ -43,16 +47,17 @@ enum EGMUnit : uint8_t {
   EGMU_CELSIUS,
   EGMU_PCT,
   EGMU_HPA,
+  EGMU_APP,   // app units from here
 };
 
 static constexpr uint8_t EGM_OUT_JSON    = 1 << 0;
 static constexpr uint8_t EGM_OUT_PROM    = 1 << 1;  // /metrics
-static constexpr uint8_t EGM_OUT_WEBHOOK = 1 << 2;
-static constexpr uint8_t EGM_OUT_MQTT    = 1 << 3;
+static constexpr uint8_t EGM_OUT_APP0    = 1 << 2;  // app sinks, the app names them
+static constexpr uint8_t EGM_OUT_APP1    = 1 << 3;
 static constexpr uint8_t EGM_OUT_VARS    = 1 << 4;  // templates and /vars.json
 static constexpr uint8_t EGM_OUT_ID      = 1 << 5;  // by id only
-static constexpr uint8_t EGM_OUT_ALL     = EGM_OUT_JSON | EGM_OUT_PROM | EGM_OUT_WEBHOOK |
-                                           EGM_OUT_MQTT | EGM_OUT_VARS;
+static constexpr uint8_t EGM_OUT_ALL     = EGM_OUT_JSON | EGM_OUT_PROM | EGM_OUT_APP0 |
+                                           EGM_OUT_APP1 | EGM_OUT_VARS;
 
 static constexpr uint8_t EGM_DIAG    = 1 << 0;
 static constexpr uint8_t EGM_COUNTER = 1 << 1;  // else gauge
@@ -71,15 +76,15 @@ typedef bool (*EGMRead)(EGMValue* out);
 
 // tables must be PROGMEM
 struct EGMeasure {
-  char        id[10];
-  char        json[4];      // "" = id
+  char        id[EGM_ID_MAX + 1];
+  char        json[EGM_JSON_MAX + 1];   // "" = id
   const char* prom;         // PROGMEM, nullptr = not exported
   const char* prom_labels;  // PROGMEM
   const char* help;         // PROGMEM
   EGMRead     read;
   EGMKind     kind;
   uint8_t     decimals;
-  EGMUnit     unit;
+  uint8_t     unit;         // EGMU_*
   uint8_t     outputs;      // EGM_OUT_*
   uint8_t     flags;        // EGM_DIAG, EGM_COUNTER
 };
@@ -107,8 +112,10 @@ private:
   size_t           _n;
 };
 
-EGMeasureRows egm_core_rows();
-EGMeasureRows egm_input_rows();
+typedef EGMeasureRows (*EGMSource)();
+
+// walked core, input, then the modules. input nullptr = none
+void egm_sources(EGMeasureRows core, EGMSource input);
 
 class EGMeasureIter {
 public:
@@ -155,14 +162,10 @@ size_t egm_text(const char* id, uint8_t output, char* buf, size_t cap);
 float    egm_f(const char* id);
 bool     egm_b(const char* id);
 uint32_t egm_u(const char* id);
+int32_t  egm_i(const char* id);
 
 // id PROGMEM, core and input rows only, safe to cache
 EGMRead egm_core_read(const char* id, EGMKind kind);
-
-// oldest first, one a second
-size_t egm_history(int* out, size_t cap);
-// tenths, made on first call
-size_t egm_cpm5_history(uint16_t* out, size_t cap);
 
 // env.unit order
 enum EGMTempUnit : uint8_t { EGMT_C = 0, EGMT_F = 1, EGMT_K = 2 };

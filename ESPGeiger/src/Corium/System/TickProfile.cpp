@@ -1,5 +1,5 @@
 /*
-  TickProfile.cpp - sTickerCB timing + loop iteration counter.
+  TickProfile.cpp - Reactor::second timing + loop iteration counter.
 
   Copyright (C) 2026 @steadramon
 
@@ -38,9 +38,9 @@ namespace TickProfile {
 static unsigned long t_start = 0;
 static uint8_t tick_max_age = 0;
 #ifdef TICK_PROFILE
-static unsigned long t_after_counter = 0;
+static unsigned long t_after_app = 0;
 static unsigned long t_after_wifi = 0;
-static uint32_t max_counter_us = 0;
+static uint32_t max_app_us = 0;
 static uint32_t max_wifi_us = 0;
 static uint32_t min_free_heap = 0xFFFFFFFFu;
 #endif
@@ -50,7 +50,7 @@ void TickProfile::beginTick() {
 }
 
 #ifdef TICK_PROFILE
-void TickProfile::markCounter() { t_after_counter = micros(); }
+void TickProfile::markApp()  { t_after_app = micros(); }
 void TickProfile::markWifi()    { t_after_wifi = micros(); }
 #endif
 
@@ -66,10 +66,10 @@ void TickProfile::endTick() {
   TickProfile::tick_us = ema8(TickProfile::tick_us, this_tick);
   if (this_tick > TickProfile::tick_max_us) TickProfile::tick_max_us = this_tick;
 #ifdef TICK_PROFILE
-  uint32_t counter_us = (uint32_t)(t_after_counter - t_start);
-  uint32_t wifi_us    = (uint32_t)(t_after_wifi - t_after_counter);
-  if (counter_us > max_counter_us) max_counter_us = counter_us;
-  if (wifi_us    > max_wifi_us)    max_wifi_us    = wifi_us;
+  uint32_t app_us  = (uint32_t)(t_after_app - t_start);
+  uint32_t wifi_us = (uint32_t)(t_after_wifi - t_after_app);
+  if (app_us  > max_app_us)  max_app_us  = app_us;
+  if (wifi_us > max_wifi_us) max_wifi_us = wifi_us;
   uint32_t cur_free = DeviceInfo::freeHeap();
   if (cur_free < min_free_heap) min_free_heap = cur_free;
 #endif
@@ -77,9 +77,9 @@ void TickProfile::endTick() {
     tick_max_age = 0;
 #ifdef TICK_PROFILE
     Log::console(PSTR("Tick profile: total=%u ctr=%u wifi=%u lps=%u free=%u min_free=%u frag=%u%%"),
-      TickProfile::tick_max_us, max_counter_us, max_wifi_us, TickProfile::lps,
+      TickProfile::tick_max_us, max_app_us, max_wifi_us, TickProfile::lps,
       (unsigned)cur_free, (unsigned)min_free_heap, (unsigned)DeviceInfo::heapFrag());
-    max_counter_us = max_wifi_us = 0;
+    max_app_us = max_wifi_us = 0;
     min_free_heap = 0xFFFFFFFFu;
 #endif
 #ifdef LOOP_PROFILE

@@ -51,7 +51,7 @@ void GRNG::begin() {
 #else
   s_sha.write(s_boot_sram, sizeof(s_boot_sram));
 #endif
-  uint32_t cc = ESP.getCycleCount();
+  uint32_t cc = DeviceInfo::cycles();
   s_sha.write((const uint8_t*)&cc, sizeof(cc));
   uint8_t* h = s_sha.result();
   for (uint8_t i = 0; i < 8; i++) s_pool[i] ^= ((uint32_t*)h)[i];
@@ -67,7 +67,7 @@ void GRNG::mix(uint32_t bits) {
 }
 
 uint32_t GRNG::stir() {
-  uint32_t e = DeviceInfo::hwRandom() ^ ESP.getCycleCount();
+  uint32_t e = DeviceInfo::hwRandom() ^ DeviceInfo::cycles();
   mix(e);
   randomSeed(e ^ s_pool[0]);
   return e;
@@ -82,7 +82,7 @@ void GRNG::extract(uint8_t* out, size_t n) {
   while (n > 0) {
     s_sha.init();
     s_sha.write((const uint8_t*)s_pool, sizeof(s_pool));
-    uint32_t cc = ESP.getCycleCount();
+    uint32_t cc = DeviceInfo::cycles();
     s_sha.write((const uint8_t*)&cc, sizeof(cc));
     uint32_t hw[EXTRACT_HW_WORDS];
     for (uint8_t i = 0; i < EXTRACT_HW_WORDS; i++) hw[i] = DeviceInfo::hwRandom();

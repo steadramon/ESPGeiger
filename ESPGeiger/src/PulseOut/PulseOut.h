@@ -24,6 +24,7 @@
 #include "Corium/Platform/Flash.h"
 #include "Corium/Module/EGModule.h"
 
+#include "App/ChipVoice.h"
 #include "Corium/Output/PulseEngine.h"
 #include "Corium/Output/QuietWindow.h"
 
@@ -37,7 +38,7 @@ class PulseOut : public EGModule {
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
-    // msTickerCB owns the pin, clicks post s_req
+    // ms ticker owns the pin, clicks post s_req
     static volatile uint8_t s_req;
     static uint8_t s_seen;
     static bool s_busy;
@@ -48,11 +49,13 @@ class PulseOut : public EGModule {
 
   private:
     void read_pin(bool was_enabled);
+    void apply_voice();
 
     bool          _enabled = false;
     bool          _begun = false;
     int8_t        _pin = -1;   // boot pref, msTicker owns the pin after begin
     PulseEngine   _engine;
+    ChipBlip      _voice = {1.0f, 1.0f};   // set at begin
 
     QuietWindow   _quiet;   // own, not the Blip LED one
 

@@ -1,5 +1,5 @@
 /*
-  TickProfile.h - sTickerCB timing + loop iteration counter.
+  TickProfile.h - Reactor::second timing + loop iteration counter.
 
   Copyright (C) 2026 @steadramon
 
@@ -38,7 +38,7 @@ namespace TickProfile {
 
   void beginTick();
 #ifdef TICK_PROFILE
-  void markCounter();
+  void markApp();
   void markWifi();
 #endif
   void endTick();

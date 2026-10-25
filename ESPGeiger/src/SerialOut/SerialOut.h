@@ -45,10 +45,11 @@ class SerialOut : public EGModule {
       void set_show(int var);
       void print_cpm();
       void print_usv();
-      void toggle_cpm();
-      void toggle_usv();
-      void toggle_hv();
-      void toggle_cps();
+      void toggle(uint8_t show);
+      void toggle_cpm() { toggle(SHOW_CPM); }
+      void toggle_usv() { toggle(SHOW_USV); }
+      void toggle_hv()  { toggle(SHOW_HV); }
+      void toggle_cps() { toggle(SHOW_CPS); }
       uint16_t interval() const { return _interval; }
       void setInterval(uint16_t v);
       uint8_t format() const { return _format; }

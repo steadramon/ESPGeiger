@@ -21,14 +21,15 @@
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Output/LedSignal.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Counter/CounterMeasures.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "Corium/System/Clock.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/TickProfile.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/Util/Fnv.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
 #include <EGJson.h>
@@ -37,12 +38,6 @@
 EG_PSTR(K_TOPIC,        "topic");
 EG_PSTR(K_HASS_ENABLED, "hass_enabled");
 EG_PSTR(K_HASS_TOPIC,   "hass_topic");
-
-EG_PSTR(M_TC,     "tc");
-EG_PSTR(M_SER_OK, "ser_ok");
-EG_PSTR(M_WARM,   "warm");
-EG_PSTR(M_WARN,   "warn");
-EG_PSTR(M_ALERT,  "alert");
 
 static const char T_STAT[] PROGMEM = "stat";
 static const char T_TELE[] PROGMEM = "tele";
@@ -113,7 +108,7 @@ const EGPrefGroup* MQTT_Client::prefs_group() { return &MQTT_PREF_GROUP; }
 
 size_t MQTT_Client::status_json(char* buf, size_t cap, unsigned long now) {
   if (EGPrefs::getString("mqtt", EG_K_SERVER)[0] == '\0') return 0;
-  return write_status_json(buf, cap, "mqtt", last_ok && connected, last_attempt_ms, now);
+  return write_status_json(buf, cap, "mqtt", last_ok && s_mq.connected(), last_attempt_ms, now);
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -140,19 +135,17 @@ MQTT_Client::MQTT_Client()
 void MQTT_Client::disconnect()
 {
   s_mq.disconnect();
-  connected = false;
   mqttEnabled = true;
   reconnectAttempts = 0;
   lastConnectionAttempt = 0;
   _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
-  _hass_next_publish = 0;
+  _hass_next.clear();
 #endif
 }
 
 void MQTT_Client::onMqttConnect(bool sessionPresent) {
   Log::console(PSTR("MQTT: Connected"));
-  connected = true;
   _reanchor = true;
   reconnectAttempts = 0;
   authFailures = 0;
@@ -190,7 +183,6 @@ void MQTT_Client::onMqttDisconnect(int8_t err) {
     latched = true;
   }
   lastConnectionAttempt = now_ms;
-  connected = false;
   wakeSoon();
   if (latched) Log::console(PSTR("MQTT: Credentials rejected 3 times, stopped until settings are saved"));
 #ifdef MQTTAUTODISCOVER
@@ -220,11 +212,7 @@ unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
 
 #ifdef MQTTAUTODISCOVER
 static uint32_t hass_spread_offset_s() {
-  static uint32_t off = 0xFFFFFFFFu;
-  if (off == 0xFFFFFFFFu) {
-    off = fnv1a(DeviceInfo::chipid()) % (MQTT_HASS_BIRTH_SPREAD_S + 1);
-  }
-  return off;
+  return DeviceInfo::chipHash() % (MQTT_HASS_BIRTH_SPREAD_S + 1);
 }
 #endif
 
@@ -232,16 +220,14 @@ static uint32_t hass_spread_offset_s() {
 void MQTT_Client::scheduleHassDiscovery(bool reconnected)
 {
   const unsigned long up_s = (unsigned long)DeviceInfo::uptime();
-  if (reconnected && (_hass_next_publish == 0 || reached(up_s, _hass_next_publish))) {
-    _hass_next_publish = up_s + 2;
-    if (_hass_next_publish == 0) _hass_next_publish = 1;
+  if (reconnected && (!_hass_next.armed() || _hass_next.due(up_s))) {
+    _hass_next.set(up_s + 2);
   }
   if (_hass_retrigger) {
     _hass_retrigger = false;
-    _hass_next_publish = up_s + hass_spread_offset_s();
-    if (_hass_next_publish == 0) _hass_next_publish = 1;
+    _hass_next.set(up_s + hass_spread_offset_s());
   }
-  if (_hass_next_publish && reached(up_s, _hass_next_publish)) {
+  if (_hass_next.due(up_s)) {
     triggerHassDiscovery();
   }
 }
@@ -330,7 +316,9 @@ void MQTT_Client::loop(unsigned long now)
 bool MQTT_Client::sendHello()
 {
   if (_pending & PEND_LWT) {
-    if (s_mq.publish(_lwt_topic, FPSTR(LWT_ONLINE), 1, true)) _pending &= ~PEND_LWT;
+    char topic[MQTT_TOPIC_LEN];
+    buildTopic(topic, sizeof(topic), T_TELE, PSTR("lwt"));
+    if (s_mq.publish(topic, FPSTR(LWT_ONLINE), 1, true)) _pending &= ~PEND_LWT;
     return true;
   }
 #ifdef MQTTAUTODISCOVER
@@ -369,8 +357,7 @@ bool MQTT_Client::publishStatus()
     return false;
   }
   _status_late = false;
-  LedSignal::activity();
-  send_indicator = 2;
+  EGModuleRegistry::emit(TOPIC_SENT);
   // pre-NTP time gives a bad year
   char dateTime[sizeof("2026-01-01T00:00:00Z")];
   dateTime[0] = '\0';
@@ -386,7 +373,7 @@ bool MQTT_Client::publishStatus()
   j.map_begin();
   j.str(PSTR("time"), dateTime);
   j.uint(PSTR("ut"), DeviceInfo::uptime());
-  j.str(PSTR("board"), DeviceInfo::chipmodel());
+  j.str(PSTR("board"), DeviceInfo::board());
   j.str(PSTR("model"), Tube::model());
   j.str(PSTR("ssid"), Wifi::ssid);
   j.str(PSTR("ip"), ipStr);
@@ -497,28 +484,20 @@ void MQTT_Client::publishPing()
   }
   // ---- end LEGACY block ----
 
-  send_indicator = 2;
+  EGModuleRegistry::emit(TOPIC_PING);
 }
 
 // a stalled connect times out in EGMqtt
 bool MQTT_Client::clientBusy()
 {
-  if (s_mq.connected()) {
-    reconnectAttempts = 0;
-    return true;
-  }
-  return s_mq.state() == EGMqtt::CONNECTING;
+  return s_mq.connected() || s_mq.state() == EGMqtt::CONNECTING;
 }
 
 static unsigned long reconnect_backoff_ms(uint8_t attempts)
 {
   unsigned long backoff = 10000UL << min(attempts, (uint8_t)5);
   if (backoff > 300000UL) backoff = 300000UL;
-  static uint32_t s_jitter_ms = 0;
-  if (s_jitter_ms == 0) {
-    s_jitter_ms = (fnv1a(DeviceInfo::chipid()) % 13u) * 1000u;   // 0..12 s
-  }
-  backoff += s_jitter_ms;
+  backoff += (DeviceInfo::chipHash() % 13u) * 1000u;   // 0..12 s
   return backoff;
 }
 
@@ -587,8 +566,8 @@ uint32_t MQTT_Client::nextDue(unsigned long now)
   if (p < s) s = p;
 #ifdef MQTTAUTODISCOVER
   if (_hass_retrigger) return 1;
-  if (_hass_next_publish) {
-    long h = (long)(_hass_next_publish - (unsigned long)DeviceInfo::uptime());
+  if (_hass_next.armed()) {
+    long h = (long)(_hass_next.at - (unsigned long)DeviceInfo::uptime());
     if (h < (long)s) s = h > 0 ? (uint32_t)h : 1;
   }
 #endif
@@ -633,10 +612,11 @@ void MQTT_Client::reconnect()
   int port = mqtt_port();
 
   // every time, picks up a topic change
-  buildTopic(_lwt_topic, sizeof(_lwt_topic), T_TELE, PSTR("lwt"));
+  char lwt[MQTT_TOPIC_LEN];
+  buildTopic(lwt, sizeof(lwt), T_TELE, PSTR("lwt"));
   bool set = s_mq.setServer(_mqtt_server, (uint16_t)port) &&
              s_mq.setClientId(DeviceInfo::hostname()) &&
-             s_mq.setWill(_lwt_topic, FPSTR(LWT_OFFLINE), 1, true) &&
+             s_mq.setWill(lwt, FPSTR(LWT_OFFLINE), 1, true) &&
              set_credentials();
 
   applyIntervalPref();
@@ -697,13 +677,67 @@ static const char H_DC_HUMID[]  PROGMEM = "humidity";
 static const char H_DC_PRES[]   PROGMEM = "atmospheric_pressure";
 // entity_category
 static const char H_EC_DIAG[]   PROGMEM = "diagnostic";
-static const char H_EMPTY[]     PROGMEM = "";   // not set
+
+enum { DC_NONE, DC_SIG, DC_DUR, DC_PROB, DC_SAFETY, DC_CONN, DC_TEMP, DC_HUMID, DC_PRES };
+static const char* const H_DEV_CLA[] PROGMEM = {
+  nullptr, H_DC_SIG, H_DC_DUR, H_DC_PROB, H_DC_SAFETY, H_DC_CONN, H_DC_TEMP, H_DC_HUMID, H_DC_PRES,
+};
+
+// row flags
+static const uint8_t HR_STATUS = 1 << 0;   // tele/status, else tele/sensor
+static const uint8_t HR_TOTAL  = 1 << 1;   // total_increasing, else measurement
+static const uint8_t HR_DIAG   = 1 << 2;
+static const uint8_t HR_BIN    = 1 << 3;   // binary_sensor
+static const uint8_t HR_OPT    = 1 << 4;   // only with its measure row
+
+struct HassRow {
+  char id[9];
+  char key[3];    // "" = id
+  char name[17];
+  char unit[7];
+  char icon[23];  // after mdi:
+  char prec[2];   // "" = HA default
+  uint8_t dev;
+  uint8_t flags;
+};
+
+// walk order
+static const HassRow HASS_ROWS[] PROGMEM = {
+  // tele/sensor
+  {"cpm",      "",   "CPM",          "CPM",        "pulse",          "",  DC_NONE,  0},
+  {"cpm5",     "",   "CPM5",         "CPM",        "pulse",          "",  DC_NONE,  0},
+  {"cpm15",    "",   "CPM15",        "CPM",        "pulse",          "",  DC_NONE,  0},
+  {"usv",      "",   "\u00B5Sv/h",   "\u00B5Sv/h", "radioactive",    "2", DC_NONE,  0},
+  {"hv",       "",   "HV",           "V",          "lightning-bolt", "",  DC_NONE,  HR_OPT},
+  {"temp",     "t",  "Temperature",  "°C",         "thermometer",    "",  DC_TEMP,  HR_OPT},
+  {"humidity", "h",  "Humidity",     "%",          "water-percent",  "",  DC_HUMID, HR_OPT},
+  {"pressure", "p",  "Pressure",     "hPa",        "gauge",          "",  DC_PRES,  HR_OPT},
+  {"c_total",  "",   "Total Clicks", "",           "counter",        "",  DC_NONE,  HR_STATUS | HR_TOTAL},
+  // tele/status
+  {"tick",     "",   "tick",         "\u00B5s",    "timer-outline",  "",  DC_NONE,  HR_STATUS | HR_DIAG},
+  {"t_max",    "",   "tick max",     "\u00B5s",    "timer-alert-outline", "", DC_NONE, HR_STATUS | HR_DIAG},
+  {"lps",      "",   "LPS",          "1/s",        "speedometer",    "",  DC_NONE,  HR_STATUS | HR_DIAG},
+  {"rssi",     "",   "RSSI",         "dBm",        "wifi",           "",  DC_SIG,   HR_STATUS | HR_DIAG},
+  {"uptime",   "ut", "Uptime",       "s",          "clock-outline",  "",  DC_DUR,   HR_STATUS | HR_TOTAL | HR_DIAG},
+  {"free_mem", "",   "Free Memory",  "B",          "memory",         "",  DC_NONE,  HR_STATUS | HR_DIAG},
+#ifdef ESP32
+  {"cpu_temp", "",   "CPU Temperature", "°C",      "chip",           "1", DC_TEMP,  HR_STATUS | HR_DIAG},
+#endif
+  // binary
+  {"warn",     "",   "Warning",      "",           "alert-outline",  "",  DC_PROB,  HR_BIN},
+  {"alert",    "",   "Alert",        "",           "alert-octagram-outline", "", DC_SAFETY, HR_BIN},
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+  {"ser_ok",   "",   "Serial Connected", "",       "serial-port",    "",  DC_CONN,  HR_BIN | HR_STATUS},
+#else
+  {"tube",     "",   "Tube Active",  "",           "radioactive",    "",  DC_CONN,  HR_BIN},
+#endif
+};
 
 // Discovery type
 static const char H_TYPE_SENSOR[]  PROGMEM = "sensor";
 static const char H_TYPE_BINSENS[] PROGMEM = "binary_sensor";
 
-// HassExtra keys
+// row keys
 static const char H_K_STAT[]  PROGMEM = "stat_t";
 static const char H_K_VT[]    PROGMEM = "val_tpl";
 static const char H_K_IC[]    PROGMEM = "ic";
@@ -738,118 +772,25 @@ static int buildHassPath(char* buf, size_t sz, const char* disc,
   return snprintf_P(buf, sz, PSTR("%s/%s/%s-%s/config"), disc, type, DeviceInfo::hostname(), name);
 }
 
-// PSTR needs function scope
-void MQTT_Client::forEachHassSensor(HassSensorFn fn) {
-  #define S(id_, jKey_, name_, unit_, icon_, stat_, dev_, state_, ent_, prec_) do { \
-    if (_hass_walk_done) return; \
-    HassSensorRow r = {PSTR(id_), PSTR(name_), PSTR("{{ value_json." jKey_ " }}"), \
-                        PSTR(unit_), PSTR(icon_), stat_, dev_, state_, ent_, PSTR(prec_)}; \
-    (this->*fn)(r); \
-  } while (0)
-
-  // tele/sensor
-  S("cpm",      "cpm",      "CPM",          "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "");
-  S("cpm5",     "cpm5",     "CPM5",         "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "");
-  S("cpm15",    "cpm15",    "CPM15",        "CPM",       "mdi:pulse",          H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "");
-  S("usv",      "usv",      "\u00B5Sv/h",   "\u00B5Sv/h", "mdi:radioactive",    H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "2");
-  if (has_row(PSTR("hv"))) {
-    S("hv",     "hv",       "HV",           "V",         "mdi:lightning-bolt", H_ST_SENSOR, H_EMPTY,  H_SC_MEAS,   H_EMPTY, "");
-  }
-  if (has_row(PSTR("t"))) {
-    S("temp",     "t", "Temperature", "°C",  "mdi:thermometer",   H_ST_SENSOR, H_DC_TEMP,  H_SC_MEAS, H_EMPTY, "");
-  }
-  if (has_row(PSTR("h"))) {
-    S("humidity", "h", "Humidity",    "%",   "mdi:water-percent", H_ST_SENSOR, H_DC_HUMID, H_SC_MEAS, H_EMPTY, "");
-  }
-  if (has_row(PSTR("p"))) {
-    S("pressure", "p", "Pressure",    "hPa", "mdi:gauge",         H_ST_SENSOR, H_DC_PRES,  H_SC_MEAS, H_EMPTY, "");
-  }
-  S("c_total",  "c_total",  "Total Clicks", "",          "mdi:counter",        H_ST_STATUS, H_EMPTY,  H_SC_TOTINC, H_EMPTY, "");
-  // tele/status
-  S("tick",     "tick",     "tick",         "\u00B5s",   "mdi:timer-outline",  H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG, "");
-  S("t_max",    "t_max",    "tick max",     "\u00B5s",   "mdi:timer-alert-outline", H_ST_STATUS, H_EMPTY, H_SC_MEAS, H_EC_DIAG, "");
-  S("lps",      "lps",      "LPS",          "1/s",       "mdi:speedometer",    H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG, "");
-  S("rssi",     "rssi",     "RSSI",         "dBm",       "mdi:wifi",           H_ST_STATUS, H_DC_SIG, H_SC_MEAS,   H_EC_DIAG, "");
-  S("uptime",   "ut",       "Uptime",       "s",         "mdi:clock-outline",  H_ST_STATUS, H_DC_DUR, H_SC_TOTINC, H_EC_DIAG, "");
-  S("free_mem", "free_mem", "Free Memory",  "B",         "mdi:memory",         H_ST_STATUS, H_EMPTY,  H_SC_MEAS,   H_EC_DIAG, "");
-#ifdef ESP32
-  S("cpu_temp", "cpu_temp", "CPU Temperature", "°C",      "mdi:chip",           H_ST_STATUS, H_DC_TEMP, H_SC_MEAS,  H_EC_DIAG, "1");
-#endif
-
-  #undef S
+static const char* hass_key(const HassRow* r) {
+  return pgm_read_byte(r->key) ? r->key : r->id;
 }
 
-void MQTT_Client::forEachHassBinarySensor(HassBinaryFn fn) {
-  #define B(id_, name_, icon_, stat_, dev_) do { \
-    if (_hass_walk_done) return; \
-    HassBinaryRow r = {PSTR(id_), PSTR(name_), PSTR("{{ value_json." id_ " }}"), \
-                        PSTR(icon_), stat_, dev_}; \
-    (this->*fn)(r); \
-  } while (0)
-
-  B("warn",  "Warning", "mdi:alert-outline",          H_ST_SENSOR, H_DC_PROB);
-  B("alert", "Alert",   "mdi:alert-octagram-outline", H_ST_SENSOR, H_DC_SAFETY);
-#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  B("ser_ok", "Serial Connected", "mdi:serial-port", H_ST_STATUS, H_DC_CONN);
-#else
-  B("tube", "Tube Active", "mdi:radioactive", H_ST_SENSOR, H_DC_CONN);
-#endif
-
-  #undef B
+static uint8_t hass_flags(const HassRow* r) {
+  return pgm_read_byte(&r->flags);
 }
 
-void MQTT_Client::hassPublishSensorAt(const HassSensorRow& r) {
-  if (_hass_walk_done) return;
-  if (_hass_walk_cursor == _hass_idx) {
-    hassPublishSensor(r);
-    _hass_walk_done = true;
+// the idx-th row HA gets, nullptr past the end
+static const HassRow* hass_row(uint8_t idx) {
+  for (const HassRow& r : HASS_ROWS) {
+    if ((hass_flags(&r) & HR_OPT) && !has_row(hass_key(&r))) continue;
+    if (idx-- == 0) return &r;
   }
-  _hass_walk_cursor++;
+  return nullptr;
 }
 
-void MQTT_Client::hassPublishBinaryAt(const HassBinaryRow& r) {
-  if (_hass_walk_done) return;
-  if (_hass_walk_cursor == _hass_idx) {
-    hassPublishBinarySensor(r);
-    _hass_walk_done = true;
-  }
-  _hass_walk_cursor++;
-}
-
-void MQTT_Client::hassRemoveSensorAt(const HassSensorRow& r) {
-  if (_hass_walk_done) return;
-  if (_hass_walk_cursor == _hass_idx) {
-    hassRemoveSensor(r);
-    _hass_walk_done = true;
-  }
-  _hass_walk_cursor++;
-}
-
-void MQTT_Client::hassRemoveBinaryAt(const HassBinaryRow& r) {
-  if (_hass_walk_done) return;
-  if (_hass_walk_cursor == _hass_idx) {
-    hassRemoveBinarySensor(r);
-    _hass_walk_done = true;
-  }
-  _hass_walk_cursor++;
-}
-
-bool MQTT_Client::publishHassNext(uint8_t idx) {
-  (void)idx;
-  _hass_walk_cursor = 0;
-  _hass_walk_done   = false;
-  forEachHassSensor(&MQTT_Client::hassPublishSensorAt);
-  if (!_hass_walk_done) forEachHassBinarySensor(&MQTT_Client::hassPublishBinaryAt);
-  return _hass_walk_done;
-}
-
-bool MQTT_Client::removeHassNext(uint8_t idx) {
-  (void)idx;
-  _hass_walk_cursor = 0;
-  _hass_walk_done   = false;
-  forEachHassSensor(&MQTT_Client::hassRemoveSensorAt);
-  if (!_hass_walk_done) forEachHassBinarySensor(&MQTT_Client::hassRemoveBinaryAt);
-  return _hass_walk_done;
+static const char* hass_type(const HassRow* r) {
+  return (hass_flags(r) & HR_BIN) ? H_TYPE_BINSENS : H_TYPE_SENSOR;
 }
 
 void MQTT_Client::setupHassCB() {
@@ -886,90 +827,21 @@ void MQTT_Client::setupHassRemove() {
 void MQTT_Client::triggerHassDiscovery() {
   if (_hass_walk_state) return;
   unsigned long now_s = (unsigned long)DeviceInfo::uptime();
-  if (_hass_last_publish && (now_s - _hass_last_publish) < MQTT_HASS_MIN_INTERVAL_S) {
+  if (fresh(now_s, _hass_last_publish, MQTT_HASS_MIN_INTERVAL_S)) {
     Log::debug(PSTR("MQTT: HA discovery throttled (%lu s since last)"),
                now_s - _hass_last_publish);
     return;
   }
   setupHassAuto();
-  _hass_next_publish = now_s + MQTT_HASS_REFRESH_S;
-  if (_hass_next_publish == 0) _hass_next_publish = 1;
+  _hass_next.set(now_s + MQTT_HASS_REFRESH_S);
 }
 
-void MQTT_Client::stepHassDiscovery() {
-  if (_hass_walk_state == 0) return;
-  // wait for acks, a refused one would be a sensor missing in HA
-  if (s_mq.room() < HASS_PACKET_MAX) return;
-  bool emitted = (_hass_walk_state > 0)
-                  ? publishHassNext(_hass_idx)
-                  : removeHassNext(_hass_idx);
-  if (emitted) {
-    _hass_idx++;
-  } else {
-    if (_hass_walk_state > 0) {
-      _hass_last_publish = (unsigned long)DeviceInfo::uptime();
-      if (_hass_last_publish == 0) _hass_last_publish = 1;
-    }
-    _hass_walk_state = 0;
-  }
-}
-
-void MQTT_Client::hassPublishSensor(const HassSensorRow& r) {
-  HassExtra extras[5] = {
-    {H_K_STAT, r.stat_t},
-    {H_K_VT,   r.val_tpl},
-    {H_K_IC,   r.icon},
-  };
-  size_t n = 3;
-  if (pgm_read_byte(r.unit)) extras[n++] = {H_K_UOM, r.unit};
-  if (pgm_read_byte(r.precision)) extras[n++] = {H_K_PREC, r.precision};
-  const HassTopic t = {H_TYPE_SENSOR, r.id, r.name,
-    r.dev_cla, r.state_cla, r.ent_cat, H_EMPTY};
-  publishHassTopic(t, extras, n);
-}
-
-void MQTT_Client::hassPublishBinarySensor(const HassBinaryRow& r) {
-  HassExtra extras[] = {
-    {H_K_STAT,  r.stat_t},
-    {H_K_VT,    r.val_tpl},
-    {H_K_PLON,  H_V_ONE},
-    {H_K_PLOFF, H_V_ZERO},
-    {H_K_IC,    r.icon},
-  };
-  const HassTopic t = {H_TYPE_BINSENS, r.id, r.name,
-    r.dev_cla, H_EMPTY, H_EMPTY, H_EMPTY};
-  publishHassTopic(t, extras, 5);
-}
-
-void MQTT_Client::hassRemoveSensor(const HassSensorRow& r) {
-  removeHassTopic(H_TYPE_SENSOR, r.id);
-}
-
-void MQTT_Client::hassRemoveBinarySensor(const HassBinaryRow& r) {
-  removeHassTopic(H_TYPE_BINSENS, r.id);
-}
-
-// all PGM_P
-void MQTT_Client::publishHassTopic(const HassTopic& t,
-    const HassExtra* extras, size_t n_extras)
-{
-  const char* host = DeviceInfo::hostname();
-  char path[HASS_PATH_LEN];
-  buildHassPath(path, sizeof(path), hass_disc(), t.type, t.id);
-  size_t cap;
-  char* out = json_begin(path, MQTT_JSON_BUFFER_SIZE, &cap);
-  if (!out) {
-    Log::console(PSTR("MQTT: HA discovery publish dropped: %s"), t.id);
-    return;
-  }
-
+static void hass_device(EGJson& j, const char* host) {
   char ipStr[EG_IPV4_MAX + 1];
   Wifi::formatIP(ipStr, sizeof(ipStr));
-  EGJson j(out, cap);
-  j.map_begin();
   j.map_begin(PSTR("device"));
   j.str(PSTR("mf"), PSTR(THING_NAME));
-  j.str(PSTR("mdl"), DeviceInfo::chipmodel());
+  j.str(PSTR("mdl"), DeviceInfo::board());
   j.str(PSTR("mdl_id"), PSTR(BUILD_ENV));
   j.str(PSTR("name"), host);
   j.str(PSTR("sw"), PSTR(RELEASE_VERSION "/" GIT_VERSION));
@@ -989,47 +861,97 @@ void MQTT_Client::publishHassTopic(const HassTopic& t,
   j.part(PSTR("/"));
   j.str_end();
   j.map_end();
+}
+
+static void hass_fields(EGJson& j, const HassRow* r) {
+  uint8_t f = hass_flags(r);
+  uint8_t dev = pgm_read_byte(&r->dev);
+  if (dev) j.str(PSTR("dev_cla"), (const char*)pgm_read_ptr(&H_DEV_CLA[dev]));
+  if (!(f & HR_BIN)) j.str(PSTR("stat_cla"), (f & HR_TOTAL) ? H_SC_TOTINC : H_SC_MEAS);
+  if (f & HR_DIAG) j.str(PSTR("ent_cat"), H_EC_DIAG);
+  j.str(H_K_STAT, (f & HR_STATUS) ? H_ST_STATUS : H_ST_SENSOR);
+  j.str_begin(H_K_VT);
+  j.part(PSTR("{{ value_json."));
+  j.part(hass_key(r));
+  j.part(PSTR(" }}"));
+  j.str_end();
+  if (f & HR_BIN) {
+    j.str(H_K_PLON, H_V_ONE);
+    j.str(H_K_PLOFF, H_V_ZERO);
+  }
+  j.str_begin(H_K_IC);
+  j.part(PSTR("mdi:"));
+  j.part(r->icon);
+  j.str_end();
+  if (pgm_read_byte(r->unit)) j.str(H_K_UOM, r->unit);
+  if (pgm_read_byte(r->prec)) j.str(H_K_PREC, r->prec);
+}
+
+static void hass_publish(const HassRow* r, const char* root)
+{
+  const char* host = DeviceInfo::hostname();
+  char path[HASS_PATH_LEN];
+  buildHassPath(path, sizeof(path), hass_disc(), hass_type(r), r->id);
+  size_t cap;
+  char* out = json_begin(path, MQTT_JSON_BUFFER_SIZE, &cap);
+  if (!out) {
+    Log::console(PSTR("MQTT: HA discovery publish dropped: %s"), r->id);
+    return;
+  }
+
+  EGJson j(out, cap);
+  j.map_begin();
+  hass_device(j, host);
   j.str(PSTR("avty_t"), PSTR("~/tele/lwt"));
   j.str(PSTR("pl_avail"), PSTR("Online"));
   j.str(PSTR("pl_not_avail"), PSTR("Offline"));
-  j.str(PSTR("~"), getRootTopic());
+  j.str(PSTR("~"), root);
   j.str_begin(PSTR("name"));
   j.part(host);
   j.part(PSTR(" "));
-  j.part(t.displayName);
+  j.part(r->name);
   j.str_end();
   j.str_begin(PSTR("uniq_id"));
   j.part(host);
   j.part(PSTR("_"));
-  j.part(t.id);
+  j.part(r->id);
   j.str_end();
-  if (pgm_read_byte(t.devCla))   j.str(PSTR("dev_cla"), t.devCla);
-  if (pgm_read_byte(t.stateCla)) j.str(PSTR("stat_cla"), t.stateCla);
-  if (pgm_read_byte(t.entCat))   j.str(PSTR("ent_cat"), t.entCat);
-  if (pgm_read_byte(t.cmdTopic)) {
-    j.str_begin(PSTR("cmd_t"));
-    j.part(PSTR("~"));
-    j.part(t.cmdTopic);
-    j.str_end();
-  }
-  for (size_t i = 0; i < n_extras; i++) j.str(extras[i].key, extras[i].value);
+  hass_fields(j, r);
   j.map_end();
   // partial is worse than none; not ended, nothing goes
   if (j.overflow) {
-    Log::console(PSTR("MQTT: HA discovery too big, not sent: %s"), t.id);
+    Log::console(PSTR("MQTT: HA discovery too big, not sent: %s"), r->id);
     return;
   }
   if (s_mq.publish_end(j.length()) == 0) {
-    Log::console(PSTR("MQTT: HA discovery publish dropped: %s"), t.id);
+    Log::console(PSTR("MQTT: HA discovery publish dropped: %s"), r->id);
   }
   MQTT_PUB_YIELD();
 }
 
-void MQTT_Client::removeHassTopic(const char* type, const char* id)
+static void hass_remove(const HassRow* r)
 {
   char path[HASS_PATH_LEN];
-  buildHassPath(path, sizeof(path), hass_disc(), type, id);
+  buildHassPath(path, sizeof(path), hass_disc(), hass_type(r), r->id);
   s_mq.publish(path, "", 1, false);
+}
+
+void MQTT_Client::stepHassDiscovery() {
+  if (_hass_walk_state == 0) return;
+  // wait for acks, a refused one would be a sensor missing in HA
+  if (s_mq.room() < HASS_PACKET_MAX) return;
+  const HassRow* r = hass_row(_hass_idx);
+  if (r) {
+    if (_hass_walk_state > 0) hass_publish(r, getRootTopic());
+    else hass_remove(r);
+    _hass_idx++;
+  } else {
+    if (_hass_walk_state > 0) {
+      _hass_last_publish = (unsigned long)DeviceInfo::uptime();
+      if (_hass_last_publish == 0) _hass_last_publish = 1;
+    }
+    _hass_walk_state = 0;
+  }
 }
 #endif
 
@@ -1075,12 +997,10 @@ void MQTT_Client::on_prefs_saved()
   _rootTopicCached = false;
   bool needs_hass_remove = false;
 #ifdef MQTTAUTODISCOVER
-  needs_hass_remove = (connected && !EGPrefs::getBool("mqtt", K_HASS_ENABLED));
+  needs_hass_remove = (s_mq.connected() && !EGPrefs::getBool("mqtt", K_HASS_ENABLED));
 #endif
   disconnect();
-  reconnectAttempts = 0;
   authFailures = 0;
-  lastConnectionAttempt = 0;
 #ifdef MQTTAUTODISCOVER
   // publish walk restarts on reconnect
   if (_hass_walk_state > 0) _hass_walk_state = 0;

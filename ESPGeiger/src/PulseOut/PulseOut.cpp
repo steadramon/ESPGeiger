@@ -19,17 +19,19 @@
 #ifdef PULSE_OUT
 
 #include "PulseOut.h"
+#include "App/AppKeys.h"
+#include "App/ChipVoice.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
 
 #include "Corium/Util/Bytes.h"
-#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
+#include "Counter/Counter.h"
 
 EG_PSTR(K_CYCLES, "cycles");
 EG_PSTR(K_MAX_HZ, "max_hz");
@@ -107,6 +109,14 @@ void PulseOut::on_prefs_loaded() {
   _quiet.set(EGPrefs::getString("pulse", EG_K_QUIET_FROM),
              EGPrefs::getString("pulse", EG_K_QUIET_TO));
   _engine.commitConfig();
+  apply_voice();
+}
+
+// after the engine clamps, so it can pass them
+void PulseOut::apply_voice() {
+  _engine.pulse_us_eff   = (uint32_t)(_engine.pulse_us_eff * _voice.pulse);
+  _engine.burst_freq_eff = (uint32_t)(_engine.burst_freq_eff * _voice.freq);
+  if (_engine.burst_freq_eff == 0) _engine.burst_freq_eff = 1;
 }
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
@@ -115,14 +125,14 @@ static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 
 // one-off migration
 static bool migrate_legacy_blip() {
-  if (!Fs::begin() || LittleFS.exists(BLIP_MIG_MARKER)) return false;
-  File f = Fs::open_r("/prefs/led.bin");
+  if (!Fs::begin() || Fs::exists(BLIP_MIG_MARKER)) return false;
+  File f = Fs::open_r(F("/prefs/led.bin"));
   if (!f) {
     Fs::touch(BLIP_MIG_MARKER);
     return false;
   }
   uint8_t magic[4];
-  if (f.read(magic, 4) != 4 || memcmp(magic, "EGP1", 4) != 0) {
+  if (f.read(magic, 4) != 4 || memcmp_P(magic, PSTR("EGP1"), 4) != 0) {
     f.close();
     Fs::touch(BLIP_MIG_MARKER);
     return false;
@@ -141,9 +151,9 @@ static bool migrate_legacy_blip() {
     uint16_t vlen = rd_le16(vb);
     if (vlen >= sizeof(value)) break;
     if (vlen > 0 && f.read((uint8_t*)value, vlen) != vlen) break;
-    if (klen == 8  && strncmp(key, "blip_pin", 8) == 0 && vlen < sizeof(pin_val)) {
+    if (klen == 8  && strncmp_P(key, PSTR("blip_pin"), 8) == 0 && vlen < sizeof(pin_val)) {
       memcpy(pin_val, value, vlen); pin_val[vlen] = '\0';
-    } else if (klen == 13 && strncmp(key, "blip_pulse_ms", 13) == 0 && vlen < sizeof(ms_val)) {
+    } else if (klen == 13 && strncmp_P(key, PSTR("blip_pulse_ms"), 13) == 0 && vlen < sizeof(ms_val)) {
       memcpy(ms_val, value, vlen); ms_val[vlen] = '\0';
     }
   }
@@ -174,7 +184,11 @@ static bool migrate_legacy_blip() {
 }
 // === END LEGACY IMPORT ===
 
+static void pulseout_click(uint32_t) { pulseout.notifyClick(fast_millis()); }
+
 void PulseOut::begin() {
+  gcounter.on_click(pulseout_click);
+  gcounter.on_rx_click(pulseout_click);
   if (migrate_legacy_blip()) on_prefs_loaded();
   _begun = true;
   _engine.pin = claim_pin(_enabled, _pin);
@@ -182,15 +196,9 @@ void PulseOut::begin() {
     if (_enabled && _engine.pin < 0) Log::console(PSTR("PulseOut: no pin set"));
     return;
   }
-  // chip-id jitter, +/-15% width, +/-3% freq
-  uint32_t r = xorshift32(fold32(DeviceInfo::hwid()));
-  int32_t  s = (int32_t)(r & 0xFF) - 128;
-  _engine.voice_pulse = 1.0f + s * (0.15f / 128.0f);
-  r = xorshift32(r);
-  s = (int32_t)(r & 0xFF) - 128;
-  _engine.voice_freq  = 1.0f + s * (0.03f / 128.0f);
-  _engine.commitConfig();
-  _engine.begin();
+  _voice = chip_blip(DeviceInfo::hwid());
+  _engine.begin();   // commits
+  apply_voice();
   Log::console(PSTR("PulseOut: GPIO%d mode=%u polarity=%u"),
                (int)_engine.pin, (unsigned)_engine.mode, (unsigned)_engine.polarity);
 }

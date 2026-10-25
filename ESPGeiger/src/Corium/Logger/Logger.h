@@ -21,9 +21,14 @@
 #define LOGGER_H
 
 #include "Arduino.h"
+#include "App/AppConfig.h"
 
+#ifndef MAX_LOG_SIZE
 #define MAX_LOG_SIZE 4000
+#endif
+#ifndef LOG_LEVEL
 #define LOG_LEVEL    LOG_LEVEL_ERROR
+#endif
 
 class Log {
 public:

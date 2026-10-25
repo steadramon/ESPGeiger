@@ -37,7 +37,7 @@ class EGLed {
     EGLed(uint8_t pin, bool low_active = false);
     void attach(uint8_t pin, bool low_active);   // once, for a pin known later
 
-    static void setClock(MillisFn fn);
+    static void setClock(MillisFn fn);   // = EGClock::set, all libs
 
     void blink(uint16_t on_ms, uint16_t off_ms);
     void pulse(uint16_t on_ms);

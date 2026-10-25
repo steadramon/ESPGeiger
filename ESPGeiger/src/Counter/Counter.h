@@ -21,7 +21,7 @@
 #define COUNTER_H
 #include <Arduino.h>
 #include <CircularBuffer.hpp>
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Output/QuietWindow.h"
 #include "Corium/Module/EGModuleRegistry.h"
@@ -45,6 +45,17 @@ class GeigerUdpRx;
 #include "CounterMaths.h"
 
 #define GEIGER_CPM_COUNT 60
+
+typedef void (*ClickFn)(uint32_t us);
+
+// filled at begin, called from loop
+struct ClickFns {
+  static constexpr uint8_t MAX = 8;
+  ClickFn fn[MAX];
+  uint8_t n = 0;
+  bool add(ClickFn f);   // false = full
+  void fire(uint32_t us) const;
+};
 
 class Counter : public CounterMaths {
     public:
@@ -74,7 +85,7 @@ class Counter : public CounterMaths {
       uint16_t get_cps_n();
       uint32_t get_cps_win_us();
       uint32_t get_min_pulse_us();
-      static void IRAM_ATTR on_pulse(uint32_t now_us);
+      static void EG_ISR_ATTR on_pulse(uint32_t now_us);
       static void on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
       // 0=auto 1=live 2=60s 3=bucket 4=fast
       void    set_cpm_mode(uint8_t m);
@@ -157,6 +168,9 @@ class Counter : public CounterMaths {
       }
       // direct, polling merges blips
       void dispatchReceiverBlip();
+      bool on_click(ClickFn f) { return _clicks.add(f); }
+      // udp receiver, no echo
+      bool on_rx_click(ClickFn f) { return _rx_clicks.add(f); }
       unsigned long clicks_hour = 0;
       unsigned long total_clicks_rollover = 0;
       unsigned long total_clicks = 0;
@@ -247,6 +261,8 @@ class Counter : public CounterMaths {
 #endif
       // static_casts rely on GEIGER_TYPE
       GeigerInput* geigerinput;
+      ClickFns _clicks;
+      ClickFns _rx_clicks;
 };
 
 extern Counter gcounter;

@@ -60,7 +60,7 @@ static void one_line(const char* p, const char* e, ImportText::PutFn put, Import
 }
 
 bool ImportText::is_blob(const char* text, size_t len) {
-  return len >= 4 && memcmp_P(text, PSTR("ESPG"), 4) == 0;
+  return len >= 4 && memcmp_P(text, PSTR(EXPORT_MAGIC_B64), 4) == 0;
 }
 
 ImportText::Result ImportText::apply(const char* text, size_t len, PutFn put) {

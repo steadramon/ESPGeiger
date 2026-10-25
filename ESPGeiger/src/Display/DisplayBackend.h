@@ -29,6 +29,8 @@ class DisplayBackend {
     virtual bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) = 0;
     virtual void reload() {}
     virtual bool present() { return true; }
+    virtual bool takes(uint8_t type) = 0;   // display.type it draws
+    virtual void unchosen() {}              // another backend drew
 
     virtual void setup_wifi(const char* host) { (void)host; }
     virtual void safe_mode() {}   // starts the panel too

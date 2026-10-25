@@ -1,5 +1,5 @@
 /*
-  ExternalPause.h - auto-expiring pause on external posters.
+  EGClock.h - One millis source for the EG libs. Set once, read by all.
 
   Copyright (C) 2026 @steadramon
 
@@ -16,17 +16,15 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
-#ifndef ESPG_EXTERNAL_PAUSE_H
-#define ESPG_EXTERNAL_PAUSE_H
+#ifndef EGCLOCK_H
+#define EGCLOCK_H
 
 #include <stdint.h>
 
-namespace ExternalPause {
-  void     start(uint32_t timeout_ms);   // 0 = resume
-  bool     start_s(const char* secs);    // false if not a number, max 24 h
-  bool     active();   // clears and logs on expiry
-  uint32_t remaining_ms();
+namespace EGClock {
+using MillisFn = uint32_t (*)();
+extern MillisFn now;    // EGClock::now(), millis() till set
+void set(MillisFn fn);  // in setup(), before wifi; nullptr = millis()
 }
 
 #endif

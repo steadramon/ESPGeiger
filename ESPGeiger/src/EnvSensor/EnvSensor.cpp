@@ -185,12 +185,6 @@ void EnvSensor::sampleDone() {
   if (!isnan(_bt) || !isnan(_bh) || !isnan(_bp)) emaUpdate(_bt, _bh, _bp);
 }
 
-static float ema(float avg, float v) {
-  if (isnan(v)) return avg;
-  if (isnan(avg)) return v;
-  return avg * (1.0f - ENV_EMA_ALPHA) + v * ENV_EMA_ALPHA;
-}
-
 void EnvSensor::emaUpdate(float t, float h, float p) {
   // NAN breaks the run
   bool same = true, any = false;
@@ -208,9 +202,9 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
     _st->stuck = 0;
   }
 
-  _st->ema_t = ema(_st->ema_t, t);
-  _st->ema_h = ema(_st->ema_h, h);
-  _st->ema_p = ema(_st->ema_p, p);
+  _st->ema_t = ema_nan(_st->ema_t, t, ENV_EMA_ALPHA);
+  _st->ema_h = ema_nan(_st->ema_h, h, ENV_EMA_ALPHA);
+  _st->ema_p = ema_nan(_st->ema_p, p, ENV_EMA_ALPHA);
 }
 
 float EnvSensor::tempC() const {

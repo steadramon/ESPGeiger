@@ -25,17 +25,15 @@
 #include "Corium/Util/Words.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Counter/CounterUpload.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 
 EG_PSTR(K_AID,  "aid");
 EG_PSTR(K_GCID, "gcid");
 
 GMC gmc;
 EG_REGISTER_MODULE(gmc)
-
-EG_PSTR(M_WARM,   "warm");
-EG_PSTR(M_CPM_ST, "cpm_st");
-EG_PSTR(M_CPM5,   "cpm5");
-EG_PSTR(M_USV5,   "usv5");
 
 EG_PSTR(GM_H_EN,  "Upload to gmcmap.com");
 EG_PSTR(GM_L_AID, "Account ID");
@@ -98,19 +96,13 @@ bool GMC::interpret(const char* r)
 }
 
 bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!egm_b(M_WARM)) return false;
-
   const char* _api_id    = EGPrefs::getString("gmc", K_AID);
   const char* _api_gc_id = EGPrefs::getString("gmc", K_GCID);
   bool has_id   = (_api_id[0]    != '\0');
   bool has_gcid = (_api_gc_id[0] != '\0');
 
   if (!has_id && !has_gcid) return false;
-
-  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    Log::console(PSTR("GMC: Testmode"));
-    return false;
-  }
+  if (!upload_ready(log_tag())) return false;
 
   if (!has_id || !has_gcid) {
     Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));

@@ -19,19 +19,19 @@
 #include "ImprovSerial.h"
 #include <cstring>
 
-#ifdef ESP8266
-#include <ESP8266WiFi.h>
-#else
-#include <WiFi.h>
-#endif
-
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
+#include "Corium/Net/WifiInfo.h"
+#include "Corium/Net/WifiSetup.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Uptime.h"
 
 ImprovSerial improvSerial;
+
+#ifndef APP_FW_NAME
+#define APP_FW_NAME THING_NAME
+#endif
 
 #if defined(ESP8266)
   static const char* IMPROV_CHIPFAMILY = "ESP8266";
@@ -45,7 +45,7 @@ ImprovSerial improvSerial;
 
 static std::string device_url() {
   char ip[16], url[32];
-  Wifi::formatIP(ip, sizeof(ip), WiFi.localIP());
+  Wifi::formatIP(ip, sizeof(ip), Wifi::localIP());
   snprintf_P(url, sizeof(url), PSTR("http://%s/"), ip);
   return std::string(url);
 }
@@ -124,7 +124,7 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
       break;
     case improv::GET_CURRENT_STATE: {
       if (_state != improv::STATE_PROVISIONED) {
-        if (WiFi.status() == WL_CONNECTED) {
+        if (Wifi::connected_raw()) {
           _state = improv::STATE_PROVISIONED;
         } else {
           // can take 50ms on esp32
@@ -167,17 +167,8 @@ void ImprovSerial::on_error(improv::Error err) {
 }
 
 void ImprovSerial::send_device_info() {
-  std::string fw;
-  const char* model = APP_MODEL;
-  if (!model[0]) {
-    fw = THING_NAME;
-  } else if (strncmp(model, THING_NAME "-", sizeof(THING_NAME)) == 0) {
-    fw = model;
-  } else {
-    fw = std::string(THING_NAME " ") + model;
-  }
   std::vector<std::string> info = {
-    fw,
+    APP_FW_NAME,
     RELEASE_VERSION,
     IMPROV_CHIPFAMILY,
     DeviceInfo::hostname(),
@@ -186,16 +177,16 @@ void ImprovSerial::send_device_info() {
 }
 
 void ImprovSerial::send_wifi_networks() {
-  int n = WiFi.scanNetworks();
+  int n = Wifi::scanNetworks(false, false);
   int8_t best_idx[16];
   uint8_t kept = 0;
   for (int i = 0; i < n && kept < 16; i++) {
-    String ssid = WiFi.SSID(i);
+    String ssid = Wifi::scanSSID(i);
     if (!ssid.length()) continue;
     bool seen = false;
     for (uint8_t k = 0; k < kept; k++) {
-      if (ssid == WiFi.SSID(best_idx[k])) {
-        if (WiFi.RSSI(i) > WiFi.RSSI(best_idx[k])) best_idx[k] = (int8_t)i;
+      if (ssid == Wifi::scanSSID(best_idx[k])) {
+        if (Wifi::scanRSSI(i) > Wifi::scanRSSI(best_idx[k])) best_idx[k] = (int8_t)i;
         seen = true;
         break;
       }
@@ -204,16 +195,10 @@ void ImprovSerial::send_wifi_networks() {
   }
   for (uint8_t k = 0; k < kept; k++) {
     int i = best_idx[k];
-    bool open = (WiFi.encryptionType(i) ==
-#ifdef ESP8266
-                 ENC_TYPE_NONE
-#else
-                 WIFI_AUTH_OPEN
-#endif
-                );
+    bool open = Wifi::scanOpen(i);
     std::vector<std::string> entry = {
-      std::string(WiFi.SSID(i).c_str()),
-      String(WiFi.RSSI(i)).c_str(),
+      std::string(Wifi::scanSSID(i).c_str()),
+      String(Wifi::scanRSSI(i)).c_str(),
       open ? "NO" : "YES"
     };
     send_response_data(improv::GET_WIFI_NETWORKS, entry);
@@ -228,18 +213,16 @@ void ImprovSerial::handle_wifi_settings(const std::string& ssid,
   Wifi::saveBackupCreds();
   Wifi::onImprovCreds(ssid.c_str(), password.c_str());
   // else the wait loop sends the old IP
-  WiFi.disconnect(false);
-  WiFi.persistent(true);
-  WiFi.begin(ssid.c_str(), password.c_str());
+  Wifi::join(ssid.c_str(), password.c_str());
 
   // esp-web-tools gives up at 30s
   uint32_t start = fast_millis();
   while (fast_millis() - start < 25000) {
-    if (WiFi.status() == WL_CONNECTED) {
+    if (Wifi::connected_raw()) {
       set_state(improv::STATE_PROVISIONED);
       send_response_data(improv::WIFI_SETTINGS, { device_url() });
       Log::console(PSTR("Improv: provisioned ssid='%s' ip=%s"),
-                   ssid.c_str(), WiFi.localIP().toString().c_str());
+                   ssid.c_str(), Wifi::localIP().toString().c_str());
       _in_wifi_settings = false;
       return;
     }
@@ -251,7 +234,7 @@ void ImprovSerial::handle_wifi_settings(const std::string& ssid,
   }
   Log::console(PSTR("Improv: WiFi connect timeout for ssid='%s'"), ssid.c_str());
   // installer gone, stop connecting
-  WiFi.disconnect(true);
+  Wifi::off();
   set_state(improv::STATE_AUTHORIZED);
   send_error(improv::ERROR_UNABLE_TO_CONNECT);
   _in_wifi_settings = false;

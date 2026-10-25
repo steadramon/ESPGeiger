@@ -26,7 +26,6 @@
 extern const char W_OK_TEXT[] PROGMEM;
 extern const char W_TRUE[] PROGMEM;
 extern const char W_FALSE[] PROGMEM;
-extern const char W_APP_NAME[] PROGMEM;
 
 extern const char W_FMT_S[] PROGMEM;
 extern const char W_FMT_D[] PROGMEM;

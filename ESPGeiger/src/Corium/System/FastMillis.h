@@ -31,4 +31,25 @@ static inline uint32_t fast_millis() { return _fast_ms_counter; }
 // at or past, wrap-safe, any unit
 static inline bool reached(uint32_t now, uint32_t at) { return (int32_t)(now - at) >= 0; }
 
+// at or past, then next ms from now
+static inline bool due_every(uint32_t now, uint32_t& at, uint32_t ms) {
+  if (!reached(now, at)) return false;
+  at = now + ms;
+  return true;
+}
+
+// stamped under ms ago, 0 = never
+static inline bool fresh(uint32_t now, uint32_t last, uint32_t ms) {
+  return last != 0 && now - last < ms;
+}
+
+// 0 = off, so a time landing on 0 moves to 1
+struct Deadline {
+  uint32_t at = 0;
+  void set(uint32_t t) { at = t ? t : 1; }
+  void clear() { at = 0; }
+  bool armed() const { return at != 0; }
+  bool due(uint32_t now) const { return at != 0 && reached(now, at); }
+};
+
 #endif

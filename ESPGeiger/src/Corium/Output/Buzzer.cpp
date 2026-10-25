@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Buzzer.h"
-#if defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
+#if defined(BUZZER_ENGINE) && defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
 #include <Arduino.h>
 #include <driver/rmt.h>
 #include <driver/gpio.h>

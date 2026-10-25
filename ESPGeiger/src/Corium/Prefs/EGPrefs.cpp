@@ -29,7 +29,8 @@
 #include <ArduinoJson.h>
 #endif
 #include <EGEscape.h>
-#include <LittleFS.h>
+#include <EGStr.h>
+#include "Corium/System/Fs.h"
 #include <errno.h>
 #include <math.h>
 #include <stdlib.h>
@@ -52,61 +53,19 @@ struct GroupShadow {
   bool               dirty;
 };
 
-const char EG_K_BRIGHTNESS[]   PROGMEM = "brightness";
-const char EG_K_CLK[]          PROGMEM = "clk";
-const char EG_K_CLKR[]         PROGMEM = "clkr";
 const char EG_K_DNS[]          PROGMEM = "dns";
-const char EG_K_ENABLE[]       PROGMEM = "enable";
-const char EG_K_FADE_SHIFT[]   PROGMEM = "fade_shift";
-const char EG_K_FBT[]          PROGMEM = "fbt";
-const char EG_K_FREQ[]         PROGMEM = "freq";
 const char EG_K_GW[]           PROGMEM = "gw";
-const char EG_K_INTERVAL[]     PROGMEM = "interval";
 const char EG_K_IP[]           PROGMEM = "ip";
 const char EG_K_LAT[]          PROGMEM = "lat";
 const char EG_K_LON[]          PROGMEM = "lon";
-const char EG_K_MODE[]         PROGMEM = "mode";
-const char EG_K_PASSWORD[]     PROGMEM = "password";
-const char EG_K_PIN[]          PROGMEM = "pin";
-const char EG_K_POLARITY[]     PROGMEM = "polarity";
-const char EG_K_PORT[]         PROGMEM = "port";
-const char EG_K_PULSE_MS[]     PROGMEM = "pulse_ms";
-const char EG_K_QUIET_FROM[]   PROGMEM = "quiet_from";
-const char EG_K_QUIET_TO[]     PROGMEM = "quiet_to";
-const char EG_K_RATIO[]        PROGMEM = "ratio";
 const char EG_K_SCL[]          PROGMEM = "scl";
 const char EG_K_SDA[]          PROGMEM = "sda";
-const char EG_K_SECS[]         PROGMEM = "secs";
-const char EG_K_SEND[]         PROGMEM = "send";
 const char EG_K_SERVER[]       PROGMEM = "server";
 const char EG_K_SN[]           PROGMEM = "sn";
 const char EG_K_STATIC_IP[]    PROGMEM = "static_ip";
-const char EG_K_TPL[]          PROGMEM = "tpl";
-const char EG_K_TYPE[]         PROGMEM = "type";
 const char EG_K_TZ[]           PROGMEM = "tz";
-const char EG_K_USER[]         PROGMEM = "user";
-const char EG_K_VOLUME[]       PROGMEM = "volume";
 const char EG_K_WEB_PASS[]     PROGMEM = "web_pass";
-const char EG_L_EN[]  PROGMEM = "Enable";
-const char EG_L_MOD[] PROGMEM = "Mode";
-const char EG_L_INT[] PROGMEM = "Interval";
-const char EG_L_PRT[] PROGMEM = "Port";
-const char EG_L_PWD[] PROGMEM = "Password";
-const char EG_L_PIN[] PROGMEM = "GPIO";
-const char EG_L_POL[] PROGMEM = "Polarity";
-const char EG_O_POL[] PROGMEM = "Active high|Active low";
-const char EG_L_PUL[] PROGMEM = "Pulse width ms";
-const char EG_H_PUL[] PROGMEM = "1-50";
-const char EG_L_FAD[] PROGMEM = "Fade rate";
-const char EG_O_FAD[] PROGMEM = "Fast|Medium|Slow";
-const char EG_L_BRT[] PROGMEM = "Brightness";
-const char EG_L_VOL[] PROGMEM = "Volume";
-const char EG_H_VOL[] PROGMEM = "0-100";
-const char EG_L_QFR[] PROGMEM = "Quiet from";
-const char EG_L_QTO[] PROGMEM = "Quiet to";
-const char EG_H_QTO[] PROGMEM = "End of quiet window; crosses midnight if from > to";
 const char EG_H_RBA[] PROGMEM = "Reboot to apply";
-const char EG_P_IP[]  PROGMEM = "[0-9.]+";
 const char EG_P_HOST[] PROGMEM = "[A-Za-z0-9.:_\\-]+";
 
 static const char FMT_LD[] PROGMEM = "%ld";
@@ -164,20 +123,10 @@ GroupShadow* find_group(const char* module_id) {
   return nullptr;
 }
 
-// SRAM or PROGMEM
-bool same_key(const char* a, const char* b) {
-  if (a == b) return true;
-  for (;; a++, b++) {
-    uint8_t c = pgm_read_byte(a);
-    if (c != pgm_read_byte(b)) return false;
-    if (!c) return true;
-  }
-}
-
 int find_pref_index(const EGPrefGroup* g, const char* key) {
   if (!g || !key) return -1;
   for (size_t i = 0; i < g->count.get(); i++) {
-    if (same_key(key, g->prefs.id_P(i))) return (int)i;
+    if (streq_PP(key, g->prefs.id_P(i))) return (int)i;
   }
   return -1;
 }
@@ -401,41 +350,46 @@ bool write_group(GroupShadow& gs) {
 }
 
 // moved keys, names kept. Taken once, first listed wins
+#ifdef EGPREFS_MOVED
 struct MovedKeys { const char* from; const char* to; };
-static const MovedKeys MOVED[] = {
-  {"display", "i2c"},   // OLED builds
-  {"env",     "i2c"},
-  {"input",   "counter"},
-  {"sys",     "counter"},
-};
+static const MovedKeys MOVED[] PROGMEM = { EGPREFS_MOVED };
 static const size_t MOVED_N = sizeof(MOVED) / sizeof(MOVED[0]);
 
+const char* from_at(size_t i) { return (const char*)pgm_read_ptr(&MOVED[i].from); }
+const char* to_at(size_t i) { return (const char*)pgm_read_ptr(&MOVED[i].to); }
+
 const char* moved_to(const char* from) {
-  for (const MovedKeys& m : MOVED) {
-    if (strcmp(m.from, from) == 0) return m.to;
+  for (size_t i = 0; i < MOVED_N; i++) {
+    if (strcmp(from_at(i), from) == 0) return to_at(i);
   }
   return nullptr;
 }
 
 void adopt_moved() {
-  for (const MovedKeys& m : MOVED) {
-    GroupShadow* gs = find_group(m.to);
-    if (!gs || s_storage.has(m.to)) continue;
+  for (size_t k = 0; k < MOVED_N; k++) {
+    const char* to = to_at(k);
+    GroupShadow* gs = find_group(to);
+    if (!gs || s_storage.has(to)) continue;
     // last listed read first, so the first overwrites
     bool any = false;
     for (size_t i = MOVED_N; i-- > 0;) {
-      if (strcmp(MOVED[i].to, m.to) != 0 || !s_storage.has(MOVED[i].from)) continue;
-      s_storage.readGroup(MOVED[i].from, load_record_cb, gs);
+      if (strcmp(to_at(i), to) != 0 || !s_storage.has(from_at(i))) continue;
+      s_storage.readGroup(from_at(i), load_record_cb, gs);
       any = true;
     }
-    if (any && write_group(*gs)) Log::console(PSTR("Prefs: keys moved to %s"), m.to);
+    if (any && write_group(*gs)) Log::console(PSTR("Prefs: keys moved to %s"), to);
   }
 }
 
 // on reset, else they come back next boot
 void drop_moved() {
-  for (const MovedKeys& m : MOVED) s_storage.removeGroup(m.from);
+  for (size_t i = 0; i < MOVED_N; i++) s_storage.removeGroup(from_at(i));
 }
+#else
+const char* moved_to(const char*) { return nullptr; }   // nothing moved
+void adopt_moved() {}
+void drop_moved() {}
+#endif
 
 // === LEGACY IMPORT (remove after v1.0.0) ===
 #ifdef EGPREFS_NO_LEGACY
@@ -449,12 +403,16 @@ void drop_stale_legacy() {
     GroupShadow& gs = s_groups[gi];
     if (!gs.module || !gs.module->legacy_aliases()) continue;
     const char* path = gs.module->legacy_file();
-    if (!path) path = "/geigerconfig.json";
+#ifdef EGPREFS_LEGACY_FILE
+    if (!path) path = EGPREFS_LEGACY_FILE;
+#else
+    if (!path) continue;
+#endif
     bool dup = false;
     for (size_t i = 0; i < n; i++) dup = dup || strcmp(seen[i], path) == 0;
     if (dup || n == sizeof(seen) / sizeof(seen[0])) continue;
     seen[n++] = path;
-    if (LittleFS.exists(path) && LittleFS.remove(path)) {
+    if (Fs::remove(path)) {
       Log::console(PSTR("Prefs: removed stale legacy %s"), path);
     }
   }
@@ -486,13 +444,16 @@ void import_legacy() {
     if (!aliases) continue;
 
     const char* path = gs.module->legacy_file();
-    if (!path) path = "/geigerconfig.json";
+#ifdef EGPREFS_LEGACY_FILE
+    if (!path) path = EGPREFS_LEGACY_FILE;
+#else
+    if (!path) continue;
+#endif
     if (cached_file == nullptr || strcmp(cached_file, path) != 0) {
       doc.clear();
       cached_file = path;
       cached_ok = false;
-      if (!LittleFS.exists(path)) continue;
-      File f = LittleFS.open(path, "r");
+      File f = Fs::open_r(path);
       if (!f) continue;
       DeserializationError err = deserializeJson(doc, f);
       f.close();
@@ -537,7 +498,7 @@ void import_legacy() {
     Log::console(PSTR("Prefs: Imported %d legacy value(s)"), imported);
   }
   for (size_t i = 0; i < drop_n; i++) {
-    if (LittleFS.remove(drop[i])) {
+    if (Fs::remove(drop[i])) {
       Log::console(PSTR("Prefs: removed legacy %s"), drop[i]);
     }
   }
@@ -736,7 +697,7 @@ void EGPrefs::reset_all(bool keep_network) {
     s_storage.removeGroup(gs.group->module_id);
     bool kept_any = false;
     for (size_t j = 0; j < gs.group->count.get(); j++) {
-      if (is_sys && same_key(EG_K_WEB_PASS, gs.group->prefs.id_P(j))) {
+      if (is_sys && streq_PP(EG_K_WEB_PASS, gs.group->prefs.id_P(j))) {
         kept_any = true;
         continue;
       }
@@ -783,7 +744,11 @@ bool EGPrefs::find_pref(const char* module, const char* key, EGPref* out) {
 }
 
 const char* EGPrefs::moved_from(size_t i) {
-  return i < MOVED_N ? MOVED[i].from : nullptr;
+#ifdef EGPREFS_MOVED
+  return i < MOVED_N ? from_at(i) : nullptr;
+#else
+  return nullptr;
+#endif
 }
 
 bool EGPrefs::show_rule(const EGPrefShow* rows, const char* id, EGPrefShow* out) {

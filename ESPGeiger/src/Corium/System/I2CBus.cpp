@@ -1,5 +1,5 @@
 /*
-  I2CBus.cpp - one Wire.begin, shared by the OLED and env sensors
+  I2CBus.cpp - one Wire.begin, shared by the modules
 
   Copyright (C) 2026 @steadramon
 
@@ -16,7 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#if defined(SSD1306_DISPLAY) || !defined(DISABLE_ENVSENSOR)
+#include "App/AppConfig.h"
+#ifdef I2C_BUS
 
 #include "I2CBus.h"
 #include <Wire.h>
@@ -24,12 +25,11 @@
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
-#include "Globals.h"
 #include "PinSafety.h"
 
 // boards with fixed pins have no prefs
-#ifndef OLED_PINS_BLOCKED
-// one bus for the OLED and env sensors
+#ifndef I2C_PINS_FIXED
+// one bus for the modules
 class I2CPrefs : public EGModule {
 public:
   const char* name() override { return PSTR("i2c"); }

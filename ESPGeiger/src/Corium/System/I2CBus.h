@@ -1,5 +1,5 @@
 /*
-  I2CBus.h - one Wire.begin, shared by the OLED and env sensors
+  I2CBus.h - one Wire.begin, shared by the modules
 
   Copyright (C) 2026 @steadramon
 
@@ -20,15 +20,11 @@
 #define EG_I2CBUS_H
 
 #include <stdint.h>
+#include "App/AppConfig.h"
 
-// i2c.sda/scl defaults: a board's OLED_SDA/OLED_SCL, the OLED's 4/5, else per chip
-#if defined(OLED_SDA)
-  #define I2C_DEFAULT_SDA OLED_SDA
-  #define I2C_DEFAULT_SCL OLED_SCL
-#elif defined(SSD1306_DISPLAY)
-  #define I2C_DEFAULT_SDA 4
-  #define I2C_DEFAULT_SCL 5
-#elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
+// i2c.sda/scl defaults: the app's, else per chip
+#ifndef I2C_DEFAULT_SDA
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
   #define I2C_DEFAULT_SDA 8
   #define I2C_DEFAULT_SCL 9
 #elif defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
@@ -40,6 +36,7 @@
 #else
   #define I2C_DEFAULT_SDA 4
   #define I2C_DEFAULT_SCL 5
+#endif
 #endif
 
 namespace I2CBus {

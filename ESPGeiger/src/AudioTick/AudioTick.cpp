@@ -19,16 +19,21 @@
 #ifdef AUDIO_TICK
 
 #include "AudioTick.h"
-#include "Voice/Voice.h"
+#include "App/AppKeys.h"
+#include "App/AppMath.h"
+#include "App/ChipVoice.h"
+#include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Debounce.h"
+#include "Corium/Util/TokenBucket.h"
 #include <EGHttpServer.h>
 #include <Ticker.h>
 #include <math.h>
@@ -63,18 +68,28 @@ bool audio_enqueue(const AudioCmd& cmd) {
   return xQueueSend(s_audio_q, &cmd, 0) == pdTRUE;
 }
 
+static volatile AudioFn s_speech = nullptr;   // set once, Voice begin
+
+void audio_speech(AudioFn fn) { s_speech = fn; }
+
+static void to_speech(const AudioCmd& cmd) {
+  AudioFn fn = s_speech;
+  if (fn) fn(cmd);
+}
+
+static void speak(uint8_t type, uint8_t i1, int32_t i32) {
+  AudioCmd cmd = { type, i1, i32, nullptr };
+  to_speech(cmd);
+}
+
 void AudioTick::dispatch(const AudioCmd& cmd) {
   if (muted()) return;
   setI2SOwned(true);
   switch (cmd.type) {
-    case AC_WORD:     voice.speakWord(cmd.word, 1.0f); break;
-    case AC_NUMBER:   voice.speakNumber(cmd.i32); break;
-    case AC_KLAXON:   voice.playKlaxon(cmd.i1); break;
-    case AC_ANNOUNCE: voice.announce(); break;
     case AC_NUMBERS:  chimeNumbersStation(); break;
     case AC_CHIME:    play_chime_now(cmd.i1); break;
     case AC_CLICK:    playClick(cmd.i1); break;
-    default: break;
+    default:          to_speech(cmd); break;
   }
   setI2SOwned(false);
 }
@@ -103,21 +118,12 @@ static void audio_worker_start() {
 #endif
 
 static Ticker s_mute_ticker;
-static volatile bool     s_mute_last_read       = false;
-static volatile bool     s_mute_pressed         = false;
-static volatile uint32_t s_mute_last_change_ms  = 0;
+static Debounce s_mute;
+static const uint16_t MUTE_DEBOUNCE_MS = 30;
 
 static void mute_tick() {
   bool down = (digitalRead(AUDIO_MUTE_PIN) == LOW);
-  uint32_t now = fast_millis();
-  if (down != s_mute_last_read) {
-    s_mute_last_read = down;
-    s_mute_last_change_ms = now;
-    return;
-  }
-  if (down == s_mute_pressed) return;
-  if (now - s_mute_last_change_ms < 30) return;
-  s_mute_pressed = down;
+  if (!s_mute.step(down, fast_millis(), MUTE_DEBOUNCE_MS)) return;
   if (down) {
     audiotick.toggleMute();
     EGModuleRegistry::post(&audiotick);
@@ -131,9 +137,7 @@ static void mute_btn_start() {
     return;
   }
   pinMode(AUDIO_MUTE_PIN, INPUT_PULLUP);
-  s_mute_last_read = (digitalRead(AUDIO_MUTE_PIN) == LOW);
-  s_mute_pressed = s_mute_last_read;
-  s_mute_last_change_ms = fast_millis();
+  s_mute.reset(digitalRead(AUDIO_MUTE_PIN) == LOW, fast_millis());
   s_mute_ticker.attach_ms(10, mute_tick);
   Log::console(PSTR("Tick: mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
 }
@@ -221,7 +225,11 @@ static bool claim_i2s_pins(uint8_t bclk, uint8_t ws, uint8_t dout) {
   return true;
 }
 
+static void audiotick_click(uint32_t) { audiotick.notifyClick(fast_millis()); }
+
 void AudioTick::begin() {
+  gcounter.on_click(audiotick_click);
+  gcounter.on_rx_click(audiotick_click);
   if (_i2s_up) return;
   if (!_enabled) return;
   if (!claim_i2s_pins(_bclk, _ws, _dout)) return;
@@ -278,15 +286,7 @@ void AudioTick::notifyClick(unsigned long now_ms) {
   if (s_nm_busy) return;
   constexpr uint32_t TOKEN_REFILL_MS = 30;
   constexpr uint8_t  TOKEN_MAX       = 8;
-  unsigned long elapsed = now_ms - _last_token_ms;
-  if (elapsed >= TOKEN_REFILL_MS) {
-    uint32_t gained = elapsed / TOKEN_REFILL_MS;
-    if (_tokens + gained > TOKEN_MAX) _tokens = TOKEN_MAX;
-    else _tokens += (uint8_t)gained;
-    _last_token_ms += gained * TOKEN_REFILL_MS;
-  }
-  if (_tokens == 0) return;
-  _tokens--;
+  if (!take_token(now_ms, _last_token_ms, _tokens, TOKEN_REFILL_MS, TOKEN_MAX)) return;
   _last_emit_ms = now_ms;
   static const AudioCmd CLICK = { AC_CLICK, 255 };   // pref engine
   audio_enqueue(CLICK);
@@ -340,7 +340,7 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
 void AudioTick::play_chime_now(uint8_t c) {
   if (!_i2s_up || c == 0) return;
   if (c == 1) {
-    uint32_t r = ESP.getCycleCount() ^ (uint32_t)DeviceInfo::hwid();
+    uint32_t r = DeviceInfo::cycles() ^ (uint32_t)DeviceInfo::hwid();
     r = xorshift32(r);
     c = 2 + (uint8_t)(r % 8);
   }
@@ -530,20 +530,20 @@ void AudioTick::chimeNumbersStation() {
   uint8_t msg[10];
   numbers_payload(msg);
   chimeFolkMelody();
-  voice.silence(800);
+  speak(AC_SILENCE, 0, 800);
   for (uint8_t grp = 0; grp < 2; grp++) {
     for (uint8_t rep = 0; rep < 2; rep++) {
       for (uint8_t d = 0; d < 5; d++) {
         const uint8_t idx = grp * 5 + d;
         const bool last = (d == 4);
-        voice.speakDigit(msg[idx], last);
-        voice.silence(last ? 600 : 200);
+        speak(AC_DIGIT, msg[idx], last);
+        speak(AC_SILENCE, 0, last ? 600 : 200);
       }
-      if (rep == 0) voice.silence(1200);
+      if (rep == 0) speak(AC_SILENCE, 0, 1200);
     }
-    if (grp == 0) voice.silence(2200);
+    if (grp == 0) speak(AC_SILENCE, 0, 2200);
   }
-  voice.silence(1000);
+  speak(AC_SILENCE, 0, 1000);
   chimeFolkMelody();
 }
 
@@ -567,19 +567,15 @@ void AudioTick::playClick(uint8_t engine_override) {
 }
 
 static float chip_voice_factor() {
-  static const float factor = [] {
-    uint32_t f = fold32(DeviceInfo::hwid());
-    uint8_t mixed = (uint8_t)(f ^ (f >> 8) ^ (f >> 16) ^ (f >> 24));
-    return 1.0f + ((int32_t)mixed - 128) * (0.03f / 128.0f);
-  }();
+  static const float factor = chip_click_pitch(DeviceInfo::hwid());
   return factor;
 }
 
 void AudioTick::playClickChirp() {
-  uint32_t r = ESP.getCycleCount();
+  uint32_t r = DeviceInfo::cycles();
   r = xorshift32(r);
-  const float j_freq = 1.0f + (((int32_t)(r        & 0xFF) - 128) * (0.03f/128.0f));
-  const float j_decay = 1.0f + (((int32_t)((r >> 8) & 0xFF) - 128) * (0.04f/128.0f));
+  const float j_freq = jitter_factor((uint8_t)r, 0.03f);
+  const float j_decay = jitter_factor((uint8_t)(r >> 8), 0.04f);
   const float amp  = (_volume / 100.0f) * 32000.0f;
   const float tau  = (float)_decay_ms / 1000.0f * j_decay;
   const float f_lo = (float)_freq_hz * j_freq * chip_voice_factor();
@@ -594,12 +590,12 @@ void AudioTick::playClickPool() {
     { 0.85f, 0.35f },
     { 1.10f, 0.30f },
   };
-  uint32_t r = ESP.getCycleCount();
+  uint32_t r = DeviceInfo::cycles();
   r = xorshift32(r);
   const uint8_t which   = (r >> 24) & 3;
-  const float   j_vol   = 1.0f + (((int32_t)(r        & 0xFF) - 128) * (0.05f/128.0f));
-  const float   j_freq  = 1.0f + (((int32_t)((r >> 8) & 0xFF) - 128) * (0.03f/128.0f));
-  const float   j_decay = 1.0f + (((int32_t)((r >>16) & 0xFF) - 128) * (0.04f/128.0f));
+  const float   j_vol   = jitter_factor((uint8_t)r,         0.05f);
+  const float   j_freq  = jitter_factor((uint8_t)(r >> 8),  0.03f);
+  const float   j_decay = jitter_factor((uint8_t)(r >> 16), 0.04f);
   const Variant v       = POOL[which];
   const float amp  = (_volume / 100.0f) * 32000.0f * j_vol;
   const float tau  = (float)_decay_ms / 1000.0f * j_decay;

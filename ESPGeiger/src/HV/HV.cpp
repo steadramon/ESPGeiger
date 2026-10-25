@@ -20,10 +20,13 @@
 
 #include <EGHttpServer.h>
 #include "HV.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Module/EGModuleRegistry.h"
-#include "Counter/Counter.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/System/PinSafety.h"
@@ -278,7 +281,7 @@ void HV::loop(unsigned long now) {
   check_feedback();   // ratio 0 doesn't turn this off
 #endif
   if (_hw_vd_ratio == 0) return;
-  bool settled = gcounter.is_warm() && reached(now, _trim_settle_until);
+  bool settled = egm_b(M_WARM) && reached(now, _trim_settle_until);
   int volts = read_hv();
   check_overvoltage(volts);
   if (_hv_target > 0 && !_ov_trip && settled) trim_step();
@@ -572,5 +575,15 @@ void HV::registerRoutes(EGHttpServer& http) {
   http.on(F("/hvjson"), EGHttpRequest::GET, hHvJson);
 #endif
 }
+
+// console
+#ifdef ESPG_HV_ADC
+static void cmd_hv() { Log::console(PSTR("HV: %d"), (int)hv.hvReading.get()); }
+EG_REGISTER_CMD(hv, cmd_hv)
+#endif
+#ifdef EG_HV_STALL_TEST
+static void cmd_t1stop() { timer1_disable(); }
+EG_REGISTER_CMD(t1stop, cmd_t1stop)
+#endif
 
 #endif

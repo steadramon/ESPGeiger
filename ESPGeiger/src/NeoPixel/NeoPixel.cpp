@@ -20,9 +20,12 @@
 
 #include "NeoPixel.h"
 #include "Corium/Logger/Logger.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/MathUtil.h"
+#include "App/AppKeys.h"
+#include "App/AppMath.h"
 #include "Corium/System/PinSafety.h"
 
 EG_PSTR(K_COLOR, "color");
@@ -141,6 +144,31 @@ EGLegacyRows NeoPixel::legacy_aliases() { return NEOPIXEL_LEGACY; }
 NeoPixel::NeoPixel() {
 }
 
+// loop blinks it
+void NeoPixel::on_click(uint32_t) { neopixel._blip = true; }
+
+// found once, read each blink
+static EGMRead s_cpm = nullptr, s_cpm5 = nullptr, s_alert = nullptr, s_warn = nullptr;
+
+static float row_f(EGMRead r) {
+  EGMValue v;
+  return (r && r(&v)) ? v.f : NAN;
+}
+
+static bool row_b(EGMRead r) {
+  EGMValue v;
+  return r && r(&v) && v.b;
+}
+
+void NeoPixel::begin() {
+  gcounter.on_click(on_click);
+  gcounter.on_rx_click(on_click);
+  s_cpm   = egm_core_read(PSTR("cpm"),   EGM_F32);
+  s_cpm5  = egm_core_read(PSTR("cpm5"),  EGM_F32);
+  s_alert = egm_core_read(PSTR("alert"), EGM_BOOL);
+  s_warn  = egm_core_read(PSTR("warn"),  EGM_BOOL);
+}
+
 void NeoPixel::setup()
 {
   if (_pin < 0) return;
@@ -165,8 +193,8 @@ void NeoPixel::setBrightness(int input) {
 RgbColor NeoPixel::trend_color()
 {
   uint8_t s = (uint8_t)colorSaturation;
-  float cpm = gcounter.get_cpmf();
-  float cpm5 = gcounter.get_cpm5f();
+  float cpm = row_f(s_cpm);
+  float cpm5 = row_f(s_cpm5);
   if (cpm5 <= 0 || cpm <= 0) {
     nextInterval = blinkInterval;
     return color(0, 0, s);                         // no data: blue
@@ -183,9 +211,9 @@ RgbColor NeoPixel::trend_color()
 RgbColor NeoPixel::alarm_color(RgbColor rgb)
 {
   uint8_t s = (uint8_t)colorSaturation;
-  if (gcounter.is_alert())   return color(s, 0, 0);
-  if (gcounter.is_warning()) return color(s, s, 0);
-  if (gcounter.get_cpmf() < 0.01f && gcounter.get_cpm5f() < 0.01f) return color(0, 0, s);
+  if (row_b(s_alert)) return color(s, 0, 0);
+  if (row_b(s_warn))  return color(s, s, 0);
+  if (row_f(s_cpm) < 0.01f && row_f(s_cpm5) < 0.01f) return color(0, 0, s);
   return rgb;
 }
 
@@ -241,8 +269,8 @@ void NeoPixel::loop(unsigned long now)
     }
   }
   if (this->neoPixelMode <= 2) {
-    if (last_blip != gcounter.last_blip()) {
-      last_blip = gcounter.last_blip();
+    if (_blip) {
+      _blip = false;
       static const uint16_t FADE_MS[4] PROGMEM = {20, 80, 150, 300};
       blink(this->neoPixelMode == 1 ? pgm_read_word(&FADE_MS[_fade_rate]) : 20);
     }

@@ -16,15 +16,23 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef ESPG_BOOTGUARD_H
-#define ESPG_BOOTGUARD_H
+#ifndef BOOTGUARD_H
+#define BOOTGUARD_H
 
 #include <stdint.h>
+#include "App/AppConfig.h"
+
+#ifndef BOOTGUARD_LIVED_S
+#define BOOTGUARD_LIVED_S 600
+#endif
+#ifndef BOOTGUARD_STABLE_MS
+#define BOOTGUARD_STABLE_MS 5000
+#endif
 
 namespace BootGuard {
 
-constexpr uint32_t LIVED_S   = 600;    // from begin_all
-constexpr uint32_t STABLE_MS = 5000;   // wifi
+constexpr uint32_t LIVED_S   = BOOTGUARD_LIVED_S;     // from begin_all
+constexpr uint32_t STABLE_MS = BOOTGUARD_STABLE_MS;   // wifi
 constexpr uint32_t DAY_MS    = 86400000UL;
 
 void on_boot();      // first thing in setup()

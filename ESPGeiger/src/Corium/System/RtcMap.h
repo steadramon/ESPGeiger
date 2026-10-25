@@ -20,10 +20,15 @@
 // RTC user words, survive reset + OTA, not power
 // eboot uses 0-31 for OTA
 
-#ifndef ESPG_RTCMAP_H
-#define ESPG_RTCMAP_H
+#ifndef RTCMAP_H
+#define RTCMAP_H
 
 #include <stdint.h>
+#include "App/AppConfig.h"
+
+#ifndef RTCMAP_APP1_WORDS
+#define RTCMAP_APP1_WORDS 4
+#endif
 
 namespace RtcMap {
 
@@ -38,7 +43,7 @@ constexpr uint32_t CRASHDUMP_WORDS = 43;
 
 // App
 constexpr uint32_t APP1_AT    = 48;
-constexpr uint32_t APP1_WORDS = 4;
+constexpr uint32_t APP1_WORDS = RTCMAP_APP1_WORDS;
 
 static_assert(EBOOT_WORDS <= APP1_AT,                         "app words run into eboot");
 static_assert(APP1_AT + APP1_WORDS <= BOOTGUARD_AT,           "app words run into BootGuard");

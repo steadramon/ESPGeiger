@@ -133,7 +133,7 @@ private:
   void do_refresh();
   unsigned long _recovery_at_ms = 0;   // 0 = idle
   uint16_t _recovery_steps = 0;
-  uint32_t _ps_bounce_until_ms = 0;    // 0 = idle
+  Deadline _ps_bounce;
   // Diags
   uint16_t _rebind_count = 0;
   uint16_t _refresh_count = 0;

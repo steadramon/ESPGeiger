@@ -22,7 +22,7 @@
 #define GEIGERINPUT_H
 #include <Arduino.h>
 #include <atomic>
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Measure/EGMeasure.h"
 #include "Corium/System/IsrLock.h"
@@ -150,7 +150,7 @@ class GeigerInput {
     virtual void restartAfterOTA() {}
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
-    static void IRAM_ATTR countInterrupt();
+    static void EG_ISR_ATTR countInterrupt();
     // main code only, interrupts off
     static void countAt(unsigned long us);
     void checkIsrStorm();

@@ -20,97 +20,37 @@
 #endif
 
 #include <Arduino.h>
-#ifdef ESP32
-#include "esp_log.h"
-#endif
-#include <EGTcp.h>
-#include <Ticker.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
-#include "Corium/System/CrashDump.h"
+#include "Corium/System/Boot.h"
 #include "Corium/System/BootGuard.h"
-#include "Corium/System/Fs.h"
-#include "Corium/ImprovSerial/ImprovSerial.h"
-#include "Corium/Output/LedSignal.h"
 #include "Corium/Net/Wifi.h"
-#include "Corium/System/TickProfile.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Net/EGHttpPoster.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Reactor.h"
-#include "Corium/Prefs/EGPrefs.h"
-#include "Corium/System/Uptime.h"
 #include "GRNG/GRNG.h"
 #include "Counter/Counter.h"
+#include "Counter/CounterMeasures.h"
 #include "PulseOut/PulseOut.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "App/BootHooks.h"
+#include "App/ExternalPause.h"
 #include "App/Board.h"
+#include "App/LedPatterns.h"
 #ifdef ESPGEIGER_HW
 #include "HV/HV.h"
 #endif
 
-long start = 0;
-
 GRNG grng;
 
-Ticker msTicker;
-
-uint8_t send_indicator = 0;
-
-volatile uint32_t _fast_ms_counter = 0;
-static uint32_t _fast_ms_last_us  = 0;
-static uint32_t _fast_ms_accum_us = 0;
-
-void msTickerCB()
-{
-  uint32_t now_us = micros();
-  _fast_ms_accum_us += (now_us - _fast_ms_last_us);
-  while (_fast_ms_accum_us >= 1000) {
-    _fast_ms_counter++;
-    _fast_ms_accum_us -= 1000;
-  }
-  _fast_ms_last_us = now_us;
-  if (LedSignal::due()) LedSignal::poll(now_us);
 #ifdef PULSE_OUT
-  if (PulseOut::due()) pulseout.poll(now_us);
-#endif
-}
-
-void sTickerCB()
-{
-  TickProfile::beginTick();
-  unsigned long stick_now = fast_millis();
-  static bool s_bg_lived = false;
-  static bool s_bg_day = false;
-  if (!s_bg_day && stick_now > BootGuard::DAY_MS) {
-    BootGuard::mark_day();
-    s_bg_day = true;
-  }
-  uint32_t up_raw = (uint32_t)Uptime::tick();
-  gcounter.secondticker(up_raw);
-#ifdef TICK_PROFILE
-  TickProfile::markCounter();
+static inline void ms_poll(uint32_t now_us) { if (PulseOut::due()) pulseout.poll(now_us); }
+#else
+static inline void ms_poll(uint32_t) {}
 #endif
 
-#ifdef ESP32
-  DeviceInfo::chipTempSample();
-#endif
-
-  // first tick can land a ms early, no wrap
-  unsigned long uptime = (long)up_raw > start ? up_raw - start : 0;
-  // wifi off counts as up, else safe mode
-  if (!s_bg_lived && uptime >= BootGuard::LIVED_S &&
-      (Wifi::stable_for(BootGuard::STABLE_MS) || Wifi::disabled)) {
-    BootGuard::mark_lived();
-    s_bg_lived = true;
-  }
-#ifdef TICK_PROFILE
-  TickProfile::markWifi();
-#endif
-
-  TickProfile::endTick();
-}
+static void counter_second(uint32_t up) { gcounter.secondticker(up); }
 
 static WebPortal s_webPortal;
 
@@ -121,7 +61,7 @@ static void boot_banner() {
   Log::banner(PSTR(" \\/   \\/"));
   if (BootGuard::crash_streak()) {
     Log::console(PSTR("BootGuard: %u crash boots in a row%s"), BootGuard::crash_streak(),
-                 BootGuard::safe_mode() ? " - safe mode" : "");
+                 BootGuard::safe_mode() ? PSTR(" - safe mode") : PSTR(""));
   }
 }
 
@@ -136,26 +76,6 @@ static void boot_button() {
   }
 }
 
-// before wifi, tcp times from it
-static void start_clock() {
-  // else first tick sees all of uptime
-  _fast_ms_last_us = micros();
-  _fast_ms_counter = _fast_ms_last_us / 1000;
-  msTicker.attach_ms(1, msTickerCB);
-  EGTcp::setClock(fast_millis);
-}
-
-static void boot_wifi() {
-  if (Wifi::connectOrPortal()) return;
-#ifdef APP_OFFLINE_OK
-  // tick retries the saved wifi
-  Wifi::disabled = true;
-#else
-  Log::console(PSTR("WiFi not connecting ... Restarting ... "));
-  DeviceInfo::safeRestart(1000);
-#endif
-}
-
 void setup()
 {
 #ifdef ESPGEIGER_HW
@@ -163,66 +83,29 @@ void setup()
   pinMode(GEIGER_PWMPIN, OUTPUT);
   digitalWrite(GEIGER_PWMPIN, LOW);
 #endif
-  CrashDump::begin();
-  BootGuard::on_boot();
-  Serial.begin(115200);
-  Serial.println();
-  delay(100);
-  improvSerial.begin();
-
-#ifdef ESP32
-  esp_log_level_set("esp_littlefs", ESP_LOG_ERROR);
-  esp_log_level_set("vfs_api",      ESP_LOG_ERROR);
-  esp_log_level_set("LITTLEFS",     ESP_LOG_ERROR);
-#endif
-
-#ifdef ESP8266
-  analogWriteRange(1023);
-#endif
-  LedSignal::begin();
-
-  // before anything reads it
-  Uptime::tick();
-  DeviceInfo::begin();
+  Boot::begin(LED_PATTERNS, LED_PATTERN_COUNT, LED_FLASH_PIN, LED_FLASH_ON_LED);
+  measures_begin();
   boot_banner();
 
-  if (!Fs::begin()) {
-    // prefs on defaults, wifi and ota still up
-    Log::console(PSTR("LittleFS Mount Failed"));
-  }
-  Wifi::check_backup_state();
-
+  Boot::prefs();
   bool safe = BootGuard::safe_mode();
-  EGModuleRegistry::set_safe_mode(safe);
-  EGModuleRegistry::pre_wifi_all();
-  EGPrefs::begin();
   if (BootGuard::entered()) BootHooks::displaySafeMode();
 
   delay(100);
-  start_clock();
-  if (start == 0 && !safe) boot_button();
+  Reactor::clock(Reactor::ms<ms_poll>);
+  if (!safe) boot_button();
   Board::detect();
   if (!Wifi::hasSavedCreds() && !safe) {
     BootHooks::displaySetupWifi(DeviceInfo::hostname());
   }
-  if (!Wifi::disabled) {
-    boot_wifi();
-    delay(100);
-    s_webPortal.begin(80);
-  }
+  Boot::net(s_webPortal);
 
-  delay(500);
   if (!safe) {
     grng.begin();
     gcounter.begin();
   }
-  EGModuleRegistry::begin_all();
-  LedSignal::attach();
-  start = Uptime::tick() + 1;
-  if (safe) Lifecycle::request_restart(fast_millis(), BootGuard::retry_after());
-  Reactor::begin(sTickerCB);
-
-  LedSignal::off();
+  EGHttpPoster::hold = ExternalPause::active;
+  Boot::end(counter_second);
   BootHooks::displayResetTimeout();
 }
 
@@ -233,7 +116,7 @@ static inline void counter_pass(unsigned long now)
 
 void loop()
 {
-  Reactor::run<counter_pass, sTickerCB>(s_webPortal);
+  Reactor::run<counter_pass>(s_webPortal);
 }
 
 #ifdef ESP8266

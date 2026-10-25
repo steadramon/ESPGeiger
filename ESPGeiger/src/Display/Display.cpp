@@ -17,10 +17,10 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Display.h"
+#include "App/AppKeys.h"
 #ifdef SSD1306_DISPLAY
 #include "DisplayType.h"
 #include "screenJS.gz.h"
-#include "OLEDDisplay/OLEDDisplay.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
@@ -28,12 +28,11 @@
 #include "Corium/WebPortal/WebPortal.h"
 #include "Counter/Counter.h"
 #include <EGHttpServer.h>
-#ifdef MAX7219_DISPLAY
-#include "Max7219.h"
-#endif
 
 Display display;
 EG_REGISTER_MODULE(display)
+
+const char W_APP_NAME[] PROGMEM = THING_NAME;
 
 #define DISP_STR_(x) #x
 #define DISP_STR(x) DISP_STR_(x)
@@ -138,11 +137,25 @@ EGLegacyRows Display::legacy_aliases() { return DISPLAY_LEGACY; }
 
 static DisplayBackend* s_backend = nullptr;   // set once, first prefs load
 
+// backends add themselves, before setup
+static DisplayBackend* s_all[Display::BACKENDS_MAX];
+static uint8_t s_count = 0;
+
+bool Display::add(DisplayBackend* b) {
+  if (s_count >= BACKENDS_MAX) return false;
+  s_all[s_count++] = b;
+  return true;
+}
+
 static DisplayBackend* chosen() {
+  uint8_t type = 0;
 #ifdef MAX7219_DISPLAY
-  if (DISP_IS_MAX7219((uint8_t)EGPrefs::getUInt("display", EG_K_TYPE))) return &max7219;
+  type = (uint8_t)EGPrefs::getUInt("display", EG_K_TYPE);
 #endif
-  return &oled;
+  for (uint8_t i = 0; i < s_count; i++) {
+    if (s_all[i]->takes(type)) return s_all[i];
+  }
+  return s_all[0];
 }
 
 DisplayBackend* Display::backend() { return s_backend ? s_backend : chosen(); }
@@ -167,9 +180,9 @@ void Display::on_prefs_loaded() {
   find_rows();
   EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
   s_backend = chosen();
-#ifdef MAX7219_DISPLAY
-  if (s_backend != &oled) oled.load_pins();   // env sensor needs i2c
-#endif
+  for (uint8_t i = 0; i < s_count; i++) {
+    if (s_all[i] != s_backend) s_all[i]->unchosen();
+  }
   s_backend->start();
 }
 

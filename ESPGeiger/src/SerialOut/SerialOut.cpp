@@ -21,8 +21,12 @@
 #include <EGFormat.h>
 #include <EGHttpServer.h>
 #include "SerialOut.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "GeigerInput/SerialFormat.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/StringUtil.h"
@@ -118,14 +122,14 @@ SerialOut::SerialOut() {
 
 void SerialOut::print_cpm() {
   char buf[32];
-  snprintf_P(buf, sizeof(buf), PSTR("CPM: %d\n"), gcounter.get_cpm());
+  snprintf_P(buf, sizeof(buf), PSTR("CPM: %d\n"), (int)egm_i(M_CPM));
   Serial.print(buf);
 }
 
 void SerialOut::print_usv() {
   char buf[32];
   char f[12];
-  format_f(f, sizeof(f), gcounter.get_usv());
+  format_f(f, sizeof(f), egm_f(M_USV));
   snprintf_P(buf, sizeof(buf), PSTR("uSv: %s\n"), f);
   Serial.print(buf);
 }
@@ -147,10 +151,55 @@ void SerialOut::setInterval(uint16_t v) {
   save();
 }
 
-void SerialOut::toggle_cpm() { _show_flags ^= SHOW_CPM; Log::setSerialLogLevel(_show_flags == 0); save(); }
-void SerialOut::toggle_usv() { _show_flags ^= SHOW_USV; Log::setSerialLogLevel(_show_flags == 0); save(); }
-void SerialOut::toggle_hv()  { _show_flags ^= SHOW_HV;  Log::setSerialLogLevel(_show_flags == 0); save(); }
-void SerialOut::toggle_cps() { _show_flags ^= SHOW_CPS; Log::setSerialLogLevel(_show_flags == 0); save(); }
+void SerialOut::toggle(uint8_t show) { _show_flags ^= show; Log::setSerialLogLevel(_show_flags == 0); save(); }
+
+// console
+
+struct ShowWord {
+  char word[4];
+  uint8_t show;   // 0 = taken, does nothing
+};
+static const ShowWord SHOW_WORDS[] PROGMEM = {
+  {"cpm", SerialOut::SHOW_CPM},
+  {"usv", SerialOut::SHOW_USV},
+  {"cps", SerialOut::SHOW_CPS},
+#ifdef ESPG_HV_ADC
+  {"hv",  SerialOut::SHOW_HV},
+#else
+  {"hv",  0},
+#endif
+};
+
+static bool show_toggle(const char* arg) {
+  for (const ShowWord& w : SHOW_WORDS) {
+    if (strcmp_P(arg, w.word) != 0) continue;
+    uint8_t show = pgm_read_byte(&w.show);
+    if (show) serialout.toggle(show);
+    return true;
+  }
+  return false;
+}
+
+static void cmd_show() {
+  char* arg = Console::next();
+  if (arg == NULL) {
+    // bare show toggles, on = 1 s
+    serialout.set_show(serialout.interval() > 0 ? 0 : 1);
+    return;
+  }
+  if (show_toggle(arg)) return;
+  int32_t aNumber;
+  if (strcmp_P(arg, PSTR("off")) == 0) serialout.set_show(0);
+  else if (isDigit(arg[0]) && parse_i32(arg, &aNumber)) serialout.set_show((int)aNumber);
+  else Log::console(PSTR("show: unknown arg '%s'"), arg);
+}
+
+static void cmd_cpm() { serialout.print_cpm(); }
+static void cmd_usv() { serialout.print_usv(); }
+
+EG_REGISTER_CMD(cpm, cmd_cpm)
+EG_REGISTER_CMD(usv, cmd_usv)
+EG_REGISTER_CMD(show, cmd_show)
 
 struct Line {
   uint8_t flags;
@@ -209,7 +258,7 @@ void SerialOut::loop(unsigned long now) {
 
   if (_show_flags == 0) return;
 
-  Line v = { _show_flags, gcounter.get_cpm(), gcounter.get_cps(), gcounter.get_usv(), 0 };
+  Line v = { _show_flags, (int)egm_i(M_CPM), egm_f(M_CPS), egm_f(M_USV), 0 };
 #ifdef ESPG_HV_ADC
   v.hv = (int)hv.hvReading.get();
 #endif

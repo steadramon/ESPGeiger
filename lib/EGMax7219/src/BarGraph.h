@@ -20,6 +20,19 @@
 #define EG_BARGRAPH_H
 #include <stdint.h>
 
+// low to 90% when over trim_above, then at least min_span tall; false = none above 0
+inline bool barRange(const int* hist, int n, int trim_above, int min_span, int& lo, int& hi) {
+  lo = hi = hist[0];
+  for (int i = 1; i < n; i++) {
+    if (hist[i] < lo) lo = hist[i];
+    if (hist[i] > hi) hi = hist[i];
+  }
+  bool counts = hi > 0;
+  if (lo > trim_above) lo = lo * 9 / 10;
+  if (hi - lo < min_span) { lo = hi > min_span ? hi - min_span : 0; hi = lo + min_span; }
+  return counts;
+}
+
 // oldest first, newest lands in the last column; bit 7 = bottom row
 void barColumns(const int* hist, int n, uint8_t* cols, int w, int min_span = 5);
 

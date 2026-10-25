@@ -23,21 +23,17 @@
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGEscape.h>
-#include "EnvSensor/EnvSensor.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Counter/CounterUpload.h"
 #include "Counter/CounterMaths.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include <math.h>
 
 EG_PSTR(K_CHANNEL_KEY, "channel_key");
 
 Thingspeak thingspeak;
 EG_REGISTER_MODULE(thingspeak)
-
-EG_PSTR(M_WARM,  "warm");
-EG_PSTR(M_CPM,   "cpm");
-EG_PSTR(M_CPM5,  "cpm5");
-EG_PSTR(M_CPM15, "cpm15");
-EG_PSTR(M_USV,   "usv");
 
 EG_PSTR(TS_H_EN,  "Upload to ThingSpeak");
 EG_PSTR(TS_L_CK,  "Channel Key");
@@ -92,12 +88,7 @@ bool Thingspeak::interpret(const char* r)
 }
 
 bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!egm_b(M_WARM)) return false;
-
-  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    Log::console(PSTR("Thingspeak: Testmode"));
-    return false;
-  }
+  if (!upload_ready(log_tag())) return false;
 
   const char* _ts_channel_key = EGPrefs::getString("thingspeak", K_CHANNEL_KEY);
   if (_ts_channel_key[0] == '\0') return false;
@@ -115,25 +106,23 @@ bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
   int n0 = snprintf_P(url, cap, TS_URI, key, avgcpm, usvChar, avgcpm5, avgcpm15);
   if (!url_fits(n0, cap)) return false;
   size_t up = (size_t)n0;
-  if (envsensor.present()) {
-    char fbuf[12];
-    float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
-    int n;
-    if (!isnan(et)) {
-      format_f(fbuf, sizeof(fbuf), et);
-      n = snprintf_P(url + up, cap - up, PSTR("&field5=%s"), fbuf);
-      if (n > 0 && (size_t)n < cap - up) up += n;
-    }
-    if (!isnan(eh)) {
-      format_f(fbuf, sizeof(fbuf), eh);
-      n = snprintf_P(url + up, cap - up, PSTR("&field6=%s"), fbuf);
-      if (n > 0 && (size_t)n < cap - up) up += n;
-    }
-    if (!isnan(ep)) {
-      format_f(fbuf, sizeof(fbuf), ep);
-      n = snprintf_P(url + up, cap - up, PSTR("&field7=%s"), fbuf);
-      if (n > 0 && (size_t)n < cap - up) up += n;
-    }
+  char fbuf[12];
+  float et = egm_f(M_T), eh = egm_f(M_H), ep = egm_f(M_P);
+  int n;
+  if (!isnan(et)) {
+    format_f(fbuf, sizeof(fbuf), et);
+    n = snprintf_P(url + up, cap - up, PSTR("&field5=%s"), fbuf);
+    if (n > 0 && (size_t)n < cap - up) up += n;
+  }
+  if (!isnan(eh)) {
+    format_f(fbuf, sizeof(fbuf), eh);
+    n = snprintf_P(url + up, cap - up, PSTR("&field6=%s"), fbuf);
+    if (n > 0 && (size_t)n < cap - up) up += n;
+  }
+  if (!isnan(ep)) {
+    format_f(fbuf, sizeof(fbuf), ep);
+    n = snprintf_P(url + up, cap - up, PSTR("&field7=%s"), fbuf);
+    if (n > 0 && (size_t)n < cap - up) up += n;
   }
 
   return true;

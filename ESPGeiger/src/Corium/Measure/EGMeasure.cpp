@@ -24,14 +24,26 @@
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Util/MathUtil.h"
 
+static EGMeasureRows s_core;
+static EGMSource s_input = nullptr;
+
+void egm_sources(EGMeasureRows core, EGMSource input) {
+  s_core = core;
+  s_input = input;
+}
+
+static EGMeasureRows rows_of(EGMSource f) {
+  return f ? f() : EGMeasureRows();
+}
+
 EGMeasureIter::EGMeasureIter(uint8_t output, bool diag, const char* id)
-  : _src(egm_core_rows()), _j(0), _mod(0), _out(output), _diag(diag), _input(false),
+  : _src(s_core), _j(0), _mod(0), _out(output), _diag(diag), _input(false),
     _id(id), _row(), _val() {}
 
 bool EGMeasureIter::next_source() {
   if (!_input) {
     _input = true;
-    _src = egm_input_rows();
+    _src = rows_of(s_input);
     _j = 0;
     return true;
   }
@@ -165,8 +177,13 @@ uint32_t egm_u(const char* id) {
   return get(id, EGM_U32, &v) ? v.u : 0;
 }
 
+int32_t egm_i(const char* id) {
+  EGMValue v;
+  return get(id, EGM_I32, &v) ? v.i : 0;
+}
+
 EGMRead egm_core_read(const char* id, EGMKind kind) {
-  const EGMeasureRows srcs[] = {egm_core_rows(), egm_input_rows()};
+  const EGMeasureRows srcs[] = {s_core, rows_of(s_input)};
   for (const EGMeasureRows& src : srcs) {
     for (size_t j = 0; j < src.size(); j++) {
       EGMeasure r = src.row(j);

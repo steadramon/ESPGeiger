@@ -1,12 +1,13 @@
 {
   "name": "EGHttp",
   "version": "0.1.0",
-  "description": "Minimal heap-friendly async HTTP/1.1 server for ESP8266 / ESP32. Built on EGTcp. Fixed-size client pool, no String, no per-request heap allocation.",
+  "description": "HTTP/1.1 server and client for ESP8266 / ESP32, on EGTcp.",
   "keywords": "http, async, esp8266, esp32, server",
   "license": "GPL-3.0",
   "frameworks": "arduino",
   "platforms": ["espressif8266", "espressif32"],
   "dependencies": [
-    {"name": "EGTcp"}
+    {"name": "EGTcp"},
+    {"name": "EGText"}
   ]
 }

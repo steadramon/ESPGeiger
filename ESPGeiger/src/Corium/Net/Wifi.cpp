@@ -18,6 +18,7 @@
 */
 #include "Wifi.h"
 #include "WifiLink.h"
+#include "WifiSetup.h"
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
 #include <user_interface.h>
@@ -30,6 +31,7 @@
 #include "Corium/Module/EGModule.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/NTP/NTP.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
@@ -103,6 +105,7 @@ void Wifi::clearSavedCreds() {
 #ifdef ESP8266
   WiFi.persistent(true);
   WiFi.disconnect(true);          // also clears creds
+  WiFi.persistent(false);
 #else
   WiFi.persistent(true);
   WiFi.disconnect(true, true);    // disable + eraseAP
@@ -169,8 +172,7 @@ static bool tryRestoreBackup() {
     return false;
   }
   Log::console(PSTR("WiFi: Restoring backup creds (ssid=%s)"), ssid);
-  WiFi.persistent(true);
-  WiFi.begin(ssid, pass);
+  Wifi::begin_saved(ssid, pass);
   bool ok = waitForWifi(30000);
   if (ok) {
     Fs::remove(WIFI_BACKUP_PATH);
@@ -196,8 +198,11 @@ bool Wifi::saveNetBackup() {
 }
 
 bool Wifi::probeReachability() {
-  IPAddress dummy;
-  return WiFi.hostByName("pool.ntp.org", dummy);
+  IPAddress ip;
+  const char* host = EGPrefs::getString("ntp", EG_K_SERVER);
+  // an ip skips dns, so no test
+  if (!host || !*host || ip.fromString(host)) host = NTP_SERVER;
+  return WiFi.hostByName(host, ip);
 }
 
 bool Wifi::restoreNetBackup() {
@@ -285,8 +290,7 @@ const char* Wifi::heldSsid() { return s_creds ? s_creds->ssid : ""; }
 
 bool Wifi::beginHeld() {
   if (!s_creds) return false;
-  WiFi.persistent(true);
-  WiFi.begin(s_creds->ssid, s_creds->pass);
+  Wifi::begin_saved(s_creds->ssid, s_creds->pass);
   free(s_creds);
   s_creds = nullptr;
   return true;
@@ -391,9 +395,7 @@ bool Wifi::connectOrPortal() {
     }
     Log::console(PSTR("WiFi: Saved creds failed to associate"));
     if (tryRestoreBackup()) return true;
-#ifdef APP_OFFLINE_OK
-    return false;
-#endif
+    if (OFFLINE_OK) return false;
   }
 
   s_portalGotCreds = false;
@@ -418,6 +420,8 @@ bool Wifi::connectOrPortal() {
   if (!Wifi::beginHeld()) return false;
   return waitForWifi(30000);
 }
+
+static_assert(Wifi::TOPIC_CHANGED < EG_TOPIC_APP, "Corium topics sit below EG_TOPIC_APP");
 
 // the one writer of Wifi::*
 class WifiModule : public EGModule {
@@ -460,7 +464,7 @@ static const EGPrefGroup WIFI_PREF_GROUP PROGMEM = {
 
 const EGPrefGroup* WifiModule::prefs_group() { return &WIFI_PREF_GROUP; }
 
-static int8_t s_rx_sleep = -1;   // UdpRx's, wins over the pref
+static int8_t s_rx_sleep = -1;   // the receiver's, wins over the pref
 
 static void apply_wifi_sleep() {
   // always, SDK keeps it in NVS
@@ -554,6 +558,8 @@ void Wifi::rx_sleep(int8_t mode) {
   s_rx_sleep = mode;
   apply_wifi_sleep();
 }
+
+void Wifi::reconnect() { WiFi.reconnect(); }
 
 void Wifi::applyRuntimeNetPrefs() {
   apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", K_TX_POWER));

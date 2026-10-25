@@ -196,7 +196,10 @@ void Sound::pre_wifi() {
   Lifecycle::on(sound_lifecycle);
 }
 
+static void sound_click(uint32_t) { sound.click((uint32_t)micros()); }
+
 void Sound::begin() {
+  gcounter.on_click(sound_click);
   Buzzer::Limits lim = Board::buzzer();
   if (!Buzzer::begin(GEIGER_BUZZER, lim)) Log::console(PSTR("Buzzer: pin %d unusable"), GEIGER_BUZZER);
   TunePlayer::begin({lim.duty_pct, BURST_HZ, GAP_PCT});

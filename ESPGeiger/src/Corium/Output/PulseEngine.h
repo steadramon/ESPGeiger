@@ -24,6 +24,7 @@
 #include <Arduino.h>
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/MathUtil.h"
+#include "Corium/Util/TokenBucket.h"
 #ifdef ESP32
 #include <EGLed.h>
 #endif
@@ -59,9 +60,6 @@ public:
   uint32_t max_hz     = 20;
   uint16_t active_level = FULL;  // FULL = digitalWrite
 
-  float    voice_pulse = 1.0f;
-  float    voice_freq  = 1.0f;
-
   // Caches + runtime state
   uint32_t pulse_us_eff   = 5000;
   uint32_t burst_freq_eff = 3500;
@@ -92,6 +90,7 @@ public:
   static constexpr uint32_t FREQ_MAX = 8000;
   static constexpr uint32_t CYCLES_MAX = 10;
   static constexpr uint32_t MAX_HZ_MAX = 200;
+  static constexpr uint8_t  TOKENS_MAX = 5;
   static constexpr uint8_t  FADE_SHIFT_MIN = 2;
   static constexpr uint8_t  FADE_SHIFT_MAX = 4;
   static constexpr uint8_t  FADE_SHIFT_DEFAULT = 3;
@@ -110,25 +109,17 @@ public:
     if (polarity > 1) polarity = 0;
     if (max_hz > MAX_HZ_MAX) max_hz = MAX_HZ_MAX;
     if (fade_shift < FADE_SHIFT_MIN || fade_shift > FADE_SHIFT_MAX) fade_shift = FADE_SHIFT_DEFAULT;
-    pulse_us_eff   = (uint32_t)(pulse_us * voice_pulse);
-    burst_freq_eff = (uint32_t)(freq_hz  * voice_freq);
-    if (burst_freq_eff == 0) burst_freq_eff = 1;
+    pulse_us_eff   = pulse_us;   // caller may scale after
+    burst_freq_eff = freq_hz;
     token_interval_ms = max_hz ? (uint16_t)(1000 / max_hz) : 0;
   }
 
   // loop side, rate cap only, never the pin
   inline bool take(uint32_t now_ms) {
     if (pin < 0) return false;
-    if (token_interval_ms) {
-      while ((now_ms - last_token_ms) >= token_interval_ms && tokens < 5) {
-        last_token_ms += token_interval_ms;
-        tokens++;
-      }
-      if ((now_ms - last_token_ms) > 5000) last_token_ms = now_ms;
-      if (tokens == 0) return false;
-      tokens--;
-    }
-    return true;
+    if (!token_interval_ms) return true;
+    // full, no credit banked
+    return take_token(now_ms, last_token_ms, tokens, token_interval_ms, TOKENS_MAX, true);
   }
 
   // poll side from here

@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPGEIGER_KEYSTORE_H
-#define ESPGEIGER_KEYSTORE_H
+#ifndef KEYSTORE_H
+#define KEYSTORE_H
 
 #include <stddef.h>
 #include <stdint.h>

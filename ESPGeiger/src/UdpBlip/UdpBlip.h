@@ -69,7 +69,7 @@ public:
   void on_prefs_saved() override;
   uint8_t display_order() override { return 20; }
   size_t status_json(char* buf, size_t cap, unsigned long now) override;
-  void notifyClick(unsigned long now_ms);
+  void notifyClick(unsigned long now_ms) { tryEmitClick(now_ms); }
 
 private:
   UdpBlipModule() {}
@@ -78,14 +78,17 @@ private:
   void teardown();
   bool ensureUdp();
   void emitClick(uint32_t counter, uint32_t ts_ms);
-  void tryEmitClick(unsigned long now_ms);
+  bool tryEmitClick(unsigned long now_ms);
+  void due(uint32_t at);
+  void wake(uint32_t at);
+  void schedule(uint32_t now, bool held);
   void emitRad(uint32_t now);
   void emitSys(uint32_t now);
   void emitEnv(uint32_t now);
 #ifdef ESPG_HV_ADC
   void emitHv(uint32_t now);
 #endif
-  bool sendPacket(const uint8_t* buf, size_t len);
+  void sendPacket(const uint8_t* buf, size_t len);
   const char* path(const char* suffix);   // suffix flash
   void announce_mdns();
   void stats(uint32_t now);
@@ -97,11 +100,11 @@ private:
   uint16_t  _port = 0;
   uint16_t  _src_port = 0;
   unsigned long _last_clicks = 0;
-  unsigned long _last_click_emit_ms = 0;
-  unsigned long _last_token_ms = 0;
+  uint32_t      _last_token_ms = 0;
   uint32_t _bound_at_ms = 0;            // wifi session, rebind on change
   uint32_t _stats_at = 0;
-  uint32_t _backoff_at = 0;             // 0 = none
+  uint32_t _wake_at = 0;                // last due_at asked
+  Deadline _backoff;
   uint16_t _jitter_ms = 0;
   uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
   uint8_t   _fail_count = 0;

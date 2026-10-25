@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPGEIGER_UPTIMECOUNTER_H
-#define ESPGEIGER_UPTIMECOUNTER_H
+#ifndef UPTIMECOUNTER_H
+#define UPTIMECOUNTER_H
 
 #include <stdint.h>
 

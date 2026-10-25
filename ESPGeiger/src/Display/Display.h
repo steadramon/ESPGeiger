@@ -24,6 +24,7 @@
 #include "Corium/Platform/Flash.h"
 #include "DisplayBackend.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Counter/CounterMeasures.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
 
@@ -61,6 +62,9 @@ class Display : public EGModule {
     void registerRoutes(EGHttpServer& http) override;
 
     DisplayBackend* backend();   // never null
+    // from a backend's file, at static init
+    static constexpr uint8_t BACKENDS_MAX = 2;
+    static bool add(DisplayBackend* b);
 
     void button(unsigned long now, int8_t dir);
     void setup_wifi(const char* host) { backend()->setup_wifi(host); }
@@ -155,6 +159,8 @@ class Display : public EGModule {
 };
 
 extern Display display;
+
+extern const char W_APP_NAME[] PROGMEM;   // splash screens
 
 #endif
 #endif

@@ -26,7 +26,6 @@
 #define EGPREFS_STORAGE_H
 
 #include <Arduino.h>
-#include <LittleFS.h>
 
 class EGPrefsStorage {
   public:

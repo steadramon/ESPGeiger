@@ -24,12 +24,27 @@
 #endif
 #define APP_URL     "https://github.com/steadramon/ESPGeiger"
 #define APP_LOC_URL "https://loc.espgeiger.com"
+#define APP_LOC_WIN "espgeiger-loc"        // finder window name
+#define APP_LOC_MSG "espgeiger-location"   // finder message type
+
+// /param tabs, EGPrefCategory order, 6 chars max
+#define APP_PARAM_TABS "System", "Input", "Output", "Upload", "Backup"
+
+// favicon and page head, inside a 512 viewBox
+#define APP_ICON_SVG \
+  "<circle cx='256' cy='256' r='256' fill='#666'/>" \
+  "<circle cx='256' cy='256' r='220' fill='#FB2'/>" \
+  "<path fill='#555' d='M256 286a30 30 0 1 0 0-60 30 30 0 0 0 0 60zm28-82 62-109a182 182 0 0 0-182 1l63 109a57 57 0 0 1 57-1zm155 51H313c0 21-11 39-28 49l64 108c54-32 90-90 90-157zM163 412l64-108a57 57 0 0 1-28-49H73c0 67 36 125 90 157z'/>"
 
 #ifdef GEIGER_MODEL
 #define APP_MODEL GEIGER_MODEL
 #else
 #define APP_MODEL ""
 #endif
+
+// improv fw name: the model if it starts "ESPGeiger-", else "ESPGeiger <model>"
+#define APP_FW_NAME (!APP_MODEL[0] ? THING_NAME : \
+  strncmp(APP_MODEL, THING_NAME "-", sizeof(THING_NAME)) == 0 ? APP_MODEL : THING_NAME " " APP_MODEL)
 
 // For builds that only set ESPGEIGER_HW
 #ifdef ESPGEIGER_HW
@@ -44,8 +59,28 @@
 #endif
 #endif
 
+// own pin for the flash
 #ifdef GEIGER_BLIPLED
-#define BLIP_LED_PIN GEIGER_BLIPLED
+#define LED_FLASH_ENGINE
+#endif
+
+// one i2c bus for the OLED and env sensors
+#if defined(SSD1306_DISPLAY) || !defined(DISABLE_ENVSENSOR)
+#define I2C_BUS
+#endif
+#ifdef OLED_PINS_BLOCKED
+#define I2C_PINS_FIXED
+#endif
+#if defined(OLED_SDA)
+#define I2C_DEFAULT_SDA OLED_SDA
+#define I2C_DEFAULT_SCL OLED_SCL
+#elif defined(SSD1306_DISPLAY)
+#define I2C_DEFAULT_SDA 4
+#define I2C_DEFAULT_SCL 5
+#endif
+
+#ifdef GEIGER_BUZZER
+#define BUZZER_ENGINE
 #endif
 
 // board name, not the chip
@@ -80,5 +115,27 @@
 #ifdef GEIGER_SDCARD
 #define APP_SEC0_BUSY
 #endif
+
+// Radmon worst case 376
+#define EGHTTPPOSTER_URL_MAX 384
+
+// old pref groups and where their keys went, first listed wins; display = OLED builds
+#define EGPREFS_MOVED \
+  {"display", "i2c"}, \
+  {"env",     "i2c"}, \
+  {"input",   "counter"}, \
+  {"sys",     "counter"}
+
+// 0.12 config file, read once by the legacy import
+#define EGPREFS_LEGACY_FILE "/geigerconfig.json"
+
+// fielded devices hold their key here, never change
+#define KEYSTORE_NS    "espg"
+#define KEYSTORE_MAGIC 0x4B475345   // "ESGK"
+
+// export blobs start "ESPG", old exports must import
+#define EXPORT_MAGIC     0x11, 0x23, 0xC6
+#define EXPORT_MAGIC_B64 "ESPG"
+#define EXPORT_SEED      0xB11C5EEDu
 
 #endif

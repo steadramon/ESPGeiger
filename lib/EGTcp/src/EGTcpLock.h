@@ -19,12 +19,12 @@
 #ifndef EGTCPLOCK_H
 #define EGTCPLOCK_H
 
-// never held across a call out
+// Never held across a call out. EGTcpHold takes it for a scope
 
 #if defined(ESP32)
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-// mutex, a critical section masks irqs
+// A mutex, a critical section would mask irqs
 class EGTcpLock {
   public:
     EGTcpLock() { _m = xSemaphoreCreateMutex(); }
@@ -34,14 +34,7 @@ class EGTcpLock {
   private:
     SemaphoreHandle_t _m;
 };
-#elif defined(ESP8266)
-// one task
-class EGTcpLock {
-  public:
-    void lock() {}
-    void unlock() {}
-};
-#else
+#elif !defined(ESP8266)
 #include <mutex>
 class EGTcpLock {
   public:
@@ -51,13 +44,6 @@ class EGTcpLock {
     std::mutex _m;
 };
 #endif
-
-class EGTcpHold {
-  public:
-    explicit EGTcpHold(EGTcpLock& l) : _l(l) { _l.lock(); }
-    ~EGTcpHold() { _l.unlock(); }
-  private:
-    EGTcpLock& _l;
-};
+// esp8266: one context, lwIP's callbacks and loop() take turns, no lock
 
 #endif

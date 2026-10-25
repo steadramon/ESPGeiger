@@ -28,6 +28,7 @@
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/TickProfile.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Output/LedSignal.h"
 #include "Corium/WebPortal/WebPortal.h"
 
 // hot(now) runs every pass, second() once a second
@@ -37,11 +38,31 @@ namespace Reactor {
   // loop runs the tick like esp8266, due on the ms edge
   extern uint32_t s_next_sec;
 #endif
+  extern uint32_t s_ms_last_us;
+  extern uint32_t s_ms_acc_us;
 
-  // end of setup
-  void begin(void (*second)());
+  // before wifi, the libs time from it
+  void clock(void (*ms)());
 
-  template <void (*hot)(unsigned long), void (*second)()>
+  // the ms ticker, extra(now_us) is the app's
+  template <void (*extra)(uint32_t)>
+  void ms() {
+    uint32_t now_us = micros();
+    s_ms_acc_us += (now_us - s_ms_last_us);
+    while (s_ms_acc_us >= 1000) {
+      _fast_ms_counter++;
+      s_ms_acc_us -= 1000;
+    }
+    s_ms_last_us = now_us;
+    if (LedSignal::due()) LedSignal::poll(now_us);
+    extra(now_us);
+  }
+
+  // end of setup, app(up) each second, nullptr = none
+  void begin(void (*app)(uint32_t up));
+  void second();
+
+  template <void (*hot)(unsigned long)>
   inline void pass(WebPortal& portal) {
 #ifdef LOOP_PROFILE
     uint32_t _body_t0 = micros();
@@ -71,13 +92,13 @@ namespace Reactor {
 #endif
   }
 
-  template <void (*hot)(unsigned long), void (*second)()>
+  template <void (*hot)(unsigned long)>
   inline void run(WebPortal& portal) {
 #if defined(ESP32) && !CONFIG_FREERTOS_UNICORE
     // never returns
-    for (;;) pass<hot, second>(portal);
+    for (;;) pass<hot>(portal);
 #else
-    pass<hot, second>(portal);
+    pass<hot>(portal);
 #endif
   }
 

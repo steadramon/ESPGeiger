@@ -41,7 +41,7 @@ class GeigerTestPulse final : public GeigerInputTest
     void loop() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    static uint32_t IRAM_ATTR pulseInterrupt();
+    static uint32_t EG_ISR_ATTR pulseInterrupt();
     void secondTicker() override;
 #ifdef USE_PCNT
     int collect() override;

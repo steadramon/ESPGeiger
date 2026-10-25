@@ -22,15 +22,19 @@
 #endif
 #include "OLEDDisplay.h"
 #include <EGFormat.h>
+#include <BarGraph.h>
 #include "fonts.h"
 #include "logo.h"
 #include "Display/Display.h"
+#include "Display/DisplayType.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Measure/EGMeasure.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/Util/MathUtil.h"
+#include "App/AppKeys.h"
+#include "App/AppMath.h"
 #include "Corium/System/I2CBus.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/System/Uptime.h"
@@ -39,6 +43,7 @@
 #include "Counter/CounterMaths.h"
 #include "GRNG/GRNG.h"
 #include "GeigerInput/Type/UdpRx.h"
+#include "Mqtt/MQTT_Client.h"
 #ifdef ESPG_HV_ADC
 #include "HV/HV.h"
 #endif
@@ -78,6 +83,10 @@ static const uint8_t TILE_ROWS = OLED_HEIGHT >> 3;
 
 SSD1306Display oled;
 EG_REGISTER_MODULE(oled)
+static bool _backend_oled = Display::add(&oled);
+
+// all but the led types
+bool SSD1306Display::takes(uint8_t type) { return !DISP_IS_MAX7219(type); }
 
 // stand-ins for ThingPulse ArialMT_Plain
 #define U8G2_FONT_ARIAL_10  u8g2_font_helvR08_tr
@@ -205,6 +214,10 @@ void SSD1306Display::start() {
   _started = true;
   setBrightness((uint8_t)EGPrefs::getUInt("display", EG_K_BRIGHTNESS));
   EGModuleRegistry::on(Display::TOPIC_POWER, this);
+  EGModuleRegistry::on(TOPIC_SENT, this);
+#ifdef MQTTOUT
+  EGModuleRegistry::on(MQTT_Client::TOPIC_PING, this);
+#endif
   EGModuleRegistry::every(this, TICK_MS);
 }
 
@@ -262,7 +275,7 @@ bool SSD1306Display::awake(unsigned long now) {
 
 // 0 = never drawn
 bool SSD1306Display::due(unsigned long now, unsigned long every) {
-  if (oled_last_update != 0 && now - oled_last_update < every) return false;
+  if (fresh(now, oled_last_update, every)) return false;
   oled_last_update = now;
   return true;
 }
@@ -357,35 +370,40 @@ void SSD1306Display::loop(unsigned long now) {
     if (_present) updateDisplayArea(0, _send_ty + _send_cur, TILE_COLS, 1);
     _send_cur++;
     _send_rows_left--;
+    if (!_send_rows_left) next_frame(now);
     return;
   }
   if (oled_page > OLED_PAGES) oled_page = PAGE_MAIN;
   if (oled_page != _last_page) page_changed();
   if (oled_page == PAGE_SAVER) display.wake(now);
-  if (EGModuleRegistry::events(this)) _next_render_due = now;   // lit or dark
-  if (!reached(now, _next_render_due)) return;
-  _next_render_due = now + frame_ms();
+  uint16_t ev = EGModuleRegistry::events(this);
+  if (ev & ~(1u << Display::TOPIC_POWER)) _sent_mark = 2;   // the rest are sends
+  if (ev & (1u << Display::TOPIC_POWER)) _next_render_due = now;   // lit or dark
+  if (!due_every(now, _next_render_due, frame_ms())) {
+    next_frame(now);
+    return;
+  }
   if (!awake(now)) return;
   uint8_t dirty = render(now);
   if (dirty != DR_NONE && _present) queue_rows(dirty);
+  if (!_send_rows_left) next_frame(now);
 }
 
-static void hist_min_max(const int* h, uint16_t n, int32_t& lo, int32_t& hi) {
-  lo = hi = h[0];
-  for (uint16_t i = 1; i < n; i++) {
-    if (h[i] < lo) lo = h[i];
-    if (h[i] > hi) hi = h[i];
-  }
+// rows ride the tick, else asleep till the frame, on the tick as before
+void SSD1306Display::next_frame(unsigned long now) {
+  uint32_t at = now + tick_ms();
+  if (!reached(at, _next_render_due)) at = _next_render_due;
+  EGModuleRegistry::due_at(this, at);
 }
 
 // k 10 = tenths, only under 10; false = no counts
 static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
   k = display.tenths(h, n);
-  hist_min_max(h, n, lo, hi);
-  bool counts = hi > 0;
-  if (lo > k) lo = lo * 9 / 10;
-  if (hi - lo < k) { lo = hi > k ? hi - k : 0; hi = lo + k; }
-  if (k > 1) { lo = lo / 10 * 10; hi = (hi + 9) / 10 * 10; }
+  int l, u;
+  bool counts = barRange(h, n, k, k, l, u);
+  if (k > 1) { l = l / 10 * 10; u = (u + 9) / 10 * 10; }
+  lo = l;
+  hi = u;
   return counts;
 }
 
@@ -892,7 +910,7 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   uint32_t cpm_x10 = (uint32_t)CounterMaths::to_int(dcpm * 10.0f);
   int32_t  usv_x100 = CounterMaths::to_int(dusv * 100.0f);
   uint8_t mode = !display.warm() ? 1 : slow ? 2 : 0;
-  uint8_t snd = send_indicator;
+  uint8_t snd = _sent_mark;
   uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0)
                | (display.no_counts() ? 4 : 0);
   int8_t trend = cpm_trend(cpm_x10 / 10);
@@ -936,7 +954,7 @@ void SSD1306Display::draw_p1_values(uint32_t cpm_x10, float dusv, uint8_t mode,
   }
   if (snd) {
     drawXBMP(110, 0, 8, 16, _iconimage_remotext);
-    send_indicator--;
+    _sent_mark--;
   }
   if (!Wifi::disabled) {
     drawXBMP(120, 0, 8, 16, Wifi::connected ? _iconimage_connected : _iconimage_disconnected);
@@ -1126,7 +1144,7 @@ void SSD1306Display::page_four_matrix() {
 
 void SSD1306Display::page_four_static() {
   unsigned long now = fast_millis();
-  if (_page4_num_last == 0 || now - _page4_num_last >= 1000) {
+  if (!fresh(now, _page4_num_last, 1000)) {
     _page4_num_last = now;
     uint16_t num;
     GRNG::extract((uint8_t*)&num, sizeof(num));

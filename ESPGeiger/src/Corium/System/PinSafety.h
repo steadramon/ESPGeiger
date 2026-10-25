@@ -21,7 +21,30 @@
 #define PINSAFETY_H
 
 #include <Arduino.h>
-#include "Globals.h"
+#include "App/AppConfig.h"
+
+// Max input pin
+#ifndef MAX_GPIO_PIN
+  #if defined(CONFIG_IDF_TARGET_ESP32S3)
+    #define MAX_GPIO_PIN 48
+  #elif defined(CONFIG_IDF_TARGET_ESP32S2)
+    #define MAX_GPIO_PIN 46
+  #elif defined(CONFIG_IDF_TARGET_ESP32C6)
+    #define MAX_GPIO_PIN 30
+  #elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    #define MAX_GPIO_PIN 21
+  #elif defined(ESP32)
+    #define MAX_GPIO_PIN 39
+  #elif defined(ESP8266)
+    #define MAX_GPIO_PIN 16
+  #else
+    #define MAX_GPIO_PIN 39
+  #endif
+#endif
+
+#ifndef PINSAFETY_MAX_CLAIMS
+#define PINSAFETY_MAX_CLAIMS 16
+#endif
 
 namespace PinSafety {
 

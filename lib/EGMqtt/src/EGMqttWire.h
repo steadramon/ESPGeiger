@@ -22,6 +22,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifndef EGMQTT_CHECK_TEXT
+  #define EGMQTT_CHECK_TEXT 1   // 0 = no UTF-8 or filter level checks, lengths and NUL still
+#endif
+
 // builders return the packet size, 0 = bad or no fit; parsers take the body
 namespace EGMqttWire {
 

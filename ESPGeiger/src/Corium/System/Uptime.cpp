@@ -20,3 +20,4 @@
 #include "Uptime.h"
 
 UptimeCounter Uptime::counter;
+long Uptime::start = 0;

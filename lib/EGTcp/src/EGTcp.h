@@ -49,8 +49,8 @@ inline void poll() {
   if (pending.load(std::memory_order_relaxed)) run();
 }
 using MillisFn = uint32_t (*)();
-void setClock(MillisFn fn);   // nullptr = millis()
-uint32_t now();               // that clock, for the protocols on top
+void setClock(MillisFn fn);   // = EGClock::set, nullptr = millis()
+uint32_t now();               // = EGClock::now
 }
 
 struct EGTcpAddr {
@@ -111,11 +111,11 @@ class EGTcpClient {
     void ackLater() { _ack_later = true; }
     void ack(size_t len);
 
-    void onConnect(std::function<void()> cb) { _on_connect = cb; }
-    void onData(std::function<void(const uint8_t* data, size_t len)> cb) { _on_data = cb; }
-    void onSent(std::function<void(size_t acked)> cb) { _on_sent = cb; }
+    void onConnect(std::function<void()> cb) { _on_connect.swap(cb); }
+    void onData(std::function<void(const uint8_t* data, size_t len)> cb) { _on_data.swap(cb); }
+    void onSent(std::function<void(size_t acked)> cb) { _on_sent.swap(cb); }
     // ended not by you: 0 = peer closed, else why. Once, never after close()
-    void onClose(std::function<void(int8_t err)> cb) { _on_close = cb; }
+    void onClose(std::function<void(int8_t err)> cb) { _on_close.swap(cb); }
 
     // ms, 0 = off; ends with E_TIMEOUT
     void setConnectTimeout(uint32_t ms) { _to_connect = ms; rearm(); }
@@ -152,7 +152,7 @@ class EGTcpClient {
     void rearm();   // after anything due() reads changes
     void timers();
     void ended(int8_t err);
-    void resolved(bool ok, const EGTcpAddr& a, uint32_t id);
+    void resolved();
     void credit(size_t n, bool flush);
     void forget(bool rst);
     bool dial(const EGTcpAddr& a, uint16_t port);
@@ -213,7 +213,7 @@ class EGTcpServer {
     void end();   // open clients stay yours
 
     // push: the client is yours. Without it, accept() pulls them
-    void onAccept(std::function<void(EGTcpClient* c)> cb) { _on_accept = cb; }
+    void onAccept(std::function<void(EGTcpClient* c)> cb) { _on_accept.swap(cb); }
     EGTcpClient* accept();   // nullptr = none
 
     // before begin(); the stack drops SYNs past n open

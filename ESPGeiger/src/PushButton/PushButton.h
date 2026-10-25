@@ -21,7 +21,7 @@
 #define PUSHBUTTON_H
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
@@ -44,7 +44,7 @@ class PushButton : public EGModule {
     const char* name() override { return PSTR("btn"); }
     uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
     void loop(unsigned long now) override;
-    static constexpr uint16_t LOOP_MS = 50;
+    static constexpr uint16_t LOOP_MS = 50;   // PIN_SCAN only
     // short press, from loop()
     static constexpr uint8_t TOPIC_PRESS = EG_TOPIC_APP + 5;
     void begin() override;

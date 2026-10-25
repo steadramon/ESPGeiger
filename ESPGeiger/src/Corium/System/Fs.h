@@ -25,7 +25,11 @@ namespace Fs {
   bool begin();   // first call only, formats after 3 failed mounts
   // all mount first and check before touching: esp32 logs a missing file
   File open_r(const char* path);   // empty File if not there
+  File open_w(const char* path);
   bool remove(const char* path);   // false if not there
+  bool exists(const char* path);
+  bool rename(const char* from, const char* to);
+  bool mkdir(const char* path);
   void touch(const char* path);
 
   // flash paths, copied for the call; longer than PATH_P_MAX fails

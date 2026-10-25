@@ -18,9 +18,12 @@
 */
 #ifdef WEBHOOKOUT
 #include "Webhook.h"
+#include "App/AppKeys.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Counter/CounterMeasures.h"
+#include "Counter/CounterUpload.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
 #include <EGEscape.h>
@@ -29,7 +32,6 @@
 
 EG_PSTR(K_URL, "url");
 EG_PSTR(K_KEY, "key");
-EG_PSTR(M_WARM, "warm");
 
 Webhook webhook;
 EG_REGISTER_MODULE(webhook)
@@ -99,11 +101,7 @@ bool Webhook::interpret(const char* r)
   return false;
 }
 
-void Webhook::add_headers(EGHttpClient* r)
-{
-  r->setReqHeader(F("Accept"), FPSTR(HTTP_CT_JSON));
-  r->setReqHeader(FPSTR(HTTP_H_CTYPE), FPSTR(HTTP_CT_JSON));
-}
+PGM_P Webhook::content_type() const { return HTTP_CT_JSON; }
 
 const char* Webhook::cleanHTTP(const char* url) {
   if (strncmp_P(url, PSTR("http://"), 7) == 0) {
@@ -128,15 +126,9 @@ static bool build_body(char* buffer, const char* key) {
 }
 
 bool Webhook::prepare(char* url, size_t cap, const char** body) {
-  if (!egm_b(M_WARM)) return false;
-
   const char* whURL = EGPrefs::getString("webhook", K_URL);
   if (whURL[0] == '\0') return false;
-
-  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    Log::console(PSTR("Webhook: Testmode"));
-    return false;
-  }
+  if (!upload_ready(log_tag())) return false;
 
   Log::debug(PSTR("Webhook: Uploading latest data ..."));
 

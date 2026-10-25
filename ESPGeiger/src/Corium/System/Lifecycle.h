@@ -17,10 +17,15 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPG_LIFECYCLE_H
-#define ESPG_LIFECYCLE_H
+#ifndef LIFECYCLE_H
+#define LIFECYCLE_H
 
 #include <stdint.h>
+#include "App/AppConfig.h"
+
+#ifndef LIFECYCLE_MAX_HANDLERS
+#define LIFECYCLE_MAX_HANDLERS 6
+#endif
 
 namespace Lifecycle {
 

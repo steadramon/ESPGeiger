@@ -20,17 +20,26 @@
 #define EGHTTPPOSTER_H
 
 #include <Arduino.h>
+#include "App/AppConfig.h"
 #include "Corium/Module/EGModule.h"
-#include <EGHttpClient.h>
+#include "Corium/Net/EGHttpDriver.h"
 
-class EGHttpPoster : public EGModule {
+#ifndef EGHTTPPOSTER_URL_MAX
+#define EGHTTPPOSTER_URL_MAX 256
+#endif
+#ifndef EGHTTPPOSTER_REPLY_MAX
+#define EGHTTPPOSTER_REPLY_MAX 128
+#endif
+
+class EGHttpPoster : public EGSender {
   public:
     bool requires_wifi() override { return true; }
     static constexpr uint16_t LOOP_MS = 500;
-    static constexpr uint16_t POLL_MS = 500;
     void loop(unsigned long now) override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
-    EGHttpClient* request = nullptr;
+    EGHttpDriver request{this};
+    // app's, true = no new post, replies still taken
+    static bool (*hold)();
 
   protected:
     // false skips, body null for GET, else malloc'd and post() frees it
@@ -41,7 +50,10 @@ class EGHttpPoster : public EGModule {
     virtual const char* method() const { return "GET"; }
     virtual uint16_t timeout_s() const { return 30; }
     virtual size_t reply_cap() const { return 64; }
-    virtual void add_headers(EGHttpClient*) {}
+    // else logged as an error
+    virtual bool ok_code(int code) const { return code == 200; }
+    // a body's type, sent as Accept too
+    virtual PGM_P content_type() const { return nullptr; }
 
     void set_enabled(bool on);
     // n from snprintf, a cut url is logged and not sent
@@ -52,8 +64,9 @@ class EGHttpPoster : public EGModule {
     bool _send_enabled = false;
 
   private:
-    static constexpr size_t URL_CAP = 384;   // Radmon worst case 376
-    static constexpr size_t REPLY_CAP = 128;
+    static constexpr size_t URL_CAP = EGHTTPPOSTER_URL_MAX;
+    static constexpr size_t REPLY_CAP = EGHTTPPOSTER_REPLY_MAX;
+    bool slot_due(unsigned long now);
     void post();
     void send(const char* url, const char* body);
     void take_reply();

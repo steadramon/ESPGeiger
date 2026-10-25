@@ -17,9 +17,12 @@
 #ifdef AUDIO_TICK
 
 #include "Voice.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "AudioTick/AudioTick.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/FastMillis.h"
@@ -344,7 +347,21 @@ static void klaxon_silence(uint16_t ms) {
   }
 }
 
+// the audio worker's speech commands
+static void voice_cmd(const AudioCmd& cmd) {
+  switch (cmd.type) {
+    case AC_WORD:     voice.speakWord(cmd.word, 1.0f); break;
+    case AC_NUMBER:   voice.speakNumber(cmd.i32); break;
+    case AC_KLAXON:   voice.playKlaxon(cmd.i1); break;
+    case AC_ANNOUNCE: voice.announce(); break;
+    case AC_DIGIT:    voice.speakDigit(cmd.i1, cmd.i32 != 0); break;
+    case AC_SILENCE:  voice.silence((uint16_t)cmd.i32); break;
+    default: break;
+  }
+}
+
 void Voice::begin() {
+  audio_speech(voice_cmd);
   EGModuleRegistry::every(this, LOOP_MS);
   // klaxon on the edge, not the next second
   EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
@@ -356,7 +373,7 @@ static const char* DIGIT_NAMES[10] = {
 };
 
 void Voice::queueKlaxonOnAlert() {
-  const bool now_alert = gcounter.is_alert();
+  const bool now_alert = egm_b(M_ALERT);
   if (now_alert && !_prev_alert && !_quiet.active()) {
     const unsigned long now_ms = fast_millis();
     const unsigned long cd_ms = (unsigned long)_klax_cd * 60UL * 1000UL;
@@ -373,7 +390,7 @@ void Voice::queueKlaxonOnAlert() {
 void Voice::queueAnnouncement() {
   const unsigned long now_ms = fast_millis();
   const unsigned long iv_ms  = (unsigned long)_ann_iv * 1000UL;
-  if (_last_ann_ms == 0 || (now_ms - _last_ann_ms) >= iv_ms) {
+  if (!fresh(now_ms, _last_ann_ms, iv_ms)) {
     _last_ann_ms = now_ms;
     AudioCmd cmd{};
     cmd.type = AC_ANNOUNCE;
@@ -383,7 +400,8 @@ void Voice::queueAnnouncement() {
 
 // not at boot
 void Voice::queueRadmonChange() {
-  EGModule* m = EGModuleRegistry::find("radmon");
+  EGModule* r = EGModuleRegistry::find("radmon");
+  EGSender* m = r ? r->sender() : nullptr;
   // last_ok is only the answer once the reply is in
   if (m && m->last_attempt_ms != 0 && !m->_publish_pending &&
       m->last_attempt_ms != _radmon_last_attempt) {
@@ -409,16 +427,16 @@ void Voice::loop(unsigned long /*now*/) {
 }
 
 void Voice::announce() {
-  if (gcounter.is_alert()) {
+  if (egm_b(M_ALERT)) {
     speakWord("alert"); silence(200);
-  } else if (gcounter.is_warning()) {
+  } else if (egm_b(M_WARN)) {
     speakWord("warning"); silence(200);
   }
   speakWord("CPM"); silence(150);
-  speakNumber(gcounter.get_cpm());
+  speakNumber(egm_i(M_CPM));
   if (_ann_usv) {
     silence(250);
-    const float usv = gcounter.get_usv();
+    const float usv = egm_f(M_USV);
     const bool use_milli = (usv >= 1000.0f);
     const float scaled = use_milli ? (usv / 1000.0f) : usv;
     const long tenths = (long)(scaled * 10.0f + 0.5f);

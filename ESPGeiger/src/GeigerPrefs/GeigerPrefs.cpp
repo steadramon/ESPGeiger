@@ -20,10 +20,13 @@
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "GeigerKeys.h"
+#include "App/AppKeys.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
+#include "Corium/System/PinSafety.h"
 #include "Corium/Output/LedSignal.h"
 #include "Corium/Output/PulseEngine.h"
+#include "App/LedPatterns.h"
 #include "Corium/Util/MathUtil.h"
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
@@ -329,17 +332,40 @@ void LifePrefs::on_prefs_loaded() {
   gcounter.set_lifetime_seconds(EGPrefs::getUInt("life", EG_K_SECS));
 }
 
+// default for led.pin, -1 = none
+#ifndef LED_SEND_RECEIVE
+#if defined(ESP8266) || defined(CONFIG_IDF_TARGET_ESP32)
+#define LED_SEND_RECEIVE 2
+#else
+#define LED_SEND_RECEIVE -1   // C3/S3 boards have no plain LED on 2
+#endif
+#endif
+#ifdef ESP8266
+#define LED_PIN_BLOCKED   // every esp8266 module has it on 2
+#endif
+#ifndef LED_SEND_RECEIVE_ON
+#ifdef ESP8266
+#define LED_SEND_RECEIVE_ON LOW
+#else
+#define LED_SEND_RECEIVE_ON HIGH
+#endif
+#endif
+
 #if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)
 #define LED_BLIP
 #endif
 
-// every build, led.pin
+// every build, led.pin and the blink on a send
 class LedPrefs : public EGModule {
 public:
   const char* name() override { return PSTR("led"); }
   uint8_t display_order() override { return 14; }
   const EGPrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
+  void begin() override { EGModuleRegistry::on(TOPIC_SENT, this); }
+  void loop(unsigned long) override {
+    if (EGModuleRegistry::events(this)) LedSignal::play(LED_ACTIVITY);
+  }
 };
 
 static LedPrefs ledprefs;

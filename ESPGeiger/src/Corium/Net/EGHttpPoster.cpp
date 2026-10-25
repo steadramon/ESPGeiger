@@ -19,19 +19,16 @@
 #include "EGHttpPoster.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Output/LedSignal.h"
-#include "Corium/System/DeviceInfo.h"
-#include "Corium/System/Globals.h"
 #include "Corium/Prefs/EGPrefs.h"
-#include "Corium/Util/StringUtil.h"
-#include <EGHttpStrings.h>
 
 static_assert(EGHTTP_HOST_MAX >= EG_HOST_MAX, "a host pref must fit the client");
+
+bool (*EGHttpPoster::hold)() = nullptr;
 
 // off mid-post: loop() still reaps the reply, then sleeps
 void EGHttpPoster::set_enabled(bool on) {
   _send_enabled = on;
-  EGModuleRegistry::every(this, (on || request) ? LOOP_MS : 0);
+  EGModuleRegistry::every(this, (on || request.busy()) ? LOOP_MS : 0);
 }
 
 size_t EGHttpPoster::status_json(char* buf, size_t cap, unsigned long now) {
@@ -41,45 +38,46 @@ size_t EGHttpPoster::status_json(char* buf, size_t cap, unsigned long now) {
 
 void EGHttpPoster::loop(unsigned long now)
 {
-  if (request && request->takeDone()) {
-    take_reply();
-    // a fresh one each post, nothing held between
-    delete request;
-    request = nullptr;
-  }
-  if (!_send_enabled) {
-    if (!request) EGModuleRegistry::every(this, 0);
+  take_reply();
+  if (hold && hold()) {
+    EGModuleRegistry::due_at(this, now + LOOP_MS);
     return;
   }
+  if (_send_enabled && slot_due(now)) post();
+  if (request.busy()) {
+    EGModuleRegistry::due_at(this, request.due());   // the reply posts us sooner
+  } else if (_send_enabled) {
+    EGModuleRegistry::due_at(this, lastPing + pingIntervalMs);
+  } else {
+    EGModuleRegistry::every(this, 0);
+  }
+}
+
+// whole intervals, keeps the slot
+bool EGHttpPoster::slot_due(unsigned long now) {
   if (lastPing == 0) {
     lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
-  } else if ((now - lastPing) >= pingIntervalMs) {
-    // whole intervals, keeps the slot
-    lastPing += ((now - lastPing) / pingIntervalMs) * pingIntervalMs;
-    post();
+    return false;
   }
-  if (request && !request->idle()) {
-    EGModuleRegistry::every(this, POLL_MS);   // reply due, poll
-    return;
-  }
-  EGModuleRegistry::due_at(this, lastPing + pingIntervalMs);
+  if ((now - lastPing) < pingIntervalMs) return false;
+  lastPing += ((now - lastPing) / pingIntervalMs) * pingIntervalMs;
+  return true;
 }
 
 void EGHttpPoster::take_reply()
 {
+  char r[REPLY_CAP];
+  size_t cap = reply_cap();
+  if (cap > sizeof(r)) cap = sizeof(r);
+  int code;
+  size_t got;
+  if (!request.take(&code, (uint8_t*)r, cap - 1, &got)) return;
   bool ok = false;
-  if (request->responseHTTPcode() == 200)
-  {
-    char r[REPLY_CAP];
-    size_t cap = reply_cap();
-    if (cap > sizeof(r)) cap = sizeof(r);
-    size_t got = request->responseRead((uint8_t*)r, cap - 1);
+  if (ok_code(code)) {
     r[got] = 0;
     ok = interpret(r);
   } else {
-    char why[32];
-    flash_to_ram((PGM_P)request->responseHTTPStringF(), why, sizeof(why));
-    Log::console(PSTR("%s: Error %d - %s"), log_tag(), request->responseHTTPcode(), why);
+    Log::console(PSTR("%s: Error %d - %s"), log_tag(), code, (PGM_P)EGHttpClient::reason(code));
   }
   note_result(ok);
 }
@@ -91,7 +89,7 @@ bool EGHttpPoster::url_fits(int n, size_t cap) {
 }
 
 void EGHttpPoster::post() {
-  if (request) return;   // last reply not in yet
+  if (request.busy()) return;   // last reply not in yet
   char url[URL_CAP];
   const char* body = nullptr;
   if (!prepare(url, sizeof(url), &body)) return;
@@ -100,24 +98,22 @@ void EGHttpPoster::post() {
 }
 
 void EGHttpPoster::send(const char* url, const char* body) {
-  request = new EGHttpClient();
-  if (!request) { Log::console(PSTR("%s: alloc failed"), log_tag()); return; }
-
-  if (!request->open(method(), url)) {
-    Log::console(PSTR("%s: Can't send request"), log_tag());
-    note_attempt();
-    note_result(false);
-    delete request;
-    request = nullptr;
+  EGHttpMeta m;
+  m.method = method();
+  m.url = url;
+  m.ctype = content_type();
+  m.accept = m.ctype;
+  m.timeout_s = timeout_s();
+  EGHttpDriver::Sent s = request.send(m, (const uint8_t*)body, body ? strlen(body) : 0);
+  if (s == EGHttpDriver::NO_MEMORY) {
+    Log::console(PSTR("%s: alloc failed"), log_tag());
     return;
   }
-  LedSignal::activity();
-  request->setReqHeader(FPSTR(HTTP_H_UA), DeviceInfo::useragent());
-  add_headers(request);
-  request->setTimeout(timeout_s());
-  request->setDeadline(timeout_s() * 2000UL);   // a trickling reply can't hold it
-  if (body) request->send(body);
-  else      request->send();
   note_attempt();
-  send_indicator = 2;
+  if (s == EGHttpDriver::NOT_OPENED) {
+    Log::console(PSTR("%s: Can't send request"), log_tag());
+    note_result(false);
+    return;
+  }
+  EGModuleRegistry::emit(TOPIC_SENT);
 }

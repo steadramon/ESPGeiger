@@ -25,19 +25,25 @@ import sys
 
 ASSETS = [
     ("ESPGeiger/src/Corium/NTP/NTP.cpp",          "NTP_PAGE_JS", "application/javascript"),
-    ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "STYLE_CSS", "text/css"),
-    ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "THEME_JS",  "application/javascript"),
     ("ESPGeiger/src/Counter/CounterWeb.cpp",      "HIST_JS",     "application/javascript"),
     ("ESPGeiger/src/Display/Display.cpp",         "screenJS",    "application/javascript"),
 ]
 
 ASSETS_COMBINED = [
+    ("STYLE_CSS", [
+        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "STYLE_CSS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "APP_CSS"),
+    ], "text/css"),
+    ("THEME_JS", [
+        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "THEME_JS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "APP_THEME_JS"),
+    ], "application/javascript"),
     ("JS_BUNDLE", [
-        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "picographJS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS"),
         ("ESPGeiger/src/Counter/CounterWeb.cpp",      "statusJS"),
     ], "application/javascript"),
     ("HVJS_BUNDLE", [
-        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "picographJS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS"),
         ("ESPGeiger/src/HV/HV.cpp",               "hvJS"),
     ], "application/javascript"),
 ]

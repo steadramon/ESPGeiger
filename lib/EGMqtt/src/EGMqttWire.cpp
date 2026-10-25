@@ -107,14 +107,19 @@ bool utf8_ok(const uint8_t* s, size_t n) {
   return true;
 }
 
+// as utf8_ok, or no NUL only
+static bool chars_ok(const void* s, size_t n) {
+  return EGMQTT_CHECK_TEXT ? utf8_ok((const uint8_t*)s, n) : !memchr(s, 0, n);
+}
+
 static bool text_ok(const char* s, size_t* n) {
   if (!s) return false;
   *n = strlen(s);
-  return *n > 0 && *n <= STR_MAX && utf8_ok((const uint8_t*)s, *n);
+  return *n > 0 && *n <= STR_MAX && chars_ok(s, *n);
 }
 
 static bool topic_ok(const char* s, size_t n) {
-  return n && n <= STR_MAX && utf8_ok((const uint8_t*)s, n) &&
+  return n && n <= STR_MAX && chars_ok(s, n) &&
          !memchr(s, '+', n) && !memchr(s, '#', n);
 }
 
@@ -126,6 +131,7 @@ bool topic_ok(const char* s) {
 bool filter_ok(const char* s) {
   size_t n;
   if (!text_ok(s, &n)) return false;
+  if (!EGMQTT_CHECK_TEXT) return true;   // the broker checks the levels
   for (size_t i = 0; i < n; i++) {
     bool level_start = i == 0 || s[i - 1] == '/';
     if (s[i] == '#' && (!level_start || i != n - 1)) return false;
@@ -165,7 +171,7 @@ bool matches(const char* f, const char* t) {
 // a string's 2 + its length onto rem, false = too long or not text
 static bool field(const char* s, bool text, uint32_t* rem) {
   size_t n = strlen(s);
-  if (n > STR_MAX || (text && !utf8_ok((const uint8_t*)s, n))) return false;
+  if (n > STR_MAX || (text && !chars_ok(s, n))) return false;
   *rem += 2 + (uint32_t)n;
   return true;
 }
@@ -291,7 +297,7 @@ bool parse_publish(uint8_t first, const uint8_t* body, size_t n, Publish* p) {
   uint16_t id = qos && head <= n ? get16(body + 2 + tn) : 0;
   if (!publish_head(first, tn, id, n)) return false;
   const uint8_t* t = body + 2;
-  if (!utf8_ok(t, tn) || memchr(t, '+', tn) || memchr(t, '#', tn)) return false;
+  if (!chars_ok(t, tn) || memchr(t, '+', tn) || memchr(t, '#', tn)) return false;
   p->topic = (const char*)t;
   p->topic_len = tn;
   p->id = id;

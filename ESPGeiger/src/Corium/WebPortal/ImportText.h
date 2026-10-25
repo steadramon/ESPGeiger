@@ -22,6 +22,16 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "App/AppConfig.h"
+
+// export blob head and its base64, set both; app sets its own
+#ifndef EXPORT_MAGIC
+#define EXPORT_MAGIC     0x08, 0xE4, 0x48
+#define EXPORT_MAGIC_B64 "CORI"
+#endif
+#ifndef EXPORT_SEED
+#define EXPORT_SEED 0x434F5249u
+#endif
 
 namespace ImportText {
 
@@ -31,7 +41,7 @@ typedef bool (*PutFn)(const char* mid, const char* key, const char* value);
 // first_skip: line number from 1, 0 = none
 struct Result { int applied; int skipped; int first_skip; };
 
-// export blobs always start ESPG
+// export blobs always start EXPORT_MAGIC_B64
 bool is_blob(const char* text, size_t len);
 
 // # comments and blank lines ignored

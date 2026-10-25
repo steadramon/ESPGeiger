@@ -46,7 +46,7 @@ namespace Wifi {
 
 static bool was_connected = false;
 static unsigned long lost_at = 0;
-static unsigned long s_retry_at = 0;
+static uint32_t s_retry_at = 0;
 static unsigned long s_link_at = 0;
 static unsigned long s_offline_retry_at = 0;
 static const uint32_t WIFI_RETRY_MS = 30000UL;
@@ -76,8 +76,7 @@ static void track_outage(unsigned long now) {
     s_retry_at = now + WIFI_RETRY_MS;
   }
   unsigned long down_seconds = (now - lost_at) / 1000;
-  if (reached(now, s_retry_at)) {
-    s_retry_at = now + WIFI_RETRY_MS;
+  if (due_every(now, s_retry_at, WIFI_RETRY_MS)) {
     Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
     WiFi.reconnect();
   }

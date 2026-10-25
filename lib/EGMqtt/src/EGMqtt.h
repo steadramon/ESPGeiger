@@ -32,6 +32,12 @@ class __FlashStringHelper;   // F("...")
 #ifndef EGMQTT_IN_CAP
   #define EGMQTT_IN_CAP 512     // biggest packet taken in, bigger are dropped
 #endif
+#ifndef EGMQTT_MAX_QOS
+  #define EGMQTT_MAX_QOS 2      // 1 = no QoS 2, one sent to us ends the connection
+#endif
+#ifndef EGMQTT_SUB_LOST
+  #define EGMQTT_SUB_LOST 1     // 0 = a subscribe lost with the connection isn't told
+#endif
 #ifndef EGMQTT_QOS2_IN
   #define EGMQTT_QOS2_IN 20     // QoS 2 ids held till PUBREL
 #endif
@@ -75,7 +81,7 @@ class EGMqtt {
     typedef void (*OnAck)(void* arg, const Ack& a);
 
     using MillisFn = uint32_t (*)();
-    static void setClock(MillisFn fn);   // before the first connect, nullptr = EGTcp's
+    static void setClock(MillisFn fn);   // = EGClock::set, nullptr = millis()
 
     EGMqtt();
     ~EGMqtt();
@@ -164,7 +170,7 @@ class EGMqtt {
     size_t next(size_t off) const;
     uint8_t* tail(size_t* cap, bool keep_reserve);
     void commit(Kind k, uint16_t id, size_t len);
-    void queue(EGMqttWire::Type t, uint16_t id);
+    void queue(EGMqttWire::Type t, uint16_t id, bool keep = true);
     Rec* find(Kind k, uint16_t id);
     Rec* find(Kind k);
     uint16_t next_id();
@@ -187,6 +193,7 @@ class EGMqtt {
     void on_connack();
     void on_publish();
     void on_ack();
+    void q2_ack(EGMqttWire::Type t, uint16_t id);
     void deliver(const EGMqttWire::Publish& p);
     bool q2_known(uint16_t id);
     void q2_drop(uint16_t id);
@@ -254,7 +261,7 @@ class EGMqtt {
     uint16_t _bigId = 0;
     uint32_t _dropped = 0;
 
-    uint16_t _q2[EGMQTT_QOS2_IN] = {};
+    uint16_t _q2[EGMQTT_MAX_QOS > 1 ? EGMQTT_QOS2_IN : 1] = {};
 };
 
 #endif

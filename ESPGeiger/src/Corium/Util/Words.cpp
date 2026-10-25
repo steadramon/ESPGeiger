@@ -18,12 +18,10 @@
 */
 
 #include "Words.h"
-#include "App/AppConfig.h"
 
 const char W_OK_TEXT[]     PROGMEM = "OK";
 const char W_TRUE[]        PROGMEM = "true";
 const char W_FALSE[]       PROGMEM = "false";
-const char W_APP_NAME[]    PROGMEM = THING_NAME;
 
 const char W_FMT_S[]       PROGMEM = "%s";
 const char W_FMT_D[]       PROGMEM = "%d";

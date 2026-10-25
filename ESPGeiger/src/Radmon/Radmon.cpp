@@ -25,14 +25,12 @@
 #include <EGEscape.h>
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Measure/EGMeasure.h"
+#include "Counter/CounterUpload.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 
 Radmon radmon;
 EG_REGISTER_MODULE(radmon)
-
-EG_PSTR(M_WARM,   "warm");
-EG_PSTR(M_CPM_ST, "cpm_st");
-EG_PSTR(M_CPM5,   "cpm5");
-EG_PSTR(M_CPM15,  "cpm15");
 
 EG_PSTR(RM_H_EN,  "Upload to radmon.org");
 EG_PSTR(RM_L_USR, "Username");
@@ -111,12 +109,7 @@ bool Radmon::interpret(const char* r)
 }
 
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!egm_b(M_WARM)) return false;
-
-  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    Log::console(PSTR("Radmon: Testmode"));
-    return false;
-  }
+  if (!upload_ready(log_tag())) return false;
 
   const char* _api_user = EGPrefs::getString("radmon", EG_K_USER);
   const char* _api_key  = EGPrefs::getString("radmon", EG_K_PASSWORD);

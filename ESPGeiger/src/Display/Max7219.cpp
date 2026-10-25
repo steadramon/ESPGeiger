@@ -18,7 +18,7 @@
 */
 #include "Max7219.h"
 #ifdef MAX7219_DISPLAY
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include <EGFormat.h>
 #include "Corium/System/FastMillis.h"
 #include "Corium/Module/EGModuleRegistry.h"
@@ -31,14 +31,15 @@
 #include "Counter/Counter.h"
 #include "Counter/CounterMaths.h"
 #include "Display.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 
-EG_PSTR(M_TEMP,  "t");
-EG_PSTR(M_HUM,   "h");
 EG_PSTR(K_SYS_WARN,  "warn");
 EG_PSTR(K_SYS_ALERT, "alert");
 
 Max7219Display max7219;
 EG_REGISTER_MODULE(max7219)
+static bool _backend_max7219 = Display::add(&max7219);
 
 enum { PAGE_CPM = 0, PAGE_USV = 1, PAGE_TEMP = 2, PAGE_HUM = 3, PAGE_GRAPH = 4, PAGE_VU = 5 };
 static const uint8_t MAX_PAGES = 5;
@@ -59,8 +60,8 @@ static void slow_reads(uint8_t page) {
     s_warn      = (float)EGPrefs::getUInt("counter", K_SYS_WARN);
     s_alert_cpm = (float)EGPrefs::getUInt("counter", K_SYS_ALERT);
   }
-  if (all || page == PAGE_TEMP) s_t = egm_f(M_TEMP);
-  if (all || page == PAGE_HUM)  s_h = egm_f(M_HUM);
+  if (all || page == PAGE_TEMP) s_t = egm_f(M_T);
+  if (all || page == PAGE_HUM)  s_h = egm_f(M_H);
 }
 
 // rows, bit x = column x (xantorohara editor)

@@ -1,5 +1,5 @@
 /*
-  EGModule.h - Base class for ESPGeiger modules
+  EGModule.h - Base class for modules
 
   Copyright (C) 2026 @steadramon
 
@@ -20,11 +20,13 @@
 #define EGMODULE_H
 
 #include <Arduino.h>
+#include "App/AppConfig.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Measure/EGMeasure.h"
 
 class EGHttpServer;
+class EGSender;
 
 // PROGMEM, ends with an empty path
 struct EGMenuEntry {
@@ -67,17 +69,33 @@ class EGModule {
 
     // LEGACY IMPORT (remove after v1.0.0) - PROGMEM table ending with {}
     virtual EGLegacyRows legacy_aliases() { return EGLegacyRows(); }
-    virtual const char* legacy_file() { return "/geigerconfig.json"; }
+#ifdef EGPREFS_LEGACY_FILE
+    virtual const char* legacy_file() { return EGPREFS_LEGACY_FILE; }
+#else
+    virtual const char* legacy_file() { return nullptr; }   // none
+#endif
 
     virtual EGMeasureRows measurements() { return EGMeasureRows(); }
 
     // /outputs fragment, 0 = not sending
     virtual size_t status_json(char* buf, size_t cap, unsigned long now) { return 0; }
+    virtual EGSender* sender() { return nullptr; }   // nullptr = not a sender
 
-    // share a byte, set via note_publish() only
-    uint8_t last_ok          : 1;
-    uint8_t _publish_pending : 1;
-    unsigned long last_attempt_ms = 0;
+    static constexpr uint8_t TOPIC_SENT = 1;   // a send went out
+
+  private:
+    friend class EGModuleRegistry;
+    uint8_t _slot = 0xFF;   // registry's, 0xFF = not added
+
+  protected:
+    // statics, never deleted
+    ~EGModule() = default;
+};
+
+// a module that sends: last result, counts for the Activity log
+class EGSender : public EGModule {
+  public:
+    EGSender* sender() override { return this; }
 
     void note_publish(bool ok);
     void note_attempt();
@@ -85,15 +103,17 @@ class EGModule {
     uint8_t take_publish_ok();
     uint8_t take_publish_err();
 
+    // share a byte, set via note_publish() only
+    uint8_t last_ok          : 1;
+    uint8_t _publish_pending : 1;
   private:
-    friend class EGModuleRegistry;
-    uint8_t _pub_ok  = 0;
+    uint8_t _pub_ok  = 0;   // in the base's tail
     uint8_t _pub_err = 0;
-    uint8_t _slot = 0xFF;   // registry's, 0xFF = not added
+  public:
+    unsigned long last_attempt_ms = 0;
 
   protected:
-    // statics, never deleted
-    ~EGModule() = default;
+    ~EGSender() = default;
     static size_t write_status_json(char* buf, size_t cap, const char* key,
                                     bool ok, unsigned long last_attempt_ms,
                                     unsigned long now);

@@ -17,11 +17,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPGEIGER_CLOCK_H
-#define ESPGEIGER_CLOCK_H
+#ifndef CLOCK_H
+#define CLOCK_H
 
 #include <Arduino.h>
 #include <time.h>
+#include "Corium/System/FastMillis.h"
 
 namespace Clock {
   extern bool synced;
@@ -40,7 +41,7 @@ namespace Clock {
   using StepFn = void (*)(int32_t delta_s);
   void on_step(StepFn fn);
 
-  // WebAPI 403 "Clock off", resync at most every 5 min
+  // a server says the clock is off, resync at most every 5 min
   extern bool resync;
   extern unsigned long resync_ms;
   bool resync_due(unsigned long now);
@@ -66,7 +67,7 @@ namespace Clock {
   }
 
   inline bool isFresh(uint32_t maxAgeMs = 25UL * 3600UL * 1000UL) {
-    return last_sync_ms && (millis() - last_sync_ms) < maxAgeMs;
+    return fresh(millis(), last_sync_ms, maxAgeMs);
   }
 }
 

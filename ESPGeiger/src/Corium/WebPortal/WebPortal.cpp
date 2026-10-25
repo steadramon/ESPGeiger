@@ -1,5 +1,5 @@
 /*
-  WebPortal.cpp - Async web UI for ESPGeiger
+  WebPortal.cpp - Async web UI
 
   Copyright (C) 2026 @steadramon
 
@@ -18,6 +18,7 @@
 */
 #include "WebPortal.h"
 #include "ImportText.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
@@ -26,6 +27,7 @@
 #include "Corium/System/CrashDump.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/Net/Wifi.h"
+#include "Corium/Net/WifiInfo.h"
 #include "Corium/Util/Bytes.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
@@ -39,7 +41,6 @@
 #include "Corium/NTP/NTP.h"
 #include "Corium/System/Clock.h"
 #include "Corium/System/AppHooks.h"
-#include <LittleFS.h>
 #include <EGBase64.h>
 
 #ifdef ESP8266
@@ -52,10 +53,6 @@
 
 #include "STYLE_CSS.gz.h"
 #include "THEME_JS.gz.h"
-#include "JS_BUNDLE.gz.h"
-#include "HVJS_BUNDLE.gz.h"
-
-extern const char picographJS[] PROGMEM;
 
 #define CACHE_1D "public, max-age=86400"
 #define CACHE_7D "public, max-age=604800"
@@ -137,26 +134,24 @@ nav.tabs a.ac{color:var(--link);border-bottom-color:var(--link)}
 .cred{margin-top:1.5em;font-size:.85em;color:var(--muted)}
 .cred a{color:inherit}
 .cred .brand{color:var(--fg);font-weight:bold;font-family:"Courier New",Courier,monospace}
-#g1{height:200px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px}
-#g2{display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.4em 0;font-size:1.05em}
-#t1{width:100%;height:250px;font-family:monospace;font-size:.8em;line-height:1.3;resize:vertical}
-:root.crt{--bg:#000;--page:#000;--fg:#0f0;--muted:#080;--border:#050;--accent:#0a0;--link:#0a0;--card:#001a00}
-:root.crt[data-theme=light]{--bg:#212529;--card:#2b3035;--border:#373b3e;background:#1a1d20}
-:root.crt[data-theme=dark]{background:#000}
-:root.crt body{font-family:Consolas,Menlo,monospace;font-weight:600;box-shadow:none}
-:root.crt :is(h1,h2,h3){color:#0f0;text-shadow:0 0 4px #0f0;font-weight:700}
-:root.crt :is(th,td,p,span,div){font-weight:600}
-:root.crt :is(button:not(.btn-o),input[type=submit],.menu a,.back){color:#000;text-shadow:none}
-:root.crt .devhead h1 .tag{color:#0a0;text-shadow:none;opacity:1}
-:root.crt::after{content:'';position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0,rgba(0,0,0,.18) 1px,transparent 1px,transparent 3px);z-index:9998;animation:crtroll 4s linear infinite}
-@keyframes crtroll{to{background-position:0 3px}})CSS";
+)CSS";
 #endif
 
-// Trefoil, one flash copy
-static const char FAVICON_PATHS[] PROGMEM =
-  "<circle cx='256' cy='256' r='256' fill='#666'/>"
-  "<circle cx='256' cy='256' r='220' fill='#FB2'/>"
-  "<path fill='#555' d='M256 286a30 30 0 1 0 0-60 30 30 0 0 0 0 60zm28-82 62-109a182 182 0 0 0-182 1l63 109a57 57 0 0 1 57-1zm155 51H313c0 21-11 39-28 49l64 108c54-32 90-90 90-157zM163 412l64-108a57 57 0 0 1-28-49H73c0 67 36 125 90 157z'/>";
+#ifndef APP_ICON_SVG
+#define APP_ICON_SVG "<circle cx='256' cy='256' r='256' fill='#666'/>"   // app sets it
+#endif
+#ifndef APP_URL
+#define APP_URL "/"
+#endif
+#ifndef APP_HOME_NAME
+#define APP_HOME_NAME THING_NAME
+#endif
+#ifndef APP_MODEL
+#define APP_MODEL ""
+#endif
+
+// one flash copy
+static const char FAVICON_PATHS[] PROGMEM = APP_ICON_SVG;
 
 static const char BACK_ROW[] PROGMEM =
   "<p class=back-row><a class=back href=/>\xe2\x86\x90 Home</a></p>";
@@ -349,7 +344,7 @@ void WebPortal::applyAuthFromPrefs() {
   const char* cur = EGPrefs::getString("sys", EG_K_WEB_PASS);
   static_assert(sizeof("admin") - 1 + 1 + WEB_PASS_MAX <= EGHTTP_AUTH_MAX,
                 "admin:pass must fit EGHTTP_AUTH_MAX or auth switches off");
-  p->_http.setBasicAuth(F("admin"), cur);
+  p->_http.setBasicAuth(F("admin"), cur, F(THING_NAME));
   static int8_t s_last_state = -1;
   int8_t state = (cur && *cur) ? 1 : 0;
   if (state != s_last_state) {
@@ -419,7 +414,7 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool hasFriendly = (fname && fname[0]);
   const char* hostname = DeviceInfo::hostname();
   char ipBuf[EG_IPV4_MAX + 1];
-  Wifi::formatIP(ipBuf, sizeof(ipBuf), WiFi.localIP());
+  Wifi::formatIP(ipBuf, sizeof(ipBuf), Wifi::localIP());
 
   char esc[6 * EG_NAME_MAX + 1];
   egesc_html(esc, sizeof(esc), fname);
@@ -450,7 +445,10 @@ void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_STYLE_CSS
   res.sendGzipP(200, F("text/css"), STYLE_CSS_GZ, STYLE_CSS_GZ_LEN);
 #else
-  res.send(200, F("text/css"), FPSTR(STYLE_CSS));
+  res.beginChunked(200, F("text/css"));
+  res.sendChunk(FPSTR(STYLE_CSS));
+  res.sendChunk(FPSTR(APP_CSS));
+  res.endChunked();
 #endif
 }
 
@@ -466,51 +464,12 @@ void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if !EG_GZ_THEME_JS
 static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t);
 !function(){
-var d=document.documentElement,L=addEventListener,LS=localStorage,SS=sessionStorage,
-TE=()=>dispatchEvent(new Event('themechange')),
-AR=el=>{
-  var u=d.classList.contains('crt'),
-      list=el&&el.dataset?[el]:document.querySelectorAll('.usv');
-  list.forEach(e=>{
-    var v=parseFloat(e.dataset.uv);
-    if(isNaN(v))return;
-    e.textContent=u?(v*114).toFixed(v*114>=10?1:2):v.toFixed(3);
-    e.title=u?v.toFixed(3)+' µSv/h':'';
-  });
-  document.querySelectorAll('.usvL').forEach(e=>{e.textContent=u?(e.dataset.on||'µR/h'):(e.dataset.off||'µSv/h')});
-},
-AD=el=>{
-  var u=d.classList.contains('crt'),
-      list=el&&el.dataset?[el]:document.querySelectorAll('.dose');
-  list.forEach(e=>{
-    var v=parseFloat(e.dataset.dose);
-    if(isNaN(v))return;
-    var dv=u?v*114:v,s=u?'R':'Sv',p='µ',sc=1;
-    if(dv>=1e6){p='';sc=1e6}
-    else if(dv>=1e3){p='m';sc=1e3}
-    dv/=sc;
-    e.textContent=(dv>=10?dv.toFixed(1):dv.toFixed(2))+' '+p+s;
-  });
-};
-window.setUsv=(el,v)=>{el.dataset.uv=v;AR(el)};
-window.setDose=(el,v)=>{el.dataset.dose=v;AD(el)};
-window.applyRad=AR;
-window.toggleCrt=()=>{LS.crt=d.classList.toggle('crt')?'1':'0';AR();AD();TE();window.applySnd&&window.applySnd()};
-function C(){var s=LS.crt,ds=new Date().toDateString().substr(4,6),hh=2166136261;
-for(var hi=0;hi<6;hi++)hh=Math.imul(hh^ds.charCodeAt(hi),16777619)>>>0;
-if(s==='1')d.classList.add('crt');
-else if(s==='0')d.classList.remove('crt');
-AR();AD();
-var msg={1332614041:'4piiIEhhcHB5IGJpcnRoZGF5IE1hcmllIEN1cmllIC0gYm9ybiAxODY3Lg==',1368767674:'8J+puyBIYXBweSBiaXJ0aGRheSBXaWxoZWxtIFLDtm50Z2VuIC0gYm9ybiAxODQ1Lg=='}[hh];
-if(msg&&location.pathname==='/'&&SS.dayDis!=hh&&!byID('dyB')){var p=document.createElement('div');p.id='dyB';p.textContent=atob(msg);p.onclick=()=>{SS.dayDis=hh;p.remove()};var ap=()=>document.body.appendChild(p);document.body?ap():L('DOMContentLoaded',ap)}}
+var d=document.documentElement,LS=localStorage;
 window.theme=()=>{var t=d.dataset.theme=='dark'?'light':'dark';
-d.dataset.theme=LS.theme=t;TE()};
+d.dataset.theme=LS.theme=t;dispatchEvent(new Event('themechange'))};
 d.dataset.theme=LS.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-C();L('pageshow',e=>{if(e.persisted)C()});
-var k=[38,38,40,40,37,39,37,39,66,65],i=0;
-L('keydown',e=>{i=e.keyCode===k[i]?i+1:0;
-if(i===k.length){toggleCrt();i=0;}})
-}();)JS";
+}();
+)JS";
 #endif
 
 void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -518,7 +477,10 @@ void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_THEME_JS
   res.sendGzipP(200, FPSTR(HTTP_CT_JS), THEME_JS_GZ, THEME_JS_GZ_LEN);
 #else
-  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(THEME_JS));
+  res.beginChunked(200, FPSTR(HTTP_CT_JS));
+  res.sendChunk(FPSTR(THEME_JS));
+  res.sendChunk(FPSTR(APP_THEME_JS));
+  res.endChunked();
 #endif
 }
 
@@ -608,21 +570,21 @@ static void info_fmt_mac(char* dst, size_t cap, const uint8_t* m) {
 }
 
 static void info_collect_net(InfoNet& net) {
-  Wifi::formatIP(net.ip,    sizeof(net.ip),    WiFi.localIP());
-  Wifi::formatIP(net.gw,    sizeof(net.gw),    WiFi.gatewayIP());
-  Wifi::formatIP(net.sn,    sizeof(net.sn),    WiFi.subnetMask());
-  Wifi::formatIP(net.dns_,  sizeof(net.dns_),  WiFi.dnsIP());
-  Wifi::formatIP(net.ap_ip, sizeof(net.ap_ip), WiFi.softAPIP());
+  Wifi::formatIP(net.ip,    sizeof(net.ip),    Wifi::localIP());
+  Wifi::formatIP(net.gw,    sizeof(net.gw),    Wifi::gatewayIP());
+  Wifi::formatIP(net.sn,    sizeof(net.sn),    Wifi::subnetMask());
+  Wifi::formatIP(net.dns_,  sizeof(net.dns_),  Wifi::dnsIP());
+  Wifi::formatIP(net.ap_ip, sizeof(net.ap_ip), Wifi::softAPIP());
   uint8_t macBuf[6];
-  WiFi.macAddress(macBuf);
+  Wifi::macAddress(macBuf);
   info_fmt_mac(net.mac, sizeof(net.mac), macBuf);
-  WiFi.softAPmacAddress(macBuf);
+  Wifi::softAPmacAddress(macBuf);
   info_fmt_mac(net.ap_mac, sizeof(net.ap_mac), macBuf);
-  const uint8_t* bssidPtr = WiFi.BSSID();
+  const uint8_t* bssidPtr = Wifi::BSSID();
   if (bssidPtr) info_fmt_mac(net.bssid, sizeof(net.bssid), bssidPtr);
   else          net.bssid[0] = '\0';
-  egesc_html(net.ssid, sizeof(net.ssid), WiFi.SSID().c_str());
-  strlcpy(net.ap_ssid, WiFi.softAPSSID().c_str(), sizeof(net.ap_ssid));
+  egesc_html(net.ssid, sizeof(net.ssid), Wifi::SSID().c_str());
+  strlcpy(net.ap_ssid, Wifi::softAPSSID().c_str(), sizeof(net.ap_ssid));
 }
 
 #ifdef ESP8266
@@ -737,7 +699,7 @@ static void info_render_system(EGHttpResponse& res) {
 
 static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
   res.sendChunk(F("<details open><summary>WiFi</summary><table>"));
-  INFO_ROW("Connected",      W_FMT_S,     WiFi.isConnected() ? PSTR("Yes") : PSTR("No"));
+  INFO_ROW("Connected",      W_FMT_S,     Wifi::isConnected() ? PSTR("Yes") : PSTR("No"));
   INFO_ROW("Station SSID",   W_FMT_S,     net.ssid);
   INFO_ROW("Station IP",     W_FMT_S,     net.ip);
   INFO_ROW("Station gateway",W_FMT_S,     net.gw);
@@ -747,14 +709,14 @@ static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
   INFO_ROW("Station MAC",    W_FMT_S,     net.mac);
   INFO_ROW("RSSI",           PSTR("%d dBm"), (int)Wifi::rssi);
   INFO_ROW("BSSID",          W_FMT_S,     net.bssid);
-  INFO_ROW("Channel",        W_FMT_D,  (int)WiFi.channel());
+  INFO_ROW("Channel",        W_FMT_D,  (int)Wifi::channel());
   {
     int q = Wifi::txPowerQdbm();
     if (q >= 0) INFO_ROW("TX power", PSTR("%d.%02d dBm"), q / 4, (q % 4) * 25);
   }
   INFO_ROW("PHY mode",       W_FMT_S,     Wifi::phyModeStr());
   INFO_ROW("Radio sleep",    W_FMT_S,     Wifi::sleepModeStr());
-  INFO_ROW("Autoconnect",    W_FMT_S,     WiFi.getAutoReconnect() ? PSTR("Enabled") : PSTR("Disabled"));
+  INFO_ROW("Autoconnect",    W_FMT_S,     Wifi::getAutoReconnect() ? PSTR("Enabled") : PSTR("Disabled"));
   INFO_ROW("AP SSID",        W_FMT_S,     net.ap_ssid[0] ? net.ap_ssid : PSTR("(not active)"));
   INFO_ROW("AP IP",          W_FMT_S,     net.ap_ip);
   INFO_ROW("AP MAC",         W_FMT_S,     net.ap_mac);
@@ -799,7 +761,7 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (net.ssid[0]) res.sendKV(F("<p class=muted>Connected to <b>"), net.ssid);
   else             res.sendChunk(F("<p class=muted>Connected to <b>(not connected)"));
   res.sendKV(F("</b> with IP <b>"), net.ip);
-  res.sendKV(F("</b> &middot; "), DeviceInfo::chipmodel(), F("</p>"));
+  res.sendKV(F("</b> &middot; "), DeviceInfo::board(), F("</p>"));
 
   info_render_system(res);
   info_render_wifi(res, net);
@@ -827,7 +789,7 @@ static void about_modules(EGHttpResponse& res) {
 void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   uint8_t macb[6];
-  WiFi.macAddress(macb);
+  Wifi::macAddress(macb);
   char mac_str[13];
   snprintf_P(mac_str, sizeof(mac_str), PSTR("%02X%02X%02X%02X%02X%02X"),
     macb[0], macb[1], macb[2], macb[3], macb[4], macb[5]);
@@ -837,7 +799,7 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
     PSTR("{\"ver\":\"" RELEASE_VERSION "\",\"git\":\"" GIT_VERSION "\",\"env\":\"" BUILD_ENV "\","
          "\"date\":\"" __DATE__ " " __TIME__ "\",\"chip\":\"%s\",\"flash\":\"%s\",\"mac\":\"%s\","
          "\"host\":\"%s\","),
-    DeviceInfo::chipmodel(),
+    DeviceInfo::board(),   // today: "chip" carries the board
     DeviceInfo::flashInfo(),
     mac_str,
     DeviceInfo::hostname());
@@ -937,7 +899,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::sendPageHead(res, F("Network"));
 
   char ssid[6 * EGPORTAL_SSID_MAX + 1];
-  egesc_html(ssid, sizeof(ssid), WiFi.SSID().c_str());
+  egesc_html(ssid, sizeof(ssid), Wifi::SSID().c_str());
   if (ssid[0]) res.sendKV(F("<p class=muted>Connected to <b>"), ssid, F("</b></p>"));
   else         res.sendChunk(F("<p class=muted>Connected to <b>(none)</b></p>"));
 
@@ -968,7 +930,7 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
   static const char SCANNING[] PROGMEM = "{\"state\":\"scanning\"}";
   bool force = req.arg(F("refresh")) != nullptr;
 
-  int status = WiFi.scanComplete();
+  int status = Wifi::scanComplete();
   if (!force && status == WIFI_SCAN_RUNNING) {
     res.send(200, FPSTR(HTTP_CT_JSON), FPSTR(SCANNING));
     return;
@@ -977,8 +939,8 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool stale = (fast_millis() - s_lastScan) > 60000UL;
   bool needScan = force || status <= 0 || stale;
   if (needScan) {
-    if (status != WIFI_SCAN_RUNNING) WiFi.scanDelete();
-    WiFi.scanNetworks(true /*async*/, false /*show_hidden*/);
+    if (status != WIFI_SCAN_RUNNING) Wifi::scanDelete();
+    Wifi::scanNetworks(true /*async*/, false /*show_hidden*/);
     s_lastScan = fast_millis();
     res.send(200, FPSTR(HTTP_CT_JSON), FPSTR(SCANNING));
     return;
@@ -1492,8 +1454,12 @@ static bool param_save_body(uint8_t tab, Refusal& r) {
   return ok;
 }
 
+#ifndef APP_PARAM_TABS
+#define APP_PARAM_TABS "System", "Input", "Output", "Upload", "Backup"   // app sets it
+#endif
+
 static void param_render_tabs(EGHttpResponse& res, uint8_t tab) {
-  static const char TAB_NAMES[5][7] PROGMEM = {"System", "Input", "Output", "Upload", "Backup"};
+  static const char TAB_NAMES[5][7] PROGMEM = {APP_PARAM_TABS};
   res.sendChunk(F("<nav class=tabs>"));
   char nav[96];
   for (uint8_t t = 0; t < 5; t++) {
@@ -1594,17 +1560,27 @@ static void param_group_header(ParamCtx& c, const EGPrefGroup* g, EGModule* mod)
   if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
 }
 
+#ifndef APP_LOC_WIN
+#define APP_LOC_WIN "corium-loc"
+#endif
+#ifndef APP_LOC_MSG
+#define APP_LOC_MSG "corium-location"
+#endif
+
+// none without APP_LOC_URL
 static void param_emit_locator(ParamCtx& c) {
+#ifdef APP_LOC_URL
   int n = snprintf_P(c.buf, sizeof(c.buf), PSTR(
-    "<p><button type=button onclick=\"window.open('" APP_LOC_URL "/','espgeiger-loc')\">Find location</button></p>"
+    "<p><button type=button onclick=\"window.open('" APP_LOC_URL "/','" APP_LOC_WIN "')\">Find location</button></p>"
     "<script>window.addEventListener('message',function(e){"
     "if(e.origin!=='" APP_LOC_URL "')return;"
-    "var d=e.data;if(!d||d.type!=='espgeiger-location')return;"
+    "var d=e.data;if(!d||d.type!=='" APP_LOC_MSG "')return;"
     "var la=byID('%s.lat'),lo=byID('%s.lon');"
     "if(la&&typeof d.lat==='number')la.value=d.lat;"
     "if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"),
     c.mid, c.mid);
   if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+#endif
 }
 
 static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
@@ -1929,7 +1905,7 @@ static bool is_skip_pref(const char* module_id, const char* key) {
   return false;
 }
 
-static constexpr uint32_t EXPORT_OBF_SEED = 0xB11C5EEDu;
+static constexpr uint32_t EXPORT_OBF_SEED = EXPORT_SEED;
 
 struct B64Sink {
   EGHttpResponse* res;
@@ -2045,7 +2021,7 @@ static void serializeExportStream(B64Sink& sink) {
     if (group_has_export(g)) group_count++;
   }
 
-  const uint8_t MAGIC[3] = {0x11, 0x23, 0xC6};
+  const uint8_t MAGIC[3] = {EXPORT_MAGIC};
   b64_write(sink, MAGIC, 3);
   b64_write_u8(sink, 1);
   sink.obf_on = true;
@@ -2067,7 +2043,8 @@ static void deobfuscate_payload(uint8_t* buf, size_t len) {
 
 static const char* validateImport(uint8_t* buf, size_t len) {
   if (len < 10) return PSTR("too short");
-  if (buf[0] != 0x11 || buf[1] != 0x23 || buf[2] != 0xC6) return PSTR("bad magic");
+  const uint8_t MAGIC[3] = {EXPORT_MAGIC};
+  if (buf[0] != MAGIC[0] || buf[1] != MAGIC[1] || buf[2] != MAGIC[2]) return PSTR("bad magic");
   if (buf[3] != 1) return PSTR("bad format");
   size_t payload_len = len - 4;
   uint32_t expected = rd_be32(buf + payload_len);
@@ -2317,7 +2294,7 @@ void WebPortal::hWebCmd(EGHttpRequest& req, EGHttpResponse& res, void*) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("empty command"));
     return;
   }
-  AppHooks::console(body);
+  Console::run(body);
   res.send(200, FPSTR(HTTP_CT_PLAIN), F("ok"));
 }
 
@@ -2400,42 +2377,3 @@ extern const char wifiAdvancedHTML[] PROGMEM = R"HTML(
 })();
 </script>
 )HTML";
-
-// picograph.js - https://github.com/RainingComputers/picograph.js
-// minimised, with adjustments to allow fixed scroll
-#if !EG_GZ_JS_BUNDLE || !EG_GZ_HVJS_BUNDLE
-extern const char picographJS[] PROGMEM = R"JS(
-var cVID=(t,s)=>t.map(x=>s+x.replace(" ","")+"value"),
-gTS=()=>new Date().toLocaleTimeString(),
-sclInv=(t,s,i,e)=>(1-(t-s)/(i-s))*e,
-sAL=(t,s)=>(t.shift(),t.push(s),t),
-eA2D=(t,s,i)=>Array(t).fill().map(_=>Array(s).fill(i)),
-eA=(t,s)=>Array(t).fill(s),
-cls=["#D35","#090","#00F","#F0F","#933","#009","#099","#999"],
-cA=t=>Array(t).fill().map((_,i)=>cls[i%cls.length]);
-function cLeg(t,s,i,e){const h=`<span>${i}</span>`,n=":"==i.at(-1)?`<span id="${e}"></span>`:"";byID(t).innerHTML+=`<div style=display:inline-block><svg width=10 height=10><rect width=10 height=10 fill="${s}"/></svg> ${h} ${n}</div>`}
-class Graph{
-constructor(t,s,i,e,h,n,a=0,l=!1,o=!1,r=5,c=1,m=2){const d=cVID(s,t);this.iE(t,e,d),this.sC(s,i,n,a,l,o,r,c,m),this.tc=0,this.vc=0,this.rs(h),""===byID(e).innerHTML&&this.cL(),addEventListener("themechange",()=>{this.fg=null;this.rd()})}
-iE(t,s,i){this.cv=byID(t),this.ctx=this.cv.getContext("2d"),this.sW(),this.lID=s,this.vIDs=i}
-sC(t,s,i,e,h,n,a,l,o){this.lb=t,this.u=s,this.vF=l,this.vl=h,this.tm=n,this.nL=t.length,this.co=cA(this.nL);var d=document.createElement("textarea");d.innerHTML=s;this.uD=d.value;this.scC(i,e,a,o)}
-scC(t,s,i,e){this.mv=t,this.lv=s,this.ss=i,this.aS=e,e!=1&&e!=2&&(this.aS=0,Number.isFinite(s)||(this.lv=0),Number.isFinite(t)||(this.mv=100))}
-rs(t){this.iS=t*this.S,this.nF=this.w/this.iS,this.nP=Math.round(this.nF)+1,this.P=eA2D(this.nL,this.nP),this.tsA=eA(this.nP,""),this.fz=null,this.hs=null,this.sp=null}
-cL(){byID(this.lID).innerHTML="";for(let t=0;t<this.nL;t++)cLeg(this.lID,this.co[t],this.lb[t]+":",this.vIDs[t])}
-uCfg(t,s,i,e,h=0,n=!1,a=!1,l=5,o=1,r=1){this.cl(),this.sC(t,s,e,h,n,a,l,o,r),this.rs(i),this.cL()}
-uMM(t){t<this.lv&&(this.lv=t),t>this.mv&&(this.mv=t);let s=Math.abs(this.mv-this.lv),mn=Infinity,mx=-Infinity;for(const r of this.P)for(const v of r)Number.isFinite(v)&&(v<mn&&(mn=v),v>mx&&(mx=v));const i=Math.ceil(mx+.05*s),e=Math.floor(mn)-.05*s;if(2==this.aS)return this.mv=i;t>this.mv-.05*s&&(this.mv=i),t<this.lv+.05*s&&(this.lv=e)}
-uP(t){for(let s=0;s<this.nL;s++)this.aS>0&&this.uMM(t[s]),this.P[s]=sAL(this.P[s],t[s])}
-uL(t){for(let s=0;s<this.nL;s++)byID(this.vIDs[s]).innerHTML=t[s].toFixed(2)+" "+this.u}
-uT(ts){this.tsA=sAL(this.tsA,ts||gTS())}
-dV(){this.vc++;const c=this.ctx,h=this.h;c.strokeStyle=this.gC;c.beginPath();for(let t=this.nP-this.vc;t>=0;t-=this.vF){const s=t*this.iS;c.moveTo(s,0);c.lineTo(s,h)}c.stroke();this.vc==this.vF&&(this.vc=0)}
-cl(){this.ctx.clearRect(0,0,this.w,this.h)}
-sW(){this.S=window.devicePixelRatio,this.cv.width=this.cv.clientWidth*this.S,this.cv.height=this.cv.clientHeight*this.S,this.w=this.ctx.canvas.width,this.h=this.ctx.canvas.height}
-sIW(){this.iS=this.w/this.nF,this.ctx.lineWidth=2*this.S}
-sS(){this.hs=this.h/this.ss,this.sp=(this.mv-this.lv)/this.ss,this.fz=Math.min(.5*this.hs,15*this.S),this.ctx.font=this.fz+"px monospace";if(!this.fg){const cs=getComputedStyle(this.cv);this.fg=cs.color;this.gC=cs.borderTopColor}this.ctx.fillStyle=this.fg}
-dH(){const c=this.ctx,w=this.w,h=this.h,fs=this.fz+2*this.S,u=this.uD;c.strokeStyle=this.gC;c.beginPath();for(let s=1;s<=this.ss;s++){const i=h-s*this.hs;c.fillText((s*this.sp+this.lv).toFixed(2)+" "+u,2,i+fs);c.moveTo(0,i);c.lineTo(w,i)}c.stroke()}
-dT(){const c=this.ctx,h=this.h,fs=this.fz+2*this.S,t=c.measureText((this.ss*this.sp).toFixed(2)).width,s=Math.floor(t/this.iS+1)+1;this.tc++;for(let t=this.nP-this.tc;t>=s;t-=this.vF){const s=t*this.iS,e=c.measureText(this.tsA[t]).width+4*this.S;c.rotate(Math.PI/2),c.fillText(this.tsA[t],h-e,-s+fs),c.stroke(),c.rotate(-Math.PI/2)}this.tc==this.vF&&(this.tc=0)}
-dr(){const c=this.ctx,lv=this.lv,mv=this.mv,h=this.h,sz=this.iS,F=Number.isFinite;for(let t=this.nL-1;t>=0;t--){c.strokeStyle=this.co[t];c.beginPath();let st=0;for(let s=this.nP-1;s>=0;s--){const v=this.P[t][s];if(!F(v)){st=0;continue}const y=sclInv(v,lv,mv,h),x=s*sz;if(st)c.lineTo(x,y);else c.moveTo(x,y);st=1}c.stroke()}}
-rd(){this.cl(),this.sW(),this.sIW(),this.sS(),this.vl&&this.dV(),this.dH(),this.tm&&this.dT(),this.dr()}
-update(t,ts){this.uP(this.sm(t)),this.uL(t),this.uT(ts),this.rd()}
-sm(t){if(!(this.av>1))return t;this.hb=this.hb||[];return t.map((v,i)=>{const h=this.hb[i]=this.hb[i]||[];h.push(v),h.length>this.av&&h.shift();return h.reduce((a,b)=>a+b,0)/h.length})}
-})JS";
-#endif

@@ -23,7 +23,9 @@
 #include <EGHttpServer.h>
 #include <EGJson.h>
 #include "Counter.h"
-#include "Corium/Module/ExternalPause.h"
+#include "Corium/Console/Console.h"
+#include "App/AppKeys.h"
+#include "App/ExternalPause.h"
 #include "Corium/Measure/EGMeasure.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/Util/StringUtil.h"
@@ -84,7 +86,7 @@ static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
       PSTR(",\"start\":%lu"), (unsigned long)Clock::boot_epoch);
   } else {
     n = snprintf_P(line, cap,
-      PSTR(",\"uptime\":%lu"), (unsigned long)Uptime::since(start));
+      PSTR(",\"uptime\":%lu"), (unsigned long)Uptime::since(Uptime::start));
   }
   send_n(res, line, cap, n);
 }
@@ -150,11 +152,19 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
+// 2 dp, else left as was
+static void set_target(const char* s) {
   int32_t target;
-  if (parse_centi(req.arg(F("v")), &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
+  if (parse_centi(s, &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
+}
+
+static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  set_target(req.arg(F("v")));
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
+
+static void cmd_target() { set_target(Console::next()); }
+EG_REGISTER_CMD(target, cmd_target)
 #endif
 
 #if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)

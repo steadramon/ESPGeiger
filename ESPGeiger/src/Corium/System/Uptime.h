@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPGEIGER_UPTIME_H
-#define ESPGEIGER_UPTIME_H
+#ifndef UPTIME_H
+#define UPTIME_H
 
 #include <Arduino.h>
 #include <time.h>
@@ -33,6 +33,7 @@ constexpr time_t SECS_PER_DAY  = SECS_PER_HOUR * 24UL;
 // tick() from the 1 Hz ticker only
 namespace Uptime {
   extern UptimeCounter counter;
+  extern long start;   // Reactor::begin, +1
   inline time_t seconds() { return counter.value(); }
   inline time_t tick() { return counter.tick((uint32_t)::millis()); }
 

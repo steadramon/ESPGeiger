@@ -36,4 +36,18 @@
 // TM1637 too
 #define DISP_IS_MAX7219(t)  ((t) >= DISP_LED_FIRST)
 
+// display.type/rst/flip defaults
+#ifndef OLED_TYPE
+#define OLED_TYPE      0   // 0=SSD1306, 1=SH1106, 2=SSD1309
+#endif
+
+// 255 = none, Heltec and TTGO boards use one
+#ifndef OLED_RST
+#define OLED_RST      255
+#endif
+
+#ifndef OLED_FLIP
+#define OLED_FLIP      false
+#endif
+
 #endif

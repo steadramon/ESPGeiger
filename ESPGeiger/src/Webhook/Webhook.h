@@ -54,7 +54,7 @@ class Webhook : public EGHttpPoster {
     const char* method() const override { return "POST"; }
     uint16_t timeout_s() const override { return 10; }
     size_t reply_cap() const override { return 128; }
-    void add_headers(EGHttpClient* r) override;
+    PGM_P content_type() const override;
   private:
     uint16_t pingInterval = WEBHOOK_INTERVAL;
 };

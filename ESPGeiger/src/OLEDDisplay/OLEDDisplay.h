@@ -24,11 +24,12 @@
 #include "Corium/Platform/Flash.h"
 #include <Wire.h>
 #include <U8g2lib.h>
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Display/DisplayBackend.h"
+#include "Display/DisplayType.h"
 
 class EGHttpServer;
 
@@ -43,24 +44,12 @@ class EGHttpServer;
 #define OLED_HEIGHT      64
 #endif
 
-#ifndef OLED_FLIP
-#define OLED_FLIP      false
-#endif
-
 #ifndef OLED_SDA
 #define OLED_SDA      4
 #endif
 
 #ifndef OLED_SCL
 #define OLED_SCL      5
-#endif
-#ifndef OLED_TYPE
-#define OLED_TYPE      0   // 0=SSD1306, 1=SH1106, 2=SSD1309
-#endif
-
-// 255 = none, Heltec and TTGO boards use one
-#ifndef OLED_RST
-#define OLED_RST      255
 #endif
 
 class SSD1306Display : public EGModule, public DisplayBackend {
@@ -94,6 +83,8 @@ public:
     bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) override;
     void reload() override;
     bool present() override { return _present; }
+    bool takes(uint8_t type) override;
+    void unchosen() override { load_pins(); }   // env sensor needs i2c
     void setup_wifi(const char* host) override { setupWifi(host); }
     void safe_mode() override;
 #ifdef GEIGER_PUSHBUTTON
@@ -170,6 +161,7 @@ public:
     enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };
     void page_changed();
     void redraw(unsigned long now);   // a frame now, page changed
+    void next_frame(unsigned long now);
     uint16_t tick_ms() const;
     unsigned long frame_ms() const;
     bool awake(unsigned long now);
@@ -205,10 +197,11 @@ public:
     uint8_t  _p1v_last_mode = 0;   // 1 W, 2 S
     uint8_t  _p1v_last_wifi = 0xFFu;  // bits: disabled, connected, no counts
     int8_t   _p1v_last_trend = 0;
+    uint8_t _sent_mark = 0;   // a send sets 2, draws count down
     uint8_t _send_ty = 0;
     uint8_t _send_cur = 0;
     uint8_t _send_rows_left = 0;      // 0 = idle, direct draws zero it
-    unsigned long _next_render_due = 0;
+    uint32_t _next_render_due = 0;
 };
 
 extern SSD1306Display oled;

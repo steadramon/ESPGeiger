@@ -18,12 +18,21 @@
 */
 
 #include "KeyStore.h"
+#include "App/AppConfig.h"
 #include <string.h>
+
+// app sets these, a change loses the key
+#ifndef KEYSTORE_NS
+#define KEYSTORE_NS "corium"
+#endif
+#ifndef KEYSTORE_MAGIC
+#define KEYSTORE_MAGIC 0x4B524F43   // "CORK"
+#endif
 
 #if defined(ESP32)
 #include <nvs.h>
 
-static const char NVS_NS[]  = "espg";
+static const char NVS_NS[]  = KEYSTORE_NS;
 static const char NVS_KEY[] = "key";
 
 bool KeyStore::read(uint8_t* out, size_t len) {
@@ -61,7 +70,7 @@ void KeyStore::clear() {
 extern "C" uint32_t _EEPROM_start;
 
 namespace {
-constexpr uint32_t MAGIC = 0x4B475345;   // "ESGK"
+constexpr uint32_t MAGIC = KEYSTORE_MAGIC;
 
 struct Rec {
   uint32_t magic;

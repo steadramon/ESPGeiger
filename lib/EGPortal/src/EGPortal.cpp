@@ -116,7 +116,7 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
   WiFi.disconnect();
   delay(100);
   int n = WiFi.scanNetworks(false);
-  Serial.printf("[EGPortal] sync scan: %d networks\n", n);
+  Serial.printf_P(PSTR("[EGPortal] sync scan: %d networks\n"), n);
   refreshScan(n);
   WiFi.scanDelete();
 
@@ -154,7 +154,7 @@ void EGPortal::kickScan() {
 }
 
 void EGPortal::takeScan(int n) {
-  Serial.printf("[EGPortal] async scan: %d networks\n", n);
+  Serial.printf_P(PSTR("[EGPortal] async scan: %d networks\n"), n);
   if (n > 0) refreshScan(n);
   WiFi.scanDelete();
 }
@@ -251,7 +251,7 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
 }
 
 void EGPortal::refreshScan(int n) {
-  Serial.printf("[EGPortal] refreshScan(%d)\n", n);
+  Serial.printf_P(PSTR("[EGPortal] refreshScan(%d)\n"), n);
   _scanCount = (uint8_t)processScan(_scan, EGPORTAL_SCAN_MAX, n, EGPORTAL_RSSI_MIN);
 }
 

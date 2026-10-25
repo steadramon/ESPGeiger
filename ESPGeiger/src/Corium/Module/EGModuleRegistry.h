@@ -1,5 +1,5 @@
 /*
-  EGModuleRegistry.h - Registry of ESPGeiger modules
+  EGModuleRegistry.h - Registry of modules
 
   Copyright (C) 2026 @steadramon
 
@@ -32,9 +32,10 @@ static_assert(EG_MAX_MODULES <= 32, "post and profile masks are 32 bits");
 #define EG_LOOP_BUDGET_US 2000
 #endif
 
-// topics 0-7 Corium's, an app numbers its own from EG_TOPIC_APP
-#define EG_TOPIC_APP 8
+// topics below EG_TOPIC_APP Corium's, an app numbers its own from it
+#define EG_TOPIC_APP 2
 #define EG_MAX_TOPICS 16
+static_assert(EGModule::TOPIC_SENT < EG_TOPIC_APP, "Corium topics sit below EG_TOPIC_APP");
 
 // settle after reconnect, AsyncTCP UAF
 #ifndef WIFI_SETTLE_MS
@@ -97,7 +98,6 @@ class EGModuleRegistry {
       uint16_t topics;           // on()
       uint16_t events;           // emitted, not taken yet
       uint8_t flags;
-      uint8_t category;
 #ifdef LOOP_PROFILE
       uint32_t max_loop_us;      // 32 bit, can pass 65 ms
       uint32_t total_loop_us;

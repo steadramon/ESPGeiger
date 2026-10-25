@@ -185,7 +185,7 @@ class AsyncClient {
     bool connect(const char* host, uint16_t port);
 #endif
     using MillisFn = uint32_t (*)();
-    static void setClock(MillisFn fn);   // before the first connect, nullptr = millis()
+    static void setClock(MillisFn fn);   // = EGClock::set, nullptr = millis()
 
     void close(bool now = false);
     void release() { delete this; }   // one task, frees now

@@ -17,17 +17,13 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGLed.h"
+#include <EGClock.h>
 
 #ifdef ESP32
 #include <driver/ledc.h>
 #endif
 
-static uint32_t default_millis() { return ::millis(); }
-static EGLed::MillisFn s_clock = default_millis;
-
-void EGLed::setClock(MillisFn fn) {
-  s_clock = (fn != nullptr) ? fn : default_millis;
-}
+void EGLed::setClock(MillisFn fn) { EGClock::set(fn); }
 
 #ifdef ESP32
 
@@ -134,7 +130,7 @@ void EGLed::blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count) {
   _cycles_left = count;
   writeDuty(_brightness);
   _state   = PHASE_ON;
-  _next_ms = s_clock() + on_ms;
+  _next_ms = EGClock::now() + on_ms;
 }
 
 void EGLed::fade(uint8_t shift) {
@@ -144,7 +140,7 @@ void EGLed::fade(uint8_t shift) {
   _fade_value = start;
   writeDuty(_fade_value);
   _state   = PHASE_FADE;
-  _next_ms = s_clock() + 5;
+  _next_ms = EGClock::now() + 5;
 }
 
 void EGLed::on() {
@@ -162,7 +158,7 @@ void EGLed::off() {
 
 void EGLed::update() {
   if (_state == IDLE) return;
-  uint32_t now = s_clock();
+  uint32_t now = EGClock::now();
   if ((int32_t)(now - _next_ms) < 0) return;
   if (_state == PHASE_FADE) {
     uint8_t delta = _fade_value >> _fade_shift;

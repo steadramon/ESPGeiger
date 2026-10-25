@@ -18,7 +18,6 @@
 */
 
 #include "Clock.h"
-#include "Globals.h"
 #include "Uptime.h"
 #include "Corium/Logger/Logger.h"
 
@@ -47,7 +46,7 @@ void refresh_tz_offset_min() {
 bool on_sync() {
   last_sync_ms = millis();
   bool first = !synced;
-  unsigned long uptime = Uptime::since(start);
+  unsigned long uptime = Uptime::since(Uptime::start);
   if (first) {
     synced = true;
     boot_epoch = epoch() - uptime;

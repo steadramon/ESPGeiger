@@ -17,9 +17,11 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpServer.h"
+#include <EGClock.h>
 #include "EGHttpForm.h"
 #include "EGHttpHeaders.h"
 #include "RespParse.h"
+#include <EGStr.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -83,7 +85,7 @@ static const uint32_t EGHTTP_SEND_BUDGET_MS = 2500;
 static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
   if (!s || s->send_aborted) return false;
   size_t sent = 0;
-  uint32_t last_progress = EGTcp::now();
+  uint32_t last_progress = EGClock::now();
   while (sent < len) {
     if (s->send_aborted) return false;
     if (!s->client || !s->client->connected()) {
@@ -96,7 +98,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     }
     size_t can = s->client->space();
     if (can == 0) {
-      if (EGTcp::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
+      if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
 #ifdef EGHTTP_DEBUG
         Serial.printf_P(PSTR("[EGHttp] send aborted, %ums no-progress at %u/%u B\n"),
                         (unsigned)EGHTTP_SEND_BUDGET_MS, (unsigned)sent, (unsigned)len);
@@ -111,7 +113,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     // write() already sends
     size_t wrote = s->client->write(data + sent, take);
     if (wrote == 0) {
-      if (EGTcp::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
+      if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
 #ifdef EGHTTP_DEBUG
         Serial.printf_P(PSTR("[EGHttp] send aborted, write stuck at %u/%u B\n"),
                         (unsigned)sent, (unsigned)len);
@@ -123,7 +125,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
       continue;
     }
     sent += wrote;
-    last_progress = EGTcp::now();
+    last_progress = EGClock::now();
     yield();
   }
   return true;
@@ -168,14 +170,6 @@ static void send_tail(EGHttpServer::Slot* s) {
 // a cut head has no blank line, send none
 static inline bool eghttp_head_fits(int n, size_t cap) {
   return n > 0 && (size_t)n < cap;
-}
-
-static bool eghttp_streq_P(PGM_P a, PGM_P b) {
-  for (;; a++, b++) {
-    uint8_t c = pgm_read_byte(a);
-    if (c != pgm_read_byte(b)) return false;
-    if (!c) return true;
-  }
 }
 
 static bool eghttp_parse_method(const char* name, EGHttpRequest::Method* method) {
@@ -234,7 +228,7 @@ bool EGHttpServer::onUpload(const __FlashStringHelper* path, BodyHandler bh, voi
   }
   for (uint8_t i = 0; i < _routeCount; i++) {
     Route& r = _routes[i];
-    if (r.method == EGHttpRequest::POST && eghttp_streq_P(r.path, (PGM_P)path)) {
+    if (r.method == EGHttpRequest::POST && streq_PP(r.path, (PGM_P)path)) {
       _uploads[_uploadCount++] = { i, bh, user };
       return true;
     }

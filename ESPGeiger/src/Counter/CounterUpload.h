@@ -1,0 +1,37 @@
+/*
+  CounterUpload.h - Upload gate for the uploaders.
+
+  Copyright (C) 2026 @steadramon
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+#ifndef COUNTER_UPLOAD_H
+#define COUNTER_UPLOAD_H
+
+#include "GeigerInput/GeigerInput.h"
+
+bool upload_warm();
+// logs tag once warm
+void upload_testmode(const char* tag);
+
+// warm and not a test build; inline so test builds drop the upload
+inline bool upload_ready(const char* tag) {
+  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
+    upload_testmode(tag);
+    return false;
+  }
+  return upload_warm();
+}
+
+#endif

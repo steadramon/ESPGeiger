@@ -22,10 +22,11 @@
 #ifdef MQTTOUT
 #define LOG_TAG "MQTT"
 
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/System/DeviceInfo.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Module/EGModule.h"
+#include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 
 
@@ -70,7 +71,7 @@
 #define MQTT_HASS_BIRTH_SPREAD_S 30UL   // stagger a fleet on HA birth
 #endif
 
-class MQTT_Client : public EGModule {
+class MQTT_Client : public EGSender {
 public:
   static MQTT_Client& getInstance()
   {
@@ -80,6 +81,7 @@ public:
   const char* name() override { return PSTR("mqtt"); }
   bool requires_wifi() override { return true; }
   static constexpr uint16_t LOOP_MS = 500;
+  static constexpr uint8_t TOPIC_PING = EG_TOPIC_APP + 6;   // today: the send mark, no LED
   void begin() override;
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
@@ -94,8 +96,6 @@ public:
   void onMqttDisconnect(int8_t err);
   void onMqttMessage(const char* topic, const char* payload, size_t len);
   void onMqttAck(uint16_t id);
-  char _lwt_topic[MQTT_ROOT_MAX + sizeof("/tele/lwt")] = "";
-  bool connected = false;
 protected:
   void reconnect();
 
@@ -120,55 +120,8 @@ private:
   void setupHassAuto();
   void setupHassRemove();
   void triggerHassDiscovery();
-  bool publishHassNext(uint8_t idx);
-  bool removeHassNext(uint8_t idx);
   void stepHassDiscovery();
   void setupHassCB();
-  struct HassExtra { const char* key; const char* value; };
-  // all PGM_P
-  struct HassSensorRow {
-    const char* id;
-    const char* name;
-    const char* val_tpl;
-    const char* unit;
-    const char* icon;
-    const char* stat_t;
-    const char* dev_cla;
-    const char* state_cla;
-    const char* ent_cat;
-    const char* precision;  // "" = HA default
-  };
-  struct HassBinaryRow {
-    const char* id;
-    const char* name;
-    const char* val_tpl;
-    const char* icon;
-    const char* stat_t;
-    const char* dev_cla;
-  };
-  typedef void (MQTT_Client::*HassSensorFn)(const HassSensorRow&);
-  typedef void (MQTT_Client::*HassBinaryFn)(const HassBinaryRow&);
-  void hassPublishSensorAt(const HassSensorRow& r);
-  void hassPublishBinaryAt(const HassBinaryRow& r);
-  void hassRemoveSensorAt(const HassSensorRow& r);
-  void hassRemoveBinaryAt(const HassBinaryRow& r);
-  void forEachHassSensor(HassSensorFn fn);
-  void forEachHassBinarySensor(HassBinaryFn fn);
-  void hassPublishSensor(const HassSensorRow& r);
-  void hassPublishBinarySensor(const HassBinaryRow& r);
-  void hassRemoveSensor(const HassSensorRow& r);
-  void hassRemoveBinarySensor(const HassBinaryRow& r);
-  struct HassTopic {
-    const char* type;
-    const char* id;
-    const char* displayName;
-    const char* devCla;
-    const char* stateCla;
-    const char* entCat;
-    const char* cmdTopic;
-  };
-  void publishHassTopic(const HassTopic& t, const HassExtra* extras, size_t n_extras);
-  void removeHassTopic(const char* type, const char* id);
 #endif
   unsigned long statusSlotAnchor(unsigned long now_s);
   bool publishStatus();
@@ -205,13 +158,11 @@ private:
 #ifdef MQTTAUTODISCOVER
   bool _hass_retrigger = false;   // HA came back, the timers spread it
   bool _hass_listen = false;
-  char _hass_status[MQTT_HASS_TOPIC_MAX + sizeof("/status")] = "";
-  unsigned long _hass_next_publish = 0;
+  char _hass_status[MQTT_HASS_TOPIC_MAX + sizeof("/status")] = {};
+  Deadline _hass_next;   // uptime s
   unsigned long _hass_last_publish = 0;
   int8_t  _hass_walk_state = 0;
   uint8_t _hass_idx = 0;
-  uint8_t _hass_walk_cursor = 0;
-  bool    _hass_walk_done = false;
 #endif
 
   // what the broker was last told

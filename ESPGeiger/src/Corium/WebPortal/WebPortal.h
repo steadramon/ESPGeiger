@@ -1,5 +1,5 @@
 /*
-  WebPortal.h - Async web UI for ESPGeiger
+  WebPortal.h - Async web UI
 
   Copyright (C) 2026 @steadramon
 

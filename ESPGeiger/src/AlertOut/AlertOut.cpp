@@ -19,11 +19,14 @@
 #ifdef ALERT_OUT
 
 #include "AlertOut.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
 
 AlertOut alertout;
@@ -77,7 +80,7 @@ void AlertOut::apply_level(bool active) {
 
 // on alarm changes; while pulsing, at each flip
 void AlertOut::loop(unsigned long now) {
-  bool active = gcounter.is_alert();
+  bool active = egm_b(M_ALERT);
   if (_mode != 1 || !active) {
     _pulsing = false;
     apply_level(active);
@@ -89,10 +92,9 @@ void AlertOut::loop(unsigned long now) {
     _high = false;
     _flip_at = now;
   }
-  if (reached(now, _flip_at)) {
+  if (due_every(now, _flip_at, FLIP_MS)) {
     _high = !_high;
     apply_level(_high);
-    _flip_at = now + FLIP_MS;
   }
   EGModuleRegistry::due_at(this, _flip_at);
 }

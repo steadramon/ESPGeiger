@@ -28,7 +28,7 @@ Log::LoggingLevels Log::logLevel = LOG_LEVEL;
 char Log::log[MAX_LOG_SIZE] = "";
 bool Log::serialLog = true;
 
-// esp32: mqtt, audio and the loop all log
+// esp32: other tasks log too
 #ifdef ESP32
 #include <freertos/semphr.h>
 static SemaphoreHandle_t s_lock = nullptr;   // first log is in setup

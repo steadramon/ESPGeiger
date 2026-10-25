@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Fs.h"
+#include "Corium/Logger/Logger.h"
 
 #define FS_MOUNT_TRIES 3
 
@@ -33,7 +34,10 @@ bool Fs::begin() {
     if (i) delay(50);
     s_mounted = LittleFS.begin();
   }
-  if (!s_mounted && LittleFS.format()) s_mounted = LittleFS.begin();
+  if (!s_mounted) {
+    Log::console(PSTR("FS: mount failed, formatting"));
+    if (LittleFS.format()) s_mounted = LittleFS.begin();
+  }
   return s_mounted;
 }
 
@@ -42,13 +46,29 @@ File Fs::open_r(const char* path) {
   return LittleFS.open(path, "r");
 }
 
+File Fs::open_w(const char* path) {
+  if (!begin()) return File();
+  return LittleFS.open(path, "w");
+}
+
 bool Fs::remove(const char* path) {
   return begin() && LittleFS.exists(path) && LittleFS.remove(path);
 }
 
+bool Fs::exists(const char* path) {
+  return begin() && LittleFS.exists(path);
+}
+
+bool Fs::rename(const char* from, const char* to) {
+  return begin() && LittleFS.exists(from) && LittleFS.rename(from, to);
+}
+
+bool Fs::mkdir(const char* path) {
+  return begin() && LittleFS.mkdir(path);
+}
+
 void Fs::touch(const char* path) {
-  if (!begin()) return;
-  File f = LittleFS.open(path, "w");
+  File f = open_w(path);
   if (f) f.close();
 }
 
@@ -69,8 +89,7 @@ File Fs::open_r(const __FlashStringHelper* path) {
 
 File Fs::open_w(const __FlashStringHelper* path) {
   RamPath p(path);
-  if (!p.s[0] || !begin()) return File();
-  return LittleFS.open(p.s, "w");
+  return p.s[0] ? open_w(p.s) : File();
 }
 
 bool Fs::remove(const __FlashStringHelper* path) {
@@ -80,10 +99,10 @@ bool Fs::remove(const __FlashStringHelper* path) {
 
 bool Fs::exists(const __FlashStringHelper* path) {
   RamPath p(path);
-  return p.s[0] && begin() && LittleFS.exists(p.s);
+  return p.s[0] && exists(p.s);
 }
 
 bool Fs::rename(const __FlashStringHelper* from, const __FlashStringHelper* to) {
   RamPath a(from), b(to);
-  return a.s[0] && b.s[0] && begin() && LittleFS.exists(a.s) && LittleFS.rename(a.s, b.s);
+  return a.s[0] && b.s[0] && rename(a.s, b.s);
 }

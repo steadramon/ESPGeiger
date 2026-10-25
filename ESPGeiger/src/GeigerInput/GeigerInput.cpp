@@ -89,7 +89,7 @@ static inline __attribute__((always_inline)) void count_at(unsigned long cycles)
   Counter::on_pulse((uint32_t)cycles);
 }
 
-void IRAM_ATTR GeigerInput::countInterrupt() {
+void EG_ISR_ATTR GeigerInput::countInterrupt() {
   count_at(micros());
 }
 
@@ -107,14 +107,14 @@ void GeigerInput::checkIsrStorm() {
 
   if (s_isr_cooldown > 0) {
     if (--s_isr_cooldown == 0) {
-      attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+      IsrLock::pin_on_fall(_rx_pin, countInterrupt);
       Log::console(PSTR("GeigerPulse: re-armed after storm cooldown"));
     }
     return;
   }
 
   if (n > ISR_STORM_THRESHOLD) {
-    detachInterrupt(digitalPinToInterrupt(_rx_pin));
+    IsrLock::pin_off(_rx_pin);
     s_isr_cooldown = ISR_STORM_COOLDOWN_S;
     Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
                  (unsigned)n, (unsigned)ISR_STORM_COOLDOWN_S);

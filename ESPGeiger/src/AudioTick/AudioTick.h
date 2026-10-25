@@ -60,6 +60,8 @@ enum AudioCmdType : uint8_t {
   AC_NUMBERS,
   AC_CHIME,
   AC_CLICK,
+  AC_DIGIT,     // speech, from the numbers station
+  AC_SILENCE,
 };
 
 struct AudioCmd {
@@ -70,6 +72,9 @@ struct AudioCmd {
 };
 
 bool audio_enqueue(const AudioCmd& cmd);
+// speech types go here, on the worker
+typedef void (*AudioFn)(const AudioCmd& cmd);
+void audio_speech(AudioFn fn);
 
 class AudioTick : public EGModule {
   public:
@@ -127,7 +132,7 @@ class AudioTick : public EGModule {
     uint8_t       _dout     = AUDIO_TICK_DOUT;
     unsigned long _last_emit_ms = 0;
     uint8_t       _tokens = 5;
-    unsigned long _last_token_ms = 0;
+    uint32_t      _last_token_ms = 0;
     std::atomic<bool> _muted{false};
     bool          _muted_logged = false;
 };

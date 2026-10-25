@@ -20,6 +20,7 @@
 #define UTIL_WIFILINK_H
 
 #include <Arduino.h>
+#include "App/AppConfig.h"
 
 // SSID\nPSK\n
 extern const char WIFI_BACKUP_P[] PROGMEM;

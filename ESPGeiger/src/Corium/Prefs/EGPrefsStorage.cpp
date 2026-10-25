@@ -70,18 +70,16 @@ bool EGPrefsStorage::begin(const char* name, bool readOnly) {
   char dir[DIR_NAME_MAX + 2];
   snprintf_P(dir, sizeof(dir), PSTR("/%s"), name);
   if (!_readOnly) {
-    if (LittleFS.exists(dir)) {
-      File chk = LittleFS.open(dir, "r");
-      if (chk && !chk.isDirectory()) {
-        chk.close();
-        LittleFS.remove(dir);
-        Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
-      } else if (chk) {
-        chk.close();
-      }
+    File chk = Fs::open_r(dir);
+    if (chk && !chk.isDirectory()) {
+      chk.close();
+      Fs::remove(dir);
+      Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
+    } else if (chk) {
+      chk.close();
     }
-    if (!LittleFS.exists(dir)) {
-      LittleFS.mkdir(dir);
+    if (!Fs::exists(dir)) {
+      Fs::mkdir(dir);
     }
   }
   snprintf_P(_path, sizeof(_path), PSTR("%s/"), dir);
@@ -100,14 +98,14 @@ bool EGPrefsStorage::has(const char* module_id) {
   if (!_started || !module_id) return false;
   char path[EGPS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
-  return LittleFS.exists(path);
+  return Fs::exists(path);
 }
 
 bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
   if (!_started || !module_id || !cb) return false;
   char path[EGPS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
-  File f = LittleFS.open(path, "r");
+  File f = Fs::open_r(path);
   if (!f) return false;
   size_t sz = f.size();
   if (sz < 4 || sz > EGPREFS_MAX_GROUP_SZ) { f.close(); return false; }
@@ -141,18 +139,18 @@ bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t l
   int sn = snprintf_P(staging, sizeof(staging), PSTR("%s%s"), final_path, EGPS_STAGING_SUFFIX);
   if (sn < 0 || sn >= (int)sizeof(staging)) return false;
   {
-    File f = LittleFS.open(staging, "w");
+    File f = Fs::open_w(staging);
     if (!f) return false;
     size_t n = f.write((const uint8_t*)buf, len);
     f.close();
     if (n != len) {
-      LittleFS.remove(staging);
+      Fs::remove(staging);
       return false;
     }
   }
   // don't remove first, rename replaces in one step
-  if (!LittleFS.rename(staging, final_path)) {
-    LittleFS.remove(staging);
+  if (!Fs::rename(staging, final_path)) {
+    Fs::remove(staging);
     return false;
   }
   return true;
@@ -162,5 +160,5 @@ bool EGPrefsStorage::removeGroup(const char* module_id) {
   if (!_started || _readOnly || !module_id) return false;
   char path[EGPS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
-  return LittleFS.remove(path);
+  return Fs::remove(path);
 }

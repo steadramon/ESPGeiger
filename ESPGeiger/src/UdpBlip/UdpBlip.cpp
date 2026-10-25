@@ -18,14 +18,18 @@
 */
 #include "UdpBlip.h"
 #include "BlipPacket.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "Counter/Counter.h"
 #include "GeigerInput/GeigerInput.h"
+#include "Corium/Measure/EGMeasure.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/Util/TokenBucket.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Uptime.h"
 #include "GRNG/GRNG.h"
@@ -75,7 +79,10 @@ static const EGPrefGroup UDPBLIP_PREF_GROUP PROGMEM = {
 const EGPrefGroup* UdpBlipModule::prefs_group() { return &UDPBLIP_PREF_GROUP; }
 
 
+static void udpblip_click(uint32_t) { udpblip.notifyClick(fast_millis()); }
+
 void UdpBlipModule::begin() {
+  gcounter.on_click(udpblip_click);
   readPrefs();
   _last_clicks = gcounter.total_clicks;
   // jitter so a fleet doesn't send at once
@@ -102,7 +109,13 @@ void UdpBlipModule::readPrefs() {
   }
   uint32_t p = EGPrefs::getUInt("udpblip", EG_K_PORT);
   _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPBLIP_DEFAULT_PORT;
+  // gate retry pace, the loop sets its own due
   EGModuleRegistry::every(this, _mode > 0 ? LOOP_MS : 0);
+  _wake_at = fast_millis();
+#if !GEIGER_IS_UDPRX(GEIGER_TYPE)
+  // serial counts land with no click
+  if (_mode == 2) EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
+#endif
 }
 
 void UdpBlipModule::teardown() {
@@ -155,9 +168,9 @@ void UdpBlipModule::on_prefs_saved() {
   Log::console(PSTR("UdpBlip: prefs saved, mode=%u port=%u"), _mode, _port);
 }
 
-bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
-  if (!_udp) return false;
-  if (!Wifi::connected) return false;
+void UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
+  if (!_udp) return;
+  if (!Wifi::connected) return;
 #ifdef ESP8266
   // esp8266 needs this for IGMP
   bool ok = Wifi::is_multicast(_group)
@@ -166,17 +179,18 @@ bool UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
 #else
   bool ok = _udp->beginPacket(_group, _port);
 #endif
-  if (!ok) {
-    _fail_count++;
-    return false;
+  if (ok) {
+    _udp->write(buf, len);
+    ok = _udp->endPacket() != 0;
   }
-  _udp->write(buf, len);
-  if (_udp->endPacket() == 0) {
-    _fail_count++;
-    return false;
+  if (ok) {
+    _fail_count = 0;
+    return;
   }
-  _fail_count = 0;
-  return true;
+  // the last one starts the cooldown
+  if (++_fail_count != UDPBLIP_FAIL_BACKOFF) return;
+  _backoff.set(fast_millis() + UDPBLIP_FAIL_COOLDOWN_MS);
+  wake(_backoff.at);
 }
 
 void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms) {
@@ -190,10 +204,10 @@ void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms) {
 void UdpBlipModule::emitRad(uint32_t now) {
   uint8_t buf[96];
   const char* state =
-    gcounter.is_alert()   ? PSTR("alert") :
-    gcounter.is_warning() ? PSTR("warning") :
-    gcounter.is_warm()    ? PSTR("healthy") : PSTR("warming");
-  BlipRad r = { gcounter.get_cpmf(), gcounter.get_usv(), state, (uint32_t)gcounter.total_clicks };
+    egm_b(M_ALERT) ? PSTR("alert") :
+    egm_b(M_WARN)  ? PSTR("warning") :
+    egm_b(M_WARM)  ? PSTR("healthy") : PSTR("warming");
+  BlipRad r = { egm_f(M_CPM), egm_f(M_USV), state, egm_u(M_TC) };
   size_t n = blip_rad(buf, sizeof(buf), path(PSTR("rad")), r);
   if (n) sendPacket(buf, n);
   (void)now;
@@ -236,42 +250,55 @@ const char* UdpBlipModule::path(const char* suffix) {
   return _path;
 }
 
-void UdpBlipModule::tryEmitClick(unsigned long now_ms) {
+// true = one waits for a token, woken then
+bool UdpBlipModule::tryEmitClick(unsigned long now_ms) {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   // never re-broadcast, feedback loop
   (void)now_ms;
-  return;
+  return false;
 #else
-  if (_mode != 2) return;
-  if (_fail_count >= UDPBLIP_FAIL_BACKOFF) return;
-  if (!_udp) return;
-  if (!Wifi::connected) return;
-  if (ota_in_progress) return;
+  if (_mode != 2) return false;
+  if (_fail_count >= UDPBLIP_FAIL_BACKOFF) return false;
+  if (!_udp) return false;
+  if (!Wifi::connected) return false;
   uint32_t true_count = (uint32_t)gcounter.total_clicks + s_event_counter;
-  if (true_count == _last_clicks) return;
-
-  // whole intervals only, keeps the slack
-  uint32_t elapsed = (uint32_t)(now_ms - _last_token_ms);
-  if (elapsed >= UDPBLIP_CLICK_MIN_INTERVAL_MS) {
-    uint32_t gained = (elapsed < UDPBLIP_CLICK_MIN_INTERVAL_MS * 2u)
-                      ? 1u
-                      : (elapsed / UDPBLIP_CLICK_MIN_INTERVAL_MS);
-    uint32_t t = _burst_tokens + gained;
-    if (t > UDPBLIP_CLICK_BURST_TOKENS) t = UDPBLIP_CLICK_BURST_TOKENS;
-    _burst_tokens = (uint8_t)t;
-    _last_token_ms += gained * UDPBLIP_CLICK_MIN_INTERVAL_MS;
+  if (true_count == _last_clicks) return false;
+  if (!ota_in_progress && take_token(now_ms, _last_token_ms, _burst_tokens,
+                                     UDPBLIP_CLICK_MIN_INTERVAL_MS, UDPBLIP_CLICK_BURST_TOKENS)) {
+    _last_clicks = true_count;
+    emitClick(true_count, (uint32_t)now_ms);
+    return false;
   }
-  if (_burst_tokens == 0) return;
-  _burst_tokens--;
-
-  _last_click_emit_ms = (uint32_t)now_ms;
-  _last_clicks = true_count;
-  emitClick(true_count, (uint32_t)now_ms);
+  wake(_last_token_ms + UDPBLIP_CLICK_MIN_INTERVAL_MS);
+  return true;
 #endif
 }
 
-void UdpBlipModule::notifyClick(unsigned long now_ms) {
-  tryEmitClick(now_ms);
+void UdpBlipModule::due(uint32_t at) {
+  _wake_at = at;
+  EGModuleRegistry::due_at(this, at);
+}
+
+// sooner only, one call per token at most
+void UdpBlipModule::wake(uint32_t at) {
+  if (reached(at, _wake_at)) return;
+  due(at);
+}
+
+static inline void sooner(uint32_t& at, uint32_t t) {
+  if (!reached(t, at)) at = t;
+}
+
+// stats, the cooldown, a held click or the bind retry
+void UdpBlipModule::schedule(uint32_t now, bool held) {
+  uint32_t at = _stats_at;
+  if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
+    at = _backoff.at;
+  } else {
+    if (!_udp || !_mdns_done) sooner(at, now + LOOP_MS);
+    if (held) sooner(at, _last_token_ms + UDPBLIP_CLICK_MIN_INTERVAL_MS);
+  }
+  due(at);
 }
 
 // rad, hv a second on, sys + env every other cycle
@@ -307,20 +334,23 @@ void UdpBlipModule::bind(uint32_t now) {
 
 void UdpBlipModule::loop(unsigned long now) {
   if (_mode == 0) return;
-  if (EGModuleRegistry::events(this) && _udp && Wifi::connected_at_ms != _bound_at_ms) {
+  uint16_t ev = EGModuleRegistry::events(this);
+  if ((ev & (1u << Wifi::TOPIC_CHANGED)) && _udp && Wifi::connected_at_ms != _bound_at_ms) {
     Log::console(PSTR("UdpBlip: WiFi reconnect, rebinding"));
     teardown();
   }
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
-    if (!_backoff_at) _backoff_at = now + UDPBLIP_FAIL_COOLDOWN_MS;
-    if (!reached(now, _backoff_at)) return;
-    _backoff_at = 0;
+    if (!_backoff.due(now)) {
+      due(_backoff.at);
+      return;
+    }
+    _backoff.clear();
     _fail_count = 0;
     teardown();
   }
   if (!_udp || !_mdns_done) bind(now);
   if (reached(now, _stats_at)) stats(now);
-  tryEmitClick(now);
+  schedule(now, tryEmitClick(now));
 }
 
 size_t UdpBlipModule::status_json(char* buf, size_t cap, unsigned long now) {

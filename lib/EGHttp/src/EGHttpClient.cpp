@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpClient.h"
+#include <EGClock.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -24,10 +25,13 @@
 #include "RespParse.h"
 #include "UrlParse.h"
 
-// the stack's wakes only send, the reply waits for idle()
+static const bool PULL = EGHTTP_SINK || EGHTTP_REDIRECTS;   // only those read
+
+// the stack's wakes send; pushed, its bytes and its close end the reply too
 EGHttpClient::EGHttpClient() {
   _tcp.onConnect([this]() { send_more(); });
   _tcp.onSent([this](size_t) { send_more(); });
+  _tcp.onClose([this](int8_t) { if (!PULL || _push) step(); });
 }
 
 EGHttpClient::~EGHttpClient() {
@@ -36,7 +40,7 @@ EGHttpClient::~EGHttpClient() {
   free(_location);
 }
 
-bool EGHttpClient::Buf::add(const char* s, size_t n) {
+bool EGHttpClient::Buf::add(const char* s, size_t n, bool flash) {
   if (len + n + 1 > cap) {
     size_t want = cap ? cap * 2 : 128;
     if (want < len + n + 1) want = len + n + 1;
@@ -45,7 +49,8 @@ bool EGHttpClient::Buf::add(const char* s, size_t n) {
     p = bigger;
     cap = want;
   }
-  memcpy(p + len, s, n);
+  if (flash) memcpy_P(p + len, s, n);
+  else memcpy(p + len, s, n);
   len += n;
   p[len] = '\0';
   return true;
@@ -69,7 +74,7 @@ bool EGHttpClient::open(const char* method, const char* url) {
   _bad = false;
   _hops = 0;
   _sink = nullptr;
-  _startMs = EGTcp::now();
+  _startMs = EGClock::now();
 
   size_t n = strlen(method);
   int err = HTTPCODE_NOT_CONNECTED;
@@ -110,11 +115,11 @@ int EGHttpClient::start(const char* url) {
   _sent = 0;
   _ready = false;
   char port[8] = "";
-  if (_port != 80) snprintf(port, sizeof(port), ":%u", _port);
-  bool ok = _req.add(_method) && _req.add(" ") &&
+  if (_port != 80) snprintf_P(port, sizeof(port), PSTR(":%u"), _port);
+  bool ok = _req.add(_method) && _req.add_P(PSTR(" ")) &&
             _req.add(u.path, u.path_len) && _req.add(u.query, u.query_len) &&
-            _req.add(" HTTP/1.1\r\nHost: ") && _req.add(_host) && _req.add(port) &&
-            _req.add("\r\nConnection: close\r\n");
+            _req.add_P(PSTR(" HTTP/1.1\r\nHost: ")) && _req.add(_host) && _req.add(port) &&
+            _req.add_P(PSTR("\r\nConnection: close\r\n"));
   if (!ok) return HTTPCODE_TOO_LESS_RAM;
 
   free(_in);
@@ -127,7 +132,7 @@ int EGHttpClient::start(const char* url) {
   _held = false;
   fresh_reply();
 
-  _heardMs = EGTcp::now();
+  _heardMs = EGClock::now();
   _phase = DIAL;
   if (!_tcp.connect(_host, _port)) return HTTPCODE_NOT_CONNECTED;
   return 0;
@@ -137,7 +142,8 @@ int EGHttpClient::start(const char* url) {
 void EGHttpClient::setReqHeader(const char* name, const char* value) {
   if (_phase != DIAL || _ready) return;
   if (!eg_http_token(name, strlen(name)) || !eg_http_text(value, strlen(value))) return;
-  bool ok = _hdrs.add(name) && _hdrs.add(": ") && _hdrs.add(value) && _hdrs.add("\r\n");
+  bool ok = _hdrs.add(name) && _hdrs.add_P(PSTR(": ")) && _hdrs.add(value) &&
+            _hdrs.add_P(PSTR("\r\n"));
   if (!ok) _bad = true;
 }
 
@@ -178,10 +184,10 @@ bool EGHttpClient::seal(const uint8_t* body, size_t len, bool has_body) {
   bool ok = !_bad && _req.add(_hdrs.p ? _hdrs.p : "", _hdrs.len);
   if (has_body) {
     char cl[32];
-    snprintf(cl, sizeof(cl), "Content-Length: %u\r\n", (unsigned)len);
+    snprintf_P(cl, sizeof(cl), PSTR("Content-Length: %u\r\n"), (unsigned)len);
     ok = ok && _req.add(cl);
   }
-  ok = ok && _req.add("\r\n");
+  ok = ok && _req.add_P(PSTR("\r\n"));
   if (has_body && len) ok = ok && _req.add((const char*)body, len);
   if (!ok) {
     end(HTTPCODE_TOO_LESS_RAM);
@@ -189,6 +195,10 @@ bool EGHttpClient::seal(const uint8_t* body, size_t len, bool has_body) {
   }
   _bodyless = !has_body;
   _ready = true;
+  // a sink holds bytes back, a redirect dials again: those pull
+  _push = !PULL || (!_sink && !_redirects);
+  if (_push) _tcp.onData([this](const uint8_t* d, size_t n) { feed(d, n); });
+  else _tcp.onData(nullptr);
   return true;
 }
 
@@ -230,8 +240,8 @@ void EGHttpClient::step() {
   do {
     was = _phase;
     if (_phase == IDLE || _phase == DONE) return;
-    uint32_t now = EGTcp::now();
-    if (_held) _heardMs = now;   // sink waiting, not the server
+    uint32_t now = EGClock::now();
+    if (EGHTTP_SINK && _held) _heardMs = now;   // sink waiting, not the server
     bool late = _deadlineMs && now - _startMs >= _deadlineMs;
     if (late || now - _heardMs >= _timeoutS * 1000UL) {
       end(HTTPCODE_TIMEOUT);
@@ -254,7 +264,7 @@ void EGHttpClient::dial() {
     // lwIP gave up
     end(_tcp.error() == EGTcpClient::E_ABRT ? HTTPCODE_TIMEOUT : HTTPCODE_NOT_CONNECTED);
   } else if (s == EGTcpClient::OPEN && _ready) {
-    _heardMs = EGTcp::now();
+    _heardMs = EGClock::now();
     _phase = SEND;
   }
 }
@@ -270,7 +280,7 @@ void EGHttpClient::push() {
     return;
   }
   size_t n = _tcp.write(_req.p + _sent, _req.len - _sent);
-  if (n) _heardMs = EGTcp::now();
+  if (n) _heardMs = EGClock::now();
   _sent += n;
   if (_sent == _req.len) listen();
 }
@@ -292,12 +302,27 @@ void EGHttpClient::listen() {
 
 // Reply
 
+// pushed, past the reply dropped
+void EGHttpClient::feed(const uint8_t* d, size_t n) {
+  if (_phase == SEND) listen();   // early reply
+  while (n && (_phase == REPLY || _phase == HEAD || _phase == BODY)) {
+    size_t k = n < IN_CAP ? n : IN_CAP;
+    memcpy(_in, d, k);
+    _inLen = k;
+    _inOff = 0;
+    _heardMs = EGClock::now();
+    step();
+    d += k;
+    n -= k;
+  }
+}
+
 // 0 = none for now
 size_t EGHttpClient::fill() {
-  if (_inOff == _inLen) {
+  if (PULL && _inOff == _inLen && !_push) {
     _inLen = _tcp.read(_in, IN_CAP);
     _inOff = 0;
-    if (_inLen) _heardMs = EGTcp::now();
+    if (_inLen) _heardMs = EGClock::now();
   }
   return _inLen - _inOff;
 }
@@ -362,6 +387,10 @@ static bool same(const char* a, const char* b) {
   return strcasecmp(a, b) == 0;
 }
 
+static bool same_P(const char* a, PGM_P b) {
+  return strcasecmp_P(a, b) == 0;
+}
+
 static bool parse_length(const char* s, int32_t* out) {
   if (!*s) return false;
   uint32_t v = 0;
@@ -389,22 +418,22 @@ void EGHttpClient::header_line() {
   char* value;
   _mattered = false;
   if (!eg_http_header(_line.p, _line.len, &name, &value)) return;   // junk, skipped
-  _mattered = same(name, "Content-Length") || same(name, "Transfer-Encoding") ||
-              same(name, "Location");
+  _mattered = same_P(name, PSTR("Content-Length")) || same_P(name, PSTR("Transfer-Encoding")) ||
+              same_P(name, PSTR("Location"));
   if (!_mattered) return;
   if (_cut) end(HTTPCODE_ENCODING);   // can't act on half
   else act_on(name, value);
 }
 
 void EGHttpClient::act_on(const char* name, const char* value) {
-  if (same(name, "Content-Length")) {
+  if (same_P(name, PSTR("Content-Length"))) {
     int32_t n;
     // a second has to agree
     if (!parse_length(value, &n) || (_length >= 0 && n != _length)) end(HTTPCODE_ENCODING);
     else _length = n;
-  } else if (same(name, "Transfer-Encoding")) {
+  } else if (same_P(name, PSTR("Transfer-Encoding"))) {
     // chunked, once
-    if (_chunked || !same(value, "chunked")) end(HTTPCODE_ENCODING);
+    if (_chunked || !same_P(value, PSTR("chunked"))) end(HTTPCODE_ENCODING);
     else _chunked = true;
   } else {
     free(_location);
@@ -424,8 +453,8 @@ void EGHttpClient::head_done() {
     return;
   }
   if (_chunked) _length = -1;   // chunked wins over a length
-  if (moved(_status) && _location && follow()) return;
-  bool none = same(_method, "HEAD") || _status == 204 || _status == 304;
+  if (EGHTTP_REDIRECTS && moved(_status) && _location && follow()) return;
+  bool none = same_P(_method, PSTR("HEAD")) || _status == 204 || _status == 304;
   if (none || (!_chunked && _length == 0)) {
     end(0);
     return;
@@ -437,12 +466,18 @@ void EGHttpClient::head_done() {
 
 // nullptr = not followed
 const char* EGHttpClient::url_start(const char* to, char* base, size_t n) {
-  if (to[0] == '/' && to[1] == '/') return "http:";
-  if (to[0] == '/') {
-    snprintf(base, n, "http://%s:%u", _host, _port);
+  if (to[0] == '/' && to[1] == '/') {
+    snprintf_P(base, n, PSTR("http:"));
     return base;
   }
-  if (strncasecmp(to, "http://", 7) == 0) return "";
+  if (to[0] == '/') {
+    snprintf_P(base, n, PSTR("http://%s:%u"), _host, _port);
+    return base;
+  }
+  if (strncasecmp_P(to, PSTR("http://"), 7) == 0) {
+    base[0] = '\0';
+    return base;
+  }
   return nullptr;
 }
 
@@ -462,7 +497,7 @@ bool EGHttpClient::follow() {
   char was[sizeof(_host)];
   strlcpy(was, _host, sizeof(was));
   uint16_t wasPort = _port;
-  if (_status == 303 && !same(_method, "HEAD")) strlcpy(_method, "GET", sizeof(_method));
+  if (_status == 303 && !same_P(_method, PSTR("HEAD"))) strncpy_P(_method, PSTR("GET"), sizeof(_method));
   _tcp.close();
   int err = ok ? start(url.p) : HTTPCODE_TOO_LESS_RAM;
   url.clear();
@@ -532,7 +567,7 @@ size_t EGHttpClient::take(size_t n) {
 
 // sink, or kept up to BODY_CAP
 size_t EGHttpClient::give(const uint8_t* buf, size_t n) {
-  if (_sink) {
+  if (EGHTTP_SINK && _sink) {
     int took = _sink(_sinkArg, buf, n);
     if (took < 0) {
       end(HTTPCODE_STREAM_WRITE);
@@ -581,6 +616,14 @@ void EGHttpClient::end(int err) {
   if (err) _tcp.abort();
   else _tcp.close();
   drop();
+  if (_wake) _wake(_wakeArg);
+}
+
+uint32_t EGHttpClient::due() const {
+  uint32_t at = _heardMs + _timeoutS * 1000UL;
+  uint32_t last = _startMs + _deadlineMs;
+  if (_deadlineMs && (int32_t)(last - at) < 0) at = last;
+  return at;
 }
 
 void EGHttpClient::drop() {
@@ -630,7 +673,10 @@ static const Reason REASONS[] PROGMEM = {
 };
 
 const __FlashStringHelper* EGHttpClient::responseHTTPStringF() const {
-  int code = responseHTTPcode();
+  return reason(responseHTTPcode());
+}
+
+const __FlashStringHelper* EGHttpClient::reason(int code) {
   for (const Reason& row : REASONS) {
     Reason r;
     memcpy_P(&r, &row, sizeof(r));

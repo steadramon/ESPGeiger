@@ -23,6 +23,7 @@
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 
 #include "Counter/Counter.h"
+#include "App/Units.h"
 #include "EnvSensor/EnvSensor.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
@@ -33,11 +34,6 @@
 #include "Corium/Util/MathUtil.h"
 #include <WiFiUdp.h>
 #include <string.h>
-#ifdef ESP8266
-#include <ESP8266WiFi.h>
-#else
-#include <WiFi.h>
-#endif
 
 static GeigerUdpRx* s_udprx_instance = nullptr;
 
@@ -368,7 +364,7 @@ bool GeigerUdpRx::ensureBound(uint32_t now) {
 // Silent rx recovery, one action a rung
 void GeigerUdpRx::climbRecoveryLadder(uint32_t now) {
   uint32_t step_ms = (_recovery_steps < 5) ? 60000UL : 300000UL;
-  if (_recovery_at_ms != 0 && (uint32_t)(now - _recovery_at_ms) < step_ms) return;
+  if (fresh(now, _recovery_at_ms, step_ms)) return;
   _recovery_at_ms = now;
   switch (_recovery_steps) {
     case 0:
@@ -379,12 +375,12 @@ void GeigerUdpRx::climbRecoveryLadder(uint32_t now) {
       Log::console(PSTR("UdpRx: silent %us, bouncing power save"),
                    (unsigned)((now - _last_packet_ms) / 1000u));
       Wifi::rx_sleep(2);
-      _ps_bounce_until_ms = now + 5000u;
+      _ps_bounce.set(now + 5000u);
       break;
     case 4:
       Log::console(PSTR("UdpRx: silent %us, reassociating WiFi"),
                    (unsigned)((now - _last_packet_ms) / 1000u));
-      WiFi.reconnect();
+      Wifi::reconnect();
       break;
     default:
       teardownUdp();
@@ -433,8 +429,8 @@ void GeigerUdpRx::loop() {
   _poll_at = now + UDPRX_POLL_MS;
   if (!ensureBound(now)) return;
 
-  if (_ps_bounce_until_ms && reached(now, _ps_bounce_until_ms)) {
-    _ps_bounce_until_ms = 0;
+  if (_ps_bounce.due(now)) {
+    _ps_bounce.clear();
     Wifi::rx_sleep(_rx_mode);
   }
 

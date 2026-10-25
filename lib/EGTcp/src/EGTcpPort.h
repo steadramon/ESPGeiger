@@ -73,12 +73,32 @@ struct EGTcpOps {
 extern const EGTcpOps* const egtcp_ops;   // the build's backend
 
 struct EGTcpCore {
+#if !defined(ESP8266)
   static EGTcpLock& lock();
+#endif
   static void post(EGTcpClient* c, uint16_t ev);   // lock held
   static uint32_t now();
   // backend's, per chip
+#if defined(ESP32)
   static void owner();   // poll()'s task
   static void check();   // warns once off it
+#else
+  static void owner() {}   // one task
+  static void check() {}
+#endif
+};
+
+// the lock while in scope
+class EGTcpHold {
+  public:
+#if defined(ESP8266)
+    EGTcpHold() {}
+#else
+    EGTcpHold() : _l(EGTcpCore::lock()) { _l.lock(); }
+    ~EGTcpHold() { _l.unlock(); }
+  private:
+    EGTcpLock& _l;
+#endif
 };
 
 #endif

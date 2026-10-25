@@ -18,6 +18,7 @@
 */
 #include "TestTimer.h"
 #include "GeigerInput/GeigerInputTest.h"
+#include "Corium/System/PinSafety.h"
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 

@@ -32,7 +32,15 @@ namespace LedSignal {
     return s_head.load(std::memory_order_acquire) != s_tail.load(std::memory_order_acquire) || s_busy;
   }
 
-  void begin();
+  // a row of the app's table, as blinkN
+  struct Pattern {
+    uint16_t on_ms;
+    uint16_t off_ms;
+    uint8_t  count;
+  };
+
+  // rows in PROGMEM, flash_pin is the engine's, flash_led without it
+  void begin(const Pattern* rows, uint8_t count, int flash_pin, bool flash_led);
   void use_pin(int pin, bool low_active);   // led.pin, -1 = none
   void attach();           // last in setup()
   void poll(uint32_t now_us);
@@ -42,11 +50,7 @@ namespace LedSignal {
   // caller checks enable and quiet hours
   void flash();
 
-  void activity();
-
-  void shortPressAck();
-  void displayEnabled();
-  void displayDisabled();
+  void play(uint8_t row);   // past the end = nothing
 
   void setBrightness(uint8_t level);
 

@@ -1,5 +1,5 @@
 /*
-  AppHooks.h - What Corium calls in the app. The app defines them.
+  AppHooks.h - What Corium calls in the app. Empty by default, the app's own win.
 
   Copyright (C) 2026 @steadramon
 
@@ -25,11 +25,14 @@ struct EGMenuEntry;
 
 namespace AppHooks {
   const EGMenuEntry* menu();   // first on the home page, PROGMEM, not in safe mode
-  void console(const char* text);   // web console, may hold more than one line
   void routes(EGHttpServer& http);   // not in safe mode
   void info_rows(EGHttpResponse& res);   // About table on /info
   void about_json(EGHttpResponse& res);   // /about fields, each ends with a comma
   void metrics(EGHttpResponse& res, const char* cid);   // after the measure rows
 }
+
+// PROGMEM, served after the core's own
+extern const char APP_CSS[];        // style.css tail
+extern const char APP_THEME_JS[];   // theme.js tail
 
 #endif

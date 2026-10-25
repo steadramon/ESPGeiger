@@ -23,7 +23,7 @@
 const char PinSafety::I2C[] PROGMEM = "I2C";
 
 namespace {
-  constexpr int MAX_CLAIMS = 16;
+  constexpr int MAX_CLAIMS = PINSAFETY_MAX_CLAIMS;
   struct PinClaim { int pin; const char* owner; };
   PinClaim s_claims[MAX_CLAIMS];
   int s_count = 0;
@@ -48,7 +48,7 @@ using PinSafety::PinRule;
 using PinSafety::PIN_END;
 
 // https://www.espressif.com/sites/default/files/documentation/0a-esp8266ex_datasheet_en.pdf
-// GPIO16 has no interrupt, GeigerInput refuses it for RX
+// GPIO16 has no interrupt
 const PinRule PinSafety::ESP8266_PINS[] PROGMEM = {
   {6, 11, PinSafety::PK_FLASH},
   {0, 0, PinSafety::PK_STRAP},     // low = download mode

@@ -22,14 +22,20 @@
 
 #include <Arduino.h>
 #include <IPAddress.h>
+#include "App/AppConfig.h"
 #include "Corium/System/FastMillis.h"
 #include "WifiStable.h"
 
 #define WIFI_SSID_MAX 32   // 802.11
 
 namespace Wifi {
+#ifdef APP_OFFLINE_OK
+  constexpr bool OFFLINE_OK = true;   // saved wifi fails: no portal, stay offline
+#else
+  constexpr bool OFFLINE_OK = false;
+#endif
   extern bool disabled;
-  extern bool offline_forced;    // button-hold only, else the wifi loop retries
+  extern bool offline_forced;    // app sets it, else the wifi loop retries
   extern bool connected;
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[WIFI_SSID_MAX + 1];
@@ -64,7 +70,8 @@ namespace Wifi {
   // on reset, else a later failed save reverts
   void dropNetBackup();
   void applyRuntimeNetPrefs();   // after WiFi.mode()
-  void rx_sleep(int8_t mode);   // UdpRx's sleep mode, -1 = the wifi.sleep pref
+  void rx_sleep(int8_t mode);   // a receiver's sleep mode, -1 = the wifi.sleep pref
+  void reconnect();
 
   int txPowerQdbm();
   const char* phyModeStr();

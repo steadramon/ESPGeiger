@@ -43,7 +43,7 @@ void GeigerTest::secondTicker() {
 }
 
 // returns ticks to the next
-uint32_t IRAM_ATTR GeigerTest::testInterrupt() {
+uint32_t EG_ISR_ATTR GeigerTest::testInterrupt() {
   GeigerInputTest::timerPulse();
   _last_b = micros();
   return _next_delay;

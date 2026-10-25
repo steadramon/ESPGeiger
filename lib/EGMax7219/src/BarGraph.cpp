@@ -26,13 +26,8 @@ void barColumns(const int* hist, int n, uint8_t* cols, int w, int min_span) {
     n = w;
   }
   if (n <= 0) return;
-  int lo = hist[0], hi = hist[0];
-  for (int i = 1; i < n; i++) {
-    if (hist[i] < lo) lo = hist[i];
-    if (hist[i] > hi) hi = hist[i];
-  }
-  if (lo > 1) lo = lo * 9 / 10;
-  if (hi - lo < min_span) { lo = hi > min_span ? hi - min_span : 0; hi = lo + min_span; }
+  int lo, hi;
+  barRange(hist, n, 1, min_span, lo, hi);
   int span = hi - lo;
   for (int i = 0; i < n; i++) {
     int h = 1 + (hist[i] - lo) * 7 / span;

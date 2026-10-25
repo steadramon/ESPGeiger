@@ -23,7 +23,7 @@ bool ota_in_progress = false;
 
 namespace Lifecycle {
 
-static constexpr uint8_t MAX_HANDLERS = 6;
+static constexpr uint8_t MAX_HANDLERS = LIFECYCLE_MAX_HANDLERS;
 static Handler s_handlers[MAX_HANDLERS];
 static uint8_t s_count = 0;
 
@@ -37,15 +37,14 @@ void send(Event e) {
   for (uint8_t i = 0; i < s_count; i++) s_handlers[i](e);
 }
 
-static uint32_t s_restart_at = 0;   // 0 = none
+static Deadline s_restart;
 
 void request_restart(uint32_t now, uint32_t delay_ms) {
-  uint32_t at = now + delay_ms;
-  s_restart_at = at ? at : 1;
+  s_restart.set(now + delay_ms);
 }
 
 bool restart_due(uint32_t now) {
-  return s_restart_at != 0 && reached(now, s_restart_at);
+  return s_restart.due(now);
 }
 
 }

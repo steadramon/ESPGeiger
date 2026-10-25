@@ -1,5 +1,5 @@
 /*
-  EGPrefs.h - Schema-driven preferences for ESPGeiger modules.
+  EGPrefs.h - Schema-driven preferences for modules.
 
   Copyright (C) 2025 @steadramon
 
@@ -21,9 +21,12 @@
 #define EGPREFS_H
 
 #include <Arduino.h>
+#include "App/AppConfig.h"
 
 // bytes per group file
+#ifndef EGPREFS_MAX_GROUP_SZ
 #define EGPREFS_MAX_GROUP_SZ 1024
+#endif
 
 // string maxes, rows and buffers both use these. buffers +1
 #define EGPREFS_MAX_VALUE 255   // longest string max_len (webhook url/key)
@@ -145,63 +148,21 @@ struct EGPrefGroup {
 };
 
 // Shared keys
-extern const char EG_K_BRIGHTNESS[];
-extern const char EG_K_CLK[];
-extern const char EG_K_CLKR[];
 extern const char EG_K_DNS[];
-extern const char EG_K_ENABLE[];
-extern const char EG_K_FADE_SHIFT[];
-extern const char EG_K_FBT[];
-extern const char EG_K_FREQ[];
 extern const char EG_K_GW[];
-extern const char EG_K_INTERVAL[];
 extern const char EG_K_IP[];
 extern const char EG_K_LAT[];
 extern const char EG_K_LON[];
-extern const char EG_K_MODE[];
-extern const char EG_K_PASSWORD[];
-extern const char EG_K_PIN[];
-extern const char EG_K_POLARITY[];
-extern const char EG_K_PORT[];
-extern const char EG_K_PULSE_MS[];
-extern const char EG_K_QUIET_FROM[];
-extern const char EG_K_QUIET_TO[];
-extern const char EG_K_RATIO[];
 extern const char EG_K_SCL[];
 extern const char EG_K_SDA[];
-extern const char EG_K_SECS[];
-extern const char EG_K_SEND[];
 extern const char EG_K_SERVER[];
 extern const char EG_K_SN[];
 extern const char EG_K_STATIC_IP[];
-extern const char EG_K_TPL[];
-extern const char EG_K_TYPE[];
 extern const char EG_K_TZ[];
-extern const char EG_K_USER[];
-extern const char EG_K_VOLUME[];
 extern const char EG_K_WEB_PASS[];
 
 // Shared labels
-extern const char EG_L_EN[];
-extern const char EG_L_MOD[];
-extern const char EG_L_INT[];
-extern const char EG_L_PRT[];
-extern const char EG_L_PWD[];
-extern const char EG_L_PIN[];
-extern const char EG_L_POL[];
-extern const char EG_O_POL[];
-extern const char EG_L_PUL[];
-extern const char EG_H_PUL[];
-extern const char EG_L_FAD[];
-extern const char EG_O_FAD[];
-extern const char EG_L_BRT[];
-extern const char EG_L_VOL[];
-extern const char EG_H_VOL[];
-extern const char EG_L_QFR[];
-extern const char EG_L_QTO[];
-extern const char EG_H_QTO[];
 extern const char EG_H_RBA[];
-extern const char EG_P_IP[];
 extern const char EG_P_HOST[];
 
 // === LEGACY IMPORT (remove after v1.0.0) ===

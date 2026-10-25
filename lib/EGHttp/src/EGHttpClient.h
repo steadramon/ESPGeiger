@@ -34,12 +34,19 @@
 #ifndef EGHTTP_HOST_MAX
   #define EGHTTP_HOST_MAX 64   // longer is refused
 #endif
+#ifndef EGHTTP_SINK
+  #define EGHTTP_SINK 1        // 0 = no setSink()
+#endif
+#ifndef EGHTTP_REDIRECTS
+  #define EGHTTP_REDIRECTS 1   // 0 = no setRedirects(), 3xx never followed
+#endif
 
-// http only, one at a time, headers after open()
+// http only, one at a time, headers after open(), sink and redirects before send()
 class EGHttpClient {
   public:
     // bytes taken, below 0 to stop
     typedef int (*Sink)(void* arg, const uint8_t* buf, size_t len);
+    typedef void (*Wake)(void* arg);
 
     static const size_t BODY_CAP = 256;
     static const size_t LINE_CAP = 2048;   // per line
@@ -60,19 +67,28 @@ class EGHttpClient {
     void setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
     void setTimeout(uint16_t secs) { _timeoutS = secs; }   // silence, default 10
     void setDeadline(uint32_t ms) { _deadlineMs = ms; }    // whole request, 0 = none
+#if EGHTTP_REDIRECTS
     void setRedirects(uint8_t n) { _redirects = n; }       // http only
+#endif
+#if EGHTTP_SINK
     void setSink(Sink fn, void* arg) { _sink = fn; _sinkArg = arg; }
+#endif
+    // once it ends, from the owner's task
+    void setWake(Wake fn, void* arg) { _wake = fn; _wakeArg = arg; }
     bool send(const char* body = nullptr);
     bool send(const uint8_t* body, size_t len);
     void abort();
 
+    // no sink or redirects: the reply is read as it lands, else idle() moves it
     bool idle();
     bool takeDone();                       // true once per request
+    uint32_t due() const;                  // a timeout could end it then
 
     int responseHTTPcode() const { return _err ? _err : _status; }
     int status() const { return _status; }   // 0 = none came
     int error() const { return _err; }       // 0 = fine, with a status = body cut
     const __FlashStringHelper* responseHTTPStringF() const;
+    static const __FlashStringHelper* reason(int code);
     size_t responseRead(uint8_t* out, size_t len);
     int32_t length() const { return _length; }   // -1 = not said
     uint32_t received() const { return _got; }   // body bytes so far
@@ -86,8 +102,9 @@ class EGHttpClient {
       char* p = nullptr;
       size_t len = 0;
       size_t cap = 0;
-      bool add(const char* s, size_t n);
+      bool add(const char* s, size_t n, bool flash = false);
       bool add(const char* s) { return add(s, strlen(s)); }
+      bool add_P(PGM_P s) { return add(s, strlen_P(s), true); }
       void clear();
     };
 
@@ -107,6 +124,7 @@ class EGHttpClient {
     bool follow();
     void body();
     void chunked();
+    void feed(const uint8_t* d, size_t n);
     size_t take(size_t n);
     size_t give(const uint8_t* buf, size_t n);
     size_t fill();
@@ -158,6 +176,9 @@ class EGHttpClient {
 
     Sink _sink = nullptr;
     void* _sinkArg = nullptr;
+    bool _push = false;        // the stack hands the reply over
+    Wake _wake = nullptr;
+    void* _wakeArg = nullptr;
     uint16_t _timeoutS = 10;
     uint32_t _deadlineMs = 0;
     uint32_t _startMs = 0;

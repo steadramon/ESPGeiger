@@ -66,9 +66,6 @@ void EGTcpCore::check() {
   told = true;
   log_e("EGTcp used off the task that polls");
 }
-#else
-void EGTcpCore::owner() {}
-void EGTcpCore::check() {}
 #endif
 
 struct Call {
@@ -179,7 +176,7 @@ struct EGTcpLwip {
   }
 
   static void post(EGTcpClient* c, uint16_t ev) {
-    EGTcpHold h(EGTcpCore::lock());
+    EGTcpHold h;
     EGTcpCore::post(c, ev);
   }
 
@@ -202,7 +199,7 @@ struct EGTcpLwip {
       return ERR_OK;
     }
     cache(c, p);   // FIN moves the state
-    EGTcpHold h(EGTcpCore::lock());
+    EGTcpHold h;
     if (!pb) {
       EGTcpCore::post(c, EV_FIN);
       return ERR_OK;
@@ -219,7 +216,7 @@ struct EGTcpLwip {
     EGTcpClient* c = (EGTcpClient*)arg;
     if (!c) return ERR_OK;
     cache(c, p);   // room grew
-    EGTcpHold h(EGTcpCore::lock());
+    EGTcpHold h;
     c->_ev_acked += len;
     EGTcpCore::post(c, EV_SENT);
     return ERR_OK;
@@ -239,7 +236,7 @@ struct EGTcpLwip {
   static void on_error(void* arg, err_t err) {
     EGTcpClient* c = (EGTcpClient*)arg;
     if (!c) return;
-    EGTcpHold h(EGTcpCore::lock());
+    EGTcpHold h;
     own(c, nullptr);
     c->_ev_err = err;
     EGTcpCore::post(c, EV_ERROR);
@@ -248,7 +245,7 @@ struct EGTcpLwip {
   static void on_dns(const char*, const ip_addr_t* ip, void* arg) {
     EGTcpAsk* ask = (EGTcpAsk*)arg;
     {
-      EGTcpHold h(EGTcpCore::lock());
+      EGTcpHold h;
       EGTcpClient* c = ask->c;   // null: gone or asked again
       if (c) {
         c->_ask = nullptr;
@@ -456,7 +453,7 @@ struct EGTcpLwip {
     if (!ask) return ERR_MEM;
     {
       // an older ask answers nobody
-      EGTcpHold h(EGTcpCore::lock());
+      EGTcpHold h;
       if (c->_ask) c->_ask->c = nullptr;
       c->_ask = ask;
     }
@@ -470,7 +467,7 @@ struct EGTcpLwip {
     on_stack(dns_api, m);
     if (m.err != ERR_INPROGRESS) {
       // cached or failed, lwIP never calls back
-      EGTcpHold h(EGTcpCore::lock());
+      EGTcpHold h;
       c->_ask = nullptr;
       delete ask;
     }

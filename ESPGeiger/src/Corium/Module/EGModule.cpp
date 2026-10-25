@@ -19,21 +19,21 @@
 #include "EGModule.h"
 #include "Corium/Util/Words.h"
 
-void EGModule::note_publish(bool ok) {
+void EGSender::note_publish(bool ok) {
   last_ok = ok;
   last_attempt_ms = fast_millis();
   if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
   else    { if (_pub_err < 0xFF) ++_pub_err; }
 }
 
-void EGModule::note_attempt() {
+void EGSender::note_attempt() {
   last_attempt_ms = fast_millis();
   last_ok = true;
   _publish_pending = 1;
 }
 
 // counted on the result, not the attempt
-void EGModule::note_result(bool ok) {
+void EGSender::note_result(bool ok) {
   if (!_publish_pending) return;
   _publish_pending = 0;
   last_ok = ok;
@@ -41,19 +41,19 @@ void EGModule::note_result(bool ok) {
   else    { if (_pub_err < 0xFF) ++_pub_err; }
 }
 
-uint8_t EGModule::take_publish_ok() {
+uint8_t EGSender::take_publish_ok() {
   uint8_t v = _pub_ok;
   _pub_ok = 0;
   return v;
 }
 
-uint8_t EGModule::take_publish_err() {
+uint8_t EGSender::take_publish_err() {
   uint8_t v = _pub_err;
   _pub_err = 0;
   return v;
 }
 
-size_t EGModule::write_status_json(char* buf, size_t cap, const char* key,
+size_t EGSender::write_status_json(char* buf, size_t cap, const char* key,
                                    bool ok, unsigned long last_attempt_ms,
                                    unsigned long now) {
   if (last_attempt_ms == 0) {

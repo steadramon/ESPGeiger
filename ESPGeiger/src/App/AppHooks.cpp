@@ -28,7 +28,6 @@
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
 #include "GRNG/GRNG.h"
-#include "SerialCommand/SerialCommand.h"
 #include "WebAPI/Features.h"
 #include "App/Board.h"
 #ifdef GEIGER_BUZZER
@@ -44,17 +43,6 @@ static const EGMenuEntry APP_MENU[] PROGMEM = {
 };
 
 const EGMenuEntry* AppHooks::menu() { return APP_MENU; }
-
-void AppHooks::console(const char* text) {
-  char line[SERIALCOMMAND_BUFFER + 2];   // one over, so too long is refused
-  size_t n = 0;
-  while (text[n] && n < sizeof(line) - 1 && text[n] != '\r' && text[n] != '\n') {
-    line[n] = text[n];
-    n++;
-  }
-  line[n] = '\0';
-  serialcmd.dispatch(line);
-}
 
 void AppHooks::routes(EGHttpServer& http) {
   GRNGRoutes::registerRoutes(http);

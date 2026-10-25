@@ -49,7 +49,7 @@ struct Slice {
 // next call for st, done_us into it. false = step over
 bool slice(const EGTune::Step& st, uint32_t done_us, bool rtttl, const Config& c, Slice& out);
 
-#if defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
+#if defined(BUZZER_ENGINE) && defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
 void begin(Config c);
 // copies the text; dropped unless it outranks what's playing
 bool play(uint32_t now_us, const char* s, uint16_t len, uint8_t prio);

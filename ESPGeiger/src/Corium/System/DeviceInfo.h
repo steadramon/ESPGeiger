@@ -43,8 +43,16 @@ namespace DeviceInfo {
 
   const char* hostname();
   const char* chipid();
+  uint32_t chipHash();   // fnv1a of chipid
   const char* useragent();
-  const char* chipmodel();
+  const char* chip();
+  inline const char* board() {
+#ifdef APP_BOARD
+    return APP_BOARD;
+#else
+    return chip();
+#endif
+  }
   const char* friendlyName();
   void setFriendlyName(const char* s);
   const char* mac();
@@ -58,6 +66,9 @@ namespace DeviceInfo {
     return esp_random();
 #endif
   }
+
+  inline __attribute__((always_inline)) uint32_t cycles() { return ESP.getCycleCount(); }
+  inline uint32_t heapNow() { return ESP.getFreeHeap(); }   // raw, freeHeap() is smoothed
 
   unsigned long uptime();
 
@@ -82,7 +93,7 @@ namespace DeviceInfo {
   }
 #endif
 
-  // Sent to WebAPI, never renumber
+  // on the wire, never renumber
   enum ResetReason : uint8_t {
     RR_UNKNOWN    = 0,
     RR_POWER_ON   = 1,

@@ -22,6 +22,7 @@
 #include "Uptime.h"
 #include "Lifecycle.h"
 #include "Corium/Net/Wifi.h"
+#include "Corium/Net/WifiSetup.h"
 #include "Corium/Util/Fnv.h"
 #include "Corium/Util/MathUtil.h"
 #include "Fs.h"
@@ -35,13 +36,11 @@
 extern "C" {
 #include <user_interface.h>
 }
-#include <ESP8266WiFi.h>
-#else
-#include <WiFi.h>
 #endif
 
 static char s_hostname_buf[sizeof(THING_NAME "-") + CHIPID_LEN] = "";
 static char s_chipid_buf[CHIPID_LEN + 1] = "";
+static uint32_t s_chip_hash = 0;
 static char s_useragent_buf[sizeof(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; )") + CHIPID_LEN] = "";
 static char s_mac_buf[18]        = "";
 static char s_flash_buf[24]      = "";
@@ -146,8 +145,9 @@ void DeviceInfo::begin() {
 #endif
   snprintf_P(s_chipid_buf, sizeof(s_chipid_buf), PSTR("%06lx"),
              (unsigned long)(tchipId & 0xFFFFFFul));
+  s_chip_hash = fnv1a(s_chipid_buf);
 
-  // ESPGeiger-d5536d
+  // <THING_NAME>-d5536d
   snprintf_P(s_hostname_buf, sizeof(s_hostname_buf), PSTR("%s-%s"),
              THING_NAME, s_chipid_buf);
 
@@ -168,27 +168,25 @@ void DeviceInfo::begin() {
 #endif
 
   // else the MAC can read all FF
-#ifdef ESP8266
-  WiFi.mode(WIFI_STA);
-  WiFi.hostname(s_hostname_buf);
-#else
-  WiFi.mode(WIFI_STA);
-  WiFi.setHostname(s_hostname_buf);
-#endif
-  strlcpy(s_mac_buf, WiFi.macAddress().c_str(), sizeof(s_mac_buf));
+  Wifi::staMode();
+  Wifi::setHostname(s_hostname_buf);
+  strlcpy(s_mac_buf, Wifi::macStr().c_str(), sizeof(s_mac_buf));
 }
 
 const char* DeviceInfo::hostname()    { return s_hostname_buf; }
 const char* DeviceInfo::chipid()      { return s_chipid_buf; }
+uint32_t    DeviceInfo::chipHash()    { return s_chip_hash; }
 const char* DeviceInfo::useragent()   { return s_useragent_buf; }
 const char* DeviceInfo::mac()         { return s_mac_buf; }
 const char* DeviceInfo::flashInfo()   { return s_flash_buf; }
 
 void DeviceInfo::factoryReset() {
-  // keeps /api.key
+  // keeps the key
   Log::console(PSTR("Factory reset"));
   EGPrefs::reset_all();
-  Fs::remove(F("/geigerconfig.json"));   // legacy ConfigManager
+#ifdef EGPREFS_LEGACY_FILE
+  Fs::remove(F(EGPREFS_LEGACY_FILE));   // legacy import file
+#endif
   Wifi::clearSavedCreds();
 }
 
@@ -199,10 +197,8 @@ void DeviceInfo::setFriendlyName(const char* s) {
 }
 
 // one case per chip
-const char* DeviceInfo::chipmodel() {
-#ifdef APP_BOARD
-  return APP_BOARD;
-#elif defined(ESP8266)
+const char* DeviceInfo::chip() {
+#ifdef ESP8266
   return "ESP8266";
 #elif defined(ESP32)
   esp_chip_info_t chipInfo;

@@ -17,10 +17,18 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPG_BOOTGUARDSTATE_H
-#define ESPG_BOOTGUARDSTATE_H
+#ifndef BOOTGUARDSTATE_H
+#define BOOTGUARDSTATE_H
 
 #include <stdint.h>
+#include "App/AppConfig.h"
+
+#ifndef BOOTGUARD_CRASHES
+#define BOOTGUARD_CRASHES 3
+#endif
+#ifndef BOOTGUARD_RETRY_MS
+#define BOOTGUARD_RETRY_MS (30UL * 60 * 1000)
+#endif
 
 namespace BootGuard {
 
@@ -30,7 +38,7 @@ enum Ending : uint8_t {
   END_CRASH,      // exception, watchdog or brownout
 };
 
-constexpr uint8_t CRASHES_TO_SAFE_MODE = 3;
+constexpr uint8_t CRASHES_TO_SAFE_MODE = BOOTGUARD_CRASHES;
 
 struct State {
   uint32_t magic;

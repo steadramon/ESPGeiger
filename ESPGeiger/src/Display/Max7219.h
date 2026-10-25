@@ -51,6 +51,7 @@ class Max7219Display : public EGModule, public DisplayBackend {
     }
     void reload() override;
     void safe_mode() override;
+    bool takes(uint8_t type) override { return DISP_IS_MAX7219(type); }
     const EGPrefGroup* prefs_group() override;
     const EGPrefShow* prefs_show() override;
     void on_prefs_loaded() override;

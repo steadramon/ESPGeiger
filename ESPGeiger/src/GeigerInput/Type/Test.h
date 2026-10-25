@@ -35,6 +35,6 @@ class GeigerTest final : public GeigerInputTest
     void secondTicker() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    static uint32_t IRAM_ATTR testInterrupt();
+    static uint32_t EG_ISR_ATTR testInterrupt();
 };
 #endif
