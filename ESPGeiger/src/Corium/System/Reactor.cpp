@@ -69,7 +69,7 @@ void Reactor::second() {
   TickProfile::markWifi();
 #endif
 
-  TickProfile::endTick();
+  if (TickProfile::endTick()) EGModuleRegistry::log_activity_and_reset();
 }
 
 #ifdef ESP32

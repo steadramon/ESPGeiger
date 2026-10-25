@@ -35,6 +35,7 @@ bool one(const EGTune::Step& st, uint32_t done, const Config& c, Slice& out) {
     return true;
   }
   out.hz = st.hz ? st.hz : c.burst_hz;
+  if (!out.hz) out.hz = DEFAULTS.burst_hz;
   out.n = st.ms;
   out.us = st.ms * period_of(out.hz);
   return true;
@@ -53,7 +54,8 @@ bool slice(const EGTune::Step& st, uint32_t done, bool rtttl, const Config& c, S
   if (st.op == EGTune::PULSE || st.op == EGTune::BURST) return one(st, done, c, out);
   uint32_t len = st.ms * 1000UL;
   if (done >= len) return false;
-  uint32_t on = rtttl ? len - len * c.gap_pct / 100 : len;
+  uint32_t gap = c.gap_pct < 100 ? c.gap_pct : 100;
+  uint32_t on = rtttl ? len - len * gap / 100 : len;
   out.op = EGTune::REST;
   out.us = len - done;
   if (st.op == EGTune::REST || done >= on) return true;

@@ -64,6 +64,8 @@ static constexpr uint16_t EGP_INLINE    = 1 << 7;
 static constexpr uint16_t EGP_REBOOT    = 1 << 8;   // a change needs a restart
 static constexpr uint16_t EGP_PIN       = 1 << 9;   // input GPIO, put checks PinSafety
 static constexpr uint16_t EGP_PIN_OUT   = 1 << 10;  // output GPIO, input-only refused too
+static constexpr uint16_t EGP_LOCAL     = 1 << 11;  // this device's, no export, an import keeps it
+static constexpr uint16_t EGP_KEEP      = 1 << 12;  // no reset_all clears it, only its own reset
 
 // no PSTR() in static init. default_val stays SRAM
 #define EG_PSTR(name, val) static const char name[] PROGMEM = val
@@ -151,8 +153,6 @@ struct EGPrefGroup {
 extern const char EG_K_DNS[];
 extern const char EG_K_GW[];
 extern const char EG_K_IP[];
-extern const char EG_K_LAT[];
-extern const char EG_K_LON[];
 extern const char EG_K_SCL[];
 extern const char EG_K_SDA[];
 extern const char EG_K_SERVER[];

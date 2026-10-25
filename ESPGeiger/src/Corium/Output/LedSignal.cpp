@@ -19,8 +19,6 @@
 #include "LedSignal.h"
 #include <EGLed.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/System/FastMillis.h"
-#include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
 #include "PulseEngine.h"
 
@@ -35,15 +33,12 @@ namespace LedSignal {
   static const Pattern* s_rows = nullptr;
   static uint8_t s_rows_n = 0;
 
-#ifdef LED_FLASH_ENGINE
-  // PulseEngine owns the external pin
-  static PulseEngine s_engine;
-#else
+#if LEDSIGNAL_FLASH
   static bool s_flash_led = false;
-#endif
   static uint16_t s_flash_pulse_ms = 20;
   static uint8_t  s_flash_mode     = PulseEngine::MODE_PULSE;
   static uint8_t  s_flash_fade     = PulseEngine::FADE_SHIFT_DEFAULT;
+#endif
 
   // rows go in as is, these sit above them
   enum : uint8_t { DO_FLASH = 252, DO_ON, DO_OFF, DO_ATTACH };
@@ -62,15 +57,13 @@ namespace LedSignal {
 
   static void run(uint8_t what) {
     switch (what) {
+#if LEDSIGNAL_FLASH
       case DO_FLASH:
-#ifdef LED_FLASH_ENGINE
-        s_engine.start();
-#else
         if (s_onboard.isRunning()) break;
         if (s_flash_mode == PulseEngine::MODE_FADE) s_onboard.fade(s_flash_fade);
         else s_onboard.pulse(s_flash_pulse_ms);
-#endif
         break;
+#endif
       case DO_ON:       s_onboard.on(); break;
       case DO_OFF:      s_onboard.off(); break;
       case DO_ATTACH:   s_onboard.attach((uint8_t)s_pin, s_low); break;
@@ -99,22 +92,17 @@ namespace LedSignal {
     post(DO_ATTACH);
   }
 
-  void begin(const Pattern* rows, uint8_t count, int flash_pin, bool flash_led) {
+  void begin(const Pattern* rows, uint8_t count, bool flash_led) {
     s_rows   = rows;
     s_rows_n = count < DO_FLASH ? count : DO_FLASH;
-#ifdef LED_FLASH_ENGINE
-    (void)flash_led;
-    s_engine.pin      = flash_pin < 0 ? -1 : (int8_t)flash_pin;
-    s_engine.polarity = 0;
-    s_engine.commitConfig();
-    s_engine.begin();
-#else
-    (void)flash_pin;
+#if LEDSIGNAL_FLASH
     s_flash_led = flash_led;
+#else
+    (void)flash_led;
 #endif
   }
 
-  void poll(uint32_t now_us) {
+  void poll() {
     uint8_t t = s_tail.load(std::memory_order_relaxed);
     while (t != s_head.load(std::memory_order_acquire)) {
       run(s_todo[t % sizeof(s_todo)]);
@@ -122,25 +110,27 @@ namespace LedSignal {
       s_tail.store(t, std::memory_order_release);
     }
     s_onboard.update();
-#ifdef LED_FLASH_ENGINE
-    s_engine.loop(now_us);
-    s_busy = s_onboard.isRunning() || s_engine.busy();
-#else
     s_busy = s_onboard.isRunning();
-#endif
   }
 
   void off() { post(DO_OFF); }
   void lit(bool on) { post(on ? DO_ON : DO_OFF); }
 
+#if LEDSIGNAL_FLASH
   void flash() {
-#ifdef LED_FLASH_ENGINE
-    if (s_engine.take(fast_millis())) post(DO_FLASH);
-#else
     if (s_pin < 0 || !s_flash_led) return;   // no LED, no flash
     post(DO_FLASH);
-#endif
   }
+
+  void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us, uint8_t fade_shift_idx) {
+    // onboard led, PulseEngine's limits
+    if (fade_shift_idx > 2) fade_shift_idx = 1;
+    s_flash_pulse_ms = (uint16_t)(clamp((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
+                                        PulseEngine::PULSE_US_MAX) / 1000);
+    s_flash_mode     = engine_mode;
+    s_flash_fade     = (uint8_t)(fade_shift_idx + PulseEngine::FADE_SHIFT_MIN);
+  }
+#endif
 
   void play(uint8_t row) {
     if (row < s_rows_n) post(row);
@@ -148,28 +138,6 @@ namespace LedSignal {
 
   void setBrightness(uint8_t level) {
     s_onboard.setBrightness(level);   // 8-bit
-#ifdef LED_FLASH_ENGINE
-    s_engine.active_level = PulseEngine::levelFrom8bit(level);
-#endif
-  }
-
-  void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us,
-                           uint8_t fade_shift_idx, uint8_t max_hz) {
-#ifdef LED_FLASH_ENGINE
-    s_engine.mode       = engine_mode;
-    s_engine.pulse_us   = pulse_us;
-    s_engine.fade_shift = PulseEngine::fadeShiftFromUi(fade_shift_idx);
-    s_engine.max_hz     = max_hz;
-    s_engine.commitConfig();
-#else
-    (void)max_hz;
-#endif
-    // onboard led, same limits
-    if (fade_shift_idx > 2) fade_shift_idx = 1;
-    s_flash_pulse_ms = (uint16_t)(clamp((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
-                                        PulseEngine::PULSE_US_MAX) / 1000);
-    s_flash_mode     = engine_mode;
-    s_flash_fade     = PulseEngine::fadeShiftFromUi(fade_shift_idx);
   }
 
 }

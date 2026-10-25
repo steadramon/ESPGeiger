@@ -19,11 +19,10 @@
 #include "EGModule.h"
 #include "Corium/Util/Words.h"
 
+// sent and answered in one go
 void EGSender::note_publish(bool ok) {
-  last_ok = ok;
-  last_attempt_ms = fast_millis();
-  if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
-  else    { if (_pub_err < 0xFF) ++_pub_err; }
+  note_attempt();
+  note_result(ok);
 }
 
 void EGSender::note_attempt() {

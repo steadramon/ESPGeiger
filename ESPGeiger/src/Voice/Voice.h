@@ -56,6 +56,7 @@ class Voice : public EGModule {
     uint16_t _ann_iv    = 60;
     bool     _ann_usv   = false;
     bool     _ann_radmon = false;
+    EGSender* _radmon = nullptr;   // nullptr = not built
     bool     _radmon_known  = false;
     bool     _radmon_was_ok = true;
     unsigned long _radmon_last_attempt = 0;
@@ -63,6 +64,8 @@ class Voice : public EGModule {
     bool     _prev_alert = false;
     unsigned long _last_klax_ms = 0;
     unsigned long _last_ann_ms  = 0;
+    bool     _klax_wait = false;   // cooldown, cleared in loop()
+    bool     _ann_wait  = false;
     void     queueKlaxonOnAlert();
     void     queueAnnouncement();
     void     queueRadmonChange();

@@ -37,7 +37,7 @@ class EGPrefsStorage {
     EGPrefsStorage();
     ~EGPrefsStorage();
 
-    bool begin(const char* name, bool readOnly = false);
+    bool begin(const char* name);
     void end();
 
     bool has(const char* module_id);
@@ -50,7 +50,6 @@ class EGPrefsStorage {
   private:
     char   _path[DIR_NAME_MAX + 3];   // "/name/"
     bool   _started;
-    bool   _readOnly;
 };
 
 #endif

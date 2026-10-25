@@ -30,7 +30,7 @@
 #include "Corium/Util/Words.h"
 #include "Counter/Counter.h"
 #include "Counter/CounterMaths.h"
-#include "Display.h"
+#include "Display/Display.h"
 #include "App/AppKeys.h"
 #include "App/MeasureIds.h"
 
@@ -699,8 +699,18 @@ void Max7219Display::roundBoot() {
   roundDigits(0, 0);
 }
 
+static const unsigned long VU_GAP_MS = 1000;
+
+// past its window stays past it, dark or off the page, so a wrap can't bring it back
+static void hold_expired(unsigned long now, unsigned long& stamp, unsigned long ms) {
+  if (now - stamp > ms) stamp = now - ms - 1;
+}
+
 void Max7219Display::second() {
   if (!_active) return;
+  unsigned long now = fast_millis();
+  hold_expired(now, _page_since, MX_PAGE_DWELL_MS);
+  hold_expired(now, _vu_ms, VU_GAP_MS);
   slow_reads(_cur_page);
   s_redraw = true;   // /screen draws the matrix without pins too
   if (!(tm() ? _tm.ready() : _drv.ready())) return;
@@ -845,14 +855,16 @@ void Max7219Display::fx(unsigned long now) {
 void Max7219Display::vuFrame() {
   uint32_t blip = display.blip();
   unsigned long now = fast_millis();
-  bool fresh = now - _vu_ms > 1000;   // page just shown, no backlog kick
+  bool fresh = now - _vu_ms > VU_GAP_MS;   // page just shown, no backlog kick
   _vu_ms = now;
-  uint32_t counts = fresh ? 0 : blip - _vu_blip;
+  // blip is the last click's stamp: one kick a frame at most
+  uint32_t counts = !fresh && blip != _vu_blip;
   _vu_blip = blip;
   float kick = 0;
   if (counts) {
     kick = 8 * 16;   // one count, 8 LEDs at most
     float perFrame = currentCPM() * LOOP_MS / 60000.0f;
+    if (perFrame > 1) perFrame = 1;
     // at the last green LED the level falls 9 a frame
     if (perFrame > 0 && 9 / perFrame < kick) kick = 9 / perFrame;
   }

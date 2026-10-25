@@ -1,7 +1,7 @@
 {
   "name": "EGPortal",
   "version": "0.1.0",
-  "description": "Heap-friendly async captive-portal library for ESP8266 / ESP32. Replaces WiFiManager-style setup flow. Built on EGTcp.",
+  "description": "Captive portal for WiFi setup on ESP8266 / ESP32, on EGTcp.",
   "keywords": "captive, portal, wifi, esp8266, esp32, async",
   "license": "GPL-3.0",
   "frameworks": "arduino",
@@ -9,6 +9,7 @@
   "dependencies": [
     {"name": "EGHttp"},
     {"name": "EGText"},
-    {"name": "EGTcp"}
+    {"name": "EGTcp"},
+    {"name": "EGUdp"}
   ]
 }

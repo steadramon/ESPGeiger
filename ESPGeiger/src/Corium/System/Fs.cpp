@@ -18,6 +18,9 @@
 */
 #include "Fs.h"
 #include "Corium/Logger/Logger.h"
+#ifdef ESP32
+#include "esp_log.h"
+#endif
 
 #define FS_MOUNT_TRIES 3
 
@@ -29,6 +32,11 @@ bool Fs::begin() {
   s_tried = true;
 #ifdef ESP8266
   LittleFS.setConfig(LittleFSConfig(false));   // no auto format
+#endif
+#ifdef ESP32
+  esp_log_level_set("esp_littlefs", ESP_LOG_ERROR);
+  esp_log_level_set("vfs_api",      ESP_LOG_ERROR);
+  esp_log_level_set("LITTLEFS",     ESP_LOG_ERROR);
 #endif
   for (uint8_t i = 0; i < FS_MOUNT_TRIES && !s_mounted; i++) {
     if (i) delay(50);

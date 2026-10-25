@@ -19,7 +19,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <DNSServer.h>
+#include "EGDnsAnswer.h"
 #include "EGHttpServer.h"
 
 #ifndef EGPORTAL_SCAN_MAX
@@ -67,7 +67,7 @@ class EGPortal {
 
   private:
     EGHttpServer _http;
-    DNSServer    _dns;
+    EGDnsAnswer  _dns;
     bool _active = false;
     bool _routed = false;
 

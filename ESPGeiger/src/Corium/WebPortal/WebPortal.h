@@ -21,6 +21,12 @@
 
 #include <EGHttpServer.h>
 
+#ifndef GIT_VERSION
+#define GIT_VERSION ""
+#endif
+// script and css urls, a new build fetches them again
+#define EG_CACHE_BUST "?v=" GIT_VERSION
+
 class WebPortal {
   public:
     void begin(uint16_t port);

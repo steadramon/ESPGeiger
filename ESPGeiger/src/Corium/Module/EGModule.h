@@ -103,7 +103,7 @@ class EGSender : public EGModule {
     uint8_t take_publish_ok();
     uint8_t take_publish_err();
 
-    // share a byte, set via note_publish() only
+    // share a byte, set via note_attempt() / note_result() only
     uint8_t last_ok          : 1;
     uint8_t _publish_pending : 1;
   private:

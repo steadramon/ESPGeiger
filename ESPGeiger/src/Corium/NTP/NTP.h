@@ -29,15 +29,11 @@
 #ifndef NTP_TZ
 #  define NTP_TZ "Etc/UTC"
 #endif
+#define NTP_TZ_MAX 64
 
 
 class NTP_Client : public EGModule {
   public:
-  static NTP_Client &getInstance()
-  {
-    static NTP_Client instance;
-    return instance;
-  }
     NTP_Client();
     const char* name() override { return PSTR("ntp"); }
     uint8_t priority() override { return EG_PRIORITY_INFRASTRUCTURE; }
@@ -48,10 +44,8 @@ class NTP_Client : public EGModule {
     void setup();
     const EGPrefGroup* prefs_group() override;
     void on_prefs_saved() override;
-    void registerRoutes(EGHttpServer& http) override;
     uint8_t display_order() override { return 0; }  // managed via /network
 
-    void renderInlineForm(class EGHttpResponse& res);
     EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
     const char* legacy_file() override { return "/ntp.json"; }  // LEGACY IMPORT
 

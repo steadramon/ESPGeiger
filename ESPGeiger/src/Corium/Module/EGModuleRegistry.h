@@ -42,6 +42,11 @@ static_assert(EGModule::TOPIC_SENT < EG_TOPIC_APP, "Corium topics sit below EG_T
 #define WIFI_SETTLE_MS 3000
 #endif
 
+// esp32 noinit RAM keeps what the loop was in through a crash reset
+#if defined(ESP32) && !defined(EG_CRASH_MARK)
+#define EG_CRASH_MARK
+#endif
+
 class EGModuleRegistry {
   public:
     static bool add(EGModule* m);
@@ -68,18 +73,22 @@ class EGModuleRegistry {
     static void set_safe_mode(bool on);   // before pre_wifi_all
     static bool quarantined(EGModule* m);
 
-    static uint32_t initial_offset(const char* mod_name, uint32_t interval_ms);
-    // wall clock once ntp synced
-    static unsigned long initial_ping(const char* mod_name, unsigned long now,
-                                      uint32_t interval_ms);
-    static unsigned long ping_from_offset(uint32_t offset, unsigned long now,
-                                          uint32_t interval_ms);
+    // Corium's own loop work, between modules
+    static constexpr uint8_t IN_TCP = 0xFD, IN_PORTAL = 0xFE, IN_NONE = 0xFF;
+#ifdef EG_CRASH_MARK
+    // before pre_wifi_all (it clears), a crash reset keeps where the loop was
+    static void crash_boot(bool crashed);
+    static const char* crashed_in();   // module name, "tcp", "portal", nullptr = not known
+    static inline void in(uint8_t what) { _firing = what; }
+#else
+    static inline void crash_boot(bool) {}
+    static inline const char* crashed_in() { return nullptr; }
+    static inline void in(uint8_t) {}
+#endif
+
     static uint8_t count();
     static EGModule* get(uint8_t idx);
     static EGModule* find(const char* name);
-    static bool has(const char* name) { return find(name) != nullptr; }
-
-    static size_t collect_status_json(char* buf, size_t cap, unsigned long now);
 
   private:
     static constexpr uint8_t FLAG_ARMED         = 1 << 0;   // next_due is set
@@ -113,7 +122,10 @@ class EGModuleRegistry {
     static uint8_t _due_order[EG_MAX_MODULES];
     static uint8_t _due_count;
     static bool _resort;          // a slot changed outside its own loop
-    static uint8_t _firing;       // slot in its loop, 0xFF = none
+    static uint8_t _firing;       // slot in its loop, IN_*, 0xFF = none
+#ifdef EG_CRASH_MARK
+    static uint8_t _crashed_in;   // _firing at a crash reset
+#endif
     static IsrLock::Bits _posted;   // bit per slot
     static void rebuild_due();
     static void sort_by_priority();

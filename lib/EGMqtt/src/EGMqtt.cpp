@@ -473,6 +473,10 @@ void EGMqtt::rewind() {
   for (size_t off = 0; off < _outLen; off = next(off)) {
     Rec* r = rec(off);
     r->at = 0;
+    if (QOS2 && r->kind == K_REL && !_session) {
+      r->sent = S_SENT;   // sent or not, settle() drops them
+      continue;
+    }
     if (r->sent != S_SENT) continue;
     r->sent = S_NEW;
     if (r->kind == K_PUB1 || (QOS2 && r->kind == K_PUB2)) {
@@ -716,11 +720,11 @@ void EGMqtt::on_connack() {
   _upNew = true;
   _pingOut = _pingSent = false;
   _txMs = _rxMs = EGClock::now();
+  rewind();   // first, settle's callbacks may publish
   if (QOS2 && !session) {
     memset(_q2, 0, sizeof(_q2));   // a new session, any id is a new message
     settle();
   }
-  rewind();
 }
 
 // too big: acked unread and lost, dropped() counts

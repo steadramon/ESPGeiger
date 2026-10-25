@@ -28,6 +28,8 @@ extern const char EG_K_FADE_SHIFT[];
 extern const char EG_K_FBT[];
 extern const char EG_K_FREQ[];
 extern const char EG_K_INTERVAL[];
+extern const char EG_K_LAT[];
+extern const char EG_K_LON[];
 extern const char EG_K_MODE[];
 extern const char EG_K_PASSWORD[];
 extern const char EG_K_PIN[];

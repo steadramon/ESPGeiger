@@ -95,11 +95,6 @@ public:
   static constexpr uint8_t  FADE_SHIFT_MAX = 4;
   static constexpr uint8_t  FADE_SHIFT_DEFAULT = 3;
 
-  // ui 0..2 = shift 2..4
-  static constexpr uint8_t fadeShiftFromUi(uint32_t idx) {
-    return (uint8_t)(idx + FADE_SHIFT_MIN);
-  }
-
   // callers pass prefs straight in
   void commitConfig() {
     if (mode > MODE_FADE) mode = MODE_PULSE;

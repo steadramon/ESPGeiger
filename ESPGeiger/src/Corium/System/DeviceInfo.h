@@ -26,8 +26,6 @@
 #define GIT_VERSION ""
 #endif
 
-#define EG_CACHE_BUST "?v=" GIT_VERSION
-
 #include "App/Version.h"
 #include "App/AppConfig.h"
 
@@ -44,7 +42,8 @@ namespace DeviceInfo {
   const char* hostname();
   const char* chipid();
   uint32_t chipHash();   // fnv1a of chipid
-  const char* useragent();
+  constexpr size_t UA_MAX = sizeof(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; )") + CHIPID_LEN;
+  void useragent(char* buf, size_t cap);   // per request, no buffer kept
   const char* chip();
   inline const char* board() {
 #ifdef APP_BOARD

@@ -38,6 +38,7 @@
 #include "Corium/Prefs/EGPrefs.h"
 #include "App/AppKeys.h"
 #include "Corium/Output/LedSignal.h"
+#include "BlipLed/BlipLed.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/System/RtcMap.h"
 #ifdef ESP32
@@ -570,6 +571,9 @@ uint32_t Counter::get_min_pulse_us() {
 
 void Counter::set_blip_brightness(uint8_t level) {
   LedSignal::setBrightness(level);
+#ifdef LED_FLASH_ENGINE
+  BlipLed::setBrightness(level);
+#endif
 }
 
 void Counter::set_quiet_hours(const char* from, const char* to) {
@@ -619,7 +623,14 @@ void ClickFns::fire(uint32_t us) const {
 }
 
 static void grng_click(uint32_t us) { GRNG::mix(us ^ DeviceInfo::cycles()); }
-static void led_click(uint32_t) { if (gcounter.blip_led()) LedSignal::flash(); }
+static void led_click(uint32_t) {
+  if (!gcounter.blip_led()) return;
+#ifdef LED_FLASH_ENGINE
+  BlipLed::flash();
+#else
+  LedSignal::flash();
+#endif
+}
 
 void Counter::begin() {
   _clicks.add(grng_click);

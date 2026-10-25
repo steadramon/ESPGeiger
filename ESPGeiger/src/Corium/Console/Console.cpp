@@ -202,7 +202,9 @@ void Console::exec(ConsoleLine& l) {
 
 void Console::begin() {
   if (_dropped) Log::console(PSTR("Console: %u command(s) dropped (raise EG_MAX_CMDS)"), _dropped);
-  EGModuleRegistry::every(this, LOOP_MS);
+#ifndef DISABLE_SERIALRX
+  EGModuleRegistry::every(this, LOOP_MS);   // else nothing to read
+#endif
 }
 
 void Console::loop(unsigned long now) {

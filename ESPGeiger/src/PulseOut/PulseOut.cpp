@@ -103,7 +103,7 @@ void PulseOut::on_prefs_loaded() {
   _engine.freq_hz  = EGPrefs::getUInt("pulse", EG_K_FREQ);
   _engine.cycles   = EGPrefs::getUInt("pulse", K_CYCLES);
   _engine.polarity = (uint8_t)EGPrefs::getUInt("pulse", EG_K_POLARITY);
-  _engine.fade_shift = PulseEngine::fadeShiftFromUi(EGPrefs::getUInt("pulse", EG_K_FADE_SHIFT));
+  _engine.fade_shift = (uint8_t)(EGPrefs::getUInt("pulse", EG_K_FADE_SHIFT) + PulseEngine::FADE_SHIFT_MIN);
   _engine.max_hz   = EGPrefs::getUInt("pulse", K_MAX_HZ);
   _engine.active_level = PulseEngine::levelFromPercent(EGPrefs::getUInt("pulse", EG_K_BRIGHTNESS));
   _quiet.set(EGPrefs::getString("pulse", EG_K_QUIET_FROM),

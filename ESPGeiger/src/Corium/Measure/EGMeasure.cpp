@@ -65,11 +65,11 @@ bool EGMeasureIter::next() {
       if (!next_source()) return false;
       continue;
     }
+    if (_id && !_src.id_is(_j, _id)) { _j++; continue; }
     _row = _src.row(_j++);
     if (!(_row.outputs & _out)) continue;
     if ((_row.flags & EGM_DIAG) && !_diag) continue;
     if ((_row.flags & EGM_NODIAG) && _diag) continue;
-    if (_id && strcmp_P(_row.id, _id) != 0) continue;
     if (!_row.read || !_row.read(&_val)) continue;
     if (_row.kind == EGM_F32 && !is_finite(_val.f)) continue;
     return true;
@@ -186,8 +186,9 @@ EGMRead egm_core_read(const char* id, EGMKind kind) {
   const EGMeasureRows srcs[] = {s_core, rows_of(s_input)};
   for (const EGMeasureRows& src : srcs) {
     for (size_t j = 0; j < src.size(); j++) {
+      if (!src.id_is(j, id)) continue;
       EGMeasure r = src.row(j);
-      if (r.kind == kind && strcmp_P(r.id, id) == 0) return r.read;
+      if (r.kind == kind) return r.read;
     }
   }
   return nullptr;

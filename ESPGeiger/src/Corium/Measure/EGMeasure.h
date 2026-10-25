@@ -107,6 +107,12 @@ public:
     memcpy_P(&r, &_rows[j], sizeof(r));
     return r;
   }
+  // id is PROGMEM, copies the id only
+  bool id_is(size_t j, const char* id) const {
+    char buf[sizeof(_rows[0].id)];
+    memcpy_P(buf, _rows[j].id, sizeof(buf));
+    return strcmp_P(buf, id) == 0;
+  }
 private:
   const EGMeasure* _rows;
   size_t           _n;

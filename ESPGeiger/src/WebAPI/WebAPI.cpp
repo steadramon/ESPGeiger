@@ -35,6 +35,7 @@
 #include <EGBase64.h>   // no heap
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Net/SendSlot.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "App/AppKeys.h"
 #include "Corium/System/DeviceInfo.h"
@@ -148,8 +149,8 @@ void WebAPI::begin() {
 void WebAPI::pingIfDue(unsigned long now) {
   if (lastPing == 0) {
     if (_ping_off == 0xFFFFFFFFu)
-      _ping_off = EGModuleRegistry::initial_offset(name(), pingIntervalMs);
-    lastPing = EGModuleRegistry::ping_from_offset(_ping_off, now, pingIntervalMs);
+      _ping_off = SendSlot::initial_offset(name(), pingIntervalMs);
+    lastPing = SendSlot::ping_from_offset(_ping_off, now, pingIntervalMs);
   } else if ((long)(now - lastPing) >= (long)pingIntervalMs) {
     while ((long)(now - lastPing) >= (long)pingIntervalMs) lastPing += pingIntervalMs;
 
@@ -197,7 +198,7 @@ void WebAPI::loop(unsigned long now) {
     // own slot, a crash boot goes at once
     bool first = _hs_off == 0xFFFFFFFFu;
     if (first)
-      _hs_off = EGModuleRegistry::initial_offset(PSTR("wapi.hs"), pingIntervalMs);
+      _hs_off = SendSlot::initial_offset(PSTR("wapi.hs"), pingIntervalMs);
     handshakeAt((uint32_t)now + (first && crash_to_send() ? 0 : _hs_off));
   } else if (reached(now, nextHandshake)) {
     doHandshake();
@@ -252,11 +253,13 @@ struct HsCrash {
   bool     sendExc   = false;
   bool     sendExtra = false;
   bool     sendStack = false;   // RTC snapshot only
+  const char* in = nullptr;     // what the loop was in, esp32
 };
 }
 
 // rst_info when CrashDump missed it
 static void collect_crash(HsCrash& c) {
+  c.in = EGModuleRegistry::crashed_in();
   c.cd = CrashDump::lastCrash();
   if (c.cd) {
     c.epc1     = c.cd->epc1;
@@ -292,6 +295,7 @@ static void write_crash(MsgPack::Writer& mp, const HsCrash& c) {
     // LE u32 words
     mp.kv(PSTR("st"), (const uint8_t*)c.cd->stack, stackBytes);
   }
+  if (c.in) mp.kv(PSTR("cm"), c.in);
 }
 
 static void write_handshake(MsgPack::Writer& mp, const char* pubKey, uint8_t mode,
@@ -771,9 +775,9 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendKV(nullptr, EGPrefs::getString("webapi", EG_K_LON),
              F("'><p style=margin-top:.5em>"));
   res.sendChunk(F(
-    "<button type=button onclick=\"window.open('https://loc.espgeiger.com/','espgeiger-loc')\">Find location</button></p>"
+    "<button type=button onclick=\"window.open('" APP_LOC_URL "/','" APP_LOC_WIN "')\">Find location</button></p>"
     "<button type=submit>Save</button></form>"
-    "<script>window.addEventListener('message',function(e){if(e.origin!=='https://loc.espgeiger.com')return;var d=e.data;if(!d||d.type!=='espgeiger-location')return;var la=document.getElementById('lat');var lo=document.getElementById('lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
+    "<script>window.addEventListener('message',function(e){if(e.origin!=='" APP_LOC_URL "')return;var d=e.data;if(!d||d.type!=='" APP_LOC_MSG "')return;var la=document.getElementById('lat');var lo=document.getElementById('lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
 
   res.sendChunk(F(
     "<details style=margin-top:1em><summary>Advanced</summary>"

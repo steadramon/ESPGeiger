@@ -450,10 +450,10 @@ void WifiModule::loop(unsigned long now) {
 #define WIFI_SLEEP_DEFAULT "1"
 
 static const EGPref WIFI_PREF_ITEMS[] PROGMEM = {
-  {K_SLEEP,    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN},
-  {K_TX_POWER, nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN},
-  {K_COUNTRY,  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN},
-  {K_PHY_MODE, nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN},
+  {K_SLEEP,    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
+  {K_TX_POWER, nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
+  {K_COUNTRY,  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN | EGP_LOCAL},
+  {K_PHY_MODE, nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
 };
 
 static const EGPrefGroup WIFI_PREF_GROUP PROGMEM = {

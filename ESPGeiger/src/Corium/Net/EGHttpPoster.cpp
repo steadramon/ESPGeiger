@@ -18,6 +18,7 @@
 */
 #include "EGHttpPoster.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "SendSlot.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
 
@@ -56,7 +57,7 @@ void EGHttpPoster::loop(unsigned long now)
 // whole intervals, keeps the slot
 bool EGHttpPoster::slot_due(unsigned long now) {
   if (lastPing == 0) {
-    lastPing = EGModuleRegistry::initial_ping(name(), now, pingIntervalMs);
+    lastPing = SendSlot::initial_ping(name(), now, pingIntervalMs);
     return false;
   }
   if ((now - lastPing) < pingIntervalMs) return false;

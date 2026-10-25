@@ -22,6 +22,7 @@
 #include "Counter/Tube.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Net/SendSlot.h"
 #include "Corium/Measure/EGMeasure.h"
 #include "Counter/CounterMeasures.h"
 #include "App/AppKeys.h"
@@ -200,7 +201,7 @@ int MQTT_Client::getInterval() {
 
 unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
   if (_slot_s < 0)
-    _slot_s = (int16_t)(EGModuleRegistry::initial_offset(name(), statusInterval * 1000UL) / 1000UL);
+    _slot_s = (int16_t)(SendSlot::initial_offset(name(), statusInterval * 1000UL) / 1000UL);
   uint32_t off_s = (uint32_t)_slot_s;
   uint32_t until = off_s;
   if (Clock::synced) {

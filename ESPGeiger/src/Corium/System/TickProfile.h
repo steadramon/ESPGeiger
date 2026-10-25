@@ -41,7 +41,7 @@ namespace TickProfile {
   void markApp();
   void markWifi();
 #endif
-  void endTick();
+  bool endTick();   // true once a minute
 }
 
 #endif

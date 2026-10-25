@@ -25,6 +25,7 @@
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/Output/LedSignal.h"
+#include "BlipLed/BlipLed.h"
 #include "Corium/Output/PulseEngine.h"
 #include "App/LedPatterns.h"
 #include "Corium/Util/MathUtil.h"
@@ -311,10 +312,10 @@ static LifePrefs lifeprefs;
 EG_REGISTER_MODULE(lifeprefs)
 
 static const EGPref LIFE_PREF_ITEMS[] PROGMEM = {
-  {EG_K_CLK,  nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN},
-  {EG_K_CLKR, nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN},
-  {EG_K_FBT,  nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN},
-  {EG_K_SECS, nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN},
+  {EG_K_CLK,  nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
+  {EG_K_CLKR, nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
+  {EG_K_FBT,  nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
+  {EG_K_SECS, nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
 };
 
 static const EGPrefGroup LIFE_PREF_GROUP PROGMEM = {
@@ -454,12 +455,12 @@ void LedPrefs::on_prefs_loaded() {
   bool fade            = (EGPrefs::getUInt("led", EG_K_MODE) == 1);
   uint8_t engine_mode  = fade ? PulseEngine::MODE_FADE : PulseEngine::MODE_PULSE;
   uint8_t fadeIdx      = (uint8_t)EGPrefs::getUInt("led", EG_K_FADE_SHIFT);
-  LedSignal::setFlashConfig(
-    engine_mode,
-    (uint16_t)(EGPrefs::getUInt("led", EG_K_PULSE_MS) * 1000),
-    fadeIdx,
-    0
-  );
+  uint16_t pulse_us    = (uint16_t)(EGPrefs::getUInt("led", EG_K_PULSE_MS) * 1000);
+#ifdef LED_FLASH_ENGINE
+  BlipLed::setConfig(engine_mode, pulse_us, fadeIdx, 0);
+#else
+  LedSignal::setFlashConfig(engine_mode, pulse_us, fadeIdx);
+#endif
 #ifndef ESPGEIGER_HW
   gcounter.set_quiet_hours(
     EGPrefs::getString("led", EG_K_QUIET_FROM),

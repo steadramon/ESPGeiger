@@ -32,7 +32,8 @@ bool QuietWindow::active() {
   if (_from < 0 || _to < 0 || _from == _to) return false;   // off
   if (!Clock::synced) return false;
   unsigned long now_ms = fast_millis();
-  if (!reached(now_ms, _recompute_ms)) return _cached;
+  // never more than a minute ahead, so a far one is stale (not asked for weeks)
+  if (!reached(now_ms, _recompute_ms) && (uint32_t)(_recompute_ms - now_ms) <= 60000UL) return _cached;
   struct tm t;
   if (!Clock::localTm(&t)) return false;
   _cached = quiet_in_window(t.tm_hour * 60 + t.tm_min, _from, _to);

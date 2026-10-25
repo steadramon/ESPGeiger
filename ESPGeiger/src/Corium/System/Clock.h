@@ -32,8 +32,6 @@ namespace Clock {
   extern int16_t tz_offset_min;
   void refresh_tz_offset_min();
 
-  extern unsigned long last_sync_ms;   // 0 = never
-
   bool on_sync();   // true on first sync
 
   // a sync off by more than this tells on_step
@@ -64,10 +62,6 @@ namespace Clock {
     time_t local = time(NULL) + (time_t)tz_offset_min * 60;
     gmtime_r(&local, out);
     return true;
-  }
-
-  inline bool isFresh(uint32_t maxAgeMs = 25UL * 3600UL * 1000UL) {
-    return fresh(millis(), last_sync_ms, maxAgeMs);
   }
 }
 

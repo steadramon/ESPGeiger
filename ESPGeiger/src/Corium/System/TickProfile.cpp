@@ -54,7 +54,7 @@ void TickProfile::markApp()  { t_after_app = micros(); }
 void TickProfile::markWifi()    { t_after_wifi = micros(); }
 #endif
 
-void TickProfile::endTick() {
+bool TickProfile::endTick() {
   // never reset, esp32 loop() is on the other core
   static uint32_t s_lps_last = 0;
   uint32_t n = _lps_count;
@@ -92,7 +92,8 @@ void TickProfile::endTick() {
       (unsigned long)(stolen / 1000UL),
       (unsigned long)(stolen / 600000UL));
 #endif
-    EGModuleRegistry::log_activity_and_reset();
     TickProfile::tick_max_us = this_tick;
+    return true;
   }
+  return false;
 }

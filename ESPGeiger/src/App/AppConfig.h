@@ -59,9 +59,10 @@
 #endif
 #endif
 
-// own pin for the flash
+// own pin for the flash, the status LED never flashes counts
 #ifdef GEIGER_BLIPLED
 #define LED_FLASH_ENGINE
+#define LEDSIGNAL_FLASH 0
 #endif
 
 // one i2c bus for the OLED and env sensors
@@ -113,7 +114,7 @@
 
 // :00 free for the SD CSV flush
 #ifdef GEIGER_SDCARD
-#define APP_SEC0_BUSY
+#define SENDSLOT_FIRST 1
 #endif
 
 // Radmon worst case 376

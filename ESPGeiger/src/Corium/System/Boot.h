@@ -20,9 +20,6 @@
 #define EG_BOOT_H
 
 #include <Arduino.h>
-#ifdef ESP32
-#include "esp_log.h"
-#endif
 #include "App/AppConfig.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
 #include "Corium/Logger/Logger.h"
@@ -44,7 +41,7 @@
 namespace Boot {
 
   inline __attribute__((always_inline))
-  void begin(const LedSignal::Pattern* leds, uint8_t count, int flash_pin, bool flash_led) {
+  void begin(const LedSignal::Pattern* leds, uint8_t count, bool flash_led) {
     CrashDump::begin();
     BootGuard::on_boot();
     Serial.begin(115200);
@@ -52,16 +49,10 @@ namespace Boot {
     delay(100);
     improvSerial.begin();
 
-#ifdef ESP32
-    esp_log_level_set("esp_littlefs", ESP_LOG_ERROR);
-    esp_log_level_set("vfs_api",      ESP_LOG_ERROR);
-    esp_log_level_set("LITTLEFS",     ESP_LOG_ERROR);
-#endif
-
 #ifdef ESP8266
     analogWriteRange(1023);
 #endif
-    LedSignal::begin(leds, count, flash_pin, flash_led);
+    LedSignal::begin(leds, count, flash_led);
 
     // before anything reads it
     Uptime::tick();
@@ -76,6 +67,10 @@ namespace Boot {
     }
     Wifi::check_backup_state();
 
+#ifdef EG_CRASH_MARK
+    uint8_t rr = DeviceInfo::resetReason();
+    EGModuleRegistry::crash_boot(rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION);
+#endif
     EGModuleRegistry::set_safe_mode(BootGuard::safe_mode());
     EGModuleRegistry::pre_wifi_all();
     EGPrefs::begin();

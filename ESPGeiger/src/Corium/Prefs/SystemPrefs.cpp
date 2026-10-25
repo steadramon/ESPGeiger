@@ -37,10 +37,10 @@ EG_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin). 
 
 static const EGPref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    EG_NAME_MAX, EGP_STRING, 0},
-  {EG_K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    WEB_PASS_MAX, EGP_STRING, EGP_SENSITIVE | EGP_ADVANCED},
+  {EG_K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    WEB_PASS_MAX, EGP_STRING, EGP_SENSITIVE | EGP_ADVANCED | EGP_LOCAL},
 #ifdef ESP32
   // 0 = board default. C3 max 160
-  {K_CPU_MHZ,     nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  EGP_UINT,   EGP_HIDDEN},
+  {K_CPU_MHZ,     nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
 #endif
 };
 
@@ -83,14 +83,14 @@ EG_PSTR(NT_L_IP,  "IP address");
 EG_PSTR(NT_L_GW,  "Gateway");
 EG_PSTR(NT_L_SN,  "Subnet mask");
 EG_PSTR(NT_L_DNS, "DNS server");
-EG_PSTR(NT_P_IP,  "^(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3}$");
+EG_PSTR(NT_P_IP,  "[0-9.]+");
 
 static const EGPref NET_PREF_ITEMS[] PROGMEM = {
-  {EG_K_STATIC_IP, NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
-  {EG_K_IP,        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, 0},
-  {EG_K_GW,        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, 0},
-  {EG_K_SN,        NT_L_SN,  nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, 0},
-  {EG_K_DNS,       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, 0},
+  {EG_K_STATIC_IP, NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  EGP_BOOL,   EGP_LOCAL},
+  {EG_K_IP,        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, EGP_LOCAL},
+  {EG_K_GW,        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, EGP_LOCAL},
+  {EG_K_SN,        NT_L_SN,  nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, EGP_LOCAL},
+  {EG_K_DNS,       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, EG_IPV4_MAX, EGP_STRING, EGP_LOCAL},
 };
 
 static const EGPrefGroup NET_PREF_GROUP PROGMEM = {

@@ -24,7 +24,7 @@ import re
 import sys
 
 ASSETS = [
-    ("ESPGeiger/src/Corium/NTP/NTP.cpp",          "NTP_PAGE_JS", "application/javascript"),
+    ("ESPGeiger/src/Corium/WebPortal/NtpPage.cpp", "NTP_PAGE_JS", "application/javascript"),
     ("ESPGeiger/src/Counter/CounterWeb.cpp",      "HIST_JS",     "application/javascript"),
     ("ESPGeiger/src/Display/Display.cpp",         "screenJS",    "application/javascript"),
 ]

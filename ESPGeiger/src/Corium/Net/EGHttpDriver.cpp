@@ -36,7 +36,9 @@ EGHttpDriver::Sent EGHttpDriver::send(const EGHttpMeta& m, const uint8_t* body, 
     _c = nullptr;
     return NOT_OPENED;
   }
-  _c->setReqHeader(FPSTR(HTTP_H_UA), DeviceInfo::useragent());
+  char ua[DeviceInfo::UA_MAX];
+  DeviceInfo::useragent(ua, sizeof(ua));
+  _c->setReqHeader(FPSTR(HTTP_H_UA), ua);
   if (m.accept) _c->setReqHeader(F("Accept"), FPSTR(m.accept));
   if (m.ctype) _c->setReqHeader(FPSTR(HTTP_H_CTYPE), FPSTR(m.ctype));
   if (m.extra) _c->setReqHeader(FPSTR(m.extra), m.extra_value);

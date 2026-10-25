@@ -38,17 +38,22 @@
 #include "App/ExternalPause.h"
 #include "App/Board.h"
 #include "App/LedPatterns.h"
+#include "BlipLed/BlipLed.h"
 #ifdef ESPGEIGER_HW
 #include "HV/HV.h"
 #endif
 
 GRNG grng;
 
-#ifdef PULSE_OUT
-static inline void ms_poll(uint32_t now_us) { if (PulseOut::due()) pulseout.poll(now_us); }
-#else
-static inline void ms_poll(uint32_t) {}
+static inline void ms_poll(uint32_t now_us) {
+#ifdef LED_FLASH_ENGINE
+  if (BlipLed::due()) BlipLed::poll(now_us);
 #endif
+#ifdef PULSE_OUT
+  if (PulseOut::due()) pulseout.poll(now_us);
+#endif
+  (void)now_us;   // neither built
+}
 
 static void counter_second(uint32_t up) { gcounter.secondticker(up); }
 
@@ -83,7 +88,10 @@ void setup()
   pinMode(GEIGER_PWMPIN, OUTPUT);
   digitalWrite(GEIGER_PWMPIN, LOW);
 #endif
-  Boot::begin(LED_PATTERNS, LED_PATTERN_COUNT, LED_FLASH_PIN, LED_FLASH_ON_LED);
+  Boot::begin(LED_PATTERNS, LED_PATTERN_COUNT, LED_FLASH_ON_LED);
+#ifdef LED_FLASH_ENGINE
+  BlipLed::begin(LED_FLASH_PIN);
+#endif
   measures_begin();
   boot_banner();
 

@@ -41,7 +41,6 @@ extern "C" {
 static char s_hostname_buf[sizeof(THING_NAME "-") + CHIPID_LEN] = "";
 static char s_chipid_buf[CHIPID_LEN + 1] = "";
 static uint32_t s_chip_hash = 0;
-static char s_useragent_buf[sizeof(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; )") + CHIPID_LEN] = "";
 static char s_mac_buf[18]        = "";
 static char s_flash_buf[24]      = "";
 static char s_friendlyname[EG_NAME_MAX + 1] = "";
@@ -151,11 +150,6 @@ void DeviceInfo::begin() {
   snprintf_P(s_hostname_buf, sizeof(s_hostname_buf), PSTR("%s-%s"),
              THING_NAME, s_chipid_buf);
 
-  snprintf_P(s_useragent_buf, sizeof(s_useragent_buf),
-             PSTR("%s/%s (%s; %s; %s)"),
-             THING_NAME, RELEASE_VERSION, GIT_VERSION,
-             BUILD_ENV, s_chipid_buf);
-
   const uint8_t fm = (uint8_t)ESP.getFlashChipMode();
   const char* mode = fm == 0 ? PSTR("QIO") : fm == 1 ? PSTR("QOUT") :
                      fm == 2 ? PSTR("DIO") : fm == 3 ? PSTR("DOUT") : PSTR("?");
@@ -176,7 +170,10 @@ void DeviceInfo::begin() {
 const char* DeviceInfo::hostname()    { return s_hostname_buf; }
 const char* DeviceInfo::chipid()      { return s_chipid_buf; }
 uint32_t    DeviceInfo::chipHash()    { return s_chip_hash; }
-const char* DeviceInfo::useragent()   { return s_useragent_buf; }
+void DeviceInfo::useragent(char* buf, size_t cap) {
+  snprintf_P(buf, cap, PSTR("%s/%s (%s; %s; %s)"),
+             THING_NAME, RELEASE_VERSION, GIT_VERSION, BUILD_ENV, s_chipid_buf);
+}
 const char* DeviceInfo::mac()         { return s_mac_buf; }
 const char* DeviceInfo::flashInfo()   { return s_flash_buf; }
 
@@ -184,6 +181,7 @@ void DeviceInfo::factoryReset() {
   // keeps the key
   Log::console(PSTR("Factory reset"));
   EGPrefs::reset_all();
+  EGPrefs::commit(false);   // kept rows back on flash now
 #ifdef EGPREFS_LEGACY_FILE
   Fs::remove(F(EGPREFS_LEGACY_FILE));   // legacy import file
 #endif

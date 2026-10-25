@@ -19,6 +19,7 @@
 
 #include "EGPrefs.h"
 #include "EGPrefsStorage.h"
+#include "PrefPattern.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Logger/Logger.h"
@@ -56,8 +57,6 @@ struct GroupShadow {
 const char EG_K_DNS[]          PROGMEM = "dns";
 const char EG_K_GW[]           PROGMEM = "gw";
 const char EG_K_IP[]           PROGMEM = "ip";
-const char EG_K_LAT[]          PROGMEM = "lat";
-const char EG_K_LON[]          PROGMEM = "lon";
 const char EG_K_SCL[]          PROGMEM = "scl";
 const char EG_K_SDA[]          PROGMEM = "sda";
 const char EG_K_SERVER[]       PROGMEM = "server";
@@ -84,19 +83,22 @@ static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
 }
 
 // default reuses the flash pointer, no heap
-static void shadow_set(GroupShadow& gs, size_t j, const char* val, size_t len) {
-  if (shadow_is_heap(gs, j)) free((void*)gs.values[j]);
+// no memory = old value kept, false
+static bool shadow_set(GroupShadow& gs, size_t j, const char* val, size_t len) {
   const char* dv = gs.group->prefs.default_val(j);
-  if (dv && strlen(dv) == len && memcmp(dv, val, len) == 0) {
-    gs.values[j] = dv;
-    gs.heap_mask &= ~(1u << j);
-    return;
+  bool is_dv = dv && strlen(dv) == len && memcmp(dv, val, len) == 0;
+  char* copy = nullptr;
+  if (!is_dv) {
+    copy = (char*)malloc(len + 1);
+    if (!copy) return false;
+    memcpy(copy, val, len);
+    copy[len] = '\0';
   }
-  char* copy = (char*)malloc(len + 1);
-  if (copy) { memcpy(copy, val, len); copy[len] = '\0'; }
-  gs.values[j] = copy ? copy : "";
+  if (shadow_is_heap(gs, j)) free((void*)gs.values[j]);
+  gs.values[j] = is_dv ? dv : copy;
   if (copy) gs.heap_mask |=  (1u << j);
   else      gs.heap_mask &= ~(1u << j);
+  return true;
 }
 
 static void shadow_reset(GroupShadow& gs, size_t j) {
@@ -142,87 +144,12 @@ const char* find_value(const char* module, const char* key) {
   return to ? find_value(to, key) : nullptr;
 }
 
-inline char pat(const char* p, size_t i) { return (char)pgm_read_byte(p + i); }
-
-bool in_class(const char* p, size_t from, size_t to, char c) {
-  for (size_t i = from; i < to; i++) {
-    char lo = pat(p, i);
-    if (lo == '\\' && i + 1 < to) lo = pat(p, ++i);
-    char hi = lo;
-    if (i + 2 < to && pat(p, i + 1) == '-') {
-      i += 2;
-      hi = pat(p, i);
-      if (hi == '\\' && i + 1 < to) hi = pat(p, ++i);
-    }
-    if (c >= lo && c <= hi) return true;
-  }
-  return false;
-}
-
-// index of the ], or of the NUL if there isn't one
-size_t class_end(const char* p) {
-  size_t i = 1;
-  for (; pat(p, i) && pat(p, i) != ']'; i++) {
-    if (pat(p, i) == '\\' && pat(p, i + 1)) i++;
-  }
-  return i;
-}
-
-unsigned read_num(const char* p, size_t* q) {
-  unsigned n = 0;
-  for (; pat(p, *q) >= '0' && pat(p, *q) <= '9'; (*q)++) n = n * 10 + (pat(p, *q) - '0');
-  return n;
-}
-
-// + * {m} {m,} {m,n} or nothing, then the end
-bool parse_count(const char* p, size_t q, unsigned* min, unsigned* max) {
-  char c = pat(p, q);
-  *min = *max = 1;
-  if (c == '+' || c == '*') {
-    *min = c == '+';
-    *max = ~0u;
-    q++;
-  } else if (c == '{') {
-    q++;
-    *min = *max = read_num(p, &q);
-    if (pat(p, q) == ',') {
-      q++;
-      *max = pat(p, q) == '}' ? ~0u : read_num(p, &q);
-    }
-    if (pat(p, q) != '}') return false;
-    q++;
-  }
-  return pat(p, q) == '\0';
-}
-
-// only [..]+ [..]* [..]{m,n} \d{m,n}, rest left to the browser
-bool pattern_ok(const char* p, const char* value) {
-  if (!p || !value[0]) return true;
-  bool digits = pat(p, 0) == '\\' && pat(p, 1) == 'd';
-  size_t to = 0, q = 2;
-  if (!digits) {
-    if (pat(p, 0) != '[') return true;
-    to = class_end(p);
-    if (pat(p, to) != ']') return true;
-    q = to + 1;
-  }
-  unsigned min, max;
-  if (!parse_count(p, q, &min, &max)) return true;
-
-  unsigned n = 0;
-  for (const char* v = value; *v; v++, n++) {
-    bool ok = digits ? (*v >= '0' && *v <= '9') : in_class(p, 1, to, *v);
-    if (!ok) return false;
-  }
-  return n >= min && n <= max;
-}
-
 bool string_ok(const EGPref* p, const char* value) {
   for (const char* v = value; *v; v++) {
     unsigned char c = (unsigned char)*v;
     if (c < 0x20 || c == 0x7f) return false;
   }
-  return egesc_utf8_ok(value) && pattern_ok(p->pattern, value);
+  return egesc_utf8_ok(value) && pref_pattern(p->pattern, value) == 1;
 }
 
 bool ranged(const EGPref* p) { return p->min_i != p->max_i; }
@@ -477,8 +404,7 @@ void import_legacy() {
       char normalized[EGPREFS_MAX_VALUE + 1];
       EGPref p = gs.group->prefs.row(idx);
       int nlen = validate(&p, raw, normalized, sizeof(normalized));
-      if (nlen < 0) continue;
-      shadow_set(gs, idx, normalized, (size_t)nlen);
+      if (nlen < 0 || !shadow_set(gs, idx, normalized, (size_t)nlen)) continue;
       any = true;
       imported++;
     }
@@ -620,7 +546,7 @@ bool EGPrefs::put(const char* module, const char* key, const char* value) {
   if (strcmp(normalized, gs->values[idx]) != 0) {
     // changes only, a stored pin still loads
     if (pin_refused(p, module, key, normalized)) return false;
-    shadow_set(*gs, idx, normalized, (size_t)nlen);
+    if (!shadow_set(*gs, idx, normalized, (size_t)nlen)) return false;
     gs->dirty = true;
     if (p.flags & EGP_REBOOT) s_reboot_put = true;
   }
@@ -687,24 +613,23 @@ bool EGPrefs::remove_group(const char* module) {
   return removed;
 }
 
+// EGP_KEEP rows always stay, EGP_LOCAL too with keep_network (an import never carries them)
 void EGPrefs::reset_all(bool keep_network) {
+  uint16_t keep = keep_network ? (EGP_KEEP | EGP_LOCAL) : EGP_KEEP;
   for (size_t i = 0; i < s_group_count; i++) {
     GroupShadow& gs = s_groups[i];
-    // imports skip wifi.* too, so keep its tuning
-    if (keep_network && (strcmp(gs.group->module_id, "net") == 0 ||
-                         strcmp(gs.group->module_id, "wifi") == 0)) continue;
-    bool is_sys = keep_network && strcmp(gs.group->module_id, "sys") == 0;
-    s_storage.removeGroup(gs.group->module_id);
-    bool kept_any = false;
-    for (size_t j = 0; j < gs.group->count.get(); j++) {
-      if (is_sys && streq_PP(EG_K_WEB_PASS, gs.group->prefs.id_P(j))) {
-        kept_any = true;
-        continue;
-      }
-      shadow_reset(gs, j);
+    size_t n = gs.group->count.get();
+    size_t kept = 0;
+    for (size_t j = 0; j < n; j++) {
+      if (gs.group->prefs.row(j).flags & keep) kept++;
     }
-    // re-dirty, keeps web_pass
-    gs.dirty = kept_any;
+    if (kept && kept == n) continue;   // all kept, file as is
+    s_storage.removeGroup(gs.group->module_id);
+    for (size_t j = 0; j < n; j++) {
+      if (!(gs.group->prefs.row(j).flags & keep)) shadow_reset(gs, j);
+    }
+    // re-dirty, the kept rows get written back
+    gs.dirty = kept > 0;
   }
   drop_moved();
 }

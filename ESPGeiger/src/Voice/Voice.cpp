@@ -365,6 +365,8 @@ void Voice::begin() {
   EGModuleRegistry::every(this, LOOP_MS);
   // klaxon on the edge, not the next second
   EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
+  EGModule* r = EGModuleRegistry::find("radmon");
+  _radmon = r ? r->sender() : nullptr;
 }
 
 static const char* DIGIT_NAMES[10] = {
@@ -374,34 +376,28 @@ static const char* DIGIT_NAMES[10] = {
 
 void Voice::queueKlaxonOnAlert() {
   const bool now_alert = egm_b(M_ALERT);
-  if (now_alert && !_prev_alert && !_quiet.active()) {
-    const unsigned long now_ms = fast_millis();
-    const unsigned long cd_ms = (unsigned long)_klax_cd * 60UL * 1000UL;
-    if (_last_klax_ms == 0 || (now_ms - _last_klax_ms) > cd_ms) {
-      _last_klax_ms = now_ms;
-      AudioCmd cmd{};
-      cmd.type = AC_KLAXON; cmd.i1 = _klax_type;
-      audio_enqueue(cmd);
-    }
+  if (now_alert && !_prev_alert && !_quiet.active() && !_klax_wait) {
+    _klax_wait = true;
+    _last_klax_ms = fast_millis();
+    AudioCmd cmd{};
+    cmd.type = AC_KLAXON; cmd.i1 = _klax_type;
+    audio_enqueue(cmd);
   }
   _prev_alert = now_alert;
 }
 
 void Voice::queueAnnouncement() {
-  const unsigned long now_ms = fast_millis();
-  const unsigned long iv_ms  = (unsigned long)_ann_iv * 1000UL;
-  if (!fresh(now_ms, _last_ann_ms, iv_ms)) {
-    _last_ann_ms = now_ms;
-    AudioCmd cmd{};
-    cmd.type = AC_ANNOUNCE;
-    audio_enqueue(cmd);
-  }
+  if (_ann_wait) return;
+  _ann_wait = true;
+  _last_ann_ms = fast_millis();
+  AudioCmd cmd{};
+  cmd.type = AC_ANNOUNCE;
+  audio_enqueue(cmd);
 }
 
 // not at boot
 void Voice::queueRadmonChange() {
-  EGModule* r = EGModuleRegistry::find("radmon");
-  EGSender* m = r ? r->sender() : nullptr;
+  EGSender* m = _radmon;
   // last_ok is only the answer once the reply is in
   if (m && m->last_attempt_ms != 0 && !m->_publish_pending &&
       m->last_attempt_ms != _radmon_last_attempt) {
@@ -421,6 +417,10 @@ void Voice::queueRadmonChange() {
 }
 
 void Voice::loop(unsigned long /*now*/) {
+  // waits end here, every second, so a wrap can't bring one back
+  const unsigned long now_ms = fast_millis();
+  if (_klax_wait && now_ms - _last_klax_ms > (unsigned long)_klax_cd * 60UL * 1000UL) _klax_wait = false;
+  if (_ann_wait && now_ms - _last_ann_ms >= (unsigned long)_ann_iv * 1000UL) _ann_wait = false;
   if (_klax_en) queueKlaxonOnAlert();
   if (_ann_en && !_quiet.active()) queueAnnouncement();
   if (_ann_radmon && !_quiet.active()) queueRadmonChange();

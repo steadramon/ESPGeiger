@@ -24,7 +24,7 @@
 #include "Corium/System/Uptime.h"
 
 char Log::logIdx = 1;
-Log::LoggingLevels Log::logLevel = LOG_LEVEL;
+Log::LoggingLevels Log::logLevel = (Log::LoggingLevels)LOG_LEVEL;
 char Log::log[MAX_LOG_SIZE] = "";
 bool Log::serialLog = true;
 
@@ -67,6 +67,7 @@ void Log::error(const char* formatP, ...)
   va_end(arg);
 }
 
+#if LOG_LEVEL >= 2
 void Log::info(const char* formatP, ...)
 {
   va_list arg;
@@ -74,7 +75,9 @@ void Log::info(const char* formatP, ...)
   vlog(LOG_LEVEL_INFO, true, formatP, arg);
   va_end(arg);
 }
+#endif
 
+#if LOG_LEVEL >= 3
 void Log::debug(const char* formatP, ...)
 {
   va_list arg;
@@ -82,6 +85,7 @@ void Log::debug(const char* formatP, ...)
   vlog(LOG_LEVEL_DEBUG, true, formatP, arg);
   va_end(arg);
 }
+#endif
 
 void Log::banner(const char* formatP, ...)
 {

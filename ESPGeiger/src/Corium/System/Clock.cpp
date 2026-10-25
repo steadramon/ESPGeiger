@@ -26,7 +26,6 @@ namespace Clock {
 bool synced = false;
 unsigned long boot_epoch = 0;
 int16_t tz_offset_min = 0;
-unsigned long last_sync_ms = 0;
 bool resync = false;
 unsigned long resync_ms = 0;
 
@@ -44,7 +43,6 @@ void refresh_tz_offset_min() {
 }
 
 bool on_sync() {
-  last_sync_ms = millis();
   bool first = !synced;
   unsigned long uptime = Uptime::since(Uptime::start);
   if (first) {

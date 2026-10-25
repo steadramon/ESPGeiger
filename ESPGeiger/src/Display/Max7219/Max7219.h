@@ -29,8 +29,8 @@
 #include <Tm1637Driver.h>
 #include <SevenSeg.h>
 #include <BarGraph.h>
-#include "DisplayType.h"
-#include "DisplayBackend.h"
+#include "Display/DisplayType.h"
+#include "Display/DisplayBackend.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Prefs/EGPrefs.h"
 

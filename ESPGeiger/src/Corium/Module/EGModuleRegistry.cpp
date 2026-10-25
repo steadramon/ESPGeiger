@@ -20,10 +20,8 @@
 #include "EGModuleRegistry.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Net/Wifi.h"
-#include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Clock.h"
-#include "Corium/Util/Fnv.h"
 #include "Corium/System/IsrLock.h"
 #ifdef ESP32
 #include <esp_attr.h>
@@ -37,7 +35,14 @@ uint32_t EGModuleRegistry::_next_loop_due = 0;
 uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_due_count = 0;
 bool EGModuleRegistry::_resort = false;
+#ifdef ESP32
+__NOINIT_ATTR uint8_t EGModuleRegistry::_firing;   // crash_boot reads it first
+#else
 uint8_t EGModuleRegistry::_firing = 0xFF;
+#endif
+#ifdef EG_CRASH_MARK
+uint8_t EGModuleRegistry::_crashed_in = 0xFF;
+#endif
 IsrLock::Bits EGModuleRegistry::_posted;
 bool EGModuleRegistry::_safe_mode = false;
 
@@ -323,96 +328,6 @@ uint16_t EGModuleRegistry::events(EGModule* m) {
   return e;
 }
 
-// two halves, no uint64 shift helper
-static uint32_t s_claimed_lo = 0;
-static uint32_t s_claimed_hi = 0;
-
-static inline bool slot_taken(uint8_t s) {
-  return s < 32 ? ((s_claimed_lo >> s) & 1u) != 0
-                : ((s_claimed_hi >> (s - 32)) & 1u) != 0;
-}
-static inline void slot_claim(uint8_t s) {
-  if (s < 32) s_claimed_lo |= (1u << s);
-  else        s_claimed_hi |= (1u << (s - 32));
-}
-
-// 60 / gcd(step, 60)
-static uint8_t orbit_length(uint8_t step60) {
-  if (step60 == 0) return 1;
-  uint8_t a = step60, b = 60;
-  while (b) { uint8_t t = a % b; a = b; b = t; }
-  return 60 / a;
-}
-
-static bool orbit_clashes(uint8_t sec, uint8_t step60, uint8_t orbit_n, uint8_t lo) {
-  uint8_t s = sec; if (s >= 60) s -= 60;
-  for (uint8_t k = 0; k < orbit_n; k++) {
-    if ((s == 0 && lo != 0) || slot_taken(s)) return true;
-    s += step60; if (s >= 60) s -= 60;
-  }
-  return false;
-}
-
-static void orbit_claim(uint8_t sec, uint8_t step60, uint8_t orbit_n) {
-  uint8_t s = sec; if (s >= 60) s -= 60;
-  for (uint8_t k = 0; k < orbit_n; k++) {
-    slot_claim(s);
-    s += step60; if (s >= 60) s -= 60;
-  }
-}
-
-uint32_t EGModuleRegistry::initial_offset(const char* mod_name, uint32_t interval_ms) {
-  if (interval_ms == 0 || !mod_name) return 0;
-
-  const uint32_t chip = DeviceInfo::chipHash();
-  const uint16_t jitter = (uint16_t)((chip >> 8) % 1000u);
-  uint32_t h = fnv1a_P(mod_name, chip);
-
-  uint16_t interval_s = interval_ms < 1000 ? 0 : (uint16_t)(interval_ms / 1000);
-  if (interval_s < 2) return interval_ms >> 1;
-
-  uint8_t avail = interval_s > 63 ? 63 : (uint8_t)(interval_s - 1);
-  // app holds :00
-#ifdef APP_SEC0_BUSY
-  const uint8_t lo = 1;
-#else
-  const uint8_t lo = 0;
-#endif
-  uint8_t span = (uint8_t)(avail - lo + 1);
-  uint8_t step60 = (uint8_t)(interval_s % 60);
-  uint8_t orbit_n = orbit_length(step60);
-
-  uint8_t sec = (uint8_t)(lo + (h % span));
-  for (uint8_t tries = 0; tries < span; tries++) {
-    if (!orbit_clashes(sec, step60, orbit_n, lo)) break;
-    sec++; if (sec > avail) sec = lo;
-  }
-  orbit_claim(sec, step60, orbit_n);
-  uint32_t off = (uint32_t)sec * 1000UL + jitter;
-  if (off >= interval_ms) off = (uint32_t)sec * 1000UL;
-  return off;
-}
-
-unsigned long EGModuleRegistry::ping_from_offset(uint32_t offset, unsigned long now,
-                                                 uint32_t interval_ms) {
-  if (interval_ms == 0) return now;
-  uint32_t until;
-  uint32_t secs = interval_ms / 1000;
-  if (secs > 0 && Clock::synced) {
-    uint32_t wall_ms = (Clock::epoch() % secs) * 1000UL;
-    until = (offset >= wall_ms) ? (offset - wall_ms) : (interval_ms - wall_ms + offset);
-  } else {
-    until = offset;
-  }
-  return now + until - interval_ms;
-}
-
-unsigned long EGModuleRegistry::initial_ping(const char* mod_name, unsigned long now,
-                                              uint32_t interval_ms) {
-  if (interval_ms == 0) return now;
-  return ping_from_offset(initial_offset(mod_name, interval_ms), now, interval_ms);
-}
-
 uint8_t EGModuleRegistry::count() {
   return _count;
 }
@@ -447,6 +362,7 @@ void EGModuleRegistry::sort_by_priority() {
 
 // cached, no virtual calls in loop_all(); nothing armed till a module asks
 void EGModuleRegistry::pre_wifi_all() {
+  _firing = IN_NONE;   // no crash_boot, junk stays out
   sort_by_priority();
 
   uint32_t now = fast_millis();
@@ -480,39 +396,25 @@ void EGModuleRegistry::set_safe_mode(bool on) {
   _safe_mode = on;
 }
 
+#ifdef EG_CRASH_MARK
+// noinit holds junk after power on, only a crash reset is trusted
+void EGModuleRegistry::crash_boot(bool crashed) {
+  _crashed_in = crashed ? _firing : IN_NONE;
+}
+
+// slots are sorted the same each boot
+const char* EGModuleRegistry::crashed_in() {
+  if (_crashed_in < _count) return _slots[_crashed_in].module->name();
+  if (_crashed_in == IN_TCP) return PSTR("tcp");
+  if (_crashed_in == IN_PORTAL) return PSTR("portal");
+  return nullptr;
+}
+#endif
+
 bool EGModuleRegistry::quarantined(EGModule* m) {
   if (!_safe_mode) return false;
   for (uint8_t i = 0; i < _count; i++) {
     if (_slots[i].module == m) return _slots[i].flags & FLAG_QUARANTINED;
   }
   return false;
-}
-
-size_t EGModuleRegistry::collect_status_json(char* buf, size_t cap, unsigned long now) {
-  size_t pos = 0;
-  bool first = true;
-  for (uint8_t i = 0; i < _count; i++) {
-    Slot& s = _slots[i];
-    if (!s.module) continue;
-    if (cap <= pos + 2) break;
-    size_t before = pos;
-    if (!first) buf[pos++] = ',';
-    size_t n;
-    if (s.flags & FLAG_QUARANTINED) {
-      n = snprintf_P(buf + pos, cap - pos, PSTR("\"%s\":{\"quarantined\":true}"), s.module->name());
-    } else {
-      n = s.module->status_json(buf + pos, cap - pos, now);
-    }
-    if (n == 0) {
-      pos = before;
-    } else if (n >= cap - pos) {
-      // truncated, drop it
-      pos = before;
-      break;
-    } else {
-      pos += n;
-      first = false;
-    }
-  }
-  return pos;
 }

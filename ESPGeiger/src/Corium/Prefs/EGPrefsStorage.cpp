@@ -56,31 +56,28 @@ bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen)
 } // anonymous namespace
 
 EGPrefsStorage::EGPrefsStorage()
-  : _path{}, _started(false), _readOnly(false)
+  : _path{}, _started(false)
 {}
 
 EGPrefsStorage::~EGPrefsStorage() {
   end();
 }
 
-bool EGPrefsStorage::begin(const char* name, bool readOnly) {
+bool EGPrefsStorage::begin(const char* name) {
   if (_started || !name || !*name || strlen(name) > DIR_NAME_MAX) return false;
   if (!Fs::begin()) return false;   // prefs run on defaults
-  _readOnly = readOnly;
   char dir[DIR_NAME_MAX + 2];
   snprintf_P(dir, sizeof(dir), PSTR("/%s"), name);
-  if (!_readOnly) {
-    File chk = Fs::open_r(dir);
-    if (chk && !chk.isDirectory()) {
-      chk.close();
-      Fs::remove(dir);
-      Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
-    } else if (chk) {
-      chk.close();
-    }
-    if (!Fs::exists(dir)) {
-      Fs::mkdir(dir);
-    }
+  File chk = Fs::open_r(dir);
+  if (chk && !chk.isDirectory()) {
+    chk.close();
+    Fs::remove(dir);
+    Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
+  } else if (chk) {
+    chk.close();
+  }
+  if (!Fs::exists(dir)) {
+    Fs::mkdir(dir);
   }
   snprintf_P(_path, sizeof(_path), PSTR("%s/"), dir);
   _started = true;
@@ -131,7 +128,7 @@ bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
 
 // stage and rename, never a partial write
 bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t len) {
-  if (!_started || _readOnly || !module_id || !buf) return false;
+  if (!_started || !module_id || !buf) return false;
   if (len < 4 || len > EGPREFS_MAX_GROUP_SZ) return false;
   char final_path[EGPS_PATH_BUFSZ];
   group_path(final_path, sizeof(final_path), _path, module_id);
@@ -157,7 +154,7 @@ bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t l
 }
 
 bool EGPrefsStorage::removeGroup(const char* module_id) {
-  if (!_started || _readOnly || !module_id) return false;
+  if (!_started || !module_id) return false;
   char path[EGPS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
   return Fs::remove(path);

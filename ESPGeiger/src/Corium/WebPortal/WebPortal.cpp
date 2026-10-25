@@ -18,6 +18,8 @@
 */
 #include "WebPortal.h"
 #include "ImportText.h"
+#include "NtpPage.h"
+#include "Outputs.h"
 #include "Corium/Console/Console.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
@@ -87,13 +89,7 @@ th{font-weight:500;color:var(--muted)}
 .stat{display:grid;grid-template-columns:auto 1fr auto 1fr;column-gap:2em}
 .stat>.row{display:grid;grid-template-columns:subgrid;grid-column:1/-1;padding:.4em .6em;border-bottom:1px solid var(--border);align-items:baseline}
 .stat>.row b{color:var(--muted);font-weight:500;font-family:inherit}
-.stat>.row.envflex{display:flex;gap:2em}
-.stat>.row.envflex>div{flex:1;display:flex;gap:2em;align-items:baseline}
 .card{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:1em;margin:1em 0}
-.bar-row{display:flex;align-items:flex-end;gap:1px;height:80px;width:100%;overflow:hidden;margin:.4em 0;border-bottom:1px solid var(--border)}
-.bar-row.bot{margin:.4em 0 1em}
-.bar-lbls{display:flex;gap:1px;font-size:.65em;color:var(--muted);white-space:nowrap;overflow:hidden}
-.bar-cell{flex:1;min-width:0}
 .a{padding:.5em .7em;margin:.6em 0;border-radius:4px;border-left:4px solid;font-size:.9em}
 .ak{background:#1f6f3a26;border-color:#1f6f3a}
 .aw{background:#ffc40026;border-color:#ffc40099}
@@ -331,6 +327,7 @@ void WebPortal::begin(uint16_t port) {
     EGModule* m = EGModuleRegistry::get(i);
     if (m && !EGModuleRegistry::quarantined(m)) m->registerRoutes(_http);
   }
+  if (!EGModuleRegistry::quarantined(&ntpclient)) NtpPage::routes(_http);
 
   _http.begin(port);
   _active = true;
@@ -643,6 +640,7 @@ static void info_render_backtrace(EGHttpResponse& res, const CrashDump::Snapshot
 
 static void info_render_reset(EGHttpResponse& res) {
   INFO_ROW("Last reset", W_FMT_S, DeviceInfo::resetText());
+  if (const char* in = EGModuleRegistry::crashed_in()) INFO_ROW("Crashed in", W_FMT_S, in);
   if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) {
 #ifdef __riscv
     INFO_ROW("mcause",    W_FMT_U,   (unsigned)cd->exccause);
@@ -916,7 +914,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
                     "s.src='/ntpjs" EG_CACHE_BUST "';this.appendChild(s);"
                     "}\">"
                     "<summary>Time / NTP</summary>"));
-    ntpclient.renderInlineForm(res);
+    NtpPage::form(res);
     res.sendChunk(FPSTR(W_DETAILS_END));
   }
 
@@ -1518,8 +1516,6 @@ struct ParamCtx {
   const char* cur;
   PGM_P       disabled;
   size_t      pos;
-  bool        has_lat;
-  bool        has_lon;
   const EGPrefShow* show;
   char        buf[512];
   char        s_id[EGPREF_ID_MAX + 1], s_lbl[80], s_help[120], s_pat[EGPREF_PATTERN_MAX + 1];
@@ -1558,29 +1554,6 @@ static void param_group_header(ParamCtx& c, const EGPrefGroup* g, EGModule* mod)
                      (hw_absent || (has_toggle && !grp_on)) ? PSTR(" off") : PSTR(""),
                      show_attr(c, nullptr), g->label, badge);
   if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
-}
-
-#ifndef APP_LOC_WIN
-#define APP_LOC_WIN "corium-loc"
-#endif
-#ifndef APP_LOC_MSG
-#define APP_LOC_MSG "corium-location"
-#endif
-
-// none without APP_LOC_URL
-static void param_emit_locator(ParamCtx& c) {
-#ifdef APP_LOC_URL
-  int n = snprintf_P(c.buf, sizeof(c.buf), PSTR(
-    "<p><button type=button onclick=\"window.open('" APP_LOC_URL "/','" APP_LOC_WIN "')\">Find location</button></p>"
-    "<script>window.addEventListener('message',function(e){"
-    "if(e.origin!=='" APP_LOC_URL "')return;"
-    "var d=e.data;if(!d||d.type!=='" APP_LOC_MSG "')return;"
-    "var la=byID('%s.lat'),lo=byID('%s.lon');"
-    "if(la&&typeof d.lat==='number')la.value=d.lat;"
-    "if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"),
-    c.mid, c.mid);
-  if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
-#endif
 }
 
 static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
@@ -1730,8 +1703,6 @@ static void param_load_text(ParamCtx& c, const EGPref& p) {
   flash_to_ram(p.label,   c.s_lbl,  sizeof(c.s_lbl));
   flash_to_ram(p.help,    c.s_help, sizeof(c.s_help));
   flash_to_ram(p.pattern, c.s_pat,  sizeof(c.s_pat));
-  if (strcmp_P(c.s_id, EG_K_LAT) == 0) c.has_lat = true;
-  else if (strcmp_P(c.s_id, EG_K_LON) == 0) c.has_lon = true;
 }
 
 static void param_emit_heading(ParamCtx& c, const EGPref& p) {
@@ -1783,15 +1754,12 @@ static void param_emit_row(ParamCtx& c, const EGPref& p) {
 static void param_render_group(ParamCtx& c, const EGPrefGroup* g, EGModule* mod) {
   param_group_header(c, g, mod);
   c.mid = g->module_id;
-  c.has_lat = false;
-  c.has_lon = false;
 
   for (size_t j = 0; j < g->count.get(); j++) {
     const EGPref p = g->prefs.row(j);
     if (p.flags & (EGP_HIDDEN | EGP_ADVANCED)) continue;
     param_emit_field(c, p);
   }
-  if (c.has_lat && c.has_lon) param_emit_locator(c);
   bool adv_open = false;
   for (size_t j = 0; j < g->count.get(); j++) {
     const EGPref p = g->prefs.row(j);
@@ -1897,14 +1865,6 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
   return ~crc;
 }
 
-static bool is_skip_pref(const char* module_id, const char* key) {
-  if (strcmp_P(module_id, PSTR("sys")) == 0)
-    return strcmp_P(key, EG_K_WEB_PASS) == 0 || strcmp_P(key, PSTR("cpu_mhz")) == 0;
-  if (strcmp_P(module_id, PSTR("net")) == 0) return true;
-  if (strcmp_P(module_id, PSTR("wifi")) == 0) return true;
-  return false;
-}
-
 static constexpr uint32_t EXPORT_OBF_SEED = EXPORT_SEED;
 
 struct B64Sink {
@@ -1959,7 +1919,7 @@ static void b64_finish(B64Sink& s) {
 static bool is_exportable_pref(const EGPrefGroup* g, const EGPref& p,
                                const char* id_buf, const char*& val_out) {
   if (p.type == EGP_LABEL || p.type == EGP_HEADER) return false;
-  if (is_skip_pref(g->module_id, id_buf)) return false;
+  if (p.flags & EGP_LOCAL) return false;
   const char* cur = EGPrefs::getString(g->module_id, id_buf);
   if (!cur) cur = "";
   if (p.default_val && strcmp(cur, p.default_val) == 0) return false;
@@ -2057,7 +2017,8 @@ static const char* validateImport(uint8_t* buf, size_t len) {
 
 // put refuses unknown keys, forwards moved ones
 static bool import_put(const char* mid, const char* key, const char* value) {
-  if (is_skip_pref(mid, key)) return false;
+  EGPref p;
+  if (EGPrefs::find_pref(mid, key, &p) && (p.flags & EGP_LOCAL)) return false;
   return EGPrefs::put(mid, key, value);
 }
 
@@ -2207,7 +2168,7 @@ void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[512];
   size_t pos = 0;
   buf[pos++] = '{';
-  pos += EGModuleRegistry::collect_status_json(buf + pos, sizeof(buf) - pos - 2, fast_millis());
+  pos += Outputs::json(buf + pos, sizeof(buf) - pos - 2, fast_millis());
   buf[pos++] = '}';
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   res.sendChunk(buf, pos);

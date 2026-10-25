@@ -54,7 +54,7 @@ namespace Reactor {
       s_ms_acc_us -= 1000;
     }
     s_ms_last_us = now_us;
-    if (LedSignal::due()) LedSignal::poll(now_us);
+    if (LedSignal::due()) LedSignal::poll();
     extra(now_us);
   }
 
@@ -83,8 +83,11 @@ namespace Reactor {
       }
 #endif
       // tcp callbacks, ota needs them too
+      EGModuleRegistry::in(EGModuleRegistry::IN_TCP);
       EGTcp::poll();
+      EGModuleRegistry::in(EGModuleRegistry::IN_PORTAL);
       if (!ota_in_progress && reached(now, portal.next_tick_due())) portal.tick(now);
+      EGModuleRegistry::in(EGModuleRegistry::IN_NONE);
       if (EGModuleRegistry::due(now)) EGModuleRegistry::loop_all(now);
     }
 #ifdef LOOP_PROFILE

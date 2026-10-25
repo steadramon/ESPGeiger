@@ -21,6 +21,12 @@
 
 #include <stdint.h>
 #include <atomic>
+#include "App/AppConfig.h"
+
+// 0 = counts never flash this LED, the app has a pin of its own
+#ifndef LEDSIGNAL_FLASH
+#define LEDSIGNAL_FLASH 1
+#endif
 
 namespace LedSignal {
 
@@ -39,24 +45,24 @@ namespace LedSignal {
     uint8_t  count;
   };
 
-  // rows in PROGMEM, flash_pin is the engine's, flash_led without it
-  void begin(const Pattern* rows, uint8_t count, int flash_pin, bool flash_led);
+  // rows in PROGMEM, flash_led = counts flash this LED
+  void begin(const Pattern* rows, uint8_t count, bool flash_led);
   void use_pin(int pin, bool low_active);   // led.pin, -1 = none
   void attach();           // last in setup()
-  void poll(uint32_t now_us);
+  void poll();
   void off();
   void lit(bool on);   // steady
 
+#if LEDSIGNAL_FLASH
   // caller checks enable and quiet hours
   void flash();
+  // PulseEngine::Mode, caller maps the UI value
+  void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us, uint8_t fade_shift_idx);
+#endif
 
   void play(uint8_t row);   // past the end = nothing
 
   void setBrightness(uint8_t level);
-
-  // PulseEngine::Mode, caller maps the UI value
-  void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us,
-                           uint8_t fade_shift_idx, uint8_t max_hz);
 }
 
 #endif

@@ -26,7 +26,7 @@
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Output/Buzzer.h"
-#include "Corium/Output/TunePlayer.h"
+#include "TunePlayer.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"

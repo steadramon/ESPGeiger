@@ -26,8 +26,9 @@
 #ifndef MAX_LOG_SIZE
 #define MAX_LOG_SIZE 4000
 #endif
+// a number: 0 console, 1 error, 2 info, 3 debug. below it info/debug compile out
 #ifndef LOG_LEVEL
-#define LOG_LEVEL    LOG_LEVEL_ERROR
+#define LOG_LEVEL    1
 #endif
 
 class Log {
@@ -35,8 +36,16 @@ public:
   enum LoggingLevels {LOG_LEVEL_CONSOLE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
   static void console(const char* logData, ...);
   static void error(const char* logData, ...);
+#if LOG_LEVEL >= 2
   static void info(const char* logData, ...);
+#else
+  template <class... A> static void info(const char*, A...) {}
+#endif
+#if LOG_LEVEL >= 3
   static void debug(const char* logData, ...);
+#else
+  template <class... A> static void debug(const char*, A...) {}
+#endif
   static void banner(const char* logData, ...);  // raw serial, no timestamp
   // line idx ending '\1', at most cap-1 bytes; 0 if gone
   static size_t copyLog(uint32_t idx, char* out, size_t cap);

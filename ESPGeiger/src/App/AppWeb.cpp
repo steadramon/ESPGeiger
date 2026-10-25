@@ -28,7 +28,13 @@
 
 // after the core style.css
 #if !EG_GZ_STYLE_CSS
-extern const char APP_CSS[] PROGMEM = R"CSS(#g1{height:200px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px}
+extern const char APP_CSS[] PROGMEM = R"CSS(.stat>.row.envflex{display:flex;gap:2em}
+.stat>.row.envflex>div{flex:1;display:flex;gap:2em;align-items:baseline}
+.bar-row{display:flex;align-items:flex-end;gap:1px;height:80px;width:100%;overflow:hidden;margin:.4em 0;border-bottom:1px solid var(--border)}
+.bar-row.bot{margin:.4em 0 1em}
+.bar-lbls{display:flex;gap:1px;font-size:.65em;color:var(--muted);white-space:nowrap;overflow:hidden}
+.bar-cell{flex:1;min-width:0}
+#g1{height:200px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px}
 #g2{display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.4em 0;font-size:1.05em}
 #t1{width:100%;height:250px;font-family:monospace;font-size:.8em;line-height:1.3;resize:vertical}
 :root.crt{--bg:#000;--page:#000;--fg:#0f0;--muted:#080;--border:#050;--accent:#0a0;--link:#0a0;--card:#001a00}

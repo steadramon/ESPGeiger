@@ -129,8 +129,7 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
   else                              WiFi.softAP(apSsid);
 
   IPAddress apIp = WiFi.softAPIP();
-  _dns.setErrorReplyCode(DNSReplyCode::NoError);
-  _dns.start(53, "*", apIp);
+  _dns.begin(53, EGTcpAddr(apIp[0], apIp[1], apIp[2], apIp[3]));
 
   // routes outlive end()
   if (!_routed) {
@@ -161,7 +160,7 @@ void EGPortal::takeScan(int n) {
 
 void EGPortal::loop() {
   if (!_active) return;
-  _dns.processNextRequest();
+  _dns.poll();
   EGTcp::poll();   // runs in setup, before loop()
   _http.tick();
   int n = WiFi.scanComplete();
@@ -171,7 +170,7 @@ void EGPortal::loop() {
 void EGPortal::end() {
   if (!_active) return;
   _http.end();
-  _dns.stop();
+  _dns.end();
   WiFi.softAPdisconnect(true);
   _active = false;
 }
