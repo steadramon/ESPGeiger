@@ -44,6 +44,10 @@ class WiFiUDP;
 #ifndef UDPRX_QUIET_MS
 #define UDPRX_QUIET_MS (3 * UDPBLIP_STATS_INTERVAL_MS)   // 3 heartbeats
 #endif
+#ifndef UDPRX_LOG_MAX
+#define UDPRX_LOG_MAX 4          // resync lines a minute
+#endif
+#define UDPRX_DRAIN_MAX 65535    // biggest gap drained, and all pending
 class GeigerUdpRx final : public GeigerInput {
 public:
   GeigerUdpRx();
@@ -98,6 +102,7 @@ private:
   void processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
   uint32_t creditForwardGap(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
   bool producerRestarted(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
+  bool logOk();
   void creditClicks(uint32_t credit, uint32_t gap_credit, const ProducerRecord* p,
                     uint32_t producer_ts, uint32_t now_ms);
   void scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint32_t now_ms);
@@ -124,6 +129,8 @@ private:
   float _drain_rate    = 0.0f;
   float _drain_partial = 0.0f;
   bool  _draining      = false;   // int guard
+  uint32_t _log_at = 0;
+  uint8_t  _log_left = UDPRX_LOG_MAX;
 
   ProducerRecord _producers[UDPRX_PRODUCER_SLOTS] = {};
   uint8_t _producers_seen = 0;

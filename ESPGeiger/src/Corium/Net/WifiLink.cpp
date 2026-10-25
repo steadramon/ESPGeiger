@@ -36,6 +36,7 @@ namespace Wifi {
   char ssid[WIFI_SSID_MAX + 1] = "";
   int16_t rssi = 0;
   uint32_t connected_at_ms = 0;
+  bool settled = false;
   bool backup_grace_done = false;
 
   void check_backup_state() {
@@ -59,9 +60,13 @@ static void refresh_link_cache(bool just_connected, unsigned long now) {
   s_link_at = now + WIFI_LINK_MS;
   Wifi::rssi = WiFi.RSSI();
   Wifi::local_ip = WiFi.localIP();
-  if (!just_connected) return;
+  if (!just_connected) {
+    if ((int32_t)(now - Wifi::connected_at_ms) < 0) Wifi::settled = true;
+    return;
+  }
   strlcpy(Wifi::ssid, WiFi.SSID().c_str(), sizeof(Wifi::ssid));
-  Wifi::connected_at_ms = now;
+  Wifi::connected_at_ms = now ? now : now - 1;   // 0 = down
+  Wifi::settled = false;
 }
 
 static void track_outage(unsigned long now) {

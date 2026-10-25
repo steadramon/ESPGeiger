@@ -23,6 +23,7 @@
 #include "EGPrefs.h"
 
 #define WEB_PASS_MAX 32
+#define WEB_PASS_SLOT 1   // KeyStore, 0 is the key
 
 class SystemPrefs : public EGModule {
   public:
@@ -31,6 +32,7 @@ class SystemPrefs : public EGModule {
     uint8_t display_order() override { return 10; }
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
+    static bool pass_restored;   // FS lost, web_pass from the key store
 };
 
 extern SystemPrefs sysprefs;

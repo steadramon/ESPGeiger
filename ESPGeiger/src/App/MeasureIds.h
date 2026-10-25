@@ -37,6 +37,10 @@
 #define M_TC     PSTR("tc")
 #define M_SER_OK PSTR("ser_ok")
 #define M_HV     PSTR("hv")
+// by id only
+#define M_HV_TGT PSTR("hv_tgt")
+#define M_HV_DTY PSTR("hv_duty")
+#define M_HV_TRM PSTR("hv_trim")
 // celsius
 #define M_T      PSTR("t")
 #define M_H      PSTR("h")

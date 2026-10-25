@@ -258,7 +258,7 @@ void HV::begin() {
   }
 #ifdef ESPG_HV_ADC
   hvReading.begin();
-  _trim_settle_until = fast_millis() + (unsigned long)_boot_s * 1000UL;
+  _settle.set(fast_millis() + (unsigned long)_boot_s * 1000UL);
 #endif
 }
 
@@ -280,8 +280,9 @@ void HV::loop(unsigned long now) {
 #ifdef ESPGEIGER_HW32
   check_feedback();   // ratio 0 doesn't turn this off
 #endif
+  if (_settle.due(now)) _settle.clear();   // a held compare goes stale at the wrap
   if (_hw_vd_ratio == 0) return;
-  bool settled = egm_b(M_WARM) && reached(now, _trim_settle_until);
+  bool settled = egm_b(M_WARM) && !_settle.armed();
   int volts = read_hv();
   check_overvoltage(volts);
   if (_hv_target > 0 && !_ov_trip && settled) trim_step();
@@ -389,7 +390,7 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   set_duty(new_duty);
   _cur_duty = -1;
   _duty_trim = 0;
-  _trim_settle_until = fast_millis() + (unsigned long)_settle_s * 1000UL;
+  _settle.set(fast_millis() + (unsigned long)_settle_s * 1000UL);
 }
 
 void HV::saveconfig() {
@@ -551,11 +552,19 @@ static bool m_hv(EGMValue* v) {
   return true;
 }
 
+static bool m_hv_tgt(EGMValue* v)  { v->u = hv.get_hv_target(); return true; }
+static bool m_hv_duty(EGMValue* v) { v->u = (uint32_t)hv.get_duty(); return true; }
+static bool m_hv_trim(EGMValue* v) { v->i = hv.get_duty_trim(); return true; }
+
 static const char MP_HV[] PROGMEM = "device_hv_volts";
 static const char MH_HV[] PROGMEM = "Tube high voltage";
 
 static const EGMeasure HV_ROWS[] PROGMEM = {
   EGM_PROW("hv", "", m_hv, EGM_I32, 0, EGMU_VOLT, EGM_OUT_ALL, 0, MP_HV, MH_HV, nullptr),
+  // the /hv blip
+  EGM_ROW("hv_tgt",  "", m_hv_tgt,  EGM_U32, 0, EGMU_VOLT, EGM_OUT_ID, 0),
+  EGM_ROW("hv_duty", "", m_hv_duty, EGM_U32, 0, EGMU_NONE, EGM_OUT_ID, 0),
+  EGM_ROW("hv_trim", "", m_hv_trim, EGM_I32, 0, EGMU_NONE, EGM_OUT_ID, 0),
 };
 
 EGMeasureRows HV::measurements() { return EGMeasureRows(HV_ROWS); }

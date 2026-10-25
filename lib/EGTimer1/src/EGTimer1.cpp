@@ -547,6 +547,9 @@ int startWaveformClockCycles(uint8_t pin, uint32_t high, uint32_t low, uint32_t 
     else drive(bit, 0);
     return true;
   }
+  if (high > EGT1_MAX_SPAN) high = EGT1_MAX_SPAN;
+  if (low > EGT1_MAX_SPAN) low = EGT1_MAX_SPAN;
+  if (run > EGT1_MAX_SPAN) run = EGT1_MAX_SPAN;
   return post(EGT1_CMD_START, bit, high, low, run);
 }
 
@@ -639,6 +642,7 @@ void timer_start(uint32_t (*fn)(), uint32_t first) {
   init_timer();
   vstore(g.tmr_on, (uint8_t)0);
   g.tmr_fn = fn;
+  if (first > (EGT1_MAX_SPAN >> g.x2)) first = EGT1_MAX_SPAN >> g.x2;
   g.tmr_next = ccount() + (first << g.x2);
   __asm__ __volatile__("" ::: "memory");
   vstore(g.tmr_on, (uint8_t)1);

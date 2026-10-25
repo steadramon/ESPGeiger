@@ -65,6 +65,9 @@ void GeigerSerial::begin() {
 // bad lines in a row before a drain
 #define GEIGERSERIAL_BAD_LIMIT 20
 
+// connected: a good line in this long, and no drain
+#define GEIGERSERIAL_OK_MS 60000
+
 // its tail would parse as a line of its own
 void GeigerSerial::drop_line() {
   _serial_idx = 0;
@@ -113,6 +116,8 @@ void GeigerSerial::loop() {
   pullSerial();
   uint32_t now = fast_millis();
   _poll_at = (_serial_idx || _discard) ? now : now + _idle_ms;   // mid line, every pass
+  bool line = _line.fresh(now, GEIGERSERIAL_OK_MS);
+  _ok = !_drain.fresh(now, GEIGERSERIAL_OK_MS) && line;
   if (serial_value <= 0) return;
   if (fast_millis() - last_serial > 10000) serial_value = 0;
 }
@@ -168,7 +173,7 @@ void GeigerSerial::drainPort() {
   _serial_idx = 0;
   _serial_buffer[0] = '\0';
   _bad_streak = 0;
-  _last_drain = now;
+  _drain.mark(now);
 }
 
 void GeigerSerial::handleSerial(char* input) {
@@ -188,6 +193,7 @@ void GeigerSerial::handleSerial(char* input) {
     _use_cps = true;
   }
   last_serial = fast_millis();
+  _line.mark(last_serial);
   _bad_streak = max((int)_bad_streak - 3, 0);
 }
 

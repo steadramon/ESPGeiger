@@ -37,9 +37,6 @@
 #include "EnvSensor/EnvSensor.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGEscape.h>
-#ifdef ESPG_HV_ADC
-#include "HV/HV.h"
-#endif
 #include <WiFiUdp.h>
 #ifdef ESP8266
 #include <ESP8266mDNS.h>
@@ -54,6 +51,7 @@ static constexpr uint16_t LOOP_MS = 1000;
 #else
 static constexpr uint16_t LOOP_MS = UDPBLIP_CLICK_MIN_INTERVAL_MS;
 #endif
+static constexpr uint8_t DRAIN_MAX = 8;   // a stats pass, the 8266 keeps ~5
 
 UdpBlipModule& udpblip = UdpBlipModule::getInstance();
 EG_REGISTER_MODULE(udpblip)
@@ -142,6 +140,16 @@ bool UdpBlipModule::ensureUdp() {
   return true;
 }
 
+// send only, drop what lands so the stack doesn't hold it
+void UdpBlipModule::drain() {
+  if (!_udp) return;
+  for (uint8_t i = 0; i < DRAIN_MAX && _udp->parsePacket() > 0; i++) {
+#ifndef ESP8266
+    _udp->flush();   // esp32 keeps one till flush, the 8266's flush sends
+#endif
+  }
+}
+
 void UdpBlipModule::announce_mdns() {
   if (_mdns_done || _mode == 0) return;
   // after ArduinoOTA starts mDNS
@@ -216,8 +224,10 @@ void UdpBlipModule::emitRad(uint32_t now) {
 #ifdef ESPG_HV_ADC
 void UdpBlipModule::emitHv(uint32_t now) {
   uint8_t buf[64];
-  BlipHv h = { (float)hv.hvReading.get(), (float)hv.get_hv_target(),
-               (uint32_t)hv.get_duty(), (int32_t)hv.get_duty_trim() };
+  // nan with no adc
+  EGMeasureIter v(0xFF, false, M_HV);
+  BlipHv h = { v.next() ? (float)v.value().i : NAN, (float)egm_u(M_HV_TGT),
+               egm_u(M_HV_DTY), egm_i(M_HV_TRM) };
   size_t n = blip_hv(buf, sizeof(buf), path(PSTR("hv")), h);
   if (n) sendPacket(buf, n);
   (void)now;
@@ -303,6 +313,7 @@ void UdpBlipModule::schedule(uint32_t now, bool held) {
 
 // rad, hv a second on, sys + env every other cycle
 void UdpBlipModule::stats(uint32_t now) {
+  drain();
   if (_emit_phase == 0) {
     emitRad(now);
   } else if (_emit_phase == 1) {

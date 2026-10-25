@@ -103,9 +103,10 @@ private:
   MQTT_Client();
   void timers(unsigned long now);
   void second(unsigned long now);
-  uint32_t nextDue(unsigned long now);
+  uint32_t nextDue(unsigned long now_ms, unsigned long now);
   void wakeSoon();
   uint32_t _due_ms = 0;   // timers next run
+  static constexpr uint32_t DUE_MAX_MS = (MQTT_MAX_TIME + 1) * 1000UL;   // nextDue's most
   bool clientBusy();
   void applyIntervalPref();
   void queueTimedPublishes(unsigned long now);

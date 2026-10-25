@@ -105,8 +105,9 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
     if (Clock::localTm(&t)) {
       snprintf_P (timeStr, sizeof (timeStr), PSTR("%02d:%02d:%02d "), t.tm_hour, t.tm_min, t.tm_sec);
     } else {
+      // * = uptime, not clock
       Uptime::Split u = Uptime::split((uint32_t)Uptime::seconds());
-      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02u:%02u:%02u "), u.h, u.m, u.s);
+      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02u:%02u:%02u*"), u.h, u.m, u.s);
     }
   }
 #endif
@@ -116,15 +117,6 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
   }
 
   if (Wifi::disabled) return;
-
-#ifndef DISABLE_LOG_TS
-  // * = uptime, not clock
-  if (timeStr[0] && !Clock::synced) {
-    size_t tsLen = strlen(timeStr);
-    if (tsLen > 0) timeStr[tsLen-1] = '*';
-  }
-#endif
-
 
   // Delimited, zero-terminated buffer of log lines.
   // Each entry has this format: [index][log data]['\1']
@@ -165,6 +157,45 @@ size_t Log::copyLog(uint32_t idx, char* out, size_t cap)
       break;
     }
     it += span;
+  }
+  LOG_UNLOCK();
+  return n;
+}
+
+static uint8_t next_idx(uint8_t i) { return i == 255 ? 1 : i + 1; }
+
+// steps from a to b, indices 1..255
+static int idx_dist(uint8_t a, uint8_t b) {
+  int d = b - a;
+  return d < 0 ? d + 255 : d;
+}
+
+size_t Log::copySince(uint32_t* idx, uint8_t end, char* out, size_t cap)
+{
+  if (*idx > 255 || !end || cap < 2) return 0;
+  uint8_t from = *idx ? (uint8_t)*idx : next_idx(end);
+  int want = idx_dist(from, end);
+  size_t n = 0;
+  LOG_LOCK();
+  const char* it   = log;
+  const char* stop = log + MAX_LOG_SIZE;
+  while (it < stop && *it != '\0') {
+    uint8_t cur_idx = (uint8_t)*it;
+    it++;
+    const char* delim = (const char*)memchr(it, '\1', (size_t)(stop - it));
+    if (!delim) break;
+    size_t span = (size_t)(delim - it) + 1;
+    if (idx_dist(from, cur_idx) < want) {
+      if (n + span > cap - 1) {
+        if (n) break;
+        span = cap - 1;   // one long line, cut as copyLog
+      }
+      memcpy(out + n, it, span);
+      n += span;
+      out[n - 1] = '\n';
+      *idx = next_idx(cur_idx);
+    }
+    it = delim + 1;
   }
   LOG_UNLOCK();
   return n;

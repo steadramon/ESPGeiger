@@ -110,7 +110,11 @@ static void audio_worker_start() {
     Log::console(PSTR("Tick: audio queue alloc failed"));
     return;
   }
-  xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr);
+  if (xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr) != pdPASS) {
+    Log::console(PSTR("Tick: audio task failed"));
+    vQueueDelete(s_audio_q);   // enqueue says no, a later start tries again
+    s_audio_q = nullptr;
+  }
 }
 
 #ifndef AUDIO_MUTE_PIN
@@ -337,6 +341,9 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
     });
 }
 
+// zeros, off the aud task stack
+static const int16_t GAP_50MS[1100] = {0};
+
 void AudioTick::play_chime_now(uint8_t c) {
   if (!_i2s_up || c == 0) return;
   if (c == 1) {
@@ -356,12 +363,11 @@ void AudioTick::play_chime_now(uint8_t c) {
   }
   // else the amp soft-stop eats the next clicks
   constexpr uint16_t SIL_CHUNK = 256;
-  int16_t silence[SIL_CHUNK] = {0};
   uint32_t remaining = ms_to_samples(300);
   while (remaining > 0) {
     const uint16_t n = (remaining > SIL_CHUNK) ? SIL_CHUNK : (uint16_t)remaining;
     size_t written = 0;
-    i2s_write(I2S_NUM_0, silence, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
+    i2s_write(I2S_NUM_0, GAP_50MS, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
     remaining -= n;
   }
 }
@@ -463,9 +469,8 @@ void AudioTick::chimeDtmf() {
       i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 50 / portTICK_PERIOD_MS);
       out += n;
     }
-    static const int16_t gap[1100] = {0};   // 50 ms
     size_t written = 0;
-    i2s_write(I2S_NUM_0, gap, sizeof(gap), &written, 80 / portTICK_PERIOD_MS);
+    i2s_write(I2S_NUM_0, GAP_50MS, sizeof(GAP_50MS), &written, 80 / portTICK_PERIOD_MS);
   }
 }
 
@@ -550,10 +555,9 @@ void AudioTick::chimeNumbersStation() {
 void AudioTick::chimeSputnik() {
   for (uint8_t k = 0; k < 3; k++) {
     playMelodyNote(1000, 280);
-    int16_t gap[1100] = {0};   // 50 ms
     size_t written = 0;
     for (uint8_t g = 0; g < 5; g++) {
-      i2s_write(I2S_NUM_0, gap, sizeof(gap), &written, 80 / portTICK_PERIOD_MS);
+      i2s_write(I2S_NUM_0, GAP_50MS, sizeof(GAP_50MS), &written, 80 / portTICK_PERIOD_MS);
     }
   }
 }

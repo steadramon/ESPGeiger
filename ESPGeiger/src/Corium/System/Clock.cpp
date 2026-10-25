@@ -36,10 +36,13 @@ void on_step(StepFn fn) { s_on_step = fn; }
 
 void refresh_tz_offset_min() {
   time_t now = time(NULL);
-  struct tm gmt_tm;
-  gmtime_r(&now, &gmt_tm);
-  gmt_tm.tm_isdst = -1;
-  tz_offset_min = (int16_t)((now - mktime(&gmt_tm)) / 60);
+  struct tm loc, utc;
+  localtime_r(&now, &loc);
+  gmtime_r(&now, &utc);
+  int days = loc.tm_yday - utc.tm_yday;
+  if (days > 1) days = -1;   // new year
+  else if (days < -1) days = 1;
+  tz_offset_min = (int16_t)((days * 24 + loc.tm_hour - utc.tm_hour) * 60 + loc.tm_min - utc.tm_min);
 }
 
 bool on_sync() {

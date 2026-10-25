@@ -35,6 +35,7 @@
 #include "Corium/Util/MathUtil.h"
 #include "App/AppKeys.h"
 #include "App/AppMath.h"
+#include "App/MeasureIds.h"
 #include "Corium/System/I2CBus.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/System/Uptime.h"
@@ -44,9 +45,6 @@
 #include "GRNG/GRNG.h"
 #include "GeigerInput/Type/UdpRx.h"
 #include "Mqtt/MQTT_Client.h"
-#ifdef ESPG_HV_ADC
-#include "HV/HV.h"
-#endif
 
 EG_PSTR(K_RST,  "rst");
 EG_PSTR(K_FLIP, "flip");
@@ -245,13 +243,14 @@ unsigned long SSD1306Display::frame_ms() const {
   return _present ? FRAME_MS : NOPANEL_FRAME_MS;
 }
 
-void SSD1306Display::page_changed() {
+// due now, 0 reads as the future half the wrap
+void SSD1306Display::page_changed(unsigned long now) {
   if (_last_page == PAGE_SAVER) {
     if (s_matrix_drops) { free(s_matrix_drops); s_matrix_drops = nullptr; }
     if (s_static_noise) { free(s_static_noise); s_static_noise = nullptr; }
   }
   _last_page = oled_page;
-  _next_render_due = 0;
+  _next_render_due = now;
   EGModuleRegistry::every(this, tick_ms());
 }
 
@@ -373,16 +372,24 @@ void SSD1306Display::loop(unsigned long now) {
     if (!_send_rows_left) next_frame(now);
     return;
   }
-  if (oled_page > OLED_PAGES) oled_page = PAGE_MAIN;
-  if (oled_page != _last_page) page_changed();
-  if (oled_page == PAGE_SAVER) display.wake(now);
-  uint16_t ev = EGModuleRegistry::events(this);
-  if (ev & ~(1u << Display::TOPIC_POWER)) _sent_mark = 2;   // the rest are sends
-  if (ev & (1u << Display::TOPIC_POWER)) _next_render_due = now;   // lit or dark
+  take_events(now);
   if (!due_every(now, _next_render_due, frame_ms())) {
     next_frame(now);
     return;
   }
+  draw_frame(now);
+}
+
+void SSD1306Display::take_events(unsigned long now) {
+  if (oled_page > OLED_PAGES) oled_page = PAGE_MAIN;
+  if (oled_page != _last_page) page_changed(now);
+  if (oled_page == PAGE_SAVER) display.wake(now);
+  uint16_t ev = EGModuleRegistry::events(this);
+  if (ev & ~(1u << Display::TOPIC_POWER)) _sent_mark = 2;   // the rest are sends
+  if (ev & (1u << Display::TOPIC_POWER)) _next_render_due = now;   // lit or dark
+}
+
+void SSD1306Display::draw_frame(unsigned long now) {
   if (!awake(now)) return;
   uint8_t dirty = render(now);
   if (dirty != DR_NONE && _present) queue_rows(dirty);
@@ -541,11 +548,14 @@ void SSD1306Display::page_two_full() {
   drawStrP(16, 17, ipStr);
   int uptime_y = 32;
 #ifdef ESPG_HV_ADC
-  drawStrP(0, uptime_y, PSTR("HV:"));
-  char hvBuf[12];
-  format_f(hvBuf, sizeof(hvBuf), hv.hvReading.get());
-  drawStrP(20, uptime_y, hvBuf);
-  uptime_y = 47;
+  EGMeasureIter hv(0xFF, false, M_HV);
+  if (hv.next()) {
+    drawStrP(0, uptime_y, PSTR("HV:"));
+    char hvBuf[12];
+    format_f(hvBuf, sizeof(hvBuf), (float)hv.value().i);
+    drawStrP(20, uptime_y, hvBuf);
+    uptime_y = 47;
+  }
 #endif
   drawStrP(0, uptime_y, DeviceInfo::uptimeString());
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -746,7 +756,7 @@ void SSD1306Display::fx(unsigned long now) {
 void SSD1306Display::redraw(unsigned long now) {
   oled_last_update = 0;
   _send_rows_left = 0;
-  _next_render_due = 0;
+  _next_render_due = now;
   loop(now);
 }
 
@@ -1187,7 +1197,7 @@ void SSD1306Display::endOTABanner() {
   if (!_ota_lock) return;
   _ota_lock = false;
   oled_last_update = 0;
-  _next_render_due = 0;
+  _next_render_due = fast_millis();
   EGModuleRegistry::every(this, tick_ms());
 }
 

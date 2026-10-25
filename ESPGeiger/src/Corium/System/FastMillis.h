@@ -31,10 +31,23 @@ static inline uint32_t fast_millis() { return _fast_ms_counter; }
 // at or past, wrap-safe, any unit
 static inline bool reached(uint32_t now, uint32_t at) { return (int32_t)(now - at) >= 0; }
 
+// reached, or more than max off: one left 24.8 d behind reads as ahead
+static inline bool reached_max(uint32_t now, uint32_t at, uint32_t max) {
+  return reached(now, at) || at - now > max;
+}
+
 // at or past, then next ms from now
 static inline bool due_every(uint32_t now, uint32_t& at, uint32_t ms) {
   if (!reached(now, at)) return false;
   at = now + ms;
+  return true;
+}
+
+// ms or more since last, last on by whole ms so the phase holds
+static inline bool due_steps(uint32_t now, uint32_t& last, uint32_t ms) {
+  uint32_t gone = now - last;
+  if (gone < ms) return false;
+  last += gone / ms * ms;
   return true;
 }
 
@@ -50,6 +63,18 @@ struct Deadline {
   void clear() { at = 0; }
   bool armed() const { return at != 0; }
   bool due(uint32_t now) const { return at != 0 && reached(now, at); }
+};
+
+// fresh() under ms after mark(), then stale till the next mark,
+// so a look once a wrap (49 days) keeps an old stamp from coming back
+struct Stamp {
+  uint32_t at = 0;   // 0 = never
+  void mark(uint32_t now) { at = now ? now : now - 1; }
+  void clear() { at = 0; }
+  bool fresh(uint32_t now, uint32_t ms) {
+    if (at && now - at >= ms) at = 0;
+    return at != 0;
+  }
 };
 
 #endif

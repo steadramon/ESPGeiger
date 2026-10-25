@@ -63,6 +63,7 @@ constexpr uint32_t RTC_STASH_S     = 30;
 constexpr uint32_t LIFETIME_SAVE_S = 6 * 3600;
 constexpr uint16_t PULSE_RING_SIZE = 256;
 constexpr uint16_t PULSE_RING_MASK = PULSE_RING_SIZE - 1;
+constexpr uint32_t PULSE_AGE_MAX_US = 70UL * 60UL * 1000000UL;   // under the 71.6 min wrap
 static_assert((PULSE_RING_SIZE & PULSE_RING_MASK) == 0, "must be power of 2");
 volatile uint32_t* s_pulse_ring   = nullptr;
 volatile uint16_t  s_pulse_head   = 0;
@@ -77,6 +78,11 @@ void ensure_pulse_ring() {
   if (s_pulse_ring) return;
   s_pulse_ring = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
   if (!s_pulse_ring) Log::console(PSTR("Counter: pulse ring alloc failed"));
+}
+
+// past the 32 bit wrap
+inline uint64_t all_clicks(unsigned long rollover, unsigned long clicks) {
+  return ((uint64_t)rollover << 32) + clicks;
 }
 }  // namespace
 
@@ -130,14 +136,25 @@ void EG_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
   IsrLock::leave_isr(s_pulse_mux);
 }
 
+// under the lock; looked at each second, an age never reaches the us wrap
+static uint16_t drop_old(uint16_t head, uint32_t now_us) {
+  uint16_t count = s_pulse_count;
+  while (count && now_us - s_pulse_ring[(head - count) & PULSE_RING_MASK] > PULSE_AGE_MAX_US) count--;
+  s_pulse_count = count;
+  return count;
+}
+
 bool Counter::snapshot_ring(RingSnapshot& s) const {
   if (!s_pulse_ring) { s.count = 0; return false; }
   IsrLock::enter(s_pulse_mux);
+  uint32_t now = micros();
   uint16_t head  = s_pulse_head;
-  uint16_t count = s_pulse_count;
+  uint16_t count = drop_old(head, now);
   if (count >= 2) {
     s.newest_us = s_pulse_ring[(head - 1)     & PULSE_RING_MASK];
     s.oldest_us = s_pulse_ring[(head - count) & PULSE_RING_MASK];
+    // quiet longer than the ring spans, no rate now
+    if (now - s.newest_us > s.newest_us - s.oldest_us) count = 0;
   }
   IsrLock::leave(s_pulse_mux);
   s.count = count;
@@ -220,7 +237,8 @@ uint32_t s_save_ctr       = 0;
 
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
 TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
-  bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s, (uint32_t)total_clicks);
+  bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s,
+                                         all_clicks(total_clicks_rollover, total_clicks));
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   cm = cm && !udp_rx()->heard();
 #endif
@@ -488,7 +506,7 @@ bool Counter::get_tube_alive() {
   if (udp_rx()->heard()) return true;
 #endif
   return tube_alive((uint32_t)DeviceInfo::uptime(), _last_count_up_s,
-                    (uint32_t)total_clicks);
+                    all_clicks(total_clicks_rollover, total_clicks));
 }
 
 int Counter::input_pin() {
@@ -505,7 +523,7 @@ bool Counter::counts_missing() {
 #else
   bool cm = CounterMaths::counts_missing((uint32_t)DeviceInfo::uptime(),
                                          _last_count_up_s,
-                                         (uint32_t)total_clicks);
+                                         all_clicks(total_clicks_rollover, total_clicks));
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   cm = cm && !udp_rx()->heard();
 #endif
@@ -531,13 +549,15 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
   // 0 = uncapped
   if (!s_pulse_ring) return 0.0f;
   IsrLock::enter(s_pulse_mux);
+  uint32_t now = micros();
   uint16_t head  = s_pulse_head;
-  uint16_t count = s_pulse_count;
-  uint32_t newest = 0, oldest = 0;
+  uint16_t count = drop_old(head, now);
+  uint32_t newest = s_pulse_ring[(head - 1) & PULSE_RING_MASK];
+  uint32_t oldest = newest;
   uint16_t take = 0;
+  // quiet past the window, none in it
+  if (max_age_us && now - newest > max_age_us) count = 0;
   if (count >= 2) {
-    newest = s_pulse_ring[(head - 1) & PULSE_RING_MASK];
-    oldest = newest;
     take = 1;
     uint16_t cap = (max_pulses && max_pulses < count) ? max_pulses : count;
     for (uint16_t i = 2; i <= cap; i++) {

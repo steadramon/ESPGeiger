@@ -20,6 +20,7 @@
 #include "ArduinoOTA.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/IgmpRefresh.h"
 #include "Corium/System/Lifecycle.h"
@@ -73,6 +74,9 @@ void ArduinoOTAModule::begin() {
     else                                 Log::console(PSTR("OTA: error %u"), error);
   });
 
+  // core copies it, before begin() only, so a new one needs a restart
+  const char* pass = EGPrefs::getString("sys", EG_K_WEB_PASS);
+  if (pass && pass[0]) ArduinoOTA.setPassword(pass);
   ArduinoOTA.setHostname(DeviceInfo::hostname());
   ArduinoOTA.begin();
   MDNS.addService("http",   "tcp", 80);

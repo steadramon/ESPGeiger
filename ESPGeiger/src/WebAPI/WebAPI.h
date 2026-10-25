@@ -91,7 +91,7 @@ class WebAPI : public EGSender {
     uint8_t pub_k[2 * WEBAPI_PRIV_LEN] = {0};
     char pub_k_64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = {};  // base64, no padding
     static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
-    unsigned long lastPing = 0;
+    uint32_t lastPing = 0;
     uint32_t nextHandshake = 0;   // 0 = not set
     uint32_t _hs_backoff_ms = WEBAPI_BACKOFF_MS;
     void handshakeAt(uint32_t at);

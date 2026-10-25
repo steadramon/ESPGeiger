@@ -49,6 +49,8 @@ public:
   static void banner(const char* logData, ...);  // raw serial, no timestamp
   // line idx ending '\1', at most cap-1 bytes; 0 if gone
   static size_t copyLog(uint32_t idx, char* out, size_t cap);
+  // lines idx..end-1 ending '\n', whole lines in one pass, idx moves on; idx 0 = all, over 255 = none
+  static size_t copySince(uint32_t* idx, uint8_t end, char* out, size_t cap);
   static char getLogIdx();
   static void setSerialLogLevel(bool level);
   static bool serialOn() { return serialLog; }

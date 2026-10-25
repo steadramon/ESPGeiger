@@ -151,9 +151,7 @@ void WebAPI::pingIfDue(unsigned long now) {
     if (_ping_off == 0xFFFFFFFFu)
       _ping_off = SendSlot::initial_offset(name(), pingIntervalMs);
     lastPing = SendSlot::ping_from_offset(_ping_off, now, pingIntervalMs);
-  } else if ((long)(now - lastPing) >= (long)pingIntervalMs) {
-    while ((long)(now - lastPing) >= (long)pingIntervalMs) lastPing += pingIntervalMs;
-
+  } else if (due_steps(now, lastPing, pingIntervalMs)) {
     const bool healthDue = (healthPostCounter == 0);
     if (_mode == 2 || healthDue) {
       postMeasurement(_mode != 2);
@@ -200,7 +198,7 @@ void WebAPI::loop(unsigned long now) {
     if (first)
       _hs_off = SendSlot::initial_offset(PSTR("wapi.hs"), pingIntervalMs);
     handshakeAt((uint32_t)now + (first && crash_to_send() ? 0 : _hs_off));
-  } else if (reached(now, nextHandshake)) {
+  } else if (reached_max(now, nextHandshake, WEBAPI_HANDSHAKE_MS)) {
     doHandshake();
   } else if (station_id != 0) {
     pingIfDue(now);
@@ -689,38 +687,16 @@ static const char FORGET_BODY[] PROGMEM =
   "<p>A delete request has been sent to the server. Sharing is now <b>Off</b>.</p>"
   "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
 
-// not atof, too big
-static bool validDeg(const char* s, int maxWhole) {
-  if (!s || !*s) return false;
-  if (*s == '-' || *s == '+') s++;
-  int w = 0; bool any = false;
-  while (*s >= '0' && *s <= '9') {
-    w = w * 10 + (*s++ - '0'); any = true;
-    if (w > maxWhole) return false;
-  }
-  if (!any) return false;
-  if (*s == '.') { s++; while (*s >= '0' && *s <= '9') s++; }
-  return !*s;
-}
-
-// false = a field refused, rest still saved
+// false = a field refused, rest still saved; the pref rows are the rule
 static bool saveSettings(EGHttpRequest& req) {
   bool ok = true;
   // arg() reuses its buffer
   const char* m = req.arg(F("m"));
   if (m && !EGPrefs::put("webapi", EG_K_MODE, m)) ok = false;
   const char* lat = req.arg(FPSTR(EG_K_LAT));
-  if (lat) {
-    if (!*lat) EGPrefs::put("webapi", EG_K_LAT, "0");
-    else if (validDeg(lat, 90)) EGPrefs::put("webapi", EG_K_LAT, lat);
-    else ok = false;
-  }
+  if (lat && !EGPrefs::put("webapi", EG_K_LAT, *lat ? lat : "0")) ok = false;
   const char* lon = req.arg(FPSTR(EG_K_LON));
-  if (lon) {
-    if (!*lon) EGPrefs::put("webapi", EG_K_LON, "0");
-    else if (validDeg(lon, 180)) EGPrefs::put("webapi", EG_K_LON, lon);
-    else ok = false;
-  }
+  if (lon && !EGPrefs::put("webapi", EG_K_LON, *lon ? lon : "0")) ok = false;
   EGPrefs::commit();
   return ok;
 }

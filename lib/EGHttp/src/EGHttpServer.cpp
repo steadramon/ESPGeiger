@@ -24,6 +24,7 @@
 #include <EGStr.h>
 #include <string.h>
 #include <stdlib.h>
+#include <new>
 
 static const char CL0_CRLF[]      PROGMEM = "Content-Length: 0\r\n";
 static const char CLOSE_NOSNIFF[] PROGMEM = "Connection: close\r\nX-Content-Type-Options: nosniff\r\n";
@@ -82,6 +83,10 @@ static void write_status(EGTcpClient* c, PGM_P r, size_t len) {
 #endif
 static const uint32_t EGHTTP_SEND_BUDGET_MS = 2500;
 
+static bool eghttp_late(const EGHttpServer::Slot* s) {
+  return (int32_t)(EGClock::now() - s->due) >= 0;
+}
+
 static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
   if (!s || s->send_aborted) return false;
   size_t sent = 0;
@@ -91,6 +96,15 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     if (!s->client || !s->client->connected()) {
 #ifdef EGHTTP_DEBUG
       Serial.printf_P(PSTR("[EGHttp] send aborted, client gone after %u/%u B\n"),
+                      (unsigned)sent, (unsigned)len);
+#endif
+      s->send_aborted = true;
+      return false;
+    }
+    // acks a little at a time still hold the loop
+    if (eghttp_late(s)) {
+#ifdef EGHTTP_DEBUG
+      Serial.printf_P(PSTR("[EGHttp] send aborted, past deadline at %u/%u B\n"),
                       (unsigned)sent, (unsigned)len);
 #endif
       s->send_aborted = true;
@@ -289,12 +303,28 @@ void EGHttpServer::begin(uint16_t port) {
       _routeCap = _routeCount;
     }
   }
-  _server = new EGTcpServer();
+  _server = new (std::nothrow) EGTcpServer();
+  if (!_server) {
+    Serial.printf_P(PSTR("[EGHttp] no memory for the server\n"));
+    return;
+  }
 #ifdef ESP32
   _server->setMaxClients(EGHTTP_MAX_INFLIGHT);
 #endif
   _server->onAccept([this](EGTcpClient* c) { onClient(c); });
-  _server->begin(port);
+  if (_server->begin(port)) return;
+  Serial.printf_P(PSTR("[EGHttp] listen on %u failed, retrying\n"), (unsigned)port);
+  _tickWanted = true;
+}
+
+// no memory at begin(), once a second till it listens
+void EGHttpServer::relisten() {
+  if (!_server || _server->listening()) return;
+  _tickWanted = true;
+  uint32_t now = EGClock::now();
+  if ((int32_t)(now - _relistenAt) < 0) return;
+  _relistenAt = now + 1000;
+  _server->begin(_server->port());
 }
 
 bool EGHttpServer::hasActiveClients() const {
@@ -347,11 +377,10 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(EGTcpClient* c) {
   for (uint8_t i = 0; i < _maxClients; i++) {
     Slot* s = &_slots[i];
     if (s->state != IDLE || s->client) continue;
-    if (!s->buf) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
-    if (!s->buf) return nullptr;
     clear_slot(s);
     s->client = c;
     s->state  = RECEIVING;
+    s->due    = EGClock::now() + EGHTTP_REQ_MS;
     return s;
   }
   return nullptr;
@@ -396,12 +425,14 @@ void EGHttpServer::abortStream(Slot* s) {
 }
 
 void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
-  c->setIdleTimeout(60000);
+  c->setIdleTimeout(EGHTTP_REQ_MS);
   c->setAckTimeout(5000);
   c->onSent([this, s](size_t) { sentMore(s); });
   c->onData([this, s](const uint8_t* data, size_t len) {
     if (s->state != RECEIVING) return;
     takeData(s, data, len);
+    // still not all in, a trickle
+    if (s->state == RECEIVING && !s->streaming && eghttp_late(s)) drop(s);
     _tickWanted = true;
   });
   c->onClose([this, s](int8_t err) {
@@ -475,6 +506,12 @@ void EGHttpServer::takeData(Slot* s, const uint8_t* data, size_t len) {
 }
 
 void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
+  // first byte, not accept
+  if (!s->buf) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
+  if (!s->buf) {
+    sendStatusAndClose(s, R503_RETRY1, sizeof(R503_RETRY1) - 1);
+    return;
+  }
   if (s->len + len > EGHTTP_REQ_BUF) {
     Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
                     (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
@@ -521,10 +558,12 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
     sendStatusAndClose(s, R503_RETRY5, sizeof(R503_RETRY5) - 1);
     return;
   }
-  uint8_t* buf = (uint8_t*)malloc(STREAM_BUF_SIZE);
+  // a small form needs no whole window, takeStream stops at Content-Length
+  size_t cap = s->contentLength < STREAM_BUF_SIZE ? s->contentLength : STREAM_BUF_SIZE;
+  uint8_t* buf = (uint8_t*)malloc(cap ? cap : 1);
   if (!buf) {
     Serial.printf_P(PSTR("[EGHttp] stream buf alloc failed (need %u)\n"),
-                    (unsigned)STREAM_BUF_SIZE);
+                    (unsigned)cap);
     sendStatusAndClose(s, R503, sizeof(R503) - 1);
     return;
   }
@@ -539,6 +578,8 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   _streamOwner  = s;
   s->ack_paused = true;
   s->streaming  = true;
+  s->due        = EGClock::now() + EGHTTP_REQ_MS;
+  s->client->setIdleTimeout(60000);
   s->client->ackLater();
 }
 
@@ -615,7 +656,12 @@ void EGHttpServer::drainStream(Slot* s) {
     deliverBodyEvent(s, BODY_DATA, (const char*)_streamBuf, toDeliver);
     // a second ackLater() loses bytes
     if (s->client) s->client->ack(toDeliver);
+    size_t was = s->bodyAcked;
     s->bodyAcked += toDeliver;
+    // a window moved, more time
+    if (was / STREAM_BUF_SIZE != s->bodyAcked / STREAM_BUF_SIZE) {
+      s->due = EGClock::now() + EGHTTP_REQ_MS;
+    }
     size_t leftover = (_streamLen > toDeliver) ? _streamLen - toDeliver : 0;
     if (leftover > 0) {
       memmove(_streamBuf, _streamBuf + toDeliver, leftover);
@@ -628,6 +674,8 @@ void EGHttpServer::drainStream(Slot* s) {
     deliverBodyEvent(s, BODY_END, nullptr, 0);
     s->state = READY;
     releaseStream();
+  } else if (eghttp_late(s)) {
+    drop(s);
   }
 }
 
@@ -691,6 +739,16 @@ bool EGHttpServer::authorized(const Slot* s) const {
          at_line_end(p[vlen]);
 }
 
+// a value arg() can't hold reads as absent, so none get past
+bool EGHttpServer::argsFit(const Slot* s, const EGHttpRequest& req) const {
+  if (!eghttp_form_fits(req._query, req._queryLen, EGHTTP_ARG_MAX + 1)) return false;
+  // console text, not a form
+  const char* ct = eghttp_find_header(s->buf, s->headerEnd, PSTR("Content-Type:"));
+  while (ct && (*ct == ' ' || *ct == '\t')) ct++;
+  if (ct && strncasecmp_P(ct, PSTR("text/plain"), 10) == 0) return true;
+  return eghttp_form_fits(req._body, req._bodyLen, EGHTTP_ARG_MAX + 1);
+}
+
 static const char HEAD_401[] PROGMEM =
   "HTTP/1.1 401 Unauthorized\r\n"
   "WWW-Authenticate: Basic realm=\"%s\"\r\n"
@@ -717,6 +775,10 @@ void EGHttpServer::dispatch(Slot* s) {
 
   if (_authEnabled && !authorized(s)) {
     sendUnauthorized(s);
+    return;
+  }
+  if (!argsFit(s, req)) {
+    yield_write_pgm(s, R400, sizeof(R400) - 1);
     return;
   }
 
@@ -749,6 +811,7 @@ void EGHttpServer::dropChunkAcc(Slot* s) {
 void EGHttpServer::tick() {
   if (!_tickWanted) return;
   _tickWanted = false;
+  relisten();
 
   for (auto& s : _slots) {
     if (s.delete_pending) {
@@ -774,6 +837,7 @@ void EGHttpServer::reclaimSlot(Slot* s) {
 void EGHttpServer::respond(Slot* s) {
   s->responded = true;
   s->state = RESPONDING;
+  s->due = EGClock::now() + EGHTTP_SEND_MS;
   dispatch(s);
   if (!s->tailLen || !s->client || s->send_aborted) {
     finish(s);
@@ -785,14 +849,26 @@ void EGHttpServer::respond(Slot* s) {
 }
 
 void EGHttpServer::finish(Slot* s) {
+  // a cut reply, nothing left worth a linger
+  if (s->send_aborted) {
+    drop(s);
+    return;
+  }
   if (s->client) s->client->close();
+  markDone(s);
+}
+
+// RST frees the pcb now
+void EGHttpServer::drop(Slot* s) {
+  if (s->client) s->client->abort();
   markDone(s);
 }
 
 void EGHttpServer::sentMore(Slot* s) {
   if (!s->tailLen) return;
-  send_tail(s);
-  if (!s->tailLen && s->state == RESPONDING) finish(s);
+  if (eghttp_late(s)) s->send_aborted = true;
+  else send_tail(s);
+  if ((!s->tailLen || s->send_aborted) && s->state == RESPONDING) finish(s);
 }
 
 // ---------- EGHttpRequest ----------

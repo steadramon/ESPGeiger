@@ -92,6 +92,7 @@ private:
   const char* path(const char* suffix);   // suffix flash
   void announce_mdns();
   void stats(uint32_t now);
+  void drain();
   void bind(uint32_t now);
 
   WiFiUDP*  _udp = nullptr;

@@ -134,6 +134,7 @@ const __FlashStringHelper* EnvSensor::chipName() const {
 }
 
 void EnvSensor::loop(unsigned long /*now*/) {
+  remoteFresh();   // stale stays stale over the wrap
   if (_drv_flags == 0) {
     tryDetect();
     return;
@@ -240,8 +241,7 @@ float EnvSensor::tempUser() const {
 }
 
 bool EnvSensor::remoteFresh() const {
-  if (_r_last_ms == 0) return false;
-  return (uint32_t)(fast_millis() - _r_last_ms) < ENV_REMOTE_TTL_MS;
+  return _r_last.fresh(fast_millis(), ENV_REMOTE_TTL_MS);
 }
 
 // off the wire, inf reads as missing
@@ -253,7 +253,8 @@ void EnvSensor::setRemote(float t, float h, float p) {
   _r_t = or_nan(t);
   _r_h = or_nan(h);
   _r_p = or_nan(p);
-  _r_last_ms = fast_millis();
+  _r_last.mark(fast_millis());
+  EGModuleRegistry::due_in(this, ENV_REMOTE_TTL_MS);   // looks once stale
 }
 
 static bool env(float f, EGMValue* v) {

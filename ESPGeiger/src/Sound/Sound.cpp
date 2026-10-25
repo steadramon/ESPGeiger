@@ -223,7 +223,7 @@ void Sound::click(uint32_t now) {
   const EGTune::Step& c = _click;
   if (c.op == EGTune::PULSE) Buzzer::pulse(now, c.ms * 1000);
   else if (c.op == EGTune::BURST) Buzzer::burst(now, c.hz ? c.hz : BURST_HZ, c.ms);
-  else if (c.op == EGTune::TONE) Buzzer::tone(now, c.hz, (uint32_t)c.ms * c.hz / 1000, c.duty ? c.duty : _duty);
+  else if (c.op == EGTune::TONE) Buzzer::tone(now, c.hz, Buzzer::tone_cycles(c.ms, c.hz), c.duty ? c.duty : _duty);
 }
 
 // up, not down

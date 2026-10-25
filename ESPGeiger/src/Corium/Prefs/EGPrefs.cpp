@@ -52,6 +52,7 @@ struct GroupShadow {
   const char**       values;
   uint32_t           heap_mask;
   bool               dirty;
+  bool               stored;
 };
 
 const char EG_K_DNS[]          PROGMEM = "dns";
@@ -273,6 +274,7 @@ bool write_group(GroupShadow& gs) {
   }
   bool ok = s_storage.writeGroup(gs.group->module_id, buf, total);
   free(buf);
+  if (ok) gs.stored = true;
   return ok;
 }
 
@@ -457,7 +459,7 @@ void add_group(EGModule* m, const EGPrefGroup* g) {
     const char* dv = g->prefs.default_val(j);
     gs.values[j] = dv ? dv : "";
   }
-  s_storage.readGroup(g->module_id, load_record_cb, &gs);
+  gs.stored = s_storage.readGroup(g->module_id, load_record_cb, &gs);
 
   Log::debug(PSTR("prefs: %s (%u keys, v%u)"),
              g->module_id, (unsigned)g->count.get(), (unsigned)g->version.get());
@@ -642,6 +644,11 @@ bool EGPrefs::group_enabled(const EGPrefGroup* g) {
 
 void EGPrefs::request_restart() { s_restart_pending = true; }
 bool EGPrefs::restart_pending() { return s_restart_pending; }
+
+bool EGPrefs::stored(const char* module) {
+  GroupShadow* gs = find_group(module);
+  return gs && gs->stored;
+}
 
 size_t EGPrefs::group_count() {
   return s_group_count;

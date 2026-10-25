@@ -29,3 +29,7 @@ bool eghttp_form_find(const char* region, size_t len, const char* name,
 // Same, decoded in place for big values. region needs len + 1 bytes for the
 // NUL. nullptr when absent or on a NUL byte.
 char* eghttp_form_take(char* region, size_t len, const char* name, size_t* out_len);
+
+// True when every value would decode in cap, so find() never takes a
+// too long or NUL value for absent.
+bool eghttp_form_fits(const char* region, size_t len, size_t cap);

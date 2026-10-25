@@ -25,6 +25,7 @@
 #ifndef CONSOLE_LINE_MAX
 #define CONSOLE_LINE_MAX 64
 #endif
+static_assert(CONSOLE_LINE_MAX < 256, "line pos is 8 bit");
 
 // app commands, Corium's own sit in a fixed table
 #ifndef EG_MAX_CMDS

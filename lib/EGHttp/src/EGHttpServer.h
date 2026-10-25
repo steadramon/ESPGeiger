@@ -50,6 +50,14 @@
   // user:password bytes
   #define EGHTTP_AUTH_MAX 64
 #endif
+#ifndef EGHTTP_REQ_MS
+  // request in by then; a streamed body moves a window per this
+  #define EGHTTP_REQ_MS 10000
+#endif
+#ifndef EGHTTP_SEND_MS
+  // whole response, the loop waits on it
+  #define EGHTTP_SEND_MS 15000
+#endif
 #ifndef EGHTTP_MAX_INFLIGHT
   // lwIP drops SYNs past this
   #ifdef ESP32
@@ -186,6 +194,7 @@ class EGHttpServer {
       size_t chunkAccCap = 0;
       PGM_P  tail        = nullptr;   // static body left, onSent sends it
       size_t tailLen     = 0;
+      uint32_t due       = 0;         // request, then response deadline
     };
 
   private:
@@ -223,6 +232,7 @@ class EGHttpServer {
     Slot*             _streamOwner = nullptr;
 
     bool              _tickWanted = false;
+    uint32_t          _relistenAt = 0;
 
 #ifdef ESP32
     char*  _dispatchChunkAcc    = nullptr;
@@ -248,6 +258,7 @@ class EGHttpServer {
     }
     inline uint8_t findRoute(const char* path, EGHttpRequest::Method method) const;
 
+    void relisten();
     void onClient(EGTcpClient* c);
     void onClosed(Slot* s);
     void takeData(Slot* s, const uint8_t* data, size_t len);
@@ -261,11 +272,13 @@ class EGHttpServer {
     inline void reclaimSlot(Slot* s);
     inline void respond(Slot* s);
     void finish(Slot* s);
+    void drop(Slot* s);
     void sentMore(Slot* s);
     inline void claimChunkAcc(Slot* s);
     void dropChunkAcc(Slot* s);
     inline bool readRequest(Slot* s, EGHttpRequest& req);
     inline bool authorized(const Slot* s) const;
+    inline bool argsFit(const Slot* s, const EGHttpRequest& req) const;
     void sendUnauthorized(Slot* s);
     void dispatch(Slot* s);
 };

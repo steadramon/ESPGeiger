@@ -18,6 +18,7 @@
 */
 #include "DeviceInfo.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/SystemPrefs.h"
 #include "Corium/Logger/Logger.h"
 #include "Uptime.h"
 #include "Lifecycle.h"
@@ -26,6 +27,7 @@
 #include "Corium/Util/Fnv.h"
 #include "Corium/Util/MathUtil.h"
 #include "Fs.h"
+#include "KeyStore.h"
 
 #ifdef ESP32
 #include <math.h>
@@ -186,6 +188,7 @@ void DeviceInfo::factoryReset() {
   Fs::remove(F(EGPREFS_LEGACY_FILE));   // legacy import file
 #endif
   Wifi::clearSavedCreds();
+  KeyStore::clear(WEB_PASS_SLOT);
 }
 
 const char* DeviceInfo::friendlyName() { return s_friendlyname; }

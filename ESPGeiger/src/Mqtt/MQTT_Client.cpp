@@ -545,20 +545,22 @@ static uint32_t left_s(unsigned long last, uint16_t interval, unsigned long now)
 // the tick's old work, only when a timer is due
 void MQTT_Client::timers(unsigned long now)
 {
-  if (!reached(now, _due_ms)) return;
-  second(now / 1000);
-  _due_ms = (now / 1000 + nextDue(now / 1000)) * 1000;
+  if (!reached_max(now, _due_ms, DUE_MAX_MS)) return;
+  // uptime, ms / 1000 wraps at 49.7 d
+  unsigned long up_s = (unsigned long)DeviceInfo::uptime();
+  second(up_s);
+  _due_ms = (now / 1000 + nextDue(now, up_s)) * 1000;
 }
 
 // seconds to the first timer that can fire, at least 1
-uint32_t MQTT_Client::nextDue(unsigned long now)
+uint32_t MQTT_Client::nextDue(unsigned long now_ms, unsigned long now)
 {
   if (!mqttEnabled) return 3600;   // begin() wakes it
   if (!s_mq.connected()) {
     // each second while connecting, as the tick was
     if (!lastConnectionAttempt || s_mq.state() == EGMqtt::CONNECTING) return 1;
     uint32_t at = lastConnectionAttempt + reconnect_backoff_ms(reconnectAttempts);
-    long s = (long)((at + 999) / 1000 - now);
+    long s = (long)((at + 999) / 1000 - now_ms / 1000);
     return s > 0 ? (uint32_t)s : 1;
   }
   if (_reanchor) return 1;
@@ -568,7 +570,7 @@ uint32_t MQTT_Client::nextDue(unsigned long now)
 #ifdef MQTTAUTODISCOVER
   if (_hass_retrigger) return 1;
   if (_hass_next.armed()) {
-    long h = (long)(_hass_next.at - (unsigned long)DeviceInfo::uptime());
+    long h = (long)(_hass_next.at - now);
     if (h < (long)s) s = h > 0 ? (uint32_t)h : 1;
   }
 #endif

@@ -20,6 +20,7 @@
 #define BOOT_HOOKS_H
 
 #include <Arduino.h>
+#include "Corium/System/BootButton.h"
 #include "Corium/System/FastMillis.h"
 
 #ifdef SSD1306_DISPLAY
@@ -36,7 +37,7 @@
 namespace BootHooks {
 
   // under 5s offline, 5s+ full reset (keeps /api.key)
-  enum class ButtonHold : uint8_t { NONE = 0, OFFLINE = 1, FULL_RESET = 2 };
+  using ButtonHold = BootButton::Hold;
 
   inline void displayWifiDisabled() {
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
@@ -74,15 +75,10 @@ namespace BootHooks {
 #endif
   }
 
-  inline void displayWipeCountdown(int s) {
+  // 0 = armed
+  inline void displayWipe(int s) {
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
     display.wipe(s);
-#endif
-  }
-
-  inline void displayWipeReady() {
-#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
-    display.wipe(0);
 #endif
   }
 
@@ -90,32 +86,10 @@ namespace BootHooks {
   inline ButtonHold checkStartupButtonHold() {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();
-    if (!pushbutton.isPressed()) return ButtonHold::NONE;
-
-    Serial.println(F("BOOT: button held - offline mode, hold 5s for factory reset"));
-    displayWifiDisabled();
-    uint32_t start = fast_millis();
-    int last_shown = 999;
-    bool wipe = false;
-
-    while (pushbutton.isPressed()) {
-      uint32_t held_ms = fast_millis() - start;
-      int remain = 5 - (int)(held_ms / 1000);
-      if (remain != last_shown) {
-        last_shown = remain;
-        if (remain >= 1) {
-          displayWipeCountdown(remain);
-        } else if (!wipe) {
-          wipe = true;
-          displayWipeReady();
-          Serial.println(F("BOOT: factory reset armed"));
-        }
-      }
-      delay(50);
-    }
-    delay(500);
-    displayDisableTimeout();
-    return wipe ? ButtonHold::FULL_RESET : ButtonHold::OFFLINE;
+    ButtonHold hold = BootButton::check([] { return pushbutton.isPressed(); },
+                                        displayWifiDisabled, displayWipe);
+    if (hold != ButtonHold::NONE) displayDisableTimeout();
+    return hold;
 #else
     return ButtonHold::NONE;
 #endif

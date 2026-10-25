@@ -28,7 +28,7 @@ namespace Clock {
   extern bool synced;
   extern unsigned long boot_epoch;
 
-  // Cached, mktime is slow
+  // Cached, localtime is slow
   extern int16_t tz_offset_min;
   void refresh_tz_offset_min();
 

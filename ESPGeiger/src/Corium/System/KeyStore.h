@@ -1,5 +1,5 @@
 /*
-  KeyStore.h - one small key kept outside LittleFS, so a format keeps it.
+  KeyStore.h - small keys kept outside LittleFS, so a format keeps them.
 
   Copyright (C) 2026 @steadramon
 
@@ -26,9 +26,10 @@
 // esp32 nvs, esp8266 the eeprom sector
 namespace KeyStore {
   static constexpr size_t MAX = 32;
-  bool read(uint8_t* out, size_t len);   // false = none, or not len bytes
-  bool write(const uint8_t* in, size_t len);
-  void clear();
+  static constexpr uint8_t SLOTS = 2;   // 0 = the key
+  bool read(uint8_t* out, size_t len, uint8_t slot = 0);   // false = none, or not len bytes
+  bool write(const uint8_t* in, size_t len, uint8_t slot = 0);
+  void clear(uint8_t slot = 0);
 }
 
 #endif

@@ -210,6 +210,8 @@ public:
   static void reset_all(bool keep_network = false);
   static void request_restart();  // from on_prefs_saved
   static bool restart_pending();  // the last commit needs one
+  // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
+  static bool stored(const char* module);
   // enable_key unset, "0" or "-1" (no pin) = off, no key = on
   static bool group_enabled(const EGPrefGroup* g);
 

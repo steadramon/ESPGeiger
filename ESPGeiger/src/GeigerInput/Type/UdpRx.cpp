@@ -34,6 +34,7 @@
 #include "Corium/Util/MathUtil.h"
 #include <WiFiUdp.h>
 #include <string.h>
+#include <ctype.h>
 
 static GeigerUdpRx* s_udprx_instance = nullptr;
 
@@ -77,7 +78,8 @@ void GeigerUdpRx::readPrefs() {
     Log::console(PSTR("UdpRx: pin %s is not %u chars, ignored"), pin, (unsigned)BLIP_ID_LEN);
     n = 0;
   }
-  memcpy(_pinned_chipid, pin, n);
+  // ids are sent lower case
+  for (size_t i = 0; i < n; i++) _pinned_chipid[i] = tolower((unsigned char)pin[i]);
   _pinned_chipid[n] = '\0';
 
   const char* g = EGPrefs::getString("counter", EG_K_UDPRX_GROUP);
@@ -195,29 +197,42 @@ GeigerUdpRx::ProducerRecord* GeigerUdpRx::findOrAllocProducer(const char* chipid
   return &_producers[slot];
 }
 
+// a flood can't log every packet
+bool GeigerUdpRx::logOk() {
+  uint32_t now = fast_millis();
+  if (now - _log_at >= 60000UL) {
+    _log_at = now;
+    _log_left = UDPRX_LOG_MAX;
+  }
+  if (!_log_left) return false;
+  _log_left--;
+  return true;
+}
+
 // <= 1024 now, to 65535 drained, more = resync
 uint32_t GeigerUdpRx::creditForwardGap(const ProducerRecord* p, uint32_t producer_counter,
                                        uint32_t producer_ts) {
   uint32_t gap = producer_counter - p->last_counter - 1;
   if (gap <= 1024) return gap;
-  if (gap <= 65535) {
+  if (gap <= UDPRX_DRAIN_MAX) {
     uint32_t dt_ms = producer_ts - p->last_ts_ms;
     if (dt_ms > 100 && dt_ms < 60000) {
       _drain_pending += (float)gap;
+      if (_drain_pending > UDPRX_DRAIN_MAX) _drain_pending = UDPRX_DRAIN_MAX;
       float r = (float)gap * 1000.0f / (float)dt_ms;
       if (r > _drain_rate) _drain_rate = r;
       _draining = true;
     } else {
       _resync_count++;
-      Log::console(PSTR("UdpRx: %s drain rejected, gap=%u dt=%ums"),
-                   p->chipid, (unsigned)gap, (unsigned)dt_ms);
+      if (logOk()) Log::console(PSTR("UdpRx: %s drain rejected, gap=%u dt=%ums"),
+                                p->chipid, (unsigned)gap, (unsigned)dt_ms);
     }
     return 0;
   }
   _resync_count++;
-  Log::console(PSTR("UdpRx: %s resync, gap=%u (counter %u -> %u)"),
-               p->chipid, (unsigned)gap,
-               (unsigned)p->last_counter, (unsigned)producer_counter);
+  if (logOk()) Log::console(PSTR("UdpRx: %s resync, gap=%u (counter %u -> %u)"),
+                            p->chipid, (unsigned)gap,
+                            (unsigned)p->last_counter, (unsigned)producer_counter);
   return 0;
 }
 
@@ -228,9 +243,9 @@ bool GeigerUdpRx::producerRestarted(const ProducerRecord* p, uint32_t producer_c
   bool ts_reset = (int32_t)(producer_ts - p->last_ts_ms) < -60000;
   if (back > 1024 || ts_reset) {
     _resync_count++;
-    Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
-                 p->chipid,
-                 (unsigned)p->last_counter, (unsigned)producer_counter);
+    if (logOk()) Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
+                              p->chipid,
+                              (unsigned)p->last_counter, (unsigned)producer_counter);
     return true;
   }
   return false;

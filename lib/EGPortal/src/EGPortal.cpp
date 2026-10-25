@@ -192,6 +192,14 @@ static int find_ssid(const EGPortal::ScanEntry* out, size_t count, const char* s
   return -1;
 }
 
+static size_t weakest(const EGPortal::ScanEntry* out, size_t count) {
+  size_t at = 0;
+  for (size_t j = 1; j < count; j++) {
+    if (out[j].rssi < out[at].rssi) at = j;
+  }
+  return at;
+}
+
 // strongest first
 static void sort_by_rssi(EGPortal::ScanEntry* out, size_t count) {
   for (size_t i = 1; i < count; i++) {
@@ -238,9 +246,16 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
       if (rssi > out[existing].rssi) out[existing].rssi = rssi;
       continue;
     }
-    if (count >= maxOut) continue;
+    // full: the weakest goes, a tie stays
+    size_t at = count;
+    if (count >= maxOut) {
+      at = weakest(out, count);
+      if (rssi <= out[at].rssi) continue;
+    } else {
+      count++;
+    }
 
-    ScanEntry& e = out[count++];
+    ScanEntry& e = out[at];
     memcpy(e.ssid, s, sizeof(s));
     e.rssi = rssi;
     e.enc  = (uint8_t)WiFi.encryptionType(i);

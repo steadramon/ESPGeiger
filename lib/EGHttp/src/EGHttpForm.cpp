@@ -81,6 +81,24 @@ bool eghttp_form_find(const char* region, size_t len, const char* name,
   return find_value(region, len, name, &v, &v_end) && decode_value(v, v_end, out, cap);
 }
 
+bool eghttp_form_fits(const char* region, size_t len, size_t cap) {
+  if (!region) return true;
+  const char* p   = region;
+  const char* end = region + len;
+  while (p < end) {
+    const char* amp = (const char*)memchr(p, '&', (size_t)(end - p));
+    const char* seg_end = amp ? amp : end;
+    const char* eq = (const char*)memchr(p, '=', (size_t)(seg_end - p));
+    // as decode_value counts
+    size_t o = 0;
+    for (const char* q = eq ? eq + 1 : seg_end; q < seg_end;) {
+      if (next_byte(q, seg_end) == 0 || ++o >= cap) return false;
+    }
+    p = amp ? amp + 1 : end;
+  }
+  return true;
+}
+
 char* eghttp_form_take(char* region, size_t len, const char* name, size_t* out_len) {
   if (!region || !name) return nullptr;
   const char *v, *v_end;

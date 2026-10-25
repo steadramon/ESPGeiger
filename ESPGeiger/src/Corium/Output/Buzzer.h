@@ -73,6 +73,12 @@ inline uint16_t clamp_hz(uint16_t hz, const Limits& l) {
   return hz < l.min_hz ? l.min_hz : hz > l.max_hz ? l.max_hz : hz;
 }
 
+// cycles in ms at hz, capped before it's 16 bit
+inline uint16_t tone_cycles(uint16_t ms, uint16_t hz) {
+  uint32_t n = (uint32_t)ms * hz / 1000;
+  return n > MAX_CYCLES ? MAX_CYCLES : (uint16_t)n;
+}
+
 inline uint8_t cap_duty(uint8_t duty_pct, uint8_t max_pct) {
   return duty_pct > max_pct ? max_pct : duty_pct;
 }

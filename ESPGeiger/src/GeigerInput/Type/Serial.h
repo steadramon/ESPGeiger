@@ -40,9 +40,7 @@ class GeigerSerial final : public GeigerInput
     void secondTicker() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    bool isHealthy() const override {
-      return !fresh(fast_millis(), _last_drain, 60000);
-    }
+    bool isHealthy() const override { return _ok; }
   private:
     void pullSerial();
     char _serial_buffer[64];
@@ -57,7 +55,9 @@ class GeigerSerial final : public GeigerInput
     uint8_t _idle_ms = 4;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint8_t _bad_streak = 0;
-    unsigned long _last_drain = 0;
+    Stamp _line;   // good line
+    Stamp _drain;
+    bool _ok = false;
     unsigned long _last_drain_log = 0;
     void drainPort();
     bool _use_cps = false;

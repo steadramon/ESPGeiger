@@ -26,6 +26,7 @@
 #include <BoschTHP.h>
 #include <AsairAHT.h>
 #include "Corium/Module/EGModule.h"
+#include "Corium/System/FastMillis.h"
 #endif
 
 #define ENV_SAMPLE_MS    10000UL
@@ -110,7 +111,7 @@ class EnvSensor : public EGModule {
     float    _r_t = NAN;
     float    _r_h = NAN;
     float    _r_p = NAN;
-    uint32_t _r_last_ms = 0;
+    mutable Stamp _r_last;
 };
 
 #else  // DISABLE_ENVSENSOR

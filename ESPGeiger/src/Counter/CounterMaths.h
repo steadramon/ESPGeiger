@@ -142,7 +142,7 @@ class CounterMaths {
     }
 
     bool tube_alive(uint32_t uptime_s, uint32_t last_count_up_s,
-                    uint32_t total_clicks) const {
+                    uint64_t total_clicks) const {
       if (_ratio <= 0.0f) return true;
       uint32_t silence = uptime_s - last_count_up_s;
       if (silence < _tube_timeout_s) return true;
@@ -153,7 +153,7 @@ class CounterMaths {
     }
 
     // capped at tube timeout
-    uint32_t missing_threshold_s(uint32_t uptime_s, uint32_t total_clicks) const {
+    uint32_t missing_threshold_s(uint32_t uptime_s, uint64_t total_clicks) const {
       if (_ratio <= 0.0f) return 0;
       uint32_t thresh = (uint32_t)((GEIGER_MISSING_COUNTS * 60.0f)
                                    / (GEIGER_ASSUMED_BG_USVH * _ratio));
@@ -166,7 +166,7 @@ class CounterMaths {
     }
 
     bool counts_missing(uint32_t uptime_s, uint32_t last_count_up_s,
-                        uint32_t total_clicks) const {
+                        uint64_t total_clicks) const {
       // int guard first
       uint32_t silence = uptime_s - last_count_up_s;
       if (silence < MISSING_MIN_S) return false;

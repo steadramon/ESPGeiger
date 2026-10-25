@@ -24,6 +24,7 @@
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "Corium/System/FastMillis.h"
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Util/MathUtil.h"
 #include "HVTrim.h"
@@ -233,7 +234,7 @@ class HV : public EGModule {
       uint16_t _adc[HV_ADC_MAX];
       uint8_t  _adc_n = 0;
       int8_t   _duty_trim = 0;
-      unsigned long _trim_settle_until = 0;  // fast_millis()
+      Deadline _settle;   // fast_millis(), cleared once reached
       bool    _ov_trip = false;
       bool    _held = false;
       uint16_t _ov_v = GEIGERHW_OV_V;

@@ -177,6 +177,7 @@ void Display::on_prefs_loaded() {
   read_timing(_timeout_ms);
   if (_started) return;
   _started = true;
+  _woke.mark(0);   // boot
   find_rows();
   EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
   s_backend = chosen();
@@ -193,7 +194,7 @@ void Display::on_prefs_saved() {
 
 // first tap only wakes
 void Display::button(unsigned long now, int8_t dir) {
-  _woken = now;
+  _woke.mark(now);
   if (!_lit) {
     refresh(now);
     return;
@@ -213,7 +214,7 @@ void Display::button(unsigned long now, int8_t dir) {
 #ifdef GEIGER_PUSHBUTTON
 bool Display::toggle_auto_off(unsigned long now) {
   _auto_off = !_auto_off;
-  _woken = now;
+  _woke.mark(now);
   refresh(now);
   backend()->screen_mode(now, _auto_off);
   return _auto_off;
@@ -222,9 +223,9 @@ bool Display::toggle_auto_off(unsigned long now) {
 
 Display::Sleep Display::sleep(unsigned long now) {
   if (!_auto_off) return AWAKE;
-  unsigned long idle = now - _woken;
-  if (_timeout_ms > 0) return (idle > _timeout_ms) ? TIMED_OUT : AWAKE;
-  if (idle > 30000 && !on_hours()) return OFF_HOURS;
+  // idle over it, + 1
+  if (_timeout_ms > 0) return _woke.fresh(now, _timeout_ms + 1) ? AWAKE : TIMED_OUT;
+  if (!_woke.fresh(now, 30000 + 1) && !on_hours()) return OFF_HOURS;
   return AWAKE;
 }
 

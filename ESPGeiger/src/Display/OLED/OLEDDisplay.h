@@ -159,9 +159,11 @@ public:
 
   private:
     enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };
-    void page_changed();
+    void page_changed(unsigned long now);
     void redraw(unsigned long now);   // a frame now, page changed
     void next_frame(unsigned long now);
+    void take_events(unsigned long now);
+    void draw_frame(unsigned long now);
     uint16_t tick_ms() const;
     unsigned long frame_ms() const;
     bool awake(unsigned long now);

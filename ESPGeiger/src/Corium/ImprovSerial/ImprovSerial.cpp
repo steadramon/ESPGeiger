@@ -117,33 +117,35 @@ void ImprovSerial::send_error(improv::Error err) {
   send_frame(improv::TYPE_ERROR_STATE, { (uint8_t)err });
 }
 
+// boot still joining the saved wifi; uptime ticks from the loop, the ms clock from setup
+static const uint32_t IMPROV_JOIN_MS = 30000;
+
 bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
+  // mid join, a frame here would nest another
+  if (_in_wifi_settings) {
+    send_error(improv::ERROR_UNKNOWN);
+    return false;
+  }
   switch (cmd.command) {
     case improv::WIFI_SETTINGS:
       handle_wifi_settings(cmd.ssid, cmd.password);
       break;
     case improv::GET_CURRENT_STATE: {
-      if (_state != improv::STATE_PROVISIONED) {
-        if (Wifi::connected_raw()) {
-          _state = improv::STATE_PROVISIONED;
-        } else {
-          // can take 50ms on esp32
-          static bool s_creds_cached = false;
-          static bool s_creds_value = false;
-          if (!s_creds_cached) {
-            s_creds_value = Wifi::hasSavedCreds();
-            s_creds_cached = true;
-          }
-          if (Uptime::seconds() < 30 && s_creds_value) {
-            _state = improv::STATE_PROVISIONING;
-          } else if (_state == improv::STATE_PROVISIONING) {
-            _state = improv::STATE_AUTHORIZED;
-          }
+      if (Wifi::connected_raw()) {
+        _state = improv::STATE_PROVISIONED;
+      } else {
+        // can take 50ms on esp32
+        static bool s_creds_cached = false;
+        static bool s_creds_value = false;
+        if (!s_creds_cached) {
+          s_creds_value = Wifi::hasSavedCreds();
+          s_creds_cached = true;
         }
+        bool joining = fast_millis() < IMPROV_JOIN_MS && Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
+        _state = (joining && s_creds_value) ? improv::STATE_PROVISIONING : improv::STATE_AUTHORIZED;
       }
       set_state(_state);
-      // WIFI_SETTINGS result has the URL
-      if (_state == improv::STATE_PROVISIONED && !_in_wifi_settings) {
+      if (_state == improv::STATE_PROVISIONED) {
         send_response_data(improv::GET_CURRENT_STATE, { device_url() });
       }
       break;

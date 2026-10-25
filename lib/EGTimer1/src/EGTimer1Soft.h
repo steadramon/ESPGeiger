@@ -28,6 +28,7 @@
 #define EGT1_SOFT_MAX   4
 #define EGT1_MAX_TICKS  0x7FFFFFu   // 23 bit register
 #define EGT1_LEAD_TICKS 160         // 2 us, the NMI must return first
+#define EGT1_MAX_SPAN   0x7FFFFFFFu // cycles, longer reads as past
 
 struct EGT1Soft {
   uint32_t mask;     // 0 = free

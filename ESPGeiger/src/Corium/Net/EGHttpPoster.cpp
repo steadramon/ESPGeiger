@@ -21,6 +21,7 @@
 #include "SendSlot.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Util/MathUtil.h"
 
 static_assert(EGHTTP_HOST_MAX >= EG_HOST_MAX, "a host pref must fit the client");
 
@@ -30,6 +31,12 @@ bool (*EGHttpPoster::hold)() = nullptr;
 void EGHttpPoster::set_enabled(bool on) {
   _send_enabled = on;
   EGModuleRegistry::every(this, (on || request.busy()) ? LOOP_MS : 0);
+}
+
+uint16_t EGHttpPoster::set_interval_s(int s, int lo, int hi) {
+  s = clamp(s, lo, hi);
+  pingIntervalMs = (uint32_t)s * 1000UL;
+  return (uint16_t)s;
 }
 
 size_t EGHttpPoster::status_json(char* buf, size_t cap, unsigned long now) {
@@ -60,9 +67,7 @@ bool EGHttpPoster::slot_due(unsigned long now) {
     lastPing = SendSlot::initial_ping(name(), now, pingIntervalMs);
     return false;
   }
-  if ((now - lastPing) < pingIntervalMs) return false;
-  lastPing += ((now - lastPing) / pingIntervalMs) * pingIntervalMs;
-  return true;
+  return due_steps(now, lastPing, pingIntervalMs);
 }
 
 void EGHttpPoster::take_reply()
@@ -86,6 +91,7 @@ void EGHttpPoster::take_reply()
 bool EGHttpPoster::url_fits(int n, size_t cap) {
   if (n >= 0 && (size_t)n < cap) return true;
   Log::console(PSTR("%s: URL too long, not sent"), log_tag());
+  note_publish(false);
   return false;
 }
 
@@ -108,6 +114,7 @@ void EGHttpPoster::send(const char* url, const char* body) {
   EGHttpDriver::Sent s = request.send(m, (const uint8_t*)body, body ? strlen(body) : 0);
   if (s == EGHttpDriver::NO_MEMORY) {
     Log::console(PSTR("%s: alloc failed"), log_tag());
+    note_publish(false);
     return;
   }
   note_attempt();

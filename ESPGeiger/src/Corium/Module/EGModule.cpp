@@ -25,9 +25,9 @@ void EGSender::note_publish(bool ok) {
   note_result(ok);
 }
 
+// last_ok stays the last answer till this one's in
 void EGSender::note_attempt() {
   last_attempt_ms = fast_millis();
-  last_ok = true;
   _publish_pending = 1;
 }
 

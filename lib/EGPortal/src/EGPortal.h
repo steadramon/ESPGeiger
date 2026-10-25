@@ -50,6 +50,12 @@ class EGPortal {
     // dont restart in here, set a flag
     void onReset(ResetCallback cb, void* user = nullptr);
 
+    // every page, empty = open
+    void setBasicAuth(const __FlashStringHelper* user, const char* password,
+                      const __FlashStringHelper* realm = nullptr) {
+      _http.setBasicAuth(user, password, realm);
+    }
+
     // must outlive the portal
     void setTitle(const char* t)  { _title  = t; }
     void setNotice(const char* n) { _notice = n; }

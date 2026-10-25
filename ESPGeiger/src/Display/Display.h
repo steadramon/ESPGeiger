@@ -27,6 +27,7 @@
 #include "Counter/CounterMeasures.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/System/FastMillis.h"
 
 // under 10 the 5 min avg, unless 3 sigma off
 inline bool use_cpm5(float cpm, float cpm5) {
@@ -75,7 +76,7 @@ class Display : public EGModule {
 #endif
     void keep_on()                    { _auto_off = false; }
     void wake(unsigned long now) {
-      _woken = now;
+      _woke.mark(now);
       if (!_lit) refresh(now);
     }
 
@@ -154,7 +155,7 @@ class Display : public EGModule {
     bool on_hours();
     bool _started = false;
     bool _auto_off = true;
-    unsigned long _woken = 0;
+    Stamp _woke;
     uint32_t _timeout_ms = 0;   // 0 = use on/off hours
 };
 

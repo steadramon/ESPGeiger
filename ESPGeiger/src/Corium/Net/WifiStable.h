@@ -25,10 +25,11 @@
 
 namespace Wifi {
   extern uint32_t connected_at_ms;  // 0 when down
+  extern bool settled;   // up past 2^31 ms, held over the wrap
 
   // lets AsyncTCP drain after a reconnect
   inline bool stable_for(uint32_t ms) {
-    return connected_at_ms != 0 && (uint32_t)(fast_millis() - connected_at_ms) >= ms;
+    return connected_at_ms != 0 && (settled || (uint32_t)(fast_millis() - connected_at_ms) >= ms);
   }
 }
 

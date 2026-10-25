@@ -32,9 +32,6 @@
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/Util/MathUtil.h"
-#ifdef ESPG_HV_ADC
-#include "HV/HV.h"
-#endif
 
 EG_PSTR(K_FLAGS,  "flags");
 EG_PSTR(K_FORMAT, "format");
@@ -260,7 +257,9 @@ void SerialOut::loop(unsigned long now) {
 
   Line v = { _show_flags, (int)egm_i(M_CPM), egm_f(M_CPS), egm_f(M_USV), 0 };
 #ifdef ESPG_HV_ADC
-  v.hv = (int)hv.hvReading.get();
+  EGMeasureIter hv(0xFF, false, M_HV);
+  if (hv.next()) v.hv = (int)hv.value().i;
+  else v.flags &= ~SHOW_HV;   // no adc
 #endif
   char buf[80];
   size_t pos = labelled_line(buf, sizeof(buf), v);

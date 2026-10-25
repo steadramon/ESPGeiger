@@ -20,6 +20,7 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/System/DeviceInfo.h"
+#include "Corium/System/KeyStore.h"
 #include "Corium/WebPortal/WebPortal.h"
 
 EG_PSTR(K_NAME,           "name");
@@ -37,7 +38,7 @@ EG_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin). 
 
 static const EGPref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    EG_NAME_MAX, EGP_STRING, 0},
-  {EG_K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    WEB_PASS_MAX, EGP_STRING, EGP_SENSITIVE | EGP_ADVANCED | EGP_LOCAL},
+  {EG_K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, 0, 0,    WEB_PASS_MAX, EGP_STRING, EGP_SENSITIVE | EGP_ADVANCED | EGP_LOCAL | EGP_REBOOT},
 #ifdef ESP32
   // 0 = board default. C3 max 160
   {K_CPU_MHZ,     nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
@@ -52,7 +53,35 @@ static const EGPrefGroup SYSTEM_PREF_GROUP PROGMEM = {
 
 const EGPrefGroup* SystemPrefs::prefs_group() { return &SYSTEM_PREF_GROUP; }
 
+bool SystemPrefs::pass_restored = false;
+
+static_assert(WEB_PASS_MAX <= KeyStore::MAX, "web_pass fits a key store slot");
+
+// a copy outside LittleFS, a lost FS keeps the login
+static void keep_pass() {
+  char kept[WEB_PASS_MAX + 1] = {};
+  bool have = KeyStore::read((uint8_t*)kept, WEB_PASS_MAX, WEB_PASS_SLOT);
+  if (!EGPrefs::stored("sys")) {
+    if (have && EGPrefs::put("sys", EG_K_WEB_PASS, kept)) {
+      EGPrefs::commit(false);
+      SystemPrefs::pass_restored = true;
+      Log::console(PSTR("System: Web password restored from backup"));
+    }
+    return;
+  }
+  const char* cur = EGPrefs::getString("sys", EG_K_WEB_PASS);
+  if (strcmp(cur, kept) == 0) return;
+  if (!cur[0]) {
+    KeyStore::clear(WEB_PASS_SLOT);
+    return;
+  }
+  char pad[WEB_PASS_MAX] = {};
+  memcpy(pad, cur, strnlen(cur, sizeof(pad)));
+  KeyStore::write((const uint8_t*)pad, sizeof(pad), WEB_PASS_SLOT);
+}
+
 void SystemPrefs::on_prefs_loaded() {
+  keep_pass();
   DeviceInfo::setFriendlyName(EGPrefs::getString("sys", K_NAME));
 #ifdef ESP32
   uint32_t mhz = EGPrefs::getUInt("sys", K_CPU_MHZ);

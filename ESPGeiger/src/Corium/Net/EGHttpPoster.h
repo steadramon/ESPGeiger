@@ -56,10 +56,12 @@ class EGHttpPoster : public EGSender {
     virtual PGM_P content_type() const { return nullptr; }
 
     void set_enabled(bool on);
+    // clamped secs back, pingIntervalMs from it
+    uint16_t set_interval_s(int s, int lo, int hi);
     // n from snprintf, a cut url is logged and not sent
     bool url_fits(int n, size_t cap);
 
-    unsigned long lastPing = 0;
+    uint32_t lastPing = 0;
     uint32_t pingIntervalMs = 0;
     bool _send_enabled = false;
 
