@@ -27,10 +27,6 @@
 #define GEIGER_MODEL "genpulse"
 #endif
 
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN 12
-#endif
-
 #include "GeigerInput/GeigerInputTest.h"
 
 class GeigerTestPulseInt final : public GeigerInputTest

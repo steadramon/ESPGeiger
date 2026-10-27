@@ -90,9 +90,11 @@ Radiation telemetry. Periodic heartbeat (~30 s).
 ,ffsi
   cpm          : float    1-minute average
   usv          : float    µSv/h
-  state        : string   "warming" | "healthy" | "warning" | "alert"
+  state        : string   "warming" | "healthy" | "nocounts" | "warning" | "alert"
   total_clicks : int32    producer's lifetime click count
 ```
+
+`nocounts` means no clicks for far longer than background allows (tube or source problem). `alert` and `warning` still win over it.
 
 ### `/espg/<chipid>/hv`
 

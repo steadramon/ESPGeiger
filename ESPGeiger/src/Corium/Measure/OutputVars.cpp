@@ -61,7 +61,7 @@ static bool apply(EGMeasure& m, const Spec& s) {
   return true;
 }
 
-size_t render(const char* key, size_t klen, char* buf, size_t cap) {
+size_t render(const char* key, size_t klen, char* buf, size_t cap, bool* cut) {
   if (!key || !buf || cap == 0) return 0;
   const char* colon = (const char*)memchr(key, ':', klen);
   size_t idlen = colon ? (size_t)(colon - key) : klen;
@@ -71,7 +71,7 @@ size_t render(const char* key, size_t klen, char* buf, size_t cap) {
   EGMValue v;
   if (!lookup(key, idlen, &m, &v) || !apply(m, spec)) return 0;
   uint8_t unit = spec.unit ? unit_code(spec.unit) : egm_temp_unit();
-  return egm_format_unit(m, v, unit, buf, cap);
+  return egm_format_unit(m, v, unit, buf, cap, cut);
 }
 
 static bool unescape(char in, char* out) {
@@ -105,7 +105,9 @@ static bool put_var(const char*& p, char* buf, size_t& pos, size_t cap) {
   const char* e = strchr(k, '}');
   if (!e) { buf[pos++] = *p++; return true; }
   size_t klen = (size_t)(e - k);
-  size_t n = render(k, klen, buf + pos, cap - pos);
+  bool cut = false;
+  size_t n = render(k, klen, buf + pos, cap - pos, &cut);
+  if (cut) return false;
   if (n > 0) {
     pos += n;
   } else {

@@ -61,7 +61,10 @@ static void reset_net() {
   Log::console(PSTR("Clearing net.* prefs and rebooting"));
   // dhcp, all blank
   EGPrefs::reset("net");
-  EGPrefs::commit();
+  if (!EGPrefs::commit()) {
+    Log::console(PSTR("Commit failed"));
+    return;
+  }
   Wifi::dropNetBackup();
   reboot();
 }

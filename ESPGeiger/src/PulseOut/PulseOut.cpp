@@ -173,7 +173,11 @@ static bool migrate_legacy_blip() {
   }
   if (any) {
     EGPrefs::put("pulse", EG_K_ENABLE, "1");
-    EGPrefs::commit(false);
+    // no marker, again next boot
+    if (!EGPrefs::commit(false)) {
+      Log::console(PSTR("PulseOut: not saved"));
+      return true;
+    }
     Log::console(PSTR("PulseOut: migrated blip pin=%s pulse_ms=%s from v0.11"),
                  pin_val[0] ? pin_val : "(none)", ms_val[0] ? ms_val : "(none)");
   } else {

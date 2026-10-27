@@ -34,6 +34,8 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 
 <!-- /gen -->
 
+HV, Temperature, Humidity and Pressure show `unknown` in Home Assistant when their reading drops out (sensor lost or turned off), rather than holding the last value.
+
 ## Threshold alerts (binary sensors)
 
 Triggered when CPM crosses the configured warning / alert thresholds. Consumed via `value_template` from `tele/sensor` JSON. Good targets for HA automations (notifications, lights, sirens).

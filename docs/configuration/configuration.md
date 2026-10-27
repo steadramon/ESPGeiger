@@ -43,8 +43,8 @@ On the **Input** tab. Some settings only appear on specific builds. Pin and Seri
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
 | Serial Type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
-| RX Pin | `counter.rx_pin` | Int 0-max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
-| TX Pin | `counter.tx_pin` | Int 0-max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
+| RX Pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
+| TX Pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
 | PCNT Filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT Pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. Floating suits most modules that drive the line actively both directions; change to pull-up for open-drain outputs or pull-down for active-high modules without their own idle pull. |
 | Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds without PCNT | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |

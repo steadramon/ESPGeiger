@@ -33,7 +33,9 @@ bool on(Handler h) {
   return true;
 }
 
+// the one writer, web and espota alike
 void send(Event e) {
+  ota_in_progress = e == OTA_START;
   for (uint8_t i = 0; i < s_count; i++) s_handlers[i](e);
 }
 

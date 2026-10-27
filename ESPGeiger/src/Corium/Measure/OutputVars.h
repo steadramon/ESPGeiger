@@ -25,8 +25,8 @@
 
 namespace OutputVars {
 
-// key not NUL-terminated, may carry :spec. 0 = unknown or bad spec
-size_t render(const char* key, size_t keylen, char* buf, size_t cap);
+// key not NUL-terminated, may carry :spec. 0 = unknown, bad spec or too long (cut set)
+size_t render(const char* key, size_t keylen, char* buf, size_t cap, bool* cut = nullptr);
 
 // {name} {name:F1} \n \r \t \\ \{ \}, unknown left as written. tpl in SRAM
 size_t renderTemplate(const char* tpl, char* buf, size_t cap);

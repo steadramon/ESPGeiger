@@ -165,10 +165,10 @@ static const EGPref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // Pins
 #ifndef RXPIN_BLOCKED
-  {K_RX_PIN,          IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN},
+  {K_RX_PIN,          IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
+  {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
 #endif
   // UDP source target
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -228,10 +228,10 @@ void CounterPrefs::on_prefs_loaded() {
   gcounter.set_cpm_window(cw);
 #endif
 #ifndef RXPIN_BLOCKED
-  gcounter.set_rx_pin((int)EGPrefs::getUInt("counter", K_RX_PIN));
+  gcounter.set_rx_pin((int)EGPrefs::getInt("counter", K_RX_PIN));
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  gcounter.set_tx_pin((int)EGPrefs::getUInt("counter", K_TX_PIN));
+  gcounter.set_tx_pin((int)EGPrefs::getInt("counter", K_TX_PIN));
 #endif
 #ifdef USE_PCNT
   gcounter.set_pcnt_filter((int)EGPrefs::getUInt("counter", K_PCNT_FILTER));

@@ -28,6 +28,11 @@
 #define EGPREFS_MAX_GROUP_SZ 1024
 #endif
 
+// commit_soon's write waits this, the ones meanwhile join it
+#ifndef EGPREFS_HOLD_MS
+#define EGPREFS_HOLD_MS 5000
+#endif
+
 // string maxes, rows and buffers both use these. buffers +1
 #define EGPREFS_MAX_VALUE 255   // longest string max_len (webhook url/key)
 #define EGPREF_ID_MAX     17    // announce_interval
@@ -203,6 +208,11 @@ public:
   static bool putInt(const char* module, const char* key, int32_t value);
   static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);
+  // for a write per request: callbacks now, one write EGPREFS_HOLD_MS on; true = will be written
+  static bool commit_soon(uint32_t now);
+  static void flush();   // the waiting write, at wake or shutdown
+  // wake(at) has flush() called then; none = commit_soon writes now
+  static void hold_by(void (*wake)(uint32_t at));
   // back to the row default, put() rules; no key = the whole group
   static bool reset(const char* module, const char* key = nullptr);
   static bool remove_group(const char* module);

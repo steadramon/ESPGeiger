@@ -36,7 +36,6 @@ void ArduinoOTAModule::begin() {
       type = PSTR("sketch");
     else // U_SPIFFS
       type = PSTR("filesystem");
-    ota_in_progress = true;
     EGModuleRegistry::post(&ota);
     Lifecycle::send(Lifecycle::OTA_START);
     LedSignal::lit(true);
@@ -45,7 +44,6 @@ void ArduinoOTAModule::begin() {
   ArduinoOTA.onEnd ([]() {
     Log::console(PSTR("End"));
     LedSignal::lit(false);
-    ota_in_progress = false;
     // core restarts, not safeRestart()
     Lifecycle::send(Lifecycle::SHUTDOWN);
   });
@@ -65,7 +63,6 @@ void ArduinoOTAModule::begin() {
   ArduinoOTA.onError ([](ota_error_t error) {
     LedSignal::lit(false);
     if (ota_in_progress) Lifecycle::send(Lifecycle::OTA_FAILED);
-    ota_in_progress = false;
     if      (error == OTA_AUTH_ERROR)    Log::console(PSTR("OTA: Auth Failed"));
     else if (error == OTA_BEGIN_ERROR)   Log::console(PSTR("OTA: Begin Failed"));
     else if (error == OTA_CONNECT_ERROR) Log::console(PSTR("OTA: Connect Failed"));

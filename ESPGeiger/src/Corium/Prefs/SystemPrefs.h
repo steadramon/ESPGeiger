@@ -32,6 +32,8 @@ class SystemPrefs : public EGModule {
     uint8_t display_order() override { return 10; }
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
+    void begin() override;
+    void loop(unsigned long now) override;
     static bool pass_restored;   // FS lost, web_pass from the key store
 };
 

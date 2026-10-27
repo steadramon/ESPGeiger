@@ -688,7 +688,7 @@ static const char FORGET_BODY[] PROGMEM =
   "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
 
 // false = a field refused, rest still saved; the pref rows are the rule
-static bool saveSettings(EGHttpRequest& req) {
+static bool saveSettings(EGHttpRequest& req, bool& wrote) {
   bool ok = true;
   // arg() reuses its buffer
   const char* m = req.arg(F("m"));
@@ -697,7 +697,7 @@ static bool saveSettings(EGHttpRequest& req) {
   if (lat && !EGPrefs::put("webapi", EG_K_LAT, *lat ? lat : "0")) ok = false;
   const char* lon = req.arg(FPSTR(EG_K_LON));
   if (lon && !EGPrefs::put("webapi", EG_K_LON, *lon ? lon : "0")) ok = false;
-  EGPrefs::commit();
+  wrote = EGPrefs::commit();
   return ok;
 }
 
@@ -718,12 +718,14 @@ static void sendStation(EGHttpResponse& res) {
 // POST saves first, both show the page
 static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const bool posted = req.method() == EGHttpRequest::POST;
-  const bool saved = posted && saveSettings(req);
+  bool wrote = true;
+  const bool saved = posted && saveSettings(req, wrote);
 
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   WebPortal::sendPageHead(res, F("ESPGeiger Network"));
-  if (saved) res.sendChunk(F("<div class='a ak'>Saved.</div>"));
-  if (posted && !saved) res.sendChunk(F("<div class='a ae'>A value was out of range and not saved.</div>"));
+  if (!wrote) WebPortal::sendNotSaved(res);
+  else if (saved) res.sendChunk(F("<div class='a ak'>Saved.</div>"));
+  else if (posted) res.sendChunk(F("<div class='a ae'>A value was out of range and not saved.</div>"));
   res.sendChunk(F(
     "<p class=muted>ESPGeiger can share data with the public station "
     "network so it appears on the global map. The device identity and "
@@ -787,10 +789,11 @@ static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
   webapi.forget();
   EGPrefs::put("webapi", EG_K_MODE, "0");
-  EGPrefs::commit();
+  bool wrote = EGPrefs::commit();
 
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   WebPortal::sendPageHead(res, F("Station Forgotten"));
+  if (!wrote) WebPortal::sendNotSaved(res);
   res.sendChunk(FPSTR(FORGET_BODY));
   WebPortal::sendPageTail(res);
   res.endChunked();

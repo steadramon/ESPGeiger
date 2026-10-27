@@ -88,14 +88,14 @@ float egm_celsius_to(float c, uint8_t unit) {
 }
 
 size_t egm_format_unit(const EGMeasure& m, const EGMValue& v, uint8_t unit,
-                       char* buf, size_t cap) {
+                       char* buf, size_t cap, bool* cut) {
   EGMValue out = v;
   if (m.unit == EGMU_CELSIUS) out.f = egm_celsius_to(v.f, unit);
-  return egm_format(m, out, buf, cap);
+  return egm_format(m, out, buf, cap, cut);
 }
 
 // truncated prints nothing
-size_t egm_format(const EGMeasure& m, const EGMValue& v, char* buf, size_t cap) {
+size_t egm_format(const EGMeasure& m, const EGMValue& v, char* buf, size_t cap, bool* cut) {
   int n;
   switch (m.kind) {
     case EGM_F32:
@@ -118,7 +118,12 @@ size_t egm_format(const EGMeasure& m, const EGMValue& v, char* buf, size_t cap) 
     default:
       return 0;
   }
-  return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
+  if (n < 0) return 0;
+  if ((size_t)n >= cap) {
+    if (cut) *cut = true;
+    return 0;
+  }
+  return (size_t)n;
 }
 
 static void json_field(EGJson& j, const char* key, const EGMeasure& m, const EGMValue& v) {

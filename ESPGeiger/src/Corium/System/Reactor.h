@@ -86,7 +86,8 @@ namespace Reactor {
       EGModuleRegistry::in(EGModuleRegistry::IN_TCP);
       EGTcp::poll();
       EGModuleRegistry::in(EGModuleRegistry::IN_PORTAL);
-      if (!ota_in_progress && reached(now, portal.next_tick_due())) portal.tick(now);
+      // web ota needs it too
+      if (reached(now, portal.next_tick_due())) portal.tick(now);
       EGModuleRegistry::in(EGModuleRegistry::IN_NONE);
       if (EGModuleRegistry::due(now)) EGModuleRegistry::loop_all(now);
     }

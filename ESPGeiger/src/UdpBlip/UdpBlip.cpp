@@ -214,6 +214,7 @@ void UdpBlipModule::emitRad(uint32_t now) {
   const char* state =
     egm_b(M_ALERT) ? PSTR("alert") :
     egm_b(M_WARN)  ? PSTR("warning") :
+    gcounter.counts_missing() ? PSTR("nocounts") :
     egm_b(M_WARM)  ? PSTR("healthy") : PSTR("warming");
   BlipRad r = { egm_f(M_CPM), egm_f(M_USV), state, egm_u(M_TC) };
   size_t n = blip_rad(buf, sizeof(buf), path(PSTR("rad")), r);

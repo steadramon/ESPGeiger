@@ -393,7 +393,7 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   _settle.set(fast_millis() + (unsigned long)_settle_s * 1000UL);
 }
 
-void HV::saveconfig() {
+bool HV::saveconfig() {
   EGPrefs::putInt("espghw", EG_K_FREQ, _hw_freq);
   EGPrefs::putInt("espghw", K_DUTY, _hw_duty);
 #ifdef ESPG_HV_ADC
@@ -401,7 +401,7 @@ void HV::saveconfig() {
   EGPrefs::putInt("espghw", K_OFFSET, _hw_vd_offset);
   EGPrefs::putInt("espghw", K_TARGET, _hv_target);
 #endif
-  EGPrefs::commit();
+  return EGPrefs::commit_soon(fast_millis());
 }
 
 extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
@@ -510,7 +510,10 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
   if (changed) {
     hv.clear_ov();   // also resets the trim
-    hv.saveconfig();
+    if (!hv.saveconfig()) {
+      res.send(500, FPSTR(HTTP_CT_PLAIN), F("Not saved"));
+      return;
+    }
   }
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }

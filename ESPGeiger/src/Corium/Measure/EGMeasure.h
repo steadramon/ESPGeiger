@@ -143,8 +143,8 @@ private:
   EGMValue      _val;
 };
 
-// 0 = truncated or unprintable
-size_t egm_format(const EGMeasure& m, const EGMValue& v, char* buf, size_t cap);
+// 0 = truncated or unprintable, cut set if truncated
+size_t egm_format(const EGMeasure& m, const EGMValue& v, char* buf, size_t cap, bool* cut = nullptr);
 
 // 0 = no metric or truncated
 size_t egm_prom_format(const EGMeasure& m, const EGMValue& v, const char* chipid,
@@ -183,7 +183,7 @@ uint8_t egm_temp_unit();
 void    egm_set_temp_unit(uint8_t unit);
 
 size_t egm_format_unit(const EGMeasure& m, const EGMValue& v, uint8_t unit,
-                       char* buf, size_t cap);
+                       char* buf, size_t cap, bool* cut = nullptr);
 
 inline size_t egm_format_display(const EGMeasure& m, const EGMValue& v,
                                  char* buf, size_t cap) {

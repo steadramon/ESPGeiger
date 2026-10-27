@@ -187,7 +187,7 @@ class HV : public EGModule {
       int get_vd_offset() {
         return _hw_vd_offset;
       }
-      void saveconfig();
+      bool saveconfig();
       // Pin low first, never old duty at new freq
       void apply_freq_duty_safe(int new_freq, int new_duty);
       void set_pwm_pin(int pin);   // reboot to apply

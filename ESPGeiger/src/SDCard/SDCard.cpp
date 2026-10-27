@@ -35,6 +35,9 @@ EG_PSTR(K_SYNC_MIN, "sync_min");
 
 #define SD_NAME_LEN 12   // 8.3, YYYYMMDD.csv
 #define SD_DIR_LEN  6    // YYYYMM
+#define SD_SECTOR   512
+#define SD_COUNT_SECTORS 256   // FAT a pass, all of it trips the 8266 WDT
+#define SD_COUNT_MS 10
 
 SdFat32* sd = nullptr;
 
@@ -116,16 +119,23 @@ void SDCard::begin()
 
   sdenabled = true;
   _fault = false;
-  _freecheck_pending = true;
   Log::console(PSTR("SDCard: Mounted."));
+  Log::console(PSTR("SDCard: Calculating free space"));
+  startCount(CLEAN_FREECHECK);
   EGModuleRegistry::due_in(this, 0);
   // remount runs begin() again
   static bool listening = false;
   if (!listening) listening = Lifecycle::on(sd_lifecycle);
 }
 
-static uint32_t freeMB() {
-  return (uint32_t)(((uint64_t)sd->freeClusterCount() * sd->sectorsPerCluster()) >> 11);
+int32_t SDCard::freeMB() const {
+  if (!sd || _counting || _free < 0) return -1;
+  return (int32_t)(((uint64_t)_free * sd->sectorsPerCluster()) >> 11);
+}
+
+static uint32_t clusters_of(uint32_t bytes) {
+  uint32_t per = (uint32_t)sd->sectorsPerCluster() * SD_SECTOR;
+  return (bytes + per - 1) / per;
 }
 
 static uint32_t packed_cutoff_year_ago() {
@@ -290,23 +300,65 @@ void SDCard::scheduleCleanup(uint8_t what) {
   if (what > _cleanup) _cleanup = what;
 }
 
-// once a minute, not re-armed once off
+// once a minute, not re-armed once off; a cleanup counts free space first
 void SDCard::loop(unsigned long /*now*/) {
   if (!sdenabled) return;
-  EGModuleRegistry::due_in(this, ms_to_minute());
-  if (_freecheck_pending) {
-    _freecheck_pending = false;
-    scheduleCleanup(CLEAN_FREECHECK);
-  } else {
+  if (!_counting) {
+    EGModuleRegistry::due_in(this, ms_to_minute());
     minuteEdge();
+    if (_cleanup == CLEAN_NONE) return;
+    startCount(_cleanup);
+    _cleanup = CLEAN_NONE;
   }
-  const uint8_t what = _cleanup;
-  _cleanup = CLEAN_NONE;
-  if (what == CLEAN_NONE) return;
+  countFat();
+}
 
+void SDCard::startCount(uint8_t what) {
+  _counting = what;
+  _free = 0;
+  _fat_sec = 0;
+}
+
+static uint16_t free_entries(const uint8_t* buf, uint16_t n, uint8_t width) {
+  uint16_t count = 0;
+  for (uint16_t i = 0; i < n * width; i += width) {
+    uint8_t used = 0;
+    for (uint8_t k = 0; k < width; k++) used |= buf[i + k];
+    if (!used) count++;
+  }
+  return count;
+}
+
+// raw sectors, SdFat's own count reads the whole FAT in one go
+void SDCard::countFat() {
+  uint8_t buf[SD_SECTOR];
+  const uint8_t width = sd->fatType() == 16 ? 2 : 4;
+  const uint32_t per = sizeof(buf) / width;
+  const uint32_t total = sd->clusterCount() + 2;
+  for (uint16_t i = 0; i < SD_COUNT_SECTORS && _fat_sec * per < total; i++) {
+    if (!sd->card()->readSector(sd->fatStartSector() + _fat_sec, buf)) {
+      _counting = CLEAN_NONE;
+      _free = -1;
+      EGModuleRegistry::due_in(this, ms_to_minute());
+      return;
+    }
+    uint32_t left = total - _fat_sec * per;
+    _free += free_entries(buf, left < per ? left : per, width);
+    _fat_sec++;
+  }
+  if (_fat_sec * per < total) {
+    EGModuleRegistry::due_in(this, SD_COUNT_MS);
+    return;
+  }
+  const uint8_t what = _counting;
+  _counting = CLEAN_NONE;
+  EGModuleRegistry::due_in(this, ms_to_minute());
+  cleanup(what);
+}
+
+void SDCard::cleanup(uint8_t what) {
   Hold hold;
   if (what == CLEAN_FREECHECK) {
-    Log::console(PSTR("SDCard: Calculating free space"));
     uint32_t freespace = freeMB();
     Log::console(PSTR("SDCard: %lu MB free."), (unsigned long)freespace);
     if (freespace <= 8 && !deleteOldest(packed_cutoff_year_ago())) disableFull();
@@ -411,9 +463,13 @@ bool SDCard::deleteOldest(uint32_t cutoffPacked) {
     if (oldestFile[0] == '\0') return false;
 
     bool deleted = false;
-    if (sd->chdir(oldestDir) && sd->exists(oldestFile)) {
+    File32 f;
+    if (sd->chdir(oldestDir) && f.open(oldestFile, O_RDONLY)) {
+      uint32_t size = f.fileSize();
+      f.close();
       Log::console(PSTR("SDCard: Deleting old file %s/%s"), oldestDir, oldestFile);
       deleted = sd->remove(oldestFile);
+      if (deleted) _free += clusters_of(size);
     }
     sd->chdir();
     return deleted;
@@ -434,7 +490,6 @@ void SDCard::reinit() {
     delete sd;
     sd = nullptr;
   }
-  _freecheck_pending = true;
   begin();
 }
 
@@ -483,6 +538,7 @@ static void tally_month(File32& subDir, MonthEntry& m, uint64_t& totalBytes) {
       }
     }
     file.close();
+    yield();
   }
 }
 
@@ -506,6 +562,7 @@ static uint16_t scan_months(MonthEntry* months, uint16_t maxMonths, uint64_t& to
       }
     }
     subDir.close();
+    yield();
   }
   rootDir.close();
   return count;
@@ -524,14 +581,17 @@ static void sort_months_desc(MonthEntry* months, uint16_t count) {
 }
 
 static void send_list_summary(EGHttpResponse& res, uint16_t count, uint64_t totalBytes) {
-  uint32_t freespace = freeMB();
+  int32_t freespace = sdcard.freeMB();
+  char fs[24];
+  if (freespace < 0) snprintf_P(fs, sizeof(fs), PSTR("counting free space"));
+  else snprintf_P(fs, sizeof(fs), PSTR("%lu MB free"), (unsigned long)freespace);
 
   char head[160];
   int n = snprintf_P(head, sizeof(head),
-    PSTR("<p>%u month%s, %lu KB total, %lu MB free.</p>"),
+    PSTR("<p>%u month%s, %lu KB total, %s.</p>"),
     (unsigned)count, count == 1 ? PSTR("") : PSTR("s"),
     (unsigned long)((totalBytes + 1023) / 1024),
-    (unsigned long)freespace);
+    fs);
   if (n > 0) res.sendChunk(head, (size_t)n);
 }
 
@@ -641,6 +701,7 @@ static bool scan_days(const char* dir, DayEntry* days, uint8_t maxDays,
       }
     }
     file.close();
+    yield();
   }
   subDir.close();
   return true;

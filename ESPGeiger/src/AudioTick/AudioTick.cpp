@@ -171,8 +171,8 @@ EG_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
 EG_PSTR(TK_L_PK,  "Peak %");
 EG_PSTR(TK_H_PK,  "Click amplitude ceiling (1-100). Lower = quieter and below NCN trip.");
 EG_PSTR(TK_L_CHM, "Boot chime");
-// 2-8 valid but hidden
-EG_PSTR(TK_O_CHM, "Off|Random");
+// value = index, as play_chime_now
+EG_PSTR(TK_O_CHM, "Off|Random|Three beeps|Folk melody|DTMF|Bit ping|Coin|Sputnik|Item get");
 #ifndef AUDIO_TICK_PINS_BLOCKED
 EG_PSTR(TK_L_BCLK,"I2S BCLK Pin");
 EG_PSTR(TK_L_WS,  "I2S WS Pin");

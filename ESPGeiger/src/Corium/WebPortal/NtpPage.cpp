@@ -94,16 +94,17 @@ static const char NTP_REFUSED_BODY[] PROGMEM =
 
 static void hNtpSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool ok = true;
-  // arg() reuses its buffer
+  // arg() reuses its buffer, absent = not saved
   const char* s = req.arg(F("s"));
-  if (s && !EGPrefs::put("ntp", EG_K_SERVER, s)) ok = false;
+  if (!s || !EGPrefs::put("ntp", EG_K_SERVER, s)) ok = false;
   const char* t = req.arg(F("t"));
-  if (t && !EGPrefs::put("ntp", EG_K_TZ,  t)) ok = false;
-  EGPrefs::commit();
+  if (!t || !EGPrefs::put("ntp", EG_K_TZ,  t)) ok = false;
+  bool wrote = EGPrefs::commit();
 
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, ok ? F("NTP Saved") : F("NTP"));
-  res.sendChunk(ok ? FPSTR(NTP_SAVED_BODY) : FPSTR(NTP_REFUSED_BODY));
+  WebPortal::sendPageHead(res, ok && wrote ? F("NTP Saved") : F("NTP"));
+  if (!wrote) WebPortal::sendNotSaved(res);
+  else res.sendChunk(ok ? FPSTR(NTP_SAVED_BODY) : FPSTR(NTP_REFUSED_BODY));
   WebPortal::sendPageTail(res);
   res.endChunked();
 }

@@ -53,6 +53,7 @@ class SDCard : public EGModule {
     };
     void reinit();
     bool ready() const { return sdenabled; }
+    int32_t freeMB() const;   // -1 = counting
     // a card there that won't mount or write, once till it mounts
     static constexpr uint8_t TOPIC_ERROR = EG_TOPIC_APP + 4;
     bool faulted() const { return _fault; }
@@ -67,13 +68,18 @@ class SDCard : public EGModule {
     uint8_t _sync_min = 1;
     uint8_t _unsynced_writes = 0;
     bool sdenabled = false;
-    bool _freecheck_pending = true;
     enum : uint8_t { CLEAN_NONE = 0, CLEAN_FREECHECK, CLEAN_FULL };
     uint8_t _cleanup = CLEAN_NONE;
+    uint8_t _counting = CLEAN_NONE;   // the cleanup it's counting for
+    int32_t _free = -1;               // clusters
+    uint32_t _fat_sec = 0;            // next FAT sector
     void minuteEdge();
     void writeMinute();
     bool openDayFile(const char* dirStr, const char* timeStr, uint32_t day, bool& failed);
     void scheduleCleanup(uint8_t what);
+    void startCount(uint8_t what);
+    void countFat();
+    void cleanup(uint8_t what);
 };
 
 extern SDCard sdcard;

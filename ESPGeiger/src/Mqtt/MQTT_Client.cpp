@@ -876,6 +876,8 @@ static void hass_fields(EGJson& j, const HassRow* r) {
   j.str_begin(H_K_VT);
   j.part(PSTR("{{ value_json."));
   j.part(hass_key(r));
+  // gone = unknown in HA
+  if (f & HR_OPT) j.part(PSTR(" | default(None)"));
   j.part(PSTR(" }}"));
   j.str_end();
   if (f & HR_BIN) {

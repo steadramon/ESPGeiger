@@ -133,7 +133,8 @@ static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
       uint16_t vlen = rd_be16(p + off);
       off += 2;
       char value[EGPREFS_MAX_VALUE + 1];
-      if (!mine || vlen >= sizeof(value)) { off += vlen; continue; }
+      // a NUL would cut the value, as put_line
+      if (!mine || vlen >= sizeof(value) || memchr(p + off, '\0', vlen)) { off += vlen; continue; }
       memcpy(value, p + off, vlen); off += vlen;
       value[vlen] = '\0';
       if (put(mid, key, value)) applied++;

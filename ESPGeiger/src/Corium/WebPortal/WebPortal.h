@@ -44,6 +44,7 @@ class WebPortal {
 
     static void requestRestart(uint32_t delayMs = 1500);   // ok from async callbacks
     static void sendRestartCountdown(EGHttpResponse& res);
+    static void sendNotSaved(EGHttpResponse& res);   // commit failed
 
     static void applyAuthFromPrefs();   // not in loop, walks pref tables
 

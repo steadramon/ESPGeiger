@@ -101,7 +101,7 @@ void SerialOut::save() {
   EGPrefs::putUInt("sout", K_FLAGS, _show_flags);
   EGPrefs::putUInt("sout", K_FORMAT, _format);
   EGPrefs::putUInt("sout", K_BAUD, _baud);
-  EGPrefs::commit();
+  if (!EGPrefs::commit_soon(fast_millis())) Log::console(PSTR("SerialOut: not saved"));
 }
 
 void SerialOut::applyBaud() {

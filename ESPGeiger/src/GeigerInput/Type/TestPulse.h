@@ -22,11 +22,6 @@
 #include <Arduino.h>
 #include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
-
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN 12
-#endif
-
 #include "GeigerInput/GeigerInputTest.h"
 
 #ifndef GEIGER_MODEL

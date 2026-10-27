@@ -21,6 +21,7 @@
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/KeyStore.h"
+#include "Corium/System/Lifecycle.h"
 #include "Corium/WebPortal/WebPortal.h"
 
 EG_PSTR(K_NAME,           "name");
@@ -93,6 +94,19 @@ void SystemPrefs::on_prefs_loaded() {
 #endif
   WebPortal::applyAuthFromPrefs();
 }
+
+// held prefs writes: flushed when due and at shutdown
+static void prefs_wake(uint32_t at) { EGModuleRegistry::due_at(&sysprefs, at); }
+static void prefs_lifecycle(Lifecycle::Event e) {
+  if (e == Lifecycle::SHUTDOWN) EGPrefs::flush();
+}
+
+void SystemPrefs::begin() {
+  // no handler free, every write goes now
+  if (Lifecycle::on(prefs_lifecycle)) EGPrefs::hold_by(prefs_wake);
+}
+
+void SystemPrefs::loop(unsigned long) { EGPrefs::flush(); }
 
 // Network prefs, hidden, edited on /wifi
 

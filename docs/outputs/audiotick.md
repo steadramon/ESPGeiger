@@ -44,7 +44,7 @@ powered speaker. No I2S amplifier required.
 | Decay ms | `tick.decay` | Int 2-100 | `4` | all | Decay time constant of the click body, in ms. |
 | Engine | `tick.engine` | `0` Pool (4 variants), `1` Chirp (single voice) | `0` Pool (4 variants) | all | Click synthesis engine. |
 | Peak % | `tick.peak` | Int 1-100 | `85` | all | Click amplitude ceiling (1-100). Lower = quieter and below NCN trip. |
-| Boot chime | `tick.chime` | `0` Off, `1` Random | `1` Random | all | Boot chime: off, or a random pick. |
+| Boot chime | `tick.chime` | `0` Off, `1` Random, `2` Three beeps, `3` Folk melody, `4` DTMF, `5` Bit ping, `6` Coin, `7` Sputnik, `8` Item get | `1` Random | all | Boot chime: off, a random pick, or one chime. |
 | I2S BCLK Pin | `tick.bclk` | Int 0-max GPIO | varies by build | boards without fixed pins | Reboot to apply |
 | I2S WS Pin | `tick.ws` | Int 0-max GPIO | varies by build | boards without fixed pins | Reboot to apply |
 | I2S DOUT Pin | `tick.dout` | Int 0-max GPIO | varies by build | boards without fixed pins | Reboot to apply |

@@ -513,6 +513,22 @@ void WebPortal::sendRestartCountdown(EGHttpResponse& res) {
   res.sendChunk(FPSTR(RESTART_COUNTDOWN));
 }
 
+static const char WRITE_FAILED[] PROGMEM = "flash write failed";
+
+void WebPortal::sendNotSaved(EGHttpResponse& res) {
+  res.sendChunk(F("<div class='a ae'>Not saved: "));
+  res.sendChunk(FPSTR(WRITE_FAILED));
+  res.sendChunk(F(".</div>"));
+}
+
+static void not_saved_page(EGHttpResponse& res, const __FlashStringHelper* title) {
+  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
+  WebPortal::sendPageHead(res, title);
+  WebPortal::sendNotSaved(res);
+  WebPortal::sendPageTail(res);
+  res.endChunked();
+}
+
 void WebPortal::hRestart(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   WebPortal::sendPageHead(res, F("Restarting"));
@@ -537,7 +553,7 @@ void WebPortal::hGuard(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static const char IR_BYTES[] PROGMEM = "%u bytes";
 static const char IR_HEX[]   PROGMEM = "0x%08x";
-static const char IR_CODE[]  PROGMEM = "<code>%s</code>";
+static const char IR_CODE_END[] PROGMEM = "</code></td></tr>";
 static const char IR_END[]   PROGMEM = "</table></details>";
 
 void WebPortal::infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...) {
@@ -584,10 +600,13 @@ static void info_collect_net(InfoNet& net) {
   strlcpy(net.ap_ssid, Wifi::softAPSSID().c_str(), sizeof(net.ap_ssid));
 }
 
+// "0x%08x " per word, longer than infoRow's buffer
+static constexpr size_t FRAMES_MAX = CrashDump::STACK_WORDS * 11 + 1;
+
 #ifdef ESP8266
 static void info_render_frames(EGHttpResponse& res, const CrashDump::Snapshot* cd) {
   // code addresses only
-  char framesbuf[256];
+  char framesbuf[FRAMES_MAX];
   size_t fp = 0;
   bool any = false;
   for (uint32_t i = 0; i < cd->word_count && fp < sizeof(framesbuf) - 12; i++) {
@@ -600,7 +619,7 @@ static void info_render_frames(EGHttpResponse& res, const CrashDump::Snapshot* c
   }
   if (any) {
     framesbuf[fp] = '\0';
-    INFO_ROW("Stack frames", IR_CODE, framesbuf);
+    res.sendKV(F("<tr><th>Stack frames</th><td><code>"), framesbuf, FPSTR(IR_CODE_END));
   }
 }
 
@@ -623,7 +642,7 @@ static void info_render_reset(EGHttpResponse& res) {
 }
 #elif defined(ESP32)
 static void info_render_backtrace(EGHttpResponse& res, const CrashDump::Snapshot* cd) {
-  char framesbuf[256];
+  char framesbuf[FRAMES_MAX];
   size_t fp = 0;
   for (uint32_t i = 0; i < cd->word_count && fp < sizeof(framesbuf) - 12; i++) {
     int wn = snprintf_P(framesbuf + fp, sizeof(framesbuf) - fp,
@@ -632,9 +651,9 @@ static void info_render_backtrace(EGHttpResponse& res, const CrashDump::Snapshot
   }
   framesbuf[fp] = '\0';
 #ifdef __riscv
-  INFO_ROW("Stack",     IR_CODE, framesbuf);   // raw words, not PCs
+  res.sendKV(F("<tr><th>Stack</th><td><code>"), framesbuf, FPSTR(IR_CODE_END));   // raw words, not PCs
 #else
-  INFO_ROW("Backtrace", IR_CODE, framesbuf);
+  res.sendKV(F("<tr><th>Backtrace</th><td><code>"), framesbuf, FPSTR(IR_CODE_END));
 #endif
 }
 
@@ -692,6 +711,7 @@ static void info_render_system(EGHttpResponse& res) {
   info_render_reset(res);
   INFO_ROW("Safe mode", W_FMT_S, BootGuard::safe_mode() ? "yes" : "no");
   INFO_ROW("Crash boots in a row", W_FMT_U, (unsigned)BootGuard::crash_streak());
+  if (SystemPrefs::pass_restored) INFO_ROW("Web password", PSTR("restored from backup (settings lost)"));
   res.sendChunk(FPSTR(IR_END));
 }
 
@@ -827,12 +847,15 @@ void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // back to DHCP for the setup AP
   Log::console(PSTR("WebPortal: erasing WiFi credentials"));
   EGPrefs::put("net", EG_K_STATIC_IP, "0");
+  if (!EGPrefs::commit()) {
+    not_saved_page(res, F("Erase WiFi"));
+    return;
+  }
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   WebPortal::sendPageHead(res, F("Erase WiFi"));
   res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device will reboot into Setup Mode.</p>"));
   WebPortal::sendPageTail(res);
   res.endChunked();
-  EGPrefs::commit();
   s_pendingEraseCreds = true;
   WebPortal::requestRestart(1500);
 }
@@ -924,9 +947,13 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  static uint32_t s_lastScan = 0;
+  static constexpr uint32_t KEEP_MS = 60000;
+  static constexpr uint32_t FORCE_MS = 10000;   // refresh is unauth, radio goes off channel
+  static Stamp s_lastScan;
   static const char SCANNING[] PROGMEM = "{\"state\":\"scanning\"}";
+  uint32_t now = fast_millis();
   bool force = req.arg(F("refresh")) != nullptr;
+  if (force && s_lastScan.fresh(now, FORCE_MS)) force = false;
 
   int status = Wifi::scanComplete();
   if (!force && status == WIFI_SCAN_RUNNING) {
@@ -934,12 +961,12 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
     return;
   }
 
-  bool stale = (fast_millis() - s_lastScan) > 60000UL;
+  bool stale = !s_lastScan.fresh(now, KEEP_MS);
   bool needScan = force || status <= 0 || stale;
   if (needScan) {
     if (status != WIFI_SCAN_RUNNING) Wifi::scanDelete();
     Wifi::scanNetworks(true /*async*/, false /*show_hidden*/);
-    s_lastScan = fast_millis();
+    s_lastScan.mark(now);
     res.send(200, FPSTR(HTTP_CT_JSON), FPSTR(SCANNING));
     return;
   }
@@ -1000,11 +1027,15 @@ static bool take_ip(EGHttpRequest& req, const __FlashStringHelper* name,
   return !*dst || a.fromString(dst);
 }
 
+enum HoldResult : uint8_t { HELD, TOO_LONG, NO_MEMORY };
+
 // arg() reuses its buffer, copy the ssid first
-static bool wifi_hold_args(EGHttpRequest& req, const char* ssid) {
+static HoldResult wifi_hold_args(EGHttpRequest& req, const char* ssid) {
   char s[EGPORTAL_SSID_MAX + 1];
-  if (strlcpy(s, ssid, sizeof(s)) >= sizeof(s)) return false;
-  return Wifi::holdCreds(s, req.arg(F("password")));
+  if (strlcpy(s, ssid, sizeof(s)) >= sizeof(s)) return TOO_LONG;
+  const char* pass = req.arg(F("password"));
+  if (pass && strlen(pass) > EGPORTAL_PASS_MAX) return TOO_LONG;
+  return Wifi::holdCreds(s, pass) ? HELD : NO_MEMORY;
 }
 
 void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -1034,8 +1065,13 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   const char* ssid = req.arg(F("ssid"));
   bool ssidProvided = (ssid && *ssid);
-  if (ssidProvided && !wifi_hold_args(req, ssid)) {
+  HoldResult held = ssidProvided ? wifi_hold_args(req, ssid) : HELD;
+  if (held == TOO_LONG) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad WiFi settings: SSID or password too long\nClick Back to fix it.\n"));
+    return;
+  }
+  if (held == NO_MEMORY) {
+    res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory\n"));
     return;
   }
 
@@ -1046,7 +1082,10 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   EGPrefs::put("net", EG_K_GW, gw_buf);
   EGPrefs::put("net", EG_K_SN, sn_buf);
   EGPrefs::put("net", EG_K_DNS, dns_buf);
-  EGPrefs::commit();
+  if (!EGPrefs::commit()) {
+    not_saved_page(res, F("Saving WiFi"));
+    return;
+  }
 
   if (ssidProvided) {
     Wifi::saveBackupCreds();
@@ -1394,10 +1433,10 @@ struct Refusal {
 
 static void param_put(const char* mid, const char* id, const char* name,
                       const char* v, Refusal& r) {
-  if (EGPrefs::put(mid, id, v) || r.why || !EGPrefs::refused()) return;
+  if (EGPrefs::put(mid, id, v) || r.why) return;
   strncpy(r.name, name, sizeof(r.name) - 1);
   r.name[sizeof(r.name) - 1] = '\0';
-  r.why = EGPrefs::refused();
+  r.why = EGPrefs::refused() ? EGPrefs::refused() : PSTR("not valid");
 }
 
 static void param_save_pref(const char* mid, const EGPref& p,
@@ -1620,6 +1659,8 @@ static void param_send_escaped(ParamCtx& c, const char* s) {
   char piece[ESC_PIECE + 1];
   for (size_t left = strlen(s); left; ) {
     size_t k = left < ESC_PIECE ? left : ESC_PIECE;
+    // whole chars, a cut one comes back as two U+FFFD
+    while (k < left && k > 1 && (s[k] & 0xC0) == 0x80) k--;
     memcpy(piece, s, k);
     piece[k] = '\0';
     c.res->sendChunk(c.buf, egesc_html(c.buf, sizeof(c.buf), piece));
@@ -1822,24 +1863,24 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool posted = (req.method() == EGHttpRequest::POST);
   Refusal refused{};
   bool saved = posted && param_save_body(tab, refused);
-  if (saved) {
-    EGPrefs::commit();
-    // stay, so the refusal shows
-    if (EGPrefs::restart_pending() && !refused.why) {
-      res.redirect(FPSTR(P_RESTART));
-      return;
-    }
+  bool wrote = saved && EGPrefs::commit();
+  // stay, so the refusal shows
+  bool restart = wrote && EGPrefs::restart_pending();
+  if (restart && !refused.why) {
+    res.redirect(FPSTR(P_RESTART));
+    return;
   }
 
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   WebPortal::sendPageHead(res, F("Config"));
-  if (saved) res.sendChunk(F(
+  if (wrote) res.sendChunk(F(
     "<div class='a ak'>Saved.</div>"));
+  else if (saved) WebPortal::sendNotSaved(res);
   if (refused.why) {
     char buf[160];
     snprintf_P(buf, sizeof(buf), PSTR("<div class='a ae'>Not saved: %s, %s.%s</div>"),
                refused.name, refused.why,
-               EGPrefs::restart_pending() ? PSTR(" <a href=/restart>Restart</a> for the rest.") : PSTR(""));
+               restart ? PSTR(" <a href=/restart>Restart</a> for the rest.") : PSTR(""));
     res.sendChunk(buf);
   }
   if (posted && !saved) res.sendChunk(F(
@@ -2002,7 +2043,7 @@ static void deobfuscate_payload(uint8_t* buf, size_t len) {
 }
 
 static const char* validateImport(uint8_t* buf, size_t len) {
-  if (len < 10) return PSTR("too short");
+  if (len < 9) return PSTR("too short");   // magic, ver, no groups, crc
   const uint8_t MAGIC[3] = {EXPORT_MAGIC};
   if (buf[0] != MAGIC[0] || buf[1] != MAGIC[1] || buf[2] != MAGIC[2]) return PSTR("bad magic");
   if (buf[3] != 1) return PSTR("bad format");
@@ -2022,14 +2063,17 @@ static bool import_put(const char* mid, const char* key, const char* value) {
   return EGPrefs::put(mid, key, value);
 }
 
-// wipe then apply, -1 = bad blob
+// wipe then apply, -1 = bad blob or not saved
 static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
   const char* err = validateImport(buf, len);
   if (err) { if (err_out) *err_out = err; return -1; }
 
   EGPrefs::reset_all(/*keep_network=*/true);
   int applied = ImportText::apply_blob(buf + 4, len - 8, import_put);   // less magic and crc
-  EGPrefs::commit(false);   // silent, the cascade would WDT
+  if (!EGPrefs::commit(false)) {   // silent, the cascade would WDT
+    if (err_out) *err_out = WRITE_FAILED;
+    return -1;
+  }
   return applied;
 }
 
@@ -2131,7 +2175,10 @@ static int import_lines(const char* text, size_t len, ImportText::Result* out, c
     *err = PSTR("nothing imported");
     return -1;
   }
-  EGPrefs::commit(false);   // silent, the cascade would WDT
+  if (!EGPrefs::commit(false)) {   // silent, the cascade would WDT
+    *err = WRITE_FAILED;
+    return -1;
+  }
   return r.applied;
 }
 
@@ -2275,21 +2322,9 @@ void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
                      (unsigned)curIdx, Clock::tz_offset_min);
   if (n > 0 && (size_t)n < sizeof(hdr)) res.sendChunk(hdr, (size_t)n);
 
-  if (counter != curIdx) {
-    if (counter == 0) counter = curIdx;
-    do {
-      char line[256];
-      size_t copyLen = Log::copyLog(counter, line, sizeof(line));
-      if (copyLen) {
-        line[copyLen - 1] = '\n';
-        line[copyLen] = '\0';
-        res.sendChunk(line, copyLen);
-      }
-      counter++;
-      counter &= 0xFF;
-      if (counter == 0) counter++;  // 0 reserved
-    } while ((uint8_t)counter != curIdx);
-  }
+  char line[256];
+  size_t len;
+  while ((len = Log::copySince(&counter, curIdx, line, sizeof(line))) > 0) res.sendChunk(line, len);
   res.endChunked();
 }
 

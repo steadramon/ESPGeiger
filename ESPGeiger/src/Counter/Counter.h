@@ -143,12 +143,15 @@ class Counter : public CounterMaths {
       static constexpr uint8_t TOPIC_COUNTS = EG_TOPIC_APP + 1;
       bool is_healthy() const { return geigerinput && geigerinput->isHealthy(); }
       GeigerInput* input() { return geigerinput; }
+      // web ota keeps the second ticking, no zero seconds
       void stop_for_ota() {
+        _running = false;
         if (_lifetime_enabled) save_lifetime();
         if (geigerinput) geigerinput->stopForOTA();
       }
       void restart_after_ota() {
         if (geigerinput) geigerinput->restartAfterOTA();
+        _running = true;
       }
       unsigned long last_blip() {
         return geigerinput->last_blip();

@@ -218,7 +218,7 @@ bool Wifi::restoreNetBackup() {
   EGPrefs::put("net", EG_K_GW,     fields[2]);
   EGPrefs::put("net", EG_K_SN,     fields[3]);
   EGPrefs::put("net", EG_K_DNS,    fields[4]);
-  EGPrefs::commit();
+  if (!EGPrefs::commit()) return false;
   Fs::remove(NET_BACKUP_PATH);
   return true;
 }

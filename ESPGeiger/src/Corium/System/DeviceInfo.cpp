@@ -61,12 +61,13 @@ uint32_t DeviceInfo::freeHeap() {
 
 static uint32_t s_lfb_cur = 0;
 static uint32_t s_lfb_low = 0;  // 0 = unset
+static const uint32_t FRAG_MS = 60000;   // 8266 getHeapStats masks ints ~260 us
 
 uint8_t DeviceInfo::heapFrag() {
   static uint8_t cached = 0;
   static uint32_t last_ms = 0;
   uint32_t now = fast_millis();
-  if (last_ms == 0 || now - last_ms >= 10000) {
+  if (last_ms == 0 || now - last_ms >= FRAG_MS) {
 #ifdef ESP8266
     uint32_t free_;
     uint16_t max_;
@@ -183,7 +184,8 @@ void DeviceInfo::factoryReset() {
   // keeps the key
   Log::console(PSTR("Factory reset"));
   EGPrefs::reset_all();
-  EGPrefs::commit(false);   // kept rows back on flash now
+  // kept rows back on flash now
+  if (!EGPrefs::commit(false)) Log::console(PSTR("Factory reset: not saved"));
 #ifdef EGPREFS_LEGACY_FILE
   Fs::remove(F(EGPREFS_LEGACY_FILE));   // legacy import file
 #endif

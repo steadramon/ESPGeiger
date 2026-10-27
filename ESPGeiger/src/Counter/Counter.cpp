@@ -403,7 +403,7 @@ void Counter::save_lifetime() {
   EGPrefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover);
   EGPrefs::putUInt("life", EG_K_FBT, _first_boot_ts);
   EGPrefs::putUInt("life", EG_K_SECS, _lifetime_seconds_saved);
-  EGPrefs::commit();
+  if (!EGPrefs::commit()) Log::console(PSTR("Lifetime: not saved"));
   _rtc_unsaved_clicks = 0;
   _rtc_carry_s = 0;
   rtc_life_stash(0, 0);
