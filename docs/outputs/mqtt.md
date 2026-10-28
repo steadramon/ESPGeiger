@@ -50,7 +50,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 ## Example `tele/sensor` JSON
 
 ```json
-{"cpm":87.00,"usv":0.51,"cps":1.45,"cpm5":149.76,"cpm15":212.07,"warn":1,"alert":0}
+{"cpm":87.00,"cpm5":149.76,"cpm15":212.07,"usv":0.5100,"cps":1.45,"tube":1,"sat":0,"warn":1,"alert":0}
 ```
 
 | Field | Description |
@@ -64,6 +64,8 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `t` | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h` | Humidity in % (BME280 / AHT family only) |
 | `p` | Pressure in hPa (BME280 / BMP280 only) |
+| `tube` | `1` while counts are arriving, `0` once the tube has been silent longer than expected for its count rate. Home Assistant's **Tube Active** reads this. |
+| `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `warn` | `1` when CPM is above configured warning threshold |
 | `alert` | `1` when CPM is above configured alert threshold |
 

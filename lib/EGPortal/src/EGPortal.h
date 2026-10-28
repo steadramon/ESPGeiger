@@ -31,6 +31,7 @@
 #ifndef EGPORTAL_PASS_MAX
   #define EGPORTAL_PASS_MAX 64   // WPA2 PSK ASCII max
 #endif
+#define EGPORTAL_PASS_MIN 8   // WPA2
 #ifndef EGPORTAL_RSSI_MIN
   #define EGPORTAL_RSSI_MIN -85   // dBm
 #endif
@@ -70,6 +71,19 @@ class EGPortal {
 
     static size_t processScan(ScanEntry* out, size_t maxOut, int rawCount,
                               int8_t rssiMin = EGPORTAL_RSSI_MIN);
+
+    // "" = open, else 8-63, or 64 = the hex PSK; no field isn't open
+    static bool passOk(const char* p) {
+      if (!p) return false;
+      size_t n = strlen(p);
+      if (n == 0) return true;
+      if (n < EGPORTAL_PASS_MIN || n > EGPORTAL_PASS_MAX) return false;
+      if (n < EGPORTAL_PASS_MAX) return true;
+      for (size_t i = 0; i < n; i++) {
+        if (!isxdigit((unsigned char)p[i])) return false;
+      }
+      return true;
+    }
 
   private:
     EGHttpServer _http;

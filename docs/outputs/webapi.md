@@ -24,6 +24,11 @@ Participation is opt-in, signed end-to-end and privacy-respecting.
   firmware version, board and build, tube model and type, compiled-in
   features, last reset reason, sharing mode and, if you set one, your
   location rounded to about 1 km.
+- **After a crash**, the first handshake also carries the crash details
+  to help fix the bug: exception cause, program counter and fault
+  address, a few CPU registers, a copy of up to 32 words (128 bytes) of
+  the stack and, on ESP32, the module that was running. No settings, passwords or
+  readings are in it.
 
 Field-level details are in the [WebAPI protocol](/dev/webapi-protocol) developer page.
 

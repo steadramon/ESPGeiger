@@ -341,12 +341,12 @@ void EGPortal::hSave(EGHttpRequest& req, EGHttpResponse& res, void* user) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("password too long"));
     return;
   }
-  if (pass) {
-    strncpy(self->_savedPass, pass, EGPORTAL_PASS_MAX);
-    self->_savedPass[EGPORTAL_PASS_MAX] = '\0';
-  } else {
-    self->_savedPass[0] = '\0';
+  if (!passOk(pass)) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), F("password must be empty (open), 8-63 characters or 64 hex digits"));
+    return;
   }
+  strncpy(self->_savedPass, pass, EGPORTAL_PASS_MAX);
+  self->_savedPass[EGPORTAL_PASS_MAX] = '\0';
 
   res.send(200, FPSTR(HTTP_CT_HTML), FPSTR(SAVED_HTML));
 

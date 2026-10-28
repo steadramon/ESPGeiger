@@ -15,9 +15,9 @@ non-blocking.
 
 This is the lightweight cousin of the [Audio Tick](/output/audiotick)
 output: no I2S, no amplifier IC, no synthesis. A real mechanical tick
-per pulse, available on every ESP build.
+per pulse, available on most ESP builds.
 
-Included in every shipped ESP build. Disabled by default; set the pin
+Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`). Disabled by default; set the pin
 and enable it from **Config > Pulse Out** after flashing.
 
 ## Settings

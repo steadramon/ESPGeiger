@@ -22,7 +22,7 @@
 #include <Arduino.h>
 #include "App/AppConfig.h"
 
-// SSID\nPSK\n
+// 0, ssid len, SSID, psk len, PSK
 extern const char WIFI_BACKUP_P[] PROGMEM;
 #define WIFI_BACKUP_PATH FPSTR(WIFI_BACKUP_P)
 

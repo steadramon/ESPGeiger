@@ -19,7 +19,7 @@ Offline mode needs a build with a push button.
 3. Power on or reset the device while holding the button.
 4. **Release the button within 5 seconds.** The display shows a countdown.
 
-> Holding the button for 5 seconds or more performs a **factory reset**: settings and Wi-Fi credentials are erased.
+> Holding the button for 5 seconds or more performs a **factory reset**: settings and Wi-Fi credentials are erased. The Stations identity and lifetime totals are kept. A hold of 30 seconds or more is taken as a stuck button and ignored: the device boots as normal, online.
 
 ## What Offline Mode Does
 
@@ -30,4 +30,4 @@ Offline mode needs a build with a push button.
 
 To go back online, reboot without holding the button.
 
-Offline mode differs from a lost connection. If the saved Wi-Fi network is unavailable at boot, ESPGeiger-HW and ESPGeiger Lite/Log devices keep counting offline, retry the network every 2 minutes and reboot after an hour. Other builds reboot and try again.
+Offline mode differs from a lost connection. If the saved Wi-Fi network is unavailable at boot, and the Wi-Fi details were only just changed, the device goes back to the previous network. Otherwise ESPGeiger-HW and ESPGeiger Lite/Log devices keep counting offline, retry the network every 2 minutes and reboot after an hour. Other builds open the [setup portal](/install/setup) hotspot, and reboot to try the saved network again after 10 minutes with nobody connected to the hotspot, or an hour after boot.

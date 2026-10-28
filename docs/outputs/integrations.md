@@ -21,7 +21,7 @@ http://192.168.1.100/json
 Response:
 
 ```json
-{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"hv":394.00,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
+{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"warn":0,"alert":0,"hv":394.00,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
 ```
 
 | Field | Description |
@@ -38,6 +38,8 @@ Response:
 | `rssi` | WiFi signal strength in dBm |
 | `tube` | `1` while counts are arriving, `0` once the tube has been silent longer than expected for its count rate |
 | `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
+| `warn` | `1` when CPM is above the warning threshold (`counter.warn`) |
+| `alert` | `1` when CPM is above the alert threshold (`counter.alert`) |
 | `hv` | HV reading in volts (ESPGeiger-HW only) |
 
 #### Environmental sensor

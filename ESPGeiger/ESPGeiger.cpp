@@ -89,6 +89,7 @@ void setup()
   digitalWrite(GEIGER_PWMPIN, LOW);
 #endif
   Boot::begin(LED_PATTERNS, LED_PATTERN_COUNT, LED_FLASH_ON_LED);
+  Board::claim();
 #ifdef LED_FLASH_ENGINE
   BlipLed::begin(LED_FLASH_PIN);
 #endif

@@ -595,30 +595,75 @@ void SSD1306Display::page_one_clear() {
   _p1v_last_cpm = 0xFFFFFFFFu;   // force a redraw
 }
 
+// 3 bad transfers in a row and nothing goes out, one a minute tries
+static const uint8_t BUS_FAILS = 3;
+static const uint32_t BUS_RETRY_MS = 60000;
+static uint8_t s_bus_fails = 0;
+static uint32_t s_bus_retry = 0;
+static bool s_bus_skip = false;
+
+static void bus_result(bool ok) {
+  if (ok) {
+    if (s_bus_fails >= BUS_FAILS) {
+      Log::console(PSTR("OLED: answering again"));
+      oled.oled_last_update = 0;   // full frame
+    }
+    s_bus_fails = 0;
+    return;
+  }
+  s_bus_retry = fast_millis() + BUS_RETRY_MS;
+  if (s_bus_fails < BUS_FAILS && ++s_bus_fails == BUS_FAILS) {
+    Log::console(PSTR("OLED: not answering, retry every 60 s"));
+  }
+}
+
+// as u8g2's hw i2c, but no Wire.begin (I2CBus did it) and the result kept
+static uint8_t oled_i2c(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
+  switch (msg) {
+    case U8X8_MSG_BYTE_START_TRANSFER:
+      s_bus_skip = s_bus_fails >= BUS_FAILS && !reached(fast_millis(), s_bus_retry);
+      Wire.setClock(u8x8->bus_clock);
+      Wire.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1);
+      break;
+    case U8X8_MSG_BYTE_SEND:
+      if (!s_bus_skip) Wire.write((uint8_t*)arg_ptr, arg_int);
+      break;
+    case U8X8_MSG_BYTE_END_TRANSFER:
+      if (!s_bus_skip) bus_result(Wire.endTransmission() == 0);
+      break;
+    case U8X8_MSG_BYTE_INIT:
+    case U8X8_MSG_BYTE_SET_DC:
+      break;
+    default:
+      return 0;
+  }
+  return 1;
+}
+
 void SSD1306Display::setup_driver() {
   switch (_pref_display_type) {
     case DISP_SH1106:
       u8g2_Setup_sh1106_i2c_128x64_noname_f(&_u8g2, U8G2_R0,
-          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+          oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
     case DISP_SSD1309:
       u8g2_Setup_ssd1309_i2c_128x64_noname0_f(&_u8g2, U8G2_R0,
-          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+          oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
 #ifdef ESP32
     case DISP_SSD1306_72X40:
       u8g2_Setup_ssd1306_i2c_72x40_er_f(&_u8g2, U8G2_R0,
-          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+          oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
     case DISP_SH1106_72X40:
       u8g2_Setup_sh1106_i2c_72x40_wise_f(&_u8g2, U8G2_R0,
-          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+          oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
 #endif
     case DISP_SSD1306:
     default:
       u8g2_Setup_ssd1306_i2c_128x64_noname_f(&_u8g2, U8G2_R0,
-          u8x8_byte_arduino_hw_i2c, u8x8_gpio_and_delay_arduino);
+          oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
   }
 }

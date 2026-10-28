@@ -26,7 +26,7 @@ To configure ESPGeiger for WiFi:
 - Click __Config Wifi__
 - Select your Wifi Access Point from the list shown, OR
 - Enter your SSID in the form area provided
-- Enter your password in the form area provided
+- Enter your password in the form area provided (8-63 characters, or leave it blank for an open network)
 - Click Save
 
 After a few seconds your ESPGeiger should be connected to your WiFi. 
@@ -35,9 +35,13 @@ You should now be able to browse to the ESPGeiger web interface to finish setup.
 
 The ESPGeiger will be available on [http://ESPGeiger-XXXXXX.local](http://ESPGeiger-XXXXXX.local) - an alternate is to find the DHCP address given to the ESPGeiger in your routers web interface.
 
+### Setup portal and the web password
+
+If a web password is set, the setup portal asks for it too: user `admin`, password the web password. A new device has none, so this only shows up on a device that has dropped back to the setup portal, for example after a router change. Forgotten it? See below.
+
 ## Locked out of the web UI?
 
-If you set a web password (Config &rarr; System &rarr; Web password) and have forgotten it, the device's main web pages will keep prompting you for credentials. The password is stored on the device, not in the cloud, so there is no remote reset. There are three ways to recover, in order of least to most disruptive:
+If you set a web password (Config &rarr; System &rarr; Web password) and have forgotten it, the device's main web pages and the setup portal will keep prompting you for credentials. The password is stored on the device, not in the cloud, so there is no remote reset. There are four ways to recover, in order of least to most disruptive:
 
 ### 1. Clear via the USB serial console
 
@@ -47,24 +51,32 @@ Connect the device over USB to your computer and open a serial terminal at **115
 set sys.web_pass
 ```
 
-(That is, the `set` command with an empty value.) The change applies immediately, no reboot needed. The web UI will stop prompting on the next request.
+(That is, the `set` command with an empty value.) The web UI stops prompting on the next request. The console also says `Reboot to apply`: that is for [espota](/install/ota#via-espotapy-arduinoota), which only reads the password at boot.
 
 To set a new password later: `set sys.web_pass MyNewPassword`.
 
-### 2. Hardware button factory reset
+This needs the device running normally on your WiFi. The serial console doesn't run whilst the setup portal is up, and ESPGeiger Log builds don't read serial commands at all.
+
+### 2. Set the WiFi over USB
+
+If the device is stuck on the setup portal, open [install.espgeiger.com](https://install.espgeiger.com) in Chrome or Edge, click Connect and pick the device, then choose the option to change or connect Wi-Fi (no reinstall needed). This sets the WiFi without going through the portal or the password. The web pages still ask for the password afterwards, so then clear it with option 1.
+
+This doesn't work on ESPGeiger Log, where the serial RX pin is the push button. Use option 3 there.
+
+### 3. Hardware button factory reset
 
 On builds with a push button (such as ESPGeiger-HW and ESPGeiger Log):
 
 1. Power off the device.
 2. **Hold the push button.**
 3. Power on while still holding.
-4. Keep holding for **at least 5 seconds** (the display counts down), then release.
+4. Keep holding for **at least 5 seconds** (the display counts down), then release. Don't hold it for 30 seconds or more: that is taken as a stuck button and the device boots as normal.
 
-The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity is kept. Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before 5 seconds starts [Offline Mode](/configuration/offlinemode) instead.
+The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity and the lifetime totals (clicks, first boot, tracked time) are kept; clear those with **Reset lifetime** on the [History page](/output/history). Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before 5 seconds starts [Offline Mode](/configuration/offlinemode) instead.
 
-### 3. Reflash via the Web Installer
+### 4. Reflash via the Web Installer
 
-Nuclear option: reflash the firmware from [install.espgeiger.com](https://install.espgeiger.com). This wipes everything (web password, WiFi credentials, all output configurations). Re-run Initial Setup afterwards.
+Nuclear option: reflash the firmware from [install.espgeiger.com](https://install.espgeiger.com) and tick **Erase device**. This wipes everything (web password, WiFi credentials, all output configurations). Re-run Initial Setup afterwards.
 
 ## Network and security
 

@@ -116,6 +116,9 @@
 #ifdef GEIGER_SDCARD
 #define SENDSLOT_FIRST 1
 #endif
+#ifndef GEIGER_SDCARD_CS
+#define GEIGER_SDCARD_CS 16
+#endif
 
 // Radmon worst case 376
 #define EGHTTPPOSTER_URL_MAX 384

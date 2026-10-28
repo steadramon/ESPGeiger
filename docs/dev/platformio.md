@@ -145,7 +145,6 @@ See [UDP / OSC Output](/output/udp) for the full protocol. Tunables for the prod
 | `-D UDPRX_DEFAULT_GROUP="239.x.x.x"` | (inherits `UDPBLIP_DEFAULT_GROUP`) | Override receiver's multicast group only if it should listen on a different group than local producers send to. |
 | `-D UDPRX_DEFAULT_PORT=N` | (inherits `UDPBLIP_DEFAULT_PORT`) | Receiver's default UDP port. |
 | `-D UDPRX_PRODUCER_SLOTS=N` | `8` | Producer tracking table size (sum mode). |
-| `-D UDPRX_POLL_SKIP=N` | `500` | Main-loop iterations between UDP rx drains. Lower = less burst loss, more polling cost. |
 
 ### Test Build Options
 
@@ -289,7 +288,7 @@ PlatformIO is configured to automatically load any file matching `*_env.ini` in 
 
 ### Example: ESP8266 with serial counter, NeoPixel and OLED
 
-Say you've built your own hardware with an ESP8266, a serial Geiger counter, a NeoPixel LED and an SSD1306 OLED display. You want the serial input on GPIO5 and a push button on GPIO14.
+Say you've built your own hardware with an ESP8266, a serial Geiger counter, a NeoPixel LED and an SSD1306 OLED display. You want the serial input on GPIO13 and a push button on GPIO14. The OLED goes on the default I2C pins, SDA 4 and SCL 5, so keep the serial input off those.
 
 Start by choosing the right base. `base:esp8266_neopixel` gives you ESP8266 with NeoPixel support. Then add the OLED, counter type and pin configuration on top:
 
@@ -298,25 +297,31 @@ Start by choosing the right base. `base:esp8266_neopixel` gives you ESP8266 with
 extends = base:esp8266_neopixel
 lib_deps =
   ${base:esp8266_neopixel.lib_deps}
-  ${libraries.ssd1306display}
+  ${libraries.u8g2}
 build_flags =
   ${base:esp8266_neopixel.build_flags}
+  ${u8g2_flags.build_flags}
+  ${serial_nmi.build_flags}
   -D SSD1306_DISPLAY
   -D OLED_SDA=4
   -D OLED_SCL=5
-  -D GEIGER_PUSHBUTTON
-  -D PUSHBUTTON_PIN=14
+  -DGEIGER_PUSHBUTTON=true
+  -DPUSHBUTTON_PIN=14
   -DGEIGER_TYPE=${geiger_type.serial}
-  -DGEIGER_RXPIN='5'
+  -DGEIGER_RXPIN='13'
   -DGEIGER_MODEL='"MySerial"'
 ```
+
+`${serial_nmi.build_flags}` reads the serial counter on the timer NMI instead of SoftwareSerial, as the shipped ESP8266 serial builds do.
+
+With no `BTN_PIN_BLOCKED` flag the button pin is also a setting, **Button Pin** (`btn.pin`) on the Config page, with `PUSHBUTTON_PIN` as its default. `-1` turns the button off.
 
 After flashing, select your serial counter type (GC10, GC10Next, MightyOhm, or ESPGeiger) from the **Config** page under **Input > Serial Type**.
 
 The key points when building a custom environment:
 
 - **Pick the closest base** that has the hardware features you need. If you need NeoPixel, start with `base:esp8266_neopixel`. If you just need OLED, use `base:esp8266_oled`. For a bare board, use `base:esp8266_main` or `base:esp32_main`.
-- **Add library dependencies** for any features not in the base. For example, adding OLED to a NeoPixel base requires `${libraries.ssd1306display}` in `lib_deps`.
+- **Add library dependencies** for any features not in the base. For example, adding OLED to a NeoPixel base requires `${libraries.u8g2}` in `lib_deps` and `${u8g2_flags.build_flags}` in `build_flags`.
 - **Set your counter type** with `GEIGER_TYPE`. For serial builds, the specific serial protocol is selected at runtime from the Config page.
 - **Configure your pins** to match your hardware wiring.
 - Common output modules (MQTT, Radmon, GMC, ThingSpeak, Webhook) are enabled globally in `platformio.ini` under `[com-esp]` and will be available in all custom environments.

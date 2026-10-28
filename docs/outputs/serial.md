@@ -21,6 +21,8 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | Command | Description | Example |
 |---|---|---|
 | `reboot` | Reboot ESPGeiger | `reboot` |
+| `safe` | Reboot into [safe mode](/configuration/safemode) | `safe` |
+| `ver` | Print the name, version and build | `ver` |
 | `resetwifi` | Erase WiFi credentials and drop into setup mode | `resetwifi` |
 | `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
 | `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
@@ -35,8 +37,8 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | `show cpm` | Toggle CPM line inclusion in periodic output | `show cpm` |
 | `show cps` | Toggle CPS on periodic output | |
 | `show usv` | Toggle μSv on periodic output | |
-| `show hv` | Toggle HV on periodic output (ESPGHW only) | |
-| `hv` | Return current live HV value (ESPGHW only) | |
+| `show hv` | Toggle HV on periodic output (builds with HV feedback: ESPGeiger-HW, `*_hv`) | |
+| `hv` | Return current live HV value (builds with HV feedback) | |
 | `target` | Set target CPM value for Test builds only | `target 1234` |
 
 ### Setting prefs

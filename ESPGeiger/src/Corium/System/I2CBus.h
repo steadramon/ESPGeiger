@@ -39,6 +39,11 @@
 #endif
 #endif
 
+// 8266 wait per bit on a held SCL, the core's 150 ms stalls a dead bus for seconds
+#ifndef I2C_STRETCH_US
+#define I2C_STRETCH_US 2000
+#endif
+
 namespace I2CBus {
   void pins(uint8_t sda, uint8_t scl);   // whoever owns the pin prefs, no effect once up
   bool begin();   // first user starts it, a remap would freeze the others

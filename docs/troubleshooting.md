@@ -32,6 +32,13 @@ crashes that never repeat in the same place. If a device misbehaves
 erratically and the crash reasons keep changing, try a better power supply
 before anything else.
 
+## Home page says SAFE MODE
+
+The device crashed 3 times in a row soon after boot, or safe mode was asked
+for. Counting and outputs are stopped, but the web pages, Config and Update
+still work. See [Safe Mode](/configuration/safemode) for what to do. If the
+crashes are brownouts, sort out the power supply first (above).
+
 ## Device is online but shows 0 CPM
 
 The firmware warns about this on the Status page ("No counts detected -

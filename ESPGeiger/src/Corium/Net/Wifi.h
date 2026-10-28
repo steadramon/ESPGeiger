@@ -60,7 +60,7 @@ namespace Wifi {
   bool validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
                       char* errbuf, size_t errlen);
   void onImprovCreds(const char* ssid, const char* pass);
-  // heap from save to beginHeld(), false = too long or no memory
+  // heap from save to beginHeld(), false = no pass, too long or no memory
   bool holdCreds(const char* ssid, const char* pass);
   const char* heldSsid();   // "" if none
   bool beginHeld();   // WiFi.begin() then frees, false = none held

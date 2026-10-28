@@ -117,13 +117,24 @@ device rejects wrong-platform binaries server-side (entry-address check),
 so an ESP32 `.bin` sent at an ESP8266 device aborts before any flash
 writes happen.
 
-### Via espota.py (ArduinoOTA, port 8266)
+### Via espota.py (ArduinoOTA)
 
 A separate path that doesn't go through the web stack. `espota.py` ships
-with the Arduino ESP core:
+with the Arduino ESP core. ESP8266 builds listen on port 8266, ESP32 builds
+(including C3 and S3) on port 3232:
 
 ```
 python espota.py -i 192.168.1.167 -p 8266 -f esp8266_pulse.v1.2.3.bin
 ```
+
+If you've set a web password, ArduinoOTA uses it too. Add it with `-a`:
+
+```
+python espota.py -i 192.168.1.167 -p 8266 -a <password> -f esp8266_pulse.v1.2.3.bin
+```
+
+Without it the upload fails with an auth error. ArduinoOTA only reads the
+password at boot, so after changing the web password restart the device
+before using the new one with espota.
 
 Useful if the web stack is wedged but ArduinoOTA is still alive.

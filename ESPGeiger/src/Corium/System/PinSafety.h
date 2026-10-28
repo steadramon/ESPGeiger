@@ -56,6 +56,14 @@ const char* claim_output(int pin, const char* owner);
 const char* claim_input(int pin, const char* owner);
 const char* claim_button(int pin, const char* owner);   // input, no strap note
 
+enum Use : uint8_t { USE_OUT, USE_IN, USE_BUTTON };
+
+// a pin the board wires, a null owner ends the table (PROGMEM)
+struct Fixed { const char* owner; int8_t pin; Use use; };
+
+// before prefs load: each claimed, and no pref can take one
+void reserve(const Fixed* rows);
+
 enum PinKind : uint8_t {
   PK_FLASH,       // refused
   PK_PSRAM,       // refused
@@ -64,7 +72,13 @@ enum PinKind : uint8_t {
   PK_INPUT_ONLY,  // outputs refused
   PK_STRAP,       // inputs warned, a pull the wrong way at power-on stops boot
   PK_NO_PULL,     // inputs warned, no internal pull-up
+  PK_NO_IRQ,      // warned when NEED_IRQ
+  PK_NO_PWM,      // warned when NEED_PWM
+  PK_NO_OD,       // warned when NEED_OD
 };
+
+// what a pin is for, a kind it lacks is a warning
+enum Need : uint8_t { NEED_IRQ = 1, NEED_PWM = 2, NEED_OD = 4 };
 
 // lo..hi inclusive, a lo of PIN_END ends the table
 struct PinRule { uint8_t lo, hi; PinKind kind; };
@@ -79,10 +93,12 @@ extern const PinRule ESP32C3_PINS[];
 extern const PinRule ESP32C6_PINS[];
 
 // nullptr = ok, else why; *warn = a note worth logging
-const char* check(const PinRule* rows, int pin, bool out, bool usb, const char** warn);
+const char* check(const PinRule* rows, int pin, bool out, bool usb, const char** warn,
+                  uint8_t needs = 0);
 
-// this chip's table only, no claim; -1 = no pin
-const char* refuse(int pin, bool out);
+// this chip's table and the reserved pins, no claim; -1 = no pin; *warn as a claim's
+const char* refuse(int pin, Use use, uint8_t needs, const char** warn);
+constexpr size_t WHY_MAX = 24;   // longest refuse() text, with the nul
 
 }  // namespace PinSafety
 

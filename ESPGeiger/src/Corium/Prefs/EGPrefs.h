@@ -69,8 +69,12 @@ static constexpr uint16_t EGP_INLINE    = 1 << 7;
 static constexpr uint16_t EGP_REBOOT    = 1 << 8;   // a change needs a restart
 static constexpr uint16_t EGP_PIN       = 1 << 9;   // input GPIO, put checks PinSafety
 static constexpr uint16_t EGP_PIN_OUT   = 1 << 10;  // output GPIO, input-only refused too
+static constexpr uint16_t EGP_PIN_BTN   = EGP_PIN | EGP_PIN_OUT;  // button: input, no strap note
 static constexpr uint16_t EGP_LOCAL     = 1 << 11;  // this device's, no export, an import keeps it
 static constexpr uint16_t EGP_KEEP      = 1 << 12;  // no reset_all clears it, only its own reset
+static constexpr uint16_t EGP_PIN_IRQ   = 1 << 13;  // pin needs an interrupt, else a warning
+static constexpr uint16_t EGP_PIN_PWM   = 1 << 14;  // pin needs PWM
+static constexpr uint16_t EGP_PIN_OD    = 1 << 15;  // pin needs open-drain
 
 // no PSTR() in static init. default_val stays SRAM
 #define EG_PSTR(name, val) static const char name[] PROGMEM = val
@@ -205,6 +209,8 @@ public:
   static bool put(const char* module, const char* key, const char* value);
   // why the last put refused a pin (PROGMEM), else nullptr
   static const char* refused();
+  // a pin the last put saved anyway, why it may not work (PROGMEM)
+  static const char* warned();
   static bool putInt(const char* module, const char* key, int32_t value);
   static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);

@@ -48,8 +48,8 @@ EG_PSTR(I2_L_SDA, "SDA Pin");
 EG_PSTR(I2_L_SCL, "SCL Pin");
 
 static const EGPref I2C_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SDA, I2_L_SDA, EG_H_RBA, I2C_STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT},
-  {EG_K_SCL, I2_L_SCL, EG_H_RBA, I2C_STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT},
+  {EG_K_SDA, I2_L_SDA, EG_H_RBA, I2C_STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT | EGP_PIN_OD},
+  {EG_K_SCL, I2_L_SCL, EG_H_RBA, I2C_STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT | EGP_PIN_OD},
 };
 
 static const EGPrefGroup I2C_PREF_GROUP PROGMEM = {
@@ -83,6 +83,9 @@ bool I2CBus::begin() {
     return false;
   }
   Wire.begin(s_sda, s_scl);
+#ifdef ESP8266
+  Wire.setClockStretchLimit(I2C_STRETCH_US);
+#endif
   s_up = true;
   return true;
 }

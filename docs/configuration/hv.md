@@ -40,7 +40,21 @@ When changing settings:
 
 - ESPGeiger-HW caps duty at 600, well above its usual ~320, so a typo can't saturate the coil.
 - ESPGeiger-HW drops duty to minimum if HV reads over 530 V for 3 seconds. It stays there until settings are saved or the device restarts and `/hv` shows the cut-off.
+- The hidden `espghw.ov_v` (below) can lower that limit, never raise it.
 - On ESP8266 the HV pin is held low if the PWM generator stops.
+
+### Hidden settings
+
+These don't show on `/hv` or the Config page. Set them over [serial](/output/serial) or the Status-page command box, for example `set espghw.ov_v 500`. They are on every build with HV feedback.
+
+| Key | Default | Range | Notes |
+|---|---|---|---|
+| `espghw.ov_v` | 530 on ESPGeiger-HW, else `0` | 0-2000 | Over-voltage cut-off in volts, `0` = off. |
+| `espghw.ov_s` | `3` | 1-60 | Seconds over `ov_v` before the cut-off. |
+| `espghw.trim_max` | `5` | 0-20 | Most steps the closed-loop trim moves either side of the saved duty. |
+| `espghw.trim_s` | `10` | 8-120 | Seconds between trim steps. |
+| `espghw.settle_s` | `30` | 0-600 | No trim for this long after a change. |
+| `espghw.boot_s` | `300` | 0-1800 | No trim for this long after boot. |
 
 ## Calibration with a Multimeter
 

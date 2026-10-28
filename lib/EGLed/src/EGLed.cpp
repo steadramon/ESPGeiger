@@ -32,9 +32,18 @@ namespace {
   constexpr int     kLedFreqHz = 5000;
 #ifdef SOC_LEDC_SUPPORT_HS_MODE
   constexpr ledc_timer_t kTimer = LEDC_TIMER_0;
+#elif SOC_LEDC_CHANNEL_NUM > 6
+  // 0 hv, 1 tone, 3 analogWrite (ch 7/6)
+  constexpr ledc_timer_t kTimer = LEDC_TIMER_2;
 #else
-  // timers 0 and 1 belong to hv and tone
+  // 0 hv, 1 tone, 2 analogWrite (ch 5/4)
   constexpr ledc_timer_t kTimer = LEDC_TIMER_3;
+#endif
+  // ledcSetup's, one source for all timers on c3/s3. never auto, on s3 APLL fights I2S
+#ifdef SOC_LEDC_SUPPORT_XTAL_CLOCK
+  constexpr ledc_clk_cfg_t kClk = LEDC_USE_XTAL_CLK;
+#else
+  constexpr ledc_clk_cfg_t kClk = LEDC_USE_APB_CLK;
 #endif
 
   uint8_t s_next_chan   = 0;
@@ -47,8 +56,7 @@ namespace {
     cfg.duty_resolution = LEDC_TIMER_8_BIT;
     cfg.timer_num       = kTimer;
     cfg.freq_hz         = kLedFreqHz;
-    // APB, on S3 APLL fights I2S
-    cfg.clk_cfg         = LEDC_USE_APB_CLK;
+    cfg.clk_cfg         = kClk;
     ledc_timer_config(&cfg);
     s_timer_ready = true;
   }

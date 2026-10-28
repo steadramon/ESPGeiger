@@ -17,6 +17,8 @@ ESPGeiger can send radiation data to a custom URL endpoint via HTTP POST. This a
 
 ESPGeiger will report the Webhook submission status in the Web Interface console.
 
+Your endpoint should reply with a body that contains `OK`. Anything else, including an empty `204` reply, is logged as `Webhook: Error` and `/outputs` shows the webhook as not OK, even though the data arrived.
+
 **Note:** Only HTTP endpoints are supported. HTTPS URLs will be downgraded to HTTP.
 
 ## JSON Payload
@@ -40,6 +42,10 @@ ESPGeiger submits a JSON payload via HTTP POST with `Content-Type: application/j
 | `tc` | integer | Total accumulated click count since boot |
 | `mem` | integer | Free heap memory in bytes |
 | `rssi` | integer | WiFi signal strength in dBm |
+| `tube` | integer | `1` while counts are arriving, `0` once the tube has been silent longer than expected |
+| `sat` | integer | `1` when the count rate is close to the tube's dead-time limit |
+| `warn` | integer | `1` when CPM is above the warning threshold |
+| `alert` | integer | `1` when CPM is above the alert threshold |
 
 Environmental fields are emitted only when the corresponding sensor channel is available. A BMP280 ships `t` and `p` but not `h`; an AHT20 ships `t` and `h` but not `p`; a BME280 or AHT20+BMP280 combo ships all three.
 

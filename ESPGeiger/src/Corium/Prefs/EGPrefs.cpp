@@ -84,6 +84,7 @@ static bool           s_begun = false;
 static bool           s_restart_pending = false;
 static bool           s_reboot_put = false;   // an EGP_REBOOT row changed
 static const char*    s_refused = nullptr;
+static const char*    s_warned = nullptr;
 static EGPrefsStorage s_storage;
 static bool           s_waiting = false;   // commit_soon's write
 static void         (*s_wake)(uint32_t) = nullptr;
@@ -544,10 +545,18 @@ float EGPrefs::getFloat(const char* module, const char* key) {
   return v ? parse_f(v, nullptr) : 0.0f;
 }
 
+static PinSafety::Use pin_use(uint16_t flags) {
+  if ((flags & EGP_PIN_BTN) == EGP_PIN_BTN) return PinSafety::USE_BUTTON;
+  return flags & EGP_PIN_OUT ? PinSafety::USE_OUT : PinSafety::USE_IN;
+}
+
 static bool pin_refused(const EGPref& p, const char* module, const char* key, const char* v) {
   int32_t pin;
   if (!(p.flags & (EGP_PIN | EGP_PIN_OUT)) || !parse_i32(v, &pin)) return false;
-  s_refused = PinSafety::refuse(pin, p.flags & EGP_PIN_OUT);
+  uint8_t needs = (p.flags & EGP_PIN_IRQ ? PinSafety::NEED_IRQ : 0) |
+                  (p.flags & EGP_PIN_PWM ? PinSafety::NEED_PWM : 0) |
+                  (p.flags & EGP_PIN_OD ? PinSafety::NEED_OD : 0);
+  s_refused = PinSafety::refuse(pin, pin_use(p.flags), needs, &s_warned);
   if (!s_refused) return false;
   Log::console(PSTR("Prefs: %s.%s pin %s refused (%s)"), module, key, v, s_refused);
   return true;
@@ -555,6 +564,7 @@ static bool pin_refused(const EGPref& p, const char* module, const char* key, co
 
 bool EGPrefs::put(const char* module, const char* key, const char* value) {
   s_refused = nullptr;
+  s_warned = nullptr;
   GroupShadow* gs = find_group(module);
   int idx = gs ? find_pref_index(gs->group, key) : -1;
   if (idx < 0) {
@@ -589,6 +599,7 @@ bool EGPrefs::put(const char* module, const char* key, const char* value) {
 }
 
 const char* EGPrefs::refused() { return s_refused; }
+const char* EGPrefs::warned() { return s_refused ? nullptr : s_warned; }
 
 bool EGPrefs::putInt(const char* module, const char* key, int32_t value) {
   char buf[EG_U32_MAX_LEN + 2];   // sign

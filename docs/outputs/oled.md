@@ -40,7 +40,7 @@ The screen shows **Screen always on** or **Screen auto off** for a moment. The s
 
 # Pin configuration
 
-Set **I2C SDA Pin** and **I2C SCL Pin** on the Display section of the Config page, then reboot. Not shown on kits with fixed pins.
+Set **SDA Pin** and **SCL Pin** in the **I2C Bus** section of the Config page (System tab), then reboot. Not shown on kits with fixed pins.
 
 # Browser screen viewer
 

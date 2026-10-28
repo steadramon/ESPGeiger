@@ -45,7 +45,7 @@ Static identity of the device and firmware, plus the compiled-in modules. Runtim
   "git": "06a2d9d",
   "env": "espgeigerlog",
   "date": "Apr 15 2026 12:34:56",
-  "chip": "ESP8266",
+  "chip": "ESPG-LOG",
   "flash": "ef4016 DIO 40MHz",
   "mac": "AABBCCDDEEFF",
   "host": "ESPGeiger-a1b2c3",
@@ -53,7 +53,7 @@ Static identity of the device and firmware, plus the compiled-in modules. Runtim
   "g_type": "pulse",
   "g_test": false,
   "g_pcnt": true,
-  "modules": ["disp","neopx","button","ntp","mqtt","radmon","whook","sercmd","serout"]
+  "modules": ["sys","net","wifi","scmd","ota","counter","life","led","disp","neopx","btn","sdcard","ntp","mqtt","radmon","whook","sout"]
 }
 ```
 
@@ -63,7 +63,7 @@ Static identity of the device and firmware, plus the compiled-in modules. Runtim
 | `git` | Short git commit the firmware was built from |
 | `env` | PlatformIO build environment name (e.g. `espgeigerlog`, `esp32_pulse`) |
 | `date` | Build timestamp (compile-time `__DATE__ __TIME__`) |
-| `chip` | Chip model reported by the framework (`ESP8266` / `ESP32` / `ESP32-S2` etc.) |
+| `chip` | Board name on ESPGeiger kits (`ESPG-HW`, `ESPG-LOG`, `ESPG-LT`), else the chip model reported by the framework (`ESP8266` / `ESP32` / `ESP32-S2` etc.) |
 | `flash` | Flash chip as booted: JEDEC id (ESP8266 only), mode and clock from the image header |
 | `mac` | Device MAC address |
 | `host` | Configured hostname |
@@ -71,7 +71,7 @@ Static identity of the device and firmware, plus the compiled-in modules. Runtim
 | `g_type` | Counter input type: `"pulse"`, `"serial"`, or `"none"` (UDP receiver and internal test builds) |
 | `g_test` | `true` on test / simulation builds |
 | `g_pcnt` | `true` if pulses are counted by the ESP32 PCNT hardware counter |
-| `modules` | Module identifiers compiled into this firmware |
+| `modules` | Every module compiled into this firmware, core ones included. Each is the module's short name, as used in `/outputs` |
 
 ## `/json?raw=1`
 

@@ -98,15 +98,15 @@ _Note_: No values are submitted to public services with Test builds.
 For diagnosing performance issues in the 1Hz tick callback, add `-DTICK_PROFILE` to `build_flags` in your environment config. Once per minute the device logs a breakdown of where time is spent:
 
 ```
-Tick profile: total=425 ctr=230 wifi=109 mods=128 lps=58733
-Mods max: mqtt=61 sdcard=25
+Tick profile: total=425 ctr=230 wifi=109 lps=58733 free=24120 min_free=22304 frag=12%
 ```
 
 - `total` - worst single tick duration in the last 60 seconds (us)
-- `ctr` - max time in `gcounter.secondticker()`
-- `wifi` - max time in WiFi tracking block
-- `mods` - max total time in `EGModuleRegistry::tick_all()`
-- `lps` - loop iterations per second (steady-state health indicator)
-- `Mods max:` - per-module worst-case `s_tick` duration, slowest first
+- `ctr` - max time in the app's once a second work (the counter tick)
+- `wifi` - max time in the WiFi tracking block
+- `lps` - loop iterations per second, averaged (steady-state health indicator)
+- `free` - free heap now (bytes)
+- `min_free` - lowest free heap seen in the last 60 seconds
+- `frag` - heap fragmentation
 
 Zero overhead when the flag is not defined - all instrumentation compiles out.

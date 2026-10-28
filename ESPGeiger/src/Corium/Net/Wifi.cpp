@@ -139,10 +139,13 @@ bool Wifi::saveBackupCreds() {
   if (!Fs::begin()) return false;
   File f = Fs::open_w(WIFI_BACKUP_PATH);
   if (!f) return false;
-  f.print(c.ssid);
-  f.print('\n');
-  f.print(c.pass);
-  f.print('\n');
+  // an ssid can hold \n
+  uint8_t sl = strlen(c.ssid), pl = strlen(c.pass);
+  f.write((uint8_t)0);
+  f.write(sl);
+  f.write((const uint8_t*)c.ssid, sl);
+  f.write(pl);
+  f.write((const uint8_t*)c.pass, pl);
   f.close();
   Log::console(PSTR("WiFi: Backup saved (ssid=%s)"), c.ssid);
   return true;
@@ -157,14 +160,33 @@ static uint8_t readLines(File& f, char* buf, size_t bufLen,
   return split_lines(buf, fields, nFields);
 }
 
+// 0.13 wrote SSID\nPSK\n, never a 0 first
+static void splitBackup(char* raw, size_t n, char** fields) {
+  if (n == 0 || raw[0] != 0) {
+    split_lines(raw, fields, 2);
+    return;
+  }
+  fields[0] = fields[1] = raw + n;
+  size_t sl = (uint8_t)raw[1];
+  if (n < 3 + sl) return;
+  size_t pl = (uint8_t)raw[2 + sl];
+  if (n < 3 + sl + pl) return;
+  raw[2 + sl] = '\0';
+  raw[3 + sl + pl] = '\0';
+  fields[0] = raw + 2;
+  fields[1] = raw + 3 + sl;
+}
+
 static bool tryRestoreBackup() {
   File f = Fs::open_r(WIFI_BACKUP_PATH);
   if (!f) return false;
-  // SSID\nPSK\n
-  char raw[EGPORTAL_SSID_MAX + EGPORTAL_PASS_MAX + 3];
-  char* fields[2];
-  readLines(f, raw, sizeof(raw), fields, 2);
+  char raw[EGPORTAL_SSID_MAX + EGPORTAL_PASS_MAX + 4];
+  int n = f.read((uint8_t*)raw, sizeof(raw) - 1);
   f.close();
+  if (n < 0) n = 0;
+  raw[n] = '\0';
+  char* fields[2];
+  splitBackup(raw, n, fields);
   const char* ssid = fields[0];
   const char* pass = fields[1];
   if (!*ssid) {
@@ -273,10 +295,9 @@ bool Wifi::applyStaticConfig() {
   return true;
 }
 
-// too long is refused, a cut one would never join
+// too long is refused, a cut one would never join; open = "", not nullptr
 bool Wifi::holdCreds(const char* ssid, const char* pass) {
-  if (!ssid) return false;
-  if (!pass) pass = "";
+  if (!ssid || !pass) return false;
   size_t sl = strlen(ssid), pl = strlen(pass);
   if (sl > EGPORTAL_SSID_MAX || pl > EGPORTAL_PASS_MAX) return false;
   if (!s_creds) s_creds = (Creds*)malloc(sizeof(Creds));
@@ -323,8 +344,13 @@ static void probe_new_static_config(bool staticOn) {
       Log::console(PSTR("WiFi: Static config probe OK"));
     } else {
       Log::console(PSTR("WiFi: Static config probe failed, reverting"));
-      Wifi::restoreNetBackup();
-      DeviceInfo::safeRestart(500);
+      if (Wifi::restoreNetBackup()) {
+        DeviceInfo::safeRestart(500);
+      } else {
+        // a restart boots the same config, next boot tries again
+        Log::console(PSTR("WiFi: Revert not saved"));
+        Wifi::backup_grace_done = true;
+      }
     }
   }
 }
@@ -514,13 +540,22 @@ static void reset_wifi_tx_power_default() {
 #endif
 }
 
+#ifdef ESP8266
+// esp32 knows its own
+static uint8_t country_chans(const char* code) {
+  if (!strncasecmp_P(code, PSTR("US"), 2) || !strncasecmp_P(code, PSTR("CA"), 2)) return 11;
+  if (!strncasecmp_P(code, PSTR("JP"), 2)) return 14;
+  return 13;
+}
+#endif
+
 static void apply_wifi_country(const char* code) {
   if (!code || !code[0]) return;
 #ifdef ESP8266
   wifi_country_t c = {0};
-  strlcpy(c.cc, code, sizeof(c.cc));
+  memcpy(c.cc, code, strnlen(code, sizeof(c.cc)));   // "USA" fills it, no NUL
   c.schan  = 1;
-  c.nchan  = 13;
+  c.nchan  = country_chans(code);
   c.policy = WIFI_COUNTRY_POLICY_MANUAL;
   wifi_set_country(&c);
 #else

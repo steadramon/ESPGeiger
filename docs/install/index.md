@@ -40,6 +40,8 @@ The easiest way to install ESPGeiger is to use the web installer in your Chrome 
 
 ## Setup
 
+If the web installer offered to connect to Wi-Fi and you did, skip to step 3.
+
 1. On your phone or computer, connect to the new Wi-Fi network (**ESPGeiger-XXXXXX**)
   - A configuration web page should appear once connected, if not browse to <http://192.168.4.1/>
   - Make a note of the name of the ESPGeiger (**ESPGeiger-XXXXXX**) - we will need this soon.

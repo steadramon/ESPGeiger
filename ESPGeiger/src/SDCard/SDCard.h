@@ -21,14 +21,12 @@
 #ifdef GEIGER_SDCARD
 #include <SPI.h>
 #include <SdFat.h>
+#include "App/AppConfig.h"
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Prefs/EGPrefs.h"
 
-#ifndef GEIGER_SDCARD_CS
-#define GEIGER_SDCARD_CS 16
-#endif
 #define SD_EDGE_MS 50   // past :00, the clock has rolled
 
 extern SdFat32* sd;

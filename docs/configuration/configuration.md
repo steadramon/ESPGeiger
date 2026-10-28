@@ -13,11 +13,21 @@ Most settings are available from the ESPGeiger [Web Portal](/output/webportal) -
 Specialised pages with their own UI:
 
 * **Network Config** - Wi-Fi, static IP, time zone and NTP server. See [Time and NTP](/configuration/ntp).
-* **HV Config** - high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
+* **HV Config** - high-voltage tuning on ESPGeiger-HW and the `*_hv` builds. See [HV Configuration](/configuration/hv).
 
 Settings changed on the Config page take effect immediately (or on next submission cycle for output modules). Pin and serial type changes require a reboot.
 
 The Config page is split across five tabs: **System**, **Input**, **Output**, **Upload** and **Backup**.
+
+### Pins
+
+Pin settings take `-1` (off) or a GPIO number, but some pins are refused. The save stops and the page shows which setting and why:
+
+* Pins wired to the flash, PSRAM or the USB port, and pins the chip doesn't have.
+* Input-only pins (ESP32 GPIO 34-39) for an output.
+* Pins the board already uses: UART0 TX (GPIO 1) and RX (GPIO 3) on ESP8266 and classic ESP32 (RX is free on builds that don't read serial commands), plus each kit's fixed pins such as the SD card, button, blip LED, buzzer, I2S audio and HV.
+
+Boot strap pins and pins with no internal pull-up are allowed. Used as an input they show a warning after the save.
 
 ## System Settings
 
@@ -32,7 +42,7 @@ The Config page is split across five tabs: **System**, **Input**, **Output**, **
 
 ### Config import / export
 
-On the **Backup** tab, **Export** copies all settings except the web password and network settings into the text box. Paste a saved export and click **Import** to restore it; settings not in the export are left alone and the device reboots.
+On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. WiFi credentials and the device-only settings are kept.
 
 ## Counter Settings
 

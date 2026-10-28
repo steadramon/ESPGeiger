@@ -165,7 +165,7 @@ static const EGPref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // Pins
 #ifndef RXPIN_BLOCKED
-  {K_RX_PIN,          IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN},
+  {K_RX_PIN,          IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN | EGP_PIN_IRQ},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
   {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
@@ -488,7 +488,7 @@ EG_PSTR(HV_L_PWM, "HV PWM Pin");
 EG_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
 
 static const EGPref HV_PIN_PREF_ITEMS[] PROGMEM = {
-  {K_PWM_PIN, HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN_OUT},
+  {K_PWM_PIN, HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN_OUT | EGP_PIN_PWM},
 };
 
 static const EGPrefGroup HV_PIN_PREF_GROUP PROGMEM = {

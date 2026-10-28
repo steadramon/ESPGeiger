@@ -52,7 +52,7 @@ Sent once per hour and on first boot or reset:
 | `pk`  | string  | Device public key, base64 (ECC secp192r1, 64 chars) |
 | `ci`  | string  | Device chip ID (hex). The server looks up or creates a station for this chip and returns the numeric `id` the device quotes in later posts. |
 | `v`   | string  | Firmware release version: `tag/sha` when built from a non-tagged commit (e.g. `devel/7a2407d`), or `tag` for released builds (e.g. `0.9.3`). |
-| `bd`  | string  | Chip model (e.g. `esp8266`, `ESP32-C3`) |
+| `bd`  | string  | Board name on ESPGeiger kits (e.g. `ESPG-HW`), else the chip model (e.g. `esp8266`, `ESP32-C3`) |
 | `gm`  | string  | PlatformIO build environment name (e.g. `espgeigerlog_serial`) |
 | `gc`  | string  | Geiger counter model: auto-detected on Serial builds, user-set on Pulse builds |
 | `td`  | uint32  | Tube detection bitmask: bit 0 = α, bit 1 = β, bit 2 = γ. `0` = unknown / not set. Bits 3-7 reserved. |
@@ -61,6 +61,20 @@ Sent once per hour and on first boot or reset:
 | `m`   | uint8   | Sharing mode: `1` = heartbeat-only, `2` = full readings (mode `0` doesn't handshake) |
 | `la`  | float32 | Optional. Latitude in degrees (-90..90), rounded on device to 2 decimal places (~1.1 km cells). Omitted when both `la` and `lo` are `0` (the "use IP" signal). |
 | `lo`  | float32 | Optional. Longitude in degrees (-180..180). Same rounding and omission rules as `la`. |
+
+After a crash the first handshake of the boot adds what the device kept about it. Each group is only sent when there is something in it:
+
+| Field | Type    | Description |
+|---|---|---|
+| `ec`  | uint32  | Exception cause |
+| `pc`  | uint32  | Program counter at the fault (epc1) |
+| `va`  | uint32  | Fault address (excvaddr) |
+| `e2`  | uint32  | epc2 |
+| `e3`  | uint32  | epc3 |
+| `dp`  | uint32  | depc |
+| `sp`  | uint32  | Stack pointer at the fault |
+| `st`  | bin     | Up to 32 raw stack words, little-endian uint32 each |
+| `cm`  | string  | Where the loop was when it crashed: a module name, `tcp` or `portal` (ESP32 only) |
 
 The server responds with the assigned station ID, which the device uses as `id` in later posts.
 

@@ -24,7 +24,7 @@
 #include "App/AppConfig.h"
 
 #ifndef LIFECYCLE_MAX_HANDLERS
-#define LIFECYCLE_MAX_HANDLERS 6
+#define LIFECYCLE_MAX_HANDLERS 8
 #endif
 
 namespace Lifecycle {

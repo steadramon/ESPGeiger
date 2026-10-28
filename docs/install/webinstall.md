@@ -80,3 +80,5 @@ Make sure the relevant drivers are installed for your device. If your device isn
 - Completed. ESPGeiger is now installed. The indication light on the ESP will be lit permanently until the WiFi hotspot is configured.
 
 ![Completed](img/webinstall_7.png)
+
+- To skip the hotspot, use the installer's option to connect to Wi-Fi when it offers it. It sends your network details to the device over USB. This doesn't work on ESPGeiger Log, which uses the serial RX pin for its button; use the hotspot there. Otherwise carry on with [Setup](/install/setup).

@@ -35,6 +35,7 @@
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/System/Lifecycle.h"
+#include "Corium/System/PinSafety.h"
 #include <EGEscape.h>
 #include <EGHttpForm.h>
 #include <EGJson.h>
@@ -1027,7 +1028,7 @@ static bool take_ip(EGHttpRequest& req, const __FlashStringHelper* name,
   return !*dst || a.fromString(dst);
 }
 
-enum HoldResult : uint8_t { HELD, TOO_LONG, NO_MEMORY };
+enum HoldResult : uint8_t { HELD, TOO_LONG, BAD_PASS, NO_MEMORY };
 
 // arg() reuses its buffer, copy the ssid first
 static HoldResult wifi_hold_args(EGHttpRequest& req, const char* ssid) {
@@ -1035,6 +1036,7 @@ static HoldResult wifi_hold_args(EGHttpRequest& req, const char* ssid) {
   if (strlcpy(s, ssid, sizeof(s)) >= sizeof(s)) return TOO_LONG;
   const char* pass = req.arg(F("password"));
   if (pass && strlen(pass) > EGPORTAL_PASS_MAX) return TOO_LONG;
+  if (!EGPortal::passOk(pass)) return BAD_PASS;
   return Wifi::holdCreds(s, pass) ? HELD : NO_MEMORY;
 }
 
@@ -1068,6 +1070,10 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   HoldResult held = ssidProvided ? wifi_hold_args(req, ssid) : HELD;
   if (held == TOO_LONG) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad WiFi settings: SSID or password too long\nClick Back to fix it.\n"));
+    return;
+  }
+  if (held == BAD_PASS) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad WiFi settings: password must be 8-63 characters, or 64 hex digits\nClick Back to fix it.\n"));
     return;
   }
   if (held == NO_MEMORY) {
@@ -1425,18 +1431,26 @@ void WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
   }
 }
 
-// first field a save refused, shown above the form
+// first field a save refused, and first saved with a warning, shown above the form
 struct Refusal {
   char name[2 * EGPREF_ID_MAX + 2];   // mid.id
-  const char* why;                    // PROGMEM
+  char why[PinSafety::WHY_MAX];       // copied, the next put reuses "in use"
+  char note_name[2 * EGPREF_ID_MAX + 2];
+  const char* note;                   // PROGMEM
 };
 
 static void param_put(const char* mid, const char* id, const char* name,
                       const char* v, Refusal& r) {
-  if (EGPrefs::put(mid, id, v) || r.why) return;
+  if (EGPrefs::put(mid, id, v)) {
+    if (r.note || !EGPrefs::warned()) return;
+    strlcpy(r.note_name, name, sizeof(r.note_name));
+    r.note = EGPrefs::warned();
+    return;
+  }
+  if (r.why[0]) return;
   strncpy(r.name, name, sizeof(r.name) - 1);
   r.name[sizeof(r.name) - 1] = '\0';
-  r.why = EGPrefs::refused() ? EGPrefs::refused() : PSTR("not valid");
+  strncpy_P(r.why, EGPrefs::refused() ? EGPrefs::refused() : PSTR("not valid"), sizeof(r.why) - 1);
 }
 
 static void param_save_pref(const char* mid, const EGPref& p,
@@ -1864,9 +1878,9 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   Refusal refused{};
   bool saved = posted && param_save_body(tab, refused);
   bool wrote = saved && EGPrefs::commit();
-  // stay, so the refusal shows
+  // stay, so the refusal or note shows
   bool restart = wrote && EGPrefs::restart_pending();
-  if (restart && !refused.why) {
+  if (restart && !refused.why[0] && !refused.note) {
     res.redirect(FPSTR(P_RESTART));
     return;
   }
@@ -1876,11 +1890,17 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (wrote) res.sendChunk(F(
     "<div class='a ak'>Saved.</div>"));
   else if (saved) WebPortal::sendNotSaved(res);
-  if (refused.why) {
-    char buf[160];
+  char buf[160];
+  if (refused.why[0]) {
     snprintf_P(buf, sizeof(buf), PSTR("<div class='a ae'>Not saved: %s, %s.%s</div>"),
                refused.name, refused.why,
                restart ? PSTR(" <a href=/restart>Restart</a> for the rest.") : PSTR(""));
+    res.sendChunk(buf);
+  }
+  if (refused.note) {
+    snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>Note: %s, %s.%s</div>"),
+               refused.note_name, refused.note,
+               restart && !refused.why[0] ? PSTR(" <a href=/restart>Restart</a> to apply.") : PSTR(""));
     res.sendChunk(buf);
   }
   if (posted && !saved) res.sendChunk(F(
