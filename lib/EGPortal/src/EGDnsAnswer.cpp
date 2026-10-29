@@ -69,22 +69,38 @@ static size_t name_len(const uint8_t* p, size_t left) {
   }
 }
 
+// one question, nothing else: edns gets FORMERR
+static bool one_question(const uint8_t* q) {
+  return rd16(q + 4) == 1 && !rd16(q + 6) && !rd16(q + 8) && !rd16(q + 10);
+}
+
+static bool asks_a(const uint8_t* q, size_t end) {
+  uint16_t type = rd16(q + end - 4);
+  uint16_t cls = rd16(q + end - 2);
+  return (type == T_A || type == T_ANY) && (cls == C_IN || cls == C_ANY);
+}
+
+static void put_a(uint8_t* a, const uint8_t ip[4], uint32_t ttl) {
+  wr16(a, 0xC000 | EGDNS_HEADER);   // the question's name
+  wr16(a + 2, T_A);
+  wr16(a + 4, C_IN);
+  wr16(a + 6, (uint16_t)(ttl >> 16));
+  wr16(a + 8, (uint16_t)ttl);
+  wr16(a + 10, 4);
+  memcpy(a + 12, ip, 4);
+}
+
 size_t egdns_reply(const uint8_t* q, size_t len, const uint8_t ip[4], uint32_t ttl,
                    uint8_t* out, size_t max) {
   if (!q || !ip || !out || len < EGDNS_HEADER || len > EGDNS_MSG_MAX) return 0;
   if (q[2] & DNS_QR) return 0;
   if (q[2] & DNS_OPCODE) return header_only(q, RC_NOTIMP, out, max);
-  // one question, nothing else: edns gets FORMERR
-  if (rd16(q + 4) != 1 || rd16(q + 6) || rd16(q + 8) || rd16(q + 10)) {
-    return header_only(q, RC_FORMERR, out, max);
-  }
+  if (!one_question(q)) return header_only(q, RC_FORMERR, out, max);
   size_t name = name_len(q + EGDNS_HEADER, len - EGDNS_HEADER);
   if (!name || len - EGDNS_HEADER - name < 4) return header_only(q, RC_FORMERR, out, max);
 
   size_t end = EGDNS_HEADER + name + 4;   // bytes past the question not echoed
-  uint16_t type = rd16(q + end - 4);
-  uint16_t cls = rd16(q + end - 2);
-  bool ok = (type == T_A || type == T_ANY) && (cls == C_IN || cls == C_ANY);
+  bool ok = asks_a(q, end);
   size_t n = ok ? end + EGDNS_ANSWER : end;
   if (n > max) return 0;
 
@@ -97,14 +113,7 @@ size_t egdns_reply(const uint8_t* q, size_t len, const uint8_t ip[4], uint32_t t
     return n;
   }
   // today: rcode echoed
-  uint8_t* a = out + end;
-  wr16(a, 0xC000 | EGDNS_HEADER);   // the question's name
-  wr16(a + 2, T_A);
-  wr16(a + 4, C_IN);
-  wr16(a + 6, (uint16_t)(ttl >> 16));
-  wr16(a + 8, (uint16_t)ttl);
-  wr16(a + 10, 4);
-  memcpy(a + 12, ip, 4);
+  put_a(out + end, ip, ttl);
   return n;
 }
 

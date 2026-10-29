@@ -59,6 +59,10 @@
 #endif
 #endif
 
+#if defined(EG_SERIAL_NMI) && defined(ESPG_HV)
+#error "EG_SERIAL_NMI and ESPG_HV both need EGTimer1"
+#endif
+
 // own pin for the flash, the status LED never flashes counts
 #ifdef GEIGER_BLIPLED
 #define LED_FLASH_ENGINE

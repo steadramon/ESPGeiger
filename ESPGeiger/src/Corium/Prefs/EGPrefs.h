@@ -41,6 +41,7 @@
 #define EG_IPV4_MAX       15
 #define EG_HHMM_MAX       5
 #define EG_U32_MAX_LEN    10    // 4294967295
+#define EGPREFS_FROZEN_MAX (3 * EGPREF_ID_MAX + 32)   // frozen()'s text, with the nul
 #define EGPREF_PATTERN_MAX 127  // regex or enum options
 
 // build macro as text, for defaults and maxlength
@@ -216,6 +217,8 @@ public:
   static bool commit(bool fire_callbacks = true);
   // for a write per request: callbacks now, one write EGPREFS_HOLD_MS on; true = will be written
   static bool commit_soon(uint32_t now);
+  // the last commit left out a group holding a stored value that didn't load: why, else 0
+  static size_t frozen(char* out, size_t n);
   static void flush();   // the waiting write, at wake or shutdown
   // wake(at) has flush() called then; none = commit_soon writes now
   static void hold_by(void (*wake)(uint32_t at));

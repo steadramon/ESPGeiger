@@ -222,7 +222,6 @@ void UdpBlipModule::emitRad(uint32_t now) {
   (void)now;
 }
 
-#ifdef ESPG_HV_ADC
 void UdpBlipModule::emitHv(uint32_t now) {
   uint8_t buf[64];
   // nan with no adc
@@ -233,7 +232,6 @@ void UdpBlipModule::emitHv(uint32_t now) {
   if (n) sendPacket(buf, n);
   (void)now;
 }
-#endif
 
 void UdpBlipModule::emitEnv(uint32_t now) {
   // never re-broadcast UDP values
@@ -318,9 +316,7 @@ void UdpBlipModule::stats(uint32_t now) {
   if (_emit_phase == 0) {
     emitRad(now);
   } else if (_emit_phase == 1) {
-#ifdef ESPG_HV_ADC
-    emitHv(now);
-#endif
+    if (M_HAS_HV) emitHv(now);
   } else {
     _sys_phase = !_sys_phase;
     if (_sys_phase) {

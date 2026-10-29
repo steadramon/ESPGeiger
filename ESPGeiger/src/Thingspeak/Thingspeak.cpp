@@ -27,13 +27,14 @@
 #include "Counter/CounterUpload.h"
 #include "Counter/CounterMaths.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 #include <math.h>
 
 EG_PSTR(K_CHANNEL_KEY, "channel_key");
 
 Thingspeak thingspeak;
-EG_REGISTER_MODULE(thingspeak)
+EG_REGISTER_FEATURE(thingspeak, FEAT_THINGSPEAK)
 
 EG_PSTR(TS_H_EN,  "Upload to ThingSpeak");
 EG_PSTR(TS_L_CK,  "Channel Key");

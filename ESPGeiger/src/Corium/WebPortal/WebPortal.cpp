@@ -46,11 +46,7 @@
 #include "Corium/System/AppHooks.h"
 #include <EGBase64.h>
 
-#ifdef ESP8266
-  #include <ESP8266WiFi.h>
-  #include <user_interface.h>
-#else
-  #include <WiFi.h>
+#ifndef ESP8266
   #include <Update.h>   // esp32 needs it
 #endif
 
@@ -110,7 +106,7 @@ nav.tabs{display:flex;border-bottom:1px solid var(--border);margin:0 0 1em;gap:.
 nav.tabs a{padding:.5em .9em;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none}
 nav.tabs a:hover{color:var(--fg)}
 nav.tabs a.ac{color:var(--link);border-bottom-color:var(--link)}
-.fx{display:flex;gap:.5em}.mt{margin-top:.4em}.mn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.mt{margin-top:.4em}
 #dyB{position:fixed;top:0;left:0;right:0;padding:.5em;background:#fc3;color:#000;text-align:center;z-index:9999;cursor:pointer;font-size:.9em;font-weight:600}
 .menu{display:flex;flex-direction:column;gap:.85em;margin:1em auto;max-width:22em}
 .menu a,.back{background:var(--accent);color:#fff;font-weight:500;padding:.5em 1em;border-radius:4px}
@@ -125,7 +121,6 @@ nav.tabs a.ac{color:var(--link);border-bottom-color:var(--link)}
 :root[data-theme=dark] .themetoggle::before{content:'\263E'}
 .devhead{margin:0 0 1em}
 .devhead h1{margin:0;font-size:1.65em;font-weight:700;display:flex;align-items:center;gap:.5em}
-.devhead h1 img{width:1.4em;height:1.4em;flex:0 0 auto}
 .devhead h1 .tag{font-size:.6em;font-weight:500;color:var(--muted);margin-left:.4em;opacity:.85}
 .devhead .sub{color:var(--muted);font-size:.95em;margin-top:.2em}
 .cred{margin-top:1.5em;font-size:.85em;color:var(--muted)}
@@ -286,38 +281,69 @@ static const char P_RESTART[] PROGMEM = "/restart";
 #define SAFE_HTTP_CLIENTS 3   // page, favicon, one spare
 #endif
 
+static const char R_STYLE[]    PROGMEM = "/style.css";
+static const char R_FAV_SVG[]  PROGMEM = "/favicon.svg";
+static const char R_FAV_ICO[]  PROGMEM = "/favicon.ico";
+static const char R_THEME[]    PROGMEM = "/theme.js";
+static const char R_GUARD[]    PROGMEM = "/guard";
+static const char R_RESET[]    PROGMEM = "/reset";
+static const char R_ERASE[]    PROGMEM = "/erase";
+static const char R_INFO[]     PROGMEM = "/info";
+static const char R_ABOUT[]    PROGMEM = "/about";
+static const char R_CS[]       PROGMEM = "/cs";
+static const char R_OUTPUTS[]  PROGMEM = "/outputs";
+static const char R_METRICS[]  PROGMEM = "/metrics";
+static const char R_VARS[]     PROGMEM = "/vars.json";
+static const char R_PROGRESS[] PROGMEM = "/update/progress";
+static const char R_NETWORK[]  PROGMEM = "/network";
+static const char R_SCAN[]     PROGMEM = "/wifiscan";
+static const char R_SAVE[]     PROGMEM = "/wifisave";
+static const char R_EXPORT[]   PROGMEM = "/export";
+
+void WebPortal::on(EGHttpServer& http, const WebRoute* rows, size_t n) {
+  for (size_t i = 0; i < n; i++) {
+    WebRoute r;
+    memcpy_P(&r, &rows[i], sizeof(r));
+    http.on(FPSTR(r.path), r.method, r.h, nullptr);
+  }
+}
+
 void WebPortal::begin(uint16_t port) {
   if (_active) return;
-  _http.on(F("/"),            EGHttpRequest::GET, &WebPortal::hRoot,        this);
-  _http.on(F("/style.css"),   EGHttpRequest::GET, &WebPortal::hStyleCss,    nullptr);
-  _http.on(F("/favicon.svg"), EGHttpRequest::GET, &WebPortal::hFavicon,     nullptr);
-  _http.on(F("/favicon.ico"), EGHttpRequest::GET, &WebPortal::hFavicon,     nullptr);
-  _http.on(F("/theme.js"),    EGHttpRequest::GET, &WebPortal::hThemeJs,     nullptr);
-  _http.on(FPSTR(P_RESTART), EGHttpRequest::GET, &WebPortal::hRestart,       nullptr);
-  _http.on(F("/guard"),     EGHttpRequest::GET, &WebPortal::hGuard,         nullptr);
-  _http.on(F("/reset"),     EGHttpRequest::POST, &WebPortal::hReset,        nullptr);
-  _http.on(F("/erase"),     EGHttpRequest::POST, &WebPortal::hEraseWifi,    nullptr);
-  _http.on(F("/info"),      EGHttpRequest::GET, &WebPortal::hInfo,          nullptr);
-  _http.on(F("/about"),     EGHttpRequest::GET, &WebPortal::hAbout,         nullptr);
+  using R = EGHttpRequest;
+  static const WebRoute ROUTES[] PROGMEM = {
+    {R_STYLE,    &WebPortal::hStyleCss,       R::GET},
+    {R_FAV_SVG,  &WebPortal::hFavicon,        R::GET},
+    {R_FAV_ICO,  &WebPortal::hFavicon,        R::GET},
+    {R_THEME,    &WebPortal::hThemeJs,        R::GET},
+    {P_RESTART,  &WebPortal::hRestart,        R::GET},
+    {R_GUARD,    &WebPortal::hGuard,          R::GET},
+    {R_RESET,    &WebPortal::hReset,          R::POST},
+    {R_ERASE,    &WebPortal::hEraseWifi,      R::POST},
+    {R_INFO,     &WebPortal::hInfo,           R::GET},
+    {R_ABOUT,    &WebPortal::hAbout,          R::GET},
+    {R_CS,       &WebPortal::hConsoleStream,  R::GET},
+    {R_OUTPUTS,  &WebPortal::hOutputs,        R::GET},
+    {R_METRICS,  &WebPortal::hMetrics,        R::GET},
+    {R_VARS,     &WebPortal::hVars,           R::GET},
+    {P_PARAM,    &WebPortal::hParam,          R::GET},
+    {P_PARAM,    &WebPortal::hParam,          R::POST},
+    {P_UPDATE,   &WebPortal::hUpdateForm,     R::GET},
+    {P_UPDATE,   &WebPortal::hUpdateDone,     R::POST},
+    {R_PROGRESS, &WebPortal::hUpdateProgress, R::GET},
+    {R_NETWORK,  &WebPortal::hWifi,           R::GET},
+    {R_SCAN,     &WebPortal::hWifiScan,       R::GET},
+    {R_SAVE,     &WebPortal::hWifiSave,       R::POST},
+    {R_EXPORT,   &WebPortal::hExport,         R::GET},
+    {P_IMPORT,   &WebPortal::hImport,         R::POST},
+  };
+  _http.on(F("/"), R::GET, &WebPortal::hRoot, this);
+  on(_http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
   bool safe = BootGuard::safe_mode();
   if (safe) _http.setMaxClients(SAFE_HTTP_CLIENTS);
-  _http.on(F("/cs"),        EGHttpRequest::GET, &WebPortal::hConsoleStream, nullptr);
-  if (!safe) _http.on(F("/webcmd"), EGHttpRequest::POST, &WebPortal::hWebCmd, nullptr);
-  _http.on(F("/outputs"),   EGHttpRequest::GET, &WebPortal::hOutputs,       nullptr);
-  _http.on(F("/metrics"),   EGHttpRequest::GET, &WebPortal::hMetrics,       nullptr);
-  _http.on(F("/vars.json"), EGHttpRequest::GET, &WebPortal::hVars,          nullptr);
-  _http.on(FPSTR(P_PARAM),  EGHttpRequest::GET, &WebPortal::hParam,         nullptr);
-  _http.on(FPSTR(P_PARAM),  EGHttpRequest::POST, &WebPortal::hParam,        nullptr);
+  else _http.on(F("/webcmd"), R::POST, &WebPortal::hWebCmd, nullptr);
   _http.onUpload(FPSTR(P_PARAM), &WebPortal::hParamBody, nullptr);
-  _http.on(FPSTR(P_UPDATE), EGHttpRequest::GET,  &WebPortal::hUpdateForm,   nullptr);
-  _http.on(FPSTR(P_UPDATE), EGHttpRequest::POST, &WebPortal::hUpdateDone,   nullptr);
   _http.onUpload(FPSTR(P_UPDATE), &WebPortal::hUpdateBody, nullptr);
-  _http.on(F("/update/progress"), EGHttpRequest::GET, &WebPortal::hUpdateProgress, nullptr);
-  _http.on(F("/network"),   EGHttpRequest::GET,  &WebPortal::hWifi,         nullptr);
-  _http.on(F("/wifiscan"),  EGHttpRequest::GET,  &WebPortal::hWifiScan,     nullptr);
-  _http.on(F("/wifisave"),  EGHttpRequest::POST, &WebPortal::hWifiSave,     nullptr);
-  _http.on(F("/export"),    EGHttpRequest::GET,  &WebPortal::hExport,       nullptr);
-  _http.on(FPSTR(P_IMPORT), EGHttpRequest::POST, &WebPortal::hImport,       nullptr);
   _http.onUpload(FPSTR(P_IMPORT), &WebPortal::hImportBody, nullptr);
 
   if (!safe) AppHooks::routes(_http);
@@ -379,6 +405,17 @@ void WebPortal::sendPageTail(EGHttpResponse& res, bool footer) {
   res.sendChunk(FPSTR(HTML_END));
 }
 
+void WebPortal::beginPage(EGHttpResponse& res, const __FlashStringHelper* title,
+                          const char* inlineSub) {
+  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
+  sendPageHead(res, title, inlineSub);
+}
+
+void WebPortal::endPage(EGHttpResponse& res, bool footer) {
+  sendPageTail(res, footer);
+  res.endChunked();
+}
+
 void WebPortal::sendPageFooter(EGHttpResponse& res) {
   res.sendChunk(F("<p class=cred>"
                   "<a class=brand href='" APP_URL "' target=_blank rel=noopener>" THING_NAME "</a>"
@@ -438,11 +475,17 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void WebPortal::sendGz(EGHttpResponse& res, const __FlashStringHelper* type,
+                       const uint8_t* gz, size_t len) {
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+  res.sendGzipP(200, type, gz, len);
+}
+
+void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_STYLE_CSS
-  res.sendGzipP(200, F("text/css"), STYLE_CSS_GZ, STYLE_CSS_GZ_LEN);
+  sendGz(res, F("text/css"), STYLE_CSS_GZ, STYLE_CSS_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.beginChunked(200, F("text/css"));
   res.sendChunk(FPSTR(STYLE_CSS));
   res.sendChunk(FPSTR(APP_CSS));
@@ -471,10 +514,10 @@ d.dataset.theme=LS.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'da
 #endif
 
 void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_THEME_JS
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), THEME_JS_GZ, THEME_JS_GZ_LEN);
+  sendGz(res, FPSTR(HTTP_CT_JS), THEME_JS_GZ, THEME_JS_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
   res.sendChunk(FPSTR(THEME_JS));
   res.sendChunk(FPSTR(APP_THEME_JS));
@@ -496,11 +539,11 @@ static const char RESTART_COUNTDOWN[] PROGMEM = R"HTML(
 var n=window._rs,c=byID('ct'),a=null,T=setTimeout,sh=t=>c.textContent=t,rl=()=>sh('Reloading in '+n+'s...');
 rl();
 function p(){
-  if(document.hidden){T(p,1000);return}
-  if(a)a.abort();
-  var b=a=new AbortController();
-  T(()=>b.abort(),1000);
-  fetch('/ping',{cache:'no-store',signal:b.signal}).then(r=>location.href='/').catch(()=>T(p,500));
+if(document.hidden){T(p,1000);return}
+if(a)a.abort();
+var b=a=new AbortController();
+T(()=>b.abort(),1000);
+fetch('/ping',{cache:'no-store',signal:b.signal}).then(r=>location.href='/').catch(()=>T(p,500));
 }
 var t=setInterval(()=>--n>0?rl():(clearInterval(t),sh('Checking...'),p()),1000);
 </script>
@@ -516,27 +559,26 @@ void WebPortal::sendRestartCountdown(EGHttpResponse& res) {
 
 static const char WRITE_FAILED[] PROGMEM = "flash write failed";
 
+// a group holding a value that didn't load says which
 void WebPortal::sendNotSaved(EGHttpResponse& res) {
   res.sendChunk(F("<div class='a ae'>Not saved: "));
-  res.sendChunk(FPSTR(WRITE_FAILED));
+  char why[EGPREFS_FROZEN_MAX];
+  if (EGPrefs::frozen(why, sizeof(why))) res.sendChunk(why);
+  else res.sendChunk(FPSTR(WRITE_FAILED));
   res.sendChunk(F(".</div>"));
 }
 
 static void not_saved_page(EGHttpResponse& res, const __FlashStringHelper* title) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, title);
+  WebPortal::beginPage(res, title);
   WebPortal::sendNotSaved(res);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 void WebPortal::hRestart(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Restarting"));
+  WebPortal::beginPage(res, F("Restarting"));
   res.sendChunk(F("<p>Device is restarting. This page will reload once it's back.</p>"));
   WebPortal::sendRestartCountdown(res);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
   WebPortal::requestRestart(1500);
 }
 
@@ -686,18 +728,18 @@ static void info_render_system(EGHttpResponse& res) {
 #ifdef ESP8266
   INFO_ROW("Platform",      PSTR("esp8266"));
   INFO_ROW("Flash chip",    W_FMT_S,DeviceInfo::flashInfo());
-  INFO_ROW("Flash size",    IR_BYTES,        (unsigned)ESP.getFlashChipSize());
-  INFO_ROW("Real flash",    IR_BYTES,        (unsigned)ESP.getFlashChipRealSize());
-  INFO_ROW("Core version",  W_FMT_S,ESP.getCoreVersion().c_str());
-  INFO_ROW("Boot version",  W_FMT_U,(unsigned)ESP.getBootVersion());
+  INFO_ROW("Flash size",    IR_BYTES,        (unsigned)DeviceInfo::flashSize());
+  INFO_ROW("Real flash",    IR_BYTES,        (unsigned)DeviceInfo::realFlash());
+  INFO_ROW("Core version",  W_FMT_S,DeviceInfo::coreVersion().c_str());
+  INFO_ROW("Boot version",  W_FMT_U,(unsigned)DeviceInfo::bootVersion());
 #elif defined(ESP32)
-  INFO_ROW("Platform",      W_FMT_S,ESP.getChipModel());
+  INFO_ROW("Platform",      W_FMT_S,DeviceInfo::chipModel());
   INFO_ROW("Flash chip",    W_FMT_S,DeviceInfo::flashInfo());
-  INFO_ROW("Flash size",    IR_BYTES,        (unsigned)ESP.getFlashChipSize());
-  INFO_ROW("Chip rev",      W_FMT_U,(unsigned)ESP.getChipRevision());
-  INFO_ROW("SDK version",   W_FMT_S,ESP.getSdkVersion());
+  INFO_ROW("Flash size",    IR_BYTES,        (unsigned)DeviceInfo::flashSize());
+  INFO_ROW("Chip rev",      W_FMT_U,(unsigned)DeviceInfo::chipRev());
+  INFO_ROW("SDK version",   W_FMT_S,DeviceInfo::sdkVersion());
 #endif
-  INFO_ROW("CPU frequency", PSTR("%u MHz"),  (unsigned)ESP.getCpuFreqMHz());
+  INFO_ROW("CPU frequency", PSTR("%u MHz"),  (unsigned)DeviceInfo::cpuMHz());
 #ifdef ESP32
   {
     float t = DeviceInfo::chipTempC();
@@ -707,8 +749,8 @@ static void info_render_system(EGHttpResponse& res) {
   }
 #endif
   INFO_ROW("Free heap",     IR_BYTES,        (unsigned)DeviceInfo::freeHeap());
-  INFO_ROW("Sketch size",   PSTR("%u / %u bytes"), (unsigned)ESP.getSketchSize(),
-                                             (unsigned)(ESP.getSketchSize() + ESP.getFreeSketchSpace()));
+  INFO_ROW("Sketch size",   PSTR("%u / %u bytes"), (unsigned)DeviceInfo::sketchSize(),
+                                             (unsigned)(DeviceInfo::sketchSize() + DeviceInfo::freeSketch()));
   info_render_reset(res);
   INFO_ROW("Safe mode", W_FMT_S, BootGuard::safe_mode() ? "yes" : "no");
   INFO_ROW("Crash boots in a row", W_FMT_U, (unsigned)BootGuard::crash_streak());
@@ -771,8 +813,7 @@ static void info_render_about(EGHttpResponse& res) {
 #undef INFO_ROW
 
 void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Info"));
+  WebPortal::beginPage(res, F("Info"));
 
   InfoNet net;
   info_collect_net(net);
@@ -787,8 +828,7 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   info_render_modules(res);
   info_render_about(res);
 
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static void about_modules(EGHttpResponse& res) {
@@ -835,12 +875,10 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   s_pendingFactoryReset = true;
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Reset"));
+  WebPortal::beginPage(res, F("Reset"));
   res.sendChunk(F("<p>All settings cleared. Device is restarting and will return to the setup portal.</p>"));
   WebPortal::sendRestartCountdown(res);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
   WebPortal::requestRestart(1500);
 }
 
@@ -852,11 +890,9 @@ void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
     not_saved_page(res, F("Erase WiFi"));
     return;
   }
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Erase WiFi"));
+  WebPortal::beginPage(res, F("Erase WiFi"));
   res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device will reboot into Setup Mode.</p>"));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
   s_pendingEraseCreds = true;
   WebPortal::requestRestart(1500);
 }
@@ -866,8 +902,8 @@ void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static const char WIFI_FORM_HEAD[] PROGMEM = R"HTML(
 <form method=POST action=/wifisave>
 <label style='display:flex;align-items:center;justify-content:space-between'>
-  <span>Network</span>
-  <button type=button id=rescan class='btn-sm btn-o'>Rescan</button>
+<span>Network</span>
+<button type=button id=rescan class='btn-sm btn-o'>Rescan</button>
 </label>
 <select id=ws onchange="byID('s').value=this.options[this.selectedIndex].dataset.ssid||''">
 <option value=''>Scanning&hellip;</option>
@@ -917,8 +953,7 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
 }
 
 void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Network"));
+  WebPortal::beginPage(res, F("Network"));
 
   char ssid[6 * EGPORTAL_SSID_MAX + 1];
   egesc_html(ssid, sizeof(ssid), Wifi::SSID().c_str());
@@ -943,8 +978,7 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
 
   res.sendChunk(FPSTR(wifiAdvancedHTML));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -1040,6 +1074,23 @@ static HoldResult wifi_hold_args(EGHttpRequest& req, const char* ssid) {
   return Wifi::holdCreds(s, pass) ? HELD : NO_MEMORY;
 }
 
+// a bad SSID or password said, false
+static bool wifi_held_ok(EGHttpResponse& res, HoldResult held) {
+  if (held == TOO_LONG) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad WiFi settings: SSID or password too long\nClick Back to fix it.\n"));
+    return false;
+  }
+  if (held == BAD_PASS) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad WiFi settings: password must be 8-63 characters, or 64 hex digits\nClick Back to fix it.\n"));
+    return false;
+  }
+  if (held == NO_MEMORY) {
+    res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory\n"));
+    return false;
+  }
+  return true;
+}
+
 void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // write all four, keeps values on toggle
   bool wantStatic = (req.arg(FPSTR(EG_K_STATIC_IP)) != nullptr);
@@ -1068,18 +1119,7 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* ssid = req.arg(F("ssid"));
   bool ssidProvided = (ssid && *ssid);
   HoldResult held = ssidProvided ? wifi_hold_args(req, ssid) : HELD;
-  if (held == TOO_LONG) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad WiFi settings: SSID or password too long\nClick Back to fix it.\n"));
-    return;
-  }
-  if (held == BAD_PASS) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad WiFi settings: password must be 8-63 characters, or 64 hex digits\nClick Back to fix it.\n"));
-    return;
-  }
-  if (held == NO_MEMORY) {
-    res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory\n"));
-    return;
-  }
+  if (!wifi_held_ok(res, held)) return;
 
   // backup first, boot can revert
   Wifi::saveNetBackup();
@@ -1098,12 +1138,10 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
     s_pendingWifiSave = true;
   }
 
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Saving WiFi"));
+  WebPortal::beginPage(res, F("Saving WiFi"));
   wifi_render_save_msg(res, ssidProvided);
   WebPortal::sendRestartCountdown(res);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 
   WebPortal::requestRestart(2500);
 }
@@ -1124,59 +1162,59 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 var D=window._dev||{},F=byID('uf_file'),B=byID('uf_btn'),C=byID('uf_check'),S=byID('uf_st'),P=byID('uf_p');
 function sC(l,h){C.style.display='block';C.className='a a'+l;C.innerHTML=h}
 async function cF(f){
-  if(!f){B.disabled=true;C.style.display='none';return}
-  var u=new Uint8Array(await f.arrayBuffer());
-  if(u.length<8||(u[0]!==0xE9&&u[0]!==0xEA)){B.disabled=true;sC('e','Not an ESP firmware image.');return}
-  var t=new TextDecoder('latin1').decode(u),e=D.env||'';
-  B.disabled=false;
-  if(D.tag&&t.indexOf(D.tag)!==-1)sC('k','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
-  else sC('w','<b>Warning:</b> running <code>'+e+'</code> not found in file. Upload anyway?');
+if(!f){B.disabled=true;C.style.display='none';return}
+var u=new Uint8Array(await f.arrayBuffer());
+if(u.length<8||(u[0]!==0xE9&&u[0]!==0xEA)){B.disabled=true;sC('e','Not an ESP firmware image.');return}
+var t=new TextDecoder('latin1').decode(u),e=D.env||'';
+B.disabled=false;
+if(D.tag&&t.indexOf(D.tag)!==-1)sC('k','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
+else sC('w','<b>Warning:</b> running <code>'+e+'</code> not found in file. Upload anyway?');
 }
 F.addEventListener('change',function(){cF(this.files[0])});
 byID('uf').addEventListener('submit',function(e){
-  e.preventDefault();
-  var f=F.files[0];if(!f)return;
-  B.disabled=true;
-  S.textContent='Uploading '+f.name+' ('+f.size+' bytes)...';
-  P.style.display='block';P.value=0;
-  var x=new XMLHttpRequest();
-  x.open('POST','/update',!0);
-  x.setRequestHeader('Content-Type','application/octet-stream');
-  var dv=0;
-  x.upload.onload=function(){if(!dv){P.removeAttribute('value');S.textContent='Sent, device still writing...'}};
-  var pt=setInterval(function(){
-    fetch('/update/progress',{cache:'no-store'}).then(r=>r.json()).then(j=>{if(j.total){dv=1;P.value=j.done/j.total}}).catch(()=>{});
-  },1000);
-  x.onloadend=function(){clearInterval(pt)};
-  x.onload=function(){
-    if(x.status===200){
-      P.value=1;
-      var R=x.responseText;
-      var n=D.rs;
-      function sh(t){S.innerHTML='<b style="color:#0a0"></b><br>'+t;S.firstChild.textContent=R}
-      sh('Reloading in '+n+'s...');
-      var pa=null,T=setTimeout;
-      function pn(){
-        if(document.hidden){T(pn,1000);return}
-        if(pa)pa.abort();
-        var b=pa=new AbortController();
-        T(()=>b.abort(),1000);
-        fetch('/ping',{cache:'no-store',signal:b.signal}).then(r=>location.href='/').catch(()=>T(pn,500));
-      }
-      var iv=setInterval(function(){
-        if(--n>0)sh('Reloading in '+n+'s...');
-        else{clearInterval(iv);sh('Checking...');pn()}
-      },1000);
-    }else{
-      B.disabled=false;
-      S.innerHTML='<b style="color:#c0392b"></b>';S.firstChild.textContent='Upload failed: '+x.responseText;
-    }
-  };
-  x.onerror=function(){
-    B.disabled=false;
-    S.innerHTML='<b style="color:#c0392b">Upload error (connection lost?)</b>';
-  };
-  x.send(f);
+e.preventDefault();
+var f=F.files[0];if(!f)return;
+B.disabled=true;
+S.textContent='Uploading '+f.name+' ('+f.size+' bytes)...';
+P.style.display='block';P.value=0;
+var x=new XMLHttpRequest();
+x.open('POST','/update',!0);
+x.setRequestHeader('Content-Type','application/octet-stream');
+var dv=0;
+x.upload.onload=function(){if(!dv){P.removeAttribute('value');S.textContent='Sent, device still writing...'}};
+var pt=setInterval(function(){
+fetch('/update/progress',{cache:'no-store'}).then(r=>r.json()).then(j=>{if(j.total){dv=1;P.value=j.done/j.total}}).catch(()=>{});
+},1000);
+x.onloadend=function(){clearInterval(pt)};
+x.onload=function(){
+if(x.status===200){
+P.value=1;
+var R=x.responseText;
+var n=D.rs;
+function sh(t){S.innerHTML='<b style="color:#0a0"></b><br>'+t;S.firstChild.textContent=R}
+sh('Reloading in '+n+'s...');
+var pa=null,T=setTimeout;
+function pn(){
+if(document.hidden){T(pn,1000);return}
+if(pa)pa.abort();
+var b=pa=new AbortController();
+T(()=>b.abort(),1000);
+fetch('/ping',{cache:'no-store',signal:b.signal}).then(r=>location.href='/').catch(()=>T(pn,500));
+}
+var iv=setInterval(function(){
+if(--n>0)sh('Reloading in '+n+'s...');
+else{clearInterval(iv);sh('Checking...');pn()}
+},1000);
+}else{
+B.disabled=false;
+S.innerHTML='<b style="color:#c0392b"></b>';S.firstChild.textContent='Upload failed: '+x.responseText;
+}
+};
+x.onerror=function(){
+B.disabled=false;
+S.innerHTML='<b style="color:#c0392b">Upload error (connection lost?)</b>';
+};
+x.send(f);
 });
 })();
 </script>
@@ -1187,16 +1225,14 @@ byID('uf').addEventListener('submit',function(e){
 static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
 
 void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Update"));
+  WebPortal::beginPage(res, F("Update"));
   char dev[140];
   int n = snprintf_P(dev, sizeof(dev),
     PSTR("<script>window._dev={env:\"" BUILD_ENV "\",tag:\"%s\",rs:%u};</script>"),
     EG_ENV_TAG, (unsigned)FLASH_COUNTDOWN_SECS);
   if (n > 0 && (size_t)n < sizeof(dev)) res.sendChunk(dev, (size_t)n);
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 // one upload at a time
@@ -1215,7 +1251,7 @@ static void ota_begin(size_t expected) {
   s_ota.write_error = false;
   s_ota.head_n      = 0;
   s_ota.started     = false;
-  uint32_t maxSketch = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+  uint32_t maxSketch = (DeviceInfo::freeSketch() - 0x1000) & 0xFFFFF000;
   if (!Update.begin(s_ota.expected ? s_ota.expected : maxSketch)) {
     Log::console(PSTR("OTA: Update.begin failed (size=%u, free=%u)"),
                  (unsigned)s_ota.expected, (unsigned)maxSketch);
@@ -1872,21 +1908,9 @@ static uint8_t param_tab(EGHttpRequest& req) {
   return (uint8_t)EGP_CAT_SYSTEM;
 }
 
-void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  uint8_t tab = param_tab(req);
-  bool posted = (req.method() == EGHttpRequest::POST);
-  Refusal refused{};
-  bool saved = posted && param_save_body(tab, refused);
-  bool wrote = saved && EGPrefs::commit();
-  // stay, so the refusal or note shows
-  bool restart = wrote && EGPrefs::restart_pending();
-  if (restart && !refused.why[0] && !refused.note) {
-    res.redirect(FPSTR(P_RESTART));
-    return;
-  }
-
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Config"));
+// what a post did, above the form
+static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart,
+                       const Refusal& refused) {
   if (wrote) res.sendChunk(F(
     "<div class='a ak'>Saved.</div>"));
   else if (saved) WebPortal::sendNotSaved(res);
@@ -1903,15 +1927,31 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
                restart && !refused.why[0] ? PSTR(" <a href=/restart>Restart</a> to apply.") : PSTR(""));
     res.sendChunk(buf);
   }
-  if (posted && !saved) res.sendChunk(F(
+  if (!saved) res.sendChunk(F(
     "<div class='a ae'>Not saved: the form was too large or memory was short.</div>"));
+}
+
+void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  uint8_t tab = param_tab(req);
+  bool posted = (req.method() == EGHttpRequest::POST);
+  Refusal refused{};
+  bool saved = posted && param_save_body(tab, refused);
+  bool wrote = saved && EGPrefs::commit();
+  // stay, so the refusal or note shows
+  bool restart = wrote && EGPrefs::restart_pending();
+  if (restart && !refused.why[0] && !refused.note) {
+    res.redirect(FPSTR(P_RESTART));
+    return;
+  }
+
+  WebPortal::beginPage(res, F("Config"));
+  if (posted) param_says(res, saved, wrote, restart, refused);
   param_render_tabs(res, tab);
 
   // Backup is the import form only
   if (tab == (uint8_t)EGP_CAT_BACKUP) param_render_backup(res);
   else                                param_render_form(res, tab);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
@@ -2134,14 +2174,12 @@ void WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 }
 
 static void import_fail(EGHttpResponse& res, const char* msg) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Import"));
+  WebPortal::beginPage(res, F("Import"));
   char buf[160];
   snprintf_P(buf, sizeof(buf),
              PSTR("<p>Import failed: %s.</p><p><a href=/param>Back</a></p>"), msg);
   res.sendChunk(buf);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
   body_free(s_importBody);
 }
 
@@ -2215,8 +2253,7 @@ void WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) {
     import_fail(res, err ? err : PSTR("bad blob"));
     return;
   }
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Imported"));
+  WebPortal::beginPage(res, F("Imported"));
   char msg[112];
   if (r.skipped) {
     snprintf_P(msg, sizeof(msg), PSTR("<p>Imported %d prefs, skipped %d (first at line %d). Restarting.</p>"),
@@ -2226,8 +2263,7 @@ void WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
   res.sendChunk(msg);
   WebPortal::sendRestartCountdown(res);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
   WebPortal::requestRestart(1500);
 }
 
@@ -2361,35 +2397,35 @@ extern const char wifiAdvancedHTML[] PROGMEM = R"HTML(
 </details>
 <script>
 (function(){
-  var sel=byID('ws');
-  var rb=byID('rescan');
-  var pollT=null;
-  function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-  function poll(force){
-    rb.disabled=true;
-    fetch('/wifiscan'+(force?'?refresh=1':''))
-      .then(r=>r.json())
-      .then(d=>{
-        if(d.state==='scanning'){
-          sel.innerHTML='<option value="">Scanning&hellip;</option>';
-          pollT=setTimeout(function(){poll(false);},1500);
-        }else if(d.state==='complete'){
-          rb.disabled=false;
-          var opts='<option value="">-- pick a network --</option>';
-          (d.aps||[]).forEach(function(a){
-            var lock=a.open?'':' \u{1F512}';
-            opts+='<option data-ssid="'+esc(a.ssid)+'">'+esc(a.ssid)+' ('+a.rssi+' dBm)'+lock+'</option>';
-          });
-          sel.innerHTML=opts;
-        }else{
-          rb.disabled=false;
-          sel.innerHTML='<option value="">(scan failed)</option>';
-        }
-      })
-      .catch(function(){rb.disabled=false;sel.innerHTML='<option value="">(error)</option>';});
-  }
-  rb.addEventListener('click',function(e){e.preventDefault();clearTimeout(pollT);poll(true);});
-  poll(false);
+var sel=byID('ws');
+var rb=byID('rescan');
+var pollT=null;
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function poll(force){
+rb.disabled=true;
+fetch('/wifiscan'+(force?'?refresh=1':''))
+.then(r=>r.json())
+.then(d=>{
+if(d.state==='scanning'){
+sel.innerHTML='<option value="">Scanning&hellip;</option>';
+pollT=setTimeout(function(){poll(false);},1500);
+}else if(d.state==='complete'){
+rb.disabled=false;
+var opts='<option value="">-- pick a network --</option>';
+(d.aps||[]).forEach(function(a){
+var lock=a.open?'':' \u{1F512}';
+opts+='<option data-ssid="'+esc(a.ssid)+'">'+esc(a.ssid)+' ('+a.rssi+' dBm)'+lock+'</option>';
+});
+sel.innerHTML=opts;
+}else{
+rb.disabled=false;
+sel.innerHTML='<option value="">(scan failed)</option>';
+}
+})
+.catch(function(){rb.disabled=false;sel.innerHTML='<option value="">(error)</option>';});
+}
+rb.addEventListener('click',function(e){e.preventDefault();clearTimeout(pollT);poll(true);});
+poll(false);
 })();
 </script>
 )HTML";

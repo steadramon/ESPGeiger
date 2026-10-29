@@ -26,10 +26,11 @@
 #include "Corium/Measure/EGMeasure.h"
 #include "Counter/CounterUpload.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 
 Radmon radmon;
-EG_REGISTER_MODULE(radmon)
+EG_REGISTER_FEATURE(radmon, FEAT_RADMON)
 
 EG_PSTR(RM_H_EN,  "Upload to radmon.org");
 EG_PSTR(RM_L_USR, "Username");

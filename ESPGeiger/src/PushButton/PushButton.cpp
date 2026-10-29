@@ -24,6 +24,7 @@
 #include "Corium/Output/LedSignal.h"
 #include "Corium/System/PinSafety.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "App/LedPatterns.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/Debounce.h"
@@ -75,7 +76,7 @@ static void do_longpress(unsigned long now) {
 #endif
 
 PushButton pushbutton;
-EG_REGISTER_MODULE(pushbutton)
+EG_REGISTER_FEATURE(pushbutton, FEAT_BUTTON)
 
 #ifndef BTN_PIN_BLOCKED
 #define BTN_STR_(x) #x

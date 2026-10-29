@@ -30,6 +30,7 @@
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/WebPortal/WebPortal.h"
+#include "App/FeatureBits.h"
 
 EG_PSTR(K_SYNC_MIN, "sync_min");
 
@@ -42,7 +43,7 @@ EG_PSTR(K_SYNC_MIN, "sync_min");
 SdFat32* sd = nullptr;
 
 SDCard sdcard;
-EG_REGISTER_MODULE(sdcard)
+EG_REGISTER_FEATURE(sdcard, FEAT_SDCARD)
 
 EG_PSTR(SD_L_SI, "Sync Interval (min)");
 EG_PSTR(SD_H_SI, "Minutes between syncs. 1=safest, higher=less SD wear");
@@ -337,6 +338,8 @@ void SDCard::countFat() {
   const uint32_t total = sd->clusterCount() + 2;
   for (uint16_t i = 0; i < SD_COUNT_SECTORS && _fat_sec * per < total; i++) {
     if (!sd->card()->readSector(sd->fatStartSector() + _fat_sec, buf)) {
+      // next pass counts again
+      scheduleCleanup(_counting);
       _counting = CLEAN_NONE;
       _free = -1;
       EGModuleRegistry::due_in(this, ms_to_minute());
@@ -446,7 +449,7 @@ static bool oldest_csv_in(const char* dir, uint32_t cutoffPacked,
 
 bool SDCard::deleteOldest(uint32_t cutoffPacked) {
   // skip stuck months, max 12
-  char after[SD_DIR_LEN + 1] = "";
+  char after[SD_DIR_LEN + 1] = {};
   for (uint8_t skips = 0; skips <= 12; skips++) {
     char oldestDir[SD_DIR_LEN + 1];
     char oldestFile[SD_NAME_LEN + 1];
@@ -516,8 +519,7 @@ struct DayEntry {
 };
 
 static void end_page(EGHttpResponse& res) {
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static void end_page(EGHttpResponse& res, const __FlashStringHelper* msg) {
@@ -583,8 +585,9 @@ static void sort_months_desc(MonthEntry* months, uint16_t count) {
 static void send_list_summary(EGHttpResponse& res, uint16_t count, uint64_t totalBytes) {
   int32_t freespace = sdcard.freeMB();
   char fs[24];
-  if (freespace < 0) snprintf_P(fs, sizeof(fs), PSTR("counting free space"));
-  else snprintf_P(fs, sizeof(fs), PSTR("%lu MB free"), (unsigned long)freespace);
+  if (freespace >= 0) snprintf_P(fs, sizeof(fs), PSTR("%lu MB free"), (unsigned long)freespace);
+  else if (sdcard.counting()) snprintf_P(fs, sizeof(fs), PSTR("counting free space"));
+  else snprintf_P(fs, sizeof(fs), PSTR("free space unknown"));
 
   char head[160];
   int n = snprintf_P(head, sizeof(head),
@@ -648,8 +651,7 @@ static void send_month_rows(EGHttpResponse& res, const MonthEntry* months,
 }
 
 static void hSdList(EGHttpResponse& res, uint16_t selectedYear = 0) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("SD Logs"));
+  WebPortal::beginPage(res, F("SD Logs"));
 
   if (!sdcard.ready() || !sd) {
     end_page(res, F("<p>SD card not available.</p>"));
@@ -739,8 +741,7 @@ static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
   for (int i = 0; i < SD_DIR_LEN; i++) dir[i] = yyyymm[i];
   dir[SD_DIR_LEN] = '\0';
 
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("SD Logs"));
+  WebPortal::beginPage(res, F("SD Logs"));
 
   if (!sdcard.ready() || !sd) {
     end_page(res, F("<p>SD card not available.</p>"));

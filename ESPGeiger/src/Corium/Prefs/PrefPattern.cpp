@@ -74,13 +74,37 @@ bool parse_count(const char* p, size_t q, unsigned* min, unsigned* max) {
   return pat(p, q) == '\0';
 }
 
+const char META[] PROGMEM = "^$.|()*+?{}[]\\";
+
 bool literal(char c) {
-  switch (c) {
-    case '\0': case '^': case '$': case '.': case '|': case '(': case ')': case '*':
-    case '+': case '?': case '{': case '}': case '[': case ']': case '\\':
-      return false;
+  if (!c) return false;
+  for (size_t i = 0; pat(META, i); i++) {
+    if (pat(META, i) == c) return false;
   }
   return true;
+}
+
+// x? takes x when it's there; false once a needed one is missing, *v past what matched
+bool prefix(const char* p, size_t* i, const char** v) {
+  bool ok = true;
+  for (; literal(pat(p, *i)); (*i)++) {
+    char c = pat(p, *i);
+    bool opt = pat(p, *i + 1) == '?';
+    if (opt) (*i)++;
+    if (ok && **v == c) (*v)++;
+    else if (!opt) ok = false;
+  }
+  return ok;
+}
+
+// how many, or -1 at one outside the class
+int count_in(const char* p, bool digits, size_t to, const char* v) {
+  int n = 0;
+  for (; *v; v++, n++) {
+    bool hit = digits ? (*v >= '0' && *v <= '9') : in_class(p, 1, to, *v);
+    if (!hit) return -1;
+  }
+  return n;
 }
 
 }  // namespace
@@ -89,15 +113,8 @@ bool literal(char c) {
 int pref_pattern(const char* p, const char* value) {
   if (!p) return 1;
   const char* v = value;
-  bool ok = true;
   size_t i = 0;
-  for (; literal(pat(p, i)); i++) {
-    char c = pat(p, i);
-    bool opt = pat(p, i + 1) == '?';
-    if (opt) i++;
-    if (ok && *v == c) v++;
-    else if (!opt) ok = false;
-  }
+  bool ok = prefix(p, &i, &v);
   p += i;
 
   bool digits = pat(p, 0) == '\\' && pat(p, 1) == 'd';
@@ -113,10 +130,6 @@ int pref_pattern(const char* p, const char* value) {
   if (!value[0]) return 1;
   if (!ok) return 0;
 
-  unsigned n = 0;
-  for (; *v; v++, n++) {
-    bool hit = digits ? (*v >= '0' && *v <= '9') : in_class(p, 1, to, *v);
-    if (!hit) return 0;
-  }
-  return n >= min && n <= max;
+  int n = count_in(p, digits, to, v);
+  return n >= 0 && (unsigned)n >= min && (unsigned)n <= max;
 }

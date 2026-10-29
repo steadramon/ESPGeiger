@@ -31,9 +31,6 @@
 #if !defined(ESP8266) || !defined(EG_TIMER1)
 #error "EG_SERIAL_NMI: ESP8266 with EG_TIMER1 only"
 #endif
-#ifdef ESPG_HV
-#error "EG_SERIAL_NMI and ESPG_HV both need EGTimer1"
-#endif
 #include <EGTimer1.h>
 
 // rx only, handler owns the ring

@@ -31,6 +31,7 @@ volatile unsigned long _debounce = GEIGER_DEBOUNCE;
 static constexpr uint32_t ISR_STORM_THRESHOLD = 10000;
 static constexpr uint8_t  ISR_STORM_COOLDOWN_S = 5;
 static uint8_t s_isr_cooldown = 0;
+static bool    s_isr_stopped = false;   // ota, the cooldown leaves it off
 
 IsrLock::Mux timerMux;
 
@@ -106,7 +107,7 @@ void GeigerInput::checkIsrStorm() {
   IsrLock::leave(timerMux);
 
   if (s_isr_cooldown > 0) {
-    if (--s_isr_cooldown == 0) {
+    if (--s_isr_cooldown == 0 && !s_isr_stopped) {
       IsrLock::pin_on_fall(_rx_pin, countInterrupt);
       Log::console(PSTR("GeigerPulse: re-armed after storm cooldown"));
     }
@@ -119,6 +120,17 @@ void GeigerInput::checkIsrStorm() {
     Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
                  (unsigned)n, (unsigned)ISR_STORM_COOLDOWN_S);
   }
+}
+
+void GeigerInput::stopIsr() {
+  s_isr_stopped = true;
+  IsrLock::pin_off(_rx_pin);
+}
+
+// a storm cooldown re-arms it when done
+void GeigerInput::restartIsr() {
+  s_isr_stopped = false;
+  if (s_isr_cooldown == 0) IsrLock::pin_on_fall(_rx_pin, countInterrupt);
 }
 
 void GeigerInput::setCounter(int val, bool update) {

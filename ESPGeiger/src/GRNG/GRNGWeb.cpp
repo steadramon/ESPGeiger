@@ -23,6 +23,7 @@
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGHttpServer.h>
+#include "RANDOM_JS.gz.h"
 
 static const char PW_CHARS[] PROGMEM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -38,47 +39,56 @@ static const char RANDOM_PAGE_BODY_NEW[] PROGMEM = R"HTML(
 </style>
 <table class=rg id=rg></table>
 <p class=muted>Powered by accumulated radiation events.</p>
-<script>
-[['Coin','coin',null,'Flip'],
- ['Dice D','dice',['sides',6,2,10000],'Roll'],
- ['Password','password',['len',16,4,64],'Generate','chars'],
- ['Hex','hex',['n',16,1,32],'Generate','bytes'],
- ['Bias test','flip',['n',1000,10,10000],'Run','flips'],
- ['OTP','otp',['n',256,16,1024],'Download','bytes',1]
-].forEach(c=>{
-  var t=document.createElement('tr'),
-      i=c[2]?'<input type=number value='+c[2][1]+' min='+c[2][2]+' max='+c[2][3]+'>':'',
-      u=c[4]?'<span class=muted>'+c[4]+'</span>':'';
-  t.innerHTML='<th>'+c[0]+'</th><td>'+i+'</td><td>'+u+'</td><td><button type=button>'+c[3]+'</button></td><td><span class=o></span></td>';
-  t.dataset.type=c[1];if(c[2])t.dataset.arg=c[2][0];if(c[5])t.dataset.dl=1;
-  t.querySelector('button').onclick=function(){r(this)};
-  document.getElementById('rg').appendChild(t);
-});
-function r(b){
-  var row=b.closest('tr'),t=row.dataset.type,k=row.dataset.arg,
-      i=row.querySelector('input'),o=row.querySelector('.o'),dl=row.dataset.dl;
-  o.classList.remove('f');b.disabled=true;
-  var u='/random.do?type='+t;if(i&&k)u+='&'+k+'='+i.value;
-  fetch(u).then(r=>r.text()).then(x=>{
-    if(dl){
-      var a=document.createElement('a');
-      a.href=URL.createObjectURL(new Blob([x],{type:'text/plain'}));
-      a.download=t+'-'+Date.now()+'.txt';
-      a.click();URL.revokeObjectURL(a.href);
-      o.textContent=i.value+' bytes ('+x.length+' hex chars) saved';
-    }else o.textContent=x;
-    void o.offsetWidth;o.classList.add('f');b.disabled=false;
-  }).catch(()=>{o.textContent='(error)';b.disabled=false;});
-}
-</script>
+<script src=/rndjs)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
 
+extern const char RANDOM_JS[] PROGMEM = R"JS(
+[['Coin','coin',null,'Flip'],
+['Dice D','dice',['sides',6,2,10000],'Roll'],
+['Password','password',['len',16,4,64],'Generate','chars'],
+['Hex','hex',['n',16,1,32],'Generate','bytes'],
+['Bias test','flip',['n',1000,10,10000],'Run','flips'],
+['OTP','otp',['n',256,16,1024],'Download','bytes',1]
+].forEach(c=>{
+var t=document.createElement('tr'),
+i=c[2]?'<input type=number value='+c[2][1]+' min='+c[2][2]+' max='+c[2][3]+'>':'',
+u=c[4]?'<span class=muted>'+c[4]+'</span>':'';
+t.innerHTML='<th>'+c[0]+'</th><td>'+i+'</td><td>'+u+'</td><td><button type=button>'+c[3]+'</button></td><td><span class=o></span></td>';
+t.dataset.type=c[1];if(c[2])t.dataset.arg=c[2][0];if(c[5])t.dataset.dl=1;
+t.querySelector('button').onclick=function(){r(this)};
+document.getElementById('rg').appendChild(t);
+});
+function r(b){
+var row=b.closest('tr'),t=row.dataset.type,k=row.dataset.arg,
+i=row.querySelector('input'),o=row.querySelector('.o'),dl=row.dataset.dl;
+o.classList.remove('f');b.disabled=true;
+var u='/random.do?type='+t;if(i&&k)u+='&'+k+'='+i.value;
+fetch(u).then(r=>r.text()).then(x=>{
+if(dl){
+var a=document.createElement('a');
+a.href=URL.createObjectURL(new Blob([x],{type:'text/plain'}));
+a.download=t+'-'+Date.now()+'.txt';
+a.click();URL.revokeObjectURL(a.href);
+o.textContent=i.value+' bytes ('+x.length+' hex chars) saved';
+}else o.textContent=x;
+void o.offsetWidth;o.classList.add('f');b.disabled=false;
+}).catch(()=>{o.textContent='(error)';b.disabled=false;});
+}
+)JS";
+
 static void hRandomPage(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Random"));
+  WebPortal::beginPage(res, F("Random"));
   res.sendChunk(FPSTR(RANDOM_PAGE_BODY_NEW));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
+}
+
+static void hRandomJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+#if EG_GZ_RANDOM_JS
+  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), RANDOM_JS_GZ, RANDOM_JS_GZ_LEN);
+#else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(RANDOM_JS));
+#endif
 }
 
 // per_chunk <= 64
@@ -210,7 +220,16 @@ static void hRandomDo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, FPSTR(HTTP_CT_PLAIN), out);
 }
 
+static const char R_RANDOM[] PROGMEM = "/random";
+static const char R_DO[]     PROGMEM = "/random.do";
+static const char R_RNDJS[]  PROGMEM = "/rndjs";
+
+static const WebRoute ROUTES[] PROGMEM = {
+  {R_RANDOM, hRandomPage, EGHttpRequest::GET},
+  {R_DO,     hRandomDo,   EGHttpRequest::GET},
+  {R_RNDJS,  hRandomJs,   EGHttpRequest::GET},
+};
+
 void GRNGRoutes::registerRoutes(EGHttpServer& http) {
-  http.on(F("/random"),    EGHttpRequest::GET, hRandomPage);
-  http.on(F("/random.do"), EGHttpRequest::GET, hRandomDo);
+  WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
 }

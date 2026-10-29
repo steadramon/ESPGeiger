@@ -26,6 +26,7 @@
 #include "Corium/Util/MathUtil.h"
 #include "App/AppKeys.h"
 #include "App/AppMath.h"
+#include "App/FeatureBits.h"
 #include "Corium/System/PinSafety.h"
 
 EG_PSTR(K_COLOR, "color");
@@ -36,7 +37,7 @@ EG_PSTR(K_SWAP,  "swap");
 #define NPX_STR(x) NPX_STR_(x)
 
 NeoPixel neopixel;
-EG_REGISTER_MODULE(neopixel)
+EG_REGISTER_FEATURE(neopixel, FEAT_NEOPIXEL)
 
 EG_PSTR(NP_L_SWAP, "Swap R/G");
 EG_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");

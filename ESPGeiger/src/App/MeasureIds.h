@@ -25,6 +25,7 @@
 #define M_ALERT  PSTR("alert")
 #define M_WARN   PSTR("warn")
 #define M_WARM   PSTR("warm")
+#define M_NONE   PSTR("no_counts")
 #define M_CPM    PSTR("cpm")
 #define M_CPM5   PSTR("cpm5")
 #define M_CPM15  PSTR("cpm15")
@@ -41,6 +42,12 @@
 #define M_HV_TGT PSTR("hv_tgt")
 #define M_HV_DTY PSTR("hv_duty")
 #define M_HV_TRM PSTR("hv_trim")
+// built with the hv rows, 0 = the code reading them drops out
+#ifdef ESPG_HV_ADC
+#define M_HAS_HV 1
+#else
+#define M_HAS_HV 0
+#endif
 // celsius
 #define M_T      PSTR("t")
 #define M_H      PSTR("h")

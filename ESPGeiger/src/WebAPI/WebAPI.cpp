@@ -462,6 +462,7 @@ static void write_env(MsgPack::Writer& mp) {
 static void write_readings(MsgPack::Writer& mp) {
   mp.kv(PSTR("c"),  egm_f(M_CPM_ST));
   mp.kv(PSTR("u"),  egm_f(M_USV_ST));
+  if (egm_b(M_NONE)) mp.kv(PSTR("nc"), true);
 #ifdef ESPG_HV_ADC
   EGMeasureIter hv(0xFF, false, M_HV);
   if (hv.next()) mp.kv(PSTR("hv"), hv.value().i);
@@ -480,8 +481,7 @@ static void write_health(MsgPack::Writer& mp) {
   if (!isnan(ct)) mp.kv(PSTR("ct"), ct);
 #endif
 #ifdef WEBAPI_TESTMODE_POST
-  mp.kv(PSTR("lfb"), DeviceInfo::largestFreeBlockLow());
-  DeviceInfo::largestFreeBlockLowReset();
+  mp.kv(PSTR("lfb"), DeviceInfo::largestFreeBlockLowTake());
 #endif
 }
 
@@ -621,7 +621,7 @@ static void write_key_file(const uint8_t* priv) {
     Log::console(PSTR("WebAPI: Failed to open api.key"));
     return;
   }
-  char private_key[2 * WEBAPI_PRIV_LEN + 1] = "";
+  char private_key[2 * WEBAPI_PRIV_LEN + 1] = {};
   bytestostr(priv, WEBAPI_PRIV_LEN, private_key);
   f.println(private_key);
   f.close();
@@ -721,8 +721,7 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool wrote = true;
   const bool saved = posted && saveSettings(req, wrote);
 
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("ESPGeiger Network"));
+  WebPortal::beginPage(res, F("ESPGeiger Network"));
   if (!wrote) WebPortal::sendNotSaved(res);
   else if (saved) res.sendChunk(F("<div class='a ak'>Saved.</div>"));
   else if (posted) res.sendChunk(F("<div class='a ae'>A value was out of range and not saved.</div>"));
@@ -770,19 +769,16 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
   res.sendChunk(FPSTR(W_DETAILS_END));
 
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   Log::console(PSTR("WebAPI: Resetting api.key"));
   forget_key();
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Key Reset"));
+  WebPortal::beginPage(res, F("Key Reset"));
   res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
   WebPortal::sendRestartCountdown(res);
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
   WebPortal::requestRestart(1500);
 }
 
@@ -791,12 +787,10 @@ static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
   EGPrefs::put("webapi", EG_K_MODE, "0");
   bool wrote = EGPrefs::commit();
 
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Station Forgotten"));
+  WebPortal::beginPage(res, F("Station Forgotten"));
   if (!wrote) WebPortal::sendNotSaved(res);
   res.sendChunk(FPSTR(FORGET_BODY));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static const EGMenuEntry WEBAPI_MENU[] PROGMEM = {
@@ -805,11 +799,18 @@ static const EGMenuEntry WEBAPI_MENU[] PROGMEM = {
 };
 const EGMenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
 
+static const char P_WEBAPI[] PROGMEM = "/webapi";
+static const char R_KEYRESET[] PROGMEM = "/webapikeyreset";
+static const char R_FORGET[]   PROGMEM = "/webapiforget";
+
+static const WebRoute ROUTES[] PROGMEM = {
+  {P_WEBAPI,   hWebAPI,   EGHttpRequest::GET},
+  {P_WEBAPI,   hWebAPI,   EGHttpRequest::POST},
+  {R_KEYRESET, hKeyReset, EGHttpRequest::POST},
+  {R_FORGET,   hForget,   EGHttpRequest::POST},
+};
+
 void WebAPI::registerRoutes(EGHttpServer& http) {
-  static const char P_WEBAPI[] PROGMEM = "/webapi";
-  http.on(FPSTR(P_WEBAPI),      EGHttpRequest::GET,  hWebAPI);
-  http.on(FPSTR(P_WEBAPI),      EGHttpRequest::POST, hWebAPI);
-  http.on(F("/webapikeyreset"), EGHttpRequest::POST, hKeyReset);
-  http.on(F("/webapiforget"),   EGHttpRequest::POST, hForget);
+  WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
 }
 #endif

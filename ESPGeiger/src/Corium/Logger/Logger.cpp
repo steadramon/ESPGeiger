@@ -98,7 +98,7 @@ void Log::banner(const char* formatP, ...)
 // Based on arendst/Tasmota addLog (support.ino)
 void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimestamp)
 {
-  char timeStr[13] = "";
+  char timeStr[13] = {};
 #ifndef DISABLE_LOG_TS
   if (withTimestamp) {
     struct tm t;

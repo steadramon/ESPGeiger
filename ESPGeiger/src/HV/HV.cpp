@@ -21,6 +21,7 @@
 #include <EGHttpServer.h>
 #include "HV.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
@@ -60,7 +61,7 @@ EG_PSTR(K_BOOT_S, "boot_s");
 
 
 HV hv;
-EG_REGISTER_MODULE(hv)
+EG_REGISTER_FEATURE(hv, FEAT_HV)
 
 EG_PSTR(HW_L_FRQ, "PWM Frequency");
 EG_PSTR(HW_H_FRQ, "HV generator frequency (Hz)");
@@ -416,11 +417,12 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
 <tr><th><label for=tgt>Target:</label></th><td><input id="tgt" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_V) R"HTML("> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
 
 <tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
+<script src="/pgjs)HTML" EG_CACHE_BUST R"HTML("></script>
 <script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
 )HTML";
 
 #if !EG_GZ_HVJS_BUNDLE
-extern const char hvJS[] PROGMEM = R"JS("use strict";
+extern const char hvJS[] PROGMEM = R"JS(
 var e=new Graph("g1",["Volts"],"V","g2",5,null,0,!0,!0,5,15),
 D=Date,X=XMLHttpRequest,O=setTimeout,
 G1=byID('g1'),G2=byID('g2'),
@@ -477,14 +479,10 @@ SB.addEventListener("click",function(){
 )JS";
 #endif
 
-extern const char picographJS[] PROGMEM;
-
 static void hHv(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("HV"));
+  WebPortal::beginPage(res, F("HV"));
   res.sendChunk(FPSTR(HV_STATUS_PAGE_BODY));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -511,7 +509,14 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (changed) {
     hv.clear_ov();   // also resets the trim
     if (!hv.saveconfig()) {
-      res.send(500, FPSTR(HTTP_CT_PLAIN), F("Not saved"));
+      char why[EGPREFS_FROZEN_MAX];
+      char buf[sizeof("Not saved: ") + EGPREFS_FROZEN_MAX];
+      if (EGPrefs::frozen(why, sizeof(why))) {
+        snprintf_P(buf, sizeof(buf), PSTR("Not saved: %s"), why);
+        res.send(500, FPSTR(HTTP_CT_PLAIN), buf);
+      } else {
+        res.send(500, FPSTR(HTTP_CT_PLAIN), F("Not saved"));
+      }
       return;
     }
   }
@@ -519,14 +524,11 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_HVJS_BUNDLE
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
+  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
 #else
-  res.beginChunked(200, FPSTR(HTTP_CT_JS));
-  res.sendChunk(FPSTR(picographJS));
-  res.sendChunk(FPSTR(hvJS));
-  res.endChunked();
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(hvJS));
 #endif
 }
 

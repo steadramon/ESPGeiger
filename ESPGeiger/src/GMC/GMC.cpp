@@ -27,13 +27,14 @@
 #include "Corium/Measure/EGMeasure.h"
 #include "Counter/CounterUpload.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 
 EG_PSTR(K_AID,  "aid");
 EG_PSTR(K_GCID, "gcid");
 
 GMC gmc;
-EG_REGISTER_MODULE(gmc)
+EG_REGISTER_FEATURE(gmc, FEAT_GMC)
 
 EG_PSTR(GM_H_EN,  "Upload to gmcmap.com");
 EG_PSTR(GM_L_AID, "Account ID");

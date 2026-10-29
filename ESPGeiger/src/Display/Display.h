@@ -27,6 +27,7 @@
 #include "Counter/CounterMeasures.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "App/Topics.h"
 #include "Corium/System/FastMillis.h"
 
 // under 10 the 5 min avg, unless 3 sigma off
@@ -85,7 +86,7 @@ class Display : public EGModule {
     // looked at on new counts, taps and wakes
     void loop(unsigned long now) override { refresh(now); }
     // lit or dark changed, from loop()
-    static constexpr uint8_t TOPIC_POWER = EG_TOPIC_APP + 2;
+    static constexpr uint8_t TOPIC_POWER = Topic::POWER;
     bool lit() const { return _lit; }
 
     // core rows, found at the first prefs load

@@ -188,7 +188,7 @@ public:
     uint8_t _oled_addr = 0;
     uint8_t _pref_display_type = OLED_TYPE;
     unsigned long _page4_num_last = 0;
-    char _page4_num[8] = "";
+    char _page4_num[8] = {};
     uint8_t _page4_variant = 0;
     uint8_t _last_page = 0;
     bool _p1_alt = false;

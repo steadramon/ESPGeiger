@@ -24,7 +24,7 @@
 #include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
 
-#ifdef USE_PCNT
+#ifdef PCNT_SELECTABLE
 #define PCNT_PULL_FLOATING 0
 #define PCNT_PULL_UP       1
 #define PCNT_PULL_DOWN     2
@@ -48,17 +48,12 @@ class GeigerPulse final : public GeigerInput
     void begin() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    bool has_pcnt() override {
-#ifdef USE_PCNT
-      return true;
-#else
-      return false;
-#endif
-    }
-#ifndef USE_PCNT
+#ifndef PCNT_SELECTABLE
     void secondTicker() override { checkIsrStorm(); }
-#endif
-#ifdef USE_PCNT
+#else
+    bool has_pcnt() override { return _pcnt; }
+    void use_pcnt(bool on) override { _pcnt = on; }
+    void secondTicker() override { if (!_pcnt) checkIsrStorm(); }
     int collect() override;
     void loop() override;
     static constexpr uint32_t DRAIN_MS = 20;   // 50 Hz
@@ -67,6 +62,7 @@ class GeigerPulse final : public GeigerInput
     void apply_pcnt_filter() override;
     void set_pin_pull(int mode) override;   // 0=floating, 1=up, 2=down
   private:
+    bool     _pcnt = true;              // false = interrupt
     uint16_t _pcnt_filter = 0;          // 0-1023
     uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT;
     int8_t   _pin_pull_last_logged = -1;        // -1 = not logged

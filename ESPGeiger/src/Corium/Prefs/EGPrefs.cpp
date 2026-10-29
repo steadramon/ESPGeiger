@@ -56,11 +56,12 @@ struct GroupShadow {
   uint32_t           heap_mask;
   uint8_t            dirty;     // DIRTY, or HELD: commit_soon called back, write waits
   bool               stored;
-  bool               partial;   // a stored value didn't load, never write over it
+  uint8_t            partial;   // a stored value didn't load, never write over it: row + 1, or MANY
   bool               wipe;      // reset_all, no file unless a put comes
 };
 static constexpr uint8_t DIRTY = 1;
 static constexpr uint8_t HELD  = 2;
+static constexpr uint8_t MANY  = 0xFF;   // more than one row, only a reset clears it
 
 const char EG_K_DNS[]          PROGMEM = "dns";
 const char EG_K_GW[]           PROGMEM = "gw";
@@ -87,6 +88,7 @@ static const char*    s_refused = nullptr;
 static const char*    s_warned = nullptr;
 static EGPrefsStorage s_storage;
 static bool           s_waiting = false;   // commit_soon's write
+static GroupShadow*   s_frozen = nullptr;  // the last commit left it out
 static void         (*s_wake)(uint32_t) = nullptr;
 
 static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
@@ -244,21 +246,31 @@ bool stored_ok(const EGPref& p, const char* value, uint16_t vlen) {
   return validate(&p, copy, out, sizeof(out)) >= 0;
 }
 
-void load_record_cb(void* ctx, const char* key, uint8_t klen,
-                    const char* value, uint16_t vlen) {
-  GroupShadow* gs = (GroupShadow*)ctx;
+void not_loaded(GroupShadow& gs, size_t j) {
+  gs.partial = gs.partial ? MANY : (uint8_t)(j + 1);
+}
+
+// own = the group's file, a refused one stays in it; a moved one isn't carried
+void read_record(GroupShadow* gs, const char* key, uint8_t klen,
+                 const char* value, uint16_t vlen, bool own) {
   for (size_t j = 0; j < gs->group->count.get(); j++) {
     const char* pid = gs->group->prefs.id_P(j);
     if (strlen_P(pid) == klen && strncmp_P(key, pid, klen) == 0) {
       EGPref p = gs->group->prefs.row(j);
       if (!stored_ok(p, value, vlen)) {
         Log::console(PSTR("prefs: %s.%s refused, default kept"), gs->group->module_id, pid);
+        if (own) not_loaded(*gs, j);
         return;
       }
-      if (!shadow_set(*gs, j, value, vlen)) gs->partial = true;
+      if (!shadow_set(*gs, j, value, vlen)) not_loaded(*gs, j);
       return;
     }
   }
+}
+
+void load_record_cb(void* ctx, const char* key, uint8_t klen,
+                    const char* value, uint16_t vlen) {
+  read_record((GroupShadow*)ctx, key, klen, value, vlen, true);
 }
 
 // file size: magic, then klen key vlen value per row
@@ -313,6 +325,11 @@ const char* moved_to(const char* from) {
   return nullptr;
 }
 
+void moved_record_cb(void* ctx, const char* key, uint8_t klen,
+                     const char* value, uint16_t vlen) {
+  read_record((GroupShadow*)ctx, key, klen, value, vlen, false);
+}
+
 void adopt_moved() {
   for (size_t k = 0; k < MOVED_N; k++) {
     const char* to = to_at(k);
@@ -322,7 +339,7 @@ void adopt_moved() {
     bool any = false;
     for (size_t i = MOVED_N; i-- > 0;) {
       if (strcmp(to_at(i), to) != 0 || !s_storage.has(from_at(i))) continue;
-      s_storage.readGroup(from_at(i), load_record_cb, gs);
+      s_storage.readGroup(from_at(i), moved_record_cb, gs);
       any = true;
     }
     if (any && write_group(*gs)) Log::console(PSTR("Prefs: keys moved to %s"), to);
@@ -345,9 +362,22 @@ void drop_moved() {}
 #ifdef EGPREFS_NO_LEGACY
 void import_legacy() {}   // new boards, nothing to import
 #else
+constexpr size_t LEGACY_PATHS = 4;
+
+bool has_path(const char* const* list, size_t n, const char* path) {
+  for (size_t i = 0; i < n; i++) {
+    if (strcmp(list[i], path) == 0) return true;
+  }
+  return false;
+}
+
+void add_path(const char** list, size_t* n, const char* path) {
+  if (!has_path(list, *n, path) && *n < LEGACY_PATHS) list[(*n)++] = path;
+}
+
 // stale once every group has its own file
 void drop_stale_legacy() {
-  const char* seen[4] = {0};
+  const char* seen[LEGACY_PATHS] = {0};
   size_t n = 0;
   for (size_t gi = 0; gi < s_group_count; gi++) {
     GroupShadow& gs = s_groups[gi];
@@ -358,9 +388,7 @@ void drop_stale_legacy() {
 #else
     if (!path) continue;
 #endif
-    bool dup = false;
-    for (size_t i = 0; i < n; i++) dup = dup || strcmp(seen[i], path) == 0;
-    if (dup || n == sizeof(seen) / sizeof(seen[0])) continue;
+    if (has_path(seen, n, path) || n == LEGACY_PATHS) continue;
     seen[n++] = path;
     if (Fs::remove(path)) {
       Log::console(PSTR("Prefs: removed stale legacy %s"), path);
@@ -383,8 +411,9 @@ void import_legacy() {
   const char* cached_file = nullptr;
   bool cached_ok = false;
   int imported = 0;
-  const char* drop[4] = {0};
-  size_t drop_n = 0;
+  const char* drop[LEGACY_PATHS] = {0};
+  const char* keep[LEGACY_PATHS] = {0};   // a group's import didn't land
+  size_t drop_n = 0, keep_n = 0;
 
   for (size_t gi = 0; gi < s_group_count; gi++) {
     GroupShadow& gs = s_groups[gi];
@@ -429,28 +458,22 @@ void import_legacy() {
       int nlen = validate(&p, raw, normalized, sizeof(normalized));
       if (nlen < 0) continue;
       if (!shadow_set(gs, idx, normalized, (size_t)nlen)) {
-        gs.partial = true;   // legacy file kept
+        not_loaded(gs, idx);   // legacy file kept
         continue;
       }
       any = true;
       imported++;
     }
-    if (any && !write_group(gs)) {
-      Log::console(PSTR("prefs: legacy persist failed for %s"), gs.group->module_id);
-      continue;
-    }
-    if (any) {
-      bool seen = false;
-      for (size_t i = 0; i < drop_n; i++) {
-        if (strcmp(drop[i], path) == 0) { seen = true; break; }
-      }
-      if (!seen && drop_n < sizeof(drop) / sizeof(drop[0])) drop[drop_n++] = path;
-    }
+    bool failed = any && !write_group(gs);
+    if (failed) Log::console(PSTR("prefs: legacy persist failed for %s"), gs.group->module_id);
+    if (failed || gs.partial) add_path(keep, &keep_n, path);
+    else if (any) add_path(drop, &drop_n, path);
   }
   if (imported > 0) {
     Log::console(PSTR("Prefs: Imported %d legacy value(s)"), imported);
   }
   for (size_t i = 0; i < drop_n; i++) {
+    if (has_path(keep, keep_n, drop[i])) continue;
     if (Fs::remove(drop[i])) {
       Log::console(PSTR("Prefs: removed legacy %s"), drop[i]);
     }
@@ -591,6 +614,7 @@ bool EGPrefs::put(const char* module, const char* key, const char* value) {
       s_refused = PSTR("no memory");
       return false;
     }
+    if (gs->partial == idx + 1) gs->partial = 0;   // its new value stands
     gs->dirty = true;
     gs->wipe = false;
     if (p.flags & EGP_REBOOT) s_reboot_put = true;
@@ -620,14 +644,47 @@ static bool save_group(GroupShadow& gs) {
   return write_group(gs);
 }
 
+static int frozen_text(const GroupShadow& gs, char* out, size_t n) {
+  const char* id = gs.group->module_id;
+  if (gs.partial == MANY) return snprintf_P(out, n, PSTR("%s didn't load in full, reset it"), id);
+  return snprintf_P(out, n, PSTR("%s.%s didn't load, set it or reset %s"),
+                    id, gs.group->prefs.id_P(gs.partial - 1), id);
+}
+
+// its write would go over a value that didn't load: dropped, said once, never retried
+static void drop_frozen(GroupShadow& gs) {
+  char why[EGPREFS_FROZEN_MAX];
+  frozen_text(gs, why, sizeof(why));
+  Log::console(PSTR("Prefs: not saved, %s"), why);
+  gs.dirty = false;
+  s_frozen = &gs;
+}
+
+size_t EGPrefs::frozen(char* out, size_t n) {
+  int len = s_frozen ? frozen_text(*s_frozen, out, n) : 0;
+  return len > 0 ? (size_t)len : 0;
+}
+
+static bool any_dirty() {
+  for (size_t i = 0; i < s_group_count; i++) {
+    if (s_groups[i].dirty) return true;
+  }
+  return false;
+}
+
 // a failed group stays dirty, the next commit writes it
 bool EGPrefs::commit(bool fire_callbacks) {
   s_restart_pending = s_reboot_put;
+  s_frozen = nullptr;
   bool all_ok = true;
   bool wrote = false;
   for (size_t i = 0; i < s_group_count; i++) {
     GroupShadow& gs = s_groups[i];
     if (!gs.dirty) continue;
+    if (gs.partial) {
+      drop_frozen(gs);
+      continue;
+    }
     // a write can take 200 ms, an import writes them all
     if (wrote) {
       yield();
@@ -645,30 +702,41 @@ bool EGPrefs::commit(bool fire_callbacks) {
     if (fire_callbacks && !held && runs(gs.module)) gs.module->on_prefs_saved();
   }
   if (all_ok) s_reboot_put = false;
-  return all_ok;
+  return all_ok && !s_frozen;
 }
 
 // callbacks now as commit's, the write waits for flush()
 bool EGPrefs::commit_soon(uint32_t now) {
   if (!s_wake) return commit();
   s_restart_pending = s_reboot_put;
+  s_frozen = nullptr;
+  bool held = false;
   for (size_t i = 0; i < s_group_count; i++) {
     GroupShadow& gs = s_groups[i];
     if (gs.dirty != DIRTY) continue;
+    if (gs.partial) {
+      drop_frozen(gs);
+      continue;
+    }
     gs.dirty = HELD;
+    held = true;
     if (runs(gs.module)) gs.module->on_prefs_saved();
   }
-  if (!s_waiting) {
+  if (held && !s_waiting) {
     s_waiting = true;
     s_wake(now + EGPREFS_HOLD_MS);
   }
-  return true;
+  return !s_frozen;
 }
 
+// a failed write waits again, a hold later; shutdown's flush tries it too
 void EGPrefs::flush() {
   if (!s_waiting) return;
   s_waiting = false;
-  if (!commit()) Log::console(PSTR("Prefs: not saved"));
+  if (commit() || !any_dirty()) return;   // a frozen one is dropped, not retried
+  Log::console(PSTR("Prefs: not saved"));
+  s_waiting = true;
+  if (s_wake) s_wake(millis() + EGPREFS_HOLD_MS);
 }
 
 void EGPrefs::hold_by(void (*wake)(uint32_t at)) { s_wake = wake; }
@@ -686,6 +754,9 @@ bool EGPrefs::reset(const char* module, const char* key) {
     if (p.flags & EGP_READONLY) continue;
     ok = put(module, p.id, p.default_val) && ok;
   }
+  // nothing stored is wanted, the defaults go over it
+  if (gs->partial) gs->dirty = true;
+  gs->partial = 0;
   return ok;
 }
 
@@ -697,7 +768,7 @@ bool EGPrefs::remove_group(const char* module) {
     shadow_reset(*gs, j);
   }
   gs->dirty = false;
-  gs->partial = false;
+  gs->partial = 0;
   import_legacy();  // LEGACY IMPORT (remove after v1.0.0)
   if (runs(gs->module)) gs->module->on_prefs_loaded();
   return removed;
@@ -720,7 +791,7 @@ void EGPrefs::reset_all(bool keep_network) {
     // files change at commit, till then the old ones stand
     gs.dirty = true;
     gs.wipe = !kept;
-    if (!kept) gs.partial = false;   // nothing stored is wanted
+    if (!kept) gs.partial = 0;   // nothing stored is wanted
   }
   drop_moved();
 }

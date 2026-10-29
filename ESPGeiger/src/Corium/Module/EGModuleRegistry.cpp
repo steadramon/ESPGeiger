@@ -31,6 +31,7 @@
 EGModuleRegistry::Slot EGModuleRegistry::_slots[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_count = 0;
 uint8_t EGModuleRegistry::_overflow = 0;
+uint16_t EGModuleRegistry::_features = 0;
 uint32_t EGModuleRegistry::_next_loop_due = 0;
 uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
 uint8_t EGModuleRegistry::_due_count = 0;
@@ -68,6 +69,12 @@ bool EGModuleRegistry::add(EGModule* m) {
   m->_slot = _count;
   _count++;
   return true;
+}
+
+// built in, slot or not
+bool EGModuleRegistry::add(EGModule* m, uint8_t feature) {
+  _features |= (uint16_t)(1u << feature);
+  return add(m);
 }
 
 void EGModuleRegistry::begin_all() {

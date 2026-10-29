@@ -50,6 +50,8 @@ static_assert(EGModule::TOPIC_SENT < EG_TOPIC_APP, "Corium topics sit below EG_T
 class EGModuleRegistry {
   public:
     static bool add(EGModule* m);
+    static bool add(EGModule* m, uint8_t feature);
+    static uint16_t features() { return _features; }   // build feature bits, the app numbers them
     static void pre_wifi_all();
     static void begin_all();
     static void loop_all(unsigned long now);
@@ -116,6 +118,7 @@ class EGModuleRegistry {
     static Slot _slots[EG_MAX_MODULES];
     static uint8_t _count;
     static uint8_t _overflow;
+    static uint16_t _features;
     static uint32_t _next_loop_due;
 
     // armed slots, sorted by next_due
@@ -143,5 +146,7 @@ class EGModuleRegistry {
 
 #define EG_REGISTER_MODULE(instance) \
   static bool _reg_##instance = EGModuleRegistry::add(&instance);
+#define EG_REGISTER_FEATURE(instance, bit) \
+  static bool _reg_##instance = EGModuleRegistry::add(&instance, bit);
 
 #endif

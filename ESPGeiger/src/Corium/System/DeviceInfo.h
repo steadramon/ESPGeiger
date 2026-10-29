@@ -58,6 +58,21 @@ namespace DeviceInfo {
   const char* flashInfo();   // "ef4016 DIO 40MHz"
   uint64_t hwid();   // chip id, efuse mac on esp32
 
+  // /info
+  inline uint32_t flashSize()  { return ESP.getFlashChipSize(); }
+  inline uint32_t cpuMHz()     { return ESP.getCpuFreqMHz(); }
+  inline uint32_t sketchSize() { return ESP.getSketchSize(); }
+  inline uint32_t freeSketch() { return ESP.getFreeSketchSpace(); }
+#ifdef ESP8266
+  inline uint32_t realFlash()  { return ESP.getFlashChipRealSize(); }
+  inline uint8_t bootVersion() { return ESP.getBootVersion(); }
+  String coreVersion();
+#elif defined(ESP32)
+  inline const char* chipModel()  { return ESP.getChipModel(); }
+  inline uint8_t chipRev()        { return ESP.getChipRevision(); }
+  inline const char* sdkVersion() { return ESP.getSdkVersion(); }
+#endif
+
   inline uint32_t hwRandom() {
 #ifdef ESP8266
     return RANDOM_REG32;
@@ -68,6 +83,13 @@ namespace DeviceInfo {
 
   inline __attribute__((always_inline)) uint32_t cycles() { return ESP.getCycleCount(); }
   inline uint32_t heapNow() { return ESP.getFreeHeap(); }   // raw, freeHeap() is smoothed
+  // raw too
+#ifdef ESP8266
+  void heapStats(uint32_t* free_, uint16_t* max_, uint8_t* frag);
+#else
+  inline uint32_t heapMin() { return ESP.getMinFreeHeap(); }
+  inline uint32_t heapMaxBlock() { return ESP.getMaxAllocHeap(); }
+#endif
 
   unsigned long uptime();
 
@@ -78,8 +100,8 @@ namespace DeviceInfo {
   uint8_t heapFrag();   // %
 
   uint32_t largestFreeBlock();
-  uint32_t largestFreeBlockLow();
-  void     largestFreeBlockLowReset();
+  uint32_t largestFreeBlockLow();       // since boot
+  uint32_t largestFreeBlockLowTake();   // since the last take, one taker
 
 #ifdef ESP32
   float chipTempC();   // die not ambient, classic esp32 reads high

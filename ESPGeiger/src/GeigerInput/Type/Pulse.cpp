@@ -22,7 +22,7 @@
 
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/MathUtil.h"
-#ifdef USE_PCNT
+#ifdef PCNT_SELECTABLE
 #include "Counter/Counter.h"
 #endif
 
@@ -31,39 +31,46 @@ GeigerPulse::GeigerPulse() {
 
 void GeigerPulse::begin() {
   GeigerInput::begin();
-#ifdef USE_PCNT
-  Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
-  // pull-up for PCNT init, user pull after
-  gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
-  pcnt_begin(_rx_pin, GPIO_PULLUP_ONLY);
-  set_pin_pull(_pin_pull);
-  _polls = true;
-#else
+#ifdef PCNT_SELECTABLE
+  if (_pcnt) {
+    Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
+    // pull-up for PCNT init, user pull after
+    gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
+    pcnt_begin(_rx_pin, GPIO_PULLUP_ONLY);
+    set_pin_pull(_pin_pull);
+    _polls = true;
+    return;
+  }
+#endif
   Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);
   IsrLock::pin_on_fall(_rx_pin, countInterrupt);
-#endif
 }
 
 void GeigerPulse::stopForOTA() {
-#ifdef USE_PCNT
-  pcnt_counter_pause(PCNT_UNIT);
-#else
-  IsrLock::pin_off(_rx_pin);
+#ifdef PCNT_SELECTABLE
+  if (_pcnt) {
+    pcnt_counter_pause(PCNT_UNIT);
+    return;
+  }
 #endif
+  stopIsr();
 }
 
 void GeigerPulse::restartAfterOTA() {
-#ifdef USE_PCNT
-  pcnt_counter_resume(PCNT_UNIT);
-#else
-  IsrLock::pin_on_fall(_rx_pin, countInterrupt);
+#ifdef PCNT_SELECTABLE
+  if (_pcnt) {
+    pcnt_counter_resume(PCNT_UNIT);
+    return;
+  }
 #endif
+  restartIsr();
 }
 
-#ifdef USE_PCNT
+#ifdef PCNT_SELECTABLE
 // wakes run it too, so it keeps its own time
 void GeigerPulse::loop() {
+  if (!_pcnt) return;
   uint32_t now = fast_millis();
   if (!due_every(now, _poll_at, DRAIN_MS)) return;
   drain_pcnt();
@@ -87,6 +94,7 @@ void GeigerPulse::drain_pcnt() {
 }
 
 int GeigerPulse::collect() {
+  if (!_pcnt) return GeigerInput::collect();
   int16_t residual = pcnt_take();
 
   uint32_t now_us = (uint32_t)micros();
@@ -112,6 +120,7 @@ void GeigerPulse::set_pcnt_filter(int val) {
 }
 
 void GeigerPulse::apply_pcnt_filter() {
+  if (!_pcnt) return;
   if (_pcnt_filter > 0) {
     pcnt_set_filter_value(PCNT_UNIT, _pcnt_filter);
     pcnt_filter_enable(PCNT_UNIT);
@@ -122,7 +131,9 @@ void GeigerPulse::apply_pcnt_filter() {
   }
 }
 
+// interrupt mode leaves the pin as begin set it
 void GeigerPulse::set_pin_pull(int mode) {
+  if (!_pcnt) return;
   gpio_pull_mode_t m;
   const char* name;
   switch (mode) {

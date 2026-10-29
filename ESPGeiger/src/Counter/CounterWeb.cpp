@@ -42,7 +42,6 @@
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 
-extern const char picographJS[] PROGMEM;
 extern const char statusJS[]    PROGMEM;
 
 // no %llu in nano libc
@@ -319,25 +318,23 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
 )JS";
 
 static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   const char* fn = DeviceInfo::friendlyName();
   const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
-  WebPortal::sendPageHead(res, F("History"), sub);
+  WebPortal::beginPage(res, F("History"), sub);
   res.sendChunk(FPSTR(HISTORY_BODY_LIFETIME));
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
   // udp rx is batched, no intervals
   res.sendChunk(FPSTR(HISTORY_BODY_INTERPULSE));
 #endif
   res.sendChunk(FPSTR(HISTORY_BODY_LAST24));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static void hHistJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_HIST_JS
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), HIST_JS_GZ, HIST_JS_GZ_LEN);
+  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HIST_JS_GZ, HIST_JS_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(HIST_JS));
 #endif
 }
@@ -363,6 +360,8 @@ static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 // /status pollers, /json and /cs
 #if !EG_GZ_JS_BUNDLE
+extern const char cmdJS[] PROGMEM = R"JS(function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1})JS";
+
 extern const char statusJS[] PROGMEM = R"JS(
 !function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",5,null,0,!0,!0,5,15);e.av=3;
 if(W&&window.GPIN>=0)W.innerHTML+=' (GPIO '+window.GPIN+')';
@@ -441,7 +440,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button type=submit>Send</button>
 </form>
 </details>
-<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1}</script>
+<script src=/pgjs)HTML" EG_CACHE_BUST R"HTML(></script>
 <script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
 
@@ -462,38 +461,50 @@ static void status_seed(EGHttpResponse& res) {
 }
 
 static void hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   const char* fn = DeviceInfo::friendlyName();
   const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
-  WebPortal::sendPageHead(res, F("Status"), sub);
+  WebPortal::beginPage(res, F("Status"), sub);
   status_seed(res);
   res.sendChunk(FPSTR(STATUS_BODY));
-  WebPortal::sendPageTail(res, true);
-  res.endChunked();
+  WebPortal::endPage(res, true);
 }
 
 static void hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_JS_BUNDLE
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
+  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
-  res.sendChunk(FPSTR(picographJS));
+  res.sendChunk(FPSTR(cmdJS));
   res.sendChunk(FPSTR(statusJS));
   res.endChunked();
 #endif
 }
 
+static const char R_STATUS[]   PROGMEM = "/status";
+static const char R_JS[]       PROGMEM = "/js";
+static const char R_CLICKS[]   PROGMEM = "/clicks";
+static const char R_LASTDATA[] PROGMEM = "/lastdata";
+static const char R_JSON[]     PROGMEM = "/json";
+static const char R_HIST[]     PROGMEM = "/hist";
+static const char R_HISTJS[]   PROGMEM = "/histjs";
+static const char R_LIFE[]     PROGMEM = "/life/reset";
+static const char R_PAUSE[]    PROGMEM = "/pause";
+
+static const WebRoute ROUTES[] PROGMEM = {
+  {R_STATUS,   hStatus,    EGHttpRequest::GET},
+  {R_JS,       hJs,        EGHttpRequest::GET},
+  {R_CLICKS,   hClicks,    EGHttpRequest::GET},
+  {R_LASTDATA, hLastData,  EGHttpRequest::GET},
+  {R_JSON,     hJson,      EGHttpRequest::GET},
+  {R_HIST,     hHistory,   EGHttpRequest::GET},
+  {R_HISTJS,   hHistJs,    EGHttpRequest::GET},
+  {R_LIFE,     hLifeReset, EGHttpRequest::POST},
+  {R_PAUSE,    hPause,     EGHttpRequest::GET},
+};
+
 void CounterRoutes::registerRoutes(EGHttpServer& http) {
-  http.on(F("/status"),   EGHttpRequest::GET,  hStatus);
-  http.on(F("/js"),       EGHttpRequest::GET,  hJs);
-  http.on(F("/clicks"),   EGHttpRequest::GET,  hClicks);
-  http.on(F("/lastdata"), EGHttpRequest::GET,  hLastData);
-  http.on(F("/json"),     EGHttpRequest::GET,  hJson);
-  http.on(F("/hist"),     EGHttpRequest::GET,  hHistory);
-  http.on(F("/histjs"),   EGHttpRequest::GET,  hHistJs);
-  http.on(F("/life/reset"), EGHttpRequest::POST, hLifeReset);
-  http.on(F("/pause"),      EGHttpRequest::GET,  hPause);
+  WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   http.on(F("/cpm"),      EGHttpRequest::GET,  hSetCPM);
 #endif

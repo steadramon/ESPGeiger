@@ -17,42 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Features.h"
+#include "Corium/Module/EGModuleRegistry.h"
 
-// add bits only, never renumber
-uint16_t Features::flags() {
-  uint16_t f = 0;
-#ifdef MQTTOUT
-  f |= 1 << 0;
-#endif
-#ifdef RADMONOUT
-  f |= 1 << 1;
-#endif
-#ifdef THINGSPEAKOUT
-  f |= 1 << 2;
-#endif
-#ifdef WEBHOOKOUT
-  f |= 1 << 3;
-#endif
-#ifdef SERIALOUT
-  f |= 1 << 4;
-#endif
-#ifdef GMCOUT
-  f |= 1 << 5;
-#endif
-#ifdef SSD1306_DISPLAY
-  f |= 1 << 6;
-#endif
-#ifdef GEIGER_PUSHBUTTON
-  f |= 1 << 7;
-#endif
-#ifdef GEIGER_SDCARD
-  f |= 1 << 8;
-#endif
-#ifdef GEIGER_NEOPIXEL
-  f |= 1 << 9;
-#endif
-#ifdef ESPG_HV
-  f |= 1 << 10;
-#endif
-  return f;
-}
+// modules set their own, App/FeatureBits.h
+uint16_t Features::flags() { return EGModuleRegistry::features(); }

@@ -25,6 +25,7 @@
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "App/Topics.h"
 #include "Corium/Prefs/EGPrefs.h"
 
 #define SD_EDGE_MS 50   // past :00, the clock has rolled
@@ -51,9 +52,10 @@ class SDCard : public EGModule {
     };
     void reinit();
     bool ready() const { return sdenabled; }
-    int32_t freeMB() const;   // -1 = counting
+    int32_t freeMB() const;   // -1 = counting or a count failed
+    bool counting() const { return _counting; }
     // a card there that won't mount or write, once till it mounts
-    static constexpr uint8_t TOPIC_ERROR = EG_TOPIC_APP + 4;
+    static constexpr uint8_t TOPIC_ERROR = Topic::SD_ERROR;
     bool faulted() const { return _fault; }
   protected:
     File32 myDataFile;

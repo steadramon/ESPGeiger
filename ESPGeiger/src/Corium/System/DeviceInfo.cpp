@@ -61,6 +61,7 @@ uint32_t DeviceInfo::freeHeap() {
 
 static uint32_t s_lfb_cur = 0;
 static uint32_t s_lfb_low = 0;  // 0 = unset
+static uint32_t s_lfb_win = 0;  // since the last take
 static const uint32_t FRAG_MS = 60000;   // 8266 getHeapStats masks ints ~260 us
 
 uint8_t DeviceInfo::heapFrag() {
@@ -89,9 +90,16 @@ uint8_t DeviceInfo::heapFrag() {
 #endif
     last_ms = now;
     if (s_lfb_low == 0 || s_lfb_cur < s_lfb_low) s_lfb_low = s_lfb_cur;
+    if (s_lfb_win == 0 || s_lfb_cur < s_lfb_win) s_lfb_win = s_lfb_cur;
   }
   return cached;
 }
+
+#ifdef ESP8266
+void DeviceInfo::heapStats(uint32_t* free_, uint16_t* max_, uint8_t* frag) {
+  ESP.getHeapStats(free_, max_, frag);
+}
+#endif
 
 uint32_t DeviceInfo::largestFreeBlock() {
   heapFrag();
@@ -103,9 +111,11 @@ uint32_t DeviceInfo::largestFreeBlockLow() {
   return s_lfb_low;
 }
 
-void DeviceInfo::largestFreeBlockLowReset() {
-  largestFreeBlock();
-  s_lfb_low = s_lfb_cur;
+uint32_t DeviceInfo::largestFreeBlockLowTake() {
+  heapFrag();
+  uint32_t low = s_lfb_win;
+  s_lfb_win = s_lfb_cur;
+  return low;
 }
 
 #ifdef ESP32
@@ -135,6 +145,10 @@ uint64_t DeviceInfo::hwid() {
   return ESP.getEfuseMac();
 #endif
 }
+
+#ifdef ESP8266
+String DeviceInfo::coreVersion() { return ESP.getCoreVersion(); }
+#endif
 
 void DeviceInfo::begin() {
 #ifdef ESP8266

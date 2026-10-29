@@ -304,25 +304,25 @@ static void hScreenTap(EGHttpRequest&, EGHttpResponse& res, void*) {
 
 static const char SCREEN_PAGE_BODY[] PROGMEM = R"HTML(
 <style>
-  .oledwrap{display:flex;flex-direction:column;align-items:center;gap:1em;margin:1em 0}
-  .oledframe{padding:8px;background:#222;border-radius:8px;box-shadow:0 0 10px #0006}
-  canvas{image-rendering:pixelated;display:block;background:#000;width:512px;height:256px}
-  .ctrls{display:flex;gap:.6em;align-items:center;flex-wrap:wrap;justify-content:center}
-  button.tap{padding:.7em 1.5em;font-size:1em;cursor:pointer}
-  .ms{display:flex;align-items:center;gap:.3em;font-size:.9em}
-  .ms input[type=number]{width:6em;padding:.3em}
-  .ms input[type=color]{width:2.3em;height:2em;padding:0;border:1px solid #888;cursor:pointer}
-  .ms input[type=text]{width:5.5em;padding:.3em;font-family:monospace}
-  .fps{font-size:.85em;opacity:.65;font-family:monospace;min-width:5em;text-align:right}
+.oledwrap{display:flex;flex-direction:column;align-items:center;gap:1em;margin:1em 0}
+.oledframe{padding:8px;background:#222;border-radius:8px;box-shadow:0 0 10px #0006}
+canvas{image-rendering:pixelated;display:block;background:#000;width:512px;height:256px}
+.ctrls{display:flex;gap:.6em;align-items:center;flex-wrap:wrap;justify-content:center}
+button.tap{padding:.7em 1.5em;font-size:1em;cursor:pointer}
+.ms{display:flex;align-items:center;gap:.3em;font-size:.9em}
+.ms input[type=number]{width:6em;padding:.3em}
+.ms input[type=color]{width:2.3em;height:2em;padding:0;border:1px solid #888;cursor:pointer}
+.ms input[type=text]{width:5.5em;padding:.3em;font-family:monospace}
+.fps{font-size:.85em;opacity:.65;font-family:monospace;min-width:5em;text-align:right}
 </style>
-<div class="oledwrap">
-  <div class="oledframe"><canvas id="oled" width="128" height="64"></canvas></div>
-  <div class="ctrls">
-    <button class="tap" id="tap" type="button">Tap (cycle page)</button>
-    <label class="ms">Refresh <input id="ivl" type="number" min="50" max="10000" step="50" value="500">ms</label>
-    <label class="ms">Tint <input id="col" type="color" value="#ffffff"><input id="colt" type="text" maxlength="7" value="#ffffff"></label>
-    <span class="fps" id="fps">--</span>
-  </div>
+<div class=oledwrap>
+<div class=oledframe><canvas id=oled width=128 height=64></canvas></div>
+<div class=ctrls>
+<button class=tap id=tap type=button>Tap (cycle page)</button>
+<label class=ms>Refresh <input id=ivl type=number min=50 max=10000 step=50 value=500>ms</label>
+<label class=ms>Tint <input id=col type=color value=#ffffff><input id=colt type=text maxlength=7 value=#ffffff></label>
+<span class=fps id=fps>--</span>
+</div>
 </div>
 <script src=/screen.js)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
@@ -396,18 +396,16 @@ r();
 )JS";
 
 static void hScreen(EGHttpRequest&, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("Screen"));
+  WebPortal::beginPage(res, F("Screen"));
   res.sendChunk(FPSTR(SCREEN_PAGE_BODY));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 static void hScreenJs(EGHttpRequest&, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_screenJS
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), screenJS_GZ, screenJS_GZ_LEN);
+  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), screenJS_GZ, screenJS_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(screenJS));
 #endif
 }

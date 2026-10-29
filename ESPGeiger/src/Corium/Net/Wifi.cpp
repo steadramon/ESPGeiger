@@ -203,18 +203,35 @@ static bool tryRestoreBackup() {
   return ok;
 }
 
+// 5 IPs + newlines
+#define NET_LINES_MAX 96
+
+static void net_lines(char* buf, size_t len) {
+  snprintf_P(buf, len, PSTR("%s\n%s\n%s\n%s\n%s\n"),
+             EGPrefs::getBool("net", EG_K_STATIC_IP) ? "1" : "0",
+             EGPrefs::getString("net", EG_K_IP),
+             EGPrefs::getString("net", EG_K_GW),
+             EGPrefs::getString("net", EG_K_SN),
+             EGPrefs::getString("net", EG_K_DNS));
+}
+
+static void put_net(char** fields) {
+  EGPrefs::put("net", EG_K_STATIC_IP, fields[0]);
+  EGPrefs::put("net", EG_K_IP,     fields[1]);
+  EGPrefs::put("net", EG_K_GW,     fields[2]);
+  EGPrefs::put("net", EG_K_SN,     fields[3]);
+  EGPrefs::put("net", EG_K_DNS,    fields[4]);
+}
+
 bool Wifi::saveNetBackup() {
   if (!Fs::begin()) return false;
   // keep last good
   if (Fs::exists(NET_BACKUP_PATH)) return false;
   File f = Fs::open_w(NET_BACKUP_PATH);
   if (!f) return false;
-  f.printf("%s\n%s\n%s\n%s\n%s\n",
-           EGPrefs::getBool("net", EG_K_STATIC_IP) ? "1" : "0",
-           EGPrefs::getString("net", EG_K_IP),
-           EGPrefs::getString("net", EG_K_GW),
-           EGPrefs::getString("net", EG_K_SN),
-           EGPrefs::getString("net", EG_K_DNS));
+  char raw[NET_LINES_MAX];
+  net_lines(raw, sizeof(raw));
+  f.print(raw);
   f.close();
   return true;
 }
@@ -230,17 +247,19 @@ bool Wifi::probeReachability() {
 bool Wifi::restoreNetBackup() {
   File f = Fs::open_r(NET_BACKUP_PATH);
   if (!f) return false;
-  // 5 IPs + newlines
-  char raw[96];
+  char raw[NET_LINES_MAX];
   char* fields[5];
   readLines(f, raw, sizeof(raw), fields, 5);
   f.close();
-  EGPrefs::put("net", EG_K_STATIC_IP, fields[0]);
-  EGPrefs::put("net", EG_K_IP,     fields[1]);
-  EGPrefs::put("net", EG_K_GW,     fields[2]);
-  EGPrefs::put("net", EG_K_SN,     fields[3]);
-  EGPrefs::put("net", EG_K_DNS,    fields[4]);
-  if (!EGPrefs::commit()) return false;
+  char now[NET_LINES_MAX];
+  net_lines(now, sizeof(now));
+  put_net(fields);
+  if (!EGPrefs::commit()) {
+    // back to what runs
+    split_lines(now, fields, 5);
+    put_net(fields);
+    return false;
+  }
   Fs::remove(NET_BACKUP_PATH);
   return true;
 }

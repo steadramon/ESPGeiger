@@ -69,15 +69,15 @@ void KeyStore::clear(uint8_t slot) {
 #include <coredecls.h>
 
 // the core's eeprom sector, under the sdk's own
-extern "C" uint32_t _EEPROM_start;
+extern "C" uint32_t _EEPROM_start;  // core linker symbol
 
 namespace {
 constexpr uint32_t MAGIC = KEYSTORE_MAGIC;
 
 struct Slot {
   uint32_t len;
-  uint8_t  data[KeyStore::MAX];
-  uint32_t crc;   // len + data
+  uint8_t  bytes[KeyStore::MAX];
+  uint32_t crc;   // len + bytes
 };
 
 // slot 0 sits where the one key record had it, both ways read it
@@ -90,7 +90,7 @@ static_assert(sizeof(Rec) % 4 == 0, "flash takes whole words");
 uint32_t rec_addr() { return (uint32_t)(uintptr_t)&_EEPROM_start - 0x40200000; }
 
 uint32_t slot_crc(const Slot& s) {
-  return crc32(&s.len, sizeof(s.len) + sizeof(s.data));
+  return crc32(&s.len, sizeof(s.len) + sizeof(s.bytes));
 }
 
 // another magic = nothing stored
@@ -113,7 +113,7 @@ bool KeyStore::read(uint8_t* out, size_t len, uint8_t slot) {
   if (!load(r)) return false;
   const Slot& s = r.slot[slot];
   if (s.len != len || s.crc != slot_crc(s)) return false;
-  memcpy(out, s.data, len);
+  memcpy(out, s.bytes, len);
   return true;
 }
 
@@ -125,7 +125,7 @@ bool KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
   Slot& s = r.slot[slot];
   memset(&s, 0, sizeof(s));
   s.len = len;
-  memcpy(s.data, in, len);
+  memcpy(s.bytes, in, len);
   s.crc = slot_crc(s);
   return store(r);
 }

@@ -329,6 +329,15 @@ TICK_COLD void Counter::ema_work(bool add15) {
   if (add15) geigerTicks15.add(geigerTicks5.get());
 }
 
+// true on a 5 s step
+inline bool Counter::ema_tick() {
+  static uint8_t tick_cnt = 0;
+  bool add5 = tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10;
+  if (add5) ema_work(tick_cnt == 0);
+  if (++tick_cnt >= 15) tick_cnt = 0;
+  return add5;
+}
+
 inline void Counter::update_alarms(int cpm) {
   bool warm = geigerTicks.warm();
   bool warn = alarm_over(cpm, _cpm_warning, warm);
@@ -353,7 +362,6 @@ void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
   if (uptime_s - _last_count_up_s >= MISSING_MIN_S || s_missing_logged) note_counts_missing(uptime_s);
 #endif
-  static uint8_t tick_cnt = 0;
   geigerTicks.add(eventCounter);
   unsigned long previous_total_clicks = total_clicks;
   total_clicks += eventCounter;
@@ -368,9 +376,7 @@ void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
 
   cpm_history.push(ccpm);
 
-  bool add5 = tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10;
-  if (add5) ema_work(tick_cnt == 0);
-  if (++tick_cnt >= 15) tick_cnt = 0;
+  bool add5 = ema_tick();
   if (cpm5_history) push_cpm5(add5);
 
   uint32_t currentTime = 0;

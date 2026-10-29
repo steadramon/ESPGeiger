@@ -85,9 +85,7 @@ private:
   void emitRad(uint32_t now);
   void emitSys(uint32_t now);
   void emitEnv(uint32_t now);
-#ifdef ESPG_HV_ADC
   void emitHv(uint32_t now);
-#endif
   void sendPacket(const uint8_t* buf, size_t len);
   const char* path(const char* suffix);   // suffix flash
   void announce_mdns();

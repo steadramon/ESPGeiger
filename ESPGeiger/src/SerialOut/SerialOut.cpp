@@ -18,10 +18,12 @@
 */
 #ifdef SERIALOUT
 
+#include <new>
 #include <EGFormat.h>
 #include <EGHttpServer.h>
 #include "SerialOut.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 #include "GeigerInput/SerialFormat.h"
 #include "Corium/Console/Console.h"
@@ -38,9 +40,10 @@ EG_PSTR(K_FORMAT, "format");
 EG_PSTR(K_BAUD,   "baud");
 
 #define SOUT_TPL_MAX 128
+#define SOUT_BAUD_MIN 9600
 
 SerialOut serialout;
-EG_REGISTER_MODULE(serialout)
+EG_REGISTER_FEATURE(serialout, FEAT_SERIALOUT)
 
 EG_PSTR(SO_L_FMT,  "Wire format");
 EG_PSTR(SO_O_FMT,  "Labelled|MightyOhm|User template");
@@ -70,6 +73,7 @@ void SerialOut::on_prefs_loaded() {
   _show_flags = (uint8_t)EGPrefs::getUInt("sout", K_FLAGS);
   _format     = (uint8_t)EGPrefs::getUInt("sout", K_FORMAT);
   _baud       = (uint32_t)EGPrefs::getUInt("sout", K_BAUD);
+  if (_baud && _baud < SOUT_BAUD_MIN) _baud = SOUT_BAUD_MIN;
   Log::setSerialLogLevel(_interval == 0);
   EGModuleRegistry::every(this, _interval > 0 ? LOOP_MS : 0);
   resolveFormat();
@@ -160,11 +164,7 @@ static const ShowWord SHOW_WORDS[] PROGMEM = {
   {"cpm", SerialOut::SHOW_CPM},
   {"usv", SerialOut::SHOW_USV},
   {"cps", SerialOut::SHOW_CPS},
-#ifdef ESPG_HV_ADC
-  {"hv",  SerialOut::SHOW_HV},
-#else
-  {"hv",  0},
-#endif
+  {"hv",  M_HAS_HV ? SerialOut::SHOW_HV : 0},
 };
 
 static bool show_toggle(const char* arg) {
@@ -224,22 +224,54 @@ static size_t labelled_line(char* buf, size_t cap, const Line& v) {
     n = snprintf_P(buf + pos, cap - pos, PSTR("%suSv: %s"), pos ? SP : PSTR(""), f);
     advance_pos(pos, n, cap);
   }
-#ifdef ESPG_HV_ADC
-  if (v.flags & SerialOut::SHOW_HV) {
+  if (M_HAS_HV && (v.flags & SerialOut::SHOW_HV)) {
     n = snprintf_P(buf + pos, cap - pos, PSTR("%sHV: %d"), pos ? SP : PSTR(""), v.hv);
     advance_pos(pos, n, cap);
   }
-#endif
   return pos;
 }
 
+// what fits the tx fifo now, the rest over the next passes
+void SerialOut::send(const char* s, size_t n) {
+  int room = Serial.availableForWrite();
+  if (room < (int)n) _rest = new (std::nothrow) char[n - room];
+  if (!_rest) {
+    // fits, or no heap: waits as before
+    Serial.write((const uint8_t*)s, n);
+    return;
+  }
+  Serial.write((const uint8_t*)s, room);
+  _rest_n = (uint16_t)(n - room);
+  _rest_at = 0;
+  memcpy(_rest, s + room, _rest_n);
+  EGModuleRegistry::due_in(this, 0);
+}
+
+void SerialOut::drain(bool wait) {
+  size_t n = _rest_n - _rest_at;
+  int room = Serial.availableForWrite();
+  if (!wait && room < (int)n) n = room;
+  Serial.write((const uint8_t*)_rest + _rest_at, n);
+  _rest_at += n;
+  if (_rest_at < _rest_n) return;
+  delete[] _rest;
+  _rest = nullptr;
+}
+
 void SerialOut::loop(unsigned long now) {
+  uint32_t period = (uint32_t)_interval * 1000UL;
+  bool due = (now - _last_fire) >= period;
+  // next line due or off: the rest now
+  if (_rest) drain(due);
+  if (_rest) {
+    EGModuleRegistry::due_in(this, 0);
+    return;
+  }
   if (_interval == 0) {
     EGModuleRegistry::every(this, 0);
     return;
   }
-  uint32_t period = (uint32_t)_interval * 1000UL;
-  if ((now - _last_fire) < period) {
+  if (!due) {
     EGModuleRegistry::due_at(this, _last_fire + period);
     return;
   }
@@ -249,23 +281,23 @@ void SerialOut::loop(unsigned long now) {
   if (_fmt_fn) {
     char line[SOUT_TPL_MAX * 2];  // vars grow it, cut cleanly past this
     size_t n = _fmt_fn(line, sizeof(line));
-    if (n) Serial.write((const uint8_t*)line, n);
+    if (n) send(line, n);
     return;
   }
 
   if (_show_flags == 0) return;
 
   Line v = { _show_flags, (int)egm_i(M_CPM), egm_f(M_CPS), egm_f(M_USV), 0 };
-#ifdef ESPG_HV_ADC
-  EGMeasureIter hv(0xFF, false, M_HV);
-  if (hv.next()) v.hv = (int)hv.value().i;
-  else v.flags &= ~SHOW_HV;   // no adc
-#endif
+  if (M_HAS_HV) {
+    EGMeasureIter hv(0xFF, false, M_HV);
+    if (hv.next()) v.hv = (int)hv.value().i;
+    else v.flags &= ~SHOW_HV;   // no adc
+  }
   char buf[80];
   size_t pos = labelled_line(buf, sizeof(buf), v);
   if (pos == 0) return;
   if (pos < sizeof(buf) - 1) buf[pos++] = '\n';
-  Serial.write((const uint8_t*)buf, pos);
+  send(buf, pos);
 }
 
 // HTTP routes

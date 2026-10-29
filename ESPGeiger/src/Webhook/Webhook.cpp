@@ -19,6 +19,7 @@
 #ifdef WEBHOOKOUT
 #include "Webhook.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Measure/EGMeasure.h"
@@ -33,12 +34,13 @@ EG_PSTR(K_URL, "url");
 EG_PSTR(K_KEY, "key");
 
 Webhook webhook;
-EG_REGISTER_MODULE(webhook)
+EG_REGISTER_FEATURE(webhook, FEAT_WEBHOOK)
 
 EG_PSTR(WH_H_EN,  "Enable webhook POSTs");
 EG_PSTR(WH_L_URL, "URL");
 EG_PSTR(WH_H_URL, "Webhook endpoint (http only)");
-EG_PSTR(WH_P_URL, "https?://[A-Za-z0-9.:_%\\/\\-]+");
+// a url's chars less ' # [ ], escaped for the browser's v flag
+EG_PSTR(WH_P_URL, "https?://[A-Za-z0-9.:_~%?=&+,;!$*@\\(\\)\\/\\-]+");
 EG_PSTR(WH_L_KEY, "Key");
 EG_PSTR(WH_H_KEY, "Optional shared secret sent as \"key\"");
 EG_PSTR(WH_H_INT, "POST interval (sec)");
@@ -104,9 +106,6 @@ const char* Webhook::cleanHTTP(const char* url) {
   if (strncmp_P(url, PSTR("http://"), 7) == 0) {
     return url + 7; // Skip "http://"
   }
-  if (strncmp_P(url, PSTR("https://"), 8) == 0) {
-    return url + 8; // Skip "https://"
-  }
   return url;
 }
 
@@ -126,6 +125,12 @@ bool Webhook::prepare(char* url, size_t cap, const char** body) {
   const char* whURL = EGPrefs::getString("webhook", K_URL);
   if (whURL[0] == '\0') return false;
   if (!upload_ready(log_tag())) return false;
+  // never sent as plain http
+  if (strncmp_P(whURL, PSTR("https://"), 8) == 0) {
+    Log::console(PSTR("Webhook: https not supported, not sent"));
+    note_publish(false);
+    return false;
+  }
 
   Log::debug(PSTR("Webhook: Uploading latest data ..."));
 

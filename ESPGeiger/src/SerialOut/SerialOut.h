@@ -58,6 +58,11 @@ class SerialOut : public EGModule {
       void save();
       void applyBaud();
       void resolveFormat();
+      void send(const char* s, size_t n);
+      void drain(bool wait);
+      char* _rest = nullptr;   // line not out yet, heap
+      uint16_t _rest_n = 0;
+      uint16_t _rest_at = 0;
       unsigned long _last_fire = 0;
       uint8_t _show_flags = 0;
       uint16_t _interval = 0;

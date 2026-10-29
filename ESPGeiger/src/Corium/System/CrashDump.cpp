@@ -49,6 +49,8 @@ void begin() {
   if (snap.magic != MAGIC) return;
   Slot::clear();
   if (snap.fw_fp != s_fw_fp) return;
+  // a bad RTC word never reads past stack[]
+  if (snap.word_count > STACK_WORDS) snap.word_count = STACK_WORDS;
   if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
 }
 

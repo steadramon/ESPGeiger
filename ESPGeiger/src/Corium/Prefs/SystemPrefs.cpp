@@ -64,7 +64,11 @@ static void keep_pass() {
   bool have = KeyStore::read((uint8_t*)kept, WEB_PASS_MAX, WEB_PASS_SLOT);
   if (!EGPrefs::stored("sys")) {
     if (have && EGPrefs::put("sys", EG_K_WEB_PASS, kept)) {
-      EGPrefs::commit(false);
+      // login holds, again next boot
+      if (!EGPrefs::commit(false)) {
+        Log::console(PSTR("System: Web password not saved"));
+        return;
+      }
       SystemPrefs::pass_restored = true;
       Log::console(PSTR("System: Web password restored from backup"));
     }

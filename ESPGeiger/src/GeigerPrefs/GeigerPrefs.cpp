@@ -49,6 +49,7 @@ EG_PSTR(K_RX_PIN,         "rx_pin");
 EG_PSTR(K_TX_PIN,         "tx_pin");
 EG_PSTR(K_PCNT_FILTER,    "pcnt_filter");
 EG_PSTR(K_PCNT_PULL,      "pcnt_pull");
+EG_PSTR(K_COUNT_MODE,     "count_mode");
 EG_PSTR(K_DEBOUNCE,       "debounce");
 EG_PSTR(K_PULSE_WIDTH_US, "pulse_width_us");
 EG_PSTR(K_CPM_WINDOW,     "cpm_window");
@@ -59,6 +60,11 @@ EG_PSTR(K_BLIP_LED,       "blip_led");
 EG_PSTR(K_BLIP_BRIGHT,    "blip_bright");
 EG_PSTR(K_PWM_PIN,        "pwm_pin");
 
+// interrupt counting, debounce applies
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && (!defined(USE_PCNT) || defined(PCNT_SELECTABLE))
+#define PREF_DEBOUNCE
+#endif
+
 // Counter prefs, pin and serial type need a reboot
 
 class CounterPrefs : public EGModule {
@@ -67,6 +73,9 @@ public:
   uint8_t priority() override { return EG_PRIORITY_HARDWARE - 1; }  // counter pins claimed first
   uint8_t display_order() override { return 12; }
   const EGPrefGroup* prefs_group() override;
+#ifdef PCNT_SELECTABLE
+  const EGPrefShow* prefs_show() override;
+#endif
   void on_prefs_loaded() override;
   void on_prefs_saved() override;
   EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
@@ -96,7 +105,12 @@ EG_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0=off)");
 EG_PSTR(IN_L_PCP, "PCNT Pull");
 EG_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+#ifdef PCNT_SELECTABLE
+EG_PSTR(IN_L_CNT, "Count with");
+EG_PSTR(IN_O_CNT, "Hardware|Interrupt");
+#define COUNT_MODE_DEF "0"
+#endif
+#ifdef PREF_DEBOUNCE
 EG_PSTR(IN_L_DBN, "Debounce");
 EG_PSTR(IN_H_DBN, "Pulse debounce (us). Filters electrical noise. 100-300 typical.");
 #endif
@@ -165,10 +179,10 @@ static const EGPref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // Pins
 #ifndef RXPIN_BLOCKED
-  {K_RX_PIN,          IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN | EGP_PIN_IRQ},
+  {K_RX_PIN,          IN_L_RXP, EG_H_RBA, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN | EGP_PIN_IRQ},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
+  {K_TX_PIN,          IN_L_TXP, EG_H_RBA, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
 #endif
   // UDP source target
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -178,12 +192,15 @@ static const EGPref COUNTER_PREF_ITEMS[] PROGMEM = {
   {EG_K_UDPRX_RXMODE, IN_L_URRM, nullptr,   UDPRX_RXMODE_DEFAULT, IN_O_URRM,   0, 2,     0,  EGP_ENUM,   EGP_ADVANCED},
 #endif
   // Signal conditioning
+#ifdef PCNT_SELECTABLE
+  {K_COUNT_MODE,      IN_L_CNT, EG_H_RBA, COUNT_MODE_DEF, IN_O_CNT, 0, 1, 0, EGP_ENUM, EGP_ADVANCED | EGP_REBOOT},
+#endif
 #ifdef USE_PCNT
   {K_PCNT_FILTER,     IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, EGP_ADVANCED},
   {K_PCNT_PULL,       IN_L_PCP, nullptr,  STR(PCNT_PIN_PULL_DEFAULT), IN_O_PCP, 0, 2, 0, EGP_ENUM, EGP_ADVANCED},
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-  {K_DEBOUNCE,        IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, EGP_ADVANCED},
+#ifdef PREF_DEBOUNCE
+  {K_DEBOUNCE,       IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, EGP_ADVANCED},
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
   {K_PULSE_WIDTH_US,  IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, EGP_ADVANCED},
@@ -220,12 +237,26 @@ static const EGPrefGroup COUNTER_PREF_GROUP PROGMEM = {
 
 const EGPrefGroup* CounterPrefs::prefs_group() { return &COUNTER_PREF_GROUP; }
 
-void CounterPrefs::on_prefs_loaded() {
-#if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  _serial_type = (uint8_t)EGPrefs::getUInt("counter", EG_K_SERIAL_TYPE);
-  uint8_t cw = (uint8_t)EGPrefs::getUInt("counter", K_CPM_WINDOW);
-  if (SerialFormat::has_cps(_serial_type)) cw = GEIGER_CPM_COUNT;
-  gcounter.set_cpm_window(cw);
+#ifdef PCNT_SELECTABLE
+// rows per count mode
+EG_PSTR(IN_W_CNT, "counter.count_mode");
+static const uint16_t SHOW_PCNT = 1u << 0;
+static const uint16_t SHOW_ISR  = 1u << 1;
+
+static const EGPrefShow COUNTER_SHOW[] PROGMEM = {
+  {K_PCNT_FILTER, IN_W_CNT, SHOW_PCNT},
+  {K_PCNT_PULL,   IN_W_CNT, SHOW_PCNT},
+  {K_DEBOUNCE,    IN_W_CNT, SHOW_ISR},
+  {},
+};
+
+const EGPrefShow* CounterPrefs::prefs_show() { return COUNTER_SHOW; }
+#endif
+
+// boot only, the isr and port keep their pins
+static void boot_pins() {
+#ifdef PCNT_SELECTABLE
+  gcounter.input()->use_pcnt(EGPrefs::getUInt("counter", K_COUNT_MODE) == 0);
 #endif
 #ifndef RXPIN_BLOCKED
   gcounter.set_rx_pin((int)EGPrefs::getInt("counter", K_RX_PIN));
@@ -233,12 +264,26 @@ void CounterPrefs::on_prefs_loaded() {
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
   gcounter.set_tx_pin((int)EGPrefs::getInt("counter", K_TX_PIN));
 #endif
+}
+
+void CounterPrefs::on_prefs_loaded() {
+#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+  _serial_type = (uint8_t)EGPrefs::getUInt("counter", EG_K_SERIAL_TYPE);
+  uint8_t cw = (uint8_t)EGPrefs::getUInt("counter", K_CPM_WINDOW);
+  if (SerialFormat::has_cps(_serial_type)) cw = GEIGER_CPM_COUNT;
+  gcounter.set_cpm_window(cw);
+#endif
+  static bool s_set = false;
+  if (!s_set) {
+    s_set = true;
+    boot_pins();
+  }
 #ifdef USE_PCNT
   gcounter.set_pcnt_filter((int)EGPrefs::getUInt("counter", K_PCNT_FILTER));
   gcounter.apply_pcnt_filter();
   gcounter.set_pin_pull((int)EGPrefs::getUInt("counter", K_PCNT_PULL));
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+#ifdef PREF_DEBOUNCE
   gcounter.set_debounce((int)EGPrefs::getUInt("counter", K_DEBOUNCE));
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
@@ -290,7 +335,7 @@ static const EGLegacyAlias COUNTER_LEGACY[] PROGMEM = {
   {"pcntFilter",    "pcnt_filter"},
   {"pcntPull",      "pcnt_pull"},
 #endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
+#ifdef PREF_DEBOUNCE
   {"geigerDebounce","debounce"},
 #endif
   {},

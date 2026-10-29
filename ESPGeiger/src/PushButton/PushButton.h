@@ -25,6 +25,7 @@
 #include "Counter/Counter.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "App/Topics.h"
 #include "Corium/Prefs/EGPrefs.h"
 
 #ifndef PUSHBUTTON_PIN
@@ -46,7 +47,7 @@ class PushButton : public EGModule {
     void loop(unsigned long now) override;
     static constexpr uint16_t LOOP_MS = 50;   // PIN_SCAN only
     // short press, from loop()
-    static constexpr uint8_t TOPIC_PRESS = EG_TOPIC_APP + 5;
+    static constexpr uint8_t TOPIC_PRESS = Topic::PRESS;
     void begin() override;
     void init();
     bool isPressed();

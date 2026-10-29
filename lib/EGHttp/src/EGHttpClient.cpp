@@ -114,7 +114,7 @@ int EGHttpClient::start(const char* url) {
   _req.clear();
   _sent = 0;
   _ready = false;
-  char port[8] = "";
+  char port[8] = {};
   if (_port != 80) snprintf_P(port, sizeof(port), PSTR(":%u"), _port);
   bool ok = _req.add(_method) && _req.add_P(PSTR(" ")) &&
             _req.add(u.path, u.path_len) && _req.add(u.query, u.query_len) &&

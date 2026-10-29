@@ -19,12 +19,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <pgmspace.h>
+#include <EGHttpServer.h>
 #include "Corium/System/AppHooks.h"
+#include "Corium/WebPortal/WebPortal.h"
 
 #include "STYLE_CSS.gz.h"
 #include "THEME_JS.gz.h"
-#include "JS_BUNDLE.gz.h"
-#include "HVJS_BUNDLE.gz.h"
+#include "picographJS.gz.h"
 
 // after the core style.css
 #if !EG_GZ_STYLE_CSS
@@ -41,7 +42,7 @@ extern const char APP_CSS[] PROGMEM = R"CSS(.stat>.row.envflex{display:flex;gap:
 :root.crt[data-theme=light]{--bg:#212529;--card:#2b3035;--border:#373b3e;background:#1a1d20}
 :root.crt[data-theme=dark]{background:#000}
 :root.crt body{font-family:Consolas,Menlo,monospace;font-weight:600;box-shadow:none}
-:root.crt :is(h1,h2,h3){color:#0f0;text-shadow:0 0 4px #0f0;font-weight:700}
+:root.crt :is(h1,h2){color:#0f0;text-shadow:0 0 4px #0f0;font-weight:700}
 :root.crt :is(th,td,p,span,div){font-weight:600}
 :root.crt :is(button:not(.btn-o),input[type=submit],.menu a,.back){color:#000;text-shadow:none}
 :root.crt .devhead h1 .tag{color:#0a0;text-shadow:none;opacity:1}
@@ -98,7 +99,6 @@ if(i===k.length){toggleCrt();i=0;}})
 
 // picograph.js - https://github.com/RainingComputers/picograph.js
 // minimised, with adjustments to allow fixed scroll
-#if !EG_GZ_JS_BUNDLE || !EG_GZ_HVJS_BUNDLE
 extern const char picographJS[] PROGMEM = R"JS(
 var cVID=(t,s)=>t.map(x=>s+x.replace(" ","")+"value"),
 gTS=()=>new Date().toLocaleTimeString(),
@@ -133,4 +133,19 @@ rd(){this.cl(),this.sW(),this.sIW(),this.sS(),this.vl&&this.dV(),this.dH(),this.
 update(t,ts){this.uP(this.sm(t)),this.uL(t),this.uT(ts),this.rd()}
 sm(t){if(!(this.av>1))return t;this.hb=this.hb||[];return t.map((v,i)=>{const h=this.hb[i]=this.hb[i]||[];h.push(v),h.length>this.av&&h.shift();return h.reduce((a,b)=>a+b,0)/h.length})}
 })JS";
+
+// /status and /hv load it before their own
+static void hGraphJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+#if EG_GZ_picographJS
+  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), picographJS_GZ, picographJS_GZ_LEN);
+#else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(picographJS));
 #endif
+}
+
+namespace AppWeb {
+void routes(EGHttpServer& http) {
+  http.on(F("/pgjs"), EGHttpRequest::GET, hGraphJs);
+}
+}

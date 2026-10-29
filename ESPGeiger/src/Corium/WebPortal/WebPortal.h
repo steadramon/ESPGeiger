@@ -27,6 +27,9 @@
 // script and css urls, a new build fetches them again
 #define EG_CACHE_BUST "?v=" GIT_VERSION
 
+// a route table row (PROGMEM), smaller than an on() call; no user pointer
+struct WebRoute { PGM_P path; EGHttpServer::Handler h; EGHttpRequest::Method method; };
+
 class WebPortal {
   public:
     void begin(uint16_t port);
@@ -39,12 +42,20 @@ class WebPortal {
                              const char* inlineSub = nullptr);
     static void sendPageTail(EGHttpResponse& res, bool footer = false);
     static void sendPageFooter(EGHttpResponse& res);
+    // a chunked html page: begin + head, tail + end
+    static void beginPage(EGHttpResponse& res, const __FlashStringHelper* title,
+                          const char* inlineSub = nullptr);
+    static void endPage(EGHttpResponse& res, bool footer = false);
+    static void on(EGHttpServer& http, const WebRoute* rows, size_t n);
     static void infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...);   // key, fmt in flash
     static void metricsLine(EGHttpResponse& res, PGM_P fmt, ...);
 
     static void requestRestart(uint32_t delayMs = 1500);   // ok from async callbacks
     static void sendRestartCountdown(EGHttpResponse& res);
     static void sendNotSaved(EGHttpResponse& res);   // commit failed
+    // a build's gzipped script or style, cached for good (gz in flash)
+    static void sendGz(EGHttpResponse& res, const __FlashStringHelper* type,
+                       const uint8_t* gz, size_t len);
 
     static void applyAuthFromPrefs();   // not in loop, walks pref tables
 

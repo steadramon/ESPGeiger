@@ -122,7 +122,7 @@ static void cmd_set() {
   }
   const char* ok = (a.p.flags & EGP_SENSITIVE) ? PSTR("OK: %s.%s set") : PSTR("OK: %s.%s=%s");
   Log::console(ok, mod, key, EGPrefs::getString(mod, key));
-  if (EGPrefs::restart_pending()) Log::console(PSTR("Reboot to apply"));
+  if (EGPrefs::restart_pending()) Log::console(EG_H_RBA);
 }
 
 // back to defaults, never reboots or wipes
@@ -146,7 +146,7 @@ static void cmd_reset() {
     return;
   }
   Log::console(PSTR("OK: %s reset"), arg);
-  if (EGPrefs::restart_pending()) Log::console(PSTR("Reboot to apply"));
+  if (EGPrefs::restart_pending()) Log::console(EG_H_RBA);
 }
 
 static const char C_REBOOT[] PROGMEM = "reboot";

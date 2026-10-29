@@ -18,6 +18,7 @@
 */
 #include "ImprovSerial.h"
 #include <cstring>
+#include <EGPortal.h>
 
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
@@ -210,6 +211,11 @@ void ImprovSerial::send_wifi_networks() {
 
 void ImprovSerial::handle_wifi_settings(const std::string& ssid,
                                        const std::string& password) {
+  // as the portal, one that can never join isn't saved
+  if (!EGPortal::passOk(password.c_str())) {
+    send_error(improv::ERROR_UNABLE_TO_CONNECT);
+    return;
+  }
   _in_wifi_settings = true;
   set_state(improv::STATE_PROVISIONING);
   Wifi::saveBackupCreds();

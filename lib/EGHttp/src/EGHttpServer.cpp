@@ -83,6 +83,12 @@ static void write_status(EGTcpClient* c, PGM_P r, size_t len) {
 #endif
 static const uint32_t EGHTTP_SEND_BUDGET_MS = 2500;
 
+#ifdef EGHTTP_DEBUG
+  #define EGHTTP_TRACE(...) Serial.printf_P(__VA_ARGS__)
+#else
+  #define EGHTTP_TRACE(...) do {} while (0)
+#endif
+
 static bool eghttp_late(const EGHttpServer::Slot* s) {
   return (int32_t)(EGClock::now() - s->due) >= 0;
 }
@@ -94,29 +100,23 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
   while (sent < len) {
     if (s->send_aborted) return false;
     if (!s->client || !s->client->connected()) {
-#ifdef EGHTTP_DEBUG
-      Serial.printf_P(PSTR("[EGHttp] send aborted, client gone after %u/%u B\n"),
-                      (unsigned)sent, (unsigned)len);
-#endif
+      EGHTTP_TRACE(PSTR("[EGHttp] send aborted, client gone after %u/%u B\n"),
+                   (unsigned)sent, (unsigned)len);
       s->send_aborted = true;
       return false;
     }
     // acks a little at a time still hold the loop
     if (eghttp_late(s)) {
-#ifdef EGHTTP_DEBUG
-      Serial.printf_P(PSTR("[EGHttp] send aborted, past deadline at %u/%u B\n"),
-                      (unsigned)sent, (unsigned)len);
-#endif
+      EGHTTP_TRACE(PSTR("[EGHttp] send aborted, past deadline at %u/%u B\n"),
+                   (unsigned)sent, (unsigned)len);
       s->send_aborted = true;
       return false;
     }
     size_t can = s->client->space();
     if (can == 0) {
       if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
-#ifdef EGHTTP_DEBUG
-        Serial.printf_P(PSTR("[EGHttp] send aborted, %ums no-progress at %u/%u B\n"),
-                        (unsigned)EGHTTP_SEND_BUDGET_MS, (unsigned)sent, (unsigned)len);
-#endif
+        EGHTTP_TRACE(PSTR("[EGHttp] send aborted, %ums no-progress at %u/%u B\n"),
+                     (unsigned)EGHTTP_SEND_BUDGET_MS, (unsigned)sent, (unsigned)len);
         s->send_aborted = true;
         return false;
       }
@@ -128,10 +128,8 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     size_t wrote = s->client->write(data + sent, take);
     if (wrote == 0) {
       if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
-#ifdef EGHTTP_DEBUG
-        Serial.printf_P(PSTR("[EGHttp] send aborted, write stuck at %u/%u B\n"),
-                        (unsigned)sent, (unsigned)len);
-#endif
+        EGHTTP_TRACE(PSTR("[EGHttp] send aborted, write stuck at %u/%u B\n"),
+                     (unsigned)sent, (unsigned)len);
         s->send_aborted = true;
         return false;
       }

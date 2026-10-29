@@ -63,6 +63,8 @@ struct Fixed { const char* owner; int8_t pin; Use use; };
 
 // before prefs load: each claimed, and no pref can take one
 void reserve(const Fixed* rows);
+// shared ones, none claimed: a pref saves with a note, the first module takes it, warned
+void share(const Fixed* rows);
 
 enum PinKind : uint8_t {
   PK_FLASH,       // refused

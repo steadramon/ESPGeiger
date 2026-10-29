@@ -19,7 +19,7 @@ ESPGeiger will report the Webhook submission status in the Web Interface console
 
 Your endpoint should reply with a body that contains `OK`. Anything else, including an empty `204` reply, is logged as `Webhook: Error` and `/outputs` shows the webhook as not OK, even though the data arrived.
 
-**Note:** Only HTTP endpoints are supported. HTTPS URLs will be downgraded to HTTP.
+**Note:** Only HTTP endpoints are supported. An HTTPS URL is not sent at all (the console shows `Webhook: https not supported, not sent`); it is never sent as plain HTTP.
 
 ## JSON Payload
 

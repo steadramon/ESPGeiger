@@ -144,8 +144,8 @@ class EGHttpClient {
     int16_t _err = 0;
 
     // request
-    char _method[8] = "";
-    char _host[EGHTTP_HOST_MAX + 1] = "";
+    char _method[8] = {};
+    char _host[EGHTTP_HOST_MAX + 1] = {};
     uint16_t _port = 80;
     Buf _req;
     size_t _sent = 0;

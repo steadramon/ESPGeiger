@@ -26,6 +26,7 @@
 #include "Corium/Measure/EGMeasure.h"
 #include "Counter/CounterMeasures.h"
 #include "App/AppKeys.h"
+#include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 #include "Corium/System/Clock.h"
 #include "Corium/Net/Wifi.h"
@@ -49,7 +50,7 @@ static const char LWT_OFFLINE[] PROGMEM = "Offline";
 static EGMqtt s_mq;
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
-EG_REGISTER_MODULE(mqtt)
+EG_REGISTER_FEATURE(mqtt, FEAT_MQTT)
 
 #ifdef ESP8266
 #define MQTT_PUB_YIELD() optimistic_yield(10000)
@@ -388,14 +389,14 @@ bool MQTT_Client::publishStatus()
     uint32_t heap_free;
     uint16_t heap_max;
     uint8_t heap_frag;
-    ESP.getHeapStats(&heap_free, &heap_max, &heap_frag);
+    DeviceInfo::heapStats(&heap_free, &heap_max, &heap_frag);
     j.uint(PSTR("free_mem"), heap_free);
     j.uint(PSTR("heap_max"), heap_max);
     j.uint(PSTR("heap_frag"), heap_frag);
   #else
     j.uint(PSTR("free_mem"), DeviceInfo::freeHeap());
-    j.uint(PSTR("min_free"), ESP.getMinFreeHeap());
-    j.uint(PSTR("heap_max"), ESP.getMaxAllocHeap());
+    j.uint(PSTR("min_free"), DeviceInfo::heapMin());
+    j.uint(PSTR("heap_max"), DeviceInfo::heapMaxBlock());
   #endif
 #else
   j.uint(PSTR("free_mem"), DeviceInfo::freeHeap());
@@ -908,8 +909,8 @@ static void hass_publish(const HassRow* r, const char* root)
   j.map_begin();
   hass_device(j, host);
   j.str(PSTR("avty_t"), PSTR("~/tele/lwt"));
-  j.str(PSTR("pl_avail"), PSTR("Online"));
-  j.str(PSTR("pl_not_avail"), PSTR("Offline"));
+  j.str(PSTR("pl_avail"), LWT_ONLINE);
+  j.str(PSTR("pl_not_avail"), LWT_OFFLINE);
   j.str(PSTR("~"), root);
   j.str_begin(PSTR("name"));
   j.part(host);

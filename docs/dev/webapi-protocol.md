@@ -20,6 +20,7 @@ Sent in CPM Readings mode:
 | `n`   | uint32  | Unix timestamp of the reading (seconds) |
 | `c`   | float32 | Current CPM |
 | `u`   | float32 | Microsieverts per hour |
+| `nc`  | bool    | `true` when no counts are arriving (dead tube or input), so `c`/`u` are not a real reading. Omitted otherwise. |
 | `hv`  | float32 | HV tube reading (ESPGeiger-HW only) |
 | `t`   | float32 | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h`   | float32 | Humidity in % (BME280 / AHT family only) |

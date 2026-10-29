@@ -89,7 +89,7 @@ namespace Board {
     {P_SD, SCK, PinSafety::USE_OUT},
     {P_SD, GEIGER_SDCARD_CS, PinSafety::USE_OUT},
 #endif
-#if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED)
+#if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED) && defined(I2C_PINS_FIXED)
     {P_BTN, PUSHBUTTON_PIN, PinSafety::USE_BUTTON},
 #if PUSHBUTTON_PIN2 >= 0
     {P_BTN, PUSHBUTTON_PIN2, PinSafety::USE_BUTTON},
@@ -110,6 +110,17 @@ namespace Board {
     {PinSafety::I2C, I2C_DEFAULT_SDA, PinSafety::USE_OUT},
     {PinSafety::I2C, I2C_DEFAULT_SCL, PinSafety::USE_OUT},
 #endif
+    {nullptr, -1, PinSafety::USE_OUT},
+  };
+
+  // 0.13 took these, it only warned: UART0, a dev board's BOOT button (a board's own is fixed)
+  constexpr PinSafety::Fixed SHARED[] PROGMEM = {
+#if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED) && !defined(I2C_PINS_FIXED)
+    {P_BTN, PUSHBUTTON_PIN, PinSafety::USE_BUTTON},
+#if PUSHBUTTON_PIN2 >= 0
+    {P_BTN, PUSHBUTTON_PIN2, PinSafety::USE_BUTTON},
+#endif
+#endif
 #if defined(ESP8266) || defined(CONFIG_IDF_TARGET_ESP32)
     {P_UART0, UART0_TX, PinSafety::USE_OUT},
 #ifndef DISABLE_SERIALRX
@@ -119,8 +130,11 @@ namespace Board {
     {nullptr, -1, PinSafety::USE_OUT},
   };
 
-  // before prefs load, a pref on one is refused
-  inline void claim() { PinSafety::reserve(PINS); }
+  // before prefs load, a pref on one is refused, on a shared one noted
+  inline void claim() {
+    PinSafety::reserve(PINS);
+    PinSafety::share(SHARED);
+  }
 
 #ifdef ESPGEIGER_HW32
   inline uint8_t& rev_slot() { static uint8_t r = 0; return r; }

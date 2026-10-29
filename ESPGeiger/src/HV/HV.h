@@ -23,6 +23,7 @@
 #include "Corium/Platform/Flash.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "App/Topics.h"
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/EGSmoothed.h"
@@ -197,7 +198,7 @@ class HV : public EGModule {
       int8_t get_duty_trim() const { return _duty_trim; }
       bool ov_tripped() const { return _ov_trip; }
       // feedback latch, from loop()
-      static constexpr uint8_t TOPIC_FAULT = EG_TOPIC_APP + 3;
+      static constexpr uint8_t TOPIC_FAULT = Topic::HV_FAULT;
 #ifdef ESPGEIGER_HW32
       bool fb_fault() const { return _fb_fault; }
 #else

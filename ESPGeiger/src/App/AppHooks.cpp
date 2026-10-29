@@ -30,11 +30,12 @@
 #include "GRNG/GRNG.h"
 #include "WebAPI/Features.h"
 #include "App/Board.h"
-#ifdef GEIGER_BUZZER
+#ifdef BUZZER_ENGINE
 #include "Corium/Output/Buzzer.h"
 #endif
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
+namespace AppWeb { void routes(EGHttpServer& http); }
 
 static const EGMenuEntry APP_MENU[] PROGMEM = {
   {"/status",  "Status"},
@@ -47,6 +48,7 @@ const EGMenuEntry* AppHooks::menu() { return APP_MENU; }
 void AppHooks::routes(EGHttpServer& http) {
   GRNGRoutes::registerRoutes(http);
   CounterRoutes::registerRoutes(http);
+  AppWeb::routes(http);
 }
 
 void AppHooks::info_rows(EGHttpResponse& res) {
@@ -55,7 +57,7 @@ void AppHooks::info_rows(EGHttpResponse& res) {
   WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
   WebPortal::infoRow(res, PSTR("Feature flags"), PSTR("0x%04x"), (unsigned)Features::flags());
   if (Board::rev()) WebPortal::infoRow(res, PSTR("Board"), PSTR("v%u"), (unsigned)Board::rev());
-#ifdef GEIGER_BUZZER
+#ifdef BUZZER_ENGINE
   if (Buzzer::faulted()) WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
 #endif
 }

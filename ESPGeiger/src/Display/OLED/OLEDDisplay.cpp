@@ -35,6 +35,7 @@
 #include "Corium/Util/MathUtil.h"
 #include "App/AppKeys.h"
 #include "App/AppMath.h"
+#include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 #include "Corium/System/I2CBus.h"
 #include "Corium/System/PinSafety.h"
@@ -44,7 +45,6 @@
 #include "Counter/CounterMaths.h"
 #include "GRNG/GRNG.h"
 #include "GeigerInput/Type/UdpRx.h"
-#include "Mqtt/MQTT_Client.h"
 
 EG_PSTR(K_RST,  "rst");
 EG_PSTR(K_FLIP, "flip");
@@ -80,7 +80,7 @@ static const uint8_t TILE_COLS = OLED_WIDTH >> 3;
 static const uint8_t TILE_ROWS = OLED_HEIGHT >> 3;
 
 SSD1306Display oled;
-EG_REGISTER_MODULE(oled)
+EG_REGISTER_FEATURE(oled, FEAT_OLED)
 static bool _backend_oled = Display::add(&oled);
 
 // all but the led types
@@ -213,9 +213,7 @@ void SSD1306Display::start() {
   setBrightness((uint8_t)EGPrefs::getUInt("display", EG_K_BRIGHTNESS));
   EGModuleRegistry::on(Display::TOPIC_POWER, this);
   EGModuleRegistry::on(TOPIC_SENT, this);
-#ifdef MQTTOUT
-  EGModuleRegistry::on(MQTT_Client::TOPIC_PING, this);
-#endif
+  EGModuleRegistry::on(Topic::PING, this);
   EGModuleRegistry::every(this, TICK_MS);
 }
 
@@ -547,16 +545,16 @@ void SSD1306Display::page_two_full() {
   Wifi::formatIP(ipStr, sizeof(ipStr));
   drawStrP(16, 17, ipStr);
   int uptime_y = 32;
-#ifdef ESPG_HV_ADC
-  EGMeasureIter hv(0xFF, false, M_HV);
-  if (hv.next()) {
-    drawStrP(0, uptime_y, PSTR("HV:"));
-    char hvBuf[12];
-    format_f(hvBuf, sizeof(hvBuf), (float)hv.value().i);
-    drawStrP(20, uptime_y, hvBuf);
-    uptime_y = 47;
+  if (M_HAS_HV) {
+    EGMeasureIter hv(0xFF, false, M_HV);
+    if (hv.next()) {
+      drawStrP(0, uptime_y, PSTR("HV:"));
+      char hvBuf[12];
+      format_f(hvBuf, sizeof(hvBuf), (float)hv.value().i);
+      drawStrP(20, uptime_y, hvBuf);
+      uptime_y = 47;
+    }
   }
-#endif
   drawStrP(0, uptime_y, DeviceInfo::uptimeString());
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   GeigerUdpRx* rx = gcounter.udp_rx();

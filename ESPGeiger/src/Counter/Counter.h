@@ -25,6 +25,7 @@
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Output/QuietWindow.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "App/Topics.h"
 
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/System/FastMillis.h"
@@ -138,9 +139,9 @@ class Counter : public CounterMaths {
       bool is_warning() const { return _bool_cpm_warning; }
       bool is_alert() const { return _bool_cpm_alert; }
       // warn, alert or warm changed, from loop()
-      static constexpr uint8_t TOPIC_ALARM = EG_TOPIC_APP;
+      static constexpr uint8_t TOPIC_ALARM = Topic::ALARM;
       // a second counted, from loop()
-      static constexpr uint8_t TOPIC_COUNTS = EG_TOPIC_APP + 1;
+      static constexpr uint8_t TOPIC_COUNTS = Topic::COUNTS;
       bool is_healthy() const { return geigerinput && geigerinput->isHealthy(); }
       GeigerInput* input() { return geigerinput; }
       // web ota keeps the second ticking, no zero seconds
@@ -218,6 +219,7 @@ class Counter : public CounterMaths {
       void life_work(uint32_t now);
       void cpm_work(bool fresh);
       void ema_work(bool add15);
+      bool ema_tick();
       void update_alarms(int cpm);
       uint16_t _boundary_secs = 3600;
       uint8_t _cpm_mode = 3;     // bucket

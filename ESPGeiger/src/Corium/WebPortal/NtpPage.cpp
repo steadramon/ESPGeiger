@@ -79,10 +79,10 @@ void NtpPage::form(EGHttpResponse& res) {
 }
 
 static void hNtpJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_NTP_PAGE_JS
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), NTP_PAGE_JS_GZ, NTP_PAGE_JS_GZ_LEN);
+  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), NTP_PAGE_JS_GZ, NTP_PAGE_JS_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(NTP_PAGE_JS));
 #endif
 }
@@ -101,12 +101,10 @@ static void hNtpSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (!t || !EGPrefs::put("ntp", EG_K_TZ,  t)) ok = false;
   bool wrote = EGPrefs::commit();
 
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, ok && wrote ? F("NTP Saved") : F("NTP"));
+  WebPortal::beginPage(res, ok && wrote ? F("NTP Saved") : F("NTP"));
   if (!wrote) WebPortal::sendNotSaved(res);
   else res.sendChunk(ok ? FPSTR(NTP_SAVED_BODY) : FPSTR(NTP_REFUSED_BODY));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  WebPortal::endPage(res);
 }
 
 void NtpPage::routes(EGHttpServer& http) {

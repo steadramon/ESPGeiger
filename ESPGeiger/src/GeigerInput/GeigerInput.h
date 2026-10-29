@@ -58,6 +58,11 @@
 #define USE_PCNT
 #endif
 
+// pulse builds link both, a pref picks one at boot
+#if defined(USE_PCNT) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#define PCNT_SELECTABLE
+#endif
+
 // esp8266 test pulses count in loop()
 #if defined(ESP8266) && GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
 #define GEIGER_COUNTS_IN_ISR
@@ -140,6 +145,9 @@ class GeigerInput {
     virtual void apply_pcnt_filter() {};
     virtual void set_pin_pull(int mode) {};   // 0=floating, 1=up, 2=down
     virtual bool has_pcnt() { return false; }
+#ifdef PCNT_SELECTABLE
+    virtual void use_pcnt(bool) {}   // before begin
+#endif
     virtual bool isHealthy() const { return true; }
     virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
     virtual void registerRoutes(EGHttpServer&) {}
@@ -154,6 +162,8 @@ class GeigerInput {
     // main code only, interrupts off
     static void countAt(unsigned long us);
     void checkIsrStorm();
+    void stopIsr();
+    void restartIsr();
     void setCounter(int val, bool update = true);
     void setLastBlip();
     // inline gate: posted, or the poll time came

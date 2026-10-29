@@ -27,6 +27,7 @@
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Module/EGModule.h"
 #include "Corium/Module/EGModuleRegistry.h"
+#include "App/Topics.h"
 #include "Corium/Prefs/EGPrefs.h"
 
 
@@ -81,7 +82,7 @@ public:
   const char* name() override { return PSTR("mqtt"); }
   bool requires_wifi() override { return true; }
   static constexpr uint16_t LOOP_MS = 500;
-  static constexpr uint8_t TOPIC_PING = EG_TOPIC_APP + 6;   // today: the send mark, no LED
+  static constexpr uint8_t TOPIC_PING = Topic::PING;   // today: the send mark, no LED
   void begin() override;
   void loop(unsigned long now) override;
   const EGPrefGroup* prefs_group() override;
@@ -115,7 +116,7 @@ private:
 #endif
   void buildTopic(char* out, size_t outsz, const char* middle, const char* cmd);
   const char* getRootTopic();
-  char _cachedRootTopic[MQTT_ROOT_MAX + 1] = "";
+  char _cachedRootTopic[MQTT_ROOT_MAX + 1] = {};
   bool _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();

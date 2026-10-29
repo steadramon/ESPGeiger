@@ -21,6 +21,7 @@
 #include <string.h>
 #include "Sound.h"
 #include "App/Board.h"
+#include "App/Topics.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
@@ -30,15 +31,6 @@
 #include "Corium/Prefs/EGPrefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
-#ifdef ESPG_HV
-#include "HV/HV.h"
-#endif
-#ifdef GEIGER_SDCARD
-#include "SDCard/SDCard.h"
-#endif
-#ifdef GEIGER_PUSHBUTTON
-#include "PushButton/PushButton.h"
-#endif
 
 Sound sound;
 EG_REGISTER_MODULE(sound)
@@ -184,15 +176,9 @@ const char* Sound::text(uint8_t id, uint16_t& len) {
 void Sound::pre_wifi() {
   EGModuleRegistry::on(Wifi::TOPIC_CHANGED, this);
   EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
-#ifdef ESPG_HV
-  EGModuleRegistry::on(HV::TOPIC_FAULT, this);
-#endif
-#ifdef GEIGER_SDCARD
-  EGModuleRegistry::on(SDCard::TOPIC_ERROR, this);
-#endif
-#ifdef GEIGER_PUSHBUTTON
-  EGModuleRegistry::on(PushButton::TOPIC_PRESS, this);
-#endif
+  EGModuleRegistry::on(Topic::HV_FAULT, this);
+  EGModuleRegistry::on(Topic::SD_ERROR, this);
+  EGModuleRegistry::on(Topic::PRESS, this);
   Lifecycle::on(sound_lifecycle);
 }
 
@@ -235,15 +221,9 @@ void Sound::wifi() {
 void Sound::events(uint16_t ev, unsigned long now) {
   if (ev & (1u << Wifi::TOPIC_CHANGED)) wifi();
   if (ev & (1u << Counter::TOPIC_ALARM)) alarm(now);
-#ifdef ESPG_HV
-  if (ev & (1u << HV::TOPIC_FAULT)) play(HVFAULT);
-#endif
-#ifdef GEIGER_SDCARD
-  if (ev & (1u << SDCard::TOPIC_ERROR)) play(SD_ERROR);
-#endif
-#ifdef GEIGER_PUSHBUTTON
-  if (ev & (1u << PushButton::TOPIC_PRESS)) play(BUTTON);
-#endif
+  if (ev & (1u << Topic::HV_FAULT)) play(HVFAULT);
+  if (ev & (1u << Topic::SD_ERROR)) play(SD_ERROR);
+  if (ev & (1u << Topic::PRESS)) play(BUTTON);
 }
 
 // rising: alert, again every repeat. falling: the all clear
