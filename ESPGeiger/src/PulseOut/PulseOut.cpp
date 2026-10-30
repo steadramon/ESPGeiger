@@ -119,7 +119,7 @@ void PulseOut::apply_voice() {
   if (_engine.burst_freq_eff == 0) _engine.burst_freq_eff = 1;
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 // v0.11 led.bin blip_pin, blip_pulse_ms to pulse.*
 static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 

@@ -173,7 +173,7 @@ int32_t  egm_i(const char* id);
 // id PROGMEM, core and input rows only, safe to cache
 EGMRead egm_core_read(const char* id, EGMKind kind);
 
-// env.unit order
+// an app's unit pref maps straight on
 enum EGMTempUnit : uint8_t { EGMT_C = 0, EGMT_F = 1, EGMT_K = 2 };
 
 // rows store celsius

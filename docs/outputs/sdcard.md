@@ -26,9 +26,7 @@ NTP synchronisation is required to write to the SD Card. Writing to the file tak
 
 During testing most SDCards are compatible, however it seems some Micro SDCards simply do not support the SPI interface. If you find an SD Card which is not supported, please try another, after double checking your wiring.
 
-During initialisation of ESPGeiger the size and free space of the SD Card is calculated - the larger the SD Card, the longer this takes.
-
-A SD Card of up to 16GB usually takes < 2 seconds to initialise.
+The card is ready as soon as it mounts. Its free space is then counted in the background, a little at a time, so a larger card only takes longer to count. Until the count is done the SD page says *counting free space*. If the card can't be read during the count, it is tried again at the next minute and the page says *free space unknown* meanwhile.
 
 # Configuration
 

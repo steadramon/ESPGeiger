@@ -23,7 +23,7 @@ Two pulse builds are made available. The installer auto-picks the right binary f
 
 ## Serial
 
-A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, or ESPGeiger) from the **Config** page. ESP8266, ESP32 and ESP32-S3 are all detected automatically.
+A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page. ESP8266, ESP32 and ESP32-S3 are all detected automatically.
 
 - Serial
 
@@ -77,8 +77,8 @@ Make sure the relevant drivers are installed for your device. If your device isn
 
 ![Installing...](img/webinstall_6.png)
 
-- Completed. ESPGeiger is now installed. The indication light on the ESP will be lit permanently until the WiFi hotspot is configured.
+- Completed. ESPGeiger is now installed. The ESPGeiger-XXXXXX network appearing is the sign the install worked.
 
 ![Completed](img/webinstall_7.png)
 
-- To skip the hotspot, use the installer's option to connect to Wi-Fi when it offers it. It sends your network details to the device over USB. This doesn't work on ESPGeiger Log, which uses the serial RX pin for its button; use the hotspot there. Otherwise carry on with [Setup](/install/setup).
+- To skip the hotspot, use the installer's option to connect to Wi-Fi when it offers it. It sends your network details to the device over USB. This doesn't work on ESPGeiger Log or ESPGeiger Lite, which use the serial RX pin for its button; use the hotspot there. Otherwise carry on with [Setup](/install/setup).

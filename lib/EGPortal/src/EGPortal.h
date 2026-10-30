@@ -72,6 +72,11 @@ class EGPortal {
     static size_t processScan(ScanEntry* out, size_t maxOut, int rawCount,
                               int8_t rssiMin = EGPORTAL_RSSI_MIN);
 
+    // 1-32
+    static bool ssidOk(const char* s) {
+      return s && s[0] && strlen(s) <= EGPORTAL_SSID_MAX;
+    }
+
     // "" = open, else 8-63, or 64 = the hex PSK; no field isn't open
     static bool passOk(const char* p) {
       if (!p) return false;

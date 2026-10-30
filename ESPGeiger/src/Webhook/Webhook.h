@@ -42,7 +42,7 @@ class Webhook : public EGHttpPoster {
     const char* name() override { return PSTR("whook"); }
     void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void setInterval(int interval);
     int getInterval() { return pingInterval; }
     const char* cleanHTTP(const char* url);

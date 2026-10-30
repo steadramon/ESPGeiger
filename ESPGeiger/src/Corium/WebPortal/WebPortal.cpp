@@ -243,7 +243,7 @@ static bool s_pendingFactoryReset = false;
 static WebPortal* s_activeWebPortal = nullptr;
 
 void WebPortal::tick(uint32_t now) {
-  if (now - _tick_last_ms < 13) return;
+  if (now - _tick_last_ms < TICK_MS) return;
   _tick_last_ms = now;
 
   if (_active) _http.tick();
@@ -805,7 +805,7 @@ static void info_render_about(EGHttpResponse& res) {
   INFO_ROW("Version",      PSTR(RELEASE_VERSION));
   INFO_ROW("Git",          PSTR(GIT_VERSION));
   INFO_ROW("Build env",    PSTR(BUILD_ENV));
-  INFO_ROW("Build date",   PSTR(__DATE__ " " __TIME__));
+  INFO_ROW("Build date",   DeviceInfo::buildDate());
   AppHooks::info_rows(res);
   res.sendChunk(FPSTR(IR_END));
 }
@@ -856,8 +856,9 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[320];
   int n = snprintf_P(buf, sizeof(buf),
     PSTR("{\"ver\":\"" RELEASE_VERSION "\",\"git\":\"" GIT_VERSION "\",\"env\":\"" BUILD_ENV "\","
-         "\"date\":\"" __DATE__ " " __TIME__ "\",\"chip\":\"%s\",\"flash\":\"%s\",\"mac\":\"%s\","
+         "\"date\":\"%s\",\"chip\":\"%s\",\"flash\":\"%s\",\"mac\":\"%s\","
          "\"host\":\"%s\","),
+    DeviceInfo::buildDate(),
     DeviceInfo::board(),   // today: "chip" carries the board
     DeviceInfo::flashInfo(),
     mac_str,
@@ -883,9 +884,9 @@ void WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // back to DHCP for the setup AP
+  // back to DHCP for the setup AP, a net row that didn't load goes too
   Log::console(PSTR("WebPortal: erasing WiFi credentials"));
-  EGPrefs::put("net", EG_K_STATIC_IP, "0");
+  EGPrefs::reset("net");
   if (!EGPrefs::commit()) {
     not_saved_page(res, F("Erase WiFi"));
     return;
@@ -1619,6 +1620,15 @@ static void param_appendf(ParamCtx& c, PGM_P fmt, ...) {
   advance_pos(c.pos, n, sizeof(c.buf));
 }
 
+// one chunk from the start of buf, dropped if it doesn't fit
+static void param_sendf(ParamCtx& c, PGM_P fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  int n = vsnprintf_P(c.buf, sizeof(c.buf), fmt, ap);
+  va_end(ap);
+  if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+}
+
 // for the form script, "" = always shown
 static const char* show_attr(ParamCtx& c, const char* id) {
   EGPrefShow r;
@@ -1638,15 +1648,13 @@ static void param_group_header(ParamCtx& c, const EGPrefGroup* g, EGModule* mod)
                       : !has_toggle ? PSTR("")
                       : grp_on ? PSTR(" <span class='gb on'>on</span>")
                                : PSTR(" <span class='gb off'>off</span>");
-  int n = snprintf_P(c.buf, sizeof(c.buf),
-                     PSTR("<details class='bx%s'%s><summary>%s%s</summary>"),
-                     (hw_absent || (has_toggle && !grp_on)) ? PSTR(" off") : PSTR(""),
-                     show_attr(c, nullptr), g->label, badge);
-  if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+  param_sendf(c, PSTR("<details class='bx%s'%s><summary>%s%s</summary>"),
+              (hw_absent || (has_toggle && !grp_on)) ? PSTR(" off") : PSTR(""),
+              show_attr(c, nullptr), g->label, badge);
 }
 
 static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
-  PGM_P checked = (c.cur[0] == '1') ? W_CHECKED : PSTR("");
+  PGM_P checked = EGPrefs::getBool(c.mid, c.s_id) ? W_CHECKED : PSTR("");
   if (inline_bool) {
     param_appendf(c,
       PSTR("<label class='il' title='%s'><input type=checkbox id='%s.%s' name='%s.%s' value=1%s%s>%s</label>"),
@@ -1670,11 +1678,9 @@ static void param_emit_options(ParamCtx& c, const EGPref& p) {
     size_t olen = sep ? (size_t)(sep - opt) : strlen(opt);
     // blank holds a number this build hasn't got
     if (olen) {
-      int n = snprintf_P(c.buf, sizeof(c.buf),
-                         PSTR("<option value=%ld%s>%.*s%s</option>"),
-                         idx, (idx == cur_idx) ? PSTR(" selected") : PSTR(""),
-                         (int)olen, opt, (idx == def_idx) ? PSTR(" (default)") : PSTR(""));
-      if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+      param_sendf(c, PSTR("<option value=%ld%s>%.*s%s</option>"),
+                  idx, (idx == cur_idx) ? PSTR(" selected") : PSTR(""),
+                  (int)olen, opt, (idx == def_idx) ? PSTR(" (default)") : PSTR(""));
     }
     if (!sep) break;
     opt = sep + 1;
@@ -1684,13 +1690,10 @@ static void param_emit_options(ParamCtx& c, const EGPref& p) {
 
 static void param_emit_enum(ParamCtx& c, const EGPref& p) {
   if (c.pos) { c.res->sendChunk(c.buf, c.pos); c.pos = 0; }
-  int n = snprintf_P(c.buf, sizeof(c.buf),
-                     PSTR("<select id='%s.%s' name='%s.%s'%s>"),
-                     c.mid, c.s_id, c.mid, c.s_id, c.disabled);
-  if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+  param_sendf(c, PSTR("<select id='%s.%s' name='%s.%s'%s>"),
+              c.mid, c.s_id, c.mid, c.s_id, c.disabled);
   param_emit_options(c, p);
-  n = snprintf_P(c.buf, sizeof(c.buf), PSTR("</select><br>"));
-  if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+  param_sendf(c, PSTR("</select><br>"));
   c.pos = 0;
 }
 
@@ -1797,10 +1800,7 @@ static void param_load_text(ParamCtx& c, const EGPref& p) {
 }
 
 static void param_emit_heading(ParamCtx& c, const EGPref& p) {
-  int n = snprintf_P(c.buf, sizeof(c.buf),
-                     p.type == EGP_LABEL ? PSTR("<label>%s</label>") : PSTR("<h4>%s</h4>"),
-                     c.s_lbl);
-  if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+  param_sendf(c, p.type == EGP_LABEL ? PSTR("<label>%s</label>") : PSTR("<h4>%s</h4>"), c.s_lbl);
 }
 
 static void param_emit_label(ParamCtx& c, const char* lbl) {
@@ -1908,9 +1908,11 @@ static uint8_t param_tab(EGHttpRequest& req) {
   return (uint8_t)EGP_CAT_SYSTEM;
 }
 
-// what a post did, above the form
+static const char RESTART_APPLY[] PROGMEM = " <a href=/restart>Restart</a> to apply.";
+
+// what a post did, above the form; frozen = a group left out, the rest saved
 static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart,
-                       const Refusal& refused) {
+                       const Refusal& refused, const char* frozen) {
   if (wrote) res.sendChunk(F(
     "<div class='a ak'>Saved.</div>"));
   else if (saved) WebPortal::sendNotSaved(res);
@@ -1924,7 +1926,12 @@ static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart
   if (refused.note) {
     snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>Note: %s, %s.%s</div>"),
                refused.note_name, refused.note,
-               restart && !refused.why[0] ? PSTR(" <a href=/restart>Restart</a> to apply.") : PSTR(""));
+               restart && !refused.why[0] ? RESTART_APPLY : PSTR(""));
+    res.sendChunk(buf);
+  }
+  if (frozen) {
+    snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>Note: %s.%s</div>"), frozen,
+               restart && !refused.why[0] && !refused.note ? RESTART_APPLY : PSTR(""));
     res.sendChunk(buf);
   }
   if (!saved) res.sendChunk(F(
@@ -1937,15 +1944,19 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   Refusal refused{};
   bool saved = posted && param_save_body(tab, refused);
   bool wrote = saved && EGPrefs::commit();
+  // every tab row is put, a frozen group on it mustn't read as not saved
+  char why[EGPREFS_FROZEN_MAX];
+  const char* frozen = saved && !wrote && EGPrefs::frozen(why, sizeof(why)) ? why : nullptr;
+  if (frozen) wrote = true;
   // stay, so the refusal or note shows
   bool restart = wrote && EGPrefs::restart_pending();
-  if (restart && !refused.why[0] && !refused.note) {
+  if (restart && !refused.why[0] && !refused.note && !frozen) {
     res.redirect(FPSTR(P_RESTART));
     return;
   }
 
   WebPortal::beginPage(res, F("Config"));
-  if (posted) param_says(res, saved, wrote, restart, refused);
+  if (posted) param_says(res, saved, wrote, restart, refused, frozen);
   param_render_tabs(res, tab);
 
   // Backup is the import form only
@@ -2123,22 +2134,31 @@ static bool import_put(const char* mid, const char* key, const char* value) {
   return EGPrefs::put(mid, key, value);
 }
 
-// wipe then apply, -1 = bad blob or not saved
+// wipe then apply, -1 = bad blob
 static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
   const char* err = validateImport(buf, len);
   if (err) { if (err_out) *err_out = err; return -1; }
 
   EGPrefs::reset_all(/*keep_network=*/true);
-  int applied = ImportText::apply_blob(buf + 4, len - 8, import_put);   // less magic and crc
-  if (!EGPrefs::commit(false)) {   // silent, the cascade would WDT
-    if (err_out) *err_out = WRITE_FAILED;
-    return -1;
-  }
-  return applied;
+  return ImportText::apply_blob(buf + 4, len - 8, import_put);   // less magic and crc
 }
 
+// safe mode gets here frozen: one the import didn't replace stops it all
+static const char* import_commit(char* why, size_t n) {
+  const char* err = EGPrefs::any_frozen(why, n) ? why : nullptr;
+  if (!err && !EGPrefs::commit(false)) err = WRITE_FAILED;   // silent, the cascade would WDT
+  if (err) EGPrefs::revert();
+  return err;
+}
+
+// a row that didn't load isn't in the blob, an import would lose it
 void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
+  char why[EGPREFS_FROZEN_MAX];
+  if (EGPrefs::any_frozen(why, sizeof(why))) {
+    res.send(409, FPSTR(HTTP_CT_PLAIN), why);
+    return;
+  }
   res.beginChunked(200, FPSTR(HTTP_CT_PLAIN));
   B64Sink sink;
   b64_init(sink, res);
@@ -2233,10 +2253,6 @@ static int import_lines(const char* text, size_t len, ImportText::Result* out, c
     *err = PSTR("nothing imported");
     return -1;
   }
-  if (!EGPrefs::commit(false)) {   // silent, the cascade would WDT
-    *err = WRITE_FAILED;
-    return -1;
-  }
   return r.applied;
 }
 
@@ -2246,10 +2262,17 @@ void WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   size_t len = 0;
   ImportText::Result r = {0, 0, 0};
   int applied = -1;
+  char why[EGPREFS_FROZEN_MAX];
+  // safe mode: the import may replace it
+  if (!BootGuard::safe_mode() && EGPrefs::any_frozen(why, sizeof(why))) {
+    import_fail(res, why);
+    return;
+  }
   char* field = import_field(&len, &err);
   if (field && ImportText::is_blob(field, len)) applied = import_blob(field, len, &err);
   else if (field) applied = import_lines(field, len, &r, &err);
-  if (applied < 0) {
+  if (applied >= 0) err = import_commit(why, sizeof(why));
+  if (applied < 0 || err) {
     import_fail(res, err ? err : PSTR("bad blob"));
     return;
   }

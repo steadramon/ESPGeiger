@@ -21,12 +21,12 @@ Sent in CPM Readings mode:
 | `c`   | float32 | Current CPM |
 | `u`   | float32 | Microsieverts per hour |
 | `nc`  | bool    | `true` when no counts are arriving (dead tube or input), so `c`/`u` are not a real reading. Omitted otherwise. |
-| `hv`  | float32 | HV tube reading (ESPGeiger-HW only) |
+| `hv`  | int     | HV tube reading in volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `t`   | float32 | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h`   | float32 | Humidity in % (BME280 / AHT family only) |
 | `p`   | float32 | Pressure in hPa (BME280 / BMP280 only) |
 
-In **Heartbeat** mode the radiation fields (`c`/`u`/`hv`) are omitted and the post is a minimal `{id, n}` body, so the server still sees the station as alive.
+In **Heartbeat** mode the device posts every 15 minutes with `{id, n}` plus the health snapshot and no radiation fields.
 
 ## Health snapshot
 
@@ -78,6 +78,8 @@ After a crash the first handshake of the boot adds what the device kept about it
 | `cm`  | string  | Where the loop was when it crashed: a module name, `tcp` or `portal` (ESP32 only) |
 
 The server responds with the assigned station ID, which the device uses as `id` in later posts.
+
+The key is made on the first handshake and kept both in a file on the device and in a copy outside the file system; a lost file system does not change `pk`. Forget deletes the key.
 
 ## Endpoint
 

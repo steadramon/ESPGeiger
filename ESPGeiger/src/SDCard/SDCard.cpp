@@ -92,13 +92,9 @@ void SDCard::begin()
 {
   Log::console(PSTR("SDCard: Init ..."));
   sd = new SdFat32();
-#ifdef ESP8266
-  ESP.wdtDisable();
-#endif
+  DeviceInfo::wdtPause();
   bool ok = sd->begin(GEIGER_SDCARD_CS);
-#ifdef ESP8266
-  ESP.wdtEnable(WDTO_8S);
-#endif
+  DeviceInfo::wdtResume();
   if (!ok) {
     Log::console(PSTR("SDCard: Init failed ... Please check wiring or insert a card."));
     if (sd->sdErrorCode() != SD_CARD_ERROR_CMD0) fault();   // CMD0 = no card

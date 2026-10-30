@@ -41,6 +41,7 @@ EG_PSTR(K_BAUD,   "baud");
 
 #define SOUT_TPL_MAX 128
 #define SOUT_BAUD_MIN 9600
+#define SOUT_BAUD_BOOT 115200   // as Boot
 
 SerialOut serialout;
 EG_REGISTER_FEATURE(serialout, FEAT_SERIALOUT)
@@ -74,6 +75,7 @@ void SerialOut::on_prefs_loaded() {
   _format     = (uint8_t)EGPrefs::getUInt("sout", K_FORMAT);
   _baud       = (uint32_t)EGPrefs::getUInt("sout", K_BAUD);
   if (_baud && _baud < SOUT_BAUD_MIN) _baud = SOUT_BAUD_MIN;
+  if (_rest) drain(true);   // the rest now, before off or a new baud
   Log::setSerialLogLevel(_interval == 0);
   EGModuleRegistry::every(this, _interval > 0 ? LOOP_MS : 0);
   resolveFormat();
@@ -92,7 +94,7 @@ static SerialFormat::FormatFn sout_resolve(uint8_t fmt) {
 static uint32_t sout_baud(uint8_t fmt) {
   switch (fmt) {
     case 1:  return 9600;
-    default: return 0;
+    default: return SOUT_BAUD_BOOT;
   }
 }
 
@@ -103,18 +105,13 @@ void SerialOut::resolveFormat() {
 void SerialOut::save() {
   EGPrefs::putUInt("sout", EG_K_INTERVAL, _interval);
   EGPrefs::putUInt("sout", K_FLAGS, _show_flags);
-  EGPrefs::putUInt("sout", K_FORMAT, _format);
-  EGPrefs::putUInt("sout", K_BAUD, _baud);
   if (!EGPrefs::commit_soon(fast_millis())) Log::console(PSTR("SerialOut: not saved"));
 }
 
 void SerialOut::applyBaud() {
-  uint32_t target = _baud;
-  if (target == 0 && _format != 0) target = sout_baud(_format);
-  if (target == 0) return;
-  Serial.flush();
 #if !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT == 0
-  Serial.updateBaudRate(target);
+  Serial.flush();
+  Serial.updateBaudRate(_baud ? _baud : sout_baud(_format));
 #endif
 }
 
@@ -233,18 +230,16 @@ static size_t labelled_line(char* buf, size_t cap, const Line& v) {
 
 // what fits the tx fifo now, the rest over the next passes
 void SerialOut::send(const char* s, size_t n) {
-  int room = Serial.availableForWrite();
-  if (room < (int)n) _rest = new (std::nothrow) char[n - room];
+  if (Serial.availableForWrite() < (int)n) _rest = new (std::nothrow) char[n];
   if (!_rest) {
     // fits, or no heap: waits as before
     Serial.write((const uint8_t*)s, n);
     return;
   }
-  Serial.write((const uint8_t*)s, room);
-  _rest_n = (uint16_t)(n - room);
+  memcpy(_rest, s, n);
+  _rest_n = (uint16_t)n;
   _rest_at = 0;
-  memcpy(_rest, s + room, _rest_n);
-  EGModuleRegistry::due_in(this, 0);
+  drain(false);
 }
 
 void SerialOut::drain(bool wait) {
@@ -253,7 +248,10 @@ void SerialOut::drain(bool wait) {
   if (!wait && room < (int)n) n = room;
   Serial.write((const uint8_t*)_rest + _rest_at, n);
   _rest_at += n;
-  if (_rest_at < _rest_n) return;
+  if (_rest_at < _rest_n) {
+    EGModuleRegistry::due_in(this, 0);
+    return;
+  }
   delete[] _rest;
   _rest = nullptr;
 }
@@ -262,10 +260,9 @@ void SerialOut::loop(unsigned long now) {
   uint32_t period = (uint32_t)_interval * 1000UL;
   bool due = (now - _last_fire) >= period;
   // next line due or off: the rest now
-  if (_rest) drain(due);
   if (_rest) {
-    EGModuleRegistry::due_in(this, 0);
-    return;
+    drain(due);
+    if (_rest) return;
   }
   if (_interval == 0) {
     EGModuleRegistry::every(this, 0);

@@ -122,7 +122,7 @@ const EGPrefShow* Display::prefs_show() { return DISPLAY_SHOW; }
 const EGPrefShow* Display::prefs_show() { return nullptr; }
 #endif
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias DISPLAY_LEGACY[] PROGMEM = {
   {"dispBrightness", "brightness"},
 #ifdef GEIGER_PUSHBUTTON

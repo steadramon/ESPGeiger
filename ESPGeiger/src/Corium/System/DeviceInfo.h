@@ -56,6 +56,7 @@ namespace DeviceInfo {
   void setFriendlyName(const char* s);
   const char* mac();
   const char* flashInfo();   // "ef4016 DIO 40MHz"
+  PGM_P buildDate();   // one copy
   uint64_t hwid();   // chip id, efuse mac on esp32
 
   // /info
@@ -131,6 +132,17 @@ namespace DeviceInfo {
   uint32_t fwFingerprint();   // never 0
 
   void safeRestart(uint32_t delayMs = 0);
+
+  inline void wdtPause() {
+#ifdef ESP8266
+    ESP.wdtDisable();
+#endif
+  }
+  inline void wdtResume() {
+#ifdef ESP8266
+    ESP.wdtEnable(WDTO_8S);
+#endif
+  }
 
   // false on esp32
   bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,

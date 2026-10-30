@@ -43,6 +43,9 @@
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 
 extern const char statusJS[]    PROGMEM;
+#ifdef ESP8266
+extern const char picographJS[] PROGMEM;
+#endif
 
 // no %llu in nano libc
 static void fmt_u64(char* out, size_t cap, uint64_t v) {
@@ -440,8 +443,12 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button type=submit>Send</button>
 </form>
 </details>
-<script src=/pgjs)HTML" EG_CACHE_BUST R"HTML(></script>
-<script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
+)HTML"
+#ifndef ESP8266
+R"HTML(<script src=/pgjs)HTML" EG_CACHE_BUST R"HTML(></script>
+)HTML"
+#endif
+R"HTML(<script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
 )HTML";
 
 static void status_seed(EGHttpResponse& res) {
@@ -475,6 +482,9 @@ static void hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
+#ifdef ESP8266
+  res.sendChunk(FPSTR(picographJS));
+#endif
   res.sendChunk(FPSTR(cmdJS));
   res.sendChunk(FPSTR(statusJS));
   res.endChunked();

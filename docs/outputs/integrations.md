@@ -21,7 +21,7 @@ http://192.168.1.100/json
 Response:
 
 ```json
-{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"warn":0,"alert":0,"hv":394.00,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
+{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"warn":0,"alert":0,"hv":394,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
 ```
 
 | Field | Description |
@@ -40,7 +40,7 @@ Response:
 | `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `warn` | `1` when CPM is above the warning threshold (`counter.warn`) |
 | `alert` | `1` when CPM is above the alert threshold (`counter.alert`) |
-| `hv` | HV reading in volts (ESPGeiger-HW only) |
+| `hv` | HV reading in whole volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 
 #### Environmental sensor
 
@@ -161,7 +161,7 @@ geiger_tube_alive{chipid="d5536d"} 1
 geiger_saturated{chipid="d5536d"} 0
 
 # HELP device_hv_volts Tube high voltage
-device_hv_volts{chipid="d5536d"} 392.00
+device_hv_volts{chipid="d5536d"} 392
 
 # HELP env_temperature_celsius Temperature
 env_temperature_celsius{chipid="d5536d"} 21.63
@@ -197,7 +197,7 @@ geiger_pulse_interval_seconds_count{chipid="d5536d"} 1845231
 | `device_uptime_seconds` | gauge | Seconds since boot |
 | `device_free_heap_bytes` | gauge | Free heap memory |
 | `device_wifi_rssi_dbm` | gauge | WiFi signal strength |
-| `device_hv_volts` | gauge | Tube high voltage (ESPGeiger-HW only) |
+| `device_hv_volts` | gauge | Tube high voltage (builds with HV feedback) |
 | `env_temperature_celsius` | gauge | Temperature, always °C |
 | `env_humidity_percent` | gauge | Relative humidity |
 | `env_pressure_hpa` | gauge | Pressure in hPa, corrected to sea level when an elevation is set |

@@ -49,6 +49,6 @@ Open **`/screen`** to see a live copy of the display in your browser, with a but
 | Path | Returns | Use |
 |---|---|---|
 | `/screen` | HTML viewer page | Interactive view in the browser |
-| `/screen.bin` | Raw framebuffer | Scripting (column-packed, 1 bit per pixel) |
+| `/screen.bin` | 4 byte header (width, height, 16-bit little-endian) then the framebuffer | Scripting (column-packed pages, 1 bit per pixel) |
 | `/screen.bmp` | Monochrome BMP image | One-shot screenshot |
 | `/screen/tap` | `OK` | Virtual short press of the user button (push-button builds) |

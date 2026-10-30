@@ -60,7 +60,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `cpm15` | 15-minute smoothed CPM |
 | `usv` | μSv/h (cpm × ratio) |
 | `cps` | Counts per second |
-| `hv` | HV reading (ESPGeiger-HW only) |
+| `hv` | HV reading in whole volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `t` | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h` | Humidity in % (BME280 / AHT family only) |
 | `p` | Pressure in hPa (BME280 / BMP280 only) |

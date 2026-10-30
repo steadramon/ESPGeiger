@@ -62,7 +62,7 @@ static const EGPrefGroup WEBHOOK_PREF_GROUP PROGMEM = {
 
 const EGPrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias WEBHOOK_LEGACY[] PROGMEM = {
   {"whSend", "send"},
   {"whURL",  "url"},

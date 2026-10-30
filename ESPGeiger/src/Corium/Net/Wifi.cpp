@@ -390,7 +390,7 @@ static char* setup_portal(EGPortal* portal) {
     if (Wifi::holdCreds(ssid, pw)) s_portalGotCreds = true;
   });
   portal->onReset([](void*) { s_portalDoReset = true; });
-  // as the web UI, open AP but /save and /reset_go ask
+  // open AP but every page asks, as the web UI
   portal->setBasicAuth(F("admin"), EGPrefs::getString("sys", EG_K_WEB_PASS), F(THING_NAME));
   portal->begin(DeviceInfo::hostname());
   reset_wifi_tx_power_default();   // after begin(), full power

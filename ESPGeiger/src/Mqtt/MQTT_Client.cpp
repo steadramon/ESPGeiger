@@ -113,7 +113,7 @@ size_t MQTT_Client::status_json(char* buf, size_t cap, unsigned long now) {
   return write_status_json(buf, cap, "mqtt", last_ok && s_mq.connected(), last_attempt_ms, now);
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias MQTT_LEGACY[] PROGMEM = {
   {"mqttServer",   "server"},
   {"mqttPort",     "port"},
@@ -893,6 +893,8 @@ static void hass_fields(EGJson& j, const HassRow* r) {
   if (pgm_read_byte(r->prec)) j.str(H_K_PREC, r->prec);
 }
 
+EG_PSTR(HA_DROPPED, "MQTT: HA discovery publish dropped: %s");
+
 static void hass_publish(const HassRow* r, const char* root)
 {
   const char* host = DeviceInfo::hostname();
@@ -901,7 +903,7 @@ static void hass_publish(const HassRow* r, const char* root)
   size_t cap;
   char* out = json_begin(path, MQTT_JSON_BUFFER_SIZE, &cap);
   if (!out) {
-    Log::console(PSTR("MQTT: HA discovery publish dropped: %s"), r->id);
+    Log::console(HA_DROPPED, r->id);
     return;
   }
 
@@ -930,7 +932,7 @@ static void hass_publish(const HassRow* r, const char* root)
     return;
   }
   if (s_mq.publish_end(j.length()) == 0) {
-    Log::console(PSTR("MQTT: HA discovery publish dropped: %s"), r->id);
+    Log::console(HA_DROPPED, r->id);
   }
   MQTT_PUB_YIELD();
 }

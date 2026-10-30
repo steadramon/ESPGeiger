@@ -134,7 +134,7 @@ RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
   return _swap_rg ? RgbColor(g, r, b) : RgbColor(r, g, b);
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias NEOPIXEL_LEGACY[] PROGMEM = {
   {"neopixelBrightness", "brightness"},
   {},

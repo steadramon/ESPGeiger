@@ -26,11 +26,19 @@
 #include "Counter/Counter.h"
 #endif
 
+#ifdef NO_PCNT_ALIAS
+// a _no_pcnt device's /update looks for its own env, retired in 0.15
+static const char NO_PCNT_TAG[] PROGMEM = "<EGENV:" BUILD_ENV "_no_pcnt:ENV>";
+#endif
+
 GeigerPulse::GeigerPulse() {
 };
 
 void GeigerPulse::begin() {
   GeigerInput::begin();
+#ifdef NO_PCNT_ALIAS
+  asm volatile("" : : "r"(NO_PCNT_TAG));   // keep it linked
+#endif
 #ifdef PCNT_SELECTABLE
   if (_pcnt) {
     Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
@@ -44,6 +52,9 @@ void GeigerPulse::begin() {
 #endif
   Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);
+#ifdef PCNT_SELECTABLE
+  set_pin_pull(_pin_pull);
+#endif
   IsrLock::pin_on_fall(_rx_pin, countInterrupt);
 }
 
@@ -120,7 +131,7 @@ void GeigerPulse::set_pcnt_filter(int val) {
 }
 
 void GeigerPulse::apply_pcnt_filter() {
-  if (!_pcnt) return;
+  if (!_pcnt || !_polls) return;   // no unit till begin
   if (_pcnt_filter > 0) {
     pcnt_set_filter_value(PCNT_UNIT, _pcnt_filter);
     pcnt_filter_enable(PCNT_UNIT);
@@ -131,9 +142,8 @@ void GeigerPulse::apply_pcnt_filter() {
   }
 }
 
-// interrupt mode leaves the pin as begin set it
+// plain gpio, both modes
 void GeigerPulse::set_pin_pull(int mode) {
-  if (!_pcnt) return;
   gpio_pull_mode_t m;
   const char* name;
   switch (mode) {

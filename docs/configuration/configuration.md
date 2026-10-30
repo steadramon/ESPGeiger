@@ -25,9 +25,13 @@ Pin settings take `-1` (off) or a GPIO number, but some pins are refused. The sa
 
 * Pins wired to the flash, PSRAM or the USB port, and pins the chip doesn't have.
 * Input-only pins (ESP32 GPIO 34-39) for an output.
-* Pins the board already uses: UART0 TX (GPIO 1) and RX (GPIO 3) on ESP8266 and classic ESP32 (RX is free on builds that don't read serial commands), plus each kit's fixed pins such as the SD card, button, blip LED, buzzer, I2S audio and HV.
+* Each kit's fixed pins, such as the SD card, button, blip LED, buzzer, I2S audio and HV.
 
-Boot strap pins and pins with no internal pull-up are allowed. Used as an input they show a warning after the save.
+Some pins save with a warning shown after the save:
+
+* Pins the board shares: UART0 TX (GPIO 1) and RX (GPIO 3) on ESP8266 and classic ESP32 (RX only on builds that read serial commands), and the BOOT button pin on dev-board builds with a push button. The serial console or the button and your setting then share the pin, and the boot log says so, for example `PinSafety: pin=3 RX, shared with UART0`.
+* Boot strap pins and pins with no internal pull-up, used as an input.
+* Pins that can't do what the setting needs: no interrupt for a counter input, no PWM, or no open-drain for I2C.
 
 ## System Settings
 
@@ -42,11 +46,17 @@ Boot strap pins and pins with no internal pull-up are allowed. Used as an input 
 
 ### Config import / export
 
-On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. WiFi credentials and the device-only settings are kept.
+On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. If the flash can't take all of it, nothing changes. WiFi credentials and the device-only settings are kept. If a stored setting didn't load (this firmware refused it), Export and Import both refuse and name it, so a backup never drops it: set it or reset its group first. In [safe mode](/configuration/safemode) Import still goes through when the backup replaces that group, so the refused value is gone. A device-only group (`net`, the Wi-Fi tunables, the lifetime totals) isn't in a backup, so it doesn't stop one.
+
+### A setting that didn't load
+
+After a firmware update a saved setting can fail the new firmware's checks, for example a webhook URL with a character the URL field no longer takes. That setting runs on its default and the boot log says so, for example `prefs: webhook.url refused, default kept`. The saved value stays on the device, so going back to the older firmware still finds it; Export and Import are refused until you deal with it.
+
+Until you deal with it, a save that touches that group is refused and says why, for example `Not saved: webhook.url didn't load, set it or reset webhook.` Enter a new value for that setting, or put the whole group back to defaults with `reset webhook` over [serial](/output/serial) or the Status-page command box.
 
 ## Counter Settings
 
-On the **Input** tab. Some settings only appear on specific builds. Pin and Serial Type changes trigger a reboot to apply; PCNT Filter, PCNT Pin Pull and Debounce apply live.
+On the **Input** tab. Some settings only appear on specific builds. Pin, Count with and Serial Type changes trigger a reboot to apply; PCNT Filter, PCNT Pin Pull and Debounce apply live.
 
 <!-- gen:prefs counter skip=udprx_mode,udprx_chipid,udprx_group,udprx_port,udprx_rxmode -->
 
@@ -55,9 +65,10 @@ On the **Input** tab. Some settings only appear on specific builds. Pin and Seri
 | Serial Type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
 | RX Pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
 | TX Pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
+| Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Interrupt has the debounce dead time, reads low at high CPM. Reboot. |
 | PCNT Filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT Pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. Floating suits most modules that drive the line actively both directions; change to pull-up for open-drain outputs or pull-down for active-high modules without their own idle pull. |
-| Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds without PCNT | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |
+| Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |
 | Pulse width | `counter.pulse_width_us` | Int 10-2000 | `500` | `test`, `testpulse` | Width of the simulated pulse on the TX pin, in microseconds. |
 | CPM Window (CPM-only counters) | `counter.cpm_window` | Int 1-60 | `30` | serial builds | Applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
 | CPM mode | `counter.cpm_mode` | `0` Fast start, `1` Live ring, `2` Fixed 60s, `3` Bucket, `4` Adaptive fast | `3` Bucket | all | How the 1-minute CPM is computed. See [CPM Calculation Mode](/configuration/cpm-mode). |
@@ -72,6 +83,8 @@ On the **Input** tab. Some settings only appear on specific builds. Pin and Seri
 | Track lifetime | `counter.life_en` | Boolean | `1` on | all | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
 
 <!-- /gen -->
+
+ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.count_mode`, advanced): `0` Hardware (PCNT, the default) or `1` Interrupt. Reboot to apply. Hardware shows PCNT Filter and PCNT Pull, Interrupt shows Debounce. Interrupt counting reads low at high count rates, see [PCNT](/hardware/esphardware#pcnt).
 
 ## Blip LED Settings
 
@@ -295,6 +308,8 @@ Changes take effect on the next reboot.
 | `phy_mode` | `wifi.phy_mode` | Int 0-3 | `0` | Wi-Fi PHY lock-down. `0` lets the device negotiate (recommended). `1` = 802.11b only, `2` = b/g, `3` = b/g/n. Use this only as a workaround for routers that fail to negotiate higher rates cleanly. |
 
 <!-- /gen -->
+
+With `wifi.country` set to `US` or `CA` the device uses channels 1-11 only, so a router on channel 12 or 13 is not seen. On ESP8266 any other code allows 1-13 and `JP` 1-14; ESP32 boards use the channel list of the country given.
 
 ## CPU Frequency (ESP32 only)
 

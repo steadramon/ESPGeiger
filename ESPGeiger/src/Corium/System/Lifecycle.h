@@ -40,7 +40,7 @@ typedef void (*Handler)(Event);
 bool on(Handler h);   // false = full
 void send(Event e);
 
-// Main loop does the restart, never mid-write
+// WebPortal::tick does the restart, never mid-write; no portal, no restart
 void request_restart(uint32_t now, uint32_t delay_ms);
 bool restart_due(uint32_t now);
 

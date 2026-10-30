@@ -323,13 +323,9 @@ void EGPortal::hSave(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
 
   const char* ssid = req.arg(F("ssid"));
-  if (!ssid || !ssid[0]) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("ssid required"));
-    return;
-  }
   // a cut one would fail to join
-  if (strlen(ssid) > EGPORTAL_SSID_MAX) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("ssid too long"));
+  if (!ssidOk(ssid)) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), F("ssid must be 1-32 characters"));
     return;
   }
   // arg() buffer is shared

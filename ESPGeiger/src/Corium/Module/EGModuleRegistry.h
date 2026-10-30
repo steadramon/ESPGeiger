@@ -37,7 +37,7 @@ static_assert(EG_MAX_MODULES <= 32, "post and profile masks are 32 bits");
 #define EG_MAX_TOPICS 16
 static_assert(EGModule::TOPIC_SENT < EG_TOPIC_APP, "Corium topics sit below EG_TOPIC_APP");
 
-// settle after reconnect, AsyncTCP UAF
+// settle after reconnect
 #ifndef WIFI_SETTLE_MS
 #define WIFI_SETTLE_MS 3000
 #endif

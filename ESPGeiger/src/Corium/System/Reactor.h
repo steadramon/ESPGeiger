@@ -44,7 +44,7 @@ namespace Reactor {
   // before wifi, the libs time from it
   void clock(void (*ms)());
 
-  // the ms ticker, extra(now_us) is the app's
+  // the ms ticker, extra(now_us) is the app's; 8266 = Ticker (SYS), esp32 = esp_timer task, no log or yield
   template <void (*extra)(uint32_t)>
   void ms() {
     uint32_t now_us = micros();
@@ -58,7 +58,7 @@ namespace Reactor {
     extra(now_us);
   }
 
-  // end of setup, app(up) each second, nullptr = none
+  // end of setup, app(up) each second, nullptr = none; 8266 = Ticker (SYS), esp32 = loop
   void begin(void (*app)(uint32_t up));
   void second();
 
@@ -96,6 +96,7 @@ namespace Reactor {
 #endif
   }
 
+  // 8266: the core runs preloop_update_frequency() every pass, the app throttles it
   template <void (*hot)(unsigned long)>
   inline void run(WebPortal& portal) {
 #if defined(ESP32) && !CONFIG_FREERTOS_UNICORE

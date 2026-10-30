@@ -47,7 +47,7 @@ The following build flags can be added to your environment's `build_flags` to cu
 | `-D GEIGER_NEOPIXEL` | Enable WS2812X NeoPixel status LED. |
 | `-D NEOPIXEL_PIN=N` | Set the NeoPixel data pin (default `15`). |
 | `-D GEIGER_PUSHBUTTON` | Enable push button for OLED page switching and display wake. |
-| `-D PUSHBUTTON_PIN=N` | Set the push button pin (default `14`). |
+| `-D PUSHBUTTON_PIN=N` | Set the push button pin. Default `0` (BOOT) on ESP32, `-1` (off) on ESP8266; `base:esp32c3_main` sets `9`. |
 | `-D LED_SEND_RECEIVE=N` | Set the status LED pin (default `2`). |
 
 ### Geiger Counter Type
@@ -58,10 +58,11 @@ The geiger counter type and serial type are defined in `platformio.ini` for use 
 [geiger_type]
 pulse = 1
 serial = 2
-test = 3
-testpulse = 4
-testserial = 5
-testpulseint = 6
+udprx = 8
+test = 128
+testpulse = 129
+testserial = 130
+testpulseint = 133
 
 [serial_type]
 gc10 = 1
@@ -80,7 +81,7 @@ build_flags =
 
 | Flag | Description |
 |---|---|
-| `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield - bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 7 = test). `1` Pulse (default), `2` Serial, `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. |
+| `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield - bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 3 = UDP receiver, bit 7 = test). `1` Pulse (default), `2` Serial, `8` UDP receiver (the `_udp` envs), `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. |
 | `-D GEIGER_SERIALTYPE=N` | Set the **default** serial counter type for serial builds. The serial type can be changed at runtime from the Config page. `1` GC10 (9600 baud), `2` GC10-Next (115200 baud), `3` MightyOhm (9600 baud), `4` ESPGeiger (115200 baud). |
 
 ### Geiger Counter Input
@@ -110,11 +111,12 @@ The 1-minute CPM value always uses a 60-second rolling average for accuracy.
 
 ### ESP32 Hardware Counter (PCNT)
 
-On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type geiger counters. This provides accurate counting without software interrupts.
+On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type geiger counters. This provides accurate counting without software interrupts. Pulse builds also carry the interrupt counter; the **Count with** setting picks one at boot.
 
 | Flag | Description |
 |---|---|
-| `-D IGNORE_PCNT` | Disable hardware PCNT and use software interrupt counting instead. |
+| `-D IGNORE_PCNT` | Leave PCNT out and always use software interrupt counting. |
+| `-D NO_PCNT_ENV` | Default **Count with** to Interrupt and keep that in the saved settings (the `_no_pcnt` envs, retired in 0.15). |
 | `-D PCNT_FILTER=N` | Set the initial PCNT glitch filter value at compile time. Filters pulses shorter than N APB clock cycles. This can also be configured at runtime from the web interface. |
 | `-D PCNT_PULLUP_PIN` | Default the PCNT input to the internal pull-up instead of floating. For open-drain outputs. |
 | `-D PCNT_PULLDOWN_PIN` | Default the PCNT input to the internal pull-down instead of floating. For active-high modules without their own idle pull. |
@@ -159,26 +161,26 @@ The HV codepath splits into two independent capabilities, gated separately so th
 
 | Flag | Description |
 |---|---|
-| `-D ESPG_HV` | Enable PWM HV generator: ESPGHW module, `freq`/`duty` prefs, /hv page (only when paired with `ESPG_HV_ADC`), serial commands `freq` and `duty`. |
+| `-D ESPG_HV` | Enable PWM HV generator (module `hv`), `espghw.freq` / `espghw.duty` prefs, the `/hv` page. Set them from the console with `set espghw.freq 6000`. With `ESPG_HV_ADC` the `hv` console command prints the live reading. |
 | `-D EG_TIMER1_PWM` | EGTimer1 PWM output. ESP8266 `ESPG_HV` builds need it. |
 | `-D ESPG_HV_ADC` | Enable ADC HV feedback divider: `ratio`/`offset` calibration prefs, live HV readout on /hv, /info, /status, OLED and as the `hv` field on every output module (WebAPI, MQTT, Webhook, SerialOut). Requires `ESPG_HV`. |
-| `-D GEIGER_PWMPIN=N` | Set the HV PWM output pin (default `12`). Requires `ESPG_HV`. |
+| `-D GEIGER_PWMPIN=N` | Set the HV PWM output pin. Default `12` on ESPGeiger-HW, otherwise `-1` (HV off until the pin is set). Requires `ESPG_HV`. |
 | `-D GEIGER_VFEEDBACKPIN=N` | Set the HV voltage feedback ADC pin (default `A0`). Requires `ESPG_HV_ADC`. |
 | `-D GEIGERHW_FREQ=N` | Set the default HV PWM frequency in Hz (default `6000`). Requires `ESPG_HV`. |
-| `-D GEIGERHW_DUTY=N` | Set the default HV PWM duty cycle 0-255 (default `70`). Requires `ESPG_HV`. |
+| `-D GEIGERHW_DUTY=N` | Set the default HV PWM duty, out of 1023 (10-bit). Default `280`. Capped by `GEIGERHW_MAX_DUTY` (600 on ESPGeiger-HW). Requires `ESPG_HV`. |
 | `-D GEIGERHW_ADC_RATIO=N` | Set the ADC voltage divider ratio for HV reading (default `1035`). Requires `ESPG_HV_ADC`. |
 | `-D GEIGERHW_ADC_OFFSET=N` | Set the ADC offset for HV reading calibration (default `0`). Requires `ESPG_HV_ADC`. |
 
-When `ESPG_HV` is defined without `ESPG_HV_ADC` (a board that drives HV via PWM but has no real feedback divider), the espghw prefs surface in the regular `/param` UI rather than `/hv` and no `hv` field is emitted on outputs.
+When `ESPG_HV` is defined without `ESPG_HV_ADC` (a board that drives HV via PWM but has no real feedback divider), the espghw prefs also show in the regular `/param` UI, the `/hv` page still exists but has no readout, and no `hv` field is emitted on any output.
 
 ### Product Identity
 
-Identifies a specific product family. Implies a known set of capability flags as defensive defaults (see `System/Globals.h`) so a custom build that defines only the product flag still gets the right behaviour.
+Identifies a specific product family. Implies a known set of capability flags as defensive defaults (see `ESPGeiger/src/App/AppConfig.h`) so a custom build that defines only the product flag still gets the right behaviour.
 
 | Flag | Implies | Description |
 |---|---|---|
-| `-D ESPGEIGER_HW` | `ESPG_HV`, `ESPG_HV_ADC`, `GEIGER_BLIPLED=15`, `GEIGER_MODEL_FIXED` | ESPGeiger-HW kit (HV generator with real ADC feedback divider, count LED on GPIO15, fixed tube model). |
-| `-D ESPGEIGER_LT` | (none currently) | Identify the build as an ESPGeiger Lite/Log device. |
+| `-D ESPGEIGER_HW` | `ESPG_HV`, `ESPG_HV_ADC`, `GEIGER_BLIPLED=15`, board name `ESPG-HW` (`ESPG32-HW` on ESP32), offline-OK | ESPGeiger-HW kit (HV generator with real ADC feedback divider, count LED on GPIO15). Stays offline (no setup portal) when the saved WiFi fails. Add `GEIGER_MODEL_FIXED` yourself if the tube is fixed. |
+| `-D ESPGEIGER_LT` | board name `ESPG-LT` (`ESPG-LOG` with `GEIGER_SDCARD`), offline-OK | Identify the build as an ESPGeiger Lite/Log device. A failed saved WiFi does not open the setup portal. |
 
 ### SD Card
 
@@ -223,6 +225,8 @@ Build environments are defined in `environments.ini`. Each environment extends a
 | `base:esp8266_neopixel` | ESP8266 | ESP8266 with NeoPixel |
 | `base:espgeigerlite` | ESP8266 | ESPGeiger Lite/Log base with OLED, NeoPixel, PushButton |
 | `base:espgeigerhw` | ESP8266 | ESPGeiger-HW base with OLED, PushButton, HV control |
+| `base:xh_s3e` | ESP32-S3 | XH-S3E board: fixed OLED, NeoPixel, buttons and I2S Audio Tick pins |
+| `base:esp32s3_audio` | ESP32-S3 | Generic ESP32-S3 with Audio Tick, I2S pins set on the Config page |
 
 These bases handle the platform setup, library dependencies and core feature flags. You mix and match by choosing a base that has the hardware features you need, then adding your counter type and any additional flags.
 
@@ -233,16 +237,22 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | Environment | Platform | Counter Type | Features |
 |---|---|---|---|
 | `esp32_pulse` | ESP32 | Pulse (PCNT) | OLED auto-detected |
-| `esp32_pulse_no_pcnt` | ESP32 | Pulse (interrupt) | OLED auto-detected, PCNT disabled |
+| `esp32_pulse_no_pcnt` | ESP32 | Pulse (interrupt) | OLED auto-detected, defaults to interrupt; retired in 0.15 |
 | `esp32_cajoe_iotgm` | ESP32 | Pulse (PCNT) | RXPIN 26, for Cajoe IoT GM |
-| `esp32_cajoe_iotgm_no_pcnt` | ESP32 | Pulse (interrupt) | RXPIN 26, PCNT disabled |
+| `esp32_cajoe_iotgm_no_pcnt` | ESP32 | Pulse (interrupt) | RXPIN 26, defaults to interrupt; retired in 0.15 |
 | `esp32_hv` | ESP32 | Pulse (PCNT) | HV generator + ADC feedback |
 | `esp32c3_pulse` | ESP32-C3 | Pulse (interrupt) | RXPIN 4, NeoPixel pref, OLED auto-detected |
 | `esp32s3_pulse` | ESP32-S3 | Pulse (PCNT) | RXPIN 13, OLED auto-detected |
-| `esp32s3_pulse_no_pcnt` | ESP32-S3 | Pulse (interrupt) | RXPIN 13, PCNT disabled |
+| `esp32s3_pulse_no_pcnt` | ESP32-S3 | Pulse (interrupt) | RXPIN 13, defaults to interrupt; retired in 0.15 |
+| `esp32s3_audio_pulse` | ESP32-S3 | Pulse (PCNT) | I2S audio tick |
+| `esp32s3_audio_serial` | ESP32-S3 | Serial | I2S audio tick |
+| `xh_s3e_pulse` | ESP32-S3 (XH-S3E) | Pulse (PCNT) | RXPIN 13, OLED, NeoPixel, I2S audio tick, pins fixed |
+| `xh_s3e_serial` | ESP32-S3 (XH-S3E) | Serial | RXPIN 13, TXPIN 14, OLED, NeoPixel, I2S audio tick, pins fixed |
 | `esp8266_pulse` | ESP8266 | Pulse | |
 | `esp8266_pulsemin` | ESP8266 | Pulse | Minimal build, no cloud services |
 | `esp8266oled_pulse` | ESP8266 | Pulse | OLED |
+| `esp8266_hv` | ESP8266 | Pulse | HV generator + ADC feedback (Timer1 PWM) |
+| `esp8266oled_hv` | ESP8266 | Pulse | OLED, HV generator + ADC feedback (Timer1 PWM) |
 | `esp8266_serial` | ESP8266 | Serial | Runtime-selectable serial type |
 | `esp8266oled_serial` | ESP8266 | Serial | OLED |
 | `esp32_serial` | ESP32 | Serial | Runtime-selectable serial type |
@@ -251,6 +261,9 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | `esp32_udp` | ESP32 | UDP receiver | Tubeless receiver |
 | `esp32c3_udp` | ESP32-C3 | UDP receiver | Tubeless receiver |
 | `esp32s3_udp` | ESP32-S3 | UDP receiver | Tubeless receiver |
+| `xh_s3e_udp` | ESP32-S3 (XH-S3E) | UDP receiver | Tubeless receiver, OLED, NeoPixel, I2S audio tick |
+| `esp8266_udp` | ESP8266 | UDP receiver | Tubeless receiver |
+| `esp8266oled_udp` | ESP8266 | UDP receiver | Tubeless receiver, OLED |
 | `espgeigerhw` | ESP8266 | Pulse | OLED, PushButton, HV control |
 | `espgeigerlite` | ESP8266 | Pulse | OLED, NeoPixel, PushButton |
 | `espgeigerlog` | ESP8266 | Pulse | OLED, NeoPixel, PushButton, SDCard |
@@ -265,6 +278,8 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | `esp8266oled_test` | ESP8266 | Internal counter | OLED |
 | `esp32_test` | ESP32 | Internal counter | OLED auto-detected |
 | `esp32s3_test` | ESP32-S3 | Internal counter | OLED auto-detected |
+| `esp32c3_test` | ESP32-C3 | Internal counter | OLED auto-detected |
+| `xh_s3e_test` | ESP32-S3 (XH-S3E) | Internal counter | OLED, NeoPixel, I2S audio tick |
 | `esp8266_testpulse` | ESP8266 | Pulse output | |
 | `esp8266oled_testpulse` | ESP8266 | Pulse output | OLED |
 | `esp32_testpulse` | ESP32 | Pulse output | OLED auto-detected |

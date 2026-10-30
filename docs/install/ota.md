@@ -24,14 +24,17 @@ Every release includes one `.bin` per build variant. The filename tells you
 which one you need - **it must match the variant you originally installed**.
 For example:
 
-- `esp8266_pulse.v1.2.3.bin` - ESP8266 with a pulse-output tube
-- `esp8266_serial.v1.2.3.bin` - ESP8266 with a serial-output counter (GC10, MightyOhm, ...)
-- `espgeigerhw.v1.2.3.bin` - ESPGeiger-HW board
-- `espgeigerlog_pulse.v1.2.3.bin` - ESPGeiger Log with a pulse tube
+- `esp8266_pulse-firmware.v1.2.3.bin` - ESP8266 with a pulse-output tube
+- `esp8266_serial-firmware.v1.2.3.bin` - ESP8266 with a serial-output counter (GC10, MightyOhm, ...)
+- `espgeigerhw-firmware.v1.2.3.bin` - ESPGeiger-HW board
+- `espgeigerlog-firmware.v1.2.3.bin` - ESPGeiger Log with a pulse tube
 - ...etc
 
+ESP32 builds also have a `-firmware_merged` file. That is the full image for
+a USB install; for OTA use the plain `-firmware` file.
+
 Not sure which one you're running? The web portal shows the build name on
-the **Info** page as `BUILD_ENV` - match that.
+the **Info** page as **Build env** - match that.
 
 > ⚠️ Flashing the wrong variant will either refuse to boot or boot with the
 > wrong hardware assumptions (wrong pins, wrong counter type). If this
@@ -53,12 +56,16 @@ the firmware upload page.
 
 Click **Browse...** and pick the `.bin` you downloaded in step 1.
 
-## 5. Click **Update**
+The page checks the file before upload. **Looks compatible** means the file
+names the build you run; a **Warning** means it doesn't, and you can still
+upload if you are sure. On 0.14 a `_no_pcnt` device also accepts the plain
+`_pulse` file (see [Build Targets](/install/buildtargets#pulse)).
 
-Click the **Update** button on the upload page. The device:
+## 5. Click **Upload**
+
+Click **Upload**. The button stays greyed until a file is chosen. The device:
 
 - Shows *"Update in progress..."* on its OLED (if fitted)
-- Lights the activity LED
 - Stops all regular activity (MQTT publishes, WebAPI posts, serial output)
   to avoid interfering with the flash write
 - Receives the new firmware, writes it, verifies it and reboots

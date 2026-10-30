@@ -1019,7 +1019,7 @@ void SSD1306Display::page_three_full() {
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 2, GEIGER_MODEL);
   drawStrP(0, 17, PSTR(RELEASE_VERSION " / " GIT_VERSION));
-  drawStrP(0, 32, PSTR(__DATE__ " " __TIME__));
+  drawStrP(0, 32, DeviceInfo::buildDate());
   drawStrP(0, 47, PSTR("@ steadramon"));
 }
 

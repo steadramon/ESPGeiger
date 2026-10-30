@@ -10,11 +10,13 @@ parent: Testing & Development
 
 Response formats for the diagnostic endpoints listed on the [Web Portal](/output/webportal#http-endpoints) page.
 
+If a web password is set, every endpoint here needs HTTP Basic auth, user `admin`.
+
 ## `/outputs`
 
-A JSON object keyed by module name, describing each enabled third-party output. Disabled or unconfigured modules are left out; `{}` means none are active.
+A JSON object keyed by output name, describing each enabled third-party output. Disabled or unconfigured modules are left out; `{}` means none are active. A module quarantined by the boot guard shows under its module short name as `{"quarantined":true}`. The body is capped at about 500 bytes; the last entries are dropped if it would overflow.
 
-Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi` and `udpblip` when Local Broadcast is on.
+Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi` and `udpblip` when Local Broadcast is on. `/about` lists module short names, which differ for three of them: `whook`, `thgspk`, `wapi`.
 
 ```json
 {
@@ -38,6 +40,8 @@ Use it as a lightweight health check for dashboards, scripts or Home Assistant R
 ## `/about`
 
 Static identity of the device and firmware, plus the compiled-in modules. Runtime values (uptime, memory, RSSI) are in `/json`.
+
+In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcmd` answer 404; `/about`, `/outputs` and `/metrics` still work.
 
 ```json
 {
@@ -71,7 +75,7 @@ Static identity of the device and firmware, plus the compiled-in modules. Runtim
 | `g_type` | Counter input type: `"pulse"`, `"serial"`, or `"none"` (UDP receiver and internal test builds) |
 | `g_test` | `true` on test / simulation builds |
 | `g_pcnt` | `true` if pulses are counted by the ESP32 PCNT hardware counter |
-| `modules` | Every module compiled into this firmware, core ones included. Each is the module's short name, as used in `/outputs` |
+| `modules` | Every module compiled into this firmware, core ones included. Each is the module's short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`) |
 
 ## `/json?raw=1`
 

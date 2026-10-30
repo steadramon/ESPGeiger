@@ -14,7 +14,7 @@ The default baud is `115200`
 
 Each command should be terminated with `\r\n`
 
-Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due to the Serial RX pin being in use for the user input button.
+Note that Serial commands are __disabled__ on ESPGeiger-Log and ESPGeiger Lite builds. This is due to the Serial RX pin being in use for the user input button.
 
 ## Commands
 
@@ -30,9 +30,9 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due 
 | `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never reboots or wipes anything else. | `reset counter.ratio` |
 | `cpm` | Return current CPM value | |
 | `usv` | Return current μSv/h value | |
-| `show` | Enable 1-second CPM output | |
+| `show` | Toggles the 1 second output: on when it is off, off when it is on | |
 | `show N` | Enable periodic output every N seconds (1-65535). Implies CPM. | `show 5` |
-| `show 0` | Disable periodic output (clears every field toggle) | `show 0` |
+| `show 0` | Stops the periodic output. The field toggles are kept for the next `show N` | `show 0` |
 | `show off` | Same as `show 0` | `show off` |
 | `show cpm` | Toggle CPM line inclusion in periodic output | `show cpm` |
 | `show cps` | Toggle CPS on periodic output | |
@@ -105,7 +105,7 @@ Set the format with the `sout.format` pref. These IDs are separate from the inpu
 |---|---|---|
 | `0` | Labelled (default), driven by `show cpm` / `cps` / `usv` / `hv` | unchanged |
 | `1` | MightyOhm | 9600 |
-| `2` | User template, see below | 115200 |
+| `2` | User template, see below | unchanged |
 
 When `sout.format` is non-zero the `show` field toggles are ignored. Output still only runs when `show N` (or `show 1`) has set a non-zero period.
 
@@ -213,12 +213,13 @@ If you leave off the trailing newline the firmware adds one for you. Multi-line 
 
 ## Baud rate
 
-Set `sout.baud` to override the serial baud rate at runtime. The change applies immediately on platforms that have a real UART (ESP8266 and classic ESP32 builds). On ESP32-S3 native USB builds the baud is virtual and the option is a no-op.
+Set `sout.baud` to override the serial baud rate at runtime. The change applies immediately on ESP8266 and classic ESP32 builds, which have a real UART. On ESP32-S3 and ESP32-C3 builds the console is native USB and the baud setting does nothing.
 
 | `set sout.baud N` | Effect |
 |---|---|
-| `0` (default) | If `sout.format` is set to a known protocol, use that protocol's native baud. Otherwise keep the framework default (115200). |
-| Any non-zero value | Force this baud regardless of format. |
+| `0` (default) | If `sout.format` is set to a known protocol, use that protocol's native baud. Otherwise 115200. |
+| 9600 or more | Force this baud regardless of format. |
+| 1-9599 | Runs at 9600, the lowest rate Serial Output uses. |
 
 After changing baud, reconnect your serial monitor at the new rate so it can decode the wire.
 
@@ -227,7 +228,9 @@ Examples:
 ```
 set sout.format 1       # MightyOhm: drops baud to 9600 automatically
 set sout.baud 19200     # override to 19200 regardless of format
-set sout.baud 0         # back to format-default (or framework default)
+set sout.baud 0         # format default; with format 0, back to 115200 at once
 ```
 
-The `sout` prefs (`format`, `baud`, `interval`, `flags`) are command-driven and do not appear on the Config page.
+A line longer than the UART can take at once goes out over the next few loop passes, so a long template line at 9600 baud still arrives whole.
+
+Wire format, Baud override and Template are on the Config page (System tab, **Serial out**). `interval` and `flags` are set by the `show` commands only.

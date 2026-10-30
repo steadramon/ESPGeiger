@@ -20,8 +20,8 @@ The pulse target is the most widely compatible build and works with all Pulse-ty
 
 | Target Name | Target Counter | Notes |
 |---|---|---|
-`pulse` | Pulse | ESP32 builds default to using built in hardware PCNT counter
-`pulse_no_pcnt` | Pulse | ESP32-only build disabling PCNT
+`pulse` | Pulse | ESP32 / ESP32-S3 builds count with the built in hardware PCNT counter by default; **Count with** on the Input tab switches to the interrupt counter
+`pulse_no_pcnt` | Pulse | ESP32 and ESP32-S3, the same build defaulting to the interrupt counter. Retired in 0.15: flash the `pulse` build, it keeps the interrupt setting
 
 ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support; the panel is auto-detected at boot. No separate `oled_*` envs needed on the ESP32 family. ESP8266 still ships dedicated `oled_*` envs to avoid the runtime cost on the slower core.
 
@@ -105,7 +105,7 @@ UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for
 `esp32c3_udp` | ESP32-C3 | auto | ESP32-C3 receiver with bundled OLED. |
 `esp32s3_udp` | ESP32-S3 | auto | ESP32-S3 receiver with bundled OLED. |
 
-After flashing, configure the source mode (pin / sum / auto) and group/port from the **Config → Input** page.
+After flashing, set **Source Mode** on **Config > Input**: Specific device (leave Pin chipid blank to latch the first source heard) or Sum all sources. Group / listen IP and UDP port are under advanced.
 
 ## Test and Custom Builds
 

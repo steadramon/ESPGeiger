@@ -418,20 +418,27 @@ void EGHttpClient::header_line() {
   char* value;
   _mattered = false;
   if (!eg_http_header(_line.p, _line.len, &name, &value)) return;   // junk, skipped
-  _mattered = same_P(name, PSTR("Content-Length")) || same_P(name, PSTR("Transfer-Encoding")) ||
-              same_P(name, PSTR("Location"));
+  uint8_t kind = header_kind(name);
+  _mattered = kind != H_OTHER;
   if (!_mattered) return;
   if (_cut) end(HTTPCODE_ENCODING);   // can't act on half
-  else act_on(name, value);
+  else act_on(kind, value);
 }
 
-void EGHttpClient::act_on(const char* name, const char* value) {
-  if (same_P(name, PSTR("Content-Length"))) {
+uint8_t EGHttpClient::header_kind(const char* name) {
+  if (same_P(name, PSTR("Content-Length"))) return H_LENGTH;
+  if (same_P(name, PSTR("Transfer-Encoding"))) return H_CODING;
+  if (same_P(name, PSTR("Location"))) return H_LOCATION;
+  return H_OTHER;
+}
+
+void EGHttpClient::act_on(uint8_t kind, const char* value) {
+  if (kind == H_LENGTH) {
     int32_t n;
     // a second has to agree
     if (!parse_length(value, &n) || (_length >= 0 && n != _length)) end(HTTPCODE_ENCODING);
     else _length = n;
-  } else if (same_P(name, PSTR("Transfer-Encoding"))) {
+  } else if (kind == H_CODING) {
     // chunked, once
     if (_chunked || !same_P(value, PSTR("chunked"))) end(HTTPCODE_ENCODING);
     else _chunked = true;

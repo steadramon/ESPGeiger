@@ -632,6 +632,7 @@ float Counter::get_usv5() {
 }
 
 static void counter_lifecycle(Lifecycle::Event e) {
+  gcounter.ota_hold(e == Lifecycle::OTA_START);
   if (e == Lifecycle::OTA_FAILED) gcounter.restart_after_ota();
   else gcounter.stop_for_ota();
 }

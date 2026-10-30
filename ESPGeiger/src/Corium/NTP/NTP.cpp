@@ -54,7 +54,7 @@ static const EGPrefGroup NTP_PREF_GROUP PROGMEM = {
 
 const EGPrefGroup* NTP_Client::prefs_group() { return &NTP_PREF_GROUP; }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias NTP_LEGACY[] PROGMEM = {
   {"srv", "server"},
   {"tz",  "tz"},

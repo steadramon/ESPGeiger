@@ -33,8 +33,9 @@ struct WebRoute { PGM_P path; EGHttpServer::Handler h; EGHttpRequest::Method met
 class WebPortal {
   public:
     void begin(uint16_t port);
+    static constexpr uint8_t TICK_MS = 13;
     void tick(uint32_t now);
-    inline uint32_t next_tick_due() const { return _tick_last_ms + 13; }
+    inline uint32_t next_tick_due() const { return _tick_last_ms + TICK_MS; }
     bool active() const { return _active; }
 
     // Shared page templates

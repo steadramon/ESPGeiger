@@ -46,7 +46,7 @@ class NTP_Client : public EGModule {
     void on_prefs_saved() override;
     uint8_t display_order() override { return 0; }  // managed via /network
 
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     const char* legacy_file() override { return "/ntp.json"; }  // LEGACY IMPORT
 
     const char* get_server() { return EGPrefs::getString("ntp", EG_K_SERVER); }

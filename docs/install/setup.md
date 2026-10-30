@@ -23,10 +23,10 @@ Visiting [http://192.168.4.1/](http://192.168.4.1/) whilst connected to the hots
 To configure ESPGeiger for WiFi:
 
 - Once connected, make a note of your ESPGeiger's ID - __ESPGeiger-XXXXXX__ this will be used to connect to the web interface.
-- Click __Config Wifi__
+- The page shows the network form straight away.
 - Select your Wifi Access Point from the list shown, OR
 - Enter your SSID in the form area provided
-- Enter your password in the form area provided (8-63 characters, or leave it blank for an open network)
+- Enter your password in the form area provided (8-63 characters or a 64 hex digit key, or leave it blank for an open network)
 - Click Save
 
 After a few seconds your ESPGeiger should be connected to your WiFi. 
@@ -55,13 +55,15 @@ set sys.web_pass
 
 To set a new password later: `set sys.web_pass MyNewPassword`.
 
-This needs the device running normally on your WiFi. The serial console doesn't run whilst the setup portal is up, and ESPGeiger Log builds don't read serial commands at all.
+This needs the device out of the setup portal: the serial console doesn't run whilst the portal is up. ESPGeiger-HW never open the portal when the saved WiFi fails, so on those it works with no WiFi too. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
+
+The web password is also kept outside the settings files, so a device that loses its settings (a damaged or reformatted file system) comes back with the same password, and **Info** shows *Web password: restored from backup (settings lost)*. A factory reset or clearing the password as above clears that copy too.
 
 ### 2. Set the WiFi over USB
 
 If the device is stuck on the setup portal, open [install.espgeiger.com](https://install.espgeiger.com) in Chrome or Edge, click Connect and pick the device, then choose the option to change or connect Wi-Fi (no reinstall needed). This sets the WiFi without going through the portal or the password. The web pages still ask for the password afterwards, so then clear it with option 1.
 
-This doesn't work on ESPGeiger Log, where the serial RX pin is the push button. Use option 3 there.
+This doesn't work on ESPGeiger Log or ESPGeiger Lite, where the serial RX pin is the push button. Use option 3 there.
 
 ### 3. Hardware button factory reset
 

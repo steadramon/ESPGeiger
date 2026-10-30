@@ -30,7 +30,7 @@ Set the threshold with **Alert CPM** under [System Settings](/configuration#syst
 
 ## Pin safety
 
-Alert Out will not take a GPIO already used by another feature (Pulse Out, blip LED, NeoPixel, OLED, Geiger input). On a clash it logs the reason at boot and stays off.
+Alert Out will not take a GPIO already used by another feature (Pulse Out, blip LED, NeoPixel, OLED, Geiger input). A pin the board itself uses, or one the chip can't drive, is refused when you save it on the Config page (for example `in use: <owner>`). Any other clash is found at boot: the log says `AlertOut: pin=N unsafe (<reason>)` and the output stays off.
 
 ## Combining with other outputs
 

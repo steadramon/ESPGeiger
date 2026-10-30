@@ -34,6 +34,7 @@
 class Log {
 public:
   enum LoggingLevels {LOG_LEVEL_CONSOLE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
+  // fmt in flash or SRAM
   static void console(const char* logData, ...);
   static void error(const char* logData, ...);
 #if LOG_LEVEL >= 2

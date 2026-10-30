@@ -30,9 +30,7 @@
 #include "GRNG/GRNG.h"
 #include "WebAPI/Features.h"
 #include "App/Board.h"
-#ifdef BUZZER_ENGINE
 #include "Corium/Output/Buzzer.h"
-#endif
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 namespace AppWeb { void routes(EGHttpServer& http); }
@@ -57,7 +55,7 @@ void AppHooks::info_rows(EGHttpResponse& res) {
   WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
   WebPortal::infoRow(res, PSTR("Feature flags"), PSTR("0x%04x"), (unsigned)Features::flags());
   if (Board::rev()) WebPortal::infoRow(res, PSTR("Board"), PSTR("v%u"), (unsigned)Board::rev());
-#ifdef BUZZER_ENGINE
+#if BUZZER_BUILT
   if (Buzzer::faulted()) WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
 #endif
 }

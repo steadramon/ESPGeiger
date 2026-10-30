@@ -166,9 +166,10 @@ class Counter : public CounterMaths {
 #endif
       void queueBlip() { _last_blip = micros(); }
 
-      // inline gate
+      void ota_hold(bool on) { _ota = on; }
+      // inline gate, every pass: only members, a global costs an l32r on esp32
       inline bool needs_loop(uint32_t now) {
-        return _pending_work || _last_blip_seen != _last_blip || geigerinput->due(now);
+        return !_ota && (_pending_work || _last_blip_seen != _last_blip || geigerinput->due(now));
       }
       // direct, polling merges blips
       void dispatchReceiverBlip();
@@ -236,6 +237,7 @@ class Counter : public CounterMaths {
       bool _blip_led = true;
       bool _lifetime_enabled = true;
       bool _running = false;
+      bool _ota = false;   // ota_in_progress, kept here for the pass
       static constexpr uint8_t PENDING_RTC   = 1 << 0;
       static constexpr uint8_t PENDING_SAVE  = 1 << 1;
       static constexpr uint8_t PENDING_ALARM = 1 << 2;

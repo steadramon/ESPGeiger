@@ -134,7 +134,8 @@ update(t,ts){this.uP(this.sm(t)),this.uL(t),this.uT(ts),this.rd()}
 sm(t){if(!(this.av>1))return t;this.hb=this.hb||[];return t.map((v,i)=>{const h=this.hb[i]=this.hb[i]||[];h.push(v),h.length>this.av&&h.shift();return h.reduce((a,b)=>a+b,0)/h.length})}
 })JS";
 
-// /status and /hv load it before their own
+// /status and /hv load it before their own, esp8266 has it in /js and /hvjs (5 sockets)
+#ifndef ESP8266
 static void hGraphJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_picographJS
   WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), picographJS_GZ, picographJS_GZ_LEN);
@@ -143,9 +144,12 @@ static void hGraphJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(picographJS));
 #endif
 }
+#endif
 
 namespace AppWeb {
 void routes(EGHttpServer& http) {
+#ifndef ESP8266
   http.on(F("/pgjs"), EGHttpRequest::GET, hGraphJs);
+#endif
 }
 }

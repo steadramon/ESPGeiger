@@ -56,7 +56,7 @@ static const EGPrefGroup RADMON_PREF_GROUP PROGMEM = {
 
 const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias RADMON_LEGACY[] PROGMEM = {
   {"radmonSend", "send"},
   {"radmonUser", "user"},

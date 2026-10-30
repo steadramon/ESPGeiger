@@ -120,7 +120,7 @@ void setup()
 
 static inline void counter_pass(unsigned long now)
 {
-  if (!ota_in_progress && gcounter.needs_loop(now)) gcounter.loop();
+  if (gcounter.needs_loop(now)) gcounter.loop();
 }
 
 void loop()

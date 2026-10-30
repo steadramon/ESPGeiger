@@ -165,7 +165,7 @@ class HV : public EGModule {
 #ifdef ESPG_HV_ADC
       EGMeasureRows measurements() override;
 #endif
-      EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+      EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
       const char* legacy_file() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
       void set_freq(int freq);
       int get_freq() {

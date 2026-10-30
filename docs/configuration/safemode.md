@@ -22,9 +22,9 @@ Installing a new firmware clears the crash count.
 * Counting stops. No uploads, MQTT, display, sounds or other outputs.
 * HV stays off on HV builds.
 * The home page shows **SAFE MODE**, why it started, and how long until it tries normal mode again. An OLED shows *Safe mode* when it first starts.
-* The **Config**, **Network Config**, **Info** and **Update** pages still work. Config shows every setting, so a recent change can be undone.
+* The **Config**, **Network Config**, **Info** and **Update** pages still work. Config shows every setting, so a recent change can be undone. On ESPGeiger-HW and the `_hv` builds the HV settings are the exception: `/hv` is off in safe mode, so undo them with `set espghw.duty <n>` or `reset espghw` over serial.
 * `/info` shows the latest crash, worth including in a bug report.
-* The command box on the Status page isn't there. Use the [serial console](/output/serial) instead; it works as normal.
+* The Status and History pages aren't there, nor is the command box on the Status page or `/json`. Use the [serial console](/output/serial) for commands; it works as normal, except on ESPGeiger Log and ESPGeiger Lite builds, which read no serial commands.
 * `/outputs` lists each stopped module as `{"quarantined":true}`.
 * The push button at boot does nothing, so no offline mode or factory reset from the button.
 

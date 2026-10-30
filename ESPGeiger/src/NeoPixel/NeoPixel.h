@@ -47,7 +47,7 @@ class NeoPixel : public EGModule {
     void begin() override;
     const EGPrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void loop(unsigned long now) override;
     static constexpr uint16_t LOOP_MS = 30;
     static constexpr uint16_t FAST_LOOP_MS = 10;

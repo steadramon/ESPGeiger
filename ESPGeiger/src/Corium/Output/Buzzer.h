@@ -26,6 +26,13 @@
 #include <soc/soc_caps.h>
 #endif
 
+// rmt loop count: c3, s3
+#if defined(BUZZER_ENGINE) && defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
+#define BUZZER_BUILT 1
+#else
+#define BUZZER_BUILT 0
+#endif
+
 // idle is low, a held high is a fault
 namespace Buzzer {
 
@@ -118,8 +125,7 @@ struct Run {
   }
 };
 
-// rmt loop count: c3, s3
-#if defined(BUZZER_ENGINE) && defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
+#if BUZZER_BUILT
 // own timer watches the pad: quiet but still high = stop, pin low, till restart
 bool begin(int pin, Limits lim = DEFAULTS);
 // false while busy, faulted, or too soon for the budget

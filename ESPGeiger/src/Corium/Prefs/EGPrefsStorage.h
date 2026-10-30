@@ -29,7 +29,7 @@
 
 class EGPrefsStorage {
   public:
-    // not NUL-terminated, valid during the call only
+    // not NUL-terminated, valid during the call only; key_len 0 = a record didn't read, the rest lost
     typedef void (*ReadCb)(void* ctx,
                            const char* key, uint8_t key_len,
                            const char* value, uint16_t val_len);
@@ -43,6 +43,10 @@ class EGPrefsStorage {
     bool has(const char* module_id);
     bool readGroup(const char* module_id, ReadCb cb, void* ctx);
     bool writeGroup(const char* module_id, const void* buf, size_t len);
+    // writeGroup in two steps, many groups land together
+    bool stageGroup(const char* module_id, const void* buf, size_t len);
+    bool commitGroup(const char* module_id);
+    void dropStaged(const char* module_id);
     bool removeGroup(const char* module_id);
 
     static constexpr size_t DIR_NAME_MAX = 15;

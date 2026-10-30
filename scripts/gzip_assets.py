@@ -41,14 +41,22 @@ ASSETS_COMBINED = [
         ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "THEME_JS"),
         ("ESPGeiger/src/App/AppWeb.cpp",              "APP_THEME_JS"),
     ], "application/javascript"),
+    # esp8266 has 5 sockets: the graph lib rides in /js and /hvjs, no /pgjs
     ("JS_BUNDLE", [
+        ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS", "espressif8266"),
         ("ESPGeiger/src/Counter/CounterWeb.cpp",      "cmdJS"),
         ("ESPGeiger/src/Counter/CounterWeb.cpp",      "statusJS"),
     ], "application/javascript"),
     ("HVJS_BUNDLE", [
+        ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS", "espressif8266"),
         ("ESPGeiger/src/HV/HV.cpp",               "hvJS"),
     ], "application/javascript"),
 ]
+
+
+# a third field = that platform only
+def for_platform(parts, platform):
+    return [p[:2] for p in parts if len(p) == 2 or p[2] == platform]
 
 # [extern|static] const char NAME[] PROGMEM = R"DELIM( ... )DELIM";
 RAW_RE_TMPL = (
@@ -163,7 +171,7 @@ def process_combined(project_dir, gen_dir, name, parts, ctype):
         return 0, 0
 
 
-def run(project_dir, gen_dir):
+def run(project_dir, gen_dir, platform=""):
     os.makedirs(gen_dir, exist_ok=True)
     total_raw = 0
     total_gz = 0
@@ -182,7 +190,7 @@ def run(project_dir, gen_dir):
     for rel_path, sym, ct in ASSETS:
         collect(process_single, rel_path, sym, ct)
     for name, parts, ct in ASSETS_COMBINED:
-        collect(process_combined, name, parts, ct)
+        collect(process_combined, name, for_platform(parts, platform), ct)
     if total_raw:
         print(f"[gzip_assets] total {total_raw} -> {total_gz} B "
               f"(saved {total_raw - total_gz} B)")
@@ -205,7 +213,7 @@ try:
     _project_dir = env["PROJECT_DIR"]  # type: ignore  # noqa: F821
     _build_dir = env.subst("$BUILD_DIR")  # type: ignore  # noqa: F821
     _gen_dir = os.path.join(_build_dir, "generated")
-    run(_project_dir, _gen_dir)
+    run(_project_dir, _gen_dir, env.get("PIOPLATFORM", ""))  # type: ignore  # noqa: F821
     env.Append(CPPPATH=[_gen_dir])  # type: ignore  # noqa: F821
 except NameError:
     if __name__ == "__main__":

@@ -10,6 +10,8 @@ nav_order: 50
 
 Pull requests are welcomed! Please [visit GitHub](https://github.com/steadramon/ESPGeiger) if you would like to contribute to the project.
 
+Host tests: `pio test -c test.ini -e native` (all suites) or `-e native_asan`. See `test/README.md`.
+
 ## Pulse Testing
 
 ![PWM module](img/pwmmodule.jpg)
@@ -68,7 +70,7 @@ To stress-test beyond 120k CPM:
 
 1. Lower `pulse_width_us` on the transmitting device (e.g. 100µs → ~600k CPM ceiling).
 2. Lower `debounce` on the receiving device to match or beat the new pulse cadence.
-3. Optionally set `GEIGER_TEST_FIXEDCPM` or use the `--manual` CPM setter so you're testing a specific rate rather than the rotating 30/60/100/120.
+3. Optionally set `GEIGER_TEST_FIXEDCPM`, or pin the rate: `GET /cpm?v=250` (two decimals allowed) or the console command `target 250`. The rotation stops until the next reboot, so you're testing a specific rate rather than the rotating 30/60/100/120.
 
 The `*_testpulseint` variant uses a deterministic PWM (not Poisson) and scales cleanly to ~500k CPM without these knobs - useful when the goal is "does the counter keep up?" rather than "does the statistics look right?".
 

@@ -43,7 +43,7 @@ class Radmon : public EGHttpPoster {
     void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
     uint8_t display_order() override { return 30; }
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void setInterval(int interval);
     int getInterval();
   protected:

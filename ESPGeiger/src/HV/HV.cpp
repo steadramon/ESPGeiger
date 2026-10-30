@@ -113,6 +113,9 @@ void HV::on_prefs_loaded() {
 #ifdef ESPGEIGER_HW32
   // pref can only lower it
   if (_ov_v == 0 || _ov_v > GEIGERHW_OV_V) _ov_v = GEIGERHW_OV_V;
+#define OV_ZERO "default"
+#else
+#define OV_ZERO "off"
 #endif
   _ov_trip_s = (uint8_t)EGPrefs::getUInt("espghw", K_OV_S);
   _trim_max = (uint8_t)EGPrefs::getUInt("espghw", K_TRIM_MAX);
@@ -121,7 +124,7 @@ void HV::on_prefs_loaded() {
   _boot_s = (uint16_t)EGPrefs::getUInt("espghw", K_BOOT_S);
   Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _hw_freq, _hw_duty, _hw_vd_ratio, _hv_target);
   if (_ov_v != GEIGERHW_OV_V) {
-    Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = off)"),
+    Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
                  _ov_v, (unsigned)GEIGERHW_OV_V);
   }
 #else
@@ -129,7 +132,7 @@ void HV::on_prefs_loaded() {
 #endif
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias HW_LEGACY[] PROGMEM = {
   {"freq",   "freq"},
   {"duty",   "duty"},
@@ -417,8 +420,12 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
 <tr><th><label for=tgt>Target:</label></th><td><input id="tgt" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_V) R"HTML("> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
 
 <tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
-<script src="/pgjs)HTML" EG_CACHE_BUST R"HTML("></script>
-<script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
+)HTML"
+#ifndef ESP8266
+R"HTML(<script src="/pgjs)HTML" EG_CACHE_BUST R"HTML("></script>
+)HTML"
+#endif
+R"HTML(<script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
 )HTML";
 
 #if !EG_GZ_HVJS_BUNDLE
@@ -479,6 +486,10 @@ SB.addEventListener("click",function(){
 )JS";
 #endif
 
+#ifdef ESP8266
+extern const char picographJS[] PROGMEM;
+#endif
+
 static void hHv(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::beginPage(res, F("HV"));
   res.sendChunk(FPSTR(HV_STATUS_PAGE_BODY));
@@ -528,7 +539,14 @@ static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+#ifdef ESP8266
+  res.beginChunked(200, FPSTR(HTTP_CT_JS));
+  res.sendChunk(FPSTR(picographJS));
+  res.sendChunk(FPSTR(hvJS));
+  res.endChunked();
+#else
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(hvJS));
+#endif
 #endif
 }
 

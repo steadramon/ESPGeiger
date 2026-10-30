@@ -193,6 +193,8 @@ void DeviceInfo::useragent(char* buf, size_t cap) {
 }
 const char* DeviceInfo::mac()         { return s_mac_buf; }
 const char* DeviceInfo::flashInfo()   { return s_flash_buf; }
+static const char BUILD_DATE[] PROGMEM = __DATE__ " " __TIME__;
+PGM_P DeviceInfo::buildDate()         { return BUILD_DATE; }
 
 void DeviceInfo::factoryReset() {
   // keeps the key

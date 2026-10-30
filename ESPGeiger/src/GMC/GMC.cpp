@@ -64,7 +64,7 @@ void GMC::on_prefs_loaded() {
   set_enabled(EGPrefs::getBool("gmc", EG_K_SEND));
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias GMC_LEGACY[] PROGMEM = {
   {"gmcSend", "send"},
   {"gmcAID",  "aid"},

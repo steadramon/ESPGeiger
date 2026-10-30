@@ -34,6 +34,11 @@ void group_path(char* out, size_t sz, const char* base, const char* mid) {
   snprintf_P(out, sz, PSTR("%s%s.bin"), base, mid);
 }
 
+bool staged_path(char* out, size_t sz, const char* base, const char* mid) {
+  int n = snprintf_P(out, sz, PSTR("%s%s.bin" EGPS_STAGING_SUFFIX), base, mid);
+  return n > 0 && n < (int)sz;
+}
+
 bool read_magic(File& f) {
   uint8_t magic[4];
   return f.read(magic, 4) == 4 &&
@@ -119,7 +124,11 @@ bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
   while (f.available() > 0) {
     uint8_t klen;
     uint16_t vlen;
-    if (!read_record(f, key, &klen, value, &vlen)) { ok = false; break; }
+    if (!read_record(f, key, &klen, value, &vlen)) {
+      cb(ctx, nullptr, 0, nullptr, 0);
+      ok = false;
+      break;
+    }
     cb(ctx, key, klen, value, vlen);
   }
   f.close();
@@ -128,29 +137,42 @@ bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
 
 // stage and rename, never a partial write
 bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t len) {
+  if (!stageGroup(module_id, buf, len)) return false;
+  if (commitGroup(module_id)) return true;
+  dropStaged(module_id);
+  return false;
+}
+
+// <id>.bin.new, the old file stands till commitGroup
+bool EGPrefsStorage::stageGroup(const char* module_id, const void* buf, size_t len) {
   if (!_started || !module_id || !buf) return false;
   if (len < 4 || len > EGPREFS_MAX_GROUP_SZ) return false;
-  char final_path[EGPS_PATH_BUFSZ];
-  group_path(final_path, sizeof(final_path), _path, module_id);
   char staging[EGPS_PATH_BUFSZ];
-  int sn = snprintf_P(staging, sizeof(staging), PSTR("%s%s"), final_path, EGPS_STAGING_SUFFIX);
-  if (sn < 0 || sn >= (int)sizeof(staging)) return false;
-  {
-    File f = Fs::open_w(staging);
-    if (!f) return false;
-    size_t n = f.write((const uint8_t*)buf, len);
-    f.close();
-    if (n != len) {
-      Fs::remove(staging);
-      return false;
-    }
-  }
-  // don't remove first, rename replaces in one step
-  if (!Fs::rename(staging, final_path)) {
+  if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
+  File f = Fs::open_w(staging);
+  if (!f) return false;
+  size_t n = f.write((const uint8_t*)buf, len);
+  f.close();
+  if (n == len) return true;
+  Fs::remove(staging);
+  return false;
+}
+
+// don't remove first, rename replaces in one step
+bool EGPrefsStorage::commitGroup(const char* module_id) {
+  if (!_started || !module_id) return false;
+  char staging[EGPS_PATH_BUFSZ];
+  char final_path[EGPS_PATH_BUFSZ];
+  if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
+  group_path(final_path, sizeof(final_path), _path, module_id);
+  return Fs::rename(staging, final_path);
+}
+
+void EGPrefsStorage::dropStaged(const char* module_id) {
+  char staging[EGPS_PATH_BUFSZ];
+  if (_started && module_id && staged_path(staging, sizeof(staging), _path, module_id)) {
     Fs::remove(staging);
-    return false;
   }
-  return true;
 }
 
 bool EGPrefsStorage::removeGroup(const char* module_id) {

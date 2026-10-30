@@ -17,8 +17,8 @@ This is the lightweight cousin of the [Audio Tick](/output/audiotick)
 output: no I2S, no amplifier IC, no synthesis. A real mechanical tick
 per pulse, available on most ESP builds.
 
-Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`). Disabled by default; set the pin
-and enable it from **Config > Pulse Out** after flashing.
+Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`) and `esp8266_pulsemin`. Disabled by default; set the pin,
+enable it from **Config > Pulse Out** and reboot; the pin is read at boot.
 
 ## Settings
 
@@ -182,7 +182,7 @@ taste; lower sounds woodier, higher sounds tinnier.
 | Sound     | Mechanical tick | Synthesised click with chirp + decay |
 | Boot chime | None | 7 chimes + random |
 
-Run both at once if you like. They share the same 20 clicks/sec cap.
+Run both at once if you like. Each has its own cap: Pulse Out `max_hz` (20 by default), Audio Tick about 33 a second.
 
 ## See also
 

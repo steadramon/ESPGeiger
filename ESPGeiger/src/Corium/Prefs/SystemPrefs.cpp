@@ -80,7 +80,8 @@ static void keep_pass() {
     KeyStore::clear(WEB_PASS_SLOT);
     return;
   }
-  char pad[WEB_PASS_MAX] = {};
+  char pad[WEB_PASS_MAX];   // = {} copies a ram template
+  memset(pad, 0, sizeof(pad));
   memcpy(pad, cur, strnlen(cur, sizeof(pad)));
   KeyStore::write((const uint8_t*)pad, sizeof(pad), WEB_PASS_SLOT);
 }

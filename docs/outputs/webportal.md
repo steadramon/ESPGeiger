@@ -54,10 +54,11 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/hv` | High-voltage tuning page (ESPGeiger-HW and `*_hv` builds) |
 | `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
 | `/screen` | Live display preview (OLED and MAX7219/TM1637 builds) - see [OLED](/output/oled#browser-screen-viewer) |
-| `/export` | Streaming base64+CRC32 dump of the prefs that differ from their defaults. Device-only prefs are skipped: `sys.web_pass`, `sys.cpu_mhz`, the `net` group, the hidden `wifi.*` tunables and the lifetime totals. UI lives on the Config page's Backup tab. |
-| `/import` (POST) | Apply a previously-exported blob. Every pref except the device-only ones goes back to its default first, so keys not in the blob end up at their defaults. Reboots on success. |
+| `/export` | Streaming base64+CRC32 dump of the prefs that differ from their defaults. Device-only prefs are skipped: `sys.web_pass`, `sys.cpu_mhz`, the `net` group, the hidden `wifi.*` tunables and the lifetime totals. UI lives on the Config page's Backup tab. A 409 naming the group while a stored pref in an exported group didn't load. |
+| `/import` (POST) | Apply a previously-exported blob. Every pref except the device-only ones goes back to its default first, so keys not in the blob end up at their defaults. Reboots on success. Refused while a stored pref in an exported group didn't load. |
 | `/life/reset` (POST) | Zero the lifetime click counter + first-boot timestamp. Button on `/hist`. |
-| `/erase` | Wipe saved WiFi credentials and reboot into the captive setup portal. Linked from `/network` → Erase WiFi config. |
+| `/erase` (POST) | Wipe saved WiFi credentials, clear the `net` group (DHCP, as `resetnet`) and reboot into the captive setup portal. Linked from `/network` → Erase WiFi config. |
+| `/reset` (POST) | Factory reset. Every setting back to its default, WiFi credentials and the web password copy cleared; the lifetime totals and the station key are kept. Reboots into the setup portal. Button: `/network` > Advanced > Factory reset. |
 | `/restart` | Reboots the device - use with care |
 
 For the `/json` response schema and examples of integrating `/json` or `/lastdata` with external tools (GeigerLog, Home Assistant, Prometheus, InfluxDB, Node-RED, Grafana), see [Integrations](/output/integrations).
@@ -70,9 +71,9 @@ Human-readable HTML report grouped into expandable sections. Useful as the first
 
 | Section | Contents |
 |---|---|
-| System | Uptime, chip ID, platform, flash size, core/SDK version, CPU frequency, free heap, sketch size, last reset reason. On ESP8266, exception cause / PC / address are shown when the last reset was a crash. |
+| System | Uptime, chip ID, platform, flash size, core/SDK version, CPU frequency, free heap, sketch size, last reset reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the whole stack plus a Crashed in row naming the module that was running (ESP32-C3 shows mcause and mtval). |
 | Network | SSID, BSSID, signal strength, channel, local IP, gateway, subnet, DNS, MAC, hostname. AP mode shows softAP SSID, IP and MAC instead. |
-| Firmware | Version, git hash, build environment, build date, geiger model + type, PCNT availability, test-build flag. |
+| About | Version, git hash, build environment, build date, Geiger model, feature flags. Geiger type, PCNT availability and the test-build flag are in `/about` as `g_type`, `g_pcnt` and `g_test`. |
 | Modules | List of compiled-in modules and their runtime state. |
 
 For machine-readable equivalents see `/json` (live data) and `/about` (static identity).
@@ -84,13 +85,13 @@ WiFi + IP + NTP configuration, all on a single page. Reachable from the home pag
 | Setting | Notes |
 |---|---|
 | **Network** dropdown | Live-scanned list of nearby SSIDs. The **Rescan** button re-runs a fresh scan. |
-| **SSID** | Manual SSID entry. Blank keeps the current network (useful when only changing the password or IP settings). |
+| **SSID** | Manual SSID entry. Blank keeps the current network and its password (useful when only changing the IP settings). To change the password, enter the SSID again. |
 | **Password** | WPA2 password, 8-63 characters or a 64 hex digit key. Blank for open networks. Anything else is refused with an error. |
 | **Use static IP** | Toggle under **Network (advanced)**. When unchecked the device gets its address by DHCP. When checked the four IP fields below take effect after reboot. |
 | **IP address / Gateway / Subnet mask** | IPv4 fields with client-side validation. Server re-validates at boot; invalid combinations fall back to DHCP. On the first boot after a change the device also checks it can look up the NTP server name (the default NTP host if the NTP server is an IP address). If that fails it puts the previous IP settings back and reboots. |
 | **DNS server** | Optional. If blank, the gateway is used. |
 | **Time / NTP** | Lazy-loaded section: timezone picker (with a **Detect** button that takes your browser's timezone) and NTP server. Pulls a ~4 KB JS payload only when expanded. |
-| **Erase WiFi config** | Under **Advanced**. Wipes saved credentials and reboots into the captive setup portal. Useful when no hardware reset button is available. |
+| **Erase WiFi config** | Under **Advanced**. Wipes saved credentials and the static IP settings, and reboots into the captive setup portal. Useful when no hardware reset button is available. |
 
 After **Save and reboot**, the device tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute.
 

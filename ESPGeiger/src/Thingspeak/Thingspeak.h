@@ -38,7 +38,7 @@ class Thingspeak : public EGHttpPoster {
     const char* name() override { return PSTR("thgspk"); }
     void on_prefs_loaded() override;
     const EGPrefGroup* prefs_group() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;

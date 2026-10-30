@@ -39,7 +39,7 @@ struct EGHttpMeta {
 // the reply posts the owner, its client goes with it
 class EGHttpDriver {
   public:
-    enum Sent : uint8_t { SENT, NOT_SEALED, NOT_OPENED, NO_MEMORY };
+    enum Sent : uint8_t { SENT, NOT_SEALED, NOT_OPENED, NO_MEMORY };   // compare, SENT is 0
 
     explicit EGHttpDriver(EGModule* owner) : _owner(owner) {}
 #ifdef NATIVE_TEST

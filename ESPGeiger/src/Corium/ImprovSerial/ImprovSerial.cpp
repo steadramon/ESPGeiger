@@ -44,11 +44,10 @@ ImprovSerial improvSerial;
   static const char* IMPROV_CHIPFAMILY = "ESP32";
 #endif
 
-static std::string device_url() {
-  char ip[16], url[32];
+static void device_url(char* url, size_t cap) {
+  char ip[16];
   Wifi::formatIP(ip, sizeof(ip), Wifi::localIP());
-  snprintf_P(url, sizeof(url), PSTR("http://%s/"), ip);
-  return std::string(url);
+  snprintf_P(url, cap, PSTR("http://%s/"), ip);
 }
 
 void ImprovSerial::begin() {
@@ -66,7 +65,7 @@ void ImprovSerial::poll() {
 
 bool ImprovSerial::consume_byte(uint8_t b) {
   uint32_t now = fast_millis();
-  if (_last_byte_ms && (now - _last_byte_ms) > 2000) {
+  if (_position && now - _last_byte_ms > 2000) {
     _position = 0;
   }
   _last_byte_ms = now;
@@ -87,20 +86,23 @@ bool ImprovSerial::consume_byte(uint8_t b) {
 
 void ImprovSerial::set_state(improv::State s) {
   _state = s;
-  send_frame(improv::TYPE_CURRENT_STATE, { (uint8_t)s });
+  uint8_t b = (uint8_t)s;
+  send_frame(improv::TYPE_CURRENT_STATE, &b, 1);
 }
 
-void ImprovSerial::send_frame(improv::ImprovSerialType type,
-                              const std::vector<uint8_t>& payload) {
-  uint8_t frame[256];   // 11 bytes framing + payload
+static const size_t FRAME_MAX = 256;   // 11 bytes framing + payload
+
+void ImprovSerial::send_frame(improv::ImprovSerialType type, const uint8_t* payload, size_t len) {
+  uint8_t frame[FRAME_MAX];
   size_t pos = 0;
-  if (payload.size() > sizeof(frame) - 11) return;
+  if (len > sizeof(frame) - 11) return;
   frame[pos++] = 'I'; frame[pos++] = 'M'; frame[pos++] = 'P';
   frame[pos++] = 'R'; frame[pos++] = 'O'; frame[pos++] = 'V';
   frame[pos++] = improv::IMPROV_SERIAL_VERSION;
   frame[pos++] = (uint8_t)type;
-  frame[pos++] = (uint8_t)payload.size();
-  for (uint8_t b : payload) frame[pos++] = b;
+  frame[pos++] = (uint8_t)len;
+  memcpy(frame + pos, payload, len);
+  pos += len;
   uint8_t checksum = 0;
   for (size_t i = 0; i < pos; i++) checksum += frame[i];
   frame[pos++] = checksum;
@@ -108,14 +110,33 @@ void ImprovSerial::send_frame(improv::ImprovSerialType type,
   Serial.write(frame, pos);
 }
 
-void ImprovSerial::send_response_data(improv::Command cmd,
-                                     const std::vector<std::string>& datum) {
-  auto payload = improv::build_rpc_response(cmd, datum, false);
-  send_frame(improv::TYPE_RPC_RESPONSE, payload);
+// as improv's build_rpc_response, its unused checksum byte kept
+void ImprovSerial::send_response_data(improv::Command cmd, const char* const* datum, uint8_t n) {
+  uint8_t out[FRAME_MAX - 11];
+  size_t pos = 2;
+  for (uint8_t i = 0; i < n; i++) {
+    size_t len = strlen(datum[i]);
+    if (len + 2 > sizeof(out) - pos) return;   // too big to send
+    out[pos++] = (uint8_t)len;
+    memcpy(out + pos, datum[i], len);
+    pos += len;
+  }
+  out[0] = cmd;
+  out[1] = (uint8_t)(pos - 2);
+  out[pos++] = 0;
+  send_frame(improv::TYPE_RPC_RESPONSE, out, pos);
+}
+
+void ImprovSerial::send_url(improv::Command cmd) {
+  char url[32];
+  device_url(url, sizeof(url));
+  const char* d[] = {url};
+  send_response_data(cmd, d, 1);
 }
 
 void ImprovSerial::send_error(improv::Error err) {
-  send_frame(improv::TYPE_ERROR_STATE, { (uint8_t)err });
+  uint8_t b = (uint8_t)err;
+  send_frame(improv::TYPE_ERROR_STATE, &b, 1);
 }
 
 // boot still joining the saved wifi; uptime ticks from the loop, the ms clock from setup
@@ -146,9 +167,7 @@ bool ImprovSerial::on_command(improv::ImprovCommand cmd) {
         _state = (joining && s_creds_value) ? improv::STATE_PROVISIONING : improv::STATE_AUTHORIZED;
       }
       set_state(_state);
-      if (_state == improv::STATE_PROVISIONED) {
-        send_response_data(improv::GET_CURRENT_STATE, { device_url() });
-      }
+      if (_state == improv::STATE_PROVISIONED) send_url(improv::GET_CURRENT_STATE);
       break;
     }
     case improv::GET_DEVICE_INFO:
@@ -170,13 +189,13 @@ void ImprovSerial::on_error(improv::Error err) {
 }
 
 void ImprovSerial::send_device_info() {
-  std::vector<std::string> info = {
+  const char* about[] = {
     APP_FW_NAME,
     RELEASE_VERSION,
     IMPROV_CHIPFAMILY,
     DeviceInfo::hostname(),
   };
-  send_response_data(improv::GET_DEVICE_INFO, info);
+  send_response_data(improv::GET_DEVICE_INFO, about, 4);
 }
 
 void ImprovSerial::send_wifi_networks() {
@@ -198,21 +217,23 @@ void ImprovSerial::send_wifi_networks() {
   }
   for (uint8_t k = 0; k < kept; k++) {
     int i = best_idx[k];
-    bool open = Wifi::scanOpen(i);
-    std::vector<std::string> entry = {
-      std::string(Wifi::scanSSID(i).c_str()),
-      String(Wifi::scanRSSI(i)).c_str(),
-      open ? "NO" : "YES"
+    String ssid = Wifi::scanSSID(i);
+    char rssi[12];
+    snprintf_P(rssi, sizeof(rssi), PSTR("%d"), (int)Wifi::scanRSSI(i));
+    const char* entry[] = {
+      ssid.c_str(),
+      rssi,
+      Wifi::scanOpen(i) ? "NO" : "YES"
     };
-    send_response_data(improv::GET_WIFI_NETWORKS, entry);
+    send_response_data(improv::GET_WIFI_NETWORKS, entry, 3);
   }
-  send_response_data(improv::GET_WIFI_NETWORKS, {});   // empty = end of list
+  send_response_data(improv::GET_WIFI_NETWORKS, nullptr, 0);   // empty = end of list
 }
 
 void ImprovSerial::handle_wifi_settings(const std::string& ssid,
                                        const std::string& password) {
   // as the portal, one that can never join isn't saved
-  if (!EGPortal::passOk(password.c_str())) {
+  if (!EGPortal::ssidOk(ssid.c_str()) || !EGPortal::passOk(password.c_str())) {
     send_error(improv::ERROR_UNABLE_TO_CONNECT);
     return;
   }
@@ -223,12 +244,14 @@ void ImprovSerial::handle_wifi_settings(const std::string& ssid,
   // else the wait loop sends the old IP
   Wifi::join(ssid.c_str(), password.c_str());
 
+  // frame done, else its '\n' lands in the checksum slot
+  _position = 0;
   // esp-web-tools gives up at 30s
   uint32_t start = fast_millis();
   while (fast_millis() - start < 25000) {
     if (Wifi::connected_raw()) {
       set_state(improv::STATE_PROVISIONED);
-      send_response_data(improv::WIFI_SETTINGS, { device_url() });
+      send_url(improv::WIFI_SETTINGS);
       Log::console(PSTR("Improv: provisioned ssid='%s' ip=%s"),
                    ssid.c_str(), Wifi::localIP().toString().c_str());
       _in_wifi_settings = false;

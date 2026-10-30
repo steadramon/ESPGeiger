@@ -21,6 +21,8 @@ Your endpoint should reply with a body that contains `OK`. Anything else, includ
 
 **Note:** Only HTTP endpoints are supported. An HTTPS URL is not sent at all (the console shows `Webhook: https not supported, not sent`); it is never sent as plain HTTP.
 
+The URL must start with `http://` and may carry a query string, for example `http://192.168.1.10/hook?src=geiger&n=1`. Characters outside the usual URL set, such as a space, `'`, `#`, `[` or `]`, are refused when you save.
+
 ## JSON Payload
 
 ESPGeiger submits a JSON payload via HTTP POST with `Content-Type: application/json`. The following fields are included:
@@ -35,7 +37,7 @@ ESPGeiger submits a JSON payload via HTTP POST with `Content-Type: application/j
 | `cpm5` | float | 5-minute smoothed CPM |
 | `cpm15` | float | 15-minute smoothed CPM |
 | `usv` | float | Current microsieverts per hour (μSv/h) |
-| `hv` | float | High voltage reading in volts (ESPGeiger-HW only) |
+| `hv` | integer | High voltage reading in volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `t` | float | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h` | float | Relative humidity in % (BME280 / AHT family only) |
 | `p` | float | Atmospheric pressure in hPa (BME280 / BMP280 only) |

@@ -57,14 +57,17 @@ static void reset_wifi() {
   reboot();
 }
 
+static bool committed() {
+  if (EGPrefs::commit()) return true;
+  Log::console(PSTR("Commit failed"));
+  return false;
+}
+
 static void reset_net() {
   Log::console(PSTR("Clearing net.* prefs and rebooting"));
   // dhcp, all blank
   EGPrefs::reset("net");
-  if (!EGPrefs::commit()) {
-    Log::console(PSTR("Commit failed"));
-    return;
-  }
+  if (!committed()) return;
   Wifi::dropNetBackup();
   reboot();
 }
@@ -116,10 +119,7 @@ static void cmd_set() {
     Log::console(PSTR("Rejected: %s.%s validation failed"), mod, key);
     return;
   }
-  if (!EGPrefs::commit()) {
-    Log::console(PSTR("Commit failed"));
-    return;
-  }
+  if (!committed()) return;
   const char* ok = (a.p.flags & EGP_SENSITIVE) ? PSTR("OK: %s.%s set") : PSTR("OK: %s.%s=%s");
   Log::console(ok, mod, key, EGPrefs::getString(mod, key));
   if (EGPrefs::restart_pending()) Log::console(EG_H_RBA);
@@ -141,10 +141,7 @@ static void cmd_reset() {
     Log::console(PSTR("Rejected: reset %s"), arg);
     return;
   }
-  if (!EGPrefs::commit()) {
-    Log::console(PSTR("Commit failed"));
-    return;
-  }
+  if (!committed()) return;
   Log::console(PSTR("OK: %s reset"), arg);
   if (EGPrefs::restart_pending()) Log::console(EG_H_RBA);
 }

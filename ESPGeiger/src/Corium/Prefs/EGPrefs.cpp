@@ -253,6 +253,11 @@ void not_loaded(GroupShadow& gs, size_t j) {
 // own = the group's file, a refused one stays in it; a moved one isn't carried
 void read_record(GroupShadow* gs, const char* key, uint8_t klen,
                  const char* value, uint16_t vlen, bool own) {
+  // the rest of the file didn't read, never written over; an old moved file isn't
+  if (!klen) {
+    if (own) gs->partial = MANY;
+    return;
+  }
   for (size_t j = 0; j < gs->group->count.get(); j++) {
     const char* pid = gs->group->prefs.id_P(j);
     if (strlen_P(pid) == klen && strncmp_P(key, pid, klen) == 0) {
@@ -282,7 +287,8 @@ size_t group_bytes(const GroupShadow& gs) {
   return total;
 }
 
-bool write_group(GroupShadow& gs) {
+// stage = the .new only, commit puts it in place
+bool write_group(GroupShadow& gs, bool stage = false) {
   if (gs.partial) return false;
   size_t total = group_bytes(gs);
   if (total > EGPREFS_MAX_GROUP_SZ) {
@@ -303,9 +309,10 @@ bool write_group(GroupShadow& gs) {
     wr_le16(&buf[p], (uint16_t)vlen); p += 2;
     memcpy(&buf[p], value, vlen); p += vlen;
   }
-  bool ok = s_storage.writeGroup(gs.group->module_id, buf, total);
+  const char* id = gs.group->module_id;
+  bool ok = stage ? s_storage.stageGroup(id, buf, total) : s_storage.writeGroup(id, buf, total);
   free(buf);
-  if (ok) gs.stored = true;
+  if (ok && !stage) gs.stored = true;
   return ok;
 }
 
@@ -349,7 +356,9 @@ void adopt_moved() {
 // on reset, else they come back next boot; a live group's file is reset_all's
 void drop_moved() {
   for (size_t i = 0; i < MOVED_N; i++) {
-    if (!find_group(from_at(i))) s_storage.removeGroup(from_at(i));
+    if (find_group(from_at(i))) continue;
+    s_storage.removeGroup(from_at(i));
+    s_storage.dropStaged(from_at(i));   // 0.13 staged too
   }
 }
 #else
@@ -358,7 +367,7 @@ void adopt_moved() {}
 void drop_moved() {}
 #endif
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 #ifdef EGPREFS_NO_LEGACY
 void import_legacy() {}   // new boards, nothing to import
 #else
@@ -485,6 +494,14 @@ void import_legacy() {
 static bool runs(EGModule* m) { return m && !EGModuleRegistry::quarantined(m); }
 
 // defaults, then whatever's stored
+void load_group(GroupShadow& gs) {
+  for (size_t j = 0; j < gs.group->count.get(); j++) shadow_reset(gs, j);
+  gs.dirty = false;
+  gs.wipe = false;
+  gs.partial = 0;
+  gs.stored = s_storage.readGroup(gs.group->module_id, load_record_cb, &gs);
+}
+
 void add_group(EGModule* m, const EGPrefGroup* g) {
   if (g->count.get() > 32) {
     Log::console(PSTR("prefs: %s has %u prefs, exceeds bitmap cap of 32 - skipped"),
@@ -494,7 +511,6 @@ void add_group(EGModule* m, const EGPrefGroup* g) {
   GroupShadow& gs = s_groups[s_group_count];
   gs.group = g;
   gs.module = m;
-  gs.dirty = false;
   gs.heap_mask = 0;
   gs.values = new (std::nothrow) const char*[g->count.get()];
   if (!gs.values) {
@@ -502,12 +518,8 @@ void add_group(EGModule* m, const EGPrefGroup* g) {
     return;
   }
   s_group_count++;
-
-  for (size_t j = 0; j < g->count.get(); j++) {
-    const char* dv = g->prefs.default_val(j);
-    gs.values[j] = dv ? dv : "";
-  }
-  gs.stored = s_storage.readGroup(g->module_id, load_record_cb, &gs);
+  s_storage.dropStaged(g->module_id);   // a cut mid commit, the old file stands
+  load_group(gs);
 
   Log::debug(PSTR("prefs: %s (%u keys, v%u)"),
              g->module_id, (unsigned)g->count.get(), (unsigned)g->version.get());
@@ -531,7 +543,7 @@ void EGPrefs::begin() {
   }
 
   adopt_moved();    // current data before any legacy file
-  import_legacy();  // LEGACY IMPORT (remove after v1.0.0)
+  import_legacy();  // LEGACY IMPORT (remove in v1.1.0)
 
   s_begun = true;
   Log::console(PSTR("Prefs: Initialised (%u groups)"), (unsigned)s_group_count);
@@ -637,32 +649,41 @@ bool EGPrefs::putUInt(const char* module, const char* key, uint32_t value) {
   return put(module, key, buf);
 }
 
-// a wiped group is all defaults, so no file
-static bool save_group(GroupShadow& gs) {
+static size_t frozen_text(const GroupShadow& gs, char* out, size_t n) {
   const char* id = gs.group->module_id;
-  if (gs.wipe) return !s_storage.has(id) || s_storage.removeGroup(id);
-  return write_group(gs);
+  int len;
+  if (gs.partial == MANY) len = snprintf_P(out, n, PSTR("%s didn't load in full, reset it"), id);
+  else len = snprintf_P(out, n, PSTR("%s.%s didn't load, set it or reset %s"),
+                        id, gs.group->prefs.id_P(gs.partial - 1), id);
+  return len > 0 ? (size_t)len : 0;
 }
 
-static int frozen_text(const GroupShadow& gs, char* out, size_t n) {
-  const char* id = gs.group->module_id;
-  if (gs.partial == MANY) return snprintf_P(out, n, PSTR("%s didn't load in full, reset it"), id);
-  return snprintf_P(out, n, PSTR("%s.%s didn't load, set it or reset %s"),
-                    id, gs.group->prefs.id_P(gs.partial - 1), id);
+size_t EGPrefs::frozen(char* out, size_t n) {
+  return s_frozen ? frozen_text(*s_frozen, out, n) : 0;
+}
+
+// all local = no export or import touches it
+static bool exported(const GroupShadow& gs) {
+  for (size_t j = 0; j < gs.group->count.get(); j++) {
+    if (!(gs.group->prefs.row(j).flags & EGP_LOCAL)) return true;
+  }
+  return false;
+}
+
+size_t EGPrefs::any_frozen(char* out, size_t n) {
+  for (size_t i = 0; i < s_group_count; i++) {
+    if (s_groups[i].partial && exported(s_groups[i])) return frozen_text(s_groups[i], out, n);
+  }
+  return 0;
 }
 
 // its write would go over a value that didn't load: dropped, said once, never retried
 static void drop_frozen(GroupShadow& gs) {
-  char why[EGPREFS_FROZEN_MAX];
-  frozen_text(gs, why, sizeof(why));
-  Log::console(PSTR("Prefs: not saved, %s"), why);
   gs.dirty = false;
   s_frozen = &gs;
-}
-
-size_t EGPrefs::frozen(char* out, size_t n) {
-  int len = s_frozen ? frozen_text(*s_frozen, out, n) : 0;
-  return len > 0 ? (size_t)len : 0;
+  char why[EGPREFS_FROZEN_MAX];
+  EGPrefs::frozen(why, sizeof(why));
+  Log::console(PSTR("Prefs: not saved, %s"), why);
 }
 
 static bool any_dirty() {
@@ -672,36 +693,85 @@ static bool any_dirty() {
   return false;
 }
 
-// a failed group stays dirty, the next commit writes it
-bool EGPrefs::commit(bool fire_callbacks) {
-  s_restart_pending = s_reboot_put;
-  s_frozen = nullptr;
-  bool all_ok = true;
-  bool wrote = false;
+// a write can take 200 ms, an import writes them all
+static void pause(bool& busy) {
+  if (busy) {
+    yield();
+#ifdef ESP32
+    esp_task_wdt_reset();
+#endif
+  }
+  busy = true;
+}
+
+static void saved(GroupShadow& gs, bool fire_callbacks) {
+  bool held = gs.dirty == HELD;
+  gs.dirty = false;
+  if (fire_callbacks && !held && runs(gs.module)) gs.module->on_prefs_saved();
+}
+
+// every file staged before any lands, a frozen one dropped either way
+static bool stage_pass(bool& busy) {
+  bool ok = true;
   for (size_t i = 0; i < s_group_count; i++) {
     GroupShadow& gs = s_groups[i];
-    if (!gs.dirty) continue;
+    if (!gs.dirty || gs.wipe) continue;
     if (gs.partial) {
       drop_frozen(gs);
       continue;
     }
-    // a write can take 200 ms, an import writes them all
-    if (wrote) {
-      yield();
-#ifdef ESP32
-      esp_task_wdt_reset();
-#endif
+    if (!ok) continue;
+    pause(busy);
+    ok = write_group(gs, true);
+  }
+  return ok;
+}
+
+// all staged: each put in place; else every .new goes, flash as it was
+static bool land_pass(bool ok, bool fire_callbacks, bool& busy) {
+  for (size_t i = 0; i < s_group_count; i++) {
+    GroupShadow& gs = s_groups[i];
+    if (!gs.dirty || gs.wipe) continue;
+    const char* id = gs.group->module_id;
+    if (ok) {
+      pause(busy);
+      ok = s_storage.commitGroup(id);
     }
-    wrote = true;
-    if (!save_group(gs)) {
+    if (!ok) {
+      s_storage.dropStaged(id);
+      continue;
+    }
+    gs.stored = true;
+    saved(gs, fire_callbacks);
+  }
+  return ok;
+}
+
+// a wiped group is all defaults, so no file
+static bool wipe_pass(bool fire_callbacks, bool& busy) {
+  bool all_ok = true;
+  for (size_t i = 0; i < s_group_count; i++) {
+    GroupShadow& gs = s_groups[i];
+    if (!gs.dirty || !gs.wipe) continue;
+    const char* id = gs.group->module_id;
+    pause(busy);
+    if (s_storage.has(id) && !s_storage.removeGroup(id)) {
       all_ok = false;
       continue;
     }
-    bool held = gs.dirty == HELD;
-    gs.dirty = false;
-    if (fire_callbacks && !held && runs(gs.module)) gs.module->on_prefs_saved();
+    saved(gs, fire_callbacks);
   }
+  return all_ok;
+}
+
+// a failed commit stays dirty, the next one writes it; a wiped file goes once the rest landed
+bool EGPrefs::commit(bool fire_callbacks) {
+  s_restart_pending = s_reboot_put;
+  s_frozen = nullptr;
+  bool busy = false;
+  bool all_ok = land_pass(stage_pass(busy), fire_callbacks, busy) && wipe_pass(fire_callbacks, busy);
   if (all_ok) s_reboot_put = false;
+  else s_frozen = nullptr;   // a failed write says more
   return all_ok && !s_frozen;
 }
 
@@ -741,6 +811,11 @@ void EGPrefs::flush() {
 
 void EGPrefs::hold_by(void (*wake)(uint32_t at)) { s_wake = wake; }
 
+// readonly rows and headings keep theirs
+static bool resets(const EGPref& p) {
+  return !(p.flags & EGP_READONLY) && p.type != EGP_LABEL && p.type != EGP_HEADER;
+}
+
 bool EGPrefs::reset(const char* module, const char* key) {
   if (key) {
     EGPref p;
@@ -748,16 +823,24 @@ bool EGPrefs::reset(const char* module, const char* key) {
   }
   GroupShadow* gs = find_group(module);
   if (!gs) return false;
-  bool ok = true;
-  for (size_t j = 0; j < gs->group->count.get(); j++) {
+  size_t n = gs->group->count.get();
+  // a bad default refuses it all, before any row changes
+  char out[EGPREFS_MAX_VALUE + 1];
+  for (size_t j = 0; j < n; j++) {
     EGPref p = gs->group->prefs.row(j);
-    if (p.flags & EGP_READONLY) continue;
-    ok = put(module, p.id, p.default_val) && ok;
+    if (resets(p) && validate(&p, p.default_val, out, sizeof(out)) < 0) return false;
+  }
+  for (size_t j = 0; j < n; j++) {
+    EGPref p = gs->group->prefs.row(j);
+    if (!resets(p) || strcmp(gs->values[j], p.default_val) == 0) continue;
+    shadow_reset(*gs, j);
+    gs->dirty = true;
+    if (p.flags & EGP_REBOOT) s_reboot_put = true;
   }
   // nothing stored is wanted, the defaults go over it
   if (gs->partial) gs->dirty = true;
   gs->partial = 0;
-  return ok;
+  return true;
 }
 
 bool EGPrefs::remove_group(const char* module) {
@@ -769,7 +852,7 @@ bool EGPrefs::remove_group(const char* module) {
   }
   gs->dirty = false;
   gs->partial = 0;
-  import_legacy();  // LEGACY IMPORT (remove after v1.0.0)
+  import_legacy();  // LEGACY IMPORT (remove in v1.1.0)
   if (runs(gs->module)) gs->module->on_prefs_loaded();
   return removed;
 }
@@ -786,7 +869,9 @@ void EGPrefs::reset_all(bool keep_network) {
     }
     if (kept && kept == n) continue;   // all kept, file as is
     for (size_t j = 0; j < n; j++) {
-      if (!(gs.group->prefs.row(j).flags & keep)) shadow_reset(gs, j);
+      if (gs.group->prefs.row(j).flags & keep) continue;
+      shadow_reset(gs, j);
+      if (gs.partial == j + 1) gs.partial = 0;   // not wanted now, as put
     }
     // files change at commit, till then the old ones stand
     gs.dirty = true;
@@ -794,6 +879,12 @@ void EGPrefs::reset_all(bool keep_network) {
     if (!kept) gs.partial = 0;   // nothing stored is wanted
   }
   drop_moved();
+}
+
+void EGPrefs::revert() {
+  for (size_t i = 0; i < s_group_count; i++) {
+    if (s_groups[i].dirty) load_group(s_groups[i]);
+  }
 }
 
 bool EGPrefs::group_enabled(const EGPrefGroup* g) {

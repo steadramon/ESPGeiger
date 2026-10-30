@@ -119,7 +119,7 @@ bool EnvSensor::tryDetect() {
   _st->stuck = 0;
   _st->fails = 0;
   EGModuleRegistry::every(this, ENV_SAMPLE_MS);
-  Log::console(PSTR("Env: %S detected"), chipName());
+  Log::console(PSTR("Env: %s detected"), chipName());
   return true;
 }
 
@@ -179,7 +179,7 @@ void EnvSensor::sampleDone() {
   if (!_failed) {
     _st->fails = 0;
   } else if (++_st->fails >= ENV_FAIL_SAMPLES) {
-    Log::console(PSTR("Env: %S not answering, re-detecting"), chipName());
+    Log::console(PSTR("Env: %s not answering, re-detecting"), chipName());
     _drv_flags = 0;
     return;
   }
@@ -195,7 +195,7 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
   _st->prev_t = t; _st->prev_h = h; _st->prev_p = p;
   if (any && same) {
     if (++_st->stuck >= ENV_STUCK_SAMPLES) {
-      Log::console(PSTR("Env: %S stuck, re-initialising"), chipName());
+      Log::console(PSTR("Env: %s stuck, re-initialising"), chipName());
       _drv_flags = 0;
       return;
     }

@@ -37,7 +37,7 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/WebPortal/WebPortal.h"
 
-// begin, prefs, Reactor::clock, net, end; once each, inline into setup()
+// begin, prefs, Reactor::clock, net, end; once each, inline into setup(); no clock = nothing ever due
 namespace Boot {
 
   inline __attribute__((always_inline))

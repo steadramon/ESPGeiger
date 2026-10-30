@@ -31,6 +31,9 @@ extern "C" {
 
 #define PCNT_UNIT PCNT_UNIT_0
 #define PCNT_CHANNEL PCNT_CHANNEL_0
+// the unit's two bits in ctrl, as hal/pcnt_ll.h (C only)
+#define PCNT_RST_BIT   (1u << (2 * PCNT_UNIT))
+#define PCNT_PAUSE_BIT (1u << (2 * PCNT_UNIT + 1))
 
 // falling edges, pull set while paused
 static inline void pcnt_begin(int pin, gpio_pull_mode_t pull) {
@@ -55,13 +58,12 @@ static inline void pcnt_begin(int pin, gpio_pull_mode_t pull) {
   pcnt_counter_resume(PCNT_UNIT);
 }
 
-// paused so nothing lands between read and clear
+// paused so the read is steady; registers, not the driver, so the pause is short
 static inline int16_t pcnt_take() {
-  int16_t n = 0;
-  pcnt_counter_pause(PCNT_UNIT);
-  pcnt_get_counter_value(PCNT_UNIT, &n);
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
+  PCNT.ctrl.val |= PCNT_PAUSE_BIT;
+  int16_t n = (int16_t)(uint16_t)PCNT.cnt_unit[PCNT_UNIT].val;
+  PCNT.ctrl.val |= PCNT_RST_BIT;
+  PCNT.ctrl.val &= ~(PCNT_RST_BIT | PCNT_PAUSE_BIT);
   return n;
 }
 #endif

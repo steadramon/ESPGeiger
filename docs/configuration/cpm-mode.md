@@ -44,9 +44,7 @@ The mode changes the live CPM, CPS and dose shown to your own consumers:
 
 Public aggregators always get a steady 60-second value, so the network sees consistent data from every device:
 
-* **[Radmon](/output/radmon)** (radmon.org)
-* **URADMonitor** (uradmonitor.com)
-* **Safecast** (safecast.org)
+* **[Radmon](/output/radmon)** (radmon.org; with an interval over 90 s it gets the 5 or 15 minute average instead)
 * **[ESPGeiger Stations](/output/webapi)** (stations.espgeiger.com)
 * **[GMC / GeigerLog](/output/gmc)** protocol
 

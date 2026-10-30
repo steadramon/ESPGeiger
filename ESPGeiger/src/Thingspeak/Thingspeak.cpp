@@ -60,7 +60,7 @@ void Thingspeak::on_prefs_loaded() {
   set_enabled(EGPrefs::getBool("thingspeak", EG_K_SEND));
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias TS_LEGACY[] PROGMEM = {
   {"tsSend",       "send"},
   {"tsChannelKey", "channel_key"},

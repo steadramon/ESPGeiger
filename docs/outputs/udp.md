@@ -31,7 +31,7 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
 5. Save.
 
-Within a few seconds the receiver's OLED page 2 (or `/status`) should show `RX <chipid>` and a loss percentage and the CPM number should track the producer's.
+Within a few seconds the receiver's OLED page 2 shows `RX <chipid>` and a loss percentage, the console says `UdpRx: locked to <chipid>`, and `loss` appears in `/json`. The CPM should track the producer's.
 
 ### Not working?
 
@@ -69,6 +69,8 @@ Configured on the **Config → Input** page (`udprx_mode`).
 | `esp32_udp` | ESP32 | OLED auto-detected |
 | `esp32c3_udp` | ESP32-C3 | OLED auto-detected |
 | `esp32s3_udp` | ESP32-S3 | OLED auto-detected |
+| `xh_s3e_udp` | ESP32-S3 (XH-S3E) | OLED fixed |
+| `espgeigerlog_udp` | ESP8266 (ESPGeiger-Log) | OLED fixed |
 
 ## OSC Message Schema
 
@@ -165,7 +167,7 @@ When mode > 0 the producer announces an `_osc._udp` service with the configured 
 
 ## Reliability and tuning
 
-- **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Cumulative loss % is on the OLED and `/status`.
+- **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Cumulative loss % is on the OLED and in `/json` as `loss`.
 - **Send throttle**: high-CPS producers cap `/click` emit rate at 20 pps. Counter accuracy is preserved because each packet carries the producer's running total.
 - **RX sleep mode** (`udprx_rxmode`): `1` (modem sleep, default) suits most networks. `0` saves more power. `2` keeps the radio always on and runs warmer; try unicast first if packets go missing. The original ESP32 (not C3/S3) defaults to `2`: on modem sleep it misses most multicast.
 

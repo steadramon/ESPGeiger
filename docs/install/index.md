@@ -20,7 +20,7 @@ Below is the quick overview of installing ESPGeiger, for more detailed informati
 
 Optional:
 
-- OLED screen (SSD1305 0.96-inch 128x64)
+- OLED screen (SSD1306 0.96-inch 128x64; SH1106 and SSD1309 also work)
 - [ESPGeiger Log](/hardware/espgeigerlog) kit
 
 _OR_
@@ -35,7 +35,7 @@ The easiest way to install ESPGeiger is to use the web installer in your Chrome 
   - Select your Geiger Counter type from the dropdown list - in most cases this is "Pulse"
   - Installation takes up to two minutes
   - Once installed your ESP device will create its own Wi-Fi network with the name in the format of "**ESPGeiger-XXXXXX**"
-  - The status LED of the ESP will be lit once installation has completed.
+  - The ESPGeiger-XXXXXX network appearing is the sign the install worked.
   - For [ESPGeiger-HW firmware](https://install.espgeiger.com?board=espgeigerhw) and [ESPGeiger Log firmware](https://install.espgeiger.com?board=espgeigerlog) you can follow these links directly.
 
 ## Setup
@@ -46,7 +46,6 @@ If the web installer offered to connect to Wi-Fi and you did, skip to step 3.
   - A configuration web page should appear once connected, if not browse to <http://192.168.4.1/>
   - Make a note of the name of the ESPGeiger (**ESPGeiger-XXXXXX**) - we will need this soon.
 2. Configure ESPGeiger to connect to your home Wi-Fi network
-  - Once connected the status LED of the ESP will go out
 3. Browse to http://**ESPGeiger-XXXXXX**.local (replace XXXXXX with the ID of your ESPGeiger)
   - Once connected to your home network you can now connect to ESPGeiger using the IP address assigned by your router or http://ESPGeiger-XXXXXX.local
 

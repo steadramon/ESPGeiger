@@ -77,9 +77,10 @@ Counting resumes by itself once the input is quiet and the log shows
 `GeigerPulse: re-armed after storm cooldown`. WiFi, the web pages and MQTT
 keep running while counting is paused.
 
-This check is on builds that count pulses with an interrupt: all ESP8266 and
-ESP32-C3 pulse builds and ESP32 `no_pcnt` builds. Other ESP32 builds count
-in hardware and don't need it.
+This check is on when pulses are counted with an interrupt: all ESP8266 and
+ESP32-C3 pulse builds, and ESP32 pulse builds set to **Count with** Interrupt
+(the default on the `no_pcnt` builds, retired in 0.15). Counting with
+Hardware (PCNT) doesn't need it.
 
 ## WiFi keeps dropping
 

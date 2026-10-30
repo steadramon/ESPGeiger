@@ -2,7 +2,7 @@
 #include <pgmspace.h>
 #include "sha256.h"
 
-uint32_t sha256K[] PROGMEM = {
+static const uint32_t sha256K[] PROGMEM = {
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
   0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
   0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -15,7 +15,7 @@ uint32_t sha256K[] PROGMEM = {
 
 #define BUFFER_SIZE 64
 
-uint8_t sha256InitState[] PROGMEM = {
+static const uint8_t sha256InitState[] PROGMEM = {
   0x67,0xe6,0x09,0x6a, // H0
   0x85,0xae,0x67,0xbb, // H1
   0x72,0xf3,0x6e,0x3c, // H2
@@ -126,7 +126,7 @@ uint8_t* Sha256Class::result(void) {
     state.w[i]=b;
   }
 
-  // Return pointer to hash (20 characters)
+  // Return pointer to hash (32 bytes)
   return state.b;
 }
 

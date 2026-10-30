@@ -75,7 +75,7 @@ Visit `/vars.json` on the device to see the current rendered value of every vari
 
 ## Troubleshooting
 
-* **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring and the `env.sda` / `env.scl` pref values. Enable debug logging to see the probe attempt in the console.
+* **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring and the `i2c.sda` / `i2c.scl` settings (I2C Bus on the Config page). The boot log says `Env: <chip> detected` when a sensor is found; when none is found nothing is logged.
 * **Humidity missing from the row.** You probably have a BMP280, not a BME280. The two parts look similar on a board but only BME280 has the humidity sensor. The boot log line `Env: <chip> detected` tells you which one you have (serial console, or the Console panel on the `/status` page).
 * **Pressure missing.** You probably have an AHT-only module without the paired BMP280. Add a BMP280 on the same I2C bus, or accept that pressure is not available.
 * **Wrong temperature just after boot.** The first reading sets the baseline. Allow 30 seconds for the smoothed value to settle.

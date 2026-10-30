@@ -26,6 +26,9 @@ the alternative.
 On the generic families, verify your wiring matches the pins in Config before
 enabling. The XH-S3E envs have the pins locked to match the on-board speaker.
 
+On the XH-S3E the BOOT button (GPIO 0) mutes and unmutes all audio; the log
+says `Tick: muted` or `Tick: unmuted`.
+
 ## Audible feedback on ESP8266
 
 For per-pulse audio on an ESP8266 use [Pulse Out](/output/pulseout): single
@@ -51,9 +54,14 @@ powered speaker. No I2S amplifier required.
 
 <!-- /gen -->
 
+Test routes: `/tick` plays the configured boot chime, `/tick?c=N` plays
+chime N (2-8), `/tick?click=0` or `/tick?click=1` plays one click with the
+Pool or Chirp engine.
+
 ## Throttle
 
-Audio is rate-limited to 20 clicks/second. Above that the audio thins out
+Audio is rate-limited to about 33 clicks a second (one every 30 ms, bursts
+of up to 8). Above that the audio thins out
 while the counter still tracks every pulse.
 
 ## Voice announcer

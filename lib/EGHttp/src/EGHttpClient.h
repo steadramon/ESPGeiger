@@ -97,6 +97,7 @@ class EGHttpClient {
   private:
     enum Phase : uint8_t { IDLE, DIAL, SEND, REPLY, HEAD, BODY, DONE };   // REPLY = status line
     enum Chunk : uint8_t { AT_SIZE, AT_DATA, AT_CRLF };
+    enum Header : uint8_t { H_OTHER, H_LENGTH, H_CODING, H_LOCATION };   // the ones acted on
 
     struct Buf {
       char* p = nullptr;
@@ -118,7 +119,8 @@ class EGHttpClient {
     void head();
     void status_line();
     void header_line();
-    void act_on(const char* name, const char* value);
+    static uint8_t header_kind(const char* name);
+    void act_on(uint8_t kind, const char* value);
     void head_done();
     const char* url_start(const char* to, char* base, size_t n);
     bool follow();

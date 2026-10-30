@@ -74,7 +74,7 @@ bool slice(const EGTune::Step& st, uint32_t done, bool rtttl, const Config& c, S
   return true;
 }
 
-#if defined(BUZZER_ENGINE) && defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
+#if BUZZER_BUILT
 
 namespace {
 

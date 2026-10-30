@@ -43,6 +43,10 @@ Mode 1 uses a fixed colour you pick from a small palette:
 
 Brightness scales the chosen colour proportionally.
 
+### Advanced settings
+
+Fade (`neopixel.fade`, Off/Fast/Medium/Slow) stretches the mode 1 blip with a decay (20, 80, 150 or 300 ms). Swap R/G (`neopixel.swap`) fixes chips that show green as red; on by default on ESP8266. Pin (`neopixel.pin`) is the data pin, -1 off, reboot to apply; fixed on the XH-S3E, ESPGeiger-Log and ESPGeiger Lite.
+
 ## How the trend colour and flash rate are derived (modes 3 and 4)
 
 The pulse **rate** scales with the ratio of the current 1-minute CPM to the 5-minute average CPM (`CPM5`). Rising activity pulses faster; steady or falling activity pulses slower. The interval is clamped to between 100 ms (≈10/sec) at maximum activity and 4 s at minimum.

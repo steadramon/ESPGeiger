@@ -26,7 +26,7 @@
 // esp32 nvs, esp8266 the eeprom sector
 namespace KeyStore {
   static constexpr size_t MAX = 32;
-  static constexpr uint8_t SLOTS = 2;   // 0 = the key
+  static constexpr uint8_t SLOTS = 2;   // 0 the app's, 1 web_pass
   bool read(uint8_t* out, size_t len, uint8_t slot = 0);   // false = none, or not len bytes
   bool write(const uint8_t* in, size_t len, uint8_t slot = 0);
   void clear(uint8_t slot = 0);

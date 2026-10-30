@@ -42,7 +42,7 @@ struct EGMenuEntry {
 
 class EGModule {
   public:
-    virtual const char* name() = 0;
+    virtual const char* name() = 0;   // flash or SRAM, read with _P
     virtual uint8_t priority() { return EG_PRIORITY_DEFAULT; }
     virtual void pre_wifi() {}   // no network yet
     virtual void begin() {}      // after wifi, or offline
@@ -67,7 +67,7 @@ class EGModule {
     virtual uint8_t display_order() { return 50; }  // lower first, 0 = hidden
     virtual bool hw_present() { return true; }
 
-    // LEGACY IMPORT (remove after v1.0.0) - PROGMEM table ending with {}
+    // LEGACY IMPORT (remove in v1.1.0) - PROGMEM table ending with {}
     virtual EGLegacyRows legacy_aliases() { return EGLegacyRows(); }
 #ifdef EGPREFS_LEGACY_FILE
     virtual const char* legacy_file() { return EGPREFS_LEGACY_FILE; }

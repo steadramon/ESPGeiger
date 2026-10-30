@@ -23,7 +23,6 @@
 #include <Arduino.h>
 #include <improv.h>
 #include <string>
-#include <vector>
 
 class ImprovSerial {
 public:
@@ -40,8 +39,9 @@ public:
 
 private:
   void set_state(improv::State s);
-  void send_frame(improv::ImprovSerialType type, const std::vector<uint8_t>& payload);
-  void send_response_data(improv::Command cmd, const std::vector<std::string>& datum);
+  void send_frame(improv::ImprovSerialType type, const uint8_t* payload, size_t len);
+  void send_response_data(improv::Command cmd, const char* const* datum, uint8_t n);
+  void send_url(improv::Command cmd);
   void send_error(improv::Error err);
   bool on_command(improv::ImprovCommand cmd);
   void on_error(improv::Error err);

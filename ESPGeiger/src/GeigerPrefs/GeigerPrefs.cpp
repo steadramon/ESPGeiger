@@ -50,6 +50,7 @@ EG_PSTR(K_TX_PIN,         "tx_pin");
 EG_PSTR(K_PCNT_FILTER,    "pcnt_filter");
 EG_PSTR(K_PCNT_PULL,      "pcnt_pull");
 EG_PSTR(K_COUNT_MODE,     "count_mode");
+EG_PSTR(K_COUNT_KEPT,     "count_kept");
 EG_PSTR(K_DEBOUNCE,       "debounce");
 EG_PSTR(K_PULSE_WIDTH_US, "pulse_width_us");
 EG_PSTR(K_CPM_WINDOW,     "cpm_window");
@@ -78,7 +79,7 @@ public:
 #endif
   void on_prefs_loaded() override;
   void on_prefs_saved() override;
-  EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+  EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
 private:
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   uint8_t _serial_type = 0;
@@ -108,7 +109,12 @@ EG_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
 #ifdef PCNT_SELECTABLE
 EG_PSTR(IN_L_CNT, "Count with");
 EG_PSTR(IN_O_CNT, "Hardware|Interrupt");
+EG_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM. Reboot.");
+#ifdef NO_PCNT_ENV
+#define COUNT_MODE_DEF "1"   // _no_pcnt envs, retired in 0.15
+#else
 #define COUNT_MODE_DEF "0"
+#endif
 #endif
 #ifdef PREF_DEBOUNCE
 EG_PSTR(IN_L_DBN, "Debounce");
@@ -193,7 +199,10 @@ static const EGPref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // Signal conditioning
 #ifdef PCNT_SELECTABLE
-  {K_COUNT_MODE,      IN_L_CNT, EG_H_RBA, COUNT_MODE_DEF, IN_O_CNT, 0, 1, 0, EGP_ENUM, EGP_ADVANCED | EGP_REBOOT},
+  {K_COUNT_MODE,      IN_L_CNT, IN_H_CNT, COUNT_MODE_DEF, IN_O_CNT, 0, 1, 0, EGP_ENUM, EGP_ADVANCED | EGP_REBOOT},
+#endif
+#ifdef NO_PCNT_ENV
+  {K_COUNT_KEPT,      nullptr,  nullptr,  "0", nullptr, 0, 1, 0, EGP_BOOL, EGP_HIDDEN | EGP_LOCAL},
 #endif
 #ifdef USE_PCNT
   {K_PCNT_FILTER,     IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, EGP_ADVANCED},
@@ -245,7 +254,6 @@ static const uint16_t SHOW_ISR  = 1u << 1;
 
 static const EGPrefShow COUNTER_SHOW[] PROGMEM = {
   {K_PCNT_FILTER, IN_W_CNT, SHOW_PCNT},
-  {K_PCNT_PULL,   IN_W_CNT, SHOW_PCNT},
   {K_DEBOUNCE,    IN_W_CNT, SHOW_ISR},
   {},
 };
@@ -253,8 +261,13 @@ static const EGPrefShow COUNTER_SHOW[] PROGMEM = {
 const EGPrefShow* CounterPrefs::prefs_show() { return COUNTER_SHOW; }
 #endif
 
-// boot only, the isr and port keep their pins
+// pins and count mode read at boot only, the isr and port keep theirs
+#if !defined(RXPIN_BLOCKED) || defined(PCNT_SELECTABLE) || \
+    (defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED))
 static void boot_pins() {
+  static bool s_set = false;
+  if (s_set) return;
+  s_set = true;
 #ifdef PCNT_SELECTABLE
   gcounter.input()->use_pcnt(EGPrefs::getUInt("counter", K_COUNT_MODE) == 0);
 #endif
@@ -265,6 +278,18 @@ static void boot_pins() {
   gcounter.set_tx_pin((int)EGPrefs::getInt("counter", K_TX_PIN));
 #endif
 }
+#else
+static void boot_pins() {}   // none on this build
+#endif
+
+#ifdef NO_PCNT_ENV
+// count_mode into the file once, so a plain bin keeps the interrupt
+static void keep_count_mode() {
+  if (EGPrefs::getBool("counter", K_COUNT_KEPT)) return;
+  EGPrefs::put("counter", K_COUNT_KEPT, "1");
+  EGPrefs::commit(false);
+}
+#endif
 
 void CounterPrefs::on_prefs_loaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
@@ -273,11 +298,10 @@ void CounterPrefs::on_prefs_loaded() {
   if (SerialFormat::has_cps(_serial_type)) cw = GEIGER_CPM_COUNT;
   gcounter.set_cpm_window(cw);
 #endif
-  static bool s_set = false;
-  if (!s_set) {
-    s_set = true;
-    boot_pins();
-  }
+  boot_pins();
+#ifdef NO_PCNT_ENV
+  keep_count_mode();
+#endif
 #ifdef USE_PCNT
   gcounter.set_pcnt_filter((int)EGPrefs::getUInt("counter", K_PCNT_FILTER));
   gcounter.apply_pcnt_filter();
@@ -320,7 +344,7 @@ void CounterPrefs::on_prefs_saved() {
   if (need_reboot) EGPrefs::request_restart();
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 static const EGLegacyAlias COUNTER_LEGACY[] PROGMEM = {
   {"geigerRatio", "ratio"},
   {"geigerWarn",  "warn"},

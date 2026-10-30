@@ -175,7 +175,7 @@ extern const char EG_K_WEB_PASS[];
 extern const char EG_H_RBA[];
 extern const char EG_P_HOST[];
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
+// === LEGACY IMPORT (remove in v1.1.0) ===
 // PROGMEM, {old, new} rows ending {}
 struct EGLegacyAlias {
   char legacy_key[20];
@@ -217,16 +217,21 @@ public:
   static bool commit(bool fire_callbacks = true);
   // for a write per request: callbacks now, one write EGPREFS_HOLD_MS on; true = will be written
   static bool commit_soon(uint32_t now);
-  // the last commit left out a group holding a stored value that didn't load: why, else 0
+  // the last commit left out a group holding a stored value that didn't load
+  // and wrote the rest: why, else 0
   static size_t frozen(char* out, size_t n);
+  // any group an export carries holding one now, the same text; the export would leave it out
+  static size_t any_frozen(char* out, size_t n);
   static void flush();   // the waiting write, at wake or shutdown
   // wake(at) has flush() called then; none = commit_soon writes now
   static void hold_by(void (*wake)(uint32_t at));
-  // back to the row default, put() rules; no key = the whole group
+  // back to the row default, a key by put() rules; no key = the whole group, all or none
   static bool reset(const char* module, const char* key = nullptr);
   static bool remove_group(const char* module);
   // keep_network keeps net + web_pass
   static void reset_all(bool keep_network = false);
+  // groups a failed commit left unsaved back to what's on flash, no callbacks
+  static void revert();
   static void request_restart();  // from on_prefs_saved
   static bool restart_pending();  // the last commit needs one
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
