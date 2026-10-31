@@ -55,7 +55,7 @@ void TickProfile::markWifi()    { t_after_wifi = micros(); }
 #endif
 
 bool TickProfile::endTick() {
-  // never reset, esp32 loop() is on the other core
+  // never reset, the loop owns it
   static uint32_t s_lps_last = 0;
   uint32_t n = _lps_count;
   uint32_t count = n - s_lps_last;

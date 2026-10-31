@@ -19,6 +19,7 @@
 
 #include "Counter.h"
 #include <new>
+#include <string.h>
 #if GEIGER_TYPE == GEIGER_TYPE_PULSE
 #include "GeigerInput/Type/Pulse.h"
 #elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
@@ -119,7 +120,9 @@ void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) 
 
 uint32_t Counter::_pulse_hist[Counter::HIST_BUCKETS] = {0};
 
+// hist and min under the ring's lock, the pages copy them under it
 void EG_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
+  IsrLock::enter_isr(s_pulse_mux);
   if (s_prev_pulse_us) {
     uint32_t interval = now_us - s_prev_pulse_us;
     if (interval && interval < s_min_pulse_us) s_min_pulse_us = interval;
@@ -127,13 +130,18 @@ void EG_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
   }
   s_prev_pulse_us = now_us;
   s_hist_from_isr = true;
-
-  if (!s_pulse_ring) return;
-  IsrLock::enter_isr(s_pulse_mux);
-  s_pulse_ring[s_pulse_head] = now_us;
-  s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
-  if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
+  if (s_pulse_ring) {
+    s_pulse_ring[s_pulse_head] = now_us;
+    s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
+    if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
+  }
   IsrLock::leave_isr(s_pulse_mux);
+}
+
+void Counter::pulse_histogram(uint32_t* out) const {
+  IsrLock::enter(s_pulse_mux);
+  memcpy(out, _pulse_hist, sizeof(_pulse_hist));
+  IsrLock::leave(s_pulse_mux);
 }
 
 // under the lock; looked at each second, an age never reaches the us wrap
@@ -591,7 +599,9 @@ uint32_t Counter::get_cps_win_us() {
 }
 
 uint32_t Counter::get_min_pulse_us() {
+  IsrLock::enter(s_pulse_mux);
   uint32_t v = s_min_pulse_us;
+  IsrLock::leave(s_pulse_mux);
   return (v == UINT32_MAX) ? 0 : v;
 }
 

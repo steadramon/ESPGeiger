@@ -84,8 +84,9 @@ void AppHooks::about_json(EGHttpResponse& res) {
 void AppHooks::metrics(EGHttpResponse& res, const char* cid) {
   res.sendChunk(F("# HELP geiger_pulse_interval_seconds Inter-pulse intervals in seconds, log2 buckets\n"
                   "# TYPE geiger_pulse_interval_seconds histogram\n"));
-  const uint32_t* hist = gcounter.pulse_histogram();
-  const uint8_t   nb   = Counter::pulse_histogram_buckets();
+  const uint8_t nb = Counter::pulse_histogram_buckets();
+  uint32_t hist[nb];
+  gcounter.pulse_histogram(hist);
   uint32_t cumul = 0;
   for (uint8_t b = 0; b < nb; b++) {
     cumul += hist[b];

@@ -80,6 +80,10 @@ namespace Reactor {
         s_next_sec += 1000;
         second();
         esp_task_wdt_reset();
+#if CONFIG_FREERTOS_UNICORE
+        // c3: idle task gets a turn
+        vTaskDelay(1);
+#endif
       }
 #endif
       // tcp callbacks, ota needs them too
@@ -99,7 +103,7 @@ namespace Reactor {
   // 8266: the core runs preloop_update_frequency() every pass, the app throttles it
   template <void (*hot)(unsigned long)>
   inline void run(WebPortal& portal) {
-#if defined(ESP32) && !CONFIG_FREERTOS_UNICORE
+#ifdef ESP32
     // never returns
     for (;;) pass<hot>(portal);
 #else

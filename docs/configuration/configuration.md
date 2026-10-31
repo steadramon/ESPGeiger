@@ -67,7 +67,7 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | TX Pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
 | Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Interrupt has the debounce dead time, reads low at high CPM. Reboot. |
 | PCNT Filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
-| PCNT Pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. Floating suits most modules that drive the line actively both directions; change to pull-up for open-drain outputs or pull-down for active-high modules without their own idle pull. |
+| PCNT Pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. None suits modules that drive the line both ways; a pull-up can hold some (the Cajoe IOT-GM v1.1) high so no pulse counts. Pull-up is for open-drain outputs, and keeps an unconnected pin quiet. Pull-down is for active-high modules without their own idle pull. |
 | Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |
 | Pulse width | `counter.pulse_width_us` | Int 10-2000 | `500` | `test`, `testpulse` | Width of the simulated pulse on the TX pin, in microseconds. |
 | CPM Window (CPM-only counters) | `counter.cpm_window` | Int 1-60 | `30` | serial builds | Applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
@@ -76,7 +76,7 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | α Alpha | `counter.tube_alpha` | Boolean | `0` off | not test builds | The tube detects alpha radiation. Informational; passed to upstream aggregators. |
 | β Beta | `counter.tube_beta` | Boolean | `0` off | not test builds | The tube detects beta radiation. Informational. |
 | γ Gamma | `counter.tube_gamma` | Boolean | `0` off | not test builds | The tube detects gamma radiation. Informational. |
-| Tube dead time | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | GM tube dead time in microseconds, used to compensate the rate at high CPS. `0` disables. Typical values: J305 = 50, SBM-20 = 150. |
+| Tube dead time | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | GM tube dead time in microseconds, used to compensate the rate at high CPS. `0` disables. Set from the tube's datasheet: SBM-20 = 190; the J305 and M4011 datasheets give none (see [Counter](/configuration/counter)). |
 | uSv/h Ratio | `counter.ratio` | Float 1-100000 | `151.0` | all | CPM to uSv/h conversion factor |
 | Warning CPM | `counter.warn` | Int 0-9999 | `50` | all | CPM threshold for warning state |
 | Alert CPM | `counter.alert` | Int 0-9999 | `100` | all | CPM threshold for alert state |

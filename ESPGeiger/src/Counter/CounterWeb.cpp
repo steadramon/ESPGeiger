@@ -104,8 +104,9 @@ static void clicks_life(EGHttpResponse& res, char* line, size_t cap) {
 
 // log2 buckets, 64 us to 512 s+
 static void clicks_hist(EGHttpResponse& res, char* line, size_t cap) {
-  const uint32_t* hist = gcounter.pulse_histogram();
-  const uint8_t   nb   = Counter::pulse_histogram_buckets();
+  const uint8_t nb = Counter::pulse_histogram_buckets();
+  uint32_t hist[nb];
+  gcounter.pulse_histogram(hist);
   send_n(res, line, cap, snprintf_P(line, cap,
                                PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]));
   for (uint8_t b = 1; b < nb; b++) {

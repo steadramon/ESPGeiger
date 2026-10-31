@@ -197,7 +197,7 @@ class Counter : public CounterMaths {
       void save_lifetime();
       void reset_lifetime();
       void clock_stepped(int32_t delta_s);
-      const uint32_t* pulse_histogram() const { return _pulse_hist; }
+      void pulse_histogram(uint32_t* out) const;   // HIST_BUCKETS, a copy under the lock
       static constexpr uint8_t pulse_histogram_buckets() { return HIST_BUCKETS; }
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<uint16_t,45>* cpm5_history = nullptr;   // tenths
