@@ -46,9 +46,9 @@
 #define APP_FW_NAME (!APP_MODEL[0] ? THING_NAME : \
   strncmp(APP_MODEL, THING_NAME "-", sizeof(THING_NAME)) == 0 ? APP_MODEL : THING_NAME " " APP_MODEL)
 
-// For builds that only set ESPGEIGER_HW
+// For builds that only set ESPGEIGER_HW, unless they name their LED
 #ifdef ESPGEIGER_HW
-#ifndef GEIGER_BLIPLED
+#if !defined(GEIGER_BLIPLED) && !defined(LED_SEND_RECEIVE)
 #define GEIGER_BLIPLED 15
 #endif
 #ifndef ESPG_HV

@@ -28,7 +28,6 @@
 #include "App/LedPatterns.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/Debounce.h"
-#include <Ticker.h>
 #ifdef SSD1306_DISPLAY
 #include "Display/Display.h"
 #endif
@@ -37,7 +36,7 @@ static const uint16_t POLL_MS      = 10;
 static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
-// 0 = next page, 1 = back. loop task only, pin set with the ticker off
+// 0 = next page, 1 = back. loop task only
 struct BtnState {
   int      pin = -1;
   Debounce deb;
@@ -46,23 +45,7 @@ struct BtnState {
 };
 static BtnState s_btn[2];
 
-static Ticker buttonTicker;
-static bool s_raw[2];   // ticker only
-
 static bool read_down(const BtnState& b) { return digitalRead(b.pin) == LOW; }
-
-// samples, a change wakes the loop
-static void button_tick() {
-  bool moved = false;
-  for (uint8_t i = 0; i < 2; i++) {
-    if (s_btn[i].pin < 0) continue;
-    bool down = read_down(s_btn[i]);
-    if (down == s_raw[i]) continue;
-    s_raw[i] = down;
-    moved = true;
-  }
-  if (moved) EGModuleRegistry::post(&pushbutton);
-}
 
 #ifdef SSD1306_DISPLAY
 static void do_longpress(unsigned long now) {
@@ -109,7 +92,7 @@ void PushButton::on_prefs_loaded() {
 PushButton::PushButton() {
 }
 
-// detach only on change, keeps the prefs cascade quiet
+// reset only on change, keeps the prefs cascade quiet
 static void set_pin_slot(uint8_t slot, int pin) {
   if (slot >= 2) return;
   BtnState& b = s_btn[slot];
@@ -117,8 +100,7 @@ static void set_pin_slot(uint8_t slot, int pin) {
     Log::console(PSTR("Btn: pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
-  if (pin == b.pin && buttonTicker.active()) return;
-  buttonTicker.detach();
+  if (pin == b.pin) return;
   uint32_t now = fast_millis();
   bool down = false;
   b.pin = pin;
@@ -131,36 +113,32 @@ static void set_pin_slot(uint8_t slot, int pin) {
   b.deb.reset(down, now);
   b.press_start_ms = now;
   b.long_fired = down;
-  s_raw[slot] = down;
-  if (s_btn[0].pin >= 0 || s_btn[1].pin >= 0) {
-    buttonTicker.attach_ms(POLL_MS, button_tick);
-  }
+  bool on = s_btn[0].pin >= 0 || s_btn[1].pin >= 0;
+  EGModuleRegistry::every(&pushbutton, on ? POLL_MS : 0);
 }
 
 void PushButton::set_pin(int pin)  { set_pin_slot(0, pin); }
 void PushButton::set_pin2(int pin) { set_pin_slot(1, pin); }
 
+// boot hold reads it before begin, fixed pins set here
 void PushButton::init()
-{
-  static bool ready = false;
-  if (ready) return;
-  if (s_btn[0].pin >= 0) set_pin_slot(0, s_btn[0].pin);
-  if (s_btn[1].pin >= 0) set_pin_slot(1, s_btn[1].pin);
-  ready = true;
-}
-
-void PushButton::begin()
 {
 #ifdef BTN_PIN_BLOCKED
   if (PUSHBUTTON_PIN  >= 0) set_pin(PUSHBUTTON_PIN);
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
+#endif
+}
+
+void PushButton::begin()
+{
+  init();
+#ifdef BTN_PIN_BLOCKED
   Log::console(PSTR("Btn: pin=%d pin2=%d"),
                (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
 #endif
 #ifdef PIN_SCAN
-  EGModuleRegistry::every(this, LOOP_MS);
+  EGModuleRegistry::every(this, POLL_MS);
 #endif
-  init();
 }
 
 // samples too, setup has no loop
@@ -230,24 +208,16 @@ static void short_press(uint8_t i, unsigned long now) {
   gcounter.reset_alarm();
 }
 
-static void soonest(Deadline& next, uint32_t t) {
-  if (!next.armed() || !reached(t, next.at)) next.set(t);
-}
-
 // long or short, never both
-static void check_long(BtnState& b, unsigned long now, Deadline& next) {
+static void check_long(BtnState& b, unsigned long now) {
 #ifdef SSD1306_DISPLAY
-  if (b.long_fired) return;
-  if (now - b.press_start_ms < LONG_PRESS_MS) {
-    soonest(next, b.press_start_ms + LONG_PRESS_MS);
-    return;
-  }
+  if (b.long_fired || (uint32_t)(now - b.press_start_ms) < LONG_PRESS_MS) return;
   b.long_fired = true;
   do_longpress(now);
 #endif
 }
 
-static void step_one(uint8_t i, unsigned long now, Deadline& next) {
+static void step_one(uint8_t i, unsigned long now) {
   BtnState& b = s_btn[i];
   if (b.pin < 0) return;
   bool down = read_down(b);
@@ -259,18 +229,15 @@ static void step_one(uint8_t i, unsigned long now, Deadline& next) {
       short_press(i, now);
     }
   }
-  if (b.deb.read != b.deb.level) soonest(next, b.deb.since + DEBOUNCE_MS);   // settling
-  else if (b.deb.level) check_long(b, now, next);
+  if (b.deb.level && b.deb.read) check_long(b, now);   // not while settling
 }
 
-// woken by the ticker on a change, else the debounce or long press due
+// every POLL_MS while a pin is set
 void PushButton::loop(unsigned long now)
 {
 #ifdef PIN_SCAN
   pin_scan_loop(now);
 #endif
-  Deadline next;
-  for (uint8_t i = 0; i < 2; i++) step_one(i, now, next);
-  if (next.armed()) EGModuleRegistry::due_at(this, next.at);
+  for (uint8_t i = 0; i < 2; i++) step_one(i, now);
 }
 #endif
