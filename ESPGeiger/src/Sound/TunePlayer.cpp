@@ -85,6 +85,7 @@ EGTune::Step s_st;
 uint32_t s_done = 0;
 uint32_t s_at = 0;
 uint8_t s_prio = 0;
+uint8_t s_vol = 100;
 bool s_on = false;
 bool s_have = false;
 
@@ -98,12 +99,13 @@ void send(uint32_t now, const Slice& sl) {
 
 void begin(Config c) { s_cfg = c; }
 
-bool play(uint32_t now, const char* s, uint16_t len, uint8_t prio) {
+bool play(uint32_t now, const char* s, uint16_t len, uint8_t prio, uint8_t vol) {
   if (s_on && prio <= s_prio) return false;
   if (len > MAX_TEXT) len = MAX_TEXT;
   memcpy(s_text, s, len);
   s_rd.begin(s_text, len);
   s_prio = prio;
+  s_vol = vol;
   s_have = false;
   s_on = true;
   s_at = now;
@@ -135,6 +137,7 @@ uint32_t poll(uint32_t now) {
       // budget after a pulse or burst: wait, don't drop
       uint32_t w = Buzzer::wait_us(now);
       if (w) return w;
+      if (sl.op == EGTune::TONE) sl.duty = at_volume(sl.duty, s_vol);
       send(now, sl);
     }
     s_done += sl.us;

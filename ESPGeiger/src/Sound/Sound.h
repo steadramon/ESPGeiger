@@ -39,6 +39,8 @@ class Sound : public EGModule {
 
     // per count, nothing while a tune plays
     void click(uint32_t now_us);
+    // console: a sound's name or a tune
+    void test(const char* v);
 
     enum : uint8_t { STARTUP, WIFI, ALERT, ALERT_END, HVFAULT, SD_ERROR, OTA, OTA_FAIL, BUTTON, CLICK, COUNT };
 
@@ -56,8 +58,10 @@ class Sound : public EGModule {
     unsigned long _next_alert = 0;
     uint16_t _bad = 0;   // bit per sound: its pref didn't parse
     uint8_t _duty = 25;
+    uint8_t _vol = 100;
     volatile bool _reload = true;
     bool _click_on = false;
+    bool _chimes = true;
     bool _alert = false;
     bool _wifi = false;
     bool _fault_said = false;

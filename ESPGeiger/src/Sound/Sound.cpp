@@ -23,6 +23,7 @@
 #include "App/Board.h"
 #include "App/Topics.h"
 #include "Counter/Counter.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/EGModuleRegistry.h"
 #include "Corium/Net/Wifi.h"
@@ -40,6 +41,9 @@ static constexpr uint8_t GAP_PCT = 12;       // rtttl, as the hw demo page
 
 enum : uint8_t { P_LOW = 1, P_MID, P_URGENT };
 
+EG_PSTR(K_VOLUME,    "volume");
+EG_PSTR(K_CLICKS,    "clicks");
+EG_PSTR(K_CHIMES,    "chimes");
 EG_PSTR(K_REPEAT,    "repeat");
 EG_PSTR(K_STARTUP,   "startup");
 EG_PSTR(K_WIFI,      "wifi");
@@ -61,7 +65,7 @@ EG_PSTR(T_CLEAR,   "2700:120,p20,2093:200");
 EG_PSTR(T_PROBLEM, "1500:160,p90,1500:160");
 EG_PSTR(T_ARP,     "2093:90,p20,2637:90,p20,3136:90,p20,4186:220");
 EG_PSTR(T_BUTTON,  "t3");
-EG_PSTR(T_CLICK,   "c");
+EG_PSTR(T_CLICK,   "1500:2");
 
 struct SoundDef {
   const char* key;
@@ -82,6 +86,11 @@ static const SoundDef DEFS[Sound::COUNT] = {
   {K_CLICK,     T_CLICK,   P_LOW},
 };
 
+EG_PSTR(L_VOLUME, "Volume (%)");
+EG_PSTR(H_VOLUME, "Tones only. Alarms and HV faults always play full, 0 = only those");
+EG_PSTR(L_CLICKS, "Click per count");
+EG_PSTR(L_CHIMES, "Chimes");
+EG_PSTR(H_CHIMES, "Startup, WiFi and button sounds");
 EG_PSTR(L_REPEAT, "Alert repeat (s)");
 EG_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
 
@@ -89,6 +98,9 @@ EG_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
 
 // "" = built-in, off = silent, else steps or rtttl
 static const EGPref SOUND_PREF_ITEMS[] PROGMEM = {
+  {K_VOLUME, L_VOLUME, H_VOLUME, "100", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+  {K_CLICKS, L_CLICKS, nullptr,  "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
+  {K_CHIMES, L_CHIMES, H_CHIMES, "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
   {K_REPEAT, L_REPEAT, H_REPEAT, "60", nullptr, 0, 3600, 0, EGP_UINT, 0},
   SOUND_ROW(K_STARTUP),
   SOUND_ROW(K_WIFI),
@@ -140,6 +152,8 @@ void Sound::on_prefs_loaded() {
 void Sound::load() {
   _reload = false;
   _repeat_ms = EGPrefs::getUInt("sound", K_REPEAT) * 1000UL;
+  _vol = EGPrefs::getUInt("sound", K_VOLUME);
+  _chimes = EGPrefs::getBool("sound", K_CHIMES);
   _bad = 0;
   for (uint8_t i = 0; i < COUNT; i++) {
     const char* v = EGPrefs::getString("sound", DEFS[i].key);
@@ -153,7 +167,7 @@ void Sound::load() {
   uint16_t len = 0;
   const char* t = text(CLICK, len);
   _click_on = false;
-  if (!t) return;
+  if (!t || !EGPrefs::getBool("sound", K_CLICKS)) return;
   EGTune::Reader r;
   r.begin(t, len);
   _click_on = r.next(_click);
@@ -198,19 +212,53 @@ void Sound::begin() {
 
 void Sound::play(uint8_t id) {
   uint8_t prio = DEFS[id].prio;
-  if (prio < P_URGENT && gcounter.is_quiet_now()) return;
+  uint8_t vol = prio == P_URGENT ? 100 : _vol;
+  if (prio < P_URGENT && (!vol || gcounter.is_quiet_now())) return;
+  if (prio == P_LOW && !_chimes) return;
   uint16_t len = 0;
   const char* t = text(id, len);
-  if (t) TunePlayer::play((uint32_t)micros(), t, len, prio);
+  if (t) TunePlayer::play((uint32_t)micros(), t, len, prio, vol);
 }
 
 void Sound::click(uint32_t now) {
-  if (!_click_on || TunePlayer::busy() || gcounter.is_quiet_now()) return;
+  if (!_click_on || !_vol || TunePlayer::busy() || gcounter.is_quiet_now()) return;
   const EGTune::Step& c = _click;
+  uint8_t duty = TunePlayer::at_volume(c.duty ? c.duty : _duty, _vol);
   if (c.op == EGTune::PULSE) Buzzer::pulse(now, c.ms * 1000);
   else if (c.op == EGTune::BURST) Buzzer::burst(now, c.hz ? c.hz : BURST_HZ, c.ms);
-  else if (c.op == EGTune::TONE) Buzzer::tone(now, c.hz, Buzzer::tone_cycles(c.ms, c.hz), c.duty ? c.duty : _duty);
+  else if (c.op == EGTune::TONE) Buzzer::tone(now, c.hz, Buzzer::tone_cycles(c.ms, c.hz), duty);
 }
+
+// over chimes, alarms full as they'd play
+void Sound::test(const char* v) {
+  uint16_t len = 0;
+  const char* t = v;
+  uint8_t vol = _vol;
+  uint8_t i = 0;
+  while (i < COUNT && strcmp_P(v, DEFS[i].key)) i++;
+  if (i < COUNT) {
+    t = text(i, len);
+    if (DEFS[i].prio == P_URGENT) vol = 100;
+  } else {
+    uint16_t at = 0;
+    uint8_t e = EGTune::check(v, strlen(v), &at);
+    if (e) {
+      Log::console(PSTR("Sound: %s at %u"), err_word(e), at);
+      return;
+    }
+    len = strlen(v);
+  }
+  if (!t) return;
+  TunePlayer::play((uint32_t)micros(), t, len, P_MID, vol);
+  EGModuleRegistry::post(this);
+}
+
+static void cmd_play() {
+  char* v = Console::rest();
+  if (v && *v) sound.test(v);
+  else Log::console(PSTR("play <sound name or tune>"));
+}
+EG_REGISTER_CMD(play, cmd_play)
 
 // up, not down
 void Sound::wifi() {

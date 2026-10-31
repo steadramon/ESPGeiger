@@ -49,10 +49,16 @@ struct Slice {
 // next call for st, done_us into it. false = step over
 bool slice(const EGTune::Step& st, uint32_t done_us, bool rtttl, const Config& c, Slice& out);
 
+// tone duty at vol %, never 0
+inline uint8_t at_volume(uint8_t duty, uint8_t vol) {
+  uint16_t d = (uint16_t)duty * vol / 100;
+  return d ? d : 1;
+}
+
 #if BUZZER_BUILT
 void begin(Config c);
 // copies the text; dropped unless it outranks what's playing
-bool play(uint32_t now_us, const char* s, uint16_t len, uint8_t prio);
+bool play(uint32_t now_us, const char* s, uint16_t len, uint8_t prio, uint8_t vol = 100);
 void stop();
 bool busy();
 // from the loop: us till the next call, 0 = done
