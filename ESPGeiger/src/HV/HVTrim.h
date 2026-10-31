@@ -53,9 +53,21 @@ inline uint8_t hv_over_count(uint8_t count, int volts, int limit) {
   return count < UINT8_MAX ? count + 1 : count;
 }
 
+// a board's cut-off: the pref can only lower it, 0 = the board's
+inline uint16_t hv_ov_limit(uint32_t pref, uint16_t board) {
+  if (board && (!pref || pref > board)) return board;
+  return (uint16_t)pref;
+}
+
 // most duty (of 1024) that keeps the on-time under max_us
 inline int hv_duty_cap(int freq, int max_us) {
   return (int)((uint32_t)max_us * (uint32_t)freq * 1024u / 1000000u);
+}
+
+// soft start, step of steps
+inline int hv_ramp_duty(int duty, uint8_t step, uint8_t steps) {
+  if (step >= steps) return duty;
+  return 1 + (duty - 1) * step / steps;
 }
 
 // ~0 while driving or the ADC top, in a row

@@ -109,10 +109,8 @@ void HV::on_prefs_loaded() {
   set_vd_ratio((int)EGPrefs::getInt("espghw", EG_K_RATIO));
   set_vd_offset((int)EGPrefs::getInt("espghw", K_OFFSET));
   set_hv_target((uint16_t)EGPrefs::getUInt("espghw", K_TARGET));
-  _ov_v = (uint16_t)EGPrefs::getUInt("espghw", K_OV_V);
-#ifdef ESPGEIGER_HW32
-  // pref can only lower it
-  if (_ov_v == 0 || _ov_v > GEIGERHW_OV_V) _ov_v = GEIGERHW_OV_V;
+  _ov_v = hv_ov_limit(EGPrefs::getUInt("espghw", K_OV_V), GEIGERHW_OV_V);
+#if GEIGERHW_OV_V > 0
 #define OV_ZERO "default"
 #else
 #define OV_ZERO "off"
@@ -192,6 +190,9 @@ void HV::write_duty() {
   if (_fb_fault) return;   // pin let go
 #endif
   int eff_duty = (_ov_trip || _held) ? 1 : clamp(_hw_duty + _duty_trim, 1, max_duty());
+#ifdef ESPGEIGER_HW32
+  eff_duty = hv_ramp_duty(eff_duty, _ramp, GEIGERHW_RAMP_S);
+#endif
   if (_cur_duty == eff_duty) return;
 #ifdef ESP8266
   EGTimer1::pwm_set((uint32_t)_hw_freq, (uint32_t)eff_duty, HV_PWM_MAX);
@@ -279,11 +280,12 @@ void HV::loop(unsigned long now) {
   EGTimer1::stats_tick();
 #endif
 #endif
+#ifdef ESPGEIGER_HW32
+  check_feedback();   // the sample is last second's duty, ratio 0 doesn't turn this off
+  if (_ramp < GEIGERHW_RAMP_S) _ramp++;
+#endif
   if (_pwm_pin >= 0) write_duty();
 #ifdef ESPG_HV_ADC
-#ifdef ESPGEIGER_HW32
-  check_feedback();   // ratio 0 doesn't turn this off
-#endif
   if (_settle.due(now)) _settle.clear();   // a held compare goes stale at the wrap
   if (_hw_vd_ratio == 0) return;
   bool settled = egm_b(M_WARM) && !_settle.armed();

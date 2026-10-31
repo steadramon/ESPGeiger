@@ -38,15 +38,17 @@
 #define GEIGER_PWMPIN 7
 #define GEIGER_VFEEDBACKPIN 4
 #define GEIGERHW_MAX_FREQ 6000
-#define GEIGERHW_DUTY 150           // ~24 us at 6 kHz
+#define GEIGERHW_DUTY 215           // 35 us at 6 kHz, ~396 V
 #define GEIGERHW_MAX_ON_US 46       // brief's ceiling, bring-up may lower it
 #define GEIGERHW_MAX_DUTY 282       // MAX_ON_US at MAX_FREQ
 #define GEIGERHW_ADC_RATIO 336      // 328.3 in mV
-#define GEIGERHW_OV_V 730
+#define GEIGERHW_MAX_V 450          // boost tops out ~460 V at the cap
+#define GEIGERHW_OV_V 520
 #define GEIGERHW_TRIM_BAND_MIN 3    // volts, the mV ratio gives 0
 #define GEIGERHW_FB_LOW_MV 150      // ~50 V while driving: divider open
 #define GEIGERHW_FB_HIGH_MV 2400    // ADC top: low leg open
 #define GEIGERHW_FB_BAD_S 5
+#define GEIGERHW_RAMP_S 4           // boot soft start, a step a second
 #endif
 
 #ifndef GEIGER_PWMPIN
@@ -223,6 +225,7 @@ class HV : public EGModule {
       void check_feedback();
       bool    _fb_fault = false;   // till restart
       uint8_t _fb_bad_s = 0;
+      uint8_t _ramp = 0;
 #endif
       int _pwm_pin = GEIGER_PWMPIN;
       int _hw_freq = GEIGERHW_FREQ;

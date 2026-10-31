@@ -26,7 +26,7 @@ The `/hv` page edits the `espghw` prefs:
 | PWM Duty | `espghw.duty` | Int 1-282/600/1023 | varies by build | all | PWM duty (1-1023, 10-bit). Each step is ~0.1 % of period. ESPGeiger-HW caps it at 600. |
 | ADC VD Ratio | `espghw.ratio` | Int 0-50000 | varies by build | HV ADC builds | Voltage divider scale factor - converts ADC counts to displayed volts. Calibrate with an external HV meter. `0` disables the ADC readout. |
 | ADC VD Offset | `espghw.offset` | Int -100 to 100 | `0` | HV ADC builds | Fixed offset added to the displayed voltage after scaling. |
-| HV target | `espghw.target` | Int 0-500/700 | `0` | HV ADC builds | Auto-trim target voltage (0 = open loop, disabled). When non-zero, firmware trims duty by a few steps to hold target. See [Closed-Loop Trim](#closed-loop-trim). |
+| HV target | `espghw.target` | Int 0-450/500/700 | `0` | HV ADC builds | Auto-trim target voltage (0 = open loop, disabled). When non-zero, firmware trims duty by a few steps to hold target. See [Closed-Loop Trim](#closed-loop-trim). |
 
 <!-- /gen -->
 
@@ -49,7 +49,7 @@ These don't show on `/hv` or the Config page. Set them over [serial](/output/ser
 
 | Key | Default | Range | Notes |
 |---|---|---|---|
-| `espghw.ov_v` | 530 on ESPGeiger-HW, else `0` | 0-2000 | Over-voltage cut-off in volts, `0` = off. |
+| `espghw.ov_v` | 530 on ESPGeiger-HW, else `0` | 0-2000 | Over-voltage cut-off in volts, `0` = off. On ESPGeiger-HW `0` or anything over the board's limit means that limit. |
 | `espghw.ov_s` | `3` | 1-60 | Seconds over `ov_v` before the cut-off. |
 | `espghw.trim_max` | `5` | 0-20 | Most steps the closed-loop trim moves either side of the saved duty. |
 | `espghw.trim_s` | `10` | 8-120 | Seconds between trim steps. |
@@ -76,10 +76,10 @@ Build the probe on an offcut of perfboard or inside a marker-pen case - keep the
 
 1. **Disconnect the Geiger tube.** The tube is a current sink at threshold and will load the rail asymmetrically; calibrate against the bare boost output, not against the tube
 2. Connect your DMM (with 1 GΩ series resistor) between the HV rail and ground, set to **DC volts, 20 V or 200 V range**
-3. Open `/hv`. Set `Ratio = 1` and `Target = 0` (open-loop, no trim chasing)
+3. Open `/hv`. Leave `Ratio` as it is (the build default is a good start), set `Offset = 0` and `Target = 0` (open-loop, no trim chasing)
 4. Adjust `Duty` until the DMM reads close to the voltage you want (HV/100 - so 4.00 V for 400 V)
-5. Note the **raw ADC counts** shown on `/hv` and your **measured HV** (DMM × 100)
-6. Set `Ratio = measured_HV × 1024 / raw_ADC`. The displayed reading on `/hv` should now match your DMM × 100
+5. Wait about 10 seconds, then note the voltage **shown** on `/hv` and your **measured HV** (DMM × 100)
+6. Set `Ratio = Ratio × measured_HV / shown_HV`, rounded. The shown voltage moves by the same factor, so it should now match your DMM × 100.
 7. Once `/hv` agrees with the DMM at one operating point, sweep duty over a couple of points to confirm the displayed voltage tracks the meter - if it does, the divider is calibrated
 8. Reconnect the tube. Read the now-calibrated voltage on `/hv` directly - no probe needed for routine checks
 9. (Optional) Set `Target` to your desired voltage to enable the closed-loop trim
