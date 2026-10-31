@@ -83,7 +83,13 @@ namespace Board {
 #if defined(GEIGER_NEOPIXEL) && defined(NEOPIXEL_PIN_BLOCKED)
     {P_NEOPX, NEOPIXEL_PIN, PinSafety::USE_OUT},
 #endif
-#ifdef GEIGER_SDCARD
+#if defined(GEIGER_SDCARD) && defined(GEIGER_SDCARD_SCK)
+    // the board's own spi pins
+    {P_SD, GEIGER_SDCARD_MISO, PinSafety::USE_IN},
+    {P_SD, GEIGER_SDCARD_MOSI, PinSafety::USE_OUT},
+    {P_SD, GEIGER_SDCARD_SCK, PinSafety::USE_OUT},
+    {P_SD, GEIGER_SDCARD_CS, PinSafety::USE_OUT},
+#elif defined(GEIGER_SDCARD)
     {P_SD, MISO, PinSafety::USE_IN},
     {P_SD, MOSI, PinSafety::USE_OUT},
     {P_SD, SCK, PinSafety::USE_OUT},

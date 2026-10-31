@@ -62,6 +62,7 @@ class SDCard : public EGModule {
   private:
     void disableFull();
     void fault();
+    void fail_step(const char* step, const char* dir, const char* file);
     bool _fault = false;
     time_t lastWrittenMinute = 0;
     uint32_t openFileDay = 0;  // YYYYMMDD, 0 = closed
@@ -72,7 +73,9 @@ class SDCard : public EGModule {
     uint8_t _cleanup = CLEAN_NONE;
     uint8_t _counting = CLEAN_NONE;   // the cleanup it's counting for
     int32_t _free = -1;               // clusters
+    uint32_t _file_cl = 0;            // day file's clusters
     uint32_t _fat_sec = 0;            // next FAT sector
+    void used_clusters(uint32_t n);
     void minuteEdge();
     void writeMinute();
     bool openDayFile(const char* dirStr, const char* timeStr, uint32_t day, bool& failed);

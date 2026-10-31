@@ -19,6 +19,9 @@
 #ifdef GEIGER_SDCARD
 #include <Arduino.h>
 #include <sys/time.h>
+#ifdef GEIGER_SDCARD_SCK
+#include <SPI.h>
+#endif
 #include <EGHttpServer.h>
 #include "SDCard.h"
 #include "Corium/Logger/Logger.h"
@@ -37,8 +40,9 @@ EG_PSTR(K_SYNC_MIN, "sync_min");
 #define SD_NAME_LEN 12   // 8.3, YYYYMMDD.csv
 #define SD_DIR_LEN  6    // YYYYMM
 #define SD_SECTOR   512
-#define SD_COUNT_SECTORS 256   // FAT a pass, all of it trips the 8266 WDT
-#define SD_COUNT_MS 10
+#define SD_COUNT_US 5000   // FAT a pass, ~1 ms a sector, the loop waits on it
+#define SD_COUNT_MS 5
+#define SD_FULL_MB 8
 
 SdFat32* sd = nullptr;
 
@@ -62,7 +66,7 @@ static const EGPrefGroup SDCARD_PREF_GROUP PROGMEM = {
 const EGPrefGroup* SDCard::prefs_group() { return &SDCARD_PREF_GROUP; }
 
 void SDCard::on_prefs_loaded() {
-  _sync_min = (uint8_t)clamp((uint32_t)EGPrefs::getUInt("sdcard", K_SYNC_MIN), 1u, 5u);
+  _sync_min = (uint8_t)clamp<uint32_t>(EGPrefs::getUInt("sdcard", K_SYNC_MIN), 1, 5);
 }
 
 // FAT date high, time low; FAT seconds are 2 s units
@@ -92,6 +96,10 @@ void SDCard::begin()
 {
   Log::console(PSTR("SDCard: Init ..."));
   sd = new SdFat32();
+#ifdef GEIGER_SDCARD_SCK
+  // pins first, the c3 defaults are hw32's HV and pulse pins; sd's begin() then keeps them
+  SPI.begin(GEIGER_SDCARD_SCK, GEIGER_SDCARD_MISO, GEIGER_SDCARD_MOSI, GEIGER_SDCARD_CS);
+#endif
   DeviceInfo::wdtPause();
   bool ok = sd->begin(GEIGER_SDCARD_CS);
   DeviceInfo::wdtResume();
@@ -228,20 +236,23 @@ bool SDCard::openDayFile(const char* dirStr, const char* timeStr, uint32_t day, 
   _unsynced_writes = 0;
 
   if (!sd->chdir()) {
-    Log::console(PSTR("SDCard: Cannot chdir to root"));
+    fail_step(PSTR("chdir /"), dirStr, timeStr);
     return false;
   }
+  const char* step = nullptr;
   if (!sd->exists(dirStr)) {
-    sd->mkdir(dirStr);
+    if (sd->mkdir(dirStr)) used_clusters(1);
+    else step = PSTR("mkdir");
   }
-  sd->chdir(dirStr);
+  if (!step && !sd->chdir(dirStr)) step = PSTR("chdir");
 
   bool fileExists = sd->exists(timeStr);
-  if (!myDataFile.open(timeStr, FILE_WRITE)) {
-    Log::console(PSTR("SDCard: Unable to create %s/%s"), dirStr, timeStr);
-    fault();
+  if (!step && !myDataFile.open(timeStr, FILE_WRITE)) step = PSTR("open");
+  if (step) {
+    fail_step(step, dirStr, timeStr);
     failed = true;
   } else {
+    _file_cl = clusters_of(myDataFile.fileSize());
     if (!fileExists) write_header(myDataFile);
     openFileDay = day;
   }
@@ -273,11 +284,17 @@ void SDCard::writeMinute()
 
   if (myDataFile.isOpen()) {
     write_row(myDataFile, dateTime);
+    uint32_t cl = clusters_of(myDataFile.fileSize());
+    if (cl > _file_cl) {
+      used_clusters(cl - _file_cl);
+      _file_cl = cl;
+    }
 
     // power loss loses unsynced rows
     _unsynced_writes++;
     if (_unsynced_writes >= _sync_min) {
       if (!myDataFile.sync()) {
+        fail_step(PSTR("sync"), dirStr, timeStr);
         myDataFile.close();
         openFileDay = 0;
         forceCleanup = true;
@@ -286,10 +303,15 @@ void SDCard::writeMinute()
     }
   }
 
-  static uint16_t clean_min = 0;   // minutes
-  bool clean_due = false;
-  if (++clean_min >= 1440) { clean_min = 0; clean_due = true; }
-  if (clean_due || forceCleanup) scheduleCleanup(CLEAN_FULL);
+  // looks full, count it properly before deleting
+  int32_t mb = freeMB();
+  if (forceCleanup || (mb >= 0 && mb <= SD_FULL_MB)) scheduleCleanup(CLEAN_FULL);
+}
+
+// our own writes, so the FAT is only counted at mount and when full
+void SDCard::used_clusters(uint32_t n) {
+  if (_free < 0) return;
+  _free =(uint32_t)_free > n ? _free - (int32_t)n : 0;
 }
 
 // one byte, ticker safe
@@ -332,7 +354,8 @@ void SDCard::countFat() {
   const uint8_t width = sd->fatType() == 16 ? 2 : 4;
   const uint32_t per = sizeof(buf) / width;
   const uint32_t total = sd->clusterCount() + 2;
-  for (uint16_t i = 0; i < SD_COUNT_SECTORS && _fat_sec * per < total; i++) {
+  const uint32_t t0 = micros();
+  while (_fat_sec * per < total && (uint32_t)(micros() - t0) < SD_COUNT_US) {
     if (!sd->card()->readSector(sd->fatStartSector() + _fat_sec, buf)) {
       // next pass counts again
       scheduleCleanup(_counting);
@@ -360,22 +383,30 @@ void SDCard::cleanup(uint8_t what) {
   if (what == CLEAN_FREECHECK) {
     uint32_t freespace = freeMB();
     Log::console(PSTR("SDCard: %lu MB free."), (unsigned long)freespace);
-    if (freespace <= 8 && !deleteOldest(packed_cutoff_year_ago())) disableFull();
+    if (freespace <= SD_FULL_MB && !deleteOldest(packed_cutoff_year_ago())) disableFull();
   } else {
     uint8_t maxDeletes = 10;
     uint32_t freespace = freeMB();
     uint32_t cutoff = packed_cutoff_year_ago();
-    while (freespace <= 8 && maxDeletes-- > 0) {
+    while (freespace <= SD_FULL_MB && maxDeletes-- > 0) {
       if (!deleteOldest(cutoff)) break;
       freespace = freeMB();
     }
-    if (freespace <= 8) disableFull();
+    if (freespace <= SD_FULL_MB) disableFull();
   }
 }
 
 void SDCard::disableFull() {
   Log::console(PSTR("SDCard: disabled - card full"));
   sdenabled = false;
+  fault();
+}
+
+// once till it mounts: the step and SdFat's code
+void SDCard::fail_step(const char* step, const char* dir, const char* file) {
+  if (!_fault) {
+    Log::console(PSTR("SDCard: %s/%s: %s failed (err 0x%02x)"), dir, file, step, sd->sdErrorCode());
+  }
   fault();
 }
 
