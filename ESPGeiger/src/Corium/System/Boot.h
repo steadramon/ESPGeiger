@@ -16,17 +16,17 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef EG_BOOT_H
-#define EG_BOOT_H
+#ifndef CORIUM_BOOT_H
+#define CORIUM_BOOT_H
 
 #include <Arduino.h>
 #include "App/AppConfig.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Output/LedSignal.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/System/CrashDump.h"
 #include "Corium/System/DeviceInfo.h"
@@ -67,13 +67,13 @@ namespace Boot {
     }
     Wifi::check_backup_state();
 
-#ifdef EG_CRASH_MARK
+#ifdef CORIUM_CRASH_MARK
     uint8_t rr = DeviceInfo::resetReason();
-    EGModuleRegistry::crash_boot(rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION);
+    corium::Registry::crash_boot(rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION);
 #endif
-    EGModuleRegistry::set_safe_mode(BootGuard::safe_mode());
-    EGModuleRegistry::pre_wifi_all();
-    EGPrefs::begin();
+    corium::Registry::set_safe_mode(BootGuard::safe_mode());
+    corium::Registry::pre_wifi_all();
+    corium::Prefs::begin();
   }
 
   inline __attribute__((always_inline)) void join() {
@@ -98,7 +98,7 @@ namespace Boot {
 
   // modules begin, the tick starts
   inline __attribute__((always_inline)) void end(void (*second)(uint32_t up)) {
-    EGModuleRegistry::begin_all();
+    corium::Registry::begin_all();
     LedSignal::attach();
     if (BootGuard::safe_mode()) Lifecycle::request_restart(fast_millis(), BootGuard::retry_after());
     Reactor::begin(second);

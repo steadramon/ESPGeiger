@@ -74,7 +74,7 @@ void GeigerTestPulseInt::stopForOTA() { TestTimer::stop(); }
 void GeigerTestPulseInt::restartAfterOTA() { TestTimer::start(pulseInterrupt, s_half); }
 
 // returns ticks to the next
-uint32_t EG_ISR_ATTR GeigerTestPulseInt::pulseInterrupt() {
+uint32_t CORIUM_ISR_ATTR GeigerTestPulseInt::pulseInterrupt() {
   _bool_pulse_state = !_bool_pulse_state;
   TestTimer::tx(s_tx_mask, s_tx_hi, _bool_pulse_state);
 #ifdef GEIGER_COUNT_TXPULSE

@@ -90,7 +90,7 @@ static inline __attribute__((always_inline)) void count_at(unsigned long cycles)
   Counter::on_pulse((uint32_t)cycles);
 }
 
-void EG_ISR_ATTR GeigerInput::countInterrupt() {
+void CORIUM_ISR_ATTR GeigerInput::countInterrupt() {
   count_at(micros());
 }
 

@@ -24,8 +24,8 @@
 #include "App/ChipVoice.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
 #include "App/AppConfig.h"
@@ -43,19 +43,19 @@
 #include <freertos/task.h>
 
 
-EG_PSTR(K_DECAY,  "decay");
-EG_PSTR(K_ENGINE, "engine");
-EG_PSTR(K_PEAK,   "peak");
-EG_PSTR(K_CHIME,  "chime");
-EG_PSTR(K_BCLK,   "bclk");
-EG_PSTR(K_WS,     "ws");
-EG_PSTR(K_DOUT,   "dout");
+CORIUM_PSTR(K_DECAY,  "decay");
+CORIUM_PSTR(K_ENGINE, "engine");
+CORIUM_PSTR(K_PEAK,   "peak");
+CORIUM_PSTR(K_CHIME,  "chime");
+CORIUM_PSTR(K_BCLK,   "bclk");
+CORIUM_PSTR(K_WS,     "ws");
+CORIUM_PSTR(K_DOUT,   "dout");
 
 #define TICK_STR_(x) #x
 #define TICK_STR(x) TICK_STR_(x)
 
 AudioTick audiotick;
-EG_REGISTER_MODULE(audiotick)
+CORIUM_REGISTER_MODULE(audiotick)
 
 static volatile bool s_nm_busy = false;
 
@@ -130,7 +130,7 @@ static void mute_tick() {
   if (!s_mute.step(down, fast_millis(), MUTE_DEBOUNCE_MS)) return;
   if (down) {
     audiotick.toggleMute();
-    EGModuleRegistry::post(&audiotick);
+    corium::Registry::post(&audiotick);
   }
 }
 
@@ -161,60 +161,60 @@ static const uint8_t MORSE_DIGIT[10][5] = {
 };
 
 
-EG_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier");
-EG_PSTR(TK_L_FREQ,"Tone Hz");
-EG_PSTR(TK_H_FREQ,"Click centre frequency (300-6000 Hz)");
-EG_PSTR(TK_L_DEC, "Decay ms");
-EG_PSTR(TK_H_DEC, "Click decay time constant (2-100 ms)");
-EG_PSTR(TK_L_ENG, "Engine");
-EG_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
-EG_PSTR(TK_L_PK,  "Peak %");
-EG_PSTR(TK_H_PK,  "Click amplitude ceiling (1-100). Lower = quieter and below NCN trip.");
-EG_PSTR(TK_L_CHM, "Boot chime");
+CORIUM_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier");
+CORIUM_PSTR(TK_L_FREQ,"Tone Hz");
+CORIUM_PSTR(TK_H_FREQ,"Click centre frequency (300-6000 Hz)");
+CORIUM_PSTR(TK_L_DEC, "Decay ms");
+CORIUM_PSTR(TK_H_DEC, "Click decay time constant (2-100 ms)");
+CORIUM_PSTR(TK_L_ENG, "Engine");
+CORIUM_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
+CORIUM_PSTR(TK_L_PK,  "Peak %");
+CORIUM_PSTR(TK_H_PK,  "Click amplitude ceiling (1-100). Lower = quieter and below NCN trip.");
+CORIUM_PSTR(TK_L_CHM, "Boot chime");
 // value = index, as play_chime_now
-EG_PSTR(TK_O_CHM, "Off|Random|Three beeps|Folk melody|DTMF|Bit ping|Coin|Sputnik|Item get");
+CORIUM_PSTR(TK_O_CHM, "Off|Random|Three beeps|Folk melody|DTMF|Bit ping|Coin|Sputnik|Item get");
 #ifndef AUDIO_TICK_PINS_BLOCKED
-EG_PSTR(TK_L_BCLK,"I2S BCLK Pin");
-EG_PSTR(TK_L_WS,  "I2S WS Pin");
-EG_PSTR(TK_L_DOUT,"I2S DOUT Pin");
+CORIUM_PSTR(TK_L_BCLK,"I2S BCLK Pin");
+CORIUM_PSTR(TK_L_WS,  "I2S WS Pin");
+CORIUM_PSTR(TK_L_DOUT,"I2S DOUT Pin");
 #endif
 
-static const EGPref TICK_PREF_ITEMS[] PROGMEM = {
-  {EG_K_ENABLE, EG_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, EGP_BOOL, 0},
-  {EG_K_VOLUME, EG_L_VOL,  EG_H_VOL,  "60",   nullptr, 0,   100,  0, EGP_UINT, 0},
-  {EG_K_FREQ,   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, EGP_UINT, EGP_ADVANCED},
-  {K_DECAY,     TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, EGP_UINT, EGP_ADVANCED},
-  {K_ENGINE,    TK_L_ENG,  nullptr,   "0",    TK_O_ENG, 0,  1,    0, EGP_ENUM, EGP_ADVANCED},
-  {K_PEAK,      TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, EGP_UINT, EGP_ADVANCED},
-  {K_CHIME,     TK_L_CHM,  nullptr,   "1",    TK_O_CHM, 0,  8,    0, EGP_ENUM, 0},
+static const corium::Pref TICK_PREF_ITEMS[] PROGMEM = {
+  {EG_K_ENABLE, EG_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, corium::P_BOOL, 0},
+  {EG_K_VOLUME, EG_L_VOL,  EG_H_VOL,  "60",   nullptr, 0,   100,  0, corium::P_UINT, 0},
+  {EG_K_FREQ,   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_DECAY,     TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_ENGINE,    TK_L_ENG,  nullptr,   "0",    TK_O_ENG, 0,  1,    0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_PEAK,      TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_CHIME,     TK_L_CHM,  nullptr,   "1",    TK_O_CHM, 0,  8,    0, corium::P_ENUM, 0},
 #ifndef AUDIO_TICK_PINS_BLOCKED
-  {K_BCLK,      TK_L_BCLK, EG_H_RBA,  TICK_STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
-  {K_WS,        TK_L_WS,   EG_H_RBA,  TICK_STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
-  {K_DOUT,      TK_L_DOUT, EG_H_RBA,  TICK_STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
+  {K_BCLK,      TK_L_BCLK, corium::H_RBA,  TICK_STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_WS,        TK_L_WS,   corium::H_RBA,  TICK_STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_DOUT,      TK_L_DOUT, corium::H_RBA,  TICK_STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
 };
 
-static const EGPrefGroup TICK_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup TICK_PREF_GROUP PROGMEM = {
   "tick", "Audio Tick", 1,
   TICK_PREF_ITEMS,
   sizeof(TICK_PREF_ITEMS) / sizeof(TICK_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT, EG_K_ENABLE,
+  corium::P_CAT_OUTPUT, EG_K_ENABLE,
 };
 
-const EGPrefGroup* AudioTick::prefs_group() { return &TICK_PREF_GROUP; }
+const corium::PrefGroup* AudioTick::prefs_group() { return &TICK_PREF_GROUP; }
 
 void AudioTick::on_prefs_loaded() {
-  _enabled  = EGPrefs::getBool("tick", EG_K_ENABLE);
-  _volume   = (uint8_t)EGPrefs::getUInt("tick", EG_K_VOLUME);
-  _freq_hz  = (uint16_t)EGPrefs::getUInt("tick", EG_K_FREQ);
-  _decay_ms = (uint8_t)EGPrefs::getUInt("tick", K_DECAY);
-  _engine   = (uint8_t)EGPrefs::getUInt("tick", K_ENGINE);
-  _peak     = (uint8_t)EGPrefs::getUInt("tick", K_PEAK);
-  _chime    = (uint8_t)EGPrefs::getUInt("tick", K_CHIME);
+  _enabled  = corium::Prefs::getBool("tick", EG_K_ENABLE);
+  _volume   = (uint8_t)corium::Prefs::getUInt("tick", EG_K_VOLUME);
+  _freq_hz  = (uint16_t)corium::Prefs::getUInt("tick", EG_K_FREQ);
+  _decay_ms = (uint8_t)corium::Prefs::getUInt("tick", K_DECAY);
+  _engine   = (uint8_t)corium::Prefs::getUInt("tick", K_ENGINE);
+  _peak     = (uint8_t)corium::Prefs::getUInt("tick", K_PEAK);
+  _chime    = (uint8_t)corium::Prefs::getUInt("tick", K_CHIME);
 #ifndef AUDIO_TICK_PINS_BLOCKED
-  _bclk = (uint8_t)EGPrefs::getUInt("tick", K_BCLK);
-  _ws   = (uint8_t)EGPrefs::getUInt("tick", K_WS);
-  _dout = (uint8_t)EGPrefs::getUInt("tick", K_DOUT);
+  _bclk = (uint8_t)corium::Prefs::getUInt("tick", K_BCLK);
+  _ws   = (uint8_t)corium::Prefs::getUInt("tick", K_WS);
+  _dout = (uint8_t)corium::Prefs::getUInt("tick", K_DOUT);
 #endif
 }
 

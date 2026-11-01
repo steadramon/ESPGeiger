@@ -39,7 +39,7 @@ static const char RANDOM_PAGE_BODY_NEW[] PROGMEM = R"HTML(
 </style>
 <table class=rg id=rg></table>
 <p class=muted>Powered by accumulated radiation events.</p>
-<script src=/rndjs)HTML" EG_CACHE_BUST R"HTML(></script>
+<script src=/rndjs)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML";
 
 extern const char RANDOM_JS[] PROGMEM = R"JS(

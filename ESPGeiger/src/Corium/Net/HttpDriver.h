@@ -1,5 +1,5 @@
 /*
-  EGHttpDriver.h - a module's HTTP requests, one at a time, a client each
+  corium::HttpDriver.h - a module's HTTP requests, one at a time, a client each
 
   Copyright (C) 2026 @steadramon
 
@@ -16,16 +16,18 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef EGHTTPDRIVER_H
-#define EGHTTPDRIVER_H
+#ifndef CORIUM_HTTPDRIVER_H
+#define CORIUM_HTTPDRIVER_H
 
 #include <Arduino.h>
 #include <EGHttpClient.h>
 
-class EGModule;
+namespace corium {
+
+class Module;
 
 // what goes with the payload
-struct EGHttpMeta {
+struct HttpMeta {
   const char* method = nullptr;
   const char* url = nullptr;
   bool flash = false;              // method and url PROGMEM
@@ -37,19 +39,19 @@ struct EGHttpMeta {
 };
 
 // the reply posts the owner, its client goes with it
-class EGHttpDriver {
+class HttpDriver {
   public:
     enum Sent : uint8_t { SENT, NOT_SEALED, NOT_OPENED, NO_MEMORY };   // compare, SENT is 0
 
-    explicit EGHttpDriver(EGModule* owner) : _owner(owner) {}
+    explicit HttpDriver(Module* owner) : _owner(owner) {}
 #ifdef NATIVE_TEST
-    ~EGHttpDriver() { delete _c; }   // device drivers are statics, never die
+    ~HttpDriver() { delete _c; }   // device drivers are statics, never die
 #endif
-    EGHttpDriver(const EGHttpDriver&) = delete;
-    EGHttpDriver& operator=(const EGHttpDriver&) = delete;
+    HttpDriver(const HttpDriver&) = delete;
+    HttpDriver& operator=(const HttpDriver&) = delete;
 
     // NOT_SEALED still replies, with an error
-    Sent send(const EGHttpMeta& m, const uint8_t* body, size_t len);
+    Sent send(const HttpMeta& m, const uint8_t* body, size_t len);
     bool busy() const { return _c != nullptr; }
     // once a request: code below 0 = client error, body cut to cap
     bool take(int* code, uint8_t* body, size_t cap, size_t* got);
@@ -57,8 +59,10 @@ class EGHttpDriver {
 
   private:
     static void wake(void* owner);
-    EGModule* _owner;
+    Module* _owner;
     EGHttpClient* _c = nullptr;
 };
+
+}  // namespace corium
 
 #endif

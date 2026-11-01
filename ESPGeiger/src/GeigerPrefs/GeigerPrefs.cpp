@@ -16,9 +16,9 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "GeigerKeys.h"
 #include "App/AppKeys.h"
 #include "Corium/Logger/Logger.h"
@@ -42,24 +42,24 @@
 #include "GeigerInput/Type/UdpRx.h"
 #endif
 
-EG_PSTR(K_WARN,           "warn");
-EG_PSTR(K_ALERT,          "alert");
-EG_PSTR(K_LIFE_EN,        "life_en");
-EG_PSTR(K_RX_PIN,         "rx_pin");
-EG_PSTR(K_TX_PIN,         "tx_pin");
-EG_PSTR(K_PCNT_FILTER,    "pcnt_filter");
-EG_PSTR(K_PCNT_PULL,      "pcnt_pull");
-EG_PSTR(K_COUNT_MODE,     "count_mode");
-EG_PSTR(K_COUNT_KEPT,     "count_kept");
-EG_PSTR(K_DEBOUNCE,       "debounce");
-EG_PSTR(K_PULSE_WIDTH_US, "pulse_width_us");
-EG_PSTR(K_CPM_WINDOW,     "cpm_window");
-EG_PSTR(K_CPM_MODE,       "cpm_mode");
-EG_PSTR(K_TUBE_HDR,       "_tube_hdr");
-EG_PSTR(K_DEAD_TIME_US,   "dead_time_us");
-EG_PSTR(K_BLIP_LED,       "blip_led");
-EG_PSTR(K_BLIP_BRIGHT,    "blip_bright");
-EG_PSTR(K_PWM_PIN,        "pwm_pin");
+CORIUM_PSTR(K_WARN,           "warn");
+CORIUM_PSTR(K_ALERT,          "alert");
+CORIUM_PSTR(K_LIFE_EN,        "life_en");
+CORIUM_PSTR(K_RX_PIN,         "rx_pin");
+CORIUM_PSTR(K_TX_PIN,         "tx_pin");
+CORIUM_PSTR(K_PCNT_FILTER,    "pcnt_filter");
+CORIUM_PSTR(K_PCNT_PULL,      "pcnt_pull");
+CORIUM_PSTR(K_COUNT_MODE,     "count_mode");
+CORIUM_PSTR(K_COUNT_KEPT,     "count_kept");
+CORIUM_PSTR(K_DEBOUNCE,       "debounce");
+CORIUM_PSTR(K_PULSE_WIDTH_US, "pulse_width_us");
+CORIUM_PSTR(K_CPM_WINDOW,     "cpm_window");
+CORIUM_PSTR(K_CPM_MODE,       "cpm_mode");
+CORIUM_PSTR(K_TUBE_HDR,       "_tube_hdr");
+CORIUM_PSTR(K_DEAD_TIME_US,   "dead_time_us");
+CORIUM_PSTR(K_BLIP_LED,       "blip_led");
+CORIUM_PSTR(K_BLIP_BRIGHT,    "blip_bright");
+CORIUM_PSTR(K_PWM_PIN,        "pwm_pin");
 
 // interrupt counting, debounce applies
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && (!defined(USE_PCNT) || defined(PCNT_SELECTABLE))
@@ -68,18 +68,18 @@ EG_PSTR(K_PWM_PIN,        "pwm_pin");
 
 // Counter prefs, pin and serial type need a reboot
 
-class CounterPrefs : public EGModule {
+class CounterPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("counter"); }
-  uint8_t priority() override { return EG_PRIORITY_HARDWARE - 1; }  // counter pins claimed first
+  uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE - 1; }  // counter pins claimed first
   uint8_t display_order() override { return 12; }
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
 #ifdef PCNT_SELECTABLE
-  const EGPrefShow* prefs_show() override;
+  const corium::PrefShow* prefs_show() override;
 #endif
   void on_prefs_loaded() override;
   void on_prefs_saved() override;
-  EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+  corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
 private:
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   uint8_t _serial_type = 0;
@@ -87,29 +87,29 @@ private:
 };
 
 static CounterPrefs counterprefs;
-EG_REGISTER_MODULE(counterprefs)
+CORIUM_REGISTER_MODULE(counterprefs)
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-EG_PSTR(IN_L_STY, "Serial Type");
-EG_PSTR(IN_L_CPW, "CPM Window (CPM-only counters)");
-EG_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth. Reboot.");
+CORIUM_PSTR(IN_L_STY, "Serial Type");
+CORIUM_PSTR(IN_L_CPW, "CPM Window (CPM-only counters)");
+CORIUM_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth. Reboot.");
 #endif
 #ifndef RXPIN_BLOCKED
-EG_PSTR(IN_L_RXP, "RX Pin");
+CORIUM_PSTR(IN_L_RXP, "RX Pin");
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-EG_PSTR(IN_L_TXP, "TX Pin");
+CORIUM_PSTR(IN_L_TXP, "TX Pin");
 #endif
 #ifdef USE_PCNT
-EG_PSTR(IN_L_PCF, "PCNT Filter");
-EG_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0=off)");
-EG_PSTR(IN_L_PCP, "PCNT Pull");
-EG_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
+CORIUM_PSTR(IN_L_PCF, "PCNT Filter");
+CORIUM_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0=off)");
+CORIUM_PSTR(IN_L_PCP, "PCNT Pull");
+CORIUM_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
 #endif
 #ifdef PCNT_SELECTABLE
-EG_PSTR(IN_L_CNT, "Count with");
-EG_PSTR(IN_O_CNT, "Hardware|Interrupt");
-EG_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM. Reboot.");
+CORIUM_PSTR(IN_L_CNT, "Count with");
+CORIUM_PSTR(IN_O_CNT, "Hardware|Interrupt");
+CORIUM_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM. Reboot.");
 #ifdef NO_PCNT_ENV
 #define COUNT_MODE_DEF "1"   // _no_pcnt envs, retired in 0.15
 #else
@@ -117,42 +117,42 @@ EG_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM. 
 #endif
 #endif
 #ifdef PREF_DEBOUNCE
-EG_PSTR(IN_L_DBN, "Debounce");
-EG_PSTR(IN_H_DBN, "Pulse debounce (us). Filters electrical noise. 100-300 typical.");
+CORIUM_PSTR(IN_L_DBN, "Debounce");
+CORIUM_PSTR(IN_H_DBN, "Pulse debounce (us). Filters electrical noise. 100-300 typical.");
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-EG_PSTR(IN_L_PWU, "Pulse width");
-EG_PSTR(IN_H_PWU, "Simulated pulse width (us)");
+CORIUM_PSTR(IN_L_PWU, "Pulse width");
+CORIUM_PSTR(IN_H_PWU, "Simulated pulse width (us)");
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-EG_PSTR(IN_L_DTU, "Tube dead time");
-EG_PSTR(IN_H_DTU, "GM tube dead time (us), from the datasheet. 0=disabled. SBM-20=190.");
+CORIUM_PSTR(IN_L_DTU, "Tube dead time");
+CORIUM_PSTR(IN_H_DTU, "GM tube dead time (us), from the datasheet. 0=disabled. SBM-20=190.");
 #endif
-EG_PSTR(IN_L_CMM, "CPM mode");
-EG_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
+CORIUM_PSTR(IN_L_CMM, "CPM mode");
+CORIUM_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
-EG_PSTR(IN_L_GMD, "Geiger Counter");
-EG_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
-EG_PSTR(IN_L_THD, "Tube Detects");
-EG_PSTR(IN_L_TBA, "\xCE\xB1 Alpha");
-EG_PSTR(IN_H_TBA, "Detects alpha radiation");
-EG_PSTR(IN_L_TBB, "\xCE\xB2 Beta");
-EG_PSTR(IN_H_TBB, "Detects beta radiation");
-EG_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
-EG_PSTR(IN_H_TBG, "Detects gamma radiation");
+CORIUM_PSTR(IN_L_GMD, "Geiger Counter");
+CORIUM_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
+CORIUM_PSTR(IN_L_THD, "Tube Detects");
+CORIUM_PSTR(IN_L_TBA, "\xCE\xB1 Alpha");
+CORIUM_PSTR(IN_H_TBA, "Detects alpha radiation");
+CORIUM_PSTR(IN_L_TBB, "\xCE\xB2 Beta");
+CORIUM_PSTR(IN_H_TBB, "Detects beta radiation");
+CORIUM_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
+CORIUM_PSTR(IN_H_TBG, "Detects gamma radiation");
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-EG_PSTR(IN_L_URMD, "Source Mode");
-EG_PSTR(IN_O_URMD, "Specific device|Sum all sources");
-EG_PSTR(IN_H_URMD, "Specific uses the Pin chipid below, auto-latching the first source heard if left blank.");
-EG_PSTR(IN_L_URCH, "Pin chipid");
-EG_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in Specific device mode");
-EG_PSTR(IN_P_URCH, "[0-9a-fA-F]{" STR(CHIPID_LEN) "}");   // blank allowed
-EG_PSTR(IN_L_URGP, "Group / listen IP");
-EG_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen.");
-EG_PSTR(IN_H_URPT, "UDP port (default 57340)");
-EG_PSTR(IN_L_URRM, "RX sleep");
-EG_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
+CORIUM_PSTR(IN_L_URMD, "Source Mode");
+CORIUM_PSTR(IN_O_URMD, "Specific device|Sum all sources");
+CORIUM_PSTR(IN_H_URMD, "Specific uses the Pin chipid below, auto-latching the first source heard if left blank.");
+CORIUM_PSTR(IN_L_URCH, "Pin chipid");
+CORIUM_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in Specific device mode");
+CORIUM_PSTR(IN_P_URCH, "[0-9a-fA-F]{" STR(CHIPID_LEN) "}");   // blank allowed
+CORIUM_PSTR(IN_L_URGP, "Group / listen IP");
+CORIUM_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen.");
+CORIUM_PSTR(IN_H_URPT, "UDP port (default 57340)");
+CORIUM_PSTR(IN_L_URRM, "RX sleep");
+CORIUM_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
 // classic esp32 misses multicast on modem sleep, c3/s3 don't
 #ifdef ESP32
 #include <sdkconfig.h>
@@ -165,100 +165,100 @@ EG_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
 // in UdpRx.cpp, keeps WiFiUDP.h out
 extern "C" void udprx_notify_prefs_saved();
 #endif
-EG_PSTR(CT_L_RAT, "uSv/h Ratio");
-EG_PSTR(CT_H_RAT, "CPM to uSv/h factor");
-EG_PSTR(CT_L_WRN, "Warning CPM");
-EG_PSTR(CT_H_WRN, "Warning trigger (CPM)");
-EG_PSTR(CT_L_ALR, "Alert CPM");
-EG_PSTR(CT_H_ALR, "Alert trigger (CPM)");
-EG_PSTR(CT_L_LE,  "Track lifetime");
-EG_PSTR(CT_H_LE,  "Persist total clicks + exposure across reboots.");
+CORIUM_PSTR(CT_L_RAT, "uSv/h Ratio");
+CORIUM_PSTR(CT_H_RAT, "CPM to uSv/h factor");
+CORIUM_PSTR(CT_L_WRN, "Warning CPM");
+CORIUM_PSTR(CT_H_WRN, "Warning trigger (CPM)");
+CORIUM_PSTR(CT_L_ALR, "Alert CPM");
+CORIUM_PSTR(CT_H_ALR, "Alert trigger (CPM)");
+CORIUM_PSTR(CT_L_LE,  "Track lifetime");
+CORIUM_PSTR(CT_H_LE,  "Persist total clicks + exposure across reboots.");
 
-static const EGPref COUNTER_PREF_ITEMS[] PROGMEM = {
+static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   // Source selector
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   {EG_K_SERIAL_TYPE,  IN_L_STY, nullptr, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
-   GEIGER_STYPE_GC10, GEIGER_STYPE_TEMPLATE, 0, EGP_ENUM, EGP_REBOOT},
+   GEIGER_STYPE_GC10, GEIGER_STYPE_TEMPLATE, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  {EG_K_UDPRX_MODE,   IN_L_URMD, IN_H_URMD, "0",                  IN_O_URMD,   0, 1,     0,  EGP_ENUM,   0},
+  {EG_K_UDPRX_MODE,   IN_L_URMD, IN_H_URMD, "0",                  IN_O_URMD,   0, 1,     0,  corium::P_ENUM,   0},
 #endif
   // Pins
 #ifndef RXPIN_BLOCKED
-  {K_RX_PIN,          IN_L_RXP, EG_H_RBA, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN | EGP_PIN_IRQ},
+  {K_RX_PIN,          IN_L_RXP, corium::H_RBA, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN | corium::P_PIN_IRQ},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {K_TX_PIN,          IN_L_TXP, EG_H_RBA, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
+  {K_TX_PIN,          IN_L_TXP, corium::H_RBA, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
   // UDP source target
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  {EG_K_UDPRX_CHIPID, IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     CHIPID_LEN,  EGP_STRING, 0},
-  {EG_K_UDPRX_GROUP,  IN_L_URGP, IN_H_URGP, UDPRX_DEFAULT_GROUP, EG_P_IP,      0, 0,     EG_IPV4_MAX, EGP_STRING, EGP_ADVANCED},
-  {EG_K_UDPRX_PORT,   EG_L_PRT,  IN_H_URPT, STR(UDPRX_DEFAULT_PORT), nullptr,  1, 65535, 0,  EGP_UINT,   EGP_ADVANCED},
-  {EG_K_UDPRX_RXMODE, IN_L_URRM, nullptr,   UDPRX_RXMODE_DEFAULT, IN_O_URRM,   0, 2,     0,  EGP_ENUM,   EGP_ADVANCED},
+  {EG_K_UDPRX_CHIPID, IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     CHIPID_LEN,  corium::P_STRING, 0},
+  {EG_K_UDPRX_GROUP,  IN_L_URGP, IN_H_URGP, UDPRX_DEFAULT_GROUP, EG_P_IP,      0, 0,     CORIUM_IPV4_MAX, corium::P_STRING, corium::P_ADVANCED},
+  {EG_K_UDPRX_PORT,   EG_L_PRT,  IN_H_URPT, STR(UDPRX_DEFAULT_PORT), nullptr,  1, 65535, 0,  corium::P_UINT,   corium::P_ADVANCED},
+  {EG_K_UDPRX_RXMODE, IN_L_URRM, nullptr,   UDPRX_RXMODE_DEFAULT, IN_O_URRM,   0, 2,     0,  corium::P_ENUM,   corium::P_ADVANCED},
 #endif
   // Signal conditioning
 #ifdef PCNT_SELECTABLE
-  {K_COUNT_MODE,      IN_L_CNT, IN_H_CNT, COUNT_MODE_DEF, IN_O_CNT, 0, 1, 0, EGP_ENUM, EGP_ADVANCED | EGP_REBOOT},
+  {K_COUNT_MODE,      IN_L_CNT, IN_H_CNT, COUNT_MODE_DEF, IN_O_CNT, 0, 1, 0, corium::P_ENUM, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
 #ifdef NO_PCNT_ENV
-  {K_COUNT_KEPT,      nullptr,  nullptr,  "0", nullptr, 0, 1, 0, EGP_BOOL, EGP_HIDDEN | EGP_LOCAL},
+  {K_COUNT_KEPT,      nullptr,  nullptr,  "0", nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN | corium::P_LOCAL},
 #endif
 #ifdef USE_PCNT
-  {K_PCNT_FILTER,     IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, EGP_UINT, EGP_ADVANCED},
-  {K_PCNT_PULL,       IN_L_PCP, nullptr,  STR(PCNT_PIN_PULL_DEFAULT), IN_O_PCP, 0, 2, 0, EGP_ENUM, EGP_ADVANCED},
+  {K_PCNT_FILTER,     IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_PCNT_PULL,       IN_L_PCP, nullptr,  STR(PCNT_PIN_PULL_DEFAULT), IN_O_PCP, 0, 2, 0, corium::P_ENUM, corium::P_ADVANCED},
 #endif
 #ifdef PREF_DEBOUNCE
-  {K_DEBOUNCE,       IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, EGP_UINT, EGP_ADVANCED},
+  {K_DEBOUNCE,       IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, corium::P_UINT, corium::P_ADVANCED},
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  {K_PULSE_WIDTH_US,  IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, EGP_UINT, EGP_ADVANCED},
+  {K_PULSE_WIDTH_US,  IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, corium::P_UINT, corium::P_ADVANCED},
 #endif
   // CPM calculation
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  {K_CPM_WINDOW,      IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, EGP_UINT, EGP_SLIDER | EGP_ADVANCED},
+  {K_CPM_WINDOW,      IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, corium::P_UINT, corium::P_SLIDER | corium::P_ADVANCED},
 #endif
-  {K_CPM_MODE,        IN_L_CMM, nullptr, "3", IN_O_CMM, 0, 4, 0, EGP_ENUM, EGP_ADVANCED},
+  {K_CPM_MODE,        IN_L_CMM, nullptr, "3", IN_O_CMM, 0, 4, 0, corium::P_ENUM, corium::P_ADVANCED},
   // Tube identity
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  {EG_K_GEIGER_MODEL, IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, EG_NAME_MAX, EGP_STRING, 0},
-  {K_TUBE_HDR,        IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, EGP_LABEL, 0},
-  {EG_K_TUBE_ALPHA,   IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
-  {EG_K_TUBE_BETA,    IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
-  {EG_K_TUBE_GAMMA,   IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, EGP_BOOL, EGP_INLINE},
+  {EG_K_GEIGER_MODEL, IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, CORIUM_NAME_MAX, corium::P_STRING, 0},
+  {K_TUBE_HDR,        IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
+  {EG_K_TUBE_ALPHA,   IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+  {EG_K_TUBE_BETA,    IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+  {EG_K_TUBE_GAMMA,   IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-  {K_DEAD_TIME_US,    IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, EGP_UINT, EGP_ADVANCED},
+  {K_DEAD_TIME_US,    IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, corium::P_UINT, corium::P_ADVANCED},
 #endif
   // Conversion and alarms
-  {EG_K_RATIO,        CT_L_RAT, CT_H_RAT, STR(GEIGER_RATIO), nullptr, 1, 100000, 0, EGP_FLOAT, 0},
-  {K_WARN,            CT_L_WRN, CT_H_WRN, "50",    nullptr, 0, 9999, 0,  EGP_UINT,   0},
-  {K_ALERT,           CT_L_ALR, CT_H_ALR, "100",   nullptr, 0, 9999, 0,  EGP_UINT,   0},
-  {K_LIFE_EN,         CT_L_LE,  CT_H_LE,  "1",     nullptr, 0, 1,    0,  EGP_BOOL,   EGP_ADVANCED},
+  {EG_K_RATIO,        CT_L_RAT, CT_H_RAT, STR(GEIGER_RATIO), nullptr, 1, 100000, 0, corium::P_FLOAT, 0},
+  {K_WARN,            CT_L_WRN, CT_H_WRN, "50",    nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {K_ALERT,           CT_L_ALR, CT_H_ALR, "100",   nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {K_LIFE_EN,         CT_L_LE,  CT_H_LE,  "1",     nullptr, 0, 1,    0,  corium::P_BOOL,   corium::P_ADVANCED},
 };
 
-static const EGPrefGroup COUNTER_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup COUNTER_PREF_GROUP PROGMEM = {
   "counter", "Counter", 1,
   COUNTER_PREF_ITEMS,
   sizeof(COUNTER_PREF_ITEMS) / sizeof(COUNTER_PREF_ITEMS[0]),
-  EGP_CAT_INPUT,
+  corium::P_CAT_INPUT,
 };
 
-const EGPrefGroup* CounterPrefs::prefs_group() { return &COUNTER_PREF_GROUP; }
+const corium::PrefGroup* CounterPrefs::prefs_group() { return &COUNTER_PREF_GROUP; }
 
 #ifdef PCNT_SELECTABLE
 // rows per count mode
-EG_PSTR(IN_W_CNT, "counter.count_mode");
+CORIUM_PSTR(IN_W_CNT, "counter.count_mode");
 static const uint16_t SHOW_PCNT = 1u << 0;
 static const uint16_t SHOW_ISR  = 1u << 1;
 
-static const EGPrefShow COUNTER_SHOW[] PROGMEM = {
+static const corium::PrefShow COUNTER_SHOW[] PROGMEM = {
   {K_PCNT_FILTER, IN_W_CNT, SHOW_PCNT},
   {K_DEBOUNCE,    IN_W_CNT, SHOW_ISR},
   {},
 };
 
-const EGPrefShow* CounterPrefs::prefs_show() { return COUNTER_SHOW; }
+const corium::PrefShow* CounterPrefs::prefs_show() { return COUNTER_SHOW; }
 #endif
 
 // pins and count mode read at boot only, the isr and port keep theirs
@@ -269,13 +269,13 @@ static void boot_pins() {
   if (s_set) return;
   s_set = true;
 #ifdef PCNT_SELECTABLE
-  gcounter.input()->use_pcnt(EGPrefs::getUInt("counter", K_COUNT_MODE) == 0);
+  gcounter.input()->use_pcnt(corium::Prefs::getUInt("counter", K_COUNT_MODE) == 0);
 #endif
 #ifndef RXPIN_BLOCKED
-  gcounter.set_rx_pin((int)EGPrefs::getInt("counter", K_RX_PIN));
+  gcounter.set_rx_pin((int)corium::Prefs::getInt("counter", K_RX_PIN));
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  gcounter.set_tx_pin((int)EGPrefs::getInt("counter", K_TX_PIN));
+  gcounter.set_tx_pin((int)corium::Prefs::getInt("counter", K_TX_PIN));
 #endif
 }
 #else
@@ -285,16 +285,16 @@ static void boot_pins() {}   // none on this build
 #ifdef NO_PCNT_ENV
 // count_mode into the file once, so a plain bin keeps the interrupt
 static void keep_count_mode() {
-  if (EGPrefs::getBool("counter", K_COUNT_KEPT)) return;
-  EGPrefs::put("counter", K_COUNT_KEPT, "1");
-  EGPrefs::commit(false);
+  if (corium::Prefs::getBool("counter", K_COUNT_KEPT)) return;
+  corium::Prefs::put("counter", K_COUNT_KEPT, "1");
+  corium::Prefs::commit(false);
 }
 #endif
 
 void CounterPrefs::on_prefs_loaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  _serial_type = (uint8_t)EGPrefs::getUInt("counter", EG_K_SERIAL_TYPE);
-  uint8_t cw = (uint8_t)EGPrefs::getUInt("counter", K_CPM_WINDOW);
+  _serial_type = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
+  uint8_t cw = (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW);
   if (SerialFormat::has_cps(_serial_type)) cw = GEIGER_CPM_COUNT;
   gcounter.set_cpm_window(cw);
 #endif
@@ -303,49 +303,49 @@ void CounterPrefs::on_prefs_loaded() {
   keep_count_mode();
 #endif
 #ifdef USE_PCNT
-  gcounter.set_pcnt_filter((int)EGPrefs::getUInt("counter", K_PCNT_FILTER));
+  gcounter.set_pcnt_filter((int)corium::Prefs::getUInt("counter", K_PCNT_FILTER));
   gcounter.apply_pcnt_filter();
-  gcounter.set_pin_pull((int)EGPrefs::getUInt("counter", K_PCNT_PULL));
+  gcounter.set_pin_pull((int)corium::Prefs::getUInt("counter", K_PCNT_PULL));
 #endif
 #ifdef PREF_DEBOUNCE
-  gcounter.set_debounce((int)EGPrefs::getUInt("counter", K_DEBOUNCE));
+  gcounter.set_debounce((int)corium::Prefs::getUInt("counter", K_DEBOUNCE));
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  set_pulse_width_us((int)EGPrefs::getUInt("counter", K_PULSE_WIDTH_US));
+  set_pulse_width_us((int)corium::Prefs::getUInt("counter", K_PULSE_WIDTH_US));
 #endif
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
   {
-    const char* m = EGPrefs::getString("counter", EG_K_GEIGER_MODEL);
+    const char* m = corium::Prefs::getString("counter", EG_K_GEIGER_MODEL);
     if (m[0] != '\0') Tube::set_model(m);
   }
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-  gcounter.set_dead_time_us((uint16_t)EGPrefs::getUInt("counter", K_DEAD_TIME_US));
+  gcounter.set_dead_time_us((uint16_t)corium::Prefs::getUInt("counter", K_DEAD_TIME_US));
 #endif
-  gcounter.set_cpm_mode((uint8_t)EGPrefs::getUInt("counter", K_CPM_MODE));
-  gcounter.set_ratio(EGPrefs::getFloat("counter", EG_K_RATIO));
-  gcounter.set_warning((int)EGPrefs::getUInt("counter", K_WARN));
-  gcounter.set_alert((int)EGPrefs::getUInt("counter", K_ALERT));
-  gcounter.set_lifetime_enabled(EGPrefs::getUInt("counter", K_LIFE_EN) != 0);
+  gcounter.set_cpm_mode((uint8_t)corium::Prefs::getUInt("counter", K_CPM_MODE));
+  gcounter.set_ratio(corium::Prefs::getFloat("counter", EG_K_RATIO));
+  gcounter.set_warning((int)corium::Prefs::getUInt("counter", K_WARN));
+  gcounter.set_alert((int)corium::Prefs::getUInt("counter", K_ALERT));
+  gcounter.set_lifetime_enabled(corium::Prefs::getUInt("counter", K_LIFE_EN) != 0);
 }
 
-// pins and serial type are EGP_REBOOT
+// pins and serial type are corium::P_REBOOT
 void CounterPrefs::on_prefs_saved() {
   bool need_reboot = false;
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   // only formats without their own cps
   if (!SerialFormat::has_cps(_serial_type) &&
-      gcounter.get_cpm_window() != (uint8_t)EGPrefs::getUInt("counter", K_CPM_WINDOW)) need_reboot = true;
+      gcounter.get_cpm_window() != (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW)) need_reboot = true;
 #endif
   on_prefs_loaded();
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   udprx_notify_prefs_saved();
 #endif
-  if (need_reboot) EGPrefs::request_restart();
+  if (need_reboot) corium::Prefs::request_restart();
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias COUNTER_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias COUNTER_LEGACY[] PROGMEM = {
   {"geigerRatio", "ratio"},
   {"geigerWarn",  "warn"},
   {"geigerAlert", "alert"},
@@ -364,42 +364,42 @@ static const EGLegacyAlias COUNTER_LEGACY[] PROGMEM = {
 #endif
   {},
 };
-EGLegacyRows CounterPrefs::legacy_aliases() { return COUNTER_LEGACY; }
+corium::LegacyRows CounterPrefs::legacy_aliases() { return COUNTER_LEGACY; }
 // === END LEGACY IMPORT ===
 
 // Lifetime prefs, own group
 
-class LifePrefs : public EGModule {
+class LifePrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("life"); }
   uint8_t display_order() override { return 0; }
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
 };
 
 static LifePrefs lifeprefs;
-EG_REGISTER_MODULE(lifeprefs)
+CORIUM_REGISTER_MODULE(lifeprefs)
 
-static const EGPref LIFE_PREF_ITEMS[] PROGMEM = {
-  {EG_K_CLK,  nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
-  {EG_K_CLKR, nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
-  {EG_K_FBT,  nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
-  {EG_K_SECS, nullptr, nullptr, "0", nullptr, 0, 0, EG_U32_MAX_LEN, EGP_STRING, EGP_HIDDEN | EGP_LOCAL | EGP_KEEP},
+static const corium::Pref LIFE_PREF_ITEMS[] PROGMEM = {
+  {EG_K_CLK,  nullptr, nullptr, "0", nullptr, 0, 0, CORIUM_U32_MAX_LEN, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL | corium::P_KEEP},
+  {EG_K_CLKR, nullptr, nullptr, "0", nullptr, 0, 0, CORIUM_U32_MAX_LEN, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL | corium::P_KEEP},
+  {EG_K_FBT,  nullptr, nullptr, "0", nullptr, 0, 0, CORIUM_U32_MAX_LEN, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL | corium::P_KEEP},
+  {EG_K_SECS, nullptr, nullptr, "0", nullptr, 0, 0, CORIUM_U32_MAX_LEN, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL | corium::P_KEEP},
 };
 
-static const EGPrefGroup LIFE_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup LIFE_PREF_GROUP PROGMEM = {
   "life", "Lifetime", 1,
   LIFE_PREF_ITEMS,
   sizeof(LIFE_PREF_ITEMS) / sizeof(LIFE_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* LifePrefs::prefs_group() { return &LIFE_PREF_GROUP; }
+const corium::PrefGroup* LifePrefs::prefs_group() { return &LIFE_PREF_GROUP; }
 
 void LifePrefs::on_prefs_loaded() {
-  gcounter.set_lifetime_clicks(EGPrefs::getUInt("life", EG_K_CLK));
-  gcounter.set_lifetime_rollover(EGPrefs::getUInt("life", EG_K_CLKR));
-  gcounter.set_first_boot_ts(EGPrefs::getUInt("life", EG_K_FBT));
-  gcounter.set_lifetime_seconds(EGPrefs::getUInt("life", EG_K_SECS));
+  gcounter.set_lifetime_clicks(corium::Prefs::getUInt("life", EG_K_CLK));
+  gcounter.set_lifetime_rollover(corium::Prefs::getUInt("life", EG_K_CLKR));
+  gcounter.set_first_boot_ts(corium::Prefs::getUInt("life", EG_K_FBT));
+  gcounter.set_lifetime_seconds(corium::Prefs::getUInt("life", EG_K_SECS));
 }
 
 // default for led.pin, -1 = none
@@ -426,24 +426,24 @@ void LifePrefs::on_prefs_loaded() {
 #endif
 
 // every build, led.pin and the blink on a send
-class LedPrefs : public EGModule {
+class LedPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("led"); }
   uint8_t display_order() override { return 14; }
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
-  void begin() override { EGModuleRegistry::on(TOPIC_SENT, this); }
+  void begin() override { corium::Registry::on(TOPIC_SENT, this); }
   void loop(unsigned long) override {
-    if (EGModuleRegistry::events(this)) LedSignal::play(LED_ACTIVITY);
+    if (corium::Registry::events(this)) LedSignal::play(LED_ACTIVITY);
   }
 };
 
 static LedPrefs ledprefs;
-EG_REGISTER_MODULE(ledprefs)
+CORIUM_REGISTER_MODULE(ledprefs)
 
 #ifndef LED_PIN_BLOCKED
-EG_PSTR(LD_L_PIN, "Status LED");
-EG_PSTR(LD_H_PIN, "GPIO of the board's own LED, -1 = none. Reboot to apply.");
+CORIUM_PSTR(LD_L_PIN, "Status LED");
+CORIUM_PSTR(LD_H_PIN, "GPIO of the board's own LED, -1 = none. Reboot to apply.");
 #if LED_SEND_RECEIVE_ON == LOW
 #define LD_POL_DEF "1"
 #else
@@ -451,22 +451,22 @@ EG_PSTR(LD_H_PIN, "GPIO of the board's own LED, -1 = none. Reboot to apply.");
 #endif
 #endif
 #ifdef LED_BLIP
-EG_PSTR(LD_L_BLP, "Blip LED");
-EG_PSTR(LD_H_BLP, "Flash LED on each count");
+CORIUM_PSTR(LD_L_BLP, "Blip LED");
+CORIUM_PSTR(LD_H_BLP, "Flash LED on each count");
 #ifdef GEIGER_BLIPLED
-EG_PSTR(LD_L_BRT, "Internal brightness");
+CORIUM_PSTR(LD_L_BRT, "Internal brightness");
 #else
-EG_PSTR(LD_L_BRT, "Blip brightness");
+CORIUM_PSTR(LD_L_BRT, "Blip brightness");
 #endif
-EG_PSTR(LD_H_BRT, "LED brightness (0-100%)");
-EG_PSTR(LD_O_MOD, "Pulse|Fade");
+CORIUM_PSTR(LD_H_BRT, "LED brightness (0-100%)");
+CORIUM_PSTR(LD_O_MOD, "Pulse|Fade");
 #ifdef ESPGEIGER_HW
 #define LD_PULSE_DEF "2"
 #define LD_BRT_DEF   "100"
 #else
 #define LD_PULSE_DEF "20"
 #define LD_BRT_DEF   "80"
-EG_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
+CORIUM_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
 #endif
 #define LED_LABEL  "Blip LED"
 #define LED_ENABLE K_BLIP_LED
@@ -475,32 +475,32 @@ EG_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
 #define LED_ENABLE nullptr
 #endif
 
-static const EGPref LED_PREF_ITEMS[] PROGMEM = {
+static const corium::Pref LED_PREF_ITEMS[] PROGMEM = {
 #ifdef LED_BLIP
-  {K_BLIP_LED,      LD_L_BLP, LD_H_BLP, "1",    nullptr, 0, 1,     0, EGP_BOOL, 0},
-  {EG_K_MODE,       EG_L_MOD, nullptr,  "0",     LD_O_MOD, 0,  1,     0, EGP_ENUM, EGP_ADVANCED},
-  {EG_K_PULSE_MS,   EG_L_PUL, EG_H_PUL, LD_PULSE_DEF, nullptr, 1, 50,  0, EGP_UINT, EGP_ADVANCED},
-  {EG_K_FADE_SHIFT, EG_L_FAD, nullptr,  "1",     EG_O_FAD, 0,  2,     0, EGP_ENUM, EGP_ADVANCED},
-  {K_BLIP_BRIGHT,   LD_L_BRT, LD_H_BRT, LD_BRT_DEF, nullptr, 0, 100,  0, EGP_UINT, EGP_SLIDER},
+  {K_BLIP_LED,      LD_L_BLP, LD_H_BLP, "1",    nullptr, 0, 1,     0, corium::P_BOOL, 0},
+  {EG_K_MODE,       EG_L_MOD, nullptr,  "0",     LD_O_MOD, 0,  1,     0, corium::P_ENUM, corium::P_ADVANCED},
+  {EG_K_PULSE_MS,   EG_L_PUL, EG_H_PUL, LD_PULSE_DEF, nullptr, 1, 50,  0, corium::P_UINT, corium::P_ADVANCED},
+  {EG_K_FADE_SHIFT, EG_L_FAD, nullptr,  "1",     EG_O_FAD, 0,  2,     0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_BLIP_BRIGHT,   LD_L_BRT, LD_H_BRT, LD_BRT_DEF, nullptr, 0, 100,  0, corium::P_UINT, corium::P_SLIDER},
 #ifndef ESPGEIGER_HW
-  {EG_K_QUIET_FROM, EG_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     EG_HHMM_MAX, EGP_STRING, EGP_TIME | EGP_ADVANCED},
-  {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",      nullptr, 0,   0,     EG_HHMM_MAX, EGP_STRING, EGP_TIME | EGP_ADVANCED},
+  {EG_K_QUIET_FROM, EG_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
+  {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",      nullptr, 0,   0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
 #endif
 #endif
 #ifndef LED_PIN_BLOCKED
-  {EG_K_PIN,        LD_L_PIN, LD_H_PIN, STR(LED_SEND_RECEIVE), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
-  {EG_K_POLARITY,   EG_L_POL, nullptr,  LD_POL_DEF, EG_O_POL, 0, 1, 0, EGP_ENUM, EGP_ADVANCED | EGP_REBOOT},
+  {EG_K_PIN,        LD_L_PIN, LD_H_PIN, STR(LED_SEND_RECEIVE), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_POLARITY,   EG_L_POL, nullptr,  LD_POL_DEF, EG_O_POL, 0, 1, 0, corium::P_ENUM, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
 };
 
-static const EGPrefGroup LED_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup LED_PREF_GROUP PROGMEM = {
   "led", LED_LABEL, 1,
   LED_PREF_ITEMS,
   sizeof(LED_PREF_ITEMS) / sizeof(LED_PREF_ITEMS[0]),
-  EGP_CAT_SYSTEM, LED_ENABLE,
+  corium::P_CAT_SYSTEM, LED_ENABLE,
 };
 
-const EGPrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
+const corium::PrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
 
 void LedPrefs::on_prefs_loaded() {
   // boot only, attach() takes it once
@@ -510,21 +510,21 @@ void LedPrefs::on_prefs_loaded() {
 #ifdef LED_PIN_BLOCKED
     LedSignal::use_pin(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON == LOW);
 #else
-    LedSignal::use_pin((int)EGPrefs::getInt("led", EG_K_PIN),
-                       EGPrefs::getUInt("led", EG_K_POLARITY) == 1);
+    LedSignal::use_pin((int)corium::Prefs::getInt("led", EG_K_PIN),
+                       corium::Prefs::getUInt("led", EG_K_POLARITY) == 1);
 #endif
   }
 #ifdef LED_BLIP
-  gcounter.set_blip_led(EGPrefs::getBool("led", K_BLIP_LED));
-  uint32_t blip_pct = EGPrefs::getUInt("led", K_BLIP_BRIGHT);
+  gcounter.set_blip_led(corium::Prefs::getBool("led", K_BLIP_LED));
+  uint32_t blip_pct = corium::Prefs::getUInt("led", K_BLIP_BRIGHT);
   uint32_t blip_level = brightness_curve(blip_pct, 255);
   if (blip_pct && !blip_level) blip_level = 1;
   gcounter.set_blip_brightness((uint8_t)blip_level);
   // UI is Pulse|Fade
-  bool fade            = (EGPrefs::getUInt("led", EG_K_MODE) == 1);
+  bool fade            = (corium::Prefs::getUInt("led", EG_K_MODE) == 1);
   uint8_t engine_mode  = fade ? PulseEngine::MODE_FADE : PulseEngine::MODE_PULSE;
-  uint8_t fadeIdx      = (uint8_t)EGPrefs::getUInt("led", EG_K_FADE_SHIFT);
-  uint16_t pulse_us    = (uint16_t)(EGPrefs::getUInt("led", EG_K_PULSE_MS) * 1000);
+  uint8_t fadeIdx      = (uint8_t)corium::Prefs::getUInt("led", EG_K_FADE_SHIFT);
+  uint16_t pulse_us    = (uint16_t)(corium::Prefs::getUInt("led", EG_K_PULSE_MS) * 1000);
 #ifdef LED_FLASH_ENGINE
   BlipLed::setConfig(engine_mode, pulse_us, fadeIdx, 0);
 #else
@@ -532,8 +532,8 @@ void LedPrefs::on_prefs_loaded() {
 #endif
 #ifndef ESPGEIGER_HW
   gcounter.set_quiet_hours(
-    EGPrefs::getString("led", EG_K_QUIET_FROM),
-    EGPrefs::getString("led", EG_K_QUIET_TO)
+    corium::Prefs::getString("led", EG_K_QUIET_FROM),
+    corium::Prefs::getString("led", EG_K_QUIET_TO)
   );
 #endif
 #endif
@@ -542,38 +542,38 @@ void LedPrefs::on_prefs_loaded() {
 #if defined(ESPG_HV) && !defined(ESPGEIGER_HW)
 #include "HV/HV.h"
 
-class HVPinPrefs : public EGModule {
+class HVPinPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("hvpin"); }
   uint8_t display_order() override { return 14; }
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
 };
 
 static HVPinPrefs hvpinprefs;
-EG_REGISTER_MODULE(hvpinprefs)
+CORIUM_REGISTER_MODULE(hvpinprefs)
 
-EG_PSTR(HV_L_PWM, "HV PWM Pin");
-EG_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
+CORIUM_PSTR(HV_L_PWM, "HV PWM Pin");
+CORIUM_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
 
-static const EGPref HV_PIN_PREF_ITEMS[] PROGMEM = {
-  {K_PWM_PIN, HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_REBOOT | EGP_PIN_OUT | EGP_PIN_PWM},
+static const corium::Pref HV_PIN_PREF_ITEMS[] PROGMEM = {
+  {K_PWM_PIN, HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_PWM},
 };
 
-static const EGPrefGroup HV_PIN_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup HV_PIN_PREF_GROUP PROGMEM = {
   "hvpin", "HV Hardware", 1,
   HV_PIN_PREF_ITEMS,
   sizeof(HV_PIN_PREF_ITEMS) / sizeof(HV_PIN_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* HVPinPrefs::prefs_group() { return &HV_PIN_PREF_GROUP; }
+const corium::PrefGroup* HVPinPrefs::prefs_group() { return &HV_PIN_PREF_GROUP; }
 
 // boot only, live -1 leaves pwm unguarded
 void HVPinPrefs::on_prefs_loaded() {
   static bool s_set = false;
   if (s_set) return;
   s_set = true;
-  int pin = (int)EGPrefs::getInt("hvpin", K_PWM_PIN);
+  int pin = (int)corium::Prefs::getInt("hvpin", K_PWM_PIN);
   hv.set_pwm_pin(pin);
   Log::console(PSTR("HV: pwm_pin=%d"), pin);
 }

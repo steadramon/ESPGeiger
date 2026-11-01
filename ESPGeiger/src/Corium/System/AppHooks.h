@@ -21,10 +21,10 @@
 
 class EGHttpServer;
 class EGHttpResponse;
-struct EGMenuEntry;
+namespace corium { struct MenuEntry; }
 
 namespace AppHooks {
-  const EGMenuEntry* menu();   // first on the home page, PROGMEM, not in safe mode
+  const corium::MenuEntry* menu();   // first on the home page, PROGMEM, not in safe mode
   void routes(EGHttpServer& http);   // not in safe mode
   void info_rows(EGHttpResponse& res);   // About table on /info
   void about_json(EGHttpResponse& res);   // /about fields, each ends with a comma

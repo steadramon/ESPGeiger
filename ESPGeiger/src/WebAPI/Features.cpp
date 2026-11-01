@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Features.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 
-// modules set their own, App/FeatureBits.h
-uint16_t Features::flags() { return EGModuleRegistry::features(); }
+// Each module sets its own bit, see App/FeatureBits.h
+uint16_t Features::flags() { return corium::Registry::features(); }

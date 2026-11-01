@@ -1,5 +1,5 @@
 /*
-  EGHttpDriver.cpp - a module's HTTP requests, one at a time, a client each
+  corium::HttpDriver.cpp - a module's HTTP requests, one at a time, a client each
 
   Copyright (C) 2026 @steadramon
 
@@ -16,17 +16,17 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include "EGHttpDriver.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "HttpDriver.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/System/DeviceInfo.h"
 #include <EGHttpStrings.h>
 #include <new>
 
-void EGHttpDriver::wake(void* owner) {
-  EGModuleRegistry::post((EGModule*)owner);
+void corium::HttpDriver::wake(void* owner) {
+  corium::Registry::post((corium::Module*)owner);
 }
 
-EGHttpDriver::Sent EGHttpDriver::send(const EGHttpMeta& m, const uint8_t* body, size_t len) {
+corium::HttpDriver::Sent corium::HttpDriver::send(const corium::HttpMeta& m, const uint8_t* body, size_t len) {
   if (_c) return NOT_OPENED;   // last reply not taken
   _c = new (std::nothrow) EGHttpClient();
   if (!_c) return NO_MEMORY;
@@ -49,7 +49,7 @@ EGHttpDriver::Sent EGHttpDriver::send(const EGHttpMeta& m, const uint8_t* body, 
   return sealed ? SENT : NOT_SEALED;
 }
 
-bool EGHttpDriver::take(int* code, uint8_t* body, size_t cap, size_t* got) {
+bool corium::HttpDriver::take(int* code, uint8_t* body, size_t cap, size_t* got) {
   if (!_c || !_c->takeDone()) return false;
   *code = _c->responseHTTPcode();
   *got = _c->responseRead(body, cap);

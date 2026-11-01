@@ -18,7 +18,7 @@
 */
 #include "TickProfile.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Util/MathUtil.h"
 #ifdef TICK_PROFILE
 #include "DeviceInfo.h"
@@ -83,7 +83,7 @@ bool TickProfile::endTick() {
     min_free_heap = 0xFFFFFFFFu;
 #endif
 #ifdef LOOP_PROFILE
-    EGModuleRegistry::log_loop_profile_and_reset();
+    corium::Registry::log_loop_profile_and_reset();
     uint32_t body = loop_body_us;
     loop_body_us = 0;
     uint32_t stolen = (body > 60000000UL) ? 0 : (60000000UL - body);

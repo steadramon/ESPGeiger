@@ -26,9 +26,9 @@
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/Util/StringUtil.h"
@@ -47,79 +47,79 @@
 #include "Corium/WebPortal/WebPortal.h"
 #include "HVJS_BUNDLE.gz.h"
 
-EG_PSTR(K_DUTY,   "duty");
-EG_PSTR(K_OFFSET, "offset");
-EG_PSTR(K_TARGET, "target");
+CORIUM_PSTR(K_DUTY,   "duty");
+CORIUM_PSTR(K_OFFSET, "offset");
+CORIUM_PSTR(K_TARGET, "target");
 #ifdef ESPG_HV_ADC
-EG_PSTR(K_OV_V,   "ov_v");
-EG_PSTR(K_OV_S,   "ov_s");
-EG_PSTR(K_TRIM_MAX, "trim_max");
-EG_PSTR(K_TRIM_S, "trim_s");
-EG_PSTR(K_SETTLE_S, "settle_s");
-EG_PSTR(K_BOOT_S, "boot_s");
+CORIUM_PSTR(K_OV_V,   "ov_v");
+CORIUM_PSTR(K_OV_S,   "ov_s");
+CORIUM_PSTR(K_TRIM_MAX, "trim_max");
+CORIUM_PSTR(K_TRIM_S, "trim_s");
+CORIUM_PSTR(K_SETTLE_S, "settle_s");
+CORIUM_PSTR(K_BOOT_S, "boot_s");
 #endif
 
 
 HV hv;
-EG_REGISTER_FEATURE(hv, FEAT_HV)
+CORIUM_REGISTER_FEATURE(hv, FEAT_HV)
 
-EG_PSTR(HW_L_FRQ, "PWM Frequency");
-EG_PSTR(HW_H_FRQ, "HV generator frequency (Hz)");
-EG_PSTR(HW_L_DTY, "PWM Duty");
-EG_PSTR(HW_H_DTY, "HV generator duty, out of " STR(HV_PWM_MAX));
+CORIUM_PSTR(HW_L_FRQ, "PWM Frequency");
+CORIUM_PSTR(HW_H_FRQ, "HV generator frequency (Hz)");
+CORIUM_PSTR(HW_L_DTY, "PWM Duty");
+CORIUM_PSTR(HW_H_DTY, "HV generator duty, out of " STR(HV_PWM_MAX));
 #ifdef ESPG_HV_ADC
-EG_PSTR(HW_L_RAT, "ADC VD Ratio");
-EG_PSTR(HW_H_RAT, "Voltage divider ratio (0 = ADC disabled)");
-EG_PSTR(HW_L_OFF, "ADC VD Offset");
-EG_PSTR(HW_H_OFF, "Voltage divider offset");
-EG_PSTR(HW_L_TGT, "HV target");
-EG_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage (0 = open loop)");
+CORIUM_PSTR(HW_L_RAT, "ADC VD Ratio");
+CORIUM_PSTR(HW_H_RAT, "Voltage divider ratio (0 = ADC disabled)");
+CORIUM_PSTR(HW_L_OFF, "ADC VD Offset");
+CORIUM_PSTR(HW_H_OFF, "Voltage divider offset");
+CORIUM_PSTR(HW_L_TGT, "HV target");
+CORIUM_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage (0 = open loop)");
 #endif
 
-static const EGPref HW_PREF_ITEMS[] PROGMEM = {
-  {EG_K_FREQ,  HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, EGP_ADVANCED},
-  {K_DUTY,     HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, GEIGERHW_MAX_DUTY, 0, EGP_UINT, EGP_ADVANCED},
+static const corium::Pref HW_PREF_ITEMS[] PROGMEM = {
+  {EG_K_FREQ,  HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_DUTY,     HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, GEIGERHW_MAX_DUTY, 0, corium::P_UINT, corium::P_ADVANCED},
 #ifdef ESPG_HV_ADC
-  {EG_K_RATIO, HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    50000, 0, EGP_INT, EGP_ADVANCED},
-  {K_OFFSET,   HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, EGP_INT, EGP_ADVANCED},
-  {K_TARGET,   HW_L_TGT, HW_H_TGT, "0", nullptr, 0, GEIGERHW_MAX_V, 0, EGP_UINT, 0},
-  {K_OV_V,     nullptr,  nullptr,  STR(GEIGERHW_OV_V), nullptr, 0, 2000, 0, EGP_UINT, EGP_HIDDEN},
-  {K_OV_S,     nullptr,  nullptr,  STR(GEIGERHW_OV_S), nullptr, 1, 60, 0, EGP_UINT, EGP_HIDDEN},
-  {K_TRIM_MAX, nullptr,  nullptr,  STR(GEIGERHW_TRIM_MAX), nullptr, 0, 20, 0, EGP_UINT, EGP_HIDDEN},
+  {EG_K_RATIO, HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    50000, 0, corium::P_INT, corium::P_ADVANCED},
+  {K_OFFSET,   HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, corium::P_INT, corium::P_ADVANCED},
+  {K_TARGET,   HW_L_TGT, HW_H_TGT, "0", nullptr, 0, GEIGERHW_MAX_V, 0, corium::P_UINT, 0},
+  {K_OV_V,     nullptr,  nullptr,  STR(GEIGERHW_OV_V), nullptr, 0, 2000, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_OV_S,     nullptr,  nullptr,  STR(GEIGERHW_OV_S), nullptr, 1, 60, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_TRIM_MAX, nullptr,  nullptr,  STR(GEIGERHW_TRIM_MAX), nullptr, 0, 20, 0, corium::P_UINT, corium::P_HIDDEN},
   // >= HV_TRIM_N, each step sees the last
-  {K_TRIM_S,   nullptr,  nullptr,  STR(GEIGERHW_TRIM_S), nullptr, HV_TRIM_N, 120, 0, EGP_UINT, EGP_HIDDEN},
-  {K_SETTLE_S, nullptr,  nullptr,  STR(GEIGERHW_SETTLE_S), nullptr, 0, 600, 0, EGP_UINT, EGP_HIDDEN},
-  {K_BOOT_S,   nullptr,  nullptr,  STR(GEIGERHW_BOOT_S), nullptr, 0, 1800, 0, EGP_UINT, EGP_HIDDEN},
+  {K_TRIM_S,   nullptr,  nullptr,  STR(GEIGERHW_TRIM_S), nullptr, HV_TRIM_N, 120, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_SETTLE_S, nullptr,  nullptr,  STR(GEIGERHW_SETTLE_S), nullptr, 0, 600, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_BOOT_S,   nullptr,  nullptr,  STR(GEIGERHW_BOOT_S), nullptr, 0, 1800, 0, corium::P_UINT, corium::P_HIDDEN},
 #endif
 };
 
-static const EGPrefGroup HW_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup HW_PREF_GROUP PROGMEM = {
   "espghw", "HV Generator", 1,
   HW_PREF_ITEMS,
   sizeof(HW_PREF_ITEMS) / sizeof(HW_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* HV::prefs_group() { return &HW_PREF_GROUP; }
+const corium::PrefGroup* HV::prefs_group() { return &HW_PREF_GROUP; }
 
 void HV::on_prefs_loaded() {
-  set_freq((int)EGPrefs::getUInt("espghw", EG_K_FREQ));
-  set_duty((int)EGPrefs::getUInt("espghw", K_DUTY));
+  set_freq((int)corium::Prefs::getUInt("espghw", EG_K_FREQ));
+  set_duty((int)corium::Prefs::getUInt("espghw", K_DUTY));
   clear_ov();
 #ifdef ESPG_HV_ADC
-  set_vd_ratio((int)EGPrefs::getInt("espghw", EG_K_RATIO));
-  set_vd_offset((int)EGPrefs::getInt("espghw", K_OFFSET));
-  set_hv_target((uint16_t)EGPrefs::getUInt("espghw", K_TARGET));
-  _ov_v = hv_ov_limit(EGPrefs::getUInt("espghw", K_OV_V), GEIGERHW_OV_V);
+  set_vd_ratio((int)corium::Prefs::getInt("espghw", EG_K_RATIO));
+  set_vd_offset((int)corium::Prefs::getInt("espghw", K_OFFSET));
+  set_hv_target((uint16_t)corium::Prefs::getUInt("espghw", K_TARGET));
+  _ov_v = hv_ov_limit(corium::Prefs::getUInt("espghw", K_OV_V), GEIGERHW_OV_V);
 #if GEIGERHW_OV_V > 0
 #define OV_ZERO "default"
 #else
 #define OV_ZERO "off"
 #endif
-  _ov_trip_s = (uint8_t)EGPrefs::getUInt("espghw", K_OV_S);
-  _trim_max = (uint8_t)EGPrefs::getUInt("espghw", K_TRIM_MAX);
-  _trim_s = (uint8_t)EGPrefs::getUInt("espghw", K_TRIM_S);
-  _settle_s = (uint16_t)EGPrefs::getUInt("espghw", K_SETTLE_S);
-  _boot_s = (uint16_t)EGPrefs::getUInt("espghw", K_BOOT_S);
+  _ov_trip_s = (uint8_t)corium::Prefs::getUInt("espghw", K_OV_S);
+  _trim_max = (uint8_t)corium::Prefs::getUInt("espghw", K_TRIM_MAX);
+  _trim_s = (uint8_t)corium::Prefs::getUInt("espghw", K_TRIM_S);
+  _settle_s = (uint16_t)corium::Prefs::getUInt("espghw", K_SETTLE_S);
+  _boot_s = (uint16_t)corium::Prefs::getUInt("espghw", K_BOOT_S);
   Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _hw_freq, _hw_duty, _hw_vd_ratio, _hv_target);
   if (_ov_v != GEIGERHW_OV_V) {
     Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
@@ -131,7 +131,7 @@ void HV::on_prefs_loaded() {
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias HW_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias HW_LEGACY[] PROGMEM = {
   {"freq",   "freq"},
   {"duty",   "duty"},
 #ifdef ESPG_HV_ADC
@@ -140,7 +140,7 @@ static const EGLegacyAlias HW_LEGACY[] PROGMEM = {
 #endif
   {},
 };
-EGLegacyRows HV::legacy_aliases() { return HW_LEGACY; }
+corium::LegacyRows HV::legacy_aliases() { return HW_LEGACY; }
 // === END LEGACY IMPORT ===
 
 HV::HV() {
@@ -241,7 +241,7 @@ void HV::set_pwm_pin(int pin) {
 void HV::begin() {
   if (_pwm_pin < 0) {
     Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
-    EGModuleRegistry::every(this, 0);
+    corium::Registry::every(this, 0);
   } else {
     Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
 #ifdef ESP8266
@@ -250,7 +250,7 @@ void HV::begin() {
     if (!EGTimer1::pwm_begin(_pwm_pin)) {
       Log::console(PSTR("HV: pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
       _pwm_pin = -1;
-      EGModuleRegistry::every(this, 0);
+      corium::Registry::every(this, 0);
     }
 #else
     ledcSetup(EGLED_HV_CHANNEL, _hw_freq, HV_PWM_BITS);
@@ -258,7 +258,7 @@ void HV::begin() {
 #endif
     if (_pwm_pin >= 0) {
       Lifecycle::on(hv_lifecycle);
-      EGModuleRegistry::every(this, LOOP_MS);
+      corium::Registry::every(this, LOOP_MS);
     }
   }
 #ifdef ESPG_HV_ADC
@@ -288,7 +288,7 @@ void HV::loop(unsigned long now) {
 #ifdef ESPG_HV_ADC
   if (_settle.due(now)) _settle.clear();   // a held compare goes stale at the wrap
   if (_hw_vd_ratio == 0) return;
-  bool settled = egm_b(M_WARM) && !_settle.armed();
+  bool settled = corium::m_b(M_WARM) && !_settle.armed();
   int volts = read_hv();
   check_overvoltage(volts);
   if (_hv_target > 0 && !_ov_trip && settled) trim_step();
@@ -363,7 +363,7 @@ void HV::check_feedback() {
   ledcDetachPin(_pwm_pin);
   pinMode(_pwm_pin, INPUT);   // base pull-down holds it off
   Log::console(PSTR("HV: feedback %d mV makes no sense - HV off until restart"), mv);
-  EGModuleRegistry::emit(TOPIC_FAULT);
+  corium::Registry::emit(TOPIC_FAULT);
 }
 #endif
 
@@ -400,14 +400,14 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
 }
 
 bool HV::saveconfig() {
-  EGPrefs::putInt("espghw", EG_K_FREQ, _hw_freq);
-  EGPrefs::putInt("espghw", K_DUTY, _hw_duty);
+  corium::Prefs::putInt("espghw", EG_K_FREQ, _hw_freq);
+  corium::Prefs::putInt("espghw", K_DUTY, _hw_duty);
 #ifdef ESPG_HV_ADC
-  EGPrefs::putInt("espghw", EG_K_RATIO, _hw_vd_ratio);
-  EGPrefs::putInt("espghw", K_OFFSET, _hw_vd_offset);
-  EGPrefs::putInt("espghw", K_TARGET, _hv_target);
+  corium::Prefs::putInt("espghw", EG_K_RATIO, _hw_vd_ratio);
+  corium::Prefs::putInt("espghw", K_OFFSET, _hw_vd_offset);
+  corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
 #endif
-  return EGPrefs::commit_soon(fast_millis());
+  return corium::Prefs::commit_soon(fast_millis());
 }
 
 extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
@@ -424,10 +424,10 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
 <tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
 )HTML"
 #ifndef ESP8266
-R"HTML(<script src="/pgjs)HTML" EG_CACHE_BUST R"HTML("></script>
+R"HTML(<script src="/pgjs)HTML" CORIUM_CACHE_BUST R"HTML("></script>
 )HTML"
 #endif
-R"HTML(<script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
+R"HTML(<script src="/hvjs)HTML" CORIUM_CACHE_BUST R"HTML("></script>
 )HTML";
 
 #if !EG_GZ_HVJS_BUNDLE
@@ -522,9 +522,9 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (changed) {
     hv.clear_ov();   // also resets the trim
     if (!hv.saveconfig()) {
-      char why[EGPREFS_FROZEN_MAX];
-      char buf[sizeof("Not saved: ") + EGPREFS_FROZEN_MAX];
-      if (EGPrefs::frozen(why, sizeof(why))) {
+      char why[CORIUM_PREFS_FROZEN_MAX];
+      char buf[sizeof("Not saved: ") + CORIUM_PREFS_FROZEN_MAX];
+      if (corium::Prefs::frozen(why, sizeof(why))) {
         snprintf_P(buf, sizeof(buf), PSTR("Not saved: %s"), why);
         res.send(500, FPSTR(HTTP_CT_PLAIN), buf);
       } else {
@@ -571,35 +571,35 @@ static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, FPSTR(HTTP_CT_JSON), buf);
 }
 
-static bool m_hv(EGMValue* v) {
+static bool m_hv(corium::MValue* v) {
   if (hv.get_pwm_pin() < 0 || hv.get_vd_ratio() == 0) return false;
   v->i = (int32_t)(hv.hvReading.get() + 0.5f);
   return true;
 }
 
-static bool m_hv_tgt(EGMValue* v)  { v->u = hv.get_hv_target(); return true; }
-static bool m_hv_duty(EGMValue* v) { v->u = (uint32_t)hv.get_duty(); return true; }
-static bool m_hv_trim(EGMValue* v) { v->i = hv.get_duty_trim(); return true; }
+static bool m_hv_tgt(corium::MValue* v)  { v->u = hv.get_hv_target(); return true; }
+static bool m_hv_duty(corium::MValue* v) { v->u = (uint32_t)hv.get_duty(); return true; }
+static bool m_hv_trim(corium::MValue* v) { v->i = hv.get_duty_trim(); return true; }
 
 static const char MP_HV[] PROGMEM = "device_hv_volts";
 static const char MH_HV[] PROGMEM = "Tube high voltage";
 
-static const EGMeasure HV_ROWS[] PROGMEM = {
-  EGM_PROW("hv", "", m_hv, EGM_I32, 0, EGMU_VOLT, EGM_OUT_ALL, 0, MP_HV, MH_HV, nullptr),
+static const corium::Measure HV_ROWS[] PROGMEM = {
+  CORIUM_M_PROW("hv", "", m_hv, corium::M_I32, 0, corium::MU_VOLT, corium::M_OUT_ALL, 0, MP_HV, MH_HV, nullptr),
   // the /hv blip
-  EGM_ROW("hv_tgt",  "", m_hv_tgt,  EGM_U32, 0, EGMU_VOLT, EGM_OUT_ID, 0),
-  EGM_ROW("hv_duty", "", m_hv_duty, EGM_U32, 0, EGMU_NONE, EGM_OUT_ID, 0),
-  EGM_ROW("hv_trim", "", m_hv_trim, EGM_I32, 0, EGMU_NONE, EGM_OUT_ID, 0),
+  CORIUM_M_ROW("hv_tgt",  "", m_hv_tgt,  corium::M_U32, 0, corium::MU_VOLT, corium::M_OUT_ID, 0),
+  CORIUM_M_ROW("hv_duty", "", m_hv_duty, corium::M_U32, 0, corium::MU_NONE, corium::M_OUT_ID, 0),
+  CORIUM_M_ROW("hv_trim", "", m_hv_trim, corium::M_I32, 0, corium::MU_NONE, corium::M_OUT_ID, 0),
 };
 
-EGMeasureRows HV::measurements() { return EGMeasureRows(HV_ROWS); }
+corium::MeasureRows HV::measurements() { return corium::MeasureRows(HV_ROWS); }
 #endif
 
-static const EGMenuEntry HV_MENU[] PROGMEM = {
+static const corium::MenuEntry HV_MENU[] PROGMEM = {
   {"/hv", "HV Config"},
   {"", ""}
 };
-const EGMenuEntry* HV::menuEntries() { return HV_MENU; }
+const corium::MenuEntry* HV::menuEntries() { return HV_MENU; }
 
 void HV::registerRoutes(EGHttpServer& http) {
   http.on(F("/hv"),     EGHttpRequest::GET, hHv);
@@ -613,11 +613,11 @@ void HV::registerRoutes(EGHttpServer& http) {
 // console
 #ifdef ESPG_HV_ADC
 static void cmd_hv() { Log::console(PSTR("HV: %d"), (int)hv.hvReading.get()); }
-EG_REGISTER_CMD(hv, cmd_hv)
+CORIUM_REGISTER_CMD(hv, cmd_hv)
 #endif
 #ifdef EG_HV_STALL_TEST
 static void cmd_t1stop() { timer1_disable(); }
-EG_REGISTER_CMD(t1stop, cmd_t1stop)
+CORIUM_REGISTER_CMD(t1stop, cmd_t1stop)
 #endif
 
 #endif

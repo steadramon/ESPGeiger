@@ -23,10 +23,10 @@
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
 #include "Counter/Counter.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "GeigerInput/SerialFormat.h"
 
-class SerialOut : public EGModule {
+class SerialOut : public corium::Module {
     public:
       static constexpr uint8_t SHOW_CPM = 1 << 0;
       static constexpr uint8_t SHOW_USV = 1 << 1;
@@ -39,7 +39,7 @@ class SerialOut : public EGModule {
       static constexpr uint16_t REPLAN_MS = 100;
       void loop(unsigned long now) override;
       void registerRoutes(EGHttpServer& http) override;
-      const EGPrefGroup* prefs_group() override;
+      const corium::PrefGroup* prefs_group() override;
       uint8_t display_order() override { return 15; }
       void on_prefs_loaded() override;
       void set_show(int var);

@@ -22,17 +22,17 @@
 
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
-class AlertOut : public EGModule {
+class AlertOut : public corium::Module {
   public:
     AlertOut() {}
     const char* name() override { return PSTR("alertout"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 18; }
     void begin() override;
     void loop(unsigned long now) override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
   private:

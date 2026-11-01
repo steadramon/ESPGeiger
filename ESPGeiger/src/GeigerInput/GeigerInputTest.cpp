@@ -46,7 +46,7 @@ static uint32_t s_tp_at[TP_RING];   // head's release/acquire orders it
 std::atomic<uint8_t> GeigerInputTest::_tp_head{0};
 std::atomic<uint8_t> GeigerInputTest::_tp_tail{0};
 
-void EG_ISR_ATTR GeigerInputTest::timerPulse() {
+void CORIUM_ISR_ATTR GeigerInputTest::timerPulse() {
   uint8_t h = _tp_head.load(std::memory_order_relaxed);
   if ((uint8_t)(h - _tp_tail.load(std::memory_order_acquire)) >= TP_RING) return;   // full, dropped
   s_tp_at[h % TP_RING] = micros();

@@ -20,7 +20,7 @@
 
 #include "PushButton.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Output/LedSignal.h"
 #include "Corium/System/PinSafety.h"
 #include "App/AppKeys.h"
@@ -59,29 +59,29 @@ static void do_longpress(unsigned long now) {
 #endif
 
 PushButton pushbutton;
-EG_REGISTER_FEATURE(pushbutton, FEAT_BUTTON)
+CORIUM_REGISTER_FEATURE(pushbutton, FEAT_BUTTON)
 
 #ifndef BTN_PIN_BLOCKED
 #define BTN_STR_(x) #x
 #define BTN_STR(x)  BTN_STR_(x)
 
-EG_PSTR(BTN_L_PIN, "Button Pin");
-EG_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
+CORIUM_PSTR(BTN_L_PIN, "Button Pin");
+CORIUM_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
 
-static const EGPref BTN_PREF_ITEMS[] PROGMEM = {
-  {EG_K_PIN, BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_PIN_BTN},
+static const corium::Pref BTN_PREF_ITEMS[] PROGMEM = {
+  {EG_K_PIN, BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_PIN_BTN},
 };
 
-static const EGPrefGroup BTN_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup BTN_PREF_GROUP PROGMEM = {
   "btn", "Button", 1,
   BTN_PREF_ITEMS,
   sizeof(BTN_PREF_ITEMS) / sizeof(BTN_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* PushButton::prefs_group() { return &BTN_PREF_GROUP; }
+const corium::PrefGroup* PushButton::prefs_group() { return &BTN_PREF_GROUP; }
 
 void PushButton::on_prefs_loaded() {
-  int pin1 = (int)EGPrefs::getInt("btn", EG_K_PIN);
+  int pin1 = (int)corium::Prefs::getInt("btn", EG_K_PIN);
   set_pin(pin1);
   // pin2 build flag only
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
@@ -114,7 +114,7 @@ static void set_pin_slot(uint8_t slot, int pin) {
   b.press_start_ms = now;
   b.long_fired = down;
   bool on = s_btn[0].pin >= 0 || s_btn[1].pin >= 0;
-  EGModuleRegistry::every(&pushbutton, on ? POLL_MS : 0);
+  corium::Registry::every(&pushbutton, on ? POLL_MS : 0);
 }
 
 void PushButton::set_pin(int pin)  { set_pin_slot(0, pin); }
@@ -137,7 +137,7 @@ void PushButton::begin()
                (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
 #endif
 #ifdef PIN_SCAN
-  EGModuleRegistry::every(this, POLL_MS);
+  corium::Registry::every(this, POLL_MS);
 #endif
 }
 
@@ -201,7 +201,7 @@ static void pin_scan_loop(unsigned long now) {
 static void short_press(uint8_t i, unsigned long now) {
   Log::console(PSTR("Btn: short"));
   LedSignal::play(LED_ACK);
-  EGModuleRegistry::emit(PushButton::TOPIC_PRESS);
+  corium::Registry::emit(PushButton::TOPIC_PRESS);
 #ifdef SSD1306_DISPLAY
   display.button(now, i == 0 ? 1 : -1);
 #endif

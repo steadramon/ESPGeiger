@@ -23,8 +23,8 @@
 #include "Corium/Platform/Flash.h"
 #include "Corium/System/DeviceInfo.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Net/EGHttpPoster.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Net/HttpPoster.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef WEBHOOK_INTERVAL_MIN
 #define WEBHOOK_INTERVAL_MIN 10
@@ -36,13 +36,13 @@
 #define WEBHOOK_INTERVAL 60
 #endif
 
-class Webhook : public EGHttpPoster {
+class Webhook : public corium::HttpPoster {
   public:
     Webhook();
     const char* name() override { return PSTR("whook"); }
     void on_prefs_loaded() override;
-    const EGPrefGroup* prefs_group() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    const corium::PrefGroup* prefs_group() override;
+    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void setInterval(int interval);
     int getInterval() { return pingInterval; }
     const char* cleanHTTP(const char* url);

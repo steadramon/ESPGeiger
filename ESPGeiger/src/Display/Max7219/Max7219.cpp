@@ -21,9 +21,9 @@
 #include "App/AppConfig.h"
 #include <EGFormat.h>
 #include "Corium/System/FastMillis.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
@@ -34,11 +34,11 @@
 #include "App/AppKeys.h"
 #include "App/MeasureIds.h"
 
-EG_PSTR(K_SYS_WARN,  "warn");
-EG_PSTR(K_SYS_ALERT, "alert");
+CORIUM_PSTR(K_SYS_WARN,  "warn");
+CORIUM_PSTR(K_SYS_ALERT, "alert");
 
 Max7219Display max7219;
-EG_REGISTER_MODULE(max7219)
+CORIUM_REGISTER_MODULE(max7219)
 static bool _backend_max7219 = Display::add(&max7219);
 
 enum { PAGE_CPM = 0, PAGE_USV = 1, PAGE_TEMP = 2, PAGE_HUM = 3, PAGE_GRAPH = 4, PAGE_VU = 5 };
@@ -57,11 +57,11 @@ static void slow_reads(uint8_t page) {
   bool all = s_age == 0;
   if (++s_age >= 30) s_age = 0;
   if (all) {
-    s_warn      = (float)EGPrefs::getUInt("counter", K_SYS_WARN);
-    s_alert_cpm = (float)EGPrefs::getUInt("counter", K_SYS_ALERT);
+    s_warn      = (float)corium::Prefs::getUInt("counter", K_SYS_WARN);
+    s_alert_cpm = (float)corium::Prefs::getUInt("counter", K_SYS_ALERT);
   }
-  if (all || page == PAGE_TEMP) s_t = egm_f(M_T);
-  if (all || page == PAGE_HUM)  s_h = egm_f(M_H);
+  if (all || page == PAGE_TEMP) s_t = corium::m_f(M_T);
+  if (all || page == PAGE_HUM)  s_h = corium::m_f(M_H);
 }
 
 // rows, bit x = column x (xantorohara editor)
@@ -135,78 +135,78 @@ static bool mxGlyph(char c, uint8_t* out8, bool small) {
   return true;
 }
 
-EG_PSTR(K_DIN,      "din");
-EG_PSTR(K_CS,       "cs");
-EG_PSTR(K_COUNT,    "count");
-EG_PSTR(K_PANELS,   "panels");
-EG_PSTR(K_DECIMALS, "decimals");
-EG_PSTR(K_BAR,      "bar");
-EG_PSTR(K_BAR_GAIN, "bar_gain");
-EG_PSTR(K_BAR_WIN,  "bar_win");
-EG_PSTR(K_ORIENT,   "orient");
-EG_PSTR(K_REVERSE,  "reverse");
-EG_PSTR(K_POINTS,   "points");
+CORIUM_PSTR(K_DIN,      "din");
+CORIUM_PSTR(K_CS,       "cs");
+CORIUM_PSTR(K_COUNT,    "count");
+CORIUM_PSTR(K_PANELS,   "panels");
+CORIUM_PSTR(K_DECIMALS, "decimals");
+CORIUM_PSTR(K_BAR,      "bar");
+CORIUM_PSTR(K_BAR_GAIN, "bar_gain");
+CORIUM_PSTR(K_BAR_WIN,  "bar_win");
+CORIUM_PSTR(K_ORIENT,   "orient");
+CORIUM_PSTR(K_REVERSE,  "reverse");
+CORIUM_PSTR(K_POINTS,   "points");
 
-EG_PSTR(MX_L_DIN, "Data Pin (DIN/DIO)");
-EG_PSTR(MX_L_CLK, "CLK Pin");
-EG_PSTR(MX_L_CS,  "CS Pin");
-EG_PSTR(MX_L_PTS, "TM1637 points");
-EG_PSTR(MX_O_PTS, "Dots|Colon only");
-EG_PSTR(MX_H_PTS, "Colon only: page letters (C U t H), the colon is the uSv point");
-EG_PSTR(MX_L_MODE, "Pages");
-EG_PSTR(MX_O_MODE, "Cycle|Fixed");
-EG_PSTR(MX_H_MODE, "Cycle auto-advances; Fixed holds until the button is pressed");
-EG_PSTR(MX_L_CNT, "Digits");
-EG_PSTR(MX_L_PNL, "Panels");
-EG_PSTR(MX_H_PNL, "8x8 panels in the chain");
-EG_PSTR(MX_L_DEC, "uSv decimal places");
-EG_PSTR(MX_L_BAR, "Level bar (decimal-point row)");
-EG_PSTR(MX_H_BAR, "Light the decimal points as a level bar (7-seg, CPM only)");
-EG_PSTR(MX_L_BGN, "Bar sensitivity");
-EG_PSTR(MX_H_BGN, "Bar fills at this multiple of the recent average");
-EG_PSTR(MX_L_BWN, "Bar baseline");
-EG_PSTR(MX_O_BWN, "5 min|15 min");
-EG_PSTR(MX_L_ORI, "Matrix module");
-EG_PSTR(MX_H_ORI, "FC-16 is the common 4-in-1 strip; Generic the single 8x8 kit. Upside down for a flipped strip");
-EG_PSTR(MX_O_ORI, "FC-16|Generic|FC-16 upside down|Generic upside down");
-EG_PSTR(MX_L_REV, "Reverse digits");
-EG_PSTR(MX_H_REV, "7-seg: for modules that show 56781234");
+CORIUM_PSTR(MX_L_DIN, "Data Pin (DIN/DIO)");
+CORIUM_PSTR(MX_L_CLK, "CLK Pin");
+CORIUM_PSTR(MX_L_CS,  "CS Pin");
+CORIUM_PSTR(MX_L_PTS, "TM1637 points");
+CORIUM_PSTR(MX_O_PTS, "Dots|Colon only");
+CORIUM_PSTR(MX_H_PTS, "Colon only: page letters (C U t H), the colon is the uSv point");
+CORIUM_PSTR(MX_L_MODE, "Pages");
+CORIUM_PSTR(MX_O_MODE, "Cycle|Fixed");
+CORIUM_PSTR(MX_H_MODE, "Cycle auto-advances; Fixed holds until the button is pressed");
+CORIUM_PSTR(MX_L_CNT, "Digits");
+CORIUM_PSTR(MX_L_PNL, "Panels");
+CORIUM_PSTR(MX_H_PNL, "8x8 panels in the chain");
+CORIUM_PSTR(MX_L_DEC, "uSv decimal places");
+CORIUM_PSTR(MX_L_BAR, "Level bar (decimal-point row)");
+CORIUM_PSTR(MX_H_BAR, "Light the decimal points as a level bar (7-seg, CPM only)");
+CORIUM_PSTR(MX_L_BGN, "Bar sensitivity");
+CORIUM_PSTR(MX_H_BGN, "Bar fills at this multiple of the recent average");
+CORIUM_PSTR(MX_L_BWN, "Bar baseline");
+CORIUM_PSTR(MX_O_BWN, "5 min|15 min");
+CORIUM_PSTR(MX_L_ORI, "Matrix module");
+CORIUM_PSTR(MX_H_ORI, "FC-16 is the common 4-in-1 strip; Generic the single 8x8 kit. Upside down for a flipped strip");
+CORIUM_PSTR(MX_O_ORI, "FC-16|Generic|FC-16 upside down|Generic upside down");
+CORIUM_PSTR(MX_L_REV, "Reverse digits");
+CORIUM_PSTR(MX_H_REV, "7-seg: for modules that show 56781234");
 
-static const EGPref MAX7219_PREF_ITEMS[] PROGMEM = {
-  {K_DIN,      MX_L_DIN,  EG_H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT,  EGP_REBOOT | EGP_PIN_OUT},
-  {EG_K_CLK,   MX_L_CLK,  EG_H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT,  EGP_REBOOT | EGP_PIN_OUT},
-  {K_CS,       MX_L_CS,   EG_H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT,  EGP_REBOOT | EGP_PIN_OUT},
-  {EG_K_MODE,  MX_L_MODE, MX_H_MODE, "1", MX_O_MODE, 0, 1, 0, EGP_ENUM, 0},
-  {K_COUNT,    MX_L_CNT,  nullptr,   "8", nullptr,  1, 8,  0, EGP_UINT, EGP_ADVANCED},
-  {K_PANELS,   MX_L_PNL,  MX_H_PNL,  "4", nullptr,  1, Max7219Driver::MAX_CHIPS, 0, EGP_UINT, EGP_ADVANCED},
-  {K_DECIMALS, MX_L_DEC,  nullptr,   "2", nullptr,  0, 3,  0, EGP_UINT, EGP_ADVANCED},
-  {K_BAR,      MX_L_BAR,  MX_H_BAR,  "1", nullptr,  0, 1,  0, EGP_BOOL, EGP_ADVANCED},
-  {K_BAR_GAIN, MX_L_BGN,  MX_H_BGN,  "2", nullptr,  1, 10, 0, EGP_UINT, EGP_ADVANCED},
-  {K_BAR_WIN,  MX_L_BWN,  nullptr,   "1", MX_O_BWN, 0, 1,  0, EGP_ENUM, EGP_ADVANCED},
-  {K_ORIENT,   MX_L_ORI,  MX_H_ORI,  "0", MX_O_ORI, 0, 3,  0, EGP_ENUM, EGP_ADVANCED},
-  {K_REVERSE,  MX_L_REV,  MX_H_REV,  "0", nullptr,  0, 1,  0, EGP_BOOL, EGP_ADVANCED},
-  {K_POINTS,   MX_L_PTS,  MX_H_PTS,  "0", MX_O_PTS, 0, 1,  0, EGP_ENUM, 0},
+static const corium::Pref MAX7219_PREF_ITEMS[] PROGMEM = {
+  {K_DIN,      MX_L_DIN,  corium::H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_CLK,   MX_L_CLK,  corium::H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_CS,       MX_L_CS,   corium::H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_MODE,  MX_L_MODE, MX_H_MODE, "1", MX_O_MODE, 0, 1, 0, corium::P_ENUM, 0},
+  {K_COUNT,    MX_L_CNT,  nullptr,   "8", nullptr,  1, 8,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_PANELS,   MX_L_PNL,  MX_H_PNL,  "4", nullptr,  1, Max7219Driver::MAX_CHIPS, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_DECIMALS, MX_L_DEC,  nullptr,   "2", nullptr,  0, 3,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_BAR,      MX_L_BAR,  MX_H_BAR,  "1", nullptr,  0, 1,  0, corium::P_BOOL, corium::P_ADVANCED},
+  {K_BAR_GAIN, MX_L_BGN,  MX_H_BGN,  "2", nullptr,  1, 10, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_BAR_WIN,  MX_L_BWN,  nullptr,   "1", MX_O_BWN, 0, 1,  0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_ORIENT,   MX_L_ORI,  MX_H_ORI,  "0", MX_O_ORI, 0, 3,  0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_REVERSE,  MX_L_REV,  MX_H_REV,  "0", nullptr,  0, 1,  0, corium::P_BOOL, corium::P_ADVANCED},
+  {K_POINTS,   MX_L_PTS,  MX_H_PTS,  "0", MX_O_PTS, 0, 1,  0, corium::P_ENUM, 0},
 };
 
 // on once DIN set
-static const EGPrefGroup MAX7219_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup MAX7219_PREF_GROUP PROGMEM = {
   "max7219", "7-Seg / Matrix", 1,
   MAX7219_PREF_ITEMS,
   sizeof(MAX7219_PREF_ITEMS) / sizeof(MAX7219_PREF_ITEMS[0]),
-  EGP_CAT_SYSTEM, K_DIN,
+  corium::P_CAT_SYSTEM, K_DIN,
 };
 
-const EGPrefGroup* Max7219Display::prefs_group() { return &MAX7219_PREF_GROUP; }
+const corium::PrefGroup* Max7219Display::prefs_group() { return &MAX7219_PREF_GROUP; }
 
 // rows per display.type
-EG_PSTR(MX_W_TYPE, "display.type");
+CORIUM_PSTR(MX_W_TYPE, "display.type");
 static const uint16_t SHOW_7SEG   = 1u << DISP_MAX7219_7SEG;
 static const uint16_t SHOW_ROUND  = 1u << DISP_MAX7219_ROUND;
 static const uint16_t SHOW_MATRIX = 1u << DISP_MAX7219_MATRIX;
 static const uint16_t SHOW_TM     = 1u << DISP_TM1637;
 static const uint16_t SHOW_MAX    = SHOW_7SEG | SHOW_ROUND | SHOW_MATRIX;
 
-static const EGPrefShow MAX7219_SHOW[] PROGMEM = {
+static const corium::PrefShow MAX7219_SHOW[] PROGMEM = {
   {nullptr,    MX_W_TYPE, SHOW_MAX | SHOW_TM},
   {K_CS,       MX_W_TYPE, SHOW_MAX},
   {K_COUNT,    MX_W_TYPE, SHOW_7SEG | SHOW_TM},
@@ -220,7 +220,7 @@ static const EGPrefShow MAX7219_SHOW[] PROGMEM = {
   {},
 };
 
-const EGPrefShow* Max7219Display::prefs_show() { return MAX7219_SHOW; }
+const corium::PrefShow* Max7219Display::prefs_show() { return MAX7219_SHOW; }
 
 // always on the page, so always posted
 uint8_t Max7219Display::display_order() { return 18; }
@@ -228,21 +228,21 @@ uint8_t Max7219Display::display_order() { return 18; }
 // not the display: no counts, no loop
 void Max7219Display::begin() {
   if (display.backend() == this) {
-    EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
-    EGModuleRegistry::on(Display::TOPIC_POWER, this);
-    EGModuleRegistry::every(this, LOOP_MS);
+    corium::Registry::on(Counter::TOPIC_COUNTS, this);
+    corium::Registry::on(Display::TOPIC_POWER, this);
+    corium::Registry::every(this, LOOP_MS);
     return;
   }
-  EGModuleRegistry::every(this, 0);
+  corium::Registry::every(this, 0);
 }
 
 void Max7219Display::start() {
-  _layout = (uint8_t)EGPrefs::getUInt("display", EG_K_TYPE);
+  _layout = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
   _active = true;
-  // boot only, EGP_REBOOT
-  _din = (int8_t)EGPrefs::getInt("max7219", K_DIN);
-  _clk = (int8_t)EGPrefs::getInt("max7219", EG_K_CLK);
-  _cs  = (int8_t)EGPrefs::getInt("max7219", K_CS);
+  // boot only, corium::P_REBOOT
+  _din = (int8_t)corium::Prefs::getInt("max7219", K_DIN);
+  _clk = (int8_t)corium::Prefs::getInt("max7219", EG_K_CLK);
+  _cs  = (int8_t)corium::Prefs::getInt("max7219", K_CS);
   read_prefs();
   apply();
 }
@@ -277,19 +277,19 @@ void Max7219Display::on_prefs_loaded() {
 }
 
 void Max7219Display::read_prefs() {
-  uint8_t mode = (uint8_t)EGPrefs::getUInt("max7219", EG_K_MODE);
+  uint8_t mode = (uint8_t)corium::Prefs::getUInt("max7219", EG_K_MODE);
   if (mode != _mode) _page = 0;   // mode change starts on CPM
   _mode = mode;
-  _count = (uint8_t)EGPrefs::getUInt("max7219",
+  _count = (uint8_t)corium::Prefs::getUInt("max7219",
                                      _layout == DISP_MAX7219_MATRIX ? K_PANELS : K_COUNT);
-  _decimals = (uint8_t)EGPrefs::getUInt("max7219", K_DECIMALS);
+  _decimals = (uint8_t)corium::Prefs::getUInt("max7219", K_DECIMALS);
   if (_decimals >= _count) _decimals = _count - 1;
-  _bar = EGPrefs::getBool("max7219", K_BAR);
-  _bar_gain = (uint8_t)EGPrefs::getUInt("max7219", K_BAR_GAIN);
-  _bar_win = (uint8_t)EGPrefs::getUInt("max7219", K_BAR_WIN);
-  _orient = (uint8_t)EGPrefs::getUInt("max7219", K_ORIENT);
-  _reverse = EGPrefs::getBool("max7219", K_REVERSE);
-  _colon = EGPrefs::getUInt("max7219", K_POINTS) == 1;
+  _bar = corium::Prefs::getBool("max7219", K_BAR);
+  _bar_gain = (uint8_t)corium::Prefs::getUInt("max7219", K_BAR_GAIN);
+  _bar_win = (uint8_t)corium::Prefs::getUInt("max7219", K_BAR_WIN);
+  _orient = (uint8_t)corium::Prefs::getUInt("max7219", K_ORIENT);
+  _reverse = corium::Prefs::getBool("max7219", K_REVERSE);
+  _colon = corium::Prefs::getUInt("max7219", K_POINTS) == 1;
 }
 
 bool Max7219Display::claim_pins() {
@@ -304,7 +304,7 @@ bool Max7219Display::claim_pins() {
 }
 
 static uint8_t brightness(uint8_t top) {
-  return (uint8_t)brightness_curve(EGPrefs::getUInt("display", EG_K_BRIGHTNESS), top);
+  return (uint8_t)brightness_curve(corium::Prefs::getUInt("display", EG_K_BRIGHTNESS), top);
 }
 
 void Max7219Display::applyTm() {
@@ -424,16 +424,16 @@ void Max7219Display::onButtonTap(unsigned long now, int8_t dir) {
 
 // env.unit
 static const char* temp_unit() {
-  uint8_t u = egm_temp_unit();
-  if (u == EGMT_F) return PSTR("^F");
-  if (u == EGMT_K) return PSTR("K");
+  uint8_t u = corium::m_temp_unit();
+  if (u == corium::MT_F) return PSTR("^F");
+  if (u == corium::MT_K) return PSTR("K");
   return PSTR("^C");
 }
 
 void Max7219Display::pageInfo(uint8_t page, float& value, uint8_t& dec, const char*& unit) {
   switch (page) {
     case PAGE_USV:  value = display.usv(); dec = _decimals; unit = PSTR("~Sv/h"); break;
-    case PAGE_TEMP: value = egm_celsius_to(s_t, egm_temp_unit()); dec = 1; unit = temp_unit(); break;
+    case PAGE_TEMP: value = corium::m_celsius_to(s_t, corium::m_temp_unit()); dec = 1; unit = temp_unit(); break;
     case PAGE_HUM:  value = s_h;           dec = 0;         unit = PSTR("%");     break;
     default:        value = currentCPM(); dec = value < 10.0f ? 1 : 0; unit = PSTR("CPM"); break;   // as the OLED
   }
@@ -825,7 +825,7 @@ int Max7219Display::mxText(uint8_t* fb, int W, int x, const char* s, bool draw, 
 }
 
 void Max7219Display::loop(unsigned long now) {
-  uint16_t ev = EGModuleRegistry::events(this);
+  uint16_t ev = corium::Registry::events(this);
   if (ev & (1u << Display::TOPIC_POWER)) update_power();
   if (ev & (1u << Counter::TOPIC_COUNTS)) second();
   if (!_active || !_lit) return;

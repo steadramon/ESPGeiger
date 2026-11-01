@@ -22,7 +22,7 @@
 #include "NtpPage.h"
 #include "WebPortal.h"
 #include "Corium/NTP/NTP.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "NTP_PAGE_JS.gz.h"
 
 // no comments, ships to the browser
@@ -61,8 +61,8 @@ void NtpPage::form(EGHttpResponse& res) {
   // data-u 1 = name not known
   char u[2] = { EGTimeZone::posixFor(ntpclient.get_tz()) ? '0' : '1', '\0' };
   // one buffer, tz then server
-  static_assert(NTP_TZ_MAX <= EG_HOST_MAX, "esc too small for tz");
-  char esc[6 * EG_HOST_MAX + 1];
+  static_assert(NTP_TZ_MAX <= CORIUM_HOST_MAX, "esc too small for tz");
+  char esc[6 * CORIUM_HOST_MAX + 1];
   res.sendKV(F("<form method=POST action=/ntpset>"
                "<label for=tz>Timezone</label>"
                "<select name=t id=tz data-u='"),
@@ -73,7 +73,7 @@ void NtpPage::form(EGHttpResponse& res) {
              esc,
              F("'></select>"
                "<label for=ntps>NTP Server</label>"
-               "<input id=ntps name=s maxlength=" STR(EG_HOST_MAX) " value='"));
+               "<input id=ntps name=s maxlength=" STR(CORIUM_HOST_MAX) " value='"));
   egesc_html(esc, sizeof(esc), ntpclient.get_server());
   res.sendKV(nullptr, esc, F("'><button type=submit>Save</button></form>"));
 }
@@ -96,10 +96,10 @@ static void hNtpSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool ok = true;
   // arg() reuses its buffer, absent = not saved
   const char* s = req.arg(F("s"));
-  if (!s || !EGPrefs::put("ntp", EG_K_SERVER, s)) ok = false;
+  if (!s || !corium::Prefs::put("ntp", corium::K_SERVER, s)) ok = false;
   const char* t = req.arg(F("t"));
-  if (!t || !EGPrefs::put("ntp", EG_K_TZ,  t)) ok = false;
-  bool wrote = EGPrefs::commit();
+  if (!t || !corium::Prefs::put("ntp", corium::K_TZ,  t)) ok = false;
+  bool wrote = corium::Prefs::commit();
 
   WebPortal::beginPage(res, ok && wrote ? F("NTP Saved") : F("NTP"));
   if (!wrote) WebPortal::sendNotSaved(res);

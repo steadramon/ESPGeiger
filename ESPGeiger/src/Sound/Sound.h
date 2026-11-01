@@ -23,9 +23,9 @@
 #include <stdint.h>
 #include "EGTune.h"
 #include "Corium/Platform/Flash.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
-class Sound : public EGModule {
+class Sound : public corium::Module {
   public:
     Sound() {}
     const char* name() override { return PSTR("sound"); }
@@ -34,7 +34,7 @@ class Sound : public EGModule {
     void pre_wifi() override;
     void begin() override;
     void loop(unsigned long now) override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
     // per count, nothing while a tune plays

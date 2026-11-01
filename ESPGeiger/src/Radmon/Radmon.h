@@ -24,8 +24,8 @@
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Net/EGHttpPoster.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Net/HttpPoster.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef RADMON_INTERVAL
 #define RADMON_INTERVAL 60
@@ -36,14 +36,14 @@
 
 const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%s&unit=CPM";
 
-class Radmon : public EGHttpPoster {
+class Radmon : public corium::HttpPoster {
   public:
     Radmon();
     const char* name() override { return PSTR("radmon"); }
     void on_prefs_loaded() override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     uint8_t display_order() override { return 30; }
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void setInterval(int interval);
     int getInterval();
   protected:

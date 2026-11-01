@@ -1,5 +1,5 @@
 /*
-  EGHttpPoster.h - periodic HTTP upload, shared by the output modules
+  corium::HttpPoster.h - periodic HTTP upload, shared by the output modules
 
   Copyright (C) 2026 @steadramon
 
@@ -16,28 +16,30 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef EGHTTPPOSTER_H
-#define EGHTTPPOSTER_H
+#ifndef CORIUM_HTTPPOSTER_H
+#define CORIUM_HTTPPOSTER_H
 
 #include <Arduino.h>
 #include "App/AppConfig.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Net/EGHttpDriver.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Net/HttpDriver.h"
 
-#ifndef EGHTTPPOSTER_URL_MAX
-#define EGHTTPPOSTER_URL_MAX 256
+#ifndef CORIUM_HTTPPOSTER_URL_MAX
+#define CORIUM_HTTPPOSTER_URL_MAX 256
 #endif
-#ifndef EGHTTPPOSTER_REPLY_MAX
-#define EGHTTPPOSTER_REPLY_MAX 128
+#ifndef CORIUM_HTTPPOSTER_REPLY_MAX
+#define CORIUM_HTTPPOSTER_REPLY_MAX 128
 #endif
 
-class EGHttpPoster : public EGSender {
+namespace corium {
+
+class HttpPoster : public Sender {
   public:
     bool requires_wifi() override { return true; }
     static constexpr uint16_t LOOP_MS = 500;
     void loop(unsigned long now) override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
-    EGHttpDriver request{this};
+    HttpDriver request{this};
     // app's, true = no new post, replies still taken
     static bool (*hold)();
 
@@ -66,12 +68,14 @@ class EGHttpPoster : public EGSender {
     bool _send_enabled = false;
 
   private:
-    static constexpr size_t URL_CAP = EGHTTPPOSTER_URL_MAX;
-    static constexpr size_t REPLY_CAP = EGHTTPPOSTER_REPLY_MAX;
+    static constexpr size_t URL_CAP = CORIUM_HTTPPOSTER_URL_MAX;
+    static constexpr size_t REPLY_CAP = CORIUM_HTTPPOSTER_REPLY_MAX;
     bool slot_due(unsigned long now);
     void post();
     void send(const char* url, const char* body);
     void take_reply();
 };
+
+}  // namespace corium
 
 #endif

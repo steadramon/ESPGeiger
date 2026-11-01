@@ -1,5 +1,5 @@
 /*
-  EGPrefsStorage.cpp - Per-module binary store. See EGPrefsStorage.h for format.
+  corium::PrefsStorage.cpp - Per-module binary store. See corium::PrefsStorage.h for format.
 
   Copyright (C) 2025 @steadramon
 
@@ -17,16 +17,16 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "EGPrefsStorage.h"
-#include "EGPrefs.h"
+#include "PrefsStorage.h"
+#include "Prefs.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/Fs.h"
 #include "Corium/Util/Bytes.h"
 
-#define EGPS_STAGING_SUFFIX   ".new"
-#define EGPS_PATH_BUFSZ       96
-#define EGPS_KEY_BUFSZ        64
-#define EGPS_VAL_BUFSZ        512   // stack, boot only
+#define CORIUM_PS_STAGING_SUFFIX   ".new"
+#define CORIUM_PS_PATH_BUFSZ       96
+#define CORIUM_PS_KEY_BUFSZ        64
+#define CORIUM_PS_VAL_BUFSZ        512   // stack, boot only
 
 namespace {
 
@@ -35,7 +35,7 @@ void group_path(char* out, size_t sz, const char* base, const char* mid) {
 }
 
 bool staged_path(char* out, size_t sz, const char* base, const char* mid) {
-  int n = snprintf_P(out, sz, PSTR("%s%s.bin" EGPS_STAGING_SUFFIX), base, mid);
+  int n = snprintf_P(out, sz, PSTR("%s%s.bin" CORIUM_PS_STAGING_SUFFIX), base, mid);
   return n > 0 && n < (int)sz;
 }
 
@@ -48,27 +48,27 @@ bool read_magic(File& f) {
 // u8 klen, key, u16le vlen, value
 bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen) {
   if (f.read(klen, 1) != 1) return false;
-  if (*klen == 0 || *klen >= EGPS_KEY_BUFSZ) return false;
+  if (*klen == 0 || *klen >= CORIUM_PS_KEY_BUFSZ) return false;
   if (f.read((uint8_t*)key, *klen) != *klen) return false;
   uint8_t vlen_bytes[2];
   if (f.read(vlen_bytes, 2) != 2) return false;
   *vlen = rd_le16(vlen_bytes);
-  if (*vlen >= EGPS_VAL_BUFSZ) return false;
+  if (*vlen >= CORIUM_PS_VAL_BUFSZ) return false;
   if (*vlen > 0 && f.read((uint8_t*)value, *vlen) != *vlen) return false;
   return true;
 }
 
 } // anonymous namespace
 
-EGPrefsStorage::EGPrefsStorage()
+corium::PrefsStorage::PrefsStorage()
   : _path{}, _started(false)
 {}
 
-EGPrefsStorage::~EGPrefsStorage() {
+corium::PrefsStorage::~PrefsStorage() {
   end();
 }
 
-bool EGPrefsStorage::begin(const char* name) {
+bool corium::PrefsStorage::begin(const char* name) {
   if (_started || !name || !*name || strlen(name) > DIR_NAME_MAX) return false;
   if (!Fs::begin()) return false;   // prefs run on defaults
   char dir[DIR_NAME_MAX + 2];
@@ -90,27 +90,27 @@ bool EGPrefsStorage::begin(const char* name) {
   return true;
 }
 
-void EGPrefsStorage::end() {
+void corium::PrefsStorage::end() {
   if (!_started) return;
   _path[0] = '\0';
   _started = false;
 }
 
-bool EGPrefsStorage::has(const char* module_id) {
+bool corium::PrefsStorage::has(const char* module_id) {
   if (!_started || !module_id) return false;
-  char path[EGPS_PATH_BUFSZ];
+  char path[CORIUM_PS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
   return Fs::exists(path);
 }
 
-bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
+bool corium::PrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
   if (!_started || !module_id || !cb) return false;
-  char path[EGPS_PATH_BUFSZ];
+  char path[CORIUM_PS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
   File f = Fs::open_r(path);
   if (!f) return false;
   size_t sz = f.size();
-  if (sz < 4 || sz > EGPREFS_MAX_GROUP_SZ) { f.close(); return false; }
+  if (sz < 4 || sz > CORIUM_PREFS_MAX_GROUP_SZ) { f.close(); return false; }
 
   if (!read_magic(f)) {
     f.close();
@@ -118,8 +118,8 @@ bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
   }
 
   // stream it, no ~1 KB heap
-  char key[EGPS_KEY_BUFSZ];
-  char value[EGPS_VAL_BUFSZ];
+  char key[CORIUM_PS_KEY_BUFSZ];
+  char value[CORIUM_PS_VAL_BUFSZ];
   bool ok = true;
   while (f.available() > 0) {
     uint8_t klen;
@@ -136,7 +136,7 @@ bool EGPrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
 }
 
 // stage and rename, never a partial write
-bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t len) {
+bool corium::PrefsStorage::writeGroup(const char* module_id, const void* buf, size_t len) {
   if (!stageGroup(module_id, buf, len)) return false;
   if (commitGroup(module_id)) return true;
   dropStaged(module_id);
@@ -144,10 +144,10 @@ bool EGPrefsStorage::writeGroup(const char* module_id, const void* buf, size_t l
 }
 
 // <id>.bin.new, the old file stands till commitGroup
-bool EGPrefsStorage::stageGroup(const char* module_id, const void* buf, size_t len) {
+bool corium::PrefsStorage::stageGroup(const char* module_id, const void* buf, size_t len) {
   if (!_started || !module_id || !buf) return false;
-  if (len < 4 || len > EGPREFS_MAX_GROUP_SZ) return false;
-  char staging[EGPS_PATH_BUFSZ];
+  if (len < 4 || len > CORIUM_PREFS_MAX_GROUP_SZ) return false;
+  char staging[CORIUM_PS_PATH_BUFSZ];
   if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
   File f = Fs::open_w(staging);
   if (!f) return false;
@@ -159,25 +159,25 @@ bool EGPrefsStorage::stageGroup(const char* module_id, const void* buf, size_t l
 }
 
 // don't remove first, rename replaces in one step
-bool EGPrefsStorage::commitGroup(const char* module_id) {
+bool corium::PrefsStorage::commitGroup(const char* module_id) {
   if (!_started || !module_id) return false;
-  char staging[EGPS_PATH_BUFSZ];
-  char final_path[EGPS_PATH_BUFSZ];
+  char staging[CORIUM_PS_PATH_BUFSZ];
+  char final_path[CORIUM_PS_PATH_BUFSZ];
   if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
   group_path(final_path, sizeof(final_path), _path, module_id);
   return Fs::rename(staging, final_path);
 }
 
-void EGPrefsStorage::dropStaged(const char* module_id) {
-  char staging[EGPS_PATH_BUFSZ];
+void corium::PrefsStorage::dropStaged(const char* module_id) {
+  char staging[CORIUM_PS_PATH_BUFSZ];
   if (_started && module_id && staged_path(staging, sizeof(staging), _path, module_id)) {
     Fs::remove(staging);
   }
 }
 
-bool EGPrefsStorage::removeGroup(const char* module_id) {
+bool corium::PrefsStorage::removeGroup(const char* module_id) {
   if (!_started || !module_id) return false;
-  char path[EGPS_PATH_BUFSZ];
+  char path[CORIUM_PS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
   return Fs::remove(path);
 }

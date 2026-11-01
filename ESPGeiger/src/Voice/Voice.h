@@ -14,21 +14,21 @@
 
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "Corium/Output/QuietWindow.h"
 
-class Voice : public EGModule {
+class Voice : public corium::Module {
   public:
     Voice() {}
     const char* name() override { return PSTR("voice"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 18; }
     static constexpr uint16_t LOOP_MS = 1000;
     void begin() override;
     void loop(unsigned long now) override;
     void registerRoutes(EGHttpServer& http) override;
 
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
     void speakDigit(uint8_t d, bool rising);
@@ -56,7 +56,7 @@ class Voice : public EGModule {
     uint16_t _ann_iv    = 60;
     bool     _ann_usv   = false;
     bool     _ann_radmon = false;
-    EGSender* _radmon = nullptr;   // nullptr = not built
+    corium::Sender* _radmon = nullptr;   // nullptr = not built
     bool     _radmon_known  = false;
     bool     _radmon_was_ok = true;
     unsigned long _radmon_last_attempt = 0;

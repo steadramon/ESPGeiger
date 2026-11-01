@@ -19,15 +19,15 @@
 
 #include "ArduinoOTA.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/IgmpRefresh.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/Output/LedSignal.h"
 
 ArduinoOTAModule ota;
-EG_REGISTER_MODULE(ota)
+CORIUM_REGISTER_MODULE(ota)
 
 void ArduinoOTAModule::begin() {
   ArduinoOTA.onStart ([]() {
@@ -36,7 +36,7 @@ void ArduinoOTAModule::begin() {
       type = PSTR("sketch");
     else // U_SPIFFS
       type = PSTR("filesystem");
-    EGModuleRegistry::post(&ota);
+    corium::Registry::post(&ota);
     Lifecycle::send(Lifecycle::OTA_START);
     LedSignal::lit(true);
     Log::console(PSTR("Start updating %s"), type);
@@ -72,17 +72,20 @@ void ArduinoOTAModule::begin() {
   });
 
   // core copies it, before begin() only, so a new one needs a restart
-  const char* pass = EGPrefs::getString("sys", EG_K_WEB_PASS);
+  const char* pass = corium::Prefs::getString("sys", corium::K_WEB_PASS);
   if (pass && pass[0]) ArduinoOTA.setPassword(pass);
   ArduinoOTA.setHostname(DeviceInfo::hostname());
   ArduinoOTA.begin();
   MDNS.addService("http",   "tcp", 80);
-  MDNS.addService("geiger", "tcp", 80);
+#ifdef APP_MDNS_SERVICE
+  // the app's own service, the name it's found by
+  MDNS.addService(APP_MDNS_SERVICE, "tcp", 80);
   const char* fname = DeviceInfo::friendlyName();
   if (fname && fname[0]) {
-    MDNS.addServiceTxt("geiger", "tcp", "fname", fname);
+    MDNS.addServiceTxt(APP_MDNS_SERVICE, "tcp", "fname", fname);
   }
-  EGModuleRegistry::every(this, OTA_POLL_INTERVAL_MS);
+#endif
+  corium::Registry::every(this, OTA_POLL_INTERVAL_MS);
 }
 
 void ArduinoOTAModule::loop(unsigned long now) {

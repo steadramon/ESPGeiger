@@ -19,10 +19,10 @@
 #ifndef APP_UNITS_H
 #define APP_UNITS_H
 
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 
 enum AppUnit : uint8_t {
-  EGMU_CPM = EGMU_APP,
+  EGMU_CPM = corium::MU_APP,
   EGMU_CPS,
   EGMU_USVH,
   EGMU_COUNT,

@@ -58,7 +58,7 @@ public:
   void secondTicker() override;
   int  collect() override;
   bool isHealthy() const override;
-  EGMeasureRows measurements() override;
+  corium::MeasureRows measurements() override;
 
   void on_prefs_saved();
 

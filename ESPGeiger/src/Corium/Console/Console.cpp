@@ -18,8 +18,8 @@
 */
 #include "Corium/Console/Console.h"
 #include "App/Version.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/DeviceInfo.h"
@@ -28,9 +28,9 @@
 
 Console console;
 
-EG_REGISTER_MODULE(console)
+CORIUM_REGISTER_MODULE(console)
 
-const EGCmd* Console::_cmds[EG_MAX_CMDS] = {};
+const corium::Cmd* Console::_cmds[CORIUM_MAX_CMDS] = {};
 uint8_t Console::_count = 0;
 uint8_t Console::_dropped = 0;
 ConsoleLine Console::_serial = {};
@@ -58,7 +58,7 @@ static void reset_wifi() {
 }
 
 static bool committed() {
-  if (EGPrefs::commit()) return true;
+  if (corium::Prefs::commit()) return true;
   Log::console(PSTR("Commit failed"));
   return false;
 }
@@ -66,7 +66,7 @@ static bool committed() {
 static void reset_net() {
   Log::console(PSTR("Clearing net.* prefs and rebooting"));
   // dhcp, all blank
-  EGPrefs::reset("net");
+  corium::Prefs::reset("net");
   if (!committed()) return;
   Wifi::dropNetBackup();
   reboot();
@@ -76,7 +76,7 @@ static void reset_net() {
 struct PrefArg {
   const char* mod;
   const char* key;
-  EGPref p;
+  corium::Pref p;
 };
 
 static bool pref_arg(PrefArg& a, const char* usage) {
@@ -89,7 +89,7 @@ static bool pref_arg(PrefArg& a, const char* usage) {
   *dot = '\0';
   a.mod = arg;
   a.key = dot + 1;
-  if (EGPrefs::find_pref(a.mod, a.key, &a.p)) return true;
+  if (corium::Prefs::find_pref(a.mod, a.key, &a.p)) return true;
   Log::console(PSTR("Unknown pref: %s.%s"), a.mod, a.key);
   return false;
 }
@@ -98,8 +98,8 @@ static void cmd_get() {
   PrefArg a;
   if (!pref_arg(a, PSTR("Usage: get <module>.<key>"))) return;
   // never null, unset is ""
-  const char* v = EGPrefs::getString(a.mod, a.key);
-  if ((a.p.flags & EGP_SENSITIVE) && *v) v = PSTR("***");
+  const char* v = corium::Prefs::getString(a.mod, a.key);
+  if ((a.p.flags & corium::P_SENSITIVE) && *v) v = PSTR("***");
   Log::console(PSTR("%s.%s=%s"), a.mod, a.key, v);
 }
 
@@ -115,14 +115,14 @@ static void cmd_set() {
   size_t vlen = strlen(value);
   // a line never holds CR or LF
   while (vlen > 0 && value[vlen-1] == ' ') value[--vlen] = '\0';
-  if (!EGPrefs::put(mod, key, value)) {
+  if (!corium::Prefs::put(mod, key, value)) {
     Log::console(PSTR("Rejected: %s.%s validation failed"), mod, key);
     return;
   }
   if (!committed()) return;
-  const char* ok = (a.p.flags & EGP_SENSITIVE) ? PSTR("OK: %s.%s set") : PSTR("OK: %s.%s=%s");
-  Log::console(ok, mod, key, EGPrefs::getString(mod, key));
-  if (EGPrefs::restart_pending()) Log::console(EG_H_RBA);
+  const char* ok = (a.p.flags & corium::P_SENSITIVE) ? PSTR("OK: %s.%s set") : PSTR("OK: %s.%s=%s");
+  Log::console(ok, mod, key, corium::Prefs::getString(mod, key));
+  if (corium::Prefs::restart_pending()) Log::console(corium::H_RBA);
 }
 
 // back to defaults, never reboots or wipes
@@ -134,7 +134,7 @@ static void cmd_reset() {
   }
   char* dot = strchr(arg, '.');
   if (dot) *dot = '\0';
-  bool ok = EGPrefs::reset(arg, dot ? dot + 1 : nullptr);
+  bool ok = corium::Prefs::reset(arg, dot ? dot + 1 : nullptr);
   // whole word again for the reply
   if (dot) *dot = '.';
   if (!ok) {
@@ -143,7 +143,7 @@ static void cmd_reset() {
   }
   if (!committed()) return;
   Log::console(PSTR("OK: %s reset"), arg);
-  if (EGPrefs::restart_pending()) Log::console(EG_H_RBA);
+  if (corium::Prefs::restart_pending()) Log::console(corium::H_RBA);
 }
 
 static const char C_REBOOT[] PROGMEM = "reboot";
@@ -156,7 +156,7 @@ static const char C_RESET[] PROGMEM = "reset";
 static const char C_VER[] PROGMEM = "ver";
 
 // in flash, no RAM copy
-static const EGCmd CMDS[] PROGMEM = {
+static const corium::Cmd CMDS[] PROGMEM = {
   { C_REBOOT, reboot },
   { C_SAFE, safe },
   { C_RESETWIFI, reset_wifi },
@@ -167,8 +167,8 @@ static const EGCmd CMDS[] PROGMEM = {
   { C_VER, ver },
 };
 
-bool Console::add(const EGCmd* cmd) {
-  if (_count >= EG_MAX_CMDS) { _dropped++; return false; }
+bool Console::add(const corium::Cmd* cmd) {
+  if (_count >= CORIUM_MAX_CMDS) { _dropped++; return false; }
   _cmds[_count++] = cmd;
   return true;
 }
@@ -181,8 +181,8 @@ char* Console::rest() {
   return _last;
 }
 
-static bool run_row(const EGCmd* row, const char* word) {
-  EGCmd c;
+static bool run_row(const corium::Cmd* row, const char* word) {
+  corium::Cmd c;
   memcpy_P(&c, row, sizeof(c));
   if (strcmp_P(word, c.name) != 0) return false;
   c.fn();
@@ -203,7 +203,7 @@ void Console::exec(ConsoleLine& l) {
 void Console::begin() {
   if (_dropped) Log::console(PSTR("Console: %u command(s) dropped (raise EG_MAX_CMDS)"), _dropped);
 #ifndef DISABLE_SERIALRX
-  EGModuleRegistry::every(this, LOOP_MS);   // else nothing to read
+  corium::Registry::every(this, LOOP_MS);   // else nothing to read
 #endif
 }
 

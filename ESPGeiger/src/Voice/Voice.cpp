@@ -22,9 +22,9 @@
 #include "AudioTick/AudioTick.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
@@ -36,92 +36,92 @@
 
 #include "vocab_adpcm.h"
 
-EG_PSTR(K_ANNOUNCE_ENABLE,   "announce_enable");
-EG_PSTR(K_ANNOUNCE_INTERVAL, "announce_interval");
-EG_PSTR(K_ANNOUNCE_USV,      "announce_usv");
-EG_PSTR(K_ANNOUNCE_RADMON,   "announce_radmon");
-EG_PSTR(K_VOICE_VOLUME,      "voice_volume");
-EG_PSTR(K_COOLDOWN,          "cooldown");
+CORIUM_PSTR(K_ANNOUNCE_ENABLE,   "announce_enable");
+CORIUM_PSTR(K_ANNOUNCE_INTERVAL, "announce_interval");
+CORIUM_PSTR(K_ANNOUNCE_USV,      "announce_usv");
+CORIUM_PSTR(K_ANNOUNCE_RADMON,   "announce_radmon");
+CORIUM_PSTR(K_VOICE_VOLUME,      "voice_volume");
+CORIUM_PSTR(K_COOLDOWN,          "cooldown");
 
 Voice voice;
-EG_REGISTER_MODULE(voice)
+CORIUM_REGISTER_MODULE(voice)
 
-EG_PSTR(VX_L_AEN, "Announce");
-EG_PSTR(VX_H_AEN, "Periodically speak the current CPM");
-EG_PSTR(VX_L_AIV, "Every (seconds)");
-EG_PSTR(VX_H_AIV, "10-3600");
-EG_PSTR(VX_L_AUS, "Announce dose");
-EG_PSTR(VX_H_AUS, "Include micro sievert per hour with the announcement");
-EG_PSTR(VX_L_ARM, "RadMon up/down");
-EG_PSTR(VX_H_ARM, "Speak when RadMon goes online or offline");
+CORIUM_PSTR(VX_L_AEN, "Announce");
+CORIUM_PSTR(VX_H_AEN, "Periodically speak the current CPM");
+CORIUM_PSTR(VX_L_AIV, "Every (seconds)");
+CORIUM_PSTR(VX_H_AIV, "10-3600");
+CORIUM_PSTR(VX_L_AUS, "Announce dose");
+CORIUM_PSTR(VX_H_AUS, "Include micro sievert per hour with the announcement");
+CORIUM_PSTR(VX_L_ARM, "RadMon up/down");
+CORIUM_PSTR(VX_H_ARM, "Speak when RadMon goes online or offline");
 
-static const EGPref VOICE_PREF_ITEMS[] PROGMEM = {
-  {K_ANNOUNCE_ENABLE,   VX_L_AEN,  VX_H_AEN,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
-  {K_ANNOUNCE_INTERVAL, VX_L_AIV,  VX_H_AIV,  "60", nullptr, 10, 3600,  0, EGP_UINT, EGP_ADVANCED},
-  {K_ANNOUNCE_USV,      VX_L_AUS,  VX_H_AUS,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
-  {K_ANNOUNCE_RADMON,   VX_L_ARM,  VX_H_ARM,  "0",  nullptr,  0,    0,  0, EGP_BOOL, 0},
-  {K_VOICE_VOLUME,      EG_L_VOL,  EG_H_VOL,  "80", nullptr,  1,  100,  0, EGP_UINT, 0},
+static const corium::Pref VOICE_PREF_ITEMS[] PROGMEM = {
+  {K_ANNOUNCE_ENABLE,   VX_L_AEN,  VX_H_AEN,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
+  {K_ANNOUNCE_INTERVAL, VX_L_AIV,  VX_H_AIV,  "60", nullptr, 10, 3600,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_ANNOUNCE_USV,      VX_L_AUS,  VX_H_AUS,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
+  {K_ANNOUNCE_RADMON,   VX_L_ARM,  VX_H_ARM,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
+  {K_VOICE_VOLUME,      EG_L_VOL,  EG_H_VOL,  "80", nullptr,  1,  100,  0, corium::P_UINT, 0},
 };
 
-static const EGPrefGroup VOICE_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup VOICE_PREF_GROUP PROGMEM = {
   "klaxon", "Voice", 1,
   VOICE_PREF_ITEMS,
   sizeof(VOICE_PREF_ITEMS) / sizeof(VOICE_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT, K_ANNOUNCE_ENABLE,
+  corium::P_CAT_OUTPUT, K_ANNOUNCE_ENABLE,
 };
 
-const EGPrefGroup* Voice::prefs_group() { return &VOICE_PREF_GROUP; }
+const corium::PrefGroup* Voice::prefs_group() { return &VOICE_PREF_GROUP; }
 
 void Voice::on_prefs_loaded() {
-  _voice_vol = (uint8_t)EGPrefs::getUInt("klaxon", K_VOICE_VOLUME);
-  _ann_en     = EGPrefs::getBool("klaxon", K_ANNOUNCE_ENABLE);
-  _ann_iv     = (uint16_t)EGPrefs::getUInt("klaxon", K_ANNOUNCE_INTERVAL);
-  _ann_usv    = EGPrefs::getBool("klaxon", K_ANNOUNCE_USV);
-  _ann_radmon = EGPrefs::getBool("klaxon", K_ANNOUNCE_RADMON);
-  _klax_en   = EGPrefs::getBool("klax", EG_K_ENABLE);
-  _klax_type = (uint8_t)EGPrefs::getUInt("klax", EG_K_TYPE);
-  _klax_vol  = (uint8_t)EGPrefs::getUInt("klax", EG_K_VOLUME);
-  _klax_cd   = (uint8_t)EGPrefs::getUInt("klax", K_COOLDOWN);
-  _quiet.set(EGPrefs::getString("klax", EG_K_QUIET_FROM),
-             EGPrefs::getString("klax", EG_K_QUIET_TO));
+  _voice_vol = (uint8_t)corium::Prefs::getUInt("klaxon", K_VOICE_VOLUME);
+  _ann_en     = corium::Prefs::getBool("klaxon", K_ANNOUNCE_ENABLE);
+  _ann_iv     = (uint16_t)corium::Prefs::getUInt("klaxon", K_ANNOUNCE_INTERVAL);
+  _ann_usv    = corium::Prefs::getBool("klaxon", K_ANNOUNCE_USV);
+  _ann_radmon = corium::Prefs::getBool("klaxon", K_ANNOUNCE_RADMON);
+  _klax_en   = corium::Prefs::getBool("klax", EG_K_ENABLE);
+  _klax_type = (uint8_t)corium::Prefs::getUInt("klax", EG_K_TYPE);
+  _klax_vol  = (uint8_t)corium::Prefs::getUInt("klax", EG_K_VOLUME);
+  _klax_cd   = (uint8_t)corium::Prefs::getUInt("klax", K_COOLDOWN);
+  _quiet.set(corium::Prefs::getString("klax", EG_K_QUIET_FROM),
+             corium::Prefs::getString("klax", EG_K_QUIET_TO));
 }
 
-class KlaxonPrefs : public EGModule {
+class KlaxonPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("klax"); }
   uint8_t display_order() override { return 19; }
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
 };
 
 static KlaxonPrefs klaxonprefs;
-EG_REGISTER_MODULE(klaxonprefs)
+CORIUM_REGISTER_MODULE(klaxonprefs)
 
-EG_PSTR(KX_L_EN,  "Klaxon on alert");
-EG_PSTR(KX_H_EN,  "Sound a klaxon when CPM crosses the alert threshold");
-EG_PSTR(KX_L_TY,  "Pattern");
-EG_PSTR(KX_O_TY,  "Alarm|Two-Tone|Wail|Horn|Voice");
-EG_PSTR(KX_L_CD,  "Cooldown");
-EG_PSTR(KX_H_CD,  "Minutes between alert klaxons (1-60)");
-EG_PSTR(KX_H_QFR, "Silence klaxon + voice from this time (blank = off)");
+CORIUM_PSTR(KX_L_EN,  "Klaxon on alert");
+CORIUM_PSTR(KX_H_EN,  "Sound a klaxon when CPM crosses the alert threshold");
+CORIUM_PSTR(KX_L_TY,  "Pattern");
+CORIUM_PSTR(KX_O_TY,  "Alarm|Two-Tone|Wail|Horn|Voice");
+CORIUM_PSTR(KX_L_CD,  "Cooldown");
+CORIUM_PSTR(KX_H_CD,  "Minutes between alert klaxons (1-60)");
+CORIUM_PSTR(KX_H_QFR, "Silence klaxon + voice from this time (blank = off)");
 
-static const EGPref KLAXON_PREF_ITEMS[] PROGMEM = {
-  {EG_K_ENABLE,     KX_L_EN,  KX_H_EN,  "0",  nullptr, 0, 0,   0, EGP_BOOL, 0},
-  {EG_K_TYPE,       KX_L_TY,  nullptr,  "0",  KX_O_TY, 0, 4,   0, EGP_ENUM, 0},
-  {EG_K_VOLUME,     EG_L_VOL, EG_H_VOL, "55", nullptr, 1, 100, 0, EGP_UINT, 0},
-  {K_COOLDOWN,      KX_L_CD,  KX_H_CD,  "5",  nullptr, 1, 60,  0, EGP_UINT, EGP_ADVANCED},
-  {EG_K_QUIET_FROM, EG_L_QFR, KX_H_QFR, "",   nullptr, 0, 0,   EG_HHMM_MAX, EGP_STRING, EGP_TIME},
-  {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",   nullptr, 0, 0,   EG_HHMM_MAX, EGP_STRING, EGP_TIME},
+static const corium::Pref KLAXON_PREF_ITEMS[] PROGMEM = {
+  {EG_K_ENABLE,     KX_L_EN,  KX_H_EN,  "0",  nullptr, 0, 0,   0, corium::P_BOOL, 0},
+  {EG_K_TYPE,       KX_L_TY,  nullptr,  "0",  KX_O_TY, 0, 4,   0, corium::P_ENUM, 0},
+  {EG_K_VOLUME,     EG_L_VOL, EG_H_VOL, "55", nullptr, 1, 100, 0, corium::P_UINT, 0},
+  {K_COOLDOWN,      KX_L_CD,  KX_H_CD,  "5",  nullptr, 1, 60,  0, corium::P_UINT, corium::P_ADVANCED},
+  {EG_K_QUIET_FROM, EG_L_QFR, KX_H_QFR, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME},
+  {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME},
 };
 
-static const EGPrefGroup KLAXON_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup KLAXON_PREF_GROUP PROGMEM = {
   "klax", "Alert Klaxon", 1,
   KLAXON_PREF_ITEMS,
   sizeof(KLAXON_PREF_ITEMS) / sizeof(KLAXON_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT, EG_K_ENABLE,
+  corium::P_CAT_OUTPUT, EG_K_ENABLE,
 };
 
-const EGPrefGroup* KlaxonPrefs::prefs_group() { return &KLAXON_PREF_GROUP; }
+const corium::PrefGroup* KlaxonPrefs::prefs_group() { return &KLAXON_PREF_GROUP; }
 
 void KlaxonPrefs::on_prefs_loaded() {
   voice.on_prefs_loaded();
@@ -362,10 +362,10 @@ static void voice_cmd(const AudioCmd& cmd) {
 
 void Voice::begin() {
   audio_speech(voice_cmd);
-  EGModuleRegistry::every(this, LOOP_MS);
+  corium::Registry::every(this, LOOP_MS);
   // klaxon on the edge, not the next second
-  EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
-  EGModule* r = EGModuleRegistry::find("radmon");
+  corium::Registry::on(Counter::TOPIC_ALARM, this);
+  corium::Module* r = corium::Registry::find("radmon");
   _radmon = r ? r->sender() : nullptr;
 }
 
@@ -375,7 +375,7 @@ static const char* DIGIT_NAMES[10] = {
 };
 
 void Voice::queueKlaxonOnAlert() {
-  const bool now_alert = egm_b(M_ALERT);
+  const bool now_alert = corium::m_b(M_ALERT);
   if (now_alert && !_prev_alert && !_quiet.active() && !_klax_wait) {
     _klax_wait = true;
     _last_klax_ms = fast_millis();
@@ -397,7 +397,7 @@ void Voice::queueAnnouncement() {
 
 // not at boot
 void Voice::queueRadmonChange() {
-  EGSender* m = _radmon;
+  corium::Sender* m = _radmon;
   // last_ok is only the answer once the reply is in
   if (m && m->last_attempt_ms != 0 && !m->_publish_pending &&
       m->last_attempt_ms != _radmon_last_attempt) {
@@ -427,16 +427,16 @@ void Voice::loop(unsigned long /*now*/) {
 }
 
 void Voice::announce() {
-  if (egm_b(M_ALERT)) {
+  if (corium::m_b(M_ALERT)) {
     speakWord("alert"); silence(200);
-  } else if (egm_b(M_WARN)) {
+  } else if (corium::m_b(M_WARN)) {
     speakWord("warning"); silence(200);
   }
   speakWord("CPM"); silence(150);
-  speakNumber(egm_i(M_CPM));
+  speakNumber(corium::m_i(M_CPM));
   if (_ann_usv) {
     silence(250);
-    const float usv = egm_f(M_USV);
+    const float usv = corium::m_f(M_USV);
     const bool use_milli = (usv >= 1000.0f);
     const float scaled = use_milli ? (usv / 1000.0f) : usv;
     const long tenths = (long)(scaled * 10.0f + 0.5f);

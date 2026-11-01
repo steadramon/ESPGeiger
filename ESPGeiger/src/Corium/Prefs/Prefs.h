@@ -1,5 +1,5 @@
 /*
-  EGPrefs.h - Schema-driven preferences for modules.
+  corium::Prefs.h - Schema-driven preferences for modules.
 
   Copyright (C) 2025 @steadramon
 
@@ -17,71 +17,73 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef EGPREFS_H
-#define EGPREFS_H
+#ifndef CORIUM_PREFS_H
+#define CORIUM_PREFS_H
 
 #include <Arduino.h>
 #include "App/AppConfig.h"
 
 // bytes per group file
-#ifndef EGPREFS_MAX_GROUP_SZ
-#define EGPREFS_MAX_GROUP_SZ 1024
+#ifndef CORIUM_PREFS_MAX_GROUP_SZ
+#define CORIUM_PREFS_MAX_GROUP_SZ 1024
 #endif
 
 // commit_soon's write waits this, the ones meanwhile join it
-#ifndef EGPREFS_HOLD_MS
-#define EGPREFS_HOLD_MS 5000
+#ifndef CORIUM_PREFS_HOLD_MS
+#define CORIUM_PREFS_HOLD_MS 5000
 #endif
 
 // string maxes, rows and buffers both use these. buffers +1
-#define EGPREFS_MAX_VALUE 255   // longest string max_len (webhook url/key)
-#define EGPREF_ID_MAX     17    // announce_interval
-#define EG_NAME_MAX       32
-#define EG_HOST_MAX       64
-#define EG_IPV4_MAX       15
-#define EG_HHMM_MAX       5
-#define EG_U32_MAX_LEN    10    // 4294967295
-#define EGPREFS_FROZEN_MAX (3 * EGPREF_ID_MAX + 32)   // frozen()'s text, with the nul
-#define EGPREF_PATTERN_MAX 127  // regex or enum options
+#define CORIUM_PREFS_MAX_VALUE 255   // longest string max_len (webhook url/key)
+#define CORIUM_PREF_ID_MAX     17    // announce_interval
+#define CORIUM_NAME_MAX       32
+#define CORIUM_HOST_MAX       64
+#define CORIUM_IPV4_MAX       15
+#define CORIUM_HHMM_MAX       5
+#define CORIUM_U32_MAX_LEN    10    // 4294967295
+#define CORIUM_PREFS_FROZEN_MAX (3 * CORIUM_PREF_ID_MAX + 32)   // frozen()'s text, with the nul
+#define CORIUM_PREF_PATTERN_MAX 127  // regex or enum options
 
 // build macro as text, for defaults and maxlength
 #define STR_(x) #x
 #define STR(x)  STR_(x)
 
-enum EGPrefType : uint8_t {
-  EGP_BOOL,
-  EGP_INT,
-  EGP_UINT,
-  EGP_FLOAT,
-  EGP_STRING,
-  EGP_LABEL,
-  EGP_HEADER,
-  EGP_ENUM,     // options in pattern, value = min_i + index
+namespace corium {
+
+enum PrefType : uint8_t {
+  P_BOOL,
+  P_INT,
+  P_UINT,
+  P_FLOAT,
+  P_STRING,
+  P_LABEL,
+  P_HEADER,
+  P_ENUM,     // options in pattern, value = min_i + index
 };
 
-static constexpr uint16_t EGP_SENSITIVE = 1 << 0;
-static constexpr uint16_t EGP_HIDDEN    = 1 << 1;
-static constexpr uint16_t EGP_ADVANCED  = 1 << 2;
-static constexpr uint16_t EGP_READONLY  = 1 << 3;
-static constexpr uint16_t EGP_TIME      = 1 << 4;
-static constexpr uint16_t EGP_SLIDER    = 1 << 5;
-static constexpr uint16_t EGP_REQUIRED  = 1 << 6;
-static constexpr uint16_t EGP_INLINE    = 1 << 7;
-static constexpr uint16_t EGP_REBOOT    = 1 << 8;   // a change needs a restart
-static constexpr uint16_t EGP_PIN       = 1 << 9;   // input GPIO, put checks PinSafety
-static constexpr uint16_t EGP_PIN_OUT   = 1 << 10;  // output GPIO, input-only refused too
-static constexpr uint16_t EGP_PIN_BTN   = EGP_PIN | EGP_PIN_OUT;  // button: input, no strap note
-static constexpr uint16_t EGP_LOCAL     = 1 << 11;  // this device's, no export, an import keeps it
-static constexpr uint16_t EGP_KEEP      = 1 << 12;  // no reset_all clears it, only its own reset
-static constexpr uint16_t EGP_PIN_IRQ   = 1 << 13;  // pin needs an interrupt, else a warning
-static constexpr uint16_t EGP_PIN_PWM   = 1 << 14;  // pin needs PWM
-static constexpr uint16_t EGP_PIN_OD    = 1 << 15;  // pin needs open-drain
+static constexpr uint16_t P_SENSITIVE = 1 << 0;
+static constexpr uint16_t P_HIDDEN    = 1 << 1;
+static constexpr uint16_t P_ADVANCED  = 1 << 2;
+static constexpr uint16_t P_READONLY  = 1 << 3;
+static constexpr uint16_t P_TIME      = 1 << 4;
+static constexpr uint16_t P_SLIDER    = 1 << 5;
+static constexpr uint16_t P_REQUIRED  = 1 << 6;
+static constexpr uint16_t P_INLINE    = 1 << 7;
+static constexpr uint16_t P_REBOOT    = 1 << 8;   // a change needs a restart
+static constexpr uint16_t P_PIN       = 1 << 9;   // input GPIO, put checks PinSafety
+static constexpr uint16_t P_PIN_OUT   = 1 << 10;  // output GPIO, input-only refused too
+static constexpr uint16_t P_PIN_BTN   = P_PIN | P_PIN_OUT;  // button: input, no strap note
+static constexpr uint16_t P_LOCAL     = 1 << 11;  // this device's, no export, an import keeps it
+static constexpr uint16_t P_KEEP      = 1 << 12;  // no reset_all clears it, only its own reset
+static constexpr uint16_t P_PIN_IRQ   = 1 << 13;  // pin needs an interrupt, else a warning
+static constexpr uint16_t P_PIN_PWM   = 1 << 14;  // pin needs PWM
+static constexpr uint16_t P_PIN_OD    = 1 << 15;  // pin needs open-drain
 
 // no PSTR() in static init. default_val stays SRAM
-#define EG_PSTR(name, val) static const char name[] PROGMEM = val
+#define CORIUM_PSTR(name, val) static const char name[] PROGMEM = val
 
 // tables must be PROGMEM
-struct EGPref {
+struct Pref {
   const char* id;         // PROGMEM, max 17 chars
   const char* label;      // SRAM or PROGMEM
   const char* help;       // SRAM or PROGMEM
@@ -90,16 +92,16 @@ struct EGPref {
   int32_t     min_i;
   int32_t     max_i;      // == min_i: no range
   uint8_t     max_len;    // 0 = unlimited
-  EGPrefType  type;
+  PrefType  type;
   uint16_t    flags;
 };
 
 // flash is 32-bit loads only, copy the whole row
-class EGPrefRows {
+class PrefRows {
 public:
-  constexpr EGPrefRows(const EGPref* rows) : _rows(rows) {}
-  EGPref row(size_t j) const {
-    EGPref r;
+  constexpr PrefRows(const Pref* rows) : _rows(rows) {}
+  Pref row(size_t j) const {
+    Pref r;
     memcpy_P(&r, &_rows[j], sizeof(r));
     return r;
   }
@@ -110,15 +112,15 @@ public:
     return (const char*)pgm_read_ptr(&_rows[j].default_val);
   }
 private:
-  const EGPref* _rows;
+  const Pref* _rows;
 };
 
 // narrow flash reads fault, use get()
 template <typename T>
-class EGFlash {
+class Flash {
 public:
-  constexpr EGFlash() : _v() {}
-  constexpr EGFlash(T v) : _v(v) {}
+  constexpr Flash() : _v() {}
+  constexpr Flash(T v) : _v(v) {}
   T get() const {
     T v;
     memcpy_P(&v, &_v, sizeof(v));
@@ -129,74 +131,74 @@ private:
 };
 
 // hidden rows still post. PROGMEM, ends with {}
-struct EGPrefShow {
+struct PrefShow {
   const char* id;       // row id, nullptr = the whole group
   const char* when;     // "module.key", the form field it watches
   uint16_t    values;   // bit n = shown while it's n
 };
 
 // SYSTEM must stay 0
-enum EGPrefCategory : uint8_t {
-  EGP_CAT_SYSTEM = 0,
-  EGP_CAT_INPUT  = 1,
-  EGP_CAT_OUTPUT = 2,
-  EGP_CAT_UPLOAD = 3,
-  EGP_CAT_BACKUP = 4,
+enum PrefCategory : uint8_t {
+  P_CAT_SYSTEM = 0,
+  P_CAT_INPUT  = 1,
+  P_CAT_OUTPUT = 2,
+  P_CAT_UPLOAD = 3,
+  P_CAT_BACKUP = 4,
 };
 
 // groups must be PROGMEM
-struct EGPrefGroup {
+struct PrefGroup {
   const char* module_id;
   char        label[20];  // flash, _P or %s only
-  EGFlash<uint16_t> version;  // bump on schema change
-  EGPrefRows    prefs;
-  EGFlash<size_t>   count;
-  EGFlash<uint8_t>  category;
+  Flash<uint16_t> version;  // bump on schema change
+  PrefRows    prefs;
+  Flash<size_t>   count;
+  Flash<uint8_t>  category;
   const char*   enable_key;   // on/off badge, nullptr = none
 
   // no copy, byte reads of flash fault
-  EGPrefGroup(const EGPrefGroup&) = delete;
-  EGPrefGroup& operator=(const EGPrefGroup&) = delete;
+  PrefGroup(const PrefGroup&) = delete;
+  PrefGroup& operator=(const PrefGroup&) = delete;
 };
 
 // Shared keys
-extern const char EG_K_DNS[];
-extern const char EG_K_GW[];
-extern const char EG_K_IP[];
-extern const char EG_K_SCL[];
-extern const char EG_K_SDA[];
-extern const char EG_K_SERVER[];
-extern const char EG_K_SN[];
-extern const char EG_K_STATIC_IP[];
-extern const char EG_K_TZ[];
-extern const char EG_K_WEB_PASS[];
+extern const char K_DNS[];
+extern const char K_GW[];
+extern const char K_IP[];
+extern const char K_SCL[];
+extern const char K_SDA[];
+extern const char K_SERVER[];
+extern const char K_SN[];
+extern const char K_STATIC_IP[];
+extern const char K_TZ[];
+extern const char K_WEB_PASS[];
 
 // Shared labels
-extern const char EG_H_RBA[];
-extern const char EG_P_HOST[];
+extern const char H_RBA[];
+extern const char P_HOST[];
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
 // PROGMEM, {old, new} rows ending {}
-struct EGLegacyAlias {
+struct LegacyAlias {
   char legacy_key[20];
   char new_key[18];
 };
 
-class EGLegacyRows {
+class LegacyRows {
 public:
-  constexpr EGLegacyRows(const EGLegacyAlias* rows = nullptr) : _rows(rows) {}
+  constexpr LegacyRows(const LegacyAlias* rows = nullptr) : _rows(rows) {}
   explicit operator bool() const { return _rows != nullptr; }
-  EGLegacyAlias row(size_t j) const {
-    EGLegacyAlias r;
+  LegacyAlias row(size_t j) const {
+    LegacyAlias r;
     memcpy_P(&r, &_rows[j], sizeof(r));
     return r;
   }
 private:
-  const EGLegacyAlias* _rows;
+  const LegacyAlias* _rows;
 };
 // === END LEGACY IMPORT ===
 
-class EGPrefs {
+class Prefs {
 public:
   static void begin();
 
@@ -215,7 +217,7 @@ public:
   static bool putInt(const char* module, const char* key, int32_t value);
   static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);
-  // for a write per request: callbacks now, one write EGPREFS_HOLD_MS on; true = will be written
+  // for a write per request: callbacks now, one write CORIUM_PREFS_HOLD_MS on; true = will be written
   static bool commit_soon(uint32_t now);
   // the last commit left out a group holding a stored value that didn't load
   // and wrote the rest: why, else 0
@@ -237,16 +239,18 @@ public:
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
   static bool stored(const char* module);
   // enable_key unset, "0" or "-1" (no pin) = off, no key = on
-  static bool group_enabled(const EGPrefGroup* g);
+  static bool group_enabled(const PrefGroup* g);
 
   static size_t              group_count();
-  static const EGPrefGroup*  group_at(size_t idx);
-  static class EGModule*     module_at(size_t idx);
-  static bool                find_pref(const char* module, const char* key, EGPref* out);
+  static const PrefGroup*  group_at(size_t idx);
+  static class Module*     module_at(size_t idx);
+  static bool                find_pref(const char* module, const char* key, Pref* out);
   // old group of a moved key, in adopt order; nullptr past the end
   static const char*         moved_from(size_t i);
   // id SRAM or nullptr for the group; false = always shown
-  static bool                show_rule(const EGPrefShow* rows, const char* id, EGPrefShow* out);
+  static bool                show_rule(const PrefShow* rows, const char* id, PrefShow* out);
 };
+
+}  // namespace corium
 
 #endif

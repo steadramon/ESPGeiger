@@ -22,10 +22,10 @@
 #include "SerialParse.h"
 #include "GeigerInput.h"
 #include "Corium/Util/StringUtil.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 #include "Corium/Measure/OutputVars.h"
 #include "Corium/Util/Words.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "App/AppKeys.h"
 #include "App/MeasureIds.h"
 #include <string.h>
@@ -42,8 +42,8 @@ const char* mohm_mode(int cps) {
 }
 
 size_t fmt_mightyohm(char* buf, size_t cap) {
-  int cps = (int)egm_i(M_CPS_I);
-  int reported_cpm = (int)egm_i(M_CPM);
+  int cps = (int)corium::m_i(M_CPS_I);
+  int reported_cpm = (int)corium::m_i(M_CPM);
   // cps*60 overflows int above ~35.8M cps
   if (cps > 255) reported_cpm = (cps > 35791394) ? 2147483647 : cps * 60;
   char usv_str[12];
@@ -54,7 +54,7 @@ size_t fmt_mightyohm(char* buf, size_t cap) {
 }
 
 size_t fmt_user_template(char* buf, size_t cap) {
-  const char* tpl = EGPrefs::getString("sout", EG_K_TPL);
+  const char* tpl = corium::Prefs::getString("sout", EG_K_TPL);
   if (!tpl || !*tpl) return 0;
   size_t n = OutputVars::renderTemplate(tpl, buf, cap);
   if (n > 0 && buf[n - 1] != '\n' && n < cap - 1) {

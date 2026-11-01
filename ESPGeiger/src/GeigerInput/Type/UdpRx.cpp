@@ -26,7 +26,7 @@
 #include "App/Units.h"
 #include "EnvSensor/EnvSensor.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
@@ -65,14 +65,14 @@ void GeigerUdpRx::begin() {
   readPrefs();
   _last_seen_count = _local_count;
   Log::console(PSTR("UdpRx: mode=%u group=%s port=%u rxmode=%u"),
-               _mode, EGPrefs::getString("counter", EG_K_UDPRX_GROUP),
+               _mode, corium::Prefs::getString("counter", EG_K_UDPRX_GROUP),
                _port, _rx_mode);
 }
 
 void GeigerUdpRx::readPrefs() {
-  _mode = (uint8_t)EGPrefs::getUInt("counter", EG_K_UDPRX_MODE);
+  _mode = (uint8_t)corium::Prefs::getUInt("counter", EG_K_UDPRX_MODE);
   if (_mode > 1) _mode = 0;   // legacy 2 = auto
-  const char* pin = EGPrefs::getString("counter", EG_K_UDPRX_CHIPID);
+  const char* pin = corium::Prefs::getString("counter", EG_K_UDPRX_CHIPID);
   size_t n = strlen(pin);
   if (n && n != BLIP_ID_LEN) {   // a short pin would match nothing
     Log::console(PSTR("UdpRx: pin %s is not %u chars, ignored"), pin, (unsigned)BLIP_ID_LEN);
@@ -82,13 +82,13 @@ void GeigerUdpRx::readPrefs() {
   for (size_t i = 0; i < n; i++) _pinned_chipid[i] = tolower((unsigned char)pin[i]);
   _pinned_chipid[n] = '\0';
 
-  const char* g = EGPrefs::getString("counter", EG_K_UDPRX_GROUP);
+  const char* g = corium::Prefs::getString("counter", EG_K_UDPRX_GROUP);
   if (!g || !g[0] || !_group.fromString(g)) {
     _group.fromString(UDPRX_DEFAULT_GROUP);
   }
-  uint32_t p = EGPrefs::getUInt("counter", EG_K_UDPRX_PORT);
+  uint32_t p = corium::Prefs::getUInt("counter", EG_K_UDPRX_PORT);
   _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPRX_DEFAULT_PORT;
-  uint32_t rm = EGPrefs::getUInt("counter", EG_K_UDPRX_RXMODE);
+  uint32_t rm = corium::Prefs::getUInt("counter", EG_K_UDPRX_RXMODE);
   _rx_mode = (rm <= 2) ? (uint8_t)rm : 1;
 }
 
@@ -137,7 +137,7 @@ bool GeigerUdpRx::ensureUdp() {
     ok = _udp->beginMulticast(_group, _port);
 #endif
     if (ok) Log::console(PSTR("UdpRx: joined %s:%u"),
-                          EGPrefs::getString("counter", EG_K_UDPRX_GROUP), _port);
+                          corium::Prefs::getString("counter", EG_K_UDPRX_GROUP), _port);
   } else {
     ok = _udp->begin(_port);
     if (ok) Log::console(PSTR("UdpRx: listening unicast on :%u"), _port);
@@ -507,12 +507,12 @@ bool GeigerUdpRx::heard() const {
 }
 
 // igmpx = no netif
-static bool m_quiet(EGMValue* v)   { v->u = s_udprx_instance->quiet_s(); return true; }
-static bool m_rebind(EGMValue* v)  { v->u = s_udprx_instance->rebind_count(); return true; }
-static bool m_igmp(EGMValue* v)    { v->u = s_udprx_instance->refresh_count(); return true; }
-static bool m_igmpx(EGMValue* v)   { v->u = s_udprx_instance->refresh_noop_count(); return true; }
+static bool m_quiet(corium::MValue* v)   { v->u = s_udprx_instance->quiet_s(); return true; }
+static bool m_rebind(corium::MValue* v)  { v->u = s_udprx_instance->rebind_count(); return true; }
+static bool m_igmp(corium::MValue* v)    { v->u = s_udprx_instance->refresh_count(); return true; }
+static bool m_igmpx(corium::MValue* v)   { v->u = s_udprx_instance->refresh_noop_count(); return true; }
 
-static bool m_loss(EGMValue* v) {
+static bool m_loss(corium::MValue* v) {
   if (s_udprx_instance->packets_accepted() == 0) return false;
   v->f = s_udprx_instance->loss_pct_x10() / 10.0f;
   return true;
@@ -521,15 +521,15 @@ static bool m_loss(EGMValue* v) {
 static const char MP_LOSS[] PROGMEM = "geiger_udp_loss_percent";
 static const char MH_LOSS[] PROGMEM = "Packet loss on the UDP feed";
 
-static const EGMeasure UDP_ROWS[] PROGMEM = {
-  EGM_ROW("quiet",    "", m_quiet,   EGM_U32, 0, EGMU_SEC,   EGM_OUT_JSON, 0),
-  EGM_ROW("rebind",   "", m_rebind,  EGM_U32, 0, EGMU_COUNT, EGM_OUT_JSON, 0),
-  EGM_ROW("igmp",     "", m_igmp,    EGM_U32, 0, EGMU_COUNT, EGM_OUT_JSON, 0),
-  EGM_ROW("igmpx",    "", m_igmpx,   EGM_U32, 0, EGMU_COUNT, EGM_OUT_JSON, 0),
-  EGM_PROW("loss",    "", m_loss,    EGM_F32, 1, EGMU_PCT,   EGM_OUT_JSON, 0, MP_LOSS, MH_LOSS, nullptr),
+static const corium::Measure UDP_ROWS[] PROGMEM = {
+  CORIUM_M_ROW("quiet",    "", m_quiet,   corium::M_U32, 0, corium::MU_SEC,   corium::M_OUT_JSON, 0),
+  CORIUM_M_ROW("rebind",   "", m_rebind,  corium::M_U32, 0, EGMU_COUNT, corium::M_OUT_JSON, 0),
+  CORIUM_M_ROW("igmp",     "", m_igmp,    corium::M_U32, 0, EGMU_COUNT, corium::M_OUT_JSON, 0),
+  CORIUM_M_ROW("igmpx",    "", m_igmpx,   corium::M_U32, 0, EGMU_COUNT, corium::M_OUT_JSON, 0),
+  CORIUM_M_PROW("loss",    "", m_loss,    corium::M_F32, 1, corium::MU_PCT,   corium::M_OUT_JSON, 0, MP_LOSS, MH_LOSS, nullptr),
 };
 
-EGMeasureRows GeigerUdpRx::measurements() { return EGMeasureRows(UDP_ROWS); }
+corium::MeasureRows GeigerUdpRx::measurements() { return corium::MeasureRows(UDP_ROWS); }
 
 const char* GeigerUdpRx::locked_chipid() const {
   if (_mode == 1) return nullptr;   // sum mode

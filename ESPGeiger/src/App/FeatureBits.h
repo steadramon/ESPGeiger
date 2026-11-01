@@ -19,7 +19,7 @@
 #ifndef APP_FEATURE_BITS_H
 #define APP_FEATURE_BITS_H
 
-// EG_REGISTER_FEATURE, add bits only, never renumber
+// Bits for CORIUM_REGISTER_FEATURE. Only add new ones, never renumber
 #define FEAT_MQTT       0
 #define FEAT_RADMON     1
 #define FEAT_THINGSPEAK 2

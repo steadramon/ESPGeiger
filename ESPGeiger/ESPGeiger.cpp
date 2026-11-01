@@ -26,7 +26,7 @@
 #include "Corium/System/BootGuard.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/Net/EGHttpPoster.h"
+#include "Corium/Net/HttpPoster.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Reactor.h"
 #include "GRNG/GRNG.h"
@@ -113,7 +113,7 @@ void setup()
     grng.begin();
     gcounter.begin();
   }
-  EGHttpPoster::hold = ExternalPause::active;
+  corium::HttpPoster::hold = ExternalPause::active;
   Boot::end(counter_second);
   BootHooks::displayResetTimeout();
 }

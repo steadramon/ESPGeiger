@@ -20,7 +20,7 @@
 #define CONSOLE_H
 #include <Arduino.h>
 #include <Print.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
 #ifndef CONSOLE_LINE_MAX
 #define CONSOLE_LINE_MAX 64
@@ -28,15 +28,19 @@
 static_assert(CONSOLE_LINE_MAX < 256, "line pos is 8 bit");
 
 // app commands, Corium's own sit in a fixed table
-#ifndef EG_MAX_CMDS
-#define EG_MAX_CMDS 8
+#ifndef CORIUM_MAX_CMDS
+#define CORIUM_MAX_CMDS 8
 #endif
 
+namespace corium {
+
 // PROGMEM, the name too
-struct EGCmd {
+struct Cmd {
   const char* name;
   void (*fn)();
 };
+
+}  // namespace corium
 
 // typed bytes, one per input
 struct ConsoleLine {
@@ -45,7 +49,7 @@ struct ConsoleLine {
   bool overflow;   // too long, dropped at the end
 };
 
-class Console : public EGModule {
+class Console : public corium::Module {
 public:
     const char* name() override { return PSTR("scmd"); }
     bool core_module() override { return true; }
@@ -53,7 +57,7 @@ public:
     void begin() override;
     void loop(unsigned long now) override;
 
-    static bool add(const EGCmd* cmd);   // static init, false = full
+    static bool add(const corium::Cmd* cmd);   // static init, false = full
     static void run(const char* text);   // web, first line only
     // a command's words, as it runs
     static char* next();   // nullptr = none left
@@ -62,7 +66,7 @@ private:
     static void feed(ConsoleLine& l, Print& io, char c);
     static void edit(ConsoleLine& l, Print& io, char c);
     static void exec(ConsoleLine& l);
-    static const EGCmd* _cmds[EG_MAX_CMDS];
+    static const corium::Cmd* _cmds[CORIUM_MAX_CMDS];
     static uint8_t _count;
     static uint8_t _dropped;
     static ConsoleLine _serial;
@@ -71,9 +75,9 @@ private:
 
 extern Console console;
 
-#define EG_REGISTER_CMD(word, fn) \
+#define CORIUM_REGISTER_CMD(word, fn) \
   static const char _cmdn_##word[] PROGMEM = #word; \
-  static const EGCmd _cmd_##word PROGMEM = {_cmdn_##word, fn}; \
+  static const corium::Cmd _cmd_##word PROGMEM = {_cmdn_##word, fn}; \
   static bool _cmdr_##word = Console::add(&_cmd_##word);
 
 #endif

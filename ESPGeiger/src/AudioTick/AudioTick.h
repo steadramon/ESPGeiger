@@ -23,7 +23,7 @@
 #include <Arduino.h>
 #include <atomic>
 #include <driver/i2s.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
 
 #ifndef AUDIO_TICK_BCLK
@@ -76,15 +76,15 @@ bool audio_enqueue(const AudioCmd& cmd);
 typedef void (*AudioFn)(const AudioCmd& cmd);
 void audio_speech(AudioFn fn);
 
-class AudioTick : public EGModule {
+class AudioTick : public corium::Module {
   public:
     AudioTick() {}
     const char* name() override { return PSTR("tick"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 17; }
     void loop(unsigned long now) override;
     void begin() override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
     void registerRoutes(EGHttpServer& http) override;
 

@@ -22,10 +22,10 @@
 #include "App/MeasureIds.h"
 #include "Counter/Counter.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/FastMillis.h"
@@ -44,7 +44,7 @@
 #include <ESPmDNS.h>
 #endif
 
-EG_PSTR(K_GROUP, "group");
+CORIUM_PSTR(K_GROUP, "group");
 
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 static constexpr uint16_t LOOP_MS = 1000;
@@ -54,27 +54,27 @@ static constexpr uint16_t LOOP_MS = UDPBLIP_CLICK_MIN_INTERVAL_MS;
 static constexpr uint8_t DRAIN_MAX = 8;   // a stats pass, the 8266 keeps ~5
 
 UdpBlipModule& udpblip = UdpBlipModule::getInstance();
-EG_REGISTER_MODULE(udpblip)
+CORIUM_REGISTER_MODULE(udpblip)
 
-EG_PSTR(UB_O_MODE,  "Off|Telemetry only|Telemetry + per-click");
-EG_PSTR(UB_L_GROUP, "Group / peer IP");
-EG_PSTR(UB_H_GROUP, "239.x = multicast, else unicast peer.");
+CORIUM_PSTR(UB_O_MODE,  "Off|Telemetry only|Telemetry + per-click");
+CORIUM_PSTR(UB_L_GROUP, "Group / peer IP");
+CORIUM_PSTR(UB_H_GROUP, "239.x = multicast, else unicast peer.");
 
 
-static const EGPref UDPBLIP_PREF_ITEMS[] PROGMEM = {
-  {EG_K_MODE, EG_L_MOD,   nullptr,    "0",                    UB_O_MODE,  0, 2, 0,  EGP_ENUM,   0},
-  {K_GROUP,   UB_L_GROUP, UB_H_GROUP, UDPBLIP_DEFAULT_GROUP,  EG_P_IP,    0, 0, EG_IPV4_MAX, EGP_STRING, EGP_ADVANCED},
-  {EG_K_PORT, EG_L_PRT,   nullptr,    STR(UDPBLIP_DEFAULT_PORT), nullptr, 1, 65535, 0, EGP_UINT, EGP_ADVANCED},
+static const corium::Pref UDPBLIP_PREF_ITEMS[] PROGMEM = {
+  {EG_K_MODE, EG_L_MOD,   nullptr,    "0",                    UB_O_MODE,  0, 2, 0,  corium::P_ENUM,   0},
+  {K_GROUP,   UB_L_GROUP, UB_H_GROUP, UDPBLIP_DEFAULT_GROUP,  EG_P_IP,    0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_ADVANCED},
+  {EG_K_PORT, EG_L_PRT,   nullptr,    STR(UDPBLIP_DEFAULT_PORT), nullptr, 1, 65535, 0, corium::P_UINT, corium::P_ADVANCED},
 };
 
-static const EGPrefGroup UDPBLIP_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup UDPBLIP_PREF_GROUP PROGMEM = {
   "udpblip", "Local Broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT, EG_K_MODE,
+  corium::P_CAT_OUTPUT, EG_K_MODE,
 };
 
-const EGPrefGroup* UdpBlipModule::prefs_group() { return &UDPBLIP_PREF_GROUP; }
+const corium::PrefGroup* UdpBlipModule::prefs_group() { return &UDPBLIP_PREF_GROUP; }
 
 
 static void udpblip_click(uint32_t) { udpblip.notifyClick(fast_millis()); }
@@ -88,31 +88,31 @@ void UdpBlipModule::begin() {
                     ? (uint16_t)((GRNG::fast_uint32() % UDPBLIP_STATS_JITTER_MS) / 1000UL) : 0;
   _jitter_ms = jitter_s * 1000;
   _fail_count = 0;
-  EGModuleRegistry::on(Wifi::TOPIC_CHANGED, this);
+  corium::Registry::on(Wifi::TOPIC_CHANGED, this);
   snprintf_P(_path, sizeof(_path), PSTR("/espg/%s/"), DeviceInfo::chipid());
   blip_click(_click_packet, sizeof(_click_packet), path(PSTR("click")));
   if (_mode > 0) {
     Log::console(PSTR("UdpBlip: mode=%u group=%s port=%u"),
                  _mode,
-                 EGPrefs::getString("udpblip", K_GROUP),
+                 corium::Prefs::getString("udpblip", K_GROUP),
                  _port);
   }
 }
 
 void UdpBlipModule::readPrefs() {
-  _mode = (uint8_t)EGPrefs::getUInt("udpblip", EG_K_MODE);
-  const char* gstr = EGPrefs::getString("udpblip", K_GROUP);
+  _mode = (uint8_t)corium::Prefs::getUInt("udpblip", EG_K_MODE);
+  const char* gstr = corium::Prefs::getString("udpblip", K_GROUP);
   if (!gstr || !gstr[0] || !_group.fromString(gstr)) {
     _group.fromString(UDPBLIP_DEFAULT_GROUP);
   }
-  uint32_t p = EGPrefs::getUInt("udpblip", EG_K_PORT);
+  uint32_t p = corium::Prefs::getUInt("udpblip", EG_K_PORT);
   _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPBLIP_DEFAULT_PORT;
   // gate retry pace, the loop sets its own due
-  EGModuleRegistry::every(this, _mode > 0 ? LOOP_MS : 0);
+  corium::Registry::every(this, _mode > 0 ? LOOP_MS : 0);
   _wake_at = fast_millis();
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
   // serial counts land with no click
-  if (_mode == 2) EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
+  if (_mode == 2) corium::Registry::on(Counter::TOPIC_COUNTS, this);
 #endif
 }
 
@@ -158,7 +158,7 @@ void UdpBlipModule::announce_mdns() {
   const char* fname = DeviceInfo::friendlyName();
   if (fname && fname[0]) MDNS.addServiceTxt("osc", "udp", "fname", fname);
   MDNS.addServiceTxt("osc", "udp", "id", DeviceInfo::chipid());
-  MDNS.addServiceTxt("osc", "udp", "group", EGPrefs::getString("udpblip", K_GROUP));
+  MDNS.addServiceTxt("osc", "udp", "group", corium::Prefs::getString("udpblip", K_GROUP));
   _mdns_done = true;
 }
 
@@ -212,11 +212,11 @@ void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms) {
 void UdpBlipModule::emitRad(uint32_t now) {
   uint8_t buf[96];
   const char* state =
-    egm_b(M_ALERT) ? PSTR("alert") :
-    egm_b(M_WARN)  ? PSTR("warning") :
+    corium::m_b(M_ALERT) ? PSTR("alert") :
+    corium::m_b(M_WARN)  ? PSTR("warning") :
     gcounter.counts_missing() ? PSTR("nocounts") :
-    egm_b(M_WARM)  ? PSTR("healthy") : PSTR("warming");
-  BlipRad r = { egm_f(M_CPM), egm_f(M_USV), state, egm_u(M_TC) };
+    corium::m_b(M_WARM)  ? PSTR("healthy") : PSTR("warming");
+  BlipRad r = { corium::m_f(M_CPM), corium::m_f(M_USV), state, corium::m_u(M_TC) };
   size_t n = blip_rad(buf, sizeof(buf), path(PSTR("rad")), r);
   if (n) sendPacket(buf, n);
   (void)now;
@@ -225,9 +225,9 @@ void UdpBlipModule::emitRad(uint32_t now) {
 void UdpBlipModule::emitHv(uint32_t now) {
   uint8_t buf[64];
   // nan with no adc
-  EGMeasureIter v(0xFF, false, M_HV);
-  BlipHv h = { v.next() ? (float)v.value().i : NAN, (float)egm_u(M_HV_TGT),
-               egm_u(M_HV_DTY), egm_i(M_HV_TRM) };
+  corium::MeasureIter v(0xFF, false, M_HV);
+  BlipHv h = { v.next() ? (float)v.value().i : NAN, (float)corium::m_u(M_HV_TGT),
+               corium::m_u(M_HV_DTY), corium::m_i(M_HV_TRM) };
   size_t n = blip_hv(buf, sizeof(buf), path(PSTR("hv")), h);
   if (n) sendPacket(buf, n);
   (void)now;
@@ -285,7 +285,7 @@ bool UdpBlipModule::tryEmitClick(unsigned long now_ms) {
 
 void UdpBlipModule::due(uint32_t at) {
   _wake_at = at;
-  EGModuleRegistry::due_at(this, at);
+  corium::Registry::due_at(this, at);
 }
 
 // sooner only, one call per token at most
@@ -342,7 +342,7 @@ void UdpBlipModule::bind(uint32_t now) {
 
 void UdpBlipModule::loop(unsigned long now) {
   if (_mode == 0) return;
-  uint16_t ev = EGModuleRegistry::events(this);
+  uint16_t ev = corium::Registry::events(this);
   if ((ev & (1u << Wifi::TOPIC_CHANGED)) && _udp && Wifi::connected_at_ms != _bound_at_ms) {
     Log::console(PSTR("UdpBlip: WiFi reconnect, rebinding"));
     teardown();
@@ -368,7 +368,7 @@ size_t UdpBlipModule::status_json(char* buf, size_t cap, unsigned long now) {
   size_t n = snprintf_P(buf, cap, PSTR("\"udpblip\":{\"mode\":%u,\"group\":\""), _mode);
   need += n;
   advance_pos(pos, n, cap);
-  n = egesc_json(buf + pos, cap - pos, EGPrefs::getString("udpblip", K_GROUP));
+  n = egesc_json(buf + pos, cap - pos, corium::Prefs::getString("udpblip", K_GROUP));
   need += n;
   advance_pos(pos, n, cap);
   need += snprintf_P(buf + pos, cap - pos, PSTR("\",\"port\":%u,\"fails\":%u}"),

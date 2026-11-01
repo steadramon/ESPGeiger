@@ -21,7 +21,7 @@
 #ifdef SSD1306_DISPLAY
 #include "DisplayType.h"
 #include "screenJS.gz.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Output/QuietWindow.h"
@@ -30,52 +30,52 @@
 #include <EGHttpServer.h>
 
 Display display;
-EG_REGISTER_MODULE(display)
+CORIUM_REGISTER_MODULE(display)
 
 const char W_APP_NAME[] PROGMEM = THING_NAME;
 
 #define DISP_STR_(x) #x
 #define DISP_STR(x) DISP_STR_(x)
 
-EG_PSTR(K_RST,      "rst");
-EG_PSTR(K_FLIP,     "flip");
-EG_PSTR(K_TIMEOUT,  "timeout");
-EG_PSTR(K_ON_TIME,  "on_time");
-EG_PSTR(K_OFF_TIME, "off_time");
+CORIUM_PSTR(K_RST,      "rst");
+CORIUM_PSTR(K_FLIP,     "flip");
+CORIUM_PSTR(K_TIMEOUT,  "timeout");
+CORIUM_PSTR(K_ON_TIME,  "on_time");
+CORIUM_PSTR(K_OFF_TIME, "off_time");
 
 #ifdef GEIGER_PUSHBUTTON
-EG_PSTR(DS_L_TMO, "Timeout");
-EG_PSTR(DS_H_TMO, "Idle seconds before display blanks (0 = use schedule below)");
+CORIUM_PSTR(DS_L_TMO, "Timeout");
+CORIUM_PSTR(DS_H_TMO, "Idle seconds before display blanks (0 = use schedule below)");
 #endif
-EG_PSTR(DS_L_ONT, "On Time");
-EG_PSTR(DS_L_OFT, "Off Time");
+CORIUM_PSTR(DS_L_ONT, "On Time");
+CORIUM_PSTR(DS_L_OFT, "Off Time");
 #ifdef GEIGER_PUSHBUTTON
-EG_PSTR(DS_H_ONT, "Display on (used when Timeout = 0)");
-EG_PSTR(DS_H_OFT, "Display off (used when Timeout = 0)");
+CORIUM_PSTR(DS_H_ONT, "Display on (used when Timeout = 0)");
+CORIUM_PSTR(DS_H_OFT, "Display off (used when Timeout = 0)");
 #else
-EG_PSTR(DS_H_ONT, "Display on");
-EG_PSTR(DS_H_OFT, "Display off");
+CORIUM_PSTR(DS_H_ONT, "Display on");
+CORIUM_PSTR(DS_H_OFT, "Display off");
 #endif
 #ifndef OLED_PINS_BLOCKED
-EG_PSTR(DS_L_FLP, "Flip 180\xC2\xB0");
-EG_PSTR(DS_L_TYP, "Display Type");
+CORIUM_PSTR(DS_L_FLP, "Flip 180\xC2\xB0");
+CORIUM_PSTR(DS_L_TYP, "Display Type");
 #ifdef ESP32
 #ifdef MAX7219_DISPLAY
-EG_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106|7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
+CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106|7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
 #else
-EG_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106");
+CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106");
 #endif
 #else
 #ifdef MAX7219_DISPLAY
 // blanks keep the esp32 numbers, tiny is esp32 only
-EG_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309|||7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
+CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309|||7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
 #else
-EG_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");
+CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");
 #endif
 #endif
-static_assert(sizeof(DS_O_TYP) - 1 <= EGPREF_PATTERN_MAX, "display types past the options buffer");
-EG_PSTR(DS_L_RST, "Reset Pin");
-EG_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
+static_assert(sizeof(DS_O_TYP) - 1 <= CORIUM_PREF_PATTERN_MAX, "display types past the options buffer");
+CORIUM_PSTR(DS_L_RST, "Reset Pin");
+CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
 #endif
 
 #ifdef MAX7219_DISPLAY
@@ -85,45 +85,45 @@ EG_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to ap
 #endif
 
 // 0.12 keys, never rename
-static const EGPref DISPLAY_PREF_ITEMS[] PROGMEM = {
+static const corium::Pref DISPLAY_PREF_ITEMS[] PROGMEM = {
 #ifndef OLED_PINS_BLOCKED
-  {EG_K_TYPE,       DS_L_TYP, EG_H_RBA, DISP_STR(OLED_TYPE), DS_O_TYP, 0, DS_TYPE_MAX, 0, EGP_ENUM, EGP_REBOOT},
+  {EG_K_TYPE,       DS_L_TYP, corium::H_RBA, DISP_STR(OLED_TYPE), DS_O_TYP, 0, DS_TYPE_MAX, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
-  {EG_K_BRIGHTNESS, EG_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
+  {EG_K_BRIGHTNESS, EG_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
 #ifndef OLED_PINS_BLOCKED
-  {K_RST,           DS_L_RST, DS_H_RST, DISP_STR(OLED_RST), nullptr, 0, 255, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT},
-  {K_FLIP,          DS_L_FLP, EG_H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, EGP_BOOL, EGP_ADVANCED | EGP_REBOOT},
+  {K_RST,           DS_L_RST, DS_H_RST, DISP_STR(OLED_RST), nullptr, 0, 255, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT},
+  {K_FLIP,          DS_L_FLP, corium::H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
 #ifdef GEIGER_PUSHBUTTON
-  {K_TIMEOUT,       DS_L_TMO, DS_H_TMO, "120", nullptr, 0, 99999, 0, EGP_UINT, 0},
+  {K_TIMEOUT,       DS_L_TMO, DS_H_TMO, "120", nullptr, 0, 99999, 0, corium::P_UINT, 0},
 #endif
-  {K_ON_TIME,       DS_L_ONT, DS_H_ONT, "", nullptr, 0, 0, EG_HHMM_MAX, EGP_STRING, EGP_TIME | EGP_ADVANCED},
-  {K_OFF_TIME,      DS_L_OFT, DS_H_OFT, "", nullptr, 0, 0, EG_HHMM_MAX, EGP_STRING, EGP_TIME | EGP_ADVANCED},
+  {K_ON_TIME,       DS_L_ONT, DS_H_ONT, "", nullptr, 0, 0, CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
+  {K_OFF_TIME,      DS_L_OFT, DS_H_OFT, "", nullptr, 0, 0, CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
 };
 
-static const EGPrefGroup DISPLAY_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup DISPLAY_PREF_GROUP PROGMEM = {
   "display", "Display", 1,
   DISPLAY_PREF_ITEMS,
   sizeof(DISPLAY_PREF_ITEMS) / sizeof(DISPLAY_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* Display::prefs_group() { return &DISPLAY_PREF_GROUP; }
+const corium::PrefGroup* Display::prefs_group() { return &DISPLAY_PREF_GROUP; }
 
 #if defined(MAX7219_DISPLAY) && !defined(OLED_PINS_BLOCKED)
-EG_PSTR(DS_W_TYPE, "display.type");
+CORIUM_PSTR(DS_W_TYPE, "display.type");
 static const uint16_t SHOW_OLED = (1u << DISP_OLED_COUNT) - 1;   // OLED types come first
-static const EGPrefShow DISPLAY_SHOW[] PROGMEM = {
+static const corium::PrefShow DISPLAY_SHOW[] PROGMEM = {
   {K_RST,  DS_W_TYPE, SHOW_OLED},
   {K_FLIP, DS_W_TYPE, SHOW_OLED},
   {},
 };
-const EGPrefShow* Display::prefs_show() { return DISPLAY_SHOW; }
+const corium::PrefShow* Display::prefs_show() { return DISPLAY_SHOW; }
 #else
-const EGPrefShow* Display::prefs_show() { return nullptr; }
+const corium::PrefShow* Display::prefs_show() { return nullptr; }
 #endif
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias DISPLAY_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias DISPLAY_LEGACY[] PROGMEM = {
   {"dispBrightness", "brightness"},
 #ifdef GEIGER_PUSHBUTTON
   {"dispTimeout", "timeout"},
@@ -132,7 +132,7 @@ static const EGLegacyAlias DISPLAY_LEGACY[] PROGMEM = {
   {"oledOff", "off_time"},
   {},
 };
-EGLegacyRows Display::legacy_aliases() { return DISPLAY_LEGACY; }
+corium::LegacyRows Display::legacy_aliases() { return DISPLAY_LEGACY; }
 // === END LEGACY IMPORT ===
 
 static DisplayBackend* s_backend = nullptr;   // set once, first prefs load
@@ -150,7 +150,7 @@ bool Display::add(DisplayBackend* b) {
 static DisplayBackend* chosen() {
   uint8_t type = 0;
 #ifdef MAX7219_DISPLAY
-  type = (uint8_t)EGPrefs::getUInt("display", EG_K_TYPE);
+  type = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
 #endif
   for (uint8_t i = 0; i < s_count; i++) {
     if (s_all[i]->takes(type)) return s_all[i];
@@ -165,12 +165,12 @@ static QuietWindow s_off_hours;
 
 static void read_timing(uint32_t& timeout_ms) {
 #ifdef GEIGER_PUSHBUTTON
-  timeout_ms = EGPrefs::getUInt("display", K_TIMEOUT) * 1000;
+  timeout_ms = corium::Prefs::getUInt("display", K_TIMEOUT) * 1000;
 #else
   timeout_ms = 0;
 #endif
-  s_off_hours.set(EGPrefs::getString("display", K_OFF_TIME),
-                  EGPrefs::getString("display", K_ON_TIME));
+  s_off_hours.set(corium::Prefs::getString("display", K_OFF_TIME),
+                  corium::Prefs::getString("display", K_ON_TIME));
 }
 
 void Display::on_prefs_loaded() {
@@ -179,7 +179,7 @@ void Display::on_prefs_loaded() {
   _started = true;
   _woke.mark(0);   // boot
   find_rows();
-  EGModuleRegistry::on(Counter::TOPIC_COUNTS, this);
+  corium::Registry::on(Counter::TOPIC_COUNTS, this);
   s_backend = chosen();
   for (uint8_t i = 0; i < s_count; i++) {
     if (s_all[i] != s_backend) s_all[i]->unchosen();
@@ -324,7 +324,7 @@ button.tap{padding:.7em 1.5em;font-size:1em;cursor:pointer}
 <span class=fps id=fps>--</span>
 </div>
 </div>
-<script src=/screen.js)HTML" EG_CACHE_BUST R"HTML(></script>
+<script src=/screen.js)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML";
 
 extern const char screenJS[] PROGMEM = R"JS(

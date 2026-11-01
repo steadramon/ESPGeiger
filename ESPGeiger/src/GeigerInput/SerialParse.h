@@ -18,7 +18,7 @@
 */
 
 // Split out of SerialFormat.cpp so these can be host tested. They take a
-// const char* and fill two ints: no Counter, no EGPrefs, no OutputVars, which
+// const char* and fill two ints: no Counter, no corium::Prefs, no OutputVars, which
 // is what the formatters in that file drag in.
 //
 // This is untrusted input off a wire, so treat every bound here as load

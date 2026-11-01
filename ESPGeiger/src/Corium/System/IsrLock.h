@@ -26,7 +26,7 @@
 #endif
 
 // isr code kept in ram
-#define EG_ISR_ATTR IRAM_ATTR
+#define CORIUM_ISR_ATTR IRAM_ATTR
 
 namespace IsrLock {
 

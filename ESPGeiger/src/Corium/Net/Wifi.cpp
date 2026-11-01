@@ -28,19 +28,19 @@
 #endif
 #include <EGPortal.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/NTP/NTP.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
 #include "Corium/Util/StringUtil.h"
 
-EG_PSTR(K_SLEEP,    "sleep");
-EG_PSTR(K_TX_POWER, "tx_power");
-EG_PSTR(K_COUNTRY,  "country");
-EG_PSTR(K_PHY_MODE, "phy_mode");
+CORIUM_PSTR(K_SLEEP,    "sleep");
+CORIUM_PSTR(K_TX_POWER, "tx_power");
+CORIUM_PSTR(K_COUNTRY,  "country");
+CORIUM_PSTR(K_PHY_MODE, "phy_mode");
 
 static_assert(WIFI_SSID_MAX == EGPORTAL_SSID_MAX, "one ssid max");
 
@@ -208,19 +208,19 @@ static bool tryRestoreBackup() {
 
 static void net_lines(char* buf, size_t len) {
   snprintf_P(buf, len, PSTR("%s\n%s\n%s\n%s\n%s\n"),
-             EGPrefs::getBool("net", EG_K_STATIC_IP) ? "1" : "0",
-             EGPrefs::getString("net", EG_K_IP),
-             EGPrefs::getString("net", EG_K_GW),
-             EGPrefs::getString("net", EG_K_SN),
-             EGPrefs::getString("net", EG_K_DNS));
+             corium::Prefs::getBool("net", corium::K_STATIC_IP) ? "1" : "0",
+             corium::Prefs::getString("net", corium::K_IP),
+             corium::Prefs::getString("net", corium::K_GW),
+             corium::Prefs::getString("net", corium::K_SN),
+             corium::Prefs::getString("net", corium::K_DNS));
 }
 
 static void put_net(char** fields) {
-  EGPrefs::put("net", EG_K_STATIC_IP, fields[0]);
-  EGPrefs::put("net", EG_K_IP,     fields[1]);
-  EGPrefs::put("net", EG_K_GW,     fields[2]);
-  EGPrefs::put("net", EG_K_SN,     fields[3]);
-  EGPrefs::put("net", EG_K_DNS,    fields[4]);
+  corium::Prefs::put("net", corium::K_STATIC_IP, fields[0]);
+  corium::Prefs::put("net", corium::K_IP,     fields[1]);
+  corium::Prefs::put("net", corium::K_GW,     fields[2]);
+  corium::Prefs::put("net", corium::K_SN,     fields[3]);
+  corium::Prefs::put("net", corium::K_DNS,    fields[4]);
 }
 
 bool Wifi::saveNetBackup() {
@@ -238,7 +238,7 @@ bool Wifi::saveNetBackup() {
 
 bool Wifi::probeReachability() {
   IPAddress ip;
-  const char* host = EGPrefs::getString("ntp", EG_K_SERVER);
+  const char* host = corium::Prefs::getString("ntp", corium::K_SERVER);
   // an ip skips dns, so no test
   if (!host || !*host || ip.fromString(host)) host = NTP_SERVER;
   return WiFi.hostByName(host, ip);
@@ -254,7 +254,7 @@ bool Wifi::restoreNetBackup() {
   char now[NET_LINES_MAX];
   net_lines(now, sizeof(now));
   put_net(fields);
-  if (!EGPrefs::commit()) {
+  if (!corium::Prefs::commit()) {
     // back to what runs
     split_lines(now, fields, 5);
     put_net(fields);
@@ -290,11 +290,11 @@ bool Wifi::validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
 }
 
 bool Wifi::applyStaticConfig() {
-  if (!EGPrefs::getBool("net", EG_K_STATIC_IP)) return false;
-  const char* s_ip  = EGPrefs::getString("net", EG_K_IP);
-  const char* s_gw  = EGPrefs::getString("net", EG_K_GW);
-  const char* s_sn  = EGPrefs::getString("net", EG_K_SN);
-  const char* s_dns = EGPrefs::getString("net", EG_K_DNS);
+  if (!corium::Prefs::getBool("net", corium::K_STATIC_IP)) return false;
+  const char* s_ip  = corium::Prefs::getString("net", corium::K_IP);
+  const char* s_gw  = corium::Prefs::getString("net", corium::K_GW);
+  const char* s_sn  = corium::Prefs::getString("net", corium::K_SN);
+  const char* s_dns = corium::Prefs::getString("net", corium::K_DNS);
   char err[96];
   if (!Wifi::validateStatic(s_ip, s_gw, s_sn, err, sizeof(err))) {
     Log::console(PSTR("WiFi: Static IP rejected (%s); using DHCP"), err);
@@ -391,7 +391,7 @@ static char* setup_portal(EGPortal* portal) {
   });
   portal->onReset([](void*) { s_portalDoReset = true; });
   // open AP but every page asks, as the web UI
-  portal->setBasicAuth(F("admin"), EGPrefs::getString("sys", EG_K_WEB_PASS), F(THING_NAME));
+  portal->setBasicAuth(F("admin"), corium::Prefs::getString("sys", corium::K_WEB_PASS), F(THING_NAME));
   portal->begin(DeviceInfo::hostname());
   reset_wifi_tx_power_default();   // after begin(), full power
   Log::console(PSTR("WiFi: Setup portal up on AP %s"), DeviceInfo::hostname());
@@ -468,55 +468,55 @@ bool Wifi::connectOrPortal() {
   return waitForWifi(30000);
 }
 
-static_assert(Wifi::TOPIC_CHANGED < EG_TOPIC_APP, "Corium topics sit below EG_TOPIC_APP");
+static_assert(Wifi::TOPIC_CHANGED < CORIUM_TOPIC_APP, "Corium topics sit below EG_TOPIC_APP");
 
 // the one writer of Wifi::*
-class WifiModule : public EGModule {
+class WifiModule : public corium::Module {
 public:
   const char* name() override { return PSTR("wifi"); }
   bool core_module() override { return true; }
   uint8_t display_order() override { return 0; }
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
   void on_prefs_loaded() override;
   void begin() override;
   void loop(unsigned long now) override;
 };
 
 static WifiModule wifimodule;
-EG_REGISTER_MODULE(wifimodule)
+CORIUM_REGISTER_MODULE(wifimodule)
 
 // SDK events cost the 8266 ~1.2 KB
 void WifiModule::begin() {
-  EGModuleRegistry::every(this, 1000);
+  corium::Registry::every(this, 1000);
 }
 
 void WifiModule::loop(unsigned long now) {
-  if (Wifi::look(now)) EGModuleRegistry::emit(Wifi::TOPIC_CHANGED);
+  if (Wifi::look(now)) corium::Registry::emit(Wifi::TOPIC_CHANGED);
 }
 
 #define WIFI_SLEEP_DEFAULT "1"
 
-static const EGPref WIFI_PREF_ITEMS[] PROGMEM = {
-  {K_SLEEP,    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
-  {K_TX_POWER, nullptr, nullptr, "0",                nullptr, 0, 20, 0, EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
-  {K_COUNTRY,  nullptr, nullptr, "",                 nullptr, 0, 0,  3, EGP_STRING, EGP_HIDDEN | EGP_LOCAL},
-  {K_PHY_MODE, nullptr, nullptr, "0",                nullptr, 0, 3,  0, EGP_UINT,   EGP_HIDDEN | EGP_LOCAL},
+static const corium::Pref WIFI_PREF_ITEMS[] PROGMEM = {
+  {K_SLEEP,    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
+  {K_TX_POWER, nullptr, nullptr, "0",                nullptr, 0, 20, 0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
+  {K_COUNTRY,  nullptr, nullptr, "",                 nullptr, 0, 0,  3, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL},
+  {K_PHY_MODE, nullptr, nullptr, "0",                nullptr, 0, 3,  0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
 };
 
-static const EGPrefGroup WIFI_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup WIFI_PREF_GROUP PROGMEM = {
   "wifi", "Wi-Fi", 1,
   WIFI_PREF_ITEMS,
   sizeof(WIFI_PREF_ITEMS) / sizeof(WIFI_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* WifiModule::prefs_group() { return &WIFI_PREF_GROUP; }
+const corium::PrefGroup* WifiModule::prefs_group() { return &WIFI_PREF_GROUP; }
 
 static int8_t s_rx_sleep = -1;   // the receiver's, wins over the pref
 
 static void apply_wifi_sleep() {
   // always, SDK keeps it in NVS
   bool rx = s_rx_sleep >= 0;
-  uint8_t mode = rx ? (uint8_t)s_rx_sleep : (uint8_t)EGPrefs::getUInt("wifi", K_SLEEP);
+  uint8_t mode = rx ? (uint8_t)s_rx_sleep : (uint8_t)corium::Prefs::getUInt("wifi", K_SLEEP);
 #ifdef ESP8266
   // multicast: listen interval 1, default 3 drops frames
   uint8_t listen = rx ? 1 : 0;
@@ -618,14 +618,14 @@ void Wifi::rx_sleep(int8_t mode) {
 void Wifi::reconnect() { WiFi.reconnect(); }
 
 void Wifi::applyRuntimeNetPrefs() {
-  apply_wifi_tx_power((uint8_t)EGPrefs::getUInt  ("wifi", K_TX_POWER));
-  apply_wifi_country (         EGPrefs::getString("wifi", K_COUNTRY));
-  apply_wifi_phy_mode((uint8_t)EGPrefs::getUInt  ("wifi", K_PHY_MODE));
+  apply_wifi_tx_power((uint8_t)corium::Prefs::getUInt  ("wifi", K_TX_POWER));
+  apply_wifi_country (         corium::Prefs::getString("wifi", K_COUNTRY));
+  apply_wifi_phy_mode((uint8_t)corium::Prefs::getUInt  ("wifi", K_PHY_MODE));
 }
 
 int Wifi::txPowerQdbm() {
 #ifdef ESP8266
-  uint8_t dBm = (uint8_t)EGPrefs::getUInt("wifi", K_TX_POWER);
+  uint8_t dBm = (uint8_t)corium::Prefs::getUInt("wifi", K_TX_POWER);
   if (dBm == 0) return 82;   // core default 20.5 dBm
   if (dBm < WIFI_TX_POWER_MIN_DBM) dBm = WIFI_TX_POWER_MIN_DBM;
   return (int)dBm * 4;

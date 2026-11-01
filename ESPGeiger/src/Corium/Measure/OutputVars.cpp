@@ -35,10 +35,10 @@ static bool parse_spec(const char* s, size_t n, Spec* out) {
   return i > 0 && i == n;
 }
 
-static bool lookup(const char* id, size_t n, EGMeasure* row, EGMValue* val) {
+static bool lookup(const char* id, size_t n, corium::Measure* row, corium::MValue* val) {
   if (n == 0 || n >= sizeof(row->id)) return false;
-  for (EGMeasureIter it(EGM_OUT_VARS); it.next(); ) {
-    const EGMeasure& m = it.row();
+  for (corium::MeasureIter it(corium::M_OUT_VARS); it.next(); ) {
+    const corium::Measure& m = it.row();
     if (strncmp(m.id, id, n) == 0 && m.id[n] == '\0') {
       *row = m;
       *val = it.value();
@@ -49,13 +49,13 @@ static bool lookup(const char* id, size_t n, EGMeasure* row, EGMValue* val) {
 }
 
 static uint8_t unit_code(char unit) {
-  return unit == 'F' ? EGMT_F : unit == 'K' ? EGMT_K : EGMT_C;
+  return unit == 'F' ? corium::MT_F : unit == 'K' ? corium::MT_K : corium::MT_C;
 }
 
-static bool apply(EGMeasure& m, const Spec& s) {
-  if (s.unit && m.unit != EGMU_CELSIUS) return false;
+static bool apply(corium::Measure& m, const Spec& s) {
+  if (s.unit && m.unit != corium::MU_CELSIUS) return false;
   if (s.decimals) {
-    if (m.kind != EGM_F32) return false;
+    if (m.kind != corium::M_F32) return false;
     m.decimals = s.decimals;
   }
   return true;
@@ -67,11 +67,11 @@ size_t render(const char* key, size_t klen, char* buf, size_t cap, bool* cut) {
   size_t idlen = colon ? (size_t)(colon - key) : klen;
   Spec spec = {0, 0};
   if (colon && !parse_spec(colon + 1, klen - idlen - 1, &spec)) return 0;
-  EGMeasure m;
-  EGMValue v;
+  corium::Measure m;
+  corium::MValue v;
   if (!lookup(key, idlen, &m, &v) || !apply(m, spec)) return 0;
-  uint8_t unit = spec.unit ? unit_code(spec.unit) : egm_temp_unit();
-  return egm_format_unit(m, v, unit, buf, cap, cut);
+  uint8_t unit = spec.unit ? unit_code(spec.unit) : corium::m_temp_unit();
+  return corium::m_format_unit(m, v, unit, buf, cap, cut);
 }
 
 static bool unescape(char in, char* out) {

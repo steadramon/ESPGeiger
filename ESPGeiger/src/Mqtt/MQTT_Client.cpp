@@ -21,9 +21,9 @@
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Net/SendSlot.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 #include "Counter/CounterMeasures.h"
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
@@ -37,9 +37,9 @@
 #include <EGJson.h>
 #include <EGMqtt.h>
 
-EG_PSTR(K_TOPIC,        "topic");
-EG_PSTR(K_HASS_ENABLED, "hass_enabled");
-EG_PSTR(K_HASS_TOPIC,   "hass_topic");
+CORIUM_PSTR(K_TOPIC,        "topic");
+CORIUM_PSTR(K_HASS_ENABLED, "hass_enabled");
+CORIUM_PSTR(K_HASS_TOPIC,   "hass_topic");
 
 static const char T_STAT[] PROGMEM = "stat";
 static const char T_TELE[] PROGMEM = "tele";
@@ -50,7 +50,7 @@ static const char LWT_OFFLINE[] PROGMEM = "Offline";
 static EGMqtt s_mq;
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
-EG_REGISTER_FEATURE(mqtt, FEAT_MQTT)
+CORIUM_REGISTER_FEATURE(mqtt, FEAT_MQTT)
 
 #ifdef ESP8266
 #define MQTT_PUB_YIELD() optimistic_yield(10000)
@@ -71,50 +71,50 @@ static char* json_begin(const char* topic, size_t max, size_t* cap) {
   return p;
 }
 
-EG_PSTR(MQ_L_SRV, "Server");
-EG_PSTR(MQ_H_SRV, "Broker address or IP");
-EG_PSTR(MQ_L_USR, "User");
-EG_PSTR(MQ_L_TPC, "Root Topic");
-EG_PSTR(MQ_H_TPC, "Root topic; {id}=chip ID");
-EG_PSTR(MQ_P_TPC, "[A-Za-z0-9_\\/\\{\\}\\-]+");
-EG_PSTR(MQ_H_INT, "Publish interval (sec)");
+CORIUM_PSTR(MQ_L_SRV, "Server");
+CORIUM_PSTR(MQ_H_SRV, "Broker address or IP");
+CORIUM_PSTR(MQ_L_USR, "User");
+CORIUM_PSTR(MQ_L_TPC, "Root Topic");
+CORIUM_PSTR(MQ_H_TPC, "Root topic; {id}=chip ID");
+CORIUM_PSTR(MQ_P_TPC, "[A-Za-z0-9_\\/\\{\\}\\-]+");
+CORIUM_PSTR(MQ_H_INT, "Publish interval (sec)");
 #ifdef MQTTAUTODISCOVER
-EG_PSTR(MQ_L_HEN, "HA Autodiscovery");
-EG_PSTR(MQ_H_HEN, "Publish HA autodiscovery");
-EG_PSTR(MQ_L_HTP, "HA Autodiscovery Topic");
-EG_PSTR(MQ_H_HTP, "HA discovery prefix");
-EG_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
+CORIUM_PSTR(MQ_L_HEN, "HA Autodiscovery");
+CORIUM_PSTR(MQ_H_HEN, "Publish HA autodiscovery");
+CORIUM_PSTR(MQ_L_HTP, "HA Autodiscovery Topic");
+CORIUM_PSTR(MQ_H_HTP, "HA discovery prefix");
+CORIUM_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
 #endif
 
-static const EGPref MQTT_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SERVER,    MQ_L_SRV, MQ_H_SRV, "",               EG_P_HOST, 0, 0, EG_HOST_MAX, EGP_STRING, 0},
-  {EG_K_PORT,      EG_L_PRT, nullptr,  "1883",           nullptr,  1, 65535, 0,  EGP_UINT,   0},
-  {EG_K_USER,      MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     64, EGP_STRING, 0},
-  {EG_K_PASSWORD,  EG_L_PWD, nullptr,  "",               nullptr,  0, 0,     64, EGP_STRING, EGP_SENSITIVE},
-  {K_TOPIC,        MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, MQTT_TOPIC_PREF_MAX, EGP_STRING, EGP_ADVANCED},
-  {EG_K_INTERVAL,  EG_L_INT, MQ_H_INT, STR(MQTT_INTERVAL), nullptr, MQTT_MIN_TIME, MQTT_MAX_TIME, 0, EGP_UINT, 0},
+static const corium::Pref MQTT_PREF_ITEMS[] PROGMEM = {
+  {corium::K_SERVER,    MQ_L_SRV, MQ_H_SRV, "",               corium::P_HOST, 0, 0, CORIUM_HOST_MAX, corium::P_STRING, 0},
+  {EG_K_PORT,      EG_L_PRT, nullptr,  "1883",           nullptr,  1, 65535, 0,  corium::P_UINT,   0},
+  {EG_K_USER,      MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     64, corium::P_STRING, 0},
+  {EG_K_PASSWORD,  EG_L_PWD, nullptr,  "",               nullptr,  0, 0,     64, corium::P_STRING, corium::P_SENSITIVE},
+  {K_TOPIC,        MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, MQTT_TOPIC_PREF_MAX, corium::P_STRING, corium::P_ADVANCED},
+  {EG_K_INTERVAL,  EG_L_INT, MQ_H_INT, STR(MQTT_INTERVAL), nullptr, MQTT_MIN_TIME, MQTT_MAX_TIME, 0, corium::P_UINT, 0},
 #ifdef MQTTAUTODISCOVER
-  {K_HASS_ENABLED, MQ_L_HEN, MQ_H_HEN, MQTT_HASS_DEFAULT,    nullptr,  0, 0, 0,  EGP_BOOL,   EGP_ADVANCED},
-  {K_HASS_TOPIC,   MQ_L_HTP, MQ_H_HTP, MQTT_DISCOVERY_TOPIC, MQ_P_HTP, 0, 0, MQTT_HASS_TOPIC_MAX, EGP_STRING, EGP_ADVANCED},
+  {K_HASS_ENABLED, MQ_L_HEN, MQ_H_HEN, MQTT_HASS_DEFAULT,    nullptr,  0, 0, 0,  corium::P_BOOL,   corium::P_ADVANCED},
+  {K_HASS_TOPIC,   MQ_L_HTP, MQ_H_HTP, MQTT_DISCOVERY_TOPIC, MQ_P_HTP, 0, 0, MQTT_HASS_TOPIC_MAX, corium::P_STRING, corium::P_ADVANCED},
 #endif
 };
 
-static const EGPrefGroup MQTT_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup MQTT_PREF_GROUP PROGMEM = {
   "mqtt", "MQTT", 1,
   MQTT_PREF_ITEMS,
   sizeof(MQTT_PREF_ITEMS) / sizeof(MQTT_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT, EG_K_SERVER,
+  corium::P_CAT_OUTPUT, corium::K_SERVER,
 };
 
-const EGPrefGroup* MQTT_Client::prefs_group() { return &MQTT_PREF_GROUP; }
+const corium::PrefGroup* MQTT_Client::prefs_group() { return &MQTT_PREF_GROUP; }
 
 size_t MQTT_Client::status_json(char* buf, size_t cap, unsigned long now) {
-  if (EGPrefs::getString("mqtt", EG_K_SERVER)[0] == '\0') return 0;
+  if (corium::Prefs::getString("mqtt", corium::K_SERVER)[0] == '\0') return 0;
   return write_status_json(buf, cap, "mqtt", last_ok && s_mq.connected(), last_attempt_ms, now);
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias MQTT_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias MQTT_LEGACY[] PROGMEM = {
   {"mqttServer",   "server"},
   {"mqttPort",     "port"},
   {"mqttUser",     "user"},
@@ -127,7 +127,7 @@ static const EGLegacyAlias MQTT_LEGACY[] PROGMEM = {
 #endif
   {},
 };
-EGLegacyRows MQTT_Client::legacy_aliases() { return MQTT_LEGACY; }
+corium::LegacyRows MQTT_Client::legacy_aliases() { return MQTT_LEGACY; }
 // === END LEGACY IMPORT ===
 
 MQTT_Client::MQTT_Client()
@@ -279,14 +279,14 @@ void MQTT_Client::second(unsigned long now)
 // once warm, a full CPM bucket
 void MQTT_Client::checkAlarms()
 {
-  if (!(_pending & PEND_ALARMS) || !egm_b(M_WARM)) return;
+  if (!(_pending & PEND_ALARMS) || !corium::m_b(M_WARM)) return;
   _pending &= ~PEND_ALARMS;
-  bool warn = egm_b(M_WARN);
+  bool warn = corium::m_b(M_WARN);
   if (warn != warnSent) {
     warnSent = warn;
     _pending |= PEND_WARN;
   }
-  bool alert = egm_b(M_ALERT);
+  bool alert = corium::m_b(M_ALERT);
   if (alert != alertSent) {
     alertSent = alert;
     _pending |= PEND_ALERT;
@@ -297,7 +297,7 @@ void MQTT_Client::loop(unsigned long now)
 {
   timers(now);   // before the client's news, as the tick was
   s_mq.loop();   // its callbacks run from here
-  if (EGModuleRegistry::events(this)) _pending |= PEND_ALARMS;
+  if (corium::Registry::events(this)) _pending |= PEND_ALARMS;
   if (!mqttEnabled) return;
   if (_pending & PEND_CONNECT) { _pending &= ~PEND_CONNECT; reconnect(); return; }
   if (!s_mq.connected()) return;
@@ -359,7 +359,7 @@ bool MQTT_Client::publishStatus()
     return false;
   }
   _status_late = false;
-  EGModuleRegistry::emit(TOPIC_SENT);
+  corium::Registry::emit(TOPIC_SENT);
   // pre-NTP time gives a bad year
   char dateTime[sizeof("2026-01-01T00:00:00Z")];
   dateTime[0] = '\0';
@@ -369,7 +369,7 @@ bool MQTT_Client::publishStatus()
       1900 + t.tm_year, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
   }
 
-  char ipStr[EG_IPV4_MAX + 1];
+  char ipStr[CORIUM_IPV4_MAX + 1];
   Wifi::formatIP(ipStr, sizeof(ipStr));
   EGJson j(out, cap);
   j.map_begin();
@@ -380,7 +380,7 @@ bool MQTT_Client::publishStatus()
   j.str(PSTR("ssid"), Wifi::ssid);
   j.str(PSTR("ip"), ipStr);
   j.sint(PSTR("rssi"), Wifi::rssi);
-  j.uint(PSTR("c_total"), egm_u(M_TC));
+  j.uint(PSTR("c_total"), corium::m_u(M_TC));
   j.uint(PSTR("tick"), TickProfile::tick_us);
   j.uint(PSTR("t_max"), TickProfile::tick_max_us);
   j.uint(PSTR("lps"), TickProfile::lps);
@@ -405,7 +405,7 @@ bool MQTT_Client::publishStatus()
   j.fixed(PSTR("cpu_temp"), DeviceInfo::chipTempC(), 1);
 #endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  j.uint(PSTR("ser_ok"), egm_b(M_SER_OK) ? 1 : 0);
+  j.uint(PSTR("ser_ok"), corium::m_b(M_SER_OK) ? 1 : 0);
 #endif
   j.map_end();
   if (j.overflow) Log::console(PSTR("MQTT: status cut to fit"));
@@ -439,7 +439,7 @@ uint16_t MQTT_Client::publishSensor()
   if (!out) return 0;
   EGJson j(out, cap);
   j.map_begin();
-  egm_json_fields(EGM_OUT_MQTT, j);
+  corium::m_json_fields(EGM_OUT_MQTT, j);
   j.map_end();
   uint16_t pid = s_mq.publish_end(j.length());
   MQTT_PUB_YIELD();
@@ -478,15 +478,15 @@ void MQTT_Client::publishPing()
   publishSensor();
 
   // ---- LEGACY ----
-  for (EGMeasureIter it(EGM_OUT_MQTT); it.next(); ) {
+  for (corium::MeasureIter it(EGM_OUT_MQTT); it.next(); ) {
     const char* topic = stat_topic(it.row().id);
     char text[24];
-    if (!topic || egm_format(it.row(), it.value(), text, sizeof(text)) == 0) continue;
+    if (!topic || corium::m_format(it.row(), it.value(), text, sizeof(text)) == 0) continue;
     publishStat(topic, text);
   }
   // ---- end LEGACY block ----
 
-  EGModuleRegistry::emit(TOPIC_PING);
+  corium::Registry::emit(TOPIC_PING);
 }
 
 // a stalled connect times out in EGMqtt
@@ -522,7 +522,7 @@ static void mq_ack(void* arg, const EGMqtt::Ack& a) {
 
 void MQTT_Client::applyIntervalPref()
 {
-  int mqtt_time = (int)EGPrefs::getUInt("mqtt", EG_K_INTERVAL);
+  int mqtt_time = (int)corium::Prefs::getUInt("mqtt", EG_K_INTERVAL);
   if (mqtt_time <= 0) mqtt_time = MQTT_INTERVAL;
   if (mqtt_time != getInterval()) {
     setInterval(mqtt_time);
@@ -586,15 +586,15 @@ void MQTT_Client::wakeSoon()
 
 static int mqtt_port()
 {
-  int port = (int)EGPrefs::getUInt("mqtt", EG_K_PORT);
+  int port = (int)corium::Prefs::getUInt("mqtt", EG_K_PORT);
   return port > 0 ? port : 1883;
 }
 
 // no password without a user in 3.1.1
 static bool set_credentials()
 {
-  const char* user = EGPrefs::getString("mqtt", EG_K_USER);
-  const char* pass = EGPrefs::getString("mqtt", EG_K_PASSWORD);
+  const char* user = corium::Prefs::getString("mqtt", EG_K_USER);
+  const char* pass = corium::Prefs::getString("mqtt", EG_K_PASSWORD);
   if (!user[0]) return s_mq.setCredentials(nullptr);
   return s_mq.setCredentials(user, pass[0] ? pass : nullptr);
 }
@@ -607,7 +607,7 @@ void MQTT_Client::reconnect()
   if (in_backoff(lastConnectionAttempt, now, (uint8_t)reconnectAttempts)) return;
   lastConnectionAttempt = now;
 
-  const char* _mqtt_server = EGPrefs::getString("mqtt", EG_K_SERVER);
+  const char* _mqtt_server = corium::Prefs::getString("mqtt", corium::K_SERVER);
   if (_mqtt_server[0] == '\0') {
     mqttEnabled = false;
     s_mq.stop();
@@ -636,7 +636,7 @@ void MQTT_Client::reconnect()
 const char* MQTT_Client::getRootTopic()
 {
   if (!_rootTopicCached) {
-    const char* rootTopic = EGPrefs::getString("mqtt", K_TOPIC);
+    const char* rootTopic = corium::Prefs::getString("mqtt", K_TOPIC);
     const char* chipId = DeviceInfo::chipid();
     size_t w = 0;
     const size_t cap = sizeof(_cachedRootTopic) - 1;
@@ -761,13 +761,13 @@ static const size_t HASS_PACKET_MAX = MQTT_JSON_BUFFER_SIZE + HASS_PATH_LEN + 16
 
 // read each use, a save frees it
 static const char* hass_disc() {
-  const char* d = EGPrefs::getString("mqtt", K_HASS_TOPIC);
+  const char* d = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
   return d[0] ? d : H_DISC_DEFAULT;
 }
 
 // id PROGMEM, absent or NaN = no entity
 static bool has_row(const char* id) {
-  EGMeasureIter it(EGM_OUT_MQTT, false, id);
+  corium::MeasureIter it(EGM_OUT_MQTT, false, id);
   return it.next();
 }
 
@@ -800,8 +800,8 @@ static const char* hass_type(const HassRow* r) {
 void MQTT_Client::setupHassCB() {
   _hass_listen = false;
   _pending &= ~PEND_SUB;
-  if (!EGPrefs::getBool("mqtt", K_HASS_ENABLED)) return;
-  const char* _discovery_topic = EGPrefs::getString("mqtt", K_HASS_TOPIC);
+  if (!corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) return;
+  const char* _discovery_topic = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
   if (_discovery_topic[0] == '\0') return;
   // onMqttMessage compares this
   snprintf_P(_hass_status, sizeof(_hass_status), H_STATUS_FMT, _discovery_topic);
@@ -811,8 +811,8 @@ void MQTT_Client::setupHassCB() {
 
 void MQTT_Client::setupHassAuto() {
   if (_hass_walk_state) return;
-  if (!EGPrefs::getBool("mqtt", K_HASS_ENABLED)) return;
-  const char* _discovery_topic = EGPrefs::getString("mqtt", K_HASS_TOPIC);
+  if (!corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) return;
+  const char* _discovery_topic = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
   if (_discovery_topic[0] == '\0') return;
   _hass_walk_state = 1;
   _hass_idx = 0;
@@ -821,7 +821,7 @@ void MQTT_Client::setupHassAuto() {
 
 void MQTT_Client::setupHassRemove() {
   if (_hass_walk_state) return;
-  const char* _discovery_topic = EGPrefs::getString("mqtt", K_HASS_TOPIC);
+  const char* _discovery_topic = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
   if (_discovery_topic[0] == '\0') return;
   _hass_walk_state = -1;
   _hass_idx = 0;
@@ -841,7 +841,7 @@ void MQTT_Client::triggerHassDiscovery() {
 }
 
 static void hass_device(EGJson& j, const char* host) {
-  char ipStr[EG_IPV4_MAX + 1];
+  char ipStr[CORIUM_IPV4_MAX + 1];
   Wifi::formatIP(ipStr, sizeof(ipStr));
   j.map_begin(PSTR("device"));
   j.str(PSTR("mf"), PSTR(THING_NAME));
@@ -893,7 +893,7 @@ static void hass_fields(EGJson& j, const HassRow* r) {
   if (pgm_read_byte(r->prec)) j.str(H_K_PREC, r->prec);
 }
 
-EG_PSTR(HA_DROPPED, "MQTT: HA discovery publish dropped: %s");
+CORIUM_PSTR(HA_DROPPED, "MQTT: HA discovery publish dropped: %s");
 
 static void hass_publish(const HassRow* r, const char* root)
 {
@@ -980,11 +980,11 @@ void MQTT_Client::onMqttMessage(const char* topic, const char* payload, size_t l
 
 void MQTT_Client::begin()
 {
-  const char* _mqtt_server = EGPrefs::getString("mqtt", EG_K_SERVER);
+  const char* _mqtt_server = corium::Prefs::getString("mqtt", corium::K_SERVER);
   if (_mqtt_server[0] == '\0') {
     mqttEnabled = false;
     s_mq.stop();
-    EGModuleRegistry::every(this, 0);
+    corium::Registry::every(this, 0);
     return;
   }
   mqttEnabled = true;
@@ -995,8 +995,8 @@ void MQTT_Client::begin()
   s_mq.onDisconnect(mq_down, this);
   s_mq.onMessage(mq_message, this);
   s_mq.onAck(mq_ack, this);
-  EGModuleRegistry::every(this, LOOP_MS);
-  EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
+  corium::Registry::every(this, LOOP_MS);
+  corium::Registry::on(Counter::TOPIC_ALARM, this);
   _pending |= PEND_ALARMS;   // an alarm already up when turned on
 }
 
@@ -1005,7 +1005,7 @@ void MQTT_Client::on_prefs_saved()
   _rootTopicCached = false;
   bool needs_hass_remove = false;
 #ifdef MQTTAUTODISCOVER
-  needs_hass_remove = (s_mq.connected() && !EGPrefs::getBool("mqtt", K_HASS_ENABLED));
+  needs_hass_remove = (s_mq.connected() && !corium::Prefs::getBool("mqtt", K_HASS_ENABLED));
 #endif
   disconnect();
   authFailures = 0;

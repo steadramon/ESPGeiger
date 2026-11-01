@@ -25,47 +25,47 @@
 #include "Counter/Counter.h"
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Output/Buzzer.h"
 #include "TunePlayer.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
 
 Sound sound;
-EG_REGISTER_MODULE(sound)
+CORIUM_REGISTER_MODULE(sound)
 
 static constexpr uint16_t BURST_HZ = 2700;   // the coil's resonance
 static constexpr uint8_t GAP_PCT = 12;       // rtttl, as the hw demo page
 
 enum : uint8_t { P_LOW = 1, P_MID, P_URGENT };
 
-EG_PSTR(K_VOLUME,    "volume");
-EG_PSTR(K_CLICKS,    "clicks");
-EG_PSTR(K_CHIMES,    "chimes");
-EG_PSTR(K_REPEAT,    "repeat");
-EG_PSTR(K_STARTUP,   "startup");
-EG_PSTR(K_WIFI,      "wifi");
-EG_PSTR(K_ALERT,     "alert");
-EG_PSTR(K_ALERT_END, "alert_end");
-EG_PSTR(K_HVFAULT,   "hvfault");
-EG_PSTR(K_SD_ERROR,  "sd_error");
-EG_PSTR(K_OTA,       "ota");
-EG_PSTR(K_OTA_FAIL,  "ota_fail");
-EG_PSTR(K_BUTTON,    "button");
-EG_PSTR(K_CLICK,     "click");
+CORIUM_PSTR(K_VOLUME,    "volume");
+CORIUM_PSTR(K_CLICKS,    "clicks");
+CORIUM_PSTR(K_CHIMES,    "chimes");
+CORIUM_PSTR(K_REPEAT,    "repeat");
+CORIUM_PSTR(K_STARTUP,   "startup");
+CORIUM_PSTR(K_WIFI,      "wifi");
+CORIUM_PSTR(K_ALERT,     "alert");
+CORIUM_PSTR(K_ALERT_END, "alert_end");
+CORIUM_PSTR(K_HVFAULT,   "hvfault");
+CORIUM_PSTR(K_SD_ERROR,  "sd_error");
+CORIUM_PSTR(K_OTA,       "ota");
+CORIUM_PSTR(K_OTA_FAIL,  "ota_fail");
+CORIUM_PSTR(K_BUTTON,    "button");
+CORIUM_PSTR(K_CLICK,     "click");
 
 // from the hw32 session's demo page
-EG_PSTR(T_COPIER, "c,p79,c,p189,c,p119,c,p129,1500>3000:500@15,p90,c,p15,c,p15,c,p15,c,p15,"
+CORIUM_PSTR(T_COPIER, "c,p79,c,p189,c,p119,c,p129,1500>3000:500@15,p90,c,p15,c,p15,c,p15,c,p15,"
                   "c,p15,c,p15,c,p15,c,p15,c,p181,2700:80,p80,2700:80");
-EG_PSTR(T_DING,    "3136:40@25,3136:40@15,3136:50@8");
-EG_PSTR(T_ALARM,   "2700:190,p20,2093:190,p20,2700:190,p20,2093:190,p20,2700:190,p20,2093:190");
-EG_PSTR(T_CLEAR,   "2700:120,p20,2093:200");
-EG_PSTR(T_PROBLEM, "1500:160,p90,1500:160");
-EG_PSTR(T_ARP,     "2093:90,p20,2637:90,p20,3136:90,p20,4186:220");
-EG_PSTR(T_BUTTON,  "t3");
-EG_PSTR(T_CLICK,   "1500:2");
+CORIUM_PSTR(T_DING,    "3136:40@25,3136:40@15,3136:50@8");
+CORIUM_PSTR(T_ALARM,   "2700:190,p20,2093:190,p20,2700:190,p20,2093:190,p20,2700:190,p20,2093:190");
+CORIUM_PSTR(T_CLEAR,   "2700:120,p20,2093:200");
+CORIUM_PSTR(T_PROBLEM, "1500:160,p90,1500:160");
+CORIUM_PSTR(T_ARP,     "2093:90,p20,2637:90,p20,3136:90,p20,4186:220");
+CORIUM_PSTR(T_BUTTON,  "t3");
+CORIUM_PSTR(T_CLICK,   "1500:2");
 
 struct SoundDef {
   const char* key;
@@ -86,22 +86,22 @@ static const SoundDef DEFS[Sound::COUNT] = {
   {K_CLICK,     T_CLICK,   P_LOW},
 };
 
-EG_PSTR(L_VOLUME, "Volume (%)");
-EG_PSTR(H_VOLUME, "Tones only. Alarms and HV faults always play full, 0 = only those");
-EG_PSTR(L_CLICKS, "Click per count");
-EG_PSTR(L_CHIMES, "Chimes");
-EG_PSTR(H_CHIMES, "Startup, WiFi and button sounds");
-EG_PSTR(L_REPEAT, "Alert repeat (s)");
-EG_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
+CORIUM_PSTR(L_VOLUME, "Volume (%)");
+CORIUM_PSTR(H_VOLUME, "Tones only. Alarms and HV faults always play full, 0 = only those");
+CORIUM_PSTR(L_CLICKS, "Click per count");
+CORIUM_PSTR(L_CHIMES, "Chimes");
+CORIUM_PSTR(H_CHIMES, "Startup, WiFi and button sounds");
+CORIUM_PSTR(L_REPEAT, "Alert repeat (s)");
+CORIUM_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
 
-#define SOUND_ROW(k) {k, nullptr, nullptr, "", nullptr, 0, 0, TunePlayer::MAX_TEXT, EGP_STRING, EGP_HIDDEN}
+#define SOUND_ROW(k) {k, nullptr, nullptr, "", nullptr, 0, 0, TunePlayer::MAX_TEXT, corium::P_STRING, corium::P_HIDDEN}
 
 // "" = built-in, off = silent, else steps or rtttl
-static const EGPref SOUND_PREF_ITEMS[] PROGMEM = {
-  {K_VOLUME, L_VOLUME, H_VOLUME, "100", nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
-  {K_CLICKS, L_CLICKS, nullptr,  "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
-  {K_CHIMES, L_CHIMES, H_CHIMES, "1",   nullptr, 0, 1,   0, EGP_BOOL, 0},
-  {K_REPEAT, L_REPEAT, H_REPEAT, "60", nullptr, 0, 3600, 0, EGP_UINT, 0},
+static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
+  {K_VOLUME, L_VOLUME, H_VOLUME, "100", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
+  {K_CLICKS, L_CLICKS, nullptr,  "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
+  {K_CHIMES, L_CHIMES, H_CHIMES, "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
+  {K_REPEAT, L_REPEAT, H_REPEAT, "60", nullptr, 0, 3600, 0, corium::P_UINT, 0},
   SOUND_ROW(K_STARTUP),
   SOUND_ROW(K_WIFI),
   SOUND_ROW(K_ALERT),
@@ -114,21 +114,21 @@ static const EGPref SOUND_PREF_ITEMS[] PROGMEM = {
   SOUND_ROW(K_CLICK),
 };
 
-static const EGPrefGroup SOUND_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup SOUND_PREF_GROUP PROGMEM = {
   "sound", "Sound", 1,
   SOUND_PREF_ITEMS,
   sizeof(SOUND_PREF_ITEMS) / sizeof(SOUND_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT,
+  corium::P_CAT_OUTPUT,
 };
 
-const EGPrefGroup* Sound::prefs_group() { return &SOUND_PREF_GROUP; }
+const corium::PrefGroup* Sound::prefs_group() { return &SOUND_PREF_GROUP; }
 
 static volatile uint8_t s_ota = 0;   // 1 started, 2 failed
 
 static void sound_lifecycle(Lifecycle::Event e) {
   if (e == Lifecycle::SHUTDOWN) return;
   s_ota = e == Lifecycle::OTA_START ? 1 : 2;
-  EGModuleRegistry::post(&sound);
+  corium::Registry::post(&sound);
 }
 
 static const char* err_word(uint8_t e) {
@@ -145,18 +145,18 @@ static bool is_off(const char* v) { return !strcmp_P(v, PSTR("off")); }
 
 void Sound::on_prefs_loaded() {
   _reload = true;
-  EGModuleRegistry::post(this);
+  corium::Registry::post(this);
 }
 
 // a typo can't silence an alarm: the built-in plays
 void Sound::load() {
   _reload = false;
-  _repeat_ms = EGPrefs::getUInt("sound", K_REPEAT) * 1000UL;
-  _vol = EGPrefs::getUInt("sound", K_VOLUME);
-  _chimes = EGPrefs::getBool("sound", K_CHIMES);
+  _repeat_ms = corium::Prefs::getUInt("sound", K_REPEAT) * 1000UL;
+  _vol = corium::Prefs::getUInt("sound", K_VOLUME);
+  _chimes = corium::Prefs::getBool("sound", K_CHIMES);
   _bad = 0;
   for (uint8_t i = 0; i < COUNT; i++) {
-    const char* v = EGPrefs::getString("sound", DEFS[i].key);
+    const char* v = corium::Prefs::getString("sound", DEFS[i].key);
     if (!v || !*v || is_off(v)) continue;
     uint16_t at = 0;
     uint8_t e = EGTune::check(v, strlen(v), &at);
@@ -167,7 +167,7 @@ void Sound::load() {
   uint16_t len = 0;
   const char* t = text(CLICK, len);
   _click_on = false;
-  if (!t || !EGPrefs::getBool("sound", K_CLICKS)) return;
+  if (!t || !corium::Prefs::getBool("sound", K_CLICKS)) return;
   EGTune::Reader r;
   r.begin(t, len);
   _click_on = r.next(_click);
@@ -175,7 +175,7 @@ void Sound::load() {
 
 // pref, else built-in. nullptr = off
 const char* Sound::text(uint8_t id, uint16_t& len) {
-  const char* v = EGPrefs::getString("sound", DEFS[id].key);
+  const char* v = corium::Prefs::getString("sound", DEFS[id].key);
   if (v && *v) {
     if (is_off(v)) return nullptr;
     if (!(_bad & (1u << id))) {
@@ -188,11 +188,11 @@ const char* Sound::text(uint8_t id, uint16_t& len) {
 }
 
 void Sound::pre_wifi() {
-  EGModuleRegistry::on(Wifi::TOPIC_CHANGED, this);
-  EGModuleRegistry::on(Counter::TOPIC_ALARM, this);
-  EGModuleRegistry::on(Topic::HV_FAULT, this);
-  EGModuleRegistry::on(Topic::SD_ERROR, this);
-  EGModuleRegistry::on(Topic::PRESS, this);
+  corium::Registry::on(Wifi::TOPIC_CHANGED, this);
+  corium::Registry::on(Counter::TOPIC_ALARM, this);
+  corium::Registry::on(Topic::HV_FAULT, this);
+  corium::Registry::on(Topic::SD_ERROR, this);
+  corium::Registry::on(Topic::PRESS, this);
   Lifecycle::on(sound_lifecycle);
 }
 
@@ -250,7 +250,7 @@ void Sound::test(const char* v) {
   }
   if (!t) return;
   TunePlayer::play((uint32_t)micros(), t, len, P_MID, vol);
-  EGModuleRegistry::post(this);
+  corium::Registry::post(this);
 }
 
 static void cmd_play() {
@@ -258,7 +258,7 @@ static void cmd_play() {
   if (v && *v) sound.test(v);
   else Log::console(PSTR("play <sound name or tune>"));
 }
-EG_REGISTER_CMD(play, cmd_play)
+CORIUM_REGISTER_CMD(play, cmd_play)
 
 // up, not down
 void Sound::wifi() {
@@ -290,7 +290,7 @@ void Sound::alarm(unsigned long now) {
 
 void Sound::loop(unsigned long now) {
   if (_reload) load();
-  uint16_t ev = EGModuleRegistry::events(this);
+  uint16_t ev = corium::Registry::events(this);
   if (ev) events(ev, now);
   uint8_t ota = s_ota;
   if (ota) {
@@ -316,7 +316,7 @@ void Sound::schedule(unsigned long now, uint32_t us) {
     next = _next_alert;
     any = true;
   }
-  if (any) EGModuleRegistry::due_at(this, next);
+  if (any) corium::Registry::due_at(this, next);
 }
 
 #endif

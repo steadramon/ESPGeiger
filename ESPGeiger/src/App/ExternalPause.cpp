@@ -74,4 +74,4 @@ static void cmd_pause() {
   if (rem) Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)(rem / 1000U));
   else     Log::console(PSTR("External posts: active"));
 }
-EG_REGISTER_CMD(pause, cmd_pause)
+CORIUM_REGISTER_CMD(pause, cmd_pause)

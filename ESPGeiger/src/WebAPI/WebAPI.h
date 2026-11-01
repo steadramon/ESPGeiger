@@ -23,10 +23,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/Net/EGHttpDriver.h"
+#include "Corium/Net/HttpDriver.h"
 #include <EGBase64.h>
-#include "Corium/Module/EGModule.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Prefs/Prefs.h"
 #include "App/AppConfig.h"
 #include "GeigerInput/GeigerInput.h"
 
@@ -44,7 +44,7 @@
 #define WEBAPI_PRIV_LEN      24
 #define WEBAPI_SIG_LEN       (2 * WEBAPI_PRIV_LEN)
 
-class WebAPI : public EGSender {
+class WebAPI : public corium::Sender {
   public:
     WebAPI();
     const char* name() override { return PSTR("wapi"); }
@@ -54,14 +54,14 @@ class WebAPI : public EGSender {
     static constexpr uint16_t REPLAN_MS = 100;
     void begin() override;
     void loop(unsigned long now) override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     uint8_t display_order() override { return 0; }  // managed via /webapi page
     void on_prefs_loaded() override;
     void registerRoutes(EGHttpServer& http) override;
-    const EGMenuEntry* menuEntries() override;
+    const corium::MenuEntry* menuEntries() override;
     size_t status_json(char* buf, size_t cap, unsigned long now) override;
 
-    EGHttpDriver request;
+    corium::HttpDriver request;
 
     uint32_t getStationId() const { return station_id; }
     void forget() { _forget = true; }   // sent when idle, even once off
@@ -71,7 +71,7 @@ class WebAPI : public EGSender {
     void sendForget();
     enum Sent : uint8_t { SENT_NONE, SENT_HS, SENT_POST, SENT_FORGET };
     uint8_t _sent = SENT_NONE;   // what the reply is for
-    EGHttpDriver::Sent send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
+    corium::HttpDriver::Sent send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
                                    const char* sig);
     void take_reply();
     void onHandshake(int code, const uint8_t* r, size_t n);

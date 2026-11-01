@@ -34,9 +34,9 @@
 #include "Features.h"
 #include <EGBase64.h>   // no heap
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Net/SendSlot.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "App/AppKeys.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
@@ -55,39 +55,39 @@
 #include <uECC.h>
 #include "Counter/CounterMeasures.h"
 #include "Counter/Tube.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 #include "App/MeasureIds.h"
 #include "App/ExternalPause.h"
 
 WebAPI webapi;
-EG_REGISTER_MODULE(webapi)
+CORIUM_REGISTER_MODULE(webapi)
 
-EG_PSTR(WA_L_MD,  "Sharing mode");
-EG_PSTR(WA_O_MD,  "Off|Heartbeat|CPM readings");
-EG_PSTR(WA_L_LAT, "Latitude");
-EG_PSTR(WA_H_LAT, "Station latitude  (-90..90, 0 = use IP)");
-EG_PSTR(WA_L_LON, "Longitude");
-EG_PSTR(WA_H_LON, "Station longitude (-180..180, 0 = use IP)");
+CORIUM_PSTR(WA_L_MD,  "Sharing mode");
+CORIUM_PSTR(WA_O_MD,  "Off|Heartbeat|CPM readings");
+CORIUM_PSTR(WA_L_LAT, "Latitude");
+CORIUM_PSTR(WA_H_LAT, "Station latitude  (-90..90, 0 = use IP)");
+CORIUM_PSTR(WA_L_LON, "Longitude");
+CORIUM_PSTR(WA_H_LON, "Station longitude (-180..180, 0 = use IP)");
 
-static const EGPref WEBAPI_PREF_ITEMS[] PROGMEM = {
-  {EG_K_MODE, WA_L_MD,  nullptr,  "2", WA_O_MD, 0,    2,   0, EGP_ENUM,  0},
-  {EG_K_LAT,  WA_L_LAT, WA_H_LAT, "0", nullptr, -90,  90,  0, EGP_FLOAT, 0},
-  {EG_K_LON,  WA_L_LON, WA_H_LON, "0", nullptr, -180, 180, 0, EGP_FLOAT, 0},
+static const corium::Pref WEBAPI_PREF_ITEMS[] PROGMEM = {
+  {EG_K_MODE, WA_L_MD,  nullptr,  "2", WA_O_MD, 0,    2,   0, corium::P_ENUM,  0},
+  {EG_K_LAT,  WA_L_LAT, WA_H_LAT, "0", nullptr, -90,  90,  0, corium::P_FLOAT, 0},
+  {EG_K_LON,  WA_L_LON, WA_H_LON, "0", nullptr, -180, 180, 0, corium::P_FLOAT, 0},
 };
 
-static const EGPrefGroup WEBAPI_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup WEBAPI_PREF_GROUP PROGMEM = {
   "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, EG_K_MODE,
+  corium::P_CAT_UPLOAD, EG_K_MODE,
 };
 
-const EGPrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
+const corium::PrefGroup* WebAPI::prefs_group() { return &WEBAPI_PREF_GROUP; }
 
 void WebAPI::on_prefs_loaded() {
-  _mode = (uint8_t)EGPrefs::getUInt("webapi", EG_K_MODE);
+  _mode = (uint8_t)corium::Prefs::getUInt("webapi", EG_K_MODE);
   bool off = _mode == 0 && !_forget && !request.busy();
-  EGModuleRegistry::every(this, off ? 0 : LOOP_MS);
+  corium::Registry::every(this, off ? 0 : LOOP_MS);
 }
 
 static int webapi_rng(uint8_t *dest, unsigned size) {
@@ -178,7 +178,7 @@ static bool crash_to_send() {
 void WebAPI::loop(unsigned long now) {
   take_reply();
   if (ExternalPause::active()) {
-    EGModuleRegistry::due_at(this, now + LOOP_MS);
+    corium::Registry::due_at(this, now + LOOP_MS);
     return;
   }
   if (_forget && !request.busy()) {
@@ -187,8 +187,8 @@ void WebAPI::loop(unsigned long now) {
   }
   if (_mode == 0) {
     // forget reply still due
-    if (request.busy()) EGModuleRegistry::due_at(this, request.due());
-    else EGModuleRegistry::every(this, 0);
+    if (request.busy()) corium::Registry::due_at(this, request.due());
+    else corium::Registry::every(this, 0);
     return;
   }
 
@@ -204,10 +204,10 @@ void WebAPI::loop(unsigned long now) {
     pingIfDue(now);
   }
   if (request.busy()) {
-    EGModuleRegistry::due_at(this, request.due());   // the reply posts us sooner
+    corium::Registry::due_at(this, request.due());   // the reply posts us sooner
     return;
   }
-  EGModuleRegistry::due_at(this, wakeTarget());
+  corium::Registry::due_at(this, wakeTarget());
 }
 
 void WebAPI::take_reply() {
@@ -224,9 +224,9 @@ void WebAPI::take_reply() {
 }
 
 // NOT_OPENED / NO_MEMORY counted here, no reply comes
-EGHttpDriver::Sent WebAPI::send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
+corium::HttpDriver::Sent WebAPI::send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
                                        const char* sig) {
-  EGHttpMeta m;
+  corium::HttpMeta m;
   m.method = PSTR("POST");
   m.url = url;
   m.flash = true;
@@ -235,8 +235,8 @@ EGHttpDriver::Sent WebAPI::send_signed(uint8_t kind, PGM_P url, const uint8_t* b
   m.extra_value = sig;
   m.timeout_s = 10;
   _sent = kind;
-  EGHttpDriver::Sent s = request.send(m, body, len);
-  if (s == EGHttpDriver::NOT_OPENED || s == EGHttpDriver::NO_MEMORY) {
+  corium::HttpDriver::Sent s = request.send(m, body, len);
+  if (s == corium::HttpDriver::NOT_OPENED || s == corium::HttpDriver::NO_MEMORY) {
     _sent = SENT_NONE;
     note_publish(false);
   }
@@ -257,7 +257,7 @@ struct HsCrash {
 
 // rst_info when CrashDump missed it
 static void collect_crash(HsCrash& c) {
-  c.in = EGModuleRegistry::crashed_in();
+  c.in = corium::Registry::crashed_in();
   c.cd = CrashDump::lastCrash();
   if (c.cd) {
     c.epc1     = c.cd->epc1;
@@ -306,8 +306,8 @@ static void write_handshake(MsgPack::Writer& mp, const char* pubKey, uint8_t mod
   }
 
   // 2dp (~1km) for privacy, 0,0 = use IP
-  float latF = EGPrefs::getFloat("webapi", EG_K_LAT);
-  float lonF = EGPrefs::getFloat("webapi", EG_K_LON);
+  float latF = corium::Prefs::getFloat("webapi", EG_K_LAT);
+  float lonF = corium::Prefs::getFloat("webapi", EG_K_LON);
   bool sendCoords = (latF != 0.0f || lonF != 0.0f);
 
   mp.map_begin();
@@ -374,11 +374,11 @@ void WebAPI::doHandshake() {
   if (!sign(priv_k, buffer, bodyLen, basesig)) return;
 
   if (request.busy()) return;
-  EGHttpDriver::Sent s = send_signed(SENT_HS, PSTR(WEBAPI_URL "/api/1/handshake"), buffer, bodyLen, basesig);
-  if (s == EGHttpDriver::SENT) {
+  corium::HttpDriver::Sent s = send_signed(SENT_HS, PSTR(WEBAPI_URL "/api/1/handshake"), buffer, bodyLen, basesig);
+  if (s == corium::HttpDriver::SENT) {
     handshakeAt(fast_millis() + WEBAPI_HANDSHAKE_MS);
-    EGModuleRegistry::emit(TOPIC_SENT);
-  } else if (s == EGHttpDriver::NOT_SEALED) {
+    corium::Registry::emit(TOPIC_SENT);
+  } else if (s == corium::HttpDriver::NOT_SEALED) {
     Log::console(PSTR("WebAPI: Handshake send failed"));
   } else {
     Log::console(PSTR("WebAPI: Handshake connect failed"));
@@ -416,7 +416,7 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
       if (id == 0) {
         Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
         backoffHandshake();
-        EGModuleRegistry::due_in(this, REPLAN_MS);
+        corium::Registry::due_in(this, REPLAN_MS);
         note_publish(false);
         return;
       }
@@ -426,7 +426,7 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
         uint32_t k = rd_be32(pub_k + 4);
         handshakeAt(fast_millis() +
           wall_clock_wait_ms(k, WEBAPI_HANDSHAKE_MS, 3600, Clock::epoch()));
-        EGModuleRegistry::due_in(this, REPLAN_MS);
+        corium::Registry::due_in(this, REPLAN_MS);
       } else {
         Log::debug(HS_OK, id);
       }
@@ -447,12 +447,12 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
   }
   // backoff, uECC_sign is slow
   backoffHandshake();
-  EGModuleRegistry::due_in(this, REPLAN_MS);
+  corium::Registry::due_in(this, REPLAN_MS);
   note_publish(false);
 }
 
 static void write_env(MsgPack::Writer& mp) {
-  float t = egm_f(M_T), h = egm_f(M_H), p = egm_f(M_P);
+  float t = corium::m_f(M_T), h = corium::m_f(M_H), p = corium::m_f(M_P);
   if (!isnan(t)) mp.kv(PSTR("t"), t);
   if (!isnan(h)) mp.kv(PSTR("h"), h);
   if (!isnan(p)) mp.kv(PSTR("p"), p);
@@ -460,11 +460,11 @@ static void write_env(MsgPack::Writer& mp) {
 
 // float32, no soft-float printer
 static void write_readings(MsgPack::Writer& mp) {
-  mp.kv(PSTR("c"),  egm_f(M_CPM_ST));
-  mp.kv(PSTR("u"),  egm_f(M_USV_ST));
-  if (egm_b(M_NONE)) mp.kv(PSTR("nc"), true);
+  mp.kv(PSTR("c"),  corium::m_f(M_CPM_ST));
+  mp.kv(PSTR("u"),  corium::m_f(M_USV_ST));
+  if (corium::m_b(M_NONE)) mp.kv(PSTR("nc"), true);
 #ifdef ESPG_HV_ADC
-  EGMeasureIter hv(0xFF, false, M_HV);
+  corium::MeasureIter hv(0xFF, false, M_HV);
   if (hv.next()) mp.kv(PSTR("hv"), hv.value().i);
 #endif
   write_env(mp);
@@ -503,7 +503,7 @@ void WebAPI::postMeasurement(bool censusOnly) {
 #endif
   }
 
-  if (!egm_b(M_WARM)) {
+  if (!corium::m_b(M_WARM)) {
     Log::debug(PSTR("WebAPI: Skipping early post (CPM bucket not full)"));
     return;
   }
@@ -528,8 +528,8 @@ void WebAPI::postMeasurement(bool censusOnly) {
   }
 
   if (request.busy()) return;
-  EGHttpDriver::Sent s = send_signed(SENT_POST, PSTR(WEBAPI_URL "/api/1/post"), buffer, bodyLen, basesig);
-  if (s == EGHttpDriver::SENT || s == EGHttpDriver::NOT_SEALED) EGModuleRegistry::emit(TOPIC_SENT);
+  corium::HttpDriver::Sent s = send_signed(SENT_POST, PSTR(WEBAPI_URL "/api/1/post"), buffer, bodyLen, basesig);
+  if (s == corium::HttpDriver::SENT || s == corium::HttpDriver::NOT_SEALED) corium::Registry::emit(TOPIC_SENT);
   else Log::console(PSTR("WebAPI: Post connect failed"));
 }
 
@@ -551,7 +551,7 @@ void WebAPI::onPost(int code, const uint8_t* r, size_t n) {
       denied(r, n);
       station_id = 0;
       nextHandshake = 0;
-      EGModuleRegistry::due_in(this, REPLAN_MS);
+      corium::Registry::due_in(this, REPLAN_MS);
     } else if (code == 409) {
       Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
     }
@@ -583,10 +583,10 @@ void WebAPI::sendForget() {
     return;
   }
 
-  EGHttpDriver::Sent s = send_signed(SENT_FORGET, PSTR(WEBAPI_URL "/api/1/forget"), buffer, bodyLen, basesig);
-  if (s == EGHttpDriver::SENT || s == EGHttpDriver::NOT_SEALED) {
+  corium::HttpDriver::Sent s = send_signed(SENT_FORGET, PSTR(WEBAPI_URL "/api/1/forget"), buffer, bodyLen, basesig);
+  if (s == corium::HttpDriver::SENT || s == corium::HttpDriver::NOT_SEALED) {
     Log::console(PSTR("WebAPI: Forget station %u"), station_id);
-    EGModuleRegistry::emit(TOPIC_SENT);
+    corium::Registry::emit(TOPIC_SENT);
   } else {
     Log::console(PSTR("WebAPI: Forget connect failed"));
   }
@@ -602,7 +602,7 @@ void WebAPI::onForget(int code, const uint8_t* r, size_t n) {
     nextHandshake = 0;
     lastPing = 0;
     healthPostCounter = 0;
-    EGModuleRegistry::due_in(this, REPLAN_MS);
+    corium::Registry::due_in(this, REPLAN_MS);
   } else {
     Log::console(PSTR("WebAPI: Forget failed - %s"), (PGM_P)EGHttpClient::reason(code));
   }
@@ -692,12 +692,12 @@ static bool saveSettings(EGHttpRequest& req, bool& wrote) {
   bool ok = true;
   // arg() reuses its buffer
   const char* m = req.arg(F("m"));
-  if (m && !EGPrefs::put("webapi", EG_K_MODE, m)) ok = false;
+  if (m && !corium::Prefs::put("webapi", EG_K_MODE, m)) ok = false;
   const char* lat = req.arg(FPSTR(EG_K_LAT));
-  if (lat && !EGPrefs::put("webapi", EG_K_LAT, *lat ? lat : "0")) ok = false;
+  if (lat && !corium::Prefs::put("webapi", EG_K_LAT, *lat ? lat : "0")) ok = false;
   const char* lon = req.arg(FPSTR(EG_K_LON));
-  if (lon && !EGPrefs::put("webapi", EG_K_LON, *lon ? lon : "0")) ok = false;
-  wrote = EGPrefs::commit();
+  if (lon && !corium::Prefs::put("webapi", EG_K_LON, *lon ? lon : "0")) ok = false;
+  wrote = corium::Prefs::commit();
   return ok;
 }
 
@@ -730,7 +730,7 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
     "network so it appears on the global map. The device identity and "
     "location are obscured before publication.</p>"));
 
-  uint8_t mode = (uint8_t)EGPrefs::getUInt("webapi", EG_K_MODE);
+  uint8_t mode = (uint8_t)corium::Prefs::getUInt("webapi", EG_K_MODE);
   if (mode > 0) sendStation(res);
 
   res.sendChunk(F(
@@ -746,10 +746,10 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.sendKV(F("> CPM Readings</label></fieldset>"
                "<label for=lat>Latitude</label>"
                "<input id=lat name=lat type=number step=any min=-90 max=90 placeholder='approximate by IP if blank' value='"),
-             EGPrefs::getString("webapi", EG_K_LAT),
+             corium::Prefs::getString("webapi", EG_K_LAT),
              F("'><label for=lon>Longitude</label>"
                "<input id=lon name=lon type=number step=any min=-180 max=180 placeholder='approximate by IP if blank' value='"));
-  res.sendKV(nullptr, EGPrefs::getString("webapi", EG_K_LON),
+  res.sendKV(nullptr, corium::Prefs::getString("webapi", EG_K_LON),
              F("'><p style=margin-top:.5em>"));
   res.sendChunk(F(
     "<button type=button onclick=\"window.open('" APP_LOC_URL "/','" APP_LOC_WIN "')\">Find location</button></p>"
@@ -784,8 +784,8 @@ static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
   webapi.forget();
-  EGPrefs::put("webapi", EG_K_MODE, "0");
-  bool wrote = EGPrefs::commit();
+  corium::Prefs::put("webapi", EG_K_MODE, "0");
+  bool wrote = corium::Prefs::commit();
 
   WebPortal::beginPage(res, F("Station Forgotten"));
   if (!wrote) WebPortal::sendNotSaved(res);
@@ -793,11 +793,11 @@ static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
   WebPortal::endPage(res);
 }
 
-static const EGMenuEntry WEBAPI_MENU[] PROGMEM = {
+static const corium::MenuEntry WEBAPI_MENU[] PROGMEM = {
   {"/webapi", "ESPGeiger Network"},
   {"", ""}
 };
-const EGMenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
+const corium::MenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
 
 static const char P_WEBAPI[] PROGMEM = "/webapi";
 static const char R_KEYRESET[] PROGMEM = "/webapikeyreset";

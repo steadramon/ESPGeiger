@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef EG_FS_H
-#define EG_FS_H
+#ifndef CORIUM_FS_H
+#define CORIUM_FS_H
 
 #include <LittleFS.h>
 

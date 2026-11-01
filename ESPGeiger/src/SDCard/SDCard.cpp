@@ -25,8 +25,8 @@
 #include <EGHttpServer.h>
 #include "SDCard.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/System/Clock.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
@@ -35,7 +35,7 @@
 #include "Corium/WebPortal/WebPortal.h"
 #include "App/FeatureBits.h"
 
-EG_PSTR(K_SYNC_MIN, "sync_min");
+CORIUM_PSTR(K_SYNC_MIN, "sync_min");
 
 #define SD_NAME_LEN 12   // 8.3, YYYYMMDD.csv
 #define SD_DIR_LEN  6    // YYYYMM
@@ -47,26 +47,26 @@ EG_PSTR(K_SYNC_MIN, "sync_min");
 SdFat32* sd = nullptr;
 
 SDCard sdcard;
-EG_REGISTER_FEATURE(sdcard, FEAT_SDCARD)
+CORIUM_REGISTER_FEATURE(sdcard, FEAT_SDCARD)
 
-EG_PSTR(SD_L_SI, "Sync Interval (min)");
-EG_PSTR(SD_H_SI, "Minutes between syncs. 1=safest, higher=less SD wear");
+CORIUM_PSTR(SD_L_SI, "Sync Interval (min)");
+CORIUM_PSTR(SD_H_SI, "Minutes between syncs. 1=safest, higher=less SD wear");
 
-static const EGPref SDCARD_PREF_ITEMS[] PROGMEM = {
-  {K_SYNC_MIN, SD_L_SI, SD_H_SI, "1", nullptr, 1, 5, 0, EGP_UINT, 0},
+static const corium::Pref SDCARD_PREF_ITEMS[] PROGMEM = {
+  {K_SYNC_MIN, SD_L_SI, SD_H_SI, "1", nullptr, 1, 5, 0, corium::P_UINT, 0},
 };
 
-static const EGPrefGroup SDCARD_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup SDCARD_PREF_GROUP PROGMEM = {
   "sdcard", "SD Card", 1,
   SDCARD_PREF_ITEMS,
   sizeof(SDCARD_PREF_ITEMS) / sizeof(SDCARD_PREF_ITEMS[0]),
-  EGP_CAT_SYSTEM,
+  corium::P_CAT_SYSTEM,
 };
 
-const EGPrefGroup* SDCard::prefs_group() { return &SDCARD_PREF_GROUP; }
+const corium::PrefGroup* SDCard::prefs_group() { return &SDCARD_PREF_GROUP; }
 
 void SDCard::on_prefs_loaded() {
-  _sync_min = (uint8_t)clamp<uint32_t>(EGPrefs::getUInt("sdcard", K_SYNC_MIN), 1, 5);
+  _sync_min = (uint8_t)clamp<uint32_t>(corium::Prefs::getUInt("sdcard", K_SYNC_MIN), 1, 5);
 }
 
 // FAT date high, time low; FAT seconds are 2 s units
@@ -127,7 +127,7 @@ void SDCard::begin()
   Log::console(PSTR("SDCard: Mounted."));
   Log::console(PSTR("SDCard: Calculating free space"));
   startCount(CLEAN_FREECHECK);
-  EGModuleRegistry::due_in(this, 0);
+  corium::Registry::due_in(this, 0);
   // remount runs begin() again
   static bool listening = false;
   if (!listening) listening = Lifecycle::on(sd_lifecycle);
@@ -203,7 +203,7 @@ static void write_header(File32& f) {
 
 static void write_col(File32& f, const char* id) {
   char fb[16];
-  egm_text(id, EGM_OUT_JSON, fb, sizeof(fb));
+  corium::m_text(id, corium::M_OUT_JSON, fb, sizeof(fb));
   f.print(F(","));
   f.print(fb);
 }
@@ -323,7 +323,7 @@ void SDCard::scheduleCleanup(uint8_t what) {
 void SDCard::loop(unsigned long /*now*/) {
   if (!sdenabled) return;
   if (!_counting) {
-    EGModuleRegistry::due_in(this, ms_to_minute());
+    corium::Registry::due_in(this, ms_to_minute());
     minuteEdge();
     if (_cleanup == CLEAN_NONE) return;
     startCount(_cleanup);
@@ -361,7 +361,7 @@ void SDCard::countFat() {
       scheduleCleanup(_counting);
       _counting = CLEAN_NONE;
       _free = -1;
-      EGModuleRegistry::due_in(this, ms_to_minute());
+      corium::Registry::due_in(this, ms_to_minute());
       return;
     }
     uint32_t left = total - _fat_sec * per;
@@ -369,12 +369,12 @@ void SDCard::countFat() {
     _fat_sec++;
   }
   if (_fat_sec * per < total) {
-    EGModuleRegistry::due_in(this, SD_COUNT_MS);
+    corium::Registry::due_in(this, SD_COUNT_MS);
     return;
   }
   const uint8_t what = _counting;
   _counting = CLEAN_NONE;
-  EGModuleRegistry::due_in(this, ms_to_minute());
+  corium::Registry::due_in(this, ms_to_minute());
   cleanup(what);
 }
 
@@ -413,7 +413,7 @@ void SDCard::fail_step(const char* step, const char* dir, const char* file) {
 void SDCard::fault() {
   if (_fault) return;
   _fault = true;
-  EGModuleRegistry::emit(TOPIC_ERROR);
+  corium::Registry::emit(TOPIC_ERROR);
 }
 
 // leaves cwd at root
@@ -851,12 +851,12 @@ static void hSdDownload(EGHttpRequest& req, EGHttpResponse& res, const char* f) 
   res.endChunked();
 }
 
-static const EGMenuEntry SDCARD_MENU[] PROGMEM = {
+static const corium::MenuEntry SDCARD_MENU[] PROGMEM = {
   {"/sd", "SD Logs"},
   {"", ""}
 };
 
-const EGMenuEntry* SDCard::menuEntries() {
+const corium::MenuEntry* SDCard::menuEntries() {
   return sdenabled ? SDCARD_MENU : nullptr;
 }
 

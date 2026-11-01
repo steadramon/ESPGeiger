@@ -21,7 +21,7 @@
 
 #define APP_HOOK __attribute__((weak))
 
-APP_HOOK const EGMenuEntry* AppHooks::menu() { return nullptr; }
+APP_HOOK const corium::MenuEntry* AppHooks::menu() { return nullptr; }
 APP_HOOK void AppHooks::routes(EGHttpServer&) {}
 APP_HOOK void AppHooks::info_rows(EGHttpResponse&) {}
 APP_HOOK void AppHooks::about_json(EGHttpResponse&) {}

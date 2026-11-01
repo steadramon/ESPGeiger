@@ -30,13 +30,13 @@
 #include <Update.h>
 #endif
 #include <ArduinoOTA.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
 #ifndef OTA_POLL_INTERVAL_MS
 #define OTA_POLL_INTERVAL_MS 100
 #endif
 
-class ArduinoOTAModule : public EGModule {
+class ArduinoOTAModule : public corium::Module {
   public:
     const char* name() override { return PSTR("ota"); }
     bool requires_wifi() override { return true; }

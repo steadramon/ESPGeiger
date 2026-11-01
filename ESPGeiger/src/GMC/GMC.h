@@ -23,8 +23,8 @@
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Net/EGHttpPoster.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Net/HttpPoster.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef GMC_INTERVAL
 #define GMC_INTERVAL 300
@@ -33,13 +33,13 @@
 // %s not %f, soft-float is slow
 const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM=%d&ACPM=%s&uSV=%s";
 
-class GMC : public EGHttpPoster {
+class GMC : public corium::HttpPoster {
   public:
     GMC();
     const char* name() override { return PSTR("gmc"); }
     void on_prefs_loaded() override;
-    const EGPrefGroup* prefs_group() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    const corium::PrefGroup* prefs_group() override;
+    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;

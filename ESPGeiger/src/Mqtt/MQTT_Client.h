@@ -25,10 +25,10 @@
 #include "App/AppConfig.h"
 #include "Corium/System/DeviceInfo.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
 #include "App/Topics.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 
 
 #ifndef MQTT_DISCOVERY_TOPIC
@@ -72,7 +72,7 @@
 #define MQTT_HASS_BIRTH_SPREAD_S 30UL   // stagger a fleet on HA birth
 #endif
 
-class MQTT_Client : public EGSender {
+class MQTT_Client : public corium::Sender {
 public:
   static MQTT_Client& getInstance()
   {
@@ -85,11 +85,11 @@ public:
   static constexpr uint8_t TOPIC_PING = Topic::PING;   // today: the send mark, no LED
   void begin() override;
   void loop(unsigned long now) override;
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
   void on_prefs_saved() override;
   uint8_t display_order() override { return 25; }
   size_t status_json(char* buf, size_t cap, unsigned long now) override;
-  EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+  corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
   void setInterval(int interval);
   int getInterval();
   void disconnect();

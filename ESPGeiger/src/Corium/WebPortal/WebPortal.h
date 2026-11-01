@@ -25,7 +25,7 @@
 #define GIT_VERSION ""
 #endif
 // script and css urls, a new build fetches them again
-#define EG_CACHE_BUST "?v=" GIT_VERSION
+#define CORIUM_CACHE_BUST "?v=" GIT_VERSION
 
 // a route table row (PROGMEM), smaller than an on() call; no user pointer
 struct WebRoute { PGM_P path; EGHttpServer::Handler h; EGHttpRequest::Method method; };

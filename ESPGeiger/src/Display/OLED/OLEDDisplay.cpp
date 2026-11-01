@@ -28,8 +28,8 @@
 #include "Display/Display.h"
 #include "Display/DisplayType.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/Util/MathUtil.h"
@@ -46,8 +46,8 @@
 #include "GRNG/GRNG.h"
 #include "GeigerInput/Type/UdpRx.h"
 
-EG_PSTR(K_RST,  "rst");
-EG_PSTR(K_FLIP, "flip");
+CORIUM_PSTR(K_RST,  "rst");
+CORIUM_PSTR(K_FLIP, "flip");
 
 static const uint8_t HIST = 45;   // seconds
 
@@ -80,7 +80,7 @@ static const uint8_t TILE_COLS = OLED_WIDTH >> 3;
 static const uint8_t TILE_ROWS = OLED_HEIGHT >> 3;
 
 SSD1306Display oled;
-EG_REGISTER_FEATURE(oled, FEAT_OLED)
+CORIUM_REGISTER_FEATURE(oled, FEAT_OLED)
 static bool _backend_oled = Display::add(&oled);
 
 // all but the led types
@@ -168,7 +168,7 @@ void SSD1306Display::drawStrP(int16_t x, int16_t y, const char* s) {
 void SSD1306Display::load_pins() {
 #ifndef OLED_PINS_BLOCKED
   {
-    uint8_t sda = (uint8_t)EGPrefs::getUInt("i2c", EG_K_SDA);
+    uint8_t sda = (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA);
     if (const char* why = PinSafety::claim_output((int)sda, PinSafety::I2C)) {
       Log::console(PSTR("OLED: sda=%u unsafe (%s) - keeping default %u"), sda, why, _pin_sda);
       PinSafety::claim((int)_pin_sda, PinSafety::I2C);
@@ -177,7 +177,7 @@ void SSD1306Display::load_pins() {
     }
   }
   {
-    uint8_t scl = (uint8_t)EGPrefs::getUInt("i2c", EG_K_SCL);
+    uint8_t scl = (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL);
     if (const char* why = PinSafety::claim_output((int)scl, PinSafety::I2C)) {
       Log::console(PSTR("OLED: scl=%u unsafe (%s) - keeping default %u"), scl, why, _pin_scl);
       PinSafety::claim((int)_pin_scl, PinSafety::I2C);
@@ -186,7 +186,7 @@ void SSD1306Display::load_pins() {
     }
   }
   {
-    uint8_t rst = (uint8_t)EGPrefs::getUInt("display", K_RST);
+    uint8_t rst = (uint8_t)corium::Prefs::getUInt("display", K_RST);
     if (rst != 255) {
       if (const char* why = PinSafety::claim_output((int)rst, PIN_OWNER)) {
         Log::console(PSTR("OLED: rst=%u unsafe (%s) - keeping default %u"), rst, why, _pin_rst);
@@ -198,7 +198,7 @@ void SSD1306Display::load_pins() {
       _pin_rst = 255;
     }
   }
-  _pref_display_type = (uint8_t)EGPrefs::getUInt("display", EG_K_TYPE);
+  _pref_display_type = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
 #else
   _pref_display_type = OLED_TYPE;
 #endif
@@ -210,15 +210,15 @@ void SSD1306Display::start() {
   setup();
   if (!_frame) return;
   _started = true;
-  setBrightness((uint8_t)EGPrefs::getUInt("display", EG_K_BRIGHTNESS));
-  EGModuleRegistry::on(Display::TOPIC_POWER, this);
-  EGModuleRegistry::on(TOPIC_SENT, this);
-  EGModuleRegistry::on(Topic::PING, this);
-  EGModuleRegistry::every(this, TICK_MS);
+  setBrightness((uint8_t)corium::Prefs::getUInt("display", EG_K_BRIGHTNESS));
+  corium::Registry::on(Display::TOPIC_POWER, this);
+  corium::Registry::on(TOPIC_SENT, this);
+  corium::Registry::on(Topic::PING, this);
+  corium::Registry::every(this, TICK_MS);
 }
 
 void SSD1306Display::reload() {
-  setBrightness((uint8_t)EGPrefs::getUInt("display", EG_K_BRIGHTNESS));
+  setBrightness((uint8_t)corium::Prefs::getUInt("display", EG_K_BRIGHTNESS));
 }
 
 SSD1306Display::SSD1306Display() {
@@ -249,7 +249,7 @@ void SSD1306Display::page_changed(unsigned long now) {
   }
   _last_page = oled_page;
   _next_render_due = now;
-  EGModuleRegistry::every(this, tick_ms());
+  corium::Registry::every(this, tick_ms());
 }
 
 // false = asleep, nothing to draw
@@ -257,7 +257,7 @@ bool SSD1306Display::awake(unsigned long now) {
   if (!_present) return true;
   if (!display.lit()) {
     if (oled_on) { clearBuffer(); setPowerSave(1); oled_on = false; _send_rows_left = 0; }
-    EGModuleRegistry::every(this, DARK_TICK_MS);   // not 0, power events still land
+    corium::Registry::every(this, DARK_TICK_MS);   // not 0, power events still land
     return false;
   }
   if (!oled_on) {
@@ -265,7 +265,7 @@ bool SSD1306Display::awake(unsigned long now) {
     oled_page = PAGE_MAIN;
     oled_on = true;
     oled_last_update = now - MAIN_FULL_MS;
-    EGModuleRegistry::every(this, TICK_MS);
+    corium::Registry::every(this, TICK_MS);
   }
   return true;
 }
@@ -355,11 +355,11 @@ void SSD1306Display::queue_rows(uint8_t dirty) {
 
 void SSD1306Display::loop(unsigned long now) {
   if (!_started) {
-    EGModuleRegistry::every(this, 0);
+    corium::Registry::every(this, 0);
     return;
   }
   if (_locked_page || _ota_lock) {
-    EGModuleRegistry::every(this, LOCKED_TICK_MS);
+    corium::Registry::every(this, LOCKED_TICK_MS);
     return;
   }
   // one row a tick
@@ -382,7 +382,7 @@ void SSD1306Display::take_events(unsigned long now) {
   if (oled_page > OLED_PAGES) oled_page = PAGE_MAIN;
   if (oled_page != _last_page) page_changed(now);
   if (oled_page == PAGE_SAVER) display.wake(now);
-  uint16_t ev = EGModuleRegistry::events(this);
+  uint16_t ev = corium::Registry::events(this);
   if (ev & ~(1u << Display::TOPIC_POWER)) _sent_mark = 2;   // the rest are sends
   if (ev & (1u << Display::TOPIC_POWER)) _next_render_due = now;   // lit or dark
 }
@@ -398,7 +398,7 @@ void SSD1306Display::draw_frame(unsigned long now) {
 void SSD1306Display::next_frame(unsigned long now) {
   uint32_t at = now + tick_ms();
   if (!reached(at, _next_render_due)) at = _next_render_due;
-  EGModuleRegistry::due_at(this, at);
+  corium::Registry::due_at(this, at);
 }
 
 // k 10 = tenths, only under 10; false = no counts
@@ -541,12 +541,12 @@ void SSD1306Display::page_two_full() {
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 2, DeviceInfo::hostname());
   drawStrP(0, 17, PSTR("IP:"));
-  char ipStr[EG_IPV4_MAX + 1];
+  char ipStr[CORIUM_IPV4_MAX + 1];
   Wifi::formatIP(ipStr, sizeof(ipStr));
   drawStrP(16, 17, ipStr);
   int uptime_y = 32;
   if (M_HAS_HV) {
-    EGMeasureIter hv(0xFF, false, M_HV);
+    corium::MeasureIter hv(0xFF, false, M_HV);
     if (hv.next()) {
       drawStrP(0, uptime_y, PSTR("HV:"));
       char hvBuf[12];
@@ -754,7 +754,7 @@ void SSD1306Display::setup() {
     _present = false;
     Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
                  _pin_sda, _pin_scl);
-    EGModuleRegistry::every(this, NOPANEL_TICK_MS);
+    corium::Registry::every(this, NOPANEL_TICK_MS);
     setFontPosTop();
     return;
   }
@@ -771,7 +771,7 @@ void SSD1306Display::setup() {
 #ifdef OLED_PINS_BLOCKED
   bool flipped = OLED_FLIP;
 #else
-  bool flipped = EGPrefs::getBool("display", K_FLIP);
+  bool flipped = corium::Prefs::getBool("display", K_FLIP);
 #endif
   // inverted vs ThingPulse, u8g2 init is already flipped
   setFlipMode(flipped ? 0 : 1);
@@ -902,7 +902,7 @@ void SSD1306Display::screen_mode(unsigned long now, bool auto_off) {
   oled_on = true;
   oled_last_update = 0;
   _next_render_due = now + 1500;   // message stays up
-  EGModuleRegistry::every(this, TICK_MS);
+  corium::Registry::every(this, TICK_MS);
 }
 #endif
 
@@ -1241,7 +1241,7 @@ void SSD1306Display::endOTABanner() {
   _ota_lock = false;
   oled_last_update = 0;
   _next_render_due = fast_millis();
-  EGModuleRegistry::every(this, tick_ms());
+  corium::Registry::every(this, tick_ms());
 }
 
 bool SSD1306Display::screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) {

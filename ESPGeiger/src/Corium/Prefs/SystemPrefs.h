@@ -19,18 +19,18 @@
 #ifndef SYSTEMPREFS_H
 #define SYSTEMPREFS_H
 
-#include "Corium/Module/EGModule.h"
-#include "EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Prefs.h"
 
 #define WEB_PASS_MAX 32
 #define WEB_PASS_SLOT 1   // KeyStore, 0 is the key
 
-class SystemPrefs : public EGModule {
+class SystemPrefs : public corium::Module {
   public:
     const char* name() override { return PSTR("sys"); }
     bool core_module() override { return true; }
     uint8_t display_order() override { return 10; }
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
     void begin() override;
     void loop(unsigned long now) override;

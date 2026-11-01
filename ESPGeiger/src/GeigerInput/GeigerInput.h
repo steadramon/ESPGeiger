@@ -24,7 +24,7 @@
 #include <atomic>
 #include "App/AppConfig.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 #include "Corium/System/IsrLock.h"
 
 // GEIGER_TYPE bits, test builds >= 128
@@ -151,14 +151,14 @@ class GeigerInput {
     virtual bool isHealthy() const { return true; }
     virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
     virtual void registerRoutes(EGHttpServer&) {}
-    virtual EGMeasureRows measurements() { return EGMeasureRows(); }
+    virtual corium::MeasureRows measurements() { return corium::MeasureRows(); }
     virtual void appendClicksExtra(EGHttpResponse&) {}
     virtual uint32_t boundary_seconds() const { return 3600; }   // 60 in test
     virtual void stopForOTA() {}
     virtual void restartAfterOTA() {}
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
-    static void EG_ISR_ATTR countInterrupt();
+    static void CORIUM_ISR_ATTR countInterrupt();
     // main code only, interrupts off
     static void countAt(unsigned long us);
     void checkIsrStorm();

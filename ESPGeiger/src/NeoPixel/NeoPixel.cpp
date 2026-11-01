@@ -20,8 +20,8 @@
 
 #include "NeoPixel.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/MathUtil.h"
 #include "App/AppKeys.h"
@@ -29,26 +29,26 @@
 #include "App/FeatureBits.h"
 #include "Corium/System/PinSafety.h"
 
-EG_PSTR(K_COLOR, "color");
-EG_PSTR(K_FADE,  "fade");
-EG_PSTR(K_SWAP,  "swap");
+CORIUM_PSTR(K_COLOR, "color");
+CORIUM_PSTR(K_FADE,  "fade");
+CORIUM_PSTR(K_SWAP,  "swap");
 
 #define NPX_STR_(x) #x
 #define NPX_STR(x) NPX_STR_(x)
 
 NeoPixel neopixel;
-EG_REGISTER_FEATURE(neopixel, FEAT_NEOPIXEL)
+CORIUM_REGISTER_FEATURE(neopixel, FEAT_NEOPIXEL)
 
-EG_PSTR(NP_L_SWAP, "Swap R/G");
-EG_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");
-EG_PSTR(NP_O_MODE, "Off|Blip|Blip+status|Trend pulse|Trend+status");
-EG_PSTR(NP_L_COL,  "Blip colour");
-EG_PSTR(NP_H_BLP,  "Blip mode only.");
-EG_PSTR(NP_O_COL,  "Green|Red|Blue|Yellow|Cyan|Magenta|White|Orange");
-EG_PSTR(NP_O_FAD,  "Off|Fast|Medium|Slow");
+CORIUM_PSTR(NP_L_SWAP, "Swap R/G");
+CORIUM_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");
+CORIUM_PSTR(NP_O_MODE, "Off|Blip|Blip+status|Trend pulse|Trend+status");
+CORIUM_PSTR(NP_L_COL,  "Blip colour");
+CORIUM_PSTR(NP_H_BLP,  "Blip mode only.");
+CORIUM_PSTR(NP_O_COL,  "Green|Red|Blue|Yellow|Cyan|Magenta|White|Orange");
+CORIUM_PSTR(NP_O_FAD,  "Off|Fast|Medium|Slow");
 #ifndef NEOPIXEL_PIN_BLOCKED
-EG_PSTR(NP_L_PIN,  "Pin");
-EG_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
+CORIUM_PSTR(NP_L_PIN,  "Pin");
+CORIUM_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
 #endif
 
 // esp8266 boards have RGB leds, swap on
@@ -60,25 +60,25 @@ EG_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
   #endif
 #endif
 
-static const EGPref NEOPIXEL_PREF_ITEMS[] PROGMEM = {
+static const corium::Pref NEOPIXEL_PREF_ITEMS[] PROGMEM = {
 #ifndef NEOPIXEL_PIN_BLOCKED
-  {EG_K_PIN,        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
+  {EG_K_PIN,        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
-  {EG_K_BRIGHTNESS, EG_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, EGP_UINT, EGP_SLIDER},
-  {EG_K_MODE,       EG_L_MOD,  nullptr,   "4",               NP_O_MODE, 0, 4, 0, EGP_ENUM, 0},
-  {K_COLOR,         NP_L_COL,  NP_H_BLP,  "0",               NP_O_COL, 0, 7,  0, EGP_ENUM, 0},
-  {K_FADE,          EG_L_FAD,  NP_H_BLP,  "0",               NP_O_FAD, 0, 3,  0, EGP_ENUM, EGP_ADVANCED},
-  {K_SWAP,          NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, EGP_BOOL, EGP_ADVANCED},
+  {EG_K_BRIGHTNESS, EG_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
+  {EG_K_MODE,       EG_L_MOD,  nullptr,   "4",               NP_O_MODE, 0, 4, 0, corium::P_ENUM, 0},
+  {K_COLOR,         NP_L_COL,  NP_H_BLP,  "0",               NP_O_COL, 0, 7,  0, corium::P_ENUM, 0},
+  {K_FADE,          EG_L_FAD,  NP_H_BLP,  "0",               NP_O_FAD, 0, 3,  0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_SWAP,          NP_L_SWAP, NP_H_SWAP, NPX_DEFAULT_SWAP,  nullptr, 0, 0,   0, corium::P_BOOL, corium::P_ADVANCED},
 };
 
-static const EGPrefGroup NEOPIXEL_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup NEOPIXEL_PREF_GROUP PROGMEM = {
   "neopixel", "NeoPixel", 1,
   NEOPIXEL_PREF_ITEMS,
   sizeof(NEOPIXEL_PREF_ITEMS) / sizeof(NEOPIXEL_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT,
+  corium::P_CAT_OUTPUT,
 };
 
-const EGPrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }
+const corium::PrefGroup* NeoPixel::prefs_group() { return &NEOPIXEL_PREF_GROUP; }
 
 // bit 2 R, 1 G, 0 B
 static const uint8_t NAMED_MASK[8] PROGMEM = {
@@ -110,24 +110,24 @@ void NeoPixel::on_prefs_loaded() {
   static bool s_pin_read = false;
   if (!s_pin_read) {
     s_pin_read = true;
-    _pin = claim_pin((int)EGPrefs::getInt("neopixel", EG_K_PIN));
-    // setup() ran before EGPrefs::begin
+    _pin = claim_pin((int)corium::Prefs::getInt("neopixel", EG_K_PIN));
+    // setup() ran before corium::Prefs::begin
     if (!controller_ && _pin >= 0) setup();
   }
 #endif
-  int b = (int)EGPrefs::getUInt("neopixel", EG_K_BRIGHTNESS);
+  int b = (int)corium::Prefs::getUInt("neopixel", EG_K_BRIGHTNESS);
   setBrightness(b);
-  _swap_rg = EGPrefs::getBool("neopixel", K_SWAP);
-  uint32_t m = EGPrefs::getUInt("neopixel", EG_K_MODE);
+  _swap_rg = corium::Prefs::getBool("neopixel", K_SWAP);
+  uint32_t m = corium::Prefs::getUInt("neopixel", EG_K_MODE);
   neoPixelMode = m > 4 ? 4 : m;
-  uint32_t c = EGPrefs::getUInt("neopixel", K_COLOR);
+  uint32_t c = corium::Prefs::getUInt("neopixel", K_COLOR);
   _blip_colour_idx = c > 7 ? 0 : (uint8_t)c;
-  uint32_t f = EGPrefs::getUInt("neopixel", K_FADE);
+  uint32_t f = corium::Prefs::getUInt("neopixel", K_FADE);
   _fade_rate = f > 3 ? 0 : (uint8_t)f;
   precompute_blip();
   bool active = (b > 0) && (neoPixelMode > 0) && (_pin >= 0);
   bool fast_loop = (neoPixelMode == 1) && (_fade_rate > 0);
-  EGModuleRegistry::every(this, active ? (fast_loop ? FAST_LOOP_MS : LOOP_MS) : 0);
+  corium::Registry::every(this, active ? (fast_loop ? FAST_LOOP_MS : LOOP_MS) : 0);
 }
 
 RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
@@ -135,11 +135,11 @@ RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias NEOPIXEL_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias NEOPIXEL_LEGACY[] PROGMEM = {
   {"neopixelBrightness", "brightness"},
   {},
 };
-EGLegacyRows NeoPixel::legacy_aliases() { return NEOPIXEL_LEGACY; }
+corium::LegacyRows NeoPixel::legacy_aliases() { return NEOPIXEL_LEGACY; }
 // === END LEGACY IMPORT ===
 
 NeoPixel::NeoPixel() {
@@ -149,25 +149,25 @@ NeoPixel::NeoPixel() {
 void NeoPixel::on_click(uint32_t) { neopixel._blip = true; }
 
 // found once, read each blink
-static EGMRead s_cpm = nullptr, s_cpm5 = nullptr, s_alert = nullptr, s_warn = nullptr;
+static corium::MRead s_cpm = nullptr, s_cpm5 = nullptr, s_alert = nullptr, s_warn = nullptr;
 
-static float row_f(EGMRead r) {
-  EGMValue v;
+static float row_f(corium::MRead r) {
+  corium::MValue v;
   return (r && r(&v)) ? v.f : NAN;
 }
 
-static bool row_b(EGMRead r) {
-  EGMValue v;
+static bool row_b(corium::MRead r) {
+  corium::MValue v;
   return r && r(&v) && v.b;
 }
 
 void NeoPixel::begin() {
   gcounter.on_click(on_click);
   gcounter.on_rx_click(on_click);
-  s_cpm   = egm_core_read(PSTR("cpm"),   EGM_F32);
-  s_cpm5  = egm_core_read(PSTR("cpm5"),  EGM_F32);
-  s_alert = egm_core_read(PSTR("alert"), EGM_BOOL);
-  s_warn  = egm_core_read(PSTR("warn"),  EGM_BOOL);
+  s_cpm   = corium::m_core_read(PSTR("cpm"),   corium::M_F32);
+  s_cpm5  = corium::m_core_read(PSTR("cpm5"),  corium::M_F32);
+  s_alert = corium::m_core_read(PSTR("alert"), corium::M_BOOL);
+  s_warn  = corium::m_core_read(PSTR("warn"),  corium::M_BOOL);
 }
 
 void NeoPixel::setup()

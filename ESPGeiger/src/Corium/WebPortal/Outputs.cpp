@@ -17,18 +17,18 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Outputs.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 
 size_t Outputs::json(char* buf, size_t cap, unsigned long now) {
   size_t pos = 0;
   bool first = true;
-  for (uint8_t i = 0; i < EGModuleRegistry::count(); i++) {
-    EGModule* m = EGModuleRegistry::get(i);
+  for (uint8_t i = 0; i < corium::Registry::count(); i++) {
+    corium::Module* m = corium::Registry::get(i);
     if (cap <= pos + 2) break;
     size_t before = pos;
     if (!first) buf[pos++] = ',';
     size_t n;
-    if (EGModuleRegistry::quarantined(m)) {
+    if (corium::Registry::quarantined(m)) {
       n = snprintf_P(buf + pos, cap - pos, PSTR("\"%s\":{\"quarantined\":true}"), m->name());
     } else {
       n = m->status_json(buf + pos, cap - pos, now);

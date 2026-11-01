@@ -19,8 +19,8 @@
 #ifndef NTP_h
 #define NTP_h
 #include <Arduino.h>
-#include "Corium/Module/EGModule.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef NTP_SERVER
 #  define NTP_SERVER "pool.ntp.org"
@@ -32,25 +32,25 @@
 #define NTP_TZ_MAX 64
 
 
-class NTP_Client : public EGModule {
+class NTP_Client : public corium::Module {
   public:
     NTP_Client();
     const char* name() override { return PSTR("ntp"); }
-    uint8_t priority() override { return EG_PRIORITY_INFRASTRUCTURE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_INFRASTRUCTURE; }
     bool requires_wifi() override { return true; }
     static constexpr uint16_t LOOP_MS = 60000;
     void loop(unsigned long now) override;
     void begin() override;
     void setup();
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_saved() override;
     uint8_t display_order() override { return 0; }  // managed via /network
 
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     const char* legacy_file() override { return "/ntp.json"; }  // LEGACY IMPORT
 
-    const char* get_server() { return EGPrefs::getString("ntp", EG_K_SERVER); }
-    const char* get_tz()     { return EGPrefs::getString("ntp", EG_K_TZ); }
+    const char* get_server() { return corium::Prefs::getString("ntp", corium::K_SERVER); }
+    const char* get_tz()     { return corium::Prefs::getString("ntp", corium::K_TZ); }
 };
 
 extern NTP_Client ntpclient;

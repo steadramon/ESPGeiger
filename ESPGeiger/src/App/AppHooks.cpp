@@ -20,10 +20,10 @@
 #include <EGHttpServer.h>
 #include <EGEscape.h>
 #include "Corium/System/AppHooks.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
@@ -35,13 +35,13 @@
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 namespace AppWeb { void routes(EGHttpServer& http); }
 
-static const EGMenuEntry APP_MENU[] PROGMEM = {
+static const corium::MenuEntry APP_MENU[] PROGMEM = {
   {"/status",  "Status"},
   {"/hist",    "History"},
   {"", ""}
 };
 
-const EGMenuEntry* AppHooks::menu() { return APP_MENU; }
+const corium::MenuEntry* AppHooks::menu() { return APP_MENU; }
 
 void AppHooks::routes(EGHttpServer& http) {
   GRNGRoutes::registerRoutes(http);
@@ -50,7 +50,7 @@ void AppHooks::routes(EGHttpServer& http) {
 }
 
 void AppHooks::info_rows(EGHttpResponse& res) {
-  char model[6 * EG_NAME_MAX + 1];
+  char model[6 * CORIUM_NAME_MAX + 1];
   egesc_html(model, sizeof(model), Tube::model());
   WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
   WebPortal::infoRow(res, PSTR("Feature flags"), PSTR("0x%04x"), (unsigned)Features::flags());
@@ -67,9 +67,9 @@ static const char* geiger_type_name() {
 }
 
 void AppHooks::about_json(EGHttpResponse& res) {
-  char model[6 * EG_NAME_MAX + 1];  // escaped worst case
+  char model[6 * CORIUM_NAME_MAX + 1];  // escaped worst case
   egesc_json(model, sizeof(model), Tube::model());
-  char buf[6 * EG_NAME_MAX + 80];
+  char buf[6 * CORIUM_NAME_MAX + 80];
   int n = snprintf_P(buf, sizeof(buf),
     PSTR("\"g_mod\":\"%s\",\"g_type\":\"%s\",\"g_test\":%s,\"g_pcnt\":%s,"),
     model,

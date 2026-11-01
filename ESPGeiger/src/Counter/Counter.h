@@ -24,7 +24,7 @@
 #include "App/AppConfig.h"
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Output/QuietWindow.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "App/Topics.h"
 
 #include "GeigerInput/GeigerInput.h"
@@ -86,7 +86,7 @@ class Counter : public CounterMaths {
       uint16_t get_cps_n();
       uint32_t get_cps_win_us();
       uint32_t get_min_pulse_us();
-      static void EG_ISR_ATTR on_pulse(uint32_t now_us);
+      static void CORIUM_ISR_ATTR on_pulse(uint32_t now_us);
       static void on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
       // 0=auto 1=live 2=60s 3=bucket 4=fast
       void    set_cpm_mode(uint8_t m);

@@ -36,7 +36,7 @@
 #include "GeigerInput/Type/TestPulseInt.h"
 #endif
 #include "Corium/Logger/Logger.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "App/AppKeys.h"
 #include "Corium/Output/LedSignal.h"
 #include "BlipLed/BlipLed.h"
@@ -121,7 +121,7 @@ void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) 
 uint32_t Counter::_pulse_hist[Counter::HIST_BUCKETS] = {0};
 
 // hist and min under the ring's lock, the pages copy them under it
-void EG_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
+void CORIUM_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
   IsrLock::enter_isr(s_pulse_mux);
   if (s_prev_pulse_us) {
     uint32_t interval = now_us - s_prev_pulse_us;
@@ -235,7 +235,7 @@ uint32_t s_save_ctr       = 0;
 
 // once a second from flash misses the cache
 #ifdef ESP32
-#define TICK_ATTR EG_ISR_ATTR
+#define TICK_ATTR CORIUM_ISR_ATTR
 #define TICK_COLD inline
 #else
 #define TICK_ATTR
@@ -413,11 +413,11 @@ void Counter::save_lifetime() {
   }
   if (Clock::synced) _last_save_time_t = now;
 
-  EGPrefs::putUInt("life", EG_K_CLK, total_clicks_lifetime);
-  EGPrefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover);
-  EGPrefs::putUInt("life", EG_K_FBT, _first_boot_ts);
-  EGPrefs::putUInt("life", EG_K_SECS, _lifetime_seconds_saved);
-  if (!EGPrefs::commit()) Log::console(PSTR("Lifetime: not saved"));
+  corium::Prefs::putUInt("life", EG_K_CLK, total_clicks_lifetime);
+  corium::Prefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover);
+  corium::Prefs::putUInt("life", EG_K_FBT, _first_boot_ts);
+  corium::Prefs::putUInt("life", EG_K_SECS, _lifetime_seconds_saved);
+  if (!corium::Prefs::commit()) Log::console(PSTR("Lifetime: not saved"));
   _rtc_unsaved_clicks = 0;
   _rtc_carry_s = 0;
   rtc_life_stash(0, 0);
@@ -754,8 +754,8 @@ void Counter::loop() {
     if (pw & PENDING_SAVE) {
       save_lifetime();
     }
-    if (pw & PENDING_ALARM) EGModuleRegistry::emit(TOPIC_ALARM);
-    if (pw & PENDING_COUNTS) EGModuleRegistry::emit(TOPIC_COUNTS);
+    if (pw & PENDING_ALARM) corium::Registry::emit(TOPIC_ALARM);
+    if (pw & PENDING_COUNTS) corium::Registry::emit(TOPIC_COUNTS);
   }
 
   static_cast<InputType*>(geigerinput)->loop();

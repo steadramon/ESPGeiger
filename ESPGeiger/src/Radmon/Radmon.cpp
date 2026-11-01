@@ -22,49 +22,49 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/Words.h"
 #include <EGEscape.h>
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Measure/Measure.h"
 #include "Counter/CounterUpload.h"
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 
 Radmon radmon;
-EG_REGISTER_FEATURE(radmon, FEAT_RADMON)
+CORIUM_REGISTER_FEATURE(radmon, FEAT_RADMON)
 
-EG_PSTR(RM_H_EN,  "Upload to radmon.org");
-EG_PSTR(RM_L_USR, "Username");
-EG_PSTR(RM_H_INT, "Upload interval (sec)");
+CORIUM_PSTR(RM_H_EN,  "Upload to radmon.org");
+CORIUM_PSTR(RM_L_USR, "Username");
+CORIUM_PSTR(RM_H_INT, "Upload interval (sec)");
 
 
 #define RADMON_USER_MAX 32
 #define RADMON_PASS_MAX 64
 
-static const EGPref RADMON_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SEND,     EG_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  EGP_BOOL,   0},
-  {EG_K_USER,     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  RADMON_USER_MAX, EGP_STRING, 0},
-  {EG_K_PASSWORD, EG_L_PWD, nullptr,  "",   nullptr, 0, 0,  RADMON_PASS_MAX, EGP_STRING, EGP_SENSITIVE},
-  {EG_K_INTERVAL, EG_L_INT, RM_H_INT, STR(RADMON_INTERVAL), nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, EGP_ADVANCED},
+static const corium::Pref RADMON_PREF_ITEMS[] PROGMEM = {
+  {EG_K_SEND,     EG_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   0},
+  {EG_K_USER,     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  RADMON_USER_MAX, corium::P_STRING, 0},
+  {EG_K_PASSWORD, EG_L_PWD, nullptr,  "",   nullptr, 0, 0,  RADMON_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE},
+  {EG_K_INTERVAL, EG_L_INT, RM_H_INT, STR(RADMON_INTERVAL), nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, corium::P_UINT, corium::P_ADVANCED},
 };
 
-static const EGPrefGroup RADMON_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup RADMON_PREF_GROUP PROGMEM = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND,
 };
 
-const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
+const corium::PrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias RADMON_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias RADMON_LEGACY[] PROGMEM = {
   {"radmonSend", "send"},
   {"radmonUser", "user"},
   {"radmonKey",  "password"},
   {"radmonTime", "interval"},
   {},
 };
-EGLegacyRows Radmon::legacy_aliases() { return RADMON_LEGACY; }
+corium::LegacyRows Radmon::legacy_aliases() { return RADMON_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Radmon::Radmon() {
@@ -80,10 +80,10 @@ int Radmon::getInterval() {
 }
 
 void Radmon::on_prefs_loaded() {
-  int rtimer = (int)EGPrefs::getUInt("radmon", EG_K_INTERVAL);
+  int rtimer = (int)corium::Prefs::getUInt("radmon", EG_K_INTERVAL);
   if (rtimer == 0) rtimer = RADMON_INTERVAL;
   setInterval(rtimer);
-  set_enabled(EGPrefs::getBool("radmon", EG_K_SEND));
+  set_enabled(corium::Prefs::getBool("radmon", EG_K_SEND));
 }
 
 bool Radmon::interpret(const char* r)
@@ -106,8 +106,8 @@ bool Radmon::interpret(const char* r)
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
   if (!upload_ready(log_tag())) return false;
 
-  const char* _api_user = EGPrefs::getString("radmon", EG_K_USER);
-  const char* _api_key  = EGPrefs::getString("radmon", EG_K_PASSWORD);
+  const char* _api_user = corium::Prefs::getString("radmon", EG_K_USER);
+  const char* _api_key  = corium::Prefs::getString("radmon", EG_K_PASSWORD);
   if (_api_user[0] == '\0' || _api_key[0] == '\0') {
     Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
     return false;
@@ -116,9 +116,9 @@ bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
   Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
   float avgcpm;
-  if      (pingInterval <= 90)  avgcpm = egm_f(M_CPM_ST);
-  else if (pingInterval <= 450) avgcpm = egm_f(M_CPM5);
-  else                          avgcpm = egm_f(M_CPM15);
+  if      (pingInterval <= 90)  avgcpm = corium::m_f(M_CPM_ST);
+  else if (pingInterval <= 450) avgcpm = corium::m_f(M_CPM5);
+  else                          avgcpm = corium::m_f(M_CPM15);
   char cpmbuf[12];
   format_f(cpmbuf, sizeof(cpmbuf), avgcpm, 1);
   char user[3 * RADMON_USER_MAX + 1], pass[3 * RADMON_PASS_MAX + 1];

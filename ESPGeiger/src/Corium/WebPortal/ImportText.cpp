@@ -19,7 +19,7 @@
 
 #include "ImportText.h"
 #include <string.h>
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/Bytes.h"
 
 // too long = false
@@ -39,9 +39,9 @@ static bool put_line(const char* p, const char* e, ImportText::PutFn put) {
   if (!eq) return false;
   const char* dot = (const char*)memchr(p, '.', eq - p);
   if (!dot || dot == p || dot + 1 == eq) return false;
-  char mid[EGPREF_ID_MAX + 1];
-  char key[EGPREF_ID_MAX + 1];
-  char value[EGPREFS_MAX_VALUE + 1];
+  char mid[CORIUM_PREF_ID_MAX + 1];
+  char key[CORIUM_PREF_ID_MAX + 1];
+  char value[CORIUM_PREFS_MAX_VALUE + 1];
   if (!take(mid, p, dot) || !take(key, dot + 1, eq) || !take(value, eq + 1, e)) return false;
   return put(mid, key, value);
 }
@@ -101,16 +101,16 @@ const char* ImportText::blob_error(const uint8_t* p, size_t len) {
 }
 
 // too long = "", matches no pref
-static void take_id(char (&out)[EGPREF_ID_MAX + 1], const uint8_t* p, uint8_t n) {
-  if (n > EGPREF_ID_MAX) n = 0;
+static void take_id(char (&out)[CORIUM_PREF_ID_MAX + 1], const uint8_t* p, uint8_t n) {
+  if (n > CORIUM_PREF_ID_MAX) n = 0;
   memcpy(out, p, n);
   out[n] = '\0';
 }
 
 // -1 = not moved
 static int moved_index(const char* mid) {
-  for (size_t i = 0; EGPrefs::moved_from(i); i++) {
-    if (strcmp(EGPrefs::moved_from(i), mid) == 0) return (int)i;
+  for (size_t i = 0; corium::Prefs::moved_from(i); i++) {
+    if (strcmp(corium::Prefs::moved_from(i), mid) == 0) return (int)i;
   }
   return -1;
 }
@@ -122,17 +122,17 @@ static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
   int applied = 0;
   for (uint8_t gi = 0; gi < gcount; gi++) {
     uint8_t mid_len = p[off++];
-    char mid[EGPREF_ID_MAX + 1];
+    char mid[CORIUM_PREF_ID_MAX + 1];
     take_id(mid, p + off, mid_len); off += mid_len;
     bool mine = moved_index(mid) == pass;
     uint8_t pcount = p[off++];
     for (uint8_t pi = 0; pi < pcount; pi++) {
       uint8_t klen = p[off++];
-      char key[EGPREF_ID_MAX + 1];
+      char key[CORIUM_PREF_ID_MAX + 1];
       take_id(key, p + off, klen); off += klen;
       uint16_t vlen = rd_be16(p + off);
       off += 2;
-      char value[EGPREFS_MAX_VALUE + 1];
+      char value[CORIUM_PREFS_MAX_VALUE + 1];
       // a NUL would cut the value, as put_line
       if (!mine || vlen >= sizeof(value) || memchr(p + off, '\0', vlen)) { off += vlen; continue; }
       memcpy(value, p + off, vlen); off += vlen;
@@ -147,7 +147,7 @@ static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
 int ImportText::apply_blob(const uint8_t* p, size_t len, PutFn put) {
   if (blob_error(p, len)) return -1;
   int n = 0;
-  while (EGPrefs::moved_from(n)) n++;
+  while (corium::Prefs::moved_from(n)) n++;
   int applied = 0;
   for (int pass = n - 1; pass >= -1; pass--) applied += apply_pass(p, pass, put);
   return applied;

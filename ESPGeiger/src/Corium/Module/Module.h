@@ -1,5 +1,5 @@
 /*
-  EGModule.h - Base class for modules
+  corium::Module.h - Base class for modules
 
   Copyright (C) 2026 @steadramon
 
@@ -16,34 +16,36 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef EGMODULE_H
-#define EGMODULE_H
+#ifndef CORIUM_MODULE_H
+#define CORIUM_MODULE_H
 
 #include <Arduino.h>
 #include "App/AppConfig.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/Prefs/EGPrefs.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Prefs/Prefs.h"
+#include "Corium/Measure/Measure.h"
 
 class EGHttpServer;
-class EGSender;
+namespace corium {
+
+class Sender;
 
 // PROGMEM, ends with an empty path
-struct EGMenuEntry {
+struct MenuEntry {
   char path[12];
   char label[20];
 };
 
 // lower runs first
-#define EG_PRIORITY_HARDWARE       10
-#define EG_PRIORITY_INFRASTRUCTURE 20
-#define EG_PRIORITY_DEFAULT        50
-#define EG_PRIORITY_LATE           90
+#define CORIUM_PRIORITY_HARDWARE       10
+#define CORIUM_PRIORITY_INFRASTRUCTURE 20
+#define CORIUM_PRIORITY_DEFAULT        50
+#define CORIUM_PRIORITY_LATE           90
 
-class EGModule {
+class Module {
   public:
     virtual const char* name() = 0;   // flash or SRAM, read with _P
-    virtual uint8_t priority() { return EG_PRIORITY_DEFAULT; }
+    virtual uint8_t priority() { return CORIUM_PRIORITY_DEFAULT; }
     virtual void pre_wifi() {}   // no network yet
     virtual void begin() {}      // after wifi, or offline
     // runs once every() / due_at() / post() asks
@@ -56,46 +58,46 @@ class EGModule {
     // loops during OTA
     virtual bool runs_during_ota() { return false; }
 
-    virtual const EGPrefGroup* prefs_group() { return nullptr; }
-    virtual const EGPrefShow* prefs_show() { return nullptr; }   // /param rows by another pref
+    virtual const PrefGroup* prefs_group() { return nullptr; }
+    virtual const PrefShow* prefs_show() { return nullptr; }   // /param rows by another pref
     virtual void on_prefs_loaded() {}
 
     virtual void registerRoutes(EGHttpServer& http) { (void)http; }
 
-    virtual const EGMenuEntry* menuEntries() { return nullptr; }
+    virtual const MenuEntry* menuEntries() { return nullptr; }
     virtual void on_prefs_saved() { on_prefs_loaded(); }
     virtual uint8_t display_order() { return 50; }  // lower first, 0 = hidden
     virtual bool hw_present() { return true; }
 
     // LEGACY IMPORT (remove in v1.1.0) - PROGMEM table ending with {}
-    virtual EGLegacyRows legacy_aliases() { return EGLegacyRows(); }
-#ifdef EGPREFS_LEGACY_FILE
-    virtual const char* legacy_file() { return EGPREFS_LEGACY_FILE; }
+    virtual LegacyRows legacy_aliases() { return LegacyRows(); }
+#ifdef CORIUM_PREFS_LEGACY_FILE
+    virtual const char* legacy_file() { return CORIUM_PREFS_LEGACY_FILE; }
 #else
     virtual const char* legacy_file() { return nullptr; }   // none
 #endif
 
-    virtual EGMeasureRows measurements() { return EGMeasureRows(); }
+    virtual MeasureRows measurements() { return MeasureRows(); }
 
     // /outputs fragment, 0 = not sending
     virtual size_t status_json(char* buf, size_t cap, unsigned long now) { return 0; }
-    virtual EGSender* sender() { return nullptr; }   // nullptr = not a sender
+    virtual Sender* sender() { return nullptr; }   // nullptr = not a sender
 
     static constexpr uint8_t TOPIC_SENT = 1;   // a send went out
 
   private:
-    friend class EGModuleRegistry;
+    friend class Registry;
     uint8_t _slot = 0xFF;   // registry's, 0xFF = not added
 
   protected:
     // statics, never deleted
-    ~EGModule() = default;
+    ~Module() = default;
 };
 
 // a module that sends: last result, counts for the Activity log
-class EGSender : public EGModule {
+class Sender : public Module {
   public:
-    EGSender* sender() override { return this; }
+    Sender* sender() override { return this; }
 
     void note_publish(bool ok);
     void note_attempt();
@@ -113,10 +115,12 @@ class EGSender : public EGModule {
     unsigned long last_attempt_ms = 0;
 
   protected:
-    ~EGSender() = default;
+    ~Sender() = default;
     static size_t write_status_json(char* buf, size_t cap, const char* key,
                                     bool ok, unsigned long last_attempt_ms,
                                     unsigned long now);
 };
+
+}  // namespace corium
 
 #endif

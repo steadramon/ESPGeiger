@@ -22,7 +22,7 @@
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 
 #include "Corium/Logger/Logger.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/MathUtil.h"
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Counter/Counter.h"
@@ -36,13 +36,13 @@ GeigerSerial::GeigerSerial() {
 };
 
 void GeigerSerial::begin() {
-  uint8_t st = (uint8_t)EGPrefs::getUInt("counter", EG_K_SERIAL_TYPE);
+  uint8_t st = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
   if (SerialFormat::is_known(st)) _serial_type = st;
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;    // unknown pref
   _use_cps = false;
-  if (name && EGPrefs::getString("counter", EG_K_GEIGER_MODEL)[0] == '\0') {
+  if (name && corium::Prefs::getString("counter", EG_K_GEIGER_MODEL)[0] == '\0') {
     Tube::set_model(name);
   }
   Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d hasCPS=%d"),

@@ -22,44 +22,44 @@
 #include "I2CBus.h"
 #include <Wire.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "PinSafety.h"
 
 // boards with fixed pins have no prefs
 #ifndef I2C_PINS_FIXED
 // one bus for the modules
-class I2CPrefs : public EGModule {
+class I2CPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("i2c"); }
   bool core_module() override { return true; }   // a bad pin is fixed from safe mode
   uint8_t display_order() override { return 16; }
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
 };
 
 static I2CPrefs i2cprefs;
-EG_REGISTER_MODULE(i2cprefs)
+CORIUM_REGISTER_MODULE(i2cprefs)
 
 #define I2C_STR_(x) #x
 #define I2C_STR(x) I2C_STR_(x)
 
-EG_PSTR(I2_L_SDA, "SDA Pin");
-EG_PSTR(I2_L_SCL, "SCL Pin");
+CORIUM_PSTR(I2_L_SDA, "SDA Pin");
+CORIUM_PSTR(I2_L_SCL, "SCL Pin");
 
-static const EGPref I2C_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SDA, I2_L_SDA, EG_H_RBA, I2C_STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT | EGP_PIN_OD},
-  {EG_K_SCL, I2_L_SCL, EG_H_RBA, I2C_STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT | EGP_PIN_OD},
+static const corium::Pref I2C_PREF_ITEMS[] PROGMEM = {
+  {corium::K_SDA, I2_L_SDA, corium::H_RBA, I2C_STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
+  {corium::K_SCL, I2_L_SCL, corium::H_RBA, I2C_STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
 };
 
-static const EGPrefGroup I2C_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup I2C_PREF_GROUP PROGMEM = {
   "i2c", "I2C Bus", 1,
   I2C_PREF_ITEMS,
   sizeof(I2C_PREF_ITEMS) / sizeof(I2C_PREF_ITEMS[0]),
-  EGP_CAT_SYSTEM, nullptr,
+  corium::P_CAT_SYSTEM, nullptr,
 };
 
-const EGPrefGroup* I2CPrefs::prefs_group() { return &I2C_PREF_GROUP; }
+const corium::PrefGroup* I2CPrefs::prefs_group() { return &I2C_PREF_GROUP; }
 #endif
 
 static const uint8_t NO_PIN = 255;

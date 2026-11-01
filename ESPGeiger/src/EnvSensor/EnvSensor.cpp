@@ -25,52 +25,52 @@ EnvSensor envsensor;
 #include <Wire.h>
 #include <math.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/I2CBus.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 
-EG_PSTR(K_UNIT,        "unit");
-EG_PSTR(K_TEMP_OFFSET, "temp_offset");
-EG_PSTR(K_ALTITUDE_M,  "altitude_m");
+CORIUM_PSTR(K_UNIT,        "unit");
+CORIUM_PSTR(K_TEMP_OFFSET, "temp_offset");
+CORIUM_PSTR(K_ALTITUDE_M,  "altitude_m");
 
-EG_REGISTER_MODULE(envsensor)
+CORIUM_REGISTER_MODULE(envsensor)
 
-EG_PSTR(EN_L_UNIT, "Temp unit");
-EG_PSTR(EN_O_UNIT, "Celsius|Fahrenheit|Kelvin");
-EG_PSTR(EN_L_TOF,  "Temp offset");
-EG_PSTR(EN_H_TOF,  "0.1 C steps. -25 = -2.5 C.");
-EG_PSTR(EN_L_ALT,  "Altitude (m)");
-EG_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = local station pressure).");
+CORIUM_PSTR(EN_L_UNIT, "Temp unit");
+CORIUM_PSTR(EN_O_UNIT, "Celsius|Fahrenheit|Kelvin");
+CORIUM_PSTR(EN_L_TOF,  "Temp offset");
+CORIUM_PSTR(EN_H_TOF,  "0.1 C steps. -25 = -2.5 C.");
+CORIUM_PSTR(EN_L_ALT,  "Altitude (m)");
+CORIUM_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = local station pressure).");
 
 // pins are i2c.sda/scl
-static const EGPref ENV_PREF_ITEMS[] PROGMEM = {
-  {K_UNIT,        EN_L_UNIT, nullptr,    "0",                  EN_O_UNIT, 0,  2,            0, EGP_ENUM, 0},
-  {K_TEMP_OFFSET, EN_L_TOF,  EN_H_TOF,   "0",                  nullptr, -100, 100,          0, EGP_INT,  EGP_ADVANCED},
-  {K_ALTITUDE_M,  EN_L_ALT,  EN_H_ALT,   "0",                  nullptr, 0,    9000,         0, EGP_UINT, 0},
+static const corium::Pref ENV_PREF_ITEMS[] PROGMEM = {
+  {K_UNIT,        EN_L_UNIT, nullptr,    "0",                  EN_O_UNIT, 0,  2,            0, corium::P_ENUM, 0},
+  {K_TEMP_OFFSET, EN_L_TOF,  EN_H_TOF,   "0",                  nullptr, -100, 100,          0, corium::P_INT,  corium::P_ADVANCED},
+  {K_ALTITUDE_M,  EN_L_ALT,  EN_H_ALT,   "0",                  nullptr, 0,    9000,         0, corium::P_UINT, 0},
 };
 
-static const EGPrefGroup ENV_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup ENV_PREF_GROUP PROGMEM = {
   "env", "Environment Sensor", 1,
   ENV_PREF_ITEMS,
   sizeof(ENV_PREF_ITEMS) / sizeof(ENV_PREF_ITEMS[0]),
-  EGP_CAT_INPUT,
+  corium::P_CAT_INPUT,
 };
 
-const EGPrefGroup* EnvSensor::prefs_group() { return &ENV_PREF_GROUP; }
+const corium::PrefGroup* EnvSensor::prefs_group() { return &ENV_PREF_GROUP; }
 
 void EnvSensor::readPrefs() {
 #ifndef SSD1306_DISPLAY   // the OLED sets them
-  I2CBus::pins((uint8_t)EGPrefs::getUInt("i2c", EG_K_SDA),
-               (uint8_t)EGPrefs::getUInt("i2c", EG_K_SCL));
+  I2CBus::pins((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA),
+               (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL));
 #endif
-  uint8_t unit = (uint8_t)EGPrefs::getUInt("env", K_UNIT);
-  egm_set_temp_unit(unit > UNIT_K ? UNIT_C : unit);
-  _temp_offset_tenths = (int8_t)EGPrefs::getInt("env", K_TEMP_OFFSET);
-  _altitude_m         = (uint16_t)EGPrefs::getUInt("env", K_ALTITUDE_M);
+  uint8_t unit = (uint8_t)corium::Prefs::getUInt("env", K_UNIT);
+  corium::m_set_temp_unit(unit > UNIT_K ? UNIT_C : unit);
+  _temp_offset_tenths = (int8_t)corium::Prefs::getInt("env", K_TEMP_OFFSET);
+  _altitude_m         = (uint16_t)corium::Prefs::getUInt("env", K_ALTITUDE_M);
 }
 
 void EnvSensor::on_prefs_loaded() {
@@ -81,10 +81,10 @@ void EnvSensor::begin() {
   if (_started) return;
   _started = true;
   if (!I2CBus::begin()) {
-    EGModuleRegistry::every(this, 0);
+    corium::Registry::every(this, 0);
     return;
   }
-  EGModuleRegistry::every(this, ENV_SAMPLE_MS);
+  corium::Registry::every(this, ENV_SAMPLE_MS);
   tryDetect();
 }
 
@@ -97,7 +97,7 @@ bool EnvSensor::tryDetect() {
     _detect_tries++;
     if (_detect_tries >= 3) {
       if (!_st) Log::debug(PSTR("Env: no sensor after %u tries, giving up"), _detect_tries);
-      EGModuleRegistry::every(this, _st ? ENV_RETRY_MS : 0);
+      corium::Registry::every(this, _st ? ENV_RETRY_MS : 0);
     }
     return false;
   }
@@ -107,7 +107,7 @@ bool EnvSensor::tryDetect() {
     Log::console(PSTR("Env: calloc(%u) failed"), (unsigned)sizeof(State));
     _drv_flags = 0;
     _detect_tries = 3;
-    EGModuleRegistry::every(this, 0);
+    corium::Registry::every(this, 0);
     return false;
   }
   _st->ema_t = NAN;
@@ -118,7 +118,7 @@ bool EnvSensor::tryDetect() {
   _st->prev_p = NAN;
   _st->stuck = 0;
   _st->fails = 0;
-  EGModuleRegistry::every(this, ENV_SAMPLE_MS);
+  corium::Registry::every(this, ENV_SAMPLE_MS);
   Log::console(PSTR("Env: %s detected"), chipName());
   return true;
 }
@@ -152,7 +152,7 @@ void EnvSensor::sampleStart() {
   if (_drv_flags & DRV_AHT) {
     if (_aht.trigger()) {
       _phase = PHASE_WAIT_AHT;
-      EGModuleRegistry::due_in(this, ENV_AHT_WAIT_MS);
+      corium::Registry::due_in(this, ENV_AHT_WAIT_MS);
       return;
     }
     _failed = true;
@@ -170,7 +170,7 @@ void EnvSensor::sampleFinish() {
     _failed = true;
   }
   _phase = PHASE_IDLE;
-  EGModuleRegistry::every(this, ENV_SAMPLE_MS);
+  corium::Registry::every(this, ENV_SAMPLE_MS);
   sampleDone();
 }
 
@@ -237,7 +237,7 @@ float EnvSensor::pressure() const {
 }
 
 float EnvSensor::tempUser() const {
-  return egm_celsius_to(tempC(), egm_temp_unit());
+  return corium::m_celsius_to(tempC(), corium::m_temp_unit());
 }
 
 bool EnvSensor::remoteFresh() const {
@@ -254,21 +254,21 @@ void EnvSensor::setRemote(float t, float h, float p) {
   _r_h = or_nan(h);
   _r_p = or_nan(p);
   _r_last.mark(fast_millis());
-  EGModuleRegistry::due_in(this, ENV_REMOTE_TTL_MS);   // looks once stale
+  corium::Registry::due_in(this, ENV_REMOTE_TTL_MS);   // looks once stale
 }
 
-static bool env(float f, EGMValue* v) {
+static bool env(float f, corium::MValue* v) {
   if (!envsensor.present() || isnan(f)) return false;
   v->f = f;
   return true;
 }
-static bool m_t(EGMValue* v) { return env(envsensor.tempC(), v); }
-static bool m_h(EGMValue* v) { return env(envsensor.humidity(), v); }
-static bool m_p(EGMValue* v) { return env(envsensor.pressure(), v); }
+static bool m_t(corium::MValue* v) { return env(envsensor.tempC(), v); }
+static bool m_h(corium::MValue* v) { return env(envsensor.humidity(), v); }
+static bool m_p(corium::MValue* v) { return env(envsensor.pressure(), v); }
 
-static bool m_tu(EGMValue* v) {
+static bool m_tu(corium::MValue* v) {
   if (!envsensor.present() || isnan(envsensor.tempC())) return false;
-  v->u = egm_temp_unit();
+  v->u = corium::m_temp_unit();
   return true;
 }
 
@@ -279,13 +279,13 @@ static const char MH_H[] PROGMEM = "Relative humidity";
 static const char MP_P[] PROGMEM = "env_pressure_hpa";
 static const char MH_P[] PROGMEM = "Pressure, sea-level corrected when an elevation is set";
 
-static const EGMeasure ENV_ROWS[] PROGMEM = {
-  EGM_PROW("t", "", m_t,  EGM_F32, 2, EGMU_CELSIUS, EGM_OUT_ALL,  0, MP_T, MH_T, nullptr),
-  EGM_ROW("tu", "", m_tu, EGM_U32, 0, EGMU_NONE,    EGM_OUT_JSON, 0),
-  EGM_PROW("h", "", m_h,  EGM_F32, 2, EGMU_PCT,     EGM_OUT_ALL,  0, MP_H, MH_H, nullptr),
-  EGM_PROW("p", "", m_p,  EGM_F32, 2, EGMU_HPA,     EGM_OUT_ALL,  0, MP_P, MH_P, nullptr),
+static const corium::Measure ENV_ROWS[] PROGMEM = {
+  CORIUM_M_PROW("t", "", m_t,  corium::M_F32, 2, corium::MU_CELSIUS, corium::M_OUT_ALL,  0, MP_T, MH_T, nullptr),
+  CORIUM_M_ROW("tu", "", m_tu, corium::M_U32, 0, corium::MU_NONE,    corium::M_OUT_JSON, 0),
+  CORIUM_M_PROW("h", "", m_h,  corium::M_F32, 2, corium::MU_PCT,     corium::M_OUT_ALL,  0, MP_H, MH_H, nullptr),
+  CORIUM_M_PROW("p", "", m_p,  corium::M_F32, 2, corium::MU_HPA,     corium::M_OUT_ALL,  0, MP_P, MH_P, nullptr),
 };
 
-EGMeasureRows EnvSensor::measurements() { return EGMeasureRows(ENV_ROWS); }
+corium::MeasureRows EnvSensor::measurements() { return corium::MeasureRows(ENV_ROWS); }
 
 #endif  // DISABLE_ENVSENSOR

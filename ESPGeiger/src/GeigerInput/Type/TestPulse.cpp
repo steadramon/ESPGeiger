@@ -90,7 +90,7 @@ void GeigerTestPulse::loop() {
 }
 
 // returns ticks to the next
-uint32_t EG_ISR_ATTR GeigerTestPulse::pulseInterrupt() {
+uint32_t CORIUM_ISR_ATTR GeigerTestPulse::pulseInterrupt() {
   _bool_pulse_state = !_bool_pulse_state;
   TestTimer::tx(s_tx_mask, s_tx_hi, _bool_pulse_state);
   uint32_t _our_delay = 0;

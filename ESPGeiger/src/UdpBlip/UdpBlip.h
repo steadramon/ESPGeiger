@@ -23,7 +23,7 @@
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
 #include <IPAddress.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "BlipPacket.h"
 
 class WiFiUDP;
@@ -55,7 +55,7 @@ class WiFiUDP;
 #define UDPBLIP_CLICK_BURST_TOKENS 5
 #endif
 
-class UdpBlipModule : public EGModule {
+class UdpBlipModule : public corium::Module {
 public:
   static UdpBlipModule& getInstance() {
     static UdpBlipModule instance;
@@ -65,7 +65,7 @@ public:
   bool requires_wifi() override { return true; }
   void begin() override;
   void loop(unsigned long now) override;
-  const EGPrefGroup* prefs_group() override;
+  const corium::PrefGroup* prefs_group() override;
   void on_prefs_saved() override;
   uint8_t display_order() override { return 20; }
   size_t status_json(char* buf, size_t cap, unsigned long now) override;

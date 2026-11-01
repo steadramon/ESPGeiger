@@ -20,10 +20,10 @@
 #include "Thingspeak.h"
 #include <EGFormat.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGEscape.h>
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 #include "Counter/CounterUpload.h"
 #include "Counter/CounterMaths.h"
 #include "App/AppKeys.h"
@@ -31,42 +31,42 @@
 #include "App/MeasureIds.h"
 #include <math.h>
 
-EG_PSTR(K_CHANNEL_KEY, "channel_key");
+CORIUM_PSTR(K_CHANNEL_KEY, "channel_key");
 
 Thingspeak thingspeak;
-EG_REGISTER_FEATURE(thingspeak, FEAT_THINGSPEAK)
+CORIUM_REGISTER_FEATURE(thingspeak, FEAT_THINGSPEAK)
 
-EG_PSTR(TS_H_EN,  "Upload to ThingSpeak");
-EG_PSTR(TS_L_CK,  "Channel Key");
-EG_PSTR(TS_H_CK,  "ThingSpeak channel write API key");
+CORIUM_PSTR(TS_H_EN,  "Upload to ThingSpeak");
+CORIUM_PSTR(TS_L_CK,  "Channel Key");
+CORIUM_PSTR(TS_H_CK,  "ThingSpeak channel write API key");
 
 #define TS_KEY_MAX 16
 
-static const EGPref TS_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SEND,     EG_L_EN, TS_H_EN, "0", nullptr, 0, 0, 0,  EGP_BOOL,   0},
-  {K_CHANNEL_KEY, TS_L_CK, TS_H_CK, "",  nullptr, 0, 0, TS_KEY_MAX, EGP_STRING, EGP_SENSITIVE},
+static const corium::Pref TS_PREF_ITEMS[] PROGMEM = {
+  {EG_K_SEND,     EG_L_EN, TS_H_EN, "0", nullptr, 0, 0, 0,  corium::P_BOOL,   0},
+  {K_CHANNEL_KEY, TS_L_CK, TS_H_CK, "",  nullptr, 0, 0, TS_KEY_MAX, corium::P_STRING, corium::P_SENSITIVE},
 };
 
-static const EGPrefGroup TS_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup TS_PREF_GROUP PROGMEM = {
   "thingspeak", "ThingSpeak", 1,
   TS_PREF_ITEMS,
   sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND,
 };
 
-const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
+const corium::PrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
 
 void Thingspeak::on_prefs_loaded() {
-  set_enabled(EGPrefs::getBool("thingspeak", EG_K_SEND));
+  set_enabled(corium::Prefs::getBool("thingspeak", EG_K_SEND));
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias TS_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias TS_LEGACY[] PROGMEM = {
   {"tsSend",       "send"},
   {"tsChannelKey", "channel_key"},
   {},
 };
-EGLegacyRows Thingspeak::legacy_aliases() { return TS_LEGACY; }
+corium::LegacyRows Thingspeak::legacy_aliases() { return TS_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Thingspeak::Thingspeak() {
@@ -91,24 +91,24 @@ bool Thingspeak::interpret(const char* r)
 bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
   if (!upload_ready(log_tag())) return false;
 
-  const char* _ts_channel_key = EGPrefs::getString("thingspeak", K_CHANNEL_KEY);
+  const char* _ts_channel_key = corium::Prefs::getString("thingspeak", K_CHANNEL_KEY);
   if (_ts_channel_key[0] == '\0') return false;
 
   Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
 
-  int avgcpm = CounterMaths::to_int(egm_f(M_CPM));
-  int avgcpm5 = CounterMaths::to_int(egm_f(M_CPM5));
-  int avgcpm15 = CounterMaths::to_int(egm_f(M_CPM15));
+  int avgcpm = CounterMaths::to_int(corium::m_f(M_CPM));
+  int avgcpm5 = CounterMaths::to_int(corium::m_f(M_CPM5));
+  int avgcpm15 = CounterMaths::to_int(corium::m_f(M_CPM15));
 
   char usvChar[20];
-  format_f(usvChar, sizeof(usvChar), egm_f(M_USV), 5);
+  format_f(usvChar, sizeof(usvChar), corium::m_f(M_USV), 5);
   char key[3 * TS_KEY_MAX + 1];
   egesc_url(key, sizeof(key), _ts_channel_key);
   int n0 = snprintf_P(url, cap, TS_URI, key, avgcpm, usvChar, avgcpm5, avgcpm15);
   if (!url_fits(n0, cap)) return false;
   size_t up = (size_t)n0;
   char fbuf[12];
-  float et = egm_f(M_T), eh = egm_f(M_H), ep = egm_f(M_P);
+  float et = corium::m_f(M_T), eh = corium::m_f(M_H), ep = corium::m_f(M_P);
   int n;
   if (!isnan(et)) {
     format_f(fbuf, sizeof(fbuf), et);

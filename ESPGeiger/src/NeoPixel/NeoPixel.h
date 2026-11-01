@@ -23,8 +23,8 @@
 #include "Corium/Platform/Flash.h"
 #include <NeoPixelBus.h>
 #include "Counter/Counter.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef NEOPIXEL_PIN
 #define NEOPIXEL_PIN 15
@@ -37,17 +37,17 @@
   typedef NeoPixelBus<NeoGrbFeature, NeoEsp8266BitBangWs2812xMethod> NeoController;
 #endif
 
-class NeoPixel : public EGModule {
+class NeoPixel : public corium::Module {
   public:
     NeoPixel();
     const char* name() override { return PSTR("neopx"); }
     uint8_t display_order() override { return 16; }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     void pre_wifi() override { setup(); }
     void begin() override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void loop(unsigned long now) override;
     static constexpr uint16_t LOOP_MS = 30;
     static constexpr uint16_t FAST_LOOP_MS = 10;

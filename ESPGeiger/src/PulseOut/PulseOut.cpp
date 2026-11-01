@@ -22,8 +22,8 @@
 #include "App/AppKeys.h"
 #include "App/ChipVoice.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
 #include "App/AppConfig.h"
@@ -33,51 +33,51 @@
 #include "Corium/Util/StringUtil.h"
 #include "Counter/Counter.h"
 
-EG_PSTR(K_CYCLES, "cycles");
-EG_PSTR(K_MAX_HZ, "max_hz");
+CORIUM_PSTR(K_CYCLES, "cycles");
+CORIUM_PSTR(K_MAX_HZ, "max_hz");
 
 PulseOut pulseout;
-EG_REGISTER_MODULE(pulseout)
+CORIUM_REGISTER_MODULE(pulseout)
 
 volatile uint8_t PulseOut::s_req = 0;
 uint8_t PulseOut::s_seen = 0;
 bool PulseOut::s_busy = false;
 
-EG_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
-EG_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
-EG_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
-EG_PSTR(PO_L_FRQ,  "Burst Hz");
-EG_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
-EG_PSTR(PO_L_CYC,  "Burst cycles");
-EG_PSTR(PO_H_CYC,  "1-10. More = louder and longer");
-EG_PSTR(PO_L_MHZ,  "Max Hz");
-EG_PSTR(PO_H_MHZ,  "Cap clicks per second (0 = unlimited, 1-200)");
-EG_PSTR(PO_H_BRT,  "0-100% (LED only). Applies to Pulse + Fade modes.");
-EG_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
+CORIUM_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
+CORIUM_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
+CORIUM_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
+CORIUM_PSTR(PO_L_FRQ,  "Burst Hz");
+CORIUM_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
+CORIUM_PSTR(PO_L_CYC,  "Burst cycles");
+CORIUM_PSTR(PO_H_CYC,  "1-10. More = louder and longer");
+CORIUM_PSTR(PO_L_MHZ,  "Max Hz");
+CORIUM_PSTR(PO_H_MHZ,  "Cap clicks per second (0 = unlimited, 1-200)");
+CORIUM_PSTR(PO_H_BRT,  "0-100% (LED only). Applies to Pulse + Fade modes.");
+CORIUM_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
 
-static const EGPref PULSE_PREF_ITEMS[] PROGMEM = {
-  {EG_K_ENABLE,     EG_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, EGP_BOOL, 0},
-  {EG_K_PIN,        EG_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, EGP_INT,  EGP_REBOOT | EGP_PIN_OUT},
-  {EG_K_POLARITY,   EG_L_POL,  nullptr,   "0",    EG_O_POL, 0,   1,     0, EGP_ENUM, 0},
-  {EG_K_MODE,       EG_L_MOD,  nullptr,   "0",    PO_O_MODE, 0,  2,     0, EGP_ENUM, 0},
-  {EG_K_PULSE_MS,   EG_L_PUL,  EG_H_PUL,  "5",    nullptr, 1,    50,    0, EGP_UINT, EGP_ADVANCED},
-  {EG_K_FREQ,       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, EGP_UINT, EGP_ADVANCED},
-  {K_CYCLES,        PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, EGP_UINT, EGP_ADVANCED},
-  {EG_K_FADE_SHIFT, EG_L_FAD,  nullptr,   "1",    EG_O_FAD, 0,   2,     0, EGP_ENUM, EGP_ADVANCED},
-  {EG_K_BRIGHTNESS, EG_L_BRT,  PO_H_BRT,  "100",  nullptr, 0,    100,   0, EGP_UINT, EGP_SLIDER | EGP_ADVANCED},
-  {K_MAX_HZ,        PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, EGP_UINT, EGP_ADVANCED},
-  {EG_K_QUIET_FROM, EG_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     EG_HHMM_MAX, EGP_STRING, EGP_TIME | EGP_ADVANCED},
-  {EG_K_QUIET_TO,   EG_L_QTO,  EG_H_QTO,  "",     nullptr, 0,    0,     EG_HHMM_MAX, EGP_STRING, EGP_TIME | EGP_ADVANCED},
+static const corium::Pref PULSE_PREF_ITEMS[] PROGMEM = {
+  {EG_K_ENABLE,     EG_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, corium::P_BOOL, 0},
+  {EG_K_PIN,        EG_L_PIN,  PO_H_PIN,  "-1",   nullptr, -1,   MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_POLARITY,   EG_L_POL,  nullptr,   "0",    EG_O_POL, 0,   1,     0, corium::P_ENUM, 0},
+  {EG_K_MODE,       EG_L_MOD,  nullptr,   "0",    PO_O_MODE, 0,  2,     0, corium::P_ENUM, 0},
+  {EG_K_PULSE_MS,   EG_L_PUL,  EG_H_PUL,  "5",    nullptr, 1,    50,    0, corium::P_UINT, corium::P_ADVANCED},
+  {EG_K_FREQ,       PO_L_FRQ,  PO_H_FRQ,  "3500", nullptr, 1000, 8000,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_CYCLES,        PO_L_CYC,  PO_H_CYC,  "1",    nullptr, 1,    10,    0, corium::P_UINT, corium::P_ADVANCED},
+  {EG_K_FADE_SHIFT, EG_L_FAD,  nullptr,   "1",    EG_O_FAD, 0,   2,     0, corium::P_ENUM, corium::P_ADVANCED},
+  {EG_K_BRIGHTNESS, EG_L_BRT,  PO_H_BRT,  "100",  nullptr, 0,    100,   0, corium::P_UINT, corium::P_SLIDER | corium::P_ADVANCED},
+  {K_MAX_HZ,        PO_L_MHZ,  PO_H_MHZ,  "20",   nullptr, 0,    200,   0, corium::P_UINT, corium::P_ADVANCED},
+  {EG_K_QUIET_FROM, EG_L_QFR,  PO_H_QFR,  "",     nullptr, 0,    0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
+  {EG_K_QUIET_TO,   EG_L_QTO,  EG_H_QTO,  "",     nullptr, 0,    0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
 };
 
-static const EGPrefGroup PULSE_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup PULSE_PREF_GROUP PROGMEM = {
   "pulse", "Pulse Out", 1,
   PULSE_PREF_ITEMS,
   sizeof(PULSE_PREF_ITEMS) / sizeof(PULSE_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT, EG_K_ENABLE,
+  corium::P_CAT_OUTPUT, EG_K_ENABLE,
 };
 
-const EGPrefGroup* PulseOut::prefs_group() { return &PULSE_PREF_GROUP; }
+const corium::PrefGroup* PulseOut::prefs_group() { return &PULSE_PREF_GROUP; }
 
 static int8_t claim_pin(bool enabled, int p) {
   if (!enabled || p < 0) return -1;
@@ -87,27 +87,27 @@ static int8_t claim_pin(bool enabled, int p) {
   return -1;
 }
 
-// pin is EGP_REBOOT, msTicker keeps the boot one
+// pin is corium::P_REBOOT, msTicker keeps the boot one
 void PulseOut::read_pin(bool was_enabled) {
-  if (!_begun) { _pin = EGPrefs::getInt("pulse", EG_K_PIN); return; }
+  if (!_begun) { _pin = corium::Prefs::getInt("pulse", EG_K_PIN); return; }
   if (_enabled && !was_enabled && _engine.pin < 0)
     Log::console(PSTR("PulseOut: needs a reboot to start"));
 }
 
 void PulseOut::on_prefs_loaded() {
   bool was = _enabled;
-  _enabled        = EGPrefs::getBool("pulse", EG_K_ENABLE);
+  _enabled        = corium::Prefs::getBool("pulse", EG_K_ENABLE);
   read_pin(was);
-  _engine.mode     = (uint8_t)EGPrefs::getUInt("pulse", EG_K_MODE);
-  _engine.pulse_us = EGPrefs::getUInt("pulse", EG_K_PULSE_MS) * 1000;
-  _engine.freq_hz  = EGPrefs::getUInt("pulse", EG_K_FREQ);
-  _engine.cycles   = EGPrefs::getUInt("pulse", K_CYCLES);
-  _engine.polarity = (uint8_t)EGPrefs::getUInt("pulse", EG_K_POLARITY);
-  _engine.fade_shift = (uint8_t)(EGPrefs::getUInt("pulse", EG_K_FADE_SHIFT) + PulseEngine::FADE_SHIFT_MIN);
-  _engine.max_hz   = EGPrefs::getUInt("pulse", K_MAX_HZ);
-  _engine.active_level = PulseEngine::levelFromPercent(EGPrefs::getUInt("pulse", EG_K_BRIGHTNESS));
-  _quiet.set(EGPrefs::getString("pulse", EG_K_QUIET_FROM),
-             EGPrefs::getString("pulse", EG_K_QUIET_TO));
+  _engine.mode     = (uint8_t)corium::Prefs::getUInt("pulse", EG_K_MODE);
+  _engine.pulse_us = corium::Prefs::getUInt("pulse", EG_K_PULSE_MS) * 1000;
+  _engine.freq_hz  = corium::Prefs::getUInt("pulse", EG_K_FREQ);
+  _engine.cycles   = corium::Prefs::getUInt("pulse", K_CYCLES);
+  _engine.polarity = (uint8_t)corium::Prefs::getUInt("pulse", EG_K_POLARITY);
+  _engine.fade_shift = (uint8_t)(corium::Prefs::getUInt("pulse", EG_K_FADE_SHIFT) + PulseEngine::FADE_SHIFT_MIN);
+  _engine.max_hz   = corium::Prefs::getUInt("pulse", K_MAX_HZ);
+  _engine.active_level = PulseEngine::levelFromPercent(corium::Prefs::getUInt("pulse", EG_K_BRIGHTNESS));
+  _quiet.set(corium::Prefs::getString("pulse", EG_K_QUIET_FROM),
+             corium::Prefs::getString("pulse", EG_K_QUIET_TO));
   _engine.commitConfig();
   apply_voice();
 }
@@ -159,7 +159,7 @@ static bool migrate_legacy_blip() {
   }
   f.close();
   if (pin_val[0]) {
-    EGPrefs::put("pulse", EG_K_PIN, pin_val);
+    corium::Prefs::put("pulse", EG_K_PIN, pin_val);
     any = true;
   }
   if (ms_val[0]) {
@@ -167,14 +167,14 @@ static bool migrate_legacy_blip() {
     long ms = strtol(ms_val, &endp, 10);
     if (endp != ms_val && ms > 0) {
       if (ms > 50) ms = 50;
-      EGPrefs::putInt("pulse", EG_K_PULSE_MS, ms);
+      corium::Prefs::putInt("pulse", EG_K_PULSE_MS, ms);
       any = true;
     }
   }
   if (any) {
-    EGPrefs::put("pulse", EG_K_ENABLE, "1");
+    corium::Prefs::put("pulse", EG_K_ENABLE, "1");
     // no marker, again next boot
-    if (!EGPrefs::commit(false)) {
+    if (!corium::Prefs::commit(false)) {
       Log::console(PSTR("PulseOut: not saved"));
       return true;
     }

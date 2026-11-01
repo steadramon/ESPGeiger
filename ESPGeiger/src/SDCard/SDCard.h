@@ -23,16 +23,16 @@
 #include <SdFat.h>
 #include "App/AppConfig.h"
 #include "Counter/Counter.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
 #include "App/Topics.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 
 #define SD_EDGE_MS 50   // past :00, the clock has rolled
 
 extern SdFat32* sd;
 
-class SDCard : public EGModule {
+class SDCard : public corium::Module {
   public:
     SDCard();
     const char* name() override { return PSTR("sdcard"); }
@@ -40,10 +40,10 @@ class SDCard : public EGModule {
     bool requires_ntp() override { return true; }
     void loop(unsigned long now) override;
     void begin() override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
     void registerRoutes(EGHttpServer& http) override;
-    const EGMenuEntry* menuEntries() override;
+    const corium::MenuEntry* menuEntries() override;
     bool deleteOldest(uint32_t cutoffPacked);   // DOS (date<<16)|time
     void pauseWriter();
     // SdFat not reentrant, closes the day file first

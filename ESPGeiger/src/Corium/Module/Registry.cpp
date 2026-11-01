@@ -1,5 +1,5 @@
 /*
-  EGModuleRegistry.cpp - Registry of modules
+  corium::Registry.cpp - Registry of modules
 
   Copyright (C) 2026 @steadramon
 
@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "EGModuleRegistry.h"
+#include "Registry.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/Lifecycle.h"
@@ -28,27 +28,27 @@
 #endif
 
 
-EGModuleRegistry::Slot EGModuleRegistry::_slots[EG_MAX_MODULES] = {};
-uint8_t EGModuleRegistry::_count = 0;
-uint8_t EGModuleRegistry::_overflow = 0;
-uint16_t EGModuleRegistry::_features = 0;
-uint32_t EGModuleRegistry::_next_loop_due = 0;
-uint8_t EGModuleRegistry::_due_order[EG_MAX_MODULES] = {};
-uint8_t EGModuleRegistry::_due_count = 0;
-bool EGModuleRegistry::_resort = false;
+corium::Registry::Slot corium::Registry::_slots[CORIUM_MAX_MODULES] = {};
+uint8_t corium::Registry::_count = 0;
+uint8_t corium::Registry::_overflow = 0;
+uint16_t corium::Registry::_features = 0;
+uint32_t corium::Registry::_next_loop_due = 0;
+uint8_t corium::Registry::_due_order[CORIUM_MAX_MODULES] = {};
+uint8_t corium::Registry::_due_count = 0;
+bool corium::Registry::_resort = false;
 #ifdef ESP32
-__NOINIT_ATTR uint8_t EGModuleRegistry::_firing;   // crash_boot reads it first
+__NOINIT_ATTR uint8_t corium::Registry::_firing;   // crash_boot reads it first
 #else
-uint8_t EGModuleRegistry::_firing = 0xFF;
+uint8_t corium::Registry::_firing = 0xFF;
 #endif
-#ifdef EG_CRASH_MARK
-uint8_t EGModuleRegistry::_crashed_in = 0xFF;
+#ifdef CORIUM_CRASH_MARK
+uint8_t corium::Registry::_crashed_in = 0xFF;
 #endif
-IsrLock::Bits EGModuleRegistry::_posted;
-bool EGModuleRegistry::_safe_mode = false;
+IsrLock::Bits corium::Registry::_posted;
+bool corium::Registry::_safe_mode = false;
 
 // keep sorted, loop_all reads [0]
-void EGModuleRegistry::rebuild_due() {
+void corium::Registry::rebuild_due() {
   _resort = false;
   _due_count = 0;
   for (uint8_t i = 0; i < _count; i++) {
@@ -63,8 +63,8 @@ void EGModuleRegistry::rebuild_due() {
   }
 }
 
-bool EGModuleRegistry::add(EGModule* m) {
-  if (_count >= EG_MAX_MODULES) { _overflow++; return false; }
+bool corium::Registry::add(corium::Module* m) {
+  if (_count >= CORIUM_MAX_MODULES) { _overflow++; return false; }
   _slots[_count].module = m;
   m->_slot = _count;
   _count++;
@@ -72,12 +72,12 @@ bool EGModuleRegistry::add(EGModule* m) {
 }
 
 // built in, slot or not
-bool EGModuleRegistry::add(EGModule* m, uint8_t feature) {
+bool corium::Registry::add(corium::Module* m, uint8_t feature) {
   _features |= (uint16_t)(1u << feature);
   return add(m);
 }
 
-void EGModuleRegistry::begin_all() {
+void corium::Registry::begin_all() {
   if (_overflow) {
     Log::console(PSTR("Module: Registry overflow, %u module(s) dropped (raise EG_MAX_MODULES)"), _overflow);
   }
@@ -99,7 +99,7 @@ void EGModuleRegistry::begin_all() {
   }
 }
 
-inline uint8_t EGModuleRegistry::unmet_requirements() {
+inline uint8_t corium::Registry::unmet_requirements() {
   uint8_t unmet = 0;
   if (!Wifi::stable_for(WIFI_SETTLE_MS)) unmet |= FLAG_REQUIRES_WIFI;
   if (!Clock::synced) unmet |= FLAG_REQUIRES_NTP;
@@ -107,7 +107,7 @@ inline uint8_t EGModuleRegistry::unmet_requirements() {
 }
 
 // period re-armed first, the loop's own due_at wins
-inline void EGModuleRegistry::fire_slot(uint8_t idx, unsigned long now) {
+inline void corium::Registry::fire_slot(uint8_t idx, unsigned long now) {
   Slot& s = _slots[idx];
   s.loop_last = now;
   if (s.period) s.next_due = now + s.period;
@@ -128,7 +128,7 @@ inline void EGModuleRegistry::fire_slot(uint8_t idx, unsigned long now) {
 }
 
 // later only, all before [k] are due already; equal stays
-inline uint8_t EGModuleRegistry::sift_due(uint8_t k) {
+inline uint8_t corium::Registry::sift_due(uint8_t k) {
   uint8_t idx = _due_order[k];
   uint32_t due = _slots[idx].next_due;
   while (k + 1 < _due_count && (int32_t)(due - _slots[_due_order[k + 1]].next_due) > 0) {
@@ -140,11 +140,11 @@ inline uint8_t EGModuleRegistry::sift_due(uint8_t k) {
 }
 
 // nothing armed, look again in a minute
-inline uint32_t EGModuleRegistry::next_wake(unsigned long now) {
+inline uint32_t corium::Registry::next_wake(unsigned long now) {
   return _due_count ? _slots[_due_order[0]].next_due : now + 60000;
 }
 
-void EGModuleRegistry::take_posts(unsigned long now) {
+void corium::Registry::take_posts(unsigned long now) {
   uint32_t p = _posted.take();
   for (uint8_t i = 0; p && i < _count; i++, p >>= 1) {
     Slot& s = _slots[i];
@@ -162,7 +162,7 @@ static inline uint32_t retry_in(uint32_t period) {
   return period && period < 1000 ? period : 1000;
 }
 
-inline void EGModuleRegistry::walk(unsigned long now) {
+inline void corium::Registry::walk(unsigned long now) {
   uint8_t unmet = unmet_requirements();
   uint32_t t0 = micros();
   uint32_t fired = 0;
@@ -183,11 +183,11 @@ inline void EGModuleRegistry::walk(unsigned long now) {
     if (_resort) { rebuild_due(); k = 0; }
     else if (sift_due(k) == k) k++;
     // the rest next pass
-    if (fired && (uint32_t)(micros() - t0) >= EG_LOOP_BUDGET_US) break;
+    if (fired && (uint32_t)(micros() - t0) >= CORIUM_LOOP_BUDGET_US) break;
   }
 }
 
-void EGModuleRegistry::loop_all(unsigned long now) {
+void corium::Registry::loop_all(unsigned long now) {
   if (_posted.any()) take_posts(now);
   if (_resort) rebuild_due();
   if (!reached(now, _next_loop_due)) return;
@@ -207,14 +207,14 @@ void EGModuleRegistry::loop_all(unsigned long now) {
 
 #ifdef LOOP_PROFILE
 // biggest total_loop_us first
-void EGModuleRegistry::log_loop_profile_and_reset() {
+void corium::Registry::log_loop_profile_and_reset() {
   char buf[240];
   int pos = 0;
   uint32_t done = 0;
   while (true) {
     uint8_t best = 0xFF;
     uint32_t bestv = 0;
-    for (uint8_t i = 0; i < _count && i < EG_MAX_MODULES; i++) {
+    for (uint8_t i = 0; i < _count && i < CORIUM_MAX_MODULES; i++) {
       if (done & (1u << i)) continue;
       uint32_t v = _slots[i].total_loop_us;
       if (v > bestv) { bestv = v; best = i; }
@@ -237,13 +237,13 @@ void EGModuleRegistry::log_loop_profile_and_reset() {
 }
 #endif
 
-void EGModuleRegistry::log_activity_and_reset() {
+void corium::Registry::log_activity_and_reset() {
   char buf[200];
   int pos = 0;
   bool any = false;
   for (uint8_t i = 0; i < _count; i++) {
-    EGModule* m = _slots[i].module;
-    EGSender* s = m->sender();
+    corium::Module* m = _slots[i].module;
+    corium::Sender* s = m->sender();
     if (!s) continue;
     uint8_t ok = s->take_publish_ok();
     uint8_t err = s->take_publish_err();
@@ -262,20 +262,20 @@ void EGModuleRegistry::log_activity_and_reset() {
   if (any) Log::console(PSTR("Activity: %s"), buf);
 }
 
-EGModuleRegistry::Slot* EGModuleRegistry::slot_of(EGModule* m) {
+corium::Registry::Slot* corium::Registry::slot_of(corium::Module* m) {
   uint8_t i = m->_slot;
   if (i >= _count || (_slots[i].flags & FLAG_OFF)) return nullptr;
   return &_slots[i];
 }
 
 // the walk sorts its own slot
-void EGModuleRegistry::changed(Slot& s) {
+void corium::Registry::changed(Slot& s) {
   if (&s - _slots == _firing) return;
   _resort = true;
   _next_loop_due = fast_millis();
 }
 
-bool EGModuleRegistry::every(EGModule* m, uint32_t ms) {
+bool corium::Registry::every(corium::Module* m, uint32_t ms) {
   Slot* s = slot_of(m);
   if (!s) return false;
   s->period = ms;
@@ -292,7 +292,7 @@ bool EGModuleRegistry::every(EGModule* m, uint32_t ms) {
   return true;
 }
 
-bool EGModuleRegistry::due_at(EGModule* m, uint32_t t) {
+bool corium::Registry::due_at(corium::Module* m, uint32_t t) {
   Slot* s = slot_of(m);
   if (!s) return false;
   s->next_due = t;
@@ -301,21 +301,21 @@ bool EGModuleRegistry::due_at(EGModule* m, uint32_t t) {
   return true;
 }
 
-void EGModuleRegistry::post(EGModule* m) {
+void corium::Registry::post(corium::Module* m) {
   uint8_t i = m->_slot;
-  if (i >= EG_MAX_MODULES) return;
+  if (i >= CORIUM_MAX_MODULES) return;
   _posted.set(1u << i);
 }
 
-bool EGModuleRegistry::on(uint8_t topic, EGModule* m) {
+bool corium::Registry::on(uint8_t topic, corium::Module* m) {
   Slot* s = slot_of(m);
-  if (!s || topic >= EG_MAX_TOPICS) return false;
+  if (!s || topic >= CORIUM_MAX_TOPICS) return false;
   s->topics |= 1u << topic;
   return true;
 }
 
-void EGModuleRegistry::emit(uint8_t topic) {
-  if (topic >= EG_MAX_TOPICS) return;
+void corium::Registry::emit(uint8_t topic) {
+  if (topic >= CORIUM_MAX_TOPICS) return;
   uint16_t bit = 1u << topic;
   uint32_t to = 0;
   for (uint8_t i = 0; i < _count; i++) {
@@ -327,7 +327,7 @@ void EGModuleRegistry::emit(uint8_t topic) {
   _posted.set(to);
 }
 
-uint16_t EGModuleRegistry::events(EGModule* m) {
+uint16_t corium::Registry::events(corium::Module* m) {
   Slot* s = slot_of(m);
   if (!s) return 0;
   uint16_t e = s->events;
@@ -335,16 +335,16 @@ uint16_t EGModuleRegistry::events(EGModule* m) {
   return e;
 }
 
-uint8_t EGModuleRegistry::count() {
+uint8_t corium::Registry::count() {
   return _count;
 }
 
-EGModule* EGModuleRegistry::get(uint8_t idx) {
+corium::Module* corium::Registry::get(uint8_t idx) {
   if (idx >= _count) return nullptr;
   return _slots[idx].module;
 }
 
-EGModule* EGModuleRegistry::find(const char* name) {
+corium::Module* corium::Registry::find(const char* name) {
   if (name == nullptr) return nullptr;
   for (uint8_t i = 0; i < _count; i++) {
     if (strcmp_P(name, _slots[i].module->name()) == 0) {
@@ -355,7 +355,7 @@ EGModule* EGModuleRegistry::find(const char* name) {
 }
 
 // stable, keeps registration order
-void EGModuleRegistry::sort_by_priority() {
+void corium::Registry::sort_by_priority() {
   for (uint8_t i = 1; i < _count; i++) {
     Slot cur = _slots[i];
     uint8_t j = i;
@@ -368,7 +368,7 @@ void EGModuleRegistry::sort_by_priority() {
 }
 
 // cached, no virtual calls in loop_all(); nothing armed till a module asks
-void EGModuleRegistry::pre_wifi_all() {
+void corium::Registry::pre_wifi_all() {
   _firing = IN_NONE;   // no crash_boot, junk stays out
   sort_by_priority();
 
@@ -377,7 +377,7 @@ void EGModuleRegistry::pre_wifi_all() {
   _due_count = 0;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
-    EGModule* m = s.module;
+    corium::Module* m = s.module;
     m->_slot = i;
     s.loop_last = now;
     s.next_due = now;
@@ -399,18 +399,18 @@ void EGModuleRegistry::pre_wifi_all() {
   _next_loop_due = now;
 }
 
-void EGModuleRegistry::set_safe_mode(bool on) {
+void corium::Registry::set_safe_mode(bool on) {
   _safe_mode = on;
 }
 
-#ifdef EG_CRASH_MARK
+#ifdef CORIUM_CRASH_MARK
 // noinit holds junk after power on, only a crash reset is trusted
-void EGModuleRegistry::crash_boot(bool crashed) {
+void corium::Registry::crash_boot(bool crashed) {
   _crashed_in = crashed ? _firing : IN_NONE;
 }
 
 // slots are sorted the same each boot
-const char* EGModuleRegistry::crashed_in() {
+const char* corium::Registry::crashed_in() {
   if (_crashed_in < _count) return _slots[_crashed_in].module->name();
   if (_crashed_in == IN_TCP) return PSTR("tcp");
   if (_crashed_in == IN_PORTAL) return PSTR("portal");
@@ -418,7 +418,7 @@ const char* EGModuleRegistry::crashed_in() {
 }
 #endif
 
-bool EGModuleRegistry::quarantined(EGModule* m) {
+bool corium::Registry::quarantined(corium::Module* m) {
   if (!_safe_mode) return false;
   for (uint8_t i = 0; i < _count; i++) {
     if (_slots[i].module == m) return _slots[i].flags & FLAG_QUARANTINED;

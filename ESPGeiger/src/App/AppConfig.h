@@ -26,8 +26,9 @@
 #define APP_LOC_URL "https://loc.espgeiger.com"
 #define APP_LOC_WIN "espgeiger-loc"        // finder window name
 #define APP_LOC_MSG "espgeiger-location"   // finder message type
+#define APP_MDNS_SERVICE "geiger"          // _geiger._tcp, the gadget looks for it
 
-// /param tabs, EGPrefCategory order, 6 chars max
+// /param tabs, corium::PrefCategory order, 6 chars max
 #define APP_PARAM_TABS "System", "Input", "Output", "Upload", "Backup"
 
 // favicon and page head, inside a 512 viewBox
@@ -125,17 +126,17 @@
 #endif
 
 // Radmon worst case 376
-#define EGHTTPPOSTER_URL_MAX 384
+#define CORIUM_HTTPPOSTER_URL_MAX 384
 
 // old pref groups and where their keys went, first listed wins; display = OLED builds
-#define EGPREFS_MOVED \
+#define CORIUM_PREFS_MOVED \
   {"display", "i2c"}, \
   {"env",     "i2c"}, \
   {"input",   "counter"}, \
   {"sys",     "counter"}
 
 // 0.12 config file, read once by the legacy import
-#define EGPREFS_LEGACY_FILE "/geigerconfig.json"
+#define CORIUM_PREFS_LEGACY_FILE "/geigerconfig.json"
 
 // fielded devices hold their key here, never change
 #define KEYSTORE_NS    "espg"

@@ -63,7 +63,7 @@ class GeigerInputTest : public GeigerInput
     double _remainder = 0;
     double generatePoissonRand(double lambda);
     // timer side, stamp only, count in loop()
-    static void EG_ISR_ATTR timerPulse();
+    static void CORIUM_ISR_ATTR timerPulse();
     // every pass, keep inline. relaxed, no memw a pass
     static void countTimerPulses() {
       if (_tp_head.load(std::memory_order_relaxed) != _tp_tail.load(std::memory_order_relaxed))

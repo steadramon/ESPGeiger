@@ -21,10 +21,10 @@
 #define HV_H
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
 #include "App/Topics.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Util/MathUtil.h"
@@ -148,11 +148,11 @@ static_assert(GEIGERHW_MAX_DUTY <= GEIGERHW_MAX_ON_US * GEIGERHW_MAX_FREQ * 1024
 #define GEIGERHW_OV_S 3           // over ov_v before cut-off
 #endif
 
-class HV : public EGModule {
+class HV : public corium::Module {
     public:
       HV();
       const char* name() override { return PSTR("hv"); }
-      uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+      uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
 #ifdef ESPG_HV_ADC
       uint8_t display_order() override { return 0; }
 #else
@@ -160,14 +160,14 @@ class HV : public EGModule {
 #endif
       void loop(unsigned long now) override;
       void begin() override;
-      const EGPrefGroup* prefs_group() override;
+      const corium::PrefGroup* prefs_group() override;
       void on_prefs_loaded() override;
       void registerRoutes(EGHttpServer& http) override;
-      const EGMenuEntry* menuEntries() override;
+      const corium::MenuEntry* menuEntries() override;
 #ifdef ESPG_HV_ADC
-      EGMeasureRows measurements() override;
+      corium::MeasureRows measurements() override;
 #endif
-      EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+      corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
       const char* legacy_file() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
       void set_freq(int freq);
       int get_freq() {

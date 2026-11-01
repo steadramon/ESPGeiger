@@ -31,13 +31,13 @@
 #include <BarGraph.h>
 #include "Display/DisplayType.h"
 #include "Display/DisplayBackend.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Prefs/Prefs.h"
 
-class Max7219Display : public EGModule, public DisplayBackend {
+class Max7219Display : public corium::Module, public DisplayBackend {
   public:
     const char* name() override { return "max72"; }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     uint8_t display_order() override;
     bool hw_present() override { return true; }   // write only, no probe
     bool screenBuffer(const uint8_t*& buf, uint16_t& w, uint16_t& h);
@@ -52,8 +52,8 @@ class Max7219Display : public EGModule, public DisplayBackend {
     void reload() override;
     void safe_mode() override;
     bool takes(uint8_t type) override { return DISP_IS_MAX7219(type); }
-    const EGPrefGroup* prefs_group() override;
-    const EGPrefShow* prefs_show() override;
+    const corium::PrefGroup* prefs_group() override;
+    const corium::PrefShow* prefs_show() override;
     void on_prefs_loaded() override;
     static constexpr uint16_t LOOP_MS = 60;
     void loop(unsigned long now) override;      // matrix scroll

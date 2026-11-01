@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef EG_I2CBUS_H
-#define EG_I2CBUS_H
+#ifndef CORIUM_I2CBUS_H
+#define CORIUM_I2CBUS_H
 
 #include <stdint.h>
 #include "App/AppConfig.h"

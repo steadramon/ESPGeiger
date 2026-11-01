@@ -21,9 +21,9 @@
 #include "NtpPage.h"
 #include "Outputs.h"
 #include "Corium/Console/Console.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Prefs/SystemPrefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/CrashDump.h"
@@ -154,7 +154,7 @@ static const char HEAD_OPEN[] PROGMEM =
   "<meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">"
   "<link rel=icon type=image/svg+xml href=/favicon.svg>";
 static const char HEAD_STYLE[] PROGMEM =
-  "<link rel=stylesheet href=/style.css" EG_CACHE_BUST "><title>";
+  "<link rel=stylesheet href=/style.css" CORIUM_CACHE_BUST "><title>";
 static const char SAFE_STYLE[] PROGMEM =
   "<style>html{background:#161616;border-top:12px solid;"
   "border-image:repeating-linear-gradient(45deg,#fb0 0 10px,#161616 0 20px) 12}"
@@ -164,7 +164,7 @@ static const char SAFE_STYLE[] PROGMEM =
   ".il{display:inline-block;margin-right:1em}nav a{margin-right:1em}</style><title>";
 
 static const char HEAD_THEME[] PROGMEM =
-  "</title><script src=/theme.js" EG_CACHE_BUST "></script></head><body>"
+  "</title><script src=/theme.js" CORIUM_CACHE_BUST "></script></head><body>"
   "<button class=themetoggle aria-label=\"Toggle theme\" onclick=theme()></button>";
 static const char SAFE_THEME[] PROGMEM =
   " (safe mode)</title><script>var byID=t=>document.getElementById(t)</script></head><body>";
@@ -202,21 +202,21 @@ static void sendSafeBanner(EGHttpResponse& res) {
 }
 
 // after the app's own
-static const EGMenuEntry WEBPORTAL_TOP_MENU[] PROGMEM = {
+static const corium::MenuEntry WEBPORTAL_TOP_MENU[] PROGMEM = {
   {"/param",   "Config"},
   {"/network", "Network Config"},
   {"", ""}
 };
-static const EGMenuEntry WEBPORTAL_BOTTOM_MENU[] PROGMEM = {
+static const corium::MenuEntry WEBPORTAL_BOTTOM_MENU[] PROGMEM = {
   {"/info",    "Info"},
   {"/update",  "Update"},
   {"/restart", "Reboot"},
   {"", ""}
 };
 
-static void renderMenu(EGHttpResponse& res, const EGMenuEntry* e) {
+static void renderMenu(EGHttpResponse& res, const corium::MenuEntry* e) {
   for (; e; e++) {
-    EGMenuEntry m;
+    corium::MenuEntry m;
     memcpy_P(&m, e, sizeof(m));
     if (!m.path[0]) break;
     char btn[160];
@@ -349,12 +349,12 @@ void WebPortal::begin(uint16_t port) {
   if (!safe) AppHooks::routes(_http);
 
   // Module routes
-  uint8_t n = EGModuleRegistry::count();
+  uint8_t n = corium::Registry::count();
   for (uint8_t i = 0; i < n; i++) {
-    EGModule* m = EGModuleRegistry::get(i);
-    if (m && !EGModuleRegistry::quarantined(m)) m->registerRoutes(_http);
+    corium::Module* m = corium::Registry::get(i);
+    if (m && !corium::Registry::quarantined(m)) m->registerRoutes(_http);
   }
-  if (!EGModuleRegistry::quarantined(&ntpclient)) NtpPage::routes(_http);
+  if (!corium::Registry::quarantined(&ntpclient)) NtpPage::routes(_http);
 
   _http.begin(port);
   _active = true;
@@ -365,7 +365,7 @@ void WebPortal::begin(uint16_t port) {
 void WebPortal::applyAuthFromPrefs() {
   WebPortal* p = s_activeWebPortal;
   if (!p || !p->_active) return;
-  const char* cur = EGPrefs::getString("sys", EG_K_WEB_PASS);
+  const char* cur = corium::Prefs::getString("sys", corium::K_WEB_PASS);
   static_assert(sizeof("admin") - 1 + 1 + WEB_PASS_MAX <= EGHTTP_AUTH_MAX,
                 "admin:pass must fit EGHTTP_AUTH_MAX or auth switches off");
   p->_http.setBasicAuth(F("admin"), cur, F(THING_NAME));
@@ -382,7 +382,7 @@ void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* tit
                              const char* inlineSub) {
   const char* fname = DeviceInfo::friendlyName();
   const char* devName = (fname && fname[0]) ? fname : DeviceInfo::hostname();
-  char esc[6 * EG_NAME_MAX + 1];
+  char esc[6 * CORIUM_NAME_MAX + 1];
   egesc_html(esc, sizeof(esc), devName);
   sendHeadOpen(res);
   res.sendChunk(title);
@@ -433,10 +433,10 @@ static void root_menus(EGHttpResponse& res, bool safe) {
   res.sendChunk(F("<div class=menu>"));
   if (!safe) renderMenu(res, AppHooks::menu());
   renderMenu(res, WEBPORTAL_TOP_MENU);
-  uint8_t mc = EGModuleRegistry::count();
+  uint8_t mc = corium::Registry::count();
   for (uint8_t i = 0; i < mc; i++) {
-    EGModule* m = EGModuleRegistry::get(i);
-    if (m && !EGModuleRegistry::quarantined(m)) renderMenu(res, m->menuEntries());
+    corium::Module* m = corium::Registry::get(i);
+    if (m && !corium::Registry::quarantined(m)) renderMenu(res, m->menuEntries());
   }
   renderMenu(res, WEBPORTAL_BOTTOM_MENU);
   res.sendChunk(F("</div>"));
@@ -448,10 +448,10 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* fname = DeviceInfo::friendlyName();
   bool hasFriendly = (fname && fname[0]);
   const char* hostname = DeviceInfo::hostname();
-  char ipBuf[EG_IPV4_MAX + 1];
+  char ipBuf[CORIUM_IPV4_MAX + 1];
   Wifi::formatIP(ipBuf, sizeof(ipBuf), Wifi::localIP());
 
-  char esc[6 * EG_NAME_MAX + 1];
+  char esc[6 * CORIUM_NAME_MAX + 1];
   egesc_html(esc, sizeof(esc), fname);
 
   auto emitIdentity = [&]() {
@@ -562,8 +562,8 @@ static const char WRITE_FAILED[] PROGMEM = "flash write failed";
 // a group holding a value that didn't load says which
 void WebPortal::sendNotSaved(EGHttpResponse& res) {
   res.sendChunk(F("<div class='a ae'>Not saved: "));
-  char why[EGPREFS_FROZEN_MAX];
-  if (EGPrefs::frozen(why, sizeof(why))) res.sendChunk(why);
+  char why[CORIUM_PREFS_FROZEN_MAX];
+  if (corium::Prefs::frozen(why, sizeof(why))) res.sendChunk(why);
   else res.sendChunk(FPSTR(WRITE_FAILED));
   res.sendChunk(F(".</div>"));
 }
@@ -614,10 +614,10 @@ void WebPortal::infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...) {
 #define INFO_ROW(k, fmt, ...) WebPortal::infoRow(res, PSTR(k), fmt, ##__VA_ARGS__)
 
 struct InfoNet {
-  char ip[EG_IPV4_MAX + 1], gw[EG_IPV4_MAX + 1], sn[EG_IPV4_MAX + 1], dns_[EG_IPV4_MAX + 1];
+  char ip[CORIUM_IPV4_MAX + 1], gw[CORIUM_IPV4_MAX + 1], sn[CORIUM_IPV4_MAX + 1], dns_[CORIUM_IPV4_MAX + 1];
   char bssid[20], mac[18];
   char ssid[6 * EGPORTAL_SSID_MAX + 1];   // escaped worst case
-  char ap_ssid[EGPORTAL_SSID_MAX + 1], ap_ip[EG_IPV4_MAX + 1], ap_mac[18];
+  char ap_ssid[EGPORTAL_SSID_MAX + 1], ap_ip[CORIUM_IPV4_MAX + 1], ap_mac[18];
 };
 
 static void info_fmt_mac(char* dst, size_t cap, const uint8_t* m) {
@@ -702,7 +702,7 @@ static void info_render_backtrace(EGHttpResponse& res, const CrashDump::Snapshot
 
 static void info_render_reset(EGHttpResponse& res) {
   INFO_ROW("Last reset", W_FMT_S, DeviceInfo::resetText());
-  if (const char* in = EGModuleRegistry::crashed_in()) INFO_ROW("Crashed in", W_FMT_S, in);
+  if (const char* in = corium::Registry::crashed_in()) INFO_ROW("Crashed in", W_FMT_S, in);
   if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) {
 #ifdef __riscv
     INFO_ROW("mcause",    W_FMT_U,   (unsigned)cd->exccause);
@@ -788,9 +788,9 @@ static void info_render_modules(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>Modules</summary><ul style='columns:2;list-style:none;padding:0'>"));
   {
     char li[48];
-    uint8_t count = EGModuleRegistry::count();
+    uint8_t count = corium::Registry::count();
     for (uint8_t i = 0; i < count; i++) {
-      EGModule* m = EGModuleRegistry::get(i);
+      corium::Module* m = corium::Registry::get(i);
       if (m == nullptr) continue;
       int n = snprintf_P(li, sizeof(li), PSTR("<li>%s</li>"), m->name());
       if (n > 0 && (size_t)n < sizeof(li)) res.sendChunk(li, (size_t)n);
@@ -832,9 +832,9 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static void about_modules(EGHttpResponse& res) {
-  uint8_t count = EGModuleRegistry::count();
+  uint8_t count = corium::Registry::count();
   for (uint8_t i = 0; i < count; i++) {
-    EGModule* m = EGModuleRegistry::get(i);
+    corium::Module* m = corium::Registry::get(i);
     if (m == nullptr) continue;
     char modbuf[40];
     int mn = snprintf_P(modbuf, sizeof(modbuf),
@@ -886,8 +886,8 @@ void WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
 void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // back to DHCP for the setup AP, a net row that didn't load goes too
   Log::console(PSTR("WebPortal: erasing WiFi credentials"));
-  EGPrefs::reset("net");
-  if (!EGPrefs::commit()) {
+  corium::Prefs::reset("net");
+  if (!corium::Prefs::commit()) {
     not_saved_page(res, F("Erase WiFi"));
     return;
   }
@@ -925,15 +925,15 @@ static void wifi_ip_field(EGHttpResponse& res, const __FlashStringHelper* head,
                           const char* prefKey) {
   static const char IPV4_PATTERN_ATTR[] PROGMEM =
     " pattern='^(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)(\\.(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)){3}$' value='";
-  char esc[6 * EG_IPV4_MAX + 1];
-  egesc_html(esc, sizeof(esc), EGPrefs::getString("net", prefKey));
+  char esc[6 * CORIUM_IPV4_MAX + 1];
+  egesc_html(esc, sizeof(esc), corium::Prefs::getString("net", prefKey));
   res.sendChunk(head);
   res.sendChunk(FPSTR(IPV4_PATTERN_ATTR));
   res.sendKV(nullptr, esc, F("'>"));
 }
 
 static void wifi_render_static_ip(EGHttpResponse& res) {
-  bool useStatic = EGPrefs::getBool("net", EG_K_STATIC_IP);
+  bool useStatic = corium::Prefs::getBool("net", corium::K_STATIC_IP);
   res.sendChunk(F("<details"));
   if (useStatic) res.sendChunk(F(" open"));
   res.sendChunk(F("><summary>Network (advanced)</summary>"
@@ -943,13 +943,13 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
   res.sendChunk(F(">Use static IP (otherwise DHCP)</label>"));
 
   wifi_ip_field(res, F("<label for=ip>IP address</label>"
-                       "<input id=ip name=ip maxlength=15 placeholder='192.168.1.50'"), EG_K_IP);
+                       "<input id=ip name=ip maxlength=15 placeholder='192.168.1.50'"), corium::K_IP);
   wifi_ip_field(res, F("<label for=gw>Gateway</label>"
-                       "<input id=gw name=gw maxlength=15 placeholder='192.168.1.1'"), EG_K_GW);
+                       "<input id=gw name=gw maxlength=15 placeholder='192.168.1.1'"), corium::K_GW);
   wifi_ip_field(res, F("<label for=sn>Subnet mask</label>"
-                       "<input id=sn name=sn maxlength=15 placeholder='255.255.255.0'"), EG_K_SN);
+                       "<input id=sn name=sn maxlength=15 placeholder='255.255.255.0'"), corium::K_SN);
   wifi_ip_field(res, F("<label for=dns>DNS server <span class=muted style='font-weight:normal'>(optional)</span></label>"
-                       "<input id=dns name=dns maxlength=15 placeholder='same as gateway'"), EG_K_DNS);
+                       "<input id=dns name=dns maxlength=15 placeholder='same as gateway'"), corium::K_DNS);
   res.sendChunk(FPSTR(W_DETAILS_END));
 }
 
@@ -965,13 +965,13 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   wifi_render_static_ip(res);
   res.sendChunk(FPSTR(WIFI_FORM_END));
 
-  if (!EGModuleRegistry::quarantined(&ntpclient)) {
+  if (!corium::Registry::quarantined(&ntpclient)) {
     // lazy load the tz list
     res.sendChunk(F("<details style='margin-top:1.5em' "
                     "ontoggle=\"if(this.open&&!this.dataset.loaded){"
                     "this.dataset.loaded=1;"
                     "var s=document.createElement('script');"
-                    "s.src='/ntpjs" EG_CACHE_BUST "';this.appendChild(s);"
+                    "s.src='/ntpjs" CORIUM_CACHE_BUST "';this.appendChild(s);"
                     "}\">"
                     "<summary>Time / NTP</summary>"));
     NtpPage::form(res);
@@ -1055,7 +1055,7 @@ static void wifi_render_save_msg(EGHttpResponse& res, bool ssidProvided) {
 // too long is refused, cut "1.2.3.2550" passes as .255
 // checked with static off too, /network shows them
 static bool take_ip(EGHttpRequest& req, const __FlashStringHelper* name,
-                    char (&dst)[EG_IPV4_MAX + 1]) {
+                    char (&dst)[CORIUM_IPV4_MAX + 1]) {
   const char* v = req.arg(name);
   if (!v) v = "";
   if (strlcpy(dst, v, sizeof(dst)) >= sizeof(dst)) return false;
@@ -1094,13 +1094,13 @@ static bool wifi_held_ok(EGHttpResponse& res, HoldResult held) {
 
 void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // write all four, keeps values on toggle
-  bool wantStatic = (req.arg(FPSTR(EG_K_STATIC_IP)) != nullptr);
-  char ip_buf[EG_IPV4_MAX + 1], gw_buf[EG_IPV4_MAX + 1];
-  char sn_buf[EG_IPV4_MAX + 1], dns_buf[EG_IPV4_MAX + 1];
-  if (!take_ip(req, FPSTR(EG_K_IP),  ip_buf)
-      || !take_ip(req, FPSTR(EG_K_GW),  gw_buf)
-      || !take_ip(req, FPSTR(EG_K_SN),  sn_buf)
-      || !take_ip(req, FPSTR(EG_K_DNS), dns_buf)) {
+  bool wantStatic = (req.arg(FPSTR(corium::K_STATIC_IP)) != nullptr);
+  char ip_buf[CORIUM_IPV4_MAX + 1], gw_buf[CORIUM_IPV4_MAX + 1];
+  char sn_buf[CORIUM_IPV4_MAX + 1], dns_buf[CORIUM_IPV4_MAX + 1];
+  if (!take_ip(req, FPSTR(corium::K_IP),  ip_buf)
+      || !take_ip(req, FPSTR(corium::K_GW),  gw_buf)
+      || !take_ip(req, FPSTR(corium::K_SN),  sn_buf)
+      || !take_ip(req, FPSTR(corium::K_DNS), dns_buf)) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad network config: not an IP address\nClick Back to fix it.\n"));
     return;
   }
@@ -1124,12 +1124,12 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   // backup first, boot can revert
   Wifi::saveNetBackup();
-  EGPrefs::put("net", EG_K_STATIC_IP, wantStatic ? "1" : "0");
-  EGPrefs::put("net", EG_K_IP, ip_buf);
-  EGPrefs::put("net", EG_K_GW, gw_buf);
-  EGPrefs::put("net", EG_K_SN, sn_buf);
-  EGPrefs::put("net", EG_K_DNS, dns_buf);
-  if (!EGPrefs::commit()) {
+  corium::Prefs::put("net", corium::K_STATIC_IP, wantStatic ? "1" : "0");
+  corium::Prefs::put("net", corium::K_IP, ip_buf);
+  corium::Prefs::put("net", corium::K_GW, gw_buf);
+  corium::Prefs::put("net", corium::K_SN, sn_buf);
+  corium::Prefs::put("net", corium::K_DNS, dns_buf);
+  if (!corium::Prefs::commit()) {
     not_saved_page(res, F("Saving WiFi"));
     return;
   }
@@ -1470,46 +1470,46 @@ void WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 
 // first field a save refused, and first saved with a warning, shown above the form
 struct Refusal {
-  char name[2 * EGPREF_ID_MAX + 2];   // mid.id
+  char name[2 * CORIUM_PREF_ID_MAX + 2];   // mid.id
   char why[PinSafety::WHY_MAX];       // copied, the next put reuses "in use"
-  char note_name[2 * EGPREF_ID_MAX + 2];
+  char note_name[2 * CORIUM_PREF_ID_MAX + 2];
   const char* note;                   // PROGMEM
 };
 
 static void param_put(const char* mid, const char* id, const char* name,
                       const char* v, Refusal& r) {
-  if (EGPrefs::put(mid, id, v)) {
-    if (r.note || !EGPrefs::warned()) return;
+  if (corium::Prefs::put(mid, id, v)) {
+    if (r.note || !corium::Prefs::warned()) return;
     strlcpy(r.note_name, name, sizeof(r.note_name));
-    r.note = EGPrefs::warned();
+    r.note = corium::Prefs::warned();
     return;
   }
   if (r.why[0]) return;
   strncpy(r.name, name, sizeof(r.name) - 1);
   r.name[sizeof(r.name) - 1] = '\0';
-  strncpy_P(r.why, EGPrefs::refused() ? EGPrefs::refused() : PSTR("not valid"), sizeof(r.why) - 1);
+  strncpy_P(r.why, corium::Prefs::refused() ? corium::Prefs::refused() : PSTR("not valid"), sizeof(r.why) - 1);
 }
 
-static void param_save_pref(const char* mid, const EGPref& p,
+static void param_save_pref(const char* mid, const corium::Pref& p,
                             const char* body, size_t bodyLen, Refusal& r) {
-  if (p.flags & (EGP_HIDDEN | EGP_READONLY)) return;
-  if (p.type == EGP_LABEL || p.type == EGP_HEADER) return;
-  char name[2 * EGPREF_ID_MAX + 2];   // mid.id
-  char id_buf[EGPREF_ID_MAX + 1];
-  char field[EGPREFS_MAX_VALUE + 1];
+  if (p.flags & (corium::P_HIDDEN | corium::P_READONLY)) return;
+  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return;
+  char name[2 * CORIUM_PREF_ID_MAX + 2];   // mid.id
+  char id_buf[CORIUM_PREF_ID_MAX + 1];
+  char field[CORIUM_PREFS_MAX_VALUE + 1];
   flash_to_ram(p.id, id_buf, sizeof(id_buf));
   snprintf_P(name, sizeof(name), PSTR("%s.%s"), mid, id_buf);
 
-  if (p.type == EGP_BOOL) {
+  if (p.type == corium::P_BOOL) {
     const char* one = EGHttpRequest::decodeArg(body, bodyLen, name, field, sizeof(field)) ? "1" : "0";
-    EGPrefs::put(mid, id_buf, one);
+    corium::Prefs::put(mid, id_buf, one);
     return;
   }
   const char* v = EGHttpRequest::decodeArg(body, bodyLen, name, field, sizeof(field));
   if (!v) return;
-  if (p.flags & EGP_SENSITIVE) {
+  if (p.flags & corium::P_SENSITIVE) {
     if (strcmp_P(v, PSTR("__CLEAR__")) == 0) {
-      EGPrefs::put(mid, id_buf, "");
+      corium::Prefs::put(mid, id_buf, "");
       return;
     }
     if (v[0] == '\0') return;
@@ -1524,16 +1524,16 @@ static bool param_save_body(uint8_t tab, Refusal& r) {
   bool        ok      = s_paramBody.ok && body;
 
   if (ok) {
-    for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
-      const EGPrefGroup* g = EGPrefs::group_at(gi);
+    for (size_t gi = 0; gi < corium::Prefs::group_count(); gi++) {
+      const corium::PrefGroup* g = corium::Prefs::group_at(gi);
       if (!g) continue;
       // this tab only, else other bools clear
       if (g->category.get() != tab) continue;
       // not on the page, a missing bool would save as off
-      EGModule* m = EGPrefs::module_at(gi);
+      corium::Module* m = corium::Prefs::module_at(gi);
       if (m && m->display_order() == 0) continue;
       for (size_t j = 0; j < g->count.get(); j++) {
-        const EGPref p = g->prefs.row(j);
+        const corium::Pref p = g->prefs.row(j);
         param_save_pref(g->module_id, p, body, bodyLen, r);
       }
     }
@@ -1570,14 +1570,14 @@ static void param_render_backup(EGHttpResponse& res) {
 }
 
 static bool param_group_on(uint8_t gi) {
-  EGModule* m = EGPrefs::module_at(gi);
+  corium::Module* m = corium::Prefs::module_at(gi);
   if (m && !m->hw_present()) return false;
-  const EGPrefGroup* g = EGPrefs::group_at(gi);
-  return !g || EGPrefs::group_enabled(g);
+  const corium::PrefGroup* g = corium::Prefs::group_at(gi);
+  return !g || corium::Prefs::group_enabled(g);
 }
 
 static uint8_t param_group_order(uint8_t gi) {
-  EGModule* m = EGPrefs::module_at(gi);
+  corium::Module* m = corium::Prefs::module_at(gi);
   return m ? m->display_order() : 50;
 }
 
@@ -1606,10 +1606,10 @@ struct ParamCtx {
   const char* cur;
   PGM_P       disabled;
   size_t      pos;
-  const EGPrefShow* show;
+  const corium::PrefShow* show;
   char        buf[512];
-  char        s_id[EGPREF_ID_MAX + 1], s_lbl[80], s_help[120], s_pat[EGPREF_PATTERN_MAX + 1];
-  char        s_show[2 * EGPREF_ID_MAX + 32];   // data-w='mid.key' data-m=N
+  char        s_id[CORIUM_PREF_ID_MAX + 1], s_lbl[80], s_help[120], s_pat[CORIUM_PREF_PATTERN_MAX + 1];
+  char        s_show[2 * CORIUM_PREF_ID_MAX + 32];   // data-w='mid.key' data-m=N
 };
 
 static void param_appendf(ParamCtx& c, PGM_P fmt, ...) {
@@ -1631,18 +1631,18 @@ static void param_sendf(ParamCtx& c, PGM_P fmt, ...) {
 
 // for the form script, "" = always shown
 static const char* show_attr(ParamCtx& c, const char* id) {
-  EGPrefShow r;
+  corium::PrefShow r;
   c.s_show[0] = '\0';
-  if (EGPrefs::show_rule(c.show, id, &r)) {
+  if (corium::Prefs::show_rule(c.show, id, &r)) {
     snprintf_P(c.s_show, sizeof(c.s_show), PSTR(" data-w='%s' data-m=%u"),
                r.when, (unsigned)r.values);
   }
   return c.s_show;
 }
 
-static void param_group_header(ParamCtx& c, const EGPrefGroup* g, EGModule* mod) {
+static void param_group_header(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {
   bool has_toggle = (g->enable_key != nullptr);
-  bool grp_on = EGPrefs::group_enabled(g);
+  bool grp_on = corium::Prefs::group_enabled(g);
   bool hw_absent = (mod && !mod->hw_present());
   const char* badge = hw_absent ? PSTR(" <span class='gb off'>not detected</span>")
                       : !has_toggle ? PSTR("")
@@ -1654,7 +1654,7 @@ static void param_group_header(ParamCtx& c, const EGPrefGroup* g, EGModule* mod)
 }
 
 static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
-  PGM_P checked = EGPrefs::getBool(c.mid, c.s_id) ? W_CHECKED : PSTR("");
+  PGM_P checked = corium::Prefs::getBool(c.mid, c.s_id) ? W_CHECKED : PSTR("");
   if (inline_bool) {
     param_appendf(c,
       PSTR("<label class='il' title='%s'><input type=checkbox id='%s.%s' name='%s.%s' value=1%s%s>%s</label>"),
@@ -1667,7 +1667,7 @@ static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
 }
 
 // sent per option, a long list can't overflow buf
-static void param_emit_options(ParamCtx& c, const EGPref& p) {
+static void param_emit_options(ParamCtx& c, const corium::Pref& p) {
   int32_t cur_idx = 0, def_idx = -1;
   parse_i32(c.cur, &cur_idx);
   parse_i32(p.default_val, &def_idx);
@@ -1688,7 +1688,7 @@ static void param_emit_options(ParamCtx& c, const EGPref& p) {
   }
 }
 
-static void param_emit_enum(ParamCtx& c, const EGPref& p) {
+static void param_emit_enum(ParamCtx& c, const corium::Pref& p) {
   if (c.pos) { c.res->sendChunk(c.buf, c.pos); c.pos = 0; }
   param_sendf(c, PSTR("<select id='%s.%s' name='%s.%s'%s>"),
               c.mid, c.s_id, c.mid, c.s_id, c.disabled);
@@ -1697,11 +1697,11 @@ static void param_emit_enum(ParamCtx& c, const EGPref& p) {
   c.pos = 0;
 }
 
-static PGM_P param_input_type(const EGPref& p, bool slider) {
+static PGM_P param_input_type(const corium::Pref& p, bool slider) {
   if (slider) return PSTR("range");
-  if (p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) return PSTR("number");
-  if (p.type == EGP_STRING && (p.flags & EGP_SENSITIVE)) return PSTR("password");
-  if (p.type == EGP_STRING && (p.flags & EGP_TIME))      return PSTR("time");
+  if (p.type == corium::P_INT || p.type == corium::P_UINT || p.type == corium::P_FLOAT) return PSTR("number");
+  if (p.type == corium::P_STRING && (p.flags & corium::P_SENSITIVE)) return PSTR("password");
+  if (p.type == corium::P_STRING && (p.flags & corium::P_TIME))      return PSTR("time");
   return PSTR("text");
 }
 
@@ -1722,8 +1722,8 @@ static void param_send_escaped(ParamCtx& c, const char* s) {
   }
 }
 
-static void param_emit_value(ParamCtx& c, const EGPref& p, bool slider) {
-  if (p.flags & EGP_SENSITIVE) {
+static void param_emit_value(ParamCtx& c, const corium::Pref& p, bool slider) {
+  if (p.flags & corium::P_SENSITIVE) {
     PGM_P ph = c.cur[0] ? PSTR("(unchanged \xE2\x80\x94 leave blank)") : PSTR("(not set)");
     param_appendf(c, PSTR(" value='' placeholder='%s'"), ph);
     return;
@@ -1733,32 +1733,32 @@ static void param_emit_value(ParamCtx& c, const EGPref& p, bool slider) {
   param_send_escaped(c, c.cur);
   c.buf[c.pos++] = '\'';
   if (!slider && p.default_val && p.default_val[0]
-      && !(p.flags & EGP_TIME)) {
+      && !(p.flags & corium::P_TIME)) {
     param_appendf(c, PSTR(" placeholder='%s'"), p.default_val);
   }
 }
 
-static void param_emit_limits(ParamCtx& c, const EGPref& p) {
-  if (p.type == EGP_STRING && p.max_len > 0) {
+static void param_emit_limits(ParamCtx& c, const corium::Pref& p) {
+  if (p.type == corium::P_STRING && p.max_len > 0) {
     param_appendf(c, PSTR(" maxlength='%u'"), (unsigned)p.max_len);
   }
-  if (p.type == EGP_STRING && p.pattern && c.s_pat[0]) {
+  if (p.type == corium::P_STRING && p.pattern && c.s_pat[0]) {
     param_appendf(c, PSTR(" pattern='%s'"), c.s_pat);
   }
-  if ((p.type == EGP_INT || p.type == EGP_UINT || p.type == EGP_FLOAT) && p.min_i != p.max_i) {
+  if ((p.type == corium::P_INT || p.type == corium::P_UINT || p.type == corium::P_FLOAT) && p.min_i != p.max_i) {
     param_appendf(c, PSTR(" min=%ld max=%ld"), (long)p.min_i, (long)p.max_i);
   }
 }
 
-static void param_emit_input_end(ParamCtx& c, const EGPref& p, bool slider) {
-  if (p.type == EGP_FLOAT) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " step=any");
-  if (!slider && (p.type == EGP_INT || p.type == EGP_UINT)) {
+static void param_emit_input_end(ParamCtx& c, const corium::Pref& p, bool slider) {
+  if (p.type == corium::P_FLOAT) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " step=any");
+  if (!slider && (p.type == corium::P_INT || p.type == corium::P_UINT)) {
     APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " inputmode=numeric");
-  } else if (p.type == EGP_FLOAT) {
+  } else if (p.type == corium::P_FLOAT) {
     APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " inputmode=decimal");
   }
-  if (p.flags & EGP_REQUIRED) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " required");
-  if (p.flags & EGP_READONLY) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " readonly");
+  if (p.flags & corium::P_REQUIRED) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " required");
+  if (p.flags & corium::P_READONLY) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " readonly");
   if (slider) {
     param_appendf(c,
       PSTR(" oninput='this.nextElementSibling.value=this.value'><output>%s</output><br>"), c.cur);
@@ -1767,9 +1767,9 @@ static void param_emit_input_end(ParamCtx& c, const EGPref& p, bool slider) {
   }
 }
 
-static void param_emit_input(ParamCtx& c, const EGPref& p) {
-  const bool slider = (p.type == EGP_INT || p.type == EGP_UINT)
-                   && (p.flags & EGP_SLIDER)
+static void param_emit_input(ParamCtx& c, const corium::Pref& p) {
+  const bool slider = (p.type == corium::P_INT || p.type == corium::P_UINT)
+                   && (p.flags & corium::P_SLIDER)
                    && p.min_i != p.max_i;
   param_appendf(c, PSTR("<input type=%s id='%s.%s' name='%s.%s'"),
                 param_input_type(p, slider), c.mid, c.s_id, c.mid, c.s_id);
@@ -1778,11 +1778,11 @@ static void param_emit_input(ParamCtx& c, const EGPref& p) {
   param_emit_input_end(c, p, slider);
 }
 
-static void param_emit_help(ParamCtx& c, const EGPref& p, bool inline_bool) {
+static void param_emit_help(ParamCtx& c, const corium::Pref& p, bool inline_bool) {
   if (!inline_bool && p.help && c.s_help[0]) {
     param_appendf(c, PSTR("<small>%s</small>"), c.s_help);
   }
-  if ((p.flags & EGP_SENSITIVE) && c.cur[0]) {
+  if ((p.flags & corium::P_SENSITIVE) && c.cur[0]) {
     param_appendf(c,
       PSTR("<button type=button class='danger btn-sm' style='margin-top:.2em' "
            "onclick=\"if(confirm('Clear stored value?')){byID('%s.%s').value='__CLEAR__';this.form.submit();}\""
@@ -1792,15 +1792,15 @@ static void param_emit_help(ParamCtx& c, const EGPref& p, bool inline_bool) {
   c.res->sendChunk(c.buf, c.pos);
 }
 
-static void param_load_text(ParamCtx& c, const EGPref& p) {
+static void param_load_text(ParamCtx& c, const corium::Pref& p) {
   flash_to_ram(p.id,      c.s_id,   sizeof(c.s_id));
   flash_to_ram(p.label,   c.s_lbl,  sizeof(c.s_lbl));
   flash_to_ram(p.help,    c.s_help, sizeof(c.s_help));
   flash_to_ram(p.pattern, c.s_pat,  sizeof(c.s_pat));
 }
 
-static void param_emit_heading(ParamCtx& c, const EGPref& p) {
-  param_sendf(c, p.type == EGP_LABEL ? PSTR("<label>%s</label>") : PSTR("<h4>%s</h4>"), c.s_lbl);
+static void param_emit_heading(ParamCtx& c, const corium::Pref& p) {
+  param_sendf(c, p.type == corium::P_LABEL ? PSTR("<label>%s</label>") : PSTR("<h4>%s</h4>"), c.s_lbl);
 }
 
 static void param_emit_label(ParamCtx& c, const char* lbl) {
@@ -1808,10 +1808,10 @@ static void param_emit_label(ParamCtx& c, const char* lbl) {
   if (n > 0 && (size_t)n < sizeof(c.buf)) c.pos = (size_t)n;
 }
 
-static void param_emit_row(ParamCtx& c, const EGPref& p);
+static void param_emit_row(ParamCtx& c, const corium::Pref& p);
 
 // a row with a show rule sits in its own div
-static void param_emit_field(ParamCtx& c, const EGPref& p) {
+static void param_emit_field(ParamCtx& c, const corium::Pref& p) {
   param_load_text(c, p);
   bool wrap = show_attr(c, c.s_id)[0];
   if (wrap) {
@@ -1823,38 +1823,38 @@ static void param_emit_field(ParamCtx& c, const EGPref& p) {
   if (wrap) c.res->sendChunk(F("</div>"));
 }
 
-static void param_emit_row(ParamCtx& c, const EGPref& p) {
-  if (p.type == EGP_LABEL || p.type == EGP_HEADER) {
+static void param_emit_row(ParamCtx& c, const corium::Pref& p) {
+  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) {
     param_emit_heading(c, p);
     return;
   }
 
-  c.cur = EGPrefs::getString(c.mid, c.s_id);
+  c.cur = corium::Prefs::getString(c.mid, c.s_id);
   const char* lbl = p.label ? c.s_lbl : c.s_id;
-  c.disabled = (p.flags & EGP_READONLY) ? PSTR(" disabled") : PSTR("");
-  bool inline_bool = (p.type == EGP_BOOL) && (p.flags & EGP_INLINE);
+  c.disabled = (p.flags & corium::P_READONLY) ? PSTR(" disabled") : PSTR("");
+  bool inline_bool = (p.type == corium::P_BOOL) && (p.flags & corium::P_INLINE);
   c.pos = 0;
   if (!inline_bool) param_emit_label(c, lbl);
 
-  if (p.type == EGP_BOOL)      param_emit_bool(c, lbl, inline_bool);
-  else if (p.type == EGP_ENUM) param_emit_enum(c, p);
+  if (p.type == corium::P_BOOL)      param_emit_bool(c, lbl, inline_bool);
+  else if (p.type == corium::P_ENUM) param_emit_enum(c, p);
   else                         param_emit_input(c, p);
   param_emit_help(c, p, inline_bool);
 }
 
-static void param_render_group(ParamCtx& c, const EGPrefGroup* g, EGModule* mod) {
+static void param_render_group(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {
   param_group_header(c, g, mod);
   c.mid = g->module_id;
 
   for (size_t j = 0; j < g->count.get(); j++) {
-    const EGPref p = g->prefs.row(j);
-    if (p.flags & (EGP_HIDDEN | EGP_ADVANCED)) continue;
+    const corium::Pref p = g->prefs.row(j);
+    if (p.flags & (corium::P_HIDDEN | corium::P_ADVANCED)) continue;
     param_emit_field(c, p);
   }
   bool adv_open = false;
   for (size_t j = 0; j < g->count.get(); j++) {
-    const EGPref p = g->prefs.row(j);
-    if ((p.flags & EGP_HIDDEN) || !(p.flags & EGP_ADVANCED)) continue;
+    const corium::Pref p = g->prefs.row(j);
+    if ((p.flags & corium::P_HIDDEN) || !(p.flags & corium::P_ADVANCED)) continue;
     if (!adv_open) {
       c.res->sendChunk(F("<details class=adv><summary>Advanced</summary>"));
       adv_open = true;
@@ -1868,15 +1868,15 @@ static void param_render_group(ParamCtx& c, const EGPrefGroup* g, EGModule* mod)
 static void param_render_groups(EGHttpResponse& res, uint8_t tab) {
   ParamCtx c;
   c.res = &res;
-  uint8_t gc = (uint8_t)EGPrefs::group_count();
-  uint8_t order[EG_MAX_MODULES];
+  uint8_t gc = (uint8_t)corium::Prefs::group_count();
+  uint8_t order[CORIUM_MAX_MODULES];
   if (gc > sizeof(order)) gc = sizeof(order);
   param_sort_groups(order, gc);
 
   for (uint8_t gi = 0; gi < gc; gi++) {
-    EGModule* mod = EGPrefs::module_at(order[gi]);
+    corium::Module* mod = corium::Prefs::module_at(order[gi]);
     if (mod && mod->display_order() == 0) continue;   // has its own page
-    const EGPrefGroup* g = EGPrefs::group_at(order[gi]);
+    const corium::PrefGroup* g = corium::Prefs::group_at(order[gi]);
     if (!g || g->count.get() == 0) continue;
     if (g->category.get() != tab) continue;
     c.show = mod ? mod->prefs_show() : nullptr;
@@ -1905,7 +1905,7 @@ static void param_render_form(EGHttpResponse& res, uint8_t tab) {
 static uint8_t param_tab(EGHttpRequest& req) {
   int32_t t;
   if (parse_i32(req.arg(F("t")), &t) && t >= 0 && t <= 4) return (uint8_t)t;
-  return (uint8_t)EGP_CAT_SYSTEM;
+  return (uint8_t)corium::P_CAT_SYSTEM;
 }
 
 static const char RESTART_APPLY[] PROGMEM = " <a href=/restart>Restart</a> to apply.";
@@ -1943,13 +1943,13 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool posted = (req.method() == EGHttpRequest::POST);
   Refusal refused{};
   bool saved = posted && param_save_body(tab, refused);
-  bool wrote = saved && EGPrefs::commit();
+  bool wrote = saved && corium::Prefs::commit();
   // every tab row is put, a frozen group on it mustn't read as not saved
-  char why[EGPREFS_FROZEN_MAX];
-  const char* frozen = saved && !wrote && EGPrefs::frozen(why, sizeof(why)) ? why : nullptr;
+  char why[CORIUM_PREFS_FROZEN_MAX];
+  const char* frozen = saved && !wrote && corium::Prefs::frozen(why, sizeof(why)) ? why : nullptr;
   if (frozen) wrote = true;
   // stay, so the refusal or note shows
-  bool restart = wrote && EGPrefs::restart_pending();
+  bool restart = wrote && corium::Prefs::restart_pending();
   if (restart && !refused.why[0] && !refused.note && !frozen) {
     res.redirect(FPSTR(P_RESTART));
     return;
@@ -1960,7 +1960,7 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   param_render_tabs(res, tab);
 
   // Backup is the import form only
-  if (tab == (uint8_t)EGP_CAT_BACKUP) param_render_backup(res);
+  if (tab == (uint8_t)corium::P_CAT_BACKUP) param_render_backup(res);
   else                                param_render_form(res, tab);
   WebPortal::endPage(res);
 }
@@ -2028,20 +2028,20 @@ static void b64_finish(B64Sink& s) {
   b64_flush_out(s);
 }
 
-static bool is_exportable_pref(const EGPrefGroup* g, const EGPref& p,
+static bool is_exportable_pref(const corium::PrefGroup* g, const corium::Pref& p,
                                const char* id_buf, const char*& val_out) {
-  if (p.type == EGP_LABEL || p.type == EGP_HEADER) return false;
-  if (p.flags & EGP_LOCAL) return false;
-  const char* cur = EGPrefs::getString(g->module_id, id_buf);
+  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return false;
+  if (p.flags & corium::P_LOCAL) return false;
+  const char* cur = corium::Prefs::getString(g->module_id, id_buf);
   if (!cur) cur = "";
   if (p.default_val && strcmp(cur, p.default_val) == 0) return false;
   val_out = cur;
   return true;
 }
 
-static bool group_has_export(const EGPrefGroup* g) {
+static bool group_has_export(const corium::PrefGroup* g) {
   for (size_t j = 0; j < g->count.get(); j++) {
-    char id_buf[EGPREF_ID_MAX + 1];
+    char id_buf[CORIUM_PREF_ID_MAX + 1];
     flash_to_ram(g->prefs.id_P(j), id_buf, sizeof(id_buf));
     const char* cur;
     if (is_exportable_pref(g, g->prefs.row(j), id_buf, cur)) return true;
@@ -2049,10 +2049,10 @@ static bool group_has_export(const EGPrefGroup* g) {
   return false;
 }
 
-static uint8_t group_export_count(const EGPrefGroup* g) {
+static uint8_t group_export_count(const corium::PrefGroup* g) {
   uint8_t emitted_prefs = 0;
   for (size_t j = 0; j < g->count.get(); j++) {
-    char id_buf[EGPREF_ID_MAX + 1];
+    char id_buf[CORIUM_PREF_ID_MAX + 1];
     flash_to_ram(g->prefs.id_P(j), id_buf, sizeof(id_buf));
     const char* cur;
     if (is_exportable_pref(g, g->prefs.row(j), id_buf, cur)) emitted_prefs++;
@@ -2060,7 +2060,7 @@ static uint8_t group_export_count(const EGPrefGroup* g) {
   return emitted_prefs;
 }
 
-static void export_write_group(B64Sink& sink, const EGPrefGroup* g, uint8_t emitted_prefs) {
+static void export_write_group(B64Sink& sink, const corium::PrefGroup* g, uint8_t emitted_prefs) {
   size_t mid_len = strlen(g->module_id);
   if (mid_len > 255) return;
   b64_write_u8(sink, (uint8_t)mid_len);
@@ -2068,8 +2068,8 @@ static void export_write_group(B64Sink& sink, const EGPrefGroup* g, uint8_t emit
   b64_write_u8(sink, emitted_prefs);
 
   for (size_t j = 0; j < g->count.get(); j++) {
-    const EGPref p = g->prefs.row(j);
-    char id_buf[EGPREF_ID_MAX + 1];
+    const corium::Pref p = g->prefs.row(j);
+    char id_buf[CORIUM_PREF_ID_MAX + 1];
     flash_to_ram(p.id, id_buf, sizeof(id_buf));
     const char* cur;
     if (!is_exportable_pref(g, p, id_buf, cur)) continue;
@@ -2087,8 +2087,8 @@ static void export_write_group(B64Sink& sink, const EGPrefGroup* g, uint8_t emit
 
 static void serializeExportStream(B64Sink& sink) {
   uint8_t group_count = 0;
-  for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
-    const EGPrefGroup* g = EGPrefs::group_at(gi);
+  for (size_t gi = 0; gi < corium::Prefs::group_count(); gi++) {
+    const corium::PrefGroup* g = corium::Prefs::group_at(gi);
     if (!g || g->count.get() == 0) continue;
     if (group_has_export(g)) group_count++;
   }
@@ -2099,8 +2099,8 @@ static void serializeExportStream(B64Sink& sink) {
   sink.obf_on = true;
   b64_write_u8(sink, group_count);
 
-  for (size_t gi = 0; gi < EGPrefs::group_count(); gi++) {
-    const EGPrefGroup* g = EGPrefs::group_at(gi);
+  for (size_t gi = 0; gi < corium::Prefs::group_count(); gi++) {
+    const corium::PrefGroup* g = corium::Prefs::group_at(gi);
     if (!g || g->count.get() == 0) continue;
     uint8_t emitted_prefs = group_export_count(g);
     if (emitted_prefs == 0) continue;
@@ -2129,9 +2129,9 @@ static const char* validateImport(uint8_t* buf, size_t len) {
 
 // put refuses unknown keys, forwards moved ones
 static bool import_put(const char* mid, const char* key, const char* value) {
-  EGPref p;
-  if (EGPrefs::find_pref(mid, key, &p) && (p.flags & EGP_LOCAL)) return false;
-  return EGPrefs::put(mid, key, value);
+  corium::Pref p;
+  if (corium::Prefs::find_pref(mid, key, &p) && (p.flags & corium::P_LOCAL)) return false;
+  return corium::Prefs::put(mid, key, value);
 }
 
 // wipe then apply, -1 = bad blob
@@ -2139,23 +2139,23 @@ static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
   const char* err = validateImport(buf, len);
   if (err) { if (err_out) *err_out = err; return -1; }
 
-  EGPrefs::reset_all(/*keep_network=*/true);
+  corium::Prefs::reset_all(/*keep_network=*/true);
   return ImportText::apply_blob(buf + 4, len - 8, import_put);   // less magic and crc
 }
 
 // safe mode gets here frozen: one the import didn't replace stops it all
 static const char* import_commit(char* why, size_t n) {
-  const char* err = EGPrefs::any_frozen(why, n) ? why : nullptr;
-  if (!err && !EGPrefs::commit(false)) err = WRITE_FAILED;   // silent, the cascade would WDT
-  if (err) EGPrefs::revert();
+  const char* err = corium::Prefs::any_frozen(why, n) ? why : nullptr;
+  if (!err && !corium::Prefs::commit(false)) err = WRITE_FAILED;   // silent, the cascade would WDT
+  if (err) corium::Prefs::revert();
   return err;
 }
 
 // a row that didn't load isn't in the blob, an import would lose it
 void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
-  char why[EGPREFS_FROZEN_MAX];
-  if (EGPrefs::any_frozen(why, sizeof(why))) {
+  char why[CORIUM_PREFS_FROZEN_MAX];
+  if (corium::Prefs::any_frozen(why, sizeof(why))) {
     res.send(409, FPSTR(HTTP_CT_PLAIN), why);
     return;
   }
@@ -2262,9 +2262,9 @@ void WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   size_t len = 0;
   ImportText::Result r = {0, 0, 0};
   int applied = -1;
-  char why[EGPREFS_FROZEN_MAX];
+  char why[CORIUM_PREFS_FROZEN_MAX];
   // safe mode: the import may replace it
-  if (!BootGuard::safe_mode() && EGPrefs::any_frozen(why, sizeof(why))) {
+  if (!BootGuard::safe_mode() && corium::Prefs::any_frozen(why, sizeof(why))) {
     import_fail(res, why);
     return;
   }
@@ -2306,11 +2306,11 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   res.sendChunk(F("{"));
   bool first = true;
-  for (EGMeasureIter it(EGM_OUT_VARS); it.next(); ) {
-    const EGMeasure& v = it.row();
+  for (corium::MeasureIter it(corium::M_OUT_VARS); it.next(); ) {
+    const corium::Measure& v = it.row();
     char raw[64];
-    if (egm_format_display(v, it.value(), raw, sizeof(raw)) == 0) continue;
-    bool str = v.kind == EGM_STR;
+    if (corium::m_format_display(v, it.value(), raw, sizeof(raw)) == 0) continue;
+    bool str = v.kind == corium::M_STR;
     const char* shown = raw;
     char esc[6 * (sizeof(raw) - 1) + 1];   // escaped worst case
     if (str) {
@@ -2343,7 +2343,7 @@ void WebPortal::metricsLine(EGHttpResponse& res, PGM_P fmt, ...) {
 static void metrics_render_info(EGHttpResponse& res, const char* cid, const char* name) {
   res.sendChunk(F("# HELP device_info Device metadata; value always 1. Join via on(chipid) for naming.\n"
                   "# TYPE device_info gauge\n"));
-  char esc_name[3 * EG_NAME_MAX + 1];
+  char esc_name[3 * CORIUM_NAME_MAX + 1];
   egesc_prom(esc_name, sizeof(esc_name), name);
   WebPortal::metricsLine(res,
     PSTR("device_info{chipid=\"%s\",name=\"%s\",model=\"" APP_MODEL "\",ver=\"" RELEASE_VERSION "\",env=\"" BUILD_ENV "\"} 1\n"),
@@ -2354,9 +2354,9 @@ static void metrics_render_info(EGHttpResponse& res, const char* cid, const char
 static void metrics_render_rows(EGHttpResponse& res, const char* cid) {
   char buf[320];
   const char* last = nullptr;
-  for (EGMeasureIter it(EGM_OUT_PROM); it.next(); ) {
-    const EGMeasure& m = it.row();
-    size_t n = egm_prom_format(m, it.value(), cid, m.prom != last, buf, sizeof(buf));
+  for (corium::MeasureIter it(corium::M_OUT_PROM); it.next(); ) {
+    const corium::Measure& m = it.row();
+    size_t n = corium::m_prom_format(m, it.value(), cid, m.prom != last, buf, sizeof(buf));
     if (n == 0) continue;
     res.sendChunk(buf, n);
     last = m.prom;

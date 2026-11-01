@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "DeviceInfo.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Prefs/SystemPrefs.h"
 #include "Corium/Logger/Logger.h"
 #include "Uptime.h"
@@ -45,7 +45,7 @@ static char s_chipid_buf[CHIPID_LEN + 1] = "";
 static uint32_t s_chip_hash = 0;
 static char s_mac_buf[18]        = "";
 static char s_flash_buf[24]      = "";
-static char s_friendlyname[EG_NAME_MAX + 1] = "";
+static char s_friendlyname[CORIUM_NAME_MAX + 1] = "";
 
 uint32_t DeviceInfo::freeHeap() {
   static uint32_t cached = 0;
@@ -199,11 +199,11 @@ PGM_P DeviceInfo::buildDate()         { return BUILD_DATE; }
 void DeviceInfo::factoryReset() {
   // keeps the key
   Log::console(PSTR("Factory reset"));
-  EGPrefs::reset_all();
+  corium::Prefs::reset_all();
   // kept rows back on flash now
-  if (!EGPrefs::commit(false)) Log::console(PSTR("Factory reset: not saved"));
-#ifdef EGPREFS_LEGACY_FILE
-  Fs::remove(F(EGPREFS_LEGACY_FILE));   // legacy import file
+  if (!corium::Prefs::commit(false)) Log::console(PSTR("Factory reset: not saved"));
+#ifdef CORIUM_PREFS_LEGACY_FILE
+  Fs::remove(F(CORIUM_PREFS_LEGACY_FILE));   // legacy import file
 #endif
   Wifi::clearSavedCreds();
   KeyStore::clear(WEB_PASS_SLOT);

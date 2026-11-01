@@ -22,20 +22,20 @@
 
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
 #include "App/ChipVoice.h"
 #include "Corium/Output/PulseEngine.h"
 #include "Corium/Output/QuietWindow.h"
 
-class PulseOut : public EGModule {
+class PulseOut : public corium::Module {
   public:
     PulseOut() {}
     const char* name() override { return PSTR("pulse"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 14; }
     void begin() override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 
     // ms ticker owns the pin, clicks post s_req

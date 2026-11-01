@@ -26,8 +26,8 @@
 #include <U8g2lib.h>
 #include "App/AppConfig.h"
 #include "Counter/Counter.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Display/DisplayBackend.h"
 #include "Display/DisplayType.h"
 
@@ -52,7 +52,7 @@ class EGHttpServer;
 #define OLED_SCL      5
 #endif
 
-class SSD1306Display : public EGModule, public DisplayBackend {
+class SSD1306Display : public corium::Module, public DisplayBackend {
 public:
     enum DisplayType : uint8_t {
       DISP_SSD1306        = 0,
@@ -75,7 +75,7 @@ public:
 
     SSD1306Display();
     const char* name() override { return PSTR("oled"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
 
     void start() override;
     void button(unsigned long now, int8_t dir) override { onButtonTap(now, dir); }

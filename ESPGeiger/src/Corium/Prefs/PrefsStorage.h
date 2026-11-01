@@ -1,5 +1,5 @@
 /*
-  EGPrefsStorage.h - LittleFS-backed per-module binary store for EGPrefs.
+  corium::PrefsStorage.h - LittleFS-backed per-module binary store for corium::Prefs.
 
   File format (EGP1): one file per module at /<namespace>/<module_id>.bin
     magic:   4 bytes 'E','G','P','1'
@@ -22,20 +22,22 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef EGPREFS_STORAGE_H
-#define EGPREFS_STORAGE_H
+#ifndef CORIUM_PREFS_STORAGE_H
+#define CORIUM_PREFS_STORAGE_H
 
 #include <Arduino.h>
 
-class EGPrefsStorage {
+namespace corium {
+
+class PrefsStorage {
   public:
     // not NUL-terminated, valid during the call only; key_len 0 = a record didn't read, the rest lost
     typedef void (*ReadCb)(void* ctx,
                            const char* key, uint8_t key_len,
                            const char* value, uint16_t val_len);
 
-    EGPrefsStorage();
-    ~EGPrefsStorage();
+    PrefsStorage();
+    ~PrefsStorage();
 
     bool begin(const char* name);
     void end();
@@ -55,5 +57,7 @@ class EGPrefsStorage {
     char   _path[DIR_NAME_MAX + 3];   // "/name/"
     bool   _started;
 };
+
+}  // namespace corium
 
 #endif

@@ -23,10 +23,10 @@
 #include <math.h>
 #include "Corium/Platform/Flash.h"
 #include "DisplayBackend.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 #include "Counter/CounterMeasures.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
 #include "App/Topics.h"
 #include "Corium/System/FastMillis.h"
 
@@ -50,15 +50,15 @@ inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
   }
 }
 
-class Display : public EGModule {
+class Display : public corium::Module {
   public:
     const char* name() override { return PSTR("disp"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     uint8_t display_order() override { return 17; }
     bool hw_present() override { return backend()->present(); }
-    const EGPrefGroup* prefs_group() override;
-    const EGPrefShow* prefs_show() override;
-    EGLegacyRows legacy_aliases() override;
+    const corium::PrefGroup* prefs_group() override;
+    const corium::PrefShow* prefs_show() override;
+    corium::LegacyRows legacy_aliases() override;
     void on_prefs_loaded() override;
     void on_prefs_saved() override;
     void registerRoutes(EGHttpServer& http) override;
@@ -100,7 +100,7 @@ class Display : public EGModule {
     bool  no_counts() { return b(_none); }
     bool  alert()     { return b(_alert); }
     uint32_t blip() {
-      EGMValue v;
+      corium::MValue v;
       return (_blip && _blip(&v)) ? v.u : 0;
     }
     // the 5 min avg under 10
@@ -125,33 +125,33 @@ class Display : public EGModule {
       bool lit = sleep(now) == AWAKE;
       if (lit == _lit) return;
       _lit = lit;
-      EGModuleRegistry::emit(TOPIC_POWER);
+      corium::Registry::emit(TOPIC_POWER);
     }
     bool _lit = true;
     uint8_t _taps = 0;
     unsigned long _tap_ms = 0;
     void find_rows() {
-      _cpm   = egm_core_read(PSTR("cpm"),       EGM_F32);
-      _cpm5  = egm_core_read(PSTR("cpm5"),      EGM_F32);
-      _cpm15 = egm_core_read(PSTR("cpm15"),     EGM_F32);
-      _cps   = egm_core_read(PSTR("cps"),       EGM_F32);
-      _usv   = egm_core_read(PSTR("usv"),       EGM_F32);
-      _ratio = egm_core_read(PSTR("ratio"),     EGM_F32);
-      _warm  = egm_core_read(PSTR("warm"),      EGM_BOOL);
-      _none  = egm_core_read(PSTR("no_counts"), EGM_BOOL);
-      _alert = egm_core_read(PSTR("alert"),     EGM_BOOL);
-      _blip  = egm_core_read(PSTR("blip"),      EGM_U32);
+      _cpm   = corium::m_core_read(PSTR("cpm"),       corium::M_F32);
+      _cpm5  = corium::m_core_read(PSTR("cpm5"),      corium::M_F32);
+      _cpm15 = corium::m_core_read(PSTR("cpm15"),     corium::M_F32);
+      _cps   = corium::m_core_read(PSTR("cps"),       corium::M_F32);
+      _usv   = corium::m_core_read(PSTR("usv"),       corium::M_F32);
+      _ratio = corium::m_core_read(PSTR("ratio"),     corium::M_F32);
+      _warm  = corium::m_core_read(PSTR("warm"),      corium::M_BOOL);
+      _none  = corium::m_core_read(PSTR("no_counts"), corium::M_BOOL);
+      _alert = corium::m_core_read(PSTR("alert"),     corium::M_BOOL);
+      _blip  = corium::m_core_read(PSTR("blip"),      corium::M_U32);
     }
-    static float f(EGMRead r) {
-      EGMValue v;
+    static float f(corium::MRead r) {
+      corium::MValue v;
       return (r && r(&v)) ? v.f : NAN;
     }
-    static bool b(EGMRead r) {
-      EGMValue v;
+    static bool b(corium::MRead r) {
+      corium::MValue v;
       return r && r(&v) && v.b;
     }
-    EGMRead _cpm = nullptr, _cpm5 = nullptr, _cpm15 = nullptr, _cps = nullptr, _usv = nullptr;
-    EGMRead _ratio = nullptr, _warm = nullptr, _none = nullptr, _alert = nullptr, _blip = nullptr;
+    corium::MRead _cpm = nullptr, _cpm5 = nullptr, _cpm15 = nullptr, _cps = nullptr, _usv = nullptr;
+    corium::MRead _ratio = nullptr, _warm = nullptr, _none = nullptr, _alert = nullptr, _blip = nullptr;
 
     bool on_hours();
     bool _started = false;

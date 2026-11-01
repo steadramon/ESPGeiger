@@ -23,10 +23,10 @@
 #include "Corium/Platform/Flash.h"
 #include "App/AppConfig.h"
 #include "Counter/Counter.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
 #include "App/Topics.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef PUSHBUTTON_PIN
   #ifdef ESP32
@@ -39,11 +39,11 @@
 #define PUSHBUTTON_PIN2 -1
 #endif
 
-class PushButton : public EGModule {
+class PushButton : public corium::Module {
   public:
     PushButton();
     const char* name() override { return PSTR("btn"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     void loop(unsigned long now) override;
     // short press, from loop()
     static constexpr uint8_t TOPIC_PRESS = Topic::PRESS;
@@ -54,7 +54,7 @@ class PushButton : public EGModule {
     void set_pin(int pin);
     void set_pin2(int pin);
 #ifndef BTN_PIN_BLOCKED
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
 #endif
 };

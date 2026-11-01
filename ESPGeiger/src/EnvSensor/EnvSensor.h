@@ -25,7 +25,7 @@
 #ifndef DISABLE_ENVSENSOR
 #include <BoschTHP.h>
 #include <AsairAHT.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "Corium/System/FastMillis.h"
 #endif
 
@@ -40,20 +40,20 @@
 
 #ifndef DISABLE_ENVSENSOR
 
-class EnvSensor : public EGModule {
+class EnvSensor : public corium::Module {
   public:
     enum Unit : uint8_t { UNIT_C = 0, UNIT_F = 1, UNIT_K = 2 };
 
     EnvSensor() {}
     const char* name() override { return PSTR("env"); }
-    uint8_t priority() override { return EG_PRIORITY_DEFAULT; }
+    uint8_t priority() override { return CORIUM_PRIORITY_DEFAULT; }
     uint8_t display_order() override { return 13; }   // after Input (12)
     void begin() override;
     void loop(unsigned long now) override;
-    const EGPrefGroup* prefs_group() override;
+    const corium::PrefGroup* prefs_group() override;
     void on_prefs_loaded() override;
     bool hw_present() override { return present(); }
-    EGMeasureRows measurements() override;
+    corium::MeasureRows measurements() override;
 
     static constexpr uint8_t DRV_BOSCH = 1 << 0;
     static constexpr uint8_t DRV_AHT   = 1 << 1;

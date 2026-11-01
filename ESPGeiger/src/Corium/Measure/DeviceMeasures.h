@@ -20,46 +20,50 @@
 #ifndef DEVICE_MEASURES_H
 #define DEVICE_MEASURES_H
 
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 
-bool egm_dev_ut(EGMValue* v);
-bool egm_dev_id(EGMValue* v);
-bool egm_dev_name(EGMValue* v);
-bool egm_dev_rssi(EGMValue* v);
-bool egm_dev_mem(EGMValue* v);
-bool egm_dev_mem_raw(EGMValue* v);
-bool egm_dev_tick(EGMValue* v);
-bool egm_dev_t_max(EGMValue* v);
-bool egm_dev_lps(EGMValue* v);
-bool egm_dev_frag(EGMValue* v);
-bool egm_dev_lfb(EGMValue* v);
-bool egm_dev_lfblow(EGMValue* v);
+namespace corium {
 
-extern const char EGM_MP_UT[];
-extern const char EGM_MH_UT[];
-extern const char EGM_MP_MEM[];
-extern const char EGM_MH_MEM[];
-extern const char EGM_MP_RSSI[];
-extern const char EGM_MH_RSSI[];
+bool m_dev_ut(MValue* v);
+bool m_dev_id(MValue* v);
+bool m_dev_name(MValue* v);
+bool m_dev_rssi(MValue* v);
+bool m_dev_mem(MValue* v);
+bool m_dev_mem_raw(MValue* v);
+bool m_dev_tick(MValue* v);
+bool m_dev_t_max(MValue* v);
+bool m_dev_lps(MValue* v);
+bool m_dev_frag(MValue* v);
+bool m_dev_lfb(MValue* v);
+bool m_dev_lfblow(MValue* v);
+
+extern const char M_MP_UT[];
+extern const char M_MH_UT[];
+extern const char M_MP_MEM[];
+extern const char M_MH_MEM[];
+extern const char M_MP_RSSI[];
+extern const char M_MH_RSSI[];
 
 // rows for the app's table, the app picks the outputs
-#define EGM_ROW_UPTIME(out) \
-  EGM_PROW("ut", "", egm_dev_ut, EGM_U32, 0, EGMU_SEC, out, 0, EGM_MP_UT, EGM_MH_UT, nullptr)
-// not on diag, EGM_ROW_MEM_RAW is
-#define EGM_ROW_MEM(out) \
-  EGM_PROW("mem", "", egm_dev_mem, EGM_U32, 0, EGMU_BYTES, out, EGM_NODIAG, EGM_MP_MEM, EGM_MH_MEM, nullptr)
-#define EGM_ROW_MEM_RAW(out) \
-  EGM_ROW("mem", "", egm_dev_mem_raw, EGM_U32, 0, EGMU_BYTES, out, EGM_DIAG)
-#define EGM_ROW_RSSI(out) \
-  EGM_PROW("rssi", "", egm_dev_rssi, EGM_I32, 0, EGMU_DBM, out, 0, EGM_MP_RSSI, EGM_MH_RSSI, nullptr)
-#define EGM_ROW_ID(out)     EGM_ROW("id", "", egm_dev_id, EGM_STR, 0, EGMU_NONE, out, 0)
-#define EGM_ROW_NAME(out)   EGM_ROW("name", "", egm_dev_name, EGM_STR, 0, EGMU_NONE, out, 0)
+#define CORIUM_M_ROW_UPTIME(out) \
+  CORIUM_M_PROW("ut", "", corium::m_dev_ut, corium::M_U32, 0, corium::MU_SEC, out, 0, corium::M_MP_UT, corium::M_MH_UT, nullptr)
+// not on diag, CORIUM_M_ROW_MEM_RAW is
+#define CORIUM_M_ROW_MEM(out) \
+  CORIUM_M_PROW("mem", "", corium::m_dev_mem, corium::M_U32, 0, corium::MU_BYTES, out, corium::M_NODIAG, corium::M_MP_MEM, corium::M_MH_MEM, nullptr)
+#define CORIUM_M_ROW_MEM_RAW(out) \
+  CORIUM_M_ROW("mem", "", corium::m_dev_mem_raw, corium::M_U32, 0, corium::MU_BYTES, out, corium::M_DIAG)
+#define CORIUM_M_ROW_RSSI(out) \
+  CORIUM_M_PROW("rssi", "", corium::m_dev_rssi, corium::M_I32, 0, corium::MU_DBM, out, 0, corium::M_MP_RSSI, corium::M_MH_RSSI, nullptr)
+#define CORIUM_M_ROW_ID(out)     CORIUM_M_ROW("id", "", corium::m_dev_id, corium::M_STR, 0, corium::MU_NONE, out, 0)
+#define CORIUM_M_ROW_NAME(out)   CORIUM_M_ROW("name", "", corium::m_dev_name, corium::M_STR, 0, corium::MU_NONE, out, 0)
 // diag only
-#define EGM_ROW_TICK(out)   EGM_ROW("tick", "", egm_dev_tick, EGM_U32, 0, EGMU_NONE, out, EGM_DIAG)
-#define EGM_ROW_T_MAX(out)  EGM_ROW("t_max", "", egm_dev_t_max, EGM_U32, 0, EGMU_NONE, out, EGM_DIAG)
-#define EGM_ROW_LPS(out)    EGM_ROW("lps", "", egm_dev_lps, EGM_U32, 0, EGMU_NONE, out, EGM_DIAG)
-#define EGM_ROW_FRAG(out)   EGM_ROW("frag", "", egm_dev_frag, EGM_U32, 0, EGMU_PCT, out, EGM_DIAG)
-#define EGM_ROW_LFB(out)    EGM_ROW("lfb", "", egm_dev_lfb, EGM_U32, 0, EGMU_BYTES, out, EGM_DIAG)
-#define EGM_ROW_LFBLOW(out) EGM_ROW("lfblow", "", egm_dev_lfblow, EGM_U32, 0, EGMU_BYTES, out, EGM_DIAG)
+#define CORIUM_M_ROW_TICK(out)   CORIUM_M_ROW("tick", "", corium::m_dev_tick, corium::M_U32, 0, corium::MU_NONE, out, corium::M_DIAG)
+#define CORIUM_M_ROW_T_MAX(out)  CORIUM_M_ROW("t_max", "", corium::m_dev_t_max, corium::M_U32, 0, corium::MU_NONE, out, corium::M_DIAG)
+#define CORIUM_M_ROW_LPS(out)    CORIUM_M_ROW("lps", "", corium::m_dev_lps, corium::M_U32, 0, corium::MU_NONE, out, corium::M_DIAG)
+#define CORIUM_M_ROW_FRAG(out)   CORIUM_M_ROW("frag", "", corium::m_dev_frag, corium::M_U32, 0, corium::MU_PCT, out, corium::M_DIAG)
+#define CORIUM_M_ROW_LFB(out)    CORIUM_M_ROW("lfb", "", corium::m_dev_lfb, corium::M_U32, 0, corium::MU_BYTES, out, corium::M_DIAG)
+#define CORIUM_M_ROW_LFBLOW(out) CORIUM_M_ROW("lfblow", "", corium::m_dev_lfblow, corium::M_U32, 0, corium::MU_BYTES, out, corium::M_DIAG)
+
+}  // namespace corium
 
 #endif

@@ -23,8 +23,8 @@
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Net/EGHttpPoster.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Net/HttpPoster.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef THINGSPEAK_INTERVAL
 #define THINGSPEAK_INTERVAL 90
@@ -32,13 +32,13 @@
 
 const char TS_URI[] PROGMEM = "http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%s&field3=%d&field4=%d";
 
-class Thingspeak : public EGHttpPoster {
+class Thingspeak : public corium::HttpPoster {
   public:
     Thingspeak();
     const char* name() override { return PSTR("thgspk"); }
     void on_prefs_loaded() override;
-    const EGPrefGroup* prefs_group() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    const corium::PrefGroup* prefs_group() override;
+    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;

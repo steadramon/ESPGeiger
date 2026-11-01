@@ -17,14 +17,14 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Tube.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
 #include "GeigerPrefs/GeigerKeys.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL ""
 #endif
 
-static char s_model[EG_NAME_MAX + 1] = GEIGER_MODEL;
+static char s_model[CORIUM_NAME_MAX + 1] = GEIGER_MODEL;
 
 const char* Tube::model() { return s_model; }
 
@@ -39,8 +39,8 @@ void Tube::set_model(const char* s) {
 
 uint8_t Tube::detection() {
   uint8_t f = 0;
-  if (EGPrefs::getBool("counter", EG_K_TUBE_ALPHA)) f |= 0x01;
-  if (EGPrefs::getBool("counter", EG_K_TUBE_BETA))  f |= 0x02;
-  if (EGPrefs::getBool("counter", EG_K_TUBE_GAMMA)) f |= 0x04;
+  if (corium::Prefs::getBool("counter", EG_K_TUBE_ALPHA)) f |= 0x01;
+  if (corium::Prefs::getBool("counter", EG_K_TUBE_BETA))  f |= 0x02;
+  if (corium::Prefs::getBool("counter", EG_K_TUBE_GAMMA)) f |= 0x04;
   return f;
 }

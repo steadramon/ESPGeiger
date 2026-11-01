@@ -26,8 +26,8 @@
 #include "Corium/Console/Console.h"
 #include "App/AppKeys.h"
 #include "App/ExternalPause.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Util/Words.h"
@@ -78,7 +78,7 @@ static void clicks_day(EGHttpResponse& res, char* line, size_t cap) {
     PSTR("],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\""),
     (int)gcounter.clicks_today,
     (int)gcounter.clicks_yesterday,
-    EGPrefs::getString("counter", EG_K_RATIO)));
+    corium::Prefs::getString("counter", EG_K_RATIO)));
 }
 
 static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
@@ -137,15 +137,15 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // GeigerLog field order, keep it
   // CPM,CPS,CPM1st,CPS1st,CPM2nd,CPS2nd,CPM3rd,CPS3rd,Temp,Press,Humid,Xtra
   char cpm[16], cps[16], cpm5[16], cpm15[16], t[16], h[16], p[16], xtra[16];
-  egm_text(PSTR("cpm"),   EGM_OUT_JSON, cpm,   sizeof(cpm));
-  egm_text(PSTR("cps"),   EGM_OUT_JSON, cps,   sizeof(cps));
-  egm_text(PSTR("cpm5"),  EGM_OUT_JSON, cpm5,  sizeof(cpm5));
-  egm_text(PSTR("cpm15"), EGM_OUT_JSON, cpm15, sizeof(cpm15));
-  egm_text(PSTR("t"),     EGM_OUT_JSON, t,     sizeof(t));
-  egm_text(PSTR("h"),     EGM_OUT_JSON, h,     sizeof(h));
-  egm_text(PSTR("p"),     EGM_OUT_JSON, p,     sizeof(p));
-  if (!egm_text(PSTR("hv"), EGM_OUT_JSON, xtra, sizeof(xtra)))
-    egm_text(PSTR("usv"), EGM_OUT_JSON, xtra, sizeof(xtra));
+  corium::m_text(PSTR("cpm"),   corium::M_OUT_JSON, cpm,   sizeof(cpm));
+  corium::m_text(PSTR("cps"),   corium::M_OUT_JSON, cps,   sizeof(cps));
+  corium::m_text(PSTR("cpm5"),  corium::M_OUT_JSON, cpm5,  sizeof(cpm5));
+  corium::m_text(PSTR("cpm15"), corium::M_OUT_JSON, cpm15, sizeof(cpm15));
+  corium::m_text(PSTR("t"),     corium::M_OUT_JSON, t,     sizeof(t));
+  corium::m_text(PSTR("h"),     corium::M_OUT_JSON, h,     sizeof(h));
+  corium::m_text(PSTR("p"),     corium::M_OUT_JSON, p,     sizeof(p));
+  if (!corium::m_text(PSTR("hv"), corium::M_OUT_JSON, xtra, sizeof(xtra)))
+    corium::m_text(PSTR("usv"), corium::M_OUT_JSON, xtra, sizeof(xtra));
 
   char out[128];
   snprintf_P(out, sizeof(out),
@@ -167,7 +167,7 @@ static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static void cmd_target() { set_target(Console::next()); }
-EG_REGISTER_CMD(target, cmd_target)
+CORIUM_REGISTER_CMD(target, cmd_target)
 #endif
 
 #if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
@@ -191,7 +191,7 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char out[256];
   EGJson j(out, sizeof(out), send_part, &res);
   j.map_begin();
-  egm_json_display(j, raw);
+  corium::m_json_display(j, raw);
   j.flush();   // closed by hand
 #if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
   if (raw) json_timer1_stats(res);
@@ -233,7 +233,7 @@ static const char HISTORY_BODY_LAST24[] PROGMEM = R"HTML(
 <thead><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th><span class=usvL>&micro;Sv</span></th></tr></thead>
 <tbody id=tb></tbody>
 </table>
-<script src=/histjs)HTML" EG_CACHE_BUST R"HTML(></script>
+<script src=/histjs)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML";
 
 static const char HIST_JS[] PROGMEM = R"JS(
@@ -446,10 +446,10 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 </details>
 )HTML"
 #ifndef ESP8266
-R"HTML(<script src=/pgjs)HTML" EG_CACHE_BUST R"HTML(></script>
+R"HTML(<script src=/pgjs)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML"
 #endif
-R"HTML(<script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
+R"HTML(<script src=/js)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML";
 
 static void status_seed(EGHttpResponse& res) {

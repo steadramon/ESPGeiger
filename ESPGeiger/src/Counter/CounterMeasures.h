@@ -21,10 +21,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
 
-static constexpr uint8_t EGM_OUT_WEBHOOK = EGM_OUT_APP0;
-static constexpr uint8_t EGM_OUT_MQTT    = EGM_OUT_APP1;
+static constexpr uint8_t EGM_OUT_WEBHOOK = corium::M_OUT_APP0;
+static constexpr uint8_t EGM_OUT_MQTT    = corium::M_OUT_APP1;
 
 // before anything reads a row
 void measures_begin();

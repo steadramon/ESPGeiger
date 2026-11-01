@@ -23,55 +23,55 @@
 #include "Counter/CounterMaths.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/Words.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Measure/Measure.h"
 #include "Counter/CounterUpload.h"
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
 
-EG_PSTR(K_AID,  "aid");
-EG_PSTR(K_GCID, "gcid");
+CORIUM_PSTR(K_AID,  "aid");
+CORIUM_PSTR(K_GCID, "gcid");
 
 GMC gmc;
-EG_REGISTER_FEATURE(gmc, FEAT_GMC)
+CORIUM_REGISTER_FEATURE(gmc, FEAT_GMC)
 
-EG_PSTR(GM_H_EN,  "Upload to gmcmap.com");
-EG_PSTR(GM_L_AID, "Account ID");
-EG_PSTR(GM_H_AID, "gmcmap.com account ID");
-EG_PSTR(GM_P_ID,  "\\d{1,20}");
-EG_PSTR(GM_L_GID, "Geiger Counter ID");
-EG_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
+CORIUM_PSTR(GM_H_EN,  "Upload to gmcmap.com");
+CORIUM_PSTR(GM_L_AID, "Account ID");
+CORIUM_PSTR(GM_H_AID, "gmcmap.com account ID");
+CORIUM_PSTR(GM_P_ID,  "\\d{1,20}");
+CORIUM_PSTR(GM_L_GID, "Geiger Counter ID");
+CORIUM_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
 
 #define GMC_ID_MAX 20
 
-static const EGPref GMC_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
-  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, EGP_STRING, 0},
-  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, EGP_STRING, 0},
+static const corium::Pref GMC_PREF_ITEMS[] PROGMEM = {
+  {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  corium::P_BOOL,   0},
+  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, 0},
+  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, 0},
 };
 
-static const EGPrefGroup GMC_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup GMC_PREF_GROUP PROGMEM = {
   "gmc", "GMC", 1,
   GMC_PREF_ITEMS,
   sizeof(GMC_PREF_ITEMS) / sizeof(GMC_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND,
 };
 
-const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
+const corium::PrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
 
 void GMC::on_prefs_loaded() {
-  set_enabled(EGPrefs::getBool("gmc", EG_K_SEND));
+  set_enabled(corium::Prefs::getBool("gmc", EG_K_SEND));
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
-static const EGLegacyAlias GMC_LEGACY[] PROGMEM = {
+static const corium::LegacyAlias GMC_LEGACY[] PROGMEM = {
   {"gmcSend", "send"},
   {"gmcAID",  "aid"},
   {"gmcGCID", "gcid"},
   {},
 };
-EGLegacyRows GMC::legacy_aliases() { return GMC_LEGACY; }
+corium::LegacyRows GMC::legacy_aliases() { return GMC_LEGACY; }
 // === END LEGACY IMPORT ===
 
 GMC::GMC() {
@@ -97,8 +97,8 @@ bool GMC::interpret(const char* r)
 }
 
 bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
-  const char* _api_id    = EGPrefs::getString("gmc", K_AID);
-  const char* _api_gc_id = EGPrefs::getString("gmc", K_GCID);
+  const char* _api_id    = corium::Prefs::getString("gmc", K_AID);
+  const char* _api_gc_id = corium::Prefs::getString("gmc", K_GCID);
   bool has_id   = (_api_id[0]    != '\0');
   bool has_gcid = (_api_gc_id[0] != '\0');
 
@@ -115,10 +115,10 @@ bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
   char aid[3 * GMC_ID_MAX + 1], gid[3 * GMC_ID_MAX + 1];
   egesc_url(aid, sizeof(aid), _api_id);
   egesc_url(gid, sizeof(gid), _api_gc_id);
-  int avgcpm = CounterMaths::to_int(egm_f(M_CPM_ST));
+  int avgcpm = CounterMaths::to_int(corium::m_f(M_CPM_ST));
   char acpm[16], usv[16];
-  format_f(acpm, sizeof(acpm), egm_f(M_CPM5));
-  format_f(usv,  sizeof(usv),  egm_f(M_USV5), 4);
+  format_f(acpm, sizeof(acpm), corium::m_f(M_CPM5));
+  format_f(usv,  sizeof(usv),  corium::m_f(M_USV5), 4);
   return url_fits(snprintf_P(url, cap, GMC_URI, aid, gid, avgcpm, acpm, usv), cap);
 }
 #endif

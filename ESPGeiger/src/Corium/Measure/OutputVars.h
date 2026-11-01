@@ -21,7 +21,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "EGMeasure.h"
+#include "Measure.h"
 
 namespace OutputVars {
 

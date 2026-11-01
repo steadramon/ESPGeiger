@@ -27,7 +27,7 @@
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/TickProfile.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Output/LedSignal.h"
 #include "Corium/WebPortal/WebPortal.h"
 
@@ -87,13 +87,13 @@ namespace Reactor {
       }
 #endif
       // tcp callbacks, ota needs them too
-      EGModuleRegistry::in(EGModuleRegistry::IN_TCP);
+      corium::Registry::in(corium::Registry::IN_TCP);
       EGTcp::poll();
-      EGModuleRegistry::in(EGModuleRegistry::IN_PORTAL);
+      corium::Registry::in(corium::Registry::IN_PORTAL);
       // web ota needs it too
       if (reached(now, portal.next_tick_due())) portal.tick(now);
-      EGModuleRegistry::in(EGModuleRegistry::IN_NONE);
-      if (EGModuleRegistry::due(now)) EGModuleRegistry::loop_all(now);
+      corium::Registry::in(corium::Registry::IN_NONE);
+      if (corium::Registry::due(now)) corium::Registry::loop_all(now);
     }
 #ifdef LOOP_PROFILE
     TickProfile::addLoopBody((uint32_t)(micros() - _body_t0));
