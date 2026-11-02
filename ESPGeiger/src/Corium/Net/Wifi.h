@@ -37,6 +37,7 @@ namespace Wifi {
   extern bool disabled;
   extern bool offline_forced;    // app sets it, else the wifi loop retries
   extern bool connected;
+  extern bool ap;                // wifi.mode 2, its own AP up
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[WIFI_SSID_MAX + 1];
   extern int16_t rssi;
@@ -53,7 +54,10 @@ namespace Wifi {
   }
 
   bool connectOrPortal();
+  bool offline_now();   // console: this boot without wifi, false once joined
   bool hasSavedCreds();
+  bool portal_ahead();   // first setup: none saved, not offline
+  void join_mode();   // wifi.mode back to 0, no commit
   bool saveBackupCreds();   // before WiFi.begin()
   void clearSavedCreds();
   bool applyStaticConfig();   // before WiFi.begin()

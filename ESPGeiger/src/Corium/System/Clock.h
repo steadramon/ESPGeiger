@@ -26,13 +26,18 @@
 
 namespace Clock {
   extern bool synced;
-  extern unsigned long boot_epoch;
+  extern time_t boot_epoch;
 
   // Cached, localtime is slow
   extern int16_t tz_offset_min;
   void refresh_tz_offset_min();
 
-  bool on_sync();   // true on first sync
+  // who set it, a later sync from a lower one is ignored by its setter
+  enum Source : uint8_t { NONE, KEPT, RTC, WEB, NTP };
+  extern Source source;
+  bool on_sync(Source s = NTP);   // true when s wasn't the last to set it
+  bool set(time_t epoch, Source s);   // NTP sets it itself
+  void kept();   // boot: esp32 keeps time() over a restart
 
   // a sync off by more than this tells on_step
   static const int32_t STEP_S = 60;
@@ -44,11 +49,16 @@ namespace Clock {
   extern unsigned long resync_ms;
   bool resync_due(unsigned long now);
 
-  // 32 bits, time_t is 64 on some cores; good to 2106
+  // 32 bits, wraps in 2106: differences and reached() only,
+  // dates and phases from time()
   inline uint32_t epoch() { return (uint32_t)time(NULL); }
 
-  // 2001, below it = never set
+  // 2001, below it = never set; checked against time_t
   static const uint32_t MIN_EPOCH = 1000000000UL;
+  static const uint64_t MAX_EPOCH = 253402300799ULL;   // end of 9999, dates stay 4 digits
+
+  // seconds into a period of wall time, 2^32 s isn't whole periods
+  inline uint32_t phase(uint32_t period_s) { return (uint32_t)(time(NULL) % period_s); }
 
   inline bool utcTm(struct tm* out) {
     if (!synced) return false;

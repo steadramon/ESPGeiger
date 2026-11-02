@@ -178,6 +178,8 @@ public:
     void setup_driver();
     void reset_panel();
     void draw_splash();
+    void draw_logo(const char* line);   // PROGMEM
+    bool take_screen();   // false = no panel
     u8g2_t _u8g2 {};
     uint8_t* _frame = nullptr;
     bool _started = false;

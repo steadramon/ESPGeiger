@@ -165,39 +165,26 @@ void SSD1306Display::drawStrP(int16_t x, int16_t y, const char* s) {
   }
 }
 
+#ifndef OLED_PINS_BLOCKED
+// the pref's pin if it's safe, else the default, claimed for it
+static uint8_t safe_pin(uint8_t want, uint8_t def, const char* owner, const char* fmt) {
+  const char* why = PinSafety::claim_output((int)want, owner);
+  if (!why) return want;
+  Log::console(fmt, want, why, def);
+  if (def != 255) PinSafety::claim((int)def, owner);
+  return def;
+}
+#endif
+
 void SSD1306Display::load_pins() {
 #ifndef OLED_PINS_BLOCKED
-  {
-    uint8_t sda = (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA);
-    if (const char* why = PinSafety::claim_output((int)sda, PinSafety::I2C)) {
-      Log::console(PSTR("OLED: sda=%u unsafe (%s) - keeping default %u"), sda, why, _pin_sda);
-      PinSafety::claim((int)_pin_sda, PinSafety::I2C);
-    } else {
-      _pin_sda = sda;
-    }
-  }
-  {
-    uint8_t scl = (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL);
-    if (const char* why = PinSafety::claim_output((int)scl, PinSafety::I2C)) {
-      Log::console(PSTR("OLED: scl=%u unsafe (%s) - keeping default %u"), scl, why, _pin_scl);
-      PinSafety::claim((int)_pin_scl, PinSafety::I2C);
-    } else {
-      _pin_scl = scl;
-    }
-  }
-  {
-    uint8_t rst = (uint8_t)corium::Prefs::getUInt("display", K_RST);
-    if (rst != 255) {
-      if (const char* why = PinSafety::claim_output((int)rst, PIN_OWNER)) {
-        Log::console(PSTR("OLED: rst=%u unsafe (%s) - keeping default %u"), rst, why, _pin_rst);
-        if (_pin_rst != 255) PinSafety::claim((int)_pin_rst, PIN_OWNER);
-      } else {
-        _pin_rst = rst;
-      }
-    } else {
-      _pin_rst = 255;
-    }
-  }
+  _pin_sda = safe_pin((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA), _pin_sda, PinSafety::I2C,
+                      PSTR("OLED: sda=%u unsafe (%s) - keeping default %u"));
+  _pin_scl = safe_pin((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL), _pin_scl, PinSafety::I2C,
+                      PSTR("OLED: scl=%u unsafe (%s) - keeping default %u"));
+  uint8_t rst = (uint8_t)corium::Prefs::getUInt("display", K_RST);
+  _pin_rst = rst == 255 ? 255 : safe_pin(rst, _pin_rst, PIN_OWNER,
+                                         PSTR("OLED: rst=%u unsafe (%s) - keeping default %u"));
   _pref_display_type = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
 #else
   _pref_display_type = OLED_TYPE;
@@ -304,12 +291,14 @@ void SSD1306Display::render_saver(unsigned long now) {
 #ifdef ESP32
 void SSD1306Display::render_tiny() {
   if (oled_page < PAGE_MAIN || oled_page > PAGE_SAVER) oled_page = PAGE_MAIN;
+  clearBuffer();
   switch (oled_page) {
     case 2:  page_tiny_dose();  break;
     case 3:  page_tiny_net();   break;
     case 4:  page_tiny_meter(); break;
     default: page_tiny();       break;
   }
+  if (Wifi::connected) drawPixel(71, 0);   // every page, over what's drawn
 }
 #endif
 
@@ -414,12 +403,10 @@ static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
 
 #ifdef ESP32
 void SSD1306Display::page_tiny() {
-  clearBuffer();
   char buf[12];
   format_cpm(buf, sizeof(buf), display.shown_cpm());
   setFont(U8G2_FONT_ARIAL_16);
   drawStr(0, 0, buf);
-  if (Wifi::connected) drawPixel(71, 0);
 
   const int CHART_TOP = 18;
   const int CHART_BOT = 39;
@@ -466,12 +453,10 @@ static const char* tinyUptime() {
 }
 
 void SSD1306Display::page_tiny_dose() {
-  clearBuffer();
   char buf[12];
   format_f(buf, sizeof(buf), display.usv(), 2);
   setFont(U8G2_FONT_ARIAL_16);
   drawStr(0, 0, buf);
-  if (Wifi::connected) drawPixel(71, 0);
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 16, PSTR("uSv/h"));
   char cpmbuf[8];
@@ -481,16 +466,20 @@ void SSD1306Display::page_tiny_dose() {
 }
 
 void SSD1306Display::page_tiny_net() {
-  clearBuffer();
-  if (Wifi::connected) drawPixel(71, 0);
   setFont(U8G2_FONT_ARIAL_10);
+  char buf[20];
   if (Wifi::connected) {
-    char buf[20];
     Wifi::formatIP(buf, sizeof(buf));
     drawStr(0, 2,  fitStr(*this, buf, 71));
     drawStr(0, 15, fitStr(*this, Wifi::ssid, 71));
     snprintf_P(buf, sizeof(buf), PSTR("%d dBm"), (int)Wifi::rssi);
     drawStr(0, 28, buf);
+  } else if (Wifi::ap) {
+    // its name is the hostname
+    Wifi::formatIP(buf, sizeof(buf));
+    drawStrP(0, 2,  PSTR("WiFi AP"));
+    drawStr (0, 15, fitStr(*this, DeviceInfo::hostname(), 71));
+    drawStr (0, 28, fitStr(*this, buf, 71));
   } else {
     drawStrP(0, 2,  PSTR("WiFi off"));
     drawStr (0, 15, fitStr(*this, DeviceInfo::hostname(), 71));
@@ -499,8 +488,6 @@ void SSD1306Display::page_tiny_net() {
 }
 
 void SSD1306Display::page_tiny_meter() {
-  clearBuffer();
-  if (Wifi::connected) drawPixel(71, 0);
   // log10 cpm over 180 deg
   const int px = 36;
   const int py = 36;
@@ -586,11 +573,7 @@ void SSD1306Display::page_one_clear() {
   drawTPString(*this, 0,  5, DialogInput_plain_12, PSTR("CPM:"));
   drawXBMP(0, 20, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_mu);
   drawTPString(*this, EG_GLYPH_W, 20, DialogInput_plain_12, PSTR("Sv/h:"));
-  if (!Wifi::disabled) {
-    drawXBMP(120, 0, 8, 16,
-             Wifi::connected ? _iconimage_connected : _iconimage_disconnected);
-  }
-  _p1v_last_cpm = 0xFFFFFFFFu;   // force a redraw
+  _p1v_last_cpm = 0xFFFFFFFFu;   // the values redraw, wifi icon and all
 }
 
 // 3 bad transfers in a row and nothing goes out, one a minute tries
@@ -677,8 +660,7 @@ void SSD1306Display::reset_panel() {
 #ifdef ESP32
   // tiny has no RST and can wedge, 9 clocks + STOP
   // no START, other i2c devices stay ok
-  if (_pref_display_type == DISP_SSD1306_72X40
-      || _pref_display_type == DISP_SH1106_72X40) {
+  if (isTiny()) {
     pinMode(_pin_sda, INPUT_PULLUP);
     pinMode(_pin_scl, OUTPUT);
     digitalWrite(_pin_scl, HIGH); delayMicroseconds(10);
@@ -706,6 +688,22 @@ static uint8_t oled_probe_addr() {
   return (uint8_t)0;
 }
 
+void SSD1306Display::draw_logo(const char* line) {
+  drawXBMP(0, 0, 51, 51, ESPLogo);
+  setFont(U8G2_FONT_ARIAL_10);
+  drawStrP(55, 10, W_APP_NAME);
+  drawStrP(55, 24, RELEASE_VERSION);
+  drawStrP(55, 42, line);
+}
+
+// a whole-screen message: the row sends stop, the frame starts clear
+bool SSD1306Display::take_screen() {
+  if (!_present) return false;
+  _send_rows_left = 0;
+  clearBuffer();
+  return true;
+}
+
 void SSD1306Display::draw_splash() {
   clearBuffer();
 #ifdef ESP32
@@ -715,13 +713,7 @@ void SSD1306Display::draw_splash() {
     drawStr(28, 14, RELEASE_VERSION);
   } else
 #endif
-  {
-    drawXBMP(0, 0, 51, 51, ESPLogo);
-    setFont(U8G2_FONT_ARIAL_10);
-    drawStrP(55, 10, W_APP_NAME);
-    drawStrP(55, 24, RELEASE_VERSION);
-    drawStrP(55, 42, PSTR("Connecting .."));
-  }
+  draw_logo(PSTR("Connecting .."));
   sendBuffer();
 }
 
@@ -804,9 +796,7 @@ void SSD1306Display::redraw(unsigned long now) {
 }
 
 void SSD1306Display::setupWifi(const char* s) {
-  if (!_present) return;
-  _send_rows_left = 0;
-  clearBuffer();
+  if (!take_screen()) return;
 #ifdef ESP32
   if (isTiny()) {
     setFont(U8G2_FONT_ARIAL_10);
@@ -827,9 +817,7 @@ void SSD1306Display::setupWifi(const char* s) {
 }
 
 void SSD1306Display::apOnlyMode(const char* host, const char* ip) {
-  if (!_present) return;
-  _send_rows_left = 0;
-  clearBuffer();
+  if (!take_screen()) return;
   drawTPString(*this, 0, 6,  DialogInput_plain_12, PSTR("Setup - Join AP"));
   drawTPString(*this, 0, 20, DialogInput_plain_12, host ? host : "");
   drawTPString(*this, 0, 34, DialogInput_plain_12, ip ? ip : "");
@@ -848,21 +836,13 @@ void SSD1306Display::safe_mode() {
 }
 
 void SSD1306Display::wifiDisabled() {
-  if (!_present) return;
-  _send_rows_left = 0;
-  clearBuffer();
-  drawXBMP(0, 0, 51, 51, ESPLogo);
-  setFont(U8G2_FONT_ARIAL_10);
-  drawStrP(55, 10, W_APP_NAME);
-  drawStrP(55, 24, RELEASE_VERSION);
-  drawStrP(55, 42, PSTR("Offline mode"));
+  if (!take_screen()) return;
+  draw_logo(PSTR("Offline mode"));
   sendBuffer();
 }
 
 void SSD1306Display::wipeCountdown(int seconds_left) {
-  if (!_present) return;
-  _send_rows_left = 0;
-  clearBuffer();
+  if (!take_screen()) return;
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 0,  PSTR("Offline mode armed"));
   drawStrP(0, 16, PSTR("Hold to factory reset"));
@@ -874,9 +854,7 @@ void SSD1306Display::wipeCountdown(int seconds_left) {
 }
 
 void SSD1306Display::wipeReady() {
-  if (!_present) return;
-  _send_rows_left = 0;
-  clearBuffer();
+  if (!take_screen()) return;
   setFont(U8G2_FONT_ARIAL_16);
   drawStrP(0, 0,  PSTR("RELEASE for"));
   drawStrP(0, 18, PSTR("FULL WIPE"));
@@ -1219,9 +1197,7 @@ void SSD1306Display::page_four_static() {
 }
 
 void SSD1306Display::showOTABanner() {
-  if (!_present) return;
-  _send_rows_left = 0;
-  clearBuffer();
+  if (!take_screen()) return;
   setFont(U8G2_FONT_ARIAL_16);
   // not PROGMEM safe, copy to ram
   char l1[12], l2[20];

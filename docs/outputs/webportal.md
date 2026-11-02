@@ -71,10 +71,11 @@ Human-readable HTML report grouped into expandable sections. Useful as the first
 
 | Section | Contents |
 |---|---|
-| System | Uptime, chip ID, platform, flash size, core/SDK version, CPU frequency, free heap, sketch size, last reset reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the whole stack plus a Crashed in row naming the module that was running (ESP32-C3 shows mcause and mtval). |
-| Network | SSID, BSSID, signal strength, channel, local IP, gateway, subnet, DNS, MAC, hostname. AP mode shows softAP SSID, IP and MAC instead. |
-| About | Version, git hash, build environment, build date, Geiger model, feature flags. Geiger type, PCNT availability and the test-build flag are in `/about` as `g_type`, `g_pcnt` and `g_test`. |
-| Modules | List of compiled-in modules and their runtime state. |
+| System | Uptime, where the time came from (NTP, an RTC chip, kept over a restart, or not set), chip ID, free heap, firmware size and the room for it, last reset reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the whole stack plus a Crashed in row naming the module that was running (ESP32-C3 shows mcause and mtval). Rows that only matter when something's wrong show only then: safe mode, crash boots in a row, a flash size that doesn't match the chip, a web password restored from backup. |
+| WiFi | Network and channel, signal strength (RSSI, with excellent / good / fair / weak), IP, hostname, MAC, DNS. The setup AP's SSID, IP and MAC while it's running. |
+| About | One build line (version, git hash, build environment, build date), Geiger model. |
+
+The chip, flash, core/SDK and WiFi radio details, gateway, subnet, feature flags and the module list are in `/about`.
 
 For machine-readable equivalents see `/json` (live data) and `/about` (static identity).
 

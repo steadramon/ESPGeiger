@@ -56,6 +56,7 @@ public:
     static constexpr uint16_t LOOP_MS = 10;
     void begin() override;
     void loop(unsigned long now) override;
+    void poll_boot();   // setup portal and the wifi wait, before the registry runs
 
     static bool add(const corium::Cmd* cmd);   // static init, false = full
     static void run(const char* text);   // web, first line only
@@ -69,6 +70,7 @@ private:
     static const corium::Cmd* _cmds[CORIUM_MAX_CMDS];
     static uint8_t _count;
     static uint8_t _dropped;
+    static bool _up;   // begun, app commands run
     static ConsoleLine _serial;
     static char* _last;   // strtok_r's place
 };

@@ -214,7 +214,7 @@ class Counter : public CounterMaths {
       bool snapshot_ring(RingSnapshot& s) const;
       float cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const;
       void note_counts_missing(uint32_t uptime_s);
-      void hour_rollover(time_t now);
+      void hour_rollover(time_t t);
       uint32_t clock_read();
       void lifetime_tick(int counts, uint32_t now);
       void life_work(uint32_t now);

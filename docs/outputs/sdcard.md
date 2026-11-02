@@ -20,7 +20,21 @@ Files on the SDCard are written to every minute, giving the average values for t
 
 A SD Card of 4-8GB is recommended - an SD Card of 2GB should give enough capacity for ~20 years of minutely CSV information.
 
-NTP synchronisation is required to write to the SD Card. Writing to the file takes place once per minute.
+Writing to the file takes place once per minute. Each row is stamped with the time from NTP, from an [RTC chip](#time-without-a-network) if one is fitted, or kept over a restart.
+
+## Time without a network
+
+Until the device knows the time, rows go to `undated.csv` in the card's root instead, with the seconds since boot in place of the date:
+
+```
+Uptime,CPM,uSv/h,CPM5,CPM15
+1260,24.00,0.16,23.80,22.10
+synced,2026-11-04 10:15:30,1265
+```
+
+Each boot that writes there starts with the header line. When the time arrives a `synced` line gives the date and time at that many seconds since boot, so the rows above it can be dated: a row's time is the synced time minus the difference in seconds. From then on rows go to the daily files as usual. A boot that never gets the time leaves its rows with the seconds only. The SD page links the file as *Undated rows*.
+
+An RTC chip on the I2C bus (a DS3231 or a PCF8563, ESP32 builds) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, opening any page of the web UI gives the device the time from the browser's clock, and an RTC keeps that too, so a device that never reaches NTP stays dated.
 
 ## (Micro) SD Card Compatibility
 

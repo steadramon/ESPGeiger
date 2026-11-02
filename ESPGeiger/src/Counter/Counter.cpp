@@ -225,7 +225,7 @@ namespace {
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
 bool     s_missing_logged = false;
 #endif
-time_t   s_next_boundary  = 0;
+uint32_t s_next_boundary  = 0;   // epoch, past 2106 too
 TickClock s_clock;
 bool     s_boundary_armed = false;
 uint32_t s_last_day       = 0;
@@ -261,21 +261,23 @@ TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
 }
 #endif
 
-TICK_COLD void Counter::hour_rollover(time_t now) {
+// t for the hour and day, 2^32 s isn't whole ones
+TICK_COLD void Counter::hour_rollover(time_t t) {
   // not static, guard runs every tick
-  const time_t kBoundarySecs = (time_t)_boundary_secs;
+  const uint32_t kBoundarySecs = _boundary_secs;
+  uint32_t now = (uint32_t)t;
   bool fire = false;
   if (s_next_boundary == 0) {
     // first sync
-    s_next_boundary = now - (now % kBoundarySecs) + kBoundarySecs;
+    s_next_boundary = (uint32_t)(t - t % kBoundarySecs + kBoundarySecs);
     fire = true;
-  } else if (now >= s_next_boundary) {
+  } else if (reached(now, s_next_boundary)) {
     fire = true;
     // ntp stepped forward
-    while (now >= s_next_boundary) s_next_boundary += kBoundarySecs;
+    while (reached(now, s_next_boundary)) s_next_boundary += kBoundarySecs;
   }
   if (!fire) return;
-  uint32_t curDay = (uint32_t)(now / 86400);
+  uint32_t curDay = (uint32_t)(t / 86400);
   if (s_boundary_armed) {
     day_hourly_history.push(clicks_hour);
   }
@@ -290,8 +292,9 @@ TICK_COLD void Counter::hour_rollover(time_t now) {
 
 // time(), the hour and the first sync stamps, on read ticks
 TICK_COLD uint32_t Counter::clock_read() {
-  uint32_t now = (uint32_t)time(nullptr);
-  if (!s_next_boundary || now >= s_next_boundary) hour_rollover(now);
+  time_t t = time(nullptr);
+  uint32_t now = (uint32_t)t;
+  if (!s_next_boundary || reached(now, s_next_boundary)) hour_rollover(t);
   if (_lifetime_enabled) {
     if (_last_save_time_t == 0) _last_save_time_t = now;
     if (_first_boot_ts == 0) {
@@ -299,7 +302,7 @@ TICK_COLD uint32_t Counter::clock_read() {
       _pending_work |= PENDING_SAVE;
     }
   }
-  s_clock.read(now, (uint32_t)s_next_boundary);
+  s_clock.read(now, s_next_boundary);
   return now;
 }
 
@@ -408,7 +411,7 @@ void Counter::reset_alarm() {
 
 void Counter::save_lifetime() {
   uint32_t now = Clock::epoch();
-  if (_last_save_time_t > 0 && Clock::synced && now >= _last_save_time_t) {
+  if (_last_save_time_t > 0 && Clock::synced && reached(now, _last_save_time_t)) {
     _lifetime_seconds_saved += now - _last_save_time_t;
   }
   if (Clock::synced) _last_save_time_t = now;
@@ -427,7 +430,7 @@ unsigned long Counter::get_lifetime_seconds() const {
   unsigned long live = _lifetime_seconds_saved;
   if (_last_save_time_t > 0 && Clock::synced) {
     uint32_t now = Clock::epoch();
-    if (now >= _last_save_time_t) live += now - _last_save_time_t;
+    if (reached(now, _last_save_time_t)) live += now - _last_save_time_t;
   }
   return live;
 }
@@ -435,7 +438,7 @@ unsigned long Counter::get_lifetime_seconds() const {
 void Counter::clock_stepped(int32_t delta_s) {
   if (_last_save_time_t) _last_save_time_t += delta_s;
   // stamped from the bad time this boot
-  if (_first_boot_ts && _first_boot_ts >= (uint32_t)(Clock::boot_epoch - delta_s)) {
+  if (_first_boot_ts && reached(_first_boot_ts, (uint32_t)(Clock::boot_epoch - delta_s))) {
     _first_boot_ts += delta_s;
     _pending_work |= PENDING_SAVE;
   }
@@ -743,7 +746,7 @@ void Counter::loop() {
     _pending_work = 0;
     if (pw & PENDING_RTC) {
       uint32_t delta_s = 0;
-      if (_last_save_time_t > 0 && _rtc_pending_now >= _last_save_time_t) {
+      if (_last_save_time_t > 0 && reached(_rtc_pending_now, _last_save_time_t)) {
         delta_s = _rtc_pending_now - _last_save_time_t;
       }
       delta_s += _rtc_carry_s;

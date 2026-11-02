@@ -25,6 +25,7 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log and ESPGeiger Lite b
 | `ver` | Print the name, version and build | `ver` |
 | `resetwifi` | Erase WiFi credentials and drop into setup mode | `resetwifi` |
 | `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
+| `offline` | Start this boot without WiFi, as holding the button at power-up does. Only while it boots: in the setup portal or while it joins the saved network. The next boot is normal. | `offline` |
 | `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
 | `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set counter.ratio 151.0` |
 | `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never reboots or wipes anything else. | `reset counter.ratio` |
@@ -40,6 +41,22 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log and ESPGeiger Lite b
 | `show hv` | Toggle HV on periodic output (builds with HV feedback: ESPGeiger-HW, `*_hv`) | |
 | `hv` | Return current live HV value (builds with HV feedback) | |
 | `target` | Set target CPM value for Test builds only | `target 1234` |
+
+The console also answers while the setup portal is up and while it joins WiFi at boot. Until the device has finished booting only the commands from `reboot` to `offline` above run; the others answer `after boot`.
+
+### No WiFi at all
+
+`set wifi.mode 1` starts every boot without WiFi: no network, no setup portal, everything else runs (counter, display, HV, SD card rows in `undated.csv` until the time is known). It is not on the web Config page, because the page goes with it. To turn WiFi back on, `set wifi.mode 0` over USB and reboot, or factory reset (hold the button 5 s at power-up).
+
+### Its own hotspot
+
+`set wifi.mode 2` makes the device start its own Wi-Fi hotspot each boot instead of joining a network. The hotspot is named after the hostname (e.g. `ESPGeiger-a1b2c3`), and the whole web UI is at `http://192.168.4.1` on it. Uploads and network time need the internet, so they stay off.
+
+* With a web password of 8 characters or more, the hotspot uses it as its Wi-Fi password. A shorter web password, or none, leaves the hotspot open, but the pages still ask for the web password if one is set.
+* `set wifi.ap_hide 1` hides the hotspot's name; you then join it by typing the name.
+* The first page you open sends your browser's time to the device, so SD card rows are dated from then on.
+
+To join a network again, save one on the **Network Config** page: that also turns the hotspot off. Or `set wifi.mode 0` (over USB, or in the console box on the Status page) and reboot.
 
 ### Setting prefs
 

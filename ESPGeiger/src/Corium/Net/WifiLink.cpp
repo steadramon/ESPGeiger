@@ -32,6 +32,7 @@ const char NET_BACKUP_P[] PROGMEM = "/net_backup";
 
 namespace Wifi {
   bool connected = false;
+  bool ap = false;
   IPAddress local_ip;
   char ssid[WIFI_SSID_MAX + 1] = "";
   int16_t rssi = 0;

@@ -79,7 +79,7 @@ bool corium::Registry::add(corium::Module* m, uint8_t feature) {
 
 void corium::Registry::begin_all() {
   if (_overflow) {
-    Log::console(PSTR("Module: Registry overflow, %u module(s) dropped (raise EG_MAX_MODULES)"), _overflow);
+    Log::console(PSTR("Module: Registry overflow, %u module(s) dropped (raise CORIUM_MAX_MODULES)"), _overflow);
   }
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];

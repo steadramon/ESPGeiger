@@ -88,8 +88,9 @@ void NTP_Client::setup()
     possixTZ = PSTR("UTC0");
   }
 #ifdef ESP8266
-  settimeofday_cb([](){
-    if (Clock::epoch() < Clock::MIN_EPOCH) return;  // SDK fires once before sync
+  // an RTC's settimeofday fires it too
+  settimeofday_cb([](bool from_sntp){
+    if (!from_sntp || time(nullptr) < Clock::MIN_EPOCH) return;  // SDK fires once before sync
     s_synced = true;
     corium::Registry::post(&ntpclient);
   });
@@ -98,7 +99,7 @@ void NTP_Client::setup()
 #else
   // tcpip task, never wait here
   sntp_set_time_sync_notification_cb([](struct timeval *t){
-    if (!t || (uint32_t)t->tv_sec < Clock::MIN_EPOCH) return;
+    if (!t || t->tv_sec < Clock::MIN_EPOCH) return;
     s_synced = true;
     corium::Registry::post(&ntpclient);
   });

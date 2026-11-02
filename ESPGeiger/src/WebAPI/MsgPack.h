@@ -119,6 +119,11 @@ public:
     else if (v <= 0xffff)  { put_u8(TAG_UINT16); put_u16((uint16_t)v); }
     else                   { put_u8(TAG_UINT32); put_u32(v); }
   }
+  // the same bytes as uint() up to 2^32
+  void uint64(uint64_t v) {
+    if (v <= 0xffffffffULL) { uint((uint32_t)v); return; }
+    put_u8(TAG_UINT64); put_u32((uint32_t)(v >> 32)); put_u32((uint32_t)v);
+  }
   void sint(int32_t v) {
     if (v >= 0) { uint((uint32_t)v); return; }
     if      (v >= -32)     put_u8((uint8_t)(0xe0 | (v & 0x1f)));   // neg fixint
@@ -151,6 +156,7 @@ public:
 
   void kv(const char* k, int32_t v)               { key(k); sint(v); }
   void kv(const char* k, uint32_t v)              { key(k); uint(v); }
+  void kv_u64(const char* k, uint64_t v)          { key(k); uint64(v); }   // not kv(), unsigned long goes ambiguous
   void kv(const char* k, float v)                 { key(k); f32(v); }
   void kv(const char* k, double v)                { key(k); f32((float)v); }
   void kv(const char* k, bool v)                  { key(k); b(v); }

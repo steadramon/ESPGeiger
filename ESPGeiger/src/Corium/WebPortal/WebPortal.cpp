@@ -26,6 +26,7 @@
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/Prefs/SystemPrefs.h"
 #include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Uptime.h"
 #include "Corium/System/CrashDump.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/Net/Wifi.h"
@@ -43,6 +44,7 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/NTP/NTP.h"
 #include "Corium/System/Clock.h"
+#include "Corium/System/Rtc.h"
 #include "Corium/System/AppHooks.h"
 #include <EGBase64.h>
 
@@ -179,8 +181,13 @@ static void sendHeadOpen(EGHttpResponse& res) {
   res.sendChunk(FPSTR(BootGuard::safe_mode() ? SAFE_STYLE : HEAD_STYLE));
 }
 
+// no clock yet, the browser has one
+static const char CLOCK_JS[] PROGMEM =
+  "<script>fetch('/clock',{method:'POST',body:new URLSearchParams({e:Math.floor(Date.now()/1e3)})})</script>";
+
 static void sendHeadTail(EGHttpResponse& res) {
   res.sendChunk(FPSTR(BootGuard::safe_mode() ? SAFE_THEME : HEAD_THEME));
+  if (!Clock::synced) res.sendChunk(FPSTR(CLOCK_JS));
   res.sendChunk(FPSTR(HEAD_H1));
   res.sendChunk(FPSTR(FAVICON_PATHS));
   res.sendChunk(FPSTR(SVG_END));
@@ -299,6 +306,17 @@ static const char R_NETWORK[]  PROGMEM = "/network";
 static const char R_SCAN[]     PROGMEM = "/wifiscan";
 static const char R_SAVE[]     PROGMEM = "/wifisave";
 static const char R_EXPORT[]   PROGMEM = "/export";
+static const char R_CLOCK[]    PROGMEM = "/clock";
+
+// only while there's no other
+static void hClock(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  uint64_t e = 0;
+  if (!Clock::synced && parse_u64(req.arg(F("e")), &e) && e >= Clock::MIN_EPOCH && e <= Clock::MAX_EPOCH) {
+    Clock::set((time_t)e, Clock::WEB);
+    Log::console(PSTR("Clock: set from the browser"));
+  }
+  res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
+}
 
 void WebPortal::on(EGHttpServer& http, const WebRoute* rows, size_t n) {
   for (size_t i = 0; i < n; i++) {
@@ -336,6 +354,7 @@ void WebPortal::begin(uint16_t port) {
     {R_SAVE,     &WebPortal::hWifiSave,       R::POST},
     {R_EXPORT,   &WebPortal::hExport,         R::GET},
     {P_IMPORT,   &WebPortal::hImport,         R::POST},
+    {R_CLOCK,    hClock,                      R::POST},
   };
   _http.on(F("/"), R::GET, &WebPortal::hRoot, this);
   on(_http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
@@ -449,7 +468,9 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool hasFriendly = (fname && fname[0]);
   const char* hostname = DeviceInfo::hostname();
   char ipBuf[CORIUM_IPV4_MAX + 1];
-  Wifi::formatIP(ipBuf, sizeof(ipBuf), Wifi::localIP());
+  IPAddress ip = Wifi::localIP();
+  if (!ip[0]) ip = Wifi::softAPIP();   // wifi.mode 2
+  Wifi::formatIP(ipBuf, sizeof(ipBuf), ip);
 
   char esc[6 * CORIUM_NAME_MAX + 1];
   egesc_html(esc, sizeof(esc), fname);
@@ -614,8 +635,8 @@ void WebPortal::infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...) {
 #define INFO_ROW(k, fmt, ...) WebPortal::infoRow(res, PSTR(k), fmt, ##__VA_ARGS__)
 
 struct InfoNet {
-  char ip[CORIUM_IPV4_MAX + 1], gw[CORIUM_IPV4_MAX + 1], sn[CORIUM_IPV4_MAX + 1], dns_[CORIUM_IPV4_MAX + 1];
-  char bssid[20], mac[18];
+  char ip[CORIUM_IPV4_MAX + 1], dns_[CORIUM_IPV4_MAX + 1];
+  char mac[18];
   char ssid[6 * EGPORTAL_SSID_MAX + 1];   // escaped worst case
   char ap_ssid[EGPORTAL_SSID_MAX + 1], ap_ip[CORIUM_IPV4_MAX + 1], ap_mac[18];
 };
@@ -627,8 +648,6 @@ static void info_fmt_mac(char* dst, size_t cap, const uint8_t* m) {
 
 static void info_collect_net(InfoNet& net) {
   Wifi::formatIP(net.ip,    sizeof(net.ip),    Wifi::localIP());
-  Wifi::formatIP(net.gw,    sizeof(net.gw),    Wifi::gatewayIP());
-  Wifi::formatIP(net.sn,    sizeof(net.sn),    Wifi::subnetMask());
   Wifi::formatIP(net.dns_,  sizeof(net.dns_),  Wifi::dnsIP());
   Wifi::formatIP(net.ap_ip, sizeof(net.ap_ip), Wifi::softAPIP());
   uint8_t macBuf[6];
@@ -636,9 +655,6 @@ static void info_collect_net(InfoNet& net) {
   info_fmt_mac(net.mac, sizeof(net.mac), macBuf);
   Wifi::softAPmacAddress(macBuf);
   info_fmt_mac(net.ap_mac, sizeof(net.ap_mac), macBuf);
-  const uint8_t* bssidPtr = Wifi::BSSID();
-  if (bssidPtr) info_fmt_mac(net.bssid, sizeof(net.bssid), bssidPtr);
-  else          net.bssid[0] = '\0';
   egesc_html(net.ssid, sizeof(net.ssid), Wifi::SSID().c_str());
   strlcpy(net.ap_ssid, Wifi::softAPSSID().c_str(), sizeof(net.ap_ssid));
 }
@@ -721,91 +737,79 @@ static void info_render_reset(EGHttpResponse& res) {
 }
 #endif
 
-static void info_render_system(EGHttpResponse& res) {
-  res.sendChunk(F("<details open><summary>System</summary><table>"));
-  INFO_ROW("Uptime",        W_FMT_S,DeviceInfo::uptimeString());
-  INFO_ROW("Chip ID",       W_FMT_S,DeviceInfo::chipid());
-#ifdef ESP8266
-  INFO_ROW("Platform",      PSTR("esp8266"));
-  INFO_ROW("Flash chip",    W_FMT_S,DeviceInfo::flashInfo());
-  INFO_ROW("Flash size",    IR_BYTES,        (unsigned)DeviceInfo::flashSize());
-  INFO_ROW("Real flash",    IR_BYTES,        (unsigned)DeviceInfo::realFlash());
-  INFO_ROW("Core version",  W_FMT_S,DeviceInfo::coreVersion().c_str());
-  INFO_ROW("Boot version",  W_FMT_U,(unsigned)DeviceInfo::bootVersion());
-#elif defined(ESP32)
-  INFO_ROW("Platform",      W_FMT_S,DeviceInfo::chipModel());
-  INFO_ROW("Flash chip",    W_FMT_S,DeviceInfo::flashInfo());
-  INFO_ROW("Flash size",    IR_BYTES,        (unsigned)DeviceInfo::flashSize());
-  INFO_ROW("Chip rev",      W_FMT_U,(unsigned)DeviceInfo::chipRev());
-  INFO_ROW("SDK version",   W_FMT_S,DeviceInfo::sdkVersion());
-#endif
-  INFO_ROW("CPU frequency", PSTR("%u MHz"),  (unsigned)DeviceInfo::cpuMHz());
-#ifdef ESP32
-  {
-    float t = DeviceInfo::chipTempC();
-    if (!isnan(t)) {
-      INFO_ROW("CPU temperature", PSTR("%.1f \xC2\xB0""C"), t);
-    }
+static void info_uptime(EGHttpResponse& res) {
+  Uptime::Split u = Uptime::split((uint32_t)Uptime::seconds());
+  if (u.d)      INFO_ROW("Uptime", PSTR("%u d %u h"), (unsigned)u.d, (unsigned)u.h);
+  else if (u.h) INFO_ROW("Uptime", PSTR("%u h %u min"), (unsigned)u.h, (unsigned)u.m);
+  else          INFO_ROW("Uptime", PSTR("%u min"), (unsigned)u.m);
+}
+
+// who set the clock
+static void info_time(EGHttpResponse& res) {
+  PGM_P src = PSTR("not set");
+  if (Clock::source == Clock::NTP)       src = PSTR("NTP");
+  else if (Clock::source == Clock::KEPT) src = PSTR("kept over a restart");
+  else if (Clock::source == Clock::WEB)  src = PSTR("browser");
+#ifdef CORIUM_RTC
+  if (Rtc::chip()) {
+    if (Clock::source == Clock::RTC) INFO_ROW("Time", PSTR("RTC (%s)"), Rtc::chip());
+    else INFO_ROW("Time", PSTR("%s, RTC %s"), src, Rtc::chip());
+    return;
   }
 #endif
-  INFO_ROW("Free heap",     IR_BYTES,        (unsigned)DeviceInfo::freeHeap());
-  INFO_ROW("Sketch size",   PSTR("%u / %u bytes"), (unsigned)DeviceInfo::sketchSize(),
-                                             (unsigned)(DeviceInfo::sketchSize() + DeviceInfo::freeSketch()));
+  INFO_ROW("Time", W_FMT_S, src);
+}
+
+static void info_render_system(EGHttpResponse& res) {
+  res.sendChunk(F("<details open><summary>System</summary><table>"));
+  info_uptime(res);
+  info_time(res);
+  INFO_ROW("Chip ID",       W_FMT_S, DeviceInfo::chipid());   // udp pairing asks for it
+  uint32_t heap = DeviceInfo::freeHeap();
+  INFO_ROW("Free heap",     PSTR("%u.%u KB"), (unsigned)(heap / 1024), (unsigned)(heap % 1024 * 10 / 1024));
+  INFO_ROW("Firmware",      PSTR("%u KB of %u KB"), (unsigned)(DeviceInfo::sketchSize() / 1024),
+                            (unsigned)((DeviceInfo::sketchSize() + DeviceInfo::freeSketch()) / 1024));
+#ifdef ESP8266
+  if (DeviceInfo::flashSize() != DeviceInfo::realFlash()) {
+    INFO_ROW("Flash", PSTR("%u KB set, the chip has %u KB"), (unsigned)(DeviceInfo::flashSize() / 1024),
+             (unsigned)(DeviceInfo::realFlash() / 1024));
+  }
+#endif
   info_render_reset(res);
-  INFO_ROW("Safe mode", W_FMT_S, BootGuard::safe_mode() ? "yes" : "no");
-  INFO_ROW("Crash boots in a row", W_FMT_U, (unsigned)BootGuard::crash_streak());
+  if (BootGuard::safe_mode()) INFO_ROW("Safe mode", PSTR("yes"));
+  if (BootGuard::crash_streak()) INFO_ROW("Crash boots in a row", W_FMT_U, (unsigned)BootGuard::crash_streak());
   if (SystemPrefs::pass_restored) INFO_ROW("Web password", PSTR("restored from backup (settings lost)"));
   res.sendChunk(FPSTR(IR_END));
 }
 
-static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
-  res.sendChunk(F("<details open><summary>WiFi</summary><table>"));
-  INFO_ROW("Connected",      W_FMT_S,     Wifi::isConnected() ? PSTR("Yes") : PSTR("No"));
-  INFO_ROW("Station SSID",   W_FMT_S,     net.ssid);
-  INFO_ROW("Station IP",     W_FMT_S,     net.ip);
-  INFO_ROW("Station gateway",W_FMT_S,     net.gw);
-  INFO_ROW("Station subnet", W_FMT_S,     net.sn);
-  INFO_ROW("DNS Server",     W_FMT_S,     net.dns_);
-  INFO_ROW("Hostname",       W_FMT_S,     DeviceInfo::hostname());
-  INFO_ROW("Station MAC",    W_FMT_S,     net.mac);
-  INFO_ROW("RSSI",           PSTR("%d dBm"), (int)Wifi::rssi);
-  INFO_ROW("BSSID",          W_FMT_S,     net.bssid);
-  INFO_ROW("Channel",        W_FMT_D,  (int)Wifi::channel());
-  {
-    int q = Wifi::txPowerQdbm();
-    if (q >= 0) INFO_ROW("TX power", PSTR("%d.%02d dBm"), q / 4, (q % 4) * 25);
-  }
-  INFO_ROW("PHY mode",       W_FMT_S,     Wifi::phyModeStr());
-  INFO_ROW("Radio sleep",    W_FMT_S,     Wifi::sleepModeStr());
-  INFO_ROW("Autoconnect",    W_FMT_S,     Wifi::getAutoReconnect() ? PSTR("Enabled") : PSTR("Disabled"));
-  INFO_ROW("AP SSID",        W_FMT_S,     net.ap_ssid[0] ? net.ap_ssid : PSTR("(not active)"));
-  INFO_ROW("AP IP",          W_FMT_S,     net.ap_ip);
-  INFO_ROW("AP MAC",         W_FMT_S,     net.ap_mac);
-  res.sendChunk(FPSTR(IR_END));
+// -80 and weaker drops out
+static PGM_P rssi_word(int r) {
+  if (r >= -60) return PSTR("excellent");
+  if (r >= -70) return PSTR("good");
+  if (r >= -80) return PSTR("fair");
+  return PSTR("weak");
 }
 
-static void info_render_modules(EGHttpResponse& res) {
-  res.sendChunk(F("<details open><summary>Modules</summary><ul style='columns:2;list-style:none;padding:0'>"));
-  {
-    char li[48];
-    uint8_t count = corium::Registry::count();
-    for (uint8_t i = 0; i < count; i++) {
-      corium::Module* m = corium::Registry::get(i);
-      if (m == nullptr) continue;
-      int n = snprintf_P(li, sizeof(li), PSTR("<li>%s</li>"), m->name());
-      if (n > 0 && (size_t)n < sizeof(li)) res.sendChunk(li, (size_t)n);
-    }
-    res.sendChunk(F("<li>portal</li>"));
+static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
+  res.sendChunk(F("<details open><summary>WiFi</summary><table>"));
+  if (net.ssid[0]) INFO_ROW("Network", PSTR("%s, channel %d"), net.ssid, (int)Wifi::channel());
+  if (Wifi::isConnected()) INFO_ROW("RSSI", PSTR("%d dBm (%s)"), (int)Wifi::rssi, rssi_word(Wifi::rssi));
+  INFO_ROW("IP",             W_FMT_S,     net.ip);
+  INFO_ROW("Hostname",       W_FMT_S,     DeviceInfo::hostname());
+  INFO_ROW("MAC",            W_FMT_S,     net.mac);
+  INFO_ROW("DNS",            W_FMT_S,     net.dns_);
+  if (strcmp_P(net.ap_ip, PSTR("0.0.0.0"))) {   // ssid is kept with the AP off
+    INFO_ROW("AP SSID",      W_FMT_S,     net.ap_ssid);
+    INFO_ROW("AP IP",        W_FMT_S,     net.ap_ip);
+    INFO_ROW("AP MAC",       W_FMT_S,     net.ap_mac);
   }
-  res.sendChunk(F("</ul></details>"));
+  res.sendChunk(FPSTR(IR_END));
 }
 
 static void info_render_about(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>About</summary><table>"));
-  INFO_ROW("Version",      PSTR(RELEASE_VERSION));
-  INFO_ROW("Git",          PSTR(GIT_VERSION));
-  INFO_ROW("Build env",    PSTR(BUILD_ENV));
-  INFO_ROW("Build date",   DeviceInfo::buildDate());
+  INFO_ROW("Build", PSTR(RELEASE_VERSION " " GIT_VERSION " &middot; " BUILD_ENV " &middot; %s"),
+           DeviceInfo::buildDate());
   AppHooks::info_rows(res);
   res.sendChunk(FPSTR(IR_END));
 }
@@ -825,7 +829,6 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   info_render_system(res);
   info_render_wifi(res, net);
-  info_render_modules(res);
   info_render_about(res);
 
   WebPortal::endPage(res);
@@ -843,6 +846,43 @@ static void about_modules(EGHttpResponse& res) {
     advance_pos(mlen, mn, sizeof(modbuf));
     if (mlen) res.sendChunk(modbuf, mlen);
   }
+}
+
+// what /info leaves out
+static void about_device(EGHttpResponse& res) {
+  char buf[200];
+#ifdef ESP8266
+  int n = snprintf_P(buf, sizeof(buf),
+    PSTR("\"core\":\"%s\",\"boot\":%u,\"fsize\":%u,\"freal\":%u,"),
+    DeviceInfo::coreVersion().c_str(), (unsigned)DeviceInfo::bootVersion(),
+    (unsigned)DeviceInfo::flashSize(), (unsigned)DeviceInfo::realFlash());
+#elif defined(ESP32)
+  char temp[8] = "null";
+  float t = DeviceInfo::chipTempC();
+  if (!isnan(t)) snprintf_P(temp, sizeof(temp), PSTR("%.1f"), t);
+  int n = snprintf_P(buf, sizeof(buf),
+    PSTR("\"model\":\"%s\",\"rev\":%u,\"sdk\":\"%s\",\"fsize\":%u,\"temp\":%s,"),
+    DeviceInfo::chipModel(), (unsigned)DeviceInfo::chipRev(), DeviceInfo::sdkVersion(),
+    (unsigned)DeviceInfo::flashSize(), temp);
+#endif
+  size_t len = 0;
+  advance_pos(len, n, sizeof(buf));
+  if (len) res.sendChunk(buf, len);
+
+  char gw[CORIUM_IPV4_MAX + 1], sn[CORIUM_IPV4_MAX + 1], bssid[18] = {}, tx[8] = "null";
+  Wifi::formatIP(gw, sizeof(gw), Wifi::gatewayIP());
+  Wifi::formatIP(sn, sizeof(sn), Wifi::subnetMask());
+  if (const uint8_t* b = Wifi::BSSID()) info_fmt_mac(bssid, sizeof(bssid), b);
+  int q = Wifi::txPowerQdbm();
+  if (q >= 0) snprintf_P(tx, sizeof(tx), PSTR("%d.%02d"), q / 4, (q % 4) * 25);
+  n = snprintf_P(buf, sizeof(buf),
+    PSTR("\"mhz\":%u,\"gw\":\"%s\",\"sn\":\"%s\",\"bssid\":\"%s\",\"tx\":%s,"
+         "\"phy\":\"%s\",\"sleep\":\"%s\",\"auto\":%s,"),
+    (unsigned)DeviceInfo::cpuMHz(), gw, sn, bssid, tx, Wifi::phyModeStr(), Wifi::sleepModeStr(),
+    Wifi::getAutoReconnect() ? W_TRUE : W_FALSE);
+  len = 0;
+  advance_pos(len, n, sizeof(buf));
+  if (len) res.sendChunk(buf, len);
 }
 
 void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -867,6 +907,7 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   advance_pos(len, n, sizeof(buf));
   if (len) res.sendChunk(buf, len);
 
+  about_device(res);
   AppHooks::about_json(res);
   res.sendChunk(F("\"modules\":["));
   about_modules(res);
@@ -1129,6 +1170,7 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::Prefs::put("net", corium::K_GW, gw_buf);
   corium::Prefs::put("net", corium::K_SN, sn_buf);
   corium::Prefs::put("net", corium::K_DNS, dns_buf);
+  if (ssidProvided) Wifi::join_mode();
   if (!corium::Prefs::commit()) {
     not_saved_page(res, F("Saving WiFi"));
     return;

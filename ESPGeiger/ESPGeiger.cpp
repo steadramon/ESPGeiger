@@ -104,7 +104,7 @@ void setup()
   Reactor::clock(Reactor::ms<ms_poll>);
   if (!safe) boot_button();
   Board::detect();
-  if (!Wifi::hasSavedCreds() && !safe) {
+  if (!safe && Wifi::portal_ahead()) {
     BootHooks::displaySetupWifi(DeviceInfo::hostname());
   }
   Boot::net(s_webPortal);

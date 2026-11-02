@@ -53,7 +53,6 @@ void AppHooks::info_rows(EGHttpResponse& res) {
   char model[6 * CORIUM_NAME_MAX + 1];
   egesc_html(model, sizeof(model), Tube::model());
   WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
-  WebPortal::infoRow(res, PSTR("Feature flags"), PSTR("0x%04x"), (unsigned)Features::flags());
   if (Board::rev()) WebPortal::infoRow(res, PSTR("Board"), PSTR("v%u"), (unsigned)Board::rev());
 #if BUZZER_BUILT
   if (Buzzer::faulted()) WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
@@ -71,11 +70,12 @@ void AppHooks::about_json(EGHttpResponse& res) {
   egesc_json(model, sizeof(model), Tube::model());
   char buf[6 * CORIUM_NAME_MAX + 80];
   int n = snprintf_P(buf, sizeof(buf),
-    PSTR("\"g_mod\":\"%s\",\"g_type\":\"%s\",\"g_test\":%s,\"g_pcnt\":%s,"),
+    PSTR("\"g_mod\":\"%s\",\"g_type\":\"%s\",\"g_test\":%s,\"g_pcnt\":%s,\"fl\":%u,"),
     model,
     geiger_type_name(),
     GEIGER_IS_TEST(GEIGER_TYPE) ? W_TRUE : W_FALSE,
-    gcounter.has_pcnt()         ? W_TRUE : W_FALSE);
+    gcounter.has_pcnt()         ? W_TRUE : W_FALSE,
+    (unsigned)Features::flags());
   size_t len = 0;
   advance_pos(len, n, sizeof(buf));
   if (len) res.sendChunk(buf, len);

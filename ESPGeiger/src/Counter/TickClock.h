@@ -40,7 +40,7 @@ struct TickClock {
   // after the boundary moved
   void read(uint32_t t, uint32_t boundary) {
     now = t;
-    uint32_t to = boundary > t ? boundary - t : 1;
+    uint32_t to = (int32_t)(boundary - t) > 0 ? boundary - t : 1;   // over the 2106 wrap too
     left = to < READ_EVERY ? (uint8_t)(to - 1) : READ_EVERY - 1;
   }
 

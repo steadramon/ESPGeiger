@@ -41,10 +41,13 @@ class Sound : public corium::Module {
     void click(uint32_t now_us);
     // console: a sound's name or a tune
     void test(const char* v);
+    // before begin, plays it through
+    void setup_portal();
 
-    enum : uint8_t { STARTUP, WIFI, ALERT, ALERT_END, HVFAULT, SD_ERROR, OTA, OTA_FAIL, BUTTON, CLICK, COUNT };
+    enum : uint8_t { STARTUP, SETUP, WIFI, ALERT, ALERT_END, HVFAULT, SD_ERROR, OTA, OTA_FAIL, BUTTON, CLICK, COUNT };
 
   private:
+    void start();
     void load();
     void events(uint16_t ev, unsigned long now);
     void wifi();
@@ -62,6 +65,7 @@ class Sound : public corium::Module {
     volatile bool _reload = true;
     bool _click_on = false;
     bool _chimes = true;
+    bool _started = false;
     bool _alert = false;
     bool _wifi = false;
     bool _fault_said = false;

@@ -47,17 +47,6 @@ extern const char statusJS[]    PROGMEM;
 extern const char picographJS[] PROGMEM;
 #endif
 
-// no %llu in nano libc
-static void fmt_u64(char* out, size_t cap, uint64_t v) {
-  char digits[24];
-  int n = 0;
-  if (v == 0) { digits[n++] = '0'; }
-  else { while (v > 0 && n < (int)sizeof(digits)) { digits[n++] = (char)('0' + v % 10); v /= 10; } }
-  size_t o = 0;
-  while (n > 0 && o + 1 < cap) out[o++] = digits[--n];
-  out[o] = 0;
-}
-
 // snprintf returns the untruncated length
 static void send_n(EGHttpResponse& res, const char* line, size_t cap, int n) {
   if (n <= 0) return;
@@ -84,8 +73,9 @@ static void clicks_day(EGHttpResponse& res, char* line, size_t cap) {
 static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
   int n;
   if (Clock::synced) {
-    n = snprintf_P(line, cap,
-      PSTR(",\"start\":%lu"), (unsigned long)Clock::boot_epoch);
+    char start[24];
+    fmt_u64(start, sizeof(start), (uint64_t)Clock::boot_epoch);
+    n = snprintf_P(line, cap, PSTR(",\"start\":%s"), start);
   } else {
     n = snprintf_P(line, cap,
       PSTR(",\"uptime\":%lu"), (unsigned long)Uptime::since(Uptime::start));

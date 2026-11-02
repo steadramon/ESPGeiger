@@ -103,7 +103,7 @@ unsigned long SendSlot::ping_from_offset(uint32_t offset, unsigned long now, uin
   uint32_t until;
   uint32_t secs = interval_ms / 1000;
   if (secs > 0 && Clock::synced) {
-    uint32_t wall_ms = (Clock::epoch() % secs) * 1000UL;
+    uint32_t wall_ms = Clock::phase(secs) * 1000UL;
     until = (offset >= wall_ms) ? (offset - wall_ms) : (interval_ms - wall_ms + offset);
   } else {
     until = offset;

@@ -306,6 +306,8 @@ Changes take effect on the next reboot.
 | `tx_power` | `wifi.tx_power` | Int 0-20 | `0` | Transmit power in dBm. `0` keeps the platform default (typically around 20 dBm). Lower values can reduce coupling with sensitive analogue circuitry on the same board and save power on battery builds, at the cost of effective range. |
 | `country` | `wifi.country` | String (3) | (empty) | ISO 2-letter country code (for example `GB`, `US`, `DE`, `JP`). Empty uses the platform default, which restricts channels in some regions. Set this if your router is on channel 12 or 13 (EU) or 14 (JP) and the device cannot see or connect to it. |
 | `phy_mode` | `wifi.phy_mode` | Int 0-3 | `0` | Wi-Fi PHY lock-down. `0` lets the device negotiate (recommended). `1` = 802.11b only, `2` = b/g, `3` = b/g/n. Use this only as a workaround for routers that fail to negotiate higher rates cleanly. |
+| `mode` | `wifi.mode` | Int 0-2 | `0` | `0` = join the saved network, `1` = no Wi-Fi at all, `2` = its own hotspot with the web UI (see [Serial](/outputs/serial#its-own-hotspot)). |
+| `ap_hide` | `wifi.ap_hide` | Boolean | `0` off | Hide the hotspot name in `wifi.mode` `2`. |
 
 <!-- /gen -->
 

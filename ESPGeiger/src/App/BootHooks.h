@@ -33,6 +33,9 @@
 #include "AudioTick/AudioTick.h"
 #include "Voice/Voice.h"
 #endif
+#ifdef GEIGER_BUZZER
+#include "Sound/Sound.h"
+#endif
 
 namespace BootHooks {
 
@@ -54,6 +57,9 @@ namespace BootHooks {
 #endif
 #ifdef SSD1306_DISPLAY
     display.setup_wifi(host);
+#endif
+#ifdef GEIGER_BUZZER
+    sound.setup_portal();
 #endif
   }
 

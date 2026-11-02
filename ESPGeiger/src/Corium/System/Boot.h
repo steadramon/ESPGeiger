@@ -34,6 +34,7 @@
 #include "Corium/System/Fs.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Reactor.h"
+#include "Corium/System/Clock.h"
 #include "Corium/System/Uptime.h"
 #include "Corium/WebPortal/WebPortal.h"
 
@@ -78,8 +79,8 @@ namespace Boot {
 
   inline __attribute__((always_inline)) void join() {
     if (Wifi::connectOrPortal()) return;
-    if (Wifi::OFFLINE_OK) {
-      Wifi::disabled = true;   // tick retries the saved wifi
+    if (Wifi::OFFLINE_OK || Wifi::offline_forced) {
+      Wifi::disabled = true;   // tick retries the saved wifi, unless forced
       return;
     }
     Log::console(PSTR("WiFi not connecting ... Restarting ... "));
@@ -102,6 +103,7 @@ namespace Boot {
     LedSignal::attach();
     if (BootGuard::safe_mode()) Lifecycle::request_restart(fast_millis(), BootGuard::retry_after());
     Reactor::begin(second);
+    Clock::kept();
     LedSignal::off();
   }
 

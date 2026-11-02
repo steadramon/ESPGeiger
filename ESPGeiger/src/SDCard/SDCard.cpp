@@ -28,6 +28,7 @@
 #include "Corium/Measure/Measure.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/System/Clock.h"
+#include "Corium/System/Uptime.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/Util/MathUtil.h"
@@ -43,6 +44,10 @@ CORIUM_PSTR(K_SYNC_MIN, "sync_min");
 #define SD_COUNT_US 5000   // FAT a pass, ~1 ms a sector, the loop waits on it
 #define SD_COUNT_MS 5
 #define SD_FULL_MB 8
+
+// rows from before the clock was set
+static const char UNDATED[] = "/undated.csv";
+static const uint32_t UNDATED_DAY = 1;   // openFileDay while it's open
 
 SdFat32* sd = nullptr;
 
@@ -70,10 +75,17 @@ void SDCard::on_prefs_loaded() {
 }
 
 // FAT date high, time low; FAT seconds are 2 s units
-static uint32_t fat_stamp(const struct tm& t) {
-  uint16_t date = (uint16_t)(((t.tm_year - 80) << 9) | ((t.tm_mon + 1) << 5) | t.tm_mday);
-  uint16_t tod  = (uint16_t)((t.tm_hour << 11) | (t.tm_min << 5) | (t.tm_sec >> 1));
+static uint32_t fat_pack(int y80, int mon, int day, int h, int m, int s) {
+  uint16_t date = (uint16_t)((y80 << 9) | (mon << 5) | day);
+  uint16_t tod  = (uint16_t)((h << 11) | (m << 5) | (s >> 1));
   return ((uint32_t)date << 16) | tod;
+}
+
+// FAT runs 1980-2107, outside it the nearest end; no clock yet is 1970
+static uint32_t fat_stamp(const struct tm& t) {
+  if (t.tm_year < 80)  return fat_pack(0, 1, 1, 0, 0, 0);
+  if (t.tm_year > 207) return fat_pack(127, 12, 31, 23, 59, 58);
+  return fat_pack(t.tm_year - 80, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
 }
 
 static void dateTimeCB(uint16_t *dosYear, uint16_t *dosTime) {
@@ -193,8 +205,9 @@ void SDCard::minuteEdge()
   lastWrittenMinute = thisMinute;
 }
 
-static void write_header(File32& f) {
-  f.print(F("DateTime,CPM,uSv/h,CPM5,CPM15"));
+static void write_header(File32& f, PGM_P first) {
+  f.print(FPSTR(first));
+  f.print(F(",CPM,uSv/h,CPM5,CPM15"));
 #ifdef SDCARD_EXTENDEDLOG
   f.print(F(",FreeMem"));
 #endif
@@ -209,12 +222,7 @@ static void write_col(File32& f, const char* id) {
 }
 
 static void write_row(File32& f, const char* dateTime) {
-#ifdef SDCARD_LOG_UNIXTIME
-  (void)dateTime;
-  f.print(Clock::epoch());
-#else
   f.print(dateTime);
-#endif
   write_col(f, PSTR("cpm"));
   write_col(f, PSTR("usv"));
   write_col(f, PSTR("cpm5"));
@@ -253,16 +261,58 @@ bool SDCard::openDayFile(const char* dirStr, const char* timeStr, uint32_t day, 
     failed = true;
   } else {
     _file_cl = clusters_of(myDataFile.fileSize());
-    if (!fileExists) write_header(myDataFile);
+    if (!fileExists) write_header(myDataFile, PSTR("DateTime"));
     openFileDay = day;
   }
   return true;
 }
 
+// clusters used, a sync every _sync_min rows; false = the file's gone
+bool SDCard::wrote(const char* dir, const char* name) {
+  uint32_t cl = clusters_of(myDataFile.fileSize());
+  if (cl > _file_cl) {
+    used_clusters(cl - _file_cl);
+    _file_cl = cl;
+  }
+  // power loss loses unsynced rows
+  if (++_unsynced_writes < _sync_min) return true;
+  _unsynced_writes = 0;
+  if (myDataFile.sync()) return true;
+  fail_step(PSTR("sync"), dir, name);
+  myDataFile.close();
+  openFileDay = 0;
+  return false;
+}
+
+// no clock yet: seconds since boot, dated later by the synced line
+void SDCard::writeUndated()
+{
+  if (openFileDay != UNDATED_DAY || !myDataFile.isOpen()) {
+    if (myDataFile.isOpen()) myDataFile.close();
+    openFileDay = 0;
+    _unsynced_writes = 0;
+    if (!sd->chdir() || !myDataFile.open(UNDATED, FILE_WRITE)) {
+      fail_step(PSTR("open"), "", UNDATED + 1);
+      return;
+    }
+    _file_cl = clusters_of(myDataFile.fileSize());
+    openFileDay = UNDATED_DAY;
+  }
+  if (!_undated) write_header(myDataFile, PSTR("Uptime"));   // once a boot
+  _undated = true;
+  char up[12];
+  snprintf_P(up, sizeof(up), PSTR("%lu"), (unsigned long)Uptime::seconds());
+  write_row(myDataFile, up);
+  if (!wrote("", UNDATED + 1)) scheduleCleanup(CLEAN_FULL);
+}
+
 void SDCard::writeMinute()
 {
   struct tm t;
-  if (!Clock::utcTm(&t)) return;
+  if (!Clock::utcTm(&t)) {
+    writeUndated();
+    return;
+  }
   int year = 1900 + t.tm_year;
   int mon = t.tm_mon + 1;
 
@@ -273,10 +323,22 @@ void SDCard::writeMinute()
 
   snprintf_P(timeStr, sizeof(timeStr), PSTR("%04d%02d%02d.csv"), year, mon, t.tm_mday);
   snprintf_P(dirStr, sizeof(dirStr), PSTR("%04d%02d"), year, mon);
+#ifdef SDCARD_LOG_UNIXTIME
+  fmt_u64(dateTime, sizeof(dateTime), (uint64_t)time(nullptr));
+#else
   snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02d %02d:%02d:%02d"),
     year, mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+#endif
 
   uint32_t currentDay = year * 10000u + mon * 100u + t.tm_mday;
+
+  if (openFileDay == UNDATED_DAY && myDataFile.isOpen()) {
+    // dates the rows above it
+    myDataFile.print(F("synced,"));
+    myDataFile.print(dateTime);
+    myDataFile.print(',');
+    myDataFile.println((unsigned long)Uptime::seconds());
+  }
 
   if (currentDay != openFileDay || !myDataFile.isOpen()) {
     if (!openDayFile(dirStr, timeStr, currentDay, forceCleanup)) return;
@@ -284,23 +346,7 @@ void SDCard::writeMinute()
 
   if (myDataFile.isOpen()) {
     write_row(myDataFile, dateTime);
-    uint32_t cl = clusters_of(myDataFile.fileSize());
-    if (cl > _file_cl) {
-      used_clusters(cl - _file_cl);
-      _file_cl = cl;
-    }
-
-    // power loss loses unsynced rows
-    _unsynced_writes++;
-    if (_unsynced_writes >= _sync_min) {
-      if (!myDataFile.sync()) {
-        fail_step(PSTR("sync"), dirStr, timeStr);
-        myDataFile.close();
-        openFileDay = 0;
-        forceCleanup = true;
-      }
-      _unsynced_writes = 0;
-    }
+    if (!wrote(dirStr, timeStr)) forceCleanup = true;
   }
 
   // looks full, count it properly before deleting
@@ -698,6 +744,9 @@ static void hSdList(EGHttpResponse& res, uint16_t selectedYear = 0) {
   uint16_t count = scan_months(months, MAX_MONTHS, totalBytes);
   sort_months_desc(months, count);
   send_list_summary(res, count, totalBytes);
+  if (sd->exists(UNDATED)) {
+    res.sendChunk(F("<p><a href='/sd?u=1'>Undated rows</a>, from before the clock was set.</p>"));
+  }
 
   if (count == 0) {
     res.sendChunk(F("<p>No log files yet.</p>"));
@@ -804,11 +853,11 @@ static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
   end_page(res);
 }
 
-static void hSdDownload(EGHttpRequest& req, EGHttpResponse& res, const char* f) {
+// f checked, nullptr = the undated rows
+static void hSdDownload(EGHttpResponse& res, const char* f) {
   // arg() buffer is shared
   char filename[SD_NAME_LEN + 1];
-  for (int i = 0; i < SD_NAME_LEN; i++) filename[i] = f[i];
-  filename[SD_NAME_LEN] = '\0';
+  strlcpy(filename, f ? f : UNDATED + 1, sizeof(filename));
 
   if (!sdcard.ready() || !sd) {
     res.send(503, FPSTR(HTTP_CT_PLAIN), F("SD not ready"));
@@ -816,12 +865,11 @@ static void hSdDownload(EGHttpRequest& req, EGHttpResponse& res, const char* f) 
   }
 
   char dir[SD_DIR_LEN + 1];
-  for (int i = 0; i < SD_DIR_LEN; i++) dir[i] = filename[i];
-  dir[SD_DIR_LEN] = '\0';
+  strlcpy(dir, filename, sizeof(dir));
 
   SDCard::Hold hold;
 
-  if (!sd->chdir() || !sd->chdir(dir)) {
+  if (!sd->chdir() || (f && !sd->chdir(dir))) {
     sd->chdir();
     res.send(404, FPSTR(HTTP_CT_PLAIN), F("Not found"));
     return;
@@ -872,7 +920,12 @@ void SDCard::registerRoutes(EGHttpServer& http) {
       const char* f = req.arg(F("f"));
       if (f && *f) {
         if (!valid_csv_name(f)) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("Bad name")); return; }
-        hSdDownload(req, res, f);
+        hSdDownload(res, f);
+        return;
+      }
+      const char* u = req.arg(F("u"));
+      if (u && *u) {
+        hSdDownload(res, nullptr);
         return;
       }
       const char* m = req.arg(F("m"));

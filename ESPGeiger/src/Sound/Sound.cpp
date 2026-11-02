@@ -46,6 +46,7 @@ CORIUM_PSTR(K_CLICKS,    "clicks");
 CORIUM_PSTR(K_CHIMES,    "chimes");
 CORIUM_PSTR(K_REPEAT,    "repeat");
 CORIUM_PSTR(K_STARTUP,   "startup");
+CORIUM_PSTR(K_SETUP,     "setup");
 CORIUM_PSTR(K_WIFI,      "wifi");
 CORIUM_PSTR(K_ALERT,     "alert");
 CORIUM_PSTR(K_ALERT_END, "alert_end");
@@ -60,6 +61,7 @@ CORIUM_PSTR(K_CLICK,     "click");
 CORIUM_PSTR(T_COPIER, "c,p79,c,p189,c,p119,c,p129,1500>3000:500@15,p90,c,p15,c,p15,c,p15,c,p15,"
                   "c,p15,c,p15,c,p15,c,p15,c,p181,2700:80,p80,2700:80");
 CORIUM_PSTR(T_DING,    "3136:40@25,3136:40@15,3136:50@8");
+CORIUM_PSTR(T_BEEPS,   "2700:60,p120,2700:60,p120,2700:60");
 CORIUM_PSTR(T_ALARM,   "2700:190,p20,2093:190,p20,2700:190,p20,2093:190,p20,2700:190,p20,2093:190");
 CORIUM_PSTR(T_CLEAR,   "2700:120,p20,2093:200");
 CORIUM_PSTR(T_PROBLEM, "1500:160,p90,1500:160");
@@ -75,6 +77,7 @@ struct SoundDef {
 
 static const SoundDef DEFS[Sound::COUNT] = {
   {K_STARTUP,   T_COPIER,  P_LOW},
+  {K_SETUP,     T_BEEPS,   P_MID},
   {K_WIFI,      T_DING,    P_LOW},
   {K_ALERT,     T_ALARM,   P_URGENT},
   {K_ALERT_END, T_CLEAR,   P_MID},
@@ -103,6 +106,7 @@ static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
   {K_CHIMES, L_CHIMES, H_CHIMES, "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
   {K_REPEAT, L_REPEAT, H_REPEAT, "60", nullptr, 0, 3600, 0, corium::P_UINT, 0},
   SOUND_ROW(K_STARTUP),
+  SOUND_ROW(K_SETUP),
   SOUND_ROW(K_WIFI),
   SOUND_ROW(K_ALERT),
   SOUND_ROW(K_ALERT_END),
@@ -198,12 +202,31 @@ void Sound::pre_wifi() {
 
 static void sound_click(uint32_t) { sound.click((uint32_t)micros()); }
 
-void Sound::begin() {
-  gcounter.on_click(sound_click);
+// once, the setup portal can be first
+void Sound::start() {
+  if (_started) return;
+  _started = true;
   Buzzer::Limits lim = Board::buzzer();
   if (!Buzzer::begin(GEIGER_BUZZER, lim)) Log::console(PSTR("Buzzer: pin %d unusable"), GEIGER_BUZZER);
   TunePlayer::begin({lim.duty_pct, BURST_HZ, GAP_PCT});
   _duty = lim.duty_pct;
+}
+
+static const unsigned long SETUP_MAX_MS = 3000;   // a long custom one is cut
+
+// the portal holds the loop, so played here
+void Sound::setup_portal() {
+  start();
+  if (_reload) load();
+  play(SETUP);
+  unsigned long t0 = fast_millis();
+  while (TunePlayer::poll((uint32_t)micros()) && fast_millis() - t0 < SETUP_MAX_MS) delay(1);
+  TunePlayer::stop();
+}
+
+void Sound::begin() {
+  gcounter.on_click(sound_click);
+  start();
   _wifi = Wifi::connected;
   if (_reload) load();
   play(STARTUP);

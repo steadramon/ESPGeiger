@@ -76,7 +76,10 @@ static inline float parse_f(const char* s, char** endptr = nullptr) {
 
 // false leaves *out alone. end null = whole string
 bool parse_i32(const char* s, int32_t* out, const char** end = nullptr);
+bool parse_u64(const char* s, uint64_t* out);   // digits only
 bool parse_centi(const char* s, int32_t* out);
+
+void fmt_u64(char* out, size_t cap, uint64_t v);   // no %llu in nano libc
 
 // In place, fields point into buf. Missing lines are ""
 uint8_t split_lines(char* buf, char** fields, uint8_t n);

@@ -29,7 +29,7 @@
 #include <EGPortal.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/Module.h"
-#include "Corium/ImprovSerial/ImprovSerial.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/NTP/NTP.h"
 #include "Corium/Prefs/Prefs.h"
@@ -41,6 +41,12 @@ CORIUM_PSTR(K_SLEEP,    "sleep");
 CORIUM_PSTR(K_TX_POWER, "tx_power");
 CORIUM_PSTR(K_COUNTRY,  "country");
 CORIUM_PSTR(K_PHY_MODE, "phy_mode");
+CORIUM_PSTR(K_MODE,     "mode");
+CORIUM_PSTR(K_AP_HIDE,  "ap_hide");
+
+static const uint8_t MODE_OFF = 1;
+static const uint8_t MODE_AP  = 2;
+static const size_t AP_PASS_MIN = 8;   // wpa2
 
 static_assert(WIFI_SSID_MAX == EGPORTAL_SSID_MAX, "one ssid max");
 
@@ -49,6 +55,7 @@ struct Creds { char ssid[EGPORTAL_SSID_MAX + 1]; char pass[EGPORTAL_PASS_MAX + 1
 static Creds* s_creds = nullptr;
 
 static bool          s_inPortal       = false;
+static bool s_joining = false;
 static bool s_portalGotCreds = false;
 static bool s_portalDoReset  = false;
 
@@ -71,14 +78,14 @@ static const uint32_t PORTAL_RETRY_MS = 600000UL;   // 10 min
 
 static bool waitForWifi(uint32_t timeoutMs) {
   uint32_t start = fast_millis();
-  while ((fast_millis() - start) < timeoutMs) {
+  while ((fast_millis() - start) < timeoutMs && !Wifi::offline_forced) {
     if (WiFi.status() == WL_CONNECTED) {
       IPAddress ipa = WiFi.localIP();
       Log::console(PSTR("WiFi: IP: %u.%u.%u.%u"),
                    ipa[0], ipa[1], ipa[2], ipa[3]);
       return true;
     }
-    improvSerial.poll();
+    console.poll_boot();
     delay(100);
     yield();
   }
@@ -346,7 +353,7 @@ static void reset_wifi_tx_power_default();
 // retries, slow AP after a power blip
 static bool join_saved_network() {
   bool associated = false;
-  for (uint8_t attempt = 0; attempt < 3 && !associated; attempt++) {
+  for (uint8_t attempt = 0; attempt < 3 && !associated && !Wifi::offline_forced; attempt++) {
     if (attempt > 0) Log::console(PSTR("WiFi: Retrying saved network (%u/2)"), attempt);
     WiFi.begin();                          // uses NVS-stored creds
     associated = waitForWifi(attempt == 0 ? 30000 : 15000);
@@ -414,9 +421,9 @@ static void portal_factory_reset(EGPortal* portal) {
 // hasSavedCreds() here drops the AP
 static void run_portal(EGPortal* portal, bool haveCreds) {
   unsigned long portal_idle_since = fast_millis();
-  while (!s_portalGotCreds) {
+  while (!s_portalGotCreds && !Wifi::offline_forced) {
     portal->loop();
-    improvSerial.poll();
+    console.poll_boot();
     delay(10);
     yield();
     if (s_portalDoReset) portal_factory_reset(portal);
@@ -430,7 +437,7 @@ static void run_portal(EGPortal* portal, bool haveCreds) {
   }
 }
 
-bool Wifi::connectOrPortal() {
+static bool join_or_portal() {
   bool haveCreds = Wifi::hasSavedCreds();
   if (haveCreds) {
     WiFi.mode(WIFI_STA);
@@ -440,9 +447,10 @@ bool Wifi::connectOrPortal() {
       probe_new_static_config(staticOn);
       return true;
     }
+    if (Wifi::offline_forced) return false;
     Log::console(PSTR("WiFi: Saved creds failed to associate"));
     if (tryRestoreBackup()) return true;
-    if (OFFLINE_OK) return false;
+    if (Wifi::OFFLINE_OK) return false;
   }
 
   s_portalGotCreds = false;
@@ -459,6 +467,10 @@ bool Wifi::connectOrPortal() {
   portal->end();
   delete portal;
   free(notice);
+  if (Wifi::offline_forced) {
+    WiFi.mode(WIFI_OFF);
+    return false;
+  }
   delay(500);
 
   WiFi.mode(WIFI_STA);
@@ -468,7 +480,56 @@ bool Wifi::connectOrPortal() {
   return waitForWifi(30000);
 }
 
-static_assert(Wifi::TOPIC_CHANGED < CORIUM_TOPIC_APP, "Corium topics sit below EG_TOPIC_APP");
+bool Wifi::offline_now() {
+  if (!s_joining) return false;
+  Wifi::offline_forced = true;
+  return true;
+}
+
+// own AP, the whole UI, no network
+static void start_ap() {
+  WiFi.persistent(false);   // nor its mode, sta boots as before
+  WiFi.mode(WIFI_AP);
+  Wifi::applyRuntimeNetPrefs();
+  const char* pass = corium::Prefs::getString("sys", corium::K_WEB_PASS);
+  // short or none: open, the pages still ask
+  bool locked = pass && strlen(pass) >= AP_PASS_MIN;
+  bool hide = corium::Prefs::getBool("wifi", K_AP_HIDE);
+  if (!WiFi.softAP(DeviceInfo::hostname(), locked ? pass : nullptr, 1, hide)) {
+    Log::console(PSTR("WiFi: AP failed"));
+    return;
+  }
+  Wifi::ap = true;
+  Wifi::local_ip = WiFi.softAPIP();   // what the pages and screen show
+  char ip[16];
+  Wifi::formatIP(ip, sizeof(ip));
+  Log::console(PSTR("WiFi: AP %s at %s (%s)"), DeviceInfo::hostname(), ip,
+               locked ? PSTR("web password") : PSTR("open"));
+}
+
+// a network to join, not the AP; saved with the next commit
+void Wifi::join_mode() { corium::Prefs::put("wifi", K_MODE, "0"); }
+
+bool Wifi::portal_ahead() {
+  if (Wifi::offline_forced || corium::Prefs::getUInt("wifi", K_MODE) != 0) return false;
+  return !Wifi::hasSavedCreds();
+}
+
+bool Wifi::connectOrPortal() {
+  uint32_t mode = corium::Prefs::getUInt("wifi", K_MODE);
+  if (mode == MODE_OFF || mode == MODE_AP) {
+    Wifi::offline_forced = true;
+    if (mode == MODE_AP) start_ap();
+    else Log::console(PSTR("WiFi: off (wifi.mode)"));
+    return false;
+  }
+  s_joining = true;
+  bool up = join_or_portal();
+  s_joining = false;
+  return up;
+}
+
+static_assert(Wifi::TOPIC_CHANGED < CORIUM_TOPIC_APP, "Corium topics sit below CORIUM_TOPIC_APP");
 
 // the one writer of Wifi::*
 class WifiModule : public corium::Module {
@@ -501,6 +562,8 @@ static const corium::Pref WIFI_PREF_ITEMS[] PROGMEM = {
   {K_TX_POWER, nullptr, nullptr, "0",                nullptr, 0, 20, 0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
   {K_COUNTRY,  nullptr, nullptr, "",                 nullptr, 0, 0,  3, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL},
   {K_PHY_MODE, nullptr, nullptr, "0",                nullptr, 0, 3,  0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
+  {K_MODE,     nullptr, nullptr, "0",                nullptr, 0, 2,  0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL | corium::P_REBOOT},
+  {K_AP_HIDE,  nullptr, nullptr, "0",                nullptr, 0, 0,  0, corium::P_BOOL,   corium::P_HIDDEN | corium::P_LOCAL | corium::P_REBOOT},
 };
 
 static const corium::PrefGroup WIFI_PREF_GROUP PROGMEM = {

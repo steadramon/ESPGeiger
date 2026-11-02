@@ -33,6 +33,7 @@ CORIUM_REGISTER_MODULE(console)
 const corium::Cmd* Console::_cmds[CORIUM_MAX_CMDS] = {};
 uint8_t Console::_count = 0;
 uint8_t Console::_dropped = 0;
+bool Console::_up = false;
 ConsoleLine Console::_serial = {};
 char* Console::_last = nullptr;
 
@@ -146,6 +147,12 @@ static void cmd_reset() {
   if (corium::Prefs::restart_pending()) Log::console(corium::H_RBA);
 }
 
+// this boot only, as the button held
+static void offline() {
+  if (Wifi::offline_now()) Log::console(PSTR("WiFi: offline this boot"));
+  else Log::console(PSTR("offline: at boot only (setup portal or wifi wait)"));
+}
+
 static const char C_REBOOT[] PROGMEM = "reboot";
 static const char C_SAFE[] PROGMEM = "safe";
 static const char C_RESETWIFI[] PROGMEM = "resetwifi";
@@ -154,6 +161,7 @@ static const char C_GET[] PROGMEM = "get";
 static const char C_SET[] PROGMEM = "set";
 static const char C_RESET[] PROGMEM = "reset";
 static const char C_VER[] PROGMEM = "ver";
+static const char C_OFFLINE[] PROGMEM = "offline";
 
 // in flash, no RAM copy
 static const corium::Cmd CMDS[] PROGMEM = {
@@ -165,6 +173,7 @@ static const corium::Cmd CMDS[] PROGMEM = {
   { C_SET, cmd_set },
   { C_RESET, cmd_reset },
   { C_VER, ver },
+  { C_OFFLINE, offline },
 };
 
 bool Console::add(const corium::Cmd* cmd) {
@@ -181,27 +190,30 @@ char* Console::rest() {
   return _last;
 }
 
-static bool run_row(const corium::Cmd* row, const char* word) {
+// runs it unless held
+static bool run_row(const corium::Cmd* row, const char* word, bool held) {
   corium::Cmd c;
   memcpy_P(&c, row, sizeof(c));
   if (strcmp_P(word, c.name) != 0) return false;
-  c.fn();
+  if (held) Log::console(PSTR("%s: after boot"), word);
+  else c.fn();
   return true;
 }
 
 void Console::exec(ConsoleLine& l) {
   char* word = strtok_r(l.buf, DELIM, &_last);
-  // own rows, then the app's
+  // own rows, then the app's, held till their modules are up
   const uint8_t own = sizeof(CMDS) / sizeof(CMDS[0]);
   for (uint8_t i = 0; word && i < own + _count; i++) {
-    if (run_row(i < own ? &CMDS[i] : _cmds[i - own], word)) break;
+    if (run_row(i < own ? &CMDS[i] : _cmds[i - own], word, i >= own && !_up)) break;
   }
   l.buf[0] = '\0';
   l.pos = 0;
 }
 
 void Console::begin() {
-  if (_dropped) Log::console(PSTR("Console: %u command(s) dropped (raise EG_MAX_CMDS)"), _dropped);
+  _up = true;
+  if (_dropped) Log::console(PSTR("Console: %u command(s) dropped (raise CORIUM_MAX_CMDS)"), _dropped);
 #ifndef DISABLE_SERIALRX
   corium::Registry::every(this, LOOP_MS);   // else nothing to read
 #endif
@@ -214,6 +226,14 @@ void Console::loop(unsigned long now) {
     if (improvSerial.consume_byte((uint8_t)c)) continue;
     feed(_serial, Serial, c);
   }
+#endif
+}
+
+void Console::poll_boot() {
+#ifdef DISABLE_SERIALRX
+  improvSerial.poll();   // rx is the button or tube, improv only
+#else
+  loop(0);   // improv's bytes first, the rest typed
 #endif
 }
 

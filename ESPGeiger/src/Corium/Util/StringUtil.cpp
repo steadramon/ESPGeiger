@@ -47,6 +47,20 @@ bool parse_i32(const char* s, int32_t* out, const char** end) {
   return true;
 }
 
+// by hand, strtoull is ~450 B and takes "-1" and spaces
+bool parse_u64(const char* s, uint64_t* out) {
+  if (!s || !*s) return false;
+  uint64_t v = 0;
+  for (; *s; s++) {
+    if (*s < '0' || *s > '9') return false;
+    uint8_t d = (uint8_t)(*s - '0');
+    if (v > UINT64_MAX / 10 || (v == UINT64_MAX / 10 && d > UINT64_MAX % 10)) return false;
+    v = v * 10 + d;
+  }
+  *out = v;
+  return true;
+}
+
 // hundredths
 bool parse_centi(const char* s, int32_t* out) {
   if (!s || *s < '0' || *s > '9') return false;
@@ -63,6 +77,16 @@ bool parse_centi(const char* s, int32_t* out) {
   if (*p) return false;
   *out = whole * 100 + frac;
   return true;
+}
+
+void fmt_u64(char* out, size_t cap, uint64_t v) {
+  char digits[24];
+  int n = 0;
+  if (v == 0) { digits[n++] = '0'; }
+  else { while (v > 0 && n < (int)sizeof(digits)) { digits[n++] = (char)('0' + v % 10); v /= 10; } }
+  size_t o = 0;
+  while (n > 0 && o + 1 < cap) out[o++] = digits[--n];
+  out[o] = 0;
 }
 
 void hex_encode(char* out, const uint8_t* in, size_t n) {

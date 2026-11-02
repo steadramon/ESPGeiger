@@ -311,7 +311,7 @@ static void write_handshake(MsgPack::Writer& mp, const char* pubKey, uint8_t mod
   bool sendCoords = (latF != 0.0f || lonF != 0.0f);
 
   mp.map_begin();
-  mp.kv(PSTR("n"),  Clock::epoch());
+  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
   mp.kv(PSTR("pk"), pubKey);
   mp.kv(PSTR("ci"), DeviceInfo::chipid());
   mp.kv(PSTR("v"),  versionStr);
@@ -395,11 +395,9 @@ void WebAPI::backoffHandshake() {
   _hs_backoff_ms = next > WEBAPI_BACKOFF_MAX ? WEBAPI_BACKOFF_MAX : next;
 }
 
-// epoch_s as uint32_t, 2038
-static uint32_t wall_clock_wait_ms(uint32_t k, uint32_t interval_ms,
-                                   uint32_t period_s, uint32_t epoch_s) {
+static uint32_t wall_clock_wait_ms(uint32_t k, uint32_t interval_ms, uint32_t period_s) {
   uint32_t target_ms = k % interval_ms;
-  uint32_t cur_ms    = (epoch_s % period_s) * 1000UL;
+  uint32_t cur_ms    = Clock::phase(period_s) * 1000UL;
   return (target_ms >= cur_ms) ? target_ms - cur_ms
                                : interval_ms - cur_ms + target_ms;
 }
@@ -425,7 +423,7 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
         station_id = id;
         uint32_t k = rd_be32(pub_k + 4);
         handshakeAt(fast_millis() +
-          wall_clock_wait_ms(k, WEBAPI_HANDSHAKE_MS, 3600, Clock::epoch()));
+          wall_clock_wait_ms(k, WEBAPI_HANDSHAKE_MS, 3600));
         corium::Registry::due_in(this, REPLAN_MS);
       } else {
         Log::debug(HS_OK, id);
@@ -489,7 +487,7 @@ static void write_post(MsgPack::Writer& mp, uint32_t stationId, bool censusOnly,
                        bool sendHealth) {
   mp.map_begin();
   mp.kv(PSTR("id"), stationId);
-  mp.kv(PSTR("n"),  Clock::epoch());
+  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
   if (!censusOnly) write_readings(mp);
   if (sendHealth)  write_health(mp);
   mp.map_end();
@@ -573,7 +571,7 @@ void WebAPI::sendForget() {
   MsgPack::Writer mp(buffer, sizeof(buffer));
   mp.map(2);
   mp.kv(PSTR("id"), station_id);
-  mp.kv(PSTR("n"),  Clock::epoch());
+  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
   if (mp.overflow) return;
   size_t bodyLen = mp.length();
 

@@ -39,7 +39,7 @@ Use it as a lightweight health check for dashboards, scripts or Home Assistant R
 
 ## `/about`
 
-Static identity of the device and firmware, plus the compiled-in modules. Runtime values (uptime, memory, RSSI) are in `/json`.
+Identity of the device and firmware, the chip and WiFi details the `/info` page leaves out, and the compiled-in modules. Live values (uptime, memory, RSSI) are in `/json`.
 
 In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcmd` answer 404; `/about`, `/outputs` and `/metrics` still work.
 
@@ -53,10 +53,23 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
   "flash": "ef4016 DIO 40MHz",
   "mac": "AABBCCDDEEFF",
   "host": "ESPGeiger-a1b2c3",
+  "core": "3.1.2",
+  "boot": 31,
+  "fsize": 4194304,
+  "freal": 4194304,
+  "mhz": 80,
+  "gw": "192.168.1.1",
+  "sn": "255.255.255.0",
+  "bssid": "E4:95:6E:45:15:B4",
+  "tx": 20.50,
+  "phy": "11n",
+  "sleep": "Modem",
+  "auto": true,
   "g_mod": "genpulse",
   "g_type": "pulse",
   "g_test": false,
   "g_pcnt": true,
+  "fl": 127,
   "modules": ["sys","net","wifi","scmd","ota","counter","life","led","disp","neopx","btn","sdcard","ntp","mqtt","radmon","whook","sout"]
 }
 ```
@@ -71,10 +84,19 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `flash` | Flash chip as booted: JEDEC id (ESP8266 only), mode and clock from the image header |
 | `mac` | Device MAC address |
 | `host` | Configured hostname |
+| `core`, `boot` | ESP8266 only: Arduino core version and bootloader version |
+| `model`, `rev`, `sdk`, `temp` | ESP32 only: chip model, chip revision, SDK version, die temperature in °C (`null` if the chip can't read it) |
+| `fsize` | Flash size the image was built for, in bytes |
+| `freal` | ESP8266 only: flash size the chip reports. `/info` warns when it differs from `fsize` |
+| `mhz` | CPU frequency |
+| `gw`, `sn`, `bssid` | Gateway, subnet mask and the BSSID of the access point it's joined to |
+| `tx` | WiFi transmit power in dBm, `null` if the core doesn't report it |
+| `phy`, `sleep`, `auto` | WiFi PHY mode, radio sleep mode, and whether WiFi auto-reconnect is on |
 | `g_mod` | Geiger model name. On serial builds this identifies the protocol (`GC10`, `GC10Next`, `MightyOhm`, `ESPG`). |
 | `g_type` | Counter input type: `"pulse"`, `"serial"`, or `"none"` (UDP receiver and internal test builds) |
 | `g_test` | `true` on test / simulation builds |
 | `g_pcnt` | `true` if pulses are counted by the ESP32 PCNT hardware counter |
+| `fl` | Feature flags, the same bits WebAPI sends as `fl` |
 | `modules` | Every module compiled into this firmware, core ones included. Each is the module's short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`) |
 
 ## `/json?raw=1`

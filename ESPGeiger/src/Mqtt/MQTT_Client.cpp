@@ -206,7 +206,7 @@ unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
   uint32_t off_s = (uint32_t)_slot_s;
   uint32_t until = off_s;
   if (Clock::synced) {
-    uint32_t wall = Clock::epoch() % statusInterval;
+    uint32_t wall = Clock::phase(statusInterval);
     until = (off_s >= wall) ? (off_s - wall) : (statusInterval - wall + off_s);
   }
   return now_s + until - statusInterval;

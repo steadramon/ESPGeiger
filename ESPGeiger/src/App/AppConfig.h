@@ -74,6 +74,10 @@
 #if defined(SSD1306_DISPLAY) || !defined(DISABLE_ENVSENSOR)
 #define I2C_BUS
 #endif
+// a battery clock on the bus: esp32, the 8266 with -DRTC_8266
+#if defined(I2C_BUS) && (defined(ESP32) || defined(RTC_8266))
+#define CORIUM_RTC
+#endif
 #ifdef OLED_PINS_BLOCKED
 #define I2C_PINS_FIXED
 #endif

@@ -73,11 +73,14 @@ class SDCard : public corium::Module {
     uint8_t _cleanup = CLEAN_NONE;
     uint8_t _counting = CLEAN_NONE;   // the cleanup it's counting for
     int32_t _free = -1;               // clusters
+    bool _undated = false;   // its header written this boot
     uint32_t _file_cl = 0;            // day file's clusters
     uint32_t _fat_sec = 0;            // next FAT sector
     void used_clusters(uint32_t n);
     void minuteEdge();
     void writeMinute();
+    void writeUndated();
+    bool wrote(const char* dir, const char* name);
     bool openDayFile(const char* dirStr, const char* timeStr, uint32_t day, bool& failed);
     void scheduleCleanup(uint8_t what);
     void startCount(uint8_t what);

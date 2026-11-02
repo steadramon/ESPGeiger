@@ -31,6 +31,6 @@ namespace Topic {
   constexpr uint8_t PRESS    = CORIUM_TOPIC_APP + 5;
   constexpr uint8_t PING     = CORIUM_TOPIC_APP + 6;
 }
-static_assert(Topic::PING < CORIUM_MAX_TOPICS, "app topics past EG_MAX_TOPICS");
+static_assert(Topic::PING < CORIUM_MAX_TOPICS, "app topics past CORIUM_MAX_TOPICS");
 
 #endif
