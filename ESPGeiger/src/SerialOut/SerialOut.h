@@ -56,6 +56,7 @@ class SerialOut : public corium::Module {
       uint32_t baud() const { return _baud; }
     private:
       void save();
+      void quiet_logs();
       void applyBaud();
       void resolveFormat();
       void send(const char* s, size_t n);

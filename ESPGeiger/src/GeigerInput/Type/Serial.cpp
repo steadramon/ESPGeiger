@@ -68,6 +68,9 @@ void GeigerSerial::begin() {
 // connected: a good line in this long, and no drain
 #define GEIGERSERIAL_OK_MS 60000
 
+// sender quiet this long: cpm 0, cps off
+#define GEIGERSERIAL_QUIET_MS 10000
+
 // its tail would parse as a line of its own
 void GeigerSerial::drop_line() {
   _serial_idx = 0;
@@ -119,7 +122,7 @@ void GeigerSerial::loop() {
   bool line = _line.fresh(now, GEIGERSERIAL_OK_MS);
   _ok = !_drain.fresh(now, GEIGERSERIAL_OK_MS) && line;
   if (serial_value <= 0) return;
-  if (fast_millis() - last_serial > 10000) serial_value = 0;
+  if (fast_millis() - last_serial > GEIGERSERIAL_QUIET_MS) serial_value = 0;
 }
 
 // saturate, don't wrap
@@ -150,6 +153,8 @@ void GeigerSerial::secondTicker() {
     _use_cps = false;
     return;
   }
+  // cps sender, its line comes next tick
+  if (_cps_seen.fresh(fast_millis(), GEIGERSERIAL_QUIET_MS)) return;
   // no soft-float divide
   static constexpr float INV_60 = 1.0f / 60.0f;
   partial_clicks += (float)serial_value * INV_60;
@@ -188,11 +193,12 @@ void GeigerSerial::handleSerial(char* input) {
   Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
   setLastBlip();
   serial_value = _scpm;
+  last_serial = fast_millis();
   if (_scps >= 0) {
     partial_clicks += (float)_scps;
     _use_cps = true;
+    _cps_seen.mark(last_serial);
   }
-  last_serial = fast_millis();
   _line.mark(last_serial);
   _bad_streak = max((int)_bad_streak - 3, 0);
 }

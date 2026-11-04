@@ -83,7 +83,6 @@ static void write_status(EGTcpClient* c, PGM_P status, uint8_t retry_s = 0) {
 #else
   #define EGHTTP_BACKPRESSURE_PAUSE() do { yield(); delay(0); } while (0)
 #endif
-static const uint32_t EGHTTP_SEND_BUDGET_MS = 2500;
 
 #ifdef EGHTTP_DEBUG
   #define EGHTTP_TRACE(...) Serial.printf_P(__VA_ARGS__)
@@ -404,7 +403,7 @@ void EGHttpServer::abortStream(Slot* s) {
 
 void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
   c->setIdleTimeout(EGHTTP_REQ_MS);
-  c->setAckTimeout(5000);
+  c->setAckTimeout(EGHTTP_ACK_MS);
   c->onSent([this, s](size_t) { sentMore(s); });
   c->onData([this, s](const uint8_t* data, size_t len) {
     if (s->state != RECEIVING) return;
@@ -557,7 +556,7 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   s->ack_paused = true;
   s->streaming  = true;
   s->due        = EGClock::now() + EGHTTP_REQ_MS;
-  s->client->setIdleTimeout(60000);
+  s->client->setIdleTimeout(EGHTTP_STREAM_IDLE_MS);
   s->client->ackLater();
 }
 
@@ -909,29 +908,33 @@ static bool eghttp_text(const char* s) {
   return s && eg_http_text(s, strlen(s));
 }
 
-void EGHttpResponse::addHeaderP(const __FlashStringHelper* name, PGM_P value) {
-  if (_started) return;
+bool EGHttpResponse::addHeaderP(const __FlashStringHelper* name, PGM_P value) {
+  if (_started) return false;
   int n = snprintf_P(_extraHeaders + _extraLen,
                      sizeof(_extraHeaders) - _extraLen,
                      PSTR("%s: %s\r\n"), (PGM_P)name, value);
-  if (n > 0 && (size_t)n < sizeof(_extraHeaders) - _extraLen) _extraLen += n;
-  else _extraHeaders[_extraLen] = '\0';
+  if (n > 0 && (size_t)n < sizeof(_extraHeaders) - _extraLen) {
+    _extraLen += n;
+    return true;
+  }
+  _extraHeaders[_extraLen] = '\0';
+  return false;
 }
 
-void EGHttpResponse::addHeader(const __FlashStringHelper* name, const char* value) {
-  if (eghttp_text(value)) addHeaderP(name, value);
+bool EGHttpResponse::addHeader(const __FlashStringHelper* name, const char* value) {
+  return eghttp_text(value) && addHeaderP(name, value);
 }
 
-void EGHttpResponse::addHeader(const __FlashStringHelper* name, const __FlashStringHelper* value) {
-  addHeaderP(name, (PGM_P)value);
+bool EGHttpResponse::addHeader(const __FlashStringHelper* name, const __FlashStringHelper* value) {
+  return addHeaderP(name, (PGM_P)value);
 }
 
-void EGHttpResponse::redirect(const __FlashStringHelper* location) {
-  redirectP((PGM_P)location);
+bool EGHttpResponse::redirect(const __FlashStringHelper* location) {
+  return redirectP((PGM_P)location);
 }
 
-void EGHttpResponse::redirect(const char* location) {
-  if (eghttp_text(location)) redirectP(location);
+bool EGHttpResponse::redirect(const char* location) {
+  return eghttp_text(location) && redirectP(location);
 }
 
 // 0 = too long
@@ -999,16 +1002,17 @@ void EGHttpResponse::writeHeadAndBodyP(const char* head, size_t headLen,
   send_tail(s);
 }
 
-void EGHttpResponse::redirectP(PGM_P location) {
-  if (!_slot || _started || _done) return;
+bool EGHttpResponse::redirectP(PGM_P location) {
+  if (!_slot || _started || _done) return false;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   char head[256];
   int n = snprintf_P(head, sizeof(head),
     PSTR("HTTP/1.1 302 Found\r\nLocation: %s\r\n%s%s\r\n"), location, CL0_CRLF, CLOSE_NOSNIFF);
-  if (!eghttp_head_fits(n, sizeof(head))) return;
-  yield_write_sram(s, head, (size_t)n);
+  if (!eghttp_head_fits(n, sizeof(head))) return false;
+  bool ok = yield_write_sram(s, head, (size_t)n);
   _started = true;
   _done    = true;
+  return ok;
 }
 
 bool EGHttpResponse::beginChunked(uint16_t status, const __FlashStringHelper* contentType) {

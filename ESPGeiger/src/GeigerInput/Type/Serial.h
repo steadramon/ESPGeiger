@@ -57,6 +57,7 @@ class GeigerSerial final : public GeigerInput
     uint8_t _bad_streak = 0;
     Stamp _line;   // good line
     Stamp _drain;
+    Stamp _cps_seen;
     bool _ok = false;
     unsigned long _last_drain_log = 0;
     void drainPort();

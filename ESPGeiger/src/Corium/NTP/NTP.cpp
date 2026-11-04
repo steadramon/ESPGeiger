@@ -31,18 +31,24 @@ CORIUM_REGISTER_MODULE(ntpclient)
 #include "sntp.h"
 #endif
 
+#ifndef DISABLE_NTP
 CORIUM_PSTR(NT_L_SRV, "NTP Server");
+#endif
 CORIUM_PSTR(NT_L_TZ,  "Timezone");
 CORIUM_PSTR(NT_H_TZ,  "Olson name");
 CORIUM_PSTR(NT_P_TZ,  "[A-Za-z0-9/_+\\-]+");
 
 static const corium::Pref NTP_PREF_ITEMS[] PROGMEM = {
+#ifndef DISABLE_NTP
   {corium::K_SERVER, NT_L_SRV, nullptr,  NTP_SERVER, corium::P_HOST, 0, 0, CORIUM_HOST_MAX, corium::P_STRING, corium::P_ADVANCED},
+#endif
   {corium::K_TZ,     NT_L_TZ,  NT_H_TZ,  NTP_TZ,     NT_P_TZ,   0, 0, NTP_TZ_MAX, corium::P_STRING, 0},
 };
 
+#ifndef DISABLE_NTP
 // sntp keeps the pointer, a save frees the pref's
 static char s_server[CORIUM_HOST_MAX + 1];
+#endif
 // set by sntp, the loop applies it
 static volatile bool s_synced = false;
 
@@ -56,7 +62,9 @@ const corium::PrefGroup* NTP_Client::prefs_group() { return &NTP_PREF_GROUP; }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
 static const corium::LegacyAlias NTP_LEGACY[] PROGMEM = {
+#ifndef DISABLE_NTP
   {"srv", "server"},
+#endif
   {"tz",  "tz"},
   {},
 };

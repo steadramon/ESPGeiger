@@ -58,6 +58,7 @@ class EGMqtt {
       NO_MEMORY = -5,
     };
 
+    // points into the in buffer, gone after onMessage returns
     struct Message {
       const char* topic;       // NUL ended
       const uint8_t* payload;  // NUL ended too, not counted in len

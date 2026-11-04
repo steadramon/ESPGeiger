@@ -68,6 +68,7 @@ void EGTcpCore::check() {
 }
 #endif
 
+namespace {
 struct Call {
   EGTcpClient* c;
   EGTcpServer* s;
@@ -83,6 +84,7 @@ struct Call {
   EGTcpAsk* ask;
   EGTcpInfo* info;
 };
+}
 
 typedef void (*StackFn)(Call* m);
 

@@ -385,7 +385,7 @@ void Voice::queueAnnouncement() {
 void Voice::queueRadmonChange() {
   corium::Sender* m = _radmon;
   // last_ok is only the answer once the reply is in
-  if (m && m->last_attempt_ms != 0 && !m->_publish_pending &&
+  if (m && m->last_attempt_ms != 0 && !m->pending() &&
       m->last_attempt_ms != _radmon_last_attempt) {
     const bool ok = m->last_ok;
     if (_radmon_known && ok != _radmon_was_ok) {

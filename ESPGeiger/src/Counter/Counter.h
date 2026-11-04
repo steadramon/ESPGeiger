@@ -82,7 +82,7 @@ class Counter : public CounterMaths {
       // keep out of line
       int input_pin();
       bool  get_saturated();
-      float    get_cps_live();      // (N-1)/T, 0 if N<2
+      float    get_cps_live();      // (N-1)/T oldest to now, 0 if N<2
       uint16_t get_cps_n();
       uint32_t get_cps_win_us();
       uint32_t get_min_pulse_us();
@@ -164,7 +164,6 @@ class Counter : public CounterMaths {
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
       GeigerUdpRx* udp_rx();
 #endif
-      void queueBlip() { _last_blip = micros(); }
 
       void ota_hold(bool on) { _ota = on; }
       // inline gate, every pass: only members, a global costs an l32r on esp32
@@ -207,6 +206,7 @@ class Counter : public CounterMaths {
       uint16_t _cpm5_x10 = 0;
       void push_cpm5(bool fresh);
       struct RingSnapshot {
+        uint32_t now_us;
         uint32_t newest_us;
         uint32_t oldest_us;
         uint16_t count;

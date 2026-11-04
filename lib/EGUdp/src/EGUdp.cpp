@@ -31,6 +31,7 @@ extern "C" {
 #include "lwip/pbuf.h"
 }
 
+namespace {
 struct Call {
   EGUdp* u;
   const ip_addr_t* addr;
@@ -43,6 +44,7 @@ struct Call {
   bool on;
   err_t err;
 };
+}
 
 static void to_ip4(const EGTcpAddr& a, ip4_addr_t* ip) {
   uint32_t v;

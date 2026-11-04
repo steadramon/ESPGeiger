@@ -70,6 +70,11 @@ inline int hv_ramp_duty(int duty, uint8_t step, uint8_t steps) {
   return 1 + (duty - 1) * step / steps;
 }
 
+// err = target - volts, past the band with no trim left, in a row
+inline uint8_t hv_low_count(uint8_t count, int err, int band, bool top) {
+  return top ? hv_over_count(count, err, band) : 0;
+}
+
 // ~0 while driving or the ADC top, in a row
 inline uint8_t hv_bad_count(uint8_t count, int mv, bool driving, int low_mv, int high_mv) {
   if (mv < high_mv && (!driving || mv >= low_mv)) return 0;

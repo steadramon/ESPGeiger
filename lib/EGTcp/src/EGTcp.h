@@ -113,6 +113,7 @@ class EGTcpClient {
     void ack(size_t len);
 
     void onConnect(std::function<void()> cb) { _on_connect.swap(cb); }
+    // data gone once it returns, no read() in here
     void onData(std::function<void(const uint8_t* data, size_t len)> cb) { _on_data.swap(cb); }
     void onSent(std::function<void(size_t acked)> cb) { _on_sent.swap(cb); }
     // ended not by you: 0 = peer closed, else why. Once, never after close()

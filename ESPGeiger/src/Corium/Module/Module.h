@@ -104,6 +104,7 @@ class Sender : public Module {
     void note_result(bool ok);
     uint8_t take_publish_ok();
     uint8_t take_publish_err();
+    bool pending() const { return _publish_pending; }   // sent, no reply yet
 
     // share a byte, set via note_attempt() / note_result() only
     uint8_t last_ok          : 1;

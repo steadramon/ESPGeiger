@@ -34,10 +34,18 @@
 #endif
 
 // string maxes, rows and buffers both use these. buffers +1
-#define CORIUM_PREFS_MAX_VALUE 255   // longest string max_len (webhook url/key)
-#define CORIUM_PREF_ID_MAX     17    // announce_interval
+#ifndef CORIUM_PREFS_MAX_VALUE
+#define CORIUM_PREFS_MAX_VALUE 255   // longest value a row may carry, max_len is 8 bit
+#endif
+#ifndef CORIUM_PREF_ID_MAX
+#define CORIUM_PREF_ID_MAX     17    // longest pref or group id
+#endif
+#ifndef CORIUM_NAME_MAX
 #define CORIUM_NAME_MAX       32
+#endif
+#ifndef CORIUM_HOST_MAX
 #define CORIUM_HOST_MAX       64
+#endif
 #define CORIUM_IPV4_MAX       15
 #define CORIUM_HHMM_MAX       5
 #define CORIUM_U32_MAX_LEN    10    // 4294967295
@@ -84,7 +92,7 @@ static constexpr uint16_t P_PIN_OD    = 1 << 15;  // pin needs open-drain
 
 // tables must be PROGMEM
 struct Pref {
-  const char* id;         // PROGMEM, max 17 chars
+  const char* id;         // PROGMEM, max CORIUM_PREF_ID_MAX
   const char* label;      // SRAM or PROGMEM
   const char* help;       // SRAM or PROGMEM
   const char* default_val;// SRAM
@@ -181,7 +189,7 @@ extern const char P_HOST[];
 // PROGMEM, {old, new} rows ending {}
 struct LegacyAlias {
   char legacy_key[20];
-  char new_key[18];
+  char new_key[CORIUM_PREF_ID_MAX + 1];
 };
 
 class LegacyRows {
@@ -209,6 +217,7 @@ public:
   static bool        getBool  (const char* module, const char* key);
   static float       getFloat (const char* module, const char* key);
 
+  // put, commit: loop task only. a put frees that key's getString
   static bool put(const char* module, const char* key, const char* value);
   // why the last put refused a pin (PROGMEM), else nullptr
   static const char* refused();

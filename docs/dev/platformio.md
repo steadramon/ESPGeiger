@@ -280,14 +280,14 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | `esp32s3_test` | ESP32-S3 | Internal counter | OLED auto-detected |
 | `esp32c3_test` | ESP32-C3 | Internal counter | OLED auto-detected |
 | `xh_s3e_test` | ESP32-S3 (XH-S3E) | Internal counter | OLED, NeoPixel, I2S audio tick |
-| `esp8266_testpulse` | ESP8266 | Pulse output | |
-| `esp8266oled_testpulse` | ESP8266 | Pulse output | OLED |
-| `esp32_testpulse` | ESP32 | Pulse output | OLED auto-detected |
-| `esp8266_testpulseint` | ESP8266 | PWM pulse output | |
-| `esp8266oled_testpulseint` | ESP8266 | PWM pulse output | OLED |
-| `esp32_testpulseint` | ESP32 | PWM pulse output | OLED auto-detected |
-| `esp8266_testserial` | ESP8266 | Serial emulated | Type selectable at runtime |
-| `esp32_testserial` | ESP32 | Serial emulated | OLED auto-detected, type selectable at runtime |
+| `esp8266_testpulse` | ESP8266 | Pulse output | TXPIN 12 |
+| `esp8266oled_testpulse` | ESP8266 | Pulse output | TXPIN 12, OLED |
+| `esp32_testpulse` | ESP32 | Pulse output | TXPIN 14, OLED auto-detected |
+| `esp8266_testpulseint` | ESP8266 | PWM pulse output | TXPIN 12 |
+| `esp8266oled_testpulseint` | ESP8266 | PWM pulse output | TXPIN 12, OLED |
+| `esp32_testpulseint` | ESP32 | PWM pulse output | TXPIN 14, OLED auto-detected |
+| `esp8266_testserial` | ESP8266 | Serial emulated | TXPIN 12, type selectable at runtime |
+| `esp32_testserial` | ESP32 | Serial emulated | TXPIN 14, OLED auto-detected, type selectable at runtime |
 | `espgeigerlite_test` | ESP8266 | Internal counter | OLED, NeoPixel, PushButton |
 | `espgeigerlite_testpulse` | ESP8266 | Pulse output | OLED, NeoPixel, PushButton |
 | `espgeigerlog_test` | ESP8266 | Internal counter | OLED, NeoPixel, PushButton, SDCard |

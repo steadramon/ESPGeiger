@@ -23,7 +23,8 @@
 
 namespace EGClock {
 using MillisFn = uint32_t (*)();
-extern MillisFn now;    // EGClock::now(), millis() till set
+// esp32 lwIP task calls it too, keep it task safe
+extern MillisFn now;    // EGClock::now(), millis() until set
 void set(MillisFn fn);  // in setup(), before wifi; nullptr = millis()
 }
 

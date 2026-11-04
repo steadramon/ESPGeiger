@@ -469,7 +469,7 @@ void MQTT_Client::publishStat(const char* cmd, const char* text)
 
 void MQTT_Client::publishPing()
 {
-  publishSensor();
+  if (!publishSensor()) note_publish(false);
 
   // ---- LEGACY ----
   for (corium::MeasureIter it(EGM_OUT_MQTT); it.next(); ) {

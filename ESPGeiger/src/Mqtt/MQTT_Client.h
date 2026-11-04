@@ -20,7 +20,6 @@
 #ifndef MQTT_CLIENT_H
 #define MQTT_CLIENT_H
 #ifdef MQTTOUT
-#define LOG_TAG "MQTT"
 
 #include "App/AppConfig.h"
 #include "Corium/System/DeviceInfo.h"

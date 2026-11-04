@@ -24,6 +24,7 @@ unsigned int decode_base64_length(const unsigned char input[], unsigned int inpu
 // writes a NUL too, output needs EGB64_LEN() + 1
 unsigned int encode_base64(const unsigned char input[], unsigned int input_length, unsigned char output[]);
 
+// no NUL, output needs decode_base64_length()
 unsigned int decode_base64(const unsigned char input[], unsigned int input_length, unsigned char output[]);
 
 #endif

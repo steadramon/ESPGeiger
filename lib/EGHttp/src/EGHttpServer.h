@@ -58,13 +58,21 @@
   // whole response, the loop waits on it
   #define EGHTTP_SEND_MS 15000
 #endif
-#ifndef EGHTTP_MAX_INFLIGHT
-  // lwIP drops SYNs past this
-  #ifdef ESP32
-    #define EGHTTP_MAX_INFLIGHT 10
-  #else
-    #define EGHTTP_MAX_INFLIGHT 8
-  #endif
+#ifndef EGHTTP_SEND_BUDGET_MS
+  // no room to write this long, the send gives up
+  #define EGHTTP_SEND_BUDGET_MS 2500
+#endif
+#ifndef EGHTTP_ACK_MS
+  // sent, not acked this long, dropped
+  #define EGHTTP_ACK_MS 5000
+#endif
+#ifndef EGHTTP_STREAM_IDLE_MS
+  // streamed body silent this long; a slow flash write stalls the window
+  #define EGHTTP_STREAM_IDLE_MS 60000
+#endif
+#if defined(ESP32) && !defined(EGHTTP_MAX_INFLIGHT)
+  // esp32 only, lwIP drops SYNs past this; the 8266 keeps EGTcp's backlog
+  #define EGHTTP_MAX_INFLIGHT 10
 #endif
 // EGHTTP_DEBUG traces to Serial
 
@@ -103,8 +111,9 @@ class EGHttpResponse {
     void send(uint16_t status, const __FlashStringHelper* contentType, const __FlashStringHelper* body);
     void sendGzipP(uint16_t status, const __FlashStringHelper* contentType,
                    const uint8_t* body, size_t len);
-    void redirect(const char* location);
-    void redirect(const __FlashStringHelper* location);
+    // false = not sent, eg CR/LF in it
+    bool redirect(const char* location);
+    bool redirect(const __FlashStringHelper* location);
 
     bool beginChunked(uint16_t status, const __FlashStringHelper* contentType);
     bool sendChunk(const char* data, size_t len);
@@ -115,8 +124,9 @@ class EGHttpResponse {
                 const __FlashStringHelper* suffix);
     bool endChunked();
 
-    void addHeader(const __FlashStringHelper* name, const char* value);
-    void addHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
+    // false = dropped: no room, CR/LF, or sent already
+    bool addHeader(const __FlashStringHelper* name, const char* value);
+    bool addHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
 
   private:
     friend class EGHttpServer;
@@ -128,8 +138,8 @@ class EGHttpResponse {
     bool _done = false;
 
     bool chunkOpen() const { return _slot && _chunked && !_done; }
-    void addHeaderP(const __FlashStringHelper* name, PGM_P value);
-    void redirectP(PGM_P location);
+    bool addHeaderP(const __FlashStringHelper* name, PGM_P value);
+    bool redirectP(PGM_P location);
     void writeHeadAndBodyP(const char* head, size_t headLen, PGM_P body, size_t bodyLen);
 };
 

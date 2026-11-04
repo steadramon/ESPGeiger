@@ -1,5 +1,5 @@
 /*
-  Fnv.h - FNV-1a, station slots are hashed with it so it never changes
+  Fnv.h - FNV-1a, send slots are hashed with it so it never changes
 
   Copyright (C) 2026 @steadramon
 

@@ -138,7 +138,7 @@ static bool denied(const uint8_t* b, size_t n) {
   const size_t len = sizeof(CLOCK_OFF) - 1;
   bool off = n == len && memcmp_P(b, CLOCK_OFF, len) == 0;
   if (off) {
-    Clock::resync = true;
+    Clock::request_resync();
     Log::console(PSTR("WebAPI: Clock off, re-syncing NTP"));
   }
   return off;
@@ -205,6 +205,11 @@ void WebAPI::loop(unsigned long now) {
     return;
   }
 
+#ifdef ESPGEIGER_ATTEST
+  // after the off / forget checks, before a post takes the request
+  if ((sign || _att == ATT_DUE || _att == ATT_FETCH) && station_id != 0 && !request.busy())
+    sendAttest(sign ? _an : nullptr);
+#endif
   if (nextHandshake == 0) {
     // own slot, a crash boot goes at once
     bool first = _hs_off == 0xFFFFFFFFu;
@@ -216,11 +221,6 @@ void WebAPI::loop(unsigned long now) {
   } else if (station_id != 0) {
     pingIfDue(now);
   }
-#ifdef ESPGEIGER_ATTEST
-  // after the off / forget checks above
-  if ((sign || _att == ATT_DUE || _att == ATT_FETCH) && station_id != 0 && !request.busy())
-    sendAttest(sign ? _an : nullptr);
-#endif
   if (request.busy()) {
     corium::Registry::due_at(this, request.due());   // the reply posts us sooner
     return;
@@ -484,7 +484,6 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
 #ifdef ESPGEIGER_ATTEST
 // official hardware, once a boot: challenge, then the chip signs it with our station key
 static const char ATTEST_TAG[] PROGMEM = "espgeiger-attest-v1";
-static constexpr size_t ATT_NONCE = 32;
 static constexpr size_t ATT_MAC = 6;
 
 // nonce nullptr = ask for one, or for the blob; a lost reply asks again after the next handshake

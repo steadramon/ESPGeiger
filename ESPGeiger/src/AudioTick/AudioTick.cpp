@@ -294,7 +294,13 @@ void AudioTick::notifyClick(unsigned long now_ms) {
   audio_enqueue(CLICK);
 }
 
-void AudioTick::playBootChime() { play_chime_now(_chime); }
+// on the aud task, setup goes on
+void AudioTick::playBootChime() {
+  AudioCmd cmd{};
+  cmd.type = AC_CHIME;
+  cmd.i1 = _chime;
+  audio_enqueue(cmd);
+}
 
 // false = 400 sent
 static bool tick_cmd_from(EGHttpRequest& req, EGHttpResponse& res, AudioCmd* cmd,

@@ -17,8 +17,6 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Same file in ESPGeiger-Gadget, keep in sync
-
 #pragma once
 
 #include <stdint.h>

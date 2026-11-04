@@ -36,7 +36,7 @@
 
 class Max7219Display : public corium::Module, public DisplayBackend {
   public:
-    const char* name() override { return "max72"; }
+    const char* name() override { return PSTR("max72"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     uint8_t display_order() override;
     bool hw_present() override { return true; }   // write only, no probe

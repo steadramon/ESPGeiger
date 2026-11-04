@@ -97,6 +97,9 @@ void EGLed::attach(uint8_t pin, bool low_active) {
   cfg.hpoint     = 0;
   ledc_channel_config(&cfg);
 #else
+#ifdef ESP8266
+  analogWriteRange(1023);   // core default is 255
+#endif
   pinMode(pin, OUTPUT);
 #endif
   _pin = pin;

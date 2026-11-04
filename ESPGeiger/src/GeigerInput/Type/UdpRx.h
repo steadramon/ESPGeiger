@@ -97,7 +97,7 @@ private:
   void climbRecoveryLadder(uint32_t now);
   void readDatagrams();
   void fireDueGapfills();
-  bool acceptChipid(const char* src_chipid);
+  bool acceptChipid(const char* src_chipid, bool click);
   void processDatagram(uint8_t* buf, size_t len);
   void processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
   uint32_t creditForwardGap(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
@@ -148,7 +148,6 @@ private:
 
   uint32_t _gapfill_due_ms[UDPRX_GAPFILL_QUEUE] = {0};
   uint8_t  _gapfill_count = 0;
-  uint32_t _gapfill_dropped = 0;
 };
 
 #endif

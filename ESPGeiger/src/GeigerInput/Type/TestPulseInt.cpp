@@ -107,17 +107,12 @@ void GeigerTestPulseInt::secondTicker() {
 #ifdef USE_PCNT
 // s_event_counter stays 0, UdpBlip adds it to total_clicks
 int GeigerTestPulseInt::collect() {
-#ifdef GEIGER_COUNT_TXPULSE
-  pcnt_take();   // keep the unit empty
-  return GeigerInput::collect();
-#else
   int16_t n = pcnt_take();
   if (n > 0) {
     setLastBlip();
     Counter::on_pulse_batch((uint16_t)n, (uint32_t)micros(), 1000000UL);
   }
   return n;
-#endif
 }
 #endif
 #endif // GEIGER_IS_TEST

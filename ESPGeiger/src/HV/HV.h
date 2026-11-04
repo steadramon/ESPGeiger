@@ -49,6 +49,7 @@
 #define GEIGERHW_FB_HIGH_MV 2400    // ADC top: low leg open
 #define GEIGERHW_FB_BAD_S 5
 #define GEIGERHW_RAMP_S 4           // boot soft start, a step a second
+#define GEIGERHW_LOW_S 30           // full trim, still under target: the /hv hint
 #endif
 
 #ifndef GEIGER_PWMPIN
@@ -178,6 +179,7 @@ class HV : public corium::Module {
       int get_duty() {
         return _hw_duty;
       }
+      int max_duty() const;
       void set_vd_ratio(int ratio) {
         _hw_vd_ratio = clamp(ratio, 0, 50000);   // 0 = ADC off
       }
@@ -203,8 +205,10 @@ class HV : public corium::Module {
       static constexpr uint8_t TOPIC_FAULT = Topic::HV_FAULT;
 #ifdef ESPGEIGER_HW32
       bool fb_fault() const { return _fb_fault; }
+      bool hv_low() const { return _low_s >= GEIGERHW_LOW_S; }
 #else
       bool fb_fault() const { return false; }
+      bool hv_low() const { return false; }
 #endif
       void clear_ov();
       void write_duty();
@@ -220,12 +224,13 @@ class HV : public corium::Module {
       int read_hv();
       void check_overvoltage(int volts);
       void trim_step();
-      int max_duty() const;
 #ifdef ESPGEIGER_HW32
       void check_feedback();
+      void note_low();
       bool    _fb_fault = false;   // till restart
       uint8_t _fb_bad_s = 0;
       uint8_t _ramp = 0;
+      uint8_t _low_s = 0;
 #endif
       int _pwm_pin = GEIGER_PWMPIN;
       int _hw_freq = GEIGERHW_FREQ;

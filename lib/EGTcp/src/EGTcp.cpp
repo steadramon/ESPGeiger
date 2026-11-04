@@ -279,7 +279,7 @@ bool EGTcpClient::connect(const char* host, uint16_t port) {
   if (e == 0) return dial(a, port);   // cached
   if (e == EGTCP_LATER) return true;
   _state = CLOSED;
-  _err = E_DNS;
+  _err = e == E_MEM ? E_MEM : E_DNS;
   rearm();
   return false;
 }

@@ -56,7 +56,7 @@ class EGUdp {
     // after begin(), the 8266 core's beginPacketMulticast()
     void setMulticast(const EGTcpAddr& iface, uint8_t ttl = 1);
 
-    // end() is fine in here, delete is not
+    // end() is fine in here, delete is not; data gone once it returns
     void onPacket(PacketFn cb) { _on_packet = cb; }
     // from the owner's loop, cheap when idle
     void poll() {

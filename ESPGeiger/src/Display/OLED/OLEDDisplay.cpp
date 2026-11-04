@@ -603,6 +603,7 @@ static uint8_t oled_i2c(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_pt
   switch (msg) {
     case U8X8_MSG_BYTE_START_TRANSFER:
       s_bus_skip = s_bus_fails >= BUS_FAILS && !reached(fast_millis(), s_bus_retry);
+      if (s_bus_skip) break;   // esp32 Wire holds its lock till endTransmission
       Wire.setClock(u8x8->bus_clock);
       Wire.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1);
       break;

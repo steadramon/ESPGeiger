@@ -165,6 +165,7 @@ bool Counter::snapshot_ring(RingSnapshot& s) const {
     if (now - s.newest_us > s.newest_us - s.oldest_us) count = 0;
   }
   IsrLock::leave(s_pulse_mux);
+  s.now_us = now;
   s.count = count;
   return count >= 2;
 }
@@ -261,6 +262,10 @@ TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
 }
 #endif
 
+static uint32_t next_boundary(time_t t, uint32_t secs) {
+  return (uint32_t)(t - t % secs + secs);
+}
+
 // t for the hour and day, 2^32 s isn't whole ones
 TICK_COLD void Counter::hour_rollover(time_t t) {
   // not static, guard runs every tick
@@ -269,7 +274,7 @@ TICK_COLD void Counter::hour_rollover(time_t t) {
   bool fire = false;
   if (s_next_boundary == 0) {
     // first sync
-    s_next_boundary = (uint32_t)(t - t % kBoundarySecs + kBoundarySecs);
+    s_next_boundary = next_boundary(t, kBoundarySecs);
     fire = true;
   } else if (reached(now, s_next_boundary)) {
     fire = true;
@@ -411,16 +416,22 @@ void Counter::reset_alarm() {
 
 void Counter::save_lifetime() {
   uint32_t now = Clock::epoch();
+  uint32_t secs = 0;
   if (_last_save_time_t > 0 && Clock::synced && reached(now, _last_save_time_t)) {
-    _lifetime_seconds_saved += now - _last_save_time_t;
+    secs = now - _last_save_time_t;
   }
+  _lifetime_seconds_saved += secs;
   if (Clock::synced) _last_save_time_t = now;
 
   corium::Prefs::putUInt("life", EG_K_CLK, total_clicks_lifetime);
   corium::Prefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover);
   corium::Prefs::putUInt("life", EG_K_FBT, _first_boot_ts);
   corium::Prefs::putUInt("life", EG_K_SECS, _lifetime_seconds_saved);
-  if (!corium::Prefs::commit()) Log::console(PSTR("Lifetime: not saved"));
+  if (!corium::Prefs::commit()) {
+    Log::console(PSTR("Lifetime: not saved"));
+    _rtc_carry_s += secs;   // the stash keeps it till a save
+    return;
+  }
   _rtc_unsaved_clicks = 0;
   _rtc_carry_s = 0;
   rtc_life_stash(0, 0);
@@ -437,12 +448,15 @@ unsigned long Counter::get_lifetime_seconds() const {
 
 void Counter::clock_stepped(int32_t delta_s) {
   if (_last_save_time_t) _last_save_time_t += delta_s;
+  // stamped before the step, 0 stays no time
+  if ((_pending_work & PENDING_RTC) && _rtc_pending_now) _rtc_pending_now += delta_s;
   // stamped from the bad time this boot
   if (_first_boot_ts && reached(_first_boot_ts, (uint32_t)(Clock::boot_epoch - delta_s))) {
     _first_boot_ts += delta_s;
     _pending_work |= PENDING_SAVE;
   }
-  s_next_boundary = 0;
+  // same hour, no early bar
+  if (s_next_boundary != next_boundary(time(nullptr), _boundary_secs)) s_next_boundary = 0;
   s_clock.read_next();
 }
 
@@ -557,7 +571,7 @@ bool Counter::get_saturated() {
 float Counter::get_cps_live() {
   RingSnapshot s;
   if (!snapshot_ring(s)) return 0.0f;
-  uint32_t span_us = s.newest_us - s.oldest_us;
+  uint32_t span_us = s.now_us - s.oldest_us;   // to now, falls once they stop
   if (span_us == 0) return 0.0f;
   return (float)(s.count - 1) * 1.0e6f / (float)span_us;
 }
@@ -746,7 +760,8 @@ void Counter::loop() {
     _pending_work = 0;
     if (pw & PENDING_RTC) {
       uint32_t delta_s = 0;
-      if (_last_save_time_t > 0 && reached(_rtc_pending_now, _last_save_time_t)) {
+      // 0 = stamped before the sync, no time
+      if (_rtc_pending_now && _last_save_time_t > 0 && reached(_rtc_pending_now, _last_save_time_t)) {
         delta_s = _rtc_pending_now - _last_save_time_t;
       }
       delta_s += _rtc_carry_s;

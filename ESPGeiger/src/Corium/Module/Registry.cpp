@@ -354,7 +354,7 @@ corium::Module* corium::Registry::find(const char* name) {
   return nullptr;
 }
 
-// stable, keeps registration order
+// stable, keeps registration order. _slot follows before any pre_wifi
 void corium::Registry::sort_by_priority() {
   for (uint8_t i = 1; i < _count; i++) {
     Slot cur = _slots[i];
@@ -365,6 +365,7 @@ void corium::Registry::sort_by_priority() {
     }
     _slots[j] = cur;
   }
+  for (uint8_t i = 0; i < _count; i++) _slots[i].module->_slot = i;
 }
 
 // cached, no virtual calls in loop_all(); nothing armed till a module asks
@@ -378,7 +379,6 @@ void corium::Registry::pre_wifi_all() {
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     corium::Module* m = s.module;
-    m->_slot = i;
     s.loop_last = now;
     s.next_due = now;
     s.period = 0;
@@ -419,9 +419,7 @@ const char* corium::Registry::crashed_in() {
 #endif
 
 bool corium::Registry::quarantined(corium::Module* m) {
-  if (!_safe_mode) return false;
-  for (uint8_t i = 0; i < _count; i++) {
-    if (_slots[i].module == m) return _slots[i].flags & FLAG_QUARANTINED;
-  }
-  return false;
+  if (!_safe_mode || !m) return false;
+  uint8_t i = m->_slot;
+  return i < _count && (_slots[i].flags & FLAG_QUARANTINED);
 }

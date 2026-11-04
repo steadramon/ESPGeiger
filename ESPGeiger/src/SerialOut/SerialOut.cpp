@@ -76,7 +76,7 @@ void SerialOut::on_prefs_loaded() {
   _baud       = (uint32_t)corium::Prefs::getUInt("sout", K_BAUD);
   if (_baud && _baud < SOUT_BAUD_MIN) _baud = SOUT_BAUD_MIN;
   if (_rest) drain(true);   // the rest now, before off or a new baud
-  Log::setSerialLogLevel(_interval == 0);
+  quiet_logs();
   corium::Registry::every(this, _interval > 0 ? LOOP_MS : 0);
   resolveFormat();
   applyBaud();
@@ -132,24 +132,25 @@ void SerialOut::print_usv() {
   Serial.print(buf);
 }
 
+// lines streaming, no logs between them
+void SerialOut::quiet_logs() { Log::setSerialLogLevel(_interval == 0); }
+
 void SerialOut::set_show(int var) {
-  _interval = (uint16_t)clamp(var, 0, (int)UINT16_MAX);
-  corium::Registry::due_in(this, REPLAN_MS);
   // keep flags for a bare show
-  if (_interval > 0 && _show_flags == 0) {
+  if (var > 0 && _show_flags == 0) {
     _show_flags = SHOW_CPM;
   }
-  Log::setSerialLogLevel(_interval == 0);
-  save();
+  setInterval((uint16_t)clamp(var, 0, (int)UINT16_MAX));
 }
 
 void SerialOut::setInterval(uint16_t v) {
   _interval = v;
   corium::Registry::due_in(this, REPLAN_MS);
+  quiet_logs();
   save();
 }
 
-void SerialOut::toggle(uint8_t show) { _show_flags ^= show; Log::setSerialLogLevel(_show_flags == 0); save(); }
+void SerialOut::toggle(uint8_t show) { _show_flags ^= show; save(); }
 
 // console
 
@@ -300,13 +301,7 @@ void SerialOut::loop(unsigned long now) {
 // HTTP routes
 
 static void hSerial(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  if (serialout.interval() == 0) {
-    serialout.setInterval(1);
-    Log::setSerialLogLevel(false);
-  } else {
-    serialout.setInterval(0);
-    Log::setSerialLogLevel(true);
-  }
+  serialout.setInterval(serialout.interval() == 0 ? 1 : 0);
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 

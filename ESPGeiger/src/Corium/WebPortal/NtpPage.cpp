@@ -69,6 +69,9 @@ void NtpPage::form(EGHttpResponse& res) {
              u,
              F("' data-option='"));
   egesc_html(esc, sizeof(esc), ntpclient.get_tz());
+#ifdef DISABLE_NTP
+  res.sendKV(nullptr, esc, F("'></select><button type=submit>Save</button></form>"));
+#else
   res.sendKV(nullptr,
              esc,
              F("'></select>"
@@ -76,6 +79,7 @@ void NtpPage::form(EGHttpResponse& res) {
                "<input id=ntps name=s maxlength=" STR(CORIUM_HOST_MAX) " value='"));
   egesc_html(esc, sizeof(esc), ntpclient.get_server());
   res.sendKV(nullptr, esc, F("'><button type=submit>Save</button></form>"));
+#endif
 }
 
 static void hNtpJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -95,8 +99,10 @@ static const char NTP_REFUSED_BODY[] PROGMEM =
 static void hNtpSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool ok = true;
   // arg() reuses its buffer, absent = not saved
+#ifndef DISABLE_NTP
   const char* s = req.arg(F("s"));
   if (!s || !corium::Prefs::put("ntp", corium::K_SERVER, s)) ok = false;
+#endif
   const char* t = req.arg(F("t"));
   if (!t || !corium::Prefs::put("ntp", corium::K_TZ,  t)) ok = false;
   bool wrote = corium::Prefs::commit();

@@ -35,6 +35,7 @@ namespace Clock {
   // who set it, a later sync from a lower one is ignored by its setter
   enum Source : uint8_t { NONE, KEPT, RTC, WEB, NTP };
   extern Source source;
+  // loop task only, a sync callback posts its module
   bool on_sync(Source s = NTP);   // true when s wasn't the last to set it
   bool set(time_t epoch, Source s);   // NTP sets it itself
   void kept();   // boot: esp32 keeps time() over a restart
@@ -48,6 +49,7 @@ namespace Clock {
   // a server says the clock is off, resync at most every 5 min
   extern bool resync;
   extern unsigned long resync_ms;
+  inline void request_resync() { resync = true; }
   bool resync_due(unsigned long now);
 
   // 32 bits, wraps in 2106: differences and reached() only,

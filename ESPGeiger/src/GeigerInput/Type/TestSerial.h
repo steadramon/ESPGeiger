@@ -20,12 +20,6 @@
 #define GEIGERTESTSRL_H
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-
-// before GeigerInputTest.h
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN 12
-#endif
-
 #include "SerialPort.h"
 #include "GeigerInput/GeigerInputTest.h"
 

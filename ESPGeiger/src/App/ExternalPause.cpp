@@ -48,7 +48,7 @@ bool ExternalPause::start_s(const char* secs) {
 
 bool ExternalPause::active() {
   if (!s_pause.armed()) return false;
-  if (s_pause.due(fast_millis())) {
+  if (reached_max(fast_millis(), s_pause.at, PAUSE_MAX_S * 1000U)) {
     s_pause.clear();
     Log::console(PSTR("External posts: resumed (timeout)"));
     return false;

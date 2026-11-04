@@ -143,11 +143,13 @@ bool Webhook::prepare(char* url, size_t cap, const char** body) {
   char* buffer = (char*)malloc(WEBHOOK_BUF_SIZE);
   if (!buffer) {
     Log::console(PSTR("Webhook: malloc(%u) failed"), (unsigned)WEBHOOK_BUF_SIZE);
+    note_publish(false);
     return false;
   }
   if (!build_body(buffer, key)) {
     free(buffer);
     Log::console(PSTR("Webhook: body too long, not sent"));
+    note_publish(false);
     return false;
   }
   *body = buffer;

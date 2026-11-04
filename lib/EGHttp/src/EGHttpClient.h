@@ -43,6 +43,18 @@
 #ifndef EGHTTP_BODY_CAP
   #define EGHTTP_BODY_CAP 256  // body kept without a sink, the rest dropped
 #endif
+#ifndef EGHTTP_LINE_CAP
+  #define EGHTTP_LINE_CAP 2048 // per reply line
+#endif
+#ifndef EGHTTP_HEAD_CAP
+  #define EGHTTP_HEAD_CAP 8192 // all reply headers
+#endif
+#ifndef EGHTTP_IN_CAP
+  #define EGHTTP_IN_CAP 256    // read buffer, the reply only
+#endif
+#ifndef EGHTTP_URL_P_MAX
+  #define EGHTTP_URL_P_MAX 127 // F() url for open()
+#endif
 
 // http only, one at a time, headers after open(), sink and redirects before send()
 class EGHttpClient {
@@ -52,9 +64,9 @@ class EGHttpClient {
     typedef void (*Wake)(void* arg);
 
     static const size_t BODY_CAP = EGHTTP_BODY_CAP;
-    static const size_t LINE_CAP = 2048;   // per line
-    static const size_t HEAD_CAP = 8192;   // all headers
-    static const size_t IN_CAP = 256;
+    static const size_t LINE_CAP = EGHTTP_LINE_CAP;
+    static const size_t HEAD_CAP = EGHTTP_HEAD_CAP;
+    static const size_t IN_CAP = EGHTTP_IN_CAP;
 
     EGHttpClient();
     ~EGHttpClient();
@@ -62,12 +74,13 @@ class EGHttpClient {
     EGHttpClient& operator=(const EGHttpClient&) = delete;
 
     bool open(const char* method, const char* url);   // dials
-    static const size_t URL_P_MAX = 127;
+    static const size_t URL_P_MAX = EGHTTP_URL_P_MAX;
     // url up to URL_P_MAX
     bool open(const __FlashStringHelper* method, const __FlashStringHelper* url);
-    void setReqHeader(const char* name, const char* value);
-    void setReqHeader(const __FlashStringHelper* name, const char* value);
-    void setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
+    // false = dropped; Host, Connection and the length ones are the client's
+    bool setReqHeader(const char* name, const char* value);
+    bool setReqHeader(const __FlashStringHelper* name, const char* value);
+    bool setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
     void setTimeout(uint16_t secs) { _timeoutS = secs; }   // silence, default 10
     void setDeadline(uint32_t ms) { _deadlineMs = ms; }    // whole request, 0 = none
 #if EGHTTP_REDIRECTS
@@ -76,7 +89,7 @@ class EGHttpClient {
 #if EGHTTP_SINK
     void setSink(Sink fn, void* arg) { _sink = fn; _sinkArg = arg; }
 #endif
-    // once it ends, from the owner's task
+    // once it ends, from the owner's task; not on abort()
     void setWake(Wake fn, void* arg) { _wake = fn; _wakeArg = arg; }
     bool send(const char* body = nullptr);
     bool send(const uint8_t* body, size_t len);
@@ -123,6 +136,7 @@ class EGHttpClient {
     void status_line();
     void header_line();
     static uint8_t header_kind(const char* name);
+    static bool owned(const char* name);
     void act_on(uint8_t kind, const char* value);
     void head_done();
     const char* url_start(const char* to, char* base, size_t n);

@@ -283,11 +283,15 @@ void HV::loop(unsigned long now) {
 #ifdef ESPGEIGER_HW32
   check_feedback();   // the sample is last second's duty, ratio 0 doesn't turn this off
   if (_ramp < GEIGERHW_RAMP_S) _ramp++;
+  note_low();
 #endif
   if (_pwm_pin >= 0) write_duty();
 #ifdef ESPG_HV_ADC
   if (_settle.due(now)) _settle.clear();   // a held compare goes stale at the wrap
-  if (_hw_vd_ratio == 0) return;
+  if (_hw_vd_ratio == 0) {
+    _adc_n = 0;
+    return;
+  }
   bool settled = corium::m_b(M_WARM) && !_settle.armed();
   int volts = read_hv();
   check_overvoltage(volts);
@@ -367,13 +371,26 @@ void HV::check_feedback() {
 }
 #endif
 
+static int trim_band(int ratio) {
+  int band = hvtrim_band(ratio);
+  return band < GEIGERHW_TRIM_BAND_MIN ? GEIGERHW_TRIM_BAND_MIN : band;
+}
+
+#ifdef ESPGEIGER_HW32
+// last second's reading
+void HV::note_low() {
+  bool top = _hv_target > 0 && _hw_vd_ratio > 0 && _duty_trim >= _trim_max;
+  int err = (int)_hv_target - (int)hvReading.get();
+  _low_s = hv_low_count(_low_s, err, trim_band(_hw_vd_ratio), top);
+}
+#endif
+
 void HV::trim_step() {
   static uint8_t secs = 0;
   if (++secs < _trim_s) return;
   secs = 0;
   int err = (int)_hv_target - (int)hvReading.get();
-  int band = hvtrim_band(_hw_vd_ratio);
-  if (band < GEIGERHW_TRIM_BAND_MIN) band = GEIGERHW_TRIM_BAND_MIN;
+  int band = trim_band(_hw_vd_ratio);
   int8_t old_trim = _duty_trim;
   if      (err >  band && _duty_trim <  _trim_max) _duty_trim++;
   else if (err < -band && _duty_trim > -_trim_max) _duty_trim--;
@@ -453,7 +470,7 @@ var hvK=live('/hvjson',1e3,function(s){
     SF.value=o.freq;SD.value=o.duty;ton();
     SB.disabled=!1;SB.textContent='Submit';
   }
-  ST.textContent=o.ov>1?'(feedback fault: HV off until restart)':o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
+  ST.textContent=o.ov>2?'(trim at max, still under target: raise duty or lower target)':o.ov>1?'(feedback fault: HV off until restart)':o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
 });
 addEventListener("load",()=>hvK(0));
 function tie(r,n,f){
@@ -550,8 +567,8 @@ static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     hv.get_hv_target(),
     hv.get_duty_trim(),
     GEIGERHW_MAX_FREQ,
-    GEIGERHW_MAX_DUTY,
-    hv.fb_fault() ? 2 : hv.ov_tripped() ? 1 : 0);
+    hv.max_duty(),
+    hv.fb_fault() ? 2 : hv.ov_tripped() ? 1 : hv.hv_low() ? 3 : 0);
   res.send(200, FPSTR(HTTP_CT_JSON), buf);
 }
 

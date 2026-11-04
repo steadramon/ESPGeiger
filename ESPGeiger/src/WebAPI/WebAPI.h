@@ -44,6 +44,10 @@
 #define WEBAPI_PRIV_LEN      24
 #define WEBAPI_SIG_LEN       (2 * WEBAPI_PRIV_LEN)
 
+#ifdef ESPGEIGER_ATTEST
+static constexpr size_t ATT_NONCE = 32;
+#endif
+
 class WebAPI : public corium::Sender {
   public:
     WebAPI();
@@ -106,7 +110,7 @@ class WebAPI : public corium::Sender {
     // WAIT = after the next good handshake, FETCH = burned but the blob is gone
     enum Att : uint8_t { ATT_WAIT, ATT_DUE, ATT_SIGN, ATT_FETCH, ATT_DONE };
     uint8_t _att = ATT_WAIT;
-    uint8_t _an[32];   // the challenge, signed and sent from loop()
+    uint8_t _an[ATT_NONCE];   // the challenge, signed and sent from loop()
     void sendAttest(const uint8_t* nonce);
     void onChallenge(int code, const uint8_t* r, size_t n);
     void onAttest(int code);

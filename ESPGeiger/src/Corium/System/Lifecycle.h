@@ -37,6 +37,7 @@ enum Event : uint8_t {
 
 typedef void (*Handler)(Event);
 
+// loop task only, handlers stay till restart and run inside send
 bool on(Handler h);   // false = full
 void send(Event e);
 

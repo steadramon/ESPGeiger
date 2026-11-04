@@ -149,13 +149,14 @@ bool GeigerUdpRx::ensureUdp() {
   return true;
 }
 
-bool GeigerUdpRx::acceptChipid(const char* src_chipid) {
+bool GeigerUdpRx::acceptChipid(const char* src_chipid, bool click) {
   if (_mode == 1) return true;   // sum
-  // pinned chipid, else first heard
+  // pinned chipid, else first click heard
   if (_pinned_chipid[0]) {
     return memcmp(_pinned_chipid, src_chipid, BLIP_ID_LEN) == 0;
   }
   if (_locked_chipid[0] == '\0') {
+    if (!click) return false;
     memcpy(_locked_chipid, src_chipid, BLIP_ID_LEN);
     _locked_chipid[BLIP_ID_LEN] = '\0';
     Log::console(PSTR("UdpRx: locked to %s"), _locked_chipid);
@@ -256,10 +257,7 @@ void GeigerUdpRx::scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint3
   if (window_ms == 0 || window_ms > 50) window_ms = 50;
   uint32_t r = (uint32_t)micros();
   for (uint32_t i = 0; i < gap_credit; i++) {
-    if (_gapfill_count >= UDPRX_GAPFILL_QUEUE) {
-      _gapfill_dropped += (gap_credit - i);
-      break;
-    }
+    if (_gapfill_count >= UDPRX_GAPFILL_QUEUE) break;
     r = xorshift32(r);
     _gapfill_due_ms[_gapfill_count++] = now_ms + (r % window_ms) + 1;
   }
@@ -323,15 +321,16 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   // own packets
   if (memcmp(buf + BLIP_ID_AT, DeviceInfo::chipid(), BLIP_ID_LEN) == 0) return;
   const char* src = (const char*)(buf + BLIP_ID_AT);
-  if (!acceptChipid(src)) return;
+  const uint8_t* s = buf + BLIP_SUFFIX_AT;
+  bool click = memcmp(s, SUFFIX_CLICK, 5) == 0;
+  if (!acceptChipid(src, click)) return;
 
   uint32_t now_ms = fast_millis();
   ProducerRecord* p = findOrAllocProducer(src, now_ms);
   _last_packet_ms = now_ms;
 
   // other paths only keep the producer alive
-  const uint8_t* s = buf + BLIP_SUFFIX_AT;
-  if (memcmp(s, SUFFIX_CLICK, 5) == 0) {
+  if (click) {
     processClick(buf, len, p, now_ms);
   } else if (memcmp(s, SUFFIX_ENV, 4) == 0) {
     processEnv(buf, len);

@@ -138,33 +138,35 @@ int EGHttpClient::start(const char* url) {
   return 0;
 }
 
-// bad ones dropped
-void EGHttpClient::setReqHeader(const char* name, const char* value) {
-  if (_phase != DIAL || _ready) return;
-  if (!eg_http_token(name, strlen(name)) || !eg_http_text(value, strlen(value))) return;
+// bad ones and the client's own dropped
+bool EGHttpClient::setReqHeader(const char* name, const char* value) {
+  if (_phase != DIAL || _ready) return false;
+  if (!eg_http_token(name, strlen(name)) || !eg_http_text(value, strlen(value))) return false;
+  if (owned(name)) return false;
   bool ok = _hdrs.add(name) && _hdrs.add_P(PSTR(": ")) && _hdrs.add(value) &&
             _hdrs.add_P(PSTR("\r\n"));
   if (!ok) _bad = true;
+  return ok;
 }
 
-void EGHttpClient::setReqHeader(const __FlashStringHelper* name, const char* value) {
+bool EGHttpClient::setReqHeader(const __FlashStringHelper* name, const char* value) {
   char n[48];
   if (strlen_P((PGM_P)name) >= sizeof(n)) {
     _bad = true;
-    return;
+    return false;
   }
   strncpy_P(n, (PGM_P)name, sizeof(n));
-  setReqHeader(n, value);
+  return setReqHeader(n, value);
 }
 
-void EGHttpClient::setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value) {
+bool EGHttpClient::setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value) {
   char v[64];
   if (strlen_P((PGM_P)value) >= sizeof(v)) {
     _bad = true;
-    return;
+    return false;
   }
   strncpy_P(v, (PGM_P)value, sizeof(v));
-  setReqHeader(name, v);
+  return setReqHeader(name, v);
 }
 
 bool EGHttpClient::send(const char* body) {
@@ -204,7 +206,10 @@ bool EGHttpClient::seal(const uint8_t* body, size_t len, bool has_body) {
 
 void EGHttpClient::abort() {
   if (_phase == IDLE || _phase == DONE) return;
+  Wake w = _wake;
+  _wake = nullptr;   // owner knows
   end(HTTPCODE_CONNECTION_LOST);
+  _wake = w;
   _pending = false;
   forget();
 }
@@ -430,6 +435,13 @@ uint8_t EGHttpClient::header_kind(const char* name) {
   if (same_P(name, PSTR("Transfer-Encoding"))) return H_CODING;
   if (same_P(name, PSTR("Location"))) return H_LOCATION;
   return H_OTHER;
+}
+
+// sent by start() and seal()
+bool EGHttpClient::owned(const char* name) {
+  uint8_t kind = header_kind(name);
+  return kind == H_LENGTH || kind == H_CODING || same_P(name, PSTR("Host")) ||
+         same_P(name, PSTR("Connection"));
 }
 
 void EGHttpClient::act_on(uint8_t kind, const char* value) {

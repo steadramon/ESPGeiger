@@ -88,8 +88,8 @@ struct Measure {
   MRead     read;
   MKind     kind;
   uint8_t     decimals;
-  uint8_t     unit;         // EGMU_*
-  uint8_t     outputs;      // EGM_OUT_*
+  uint8_t     unit;         // MU_*
+  uint8_t     outputs;      // M_OUT_*
   uint8_t     flags;        // M_DIAG, M_COUNTER
 };
 

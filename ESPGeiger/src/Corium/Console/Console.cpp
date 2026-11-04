@@ -231,7 +231,7 @@ void Console::loop(unsigned long now) {
 
 void Console::poll_boot() {
 #ifdef DISABLE_SERIALRX
-  improvSerial.poll();   // rx is the button or tube, improv only
+  improvSerial.poll();   // rx pin is the app's, improv only
 #else
   loop(0);   // improv's bytes first, the rest typed
 #endif
@@ -240,6 +240,25 @@ void Console::poll_boot() {
 // a cut line could still save
 static void too_long() {
   Log::console(PSTR("Command too long, max %u chars"), (unsigned)CONSOLE_LINE_MAX);
+}
+
+// set of a P_SENSITIVE pref: where its value starts, else null
+static char* secret_at(char* line) {
+  char* s = line;
+  while (*s == ' ') s++;
+  if (strncmp_P(s, C_SET, 3) != 0 || s[3] != ' ') return nullptr;
+  s += 4;
+  while (*s == ' ') s++;
+  char* dot = strchr(s, '.');
+  char* sp = dot ? strchr(dot, ' ') : nullptr;
+  if (!sp) return nullptr;
+  corium::Pref p;
+  *dot = '\0';
+  *sp = '\0';
+  bool secret = corium::Prefs::find_pref(s, dot + 1, &p) && (p.flags & corium::P_SENSITIVE);
+  *dot = '.';
+  *sp = ' ';
+  return secret ? sp : nullptr;
 }
 
 // today: shares the serial line, a half typed one is dropped
@@ -253,7 +272,9 @@ void Console::run(const char* text) {
   l.buf[n] = '\0';
   l.pos = n;
   // via Log so /cs sees it
-  Log::console(PSTR("> %s"), l.buf);
+  char* secret = secret_at(l.buf);
+  if (secret) Log::console(PSTR("> %.*s ***"), (int)(secret - l.buf), l.buf);
+  else Log::console(PSTR("> %s"), l.buf);
   exec(l);
 }
 
