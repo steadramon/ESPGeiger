@@ -258,65 +258,54 @@ bool DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
 #endif
 }
 
-// one case per reset cause
-uint8_t DeviceInfo::resetReason() {
+struct ResetRow {
+  uint8_t cause;   // the sdk's
+  uint8_t rr;
+  char text[19];
+};
+
 #ifdef ESP8266
-  uint32_t r = ESP.getResetInfoPtr()->reason;
-  switch (r) {
-    case REASON_DEFAULT_RST:      return RR_POWER_ON;
-    case REASON_EXT_SYS_RST:      return RR_PIN;
-    case REASON_SOFT_RESTART:     return RR_RESTART;
-    case REASON_EXCEPTION_RST:    return RR_EXCEPTION;
-    case REASON_WDT_RST:
-    case REASON_SOFT_WDT_RST:     return RR_WDT;
-    case REASON_DEEP_SLEEP_AWAKE: return RR_DEEP_SLEEP;
-    default:                      return RR_UNKNOWN;
-  }
-#elif defined(ESP32)
-  switch (esp_reset_reason()) {
-    case ESP_RST_POWERON:   return RR_POWER_ON;
-    case ESP_RST_EXT:       return RR_PIN;
-    case ESP_RST_SW:        return RR_RESTART;
-    case ESP_RST_PANIC:     return RR_EXCEPTION;
-    case ESP_RST_INT_WDT:
-    case ESP_RST_TASK_WDT:
-    case ESP_RST_WDT:       return RR_WDT;
-    case ESP_RST_BROWNOUT:  return RR_BROWNOUT;
-    case ESP_RST_DEEPSLEEP: return RR_DEEP_SLEEP;
-    default:                return RR_UNKNOWN;
-  }
+static const ResetRow RESETS[] PROGMEM = {
+  {REASON_DEFAULT_RST,      DeviceInfo::RR_POWER_ON,   "Power on"},
+  {REASON_WDT_RST,          DeviceInfo::RR_WDT,        "Hardware watchdog"},
+  {REASON_EXCEPTION_RST,    DeviceInfo::RR_EXCEPTION,  "Exception"},
+  {REASON_SOFT_WDT_RST,     DeviceInfo::RR_WDT,        "Software watchdog"},
+  {REASON_SOFT_RESTART,     DeviceInfo::RR_RESTART,    "Software restart"},
+  {REASON_DEEP_SLEEP_AWAKE, DeviceInfo::RR_DEEP_SLEEP, "Deep sleep wake"},
+  {REASON_EXT_SYS_RST,      DeviceInfo::RR_PIN,        "External reset"},
+};
+static uint32_t reset_cause() { return ESP.getResetInfoPtr()->reason; }
 #else
-  return RR_UNKNOWN;
+static const ResetRow RESETS[] = {
+  {ESP_RST_POWERON,   DeviceInfo::RR_POWER_ON,   "Power on"},
+  {ESP_RST_EXT,       DeviceInfo::RR_PIN,        "External reset"},
+  {ESP_RST_SW,        DeviceInfo::RR_RESTART,    "Software restart"},
+  {ESP_RST_PANIC,     DeviceInfo::RR_EXCEPTION,  "Exception"},
+  {ESP_RST_INT_WDT,   DeviceInfo::RR_WDT,        "Interrupt watchdog"},
+  {ESP_RST_TASK_WDT,  DeviceInfo::RR_WDT,        "Task watchdog"},
+  {ESP_RST_WDT,       DeviceInfo::RR_WDT,        "Watchdog"},
+  {ESP_RST_BROWNOUT,  DeviceInfo::RR_BROWNOUT,   "Brownout"},
+  {ESP_RST_DEEPSLEEP, DeviceInfo::RR_DEEP_SLEEP, "Deep sleep wake"},
+};
+static uint32_t reset_cause() { return esp_reset_reason(); }
 #endif
+
+static const ResetRow* reset_row() {
+  uint32_t c = reset_cause();
+  for (const ResetRow& r : RESETS) {
+    if (pgm_read_byte(&r.cause) == c) return &r;
+  }
+  return nullptr;
 }
 
-// one case per reset cause
+uint8_t DeviceInfo::resetReason() {
+  const ResetRow* r = reset_row();
+  return r ? pgm_read_byte(&r->rr) : RR_UNKNOWN;
+}
+
 const char* DeviceInfo::resetText() {
-#ifdef ESP8266
-  switch (ESP.getResetInfoPtr()->reason) {
-    case REASON_DEFAULT_RST:      return PSTR("Power on");
-    case REASON_WDT_RST:          return PSTR("Hardware watchdog");
-    case REASON_EXCEPTION_RST:    return PSTR("Exception");
-    case REASON_SOFT_WDT_RST:     return PSTR("Software watchdog");
-    case REASON_SOFT_RESTART:     return PSTR("Software restart");
-    case REASON_DEEP_SLEEP_AWAKE: return PSTR("Deep sleep wake");
-    case REASON_EXT_SYS_RST:      return PSTR("External reset");
-    default:                      return PSTR("Unknown");
-  }
-#else
-  switch (esp_reset_reason()) {
-    case ESP_RST_POWERON:   return "Power on";
-    case ESP_RST_EXT:       return "External reset";
-    case ESP_RST_SW:        return "Software restart";
-    case ESP_RST_PANIC:     return "Exception";
-    case ESP_RST_INT_WDT:   return "Interrupt watchdog";
-    case ESP_RST_TASK_WDT:  return "Task watchdog";
-    case ESP_RST_WDT:       return "Watchdog";
-    case ESP_RST_BROWNOUT:  return "Brownout";
-    case ESP_RST_DEEPSLEEP: return "Deep sleep wake";
-    default:                return "Unknown";
-  }
-#endif
+  const ResetRow* r = reset_row();
+  return r ? r->text : PSTR("Unknown");
 }
 
 uint32_t DeviceInfo::fwFingerprint() {

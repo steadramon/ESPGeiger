@@ -29,48 +29,50 @@
 static const char CL0_CRLF[]      PROGMEM = "Content-Length: 0\r\n";
 static const char CLOSE_NOSNIFF[] PROGMEM = "Connection: close\r\nX-Content-Type-Options: nosniff\r\n";
 static const char HEAD_OK[]       PROGMEM =
-  "HTTP/1.1 %u \r\nContent-Type: %s\r\nContent-Length: %u\r\n%s%s\r\n";
+  "HTTP/1.1 %u \r\nContent-Type: %s\r\n%sContent-Length: %u\r\n%s%s\r\n";
+static const char GZIP_CRLF[]     PROGMEM = "Content-Encoding: gzip\r\n";
 static const char CHUNK_HEAD[]    PROGMEM = "%X\r\n";
 static const char CRLF[]          PROGMEM = "\r\n";
 static const char M_GET[]         PROGMEM = "GET";
 static const char M_POST[]        PROGMEM = "POST";
 
-static const char R400[] PROGMEM =
-  "HTTP/1.1 400 Bad Request\r\n"
-  "Content-Length: 0\r\n"
-  "Connection: close\r\n\r\n";
-static const char R413[] PROGMEM =
-  "HTTP/1.1 413 Payload Too Large\r\n"
-  "Content-Length: 0\r\n"
-  "Connection: close\r\n\r\n";
-static const char R501[] PROGMEM =
-  "HTTP/1.1 501 Not Implemented\r\n"
-  "Content-Length: 0\r\n"
-  "Connection: close\r\n\r\n";
-static const char R503[] PROGMEM =
-  "HTTP/1.1 503 Service Unavailable\r\n"
-  "Content-Length: 0\r\n"
-  "Connection: close\r\n\r\n";
-static const char R503_RETRY1[] PROGMEM =
-  "HTTP/1.1 503 Service Unavailable\r\n"
-  "Content-Length: 0\r\n"
-  "Connection: close\r\n"
-  "Retry-After: 1\r\n\r\n";
-static const char R503_RETRY5[] PROGMEM =
-  "HTTP/1.1 503 Service Unavailable\r\n"
-  "Content-Length: 0\r\n"
-  "Connection: close\r\n"
-  "Retry-After: 5\r\n\r\n";
+static const char R_HTTP[]  PROGMEM = "HTTP/1.1 ";
+static const char R_CLOSE[] PROGMEM = "\r\nContent-Length: 0\r\nConnection: close\r\n";
+static const char R_RETRY[] PROGMEM = "Retry-After: ";
+static const char S400[] PROGMEM = "400 Bad Request";
+static const char S413[] PROGMEM = "413 Payload Too Large";
+static const char S501[] PROGMEM = "501 Not Implemented";
+static const char S503[] PROGMEM = "503 Service Unavailable";
 
 // no yield, one write or dropped
 static const size_t STATUS_MAX = 96;
-static_assert(sizeof(R503_RETRY5) <= STATUS_MAX, "canned reply over STATUS_MAX");
-static_assert(sizeof(R413) <= STATUS_MAX, "canned reply over STATUS_MAX");
+static_assert(sizeof(R_HTTP) + sizeof(S503) + sizeof(R_CLOSE) + sizeof(R_RETRY) + 2 * sizeof(CRLF) <= STATUS_MAX,
+              "canned reply over STATUS_MAX");
 
-static void write_status(EGTcpClient* c, PGM_P r, size_t len) {
+static size_t put_P(char* buf, size_t n, PGM_P p) {
+  size_t l = strlen_P(p);
+  memcpy_P(buf + n, p, l);
+  return n + l;
+}
+
+// retry_s one digit, 0 = none
+static size_t canned(char* buf, PGM_P status, uint8_t retry_s) {
+  size_t n = put_P(buf, 0, R_HTTP);
+  n = put_P(buf, n, status);
+  n = put_P(buf, n, R_CLOSE);
+  if (retry_s) {
+    n = put_P(buf, n, R_RETRY);
+    buf[n++] = '0' + retry_s;
+    n = put_P(buf, n, CRLF);
+  }
+  return put_P(buf, n, CRLF);
+}
+
+static void write_status(EGTcpClient* c, PGM_P status, uint8_t retry_s = 0) {
   char buf[STATUS_MAX];
-  if (!c || !r || !len || len > sizeof(buf) || c->space() < len) return;
-  memcpy_P(buf, r, len);
+  if (!c || !status) return;
+  size_t len = canned(buf, status, retry_s);
+  if (c->space() < len) return;
   c->write(buf, len);
 }
 
@@ -93,46 +95,28 @@ static bool eghttp_late(const EGHttpServer::Slot* s) {
   return (int32_t)(EGClock::now() - s->due) >= 0;
 }
 
+static bool send_fail(EGHttpServer::Slot* s, PGM_P why, size_t sent, size_t len) {
+  EGHTTP_TRACE(PSTR("[EGHttp] send aborted, %s at %u/%u B\n"), why, (unsigned)sent, (unsigned)len);
+  (void)why; (void)sent; (void)len;
+  s->send_aborted = true;
+  return false;
+}
+
 static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
   if (!s || s->send_aborted) return false;
   size_t sent = 0;
   uint32_t last_progress = EGClock::now();
   while (sent < len) {
     if (s->send_aborted) return false;
-    if (!s->client || !s->client->connected()) {
-      EGHTTP_TRACE(PSTR("[EGHttp] send aborted, client gone after %u/%u B\n"),
-                   (unsigned)sent, (unsigned)len);
-      s->send_aborted = true;
-      return false;
-    }
+    if (!s->client || !s->client->connected()) return send_fail(s, PSTR("client gone"), sent, len);
     // acks a little at a time still hold the loop
-    if (eghttp_late(s)) {
-      EGHTTP_TRACE(PSTR("[EGHttp] send aborted, past deadline at %u/%u B\n"),
-                   (unsigned)sent, (unsigned)len);
-      s->send_aborted = true;
-      return false;
-    }
+    if (eghttp_late(s)) return send_fail(s, PSTR("past deadline"), sent, len);
     size_t can = s->client->space();
-    if (can == 0) {
-      if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
-        EGHTTP_TRACE(PSTR("[EGHttp] send aborted, %ums no-progress at %u/%u B\n"),
-                     (unsigned)EGHTTP_SEND_BUDGET_MS, (unsigned)sent, (unsigned)len);
-        s->send_aborted = true;
-        return false;
-      }
-      EGHTTP_BACKPRESSURE_PAUSE();
-      continue;
-    }
     size_t take = (len - sent) < can ? (len - sent) : can;
     // write() already sends
-    size_t wrote = s->client->write(data + sent, take);
+    size_t wrote = take ? s->client->write(data + sent, take) : 0;
     if (wrote == 0) {
-      if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) {
-        EGHTTP_TRACE(PSTR("[EGHttp] send aborted, write stuck at %u/%u B\n"),
-                     (unsigned)sent, (unsigned)len);
-        s->send_aborted = true;
-        return false;
-      }
+      if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) return send_fail(s, PSTR("stalled"), sent, len);
       EGHTTP_BACKPRESSURE_PAUSE();
       continue;
     }
@@ -263,24 +247,17 @@ void EGHttpServer::onNotFound(Handler h, void* user) {
 
 void EGHttpServer::setBasicAuth(const __FlashStringHelper* user, const char* password,
                                   const __FlashStringHelper* realm) {
-  if (!user || !password || !*password) {
-    _authEnabled = false;
-    _authValue[0] = '\0';
-    return;
-  }
+  _authEnabled = false;
+  _authValue[0] = '\0';
+  if (!user || !password || !*password) return;
   char raw[EGHTTP_AUTH_MAX + 1];
   int rlen = snprintf_P(raw, sizeof(raw), PSTR("%s:%s"), (PGM_P)user, password);
-  if (rlen <= 0 || (size_t)rlen >= sizeof(raw)) {
-    _authEnabled = false;
-    _authValue[0] = '\0';
-    return;
-  }
+  if (rlen <= 0 || (size_t)rlen >= sizeof(raw)) return;
   unsigned char encoded[EGB64_LEN(EGHTTP_AUTH_MAX) + 1];
   unsigned int elen = encode_base64((const unsigned char*)raw, (unsigned int)rlen, encoded);
   encoded[elen] = '\0';
   int n = snprintf_P(_authValue, sizeof(_authValue), PSTR("Basic %s"), (char*)encoded);
   if (n <= 0 || (size_t)n >= sizeof(_authValue)) {
-    _authEnabled = false;
     _authValue[0] = '\0';
     return;
   }
@@ -348,6 +325,13 @@ void EGHttpServer::end() {
 }
 
 // fresh slot, buf kept
+// nullptr = none, cap 0
+static void set_acc(EGHttpServer::Slot* s, char* buf, size_t cap) {
+  s->chunkAcc    = buf;
+  s->chunkAccLen = 0;
+  s->chunkAccCap = buf ? cap : 0;
+}
+
 static void clear_slot(EGHttpServer::Slot* s) {
   s->delete_pending = false;
   s->len            = 0;
@@ -364,9 +348,7 @@ static void clear_slot(EGHttpServer::Slot* s) {
   s->send_aborted   = false;
   s->responded      = false;
   s->routeIdx       = 0xFF;
-  s->chunkAcc       = nullptr;
-  s->chunkAccLen    = 0;
-  s->chunkAccCap    = 0;
+  set_acc(s, nullptr, 0);
   s->tail           = nullptr;
   s->tailLen        = 0;
 }
@@ -386,19 +368,17 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(EGTcpClient* c) {
 
 void EGHttpServer::markDone(Slot* s) {
   if (s->buf) { free(s->buf); s->buf = nullptr; }
-  s->chunkAcc       = nullptr;
-  s->chunkAccLen    = 0;
-  s->chunkAccCap    = 0;
+  set_acc(s, nullptr, 0);
   s->state          = DONE;
   s->delete_pending = true;
   _tickWanted       = true;
 }
 
 // the slot keeps the client till reclaimed
-void EGHttpServer::sendStatusAndClose(Slot* s, const char* body, size_t len) {
+void EGHttpServer::sendStatusAndClose(Slot* s, const char* status, uint8_t retry_s) {
   markDone(s);
   if (!s->client) return;
-  write_status(s->client, (PGM_P)body, len);
+  write_status(s->client, (PGM_P)status, retry_s);
   s->client->close();
 }
 
@@ -451,7 +431,7 @@ void EGHttpServer::onClient(EGTcpClient* c) {
   if (s) { wireSlotCallbacks(s, c); return; }
 
   // full, 503 as queueing drops pbufs
-  write_status(c, R503_RETRY1, sizeof(R503_RETRY1) - 1);
+  write_status(c, S503, 1);
   c->close();
   delete c;
 }
@@ -473,7 +453,7 @@ void EGHttpServer::takeStream(Slot* s, const uint8_t* data, size_t len) {
   if (_streamLen + len > STREAM_BUF_SIZE) {
     Serial.printf_P(PSTR("[EGHttp] stream buf overflow: %u+%u>%u, aborting\n"),
                     (unsigned)_streamLen, (unsigned)len, (unsigned)STREAM_BUF_SIZE);
-    sendStatusAndClose(s, nullptr, 0);
+    sendStatusAndClose(s, nullptr);
     return;
   }
   memcpy(_streamBuf + _streamLen, data, len);
@@ -494,7 +474,7 @@ void EGHttpServer::takeData(Slot* s, const uint8_t* data, size_t len) {
   }
 
   if (s->len + len > EGHTTP_REQ_BUF) {
-    sendStatusAndClose(s, R413, sizeof(R413) - 1);
+    sendStatusAndClose(s, S413);
     return;
   }
   memcpy(s->buf + s->len, data, len);
@@ -507,13 +487,13 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
   // first byte, not accept
   if (!s->buf) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
   if (!s->buf) {
-    sendStatusAndClose(s, R503_RETRY1, sizeof(R503_RETRY1) - 1);
+    sendStatusAndClose(s, S503, 1);
     return;
   }
   if (s->len + len > EGHTTP_REQ_BUF) {
     Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
                     (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
-    sendStatusAndClose(s, R413, sizeof(R413) - 1);
+    sendStatusAndClose(s, S413);
     return;
   }
   memcpy(s->buf + s->len, data, len);
@@ -525,7 +505,7 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
   s->headersDone = true;
 
   if (eghttp_content_length(s->buf, s->headerEnd, &s->contentLength) == EGHTTP_CL_BAD) {
-    sendStatusAndClose(s, R400, sizeof(R400) - 1);
+    sendStatusAndClose(s, S400);
     return;
   }
 
@@ -534,7 +514,7 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
     // auth before any body
     if (_authEnabled && !authorized(s)) {
       sendUnauthorized(s);
-      sendStatusAndClose(s, nullptr, 0);
+      sendStatusAndClose(s, nullptr);
       return;
     }
     beginStream(s, len);
@@ -543,7 +523,7 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
 
   // room for the NUL
   if (s->contentLength >= EGHTTP_REQ_BUF - s->headerEnd) {
-    sendStatusAndClose(s, R413, sizeof(R413) - 1);
+    sendStatusAndClose(s, S413);
     return;
   }
   if (s->len >= s->headerEnd + s->contentLength) {
@@ -553,7 +533,7 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
 
 void EGHttpServer::beginStream(Slot* s, size_t len) {
   if (_streamOwner) {
-    sendStatusAndClose(s, R503_RETRY5, sizeof(R503_RETRY5) - 1);
+    sendStatusAndClose(s, S503, 5);
     return;
   }
   // a small form needs no whole window, takeStream stops at Content-Length
@@ -562,7 +542,7 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   if (!buf) {
     Serial.printf_P(PSTR("[EGHttp] stream buf alloc failed (need %u)\n"),
                     (unsigned)cap);
-    sendStatusAndClose(s, R503, sizeof(R503) - 1);
+    sendStatusAndClose(s, S503);
     return;
   }
   size_t inBuf = s->len - s->headerEnd;
@@ -682,21 +662,12 @@ void EGHttpServer::claimChunkAcc(Slot* s) {
   if (!_dispatchChunkAcc) {
     _dispatchChunkAcc = (char*)malloc(EGHTTP_CHUNK_ACC);
   }
-  s->chunkAcc    = _dispatchChunkAcc;
-  s->chunkAccLen = 0;
-  s->chunkAccCap = _dispatchChunkAcc ? EGHTTP_CHUNK_ACC : 0;
+  set_acc(s, _dispatchChunkAcc, EGHTTP_CHUNK_ACC);
 #else
   // tail only, +1 keeps the body's NUL
   size_t reqUsed = s->headerEnd + (s->streaming ? 0 : s->contentLength) + 1;
-  if (s->buf && reqUsed < EGHTTP_REQ_BUF) {
-    s->chunkAcc    = s->buf + reqUsed;
-    s->chunkAccLen = 0;
-    s->chunkAccCap = EGHTTP_REQ_BUF - reqUsed;
-  } else {
-    s->chunkAcc    = nullptr;
-    s->chunkAccLen = 0;
-    s->chunkAccCap = 0;
-  }
+  if (s->buf && reqUsed < EGHTTP_REQ_BUF) set_acc(s, s->buf + reqUsed, EGHTTP_REQ_BUF - reqUsed);
+  else                                    set_acc(s, nullptr, 0);
 #endif
 }
 
@@ -760,13 +731,18 @@ void EGHttpServer::sendUnauthorized(Slot* s) {
   }
 }
 
+static void reply_status(EGHttpServer::Slot* s, PGM_P status) {
+  char buf[STATUS_MAX];
+  yield_write_sram(s, buf, canned(buf, status, 0));
+}
+
 void EGHttpServer::dispatch(Slot* s) {
   EGHttpRequest req;
   EGHttpResponse res;
   res._slot = s;
 
   if (!eghttp_parse_method(s->buf, &req._method)) {
-    yield_write_pgm(s, R501, sizeof(R501) - 1);
+    reply_status(s, S501);
     return;
   }
   if (!readRequest(s, req)) return;
@@ -776,7 +752,7 @@ void EGHttpServer::dispatch(Slot* s) {
     return;
   }
   if (!argsFit(s, req)) {
-    yield_write_pgm(s, R400, sizeof(R400) - 1);
+    reply_status(s, S400);
     return;
   }
 
@@ -796,9 +772,7 @@ void EGHttpServer::dispatch(Slot* s) {
 }
 
 void EGHttpServer::dropChunkAcc(Slot* s) {
-  s->chunkAcc    = nullptr;
-  s->chunkAccLen = 0;
-  s->chunkAccCap = 0;
+  set_acc(s, nullptr, 0);
 #ifdef ESP32
   // per response, not held idle
   free(_dispatchChunkAcc);
@@ -887,32 +861,38 @@ const char* EGHttpRequest::decodeArg(const char* body, size_t bodyLen,
   return eghttp_form_find(body, bodyLen, name, out, cap) ? out : nullptr;
 }
 
-static bool eghttp_acc_append(EGHttpServer::Slot* s, const char* data, size_t len) {
-  if (!s->chunkAcc || s->chunkAccCap == 0) return yield_write_sram(s, data, len);
+static bool eghttp_write(EGHttpServer::Slot* s, const char* data, size_t len, bool pgm) {
+  return pgm ? yield_write_pgm(s, data, len) : yield_write_sram(s, data, len);
+}
+
+// pgm = flash data
+static bool eghttp_acc_add(EGHttpServer::Slot* s, const char* data, size_t len, bool pgm) {
+  if (!s->chunkAcc || s->chunkAccCap == 0) return eghttp_write(s, data, len, pgm);
   if (s->chunkAccLen + len > s->chunkAccCap) {
     if (s->chunkAccLen > 0) {
       if (!yield_write_sram(s, s->chunkAcc, s->chunkAccLen)) return false;
       s->chunkAccLen = 0;
     }
-    if (len >= s->chunkAccCap) return yield_write_sram(s, data, len);
+    if (len >= s->chunkAccCap) return eghttp_write(s, data, len, pgm);
   }
-  memcpy(s->chunkAcc + s->chunkAccLen, data, len);
+  if (pgm) memcpy_P(s->chunkAcc + s->chunkAccLen, data, len);
+  else     memcpy(s->chunkAcc + s->chunkAccLen, data, len);
   s->chunkAccLen += len;
   return true;
 }
 
+static bool eghttp_acc_append(EGHttpServer::Slot* s, const char* data, size_t len) {
+  return eghttp_acc_add(s, data, len, false);
+}
+
 static bool eghttp_acc_append_pgm(EGHttpServer::Slot* s, PGM_P data, size_t len) {
-  if (!s->chunkAcc || s->chunkAccCap == 0) return yield_write_pgm(s, data, len);
-  if (s->chunkAccLen + len > s->chunkAccCap) {
-    if (s->chunkAccLen > 0) {
-      if (!yield_write_sram(s, s->chunkAcc, s->chunkAccLen)) return false;
-      s->chunkAccLen = 0;
-    }
-    if (len >= s->chunkAccCap) return yield_write_pgm(s, data, len);
-  }
-  memcpy_P(s->chunkAcc + s->chunkAccLen, data, len);
-  s->chunkAccLen += len;
-  return true;
+  return eghttp_acc_add(s, data, len, true);
+}
+
+static bool eghttp_chunk_head(EGHttpServer::Slot* s, size_t len) {
+  char hdr[16];
+  int hn = snprintf_P(hdr, sizeof(hdr), CHUNK_HEAD, (unsigned)len);
+  return eghttp_acc_append(s, hdr, (size_t)hn);
 }
 
 static bool eghttp_acc_flush(EGHttpServer::Slot* s) {
@@ -954,15 +934,22 @@ void EGHttpResponse::redirect(const char* location) {
   if (eghttp_text(location)) redirectP(location);
 }
 
+// 0 = too long
+static int eghttp_head(char (&head)[256], uint16_t status, PGM_P ct, PGM_P enc,
+                       size_t len, const char* extra) {
+  int n = snprintf_P(head, sizeof(head), HEAD_OK,
+    status, ct, enc, (unsigned)len, CLOSE_NOSNIFF, extra);
+  return eghttp_head_fits(n, sizeof(head)) ? n : 0;
+}
+
 // RAM only, F() has its own
 void EGHttpResponse::send(uint16_t status, const __FlashStringHelper* contentType, const char* body) {
   if (!_slot || _started || _done) return;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   size_t bodyLen = body ? strlen(body) : 0;
   char head[256];
-  int n = snprintf_P(head, sizeof(head), HEAD_OK,
-    status, (PGM_P)contentType, (unsigned)bodyLen, CLOSE_NOSNIFF, _extraHeaders);
-  if (!eghttp_head_fits(n, sizeof(head))) return;
+  int n = eghttp_head(head, status, (PGM_P)contentType, PSTR(""), bodyLen, _extraHeaders);
+  if (!n) return;
   if (s->chunkAcc && s->chunkAccCap > 0) {
     s->chunkAccLen = 0;
     bool ok = eghttp_acc_append(s, head, (size_t)n);
@@ -982,9 +969,8 @@ void EGHttpResponse::send(uint16_t status, const __FlashStringHelper* contentTyp
   if (!_slot || _started || _done) return;
   size_t bodyLen = body ? strlen_P((PGM_P)body) : 0;
   char head[256];
-  int n = snprintf_P(head, sizeof(head), HEAD_OK,
-    status, (PGM_P)contentType, (unsigned)bodyLen, CLOSE_NOSNIFF, _extraHeaders);
-  if (!eghttp_head_fits(n, sizeof(head))) return;
+  int n = eghttp_head(head, status, (PGM_P)contentType, PSTR(""), bodyLen, _extraHeaders);
+  if (!n) return;
   writeHeadAndBodyP(head, (size_t)n, (PGM_P)body, bodyLen);
 }
 
@@ -992,11 +978,8 @@ void EGHttpResponse::sendGzipP(uint16_t status, const __FlashStringHelper* conte
                                  const uint8_t* body, size_t len) {
   if (!_slot || _started || _done) return;
   char head[256];
-  int n = snprintf_P(head, sizeof(head),
-    PSTR("HTTP/1.1 %u \r\nContent-Type: %s\r\nContent-Encoding: gzip\r\n"
-         "Content-Length: %u\r\n%s%s\r\n"),
-    status, (PGM_P)contentType, (unsigned)len, CLOSE_NOSNIFF, _extraHeaders);
-  if (!eghttp_head_fits(n, sizeof(head))) return;
+  int n = eghttp_head(head, status, (PGM_P)contentType, GZIP_CRLF, len, _extraHeaders);
+  if (!n) return;
   writeHeadAndBodyP(head, (size_t)n, (PGM_P)body, len);
 }
 
@@ -1045,12 +1028,9 @@ bool EGHttpResponse::beginChunked(uint16_t status, const __FlashStringHelper* co
 bool EGHttpResponse::sendChunk(const char* data, size_t len) {
   if (!chunkOpen() || len == 0) return false;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
-  char hdr[16];
-  int hn = snprintf_P(hdr, sizeof(hdr), CHUNK_HEAD, (unsigned)len);
-  if (!eghttp_acc_append(s, hdr, (size_t)hn))   return false;
+  if (!eghttp_chunk_head(s, len))               return false;
   if (!eghttp_acc_append(s, data, len))         return false;
-  if (!eghttp_acc_append_pgm(s, CRLF, 2))       return false;
-  return true;
+  return eghttp_acc_append_pgm(s, CRLF, 2);
 }
 
 bool EGHttpResponse::sendChunk(const char* data) {
@@ -1059,16 +1039,8 @@ bool EGHttpResponse::sendChunk(const char* data) {
 }
 
 bool EGHttpResponse::sendChunk(const __FlashStringHelper* data) {
-  if (!chunkOpen() || !data) return false;
-  auto* s = static_cast<EGHttpServer::Slot*>(_slot);
-  size_t len = strlen_P((PGM_P)data);
-  if (len == 0) return false;
-  char hdr[16];
-  int hn = snprintf_P(hdr, sizeof(hdr), CHUNK_HEAD, (unsigned)len);
-  if (!eghttp_acc_append(s, hdr, (size_t)hn))      return false;
-  if (!eghttp_acc_append_pgm(s, (PGM_P)data, len)) return false;
-  if (!eghttp_acc_append_pgm(s, CRLF, 2))          return false;
-  return true;
+  if (!data || !pgm_read_byte((PGM_P)data)) return false;
+  return sendKV(data, nullptr, nullptr);
 }
 
 bool EGHttpResponse::sendKV(const __FlashStringHelper* prefix, const char* value) {
@@ -1094,9 +1066,7 @@ bool EGHttpResponse::sendKV(const __FlashStringHelper* prefix, const char* value
   size_t sLen = eghttp_flash_len(suffix);
   size_t total = pLen + vLen + sLen;
   if (total == 0) return true;
-  char hdr[16];
-  int hn = snprintf_P(hdr, sizeof(hdr), CHUNK_HEAD, (unsigned)total);
-  if (!eghttp_acc_append(s, hdr, (size_t)hn))            return false;
+  if (!eghttp_chunk_head(s, total))                      return false;
   if (!eghttp_acc_append_part_P(s, prefix, pLen))        return false;
   if (vLen && !eghttp_acc_append(s, value, vLen))        return false;
   if (!eghttp_acc_append_part_P(s, suffix, sLen))        return false;

@@ -18,6 +18,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGTcpPort.h"
+#include "EGLwipHop.h"
 
 #include <new>
 #include <string.h>
@@ -29,7 +30,6 @@ extern "C" {
 #include "lwip/priv/tcp_priv.h"
 }
 #if defined(ESP32)
-#include "lwip/priv/tcpip_priv.h"
 #include <Arduino.h>
 #endif
 
@@ -85,60 +85,6 @@ struct Call {
 };
 
 typedef void (*StackFn)(Call* m);
-
-#if defined(ESP32)
-struct Hop {
-  struct tcpip_api_call_data call;
-  StackFn fn;
-  Call* m;
-};
-
-static err_t hop(struct tcpip_api_call_data* d) {
-  Hop* h = reinterpret_cast<Hop*>(d);
-  h->fn(h->m);
-  return ERR_OK;
-}
-
-static err_t on_stack(StackFn fn, Call& m) {
-  Hop h{};
-  h.fn = fn;
-  h.m = &m;
-  tcpip_api_call(hop, &h.call);
-  return m.err;
-}
-#else
-static err_t on_stack(StackFn fn, Call& m) {
-  fn(&m);
-  return m.err;
-}
-#endif
-
-static void to_addr(const ip_addr_t& ip, EGTcpAddr* a) {
-  *a = EGTcpAddr();
-#if LWIP_IPV6
-  if (IP_IS_V6(&ip)) {
-    a->v6 = 1;
-    memcpy(a->b, ip_2_ip6(&ip)->addr, 16);
-    return;
-  }
-#endif
-  uint32_t v = ip4_addr_get_u32(ip_2_ip4(&ip));
-  memcpy(a->b, &v, 4);   // network order both
-}
-
-static void from_addr(const EGTcpAddr& a, ip_addr_t* ip) {
-  memset(ip, 0, sizeof(*ip));
-#if LWIP_IPV6
-  if (a.v6) {
-    IP_SET_TYPE_VAL(*ip, IPADDR_TYPE_V6);
-    memcpy(ip_2_ip6(ip)->addr, a.b, 16);
-    return;
-  }
-#endif
-  uint32_t v;
-  memcpy(&v, a.b, 4);
-  ip_addr_set_ip4_u32(ip, v);
-}
 
 // tmr = last heard
 static err_t linger_poll(void*, tcp_pcb* p) {
@@ -307,16 +253,20 @@ struct EGTcpLwip {
    * Calls, each body on lwIP's side: _h is exact there
    */
 
-  static void connect_api(Call* m) {
+  // nullptr = ERR_MEM in m
+  static tcp_pcb* new_pcb(Call* m) {
 #if LWIP_IPV4 && LWIP_IPV6
     tcp_pcb* p = tcp_new_ip_type(IP_GET_TYPE(m->addr));
 #else
     tcp_pcb* p = tcp_new();
 #endif
-    if (!p) {
-      m->err = ERR_MEM;
-      return;
-    }
+    if (!p) m->err = ERR_MEM;
+    return p;
+  }
+
+  static void connect_api(Call* m) {
+    tcp_pcb* p = new_pcb(m);
+    if (!p) return;
     bind(p, m->c);
     own(m->c, p);
     m->err = tcp_connect(p, m->addr, m->port, on_connected);
@@ -402,15 +352,8 @@ struct EGTcpLwip {
   }
 
   static void listen_api(Call* m) {
-#if LWIP_IPV4 && LWIP_IPV6
-    tcp_pcb* p = tcp_new_ip_type(IP_GET_TYPE(m->addr));
-#else
-    tcp_pcb* p = tcp_new();
-#endif
-    if (!p) {
-      m->err = ERR_MEM;
-      return;
-    }
+    tcp_pcb* p = new_pcb(m);
+    if (!p) return;
     ip_set_option(p, SOF_REUSEADDR);   // rebind with clients in TIME_WAIT
     m->err = tcp_bind(p, m->addr, m->port);
     tcp_pcb* l = m->err == ERR_OK ? tcp_listen_with_backlog(p, m->flags) : nullptr;

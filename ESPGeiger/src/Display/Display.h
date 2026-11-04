@@ -90,15 +90,15 @@ class Display : public corium::Module {
     bool lit() const { return _lit; }
 
     // core rows, found at the first prefs load
-    float cpm()       { return f(_cpm); }
-    float cpm5()      { return f(_cpm5); }
-    float cpm15()     { return f(_cpm15); }
-    float cps()       { return f(_cps); }
-    float usv()       { return f(_usv); }
-    float ratio()     { return f(_ratio); }
-    bool  warm()      { return b(_warm); }
-    bool  no_counts() { return b(_none); }
-    bool  alert()     { return b(_alert); }
+    float cpm()       { return corium::m_read_f(_cpm); }
+    float cpm5()      { return corium::m_read_f(_cpm5); }
+    float cpm15()     { return corium::m_read_f(_cpm15); }
+    float cps()       { return corium::m_read_f(_cps); }
+    float usv()       { return corium::m_read_f(_usv); }
+    float ratio()     { return corium::m_read_f(_ratio); }
+    bool  warm()      { return corium::m_read_b(_warm); }
+    bool  no_counts() { return corium::m_read_b(_none); }
+    bool  alert()     { return corium::m_read_b(_alert); }
     uint32_t blip() {
       corium::MValue v;
       return (_blip && _blip(&v)) ? v.u : 0;
@@ -141,14 +141,6 @@ class Display : public corium::Module {
       _none  = corium::m_core_read(PSTR("no_counts"), corium::M_BOOL);
       _alert = corium::m_core_read(PSTR("alert"),     corium::M_BOOL);
       _blip  = corium::m_core_read(PSTR("blip"),      corium::M_U32);
-    }
-    static float f(corium::MRead r) {
-      corium::MValue v;
-      return (r && r(&v)) ? v.f : NAN;
-    }
-    static bool b(corium::MRead r) {
-      corium::MValue v;
-      return r && r(&v) && v.b;
     }
     corium::MRead _cpm = nullptr, _cpm5 = nullptr, _cpm15 = nullptr, _cps = nullptr, _usv = nullptr;
     corium::MRead _ratio = nullptr, _warm = nullptr, _none = nullptr, _alert = nullptr, _blip = nullptr;

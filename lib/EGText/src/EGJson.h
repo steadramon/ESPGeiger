@@ -51,6 +51,7 @@ private:
   void close(char c);
   void name(const char* key);
   void put(const char* s, size_t n);
+  void num(const char* key, const char* t, int n);   // key and digits as one field
   void cut();
   void spill();
 

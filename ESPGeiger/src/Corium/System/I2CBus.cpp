@@ -41,15 +41,13 @@ public:
 static I2CPrefs i2cprefs;
 CORIUM_REGISTER_MODULE(i2cprefs)
 
-#define I2C_STR_(x) #x
-#define I2C_STR(x) I2C_STR_(x)
 
 CORIUM_PSTR(I2_L_SDA, "SDA Pin");
 CORIUM_PSTR(I2_L_SCL, "SCL Pin");
 
 static const corium::Pref I2C_PREF_ITEMS[] PROGMEM = {
-  {corium::K_SDA, I2_L_SDA, corium::H_RBA, I2C_STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
-  {corium::K_SCL, I2_L_SCL, corium::H_RBA, I2C_STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
+  {corium::K_SDA, I2_L_SDA, corium::H_RBA, STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
+  {corium::K_SCL, I2_L_SCL, corium::H_RBA, STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
 };
 
 static const corium::PrefGroup I2C_PREF_GROUP PROGMEM = {

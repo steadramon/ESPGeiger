@@ -333,20 +333,6 @@ static void klaxon_square_sweep(float f_start, float f_end, uint16_t ms, int pea
   }
 }
 
-static void klaxon_silence(uint16_t ms) {
-  if (ms == 0) return;
-  constexpr int OUT_CHUNK = 256;
-  static const int16_t zeros[OUT_CHUNK] = {0};
-  uint32_t remaining = ms_to_samples(ms);
-  while (remaining > 0) {
-    const uint16_t n = (remaining > OUT_CHUNK) ? OUT_CHUNK : (uint16_t)remaining;
-    size_t w;
-    i2s_write(I2S_NUM_0, zeros, n * sizeof(int16_t), &w,
-              100 / portTICK_PERIOD_MS);
-    remaining -= n;
-  }
-}
-
 // the audio worker's speech commands
 static void voice_cmd(const AudioCmd& cmd) {
   switch (cmd.type) {
@@ -452,17 +438,7 @@ void Voice::announce() {
 }
 
 void Voice::silence(uint16_t ms) {
-  if (ms == 0) return;
-  constexpr uint16_t CHUNK = 256;
-  static const int16_t zeros[CHUNK] = {0};
-  uint32_t remaining = ms_to_samples(ms);
-  while (remaining > 0) {
-    const uint16_t n = (remaining > CHUNK) ? CHUNK : (uint16_t)remaining;
-    size_t w;
-    i2s_write(I2S_NUM_0, zeros, n * sizeof(int16_t), &w,
-              100 / portTICK_PERIOD_MS);
-    remaining -= n;
-  }
+  audio_silence(ms);
 }
 
 void Voice::speakWord(const char* name, float pitch_scale) {
@@ -615,7 +591,7 @@ void Voice::playKlaxon(uint8_t type) {
       for (int c = 0; c < 5; c++) {
         klaxon_square_tone(600, 380, peak);
         klaxon_square_tone(300, 380, peak);
-        klaxon_silence(140);
+        audio_silence(140);
       }
       break;
     case 4:

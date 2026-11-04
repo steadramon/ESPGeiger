@@ -34,8 +34,6 @@ CORIUM_REGISTER_MODULE(display)
 
 const char W_APP_NAME[] PROGMEM = THING_NAME;
 
-#define DISP_STR_(x) #x
-#define DISP_STR(x) DISP_STR_(x)
 
 CORIUM_PSTR(K_RST,      "rst");
 CORIUM_PSTR(K_FLIP,     "flip");
@@ -56,8 +54,8 @@ CORIUM_PSTR(DS_H_OFT, "Display off (used when Timeout = 0)");
 CORIUM_PSTR(DS_H_ONT, "Display on");
 CORIUM_PSTR(DS_H_OFT, "Display off");
 #endif
-#ifndef OLED_PINS_BLOCKED
 CORIUM_PSTR(DS_L_FLP, "Flip 180\xC2\xB0");
+#ifndef OLED_PINS_BLOCKED
 CORIUM_PSTR(DS_L_TYP, "Display Type");
 #ifdef ESP32
 #ifdef MAX7219_DISPLAY
@@ -87,13 +85,13 @@ CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot t
 // 0.12 keys, never rename
 static const corium::Pref DISPLAY_PREF_ITEMS[] PROGMEM = {
 #ifndef OLED_PINS_BLOCKED
-  {EG_K_TYPE,       DS_L_TYP, corium::H_RBA, DISP_STR(OLED_TYPE), DS_O_TYP, 0, DS_TYPE_MAX, 0, corium::P_ENUM, corium::P_REBOOT},
+  {EG_K_TYPE,       DS_L_TYP, corium::H_RBA, STR(OLED_TYPE), DS_O_TYP, 0, DS_TYPE_MAX, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
   {EG_K_BRIGHTNESS, EG_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
 #ifndef OLED_PINS_BLOCKED
-  {K_RST,           DS_L_RST, DS_H_RST, DISP_STR(OLED_RST), nullptr, 0, 255, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT},
-  {K_FLIP,          DS_L_FLP, corium::H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
+  {K_RST,           DS_L_RST, DS_H_RST, STR(OLED_RST), nullptr, 0, 255, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
+  {K_FLIP,          DS_L_FLP, corium::H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
 #ifdef GEIGER_PUSHBUTTON
   {K_TIMEOUT,       DS_L_TMO, DS_H_TMO, "120", nullptr, 0, 99999, 0, corium::P_UINT, 0},
 #endif

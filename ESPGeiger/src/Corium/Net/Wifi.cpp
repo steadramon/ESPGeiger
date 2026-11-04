@@ -437,12 +437,17 @@ static void run_portal(EGPortal* portal, bool haveCreds) {
   }
 }
 
+// true = a static IP set
+static bool sta_up() {
+  WiFi.mode(WIFI_STA);
+  Wifi::applyRuntimeNetPrefs();
+  return Wifi::applyStaticConfig();
+}
+
 static bool join_or_portal() {
   bool haveCreds = Wifi::hasSavedCreds();
   if (haveCreds) {
-    WiFi.mode(WIFI_STA);
-    Wifi::applyRuntimeNetPrefs();
-    bool staticOn = Wifi::applyStaticConfig();
+    bool staticOn = sta_up();
     if (join_saved_network()) {
       probe_new_static_config(staticOn);
       return true;
@@ -473,9 +478,7 @@ static bool join_or_portal() {
   }
   delay(500);
 
-  WiFi.mode(WIFI_STA);
-  Wifi::applyRuntimeNetPrefs();
-  Wifi::applyStaticConfig();
+  sta_up();
   if (!Wifi::beginHeld()) return false;
   return waitForWifi(30000);
 }

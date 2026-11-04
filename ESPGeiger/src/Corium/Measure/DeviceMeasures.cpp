@@ -35,8 +35,7 @@ bool corium::m_dev_lfb(corium::MValue* v)    { v->u = DeviceInfo::largestFreeBlo
 bool corium::m_dev_lfblow(corium::MValue* v) { v->u = DeviceInfo::largestFreeBlockLow(); return true; }
 
 bool corium::m_dev_name(corium::MValue* v) {
-  const char* fn = DeviceInfo::friendlyName();
-  v->s = (fn && fn[0]) ? fn : DeviceInfo::hostname();
+  v->s = DeviceInfo::displayName();
   return true;
 }
 

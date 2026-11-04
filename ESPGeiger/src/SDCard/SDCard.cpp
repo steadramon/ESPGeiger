@@ -162,31 +162,26 @@ static uint32_t packed_cutoff_year_ago() {
   return fat_stamp(tmv);
 }
 
+// n digits, the first non-digit (or the end) stops it
+static bool digits(const char* s, int n) {
+  if (!s) return false;
+  for (int i = 0; i < n; i++) {
+    if (s[i] < '0' || s[i] > '9') return false;
+  }
+  return true;
+}
+
 // strict, no ../
 static bool valid_csv_name(const char* name) {
-  if (!name) return false;
-  size_t i = 0;
-  while (i < 8) {
-    if (name[i] < '0' || name[i] > '9') return false;
-    i++;
-  }
-  return name[8] == '.' && name[9] == 'c' && name[10] == 's' && name[11] == 'v' && name[12] == '\0';
+  return digits(name, 8) && name[8] == '.' && name[9] == 'c' && name[10] == 's' && name[11] == 'v' && name[12] == '\0';
 }
 
-static bool valid_yyyymm(const char* s) {
-  if (!s) return false;
-  for (int i = 0; i < SD_DIR_LEN; i++) {
-    if (s[i] < '0' || s[i] > '9') return false;
-  }
-  return s[SD_DIR_LEN] == '\0';
-}
+static bool valid_yyyymm(const char* s) { return digits(s, SD_DIR_LEN) && s[SD_DIR_LEN] == '\0'; }
+static bool valid_year(const char* s)   { return digits(s, 4) && s[4] == '\0'; }
 
-static bool valid_year(const char* s) {
-  if (!s) return false;
-  for (int i = 0; i < 4; i++) {
-    if (s[i] < '0' || s[i] > '9') return false;
-  }
-  return s[4] == '\0';
+// a day file of this month
+static bool our_csv(const char* name, const char* dir) {
+  return valid_csv_name(name) && strncmp(name, dir, SD_DIR_LEN) == 0;
 }
 
 // just past the next :00
@@ -254,7 +249,7 @@ bool SDCard::openDayFile(const char* dirStr, const char* timeStr, uint32_t day, 
   }
   if (!step && !sd->chdir(dirStr)) step = PSTR("chdir");
 
-  bool fileExists = sd->exists(timeStr);
+  bool fileExists = !step && sd->exists(timeStr);
   if (!step && !myDataFile.open(timeStr, FILE_WRITE)) step = PSTR("open");
   if (step) {
     fail_step(step, dirStr, timeStr);
@@ -500,8 +495,7 @@ static bool oldest_csv_in(const char* dir, uint32_t cutoffPacked,
     if (!file.isSubDir() && !file.isHidden()) {
       char f_name[SD_NAME_LEN + 1];
       file.getName(f_name, sizeof(f_name));
-      size_t nameLen = strlen(f_name);
-      if (nameLen >= 4 && strcmp_P(f_name + nameLen - 4, PSTR(".csv")) == 0) {
+      if (our_csv(f_name, dir)) {
         any_csv = true;
         uint16_t date_AGPS, time_AGPS;
         file.getModifyDateTime(&date_AGPS, &time_AGPS);
@@ -556,12 +550,7 @@ bool SDCard::deleteOldest(uint32_t cutoffPacked) {
 void SDCard::reinit() {
   // first, the loop checks it
   sdenabled = false;
-  if (myDataFile.isOpen()) {
-    myDataFile.sync();
-    myDataFile.close();
-  }
-  openFileDay = 0;
-  _unsynced_writes = 0;
+  pauseWriter();
   if (sd) {
     delete sd;
     sd = nullptr;
@@ -600,13 +589,13 @@ static void end_page(EGHttpResponse& res, const __FlashStringHelper* msg) {
   end_page(res);
 }
 
-static void tally_month(File32& subDir, MonthEntry& m, uint64_t& totalBytes) {
+static void tally_month(File32& subDir, const char* dir, MonthEntry& m, uint64_t& totalBytes) {
   File32 file;
   while (file.openNext(&subDir, O_RDONLY)) {
     if (!file.isSubDir() && !file.isHidden()) {
       char f_name[SD_NAME_LEN + 1];
       file.getName(f_name, sizeof(f_name));
-      if (valid_csv_name(f_name)) {
+      if (our_csv(f_name, dir)) {
         m.files++;
         m.bytes += file.fileSize();
         totalBytes += file.fileSize();
@@ -632,7 +621,7 @@ static uint16_t scan_months(MonthEntry* months, uint16_t maxMonths, uint64_t& to
         m.yyyymm = (uint32_t)ym;
         m.files  = 0;
         m.bytes  = 0;
-        tally_month(subDir, m, totalBytes);
+        tally_month(subDir, dirName, m, totalBytes);
         if (m.files > 0) count++;
       }
     }
@@ -691,7 +680,7 @@ static uint16_t send_year_picker(EGHttpResponse& res, const MonthEntry* months,
     for (uint8_t i = 0; i < yearCount; i++) {
       char opt[64];
       int on = snprintf_P(opt, sizeof(opt),
-        PSTR("<option value='%u'%s>%u</option>"),
+        PSTR("<option value='%04u'%s>%04u</option>"),
         (unsigned)years[i],
         years[i] == showYear ? PSTR(" selected") : PSTR(""),
         (unsigned)years[i]);
@@ -771,7 +760,7 @@ static bool scan_days(const char* dir, DayEntry* days, uint8_t maxDays,
     if (!file.isSubDir() && !file.isHidden()) {
       char f_name[SD_NAME_LEN + 1];
       file.getName(f_name, sizeof(f_name));
-      if (valid_csv_name(f_name) && strncmp(f_name, dir, SD_DIR_LEN) == 0) {
+      if (our_csv(f_name, dir)) {
         days[count].day   = (uint8_t)((f_name[6] - '0') * 10 + (f_name[7] - '0'));
         days[count].bytes = file.fileSize();
         totalBytes += days[count].bytes;

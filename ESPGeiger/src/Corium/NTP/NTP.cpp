@@ -71,6 +71,29 @@ void NTP_Client::begin() {
   corium::Registry::every(this, LOOP_MS);
 }
 
+static const char* posix_tz() {
+  const char* tz = corium::Prefs::getString("ntp", corium::K_TZ);
+  if (tz[0] == '\0') tz = NTP_TZ;
+  const char* posix = EGTimeZone::posixFor(tz);
+  if (posix) return posix;
+  Log::console(PSTR("NTP: timezone '%s' not known, using UTC"), tz);
+  return PSTR("UTC0");
+}
+
+static void set_tz(const char* posix) {
+#ifdef ESP8266
+  setTZ(posix);   // copies from flash
+#else
+  setenv("TZ", posix, 1);
+  tzset();
+#endif
+}
+
+// before the modules begin: a kept, RTC or browser clock stamps local, wifi or not
+void NTP_Client::on_prefs_loaded() {
+  set_tz(posix_tz());
+}
+
 void NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
@@ -78,15 +101,9 @@ void NTP_Client::setup()
   if (server[0] == '\0') server = NTP_SERVER;
   if (strcmp(s_server, server) != 0) strlcpy(s_server, server, sizeof(s_server));
   server = s_server;
-  const char* tz = corium::Prefs::getString("ntp", corium::K_TZ);
-  if (tz[0] == '\0') tz = NTP_TZ;
 
   Log::console(PSTR("NTP: Starting ... %s"), server);
-  const char *possixTZ = EGTimeZone::posixFor(tz);
-  if (!possixTZ) {
-    Log::console(PSTR("NTP: timezone '%s' not known, using UTC"), tz);
-    possixTZ = PSTR("UTC0");
-  }
+  const char *possixTZ = posix_tz();
 #ifdef ESP8266
   // an RTC's settimeofday fires it too
   settimeofday_cb([](bool from_sntp){
@@ -104,8 +121,7 @@ void NTP_Client::setup()
     corium::Registry::post(&ntpclient);
   });
   configTime(0, 0, server); // TZ set below
-  setenv("TZ", possixTZ, 1); // Set environment variable with your time zone
-  tzset();
+  set_tz(possixTZ);
 #endif
 #endif
 }

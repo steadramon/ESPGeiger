@@ -433,40 +433,29 @@ R"HTML(<script src="/hvjs)HTML" CORIUM_CACHE_BUST R"HTML("></script>
 #if !EG_GZ_HVJS_BUNDLE
 extern const char hvJS[] PROGMEM = R"JS(
 var e=new Graph("g1",["Volts"],"V","g2",5,null,0,!0,!0,5,15),
-D=Date,X=XMLHttpRequest,O=setTimeout,
 G1=byID('g1'),G2=byID('g2'),
 FQ=byID('freq'),DU=byID('duty'),RT=byID('ratio'),TG=byID('tgt'),
 SF=byID('sfreq'),SD=byID('sduty'),PD=byID('pduty'),ST=byID('strim'),SB=byID('submit'),
 TRow=TG.closest('tr'),
-lt,lf=0,ge=!0,inited=!1;
+ge=!0,inited=!1;
 e.av=3;
 function showGraph(on){if(on===ge)return;ge=on;var d=on?'':'none';G1.style.display=d;G2.style.display=d;TRow.style.display=d}
-function gethv(){
-  clearTimeout(lt);
-  var x=new X;
-  x.onload=function(){
-    if(x.status==200){
-      var o=JSON.parse(x.responseText);
-      showGraph(o.ratio>0);
-      if(o.ratio>0)e.update([o.volts]);
-      if(!inited){
-        inited=!0;
-        if(o.fmax)FQ.max=SF.max=o.fmax;
-        if(o.dmax)DU.max=SD.max=o.dmax;
-        FQ.value=o.freq;DU.value=o.duty;RT.value=o.ratio;TG.value=o.target;
-        SF.value=o.freq;SD.value=o.duty;ton();
-        SB.disabled=!1;SB.textContent='Submit';
-      }
-      ST.textContent=o.ov>1?'(feedback fault: HV off until restart)':o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
-    }
-    lf=D.now();lt=O(gethv,1e3);
-  };
-  x.open('GET','/hvjson',!0);
-  x.send();
-  return!1;
-}
-addEventListener("load",gethv);
-document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(lt);lt=O(gethv,Math.max(0,1e3-(D.now()-lf)))}});
+var hvK=live('/hvjson',1e3,function(s){
+  if(s==null)return 1e3;
+  var o=JSON.parse(s);
+  showGraph(o.ratio>0);
+  if(o.ratio>0)e.update([o.volts]);
+  if(!inited){
+    inited=!0;
+    if(o.fmax)FQ.max=SF.max=o.fmax;
+    if(o.dmax)DU.max=SD.max=o.dmax;
+    FQ.value=o.freq;DU.value=o.duty;RT.value=o.ratio;TG.value=o.target;
+    SF.value=o.freq;SD.value=o.duty;ton();
+    SB.disabled=!1;SB.textContent='Submit';
+  }
+  ST.textContent=o.ov>1?'(feedback fault: HV off until restart)':o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
+});
+addEventListener("load",()=>hvK(0));
 function tie(r,n,f){
   f=f||function(){};
   r.addEventListener("input",function(){n.value=r.value;f()});
@@ -476,14 +465,9 @@ function tie(r,n,f){
 function ton(){PD.textContent=SD.value&&SF.value>0?'('+(SD.value*1e6/PD.dataset.fs/SF.value).toFixed(1)+' \xb5s on)':''}
 tie(FQ,SF,ton);tie(DU,SD,ton);
 SB.addEventListener("click",function(){
-  var x=new X;
-  x.onload=function(){
-    if(x.status==200){
-      SF.value='';SD.value='';ton();inited=!1;
-    }
-  };
-  x.open('GET','/hvset?f='+SF.value+'&d='+SD.value+'&r='+RT.value+'&t='+TG.value,!0);
-  x.send();
+  fetch('/hvset?f='+SF.value+'&d='+SD.value+'&r='+RT.value+'&t='+TG.value).then(r=>{
+    if(r.ok){SF.value='';SD.value='';ton();inited=!1}
+  });
 });
 )JS";
 #endif

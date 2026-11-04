@@ -513,12 +513,11 @@ size_t EGMqtt::room() const {
 
 // Sending
 
-uint16_t EGMqtt::publish(const char* topic, const uint8_t* payload, size_t len,
-                         uint8_t qos, bool retain) {
-  if (!topic || qos > EGMQTT_MAX_QOS || (!qos && _phase != UP) || !mem()) return 0;
+// false = topic too long
+bool EGMqtt::fill(Publish& m, const char* topic, const uint8_t* payload, size_t len,
+                  uint8_t qos, bool retain) {
   size_t tn = strlen(topic);
-  if (tn > 0xFFFF) return 0;
-  Publish m;
+  if (tn > 0xFFFF) return false;
   m.topic = topic;
   m.topic_len = (uint16_t)tn;
   m.payload = payload;
@@ -526,13 +525,29 @@ uint16_t EGMqtt::publish(const char* topic, const uint8_t* payload, size_t len,
   m.qos = qos;
   m.retain = retain;
   m.id = qos ? next_id() : 0;
+  return true;
+}
+
+bool EGMqtt::queue(Kind k, uint16_t id, size_t len) {
+  if (!len) return false;
+  commit(k, id, len);
+  flush();
+  return true;
+}
+
+uint16_t EGMqtt::pub_commit(const Publish& m, size_t len) {
+  if (!queue(m.qos == 0 ? K_ONCE : m.qos == 1 ? K_PUB1 : K_PUB2, m.id, len)) return 0;
+  return m.qos ? m.id : 1;
+}
+
+uint16_t EGMqtt::publish(const char* topic, const uint8_t* payload, size_t len,
+                         uint8_t qos, bool retain) {
+  if (!topic || qos > EGMQTT_MAX_QOS || (!qos && _phase != UP) || !mem()) return 0;
+  Publish m;
+  if (!fill(m, topic, payload, len, qos, retain)) return 0;
   size_t cap;
   uint8_t* p = tail(&cap, true);
-  size_t n = p ? EGMqttWire::publish(p, cap, m) : 0;
-  if (!n) return 0;
-  commit(qos == 0 ? K_ONCE : qos == 1 ? K_PUB1 : K_PUB2, m.id, n);
-  flush();
-  return qos ? m.id : 1;
+  return pub_commit(m, p ? EGMqttWire::publish(p, cap, m) : 0);
 }
 
 uint16_t EGMqtt::publish(const char* topic, const char* payload, uint8_t qos, bool retain) {
@@ -576,22 +591,10 @@ uint16_t EGMqtt::publish_end(size_t len) {
   uint8_t* body = _pend;
   _pend = nullptr;
   if (!body || len > _pendCap) return 0;
-  size_t tn = strlen(_pendTopic);
-  if (tn > 0xFFFF) return 0;
   Publish m;
-  m.topic = _pendTopic;
-  m.topic_len = (uint16_t)tn;
-  m.payload = body;
-  m.len = len;
-  m.qos = _pendQos;
-  m.retain = _pendRetain;
-  m.id = m.qos ? next_id() : 0;
-  uint8_t* p = body - ahead_of(tn, m.qos);
-  size_t n = EGMqttWire::publish(p, (size_t)(body - p) + len, m);
-  if (!n) return 0;
-  commit(m.qos == 0 ? K_ONCE : m.qos == 1 ? K_PUB1 : K_PUB2, m.id, n);
-  flush();
-  return m.qos ? m.id : 1;
+  if (!fill(m, _pendTopic, body, len, _pendQos, _pendRetain)) return 0;
+  uint8_t* p = body - ahead_of(m.topic_len, m.qos);
+  return pub_commit(m, EGMqttWire::publish(p, (size_t)(body - p) + len, m));
 }
 
 uint16_t EGMqtt::subscribe(const char* filter, uint8_t qos) {
@@ -600,10 +603,7 @@ uint16_t EGMqtt::subscribe(const char* filter, uint8_t qos) {
   size_t cap;
   uint8_t* p = tail(&cap, true);
   size_t n = p ? EGMqttWire::subscribe(p, cap, id, filter, qos) : 0;
-  if (!n) return 0;
-  commit(K_SUB, id, n);
-  flush();
-  return id;
+  return queue(K_SUB, id, n) ? id : 0;
 }
 
 uint16_t EGMqtt::unsubscribe(const char* filter) {
@@ -612,10 +612,7 @@ uint16_t EGMqtt::unsubscribe(const char* filter) {
   size_t cap;
   uint8_t* p = tail(&cap, true);
   size_t n = p ? EGMqttWire::unsubscribe(p, cap, id, filter) : 0;
-  if (!n) return 0;
-  commit(K_UNSUB, id, n);
-  flush();
-  return id;
+  return queue(K_UNSUB, id, n) ? id : 0;
 }
 
 // Receiving

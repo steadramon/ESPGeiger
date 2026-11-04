@@ -57,22 +57,21 @@ void EGJson::str(const char* key, const char* s) {
   str_end();
 }
 
-void EGJson::uint(const char* key, uint32_t v) {
-  char t[12];
-  int n = snprintf_P(t, sizeof(t), PSTR("%lu"), (unsigned long)v);
+void EGJson::num(const char* key, const char* t, int n) {
   _mark = _pos;
   name(key);
   put(t, (size_t)n);
   cut();
 }
 
+void EGJson::uint(const char* key, uint32_t v) {
+  char t[12];
+  num(key, t, snprintf_P(t, sizeof(t), PSTR("%lu"), (unsigned long)v));
+}
+
 void EGJson::sint(const char* key, int32_t v) {
   char t[12];
-  int n = snprintf_P(t, sizeof(t), PSTR("%ld"), (long)v);
-  _mark = _pos;
-  name(key);
-  put(t, (size_t)n);
-  cut();
+  num(key, t, snprintf_P(t, sizeof(t), PSTR("%ld"), (long)v));
 }
 
 void EGJson::fixed(const char* key, float v, uint8_t decimals) {
@@ -81,11 +80,7 @@ void EGJson::fixed(const char* key, float v, uint8_t decimals) {
   if ((bits & 0x7F800000u) == 0x7F800000u) return;   // NaN or infinity
   if (decimals < 1 || decimals > 9) return;
   char t[24];
-  int n = format_f(t, sizeof(t), v, decimals);
-  _mark = _pos;
-  name(key);
-  put(t, (size_t)n);
-  cut();
+  num(key, t, format_f(t, sizeof(t), v, decimals));
 }
 
 void EGJson::str_begin(const char* key) {

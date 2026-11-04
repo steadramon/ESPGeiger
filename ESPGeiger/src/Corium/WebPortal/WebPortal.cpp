@@ -399,8 +399,7 @@ void WebPortal::applyAuthFromPrefs() {
 
 void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
                              const char* inlineSub) {
-  const char* fname = DeviceInfo::friendlyName();
-  const char* devName = (fname && fname[0]) ? fname : DeviceInfo::hostname();
+  const char* devName = DeviceInfo::displayName();
   char esc[6 * CORIUM_NAME_MAX + 1];
   egesc_html(esc, sizeof(esc), devName);
   sendHeadOpen(res);
@@ -524,6 +523,7 @@ void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 #if !EG_GZ_THEME_JS
+// live(url or fn, ms, fn, first): fn(text), null on error, returns the next ms or nothing; gives kick(ms)
 static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t);
 !function(){
 var d=document.documentElement,LS=localStorage;
@@ -531,6 +531,11 @@ window.theme=()=>{var t=d.dataset.theme=='dark'?'light':'dark';
 d.dataset.theme=LS.theme=t;dispatchEvent(new Event('themechange'))};
 d.dataset.theme=LS.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
 }();
+window.live=(u,ms,fn,at)=>{var J,L=0,
+k=w=>{clearTimeout(J);J=setTimeout(go,w)},
+go=()=>fetch(typeof u=='function'?u():u,{cache:'no-store'}).then(r=>r.ok?r.text():null,()=>null).then(t=>{L=Date.now();var w;try{w=fn(t)}catch(e){}k(w>=0?w:t==null?6e3:ms)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&L)k(Math.max(0,ms-(Date.now()-L)))});
+if(at>=0)k(at);return k};
 )JS";
 #endif
 
@@ -1486,28 +1491,34 @@ static void body_end(BodyBuf& b) {
   if (b.buf) b.buf[b.len] = '\0';
 }
 
-// freed in hParam
-static BodyBuf s_paramBody;
-
-static void param_body_begin(size_t cap) {
-  body_free(s_paramBody);
+// path nullptr = quiet
+static void body_begin(BodyBuf& b, size_t cap, PGM_P path) {
+  body_free(b);
   if (!body_size_ok(cap)) {
-    Log::console(PSTR("/param: body size %u out of range"), (unsigned)cap);
+    if (path) Log::console(PSTR("%s: body size %u out of range"), path, (unsigned)cap);
     return;
   }
-  if (!body_alloc(s_paramBody, cap)) {
-    Log::console(PSTR("/param: malloc(%u) failed"), (unsigned)(cap + 1));
+  if (!body_alloc(b, cap) && path) {
+    Log::console(PSTR("%s: malloc(%u) failed"), path, (unsigned)(cap + 1));
   }
 }
 
+static void body_event(BodyBuf& b, EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+                       const char* chunk, size_t len, PGM_P path) {
+  switch (ev) {
+    case EGHttpServer::BODY_BEGIN: body_begin(b, req.bodyLen(), path); break;
+    case EGHttpServer::BODY_DATA:  body_append(b, chunk, len);         break;
+    case EGHttpServer::BODY_END:   body_end(b);                        break;
+    case EGHttpServer::BODY_ABORT: body_free(b);                       break;
+  }
+}
+
+// freed in hParam
+static BodyBuf s_paramBody;
+
 void WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                             const char* chunk, size_t len, void*) {
-  switch (ev) {
-    case EGHttpServer::BODY_BEGIN: param_body_begin(req.bodyLen());         break;
-    case EGHttpServer::BODY_DATA:  body_append(s_paramBody, chunk, len);    break;
-    case EGHttpServer::BODY_END:   body_end(s_paramBody);                   break;
-    case EGHttpServer::BODY_ABORT: body_free(s_paramBody);                  break;
-  }
+  body_event(s_paramBody, req, ev, chunk, len, P_PARAM);
 }
 
 // first field a save refused, and first saved with a warning, shown above the form
@@ -2070,10 +2081,12 @@ static void b64_finish(B64Sink& s) {
   b64_flush_out(s);
 }
 
+// id_buf gets the key, val_out its value
 static bool is_exportable_pref(const corium::PrefGroup* g, const corium::Pref& p,
-                               const char* id_buf, const char*& val_out) {
+                               char (&id_buf)[CORIUM_PREF_ID_MAX + 1], const char*& val_out) {
   if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return false;
   if (p.flags & corium::P_LOCAL) return false;
+  flash_to_ram(p.id, id_buf, sizeof(id_buf));
   const char* cur = corium::Prefs::getString(g->module_id, id_buf);
   if (!cur) cur = "";
   if (p.default_val && strcmp(cur, p.default_val) == 0) return false;
@@ -2081,21 +2094,10 @@ static bool is_exportable_pref(const corium::PrefGroup* g, const corium::Pref& p
   return true;
 }
 
-static bool group_has_export(const corium::PrefGroup* g) {
-  for (size_t j = 0; j < g->count.get(); j++) {
-    char id_buf[CORIUM_PREF_ID_MAX + 1];
-    flash_to_ram(g->prefs.id_P(j), id_buf, sizeof(id_buf));
-    const char* cur;
-    if (is_exportable_pref(g, g->prefs.row(j), id_buf, cur)) return true;
-  }
-  return false;
-}
-
 static uint8_t group_export_count(const corium::PrefGroup* g) {
   uint8_t emitted_prefs = 0;
   for (size_t j = 0; j < g->count.get(); j++) {
     char id_buf[CORIUM_PREF_ID_MAX + 1];
-    flash_to_ram(g->prefs.id_P(j), id_buf, sizeof(id_buf));
     const char* cur;
     if (is_exportable_pref(g, g->prefs.row(j), id_buf, cur)) emitted_prefs++;
   }
@@ -2112,7 +2114,6 @@ static void export_write_group(B64Sink& sink, const corium::PrefGroup* g, uint8_
   for (size_t j = 0; j < g->count.get(); j++) {
     const corium::Pref p = g->prefs.row(j);
     char id_buf[CORIUM_PREF_ID_MAX + 1];
-    flash_to_ram(p.id, id_buf, sizeof(id_buf));
     const char* cur;
     if (!is_exportable_pref(g, p, id_buf, cur)) continue;
     size_t klen = strlen(id_buf);
@@ -2132,7 +2133,7 @@ static void serializeExportStream(B64Sink& sink) {
   for (size_t gi = 0; gi < corium::Prefs::group_count(); gi++) {
     const corium::PrefGroup* g = corium::Prefs::group_at(gi);
     if (!g || g->count.get() == 0) continue;
-    if (group_has_export(g)) group_count++;
+    if (group_export_count(g)) group_count++;
   }
 
   const uint8_t MAGIC[3] = {EXPORT_MAGIC};
@@ -2219,20 +2220,10 @@ void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static BodyBuf s_importBody;
 
-static void import_body_begin(size_t cap) {
-  body_free(s_importBody);
-  if (body_size_ok(cap)) (void)body_alloc(s_importBody, cap);
-}
-
 // too big or no memory, hImport says no body
 void WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                              const char* chunk, size_t len, void*) {
-  switch (ev) {
-    case EGHttpServer::BODY_BEGIN: import_body_begin(req.bodyLen());         break;
-    case EGHttpServer::BODY_DATA:  body_append(s_importBody, chunk, len);    break;
-    case EGHttpServer::BODY_END:   body_end(s_importBody);                   break;
-    case EGHttpServer::BODY_ABORT: body_free(s_importBody);                  break;
-  }
+  body_event(s_importBody, req, ev, chunk, len, nullptr);
 }
 
 static void import_fail(EGHttpResponse& res, const char* msg) {
@@ -2408,8 +2399,7 @@ static void metrics_render_rows(EGHttpResponse& res, const char* cid) {
 void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // chipid only, a rename keeps the series
   const char* cid  = DeviceInfo::chipid();
-  const char* fn   = DeviceInfo::friendlyName();
-  const char* name = (fn && fn[0]) ? fn : DeviceInfo::hostname();
+  const char* name = DeviceInfo::displayName();
   res.beginChunked(200, F("text/plain; version=0.0.4"));
   metrics_render_info(res, cid, name);
   metrics_render_rows(res, cid);

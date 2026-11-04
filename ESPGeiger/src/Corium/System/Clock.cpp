@@ -81,6 +81,11 @@ void kept() {
   Log::console(PSTR("Clock: kept over the restart"));
 }
 
+// the wifi join or portal ran since, no step
+void anchor() {
+  if (synced) boot_epoch = time(NULL) - Uptime::since(Uptime::start);
+}
+
 bool resync_due(unsigned long now) {
   if (!resync) return false;
   if (resync_ms && now - resync_ms < RESYNC_MS) return false;

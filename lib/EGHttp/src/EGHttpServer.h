@@ -246,7 +246,7 @@ class EGHttpServer {
     void  resetSlot(Slot* s);
     void  abortStream(Slot* s);
     void  markDone(Slot* s);
-    void  sendStatusAndClose(Slot* s, const char* body, size_t len);   // nullptr = close only
+    void  sendStatusAndClose(Slot* s, const char* status, uint8_t retry_s = 0);   // nullptr = close only
 
     void  wireSlotCallbacks(Slot* s, EGTcpClient* c);
     bool  growRoutes();

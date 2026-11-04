@@ -235,19 +235,19 @@ void MQTT_Client::scheduleHassDiscovery(bool reconnected)
 }
 #endif
 
+// once now - last > interval, on the slot, or now when a whole one behind
+static bool fired(unsigned long now, unsigned long& last, uint16_t interval)
+{
+  if ((now - last) <= interval) return false;
+  last += interval;
+  if ((now - last) > interval) last = now;
+  return true;
+}
+
 void MQTT_Client::queueTimedPublishes(unsigned long now)
 {
-  if ((now - lastStatus) > statusInterval) {
-    lastStatus += statusInterval;
-    if ((now - lastStatus) > statusInterval) lastStatus = now;
-    _pending |= PEND_STATUS;
-  }
-
-  if ((now - lastPing) > pingInterval) {
-    lastPing += pingInterval;
-    if ((now - lastPing) > pingInterval) lastPing = now;
-    _pending |= PEND_PING;
-  }
+  if (fired(now, lastStatus, statusInterval)) _pending |= PEND_STATUS;
+  if (fired(now, lastPing, pingInterval))     _pending |= PEND_PING;
 }
 
 void MQTT_Client::second(unsigned long now)
@@ -304,8 +304,8 @@ void MQTT_Client::loop(unsigned long now)
   checkAlarms();
   // one per call, hello then alarms; these stay till the outbox takes them
   if (sendHello()) return;
-  if (_pending & PEND_WARN)       { if (publishWarn())  _pending &= ~PEND_WARN;  return; }
-  if (_pending & PEND_ALERT)      { if (publishAlert()) _pending &= ~PEND_ALERT; return; }
+  if (_pending & PEND_WARN)       { if (publishFlag(PSTR("WARN"), warnSent))   _pending &= ~PEND_WARN;  return; }
+  if (_pending & PEND_ALERT)      { if (publishFlag(PSTR("ALERT"), alertSent)) _pending &= ~PEND_ALERT; return; }
   // no room for status, ping is smaller
   if ((_pending & PEND_STATUS) && publishStatus()) { _pending &= ~PEND_STATUS; return; }
   if (_pending & PEND_PING)       { _pending &= ~PEND_PING;   publishPing();   return; }
@@ -332,18 +332,12 @@ bool MQTT_Client::sendHello()
   return false;
 }
 
-bool MQTT_Client::publishWarn()
+// stat/WARN, stat/ALERT
+bool MQTT_Client::publishFlag(const char* cmd, bool on)
 {
   char topic[MQTT_TOPIC_LEN];
-  buildTopic(topic, sizeof(topic), T_STAT, PSTR("WARN"));
-  return s_mq.publish(topic, warnSent ? F("1") : F("0"), 1, false);
-}
-
-bool MQTT_Client::publishAlert()
-{
-  char topic[MQTT_TOPIC_LEN];
-  buildTopic(topic, sizeof(topic), T_STAT, PSTR("ALERT"));
-  return s_mq.publish(topic, alertSent ? F("1") : F("0"), 1, false);
+  buildTopic(topic, sizeof(topic), T_STAT, cmd);
+  return s_mq.publish(topic, on ? F("1") : F("0"), 1, false);
 }
 
 bool MQTT_Client::publishStatus()
@@ -809,23 +803,17 @@ void MQTT_Client::setupHassCB() {
   _pending |= PEND_SUB;
 }
 
-void MQTT_Client::setupHassAuto() {
+// 1 = publish, -1 = remove; no topic, nothing to walk
+void MQTT_Client::startHassWalk(int8_t dir) {
   if (_hass_walk_state) return;
-  if (!corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) return;
-  const char* _discovery_topic = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
-  if (_discovery_topic[0] == '\0') return;
-  _hass_walk_state = 1;
+  if (corium::Prefs::getString("mqtt", K_HASS_TOPIC)[0] == '\0') return;
+  _hass_walk_state = dir;
   _hass_idx = 0;
-  Log::console(PSTR("MQTT: Starting HA autodiscovery walk"));
+  Log::console(PSTR("MQTT: Starting HA autodiscovery %swalk"), dir < 0 ? PSTR("removal ") : PSTR(""));
 }
 
-void MQTT_Client::setupHassRemove() {
-  if (_hass_walk_state) return;
-  const char* _discovery_topic = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
-  if (_discovery_topic[0] == '\0') return;
-  _hass_walk_state = -1;
-  _hass_idx = 0;
-  Log::console(PSTR("MQTT: Starting HA autodiscovery removal walk"));
+void MQTT_Client::setupHassAuto() {
+  if (corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) startHassWalk(1);
 }
 
 void MQTT_Client::triggerHassDiscovery() {
@@ -1012,7 +1000,7 @@ void MQTT_Client::on_prefs_saved()
 #ifdef MQTTAUTODISCOVER
   // publish walk restarts on reconnect
   if (_hass_walk_state > 0) _hass_walk_state = 0;
-  if (needs_hass_remove) setupHassRemove();
+  if (needs_hass_remove) startHassWalk(-1);
 #endif
   begin();
 }

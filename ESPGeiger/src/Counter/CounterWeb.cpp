@@ -312,9 +312,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
 )JS";
 
 static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  const char* fn = DeviceInfo::friendlyName();
-  const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
-  WebPortal::beginPage(res, F("History"), sub);
+  WebPortal::beginPage(res, F("History"), DeviceInfo::displayName());
   res.sendChunk(FPSTR(HISTORY_BODY_LIFETIME));
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
   // udp rx is batched, no intervals
@@ -357,7 +355,7 @@ static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
 extern const char cmdJS[] PROGMEM = R"JS(function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1})JS";
 
 extern const char statusJS[] PROGMEM = R"JS(
-!function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",5,null,0,!0,!0,5,15);e.av=3;
+!function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",5,null,0,!0,!0,5,15);e.av=3;
 if(W&&window.GPIN>=0)W.innerHTML+=' (GPIO '+window.GPIN+')';
 if(window.BO)$('bw').style.display='';
 var ac,cps=0,nb,mu=$('snd'),mt=1,AC=window.AudioContext||window.webkitAudioContext;
@@ -375,11 +373,11 @@ s.connect(f);f.connect(g);g.connect(ac.destination);s.start(t);
 n=Math.max(20,-Math.log(1-Math.random())/cps*1000)}
 O(clk,n)})();
 if(window._seedHist&&window._seedHist.length){var N=window._seedHist.length,w=D.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new D(w-(N-1-i)*1e3).toLocaleTimeString()))}
-var J,L=0,I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
+var I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
 B.style.setProperty('--blip',K);
 setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
-var Q=function(){if(!window._csk){window._csk=1;O(f,100)}},t=function(){var n=new X;n.open("GET","/json",!0);
-n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText),u=o.ut;
+var Q=function(){if(!window._csk){window._csk=1;csK(100)}};
+live("/json",1e3,function(s){Q();if(s!=null){var o=JSON.parse(s),u=o.ut;
 U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 var dd=o.c-o.c5,dc=o.c<10&&o.c5<10&&dd*dd<9*o.c5?o.c5:o.c;C.textContent=dc.toFixed(2);T.textContent=o.tc;setUsv(V,dc/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
@@ -389,21 +387,18 @@ e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(100,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
 K=o.c<.01&&o.c5<.01?'#08f':z>3?'#f33':z>1.5?'#fa0':z<-1.5?'#c0f':'#0f0';
-B.style.setProperty('--blip',K)}L=D.now();Q();J=O(t,1e3)};
-n.onerror=function(){L=D.now();Q();J=O(t,6e3)};n.send()};
-O(t,250);document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(J);J=O(t,Math.max(0,1e3-(D.now()-L)))}})}();
-var DD=Date,lt,lc=0,x,id=0,M=1e4,dl=200,dz=0,T1,ci=3e3;
-function f(){clearTimeout(lt);T1=T1||byID("t1");x=new XMLHttpRequest;
-x.onload=function(){if(200==x.status){var n=x.responseText,nl=n.indexOf("\n"),ab=(T1.scrollHeight-T1.scrollTop-T1.clientHeight)<50,h=n.substr(0,nl).split(",");
+B.style.setProperty('--blip',K)}},250)}();
+var DD=Date,lc=0,id=0,M=1e4,dl=200,dz=0,T1,ci=3e3;
+var csK=live(function(){if(lc&&DD.now()-lc>1.08e7)id=0;return"/cs?c1="+id},3e3,function(n){lc=DD.now();if(n==null)return;T1=T1||byID("t1");
+var nl=n.indexOf("\n"),ab=(T1.scrollHeight-T1.scrollTop-T1.clientHeight)<50,h=n.substr(0,nl).split(",");
 id=h[0];dz=+h[1]||0;var e=n.substr(nl+1);
 if(e){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){
 var b=-new DD().getTimezoneOffset(),T=((+h*60+(+m)+b-dz)%1440+1440)%1440;
 return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s});
 T1.value+=e;var L=T1.value.split("\n");if(L.length>M)T1.value=L.slice(-(M-dl)).join("\n")}
-if(ab)T1.scrollTop=T1.scrollHeight}lc=DD.now();ci=e?3e3:Math.min(ci*1.5,8.3e3);lt=setTimeout(f,ci)};
-x.onerror=function(){lc=DD.now();lt=setTimeout(f,6e3)};x.open("GET","/cs?c1="+id,!0);x.send();return!1}
-document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lc&&DD.now()-lc>1.08e7)id=0;ci=3e3;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(DD.now()-lc)))}});
-window._boost=function(){ci=3e3;clearTimeout(lt);lt=setTimeout(f,200)};
+if(ab)T1.scrollTop=T1.scrollHeight;return ci=e?3e3:Math.min(ci*1.5,8.3e3)});
+document.addEventListener("visibilitychange",function(){if(!document.hidden)ci=3e3});
+window._boost=function(){ci=3e3;csK(200)};
 )JS";
 #endif
 
@@ -459,9 +454,7 @@ static void status_seed(EGHttpResponse& res) {
 }
 
 static void hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  const char* fn = DeviceInfo::friendlyName();
-  const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
-  WebPortal::beginPage(res, F("Status"), sub);
+  WebPortal::beginPage(res, F("Status"), DeviceInfo::displayName());
   status_seed(res);
   res.sendChunk(FPSTR(STATUS_BODY));
   WebPortal::endPage(res, true);

@@ -110,14 +110,7 @@ bool EnvSensor::tryDetect() {
     corium::Registry::every(this, 0);
     return false;
   }
-  _st->ema_t = NAN;
-  _st->ema_h = NAN;
-  _st->ema_p = NAN;
-  _st->prev_t = NAN;
-  _st->prev_h = NAN;
-  _st->prev_p = NAN;
-  _st->stuck = 0;
-  _st->fails = 0;
+  *_st = State();   // calloc'd, the NANs from its defaults
   corium::Registry::every(this, ENV_SAMPLE_MS);
   Log::console(PSTR("Env: %s detected"), chipName());
   return true;

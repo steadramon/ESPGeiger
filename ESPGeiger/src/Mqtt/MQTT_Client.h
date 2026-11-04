@@ -120,7 +120,7 @@ private:
   bool _rootTopicCached = false;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
-  void setupHassRemove();
+  void startHassWalk(int8_t dir);
   void triggerHassDiscovery();
   void stepHassDiscovery();
   void setupHassCB();
@@ -133,8 +133,7 @@ private:
   uint16_t _ack_pid = 0;   // the publish whose ack decides last_ok
   void publishStat(const char* cmd, const char* text);
   bool sendHello();
-  bool publishWarn();
-  bool publishAlert();
+  bool publishFlag(const char* cmd, bool on);   // cmd PROGMEM
   static constexpr uint8_t PEND_STATUS = 1 << 0;
   static constexpr uint8_t PEND_PING   = 1 << 1;
   static constexpr uint8_t PEND_WARN   = 1 << 2;

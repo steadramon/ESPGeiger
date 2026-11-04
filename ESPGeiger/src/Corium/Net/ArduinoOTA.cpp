@@ -63,12 +63,10 @@ void ArduinoOTAModule::begin() {
   ArduinoOTA.onError ([](ota_error_t error) {
     LedSignal::lit(false);
     if (ota_in_progress) Lifecycle::send(Lifecycle::OTA_FAILED);
-    if      (error == OTA_AUTH_ERROR)    Log::console(PSTR("OTA: Auth Failed"));
-    else if (error == OTA_BEGIN_ERROR)   Log::console(PSTR("OTA: Begin Failed"));
-    else if (error == OTA_CONNECT_ERROR) Log::console(PSTR("OTA: Connect Failed"));
-    else if (error == OTA_RECEIVE_ERROR) Log::console(PSTR("OTA: Receive Failed"));
-    else if (error == OTA_END_ERROR)     Log::console(PSTR("OTA: End Failed"));
-    else                                 Log::console(PSTR("OTA: error %u"), error);
+    // ota_error_t order, both cores
+    static const char ERRS[][8] PROGMEM = {"Auth", "Begin", "Connect", "Receive", "End"};
+    if ((unsigned)error <= OTA_END_ERROR) Log::console(PSTR("OTA: %s Failed"), ERRS[error]);
+    else                                  Log::console(PSTR("OTA: error %u"), error);
   });
 
   // core copies it, before begin() only, so a new one needs a restart

@@ -40,6 +40,7 @@ class EGTcpClient;
 class EGTcpServer;
 struct EGTcpOps;
 struct EGTcpAsk;
+struct EGTcpInfo;
 
 namespace EGTcp {
 extern std::atomic<bool> pending;
@@ -145,6 +146,7 @@ class EGTcpClient {
     friend struct EGTcpLwip;
     friend class EGTcpServer;
 
+    EGTcpInfo info() const;   // the backend's addresses and mss
     void opened();
     void delivered();
     void acked(uint32_t n);
@@ -156,6 +158,7 @@ class EGTcpClient {
     void credit(size_t n, bool flush);
     void forget(bool rst);
     bool dial(const EGTcpAddr& a, uint16_t port);
+    void start();
 
     const EGTcpOps* _ops;
 

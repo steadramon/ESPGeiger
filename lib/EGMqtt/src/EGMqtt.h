@@ -170,6 +170,10 @@ class EGMqtt {
     size_t next(size_t off) const;
     uint8_t* tail(size_t* cap, bool keep_reserve);
     void commit(Kind k, uint16_t id, size_t len);
+    bool queue(Kind k, uint16_t id, size_t len);   // len 0 = didn't build
+    uint16_t pub_commit(const EGMqttWire::Publish& m, size_t len);
+    bool fill(EGMqttWire::Publish& m, const char* topic, const uint8_t* payload, size_t len,
+              uint8_t qos, bool retain);
     void queue(EGMqttWire::Type t, uint16_t id, bool keep = true);
     Rec* find(Kind k, uint16_t id);
     Rec* find(Kind k);

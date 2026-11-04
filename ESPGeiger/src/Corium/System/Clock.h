@@ -38,6 +38,7 @@ namespace Clock {
   bool on_sync(Source s = NTP);   // true when s wasn't the last to set it
   bool set(time_t epoch, Source s);   // NTP sets it itself
   void kept();   // boot: esp32 keeps time() over a restart
+  void anchor();   // boot: a clock set before Reactor::begin, boot_epoch from its uptime 0
 
   // a sync off by more than this tells on_step
   static const int32_t STEP_S = 60;

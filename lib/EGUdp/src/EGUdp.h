@@ -95,6 +95,7 @@ class EGUdp {
     // taken in begin(), the stack fills _tail, the owner reads _head
     Slot* _slot = nullptr;
     uint8_t* _buf = nullptr;   // _slots * _size
+    void freeRing();
     uint8_t _head = 0;
     uint8_t _tail = 0;
     std::atomic<uint8_t> _count{0};

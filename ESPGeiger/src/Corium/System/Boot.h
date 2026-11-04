@@ -75,6 +75,7 @@ namespace Boot {
     corium::Registry::set_safe_mode(BootGuard::safe_mode());
     corium::Registry::pre_wifi_all();
     corium::Prefs::begin();
+    Clock::kept();   // after the zone, stamps from here on
   }
 
   inline __attribute__((always_inline)) void join() {
@@ -103,7 +104,7 @@ namespace Boot {
     LedSignal::attach();
     if (BootGuard::safe_mode()) Lifecycle::request_restart(fast_millis(), BootGuard::retry_after());
     Reactor::begin(second);
-    Clock::kept();
+    Clock::anchor();
     LedSignal::off();
   }
 

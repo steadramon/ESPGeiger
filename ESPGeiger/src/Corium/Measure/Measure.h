@@ -175,6 +175,9 @@ int32_t  m_i(const char* id);
 
 // id PROGMEM, core and input rows only, safe to cache
 MRead m_core_read(const char* id, MKind kind);
+// its value now, NAN / false when not found or gone
+inline float m_read_f(MRead r) { MValue v; return (r && r(&v)) ? v.f : NAN; }
+inline bool  m_read_b(MRead r) { MValue v; return r && r(&v) && v.b; }
 
 // an app's unit pref maps straight on
 enum MTempUnit : uint8_t { MT_C = 0, MT_F = 1, MT_K = 2 };

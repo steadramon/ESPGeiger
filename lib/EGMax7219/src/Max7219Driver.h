@@ -60,6 +60,7 @@ class Max7219Driver {
 
   private:
     static constexpr uint8_t SETUP_REGS = 5;
+    void shiftByte(uint8_t b);
     void shiftFrame(uint8_t reg, uint8_t val);
     void sendSetup(uint8_t i);
     void sendRow(uint8_t r);

@@ -215,10 +215,10 @@ One bus for the OLED and the [environment sensor](/configuration/env). Upgrades 
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Display Type | `display.type` | `0` SSD1306, `1` SH1106 (1.3in), `2` SSD1309 | varies by build | boards without fixed pins | OLED panel, or an LED display on builds with MAX7219 support: `3` Tiny SSD1306 and `4` Tiny SH1106 (ESP32), `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637). Reboot to apply. |
+| Display Type | `display.type` | `0` SSD1306, `1` SH1106 (1.3in), `2` SSD1309 | `0` SSD1306 | boards without fixed pins | OLED panel, or an LED display on builds with MAX7219 support: `3` Tiny SSD1306 and `4` Tiny SH1106 (ESP32), `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637). Reboot to apply. |
 | Brightness | `display.brightness` | Int 0-100 | `25` | all | Display brightness |
-| Reset Pin | `display.rst` | Int 0-255 | varies by build | boards without fixed pins | GPIO toggled at boot to reset OLED (255 = none). Reboot to apply. |
-| Flip 180° | `display.flip` | Boolean | varies by build | boards without fixed pins | Reboot to apply |
+| Reset Pin | `display.rst` | Int 0-255 | `255` | boards without fixed pins | GPIO toggled at boot to reset OLED (255 = none). Reboot to apply. |
+| Flip 180° | `display.flip` | Boolean | varies by build | all | Reboot to apply |
 | Timeout | `display.timeout` | Int 0-99999 | `120` | push-button builds | Display turns off after this many seconds of inactivity. `0` falls back to On Time / Off Time below. |
 | On Time | `display.on_time` | Time HH:MM | (empty) | all | Display on-time. On push-button builds, only takes effect when Timeout is `0`. Blank means always on. |
 | Off Time | `display.off_time` | Time HH:MM | (empty) | all | Display off-time. Same rules as On Time. Window crosses midnight if `from > to`. |

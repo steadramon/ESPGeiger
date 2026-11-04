@@ -19,6 +19,7 @@
 */
 #include "EGUdp.h"
 #include "EGTcpPort.h"
+#include "EGLwipHop.h"
 
 #include <new>
 #include <string.h>
@@ -29,9 +30,6 @@ extern "C" {
 #include "lwip/igmp.h"
 #include "lwip/pbuf.h"
 }
-#if defined(ESP32)
-#include "lwip/priv/tcpip_priv.h"
-#endif
 
 struct Call {
   EGUdp* u;
@@ -45,62 +43,6 @@ struct Call {
   bool on;
   err_t err;
 };
-
-typedef void (*StackFn)(Call* m);
-
-#if defined(ESP32)
-struct Hop {
-  struct tcpip_api_call_data call;
-  StackFn fn;
-  Call* m;
-};
-
-static err_t hop(struct tcpip_api_call_data* d) {
-  Hop* h = reinterpret_cast<Hop*>(d);
-  h->fn(h->m);
-  return ERR_OK;
-}
-
-static err_t on_stack(StackFn fn, Call& m) {
-  Hop h{};
-  h.fn = fn;
-  h.m = &m;
-  tcpip_api_call(hop, &h.call);
-  return m.err;
-}
-#else
-static err_t on_stack(StackFn fn, Call& m) {
-  fn(&m);
-  return m.err;
-}
-#endif
-
-static void to_addr(const ip_addr_t& ip, EGTcpAddr* a) {
-  *a = EGTcpAddr();
-#if LWIP_IPV6
-  if (IP_IS_V6(&ip)) {
-    a->v6 = 1;
-    memcpy(a->b, ip_2_ip6(&ip)->addr, 16);
-    return;
-  }
-#endif
-  uint32_t v = ip4_addr_get_u32(ip_2_ip4(&ip));
-  memcpy(a->b, &v, 4);   // network order both
-}
-
-static void from_addr(const EGTcpAddr& a, ip_addr_t* ip) {
-  memset(ip, 0, sizeof(*ip));
-#if LWIP_IPV6
-  if (a.v6) {
-    IP_SET_TYPE_VAL(*ip, IPADDR_TYPE_V6);
-    memcpy(ip_2_ip6(ip)->addr, a.b, 16);
-    return;
-  }
-#endif
-  uint32_t v;
-  memcpy(&v, a.b, 4);
-  ip_addr_set_ip4_u32(ip, v);
-}
 
 static void to_ip4(const EGTcpAddr& a, ip4_addr_t* ip) {
   uint32_t v;
@@ -224,13 +166,17 @@ bool EGUdp::begin(uint16_t port) {
   m.port = port;
   m.err = ERR_MEM;
   if ((_slots && (!_slot || !_buf)) || on_stack(EGUdpLwip::open_api, m) != ERR_OK) {
-    delete[] _slot;
-    delete[] _buf;
-    _slot = nullptr;
-    _buf = nullptr;
+    freeRing();
     return false;
   }
   return true;
+}
+
+void EGUdp::freeRing() {
+  delete[] _slot;
+  delete[] _buf;
+  _slot = nullptr;
+  _buf = nullptr;
 }
 
 void EGUdp::end() {
@@ -240,10 +186,7 @@ void EGUdp::end() {
     m.u = this;
     on_stack(EGUdpLwip::close_api, m);
   }
-  delete[] _slot;
-  delete[] _buf;
-  _slot = nullptr;
-  _buf = nullptr;
+  freeRing();
   _head = _tail = 0;
   _count.store(0, std::memory_order_relaxed);
   _port = 0;

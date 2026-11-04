@@ -33,8 +33,6 @@ CORIUM_PSTR(K_COLOR, "color");
 CORIUM_PSTR(K_FADE,  "fade");
 CORIUM_PSTR(K_SWAP,  "swap");
 
-#define NPX_STR_(x) #x
-#define NPX_STR(x) NPX_STR_(x)
 
 NeoPixel neopixel;
 CORIUM_REGISTER_FEATURE(neopixel, FEAT_NEOPIXEL)
@@ -62,7 +60,7 @@ CORIUM_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
 
 static const corium::Pref NEOPIXEL_PREF_ITEMS[] PROGMEM = {
 #ifndef NEOPIXEL_PIN_BLOCKED
-  {EG_K_PIN,        NP_L_PIN,  NP_H_PIN,  NPX_STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_PIN,        NP_L_PIN,  NP_H_PIN,  STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
   {EG_K_BRIGHTNESS, EG_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
   {EG_K_MODE,       EG_L_MOD,  nullptr,   "4",               NP_O_MODE, 0, 4, 0, corium::P_ENUM, 0},
@@ -151,16 +149,6 @@ void NeoPixel::on_click(uint32_t) { neopixel._blip = true; }
 // found once, read each blink
 static corium::MRead s_cpm = nullptr, s_cpm5 = nullptr, s_alert = nullptr, s_warn = nullptr;
 
-static float row_f(corium::MRead r) {
-  corium::MValue v;
-  return (r && r(&v)) ? v.f : NAN;
-}
-
-static bool row_b(corium::MRead r) {
-  corium::MValue v;
-  return r && r(&v) && v.b;
-}
-
 void NeoPixel::begin() {
   gcounter.on_click(on_click);
   gcounter.on_rx_click(on_click);
@@ -194,8 +182,8 @@ void NeoPixel::setBrightness(int input) {
 RgbColor NeoPixel::trend_color()
 {
   uint8_t s = (uint8_t)colorSaturation;
-  float cpm = row_f(s_cpm);
-  float cpm5 = row_f(s_cpm5);
+  float cpm = corium::m_read_f(s_cpm);
+  float cpm5 = corium::m_read_f(s_cpm5);
   if (cpm5 <= 0 || cpm <= 0) {
     nextInterval = blinkInterval;
     return color(0, 0, s);                         // no data: blue
@@ -212,9 +200,9 @@ RgbColor NeoPixel::trend_color()
 RgbColor NeoPixel::alarm_color(RgbColor rgb)
 {
   uint8_t s = (uint8_t)colorSaturation;
-  if (row_b(s_alert)) return color(s, 0, 0);
-  if (row_b(s_warn))  return color(s, s, 0);
-  if (row_f(s_cpm) < 0.01f && row_f(s_cpm5) < 0.01f) return color(0, 0, s);
+  if (corium::m_read_b(s_alert)) return color(s, 0, 0);
+  if (corium::m_read_b(s_warn))  return color(s, s, 0);
+  if (corium::m_read_f(s_cpm) < 0.01f && corium::m_read_f(s_cpm5) < 0.01f) return color(0, 0, s);
   return rgb;
 }
 

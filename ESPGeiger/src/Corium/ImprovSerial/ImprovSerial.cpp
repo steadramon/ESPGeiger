@@ -258,9 +258,7 @@ void ImprovSerial::handle_wifi_settings(const std::string& ssid,
       return;
     }
     yield();
-    while (Serial.available()) {
-      consume_byte((uint8_t)Serial.read());
-    }
+    poll();
     delay(50);
   }
   Log::console(PSTR("Improv: WiFi connect timeout for ssid='%s'"), ssid.c_str());

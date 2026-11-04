@@ -43,6 +43,7 @@ class NTP_Client : public corium::Module {
     void begin() override;
     void setup();
     const corium::PrefGroup* prefs_group() override;
+    void on_prefs_loaded() override;
     void on_prefs_saved() override;
     uint8_t display_order() override { return 0; }  // managed via /network
 

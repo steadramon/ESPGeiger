@@ -58,6 +58,14 @@
 #include "Corium/Measure/Measure.h"
 #include "App/MeasureIds.h"
 #include "App/ExternalPause.h"
+#ifdef ESPGEIGER_ATTEST
+#include <esp_mac.h>
+#include "Corium/Console/Console.h"
+#include "HwKey.h"
+#define WEBAPI_REPLY_MAX 112   // + the attest nonce, hex
+#else
+#define WEBAPI_REPLY_MAX 64
+#endif
 
 WebAPI webapi;
 CORIUM_REGISTER_MODULE(webapi)
@@ -177,6 +185,11 @@ static bool crash_to_send() {
 
 void WebAPI::loop(unsigned long now) {
   take_reply();
+#ifdef ESPGEIGER_ATTEST
+  // a challenge is answered this pass or never, a stale nonce only fails
+  const bool sign = _att == ATT_SIGN;
+  if (sign) _att = ATT_WAIT;
+#endif
   if (ExternalPause::active()) {
     corium::Registry::due_at(this, now + LOOP_MS);
     return;
@@ -203,6 +216,11 @@ void WebAPI::loop(unsigned long now) {
   } else if (station_id != 0) {
     pingIfDue(now);
   }
+#ifdef ESPGEIGER_ATTEST
+  // after the off / forget checks above
+  if ((sign || _att == ATT_DUE || _att == ATT_FETCH) && station_id != 0 && !request.busy())
+    sendAttest(sign ? _an : nullptr);
+#endif
   if (request.busy()) {
     corium::Registry::due_at(this, request.due());   // the reply posts us sooner
     return;
@@ -212,7 +230,13 @@ void WebAPI::loop(unsigned long now) {
 
 void WebAPI::take_reply() {
   if (!WEBAPI_SENDS) return;
-  uint8_t r[64];
+#ifdef ESPGEIGER_ATTEST
+  if (_sent == SENT_ATT_BLOB) {
+    takeBlob();
+    return;
+  }
+#endif
+  uint8_t r[WEBAPI_REPLY_MAX];
   int code;
   size_t n;
   if (!request.take(&code, r, sizeof(r), &n)) return;
@@ -221,6 +245,10 @@ void WebAPI::take_reply() {
   if (sent == SENT_HS)          onHandshake(code, r, n);
   else if (sent == SENT_POST)   onPost(code, r, n);
   else if (sent == SENT_FORGET) onForget(code, r, n);
+#ifdef ESPGEIGER_ATTEST
+  else if (sent == SENT_ATT_CH) onChallenge(code, r, n);
+  else if (sent == SENT_ATT)    onAttest(code);
+#endif
 }
 
 // NOT_OPENED / NO_MEMORY counted here, no reply comes
@@ -410,17 +438,17 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
     if (reader.find_key(PSTR("id"))) {
       reader.read_uint(&id);
     }
-    if (!reader.error) {
-      if (id == 0) {
-        Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
-        backoffHandshake();
-        corium::Registry::due_in(this, REPLAN_MS);
-        note_publish(false);
-        return;
-      }
+    if (reader.error) {
+      Log::debug(PSTR("WebAPI: Handshake parse error"));
+    } else if (id == 0) {
+      Log::debug(PSTR("WebAPI: Handshake rejected (no ID in response)"));
+    } else {
       if (station_id != id) {
         Log::console(HS_OK, id);
         station_id = id;
+#ifdef ESPGEIGER_ATTEST
+        _att = ATT_WAIT;   // a new or regained station attests again
+#endif
         uint32_t k = rd_be32(pub_k + 4);
         handshakeAt(fast_millis() +
           wall_clock_wait_ms(k, WEBAPI_HANDSHAKE_MS, 3600));
@@ -430,10 +458,14 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
       }
       _hs_backoff_ms = WEBAPI_BACKOFF_MS;
       _exc_sent = true;
+#ifdef ESPGEIGER_ATTEST
+      // a burned chip with no blob asks for it back, the rest never ask
+      if (_att == ATT_WAIT && HwKey::present()) _att = ATT_DUE;
+      else if (_att == ATT_WAIT && HwKey::burned()) _att = ATT_FETCH;
+#endif
       note_publish(true);
       return;
     }
-    Log::debug(PSTR("WebAPI: Handshake parse error"));
   } else {
     Log::debug(PSTR("WebAPI: Handshake error %d - %s"), code, (PGM_P)EGHttpClient::reason(code));
     if (code == 403) denied(r, n);
@@ -448,6 +480,139 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
   corium::Registry::due_in(this, REPLAN_MS);
   note_publish(false);
 }
+
+#ifdef ESPGEIGER_ATTEST
+// official hardware, once a boot: challenge, then the chip signs it with our station key
+static const char ATTEST_TAG[] PROGMEM = "espgeiger-attest-v1";
+static constexpr size_t ATT_NONCE = 32;
+static constexpr size_t ATT_MAC = 6;
+
+// nonce nullptr = ask for one, or for the blob; a lost reply asks again after the next handshake
+void WebAPI::sendAttest(const uint8_t* nonce) {
+  const bool fetch = _att == ATT_FETCH;
+  _att = ATT_WAIT;
+  uint8_t buffer[448], mac[ATT_MAC], hw_sig[HwKey::SIG];
+  if (esp_efuse_mac_get_default(mac) != ESP_OK) return;
+  MsgPack::Writer mp(buffer, sizeof(buffer));
+  mp.map_begin();
+  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
+  mp.kv(PSTR("pk"), pub_k_64);
+  mp.kv(PSTR("hw"), mac, ATT_MAC);
+  if (nonce) {
+    Sha256Class sha;
+    sha.init();
+    sha.write((const uint8_t*)ATTEST_TAG, sizeof(ATTEST_TAG) - 1);
+    sha.write(mac, ATT_MAC);
+    sha.write(nonce, ATT_NONCE);
+    sha.write(pub_k, sizeof(pub_k));
+    if (!HwKey::sign(sha.result(), hw_sig)) {
+      Log::console(PSTR("WebAPI: Attest sign failed"));
+      _att = ATT_DONE;
+      return;
+    }
+    mp.kv(PSTR("an"), nonce, ATT_NONCE);
+    mp.kv(PSTR("as"), hw_sig, sizeof(hw_sig));
+  }
+  mp.map_end();
+  char sig[WEBAPI_SIG_B64];
+  if (mp.overflow || !sign(priv_k, buffer, mp.length(), sig)) return;
+  uint8_t kind = SENT_ATT_CH;
+  PGM_P url = PSTR(WEBAPI_URL "/api/1/attest/challenge");
+  if (nonce) {
+    kind = SENT_ATT;
+    url = PSTR(WEBAPI_URL "/api/1/attest");
+  } else if (fetch) {
+    kind = SENT_ATT_BLOB;
+    url = PSTR(WEBAPI_URL "/api/1/attest/blob");
+  }
+  send_signed(kind, url, buffer, mp.length(), sig);
+}
+
+static_assert(EGHttpClient::BODY_CAP > HwKey::BLOB, "blob reply needs EGHTTP_BODY_CAP");
+
+// +1 sees a longer reply
+void __attribute__((noinline)) WebAPI::takeBlob() {
+  uint8_t r[HwKey::BLOB + 1];
+  int code;
+  size_t n;
+  if (!request.take(&code, r, sizeof(r), &n)) return;
+  _sent = SENT_NONE;
+  onBlob(code, r, n);
+}
+
+// raw blob; 403 / 404 = not for this boot
+void WebAPI::onBlob(int code, const uint8_t* r, size_t n) {
+  if (code == 200 && n == HwKey::BLOB && HwKey::put(r)) {
+    Log::debug(PSTR("WebAPI: Key restored"));
+    _att = ATT_DUE;
+  } else if (code == 200 || code == 403 || code == 404) {
+    Log::debug(PSTR("WebAPI: Key not restored"));
+    _att = ATT_DONE;
+  }
+}
+
+// 404 = not one of ours, nothing more this boot
+void WebAPI::onChallenge(int code, const uint8_t* r, size_t n) {
+  MsgPack::Reader reader(r, n);
+  char hex[2 * ATT_NONCE + 1];
+  if (code == 200 && reader.find_key(PSTR("an")) && reader.read_str(hex, sizeof(hex)) &&
+      hex_decode(_an, hex, ATT_NONCE)) {
+    _att = ATT_SIGN;
+  } else if (code == 403 || code == 404) {
+    _att = ATT_DONE;
+  }
+}
+
+void WebAPI::onAttest(int code) {
+  if (code == 200) {
+    Log::debug(PSTR("WebAPI: Official hardware verified"));
+    _att = ATT_DONE;
+  } else if (code == 403 || code == 404) {
+    Log::debug(PSTR("WebAPI: Official hardware not verified"));
+    _att = ATT_DONE;
+  }
+}
+
+// genuine <64 hex>: setup.espgeiger.com's check over serial. Its own tag, never a station attest
+static const char CHECK_TAG[] PROGMEM = "espgeiger-check-v1";
+static constexpr size_t SIG_LINE = 32;
+
+static void genuine(const char* hex) {
+  uint8_t ch[ATT_NONCE], mac[ATT_MAC], sig[HwKey::SIG];
+  if (!hex || !hex_decode(ch, hex, ATT_NONCE) || esp_efuse_mac_get_default(mac) != ESP_OK) {
+    Log::console(PSTR("genuine <64 hex>"));
+    return;
+  }
+  Sha256Class sha;
+  sha.init();
+  sha.write((const uint8_t*)CHECK_TAG, sizeof(CHECK_TAG) - 1);
+  sha.write(mac, ATT_MAC);
+  sha.write(ch, ATT_NONCE);
+  if (!HwKey::sign(sha.result(), sig)) {
+    Log::console(PSTR("Genuine: no"));
+    return;
+  }
+  char out[2 * SIG_LINE + 1];
+  hex_encode(out, mac, ATT_MAC);
+  out[2 * ATT_MAC] = '\0';
+  Log::console(PSTR("Genuine: mac %s"), out);
+  for (size_t i = 0; i < HwKey::SIG / SIG_LINE; i++) {
+    hex_encode(out, sig + i * SIG_LINE, SIG_LINE);
+    out[2 * SIG_LINE] = '\0';
+    Log::console(PSTR("Genuine: sig %u %s"), (unsigned)i, out);
+  }
+  Log::console(PSTR("Genuine: end"));
+}
+
+// the reply reaches USB even while SerialOut streams
+static void cmd_genuine() {
+  const bool was = Log::serialOn();
+  Log::setSerialLogLevel(true);
+  genuine(Console::next());
+  Log::setSerialLogLevel(was);
+}
+CORIUM_REGISTER_CMD(genuine, cmd_genuine)
+#endif
 
 static void write_env(MsgPack::Writer& mp) {
   float t = corium::m_f(M_T), h = corium::m_f(M_H), p = corium::m_f(M_P);

@@ -138,25 +138,34 @@ void Log::AddLog(Log::LoggingLevels level, const char* logData, bool withTimesta
     logIdx++;       // Index 0 is not allowed as it is the end of char string*/
 }
 
+// the next "[idx]line\1", span takes the \1; false = none left
+static bool next_line(const char*& it, const char* stop, uint8_t& idx, const char*& line, size_t& span)
+{
+  if (it >= stop || *it == '\0') return false;
+  idx = (uint8_t)*it++;
+  const char* delim = (const char*)memchr(it, '\1', (size_t)(stop - it));
+  if (!delim) return false;
+  line = it;
+  span = (size_t)(delim - it) + 1;
+  it = delim + 1;
+  return true;
+}
+
 size_t Log::copyLog(uint32_t idx, char* out, size_t cap)
 {
   if (!idx || cap < 2) return 0;
   size_t n = 0;
   LOG_LOCK();
-  const char* it  = log;
-  const char* end = log + MAX_LOG_SIZE;
-  while (it < end && *it != '\0') {
-    uint32_t cur_idx = (uint8_t)*it;
-    it++;
-    const char* delim = (const char*)memchr(it, '\1', (size_t)(end - it));
-    if (!delim) break;
-    size_t span = (size_t)(delim - it) + 1;
+  const char* it = log;
+  const char* line;
+  uint8_t cur_idx;
+  size_t span;
+  while (next_line(it, log + MAX_LOG_SIZE, cur_idx, line, span)) {
     if (cur_idx == idx) {
       n = span < cap - 1 ? span : cap - 1;
-      memcpy(out, it, n);
+      memcpy(out, line, n);
       break;
     }
-    it += span;
   }
   LOG_UNLOCK();
   return n;
@@ -177,25 +186,20 @@ size_t Log::copySince(uint32_t* idx, uint8_t end, char* out, size_t cap)
   int want = idx_dist(from, end);
   size_t n = 0;
   LOG_LOCK();
-  const char* it   = log;
-  const char* stop = log + MAX_LOG_SIZE;
-  while (it < stop && *it != '\0') {
-    uint8_t cur_idx = (uint8_t)*it;
-    it++;
-    const char* delim = (const char*)memchr(it, '\1', (size_t)(stop - it));
-    if (!delim) break;
-    size_t span = (size_t)(delim - it) + 1;
-    if (idx_dist(from, cur_idx) < want) {
-      if (n + span > cap - 1) {
-        if (n) break;
-        span = cap - 1;   // one long line, cut as copyLog
-      }
-      memcpy(out + n, it, span);
-      n += span;
-      out[n - 1] = '\n';
-      *idx = next_idx(cur_idx);
+  const char* it = log;
+  const char* line;
+  uint8_t cur_idx;
+  size_t span;
+  while (next_line(it, log + MAX_LOG_SIZE, cur_idx, line, span)) {
+    if (idx_dist(from, cur_idx) >= want) continue;
+    if (n + span > cap - 1) {
+      if (n) break;
+      span = cap - 1;   // one long line, cut as copyLog
     }
-    it = delim + 1;
+    memcpy(out + n, line, span);
+    n += span;
+    out[n - 1] = '\n';
+    *idx = next_idx(cur_idx);
   }
   LOG_UNLOCK();
   return n;

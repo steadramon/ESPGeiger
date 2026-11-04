@@ -72,6 +72,7 @@ struct AudioCmd {
 };
 
 bool audio_enqueue(const AudioCmd& cmd);
+void audio_silence(uint16_t ms);
 // speech types go here, on the worker
 typedef void (*AudioFn)(const AudioCmd& cmd);
 void audio_speech(AudioFn fn);

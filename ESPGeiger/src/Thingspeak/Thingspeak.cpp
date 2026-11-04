@@ -88,6 +88,15 @@ bool Thingspeak::interpret(const char* r)
   return false;
 }
 
+// &fieldN=v, no reading leaves it out
+static size_t add_field(char* url, size_t cap, size_t up, unsigned field, float v) {
+  if (isnan(v)) return up;
+  char fbuf[12];
+  format_f(fbuf, sizeof(fbuf), v);
+  int n = snprintf_P(url + up, cap - up, PSTR("&field%u=%s"), field, fbuf);
+  return (n > 0 && (size_t)n < cap - up) ? up + (size_t)n : up;
+}
+
 bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
   if (!upload_ready(log_tag())) return false;
 
@@ -107,25 +116,9 @@ bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
   int n0 = snprintf_P(url, cap, TS_URI, key, avgcpm, usvChar, avgcpm5, avgcpm15);
   if (!url_fits(n0, cap)) return false;
   size_t up = (size_t)n0;
-  char fbuf[12];
-  float et = corium::m_f(M_T), eh = corium::m_f(M_H), ep = corium::m_f(M_P);
-  int n;
-  if (!isnan(et)) {
-    format_f(fbuf, sizeof(fbuf), et);
-    n = snprintf_P(url + up, cap - up, PSTR("&field5=%s"), fbuf);
-    if (n > 0 && (size_t)n < cap - up) up += n;
-  }
-  if (!isnan(eh)) {
-    format_f(fbuf, sizeof(fbuf), eh);
-    n = snprintf_P(url + up, cap - up, PSTR("&field6=%s"), fbuf);
-    if (n > 0 && (size_t)n < cap - up) up += n;
-  }
-  if (!isnan(ep)) {
-    format_f(fbuf, sizeof(fbuf), ep);
-    n = snprintf_P(url + up, cap - up, PSTR("&field7=%s"), fbuf);
-    if (n > 0 && (size_t)n < cap - up) up += n;
-  }
-
+  up = add_field(url, cap, up, 5, corium::m_f(M_T));
+  up = add_field(url, cap, up, 6, corium::m_f(M_H));
+  up = add_field(url, cap, up, 7, corium::m_f(M_P));
   return true;
 }
 #endif

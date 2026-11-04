@@ -760,11 +760,7 @@ void SSD1306Display::setup() {
   u8g2_ClearBuffer(&_u8g2);
   u8g2_SendBuffer(&_u8g2);
   setFontPosTop();
-#ifdef OLED_PINS_BLOCKED
-  bool flipped = OLED_FLIP;
-#else
   bool flipped = corium::Prefs::getBool("display", K_FLIP);
-#endif
   // inverted vs ThingPulse, u8g2 init is already flipped
   setFlipMode(flipped ? 0 : 1);
   setContrast(64);

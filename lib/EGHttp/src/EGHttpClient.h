@@ -40,6 +40,9 @@
 #ifndef EGHTTP_REDIRECTS
   #define EGHTTP_REDIRECTS 1   // 0 = no setRedirects(), 3xx never followed
 #endif
+#ifndef EGHTTP_BODY_CAP
+  #define EGHTTP_BODY_CAP 256  // body kept without a sink, the rest dropped
+#endif
 
 // http only, one at a time, headers after open(), sink and redirects before send()
 class EGHttpClient {
@@ -48,7 +51,7 @@ class EGHttpClient {
     typedef int (*Sink)(void* arg, const uint8_t* buf, size_t len);
     typedef void (*Wake)(void* arg);
 
-    static const size_t BODY_CAP = 256;
+    static const size_t BODY_CAP = EGHTTP_BODY_CAP;
     static const size_t LINE_CAP = 2048;   // per line
     static const size_t HEAD_CAP = 8192;   // all headers
     static const size_t IN_CAP = 256;

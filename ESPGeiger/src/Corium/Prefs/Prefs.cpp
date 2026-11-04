@@ -148,13 +148,20 @@ int find_pref_index(const corium::PrefGroup* g, const char* key) {
 
 const char* moved_to(const char* from);
 
-// a moved key reads from its new group, as put
+// the group holding module.key, a moved one in its new group; module follows the move
+GroupShadow* locate(const char*& module, const char* key, int& idx) {
+  for (const char* m = module; m; m = moved_to(m)) {
+    GroupShadow* gs = find_group(m);
+    idx = gs ? find_pref_index(gs->group, key) : -1;
+    if (idx >= 0) { module = m; return gs; }
+  }
+  return nullptr;
+}
+
 const char* find_value(const char* module, const char* key) {
-  GroupShadow* gs = find_group(module);
-  int idx = gs ? find_pref_index(gs->group, key) : -1;
-  if (idx >= 0) return gs->values[idx];
-  const char* to = moved_to(module);
-  return to ? find_value(to, key) : nullptr;
+  int idx;
+  GroupShadow* gs = locate(module, key, idx);
+  return gs ? gs->values[idx] : nullptr;
 }
 
 bool string_ok(const corium::Pref* p, const char* value) {
@@ -174,10 +181,11 @@ int copy_value(const char* value, char* out, size_t outsz) {
   return (int)len;
 }
 
+// 1, true, yes
+bool truthy(char c) { return c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y'; }
+
 int valid_bool(const char* value, char* out, size_t outsz) {
-  char c = value[0];
-  bool v = (c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y');
-  return snprintf_P(out, outsz, PSTR("%c"), v ? '1' : '0');
+  return snprintf_P(out, outsz, PSTR("%c"), truthy(value[0]) ? '1' : '0');
 }
 
 // refuse, don't clamp
@@ -570,9 +578,7 @@ uint32_t corium::Prefs::getUInt(const char* module, const char* key) {
 
 bool corium::Prefs::getBool(const char* module, const char* key) {
   const char* v = find_value(module, key);
-  if (!v || v[0] == '\0') return false;
-  char c = v[0];
-  return (c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y');
+  return v && truthy(v[0]);
 }
 
 float corium::Prefs::getFloat(const char* module, const char* key) {
@@ -600,13 +606,9 @@ static bool pin_refused(const corium::Pref& p, const char* module, const char* k
 bool corium::Prefs::put(const char* module, const char* key, const char* value) {
   s_refused = nullptr;
   s_warned = nullptr;
-  GroupShadow* gs = find_group(module);
-  int idx = gs ? find_pref_index(gs->group, key) : -1;
-  if (idx < 0) {
-    // moved key, forward it
-    const char* to = moved_to(module);
-    return to && put(to, key, value);
-  }
+  int idx;
+  GroupShadow* gs = locate(module, key, idx);
+  if (!gs) return false;
   const corium::Pref p = gs->group->prefs.row(idx);
   if (p.flags & corium::P_READONLY) return false;
 
@@ -916,14 +918,10 @@ corium::Module* corium::Prefs::module_at(size_t idx) {
 }
 
 bool corium::Prefs::find_pref(const char* module, const char* key, corium::Pref* out) {
-  GroupShadow* gs = find_group(module);
-  int idx = gs ? find_pref_index(gs->group, key) : -1;
-  if (idx < 0) {
-    const char* to = moved_to(module);
-    return to && find_pref(to, key, out);
-  }
-  if (out) *out = gs->group->prefs.row(idx);
-  return true;
+  int idx;
+  GroupShadow* gs = locate(module, key, idx);
+  if (gs && out) *out = gs->group->prefs.row(idx);
+  return gs != nullptr;
 }
 
 const char* corium::Prefs::moved_from(size_t i) {

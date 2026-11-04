@@ -54,6 +54,11 @@ namespace DeviceInfo {
   }
   const char* friendlyName();
   void setFriendlyName(const char* s);
+  // friendly, else the hostname
+  inline const char* displayName() {
+    const char* fn = friendlyName();
+    return (fn && fn[0]) ? fn : hostname();
+  }
   const char* mac();
   const char* flashInfo();   // "ef4016 DIO 40MHz"
   PGM_P buildDate();   // one copy

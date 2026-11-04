@@ -254,27 +254,26 @@ bool EGTcpClient::dial(const EGTcpAddr& a, uint16_t port) {
   return false;
 }
 
-bool EGTcpClient::connect(const EGTcpAddr& a, uint16_t port) {
-  if (_state == CONNECTING || _state == OPEN) return false;
+void EGTcpClient::start() {
   EGTcpCore::check();
   forget(false);
   _err = 0;
   _t_start = EGTcpCore::now();
   _state = CONNECTING;
   rearm();
+}
+
+bool EGTcpClient::connect(const EGTcpAddr& a, uint16_t port) {
+  if (_state == CONNECTING || _state == OPEN) return false;
+  start();
   return dial(a, port);
 }
 
 bool EGTcpClient::connect(const char* host, uint16_t port) {
   if (!host || _state == CONNECTING || _state == OPEN) return false;
-  EGTcpCore::check();
-  forget(false);
-  _err = 0;
+  start();
   _port = port;
   _dns_id++;
-  _t_start = EGTcpCore::now();
-  _state = CONNECTING;
-  rearm();
   EGTcpAddr a;
   int8_t e = _ops->resolve(this, host, &a);
   if (e == 0) return dial(a, port);   // cached
@@ -384,35 +383,17 @@ void EGTcpClient::setKeepAlive(uint32_t idle_ms, uint8_t count) {
   if (_h.load()) _ops->keepalive(this, idle_ms, count);
 }
 
-EGTcpAddr EGTcpClient::remoteAddr() const {
+EGTcpInfo EGTcpClient::info() const {
   EGTcpInfo i{};
   _ops->info(this, &i);
-  return i.remote;
+  return i;
 }
 
-uint16_t EGTcpClient::remotePort() const {
-  EGTcpInfo i{};
-  _ops->info(this, &i);
-  return i.remote_port;
-}
-
-EGTcpAddr EGTcpClient::localAddr() const {
-  EGTcpInfo i{};
-  _ops->info(this, &i);
-  return i.local;
-}
-
-uint16_t EGTcpClient::localPort() const {
-  EGTcpInfo i{};
-  _ops->info(this, &i);
-  return i.local_port;
-}
-
-uint16_t EGTcpClient::mss() const {
-  EGTcpInfo i{};
-  _ops->info(this, &i);
-  return i.mss;
-}
+EGTcpAddr EGTcpClient::remoteAddr() const { return info().remote; }
+uint16_t EGTcpClient::remotePort() const  { return info().remote_port; }
+EGTcpAddr EGTcpClient::localAddr() const  { return info().local; }
+uint16_t EGTcpClient::localPort() const   { return info().local_port; }
+uint16_t EGTcpClient::mss() const         { return info().mss; }
 
 // what happened, owner's task
 

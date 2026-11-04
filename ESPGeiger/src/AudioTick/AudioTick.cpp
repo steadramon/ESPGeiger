@@ -51,8 +51,6 @@ CORIUM_PSTR(K_BCLK,   "bclk");
 CORIUM_PSTR(K_WS,     "ws");
 CORIUM_PSTR(K_DOUT,   "dout");
 
-#define TICK_STR_(x) #x
-#define TICK_STR(x) TICK_STR_(x)
 
 AudioTick audiotick;
 CORIUM_REGISTER_MODULE(audiotick)
@@ -188,9 +186,9 @@ static const corium::Pref TICK_PREF_ITEMS[] PROGMEM = {
   {K_PEAK,      TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, corium::P_UINT, corium::P_ADVANCED},
   {K_CHIME,     TK_L_CHM,  nullptr,   "1",    TK_O_CHM, 0,  8,    0, corium::P_ENUM, 0},
 #ifndef AUDIO_TICK_PINS_BLOCKED
-  {K_BCLK,      TK_L_BCLK, corium::H_RBA,  TICK_STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-  {K_WS,        TK_L_WS,   corium::H_RBA,  TICK_STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-  {K_DOUT,      TK_L_DOUT, corium::H_RBA,  TICK_STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_BCLK,      TK_L_BCLK, corium::H_RBA,  STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_WS,        TK_L_WS,   corium::H_RBA,  STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_DOUT,      TK_L_DOUT, corium::H_RBA,  STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
 };
 
@@ -343,6 +341,18 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
 
 // zeros, off the aud task stack
 static const int16_t GAP_50MS[1100] = {0};
+constexpr uint16_t GAP_LEN = sizeof(GAP_50MS) / sizeof(int16_t);
+
+// the aud task only
+void audio_silence(uint16_t ms) {
+  uint32_t remaining = ms_to_samples(ms);
+  while (remaining > 0) {
+    const uint16_t n = (remaining > GAP_LEN) ? GAP_LEN : (uint16_t)remaining;
+    size_t written = 0;
+    i2s_write(I2S_NUM_0, GAP_50MS, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
+    remaining -= n;
+  }
+}
 
 void AudioTick::play_chime_now(uint8_t c) {
   if (!_i2s_up || c == 0) return;
@@ -362,14 +372,14 @@ void AudioTick::play_chime_now(uint8_t c) {
     case 9:          chimeMorseCallsign(); break;
   }
   // else the amp soft-stop eats the next clicks
-  constexpr uint16_t SIL_CHUNK = 256;
-  uint32_t remaining = ms_to_samples(300);
-  while (remaining > 0) {
-    const uint16_t n = (remaining > SIL_CHUNK) ? SIL_CHUNK : (uint16_t)remaining;
-    size_t written = 0;
-    i2s_write(I2S_NUM_0, GAP_50MS, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
-    remaining -= n;
-  }
+  audio_silence(300);
+}
+
+// ramp up, hold, ramp down
+static inline float envelope(uint32_t pos, uint32_t total, uint32_t attack, uint32_t release) {
+  if (pos < attack)          return (float)pos / (float)attack;
+  if (pos > total - release) return (float)(total - pos) / (float)release;
+  return 1.0f;
 }
 
 // 256-sample chunks, keeps stack bounded
@@ -388,10 +398,7 @@ void AudioTick::playMelodyNote(uint16_t freq_hz, uint16_t ms,
     const uint16_t n = (total - out > CHUNK) ? CHUNK : (uint16_t)(total - out);
     for (uint16_t i = 0; i < n; i++) {
       const uint32_t pos = out + i;
-      float env;
-      if (pos < attack)                 env = (float)pos / (float)attack;
-      else if (pos > total - release)   env = (float)(total - pos) / (float)release;
-      else                              env = 1.0f;
+      const float env = envelope(pos, total, attack, release);
       phase += w;
       float s = sinf(phase);
       if (square) s = (s >= 0.0f) ? 1.0f : -1.0f;
@@ -401,16 +408,7 @@ void AudioTick::playMelodyNote(uint16_t freq_hz, uint16_t ms,
     i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 50 / portTICK_PERIOD_MS);
     out += n;
   }
-  if (gap_ms > 0) {
-    for (uint16_t i = 0; i < CHUNK; i++) buf[i] = 0;
-    uint32_t remaining = ms_to_samples(gap_ms);
-    while (remaining > 0) {
-      const uint16_t n = (remaining > CHUNK) ? CHUNK : (uint16_t)remaining;
-      size_t written = 0;
-      i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
-      remaining -= n;
-    }
-  }
+  audio_silence(gap_ms);
 }
 
 void AudioTick::chimeThreeBeeps() {
@@ -458,10 +456,7 @@ void AudioTick::chimeDtmf() {
       const uint16_t n = (total - out > CHUNK) ? CHUNK : (uint16_t)(total - out);
       for (uint16_t i = 0; i < n; i++) {
         const uint32_t pos = out + i;
-        float env;
-        if (pos < attack)                 env = (float)pos / (float)attack;
-        else if (pos > total - release)   env = (float)(total - pos) / (float)release;
-        else                              env = 1.0f;
+        const float env = envelope(pos, total, attack, release);
         p1 += w1; p2 += w2;
         buf[i] = (int16_t)((sinf(p1) + sinf(p2)) * env * amp);
       }
@@ -469,8 +464,7 @@ void AudioTick::chimeDtmf() {
       i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 50 / portTICK_PERIOD_MS);
       out += n;
     }
-    size_t written = 0;
-    i2s_write(I2S_NUM_0, GAP_50MS, sizeof(GAP_50MS), &written, 80 / portTICK_PERIOD_MS);
+    audio_silence(50);
   }
 }
 
@@ -555,10 +549,7 @@ void AudioTick::chimeNumbersStation() {
 void AudioTick::chimeSputnik() {
   for (uint8_t k = 0; k < 3; k++) {
     playMelodyNote(1000, 280);
-    size_t written = 0;
-    for (uint8_t g = 0; g < 5; g++) {
-      i2s_write(I2S_NUM_0, GAP_50MS, sizeof(GAP_50MS), &written, 80 / portTICK_PERIOD_MS);
-    }
+    audio_silence(250);
   }
 }
 

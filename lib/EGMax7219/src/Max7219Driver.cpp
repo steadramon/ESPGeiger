@@ -70,20 +70,20 @@ void Max7219Driver::heal() {
   if (++_heal_row > _scan) _heal_row = 0;
 }
 
-// MSB first, no latch
+// MSB first
+void Max7219Driver::shiftByte(uint8_t b) {
+  for (uint8_t i = 0; i < 8; i++) {
+    digitalWrite(_din, (b & 0x80) ? HIGH : LOW);
+    b <<= 1;
+    digitalWrite(_clk, HIGH);
+    digitalWrite(_clk, LOW);
+  }
+}
+
+// no latch
 void Max7219Driver::shiftFrame(uint8_t reg, uint8_t val) {
-  for (uint8_t i = 0; i < 8; i++) {
-    digitalWrite(_din, (reg & 0x80) ? HIGH : LOW);
-    reg <<= 1;
-    digitalWrite(_clk, HIGH);
-    digitalWrite(_clk, LOW);
-  }
-  for (uint8_t i = 0; i < 8; i++) {
-    digitalWrite(_din, (val & 0x80) ? HIGH : LOW);
-    val <<= 1;
-    digitalWrite(_clk, HIGH);
-    digitalWrite(_clk, LOW);
-  }
+  shiftByte(reg);
+  shiftByte(val);
 }
 
 static bool is_digit(uint8_t reg) {

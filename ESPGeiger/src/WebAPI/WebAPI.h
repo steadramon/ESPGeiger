@@ -69,7 +69,7 @@ class WebAPI : public corium::Sender {
   private:
     bool _forget = false;
     void sendForget();
-    enum Sent : uint8_t { SENT_NONE, SENT_HS, SENT_POST, SENT_FORGET };
+    enum Sent : uint8_t { SENT_NONE, SENT_HS, SENT_POST, SENT_FORGET, SENT_ATT_CH, SENT_ATT, SENT_ATT_BLOB };
     uint8_t _sent = SENT_NONE;   // what the reply is for
     corium::HttpDriver::Sent send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
                                    const char* sig);
@@ -102,6 +102,17 @@ class WebAPI : public corium::Sender {
     uint8_t _mode = 2;   // 0 off, 1 heartbeat, 2 + CPM
     void backoffHandshake();
     bool _exc_sent = false;
+#ifdef ESPGEIGER_ATTEST
+    // WAIT = after the next good handshake, FETCH = burned but the blob is gone
+    enum Att : uint8_t { ATT_WAIT, ATT_DUE, ATT_SIGN, ATT_FETCH, ATT_DONE };
+    uint8_t _att = ATT_WAIT;
+    uint8_t _an[32];   // the challenge, signed and sent from loop()
+    void sendAttest(const uint8_t* nonce);
+    void onChallenge(int code, const uint8_t* r, size_t n);
+    void onAttest(int code);
+    void takeBlob();
+    void onBlob(int code, const uint8_t* r, size_t n);
+#endif
 };
 
 extern WebAPI webapi;
