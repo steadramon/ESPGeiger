@@ -24,7 +24,7 @@
 
 namespace BlipLed {
 
-  static PulseEngine s_engine;
+  static corium::PulseEngine s_engine;
   volatile uint8_t s_req = 0;
   uint8_t s_seen = 0;
   bool s_busy = false;
@@ -46,18 +46,18 @@ namespace BlipLed {
   }
 
   void flash() {
-    if (s_engine.take(fast_millis())) s_req++;
+    if (s_engine.take(corium::fastMillis())) s_req++;
   }
 
   void setBrightness(uint8_t level) {
-    s_engine.active_level = PulseEngine::levelFrom8bit(level);
+    s_engine.activeLevel = corium::PulseEngine::levelFrom8bit(level);
   }
 
   void setConfig(uint8_t engine_mode, uint16_t pulse_us, uint8_t fade_shift_idx, uint8_t max_hz) {
     s_engine.mode       = engine_mode;
-    s_engine.pulse_us   = pulse_us;
-    s_engine.fade_shift = (uint8_t)(fade_shift_idx + PulseEngine::FADE_SHIFT_MIN);
-    s_engine.max_hz     = max_hz;
+    s_engine.pulseUs    = pulse_us;
+    s_engine.fadeShift = (uint8_t)(fade_shift_idx + corium::PulseEngine::FADE_SHIFT_MIN);
+    s_engine.maxHz      = max_hz;
     s_engine.commitConfig();
   }
 

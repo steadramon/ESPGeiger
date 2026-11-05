@@ -20,11 +20,11 @@
 #define ENVSENSOR_H
 
 #include <Arduino.h>
-#include "UdpBlip/UdpBlip.h"
 
 #ifndef DISABLE_ENVSENSOR
 #include <BoschTHP.h>
 #include <AsairAHT.h>
+#include "Corium/Measure/Measure.h"
 #include "Corium/Module/Module.h"
 #include "Corium/System/FastMillis.h"
 #endif
@@ -35,8 +35,6 @@
 #define ENV_FAIL_SAMPLES  6     // 1 min
 #define ENV_RETRY_MS      60000UL   // max 0xFFFF
 #define ENV_AHT_WAIT_MS   80
-// 2 lost /env, third up to half a period late
-#define ENV_REMOTE_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
 
 #ifndef DISABLE_ENVSENSOR
 
@@ -47,12 +45,12 @@ class EnvSensor : public corium::Module {
     EnvSensor() {}
     const char* name() override { return PSTR("env"); }
     uint8_t priority() override { return CORIUM_PRIORITY_DEFAULT; }
-    uint8_t display_order() override { return 13; }   // after Input (12)
+    uint8_t displayOrder() override { return 13; }   // after Input (12)
     void begin() override;
     void loop(unsigned long now) override;
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
-    bool hw_present() override { return present(); }
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
+    bool hwPresent() override { return present(); }
     corium::MeasureRows measurements() override;
 
     static constexpr uint8_t DRV_BOSCH = 1 << 0;
@@ -68,8 +66,7 @@ class EnvSensor : public corium::Module {
     float pressure() const;
     float tempUser() const;
 
-    // UdpBlip /env, used with no local sensor
-    void setRemote(float t, float h, float p);
+    // UdpRx's /env rows, used with no local sensor
     bool remoteFresh() const;
 
   private:
@@ -108,10 +105,9 @@ class EnvSensor : public corium::Module {
     AsairAHT::Sensor _aht;
     State*   _st = nullptr;
 
-    float    _r_t = NAN;
-    float    _r_h = NAN;
-    float    _r_p = NAN;
-    mutable Stamp _r_last;
+    corium::MRead _rx_t = nullptr;
+    corium::MRead _rx_h = nullptr;
+    corium::MRead _rx_p = nullptr;
 };
 
 #else  // DISABLE_ENVSENSOR
@@ -127,7 +123,6 @@ class EnvSensor {
     float   humidity() const  { return NAN; }
     float   pressure() const  { return NAN; }
     float   tempUser() const  { return NAN; }
-    void    setRemote(float, float, float) {}
 };
 
 #endif  // DISABLE_ENVSENSOR

@@ -36,14 +36,14 @@ corium::HttpDriver::Sent corium::HttpDriver::send(const corium::HttpMeta& m, con
     _c = nullptr;
     return NOT_OPENED;
   }
-  char ua[DeviceInfo::UA_MAX];
-  DeviceInfo::useragent(ua, sizeof(ua));
+  char ua[corium::DeviceInfo::UA_MAX];
+  corium::DeviceInfo::userAgent(ua, sizeof(ua));
   _c->setReqHeader(FPSTR(HTTP_H_UA), ua);
   if (m.accept) _c->setReqHeader(F("Accept"), FPSTR(m.accept));
   if (m.ctype) _c->setReqHeader(FPSTR(HTTP_H_CTYPE), FPSTR(m.ctype));
-  if (m.extra) _c->setReqHeader(FPSTR(m.extra), m.extra_value);
-  _c->setTimeout(m.timeout_s);
-  _c->setDeadline(m.timeout_s * 2000UL);   // a trickling reply can't hold it
+  if (m.extra) _c->setReqHeader(FPSTR(m.extra), m.extraValue);
+  _c->setTimeoutS(m.timeoutS);
+  _c->setDeadline(m.timeoutS * 2000UL);   // a trickling reply can't hold it
   _c->setWake(wake, _owner);
   bool sealed = body ? _c->send(body, len) : _c->send();
   return sealed ? SENT : NOT_SEALED;

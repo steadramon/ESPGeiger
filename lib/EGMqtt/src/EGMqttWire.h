@@ -36,8 +36,10 @@ enum Type : uint8_t {
 
 static const uint32_t LEN_MAX = 268435455;   // 4 length bytes of 7 bits
 static const uint8_t DUP = 0x08;             // in the first byte
+static const uint8_t REFUSED = 0x80;         // SUBACK
 
 inline Type type_of(uint8_t first) { return (Type)(first >> 4); }
+inline uint8_t qos_of(uint8_t first) { return (first >> 1) & 3; }
 inline uint16_t get16(const uint8_t* p) { return (uint16_t)((p[0] << 8) | p[1]); }   // big endian
 
 // fixed header: 2-5 bytes used, 0 = not all here yet, -1 = malformed

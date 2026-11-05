@@ -36,16 +36,16 @@ class Thingspeak : public corium::HttpPoster {
   public:
     Thingspeak();
     const char* name() override { return PSTR("thgspk"); }
-    void on_prefs_loaded() override;
-    const corium::PrefGroup* prefs_group() override;
-    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    void onPrefsLoaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* log_tag() override { return PSTR("Thingspeak"); }
-    const char* status_key() override { return PSTR("thingspeak"); }
-    uint16_t timeout_s() const override { return 5; }
-    size_t reply_cap() const override { return 32; }
+    const char* logTag() override { return PSTR("Thingspeak"); }
+    const char* statusKey() override { return PSTR("thingspeak"); }
+    uint16_t timeoutS() const override { return 5; }
+    size_t replyCap() const override { return 32; }
 };
 
 extern Thingspeak thingspeak;

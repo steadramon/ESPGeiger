@@ -39,6 +39,7 @@ static const unsigned long WRITE_MS = 24UL * 3600UL * 1000UL;   // its drift, on
 enum Chip : uint8_t { NONE, DS, PCF };
 static Chip s_chip = NONE;
 
+namespace corium {
 namespace Rtc {
   PGM_P chip() {
     if (s_chip == DS)  return PSTR("DS3231");
@@ -46,6 +47,7 @@ namespace Rtc {
     return nullptr;
   }
 }
+}  // namespace corium
 
 static bool rd(uint8_t addr, uint8_t reg, uint8_t* buf, uint8_t n) {
   Wire.beginTransmission(addr);
@@ -143,7 +145,7 @@ public:
   void begin() override;
   void loop(unsigned long now) override;
 private:
-  Clock::Source _from = Clock::NONE;   // what it was last set from
+  corium::Clock::Source _from = corium::Clock::NONE;   // what it was last set from
   unsigned long _written_at = 0;
 };
 
@@ -157,7 +159,7 @@ static bool here(uint8_t addr, uint8_t reg) {
 
 void RtcModule::begin() {
   corium::Registry::every(this, 0);
-  if (!I2CBus::begin()) return;
+  if (!corium::I2CBus::begin()) return;
   if (here(PCF_ADDR, PCF_TIME)) s_chip = PCF;
   else if (here(DS_ADDR, 0)) s_chip = DS;
   else return;
@@ -165,14 +167,14 @@ void RtcModule::begin() {
     const uint8_t off = 0;
     wr(PCF_ADDR, PCF_CLKOUT, &off, 1);   // on at power-up
   }
-  Log::console(PSTR("RTC: %s found"), Rtc::chip());
-  if (!Clock::synced) {
+  corium::Log::console(PSTR("RTC: %s found"), corium::Rtc::chip());
+  if (!corium::Clock::synced) {
     time_t e = read_time();
-    if (e >= Clock::MIN_EPOCH) {
-      Clock::set(e, Clock::RTC);
-      Log::console(PSTR("RTC: clock set from it"));
+    if (e >= corium::Clock::MIN_EPOCH) {
+      corium::Clock::set(e, corium::Clock::RTC);
+      corium::Log::console(PSTR("RTC: clock set from it"));
     } else {
-      Log::console(PSTR("RTC: not set, waits for NTP"));
+      corium::Log::console(PSTR("RTC: not set, waits for NTP"));
     }
   }
   corium::Registry::every(this, 60000);
@@ -180,13 +182,13 @@ void RtcModule::begin() {
 
 // NTP's or the browser's time into it, then daily; offline the browser is all it gets
 void RtcModule::loop(unsigned long now) {
-  bool ntp = Clock::source == Clock::NTP;
-  if (!ntp && Clock::source != Clock::WEB) return;
+  bool ntp = corium::Clock::source == corium::Clock::NTP;
+  if (!ntp && corium::Clock::source != corium::Clock::WEB) return;
   // NTP after the browser goes in at once
-  if (Clock::source == _from && now - _written_at < WRITE_MS) return;
+  if (corium::Clock::source == _from && now - _written_at < WRITE_MS) return;
   if (!write_time(time(nullptr))) return;
-  if (Clock::source != _from) Log::console(PSTR("RTC: set from %s"), ntp ? PSTR("NTP") : PSTR("the browser"));
-  _from = Clock::source;
+  if (corium::Clock::source != _from) corium::Log::console(PSTR("RTC: set from %s"), ntp ? PSTR("NTP") : PSTR("the browser"));
+  _from = corium::Clock::source;
   _written_at = now;
 }
 

@@ -36,12 +36,12 @@ class SDCard : public corium::Module {
   public:
     SDCard();
     const char* name() override { return PSTR("sdcard"); }
-    uint8_t display_order() override { return 20; }
-    bool requires_ntp() override { return true; }
+    uint8_t displayOrder() override { return 20; }
+    bool requiresNtp() override { return true; }
     void loop(unsigned long now) override;
     void begin() override;
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
     void registerRoutes(EGHttpServer& http) override;
     const corium::MenuEntry* menuEntries() override;
     bool deleteOldest(uint32_t cutoffPacked);   // DOS (date<<16)|time
@@ -81,6 +81,7 @@ class SDCard : public corium::Module {
     void writeMinute();
     void writeUndated();
     bool wrote(const char* dir, const char* name);
+    void closeDay(bool sync);
     bool openDayFile(const char* dirStr, const char* timeStr, uint32_t day, bool& failed);
     void scheduleCleanup(uint8_t what);
     void startCount(uint8_t what);

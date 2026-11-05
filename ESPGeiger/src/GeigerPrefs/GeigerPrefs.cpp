@@ -72,14 +72,14 @@ class CounterPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("counter"); }
   uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE - 1; }  // counter pins claimed first
-  uint8_t display_order() override { return 12; }
-  const corium::PrefGroup* prefs_group() override;
+  uint8_t displayOrder() override { return 12; }
+  const corium::PrefGroup* prefsGroup() override;
 #ifdef PCNT_SELECTABLE
-  const corium::PrefShow* prefs_show() override;
+  const corium::PrefShow* prefsShow() override;
 #endif
-  void on_prefs_loaded() override;
-  void on_prefs_saved() override;
-  corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+  void onPrefsLoaded() override;
+  void onPrefsSaved() override;
+  corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
 private:
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   uint8_t _serial_type = 0;
@@ -244,7 +244,7 @@ static const corium::PrefGroup COUNTER_PREF_GROUP PROGMEM = {
   corium::P_CAT_INPUT,
 };
 
-const corium::PrefGroup* CounterPrefs::prefs_group() { return &COUNTER_PREF_GROUP; }
+const corium::PrefGroup* CounterPrefs::prefsGroup() { return &COUNTER_PREF_GROUP; }
 
 #ifdef PCNT_SELECTABLE
 // rows per count mode
@@ -258,7 +258,7 @@ static const corium::PrefShow COUNTER_SHOW[] PROGMEM = {
   {},
 };
 
-const corium::PrefShow* CounterPrefs::prefs_show() { return COUNTER_SHOW; }
+const corium::PrefShow* CounterPrefs::prefsShow() { return COUNTER_SHOW; }
 #endif
 
 // pins and count mode read at boot only, the isr and port keep theirs
@@ -291,7 +291,7 @@ static void keep_count_mode() {
 }
 #endif
 
-void CounterPrefs::on_prefs_loaded() {
+void CounterPrefs::onPrefsLoaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   _serial_type = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
   uint8_t cw = (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW);
@@ -330,18 +330,18 @@ void CounterPrefs::on_prefs_loaded() {
 }
 
 // pins and serial type are corium::P_REBOOT
-void CounterPrefs::on_prefs_saved() {
+void CounterPrefs::onPrefsSaved() {
   bool need_reboot = false;
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   // only formats without their own cps
   if (!SerialFormat::has_cps(_serial_type) &&
       gcounter.get_cpm_window() != (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW)) need_reboot = true;
 #endif
-  on_prefs_loaded();
+  onPrefsLoaded();
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   udprx_notify_prefs_saved();
 #endif
-  if (need_reboot) corium::Prefs::request_restart();
+  if (need_reboot) corium::Prefs::needsRestart();
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
@@ -364,7 +364,7 @@ static const corium::LegacyAlias COUNTER_LEGACY[] PROGMEM = {
 #endif
   {},
 };
-corium::LegacyRows CounterPrefs::legacy_aliases() { return COUNTER_LEGACY; }
+corium::LegacyRows CounterPrefs::legacyAliases() { return COUNTER_LEGACY; }
 // === END LEGACY IMPORT ===
 
 // Lifetime prefs, own group
@@ -372,9 +372,9 @@ corium::LegacyRows CounterPrefs::legacy_aliases() { return COUNTER_LEGACY; }
 class LifePrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("life"); }
-  uint8_t display_order() override { return 0; }
-  const corium::PrefGroup* prefs_group() override;
-  void on_prefs_loaded() override;
+  uint8_t displayOrder() override { return 0; }
+  const corium::PrefGroup* prefsGroup() override;
+  void onPrefsLoaded() override;
 };
 
 static LifePrefs lifeprefs;
@@ -393,9 +393,9 @@ static const corium::PrefGroup LIFE_PREF_GROUP PROGMEM = {
   sizeof(LIFE_PREF_ITEMS) / sizeof(LIFE_PREF_ITEMS[0]),
 };
 
-const corium::PrefGroup* LifePrefs::prefs_group() { return &LIFE_PREF_GROUP; }
+const corium::PrefGroup* LifePrefs::prefsGroup() { return &LIFE_PREF_GROUP; }
 
-void LifePrefs::on_prefs_loaded() {
+void LifePrefs::onPrefsLoaded() {
   gcounter.set_lifetime_clicks(corium::Prefs::getUInt("life", EG_K_CLK));
   gcounter.set_lifetime_rollover(corium::Prefs::getUInt("life", EG_K_CLKR));
   gcounter.set_first_boot_ts(corium::Prefs::getUInt("life", EG_K_FBT));
@@ -429,12 +429,12 @@ void LifePrefs::on_prefs_loaded() {
 class LedPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("led"); }
-  uint8_t display_order() override { return 14; }
-  const corium::PrefGroup* prefs_group() override;
-  void on_prefs_loaded() override;
+  uint8_t displayOrder() override { return 14; }
+  const corium::PrefGroup* prefsGroup() override;
+  void onPrefsLoaded() override;
   void begin() override { corium::Registry::on(TOPIC_SENT, this); }
   void loop(unsigned long) override {
-    if (corium::Registry::events(this)) LedSignal::play(LED_ACTIVITY);
+    if (corium::Registry::events(this)) corium::LedSignal::play(LED_ACTIVITY);
   }
 };
 
@@ -500,35 +500,35 @@ static const corium::PrefGroup LED_PREF_GROUP PROGMEM = {
   corium::P_CAT_SYSTEM, LED_ENABLE,
 };
 
-const corium::PrefGroup* LedPrefs::prefs_group() { return &LED_PREF_GROUP; }
+const corium::PrefGroup* LedPrefs::prefsGroup() { return &LED_PREF_GROUP; }
 
-void LedPrefs::on_prefs_loaded() {
+void LedPrefs::onPrefsLoaded() {
   // boot only, attach() takes it once
   static bool s_pin_read = false;
   if (!s_pin_read) {
     s_pin_read = true;
 #ifdef LED_PIN_BLOCKED
-    LedSignal::use_pin(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON == LOW);
+    corium::LedSignal::usePin(LED_SEND_RECEIVE, LED_SEND_RECEIVE_ON == LOW);
 #else
-    LedSignal::use_pin((int)corium::Prefs::getInt("led", EG_K_PIN),
+    corium::LedSignal::usePin((int)corium::Prefs::getInt("led", EG_K_PIN),
                        corium::Prefs::getUInt("led", EG_K_POLARITY) == 1);
 #endif
   }
 #ifdef LED_BLIP
   gcounter.set_blip_led(corium::Prefs::getBool("led", K_BLIP_LED));
   uint32_t blip_pct = corium::Prefs::getUInt("led", K_BLIP_BRIGHT);
-  uint32_t blip_level = brightness_curve(blip_pct, 255);
+  uint32_t blip_level = brightnessCurve(blip_pct, 255);
   if (blip_pct && !blip_level) blip_level = 1;
   gcounter.set_blip_brightness((uint8_t)blip_level);
   // UI is Pulse|Fade
   bool fade            = (corium::Prefs::getUInt("led", EG_K_MODE) == 1);
-  uint8_t engine_mode  = fade ? PulseEngine::MODE_FADE : PulseEngine::MODE_PULSE;
+  uint8_t engine_mode  = fade ? corium::PulseEngine::MODE_FADE : corium::PulseEngine::MODE_PULSE;
   uint8_t fadeIdx      = (uint8_t)corium::Prefs::getUInt("led", EG_K_FADE_SHIFT);
   uint16_t pulse_us    = (uint16_t)(corium::Prefs::getUInt("led", EG_K_PULSE_MS) * 1000);
 #ifdef LED_FLASH_ENGINE
   BlipLed::setConfig(engine_mode, pulse_us, fadeIdx, 0);
 #else
-  LedSignal::setFlashConfig(engine_mode, pulse_us, fadeIdx);
+  corium::LedSignal::setFlashConfig(engine_mode, pulse_us, fadeIdx);
 #endif
 #ifndef ESPGEIGER_HW
   gcounter.set_quiet_hours(
@@ -545,9 +545,9 @@ void LedPrefs::on_prefs_loaded() {
 class HVPinPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("hvpin"); }
-  uint8_t display_order() override { return 14; }
-  const corium::PrefGroup* prefs_group() override;
-  void on_prefs_loaded() override;
+  uint8_t displayOrder() override { return 14; }
+  const corium::PrefGroup* prefsGroup() override;
+  void onPrefsLoaded() override;
 };
 
 static HVPinPrefs hvpinprefs;
@@ -566,15 +566,15 @@ static const corium::PrefGroup HV_PIN_PREF_GROUP PROGMEM = {
   sizeof(HV_PIN_PREF_ITEMS) / sizeof(HV_PIN_PREF_ITEMS[0]),
 };
 
-const corium::PrefGroup* HVPinPrefs::prefs_group() { return &HV_PIN_PREF_GROUP; }
+const corium::PrefGroup* HVPinPrefs::prefsGroup() { return &HV_PIN_PREF_GROUP; }
 
 // boot only, live -1 leaves pwm unguarded
-void HVPinPrefs::on_prefs_loaded() {
+void HVPinPrefs::onPrefsLoaded() {
   static bool s_set = false;
   if (s_set) return;
   s_set = true;
   int pin = (int)corium::Prefs::getInt("hvpin", K_PWM_PIN);
   hv.set_pwm_pin(pin);
-  Log::console(PSTR("HV: pwm_pin=%d"), pin);
+  corium::Log::console(PSTR("HV: pwm_pin=%d"), pin);
 }
 #endif

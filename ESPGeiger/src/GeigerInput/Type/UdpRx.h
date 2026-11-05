@@ -48,6 +48,10 @@ class WiFiUDP;
 #define UDPRX_LOG_MAX 4          // resync lines a minute
 #endif
 #define UDPRX_DRAIN_MAX 65535    // biggest gap drained, and all pending
+// 2 lost /env, third up to half a period late
+#ifndef UDPRX_ENV_TTL_MS
+#define UDPRX_ENV_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
+#endif
 class GeigerUdpRx final : public GeigerInput {
 public:
   GeigerUdpRx();
@@ -60,7 +64,7 @@ public:
   bool isHealthy() const override;
   corium::MeasureRows measurements() override;
 
-  void on_prefs_saved();
+  void onPrefsSaved();
 
   struct ProducerRecord {
     char     chipid[BLIP_ID_LEN + 2];   // NUL + pad
@@ -72,7 +76,9 @@ public:
 
   uint8_t producer_count() const { return _producers_seen; }
   const char* locked_chipid() const;
+  enum : uint8_t { RX_ONE, RX_SUM };
   uint8_t mode() const { return _mode; }
+  bool summing() const { return _mode == RX_SUM; }
   IPAddress group() const { return _group; }
   uint16_t  port()  const { return _port; }
 
@@ -82,12 +88,14 @@ public:
   uint32_t last_click_ms()    const { return _last_click_ms; }
   // any message
   uint32_t last_packet_ms()   const { return _last_packet_ms; }
-  uint16_t loss_pct_x10() const { return per_mille(_gap_filled, _local_count); }
+  uint16_t loss_pct_x10() const { return perMille(_gap_filled, _local_count); }
   uint32_t quiet_s() const;   // 0 before the first
   bool heard() const;
   uint16_t rebind_count() const       { return _rebind_count; }
   uint16_t refresh_count() const      { return _refresh_count; }
   uint16_t refresh_noop_count() const { return _refresh_noop_count; }
+  // the last /env, 0 t 1 h 2 p; false once stale
+  bool env(uint8_t i, float* v);
 
 private:
   void readPrefs();
@@ -112,10 +120,12 @@ private:
   WiFiUDP*  _udp = nullptr;
   IPAddress _group;
   uint16_t  _port = UDPRX_DEFAULT_PORT;
-  uint8_t   _mode = 2;          // 0=pin 1=sum, 2 legacy auto
+  uint8_t   _mode = 2;          // legacy auto
   char      _pinned_chipid[BLIP_ID_LEN + 1] = {0};
   char      _locked_chipid[BLIP_ID_LEN + 1] = {0};
   char      _env_chipid[BLIP_ID_LEN + 1] = {0};
+  float     _env[3] = {NAN, NAN, NAN};
+  corium::Stamp _env_at;
   uint8_t   _rx_mode = 1;       // 0=light 1=modem 2=none
 
   uint32_t _local_count = 0;
@@ -140,7 +150,7 @@ private:
   void do_refresh();
   unsigned long _recovery_at_ms = 0;   // 0 = idle
   uint16_t _recovery_steps = 0;
-  Deadline _ps_bounce;
+  corium::Deadline _ps_bounce;
   // Diags
   uint16_t _rebind_count = 0;
   uint16_t _refresh_count = 0;

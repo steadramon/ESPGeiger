@@ -17,8 +17,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef UTIL_WIFI_H
-#define UTIL_WIFI_H
+#ifndef CORIUM_WIFI_H
+#define CORIUM_WIFI_H
 
 #include <Arduino.h>
 #include <IPAddress.h>
@@ -28,6 +28,7 @@
 
 #define WIFI_SSID_MAX 32   // 802.11
 
+namespace corium {
 namespace Wifi {
 #ifdef APP_OFFLINE_OK
   constexpr bool OFFLINE_OK = true;   // saved wifi fails: no portal, stay offline
@@ -35,29 +36,30 @@ namespace Wifi {
   constexpr bool OFFLINE_OK = false;
 #endif
   extern bool disabled;
-  extern bool offline_forced;    // app sets it, else the wifi loop retries
+  extern bool offlineForced;    // app sets it, else the wifi loop retries
+  inline void forceOffline() { disabled = true; offlineForced = true; }   // this boot, no retry
   extern bool connected;
   extern bool ap;                // wifi.mode 2, its own AP up
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[WIFI_SSID_MAX + 1];
   extern int16_t rssi;
-  extern bool backup_grace_done;
-  void check_backup_state();  // LittleFS mounted
+  extern bool backupGraceDone;
+  void checkBackupState();  // LittleFS mounted
 
   constexpr uint8_t TOPIC_CHANGED = 0;   // up or down
 
   size_t formatIP(char* buf, size_t cap);   // cap >= 16
   size_t formatIP(char* buf, size_t cap, const IPAddress& a);
 
-  inline bool is_multicast(const IPAddress& ip) {
+  inline bool isMulticast(const IPAddress& ip) {
     return ip[0] >= 224 && ip[0] <= 239;
   }
 
   bool connectOrPortal();
-  bool offline_now();   // console: this boot without wifi, false once joined
+  bool offlineNow();   // console: this boot without wifi, false once joined
   bool hasSavedCreds();
-  bool portal_ahead();   // first setup: none saved, not offline
-  void join_mode();   // wifi.mode back to 0, no commit
+  bool portalAhead();   // first setup: none saved, not offline
+  void joinMode();   // wifi.mode back to 0, no commit
   bool saveBackupCreds();   // before WiFi.begin()
   void clearSavedCreds();
   bool applyStaticConfig();   // before WiFi.begin()
@@ -74,12 +76,13 @@ namespace Wifi {
   // on reset, else a later failed save reverts
   void dropNetBackup();
   void applyRuntimeNetPrefs();   // after WiFi.mode()
-  void rx_sleep(int8_t mode);   // a receiver's sleep mode, -1 = the wifi.sleep pref
+  void rxSleep(int8_t mode);   // a receiver's sleep mode, -1 = the wifi.sleep pref
   void reconnect();
 
   int txPowerQdbm();
   const char* phyModeStr();
   const char* sleepModeStr();
 }
+}  // namespace corium
 
 #endif

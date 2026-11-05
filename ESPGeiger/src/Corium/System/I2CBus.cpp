@@ -33,9 +33,9 @@
 class I2CPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("i2c"); }
-  bool core_module() override { return true; }   // a bad pin is fixed from safe mode
-  uint8_t display_order() override { return 16; }
-  const corium::PrefGroup* prefs_group() override;
+  bool coreModule() override { return true; }   // a bad pin is fixed from safe mode
+  uint8_t displayOrder() override { return 16; }
+  const corium::PrefGroup* prefsGroup() override;
 };
 
 static I2CPrefs i2cprefs;
@@ -57,7 +57,7 @@ static const corium::PrefGroup I2C_PREF_GROUP PROGMEM = {
   corium::P_CAT_SYSTEM, nullptr,
 };
 
-const corium::PrefGroup* I2CPrefs::prefs_group() { return &I2C_PREF_GROUP; }
+const corium::PrefGroup* I2CPrefs::prefsGroup() { return &I2C_PREF_GROUP; }
 #endif
 
 static const uint8_t NO_PIN = 255;
@@ -66,23 +66,23 @@ static uint8_t s_sda = NO_PIN;
 static uint8_t s_scl = NO_PIN;
 static bool s_up = false;
 
-void I2CBus::pins(uint8_t sda, uint8_t scl) {
+void corium::I2CBus::pins(uint8_t sda, uint8_t scl) {
   s_sda = sda;
   s_scl = scl;
 }
 
-bool I2CBus::begin() {
+bool corium::I2CBus::begin() {
   if (s_up) return true;
   if (s_sda == NO_PIN || s_scl == NO_PIN) return false;
-  const char* why = PinSafety::claim_output(s_sda, PinSafety::I2C);
-  if (!why) why = PinSafety::claim_output(s_scl, PinSafety::I2C);
+  const char* why = corium::PinSafety::claimOutput(s_sda, corium::PinSafety::I2C);
+  if (!why) why = corium::PinSafety::claimOutput(s_scl, corium::PinSafety::I2C);
   if (why) {
-    Log::console(PSTR("I2C: pins %u/%u unsafe (%s)"), s_sda, s_scl, why);
+    corium::Log::console(PSTR("I2C: pins %u/%u unsafe (%s)"), s_sda, s_scl, why);
     return false;
   }
   Wire.begin(s_sda, s_scl);
 #ifdef ESP8266
-  Wire.setClockStretchLimit(I2C_STRETCH_US);
+  Wire.setClockStretchLimit(CORIUM_I2C_STRETCH_US);
 #endif
   s_up = true;
   return true;

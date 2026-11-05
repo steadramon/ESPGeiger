@@ -17,41 +17,43 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef IMPORTTEXT_H
-#define IMPORTTEXT_H
+#ifndef CORIUM_IMPORTTEXT_H
+#define CORIUM_IMPORTTEXT_H
 
 #include <stddef.h>
 #include <stdint.h>
 #include "App/AppConfig.h"
 
 // export blob head and its base64, set both; app sets its own
-#ifndef EXPORT_MAGIC
-#define EXPORT_MAGIC     0x08, 0xE4, 0x48
-#define EXPORT_MAGIC_B64 "CORI"
+#ifndef CORIUM_EXPORT_MAGIC
+#define CORIUM_EXPORT_MAGIC     0x08, 0xE4, 0x48
+#define CORIUM_EXPORT_MAGIC_B64 "CORI"
 #endif
-#ifndef EXPORT_SEED
-#define EXPORT_SEED 0x434F5249u
+#ifndef CORIUM_EXPORT_SEED
+#define CORIUM_EXPORT_SEED 0x434F5249u
 #endif
 
+namespace corium {
 namespace ImportText {
 
 // false = skipped
 typedef bool (*PutFn)(const char* mid, const char* key, const char* value);
 
-// first_skip: line number from 1, 0 = none
-struct Result { int applied; int skipped; int first_skip; };
+// firstSkip: line number from 1, 0 = none
+struct Result { int applied; int skipped; int firstSkip; };
 
-// export blobs always start EXPORT_MAGIC_B64
-bool is_blob(const char* text, size_t len);
+// export blobs always start CORIUM_EXPORT_MAGIC_B64
+bool isBlob(const char* text, size_t len);
 
 // # comments and blank lines ignored
 Result apply(const char* text, size_t len, PutFn put);
 
 // blob records from the group count on; nullptr = ok, else why (PROGMEM)
-const char* blob_error(const uint8_t* p, size_t len);
+const char* blobError(const uint8_t* p, size_t len);
 // puts done, -1 = bad records
-int apply_blob(const uint8_t* p, size_t len, PutFn put);
+int applyBlob(const uint8_t* p, size_t len, PutFn put);
 
 }
+}  // namespace corium
 
 #endif

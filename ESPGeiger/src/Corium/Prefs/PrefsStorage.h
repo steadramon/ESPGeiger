@@ -29,6 +29,10 @@
 
 namespace corium {
 
+static constexpr size_t PREFS_MAGIC_LEN = 4;
+inline void putMagic(uint8_t* p) { p[0] = 'E'; p[1] = 'G'; p[2] = 'P'; p[3] = '1'; }
+inline bool isMagic(const uint8_t* p) { return p[0] == 'E' && p[1] == 'G' && p[2] == 'P' && p[3] == '1'; }
+
 class PrefsStorage {
   public:
     // not NUL-terminated, valid during the call only; key_len 0 = a record didn't read, the rest lost

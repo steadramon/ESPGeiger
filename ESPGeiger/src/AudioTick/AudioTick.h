@@ -82,11 +82,11 @@ class AudioTick : public corium::Module {
     AudioTick() {}
     const char* name() override { return PSTR("tick"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 17; }
+    uint8_t displayOrder() override { return 17; }
     void loop(unsigned long now) override;
     void begin() override;
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
     void registerRoutes(EGHttpServer& http) override;
 
     void notifyClick(unsigned long now_ms);

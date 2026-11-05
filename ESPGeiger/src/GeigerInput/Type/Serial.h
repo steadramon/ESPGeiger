@@ -46,8 +46,13 @@ class GeigerSerial final : public GeigerInput
     char _serial_buffer[64];
     uint8_t _serial_idx = 0;
     bool _discard = false;   // rest of a bad line, up to its \n
+    inline __attribute__((always_inline)) void clear_line() {
+      _serial_idx = 0;
+      _serial_buffer[0] = '\0';
+    }
+    void bad_line();
     void drop_line();
-    unsigned long _line_ms = 0;   // fast_millis()
+    unsigned long _line_ms = 0;   // fastMillis()
     void handleSerial(char* input);
     float partial_clicks = 0;
     int serial_value = 0;
@@ -55,9 +60,9 @@ class GeigerSerial final : public GeigerInput
     uint8_t _idle_ms = 4;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint8_t _bad_streak = 0;
-    Stamp _line;   // good line
-    Stamp _drain;
-    Stamp _cps_seen;
+    corium::Stamp _line;   // good line
+    corium::Stamp _drain;
+    corium::Stamp _cps_seen;
     bool _ok = false;
     unsigned long _last_drain_log = 0;
     void drainPort();

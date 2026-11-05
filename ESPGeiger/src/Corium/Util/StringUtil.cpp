@@ -25,14 +25,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-const char* flash_to_ram(const char* fp, char* dst, size_t cap) {
+const char* flashToRam(const char* fp, char* dst, size_t cap) {
   if (!fp) { dst[0] = '\0'; return dst; }
   strncpy_P(dst, fp, cap - 1);
   dst[cap - 1] = '\0';
   return dst;
 }
 
-bool parse_i32(const char* s, int32_t* out, const char** end) {
+bool parseI32(const char* s, int32_t* out, const char** end) {
   if (!s || !*s) return false;
   char* stop;
   errno = 0;
@@ -48,7 +48,7 @@ bool parse_i32(const char* s, int32_t* out, const char** end) {
 }
 
 // by hand, strtoull is ~450 B and takes "-1" and spaces
-bool parse_u64(const char* s, uint64_t* out) {
+bool parseU64(const char* s, uint64_t* out) {
   if (!s || !*s) return false;
   uint64_t v = 0;
   for (; *s; s++) {
@@ -62,11 +62,11 @@ bool parse_u64(const char* s, uint64_t* out) {
 }
 
 // hundredths
-bool parse_centi(const char* s, int32_t* out) {
+bool parseCenti(const char* s, int32_t* out) {
   if (!s || *s < '0' || *s > '9') return false;
   const char* p;
   int32_t whole;
-  if (!parse_i32(s, &whole, &p) || whole > INT32_MAX / 100 - 1) return false;
+  if (!parseI32(s, &whole, &p) || whole > (INT32_MAX - 99) / 100) return false;
   int32_t frac = 0;
   if (*p == '.') {
     p++;
@@ -79,7 +79,7 @@ bool parse_centi(const char* s, int32_t* out) {
   return true;
 }
 
-void fmt_u64(char* out, size_t cap, uint64_t v) {
+void fmtU64(char* out, size_t cap, uint64_t v) {
   char digits[24];
   int n = 0;
   if (v == 0) { digits[n++] = '0'; }
@@ -89,7 +89,7 @@ void fmt_u64(char* out, size_t cap, uint64_t v) {
   out[o] = 0;
 }
 
-void hex_encode(char* out, const uint8_t* in, size_t n) {
+void hexEncode(char* out, const uint8_t* in, size_t n) {
   for (size_t i = 0; i < n; i++) {
     uint8_t hi = in[i] >> 4, lo = in[i] & 0xF;
     out[2 * i]     = (char)(hi < 10 ? '0' + hi : 'a' - 10 + hi);
@@ -104,7 +104,7 @@ static int hex_val(char c) {
   return -1;
 }
 
-bool hex_decode(uint8_t* out, const char* in, size_t n) {
+bool hexDecode(uint8_t* out, const char* in, size_t n) {
   // stops at the NUL, it isn't hex
   for (size_t i = 0; i < 2 * n; i++) {
     if (hex_val(in[i]) < 0) return false;
@@ -121,7 +121,7 @@ static void strip_cr(char* s) {
   if (l > 0 && s[l - 1] == '\r') s[l - 1] = '\0';
 }
 
-uint8_t split_lines(char* buf, char** fields, uint8_t n) {
+uint8_t splitLines(char* buf, char** fields, uint8_t n) {
   uint8_t got = 0;
   char* line = buf;
   for (char* p = buf; *p; p++) {

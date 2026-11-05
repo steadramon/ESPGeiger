@@ -34,7 +34,7 @@ synced,2026-11-04 10:15:30,1265
 
 Each boot that writes there starts with the header line. When the time arrives a `synced` line gives the date and time at that many seconds since boot, so the rows above it can be dated: a row's time is the synced time minus the difference in seconds. From then on rows go to the daily files as usual. A boot that never gets the time leaves its rows with the seconds only. The SD page links the file as *Undated rows*.
 
-An RTC chip on the I2C bus (a DS3231 or a PCF8563, ESP32 builds) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, opening any page of the web UI gives the device the time from the browser's clock, and an RTC keeps that too, so a device that never reaches NTP stays dated.
+An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; ESP32 builds with the I2C bus, ESP8266 builds with `-DRTC_8266`) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, opening any page of the web UI gives the device the time from the browser's clock, and an RTC keeps that too, so a device that never reaches NTP stays dated.
 
 ## (Micro) SD Card Compatibility
 
@@ -59,7 +59,7 @@ Each minute the firmware appends one CSV row. The file stays open between minute
 - `1` (default) - sync on every write. Safest: at most the current in-progress row is lost on a power cut. Highest SD wear.
 - `2`-`5` - sync every N minutes. Up to `N - 1` minutes of rows can be lost on a power cut, but SD write cycles are reduced proportionally. Useful on cheap / worn cards or battery-powered deployments where clean shutdown isn't guaranteed.
 
-Regardless of the setting, the file is always flushed at day rollover (when a new daily CSV is opened) and before the daily cleanup scan.
+Regardless of the setting, the file is always flushed at day rollover (when a new daily CSV is opened) and before old files are cleared to make room (after the count at mount, and when the card looks full).
 
 # CSV Format
 

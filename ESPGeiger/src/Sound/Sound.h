@@ -29,13 +29,13 @@ class Sound : public corium::Module {
   public:
     Sound() {}
     const char* name() override { return PSTR("sound"); }
-    uint8_t display_order() override { return 19; }
-    bool runs_during_ota() override { return true; }
-    void pre_wifi() override;
+    uint8_t displayOrder() override { return 19; }
+    bool runsDuringOta() override { return true; }
+    void preWifi() override;
     void begin() override;
     void loop(unsigned long now) override;
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
 
     // per count, nothing while a tune plays
     void click(uint32_t now_us);

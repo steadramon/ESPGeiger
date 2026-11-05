@@ -137,15 +137,17 @@ nav.tabs a.ac{color:var(--link);border-bottom-color:var(--link)}
 #ifndef APP_URL
 #define APP_URL "/"
 #endif
-#ifndef APP_HOME_NAME
-#define APP_HOME_NAME THING_NAME
-#endif
 #ifndef APP_MODEL
 #define APP_MODEL ""
 #endif
 
 // one flash copy
 static const char FAVICON_PATHS[] PROGMEM = APP_ICON_SVG;
+
+static const char HOME_NAME[] PROGMEM = THING_NAME;
+static PGM_P s_home = HOME_NAME;
+
+void corium::WebPortal::setHomeName(PGM_P name) { s_home = name; }
 
 static const char BACK_ROW[] PROGMEM =
   "<p class=back-row><a class=back href=/>\xe2\x86\x90 Home</a></p>";
@@ -178,7 +180,7 @@ static const char SVG_END[] PROGMEM = "</svg>";
 
 static void sendHeadOpen(EGHttpResponse& res) {
   res.sendChunk(FPSTR(HEAD_OPEN));
-  res.sendChunk(FPSTR(BootGuard::safe_mode() ? SAFE_STYLE : HEAD_STYLE));
+  res.sendChunk(FPSTR(corium::BootGuard::safeMode() ? SAFE_STYLE : HEAD_STYLE));
 }
 
 // no clock yet, the browser has one
@@ -186,26 +188,30 @@ static const char CLOCK_JS[] PROGMEM =
   "<script>fetch('/clock',{method:'POST',body:new URLSearchParams({e:Math.floor(Date.now()/1e3)})})</script>";
 
 static void sendHeadTail(EGHttpResponse& res) {
-  res.sendChunk(FPSTR(BootGuard::safe_mode() ? SAFE_THEME : HEAD_THEME));
-  if (!Clock::synced) res.sendChunk(FPSTR(CLOCK_JS));
+  res.sendChunk(FPSTR(corium::BootGuard::safeMode() ? SAFE_THEME : HEAD_THEME));
+  if (!corium::Clock::synced) res.sendChunk(FPSTR(CLOCK_JS));
   res.sendChunk(FPSTR(HEAD_H1));
   res.sendChunk(FPSTR(FAVICON_PATHS));
   res.sendChunk(FPSTR(SVG_END));
 }
 
 static void sendSafeTag(EGHttpResponse& res) {
-  if (BootGuard::safe_mode()) res.sendChunk(F(" <b>SAFE MODE</b>"));
+  if (corium::BootGuard::safeMode()) res.sendChunk(F(" <b>SAFE MODE</b>"));
+}
+
+// n from snprintf, cut text is dropped
+static void send_fmt(EGHttpResponse& res, const char* buf, int n, size_t cap) {
+  if (n > 0 && (size_t)n < cap) res.sendChunk(buf, (size_t)n);
 }
 
 static void sendSafeBanner(EGHttpResponse& res) {
-  if (!BootGuard::safe_mode()) return;
-  uint32_t up = fast_millis();
-  uint32_t at = BootGuard::retry_after();
+  if (!corium::BootGuard::safeMode()) return;
+  uint32_t up = corium::fastMillis();
+  uint32_t at = corium::BootGuard::retryAfterMs();
   char b[160];
-  int n = snprintf_P(b, sizeof(b),
+  send_fmt(res, b, snprintf_P(b, sizeof(b),
       PSTR("<p>Normal mode again in %u min, or <a href=/restart>restart now</a>.</p>"),
-      (unsigned)(up < at ? (at - up) / 60000 + 1 : 0));
-  if (n > 0 && (size_t)n < sizeof(b)) res.sendChunk(b, (size_t)n);
+      (unsigned)(up < at ? (at - up) / 60000 + 1 : 0)), sizeof(b));
 }
 
 // after the app's own
@@ -237,44 +243,44 @@ static void renderMenu(EGHttpResponse& res, const corium::MenuEntry* e) {
 
 // Pending restart
 
-void WebPortal::requestRestart(uint32_t delayMs) {
-  Lifecycle::request_restart(fast_millis(), delayMs);
+void corium::WebPortal::requestRestart(uint32_t delayMs) {
+  corium::Lifecycle::requestRestart(corium::fastMillis(), delayMs);
 }
 
-// tick() applies these, page drains first
+// poll() applies these, page drains first
 static bool s_pendingWifiSave = false;   // creds in Wifi::holdCreds
 
 static bool s_pendingEraseCreds = false;
 static bool s_pendingFactoryReset = false;
 
-static WebPortal* s_activeWebPortal = nullptr;
+static corium::WebPortal* s_activeWebPortal = nullptr;
 
-void WebPortal::tick(uint32_t now) {
-  if (now - _tick_last_ms < TICK_MS) return;
-  _tick_last_ms = now;
+void corium::WebPortal::poll(uint32_t now) {
+  if (now - _poll_last_ms < POLL_MS) return;
+  _poll_last_ms = now;
 
   if (_active) _http.tick();
 
-  if (Lifecycle::restart_due(now)) {
+  if (corium::Lifecycle::restartDue(now)) {
     if (s_pendingWifiSave) {
-      Log::console(PSTR("WebPortal: applying new WiFi creds (ssid='%s')"),
-                   Wifi::heldSsid());
-      Wifi::beginHeld();
+      corium::Log::console(PSTR("WebPortal: applying new WiFi creds (ssid='%s')"),
+                   corium::Wifi::heldSsid());
+      corium::Wifi::beginHeld();
       s_pendingWifiSave = false;
       delay(150);  // restart follows, NVS settle
     }
     if (s_pendingEraseCreds) {
-      Wifi::clearSavedCreds();
+      corium::Wifi::clearSavedCreds();
       s_pendingEraseCreds = false;
       delay(150);  // restart follows
     }
     if (s_pendingFactoryReset) {
-      DeviceInfo::factoryReset();
+      corium::DeviceInfo::factoryReset();
       s_pendingFactoryReset = false;
       delay(150);  // restart follows
     }
-    Log::console(PSTR("WebPortal: restarting"));
-    DeviceInfo::safeRestart(50);
+    corium::Log::console(PSTR("WebPortal: restarting"));
+    corium::DeviceInfo::safeRestart(50);
   }
 }
 
@@ -311,61 +317,61 @@ static const char R_CLOCK[]    PROGMEM = "/clock";
 // only while there's no other
 static void hClock(EGHttpRequest& req, EGHttpResponse& res, void*) {
   uint64_t e = 0;
-  if (!Clock::synced && parse_u64(req.arg(F("e")), &e) && e >= Clock::MIN_EPOCH && e <= Clock::MAX_EPOCH) {
-    Clock::set((time_t)e, Clock::WEB);
-    Log::console(PSTR("Clock: set from the browser"));
+  if (!corium::Clock::synced && parseU64(req.arg(F("e")), &e) && e >= corium::Clock::MIN_EPOCH && e <= corium::Clock::MAX_EPOCH) {
+    corium::Clock::set((time_t)e, corium::Clock::WEB);
+    corium::Log::console(PSTR("Clock: set from the browser"));
   }
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 
-void WebPortal::on(EGHttpServer& http, const WebRoute* rows, size_t n) {
+void corium::WebPortal::on(EGHttpServer& http, const corium::WebRoute* rows, size_t n) {
   for (size_t i = 0; i < n; i++) {
-    WebRoute r;
+    corium::WebRoute r;
     memcpy_P(&r, &rows[i], sizeof(r));
     http.on(FPSTR(r.path), r.method, r.h, nullptr);
   }
 }
 
-void WebPortal::begin(uint16_t port) {
+void corium::WebPortal::begin(uint16_t port) {
   if (_active) return;
   using R = EGHttpRequest;
-  static const WebRoute ROUTES[] PROGMEM = {
-    {R_STYLE,    &WebPortal::hStyleCss,       R::GET},
-    {R_FAV_SVG,  &WebPortal::hFavicon,        R::GET},
-    {R_FAV_ICO,  &WebPortal::hFavicon,        R::GET},
-    {R_THEME,    &WebPortal::hThemeJs,        R::GET},
-    {P_RESTART,  &WebPortal::hRestart,        R::GET},
-    {R_GUARD,    &WebPortal::hGuard,          R::GET},
-    {R_RESET,    &WebPortal::hReset,          R::POST},
-    {R_ERASE,    &WebPortal::hEraseWifi,      R::POST},
-    {R_INFO,     &WebPortal::hInfo,           R::GET},
-    {R_ABOUT,    &WebPortal::hAbout,          R::GET},
-    {R_CS,       &WebPortal::hConsoleStream,  R::GET},
-    {R_OUTPUTS,  &WebPortal::hOutputs,        R::GET},
-    {R_METRICS,  &WebPortal::hMetrics,        R::GET},
-    {R_VARS,     &WebPortal::hVars,           R::GET},
-    {P_PARAM,    &WebPortal::hParam,          R::GET},
-    {P_PARAM,    &WebPortal::hParam,          R::POST},
-    {P_UPDATE,   &WebPortal::hUpdateForm,     R::GET},
-    {P_UPDATE,   &WebPortal::hUpdateDone,     R::POST},
-    {R_PROGRESS, &WebPortal::hUpdateProgress, R::GET},
-    {R_NETWORK,  &WebPortal::hWifi,           R::GET},
-    {R_SCAN,     &WebPortal::hWifiScan,       R::GET},
-    {R_SAVE,     &WebPortal::hWifiSave,       R::POST},
-    {R_EXPORT,   &WebPortal::hExport,         R::GET},
-    {P_IMPORT,   &WebPortal::hImport,         R::POST},
+  static const corium::WebRoute ROUTES[] PROGMEM = {
+    {R_STYLE,    &corium::WebPortal::hStyleCss,       R::GET},
+    {R_FAV_SVG,  &corium::WebPortal::hFavicon,        R::GET},
+    {R_FAV_ICO,  &corium::WebPortal::hFavicon,        R::GET},
+    {R_THEME,    &corium::WebPortal::hThemeJs,        R::GET},
+    {P_RESTART,  &corium::WebPortal::hRestart,        R::GET},
+    {R_GUARD,    &corium::WebPortal::hGuard,          R::GET},
+    {R_RESET,    &corium::WebPortal::hReset,          R::POST},
+    {R_ERASE,    &corium::WebPortal::hEraseWifi,      R::POST},
+    {R_INFO,     &corium::WebPortal::hInfo,           R::GET},
+    {R_ABOUT,    &corium::WebPortal::hAbout,          R::GET},
+    {R_CS,       &corium::WebPortal::hConsoleStream,  R::GET},
+    {R_OUTPUTS,  &corium::WebPortal::hOutputs,        R::GET},
+    {R_METRICS,  &corium::WebPortal::hMetrics,        R::GET},
+    {R_VARS,     &corium::WebPortal::hVars,           R::GET},
+    {P_PARAM,    &corium::WebPortal::hParam,          R::GET},
+    {P_PARAM,    &corium::WebPortal::hParam,          R::POST},
+    {P_UPDATE,   &corium::WebPortal::hUpdateForm,     R::GET},
+    {P_UPDATE,   &corium::WebPortal::hUpdateDone,     R::POST},
+    {R_PROGRESS, &corium::WebPortal::hUpdateProgress, R::GET},
+    {R_NETWORK,  &corium::WebPortal::hWifi,           R::GET},
+    {R_SCAN,     &corium::WebPortal::hWifiScan,       R::GET},
+    {R_SAVE,     &corium::WebPortal::hWifiSave,       R::POST},
+    {R_EXPORT,   &corium::WebPortal::hExport,         R::GET},
+    {P_IMPORT,   &corium::WebPortal::hImport,         R::POST},
     {R_CLOCK,    hClock,                      R::POST},
   };
-  _http.on(F("/"), R::GET, &WebPortal::hRoot, this);
+  _http.on(F("/"), R::GET, &corium::WebPortal::hRoot, this);
   on(_http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
-  bool safe = BootGuard::safe_mode();
+  bool safe = corium::BootGuard::safeMode();
   if (safe) _http.setMaxClients(SAFE_HTTP_CLIENTS);
-  else _http.on(F("/webcmd"), R::POST, &WebPortal::hWebCmd, nullptr);
-  _http.onUpload(FPSTR(P_PARAM), &WebPortal::hParamBody, nullptr);
-  _http.onUpload(FPSTR(P_UPDATE), &WebPortal::hUpdateBody, nullptr);
-  _http.onUpload(FPSTR(P_IMPORT), &WebPortal::hImportBody, nullptr);
+  else _http.on(F("/webcmd"), R::POST, &corium::WebPortal::hWebCmd, nullptr);
+  _http.onUpload(FPSTR(P_PARAM), &corium::WebPortal::hParamBody, nullptr);
+  _http.onUpload(FPSTR(P_UPDATE), &corium::WebPortal::hUpdateBody, nullptr);
+  _http.onUpload(FPSTR(P_IMPORT), &corium::WebPortal::hImportBody, nullptr);
 
-  if (!safe) AppHooks::routes(_http);
+  if (!safe) corium::AppHooks::routes(_http);
 
   // Module routes
   uint8_t n = corium::Registry::count();
@@ -373,7 +379,7 @@ void WebPortal::begin(uint16_t port) {
     corium::Module* m = corium::Registry::get(i);
     if (m && !corium::Registry::quarantined(m)) m->registerRoutes(_http);
   }
-  if (!corium::Registry::quarantined(&ntpclient)) NtpPage::routes(_http);
+  if (!corium::Registry::quarantined(&ntpclient)) corium::NtpPage::routes(_http);
 
   _http.begin(port);
   _active = true;
@@ -381,8 +387,8 @@ void WebPortal::begin(uint16_t port) {
   applyAuthFromPrefs();
 }
 
-void WebPortal::applyAuthFromPrefs() {
-  WebPortal* p = s_activeWebPortal;
+void corium::WebPortal::applyAuthFromPrefs() {
+  corium::WebPortal* p = s_activeWebPortal;
   if (!p || !p->_active) return;
   const char* cur = corium::Prefs::getString("sys", corium::K_WEB_PASS);
   static_assert(sizeof("admin") - 1 + 1 + WEB_PASS_MAX <= EGHTTP_AUTH_MAX,
@@ -391,15 +397,15 @@ void WebPortal::applyAuthFromPrefs() {
   static int8_t s_last_state = -1;
   int8_t state = (cur && *cur) ? 1 : 0;
   if (state != s_last_state) {
-    Log::console(PSTR("WebPortal: auth %s"),
+    corium::Log::console(PSTR("WebPortal: auth %s"),
                  state ? PSTR("enabled (user=admin)") : PSTR("disabled"));
     s_last_state = state;
   }
 }
 
-void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
+void corium::WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
                              const char* inlineSub) {
-  const char* devName = DeviceInfo::displayName();
+  const char* devName = corium::DeviceInfo::displayName();
   char esc[6 * CORIUM_NAME_MAX + 1];
   egesc_html(esc, sizeof(esc), devName);
   sendHeadOpen(res);
@@ -417,31 +423,31 @@ void WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHelper* tit
   sendSafeBanner(res);
 }
 
-void WebPortal::sendPageTail(EGHttpResponse& res, bool footer) {
+void corium::WebPortal::sendPageTail(EGHttpResponse& res, bool footer) {
   res.sendChunk(FPSTR(BACK_ROW));
-  if (footer) WebPortal::sendPageFooter(res);
+  if (footer) corium::WebPortal::sendPageFooter(res);
   res.sendChunk(FPSTR(HTML_END));
 }
 
-void WebPortal::beginPage(EGHttpResponse& res, const __FlashStringHelper* title,
+void corium::WebPortal::beginPage(EGHttpResponse& res, const __FlashStringHelper* title,
                           const char* inlineSub) {
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   sendPageHead(res, title, inlineSub);
 }
 
-void WebPortal::endPage(EGHttpResponse& res, bool footer) {
+void corium::WebPortal::endPage(EGHttpResponse& res, bool footer) {
   sendPageTail(res, footer);
   res.endChunked();
 }
 
-void WebPortal::sendPageFooter(EGHttpResponse& res) {
+void corium::WebPortal::sendPageFooter(EGHttpResponse& res) {
   res.sendChunk(F("<p class=cred>"
                   "<a class=brand href='" APP_URL "' target=_blank rel=noopener>" THING_NAME "</a>"
                   " &middot; <a href='/about'>" RELEASE_VERSION "</a></p>"));
 }
 
 static void root_safe_note(EGHttpResponse& res) {
-  res.sendChunk(BootGuard::crash_streak() ? F("<pre>" THING_NAME " keeps crashing.\n")
+  res.sendChunk(corium::BootGuard::crashStreak() ? F("<pre>" THING_NAME " keeps crashing.\n")
                                           : F("<pre>Safe mode was requested.\n"));
   res.sendChunk(F("Undo a recent change in Config or install a previous firmware via Update.\n"
                   "Info shows the latest crash for bug reports.</pre>"));
@@ -449,7 +455,7 @@ static void root_safe_note(EGHttpResponse& res) {
 
 static void root_menus(EGHttpResponse& res, bool safe) {
   res.sendChunk(F("<div class=menu>"));
-  if (!safe) renderMenu(res, AppHooks::menu());
+  if (!safe) renderMenu(res, corium::AppHooks::menu());
   renderMenu(res, WEBPORTAL_TOP_MENU);
   uint8_t mc = corium::Registry::count();
   for (uint8_t i = 0; i < mc; i++) {
@@ -460,26 +466,26 @@ static void root_menus(EGHttpResponse& res, bool safe) {
   res.sendChunk(F("</div>"));
 }
 
-void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
 
-  const char* fname = DeviceInfo::friendlyName();
+  const char* fname = corium::DeviceInfo::friendlyName();
   bool hasFriendly = (fname && fname[0]);
-  const char* hostname = DeviceInfo::hostname();
+  const char* hostname = corium::DeviceInfo::hostname();
   char ipBuf[CORIUM_IPV4_MAX + 1];
-  IPAddress ip = Wifi::localIP();
-  if (!ip[0]) ip = Wifi::softAPIP();   // wifi.mode 2
-  Wifi::formatIP(ipBuf, sizeof(ipBuf), ip);
+  IPAddress ip = corium::Wifi::localIP();
+  if (!ip[0]) ip = corium::Wifi::softAPIP();   // wifi.mode 2
+  corium::Wifi::formatIP(ipBuf, sizeof(ipBuf), ip);
 
   char esc[6 * CORIUM_NAME_MAX + 1];
   egesc_html(esc, sizeof(esc), fname);
 
   auto emitIdentity = [&]() {
-    if (hasFriendly) res.sendKV(F(APP_HOME_NAME " - "), esc);
-    else             res.sendChunk(F(APP_HOME_NAME));
+    res.sendChunk(FPSTR(s_home));
+    if (hasFriendly) res.sendKV(F(" - "), esc);
   };
 
-  bool safe = BootGuard::safe_mode();
+  bool safe = corium::BootGuard::safeMode();
   sendHeadOpen(res);
   emitIdentity();
   sendHeadTail(res);
@@ -490,18 +496,18 @@ void WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   sendSafeBanner(res);
   if (safe) root_safe_note(res);
   root_menus(res, safe);
-  if (!safe) WebPortal::sendPageFooter(res);
+  if (!safe) corium::WebPortal::sendPageFooter(res);
   res.sendChunk(FPSTR(HTML_END));
   res.endChunked();
 }
 
-void WebPortal::sendGz(EGHttpResponse& res, const __FlashStringHelper* type,
+void corium::WebPortal::sendGz(EGHttpResponse& res, const __FlashStringHelper* type,
                        const uint8_t* gz, size_t len) {
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.sendGzipP(200, type, gz, len);
 }
 
-void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_STYLE_CSS
   sendGz(res, F("text/css"), STYLE_CSS_GZ, STYLE_CSS_GZ_LEN);
 #else
@@ -513,7 +519,7 @@ void WebPortal::hStyleCss(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #endif
 }
 
-void WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.addHeader(FPSTR(HTTP_H_CACHE), F(CACHE_7D));
   res.beginChunked(200, F("image/svg+xml"));
   res.sendChunk(F("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>"));
@@ -539,7 +545,7 @@ if(at>=0)k(at);return k};
 )JS";
 #endif
 
-void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_THEME_JS
   sendGz(res, FPSTR(HTTP_CT_JS), THEME_JS_GZ, THEME_JS_GZ_LEN);
 #else
@@ -552,6 +558,7 @@ void WebPortal::hThemeJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 #define RESTART_COUNTDOWN_SECS 8
+#define WIFI_RESTART_MS 2500
 // esp8266 copies the new image at boot
 #ifdef ESP8266
 #define FLASH_COUNTDOWN_SECS 20
@@ -575,18 +582,17 @@ var t=setInterval(()=>--n>0?rl():(clearInterval(t),sh('Checking...'),p()),1000);
 </script>
 )HTML";
 
-void WebPortal::sendRestartCountdown(EGHttpResponse& res) {
+void corium::WebPortal::sendRestartCountdown(EGHttpResponse& res) {
   char buf[40];
-  int n = snprintf_P(buf, sizeof(buf), PSTR("<script>window._rs=%u;</script>"),
-                     (unsigned)RESTART_COUNTDOWN_SECS);
-  if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+  send_fmt(res, buf, snprintf_P(buf, sizeof(buf), PSTR("<script>window._rs=%u;</script>"),
+                                (unsigned)RESTART_COUNTDOWN_SECS), sizeof(buf));
   res.sendChunk(FPSTR(RESTART_COUNTDOWN));
 }
 
 static const char WRITE_FAILED[] PROGMEM = "flash write failed";
 
 // a group holding a value that didn't load says which
-void WebPortal::sendNotSaved(EGHttpResponse& res) {
+void corium::WebPortal::sendNotSaved(EGHttpResponse& res) {
   res.sendChunk(F("<div class='a ae'>Not saved: "));
   char why[CORIUM_PREFS_FROZEN_MAX];
   if (corium::Prefs::frozen(why, sizeof(why))) res.sendChunk(why);
@@ -595,26 +601,26 @@ void WebPortal::sendNotSaved(EGHttpResponse& res) {
 }
 
 static void not_saved_page(EGHttpResponse& res, const __FlashStringHelper* title) {
-  WebPortal::beginPage(res, title);
-  WebPortal::sendNotSaved(res);
-  WebPortal::endPage(res);
+  corium::WebPortal::beginPage(res, title);
+  corium::WebPortal::sendNotSaved(res);
+  corium::WebPortal::endPage(res);
 }
 
-void WebPortal::hRestart(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("Restarting"));
+void corium::WebPortal::hRestart(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  corium::WebPortal::beginPage(res, F("Restarting"));
   res.sendChunk(F("<p>Device is restarting. This page will reload once it's back.</p>"));
-  WebPortal::sendRestartCountdown(res);
-  WebPortal::endPage(res);
-  WebPortal::requestRestart(1500);
+  corium::WebPortal::sendRestartCountdown(res);
+  corium::WebPortal::endPage(res);
+  corium::WebPortal::requestRestart();
 }
 
-void WebPortal::hGuard(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hGuard(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* e = req.arg(F("enter"));
   if (!e || strcmp_P(e, PSTR("1")) != 0) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("/guard?enter=1 restarts into safe mode"));
     return;
   }
-  BootGuard::request_safe();
+  corium::BootGuard::requestSafe();
   hRestart(req, res, nullptr);
 }
 
@@ -625,19 +631,19 @@ static const char IR_HEX[]   PROGMEM = "0x%08x";
 static const char IR_CODE_END[] PROGMEM = "</code></td></tr>";
 static const char IR_END[]   PROGMEM = "</table></details>";
 
-void WebPortal::infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...) {
+void corium::WebPortal::infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...) {
   char row[320];
   size_t pos = 0;
-  advance_pos(pos, snprintf_P(row, sizeof(row), PSTR("<tr><th>%s</th><td>"), key), sizeof(row));
+  advancePos(pos, snprintf_P(row, sizeof(row), PSTR("<tr><th>%s</th><td>"), key), sizeof(row));
   va_list ap;
   va_start(ap, fmt);
-  advance_pos(pos, vsnprintf_P(row + pos, sizeof(row) - pos, fmt, ap), sizeof(row));
+  advancePos(pos, vsnprintf_P(row + pos, sizeof(row) - pos, fmt, ap), sizeof(row));
   va_end(ap);
-  advance_pos(pos, snprintf_P(row + pos, sizeof(row) - pos, PSTR("</td></tr>")), sizeof(row));
+  advancePos(pos, snprintf_P(row + pos, sizeof(row) - pos, PSTR("</td></tr>")), sizeof(row));
   res.sendChunk(row, pos);
 }
 
-#define INFO_ROW(k, fmt, ...) WebPortal::infoRow(res, PSTR(k), fmt, ##__VA_ARGS__)
+#define INFO_ROW(k, fmt, ...) corium::WebPortal::infoRow(res, PSTR(k), fmt, ##__VA_ARGS__)
 
 struct InfoNet {
   char ip[CORIUM_IPV4_MAX + 1], dns_[CORIUM_IPV4_MAX + 1];
@@ -652,28 +658,28 @@ static void info_fmt_mac(char* dst, size_t cap, const uint8_t* m) {
 }
 
 static void info_collect_net(InfoNet& net) {
-  Wifi::formatIP(net.ip,    sizeof(net.ip),    Wifi::localIP());
-  Wifi::formatIP(net.dns_,  sizeof(net.dns_),  Wifi::dnsIP());
-  Wifi::formatIP(net.ap_ip, sizeof(net.ap_ip), Wifi::softAPIP());
+  corium::Wifi::formatIP(net.ip,    sizeof(net.ip),    corium::Wifi::localIP());
+  corium::Wifi::formatIP(net.dns_,  sizeof(net.dns_),  corium::Wifi::dnsIP());
+  corium::Wifi::formatIP(net.ap_ip, sizeof(net.ap_ip), corium::Wifi::softAPIP());
   uint8_t macBuf[6];
-  Wifi::macAddress(macBuf);
+  corium::Wifi::macAddress(macBuf);
   info_fmt_mac(net.mac, sizeof(net.mac), macBuf);
-  Wifi::softAPmacAddress(macBuf);
+  corium::Wifi::softAPmacAddress(macBuf);
   info_fmt_mac(net.ap_mac, sizeof(net.ap_mac), macBuf);
-  egesc_html(net.ssid, sizeof(net.ssid), Wifi::SSID().c_str());
-  strlcpy(net.ap_ssid, Wifi::softAPSSID().c_str(), sizeof(net.ap_ssid));
+  egesc_html(net.ssid, sizeof(net.ssid), corium::Wifi::SSID().c_str());
+  strlcpy(net.ap_ssid, corium::Wifi::softAPSSID().c_str(), sizeof(net.ap_ssid));
 }
 
 // "0x%08x " per word, longer than infoRow's buffer
-static constexpr size_t FRAMES_MAX = CrashDump::STACK_WORDS * 11 + 1;
+static constexpr size_t FRAMES_MAX = corium::CrashDump::STACK_WORDS * 11 + 1;
 
 #ifdef ESP8266
-static void info_render_frames(EGHttpResponse& res, const CrashDump::Snapshot* cd) {
+static void info_render_frames(EGHttpResponse& res, const corium::CrashDump::Snapshot* cd) {
   // code addresses only
   char framesbuf[FRAMES_MAX];
   size_t fp = 0;
   bool any = false;
-  for (uint32_t i = 0; i < cd->word_count && fp < sizeof(framesbuf) - 12; i++) {
+  for (uint32_t i = 0; i < cd->wordCount && fp < sizeof(framesbuf) - 12; i++) {
     uint32_t w = cd->stack[i];
     if (w < 0x40100000u || w >= 0x40300000u) continue;
     int wn = snprintf_P(framesbuf + fp, sizeof(framesbuf) - fp,
@@ -688,15 +694,15 @@ static void info_render_frames(EGHttpResponse& res, const CrashDump::Snapshot* c
 }
 
 static void info_render_reset(EGHttpResponse& res) {
-  INFO_ROW("Last reset",    W_FMT_S, DeviceInfo::resetText());
+  INFO_ROW("Last reset",    W_FMT_S, corium::DeviceInfo::resetText());
   uint32_t epc1, excvaddr;
   uint8_t exccause;
-  if (DeviceInfo::resetExc(&epc1, &excvaddr, &exccause)) {
+  if (corium::DeviceInfo::resetExc(&epc1, &excvaddr, &exccause)) {
     INFO_ROW("Exc cause", W_FMT_U,   (unsigned)exccause);
     INFO_ROW("Exc PC",    IR_HEX, (unsigned)epc1);
     INFO_ROW("Exc addr",  IR_HEX, (unsigned)excvaddr);
   }
-  if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) {
+  if (const corium::CrashDump::Snapshot* cd = corium::CrashDump::lastCrash()) {
     INFO_ROW("EPC2",      IR_HEX, (unsigned)cd->epc2);
     INFO_ROW("EPC3",      IR_HEX, (unsigned)cd->epc3);
     INFO_ROW("DEPC",      IR_HEX, (unsigned)cd->depc);
@@ -705,10 +711,10 @@ static void info_render_reset(EGHttpResponse& res) {
   }
 }
 #elif defined(ESP32)
-static void info_render_backtrace(EGHttpResponse& res, const CrashDump::Snapshot* cd) {
+static void info_render_backtrace(EGHttpResponse& res, const corium::CrashDump::Snapshot* cd) {
   char framesbuf[FRAMES_MAX];
   size_t fp = 0;
-  for (uint32_t i = 0; i < cd->word_count && fp < sizeof(framesbuf) - 12; i++) {
+  for (uint32_t i = 0; i < cd->wordCount && fp < sizeof(framesbuf) - 12; i++) {
     int wn = snprintf_P(framesbuf + fp, sizeof(framesbuf) - fp,
                         PSTR("%s0x%08x"), i ? " " : "", (unsigned)cd->stack[i]);
     if (wn > 0 && (size_t)wn < sizeof(framesbuf) - fp) fp += (size_t)wn;
@@ -722,9 +728,9 @@ static void info_render_backtrace(EGHttpResponse& res, const CrashDump::Snapshot
 }
 
 static void info_render_reset(EGHttpResponse& res) {
-  INFO_ROW("Last reset", W_FMT_S, DeviceInfo::resetText());
-  if (const char* in = corium::Registry::crashed_in()) INFO_ROW("Crashed in", W_FMT_S, in);
-  if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) {
+  INFO_ROW("Last reset", W_FMT_S, corium::DeviceInfo::resetText());
+  if (const char* in = corium::Registry::crashedIn()) INFO_ROW("Crashed in", W_FMT_S, in);
+  if (const corium::CrashDump::Snapshot* cd = corium::CrashDump::lastCrash()) {
 #ifdef __riscv
     INFO_ROW("mcause",    W_FMT_U,   (unsigned)cd->exccause);
     INFO_ROW("Exc PC",    IR_HEX, (unsigned)cd->epc1);
@@ -737,13 +743,13 @@ static void info_render_reset(EGHttpResponse& res) {
     if (cd->epc2) INFO_ROW("EPC2", IR_HEX, (unsigned)cd->epc2);
     if (cd->epc3) INFO_ROW("EPC3", IR_HEX, (unsigned)cd->epc3);
     if (cd->sp)   INFO_ROW("SP",   IR_HEX, (unsigned)cd->sp);
-    if (cd->word_count) info_render_backtrace(res, cd);
+    if (cd->wordCount) info_render_backtrace(res, cd);
   }
 }
 #endif
 
 static void info_uptime(EGHttpResponse& res) {
-  Uptime::Split u = Uptime::split((uint32_t)Uptime::seconds());
+  corium::Uptime::Split u = corium::Uptime::split((uint32_t)corium::Uptime::seconds());
   if (u.d)      INFO_ROW("Uptime", PSTR("%u d %u h"), (unsigned)u.d, (unsigned)u.h);
   else if (u.h) INFO_ROW("Uptime", PSTR("%u h %u min"), (unsigned)u.h, (unsigned)u.m);
   else          INFO_ROW("Uptime", PSTR("%u min"), (unsigned)u.m);
@@ -752,13 +758,13 @@ static void info_uptime(EGHttpResponse& res) {
 // who set the clock
 static void info_time(EGHttpResponse& res) {
   PGM_P src = PSTR("not set");
-  if (Clock::source == Clock::NTP)       src = PSTR("NTP");
-  else if (Clock::source == Clock::KEPT) src = PSTR("kept over a restart");
-  else if (Clock::source == Clock::WEB)  src = PSTR("browser");
+  if (corium::Clock::source == corium::Clock::NTP)       src = PSTR("NTP");
+  else if (corium::Clock::source == corium::Clock::KEPT) src = PSTR("kept over a restart");
+  else if (corium::Clock::source == corium::Clock::WEB)  src = PSTR("browser");
 #ifdef CORIUM_RTC
-  if (Rtc::chip()) {
-    if (Clock::source == Clock::RTC) INFO_ROW("Time", PSTR("RTC (%s)"), Rtc::chip());
-    else INFO_ROW("Time", PSTR("%s, RTC %s"), src, Rtc::chip());
+  if (corium::Rtc::chip()) {
+    if (corium::Clock::source == corium::Clock::RTC) INFO_ROW("Time", PSTR("RTC (%s)"), corium::Rtc::chip());
+    else INFO_ROW("Time", PSTR("%s, RTC %s"), src, corium::Rtc::chip());
     return;
   }
 #endif
@@ -769,21 +775,21 @@ static void info_render_system(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>System</summary><table>"));
   info_uptime(res);
   info_time(res);
-  INFO_ROW("Chip ID",       W_FMT_S, DeviceInfo::chipid());   // udp pairing asks for it
-  uint32_t heap = DeviceInfo::freeHeap();
+  INFO_ROW("Chip ID",       W_FMT_S, corium::DeviceInfo::chipId());   // udp pairing asks for it
+  uint32_t heap = corium::DeviceInfo::freeHeap();
   INFO_ROW("Free heap",     PSTR("%u.%u KB"), (unsigned)(heap / 1024), (unsigned)(heap % 1024 * 10 / 1024));
-  INFO_ROW("Firmware",      PSTR("%u KB of %u KB"), (unsigned)(DeviceInfo::sketchSize() / 1024),
-                            (unsigned)((DeviceInfo::sketchSize() + DeviceInfo::freeSketch()) / 1024));
+  INFO_ROW("Firmware",      PSTR("%u KB of %u KB"), (unsigned)(corium::DeviceInfo::sketchSize() / 1024),
+                            (unsigned)((corium::DeviceInfo::sketchSize() + corium::DeviceInfo::freeSketch()) / 1024));
 #ifdef ESP8266
-  if (DeviceInfo::flashSize() != DeviceInfo::realFlash()) {
-    INFO_ROW("Flash", PSTR("%u KB set, the chip has %u KB"), (unsigned)(DeviceInfo::flashSize() / 1024),
-             (unsigned)(DeviceInfo::realFlash() / 1024));
+  if (corium::DeviceInfo::flashSize() != corium::DeviceInfo::realFlash()) {
+    INFO_ROW("Flash", PSTR("%u KB set, the chip has %u KB"), (unsigned)(corium::DeviceInfo::flashSize() / 1024),
+             (unsigned)(corium::DeviceInfo::realFlash() / 1024));
   }
 #endif
   info_render_reset(res);
-  if (BootGuard::safe_mode()) INFO_ROW("Safe mode", PSTR("yes"));
-  if (BootGuard::crash_streak()) INFO_ROW("Crash boots in a row", W_FMT_U, (unsigned)BootGuard::crash_streak());
-  if (SystemPrefs::pass_restored) INFO_ROW("Web password", PSTR("restored from backup (settings lost)"));
+  if (corium::BootGuard::safeMode()) INFO_ROW("Safe mode", PSTR("yes"));
+  if (corium::BootGuard::crashStreak()) INFO_ROW("Crash boots in a row", W_FMT_U, (unsigned)corium::BootGuard::crashStreak());
+  if (corium::SystemPrefs::passRestored) INFO_ROW("Web password", PSTR("restored from backup (settings lost)"));
   res.sendChunk(FPSTR(IR_END));
 }
 
@@ -797,10 +803,10 @@ static PGM_P rssi_word(int r) {
 
 static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
   res.sendChunk(F("<details open><summary>WiFi</summary><table>"));
-  if (net.ssid[0]) INFO_ROW("Network", PSTR("%s, channel %d"), net.ssid, (int)Wifi::channel());
-  if (Wifi::isConnected()) INFO_ROW("RSSI", PSTR("%d dBm (%s)"), (int)Wifi::rssi, rssi_word(Wifi::rssi));
+  if (net.ssid[0]) INFO_ROW("Network", PSTR("%s, channel %d"), net.ssid, (int)corium::Wifi::channel());
+  if (corium::Wifi::isConnected()) INFO_ROW("RSSI", PSTR("%d dBm (%s)"), (int)corium::Wifi::rssi, rssi_word(corium::Wifi::rssi));
   INFO_ROW("IP",             W_FMT_S,     net.ip);
-  INFO_ROW("Hostname",       W_FMT_S,     DeviceInfo::hostname());
+  INFO_ROW("Hostname",       W_FMT_S,     corium::DeviceInfo::hostname());
   INFO_ROW("MAC",            W_FMT_S,     net.mac);
   INFO_ROW("DNS",            W_FMT_S,     net.dns_);
   if (strcmp_P(net.ap_ip, PSTR("0.0.0.0"))) {   // ssid is kept with the AP off
@@ -814,15 +820,15 @@ static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
 static void info_render_about(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>About</summary><table>"));
   INFO_ROW("Build", PSTR(RELEASE_VERSION " " GIT_VERSION " &middot; " BUILD_ENV " &middot; %s"),
-           DeviceInfo::buildDate());
-  AppHooks::info_rows(res);
+           corium::DeviceInfo::buildDate());
+  corium::AppHooks::infoRows(res);
   res.sendChunk(FPSTR(IR_END));
 }
 
 #undef INFO_ROW
 
-void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("Info"));
+void corium::WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  corium::WebPortal::beginPage(res, F("Info"));
 
   InfoNet net;
   info_collect_net(net);
@@ -830,13 +836,13 @@ void WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (net.ssid[0]) res.sendKV(F("<p class=muted>Connected to <b>"), net.ssid);
   else             res.sendChunk(F("<p class=muted>Connected to <b>(not connected)"));
   res.sendKV(F("</b> with IP <b>"), net.ip);
-  res.sendKV(F("</b> &middot; "), DeviceInfo::board(), F("</p>"));
+  res.sendKV(F("</b> &middot; "), corium::DeviceInfo::board(), F("</p>"));
 
   info_render_system(res);
   info_render_wifi(res, net);
   info_render_about(res);
 
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
 static void about_modules(EGHttpResponse& res) {
@@ -848,7 +854,7 @@ static void about_modules(EGHttpResponse& res) {
     int mn = snprintf_P(modbuf, sizeof(modbuf),
       PSTR("%s\"%s\""), (i > 0 ? PSTR(",") : PSTR("")), m->name());
     size_t mlen = 0;
-    advance_pos(mlen, mn, sizeof(modbuf));
+    advancePos(mlen, mn, sizeof(modbuf));
     if (mlen) res.sendChunk(modbuf, mlen);
   }
 }
@@ -859,41 +865,41 @@ static void about_device(EGHttpResponse& res) {
 #ifdef ESP8266
   int n = snprintf_P(buf, sizeof(buf),
     PSTR("\"core\":\"%s\",\"boot\":%u,\"fsize\":%u,\"freal\":%u,"),
-    DeviceInfo::coreVersion().c_str(), (unsigned)DeviceInfo::bootVersion(),
-    (unsigned)DeviceInfo::flashSize(), (unsigned)DeviceInfo::realFlash());
+    corium::DeviceInfo::coreVersion().c_str(), (unsigned)corium::DeviceInfo::bootVersion(),
+    (unsigned)corium::DeviceInfo::flashSize(), (unsigned)corium::DeviceInfo::realFlash());
 #elif defined(ESP32)
-  char temp[8] = "null";
-  float t = DeviceInfo::chipTempC();
-  if (!isnan(t)) snprintf_P(temp, sizeof(temp), PSTR("%.1f"), t);
+  char celsius[8] = "null";
+  float t = corium::DeviceInfo::chipTempC();
+  if (!isnan(t)) snprintf_P(celsius, sizeof(celsius), PSTR("%.1f"), t);
   int n = snprintf_P(buf, sizeof(buf),
     PSTR("\"model\":\"%s\",\"rev\":%u,\"sdk\":\"%s\",\"fsize\":%u,\"temp\":%s,"),
-    DeviceInfo::chipModel(), (unsigned)DeviceInfo::chipRev(), DeviceInfo::sdkVersion(),
-    (unsigned)DeviceInfo::flashSize(), temp);
+    corium::DeviceInfo::chipModel(), (unsigned)corium::DeviceInfo::chipRev(), corium::DeviceInfo::sdkVersion(),
+    (unsigned)corium::DeviceInfo::flashSize(), celsius);
 #endif
   size_t len = 0;
-  advance_pos(len, n, sizeof(buf));
+  advancePos(len, n, sizeof(buf));
   if (len) res.sendChunk(buf, len);
 
   char gw[CORIUM_IPV4_MAX + 1], sn[CORIUM_IPV4_MAX + 1], bssid[18] = {}, tx[8] = "null";
-  Wifi::formatIP(gw, sizeof(gw), Wifi::gatewayIP());
-  Wifi::formatIP(sn, sizeof(sn), Wifi::subnetMask());
-  if (const uint8_t* b = Wifi::BSSID()) info_fmt_mac(bssid, sizeof(bssid), b);
-  int q = Wifi::txPowerQdbm();
+  corium::Wifi::formatIP(gw, sizeof(gw), corium::Wifi::gatewayIP());
+  corium::Wifi::formatIP(sn, sizeof(sn), corium::Wifi::subnetMask());
+  if (const uint8_t* b = corium::Wifi::BSSID()) info_fmt_mac(bssid, sizeof(bssid), b);
+  int q = corium::Wifi::txPowerQdbm();
   if (q >= 0) snprintf_P(tx, sizeof(tx), PSTR("%d.%02d"), q / 4, (q % 4) * 25);
   n = snprintf_P(buf, sizeof(buf),
     PSTR("\"mhz\":%u,\"gw\":\"%s\",\"sn\":\"%s\",\"bssid\":\"%s\",\"tx\":%s,"
          "\"phy\":\"%s\",\"sleep\":\"%s\",\"auto\":%s,"),
-    (unsigned)DeviceInfo::cpuMHz(), gw, sn, bssid, tx, Wifi::phyModeStr(), Wifi::sleepModeStr(),
-    Wifi::getAutoReconnect() ? W_TRUE : W_FALSE);
+    (unsigned)corium::DeviceInfo::cpuMHz(), gw, sn, bssid, tx, corium::Wifi::phyModeStr(), corium::Wifi::sleepModeStr(),
+    corium::Wifi::getAutoReconnect() ? W_TRUE : W_FALSE);
   len = 0;
-  advance_pos(len, n, sizeof(buf));
+  advancePos(len, n, sizeof(buf));
   if (len) res.sendChunk(buf, len);
 }
 
-void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   uint8_t macb[6];
-  Wifi::macAddress(macb);
+  corium::Wifi::macAddress(macb);
   char mac_str[13];
   snprintf_P(mac_str, sizeof(mac_str), PSTR("%02X%02X%02X%02X%02X%02X"),
     macb[0], macb[1], macb[2], macb[3], macb[4], macb[5]);
@@ -903,45 +909,45 @@ void WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
     PSTR("{\"ver\":\"" RELEASE_VERSION "\",\"git\":\"" GIT_VERSION "\",\"env\":\"" BUILD_ENV "\","
          "\"date\":\"%s\",\"chip\":\"%s\",\"flash\":\"%s\",\"mac\":\"%s\","
          "\"host\":\"%s\","),
-    DeviceInfo::buildDate(),
-    DeviceInfo::board(),   // today: "chip" carries the board
-    DeviceInfo::flashInfo(),
+    corium::DeviceInfo::buildDate(),
+    corium::DeviceInfo::board(),   // today: "chip" carries the board
+    corium::DeviceInfo::flashInfo(),
     mac_str,
-    DeviceInfo::hostname());
+    corium::DeviceInfo::hostname());
   size_t len = 0;
-  advance_pos(len, n, sizeof(buf));
+  advancePos(len, n, sizeof(buf));
   if (len) res.sendChunk(buf, len);
 
   about_device(res);
-  AppHooks::about_json(res);
+  corium::AppHooks::aboutJson(res);
   res.sendChunk(F("\"modules\":["));
   about_modules(res);
   res.sendChunk(F("]}"));
   res.endChunked();
 }
 
-void WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   s_pendingFactoryReset = true;
-  WebPortal::beginPage(res, F("Reset"));
+  corium::WebPortal::beginPage(res, F("Reset"));
   res.sendChunk(F("<p>All settings cleared. Device is restarting and will return to the setup portal.</p>"));
-  WebPortal::sendRestartCountdown(res);
-  WebPortal::endPage(res);
-  WebPortal::requestRestart(1500);
+  corium::WebPortal::sendRestartCountdown(res);
+  corium::WebPortal::endPage(res);
+  corium::WebPortal::requestRestart();
 }
 
-void WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // back to DHCP for the setup AP, a net row that didn't load goes too
-  Log::console(PSTR("WebPortal: erasing WiFi credentials"));
+  corium::Log::console(PSTR("WebPortal: erasing WiFi credentials"));
   corium::Prefs::reset("net");
   if (!corium::Prefs::commit()) {
     not_saved_page(res, F("Erase WiFi"));
     return;
   }
-  WebPortal::beginPage(res, F("Erase WiFi"));
+  corium::WebPortal::beginPage(res, F("Erase WiFi"));
   res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device will reboot into Setup Mode.</p>"));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
   s_pendingEraseCreds = true;
-  WebPortal::requestRestart(1500);
+  corium::WebPortal::requestRestart();
 }
 
 // /wifi + /wifisave
@@ -999,11 +1005,11 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
   res.sendChunk(FPSTR(W_DETAILS_END));
 }
 
-void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("Network"));
+void corium::WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  corium::WebPortal::beginPage(res, F("Network"));
 
   char ssid[6 * EGPORTAL_SSID_MAX + 1];
-  egesc_html(ssid, sizeof(ssid), Wifi::SSID().c_str());
+  egesc_html(ssid, sizeof(ssid), corium::Wifi::SSID().c_str());
   if (ssid[0]) res.sendKV(F("<p class=muted>Connected to <b>"), ssid, F("</b></p>"));
   else         res.sendChunk(F("<p class=muted>Connected to <b>(none)</b></p>"));
 
@@ -1020,24 +1026,24 @@ void WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
                     "s.src='/ntpjs" CORIUM_CACHE_BUST "';this.appendChild(s);"
                     "}\">"
                     "<summary>Time / NTP</summary>"));
-    NtpPage::form(res);
+    corium::NtpPage::form(res);
     res.sendChunk(FPSTR(W_DETAILS_END));
   }
 
   res.sendChunk(FPSTR(wifiAdvancedHTML));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
-void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
   static constexpr uint32_t KEEP_MS = 60000;
   static constexpr uint32_t FORCE_MS = 10000;   // refresh is unauth, radio goes off channel
-  static Stamp s_lastScan;
+  static corium::Stamp s_lastScan;
   static const char SCANNING[] PROGMEM = "{\"state\":\"scanning\"}";
-  uint32_t now = fast_millis();
+  uint32_t now = corium::fastMillis();
   bool force = req.arg(F("refresh")) != nullptr;
   if (force && s_lastScan.fresh(now, FORCE_MS)) force = false;
 
-  int status = Wifi::scanComplete();
+  int status = corium::Wifi::scanComplete();
   if (!force && status == WIFI_SCAN_RUNNING) {
     res.send(200, FPSTR(HTTP_CT_JSON), FPSTR(SCANNING));
     return;
@@ -1046,8 +1052,8 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool stale = !s_lastScan.fresh(now, KEEP_MS);
   bool needScan = force || status <= 0 || stale;
   if (needScan) {
-    if (status != WIFI_SCAN_RUNNING) Wifi::scanDelete();
-    Wifi::scanNetworks(true /*async*/, false /*show_hidden*/);
+    if (status != WIFI_SCAN_RUNNING) corium::Wifi::scanDelete();
+    corium::Wifi::scanNetworks(true /*async*/, false /*show_hidden*/);
     s_lastScan.mark(now);
     res.send(200, FPSTR(HTTP_CT_JSON), FPSTR(SCANNING));
     return;
@@ -1086,7 +1092,7 @@ void WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static void wifi_render_save_msg(EGHttpResponse& res, bool ssidProvided) {
   if (ssidProvided) {
     char ssid[6 * EGPORTAL_SSID_MAX + 1];
-    egesc_html(ssid, sizeof(ssid), Wifi::heldSsid());
+    egesc_html(ssid, sizeof(ssid), corium::Wifi::heldSsid());
     res.sendKV(F("<p>Saving credentials for <b>"), ssid, F("</b> and rebooting.</p>"));
     res.sendChunk(F("<p class=muted>If the new network is reachable, the device will "
                     "reconnect on its own. If it isn't, the previous credentials are "
@@ -1118,7 +1124,7 @@ static HoldResult wifi_hold_args(EGHttpRequest& req, const char* ssid) {
   const char* pass = req.arg(F("password"));
   if (pass && strlen(pass) > EGPORTAL_PASS_MAX) return TOO_LONG;
   if (!EGPortal::passOk(pass)) return BAD_PASS;
-  return Wifi::holdCreds(s, pass) ? HELD : NO_MEMORY;
+  return corium::Wifi::holdCreds(s, pass) ? HELD : NO_MEMORY;
 }
 
 // a bad SSID or password said, false
@@ -1138,7 +1144,7 @@ static bool wifi_held_ok(EGHttpResponse& res, HoldResult held) {
   return true;
 }
 
-void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // write all four, keeps values on toggle
   bool wantStatic = (req.arg(FPSTR(corium::K_STATIC_IP)) != nullptr);
   char ip_buf[CORIUM_IPV4_MAX + 1], gw_buf[CORIUM_IPV4_MAX + 1];
@@ -1153,7 +1159,7 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   if (wantStatic) {
     char err[96];
-    if (!Wifi::validateStatic(ip_buf, gw_buf, sn_buf, err, sizeof(err))) {
+    if (!corium::Wifi::validateStatic(ip_buf, gw_buf, sn_buf, err, sizeof(err))) {
       char body[160];
       int n = snprintf_P(body, sizeof(body),
         PSTR("Bad network config: %s\nClick Back to fix it.\n"), err);
@@ -1169,29 +1175,29 @@ void WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (!wifi_held_ok(res, held)) return;
 
   // backup first, boot can revert
-  Wifi::saveNetBackup();
+  corium::Wifi::saveNetBackup();
   corium::Prefs::put("net", corium::K_STATIC_IP, wantStatic ? "1" : "0");
   corium::Prefs::put("net", corium::K_IP, ip_buf);
   corium::Prefs::put("net", corium::K_GW, gw_buf);
   corium::Prefs::put("net", corium::K_SN, sn_buf);
   corium::Prefs::put("net", corium::K_DNS, dns_buf);
-  if (ssidProvided) Wifi::join_mode();
+  if (ssidProvided) corium::Wifi::joinMode();
   if (!corium::Prefs::commit()) {
     not_saved_page(res, F("Saving WiFi"));
     return;
   }
 
   if (ssidProvided) {
-    Wifi::saveBackupCreds();
+    corium::Wifi::saveBackupCreds();
     s_pendingWifiSave = true;
   }
 
-  WebPortal::beginPage(res, F("Saving WiFi"));
+  corium::WebPortal::beginPage(res, F("Saving WiFi"));
   wifi_render_save_msg(res, ssidProvided);
-  WebPortal::sendRestartCountdown(res);
-  WebPortal::endPage(res);
+  corium::WebPortal::sendRestartCountdown(res);
+  corium::WebPortal::endPage(res);
 
-  WebPortal::requestRestart(2500);
+  corium::WebPortal::requestRestart(WIFI_RESTART_MS);
 }
 
 // /update
@@ -1272,15 +1278,14 @@ x.send(f);
 // keep it used, gc-sections drops it
 static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
 
-void WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("Update"));
+void corium::WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  corium::WebPortal::beginPage(res, F("Update"));
   char dev[140];
-  int n = snprintf_P(dev, sizeof(dev),
+  send_fmt(res, dev, snprintf_P(dev, sizeof(dev),
     PSTR("<script>window._dev={env:\"" BUILD_ENV "\",tag:\"%s\",rs:%u};</script>"),
-    EG_ENV_TAG, (unsigned)FLASH_COUNTDOWN_SECS);
-  if (n > 0 && (size_t)n < sizeof(dev)) res.sendChunk(dev, (size_t)n);
+    EG_ENV_TAG, (unsigned)FLASH_COUNTDOWN_SECS), sizeof(dev));
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
 // one upload at a time
@@ -1299,48 +1304,49 @@ static void ota_begin(size_t expected) {
   s_ota.write_error = false;
   s_ota.head_n      = 0;
   s_ota.started     = false;
-  uint32_t maxSketch = (DeviceInfo::freeSketch() - 0x1000) & 0xFFFFF000;
+  uint32_t maxSketch = (corium::DeviceInfo::freeSketch() - 0x1000) & 0xFFFFF000;
   if (!Update.begin(s_ota.expected ? s_ota.expected : maxSketch)) {
-    Log::console(PSTR("OTA: Update.begin failed (size=%u, free=%u)"),
+    corium::Log::console(PSTR("OTA: Update.begin failed (size=%u, free=%u)"),
                  (unsigned)s_ota.expected, (unsigned)maxSketch);
     s_ota.write_error = true;
   } else {
-    Log::console(PSTR("OTA: starting (%u bytes)"), (unsigned)s_ota.expected);
+    corium::Log::console(PSTR("OTA: starting (%u bytes)"), (unsigned)s_ota.expected);
     s_ota.started = true;
-    Lifecycle::send(Lifecycle::OTA_START);
+    corium::Lifecycle::send(corium::Lifecycle::OTA_START);
   }
 }
 
 static void ota_failed() {
   if (!s_ota.started) return;
   s_ota.started = false;
-  Lifecycle::send(Lifecycle::OTA_FAILED);
+  corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
 }
 
-static bool ota_entry_ok(uint32_t entry) {
 #ifdef ESP8266
-  // esp8266 IRAM
-  bool plat_ok = (entry >= 0x40100000UL && entry < 0x40200000UL);
+// esp8266 IRAM
+static constexpr uint32_t ENTRY_LO = 0x40100000UL, ENTRY_HI = 0x40200000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-  // S3 IRAM
-  bool plat_ok = (entry >= 0x40370000UL && entry < 0x403E0000UL);
+// S3 IRAM
+static constexpr uint32_t ENTRY_LO = 0x40370000UL, ENTRY_HI = 0x403E0000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
-  bool plat_ok = (entry >= 0x40020000UL && entry < 0x40050000UL);
+static constexpr uint32_t ENTRY_LO = 0x40020000UL, ENTRY_HI = 0x40050000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32C3)
-  bool plat_ok = (entry >= 0x40380000UL && entry < 0x403E0000UL);
+static constexpr uint32_t ENTRY_LO = 0x40380000UL, ENTRY_HI = 0x403E0000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
-  bool plat_ok = (entry >= 0x40800000UL && entry < 0x40880000UL);
+static constexpr uint32_t ENTRY_LO = 0x40800000UL, ENTRY_HI = 0x40880000UL;
 #else
-  // esp32 IRAM
-  bool plat_ok = (entry >= 0x40080000UL && entry < 0x400A0000UL);
+// esp32 IRAM
+static constexpr uint32_t ENTRY_LO = 0x40080000UL, ENTRY_HI = 0x400A0000UL;
 #endif
-  return plat_ok;
+
+static bool ota_entry_ok(uint32_t entry) {
+  return entry >= ENTRY_LO && entry < ENTRY_HI;
 }
 
 static bool ota_write(const uint8_t* p, size_t len) {
   size_t wrote = Update.write((uint8_t*)p, len);
   if (wrote != len) {
-    Log::console(PSTR("OTA: short write %u/%u err=%u"),
+    corium::Log::console(PSTR("OTA: short write %u/%u err=%u"),
                  (unsigned)wrote, (unsigned)len, Update.getError());
     s_ota.write_error = true;
     return false;
@@ -1361,10 +1367,9 @@ static void ota_data(const char* chunk, size_t len) {
     len -= n;
     if (s_ota.head_n < sizeof(s_ota.head)) return;
     const uint8_t* h = s_ota.head;
-    uint32_t entry = (uint32_t)h[4] | ((uint32_t)h[5] << 8)
-                   | ((uint32_t)h[6] << 16) | ((uint32_t)h[7] << 24);
+    uint32_t entry = rdLe32(h + 4);
     if (!ota_entry_ok(entry)) {
-      Log::console(PSTR("OTA: REFUSING wrong-platform bin (entry=0x%08x)"),
+      corium::Log::console(PSTR("OTA: REFUSING wrong-platform bin (entry=0x%08x)"),
                    (unsigned)entry);
       Update.end(false);
       s_ota.write_error = true;
@@ -1378,25 +1383,25 @@ static void ota_data(const char* chunk, size_t len) {
 static void ota_end() {
   // Update.end() is strict, needs full size
   if (s_ota.write_error || !Update.isRunning()) {
-    Log::console(PSTR("OTA: aborting on prior error"));
+    corium::Log::console(PSTR("OTA: aborting on prior error"));
     if (Update.isRunning()) Update.end(false);  // discard
     s_ota.write_error = true;
     return;
   }
   if (s_ota.delivered != s_ota.expected) {
-    Log::console(PSTR("OTA: byte-count mismatch %u != %u"),
+    corium::Log::console(PSTR("OTA: byte-count mismatch %u != %u"),
                  (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
     Update.end(false);
     s_ota.write_error = true;
     return;
   }
   if (Update.end()) {
-    Log::console(PSTR("OTA: success (%u bytes), restarting"),
+    corium::Log::console(PSTR("OTA: success (%u bytes), restarting"),
                  (unsigned)s_ota.delivered);
     // here too, reply may never go out
-    WebPortal::requestRestart(1500);
+    corium::WebPortal::requestRestart();
   } else {
-    Log::console(PSTR("OTA: end failed err=%u"), Update.getError());
+    corium::Log::console(PSTR("OTA: end failed err=%u"), Update.getError());
     s_ota.write_error = true;
   }
 }
@@ -1404,11 +1409,11 @@ static void ota_end() {
 static void ota_abort() {
   if (Update.isRunning()) Update.end(false);
   s_ota.write_error = true;
-  Log::console(PSTR("OTA: aborted at %u/%u bytes"),
+  corium::Log::console(PSTR("OTA: aborted at %u/%u bytes"),
                (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
 }
 
-void WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+void corium::WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                              const char* chunk, size_t len, void*) {
   // main loop, flash write ok
   switch (ev) {
@@ -1422,7 +1427,7 @@ void WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
   }
 }
 
-void WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (s_ota.write_error || Update.hasError()) {
     char errBuf[96];
     snprintf_P(errBuf, sizeof(errBuf),
@@ -1433,11 +1438,11 @@ void WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, void*) {
     return;
   }
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
-  WebPortal::requestRestart(1500);
+  corium::WebPortal::requestRestart();
 }
 
 // device-side count, 0 when idle
-void WebPortal::hUpdateProgress(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hUpdateProgress(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[48];
   snprintf_P(buf, sizeof(buf), PSTR("{\"done\":%u,\"total\":%u}"),
              (unsigned)s_ota.delivered, (unsigned)(s_ota.started ? s_ota.expected : 0));
@@ -1467,9 +1472,10 @@ static void body_free(BodyBuf& b) {
   b.ok  = false;
 }
 
-// over 8 KB is dropped
+static constexpr size_t BODY_MAX = 8192;
+
 static bool body_size_ok(size_t cap) {
-  return cap != 0 && cap <= 8192;
+  return cap != 0 && cap <= BODY_MAX;
 }
 
 static bool body_alloc(BodyBuf& b, size_t cap) {
@@ -1495,11 +1501,11 @@ static void body_end(BodyBuf& b) {
 static void body_begin(BodyBuf& b, size_t cap, PGM_P path) {
   body_free(b);
   if (!body_size_ok(cap)) {
-    if (path) Log::console(PSTR("%s: body size %u out of range"), path, (unsigned)cap);
+    if (path) corium::Log::console(PSTR("%s: body size %u out of range"), path, (unsigned)cap);
     return;
   }
   if (!body_alloc(b, cap) && path) {
-    Log::console(PSTR("%s: malloc(%u) failed"), path, (unsigned)(cap + 1));
+    corium::Log::console(PSTR("%s: malloc(%u) failed"), path, (unsigned)(cap + 1));
   }
 }
 
@@ -1516,7 +1522,7 @@ static void body_event(BodyBuf& b, EGHttpRequest& req, EGHttpServer::BodyEvent e
 // freed in hParam
 static BodyBuf s_paramBody;
 
-void WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+void corium::WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                             const char* chunk, size_t len, void*) {
   body_event(s_paramBody, req, ev, chunk, len, P_PARAM);
 }
@@ -1524,7 +1530,7 @@ void WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
 // first field a save refused, and first saved with a warning, shown above the form
 struct Refusal {
   char name[2 * CORIUM_PREF_ID_MAX + 2];   // mid.id
-  char why[PinSafety::WHY_MAX];       // copied, the next put reuses "in use"
+  char why[corium::PinSafety::WHY_MAX];       // copied, the next put reuses "in use"
   char note_name[2 * CORIUM_PREF_ID_MAX + 2];
   const char* note;                   // PROGMEM
 };
@@ -1550,7 +1556,7 @@ static void param_save_pref(const char* mid, const corium::Pref& p,
   char name[2 * CORIUM_PREF_ID_MAX + 2];   // mid.id
   char id_buf[CORIUM_PREF_ID_MAX + 1];
   char field[CORIUM_PREFS_MAX_VALUE + 1];
-  flash_to_ram(p.id, id_buf, sizeof(id_buf));
+  flashToRam(p.id, id_buf, sizeof(id_buf));
   snprintf_P(name, sizeof(name), PSTR("%s.%s"), mid, id_buf);
 
   if (p.type == corium::P_BOOL) {
@@ -1577,17 +1583,17 @@ static bool param_save_body(uint8_t tab, Refusal& r) {
   bool        ok      = s_paramBody.ok && body;
 
   if (ok) {
-    for (size_t gi = 0; gi < corium::Prefs::group_count(); gi++) {
-      const corium::PrefGroup* g = corium::Prefs::group_at(gi);
+    for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
+      const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
       if (!g) continue;
       // this tab only, else other bools clear
       if (g->category.get() != tab) continue;
       // not on the page, a missing bool would save as off
-      corium::Module* m = corium::Prefs::module_at(gi);
-      if (m && m->display_order() == 0) continue;
+      corium::Module* m = corium::Prefs::moduleAt(gi);
+      if (m && m->displayOrder() == 0) continue;
       for (size_t j = 0; j < g->count.get(); j++) {
         const corium::Pref p = g->prefs.row(j);
-        param_save_pref(g->module_id, p, body, bodyLen, r);
+        param_save_pref(g->moduleId, p, body, bodyLen, r);
       }
     }
   }
@@ -1599,15 +1605,16 @@ static bool param_save_body(uint8_t tab, Refusal& r) {
 #define APP_PARAM_TABS "System", "Input", "Output", "Upload", "Backup"   // app sets it
 #endif
 
+static constexpr uint8_t TABS = corium::P_CAT_BACKUP + 1;
+
 static void param_render_tabs(EGHttpResponse& res, uint8_t tab) {
-  static const char TAB_NAMES[5][7] PROGMEM = {APP_PARAM_TABS};
+  static const char TAB_NAMES[TABS][7] PROGMEM = {APP_PARAM_TABS};
   res.sendChunk(F("<nav class=tabs>"));
   char nav[96];
-  for (uint8_t t = 0; t < 5; t++) {
-    int nn = snprintf_P(nav, sizeof(nav),
+  for (uint8_t t = 0; t < TABS; t++) {
+    send_fmt(res, nav, snprintf_P(nav, sizeof(nav),
       PSTR("<a href='/param?t=%u'%s>%s</a>"),
-      (unsigned)t, t == tab ? PSTR(" class=ac") : PSTR(""), TAB_NAMES[t]);
-    if (nn > 0 && (size_t)nn < sizeof(nav)) res.sendChunk(nav, (size_t)nn);
+      (unsigned)t, t == tab ? PSTR(" class=ac") : PSTR(""), TAB_NAMES[t]), sizeof(nav));
   }
   res.sendChunk(F("</nav>"));
 }
@@ -1623,29 +1630,28 @@ static void param_render_backup(EGHttpResponse& res) {
 }
 
 static bool param_group_on(uint8_t gi) {
-  corium::Module* m = corium::Prefs::module_at(gi);
-  if (m && !m->hw_present()) return false;
-  const corium::PrefGroup* g = corium::Prefs::group_at(gi);
-  return !g || corium::Prefs::group_enabled(g);
+  corium::Module* m = corium::Prefs::moduleAt(gi);
+  if (m && !m->hwPresent()) return false;
+  const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
+  return !g || corium::Prefs::groupEnabled(g);
 }
 
 static uint8_t param_group_order(uint8_t gi) {
-  corium::Module* m = corium::Prefs::module_at(gi);
-  return m ? m->display_order() : 50;
+  corium::Module* m = corium::Prefs::moduleAt(gi);
+  return m ? m->displayOrder() : 50;
 }
 
 static void param_sort_groups(uint8_t* order, uint8_t gc) {
-  for (uint8_t i = 0; i < gc; i++) order[i] = i;
+  static constexpr uint16_t OFF_LAST = 0x100;
+  uint16_t key[CORIUM_MAX_MODULES];
+  for (uint8_t i = 0; i < gc; i++) {
+    order[i] = i;
+    key[i] = (param_group_on(i) ? 0 : OFF_LAST) | param_group_order(i);
+  }
   for (uint8_t i = 1; i < gc; i++) {
     uint8_t cur = order[i];
-    uint8_t o_cur = param_group_order(cur);
-    bool en_cur = param_group_on(cur);
     uint8_t j = i;
-    while (j > 0) {
-      uint8_t o_prev = param_group_order(order[j - 1]);
-      bool en_prev = param_group_on(order[j - 1]);
-      bool prev_first = (en_prev != en_cur) ? en_prev : (o_prev <= o_cur);
-      if (prev_first) break;
+    while (j > 0 && key[order[j - 1]] > key[cur]) {
       order[j] = order[j - 1];
       j--;
     }
@@ -1670,23 +1676,23 @@ static void param_appendf(ParamCtx& c, PGM_P fmt, ...) {
   va_start(ap, fmt);
   int n = vsnprintf_P(c.buf + c.pos, sizeof(c.buf) - c.pos, fmt, ap);
   va_end(ap);
-  advance_pos(c.pos, n, sizeof(c.buf));
+  advancePos(c.pos, n, sizeof(c.buf));
 }
 
-// one chunk from the start of buf, dropped if it doesn't fit
+// one chunk from the start of buf
 static void param_sendf(ParamCtx& c, PGM_P fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   int n = vsnprintf_P(c.buf, sizeof(c.buf), fmt, ap);
   va_end(ap);
-  if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
+  send_fmt(*c.res, c.buf, n, sizeof(c.buf));
 }
 
 // for the form script, "" = always shown
 static const char* show_attr(ParamCtx& c, const char* id) {
   corium::PrefShow r;
   c.s_show[0] = '\0';
-  if (corium::Prefs::show_rule(c.show, id, &r)) {
+  if (corium::Prefs::showRule(c.show, id, &r)) {
     snprintf_P(c.s_show, sizeof(c.s_show), PSTR(" data-w='%s' data-m=%u"),
                r.when, (unsigned)r.values);
   }
@@ -1694,16 +1700,19 @@ static const char* show_attr(ParamCtx& c, const char* id) {
 }
 
 static void param_group_header(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {
-  bool has_toggle = (g->enable_key != nullptr);
-  bool grp_on = corium::Prefs::group_enabled(g);
-  bool hw_absent = (mod && !mod->hw_present());
-  const char* badge = hw_absent ? PSTR(" <span class='gb off'>not detected</span>")
-                      : !has_toggle ? PSTR("")
-                      : grp_on ? PSTR(" <span class='gb on'>on</span>")
-                               : PSTR(" <span class='gb off'>off</span>");
+  bool has_toggle = (g->enableKey != nullptr);
+  bool grp_on = corium::Prefs::groupEnabled(g);
+  bool hw_absent = (mod && !mod->hwPresent());
+  bool off = hw_absent;
+  PGM_P badge = PSTR("");
+  if (hw_absent) {
+    badge = PSTR(" <span class='gb off'>not detected</span>");
+  } else if (has_toggle) {
+    off = !grp_on;
+    badge = grp_on ? PSTR(" <span class='gb on'>on</span>") : PSTR(" <span class='gb off'>off</span>");
+  }
   param_sendf(c, PSTR("<details class='bx%s'%s><summary>%s%s</summary>"),
-              (hw_absent || (has_toggle && !grp_on)) ? PSTR(" off") : PSTR(""),
-              show_attr(c, nullptr), g->label, badge);
+              off ? PSTR(" off") : PSTR(""), show_attr(c, nullptr), g->label, badge);
 }
 
 static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
@@ -1722,10 +1731,10 @@ static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
 // sent per option, a long list can't overflow buf
 static void param_emit_options(ParamCtx& c, const corium::Pref& p) {
   int32_t cur_idx = 0, def_idx = -1;
-  parse_i32(c.cur, &cur_idx);
-  parse_i32(p.default_val, &def_idx);
+  parseI32(c.cur, &cur_idx);
+  parseI32(p.defaultVal, &def_idx);
   const char* opt = c.s_pat;
-  long idx = p.min_i;
+  long idx = p.minI;
   while (*opt) {
     const char* sep = strchr(opt, '|');
     size_t olen = sep ? (size_t)(sep - opt) : strlen(opt);
@@ -1785,21 +1794,21 @@ static void param_emit_value(ParamCtx& c, const corium::Pref& p, bool slider) {
   c.res->sendChunk(F(" value='"));
   param_send_escaped(c, c.cur);
   c.buf[c.pos++] = '\'';
-  if (!slider && p.default_val && p.default_val[0]
+  if (!slider && p.defaultVal && p.defaultVal[0]
       && !(p.flags & corium::P_TIME)) {
-    param_appendf(c, PSTR(" placeholder='%s'"), p.default_val);
+    param_appendf(c, PSTR(" placeholder='%s'"), p.defaultVal);
   }
 }
 
 static void param_emit_limits(ParamCtx& c, const corium::Pref& p) {
-  if (p.type == corium::P_STRING && p.max_len > 0) {
-    param_appendf(c, PSTR(" maxlength='%u'"), (unsigned)p.max_len);
+  if (p.type == corium::P_STRING && p.maxLen > 0) {
+    param_appendf(c, PSTR(" maxlength='%u'"), (unsigned)p.maxLen);
   }
   if (p.type == corium::P_STRING && p.pattern && c.s_pat[0]) {
     param_appendf(c, PSTR(" pattern='%s'"), c.s_pat);
   }
-  if ((p.type == corium::P_INT || p.type == corium::P_UINT || p.type == corium::P_FLOAT) && p.min_i != p.max_i) {
-    param_appendf(c, PSTR(" min=%ld max=%ld"), (long)p.min_i, (long)p.max_i);
+  if ((p.type == corium::P_INT || p.type == corium::P_UINT || p.type == corium::P_FLOAT) && p.minI != p.maxI) {
+    param_appendf(c, PSTR(" min=%ld max=%ld"), (long)p.minI, (long)p.maxI);
   }
 }
 
@@ -1823,7 +1832,7 @@ static void param_emit_input_end(ParamCtx& c, const corium::Pref& p, bool slider
 static void param_emit_input(ParamCtx& c, const corium::Pref& p) {
   const bool slider = (p.type == corium::P_INT || p.type == corium::P_UINT)
                    && (p.flags & corium::P_SLIDER)
-                   && p.min_i != p.max_i;
+                   && p.minI != p.maxI;
   param_appendf(c, PSTR("<input type=%s id='%s.%s' name='%s.%s'"),
                 param_input_type(p, slider), c.mid, c.s_id, c.mid, c.s_id);
   param_emit_value(c, p, slider);
@@ -1846,10 +1855,10 @@ static void param_emit_help(ParamCtx& c, const corium::Pref& p, bool inline_bool
 }
 
 static void param_load_text(ParamCtx& c, const corium::Pref& p) {
-  flash_to_ram(p.id,      c.s_id,   sizeof(c.s_id));
-  flash_to_ram(p.label,   c.s_lbl,  sizeof(c.s_lbl));
-  flash_to_ram(p.help,    c.s_help, sizeof(c.s_help));
-  flash_to_ram(p.pattern, c.s_pat,  sizeof(c.s_pat));
+  flashToRam(p.id,      c.s_id,   sizeof(c.s_id));
+  flashToRam(p.label,   c.s_lbl,  sizeof(c.s_lbl));
+  flashToRam(p.help,    c.s_help, sizeof(c.s_help));
+  flashToRam(p.pattern, c.s_pat,  sizeof(c.s_pat));
 }
 
 static void param_emit_heading(ParamCtx& c, const corium::Pref& p) {
@@ -1897,7 +1906,7 @@ static void param_emit_row(ParamCtx& c, const corium::Pref& p) {
 
 static void param_render_group(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {
   param_group_header(c, g, mod);
-  c.mid = g->module_id;
+  c.mid = g->moduleId;
 
   for (size_t j = 0; j < g->count.get(); j++) {
     const corium::Pref p = g->prefs.row(j);
@@ -1921,27 +1930,26 @@ static void param_render_group(ParamCtx& c, const corium::PrefGroup* g, corium::
 static void param_render_groups(EGHttpResponse& res, uint8_t tab) {
   ParamCtx c;
   c.res = &res;
-  uint8_t gc = (uint8_t)corium::Prefs::group_count();
+  uint8_t gc = (uint8_t)corium::Prefs::groupCount();
   uint8_t order[CORIUM_MAX_MODULES];
   if (gc > sizeof(order)) gc = sizeof(order);
   param_sort_groups(order, gc);
 
   for (uint8_t gi = 0; gi < gc; gi++) {
-    corium::Module* mod = corium::Prefs::module_at(order[gi]);
-    if (mod && mod->display_order() == 0) continue;   // has its own page
-    const corium::PrefGroup* g = corium::Prefs::group_at(order[gi]);
+    corium::Module* mod = corium::Prefs::moduleAt(order[gi]);
+    if (mod && mod->displayOrder() == 0) continue;   // has its own page
+    const corium::PrefGroup* g = corium::Prefs::groupAt(order[gi]);
     if (!g || g->count.get() == 0) continue;
     if (g->category.get() != tab) continue;
-    c.show = mod ? mod->prefs_show() : nullptr;
+    c.show = mod ? mod->prefsShow() : nullptr;
     param_render_group(c, g, mod);
   }
 }
 
 static void param_render_form(EGHttpResponse& res, uint8_t tab) {
   char form_open[48];
-  int fo = snprintf_P(form_open, sizeof(form_open),
-    PSTR("<form method=POST action='/param?t=%u'>"), (unsigned)tab);
-  if (fo > 0 && (size_t)fo < sizeof(form_open)) res.sendChunk(form_open, (size_t)fo);
+  send_fmt(res, form_open, snprintf_P(form_open, sizeof(form_open),
+    PSTR("<form method=POST action='/param?t=%u'>"), (unsigned)tab), sizeof(form_open));
   param_render_groups(res, tab);
   res.sendChunk(F(
     "<hr><div id=fErr class='a ae' style=display:none>"
@@ -1957,41 +1965,47 @@ static void param_render_form(EGHttpResponse& res, uint8_t tab) {
 
 static uint8_t param_tab(EGHttpRequest& req) {
   int32_t t;
-  if (parse_i32(req.arg(F("t")), &t) && t >= 0 && t <= 4) return (uint8_t)t;
+  if (parseI32(req.arg(F("t")), &t) && t >= 0 && t < TABS) return (uint8_t)t;
   return (uint8_t)corium::P_CAT_SYSTEM;
 }
 
 static const char RESTART_APPLY[] PROGMEM = " <a href=/restart>Restart</a> to apply.";
+
+static PGM_P link_once(bool& link, PGM_P text) {
+  if (!link) return PSTR("");
+  link = false;
+  return text;
+}
 
 // what a post did, above the form; frozen = a group left out, the rest saved
 static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart,
                        const Refusal& refused, const char* frozen) {
   if (wrote) res.sendChunk(F(
     "<div class='a ak'>Saved.</div>"));
-  else if (saved) WebPortal::sendNotSaved(res);
+  else if (saved) corium::WebPortal::sendNotSaved(res);
   char buf[160];
+  bool link = restart;
   if (refused.why[0]) {
     snprintf_P(buf, sizeof(buf), PSTR("<div class='a ae'>Not saved: %s, %s.%s</div>"),
                refused.name, refused.why,
-               restart ? PSTR(" <a href=/restart>Restart</a> for the rest.") : PSTR(""));
+               link_once(link, PSTR(" <a href=/restart>Restart</a> for the rest.")));
     res.sendChunk(buf);
   }
   if (refused.note) {
     snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>Note: %s, %s.%s</div>"),
-               refused.note_name, refused.note,
-               restart && !refused.why[0] ? RESTART_APPLY : PSTR(""));
+               refused.note_name, refused.note, link_once(link, RESTART_APPLY));
     res.sendChunk(buf);
   }
   if (frozen) {
     snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>Note: %s.%s</div>"), frozen,
-               restart && !refused.why[0] && !refused.note ? RESTART_APPLY : PSTR(""));
+               link_once(link, RESTART_APPLY));
     res.sendChunk(buf);
   }
   if (!saved) res.sendChunk(F(
     "<div class='a ae'>Not saved: the form was too large or memory was short.</div>"));
 }
 
-void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   uint8_t tab = param_tab(req);
   bool posted = (req.method() == EGHttpRequest::POST);
   Refusal refused{};
@@ -2002,20 +2016,20 @@ void WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* frozen = saved && !wrote && corium::Prefs::frozen(why, sizeof(why)) ? why : nullptr;
   if (frozen) wrote = true;
   // stay, so the refusal or note shows
-  bool restart = wrote && corium::Prefs::restart_pending();
+  bool restart = wrote && corium::Prefs::restartPending();
   if (restart && !refused.why[0] && !refused.note && !frozen) {
     res.redirect(FPSTR(P_RESTART));
     return;
   }
 
-  WebPortal::beginPage(res, F("Config"));
+  corium::WebPortal::beginPage(res, F("Config"));
   if (posted) param_says(res, saved, wrote, restart, refused, frozen);
   param_render_tabs(res, tab);
 
   // Backup is the import form only
   if (tab == (uint8_t)corium::P_CAT_BACKUP) param_render_backup(res);
   else                                param_render_form(res, tab);
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
 static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
@@ -2030,7 +2044,10 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
   return ~crc;
 }
 
-static constexpr uint32_t EXPORT_OBF_SEED = EXPORT_SEED;
+static constexpr uint32_t EXPORT_OBF_SEED = CORIUM_EXPORT_SEED;
+// magic, version, groups, crc
+static constexpr size_t  BLOB_MAGIC = 3, BLOB_HEAD = BLOB_MAGIC + 1, BLOB_CRC = 4;
+static constexpr uint8_t BLOB_VER = 1;
 
 struct B64Sink {
   EGHttpResponse* res;
@@ -2065,14 +2082,17 @@ static void b64_emit_quartet(B64Sink& s, uint8_t in_len) {
   s.outLen += 4;
   s.triLen = 0;
 }
+static void b64_put(B64Sink& s, uint8_t b) {
+  s.tri[s.triLen++] = b;
+  if (s.triLen == 3) b64_emit_quartet(s, 3);
+}
 static void b64_write(B64Sink& s, const void* data, size_t len) {
   const uint8_t* p = (const uint8_t*)data;
   for (size_t i = 0; i < len; i++) {
     uint8_t b = p[i];
     if (s.obf_on) b ^= obf_step(&s.obf_state);
     s.crc = crc32_update(s.crc, &b, 1);
-    s.tri[s.triLen++] = b;
-    if (s.triLen == 3) b64_emit_quartet(s, 3);
+    b64_put(s, b);
   }
 }
 static void b64_write_u8(B64Sink& s, uint8_t v) { b64_write(s, &v, 1); }
@@ -2086,10 +2106,10 @@ static bool is_exportable_pref(const corium::PrefGroup* g, const corium::Pref& p
                                char (&id_buf)[CORIUM_PREF_ID_MAX + 1], const char*& val_out) {
   if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return false;
   if (p.flags & corium::P_LOCAL) return false;
-  flash_to_ram(p.id, id_buf, sizeof(id_buf));
-  const char* cur = corium::Prefs::getString(g->module_id, id_buf);
+  flashToRam(p.id, id_buf, sizeof(id_buf));
+  const char* cur = corium::Prefs::getString(g->moduleId, id_buf);
   if (!cur) cur = "";
-  if (p.default_val && strcmp(cur, p.default_val) == 0) return false;
+  if (p.defaultVal && strcmp(cur, p.defaultVal) == 0) return false;
   val_out = cur;
   return true;
 }
@@ -2105,10 +2125,10 @@ static uint8_t group_export_count(const corium::PrefGroup* g) {
 }
 
 static void export_write_group(B64Sink& sink, const corium::PrefGroup* g, uint8_t emitted_prefs) {
-  size_t mid_len = strlen(g->module_id);
+  size_t mid_len = strlen(g->moduleId);
   if (mid_len > 255) return;
   b64_write_u8(sink, (uint8_t)mid_len);
-  b64_write(sink, g->module_id, mid_len);
+  b64_write(sink, g->moduleId, mid_len);
   b64_write_u8(sink, emitted_prefs);
 
   for (size_t j = 0; j < g->count.get(); j++) {
@@ -2122,28 +2142,28 @@ static void export_write_group(B64Sink& sink, const corium::PrefGroup* g, uint8_
     b64_write_u8(sink, (uint8_t)klen);
     b64_write(sink, id_buf, klen);
     uint8_t vb[2];
-    wr_be16(vb, (uint16_t)vlen);
+    wrBe16(vb, (uint16_t)vlen);
     b64_write(sink, vb, 2);
     b64_write(sink, cur, vlen);
   }
 }
 
 static void serializeExportStream(B64Sink& sink) {
-  uint8_t group_count = 0;
-  for (size_t gi = 0; gi < corium::Prefs::group_count(); gi++) {
-    const corium::PrefGroup* g = corium::Prefs::group_at(gi);
+  uint8_t groupCount = 0;
+  for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
+    const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
     if (!g || g->count.get() == 0) continue;
-    if (group_export_count(g)) group_count++;
+    if (group_export_count(g)) groupCount++;
   }
 
-  const uint8_t MAGIC[3] = {EXPORT_MAGIC};
-  b64_write(sink, MAGIC, 3);
-  b64_write_u8(sink, 1);
+  const uint8_t MAGIC[BLOB_MAGIC] = {CORIUM_EXPORT_MAGIC};
+  b64_write(sink, MAGIC, BLOB_MAGIC);
+  b64_write_u8(sink, BLOB_VER);
   sink.obf_on = true;
-  b64_write_u8(sink, group_count);
+  b64_write_u8(sink, groupCount);
 
-  for (size_t gi = 0; gi < corium::Prefs::group_count(); gi++) {
-    const corium::PrefGroup* g = corium::Prefs::group_at(gi);
+  for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
+    const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
     if (!g || g->count.get() == 0) continue;
     uint8_t emitted_prefs = group_export_count(g);
     if (emitted_prefs == 0) continue;
@@ -2157,23 +2177,23 @@ static void deobfuscate_payload(uint8_t* buf, size_t len) {
 }
 
 static const char* validateImport(uint8_t* buf, size_t len) {
-  if (len < 9) return PSTR("too short");   // magic, ver, no groups, crc
-  const uint8_t MAGIC[3] = {EXPORT_MAGIC};
+  if (len < BLOB_HEAD + 1 + BLOB_CRC) return PSTR("too short");   // no groups
+  const uint8_t MAGIC[BLOB_MAGIC] = {CORIUM_EXPORT_MAGIC};
   if (buf[0] != MAGIC[0] || buf[1] != MAGIC[1] || buf[2] != MAGIC[2]) return PSTR("bad magic");
-  if (buf[3] != 1) return PSTR("bad format");
-  size_t payload_len = len - 4;
-  uint32_t expected = rd_be32(buf + payload_len);
+  if (buf[BLOB_MAGIC] != BLOB_VER) return PSTR("bad format");
+  size_t payload_len = len - BLOB_CRC;
+  uint32_t expected = rdBe32(buf + payload_len);
   uint32_t actual = crc32_update(0, buf, payload_len) ^ EXPORT_OBF_SEED;
   if (expected != actual) return PSTR("checksum mismatch");
 
-  deobfuscate_payload(buf + 4, payload_len - 4);
-  return ImportText::blob_error(buf + 4, payload_len - 4);
+  deobfuscate_payload(buf + BLOB_HEAD, payload_len - BLOB_HEAD);
+  return corium::ImportText::blobError(buf + BLOB_HEAD, payload_len - BLOB_HEAD);
 }
 
 // put refuses unknown keys, forwards moved ones
 static bool import_put(const char* mid, const char* key, const char* value) {
   corium::Pref p;
-  if (corium::Prefs::find_pref(mid, key, &p) && (p.flags & corium::P_LOCAL)) return false;
+  if (corium::Prefs::findPref(mid, key, &p) && (p.flags & corium::P_LOCAL)) return false;
   return corium::Prefs::put(mid, key, value);
 }
 
@@ -2182,23 +2202,23 @@ static int applyImport(uint8_t* buf, size_t len, const char** err_out) {
   const char* err = validateImport(buf, len);
   if (err) { if (err_out) *err_out = err; return -1; }
 
-  corium::Prefs::reset_all(/*keep_network=*/true);
-  return ImportText::apply_blob(buf + 4, len - 8, import_put);   // less magic and crc
+  corium::Prefs::resetAll(/*keep_network=*/true);
+  return corium::ImportText::applyBlob(buf + BLOB_HEAD, len - BLOB_HEAD - BLOB_CRC, import_put);
 }
 
 // safe mode gets here frozen: one the import didn't replace stops it all
 static const char* import_commit(char* why, size_t n) {
-  const char* err = corium::Prefs::any_frozen(why, n) ? why : nullptr;
+  const char* err = corium::Prefs::anyFrozen(why, n) ? why : nullptr;
   if (!err && !corium::Prefs::commit(false)) err = WRITE_FAILED;   // silent, the cascade would WDT
   if (err) corium::Prefs::revert();
   return err;
 }
 
 // a row that didn't load isn't in the blob, an import would lose it
-void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
   char why[CORIUM_PREFS_FROZEN_MAX];
-  if (corium::Prefs::any_frozen(why, sizeof(why))) {
+  if (corium::Prefs::anyFrozen(why, sizeof(why))) {
     res.send(409, FPSTR(HTTP_CT_PLAIN), why);
     return;
   }
@@ -2207,13 +2227,9 @@ void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   b64_init(sink, res);
   serializeExportStream(sink);
   uint32_t crc = sink.crc ^ EXPORT_OBF_SEED;
-  uint8_t crc_be[4];
-  wr_be32(crc_be, crc);
-  // not b64_write, the CRC isn't hashed
-  for (int i = 0; i < 4; i++) {
-    sink.tri[sink.triLen++] = crc_be[i];
-    if (sink.triLen == 3) b64_emit_quartet(sink, 3);
-  }
+  uint8_t crc_be[BLOB_CRC];
+  wrBe32(crc_be, crc);
+  for (uint8_t b : crc_be) b64_put(sink, b);
   b64_finish(sink);
   res.endChunked();
 }
@@ -2221,18 +2237,18 @@ void WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static BodyBuf s_importBody;
 
 // too big or no memory, hImport says no body
-void WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+void corium::WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                              const char* chunk, size_t len, void*) {
   body_event(s_importBody, req, ev, chunk, len, nullptr);
 }
 
 static void import_fail(EGHttpResponse& res, const char* msg) {
-  WebPortal::beginPage(res, F("Import"));
+  corium::WebPortal::beginPage(res, F("Import"));
   char buf[160];
   snprintf_P(buf, sizeof(buf),
              PSTR("<p>Import failed: %s.</p><p><a href=/param>Back</a></p>"), msg);
   res.sendChunk(buf);
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
   body_free(s_importBody);
 }
 
@@ -2253,7 +2269,7 @@ static char* import_field(size_t* len, const char** err) {
 // malloc'd blob, or nullptr and err
 static uint8_t* import_decode(char* b64, size_t b64_len, unsigned int* raw_len, const char** err) {
   unsigned int raw_cap = decode_base64_length((unsigned char*)b64, b64_len);
-  if (raw_cap == 0 || raw_cap > 8192) {
+  if (raw_cap == 0 || raw_cap > BODY_MAX) {
     *err = PSTR("bad base64");
     return nullptr;
   }
@@ -2278,8 +2294,8 @@ static int import_blob(char* b64, size_t b64_len, const char** err) {
 }
 
 // only the listed prefs change, each one validated; -1 = none
-static int import_lines(const char* text, size_t len, ImportText::Result* out, const char** err) {
-  ImportText::Result r = ImportText::apply(text, len, import_put);
+static int import_lines(const char* text, size_t len, corium::ImportText::Result* out, const char** err) {
+  corium::ImportText::Result r = corium::ImportText::apply(text, len, import_put);
   body_free(s_importBody);
   *out = r;
   if (r.applied == 0) {
@@ -2289,52 +2305,52 @@ static int import_lines(const char* text, size_t len, ImportText::Result* out, c
   return r.applied;
 }
 
-void WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
   const char* err = nullptr;
   size_t len = 0;
-  ImportText::Result r = {0, 0, 0};
+  corium::ImportText::Result r = {0, 0, 0};
   int applied = -1;
   char why[CORIUM_PREFS_FROZEN_MAX];
   // safe mode: the import may replace it
-  if (!BootGuard::safe_mode() && corium::Prefs::any_frozen(why, sizeof(why))) {
+  if (!corium::BootGuard::safeMode() && corium::Prefs::anyFrozen(why, sizeof(why))) {
     import_fail(res, why);
     return;
   }
   char* field = import_field(&len, &err);
-  if (field && ImportText::is_blob(field, len)) applied = import_blob(field, len, &err);
+  if (field && corium::ImportText::isBlob(field, len)) applied = import_blob(field, len, &err);
   else if (field) applied = import_lines(field, len, &r, &err);
   if (applied >= 0) err = import_commit(why, sizeof(why));
   if (applied < 0 || err) {
     import_fail(res, err ? err : PSTR("bad blob"));
     return;
   }
-  WebPortal::beginPage(res, F("Imported"));
+  corium::WebPortal::beginPage(res, F("Imported"));
   char msg[112];
   if (r.skipped) {
     snprintf_P(msg, sizeof(msg), PSTR("<p>Imported %d prefs, skipped %d (first at line %d). Restarting.</p>"),
-               applied, r.skipped, r.first_skip);
+               applied, r.skipped, r.firstSkip);
   } else {
     snprintf_P(msg, sizeof(msg), PSTR("<p>Imported %d prefs. Restarting.</p>"), applied);
   }
   res.sendChunk(msg);
-  WebPortal::sendRestartCountdown(res);
-  WebPortal::endPage(res);
-  WebPortal::requestRestart(1500);
+  corium::WebPortal::sendRestartCountdown(res);
+  corium::WebPortal::endPage(res);
+  corium::WebPortal::requestRestart();
 }
 
-void WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[512];
   size_t pos = 0;
   buf[pos++] = '{';
-  pos += Outputs::json(buf + pos, sizeof(buf) - pos - 2, fast_millis());
+  pos += corium::Outputs::json(buf + pos, sizeof(buf) - pos - 2, corium::fastMillis());
   buf[pos++] = '}';
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   res.sendChunk(buf, pos);
   res.endChunked();
 }
 
-void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   res.sendChunk(F("{"));
@@ -2364,13 +2380,13 @@ void WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-void WebPortal::metricsLine(EGHttpResponse& res, PGM_P fmt, ...) {
+void corium::WebPortal::metricsLine(EGHttpResponse& res, PGM_P fmt, ...) {
   char buf[320];
   va_list ap;
   va_start(ap, fmt);
   int n = vsnprintf_P(buf, sizeof(buf), fmt, ap);
   va_end(ap);
-  if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+  send_fmt(res, buf, n, sizeof(buf));
 }
 
 static void metrics_render_info(EGHttpResponse& res, const char* cid, const char* name) {
@@ -2378,7 +2394,7 @@ static void metrics_render_info(EGHttpResponse& res, const char* cid, const char
                   "# TYPE device_info gauge\n"));
   char esc_name[3 * CORIUM_NAME_MAX + 1];
   egesc_prom(esc_name, sizeof(esc_name), name);
-  WebPortal::metricsLine(res,
+  corium::WebPortal::metricsLine(res,
     PSTR("device_info{chipid=\"%s\",name=\"%s\",model=\"" APP_MODEL "\",ver=\"" RELEASE_VERSION "\",env=\"" BUILD_ENV "\"} 1\n"),
     cid, esc_name);
 }
@@ -2396,46 +2412,45 @@ static void metrics_render_rows(EGHttpResponse& res, const char* cid) {
   }
 }
 
-void WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // chipid only, a rename keeps the series
-  const char* cid  = DeviceInfo::chipid();
-  const char* name = DeviceInfo::displayName();
+  const char* cid  = corium::DeviceInfo::chipId();
+  const char* name = corium::DeviceInfo::displayName();
   res.beginChunked(200, F("text/plain; version=0.0.4"));
   metrics_render_info(res, cid, name);
   metrics_render_rows(res, cid);
-  AppHooks::metrics(res, cid);
+  corium::AppHooks::metrics(res, cid);
   res.endChunked();
 }
 
-void WebPortal::hWebCmd(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hWebCmd(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* body = req.body();
   if (!body || !*body) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("empty command"));
     return;
   }
-  Console::run(body);
+  corium::Console::run(body);
   res.send(200, FPSTR(HTTP_CT_PLAIN), F("ok"));
 }
 
-void WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
+void corium::WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // "<idx>,<tz_min>\n" then new lines
   int32_t c1 = 0;
-  parse_i32(req.arg(F("c1")), &c1);
+  parseI32(req.arg(F("c1")), &c1);
   uint32_t counter = (uint32_t)c1;
 
   res.addHeader(FPSTR(HTTP_H_CACHE), F("no-store"));
   res.beginChunked(200, FPSTR(HTTP_CT_PLAIN));
 
   // read once, sendChunk can yield
-  uint8_t curIdx = (uint8_t)Log::getLogIdx();
+  uint8_t curIdx = (uint8_t)corium::Log::getLogIdx();
   char hdr[24];
-  int n = snprintf_P(hdr, sizeof(hdr), PSTR("%u,%d\n"),
-                     (unsigned)curIdx, Clock::tz_offset_min);
-  if (n > 0 && (size_t)n < sizeof(hdr)) res.sendChunk(hdr, (size_t)n);
+  send_fmt(res, hdr, snprintf_P(hdr, sizeof(hdr), PSTR("%u,%d\n"),
+                                (unsigned)curIdx, corium::Clock::tzOffsetMin), sizeof(hdr));
 
   char line[256];
   size_t len;
-  while ((len = Log::copySince(&counter, curIdx, line, sizeof(line))) > 0) res.sendChunk(line, len);
+  while ((len = corium::Log::copySince(&counter, curIdx, line, sizeof(line))) > 0) res.sendChunk(line, len);
   res.endChunked();
 }
 

@@ -275,7 +275,7 @@ void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   if (self->_notice) res.sendChunk(self->_notice);
   res.sendChunk(FPSTR(PORTAL_FORM));
 
-  char ssid[6 * EGPORTAL_SSID_MAX + 1];
+  char ssid[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
   char opt[2 * sizeof(ssid) + 40];
   for (uint8_t i = 0; i < self->_scanCount; i++) {
     egesc_html(ssid, sizeof(ssid), self->_scan[i].ssid);
@@ -299,7 +299,7 @@ void EGPortal::hScan(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   }
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   res.sendChunk(F("["));
-  char ssid[6 * EGPORTAL_SSID_MAX + 1];
+  char ssid[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
   char row[sizeof(ssid) + 24];
   for (uint8_t i = 0; i < self->_scanCount; i++) {
     egesc_json(ssid, sizeof(ssid), self->_scan[i].ssid);

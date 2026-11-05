@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef DEVICE_MEASURES_H
-#define DEVICE_MEASURES_H
+#ifndef CORIUM_DEVICE_MEASURES_H
+#define CORIUM_DEVICE_MEASURES_H
 
 #include "Corium/Measure/Measure.h"
 

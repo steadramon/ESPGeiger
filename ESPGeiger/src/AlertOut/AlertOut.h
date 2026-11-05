@@ -29,11 +29,11 @@ class AlertOut : public corium::Module {
     AlertOut() {}
     const char* name() override { return PSTR("alertout"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 18; }
+    uint8_t displayOrder() override { return 18; }
     void begin() override;
     void loop(unsigned long now) override;
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
 
   private:
     void apply_level(bool active);

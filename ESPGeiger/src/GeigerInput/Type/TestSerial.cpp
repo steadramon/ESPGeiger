@@ -45,10 +45,10 @@ void GeigerTestSerial::begin() {
   if (name && corium::Prefs::getString("counter", EG_K_GEIGER_MODEL)[0] == '\0') {
     Tube::set_model(name);
   }
-  Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
+  corium::Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
                name ? name : PSTR("?"), _serial_type, baud, _rx_pin, _tx_pin);
 #ifdef GEIGER_COUNT_TXPULSE
-  Log::console(PSTR("TestSerial: TX pulse counting enabled"));
+  corium::Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
   geigerPort.begin(baud, _rx_pin, _tx_pin);
   _idle_ms = (uint8_t)clamp<uint32_t>(12500UL / baud, 1, 4);   // ~1 char
@@ -75,7 +75,7 @@ void GeigerTestSerial::pullSerial() {
 
 void GeigerTestSerial::loop() {
   pullSerial();
-  uint32_t now = fast_millis();
+  uint32_t now = corium::fastMillis();
   _poll_at = _serial_idx ? now : now + _idle_ms;   // mid line, every pass
 }
 
@@ -85,8 +85,8 @@ void GeigerTestSerial::secondTicker() {
   double target = (double) GeigerInputTest::getTargetCPS();
   if (target > 0) {
     double u1, u2;
-    u1 = ((double)DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
-    u2 = ((double)DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
+    u1 = ((double)corium::DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
+    u2 = ((double)corium::DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
     double z = sqrt(-2 * log(u1)) * cos(2 * M_PI * u2);
     long c = lround(target + sqrt(target) * z);
     if (c > 0) count = (int) c;
@@ -102,7 +102,7 @@ void GeigerTestSerial::secondTicker() {
     memcpy(echo, line, n);
     echo[n] = '\0';
     while (n > 0 && (echo[n - 1] == '\n' || echo[n - 1] == '\r')) echo[--n] = '\0';
-    Log::console(PSTR("TestSerial TX: %s"), echo);
+    corium::Log::console(PSTR("TestSerial TX: %s"), echo);
     geigerPort.write((const uint8_t*) line, strlen(line));
   }
 }
@@ -110,7 +110,7 @@ void GeigerTestSerial::secondTicker() {
 void GeigerTestSerial::handleSerial(char* input) {
   int _scpm = 0;
   if (SerialFormat::parse_cpm(_serial_type, input, &_scpm)) {
-    Log::console(PSTR("TestSerial RX: %d"), _scpm);
+    corium::Log::console(PSTR("TestSerial RX: %d"), _scpm);
   }
 }
 #endif // GEIGER_IS_TEST && GEIGER_IS_SERIAL

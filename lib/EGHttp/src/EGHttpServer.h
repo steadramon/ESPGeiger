@@ -178,27 +178,23 @@ class EGHttpServer {
 
   public:
     enum SlotState : uint8_t { IDLE, RECEIVING, READY, RESPONDING, DONE };
+    enum StreamState : uint8_t { NO_STREAM, STREAM_WAIT, STREAM_OPEN, STREAM_ENDED, STREAM_ABORTED };
+    static constexpr uint8_t NO_ROUTE = 0xFF;
 
     struct Slot {
       EGTcpClient* client = nullptr;   // resetSlot deletes it
       SlotState state = IDLE;
-      bool delete_pending = false;
       char* buf = nullptr;
       size_t len = 0;
-      bool headersDone = false;
       size_t contentLength = 0;
       size_t headerEnd = 0;
       // onData can't yield, tick() drains
-      bool streaming = false;
-      bool stream_begun = false;
-      bool stream_ended = false;
-      bool stream_aborted = false;
-      bool ack_paused = false;
+      StreamState stream = NO_STREAM;
       uint16_t ack_owed = 0;   // header bytes in first pbuf
       size_t bodyAcked = 0;
       bool send_aborted = false;   // sticky
       bool responded = false;
-      uint8_t routeIdx = 0xFF;   // 0xFF = no route
+      uint8_t routeIdx = NO_ROUTE;
       char*  chunkAcc    = nullptr;
       size_t chunkAccLen = 0;
       size_t chunkAccCap = 0;
@@ -263,7 +259,7 @@ class EGHttpServer {
     const Upload* uploadFor(uint8_t route) const;
 
     Route* matchedRoute(Slot* s) {
-      if (s->routeIdx == 0xFF || s->routeIdx >= _routeCount) return nullptr;
+      if (s->routeIdx == NO_ROUTE || s->routeIdx >= _routeCount) return nullptr;
       return &_routes[s->routeIdx];
     }
     inline uint8_t findRoute(const char* path, EGHttpRequest::Method method) const;

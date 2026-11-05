@@ -17,20 +17,21 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef IMPROVSERIAL_H
-#define IMPROVSERIAL_H
+#ifndef CORIUM_IMPROVSERIAL_H
+#define CORIUM_IMPROVSERIAL_H
 
 #include <Arduino.h>
 #include <improv.h>
 #include <string>
 
+namespace corium {
 class ImprovSerial {
 public:
   void begin();
   // Feed one byte to the parser. Returns true if it was part of an
   // in-flight Improv frame; the caller should drop it. Returns false
   // for out-of-frame bytes, which the caller keeps.
-  bool consume_byte(uint8_t b);
+  bool consumeByte(uint8_t b);
   // Pull pending Serial bytes through the parser. Only call from contexts
   // where the console's main-loop polling isn't running (setup, the
   // captive-portal busy-wait); otherwise the two race on Serial.read().
@@ -55,7 +56,8 @@ private:
   uint32_t      _last_byte_ms = 0;
   bool          _in_wifi_settings = false;
 };
+}  // namespace corium
 
-extern ImprovSerial improvSerial;
+extern corium::ImprovSerial improvSerial;
 
 #endif

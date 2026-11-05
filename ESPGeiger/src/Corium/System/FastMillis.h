@@ -17,34 +17,35 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef UTIL_FASTMILLIS_H
-#define UTIL_FASTMILLIS_H
+#ifndef CORIUM_FASTMILLIS_H
+#define CORIUM_FASTMILLIS_H
 
 #include <stdint.h>
 
 // Cheaper than millis(), not for sub-ms
 
+namespace corium {
 extern volatile uint32_t _fast_ms_counter;
 
-static inline uint32_t fast_millis() { return _fast_ms_counter; }
+static inline uint32_t fastMillis() { return _fast_ms_counter; }
 
 // at or past, wrap-safe, any unit
 static inline bool reached(uint32_t now, uint32_t at) { return (int32_t)(now - at) >= 0; }
 
 // reached, or more than max off: one left 24.8 d behind reads as ahead
-static inline bool reached_max(uint32_t now, uint32_t at, uint32_t max) {
+static inline bool reachedMax(uint32_t now, uint32_t at, uint32_t max) {
   return reached(now, at) || at - now > max;
 }
 
 // at or past, then next ms from now
-static inline bool due_every(uint32_t now, uint32_t& at, uint32_t ms) {
+static inline bool dueEvery(uint32_t now, uint32_t& at, uint32_t ms) {
   if (!reached(now, at)) return false;
   at = now + ms;
   return true;
 }
 
 // ms or more since last, last on by whole ms so the phase holds
-static inline bool due_steps(uint32_t now, uint32_t& last, uint32_t ms) {
+static inline bool dueSteps(uint32_t now, uint32_t& last, uint32_t ms) {
   uint32_t gone = now - last;
   if (gone < ms) return false;
   last += gone / ms * ms;
@@ -76,5 +77,6 @@ struct Stamp {
     return at != 0;
   }
 };
+}  // namespace corium
 
 #endif

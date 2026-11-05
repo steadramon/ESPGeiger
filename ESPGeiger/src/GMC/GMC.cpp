@@ -58,10 +58,10 @@ static const corium::PrefGroup GMC_PREF_GROUP PROGMEM = {
   corium::P_CAT_UPLOAD, EG_K_SEND,
 };
 
-const corium::PrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
+const corium::PrefGroup* GMC::prefsGroup() { return &GMC_PREF_GROUP; }
 
-void GMC::on_prefs_loaded() {
-  set_enabled(corium::Prefs::getBool("gmc", EG_K_SEND));
+void GMC::onPrefsLoaded() {
+  setEnabled(corium::Prefs::getBool("gmc", EG_K_SEND));
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
@@ -71,7 +71,7 @@ static const corium::LegacyAlias GMC_LEGACY[] PROGMEM = {
   {"gmcGCID", "gcid"},
   {},
 };
-corium::LegacyRows GMC::legacy_aliases() { return GMC_LEGACY; }
+corium::LegacyRows GMC::legacyAliases() { return GMC_LEGACY; }
 // === END LEGACY IMPORT ===
 
 GMC::GMC() {
@@ -84,14 +84,14 @@ bool GMC::interpret(const char* r)
   size_t n = strlen(r);
   char code = (n >= 5 && strncmp_P(r + n - 5, PSTR(".ERR"), 4) == 0) ? r[n - 1] : 0;
   if (code == '0') {
-    Log::debug(PSTR("GMC: Upload OK"));
+    corium::Log::debug(PSTR("GMC: Upload OK"));
     return true;
   } else if (code == '1') {
-    Log::console(PSTR("GMC: User is not found"));
+    corium::Log::console(PSTR("GMC: User is not found"));
   } else if (code == '2') {
-    Log::console(PSTR("GMC: Geiger Counter is not found"));
+    corium::Log::console(PSTR("GMC: Geiger Counter is not found"));
   } else {
-    Log::console(PSTR("GMC: Error"));
+    corium::Log::console(PSTR("GMC: Error"));
   }
   return false;
 }
@@ -103,14 +103,14 @@ bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
   bool has_gcid = (_api_gc_id[0] != '\0');
 
   if (!has_id && !has_gcid) return false;
-  if (!upload_ready(log_tag())) return false;
+  if (!upload_ready(logTag())) return false;
 
   if (!has_id || !has_gcid) {
-    Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
+    corium::Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
     return false;
   }
 
-  Log::debug(PSTR("GMC: Uploading latest data ..."));
+  corium::Log::debug(PSTR("GMC: Uploading latest data ..."));
 
   char aid[3 * GMC_ID_MAX + 1], gid[3 * GMC_ID_MAX + 1];
   egesc_url(aid, sizeof(aid), _api_id);
@@ -119,6 +119,6 @@ bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
   char acpm[16], usv[16];
   format_f(acpm, sizeof(acpm), corium::m_f(M_CPM5));
   format_f(usv,  sizeof(usv),  corium::m_f(M_USV5), 4);
-  return url_fits(snprintf_P(url, cap, GMC_URI, aid, gid, avgcpm, acpm, usv), cap);
+  return urlFits(snprintf_P(url, cap, GMC_URI, aid, gid, avgcpm, acpm, usv), cap);
 }
 #endif

@@ -22,6 +22,7 @@
 #include "Corium/System/PinSafety.h"
 #include "PulseEngine.h"
 
+namespace corium {
 namespace LedSignal {
 
   // dark till attach(), the pin comes from led.pin
@@ -33,7 +34,7 @@ namespace LedSignal {
   static const Pattern* s_rows = nullptr;
   static uint8_t s_rows_n = 0;
 
-#if LEDSIGNAL_FLASH
+#if CORIUM_LEDSIGNAL_FLASH
   static bool s_flash_led = false;
   static uint16_t s_flash_pulse_ms = 20;
   static uint8_t  s_flash_mode     = PulseEngine::MODE_PULSE;
@@ -57,7 +58,7 @@ namespace LedSignal {
 
   static void run(uint8_t what) {
     switch (what) {
-#if LEDSIGNAL_FLASH
+#if CORIUM_LEDSIGNAL_FLASH
       case DO_FLASH:
         if (s_onboard.isRunning()) break;
         if (s_flash_mode == PulseEngine::MODE_FADE) s_onboard.fade(s_flash_fade);
@@ -70,13 +71,13 @@ namespace LedSignal {
       default: {
         Pattern p;
         memcpy_P(&p, &s_rows[what], sizeof(p));
-        s_onboard.blinkN(p.on_ms, p.off_ms, p.count);
+        s_onboard.blinkN(p.onMs, p.offMs, p.count);
         break;
       }
     }
   }
 
-  void use_pin(int pin, bool low_active) {
+  void usePin(int pin, bool low_active) {
     s_pin = pin < 0 ? -1 : (int8_t)pin;
     s_low = low_active;
   }
@@ -84,7 +85,7 @@ namespace LedSignal {
   // after the modules, a pin one took stays theirs
   void attach() {
     if (s_pin < 0) return;
-    if (const char* why = PinSafety::claim_output(s_pin, PSTR("LED"))) {
+    if (const char* why = PinSafety::claimOutput(s_pin, PSTR("LED"))) {
       Log::console(PSTR("LED: pin=%d unsafe (%s) - off"), s_pin, why);
       s_pin = -1;
       return;
@@ -95,7 +96,7 @@ namespace LedSignal {
   void begin(const Pattern* rows, uint8_t count, bool flash_led) {
     s_rows   = rows;
     s_rows_n = count < DO_FLASH ? count : DO_FLASH;
-#if LEDSIGNAL_FLASH
+#if CORIUM_LEDSIGNAL_FLASH
     s_flash_led = flash_led;
 #else
     (void)flash_led;
@@ -116,7 +117,7 @@ namespace LedSignal {
   void off() { post(DO_OFF); }
   void lit(bool on) { post(on ? DO_ON : DO_OFF); }
 
-#if LEDSIGNAL_FLASH
+#if CORIUM_LEDSIGNAL_FLASH
   void flash() {
     if (s_pin < 0 || !s_flash_led) return;   // no LED, no flash
     post(DO_FLASH);
@@ -124,7 +125,8 @@ namespace LedSignal {
 
   void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us, uint8_t fade_shift_idx) {
     // onboard led, PulseEngine's limits
-    if (fade_shift_idx > 2) fade_shift_idx = 1;
+    if (fade_shift_idx > PulseEngine::FADE_SHIFT_MAX - PulseEngine::FADE_SHIFT_MIN)
+      fade_shift_idx = PulseEngine::FADE_SHIFT_DEFAULT - PulseEngine::FADE_SHIFT_MIN;
     s_flash_pulse_ms = (uint16_t)(clamp((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,
                                         PulseEngine::PULSE_US_MAX) / 1000);
     s_flash_mode     = engine_mode;
@@ -141,3 +143,4 @@ namespace LedSignal {
   }
 
 }
+}  // namespace corium

@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 */
-#ifndef DEVICEINFO_H
-#define DEVICEINFO_H
+#ifndef CORIUM_DEVICEINFO_H
+#define CORIUM_DEVICEINFO_H
 
 #include <Arduino.h>
 
@@ -35,23 +35,19 @@
 
 #define CHIPID_LEN 6   // low 24 bits, hex
 
+namespace corium {
 namespace DeviceInfo {
   void begin();   // early in setup()
   void factoryReset();
 
   const char* hostname();
-  const char* chipid();
+  const char* chipId();
   uint32_t chipHash();   // fnv1a of chipid
   constexpr size_t UA_MAX = sizeof(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; )") + CHIPID_LEN;
-  void useragent(char* buf, size_t cap);   // per request, no buffer kept
+  void userAgent(char* buf, size_t cap);   // per request, no buffer kept
   const char* chip();
-  inline const char* board() {
-#ifdef APP_BOARD
-    return APP_BOARD;
-#else
-    return chip();
-#endif
-  }
+  const char* board();   // the app's, else the chip
+  void setBoard(const char* s);   // from setup()
   const char* friendlyName();
   void setFriendlyName(const char* s);
   // friendly, else the hostname
@@ -62,7 +58,7 @@ namespace DeviceInfo {
   const char* mac();
   const char* flashInfo();   // "ef4016 DIO 40MHz"
   PGM_P buildDate();   // one copy
-  uint64_t hwid();   // chip id, efuse mac on esp32
+  uint64_t hwId();   // chip id, efuse mac on esp32
 
   // /info
   inline uint32_t flashSize()  { return ESP.getFlashChipSize(); }
@@ -111,11 +107,11 @@ namespace DeviceInfo {
 
 #ifdef ESP32
   float chipTempC();   // die not ambient, classic esp32 reads high
-  extern uint8_t ct_wait;
+  extern uint8_t ctWait;
   void chipTempRead();
   // 1 Hz, no call till a read is due
   inline void chipTempSample() {
-    if (ct_wait) { ct_wait--; return; }
+    if (ctWait) { ctWait--; return; }
     chipTempRead();
   }
 #endif
@@ -154,5 +150,6 @@ namespace DeviceInfo {
                 uint32_t* epc2 = nullptr, uint32_t* epc3 = nullptr,
                 uint32_t* depc = nullptr);
 }
+}  // namespace corium
 
 #endif

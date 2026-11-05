@@ -48,9 +48,9 @@ static const corium::PrefGroup ALERT_PREF_GROUP PROGMEM = {
   corium::P_CAT_OUTPUT, EG_K_PIN,
 };
 
-const corium::PrefGroup* AlertOut::prefs_group() { return &ALERT_PREF_GROUP; }
+const corium::PrefGroup* AlertOut::prefsGroup() { return &ALERT_PREF_GROUP; }
 
-void AlertOut::on_prefs_loaded() {
+void AlertOut::onPrefsLoaded() {
   _invert = (uint8_t)corium::Prefs::getUInt("alert", EG_K_POLARITY) & 1;
   _mode   = (uint8_t)corium::Prefs::getUInt("alert", EG_K_MODE) & 1;
   // pin only at begin(), PinSafety holds the claim
@@ -61,15 +61,15 @@ void AlertOut::on_prefs_loaded() {
 void AlertOut::begin() {
   int p = corium::Prefs::getInt("alert", EG_K_PIN);
   if (p < 0 || p > MAX_GPIO_PIN) return;
-  if (const char* why = PinSafety::claim_output(p, PSTR("AlertOut"))) {
-    Log::console(PSTR("AlertOut: pin=%d unsafe (%s)"), p, why);
+  if (const char* why = corium::PinSafety::claimOutput(p, PSTR("AlertOut"))) {
+    corium::Log::console(PSTR("AlertOut: pin=%d unsafe (%s)"), p, why);
     return;
   }
   _pin = (int8_t)p;
   pinMode(_pin, OUTPUT);
   apply_level(false);
   corium::Registry::on(Counter::TOPIC_ALARM, this);
-  Log::console(PSTR("AlertOut: pin=%d polarity=%u mode=%u"),
+  corium::Log::console(PSTR("AlertOut: pin=%d polarity=%u mode=%u"),
                (int)_pin, (unsigned)_invert, (unsigned)_mode);
 }
 
@@ -92,11 +92,11 @@ void AlertOut::loop(unsigned long now) {
     _high = false;
     _flip_at = now;
   }
-  if (due_every(now, _flip_at, FLIP_MS)) {
+  if (corium::dueEvery(now, _flip_at, FLIP_MS)) {
     _high = !_high;
     apply_level(_high);
   }
-  corium::Registry::due_at(this, _flip_at);
+  corium::Registry::dueAt(this, _flip_at);
 }
 
 #endif

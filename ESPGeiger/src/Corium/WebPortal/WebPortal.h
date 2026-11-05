@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef WEBPORTAL_H
-#define WEBPORTAL_H
+#ifndef CORIUM_WEBPORTAL_H
+#define CORIUM_WEBPORTAL_H
 
 #include <EGHttpServer.h>
 
@@ -27,15 +27,16 @@
 // script and css urls, a new build fetches them again
 #define CORIUM_CACHE_BUST "?v=" GIT_VERSION
 
+namespace corium {
 // a route table row (PROGMEM), smaller than an on() call; no user pointer
 struct WebRoute { PGM_P path; EGHttpServer::Handler h; EGHttpRequest::Method method; };
 
 class WebPortal {
   public:
     void begin(uint16_t port);
-    static constexpr uint8_t TICK_MS = 13;
-    void tick(uint32_t now);
-    inline uint32_t next_tick_due() const { return _tick_last_ms + TICK_MS; }
+    static constexpr uint8_t POLL_MS = 13;
+    void poll(uint32_t now);
+    inline uint32_t nextPollDue() const { return _poll_last_ms + POLL_MS; }
     bool active() const { return _active; }
 
     // Shared page templates
@@ -51,7 +52,8 @@ class WebPortal {
     static void infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...);   // key, fmt in flash
     static void metricsLine(EGHttpResponse& res, PGM_P fmt, ...);
 
-    static void requestRestart(uint32_t delayMs = 1500);   // ok from async callbacks
+    static constexpr uint32_t RESTART_MS = 1500;
+    static void requestRestart(uint32_t delayMs = RESTART_MS);   // ok from async callbacks
     static void sendRestartCountdown(EGHttpResponse& res);
     static void sendNotSaved(EGHttpResponse& res);   // commit failed
     // a build's gzipped script or style, cached for good (gz in flash)
@@ -59,11 +61,12 @@ class WebPortal {
                        const uint8_t* gz, size_t len);
 
     static void applyAuthFromPrefs();   // not in loop, walks pref tables
+    static void setHomeName(PGM_P name);   // the root page's name, THING_NAME till set
 
   private:
     EGHttpServer _http;
     bool _active = false;
-    uint32_t _tick_last_ms = 0;
+    uint32_t _poll_last_ms = 0;
 
     // Non-module routes
     static void hRoot(EGHttpRequest&, EGHttpResponse&, void*);
@@ -97,5 +100,6 @@ class WebPortal {
     static void hImportBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                             const char*, size_t, void*);
 };
+}  // namespace corium
 
 #endif

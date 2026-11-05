@@ -23,15 +23,20 @@
 #include "App/AppConfig.h"
 
 // first second a send may take, the app keeps the ones before
-#ifndef SENDSLOT_FIRST
-#define SENDSLOT_FIRST 0
+#ifndef CORIUM_SENDSLOT_FIRST
+#define CORIUM_SENDSLOT_FIRST 0
 #endif
 
+namespace corium {
 namespace SendSlot {
-  uint32_t initial_offset(const char* mod_name, uint32_t interval_ms);
+  uint32_t initialOffset(const char* mod_name, uint32_t interval_ms);
   // wall clock once ntp synced
-  unsigned long initial_ping(const char* mod_name, unsigned long now, uint32_t interval_ms);
-  unsigned long ping_from_offset(uint32_t offset, unsigned long now, uint32_t interval_ms);
+  unsigned long initialPing(const char* mod_name, unsigned long now, uint32_t interval_ms);
+  unsigned long pingFromOffset(uint32_t offset, unsigned long now, uint32_t interval_ms);
+  inline uint32_t untilPhase(uint32_t target, uint32_t cur, uint32_t period) {
+    return target >= cur ? target - cur : period - cur + target;
+  }
 }
+}  // namespace corium
 
 #endif

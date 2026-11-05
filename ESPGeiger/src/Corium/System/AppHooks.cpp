@@ -21,11 +21,11 @@
 
 #define APP_HOOK __attribute__((weak))
 
-APP_HOOK const corium::MenuEntry* AppHooks::menu() { return nullptr; }
-APP_HOOK void AppHooks::routes(EGHttpServer&) {}
-APP_HOOK void AppHooks::info_rows(EGHttpResponse&) {}
-APP_HOOK void AppHooks::about_json(EGHttpResponse&) {}
-APP_HOOK void AppHooks::metrics(EGHttpResponse&, const char*) {}
+APP_HOOK const corium::MenuEntry* corium::AppHooks::menu() { return nullptr; }
+APP_HOOK void corium::AppHooks::routes(EGHttpServer&) {}
+APP_HOOK void corium::AppHooks::infoRows(EGHttpResponse&) {}
+APP_HOOK void corium::AppHooks::aboutJson(EGHttpResponse&) {}
+APP_HOOK void corium::AppHooks::metrics(EGHttpResponse&, const char*) {}
 
 APP_HOOK extern const char APP_CSS[] PROGMEM = "";
 APP_HOOK extern const char APP_THEME_JS[] PROGMEM = "";

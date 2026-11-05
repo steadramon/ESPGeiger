@@ -106,11 +106,11 @@ static const corium::PrefGroup MQTT_PREF_GROUP PROGMEM = {
   corium::P_CAT_OUTPUT, corium::K_SERVER,
 };
 
-const corium::PrefGroup* MQTT_Client::prefs_group() { return &MQTT_PREF_GROUP; }
+const corium::PrefGroup* MQTT_Client::prefsGroup() { return &MQTT_PREF_GROUP; }
 
-size_t MQTT_Client::status_json(char* buf, size_t cap, unsigned long now) {
+size_t MQTT_Client::statusJson(char* buf, size_t cap, unsigned long now) {
   if (corium::Prefs::getString("mqtt", corium::K_SERVER)[0] == '\0') return 0;
-  return write_status_json(buf, cap, "mqtt", last_ok && s_mq.connected(), last_attempt_ms, now);
+  return writeStatusJson(buf, cap, "mqtt", lastOk && s_mq.connected(), lastAttemptMs, now);
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
@@ -127,7 +127,7 @@ static const corium::LegacyAlias MQTT_LEGACY[] PROGMEM = {
 #endif
   {},
 };
-corium::LegacyRows MQTT_Client::legacy_aliases() { return MQTT_LEGACY; }
+corium::LegacyRows MQTT_Client::legacyAliases() { return MQTT_LEGACY; }
 // === END LEGACY IMPORT ===
 
 MQTT_Client::MQTT_Client()
@@ -147,7 +147,7 @@ void MQTT_Client::disconnect()
 }
 
 void MQTT_Client::onMqttConnect(bool sessionPresent) {
-  Log::console(PSTR("MQTT: Connected"));
+  corium::Log::console(PSTR("MQTT: Connected"));
   _reanchor = true;
   reconnectAttempts = 0;
   authFailures = 0;
@@ -176,19 +176,19 @@ static const char* disconnect_reason_text(int8_t err) {
 
 void MQTT_Client::onMqttDisconnect(int8_t err) {
   bool authFail = err == EGMqtt::BAD_CREDENTIALS || err == EGMqtt::NOT_AUTHORIZED;
-  Log::console(PSTR("MQTT: Disconnected (%s)"), disconnect_reason_text(err));
-  unsigned long now_ms = fast_millis();
+  corium::Log::console(PSTR("MQTT: Disconnected (%s)"), disconnect_reason_text(err));
+  unsigned long now_ms = corium::fastMillis();
   bool latched = false;
-  if (authFail && ++authFailures >= 3) {
+  if (authFail && ++authFailures >= MQTT_AUTH_TRIES) {
     mqttEnabled = false;
     s_mq.stop();   // memory back till the settings change
     latched = true;
   }
   lastConnectionAttempt = now_ms;
   wakeSoon();
-  if (latched) Log::console(PSTR("MQTT: Credentials rejected 3 times, stopped until settings are saved"));
+  if (latched) corium::Log::console(PSTR("MQTT: Credentials rejected " STR(MQTT_AUTH_TRIES) " times, stopped until settings are saved"));
 #ifdef MQTTAUTODISCOVER
-  if (_hass_walk_state) _hass_idx = 0;
+  if (_hass_walk_state != HASS_IDLE) _hass_idx = 0;
 #endif
 }
 
@@ -202,26 +202,23 @@ int MQTT_Client::getInterval() {
 
 unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
   if (_slot_s < 0)
-    _slot_s = (int16_t)(SendSlot::initial_offset(name(), statusInterval * 1000UL) / 1000UL);
+    _slot_s = (int16_t)(corium::SendSlot::initialOffset(name(), statusInterval * 1000UL) / 1000UL);
   uint32_t off_s = (uint32_t)_slot_s;
   uint32_t until = off_s;
-  if (Clock::synced) {
-    uint32_t wall = Clock::phase(statusInterval);
-    until = (off_s >= wall) ? (off_s - wall) : (statusInterval - wall + off_s);
-  }
+  if (corium::Clock::synced) until = corium::SendSlot::untilPhase(off_s, corium::Clock::phase(statusInterval), statusInterval);
   return now_s + until - statusInterval;
 }
 
 #ifdef MQTTAUTODISCOVER
 static uint32_t hass_spread_offset_s() {
-  return DeviceInfo::chipHash() % (MQTT_HASS_BIRTH_SPREAD_S + 1);
+  return corium::DeviceInfo::chipHash() % (MQTT_HASS_BIRTH_SPREAD_S + 1);
 }
 #endif
 
 #ifdef MQTTAUTODISCOVER
 void MQTT_Client::scheduleHassDiscovery(bool reconnected)
 {
-  const unsigned long up_s = (unsigned long)DeviceInfo::uptime();
+  const unsigned long up_s = (unsigned long)corium::DeviceInfo::uptime();
   if (reconnected && (!_hass_next.armed() || _hass_next.due(up_s))) {
     _hass_next.set(up_s + 2);
   }
@@ -310,7 +307,7 @@ void MQTT_Client::loop(unsigned long now)
   if ((_pending & PEND_STATUS) && publishStatus()) { _pending &= ~PEND_STATUS; return; }
   if (_pending & PEND_PING)       { _pending &= ~PEND_PING;   publishPing();   return; }
 #ifdef MQTTAUTODISCOVER
-  if (_hass_walk_state)           { stepHassDiscovery(); }
+  if (_hass_walk_state != HASS_IDLE) { stepHassDiscovery(); }
 #endif
 }
 
@@ -358,70 +355,70 @@ bool MQTT_Client::publishStatus()
   char dateTime[sizeof("2026-01-01T00:00:00Z")];
   dateTime[0] = '\0';
   struct tm t;
-  if (Clock::utcTm(&t)) {
+  if (corium::Clock::utcTm(&t)) {
     snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02dT%02d:%02d:%02dZ"),
       1900 + t.tm_year, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
   }
 
   char ipStr[CORIUM_IPV4_MAX + 1];
-  Wifi::formatIP(ipStr, sizeof(ipStr));
+  corium::Wifi::formatIP(ipStr, sizeof(ipStr));
   EGJson j(out, cap);
   j.map_begin();
   j.str(PSTR("time"), dateTime);
-  j.uint(PSTR("ut"), DeviceInfo::uptime());
-  j.str(PSTR("board"), DeviceInfo::board());
+  j.uint(PSTR("ut"), corium::DeviceInfo::uptime());
+  j.str(PSTR("board"), corium::DeviceInfo::board());
   j.str(PSTR("model"), Tube::model());
-  j.str(PSTR("ssid"), Wifi::ssid);
+  j.str(PSTR("ssid"), corium::Wifi::ssid);
   j.str(PSTR("ip"), ipStr);
-  j.sint(PSTR("rssi"), Wifi::rssi);
+  j.sint(PSTR("rssi"), corium::Wifi::rssi);
   j.uint(PSTR("c_total"), corium::m_u(M_TC));
-  j.uint(PSTR("tick"), TickProfile::tick_us);
-  j.uint(PSTR("t_max"), TickProfile::tick_max_us);
-  j.uint(PSTR("lps"), TickProfile::lps);
+  j.uint(PSTR("tick"), corium::TickProfile::tickUs);
+  j.uint(PSTR("t_max"), corium::TickProfile::tickMaxUs);
+  j.uint(PSTR("lps"), corium::TickProfile::lps);
 #ifdef MQTT_MEM_DEBUG
   #ifdef ESP8266
     uint32_t heap_free;
     uint16_t heap_max;
     uint8_t heap_frag;
-    DeviceInfo::heapStats(&heap_free, &heap_max, &heap_frag);
+    corium::DeviceInfo::heapStats(&heap_free, &heap_max, &heap_frag);
     j.uint(PSTR("free_mem"), heap_free);
     j.uint(PSTR("heap_max"), heap_max);
     j.uint(PSTR("heap_frag"), heap_frag);
   #else
-    j.uint(PSTR("free_mem"), DeviceInfo::freeHeap());
-    j.uint(PSTR("min_free"), DeviceInfo::heapMin());
-    j.uint(PSTR("heap_max"), DeviceInfo::heapMaxBlock());
+    j.uint(PSTR("free_mem"), corium::DeviceInfo::freeHeap());
+    j.uint(PSTR("min_free"), corium::DeviceInfo::heapMin());
+    j.uint(PSTR("heap_max"), corium::DeviceInfo::heapMaxBlock());
   #endif
 #else
-  j.uint(PSTR("free_mem"), DeviceInfo::freeHeap());
+  j.uint(PSTR("free_mem"), corium::DeviceInfo::freeHeap());
 #endif
 #ifdef ESP32
-  j.fixed(PSTR("cpu_temp"), DeviceInfo::chipTempC(), 1);
+  j.fixed(PSTR("cpu_temp"), corium::DeviceInfo::chipTempC(), 1);
 #endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   j.uint(PSTR("ser_ok"), corium::m_b(M_SER_OK) ? 1 : 0);
 #endif
   j.map_end();
-  if (j.overflow) Log::console(PSTR("MQTT: status cut to fit"));
+  if (j.overflow) corium::Log::console(PSTR("MQTT: status cut to fit"));
   track(s_mq.publish_end(j.length()));
-  Log::debug(PSTR("MQTT: Published"));
+  corium::Log::debug(PSTR("MQTT: Published"));
   return true;
 }
 
 // ok once the broker acks it, not when queued
 void MQTT_Client::track(uint16_t pid)
 {
-  if (_ack_pid) note_result(false);   // the last one never came back
+  if (_ack_pid) noteResult(false);   // the last one never came back
   _ack_pid = pid;
-  if (pid) note_attempt();
-  else note_publish(false);
+  if (pid) noteAttempt();
+  else notePublish(false);
 }
 
 void MQTT_Client::onMqttAck(uint16_t id)
 {
   if (!_ack_pid || id != _ack_pid) return;
   _ack_pid = 0;
-  note_result(true);
+  noteResult(true);
 }
 
 uint16_t MQTT_Client::publishSensor()
@@ -469,7 +466,7 @@ void MQTT_Client::publishStat(const char* cmd, const char* text)
 
 void MQTT_Client::publishPing()
 {
-  if (!publishSensor()) note_publish(false);
+  if (!publishSensor()) notePublish(false);
 
   // ---- LEGACY ----
   for (corium::MeasureIter it(EGM_OUT_MQTT); it.next(); ) {
@@ -491,9 +488,9 @@ bool MQTT_Client::clientBusy()
 
 static unsigned long reconnect_backoff_ms(uint8_t attempts)
 {
-  unsigned long backoff = 10000UL << min(attempts, (uint8_t)5);
-  if (backoff > 300000UL) backoff = 300000UL;
-  backoff += (DeviceInfo::chipHash() % 13u) * 1000u;   // 0..12 s
+  unsigned long backoff = MQTT_RETRY_MS << min(attempts, (uint8_t)5);
+  if (backoff > MQTT_RETRY_MAX_MS) backoff = MQTT_RETRY_MAX_MS;
+  backoff += (corium::DeviceInfo::chipHash() % (MQTT_JITTER_S + 1u)) * 1000u;
   return backoff;
 }
 
@@ -520,7 +517,7 @@ void MQTT_Client::applyIntervalPref()
   if (mqtt_time <= 0) mqtt_time = MQTT_INTERVAL;
   if (mqtt_time != getInterval()) {
     setInterval(mqtt_time);
-    Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
+    corium::Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
   }
 }
 
@@ -540,9 +537,9 @@ static uint32_t left_s(unsigned long last, uint16_t interval, unsigned long now)
 // the tick's old work, only when a timer is due
 void MQTT_Client::timers(unsigned long now)
 {
-  if (!reached_max(now, _due_ms, DUE_MAX_MS)) return;
+  if (!corium::reachedMax(now, _due_ms, DUE_MAX_MS)) return;
   // uptime, ms / 1000 wraps at 49.7 d
-  unsigned long up_s = (unsigned long)DeviceInfo::uptime();
+  unsigned long up_s = (unsigned long)corium::DeviceInfo::uptime();
   second(up_s);
   _due_ms = (now / 1000 + nextDue(now, up_s)) * 1000;
 }
@@ -575,7 +572,7 @@ uint32_t MQTT_Client::nextDue(unsigned long now_ms, unsigned long now)
 // a callback moved a timer, look on the next second
 void MQTT_Client::wakeSoon()
 {
-  _due_ms = (fast_millis() / 1000 + 1) * 1000;
+  _due_ms = (corium::fastMillis() / 1000 + 1) * 1000;
 }
 
 static int mqtt_port()
@@ -597,7 +594,7 @@ void MQTT_Client::reconnect()
 {
   if (clientBusy()) return;
 
-  unsigned long now = fast_millis();
+  unsigned long now = corium::fastMillis();
   if (in_backoff(lastConnectionAttempt, now, (uint8_t)reconnectAttempts)) return;
   lastConnectionAttempt = now;
 
@@ -613,7 +610,7 @@ void MQTT_Client::reconnect()
   char lwt[MQTT_TOPIC_LEN];
   buildTopic(lwt, sizeof(lwt), T_TELE, PSTR("lwt"));
   bool set = s_mq.setServer(_mqtt_server, (uint16_t)port) &&
-             s_mq.setClientId(DeviceInfo::hostname()) &&
+             s_mq.setClientId(corium::DeviceInfo::hostname()) &&
              s_mq.setWill(lwt, FPSTR(LWT_OFFLINE), 1, true) &&
              set_credentials();
 
@@ -621,17 +618,17 @@ void MQTT_Client::reconnect()
   if (reconnectAttempts < 10) reconnectAttempts++;
 
   if (!set || !s_mq.connect()) {
-    Log::console(PSTR("MQTT: Connect refused by client (attempt %d)"), reconnectAttempts);
+    corium::Log::console(PSTR("MQTT: Connect refused by client (attempt %d)"), reconnectAttempts);
     return;
   }
-  Log::console(PSTR("MQTT: Connecting (attempt %d) ... %s:%d"), reconnectAttempts, _mqtt_server, port);
+  corium::Log::console(PSTR("MQTT: Connecting (attempt %d) ... %s:%d"), reconnectAttempts, _mqtt_server, port);
 }
 
 const char* MQTT_Client::getRootTopic()
 {
   if (!_rootTopicCached) {
     const char* rootTopic = corium::Prefs::getString("mqtt", K_TOPIC);
-    const char* chipId = DeviceInfo::chipid();
+    const char* chipId = corium::DeviceInfo::chipId();
     size_t w = 0;
     const size_t cap = sizeof(_cachedRootTopic) - 1;
     for (const char* p = rootTopic; *p && w < cap; ) {
@@ -767,7 +764,7 @@ static bool has_row(const char* id) {
 
 static int buildHassPath(char* buf, size_t sz, const char* disc,
                           const char* type, const char* name) {
-  return snprintf_P(buf, sz, PSTR("%s/%s/%s-%s/config"), disc, type, DeviceInfo::hostname(), name);
+  return snprintf_P(buf, sz, PSTR("%s/%s/%s-%s/config"), disc, type, corium::DeviceInfo::hostname(), name);
 }
 
 static const char* hass_key(const HassRow* r) {
@@ -803,24 +800,24 @@ void MQTT_Client::setupHassCB() {
   _pending |= PEND_SUB;
 }
 
-// 1 = publish, -1 = remove; no topic, nothing to walk
+// no topic, nothing to walk
 void MQTT_Client::startHassWalk(int8_t dir) {
-  if (_hass_walk_state) return;
+  if (_hass_walk_state != HASS_IDLE) return;
   if (corium::Prefs::getString("mqtt", K_HASS_TOPIC)[0] == '\0') return;
   _hass_walk_state = dir;
   _hass_idx = 0;
-  Log::console(PSTR("MQTT: Starting HA autodiscovery %swalk"), dir < 0 ? PSTR("removal ") : PSTR(""));
+  corium::Log::console(PSTR("MQTT: Starting HA autodiscovery %swalk"), dir == HASS_REMOVE ? PSTR("removal ") : PSTR(""));
 }
 
 void MQTT_Client::setupHassAuto() {
-  if (corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) startHassWalk(1);
+  if (corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) startHassWalk(HASS_PUBLISH);
 }
 
 void MQTT_Client::triggerHassDiscovery() {
-  if (_hass_walk_state) return;
-  unsigned long now_s = (unsigned long)DeviceInfo::uptime();
-  if (fresh(now_s, _hass_last_publish, MQTT_HASS_MIN_INTERVAL_S)) {
-    Log::debug(PSTR("MQTT: HA discovery throttled (%lu s since last)"),
+  if (_hass_walk_state != HASS_IDLE) return;
+  unsigned long now_s = (unsigned long)corium::DeviceInfo::uptime();
+  if (corium::fresh(now_s, _hass_last_publish, MQTT_HASS_MIN_INTERVAL_S)) {
+    corium::Log::debug(PSTR("MQTT: HA discovery throttled (%lu s since last)"),
                now_s - _hass_last_publish);
     return;
   }
@@ -830,21 +827,21 @@ void MQTT_Client::triggerHassDiscovery() {
 
 static void hass_device(EGJson& j, const char* host) {
   char ipStr[CORIUM_IPV4_MAX + 1];
-  Wifi::formatIP(ipStr, sizeof(ipStr));
+  corium::Wifi::formatIP(ipStr, sizeof(ipStr));
   j.map_begin(PSTR("device"));
   j.str(PSTR("mf"), PSTR(THING_NAME));
-  j.str(PSTR("mdl"), DeviceInfo::board());
+  j.str(PSTR("mdl"), corium::DeviceInfo::board());
   j.str(PSTR("mdl_id"), PSTR(BUILD_ENV));
   j.str(PSTR("name"), host);
   j.str(PSTR("sw"), PSTR(RELEASE_VERSION "/" GIT_VERSION));
-  j.str(PSTR("sn"), DeviceInfo::chipid());
+  j.str(PSTR("sn"), corium::DeviceInfo::chipId());
   j.array_begin(PSTR("identifiers"));
   j.str(nullptr, host);
   j.array_end();
   j.array_begin(PSTR("connections"));
   j.array_begin();
   j.str(nullptr, PSTR("mac"));
-  j.str(nullptr, DeviceInfo::mac());
+  j.str(nullptr, corium::DeviceInfo::mac());
   j.array_end();
   j.array_end();
   j.str_begin(PSTR("cu"));
@@ -885,13 +882,13 @@ CORIUM_PSTR(HA_DROPPED, "MQTT: HA discovery publish dropped: %s");
 
 static void hass_publish(const HassRow* r, const char* root)
 {
-  const char* host = DeviceInfo::hostname();
+  const char* host = corium::DeviceInfo::hostname();
   char path[HASS_PATH_LEN];
   buildHassPath(path, sizeof(path), hass_disc(), hass_type(r), r->id);
   size_t cap;
   char* out = json_begin(path, MQTT_JSON_BUFFER_SIZE, &cap);
   if (!out) {
-    Log::console(HA_DROPPED, r->id);
+    corium::Log::console(HA_DROPPED, r->id);
     return;
   }
 
@@ -916,11 +913,11 @@ static void hass_publish(const HassRow* r, const char* root)
   j.map_end();
   // partial is worse than none; not ended, nothing goes
   if (j.overflow) {
-    Log::console(PSTR("MQTT: HA discovery too big, not sent: %s"), r->id);
+    corium::Log::console(PSTR("MQTT: HA discovery too big, not sent: %s"), r->id);
     return;
   }
   if (s_mq.publish_end(j.length()) == 0) {
-    Log::console(HA_DROPPED, r->id);
+    corium::Log::console(HA_DROPPED, r->id);
   }
   MQTT_PUB_YIELD();
 }
@@ -933,20 +930,20 @@ static void hass_remove(const HassRow* r)
 }
 
 void MQTT_Client::stepHassDiscovery() {
-  if (_hass_walk_state == 0) return;
+  if (_hass_walk_state == HASS_IDLE) return;
   // wait for acks, a refused one would be a sensor missing in HA
   if (s_mq.room() < HASS_PACKET_MAX) return;
   const HassRow* r = hass_row(_hass_idx);
   if (r) {
-    if (_hass_walk_state > 0) hass_publish(r, getRootTopic());
+    if (_hass_walk_state == HASS_PUBLISH) hass_publish(r, getRootTopic());
     else hass_remove(r);
     _hass_idx++;
   } else {
-    if (_hass_walk_state > 0) {
-      _hass_last_publish = (unsigned long)DeviceInfo::uptime();
+    if (_hass_walk_state == HASS_PUBLISH) {
+      _hass_last_publish = (unsigned long)corium::DeviceInfo::uptime();
       if (_hass_last_publish == 0) _hass_last_publish = 1;
     }
-    _hass_walk_state = 0;
+    _hass_walk_state = HASS_IDLE;
   }
 }
 #endif
@@ -956,7 +953,7 @@ void MQTT_Client::onMqttMessage(const char* topic, const char* payload, size_t l
 #ifdef MQTTAUTODISCOVER
   if (_hass_listen && strcmp(_hass_status, topic) == 0) {
     if (len == 6 && strncmp_P(payload, PSTR("online"), 6) == 0) {
-      Log::debug(PSTR("MQTT: HA is back online"));
+      corium::Log::debug(PSTR("MQTT: HA is back online"));
       _hass_retrigger = true;
       wakeSoon();
     }
@@ -978,7 +975,7 @@ void MQTT_Client::begin()
   mqttEnabled = true;
   wakeSoon();
   s_mq.setKeepAlive(MQTT_KEEPALIVE_S);
-  s_mq.setTimeout(MQTT_TIMEOUT_S);
+  s_mq.setTimeoutS(MQTT_TIMEOUT_S);
   s_mq.onConnect(mq_up, this);
   s_mq.onDisconnect(mq_down, this);
   s_mq.onMessage(mq_message, this);
@@ -988,7 +985,7 @@ void MQTT_Client::begin()
   _pending |= PEND_ALARMS;   // an alarm already up when turned on
 }
 
-void MQTT_Client::on_prefs_saved()
+void MQTT_Client::onPrefsSaved()
 {
   _rootTopicCached = false;
   bool needs_hass_remove = false;
@@ -999,8 +996,8 @@ void MQTT_Client::on_prefs_saved()
   authFailures = 0;
 #ifdef MQTTAUTODISCOVER
   // publish walk restarts on reconnect
-  if (_hass_walk_state > 0) _hass_walk_state = 0;
-  if (needs_hass_remove) startHassWalk(-1);
+  if (_hass_walk_state == HASS_PUBLISH) _hass_walk_state = HASS_IDLE;
+  if (needs_hass_remove) startHassWalk(HASS_REMOVE);
 #endif
   begin();
 }

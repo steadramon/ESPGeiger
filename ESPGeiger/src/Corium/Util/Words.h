@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef UTIL_WORDS_H
-#define UTIL_WORDS_H
+#ifndef CORIUM_WORDS_H
+#define CORIUM_WORDS_H
 
 #include <Arduino.h>
 

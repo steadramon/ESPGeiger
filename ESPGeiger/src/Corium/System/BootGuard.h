@@ -16,35 +16,37 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef BOOTGUARD_H
-#define BOOTGUARD_H
+#ifndef CORIUM_BOOTGUARD_H
+#define CORIUM_BOOTGUARD_H
 
 #include <stdint.h>
 #include "App/AppConfig.h"
 
-#ifndef BOOTGUARD_LIVED_S
-#define BOOTGUARD_LIVED_S 600
+#ifndef CORIUM_BOOTGUARD_LIVED_S
+#define CORIUM_BOOTGUARD_LIVED_S 600
 #endif
-#ifndef BOOTGUARD_STABLE_MS
-#define BOOTGUARD_STABLE_MS 5000
+#ifndef CORIUM_BOOTGUARD_STABLE_MS
+#define CORIUM_BOOTGUARD_STABLE_MS 5000
 #endif
 
+namespace corium {
 namespace BootGuard {
 
-constexpr uint32_t LIVED_S   = BOOTGUARD_LIVED_S;     // from begin_all
-constexpr uint32_t STABLE_MS = BOOTGUARD_STABLE_MS;   // wifi
+constexpr uint32_t LIVED_S   = CORIUM_BOOTGUARD_LIVED_S;     // from beginAll
+constexpr uint32_t STABLE_MS = CORIUM_BOOTGUARD_STABLE_MS;   // wifi
 constexpr uint32_t DAY_MS    = 86400000UL;
 
-void on_boot();      // first thing in setup()
-void mark_lived();   // up LIVED_S, a crash after doesn't count
-void mark_day();     // up DAY_MS
-void request_safe();   // safe mode on next restart
+void onBoot();      // first thing in setup()
+void markLived();   // up LIVED_S, a crash after doesn't count
+void markDay();     // up DAY_MS
+void requestSafe();   // safe mode on next restart
 
-bool     safe_mode();
+bool     safeMode();
 bool     entered();       // first safe boot
-uint32_t retry_after();   // ms
-uint8_t  crash_streak();
+uint32_t retryAfterMs();   // ms
+uint8_t  crashStreak();
 
 }
+}  // namespace corium
 
 #endif

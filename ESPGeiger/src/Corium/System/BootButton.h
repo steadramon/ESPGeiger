@@ -16,25 +16,27 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef BOOT_BUTTON_H
-#define BOOT_BUTTON_H
+#ifndef CORIUM_BOOT_BUTTON_H
+#define CORIUM_BOOT_BUTTON_H
 
 #include <stdint.h>
 
-#ifndef BOOT_BUTTON_RESET_S
-#define BOOT_BUTTON_RESET_S 5
+#ifndef CORIUM_BOOT_BUTTON_RESET_S
+#define CORIUM_BOOT_BUTTON_RESET_S 5
 #endif
 
-// held this long = stuck or a low pin, boot on
-#ifndef BOOT_BUTTON_STUCK_S
-#define BOOT_BUTTON_STUCK_S 30
+// Held this long = stuck button or a low pin, carry on booting
+#ifndef CORIUM_BOOT_BUTTON_STUCK_S
+#define CORIUM_BOOT_BUTTON_STUCK_S 30
 #endif
 
+namespace corium {
 namespace BootButton {
   enum class Hold : uint8_t { NONE = 0, OFFLINE = 1, FULL_RESET = 2 };
 
-  // Blocks until released, or NONE when stuck. left = s to reset, 0 = armed
+  // Blocks until released, NONE when stuck. left() gets the seconds to a reset, 0 = armed
   Hold check(bool (*pressed)(), void (*held)(), void (*left)(int s));
 }
+}  // namespace corium
 
 #endif

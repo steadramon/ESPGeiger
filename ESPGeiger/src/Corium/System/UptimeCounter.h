@@ -17,11 +17,12 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef UPTIMECOUNTER_H
-#define UPTIMECOUNTER_H
+#ifndef CORIUM_UPTIMECOUNTER_H
+#define CORIUM_UPTIMECOUNTER_H
 
 #include <stdint.h>
 
+namespace corium {
 // Monotonic seconds since boot across the 49.71 day millis() wrap.
 //
 // tick() must be called at least once per wrap or a whole wrap is lost. The
@@ -55,5 +56,6 @@ private:
   uint32_t _value   = 0;
   uint16_t _wraps   = 0;
 };
+}  // namespace corium
 
 #endif

@@ -56,7 +56,7 @@ size_t fmt_mightyohm(char* buf, size_t cap) {
 size_t fmt_user_template(char* buf, size_t cap) {
   const char* tpl = corium::Prefs::getString("sout", EG_K_TPL);
   if (!tpl || !*tpl) return 0;
-  size_t n = OutputVars::renderTemplate(tpl, buf, cap);
+  size_t n = corium::OutputVars::renderTemplate(tpl, buf, cap);
   if (n > 0 && buf[n - 1] != '\n' && n < cap - 1) {
     buf[n++] = '\n';
     buf[n]   = '\0';
@@ -123,7 +123,7 @@ const char TYPE_OPTS[] PROGMEM =
 
 static size_t render_tpl_P(const char* tpl, char* buf, size_t cap) {
   char t[16];
-  return OutputVars::renderTemplate(flash_to_ram(tpl, t, sizeof(t)), buf, cap);
+  return corium::OutputVars::renderTemplate(flashToRam(tpl, t, sizeof(t)), buf, cap);
 }
 
 size_t format_line(uint8_t type, char* buf, size_t cap) {

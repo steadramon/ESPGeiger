@@ -17,16 +17,17 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef DEBOUNCE_H
-#define DEBOUNCE_H
+#ifndef CORIUM_DEBOUNCE_H
+#define CORIUM_DEBOUNCE_H
 
 #include <stdint.h>
 
-// step() true when the steady level flips
+namespace corium {
+// step() returns true when the steady level flips
 struct Debounce {
-  bool     read  = false;   // last raw level
+  bool     read  = false;   // Last raw level
   bool     level = false;   // steady level
-  uint32_t since = 0;       // last raw change
+  uint32_t since = 0;       // Last raw change
 
   void reset(bool on, uint32_t now) {
     read = level = on;
@@ -44,5 +45,6 @@ struct Debounce {
     return true;
   }
 };
+}  // namespace corium
 
 #endif

@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MATHUTIL_H
-#define MATHUTIL_H
+#ifndef CORIUM_MATHUTIL_H
+#define CORIUM_MATHUTIL_H
 
 #include <math.h>
 #include <stdint.h>
@@ -29,21 +29,21 @@ constexpr T clamp(T v, T lo, T hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// 0-100 -> 0..top, squared: eyes see the low end
-inline uint32_t brightness_curve(uint32_t pct, uint32_t top) {
+// 0-100 -> 0..top, squared since eyes see more change at the low end
+inline uint32_t brightnessCurve(uint32_t pct, uint32_t top) {
   if (pct > 100) pct = 100;
   return (pct * pct * top + 5000) / 10000;
 }
 
-// not NaN or inf, int test, no soft-float call
-inline bool is_finite(float v) {
+// Not NaN or inf. Tests the bits as an int, so no soft-float call
+inline bool isFinite(float v) {
   uint32_t b;
   memcpy(&b, &v, sizeof(b));
   return (b & 0x7F800000u) != 0x7F800000u;
 }
 
-// 0-1000, part past whole is 1000
-inline uint16_t per_mille(uint32_t part, uint32_t whole) {
+// 0-1000, a part past whole gives 1000
+inline uint16_t perMille(uint32_t part, uint32_t whole) {
   if (whole == 0) return 0;
   if (part >= whole) return 1000;
   return (uint16_t)(((uint64_t)part * 1000u) / whole);
@@ -60,14 +60,14 @@ inline uint32_t ema8(uint32_t avg, uint32_t v) {
   return (avg * 7 + v) >> 3;
 }
 
-// NAN avg takes v, NAN v keeps avg
-inline float ema_nan(float avg, float v, float alpha) {
+// A NAN avg takes v, a NAN v keeps avg
+inline float emaNan(float avg, float v, float alpha) {
   if (isnan(v)) return avg;
   if (isnan(avg)) return v;
   return avg * (1.0f - alpha) + v * alpha;
 }
 
-// marsaglia 13/17/5, 0 stays 0
+// Marsaglia 13/17/5, 0 stays 0
 inline uint32_t xorshift32(uint32_t x) {
   x ^= x << 13;
   x ^= x >> 17;
@@ -75,7 +75,7 @@ inline uint32_t xorshift32(uint32_t x) {
   return x;
 }
 
-// hwid seed, hi ^ lo
+// folds a hwid into a seed, hi ^ lo
 inline uint32_t fold32(uint64_t v) {
   return (uint32_t)(v ^ (v >> 32));
 }

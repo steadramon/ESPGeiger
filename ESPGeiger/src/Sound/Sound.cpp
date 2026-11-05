@@ -125,13 +125,13 @@ static const corium::PrefGroup SOUND_PREF_GROUP PROGMEM = {
   corium::P_CAT_OUTPUT,
 };
 
-const corium::PrefGroup* Sound::prefs_group() { return &SOUND_PREF_GROUP; }
+const corium::PrefGroup* Sound::prefsGroup() { return &SOUND_PREF_GROUP; }
 
 static volatile uint8_t s_ota = 0;   // 1 started, 2 failed
 
-static void sound_lifecycle(Lifecycle::Event e) {
-  if (e == Lifecycle::SHUTDOWN) return;
-  s_ota = e == Lifecycle::OTA_START ? 1 : 2;
+static void sound_lifecycle(corium::Lifecycle::Event e) {
+  if (e == corium::Lifecycle::SHUTDOWN) return;
+  s_ota = e == corium::Lifecycle::OTA_START ? 1 : 2;
   corium::Registry::post(&sound);
 }
 
@@ -147,7 +147,7 @@ static const char* err_word(uint8_t e) {
 
 static bool is_off(const char* v) { return !strcmp_P(v, PSTR("off")); }
 
-void Sound::on_prefs_loaded() {
+void Sound::onPrefsLoaded() {
   _reload = true;
   corium::Registry::post(this);
 }
@@ -166,7 +166,7 @@ void Sound::load() {
     uint8_t e = EGTune::check(v, strlen(v), &at);
     if (!e) continue;
     _bad |= 1u << i;
-    Log::console(PSTR("Sound: %s %s at %u, built-in plays"), DEFS[i].key, err_word(e), at);
+    corium::Log::console(PSTR("Sound: %s %s at %u, built-in plays"), DEFS[i].key, err_word(e), at);
   }
   uint16_t len = 0;
   const char* t = text(CLICK, len);
@@ -191,13 +191,13 @@ const char* Sound::text(uint8_t id, uint16_t& len) {
   return DEFS[id].tune;
 }
 
-void Sound::pre_wifi() {
-  corium::Registry::on(Wifi::TOPIC_CHANGED, this);
+void Sound::preWifi() {
+  corium::Registry::on(corium::Wifi::TOPIC_CHANGED, this);
   corium::Registry::on(Counter::TOPIC_ALARM, this);
   corium::Registry::on(Topic::HV_FAULT, this);
   corium::Registry::on(Topic::SD_ERROR, this);
   corium::Registry::on(Topic::PRESS, this);
-  Lifecycle::on(sound_lifecycle);
+  corium::Lifecycle::on(sound_lifecycle);
 }
 
 static void sound_click(uint32_t) { sound.click((uint32_t)micros()); }
@@ -206,10 +206,10 @@ static void sound_click(uint32_t) { sound.click((uint32_t)micros()); }
 void Sound::start() {
   if (_started) return;
   _started = true;
-  Buzzer::Limits lim = Board::buzzer();
-  if (!Buzzer::begin(GEIGER_BUZZER, lim)) Log::console(PSTR("Buzzer: pin %d unusable"), GEIGER_BUZZER);
-  TunePlayer::begin({lim.duty_pct, BURST_HZ, GAP_PCT});
-  _duty = lim.duty_pct;
+  corium::Buzzer::Limits lim = Board::buzzer();
+  if (!corium::Buzzer::begin(GEIGER_BUZZER, lim)) corium::Log::console(PSTR("Buzzer: pin %d unusable"), GEIGER_BUZZER);
+  TunePlayer::begin({lim.dutyPct, BURST_HZ, GAP_PCT});
+  _duty = lim.dutyPct;
 }
 
 static const unsigned long SETUP_MAX_MS = 3000;   // a long custom one is cut
@@ -219,18 +219,18 @@ void Sound::setup_portal() {
   start();
   if (_reload) load();
   play(SETUP);
-  unsigned long t0 = fast_millis();
-  while (TunePlayer::poll((uint32_t)micros()) && fast_millis() - t0 < SETUP_MAX_MS) delay(1);
+  unsigned long t0 = corium::fastMillis();
+  while (TunePlayer::poll((uint32_t)micros()) && corium::fastMillis() - t0 < SETUP_MAX_MS) delay(1);
   TunePlayer::stop();
 }
 
 void Sound::begin() {
   gcounter.on_click(sound_click);
   start();
-  _wifi = Wifi::connected;
+  _wifi = corium::Wifi::connected;
   if (_reload) load();
   play(STARTUP);
-  schedule(fast_millis(), TunePlayer::poll((uint32_t)micros()));
+  schedule(corium::fastMillis(), TunePlayer::poll((uint32_t)micros()));
 }
 
 void Sound::play(uint8_t id) {
@@ -247,9 +247,9 @@ void Sound::click(uint32_t now) {
   if (!_click_on || !_vol || TunePlayer::busy() || gcounter.is_quiet_now()) return;
   const EGTune::Step& c = _click;
   uint8_t duty = TunePlayer::at_volume(c.duty ? c.duty : _duty, _vol);
-  if (c.op == EGTune::PULSE) Buzzer::pulse(now, c.ms * 1000);
-  else if (c.op == EGTune::BURST) Buzzer::burst(now, c.hz ? c.hz : BURST_HZ, c.ms);
-  else if (c.op == EGTune::TONE) Buzzer::tone(now, c.hz, Buzzer::tone_cycles(c.ms, c.hz), duty);
+  if (c.op == EGTune::PULSE) corium::Buzzer::pulse(now, c.ms * 1000);
+  else if (c.op == EGTune::BURST) corium::Buzzer::burst(now, c.hz ? c.hz : BURST_HZ, c.ms);
+  else if (c.op == EGTune::TONE) corium::Buzzer::tone(now, c.hz, corium::Buzzer::toneCycles(c.ms, c.hz), duty);
 }
 
 // over chimes, alarms full as they'd play
@@ -266,7 +266,7 @@ void Sound::test(const char* v) {
     uint16_t at = 0;
     uint8_t e = EGTune::check(v, strlen(v), &at);
     if (e) {
-      Log::console(PSTR("Sound: %s at %u"), err_word(e), at);
+      corium::Log::console(PSTR("Sound: %s at %u"), err_word(e), at);
       return;
     }
     len = strlen(v);
@@ -277,20 +277,20 @@ void Sound::test(const char* v) {
 }
 
 static void cmd_play() {
-  char* v = Console::rest();
+  char* v = corium::Console::rest();
   if (v && *v) sound.test(v);
-  else Log::console(PSTR("play <sound name or tune>"));
+  else corium::Log::console(PSTR("play <sound name or tune>"));
 }
 CORIUM_REGISTER_CMD(play, cmd_play)
 
 // up, not down
 void Sound::wifi() {
-  if (Wifi::connected && !_wifi) play(WIFI);
-  _wifi = Wifi::connected;
+  if (corium::Wifi::connected && !_wifi) play(WIFI);
+  _wifi = corium::Wifi::connected;
 }
 
 void Sound::events(uint16_t ev, unsigned long now) {
-  if (ev & (1u << Wifi::TOPIC_CHANGED)) wifi();
+  if (ev & (1u << corium::Wifi::TOPIC_CHANGED)) wifi();
   if (ev & (1u << Counter::TOPIC_ALARM)) alarm(now);
   if (ev & (1u << Topic::HV_FAULT)) play(HVFAULT);
   if (ev & (1u << Topic::SD_ERROR)) play(SD_ERROR);
@@ -320,13 +320,13 @@ void Sound::loop(unsigned long now) {
     s_ota = 0;
     play(ota == 1 ? OTA : OTA_FAIL);
   }
-  if (_alert && _repeat_ms && reached(now, _next_alert)) {
+  if (_alert && _repeat_ms && corium::reached(now, _next_alert)) {
     play(ALERT);
     _next_alert = now + _repeat_ms;
   }
-  if (!_fault_said && Buzzer::faulted()) {
+  if (!_fault_said && corium::Buzzer::faulted()) {
     _fault_said = true;
-    Log::console(PSTR("Sound: buzzer pin held high - off until restart"));
+    corium::Log::console(PSTR("Sound: buzzer pin held high - off until restart"));
   }
   schedule(now, TunePlayer::poll((uint32_t)micros()));
 }
@@ -339,7 +339,7 @@ void Sound::schedule(unsigned long now, uint32_t us) {
     next = _next_alert;
     any = true;
   }
-  if (any) corium::Registry::due_at(this, next);
+  if (any) corium::Registry::dueAt(this, next);
 }
 
 #endif

@@ -54,13 +54,13 @@ class Display : public corium::Module {
   public:
     const char* name() override { return PSTR("disp"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 17; }
-    bool hw_present() override { return backend()->present(); }
-    const corium::PrefGroup* prefs_group() override;
-    const corium::PrefShow* prefs_show() override;
-    corium::LegacyRows legacy_aliases() override;
-    void on_prefs_loaded() override;
-    void on_prefs_saved() override;
+    uint8_t displayOrder() override { return 17; }
+    bool hwPresent() override { return backend()->present(); }
+    const corium::PrefGroup* prefsGroup() override;
+    const corium::PrefShow* prefsShow() override;
+    corium::LegacyRows legacyAliases() override;
+    void onPrefsLoaded() override;
+    void onPrefsSaved() override;
     void registerRoutes(EGHttpServer& http) override;
 
     DisplayBackend* backend();   // never null
@@ -74,6 +74,9 @@ class Display : public corium::Module {
     bool toggle_auto_off(unsigned long now);
     void offline()                    { backend()->offline(); }
     void wipe(int seconds)            { backend()->wipe(seconds); }
+    void presses(unsigned long now);
+#else
+    void presses(unsigned long) {}
 #endif
     void keep_on()                    { _auto_off = false; }
     void wake(unsigned long now) {
@@ -83,8 +86,11 @@ class Display : public corium::Module {
 
     enum Sleep : uint8_t { AWAKE, TIMED_OUT, OFF_HOURS };
     Sleep sleep(unsigned long now);
-    // looked at on new counts, taps and wakes
-    void loop(unsigned long now) override { refresh(now); }
+    // looked at on new counts, presses, taps and wakes
+    void loop(unsigned long now) override {
+      presses(now);
+      refresh(now);
+    }
     // lit or dark changed, from loop()
     static constexpr uint8_t TOPIC_POWER = Topic::POWER;
     bool lit() const { return _lit; }
@@ -148,7 +154,7 @@ class Display : public corium::Module {
     bool on_hours();
     bool _started = false;
     bool _auto_off = true;
-    Stamp _woke;
+    corium::Stamp _woke;
     uint32_t _timeout_ms = 0;   // 0 = use on/off hours
 };
 

@@ -19,6 +19,7 @@
 #include "OutputVars.h"
 #include <string.h>
 
+namespace corium {
 namespace OutputVars {
 
 // 0 = row's own
@@ -35,10 +36,10 @@ static bool parse_spec(const char* s, size_t n, Spec* out) {
   return i > 0 && i == n;
 }
 
-static bool lookup(const char* id, size_t n, corium::Measure* row, corium::MValue* val) {
+static bool lookup(const char* id, size_t n, Measure* row, MValue* val) {
   if (n == 0 || n >= sizeof(row->id)) return false;
-  for (corium::MeasureIter it(corium::M_OUT_VARS); it.next(); ) {
-    const corium::Measure& m = it.row();
+  for (MeasureIter it(M_OUT_VARS); it.next(); ) {
+    const Measure& m = it.row();
     if (strncmp(m.id, id, n) == 0 && m.id[n] == '\0') {
       *row = m;
       *val = it.value();
@@ -49,13 +50,13 @@ static bool lookup(const char* id, size_t n, corium::Measure* row, corium::MValu
 }
 
 static uint8_t unit_code(char unit) {
-  return unit == 'F' ? corium::MT_F : unit == 'K' ? corium::MT_K : corium::MT_C;
+  return unit == 'F' ? MT_F : unit == 'K' ? MT_K : MT_C;
 }
 
-static bool apply(corium::Measure& m, const Spec& s) {
-  if (s.unit && m.unit != corium::MU_CELSIUS) return false;
+static bool apply(Measure& m, const Spec& s) {
+  if (s.unit && m.unit != MU_CELSIUS) return false;
   if (s.decimals) {
-    if (m.kind != corium::M_F32) return false;
+    if (m.kind != M_F32) return false;
     m.decimals = s.decimals;
   }
   return true;
@@ -67,11 +68,11 @@ size_t render(const char* key, size_t klen, char* buf, size_t cap, bool* cut) {
   size_t idlen = colon ? (size_t)(colon - key) : klen;
   Spec spec = {0, 0};
   if (colon && !parse_spec(colon + 1, klen - idlen - 1, &spec)) return 0;
-  corium::Measure m;
-  corium::MValue v;
+  Measure m;
+  MValue v;
   if (!lookup(key, idlen, &m, &v) || !apply(m, spec)) return 0;
-  uint8_t unit = spec.unit ? unit_code(spec.unit) : corium::m_temp_unit();
-  return corium::m_format_unit(m, v, unit, buf, cap, cut);
+  uint8_t unit = spec.unit ? unit_code(spec.unit) : m_temp_unit();
+  return m_format_unit(m, v, unit, buf, cap, cut);
 }
 
 static bool unescape(char in, char* out) {
@@ -140,3 +141,4 @@ size_t renderTemplate(const char* tpl, char* buf, size_t cap) {
 }
 
 }  // namespace OutputVars
+}  // namespace corium

@@ -21,7 +21,7 @@
 
 #include "Corium/Module/Registry.h"
 
-// a module posts its own, anyone listens
+// Each module posts its own topics, anyone can listen
 namespace Topic {
   constexpr uint8_t ALARM    = CORIUM_TOPIC_APP;
   constexpr uint8_t COUNTS   = CORIUM_TOPIC_APP + 1;
@@ -30,7 +30,9 @@ namespace Topic {
   constexpr uint8_t SD_ERROR = CORIUM_TOPIC_APP + 4;
   constexpr uint8_t PRESS    = CORIUM_TOPIC_APP + 5;
   constexpr uint8_t PING     = CORIUM_TOPIC_APP + 6;
+  constexpr uint8_t BACK     = CORIUM_TOPIC_APP + 7;   // the second button, sent alongside PRESS
+  constexpr uint8_t LONG     = CORIUM_TOPIC_APP + 8;
 }
-static_assert(Topic::PING < CORIUM_MAX_TOPICS, "app topics past CORIUM_MAX_TOPICS");
+static_assert(Topic::LONG < CORIUM_MAX_TOPICS, "app topics past CORIUM_MAX_TOPICS");
 
 #endif

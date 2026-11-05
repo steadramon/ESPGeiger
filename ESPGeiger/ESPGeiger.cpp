@@ -57,27 +57,26 @@ static inline void ms_poll(uint32_t now_us) {
 
 static void counter_second(uint32_t up) { gcounter.secondticker(up); }
 
-static WebPortal s_webPortal;
+static corium::WebPortal s_webPortal;
 
 static void boot_banner() {
-  Log::banner(PSTR("   ___"));
-  Log::banner(PSTR("   \\_/    Starting up ... %s"), DeviceInfo::hostname());
-  Log::banner(PSTR(".--.O.--. Version - %s/%s (%s)"), RELEASE_VERSION, GIT_VERSION, BUILD_ENV);
-  Log::banner(PSTR(" \\/   \\/"));
-  if (BootGuard::crash_streak()) {
-    Log::console(PSTR("BootGuard: %u crash boots in a row%s"), BootGuard::crash_streak(),
-                 BootGuard::safe_mode() ? PSTR(" - safe mode") : PSTR(""));
+  corium::Log::banner(PSTR("   ___"));
+  corium::Log::banner(PSTR("   \\_/    Starting up ... %s"), corium::DeviceInfo::hostname());
+  corium::Log::banner(PSTR(".--.O.--. Version - %s/%s (%s)"), RELEASE_VERSION, GIT_VERSION, BUILD_ENV);
+  corium::Log::banner(PSTR(" \\/   \\/"));
+  if (corium::BootGuard::crashStreak()) {
+    corium::Log::console(PSTR("BootGuard: %u crash boots in a row%s"), corium::BootGuard::crashStreak(),
+                 corium::BootGuard::safeMode() ? PSTR(" - safe mode") : PSTR(""));
   }
 }
 
 static void boot_button() {
   auto action = BootHooks::checkStartupButtonHold();
   if (action == BootHooks::ButtonHold::FULL_RESET) {
-    DeviceInfo::factoryReset();
-    DeviceInfo::safeRestart(500);
+    corium::DeviceInfo::factoryReset();
+    corium::DeviceInfo::safeRestart(500);
   } else if (action == BootHooks::ButtonHold::OFFLINE) {
-    Wifi::disabled = true;
-    Wifi::offline_forced = true;   // no self-heal
+    corium::Wifi::forceOffline();   // no self-heal
   }
 }
 
@@ -88,33 +87,39 @@ void setup()
   pinMode(GEIGER_PWMPIN, OUTPUT);
   digitalWrite(GEIGER_PWMPIN, LOW);
 #endif
-  Boot::begin(LED_PATTERNS, LED_PATTERN_COUNT, LED_FLASH_ON_LED);
+  corium::Boot::begin(LED_PATTERNS, LED_PATTERN_COUNT, LED_FLASH_ON_LED);
   Board::claim();
+#ifdef APP_BOARD
+  corium::DeviceInfo::setBoard(APP_BOARD);
+#endif
+#ifdef APP_HOME_NAME
+  corium::WebPortal::setHomeName(PSTR(APP_HOME_NAME));
+#endif
 #ifdef LED_FLASH_ENGINE
   BlipLed::begin(LED_FLASH_PIN);
 #endif
   measures_begin();
   boot_banner();
 
-  Boot::prefs();
-  bool safe = BootGuard::safe_mode();
-  if (BootGuard::entered()) BootHooks::displaySafeMode();
+  corium::Boot::prefs();
+  bool safe = corium::BootGuard::safeMode();
+  if (corium::BootGuard::entered()) BootHooks::displaySafeMode();
 
   delay(100);
-  Reactor::clock(Reactor::ms<ms_poll>);
+  corium::Reactor::clock(corium::Reactor::ms<ms_poll>);
   if (!safe) boot_button();
   Board::detect();
-  if (!safe && Wifi::portal_ahead()) {
-    BootHooks::displaySetupWifi(DeviceInfo::hostname());
+  if (!safe && corium::Wifi::portalAhead()) {
+    BootHooks::displaySetupWifi(corium::DeviceInfo::hostname());
   }
-  Boot::net(s_webPortal);
+  corium::Boot::net(s_webPortal);
 
   if (!safe) {
     grng.begin();
     gcounter.begin();
   }
   corium::HttpPoster::hold = ExternalPause::active;
-  Boot::end(counter_second);
+  corium::Boot::end(counter_second);
   BootHooks::displayResetTimeout();
 }
 
@@ -125,7 +130,7 @@ static inline void counter_pass(unsigned long now)
 
 void loop()
 {
-  Reactor::run<counter_pass>(s_webPortal);
+  corium::Reactor::run<counter_pass>(s_webPortal);
 }
 
 #ifdef ESP8266
@@ -133,8 +138,8 @@ extern "C" void __preloop_update_frequency();
 // core sets it every pass, once a second is plenty
 extern "C" void preloop_update_frequency() {
   static uint32_t s_next;
-  uint32_t now = fast_millis();
-  if (!reached(now, s_next)) return;
+  uint32_t now = corium::fastMillis();
+  if (!corium::reached(now, s_next)) return;
   s_next = now + 1000;
   __preloop_update_frequency();
 }

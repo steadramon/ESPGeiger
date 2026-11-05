@@ -41,21 +41,21 @@ static const corium::MenuEntry APP_MENU[] PROGMEM = {
   {"", ""}
 };
 
-const corium::MenuEntry* AppHooks::menu() { return APP_MENU; }
+const corium::MenuEntry* corium::AppHooks::menu() { return APP_MENU; }
 
-void AppHooks::routes(EGHttpServer& http) {
+void corium::AppHooks::routes(EGHttpServer& http) {
   GRNGRoutes::registerRoutes(http);
   CounterRoutes::registerRoutes(http);
   AppWeb::routes(http);
 }
 
-void AppHooks::info_rows(EGHttpResponse& res) {
+void corium::AppHooks::infoRows(EGHttpResponse& res) {
   char model[6 * CORIUM_NAME_MAX + 1];
   egesc_html(model, sizeof(model), Tube::model());
-  WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
-  if (Board::rev()) WebPortal::infoRow(res, PSTR("Board"), PSTR("v%u"), (unsigned)Board::rev());
+  corium::WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
+  if (Board::rev()) corium::WebPortal::infoRow(res, PSTR("Board"), PSTR("v%u"), (unsigned)Board::rev());
 #if BUZZER_BUILT
-  if (Buzzer::faulted()) WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
+  if (corium::Buzzer::faulted()) corium::WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
 #endif
 }
 
@@ -65,7 +65,7 @@ static const char* geiger_type_name() {
   return PSTR("none");
 }
 
-void AppHooks::about_json(EGHttpResponse& res) {
+void corium::AppHooks::aboutJson(EGHttpResponse& res) {
   char model[6 * CORIUM_NAME_MAX + 1];  // escaped worst case
   egesc_json(model, sizeof(model), Tube::model());
   char buf[6 * CORIUM_NAME_MAX + 80];
@@ -77,11 +77,11 @@ void AppHooks::about_json(EGHttpResponse& res) {
     gcounter.has_pcnt()         ? W_TRUE : W_FALSE,
     (unsigned)Features::flags());
   size_t len = 0;
-  advance_pos(len, n, sizeof(buf));
+  advancePos(len, n, sizeof(buf));
   if (len) res.sendChunk(buf, len);
 }
 
-void AppHooks::metrics(EGHttpResponse& res, const char* cid) {
+void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {
   res.sendChunk(F("# HELP geiger_pulse_interval_seconds Inter-pulse intervals in seconds, log2 buckets\n"
                   "# TYPE geiger_pulse_interval_seconds histogram\n"));
   const uint8_t nb = Counter::pulse_histogram_buckets();
@@ -92,19 +92,19 @@ void AppHooks::metrics(EGHttpResponse& res, const char* cid) {
     cumul += hist[b];
     if (b < nb - 1) {
       uint32_t ub_us = 64UL << b;
-      WebPortal::metricsLine(res,
+      corium::WebPortal::metricsLine(res,
         PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",le=\"%lu.%06lu\"} %lu\n"),
         cid,
         (unsigned long)(ub_us / 1000000UL),
         (unsigned long)(ub_us % 1000000UL),
         (unsigned long)cumul);
     } else {
-      WebPortal::metricsLine(res,
+      corium::WebPortal::metricsLine(res,
         PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",le=\"+Inf\"} %lu\n"),
         cid, (unsigned long)cumul);
     }
   }
-  WebPortal::metricsLine(res,
+  corium::WebPortal::metricsLine(res,
     PSTR("geiger_pulse_interval_seconds_count{chipid=\"%s\"} %lu\n"),
     cid, (unsigned long)cumul);
 }

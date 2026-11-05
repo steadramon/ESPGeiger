@@ -16,13 +16,15 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef IGMP_REFRESH_H
-#define IGMP_REFRESH_H
+#ifndef CORIUM_IGMP_REFRESH_H
+#define CORIUM_IGMP_REFRESH_H
 
+namespace corium {
 namespace IgmpRefresh {
 
 bool refresh();   // esp32 only
 
 }
+}  // namespace corium
 
 #endif

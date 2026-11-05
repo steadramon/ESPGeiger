@@ -40,7 +40,7 @@
 namespace BootHooks {
 
   // under 5s offline, 5s+ full reset (keeps /api.key)
-  using ButtonHold = BootButton::Hold;
+  using ButtonHold = corium::BootButton::Hold;
 
   inline void displayWifiDisabled() {
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
@@ -77,7 +77,7 @@ namespace BootHooks {
 
   inline void displayResetTimeout() {
 #ifdef SSD1306_DISPLAY
-    display.wake(fast_millis());
+    display.wake(corium::fastMillis());
 #endif
   }
 
@@ -92,7 +92,7 @@ namespace BootHooks {
   inline ButtonHold checkStartupButtonHold() {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();
-    ButtonHold hold = BootButton::check([] { return pushbutton.isPressed(); },
+    ButtonHold hold = corium::BootButton::check([] { return pushbutton.isPressed(); },
                                         displayWifiDisabled, displayWipe);
     if (hold != ButtonHold::NONE) displayDisableTimeout();
     return hold;

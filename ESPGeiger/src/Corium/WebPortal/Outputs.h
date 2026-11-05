@@ -17,16 +17,18 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef OUTPUTS_H
-#define OUTPUTS_H
+#ifndef CORIUM_OUTPUTS_H
+#define CORIUM_OUTPUTS_H
 
 #include <stddef.h>
 
+namespace corium {
 namespace Outputs {
 
 // "a":{..},"b":{..} without the braces; one that won't fit is dropped
 size_t json(char* buf, size_t cap, unsigned long now);
 
 }
+}  // namespace corium
 
 #endif

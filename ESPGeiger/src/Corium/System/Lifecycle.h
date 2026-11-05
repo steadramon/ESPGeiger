@@ -17,16 +17,17 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef LIFECYCLE_H
-#define LIFECYCLE_H
+#ifndef CORIUM_LIFECYCLE_H
+#define CORIUM_LIFECYCLE_H
 
 #include <stdint.h>
 #include "App/AppConfig.h"
 
-#ifndef LIFECYCLE_MAX_HANDLERS
-#define LIFECYCLE_MAX_HANDLERS 8
+#ifndef CORIUM_LIFECYCLE_MAX_HANDLERS
+#define CORIUM_LIFECYCLE_MAX_HANDLERS 8
 #endif
 
+namespace corium {
 namespace Lifecycle {
 
 enum Event : uint8_t {
@@ -41,12 +42,13 @@ typedef void (*Handler)(Event);
 bool on(Handler h);   // false = full
 void send(Event e);
 
-// WebPortal::tick does the restart, never mid-write; no portal, no restart
-void request_restart(uint32_t now, uint32_t delay_ms);
-bool restart_due(uint32_t now);
+// WebPortal::poll does the restart, never mid-write; no portal, no restart
+void requestRestart(uint32_t now, uint32_t delay_ms);
+bool restartDue(uint32_t now);
 
 }
 
-extern bool ota_in_progress;
+extern bool otaInProgress;
+}  // namespace corium
 
 #endif

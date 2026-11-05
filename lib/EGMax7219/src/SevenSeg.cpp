@@ -20,10 +20,12 @@
 
 static const uint8_t SEG7[10] PROGMEM =
   { 0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F };
+static const uint8_t SEG_DASH = 0x40;
+static const uint8_t COLON_DIGIT = 1;
 
 uint8_t codeToSeg(uint8_t code) {
   if (code < 10)          return pgm_read_byte(&SEG7[code]);
-  if (code == DIGIT_DASH) return 0x40;
+  if (code == DIGIT_DASH) return SEG_DASH;
   return 0x00;
 }
 
@@ -31,7 +33,7 @@ uint8_t codeToSeg(uint8_t code) {
 void codesToSegs(const uint8_t* codes, const bool* dps, uint8_t n, uint8_t* segs) {
   for (uint8_t i = 0; i < n; i++) {
     uint8_t d = (uint8_t)(n - 1 - i);
-    segs[i] = (uint8_t)(codeToSeg(codes[d]) | (dps[d] ? 0x80 : 0));
+    segs[i] = (uint8_t)(codeToSeg(codes[d]) | (dps[d] ? SEG_DP : 0));
   }
 }
 
@@ -48,14 +50,14 @@ void letteredSegs(uint8_t letter, float value, uint8_t n, uint8_t decimals, uint
   computeDigits(value, m, decimals, 0, codes, dps);
   if (codes[0] == DIGIT_DASH && decimals) computeDigits(value, m, 0, 0, codes, dps);
   if (codes[0] == DIGIT_DASH) {
-    computeDigits(value, n, 0, 0, codes, dps);   // letter goes
+    computeDigits(value, n, 0, 0, codes, dps);   // the letter is dropped
     codesToSegs(codes, dps, n, segs);
   } else {
     segs[0] = letter;
     codesToSegs(codes, dps, m, segs + 1);
   }
   for (uint8_t i = 0; i < n; i++)
-    if (i != 1) segs[i] &= 0x7F;
+    if (i != COLON_DIGIT) segs[i] &= (uint8_t)~SEG_DP;
 }
 
 // int32_t not long, host long is 64-bit

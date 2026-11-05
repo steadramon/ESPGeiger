@@ -70,9 +70,9 @@ static const corium::PrefGroup VOICE_PREF_GROUP PROGMEM = {
   corium::P_CAT_OUTPUT, K_ANNOUNCE_ENABLE,
 };
 
-const corium::PrefGroup* Voice::prefs_group() { return &VOICE_PREF_GROUP; }
+const corium::PrefGroup* Voice::prefsGroup() { return &VOICE_PREF_GROUP; }
 
-void Voice::on_prefs_loaded() {
+void Voice::onPrefsLoaded() {
   _voice_vol = (uint8_t)corium::Prefs::getUInt("klaxon", K_VOICE_VOLUME);
   _ann_en     = corium::Prefs::getBool("klaxon", K_ANNOUNCE_ENABLE);
   _ann_iv     = (uint16_t)corium::Prefs::getUInt("klaxon", K_ANNOUNCE_INTERVAL);
@@ -89,9 +89,9 @@ void Voice::on_prefs_loaded() {
 class KlaxonPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("klax"); }
-  uint8_t display_order() override { return 19; }
-  const corium::PrefGroup* prefs_group() override;
-  void on_prefs_loaded() override;
+  uint8_t displayOrder() override { return 19; }
+  const corium::PrefGroup* prefsGroup() override;
+  void onPrefsLoaded() override;
 };
 
 static KlaxonPrefs klaxonprefs;
@@ -121,10 +121,10 @@ static const corium::PrefGroup KLAXON_PREF_GROUP PROGMEM = {
   corium::P_CAT_OUTPUT, EG_K_ENABLE,
 };
 
-const corium::PrefGroup* KlaxonPrefs::prefs_group() { return &KLAXON_PREF_GROUP; }
+const corium::PrefGroup* KlaxonPrefs::prefsGroup() { return &KLAXON_PREF_GROUP; }
 
-void KlaxonPrefs::on_prefs_loaded() {
-  voice.on_prefs_loaded();
+void KlaxonPrefs::onPrefsLoaded() {
+  voice.onPrefsLoaded();
 }
 
 static const int8_t IMA_INDEX_TABLE[16] = {
@@ -183,20 +183,27 @@ static int16_t scale_sample(int16_t s, uint16_t scale_q8) {
   return (int16_t)(((int32_t)s * scale_q8) >> 8);
 }
 
-// decode runs one ahead, write the last one
-static void adpcm_flush(int16_t* out, int oc, int out_cap, int16_t final_sample) {
-  if (oc < out_cap) {
-    out[oc++] = final_sample;
-  } else {
-    size_t w;
-    i2s_write(I2S_NUM_0, &final_sample, sizeof(int16_t), &w,
-              200 / portTICK_PERIOD_MS);
+struct I2sOut {
+  static constexpr int CHUNK = 256;
+  int16_t buf[CHUNK];
+  int n = 0;
+  void put(int16_t s) {
+    buf[n++] = s;
+    if (n >= CHUNK) flush();
   }
-  if (oc > 0) {
+  void flush() {
+    if (n <= 0) return;
     size_t w;
-    i2s_write(I2S_NUM_0, out, oc * sizeof(int16_t), &w,
-              200 / portTICK_PERIOD_MS);
+    i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &w, 200 / portTICK_PERIOD_MS);
+    n = 0;
   }
+};
+
+static int ramp(uint32_t i, uint32_t total, int peak) {
+  constexpr int RAMP = 220;
+  if (i < (uint32_t)RAMP)    return (int)i * peak / RAMP;
+  if (i > total - RAMP)      return (int)(total - i) * peak / RAMP;
+  return peak;
 }
 
 // tail must be the scaled value
@@ -218,14 +225,12 @@ static void adpcm_speak_word(const VocabADPCM* info, float pitch_scale) {
   adpcm_pred = 0;
   adpcm_idx  = 0;
 
-  const float phase_step = (float)VOCAB_ADPCM_RATE * pitch_scale / 22050.0f;
+  const float phase_step = (float)VOCAB_ADPCM_RATE * pitch_scale / (float)AUDIO_TICK_SAMPLE_RATE;
   float phase = 0.0f;
 
   const uint16_t scale_q8 = voice_scale_q8();
 
-  constexpr int OUT_CHUNK = 256;
-  int16_t out[OUT_CHUNK];
-  int oc = 0;
+  I2sOut out;
 
   // high nibble first, as audioop.lin2adpcm
   uint8_t pending_byte = pgm_read_byte(&info->data[0]);
@@ -236,13 +241,7 @@ static void adpcm_speak_word(const VocabADPCM* info, float pitch_scale) {
   uint32_t total_in = info->byte_count * 2;
   uint32_t consumed = 1;
   while (consumed <= total_in) {
-    out[oc++] = scale_sample(sample, scale_q8);
-    if (oc >= OUT_CHUNK) {
-      size_t w;
-      i2s_write(I2S_NUM_0, out, OUT_CHUNK * sizeof(int16_t), &w,
-                200 / portTICK_PERIOD_MS);
-      oc = 0;
-    }
+    out.put(scale_sample(sample, scale_q8));
     phase += phase_step;
     while (phase >= 1.0f && consumed < total_in) {
       phase -= 1.0f;
@@ -263,74 +262,44 @@ static void adpcm_speak_word(const VocabADPCM* info, float pitch_scale) {
     }
     if (consumed >= total_in) break;
   }
-  adpcm_flush(out, oc, OUT_CHUNK, scale_sample((int16_t)adpcm_pred, scale_q8));
+  // decode runs one ahead, write the last one
+  out.put(scale_sample((int16_t)adpcm_pred, scale_q8));
+  out.flush();
   adpcm_fade_out(scale_sample(adpcm_pred, scale_q8));
 }
 
 // peak 0..32767
 static void klaxon_square_tone(uint16_t freq_hz, uint16_t ms, int peak) {
   if (freq_hz == 0 || ms == 0) return;
-  constexpr int OUT_CHUNK = 256;
-  int16_t out[OUT_CHUNK];
-  int oc = 0;
-  const uint32_t half_period = (22050 / freq_hz) / 2;
+  I2sOut out;
+  const uint32_t half_period = (AUDIO_TICK_SAMPLE_RATE / freq_hz) / 2;
   uint32_t phase = 0;
   const uint32_t total = ms_to_samples(ms);
-  constexpr int ramp = 220;
   for (uint32_t i = 0; i < total; i++) {
-    int env = peak;
-    if (i < (uint32_t)ramp)         env = (int)i * peak / ramp;
-    else if (i > total - ramp)      env = (int)(total - i) * peak / ramp;
-    int16_t s = (phase < half_period) ? env : -env;
-    out[oc++] = s;
-    if (oc >= OUT_CHUNK) {
-      size_t w;
-      i2s_write(I2S_NUM_0, out, OUT_CHUNK * sizeof(int16_t), &w,
-                200 / portTICK_PERIOD_MS);
-      oc = 0;
-    }
+    int env = ramp(i, total, peak);
+    out.put((phase < half_period) ? env : -env);
     phase++;
     if (phase >= half_period * 2) phase = 0;
   }
-  if (oc > 0) {
-    size_t w;
-    i2s_write(I2S_NUM_0, out, oc * sizeof(int16_t), &w,
-              200 / portTICK_PERIOD_MS);
-  }
+  out.flush();
 }
 
 static void klaxon_square_sweep(float f_start, float f_end, uint16_t ms, int peak) {
   if (ms == 0) return;
-  constexpr int OUT_CHUNK = 256;
-  int16_t out[OUT_CHUNK];
-  int oc = 0;
-  constexpr float inv_fs = 1.0f / 22050.0f;
+  I2sOut out;
+  constexpr float inv_fs = 1.0f / (float)AUDIO_TICK_SAMPLE_RATE;
   float phase = 0.0f;
   const uint32_t total = ms_to_samples(ms);
-  constexpr int ramp = 220;
   const float fr = (float)total;
   for (uint32_t i = 0; i < total; i++) {
     const float t = (float)i / fr;
     const float f = f_start + (f_end - f_start) * t;
     phase += f * inv_fs;
     if (phase >= 1.0f) phase -= 1.0f;
-    int env = peak;
-    if (i < (uint32_t)ramp)         env = (int)i * peak / ramp;
-    else if (i > total - ramp)      env = (int)(total - i) * peak / ramp;
-    int16_t s = (phase < 0.5f) ? env : -env;
-    out[oc++] = s;
-    if (oc >= OUT_CHUNK) {
-      size_t w;
-      i2s_write(I2S_NUM_0, out, OUT_CHUNK * sizeof(int16_t), &w,
-                200 / portTICK_PERIOD_MS);
-      oc = 0;
-    }
+    int env = ramp(i, total, peak);
+    out.put((phase < 0.5f) ? env : -env);
   }
-  if (oc > 0) {
-    size_t w;
-    i2s_write(I2S_NUM_0, out, oc * sizeof(int16_t), &w,
-              200 / portTICK_PERIOD_MS);
-  }
+  out.flush();
 }
 
 // the audio worker's speech commands
@@ -364,7 +333,7 @@ void Voice::queueKlaxonOnAlert() {
   const bool now_alert = corium::m_b(M_ALERT);
   if (now_alert && !_prev_alert && !_quiet.active() && !_klax_wait) {
     _klax_wait = true;
-    _last_klax_ms = fast_millis();
+    _last_klax_ms = corium::fastMillis();
     AudioCmd cmd{};
     cmd.type = AC_KLAXON; cmd.i1 = _klax_type;
     audio_enqueue(cmd);
@@ -375,7 +344,7 @@ void Voice::queueKlaxonOnAlert() {
 void Voice::queueAnnouncement() {
   if (_ann_wait) return;
   _ann_wait = true;
-  _last_ann_ms = fast_millis();
+  _last_ann_ms = corium::fastMillis();
   AudioCmd cmd{};
   cmd.type = AC_ANNOUNCE;
   audio_enqueue(cmd);
@@ -384,10 +353,10 @@ void Voice::queueAnnouncement() {
 // not at boot
 void Voice::queueRadmonChange() {
   corium::Sender* m = _radmon;
-  // last_ok is only the answer once the reply is in
-  if (m && m->last_attempt_ms != 0 && !m->pending() &&
-      m->last_attempt_ms != _radmon_last_attempt) {
-    const bool ok = m->last_ok;
+  // lastOk is only the answer once the reply is in
+  if (m && m->lastAttemptMs != 0 && !m->pending() &&
+      m->lastAttemptMs != _radmon_last_attempt) {
+    const bool ok = m->lastOk;
     if (_radmon_known && ok != _radmon_was_ok) {
       AudioCmd cmd{};
       cmd.type = AC_WORD;
@@ -398,13 +367,13 @@ void Voice::queueRadmonChange() {
     }
     _radmon_was_ok = ok;
     _radmon_known  = true;
-    _radmon_last_attempt = m->last_attempt_ms;
+    _radmon_last_attempt = m->lastAttemptMs;
   }
 }
 
 void Voice::loop(unsigned long /*now*/) {
   // waits end here, every second, so a wrap can't bring one back
-  const unsigned long now_ms = fast_millis();
+  const unsigned long now_ms = corium::fastMillis();
   if (_klax_wait && now_ms - _last_klax_ms > (unsigned long)_klax_cd * 60UL * 1000UL) _klax_wait = false;
   if (_ann_wait && now_ms - _last_ann_ms >= (unsigned long)_ann_iv * 1000UL) _ann_wait = false;
   if (_klax_en) queueKlaxonOnAlert();
@@ -538,7 +507,7 @@ static void hAdpcm(EGHttpRequest& req, EGHttpResponse& res, void*) {
     if (!v) { res.send(404, FPSTR(HTTP_CT_PLAIN), F("unknown word")); return; }
     cmd.type = AC_WORD;
     cmd.word = v->name;   // arg buffer gets reused
-  } else if (parse_i32(req.arg(F("n")), &cmd.i32)) {
+  } else if (parseI32(req.arg(F("n")), &cmd.i32)) {
     cmd.type = AC_NUMBER;
   } else {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("w= or n= required"));
@@ -552,7 +521,7 @@ static void hKlaxon(EGHttpRequest& req, EGHttpResponse& res, void*) {
   uint8_t type = voice.klaxonType();
   if (tArg && tArg[0]) {
     int32_t v;
-    if (!parse_i32(tArg, &v) || v < 0 || v > 4) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("t=0..4")); return; }
+    if (!parseI32(tArg, &v) || v < 0 || v > 4) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("t=0..4")); return; }
     type = (uint8_t)v;
   }
   AudioCmd cmd{};

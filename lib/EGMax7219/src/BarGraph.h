@@ -1,5 +1,5 @@
 /*
-  BarGraph.h - CPM history as 8 high bar columns.
+  BarGraph.h - a history as 8 high bar columns.
 
   Copyright (C) 2026 @steadramon
 
@@ -36,8 +36,8 @@ inline bool barRange(const int* hist, int n, int trim_above, int min_span, int& 
 // oldest first, newest lands in the last column; bit 7 = bottom row
 void barColumns(const int* hist, int n, uint8_t* cols, int w, int min_span = 5);
 
-// LEDs lit: green to warn, orange to alert, red to 2x alert
-uint8_t zoneLevel(float cpm, float warn, float alert,
+// LEDs lit: green to low, orange to high, red to 2x high
+uint8_t zoneLevel(float value, float low, float high,
                   uint8_t green, uint8_t orange, uint8_t red);
 
 // 1/16 LEDs, falls 1/12 a frame, climbs at most rise

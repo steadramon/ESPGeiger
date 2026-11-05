@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef LOGGER_H
-#define LOGGER_H
+#ifndef CORIUM_LOGGER_H
+#define CORIUM_LOGGER_H
 
 #include "Arduino.h"
 #include "App/AppConfig.h"
@@ -31,6 +31,7 @@
 #define LOG_LEVEL    1
 #endif
 
+namespace corium {
 class Log {
 public:
   enum LoggingLevels {LOG_LEVEL_CONSOLE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
@@ -53,7 +54,7 @@ public:
   // lines idx..end-1 ending '\n', whole lines in one pass, idx moves on; idx 0 = all, over 255 = none
   static size_t copySince(uint32_t* idx, uint8_t end, char* out, size_t cap);
   static char getLogIdx();
-  static void setSerialLogLevel(bool level);
+  static void setSerialOn(bool on);
   static bool serialOn() { return serialLog; }
 
 private:
@@ -65,5 +66,6 @@ private:
   static LoggingLevels logLevel;
   static bool serialLog;
 };
+}  // namespace corium
 
 #endif

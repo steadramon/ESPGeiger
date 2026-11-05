@@ -37,17 +37,17 @@ uint8_t corium::Registry::_due_order[CORIUM_MAX_MODULES] = {};
 uint8_t corium::Registry::_due_count = 0;
 bool corium::Registry::_resort = false;
 #ifdef ESP32
-__NOINIT_ATTR uint8_t corium::Registry::_firing;   // crash_boot reads it first
+__NOINIT_ATTR uint8_t corium::Registry::_firing;   // crashBoot reads it first
 #else
-uint8_t corium::Registry::_firing = 0xFF;
+uint8_t corium::Registry::_firing = IN_NONE;
 #endif
 #ifdef CORIUM_CRASH_MARK
-uint8_t corium::Registry::_crashed_in = 0xFF;
+uint8_t corium::Registry::_crashed_in = IN_NONE;
 #endif
-IsrLock::Bits corium::Registry::_posted;
+corium::IsrLock::Bits corium::Registry::_posted;
 bool corium::Registry::_safe_mode = false;
 
-// keep sorted, loop_all reads [0]
+// keep sorted, loopAll reads [0]
 void corium::Registry::rebuild_due() {
   _resort = false;
   _due_count = 0;
@@ -77,23 +77,23 @@ bool corium::Registry::add(corium::Module* m, uint8_t feature) {
   return add(m);
 }
 
-void corium::Registry::begin_all() {
+void corium::Registry::beginAll() {
   if (_overflow) {
-    Log::console(PSTR("Module: Registry overflow, %u module(s) dropped (raise CORIUM_MAX_MODULES)"), _overflow);
+    corium::Log::console(PSTR("Module: Registry overflow, %u module(s) dropped (raise CORIUM_MAX_MODULES)"), _overflow);
   }
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     if (s.flags & FLAG_QUARANTINED) {
-      Log::console(PSTR("Module: Skipping %s (quarantined)"), s.module->name());
+      corium::Log::console(PSTR("Module: Skipping %s (quarantined)"), s.module->name());
       continue;
     }
-    if ((s.flags & FLAG_REQUIRES_WIFI) && Wifi::disabled) {
-      Log::debug(PSTR("Module: Skipping %s (wifi disabled)"), s.module->name());
+    if ((s.flags & FLAG_REQUIRES_WIFI) && corium::Wifi::disabled) {
+      corium::Log::debug(PSTR("Module: Skipping %s (wifi disabled)"), s.module->name());
       s.flags = (s.flags | FLAG_OFF) & ~FLAG_ARMED;
       _resort = true;
       continue;
     }
-    Log::debug(PSTR("Module: Starting %s"), s.module->name());
+    corium::Log::debug(PSTR("Module: Starting %s"), s.module->name());
     s.module->begin();
     yield();
   }
@@ -101,12 +101,12 @@ void corium::Registry::begin_all() {
 
 inline uint8_t corium::Registry::unmet_requirements() {
   uint8_t unmet = 0;
-  if (!Wifi::stable_for(WIFI_SETTLE_MS)) unmet |= FLAG_REQUIRES_WIFI;
-  if (!Clock::synced) unmet |= FLAG_REQUIRES_NTP;
+  if (!corium::Wifi::stableFor(WIFI_SETTLE_MS)) unmet |= FLAG_REQUIRES_WIFI;
+  if (!corium::Clock::synced) unmet |= FLAG_REQUIRES_NTP;
   return unmet;
 }
 
-// period re-armed first, the loop's own due_at wins
+// period re-armed first, the loop's own dueAt wins
 inline void corium::Registry::fire_slot(uint8_t idx, unsigned long now) {
   Slot& s = _slots[idx];
   s.loop_last = now;
@@ -123,7 +123,7 @@ inline void corium::Registry::fire_slot(uint8_t idx, unsigned long now) {
 #else
   s.module->loop(now);
 #endif
-  _firing = 0xFF;
+  _firing = IN_NONE;
   if (!(s.flags & FLAG_ARMED)) _resort = true;
 }
 
@@ -139,9 +139,9 @@ inline uint8_t corium::Registry::sift_due(uint8_t k) {
   return k;
 }
 
-// nothing armed, look again in a minute
+static constexpr uint32_t IDLE_WAKE_MS = 60000;
 inline uint32_t corium::Registry::next_wake(unsigned long now) {
-  return _due_count ? _slots[_due_order[0]].next_due : now + 60000;
+  return _due_count ? _slots[_due_order[0]].next_due : now + IDLE_WAKE_MS;
 }
 
 void corium::Registry::take_posts(unsigned long now) {
@@ -157,9 +157,9 @@ void corium::Registry::take_posts(unsigned long now) {
   _next_loop_due = now;
 }
 
-// gate closed, retry within 1 s
+static constexpr uint32_t GATE_RETRY_MS = 1000;
 static inline uint32_t retry_in(uint32_t period) {
-  return period && period < 1000 ? period : 1000;
+  return period && period < GATE_RETRY_MS ? period : GATE_RETRY_MS;
 }
 
 inline void corium::Registry::walk(unsigned long now) {
@@ -171,8 +171,8 @@ inline void corium::Registry::walk(unsigned long now) {
   while (k < _due_count) {
     uint8_t idx = _due_order[k];
     Slot& s = _slots[idx];
-    if (!reached(now, s.next_due)) break;
-    // once a pass, due_in(0) runs on the next
+    if (!corium::reached(now, s.next_due)) break;
+    // once a pass, dueIn(0) runs on the next
     if (fired & (1u << idx)) { k++; continue; }
     if (s.flags & unmet) {
       s.next_due = now + retry_in(s.period);
@@ -187,12 +187,12 @@ inline void corium::Registry::walk(unsigned long now) {
   }
 }
 
-void corium::Registry::loop_all(unsigned long now) {
+void corium::Registry::loopAll(unsigned long now) {
   if (_posted.any()) take_posts(now);
   if (_resort) rebuild_due();
-  if (!reached(now, _next_loop_due)) return;
+  if (!corium::reached(now, _next_loop_due)) return;
 
-  if (ota_in_progress) {
+  if (corium::otaInProgress) {
     for (uint8_t i = 0; i < _count; i++) {
       if (!(_slots[i].flags & FLAG_DURING_OTA)) continue;
       _slots[i].module->loop(now);
@@ -207,7 +207,7 @@ void corium::Registry::loop_all(unsigned long now) {
 
 #ifdef LOOP_PROFILE
 // biggest total_loop_us first
-void corium::Registry::log_loop_profile_and_reset() {
+void corium::Registry::logLoopProfileAndReset() {
   char buf[240];
   int pos = 0;
   uint32_t done = 0;
@@ -228,7 +228,7 @@ void corium::Registry::log_loop_profile_and_reset() {
     if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
     pos += n;
   }
-  if (pos > 0) Log::console(PSTR("Loop total/calls/max: %s"), buf);
+  if (pos > 0) corium::Log::console(PSTR("Loop total/calls/max: %s"), buf);
   for (uint8_t i = 0; i < _count; i++) {
     _slots[i].max_loop_us = 0;
     _slots[i].total_loop_us = 0;
@@ -237,7 +237,7 @@ void corium::Registry::log_loop_profile_and_reset() {
 }
 #endif
 
-void corium::Registry::log_activity_and_reset() {
+void corium::Registry::logActivityAndReset() {
   char buf[200];
   int pos = 0;
   bool any = false;
@@ -245,8 +245,8 @@ void corium::Registry::log_activity_and_reset() {
     corium::Module* m = _slots[i].module;
     corium::Sender* s = m->sender();
     if (!s) continue;
-    uint8_t ok = s->take_publish_ok();
-    uint8_t err = s->take_publish_err();
+    uint8_t ok = s->takePublishOk();
+    uint8_t err = s->takePublishErr();
     if (ok == 0 && err == 0) continue;
     any = true;
     PGM_P sep = pos ? PSTR(" ") : PSTR("");
@@ -259,7 +259,7 @@ void corium::Registry::log_activity_and_reset() {
     if (n <= 0 || pos + n >= (int)sizeof(buf)) break;
     pos += n;
   }
-  if (any) Log::console(PSTR("Activity: %s"), buf);
+  if (any) corium::Log::console(PSTR("Activity: %s"), buf);
 }
 
 corium::Registry::Slot* corium::Registry::slot_of(corium::Module* m) {
@@ -272,7 +272,7 @@ corium::Registry::Slot* corium::Registry::slot_of(corium::Module* m) {
 void corium::Registry::changed(Slot& s) {
   if (&s - _slots == _firing) return;
   _resort = true;
-  _next_loop_due = fast_millis();
+  _next_loop_due = corium::fastMillis();
 }
 
 bool corium::Registry::every(corium::Module* m, uint32_t ms) {
@@ -282,17 +282,17 @@ bool corium::Registry::every(corium::Module* m, uint32_t ms) {
   if (!ms) {
     s->flags &= ~FLAG_ARMED;
   } else {
-    uint32_t now = fast_millis();
-    // off to on runs now; overdue, or idle past 2^31 ms
+    uint32_t now = corium::fastMillis();
     bool start = !(s->flags & FLAG_ARMED);
-    s->next_due = start || (uint32_t)(now - s->loop_last) >= ms ? now : s->loop_last + ms;
+    bool overdue = (uint32_t)(now - s->loop_last) >= ms;   // or idle past 2^31 ms
+    s->next_due = (start || overdue) ? now : s->loop_last + ms;
     s->flags |= FLAG_ARMED;
   }
   changed(*s);
   return true;
 }
 
-bool corium::Registry::due_at(corium::Module* m, uint32_t t) {
+bool corium::Registry::dueAt(corium::Module* m, uint32_t t) {
   Slot* s = slot_of(m);
   if (!s) return false;
   s->next_due = t;
@@ -335,6 +335,14 @@ uint16_t corium::Registry::events(corium::Module* m) {
   return e;
 }
 
+bool corium::Registry::heard(uint8_t topic) {
+  if (topic >= CORIUM_MAX_TOPICS) return false;
+  for (uint8_t i = 0; i < _count; i++) {
+    if (_slots[i].topics & (1u << topic)) return true;
+  }
+  return false;
+}
+
 uint8_t corium::Registry::count() {
   return _count;
 }
@@ -354,7 +362,7 @@ corium::Module* corium::Registry::find(const char* name) {
   return nullptr;
 }
 
-// stable, keeps registration order. _slot follows before any pre_wifi
+// stable, keeps registration order. _slot follows before any preWifi
 void corium::Registry::sort_by_priority() {
   for (uint8_t i = 1; i < _count; i++) {
     Slot cur = _slots[i];
@@ -368,12 +376,12 @@ void corium::Registry::sort_by_priority() {
   for (uint8_t i = 0; i < _count; i++) _slots[i].module->_slot = i;
 }
 
-// cached, no virtual calls in loop_all(); nothing armed till a module asks
-void corium::Registry::pre_wifi_all() {
-  _firing = IN_NONE;   // no crash_boot, junk stays out
+// cached, no virtual calls in loopAll(); nothing armed till a module asks
+void corium::Registry::preWifiAll() {
+  _firing = IN_NONE;   // no crashBoot, junk stays out
   sort_by_priority();
 
-  uint32_t now = fast_millis();
+  uint32_t now = corium::fastMillis();
   _posted.take();   // bits were registration order
   _due_count = 0;
   for (uint8_t i = 0; i < _count; i++) {
@@ -384,33 +392,33 @@ void corium::Registry::pre_wifi_all() {
     s.period = 0;
     s.topics = 0;
     s.events = 0;
-    if (_safe_mode && !m->core_module()) {
+    if (_safe_mode && !m->coreModule()) {
       s.flags = FLAG_QUARANTINED | FLAG_OFF;
       continue;
     }
     uint8_t f = 0;
-    if (m->requires_wifi())  f |= FLAG_REQUIRES_WIFI;
-    if (m->requires_ntp())   f |= FLAG_REQUIRES_NTP;
-    if (m->runs_during_ota()) f |= FLAG_DURING_OTA;
+    if (m->requiresWifi())  f |= FLAG_REQUIRES_WIFI;
+    if (m->requiresNtp())   f |= FLAG_REQUIRES_NTP;
+    if (m->runsDuringOta()) f |= FLAG_DURING_OTA;
     s.flags = f;
-    m->pre_wifi();
+    m->preWifi();
     yield();
   }
   _next_loop_due = now;
 }
 
-void corium::Registry::set_safe_mode(bool on) {
+void corium::Registry::setSafeMode(bool on) {
   _safe_mode = on;
 }
 
 #ifdef CORIUM_CRASH_MARK
 // noinit holds junk after power on, only a crash reset is trusted
-void corium::Registry::crash_boot(bool crashed) {
+void corium::Registry::crashBoot(bool crashed) {
   _crashed_in = crashed ? _firing : IN_NONE;
 }
 
 // slots are sorted the same each boot
-const char* corium::Registry::crashed_in() {
+const char* corium::Registry::crashedIn() {
   if (_crashed_in < _count) return _slots[_crashed_in].module->name();
   if (_crashed_in == IN_TCP) return PSTR("tcp");
   if (_crashed_in == IN_PORTAL) return PSTR("portal");

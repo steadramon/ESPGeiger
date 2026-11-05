@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef REACTOR_H
-#define REACTOR_H
+#ifndef CORIUM_REACTOR_H
+#define CORIUM_REACTOR_H
 
 #include <Arduino.h>
 #include <EGTcp.h>
@@ -31,6 +31,7 @@
 #include "Corium/Output/LedSignal.h"
 #include "Corium/WebPortal/WebPortal.h"
 
+namespace corium {
 // hot(now) runs every pass, second() once a second
 namespace Reactor {
 
@@ -68,7 +69,7 @@ namespace Reactor {
     uint32_t _body_t0 = micros();
 #endif
     TickProfile::countIter();
-    unsigned long now = fast_millis();
+    unsigned long now = fastMillis();
     hot(now);
     // the rest runs on ms, once a ms is plenty
     static unsigned long s_ms;
@@ -87,13 +88,13 @@ namespace Reactor {
       }
 #endif
       // tcp callbacks, ota needs them too
-      corium::Registry::in(corium::Registry::IN_TCP);
+      Registry::in(Registry::IN_TCP);
       EGTcp::poll();
-      corium::Registry::in(corium::Registry::IN_PORTAL);
+      Registry::in(Registry::IN_PORTAL);
       // web ota needs it too
-      if (reached(now, portal.next_tick_due())) portal.tick(now);
-      corium::Registry::in(corium::Registry::IN_NONE);
-      if (corium::Registry::due(now)) corium::Registry::loop_all(now);
+      if (reached(now, portal.nextPollDue())) portal.poll(now);
+      Registry::in(Registry::IN_NONE);
+      if (Registry::due(now)) Registry::loopAll(now);
     }
 #ifdef LOOP_PROFILE
     TickProfile::addLoopBody((uint32_t)(micros() - _body_t0));
@@ -112,5 +113,6 @@ namespace Reactor {
   }
 
 }
+}  // namespace corium
 
 #endif

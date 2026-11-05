@@ -46,41 +46,41 @@ class Module {
   public:
     virtual const char* name() = 0;   // flash or SRAM, read with _P
     virtual uint8_t priority() { return CORIUM_PRIORITY_DEFAULT; }
-    virtual void pre_wifi() {}   // no network yet
+    virtual void preWifi() {}   // no network yet
     virtual void begin() {}      // after wifi, or offline
-    // runs once every() / due_at() / post() asks
+    // runs once every() / dueAt() / post() asks
     virtual void loop(unsigned long now) {}
 
-    virtual bool requires_wifi() { return false; }
-    virtual bool requires_ntp() { return false; }
+    virtual bool requiresWifi() { return false; }
+    virtual bool requiresNtp() { return false; }
     // safe mode keeps these
-    virtual bool core_module() { return false; }
+    virtual bool coreModule() { return false; }
     // loops during OTA
-    virtual bool runs_during_ota() { return false; }
+    virtual bool runsDuringOta() { return false; }
 
-    virtual const PrefGroup* prefs_group() { return nullptr; }
-    virtual const PrefShow* prefs_show() { return nullptr; }   // /param rows by another pref
-    virtual void on_prefs_loaded() {}
+    virtual const PrefGroup* prefsGroup() { return nullptr; }
+    virtual const PrefShow* prefsShow() { return nullptr; }   // /param rows by another pref
+    virtual void onPrefsLoaded() {}
 
     virtual void registerRoutes(EGHttpServer& http) { (void)http; }
 
     virtual const MenuEntry* menuEntries() { return nullptr; }
-    virtual void on_prefs_saved() { on_prefs_loaded(); }
-    virtual uint8_t display_order() { return 50; }  // lower first, 0 = hidden
-    virtual bool hw_present() { return true; }
+    virtual void onPrefsSaved() { onPrefsLoaded(); }
+    virtual uint8_t displayOrder() { return 50; }  // lower first, 0 = hidden
+    virtual bool hwPresent() { return true; }
 
     // LEGACY IMPORT (remove in v1.1.0) - PROGMEM table ending with {}
-    virtual LegacyRows legacy_aliases() { return LegacyRows(); }
+    virtual LegacyRows legacyAliases() { return LegacyRows(); }
 #ifdef CORIUM_PREFS_LEGACY_FILE
-    virtual const char* legacy_file() { return CORIUM_PREFS_LEGACY_FILE; }
+    virtual const char* legacyFile() { return CORIUM_PREFS_LEGACY_FILE; }
 #else
-    virtual const char* legacy_file() { return nullptr; }   // none
+    virtual const char* legacyFile() { return nullptr; }   // none
 #endif
 
     virtual MeasureRows measurements() { return MeasureRows(); }
 
     // /outputs fragment, 0 = not sending
-    virtual size_t status_json(char* buf, size_t cap, unsigned long now) { return 0; }
+    virtual size_t statusJson(char* buf, size_t cap, unsigned long now) { return 0; }
     virtual Sender* sender() { return nullptr; }   // nullptr = not a sender
 
     static constexpr uint8_t TOPIC_SENT = 1;   // a send went out
@@ -99,26 +99,26 @@ class Sender : public Module {
   public:
     Sender* sender() override { return this; }
 
-    void note_publish(bool ok);
-    void note_attempt();
-    void note_result(bool ok);
-    uint8_t take_publish_ok();
-    uint8_t take_publish_err();
+    void notePublish(bool ok);
+    void noteAttempt();
+    void noteResult(bool ok);
+    uint8_t takePublishOk();
+    uint8_t takePublishErr();
     bool pending() const { return _publish_pending; }   // sent, no reply yet
 
-    // share a byte, set via note_attempt() / note_result() only
-    uint8_t last_ok          : 1;
+    // share a byte, set via noteAttempt() / noteResult() only
+    uint8_t lastOk           : 1;
     uint8_t _publish_pending : 1;
   private:
     uint8_t _pub_ok  = 0;   // in the base's tail
     uint8_t _pub_err = 0;
   public:
-    unsigned long last_attempt_ms = 0;
+    unsigned long lastAttemptMs = 0;
 
   protected:
     ~Sender() = default;
-    static size_t write_status_json(char* buf, size_t cap, const char* key,
-                                    bool ok, unsigned long last_attempt_ms,
+    static size_t writeStatusJson(char* buf, size_t cap, const char* key,
+                                    bool ok, unsigned long lastAttemptMs,
                                     unsigned long now);
 };
 

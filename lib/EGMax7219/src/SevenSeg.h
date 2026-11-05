@@ -29,6 +29,8 @@ enum : uint8_t {
 // bit a=0 b=1 c=2 d=3 e=4 f=5 g=6
 uint8_t codeToSeg(uint8_t code);
 
+static const uint8_t SEG_DP = 0x80;
+
 // left to right, bit 7 = DP
 void codesToSegs(const uint8_t* codes, const bool* dps, uint8_t n, uint8_t* segs);
 

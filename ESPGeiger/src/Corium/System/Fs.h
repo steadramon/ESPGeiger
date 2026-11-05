@@ -21,11 +21,12 @@
 
 #include <LittleFS.h>
 
+namespace corium {
 namespace Fs {
   bool begin();   // first call only, formats after 3 failed mounts
   // all mount first and check before touching: esp32 logs a missing file
-  File open_r(const char* path);   // empty File if not there
-  File open_w(const char* path);
+  File openR(const char* path);   // empty File if not there
+  File openW(const char* path);
   bool remove(const char* path);   // false if not there
   bool exists(const char* path);
   bool rename(const char* from, const char* to);
@@ -34,11 +35,12 @@ namespace Fs {
 
   // flash paths, copied for the call; longer than PATH_P_MAX fails
   static const size_t PATH_P_MAX = 31;
-  File open_r(const __FlashStringHelper* path);
-  File open_w(const __FlashStringHelper* path);
+  File openR(const __FlashStringHelper* path);
+  File openW(const __FlashStringHelper* path);
   bool remove(const __FlashStringHelper* path);
   bool exists(const __FlashStringHelper* path);
   bool rename(const __FlashStringHelper* from, const __FlashStringHelper* to);
 }
+}  // namespace corium
 
 #endif

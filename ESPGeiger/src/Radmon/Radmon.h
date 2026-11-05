@@ -40,16 +40,16 @@ class Radmon : public corium::HttpPoster {
   public:
     Radmon();
     const char* name() override { return PSTR("radmon"); }
-    void on_prefs_loaded() override;
-    const corium::PrefGroup* prefs_group() override;
-    uint8_t display_order() override { return 30; }
-    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    void onPrefsLoaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    uint8_t displayOrder() override { return 30; }
+    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void setInterval(int interval);
     int getInterval();
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* log_tag() override { return PSTR("Radmon"); }
+    const char* logTag() override { return PSTR("Radmon"); }
   private:
     uint16_t pingInterval = RADMON_INTERVAL;
 };

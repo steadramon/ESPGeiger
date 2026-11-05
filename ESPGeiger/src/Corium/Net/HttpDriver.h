@@ -34,8 +34,8 @@ struct HttpMeta {
   PGM_P ctype = nullptr;           // Content-Type, nullptr = none
   PGM_P accept = nullptr;          // Accept, nullptr = none
   PGM_P extra = nullptr;           // one more header
-  const char* extra_value = nullptr;
-  uint16_t timeout_s = 30;         // quiet, twice that whole
+  const char* extraValue = nullptr;
+  uint16_t timeoutS = 30;         // quiet, twice that whole
 };
 
 // the reply posts the owner, its client goes with it

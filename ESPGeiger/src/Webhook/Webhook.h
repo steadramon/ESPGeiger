@@ -40,21 +40,21 @@ class Webhook : public corium::HttpPoster {
   public:
     Webhook();
     const char* name() override { return PSTR("whook"); }
-    void on_prefs_loaded() override;
-    const corium::PrefGroup* prefs_group() override;
-    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    void onPrefsLoaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void setInterval(int interval);
     int getInterval() { return pingInterval; }
     const char* cleanHTTP(const char* url);
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* log_tag() override { return PSTR("Webhook"); }
-    const char* status_key() override { return PSTR("webhook"); }
+    const char* logTag() override { return PSTR("Webhook"); }
+    const char* statusKey() override { return PSTR("webhook"); }
     const char* method() const override { return "POST"; }
-    uint16_t timeout_s() const override { return 10; }
-    size_t reply_cap() const override { return 128; }
-    PGM_P content_type() const override;
+    uint16_t timeoutS() const override { return 10; }
+    size_t replyCap() const override { return 128; }
+    PGM_P contentType() const override;
   private:
     uint16_t pingInterval = WEBHOOK_INTERVAL;
 };

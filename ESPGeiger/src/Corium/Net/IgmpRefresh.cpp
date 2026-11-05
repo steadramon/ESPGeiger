@@ -26,6 +26,7 @@
 #include <lwip/igmp.h>
 #include <lwip/tcpip.h>
 
+namespace corium {
 namespace IgmpRefresh {
 
 // Must run on the tcpip thread: igmp_report_groups mutates
@@ -45,9 +46,12 @@ bool refresh() {
 }
 
 }
+}  // namespace corium
 
 #else  // ESP8266 or other targets - bug doesn't manifest here.
 
+namespace corium {
 namespace IgmpRefresh { bool refresh() { return false; } }
+}  // namespace corium
 
 #endif

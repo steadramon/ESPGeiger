@@ -33,7 +33,7 @@ static bool take(char (&out)[N], const char* p, const char* e) {
 }
 
 // value may hold '=' and '.'
-static bool put_line(const char* p, const char* e, ImportText::PutFn put) {
+static bool put_line(const char* p, const char* e, corium::ImportText::PutFn put) {
   if (memchr(p, '\0', e - p)) return false;   // a NUL would cut the value
   const char* eq = (const char*)memchr(p, '=', e - p);
   if (!eq) return false;
@@ -46,7 +46,7 @@ static bool put_line(const char* p, const char* e, ImportText::PutFn put) {
   return put(mid, key, value);
 }
 
-static void one_line(const char* p, const char* e, ImportText::PutFn put, ImportText::Result& r,
+static void one_line(const char* p, const char* e, corium::ImportText::PutFn put, corium::ImportText::Result& r,
                      int line) {
   while (p < e && (*p == ' ' || *p == '\t')) p++;
   if (e > p && e[-1] == '\r') e--;
@@ -55,15 +55,15 @@ static void one_line(const char* p, const char* e, ImportText::PutFn put, Import
     r.applied++;
     return;
   }
-  if (!r.skipped) r.first_skip = line;
+  if (!r.skipped) r.firstSkip = line;
   r.skipped++;
 }
 
-bool ImportText::is_blob(const char* text, size_t len) {
-  return len >= 4 && memcmp_P(text, PSTR(EXPORT_MAGIC_B64), 4) == 0;
+bool corium::ImportText::isBlob(const char* text, size_t len) {
+  return len >= 4 && memcmp_P(text, PSTR(CORIUM_EXPORT_MAGIC_B64), 4) == 0;
 }
 
-ImportText::Result ImportText::apply(const char* text, size_t len, PutFn put) {
+corium::ImportText::Result corium::ImportText::apply(const char* text, size_t len, PutFn put) {
   Result r = {0, 0, 0};
   const char* end = text + len;
   int line = 0;
@@ -76,7 +76,7 @@ ImportText::Result ImportText::apply(const char* text, size_t len, PutFn put) {
   return r;
 }
 
-const char* ImportText::blob_error(const uint8_t* p, size_t len) {
+const char* corium::ImportText::blobError(const uint8_t* p, size_t len) {
   if (len < 1) return PSTR("too short");
   size_t off = 0;
   uint8_t gcount = p[off++];
@@ -91,7 +91,7 @@ const char* ImportText::blob_error(const uint8_t* p, size_t len) {
       uint8_t klen = p[off++];
       if (off + klen + 2 > len) return PSTR("bad pref key");
       off += klen;
-      uint16_t vlen = rd_be16(p + off);
+      uint16_t vlen = rdBe16(p + off);
       off += 2;
       if (off + vlen > len) return PSTR("truncated pref value");
       off += vlen;
@@ -109,14 +109,14 @@ static void take_id(char (&out)[CORIUM_PREF_ID_MAX + 1], const uint8_t* p, uint8
 
 // -1 = not moved
 static int moved_index(const char* mid) {
-  for (size_t i = 0; corium::Prefs::moved_from(i); i++) {
-    if (strcmp(corium::Prefs::moved_from(i), mid) == 0) return (int)i;
+  for (size_t i = 0; corium::Prefs::movedFrom(i); i++) {
+    if (strcmp(corium::Prefs::movedFrom(i), mid) == 0) return (int)i;
   }
   return -1;
 }
 
 // only the groups whose moved_index is pass
-static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
+static int apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put) {
   size_t off = 0;
   uint8_t gcount = p[off++];
   int applied = 0;
@@ -130,7 +130,7 @@ static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
       uint8_t klen = p[off++];
       char key[CORIUM_PREF_ID_MAX + 1];
       take_id(key, p + off, klen); off += klen;
-      uint16_t vlen = rd_be16(p + off);
+      uint16_t vlen = rdBe16(p + off);
       off += 2;
       char value[CORIUM_PREFS_MAX_VALUE + 1];
       // a NUL would cut the value, as put_line
@@ -144,10 +144,10 @@ static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
 }
 
 // moved groups last listed first, then the rest, as at boot
-int ImportText::apply_blob(const uint8_t* p, size_t len, PutFn put) {
-  if (blob_error(p, len)) return -1;
+int corium::ImportText::applyBlob(const uint8_t* p, size_t len, PutFn put) {
+  if (blobError(p, len)) return -1;
   int n = 0;
-  while (corium::Prefs::moved_from(n)) n++;
+  while (corium::Prefs::movedFrom(n)) n++;
   int applied = 0;
   for (int pass = n - 1; pass >= -1; pass--) applied += apply_pass(p, pass, put);
   return applied;

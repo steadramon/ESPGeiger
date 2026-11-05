@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef ISRLOCK_H
-#define ISRLOCK_H
+#ifndef CORIUM_ISRLOCK_H
+#define CORIUM_ISRLOCK_H
 
 #include <Arduino.h>
 #include <atomic>
@@ -28,13 +28,14 @@
 // isr code kept in ram
 #define CORIUM_ISR_ATTR IRAM_ATTR
 
+namespace corium {
 namespace IsrLock {
 
-  static inline __attribute__((always_inline)) void pin_on_fall(int pin, void (*fn)()) {
+  static inline __attribute__((always_inline)) void pinOnFall(int pin, void (*fn)()) {
     attachInterrupt(digitalPinToInterrupt(pin), fn, FALLING);
   }
 
-  static inline __attribute__((always_inline)) void pin_off(int pin) {
+  static inline __attribute__((always_inline)) void pinOff(int pin) {
     detachInterrupt(digitalPinToInterrupt(pin));
   }
 
@@ -71,7 +72,7 @@ namespace IsrLock {
   }
 
   // in the isr, 8266 isrs don't nest
-  static inline __attribute__((always_inline)) void enter_isr(Mux& x) {
+  static inline __attribute__((always_inline)) void enterIsr(Mux& x) {
 #if defined(ESP32)
     portENTER_CRITICAL_ISR(&x.m);
 #elif defined(NATIVE_TEST)
@@ -81,7 +82,7 @@ namespace IsrLock {
 #endif
   }
 
-  static inline __attribute__((always_inline)) void leave_isr(Mux& x) {
+  static inline __attribute__((always_inline)) void leaveIsr(Mux& x) {
 #if defined(ESP32)
     portEXIT_CRITICAL_ISR(&x.m);
 #elif defined(NATIVE_TEST)
@@ -113,5 +114,6 @@ namespace IsrLock {
   };
 
 }
+}  // namespace corium
 
 #endif

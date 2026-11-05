@@ -22,8 +22,12 @@ namespace EGTune {
 
 namespace {
 
+const int8_t PAUSE = -1, NOT_NOTE = 12, OCTAVE = 12;
+const uint8_t OCT_MIN = 3, OCT_MAX = 8;
+const uint32_t WHOLE_NOTE_MS = 4 * 60000UL;
+
 // octave 8, shift down for the rest
-const uint16_t NOTE8[12] = {4186, 4435, 4699, 4978, 5274, 5588, 5920, 6272, 6645, 7040, 7459, 7902};
+const uint16_t NOTE8[OCTAVE] = {4186, 4435, 4699, 4978, 5274, 5588, 5920, 6272, 6645, 7040, 7459, 7902};
 // semitone of a .. g
 const uint8_t SEMI[7] = {9, 11, 0, 2, 4, 5, 7};
 
@@ -31,13 +35,12 @@ bool digit(char c) { return c >= '0' && c <= '9'; }
 bool space(char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; }
 bool pow2(uint32_t v) { return v && v <= 32 && !(v & (v - 1)); }
 
-// -1 pause, 0..11, 12 = not a note
 int8_t letter(char c) {
   c |= 0x20;
-  if (c == 'p') return -1;
+  if (c == 'p') return PAUSE;
   if (c == 'h') return 11;
   if (c >= 'a' && c <= 'g') return SEMI[c - 'a'];
-  return 12;
+  return NOT_NOTE;
 }
 
 }
@@ -87,7 +90,7 @@ bool Reader::set(char k, uint32_t v) {
     if (!pow2(v)) return fail(RANGE);
     _d = v;
   } else if (k == 'o') {
-    if (v < 3 || v > 8) return fail(RANGE);
+    if (v < OCT_MIN || v > OCT_MAX) return fail(RANGE);
     _o = v;
   } else if (k == 'b') {
     if (!v || v > 900) return fail(RANGE);
@@ -192,11 +195,11 @@ bool Reader::note(Step& st) {
   if (digit(peek()) && !num(dur, 32)) return false;
   if (!pow2(dur)) return fail(RANGE);
   int8_t semi = letter(peek());
-  if (semi > 11) return fail(BAD);
+  if (semi == NOT_NOTE) return fail(BAD);
   _pos++;
   if (semi >= 0 && peek() == '#') { _pos++; semi++; }
   bool dot = dotted();
-  if (digit(peek()) && !num(oct, 8)) return false;
+  if (digit(peek()) && !num(oct, OCT_MAX)) return false;
   if (dotted()) dot = true;
   return pitch(st, semi, oct, beat(dur, dot));
 }
@@ -208,18 +211,18 @@ bool Reader::dotted() {
 }
 
 uint32_t Reader::beat(uint32_t dur, bool dot) const {
-  uint32_t ms = 240000UL / (_b * dur);
+  uint32_t ms = WHOLE_NOTE_MS / (_b * dur);
   return dot ? ms + ms / 2 : ms;
 }
 
-// -1 = pause, 12 = next octave's c
+// b# = next octave's c
 bool Reader::pitch(Step& st, int8_t semi, uint32_t oct, uint32_t ms) {
-  if (semi == 12) { semi = 0; oct++; }
-  if (oct < 3 || oct > 8) return fail(RANGE);
+  if (semi == OCTAVE) { semi = 0; oct++; }
+  if (oct < OCT_MIN || oct > OCT_MAX) return fail(RANGE);
   if (ms > _caps.step_ms) return fail(RANGE);
   st.ms = ms;
-  st.op = semi < 0 ? REST : TONE;
-  if (semi >= 0) st.hz = NOTE8[semi] >> (8 - oct);
+  st.op = semi == PAUSE ? REST : TONE;
+  if (semi != PAUSE) st.hz = NOTE8[semi] >> (OCT_MAX - oct);
   return true;
 }
 

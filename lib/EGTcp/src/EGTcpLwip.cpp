@@ -154,8 +154,7 @@ struct EGTcpLwip {
     }
     if (c->_rx) pbuf_cat((pbuf*)c->_rx, pb);
     else c->_rx = pb;
-    // lock held, no fetch_add on the 8266
-    c->_rx_len.store(c->_rx_len.load(std::memory_order_relaxed) + pb->tot_len, std::memory_order_release);
+    locked_add<uint32_t>(c->_rx_len, pb->tot_len, std::memory_order_release);
     EGTcpCore::post(c, EV_RX);
     return ERR_OK;
   }
@@ -486,7 +485,7 @@ struct EGTcpLwip {
       if (n > len) n = len;
       c->_rx_off += n;
       len -= n;
-      c->_rx_len.store(c->_rx_len.load(std::memory_order_relaxed) - n, std::memory_order_release);
+      locked_sub<uint32_t>(c->_rx_len, n, std::memory_order_release);
       if (c->_rx_off >= p->len) p = rx_pop(c);
     }
   }

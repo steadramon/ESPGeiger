@@ -138,7 +138,7 @@ sm(t){if(!(this.av>1))return t;this.hb=this.hb||[];return t.map((v,i)=>{const h=
 #ifndef ESP8266
 static void hGraphJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_picographJS
-  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), picographJS_GZ, picographJS_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), picographJS_GZ, picographJS_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(picographJS));

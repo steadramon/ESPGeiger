@@ -44,6 +44,10 @@ static bool _backend_max7219 = Display::add(&max7219);
 enum { PAGE_CPM = 0, PAGE_USV = 1, PAGE_TEMP = 2, PAGE_HUM = 3, PAGE_GRAPH = 4, PAGE_VU = 5 };
 static const uint8_t MAX_PAGES = 5;
 
+static const uint8_t ARC_LEDS = 24;
+static const uint8_t ARC_REG  = Max7219Driver::REG_DIGIT0 + 4;
+static const uint8_t VU_SUB   = 16;   // 1/16 led
+
 // slow reads, see slow_reads()
 static float s_t = NAN, s_h = NAN;
 static float s_warn = 0, s_alert_cpm = 0;
@@ -196,7 +200,7 @@ static const corium::PrefGroup MAX7219_PREF_GROUP PROGMEM = {
   corium::P_CAT_SYSTEM, K_DIN,
 };
 
-const corium::PrefGroup* Max7219Display::prefs_group() { return &MAX7219_PREF_GROUP; }
+const corium::PrefGroup* Max7219Display::prefsGroup() { return &MAX7219_PREF_GROUP; }
 
 // rows per display.type
 CORIUM_PSTR(MX_W_TYPE, "display.type");
@@ -220,10 +224,10 @@ static const corium::PrefShow MAX7219_SHOW[] PROGMEM = {
   {},
 };
 
-const corium::PrefShow* Max7219Display::prefs_show() { return MAX7219_SHOW; }
+const corium::PrefShow* Max7219Display::prefsShow() { return MAX7219_SHOW; }
 
 // always on the page, so always posted
-uint8_t Max7219Display::display_order() { return 18; }
+uint8_t Max7219Display::displayOrder() { return 18; }
 
 // not the display: no counts, no loop
 void Max7219Display::begin() {
@@ -271,7 +275,7 @@ void Max7219Display::safe_mode() {
   }
 }
 
-void Max7219Display::on_prefs_loaded() {
+void Max7219Display::onPrefsLoaded() {
   read_prefs();
   if (_active) apply();
 }
@@ -295,8 +299,8 @@ void Max7219Display::read_prefs() {
 bool Max7219Display::claim_pins() {
   const int8_t pins[] = {_din, _clk, tm() ? (int8_t)-1 : _cs};
   for (int8_t p : pins) {
-    if (const char* why = PinSafety::claim_output(p, PSTR("Max7219"))) {
-      Log::console(PSTR("MAX7219: pin=%d unsafe (%s) - disabled"), p, why);
+    if (const char* why = corium::PinSafety::claimOutput(p, PSTR("Max7219"))) {
+      corium::Log::console(PSTR("MAX7219: pin=%d unsafe (%s) - disabled"), p, why);
       return false;
     }
   }
@@ -304,7 +308,7 @@ bool Max7219Display::claim_pins() {
 }
 
 static uint8_t brightness(uint8_t top) {
-  return (uint8_t)brightness_curve(corium::Prefs::getUInt("display", EG_K_BRIGHTNESS), top);
+  return (uint8_t)brightnessCurve(corium::Prefs::getUInt("display", EG_K_BRIGHTNESS), top);
 }
 
 void Max7219Display::applyTm() {
@@ -320,10 +324,10 @@ void Max7219Display::applyTm() {
     bootSweep();
     _swept = true;
     if (_tm_acked) {
-      Log::console(PSTR("TM1637: display up (clk=%d dio=%d)"), _clk, _din);
+      corium::Log::console(PSTR("TM1637: display up (clk=%d dio=%d)"), _clk, _din);
     } else {
       _tm_off = true;
-      Log::console(PSTR("TM1637: no ack (clk=%d dio=%d), off until reboot"), _clk, _din);
+      corium::Log::console(PSTR("TM1637: no ack (clk=%d dio=%d), off until reboot"), _clk, _din);
     }
   }
 }
@@ -359,7 +363,7 @@ void Max7219Display::apply() {
   _lit = true;
   _drv.setIntensity(brightness(15));
   if (_drv.ready() && !_swept) {
-    Log::console(PSTR("MAX7219: display up (type=%u din=%d clk=%d cs=%d)"),
+    corium::Log::console(PSTR("MAX7219: display up (type=%u din=%d clk=%d cs=%d)"),
                  _layout, _din, _clk, _cs);
     bootSweep();
     _swept = true;
@@ -387,8 +391,8 @@ void Max7219Display::updatePage() {
   uint8_t list[MAX_PAGES];
   uint8_t n = buildPages(list);
   if (_page >= n) _page = 0;
-  if (_mode == 0) {                         // 0 = cycle
-    unsigned long now = fast_millis();
+  if (_mode == MX_CYCLE) {
+    unsigned long now = corium::fastMillis();
     if ((now - _page_since) >= MX_PAGE_DWELL_MS) {
       _page = (uint8_t)((_page + 1) % n);
       _page_since = now;
@@ -418,7 +422,7 @@ void Max7219Display::onButtonTap(unsigned long now, int8_t dir) {
   uint8_t n = buildPages(list);
   if (n <= 1) return;
   _page = (uint8_t)((_page + (dir > 0 ? 1 : n - 1)) % n);
-  _page_since = fast_millis();
+  _page_since = corium::fastMillis();
   _cur_page = list[_page];
 }
 
@@ -482,13 +486,13 @@ void Max7219Display::pageSegs(uint8_t* segs) {
 
 void Max7219Display::tmSend(const uint8_t* segs, uint8_t n) {
   bool ok = _tm.show(segs, n);
-  if (!ok && _tm_acked) Log::console(PSTR("TM1637: no ack, check wiring and power"));
+  if (!ok && _tm_acked) corium::Log::console(PSTR("TM1637: no ack, check wiring and power"));
   _tm_acked = ok;
   if (ok) {
     _tm_fails = 0;
   } else if (++_tm_fails >= TM_GIVE_UP) {
     _tm_off = true;
-    Log::console(PSTR("TM1637: no ack, off until reboot"));
+    corium::Log::console(PSTR("TM1637: no ack, off until reboot"));
   }
 }
 
@@ -497,7 +501,7 @@ void Max7219Display::pushArc(uint8_t level) {
   for (uint8_t s = 0; s < 3; s++) {
     int k = clamp((int)level - 8 * (int)s, 0, 8);
     uint8_t fill = k ? (uint8_t)(0xFF << (8 - k)) : 0;
-    _drv.write(0, Max7219Driver::REG_DIGIT0 + 4 + s, fill);
+    _drv.write(0, ARC_REG + s, fill);
   }
 }
 
@@ -611,7 +615,7 @@ void Max7219Display::drawRepRound(uint8_t* fb, uint16_t& w, uint16_t& h) {
     uint8_t i = 3 - p;
     fb[p] = (uint8_t)(codeToSeg(codes[i]) | (dps[i] ? 0x80 : 0));
   }
-  fb[4] = vu() ? (uint8_t)(_vu.shown / 16) : arcLevel();
+  fb[4] = vu() ? (uint8_t)(_vu.shown / VU_SUB) : arcLevel();
   w = 5; h = 0;
 }
 
@@ -668,7 +672,7 @@ void Max7219Display::pushArcMask(uint32_t mask) {
     for (uint8_t j = 0; j < 8; j++) {
       if (mask & (1UL << (8 * s + j))) b |= (uint8_t)(0x80 >> j);
     }
-    _drv.write(0, Max7219Driver::REG_DIGIT0 + 4 + s, b);
+    _drv.write(0, ARC_REG + s, b);
   }
 }
 
@@ -680,7 +684,7 @@ static const uint8_t BUILD[8] = { 0x00, 0x40, 0x60, 0x70, 0x78, 0x7C, 0x7E, 0x7F
 // comet, then a needle sweep
 void Max7219Display::roundBoot() {
   _drv.setDecode(0x00);
-  for (uint8_t head = 0; head < 24 + 3; head++) {
+  for (uint8_t head = 0; head < ARC_LEDS + 3; head++) {
     pushArcMask((0x7UL << head >> 2) & 0xFFFFFFUL);   // 3 led tail
     for (uint8_t p = 0; p < 4; p++) _drv.write(0, Max7219Driver::REG_DIGIT0 + p, SPIN[(head + p) % 6]);
     delay(20);
@@ -689,12 +693,13 @@ void Max7219Display::roundBoot() {
   auto frame = [this](uint8_t l) {
     pushArc(l);
     for (uint8_t p = 0; p < 4; p++) {
-      _drv.write(0, Max7219Driver::REG_DIGIT0 + p, (uint8_t)(BUILD[l * 7 / 24] | (l >= p * 6 ? 0x80 : 0)));
+      _drv.write(0, Max7219Driver::REG_DIGIT0 + p,
+                 (uint8_t)(BUILD[l * 7 / ARC_LEDS] | (l >= p * (ARC_LEDS / 4) ? 0x80 : 0)));
     }
   };
-  for (uint8_t l = 0; l <= 24; l++) { frame(l); delay(10 + l); }   // slows near the top
+  for (uint8_t l = 0; l <= ARC_LEDS; l++) { frame(l); delay(10 + l); }   // slows near the top
   delay(300);
-  for (int l = 24; l >= 0; l--) { frame((uint8_t)l); delay(16); }
+  for (int l = ARC_LEDS; l >= 0; l--) { frame((uint8_t)l); delay(16); }
   _drv.setDecode(0x0F);
   roundDigits(0, 0);
 }
@@ -708,7 +713,7 @@ static void hold_expired(unsigned long now, unsigned long& stamp, unsigned long 
 
 void Max7219Display::second() {
   if (!_active) return;
-  unsigned long now = fast_millis();
+  unsigned long now = corium::fastMillis();
   hold_expired(now, _page_since, MX_PAGE_DWELL_MS);
   hold_expired(now, _vu_ms, VU_GAP_MS);
   slow_reads(_cur_page);
@@ -729,7 +734,7 @@ void Max7219Display::matrixValueUnit(char* val, size_t vc, char* unit, size_t uc
   pageInfo(_cur_page, v, dec, u);
   if (dec == 0) snprintf_P(val, vc, PSTR("%d"), CounterMaths::to_int(v));
   else          format_f(val, vc, v, dec);
-  flash_to_ram(u, unit, uc);
+  flashToRam(u, unit, uc);
 }
 
 // works without pins, for /screen
@@ -851,10 +856,9 @@ void Max7219Display::fx(unsigned long now) {
   _fx = 0;
 }
 
-// arc in 1/16 LEDs
 void Max7219Display::vuFrame() {
   uint32_t blip = display.blip();
-  unsigned long now = fast_millis();
+  unsigned long now = corium::fastMillis();
   bool fresh = now - _vu_ms > VU_GAP_MS;   // page just shown, no backlog kick
   _vu_ms = now;
   // blip is the last click's stamp: one kick a frame at most
@@ -862,14 +866,14 @@ void Max7219Display::vuFrame() {
   _vu_blip = blip;
   float kick = 0;
   if (counts) {
-    kick = 8 * 16;   // one count, 8 LEDs at most
+    kick = 8 * VU_SUB;   // one count, 8 LEDs at most
     float perFrame = currentCPM() * LOOP_MS / 60000.0f;
     if (perFrame > 1) perFrame = 1;
     // at the last green LED the level falls 9 a frame
     if (perFrame > 0 && 9 / perFrame < kick) kick = 9 / perFrame;
   }
-  vuStep(_vu, counts, kick, 3 * 16, 24 * 16);
-  pushArc((uint8_t)(_vu.shown / 16));
+  vuStep(_vu, counts, kick, 3 * VU_SUB, ARC_LEDS * VU_SUB);
+  pushArc((uint8_t)(_vu.shown / VU_SUB));
 }
 
 static const uint8_t SINE16[64] PROGMEM = {
@@ -893,7 +897,7 @@ void Max7219Display::fxFrame(int W) {
 
 bool Max7219Display::fxScroll(int W) {
   char text[12];
-  flash_to_ram(W_APP_NAME, text, sizeof(text));
+  flashToRam(W_APP_NAME, text, sizeof(text));
   int x = W - (int)_fx;
   int end = mxDraw(_mfb, W, x, text, MX_SMALL);
   for (int c = 0; c < W; c++) {

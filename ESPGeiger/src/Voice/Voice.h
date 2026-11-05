@@ -22,14 +22,14 @@ class Voice : public corium::Module {
     Voice() {}
     const char* name() override { return PSTR("voice"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 18; }
+    uint8_t displayOrder() override { return 18; }
     static constexpr uint16_t LOOP_MS = 1000;
     void begin() override;
     void loop(unsigned long now) override;
     void registerRoutes(EGHttpServer& http) override;
 
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
 
     void speakDigit(uint8_t d, bool rising);
     void speakDigits(const char* s);
@@ -60,7 +60,7 @@ class Voice : public corium::Module {
     bool     _radmon_known  = false;
     bool     _radmon_was_ok = true;
     unsigned long _radmon_last_attempt = 0;
-    QuietWindow _quiet;
+    corium::QuietWindow _quiet;
     bool     _prev_alert = false;
     unsigned long _last_klax_ms = 0;
     unsigned long _last_ann_ms  = 0;

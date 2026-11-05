@@ -81,7 +81,7 @@ class EGHttpClient {
     bool setReqHeader(const char* name, const char* value);
     bool setReqHeader(const __FlashStringHelper* name, const char* value);
     bool setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
-    void setTimeout(uint16_t secs) { _timeoutS = secs; }   // silence, default 10
+    void setTimeoutS(uint16_t secs) { _timeoutS = secs; }   // silence, default 10
     void setDeadline(uint32_t ms) { _deadlineMs = ms; }    // whole request, 0 = none
 #if EGHTTP_REDIRECTS
     void setRedirects(uint8_t n) { _redirects = n; }       // http only

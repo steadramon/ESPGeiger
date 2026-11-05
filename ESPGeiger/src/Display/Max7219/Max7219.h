@@ -38,8 +38,8 @@ class Max7219Display : public corium::Module, public DisplayBackend {
   public:
     const char* name() override { return PSTR("max72"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
-    uint8_t display_order() override;
-    bool hw_present() override { return true; }   // write only, no probe
+    uint8_t displayOrder() override;
+    bool hwPresent() override { return true; }   // write only, no probe
     bool screenBuffer(const uint8_t*& buf, uint16_t& w, uint16_t& h);
     void onButtonTap(unsigned long now, int8_t dir);
     void begin() override;
@@ -52,9 +52,9 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     void reload() override;
     void safe_mode() override;
     bool takes(uint8_t type) override { return DISP_IS_MAX7219(type); }
-    const corium::PrefGroup* prefs_group() override;
-    const corium::PrefShow* prefs_show() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    const corium::PrefShow* prefsShow() override;
+    void onPrefsLoaded() override;
     static constexpr uint16_t LOOP_MS = 60;
     void loop(unsigned long now) override;      // matrix scroll
 
@@ -110,7 +110,8 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     uint8_t _bar_gain = 2;        // full = gain * baseline
     uint8_t _bar_win = 1;         // 0 = 5 min, 1 = 15 min
 
-    uint8_t  _mode = 1;           // 0 = cycle, 1 = fixed
+    enum : uint8_t { MX_CYCLE, MX_FIXED };
+    uint8_t  _mode = MX_FIXED;
     bool     vu() const;          // round, VU page
     bool     _reverse = false;    // 7-seg digit 0 on the left
     uint8_t  _page = 0;

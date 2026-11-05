@@ -194,10 +194,11 @@ static size_t eghttp_find_header_end(const char* buf, size_t len) {
 
 // ---------- EGHttpServer ----------
 
-// 0xFF = no route
+static const uint8_t ROUTE_STEP = 16;
+
 bool EGHttpServer::growRoutes() {
-  if (_routeCap >= 0xF0) return false;
-  uint8_t cap = _routeCap + 16;
+  if (_routeCap > NO_ROUTE - ROUTE_STEP) return false;
+  uint8_t cap = _routeCap + ROUTE_STEP;
   Route* r = (Route*)realloc(_routes, cap * sizeof(Route));
   if (!r) return false;
   _routes = r;
@@ -332,21 +333,15 @@ static void set_acc(EGHttpServer::Slot* s, char* buf, size_t cap) {
 }
 
 static void clear_slot(EGHttpServer::Slot* s) {
-  s->delete_pending = false;
   s->len            = 0;
-  s->headersDone    = false;
   s->contentLength  = 0;
   s->headerEnd      = 0;
-  s->streaming      = false;
-  s->stream_begun   = false;
-  s->stream_ended   = false;
-  s->stream_aborted = false;
-  s->ack_paused     = false;
+  s->stream         = EGHttpServer::NO_STREAM;
   s->ack_owed       = 0;
   s->bodyAcked      = 0;
   s->send_aborted   = false;
   s->responded      = false;
-  s->routeIdx       = 0xFF;
+  s->routeIdx       = EGHttpServer::NO_ROUTE;
   set_acc(s, nullptr, 0);
   s->tail           = nullptr;
   s->tailLen        = 0;
@@ -368,9 +363,8 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(EGTcpClient* c) {
 void EGHttpServer::markDone(Slot* s) {
   if (s->buf) { free(s->buf); s->buf = nullptr; }
   set_acc(s, nullptr, 0);
-  s->state          = DONE;
-  s->delete_pending = true;
-  _tickWanted       = true;
+  s->state    = DONE;
+  _tickWanted = true;
 }
 
 // the slot keeps the client till reclaimed
@@ -390,14 +384,10 @@ void EGHttpServer::resetSlot(Slot* s) {
   delete c;   // closes it if still open
 }
 
-static bool eghttp_stream_open(const EGHttpServer::Slot* s) {
-  return s->streaming && s->stream_begun && !s->stream_ended;
-}
-
 // handler hears it once
 void EGHttpServer::abortStream(Slot* s) {
-  if (!eghttp_stream_open(s) || s->stream_aborted) return;
-  s->stream_aborted = true;
+  if (s->stream != STREAM_OPEN) return;
+  s->stream = STREAM_ABORTED;
   deliverBodyEvent(s, BODY_ABORT, nullptr, 0);
 }
 
@@ -409,13 +399,13 @@ void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
     if (s->state != RECEIVING) return;
     takeData(s, data, len);
     // still not all in, a trickle
-    if (s->state == RECEIVING && !s->streaming && eghttp_late(s)) drop(s);
+    if (s->state == RECEIVING && s->stream == NO_STREAM && eghttp_late(s)) drop(s);
     _tickWanted = true;
   });
   c->onClose([this, s](int8_t err) {
 #ifdef EGHTTP_DEBUG
     Serial.printf_P(PSTR("[EGHttp] closed err=%d streaming=%d acked=%u/%u\n"),
-                    (int)err, (int)s->streaming, (unsigned)s->bodyAcked,
+                    (int)err, (int)(s->stream != NO_STREAM), (unsigned)s->bodyAcked,
                     (unsigned)s->contentLength);
 #else
     (void)err;
@@ -437,9 +427,8 @@ void EGHttpServer::onClient(EGTcpClient* c) {
 
 // peer, error or timeout; tick() reclaims
 void EGHttpServer::onClosed(Slot* s) {
-  s->state          = DONE;
-  s->delete_pending = true;
-  _tickWanted       = true;
+  s->state    = DONE;
+  _tickWanted = true;
 }
 
 void EGHttpServer::takeStream(Slot* s, const uint8_t* data, size_t len) {
@@ -457,27 +446,31 @@ void EGHttpServer::takeStream(Slot* s, const uint8_t* data, size_t len) {
   }
   memcpy(_streamBuf + _streamLen, data, len);
   _streamLen += len;
-  s->ack_paused = true;
   s->client->ackLater();
 }
 
+static bool append_req(EGHttpServer::Slot* s, const uint8_t* data, size_t len) {
+  if (s->len + len > EGHTTP_REQ_BUF) return false;
+  memcpy(s->buf + s->len, data, len);
+  s->len += len;
+  return true;
+}
+
 void EGHttpServer::takeData(Slot* s, const uint8_t* data, size_t len) {
-  if (!s->headersDone) {
+  if (!s->headerEnd) {
     receiveHeaders(s, data, len);
     return;
   }
 
-  if (s->streaming) {
+  if (s->stream != NO_STREAM) {
     takeStream(s, data, len);
     return;
   }
 
-  if (s->len + len > EGHTTP_REQ_BUF) {
+  if (!append_req(s, data, len)) {
     sendStatusAndClose(s, S413);
     return;
   }
-  memcpy(s->buf + s->len, data, len);
-  s->len += len;
   if (s->len < s->headerEnd + s->contentLength) return;
   s->state = READY;
 }
@@ -489,19 +482,16 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
     sendStatusAndClose(s, S503, 1);
     return;
   }
-  if (s->len + len > EGHTTP_REQ_BUF) {
+  if (!append_req(s, data, len)) {
     Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
                     (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
     sendStatusAndClose(s, S413);
     return;
   }
-  memcpy(s->buf + s->len, data, len);
-  s->len += len;
 
   size_t headerEnd = eghttp_find_header_end(s->buf, s->len);
   if (!headerEnd) return;
-  s->headerEnd   = headerEnd;
-  s->headersDone = true;
+  s->headerEnd = headerEnd;
 
   if (eghttp_content_length(s->buf, s->headerEnd, &s->contentLength) == EGHTTP_CL_BAD) {
     sendStatusAndClose(s, S400);
@@ -553,8 +543,7 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   _streamBuf    = buf;
   _streamLen    = inBuf;
   _streamOwner  = s;
-  s->ack_paused = true;
-  s->streaming  = true;
+  s->stream     = STREAM_WAIT;
   s->due        = EGClock::now() + EGHTTP_REQ_MS;
   s->client->setIdleTimeout(EGHTTP_STREAM_IDLE_MS);
   s->client->ackLater();
@@ -598,7 +587,7 @@ uint8_t EGHttpServer::findRoute(const char* path, EGHttpRequest::Method method) 
       return i;
     }
   }
-  return 0xFF;
+  return NO_ROUTE;
 }
 
 void EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
@@ -616,12 +605,12 @@ void EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
 
 void EGHttpServer::drainStream(Slot* s) {
   // snapshot, a handler that polls adds more
-  bool mine = s->streaming && _streamOwner == s;
+  bool mine = s->stream != NO_STREAM && _streamOwner == s;
   size_t toDeliver = _streamLen;
-  if (!mine || s->stream_ended) return;
+  if (!mine || s->stream == STREAM_ENDED) return;
 
-  if (!s->stream_begun) {
-    s->stream_begun = true;
+  if (s->stream == STREAM_WAIT) {
+    s->stream = STREAM_OPEN;
     deliverBodyEvent(s, BODY_BEGIN, nullptr, 0);
   }
   if (s->ack_owed && s->client) {
@@ -647,7 +636,7 @@ void EGHttpServer::drainStream(Slot* s) {
   }
 
   if (s->bodyAcked >= s->contentLength) {
-    s->stream_ended = true;
+    s->stream = STREAM_ENDED;
     deliverBodyEvent(s, BODY_END, nullptr, 0);
     s->state = READY;
     releaseStream();
@@ -664,15 +653,15 @@ void EGHttpServer::claimChunkAcc(Slot* s) {
   set_acc(s, _dispatchChunkAcc, EGHTTP_CHUNK_ACC);
 #else
   // tail only, +1 keeps the body's NUL
-  size_t reqUsed = s->headerEnd + (s->streaming ? 0 : s->contentLength) + 1;
+  size_t reqUsed = s->headerEnd + (s->stream != NO_STREAM ? 0 : s->contentLength) + 1;
   if (s->buf && reqUsed < EGHTTP_REQ_BUF) set_acc(s, s->buf + reqUsed, EGHTTP_REQ_BUF - reqUsed);
   else                                    set_acc(s, nullptr, 0);
 #endif
 }
 
 bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
-  char* sp1 = strchr(s->buf, '\0');
-  if (!sp1 || sp1 >= s->buf + s->headerEnd) return false;
+  char* sp1 = s->buf + strlen(s->buf);
+  if (sp1 >= s->buf + s->headerEnd) return false;
 
   char* path = sp1 + 1;
   if (!memchr(path, '\0', s->buf + s->headerEnd - path)) return false;
@@ -685,8 +674,9 @@ bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
   req._path = path;
 
   req._body    = s->buf + s->headerEnd;
-  req._bodyLen = s->streaming ? 0 : s->contentLength;
-  if (!s->streaming && s->headerEnd + req._bodyLen < EGHTTP_REQ_BUF) {
+  bool streamed = s->stream != NO_STREAM;
+  req._bodyLen = streamed ? 0 : s->contentLength;
+  if (!streamed && s->headerEnd + req._bodyLen < EGHTTP_REQ_BUF) {
     s->buf[s->headerEnd + req._bodyLen] = '\0';
   }
   return true;
@@ -785,21 +775,21 @@ void EGHttpServer::tick() {
   relisten();
 
   for (auto& s : _slots) {
-    if (s.delete_pending) {
+    if (s.state == DONE) {
       reclaimSlot(&s);
       continue;
     }
-    if (s.state == RECEIVING && s.streaming) drainStream(&s);
+    if (s.state == RECEIVING && s.stream != NO_STREAM) drainStream(&s);
     if (s.state == READY) respond(&s);
   }
 }
 
 void EGHttpServer::reclaimSlot(Slot* s) {
-  if (eghttp_stream_open(s) && _streamOwner == s && _streamLen > 0) {
+  if (s->stream == STREAM_OPEN && _streamOwner == s && _streamLen > 0) {
     drainStream(s);
   }
   // whole body came, handler frees
-  if (s->stream_ended && !s->responded) respond(s);
+  if (s->stream == STREAM_ENDED && !s->responded) respond(s);
   abortStream(s);
   if (_streamOwner == s) releaseStream();
   resetSlot(s);
@@ -937,8 +927,10 @@ bool EGHttpResponse::redirect(const char* location) {
   return eghttp_text(location) && redirectP(location);
 }
 
+static const size_t HEAD_MAX = 256;
+
 // 0 = too long
-static int eghttp_head(char (&head)[256], uint16_t status, PGM_P ct, PGM_P enc,
+static int eghttp_head(char (&head)[HEAD_MAX], uint16_t status, PGM_P ct, PGM_P enc,
                        size_t len, const char* extra) {
   int n = snprintf_P(head, sizeof(head), HEAD_OK,
     status, ct, enc, (unsigned)len, CLOSE_NOSNIFF, extra);
@@ -950,7 +942,7 @@ void EGHttpResponse::send(uint16_t status, const __FlashStringHelper* contentTyp
   if (!_slot || _started || _done) return;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   size_t bodyLen = body ? strlen(body) : 0;
-  char head[256];
+  char head[HEAD_MAX];
   int n = eghttp_head(head, status, (PGM_P)contentType, PSTR(""), bodyLen, _extraHeaders);
   if (!n) return;
   if (s->chunkAcc && s->chunkAccCap > 0) {
@@ -971,7 +963,7 @@ void EGHttpResponse::send(uint16_t status, const __FlashStringHelper* contentTyp
 void EGHttpResponse::send(uint16_t status, const __FlashStringHelper* contentType, const __FlashStringHelper* body) {
   if (!_slot || _started || _done) return;
   size_t bodyLen = body ? strlen_P((PGM_P)body) : 0;
-  char head[256];
+  char head[HEAD_MAX];
   int n = eghttp_head(head, status, (PGM_P)contentType, PSTR(""), bodyLen, _extraHeaders);
   if (!n) return;
   writeHeadAndBodyP(head, (size_t)n, (PGM_P)body, bodyLen);
@@ -980,7 +972,7 @@ void EGHttpResponse::send(uint16_t status, const __FlashStringHelper* contentTyp
 void EGHttpResponse::sendGzipP(uint16_t status, const __FlashStringHelper* contentType,
                                  const uint8_t* body, size_t len) {
   if (!_slot || _started || _done) return;
-  char head[256];
+  char head[HEAD_MAX];
   int n = eghttp_head(head, status, (PGM_P)contentType, GZIP_CRLF, len, _extraHeaders);
   if (!n) return;
   writeHeadAndBodyP(head, (size_t)n, (PGM_P)body, len);
@@ -1005,7 +997,7 @@ void EGHttpResponse::writeHeadAndBodyP(const char* head, size_t headLen,
 bool EGHttpResponse::redirectP(PGM_P location) {
   if (!_slot || _started || _done) return false;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
-  char head[256];
+  char head[HEAD_MAX];
   int n = snprintf_P(head, sizeof(head),
     PSTR("HTTP/1.1 302 Found\r\nLocation: %s\r\n%s%s\r\n"), location, CL0_CRLF, CLOSE_NOSNIFF);
   if (!eghttp_head_fits(n, sizeof(head))) return false;
@@ -1018,7 +1010,7 @@ bool EGHttpResponse::redirectP(PGM_P location) {
 bool EGHttpResponse::beginChunked(uint16_t status, const __FlashStringHelper* contentType) {
   if (!_slot || _started || _done) return false;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
-  char head[256];
+  char head[HEAD_MAX];
   int n = snprintf_P(head, sizeof(head),
     PSTR("HTTP/1.1 %u \r\nContent-Type: %s\r\nTransfer-Encoding: chunked\r\n%s%s\r\n"),
     status, (PGM_P)contentType, CLOSE_NOSNIFF, _extraHeaders);

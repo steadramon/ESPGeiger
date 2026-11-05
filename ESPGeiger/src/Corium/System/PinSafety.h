@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef PINSAFETY_H
-#define PINSAFETY_H
+#ifndef CORIUM_PINSAFETY_H
+#define CORIUM_PINSAFETY_H
 
 #include <Arduino.h>
 #include "App/AppConfig.h"
@@ -42,19 +42,20 @@
   #endif
 #endif
 
-#ifndef PINSAFETY_MAX_CLAIMS
-#define PINSAFETY_MAX_CLAIMS 16
+#ifndef CORIUM_PINSAFETY_MAX_CLAIMS
+#define CORIUM_PINSAFETY_MAX_CLAIMS 16
 #endif
 
+namespace corium {
 namespace PinSafety {
 
 extern const char I2C[];   // shared bus, one owner
 
 // nullptr = ok, else why or the other owner (PROGMEM)
 const char* claim(int pin, const char* owner);
-const char* claim_output(int pin, const char* owner);
-const char* claim_input(int pin, const char* owner);
-const char* claim_button(int pin, const char* owner);   // input, no strap note
+const char* claimOutput(int pin, const char* owner);
+const char* claimInput(int pin, const char* owner);
+const char* claimButton(int pin, const char* owner);   // input, no strap note
 
 enum Use : uint8_t { USE_OUT, USE_IN, USE_BUTTON };
 
@@ -103,5 +104,6 @@ const char* refuse(int pin, Use use, uint8_t needs, const char** warn);
 constexpr size_t WHY_MAX = 24;   // longest refuse() text, with the nul
 
 }  // namespace PinSafety
+}  // namespace corium
 
 #endif

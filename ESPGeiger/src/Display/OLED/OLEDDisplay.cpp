@@ -50,6 +50,11 @@ CORIUM_PSTR(K_RST,  "rst");
 CORIUM_PSTR(K_FLIP, "flip");
 
 static const uint8_t HIST = 45;   // seconds
+static const uint8_t GRAPH_TOP = 35;
+static const uint8_t GRAPH_BOT = 63;
+static const uint8_t GRAPH_W   = 2 * HIST;
+static const uint8_t GRAPH_H   = 24;
+static const uint8_t LABEL_X   = GRAPH_W + 3;
 
 static void format_cpm(char* buf, size_t bufsz, float cpm) {
   if (cpm < 10.0f) format_f(buf, bufsz, cpm, 1);
@@ -63,12 +68,12 @@ static Drop*    s_matrix_drops = nullptr;
 static uint8_t* s_static_noise = nullptr;
 
 // loop rates, ms. no panel: /screen polls every 500 ms
-static const uint16_t TICK_MS           = 20;
-static const uint16_t SAVER_TICK_MS     = 10;
-static const uint16_t NOPANEL_TICK_MS   = 250;
+static const uint16_t LOOP_MS           = 20;
+static const uint16_t SAVER_LOOP_MS     = 10;
+static const uint16_t NOPANEL_LOOP_MS   = 250;
 static const uint16_t NOPANEL_SAVER_MS  = 80;
-static const uint16_t DARK_TICK_MS      = 30000;
-static const uint16_t LOCKED_TICK_MS    = 1000;
+static const uint16_t DARK_LOOP_MS      = 30000;
+static const uint16_t LOCKED_LOOP_MS    = 1000;
 // redraws, ms
 static const unsigned long FRAME_MS         = 500;
 static const unsigned long NOPANEL_FRAME_MS = 250;
@@ -168,19 +173,19 @@ void SSD1306Display::drawStrP(int16_t x, int16_t y, const char* s) {
 #ifndef OLED_PINS_BLOCKED
 // the pref's pin if it's safe, else the default, claimed for it
 static uint8_t safe_pin(uint8_t want, uint8_t def, const char* owner, const char* fmt) {
-  const char* why = PinSafety::claim_output((int)want, owner);
+  const char* why = corium::PinSafety::claimOutput((int)want, owner);
   if (!why) return want;
-  Log::console(fmt, want, why, def);
-  if (def != 255) PinSafety::claim((int)def, owner);
+  corium::Log::console(fmt, want, why, def);
+  if (def != 255) corium::PinSafety::claim((int)def, owner);
   return def;
 }
 #endif
 
 void SSD1306Display::load_pins() {
 #ifndef OLED_PINS_BLOCKED
-  _pin_sda = safe_pin((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA), _pin_sda, PinSafety::I2C,
+  _pin_sda = safe_pin((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA), _pin_sda, corium::PinSafety::I2C,
                       PSTR("OLED: sda=%u unsafe (%s) - keeping default %u"));
-  _pin_scl = safe_pin((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL), _pin_scl, PinSafety::I2C,
+  _pin_scl = safe_pin((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL), _pin_scl, corium::PinSafety::I2C,
                       PSTR("OLED: scl=%u unsafe (%s) - keeping default %u"));
   uint8_t rst = (uint8_t)corium::Prefs::getUInt("display", K_RST);
   _pin_rst = rst == 255 ? 255 : safe_pin(rst, _pin_rst, PIN_OWNER,
@@ -189,7 +194,7 @@ void SSD1306Display::load_pins() {
 #else
   _pref_display_type = OLED_TYPE;
 #endif
-  I2CBus::pins(_pin_sda, _pin_scl);
+  corium::I2CBus::pins(_pin_sda, _pin_scl);
 }
 
 void SSD1306Display::start() {
@@ -201,7 +206,7 @@ void SSD1306Display::start() {
   corium::Registry::on(Display::TOPIC_POWER, this);
   corium::Registry::on(TOPIC_SENT, this);
   corium::Registry::on(Topic::PING, this);
-  corium::Registry::every(this, TICK_MS);
+  corium::Registry::every(this, LOOP_MS);
 }
 
 void SSD1306Display::reload() {
@@ -217,10 +222,10 @@ void SSD1306Display::setBrightness(uint8_t brightness) {
   setContrast(brightness);
 }
 
-uint16_t SSD1306Display::tick_ms() const {
+uint16_t SSD1306Display::loop_ms() const {
   bool saver = oled_page == PAGE_SAVER;
-  if (_present) return saver ? SAVER_TICK_MS : TICK_MS;
-  return saver ? NOPANEL_SAVER_MS : NOPANEL_TICK_MS;
+  if (_present) return saver ? SAVER_LOOP_MS : LOOP_MS;
+  return saver ? NOPANEL_SAVER_MS : NOPANEL_LOOP_MS;
 }
 
 unsigned long SSD1306Display::frame_ms() const {
@@ -236,7 +241,7 @@ void SSD1306Display::page_changed(unsigned long now) {
   }
   _last_page = oled_page;
   _next_render_due = now;
-  corium::Registry::every(this, tick_ms());
+  corium::Registry::every(this, loop_ms());
 }
 
 // false = asleep, nothing to draw
@@ -244,7 +249,7 @@ bool SSD1306Display::awake(unsigned long now) {
   if (!_present) return true;
   if (!display.lit()) {
     if (oled_on) { clearBuffer(); setPowerSave(1); oled_on = false; _send_rows_left = 0; }
-    corium::Registry::every(this, DARK_TICK_MS);   // not 0, power events still land
+    corium::Registry::every(this, DARK_LOOP_MS);   // not 0, power events still land
     return false;
   }
   if (!oled_on) {
@@ -252,14 +257,14 @@ bool SSD1306Display::awake(unsigned long now) {
     oled_page = PAGE_MAIN;
     oled_on = true;
     oled_last_update = now - MAIN_FULL_MS;
-    corium::Registry::every(this, TICK_MS);
+    corium::Registry::every(this, LOOP_MS);
   }
   return true;
 }
 
 // 0 = never drawn
 bool SSD1306Display::due(unsigned long now, unsigned long every) {
-  if (fresh(now, oled_last_update, every)) return false;
+  if (corium::fresh(now, oled_last_update, every)) return false;
   oled_last_update = now;
   return true;
 }
@@ -298,7 +303,7 @@ void SSD1306Display::render_tiny() {
     case 4:  page_tiny_meter(); break;
     default: page_tiny();       break;
   }
-  if (Wifi::connected) drawPixel(71, 0);   // every page, over what's drawn
+  if (corium::Wifi::connected) drawPixel(71, 0);   // every page, over what's drawn
 }
 #endif
 
@@ -313,11 +318,11 @@ uint8_t SSD1306Display::render(unsigned long now) {
   switch (oled_page) {
     case PAGE_MAIN:
       return render_main(now);
-    case 2:
+    case PAGE_NET:
       if (!due(now, NET_MS)) return DR_NONE;
       page_two_full();
       return DR_FULL;
-    case 3:
+    case PAGE_ABOUT:
       if (!due(now, ABOUT_MS)) return DR_NONE;
       page_three_full();
       return DR_FULL;
@@ -348,10 +353,10 @@ void SSD1306Display::loop(unsigned long now) {
     return;
   }
   if (_locked_page || _ota_lock) {
-    corium::Registry::every(this, LOCKED_TICK_MS);
+    corium::Registry::every(this, LOCKED_LOOP_MS);
     return;
   }
-  // one row a tick
+  // one row a loop
   if (_send_rows_left > 0) {
     if (_present) updateDisplayArea(0, _send_ty + _send_cur, TILE_COLS, 1);
     _send_cur++;
@@ -360,7 +365,7 @@ void SSD1306Display::loop(unsigned long now) {
     return;
   }
   take_events(now);
-  if (!due_every(now, _next_render_due, frame_ms())) {
+  if (!corium::dueEvery(now, _next_render_due, frame_ms())) {
     next_frame(now);
     return;
   }
@@ -383,11 +388,11 @@ void SSD1306Display::draw_frame(unsigned long now) {
   if (!_send_rows_left) next_frame(now);
 }
 
-// rows ride the tick, else asleep till the frame, on the tick as before
+// rows ride the loop, else asleep till the frame, on the loop as before
 void SSD1306Display::next_frame(unsigned long now) {
-  uint32_t at = now + tick_ms();
-  if (!reached(at, _next_render_due)) at = _next_render_due;
-  corium::Registry::due_at(this, at);
+  uint32_t at = now + loop_ms();
+  if (!corium::reached(at, _next_render_due)) at = _next_render_due;
+  corium::Registry::dueAt(this, at);
 }
 
 // k 10 = tenths, only under 10; false = no counts
@@ -446,7 +451,7 @@ static const char* fitStr(SSD1306Display& d, const char* src, int max_w) {
 
 static const char* tinyUptime() {
   static char buf[12];
-  Uptime::Split u = Uptime::split((uint32_t)Uptime::seconds());
+  corium::Uptime::Split u = corium::Uptime::split((uint32_t)corium::Uptime::seconds());
   if (u.d > 0) snprintf_P(buf, sizeof(buf), PSTR("%ud %02u:%02u"), u.d, u.h, u.m);
   else         snprintf_P(buf, sizeof(buf), PSTR("%02u:%02u:%02u"),      u.h, u.m, u.s);
   return buf;
@@ -468,21 +473,21 @@ void SSD1306Display::page_tiny_dose() {
 void SSD1306Display::page_tiny_net() {
   setFont(U8G2_FONT_ARIAL_10);
   char buf[20];
-  if (Wifi::connected) {
-    Wifi::formatIP(buf, sizeof(buf));
+  if (corium::Wifi::connected) {
+    corium::Wifi::formatIP(buf, sizeof(buf));
     drawStr(0, 2,  fitStr(*this, buf, 71));
-    drawStr(0, 15, fitStr(*this, Wifi::ssid, 71));
-    snprintf_P(buf, sizeof(buf), PSTR("%d dBm"), (int)Wifi::rssi);
+    drawStr(0, 15, fitStr(*this, corium::Wifi::ssid, 71));
+    snprintf_P(buf, sizeof(buf), PSTR("%d dBm"), (int)corium::Wifi::rssi);
     drawStr(0, 28, buf);
-  } else if (Wifi::ap) {
+  } else if (corium::Wifi::ap) {
     // its name is the hostname
-    Wifi::formatIP(buf, sizeof(buf));
+    corium::Wifi::formatIP(buf, sizeof(buf));
     drawStrP(0, 2,  PSTR("WiFi AP"));
-    drawStr (0, 15, fitStr(*this, DeviceInfo::hostname(), 71));
+    drawStr (0, 15, fitStr(*this, corium::DeviceInfo::hostname(), 71));
     drawStr (0, 28, fitStr(*this, buf, 71));
   } else {
     drawStrP(0, 2,  PSTR("WiFi off"));
-    drawStr (0, 15, fitStr(*this, DeviceInfo::hostname(), 71));
+    drawStr (0, 15, fitStr(*this, corium::DeviceInfo::hostname(), 71));
     drawStr (0, 28, tinyUptime());
   }
 }
@@ -526,29 +531,29 @@ void SSD1306Display::page_tiny_meter() {
 void SSD1306Display::page_two_full() {
   clearBuffer();
   setFont(U8G2_FONT_ARIAL_10);
-  drawStrP(0, 2, DeviceInfo::hostname());
+  drawStrP(0, 2, corium::DeviceInfo::hostname());
   drawStrP(0, 17, PSTR("IP:"));
   char ipStr[CORIUM_IPV4_MAX + 1];
-  Wifi::formatIP(ipStr, sizeof(ipStr));
+  corium::Wifi::formatIP(ipStr, sizeof(ipStr));
   drawStrP(16, 17, ipStr);
   int uptime_y = 32;
   if (M_HAS_HV) {
-    corium::MeasureIter hv(0xFF, false, M_HV);
-    if (hv.next()) {
+    int32_t hv;
+    if (m_hv_volts(&hv)) {
       drawStrP(0, uptime_y, PSTR("HV:"));
       char hvBuf[12];
-      format_f(hvBuf, sizeof(hvBuf), (float)hv.value().i);
+      format_f(hvBuf, sizeof(hvBuf), (float)hv);
       drawStrP(20, uptime_y, hvBuf);
       uptime_y = 47;
     }
   }
-  drawStrP(0, uptime_y, DeviceInfo::uptimeString());
+  drawStrP(0, uptime_y, corium::DeviceInfo::uptimeString());
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   GeigerUdpRx* rx = gcounter.udp_rx();
   if (rx) {
     char rxBuf[24];
     const char* chip = rx->locked_chipid();
-    if (rx->mode() == 1) {
+    if (rx->summing()) {
       snprintf_P(rxBuf, sizeof(rxBuf), PSTR("Sum %u src"), (unsigned)rx->producer_count());
     } else if (chip) {
       snprintf_P(rxBuf, sizeof(rxBuf), PSTR("RX %s"), chip);
@@ -573,7 +578,7 @@ void SSD1306Display::page_one_clear() {
   drawTPString(*this, 0,  5, DialogInput_plain_12, PSTR("CPM:"));
   drawXBMP(0, 20, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_mu);
   drawTPString(*this, EG_GLYPH_W, 20, DialogInput_plain_12, PSTR("Sv/h:"));
-  _p1v_last_cpm = 0xFFFFFFFFu;   // the values redraw, wifi icon and all
+  _p1_last.cpm_x10 = 0xFFFFFFFFu;   // the values redraw, wifi icon and all
 }
 
 // 3 bad transfers in a row and nothing goes out, one a minute tries
@@ -586,15 +591,15 @@ static bool s_bus_skip = false;
 static void bus_result(bool ok) {
   if (ok) {
     if (s_bus_fails >= BUS_FAILS) {
-      Log::console(PSTR("OLED: answering again"));
+      corium::Log::console(PSTR("OLED: answering again"));
       oled.oled_last_update = 0;   // full frame
     }
     s_bus_fails = 0;
     return;
   }
-  s_bus_retry = fast_millis() + BUS_RETRY_MS;
+  s_bus_retry = corium::fastMillis() + BUS_RETRY_MS;
   if (s_bus_fails < BUS_FAILS && ++s_bus_fails == BUS_FAILS) {
-    Log::console(PSTR("OLED: not answering, retry every 60 s"));
+    corium::Log::console(PSTR("OLED: not answering, retry every 60 s"));
   }
 }
 
@@ -602,7 +607,7 @@ static void bus_result(bool ok) {
 static uint8_t oled_i2c(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
   switch (msg) {
     case U8X8_MSG_BYTE_START_TRANSFER:
-      s_bus_skip = s_bus_fails >= BUS_FAILS && !reached(fast_millis(), s_bus_retry);
+      s_bus_skip = s_bus_fails >= BUS_FAILS && !corium::reached(corium::fastMillis(), s_bus_retry);
       if (s_bus_skip) break;   // esp32 Wire holds its lock till endTransmission
       Wire.setClock(u8x8->bus_clock);
       Wire.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1);
@@ -718,12 +723,12 @@ void SSD1306Display::draw_splash() {
   sendBuffer();
 }
 
-static void oled_lifecycle(Lifecycle::Event e) {
-  if (e == Lifecycle::OTA_START) oled.showOTABanner();
-  if (e == Lifecycle::OTA_FAILED) oled.endOTABanner();
+static void oled_lifecycle(corium::Lifecycle::Event e) {
+  if (e == corium::Lifecycle::OTA_START) oled.showOTABanner();
+  if (e == corium::Lifecycle::OTA_FAILED) oled.endOTABanner();
 #ifdef ESP32
   // tiny keeps its image over a reset
-  if (e == Lifecycle::SHUTDOWN && oled.is_present()) {
+  if (e == corium::Lifecycle::SHUTDOWN && oled.is_present()) {
     oled.clearBuffer();
     oled.sendBuffer();
   }
@@ -731,28 +736,28 @@ static void oled_lifecycle(Lifecycle::Event e) {
 }
 
 void SSD1306Display::setup() {
-  Lifecycle::on(oled_lifecycle);
+  corium::Lifecycle::on(oled_lifecycle);
   setup_driver();
   // only when chosen, a MAX7219 build keeps the 1 KB
   if (!_frame) _frame = (uint8_t*)malloc(u8g2_GetBufferSize(&_u8g2));
   if (!_frame) {
-    Log::console(PSTR("OLED: no memory for the frame"));
+    corium::Log::console(PSTR("OLED: no memory for the frame"));
     return;
   }
   u8g2_SetBufferPtr(&_u8g2, _frame);
   reset_panel();
 
-  _oled_addr = I2CBus::begin() ? oled_probe_addr() : 0;
+  _oled_addr = corium::I2CBus::begin() ? oled_probe_addr() : 0;
   if (!_oled_addr) {
     _present = false;
-    Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
+    corium::Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
                  _pin_sda, _pin_scl);
-    corium::Registry::every(this, NOPANEL_TICK_MS);
+    corium::Registry::every(this, NOPANEL_LOOP_MS);
     setFontPosTop();
     return;
   }
   _present = true;
-  Log::console(PSTR("OLED: detected at 0x%02X (type=%u)"), _oled_addr, _pref_display_type);
+  corium::Log::console(PSTR("OLED: detected at 0x%02X (type=%u)"), _oled_addr, _pref_display_type);
   setI2CAddress(_oled_addr << 1);
   setBusClock(700000);
   u8g2_InitDisplay(&_u8g2);
@@ -877,7 +882,7 @@ void SSD1306Display::screen_mode(unsigned long now, bool auto_off) {
   oled_on = true;
   oled_last_update = 0;
   _next_render_due = now + 1500;   // message stays up
-  corium::Registry::every(this, TICK_MS);
+  corium::Registry::every(this, LOOP_MS);
 }
 #endif
 
@@ -890,27 +895,27 @@ bool SSD1306Display::page_one_graph() {
   bool counts = histSize > 0 && hist_range(hist, histSize, minValue, maxValue, k);
 
   setDrawColor(0);
-  drawBox(0, 35, OLED_WIDTH, 29);
+  drawBox(0, GRAPH_TOP, OLED_WIDTH, GRAPH_BOT - GRAPH_TOP + 1);
   setDrawColor(1);
-  drawLine(0, 63, 90, 63);
-  drawLine(90, 35, 90, 63);
+  drawLine(0, GRAPH_BOT, GRAPH_W, GRAPH_BOT);
+  drawLine(GRAPH_W, GRAPH_TOP, GRAPH_W, GRAPH_BOT);
   if (histSize > 0) {
     int x_start = 2 * (HIST - histSize);
     char graphBuf[8];
     if (!counts) {
       snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, 0);
-      drawTPString(*this, 93, 55, Open_Sans_Digits_10, graphBuf);
+      drawTPString(*this, LABEL_X, 55, Open_Sans_Digits_10, graphBuf);
       return true;
     }
     for (uint16_t i = 0; i < histSize; i++) {
-      int location = ((map((long)hist[i], (long)minValue, (long)maxValue, 0, 24 )) * (-1)) + 62;
-      drawFrame(x_start + i * 2, location, 2, (63 - location));
+      int location = ((map((long)hist[i], (long)minValue, (long)maxValue, 0, GRAPH_H)) * (-1)) + GRAPH_BOT - 1;
+      drawFrame(x_start + i * 2, location, 2, (GRAPH_BOT - location));
     }
     if (k > 1) { minValue /= 10; maxValue /= 10; }
     snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)minValue);
-    drawTPString(*this, 93, 55, Open_Sans_Digits_10, graphBuf);
+    drawTPString(*this, LABEL_X, 55, Open_Sans_Digits_10, graphBuf);
     snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)maxValue);
-    drawTPString(*this, 93, 35, Open_Sans_Digits_10, graphBuf);
+    drawTPString(*this, LABEL_X, GRAPH_TOP, Open_Sans_Digits_10, graphBuf);
   }
   return true;
 }
@@ -937,37 +942,26 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   float dusv = (dratio > 0.0f) ? dcpm / dratio : 0.0f;
   uint32_t cpm_x10 = (uint32_t)CounterMaths::to_int(dcpm * 10.0f);
   int32_t  usv_x100 = CounterMaths::to_int(dusv * 100.0f);
-  uint8_t mode = !display.warm() ? 1 : slow ? 2 : 0;
-  uint8_t snd = _sent_mark;
-  uint8_t wifi = (Wifi::disabled ? 1 : 0) | (Wifi::connected ? 2 : 0)
-               | (display.no_counts() ? 4 : 0);
-  int8_t trend = cpm_trend(cpm_x10 / 10);
-  if (cpm_x10 == _p1v_last_cpm && usv_x100 == _p1v_last_usv_x100
-      && mode == _p1v_last_mode && snd == _p1v_last_send_ind
-      && wifi == _p1v_last_wifi && trend == _p1v_last_trend) {
-    return false;
-  }
-  _p1v_last_cpm = cpm_x10;
-  _p1v_last_usv_x100 = usv_x100;
-  _p1v_last_mode = mode;
-  _p1v_last_send_ind = snd;
-  _p1v_last_wifi = wifi;
-  _p1v_last_trend = trend;
-  draw_p1_values(cpm_x10, dusv, mode, snd, wifi, trend);
+  uint8_t mode = !display.warm() ? P1_WARMING : slow ? P1_SLOW : P1_LIVE;
+  uint8_t flags = (corium::Wifi::disabled ? P1_WIFI_OFF : 0) | (corium::Wifi::connected ? P1_WIFI_UP : 0)
+                | (display.no_counts() ? P1_NO_COUNTS : 0);
+  P1 p = { cpm_x10, usv_x100, mode, _sent_mark, flags, cpm_trend(cpm_x10 / 10) };
+  if (p == _p1_last) return false;
+  _p1_last = p;
+  draw_p1_values(p, dusv);
   return true;
 }
 
-void SSD1306Display::draw_p1_values(uint32_t cpm_x10, float dusv, uint8_t mode,
-                                    uint8_t snd, uint8_t wifi, int8_t trend) {
+void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
   setDrawColor(0);
   drawBox(36, 0, 92, 32);
   setDrawColor(1);
-  if (trend > 0)      drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_up);
-  else if (trend < 0) drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_down);
+  if (p.trend > 0)      drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_up);
+  else if (p.trend < 0) drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_down);
   char oledBuf[16];
-  format_cpm(oledBuf, sizeof(oledBuf), cpm_x10 * 0.1f);
+  format_cpm(oledBuf, sizeof(oledBuf), p.cpm_x10 * 0.1f);
   drawTPString(*this, 45, 0, DialogInput_Digits_17, oledBuf);
-  if (wifi & 4) {
+  if (p.flags & P1_NO_COUNTS) {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
     drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("no signal?"));
 #else
@@ -977,15 +971,15 @@ void SSD1306Display::draw_p1_values(uint32_t cpm_x10, float dusv, uint8_t mode,
     format_f(oledBuf, sizeof(oledBuf), dusv);
     drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);
   }
-  if (mode) {
-    drawTPString(*this, 98, 2, DialogInput_plain_12, mode == 1 ? PSTR("W") : PSTR("S"));
+  if (p.mode != P1_LIVE) {
+    drawTPString(*this, 98, 2, DialogInput_plain_12, p.mode == P1_WARMING ? PSTR("W") : PSTR("S"));
   }
-  if (snd) {
+  if (p.snd) {
     drawXBMP(110, 0, 8, 16, _iconimage_remotext);
     _sent_mark--;
   }
-  if (!Wifi::disabled) {
-    drawXBMP(120, 0, 8, 16, Wifi::connected ? _iconimage_connected : _iconimage_disconnected);
+  if (!corium::Wifi::disabled) {
+    drawXBMP(120, 0, 8, 16, corium::Wifi::connected ? _iconimage_connected : _iconimage_disconnected);
   }
 }
 
@@ -994,7 +988,7 @@ void SSD1306Display::page_three_full() {
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 2, GEIGER_MODEL);
   drawStrP(0, 17, PSTR(RELEASE_VERSION " / " GIT_VERSION));
-  drawStrP(0, 32, DeviceInfo::buildDate());
+  drawStrP(0, 32, corium::DeviceInfo::buildDate());
   drawStrP(0, 47, PSTR("@ steadramon"));
 }
 
@@ -1158,7 +1152,7 @@ void SSD1306Display::page_four_matrix() {
     if (!drops) return;
   }
   if (_page4_num_last == 0) {
-    _page4_num_last = fast_millis();
+    _page4_num_last = corium::fastMillis();
     seed_drops(drops);
   }
   unsigned long now_blip = display.blip();
@@ -1171,8 +1165,8 @@ void SSD1306Display::page_four_matrix() {
 }
 
 void SSD1306Display::page_four_static() {
-  unsigned long now = fast_millis();
-  if (!fresh(now, _page4_num_last, 1000)) {
+  unsigned long now = corium::fastMillis();
+  if (!corium::fresh(now, _page4_num_last, 1000)) {
     _page4_num_last = now;
     uint16_t num;
     GRNG::extract((uint8_t*)&num, sizeof(num));
@@ -1213,8 +1207,8 @@ void SSD1306Display::endOTABanner() {
   if (!_ota_lock) return;
   _ota_lock = false;
   oled_last_update = 0;
-  _next_render_due = fast_millis();
-  corium::Registry::every(this, tick_ms());
+  _next_render_due = corium::fastMillis();
+  corium::Registry::every(this, loop_ms());
 }
 
 bool SSD1306Display::screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) {

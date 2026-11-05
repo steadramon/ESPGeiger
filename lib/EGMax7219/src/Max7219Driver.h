@@ -43,6 +43,7 @@ class Max7219Driver {
 
     void writeDigit(uint8_t index, uint8_t code, bool dp);
 
+    enum : uint8_t { ORIENT_FC16, ORIENT_GENERIC, ORIENT_FC16_FLIP, ORIENT_GENERIC_FLIP };
     // byte per column, bit y = row y, orient 0..3 = 0/90/180/270
     void drawMatrix(const uint8_t* cols, uint8_t orient);
 

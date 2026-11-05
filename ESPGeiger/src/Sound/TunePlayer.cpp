@@ -65,7 +65,7 @@ bool slice(const EGTune::Step& st, uint32_t done, bool rtttl, const Config& c, S
   if (st.to && left > SWEEP_US) left = SWEEP_US;
   uint32_t n = left / period;
   if (!n) return true;   // under a cycle left
-  if (n > Buzzer::MAX_CYCLES) n = Buzzer::MAX_CYCLES;
+  if (n > corium::Buzzer::MAX_CYCLES) n = corium::Buzzer::MAX_CYCLES;
   out.op = EGTune::TONE;
   out.hz = hz;
   out.n = n;
@@ -90,9 +90,9 @@ bool s_on = false;
 bool s_have = false;
 
 void send(uint32_t now, const Slice& sl) {
-  if (sl.op == EGTune::TONE) Buzzer::tone(now, sl.hz, sl.n, sl.duty);
-  else if (sl.op == EGTune::PULSE) Buzzer::pulse(now, sl.n);
-  else if (sl.op == EGTune::BURST) Buzzer::burst(now, sl.hz, sl.n);
+  if (sl.op == EGTune::TONE) corium::Buzzer::tone(now, sl.hz, sl.n, sl.duty);
+  else if (sl.op == EGTune::PULSE) corium::Buzzer::pulse(now, sl.n);
+  else if (sl.op == EGTune::BURST) corium::Buzzer::burst(now, sl.hz, sl.n);
 }
 
 }
@@ -135,7 +135,7 @@ uint32_t poll(uint32_t now) {
     }
     if (sl.op != EGTune::REST) {
       // budget after a pulse or burst: wait, don't drop
-      uint32_t w = Buzzer::wait_us(now);
+      uint32_t w = corium::Buzzer::waitUs(now);
       if (w) return w;
       if (sl.op == EGTune::TONE) sl.duty = at_volume(sl.duty, s_vol);
       send(now, sl);

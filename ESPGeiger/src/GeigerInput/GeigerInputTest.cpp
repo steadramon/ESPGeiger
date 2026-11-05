@@ -71,14 +71,14 @@ int GeigerInputTest::collect() {
 }
 
 void GeigerInputTest::begin() {
-  Log::console(PSTR("%s: Setting up test geiger ..."), _test_type);
+  corium::Log::console(PSTR("%s: Setting up test geiger ..."), _test_type);
   GeigerInput::begin();
 }
 
 double GeigerInputTest::generatePoissonRand(double lambda) {
   // https://tomroelandts.com/articles/simulating-a-geiger-counter
   double u;
-  u = (double)DeviceInfo::hwRandom() / ((double)0xFFFFFFFF + 1);
+  u = (double)corium::DeviceInfo::hwRandom() / ((double)0xFFFFFFFF + 1);
   return -log(1 - u) / lambda;
 }
 
@@ -106,7 +106,7 @@ double GeigerInputTest::calcDelay() {
 
 void GeigerInputTest::setTargetCPM(float target, bool manual = false) {
   int c = CounterMaths::to_int(target * 100);
-  Log::console(PSTR("%s: Setting CPM to: %d.%02d"), _test_type, c / 100, c % 100);
+  corium::Log::console(PSTR("%s: Setting CPM to: %d.%02d"), _test_type, c / 100, c % 100);
   _manual = manual;
   setTargetCPS(target/60.0f);
   _retarget = true;
@@ -134,7 +134,7 @@ void GeigerInputTest::CPMAdjuster() {
     return;
   }
 #ifndef GEIGER_TEST_FIXEDCPM
-  int selection = (fast_millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
+  int selection = (corium::fastMillis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
   if (selection != _current_selection) {
     _current_selection = selection;
     int _targetCPM = 30;

@@ -168,5 +168,5 @@ size_t egm_cpm5_history(uint16_t* out, size_t cap) {
 bool upload_warm() { return gcounter.is_warm(); }
 
 void upload_testmode(const char* tag) {
-  if (gcounter.is_warm()) Log::console(PSTR("%s: Testmode"), tag);
+  if (gcounter.is_warm()) corium::Log::console(PSTR("%s: Testmode"), tag);
 }

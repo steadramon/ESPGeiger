@@ -28,34 +28,34 @@ static_assert(EGHTTP_HOST_MAX >= CORIUM_HOST_MAX, "a host pref must fit the clie
 bool (*corium::HttpPoster::hold)() = nullptr;
 
 // off mid-post: loop() still reaps the reply, then sleeps
-void corium::HttpPoster::set_enabled(bool on) {
+void corium::HttpPoster::setEnabled(bool on) {
   _send_enabled = on;
   corium::Registry::every(this, (on || request.busy()) ? LOOP_MS : 0);
 }
 
-uint16_t corium::HttpPoster::set_interval_s(int s, int lo, int hi) {
+uint16_t corium::HttpPoster::setIntervalS(int s, int lo, int hi) {
   s = clamp(s, lo, hi);
   pingIntervalMs = (uint32_t)s * 1000UL;
   return (uint16_t)s;
 }
 
-size_t corium::HttpPoster::status_json(char* buf, size_t cap, unsigned long now) {
+size_t corium::HttpPoster::statusJson(char* buf, size_t cap, unsigned long now) {
   if (!_send_enabled) return 0;
-  return write_status_json(buf, cap, status_key(), last_ok, last_attempt_ms, now);
+  return writeStatusJson(buf, cap, statusKey(), lastOk, lastAttemptMs, now);
 }
 
 void corium::HttpPoster::loop(unsigned long now)
 {
   take_reply();
   if (hold && hold()) {
-    corium::Registry::due_at(this, now + LOOP_MS);
+    corium::Registry::dueAt(this, now + LOOP_MS);
     return;
   }
   if (_send_enabled && slot_due(now)) post();
   if (request.busy()) {
-    corium::Registry::due_at(this, request.due());   // the reply posts us sooner
+    corium::Registry::dueAt(this, request.due());   // the reply posts us sooner
   } else if (_send_enabled) {
-    corium::Registry::due_at(this, lastPing + pingIntervalMs);
+    corium::Registry::dueAt(this, lastPing + pingIntervalMs);
   } else {
     corium::Registry::every(this, 0);
   }
@@ -64,34 +64,34 @@ void corium::HttpPoster::loop(unsigned long now)
 // whole intervals, keeps the slot
 bool corium::HttpPoster::slot_due(unsigned long now) {
   if (lastPing == 0) {
-    lastPing = SendSlot::initial_ping(name(), now, pingIntervalMs);
+    lastPing = corium::SendSlot::initialPing(name(), now, pingIntervalMs);
     return false;
   }
-  return due_steps(now, lastPing, pingIntervalMs);
+  return corium::dueSteps(now, lastPing, pingIntervalMs);
 }
 
 void corium::HttpPoster::take_reply()
 {
   char r[REPLY_CAP];
-  size_t cap = reply_cap();
+  size_t cap = replyCap();
   if (cap > sizeof(r)) cap = sizeof(r);
   int code;
   size_t got;
   if (!request.take(&code, (uint8_t*)r, cap - 1, &got)) return;
   bool ok = false;
-  if (ok_code(code)) {
+  if (okCode(code)) {
     r[got] = 0;
     ok = interpret(r);
   } else {
-    Log::console(PSTR("%s: Error %d - %s"), log_tag(), code, (PGM_P)EGHttpClient::reason(code));
+    corium::Log::console(PSTR("%s: Error %d - %s"), logTag(), code, (PGM_P)EGHttpClient::reason(code));
   }
-  note_result(ok);
+  noteResult(ok);
 }
 
-bool corium::HttpPoster::url_fits(int n, size_t cap) {
+bool corium::HttpPoster::urlFits(int n, size_t cap) {
   if (n >= 0 && (size_t)n < cap) return true;
-  Log::console(PSTR("%s: URL too long, not sent"), log_tag());
-  note_publish(false);
+  corium::Log::console(PSTR("%s: URL too long, not sent"), logTag());
+  notePublish(false);
   return false;
 }
 
@@ -108,19 +108,19 @@ void corium::HttpPoster::send(const char* url, const char* body) {
   corium::HttpMeta m;
   m.method = method();
   m.url = url;
-  m.ctype = content_type();
+  m.ctype = contentType();
   m.accept = m.ctype;
-  m.timeout_s = timeout_s();
+  m.timeoutS = timeoutS();
   corium::HttpDriver::Sent s = request.send(m, (const uint8_t*)body, body ? strlen(body) : 0);
   if (s == corium::HttpDriver::NO_MEMORY) {
-    Log::console(PSTR("%s: alloc failed"), log_tag());
-    note_publish(false);
+    corium::Log::console(PSTR("%s: alloc failed"), logTag());
+    notePublish(false);
     return;
   }
-  note_attempt();
+  noteAttempt();
   if (s == corium::HttpDriver::NOT_OPENED) {
-    Log::console(PSTR("%s: Can't send request"), log_tag());
-    note_result(false);
+    corium::Log::console(PSTR("%s: Can't send request"), logTag());
+    noteResult(false);
     return;
   }
   corium::Registry::emit(TOPIC_SENT);

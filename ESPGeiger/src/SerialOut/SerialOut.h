@@ -32,6 +32,7 @@ class SerialOut : public corium::Module {
       static constexpr uint8_t SHOW_USV = 1 << 1;
       static constexpr uint8_t SHOW_HV  = 1 << 2;
       static constexpr uint8_t SHOW_CPS = 1 << 3;
+      enum : uint8_t { SO_LABELLED, SO_MIGHTYOHM, SO_TEMPLATE };
 
       SerialOut();
       const char* name() override { return PSTR("sout"); }
@@ -39,9 +40,9 @@ class SerialOut : public corium::Module {
       static constexpr uint16_t REPLAN_MS = 100;
       void loop(unsigned long now) override;
       void registerRoutes(EGHttpServer& http) override;
-      const corium::PrefGroup* prefs_group() override;
-      uint8_t display_order() override { return 15; }
-      void on_prefs_loaded() override;
+      const corium::PrefGroup* prefsGroup() override;
+      uint8_t displayOrder() override { return 15; }
+      void onPrefsLoaded() override;
       void set_show(int var);
       void print_cpm();
       void print_usv();
@@ -67,7 +68,7 @@ class SerialOut : public corium::Module {
       unsigned long _last_fire = 0;
       uint8_t _show_flags = 0;
       uint16_t _interval = 0;
-      uint8_t _format = 0;     // 0 = labelled
+      uint8_t _format = SO_LABELLED;
       uint32_t _baud = 0;      // 0 = framework default (115200)
       SerialFormat::FormatFn _fmt_fn = nullptr;
 };

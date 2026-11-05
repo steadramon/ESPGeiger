@@ -98,7 +98,7 @@ class EGMqtt {
     void clearWill();
     void setKeepAlive(uint16_t secs) { _keepalive = secs; }   // 0 = off
     void setCleanSession(bool clean) { _clean = clean; }
-    void setTimeout(uint16_t secs) { _timeoutS = secs; }      // connect and ping replies
+    void setTimeoutS(uint16_t secs) { _timeoutS = secs; }      // connect and ping replies
     void onConnect(OnConnect fn, void* arg = nullptr) { _onUp = fn; _onUpArg = arg; }
     void onDisconnect(OnDisconnect fn, void* arg = nullptr) { _onDown = fn; _onDownArg = arg; }
     void onMessage(OnMessage fn, void* arg = nullptr) { _onMsg = fn; _onMsgArg = arg; }
@@ -173,6 +173,7 @@ class EGMqtt {
     void commit(Kind k, uint16_t id, size_t len);
     bool queue(Kind k, uint16_t id, size_t len);   // len 0 = didn't build
     uint16_t pub_commit(const EGMqttWire::Publish& m, size_t len);
+    bool can_publish(const char* topic, uint8_t qos);
     bool fill(EGMqttWire::Publish& m, const char* topic, const uint8_t* payload, size_t len,
               uint8_t qos, bool retain);
     void queue(EGMqttWire::Type t, uint16_t id, bool keep = true);

@@ -26,10 +26,10 @@
 #include "Corium/System/Lifecycle.h"
 #include "Corium/Output/LedSignal.h"
 
-ArduinoOTAModule ota;
+corium::ArduinoOTAModule ota;
 CORIUM_REGISTER_MODULE(ota)
 
-void ArduinoOTAModule::begin() {
+void corium::ArduinoOTAModule::begin() {
   ArduinoOTA.onStart ([]() {
     const char* type;
     if (ArduinoOTA.getCommand () == U_FLASH)
@@ -37,15 +37,15 @@ void ArduinoOTAModule::begin() {
     else // U_SPIFFS
       type = PSTR("filesystem");
     corium::Registry::post(&ota);
-    Lifecycle::send(Lifecycle::OTA_START);
-    LedSignal::lit(true);
-    Log::console(PSTR("Start updating %s"), type);
+    corium::Lifecycle::send(corium::Lifecycle::OTA_START);
+    corium::LedSignal::lit(true);
+    corium::Log::console(PSTR("Start updating %s"), type);
   });
   ArduinoOTA.onEnd ([]() {
-    Log::console(PSTR("End"));
-    LedSignal::lit(false);
+    corium::Log::console(PSTR("End"));
+    corium::LedSignal::lit(false);
     // core restarts, not safeRestart()
-    Lifecycle::send(Lifecycle::SHUTDOWN);
+    corium::Lifecycle::send(corium::Lifecycle::SHUTDOWN);
   });
   ArduinoOTA.onProgress ([](unsigned int progress, unsigned int total) {
 #ifdef ESP32
@@ -55,30 +55,30 @@ void ArduinoOTAModule::begin() {
     if (total == 0) return;
     uint8_t nextValue = (uint8_t)((uint64_t)progress * 100 / total);
     if (lastValue != nextValue) {
-      Log::debug(PSTR("Progress: %u%%\r"), nextValue);
+      corium::Log::debug(PSTR("Progress: %u%%\r"), nextValue);
       lastValue = nextValue;
-      LedSignal::lit(nextValue % 2);
+      corium::LedSignal::lit(nextValue % 2);
     }
   });
   ArduinoOTA.onError ([](ota_error_t error) {
-    LedSignal::lit(false);
-    if (ota_in_progress) Lifecycle::send(Lifecycle::OTA_FAILED);
+    corium::LedSignal::lit(false);
+    if (corium::otaInProgress) corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
     // ota_error_t order, both cores
     static const char ERRS[][8] PROGMEM = {"Auth", "Begin", "Connect", "Receive", "End"};
-    if ((unsigned)error <= OTA_END_ERROR) Log::console(PSTR("OTA: %s Failed"), ERRS[error]);
-    else                                  Log::console(PSTR("OTA: error %u"), error);
+    if ((unsigned)error <= OTA_END_ERROR) corium::Log::console(PSTR("OTA: %s Failed"), ERRS[error]);
+    else                                  corium::Log::console(PSTR("OTA: error %u"), error);
   });
 
   // core copies it, before begin() only, so a new one needs a restart
   const char* pass = corium::Prefs::getString("sys", corium::K_WEB_PASS);
   if (pass && pass[0]) ArduinoOTA.setPassword(pass);
-  ArduinoOTA.setHostname(DeviceInfo::hostname());
+  ArduinoOTA.setHostname(corium::DeviceInfo::hostname());
   ArduinoOTA.begin();
   MDNS.addService("http",   "tcp", 80);
 #ifdef APP_MDNS_SERVICE
   // the app's own service, the name it's found by
   MDNS.addService(APP_MDNS_SERVICE, "tcp", 80);
-  const char* fname = DeviceInfo::friendlyName();
+  const char* fname = corium::DeviceInfo::friendlyName();
   if (fname && fname[0]) {
     MDNS.addServiceTxt(APP_MDNS_SERVICE, "tcp", "fname", fname);
   }
@@ -86,12 +86,12 @@ void ArduinoOTAModule::begin() {
   corium::Registry::every(this, OTA_POLL_INTERVAL_MS);
 }
 
-void ArduinoOTAModule::loop(unsigned long now) {
+void corium::ArduinoOTAModule::loop(unsigned long now) {
   ArduinoOTA.handle();
   static unsigned long s_last_igmp_refresh = 0;
   if (s_last_igmp_refresh == 0) s_last_igmp_refresh = now;
   if ((unsigned long)(now - s_last_igmp_refresh) > 300000UL) {
     s_last_igmp_refresh = now;
-    IgmpRefresh::refresh();
+    corium::IgmpRefresh::refresh();
   }
 }

@@ -45,8 +45,10 @@ class PushButton : public corium::Module {
     const char* name() override { return PSTR("btn"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     void loop(unsigned long now) override;
-    // short press, from loop()
+    // from loop(); a long only when something hears it
     static constexpr uint8_t TOPIC_PRESS = Topic::PRESS;
+    static constexpr uint8_t TOPIC_BACK  = Topic::BACK;
+    static constexpr uint8_t TOPIC_LONG  = Topic::LONG;
     void begin() override;
     void init();
     bool isPressed();
@@ -54,8 +56,8 @@ class PushButton : public corium::Module {
     void set_pin(int pin);
     void set_pin2(int pin);
 #ifndef BTN_PIN_BLOCKED
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
 #endif
 };
 

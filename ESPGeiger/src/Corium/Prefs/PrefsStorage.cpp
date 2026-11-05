@@ -40,9 +40,8 @@ bool staged_path(char* out, size_t sz, const char* base, const char* mid) {
 }
 
 bool read_magic(File& f) {
-  uint8_t magic[4];
-  return f.read(magic, 4) == 4 &&
-         magic[0] == 'E' && magic[1] == 'G' && magic[2] == 'P' && magic[3] == '1';
+  uint8_t magic[corium::PREFS_MAGIC_LEN];
+  return f.read(magic, sizeof(magic)) == sizeof(magic) && corium::isMagic(magic);
 }
 
 // u8 klen, key, u16le vlen, value
@@ -52,7 +51,7 @@ bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen)
   if (f.read((uint8_t*)key, *klen) != *klen) return false;
   uint8_t vlen_bytes[2];
   if (f.read(vlen_bytes, 2) != 2) return false;
-  *vlen = rd_le16(vlen_bytes);
+  *vlen = rdLe16(vlen_bytes);
   if (*vlen >= CORIUM_PS_VAL_BUFSZ) return false;
   if (*vlen > 0 && f.read((uint8_t*)value, *vlen) != *vlen) return false;
   return true;
@@ -70,23 +69,23 @@ corium::PrefsStorage::~PrefsStorage() {
 
 bool corium::PrefsStorage::begin(const char* name) {
   if (_started || !name || !*name || strlen(name) > DIR_NAME_MAX) return false;
-  if (!Fs::begin()) return false;   // prefs run on defaults
+  if (!corium::Fs::begin()) return false;   // prefs run on defaults
   char dir[DIR_NAME_MAX + 2];
   snprintf_P(dir, sizeof(dir), PSTR("/%s"), name);
-  File chk = Fs::open_r(dir);
+  File chk = corium::Fs::openR(dir);
   if (chk && !chk.isDirectory()) {
     chk.close();
-    Fs::remove(dir);
-    Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
+    corium::Fs::remove(dir);
+    corium::Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
   } else if (chk) {
     chk.close();
   }
-  if (!Fs::exists(dir)) {
-    Fs::mkdir(dir);
+  if (!corium::Fs::exists(dir)) {
+    corium::Fs::mkdir(dir);
   }
   snprintf_P(_path, sizeof(_path), PSTR("%s/"), dir);
   _started = true;
-  Log::debug(PSTR("prefs: storage mounted at %s"), _path);
+  corium::Log::debug(PSTR("prefs: storage mounted at %s"), _path);
   return true;
 }
 
@@ -100,17 +99,17 @@ bool corium::PrefsStorage::has(const char* module_id) {
   if (!_started || !module_id) return false;
   char path[CORIUM_PS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
-  return Fs::exists(path);
+  return corium::Fs::exists(path);
 }
 
 bool corium::PrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
   if (!_started || !module_id || !cb) return false;
   char path[CORIUM_PS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
-  File f = Fs::open_r(path);
+  File f = corium::Fs::openR(path);
   if (!f) return false;
   size_t sz = f.size();
-  if (sz < 4 || sz > CORIUM_PREFS_MAX_GROUP_SZ) { f.close(); return false; }
+  if (sz < corium::PREFS_MAGIC_LEN || sz > CORIUM_PREFS_MAX_GROUP_SZ) { f.close(); return false; }
 
   if (!read_magic(f)) {
     f.close();
@@ -146,15 +145,15 @@ bool corium::PrefsStorage::writeGroup(const char* module_id, const void* buf, si
 // <id>.bin.new, the old file stands till commitGroup
 bool corium::PrefsStorage::stageGroup(const char* module_id, const void* buf, size_t len) {
   if (!_started || !module_id || !buf) return false;
-  if (len < 4 || len > CORIUM_PREFS_MAX_GROUP_SZ) return false;
+  if (len < corium::PREFS_MAGIC_LEN || len > CORIUM_PREFS_MAX_GROUP_SZ) return false;
   char staging[CORIUM_PS_PATH_BUFSZ];
   if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
-  File f = Fs::open_w(staging);
+  File f = corium::Fs::openW(staging);
   if (!f) return false;
   size_t n = f.write((const uint8_t*)buf, len);
   f.close();
   if (n == len) return true;
-  Fs::remove(staging);
+  corium::Fs::remove(staging);
   return false;
 }
 
@@ -165,13 +164,13 @@ bool corium::PrefsStorage::commitGroup(const char* module_id) {
   char final_path[CORIUM_PS_PATH_BUFSZ];
   if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
   group_path(final_path, sizeof(final_path), _path, module_id);
-  return Fs::rename(staging, final_path);
+  return corium::Fs::rename(staging, final_path);
 }
 
 void corium::PrefsStorage::dropStaged(const char* module_id) {
   char staging[CORIUM_PS_PATH_BUFSZ];
   if (_started && module_id && staged_path(staging, sizeof(staging), _path, module_id)) {
-    Fs::remove(staging);
+    corium::Fs::remove(staging);
   }
 }
 
@@ -179,5 +178,5 @@ bool corium::PrefsStorage::removeGroup(const char* module_id) {
   if (!_started || !module_id) return false;
   char path[CORIUM_PS_PATH_BUFSZ];
   group_path(path, sizeof(path), _path, module_id);
-  return Fs::remove(path);
+  return corium::Fs::remove(path);
 }

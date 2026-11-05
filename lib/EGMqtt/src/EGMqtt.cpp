@@ -286,7 +286,7 @@ void EGMqtt::events() {
   }
 }
 
-// 0x80 as if refused, callback may move the outbox
+// as if refused, callback may move the outbox
 void EGMqtt::lost() {
   _lostNew = false;
   for (;;) {
@@ -296,7 +296,7 @@ void EGMqtt::lost() {
     }
     if (!r) return;
     r->sent = S_DONE;
-    note(r->id, r->kind == K_SUB ? ACK_SUBSCRIBE : ACK_UNSUBSCRIBE, 0x80);
+    note(r->id, r->kind == K_SUB ? ACK_SUBSCRIBE : ACK_UNSUBSCRIBE, REFUSED);
   }
 }
 
@@ -393,12 +393,16 @@ void EGMqtt::queue(Type t, uint16_t id, bool keep) {
   if (_phase != UP) return;
   size_t cap;
   uint8_t* p = tail(&cap, false);
-  size_t n = !p ? 0 : t == PINGREQ ? bare(p, cap, t) : ack(p, cap, t, id);
+  size_t n = 0;
+  if (p) n = t == PINGREQ ? bare(p, cap, t) : ack(p, cap, t, id);
   if (!n) {
     end(NO_MEMORY);
     return;
   }
-  commit(t == PUBREL && keep ? K_REL : t == PINGREQ ? K_PING : K_ONCE, id, n);
+  Kind k = K_ONCE;
+  if (t == PINGREQ) k = K_PING;
+  else if (t == PUBREL && keep) k = K_REL;
+  commit(k, id, n);
 }
 
 EGMqtt::Rec* EGMqtt::find(Kind k, uint16_t id) {
@@ -536,13 +540,20 @@ bool EGMqtt::queue(Kind k, uint16_t id, size_t len) {
 }
 
 uint16_t EGMqtt::pub_commit(const Publish& m, size_t len) {
-  if (!queue(m.qos == 0 ? K_ONCE : m.qos == 1 ? K_PUB1 : K_PUB2, m.id, len)) return 0;
+  Kind k = K_ONCE;
+  if (m.qos == 1) k = K_PUB1;
+  else if (m.qos) k = K_PUB2;
+  if (!queue(k, m.id, len)) return 0;
   return m.qos ? m.id : 1;
+}
+
+bool EGMqtt::can_publish(const char* topic, uint8_t qos) {
+  return topic && qos <= EGMQTT_MAX_QOS && (qos || _phase == UP) && mem();
 }
 
 uint16_t EGMqtt::publish(const char* topic, const uint8_t* payload, size_t len,
                          uint8_t qos, bool retain) {
-  if (!topic || qos > EGMQTT_MAX_QOS || (!qos && _phase != UP) || !mem()) return 0;
+  if (!can_publish(topic, qos)) return 0;
   Publish m;
   if (!fill(m, topic, payload, len, qos, retain)) return 0;
   size_t cap;
@@ -572,7 +583,7 @@ static size_t ahead_of(size_t topic_len, uint8_t qos) {
 }
 
 uint8_t* EGMqtt::publish_begin(const char* topic, uint8_t qos, bool retain, size_t* cap) {
-  if (!topic || qos > EGMQTT_MAX_QOS || (!qos && _phase != UP) || !mem()) return nullptr;
+  if (!can_publish(topic, qos)) return nullptr;
   size_t room;
   uint8_t* p = tail(&room, true);   // compacts, clears _pend
   size_t ahead = ahead_of(strlen(topic), qos);
@@ -735,7 +746,7 @@ void EGMqtt::on_publish() {
     return;
   }
   if (big) {
-    p.qos = (_first >> 1) & 3;
+    p.qos = qos_of(_first);
     p.id = _bigId;
   }
   if (p.qos > EGMQTT_MAX_QOS) {   // over the max, never asked for

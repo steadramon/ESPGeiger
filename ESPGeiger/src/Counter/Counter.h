@@ -88,7 +88,8 @@ class Counter : public CounterMaths {
       uint32_t get_min_pulse_us();
       static void CORIUM_ISR_ATTR on_pulse(uint32_t now_us);
       static void on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
-      // 0=auto 1=live 2=60s 3=bucket 4=fast
+      // pref order
+      enum : uint8_t { CPM_FAST_START, CPM_LIVE, CPM_60S, CPM_BUCKET, CPM_FAST };
       void    set_cpm_mode(uint8_t m);
       uint8_t get_cpm_mode() const { return _cpm_mode; }
       bool blip_led();
@@ -223,7 +224,7 @@ class Counter : public CounterMaths {
       bool ema_tick();
       void update_alarms(int cpm);
       uint16_t _boundary_secs = 3600;
-      uint8_t _cpm_mode = 3;     // bucket
+      uint8_t _cpm_mode = CPM_BUCKET;
       unsigned long _last_blip_seen = 0;
       uint32_t _last_count_up_s = 0;   // 0 = none since boot
       static uint32_t _pulse_hist[HIST_BUCKETS];
@@ -237,7 +238,7 @@ class Counter : public CounterMaths {
       bool _blip_led = true;
       bool _lifetime_enabled = true;
       bool _running = false;
-      bool _ota = false;   // ota_in_progress, kept here for the pass
+      bool _ota = false;   // otaInProgress, kept here for the pass
       static constexpr uint8_t PENDING_RTC   = 1 << 0;
       static constexpr uint8_t PENDING_SAVE  = 1 << 1;
       static constexpr uint8_t PENDING_ALARM = 1 << 2;
@@ -253,7 +254,7 @@ class Counter : public CounterMaths {
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
       float   _cpm_window_inv = 1.0f / (float)GEIGER_CPM_COUNT;
       mutable bool _warm_cached = false;
-      QuietWindow _quiet;
+      corium::QuietWindow _quiet;
       float _cached_cps = 0.0f;
       float _cached_cpm_active = 0.0f;
       int   _cached_ccpm = 0;

@@ -65,13 +65,13 @@ bool corium::MeasureIter::next() {
       if (!next_source()) return false;
       continue;
     }
-    if (_id && !_src.id_is(_j, _id)) { _j++; continue; }
+    if (_id && !_src.idIs(_j, _id)) { _j++; continue; }
     _row = _src.row(_j++);
     if (!(_row.outputs & _out)) continue;
     if ((_row.flags & corium::M_DIAG) && !_diag) continue;
     if ((_row.flags & corium::M_NODIAG) && _diag) continue;
     if (!_row.read || !_row.read(&_val)) continue;
-    if (_row.kind == corium::M_F32 && !is_finite(_val.f)) continue;
+    if (_row.kind == corium::M_F32 && !isFinite(_val.f)) continue;
     return true;
   }
 }
@@ -99,7 +99,7 @@ size_t corium::m_format(const corium::Measure& m, const corium::MValue& v, char*
   int n;
   switch (m.kind) {
     case corium::M_F32:
-      if (m.decimals < 1 || m.decimals > 9 || !is_finite(v.f)) return 0;
+      if (m.decimals < 1 || m.decimals > 9 || !isFinite(v.f)) return 0;
       n = format_f(buf, cap, v.f, m.decimals);
       break;
     case corium::M_U32:
@@ -159,7 +159,7 @@ size_t corium::m_text(const char* id, uint8_t output, char* buf, size_t cap) {
 }
 
 static bool get(const char* id, corium::MKind kind, corium::MValue* out) {
-  for (corium::MeasureIter it(0xFF, false, id); it.next(); ) {
+  for (corium::MeasureIter it(corium::M_OUT_ANY, false, id); it.next(); ) {
     if (it.row().kind != kind) continue;
     *out = it.value();
     return true;
@@ -191,7 +191,7 @@ corium::MRead corium::m_core_read(const char* id, corium::MKind kind) {
   const corium::MeasureRows srcs[] = {s_core, rows_of(s_input)};
   for (const corium::MeasureRows& src : srcs) {
     for (size_t j = 0; j < src.size(); j++) {
-      if (!src.id_is(j, id)) continue;
+      if (!src.idIs(j, id)) continue;
       corium::Measure r = src.row(j);
       if (r.kind == kind) return r.read;
     }
@@ -222,7 +222,7 @@ size_t corium::m_prom_format(const corium::Measure& m, const corium::MValue& v, 
     n = (size_t)h;
   }
   int s = snprintf_P(buf + n, cap - n, PSTR("%s{chipid=\"%s\"%s} %s\n"),
-                     m.prom, chipid, or_blank(m.prom_labels), text);
+                     m.prom, chipid, or_blank(m.promLabels), text);
   if (!fits(s, cap - n)) return 0;
   return n + (size_t)s;
 }

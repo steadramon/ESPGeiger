@@ -25,7 +25,7 @@
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/Clock.h"
 
-NTP_Client ntpclient = NTP_Client();
+corium::NTP_Client ntpclient = corium::NTP_Client();
 CORIUM_REGISTER_MODULE(ntpclient)
 #ifdef ESP32
 #include "sntp.h"
@@ -58,7 +58,7 @@ static const corium::PrefGroup NTP_PREF_GROUP PROGMEM = {
   sizeof(NTP_PREF_ITEMS) / sizeof(NTP_PREF_ITEMS[0]),
 };
 
-const corium::PrefGroup* NTP_Client::prefs_group() { return &NTP_PREF_GROUP; }
+const corium::PrefGroup* corium::NTP_Client::prefsGroup() { return &NTP_PREF_GROUP; }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
 static const corium::LegacyAlias NTP_LEGACY[] PROGMEM = {
@@ -68,13 +68,13 @@ static const corium::LegacyAlias NTP_LEGACY[] PROGMEM = {
   {"tz",  "tz"},
   {},
 };
-corium::LegacyRows NTP_Client::legacy_aliases() { return NTP_LEGACY; }
+corium::LegacyRows corium::NTP_Client::legacyAliases() { return NTP_LEGACY; }
 // === END LEGACY IMPORT ===
 
-NTP_Client::NTP_Client() {
+corium::NTP_Client::NTP_Client() {
 }
 
-void NTP_Client::begin() {
+void corium::NTP_Client::begin() {
   setup();
   corium::Registry::every(this, LOOP_MS);
 }
@@ -84,7 +84,7 @@ static const char* posix_tz() {
   if (tz[0] == '\0') tz = NTP_TZ;
   const char* posix = EGTimeZone::posixFor(tz);
   if (posix) return posix;
-  Log::console(PSTR("NTP: timezone '%s' not known, using UTC"), tz);
+  corium::Log::console(PSTR("NTP: timezone '%s' not known, using UTC"), tz);
   return PSTR("UTC0");
 }
 
@@ -98,11 +98,11 @@ static void set_tz(const char* posix) {
 }
 
 // before the modules begin: a kept, RTC or browser clock stamps local, wifi or not
-void NTP_Client::on_prefs_loaded() {
+void corium::NTP_Client::onPrefsLoaded() {
   set_tz(posix_tz());
 }
 
-void NTP_Client::setup()
+void corium::NTP_Client::setup()
 {
 #ifndef DISABLE_NTP
   const char* server = corium::Prefs::getString("ntp", corium::K_SERVER);
@@ -110,12 +110,12 @@ void NTP_Client::setup()
   if (strcmp(s_server, server) != 0) strlcpy(s_server, server, sizeof(s_server));
   server = s_server;
 
-  Log::console(PSTR("NTP: Starting ... %s"), server);
+  corium::Log::console(PSTR("NTP: Starting ... %s"), server);
   const char *possixTZ = posix_tz();
 #ifdef ESP8266
   // an RTC's settimeofday fires it too
   settimeofday_cb([](bool from_sntp){
-    if (!from_sntp || time(nullptr) < Clock::MIN_EPOCH) return;  // SDK fires once before sync
+    if (!from_sntp || time(nullptr) < corium::Clock::MIN_EPOCH) return;  // SDK fires once before sync
     s_synced = true;
     corium::Registry::post(&ntpclient);
   });
@@ -124,7 +124,7 @@ void NTP_Client::setup()
 #else
   // tcpip task, never wait here
   sntp_set_time_sync_notification_cb([](struct timeval *t){
-    if (!t || t->tv_sec < Clock::MIN_EPOCH) return;
+    if (!t || t->tv_sec < corium::Clock::MIN_EPOCH) return;
     s_synced = true;
     corium::Registry::post(&ntpclient);
   });
@@ -134,16 +134,16 @@ void NTP_Client::setup()
 #endif
 }
 
-void NTP_Client::on_prefs_saved() {
+void corium::NTP_Client::onPrefsSaved() {
   setup();
 }
 
 // posted on each sync, else every LOOP_MS for resyncs
-void NTP_Client::loop(unsigned long now) {
+void corium::NTP_Client::loop(unsigned long now) {
   if (s_synced) {
     s_synced = false;
-    if (Clock::on_sync()) Log::console(PSTR("NTP: Synched"));
+    if (corium::Clock::onSync()) corium::Log::console(PSTR("NTP: Synched"));
   }
-  if (Clock::resync_due(now)) setup();
-  if (Clock::synced) Clock::refresh_tz_offset_min();
+  if (corium::Clock::resyncDue(now)) setup();
+  if (corium::Clock::synced) corium::Clock::refreshTzOffsetMin();
 }

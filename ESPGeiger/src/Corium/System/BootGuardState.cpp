@@ -20,6 +20,7 @@
 #include "DeviceInfo.h"
 #include <string.h>
 
+namespace corium {
 namespace BootGuard {
 
 Ending ending(uint8_t reset_reason) {
@@ -33,10 +34,11 @@ Ending ending(uint8_t reset_reason) {
   }
 }
 
-static_assert((uint64_t)BOOTGUARD_RETRY_MS << 5 <= INT32_MAX, "retry doubling runs past reached()");
+static constexpr uint8_t RETRY_DOUBLINGS = 5;
+static_assert((uint64_t)CORIUM_BOOTGUARD_RETRY_MS << RETRY_DOUBLINGS <= INT32_MAX, "retry doubling runs past reached()");
 
-uint32_t retry_ms(uint8_t retries) {
-  return BOOTGUARD_RETRY_MS << (retries < 5 ? retries : 5);
+uint32_t retryMs(uint8_t retries) {
+  return CORIUM_BOOTGUARD_RETRY_MS << (retries < RETRY_DOUBLINGS ? retries : RETRY_DOUBLINGS);
 }
 
 void apply(State& s, uint32_t magic, uint32_t fw, Ending end) {
@@ -51,13 +53,14 @@ void apply(State& s, uint32_t magic, uint32_t fw, Ending end) {
   s.enter = 0;
 
   if (end != END_CRASH) {
-    s.crash_streak = 0;
+    s.crashStreak = 0;
     s.safe = enter && end == END_RESTART;
     return;
   }
-  if (lived) s.crash_streak = 0;
-  else if (s.crash_streak < 255) s.crash_streak++;
-  if (s.crash_streak >= CRASHES_TO_SAFE_MODE || enter) s.safe = 1;
+  if (lived) s.crashStreak = 0;
+  else if (s.crashStreak < 255) s.crashStreak++;
+  if (s.crashStreak >= CRASHES_TO_SAFE_MODE || enter) s.safe = 1;
 }
 
 }
+}  // namespace corium

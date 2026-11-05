@@ -20,16 +20,17 @@
 // RTC user words, survive reset + OTA, not power
 // eboot uses 0-31 for OTA
 
-#ifndef RTCMAP_H
-#define RTCMAP_H
+#ifndef CORIUM_RTCMAP_H
+#define CORIUM_RTCMAP_H
 
 #include <stdint.h>
 #include "App/AppConfig.h"
 
-#ifndef RTCMAP_APP1_WORDS
-#define RTCMAP_APP1_WORDS 4
+#ifndef CORIUM_RTCMAP_APP1_WORDS
+#define CORIUM_RTCMAP_APP1_WORDS 4
 #endif
 
+namespace corium {
 namespace RtcMap {
 
 constexpr uint32_t EBOOT_WORDS = 32;
@@ -43,7 +44,7 @@ constexpr uint32_t CRASHDUMP_WORDS = 43;
 
 // App
 constexpr uint32_t APP1_AT    = 48;
-constexpr uint32_t APP1_WORDS = RTCMAP_APP1_WORDS;
+constexpr uint32_t APP1_WORDS = CORIUM_RTCMAP_APP1_WORDS;
 
 static_assert(EBOOT_WORDS <= APP1_AT,                         "app words run into eboot");
 static_assert(APP1_AT + APP1_WORDS <= BOOTGUARD_AT,           "app words run into BootGuard");
@@ -51,11 +52,13 @@ static_assert(BOOTGUARD_AT + BOOTGUARD_WORDS <= CRASHDUMP_AT, "BootGuard runs in
 static_assert(CRASHDUMP_AT + CRASHDUMP_WORDS <= 128,          "past the 128 user words");
 
 }
+}  // namespace corium
 
 #ifdef ESP8266
 #include <Arduino.h>
 #include <stddef.h>
 
+namespace corium {
 // one owner's words, T starts with its magic
 template <typename T, uint32_t AT, uint32_t WORDS>
 struct RtcSlot {
@@ -70,6 +73,7 @@ struct RtcSlot {
     ESP.rtcUserMemoryWrite(AT, &zero, sizeof(zero));
   }
 };
+}  // namespace corium
 #endif
 
 #endif

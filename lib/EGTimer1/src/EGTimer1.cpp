@@ -42,6 +42,7 @@ static constexpr uint32_t RX_EARLY_TICKS = 200;
 static constexpr uint32_t RX_SPIN_MAX_TICKS = 1000;
 static constexpr uint32_t RX_RING = 256;
 static_assert((RX_RING & (RX_RING - 1)) == 0, "ring size must be a power of two");
+static constexpr uint32_t GPC_INT_MASK = 0xFu << GPCI;
 #endif
 
 // EG_TIMER1_STATS delays the gpio isrs
@@ -148,6 +149,16 @@ static uint32_t s_rx_tail;      // main side only
 #pragma GCC push_options
 #pragma GCC optimize("O2")
 
+static inline __attribute__((always_inline)) uint32_t spin_until(uint32_t due) {
+  uint32_t t;
+  while ((int32_t)(due - (t = ccount())) > 0) {}
+  return t;
+}
+
+static inline __attribute__((always_inline)) uint32_t pwm_window(uint8_t x2) {
+  return (g.pwm.high ? SPIN_TICKS : EGT1_LEAD_TICKS) << x2;
+}
+
 static inline __attribute__((always_inline)) void on_edge(uint8_t action, uint32_t t,
                                                           uint32_t due) {
   if (action == EGT1_PWM_RISE) {
@@ -198,14 +209,13 @@ static inline __attribute__((always_inline)) void rx_push(uint8_t b) {
 static inline __attribute__((always_inline)) void rx_listen() {
   if (g.rx_paused) return;
   GPIEC = g.rx_bit;
-  GPC(g.rx_pin) = (GPC(g.rx_pin) & ~(0xFu << GPCI)) | ((uint32_t)FALLING << GPCI);
+  GPC(g.rx_pin) = (GPC(g.rx_pin) & ~GPC_INT_MASK) | ((uint32_t)FALLING << GPCI);
 }
 
 static inline __attribute__((always_inline)) void rx_service() {
   uint32_t t = g.rx.next;
   if ((int32_t)(t - ccount()) > (int32_t)g.rx_window) return;
-  uint32_t now;
-  while ((int32_t)(t - (now = ccount())) > 0) {}
+  uint32_t now = spin_until(t);
   bool v = (GPI >> g.rx_pin) & 1;
   uint8_t a = egrx_sample(g.rx, v, now - t);
   if (a == EGRX_NEXT) return;
@@ -236,14 +246,14 @@ static inline __attribute__((always_inline)) void rx_service() {
 
 static inline __attribute__((always_inline)) uint8_t pwm_pass(uint8_t x2) {
   uint32_t due;
-  uint32_t window = (g.pwm.high ? SPIN_TICKS : EGT1_LEAD_TICKS) << x2;
+  uint32_t window = pwm_window(x2);
   uint8_t a = egt1_pwm_step(g.pwm, g.mb, ccount(), x2, window, &due);
   if (a != EGT1_PWM_RISE && a != EGT1_PWM_FALL) return a;
   uint32_t t = ccount();
 #ifdef EG_TIMER1_STATS
   int32_t slack = (int32_t)(due - t);
 #endif
-  while ((int32_t)(due - (t = ccount())) > 0) {}
+  t = spin_until(due);
   on_edge(a, t, due);
   if (a == EGT1_PWM_RISE) egt1_pwm_fall_from(g.pwm, t, x2);
   else egt1_pwm_late(g.pwm, t - due, x2);
@@ -299,8 +309,8 @@ static inline __attribute__((always_inline)) void finish(uint32_t t0, uint32_t d
 }
 
 static inline __attribute__((always_inline)) bool edge_pass(uint32_t t0, uint8_t x2) {
-  uint32_t due, t;
-  uint32_t window = (g.pwm.high ? SPIN_TICKS : EGT1_LEAD_TICKS) << x2;
+  uint32_t due;
+  uint32_t window = pwm_window(x2);
   uint8_t a = egt1_pwm_step(g.pwm, g.mb, ccount(), x2, window, &due);
   if (a == EGT1_PWM_FALL) {
     uint32_t d = egt1_arm(true, g.pwm.next, false, 0, due, x2);
@@ -308,7 +318,7 @@ static inline __attribute__((always_inline)) bool edge_pass(uint32_t t0, uint8_t
     int32_t slack = (int32_t)(due - ccount());
     if (slack > 0) g.spin_sum += (uint32_t)slack;
 #endif
-    while ((int32_t)(due - (t = ccount())) > 0) {}
+    uint32_t t = spin_until(due);
     on_edge(a, t, due);
     reg_write(T1L, d);
     egt1_pwm_late(g.pwm, t - due, x2);
@@ -317,7 +327,7 @@ static inline __attribute__((always_inline)) bool edge_pass(uint32_t t0, uint8_t
     return true;
   }
   if (a != EGT1_PWM_RISE) return false;
-  while ((int32_t)(due - (t = ccount())) > 0) {}
+  uint32_t t = spin_until(due);
   on_edge(a, t, due);
   egt1_pwm_fall_from(g.pwm, t, x2);
   g.idle = 0;
@@ -484,16 +494,28 @@ static inline void IRAM_ATTR kick() {
   if (vload(g.idle) || T1V > EGT1_LEAD_TICKS) timer1_write(EGT1_LEAD_TICKS);
 }
 
+static inline __attribute__((always_inline)) void kick_now() {
+  uint32_t ps = xt_rsil(15);
+  kick();
+  xt_wsr_ps(ps);
+}
+
 #ifdef EG_SERIAL_NMI
 // CHANGE, the core drops a late FALLING
 static void IRAM_ATTR rx_on_start() {
   uint32_t entry = ccount();
-  GPC(g.rx_pin) &= ~(0xFu << GPCI);
+  GPC(g.rx_pin) &= ~GPC_INT_MASK;
   if (vload(g.rx.on)) return;
   egrx_start(g.rx, entry, EG_RX_GPIO_LAT, EG_RX_BIAS);
   int32_t d = (int32_t)(g.rx.next - (RX_EARLY_TICKS << g.x2) - ccount()) >> g.x2;
   if (d < (int32_t)EGT1_LEAD_TICKS) d = EGT1_LEAD_TICKS;
   if (vload(g.idle) || T1V > (uint32_t)d) timer1_write((uint32_t)d);
+}
+
+static void listen_now() {
+  uint32_t ps = xt_rsil(15);
+  rx_listen();
+  xt_wsr_ps(ps);
 }
 #endif
 
@@ -604,9 +626,7 @@ bool pwm_begin(uint8_t pin) {
   g.pwm.next = ccount() + (START_TICKS << g.x2);
   __asm__ __volatile__("" ::: "memory");
   vstore(g.pwm_on, (uint8_t)1);
-  uint32_t ps = xt_rsil(15);
-  kick();
-  xt_wsr_ps(ps);
+  kick_now();
   return true;
 }
 
@@ -632,9 +652,7 @@ uint32_t entries() { return vload(g.entries); }
 void restart() {
   if (!s_init) return;
   arm_timer();
-  uint32_t ps = xt_rsil(15);
-  kick();
-  xt_wsr_ps(ps);
+  kick_now();
 }
 
 void timer_start(uint32_t (*fn)(), uint32_t first) {
@@ -646,9 +664,7 @@ void timer_start(uint32_t (*fn)(), uint32_t first) {
   g.tmr_next = ccount() + (first << g.x2);
   __asm__ __volatile__("" ::: "memory");
   vstore(g.tmr_on, (uint8_t)1);
-  uint32_t ps = xt_rsil(15);
-  kick();
-  xt_wsr_ps(ps);
+  kick_now();
 }
 
 void timer_stop() { vstore(g.tmr_on, (uint8_t)0); }
@@ -726,9 +742,7 @@ bool rx_begin(int8_t pin, uint32_t baud) {
   g.rx_bit = 1u << pin;
   pinMode(pin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(pin), rx_on_start, CHANGE);
-  uint32_t ps = xt_rsil(15);
-  rx_listen();
-  xt_wsr_ps(ps);
+  listen_now();
   return true;
 }
 
@@ -744,15 +758,13 @@ int rx_read() {
 
 void rx_pause() {
   vstore(g.rx_paused, (uint8_t)1);
-  GPC(g.rx_pin) &= ~(0xFu << GPCI);
+  GPC(g.rx_pin) &= ~GPC_INT_MASK;
   vstore(g.rx.on, (uint8_t)0);
 }
 
 void rx_resume() {
   vstore(g.rx_paused, (uint8_t)0);
-  uint32_t ps = xt_rsil(15);
-  rx_listen();
-  xt_wsr_ps(ps);
+  listen_now();
 }
 
 void rx_stats(RxStats* out) {

@@ -52,18 +52,18 @@ class WebAPI : public corium::Sender {
   public:
     WebAPI();
     const char* name() override { return PSTR("wapi"); }
-    bool requires_wifi() override { return true; }
-    bool requires_ntp() override { return true; }
+    bool requiresWifi() override { return true; }
+    bool requiresNtp() override { return true; }
     static constexpr uint16_t LOOP_MS = 1000;
     static constexpr uint16_t REPLAN_MS = 100;
     void begin() override;
     void loop(unsigned long now) override;
-    const corium::PrefGroup* prefs_group() override;
-    uint8_t display_order() override { return 0; }  // managed via /webapi page
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    uint8_t displayOrder() override { return 0; }  // managed via /webapi page
+    void onPrefsLoaded() override;
     void registerRoutes(EGHttpServer& http) override;
     const corium::MenuEntry* menuEntries() override;
-    size_t status_json(char* buf, size_t cap, unsigned long now) override;
+    size_t statusJson(char* buf, size_t cap, unsigned long now) override;
 
     corium::HttpDriver request;
 
@@ -100,10 +100,12 @@ class WebAPI : public corium::Sender {
     uint32_t _hs_backoff_ms = WEBAPI_BACKOFF_MS;
     void handshakeAt(uint32_t at);
     // claimed once, reused
-    uint32_t _hs_off = 0xFFFFFFFFu;
-    uint32_t _ping_off = 0xFFFFFFFFu;
+    static constexpr uint32_t SLOT_UNSET = 0xFFFFFFFFu;
+    uint32_t _hs_off = SLOT_UNSET;
+    uint32_t _ping_off = SLOT_UNSET;
     uint8_t healthPostCounter = 0;
-    uint8_t _mode = 2;   // 0 off, 1 heartbeat, 2 + CPM
+    enum : uint8_t { WA_OFF, WA_HEARTBEAT, WA_CPM };
+    uint8_t _mode = WA_CPM;
     void backoffHandshake();
     bool _exc_sent = false;
 #ifdef ESPGEIGER_ATTEST

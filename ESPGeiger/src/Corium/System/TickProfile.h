@@ -16,24 +16,25 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef UTIL_TICKPROFILE_H
-#define UTIL_TICKPROFILE_H
+#ifndef CORIUM_TICKPROFILE_H
+#define CORIUM_TICKPROFILE_H
 
 #include <Arduino.h>
 
+namespace corium {
 // loop and the tick only, esp32 runs the tick on loop too: no volatile
 namespace TickProfile {
-  extern uint32_t tick_us;
-  extern uint32_t tick_max_us;  // 60s
+  extern uint32_t tickUs;
+  extern uint32_t tickMaxUs;  // 60s
   extern uint32_t lps;
-  extern uint32_t lps_raw;
+  extern uint32_t lpsRaw;
   extern uint32_t _lps_count;    // free-running, never reset
 
   inline void countIter() { ++_lps_count; }
 
 #ifdef LOOP_PROFILE
-  extern uint32_t loop_body_us;
-  inline void addLoopBody(uint32_t us) { loop_body_us += us; }
+  extern uint32_t loopBodyUs;
+  inline void addLoopBody(uint32_t us) { loopBodyUs += us; }
 #endif
 
   void beginTick();
@@ -43,5 +44,6 @@ namespace TickProfile {
 #endif
   bool endTick();   // true once a minute
 }
+}  // namespace corium
 
 #endif

@@ -99,7 +99,7 @@ public:
     if (pos + 2 > cap) { overflow = true; return; }
     memmove(buf + _map_at + 3, buf + _map_at + 1, pos - _map_at - 1);
     buf[_map_at] = TAG_MAP16;
-    wr_be16(buf + _map_at + 1, _map_n);
+    wrBe16(buf + _map_at + 1, _map_n);
     pos += 2;
   }
   void array(uint16_t n) {
@@ -178,12 +178,12 @@ private:
   }
   void put_u16(uint16_t v) {
     if (pos + 2 > cap) { overflow = true; return; }
-    wr_be16(buf + pos, v);
+    wrBe16(buf + pos, v);
     pos += 2;
   }
   void put_u32(uint32_t v) {
     if (pos + 4 > cap) { overflow = true; return; }
-    wr_be32(buf + pos, v);
+    wrBe32(buf + pos, v);
     pos += 4;
   }
   void put_bytes(const uint8_t* p, size_t len) {
@@ -353,12 +353,12 @@ private:
   }
   bool get_u16(uint16_t* out) {
     if (pos + 2 > cap) { error = true; return false; }
-    *out = rd_be16(buf + pos);
+    *out = rdBe16(buf + pos);
     pos += 2; return true;
   }
   bool get_u32(uint32_t* out) {
     if (pos + 4 > cap) { error = true; return false; }
-    *out = rd_be32(buf + pos);
+    *out = rdBe32(buf + pos);
     pos += 4; return true;
   }
   bool advance(size_t n) {

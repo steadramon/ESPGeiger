@@ -64,19 +64,20 @@ __attribute__((always_inline)) inline uint32_t egt1_apply(EGT1Soft* ch, uint8_t 
   c.ok = 1;
   if (c.op == EGT1_CMD_STOP) {
     if (slot) slot->mask = 0;
-  } else if (slot) {
-    slot->high = c.high;
-    slot->low = c.low;
-    slot->expiry = expiry;
-  } else if (spare) {
-    spare->mask = c.mask;
-    spare->high = c.high;
-    spare->low = c.low;
-    spare->next = now;
-    spare->expiry = expiry;
-    spare->level = 0;
   } else {
-    c.ok = 0;
+    if (!slot && spare) {
+      slot = spare;
+      slot->mask = c.mask;
+      slot->next = now;
+      slot->level = 0;
+    }
+    if (slot) {
+      slot->high = c.high;
+      slot->low = c.low;
+      slot->expiry = expiry;
+    } else {
+      c.ok = 0;
+    }
   }
   c.op = EGT1_CMD_NONE;
   uint32_t carried = 0;

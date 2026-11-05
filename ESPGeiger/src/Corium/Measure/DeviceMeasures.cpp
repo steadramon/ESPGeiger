@@ -22,20 +22,20 @@
 #include "Corium/System/TickProfile.h"
 #include "Corium/Net/Wifi.h"
 
-bool corium::m_dev_ut(corium::MValue* v)     { v->u = (uint32_t)DeviceInfo::uptime(); return true; }
-bool corium::m_dev_id(corium::MValue* v)     { v->s = DeviceInfo::chipid(); return true; }
-bool corium::m_dev_rssi(corium::MValue* v)   { v->i = (int32_t)Wifi::rssi; return true; }
-bool corium::m_dev_mem(corium::MValue* v)    { v->u = (uint32_t)DeviceInfo::freeHeap(); return true; }
-bool corium::m_dev_mem_raw(corium::MValue* v) { v->u = DeviceInfo::heapNow(); return true; }
-bool corium::m_dev_tick(corium::MValue* v)   { v->u = TickProfile::tick_us; return true; }
-bool corium::m_dev_t_max(corium::MValue* v)  { v->u = TickProfile::tick_max_us; return true; }
-bool corium::m_dev_lps(corium::MValue* v)    { v->u = TickProfile::lps_raw; return true; }
-bool corium::m_dev_frag(corium::MValue* v)   { v->u = DeviceInfo::heapFrag(); return true; }
-bool corium::m_dev_lfb(corium::MValue* v)    { v->u = DeviceInfo::largestFreeBlock(); return true; }
-bool corium::m_dev_lfblow(corium::MValue* v) { v->u = DeviceInfo::largestFreeBlockLow(); return true; }
+bool corium::m_dev_ut(corium::MValue* v)     { v->u = (uint32_t)corium::DeviceInfo::uptime(); return true; }
+bool corium::m_dev_id(corium::MValue* v)     { v->s = corium::DeviceInfo::chipId(); return true; }
+bool corium::m_dev_rssi(corium::MValue* v)   { v->i = (int32_t)corium::Wifi::rssi; return true; }
+bool corium::m_dev_mem(corium::MValue* v)    { v->u = (uint32_t)corium::DeviceInfo::freeHeap(); return true; }
+bool corium::m_dev_mem_raw(corium::MValue* v) { v->u = corium::DeviceInfo::heapNow(); return true; }
+bool corium::m_dev_tick(corium::MValue* v)   { v->u = corium::TickProfile::tickUs; return true; }
+bool corium::m_dev_t_max(corium::MValue* v)  { v->u = corium::TickProfile::tickMaxUs; return true; }
+bool corium::m_dev_lps(corium::MValue* v)    { v->u = corium::TickProfile::lpsRaw; return true; }
+bool corium::m_dev_frag(corium::MValue* v)   { v->u = corium::DeviceInfo::heapFrag(); return true; }
+bool corium::m_dev_lfb(corium::MValue* v)    { v->u = corium::DeviceInfo::largestFreeBlock(); return true; }
+bool corium::m_dev_lfblow(corium::MValue* v) { v->u = corium::DeviceInfo::largestFreeBlockLow(); return true; }
 
 bool corium::m_dev_name(corium::MValue* v) {
-  v->s = DeviceInfo::displayName();
+  v->s = corium::DeviceInfo::displayName();
   return true;
 }
 

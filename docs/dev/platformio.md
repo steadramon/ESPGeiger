@@ -187,6 +187,7 @@ Identifies a specific product family. Implies a known set of capability flags as
 | Flag | Description |
 |---|---|
 | `-D GEIGER_SDCARD_CS=N` | Set the SD card SPI chip select pin (default `16`). Requires `GEIGER_SDCARD`. |
+| `-D GEIGER_SDCARD_SCK=N` | SD card on its own SPI pins, with `GEIGER_SDCARD_MOSI=N` and `GEIGER_SDCARD_MISO=N` (ESP32 family). Without it the chip's default SPI pins are used. |
 
 ### Miscellaneous
 
@@ -196,6 +197,7 @@ Identifies a specific product family. Implies a known set of capability flags as
 | `-D DISABLE_INTERNAL_BLIP` | Disable the internal status LED blip on each detected pulse. |
 | `-D NTP_SERVER="server"` | Set the default NTP server (default `pool.ntp.org`). |
 | `-D NTP_TZ="tz"` | Set the default timezone in POSIX format. |
+| `-D RTC_8266` | Look for an RTC chip on the I2C bus on ESP8266 builds too (ESP32 builds with the bus always do). |
 
 ### SdFat (SD card builds)
 
@@ -203,7 +205,7 @@ Applied globally in `[com-esp]` so they affect every SD-enabled build:
 
 | Flag | Description |
 |---|---|
-| `-D MAINTAIN_FREE_CLUSTER_COUNT=1` | Cache free-cluster count; `freeClusterCount()` becomes O(1) after first call. Eliminates multi-second "calculating free space" delay at boot and daily cleanup scan. |
+| `-D MAINTAIN_FREE_CLUSTER_COUNT=1` | Cache free-cluster count; `freeClusterCount()` becomes O(1) after first call. Eliminates multi-second "calculating free space" delay at boot and when the card looks full. |
 | `-D SDFAT_FILE_TYPE=1` | FAT16/FAT32 only (no exFAT). Saves ~15-20 KB flash; we use FAT32 exclusively. |
 | `-D USE_LONG_FILE_NAMES=0` | Disable LFN support. Saves ~5 KB flash. All our filenames are 8.3-compliant (`YYYYMMDD.CSV`, `YYYYMM/`, `TEST.TMP`). |
 

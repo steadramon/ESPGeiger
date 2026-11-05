@@ -62,6 +62,7 @@ static constexpr uint8_t M_OUT_VARS    = 1 << 4;  // templates and /vars.json
 static constexpr uint8_t M_OUT_ID      = 1 << 5;  // by id only
 static constexpr uint8_t M_OUT_ALL     = M_OUT_JSON | M_OUT_PROM | M_OUT_APP0 |
                                            M_OUT_APP1 | M_OUT_VARS;
+static constexpr uint8_t M_OUT_ANY     = 0xFF;
 
 static constexpr uint8_t M_DIAG    = 1 << 0;
 static constexpr uint8_t M_COUNTER = 1 << 1;  // else gauge
@@ -83,7 +84,7 @@ struct Measure {
   char        id[CORIUM_M_ID_MAX + 1];
   char        json[CORIUM_M_JSON_MAX + 1];   // "" = id
   const char* prom;         // PROGMEM, nullptr = not exported
-  const char* prom_labels;  // PROGMEM
+  const char* promLabels;  // PROGMEM
   const char* help;         // PROGMEM
   MRead     read;
   MKind     kind;
@@ -112,7 +113,7 @@ public:
     return r;
   }
   // id is PROGMEM, copies the id only
-  bool id_is(size_t j, const char* id) const {
+  bool idIs(size_t j, const char* id) const {
     char buf[sizeof(_rows[0].id)];
     memcpy_P(buf, _rows[j].id, sizeof(buf));
     return strcmp_P(buf, id) == 0;

@@ -25,24 +25,24 @@
 
 static const uint16_t POLL_MS   = 50;
 static const uint16_t SETTLE_MS = 500;   // after the release
-static const uint32_t STUCK_MS  = BOOT_BUTTON_STUCK_S * 1000UL;
+static const uint32_t STUCK_MS  = CORIUM_BOOT_BUTTON_STUCK_S * 1000UL;
 
-BootButton::Hold BootButton::check(bool (*pressed)(), void (*held)(), void (*left)(int s)) {
+corium::BootButton::Hold corium::BootButton::check(bool (*pressed)(), void (*held)(), void (*left)(int s)) {
   if (!pressed()) return Hold::NONE;
 
-  Serial.println(F("BOOT: button held - offline mode, hold " BB_STR(BOOT_BUTTON_RESET_S) "s for factory reset"));
+  Serial.println(F("BOOT: button held - offline mode, hold " BB_STR(CORIUM_BOOT_BUTTON_RESET_S) "s for factory reset"));
   held();
-  uint32_t start = fast_millis();
+  uint32_t start = corium::fastMillis();
   int last_shown = 999;
   bool armed = false;
 
   while (pressed()) {
-    uint32_t held_ms = fast_millis() - start;
+    uint32_t held_ms = corium::fastMillis() - start;
     if (held_ms >= STUCK_MS) {
       Serial.println(F("BOOT: button stuck - ignored"));
       return Hold::NONE;
     }
-    int remain = BOOT_BUTTON_RESET_S - (int)(held_ms / 1000);
+    int remain = CORIUM_BOOT_BUTTON_RESET_S - (int)(held_ms / 1000);
     if (remain != last_shown) {
       last_shown = remain;
       if (remain >= 1) {

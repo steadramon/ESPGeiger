@@ -36,7 +36,7 @@ enum : uint16_t {
 
 static const int8_t EGTCP_LATER = -5;   // lwIP's ERR_INPROGRESS
 
-// stack's arg till it answers, c cleared under the lock
+// The stack's arg until it answers, c is cleared under the lock
 struct EGTcpAsk {
   EGTcpClient* c;
   uint32_t id;
@@ -81,14 +81,25 @@ struct EGTcpCore {
   // backend's, per chip
 #if defined(ESP32)
   static void owner();   // poll()'s task
-  static void check();   // warns once off it
+  static void check();   // warns once if called off that task
 #else
   static void owner() {}   // one task
   static void check() {}
 #endif
 };
 
-// the lock while in scope
+// Lock held, the 8266 has no fetch_add
+template <class T>
+__attribute__((always_inline)) inline void locked_add(std::atomic<T>& a, T n, std::memory_order o) {
+  a.store(a.load(std::memory_order_relaxed) + n, o);
+}
+
+template <class T>
+__attribute__((always_inline)) inline void locked_sub(std::atomic<T>& a, T n, std::memory_order o) {
+  a.store(a.load(std::memory_order_relaxed) - n, o);
+}
+
+// Holds the lock while in scope
 class EGTcpHold {
   public:
 #if defined(ESP8266)

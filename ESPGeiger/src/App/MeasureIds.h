@@ -20,6 +20,7 @@
 #define APP_MEASURE_IDS_H
 
 #include "Corium/Platform/Flash.h"
+#include "Corium/Measure/Measure.h"
 
 // PSTR so the linker keeps one copy of each
 #define M_ALERT  PSTR("alert")
@@ -42,12 +43,21 @@
 #define M_HV_TGT PSTR("hv_tgt")
 #define M_HV_DTY PSTR("hv_duty")
 #define M_HV_TRM PSTR("hv_trim")
+#define M_RX_T   PSTR("rx_t")   // UdpRx /env
+#define M_RX_H   PSTR("rx_h")
+#define M_RX_P   PSTR("rx_p")
 // built with the hv rows, 0 = the code reading them drops out
 #ifdef ESPG_HV_ADC
 #define M_HAS_HV 1
 #else
 #define M_HAS_HV 0
 #endif
+inline bool m_hv_volts(int32_t* v) {
+  corium::MeasureIter it(corium::M_OUT_ANY, false, M_HV);
+  if (!it.next()) return false;
+  *v = it.value().i;
+  return true;
+}
 // celsius
 #define M_T      PSTR("t")
 #define M_H      PSTR("h")

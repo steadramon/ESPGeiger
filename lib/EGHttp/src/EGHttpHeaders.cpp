@@ -36,7 +36,9 @@ static const char* skip_spaces(const char* p, const char* end) {
   return p;
 }
 
-// max 8 digits, junk is BAD
+static const size_t CL_DIGITS_MAX = 8;
+
+// junk is BAD
 EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* out) {
   *out = 0;
   const char* p = eghttp_find_header(hdr, headerEnd, PSTR("Content-Length:"));
@@ -44,12 +46,12 @@ EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* 
   const char* end = hdr + headerEnd;
   p = skip_spaces(p, end);
   size_t v = 0, nd = 0;
-  while (p < end && *p >= '0' && *p <= '9' && nd < 9) {
-    v = v * 10 + (size_t)(*p - '0');
-    p++; nd++;
+  while (p < end && *p >= '0' && *p <= '9') {
+    if (++nd > CL_DIGITS_MAX) return EGHTTP_CL_BAD;
+    v = v * 10 + (size_t)(*p++ - '0');
   }
   p = skip_spaces(p, end);
-  if (nd == 0 || nd > 8 || p >= end || *p != '\r') return EGHTTP_CL_BAD;
+  if (nd == 0 || p >= end || *p != '\r') return EGHTTP_CL_BAD;
   *out = v;
   return EGHTTP_CL_OK;
 }

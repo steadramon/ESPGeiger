@@ -30,6 +30,7 @@ extern "C" {
 #include "cont.h"
 }
 
+namespace corium {
 namespace CrashDump {
 
 static constexpr uint32_t MAGIC = 0xC0DECAFFu;
@@ -48,9 +49,9 @@ void begin() {
   if (!Slot::read(snap)) return;
   if (snap.magic != MAGIC) return;
   Slot::clear();
-  if (snap.fw_fp != s_fw_fp) return;
+  if (snap.fwFp != s_fw_fp) return;
   // a bad RTC word never reads past stack[]
-  if (snap.word_count > STACK_WORDS) snap.word_count = STACK_WORDS;
+  if (snap.wordCount > STACK_WORDS) snap.wordCount = STACK_WORDS;
   if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
 }
 
@@ -58,15 +59,16 @@ bool hasCrash() { return s_recovered != nullptr; }
 const Snapshot* lastCrash() { return s_recovered; }
 
 } // namespace CrashDump
+}  // namespace corium
 
 // Exception handler - no heap, Serial or libc
 extern "C" void custom_crash_callback(struct rst_info* rst_info,
                                       uint32_t stack,
                                       uint32_t stack_end) {
-  using namespace CrashDump;
+  using namespace corium::CrashDump;
   Snapshot snap{};
   snap.magic    = MAGIC;
-  snap.fw_fp    = s_fw_fp;   // 0 = crashed before begin()
+  snap.fwFp     = s_fw_fp;   // 0 = crashed before begin()
   snap.reason   = rst_info ? rst_info->reason   : 0;
   snap.exccause = rst_info ? rst_info->exccause : 0;
   snap.epc1     = rst_info ? rst_info->epc1     : 0;
@@ -83,7 +85,7 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
     if (avail > STACK_WORDS) avail = STACK_WORDS;
     const uint32_t* p = (const uint32_t*)lo;
     for (size_t i = 0; i < avail; i++) snap.stack[i] = p[i];
-    snap.word_count = avail;
+    snap.wordCount = avail;
   }
 
   Slot::write(snap);
@@ -96,6 +98,7 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
 #include <esp_ota_ops.h>
 #include <string.h>
 
+namespace corium {
 namespace CrashDump {
 
 static Snapshot* s_recovered = nullptr;   // crash boots only
@@ -127,7 +130,7 @@ void begin() {
     size_t bytes  = sum.exc_bt_info.dump_size;
     if (bytes > sizeof(snap.stack)) bytes = sizeof(snap.stack);
     memcpy(snap.stack, sum.exc_bt_info.stackdump, bytes);
-    snap.word_count = (uint32_t)(bytes / sizeof(uint32_t));
+    snap.wordCount = (uint32_t)(bytes / sizeof(uint32_t));
 #else
     snap.exccause = sum.ex_info.exc_cause;
     snap.epc1     = sum.exc_pc;
@@ -139,7 +142,7 @@ void begin() {
     size_t depth = sum.exc_bt_info.depth;
     if (depth > STACK_WORDS) depth = STACK_WORDS;
     for (size_t i = 0; i < depth; i++) snap.stack[i] = sum.exc_bt_info.bt[i];
-    snap.word_count = (uint32_t)depth;
+    snap.wordCount = (uint32_t)depth;
 #endif
     if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
   }
@@ -152,11 +155,14 @@ bool hasCrash() { return s_recovered != nullptr; }
 const Snapshot* lastCrash() { return s_recovered; }
 
 } // namespace CrashDump
+}  // namespace corium
 
 #else  // Other targets - stub.
+namespace corium {
 namespace CrashDump {
 void begin() {}
 bool hasCrash() { return false; }
 const Snapshot* lastCrash() { return nullptr; }
 }
+}  // namespace corium
 #endif

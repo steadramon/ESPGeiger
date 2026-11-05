@@ -17,17 +17,19 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef NTPPAGE_H
-#define NTPPAGE_H
+#ifndef CORIUM_NTPPAGE_H
+#define CORIUM_NTPPAGE_H
 
 class EGHttpResponse;
 class EGHttpServer;
 
+namespace corium {
 namespace NtpPage {
 
 void form(EGHttpResponse& res);
 void routes(EGHttpServer& http);   // /ntpjs, /ntpset
 
 }
+}  // namespace corium
 
 #endif

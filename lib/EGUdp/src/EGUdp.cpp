@@ -53,9 +53,8 @@ static void to_ip4(const EGTcpAddr& a, ip4_addr_t* ip) {
 }
 
 struct EGUdpLwip {
-  // lock held, no fetch_add on the 8266
   static void bump(std::atomic<uint32_t>& n) {
-    n.store(n.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+    locked_add<uint32_t>(n, 1, std::memory_order_relaxed);
   }
 
   static void take(EGUdp* u, const pbuf* p, const ip_addr_t* addr, u16_t port) {
@@ -246,7 +245,7 @@ void EGUdp::run() {
     if (_life != life) break;   // end() in onPacket
     EGTcpHold h;
     _head = _head + 1 < _slots ? _head + 1 : 0;
-    _count.store(_count.load(std::memory_order_relaxed) - 1, std::memory_order_release);
+    locked_sub<uint8_t>(_count, 1, std::memory_order_release);
   }
   _in_run = false;
 }

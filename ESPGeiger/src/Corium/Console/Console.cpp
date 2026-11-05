@@ -26,50 +26,50 @@
 #include "Corium/System/BootGuard.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
 
-Console console;
+corium::Console console;
 
 CORIUM_REGISTER_MODULE(console)
 
-const corium::Cmd* Console::_cmds[CORIUM_MAX_CMDS] = {};
-uint8_t Console::_count = 0;
-uint8_t Console::_dropped = 0;
-bool Console::_up = false;
-ConsoleLine Console::_serial = {};
-char* Console::_last = nullptr;
+const corium::Cmd* corium::Console::_cmds[CORIUM_MAX_CMDS] = {};
+uint8_t corium::Console::_count = 0;
+uint8_t corium::Console::_dropped = 0;
+bool corium::Console::_up = false;
+corium::ConsoleLine corium::Console::_serial = {};
+char* corium::Console::_last = nullptr;
 
 static const char DELIM[] = " ";
 
-static void reboot() { DeviceInfo::safeRestart(); }
+static void reboot() { corium::DeviceInfo::safeRestart(); }
 static void safe() {
-  BootGuard::request_safe();
-  DeviceInfo::safeRestart();
+  corium::BootGuard::requestSafe();
+  corium::DeviceInfo::safeRestart();
 }
 
 // setup site reads this
 static const char VER_LINE[] PROGMEM = THING_NAME " " RELEASE_VERSION " " BUILD_ENV;
 static void ver() {
-  Log::console(VER_LINE);
+  corium::Log::console(VER_LINE);
   // show streaming turns console logging off
-  if (!Log::serialOn()) Serial.println(FPSTR(VER_LINE));
+  if (!corium::Log::serialOn()) Serial.println(FPSTR(VER_LINE));
 }
 
 static void reset_wifi() {
-  Wifi::clearSavedCreds();
+  corium::Wifi::clearSavedCreds();
   reboot();
 }
 
 static bool committed() {
   if (corium::Prefs::commit()) return true;
-  Log::console(PSTR("Commit failed"));
+  corium::Log::console(PSTR("Commit failed"));
   return false;
 }
 
 static void reset_net() {
-  Log::console(PSTR("Clearing net.* prefs and rebooting"));
+  corium::Log::console(PSTR("Clearing net.* prefs and rebooting"));
   // dhcp, all blank
   corium::Prefs::reset("net");
   if (!committed()) return;
-  Wifi::dropNetBackup();
+  corium::Wifi::dropNetBackup();
   reboot();
 }
 
@@ -81,17 +81,17 @@ struct PrefArg {
 };
 
 static bool pref_arg(PrefArg& a, const char* usage) {
-  char* arg = Console::next();
+  char* arg = corium::Console::next();
   char* dot = arg ? strchr(arg, '.') : nullptr;
   if (!dot || dot == arg || !*(dot + 1)) {
-    Log::console(usage);
+    corium::Log::console(usage);
     return false;
   }
   *dot = '\0';
   a.mod = arg;
   a.key = dot + 1;
-  if (corium::Prefs::find_pref(a.mod, a.key, &a.p)) return true;
-  Log::console(PSTR("Unknown pref: %s.%s"), a.mod, a.key);
+  if (corium::Prefs::findPref(a.mod, a.key, &a.p)) return true;
+  corium::Log::console(PSTR("Unknown pref: %s.%s"), a.mod, a.key);
   return false;
 }
 
@@ -101,7 +101,7 @@ static void cmd_get() {
   // never null, unset is ""
   const char* v = corium::Prefs::getString(a.mod, a.key);
   if ((a.p.flags & corium::P_SENSITIVE) && *v) v = PSTR("***");
-  Log::console(PSTR("%s.%s=%s"), a.mod, a.key, v);
+  corium::Log::console(PSTR("%s.%s=%s"), a.mod, a.key, v);
 }
 
 static void cmd_set() {
@@ -110,27 +110,27 @@ static void cmd_set() {
   const char* mod = a.mod;
   const char* key = a.key;
   // rest of line, keeps spaces
-  char* value = Console::rest();
+  char* value = corium::Console::rest();
   if (!value) value = (char*)"";
   while (*value == ' ') value++;
   size_t vlen = strlen(value);
   // a line never holds CR or LF
   while (vlen > 0 && value[vlen-1] == ' ') value[--vlen] = '\0';
   if (!corium::Prefs::put(mod, key, value)) {
-    Log::console(PSTR("Rejected: %s.%s validation failed"), mod, key);
+    corium::Log::console(PSTR("Rejected: %s.%s validation failed"), mod, key);
     return;
   }
   if (!committed()) return;
   const char* ok = (a.p.flags & corium::P_SENSITIVE) ? PSTR("OK: %s.%s set") : PSTR("OK: %s.%s=%s");
-  Log::console(ok, mod, key, corium::Prefs::getString(mod, key));
-  if (corium::Prefs::restart_pending()) Log::console(corium::H_RBA);
+  corium::Log::console(ok, mod, key, corium::Prefs::getString(mod, key));
+  if (corium::Prefs::restartPending()) corium::Log::console(corium::H_RBA);
 }
 
 // back to defaults, never reboots or wipes
 static void cmd_reset() {
-  char* arg = Console::next();
+  char* arg = corium::Console::next();
   if (!arg) {
-    Log::console(PSTR("Usage: reset <module>.<key> | reset <module>"));
+    corium::Log::console(PSTR("Usage: reset <module>.<key> | reset <module>"));
     return;
   }
   char* dot = strchr(arg, '.');
@@ -139,18 +139,18 @@ static void cmd_reset() {
   // whole word again for the reply
   if (dot) *dot = '.';
   if (!ok) {
-    Log::console(PSTR("Rejected: reset %s"), arg);
+    corium::Log::console(PSTR("Rejected: reset %s"), arg);
     return;
   }
   if (!committed()) return;
-  Log::console(PSTR("OK: %s reset"), arg);
-  if (corium::Prefs::restart_pending()) Log::console(corium::H_RBA);
+  corium::Log::console(PSTR("OK: %s reset"), arg);
+  if (corium::Prefs::restartPending()) corium::Log::console(corium::H_RBA);
 }
 
 // this boot only, as the button held
 static void offline() {
-  if (Wifi::offline_now()) Log::console(PSTR("WiFi: offline this boot"));
-  else Log::console(PSTR("offline: at boot only (setup portal or wifi wait)"));
+  if (corium::Wifi::offlineNow()) corium::Log::console(PSTR("WiFi: offline this boot"));
+  else corium::Log::console(PSTR("offline: at boot only (setup portal or wifi wait)"));
 }
 
 static const char C_REBOOT[] PROGMEM = "reboot";
@@ -176,17 +176,17 @@ static const corium::Cmd CMDS[] PROGMEM = {
   { C_OFFLINE, offline },
 };
 
-bool Console::add(const corium::Cmd* cmd) {
+bool corium::Console::add(const corium::Cmd* cmd) {
   if (_count >= CORIUM_MAX_CMDS) { _dropped++; return false; }
   _cmds[_count++] = cmd;
   return true;
 }
 
-char* Console::next() {
+char* corium::Console::next() {
   return strtok_r(NULL, DELIM, &_last);
 }
 
-char* Console::rest() {
+char* corium::Console::rest() {
   return _last;
 }
 
@@ -195,12 +195,12 @@ static bool run_row(const corium::Cmd* row, const char* word, bool held) {
   corium::Cmd c;
   memcpy_P(&c, row, sizeof(c));
   if (strcmp_P(word, c.name) != 0) return false;
-  if (held) Log::console(PSTR("%s: after boot"), word);
+  if (held) corium::Log::console(PSTR("%s: after boot"), word);
   else c.fn();
   return true;
 }
 
-void Console::exec(ConsoleLine& l) {
+void corium::Console::exec(corium::ConsoleLine& l) {
   char* word = strtok_r(l.buf, DELIM, &_last);
   // own rows, then the app's, held till their modules are up
   const uint8_t own = sizeof(CMDS) / sizeof(CMDS[0]);
@@ -211,25 +211,25 @@ void Console::exec(ConsoleLine& l) {
   l.pos = 0;
 }
 
-void Console::begin() {
+void corium::Console::begin() {
   _up = true;
-  if (_dropped) Log::console(PSTR("Console: %u command(s) dropped (raise CORIUM_MAX_CMDS)"), _dropped);
+  if (_dropped) corium::Log::console(PSTR("Console: %u command(s) dropped (raise CORIUM_MAX_CMDS)"), _dropped);
 #ifndef DISABLE_SERIALRX
   corium::Registry::every(this, LOOP_MS);   // else nothing to read
 #endif
 }
 
-void Console::loop(unsigned long now) {
+void corium::Console::loop(unsigned long now) {
 #ifndef DISABLE_SERIALRX
   while (Serial.available() > 0) {
     char c = Serial.read();
-    if (improvSerial.consume_byte((uint8_t)c)) continue;
+    if (improvSerial.consumeByte((uint8_t)c)) continue;
     feed(_serial, Serial, c);
   }
 #endif
 }
 
-void Console::poll_boot() {
+void corium::Console::pollBoot() {
 #ifdef DISABLE_SERIALRX
   improvSerial.poll();   // rx pin is the app's, improv only
 #else
@@ -239,15 +239,16 @@ void Console::poll_boot() {
 
 // a cut line could still save
 static void too_long() {
-  Log::console(PSTR("Command too long, max %u chars"), (unsigned)CONSOLE_LINE_MAX);
+  corium::Log::console(PSTR("Command too long, max %u chars"), (unsigned)CONSOLE_LINE_MAX);
 }
 
 // set of a P_SENSITIVE pref: where its value starts, else null
 static char* secret_at(char* line) {
+  const size_t n = sizeof(C_SET) - 1;
   char* s = line;
   while (*s == ' ') s++;
-  if (strncmp_P(s, C_SET, 3) != 0 || s[3] != ' ') return nullptr;
-  s += 4;
+  if (strncmp_P(s, C_SET, n) != 0 || s[n] != ' ') return nullptr;
+  s += n + 1;
   while (*s == ' ') s++;
   char* dot = strchr(s, '.');
   char* sp = dot ? strchr(dot, ' ') : nullptr;
@@ -255,16 +256,16 @@ static char* secret_at(char* line) {
   corium::Pref p;
   *dot = '\0';
   *sp = '\0';
-  bool secret = corium::Prefs::find_pref(s, dot + 1, &p) && (p.flags & corium::P_SENSITIVE);
+  bool secret = corium::Prefs::findPref(s, dot + 1, &p) && (p.flags & corium::P_SENSITIVE);
   *dot = '.';
   *sp = ' ';
   return secret ? sp : nullptr;
 }
 
 // today: shares the serial line, a half typed one is dropped
-void Console::run(const char* text) {
+void corium::Console::run(const char* text) {
   if (!text) return;
-  ConsoleLine& l = _serial;
+  corium::ConsoleLine& l = _serial;
   size_t n = 0;
   while (text[n] && n <= CONSOLE_LINE_MAX && text[n] != '\r' && text[n] != '\n') n++;
   if (n > CONSOLE_LINE_MAX) { too_long(); return; }
@@ -273,12 +274,12 @@ void Console::run(const char* text) {
   l.pos = n;
   // via Log so /cs sees it
   char* secret = secret_at(l.buf);
-  if (secret) Log::console(PSTR("> %.*s ***"), (int)(secret - l.buf), l.buf);
-  else Log::console(PSTR("> %s"), l.buf);
+  if (secret) corium::Log::console(PSTR("> %.*s ***"), (int)(secret - l.buf), l.buf);
+  else corium::Log::console(PSTR("> %s"), l.buf);
   exec(l);
 }
 
-void Console::edit(ConsoleLine& l, Print& io, char c) {
+void corium::Console::edit(corium::ConsoleLine& l, Print& io, char c) {
   if (c == 0x08 || c == 0x7f) {  // BS or DEL
     if (l.pos > 0) {
       l.buf[--l.pos] = '\0';
@@ -292,7 +293,7 @@ void Console::edit(ConsoleLine& l, Print& io, char c) {
   }
 }
 
-void Console::feed(ConsoleLine& l, Print& io, char c) {
+void corium::Console::feed(corium::ConsoleLine& l, Print& io, char c) {
   if (c != '\r' && c != '\n') {
     edit(l, io, c);
     return;

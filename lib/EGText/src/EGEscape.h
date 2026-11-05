@@ -22,6 +22,7 @@
 
 // snprintf style, in may be PROGMEM
 // grows json 6x, html 6x, url 3x, prom 3x
+#define EGESC_GROW_MAX 6
 size_t egesc_json(char* out, size_t cap, const char* in);  // json.dumps body
 size_t egesc_html(char* out, size_t cap, const char* in);  // html.escape
 size_t egesc_url (char* out, size_t cap, const char* in);  // quote(safe='')

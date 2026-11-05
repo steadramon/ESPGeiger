@@ -99,9 +99,9 @@ static const corium::PrefGroup HW_PREF_GROUP PROGMEM = {
   sizeof(HW_PREF_ITEMS) / sizeof(HW_PREF_ITEMS[0]),
 };
 
-const corium::PrefGroup* HV::prefs_group() { return &HW_PREF_GROUP; }
+const corium::PrefGroup* HV::prefsGroup() { return &HW_PREF_GROUP; }
 
-void HV::on_prefs_loaded() {
+void HV::onPrefsLoaded() {
   set_freq((int)corium::Prefs::getUInt("espghw", EG_K_FREQ));
   set_duty((int)corium::Prefs::getUInt("espghw", K_DUTY));
   clear_ov();
@@ -120,13 +120,13 @@ void HV::on_prefs_loaded() {
   _trim_s = (uint8_t)corium::Prefs::getUInt("espghw", K_TRIM_S);
   _settle_s = (uint16_t)corium::Prefs::getUInt("espghw", K_SETTLE_S);
   _boot_s = (uint16_t)corium::Prefs::getUInt("espghw", K_BOOT_S);
-  Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _hw_freq, _hw_duty, _hw_vd_ratio, _hv_target);
+  corium::Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _hw_freq, _hw_duty, _hw_vd_ratio, _hv_target);
   if (_ov_v != GEIGERHW_OV_V) {
-    Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
+    corium::Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
                  _ov_v, (unsigned)GEIGERHW_OV_V);
   }
 #else
-  Log::console(PSTR("HV: freq: %d duty: %d"), _hw_freq, _hw_duty);
+  corium::Log::console(PSTR("HV: freq: %d duty: %d"), _hw_freq, _hw_duty);
 #endif
 }
 
@@ -140,7 +140,7 @@ static const corium::LegacyAlias HW_LEGACY[] PROGMEM = {
 #endif
   {},
 };
-corium::LegacyRows HV::legacy_aliases() { return HW_LEGACY; }
+corium::LegacyRows HV::legacyAliases() { return HW_LEGACY; }
 // === END LEGACY IMPORT ===
 
 HV::HV() {
@@ -149,7 +149,7 @@ HV::HV() {
 void HV::set_freq(int freq) {
   freq = clamp(freq, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ);
 #ifdef ESP8266
-  _cur_duty = -1;  // loop() posts freq and duty together
+  force_write();  // loop() posts freq and duty together
 #else
 #ifdef GEIGERHW_MAX_ON_US
   // old duty at a lower freq is a longer on-time, duty first
@@ -178,11 +178,11 @@ void HV::set_duty(int duty) {
 }
 
 void HV::clear_ov() {
-  if (_ov_trip) Log::console(PSTR("HV: overvoltage cut-off cleared"));
+  if (_ov_trip) corium::Log::console(PSTR("HV: overvoltage cut-off cleared"));
   _ov_trip = false;
   _ov_secs = 0;
   _duty_trim = 0;
-  _cur_duty = -1;
+  force_write();
 }
 
 void HV::write_duty() {
@@ -216,13 +216,13 @@ void HV::hold(bool restarting) {
 
 void HV::release_hold() {
   _held = false;
-  _cur_duty = -1;
+  force_write();
   write_duty();
 }
 
-static void hv_lifecycle(Lifecycle::Event e) {
-  if (e == Lifecycle::OTA_FAILED) hv.release_hold();
-  else hv.hold(e == Lifecycle::SHUTDOWN);
+static void hv_lifecycle(corium::Lifecycle::Event e) {
+  if (e == corium::Lifecycle::OTA_FAILED) hv.release_hold();
+  else hv.hold(e == corium::Lifecycle::SHUTDOWN);
 }
 
 void HV::set_pwm_pin(int pin) {
@@ -230,9 +230,9 @@ void HV::set_pwm_pin(int pin) {
 #ifdef ESP8266
   if (pin == 16) why = PSTR("no PWM on GPIO 16");
 #endif
-  if (!why) why = PinSafety::claim_output(pin, PSTR("HV"));
+  if (!why) why = corium::PinSafety::claimOutput(pin, PSTR("HV"));
   if (why) {
-    Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
+    corium::Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
   _pwm_pin = pin;
@@ -240,15 +240,15 @@ void HV::set_pwm_pin(int pin) {
 
 void HV::begin() {
   if (_pwm_pin < 0) {
-    Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
+    corium::Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
     corium::Registry::every(this, 0);
   } else {
-    Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
+    corium::Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
 #ifdef ESP8266
     pinMode(_pwm_pin, OUTPUT);
     digitalWrite(_pwm_pin, LOW);
     if (!EGTimer1::pwm_begin(_pwm_pin)) {
-      Log::console(PSTR("HV: pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
+      corium::Log::console(PSTR("HV: pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
       _pwm_pin = -1;
       corium::Registry::every(this, 0);
     }
@@ -257,13 +257,13 @@ void HV::begin() {
     ledcAttachPin(_pwm_pin, EGLED_HV_CHANNEL);
 #endif
     if (_pwm_pin >= 0) {
-      Lifecycle::on(hv_lifecycle);
+      corium::Lifecycle::on(hv_lifecycle);
       corium::Registry::every(this, LOOP_MS);
     }
   }
 #ifdef ESPG_HV_ADC
   hvReading.begin();
-  _settle.set(fast_millis() + (unsigned long)_boot_s * 1000UL);
+  _settle.set(corium::fastMillis() + (unsigned long)_boot_s * 1000UL);
 #endif
 }
 
@@ -273,9 +273,8 @@ void HV::loop(unsigned long now) {
 #endif
 #ifdef ESP8266
   check_handler();
-  static uint8_t pass;
-  if (++pass < LOOP_SLOW) return;
-  pass = 0;
+  if (++_pass < LOOP_SLOW) return;
+  _pass = 0;
 #ifdef EG_TIMER1_STATS
   EGTimer1::stats_tick();
 #endif
@@ -303,24 +302,22 @@ void HV::loop(unsigned long now) {
 // stalled handler may leave the pin high
 void HV::check_handler() {
   if (_pwm_pin < 0) return;
-  static uint32_t last_entries;
-  static uint8_t restarts;
   uint32_t n = EGTimer1::entries();
-  bool stalled = EGTimer1::pwm_running() && n == last_entries;
-  last_entries = n;
+  bool stalled = EGTimer1::pwm_running() && n == _t1_entries;
+  _t1_entries = n;
   if (!stalled) return;
   EGTimer1::pwm_stop();
-  if (restarts >= PWM_RESTARTS) {
-    Log::console(PSTR("HV: PWM handler stopped - pin held low"));
+  if (_t1_restarts >= PWM_RESTARTS) {
+    corium::Log::console(PSTR("HV: PWM handler stopped - pin held low"));
     return;
   }
-  restarts++;
+  _t1_restarts++;
   EGTimer1::restart();
   EGTimer1::pwm_begin(_pwm_pin);
-  _cur_duty = -1;
+  force_write();
   write_duty();
-  Log::console(PSTR("HV: PWM handler stopped - restarted (%u of %u)"),
-               (unsigned)restarts, (unsigned)PWM_RESTARTS);
+  corium::Log::console(PSTR("HV: PWM handler stopped - restarted (%u of %u)"),
+               (unsigned)_t1_restarts, (unsigned)PWM_RESTARTS);
 }
 #endif
 
@@ -351,7 +348,7 @@ void HV::check_overvoltage(int volts) {
   if (_ov_secs < _ov_trip_s) return;
   _ov_trip = true;
   if (_pwm_pin >= 0) write_duty();
-  Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
+  corium::Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
                volts, _ov_v);
 }
 
@@ -366,7 +363,7 @@ void HV::check_feedback() {
   ledcWrite(EGLED_HV_CHANNEL, 0);
   ledcDetachPin(_pwm_pin);
   pinMode(_pwm_pin, INPUT);   // base pull-down holds it off
-  Log::console(PSTR("HV: feedback %d mV makes no sense - HV off until restart"), mv);
+  corium::Log::console(PSTR("HV: feedback %d mV makes no sense - HV off until restart"), mv);
   corium::Registry::emit(TOPIC_FAULT);
 }
 #endif
@@ -386,16 +383,15 @@ void HV::note_low() {
 #endif
 
 void HV::trim_step() {
-  static uint8_t secs = 0;
-  if (++secs < _trim_s) return;
-  secs = 0;
+  if (++_trim_secs < _trim_s) return;
+  _trim_secs = 0;
   int err = (int)_hv_target - (int)hvReading.get();
   int band = trim_band(_hw_vd_ratio);
   int8_t old_trim = _duty_trim;
   if      (err >  band && _duty_trim <  _trim_max) _duty_trim++;
   else if (err < -band && _duty_trim > -_trim_max) _duty_trim--;
   if (_duty_trim != old_trim) {
-    Log::console(PSTR("HV: trim %d -> %d (err %d, band %d)"), old_trim, _duty_trim, err, band);
+    corium::Log::console(PSTR("HV: trim %d -> %d (err %d, band %d)"), old_trim, _duty_trim, err, band);
   }
 }
 #endif
@@ -411,9 +407,9 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   }
   set_freq(new_freq);
   set_duty(new_duty);
-  _cur_duty = -1;
+  force_write();
   _duty_trim = 0;
-  _settle.set(fast_millis() + (unsigned long)_settle_s * 1000UL);
+  _settle.set(corium::fastMillis() + (unsigned long)_settle_s * 1000UL);
 }
 
 bool HV::saveconfig() {
@@ -424,7 +420,7 @@ bool HV::saveconfig() {
   corium::Prefs::putInt("espghw", K_OFFSET, _hw_vd_offset);
   corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
 #endif
-  return corium::Prefs::commit_soon(fast_millis());
+  return corium::Prefs::commitSoon(corium::fastMillis());
 }
 
 extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
@@ -454,6 +450,7 @@ G1=byID('g1'),G2=byID('g2'),
 FQ=byID('freq'),DU=byID('duty'),RT=byID('ratio'),TG=byID('tgt'),
 SF=byID('sfreq'),SD=byID('sduty'),PD=byID('pduty'),ST=byID('strim'),SB=byID('submit'),
 TRow=TG.closest('tr'),
+M=['','(overvoltage cut-off: save to retry)','(feedback fault: HV off until restart)','(trim at max, still under target: raise duty or lower target)'],
 ge=!0,inited=!1;
 e.av=3;
 function showGraph(on){if(on===ge)return;ge=on;var d=on?'':'none';G1.style.display=d;G2.style.display=d;TRow.style.display=d}
@@ -470,7 +467,7 @@ var hvK=live('/hvjson',1e3,function(s){
     SF.value=o.freq;SD.value=o.duty;ton();
     SB.disabled=!1;SB.textContent='Submit';
   }
-  ST.textContent=o.ov>2?'(trim at max, still under target: raise duty or lower target)':o.ov>1?'(feedback fault: HV off until restart)':o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
+  ST.textContent=M[o.ov]||(o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'');
 });
 addEventListener("load",()=>hvK(0));
 function tie(r,n,f){
@@ -494,19 +491,19 @@ extern const char picographJS[] PROGMEM;
 #endif
 
 static void hHv(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("HV"));
+  corium::WebPortal::beginPage(res, F("HV"));
   res.sendChunk(FPSTR(HV_STATUS_PAGE_BODY));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
 static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // arg() buffer is shared, parse each now
   int new_freq = -1, new_duty = -1, new_ratio = -1, new_target = -1;
   int32_t v;
-  const char* p = req.arg(F("d")); if (parse_i32(p, &v)) new_duty   = (int)v;
-  p = req.arg(F("f"));              if (parse_i32(p, &v)) new_freq   = (int)v;
-  p = req.arg(F("r"));              if (parse_i32(p, &v)) new_ratio  = (int)v;
-  p = req.arg(F("t"));              if (parse_i32(p, &v)) new_target = (int)v;
+  const char* p = req.arg(F("d")); if (parseI32(p, &v)) new_duty   = (int)v;
+  p = req.arg(F("f"));              if (parseI32(p, &v)) new_freq   = (int)v;
+  p = req.arg(F("r"));              if (parseI32(p, &v)) new_ratio  = (int)v;
+  p = req.arg(F("t"));              if (parseI32(p, &v)) new_target = (int)v;
 
   bool changed = false;
   if (new_duty >= 0 || new_freq >= 0) {
@@ -539,7 +536,7 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_HVJS_BUNDLE
-  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #ifdef ESP8266
@@ -568,7 +565,7 @@ static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     hv.get_duty_trim(),
     GEIGERHW_MAX_FREQ,
     hv.max_duty(),
-    hv.fb_fault() ? 2 : hv.ov_tripped() ? 1 : hv.hv_low() ? 3 : 0);
+    hv.status());
   res.send(200, FPSTR(HTTP_CT_JSON), buf);
 }
 
@@ -613,7 +610,7 @@ void HV::registerRoutes(EGHttpServer& http) {
 
 // console
 #ifdef ESPG_HV_ADC
-static void cmd_hv() { Log::console(PSTR("HV: %d"), (int)hv.hvReading.get()); }
+static void cmd_hv() { corium::Log::console(PSTR("HV: %d"), (int)hv.hvReading.get()); }
 CORIUM_REGISTER_CMD(hv, cmd_hv)
 #endif
 #ifdef EG_HV_STALL_TEST

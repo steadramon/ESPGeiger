@@ -20,7 +20,7 @@
 #include <Arduino.h>
 #include "PinProbe.h"
 
-PinProbe::Pull PinProbe::pulled(int pin) {
+corium::PinProbe::Pull corium::PinProbe::pulled(int pin) {
   pinMode(pin, INPUT_PULLDOWN);
   delayMicroseconds(100);
   bool down = digitalRead(pin) == HIGH;
@@ -28,6 +28,6 @@ PinProbe::Pull PinProbe::pulled(int pin) {
   delayMicroseconds(100);
   bool up = digitalRead(pin) == HIGH;
   pinMode(pin, INPUT);
-  return from_reads(down, up);
+  return fromReads(down, up);
 }
 #endif

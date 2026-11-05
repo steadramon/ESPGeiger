@@ -57,9 +57,9 @@ b.onclick = () => { var t = Intl.DateTimeFormat().resolvedOptions().timeZone; if
 )HTML";
 #endif
 
-void NtpPage::form(EGHttpResponse& res) {
+void corium::NtpPage::form(EGHttpResponse& res) {
   // data-u 1 = name not known
-  char u[2] = { EGTimeZone::posixFor(ntpclient.get_tz()) ? '0' : '1', '\0' };
+  char u[2] = { EGTimeZone::posixFor(ntpclient.getTz()) ? '0' : '1', '\0' };
   // one buffer, tz then server
   static_assert(NTP_TZ_MAX <= CORIUM_HOST_MAX, "esc too small for tz");
   char esc[6 * CORIUM_HOST_MAX + 1];
@@ -68,7 +68,7 @@ void NtpPage::form(EGHttpResponse& res) {
                "<select name=t id=tz data-u='"),
              u,
              F("' data-option='"));
-  egesc_html(esc, sizeof(esc), ntpclient.get_tz());
+  egesc_html(esc, sizeof(esc), ntpclient.getTz());
 #ifdef DISABLE_NTP
   res.sendKV(nullptr, esc, F("'></select><button type=submit>Save</button></form>"));
 #else
@@ -77,14 +77,14 @@ void NtpPage::form(EGHttpResponse& res) {
              F("'></select>"
                "<label for=ntps>NTP Server</label>"
                "<input id=ntps name=s maxlength=" STR(CORIUM_HOST_MAX) " value='"));
-  egesc_html(esc, sizeof(esc), ntpclient.get_server());
+  egesc_html(esc, sizeof(esc), ntpclient.getServer());
   res.sendKV(nullptr, esc, F("'><button type=submit>Save</button></form>"));
 #endif
 }
 
 static void hNtpJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_NTP_PAGE_JS
-  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), NTP_PAGE_JS_GZ, NTP_PAGE_JS_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), NTP_PAGE_JS_GZ, NTP_PAGE_JS_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(NTP_PAGE_JS));
@@ -107,13 +107,13 @@ static void hNtpSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (!t || !corium::Prefs::put("ntp", corium::K_TZ,  t)) ok = false;
   bool wrote = corium::Prefs::commit();
 
-  WebPortal::beginPage(res, ok && wrote ? F("NTP Saved") : F("NTP"));
-  if (!wrote) WebPortal::sendNotSaved(res);
+  corium::WebPortal::beginPage(res, ok && wrote ? F("NTP Saved") : F("NTP"));
+  if (!wrote) corium::WebPortal::sendNotSaved(res);
   else res.sendChunk(ok ? FPSTR(NTP_SAVED_BODY) : FPSTR(NTP_REFUSED_BODY));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
-void NtpPage::routes(EGHttpServer& http) {
+void corium::NtpPage::routes(EGHttpServer& http) {
   http.on(F("/ntpjs"),  EGHttpRequest::GET,  hNtpJs);
   http.on(F("/ntpset"), EGHttpRequest::POST, hNtpSet);
 }

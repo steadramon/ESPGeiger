@@ -52,7 +52,7 @@ bool parse_gc10(const char* in, int* out_cpm, int* /*out_cps*/) {
   // not sscanf, it wraps
   int32_t cpm;
   const char* end;
-  if (!parse_i32(in, &cpm, &end)) return false;
+  if (!parseI32(in, &cpm, &end)) return false;
   if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
   *out_cpm = (int)cpm;
   return true;
@@ -71,7 +71,7 @@ static bool cp_tag(const char* p, char c) {
 // as %d, too big is -1. nullptr = no number
 static const char* scan_int(const char* p, int32_t* v) {
   const char* end;
-  if (parse_i32(p, v, &end)) return end;
+  if (parseI32(p, v, &end)) return end;
   p = skip_ws(p);
   if (*p == '+' || *p == '-') p++;
   if (!is_digit(*p)) return nullptr;
@@ -105,7 +105,7 @@ static bool parse_label_value(const char* in, char tag, int* out) {
       // still present, -1 fails the bounds
       int32_t v;
       const char* end;
-      *out = parse_i32(p, &v, &end) ? (int)v : -1;
+      *out = parseI32(p, &v, &end) ? (int)v : -1;
       return true;
     }
   }
@@ -122,7 +122,7 @@ static bool parse_labelled(const char* in, int* out_cpm, int* out_cps, bool loos
     while (*p && !is_digit(*p)) p++;
     int32_t v;
     const char* end;
-    if (!*p || !parse_i32(p, &v, &end)) return false;
+    if (!*p || !parseI32(p, &v, &end)) return false;
     cpm = (int)v;
   }
   if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;

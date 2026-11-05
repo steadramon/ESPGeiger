@@ -39,7 +39,7 @@ static inline size_t osc_str(uint8_t* buf, size_t cap, size_t off, const char* s
 
 static size_t osc_i32(uint8_t* buf, size_t cap, size_t off, uint32_t v) {
   if (off + 4 > cap) return 0;
-  wr_be32(buf + off, v);
+  wrBe32(buf + off, v);
   return 4;
 }
 

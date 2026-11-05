@@ -55,7 +55,7 @@ set sys.web_pass
 
 To set a new password later: `set sys.web_pass MyNewPassword`.
 
-This needs the device out of the setup portal: the serial console doesn't run whilst the portal is up. ESPGeiger-HW never open the portal when the saved WiFi fails, so on those it works with no WiFi too. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
+This works with the setup portal up too: during the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
 
 The web password is also kept outside the settings files, so a device that loses its settings (a damaged or reformatted file system) comes back with the same password, and **Info** shows *Web password: restored from backup (settings lost)*. A factory reset or clearing the password as above clears that copy too.
 

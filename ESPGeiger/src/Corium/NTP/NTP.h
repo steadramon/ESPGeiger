@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef NTP_h
-#define NTP_h
+#ifndef CORIUM_NTP_H
+#define CORIUM_NTP_H
 #include <Arduino.h>
 #include "Corium/Module/Module.h"
 #include "Corium/Prefs/Prefs.h"
@@ -32,28 +32,30 @@
 #define NTP_TZ_MAX 64
 
 
-class NTP_Client : public corium::Module {
+namespace corium {
+class NTP_Client : public Module {
   public:
     NTP_Client();
     const char* name() override { return PSTR("ntp"); }
     uint8_t priority() override { return CORIUM_PRIORITY_INFRASTRUCTURE; }
-    bool requires_wifi() override { return true; }
+    bool requiresWifi() override { return true; }
     static constexpr uint16_t LOOP_MS = 60000;
     void loop(unsigned long now) override;
     void begin() override;
     void setup();
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
-    void on_prefs_saved() override;
-    uint8_t display_order() override { return 0; }  // managed via /network
+    const PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
+    void onPrefsSaved() override;
+    uint8_t displayOrder() override { return 0; }  // managed via /network
 
-    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
-    const char* legacy_file() override { return "/ntp.json"; }  // LEGACY IMPORT
+    LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    const char* legacyFile() override { return "/ntp.json"; }  // LEGACY IMPORT
 
-    const char* get_server() { return corium::Prefs::getString("ntp", corium::K_SERVER); }
-    const char* get_tz()     { return corium::Prefs::getString("ntp", corium::K_TZ); }
+    const char* getServer() { return Prefs::getString("ntp", K_SERVER); }
+    const char* getTz()     { return Prefs::getString("ntp", K_TZ); }
 };
+}  // namespace corium
 
-extern NTP_Client ntpclient;
+extern corium::NTP_Client ntpclient;
 
 #endif

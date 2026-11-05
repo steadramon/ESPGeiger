@@ -62,13 +62,13 @@ public:
     return instance;
   }
   const char* name() override { return PSTR("udpblip"); }
-  bool requires_wifi() override { return true; }
+  bool requiresWifi() override { return true; }
   void begin() override;
   void loop(unsigned long now) override;
-  const corium::PrefGroup* prefs_group() override;
-  void on_prefs_saved() override;
-  uint8_t display_order() override { return 20; }
-  size_t status_json(char* buf, size_t cap, unsigned long now) override;
+  const corium::PrefGroup* prefsGroup() override;
+  void onPrefsSaved() override;
+  uint8_t displayOrder() override { return 20; }
+  size_t statusJson(char* buf, size_t cap, unsigned long now) override;
   void notifyClick(unsigned long now_ms) { tryEmitClick(now_ms); }
 
 private:
@@ -82,10 +82,10 @@ private:
   void due(uint32_t at);
   void wake(uint32_t at);
   void schedule(uint32_t now, bool held);
-  void emitRad(uint32_t now);
-  void emitSys(uint32_t now);
-  void emitEnv(uint32_t now);
-  void emitHv(uint32_t now);
+  void emitRad();
+  void emitSys();
+  void emitEnv();
+  void emitHv();
   void sendPacket(const uint8_t* buf, size_t len);
   const char* path(const char* suffix);   // suffix flash
   void announce_mdns();
@@ -94,7 +94,8 @@ private:
   void bind(uint32_t now);
 
   WiFiUDP*  _udp = nullptr;
-  uint8_t   _mode = 0;
+  enum : uint8_t { UB_OFF, UB_TELEMETRY, UB_CLICKS };
+  uint8_t   _mode = UB_OFF;
   IPAddress _group;
   uint16_t  _port = 0;
   uint16_t  _src_port = 0;
@@ -102,8 +103,8 @@ private:
   uint32_t      _last_token_ms = 0;
   uint32_t _bound_at_ms = 0;            // wifi session, rebind on change
   uint32_t _stats_at = 0;
-  uint32_t _wake_at = 0;                // last due_at asked
-  Deadline _backoff;
+  uint32_t _wake_at = 0;                // last dueAt asked
+  corium::Deadline _backoff;
   uint16_t _jitter_ms = 0;
   uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
   uint8_t   _fail_count = 0;

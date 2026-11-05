@@ -33,10 +33,10 @@ class PulseOut : public corium::Module {
     PulseOut() {}
     const char* name() override { return PSTR("pulse"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 14; }
+    uint8_t displayOrder() override { return 14; }
     void begin() override;
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
 
     // ms ticker owns the pin, clicks post s_req
     static volatile uint8_t s_req;
@@ -54,10 +54,10 @@ class PulseOut : public corium::Module {
     bool          _enabled = false;
     bool          _begun = false;
     int8_t        _pin = -1;   // boot pref, msTicker owns the pin after begin
-    PulseEngine   _engine;
+    corium::PulseEngine _engine;
     ChipBlip      _voice = {1.0f, 1.0f};   // set at begin
 
-    QuietWindow   _quiet;   // own, not the Blip LED one
+    corium::QuietWindow _quiet;   // own, not the Blip LED one
 
 };
 

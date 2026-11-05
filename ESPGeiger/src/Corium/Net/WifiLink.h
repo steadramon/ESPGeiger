@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef UTIL_WIFILINK_H
-#define UTIL_WIFILINK_H
+#ifndef CORIUM_WIFILINK_H
+#define CORIUM_WIFILINK_H
 
 #include <Arduino.h>
 #include "App/AppConfig.h"
@@ -35,8 +35,10 @@ extern const char NET_BACKUP_P[] PROGMEM;
 #endif
 static const uint32_t WIFI_OFFLINE_MAX_MS = WIFI_DOWN_MAX_S * 1000UL;
 
+namespace corium {
 namespace Wifi {
   bool look(unsigned long now);   // true on an up or down edge
 }
+}  // namespace corium
 
 #endif

@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ARDUINO_OTA_h
-#define ARDUINO_OTA_h
+#ifndef CORIUM_ARDUINO_OTA_H
+#define CORIUM_ARDUINO_OTA_H
 
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
@@ -36,16 +36,18 @@
 #define OTA_POLL_INTERVAL_MS 100
 #endif
 
-class ArduinoOTAModule : public corium::Module {
+namespace corium {
+class ArduinoOTAModule : public Module {
   public:
     const char* name() override { return PSTR("ota"); }
-    bool requires_wifi() override { return true; }
-    bool core_module() override { return true; }
+    bool requiresWifi() override { return true; }
+    bool coreModule() override { return true; }
     void begin() override;
     void loop(unsigned long now) override;
-    bool runs_during_ota() override { return true; }
+    bool runsDuringOta() override { return true; }
 };
+}  // namespace corium
 
-extern ArduinoOTAModule ota;
+extern corium::ArduinoOTAModule ota;
 
 #endif

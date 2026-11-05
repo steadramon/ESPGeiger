@@ -118,7 +118,7 @@ extern volatile uint32_t s_event_counter;   // isr writes, loop reads and clears
 
 extern volatile unsigned long _debounce;
 
-extern IsrLock::Mux timerMux;
+extern corium::IsrLock::Mux timerMux;
 
 class EGHttpResponse;
 class EGHttpServer;
@@ -175,7 +175,7 @@ class GeigerInput {
       // only test timers post, the atomic costs a memw a pass
       if (s_posted.load(std::memory_order_relaxed)) return true;
 #endif
-      return _polls && reached(now, _poll_at);
+      return _polls && corium::reached(now, _poll_at);
     }
 #endif
     // test stamp, pulse or retarget; loop() takes it first, collect() sweeps the rest
@@ -185,7 +185,7 @@ class GeigerInput {
     void (*callback)(void) = nullptr;
   protected:
     static std::atomic<bool> s_posted;
-    uint32_t _poll_at = 0;   // fast_millis()
+    uint32_t _poll_at = 0;   // fastMillis()
     bool     _polls = false;
 #ifdef GEIGER_TXPIN
     int _tx_pin = GEIGER_TXPIN;

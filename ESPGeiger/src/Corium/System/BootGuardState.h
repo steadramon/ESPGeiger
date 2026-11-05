@@ -17,19 +17,20 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef BOOTGUARDSTATE_H
-#define BOOTGUARDSTATE_H
+#ifndef CORIUM_BOOTGUARDSTATE_H
+#define CORIUM_BOOTGUARDSTATE_H
 
 #include <stdint.h>
 #include "App/AppConfig.h"
 
-#ifndef BOOTGUARD_CRASHES
-#define BOOTGUARD_CRASHES 3
+#ifndef CORIUM_BOOTGUARD_CRASHES
+#define CORIUM_BOOTGUARD_CRASHES 3
 #endif
-#ifndef BOOTGUARD_RETRY_MS
-#define BOOTGUARD_RETRY_MS (30UL * 60 * 1000)
+#ifndef CORIUM_BOOTGUARD_RETRY_MS
+#define CORIUM_BOOTGUARD_RETRY_MS (30UL * 60 * 1000)
 #endif
 
+namespace corium {
 namespace BootGuard {
 
 enum Ending : uint8_t {
@@ -38,13 +39,13 @@ enum Ending : uint8_t {
   END_CRASH,      // exception, watchdog or brownout
 };
 
-constexpr uint8_t CRASHES_TO_SAFE_MODE = BOOTGUARD_CRASHES;
+constexpr uint8_t CRASHES_TO_SAFE_MODE = CORIUM_BOOTGUARD_CRASHES;
 
 struct State {
   uint32_t magic;
   uint32_t fw;
   uint8_t  lived;         // this boot passed LIVED_S
-  uint8_t  crash_streak;  // crashes before LIVED_S
+  uint8_t  crashStreak;  // crashes before LIVED_S
   uint8_t  safe;
   uint8_t  retries;       // safe boots since a day up
   uint8_t  enter;
@@ -53,9 +54,10 @@ struct State {
 static_assert(sizeof(State) == 16, "State is kept in 4 RTC words");
 
 Ending   ending(uint8_t reset_reason);
-uint32_t retry_ms(uint8_t retries);      // 30 min doubling, max 16 h
+uint32_t retryMs(uint8_t retries);      // 30 min doubling, max 16 h
 void     apply(State& s, uint32_t magic, uint32_t fw, Ending end);
 
 }
+}  // namespace corium
 
 #endif

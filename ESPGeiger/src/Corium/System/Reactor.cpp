@@ -26,63 +26,63 @@
 #include "Corium/System/DeviceInfo.h"
 #endif
 
-volatile uint32_t _fast_ms_counter = 0;
-uint32_t Reactor::s_ms_last_us = 0;
-uint32_t Reactor::s_ms_acc_us = 0;
+namespace corium { volatile uint32_t _fast_ms_counter = 0; }
+uint32_t corium::Reactor::s_ms_last_us = 0;
+uint32_t corium::Reactor::s_ms_acc_us = 0;
 
 static Ticker s_ms_ticker;
 static void (*s_app)(uint32_t) = nullptr;
 static bool s_lived = false;
 static bool s_day = false;
 
-void Reactor::clock(void (*ms)()) {
+void corium::Reactor::clock(void (*ms)()) {
   // else first tick sees all of uptime
   s_ms_last_us = micros();
-  _fast_ms_counter = s_ms_last_us / 1000;
-  EGClock::set(fast_millis);
+  corium::_fast_ms_counter = s_ms_last_us / 1000;
+  EGClock::set(fastMillis);
   s_ms_ticker.attach_ms(1, ms);
 }
 
-void Reactor::second() {
-  TickProfile::beginTick();
-  if (!s_day && fast_millis() > BootGuard::DAY_MS) {
-    BootGuard::mark_day();
+void corium::Reactor::second() {
+  corium::TickProfile::beginTick();
+  if (!s_day && corium::fastMillis() > corium::BootGuard::DAY_MS) {
+    corium::BootGuard::markDay();
     s_day = true;
   }
-  uint32_t up = (uint32_t)Uptime::tick();
+  uint32_t up = (uint32_t)corium::Uptime::tick();
   if (s_app) s_app(up);
 #ifdef TICK_PROFILE
-  TickProfile::markApp();
+  corium::TickProfile::markApp();
 #endif
 
 #ifdef ESP32
-  DeviceInfo::chipTempSample();
+  corium::DeviceInfo::chipTempSample();
 #endif
 
   // wifi off counts as up, else safe mode
-  if (!s_lived && Uptime::since(Uptime::start) >= BootGuard::LIVED_S &&
-      (Wifi::stable_for(BootGuard::STABLE_MS) || Wifi::disabled)) {
-    BootGuard::mark_lived();
+  if (!s_lived && corium::Uptime::since(corium::Uptime::start) >= corium::BootGuard::LIVED_S &&
+      (corium::Wifi::stableFor(corium::BootGuard::STABLE_MS) || corium::Wifi::disabled)) {
+    corium::BootGuard::markLived();
     s_lived = true;
   }
 #ifdef TICK_PROFILE
-  TickProfile::markWifi();
+  corium::TickProfile::markWifi();
 #endif
 
-  if (TickProfile::endTick()) corium::Registry::log_activity_and_reset();
+  if (corium::TickProfile::endTick()) corium::Registry::logActivityAndReset();
 }
 
 #ifdef ESP32
-uint32_t Reactor::s_next_sec = 0;
+uint32_t corium::Reactor::s_next_sec = 0;
 #else
 static Ticker s_sec_ticker;
 #endif
 
-void Reactor::begin(void (*app)(uint32_t up)) {
+void corium::Reactor::begin(void (*app)(uint32_t up)) {
   s_app = app;
-  Uptime::start = Uptime::tick() + 1;
+  corium::Uptime::start = corium::Uptime::tick() + 1;
 #ifdef ESP32
-  s_next_sec = fast_millis() + 1000;
+  s_next_sec = corium::fastMillis() + 1000;
   // the tick in loop feeds it
   esp_task_wdt_add(NULL);
 #else

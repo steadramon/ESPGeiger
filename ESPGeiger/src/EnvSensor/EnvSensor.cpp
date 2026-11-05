@@ -32,6 +32,7 @@ EnvSensor envsensor;
 #include "Corium/System/I2CBus.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
+#include "App/MeasureIds.h"
 
 CORIUM_PSTR(K_UNIT,        "unit");
 CORIUM_PSTR(K_TEMP_OFFSET, "temp_offset");
@@ -60,11 +61,11 @@ static const corium::PrefGroup ENV_PREF_GROUP PROGMEM = {
   corium::P_CAT_INPUT,
 };
 
-const corium::PrefGroup* EnvSensor::prefs_group() { return &ENV_PREF_GROUP; }
+const corium::PrefGroup* EnvSensor::prefsGroup() { return &ENV_PREF_GROUP; }
 
 void EnvSensor::readPrefs() {
 #ifndef SSD1306_DISPLAY   // the OLED sets them
-  I2CBus::pins((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA),
+  corium::I2CBus::pins((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA),
                (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL));
 #endif
   uint8_t unit = (uint8_t)corium::Prefs::getUInt("env", K_UNIT);
@@ -73,14 +74,17 @@ void EnvSensor::readPrefs() {
   _altitude_m         = (uint16_t)corium::Prefs::getUInt("env", K_ALTITUDE_M);
 }
 
-void EnvSensor::on_prefs_loaded() {
+void EnvSensor::onPrefsLoaded() {
   readPrefs();
 }
 
 void EnvSensor::begin() {
   if (_started) return;
   _started = true;
-  if (!I2CBus::begin()) {
+  _rx_t = corium::m_core_read(M_RX_T, corium::M_F32);
+  _rx_h = corium::m_core_read(M_RX_H, corium::M_F32);
+  _rx_p = corium::m_core_read(M_RX_P, corium::M_F32);
+  if (!corium::I2CBus::begin()) {
     corium::Registry::every(this, 0);
     return;
   }
@@ -96,7 +100,7 @@ bool EnvSensor::tryDetect() {
   if (_drv_flags == 0) {
     _detect_tries++;
     if (_detect_tries >= 3) {
-      if (!_st) Log::debug(PSTR("Env: no sensor after %u tries, giving up"), _detect_tries);
+      if (!_st) corium::Log::debug(PSTR("Env: no sensor after %u tries, giving up"), _detect_tries);
       corium::Registry::every(this, _st ? ENV_RETRY_MS : 0);
     }
     return false;
@@ -104,7 +108,7 @@ bool EnvSensor::tryDetect() {
   // reuse State, else it leaks
   if (!_st) _st = (State*)calloc(1, sizeof(State));
   if (!_st) {
-    Log::console(PSTR("Env: calloc(%u) failed"), (unsigned)sizeof(State));
+    corium::Log::console(PSTR("Env: calloc(%u) failed"), (unsigned)sizeof(State));
     _drv_flags = 0;
     _detect_tries = 3;
     corium::Registry::every(this, 0);
@@ -112,7 +116,7 @@ bool EnvSensor::tryDetect() {
   }
   *_st = State();   // calloc'd, the NANs from its defaults
   corium::Registry::every(this, ENV_SAMPLE_MS);
-  Log::console(PSTR("Env: %s detected"), chipName());
+  corium::Log::console(PSTR("Env: %s detected"), chipName());
   return true;
 }
 
@@ -127,7 +131,6 @@ const __FlashStringHelper* EnvSensor::chipName() const {
 }
 
 void EnvSensor::loop(unsigned long /*now*/) {
-  remoteFresh();   // stale stays stale over the wrap
   if (_drv_flags == 0) {
     tryDetect();
     return;
@@ -145,7 +148,7 @@ void EnvSensor::sampleStart() {
   if (_drv_flags & DRV_AHT) {
     if (_aht.trigger()) {
       _phase = PHASE_WAIT_AHT;
-      corium::Registry::due_in(this, ENV_AHT_WAIT_MS);
+      corium::Registry::dueIn(this, ENV_AHT_WAIT_MS);
       return;
     }
     _failed = true;
@@ -172,7 +175,7 @@ void EnvSensor::sampleDone() {
   if (!_failed) {
     _st->fails = 0;
   } else if (++_st->fails >= ENV_FAIL_SAMPLES) {
-    Log::console(PSTR("Env: %s not answering, re-detecting"), chipName());
+    corium::Log::console(PSTR("Env: %s not answering, re-detecting"), chipName());
     _drv_flags = 0;
     return;
   }
@@ -188,7 +191,7 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
   _st->prev_t = t; _st->prev_h = h; _st->prev_p = p;
   if (any && same) {
     if (++_st->stuck >= ENV_STUCK_SAMPLES) {
-      Log::console(PSTR("Env: %s stuck, re-initialising"), chipName());
+      corium::Log::console(PSTR("Env: %s stuck, re-initialising"), chipName());
       _drv_flags = 0;
       return;
     }
@@ -196,9 +199,15 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
     _st->stuck = 0;
   }
 
-  _st->ema_t = ema_nan(_st->ema_t, t, ENV_EMA_ALPHA);
-  _st->ema_h = ema_nan(_st->ema_h, h, ENV_EMA_ALPHA);
-  _st->ema_p = ema_nan(_st->ema_p, p, ENV_EMA_ALPHA);
+  _st->ema_t = emaNan(_st->ema_t, t, ENV_EMA_ALPHA);
+  _st->ema_h = emaNan(_st->ema_h, h, ENV_EMA_ALPHA);
+  _st->ema_p = emaNan(_st->ema_p, p, ENV_EMA_ALPHA);
+}
+
+// NAN once stale
+static float rx(corium::MRead r) {
+  corium::MValue v;
+  return r && r(&v) ? v.f : NAN;
 }
 
 float EnvSensor::tempC() const {
@@ -207,14 +216,12 @@ float EnvSensor::tempC() const {
     if (isnan(t)) return NAN;
     return t + (float)_temp_offset_tenths * 0.1f;
   }
-  if (remoteFresh()) return _r_t;
-  return NAN;
+  return rx(_rx_t);
 }
 
 float EnvSensor::humidity() const {
   if (localPresent()) return _st->ema_h;
-  if (remoteFresh())  return _r_h;
-  return NAN;
+  return rx(_rx_h);
 }
 
 float EnvSensor::pressure() const {
@@ -225,8 +232,7 @@ float EnvSensor::pressure() const {
     float ratio = 1.0f - (float)_altitude_m / 44330.0f;
     return p / powf(ratio, 5.255f);
   }
-  if (remoteFresh()) return _r_p;
-  return NAN;
+  return rx(_rx_p);
 }
 
 float EnvSensor::tempUser() const {
@@ -234,20 +240,8 @@ float EnvSensor::tempUser() const {
 }
 
 bool EnvSensor::remoteFresh() const {
-  return _r_last.fresh(fast_millis(), ENV_REMOTE_TTL_MS);
-}
-
-// off the wire, inf reads as missing
-static float or_nan(float v) { return is_finite(v) ? v : NAN; }
-
-void EnvSensor::setRemote(float t, float h, float p) {
-  // local wins
-  if (localPresent()) return;
-  _r_t = or_nan(t);
-  _r_h = or_nan(h);
-  _r_p = or_nan(p);
-  _r_last.mark(fast_millis());
-  corium::Registry::due_in(this, ENV_REMOTE_TTL_MS);   // looks once stale
+  corium::MValue v;
+  return _rx_t && _rx_t(&v);
 }
 
 static bool env(float f, corium::MValue* v) {

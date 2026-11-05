@@ -20,44 +20,44 @@
 #include "Corium/Util/Words.h"
 
 // sent and answered in one go
-void corium::Sender::note_publish(bool ok) {
-  note_attempt();
-  note_result(ok);
+void corium::Sender::notePublish(bool ok) {
+  noteAttempt();
+  noteResult(ok);
 }
 
-// last_ok stays the last answer till this one's in
-void corium::Sender::note_attempt() {
-  last_attempt_ms = fast_millis();
+// lastOk stays the last answer till this one's in
+void corium::Sender::noteAttempt() {
+  lastAttemptMs = corium::fastMillis();
   _publish_pending = 1;
 }
 
 // counted on the result, not the attempt
-void corium::Sender::note_result(bool ok) {
+void corium::Sender::noteResult(bool ok) {
   if (!_publish_pending) return;
   _publish_pending = 0;
-  last_ok = ok;
+  lastOk = ok;
   if (ok) { if (_pub_ok < 0xFF) ++_pub_ok; }
   else    { if (_pub_err < 0xFF) ++_pub_err; }
 }
 
-uint8_t corium::Sender::take_publish_ok() {
+uint8_t corium::Sender::takePublishOk() {
   uint8_t v = _pub_ok;
   _pub_ok = 0;
   return v;
 }
 
-uint8_t corium::Sender::take_publish_err() {
+uint8_t corium::Sender::takePublishErr() {
   uint8_t v = _pub_err;
   _pub_err = 0;
   return v;
 }
 
-size_t corium::Sender::write_status_json(char* buf, size_t cap, const char* key,
-                                   bool ok, unsigned long last_attempt_ms,
+size_t corium::Sender::writeStatusJson(char* buf, size_t cap, const char* key,
+                                   bool ok, unsigned long lastAttemptMs,
                                    unsigned long now) {
-  if (last_attempt_ms == 0) {
+  if (lastAttemptMs == 0) {
     return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":false,\"age\":null}"), key);
   }
   return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":%s,\"age\":%lu}"), key,
-                    ok ? W_TRUE : W_FALSE, (now - last_attempt_ms) / 1000);
+                    ok ? W_TRUE : W_FALSE, (now - lastAttemptMs) / 1000);
 }

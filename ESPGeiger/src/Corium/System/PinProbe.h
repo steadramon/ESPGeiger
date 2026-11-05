@@ -17,27 +17,29 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef PINPROBE_H
-#define PINPROBE_H
+#ifndef CORIUM_PINPROBE_H
+#define CORIUM_PINPROBE_H
 
 #include <stdint.h>
 
+namespace corium {
 namespace PinProbe {
 
 enum Pull : uint8_t { NONE, UP, DOWN };
 
-// a fitted resistor beats the chip's own pull, odd reads claim nothing
-inline Pull from_reads(bool high_on_down, bool high_on_up) {
+// A fitted resistor beats the chip's own pull, mixed reads mean nothing is fitted
+inline Pull fromReads(bool high_on_down, bool high_on_up) {
   if (high_on_down && high_on_up) return UP;
   if (!high_on_down && !high_on_up) return DOWN;
   return NONE;
 }
 
 #ifdef ESP32
-// esp8266 has no pull-down. Leaves it INPUT, the caller sets it back
+// esp32 only, the 8266 has no pull-down. Leaves the pin INPUT, the caller sets it back
 Pull pulled(int pin);
 #endif
 
 }
+}  // namespace corium
 
 #endif

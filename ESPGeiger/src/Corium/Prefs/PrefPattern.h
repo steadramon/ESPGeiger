@@ -16,11 +16,12 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef PREFPATTERN_H
-#define PREFPATTERN_H
+#ifndef CORIUM_PREFPATTERN_H
+#define CORIUM_PREFPATTERN_H
 
-// literal chars (x? optional), then [..] or \d with + * {m} {m,} {m,n}, then the end.
-// p SRAM or PROGMEM, nullptr = none. 1 match (empty always), 0 no, -1 not that shape
-int pref_pattern(const char* p, const char* value);
+// Pattern is literal chars (x? optional), then [..] or \d with + * {m} {m,} {m,n}, then the end.
+// p in SRAM or PROGMEM, nullptr = no pattern. Returns 1 on a match (empty always matches),
+// 0 if not, -1 if p isn't that shape
+int prefPattern(const char* p, const char* value);
 
 #endif

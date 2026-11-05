@@ -40,25 +40,25 @@ GeigerTestPulse::GeigerTestPulse() {
 
 void GeigerTestPulse::begin() {
   GeigerInput::begin();
-  Log::console(PSTR("TestPulse: Setting up Poisson test geiger ..."));
+  corium::Log::console(PSTR("TestPulse: Setting up Poisson test geiger ..."));
 #ifdef GEIGER_COUNT_TXPULSE
-  Log::console(PSTR("TestPulse: TX pulse counting enabled"));
+  corium::Log::console(PSTR("TestPulse: TX pulse counting enabled"));
 #endif
 
 #ifdef USE_PCNT
-  Log::console(PSTR("TestPulse: PCNT RXPIN: %d"), _rx_pin);
+  corium::Log::console(PSTR("TestPulse: PCNT RXPIN: %d"), _rx_pin);
   pcnt_begin(_rx_pin, GPIO_PULLDOWN_ONLY);
 #else
-  Log::console(PSTR("TestPulse: Interrupt RXPIN: %d"), _rx_pin);
+  corium::Log::console(PSTR("TestPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);
-  IsrLock::pin_on_fall(_rx_pin, countInterrupt);
+  corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);
 #endif
 
-  Log::console(PSTR("TestPulse: Test TXPIN: %d"), _tx_pin);
+  corium::Log::console(PSTR("TestPulse: Test TXPIN: %d"), _tx_pin);
   if (TestTimer::tx_pin(_tx_pin, s_tx_mask, s_tx_hi)) {
     pinMode(_tx_pin, OUTPUT);
   } else if (_tx_pin >= 0) {
-    Log::console(PSTR("TestPulse: TXPIN %d can't be driven, no TX"), _tx_pin);
+    corium::Log::console(PSTR("TestPulse: TXPIN %d can't be driven, no TX"), _tx_pin);
   }
   CPMAdjuster();
   _next_delay = (uint32_t)calcDelay();

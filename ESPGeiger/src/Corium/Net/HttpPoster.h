@@ -35,10 +35,10 @@ namespace corium {
 
 class HttpPoster : public Sender {
   public:
-    bool requires_wifi() override { return true; }
+    bool requiresWifi() override { return true; }
     static constexpr uint16_t LOOP_MS = 500;
     void loop(unsigned long now) override;
-    size_t status_json(char* buf, size_t cap, unsigned long now) override;
+    size_t statusJson(char* buf, size_t cap, unsigned long now) override;
     HttpDriver request{this};
     // app's, true = no new post, replies still taken
     static bool (*hold)();
@@ -47,21 +47,21 @@ class HttpPoster : public Sender {
     // false skips, body null for GET, else malloc'd and post() frees it
     virtual bool prepare(char* url, size_t cap, const char** body) = 0;
     virtual bool interpret(const char* reply) = 0;
-    virtual const char* log_tag() = 0;
-    virtual const char* status_key() { return name(); }
+    virtual const char* logTag() = 0;
+    virtual const char* statusKey() { return name(); }
     virtual const char* method() const { return "GET"; }
-    virtual uint16_t timeout_s() const { return 30; }
-    virtual size_t reply_cap() const { return 64; }
+    virtual uint16_t timeoutS() const { return 30; }
+    virtual size_t replyCap() const { return 64; }
     // else logged as an error
-    virtual bool ok_code(int code) const { return code == 200; }
+    virtual bool okCode(int code) const { return code == 200; }
     // a body's type, sent as Accept too
-    virtual PGM_P content_type() const { return nullptr; }
+    virtual PGM_P contentType() const { return nullptr; }
 
-    void set_enabled(bool on);
+    void setEnabled(bool on);
     // clamped secs back, pingIntervalMs from it
-    uint16_t set_interval_s(int s, int lo, int hi);
+    uint16_t setIntervalS(int s, int lo, int hi);
     // n from snprintf, a cut url is logged and not sent
-    bool url_fits(int n, size_t cap);
+    bool urlFits(int n, size_t cap);
 
     uint32_t lastPing = 0;
     uint32_t pingIntervalMs = 0;

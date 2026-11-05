@@ -38,13 +38,14 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/WebPortal/WebPortal.h"
 
+namespace corium {
 // begin, prefs, Reactor::clock, net, end; once each, inline into setup(); no clock = nothing ever due
 namespace Boot {
 
   inline __attribute__((always_inline))
   void begin(const LedSignal::Pattern* leds, uint8_t count, bool flash_led) {
     CrashDump::begin();
-    BootGuard::on_boot();
+    BootGuard::onBoot();
     Serial.begin(115200);
     Serial.println();
     delay(100);
@@ -66,21 +67,21 @@ namespace Boot {
       // prefs on defaults, wifi and ota still up
       Log::console(PSTR("LittleFS Mount Failed"));
     }
-    Wifi::check_backup_state();
+    Wifi::checkBackupState();
 
 #ifdef CORIUM_CRASH_MARK
     uint8_t rr = DeviceInfo::resetReason();
-    corium::Registry::crash_boot(rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION);
+    Registry::crashBoot(rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION);
 #endif
-    corium::Registry::set_safe_mode(BootGuard::safe_mode());
-    corium::Registry::pre_wifi_all();
-    corium::Prefs::begin();
+    Registry::setSafeMode(BootGuard::safeMode());
+    Registry::preWifiAll();
+    Prefs::begin();
     Clock::kept();   // after the zone, stamps from here on
   }
 
   inline __attribute__((always_inline)) void join() {
     if (Wifi::connectOrPortal()) return;
-    if (Wifi::OFFLINE_OK || Wifi::offline_forced) {
+    if (Wifi::OFFLINE_OK || Wifi::offlineForced) {
       Wifi::disabled = true;   // tick retries the saved wifi, unless forced
       return;
     }
@@ -100,14 +101,15 @@ namespace Boot {
 
   // modules begin, the tick starts
   inline __attribute__((always_inline)) void end(void (*second)(uint32_t up)) {
-    corium::Registry::begin_all();
+    Registry::beginAll();
     LedSignal::attach();
-    if (BootGuard::safe_mode()) Lifecycle::request_restart(fast_millis(), BootGuard::retry_after());
+    if (BootGuard::safeMode()) Lifecycle::requestRestart(fastMillis(), BootGuard::retryAfterMs());
     Reactor::begin(second);
     Clock::anchor();
     LedSignal::off();
   }
 
 }
+}  // namespace corium
 
 #endif

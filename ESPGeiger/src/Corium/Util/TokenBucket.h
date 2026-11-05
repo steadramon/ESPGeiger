@@ -17,13 +17,13 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef TOKENBUCKET_H
-#define TOKENBUCKET_H
+#ifndef CORIUM_TOKENBUCKET_H
+#define CORIUM_TOKENBUCKET_H
 
 #include <stdint.h>
 
 // whole intervals only, keeps the slack. restart: full starts the clock again
-static inline bool take_token(uint32_t now, uint32_t& last, uint8_t& tokens,
+static inline bool takeToken(uint32_t now, uint32_t& last, uint8_t& tokens,
                               uint32_t every, uint8_t max, bool restart = false) {
   uint32_t elapsed = now - last;
   if (elapsed >= every) {

@@ -19,6 +19,26 @@
 #ifndef BOARD_H
 #define BOARD_H
 
+// board name, not the chip; setup() hands them to Corium
+#if defined(ESPGEIGER_HW32)
+  #define APP_HOME_NAME "ESPGeiger-HW32"
+  #define APP_BOARD "ESPG-HW32"
+#elif defined(ESPGEIGER_HW)
+  #define APP_HOME_NAME "ESPGeiger-HW"
+  #ifdef ESP8266
+    #define APP_BOARD "ESPG-HW"
+  #else
+    #define APP_BOARD "ESPG32-HW"
+  #endif
+#elif defined(ESPGEIGER_LT)
+  #define APP_HOME_NAME "ESPGeiger-Log"
+  #if defined(ESP8266) && defined(GEIGER_SDCARD)
+    #define APP_BOARD "ESPG-LOG"
+  #elif defined(ESP8266)
+    #define APP_BOARD "ESPG-LT"
+  #endif
+#endif
+
 #include <stdint.h>
 #include "Corium/System/PinSafety.h"
 #include "GeigerInput/GeigerInput.h"
@@ -62,84 +82,84 @@ namespace Board {
   static const char P_MUTE[]  PROGMEM = "AudioMute";
 
   // pins the board wires, owners as the modules claim them
-  constexpr PinSafety::Fixed PINS[] PROGMEM = {
+  constexpr corium::PinSafety::Fixed PINS[] PROGMEM = {
 #ifdef ESPGEIGER_HW
-    {P_HV, GEIGER_PWMPIN, PinSafety::USE_OUT},
+    {P_HV, GEIGER_PWMPIN, corium::PinSafety::USE_OUT},
 #endif
 #ifdef ESPGEIGER_HW32
-    {P_HVFB, GEIGER_VFEEDBACKPIN, PinSafety::USE_IN},   // esp8266 A0 isn't a gpio
+    {P_HVFB, GEIGER_VFEEDBACKPIN, corium::PinSafety::USE_IN},   // esp8266 A0 isn't a gpio
 #endif
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
 #ifdef RXPIN_BLOCKED
-    {P_RX, GEIGER_RXPIN, PinSafety::USE_IN},
+    {P_RX, GEIGER_RXPIN, corium::PinSafety::USE_IN},
 #endif
 #if defined(TXPIN_BLOCKED) && defined(GEIGER_TXPIN)
-    {P_TX, GEIGER_TXPIN, PinSafety::USE_OUT},
+    {P_TX, GEIGER_TXPIN, corium::PinSafety::USE_OUT},
 #endif
 #endif
 #ifdef GEIGER_BLIPLED
-    {P_BLIP, GEIGER_BLIPLED, PinSafety::USE_OUT},
+    {P_BLIP, GEIGER_BLIPLED, corium::PinSafety::USE_OUT},
 #endif
 #if defined(GEIGER_NEOPIXEL) && defined(NEOPIXEL_PIN_BLOCKED)
-    {P_NEOPX, NEOPIXEL_PIN, PinSafety::USE_OUT},
+    {P_NEOPX, NEOPIXEL_PIN, corium::PinSafety::USE_OUT},
 #endif
 #if defined(GEIGER_SDCARD) && defined(GEIGER_SDCARD_SCK)
     // the board's own spi pins
-    {P_SD, GEIGER_SDCARD_MISO, PinSafety::USE_IN},
-    {P_SD, GEIGER_SDCARD_MOSI, PinSafety::USE_OUT},
-    {P_SD, GEIGER_SDCARD_SCK, PinSafety::USE_OUT},
-    {P_SD, GEIGER_SDCARD_CS, PinSafety::USE_OUT},
+    {P_SD, GEIGER_SDCARD_MISO, corium::PinSafety::USE_IN},
+    {P_SD, GEIGER_SDCARD_MOSI, corium::PinSafety::USE_OUT},
+    {P_SD, GEIGER_SDCARD_SCK, corium::PinSafety::USE_OUT},
+    {P_SD, GEIGER_SDCARD_CS, corium::PinSafety::USE_OUT},
 #elif defined(GEIGER_SDCARD)
-    {P_SD, MISO, PinSafety::USE_IN},
-    {P_SD, MOSI, PinSafety::USE_OUT},
-    {P_SD, SCK, PinSafety::USE_OUT},
-    {P_SD, GEIGER_SDCARD_CS, PinSafety::USE_OUT},
+    {P_SD, MISO, corium::PinSafety::USE_IN},
+    {P_SD, MOSI, corium::PinSafety::USE_OUT},
+    {P_SD, SCK, corium::PinSafety::USE_OUT},
+    {P_SD, GEIGER_SDCARD_CS, corium::PinSafety::USE_OUT},
 #endif
 #if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED) && defined(I2C_PINS_FIXED)
-    {P_BTN, PUSHBUTTON_PIN, PinSafety::USE_BUTTON},
+    {P_BTN, PUSHBUTTON_PIN, corium::PinSafety::USE_BUTTON},
 #if PUSHBUTTON_PIN2 >= 0
-    {P_BTN, PUSHBUTTON_PIN2, PinSafety::USE_BUTTON},
+    {P_BTN, PUSHBUTTON_PIN2, corium::PinSafety::USE_BUTTON},
 #endif
 #endif
 #ifdef GEIGER_BUZZER
-    {P_BUZZ, GEIGER_BUZZER, PinSafety::USE_OUT},
+    {P_BUZZ, GEIGER_BUZZER, corium::PinSafety::USE_OUT},
 #endif
 #if defined(AUDIO_TICK) && defined(AUDIO_TICK_PINS_BLOCKED)
-    {P_I2S, AUDIO_TICK_BCLK, PinSafety::USE_OUT},
-    {P_I2S, AUDIO_TICK_WS, PinSafety::USE_OUT},
-    {P_I2S, AUDIO_TICK_DOUT, PinSafety::USE_OUT},
+    {P_I2S, AUDIO_TICK_BCLK, corium::PinSafety::USE_OUT},
+    {P_I2S, AUDIO_TICK_WS, corium::PinSafety::USE_OUT},
+    {P_I2S, AUDIO_TICK_DOUT, corium::PinSafety::USE_OUT},
 #endif
 #if defined(AUDIO_TICK) && defined(AUDIO_MUTE_PIN)
-    {P_MUTE, AUDIO_MUTE_PIN, PinSafety::USE_IN},
+    {P_MUTE, AUDIO_MUTE_PIN, corium::PinSafety::USE_IN},
 #endif
 #ifdef I2C_PINS_FIXED
-    {PinSafety::I2C, I2C_DEFAULT_SDA, PinSafety::USE_OUT},
-    {PinSafety::I2C, I2C_DEFAULT_SCL, PinSafety::USE_OUT},
+    {corium::PinSafety::I2C, I2C_DEFAULT_SDA, corium::PinSafety::USE_OUT},
+    {corium::PinSafety::I2C, I2C_DEFAULT_SCL, corium::PinSafety::USE_OUT},
 #endif
-    {nullptr, -1, PinSafety::USE_OUT},
+    {nullptr, -1, corium::PinSafety::USE_OUT},
   };
 
   // 0.13 took these, it only warned: UART0, a dev board's BOOT button (a board's own is fixed)
-  constexpr PinSafety::Fixed SHARED[] PROGMEM = {
+  constexpr corium::PinSafety::Fixed SHARED[] PROGMEM = {
 #if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED) && !defined(I2C_PINS_FIXED)
-    {P_BTN, PUSHBUTTON_PIN, PinSafety::USE_BUTTON},
+    {P_BTN, PUSHBUTTON_PIN, corium::PinSafety::USE_BUTTON},
 #if PUSHBUTTON_PIN2 >= 0
-    {P_BTN, PUSHBUTTON_PIN2, PinSafety::USE_BUTTON},
+    {P_BTN, PUSHBUTTON_PIN2, corium::PinSafety::USE_BUTTON},
 #endif
 #endif
 #if defined(ESP8266) || defined(CONFIG_IDF_TARGET_ESP32)
-    {P_UART0, UART0_TX, PinSafety::USE_OUT},
+    {P_UART0, UART0_TX, corium::PinSafety::USE_OUT},
 #ifndef DISABLE_SERIALRX
-    {P_UART0, UART0_RX, PinSafety::USE_IN},
+    {P_UART0, UART0_RX, corium::PinSafety::USE_IN},
 #endif
 #endif
-    {nullptr, -1, PinSafety::USE_OUT},
+    {nullptr, -1, corium::PinSafety::USE_OUT},
   };
 
   // before prefs load, a pref on one is refused, on a shared one noted
   inline void claim() {
-    PinSafety::reserve(PINS);
-    PinSafety::share(SHARED);
+    corium::PinSafety::reserve(PINS);
+    corium::PinSafety::share(SHARED);
   }
 
 #ifdef ESPGEIGER_HW32
@@ -149,18 +169,18 @@ namespace Board {
   // after the boot button is let go
   inline void detect() {
     // the button pull-up is v2 only, a misread says v1, the gentle one
-    rev_slot() = PinProbe::pulled(PUSHBUTTON_PIN) == PinProbe::UP ? 2 : 1;
+    rev_slot() = corium::PinProbe::pulled(PUSHBUTTON_PIN) == corium::PinProbe::UP ? 2 : 1;
     pinMode(PUSHBUTTON_PIN, INPUT_PULLUP);
-    Log::console(PSTR("Board: v%u"), (unsigned)rev_slot());
+    corium::Log::console(PSTR("Board: v%u"), (unsigned)rev_slot());
   }
 
   // v1 drives the coil DC: 25 %, 2 s then rest. v2 is AC coupled
-  inline Buzzer::Limits buzzer() {
-    Buzzer::Limits l = Buzzer::DEFAULTS;
-    l.duty_pct = rev() == 2 ? 50 : 25;
-    l.run_ms = rev() == 2 ? 0 : 2000;
-    l.break_ms = 20;
-    l.rest_ms = 2000;
+  inline corium::Buzzer::Limits buzzer() {
+    corium::Buzzer::Limits l = corium::Buzzer::DEFAULTS;
+    l.dutyPct = rev() == 2 ? 50 : 25;
+    l.runMs = rev() == 2 ? 0 : 2000;
+    l.breakMs = 20;
+    l.restMs = 2000;
     return l;
   }
 #else

@@ -33,6 +33,8 @@
 #define C_IN   1
 #define C_ANY  255
 
+enum { QDCOUNT = 4, ANCOUNT = 6, NSCOUNT = 8, ARCOUNT = 10 };
+
 static uint16_t rd16(const uint8_t* p) {
   return (uint16_t)(p[0] << 8 | p[1]);
 }
@@ -52,7 +54,7 @@ static size_t header_only(const uint8_t* q, uint8_t rc, uint8_t* out, size_t max
   memcpy(out, q, EGDNS_HEADER);
   out[2] |= DNS_QR;
   set_rcode(out, rc);
-  memset(out + 4, 0, EGDNS_HEADER - 4);
+  memset(out + QDCOUNT, 0, EGDNS_HEADER - QDCOUNT);
   return EGDNS_HEADER;
 }
 
@@ -71,12 +73,13 @@ static size_t name_len(const uint8_t* p, size_t left) {
 
 // one question, nothing else: edns gets FORMERR
 static bool one_question(const uint8_t* q) {
-  return rd16(q + 4) == 1 && !rd16(q + 6) && !rd16(q + 8) && !rd16(q + 10);
+  return rd16(q + QDCOUNT) == 1 && !rd16(q + ANCOUNT) && !rd16(q + NSCOUNT) && !rd16(q + ARCOUNT);
 }
 
 static bool asks_a(const uint8_t* q, size_t end) {
-  uint16_t type = rd16(q + end - 4);
-  uint16_t cls = rd16(q + end - 2);
+  const uint8_t* t = q + end - EGDNS_QTAIL;
+  uint16_t type = rd16(t);
+  uint16_t cls = rd16(t + 2);
   return (type == T_A || type == T_ANY) && (cls == C_IN || cls == C_ANY);
 }
 
@@ -97,17 +100,17 @@ size_t egdns_reply(const uint8_t* q, size_t len, const uint8_t ip[4], uint32_t t
   if (q[2] & DNS_OPCODE) return header_only(q, RC_NOTIMP, out, max);
   if (!one_question(q)) return header_only(q, RC_FORMERR, out, max);
   size_t name = name_len(q + EGDNS_HEADER, len - EGDNS_HEADER);
-  if (!name || len - EGDNS_HEADER - name < 4) return header_only(q, RC_FORMERR, out, max);
+  if (!name || len - EGDNS_HEADER - name < EGDNS_QTAIL) return header_only(q, RC_FORMERR, out, max);
 
-  size_t end = EGDNS_HEADER + name + 4;   // bytes past the question not echoed
+  size_t end = EGDNS_HEADER + name + EGDNS_QTAIL;   // bytes past the question not echoed
   bool ok = asks_a(q, end);
   size_t n = ok ? end + EGDNS_ANSWER : end;
   if (n > max) return 0;
 
   memcpy(out, q, end);
   out[2] |= DNS_QR;
-  wr16(out + 6, ok ? 1 : 0);
-  memset(out + 8, 0, 4);
+  wr16(out + ANCOUNT, ok ? 1 : 0);
+  memset(out + NSCOUNT, 0, EGDNS_HEADER - NSCOUNT);
   if (!ok) {
     set_rcode(out, RC_NOERROR);   // the name is there, no records
     return n;

@@ -24,9 +24,11 @@
 
 #include <Arduino.h>
 
+namespace corium {
 namespace Rtc {
   PGM_P chip();   // nullptr = none found
 }
+}  // namespace corium
 
 #endif
 #endif

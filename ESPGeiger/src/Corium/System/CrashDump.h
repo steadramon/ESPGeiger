@@ -16,19 +16,20 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef CRASHDUMP_H
-#define CRASHDUMP_H
+#ifndef CORIUM_CRASHDUMP_H
+#define CORIUM_CRASHDUMP_H
 
 #include <stdint.h>
 #include <stddef.h>
 
+namespace corium {
 namespace CrashDump {
 
 static constexpr size_t STACK_WORDS = 32;
 
 struct Snapshot {
   uint32_t magic;
-  uint32_t fw_fp;
+  uint32_t fwFp;
   uint32_t reason;
   uint32_t exccause;
   uint32_t epc1;
@@ -37,7 +38,7 @@ struct Snapshot {
   uint32_t excvaddr;
   uint32_t depc;
   uint32_t sp;
-  uint32_t word_count;
+  uint32_t wordCount;
   uint32_t stack[STACK_WORDS];
 };
 
@@ -46,5 +47,6 @@ bool hasCrash();
 const Snapshot* lastCrash();
 
 } // namespace CrashDump
+}  // namespace corium
 
 #endif

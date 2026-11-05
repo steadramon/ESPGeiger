@@ -105,11 +105,11 @@ static void audio_worker_start() {
   if (s_audio_q) return;
   s_audio_q = xQueueCreate(8, sizeof(AudioCmd));
   if (!s_audio_q) {
-    Log::console(PSTR("Tick: audio queue alloc failed"));
+    corium::Log::console(PSTR("Tick: audio queue alloc failed"));
     return;
   }
   if (xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr) != pdPASS) {
-    Log::console(PSTR("Tick: audio task failed"));
+    corium::Log::console(PSTR("Tick: audio task failed"));
     vQueueDelete(s_audio_q);   // enqueue says no, a later start tries again
     s_audio_q = nullptr;
   }
@@ -120,12 +120,12 @@ static void audio_worker_start() {
 #endif
 
 static Ticker s_mute_ticker;
-static Debounce s_mute;
+static corium::Debounce s_mute;
 static const uint16_t MUTE_DEBOUNCE_MS = 30;
 
-static void mute_tick() {
+static void mute_poll() {
   bool down = (digitalRead(AUDIO_MUTE_PIN) == LOW);
-  if (!s_mute.step(down, fast_millis(), MUTE_DEBOUNCE_MS)) return;
+  if (!s_mute.step(down, corium::fastMillis(), MUTE_DEBOUNCE_MS)) return;
   if (down) {
     audiotick.toggleMute();
     corium::Registry::post(&audiotick);
@@ -134,14 +134,14 @@ static void mute_tick() {
 
 static void mute_btn_start() {
   if (AUDIO_MUTE_PIN < 0) return;
-  if (const char* why = PinSafety::claim_input(AUDIO_MUTE_PIN, PSTR("AudioMute"))) {
-    Log::console(PSTR("Tick: mute pin=%d unsafe (%s)"), (int)AUDIO_MUTE_PIN, why);
+  if (const char* why = corium::PinSafety::claimInput(AUDIO_MUTE_PIN, PSTR("AudioMute"))) {
+    corium::Log::console(PSTR("Tick: mute pin=%d unsafe (%s)"), (int)AUDIO_MUTE_PIN, why);
     return;
   }
   pinMode(AUDIO_MUTE_PIN, INPUT_PULLUP);
-  s_mute.reset(digitalRead(AUDIO_MUTE_PIN) == LOW, fast_millis());
-  s_mute_ticker.attach_ms(10, mute_tick);
-  Log::console(PSTR("Tick: mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
+  s_mute.reset(digitalRead(AUDIO_MUTE_PIN) == LOW, corium::fastMillis());
+  s_mute_ticker.attach_ms(10, mute_poll);
+  corium::Log::console(PSTR("Tick: mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
 }
 
 // 0 = dot, 1 = dash
@@ -199,9 +199,9 @@ static const corium::PrefGroup TICK_PREF_GROUP PROGMEM = {
   corium::P_CAT_OUTPUT, EG_K_ENABLE,
 };
 
-const corium::PrefGroup* AudioTick::prefs_group() { return &TICK_PREF_GROUP; }
+const corium::PrefGroup* AudioTick::prefsGroup() { return &TICK_PREF_GROUP; }
 
-void AudioTick::on_prefs_loaded() {
+void AudioTick::onPrefsLoaded() {
   _enabled  = corium::Prefs::getBool("tick", EG_K_ENABLE);
   _volume   = (uint8_t)corium::Prefs::getUInt("tick", EG_K_VOLUME);
   _freq_hz  = (uint16_t)corium::Prefs::getUInt("tick", EG_K_FREQ);
@@ -219,15 +219,15 @@ void AudioTick::on_prefs_loaded() {
 static bool claim_i2s_pins(uint8_t bclk, uint8_t ws, uint8_t dout) {
   const uint8_t pins[3] = {bclk, ws, dout};
   for (uint8_t p : pins) {
-    if (const char* why = PinSafety::claim_output(p, PSTR("AudioI2S"))) {
-      Log::console(PSTR("Tick: I2S pin=%u unsafe (%s)"), (unsigned)p, why);
+    if (const char* why = corium::PinSafety::claimOutput(p, PSTR("AudioI2S"))) {
+      corium::Log::console(PSTR("Tick: I2S pin=%u unsafe (%s)"), (unsigned)p, why);
       return false;
     }
   }
   return true;
 }
 
-static void audiotick_click(uint32_t) { audiotick.notifyClick(fast_millis()); }
+static void audiotick_click(uint32_t) { audiotick.notifyClick(corium::fastMillis()); }
 
 void AudioTick::begin() {
   gcounter.on_click(audiotick_click);
@@ -250,7 +250,7 @@ void AudioTick::begin() {
     .fixed_mclk = 0,
   };
   if (i2s_driver_install(I2S_NUM_0, &cfg, 0, NULL) != ESP_OK) {
-    Log::console(PSTR("Tick: i2s_driver_install failed"));
+    corium::Log::console(PSTR("Tick: i2s_driver_install failed"));
     return;
   }
   i2s_pin_config_t pins = {
@@ -261,7 +261,7 @@ void AudioTick::begin() {
     .data_in_num  = I2S_PIN_NO_CHANGE,
   };
   if (i2s_set_pin(I2S_NUM_0, &pins) != ESP_OK) {
-    Log::console(PSTR("Tick: i2s_set_pin failed"));
+    corium::Log::console(PSTR("Tick: i2s_set_pin failed"));
     i2s_driver_uninstall(I2S_NUM_0);
     return;
   }
@@ -269,7 +269,7 @@ void AudioTick::begin() {
   _i2s_up = true;
   audio_worker_start();
   mute_btn_start();
-  Log::console(PSTR("Tick: I2S ready (BCLK=%u WS=%u DOUT=%u)"),
+  corium::Log::console(PSTR("Tick: I2S ready (BCLK=%u WS=%u DOUT=%u)"),
                (unsigned)_bclk, (unsigned)_ws, (unsigned)_dout);
   playBootChime();
 }
@@ -279,7 +279,7 @@ void AudioTick::loop(unsigned long) {
   bool m = muted();
   if (m == _muted_logged) return;
   _muted_logged = m;
-  Log::console(m ? PSTR("Tick: muted") : PSTR("Tick: unmuted"));
+  corium::Log::console(m ? PSTR("Tick: muted") : PSTR("Tick: unmuted"));
 }
 
 // 33 Hz cap, burst of 8
@@ -288,7 +288,7 @@ void AudioTick::notifyClick(unsigned long now_ms) {
   if (s_nm_busy) return;
   constexpr uint32_t TOKEN_REFILL_MS = 30;
   constexpr uint8_t  TOKEN_MAX       = 8;
-  if (!take_token(now_ms, _last_token_ms, _tokens, TOKEN_REFILL_MS, TOKEN_MAX)) return;
+  if (!takeToken(now_ms, _last_token_ms, _tokens, TOKEN_REFILL_MS, TOKEN_MAX)) return;
   _last_emit_ms = now_ms;
   static const AudioCmd CLICK = { AC_CLICK, 255 };   // pref engine
   audio_enqueue(CLICK);
@@ -308,13 +308,13 @@ static bool tick_cmd_from(EGHttpRequest& req, EGHttpResponse& res, AudioCmd* cmd
   const char* k = req.arg(F("click"));
   if (k && k[0]) {
     int32_t eng;
-    if (!parse_i32(k, &eng) || eng < 0 || eng > 1) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("0..1")); return false; }
+    if (!parseI32(k, &eng) || eng < 0 || eng > 1) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("0..1")); return false; }
     cmd->type = AC_CLICK; cmd->i1 = (uint8_t)eng;
     return true;
   }
   const char* c = req.arg(F("c"));
   int32_t which = chime;
-  if (c && c[0] && !parse_i32(c, &which)) which = 0;
+  if (c && c[0] && !parseI32(c, &which)) which = 0;
   if (which < 0 || which > 9) which = 0;
   cmd->type = AC_CHIME; cmd->i1 = (uint8_t)which;
   return true;
@@ -363,7 +363,7 @@ void audio_silence(uint16_t ms) {
 void AudioTick::play_chime_now(uint8_t c) {
   if (!_i2s_up || c == 0) return;
   if (c == 1) {
-    uint32_t r = DeviceInfo::cycles() ^ (uint32_t)DeviceInfo::hwid();
+    uint32_t r = corium::DeviceInfo::cycles() ^ (uint32_t)corium::DeviceInfo::hwId();
     r = xorshift32(r);
     c = 2 + (uint8_t)(r % 8);
   }
@@ -498,7 +498,7 @@ void AudioTick::chimeMorseCallsign() {
   constexpr uint16_t F       = 700;
   constexpr uint16_t ELE_GAP = U;
   constexpr uint16_t DIG_GAP = U * 3;
-  uint64_t mac = DeviceInfo::hwid();
+  uint64_t mac = corium::DeviceInfo::hwId();
   uint32_t r = xorshift32(fold32(mac));
   for (uint8_t i = 0; i < 3; i++) {
     uint8_t d = (uint8_t)(r % 10);
@@ -513,7 +513,7 @@ void AudioTick::chimeMorseCallsign() {
 }
 
 void AudioTick::numbersPad(uint8_t* out, size_t n) {
-  uint64_t h = DeviceInfo::hwid();
+  uint64_t h = corium::DeviceInfo::hwId();
   for (size_t i = 0; i < n; i++) {
     h = h * 6364136223846793005ULL + 1442695040888963407ULL;
     out[i] = (uint8_t)((h >> 32) % 10);
@@ -568,12 +568,12 @@ void AudioTick::playClick(uint8_t engine_override) {
 }
 
 static float chip_voice_factor() {
-  static const float factor = chip_click_pitch(DeviceInfo::hwid());
+  static const float factor = chip_click_pitch(corium::DeviceInfo::hwId());
   return factor;
 }
 
 void AudioTick::playClickChirp() {
-  uint32_t r = DeviceInfo::cycles();
+  uint32_t r = corium::DeviceInfo::cycles();
   r = xorshift32(r);
   const float j_freq = jitter_factor((uint8_t)r, 0.03f);
   const float j_decay = jitter_factor((uint8_t)(r >> 8), 0.04f);
@@ -591,7 +591,7 @@ void AudioTick::playClickPool() {
     { 0.85f, 0.35f },
     { 1.10f, 0.30f },
   };
-  uint32_t r = DeviceInfo::cycles();
+  uint32_t r = corium::DeviceInfo::cycles();
   r = xorshift32(r);
   const uint8_t which   = (r >> 24) & 3;
   const float   j_vol   = jitter_factor((uint8_t)r,         0.05f);

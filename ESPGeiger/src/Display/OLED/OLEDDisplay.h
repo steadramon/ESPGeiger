@@ -150,7 +150,7 @@ public:
     uint16_t getStrWidth(const char* s)         { return u8g2_GetStrWidth(&_u8g2, s); }
     uint8_t* getBufferPtr()                     { return u8g2_GetBufferPtr(&_u8g2); }
 
-    enum : uint8_t { PAGE_MAIN = 1, PAGE_LAST = 3, PAGE_SAVER = 4 };
+    enum : uint8_t { PAGE_MAIN = 1, PAGE_NET = 2, PAGE_ABOUT = 3, PAGE_LAST = PAGE_ABOUT, PAGE_SAVER = 4 };
     uint8_t oled_page = PAGE_MAIN;
     unsigned long oled_last_update = 0;
     bool oled_on = true;
@@ -164,7 +164,7 @@ public:
     void next_frame(unsigned long now);
     void take_events(unsigned long now);
     void draw_frame(unsigned long now);
-    uint16_t tick_ms() const;
+    uint16_t loop_ms() const;
     unsigned long frame_ms() const;
     bool awake(unsigned long now);
     bool due(unsigned long now, unsigned long every);
@@ -173,8 +173,23 @@ public:
     void render_saver(unsigned long now);
     void render_tiny();
     void queue_rows(uint8_t dirty);
-    void draw_p1_values(uint32_t cpm_x10, float usv, uint8_t mode,
-                        uint8_t snd, uint8_t wifi, int8_t trend);
+    enum : uint8_t { P1_LIVE, P1_WARMING, P1_SLOW };
+    static constexpr uint8_t P1_WIFI_OFF  = 1 << 0;
+    static constexpr uint8_t P1_WIFI_UP   = 1 << 1;
+    static constexpr uint8_t P1_NO_COUNTS = 1 << 2;
+    struct P1 {
+      uint32_t cpm_x10;
+      int32_t  usv_x100;
+      uint8_t  mode;
+      uint8_t  snd;
+      uint8_t  flags;
+      int8_t   trend;
+      bool operator==(const P1& o) const {
+        return cpm_x10 == o.cpm_x10 && usv_x100 == o.usv_x100 && mode == o.mode
+            && snd == o.snd && flags == o.flags && trend == o.trend;
+      }
+    };
+    void draw_p1_values(const P1& p, float usv);
     void setup_driver();
     void reset_panel();
     void draw_splash();
@@ -195,12 +210,7 @@ public:
     uint8_t _last_page = 0;
     bool _p1_alt = false;
     // 0xFF.. = force a render
-    uint32_t _p1v_last_cpm = 0xFFFFFFFFu;
-    int32_t  _p1v_last_usv_x100 = -1;
-    uint8_t  _p1v_last_send_ind = 0;
-    uint8_t  _p1v_last_mode = 0;   // 1 W, 2 S
-    uint8_t  _p1v_last_wifi = 0xFFu;  // bits: disabled, connected, no counts
-    int8_t   _p1v_last_trend = 0;
+    P1 _p1_last = { 0xFFFFFFFFu, -1, P1_LIVE, 0, 0xFFu, 0 };
     uint8_t _sent_mark = 0;   // a send sets 2, draws count down
     uint8_t _send_ty = 0;
     uint8_t _send_cur = 0;

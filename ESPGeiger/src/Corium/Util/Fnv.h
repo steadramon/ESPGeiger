@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef FNV_H
-#define FNV_H
+#ifndef CORIUM_FNV_H
+#define CORIUM_FNV_H
 
 #include <Arduino.h>
 

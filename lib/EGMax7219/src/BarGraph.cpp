@@ -1,5 +1,5 @@
 /*
-  BarGraph.cpp - CPM history as 8 high bar columns.
+  BarGraph.cpp - a history as 8 high bar columns.
 
   Copyright (C) 2026 @steadramon
 
@@ -19,7 +19,7 @@
 #include "BarGraph.h"
 #include <math.h>
 
-// floor 90% of the low, as the OLED
+// Floor at 90% of the low, same as the OLED
 void barColumns(const int* hist, int n, uint8_t* cols, int w, int min_span) {
   if (n > w) {
     hist += n - w;
@@ -35,20 +35,20 @@ void barColumns(const int* hist, int n, uint8_t* cols, int w, int min_span) {
   }
 }
 
-// any CPM past a threshold lights at least one LED of the next zone
-uint8_t zoneLevel(float cpm, float warn, float alert,
+// any value past a threshold lights at least one LED of the next zone
+uint8_t zoneLevel(float value, float low, float high,
                   uint8_t green, uint8_t orange, uint8_t red) {
-  if (!(cpm > 0)) return 0;   // NaN too
-  if (alert < warn) alert = warn;
-  float lo = 0, hi = warn;
+  if (!(value > 0)) return 0;   // NaN too
+  if (high < low) high = low;
+  float lo = 0, hi = low;
   uint8_t base = 0, n = green;
-  if (cpm > alert) {
-    lo = alert; hi = 2 * alert; base = (uint8_t)(green + orange); n = red;
-  } else if (cpm > warn) {
-    lo = warn; hi = alert; base = green; n = orange;
+  if (value > high) {
+    lo = high; hi = 2 * high; base = (uint8_t)(green + orange); n = red;
+  } else if (value > low) {
+    lo = low; hi = high; base = green; n = orange;
   }
   if (hi <= lo) return (uint8_t)(base + n);
-  float k = ceilf((cpm - lo) / (hi - lo) * n);
+  float k = ceilf((value - lo) / (hi - lo) * n);
   return (uint8_t)(base + (k > n ? n : k));
 }
 

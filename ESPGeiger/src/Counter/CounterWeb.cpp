@@ -72,20 +72,20 @@ static void clicks_day(EGHttpResponse& res, char* line, size_t cap) {
 
 static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
   int n;
-  if (Clock::synced) {
+  if (corium::Clock::synced) {
     char start[24];
-    fmt_u64(start, sizeof(start), (uint64_t)Clock::boot_epoch);
+    fmtU64(start, sizeof(start), (uint64_t)corium::Clock::bootEpoch);
     n = snprintf_P(line, cap, PSTR(",\"start\":%s"), start);
   } else {
     n = snprintf_P(line, cap,
-      PSTR(",\"uptime\":%lu"), (unsigned long)Uptime::since(Uptime::start));
+      PSTR(",\"uptime\":%lu"), (unsigned long)corium::Uptime::since(corium::Uptime::start));
   }
   send_n(res, line, cap, n);
 }
 
 static void clicks_life(EGHttpResponse& res, char* line, size_t cap) {
   char clkBuf[24];
-  fmt_u64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
+  fmtU64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
   send_n(res, line, cap, snprintf_P(line, cap,
     PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu,\"secs\":%lu}"),
     clkBuf, (unsigned long)gcounter.get_first_boot_ts(),
@@ -148,7 +148,7 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // 2 dp, else left as was
 static void set_target(const char* s) {
   int32_t target;
-  if (parse_centi(s, &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
+  if (parseCenti(s, &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
 }
 
 static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -156,7 +156,7 @@ static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 
-static void cmd_target() { set_target(Console::next()); }
+static void cmd_target() { set_target(corium::Console::next()); }
 CORIUM_REGISTER_CMD(target, cmd_target)
 #endif
 
@@ -312,19 +312,19 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
 )JS";
 
 static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("History"), DeviceInfo::displayName());
+  corium::WebPortal::beginPage(res, F("History"), corium::DeviceInfo::displayName());
   res.sendChunk(FPSTR(HISTORY_BODY_LIFETIME));
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
   // udp rx is batched, no intervals
   res.sendChunk(FPSTR(HISTORY_BODY_INTERPULSE));
 #endif
   res.sendChunk(FPSTR(HISTORY_BODY_LAST24));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
 static void hHistJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_HIST_JS
-  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HIST_JS_GZ, HIST_JS_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HIST_JS_GZ, HIST_JS_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(HIST_JS));
@@ -438,15 +438,15 @@ R"HTML(<script src=/js)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML";
 
 static void status_seed(EGHttpResponse& res) {
-  int bo = DeviceInfo::resetReason() == DeviceInfo::RR_BROWNOUT;
+  int bo = corium::DeviceInfo::resetReason() == corium::DeviceInfo::RR_BROWNOUT;
   char buf[400];
   size_t sp = 0;
-  advance_pos(sp, snprintf_P(buf, sizeof(buf),
+  advancePos(sp, snprintf_P(buf, sizeof(buf),
               PSTR("<script>var w=window;w.CHIPID=\"%s\";w.GPIN=%d;w.BO=%d;w._seedHist=["),
-              DeviceInfo::chipid(), gcounter.input_pin(), bo), sizeof(buf));
+              corium::DeviceInfo::chipId(), gcounter.input_pin(), bo), sizeof(buf));
   int histSize = gcounter.cpm_history.size();
   for (int i = 0; i < histSize && sp + sizeof(",-2147483648") <= sizeof(buf); i++) {
-    advance_pos(sp, snprintf_P(buf + sp, sizeof(buf) - sp, i ? PSTR(",%d") : W_FMT_D,
+    advancePos(sp, snprintf_P(buf + sp, sizeof(buf) - sp, i ? PSTR(",%d") : W_FMT_D,
                 gcounter.cpm_history[i]), sizeof(buf));
   }
   res.sendChunk(buf, sp);
@@ -454,15 +454,15 @@ static void status_seed(EGHttpResponse& res) {
 }
 
 static void hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("Status"), DeviceInfo::displayName());
+  corium::WebPortal::beginPage(res, F("Status"), corium::DeviceInfo::displayName());
   status_seed(res);
   res.sendChunk(FPSTR(STATUS_BODY));
-  WebPortal::endPage(res, true);
+  corium::WebPortal::endPage(res, true);
 }
 
 static void hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_JS_BUNDLE
-  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
@@ -485,7 +485,7 @@ static const char R_HISTJS[]   PROGMEM = "/histjs";
 static const char R_LIFE[]     PROGMEM = "/life/reset";
 static const char R_PAUSE[]    PROGMEM = "/pause";
 
-static const WebRoute ROUTES[] PROGMEM = {
+static const corium::WebRoute ROUTES[] PROGMEM = {
   {R_STATUS,   hStatus,    EGHttpRequest::GET},
   {R_JS,       hJs,        EGHttpRequest::GET},
   {R_CLICKS,   hClicks,    EGHttpRequest::GET},
@@ -498,7 +498,7 @@ static const WebRoute ROUTES[] PROGMEM = {
 };
 
 void CounterRoutes::registerRoutes(EGHttpServer& http) {
-  WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
+  corium::WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   http.on(F("/cpm"),      EGHttpRequest::GET,  hSetCPM);
 #endif

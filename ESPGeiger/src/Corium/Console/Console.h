@@ -16,8 +16,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef CONSOLE_H
-#define CONSOLE_H
+#ifndef CORIUM_CONSOLE_H
+#define CORIUM_CONSOLE_H
 #include <Arduino.h>
 #include <Print.h>
 #include "Corium/Module/Module.h"
@@ -40,8 +40,6 @@ struct Cmd {
   void (*fn)();
 };
 
-}  // namespace corium
-
 // typed bytes, one per input
 struct ConsoleLine {
   char buf[CONSOLE_LINE_MAX + 1];
@@ -49,16 +47,16 @@ struct ConsoleLine {
   bool overflow;   // too long, dropped at the end
 };
 
-class Console : public corium::Module {
+class Console : public Module {
 public:
     const char* name() override { return PSTR("scmd"); }
-    bool core_module() override { return true; }
+    bool coreModule() override { return true; }
     static constexpr uint16_t LOOP_MS = 10;
     void begin() override;
     void loop(unsigned long now) override;
-    void poll_boot();   // setup portal and the wifi wait, before the registry runs
+    void pollBoot();   // setup portal and the wifi wait, before the registry runs
 
-    static bool add(const corium::Cmd* cmd);   // static init, false = full
+    static bool add(const Cmd* cmd);   // static init, false = full
     static void run(const char* text);   // web, first line only
     // a command's words, as it runs
     static char* next();   // nullptr = none left
@@ -67,19 +65,20 @@ private:
     static void feed(ConsoleLine& l, Print& io, char c);
     static void edit(ConsoleLine& l, Print& io, char c);
     static void exec(ConsoleLine& l);
-    static const corium::Cmd* _cmds[CORIUM_MAX_CMDS];
+    static const Cmd* _cmds[CORIUM_MAX_CMDS];
     static uint8_t _count;
     static uint8_t _dropped;
     static bool _up;   // begun, app commands run
     static ConsoleLine _serial;
     static char* _last;   // strtok_r's place
 };
+}  // namespace corium
 
-extern Console console;
+extern corium::Console console;
 
 #define CORIUM_REGISTER_CMD(word, fn) \
   static const char _cmdn_##word[] PROGMEM = #word; \
   static const corium::Cmd _cmd_##word PROGMEM = {_cmdn_##word, fn}; \
-  static bool _cmdr_##word = Console::add(&_cmd_##word);
+  static bool _cmdr_##word = corium::Console::add(&_cmd_##word);
 
 #endif

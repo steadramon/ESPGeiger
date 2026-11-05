@@ -16,20 +16,22 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef APP_HOOKS_H
-#define APP_HOOKS_H
+#ifndef CORIUM_APP_HOOKS_H
+#define CORIUM_APP_HOOKS_H
 
 class EGHttpServer;
 class EGHttpResponse;
 namespace corium { struct MenuEntry; }
 
+namespace corium {
 namespace AppHooks {
-  const corium::MenuEntry* menu();   // first on the home page, PROGMEM, not in safe mode
+  const MenuEntry* menu();   // first on the home page, PROGMEM, not in safe mode
   void routes(EGHttpServer& http);   // not in safe mode
-  void info_rows(EGHttpResponse& res);   // About table on /info
-  void about_json(EGHttpResponse& res);   // /about fields, each ends with a comma
+  void infoRows(EGHttpResponse& res);   // About table on /info
+  void aboutJson(EGHttpResponse& res);   // /about fields, each ends with a comma
   void metrics(EGHttpResponse& res, const char* cid);   // after the measure rows
 }
+}  // namespace corium
 
 // PROGMEM, served after the core's own
 extern const char APP_CSS[];        // style.css tail

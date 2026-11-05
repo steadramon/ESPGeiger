@@ -67,7 +67,7 @@
 // own pin for the flash, the status LED never flashes counts
 #ifdef GEIGER_BLIPLED
 #define LED_FLASH_ENGINE
-#define LEDSIGNAL_FLASH 0
+#define CORIUM_LEDSIGNAL_FLASH 0
 #endif
 
 // one i2c bus for the OLED and env sensors
@@ -93,29 +93,6 @@
 #define BUZZER_ENGINE
 #endif
 
-// board name, not the chip
-#if defined(ESPGEIGER_HW32)
-  #define APP_HOME_NAME "ESPGeiger-HW32"
-  #define APP_BOARD "ESPG-HW32"
-#elif defined(ESPGEIGER_HW)
-  #define APP_HOME_NAME "ESPGeiger-HW"
-  #ifdef ESP8266
-    #define APP_BOARD "ESPG-HW"
-  #else
-    #define APP_BOARD "ESPG32-HW"
-  #endif
-#elif defined(ESPGEIGER_LT)
-  #define APP_HOME_NAME "ESPGeiger-Log"
-  #if defined(ESP8266) && defined(GEIGER_SDCARD)
-    #define APP_BOARD "ESPG-LOG"
-  #elif defined(ESP8266)
-    #define APP_BOARD "ESPG-LT"
-  #endif
-#endif
-#ifndef APP_HOME_NAME
-#define APP_HOME_NAME THING_NAME
-#endif
-
 // saved wifi fails: stay offline, no portal
 #if defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT)
 #define APP_OFFLINE_OK
@@ -123,7 +100,7 @@
 
 // :00 free for the SD CSV flush
 #ifdef GEIGER_SDCARD
-#define SENDSLOT_FIRST 1
+#define CORIUM_SENDSLOT_FIRST 1
 #endif
 #ifndef GEIGER_SDCARD_CS
 #define GEIGER_SDCARD_CS 16
@@ -143,12 +120,12 @@
 #define CORIUM_PREFS_LEGACY_FILE "/geigerconfig.json"
 
 // fielded devices hold their key here, never change
-#define KEYSTORE_NS    "espg"
-#define KEYSTORE_MAGIC 0x4B475345   // "ESGK"
+#define CORIUM_KEYSTORE_NS    "espg"
+#define CORIUM_KEYSTORE_MAGIC 0x4B475345   // "ESGK"
 
 // export blobs start "ESPG", old exports must import
-#define EXPORT_MAGIC     0x11, 0x23, 0xC6
-#define EXPORT_MAGIC_B64 "ESPG"
-#define EXPORT_SEED      0xB11C5EEDu
+#define CORIUM_EXPORT_MAGIC     0x11, 0x23, 0xC6
+#define CORIUM_EXPORT_MAGIC_B64 "ESPG"
+#define CORIUM_EXPORT_SEED      0xB11C5EEDu
 
 #endif

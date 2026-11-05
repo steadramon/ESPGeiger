@@ -17,8 +17,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef UTIL_WIFISETUP_H
-#define UTIL_WIFISETUP_H
+#ifndef CORIUM_WIFISETUP_H
+#define CORIUM_WIFISETUP_H
 
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
@@ -26,10 +26,11 @@
 #include <WiFi.h>
 #endif
 
+namespace corium {
 namespace Wifi {
-  inline bool connected_raw() { return WiFi.status() == WL_CONNECTED; }   // live, not Wifi::connected
+  inline bool connectedRaw() { return WiFi.status() == WL_CONNECTED; }   // live, not Wifi::connected
   // saved to flash; 8266 off again or the next disconnect() wipes them
-  inline void begin_saved(const char* ssid, const char* pass) {
+  inline void beginSaved(const char* ssid, const char* pass) {
     WiFi.persistent(true);
     WiFi.begin(ssid, pass);
 #ifdef ESP8266
@@ -38,7 +39,7 @@ namespace Wifi {
   }
   inline void join(const char* ssid, const char* pass) {
     WiFi.disconnect(false);
-    begin_saved(ssid, pass);
+    beginSaved(ssid, pass);
   }
   inline void off() { WiFi.disconnect(true); }
 
@@ -63,5 +64,6 @@ namespace Wifi {
   }
   inline String macStr() { return WiFi.macAddress(); }
 }
+}  // namespace corium
 
 #endif

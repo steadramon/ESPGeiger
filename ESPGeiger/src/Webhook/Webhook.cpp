@@ -60,7 +60,7 @@ static const corium::PrefGroup WEBHOOK_PREF_GROUP PROGMEM = {
   corium::P_CAT_UPLOAD, EG_K_SEND,
 };
 
-const corium::PrefGroup* Webhook::prefs_group() { return &WEBHOOK_PREF_GROUP; }
+const corium::PrefGroup* Webhook::prefsGroup() { return &WEBHOOK_PREF_GROUP; }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
 static const corium::LegacyAlias WEBHOOK_LEGACY[] PROGMEM = {
@@ -70,7 +70,7 @@ static const corium::LegacyAlias WEBHOOK_LEGACY[] PROGMEM = {
   {"whTime", "interval"},
   {},
 };
-corium::LegacyRows Webhook::legacy_aliases() { return WEBHOOK_LEGACY; }
+corium::LegacyRows Webhook::legacyAliases() { return WEBHOOK_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Webhook::Webhook() {
@@ -79,28 +79,28 @@ Webhook::Webhook() {
 
 void Webhook::setInterval(int interval)
 {
-  pingInterval = set_interval_s(interval, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX);
+  pingInterval = setIntervalS(interval, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX);
 }
 
-void Webhook::on_prefs_loaded() {
+void Webhook::onPrefsLoaded() {
   int iv = (int)corium::Prefs::getUInt("webhook", EG_K_INTERVAL);
   if (iv > 0) setInterval(iv);
-  set_enabled(corium::Prefs::getBool("webhook", EG_K_SEND));
+  setEnabled(corium::Prefs::getBool("webhook", EG_K_SEND));
 }
 
 bool Webhook::interpret(const char* r)
 {
   if (strstr_P(r, W_OK_TEXT)) {
-    Log::debug(PSTR("Webhook: Upload OK"));
+    corium::Log::debug(PSTR("Webhook: Upload OK"));
     return true;
   }
   char esc[96];   // log only, cut is fine
   egesc_json(esc, sizeof(esc), r);
-  Log::console(PSTR("Webhook: Error - %s"), esc);
+  corium::Log::console(PSTR("Webhook: Error - %s"), esc);
   return false;
 }
 
-PGM_P Webhook::content_type() const { return HTTP_CT_JSON; }
+PGM_P Webhook::contentType() const { return HTTP_CT_JSON; }
 
 const char* Webhook::cleanHTTP(const char* url) {
   if (strncmp_P(url, PSTR("http://"), 7) == 0) {
@@ -114,7 +114,7 @@ static constexpr size_t WEBHOOK_BUF_SIZE = 512;
 static bool build_body(char* buffer, const char* key) {
   EGJson j(buffer, WEBHOOK_BUF_SIZE);
   j.map_begin();
-  j.str(PSTR("id"), DeviceInfo::chipid());
+  j.str(PSTR("id"), corium::DeviceInfo::chipId());
   if (key[0] != '\0') j.str(PSTR("key"), key);
   corium::m_json_fields(EGM_OUT_WEBHOOK, j);
   j.map_end();
@@ -124,32 +124,32 @@ static bool build_body(char* buffer, const char* key) {
 bool Webhook::prepare(char* url, size_t cap, const char** body) {
   const char* whURL = corium::Prefs::getString("webhook", K_URL);
   if (whURL[0] == '\0') return false;
-  if (!upload_ready(log_tag())) return false;
+  if (!upload_ready(logTag())) return false;
   // never sent as plain http
   if (strncmp_P(whURL, PSTR("https://"), 8) == 0) {
-    Log::console(PSTR("Webhook: https not supported, not sent"));
-    note_publish(false);
+    corium::Log::console(PSTR("Webhook: https not supported, not sent"));
+    notePublish(false);
     return false;
   }
 
-  Log::debug(PSTR("Webhook: Uploading latest data ..."));
+  corium::Log::debug(PSTR("Webhook: Uploading latest data ..."));
 
   const char* key = corium::Prefs::getString("webhook", K_KEY);
 
   const char* trimmedURL = cleanHTTP(whURL);
-  if (!url_fits(snprintf_P(url, cap, PSTR("http://%s"), trimmedURL), cap)) return false;
+  if (!urlFits(snprintf_P(url, cap, PSTR("http://%s"), trimmedURL), cap)) return false;
 
   // post() frees it once sent
   char* buffer = (char*)malloc(WEBHOOK_BUF_SIZE);
   if (!buffer) {
-    Log::console(PSTR("Webhook: malloc(%u) failed"), (unsigned)WEBHOOK_BUF_SIZE);
-    note_publish(false);
+    corium::Log::console(PSTR("Webhook: malloc(%u) failed"), (unsigned)WEBHOOK_BUF_SIZE);
+    notePublish(false);
     return false;
   }
   if (!build_body(buffer, key)) {
     free(buffer);
-    Log::console(PSTR("Webhook: body too long, not sent"));
-    note_publish(false);
+    corium::Log::console(PSTR("Webhook: body too long, not sent"));
+    notePublish(false);
     return false;
   }
   *body = buffer;

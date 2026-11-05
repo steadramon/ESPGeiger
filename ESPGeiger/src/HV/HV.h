@@ -155,21 +155,21 @@ class HV : public corium::Module {
       const char* name() override { return PSTR("hv"); }
       uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
 #ifdef ESPG_HV_ADC
-      uint8_t display_order() override { return 0; }
+      uint8_t displayOrder() override { return 0; }
 #else
-      uint8_t display_order() override { return 16; }
+      uint8_t displayOrder() override { return 16; }
 #endif
       void loop(unsigned long now) override;
       void begin() override;
-      const corium::PrefGroup* prefs_group() override;
-      void on_prefs_loaded() override;
+      const corium::PrefGroup* prefsGroup() override;
+      void onPrefsLoaded() override;
       void registerRoutes(EGHttpServer& http) override;
       const corium::MenuEntry* menuEntries() override;
 #ifdef ESPG_HV_ADC
       corium::MeasureRows measurements() override;
 #endif
-      corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
-      const char* legacy_file() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
+      corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+      const char* legacyFile() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
       void set_freq(int freq);
       int get_freq() {
         return _hw_freq;
@@ -210,6 +210,13 @@ class HV : public corium::Module {
       bool fb_fault() const { return false; }
       bool hv_low() const { return false; }
 #endif
+      // /hvjson ov
+      enum : uint8_t { HV_OK, HV_OVER, HV_FB_FAULT, HV_LOW };
+      uint8_t status() const {
+        if (fb_fault())   return HV_FB_FAULT;
+        if (ov_tripped()) return HV_OVER;
+        return hv_low() ? HV_LOW : HV_OK;
+      }
       void clear_ov();
       void write_duty();
       // release_hold() if the OTA fails
@@ -235,6 +242,8 @@ class HV : public corium::Module {
       int _pwm_pin = GEIGER_PWMPIN;
       int _hw_freq = GEIGERHW_FREQ;
       int _hw_duty = GEIGERHW_DUTY;
+      static constexpr int DUTY_UNSENT = -1;
+      void force_write() { _cur_duty = DUTY_UNSENT; }
       int _cur_duty = 0;
       int _hw_vd_ratio = GEIGERHW_ADC_RATIO;
       int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
@@ -243,7 +252,7 @@ class HV : public corium::Module {
       uint16_t _adc[HV_ADC_MAX];
       uint8_t  _adc_n = 0;
       int8_t   _duty_trim = 0;
-      Deadline _settle;   // fast_millis(), cleared once reached
+      corium::Deadline _settle;   // fastMillis(), cleared once reached
       bool    _ov_trip = false;
       bool    _held = false;
       uint16_t _ov_v = GEIGERHW_OV_V;
@@ -251,9 +260,13 @@ class HV : public corium::Module {
       uint8_t _ov_trip_s = GEIGERHW_OV_S;
       uint8_t _trim_max = GEIGERHW_TRIM_MAX;
       uint8_t _trim_s = GEIGERHW_TRIM_S;
+      uint8_t _trim_secs = 0;
       uint16_t _settle_s = GEIGERHW_SETTLE_S;
       uint16_t _boot_s = GEIGERHW_BOOT_S;
 #ifdef ESP8266
+      uint8_t  _pass = 0;
+      uint32_t _t1_entries = 0;
+      uint8_t  _t1_restarts = 0;
       static constexpr uint8_t LOOP_SLOW = 10;
       static constexpr uint8_t PWM_RESTARTS = 3;   // per boot, then pin stays low
 #else

@@ -22,20 +22,20 @@
 #include <string.h>
 
 // app sets these, a change loses the key
-#ifndef KEYSTORE_NS
-#define KEYSTORE_NS "corium"
+#ifndef CORIUM_KEYSTORE_NS
+#define CORIUM_KEYSTORE_NS "corium"
 #endif
-#ifndef KEYSTORE_MAGIC
-#define KEYSTORE_MAGIC 0x4B524F43   // "CORK"
+#ifndef CORIUM_KEYSTORE_MAGIC
+#define CORIUM_KEYSTORE_MAGIC 0x4B524F43   // "CORK"
 #endif
 
 #if defined(ESP32)
 #include <nvs.h>
 
-static const char NVS_NS[] = KEYSTORE_NS;
-static const char* const NVS_KEYS[KeyStore::SLOTS] = {"key", "key1"};
+static const char NVS_NS[] = CORIUM_KEYSTORE_NS;
+static const char* const NVS_KEYS[corium::KeyStore::SLOTS] = {"key", "key1"};
 
-bool KeyStore::read(uint8_t* out, size_t len, uint8_t slot) {
+bool corium::KeyStore::read(uint8_t* out, size_t len, uint8_t slot) {
   if (slot >= SLOTS) return false;
   nvs_handle_t h;
   if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return false;
@@ -46,7 +46,7 @@ bool KeyStore::read(uint8_t* out, size_t len, uint8_t slot) {
   return ok;
 }
 
-bool KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
+bool corium::KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
   if (len > MAX || slot >= SLOTS) return false;
   nvs_handle_t h;
   if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return false;
@@ -55,7 +55,7 @@ bool KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
   return ok;
 }
 
-void KeyStore::clear(uint8_t slot) {
+void corium::KeyStore::clear(uint8_t slot) {
   if (slot >= SLOTS) return;
   nvs_handle_t h;
   if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
@@ -72,18 +72,18 @@ void KeyStore::clear(uint8_t slot) {
 extern "C" uint32_t _EEPROM_start;  // core linker symbol
 
 namespace {
-constexpr uint32_t MAGIC = KEYSTORE_MAGIC;
+constexpr uint32_t MAGIC = CORIUM_KEYSTORE_MAGIC;
 
 struct Slot {
   uint32_t len;
-  uint8_t  bytes[KeyStore::MAX];
+  uint8_t  bytes[corium::KeyStore::MAX];
   uint32_t crc;   // len + bytes
 };
 
 // slot 0 sits where the one key record had it, both ways read it
 struct Rec {
   uint32_t magic;
-  Slot     slot[KeyStore::SLOTS];
+  Slot     slot[corium::KeyStore::SLOTS];
 };
 static_assert(sizeof(Rec) % 4 == 0, "flash takes whole words");
 
@@ -107,7 +107,7 @@ bool store(const Rec& r) {
 }
 }  // namespace
 
-bool KeyStore::read(uint8_t* out, size_t len, uint8_t slot) {
+bool corium::KeyStore::read(uint8_t* out, size_t len, uint8_t slot) {
   if (len > MAX || slot >= SLOTS) return false;
   Rec r;
   if (!load(r)) return false;
@@ -117,7 +117,7 @@ bool KeyStore::read(uint8_t* out, size_t len, uint8_t slot) {
   return true;
 }
 
-bool KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
+bool corium::KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
   if (len > MAX || slot >= SLOTS) return false;
   Rec r;
   if (!load(r)) return false;
@@ -131,7 +131,7 @@ bool KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
 }
 
 // a zero slot fails its crc
-void KeyStore::clear(uint8_t slot) {
+void corium::KeyStore::clear(uint8_t slot) {
   Rec r;
   if (slot >= SLOTS || !load(r)) return;
   memset(&r.slot[slot], 0, sizeof(Slot));

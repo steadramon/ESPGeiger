@@ -58,6 +58,10 @@
 #define MQTT_STATUS_INTERVAL 60
 #define MQTT_KEEPALIVE_S 15
 #define MQTT_TIMEOUT_S 15   // connect, ping reply
+#define MQTT_RETRY_MS     10000UL
+#define MQTT_RETRY_MAX_MS 300000UL
+#define MQTT_JITTER_S     12
+#define MQTT_AUTH_TRIES   3
 
 #ifndef MQTT_HASS_REFRESH_S
 #define MQTT_HASS_REFRESH_S 3600UL
@@ -79,16 +83,16 @@ public:
     return instance;
   }
   const char* name() override { return PSTR("mqtt"); }
-  bool requires_wifi() override { return true; }
+  bool requiresWifi() override { return true; }
   static constexpr uint16_t LOOP_MS = 500;
   static constexpr uint8_t TOPIC_PING = Topic::PING;   // today: the send mark, no LED
   void begin() override;
   void loop(unsigned long now) override;
-  const corium::PrefGroup* prefs_group() override;
-  void on_prefs_saved() override;
-  uint8_t display_order() override { return 25; }
-  size_t status_json(char* buf, size_t cap, unsigned long now) override;
-  corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+  const corium::PrefGroup* prefsGroup() override;
+  void onPrefsSaved() override;
+  uint8_t displayOrder() override { return 25; }
+  size_t statusJson(char* buf, size_t cap, unsigned long now) override;
+  corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
   void setInterval(int interval);
   int getInterval();
   void disconnect();
@@ -129,7 +133,7 @@ private:
   void publishPing();
   uint16_t publishSensor();
   void track(uint16_t pid);
-  uint16_t _ack_pid = 0;   // the publish whose ack decides last_ok
+  uint16_t _ack_pid = 0;   // the publish whose ack decides lastOk
   void publishStat(const char* cmd, const char* text);
   bool sendHello();
   bool publishFlag(const char* cmd, bool on);   // cmd PROGMEM
@@ -159,9 +163,10 @@ private:
   bool _hass_retrigger = false;   // HA came back, the timers spread it
   bool _hass_listen = false;
   char _hass_status[MQTT_HASS_TOPIC_MAX + sizeof("/status")] = {};
-  Deadline _hass_next;   // uptime s
+  corium::Deadline _hass_next;   // uptime s
   unsigned long _hass_last_publish = 0;
-  int8_t  _hass_walk_state = 0;
+  enum : int8_t { HASS_REMOVE = -1, HASS_IDLE, HASS_PUBLISH };
+  int8_t  _hass_walk_state = HASS_IDLE;
   uint8_t _hass_idx = 0;
 #endif
 

@@ -41,13 +41,13 @@ class NeoPixel : public corium::Module {
   public:
     NeoPixel();
     const char* name() override { return PSTR("neopx"); }
-    uint8_t display_order() override { return 16; }
+    uint8_t displayOrder() override { return 16; }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
-    void pre_wifi() override { setup(); }
+    void preWifi() override { setup(); }
     void begin() override;
-    const corium::PrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
-    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
+    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void loop(unsigned long now) override;
     static constexpr uint16_t LOOP_MS = 30;
     static constexpr uint16_t FAST_LOOP_MS = 10;

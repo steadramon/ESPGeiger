@@ -54,7 +54,7 @@ static const corium::PrefGroup RADMON_PREF_GROUP PROGMEM = {
   corium::P_CAT_UPLOAD, EG_K_SEND,
 };
 
-const corium::PrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
+const corium::PrefGroup* Radmon::prefsGroup() { return &RADMON_PREF_GROUP; }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
 static const corium::LegacyAlias RADMON_LEGACY[] PROGMEM = {
@@ -64,7 +64,7 @@ static const corium::LegacyAlias RADMON_LEGACY[] PROGMEM = {
   {"radmonTime", "interval"},
   {},
 };
-corium::LegacyRows Radmon::legacy_aliases() { return RADMON_LEGACY; }
+corium::LegacyRows Radmon::legacyAliases() { return RADMON_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Radmon::Radmon() {
@@ -72,48 +72,48 @@ Radmon::Radmon() {
 }
 
 void Radmon::setInterval(int interval) {
-  pingInterval = set_interval_s(interval, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX);
+  pingInterval = setIntervalS(interval, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX);
 }
 
 int Radmon::getInterval() {
   return pingInterval;
 }
 
-void Radmon::on_prefs_loaded() {
+void Radmon::onPrefsLoaded() {
   int rtimer = (int)corium::Prefs::getUInt("radmon", EG_K_INTERVAL);
   if (rtimer == 0) rtimer = RADMON_INTERVAL;
   setInterval(rtimer);
-  set_enabled(corium::Prefs::getBool("radmon", EG_K_SEND));
+  setEnabled(corium::Prefs::getBool("radmon", EG_K_SEND));
 }
 
 bool Radmon::interpret(const char* r)
 {
   if (strcmp_P(r, PSTR("OK<br>")) == 0) {
-    Log::debug(PSTR("Radmon: Upload OK"));
+    corium::Log::debug(PSTR("Radmon: Upload OK"));
     return true;
   } else if (strstr_P(r, PSTR("Incorrect"))) {
-    Log::console(PSTR("Radmon: Password incorrect, please check"));
+    corium::Log::console(PSTR("Radmon: Password incorrect, please check"));
   } else if (strstr_P(r, PSTR("register"))) {
-    Log::console(PSTR("Radmon: Username incorrect, please check"));
+    corium::Log::console(PSTR("Radmon: Username incorrect, please check"));
   } else if (strstr_P(r, PSTR("Too soon"))) {
-    Log::console(PSTR("Radmon: Rate limited"));
+    corium::Log::console(PSTR("Radmon: Rate limited"));
   } else {
-    Log::console(PSTR("Radmon: Unknown error"));
+    corium::Log::console(PSTR("Radmon: Unknown error"));
   }
   return false;
 }
 
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!upload_ready(log_tag())) return false;
+  if (!upload_ready(logTag())) return false;
 
   const char* _api_user = corium::Prefs::getString("radmon", EG_K_USER);
   const char* _api_key  = corium::Prefs::getString("radmon", EG_K_PASSWORD);
   if (_api_user[0] == '\0' || _api_key[0] == '\0') {
-    Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
+    corium::Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
     return false;
   }
 
-  Log::debug(PSTR("Radmon: Uploading latest data ..."));
+  corium::Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
   float avgcpm;
   if      (pingInterval <= 90)  avgcpm = corium::m_f(M_CPM_ST);
@@ -124,6 +124,6 @@ bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
   char user[3 * RADMON_USER_MAX + 1], pass[3 * RADMON_PASS_MAX + 1];
   egesc_url(user, sizeof(user), _api_user);
   egesc_url(pass, sizeof(pass), _api_key);
-  return url_fits(snprintf_P(url, cap, RADMON_URI, user, pass, cpmbuf), cap);
+  return urlFits(snprintf_P(url, cap, RADMON_URI, user, pass, cpmbuf), cap);
 }
 #endif

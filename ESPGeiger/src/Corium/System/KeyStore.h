@@ -17,12 +17,13 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef KEYSTORE_H
-#define KEYSTORE_H
+#ifndef CORIUM_KEYSTORE_H
+#define CORIUM_KEYSTORE_H
 
 #include <stddef.h>
 #include <stdint.h>
 
+namespace corium {
 // esp32 nvs, esp8266 the eeprom sector
 namespace KeyStore {
   static constexpr size_t MAX = 32;
@@ -31,5 +32,6 @@ namespace KeyStore {
   bool write(const uint8_t* in, size_t len, uint8_t slot = 0);
   void clear(uint8_t slot = 0);
 }
+}  // namespace corium
 
 #endif

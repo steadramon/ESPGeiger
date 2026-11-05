@@ -77,14 +77,14 @@ void o.offsetWidth;o.classList.add('f');b.disabled=false;
 )JS";
 
 static void hRandomPage(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("Random"));
+  corium::WebPortal::beginPage(res, F("Random"));
   res.sendChunk(FPSTR(RANDOM_PAGE_BODY_NEW));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
 static void hRandomJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_RANDOM_JS
-  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), RANDOM_JS_GZ, RANDOM_JS_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), RANDOM_JS_GZ, RANDOM_JS_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(RANDOM_JS));
@@ -100,7 +100,7 @@ static void send_hex(EGHttpResponse& res, long n, size_t per_chunk) {
   while (remaining > 0) {
     size_t batch = remaining > (long)per_chunk ? per_chunk : (size_t)remaining;
     GRNG::extract(chunk, batch);
-    hex_encode(hexbuf, chunk, batch);
+    hexEncode(hexbuf, chunk, batch);
     res.sendChunk(hexbuf, batch * 2);
     remaining -= batch;
   }
@@ -109,13 +109,13 @@ static void send_hex(EGHttpResponse& res, long n, size_t per_chunk) {
 
 static void random_otp(EGHttpRequest& req, EGHttpResponse& res) {
   int32_t n = 256;
-  parse_i32(req.arg(F("n")), &n);
+  parseI32(req.arg(F("n")), &n);
   send_hex(res, clamp<int32_t>(n, 16, 1024), 64);
 }
 
 static void random_hex(EGHttpRequest& req, EGHttpResponse& res) {
   int32_t n = 16;
-  parse_i32(req.arg(F("n")), &n);
+  parseI32(req.arg(F("n")), &n);
   if (n < 1)   n = 16;
   if (n > 256) n = 256;
   send_hex(res, n, 32);
@@ -132,12 +132,12 @@ static size_t random_coin(char* out) {
 
 static size_t random_dice(EGHttpRequest& req, char* out, size_t cap) {
   int32_t sides = 6;
-  parse_i32(req.arg(F("sides")), &sides);
+  parseI32(req.arg(F("sides")), &sides);
   if (sides < 2)     sides = 6;
   if (sides > 10000) sides = 10000;
   uint8_t bytes[4];
   GRNG::extract(bytes, 4);
-  uint32_t r = rd_be32(bytes);
+  uint32_t r = rdBe32(bytes);
   long roll = (long)(r % (uint32_t)sides) + 1;
   return snprintf_P(out, cap, PSTR("%ld"), roll);
 }
@@ -145,7 +145,7 @@ static size_t random_dice(EGHttpRequest& req, char* out, size_t cap) {
 // out >= 64 chars
 static size_t random_password(EGHttpRequest& req, char* out) {
   int32_t len = 16;
-  parse_i32(req.arg(F("len")), &len);
+  parseI32(req.arg(F("len")), &len);
   if (len < 4)  len = 16;
   if (len > 64) len = 64;
   GRNG::pick(out, len, PW_CHARS, sizeof(PW_CHARS) - 1);
@@ -174,7 +174,7 @@ static uint32_t count_heads(long n) {
 static size_t random_flip(EGHttpRequest& req, char* out, size_t cap) {
   // chi^2 1 dof, < 3.841 fair, < 6.635 suspect
   int32_t n = 1000;
-  parse_i32(req.arg(F("n")), &n);
+  parseI32(req.arg(F("n")), &n);
   n = clamp<int32_t>(n, 10, 10000);
   uint32_t heads = count_heads(n);
   uint32_t tails = (uint32_t)n - heads;
@@ -224,12 +224,12 @@ static const char R_RANDOM[] PROGMEM = "/random";
 static const char R_DO[]     PROGMEM = "/random.do";
 static const char R_RNDJS[]  PROGMEM = "/rndjs";
 
-static const WebRoute ROUTES[] PROGMEM = {
+static const corium::WebRoute ROUTES[] PROGMEM = {
   {R_RANDOM, hRandomPage, EGHttpRequest::GET},
   {R_DO,     hRandomDo,   EGHttpRequest::GET},
   {R_RNDJS,  hRandomJs,   EGHttpRequest::GET},
 };
 
 void GRNGRoutes::registerRoutes(EGHttpServer& http) {
-  WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
+  corium::WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
 }

@@ -77,13 +77,13 @@ static const corium::PrefGroup PULSE_PREF_GROUP PROGMEM = {
   corium::P_CAT_OUTPUT, EG_K_ENABLE,
 };
 
-const corium::PrefGroup* PulseOut::prefs_group() { return &PULSE_PREF_GROUP; }
+const corium::PrefGroup* PulseOut::prefsGroup() { return &PULSE_PREF_GROUP; }
 
 static int8_t claim_pin(bool enabled, int p) {
   if (!enabled || p < 0) return -1;
-  const char* why = PinSafety::claim_output(p, PSTR("PulseOut"));
+  const char* why = corium::PinSafety::claimOutput(p, PSTR("PulseOut"));
   if (!why) return (int8_t)p;
-  Log::console(PSTR("PulseOut: pin=%d unsafe (%s)"), p, why);
+  corium::Log::console(PSTR("PulseOut: pin=%d unsafe (%s)"), p, why);
   return -1;
 }
 
@@ -91,21 +91,21 @@ static int8_t claim_pin(bool enabled, int p) {
 void PulseOut::read_pin(bool was_enabled) {
   if (!_begun) { _pin = corium::Prefs::getInt("pulse", EG_K_PIN); return; }
   if (_enabled && !was_enabled && _engine.pin < 0)
-    Log::console(PSTR("PulseOut: needs a reboot to start"));
+    corium::Log::console(PSTR("PulseOut: needs a reboot to start"));
 }
 
-void PulseOut::on_prefs_loaded() {
+void PulseOut::onPrefsLoaded() {
   bool was = _enabled;
   _enabled        = corium::Prefs::getBool("pulse", EG_K_ENABLE);
   read_pin(was);
   _engine.mode     = (uint8_t)corium::Prefs::getUInt("pulse", EG_K_MODE);
-  _engine.pulse_us = corium::Prefs::getUInt("pulse", EG_K_PULSE_MS) * 1000;
-  _engine.freq_hz  = corium::Prefs::getUInt("pulse", EG_K_FREQ);
+  _engine.pulseUs = corium::Prefs::getUInt("pulse", EG_K_PULSE_MS) * 1000;
+  _engine.freqHz   = corium::Prefs::getUInt("pulse", EG_K_FREQ);
   _engine.cycles   = corium::Prefs::getUInt("pulse", K_CYCLES);
   _engine.polarity = (uint8_t)corium::Prefs::getUInt("pulse", EG_K_POLARITY);
-  _engine.fade_shift = (uint8_t)(corium::Prefs::getUInt("pulse", EG_K_FADE_SHIFT) + PulseEngine::FADE_SHIFT_MIN);
-  _engine.max_hz   = corium::Prefs::getUInt("pulse", K_MAX_HZ);
-  _engine.active_level = PulseEngine::levelFromPercent(corium::Prefs::getUInt("pulse", EG_K_BRIGHTNESS));
+  _engine.fadeShift = (uint8_t)(corium::Prefs::getUInt("pulse", EG_K_FADE_SHIFT) + corium::PulseEngine::FADE_SHIFT_MIN);
+  _engine.maxHz    = corium::Prefs::getUInt("pulse", K_MAX_HZ);
+  _engine.activeLevel = corium::PulseEngine::levelFromPercent(corium::Prefs::getUInt("pulse", EG_K_BRIGHTNESS));
   _quiet.set(corium::Prefs::getString("pulse", EG_K_QUIET_FROM),
              corium::Prefs::getString("pulse", EG_K_QUIET_TO));
   _engine.commitConfig();
@@ -114,9 +114,9 @@ void PulseOut::on_prefs_loaded() {
 
 // after the engine clamps, so it can pass them
 void PulseOut::apply_voice() {
-  _engine.pulse_us_eff   = (uint32_t)(_engine.pulse_us_eff * _voice.pulse);
-  _engine.burst_freq_eff = (uint32_t)(_engine.burst_freq_eff * _voice.freq);
-  if (_engine.burst_freq_eff == 0) _engine.burst_freq_eff = 1;
+  _engine.pulseUsEff     = (uint32_t)(_engine.pulseUsEff * _voice.pulse);
+  _engine.burstFreqEff = (uint32_t)(_engine.burstFreqEff * _voice.freq);
+  if (_engine.burstFreqEff == 0) _engine.burstFreqEff = 1;
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
@@ -125,16 +125,16 @@ static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 
 // one-off migration
 static bool migrate_legacy_blip() {
-  if (!Fs::begin() || Fs::exists(BLIP_MIG_MARKER)) return false;
-  File f = Fs::open_r(F("/prefs/led.bin"));
+  if (!corium::Fs::begin() || corium::Fs::exists(BLIP_MIG_MARKER)) return false;
+  File f = corium::Fs::openR(F("/prefs/led.bin"));
   if (!f) {
-    Fs::touch(BLIP_MIG_MARKER);
+    corium::Fs::touch(BLIP_MIG_MARKER);
     return false;
   }
   uint8_t magic[4];
   if (f.read(magic, 4) != 4 || memcmp_P(magic, PSTR("EGP1"), 4) != 0) {
     f.close();
-    Fs::touch(BLIP_MIG_MARKER);
+    corium::Fs::touch(BLIP_MIG_MARKER);
     return false;
   }
   char pin_val[16]  = {0};
@@ -148,7 +148,7 @@ static bool migrate_legacy_blip() {
     if (f.read((uint8_t*)key, klen) != klen) break;
     uint8_t vb[2];
     if (f.read(vb, 2) != 2) break;
-    uint16_t vlen = rd_le16(vb);
+    uint16_t vlen = rdLe16(vb);
     if (vlen >= sizeof(value)) break;
     if (vlen > 0 && f.read((uint8_t*)value, vlen) != vlen) break;
     if (klen == 8  && strncmp_P(key, PSTR("blip_pin"), 8) == 0 && vlen < sizeof(pin_val)) {
@@ -175,35 +175,35 @@ static bool migrate_legacy_blip() {
     corium::Prefs::put("pulse", EG_K_ENABLE, "1");
     // no marker, again next boot
     if (!corium::Prefs::commit(false)) {
-      Log::console(PSTR("PulseOut: not saved"));
+      corium::Log::console(PSTR("PulseOut: not saved"));
       return true;
     }
-    Log::console(PSTR("PulseOut: migrated blip pin=%s pulse_ms=%s from v0.11"),
+    corium::Log::console(PSTR("PulseOut: migrated blip pin=%s pulse_ms=%s from v0.11"),
                  pin_val[0] ? pin_val : "(none)", ms_val[0] ? ms_val : "(none)");
   } else {
-    Log::console(PSTR("PulseOut: no blip pin/pulse keys in /prefs/led.bin"));
+    corium::Log::console(PSTR("PulseOut: no blip pin/pulse keys in /prefs/led.bin"));
   }
-  Fs::touch(BLIP_MIG_MARKER);
+  corium::Fs::touch(BLIP_MIG_MARKER);
   return any;
 }
 // === END LEGACY IMPORT ===
 
-static void pulseout_click(uint32_t) { pulseout.notifyClick(fast_millis()); }
+static void pulseout_click(uint32_t) { pulseout.notifyClick(corium::fastMillis()); }
 
 void PulseOut::begin() {
   gcounter.on_click(pulseout_click);
   gcounter.on_rx_click(pulseout_click);
-  if (migrate_legacy_blip()) on_prefs_loaded();
+  if (migrate_legacy_blip()) onPrefsLoaded();
   _begun = true;
   _engine.pin = claim_pin(_enabled, _pin);
   if (!_enabled || _engine.pin < 0) {
-    if (_enabled && _engine.pin < 0) Log::console(PSTR("PulseOut: no pin set"));
+    if (_enabled && _engine.pin < 0) corium::Log::console(PSTR("PulseOut: no pin set"));
     return;
   }
-  _voice = chip_blip(DeviceInfo::hwid());
+  _voice = chip_blip(corium::DeviceInfo::hwId());
   _engine.begin();   // commits
   apply_voice();
-  Log::console(PSTR("PulseOut: GPIO%d mode=%u polarity=%u"),
+  corium::Log::console(PSTR("PulseOut: GPIO%d mode=%u polarity=%u"),
                (int)_engine.pin, (unsigned)_engine.mode, (unsigned)_engine.polarity);
 }
 

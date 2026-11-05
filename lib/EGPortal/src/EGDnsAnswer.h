@@ -28,8 +28,9 @@
 #define EGDNS_HEADER 12
 #define EGDNS_LABEL_MAX 63
 #define EGDNS_NAME_MAX 255   // on the wire, lengths and root counted
+#define EGDNS_QTAIL 4        // qtype, qclass
 #define EGDNS_ANSWER 16      // pointer, type, class, ttl, length, ip
-#define EGDNS_REPLY_MAX (EGDNS_HEADER + EGDNS_NAME_MAX + 4 + EGDNS_ANSWER)
+#define EGDNS_REPLY_MAX (EGDNS_HEADER + EGDNS_NAME_MAX + EGDNS_QTAIL + EGDNS_ANSWER)
 
 #ifndef EGDNS_TTL
 #define EGDNS_TTL 60   // the core's

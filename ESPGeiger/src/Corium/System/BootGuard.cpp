@@ -29,6 +29,7 @@
 #include <esp_attr.h>
 #endif
 
+namespace corium {
 namespace BootGuard {
 
 static constexpr uint32_t MAGIC = 0xE56B0014;
@@ -53,7 +54,7 @@ static void save() {}
 static uint32_t s_retry_ms = 0;
 static bool     s_entered = false;
 
-void on_boot() {
+void onBoot() {
   load();
   bool was_safe = s.safe;
   Ending end = ending(DeviceInfo::resetReason());
@@ -61,30 +62,31 @@ void on_boot() {
   apply(s, MAGIC, DeviceInfo::fwFingerprint(), end);
   if (s.safe) {
     s_entered = !was_safe;
-    s_retry_ms = retry_ms(s.retries);
+    s_retry_ms = retryMs(s.retries);
     if (s.retries < 255) s.retries++;
   }
   save();
 }
 
-void request_safe() {
+void requestSafe() {
   s.enter = 1;
   save();
 }
 
-void mark_lived() {
+void markLived() {
   s.lived = 1;
   save();
 }
 
-void mark_day() {
+void markDay() {
   s.retries = 0;
   save();
 }
 
-bool     safe_mode()    { return s.safe; }
+bool     safeMode()    { return s.safe; }
 bool     entered()      { return s_entered; }
-uint32_t retry_after()  { return s_retry_ms; }
-uint8_t  crash_streak() { return s.crash_streak; }
+uint32_t retryAfterMs()  { return s_retry_ms; }
+uint8_t  crashStreak() { return s.crashStreak; }
 
 }
+}  // namespace corium

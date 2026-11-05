@@ -24,7 +24,10 @@
 #include "Corium/Module/Registry.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/Util/Bytes.h"
 #include "Corium/Output/QuietWindow.h"
+#include "Corium/Output/LedSignal.h"
+#include "App/LedPatterns.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "Counter/Counter.h"
 #include <EGHttpServer.h>
@@ -105,7 +108,7 @@ static const corium::PrefGroup DISPLAY_PREF_GROUP PROGMEM = {
   sizeof(DISPLAY_PREF_ITEMS) / sizeof(DISPLAY_PREF_ITEMS[0]),
 };
 
-const corium::PrefGroup* Display::prefs_group() { return &DISPLAY_PREF_GROUP; }
+const corium::PrefGroup* Display::prefsGroup() { return &DISPLAY_PREF_GROUP; }
 
 #if defined(MAX7219_DISPLAY) && !defined(OLED_PINS_BLOCKED)
 CORIUM_PSTR(DS_W_TYPE, "display.type");
@@ -115,9 +118,9 @@ static const corium::PrefShow DISPLAY_SHOW[] PROGMEM = {
   {K_FLIP, DS_W_TYPE, SHOW_OLED},
   {},
 };
-const corium::PrefShow* Display::prefs_show() { return DISPLAY_SHOW; }
+const corium::PrefShow* Display::prefsShow() { return DISPLAY_SHOW; }
 #else
-const corium::PrefShow* Display::prefs_show() { return nullptr; }
+const corium::PrefShow* Display::prefsShow() { return nullptr; }
 #endif
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
@@ -130,7 +133,7 @@ static const corium::LegacyAlias DISPLAY_LEGACY[] PROGMEM = {
   {"oledOff", "off_time"},
   {},
 };
-corium::LegacyRows Display::legacy_aliases() { return DISPLAY_LEGACY; }
+corium::LegacyRows Display::legacyAliases() { return DISPLAY_LEGACY; }
 // === END LEGACY IMPORT ===
 
 static DisplayBackend* s_backend = nullptr;   // set once, first prefs load
@@ -159,7 +162,7 @@ static DisplayBackend* chosen() {
 DisplayBackend* Display::backend() { return s_backend ? s_backend : chosen(); }
 
 // off to on, on == off or blank never sleeps
-static QuietWindow s_off_hours;
+static corium::QuietWindow s_off_hours;
 
 static void read_timing(uint32_t& timeout_ms) {
 #ifdef GEIGER_PUSHBUTTON
@@ -171,13 +174,18 @@ static void read_timing(uint32_t& timeout_ms) {
                   corium::Prefs::getString("display", K_ON_TIME));
 }
 
-void Display::on_prefs_loaded() {
+void Display::onPrefsLoaded() {
   read_timing(_timeout_ms);
   if (_started) return;
   _started = true;
   _woke.mark(0);   // boot
   find_rows();
   corium::Registry::on(Counter::TOPIC_COUNTS, this);
+#ifdef GEIGER_PUSHBUTTON
+  corium::Registry::on(Topic::PRESS, this);
+  corium::Registry::on(Topic::BACK, this);
+  corium::Registry::on(Topic::LONG, this);
+#endif
   s_backend = chosen();
   for (uint8_t i = 0; i < s_count; i++) {
     if (s_all[i] != s_backend) s_all[i]->unchosen();
@@ -185,7 +193,7 @@ void Display::on_prefs_loaded() {
   s_backend->start();
 }
 
-void Display::on_prefs_saved() {
+void Display::onPrefsSaved() {
   read_timing(_timeout_ms);
   s_backend->reload();
 }
@@ -217,6 +225,13 @@ bool Display::toggle_auto_off(unsigned long now) {
   backend()->screen_mode(now, _auto_off);
   return _auto_off;
 }
+
+// short pages on or back, long flips the screen mode
+void Display::presses(unsigned long now) {
+  uint16_t ev = corium::Registry::events(this);
+  if (ev & (1u << Topic::PRESS)) button(now, (ev & (1u << Topic::BACK)) ? -1 : 1);
+  if (ev & (1u << Topic::LONG)) corium::LedSignal::play(toggle_auto_off(now) ? LED_DISP_ON : LED_DISP_OFF);
+}
 #endif
 
 Display::Sleep Display::sleep(unsigned long now) {
@@ -236,6 +251,8 @@ static bool screenOr503(EGHttpResponse& res, const uint8_t*& buf, uint16_t& w, u
   return false;
 }
 
+static constexpr uint8_t BMP_HEAD = 62;
+
 static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   const uint8_t* buf = nullptr;
   uint16_t W = 0, H = 0;
@@ -245,16 +262,15 @@ static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   uint8_t row[24] = {0};
   if (row_padded > sizeof(row)) { res.send(503, FPSTR(HTTP_CT_PLAIN), F("display too wide")); return; }
   const uint32_t pixel_bytes  = (uint32_t)row_padded * H;
-  const uint32_t file_size    = 62 + pixel_bytes;
+  const uint32_t file_size    = BMP_HEAD + pixel_bytes;
 
-  uint8_t hdr[62] = {0};
+  uint8_t hdr[BMP_HEAD] = {0};
   hdr[0] = 'B'; hdr[1] = 'M';
-  hdr[2] = file_size & 0xff; hdr[3] = (file_size >> 8) & 0xff;
-  hdr[4] = (file_size >> 16) & 0xff; hdr[5] = (file_size >> 24) & 0xff;
-  hdr[10] = 62;
+  wrLe32(hdr + 2, file_size);
+  hdr[10] = BMP_HEAD;
   hdr[14] = 40;
-  hdr[18] = W & 0xff;  hdr[19] = (W >> 8) & 0xff;
-  hdr[22] = H & 0xff;  hdr[23] = (H >> 8) & 0xff;
+  wrLe16(hdr + 18, W);
+  wrLe16(hdr + 22, H);
   hdr[26] = 1;
   hdr[28] = 1;
   hdr[46] = 2;
@@ -296,7 +312,7 @@ static void hScreenBin(EGHttpRequest&, EGHttpResponse& res, void*) {
 }
 
 static void hScreenTap(EGHttpRequest&, EGHttpResponse& res, void*) {
-  display.button(fast_millis(), 1);
+  display.button(corium::fastMillis(), 1);
   res.send(200, FPSTR(HTTP_CT_PLAIN), F("ok"));
 }
 
@@ -394,14 +410,14 @@ r();
 )JS";
 
 static void hScreen(EGHttpRequest&, EGHttpResponse& res, void*) {
-  WebPortal::beginPage(res, F("Screen"));
+  corium::WebPortal::beginPage(res, F("Screen"));
   res.sendChunk(FPSTR(SCREEN_PAGE_BODY));
-  WebPortal::endPage(res);
+  corium::WebPortal::endPage(res);
 }
 
 static void hScreenJs(EGHttpRequest&, EGHttpResponse& res, void*) {
 #if EG_GZ_screenJS
-  WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), screenJS_GZ, screenJS_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), screenJS_GZ, screenJS_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(screenJS));

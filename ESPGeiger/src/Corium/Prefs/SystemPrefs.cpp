@@ -29,7 +29,7 @@ CORIUM_PSTR(K_CPU_MHZ,        "cpu_mhz");
 
 // System prefs
 
-SystemPrefs sysprefs;
+corium::SystemPrefs sysprefs;
 CORIUM_REGISTER_MODULE(sysprefs)
 
 CORIUM_PSTR(SY_L_NAM, "Friendly name");
@@ -52,75 +52,75 @@ static const corium::PrefGroup SYSTEM_PREF_GROUP PROGMEM = {
   sizeof(SYSTEM_PREF_ITEMS) / sizeof(SYSTEM_PREF_ITEMS[0]),
 };
 
-const corium::PrefGroup* SystemPrefs::prefs_group() { return &SYSTEM_PREF_GROUP; }
+const corium::PrefGroup* corium::SystemPrefs::prefsGroup() { return &SYSTEM_PREF_GROUP; }
 
-bool SystemPrefs::pass_restored = false;
+bool corium::SystemPrefs::passRestored = false;
 
-static_assert(WEB_PASS_MAX <= KeyStore::MAX, "web_pass fits a key store slot");
+static_assert(WEB_PASS_MAX <= corium::KeyStore::MAX, "web_pass fits a key store slot");
 
 // a copy outside LittleFS, a lost FS keeps the login
 static void keep_pass() {
   char kept[WEB_PASS_MAX + 1] = {};
-  bool have = KeyStore::read((uint8_t*)kept, WEB_PASS_MAX, WEB_PASS_SLOT);
+  bool have = corium::KeyStore::read((uint8_t*)kept, WEB_PASS_MAX, WEB_PASS_SLOT);
   if (!corium::Prefs::stored("sys")) {
     if (have && corium::Prefs::put("sys", corium::K_WEB_PASS, kept)) {
       // login holds, again next boot
       if (!corium::Prefs::commit(false)) {
-        Log::console(PSTR("System: Web password not saved"));
+        corium::Log::console(PSTR("System: Web password not saved"));
         return;
       }
-      SystemPrefs::pass_restored = true;
-      Log::console(PSTR("System: Web password restored from backup"));
+      corium::SystemPrefs::passRestored = true;
+      corium::Log::console(PSTR("System: Web password restored from backup"));
     }
     return;
   }
   const char* cur = corium::Prefs::getString("sys", corium::K_WEB_PASS);
   if (strcmp(cur, kept) == 0) return;
   if (!cur[0]) {
-    KeyStore::clear(WEB_PASS_SLOT);
+    corium::KeyStore::clear(WEB_PASS_SLOT);
     return;
   }
   char pad[WEB_PASS_MAX];   // = {} copies a ram template
   memset(pad, 0, sizeof(pad));
   memcpy(pad, cur, strnlen(cur, sizeof(pad)));
-  KeyStore::write((const uint8_t*)pad, sizeof(pad), WEB_PASS_SLOT);
+  corium::KeyStore::write((const uint8_t*)pad, sizeof(pad), WEB_PASS_SLOT);
 }
 
-void SystemPrefs::on_prefs_loaded() {
+void corium::SystemPrefs::onPrefsLoaded() {
   keep_pass();
-  DeviceInfo::setFriendlyName(corium::Prefs::getString("sys", K_NAME));
+  corium::DeviceInfo::setFriendlyName(corium::Prefs::getString("sys", K_NAME));
 #ifdef ESP32
   uint32_t mhz = corium::Prefs::getUInt("sys", K_CPU_MHZ);
   if (mhz == 80 || mhz == 160 || mhz == 240) {
     if (setCpuFrequencyMhz(mhz)) {
-      Log::console(PSTR("System: CPU set to %u MHz"), (unsigned)mhz);
+      corium::Log::console(PSTR("System: CPU set to %u MHz"), (unsigned)mhz);
     }
   }
 #endif
-  WebPortal::applyAuthFromPrefs();
+  corium::WebPortal::applyAuthFromPrefs();
 }
 
 // held prefs writes: flushed when due and at shutdown
-static void prefs_wake(uint32_t at) { corium::Registry::due_at(&sysprefs, at); }
-static void prefs_lifecycle(Lifecycle::Event e) {
-  if (e == Lifecycle::SHUTDOWN) corium::Prefs::flush();
+static void prefs_wake(uint32_t at) { corium::Registry::dueAt(&sysprefs, at); }
+static void prefs_lifecycle(corium::Lifecycle::Event e) {
+  if (e == corium::Lifecycle::SHUTDOWN) corium::Prefs::flush();
 }
 
-void SystemPrefs::begin() {
+void corium::SystemPrefs::begin() {
   // no handler free, every write goes now
-  if (Lifecycle::on(prefs_lifecycle)) corium::Prefs::hold_by(prefs_wake);
+  if (corium::Lifecycle::on(prefs_lifecycle)) corium::Prefs::holdBy(prefs_wake);
 }
 
-void SystemPrefs::loop(unsigned long) { corium::Prefs::flush(); }
+void corium::SystemPrefs::loop(unsigned long) { corium::Prefs::flush(); }
 
 // Network prefs, hidden, edited on /wifi
 
 class NetPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("net"); }
-  bool core_module() override { return true; }
-  uint8_t display_order() override { return 0; }
-  const corium::PrefGroup* prefs_group() override;
+  bool coreModule() override { return true; }
+  uint8_t displayOrder() override { return 0; }
+  const corium::PrefGroup* prefsGroup() override;
 };
 
 static NetPrefs netprefs;
@@ -147,4 +147,4 @@ static const corium::PrefGroup NET_PREF_GROUP PROGMEM = {
   sizeof(NET_PREF_ITEMS) / sizeof(NET_PREF_ITEMS[0]),
 };
 
-const corium::PrefGroup* NetPrefs::prefs_group() { return &NET_PREF_GROUP; }
+const corium::PrefGroup* NetPrefs::prefsGroup() { return &NET_PREF_GROUP; }

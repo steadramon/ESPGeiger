@@ -110,7 +110,7 @@ int count_in(const char* p, bool digits, size_t to, const char* v) {
 }  // namespace
 
 // no backtracking: x? takes x when it's there
-int pref_pattern(const char* p, const char* value) {
+int prefPattern(const char* p, const char* value) {
   if (!p) return 1;
   const char* v = value;
   size_t i = 0;

@@ -18,8 +18,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef PULSE_ENGINE_H
-#define PULSE_ENGINE_H
+#ifndef CORIUM_PULSE_ENGINE_H
+#define CORIUM_PULSE_ENGINE_H
 
 #include <Arduino.h>
 #include "Corium/System/FastMillis.h"
@@ -29,6 +29,7 @@
 #include <EGLed.h>
 #endif
 
+namespace corium {
 class PulseEngine {
 public:
   enum Mode : uint8_t { MODE_PULSE = 0, MODE_BURST = 1, MODE_FADE = 2 };
@@ -52,24 +53,24 @@ public:
   // wide so a bad pref clamps, not wraps
   int8_t   pin        = -1;
   uint8_t  mode       = MODE_PULSE;
-  uint32_t pulse_us   = 5000;
-  uint32_t freq_hz    = 3500;
+  uint32_t pulseUs    = 5000;
+  uint32_t freqHz     = 3500;
   uint32_t cycles     = 1;
   uint8_t  polarity   = 0;
-  uint8_t  fade_shift = FADE_SHIFT_DEFAULT;
-  uint32_t max_hz     = 20;
-  uint16_t active_level = FULL;  // FULL = digitalWrite
+  uint8_t  fadeShift = FADE_SHIFT_DEFAULT;
+  uint32_t maxHz      = 20;
+  uint16_t activeLevel = FULL;  // FULL = digitalWrite
 
   // Caches + runtime state
-  uint32_t pulse_us_eff   = 5000;
-  uint32_t burst_freq_eff = 3500;
-  uint16_t token_interval_ms = 50;
+  uint32_t pulseUsEff     = 5000;
+  uint32_t burstFreqEff = 3500;
+  uint16_t tokenIntervalMs = 50;
   uint8_t  tokens          = 0;
-  uint32_t last_token_ms   = 0;
-  uint8_t  phases_remaining = 0;
-  bool     pin_high        = false;
-  uint32_t next_us         = 0;
-  uint32_t period_us       = 0;
+  uint32_t lastTokenMs     = 0;
+  uint8_t  phasesRemaining = 0;
+  bool     pinHigh         = false;
+  uint32_t nextUs          = 0;
+  uint32_t periodUs        = 0;
   uint16_t brightness      = 0;
 
   void begin() {
@@ -80,7 +81,7 @@ public:
     digitalWrite(pin, polarity ? HIGH : LOW);
 #endif
     writeIdle();
-    pin_high = false;
+    pinHigh = false;
     commitConfig();
   }
 
@@ -94,61 +95,63 @@ public:
   static constexpr uint8_t  FADE_SHIFT_MIN = 2;
   static constexpr uint8_t  FADE_SHIFT_MAX = 4;
   static constexpr uint8_t  FADE_SHIFT_DEFAULT = 3;
+  static constexpr uint32_t FADE_STEP_US = 5000;
+  static constexpr uint16_t FADE_FLOOR = 8;
 
   // callers pass prefs straight in
   void commitConfig() {
     if (mode > MODE_FADE) mode = MODE_PULSE;
-    pulse_us = clamp(pulse_us, PULSE_US_MIN, PULSE_US_MAX);
-    freq_hz  = clamp(freq_hz, FREQ_MIN, FREQ_MAX);
+    pulseUs = clamp(pulseUs, PULSE_US_MIN, PULSE_US_MAX);
+    freqHz   = clamp(freqHz, FREQ_MIN, FREQ_MAX);
     cycles   = clamp<uint32_t>(cycles, 1, CYCLES_MAX);
     if (polarity > 1) polarity = 0;
-    if (max_hz > MAX_HZ_MAX) max_hz = MAX_HZ_MAX;
-    if (fade_shift < FADE_SHIFT_MIN || fade_shift > FADE_SHIFT_MAX) fade_shift = FADE_SHIFT_DEFAULT;
-    pulse_us_eff   = pulse_us;   // caller may scale after
-    burst_freq_eff = freq_hz;
-    token_interval_ms = max_hz ? (uint16_t)(1000 / max_hz) : 0;
+    if (maxHz > MAX_HZ_MAX) maxHz = MAX_HZ_MAX;
+    if (fadeShift < FADE_SHIFT_MIN || fadeShift > FADE_SHIFT_MAX) fadeShift = FADE_SHIFT_DEFAULT;
+    pulseUsEff     = pulseUs;   // caller may scale after
+    burstFreqEff = freqHz;
+    tokenIntervalMs = maxHz ? (uint16_t)(1000 / maxHz) : 0;
   }
 
   // loop side, rate cap only, never the pin
   inline bool take(uint32_t now_ms) {
     if (pin < 0) return false;
-    if (!token_interval_ms) return true;
+    if (!tokenIntervalMs) return true;
     // full, no credit banked
-    return take_token(now_ms, last_token_ms, tokens, token_interval_ms, TOKENS_MAX, true);
+    return takeToken(now_ms, lastTokenMs, tokens, tokenIntervalMs, TOKENS_MAX, true);
   }
 
   // poll side from here
   inline void start() {
-    if (phases_remaining == 0) fire();
+    if (phasesRemaining == 0) fire();
   }
 
   inline bool busy() const {
-    return phases_remaining != 0 || (mode == MODE_FADE && brightness > 0);
+    return phasesRemaining != 0 || (mode == MODE_FADE && brightness > 0);
   }
 
   // one compare when idle
   inline void loop(uint32_t now_us) {
     if (mode == MODE_FADE && brightness > 0) {
-      if (!reached(now_us, next_us)) return;
-      uint16_t delta = brightness >> fade_shift;
+      if (!reached(now_us, nextUs)) return;
+      uint16_t delta = brightness >> fadeShift;
       if (delta == 0) delta = 1;
       brightness -= delta;
-      if (brightness < 8) {
+      if (brightness < FADE_FLOOR) {
         brightness = 0;
         analogWrite(pin, polarity ? FULL : 0);
         return;
       }
-      analogWrite(pin, polarity ? (FULL - brightness) : brightness);
-      next_us = now_us + 5000;
+      analogWrite(pin, level(brightness));
+      nextUs = now_us + FADE_STEP_US;
       return;
     }
-    if (phases_remaining == 0) return;
-    if (!reached(now_us, next_us)) return;
-    pin_high = !pin_high;
-    if (pin_high) writeActive(); else writeIdle();
-    phases_remaining--;
-    if (phases_remaining == 0) return;
-    next_us = now_us + period_us;
+    if (phasesRemaining == 0) return;
+    if (!reached(now_us, nextUs)) return;
+    pinHigh = !pinHigh;
+    if (pinHigh) writeActive(); else writeIdle();
+    phasesRemaining--;
+    if (phasesRemaining == 0) return;
+    nextUs = now_us + periodUs;
   }
 
 private:
@@ -160,17 +163,18 @@ private:
   inline void writeIdle()   { digitalWrite(pin, polarity ? HIGH : LOW); }
   inline void writeActive() { digitalWrite(pin, polarity ? LOW  : HIGH); }
 #endif
+  inline int level(uint16_t v) const { return polarity ? FULL - v : v; }
 
   inline void fire() {
     if (mode == MODE_FADE) {
-      brightness = active_level;
-      analogWrite(pin, polarity ? (FULL - active_level) : active_level);
-      phases_remaining = 0;
-      next_us = (uint32_t)micros() + 5000;
+      brightness = activeLevel;
+      analogWrite(pin, level(activeLevel));
+      phasesRemaining = 0;
+      nextUs = (uint32_t)micros() + FADE_STEP_US;
       return;
     }
     if (mode == MODE_BURST) {
-      uint32_t duration_us = (uint32_t)cycles * 1000000UL / burst_freq_eff;
+      uint32_t duration_us = (uint32_t)cycles * 1000000UL / burstFreqEff;
       uint32_t duration_ms = (duration_us + 999u) / 1000u;
       if (duration_ms == 0) duration_ms = 1;
 #ifdef ESP32
@@ -181,20 +185,21 @@ private:
         s_tone_chan = true;
       }
 #endif
-      tone(pin, burst_freq_eff, duration_ms);
-      phases_remaining = 0;
+      tone(pin, burstFreqEff, duration_ms);
+      phasesRemaining = 0;
       return;
     }
-    if (active_level >= FULL) {
+    if (activeLevel >= FULL) {
       writeActive();
     } else {
-      analogWrite(pin, polarity ? (FULL - active_level) : active_level);
+      analogWrite(pin, level(activeLevel));
     }
-    pin_high = true;
-    phases_remaining = 1;
-    period_us = pulse_us_eff;
-    next_us = (uint32_t)micros() + pulse_us_eff;
+    pinHigh = true;
+    phasesRemaining = 1;
+    periodUs = pulseUsEff;
+    nextUs = (uint32_t)micros() + pulseUsEff;
   }
 };
+}  // namespace corium
 
 #endif

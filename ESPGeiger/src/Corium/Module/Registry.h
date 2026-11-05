@@ -54,18 +54,18 @@ class Registry {
     static bool add(Module* m);
     static bool add(Module* m, uint8_t feature);
     static uint16_t features() { return _features; }   // build feature bits, the app numbers them
-    static void pre_wifi_all();
-    static void begin_all();
-    static void loop_all(unsigned long now);
-    static inline bool due(uint32_t now) { return _posted.any() || reached(now, _next_loop_due); }
+    static void preWifiAll();
+    static void beginAll();
+    static void loopAll(unsigned long now);
+    static inline bool due(uint32_t now) { return _posted.any() || corium::reached(now, _next_loop_due); }
 #ifdef LOOP_PROFILE
-    static void log_loop_profile_and_reset();
+    static void logLoopProfileAndReset();
 #endif
-    static void log_activity_and_reset();
+    static void logActivityAndReset();
     // a module schedules itself, from the loop task
     static bool every(Module* m, uint32_t ms);   // 0 = off
-    static bool due_at(Module* m, uint32_t t);   // once, keeps every()
-    static bool due_in(Module* m, uint32_t ms) { return due_at(m, fast_millis() + ms); }
+    static bool dueAt(Module* m, uint32_t t);   // once, keeps every()
+    static bool dueIn(Module* m, uint32_t ms) { return dueAt(m, corium::fastMillis() + ms); }
     // due now, from any task, not an isr
     static void post(Module* m);
 
@@ -73,20 +73,21 @@ class Registry {
     static bool on(uint8_t topic, Module* m);
     static void emit(uint8_t topic);
     static uint16_t events(Module* m);   // bit per topic since the last call
+    static bool heard(uint8_t topic);    // anyone on() it
 
-    static void set_safe_mode(bool on);   // before pre_wifi_all
+    static void setSafeMode(bool on);   // before preWifiAll
     static bool quarantined(Module* m);
 
     // Corium's own loop work, between modules
     static constexpr uint8_t IN_TCP = 0xFD, IN_PORTAL = 0xFE, IN_NONE = 0xFF;
 #ifdef CORIUM_CRASH_MARK
-    // before pre_wifi_all (it clears), a crash reset keeps where the loop was
-    static void crash_boot(bool crashed);
-    static const char* crashed_in();   // module name, "tcp", "portal", nullptr = not known
+    // before preWifiAll (it clears), a crash reset keeps where the loop was
+    static void crashBoot(bool crashed);
+    static const char* crashedIn();   // module name, "tcp", "portal", nullptr = not known
     static inline void in(uint8_t what) { _firing = what; }
 #else
-    static inline void crash_boot(bool) {}
-    static inline const char* crashed_in() { return nullptr; }
+    static inline void crashBoot(bool) {}
+    static inline const char* crashedIn() { return nullptr; }
     static inline void in(uint8_t) {}
 #endif
 
@@ -131,7 +132,7 @@ class Registry {
 #ifdef CORIUM_CRASH_MARK
     static uint8_t _crashed_in;   // _firing at a crash reset
 #endif
-    static IsrLock::Bits _posted;   // bit per slot
+    static corium::IsrLock::Bits _posted;   // bit per slot
     static void rebuild_due();
     static void sort_by_priority();
     static Slot* slot_of(Module* m);

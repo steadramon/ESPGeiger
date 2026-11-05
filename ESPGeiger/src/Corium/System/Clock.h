@@ -17,40 +17,41 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CLOCK_H
-#define CLOCK_H
+#ifndef CORIUM_CLOCK_H
+#define CORIUM_CLOCK_H
 
 #include <Arduino.h>
 #include <time.h>
 #include "Corium/System/FastMillis.h"
 
+namespace corium {
 namespace Clock {
   extern bool synced;
-  extern time_t boot_epoch;
+  extern time_t bootEpoch;
 
   // Cached, localtime is slow
-  extern int16_t tz_offset_min;
-  void refresh_tz_offset_min();
+  extern int16_t tzOffsetMin;
+  void refreshTzOffsetMin();
 
   // who set it, a later sync from a lower one is ignored by its setter
   enum Source : uint8_t { NONE, KEPT, RTC, WEB, NTP };
   extern Source source;
   // loop task only, a sync callback posts its module
-  bool on_sync(Source s = NTP);   // true when s wasn't the last to set it
+  bool onSync(Source s = NTP);   // true when s wasn't the last to set it
   bool set(time_t epoch, Source s);   // NTP sets it itself
   void kept();   // boot: esp32 keeps time() over a restart
-  void anchor();   // boot: a clock set before Reactor::begin, boot_epoch from its uptime 0
+  void anchor();   // boot: a clock set before Reactor::begin, bootEpoch from its uptime 0
 
-  // a sync off by more than this tells on_step
+  // a sync off by more than this tells onStep
   static const int32_t STEP_S = 60;
   using StepFn = void (*)(int32_t delta_s);
-  void on_step(StepFn fn);
+  void onStep(StepFn fn);
 
   // a server says the clock is off, resync at most every 5 min
   extern bool resync;
-  extern unsigned long resync_ms;
-  inline void request_resync() { resync = true; }
-  bool resync_due(unsigned long now);
+  extern unsigned long resyncMs;
+  inline void requestResync() { resync = true; }
+  bool resyncDue(unsigned long now);
 
   // 32 bits, wraps in 2106: differences and reached() only,
   // dates and phases from time()
@@ -72,10 +73,11 @@ namespace Clock {
 
   inline bool localTm(struct tm* out) {
     if (!synced) return false;
-    time_t local = time(NULL) + (time_t)tz_offset_min * 60;
+    time_t local = time(NULL) + (time_t)tzOffsetMin * 60;
     gmtime_r(&local, out);
     return true;
   }
 }
+}  // namespace corium
 
 #endif

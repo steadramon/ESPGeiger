@@ -33,7 +33,7 @@ static constexpr uint8_t  ISR_STORM_COOLDOWN_S = 5;
 static uint8_t s_isr_cooldown = 0;
 static bool    s_isr_stopped = false;   // ota, the cooldown leaves it off
 
-IsrLock::Mux timerMux;
+corium::IsrLock::Mux timerMux;
 
 void GeigerInput::begin() {
 
@@ -44,27 +44,27 @@ void GeigerInput::set_rx_pin(int pin) {
 #ifdef ESP8266
   if (pin == 16) why = PSTR("no interrupt on GPIO16");
 #endif
-  if (!why) why = PinSafety::claim_input(pin, PSTR("RX"));
+  if (!why) why = corium::PinSafety::claimInput(pin, PSTR("RX"));
   if (why) {
-    Log::console(PSTR("Counter: rx_pin=%d unsafe (%s) - disabled"), pin, why);
+    corium::Log::console(PSTR("Counter: rx_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
   _rx_pin = pin;
 }
 
 void GeigerInput::set_tx_pin(int pin) {
-  if (const char* why = PinSafety::claim_output(pin, PSTR("TX"))) {
-    Log::console(PSTR("Counter: tx_pin=%d unsafe (%s) - disabled"), pin, why);
+  if (const char* why = corium::PinSafety::claimOutput(pin, PSTR("TX"))) {
+    corium::Log::console(PSTR("Counter: tx_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
   _tx_pin = pin;
 }
 
 int GeigerInput::collect() {
-  IsrLock::enter(timerMux);
+  corium::IsrLock::enter(timerMux);
   uint32_t n = s_event_counter;
   s_event_counter = 0;
-  IsrLock::leave(timerMux);
+  corium::IsrLock::leave(timerMux);
   return (int)n;
 }
 
@@ -83,9 +83,9 @@ static inline __attribute__((always_inline)) void count_at(unsigned long cycles)
   if (cycles - _last_blip < _debounce) {
     return;
   }
-  IsrLock::enter_isr(timerMux);
+  corium::IsrLock::enterIsr(timerMux);
   s_event_counter++;
-  IsrLock::leave_isr(timerMux);
+  corium::IsrLock::leaveIsr(timerMux);
   _last_blip = cycles;
   Counter::on_pulse((uint32_t)cycles);
 }
@@ -101,43 +101,43 @@ void GeigerInput::countAt(unsigned long us) {
 // floating pin, EMI
 void GeigerInput::checkIsrStorm() {
   if (_rx_pin < 0) return;
-  IsrLock::enter(timerMux);
+  corium::IsrLock::enter(timerMux);
   uint32_t n = s_isr_entries;
   s_isr_entries = 0;
-  IsrLock::leave(timerMux);
+  corium::IsrLock::leave(timerMux);
 
   if (s_isr_cooldown > 0) {
     if (--s_isr_cooldown == 0 && !s_isr_stopped) {
-      IsrLock::pin_on_fall(_rx_pin, countInterrupt);
-      Log::console(PSTR("GeigerPulse: re-armed after storm cooldown"));
+      corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);
+      corium::Log::console(PSTR("GeigerPulse: re-armed after storm cooldown"));
     }
     return;
   }
 
   if (n > ISR_STORM_THRESHOLD) {
-    IsrLock::pin_off(_rx_pin);
+    corium::IsrLock::pinOff(_rx_pin);
     s_isr_cooldown = ISR_STORM_COOLDOWN_S;
-    Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
+    corium::Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
                  (unsigned)n, (unsigned)ISR_STORM_COOLDOWN_S);
   }
 }
 
 void GeigerInput::stopIsr() {
   s_isr_stopped = true;
-  IsrLock::pin_off(_rx_pin);
+  corium::IsrLock::pinOff(_rx_pin);
 }
 
 // a storm cooldown re-arms it when done
 void GeigerInput::restartIsr() {
   s_isr_stopped = false;
-  if (s_isr_cooldown == 0) IsrLock::pin_on_fall(_rx_pin, countInterrupt);
+  if (s_isr_cooldown == 0) corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);
 }
 
 void GeigerInput::setCounter(int val, bool update) {
-  if (update) IsrLock::enter(timerMux);
+  if (update) corium::IsrLock::enter(timerMux);
   s_event_counter = (uint32_t)val;
   if (update) {
-    IsrLock::leave(timerMux);
+    corium::IsrLock::leave(timerMux);
     _last_blip = micros();
   }
 }

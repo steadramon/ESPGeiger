@@ -57,7 +57,7 @@ unsigned utf8_next(const unsigned char* s, bool* bad) {
   return need + 1;
 }
 
-struct Rep { char c; unsigned char modes; char seq[7]; };
+struct Rep { char c; unsigned char modes; char seq[EGESC_GROW_MAX + 1]; };
 
 const Rep REPS[] PROGMEM = {
   {'"',  1 << JSON | 1 << PROM, "\\\""},
@@ -82,7 +82,7 @@ unsigned table_rep(Mode m, unsigned char c, char* rep) {
   for (const Rep& r : REPS) {
     if (pgm_read_byte(&r.c) != c || !(pgm_read_byte(&r.modes) & (1 << m))) continue;
     unsigned n = 0;
-    while (n < 6 && (rep[n] = (char)pgm_read_byte(&r.seq[n]))) n++;
+    while (n < EGESC_GROW_MAX && (rep[n] = (char)pgm_read_byte(&r.seq[n]))) n++;
     return n;
   }
   return 0;
@@ -115,7 +115,7 @@ size_t escape(Mode m, char* out, size_t cap, const char* in) {
   bool full = (cap == 0);
   const unsigned char* s = (const unsigned char*)in;
   while (s && at(s)) {
-    char rep[6];
+    char rep[EGESC_GROW_MAX];
     unsigned n, adv;
     unsigned char c = at(s);
     if (c < 0x80 || m == URL) {

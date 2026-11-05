@@ -37,13 +37,13 @@ class GMC : public corium::HttpPoster {
   public:
     GMC();
     const char* name() override { return PSTR("gmc"); }
-    void on_prefs_loaded() override;
-    const corium::PrefGroup* prefs_group() override;
-    corium::LegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    void onPrefsLoaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* log_tag() override { return PSTR("GMC"); }
+    const char* logTag() override { return PSTR("GMC"); }
 };
 
 extern GMC gmc;

@@ -17,8 +17,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef UTIL_WIFIINFO_H
-#define UTIL_WIFIINFO_H
+#ifndef CORIUM_WIFIINFO_H
+#define CORIUM_WIFIINFO_H
 
 #include <IPAddress.h>
 #ifdef ESP8266
@@ -27,6 +27,7 @@
 #include <WiFi.h>
 #endif
 
+namespace corium {
 // live, Wifi::local_ip and Wifi::ssid are the cached ones
 namespace Wifi {
   inline IPAddress localIP()    { return WiFi.localIP(); }
@@ -47,5 +48,6 @@ namespace Wifi {
   inline void scanDelete()     { WiFi.scanDelete(); }
   inline int scanNetworks(bool async, bool hidden) { return WiFi.scanNetworks(async, hidden); }
 }
+}  // namespace corium
 
 #endif

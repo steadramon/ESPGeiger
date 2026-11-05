@@ -28,14 +28,14 @@
 #define CORIUM_PREFS_MAX_GROUP_SZ 1024
 #endif
 
-// commit_soon's write waits this, the ones meanwhile join it
+// commitSoon's write waits this, the ones meanwhile join it
 #ifndef CORIUM_PREFS_HOLD_MS
 #define CORIUM_PREFS_HOLD_MS 5000
 #endif
 
 // string maxes, rows and buffers both use these. buffers +1
 #ifndef CORIUM_PREFS_MAX_VALUE
-#define CORIUM_PREFS_MAX_VALUE 255   // longest value a row may carry, max_len is 8 bit
+#define CORIUM_PREFS_MAX_VALUE 255   // longest value a row may carry, maxLen is 8 bit
 #endif
 #ifndef CORIUM_PREF_ID_MAX
 #define CORIUM_PREF_ID_MAX     17    // longest pref or group id
@@ -66,7 +66,7 @@ enum PrefType : uint8_t {
   P_STRING,
   P_LABEL,
   P_HEADER,
-  P_ENUM,     // options in pattern, value = min_i + index
+  P_ENUM,     // options in pattern, value = minI + index
 };
 
 static constexpr uint16_t P_SENSITIVE = 1 << 0;
@@ -82,12 +82,12 @@ static constexpr uint16_t P_PIN       = 1 << 9;   // input GPIO, put checks PinS
 static constexpr uint16_t P_PIN_OUT   = 1 << 10;  // output GPIO, input-only refused too
 static constexpr uint16_t P_PIN_BTN   = P_PIN | P_PIN_OUT;  // button: input, no strap note
 static constexpr uint16_t P_LOCAL     = 1 << 11;  // this device's, no export, an import keeps it
-static constexpr uint16_t P_KEEP      = 1 << 12;  // no reset_all clears it, only its own reset
+static constexpr uint16_t P_KEEP      = 1 << 12;  // no resetAll clears it, only its own reset
 static constexpr uint16_t P_PIN_IRQ   = 1 << 13;  // pin needs an interrupt, else a warning
 static constexpr uint16_t P_PIN_PWM   = 1 << 14;  // pin needs PWM
 static constexpr uint16_t P_PIN_OD    = 1 << 15;  // pin needs open-drain
 
-// no PSTR() in static init. default_val stays SRAM
+// no PSTR() in static init. defaultVal stays SRAM
 #define CORIUM_PSTR(name, val) static const char name[] PROGMEM = val
 
 // tables must be PROGMEM
@@ -95,11 +95,11 @@ struct Pref {
   const char* id;         // PROGMEM, max CORIUM_PREF_ID_MAX
   const char* label;      // SRAM or PROGMEM
   const char* help;       // SRAM or PROGMEM
-  const char* default_val;// SRAM
+  const char* defaultVal;// SRAM
   const char* pattern;    // regex, SRAM or PROGMEM
-  int32_t     min_i;
-  int32_t     max_i;      // == min_i: no range
-  uint8_t     max_len;    // 0 = unlimited
+  int32_t     minI;
+  int32_t     maxI;      // == minI: no range
+  uint8_t     maxLen;    // 0 = unlimited
   PrefType  type;
   uint16_t    flags;
 };
@@ -116,8 +116,8 @@ public:
   const char* id_P(size_t j) const {
     return (const char*)pgm_read_ptr(&_rows[j].id);
   }
-  const char* default_val(size_t j) const {
-    return (const char*)pgm_read_ptr(&_rows[j].default_val);
+  const char* defaultVal(size_t j) const {
+    return (const char*)pgm_read_ptr(&_rows[j].defaultVal);
   }
 private:
   const Pref* _rows;
@@ -156,13 +156,13 @@ enum PrefCategory : uint8_t {
 
 // groups must be PROGMEM
 struct PrefGroup {
-  const char* module_id;
+  const char* moduleId;
   char        label[20];  // flash, _P or %s only
   Flash<uint16_t> version;  // bump on schema change
   PrefRows    prefs;
   Flash<size_t>   count;
   Flash<uint8_t>  category;
-  const char*   enable_key;   // on/off badge, nullptr = none
+  const char*   enableKey;   // on/off badge, nullptr = none
 
   // no copy, byte reads of flash fault
   PrefGroup(const PrefGroup&) = delete;
@@ -188,8 +188,8 @@ extern const char P_HOST[];
 // === LEGACY IMPORT (remove in v1.1.0) ===
 // PROGMEM, {old, new} rows ending {}
 struct LegacyAlias {
-  char legacy_key[20];
-  char new_key[CORIUM_PREF_ID_MAX + 1];
+  char legacyKey[20];
+  char newKey[CORIUM_PREF_ID_MAX + 1];
 };
 
 class LegacyRows {
@@ -227,37 +227,37 @@ public:
   static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);
   // for a write per request: callbacks now, one write CORIUM_PREFS_HOLD_MS on; true = will be written
-  static bool commit_soon(uint32_t now);
+  static bool commitSoon(uint32_t now);
   // the last commit left out a group holding a stored value that didn't load
   // and wrote the rest: why, else 0
   static size_t frozen(char* out, size_t n);
   // any group an export carries holding one now, the same text; the export would leave it out
-  static size_t any_frozen(char* out, size_t n);
+  static size_t anyFrozen(char* out, size_t n);
   static void flush();   // the waiting write, at wake or shutdown
-  // wake(at) has flush() called then; none = commit_soon writes now
-  static void hold_by(void (*wake)(uint32_t at));
+  // wake(at) has flush() called then; none = commitSoon writes now
+  static void holdBy(void (*wake)(uint32_t at));
   // back to the row default, a key by put() rules; no key = the whole group, all or none
   static bool reset(const char* module, const char* key = nullptr);
-  static bool remove_group(const char* module);
+  static bool removeGroup(const char* module);
   // keep_network keeps net + web_pass
-  static void reset_all(bool keep_network = false);
+  static void resetAll(bool keep_network = false);
   // groups a failed commit left unsaved back to what's on flash, no callbacks
   static void revert();
-  static void request_restart();  // from on_prefs_saved
-  static bool restart_pending();  // the last commit needs one
+  static void needsRestart();  // from onPrefsSaved
+  static bool restartPending();  // the last commit needs one
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
   static bool stored(const char* module);
-  // enable_key unset, "0" or "-1" (no pin) = off, no key = on
-  static bool group_enabled(const PrefGroup* g);
+  // enableKey unset, "0" or "-1" (no pin) = off, no key = on
+  static bool groupEnabled(const PrefGroup* g);
 
-  static size_t              group_count();
-  static const PrefGroup*  group_at(size_t idx);
-  static class Module*     module_at(size_t idx);
-  static bool                find_pref(const char* module, const char* key, Pref* out);
+  static size_t              groupCount();
+  static const PrefGroup*  groupAt(size_t idx);
+  static class Module*     moduleAt(size_t idx);
+  static bool                findPref(const char* module, const char* key, Pref* out);
   // old group of a moved key, in adopt order; nullptr past the end
-  static const char*         moved_from(size_t i);
+  static const char*         movedFrom(size_t i);
   // id SRAM or nullptr for the group; false = always shown
-  static bool                show_rule(const PrefShow* rows, const char* id, PrefShow* out);
+  static bool                showRule(const PrefShow* rows, const char* id, PrefShow* out);
 };
 
 }  // namespace corium
