@@ -40,7 +40,7 @@ struct Snapshot {
   uint32_t depc;
   uint32_t sp;
   uint32_t wordCount;
-  uint32_t stack[STACK_WORDS];   // 8266 raw stack, esp32 backtrace PCs
+  uint32_t stack[STACK_WORDS];   // 8266 stack code words (rest 0), esp32 backtrace PCs
 };
 
 void begin();   // early in setup()

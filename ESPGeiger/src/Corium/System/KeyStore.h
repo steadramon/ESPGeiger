@@ -22,15 +22,16 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "Corium/Util/Attr.h"
 
 namespace corium {
-// esp32 nvs, esp8266 the eeprom sector
+// Kept in nvs on esp32, in the eeprom sector on the 8266
 namespace KeyStore {
   static constexpr size_t MAX = 32;
   static constexpr uint8_t SLOTS = 2;   // 0 the app's, 1 web_pass
   bool read(uint8_t* out, size_t len, uint8_t slot = 0);   // false = none, or not len bytes
-  bool write(const uint8_t* in, size_t len, uint8_t slot = 0);
-  void clear(uint8_t slot = 0);
+  CORIUM_NODISCARD bool write(const uint8_t* in, size_t len, uint8_t slot = 0);
+  CORIUM_NODISCARD bool clear(uint8_t slot = 0);   // true = none there now
 }
 }  // namespace corium
 

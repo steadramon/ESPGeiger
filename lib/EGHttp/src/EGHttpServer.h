@@ -37,6 +37,10 @@
   // per client: request line, headers and a body that isn't streamed
   #define EGHTTP_REQ_BUF 1536
 #endif
+#ifndef EGHTTP_HEAP_MIN
+  // free heap under this, a new request gets 503
+  #define EGHTTP_HEAP_MIN 6144
+#endif
 #ifndef EGHTTP_CHUNK_ACC
   // esp32 only, esp8266 uses the Slot::buf tail
   #define EGHTTP_CHUNK_ACC 12288
@@ -161,7 +165,8 @@ class EGHttpServer {
     enum BodyEvent : uint8_t {
       BODY_BEGIN = 1, BODY_DATA = 2, BODY_END = 3, BODY_ABORT = 4
     };
-    using BodyHandler = void(*)(EGHttpRequest& req, BodyEvent ev,
+    // false refuses: rest not read, the route replies, no END/ABORT
+    using BodyHandler = bool(*)(EGHttpRequest& req, BodyEvent ev,
                                 const char* chunk, size_t len, void* user);
 
     // before begin(), first match wins; handlers run in tick()
@@ -281,7 +286,9 @@ class EGHttpServer {
     void releaseStream();
     void identifyRoute(Slot* s);
     void drainStream(Slot* s);
-    void deliverBodyEvent(Slot* s, BodyEvent ev, const char* chunk, size_t len);
+    bool deliverBodyEvent(Slot* s, BodyEvent ev, const char* chunk, size_t len);
+    void refuseStream(Slot* s);
+    void streamTaken(Slot* s, size_t n);
     inline void reclaimSlot(Slot* s);
     inline void respond(Slot* s);
     void finish(Slot* s);

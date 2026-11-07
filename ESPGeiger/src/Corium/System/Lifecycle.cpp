@@ -29,7 +29,11 @@ static Handler s_handlers[MAX_HANDLERS];
 static uint8_t s_count = 0;
 
 bool on(Handler h) {
-  if (!h || s_count >= MAX_HANDLERS) return false;
+  if (!h) return false;
+  for (uint8_t i = 0; i < s_count; i++) {
+    if (s_handlers[i] == h) return true;   // a second begin()
+  }
+  if (s_count >= MAX_HANDLERS) return false;
   s_handlers[s_count++] = h;
   return true;
 }

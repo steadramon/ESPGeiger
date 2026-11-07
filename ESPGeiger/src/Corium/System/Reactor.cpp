@@ -39,14 +39,19 @@ static bool s_day_marked = false;
 void corium::Reactor::clock(void (*ms)()) {
   // else first tick sees all of uptime
   s_ms_last_us = micros();
-  corium::_fast_ms_counter = s_ms_last_us / 1000;
+  corium::_fast_ms_counter = CORIUM_MS_START + s_ms_last_us / 1000;
   EGClock::set(fastMillis);
   s_ms_ticker.attach_ms(1, ms);
 }
 
 void corium::Reactor::second() {
+#ifdef ESP32
+  // a stall runs it once, as the 8266 ticker
+  uint32_t now = corium::fastMillis();
+  if (corium::reached(now, s_next_sec)) s_next_sec = now + 1000;
+#endif
   corium::TickProfile::beginTick();
-  if (!s_day_marked && corium::fastMillis() > corium::BootGuard::DAY_MS) {
+  if (!s_day_marked && corium::fastMillis() - CORIUM_MS_START > corium::BootGuard::DAY_MS) {
     corium::BootGuard::markDay();
     s_day_marked = true;
   }

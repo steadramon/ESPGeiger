@@ -48,6 +48,7 @@ void corium::HwKey::pad(const uint8_t hash[HASH], uint8_t out[SIG]) {
 #include <esp32c3/rom/efuse.h>
 #include <esp32c3/rom/hmac.h>
 #include <esp_crypto_lock.h>
+#include <esp_timer.h>
 #include <nvs.h>
 
 // written at provisioning, KEY5 holds the eFuse half
@@ -55,6 +56,7 @@ static const char NVS_NS[] = "hwkey";
 static const char NVS_KEY[] = "ds";
 static const ets_efuse_block_t KEY_BLOCK = ETS_EFUSE_BLOCK_KEY5;
 static const uint32_t RSA_2048 = 2048 / 32 - 1;   // rsa_length
+static const int64_t DS_WAIT_US = 500000;   // a stuck DS fails, not the wdt
 static_assert(sizeof(ets_ds_data_t) == corium::HwKey::BLOB, "blob size");
 
 namespace {
@@ -74,8 +76,10 @@ bool rom_sign(Work* w) {
   bool ok = ets_hmac_calculate_downstream(KEY_BLOCK, ETS_EFUSE_KEY_PURPOSE_HMAC_DOWN_DIGITAL_SIGNATURE) == 0 &&
             ets_ds_start_sign(w->msg, &w->data) == ETS_DS_OK;
   if (ok) {
-    while (ets_ds_is_busy()) {}
-    ok = ets_ds_finish_sign(w->sig, &w->data) == ETS_DS_OK;
+    int64_t until = esp_timer_get_time() + DS_WAIT_US;
+    while (ets_ds_is_busy() && esp_timer_get_time() < until) {}
+    // finish blocks while busy
+    ok = !ets_ds_is_busy() && ets_ds_finish_sign(w->sig, &w->data) == ETS_DS_OK;
   }
   ets_hmac_invalidate_downstream(ETS_EFUSE_KEY_PURPOSE_HMAC_DOWN_DIGITAL_SIGNATURE);
   periph_module_disable(PERIPH_DS_MODULE);

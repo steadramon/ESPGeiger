@@ -87,19 +87,19 @@ class WebPortal {
     static void hWebCmd(EGHttpRequest&, EGHttpResponse&, void*);
     static void hEraseWifi(EGHttpRequest&, EGHttpResponse&, void*);
     static void hParam(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hParamBody(EGHttpRequest&, EGHttpServer::BodyEvent,
+    static bool hParamBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                            const char*, size_t, void*);
     static void hUpdateForm(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateDone(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateProgress(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hUpdateBody(EGHttpRequest&, EGHttpServer::BodyEvent,
+    static bool hUpdateBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                             const char*, size_t, void*);
     static void hWifi(EGHttpRequest&, EGHttpResponse&, void*);
     static void hWifiScan(EGHttpRequest&, EGHttpResponse&, void*);
     static void hWifiSave(EGHttpRequest&, EGHttpResponse&, void*);
     static void hExport(EGHttpRequest&, EGHttpResponse&, void*);
     static void hImport(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hImportBody(EGHttpRequest&, EGHttpServer::BodyEvent,
+    static bool hImportBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                             const char*, size_t, void*);
 };
 }  // namespace corium

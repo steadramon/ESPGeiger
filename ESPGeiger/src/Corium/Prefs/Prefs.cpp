@@ -90,6 +90,8 @@ static corium::PrefsStorage s_storage;
 static bool           s_waiting = false;   // commitSoon's write
 static GroupShadow*   s_frozen = nullptr;  // the last commit left it out
 static void         (*s_wake)(uint32_t) = nullptr;
+static uint8_t        s_fails = 0;   // flushes failed in a row
+static constexpr uint8_t FAILS_MAX = 7;   // hold doubles, 64x tops
 
 static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
   return (gs.heap_mask >> j) & 1u;
@@ -259,13 +261,13 @@ void not_loaded(GroupShadow& gs, size_t j) {
   gs.partial = gs.partial ? MANY : (uint8_t)(j + 1);
 }
 
-// own = the group's file, a refused one stays in it; a moved one isn't carried
-void read_record(GroupShadow* gs, const char* key, uint8_t klen,
+// own = the group's file, a refused one stays in it; a moved one isn't carried. true = a row took it
+bool read_record(GroupShadow* gs, const char* key, uint8_t klen,
                  const char* value, uint16_t vlen, bool own) {
   // the rest of the file didn't read, never written over; an old moved file isn't
   if (!klen) {
     if (own) gs->partial = MANY;
-    return;
+    return false;
   }
   for (size_t j = 0; j < gs->group->count.get(); j++) {
     const char* pid = gs->group->prefs.id_P(j);
@@ -274,12 +276,14 @@ void read_record(GroupShadow* gs, const char* key, uint8_t klen,
       if (!stored_ok(p, value, vlen)) {
         corium::Log::console(PSTR("prefs: %s.%s refused, default kept"), gs->group->moduleId, pid);
         if (own) not_loaded(*gs, j);
-        return;
+        return false;
       }
-      if (!shadow_set(*gs, j, value, vlen)) not_loaded(*gs, j);
-      return;
+      if (shadow_set(*gs, j, value, vlen)) return true;
+      not_loaded(*gs, j);
+      return false;
     }
   }
+  return false;
 }
 
 void load_record_cb(void* ctx, const char* key, uint8_t klen,
@@ -341,9 +345,12 @@ const char* moved_to(const char* from) {
   return nullptr;
 }
 
+struct Adopt { GroupShadow* gs; bool any; };   // any = a row landed
+
 void moved_record_cb(void* ctx, const char* key, uint8_t klen,
                      const char* value, uint16_t vlen) {
-  read_record((GroupShadow*)ctx, key, klen, value, vlen, false);
+  Adopt* a = (Adopt*)ctx;
+  if (read_record(a->gs, key, klen, value, vlen, false)) a->any = true;
 }
 
 void adopt_moved() {
@@ -352,13 +359,12 @@ void adopt_moved() {
     GroupShadow* gs = find_group(to);
     if (!gs || s_storage.has(to)) continue;
     // last listed read first, so the first overwrites
-    bool any = false;
+    Adopt a = {gs, false};
     for (size_t i = MOVED_N; i-- > 0;) {
       if (strcmp(to_at(i), to) != 0 || !s_storage.has(from_at(i))) continue;
-      s_storage.readGroup(from_at(i), moved_record_cb, gs);
-      any = true;
+      s_storage.readGroup(from_at(i), moved_record_cb, &a);
     }
-    if (any && write_group(*gs)) corium::Log::console(PSTR("Prefs: keys moved to %s"), to);
+    if (a.any && write_group(*gs)) corium::Log::console(PSTR("Prefs: keys moved to %s"), to);
   }
 }
 
@@ -605,7 +611,14 @@ static bool pin_refused(const corium::Pref& p, const char* module, const char* k
   return true;
 }
 
-bool corium::Prefs::put(const char* module, const char* key, const char* value) {
+// a stored shorter one still loads
+static bool too_short(const corium::Pref& p, int nlen) {
+  if (p.type != corium::P_STRING || nlen == 0 || nlen >= p.minI) return false;
+  s_refused = PSTR("too short");
+  return true;
+}
+
+static bool put_value(const char* module, const char* key, const char* value, bool kept) {
   s_refused = nullptr;
   s_warned = nullptr;
   int idx;
@@ -622,6 +635,7 @@ bool corium::Prefs::put(const char* module, const char* key, const char* value) 
   if (strcmp(out, gs->values[idx]) != 0) {
     // changes only, a stored pin still loads
     if (pin_refused(p, module, key, out)) return false;
+    if (!kept && too_short(p, nlen)) return false;
     // write_group would refuse it, and every commit after
     if (group_bytes(*gs) - strlen(gs->values[idx]) + nlen > CORIUM_PREFS_MAX_GROUP_SZ) {
       s_refused = PSTR("group full");
@@ -637,6 +651,14 @@ bool corium::Prefs::put(const char* module, const char* key, const char* value) 
     if (p.flags & corium::P_REBOOT) s_reboot_put = true;
   }
   return true;
+}
+
+bool corium::Prefs::put(const char* module, const char* key, const char* value) {
+  return put_value(module, key, value, false);
+}
+
+bool corium::Prefs::putKept(const char* module, const char* key, const char* value) {
+  return put_value(module, key, value, true);
 }
 
 const char* corium::Prefs::refused() { return s_refused; }
@@ -775,8 +797,12 @@ bool corium::Prefs::commit(bool fire_callbacks) {
   s_frozen = nullptr;
   bool busy = false;
   bool all_ok = land_pass(stage_pass(busy), fire_callbacks, busy) && wipe_pass(fire_callbacks, busy);
-  if (all_ok) s_reboot_put = false;
-  else s_frozen = nullptr;   // a failed write says more
+  if (all_ok) {
+    s_reboot_put = false;
+    s_fails = 0;
+  } else {
+    s_frozen = nullptr;   // a failed write says more
+  }
   return all_ok && !s_frozen;
 }
 
@@ -804,14 +830,15 @@ bool corium::Prefs::commitSoon(uint32_t now_ms) {
   return !s_frozen;
 }
 
-// a failed write waits again, a hold later; shutdown's flush tries it too
-void corium::Prefs::flush() {
+// a failed write waits again, longer each time, said once; shutdown's flush tries it too
+void corium::Prefs::flush(uint32_t now_ms) {
   if (!s_waiting) return;
   s_waiting = false;
   if (commit() || !any_dirty()) return;   // a frozen one is dropped, not retried
-  corium::Log::console(PSTR("Prefs: not saved"));
+  if (!s_fails) corium::Log::console(PSTR("Prefs: not saved"));
+  if (s_fails < FAILS_MAX) s_fails++;
   s_waiting = true;
-  if (s_wake) s_wake(millis() + CORIUM_PREFS_HOLD_MS);
+  if (s_wake) s_wake(now_ms + ((uint32_t)CORIUM_PREFS_HOLD_MS << (s_fails - 1)));
 }
 
 void corium::Prefs::holdBy(void (*wake)(uint32_t at)) { s_wake = wake; }
@@ -904,6 +931,12 @@ bool corium::Prefs::restartPending() { return s_restart_pending; }
 bool corium::Prefs::stored(const char* module) {
   GroupShadow* gs = find_group(module);
   return gs && gs->stored;
+}
+
+bool corium::Prefs::loaded(const char* module, const char* key) {
+  int idx;
+  GroupShadow* gs = locate(module, key, idx);
+  return !gs || (gs->partial != MANY && gs->partial != idx + 1);
 }
 
 size_t corium::Prefs::groupCount() {

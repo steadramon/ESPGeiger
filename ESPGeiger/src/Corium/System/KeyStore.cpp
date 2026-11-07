@@ -55,13 +55,15 @@ bool corium::KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
   return ok;
 }
 
-void corium::KeyStore::clear(uint8_t slot) {
-  if (slot >= SLOTS) return;
+// none there is cleared too
+bool corium::KeyStore::clear(uint8_t slot) {
+  if (slot >= SLOTS) return false;
   nvs_handle_t h;
-  if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
-  nvs_erase_key(h, NVS_KEYS[slot]);
-  nvs_commit(h);
+  if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return false;
+  esp_err_t e = nvs_erase_key(h, NVS_KEYS[slot]);
+  bool ok = (e == ESP_OK || e == ESP_ERR_NVS_NOT_FOUND) && nvs_commit(h) == ESP_OK;
   nvs_close(h);
+  return ok;
 }
 
 #elif defined(ESP8266)
@@ -131,11 +133,13 @@ bool corium::KeyStore::write(const uint8_t* in, size_t len, uint8_t slot) {
   return store(r);
 }
 
-// a zero slot fails its crc
-void corium::KeyStore::clear(uint8_t slot) {
+// a zero slot fails its crc; erased then not written is gone too
+bool corium::KeyStore::clear(uint8_t slot) {
   Rec r;
-  if (slot >= SLOTS || !load(r)) return;
+  if (slot >= SLOTS || !load(r)) return false;
   memset(&r.slot[slot], 0, sizeof(Slot));
-  store(r);
+  if (store(r)) return true;
+  if (!load(r)) return false;
+  return r.slot[slot].crc != slot_crc(r.slot[slot]);
 }
 #endif

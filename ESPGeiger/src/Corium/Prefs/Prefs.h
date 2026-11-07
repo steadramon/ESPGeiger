@@ -97,7 +97,7 @@ struct Pref {
   const char* help;       // SRAM or PROGMEM
   const char* defaultVal;// SRAM
   const char* pattern;    // regex, SRAM or PROGMEM
-  int32_t     minI;
+  int32_t     minI;      // strings: shortest a new one may be, "" still ok
   int32_t     maxI;      // == minI: no range
   uint8_t     maxLen;    // 0 = unlimited
   PrefType  type;
@@ -221,7 +221,9 @@ public:
 
   // put, commit: loop task only. a put frees that key's getString
   static bool put(const char* module, const char* key, const char* value);
-  // why the last put refused a pin (PROGMEM), else nullptr
+  // a value saved before, the shortest rule doesn't apply
+  static bool putKept(const char* module, const char* key, const char* value);
+  // why the last put refused it (PROGMEM), else nullptr
   static const char* refused();
   // a pin the last put saved anyway, why it may not work (PROGMEM)
   static const char* warned();
@@ -234,7 +236,7 @@ public:
   static size_t frozen(char* out, size_t cap);
   // any group an export carries holding one now, the same text; the export would leave it out
   static size_t anyFrozen(char* out, size_t cap);
-  static void flush();   // the waiting write, at wake or shutdown
+  static void flush(uint32_t now_ms);   // the waiting write, at wake or shutdown; now as commitSoon's
   // wake(at) has flush() called then; none = commitSoon writes now
   static void holdBy(void (*wake)(uint32_t at));
   // back to the row default, a key by put() rules; no key = the whole group, all or none
@@ -248,6 +250,8 @@ public:
   static bool restartPending();  // the last commit needs one
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
   static bool stored(const char* module);
+  // false = its stored value didn't load, the default stands; two in a group = every row
+  static bool loaded(const char* module, const char* key);
   // enableKey unset, "0" or "-1" (no pin) = off, no key = on
   static bool groupEnabled(const PrefGroup* g);
 

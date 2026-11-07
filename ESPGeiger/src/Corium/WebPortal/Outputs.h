@@ -21,9 +21,13 @@
 #define CORIUM_OUTPUTS_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 namespace corium {
 namespace Outputs {
+
+// module i's "a":{..}, 0 = none or won't fit
+size_t module(uint8_t i, char* buf, size_t cap, unsigned long now);
 
 // "a":{..},"b":{..} without the braces; one that won't fit is dropped
 size_t json(char* buf, size_t cap, unsigned long now);

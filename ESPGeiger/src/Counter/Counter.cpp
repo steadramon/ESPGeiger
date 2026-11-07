@@ -68,10 +68,31 @@ volatile uint32_t  s_prev_pulse_us = 0;
 volatile bool      s_hist_from_isr = false;
 corium::IsrLock::Mux s_pulse_mux;
 
+// zeros first, then the ISR sees it under the lock
 void ensure_pulse_ring() {
   if (s_pulse_ring) return;
-  s_pulse_ring = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
-  if (!s_pulse_ring) corium::Log::console(PSTR("Counter: pulse ring alloc failed"));
+  volatile uint32_t* r = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
+  if (!r) {
+    corium::Log::console(PSTR("Counter: pulse ring alloc failed"));
+    return;
+  }
+  corium::IsrLock::enter(s_pulse_mux);
+  s_pulse_head = 0;
+  s_pulse_count = 0;
+  s_pulse_ring = r;
+  corium::IsrLock::leave(s_pulse_mux);
+}
+
+// as a boot in bucket mode; the ISR takes it under the lock
+void drop_pulse_ring() {
+  if (!s_pulse_ring) return;
+  corium::IsrLock::enter(s_pulse_mux);
+  volatile uint32_t* r = s_pulse_ring;
+  s_pulse_ring = nullptr;
+  s_pulse_head = 0;
+  s_pulse_count = 0;
+  corium::IsrLock::leave(s_pulse_mux);
+  free((void*)r);
 }
 
 // past the 32 bit wrap
@@ -91,6 +112,7 @@ void Counter::set_cpm_mode(uint8_t m) {
   _cpm_mode = (m > CPM_FAST) ? CPM_BUCKET : m;
   _cps_in.reset();
   if (_cpm_mode != CPM_BUCKET) ensure_pulse_ring();
+  else drop_pulse_ring();
 }
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
@@ -150,6 +172,14 @@ static uint16_t drop_old(uint16_t head, uint32_t now_us) {
   while (count && now_us - s_pulse_ring[(head - count) & PULSE_RING_MASK] > PULSE_AGE_MAX_US) count--;
   s_pulse_count = count;
   return count;
+}
+
+// the ISR still fills it when no mode reads it each second
+static void prune_ring() {
+  if (!s_pulse_ring) return;
+  corium::IsrLock::enter(s_pulse_mux);
+  drop_old(s_pulse_head, micros());
+  corium::IsrLock::leave(s_pulse_mux);
 }
 
 bool Counter::snapshot_ring(RingSnapshot& s) const {
@@ -458,8 +488,11 @@ float Counter::get_cps() {
     case CPM_FAST_START: {
       uint32_t up = corium::DeviceInfo::uptime();
       uint32_t w  = _cpm_window;
-      // live till w, then blend into the bucket by 2w; warm, no ring read
-      if (up >= 2u * w) return _cached_cps;
+      // live till w, then blend into the bucket by 2w; warm, the ring only pruned
+      if (up >= 2u * w) {
+        prune_ring();
+        return _cached_cps;
+      }
       float live = get_cps_live();
       if (live <= 0.0f) return _cached_cps;
       if (up <  w)      return apply_dead_time(live);
@@ -642,8 +675,16 @@ static void counter_lifecycle(corium::Lifecycle::Event e) {
 
 static void counter_clock_stepped(int32_t delta_s) { gcounter.clock_stepped(delta_s); }
 
+// past MAX the build fails, this logs one that slips by
 bool ClickFns::add(ClickFn f) {
-  if (!f || n >= MAX) return false;
+  if (!f) return false;
+  for (uint8_t i = 0; i < n; i++) {
+    if (fn[i] == f) return true;   // a second begin()
+  }
+  if (n >= MAX) {
+    corium::Log::console(PSTR("Counter: click hook dropped, %u max"), (unsigned)MAX);
+    return false;
+  }
   fn[n++] = f;
   return true;
 }

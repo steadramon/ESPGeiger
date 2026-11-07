@@ -91,7 +91,7 @@ class WebAPI : public corium::Sender {
     void postMeasurement(bool census = false);
     void loadConfig();
     bool readKeyFile();
-    void saveConfig();
+    bool saveConfig();
 
     uint32_t _station = 0;
     bool _have_key = false;   // a key can start with 0

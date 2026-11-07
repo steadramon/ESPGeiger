@@ -23,6 +23,7 @@
 #include <ESP8266WiFi.h>
 #else
 #include <WiFi.h>
+#include <esp_wifi.h>
 #endif
 
 namespace corium {
@@ -30,6 +31,9 @@ namespace Wifi {
   inline bool connectedRaw() { return WiFi.status() == WL_CONNECTED; }   // live, not Wifi::connected
   // saved to flash; 8266 off again or the next disconnect() wipes them
   inline void beginSaved(const char* ssid, const char* pass) {
+#ifdef ESP32
+    esp_wifi_set_storage(WIFI_STORAGE_FLASH);   // persistent() is read once, at the first mode()
+#endif
     WiFi.persistent(true);
     WiFi.begin(ssid, pass);
 #ifdef ESP8266
@@ -53,12 +57,14 @@ namespace Wifi {
 #endif
   }
 
-  inline void staMode() { WiFi.mode(WIFI_STA); }
-  inline void setHostname(const char* name) {
+  // the 8266 takes the name after the mode, the esp32 only at a mode change
+  inline void staMode(const char* name) {
 #ifdef ESP8266
+    WiFi.mode(WIFI_STA);
     WiFi.hostname(name);
 #else
     WiFi.setHostname(name);
+    WiFi.mode(WIFI_STA);
 #endif
   }
   inline String macStr() { return WiFi.macAddress(); }

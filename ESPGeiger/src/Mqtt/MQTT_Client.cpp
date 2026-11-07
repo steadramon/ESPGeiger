@@ -48,6 +48,16 @@ static const char LWT_OFFLINE[] PROGMEM = "Offline";
 
 
 static EGMqtt s_mq;
+static uint32_t s_dropped = 0;   // s_mq.dropped() last seen
+static bool s_drop_told = false;
+
+// once a connection
+static void note_dropped() {
+  if (s_mq.dropped() == s_dropped) return;
+  s_dropped = s_mq.dropped();
+  if (!s_drop_told) corium::Log::console(PSTR("MQTT: Message over %u bytes dropped"), (unsigned)EGMqtt::IN_CAP);
+  s_drop_told = true;
+}
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
 CORIUM_REGISTER_FEATURE(mqtt, FEAT_MQTT)
@@ -134,9 +144,10 @@ MQTT_Client::MQTT_Client()
 {
 }
 
+// the one way out; a new broker or topic gets Offline on the old one
 void MQTT_Client::disconnect()
 {
-  s_mq.disconnect();
+  s_mq.disconnect(moved());
   _enabled = true;
   _tries = 0;
   _tried_ms = 0;
@@ -151,6 +162,7 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   _reanchor = true;
   _tries = 0;
   _auth_fails = 0;
+  s_drop_told = false;
   _pending |= PEND_LWT;
 #ifdef MQTTAUTODISCOVER
   this->setupHassCB();
@@ -294,6 +306,7 @@ void MQTT_Client::loop(unsigned long now)
 {
   timers(now);   // before the client's callbacks
   s_mq.loop();   // its callbacks run from here
+  note_dropped();
   if (corium::Registry::events(this)) _pending |= PEND_ALARMS;
   if (!_enabled) return;
   if (_pending & PEND_CONNECT) { _pending &= ~PEND_CONNECT; reconnect(); return; }
@@ -579,6 +592,16 @@ static int mqtt_port()
 {
   int port = (int)corium::Prefs::getUInt("mqtt", EG_K_PORT);
   return port > 0 ? port : 1883;
+}
+
+// the prefs against what the connection was set up with
+bool MQTT_Client::moved()
+{
+  if (s_mq.port() != mqtt_port() ||
+      strcmp(corium::Prefs::getString("mqtt", corium::K_SERVER), s_mq.host()) != 0) return true;
+  char lwt[MQTT_TOPIC_LEN];
+  buildTopic(lwt, sizeof(lwt), T_TELE, PSTR("lwt"));
+  return strcmp(lwt, s_mq.willTopic()) != 0;
 }
 
 // no password without a user in 3.1.1

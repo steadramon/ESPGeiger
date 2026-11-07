@@ -22,12 +22,12 @@
 
 #include <stdint.h>
 
-// holds the uploaders, from /pause or the console
+// Holds off the uploaders, set from /pause or the console
 namespace ExternalPause {
-  void     start(uint32_t timeout_ms);   // 0 = resume
+  void     start(uint32_t secs);         // 0 = resume
   bool     start_s(const char* secs);    // false if not a number, max 24 h
   bool     active();   // clears and logs on expiry
-  uint32_t remaining_ms();
+  uint32_t remaining_s();
 }
 
 #endif

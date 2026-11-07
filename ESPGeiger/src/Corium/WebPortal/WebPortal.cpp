@@ -1081,7 +1081,8 @@ void corium::WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*
   }
 
   bool stale = !s_scan.fresh(now, KEEP_MS);
-  bool rescan = force || status <= 0 || stale;
+  bool retry = status <= 0 && !s_scan.fresh(now, FORCE_MS);   // none or failed, 10 s apart
+  bool rescan = force || retry || stale;
   if (rescan) {
     if (status != WIFI_SCAN_RUNNING) corium::Wifi::scanDelete();
     corium::Wifi::scanNetworks(true /*async*/, false /*show_hidden*/);
@@ -1195,6 +1196,7 @@ void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*
   put_net(static_on, ip, gw, sn, dns);
   if (has_ssid) corium::Wifi::joinMode();
   if (!corium::Prefs::commit()) {
+    if (has_ssid) corium::Wifi::dropHeld();
     not_saved_page(res, F("Saving WiFi"));
     return;
   }
@@ -1271,14 +1273,11 @@ var iv=setInterval(function(){
 if(--n>0)sh('Reloading in '+n+'s...');
 else{clearInterval(iv);sh('Checking...');pn()}
 },1000);
-}else{
-B.disabled=false;
-S.innerHTML='<b style="color:#c0392b"></b>';S.firstChild.textContent='Upload failed: '+x.responseText;
-}
+}else fl(x.responseText);
 };
+function fl(t){B.disabled=false;S.innerHTML='<b style="color:#c0392b"></b>';S.firstChild.textContent=t?'Upload failed: '+t:'Upload error (connection lost?)'}
 x.onerror=function(){
-B.disabled=false;
-S.innerHTML='<b style="color:#c0392b">Upload error (connection lost?)</b>';
+fetch('/update/progress',{cache:'no-store'}).then(r=>r.json()).then(j=>fl(j.err)).catch(()=>fl());
 };
 x.send(f);
 });
@@ -1308,7 +1307,13 @@ static struct {
   uint8_t head[8];         // held until entry addr checked
   uint8_t head_n = 0;
   bool    started = false; // OTA_FAILED owed
+  PGM_P   why = nullptr;   // for the page
 } s_ota;
+
+static void ota_fail(PGM_P why) {
+  s_ota.write_error = true;
+  if (!s_ota.why) s_ota.why = why;
+}
 
 static void ota_begin(size_t expected) {
   s_ota.expected    = expected;
@@ -1316,12 +1321,13 @@ static void ota_begin(size_t expected) {
   s_ota.write_error = false;
   s_ota.head_n      = 0;
   s_ota.started     = false;
+  s_ota.why         = nullptr;
   // no length given: free space less one 4 KB sector, sector aligned
   uint32_t room = (corium::DeviceInfo::freeSketch() - 0x1000) & 0xFFFFF000;
   if (!Update.begin(s_ota.expected ? s_ota.expected : room)) {
     corium::Log::console(PSTR("OTA: Update.begin failed (size=%u, free=%u)"),
                  (unsigned)s_ota.expected, (unsigned)room);
-    s_ota.write_error = true;
+    ota_fail(PSTR("no room"));
   } else {
     corium::Log::console(PSTR("OTA: starting (%u bytes)"), (unsigned)s_ota.expected);
     s_ota.started = true;
@@ -1362,7 +1368,7 @@ static bool ota_write(const uint8_t* p, size_t len) {
   if (wrote != len) {
     corium::Log::console(PSTR("OTA: short write %u/%u err=%u"),
                  (unsigned)wrote, (unsigned)len, Update.getError());
-    s_ota.write_error = true;
+    ota_fail(PSTR("write failed"));
     return false;
   }
   s_ota.delivered += wrote;
@@ -1370,7 +1376,7 @@ static bool ota_write(const uint8_t* p, size_t len) {
 }
 
 static void ota_data(const char* chunk, size_t len) {
-  if (s_ota.write_error || !Update.isRunning()) return;  // already failed, drain
+  if (s_ota.write_error || !Update.isRunning()) return;   // already failed
   // check entry_addr first, wrong chip bricks it
   if (s_ota.head_n < sizeof(s_ota.head)) {
     size_t n = sizeof(s_ota.head) - s_ota.head_n;
@@ -1386,7 +1392,7 @@ static void ota_data(const char* chunk, size_t len) {
       corium::Log::console(PSTR("OTA: REFUSING wrong-platform bin (entry=0x%08x)"),
                    (unsigned)entry);
       Update.end(false);
-      s_ota.write_error = true;
+      ota_fail(PSTR("wrong platform"));
       return;
     }
     if (!ota_write(h, sizeof(s_ota.head))) return;
@@ -1399,14 +1405,14 @@ static void ota_end() {
   if (s_ota.write_error || !Update.isRunning()) {
     corium::Log::console(PSTR("OTA: aborting on prior error"));
     if (Update.isRunning()) Update.end(false);  // discard
-    s_ota.write_error = true;
+    ota_fail(PSTR("not running"));
     return;
   }
   if (s_ota.delivered != s_ota.expected) {
     corium::Log::console(PSTR("OTA: byte-count mismatch %u != %u"),
                  (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
     Update.end(false);
-    s_ota.write_error = true;
+    ota_fail(PSTR("size mismatch"));
     return;
   }
   if (Update.end()) {
@@ -1416,36 +1422,36 @@ static void ota_end() {
     corium::WebPortal::requestRestart();
   } else {
     corium::Log::console(PSTR("OTA: end failed err=%u"), Update.getError());
-    s_ota.write_error = true;
+    ota_fail(PSTR("image check failed"));
   }
 }
 
 static void ota_abort() {
   if (Update.isRunning()) Update.end(false);
-  s_ota.write_error = true;
+  ota_fail(PSTR("connection lost"));
   corium::Log::console(PSTR("OTA: aborted at %u/%u bytes"),
                (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
 }
 
-void corium::WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+bool corium::WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                              const char* chunk, size_t len, void*) {
   // main loop, flash write ok
   switch (ev) {
     case EGHttpServer::BODY_BEGIN: ota_begin(req.bodyLen()); break;
     case EGHttpServer::BODY_DATA:  ota_data(chunk, len);     break;
-    case EGHttpServer::BODY_END:
-      ota_end();
-      if (s_ota.write_error) ota_failed();
-      break;
-    case EGHttpServer::BODY_ABORT: ota_abort(); ota_failed(); break;
+    case EGHttpServer::BODY_END:   ota_end();                break;
+    case EGHttpServer::BODY_ABORT: ota_abort();              break;
   }
+  if (s_ota.write_error) ota_failed();
+  return !s_ota.write_error;
 }
 
 void corium::WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (s_ota.write_error || Update.hasError()) {
     char msg[96];
     snprintf_P(msg, sizeof(msg),
-               PSTR("Update failed: %u/%u bytes, err=%u"),
+               PSTR("Update failed: %s, %u/%u bytes, err=%u"),
+               s_ota.why ? s_ota.why : PSTR("error"),
                (unsigned)s_ota.delivered, (unsigned)s_ota.expected,
                (unsigned)Update.getError());
     res.send(500, FPSTR(HTTP_CT_PLAIN), msg);
@@ -1455,11 +1461,12 @@ void corium::WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, voi
   corium::WebPortal::requestRestart();
 }
 
-// device-side count, 0 when idle
+// device-side count, 0 when idle; err after a refused upload
 void corium::WebPortal::hUpdateProgress(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  char buf[48];
-  snprintf_P(buf, sizeof(buf), PSTR("{\"done\":%u,\"total\":%u}"),
-             (unsigned)s_ota.delivered, (unsigned)(s_ota.started ? s_ota.expected : 0));
+  char buf[80];
+  snprintf_P(buf, sizeof(buf), PSTR("{\"done\":%u,\"total\":%u,\"err\":\"%s\"}"),
+             (unsigned)s_ota.delivered, (unsigned)(s_ota.started ? s_ota.expected : 0),
+             s_ota.why ? s_ota.why : PSTR(""));
   res.addHeader(FPSTR(HTTP_H_CACHE), F("no-store"));
   res.send(200, FPSTR(HTTP_CT_JSON), buf);
 }
@@ -1524,7 +1531,8 @@ static void body_begin(BodyBuf& b, size_t cap, PGM_P path) {
   }
 }
 
-static void body_event(BodyBuf& b, EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+// no buffer, the rest isn't read
+static bool body_event(BodyBuf& b, EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                        const char* chunk, size_t len, PGM_P path) {
   switch (ev) {
     case EGHttpServer::BODY_BEGIN: body_begin(b, req.bodyLen(), path); break;
@@ -1532,14 +1540,15 @@ static void body_event(BodyBuf& b, EGHttpRequest& req, EGHttpServer::BodyEvent e
     case EGHttpServer::BODY_END:   body_end(b);                        break;
     case EGHttpServer::BODY_ABORT: body_free(b);                       break;
   }
+  return b.buf != nullptr;
 }
 
 // freed in hParam
 static BodyBuf s_param_body;
 
-void corium::WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+bool corium::WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                             const char* chunk, size_t len, void*) {
-  body_event(s_param_body, req, ev, chunk, len, P_PARAM);
+  return body_event(s_param_body, req, ev, chunk, len, P_PARAM);
 }
 
 // first field a save refused, and first saved with a warning, shown above the form
@@ -1817,11 +1826,11 @@ static void param_emit_value(ParamCtx& c, const corium::Pref& p, bool slider) {
 }
 
 static void param_emit_limits(ParamCtx& c, const corium::Pref& p) {
-  if (p.type == corium::P_STRING && p.maxLen > 0) {
-    param_appendf(c, PSTR(" maxlength='%u'"), (unsigned)p.maxLen);
-  }
-  if (p.type == corium::P_STRING && p.pattern && c.pat[0]) {
-    param_appendf(c, PSTR(" pattern='%s'"), c.pat);
+  if (p.type == corium::P_STRING) {
+    if (p.maxLen > 0) param_appendf(c, PSTR(" maxlength='%u'"), (unsigned)p.maxLen);
+    if (p.minI > 0) param_appendf(c, PSTR(" minlength='%ld'"), (long)p.minI);
+    if (p.pattern && c.pat[0]) param_appendf(c, PSTR(" pattern='%s'"), c.pat);
+    return;
   }
   if ((p.type == corium::P_INT || p.type == corium::P_UINT || p.type == corium::P_FLOAT) && p.minI != p.maxI) {
     param_appendf(c, PSTR(" min=%ld max=%ld"), (long)p.minI, (long)p.maxI);
@@ -2259,9 +2268,9 @@ void corium::WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) 
 static BodyBuf s_import_body;
 
 // too big or no memory, hImport says no body
-void corium::WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
+bool corium::WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                              const char* chunk, size_t len, void*) {
-  body_event(s_import_body, req, ev, chunk, len, nullptr);
+  return body_event(s_import_body, req, ev, chunk, len, nullptr);
 }
 
 static void import_fail(EGHttpResponse& res, const char* msg) {
@@ -2361,14 +2370,22 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
   corium::WebPortal::requestRestart();
 }
 
+// a chunk per module, a big one can't push the rest out
 void corium::WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  char buf[512];
-  size_t pos = 0;
-  buf[pos++] = '{';
-  pos += corium::Outputs::json(buf + pos, sizeof(buf) - pos - 2, corium::fastMillis());
-  buf[pos++] = '}';
+  unsigned long now = corium::fastMillis();
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
-  res.sendChunk(buf, pos);
+  res.sendChunk(F("{"));
+  char buf[256];
+  bool first = true;
+  for (uint8_t i = 0; i < corium::Registry::count(); i++) {
+    buf[0] = ',';
+    size_t n = corium::Outputs::module(i, buf + 1, sizeof(buf) - 1, now);
+    if (!n) continue;
+    if (first) res.sendChunk(buf + 1, n);
+    else       res.sendChunk(buf, n + 1);
+    first = false;
+  }
+  res.sendChunk(F("}"));
   res.endChunked();
 }
 

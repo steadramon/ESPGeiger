@@ -53,7 +53,7 @@ set sys.web_pass
 
 (That is, the `set` command with an empty value.) The web UI stops prompting on the next request. The console also says `Reboot to apply`: that is for [espota](/install/ota#via-espotapy-arduinoota), which only reads the password at boot.
 
-To set a new password later: `set sys.web_pass MyNewPassword`.
+To set a new password later: `set sys.web_pass MyNewPassword` (8 or more characters).
 
 This works with the setup portal up too: during the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
 

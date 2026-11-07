@@ -478,7 +478,7 @@ void EGHttpServer::takeData(Slot* s, const uint8_t* data, size_t len) {
 
 void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
   // first byte, not accept
-  if (!s->buf) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
+  if (!s->buf && ESP.getFreeHeap() >= EGHTTP_HEAP_MIN) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
   if (!s->buf) {
     sendStatusAndClose(s, S503, 1);
     return;
@@ -591,17 +591,41 @@ uint8_t EGHttpServer::findRoute(const char* path, EGHttpRequest::Method method) 
   return NO_ROUTE;
 }
 
-void EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
+bool EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
                                      const char* chunk, size_t len) {
   const Upload* u = uploadFor(s->routeIdx);
-  if (!u) return;
+  if (!u) return true;
   const Route& r = _routes[u->route];
   EGHttpRequest req;
   req._method  = r.method;
   req._path    = r.path;
   req._body    = nullptr;
   req._bodyLen = s->contentLength;
-  u->handler(req, ev, chunk, len, u->user);
+  return u->handler(req, ev, chunk, len, u->user);
+}
+
+// reply now, the reply closes it
+void EGHttpServer::refuseStream(Slot* s) {
+  s->stream = STREAM_ENDED;
+  s->state = READY;
+  releaseStream();
+}
+
+// n handed over: ack it, keep the rest
+void EGHttpServer::streamTaken(Slot* s, size_t n) {
+  // a second ackLater() loses bytes
+  if (s->client) s->client->ack(n);
+  size_t was = s->bodyAcked;
+  s->bodyAcked += n;
+  // a window moved, more time
+  if (was / STREAM_BUF_SIZE != s->bodyAcked / STREAM_BUF_SIZE) {
+    s->due = EGClock::now() + EGHTTP_REQ_MS;
+  }
+  size_t leftover = (_streamLen > n) ? _streamLen - n : 0;
+  if (leftover > 0) {
+    memmove(_streamBuf, _streamBuf + n, leftover);
+  }
+  _streamLen = leftover;
 }
 
 void EGHttpServer::drainStream(Slot* s) {
@@ -612,7 +636,10 @@ void EGHttpServer::drainStream(Slot* s) {
 
   if (s->stream == STREAM_WAIT) {
     s->stream = STREAM_OPEN;
-    deliverBodyEvent(s, BODY_BEGIN, nullptr, 0);
+    if (!deliverBodyEvent(s, BODY_BEGIN, nullptr, 0)) {
+      refuseStream(s);
+      return;
+    }
   }
   if (s->ack_owed && s->client) {
     s->client->ack(s->ack_owed);
@@ -620,20 +647,11 @@ void EGHttpServer::drainStream(Slot* s) {
   }
 
   if (toDeliver > 0) {
-    deliverBodyEvent(s, BODY_DATA, (const char*)_streamBuf, toDeliver);
-    // a second ackLater() loses bytes
-    if (s->client) s->client->ack(toDeliver);
-    size_t was = s->bodyAcked;
-    s->bodyAcked += toDeliver;
-    // a window moved, more time
-    if (was / STREAM_BUF_SIZE != s->bodyAcked / STREAM_BUF_SIZE) {
-      s->due = EGClock::now() + EGHTTP_REQ_MS;
+    if (!deliverBodyEvent(s, BODY_DATA, (const char*)_streamBuf, toDeliver)) {
+      refuseStream(s);
+      return;
     }
-    size_t leftover = (_streamLen > toDeliver) ? _streamLen - toDeliver : 0;
-    if (leftover > 0) {
-      memmove(_streamBuf, _streamBuf + toDeliver, leftover);
-    }
-    _streamLen = leftover;
+    streamTaken(s, toDeliver);
   }
 
   if (s->bodyAcked >= s->contentLength) {

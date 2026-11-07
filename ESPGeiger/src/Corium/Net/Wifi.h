@@ -61,7 +61,7 @@ namespace Wifi {
   bool portalAhead();   // first setup: none saved, not offline
   void joinMode();   // wifi.mode back to 0, no commit
   bool saveBackupCreds();   // before WiFi.begin()
-  void clearSavedCreds();
+  bool clearSavedCreds();   // false = the sdk kept them, logged
   bool applyStaticConfig();   // before WiFi.begin()
   bool validateStatic(const char* ip, const char* gw, const char* sn,
                       char* err, size_t cap);
@@ -70,6 +70,7 @@ namespace Wifi {
   bool holdCreds(const char* ssid, const char* pass);
   const char* heldSsid();   // "" if none
   bool beginHeld();   // WiFi.begin() then frees, false = none held
+  void dropHeld();   // a save that didn't land
   bool saveNetBackup();   // won't overwrite a pending backup
   bool probeReachability();   // blocks, lwIP timeout ~14s
   bool restoreNetBackup();   // restart after

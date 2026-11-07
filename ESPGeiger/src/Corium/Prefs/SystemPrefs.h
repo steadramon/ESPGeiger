@@ -23,6 +23,7 @@
 #include "Prefs.h"
 
 #define WEB_PASS_MAX 32
+#define WEB_PASS_MIN 8    // a new one, blank still ok
 #define WEB_PASS_SLOT 1   // KeyStore, 0 is the key
 
 namespace corium {
@@ -33,6 +34,7 @@ class SystemPrefs : public Module {
     uint8_t displayOrder() override { return 10; }
     const PrefGroup* prefsGroup() override;
     void onPrefsLoaded() override;
+    void onPrefsSaved() override;
     void begin() override;
     void loop(unsigned long now) override;
     static bool passRestored;   // FS lost, web_pass from the key store

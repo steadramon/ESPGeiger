@@ -136,7 +136,7 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (!corium::m_text(PSTR("hv"), corium::M_OUT_JSON, xtra, sizeof(xtra)))
     corium::m_text(PSTR("usv"), corium::M_OUT_JSON, xtra, sizeof(xtra));
 
-  char out[128];
+  char out[8 * sizeof(cpm) + 32];   // 8 fields and the commas
   snprintf_P(out, sizeof(out),
     PSTR("%s, %s, %s, , %s, , , , %s, %s, %s, %s"),
     cpm, cps, cpm5, cpm15, t, p, h, xtra);
@@ -343,9 +343,9 @@ static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
     return;
   }
   char body[40];
-  uint32_t rem = ExternalPause::remaining_ms();
+  uint32_t rem = ExternalPause::remaining_s();
   snprintf_P(body, sizeof(body),
-             rem ? PSTR("PAUSED %u s") : PSTR("RESUMED"), (unsigned)(rem / 1000U));
+             rem ? PSTR("PAUSED %u s") : PSTR("RESUMED"), (unsigned)rem);
   res.send(200, FPSTR(HTTP_CT_PLAIN), body);
 }
 

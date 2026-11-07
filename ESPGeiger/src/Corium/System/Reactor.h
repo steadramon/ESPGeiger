@@ -76,7 +76,7 @@ namespace Reactor {
     if (now != s_ms) {
       s_ms = now;
 #ifdef ESP32
-      // one a ms, a stall catches up
+      // one a ms, second() skips a stall
       if (reached(now, s_next_sec)) {
         s_next_sec += 1000;
         second();

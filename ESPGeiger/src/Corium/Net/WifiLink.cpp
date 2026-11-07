@@ -24,6 +24,7 @@
 #include <WiFi.h>
 #endif
 #include "Corium/Logger/Logger.h"
+#include "Corium/System/FastMillis.h"
 #include "Corium/System/Fs.h"
 #include "Corium/System/Lifecycle.h"
 
@@ -108,7 +109,7 @@ static void reprobe_saved_network(unsigned long now) {
   if (corium::Wifi::connected) {
     corium::Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
     corium::Lifecycle::requestRestart(now, 500);
-  } else if (now > WIFI_OFFLINE_MAX_MS) {   // ms since boot
+  } else if (now - CORIUM_MS_START > WIFI_OFFLINE_MAX_MS) {   // ms since boot
     corium::Log::console(PSTR("WiFi: Offline %lus, rebooting to retry"), now / 1000);
     corium::Lifecycle::requestRestart(now, 500);
   } else if (s_offline_retry_at == 0) {
@@ -144,6 +145,6 @@ bool corium::Wifi::look(unsigned long now) {
     reprobe_saved_network(now);
   }
 
-  if (!corium::Wifi::backupGraceDone && corium::Wifi::connected && now > WIFI_BACKUP_MS) clear_backups_once_stable();
+  if (!corium::Wifi::backupGraceDone && corium::Wifi::connected && now - CORIUM_MS_START > WIFI_BACKUP_MS) clear_backups_once_stable();
   return corium::Wifi::connected != prev;
 }

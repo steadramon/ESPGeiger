@@ -99,7 +99,7 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
 
   // STA only, AP_STA scan is unreliable
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
+  WiFi.disconnect(false, false);   // keep the creds, one arg wipes them
   delay(100);
   int n = WiFi.scanNetworks(false);
   Serial.printf_P(PSTR("[EGPortal] sync scan: %d networks\n"), n);

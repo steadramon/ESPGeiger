@@ -43,6 +43,13 @@ static constexpr uint32_t DRAM_HI = 0x40000000u;
 static Snapshot* s_recovered = nullptr;   // crash boots only
 static uint32_t  s_fw_fp = 0;
 
+// stack goes off-device, keep code addresses only
+static bool code_word(uint32_t w) {
+  return (w >= 0x40200000u && w < 0x40600000u)    // flash
+      || (w >= 0x40100000u && w < 0x40108000u)    // IRAM
+      || (w >= 0x40000000u && w < 0x40010000u);   // ROM
+}
+
 void begin() {
   s_fw_fp = DeviceInfo::fwFingerprint();
   Snapshot snap{};
@@ -87,7 +94,7 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
     size_t avail = (hi - lo) / 4;
     if (avail > STACK_WORDS) avail = STACK_WORDS;
     const uint32_t* p = (const uint32_t*)lo;
-    for (size_t i = 0; i < avail; i++) snap.stack[i] = p[i];
+    for (size_t i = 0; i < avail; i++) snap.stack[i] = code_word(p[i]) ? p[i] : 0;
     snap.wordCount = avail;
   }
 

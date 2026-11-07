@@ -185,8 +185,7 @@ void corium::DeviceInfo::begin() {
 #endif
 
   // else the MAC can read all FF
-  corium::Wifi::staMode();
-  corium::Wifi::setHostname(s_hostname);
+  corium::Wifi::staMode(s_hostname);
   strlcpy(s_mac, corium::Wifi::macStr().c_str(), sizeof(s_mac));
 }
 
@@ -205,6 +204,10 @@ PGM_P corium::DeviceInfo::buildDate()         { return BUILD_DATE; }
 void corium::DeviceInfo::factoryReset() {
   // keeps the key
   corium::Log::console(PSTR("Factory reset"));
+  // first, a cut after the wipe would restore the old login
+  if (!corium::KeyStore::clear(WEB_PASS_SLOT)) {
+    corium::Log::console(PSTR("Factory reset: web password backup kept"));   // the old login comes back
+  }
   corium::Prefs::resetAll();
   // kept rows back on flash now
   if (!corium::Prefs::commit(false)) corium::Log::console(PSTR("Factory reset: not saved"));
@@ -212,7 +215,6 @@ void corium::DeviceInfo::factoryReset() {
   corium::Fs::remove(F(CORIUM_PREFS_LEGACY_FILE));   // legacy import file
 #endif
   corium::Wifi::clearSavedCreds();
-  corium::KeyStore::clear(WEB_PASS_SLOT);
 }
 
 static const char* s_board = nullptr;

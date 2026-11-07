@@ -376,10 +376,10 @@ void WebAPI::doHandshake() {
     corium::Log::console(PSTR("WebAPI: Generating keys"));
     GRNG::stir();
     if (uECC_make_key(_pub, _priv, uECC_secp192r1()) != 1) return;   // again after the backoff
-    _have_key = true;
     optimistic_yield(100 * 1000);
+    if (!saveConfig()) return;   // no station for a key a reboot loses
+    _have_key = true;
     encode_base64(_pub, sizeof(_pub), (uint8_t *)_pub64);
-    saveConfig();
   }
 
   corium::Log::debug(PSTR("WebAPI: Handshake -> " WEBAPI_URL "/api/1/handshake"));
@@ -695,10 +695,7 @@ void WebAPI::postMeasurement(bool census) {
   size_t len = mp.length();
 
   char sig[WEBAPI_SIG_B64];
-  if (!sign(_priv, buf, len, sig)) {
-    _ping_ms -= PING_MS;  // retry next loop
-    return;
-  }
+  if (!sign(_priv, buf, len, sig)) return;   // next slot
 
   if (request.busy()) return;
   corium::HttpDriver::Sent s = send_signed(SENT_POST, PSTR(WEBAPI_URL "/api/1/post"), buf, len, sig);
@@ -787,29 +784,38 @@ static const char API_BAD_P[] PROGMEM = "/api.bad";
 #define API_KEY_PATH FPSTR(API_KEY_P)
 #define API_BAD_PATH FPSTR(API_BAD_P)
 
-// file only, the key store has it
-static void write_key_file(const uint8_t* priv) {
-  File f = corium::Fs::openW(API_KEY_PATH);
-  if (!f) {
-    corium::Log::console(PSTR("WebAPI: Failed to open api.key"));
-    return;
-  }
-  char key_hex[2 * WEBAPI_PRIV_LEN + 1] = {};
-  hex_str(priv, WEBAPI_PRIV_LEN, key_hex);
-  f.println(key_hex);
-  f.close();
+// file only, the key store has it; read back, close() says nothing
+static bool write_key_file(const uint8_t* priv) {
+  char line[2 * WEBAPI_PRIV_LEN + 2];   // hex, \r\n as println had it
+  hex_str(priv, WEBAPI_PRIV_LEN, line);
+  line[2 * WEBAPI_PRIV_LEN] = '\r';
+  line[2 * WEBAPI_PRIV_LEN + 1] = '\n';
+  if (corium::Fs::writeWhole(API_KEY_PATH, line, sizeof(line))) return true;
+  corium::Log::console(PSTR("WebAPI: Failed to write api.key"));
+  return false;
+}
+
+// the copy outside LittleFS
+static bool keep_key(const uint8_t* priv) {
+  if (corium::KeyStore::write(priv, WEBAPI_PRIV_LEN)) return true;
+  corium::Log::console(PSTR("WebAPI: Key backup not saved"));
+  return false;
 }
 
 // key reset; factory reset keeps the station
 static void forget_key() {
+  // copy first, else a cut brings it back
+  if (!corium::KeyStore::clear()) corium::Log::console(PSTR("WebAPI: Key backup not cleared"));
   corium::Fs::remove(API_KEY_PATH);
-  corium::KeyStore::clear();
 }
 
-void WebAPI::saveConfig() {
+// either copy keeps it over a reboot
+bool WebAPI::saveConfig() {
   corium::Log::console(PSTR("WebAPI: Saving key ..."));
-  corium::KeyStore::write(_priv, sizeof(_priv));
-  write_key_file(_priv);
+  bool kept = keep_key(_priv);
+  if (write_key_file(_priv) || kept) return true;
+  corium::Log::console(PSTR("WebAPI: Key not saved"));
+  return false;
 }
 
 // a cut or bad file would sign as some other station
@@ -837,11 +843,11 @@ void WebAPI::loadConfig() {
   bool have_kept = corium::KeyStore::read(kept, sizeof(kept));
   _have_key = readKeyFile();
   if (_have_key) {
-    if (!have_kept || memcmp(kept, _priv, sizeof(kept)) != 0) corium::KeyStore::write(_priv, sizeof(_priv));
+    if (!have_kept || memcmp(kept, _priv, sizeof(kept)) != 0) (void)keep_key(_priv);
   } else if (have_kept && uECC_compute_public_key(kept, _pub, uECC_secp192r1()) == 1) {
     memcpy(_priv, kept, sizeof(_priv));
     _have_key = true;
-    write_key_file(_priv);
+    (void)write_key_file(_priv);   // the copy still has it
     corium::Log::console(PSTR("WebAPI: Key restored from backup"));
   }
   if (!_have_key) return;

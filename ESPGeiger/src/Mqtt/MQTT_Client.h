@@ -115,6 +115,7 @@ private:
   uint32_t _due_ms = 0;   // timers next run
   static constexpr uint32_t DUE_MAX_MS = (MQTT_MAX_TIME + 1) * 1000UL;   // nextDue's most
   bool clientBusy();
+  bool moved();
   void applyIntervalPref();
   void queueTimedPublishes(unsigned long now_s);
 #ifdef MQTTAUTODISCOVER

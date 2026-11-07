@@ -200,9 +200,12 @@ bool EGMqtt::connect() {
   return true;
 }
 
-void EGMqtt::disconnect() {
+// qos 0, a kept one would go to the next broker
+void EGMqtt::disconnect(bool will) {
   if (_state == DISCONNECTED) return;
-  if (_phase == UP) {
+  bool bye = _phase == UP;
+  if (bye && will && _will) bye = publish(str(F_WILL_TOPIC), str(F_WILL_MSG), 0, _willRetain) != 0;
+  if (bye) {
     size_t cap;
     uint8_t* p = tail(&cap, false);
     size_t n = p ? bare(p, cap, DISCONNECT) : 0;

@@ -21,46 +21,45 @@
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/System/Uptime.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 
 static const int32_t PAUSE_MAX_S = 86400;
 
-static corium::Deadline s_pause;
+static corium::Deadline s_pause;   // uptime s, no wrap
 
-void ExternalPause::start(uint32_t timeout_ms) {
-  if (timeout_ms == 0) {
+static uint32_t up_s() { return (uint32_t)corium::Uptime::seconds(); }
+
+void ExternalPause::start(uint32_t secs) {
+  if (secs == 0) {
     s_pause.clear();
     corium::Log::console(PSTR("External posts: resumed"));
     return;
   }
-  s_pause.set(corium::fastMillis() + timeout_ms);
-  corium::Log::console(PSTR("External posts: paused for %u s"), (unsigned)(timeout_ms / 1000U));
+  s_pause.set(up_s() + secs);
+  corium::Log::console(PSTR("External posts: paused for %u s"), (unsigned)secs);
 }
 
 // junk mustn't end a running pause
 bool ExternalPause::start_s(const char* secs) {
   int32_t n;
   if (!parseI32(secs, &n)) return false;
-  start((uint32_t)clamp<int32_t>(n, 0, PAUSE_MAX_S) * 1000U);
+  start((uint32_t)clamp<int32_t>(n, 0, PAUSE_MAX_S));
   return true;
 }
 
 bool ExternalPause::active() {
   if (!s_pause.armed()) return false;
-  if (corium::reachedMax(corium::fastMillis(), s_pause.at, PAUSE_MAX_S * 1000U)) {
-    s_pause.clear();
-    corium::Log::console(PSTR("External posts: resumed (timeout)"));
-    return false;
-  }
-  return true;
+  if (!s_pause.due(up_s())) return true;
+  s_pause.clear();
+  corium::Log::console(PSTR("External posts: resumed (timeout)"));
+  return false;
 }
 
 // a query logs the end too
-uint32_t ExternalPause::remaining_ms() {
-  if (!active()) return 0;
-  int32_t d = (int32_t)(s_pause.at - corium::fastMillis());
-  return d > 0 ? (uint32_t)d : 0;
+uint32_t ExternalPause::remaining_s() {
+  return active() ? s_pause.at - up_s() : 0;
 }
 
 // pause [s], 0 resumes
@@ -70,8 +69,8 @@ static void cmd_pause() {
     if (!ExternalPause::start_s(arg)) corium::Log::console(PSTR("pause [seconds], 0 resumes"));
     return;
   }
-  uint32_t rem = ExternalPause::remaining_ms();
-  if (rem) corium::Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)(rem / 1000U));
+  uint32_t rem = ExternalPause::remaining_s();
+  if (rem) corium::Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)rem);
   else     corium::Log::console(PSTR("External posts: active"));
 }
 CORIUM_REGISTER_CMD(pause, cmd_pause)

@@ -98,7 +98,7 @@ bool EnvSensor::tryDetect() {
   if (_bosch.begin(Wire)) _drv_flags |= DRV_BOSCH;
   if (_aht.begin(Wire))   _drv_flags |= DRV_AHT;
   if (_drv_flags == 0) {
-    _detect_tries++;
+    if (_detect_tries < 3) _detect_tries++;
     if (_detect_tries >= 3) {
       if (!_st) corium::Log::debug(PSTR("Env: no sensor after %u tries, giving up"), _detect_tries);
       corium::Registry::every(this, _st ? ENV_RETRY_MS : 0);

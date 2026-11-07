@@ -153,7 +153,7 @@ static improv::State current_state() {
     s_have = corium::Wifi::hasSavedCreds();
     s_asked = true;
   }
-  bool joining = corium::fastMillis() < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
+  bool joining = corium::fastMillis() - CORIUM_MS_START < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
   return (joining && s_have) ? improv::STATE_PROVISIONING : improv::STATE_AUTHORIZED;
 }
 

@@ -24,6 +24,11 @@
 
 // Cheaper than millis(), not for sub-ms
 
+// a test build starts it near the wrap
+#ifndef CORIUM_MS_START
+#define CORIUM_MS_START 0
+#endif
+
 namespace corium {
 extern volatile uint32_t _fast_ms_counter;
 

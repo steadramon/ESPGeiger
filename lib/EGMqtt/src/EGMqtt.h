@@ -105,7 +105,8 @@ class EGMqtt {
     void onAck(OnAck fn, void* arg = nullptr) { _onAck = fn; _onAckArg = arg; }
 
     bool connect();      // false = not started: no host, not down, or see lastError()
-    void disconnect();   // DISCONNECT, then closed; the will isn't sent
+    // DISCONNECT, then closed; will = publish it first, no room = no DISCONNECT so the broker does
+    void disconnect(bool will = false);
     void stop();         // drops the queue and settings, frees all
     void loop();         // call often, every callback runs from here
 
@@ -113,6 +114,10 @@ class EGMqtt {
     bool connected() const { return _state == CONNECTED; }
     int8_t lastError() const { return _err; }
     bool sessionPresent() const { return _session; }
+    // as set, for the next connect
+    const char* host() const { return str(F_HOST); }
+    uint16_t port() const { return _port; }
+    const char* willTopic() const { return _will ? str(F_WILL_TOPIC) : ""; }
 
     // 0 = refused (bad topic, full, QoS 0 while down), QoS 0 gives 1
     uint16_t publish(const char* topic, const uint8_t* payload, size_t len,

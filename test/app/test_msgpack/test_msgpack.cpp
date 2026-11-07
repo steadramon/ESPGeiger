@@ -235,6 +235,30 @@ static void overflow_flags(void) {
   }
 }
 
+// past 0xffff: no 32 bit forms, overflow and nothing written
+static void too_long(void) {
+  static uint8_t big[0x10010];
+  static uint8_t blob[0x10000];
+  {
+    MsgPack::Writer mp(big, sizeof(big));
+    mp.str((const char*)blob, sizeof(blob));
+    TEST_ASSERT_TRUE(mp.overflow);
+    TEST_ASSERT_EQUAL_size_t(0, mp.length());
+  }
+  {
+    MsgPack::Writer mp(big, sizeof(big));
+    mp.bin(blob, sizeof(blob));
+    TEST_ASSERT_TRUE(mp.overflow);
+    TEST_ASSERT_EQUAL_size_t(0, mp.length());
+  }
+  {
+    MsgPack::Writer mp(big, sizeof(big));
+    mp.str((const char*)blob, 0xffff);
+    TEST_ASSERT_FALSE(mp.overflow);
+    TEST_ASSERT_EQUAL_size_t(3 + 0xffff, mp.length());
+  }
+}
+
 static void reader_scalars(void) {
   auto mp = w();
   mp.map(5);
@@ -450,6 +474,7 @@ int main(void) {
   RUN_TEST(counted_map);
   RUN_TEST(counted_full);
   RUN_TEST(overflow_flags);
+  RUN_TEST(too_long);
   RUN_TEST(reader_scalars);
   RUN_TEST(find_key_nested);
   RUN_TEST(find_key_miss);

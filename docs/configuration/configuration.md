@@ -40,7 +40,7 @@ Some pins save with a warning shown after the save:
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Friendly name | `sys.name` | String (32) | (empty) | Optional human label shown in the web UI title and `/about`. Blank falls back to the hostname (e.g. `ESPGeiger-a1b2c3`). |
-| Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`). Blank disables auth. Sensitive. |
+| Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. |
 
 <!-- /gen -->
 

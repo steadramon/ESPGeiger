@@ -136,10 +136,11 @@ public:
   // strings + binary
   void str(const char* s)              { str(s, s ? strlen(s) : 0); }
   void str(const char* s, size_t len) {
-    str_hdr(len);
+    if (!str_hdr(len)) return;
     put_bytes((const uint8_t*)s, len);
   }
   void bin(const uint8_t* p, size_t len) {
+    if (len > 0xffff)      { overflow = true; return; }   // no BIN32
     if (len <= 0xff)       { put_u8(TAG_BIN8);  put_u8((uint8_t)len); }
     else                   { put_u8(TAG_BIN16); put_u16((uint16_t)len); }
     put_bytes(p, len);
@@ -149,7 +150,7 @@ public:
   void key(const char* k) {
     _map_n++;
     size_t len = strlen_P(k);
-    str_hdr(len);
+    if (!str_hdr(len)) return;
     if (pos + len > cap) { overflow = true; return; }
     memcpy_P(buf + pos, k, len);
     pos += len;
@@ -168,10 +169,13 @@ private:
   size_t   _map_at = 0;
   uint16_t _map_n = 0;
 
-  void str_hdr(size_t len) {
-    if (len <= 31)         put_u8((uint8_t)(0xa0 | len));   // fixstr
-    else if (len <= 0xff)  { put_u8(TAG_STR8);  put_u8((uint8_t)len); }
-    else                   { put_u8(TAG_STR16); put_u16((uint16_t)len); }
+  // false = too long, no STR32
+  bool str_hdr(size_t len) {
+    if (len <= 31)          put_u8((uint8_t)(0xa0 | len));   // fixstr
+    else if (len <= 0xff)   { put_u8(TAG_STR8);  put_u8((uint8_t)len); }
+    else if (len <= 0xffff) { put_u8(TAG_STR16); put_u16((uint16_t)len); }
+    else                    { overflow = true; return false; }
+    return true;
   }
   void put_u8(uint8_t v) {
     if (pos + 1 > cap) { overflow = true; return; }
