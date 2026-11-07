@@ -113,8 +113,7 @@ def main():
                 count += 1
 
     if count == 0:
-        print("no ESP32 envs to package")
-        return
+        sys.exit("no envs to package")
 
     zip_path = REPO / f"ESPGeiger_webinstall.{version}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:

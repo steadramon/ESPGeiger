@@ -64,7 +64,7 @@ bool corium::ImportText::isBlob(const char* text, size_t len) {
 }
 
 corium::ImportText::Result corium::ImportText::apply(const char* text, size_t len, PutFn put) {
-  Result r = {0, 0, 0};
+  Result r = {};
   const char* end = text + len;
   int line = 0;
   while (text < end) {
@@ -115,11 +115,21 @@ static int moved_index(const char* mid) {
   return -1;
 }
 
+// a NUL would cut the value, as put_line
+static bool put_rec(const char* mid, const char* key, const uint8_t* v, uint16_t vlen,
+                    corium::ImportText::PutFn put) {
+  char value[CORIUM_PREFS_MAX_VALUE + 1];
+  if (vlen >= sizeof(value) || memchr(v, '\0', vlen)) return false;
+  memcpy(value, v, vlen);
+  value[vlen] = '\0';
+  return put(mid, key, value);
+}
+
 // only the groups whose moved_index is pass
-static int apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put) {
+static void apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put,
+                       corium::ImportText::Result& r) {
   size_t off = 0;
   uint8_t gcount = p[off++];
-  int applied = 0;
   for (uint8_t gi = 0; gi < gcount; gi++) {
     uint8_t mid_len = p[off++];
     char mid[CORIUM_PREF_ID_MAX + 1];
@@ -132,23 +142,28 @@ static int apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put)
       take_id(key, p + off, klen); off += klen;
       uint16_t vlen = rdBe16(p + off);
       off += 2;
-      char value[CORIUM_PREFS_MAX_VALUE + 1];
-      // a NUL would cut the value, as put_line
-      if (!mine || vlen >= sizeof(value) || memchr(p + off, '\0', vlen)) { off += vlen; continue; }
-      memcpy(value, p + off, vlen); off += vlen;
-      value[vlen] = '\0';
-      if (put(mid, key, value)) applied++;
+      const uint8_t* v = p + off;
+      off += vlen;
+      if (!mine) continue;
+      if (put_rec(mid, key, v, vlen, put)) {
+        r.applied++;
+        continue;
+      }
+      if (!r.skipped) snprintf_P(r.firstKey, sizeof(r.firstKey), PSTR("%s.%s"), mid, key);
+      r.skipped++;
     }
   }
-  return applied;
 }
 
 // moved groups last listed first, then the rest, as at boot
-int corium::ImportText::applyBlob(const uint8_t* p, size_t len, PutFn put) {
-  if (blobError(p, len)) return -1;
+corium::ImportText::Result corium::ImportText::applyBlob(const uint8_t* p, size_t len, PutFn put) {
+  Result r = {};
+  if (blobError(p, len)) {
+    r.applied = -1;
+    return r;
+  }
   int n = 0;
   while (corium::Prefs::movedFrom(n)) n++;
-  int applied = 0;
-  for (int pass = n - 1; pass >= -1; pass--) applied += apply_pass(p, pass, put);
-  return applied;
+  for (int pass = n - 1; pass >= -1; pass--) apply_pass(p, pass, put, r);
+  return r;
 }

@@ -23,6 +23,7 @@
 
 #include <Arduino.h>
 #include "Corium/System/FastMillis.h"
+#include "Corium/System/IsrLock.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/TokenBucket.h"
 #ifdef ESP32
@@ -49,7 +50,7 @@ public:
     return (uint16_t)(((v > 255 ? 255 : v) * FULL + 127) / 255);
   }
 
-  // Config, then commitConfig()
+  // Config, then commitConfig(), loop side
   // wide so a bad pref clamps, not wraps
   int8_t   pin        = -1;
   uint8_t  mode       = MODE_PULSE;
@@ -75,14 +76,17 @@ public:
 
   void begin() {
     if (pin < 0) return;
+    commitConfig();
     pinMode(pin, OUTPUT);
 #ifdef ESP32
-    // level the pin falls back to when tone() lets go
-    digitalWrite(pin, polarity ? HIGH : LOW);
+    // once, edges only write the duty
+    analogWrite(pin, polarity ? FULL : 0);
+    _chan = analogGetChannel(pin);
+    _out = _chan;
 #endif
+    adopt();
     writeIdle();
     pinHigh = false;
-    commitConfig();
   }
 
   static constexpr uint32_t PULSE_US_MIN = 1000;   // 1 ms poll
@@ -107,9 +111,18 @@ public:
     if (polarity > 1) polarity = 0;
     if (maxHz > MAX_HZ_MAX) maxHz = MAX_HZ_MAX;
     if (fadeShift < FADE_SHIFT_MIN || fadeShift > FADE_SHIFT_MAX) fadeShift = FADE_SHIFT_DEFAULT;
-    pulseUsEff     = pulseUs;   // caller may scale after
+    pulseUsEff     = pulseUs;   // caller may scale after, then publish()
     burstFreqEff = freqHz;
     tokenIntervalMs = maxHz ? (uint16_t)(1000 / maxHz) : 0;
+    publish();
+  }
+
+  // the poll side takes it at its next start()
+  void publish() {
+    IsrLock::enter(mux());
+    _next = { mode, polarity, fadeShift, activeLevel, pulseUsEff, burstFreqEff, cycles };
+    _gen++;
+    IsrLock::leave(mux());
   }
 
   // loop side, rate cap only, never the pin
@@ -122,83 +135,139 @@ public:
 
   // poll side from here
   inline void start() {
-    if (phasesRemaining == 0) fire();
+    if (phasesRemaining != 0) return;
+    adopt();
+    fire();
   }
 
   inline bool busy() const {
-    return phasesRemaining != 0 || (mode == MODE_FADE && brightness > 0);
+    return phasesRemaining != 0 || (_run.mode == MODE_FADE && brightness > 0);
+  }
+
+  // a saved polarity now, a running pulse ends on it
+  inline void idleNow() {
+    if (pin < 0 || busy()) return;
+    adopt();
+    writeIdle();
   }
 
   // poll side, micros; one compare when idle
   inline void loop(uint32_t now_us) {
-    if (mode == MODE_FADE && brightness > 0) {
+    if (_run.mode == MODE_FADE && brightness > 0) {
       if (!reached(now_us, nextUs)) return;
-      uint16_t delta = brightness >> fadeShift;
+      uint16_t delta = brightness >> _run.fadeShift;
       if (delta == 0) delta = 1;
       brightness -= delta;
       if (brightness < FADE_FLOOR) {
         brightness = 0;
-        analogWrite(pin, polarity ? FULL : 0);
+        adopt();
+        writeLevel(_run.polarity ? FULL : 0);
         return;
       }
-      analogWrite(pin, level(brightness));
+      writeLevel(level(brightness));
       nextUs = now_us + FADE_STEP_US;
       return;
     }
     if (phasesRemaining == 0) return;
     if (!reached(now_us, nextUs)) return;
     pinHigh = !pinHigh;
-    if (pinHigh) writeActive(); else writeIdle();
+    if (pinHigh) {
+      writeActive();
+    } else {
+      adopt();
+      writeIdle();
+    }
     phasesRemaining--;
     if (phasesRemaining == 0) return;
     nextUs = now_us + periodUs;
   }
 
 private:
+  // what fire() and loop() run with
+  struct Run {
+    uint8_t  mode;
+    uint8_t  polarity;
+    uint8_t  fadeShift;
+    uint16_t level;
+    uint32_t pulseUs;
+    uint32_t burstHz;
+    uint32_t cycles;
+  };
+  Run _next = {};   // begin() commits and adopts first
+  Run _run = {};
+  volatile uint8_t _gen = 0;
+  uint8_t _seen = 0;
+
+  // one for all engines, a save is rare
+  static IsrLock::Mux& mux() {
+    static IsrLock::Mux m;
+    return m;
+  }
+
+  // between pulses, never mid one
+  inline void adopt() {
+    if (_gen == _seen) return;
+    IsrLock::enter(mux());
+    _run = _next;
+    _seen = _gen;
+    IsrLock::leave(mux());
 #ifdef ESP32
-  // once ledc has the pin digitalWrite does nothing
-  inline void writeIdle()   { analogWrite(pin, polarity ? FULL : 0); }
-  inline void writeActive() { analogWrite(pin, polarity ? 0 : FULL); }
-#else
-  inline void writeIdle()   { digitalWrite(pin, polarity ? HIGH : LOW); }
-  inline void writeActive() { digitalWrite(pin, polarity ? LOW  : HIGH); }
+    route();
 #endif
-  inline int level(uint16_t v) const { return polarity ? FULL - v : v; }
+  }
+
+#ifdef ESP32
+  static constexpr uint8_t  PWM_BITS   = 8;   // analogWrite's
+  static constexpr uint16_t BURST_DUTY = (FULL + 1) / 2;
+  int8_t   _chan   = -1;   // analogWrite's, from begin()
+  int8_t   _out    = -1;   // the one the pin is on
+  uint32_t _toneHz = 0;    // 0 = pin on _chan
+
+  // bursts on the tone channel's own timer, only on a mode or Hz change
+  void route() {
+    uint32_t hz = _run.mode == MODE_BURST ? _run.burstHz : 0;
+    if (hz == _toneHz) return;
+    _toneHz = hz;
+    _out = hz ? EGLED_TONE_CHANNEL : _chan;
+    if (hz) ledcSetup(_out, hz, PWM_BITS);
+    ledcAttachPin(pin, _out);
+    writeIdle();
+  }
+
+  inline void writeLevel(int v) { ledcWrite(_out, v); }
+  inline void writeIdle()   { writeLevel(_run.polarity ? FULL : 0); }
+  inline void writeActive() { writeLevel(_run.polarity ? 0 : FULL); }
+  inline void startBurst()  { writeLevel(BURST_DUTY); }
+#else
+  inline void writeLevel(int v) { analogWrite(pin, v); }
+  inline void writeIdle()   { digitalWrite(pin, _run.polarity ? HIGH : LOW); }
+  inline void writeActive() { digitalWrite(pin, _run.polarity ? LOW  : HIGH); }
+  inline void startBurst()  { tone(pin, _run.burstHz, 0); }   // 0 = till writeIdle
+#endif
+  inline int level(uint16_t v) const { return _run.polarity ? FULL - v : v; }
 
   inline void fire() {
-    if (mode == MODE_FADE) {
-      brightness = activeLevel;
-      analogWrite(pin, level(activeLevel));
+    if (_run.mode == MODE_FADE) {
+      brightness = _run.level;
+      writeLevel(level(_run.level));
       phasesRemaining = 0;
       nextUs = (uint32_t)micros() + FADE_STEP_US;
       return;
     }
-    if (mode == MODE_BURST) {
-      // tone() takes ms, round up, at least 1
-      uint32_t duration_us = (uint32_t)cycles * 1000000UL / burstFreqEff;
-      uint32_t duration_ms = (duration_us + 999u) / 1000u;
-      if (duration_ms == 0) duration_ms = 1;
-#ifdef ESP32
-      // queued ahead of the tone, task only made on first burst
-      static bool s_tone_chan = false;
-      if (!s_tone_chan) {
-        setToneChannel(EGLED_TONE_CHANNEL);
-        s_tone_chan = true;
-      }
-#endif
-      tone(pin, burstFreqEff, duration_ms);
-      phasesRemaining = 0;
-      return;
-    }
-    if (activeLevel >= FULL) {
+    uint32_t us = _run.pulseUs;
+    if (_run.mode == MODE_BURST) {
+      // the poll ends it, as a pulse
+      us = _run.cycles * 1000000UL / _run.burstHz;
+      startBurst();
+    } else if (_run.level >= FULL) {
       writeActive();
     } else {
-      analogWrite(pin, level(activeLevel));
+      writeLevel(level(_run.level));
     }
     pinHigh = true;
     phasesRemaining = 1;
-    periodUs = pulseUsEff;
-    nextUs = (uint32_t)micros() + pulseUsEff;
+    periodUs = us;
+    nextUs = (uint32_t)micros() + us;
   }
 };
 }  // namespace corium

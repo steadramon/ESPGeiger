@@ -23,6 +23,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "App/AppConfig.h"
+#include "Corium/Prefs/Prefs.h"
 
 // export blob head and its base64, set both; app sets its own
 #ifndef CORIUM_EXPORT_MAGIC
@@ -39,8 +40,13 @@ namespace ImportText {
 // false = skipped
 typedef bool (*PutFn)(const char* mid, const char* key, const char* value);
 
-// firstSkip: line number from 1, 0 = none
-struct Result { int applied; int skipped; int firstSkip; };
+// firstSkip: line number from 1, 0 = none; firstKey: a blob's first refused mid.key, "" = none
+struct Result {
+  int applied;
+  int skipped;
+  int firstSkip;
+  char firstKey[2 * CORIUM_PREF_ID_MAX + 2];
+};
 
 // export blobs always start CORIUM_EXPORT_MAGIC_B64
 bool isBlob(const char* text, size_t len);
@@ -51,8 +57,8 @@ Result apply(const char* text, size_t len, PutFn put);
 // records: group count, per group len+mid and pref count, per pref len+key, be16 len+value
 // blob records from the group count on; nullptr = ok, else why (PROGMEM)
 const char* blobError(const uint8_t* p, size_t len);
-// puts done, -1 = bad records
-int applyBlob(const uint8_t* p, size_t len, PutFn put);
+// applied -1 = bad records; a refused put counts in skipped
+Result applyBlob(const uint8_t* p, size_t len, PutFn put);
 
 }
 }  // namespace corium

@@ -41,6 +41,8 @@ CORIUM_REGISTER_MODULE(pulseout)
 
 volatile uint8_t PulseOut::s_req = 0;
 uint8_t PulseOut::s_seen = 0;
+volatile uint8_t PulseOut::s_idle = 0;
+uint8_t PulseOut::s_idle_seen = 0;
 bool PulseOut::s_busy = false;
 
 CORIUM_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
@@ -112,11 +114,19 @@ void PulseOut::onPrefsLoaded() {
   apply_voice();
 }
 
+// else the pin keeps the old idle level till a click
+void PulseOut::onPrefsSaved() {
+  uint8_t was = _engine.polarity;
+  onPrefsLoaded();
+  if (_engine.polarity != was) s_idle++;
+}
+
 // after the engine clamps, so it can pass them
 void PulseOut::apply_voice() {
   _engine.pulseUsEff     = (uint32_t)(_engine.pulseUsEff * _voice.pulse);
   _engine.burstFreqEff = (uint32_t)(_engine.burstFreqEff * _voice.freq);
   if (_engine.burstFreqEff == 0) _engine.burstFreqEff = 1;
+  _engine.publish();
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
@@ -218,6 +228,10 @@ void PulseOut::poll(uint32_t now_us) {
   if (s_seen != s_req) {
     s_seen = s_req;
     _engine.start();
+  }
+  if (s_idle_seen != s_idle) {
+    s_idle_seen = s_idle;
+    _engine.idleNow();
   }
   _engine.loop(now_us);
   s_busy = _engine.busy();

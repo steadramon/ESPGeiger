@@ -51,6 +51,7 @@ namespace BlipLed {
 
   void setBrightness(uint8_t level) {
     s_engine.activeLevel = corium::PulseEngine::levelFrom8bit(level);
+    s_engine.publish();
   }
 
   void setConfig(uint8_t engine_mode, uint16_t pulse_us, uint8_t fade_shift_idx, uint8_t max_hz) {

@@ -58,14 +58,6 @@ bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen)
   return true;
 }
 
-// close() says nothing, its flush can still fail
-bool has_len(const char* path, size_t len) {
-  File f = corium::Fs::openR(path);
-  bool ok = f && f.size() == len;
-  f.close();
-  return ok;
-}
-
 } // anonymous namespace
 
 corium::PrefsStorage::PrefsStorage()
@@ -158,13 +150,7 @@ bool corium::PrefsStorage::stageGroup(const char* module_id, const void* buf, si
   if (len < corium::PREFS_MAGIC_LEN || len > CORIUM_PREFS_MAX_GROUP_SZ) return false;
   char staging[CORIUM_PS_PATH_BUFSZ];
   if (!staged_path(staging, sizeof(staging), _dir, module_id)) return false;
-  File f = corium::Fs::openW(staging);
-  if (!f) return false;
-  size_t n = f.write((const uint8_t*)buf, len);
-  f.close();
-  if (n == len && has_len(staging, len)) return true;
-  corium::Fs::remove(staging);
-  return false;
+  return corium::Fs::writeWhole(staging, buf, len);
 }
 
 // don't remove first, rename replaces in one step

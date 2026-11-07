@@ -93,8 +93,10 @@ class Counter : public CounterMaths {
       uint32_t get_min_pulse_us();
       // isr, one pulse into the ring and histogram
       static void CORIUM_ISR_ATTR on_pulse(uint32_t now_us);
-      // count pulses spread over span_us, last at end_us
-      static void on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
+      // count pulses spread over span_us, last at end_us; how many went in
+      static uint16_t on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
+      // the newest n off the ring, a junk second
+      static void drop_pulses(uint32_t n);
       // pref order
       enum : uint8_t { CPM_FAST_START, CPM_LIVE, CPM_60S, CPM_BUCKET, CPM_FAST };
       void    set_cpm_mode(uint8_t m);

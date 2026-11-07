@@ -37,12 +37,15 @@ class PulseOut : public corium::Module {
     void begin() override;
     const corium::PrefGroup* prefsGroup() override;
     void onPrefsLoaded() override;
+    void onPrefsSaved() override;
 
-    // ms ticker owns the pin, clicks post s_req
+    // ms ticker owns the pin, clicks post s_req, a polarity save s_idle
     static volatile uint8_t s_req;
     static uint8_t s_seen;
+    static volatile uint8_t s_idle;
+    static uint8_t s_idle_seen;
     static bool s_busy;
-    static inline bool due() { return s_req != s_seen || s_busy; }
+    static inline bool due() { return s_req != s_seen || s_idle != s_idle_seen || s_busy; }
     void poll(uint32_t now_us);
 
     void notifyClick(unsigned long now_ms);

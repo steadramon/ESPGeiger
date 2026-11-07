@@ -124,9 +124,9 @@ void Counter::set_target_cpm(float val) {
 GeigerUdpRx* Counter::udp_rx() { return static_cast<GeigerUdpRx*>(_input); }
 #endif
 
-void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
+uint16_t Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
   // synthetic, no min_pulse_us; evenly spaced, last one at end_us
-  if (!s_pulse_ring || count == 0) return;
+  if (!s_pulse_ring || count == 0) return 0;
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
   uint32_t t = end_us - (uint32_t)(count - 1) * step;
@@ -137,6 +137,16 @@ void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) 
     if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
     t += step;
   }
+  corium::IsrLock::leave(s_pulse_mux);
+  return count;
+}
+
+void Counter::drop_pulses(uint32_t n) {
+  if (!s_pulse_ring) return;
+  corium::IsrLock::enter(s_pulse_mux);
+  if (n > s_pulse_count) n = s_pulse_count;
+  s_pulse_count -= n;
+  s_pulse_head = (s_pulse_head - n) & PULSE_RING_MASK;
   corium::IsrLock::leave(s_pulse_mux);
 }
 
@@ -727,7 +737,8 @@ void Counter::begin() {
   corium::Clock::onStep(counter_clock_stepped);
 
   uint32_t clicks = 0, secs = 0;
-  bool rtc_ok = rtc_life_recover(&clicks, &secs);
+  // an erase keeps the rtc, not the life file
+  bool rtc_ok = corium::Prefs::stored("life") && rtc_life_recover(&clicks, &secs);
   if (rtc_ok && !_lifetime_enabled) {
     life_clear();
   } else if (rtc_ok) {

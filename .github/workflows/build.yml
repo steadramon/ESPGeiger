@@ -38,12 +38,14 @@ jobs:
           - "esp32c3_pulse"
           - "esp32c3_serial"
           - "esp32c3_udp"
+          - "esp32c3_test"
           - "esp32s3_pulse"
           - "esp32s3_pulse_no_pcnt"
           - "esp32s3_serial"
           - "esp32s3_udp"
           - "esp32s3_test"
           - "esp32s3_audio_pulse"
+          - "esp32s3_audio_serial"
           - "xh_s3e_pulse"
           - "xh_s3e_udp"
           - "esp8266_hv"
@@ -56,6 +58,7 @@ jobs:
           - "esp8266_test"
           - "esp8266_testpulse"
           - "esp8266_testpulseint"
+          - "esp8266_testserial"
           - "esp8266oled_pulse"
           - "esp8266oled_serial"
           - "espgeigerhw"
@@ -63,6 +66,7 @@ jobs:
           - "espgeigerlog"
           - "espgeigerlog_serial"
           - "espgeigerlog_testpulseint"
+          - "espgeigerlog_udp"
     runs-on: ubuntu-24.04
     name: Build with PlatformIO
     steps:
@@ -88,3 +92,30 @@ jobs:
             .pio/build/*/firmware_merged.bin
             .pio/build/*/firmware.elf
           retention-days: 7
+
+  # flags no env sets, compile only
+  options:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: "esp8266oled_pulse"
+            flags: "-DRTC_8266"
+    runs-on: ubuntu-24.04
+    name: Build options
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install platformio
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'platformio==6.1.9' 'intelhex==2.3.0'
+      - name: Run PlatformIO
+        run: platformio run -e ${{ matrix.environment }}
+        env:
+          PLATFORMIO_BUILD_FLAGS: ${{ matrix.flags }}

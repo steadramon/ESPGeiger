@@ -58,9 +58,11 @@ static void reset_wifi() {
   reboot();
 }
 
+// a frozen group said why as it was left out
 static bool committed() {
   if (corium::Prefs::commit()) return true;
-  corium::Log::console(PSTR("Commit failed"));
+  char why[CORIUM_PREFS_FROZEN_MAX];
+  if (!corium::Prefs::frozen(why, sizeof(why))) corium::Log::console(PSTR("Commit failed"));
   return false;
 }
 
@@ -117,7 +119,8 @@ static void cmd_set() {
   // a line never holds CR or LF
   while (vlen > 0 && value[vlen-1] == ' ') value[--vlen] = '\0';
   if (!corium::Prefs::put(mod, key, value)) {
-    corium::Log::console(PSTR("Rejected: %s.%s validation failed"), mod, key);
+    const char* why = corium::Prefs::refused();
+    corium::Log::console(PSTR("Rejected: %s.%s %s"), mod, key, why ? why : PSTR("validation failed"));
     return;
   }
   if (!committed()) return;
@@ -135,7 +138,10 @@ static void cmd_reset() {
   }
   char* dot = strchr(arg, '.');
   if (dot) *dot = '\0';
-  bool ok = corium::Prefs::reset(arg, dot ? dot + 1 : nullptr);
+  const char* key = dot ? dot + 1 : nullptr;
+  bool ok = corium::Prefs::reset(arg, key);
+  // its default again doesn't unfreeze it, a group reset does
+  bool stuck = ok && key && !corium::Prefs::loaded(arg, key);
   // whole word again for the reply
   if (dot) *dot = '.';
   if (!ok) {
@@ -143,6 +149,10 @@ static void cmd_reset() {
     return;
   }
   if (!committed()) return;
+  if (stuck) {
+    corium::Log::console(PSTR("Rejected: %s didn't load, reset %.*s"), arg, (int)(dot - arg), arg);
+    return;
+  }
   corium::Log::console(PSTR("OK: %s reset"), arg);
   if (corium::Prefs::restartPending()) corium::Log::console(corium::H_RBA);
 }
@@ -200,15 +210,18 @@ static bool run_row(const corium::Cmd* row, const char* word, bool held) {
   return true;
 }
 
-void corium::Console::exec(corium::ConsoleLine& l) {
+// false = no such command
+bool corium::Console::exec(corium::ConsoleLine& l) {
   char* word = strtok_r(l.buf, DELIM, &_last);
   // own rows, then the app's, held till their modules are up
   const uint8_t own = sizeof(CMDS) / sizeof(CMDS[0]);
-  for (uint8_t i = 0; word && i < own + _count; i++) {
-    if (run_row(i < own ? &CMDS[i] : _cmds[i - own], word, i >= own && !_up)) break;
+  bool found = false;
+  for (uint8_t i = 0; word && !found && i < own + _count; i++) {
+    found = run_row(i < own ? &CMDS[i] : _cmds[i - own], word, i >= own && !_up);
   }
   l.buf[0] = '\0';
   l.pos = 0;
+  return found;
 }
 
 void corium::Console::begin() {
@@ -262,13 +275,24 @@ static char* secret_at(char* line) {
   return secret ? sp : nullptr;
 }
 
+// isprint, no call
+static bool typed(char c) { return c >= ' ' && c <= '~'; }
+
+static bool line_end(char c) { return c == '\r' || c == '\n'; }
+
 // shares the serial line, a half typed one is dropped
-void corium::Console::run(const char* text) {
-  if (!text) return;
+bool corium::Console::run(const char* text, size_t len) {
+  if (!text) return false;
   corium::ConsoleLine& l = _serial;
   size_t n = 0;
-  while (text[n] && n <= CONSOLE_LINE_MAX && text[n] != '\r' && text[n] != '\n') n++;
-  if (n > CONSOLE_LINE_MAX) { too_long(); return; }
+  while (n < len && n <= CONSOLE_LINE_MAX && typed(text[n])) n++;
+  if (n > CONSOLE_LINE_MAX) { too_long(); return false; }
+  size_t end = n;
+  while (end < len && line_end(text[end])) end++;
+  if (end < len) {
+    corium::Log::console(PSTR("Command refused: one line of printable ASCII"));
+    return false;
+  }
   memcpy(l.buf, text, n);
   l.buf[n] = '\0';
   l.pos = n;
@@ -276,7 +300,7 @@ void corium::Console::run(const char* text) {
   char* secret = secret_at(l.buf);
   if (secret) corium::Log::console(PSTR("> %.*s ***"), (int)(secret - l.buf), l.buf);
   else corium::Log::console(PSTR("> %s"), l.buf);
-  exec(l);
+  return exec(l);
 }
 
 void corium::Console::edit(corium::ConsoleLine& l, Print& io, char c) {
@@ -285,7 +309,7 @@ void corium::Console::edit(corium::ConsoleLine& l, Print& io, char c) {
       l.buf[--l.pos] = '\0';
       io.write("\b \b", 3);
     }
-  } else if (c >= ' ' && c <= '~') {  // isprint, no call
+  } else if (typed(c)) {
     if (l.pos >= CONSOLE_LINE_MAX) { l.overflow = true; return; }
     l.buf[l.pos++] = c;
     l.buf[l.pos] = '\0';

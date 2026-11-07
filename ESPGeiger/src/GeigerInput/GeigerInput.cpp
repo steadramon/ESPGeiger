@@ -27,16 +27,16 @@ volatile uint32_t s_isr_entries = 0;  // before debounce
 
 volatile unsigned long _debounce = GEIGER_DEBOUNCE;
 
-// ~600x any real tube
-static constexpr uint32_t ISR_STORM_THRESHOLD = 10000;
-static constexpr uint8_t  ISR_STORM_COOLDOWN_S = 5;
-static uint8_t s_cooldown_s = 0;
-static bool    s_isr_stopped = false;   // ota, the cooldown leaves it off
+static constexpr uint16_t ISR_STORM_COOLDOWN_S = 5;
+static constexpr uint16_t ISR_STORM_MAX_S = 300;
+static uint16_t s_cooldown_s = 0;
+static uint16_t s_park_s = ISR_STORM_COOLDOWN_S;   // doubles per storm, a quiet second resets
+static bool     s_isr_stopped = false;   // ota, the cooldown leaves it off
 
 corium::IsrLock::Mux timerMux;
 
 void GeigerInput::begin() {
-
+  s_park_s = ISR_STORM_COOLDOWN_S;
 }
 
 void GeigerInput::set_rx_pin(int pin) {
@@ -114,11 +114,16 @@ void GeigerInput::checkIsrStorm() {
     return;
   }
 
-  if (n > ISR_STORM_THRESHOLD) {
+  if (n > STORM_COUNTS) {
     corium::IsrLock::pinOff(_rx_pin);
-    s_cooldown_s = ISR_STORM_COOLDOWN_S;
+    Counter::drop_pulses(s_event_counter);   // and the ring's
+    setCounter(0, false);   // junk, collect() hands 0
+    s_cooldown_s = s_park_s;
     corium::Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
-                 (unsigned)n, (unsigned)ISR_STORM_COOLDOWN_S);
+                 (unsigned)n, (unsigned)s_park_s);
+    s_park_s = s_park_s >= ISR_STORM_MAX_S / 2 ? ISR_STORM_MAX_S : s_park_s * 2;
+  } else {
+    s_park_s = ISR_STORM_COOLDOWN_S;
   }
 }
 

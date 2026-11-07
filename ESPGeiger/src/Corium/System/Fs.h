@@ -20,6 +20,7 @@
 #define CORIUM_FS_H
 
 #include <LittleFS.h>
+#include "Corium/Util/Attr.h"
 
 namespace corium {
 namespace Fs {
@@ -32,6 +33,8 @@ namespace Fs {
   bool rename(const char* from, const char* to);
   bool mkdir(const char* path);
   void touch(const char* path);
+  // all of buf or no file: the size read back, a flush lost at close shows there
+  CORIUM_NODISCARD bool writeWhole(const char* path, const void* buf, size_t len);
 
   // flash paths, copied for the call; longer than PATH_P_MAX fails
   static const size_t PATH_P_MAX = 31;
@@ -40,6 +43,7 @@ namespace Fs {
   bool remove(const __FlashStringHelper* path);
   bool exists(const __FlashStringHelper* path);
   bool rename(const __FlashStringHelper* from, const __FlashStringHelper* to);
+  CORIUM_NODISCARD bool writeWhole(const __FlashStringHelper* path, const void* buf, size_t len);
 }
 }  // namespace corium
 

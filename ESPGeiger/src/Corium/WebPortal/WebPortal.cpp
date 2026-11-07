@@ -2220,20 +2220,37 @@ static const char* check_import(uint8_t* buf, size_t len) {
   return corium::ImportText::blobError(buf + BLOB_HEAD, payload_len - BLOB_HEAD);
 }
 
-// put refuses unknown keys, forwards moved ones
-static bool import_put(const char* mid, const char* key, const char* value) {
+static bool import_local(const char* mid, const char* key) {
   corium::Pref p;
-  if (corium::Prefs::findPref(mid, key, &p) && (p.flags & corium::P_LOCAL)) return false;
-  return corium::Prefs::put(mid, key, value);
+  return corium::Prefs::findPref(mid, key, &p) && (p.flags & corium::P_LOCAL);
 }
 
-// wipe then apply, -1 = bad blob
-static int apply_import(uint8_t* buf, size_t len, const char** err_out) {
+// put refuses unknown keys, forwards moved ones
+static bool import_put(const char* mid, const char* key, const char* value) {
+  return !import_local(mid, key) && corium::Prefs::put(mid, key, value);
+}
+
+// a backup's values were saved before, a newer shortest rule mustn't drop them
+static bool import_kept(const char* mid, const char* key, const char* value) {
+  return !import_local(mid, key) && corium::Prefs::putKept(mid, key, value);
+}
+
+// wipe then apply, -1 = bad blob or every row refused
+static int apply_import(uint8_t* buf, size_t len, corium::ImportText::Result* out,
+                        const char** err_out) {
   const char* err = check_import(buf, len);
   if (err) { if (err_out) *err_out = err; return -1; }
 
   corium::Prefs::resetAll(/*keep_network=*/true);
-  return corium::ImportText::applyBlob(buf + BLOB_HEAD, len - BLOB_HEAD - BLOB_CRC, import_put);
+  *out = corium::ImportText::applyBlob(buf + BLOB_HEAD, len - BLOB_HEAD - BLOB_CRC, import_kept);
+  if (out->skipped) corium::Log::console(PSTR("Import: %d refused, first %s"), out->skipped, out->firstKey);
+  // another board's export, say: the old settings stand
+  if (out->applied == 0 && out->skipped) {
+    corium::Prefs::revert();
+    if (err_out) *err_out = PSTR("nothing imported");
+    return -1;
+  }
+  return out->applied;
 }
 
 // safe mode gets here frozen: one the import didn't replace stops it all
@@ -2314,12 +2331,13 @@ static uint8_t* import_decode(char* b64, size_t b64_len, unsigned int* raw_len, 
 }
 
 // wipe then apply, -1 = bad
-static int import_blob(char* b64, size_t b64_len, const char** err) {
+static int import_blob(char* b64, size_t b64_len, corium::ImportText::Result* out,
+                       const char** err) {
   unsigned int raw_len = 0;
   uint8_t* raw = import_decode(b64, b64_len, &raw_len, err);
   body_free(s_import_body);
   if (!raw) return -1;
-  int applied = apply_import(raw, raw_len, err);
+  int applied = apply_import(raw, raw_len, out, err);
   free(raw);
   return applied;
 }
@@ -2340,7 +2358,7 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
   (void)req;
   const char* err = nullptr;
   size_t len = 0;
-  corium::ImportText::Result r = {0, 0, 0};
+  corium::ImportText::Result r = {};
   int applied = -1;
   char why[CORIUM_PREFS_FROZEN_MAX];
   // safe mode: the import may replace it
@@ -2349,7 +2367,7 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
     return;
   }
   char* field = import_field(&len, &err);
-  if (field && corium::ImportText::isBlob(field, len)) applied = import_blob(field, len, &err);
+  if (field && corium::ImportText::isBlob(field, len)) applied = import_blob(field, len, &r, &err);
   else if (field) applied = import_lines(field, len, &r, &err);
   if (applied >= 0) err = import_commit(why, sizeof(why));
   if (applied < 0 || err) {
@@ -2358,7 +2376,15 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
   }
   corium::WebPortal::beginPage(res, F("Imported"));
   char msg[112];
-  if (r.skipped) {
+  if (r.firstKey[0]) {
+    // blob, a key from the upload
+    snprintf_P(msg, sizeof(msg), PSTR("<p>Imported %d prefs, %d refused (first "), applied, r.skipped);
+    res.sendChunk(msg);
+    char esc[6 * (sizeof(r.firstKey) - 1) + 1];
+    egesc_html(esc, sizeof(esc), r.firstKey);
+    res.sendChunk(esc);
+    snprintf_P(msg, sizeof(msg), PSTR("). Restarting.</p>"));
+  } else if (r.skipped) {
     snprintf_P(msg, sizeof(msg), PSTR("<p>Imported %d prefs, skipped %d (first at line %d). Restarting.</p>"),
                applied, r.skipped, r.firstSkip);
   } else {
@@ -2462,14 +2488,25 @@ void corium::WebPortal::hMetrics(EGHttpRequest& req, EGHttpResponse& res, void*)
   res.endChunked();
 }
 
+// log lines idx..end-1, one per row
+static void send_log(EGHttpResponse& res, uint32_t idx, uint8_t end) {
+  char line[256];
+  size_t len;
+  while ((len = corium::Log::copySince(&idx, end, line, sizeof(line))) > 0) res.sendChunk(line, len);
+}
+
 void corium::WebPortal::hWebCmd(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* body = req.body();
   if (!body || !*body) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("empty command"));
     return;
   }
-  corium::Console::run(body);
-  res.send(200, FPSTR(HTTP_CT_PLAIN), F("ok"));
+  // reply = the lines it logged
+  uint32_t idx = (uint8_t)corium::Log::getLogIdx();
+  bool ok = corium::Console::run(body, req.bodyLen());
+  res.beginChunked(ok ? 200 : 400, FPSTR(HTTP_CT_PLAIN));
+  send_log(res, idx, (uint8_t)corium::Log::getLogIdx());
+  res.endChunked();
 }
 
 void corium::WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -2486,10 +2523,7 @@ void corium::WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, 
   char hdr[24];
   send_fmt(res, hdr, snprintf_P(hdr, sizeof(hdr), PSTR("%u,%d\n"),
                                 (unsigned)end, corium::Clock::tzOffsetMin), sizeof(hdr));
-
-  char line[256];
-  size_t len;
-  while ((len = corium::Log::copySince(&idx, end, line, sizeof(line))) > 0) res.sendChunk(line, len);
+  send_log(res, idx, end);
   res.endChunked();
 }
 

@@ -94,6 +94,9 @@
 #endif
 
 #ifdef GEIGER_BUZZER
+#ifndef ESPGEIGER_HW32
+#error "GEIGER_BUZZER needs ESPGEIGER_HW32, Board::buzzer() has the coil limits"
+#endif
 #define BUZZER_ENGINE
 #endif
 

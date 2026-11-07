@@ -22,7 +22,7 @@
 #include "esp_log.h"
 #endif
 
-#define FS_MOUNT_TRIES 3
+#define FS_MOUNT_TRIES 6
 
 static bool s_tried   = false;
 static bool s_mounted = false;
@@ -40,7 +40,7 @@ bool corium::Fs::begin() {
   esp_log_level_set("LITTLEFS",     ESP_LOG_ERROR);
 #endif
   for (uint8_t i = 0; i < FS_MOUNT_TRIES && !s_mounted; i++) {
-    if (i) delay(50);
+    if (i) delay(50 << (i - 1));   // 50 ms doubling, ~1.5 s before a format
     s_mounted = LittleFS.begin();
   }
   if (!s_mounted) {
@@ -81,6 +81,19 @@ void corium::Fs::touch(const char* path) {
   if (f) f.close();
 }
 
+// close() says nothing, its flush can still fail
+bool corium::Fs::writeWhole(const char* path, const void* buf, size_t len) {
+  File f = openW(path);
+  if (!f) return false;
+  size_t n = f.write((const uint8_t*)buf, len);
+  f.close();
+  File r = openR(path);
+  bool ok = n == len && r && r.size() == len;
+  r.close();
+  if (!ok) remove(path);
+  return ok;
+}
+
 // on the stack for the call, "" if too long
 struct RamPath {
   char s[corium::Fs::PATH_P_MAX + 1];
@@ -114,4 +127,9 @@ bool corium::Fs::exists(const __FlashStringHelper* path) {
 bool corium::Fs::rename(const __FlashStringHelper* from, const __FlashStringHelper* to) {
   RamPath a(from), b(to);
   return a.s[0] && b.s[0] && rename(a.s, b.s);
+}
+
+bool corium::Fs::writeWhole(const __FlashStringHelper* path, const void* buf, size_t len) {
+  RamPath p(path);
+  return p.s[0] && writeWhole(p.s, buf, len);
 }

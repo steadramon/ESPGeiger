@@ -375,6 +375,7 @@ public:
   uint8_t displayOrder() override { return 0; }
   const corium::PrefGroup* prefsGroup() override;
   void onPrefsLoaded() override;
+  void onPrefsSaved() override {}   // live counts stay
 };
 
 static LifePrefs lifeprefs;

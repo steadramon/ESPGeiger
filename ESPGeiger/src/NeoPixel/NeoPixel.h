@@ -19,6 +19,10 @@
 #ifndef NEOPIXEL_h
 #define NEOPIXEL_h
 #ifdef GEIGER_NEOPIXEL
+#include "Corium/Output/Buzzer.h"
+#if BUZZER_BUILT
+#error "NeoPixel and the buzzer both use RMT channel 0"
+#endif
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
 #include <NeoPixelBus.h>

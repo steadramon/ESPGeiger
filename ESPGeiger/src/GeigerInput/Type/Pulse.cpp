@@ -79,10 +79,11 @@ void GeigerPulse::restartAfterOTA() {
 }
 
 #ifdef PCNT_SELECTABLE
-// us since the last drain, 1 s if 0 or over
-static inline __attribute__((always_inline)) uint32_t span_us(uint32_t now_us, uint32_t last_us) {
-  uint32_t s = now_us - last_us;
-  return (s == 0 || s > 1000000UL) ? 1000000UL : s;
+// us since the last drain, 1 s the first time; a stall's pulses spread over the stall
+static inline __attribute__((always_inline)) uint32_t span_us(int64_t now_us, int64_t last_us) {
+  if (last_us == 0 || now_us <= last_us) return 1000000UL;
+  int64_t s = now_us - last_us;
+  return s < (int64_t)UINT32_MAX ? (uint32_t)s : UINT32_MAX;
 }
 
 // wakes run it too, so it keeps its own time
@@ -97,36 +98,48 @@ void GeigerPulse::drain_pcnt() {
   int16_t n = pcnt_take();
   if (n <= 0) return;
 
-  uint32_t now_us = (uint32_t)micros();
-  uint32_t span = span_us(now_us, _last_drain_us);
-  _last_drain_us = now_us;
+  int64_t now = esp_timer_get_time();
+  uint32_t span = span_us(now, _last_drain_us);
+  _last_drain_us = now;
+  uint32_t now_us = (uint32_t)now;
 
   corium::IsrLock::enter(timerMux);
   s_event_counter += (uint32_t)n;
   corium::IsrLock::leave(timerMux);
 
   _last_blip = now_us;
-  Counter::on_pulse_batch((uint16_t)n, now_us, span);
+  _pushed += Counter::on_pulse_batch((uint16_t)n, now_us, span);
 }
 
 int GeigerPulse::collect() {
   if (!_pcnt) return GeigerInput::collect();
   int16_t residual = pcnt_take();
 
-  uint32_t now_us = (uint32_t)micros();
+  int64_t now = esp_timer_get_time();
+  uint32_t now_us = (uint32_t)now;
 
   if (residual > 0) {
-    Counter::on_pulse_batch((uint16_t)residual, now_us, span_us(now_us, _last_drain_us));
+    _pushed += Counter::on_pulse_batch((uint16_t)residual, now_us, span_us(now, _last_drain_us));
     _last_blip = now_us;
   }
-  _last_drain_us = now_us;
+  _last_drain_us = now;
+  uint32_t pushed = _pushed;
+  _pushed = 0;
 
   corium::IsrLock::enter(timerMux);
   uint32_t pending = s_event_counter;
   s_event_counter = 0;
   corium::IsrLock::leave(timerMux);
 
-  return (int)(pending + (uint32_t)residual);
+  uint32_t n = pending + (uint32_t)residual;
+  if (n > STORM_COUNTS) {
+    Counter::drop_pulses(pushed);   // what this second put in, not n: older ones stay
+    if (!_storm) corium::Log::console(PSTR("GeigerPulse: PCNT storm (%u/s) - dropped"), (unsigned)n);
+    _storm = true;
+    return 0;
+  }
+  _storm = false;
+  return (int)n;
 }
 
 void GeigerPulse::set_pcnt_filter(int val) {

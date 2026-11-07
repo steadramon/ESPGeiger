@@ -48,15 +48,13 @@ static const char LWT_OFFLINE[] PROGMEM = "Offline";
 
 
 static EGMqtt s_mq;
-static uint32_t s_dropped = 0;   // s_mq.dropped() last seen
 static bool s_drop_told = false;
 
-// once a connection
+// once a boot
 static void note_dropped() {
-  if (s_mq.dropped() == s_dropped) return;
-  s_dropped = s_mq.dropped();
-  if (!s_drop_told) corium::Log::console(PSTR("MQTT: Message over %u bytes dropped"), (unsigned)EGMqtt::IN_CAP);
+  if (s_drop_told || !s_mq.dropped()) return;
   s_drop_told = true;
+  corium::Log::console(PSTR("MQTT: msg over %u B dropped"), (unsigned)EGMqtt::IN_CAP);
 }
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
@@ -162,7 +160,6 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   _reanchor = true;
   _tries = 0;
   _auth_fails = 0;
-  s_drop_told = false;
   _pending |= PEND_LWT;
 #ifdef MQTTAUTODISCOVER
   this->setupHassCB();

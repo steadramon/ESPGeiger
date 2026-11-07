@@ -57,14 +57,14 @@ public:
     void pollBoot();   // setup portal and the wifi wait, before the registry runs
 
     static bool add(const Cmd* cmd);   // static init, false = full
-    static void run(const char* text);   // web, first line only
+    static bool run(const char* text, size_t len);   // web, one line; false = refused or unknown
     // a command's words, as it runs
     static char* next();   // nullptr = none left
     static char* rest();   // rest of the line as typed
 private:
     static void feed(ConsoleLine& l, Print& io, char c);
     static void edit(ConsoleLine& l, Print& io, char c);
-    static void exec(ConsoleLine& l);
+    static bool exec(ConsoleLine& l);
     static const Cmd* _cmds[CORIUM_MAX_CMDS];
     static uint8_t _count;
     static uint8_t _dropped;

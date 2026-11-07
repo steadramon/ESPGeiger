@@ -164,7 +164,9 @@ class GeigerInput {
     static void CORIUM_ISR_ATTR countInterrupt();
     // main code only, interrupts off
     static void countAt(unsigned long us);
-    // once a second, parks the pin over 10000 isr/s
+    // a second over it is junk, ~600x any real tube
+    static constexpr uint32_t STORM_COUNTS = 10000;
+    // once a second, parks the pin over STORM_COUNTS isr/s
     void checkIsrStorm();
     void stopIsr();
     void restartIsr();

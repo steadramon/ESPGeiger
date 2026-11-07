@@ -150,17 +150,15 @@ static bool sdk_creds(Creds& c) {
 
 static bool write_backup(const Creds& c) {
   if (!corium::Fs::begin()) return false;
-  File f = corium::Fs::openW(WIFI_BACKUP_PATH);
-  if (!f) return false;
   // 0, len, ssid, len, pass; an ssid can hold \n
+  uint8_t raw[3 + EGPORTAL_SSID_MAX + EGPORTAL_PASS_MAX];
   uint8_t sl = strlen(c.ssid), pl = strlen(c.pass);
-  size_t n = f.write((uint8_t)0);
-  n += f.write(sl);
-  n += f.write((const uint8_t*)c.ssid, sl);
-  n += f.write(pl);
-  n += f.write((const uint8_t*)c.pass, pl);
-  f.close();
-  return n == 1 + 1 + sl + 1 + pl;
+  raw[0] = 0;
+  raw[1] = sl;
+  memcpy(raw + 2, c.ssid, sl);
+  raw[2 + sl] = pl;
+  memcpy(raw + 3 + sl, c.pass, pl);
+  return corium::Fs::writeWhole(WIFI_BACKUP_PATH, raw, 3 + sl + pl);
 }
 
 bool corium::Wifi::saveBackupCreds() {
@@ -253,13 +251,9 @@ bool corium::Wifi::saveNetBackup() {
   if (!corium::Fs::begin()) return false;
   // keep last good
   if (corium::Fs::exists(NET_BACKUP_PATH)) return false;
-  File f = corium::Fs::openW(NET_BACKUP_PATH);
-  if (!f) return false;
   char raw[NET_LINES_MAX];
   net_lines(raw, sizeof(raw));
-  f.print(raw);
-  f.close();
-  return true;
+  return corium::Fs::writeWhole(NET_BACKUP_PATH, raw, strlen(raw));
 }
 
 bool corium::Wifi::probeReachability() {

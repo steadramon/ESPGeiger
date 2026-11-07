@@ -12,11 +12,8 @@
 # in list order, then gzipped as a single stream (browsers don't reliably
 # handle RFC 1952 multi-member gzip; one stream is mandatory).
 #
-# Per-asset fallback: an unexpected failure writes the header with
-# EG_GZ_<NAME> 0 and consumers fall through to the raw R"..." path, so a
-# surprise here never breaks the build.
-#
-# Missing file or symbol is a build error, EG_GZ_ALLOW_STALE=1 for raw
+# Any failure is a build error, raw costs flash.
+# Missing file or symbol: EG_GZ_ALLOW_STALE=1 for raw (EG_GZ_<NAME> 0)
 
 import gzip
 import io
@@ -143,10 +140,6 @@ def process_single(project_dir, gen_dir, rel_path, sym, ctype):
     except StaleAsset:
         emit_header(out_path, sym, ok=False)
         raise
-    except Exception as e:
-        print(f"[gzip_assets] {sym}: {e}; raw fallback")
-        emit_header(out_path, sym, ok=False)
-        return 0, 0
 
 
 def process_combined(project_dir, gen_dir, name, parts, ctype):
@@ -165,10 +158,6 @@ def process_combined(project_dir, gen_dir, name, parts, ctype):
     except StaleAsset:
         emit_header(out_path, name, ok=False)
         raise
-    except Exception as e:
-        print(f"[gzip_assets] {name}: {e}; raw fallback")
-        emit_header(out_path, name, ok=False)
-        return 0, 0
 
 
 def run(project_dir, gen_dir, platform=""):
