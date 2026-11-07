@@ -14,11 +14,12 @@
 // for array sizes, no NUL
 #define EGB64_LEN(n) (((n) + 2) / 3 * 4)
 
-unsigned char binary_to_base64(unsigned char v);
-unsigned char base64_to_binary(unsigned char c);
+unsigned char binary_to_base64(unsigned char v);   // 64 if v is over 63
+unsigned char base64_to_binary(unsigned char c);   // 255 = not base64
 
 unsigned int encode_base64_length(unsigned int input_length);
 
+// stops at the first non base64 byte, '=' or not
 unsigned int decode_base64_length(const unsigned char input[], unsigned int input_length);
 
 // writes a NUL too, output needs EGB64_LEN() + 1

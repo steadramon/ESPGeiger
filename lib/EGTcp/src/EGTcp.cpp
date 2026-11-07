@@ -170,9 +170,9 @@ struct EGTcpRun {
 };
 
 void EGTcp::run() {
-  static bool in_run = false;
-  if (in_run) return;   // a callback polled
-  in_run = true;
+  static bool s_in_run = false;
+  if (s_in_run) return;   // a callback polled
+  s_in_run = true;
   EGTcpCore::owner();
   // before the drain, a post after sets it again
   pending.store(false, std::memory_order_relaxed);
@@ -181,13 +181,13 @@ void EGTcp::run() {
     uint32_t acked = 0;
     EGTcpClient* c = EGTcpRun::take(ev, acked);
     if (!c) {
-      in_run = false;
+      s_in_run = false;
       return;
     }
     EGTcpRun::dispatch(c, ev, acked);
   }
   pending.store(true, std::memory_order_relaxed);   // more next pass
-  in_run = false;
+  s_in_run = false;
 }
 
 /*
@@ -258,7 +258,7 @@ void EGTcpClient::start() {
   EGTcpCore::check();
   forget(false);
   _err = 0;
-  _t_start = EGTcpCore::now();
+  _start_ms = EGTcpCore::now();
   _state = CONNECTING;
   rearm();
 }
@@ -314,7 +314,7 @@ size_t EGTcpClient::write(const void* data, size_t len, uint8_t flags) {
   size_t n = _ops->write(this, data, len, flags);
   if (n) {
     _unacked += n;
-    _t_tx = EGTcpCore::now();
+    _tx_ms = EGTcpCore::now();
     rearm();
   }
   return n;
@@ -411,13 +411,13 @@ void EGTcpClient::resolved() {
 void EGTcpClient::opened() {
   if (_state != CONNECTING || !_h.load()) return;   // an error took it
   _state = OPEN;
-  _t_rx = _t_tx = EGTcpCore::now();
+  _rx_ms = _tx_ms = EGTcpCore::now();
   rearm();
   if (_on_connect) _on_connect();
 }
 
 void EGTcpClient::delivered() {
-  _t_rx = EGTcpCore::now();
+  _rx_ms = EGTcpCore::now();
   rearm();
   if (!_on_data) return;   // pull, it waits
   for (;;) {
@@ -443,7 +443,7 @@ void EGTcpClient::delivered() {
 
 void EGTcpClient::acked(uint32_t n) {
   _unacked = n > _unacked ? 0 : _unacked - n;
-  _t_rx = EGTcpCore::now();
+  _rx_ms = EGTcpCore::now();
   rearm();
   if (_on_sent) _on_sent(n);
 }
@@ -452,11 +452,12 @@ static bool late(uint32_t now, uint32_t since, uint32_t limit) {
   return limit && now - since >= limit;
 }
 
+// idle runs from the later of rx and tx, signed diff so millis wrap is fine
 bool EGTcpClient::due(uint32_t now) const {
-  uint32_t heard = (int32_t)(_t_rx - _t_tx) > 0 ? _t_rx : _t_tx;
-  return (_state == CONNECTING && late(now, _t_start, _to_connect)) ||
-         (_state == OPEN && late(now, heard, _to_idle)) ||
-         (_unacked && late(now, _t_tx, _to_ack));
+  uint32_t heard = (int32_t)(_rx_ms - _tx_ms) > 0 ? _rx_ms : _tx_ms;
+  return (_state == CONNECTING && late(now, _start_ms, _connect_ms)) ||
+         (_state == OPEN && late(now, heard, _idle_ms)) ||
+         (_unacked && late(now, _tx_ms, _ack_ms));
 }
 
 // the soonest due() could say yes, for the stack's poll
@@ -469,9 +470,10 @@ void EGTcpClient::rearm() {
     if (!any || (int32_t)(t - at) < 0) at = t;
     any = true;
   };
-  if (_state == CONNECTING) sooner(_t_start, _to_connect);
-  if (_state == OPEN) sooner((int32_t)(_t_rx - _t_tx) > 0 ? _t_rx : _t_tx, _to_idle);
-  if (_unacked) sooner(_t_tx, _to_ack);
+  if (_state == CONNECTING) sooner(_start_ms, _connect_ms);
+  if (_state == OPEN) sooner((int32_t)(_rx_ms - _tx_ms) > 0 ? _rx_ms : _tx_ms, _idle_ms);
+  if (_unacked) sooner(_tx_ms, _ack_ms);
+  // 0 = nothing timed, so a real 0 goes as 1
   _due_at.store(any ? (at ? at : 1) : 0, std::memory_order_relaxed);
 }
 

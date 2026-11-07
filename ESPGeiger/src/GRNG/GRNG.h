@@ -25,16 +25,22 @@
 
 class EGHttpServer;
 
+// Entropy pool fed by pulse timing, read out through SHA-256
 class GRNG
 {
   public:
     GRNG();
     void begin();
+    // a pulse's timing into the pool, from loop
     static void mix(uint32_t bits);
+    // hw random into the pool, reseeds random()
     static uint32_t stir();
+    // SHA-256 of the pool, for keys and passwords
     static void extract(uint8_t* out, size_t n);
     static uint32_t fast_uint32();
+    // xorshift seeded from the pool, bulk only, not for keys
     static void extract_fast(uint8_t* out, size_t n);
+    // n chars from a flash set, no modulo bias
     static void pick(char* out, size_t n, PGM_P set, uint8_t set_len);
 };
 

@@ -458,6 +458,7 @@ void EGMqtt::flush() {
   compact();
 }
 
+// drops done records, the rest keep their order
 void EGMqtt::compact() {
   _pend = nullptr;
   size_t w = 0;

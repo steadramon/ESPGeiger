@@ -30,7 +30,7 @@ volatile unsigned long _debounce = GEIGER_DEBOUNCE;
 // ~600x any real tube
 static constexpr uint32_t ISR_STORM_THRESHOLD = 10000;
 static constexpr uint8_t  ISR_STORM_COOLDOWN_S = 5;
-static uint8_t s_isr_cooldown = 0;
+static uint8_t s_cooldown_s = 0;
 static bool    s_isr_stopped = false;   // ota, the cooldown leaves it off
 
 corium::IsrLock::Mux timerMux;
@@ -78,16 +78,16 @@ void GeigerInput::setLastBlip()  {
 }
 
 // inline, isr stays one IRAM function
-static inline __attribute__((always_inline)) void count_at(unsigned long cycles) {
+static inline __attribute__((always_inline)) void count_at(unsigned long us) {
   s_isr_entries++;
-  if (cycles - _last_blip < _debounce) {
+  if (us - _last_blip < _debounce) {
     return;
   }
   corium::IsrLock::enterIsr(timerMux);
   s_event_counter++;
   corium::IsrLock::leaveIsr(timerMux);
-  _last_blip = cycles;
-  Counter::on_pulse((uint32_t)cycles);
+  _last_blip = us;
+  Counter::on_pulse((uint32_t)us);
 }
 
 void CORIUM_ISR_ATTR GeigerInput::countInterrupt() {
@@ -106,8 +106,8 @@ void GeigerInput::checkIsrStorm() {
   s_isr_entries = 0;
   corium::IsrLock::leave(timerMux);
 
-  if (s_isr_cooldown > 0) {
-    if (--s_isr_cooldown == 0 && !s_isr_stopped) {
+  if (s_cooldown_s > 0) {
+    if (--s_cooldown_s == 0 && !s_isr_stopped) {
       corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);
       corium::Log::console(PSTR("GeigerPulse: re-armed after storm cooldown"));
     }
@@ -116,7 +116,7 @@ void GeigerInput::checkIsrStorm() {
 
   if (n > ISR_STORM_THRESHOLD) {
     corium::IsrLock::pinOff(_rx_pin);
-    s_isr_cooldown = ISR_STORM_COOLDOWN_S;
+    s_cooldown_s = ISR_STORM_COOLDOWN_S;
     corium::Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
                  (unsigned)n, (unsigned)ISR_STORM_COOLDOWN_S);
   }
@@ -130,7 +130,7 @@ void GeigerInput::stopIsr() {
 // a storm cooldown re-arms it when done
 void GeigerInput::restartIsr() {
   s_isr_stopped = false;
-  if (s_isr_cooldown == 0) corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);
+  if (s_cooldown_s == 0) corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);
 }
 
 void GeigerInput::setCounter(int val, bool update) {

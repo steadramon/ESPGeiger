@@ -18,7 +18,7 @@
 */
 
 // Fixed timeline, a late edge never moves the next
-// lengths are 80 MHz ticks, times CCOUNT, shift by x2
+// Lengths are 80 MHz ticks, times are CCOUNT, shift by x2
 
 #ifndef EG_TIMER1_PWM_H
 #define EG_TIMER1_PWM_H
@@ -31,6 +31,7 @@
 
 enum : uint8_t { EGT1_PWM_WAIT = 0, EGT1_PWM_RISE, EGT1_PWM_FALL, EGT1_PWM_SKIP };
 
+// main writes, the NMI takes it at the next period start
 struct EGT1PwmMailbox {
   volatile uint32_t period;
   volatile uint32_t on;
@@ -43,7 +44,7 @@ struct EGT1PwmState {
   uint32_t period;
   uint32_t on;      // 0 = held low
   uint32_t skips;
-  uint32_t debt;    // cycles late, off the next pulse
+  uint32_t debt;    // cycles late, taken off the next pulse
   uint8_t  high;
 };
 
@@ -89,6 +90,7 @@ __attribute__((always_inline)) inline uint8_t egt1_pwm_step(EGT1PwmState& s, EGT
   s.next = s.start + (s.period << x2);
   uint32_t on = s.on << x2;
   if (!on) return EGT1_PWM_SKIP;
+  // too late to rise and still fall on time
   if ((int32_t)(now - (s.start + on - lead)) >= 0) {
     s.skips++;
     return EGT1_PWM_SKIP;

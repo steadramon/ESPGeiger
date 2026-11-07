@@ -48,11 +48,12 @@ static_assert(CORIUM_PREFS_MAX_GROUPS >= CORIUM_MAX_MODULES, "every module needs
 
 #define CORIUM_PREFS_NAMESPACE    "prefs"
 
+// a group's live values in SRAM, files only change at commit
 struct GroupShadow {
   const corium::PrefGroup* group;
   corium::Module*          module;
-  const char**       values;
-  uint32_t           heap_mask;
+  const char**       values;    // per row: heap copy or the default's own pointer
+  uint32_t           heap_mask; // bit j = values[j] is malloc'd
   uint8_t            dirty;     // DIRTY, or HELD: commitSoon called back, write waits
   bool               stored;
   uint8_t            partial;   // a stored value didn't load, never write over it: row + 1, or MANY
@@ -82,7 +83,7 @@ static GroupShadow    s_groups[CORIUM_PREFS_MAX_GROUPS];
 static size_t         s_group_count = 0;
 static bool           s_begun = false;
 static bool           s_restart_pending = false;
-static bool           s_reboot_put = false;   // an corium::P_REBOOT row changed
+static bool           s_reboot_put = false;   // a P_REBOOT row changed
 static const char*    s_refused = nullptr;
 static const char*    s_warned = nullptr;
 static corium::PrefsStorage s_storage;
@@ -124,12 +125,12 @@ namespace {
 
 static GroupShadow* s_last_group = nullptr;  // one-entry cache
 
-GroupShadow* find_group(const char* moduleId) {
-  if (!moduleId) return nullptr;
-  if (s_last_group && strcmp(s_last_group->group->moduleId, moduleId) == 0)
+GroupShadow* find_group(const char* id) {
+  if (!id) return nullptr;
+  if (s_last_group && strcmp(s_last_group->group->moduleId, id) == 0)
     return s_last_group;
   for (size_t i = 0; i < s_group_count; i++) {
-    if (strcmp(s_groups[i].group->moduleId, moduleId) == 0) {
+    if (strcmp(s_groups[i].group->moduleId, id) == 0) {
       s_last_group = &s_groups[i];
       return s_last_group;
     }
@@ -163,6 +164,7 @@ const char* find_value(const char* module, const char* key) {
   return gs ? gs->values[idx] : nullptr;
 }
 
+// no control chars, valid utf8, fits the pattern
 bool string_ok(const corium::Pref* p, const char* value) {
   for (const char* v = value; *v; v++) {
     unsigned char c = (unsigned char)*v;
@@ -305,16 +307,16 @@ bool write_group(GroupShadow& gs, bool stage = false) {
   uint8_t* buf = (uint8_t*)malloc(total);
   if (!buf) return false;
   corium::putMagic(buf);
-  size_t p = corium::PREFS_MAGIC_LEN;
+  size_t pos = corium::PREFS_MAGIC_LEN;
   for (size_t j = 0; j < gs.group->count.get(); j++) {
     const char* key = gs.group->prefs.id_P(j);
     size_t klen = strlen_P(key);
     const char* value = gs.values[j];
     size_t vlen = strlen(value);
-    buf[p++] = (uint8_t)klen;
-    memcpy_P(&buf[p], key, klen); p += klen;
-    wrLe16(&buf[p], (uint16_t)vlen); p += 2;
-    memcpy(&buf[p], value, vlen); p += vlen;
+    buf[pos++] = (uint8_t)klen;
+    memcpy_P(&buf[pos], key, klen); pos += klen;
+    wrLe16(&buf[pos], (uint16_t)vlen); pos += 2;
+    memcpy(&buf[pos], value, vlen); pos += vlen;
   }
   const char* id = gs.group->moduleId;
   bool ok = stage ? s_storage.stageGroup(id, buf, total) : s_storage.writeGroup(id, buf, total);
@@ -590,6 +592,7 @@ static corium::PinSafety::Use pin_use(uint16_t flags) {
   return flags & corium::P_PIN_OUT ? corium::PinSafety::USE_OUT : corium::PinSafety::USE_IN;
 }
 
+// pin rows only, sets s_refused and s_warned
 static bool pin_refused(const corium::Pref& p, const char* module, const char* key, const char* v) {
   int32_t pin;
   if (!(p.flags & (corium::P_PIN | corium::P_PIN_OUT)) || !parseI32(v, &pin)) return false;
@@ -611,19 +614,20 @@ bool corium::Prefs::put(const char* module, const char* key, const char* value) 
   const corium::Pref p = gs->group->prefs.row(idx);
   if (p.flags & corium::P_READONLY) return false;
 
-  char normalized[CORIUM_PREFS_MAX_VALUE + 1];
-  int nlen = validate(&p, value, normalized, sizeof(normalized));
+  char out[CORIUM_PREFS_MAX_VALUE + 1];
+  int nlen = validate(&p, value, out, sizeof(out));
   if (nlen < 0) return false;
 
-  if (strcmp(normalized, gs->values[idx]) != 0) {
+  // same value = nothing to do, still true
+  if (strcmp(out, gs->values[idx]) != 0) {
     // changes only, a stored pin still loads
-    if (pin_refused(p, module, key, normalized)) return false;
+    if (pin_refused(p, module, key, out)) return false;
     // write_group would refuse it, and every commit after
     if (group_bytes(*gs) - strlen(gs->values[idx]) + nlen > CORIUM_PREFS_MAX_GROUP_SZ) {
       s_refused = PSTR("group full");
       return false;
     }
-    if (!shadow_set(*gs, idx, normalized, (size_t)nlen)) {
+    if (!shadow_set(*gs, idx, out, (size_t)nlen)) {
       s_refused = PSTR("no memory");
       return false;
     }
@@ -650,17 +654,17 @@ bool corium::Prefs::putUInt(const char* module, const char* key, uint32_t value)
   return put(module, key, buf);
 }
 
-static size_t frozen_text(const GroupShadow& gs, char* out, size_t n) {
+static size_t frozen_text(const GroupShadow& gs, char* out, size_t cap) {
   const char* id = gs.group->moduleId;
   int len;
-  if (gs.partial == MANY) len = snprintf_P(out, n, PSTR("%s didn't load in full, reset it"), id);
-  else len = snprintf_P(out, n, PSTR("%s.%s didn't load, set it or reset %s"),
+  if (gs.partial == MANY) len = snprintf_P(out, cap, PSTR("%s didn't load in full, reset it"), id);
+  else len = snprintf_P(out, cap, PSTR("%s.%s didn't load, set it or reset %s"),
                         id, gs.group->prefs.id_P(gs.partial - 1), id);
   return len > 0 ? (size_t)len : 0;
 }
 
-size_t corium::Prefs::frozen(char* out, size_t n) {
-  return s_frozen ? frozen_text(*s_frozen, out, n) : 0;
+size_t corium::Prefs::frozen(char* out, size_t cap) {
+  return s_frozen ? frozen_text(*s_frozen, out, cap) : 0;
 }
 
 // all local = no export or import touches it
@@ -671,9 +675,9 @@ static bool exported(const GroupShadow& gs) {
   return false;
 }
 
-size_t corium::Prefs::anyFrozen(char* out, size_t n) {
+size_t corium::Prefs::anyFrozen(char* out, size_t cap) {
   for (size_t i = 0; i < s_group_count; i++) {
-    if (s_groups[i].partial && exported(s_groups[i])) return frozen_text(s_groups[i], out, n);
+    if (s_groups[i].partial && exported(s_groups[i])) return frozen_text(s_groups[i], out, cap);
   }
   return 0;
 }
@@ -777,7 +781,7 @@ bool corium::Prefs::commit(bool fire_callbacks) {
 }
 
 // callbacks now as commit's, the write waits for flush()
-bool corium::Prefs::commitSoon(uint32_t now) {
+bool corium::Prefs::commitSoon(uint32_t now_ms) {
   if (!s_wake) return commit();
   s_restart_pending = s_reboot_put;
   s_frozen = nullptr;
@@ -795,7 +799,7 @@ bool corium::Prefs::commitSoon(uint32_t now) {
   }
   if (held && !s_waiting) {
     s_waiting = true;
-    s_wake(now + CORIUM_PREFS_HOLD_MS);
+    s_wake(now_ms + CORIUM_PREFS_HOLD_MS);
   }
   return !s_frozen;
 }
@@ -858,7 +862,7 @@ bool corium::Prefs::removeGroup(const char* module) {
   return removed;
 }
 
-// corium::P_KEEP rows always stay, corium::P_LOCAL too with keep_network (an import never carries them)
+// P_KEEP rows always stay, P_LOCAL too with keep_network (an import never carries them)
 void corium::Prefs::resetAll(bool keep_network) {
   uint16_t keep = keep_network ? (corium::P_KEEP | corium::P_LOCAL) : corium::P_KEEP;
   for (size_t i = 0; i < s_group_count; i++) {
@@ -890,8 +894,8 @@ void corium::Prefs::revert() {
 
 bool corium::Prefs::groupEnabled(const corium::PrefGroup* g) {
   if (!g->enableKey) return true;
-  const char* ev = getString(g->moduleId, g->enableKey);
-  return ev[0] != '\0' && strcmp_P(ev, PSTR("0")) != 0 && strcmp_P(ev, PSTR("-1")) != 0;
+  const char* v = getString(g->moduleId, g->enableKey);
+  return v[0] != '\0' && strcmp_P(v, PSTR("0")) != 0 && strcmp_P(v, PSTR("-1")) != 0;
 }
 
 void corium::Prefs::needsRestart() { s_restart_pending = true; }

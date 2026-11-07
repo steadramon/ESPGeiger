@@ -32,8 +32,9 @@ uint32_t corium::Reactor::s_ms_acc_us = 0;
 
 static Ticker s_ms_ticker;
 static void (*s_app)(uint32_t) = nullptr;
+// boot guard marks, once each
 static bool s_lived = false;
-static bool s_day = false;
+static bool s_day_marked = false;
 
 void corium::Reactor::clock(void (*ms)()) {
   // else first tick sees all of uptime
@@ -45,9 +46,9 @@ void corium::Reactor::clock(void (*ms)()) {
 
 void corium::Reactor::second() {
   corium::TickProfile::beginTick();
-  if (!s_day && corium::fastMillis() > corium::BootGuard::DAY_MS) {
+  if (!s_day_marked && corium::fastMillis() > corium::BootGuard::DAY_MS) {
     corium::BootGuard::markDay();
-    s_day = true;
+    s_day_marked = true;
   }
   uint32_t up = (uint32_t)corium::Uptime::tick();
   if (s_app) s_app(up);

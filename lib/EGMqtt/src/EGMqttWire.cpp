@@ -23,16 +23,19 @@
 namespace EGMqttWire {
 
 static const uint16_t STR_MAX = 0xFFFF;
-static const uint8_t FLAGS_02 = 0x02;
+static const uint8_t FLAGS_02 = 0x02;   // fixed bits PUBREL, SUBSCRIBE, UNSUBSCRIBE carry
 
+// "MQTT", level 4 = 3.1.1
 static const uint8_t NAME_LEVEL[] = { 0, 4, 'M', 'Q', 'T', 'T', 4 };
 
+// CONNECT flags, C_WILL_QOS is a shift
 enum : uint8_t {
   C_CLEAN = 0x02, C_WILL = 0x04, C_WILL_QOS = 3, C_WILL_RETAIN = 0x20, C_PASS = 0x40, C_USER = 0x80,
 };
 
 // Lengths and headers
 
+// remaining length bytes, 1-4
 static size_t len_bytes(uint32_t n) {
   return n < 128 ? 1 : n < 16384 ? 2 : n < 2097152 ? 3 : 4;
 }
@@ -63,7 +66,7 @@ int header(const uint8_t* in, size_t avail, uint8_t* first, uint32_t* rem) {
   return -1;   // a 5th length byte
 }
 
-// the fixed header, 0 = the whole packet won't fit
+// Writes the fixed header, 0 if the whole packet won't fit
 static size_t start(uint8_t* out, size_t cap, uint8_t first, uint32_t rem) {
   if (rem > LEN_MAX) return 0;
   size_t h = 1 + len_bytes(rem);
@@ -114,7 +117,7 @@ bool utf8_ok(const uint8_t* s, size_t n) {
   return true;
 }
 
-// as utf8_ok, or no NUL only
+// Same as utf8_ok, or just the no NUL check with EGMQTT_CHECK_TEXT 0
 static bool chars_ok(const void* s, size_t n) {
   return EGMQTT_CHECK_TEXT ? utf8_ok((const uint8_t*)s, n) : !memchr(s, 0, n);
 }
@@ -147,7 +150,7 @@ bool filter_ok(const char* s) {
   return true;
 }
 
-// one level each, both left on the '/' or the end; false = they differ
+// Compares one level of each, leaves both on the '/' or the end. false if they differ
 static bool same_level(const char** f, const char** t) {
   if (**f == '+') {
     (*f)++;
@@ -175,7 +178,7 @@ bool matches(const char* f, const char* t) {
 
 // Building
 
-// a string's 2 + its length onto rem, false = too long or not text
+// Adds a string's 2 + its length to rem, false if too long or not text
 static bool field(const char* s, bool text, uint32_t* rem) {
   size_t n = strlen(s);
   if (n > STR_MAX || (text && !chars_ok(s, n))) return false;
@@ -188,7 +191,7 @@ static bool will_ok(const Connect& c) {
          (c.will_msg || !c.will_len);
 }
 
-// the CONNECT's remaining length, 0 = settings no broker would take
+// Remaining length of the CONNECT, 0 for settings no broker would take
 static uint32_t connect_rem(const Connect& c) {
   const char* id = c.client_id ? c.client_id : "";
   uint32_t rem = sizeof(NAME_LEVEL) + 1 + 2;   // flags, keepalive
@@ -235,9 +238,9 @@ size_t connect(uint8_t* out, size_t cap, const Connect& c) {
   return h + rem;
 }
 
-static bool publish_ok(const Publish& m) {
-  return m.topic && topic_ok(m.topic, m.topic_len) && m.qos <= 2 && (m.id || !m.qos) &&
-         (m.payload || !m.len) && m.len <= LEN_MAX;
+static bool publish_ok(const Publish& p) {
+  return p.topic && topic_ok(p.topic, p.topic_len) && p.qos <= 2 && (p.id || !p.qos) &&
+         (p.payload || !p.len) && p.len <= LEN_MAX;
 }
 
 size_t publish(uint8_t* out, size_t cap, const Publish& m) {
@@ -249,7 +252,7 @@ size_t publish(uint8_t* out, size_t cap, const Publish& m) {
   if (!h) return 0;
   uint8_t* p = put_str(out + h, m.topic, m.topic_len);
   if (m.qos) p = put16(p, m.id);
-  if (m.len) memmove(p, m.payload, m.len);   // may already sit in out, a little higher
+  if (m.len) memmove(p, m.payload, m.len);   // payload may already be in out, a little higher up
   return h + rem;
 }
 

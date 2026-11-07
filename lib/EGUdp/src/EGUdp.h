@@ -48,10 +48,11 @@ class EGUdp {
     EGUdp(const EGUdp&) = delete;
     EGUdp& operator=(const EGUdp&) = delete;
 
-    bool begin(uint16_t port);   // 0 = any free one
+    // port 0 = any free one; false = open already, no memory or bind failed
+    bool begin(uint16_t port);
     void end();                  // leaves the group, queued ones dropped
 
-    // one group, any iface = all
+    // v4 only, one group, any iface = all
     bool join(const EGTcpAddr& group, const EGTcpAddr& iface = EGTcpAddr());
     // after begin(), the 8266 core's beginPacketMulticast()
     void setMulticast(const EGTcpAddr& iface, uint8_t ttl = 1);
@@ -63,11 +64,13 @@ class EGUdp {
       if (_count.load(std::memory_order_acquire)) run();
     }
 
+    // copied before it returns; false = not open, no memory or the stack said no
     bool sendTo(const EGTcpAddr& to, uint16_t port, const void* data, size_t len);
 
     bool listening() const { return _h != nullptr; }
     uint16_t localPort() const { return _port; }
     uint8_t waiting() const { return _count.load(std::memory_order_relaxed); }
+    // dropped counts: over max, and no free slot
     uint32_t tooBig() const { return _big.load(std::memory_order_relaxed); }
     uint32_t full() const { return _full.load(std::memory_order_relaxed); }
 

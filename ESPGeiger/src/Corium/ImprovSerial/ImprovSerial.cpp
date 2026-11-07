@@ -51,7 +51,7 @@ static void device_url(char* url, size_t cap) {
 }
 
 void corium::ImprovSerial::begin() {
-  _position = 0;
+  _pos = 0;
   _state = improv::STATE_AUTHORIZED;
   while (Serial.available()) Serial.read();
 }
@@ -65,22 +65,23 @@ void corium::ImprovSerial::poll() {
 
 bool corium::ImprovSerial::consumeByte(uint8_t b) {
   uint32_t now = corium::fastMillis();
-  if (_position && now - _last_byte_ms > 2000) {
-    _position = 0;
+  // 2s gap mid frame, start again
+  if (_pos && now - _last_byte_ms > 2000) {
+    _pos = 0;
   }
   _last_byte_ms = now;
 
-  if (_position >= sizeof(_buffer)) _position = 0;
-  _buffer[_position] = b;
+  if (_pos >= sizeof(_buf)) _pos = 0;
+  _buf[_pos] = b;
   bool consumed = improv::parse_improv_serial_byte(
-    _position, b, _buffer,
+    _pos, b, _buf,
     [this](improv::ImprovCommand cmd) { return on_command(cmd); },
     [this](improv::Error err) { on_error(err); });
   if (consumed) {
-    _position++;
+    _pos++;
     return true;
   }
-  _position = 0;
+  _pos = 0;
   return false;
 }
 
@@ -104,7 +105,7 @@ void corium::ImprovSerial::send_frame(improv::ImprovSerialType type, const uint8
   frame[pos++] = (uint8_t)len;
   memcpy(frame + pos, payload, len);
   pos += len;
-  uint8_t checksum = 0;
+  uint8_t checksum = 0;   // byte sum, header too
   for (size_t i = 0; i < pos; i++) checksum += frame[i];
   frame[pos++] = checksum;
   frame[pos++] = '\n';
@@ -114,7 +115,7 @@ void corium::ImprovSerial::send_frame(improv::ImprovSerialType type, const uint8
 // as improv's build_rpc_response, its unused checksum byte kept
 void corium::ImprovSerial::send_response_data(improv::Command cmd, const char* const* datum, uint8_t n) {
   uint8_t out[FRAME_MAX - FRAME_OVERHEAD];
-  size_t pos = 2;
+  size_t pos = 2;   // cmd, total len, then len + string each
   for (uint8_t i = 0; i < n; i++) {
     size_t len = strlen(datum[i]);
     if (len + 2 > sizeof(out) - pos) return;   // too big to send
@@ -143,9 +144,22 @@ void corium::ImprovSerial::send_error(improv::Error err) {
 // boot still joining the saved wifi; uptime ticks from the loop, the ms clock from setup
 static const uint32_t IMPROV_JOIN_MS = 30000;
 
+static improv::State current_state() {
+  if (corium::Wifi::connectedRaw()) return improv::STATE_PROVISIONED;
+  // can take 50ms on esp32
+  static bool s_asked = false;
+  static bool s_have = false;
+  if (!s_asked) {
+    s_have = corium::Wifi::hasSavedCreds();
+    s_asked = true;
+  }
+  bool joining = corium::fastMillis() < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
+  return (joining && s_have) ? improv::STATE_PROVISIONING : improv::STATE_AUTHORIZED;
+}
+
 bool corium::ImprovSerial::on_command(improv::ImprovCommand cmd) {
   // mid join, a frame here would nest another
-  if (_in_wifi_settings) {
+  if (_joining) {
     send_error(improv::ERROR_UNKNOWN);
     return false;
   }
@@ -153,24 +167,10 @@ bool corium::ImprovSerial::on_command(improv::ImprovCommand cmd) {
     case improv::WIFI_SETTINGS:
       handle_wifi_settings(cmd.ssid, cmd.password);
       break;
-    case improv::GET_CURRENT_STATE: {
-      if (corium::Wifi::connectedRaw()) {
-        _state = improv::STATE_PROVISIONED;
-      } else {
-        // can take 50ms on esp32
-        static bool s_creds_cached = false;
-        static bool s_creds_value = false;
-        if (!s_creds_cached) {
-          s_creds_value = corium::Wifi::hasSavedCreds();
-          s_creds_cached = true;
-        }
-        bool joining = corium::fastMillis() < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
-        _state = (joining && s_creds_value) ? improv::STATE_PROVISIONING : improv::STATE_AUTHORIZED;
-      }
-      set_state(_state);
+    case improv::GET_CURRENT_STATE:
+      set_state(current_state());
       if (_state == improv::STATE_PROVISIONED) send_url(improv::GET_CURRENT_STATE);
       break;
-    }
     case improv::GET_DEVICE_INFO:
       send_device_info();
       break;
@@ -181,7 +181,7 @@ bool corium::ImprovSerial::on_command(improv::ImprovCommand cmd) {
       send_error(improv::ERROR_UNKNOWN_RPC);
       break;
   }
-  return false;   // resets _position
+  return false;   // resets _pos
 }
 
 void corium::ImprovSerial::on_error(improv::Error err) {
@@ -201,6 +201,7 @@ void corium::ImprovSerial::send_device_info() {
 
 void corium::ImprovSerial::send_wifi_networks() {
   int n = corium::Wifi::scanNetworks(false, false);
+  // one row per ssid, its strongest AP, 16 max
   int8_t best_idx[16];
   uint8_t kept = 0;
   for (int i = 0; i < n && kept < 16; i++) {
@@ -238,7 +239,7 @@ void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
     send_error(improv::ERROR_UNABLE_TO_CONNECT);
     return;
   }
-  _in_wifi_settings = true;
+  _joining = true;
   set_state(improv::STATE_PROVISIONING);
   corium::Wifi::saveBackupCreds();
   corium::Wifi::onImprovCreds(ssid.c_str(), password.c_str());
@@ -246,7 +247,7 @@ void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
   corium::Wifi::join(ssid.c_str(), password.c_str());
 
   // frame done, else its '\n' lands in the checksum slot
-  _position = 0;
+  _pos = 0;
   // esp-web-tools gives up at 30s
   uint32_t start = corium::fastMillis();
   while (corium::fastMillis() - start < 25000) {
@@ -255,7 +256,7 @@ void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
       send_url(improv::WIFI_SETTINGS);
       corium::Log::console(PSTR("Improv: provisioned ssid='%s' ip=%s"),
                    ssid.c_str(), corium::Wifi::localIP().toString().c_str());
-      _in_wifi_settings = false;
+      _joining = false;
       return;
     }
     yield();
@@ -267,6 +268,6 @@ void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
   corium::Wifi::off();
   set_state(improv::STATE_AUTHORIZED);
   send_error(improv::ERROR_UNABLE_TO_CONNECT);
-  _in_wifi_settings = false;
+  _joining = false;
 }
 

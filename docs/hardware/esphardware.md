@@ -67,7 +67,7 @@ The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://d
 
 Hardware is the better choice at high count rates: it has no dead time of its own, while the interrupt counter's debounce (below) drops pulses that come close together.
 
-The PCNT input pin floats by default, which suits modules that drive the line both ways. Change **PCNT Pull** in the Input tab's advanced settings to pull-up for open-drain outputs, or pull-down for active-high modules with no idle pull of their own.
+The PCNT input pin floats by default (None), as an internal pull-up can hold some modules' output high so no pulse gets through (the Cajoe IOT-GM v1.1, for one). Change **PCNT Pull** in the Input tab's advanced settings to Pull-up for open-drain outputs, or Pull-down for active-high modules with no idle pull of their own.
 
 ### PCNT Filter
 

@@ -108,7 +108,7 @@ class Registry {
       Module* module;
       uint32_t loop_last;
       uint32_t next_due;
-      uint32_t period;           // 0 = none
+      uint32_t period_ms;        // 0 = none
       uint16_t topics;           // on()
       uint16_t events;           // emitted, not taken yet
       uint8_t flags;
@@ -147,6 +147,7 @@ class Registry {
     static inline uint32_t next_wake(unsigned long now);
 };
 
+// static init, before setup; FEATURE also sets a features() bit
 #define CORIUM_REGISTER_MODULE(instance) \
   static bool _reg_##instance = corium::Registry::add(&instance);
 #define CORIUM_REGISTER_FEATURE(instance, bit) \

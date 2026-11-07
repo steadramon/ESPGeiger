@@ -42,7 +42,7 @@ class NTP_Client : public Module {
     static constexpr uint16_t LOOP_MS = 60000;
     void loop(unsigned long now) override;
     void begin() override;
-    void setup();
+    void setup();   // (re)starts sntp from the prefs
     const PrefGroup* prefsGroup() override;
     void onPrefsLoaded() override;
     void onPrefsSaved() override;

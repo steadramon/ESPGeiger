@@ -89,7 +89,7 @@ The `/lastdata` endpoint returns a single comma-separated line in GeigerLog's 12
 | 9 | Temp | Temperature, if an environment sensor is fitted |
 | 10 | Press | Pressure, if fitted |
 | 11 | Humid | Humidity, if fitted |
-| 12 | Xtra | HV in volts (ESPGeiger-HW), otherwise dose rate in µSv/h |
+| 12 | Xtra | HV in volts (builds with HV feedback: ESPGeiger-HW, `*_hv`), otherwise dose rate in µSv/h |
 
 Positions 4, 6, 7 and 8 (CPS1st / CPS2nd / CPM3rd / CPS3rd) are always empty.
 

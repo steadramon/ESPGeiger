@@ -46,7 +46,7 @@ extern const char EG_K_TYPE[];
 extern const char EG_K_USER[];
 extern const char EG_K_VOLUME[];
 
-// Shared labels
+// Shared labels: L label, O options, H hint, P input pattern
 extern const char EG_L_EN[];
 extern const char EG_L_MOD[];
 extern const char EG_L_INT[];

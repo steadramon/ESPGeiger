@@ -25,22 +25,22 @@
 #include <string.h>
 
 // Use after every snprintf, it returns the untruncated length
-static inline void advancePos(size_t& pos, int nret, size_t bufsz) {
-  if (nret <= 0) return;
-  size_t want = (size_t) nret;
-  size_t room = (pos < bufsz) ? (bufsz - pos - 1) : 0;  // -1 for NUL
+static inline void advancePos(size_t& pos, int n, size_t cap) {
+  if (n <= 0) return;
+  size_t want = (size_t) n;
+  size_t room = (pos < cap) ? (cap - pos - 1) : 0;  // -1 for NUL
   pos += (want < room) ? want : room;
 }
 
-// null fp = ""
+// Copies PROGMEM fp to dst, cut at cap. null fp = ""
 const char* flashToRam(const char* fp, char* dst, size_t cap);
 
-// 2n chars, no NUL
+// writes 2n chars, no NUL
 void hexEncode(char* out, const uint8_t* in, size_t n);
 // exactly 2n hex chars, anything else is false and out untouched
 bool hexDecode(uint8_t* out, const char* in, size_t n);
 
-// no exponent, hex or INF/NAN, keeps newlib strtof out
+// No exponent, hex or INF/NAN, keeps newlib's strtof out of the build
 static inline float parseF(const char* s, char** endptr = nullptr) {
   const char* p = s;
   bool neg = false;
@@ -74,14 +74,14 @@ static inline float parseF(const char* s, char** endptr = nullptr) {
   return neg ? -mag : mag;
 }
 
-// false leaves *out alone. end null = whole string
+// false leaves *out alone. A null end means the whole string has to parse
 bool parseI32(const char* s, int32_t* out, const char** end = nullptr);
 bool parseU64(const char* s, uint64_t* out);   // digits only
-bool parseCenti(const char* s, int32_t* out);
+bool parseCenti(const char* s, int32_t* out);   // "12.34" -> 1234, no sign
 
 void fmtU64(char* out, size_t cap, uint64_t v);   // no %llu in nano libc
 
-// In place, fields point into buf. Missing lines are ""
+// In place, fields point into buf, \r dropped. Missing lines are ""
 uint8_t splitLines(char* buf, char** fields, uint8_t n);
 
 // strict "HH:MM", keep the digit check
@@ -91,17 +91,17 @@ struct ParsedTime {
   bool isValid;
 };
 
-inline ParsedTime parseTime(const char* timeStr) {
+inline ParsedTime parseTime(const char* s) {
   ParsedTime pt = { -1, -1, false };
-  if (!timeStr || strlen(timeStr) != 5 || timeStr[2] != ':') return pt;
+  if (!s || strlen(s) != 5 || s[2] != ':') return pt;
   for (uint8_t i = 0; i < 5; i++) {
     if (i == 2) continue;
-    if (timeStr[i] < '0' || timeStr[i] > '9') return pt;
+    if (s[i] < '0' || s[i] > '9') return pt;
   }
-  int hv = (timeStr[0] - '0') * 10 + (timeStr[1] - '0');
-  int mv = (timeStr[3] - '0') * 10 + (timeStr[4] - '0');
-  if (hv <= 23 && mv <= 59) {
-    pt.hour = hv; pt.minute = mv; pt.isValid = true;
+  int h = (s[0] - '0') * 10 + (s[1] - '0');
+  int m = (s[3] - '0') * 10 + (s[4] - '0');
+  if (h <= 23 && m <= 59) {
+    pt.hour = h; pt.minute = m; pt.isValid = true;
   }
   return pt;
 }

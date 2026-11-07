@@ -52,6 +52,7 @@
 #else
 #define M_HAS_HV 0
 #endif
+// tube volts, false with no hv row
 inline bool m_hv_volts(int32_t* v) {
   corium::MeasureIter it(corium::M_OUT_ANY, false, M_HV);
   if (!it.next()) return false;

@@ -68,24 +68,25 @@ corium::LegacyRows Radmon::legacyAliases() { return RADMON_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Radmon::Radmon() {
-  pingIntervalMs = (uint32_t)RADMON_INTERVAL * 1000UL;
+  _every_ms = (uint32_t)RADMON_INTERVAL * 1000UL;
 }
 
 void Radmon::setInterval(int interval) {
-  pingInterval = setIntervalS(interval, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX);
+  _interval_s = setIntervalS(interval, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX);
 }
 
 int Radmon::getInterval() {
-  return pingInterval;
+  return _interval_s;
 }
 
 void Radmon::onPrefsLoaded() {
-  int rtimer = (int)corium::Prefs::getUInt("radmon", EG_K_INTERVAL);
-  if (rtimer == 0) rtimer = RADMON_INTERVAL;
-  setInterval(rtimer);
+  int iv = (int)corium::Prefs::getUInt("radmon", EG_K_INTERVAL);
+  if (iv == 0) iv = RADMON_INTERVAL;
+  setInterval(iv);
   setEnabled(corium::Prefs::getBool("radmon", EG_K_SEND));
 }
 
+// "OK<br>" on success, else the error text
 bool Radmon::interpret(const char* r)
 {
   if (strcmp_P(r, PSTR("OK<br>")) == 0) {
@@ -106,24 +107,25 @@ bool Radmon::interpret(const char* r)
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
   if (!upload_ready(logTag())) return false;
 
-  const char* _api_user = corium::Prefs::getString("radmon", EG_K_USER);
-  const char* _api_key  = corium::Prefs::getString("radmon", EG_K_PASSWORD);
-  if (_api_user[0] == '\0' || _api_key[0] == '\0') {
+  const char* raw_user = corium::Prefs::getString("radmon", EG_K_USER);
+  const char* raw_pass = corium::Prefs::getString("radmon", EG_K_PASSWORD);
+  if (raw_user[0] == '\0' || raw_pass[0] == '\0') {
     corium::Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
     return false;
   }
 
   corium::Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
+  // the average nearest the interval: 1, 5 or 15 min
   float avgcpm;
-  if      (pingInterval <= 90)  avgcpm = corium::m_f(M_CPM_ST);
-  else if (pingInterval <= 450) avgcpm = corium::m_f(M_CPM5);
-  else                          avgcpm = corium::m_f(M_CPM15);
-  char cpmbuf[12];
-  format_f(cpmbuf, sizeof(cpmbuf), avgcpm, 1);
+  if      (_interval_s <= 90)  avgcpm = corium::m_f(M_CPM_ST);
+  else if (_interval_s <= 450) avgcpm = corium::m_f(M_CPM5);
+  else                         avgcpm = corium::m_f(M_CPM15);
+  char value[12];
+  format_f(value, sizeof(value), avgcpm, 1);
   char user[3 * RADMON_USER_MAX + 1], pass[3 * RADMON_PASS_MAX + 1];
-  egesc_url(user, sizeof(user), _api_user);
-  egesc_url(pass, sizeof(pass), _api_key);
-  return urlFits(snprintf_P(url, cap, RADMON_URI, user, pass, cpmbuf), cap);
+  egesc_url(user, sizeof(user), raw_user);
+  egesc_url(pass, sizeof(pass), raw_pass);
+  return urlFits(snprintf_P(url, cap, RADMON_URI, user, pass, value), cap);
 }
 #endif

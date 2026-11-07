@@ -87,6 +87,7 @@ void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {
   const uint8_t nb = Counter::pulse_histogram_buckets();
   uint32_t hist[nb];
   gcounter.pulse_histogram(hist);
+  // cumulative, bucket b tops out at 64 us << b, last is +Inf
   uint32_t cumul = 0;
   for (uint8_t b = 0; b < nb; b++) {
     cumul += hist[b];

@@ -26,6 +26,7 @@
 #define GEIGER_MODEL "test"
 #endif
 
+// Timer pulses counted in loop, no pin
 class GeigerTest final : public GeigerInputTest
 {
   public:

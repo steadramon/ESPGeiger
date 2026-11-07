@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <string.h>
 
+// CPM per uSv/h
 #ifndef GEIGER_RATIO
   #define GEIGER_RATIO 151.0  // pref default is STR() of it
 #endif
@@ -42,6 +43,7 @@
 #ifndef GEIGER_DEAD_COUNTS
 #define GEIGER_DEAD_COUNTS 20
 #endif
+// 6 h, cap on the observed rate timeout
 #define GEIGER_TUBE_DEAD_MAX_S 21600
 // uSv/h, until the first count
 #ifndef GEIGER_ASSUMED_BG_USVH
@@ -52,6 +54,7 @@
 #define GEIGER_TUBE_TIMEOUT_MIN_S 1800
 #endif
 
+// samples in the 5 and 15 min averages
 #define GEIGER_CPM5_COUNT 60
 #define GEIGER_CPM15_COUNT 60
 // same as a 60 sample avg
@@ -61,6 +64,7 @@
 
 class CounterMaths {
   public:
+    // pulse interval histogram, log2 buckets from 64 us
     static constexpr uint8_t  HIST_BUCKETS = 25;
     static constexpr uint32_t HIST_BASE_US = 64;
     static constexpr uint32_t MISSING_MIN_S = 60;   // never sooner
@@ -121,7 +125,7 @@ class CounterMaths {
     }
     float get_ratio() const { return _ratio; }
 
-    void     set_dead_time_us(uint16_t us) { _dead_time_us = us; _dead_time_sec = us * 1e-6f; }
+    void     set_dead_time_us(uint16_t us) { _dead_time_us = us; _dead_time_s = us * 1e-6f; }
     uint16_t get_dead_time_us() const { return _dead_time_us; }
 
     // Non-paralyzable, 10x cap, off below 50 cps
@@ -130,7 +134,7 @@ class CounterMaths {
       if (b <= 0 || b > 0x7F800000) return 0.0f;
       if (b >= 0x4A000000 && cps > CPS_MAX) cps = CPS_MAX;   // 2^21 first
       if (_dead_time_us == 0 || cps <= 50.0f) return cps;
-      float x = cps * _dead_time_sec;
+      float x = cps * _dead_time_s;
       if (x > 0.9f) x = 0.9f;
       return cps / (1.0f - x);
     }
@@ -138,9 +142,10 @@ class CounterMaths {
     // raw cps only
     bool saturated_at(float cps) const {
       if (_dead_time_us == 0) return false;
-      return cps * _dead_time_sec > 0.875f;
+      return cps * _dead_time_s > 0.875f;
     }
 
+    // dead = silent past the timeout and 20 mean gaps
     bool tube_alive(uint32_t uptime_s, uint32_t last_count_up_s,
                     uint64_t total_clicks) const {
       if (_ratio <= 0.0f) return true;
@@ -190,7 +195,7 @@ class CounterMaths {
     float    _ratio_inv = 1.0f / (float)GEIGER_RATIO;
     uint32_t _tube_timeout_s = GEIGER_TUBE_TIMEOUT_MIN_S;
     uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
-    float    _dead_time_sec = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
+    float    _dead_time_s = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
 };
 
 #endif

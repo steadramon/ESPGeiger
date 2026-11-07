@@ -29,6 +29,7 @@
 #include "Corium/System/FastMillis.h"
 #endif
 
+// sample counts are at ENV_SAMPLE_MS
 #define ENV_SAMPLE_MS    10000UL
 #define ENV_EMA_ALPHA     0.1f
 #define ENV_STUCK_SAMPLES 180   // 30 min
@@ -61,10 +62,11 @@ class EnvSensor : public corium::Module {
     const __FlashStringHelper* chipName() const;
     uint8_t driverFlags() const { return _drv_flags; }
 
-    float tempC() const;
-    float humidity() const;
-    float pressure() const;
-    float tempUser() const;
+    // local sensor, else UdpRx's; NAN = none
+    float tempC() const;      // C, offset applied
+    float humidity() const;   // %
+    float pressure() const;   // hPa, sea level once an altitude is set
+    float tempUser() const;   // in the unit pref
 
     // UdpRx's /env rows, used with no local sensor
     bool remoteFresh() const;
@@ -90,16 +92,16 @@ class EnvSensor : public corium::Module {
     void emaUpdate(float t, float h, float p);
     bool tryDetect();
 
-    int8_t   _temp_offset_tenths = 0;
+    int8_t   _temp_x10 = 0;
     uint16_t _altitude_m = 0;
     bool     _started = false;
     uint8_t  _drv_flags = 0;
     uint8_t  _detect_tries = 0;
     uint8_t  _phase = PHASE_IDLE;
     // WAIT_AHT only
-    float    _bt = NAN;
-    float    _bh = NAN;
-    float    _bp = NAN;
+    float    _t = NAN;
+    float    _h = NAN;
+    float    _p = NAN;
     bool     _failed = false;
     BoschTHP::Sensor _bosch;
     AsairAHT::Sensor _aht;

@@ -42,7 +42,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `ESPGeiger-<device_id>/stat/CPM15` | `29.10` | 60 s |
 | `ESPGeiger-<device_id>/stat/uSv` | `0.20` | 60 s |
 | `ESPGeiger-<device_id>/stat/CPS` | `0.50` | 60 s |
-| `ESPGeiger-<device_id>/stat/HV` | `412.00` | 60 s (ESPGeiger-HW only) |
+| `ESPGeiger-<device_id>/stat/HV` | `412.00` | 60 s (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `ESPGeiger-<device_id>/stat/T` | `22.40` | 60 s (when an [environment sensor](/configuration/env) is present) |
 | `ESPGeiger-<device_id>/stat/H` | `45.60` | 60 s (BME280 / AHT family only) |
 | `ESPGeiger-<device_id>/stat/P` | `1013.20` | 60 s (BME280 / BMP280 only) |

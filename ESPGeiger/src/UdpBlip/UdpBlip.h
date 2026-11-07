@@ -48,6 +48,7 @@ class WiFiUDP;
 #ifndef UDPBLIP_FAIL_BACKOFF
 #define UDPBLIP_FAIL_BACKOFF 8
 #endif
+// click packets: a token per 50 ms, burst of 5
 #ifndef UDPBLIP_CLICK_MIN_INTERVAL_MS
 #define UDPBLIP_CLICK_MIN_INTERVAL_MS 50
 #endif
@@ -55,6 +56,7 @@ class WiFiUDP;
 #define UDPBLIP_CLICK_BURST_TOKENS 5
 #endif
 
+// OSC over udp: clicks as they come, rad/hv/sys/env stats each cycle
 class UdpBlipModule : public corium::Module {
 public:
   static UdpBlipModule& getInstance() {
@@ -77,7 +79,7 @@ private:
   void readPrefs();
   void teardown();
   bool ensureUdp();
-  void emitClick(uint32_t counter, uint32_t ts_ms);
+  void emitClick(uint32_t count, uint32_t ts_ms);
   bool tryEmitClick(unsigned long now_ms);
   void due(uint32_t at);
   void wake(uint32_t at);
@@ -106,7 +108,7 @@ private:
   uint32_t _wake_at = 0;                // last dueAt asked
   corium::Deadline _backoff;
   uint16_t _jitter_ms = 0;
-  uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
+  uint8_t       _tokens = UDPBLIP_CLICK_BURST_TOKENS;
   uint8_t   _fail_count = 0;
   bool      _mdns_done = false;
   bool      _sys_phase = false;

@@ -34,6 +34,7 @@
 #include "Corium/Module/Module.h"
 #include "Corium/Prefs/Prefs.h"
 
+// LED displays: MAX7219 7-seg, round and matrix, TM1637 7-seg
 class Max7219Display : public corium::Module, public DisplayBackend {
   public:
     const char* name() override { return PSTR("max72"); }
@@ -65,7 +66,7 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     void apply();
     void applyTm();
     void update_power();
-    uint8_t adaptiveLevel(uint8_t maxLevel);
+    uint8_t adaptiveLevel(uint8_t top);
     uint8_t arcLevel();
     float   currentCPM();
     uint8_t buildPages(uint8_t* list);
@@ -74,7 +75,7 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     void    render7seg();
     void    renderRound();
     void    roundDigits(float v, uint8_t dec);
-    void    matrixValueUnit(char* val, size_t vc, char* unit, size_t uc);
+    void    matrixValueUnit(char* val, size_t val_cap, char* unit, size_t unit_cap);
     void    pushNumber(uint8_t first_digit, uint8_t ndigits, float value,
                        uint8_t decimals, uint8_t dp_bar_level);
     void    pushArc(uint8_t level);   // 24 leds, regs 5-7
@@ -90,7 +91,7 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     Max7219Driver _drv;
     Tm1637Driver  _tm;            // DIN = DIO
     bool    _tm_acked = true;
-    uint8_t _tm_wait = 0;
+    uint8_t _tm_wait_s = 0;
     uint8_t _tm_fails = 0;
     bool    _tm_off = false;      // gave up, until reboot (as the OLED)
     static const uint8_t TM_RETRY_S = 10;
@@ -116,7 +117,7 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     bool     _reverse = false;    // 7-seg digit 0 on the left
     uint8_t  _page = 0;
     uint8_t  _cur_page = 0;
-    unsigned long _page_since = 0;
+    unsigned long _page_ms = 0;
 
     void    renderMatrixContent(unsigned long now);
     void    drawMatrixIcon(const uint8_t* rows8);

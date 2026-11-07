@@ -26,7 +26,7 @@ Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log ha
 
 <!-- /gen -->
 
-Set the threshold with **Alert CPM** under [System Settings](/configuration#system-settings). Alert Out ignores the warning threshold.
+Set the threshold with **Alert CPM** under [Counter Settings](/configuration#counter-settings). Alert Out ignores the warning threshold.
 
 ## Pin safety
 

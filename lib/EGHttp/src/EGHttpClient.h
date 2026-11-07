@@ -91,6 +91,7 @@ class EGHttpClient {
 #endif
     // once it ends, from the owner's task; not on abort()
     void setWake(Wake fn, void* arg) { _wake = fn; _wakeArg = arg; }
+    // once per open(), body copied; false = not open or no ram
     bool send(const char* body = nullptr);
     bool send(const uint8_t* body, size_t len);
     void abort();
@@ -98,14 +99,15 @@ class EGHttpClient {
     // no sink or redirects: the reply is read as it lands, else idle() moves it
     bool idle();
     bool takeDone();                       // true once per request
-    uint32_t due() const;                  // a timeout could end it then
+    uint32_t due() const;                  // EGClock ms a timeout could end it
 
     int responseHTTPcode() const { return _err ? _err : _status; }
     int status() const { return _status; }   // 0 = none came
     int error() const { return _err; }       // 0 = fine, with a status = body cut
     const __FlashStringHelper* responseHTTPStringF() const;
-    static const __FlashStringHelper* reason(int code);
-    size_t responseRead(uint8_t* out, size_t len);
+    static const __FlashStringHelper* reason(int code);   // flash text; unknown = class text, "" below 300
+    // kept body and location freed on the next call after takeDone()
+    size_t responseRead(uint8_t* out, size_t len);   // no sink, up to BODY_CAP
     int32_t length() const { return _length; }   // -1 = not said
     uint32_t received() const { return _got; }   // body bytes so far
     const char* location() const { return _location; }   // a redirect not followed

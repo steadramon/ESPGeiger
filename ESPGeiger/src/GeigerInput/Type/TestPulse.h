@@ -28,6 +28,7 @@
 #define GEIGER_MODEL "genpulse"
 #endif
 
+// Poisson pulses out on TX, counted back on RX
 class GeigerTestPulse final : public GeigerInputTest
 {
   public:

@@ -45,6 +45,7 @@ struct Step {
   uint8_t  duty;   // 0 = player's
 };
 
+// limits: steps, ms a step, ms in all (bursts not counted)
 struct Caps {
   uint8_t  steps;
   uint16_t step_ms;
@@ -54,10 +55,11 @@ static constexpr Caps DEFAULTS = {64, 5000, 15000};
 
 class Reader {
  public:
+  // s not copied, keep it till done; no NUL needed
   void begin(const char* s, uint16_t len, Caps caps = DEFAULTS);
   // false at the end or on an error
   bool next(Step& st);
-  uint8_t err() const { return _err; }
+  uint8_t err() const { return _err; }   // Err
   uint16_t at() const { return _at; }   // where the bad bit starts
   bool rtttl() const { return _rtttl; }
 
@@ -94,16 +96,16 @@ class Reader {
   uint16_t _n = 0;
   uint32_t _total = 0;
   Caps _caps = DEFAULTS;
-  uint16_t _b = 63;
-  uint8_t _d = 4;
-  uint8_t _o = 6;
+  uint16_t _bpm = 63;
+  uint8_t _dur = 4;
+  uint8_t _oct = 6;
   uint8_t _left = 0;
   uint8_t _err = OK;
   bool _rtttl = false;
   bool _ingrp = false;
 };
 
-// the whole tune, at = where it went wrong
+// the whole tune, returns Err, at = where it went wrong
 uint8_t check(const char* s, uint16_t len, uint16_t* at = nullptr, Caps caps = DEFAULTS);
 
 }

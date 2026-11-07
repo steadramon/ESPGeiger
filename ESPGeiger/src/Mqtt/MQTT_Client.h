@@ -50,6 +50,7 @@
 #ifndef MQTT_JSON_BUFFER_SIZE
 #define MQTT_JSON_BUFFER_SIZE 1024
 #endif
+// s, the interval pref's range
 #define MQTT_MIN_TIME 5
 #define MQTT_MAX_TIME 3600
 #ifndef MQTT_INTERVAL
@@ -58,6 +59,7 @@
 #define MQTT_STATUS_INTERVAL 60
 #define MQTT_KEEPALIVE_S 15
 #define MQTT_TIMEOUT_S 15   // connect, ping reply
+// reconnect: doubles from 10 s to 5 min, plus 0-12 s per chip
 #define MQTT_RETRY_MS     10000UL
 #define MQTT_RETRY_MAX_MS 300000UL
 #define MQTT_JITTER_S     12
@@ -75,6 +77,7 @@
 #define MQTT_HASS_BIRTH_SPREAD_S 30UL   // stagger a fleet on HA birth
 #endif
 
+// tele/sensor and tele/status, stat/WARN and ALERT, HA discovery
 class MQTT_Client : public corium::Sender {
 public:
   static MQTT_Client& getInstance()
@@ -85,7 +88,7 @@ public:
   const char* name() override { return PSTR("mqtt"); }
   bool requiresWifi() override { return true; }
   static constexpr uint16_t LOOP_MS = 500;
-  static constexpr uint8_t TOPIC_PING = Topic::PING;   // today: the send mark, no LED
+  static constexpr uint8_t TOPIC_PING = Topic::PING;   // the send mark, no LED
   void begin() override;
   void loop(unsigned long now) override;
   const corium::PrefGroup* prefsGroup() override;
@@ -106,21 +109,21 @@ protected:
 private:
   MQTT_Client();
   void timers(unsigned long now);
-  void second(unsigned long now);
-  uint32_t nextDue(unsigned long now_ms, unsigned long now);
+  void second(unsigned long now_s);
+  uint32_t nextDue(unsigned long now_ms, unsigned long now_s);
   void wakeSoon();
   uint32_t _due_ms = 0;   // timers next run
   static constexpr uint32_t DUE_MAX_MS = (MQTT_MAX_TIME + 1) * 1000UL;   // nextDue's most
   bool clientBusy();
   void applyIntervalPref();
-  void queueTimedPublishes(unsigned long now);
+  void queueTimedPublishes(unsigned long now_s);
 #ifdef MQTTAUTODISCOVER
   void scheduleHassDiscovery(bool reconnected);
 #endif
   void buildTopic(char* out, size_t outsz, const char* middle, const char* cmd);
   const char* getRootTopic();
-  char _cachedRootTopic[MQTT_ROOT_MAX + 1] = {};
-  bool _rootTopicCached = false;
+  char _root[MQTT_ROOT_MAX + 1] = {};
+  bool _root_ok = false;
 #ifdef MQTTAUTODISCOVER
   void setupHassAuto();
   void startHassWalk(int8_t dir);
@@ -150,29 +153,29 @@ private:
   bool _status_late = false;   // refused, waiting for room
   bool _reanchor = false;
   int16_t _slot_s = -1;
-  unsigned long lastPing = 0;
-  unsigned long lastStatus = 0;
-  unsigned long lastConnectionAttempt = 0;
-  bool mqttEnabled = true;
-  uint8_t reconnectAttempts = 0;
-  uint8_t authFailures = 0;
+  unsigned long _ping_s = 0;
+  unsigned long _status_s = 0;
+  unsigned long _tried_ms = 0;
+  bool _enabled = true;
+  uint8_t _tries = 0;
+  uint8_t _auth_fails = 0;
 
-  uint16_t statusInterval = MQTT_STATUS_INTERVAL;
-  uint16_t pingInterval = MQTT_INTERVAL;
+  uint16_t _status_every = MQTT_STATUS_INTERVAL;
+  uint16_t _ping_every = MQTT_INTERVAL;
 #ifdef MQTTAUTODISCOVER
   bool _hass_retrigger = false;   // HA came back, the timers spread it
   bool _hass_listen = false;
   char _hass_status[MQTT_HASS_TOPIC_MAX + sizeof("/status")] = {};
   corium::Deadline _hass_next;   // uptime s
-  unsigned long _hass_last_publish = 0;
+  unsigned long _hass_last_s = 0;
   enum : int8_t { HASS_REMOVE = -1, HASS_IDLE, HASS_PUBLISH };
   int8_t  _hass_walk_state = HASS_IDLE;
   uint8_t _hass_idx = 0;
 #endif
 
   // what the broker was last told
-  bool warnSent = false;
-  bool alertSent = false;
+  bool _warn_sent = false;
+  bool _alert_sent = false;
 };
 
 extern MQTT_Client& mqtt;

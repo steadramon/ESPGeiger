@@ -32,7 +32,7 @@ void Tm1637Driver::begin(int8_t clk, int8_t dio) {
   if (!_ready) return;
   drive(_clk, true);
   drive(_dio, true);
-  // fastest that acks and leaves DIO high
+  // Picks the fastest that acks and leaves DIO high
   static const uint8_t TRY_US[] = { 5, 10, 25, 50, SLOWEST_US };
   for (uint8_t us : TRY_US) {
     _us = us;
@@ -41,7 +41,7 @@ void Tm1637Driver::begin(int8_t clk, int8_t dio) {
   }
 }
 
-// driven both ways, pull-ups and module caps make a let-go edge slow
+// Driven both ways, as pull-ups and the module caps make a released edge slow
 void Tm1637Driver::drive(int8_t pin, bool high) {
   digitalWrite(pin, high ? HIGH : LOW);
   pinMode(pin, OUTPUT);
@@ -95,15 +95,15 @@ bool Tm1637Driver::command(uint8_t c) {
   return ok;
 }
 
-// write mode, first changed address + the changed run, control
+// Sends write mode, the first changed address and the changed run, then control
 bool Tm1637Driver::show(const uint8_t* segs, uint8_t n) {
   if (!_ready) return false;
   if (n > MAX_DIGITS) n = MAX_DIGITS;
   uint8_t from = 0, to = n;
-  if (n == _lastN) {
+  if (n == _last_n) {
     while (from < n && segs[from] == _last[from]) from++;
     if (from == n) return true;
-    while (segs[to - 1] == _last[to - 1]) to--;
+    while (to > from && segs[to - 1] == _last[to - 1]) to--;
   }
   bool ok = command(CMD_WRITE);
   start();
@@ -111,7 +111,7 @@ bool Tm1637Driver::show(const uint8_t* segs, uint8_t n) {
   for (uint8_t i = from; i < to; i++) ok = put(segs[i]) && ok;
   stop();
   ok = command(_ctrl) && ok;
-  _lastN = ok ? n : 0;
+  _last_n = ok ? n : 0;
   if (ok) memcpy(_last, segs, n);
   return ok;
 }

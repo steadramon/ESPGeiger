@@ -58,7 +58,7 @@ class Sound : public corium::Module {
 
     EGTune::Step _click = {};
     uint32_t _repeat_ms = 0;
-    unsigned long _next_alert = 0;
+    unsigned long _repeat_at = 0;
     uint16_t _bad = 0;   // bit per sound: its pref didn't parse
     uint8_t _duty = 25;
     uint8_t _vol = 100;

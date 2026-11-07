@@ -41,6 +41,7 @@
 #define GEIGER_MODEL "genpulse"
 #endif
 
+// Tube pulses on a pin, by interrupt or esp32 PCNT
 class GeigerPulse final : public GeigerInput
 {
   public:
@@ -63,9 +64,9 @@ class GeigerPulse final : public GeigerInput
     void set_pin_pull(int mode) override;   // 0=floating, 1=up, 2=down
   private:
     bool     _pcnt = true;              // false = interrupt
-    uint16_t _pcnt_filter = 0;          // 0-1023
+    uint16_t _pcnt_filter = 0;          // 0-1023 APB cycles, 12.5 ns each
     uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT;
-    int8_t   _pin_pull_last_logged = -1;        // -1 = not logged
+    int8_t   _pull_logged = -1;        // -1 = not logged
     uint32_t _last_drain_us = 0;
 #endif
 };

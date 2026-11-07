@@ -24,6 +24,7 @@
 
 namespace {
 
+// one decoded byte, a bad %xx kept as is
 inline unsigned char next_byte(const char*& p, const char* end) {
   if (*p == '+') { p++; return ' '; }
   if (*p == '%' && end - p >= 3) {
@@ -89,7 +90,7 @@ bool eghttp_form_fits(const char* region, size_t len, size_t cap) {
     const char* amp = (const char*)memchr(p, '&', (size_t)(end - p));
     const char* seg_end = amp ? amp : end;
     const char* eq = (const char*)memchr(p, '=', (size_t)(seg_end - p));
-    // as decode_value counts
+    // counts the same way decode_value does
     size_t o = 0;
     for (const char* q = eq ? eq + 1 : seg_end; q < seg_end;) {
       if (next_byte(q, seg_end) == 0 || ++o >= cap) return false;
@@ -103,7 +104,7 @@ char* eghttp_form_take(char* region, size_t len, const char* name, size_t* out_l
   if (!region || !name) return nullptr;
   const char *v, *v_end;
   if (!find_value(region, len, name, &v, &v_end)) return nullptr;
-  // decoding never gets ahead of the read
+  // Safe in place, decoding never writes ahead of the read
   char* out = region + (v - region);
   if (!decode_value(v, v_end, out, (size_t)(v_end - v) + 1)) return nullptr;
   if (out_len) *out_len = strlen(out);

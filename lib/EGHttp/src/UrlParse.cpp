@@ -20,11 +20,8 @@
 
 #include <string.h>
 
-// http URLs split as CPython urllib.parse.urlsplit does, with .hostname and
-// .port rules. No scheme means http. Rejected: other schemes, an empty host,
-// userinfo and [IPv6] (the client cannot honour them), a port that .port
-// would refuse and any space or control byte (urlsplit strips tab and
-// CR/LF; here they could reach the request line).
+// scheme, host, port, path; no scheme = http
+// refused: other schemes, empty host, userinfo, [IPv6], bad port, any space or ctl (request line)
 
 static bool is_http(const char* s, size_t n) {
   return n == 4 &&
@@ -50,7 +47,7 @@ static bool is_scheme_char(char c) {
 
 // NULL for any scheme but http
 static const char* skip_scheme(const char* url) {
-  // A scheme is the leading run of scheme characters before "://".
+  // leading scheme chars before "://"
   const char* s = url;
   while (is_scheme_char(*s)) s++;
   if (s > url && is_alpha_ci(*url) &&

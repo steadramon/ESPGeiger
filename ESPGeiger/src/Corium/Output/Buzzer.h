@@ -67,9 +67,9 @@ inline Limits fit(Limits l) {
 }
 
 // high part of one cycle at hz, 1 .. max_us, always ends low
-inline uint32_t highUs(uint16_t hz, uint8_t dutyPct, uint16_t max_us) {
+inline uint32_t highUs(uint16_t hz, uint8_t duty_pct, uint16_t max_us) {
   uint32_t period = 1000000UL / hz;
-  uint32_t h = period * dutyPct / 100;
+  uint32_t h = period * duty_pct / 100;
   if (h > max_us) h = max_us;
   if (h >= period) h = period - 1;
   return h ? h : 1;
@@ -87,8 +87,8 @@ inline uint16_t toneCycles(uint16_t ms, uint16_t hz) {
   return n > MAX_CYCLES ? MAX_CYCLES : (uint16_t)n;
 }
 
-inline uint8_t capDuty(uint8_t dutyPct, uint8_t max_pct) {
-  return dutyPct > max_pct ? max_pct : dutyPct;
+inline uint8_t capDuty(uint8_t duty_pct, uint8_t max_pct) {
+  return duty_pct > max_pct ? max_pct : duty_pct;
 }
 
 // cycles that still fit the run, 0 = rest first
@@ -107,7 +107,7 @@ struct Run {
   bool resting = false;
 
   // cycles allowed for a tone at now, end = when the last sound stopped
-  uint16_t take(uint32_t now, uint32_t end, uint16_t cycles, uint32_t period, const Limits& l) {
+  uint16_t take(uint32_t now, uint32_t end, uint16_t cycles, uint32_t period_us, const Limits& l) {
     if (resting) {
       if (now - restAt < l.restMs * 1000UL) return 0;
       resting = false;
@@ -117,10 +117,10 @@ struct Run {
       start = now;
       on = true;
     }
-    uint16_t n = runCycles(cycles, period, now - start, l.runMs * 1000UL);
+    uint16_t n = runCycles(cycles, period_us, now - start, l.runMs * 1000UL);
     if (n < cycles) {
       resting = true;
-      restAt = now + n * period;
+      restAt = now + n * period_us;
     }
     return n;
   }
@@ -132,7 +132,7 @@ bool begin(int pin, Limits lim = DEFAULTS);
 // false while busy, faulted, or too soon for the budget
 bool pulse(uint32_t now_us, uint16_t us);
 bool burst(uint32_t now_us, uint16_t hz, uint8_t cycles);
-bool tone(uint32_t now_us, uint16_t hz, uint16_t cycles, uint8_t dutyPct);
+bool tone(uint32_t now_us, uint16_t hz, uint16_t cycles, uint8_t duty_pct);
 uint32_t waitUs(uint32_t now_us);   // 0 = free
 bool faulted();
 #endif

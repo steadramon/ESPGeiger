@@ -52,6 +52,7 @@ namespace Boot {
     improvSerial.begin();
 
 #ifdef ESP8266
+    // core default is 255
     analogWriteRange(1023);
 #endif
     LedSignal::begin(leds, count, flash_led);
@@ -103,6 +104,7 @@ namespace Boot {
   inline __attribute__((always_inline)) void end(void (*second)(uint32_t up)) {
     Registry::beginAll();
     LedSignal::attach();
+    // safe mode tries a normal boot again later
     if (BootGuard::safeMode()) Lifecycle::requestRestart(fastMillis(), BootGuard::retryAfterMs());
     Reactor::begin(second);
     Clock::anchor();

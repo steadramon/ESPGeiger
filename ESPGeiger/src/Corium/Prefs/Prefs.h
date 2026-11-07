@@ -72,8 +72,8 @@ enum PrefType : uint8_t {
 static constexpr uint16_t P_SENSITIVE = 1 << 0;
 static constexpr uint16_t P_HIDDEN    = 1 << 1;
 static constexpr uint16_t P_ADVANCED  = 1 << 2;
-static constexpr uint16_t P_READONLY  = 1 << 3;
-static constexpr uint16_t P_TIME      = 1 << 4;
+static constexpr uint16_t P_READONLY  = 1 << 3;   // put refuses it, reset skips it
+static constexpr uint16_t P_TIME      = 1 << 4;   // HH:MM string, "" = off
 static constexpr uint16_t P_SLIDER    = 1 << 5;
 static constexpr uint16_t P_REQUIRED  = 1 << 6;
 static constexpr uint16_t P_INLINE    = 1 << 7;
@@ -206,11 +206,13 @@ private:
 };
 // === END LEGACY IMPORT ===
 
+// all static, one store for every module's group
 class Prefs {
 public:
+  // setup, once modules are registered; loads every group then onPrefsLoaded
   static void begin();
 
-  // module SRAM, key SRAM or PROGMEM
+  // module SRAM, key SRAM or PROGMEM; unknown = "" or 0
   static const char* getString(const char* module, const char* key);
   static int32_t     getInt   (const char* module, const char* key);
   static uint32_t    getUInt  (const char* module, const char* key);
@@ -227,12 +229,11 @@ public:
   static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);
   // for a write per request: callbacks now, one write CORIUM_PREFS_HOLD_MS on; true = will be written
-  static bool commitSoon(uint32_t now);
-  // the last commit left out a group holding a stored value that didn't load
-  // and wrote the rest: why, else 0
-  static size_t frozen(char* out, size_t n);
+  static bool commitSoon(uint32_t now_ms);
+  // why the last commit left a group out (a stored value didn't load, rest written), else 0
+  static size_t frozen(char* out, size_t cap);
   // any group an export carries holding one now, the same text; the export would leave it out
-  static size_t anyFrozen(char* out, size_t n);
+  static size_t anyFrozen(char* out, size_t cap);
   static void flush();   // the waiting write, at wake or shutdown
   // wake(at) has flush() called then; none = commitSoon writes now
   static void holdBy(void (*wake)(uint32_t at));

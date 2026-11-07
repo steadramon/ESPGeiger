@@ -24,7 +24,7 @@
   Arduino loop), calls EGTcp::poll() and every callback below runs there.
   Every EGTcpClient/EGTcpServer call comes from that task too.
 
-  A backend (EGTcpOps) does the network: lwIP raw today. No lwIP or Arduino
+  A backend (EGTcpOps) does the network, lwIP raw. No lwIP or Arduino
   types in here.
 */
 
@@ -91,13 +91,14 @@ class EGTcpClient {
     EGTcpClient(const EGTcpClient&) = delete;
     EGTcpClient& operator=(const EGTcpClient&) = delete;
 
+    // false = busy, or failed now and error() says; else onConnect or onClose follows
     bool connect(const char* host, uint16_t port);
     bool connect(const EGTcpAddr& ip, uint16_t port);
     void close();      // queued data still goes, then FIN; unread dropped
     void abort();      // RST
     void shutdown();   // FIN after queued data, keep reading
 
-    size_t space() const;
+    size_t space() const;   // bytes write() takes now, 0 when not open
     // up to space(), sends now unless MORE
     size_t write(const void* data, size_t len, uint8_t flags = COPY);
     size_t write(const char* s);
@@ -120,9 +121,10 @@ class EGTcpClient {
     void onClose(std::function<void(int8_t err)> cb) { _on_close.swap(cb); }
 
     // ms, 0 = off; ends with E_TIMEOUT
-    void setConnectTimeout(uint32_t ms) { _to_connect = ms; rearm(); }
-    void setIdleTimeout(uint32_t ms) { _to_idle = ms; rearm(); }
-    void setAckTimeout(uint32_t ms) { _to_ack = ms; rearm(); }
+    void setConnectTimeout(uint32_t ms) { _connect_ms = ms; rearm(); }
+    void setIdleTimeout(uint32_t ms) { _idle_ms = ms; rearm(); }
+    void setAckTimeout(uint32_t ms) { _ack_ms = ms; rearm(); }
+    // once connected, else ignored; keepalive 0 = off, idle_ms is the probe gap too where lwIP allows
     void setNoDelay(bool on);
     void setKeepAlive(uint32_t idle_ms, uint8_t count);
 
@@ -192,12 +194,12 @@ class EGTcpClient {
     uint32_t _owed = 0;      // taken, not acked yet
     uint32_t _credit = 0;    // acked, not told the stack yet
     uint32_t _unacked = 0;   // written, peer has not acked
-    uint32_t _t_start = 0;
-    uint32_t _t_rx = 0;
-    uint32_t _t_tx = 0;
-    uint32_t _to_connect = 0;
-    uint32_t _to_idle = 0;
-    uint32_t _to_ack = 0;
+    uint32_t _start_ms = 0;
+    uint32_t _rx_ms = 0;
+    uint32_t _tx_ms = 0;
+    uint32_t _connect_ms = 0;
+    uint32_t _idle_ms = 0;
+    uint32_t _ack_ms = 0;
     EGTcpClient* _accept_next = nullptr;    // server's pull list
 
     std::function<void()> _on_connect;
@@ -213,12 +215,13 @@ class EGTcpServer {
     EGTcpServer(const EGTcpServer&) = delete;
     EGTcpServer& operator=(const EGTcpServer&) = delete;
 
+    // any addr = all; false = listening already or the stack said no
     bool begin(uint16_t port, const EGTcpAddr& addr = EGTcpAddr());
     void end();   // open clients stay yours
 
     // push: the client is yours. Without it, accept() pulls them
     void onAccept(std::function<void(EGTcpClient* c)> cb) { _on_accept.swap(cb); }
-    EGTcpClient* accept();   // nullptr = none
+    EGTcpClient* accept();   // nullptr = none, else yours to delete
 
     // before begin(); the stack drops SYNs past n open
     void setMaxClients(uint8_t n) { _max = n; }

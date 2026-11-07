@@ -31,6 +31,7 @@
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/System/FastMillis.h"
 
+// Counter on a uart, sends cpm (and maybe cps) lines
 class GeigerSerial final : public GeigerInput
 {
   public:
@@ -52,11 +53,11 @@ class GeigerSerial final : public GeigerInput
     }
     void bad_line();
     void drop_line();
-    unsigned long _line_ms = 0;   // fastMillis()
+    unsigned long _rx_ms = 0;   // fastMillis()
     void handleSerial(char* input);
-    float partial_clicks = 0;
-    int serial_value = 0;
-    unsigned long last_serial = 0;
+    float _carry = 0;
+    int _cpm = 0;
+    unsigned long _good_ms = 0;
     uint8_t _idle_ms = 4;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
     uint8_t _bad_streak = 0;

@@ -23,7 +23,7 @@
 #include "EGHttpServer.h"
 
 #ifndef EGPORTAL_SCAN_MAX
-  #define EGPORTAL_SCAN_MAX 16
+  #define EGPORTAL_SCAN_MAX 16   // networks kept for the list
 #endif
 #ifndef EGPORTAL_SSID_MAX
   #define EGPORTAL_SSID_MAX 32   // 802.11 SSID max
@@ -41,8 +41,9 @@ class EGPortal {
     using SaveCallback = void(*)(const char* ssid, const char* password, void* user);
     using ResetCallback = void(*)(void* user);
 
+    // blocks for one sync scan, then AP + dns + http on 80
     void begin(const char* apSsid, const char* apPassword = nullptr);   // nullptr = open
-    void loop();
+    void loop();   // every loop while active, handlers run from here
     void end();
 
     // pointers only valid in the callback
@@ -65,10 +66,11 @@ class EGPortal {
 
     struct ScanEntry {
       char    ssid[EGPORTAL_SSID_MAX + 1];
-      int8_t  rssi;
+      int8_t  rssi;    // dBm
       uint8_t enc;     // wl_enc_type / wifi_auth_mode_t per platform
     };
 
+    // WiFi scan results into out: one per SSID, weak ones dropped, strongest first
     static size_t processScan(ScanEntry* out, size_t maxOut, int rawCount,
                               int8_t rssiMin = EGPORTAL_RSSI_MIN);
 

@@ -62,11 +62,11 @@ static constexpr uint8_t M_OUT_VARS    = 1 << 4;  // templates and /vars.json
 static constexpr uint8_t M_OUT_ID      = 1 << 5;  // by id only
 static constexpr uint8_t M_OUT_ALL     = M_OUT_JSON | M_OUT_PROM | M_OUT_APP0 |
                                            M_OUT_APP1 | M_OUT_VARS;
-static constexpr uint8_t M_OUT_ANY     = 0xFF;
+static constexpr uint8_t M_OUT_ANY     = 0xFF;  // lookups by id
 
-static constexpr uint8_t M_DIAG    = 1 << 0;
+static constexpr uint8_t M_DIAG    = 1 << 0;  // only when diag asked for
 static constexpr uint8_t M_COUNTER = 1 << 1;  // else gauge
-static constexpr uint8_t M_NODIAG  = 1 << 2;
+static constexpr uint8_t M_NODIAG  = 1 << 2;  // left out when diag asked for
 
 union MValue {
   float       f;
@@ -128,6 +128,7 @@ typedef MeasureRows (*MSource)();
 // walked core, input, then the modules. input nullptr = none
 void m_sources(MeasureRows core, MSource input);
 
+// rows for one output with a value now, id = that row only
 class MeasureIter {
 public:
   // id is PROGMEM
@@ -189,6 +190,7 @@ float m_celsius_to(float c, uint8_t unit);
 uint8_t m_temp_unit();
 void    m_set_temp_unit(uint8_t unit);
 
+// unit MT_*, only celsius rows change
 size_t m_format_unit(const Measure& m, const MValue& v, uint8_t unit,
                        char* buf, size_t cap, bool* cut = nullptr);
 

@@ -39,15 +39,15 @@ volatile uint32_t s_busy_us = 0;   // sound length, watch() reads both
 uint32_t s_wait_us = 0;            // budget
 corium::Buzzer::Run s_run;
 volatile bool s_fault = false;
-uint8_t s_high = 0;
+uint8_t s_high_n = 0;
 esp_timer_handle_t s_watch = nullptr;
 
-bool ready(uint32_t now) {
-  return s_pin >= 0 && !s_fault && now - s_sent_at >= s_wait_us;
+bool ready(uint32_t now_us) {
+  return s_pin >= 0 && !s_fault && now_us - s_sent_at >= s_wait_us;
 }
 
-void sent(uint32_t now, uint32_t busy, uint32_t wait) {
-  s_sent_at = now;
+void sent(uint32_t now_us, uint32_t busy, uint32_t wait) {
+  s_sent_at = now_us;
   s_busy_us = busy;
   s_wait_us = wait;
 }
@@ -73,10 +73,10 @@ rmt_item32_t cycle(uint32_t high, uint32_t low) {
 // esp_timer task
 void watch(void*) {
   if (micros() - s_sent_at < s_busy_us + 1000 || !gpio_get_level((gpio_num_t)s_pin)) {
-    s_high = 0;
+    s_high_n = 0;
     return;
   }
-  if (++s_high < corium::Buzzer::GUARD_MS / corium::Buzzer::GUARD_POLL_MS) return;
+  if (++s_high_n < corium::Buzzer::GUARD_MS / corium::Buzzer::GUARD_POLL_MS) return;
   rmt_tx_stop(CH);
   esp_rom_gpio_connect_out_signal(s_pin, SIG_GPIO_OUT_IDX, false, false);
   gpio_set_level((gpio_num_t)s_pin, 0);
@@ -103,18 +103,18 @@ bool corium::Buzzer::begin(int pin, Limits lim) {
   return true;
 }
 
-bool corium::Buzzer::pulse(uint32_t now, uint16_t us) {
-  if (!ready(now)) return false;
+bool corium::Buzzer::pulse(uint32_t now_us, uint16_t us) {
+  if (!ready(now_us)) return false;
   if (us > s_lim.maxHighUs) us = s_lim.maxHighUs;
   if (!us) us = 1;
   rmt_item32_t it = cycle(us, 1);
   send(&it, 1, 0);
-  sent(now, us + 1, gapUs(us, s_lim.gapX));
+  sent(now_us, us + 1, gapUs(us, s_lim.gapX));
   return true;
 }
 
-bool corium::Buzzer::burst(uint32_t now, uint16_t hz, uint8_t cycles) {
-  if (!ready(now) || !cycles) return false;
+bool corium::Buzzer::burst(uint32_t now_us, uint16_t hz, uint8_t cycles) {
+  if (!ready(now_us) || !cycles) return false;
   if (cycles > MAX_BURST) cycles = MAX_BURST;
   hz = clampHz(hz, s_lim);
   uint32_t period = 1000000UL / hz;
@@ -122,27 +122,27 @@ bool corium::Buzzer::burst(uint32_t now, uint16_t hz, uint8_t cycles) {
   rmt_item32_t its[MAX_BURST];
   for (uint8_t i = 0; i < cycles; i++) its[i] = cycle(high, period - high);
   send(its, cycles, 0);
-  sent(now, cycles * period, gapUs(cycles * high, s_lim.gapX));
+  sent(now_us, cycles * period, gapUs(cycles * high, s_lim.gapX));
   return true;
 }
 
 // the player keeps the budget for tones, run cap here
-bool corium::Buzzer::tone(uint32_t now, uint16_t hz, uint16_t cycles, uint8_t dutyPct) {
-  if (!ready(now) || !cycles) return false;
+bool corium::Buzzer::tone(uint32_t now_us, uint16_t hz, uint16_t cycles, uint8_t duty_pct) {
+  if (!ready(now_us) || !cycles) return false;
   if (cycles > MAX_CYCLES) cycles = MAX_CYCLES;
   hz = clampHz(hz, s_lim);
   uint32_t period = 1000000UL / hz;
-  cycles = s_run.take(now, s_sent_at + s_busy_us, cycles, period, s_lim);
+  cycles = s_run.take(now_us, s_sent_at + s_busy_us, cycles, period, s_lim);
   if (!cycles) return false;
-  uint32_t high = highUs(hz, capDuty(dutyPct, s_lim.dutyPct), s_lim.maxHighUs);
+  uint32_t high = highUs(hz, capDuty(duty_pct, s_lim.dutyPct), s_lim.maxHighUs);
   rmt_item32_t it = cycle(high, period - high);
   send(&it, 1, cycles);
-  sent(now, cycles * period, cycles * period);
+  sent(now_us, cycles * period, cycles * period);
   return true;
 }
 
-uint32_t corium::Buzzer::waitUs(uint32_t now) {
-  uint32_t gone = now - s_sent_at;
+uint32_t corium::Buzzer::waitUs(uint32_t now_us) {
+  uint32_t gone = now_us - s_sent_at;
   return gone >= s_wait_us ? 0 : s_wait_us - gone;
 }
 

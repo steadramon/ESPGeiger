@@ -34,12 +34,14 @@ struct WebRoute { PGM_P path; EGHttpServer::Handler h; EGHttpRequest::Method met
 class WebPortal {
   public:
     void begin(uint16_t port);
-    static constexpr uint8_t POLL_MS = 13;
+    static constexpr uint8_t POLL_MS = 13;   // ms between http ticks
+    // loop: http tick, then a due restart
     void poll(uint32_t now);
     inline uint32_t nextPollDue() const { return _poll_last_ms + POLL_MS; }
     bool active() const { return _active; }
 
     // Shared page templates
+    // inlineSub: small tag after the title, escaped here
     static void sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
                              const char* inlineSub = nullptr);
     static void sendPageTail(EGHttpResponse& res, bool footer = false);
@@ -48,12 +50,12 @@ class WebPortal {
     static void beginPage(EGHttpResponse& res, const __FlashStringHelper* title,
                           const char* inlineSub = nullptr);
     static void endPage(EGHttpResponse& res, bool footer = false);
-    static void on(EGHttpServer& http, const WebRoute* rows, size_t n);
+    static void on(EGHttpServer& http, const WebRoute* rows, size_t n);   // adds a PROGMEM table
     static void infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...);   // key, fmt in flash
-    static void metricsLine(EGHttpResponse& res, PGM_P fmt, ...);
+    static void metricsLine(EGHttpResponse& res, PGM_P fmt, ...);   // /metrics text, a cut line is dropped
 
     static constexpr uint32_t RESTART_MS = 1500;
-    static void requestRestart(uint32_t delayMs = RESTART_MS);   // ok from async callbacks
+    static void requestRestart(uint32_t delay_ms = RESTART_MS);   // ok from async callbacks
     static void sendRestartCountdown(EGHttpResponse& res);
     static void sendNotSaved(EGHttpResponse& res);   // commit failed
     // a build's gzipped script or style, cached for good (gz in flash)

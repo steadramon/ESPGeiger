@@ -21,6 +21,7 @@
 
 #include <stddef.h>
 
+// points into the url, query keeps its '?'
 struct EGUrlParts {
   const char* host;
   size_t      host_len;
@@ -31,6 +32,7 @@ struct EGUrlParts {
   int         port;
 };
 
+// http only, port 80 if none, path "/" if none
 bool eg_parse_url(const char* url, EGUrlParts* out);
 
 #endif

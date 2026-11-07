@@ -25,17 +25,18 @@
 
 #define CORIUM_PS_STAGING_SUFFIX   ".new"
 #define CORIUM_PS_PATH_BUFSZ       96
+// a longer key or value = a bad record, the rest not read
 #define CORIUM_PS_KEY_BUFSZ        64
 #define CORIUM_PS_VAL_BUFSZ        512   // stack, boot only
 
 namespace {
 
-void group_path(char* out, size_t sz, const char* base, const char* mid) {
-  snprintf_P(out, sz, PSTR("%s%s.bin"), base, mid);
+void group_path(char* out, size_t sz, const char* base, const char* id) {
+  snprintf_P(out, sz, PSTR("%s%s.bin"), base, id);
 }
 
-bool staged_path(char* out, size_t sz, const char* base, const char* mid) {
-  int n = snprintf_P(out, sz, PSTR("%s%s.bin" CORIUM_PS_STAGING_SUFFIX), base, mid);
+bool staged_path(char* out, size_t sz, const char* base, const char* id) {
+  int n = snprintf_P(out, sz, PSTR("%s%s.bin" CORIUM_PS_STAGING_SUFFIX), base, id);
   return n > 0 && n < (int)sz;
 }
 
@@ -60,7 +61,7 @@ bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen)
 } // anonymous namespace
 
 corium::PrefsStorage::PrefsStorage()
-  : _path{}, _started(false)
+  : _dir{}, _started(false)
 {}
 
 corium::PrefsStorage::~PrefsStorage() {
@@ -72,6 +73,7 @@ bool corium::PrefsStorage::begin(const char* name) {
   if (!corium::Fs::begin()) return false;   // prefs run on defaults
   char dir[DIR_NAME_MAX + 2];
   snprintf_P(dir, sizeof(dir), PSTR("/%s"), name);
+  // a file where the dir goes would stop every write
   File chk = corium::Fs::openR(dir);
   if (chk && !chk.isDirectory()) {
     chk.close();
@@ -83,29 +85,29 @@ bool corium::PrefsStorage::begin(const char* name) {
   if (!corium::Fs::exists(dir)) {
     corium::Fs::mkdir(dir);
   }
-  snprintf_P(_path, sizeof(_path), PSTR("%s/"), dir);
+  snprintf_P(_dir, sizeof(_dir), PSTR("%s/"), dir);
   _started = true;
-  corium::Log::debug(PSTR("prefs: storage mounted at %s"), _path);
+  corium::Log::debug(PSTR("prefs: storage mounted at %s"), _dir);
   return true;
 }
 
 void corium::PrefsStorage::end() {
   if (!_started) return;
-  _path[0] = '\0';
+  _dir[0] = '\0';
   _started = false;
 }
 
 bool corium::PrefsStorage::has(const char* module_id) {
   if (!_started || !module_id) return false;
   char path[CORIUM_PS_PATH_BUFSZ];
-  group_path(path, sizeof(path), _path, module_id);
+  group_path(path, sizeof(path), _dir, module_id);
   return corium::Fs::exists(path);
 }
 
 bool corium::PrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx) {
   if (!_started || !module_id || !cb) return false;
   char path[CORIUM_PS_PATH_BUFSZ];
-  group_path(path, sizeof(path), _path, module_id);
+  group_path(path, sizeof(path), _dir, module_id);
   File f = corium::Fs::openR(path);
   if (!f) return false;
   size_t sz = f.size();
@@ -147,7 +149,7 @@ bool corium::PrefsStorage::stageGroup(const char* module_id, const void* buf, si
   if (!_started || !module_id || !buf) return false;
   if (len < corium::PREFS_MAGIC_LEN || len > CORIUM_PREFS_MAX_GROUP_SZ) return false;
   char staging[CORIUM_PS_PATH_BUFSZ];
-  if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
+  if (!staged_path(staging, sizeof(staging), _dir, module_id)) return false;
   File f = corium::Fs::openW(staging);
   if (!f) return false;
   size_t n = f.write((const uint8_t*)buf, len);
@@ -161,15 +163,15 @@ bool corium::PrefsStorage::stageGroup(const char* module_id, const void* buf, si
 bool corium::PrefsStorage::commitGroup(const char* module_id) {
   if (!_started || !module_id) return false;
   char staging[CORIUM_PS_PATH_BUFSZ];
-  char final_path[CORIUM_PS_PATH_BUFSZ];
-  if (!staged_path(staging, sizeof(staging), _path, module_id)) return false;
-  group_path(final_path, sizeof(final_path), _path, module_id);
-  return corium::Fs::rename(staging, final_path);
+  char path[CORIUM_PS_PATH_BUFSZ];
+  if (!staged_path(staging, sizeof(staging), _dir, module_id)) return false;
+  group_path(path, sizeof(path), _dir, module_id);
+  return corium::Fs::rename(staging, path);
 }
 
 void corium::PrefsStorage::dropStaged(const char* module_id) {
   char staging[CORIUM_PS_PATH_BUFSZ];
-  if (_started && module_id && staged_path(staging, sizeof(staging), _path, module_id)) {
+  if (_started && module_id && staged_path(staging, sizeof(staging), _dir, module_id)) {
     corium::Fs::remove(staging);
   }
 }
@@ -177,6 +179,6 @@ void corium::PrefsStorage::dropStaged(const char* module_id) {
 bool corium::PrefsStorage::removeGroup(const char* module_id) {
   if (!_started || !module_id) return false;
   char path[CORIUM_PS_PATH_BUFSZ];
-  group_path(path, sizeof(path), _path, module_id);
+  group_path(path, sizeof(path), _dir, module_id);
   return corium::Fs::remove(path);
 }

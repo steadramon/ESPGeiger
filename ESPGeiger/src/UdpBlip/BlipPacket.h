@@ -52,11 +52,15 @@ struct BlipSys {
 };
 
 // 0 = no room
+// ,ii sender's total clicks and its millis. Written as zeros, filled in per send
 size_t blip_click(uint8_t* buf, size_t cap, const char* path);
+// ,ffsi cpm, uSv/h, state, total clicks
 size_t blip_rad(uint8_t* buf, size_t cap, const char* path, const BlipRad& r);
+// ,ffii volts, target, duty, trim
 size_t blip_hv(uint8_t* buf, size_t cap, const char* path, const BlipHv& h);
-// humidity NaN on BMP280
+// ,fff C, %, hPa; humidity NaN on BMP280
 size_t blip_env(uint8_t* buf, size_t cap, const char* path, float t, float h, float p);
+// ,iiii uptime s, rssi dBm, lps, tick max us
 size_t blip_sys(uint8_t* buf, size_t cap, const char* path, const BlipSys& s);
 
 #endif

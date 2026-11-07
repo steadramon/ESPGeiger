@@ -40,7 +40,7 @@ extern "C" {
 #ifndef EGTCP_LINGER_S
 #define EGTCP_LINGER_S 180
 #endif
-#define EGTCP_LINGER_TICKS 10
+#define EGTCP_LINGER_TICKS 10   // checked every 5 s
 
 #define EGTCP_BACKLOG 5   // half-open SYNs
 
@@ -61,9 +61,9 @@ void EGTcpCore::owner() {
 
 // once, a wrong task is a bug in the caller
 void EGTcpCore::check() {
-  static bool told = false;
-  if (!s_owner || told || xTaskGetCurrentTaskHandle() == s_owner) return;
-  told = true;
+  static bool s_told = false;
+  if (!s_owner || s_told || xTaskGetCurrentTaskHandle() == s_owner) return;
+  s_told = true;
   log_e("EGTcp used off the task that polls");
 }
 #endif
@@ -88,7 +88,7 @@ struct Call {
 
 typedef void (*StackFn)(Call* m);
 
-// tmr = last heard
+// tmr = last heard, unsigned so tcp_ticks wrap is fine
 static err_t linger_poll(void*, tcp_pcb* p) {
   if (tcp_ticks - p->tmr < EGTCP_LINGER_S * 1000UL / TCP_SLOW_INTERVAL) return ERR_OK;
   tcp_abort(p);

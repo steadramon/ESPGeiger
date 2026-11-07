@@ -48,15 +48,15 @@ namespace Wifi {
 }
 }  // namespace corium
 
-static bool was_connected = false;
-static unsigned long lost_at = 0;
+static bool s_was_up = false;
+static unsigned long s_lost_at = 0;   // 0 = never lost
 static uint32_t s_retry_at = 0;
 static unsigned long s_link_at = 0;
 static unsigned long s_offline_retry_at = 0;
 static const uint32_t WIFI_RETRY_MS = 30000UL;
 static const uint32_t WIFI_LINK_MS = 60000UL;   // rssi + ip
-static const uint32_t WIFI_BACKUP_MS = 300000UL;
-static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;
+static const uint32_t WIFI_BACKUP_MS = 300000UL;   // up this long after boot, backups go
+static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;   // disabled, try the saved network
 
 static void refresh_link_cache(bool just_connected, unsigned long now) {
   if (!just_connected && !corium::reached(now, s_link_at)) return;
@@ -64,6 +64,7 @@ static void refresh_link_cache(bool just_connected, unsigned long now) {
   corium::Wifi::rssi = WiFi.RSSI();
   corium::Wifi::local_ip = WiFi.localIP();
   if (!just_connected) {
+    // set before the u32 diff wraps back to small
     uint32_t up = (uint32_t)(now - corium::Wifi::connectedAtMs);
     if (up > INT32_MAX) corium::Wifi::settled = true;
     return;
@@ -74,32 +75,32 @@ static void refresh_link_cache(bool just_connected, unsigned long now) {
 }
 
 static void track_outage(unsigned long now) {
-  if (was_connected) {
-    was_connected = false;
-    lost_at = now;
+  if (s_was_up) {
+    s_was_up = false;
+    s_lost_at = now;
     s_retry_at = now + WIFI_RETRY_MS;
     corium::Wifi::connectedAtMs = 0;
     corium::Log::console(PSTR("WiFi: Connection lost"));
-  } else if (lost_at == 0) {
-    lost_at = now;
+  } else if (s_lost_at == 0) {
+    s_lost_at = now;
     s_retry_at = now + WIFI_RETRY_MS;
   }
-  unsigned long down_seconds = (now - lost_at) / 1000;
+  unsigned long down_s = (now - s_lost_at) / 1000;
   if (corium::dueEvery(now, s_retry_at, WIFI_RETRY_MS)) {
-    corium::Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_seconds);
+    corium::Log::console(PSTR("WiFi: Attempting reconnect (%lus)"), down_s);
     WiFi.reconnect();
   }
-  if (down_seconds > WIFI_DOWN_MAX_S) {
-    corium::Log::console(PSTR("WiFi: Down for %lus, rebooting"), down_seconds);
+  if (down_s > WIFI_DOWN_MAX_S) {
+    corium::Log::console(PSTR("WiFi: Down for %lus, rebooting"), down_s);
     corium::Lifecycle::requestRestart(now, 100);
   }
 }
 
 static void note_reconnected(unsigned long now) {
-  was_connected = true;
-  if (lost_at > 0) {
-    unsigned long down_seconds = (now - lost_at) / 1000;
-    corium::Log::console(PSTR("WiFi: Reconnected after %lus"), down_seconds);
+  s_was_up = true;
+  if (s_lost_at > 0) {
+    unsigned long down_s = (now - s_lost_at) / 1000;
+    corium::Log::console(PSTR("WiFi: Reconnected after %lus"), down_s);
   }
 }
 
@@ -107,7 +108,7 @@ static void reprobe_saved_network(unsigned long now) {
   if (corium::Wifi::connected) {
     corium::Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
     corium::Lifecycle::requestRestart(now, 500);
-  } else if (now > WIFI_OFFLINE_MAX_MS) {
+  } else if (now > WIFI_OFFLINE_MAX_MS) {   // ms since boot
     corium::Log::console(PSTR("WiFi: Offline %lus, rebooting to retry"), now / 1000);
     corium::Lifecycle::requestRestart(now, 500);
   } else if (s_offline_retry_at == 0) {
@@ -131,14 +132,14 @@ static void clear_backups_once_stable() {
 }
 
 bool corium::Wifi::look(unsigned long now) {
-  wl_status_t wifi_status = WiFi.status();
+  wl_status_t st = WiFi.status();
   bool prev = corium::Wifi::connected;
-  corium::Wifi::connected = (wifi_status == WL_CONNECTED);
+  corium::Wifi::connected = (st == WL_CONNECTED);
   if (corium::Wifi::connected) refresh_link_cache(!prev, now);
 
   if (!corium::Wifi::disabled) {
-    if (wifi_status != WL_CONNECTED) track_outage(now);
-    else if (!was_connected) note_reconnected(now);
+    if (st != WL_CONNECTED) track_outage(now);
+    else if (!s_was_up) note_reconnected(now);
   } else if (!corium::Wifi::offlineForced) {
     reprobe_saved_network(now);
   }

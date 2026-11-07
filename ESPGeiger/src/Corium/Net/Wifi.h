@@ -63,8 +63,8 @@ namespace Wifi {
   bool saveBackupCreds();   // before WiFi.begin()
   void clearSavedCreds();
   bool applyStaticConfig();   // before WiFi.begin()
-  bool validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
-                      char* errbuf, size_t errlen);
+  bool validateStatic(const char* ip, const char* gw, const char* sn,
+                      char* err, size_t cap);
   void onImprovCreds(const char* ssid, const char* pass);
   // heap from save to beginHeld(), false = no pass, too long or no memory
   bool holdCreds(const char* ssid, const char* pass);

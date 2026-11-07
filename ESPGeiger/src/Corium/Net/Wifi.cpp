@@ -54,10 +54,10 @@ static_assert(WIFI_SSID_MAX == EGPORTAL_SSID_MAX, "one ssid max");
 struct Creds { char ssid[EGPORTAL_SSID_MAX + 1]; char pass[EGPORTAL_PASS_MAX + 1]; };
 static Creds* s_creds = nullptr;
 
-static bool          s_inPortal       = false;
+static bool s_in_portal = false;
 static bool s_joining = false;
-static bool s_portalGotCreds = false;
-static bool s_portalDoReset  = false;
+static bool s_got_creds = false;
+static bool s_reset = false;
 
 namespace corium {
 namespace Wifi {
@@ -81,9 +81,9 @@ static const uint32_t JOIN_RETRY_WAIT_MS = 15000;
 
 // Boot association
 
-static bool waitForWifi(uint32_t timeoutMs) {
+static bool wait_wifi(uint32_t timeout_ms) {
   uint32_t start = corium::fastMillis();
-  while ((corium::fastMillis() - start) < timeoutMs && !corium::Wifi::offlineForced) {
+  while ((corium::fastMillis() - start) < timeout_ms && !corium::Wifi::offlineForced) {
     if (WiFi.status() == WL_CONNECTED) {
       IPAddress ipa = WiFi.localIP();
       corium::Log::console(PSTR("WiFi: IP: %u.%u.%u.%u"),
@@ -151,7 +151,7 @@ bool corium::Wifi::saveBackupCreds() {
   if (!corium::Fs::begin()) return false;
   File f = corium::Fs::openW(WIFI_BACKUP_PATH);
   if (!f) return false;
-  // an ssid can hold \n
+  // 0, len, ssid, len, pass; an ssid can hold \n
   uint8_t sl = strlen(c.ssid), pl = strlen(c.pass);
   f.write((uint8_t)0);
   f.write(sl);
@@ -163,17 +163,17 @@ bool corium::Wifi::saveBackupCreds() {
   return true;
 }
 
-static uint8_t readLines(File& f, char* buf, size_t bufLen,
-                         char** fields, uint8_t nFields) {
-  if (bufLen == 0 || nFields == 0) return 0;
-  int n = f.read((uint8_t*)buf, bufLen - 1);
+static uint8_t read_lines(File& f, char* buf, size_t cap,
+                         char** fields, uint8_t count) {
+  if (cap == 0 || count == 0) return 0;
+  int n = f.read((uint8_t*)buf, cap - 1);
   if (n < 0) n = 0;
   buf[n] = '\0';
-  return splitLines(buf, fields, nFields);
+  return splitLines(buf, fields, count);
 }
 
 // 0.13 wrote SSID\nPSK\n, never a 0 first
-static void splitBackup(char* raw, size_t n, char** fields) {
+static void split_backup(char* raw, size_t n, char** fields) {
   if (n == 0 || raw[0] != 0) {
     splitLines(raw, fields, 2);
     return;
@@ -189,7 +189,7 @@ static void splitBackup(char* raw, size_t n, char** fields) {
   fields[1] = raw + pass_at;
 }
 
-static bool tryRestoreBackup() {
+static bool restore_backup() {
   File f = corium::Fs::openR(WIFI_BACKUP_PATH);
   if (!f) return false;
   char raw[EGPORTAL_SSID_MAX + EGPORTAL_PASS_MAX + 4];
@@ -198,7 +198,7 @@ static bool tryRestoreBackup() {
   if (n < 0) n = 0;
   raw[n] = '\0';
   char* fields[2];
-  splitBackup(raw, n, fields);
+  split_backup(raw, n, fields);
   const char* ssid = fields[0];
   const char* pass = fields[1];
   if (!*ssid) {
@@ -207,7 +207,7 @@ static bool tryRestoreBackup() {
   }
   corium::Log::console(PSTR("WiFi: Restoring backup creds (ssid=%s)"), ssid);
   corium::Wifi::beginSaved(ssid, pass);
-  bool ok = waitForWifi(JOIN_WAIT_MS);
+  bool ok = wait_wifi(JOIN_WAIT_MS);
   if (ok) {
     corium::Fs::remove(WIFI_BACKUP_PATH);
     corium::Log::console(PSTR("WiFi: Reverted to backup creds"));
@@ -261,14 +261,14 @@ bool corium::Wifi::restoreNetBackup() {
   if (!f) return false;
   char raw[NET_LINES_MAX];
   char* fields[5];
-  readLines(f, raw, sizeof(raw), fields, 5);
+  read_lines(f, raw, sizeof(raw), fields, 5);
   f.close();
-  char now[NET_LINES_MAX];
-  net_lines(now, sizeof(now));
+  char cur[NET_LINES_MAX];
+  net_lines(cur, sizeof(cur));
   put_net(fields);
   if (!corium::Prefs::commit()) {
     // back to what runs
-    splitLines(now, fields, 5);
+    splitLines(cur, fields, 5);
     put_net(fields);
     return false;
   }
@@ -278,24 +278,25 @@ bool corium::Wifi::restoreNetBackup() {
 
 void corium::Wifi::dropNetBackup() { corium::Fs::remove(NET_BACKUP_PATH); }
 
-bool corium::Wifi::validateStatic(const char* s_ip, const char* s_gw, const char* s_sn,
-                          char* errbuf, size_t errlen) {
-  IPAddress ip, gw, sn;
-  if (!ip.fromString(s_ip)) {
-    if (errbuf) snprintf_P(errbuf, errlen, PSTR("invalid IP address: %s"), s_ip);
+bool corium::Wifi::validateStatic(const char* ip, const char* gw, const char* sn,
+                          char* err, size_t cap) {
+  IPAddress ipa, gwa, sna;
+  if (!ipa.fromString(ip)) {
+    if (err) snprintf_P(err, cap, PSTR("invalid IP address: %s"), ip);
     return false;
   }
-  if (!gw.fromString(s_gw)) {
-    if (errbuf) snprintf_P(errbuf, errlen, PSTR("invalid gateway: %s"), s_gw);
+  if (!gwa.fromString(gw)) {
+    if (err) snprintf_P(err, cap, PSTR("invalid gateway: %s"), gw);
     return false;
   }
-  if (!sn.fromString(s_sn)) {
-    if (errbuf) snprintf_P(errbuf, errlen, PSTR("invalid subnet mask: %s"), s_sn);
+  if (!sna.fromString(sn)) {
+    if (err) snprintf_P(err, cap, PSTR("invalid subnet mask: %s"), sn);
     return false;
   }
-  if (((uint32_t)ip & (uint32_t)sn) != ((uint32_t)gw & (uint32_t)sn)) {
-    if (errbuf) snprintf_P(errbuf, errlen,
-      PSTR("gateway %s outside subnet %s/%s"), s_gw, s_ip, s_sn);
+  // gw on the same subnet
+  if (((uint32_t)ipa & (uint32_t)sna) != ((uint32_t)gwa & (uint32_t)sna)) {
+    if (err) snprintf_P(err, cap,
+      PSTR("gateway %s outside subnet %s/%s"), gw, ip, sn);
     return false;
   }
   return true;
@@ -303,26 +304,26 @@ bool corium::Wifi::validateStatic(const char* s_ip, const char* s_gw, const char
 
 bool corium::Wifi::applyStaticConfig() {
   if (!corium::Prefs::getBool("net", corium::K_STATIC_IP)) return false;
-  const char* s_ip  = corium::Prefs::getString("net", corium::K_IP);
-  const char* s_gw  = corium::Prefs::getString("net", corium::K_GW);
-  const char* s_sn  = corium::Prefs::getString("net", corium::K_SN);
-  const char* s_dns = corium::Prefs::getString("net", corium::K_DNS);
+  const char* ip  = corium::Prefs::getString("net", corium::K_IP);
+  const char* gw  = corium::Prefs::getString("net", corium::K_GW);
+  const char* sn  = corium::Prefs::getString("net", corium::K_SN);
+  const char* dns = corium::Prefs::getString("net", corium::K_DNS);
   char err[96];
-  if (!corium::Wifi::validateStatic(s_ip, s_gw, s_sn, err, sizeof(err))) {
+  if (!corium::Wifi::validateStatic(ip, gw, sn, err, sizeof(err))) {
     corium::Log::console(PSTR("WiFi: Static IP rejected (%s); using DHCP"), err);
     return false;
   }
-  IPAddress ip, gw, sn, dns;
-  ip.fromString(s_ip);
-  gw.fromString(s_gw);
-  sn.fromString(s_sn);
-  if (!dns.fromString(s_dns)) dns = gw;
-  WiFi.config(ip, gw, sn, dns);
+  IPAddress ipa, gwa, sna, dnsa;
+  ipa.fromString(ip);
+  gwa.fromString(gw);
+  sna.fromString(sn);
+  if (!dnsa.fromString(dns)) dnsa = gwa;
+  WiFi.config(ipa, gwa, sna, dnsa);
   corium::Log::console(PSTR("WiFi: Static %u.%u.%u.%u gw=%u.%u.%u.%u sn=%u.%u.%u.%u dns=%u.%u.%u.%u"),
-               ip[0], ip[1], ip[2], ip[3],
-               gw[0], gw[1], gw[2], gw[3],
-               sn[0], sn[1], sn[2], sn[3],
-               dns[0], dns[1], dns[2], dns[3]);
+               ipa[0], ipa[1], ipa[2], ipa[3],
+               gwa[0], gwa[1], gwa[2], gwa[3],
+               sna[0], sna[1], sna[2], sna[3],
+               dnsa[0], dnsa[1], dnsa[2], dnsa[3]);
   return true;
 }
 
@@ -350,7 +351,7 @@ bool corium::Wifi::beginHeld() {
 
 // outside the portal Improv joins by itself
 void corium::Wifi::onImprovCreds(const char* ssid, const char* pass) {
-  if (s_inPortal && corium::Wifi::holdCreds(ssid, pass)) s_portalGotCreds = true;
+  if (s_in_portal && corium::Wifi::holdCreds(ssid, pass)) s_got_creds = true;
 }
 
 static void reset_wifi_tx_power_default();
@@ -361,14 +362,14 @@ static bool join_saved_network() {
   for (uint8_t attempt = 0; attempt <= JOIN_RETRIES && !associated && !corium::Wifi::offlineForced; attempt++) {
     if (attempt > 0) corium::Log::console(PSTR("WiFi: Retrying saved network (%u/" STR(JOIN_RETRIES) ")"), attempt);
     WiFi.begin();                          // uses NVS-stored creds
-    associated = waitForWifi(attempt == 0 ? JOIN_WAIT_MS : JOIN_RETRY_WAIT_MS);
+    associated = wait_wifi(attempt == 0 ? JOIN_WAIT_MS : JOIN_RETRY_WAIT_MS);
   }
   return associated;
 }
 
 // associated but may not route
-static void probe_new_static_config(bool staticOn) {
-  if (!staticOn || !corium::Fs::exists(NET_BACKUP_PATH)) return;
+static void probe_new_static_config(bool static_on) {
+  if (!static_on || !corium::Fs::exists(NET_BACKUP_PATH)) return;
   corium::Log::console(PSTR("WiFi: Probing reachability of new static config"));
   if (corium::Wifi::probeReachability()) {
     corium::Log::console(PSTR("WiFi: Static config probe OK"));
@@ -397,9 +398,9 @@ static char* setup_portal(EGPortal* portal) {
     portal->setNotice(notice);
   }
   portal->onSave([](const char* ssid, const char* pw, void*) {
-    if (corium::Wifi::holdCreds(ssid, pw)) s_portalGotCreds = true;
+    if (corium::Wifi::holdCreds(ssid, pw)) s_got_creds = true;
   });
-  portal->onReset([](void*) { s_portalDoReset = true; });
+  portal->onReset([](void*) { s_reset = true; });
   // open AP but every page asks, as the web UI
   portal->setBasicAuth(F("admin"), corium::Prefs::getString("sys", corium::K_WEB_PASS), F(THING_NAME));
   portal->begin(corium::DeviceInfo::hostname());
@@ -422,17 +423,17 @@ static void portal_factory_reset(EGPortal* portal) {
 }
 
 // hasSavedCreds() here drops the AP
-static void run_portal(EGPortal* portal, bool haveCreds) {
-  unsigned long portal_idle_since = corium::fastMillis();
-  while (!s_portalGotCreds && !corium::Wifi::offlineForced) {
+static void run_portal(EGPortal* portal, bool have_creds) {
+  unsigned long idle_ms = corium::fastMillis();
+  while (!s_got_creds && !corium::Wifi::offlineForced) {
     portal->loop();
     console.pollBoot();
     delay(10);
     yield();
-    if (s_portalDoReset) portal_factory_reset(portal);
-    if (!haveCreds) continue;   // first setup, wait forever
-    if (WiFi.softAPgetStationNum() > 0) portal_idle_since = corium::fastMillis();
-    if ((corium::fastMillis() - portal_idle_since) >= PORTAL_RETRY_MS ||
+    if (s_reset) portal_factory_reset(portal);
+    if (!have_creds) continue;   // first setup, wait forever
+    if (WiFi.softAPgetStationNum() > 0) idle_ms = corium::fastMillis();
+    if ((corium::fastMillis() - idle_ms) >= PORTAL_RETRY_MS ||
         corium::fastMillis() >= WIFI_OFFLINE_MAX_MS) {
       corium::Log::console(PSTR("WiFi: Portal timeout, rebooting to retry saved network"));
       corium::DeviceInfo::safeRestart(500);
@@ -448,30 +449,25 @@ static bool sta_up() {
 }
 
 static bool join_or_portal() {
-  bool haveCreds = corium::Wifi::hasSavedCreds();
-  if (haveCreds) {
-    bool staticOn = sta_up();
+  bool have_creds = corium::Wifi::hasSavedCreds();
+  if (have_creds) {
+    bool static_on = sta_up();
     if (join_saved_network()) {
-      probe_new_static_config(staticOn);
+      probe_new_static_config(static_on);
       return true;
     }
     if (corium::Wifi::offlineForced) return false;
     corium::Log::console(PSTR("WiFi: Saved creds failed to associate"));
-    if (tryRestoreBackup()) return true;
+    if (restore_backup()) return true;
     if (corium::Wifi::OFFLINE_OK) return false;
   }
 
-  s_portalGotCreds = false;
+  s_got_creds = false;
   auto* portal = new EGPortal();
-  if (!portal) {
-    corium::Log::console(PSTR("WiFi: Portal alloc failed, rebooting"));
-    corium::DeviceInfo::safeRestart(500);
-    return false;
-  }
   char* notice = setup_portal(portal);
-  s_inPortal = true;
-  run_portal(portal, haveCreds);
-  s_inPortal = false;
+  s_in_portal = true;
+  run_portal(portal, have_creds);
+  s_in_portal = false;
   portal->end();
   delete portal;
   free(notice);
@@ -483,7 +479,7 @@ static bool join_or_portal() {
 
   sta_up();
   if (!corium::Wifi::beginHeld()) return false;
-  return waitForWifi(JOIN_WAIT_MS);
+  return wait_wifi(JOIN_WAIT_MS);
 }
 
 bool corium::Wifi::offlineNow() {
@@ -616,7 +612,7 @@ static void apply_wifi_tx_power(uint8_t dBm) {
 #ifdef ESP8266
   WiFi.setOutputPower((float)dBm);
 #else
-  esp_wifi_set_max_tx_power((int8_t)(dBm * 4));
+  esp_wifi_set_max_tx_power((int8_t)(dBm * 4));   // quarter dBm
 #endif
 }
 
@@ -624,7 +620,7 @@ static void reset_wifi_tx_power_default() {
 #ifdef ESP8266
   WiFi.setOutputPower(20.5f);
 #else
-  esp_wifi_set_max_tx_power(80);
+  esp_wifi_set_max_tx_power(80);   // 20 dBm
 #endif
 }
 

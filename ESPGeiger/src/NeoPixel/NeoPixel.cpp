@@ -88,10 +88,10 @@ static const uint8_t NAMED_MASK[8] PROGMEM = {
 
 void NeoPixel::precompute_blip() {
   uint8_t mask = pgm_read_byte(&NAMED_MASK[_blip_colour_idx]);
-  _blip_r = (mask & 0b100) ? colorSaturation : 0;
-  _blip_g = (mask & 0b010) ? colorSaturation : 0;
-  _blip_b = (mask & 0b001) ? colorSaturation : 0;
-  if (_blip_colour_idx == 7) _blip_g = colorSaturation >> 1;  // orange
+  _blip_r = (mask & 0b100) ? _level : 0;
+  _blip_g = (mask & 0b010) ? _level : 0;
+  _blip_b = (mask & 0b001) ? _level : 0;
+  if (_blip_colour_idx == 7) _blip_g = _level >> 1;  // orange
 }
 
 #ifndef NEOPIXEL_PIN_BLOCKED
@@ -113,7 +113,7 @@ void NeoPixel::onPrefsLoaded() {
     s_pin_read = true;
     _pin = claim_pin((int)corium::Prefs::getInt("neopixel", EG_K_PIN));
     // setup() ran before corium::Prefs::begin
-    if (!controller_ && _pin >= 0) setup();
+    if (!_bus && _pin >= 0) setup();
   }
 #endif
   int b = (int)corium::Prefs::getUInt("neopixel", EG_K_BRIGHTNESS);
@@ -164,9 +164,9 @@ void NeoPixel::begin() {
 void NeoPixel::setup()
 {
   if (_pin < 0) return;
-  this->controller_ = new NeoController(1, (uint8_t)_pin);
-  this->controller_->Begin();
-  this->controller_->Show();
+  this->_bus = new NeoController(1, (uint8_t)_pin);
+  this->_bus->Begin();
+  this->_bus->Show();
 }
 
 static void show(NeoController* c, RgbColor rgb) {
@@ -178,21 +178,21 @@ void NeoPixel::setBrightness(int input) {
   int pct = clamp(input, 0, 100);
   input = (int)brightnessCurve((uint32_t)pct, 128);  // 0-128
   if (pct && !input) input = 1;
-  if (input == 0 && controller_) show(controller_, RgbColor(0));
-  colorSaturation = input;
+  if (input == 0 && _bus) show(_bus, RgbColor(0));
+  _level = input;
 }
 
 // trend modes: blink faster when rising, colour by trend
 RgbColor NeoPixel::trend_color()
 {
-  uint8_t s = (uint8_t)colorSaturation;
+  uint8_t s = (uint8_t)_level;
   float cpm = corium::m_read_f(s_cpm);
   float cpm5 = corium::m_read_f(s_cpm5);
   if (cpm5 <= 0 || cpm <= 0) {
-    nextInterval = blinkInterval;
+    _next_ms = _blink_ms;
     return color(0, 0, s);                         // no data: blue
   }
-  nextInterval = clamp((unsigned long)(blinkInterval * cpm5 / cpm), 100UL, 4000UL);
+  _next_ms = clamp((unsigned long)(_blink_ms * cpm5 / cpm), 100UL, 4000UL);
   float z = poisson_z(cpm, cpm5);
   if (z > 3.0f)  return color(s, 0, 0);            // rise: red
   if (z > 1.5f)  return color(s, s, 0);            // rising: yellow
@@ -203,16 +203,16 @@ RgbColor NeoPixel::trend_color()
 // status modes: alarms win, blue when quiet
 RgbColor NeoPixel::alarm_color(RgbColor rgb)
 {
-  uint8_t s = (uint8_t)colorSaturation;
+  uint8_t s = (uint8_t)_level;
   if (corium::m_read_b(s_alert)) return color(s, 0, 0);
   if (corium::m_read_b(s_warn))  return color(s, s, 0);
   if (corium::m_read_f(s_cpm) < 0.01f && corium::m_read_f(s_cpm5) < 0.01f) return color(0, 0, s);
   return rgb;
 }
 
-void NeoPixel::blink(uint16_t timer)
+void NeoPixel::blink(uint16_t ms)
 {
-  if (colorSaturation == 0 || neoPixelMode == NP_OFF || !controller_) {
+  if (_level == 0 || neoPixelMode == NP_OFF || !_bus) {
     return;
   }
   RgbColor rgb;
@@ -221,39 +221,39 @@ void NeoPixel::blink(uint16_t timer)
   } else if (trend(neoPixelMode)) {
     rgb = trend_color();
   } else {
-    rgb = color(0, colorSaturation, 0);
+    rgb = color(0, _level, 0);
   }
   if (alarms(neoPixelMode)) rgb = alarm_color(rgb);
 
-  show(controller_, rgb);
+  show(_bus, rgb);
   _is_off = false;
-  onTime = corium::fastMillis();
-  offTime = timer;
+  _on_ms = corium::fastMillis();
+  _lit_ms = ms;
 }
 
 void NeoPixel::loop(unsigned long now)
 {
-  if (colorSaturation == 0 || !controller_) {
+  if (_level == 0 || !_bus) {
     return;
   }
   if (!_is_off) {
-    unsigned long elapsed = now - onTime;
-    if (elapsed >= offTime) {
-      show(controller_, RgbColor(0));
+    unsigned long elapsed = now - _on_ms;
+    if (elapsed >= _lit_ms) {
+      show(_bus, RgbColor(0));
       _is_off = true;
     } else if (this->neoPixelMode == NP_BLIP && _fade_rate > 0) {
       // hold at peak, then gamma-2 decay
       const uint16_t FADE_HOLD_MS = 20;
-      if (elapsed >= FADE_HOLD_MS && offTime > FADE_HOLD_MS) {
+      if (elapsed >= FADE_HOLD_MS && _lit_ms > FADE_HOLD_MS) {
         uint32_t fe = elapsed - FADE_HOLD_MS;
-        uint32_t fw = offTime - FADE_HOLD_MS;
+        uint32_t fw = _lit_ms - FADE_HOLD_MS;
         uint32_t lin = ((fw - fe) * 256u) / fw;
         uint32_t scale = (lin * lin) >> 8;
         RgbColor f = color(
           (uint8_t)((uint32_t)_blip_r * scale >> 8),
           (uint8_t)((uint32_t)_blip_g * scale >> 8),
           (uint8_t)((uint32_t)_blip_b * scale >> 8));
-        show(controller_, f);
+        show(_bus, f);
       }
     }
   }
@@ -264,7 +264,7 @@ void NeoPixel::loop(unsigned long now)
       blink(this->neoPixelMode == NP_BLIP ? pgm_read_word(&FADE_MS[_fade_rate]) : 20);
     }
   } else {
-    if (now - onTime >= nextInterval) {
+    if (now - _on_ms >= _next_ms) {
       blink(20);
     }
   }

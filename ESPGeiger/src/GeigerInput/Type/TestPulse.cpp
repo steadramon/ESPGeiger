@@ -18,7 +18,7 @@
 */
 #include "TestPulse.h"
 
-#if GEIGER_IS_TEST(GEIGER_TYPE)
+#if GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
 
 #include "Corium/Logger/Logger.h"
 #ifdef USE_PCNT
@@ -28,11 +28,11 @@
 
 static uint32_t s_tx_mask;   // 0 = no TX pin
 static bool s_tx_hi;
-static volatile bool _bool_pulse_state = false;   // loop reads it
-static volatile unsigned long _last_b;
+static volatile bool s_high = false;   // loop reads it
+static volatile unsigned long s_blip_us;
 // ticks, no libgcc in the isr
-static volatile uint32_t _this_delay;
-static volatile uint32_t _next_delay;
+static volatile uint32_t s_this;
+static volatile uint32_t s_next;
 
 GeigerTestPulse::GeigerTestPulse() {
   strlcpy(_test_type, "TestPulse", sizeof(_test_type));
@@ -61,53 +61,54 @@ void GeigerTestPulse::begin() {
     corium::Log::console(PSTR("TestPulse: TXPIN %d can't be driven, no TX"), _tx_pin);
   }
   CPMAdjuster();
-  _next_delay = (uint32_t)calcDelay();
-  _this_delay = _next_delay;
-  TestTimer::start(pulseInterrupt, _next_delay);
+  s_next = (uint32_t)calcDelay();
+  s_this = s_next;
+  TestTimer::start(pulseInterrupt, s_next);
 }
 
 void GeigerTestPulse::stopForOTA() { TestTimer::stop(); }
 
-void GeigerTestPulse::restartAfterOTA() { TestTimer::start(pulseInterrupt, _next_delay); }
+void GeigerTestPulse::restartAfterOTA() { TestTimer::start(pulseInterrupt, s_next); }
 
 void GeigerTestPulse::loop() {
   take();
   countTimerPulses();
   if (_retarget) {
     // between pulses only
-    if (_bool_pulse_state) {
+    if (s_high) {
       post();
     } else {
       _retarget = false;
-      _next_delay = (uint32_t)calcDelay();
+      s_next = (uint32_t)calcDelay();
       TestTimer::restart((uint32_t)calcDelay());
     }
   }
-  if (_last_pulse_test != _last_b) {
-    _last_pulse_test = _last_b;
-    _next_delay = (uint32_t)calcDelay();   // one word, the isr reads it whole
+  if (_last_pulse_test != s_blip_us) {
+    _last_pulse_test = s_blip_us;
+    s_next = (uint32_t)calcDelay();   // one word, the isr reads it whole
   }
 }
 
 // returns ticks to the next
 uint32_t CORIUM_ISR_ATTR GeigerTestPulse::pulseInterrupt() {
-  _bool_pulse_state = !_bool_pulse_state;
-  TestTimer::tx(s_tx_mask, s_tx_hi, _bool_pulse_state);
-  uint32_t _our_delay = 0;
-  uint32_t pulseWidthTicks = _pulse_width_ticks;
-  if (!_bool_pulse_state) {
+  s_high = !s_high;
+  TestTimer::tx(s_tx_mask, s_tx_hi, s_high);
+  uint32_t ticks = 0;
+  uint32_t width = _pulse_width_ticks;
+  if (!s_high) {
 #ifdef GEIGER_COUNT_TXPULSE
     GeigerInputTest::timerPulse();
 #endif
-    _last_b = micros();
+    s_blip_us = micros();
     GeigerInputTest::post();
-    uint32_t next = _next_delay;
-    _this_delay = (next > 2 * pulseWidthTicks) ? next - pulseWidthTicks : pulseWidthTicks;
-    _our_delay = _this_delay;
+    // low time = gap less the width, min one width
+    uint32_t next = s_next;
+    s_this = (next > 2 * width) ? next - width : width;
+    ticks = s_this;
   } else {
-    _our_delay = pulseWidthTicks;
+    ticks = width;
   }
-  return _our_delay;
+  return ticks;
 }
 
 void GeigerTestPulse::secondTicker() {
@@ -128,4 +129,4 @@ int GeigerTestPulse::collect() {
   return n;
 }
 #endif
-#endif // GEIGER_IS_TEST
+#endif // GEIGER_TYPE_TESTPULSE

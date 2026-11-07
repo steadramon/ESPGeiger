@@ -35,7 +35,7 @@
 #include <string.h>
 #include <ctype.h>
 
-static GeigerUdpRx* s_udprx_instance = nullptr;
+static GeigerUdpRx* s_rx = nullptr;
 
 static constexpr const char PATH_PREFIX[]  = "/espg/";
 static constexpr const char TAG_II[]        = ",ii";
@@ -55,17 +55,17 @@ static inline float rd_f32(const uint8_t* p) {
 static float or_nan(float v) { return isFinite(v) ? v : NAN; }
 
 extern "C" void udprx_notify_prefs_saved() {
-  if (s_udprx_instance) s_udprx_instance->onPrefsSaved();
+  if (s_rx) s_rx->onPrefsSaved();
 }
 
-GeigerUdpRx::GeigerUdpRx() { s_udprx_instance = this; }
-GeigerUdpRx::~GeigerUdpRx() { s_udprx_instance = nullptr; teardownUdp(); }
+GeigerUdpRx::GeigerUdpRx() { s_rx = this; }
+GeigerUdpRx::~GeigerUdpRx() { s_rx = nullptr; teardownUdp(); }
 
 void GeigerUdpRx::begin() {
   _poll_at = corium::fastMillis() + UDPRX_POLL_MS;
   _polls = true;
   readPrefs();
-  _last_seen_count = _local_count;
+  _collected = _local_count;
   corium::Log::console(PSTR("UdpRx: mode=%u group=%s port=%u rxmode=%u"),
                _mode, corium::Prefs::getString("counter", EG_K_UDPRX_GROUP),
                _port, _rx_mode);
@@ -74,14 +74,14 @@ void GeigerUdpRx::begin() {
 void GeigerUdpRx::readPrefs() {
   _mode = (uint8_t)corium::Prefs::getUInt("counter", EG_K_UDPRX_MODE);
   if (_mode > RX_SUM) _mode = RX_ONE;   // legacy 2 = auto
-  const char* pin = corium::Prefs::getString("counter", EG_K_UDPRX_CHIPID);
-  size_t n = strlen(pin);
+  const char* id = corium::Prefs::getString("counter", EG_K_UDPRX_CHIPID);
+  size_t n = strlen(id);
   if (n && n != BLIP_ID_LEN) {   // a short pin would match nothing
-    corium::Log::console(PSTR("UdpRx: pin %s is not %u chars, ignored"), pin, (unsigned)BLIP_ID_LEN);
+    corium::Log::console(PSTR("UdpRx: pin %s is not %u chars, ignored"), id, (unsigned)BLIP_ID_LEN);
     n = 0;
   }
   // ids are sent lower case
-  for (size_t i = 0; i < n; i++) _pinned_chipid[i] = tolower((unsigned char)pin[i]);
+  for (size_t i = 0; i < n; i++) _pinned_chipid[i] = tolower((unsigned char)id[i]);
   _pinned_chipid[n] = '\0';
 
   const char* g = corium::Prefs::getString("counter", EG_K_UDPRX_GROUP);
@@ -126,10 +126,6 @@ bool GeigerUdpRx::ensureUdp() {
   if (_udp) return true;
   if (!corium::Wifi::connected) return false;
   _udp = new WiFiUDP();
-  if (!_udp) {
-    corium::Log::console(PSTR("UdpRx: WiFiUDP alloc failed"));
-    return false;
-  }
   corium::Wifi::rxSleep(_rx_mode);
   bool ok;
   if (corium::Wifi::isMulticast(_group)) {
@@ -167,7 +163,7 @@ bool GeigerUdpRx::acceptChipid(const char* src_chipid, bool click) {
   return memcmp(_locked_chipid, src_chipid, BLIP_ID_LEN) == 0;
 }
 
-GeigerUdpRx::ProducerRecord* GeigerUdpRx::findOrAllocProducer(const char* chipid,
+GeigerUdpRx::ProducerRecord* GeigerUdpRx::producer(const char* chipid,
                                                               uint32_t now_ms) {
   for (uint8_t i = 0; i < _producers_seen; i++) {
     if (memcmp(_producers[i].chipid, chipid, BLIP_ID_LEN) == 0) {
@@ -213,12 +209,12 @@ bool GeigerUdpRx::logOk() {
 }
 
 // <= 1024 now, to 65535 drained, more = resync
-uint32_t GeigerUdpRx::creditForwardGap(const ProducerRecord* p, uint32_t producer_counter,
-                                       uint32_t producer_ts) {
-  uint32_t gap = producer_counter - p->last_counter - 1;
+uint32_t GeigerUdpRx::creditForwardGap(const ProducerRecord* p, uint32_t count,
+                                       uint32_t ts_ms) {
+  uint32_t gap = count - p->last_counter - 1;
   if (gap <= 1024) return gap;
   if (gap <= UDPRX_DRAIN_MAX) {
-    uint32_t dt_ms = producer_ts - p->last_ts_ms;
+    uint32_t dt_ms = ts_ms - p->last_ts_ms;
     if (dt_ms > 100 && dt_ms < 60000) {
       _drain_pending += (float)gap;
       if (_drain_pending > UDPRX_DRAIN_MAX) _drain_pending = UDPRX_DRAIN_MAX;
@@ -235,20 +231,20 @@ uint32_t GeigerUdpRx::creditForwardGap(const ProducerRecord* p, uint32_t produce
   _resync_count++;
   if (logOk()) corium::Log::console(PSTR("UdpRx: %s resync, gap=%u (counter %u -> %u)"),
                             p->chipid, (unsigned)gap,
-                            (unsigned)p->last_counter, (unsigned)producer_counter);
+                            (unsigned)p->last_counter, (unsigned)count);
   return 0;
 }
 
 // small = reorder, big or ts back = producer reboot
-bool GeigerUdpRx::producerRestarted(const ProducerRecord* p, uint32_t producer_counter,
-                                    uint32_t producer_ts) {
-  uint32_t back = p->last_counter - producer_counter;
-  bool ts_reset = (int32_t)(producer_ts - p->last_ts_ms) < -60000;
+bool GeigerUdpRx::producerRestarted(const ProducerRecord* p, uint32_t count,
+                                    uint32_t ts_ms) {
+  uint32_t back = p->last_counter - count;
+  bool ts_reset = (int32_t)(ts_ms - p->last_ts_ms) < -60000;
   if (back > 1024 || ts_reset) {
     _resync_count++;
     if (logOk()) corium::Log::console(PSTR("UdpRx: %s counter reset (%u -> %u)"),
                               p->chipid,
-                              (unsigned)p->last_counter, (unsigned)producer_counter);
+                              (unsigned)p->last_counter, (unsigned)count);
     return true;
   }
   return false;
@@ -266,18 +262,18 @@ void GeigerUdpRx::scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint3
 }
 
 void GeigerUdpRx::creditClicks(uint32_t credit, uint32_t gap_credit, const ProducerRecord* p,
-                               uint32_t producer_ts, uint32_t now_ms) {
+                               uint32_t ts_ms, uint32_t now_ms) {
   _packets_accepted++;
   _last_click_ms  = now_ms;
   _gap_filled    += gap_credit;
   gcounter.dispatchReceiverBlip();
-  if (gap_credit > 0) scheduleGapfill(gap_credit, producer_ts - p->last_ts_ms, now_ms);
+  if (gap_credit > 0) scheduleGapfill(gap_credit, ts_ms - p->last_ts_ms, now_ms);
   // batch, receiver timing would lie
   uint32_t now_us = (uint32_t)micros();
   if (credit == 1) {
     Counter::on_pulse_batch(1, now_us, 0);
   } else {
-    uint32_t dt_ms = producer_ts - p->last_ts_ms;
+    uint32_t dt_ms = ts_ms - p->last_ts_ms;
     uint32_t span_us = ((int32_t)dt_ms > 0 && dt_ms < 60000)
                         ? dt_ms * 1000UL : 1000000UL;
     Counter::on_pulse_batch((uint16_t)credit, now_us, span_us);
@@ -290,29 +286,29 @@ void GeigerUdpRx::processClick(const uint8_t* buf, size_t len, ProducerRecord* p
   if (buf[BLIP_SUFFIX_AT + 5] != '\0') return;
   if (memcmp(buf + BLIP_ARGS_AT, TAG_II, 4) != 0) return;
 
-  uint32_t producer_counter = rdBe32(buf + BLIP_CLICK_COUNT_AT);
-  uint32_t producer_ts      = rdBe32(buf + BLIP_CLICK_MS_AT);
+  uint32_t count = rdBe32(buf + BLIP_CLICK_COUNT_AT);
+  uint32_t ts_ms      = rdBe32(buf + BLIP_CLICK_MS_AT);
 
   uint32_t credit = 1;
   uint32_t gap_credit = 0;
   bool     advance_anchor = true;
   if (p->click_count > 0) {
-    if (producer_counter == p->last_counter) {
+    if (count == p->last_counter) {
       credit = 0;   // dup
-    } else if (producer_counter > p->last_counter) {
-      gap_credit = creditForwardGap(p, producer_counter, producer_ts);
+    } else if (count > p->last_counter) {
+      gap_credit = creditForwardGap(p, count, ts_ms);
       credit += gap_credit;
-    } else if (!producerRestarted(p, producer_counter, producer_ts)) {
+    } else if (!producerRestarted(p, count, ts_ms)) {
       credit = 0;
       advance_anchor = false;
     }
   }
-  if (credit > 0) creditClicks(credit, gap_credit, p, producer_ts, now_ms);
+  if (credit > 0) creditClicks(credit, gap_credit, p, ts_ms, now_ms);
   _local_count    += credit;
   p->click_count  += credit;
   if (advance_anchor) {
-    p->last_counter = producer_counter;
-    p->last_ts_ms   = producer_ts;
+    p->last_counter = count;
+    p->last_ts_ms   = ts_ms;
   }
 }
 
@@ -323,18 +319,18 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   // own packets
   if (memcmp(buf + BLIP_ID_AT, corium::DeviceInfo::chipId(), BLIP_ID_LEN) == 0) return;
   const char* src = (const char*)(buf + BLIP_ID_AT);
-  const uint8_t* s = buf + BLIP_SUFFIX_AT;
-  bool click = memcmp(s, SUFFIX_CLICK, 5) == 0;
+  const uint8_t* suffix = buf + BLIP_SUFFIX_AT;
+  bool click = memcmp(suffix, SUFFIX_CLICK, 5) == 0;
   if (!acceptChipid(src, click)) return;
 
   uint32_t now_ms = corium::fastMillis();
-  ProducerRecord* p = findOrAllocProducer(src, now_ms);
+  ProducerRecord* p = producer(src, now_ms);
   _last_packet_ms = now_ms;
 
   // other paths only keep the producer alive
   if (click) {
     processClick(buf, len, p, now_ms);
-  } else if (memcmp(s, SUFFIX_ENV, 4) == 0) {
+  } else if (memcmp(suffix, SUFFIX_ENV, 4) == 0) {
     processEnv(buf, len);
   }
 }
@@ -376,13 +372,13 @@ bool GeigerUdpRx::ensureBound(uint32_t now) {
   }
   if (!ensureUdp()) return false;
   _bound_at_ms = corium::Wifi::connectedAtMs;
-  _last_igmp_refresh_ms = now;
+  _igmp_ms = now;
   do_refresh();
   return true;
 }
 
 // Silent rx recovery, one action a rung
-void GeigerUdpRx::climbRecoveryLadder(uint32_t now) {
+void GeigerUdpRx::recover(uint32_t now) {
   uint32_t step_ms = (_recovery_steps < 5) ? 60000UL : 300000UL;
   if (corium::fresh(now, _recovery_at_ms, step_ms)) return;
   _recovery_at_ms = now;
@@ -411,7 +407,7 @@ void GeigerUdpRx::climbRecoveryLadder(uint32_t now) {
       break;
   }
   _recovery_steps++;
-  _last_igmp_refresh_ms = now;
+  _igmp_ms = now;
 }
 
 void GeigerUdpRx::readDatagrams() {
@@ -456,7 +452,7 @@ void GeigerUdpRx::loop() {
   }
 
   if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > UDPRX_QUIET_MS) {
-    climbRecoveryLadder(now);
+    recover(now);
     if (!_udp) return;
   } else {
     if (_recovery_steps) {
@@ -465,9 +461,9 @@ void GeigerUdpRx::loop() {
     _recovery_steps = 0;
     _recovery_at_ms = 0;
     // keep the router subscription
-    if ((uint32_t)(now - _last_igmp_refresh_ms) > 300000UL) {
+    if ((uint32_t)(now - _igmp_ms) > 300000UL) {
       do_refresh();
-      _last_igmp_refresh_ms = now;
+      _igmp_ms = now;
     }
   }
   readDatagrams();
@@ -477,6 +473,7 @@ void GeigerUdpRx::loop() {
 void GeigerUdpRx::secondTicker() {
   _env_at.fresh(corium::fastMillis(), UDPRX_ENV_TTL_MS);   // stale stays stale over the wrap
   if (!_draining) return;
+  // a big gap goes in at the sender's rate
   float step = _drain_rate;
   if (step > _drain_pending) step = _drain_pending;
   _drain_pending -= step;
@@ -495,9 +492,9 @@ void GeigerUdpRx::secondTicker() {
 }
 
 int GeigerUdpRx::collect() {
-  uint32_t now = _local_count;
-  int delta = (int)(now - _last_seen_count);
-  _last_seen_count = now;
+  uint32_t count = _local_count;
+  int delta = (int)(count - _collected);
+  _collected = count;
   return delta;
 }
 
@@ -514,20 +511,20 @@ bool GeigerUdpRx::heard() const {
 }
 
 // igmpx = no netif
-static bool m_quiet(corium::MValue* v)   { v->u = s_udprx_instance->quiet_s(); return true; }
-static bool m_rebind(corium::MValue* v)  { v->u = s_udprx_instance->rebind_count(); return true; }
-static bool m_igmp(corium::MValue* v)    { v->u = s_udprx_instance->refresh_count(); return true; }
-static bool m_igmpx(corium::MValue* v)   { v->u = s_udprx_instance->refresh_noop_count(); return true; }
+static bool m_quiet(corium::MValue* v)   { v->u = s_rx->quiet_s(); return true; }
+static bool m_rebind(corium::MValue* v)  { v->u = s_rx->rebind_count(); return true; }
+static bool m_igmp(corium::MValue* v)    { v->u = s_rx->refresh_count(); return true; }
+static bool m_igmpx(corium::MValue* v)   { v->u = s_rx->refresh_noop_count(); return true; }
 
 static bool m_loss(corium::MValue* v) {
-  if (s_udprx_instance->packets_accepted() == 0) return false;
-  v->f = s_udprx_instance->loss_pct_x10() / 10.0f;
+  if (s_rx->packets_accepted() == 0) return false;
+  v->f = s_rx->loss_pct_x10() / 10.0f;
   return true;
 }
 
-static bool m_rx_t(corium::MValue* v) { return s_udprx_instance->env(0, &v->f); }
-static bool m_rx_h(corium::MValue* v) { return s_udprx_instance->env(1, &v->f); }
-static bool m_rx_p(corium::MValue* v) { return s_udprx_instance->env(2, &v->f); }
+static bool m_rx_t(corium::MValue* v) { return s_rx->env(0, &v->f); }
+static bool m_rx_h(corium::MValue* v) { return s_rx->env(1, &v->f); }
+static bool m_rx_p(corium::MValue* v) { return s_rx->env(2, &v->f); }
 
 static const char MP_LOSS[] PROGMEM = "geiger_udp_loss_percent";
 static const char MH_LOSS[] PROGMEM = "Packet loss on the UDP feed";

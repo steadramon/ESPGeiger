@@ -37,7 +37,7 @@ static const uint16_t LONG_PRESS_MS = 2000;
 struct BtnState {
   int      pin = -1;
   corium::Debounce deb;
-  uint32_t press_start_ms = 0;
+  uint32_t down_ms = 0;
   bool     long_fired = false;
 };
 static BtnState s_btn[2];
@@ -95,7 +95,7 @@ static void set_pin_slot(uint8_t slot, int pin) {
   }
   // held at boot: no short on release
   b.deb.reset(down, now);
-  b.press_start_ms = now;
+  b.down_ms = now;
   b.long_fired = down;
   bool on = s_btn[0].pin >= 0 || s_btn[1].pin >= 0;
   corium::Registry::every(&pushbutton, on ? POLL_MS : 0);
@@ -156,29 +156,29 @@ static void pin_scan_init() {
 }
 
 static void pin_scan_poll() {
-  static uint8_t last[49] = {0};
-  static bool primed = false;
-  if (!primed) {
+  static uint8_t s_level[49] = {0};
+  static bool s_primed = false;
+  if (!s_primed) {
     delay(5);
-    for (int p = 1; p <= 48; p++) last[p] = digitalRead(p) ? 1 : 0;
-    primed = true;
+    for (int p = 1; p <= 48; p++) s_level[p] = digitalRead(p) ? 1 : 0;
+    s_primed = true;
     return;
   }
   for (int p = 1; p <= 48; p++) {
     if (pin_scan_skips(p)) continue;
     uint8_t cur = digitalRead(p) ? 1 : 0;
-    if (cur != last[p]) {
+    if (cur != s_level[p]) {
       corium::Log::console(PSTR("PinScan: GPIO%d %s"), p, cur ? "HIGH" : "LOW");
-      last[p] = cur;
+      s_level[p] = cur;
     }
   }
 }
 
 static void pin_scan_loop(unsigned long now) {
-  static bool inited = false;
-  if (!inited) { pin_scan_init(); inited = true; }
-  static unsigned long s_last = 0;
-  if (now - s_last >= 30) { s_last = now; pin_scan_poll(); }
+  static bool s_inited = false;
+  if (!s_inited) { pin_scan_init(); s_inited = true; }
+  static unsigned long s_poll_ms = 0;
+  if (now - s_poll_ms >= 30) { s_poll_ms = now; pin_scan_poll(); }
 }
 #endif
 
@@ -192,7 +192,7 @@ static void short_press(uint8_t i) {
 
 // long or short, never both
 static void check_long(BtnState& b, unsigned long now) {
-  if (b.long_fired || (uint32_t)(now - b.press_start_ms) < LONG_PRESS_MS) return;
+  if (b.long_fired || (uint32_t)(now - b.down_ms) < LONG_PRESS_MS) return;
   if (!corium::Registry::heard(PushButton::TOPIC_LONG)) return;
   b.long_fired = true;
   corium::Log::console(PSTR("Btn: long"));
@@ -205,7 +205,7 @@ static void step_one(uint8_t i, unsigned long now) {
   bool down = read_down(b);
   if (b.deb.step(down, now, DEBOUNCE_MS)) {
     if (down) {
-      b.press_start_ms = now;
+      b.down_ms = now;
       b.long_fired = false;
     } else if (!b.long_fired) {
       short_press(i);

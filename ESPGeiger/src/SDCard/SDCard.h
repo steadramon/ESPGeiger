@@ -32,6 +32,7 @@
 
 extern SdFat32* sd;
 
+// A csv row a minute in /YYYYMM/YYYYMMDD.csv, oldest year-old files go when full
 class SDCard : public corium::Module {
   public:
     SDCard();
@@ -44,31 +45,31 @@ class SDCard : public corium::Module {
     void onPrefsLoaded() override;
     void registerRoutes(EGHttpServer& http) override;
     const corium::MenuEntry* menuEntries() override;
-    bool deleteOldest(uint32_t cutoffPacked);   // DOS (date<<16)|time
+    bool deleteOldest(uint32_t cutoff);   // DOS (date<<16)|time
     void pauseWriter();
     // SdFat not reentrant, closes the day file first
     struct Hold {
       Hold();
     };
     void reinit();
-    bool ready() const { return sdenabled; }
+    bool ready() const { return _enabled; }
     int32_t freeMB() const;   // -1 = counting or a count failed
     bool counting() const { return _counting; }
     // a card there that won't mount or write, once till it mounts
     static constexpr uint8_t TOPIC_ERROR = Topic::SD_ERROR;
     bool faulted() const { return _fault; }
   protected:
-    File32 myDataFile;
+    File32 _file;
   private:
     void disableFull();
     void fault();
     void fail_step(const char* step, const char* dir, const char* file);
     bool _fault = false;
-    time_t lastWrittenMinute = 0;
-    uint32_t openFileDay = 0;  // YYYYMMDD, 0 = closed
+    time_t _last_minute = 0;
+    uint32_t _open_day = 0;  // YYYYMMDD, 0 = closed
     uint8_t _sync_min = 1;
     uint8_t _unsynced_writes = 0;
-    bool sdenabled = false;
+    bool _enabled = false;
     enum : uint8_t { CLEAN_NONE = 0, CLEAN_FREECHECK, CLEAN_FULL };
     uint8_t _cleanup = CLEAN_NONE;
     uint8_t _counting = CLEAN_NONE;   // the cleanup it's counting for
@@ -82,7 +83,7 @@ class SDCard : public corium::Module {
     void writeUndated();
     bool wrote(const char* dir, const char* name);
     void closeDay(bool sync);
-    bool openDayFile(const char* dirStr, const char* timeStr, uint32_t day, bool& failed);
+    bool openDayFile(const char* dir, const char* name, uint32_t day, bool& failed);
     void scheduleCleanup(uint8_t what);
     void startCount(uint8_t what);
     void countFat();

@@ -67,9 +67,9 @@ bool Reader::is_rtttl() const {
   return p < _len && _s[p] == '=';
 }
 
-// up to the second colon
+// Reads up to the second colon, is_rtttl() already found the first
 void Reader::header() {
-  while (_s[_pos] != ':') _pos++;
+  while (_pos < _len && _s[_pos] != ':') _pos++;
   _pos++;
   for (;;) {
     skip();
@@ -88,13 +88,13 @@ void Reader::header() {
 bool Reader::set(char k, uint32_t v) {
   if (k == 'd') {
     if (!pow2(v)) return fail(RANGE);
-    _d = v;
+    _dur = v;
   } else if (k == 'o') {
     if (v < OCT_MIN || v > OCT_MAX) return fail(RANGE);
-    _o = v;
+    _oct = v;
   } else if (k == 'b') {
     if (!v || v > 900) return fail(RANGE);
-    _b = v;
+    _bpm = v;
   } else {
     return fail(BAD);
   }
@@ -191,7 +191,7 @@ bool Reader::tone(Step& st) {
 
 // [dur]note[#][.][oct][.]
 bool Reader::note(Step& st) {
-  uint32_t dur = _d, oct = _o;
+  uint32_t dur = _dur, oct = _oct;
   if (digit(peek()) && !num(dur, 32)) return false;
   if (!pow2(dur)) return fail(RANGE);
   int8_t semi = letter(peek());
@@ -211,7 +211,7 @@ bool Reader::dotted() {
 }
 
 uint32_t Reader::beat(uint32_t dur, bool dot) const {
-  uint32_t ms = WHOLE_NOTE_MS / (_b * dur);
+  uint32_t ms = WHOLE_NOTE_MS / (_bpm * dur);
   return dot ? ms + ms / 2 : ms;
 }
 

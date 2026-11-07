@@ -37,23 +37,23 @@ namespace TickProfile {
 }
 }  // namespace corium
 
-static unsigned long t_start = 0;
-static uint8_t tick_max_age = 0;
+static unsigned long s_start_us = 0;
+static uint8_t s_max_age = 0;
 #ifdef TICK_PROFILE
-static unsigned long t_after_app = 0;
-static unsigned long t_after_wifi = 0;
-static uint32_t max_app_us = 0;
-static uint32_t max_wifi_us = 0;
-static uint32_t min_free_heap = 0xFFFFFFFFu;
+static unsigned long s_app_done_us = 0;
+static unsigned long s_wifi_done_us = 0;
+static uint32_t s_max_app_us = 0;
+static uint32_t s_max_wifi_us = 0;
+static uint32_t s_min_heap = 0xFFFFFFFFu;
 #endif
 
 void corium::TickProfile::beginTick() {
-  t_start = micros();
+  s_start_us = micros();
 }
 
 #ifdef TICK_PROFILE
-void corium::TickProfile::markApp()  { t_after_app = micros(); }
-void corium::TickProfile::markWifi()    { t_after_wifi = micros(); }
+void corium::TickProfile::markApp()  { s_app_done_us = micros(); }
+void corium::TickProfile::markWifi()    { s_wifi_done_us = micros(); }
 #endif
 
 bool corium::TickProfile::endTick() {
@@ -64,37 +64,38 @@ bool corium::TickProfile::endTick() {
   s_lps_last = n;
   corium::TickProfile::lpsRaw = count;
   corium::TickProfile::lps = ema8(corium::TickProfile::lps, count);
-  uint32_t this_tick = (uint32_t)(micros() - t_start);
-  corium::TickProfile::tickUs = ema8(corium::TickProfile::tickUs, this_tick);
-  if (this_tick > corium::TickProfile::tickMaxUs) corium::TickProfile::tickMaxUs = this_tick;
+  uint32_t us = (uint32_t)(micros() - s_start_us);
+  corium::TickProfile::tickUs = ema8(corium::TickProfile::tickUs, us);
+  if (us > corium::TickProfile::tickMaxUs) corium::TickProfile::tickMaxUs = us;
 #ifdef TICK_PROFILE
-  uint32_t app_us  = (uint32_t)(t_after_app - t_start);
-  uint32_t wifi_us = (uint32_t)(t_after_wifi - t_after_app);
-  if (app_us  > max_app_us)  max_app_us  = app_us;
-  if (wifi_us > max_wifi_us) max_wifi_us = wifi_us;
+  uint32_t app_us  = (uint32_t)(s_app_done_us - s_start_us);
+  uint32_t wifi_us = (uint32_t)(s_wifi_done_us - s_app_done_us);
+  if (app_us  > s_max_app_us)  s_max_app_us  = app_us;
+  if (wifi_us > s_max_wifi_us) s_max_wifi_us = wifi_us;
   uint32_t cur_free = corium::DeviceInfo::freeHeap();
-  if (cur_free < min_free_heap) min_free_heap = cur_free;
+  if (cur_free < s_min_heap) s_min_heap = cur_free;
 #endif
-  if (++tick_max_age >= 60) {
-    tick_max_age = 0;
+  if (++s_max_age >= 60) {
+    s_max_age = 0;
 #ifdef TICK_PROFILE
     corium::Log::console(PSTR("Tick profile: total=%u ctr=%u wifi=%u lps=%u free=%u min_free=%u frag=%u%%"),
-      corium::TickProfile::tickMaxUs, max_app_us, max_wifi_us, corium::TickProfile::lps,
-      (unsigned)cur_free, (unsigned)min_free_heap, (unsigned)corium::DeviceInfo::heapFrag());
-    max_app_us = max_wifi_us = 0;
-    min_free_heap = 0xFFFFFFFFu;
+      corium::TickProfile::tickMaxUs, s_max_app_us, s_max_wifi_us, corium::TickProfile::lps,
+      (unsigned)cur_free, (unsigned)s_min_heap, (unsigned)corium::DeviceInfo::heapFrag());
+    s_max_app_us = s_max_wifi_us = 0;
+    s_min_heap = 0xFFFFFFFFu;
 #endif
 #ifdef LOOP_PROFILE
     corium::Registry::logLoopProfileAndReset();
     uint32_t body = loopBodyUs;
     loopBodyUs = 0;
+    // of the 60 s, what loop() didn't get
     uint32_t stolen = (body > 60000000UL) ? 0 : (60000000UL - body);
     corium::Log::console(PSTR("Loop wall: body=%lums stolen=%lums (%lu%% async)"),
       (unsigned long)(body / 1000UL),
       (unsigned long)(stolen / 1000UL),
       (unsigned long)(stolen / 600000UL));
 #endif
-    corium::TickProfile::tickMaxUs = this_tick;
+    corium::TickProfile::tickMaxUs = us;
     return true;
   }
   return false;

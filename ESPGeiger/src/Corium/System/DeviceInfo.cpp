@@ -33,6 +33,7 @@
 #include <math.h>
 #include <esp_chip_info.h>
 #include <esp_system.h>
+#include <esp_mac.h>
 #endif
 #ifdef ESP8266
 extern "C" {
@@ -40,23 +41,24 @@ extern "C" {
 }
 #endif
 
-static char s_hostname_buf[sizeof(THING_NAME "-") + CHIPID_LEN] = "";
-static char s_chipid_buf[CHIPID_LEN + 1] = "";
+static char s_hostname[sizeof(THING_NAME "-") + CHIPID_LEN] = "";
+static char s_chipid[CHIPID_LEN + 1] = "";
 static uint32_t s_chip_hash = 0;
-static char s_mac_buf[18]        = "";
-static char s_flash_buf[24]      = "";
+static char s_mac[18]        = "";
+static char s_flash[24]      = "";
 static char s_friendlyname[CORIUM_NAME_MAX + 1] = "";
 
+// sampled once a second, smoothed
 uint32_t corium::DeviceInfo::freeHeap() {
-  static uint32_t cached = 0;
-  static uint32_t last_ms = 0;
+  static uint32_t s_heap = 0;
+  static uint32_t s_last_ms = 0;
   uint32_t now = corium::fastMillis();
-  if (cached == 0 || now - last_ms >= 1000) {
+  if (s_heap == 0 || now - s_last_ms >= 1000) {
     uint32_t sample = ESP.getFreeHeap();
-    cached = (cached == 0) ? sample : ema8(cached, sample);
-    last_ms = now;
+    s_heap = (s_heap == 0) ? sample : ema8(s_heap, sample);
+    s_last_ms = now;
   }
-  return cached;
+  return s_heap;
 }
 
 static uint32_t s_lfb_cur = 0;
@@ -65,16 +67,16 @@ static uint32_t s_lfb_win = 0;  // since the last take
 static const uint32_t FRAG_MS = 60000;   // 8266 getHeapStats masks ints ~260 us
 
 uint8_t corium::DeviceInfo::heapFrag() {
-  static uint8_t cached = 0;
-  static uint32_t last_ms = 0;
+  static uint8_t s_frag = 0;
+  static uint32_t s_last_ms = 0;
   uint32_t now = corium::fastMillis();
-  if (last_ms == 0 || now - last_ms >= FRAG_MS) {
+  if (s_last_ms == 0 || now - s_last_ms >= FRAG_MS) {
 #ifdef ESP8266
     uint32_t free_;
     uint16_t max_;
     uint8_t frag_;
     ESP.getHeapStats(&free_, &max_, &frag_);
-    cached = frag_;
+    s_frag = frag_;
     s_lfb_cur = max_;
 #else
     // same as umm_malloc on the 8266
@@ -82,17 +84,17 @@ uint8_t corium::DeviceInfo::heapFrag() {
     uint32_t max_  = ESP.getMaxAllocHeap();
     s_lfb_cur = max_;
     if (free_ == 0 || max_ > free_) {
-      cached = 0;
+      s_frag = 0;
     } else {
       float ratio = (float)max_ / (float)free_;
-      cached = (uint8_t)(100.0f - sqrtf(ratio) * 100.0f);
+      s_frag = (uint8_t)(100.0f - sqrtf(ratio) * 100.0f);
     }
 #endif
-    last_ms = now;
+    s_last_ms = now;
     if (s_lfb_low == 0 || s_lfb_cur < s_lfb_low) s_lfb_low = s_lfb_cur;
     if (s_lfb_win == 0 || s_lfb_cur < s_lfb_win) s_lfb_win = s_lfb_cur;
   }
-  return cached;
+  return s_frag;
 }
 
 #ifdef ESP8266
@@ -119,22 +121,23 @@ uint32_t corium::DeviceInfo::largestFreeBlockLowTake() {
 }
 
 #ifdef ESP32
-static float s_ct = NAN;
+static float s_temp_c = NAN;
 uint8_t corium::DeviceInfo::ctWait = 0;
 
+// next read 45-75 s on, then a 1/16 ema, out of range reads dropped
 void corium::DeviceInfo::chipTempRead() {
   ctWait = 45 + (uint8_t)(esp_random() % 31);
   float t = temperatureRead();
   if (isnan(t) || t <= -40.0f || t >= 150.0f) return;
-  s_ct = isnan(s_ct) ? t : s_ct + (t - s_ct) * 0.0625f;
+  s_temp_c = isnan(s_temp_c) ? t : s_temp_c + (t - s_temp_c) * 0.0625f;
 }
 
-float corium::DeviceInfo::chipTempC() { return s_ct; }
+float corium::DeviceInfo::chipTempC() { return s_temp_c; }
 #endif
 
-void corium::DeviceInfo::safeRestart(uint32_t delayMs) {
+void corium::DeviceInfo::safeRestart(uint32_t delay_ms) {
   corium::Lifecycle::send(corium::Lifecycle::SHUTDOWN);
-  if (delayMs) delay(delayMs);
+  if (delay_ms) delay(delay_ms);
   ESP.restart();  // the one restart path
 }
 
@@ -148,51 +151,54 @@ uint64_t corium::DeviceInfo::hwId() {
 
 #ifdef ESP8266
 String corium::DeviceInfo::coreVersion() { return ESP.getCoreVersion(); }
+#else
+bool corium::DeviceInfo::efuseMac(uint8_t* out) { return esp_efuse_mac_get_default(out) == ESP_OK; }
 #endif
 
 void corium::DeviceInfo::begin() {
 #ifdef ESP8266
-  uint32_t tchipId = ESP.getChipId();
+  uint32_t id = ESP.getChipId();
 #else
-  uint32_t tchipId = 0;
+  uint32_t id = 0;
+  // last 3 MAC bytes, like the 8266 chip id
   for (int i = 0; i < 17; i += 8) {
-    tchipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+    id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
   }
 #endif
-  snprintf_P(s_chipid_buf, sizeof(s_chipid_buf), PSTR("%06lx"),
-             (unsigned long)(tchipId & 0xFFFFFFul));
-  s_chip_hash = fnv1a(s_chipid_buf);
+  snprintf_P(s_chipid, sizeof(s_chipid), PSTR("%06lx"),
+             (unsigned long)(id & 0xFFFFFFul));
+  s_chip_hash = fnv1a(s_chipid);
 
   // <THING_NAME>-d5536d
-  snprintf_P(s_hostname_buf, sizeof(s_hostname_buf), PSTR("%s-%s"),
-             THING_NAME, s_chipid_buf);
+  snprintf_P(s_hostname, sizeof(s_hostname), PSTR("%s-%s"),
+             THING_NAME, s_chipid);
 
   const uint8_t fm = (uint8_t)ESP.getFlashChipMode();
   static const char FLASH_MODES[][5] PROGMEM = {"QIO", "QOUT", "DIO", "DOUT"};
   const char* mode = fm < 4 ? FLASH_MODES[fm] : PSTR("?");
   const unsigned long mhz = (unsigned long)(ESP.getFlashChipSpeed() / 1000000ul);
 #ifdef ESP8266
-  snprintf_P(s_flash_buf, sizeof(s_flash_buf), PSTR("%06lx %s %luMHz"),
+  snprintf_P(s_flash, sizeof(s_flash), PSTR("%06lx %s %luMHz"),
              (unsigned long)(ESP.getFlashChipId() & 0xFFFFFFul), mode, mhz);
 #else
-  snprintf_P(s_flash_buf, sizeof(s_flash_buf), PSTR("%s %luMHz"), mode, mhz);
+  snprintf_P(s_flash, sizeof(s_flash), PSTR("%s %luMHz"), mode, mhz);
 #endif
 
   // else the MAC can read all FF
   corium::Wifi::staMode();
-  corium::Wifi::setHostname(s_hostname_buf);
-  strlcpy(s_mac_buf, corium::Wifi::macStr().c_str(), sizeof(s_mac_buf));
+  corium::Wifi::setHostname(s_hostname);
+  strlcpy(s_mac, corium::Wifi::macStr().c_str(), sizeof(s_mac));
 }
 
-const char* corium::DeviceInfo::hostname()    { return s_hostname_buf; }
-const char* corium::DeviceInfo::chipId()      { return s_chipid_buf; }
+const char* corium::DeviceInfo::hostname()    { return s_hostname; }
+const char* corium::DeviceInfo::chipId()      { return s_chipid; }
 uint32_t    corium::DeviceInfo::chipHash()    { return s_chip_hash; }
 void corium::DeviceInfo::userAgent(char* buf, size_t cap) {
   snprintf_P(buf, cap, PSTR("%s/%s (%s; %s; %s)"),
-             THING_NAME, RELEASE_VERSION, GIT_VERSION, BUILD_ENV, s_chipid_buf);
+             THING_NAME, RELEASE_VERSION, GIT_VERSION, BUILD_ENV, s_chipid);
 }
-const char* corium::DeviceInfo::mac()         { return s_mac_buf; }
-const char* corium::DeviceInfo::flashInfo()   { return s_flash_buf; }
+const char* corium::DeviceInfo::mac()         { return s_mac; }
+const char* corium::DeviceInfo::flashInfo()   { return s_flash; }
 static const char BUILD_DATE[] PROGMEM = __DATE__ " " __TIME__;
 PGM_P corium::DeviceInfo::buildDate()         { return BUILD_DATE; }
 
@@ -224,14 +230,15 @@ const char* corium::DeviceInfo::chip() {
 #ifdef ESP8266
   return "ESP8266";
 #elif defined(ESP32)
-  esp_chip_info_t chipInfo;
-  esp_chip_info(&chipInfo);
-  switch ((int)chipInfo.model) {
+  esp_chip_info_t info;
+  esp_chip_info(&info);
+  switch ((int)info.model) {
     case 0:  return "ESP8266";
     case (int)esp_chip_model_t::CHIP_ESP32:   return "ESP32";
     case (int)esp_chip_model_t::CHIP_ESP32S2: return "ESP32-S2";
     case (int)esp_chip_model_t::CHIP_ESP32S3: return "ESP32-S3";
     case (int)esp_chip_model_t::CHIP_ESP32C3: return "ESP32-C3";
+    // raw model numbers, not in every IDF enum
     case 6:  return "ESP32-H4";
     case 12: return "ESP32-C2";
     case 13: return "ESP32-C6";
@@ -321,8 +328,8 @@ uint32_t corium::DeviceInfo::fwFingerprint() {
 unsigned long corium::DeviceInfo::uptime() { return corium::Uptime::seconds(); }
 
 char* corium::DeviceInfo::uptimeString() {
-  static char buf[20];
+  static char s_buf[20];
   corium::Uptime::Split u = corium::Uptime::split((uint32_t)corium::Uptime::seconds());
-  snprintf_P(buf, sizeof(buf), PSTR("%uT%02u:%02u:%02u"), u.d, u.h, u.m, u.s);
-  return buf;
+  snprintf_P(s_buf, sizeof(s_buf), PSTR("%uT%02u:%02u:%02u"), u.d, u.h, u.m, u.s);
+  return s_buf;
 }

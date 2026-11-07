@@ -48,7 +48,8 @@ namespace LedSignal {
   std::atomic<uint8_t> s_tail{0};   // poll writes
   bool s_busy = false;
 
-  // full drops it
+  // loop only, full drops it
+  // 8 divides 256, so h % 8 holds over the uint8_t wrap
   static void post(uint8_t what) {
     uint8_t h = s_head.load(std::memory_order_relaxed);
     if ((uint8_t)(h - s_tail.load(std::memory_order_acquire)) >= sizeof(s_todo)) return;

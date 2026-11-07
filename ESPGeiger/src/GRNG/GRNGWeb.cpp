@@ -27,7 +27,7 @@
 
 static const char PW_CHARS[] PROGMEM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-static const char RANDOM_PAGE_BODY_NEW[] PROGMEM = R"HTML(
+static const char RANDOM_PAGE_BODY[] PROGMEM = R"HTML(
 <style>
 .rg th{text-align:right;color:var(--muted);font-weight:normal;padding:.3em .7em .3em 0}
 .rg td{padding:.3em .4em}
@@ -78,7 +78,7 @@ void o.offsetWidth;o.classList.add('f');b.disabled=false;
 
 static void hRandomPage(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("Random"));
-  res.sendChunk(FPSTR(RANDOM_PAGE_BODY_NEW));
+  res.sendChunk(FPSTR(RANDOM_PAGE_BODY));
   corium::WebPortal::endPage(res);
 }
 
@@ -95,14 +95,14 @@ static void hRandomJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static void send_hex(EGHttpResponse& res, long n, size_t per_chunk) {
   res.beginChunked(200, FPSTR(HTTP_CT_PLAIN));
   uint8_t  chunk[64];
-  char     hexbuf[128];
-  long remaining = n;
-  while (remaining > 0) {
-    size_t batch = remaining > (long)per_chunk ? per_chunk : (size_t)remaining;
+  char     hex[128];
+  long left = n;
+  while (left > 0) {
+    size_t batch = left > (long)per_chunk ? per_chunk : (size_t)left;
     GRNG::extract(chunk, batch);
-    hexEncode(hexbuf, chunk, batch);
-    res.sendChunk(hexbuf, batch * 2);
-    remaining -= batch;
+    hexEncode(hex, chunk, batch);
+    res.sendChunk(hex, batch * 2);
+    left -= batch;
   }
   res.endChunked();
 }
@@ -125,9 +125,9 @@ static size_t random_coin(char* out) {
   uint8_t b;
   GRNG::extract(&b, 1);
   PGM_P s = (b & 1) ? PSTR("Heads") : PSTR("Tails");
-  size_t outlen = strlen_P(s);
-  memcpy_P(out, s, outlen);
-  return outlen;
+  size_t len = strlen_P(s);
+  memcpy_P(out, s, len);
+  return len;
 }
 
 static size_t random_dice(EGHttpRequest& req, char* out, size_t cap) {
@@ -155,16 +155,16 @@ static size_t random_password(EGHttpRequest& req, char* out) {
 static uint32_t count_heads(long n) {
   uint32_t heads = 0;
   uint8_t  buf[64];
-  long remaining = n;
-  while (remaining > 0) {
-    size_t need = (size_t)((remaining + 7) / 8);
+  long left = n;
+  while (left > 0) {
+    size_t need = (size_t)((left + 7) / 8);
     if (need > sizeof(buf)) need = sizeof(buf);
     GRNG::extract_fast(buf, need);
-    for (size_t i = 0; i < need && remaining > 0; i++) {
+    for (size_t i = 0; i < need && left > 0; i++) {
       uint8_t b = buf[i];
-      for (int k = 0; k < 8 && remaining > 0; k++) {
+      for (int k = 0; k < 8 && left > 0; k++) {
         if (b & (1 << k)) heads++;
-        remaining--;
+        left--;
       }
     }
   }
@@ -201,22 +201,22 @@ static void hRandomDo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (strcmp_P(type, PSTR("hex")) == 0) { random_hex(req, res); return; }
 
   char out[68];
-  size_t outlen = 0;
+  size_t len = 0;
 
   if (strcmp_P(type, PSTR("coin")) == 0) {
-    outlen = random_coin(out);
+    len = random_coin(out);
   } else if (strcmp_P(type, PSTR("dice")) == 0) {
-    outlen = random_dice(req, out, sizeof(out));
+    len = random_dice(req, out, sizeof(out));
   } else if (strcmp_P(type, PSTR("password")) == 0) {
-    outlen = random_password(req, out);
+    len = random_password(req, out);
   } else if (strcmp_P(type, PSTR("flip")) == 0) {
-    outlen = random_flip(req, out, sizeof(out));
+    len = random_flip(req, out, sizeof(out));
   } else {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F(""));
     return;
   }
 
-  out[outlen] = '\0';
+  out[len] = '\0';
   res.send(200, FPSTR(HTTP_CT_PLAIN), out);
 }
 

@@ -47,7 +47,7 @@ bool parseI32(const char* s, int32_t* out, const char** end) {
   return true;
 }
 
-// by hand, strtoull is ~450 B and takes "-1" and spaces
+// By hand, strtoull is ~450 B and accepts "-1" and spaces
 bool parseU64(const char* s, uint64_t* out) {
   if (!s || !*s) return false;
   uint64_t v = 0;
@@ -61,7 +61,7 @@ bool parseU64(const char* s, uint64_t* out) {
   return true;
 }
 
-// hundredths
+// Hundredths. whole is capped so whole * 100 + 99 still fits
 bool parseCenti(const char* s, int32_t* out) {
   if (!s || *s < '0' || *s > '9') return false;
   const char* p;
@@ -105,7 +105,7 @@ static int hex_val(char c) {
 }
 
 bool hexDecode(uint8_t* out, const char* in, size_t n) {
-  // stops at the NUL, it isn't hex
+  // stops at a NUL, since it isn't hex
   for (size_t i = 0; i < 2 * n; i++) {
     if (hex_val(in[i]) < 0) return false;
   }

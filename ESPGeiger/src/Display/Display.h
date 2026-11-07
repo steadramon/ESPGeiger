@@ -50,6 +50,7 @@ inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
   }
 }
 
+// Prefs, sleep and the button for whichever DisplayBackend the type pref picks
 class Display : public corium::Module {
   public:
     const char* name() override { return PSTR("disp"); }

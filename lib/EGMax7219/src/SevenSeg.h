@@ -26,7 +26,7 @@ enum : uint8_t {
   DIGIT_BLANK = 0x0F,
 };
 
-// bit a=0 b=1 c=2 d=3 e=4 f=5 g=6
+// bit a=0 b=1 c=2 d=3 e=4 f=5 g=6; 0-9, DIGIT_DASH, else blank
 uint8_t codeToSeg(uint8_t code);
 
 static const uint8_t SEG_DP = 0x80;
@@ -45,6 +45,7 @@ enum : uint8_t {
 void letteredSegs(uint8_t letter, float value, uint8_t n, uint8_t decimals, uint8_t* segs);
 
 // codes[0] = rightmost, decimals 0 = DP row is the bar
+// too big = all dashes, minus takes a digit
 void computeDigits(float value, uint8_t ndigits, uint8_t decimals,
                    uint8_t dp_bar_level, uint8_t* codes, bool* dps);
 

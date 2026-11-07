@@ -29,8 +29,7 @@
 namespace corium {
 namespace IgmpRefresh {
 
-// Must run on the tcpip thread: igmp_report_groups mutates
-// netif->igmp_group_list which the lwIP worker also touches.
+// tcpip thread only, lwIP shares igmp_group_list
 static void report_groups_cb(void* ctx) {
   igmp_report_groups((struct netif*)ctx);
 }
@@ -48,7 +47,7 @@ bool refresh() {
 }
 }  // namespace corium
 
-#else  // ESP8266 or other targets - bug doesn't manifest here.
+#else  // not needed off esp32
 
 namespace corium {
 namespace IgmpRefresh { bool refresh() { return false; } }

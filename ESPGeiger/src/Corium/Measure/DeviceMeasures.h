@@ -37,6 +37,7 @@ bool m_dev_frag(MValue* v);
 bool m_dev_lfb(MValue* v);
 bool m_dev_lfblow(MValue* v);
 
+// PROGMEM, MP = /metrics name, MH = its help
 extern const char M_MP_UT[];
 extern const char M_MH_UT[];
 extern const char M_MP_MEM[];

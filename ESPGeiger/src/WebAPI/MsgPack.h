@@ -66,6 +66,7 @@ static inline float bits_to_f32(uint32_t u) {
   x.u = u; return x.f;
 }
 
+// big-endian, never past cap: sets overflow instead
 class Writer {
 public:
   uint8_t* buf;
@@ -193,6 +194,7 @@ private:
   }
 };
 
+// untrusted input, a bad tag or a read past cap sets error
 class Reader {
 public:
   const uint8_t* buf;
@@ -327,16 +329,16 @@ public:
     if (error) return false;
     size_t klen = strlen_P(key);
     for (uint16_t i = 0; i < n; i++) {
-      size_t this_len;
-      if (!read_str_len(&this_len)) return false;
-      if (this_len == klen && this_len <= cap - pos &&
-          memcmp_P(buf + pos, key, this_len) == 0) {
-        pos += this_len;
+      size_t len;
+      if (!read_str_len(&len)) return false;
+      if (len == klen && len <= cap - pos &&
+          memcmp_P(buf + pos, key, len) == 0) {
+        pos += len;
         return true;
       }
       // check first, truncated input
-      if (this_len > cap - pos) { error = true; return false; }
-      pos += this_len;
+      if (len > cap - pos) { error = true; return false; }
+      pos += len;
       if (!skip()) return false;
     }
     return false;

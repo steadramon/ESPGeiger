@@ -253,15 +253,16 @@ static bool screenOr503(EGHttpResponse& res, const uint8_t*& buf, uint16_t& w, u
 
 static constexpr uint8_t BMP_HEAD = 62;
 
+// 1 bit BMP, 2 colour table, rows bottom up, padded to 4; the buffer is 8 row pages, lsb on top
 static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   const uint8_t* buf = nullptr;
-  uint16_t W = 0, H = 0;
-  if (!screenOr503(res, buf, W, H, true)) return;
-  const uint16_t row_unpadded = (W + 7) / 8;
+  uint16_t w = 0, h = 0;
+  if (!screenOr503(res, buf, w, h, true)) return;
+  const uint16_t row_unpadded = (w + 7) / 8;
   const uint16_t row_padded   = (row_unpadded + 3) & ~3;
   uint8_t row[24] = {0};
   if (row_padded > sizeof(row)) { res.send(503, FPSTR(HTTP_CT_PLAIN), F("display too wide")); return; }
-  const uint32_t pixel_bytes  = (uint32_t)row_padded * H;
+  const uint32_t pixel_bytes  = (uint32_t)row_padded * h;
   const uint32_t file_size    = BMP_HEAD + pixel_bytes;
 
   uint8_t hdr[BMP_HEAD] = {0};
@@ -269,8 +270,8 @@ static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   wrLe32(hdr + 2, file_size);
   hdr[10] = BMP_HEAD;
   hdr[14] = 40;
-  wrLe16(hdr + 18, W);
-  wrLe16(hdr + 22, H);
+  wrLe16(hdr + 18, w);
+  wrLe16(hdr + 22, h);
   hdr[26] = 1;
   hdr[28] = 1;
   hdr[46] = 2;
@@ -279,16 +280,16 @@ static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   if (!res.beginChunked(200, F("image/bmp"))) return;
   res.sendChunk((const char*)hdr, sizeof(hdr));
 
-  for (int y_bmp = 0; y_bmp < H; y_bmp++) {
-    int y_disp = H - 1 - y_bmp;
+  for (int y_bmp = 0; y_bmp < h; y_bmp++) {
+    int y_disp = h - 1 - y_bmp;
     int page = y_disp >> 3;
     int bit_in_page = y_disp & 7;
     for (uint16_t x_byte = 0; x_byte < row_padded; x_byte++) row[x_byte] = 0;
     for (uint16_t x_byte = 0; x_byte < row_unpadded; x_byte++) {
       uint8_t b = 0;
-      const uint8_t* col_base = buf + page * W + x_byte * 8;
+      const uint8_t* col_base = buf + page * w + x_byte * 8;
       for (int i = 0; i < 8; i++) {
-        if ((x_byte * 8 + i) < W && ((col_base[i] >> bit_in_page) & 1)) {
+        if ((x_byte * 8 + i) < w && ((col_base[i] >> bit_in_page) & 1)) {
           b |= (1 << (7 - i));
         }
       }
@@ -299,15 +300,16 @@ static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
+// w, h as le16, then the pages; h 0 = w bytes of segments
 static void hScreenBin(EGHttpRequest&, EGHttpResponse& res, void*) {
   const uint8_t* buf = nullptr;
-  uint16_t W = 0, H = 0;
-  if (!screenOr503(res, buf, W, H, false)) return;
+  uint16_t w = 0, h = 0;
+  if (!screenOr503(res, buf, w, h, false)) return;
   if (!res.beginChunked(200, F("application/octet-stream"))) return;
-  uint8_t hdr[4] = { (uint8_t)(W & 0xff), (uint8_t)(W >> 8),
-                     (uint8_t)(H & 0xff), (uint8_t)(H >> 8) };
+  uint8_t hdr[4] = { (uint8_t)(w & 0xff), (uint8_t)(w >> 8),
+                     (uint8_t)(h & 0xff), (uint8_t)(h >> 8) };
   res.sendChunk((const char*)hdr, 4);
-  res.sendChunk((const char*)buf, H ? (size_t)W * (H / 8) : W);
+  res.sendChunk((const char*)buf, h ? (size_t)w * (h / 8) : w);
   res.endChunked();
 }
 

@@ -26,6 +26,7 @@
 #include "Corium/Net/HttpPoster.h"
 #include "Corium/Prefs/Prefs.h"
 
+// s between POSTs
 #ifndef WEBHOOK_INTERVAL_MIN
 #define WEBHOOK_INTERVAL_MIN 10
 #endif
@@ -44,7 +45,7 @@ class Webhook : public corium::HttpPoster {
     const corium::PrefGroup* prefsGroup() override;
     corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
     void setInterval(int interval);
-    int getInterval() { return pingInterval; }
+    int getInterval() { return _interval_s; }
     const char* cleanHTTP(const char* url);
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
@@ -56,7 +57,7 @@ class Webhook : public corium::HttpPoster {
     size_t replyCap() const override { return 128; }
     PGM_P contentType() const override;
   private:
-    uint16_t pingInterval = WEBHOOK_INTERVAL;
+    uint16_t _interval_s = WEBHOOK_INTERVAL;
 };
 
 extern Webhook webhook;

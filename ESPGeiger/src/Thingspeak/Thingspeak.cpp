@@ -70,7 +70,7 @@ corium::LegacyRows Thingspeak::legacyAliases() { return TS_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Thingspeak::Thingspeak() {
-  pingIntervalMs = (uint32_t)THINGSPEAK_INTERVAL * 1000UL;
+  _every_ms = (uint32_t)THINGSPEAK_INTERVAL * 1000UL;
 }
 
 // entry number, "0" = refused
@@ -89,36 +89,36 @@ bool Thingspeak::interpret(const char* r)
 }
 
 // &fieldN=v, no reading leaves it out
-static size_t add_field(char* url, size_t cap, size_t up, unsigned field, float v) {
-  if (isnan(v)) return up;
-  char fbuf[12];
-  format_f(fbuf, sizeof(fbuf), v);
-  int n = snprintf_P(url + up, cap - up, PSTR("&field%u=%s"), field, fbuf);
-  return (n > 0 && (size_t)n < cap - up) ? up + (size_t)n : up;
+static size_t add_field(char* url, size_t cap, size_t pos, unsigned field, float v) {
+  if (isnan(v)) return pos;
+  char num[12];
+  format_f(num, sizeof(num), v);
+  int n = snprintf_P(url + pos, cap - pos, PSTR("&field%u=%s"), field, num);
+  return (n > 0 && (size_t)n < cap - pos) ? pos + (size_t)n : pos;
 }
 
 bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
   if (!upload_ready(logTag())) return false;
 
-  const char* _ts_channel_key = corium::Prefs::getString("thingspeak", K_CHANNEL_KEY);
-  if (_ts_channel_key[0] == '\0') return false;
+  const char* raw_key = corium::Prefs::getString("thingspeak", K_CHANNEL_KEY);
+  if (raw_key[0] == '\0') return false;
 
   corium::Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
 
-  int avgcpm = CounterMaths::to_int(corium::m_f(M_CPM));
-  int avgcpm5 = CounterMaths::to_int(corium::m_f(M_CPM5));
-  int avgcpm15 = CounterMaths::to_int(corium::m_f(M_CPM15));
+  int cpm = CounterMaths::to_int(corium::m_f(M_CPM));
+  int cpm5 = CounterMaths::to_int(corium::m_f(M_CPM5));
+  int cpm15 = CounterMaths::to_int(corium::m_f(M_CPM15));
 
-  char usvChar[20];
-  format_f(usvChar, sizeof(usvChar), corium::m_f(M_USV), 5);
+  char usv[20];
+  format_f(usv, sizeof(usv), corium::m_f(M_USV), 5);
   char key[3 * TS_KEY_MAX + 1];
-  egesc_url(key, sizeof(key), _ts_channel_key);
-  int n0 = snprintf_P(url, cap, TS_URI, key, avgcpm, usvChar, avgcpm5, avgcpm15);
+  egesc_url(key, sizeof(key), raw_key);
+  int n0 = snprintf_P(url, cap, TS_URI, key, cpm, usv, cpm5, cpm15);
   if (!urlFits(n0, cap)) return false;
-  size_t up = (size_t)n0;
-  up = add_field(url, cap, up, 5, corium::m_f(M_T));
-  up = add_field(url, cap, up, 6, corium::m_f(M_H));
-  up = add_field(url, cap, up, 7, corium::m_f(M_P));
+  size_t pos = (size_t)n0;
+  pos = add_field(url, cap, pos, 5, corium::m_f(M_T));
+  pos = add_field(url, cap, pos, 6, corium::m_f(M_H));
+  pos = add_field(url, cap, pos, 7, corium::m_f(M_P));
   return true;
 }
 #endif

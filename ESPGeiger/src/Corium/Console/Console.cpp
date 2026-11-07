@@ -262,7 +262,7 @@ static char* secret_at(char* line) {
   return secret ? sp : nullptr;
 }
 
-// today: shares the serial line, a half typed one is dropped
+// shares the serial line, a half typed one is dropped
 void corium::Console::run(const char* text) {
   if (!text) return;
   corium::ConsoleLine& l = _serial;

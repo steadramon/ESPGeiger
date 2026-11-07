@@ -1,6 +1,5 @@
 /*
-  WifiSetup.h - the core's WiFi calls for Improv and boot, apart from
-  WifiInfo.h so the portal's host fakes stay small.
+  WifiSetup.h - the core's WiFi calls for Improv and boot
 
   Copyright (C) 2026 @steadramon
 

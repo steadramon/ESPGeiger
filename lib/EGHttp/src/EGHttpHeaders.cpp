@@ -36,7 +36,7 @@ static const char* skip_spaces(const char* p, const char* end) {
   return p;
 }
 
-static const size_t CL_DIGITS_MAX = 8;
+static const size_t CL_DIGITS_MAX = 8;   // under 100 MB, no size_t overflow
 
 // junk is BAD
 EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* out) {

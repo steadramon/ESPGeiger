@@ -18,7 +18,7 @@
 */
 #include "Pulse.h"
 
-#if GEIGER_IS_PULSE(GEIGER_TYPE)
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
 
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/MathUtil.h"
@@ -27,7 +27,7 @@
 #endif
 
 #ifdef NO_PCNT_ALIAS
-// a _no_pcnt device's /update looks for its own env, retired in 0.15
+// a _no_pcnt device's /update looks for its own env
 static const char NO_PCNT_TAG[] PROGMEM = "<EGENV:" BUILD_ENV "_no_pcnt:ENV>";
 #endif
 
@@ -79,6 +79,7 @@ void GeigerPulse::restartAfterOTA() {
 }
 
 #ifdef PCNT_SELECTABLE
+// us since the last drain, 1 s if 0 or over
 static inline __attribute__((always_inline)) uint32_t span_us(uint32_t now_us, uint32_t last_us) {
   uint32_t s = now_us - last_us;
   return (s == 0 || s > 1000000UL) ? 1000000UL : s;
@@ -156,10 +157,10 @@ void GeigerPulse::set_pin_pull(int mode) {
   }
   _pin_pull = mode;
   gpio_set_pull_mode((gpio_num_t)_rx_pin, m);
-  if (mode != _pin_pull_last_logged) {
+  if (mode != _pull_logged) {
     corium::Log::console(PSTR("GeigerPulse: PCNT pin pull = %s"), name);
-    _pin_pull_last_logged = mode;
+    _pull_logged = mode;
   }
 }
 #endif
-#endif // GEIGER_IS_PULSE
+#endif // GEIGER_TYPE_PULSE

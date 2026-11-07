@@ -48,6 +48,7 @@ corium::IsrLock::Bits corium::Registry::_posted;
 bool corium::Registry::_safe_mode = false;
 
 // keep sorted, loopAll reads [0]
+// signed diff, safe over the millis wrap
 void corium::Registry::rebuild_due() {
   _resort = false;
   _due_count = 0;
@@ -110,7 +111,7 @@ inline uint8_t corium::Registry::unmet_requirements() {
 inline void corium::Registry::fire_slot(uint8_t idx, unsigned long now) {
   Slot& s = _slots[idx];
   s.loop_last = now;
-  if (s.period) s.next_due = now + s.period;
+  if (s.period_ms) s.next_due = now + s.period_ms;
   else s.flags &= ~FLAG_ARMED;
   _firing = idx;
 #ifdef LOOP_PROFILE
@@ -139,6 +140,7 @@ inline uint8_t corium::Registry::sift_due(uint8_t k) {
   return k;
 }
 
+// nothing armed, look again in a minute
 static constexpr uint32_t IDLE_WAKE_MS = 60000;
 inline uint32_t corium::Registry::next_wake(unsigned long now) {
   return _due_count ? _slots[_due_order[0]].next_due : now + IDLE_WAKE_MS;
@@ -157,6 +159,7 @@ void corium::Registry::take_posts(unsigned long now) {
   _next_loop_due = now;
 }
 
+// wifi or ntp not there yet, try again at its period or 1 s
 static constexpr uint32_t GATE_RETRY_MS = 1000;
 static inline uint32_t retry_in(uint32_t period) {
   return period && period < GATE_RETRY_MS ? period : GATE_RETRY_MS;
@@ -175,7 +178,7 @@ inline void corium::Registry::walk(unsigned long now) {
     // once a pass, dueIn(0) runs on the next
     if (fired & (1u << idx)) { k++; continue; }
     if (s.flags & unmet) {
-      s.next_due = now + retry_in(s.period);
+      s.next_due = now + retry_in(s.period_ms);
     } else {
       fired |= 1u << idx;
       fire_slot(idx, now);
@@ -237,6 +240,7 @@ void corium::Registry::logLoopProfileAndReset() {
 }
 #endif
 
+// senders only, name=ok or name=ok/total once one failed
 void corium::Registry::logActivityAndReset() {
   char buf[200];
   int pos = 0;
@@ -278,7 +282,7 @@ void corium::Registry::changed(Slot& s) {
 bool corium::Registry::every(corium::Module* m, uint32_t ms) {
   Slot* s = slot_of(m);
   if (!s) return false;
-  s->period = ms;
+  s->period_ms = ms;
   if (!ms) {
     s->flags &= ~FLAG_ARMED;
   } else {
@@ -389,7 +393,7 @@ void corium::Registry::preWifiAll() {
     corium::Module* m = s.module;
     s.loop_last = now;
     s.next_due = now;
-    s.period = 0;
+    s.period_ms = 0;
     s.topics = 0;
     s.events = 0;
     if (_safe_mode && !m->coreModule()) {

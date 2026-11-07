@@ -42,6 +42,7 @@ uint32_t retryMs(uint8_t retries) {
 }
 
 void apply(State& s, uint32_t magic, uint32_t fw, Ending end) {
+  // new firmware starts clean
   if (s.magic != magic || s.fw != fw) {
     memset(&s, 0, sizeof(s));
     s.magic = magic;
@@ -57,6 +58,7 @@ void apply(State& s, uint32_t magic, uint32_t fw, Ending end) {
     s.safe = enter && end == END_RESTART;
     return;
   }
+  // a crash after LIVED_S doesn't count
   if (lived) s.crashStreak = 0;
   else if (s.crashStreak < 255) s.crashStreak++;
   if (s.crashStreak >= CRASHES_TO_SAFE_MODE || enter) s.safe = 1;

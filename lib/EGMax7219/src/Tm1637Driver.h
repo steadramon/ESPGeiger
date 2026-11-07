@@ -26,11 +26,13 @@ class Tm1637Driver {
     static constexpr uint8_t MAX_DIGITS = 6;
     static constexpr uint8_t SLOWEST_US = 100;
 
+    // picks the fastest half clock that acks
     void begin(int8_t clk, int8_t dio);
     bool ready() const { return _ready; }
     uint8_t half_clock_us() const { return _us; }
 
     // leftmost first, bit 7 = dot or colon, only the changed digits sent
+    // false = no ack, all sent again next call
     bool show(const uint8_t* segs, uint8_t n);
     bool light(uint8_t level, bool on);   // 0..7
 
@@ -47,7 +49,7 @@ class Tm1637Driver {
     uint8_t _us = SLOWEST_US;   // half a clock
     uint8_t _ctrl = 0x88;       // on, dimmest
     uint8_t _last[MAX_DIGITS];
-    uint8_t _lastN = 0;
+    uint8_t _last_n = 0;
 };
 
 #endif

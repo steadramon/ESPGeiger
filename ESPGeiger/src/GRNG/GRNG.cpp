@@ -44,6 +44,7 @@ static uint8_t s_boot_sram[256] EG_NOINIT;
 GRNG::GRNG() {
 };
 
+// seed: ram left from before the boot, then the cycle count
 void GRNG::begin() {
   s_sha.init();
 #ifdef ESP8266
@@ -111,15 +112,15 @@ void GRNG::pick(char* out, size_t n, PGM_P set, uint8_t set_len) {
 }
 
 uint32_t GRNG::fast_uint32() {
-  static uint8_t buf[32];
-  static uint8_t pos = sizeof(buf);
-  if (pos >= sizeof(buf)) {
-    extract(buf, sizeof(buf));
-    pos = 0;
+  static uint8_t s_buf[32];
+  static uint8_t s_pos = sizeof(s_buf);
+  if (s_pos >= sizeof(s_buf)) {
+    extract(s_buf, sizeof(s_buf));
+    s_pos = 0;
   }
   uint32_t r;
-  memcpy(&r, buf + pos, sizeof(r));
-  pos += sizeof(r);
+  memcpy(&r, s_buf + s_pos, sizeof(r));
+  s_pos += sizeof(r);
   return r;
 }
 

@@ -139,7 +139,7 @@ namespace Board {
     {nullptr, -1, corium::PinSafety::USE_OUT},
   };
 
-  // 0.13 took these, it only warned: UART0, a dev board's BOOT button (a board's own is fixed)
+  // a pref may still take these, only noted: UART0, a dev board's BOOT button (a board's own is fixed)
   constexpr corium::PinSafety::Fixed SHARED[] PROGMEM = {
 #if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED) && !defined(I2C_PINS_FIXED)
     {P_BTN, PUSHBUTTON_PIN, corium::PinSafety::USE_BUTTON},

@@ -18,13 +18,13 @@
 */
 #include "Test.h"
 
-#if GEIGER_IS_TEST(GEIGER_TYPE)
+#if GEIGER_TYPE == GEIGER_TYPE_TEST
 
 #include "TestTimer.h"
 
-static volatile unsigned long _last_b;
-// ticks, no libgcc in the isr
-static volatile uint32_t _next_delay;
+static volatile unsigned long s_blip_us;
+// In ticks, so the isr needs no libgcc maths
+static volatile uint32_t s_next;
 
 GeigerTest::GeigerTest() {
   strlcpy(_test_type, "TestGeiger", sizeof(_test_type));
@@ -34,36 +34,36 @@ void GeigerTest::begin() {
   GeigerInputTest::begin();
   set_debounce(0);
   CPMAdjuster();
-  _next_delay = (uint32_t)calcDelay();
-  TestTimer::start(testInterrupt, _next_delay);
+  s_next = (uint32_t)calcDelay();
+  TestTimer::start(testInterrupt, s_next);
 }
 
 void GeigerTest::secondTicker() {
   CPMAdjuster();
 }
 
-// returns ticks to the next
+// Returns ticks to the next pulse
 uint32_t CORIUM_ISR_ATTR GeigerTest::testInterrupt() {
   GeigerInputTest::timerPulse();
-  _last_b = micros();
-  return _next_delay;
+  s_blip_us = micros();
+  return s_next;
 }
 
 void GeigerTest::stopForOTA() { TestTimer::stop(); }
 
-void GeigerTest::restartAfterOTA() { TestTimer::start(testInterrupt, _next_delay); }
+void GeigerTest::restartAfterOTA() { TestTimer::start(testInterrupt, s_next); }
 
 void GeigerTest::loop() {
   take();
   countTimerPulses();
   if (_retarget) {
     _retarget = false;
-    _next_delay = (uint32_t)calcDelay();
+    s_next = (uint32_t)calcDelay();
     TestTimer::restart((uint32_t)calcDelay());
   }
-  if (_last_pulse_test != _last_b) {
-    _last_pulse_test = _last_b;
-    _next_delay = (uint32_t)calcDelay();   // one word, the isr reads it whole
+  if (_last_pulse_test != s_blip_us) {
+    _last_pulse_test = s_blip_us;
+    s_next = (uint32_t)calcDelay();   // one word, the isr reads it whole
   }
 }
-#endif // GEIGER_IS_TEST
+#endif // GEIGER_TYPE_TEST

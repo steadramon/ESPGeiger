@@ -23,10 +23,10 @@
 #include "Corium/System/Clock.h"
 #include "Corium/System/Uptime.h"
 
-char corium::Log::logIdx = 1;
-corium::Log::LoggingLevels corium::Log::logLevel = (corium::Log::LoggingLevels)LOG_LEVEL;
-char corium::Log::log[MAX_LOG_SIZE] = "";
-bool corium::Log::serialLog = true;
+char corium::Log::_idx = 1;
+corium::Log::LoggingLevels corium::Log::_level = (corium::Log::LoggingLevels)LOG_LEVEL;
+char corium::Log::_log[MAX_LOG_SIZE] = "";
+bool corium::Log::_serial = true;
 
 // esp32: other tasks log too
 #ifdef ESP32
@@ -40,101 +40,102 @@ static SemaphoreHandle_t s_lock = nullptr;   // first log is in setup
 #define LOG_UNLOCK()
 #endif
 
-static char s_log_buf[256];
+// one line, longer is cut; used under LOG_LOCK
+static char s_line[256];
 
-void corium::Log::vlog(LoggingLevels level, bool withTimestamp, const char* formatP, va_list arg)
+void corium::Log::vlog(LoggingLevels level, bool timed, const char* fmt, va_list arg)
 {
-  if (level > logLevel) return;
+  if (level > _level) return;
   LOG_LOCK();
-  vsnprintf_P(s_log_buf, sizeof(s_log_buf), formatP, arg);
-  AddLog(level, s_log_buf, withTimestamp);
+  vsnprintf_P(s_line, sizeof(s_line), fmt, arg);
+  AddLog(level, s_line, timed);
   LOG_UNLOCK();
 }
 
-void corium::Log::console(const char* formatP, ...)
+void corium::Log::console(const char* fmt, ...)
 {
   va_list arg;
-  va_start(arg, formatP);
-  vlog(LOG_LEVEL_CONSOLE, true, formatP, arg);
+  va_start(arg, fmt);
+  vlog(LOG_LEVEL_CONSOLE, true, fmt, arg);
   va_end(arg);
 }
 
-void corium::Log::error(const char* formatP, ...)
+void corium::Log::error(const char* fmt, ...)
 {
   va_list arg;
-  va_start(arg, formatP);
-  vlog(LOG_LEVEL_ERROR, true, formatP, arg);
+  va_start(arg, fmt);
+  vlog(LOG_LEVEL_ERROR, true, fmt, arg);
   va_end(arg);
 }
 
 #if LOG_LEVEL >= 2
-void corium::Log::info(const char* formatP, ...)
+void corium::Log::info(const char* fmt, ...)
 {
   va_list arg;
-  va_start(arg, formatP);
-  vlog(LOG_LEVEL_INFO, true, formatP, arg);
+  va_start(arg, fmt);
+  vlog(LOG_LEVEL_INFO, true, fmt, arg);
   va_end(arg);
 }
 #endif
 
 #if LOG_LEVEL >= 3
-void corium::Log::debug(const char* formatP, ...)
+void corium::Log::debug(const char* fmt, ...)
 {
   va_list arg;
-  va_start(arg, formatP);
-  vlog(LOG_LEVEL_DEBUG, true, formatP, arg);
+  va_start(arg, fmt);
+  vlog(LOG_LEVEL_DEBUG, true, fmt, arg);
   va_end(arg);
 }
 #endif
 
-void corium::Log::banner(const char* formatP, ...)
+void corium::Log::banner(const char* fmt, ...)
 {
   va_list arg;
-  va_start(arg, formatP);
-  vlog(LOG_LEVEL_CONSOLE, false, formatP, arg);
+  va_start(arg, fmt);
+  vlog(LOG_LEVEL_CONSOLE, false, fmt, arg);
   va_end(arg);
 }
 
 static uint8_t next_idx(uint8_t i) { return i == 255 ? 1 : i + 1; }
 
 // Based on arendst/Tasmota addLog (support.ino)
-void corium::Log::AddLog(corium::Log::LoggingLevels level, const char* logData, bool withTimestamp)
+void corium::Log::AddLog(corium::Log::LoggingLevels level, const char* line, bool timed)
 {
-  char timeStr[13] = {};
+  char stamp[13] = {};
 #ifndef DISABLE_LOG_TS
-  if (withTimestamp) {
+  if (timed) {
     struct tm t;
     if (corium::Clock::localTm(&t)) {
-      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02d:%02d:%02d "), t.tm_hour, t.tm_min, t.tm_sec);
+      snprintf_P (stamp, sizeof (stamp), PSTR("%02d:%02d:%02d "), t.tm_hour, t.tm_min, t.tm_sec);
     } else {
       // * = uptime, not clock
       corium::Uptime::Split u = corium::Uptime::split((uint32_t)corium::Uptime::seconds());
-      snprintf_P (timeStr, sizeof (timeStr), PSTR("%02u:%02u:%02u*"), u.h, u.m, u.s);
+      snprintf_P (stamp, sizeof (stamp), PSTR("%02u:%02u:%02u*"), u.h, u.m, u.s);
     }
   }
 #endif
-  if (serialLog) {
-    if (timeStr[0]) Serial.print(timeStr);
-    Serial.println(logData);
+  if (_serial) {
+    if (stamp[0]) Serial.print(stamp);
+    Serial.println(line);
   }
 
   if (corium::Wifi::disabled) return;
 
   // Delimited, zero-terminated buffer of log lines.
   // Each entry has this format: [index][log data]['\1']
-  while (logIdx == log[0] ||  // If log already holds the next index, remove it
-          strlen(log) + strlen(logData) + 13 > MAX_LOG_SIZE)  // 13 = idx + time + '\1' + '\0'
+  while (_idx == _log[0] ||  // If _log already holds the next index, remove it
+          strlen(_log) + strlen(line) + 13 > MAX_LOG_SIZE)  // 13 = idx + time + '\1' + '\0'
   {
-    char* it = log;
+    char* it = _log;
     it++;                                // Skip web_log_index
     it += strchrspn(it, '\1');           // Skip log line
     it++;                                // Skip delimiting "\1"
-    memmove(log, it, MAX_LOG_SIZE -(it-log));  // Move buffer forward to remove oldest log line
+    memmove(_log, it, MAX_LOG_SIZE -(it-_log));  // Move buffer forward to remove oldest log line
   }
 
-  size_t logLen = strlen(log);
-  snprintf_P(log + logLen, sizeof(log) - logLen, PSTR("%c%s%s\1"), logIdx, timeStr, logData);
-  logIdx = (char)next_idx((uint8_t)logIdx);
+  size_t len = strlen(_log);
+  snprintf_P(_log + len, sizeof(_log) - len, PSTR("%c%s%s\1"), _idx, stamp, line);
+  _idx = (char)next_idx((uint8_t)_idx);
 }
 
 // the next "[idx]line\1", span takes the \1; false = none left
@@ -155,11 +156,11 @@ size_t corium::Log::copyLog(uint32_t idx, char* out, size_t cap)
   if (!idx || cap < 2) return 0;
   size_t n = 0;
   LOG_LOCK();
-  const char* it = log;
+  const char* it = _log;
   const char* line;
   uint8_t cur_idx;
   size_t span;
-  while (next_line(it, log + MAX_LOG_SIZE, cur_idx, line, span)) {
+  while (next_line(it, _log + MAX_LOG_SIZE, cur_idx, line, span)) {
     if (cur_idx == idx) {
       n = span < cap - 1 ? span : cap - 1;
       memcpy(out, line, n);
@@ -183,11 +184,11 @@ size_t corium::Log::copySince(uint32_t* idx, uint8_t end, char* out, size_t cap)
   int want = idx_dist(from, end);
   size_t n = 0;
   LOG_LOCK();
-  const char* it = log;
+  const char* it = _log;
   const char* line;
   uint8_t cur_idx;
   size_t span;
-  while (next_line(it, log + MAX_LOG_SIZE, cur_idx, line, span)) {
+  while (next_line(it, _log + MAX_LOG_SIZE, cur_idx, line, span)) {
     if (idx_dist(from, cur_idx) >= want) continue;
     if (n + span > cap - 1) {
       if (n) break;
@@ -211,10 +212,10 @@ size_t corium::Log::strchrspn(const char *str1, int character)
 
 char corium::Log::getLogIdx()
 {
-  return logIdx;
+  return _idx;
 }
 
 void corium::Log::setSerialOn(bool on)
 {
-  serialLog = on;
+  _serial = on;
 }

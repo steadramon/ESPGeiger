@@ -76,13 +76,15 @@ uint32_t corium::SendSlot::initialOffset(const char* mod_name, uint32_t interval
   if (interval_ms == 0 || !mod_name) return 0;
 
   const uint32_t chip = corium::DeviceInfo::chipHash();
-  const uint16_t jitter = (uint16_t)((chip >> 8) % 1000u);
+  const uint16_t jitter = (uint16_t)((chip >> 8) % 1000u);   // 0-999 ms, per chip
   uint32_t h = fnv1a_P(mod_name, chip);
 
   uint16_t interval_s = interval_ms < 1000 ? 0 : (uint16_t)(interval_ms / 1000);
-  if (interval_s < 2) return interval_ms >> 1;
+  if (interval_s < 2) return interval_ms >> 1;   // under 2s, halfway
 
+  // second 63 at most, the claim bits hold 64
   uint8_t avail = interval_s > 63 ? 63 : (uint8_t)(interval_s - 1);
+  if (avail < CORIUM_SENDSLOT_FIRST) return interval_ms >> 1;
   uint8_t span = (uint8_t)(avail - CORIUM_SENDSLOT_FIRST + 1);
   uint8_t step60 = (uint8_t)(interval_s % 60);
   uint8_t orbit_n = orbit_length(step60);
@@ -103,6 +105,7 @@ unsigned long corium::SendSlot::pingFromOffset(uint32_t offset, unsigned long no
   uint32_t until = offset;
   uint32_t secs = interval_ms / 1000;
   if (secs > 0 && corium::Clock::synced) until = untilPhase(offset, corium::Clock::phase(secs) * 1000UL, interval_ms);
+  // one interval back, due in until ms
   return now + until - interval_ms;
 }
 

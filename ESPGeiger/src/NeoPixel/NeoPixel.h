@@ -37,6 +37,7 @@
   typedef NeoPixelBus<NeoGrbFeature, NeoEsp8266BitBangWs2812xMethod> NeoController;
 #endif
 
+// One WS2812: a flash per count or a trend pulse, alarm colours on top
 class NeoPixel : public corium::Module {
   public:
     NeoPixel();
@@ -52,8 +53,8 @@ class NeoPixel : public corium::Module {
     static constexpr uint16_t LOOP_MS = 30;
     static constexpr uint16_t FAST_LOOP_MS = 10;
     void setup();
-    void blink(uint16_t timer);
-    void setBrightness(int input);
+    void blink(uint16_t ms);   // lit for ms
+    void setBrightness(int input);   // 0-100 %
     RgbColor color(uint8_t r, uint8_t g, uint8_t b);
     const uint16_t PixelCount = 1;
     int8_t _pin = NEOPIXEL_PIN;   // -1 = none
@@ -64,18 +65,18 @@ class NeoPixel : public corium::Module {
     uint8_t  _blip_b = 0;
     uint8_t  _fade_rate = 0;     // 0=off, 1=fast, 2=medium, 3=slow
   protected:
-    NeoController* controller_{nullptr};
+    NeoController* _bus{nullptr};
   private:
     void precompute_blip();
     RgbColor trend_color();
     RgbColor alarm_color(RgbColor rgb);
-    unsigned long onTime = 0;
-    unsigned long offTime = 0;
-    unsigned long blinkInterval = 2000;
-    unsigned long nextInterval = 2000;
+    unsigned long _on_ms = 0;
+    unsigned long _lit_ms = 0;
+    unsigned long _blink_ms = 2000;
+    unsigned long _next_ms = 2000;
     static void on_click(uint32_t us);
     bool _blip = false;
-    int colorSaturation = 15;
+    int _level = 15;
     bool _is_off = true;
     bool _swap_rg = false;
 };

@@ -30,14 +30,17 @@
 #include "App/AppConfig.h"
 #include "GeigerInput/GeigerInput.h"
 
+// s between posts
 #define WEBAPI_INTERVAL      60
 
 #ifndef WEBAPI_STATION_URL
 #define WEBAPI_STATION_URL "https://stations.espgeiger.com/station/%u"
 #endif
+// handshake hourly; a failed one backs off 30 s, doubling to 5 min
 #define WEBAPI_HANDSHAKE_MS  (1UL * 60UL * 60UL * 1000UL)
 #define WEBAPI_BACKOFF_MS    30000UL
 #define WEBAPI_BACKOFF_MAX   (5UL * 60UL * 1000UL)
+// health fields on one post in 15
 #define WEBAPI_HEALTH_EVERY  15
 
 // secp192r1, public key and signature are 2x
@@ -48,6 +51,7 @@
 static constexpr size_t ATT_NONCE = 32;
 #endif
 
+// ESPGeiger Network: signed msgpack handshake, posts and forget
 class WebAPI : public corium::Sender {
   public:
     WebAPI();
@@ -67,7 +71,7 @@ class WebAPI : public corium::Sender {
 
     corium::HttpDriver request;
 
-    uint32_t getStationId() const { return station_id; }
+    uint32_t getStationId() const { return _station; }
     void forget() { _forget = true; }   // sent when idle, even once off
 
   private:
@@ -84,26 +88,26 @@ class WebAPI : public corium::Sender {
     void doHandshake();
     void pingIfDue(unsigned long now);
     unsigned long wakeTarget();
-    void postMeasurement(bool censusOnly = false);
+    void postMeasurement(bool census = false);
     void loadConfig();
     bool readKeyFile();
     void saveConfig();
 
-    uint32_t station_id = 0;
+    uint32_t _station = 0;
     bool _have_key = false;   // a key can start with 0
-    uint8_t priv_k[WEBAPI_PRIV_LEN] = {0};
-    uint8_t pub_k[2 * WEBAPI_PRIV_LEN] = {0};
-    char pub_k_64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = {};  // base64, no padding
-    static constexpr uint32_t pingIntervalMs = (uint32_t)WEBAPI_INTERVAL * 1000UL;
-    uint32_t lastPing = 0;
-    uint32_t nextHandshake = 0;   // 0 = not set
+    uint8_t _priv[WEBAPI_PRIV_LEN] = {0};
+    uint8_t _pub[2 * WEBAPI_PRIV_LEN] = {0};
+    char _pub64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = {};  // base64, no padding
+    static constexpr uint32_t PING_MS = (uint32_t)WEBAPI_INTERVAL * 1000UL;
+    uint32_t _ping_ms = 0;
+    uint32_t _hs_at = 0;   // 0 = not set
     uint32_t _hs_backoff_ms = WEBAPI_BACKOFF_MS;
     void handshakeAt(uint32_t at);
     // claimed once, reused
     static constexpr uint32_t SLOT_UNSET = 0xFFFFFFFFu;
     uint32_t _hs_off = SLOT_UNSET;
     uint32_t _ping_off = SLOT_UNSET;
-    uint8_t healthPostCounter = 0;
+    uint8_t _health_n = 0;
     enum : uint8_t { WA_OFF, WA_HEARTBEAT, WA_CPM };
     uint8_t _mode = WA_CPM;
     void backoffHandshake();
@@ -112,7 +116,9 @@ class WebAPI : public corium::Sender {
     // WAIT = after the next good handshake, FETCH = burned but the blob is gone
     enum Att : uint8_t { ATT_WAIT, ATT_DUE, ATT_SIGN, ATT_FETCH, ATT_DONE };
     uint8_t _att = ATT_WAIT;
-    uint8_t _an[ATT_NONCE];   // the challenge, signed and sent from loop()
+    uint8_t _nonce[ATT_NONCE];   // the challenge, signed and sent from loop()
+    bool takeSign();
+    void attestIfDue(bool sign);
     void sendAttest(const uint8_t* nonce);
     void onChallenge(int code, const uint8_t* r, size_t n);
     void onAttest(int code);

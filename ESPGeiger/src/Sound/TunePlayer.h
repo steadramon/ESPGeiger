@@ -26,10 +26,11 @@
 
 namespace TunePlayer {
 
+// a sweep is sent in slices this long, us
 static constexpr uint32_t SWEEP_US = 10000;
 static constexpr uint16_t MAX_TEXT = 255;
 
-// the app's call
+// The app picks these
 struct Config {
   uint8_t  duty_pct;   // steps with no @
   uint16_t burst_hz;   // t
@@ -43,10 +44,10 @@ struct Slice {
   uint16_t hz;
   uint16_t n;      // tone, burst: cycles. pulse: us
   uint8_t  duty;
-  uint32_t us;     // till the next one
+  uint32_t us;     // until the next one
 };
 
-// next call for st, done_us into it. false = step over
+// Next call for step st, done_us into it. false when the step is over
 bool slice(const EGTune::Step& st, uint32_t done_us, bool rtttl, const Config& c, Slice& out);
 
 // tone duty at vol %, never 0
@@ -57,11 +58,11 @@ inline uint8_t at_volume(uint8_t duty, uint8_t vol) {
 
 #if BUZZER_BUILT
 void begin(Config c);
-// copies the text; dropped unless it outranks what's playing
+// Copies the text. Dropped unless it outranks what's playing
 bool play(uint32_t now_us, const char* s, uint16_t len, uint8_t prio, uint8_t vol = 100);
 void stop();
 bool busy();
-// from the loop: us till the next call, 0 = done
+// Call from the loop, returns us until the next call, 0 = done
 uint32_t poll(uint32_t now_us);
 #endif
 

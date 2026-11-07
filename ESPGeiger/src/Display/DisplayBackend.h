@@ -20,6 +20,7 @@
 #define EG_DISPLAYBACKEND_H
 #include <stdint.h>
 
+// One panel family, OLED or LED; Display uses the one that takes the type pref
 class DisplayBackend {
   public:
     virtual void start() = 0;

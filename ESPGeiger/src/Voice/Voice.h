@@ -17,6 +17,7 @@
 #include "Corium/Module/Module.h"
 #include "Corium/Output/QuietWindow.h"
 
+// Spoken cpm, alerts and klaxons; speak and play calls block on I2S
 class Voice : public corium::Module {
   public:
     Voice() {}
@@ -50,16 +51,16 @@ class Voice : public corium::Module {
     bool     _klax_en   = false;
     uint8_t  _klax_type = 0;
     uint8_t  _klax_vol  = 55;
-    uint8_t  _klax_cd   = 5;
+    uint8_t  _klax_min  = 5;
     uint8_t  _voice_vol = 80;
     bool     _ann_en    = false;
-    uint16_t _ann_iv    = 60;
+    uint16_t _ann_s     = 60;
     bool     _ann_usv   = false;
     bool     _ann_radmon = false;
     corium::Sender* _radmon = nullptr;   // nullptr = not built
     bool     _radmon_known  = false;
     bool     _radmon_was_ok = true;
-    unsigned long _radmon_last_attempt = 0;
+    unsigned long _radmon_tried_ms = 0;
     corium::QuietWindow _quiet;
     bool     _prev_alert = false;
     unsigned long _last_klax_ms = 0;

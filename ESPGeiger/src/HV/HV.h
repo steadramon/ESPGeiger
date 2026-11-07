@@ -33,13 +33,13 @@
 #include <EGLed.h>
 #endif
 
-// hw32: the board's hard limits (firmware brief), not prefs
+// hw32: the board's hard limits, not prefs
 #ifdef ESPGEIGER_HW32
 #define GEIGER_PWMPIN 7
 #define GEIGER_VFEEDBACKPIN 4
 #define GEIGERHW_MAX_FREQ 6000
 #define GEIGERHW_DUTY 215           // 35 us at 6 kHz, ~396 V
-#define GEIGERHW_MAX_ON_US 46       // brief's ceiling, bring-up may lower it
+#define GEIGERHW_MAX_ON_US 46
 #define GEIGERHW_MAX_DUTY 282       // MAX_ON_US at MAX_FREQ
 #define GEIGERHW_ADC_RATIO 336      // 328.3 in mV
 #define GEIGERHW_MAX_V 450          // boost tops out ~460 V at the cap
@@ -70,10 +70,12 @@
 #endif
 #endif
 
+// Hz
 #ifndef GEIGERHW_FREQ
 #define GEIGERHW_FREQ 6000
 #endif
 
+// out of HV_PWM_MAX
 #ifndef GEIGERHW_DUTY
 #define GEIGERHW_DUTY 280
 #endif
@@ -92,6 +94,7 @@
 #define GEIGERHW_MIN_FREQ 100
 #endif
 
+// volts = adc * ratio >> 10
 #ifndef GEIGERHW_ADC_RATIO
 #define GEIGERHW_ADC_RATIO 1035
 #endif
@@ -100,6 +103,7 @@
 #define GEIGERHW_ADC_OFFSET 0
 #endif
 
+// volts, top of the target pref
 #ifndef GEIGERHW_MAX_V
 #define GEIGERHW_MAX_V 700
 #endif
@@ -149,6 +153,7 @@ static_assert(GEIGERHW_MAX_DUTY <= GEIGERHW_MAX_ON_US * GEIGERHW_MAX_FREQ * 1024
 #define GEIGERHW_OV_S 3           // over ov_v before cut-off
 #endif
 
+// HV boost PWM, ADC feedback, auto-trim and overvoltage cut-off
 class HV : public corium::Module {
     public:
       HV();
@@ -172,25 +177,26 @@ class HV : public corium::Module {
       const char* legacyFile() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
       void set_freq(int freq);
       int get_freq() {
-        return _hw_freq;
+        return _freq;
       }
       // keep out of line
       void set_duty(int duty);
       int get_duty() {
-        return _hw_duty;
+        return _duty;
       }
+      // GEIGERHW_MAX_DUTY, or less if MAX_ON_US caps it at this freq
       int max_duty() const;
       void set_vd_ratio(int ratio) {
-        _hw_vd_ratio = clamp(ratio, 0, 50000);   // 0 = ADC off
+        _vd_ratio = clamp(ratio, 0, 50000);   // 0 = ADC off
       }
       void set_vd_offset(int offset) {
-        _hw_vd_offset = clamp(offset, -100, 100);
+        _vd_offset = clamp(offset, -100, 100);
       }
       int get_vd_ratio() {
-        return _hw_vd_ratio;
+        return _vd_ratio;
       }
       int get_vd_offset() {
-        return _hw_vd_offset;
+        return _vd_offset;
       }
       bool saveconfig();
       // Pin low first, never old duty at new freq
@@ -223,6 +229,7 @@ class HV : public corium::Module {
       void hold(bool restarting);
       void release_hold();
       void reset_trim() { _duty_trim = 0; }
+      // last reading, volts
       uint16_t get_volts() const { return _hv_prev; }
       EGRingAvg<uint16_t, HV_TRIM_N> hvReading;
     private:
@@ -240,13 +247,13 @@ class HV : public corium::Module {
       uint8_t _low_s = 0;
 #endif
       int _pwm_pin = GEIGER_PWMPIN;
-      int _hw_freq = GEIGERHW_FREQ;
-      int _hw_duty = GEIGERHW_DUTY;
+      int _freq = GEIGERHW_FREQ;
+      int _duty = GEIGERHW_DUTY;
       static constexpr int DUTY_UNSENT = -1;
       void force_write() { _cur_duty = DUTY_UNSENT; }
       int _cur_duty = 0;
-      int _hw_vd_ratio = GEIGERHW_ADC_RATIO;
-      int _hw_vd_offset = GEIGERHW_ADC_OFFSET;
+      int _vd_ratio = GEIGERHW_ADC_RATIO;
+      int _vd_offset = GEIGERHW_ADC_OFFSET;
       uint16_t _hv_target = 0;
       uint16_t _hv_prev = 0;    // 0 = none
       uint16_t _adc[HV_ADC_MAX];
@@ -256,11 +263,11 @@ class HV : public corium::Module {
       bool    _ov_trip = false;
       bool    _held = false;
       uint16_t _ov_v = GEIGERHW_OV_V;
-      uint8_t _ov_secs = 0;
+      uint8_t _over_s = 0;
       uint8_t _ov_trip_s = GEIGERHW_OV_S;
       uint8_t _trim_max = GEIGERHW_TRIM_MAX;
       uint8_t _trim_s = GEIGERHW_TRIM_S;
-      uint8_t _trim_secs = 0;
+      uint8_t _trim_age_s = 0;
       uint16_t _settle_s = GEIGERHW_SETTLE_S;
       uint16_t _boot_s = GEIGERHW_BOOT_S;
 #ifdef ESP8266

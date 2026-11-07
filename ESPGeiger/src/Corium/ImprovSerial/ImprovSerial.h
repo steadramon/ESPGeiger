@@ -28,13 +28,9 @@ namespace corium {
 class ImprovSerial {
 public:
   void begin();
-  // Feed one byte to the parser. Returns true if it was part of an
-  // in-flight Improv frame; the caller should drop it. Returns false
-  // for out-of-frame bytes, which the caller keeps.
+  // true = part of an Improv frame, caller drops it; false = caller keeps it
   bool consumeByte(uint8_t b);
-  // Pull pending Serial bytes through the parser. Only call from contexts
-  // where the console's main-loop polling isn't running (setup, the
-  // captive-portal busy-wait); otherwise the two race on Serial.read().
+  // setup and the portal wait only, else it races the console on Serial.read()
   void poll();
   bool isProvisioning() const { return _state == improv::STATE_PROVISIONING; }
 
@@ -50,11 +46,11 @@ private:
   void send_wifi_networks();
   void handle_wifi_settings(const std::string& ssid, const std::string& password);
 
-  uint8_t       _buffer[128];
-  size_t        _position = 0;
+  uint8_t       _buf[128];   // one frame in
+  size_t        _pos = 0;
   improv::State _state = improv::STATE_AUTHORIZED;
   uint32_t      _last_byte_ms = 0;
-  bool          _in_wifi_settings = false;
+  bool          _joining = false;
 };
 }  // namespace corium
 

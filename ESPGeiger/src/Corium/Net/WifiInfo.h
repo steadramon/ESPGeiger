@@ -1,6 +1,5 @@
 /*
-  WifiInfo.h - live reads of the core's WiFi, apart from Wifi.h
-  so host tests keep their own WiFi fakes.
+  WifiInfo.h - live reads of the core's WiFi
 
   Copyright (C) 2026 @steadramon
 

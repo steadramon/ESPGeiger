@@ -74,12 +74,12 @@ corium::LegacyRows Webhook::legacyAliases() { return WEBHOOK_LEGACY; }
 // === END LEGACY IMPORT ===
 
 Webhook::Webhook() {
-  pingIntervalMs = (uint32_t)WEBHOOK_INTERVAL * 1000UL;
+  _every_ms = (uint32_t)WEBHOOK_INTERVAL * 1000UL;
 }
 
 void Webhook::setInterval(int interval)
 {
-  pingInterval = setIntervalS(interval, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX);
+  _interval_s = setIntervalS(interval, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX);
 }
 
 void Webhook::onPrefsLoaded() {
@@ -111,8 +111,9 @@ const char* Webhook::cleanHTTP(const char* url) {
 
 static constexpr size_t WEBHOOK_BUF_SIZE = 512;
 
-static bool build_body(char* buffer, const char* key) {
-  EGJson j(buffer, WEBHOOK_BUF_SIZE);
+// {"id", "key" if set, then the webhook rows}; false = cut short
+static bool build_body(char* buf, const char* key) {
+  EGJson j(buf, WEBHOOK_BUF_SIZE);
   j.map_begin();
   j.str(PSTR("id"), corium::DeviceInfo::chipId());
   if (key[0] != '\0') j.str(PSTR("key"), key);
@@ -122,11 +123,11 @@ static bool build_body(char* buffer, const char* key) {
 }
 
 bool Webhook::prepare(char* url, size_t cap, const char** body) {
-  const char* whURL = corium::Prefs::getString("webhook", K_URL);
-  if (whURL[0] == '\0') return false;
+  const char* raw = corium::Prefs::getString("webhook", K_URL);
+  if (raw[0] == '\0') return false;
   if (!upload_ready(logTag())) return false;
   // never sent as plain http
-  if (strncmp_P(whURL, PSTR("https://"), 8) == 0) {
+  if (strncmp_P(raw, PSTR("https://"), 8) == 0) {
     corium::Log::console(PSTR("Webhook: https not supported, not sent"));
     notePublish(false);
     return false;
@@ -136,23 +137,23 @@ bool Webhook::prepare(char* url, size_t cap, const char** body) {
 
   const char* key = corium::Prefs::getString("webhook", K_KEY);
 
-  const char* trimmedURL = cleanHTTP(whURL);
-  if (!urlFits(snprintf_P(url, cap, PSTR("http://%s"), trimmedURL), cap)) return false;
+  const char* bare = cleanHTTP(raw);
+  if (!urlFits(snprintf_P(url, cap, PSTR("http://%s"), bare), cap)) return false;
 
   // post() frees it once sent
-  char* buffer = (char*)malloc(WEBHOOK_BUF_SIZE);
-  if (!buffer) {
+  char* buf = (char*)malloc(WEBHOOK_BUF_SIZE);
+  if (!buf) {
     corium::Log::console(PSTR("Webhook: malloc(%u) failed"), (unsigned)WEBHOOK_BUF_SIZE);
     notePublish(false);
     return false;
   }
-  if (!build_body(buffer, key)) {
-    free(buffer);
+  if (!build_body(buf, key)) {
+    free(buf);
     corium::Log::console(PSTR("Webhook: body too long, not sent"));
     notePublish(false);
     return false;
   }
-  *body = buffer;
+  *body = buf;
   return true;
 }
 #endif

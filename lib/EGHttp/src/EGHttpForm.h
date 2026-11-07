@@ -20,16 +20,14 @@
 
 #include <stddef.h>
 
-// First value for name, decoded as the WHATWG urlencoded parser and CPython
-// parse_qsl(keep_blank_values=True) do. False when absent, when the value
-// does not fit in cap, or when it decodes to a NUL byte. name may be PROGMEM.
+// First value for name, form-decoded (WHATWG), blank values kept
+// false when absent, too long for cap or decodes to a NUL; name may be PROGMEM
 bool eghttp_form_find(const char* region, size_t len, const char* name,
                       char* out, size_t cap);
 
-// Same, decoded in place for big values. region needs len + 1 bytes for the
-// NUL. nullptr when absent or on a NUL byte.
+// Same, decoded in place for big values; region needs len + 1 bytes
+// nullptr when absent or on a NUL byte, else points into region
 char* eghttp_form_take(char* region, size_t len, const char* name, size_t* out_len);
 
-// True when every value would decode in cap, so find() never takes a
-// too long or NUL value for absent.
+// True when every value decodes in cap, so find() never takes a long or NUL value for absent
 bool eghttp_form_fits(const char* region, size_t len, size_t cap);

@@ -22,7 +22,8 @@ chip protected itself by resetting. The usual suspects, in order:
   under load. WiFi transmit bursts draw sharp current spikes; a marginal
   supply drops just long enough to trigger a reset. Use a supply rated 1A+
   and a short, decent cable.
-- **Sharing the supply with the geiger counter.** ESP32 devices draw a lot of power
+- **Sharing the supply with the geiger counter.** ESP32 devices draw a lot of power,
+  so a supply that runs both can sag.
 - **Powering from a PC hub port.** Unpowered hubs are a classic source of
   mystery resets.
 

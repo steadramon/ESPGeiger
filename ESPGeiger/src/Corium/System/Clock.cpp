@@ -37,6 +37,7 @@ static StepFn s_on_step = nullptr;
 
 void onStep(StepFn fn) { s_on_step = fn; }
 
+// local minus UTC, minutes
 void refreshTzOffsetMin() {
   time_t now = time(NULL);
   struct tm loc, utc;
@@ -50,7 +51,7 @@ void refreshTzOffsetMin() {
 
 bool onSync(Source s) {
   bool first = !synced;
-  bool fresh = source != s;
+  bool changed = source != s;
   unsigned long uptime = Uptime::since(Uptime::start);
   if (first) {
     synced = true;
@@ -66,7 +67,7 @@ bool onSync(Source s) {
   }
   source = s;
   refreshTzOffsetMin();
-  return fresh;
+  return changed;
 }
 
 bool set(time_t epoch, Source s) {

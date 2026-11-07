@@ -29,6 +29,7 @@ static inline bool is_printable(char c) {
   const unsigned char u = (unsigned char)c;
   return u >= 0x20 && u <= 0x7E;
 }
+static bool count_ok(int32_t v) { return v >= 0 && v <= SERIAL_MAX_COUNT; }
 
 bool common_validate(const char* in, size_t len) {
   if (!in || len == 0) return false;
@@ -53,7 +54,7 @@ bool parse_gc10(const char* in, int* out_cpm, int* /*out_cps*/) {
   int32_t cpm;
   const char* end;
   if (!parseI32(in, &cpm, &end)) return false;
-  if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
+  if (!count_ok(cpm)) return false;
   *out_cpm = (int)cpm;
   return true;
 }
@@ -88,9 +89,9 @@ bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
   if (!cp_tag(p, 'S') || !(p = scan_int(p + 4, &cps)) || *p != ',') return false;
   p = skip_ws(p + 1);
   if (!cp_tag(p, 'M') || !scan_int(p + 4, &cpm)) return false;
-  if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
+  if (!count_ok(cpm)) return false;
   // bound cps too, it goes in the counter
-  if (out_cps && cps >= 0 && cps <= SERIAL_MAX_COUNT) *out_cps = (int)cps;
+  if (out_cps && count_ok(cps)) *out_cps = (int)cps;
   *out_cpm = (int)cpm;
   return true;
 }
@@ -125,11 +126,11 @@ static bool parse_labelled(const char* in, int* out_cpm, int* out_cps, bool loos
     if (!*p || !parseI32(p, &v, &end)) return false;
     cpm = (int)v;
   }
-  if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
+  if (!count_ok(cpm)) return false;
   *out_cpm = cpm;
   if (out_cps) {
     int cps = 0;
-    if (parse_label_value(in, 'S', &cps) && cps >= 0 && cps <= SERIAL_MAX_COUNT) {
+    if (parse_label_value(in, 'S', &cps) && count_ok(cps)) {
       *out_cps = cps;
     }
   }

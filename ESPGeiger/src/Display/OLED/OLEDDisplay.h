@@ -52,6 +52,7 @@ class EGHttpServer;
 #define OLED_SCL      5
 #endif
 
+// SSD1306, SH1106 and SSD1309 panels over u8g2, a page per button tap
 class SSD1306Display : public corium::Module, public DisplayBackend {
 public:
     enum DisplayType : uint8_t {
@@ -66,8 +67,8 @@ public:
 
 #ifdef ESP32
     bool isTiny() const {
-      return _pref_display_type == DISP_SSD1306_72X40
-          || _pref_display_type == DISP_SH1106_72X40;
+      return _type == DISP_SSD1306_72X40
+          || _type == DISP_SH1106_72X40;
     }
 #else
     bool isTiny() const { return false; }
@@ -202,9 +203,9 @@ public:
     uint8_t _pin_scl = OLED_SCL;
     uint8_t _pin_rst = OLED_RST;
     bool _present = false;
-    uint8_t _oled_addr = 0;
-    uint8_t _pref_display_type = OLED_TYPE;
-    unsigned long _page4_num_last = 0;
+    uint8_t _addr = 0;
+    uint8_t _type = OLED_TYPE;
+    unsigned long _page4_ms = 0;
     char _page4_num[8] = {};
     uint8_t _page4_variant = 0;
     uint8_t _last_page = 0;

@@ -194,6 +194,7 @@ static inline __attribute__((always_inline)) void on_edge(uint8_t action, uint32
 }
 
 #ifdef EG_SERIAL_NMI
+// head NMI side, tail main side, full = byte dropped
 static inline __attribute__((always_inline)) void rx_push(uint8_t b) {
   uint32_t h = g.rx_head;
   if (h - vload(s_rx_tail) < RX_RING) {
@@ -225,6 +226,7 @@ static inline __attribute__((always_inline)) void rx_service() {
     return;
   }
   rx_push(g.rx.cur);
+  // fast baud: watch one bit for the next start, else back to the edge irq
   bool high = true, waited = false;
   if (g.rx_spin) {
     uint32_t until = t + g.rx.cpb;
@@ -274,6 +276,7 @@ static inline __attribute__((always_inline)) void tmr_pass(uint32_t now, uint8_t
     g.tmr_on = 0;
     return;
   }
+  // cap so the x2 shift stays a signed span
   if (r > (0x7FFFFFFFu >> x2)) r = 0x7FFFFFFFu >> x2;
   r <<= x2;
   g.tmr_next += r;
@@ -455,9 +458,11 @@ static bool patch_nmi_vector() {
   if ((w0 & 0x00FFFFFF) != 0x0013D300) return false;   // wsr.excsave3 a0
   if (((w0 >> 24) & 0x3F) != 0x05) return false;      // call0
   uint32_t target = (uint32_t)egt1_nmi_entry;
+  // call0 at byte 3, lands at 0x40100024 + off * 4, off 18 bit signed
   int32_t off = ((int32_t)target - 0x40100024) >> 2;
   if ((target & 3) || off < -(1 << 17) || off >= (1 << 17)) return false;
   uint32_t insn = 0x05u | (((uint32_t)off & 0x3FFFF) << 6);
+  // 3 byte insn spans both words
   uint32_t ps = xt_rsil(15);
   v[0] = (w0 & 0x00FFFFFF) | (insn << 24);
   v[1] = (w1 & 0xFFFF0000) | (insn >> 8);
@@ -538,11 +543,13 @@ static bool IRAM_ATTR post(uint8_t op, uint32_t mask, uint32_t high, uint32_t lo
   g.cmd.run = run;
   g.cmd.ok = 0;
   g.cmd_seq = seq;
+  // op last, the NMI reads it first
   __asm__ __volatile__("" ::: "memory");
   g.cmd.op = op;
   kick();
   xt_wsr_ps(ps);
   while ((int32_t)(vload(g.done) - seq) < 0) {
+    // timed out, take the cmd back if the NMI hasn't
     if (ccount() - t0 >= s_post_limit) {
       ps = xt_rsil(15);
       if (vload(g.cmd_seq) == seq) g.cmd.op = EGT1_CMD_NONE;
@@ -735,7 +742,7 @@ bool rx_begin(int8_t pin, uint32_t baud) {
   if (vload(g.pwm_on)) return false;   // pwm has the precise channel
   init_timer();
   uint32_t cpu = ESP.getCpuFreqMHz() * 1000000UL;
-  g.rx.cpb = (cpu + baud / 2) / baud;
+  g.rx.cpb = (cpu + baud / 2) / baud;   // rounded
   g.rx_window = (2 * RX_EARLY_TICKS) << g.x2;
   g.rx_spin = (g.rx.cpb >> g.x2) <= RX_SPIN_MAX_TICKS;
   g.rx_pin = (uint8_t)pin;

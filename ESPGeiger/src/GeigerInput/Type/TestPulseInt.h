@@ -29,6 +29,7 @@
 
 #include "GeigerInput/GeigerInputTest.h"
 
+// Even square wave on TX at the target cps, counted back on RX
 class GeigerTestPulseInt final : public GeigerInputTest
 {
   public:
@@ -44,7 +45,7 @@ class GeigerTestPulseInt final : public GeigerInputTest
     int collect() override;
 #endif
   private:
-    int _target_pwm = 0;
-    int _current_pwm = 0;
+    int _target_half = 0;
+    int _cur_half = 0;
 };
 #endif

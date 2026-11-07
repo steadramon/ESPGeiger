@@ -29,45 +29,54 @@
 corium::ArduinoOTAModule ota;
 CORIUM_REGISTER_MODULE(ota)
 
-void corium::ArduinoOTAModule::begin() {
-  ArduinoOTA.onStart ([]() {
-    const char* type;
-    if (ArduinoOTA.getCommand () == U_FLASH)
-      type = PSTR("sketch");
-    else // U_SPIFFS
-      type = PSTR("filesystem");
-    corium::Registry::post(&ota);
-    corium::Lifecycle::send(corium::Lifecycle::OTA_START);
-    corium::LedSignal::lit(true);
-    corium::Log::console(PSTR("Start updating %s"), type);
-  });
-  ArduinoOTA.onEnd ([]() {
-    corium::Log::console(PSTR("End"));
-    corium::LedSignal::lit(false);
-    // core restarts, not safeRestart()
-    corium::Lifecycle::send(corium::Lifecycle::SHUTDOWN);
-  });
-  ArduinoOTA.onProgress ([](unsigned int progress, unsigned int total) {
+static void ota_start() {
+  const char* type;
+  if (ArduinoOTA.getCommand () == U_FLASH)
+    type = PSTR("sketch");
+  else // U_SPIFFS
+    type = PSTR("filesystem");
+  corium::Registry::post(&ota);
+  corium::Lifecycle::send(corium::Lifecycle::OTA_START);
+  corium::LedSignal::lit(true);
+  corium::Log::console(PSTR("Start updating %s"), type);
+}
+
+static void ota_end() {
+  corium::Log::console(PSTR("End"));
+  corium::LedSignal::lit(false);
+  // core restarts, not safeRestart()
+  corium::Lifecycle::send(corium::Lifecycle::SHUTDOWN);
+}
+
+static void ota_progress(unsigned int progress, unsigned int total) {
 #ifdef ESP32
-    feedLoopWDT();   // handle() blocks for the whole transfer
+  feedLoopWDT();   // handle() blocks for the whole transfer
 #endif
-    static uint8_t lastValue = 255;
-    if (total == 0) return;
-    uint8_t nextValue = (uint8_t)((uint64_t)progress * 100 / total);
-    if (lastValue != nextValue) {
-      corium::Log::debug(PSTR("Progress: %u%%\r"), nextValue);
-      lastValue = nextValue;
-      corium::LedSignal::lit(nextValue % 2);
-    }
-  });
-  ArduinoOTA.onError ([](ota_error_t error) {
-    corium::LedSignal::lit(false);
-    if (corium::otaInProgress) corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
-    // ota_error_t order, both cores
-    static const char ERRS[][8] PROGMEM = {"Auth", "Begin", "Connect", "Receive", "End"};
-    if ((unsigned)error <= OTA_END_ERROR) corium::Log::console(PSTR("OTA: %s Failed"), ERRS[error]);
-    else                                  corium::Log::console(PSTR("OTA: error %u"), error);
-  });
+  static uint8_t s_pct = 255;
+  if (total == 0) return;
+  uint8_t pct = (uint8_t)((uint64_t)progress * 100 / total);
+  if (s_pct != pct) {
+    corium::Log::debug(PSTR("Progress: %u%%\r"), pct);
+    s_pct = pct;
+    corium::LedSignal::lit(pct % 2);
+  }
+}
+
+static void ota_error(ota_error_t error) {
+  corium::LedSignal::lit(false);
+  if (corium::otaInProgress) corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
+  // ota_error_t order, both cores
+  static const char ERRS[][8] PROGMEM = {"Auth", "Begin", "Connect", "Receive", "End"};
+  if ((unsigned)error <= OTA_END_ERROR) corium::Log::console(PSTR("OTA: %s Failed"), ERRS[error]);
+  else                                  corium::Log::console(PSTR("OTA: error %u"), error);
+}
+
+void corium::ArduinoOTAModule::begin() {
+  // lambdas fold the statics in, a plain function in std::function costs more
+  ArduinoOTA.onStart([]() { ota_start(); });
+  ArduinoOTA.onEnd([]() { ota_end(); });
+  ArduinoOTA.onProgress([](unsigned int p, unsigned int t) { ota_progress(p, t); });
+  ArduinoOTA.onError([](ota_error_t e) { ota_error(e); });
 
   // core copies it, before begin() only, so a new one needs a restart
   const char* pass = corium::Prefs::getString("sys", corium::K_WEB_PASS);
@@ -88,10 +97,11 @@ void corium::ArduinoOTAModule::begin() {
 
 void corium::ArduinoOTAModule::loop(unsigned long now) {
   ArduinoOTA.handle();
-  static unsigned long s_last_igmp_refresh = 0;
-  if (s_last_igmp_refresh == 0) s_last_igmp_refresh = now;
-  if ((unsigned long)(now - s_last_igmp_refresh) > 300000UL) {
-    s_last_igmp_refresh = now;
+  // multicast groups re-reported every 5 min
+  static unsigned long s_igmp_ms = 0;
+  if (s_igmp_ms == 0) s_igmp_ms = now;
+  if ((unsigned long)(now - s_igmp_ms) > 300000UL) {
+    s_igmp_ms = now;
     corium::IgmpRefresh::refresh();
   }
 }

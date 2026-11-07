@@ -34,6 +34,7 @@ bool corium::Fs::begin() {
   LittleFS.setConfig(LittleFSConfig(false));   // no auto format
 #endif
 #ifdef ESP32
+  // errors only, else a missing file logs
   esp_log_level_set("esp_littlefs", ESP_LOG_ERROR);
   esp_log_level_set("vfs_api",      ESP_LOG_ERROR);
   esp_log_level_set("LITTLEFS",     ESP_LOG_ERROR);

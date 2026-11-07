@@ -21,5 +21,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// As printf("%.*f"), decimals 0-9
-int format_f(char* buf, size_t bufsz, float v, uint8_t decimals = 2);
+// As printf("%.*f"), decimals 0-9, returns snprintf length
+// above 2^32 saturates
+int format_f(char* buf, size_t cap, float v, uint8_t decimals = 2);

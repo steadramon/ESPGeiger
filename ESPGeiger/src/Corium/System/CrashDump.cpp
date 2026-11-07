@@ -69,17 +69,20 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
   Snapshot snap{};
   snap.magic    = MAGIC;
   snap.fwFp     = s_fw_fp;   // 0 = crashed before begin()
-  snap.reason   = rst_info ? rst_info->reason   : 0;
-  snap.exccause = rst_info ? rst_info->exccause : 0;
-  snap.epc1     = rst_info ? rst_info->epc1     : 0;
-  snap.epc2     = rst_info ? rst_info->epc2     : 0;
-  snap.epc3     = rst_info ? rst_info->epc3     : 0;
-  snap.excvaddr = rst_info ? rst_info->excvaddr : 0;
-  snap.depc     = rst_info ? rst_info->depc     : 0;
+  if (rst_info) {
+    snap.reason   = rst_info->reason;
+    snap.exccause = rst_info->exccause;
+    snap.epc1     = rst_info->epc1;
+    snap.epc2     = rst_info->epc2;
+    snap.epc3     = rst_info->epc3;
+    snap.excvaddr = rst_info->excvaddr;
+    snap.depc     = rst_info->depc;
+  }
   snap.sp       = stack;
 
   uint32_t lo = stack;
   uint32_t hi = stack_end;
+  // copy only a stack that sits in DRAM
   if (lo >= DRAM_LO && lo < DRAM_HI && hi > lo && hi <= DRAM_HI) {
     size_t avail = (hi - lo) / 4;
     if (avail > STACK_WORDS) avail = STACK_WORDS;
@@ -103,11 +106,41 @@ namespace CrashDump {
 
 static Snapshot* s_recovered = nullptr;   // crash boots only
 
+static bool panic_reset(esp_reset_reason_t rr) {
+  return rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
+         rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT;
+}
+
+static void from_summary(Snapshot& snap, const esp_core_dump_summary_t& sum) {
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32H2
+  // RISC-V, raw stack bytes not PCs
+  snap.epc1     = sum.exc_pc;
+  snap.exccause = sum.ex_info.mcause;
+  snap.excvaddr = sum.ex_info.mtval;
+  snap.sp       = sum.ex_info.sp;
+  size_t bytes  = sum.exc_bt_info.dump_size;
+  if (bytes > sizeof(snap.stack)) bytes = sizeof(snap.stack);
+  memcpy(snap.stack, sum.exc_bt_info.stackdump, bytes);
+  snap.wordCount = (uint32_t)(bytes / sizeof(uint32_t));
+#else
+  snap.exccause = sum.ex_info.exc_cause;
+  snap.epc1     = sum.exc_pc;
+  // epcx[n] only good when its bit is set
+  snap.epc2     = (sum.ex_info.epcx_reg_bits & (1u << 1)) ? sum.ex_info.epcx[1] : 0;
+  snap.epc3     = (sum.ex_info.epcx_reg_bits & (1u << 2)) ? sum.ex_info.epcx[2] : 0;
+  snap.excvaddr = sum.ex_info.exc_vaddr;
+  snap.depc     = 0;
+  snap.sp       = sum.ex_info.exc_a[1];
+  size_t depth = sum.exc_bt_info.depth;
+  if (depth > STACK_WORDS) depth = STACK_WORDS;
+  for (size_t i = 0; i < depth; i++) snap.stack[i] = sum.exc_bt_info.bt[i];
+  snap.wordCount = (uint32_t)depth;
+#endif
+}
+
 void begin() {
   esp_reset_reason_t rr = esp_reset_reason();
-  bool was_panic = (rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
-                    rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT);
-  if (!was_panic) return;
+  if (!panic_reset(rr)) return;
   if (esp_core_dump_image_check() != ESP_OK) return;
 
   esp_core_dump_summary_t sum{};
@@ -121,29 +154,7 @@ void begin() {
     }
     Snapshot snap{};
     snap.reason = (uint32_t)rr;
-#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32H2
-    // RISC-V, raw stack bytes not PCs
-    snap.epc1     = sum.exc_pc;
-    snap.exccause = sum.ex_info.mcause;
-    snap.excvaddr = sum.ex_info.mtval;
-    snap.sp       = sum.ex_info.sp;
-    size_t bytes  = sum.exc_bt_info.dump_size;
-    if (bytes > sizeof(snap.stack)) bytes = sizeof(snap.stack);
-    memcpy(snap.stack, sum.exc_bt_info.stackdump, bytes);
-    snap.wordCount = (uint32_t)(bytes / sizeof(uint32_t));
-#else
-    snap.exccause = sum.ex_info.exc_cause;
-    snap.epc1     = sum.exc_pc;
-    snap.epc2     = (sum.ex_info.epcx_reg_bits & (1u << 1)) ? sum.ex_info.epcx[1] : 0;
-    snap.epc3     = (sum.ex_info.epcx_reg_bits & (1u << 2)) ? sum.ex_info.epcx[2] : 0;
-    snap.excvaddr = sum.ex_info.exc_vaddr;
-    snap.depc     = 0;
-    snap.sp       = sum.ex_info.exc_a[1];
-    size_t depth = sum.exc_bt_info.depth;
-    if (depth > STACK_WORDS) depth = STACK_WORDS;
-    for (size_t i = 0; i < depth; i++) snap.stack[i] = sum.exc_bt_info.bt[i];
-    snap.wordCount = (uint32_t)depth;
-#endif
+    from_summary(snap, sum);
     if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
   }
 

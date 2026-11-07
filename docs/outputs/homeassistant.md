@@ -26,7 +26,7 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 | `ESPGeiger-<device_id> CPM5` | CPM | 5-minute smoothed CPM | `30.0` | 60 s |
 | `ESPGeiger-<device_id> CPM15` | CPM | 15-minute smoothed CPM | `30.0` | 60 s |
 | `ESPGeiger-<device_id> µSv/h` | µSv/h | μSv/h value | `0.10` | 60 s |
-| `ESPGeiger-<device_id> HV` | V | High-voltage reading - ESPGeiger-HW only | `400.1` | 60 s |
+| `ESPGeiger-<device_id> HV` | V | High-voltage reading - builds with HV feedback (ESPGeiger-HW, `*_hv`) | `400.1` | 60 s |
 | `ESPGeiger-<device_id> Temperature` | °C | Temperature in °C - [environment sensor](/configuration/env) only | `22.4` | 60 s |
 | `ESPGeiger-<device_id> Humidity` | % | Relative humidity in % - BME280 / AHT family only | `45.6` | 60 s |
 | `ESPGeiger-<device_id> Pressure` | hPa | Atmospheric pressure in hPa - BME280 / BMP280 only | `1013.2` | 60 s |

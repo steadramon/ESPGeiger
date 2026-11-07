@@ -10,7 +10,7 @@ nav_order: 50
 
 Pull requests are welcomed! Please [visit GitHub](https://github.com/steadramon/ESPGeiger) if you would like to contribute to the project.
 
-Host tests: `pio test -c test.ini -e native` (all suites) or `-e native_asan`. See `test/README.md`.
+Host tests: `pio test -c test.ini -e native`. See `test/README.md`.
 
 ## Pulse Testing
 
@@ -57,7 +57,7 @@ To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX 
 Notes:
 
 - Idle line level is LOW; each simulated count is a ~500µs HIGH pulse. The receiver counts on the falling edge at pulse end. This is inverted-polarity from a real Geiger tube (idles HIGH, pulses LOW) but the count is the same.
-- `GEIGER_COUNT_TXPULSE` is enabled in the default builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX↔RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 200µs) drops the duplicate edge that arrives immediately after.
+- `GEIGER_COUNT_TXPULSE` is set on `esp8266_testpulse`, `esp32_testpulseint` and the ESPGeiger Lite/Log TX test builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX↔RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 200µs) drops the duplicate edge that arrives immediately after.
 
 ### Pushing the rate ceiling
 

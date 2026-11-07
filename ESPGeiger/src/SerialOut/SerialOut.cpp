@@ -70,14 +70,14 @@ static const corium::PrefGroup SOUT_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* SerialOut::prefsGroup() { return &SOUT_PREF_GROUP; }
 
 void SerialOut::onPrefsLoaded() {
-  _interval   = (uint16_t)corium::Prefs::getUInt("sout", EG_K_INTERVAL);
-  _show_flags = (uint8_t)corium::Prefs::getUInt("sout", K_FLAGS);
+  _interval_s   = (uint16_t)corium::Prefs::getUInt("sout", EG_K_INTERVAL);
+  _show = (uint8_t)corium::Prefs::getUInt("sout", K_FLAGS);
   _format     = (uint8_t)corium::Prefs::getUInt("sout", K_FORMAT);
   _baud       = (uint32_t)corium::Prefs::getUInt("sout", K_BAUD);
   if (_baud && _baud < SOUT_BAUD_MIN) _baud = SOUT_BAUD_MIN;
   if (_rest) drain(true);   // the rest now, before off or a new baud
   quiet_logs();
-  corium::Registry::every(this, _interval > 0 ? LOOP_MS : 0);
+  corium::Registry::every(this, _interval_s > 0 ? LOOP_MS : 0);
   resolveFormat();
   applyBaud();
 }
@@ -103,8 +103,8 @@ void SerialOut::resolveFormat() {
 }
 
 void SerialOut::save() {
-  corium::Prefs::putUInt("sout", EG_K_INTERVAL, _interval);
-  corium::Prefs::putUInt("sout", K_FLAGS, _show_flags);
+  corium::Prefs::putUInt("sout", EG_K_INTERVAL, _interval_s);
+  corium::Prefs::putUInt("sout", K_FLAGS, _show);
   if (!corium::Prefs::commitSoon(corium::fastMillis())) corium::Log::console(PSTR("SerialOut: not saved"));
 }
 
@@ -133,24 +133,24 @@ void SerialOut::print_usv() {
 }
 
 // lines streaming, no logs between them
-void SerialOut::quiet_logs() { corium::Log::setSerialOn(_interval == 0); }
+void SerialOut::quiet_logs() { corium::Log::setSerialOn(_interval_s == 0); }
 
-void SerialOut::set_show(int var) {
+void SerialOut::set_show(int secs) {
   // keep flags for a bare show
-  if (var > 0 && _show_flags == 0) {
-    _show_flags = SHOW_CPM;
+  if (secs > 0 && _show == 0) {
+    _show = SHOW_CPM;
   }
-  setInterval((uint16_t)clamp(var, 0, (int)UINT16_MAX));
+  setInterval((uint16_t)clamp(secs, 0, (int)UINT16_MAX));
 }
 
 void SerialOut::setInterval(uint16_t v) {
-  _interval = v;
+  _interval_s = v;
   corium::Registry::dueIn(this, REPLAN_MS);
   quiet_logs();
   save();
 }
 
-void SerialOut::toggle(uint8_t show) { _show_flags ^= show; save(); }
+void SerialOut::toggle(uint8_t show) { _show ^= show; save(); }
 
 // console
 
@@ -183,9 +183,9 @@ static void cmd_show() {
     return;
   }
   if (show_toggle(arg)) return;
-  int32_t aNumber;
+  int32_t n;
   if (strcmp_P(arg, PSTR("off")) == 0) serialout.set_show(0);
-  else if (isDigit(arg[0]) && parseI32(arg, &aNumber)) serialout.set_show((int)aNumber);
+  else if (isDigit(arg[0]) && parseI32(arg, &n)) serialout.set_show((int)n);
   else corium::Log::console(PSTR("show: unknown arg '%s'"), arg);
 }
 
@@ -233,7 +233,7 @@ static size_t labelled_line(char* buf, size_t cap, const Line& v) {
 void SerialOut::send(const char* s, size_t n) {
   if (Serial.availableForWrite() < (int)n) _rest = new (std::nothrow) char[n];
   if (!_rest) {
-    // fits, or no heap: waits as before
+    // fits, or no heap: a blocking write
     Serial.write((const uint8_t*)s, n);
     return;
   }
@@ -257,23 +257,39 @@ void SerialOut::drain(bool wait) {
   _rest = nullptr;
 }
 
+// 0 = nothing to send
+static size_t labelled(char* buf, size_t cap, uint8_t flags) {
+  if (flags == 0) return 0;
+
+  Line v = { flags, (int)corium::m_i(M_CPM), corium::m_f(M_CPS), corium::m_f(M_USV), 0 };
+  if (M_HAS_HV) {
+    int32_t hv;
+    if (m_hv_volts(&hv)) v.hv = (int)hv;
+    else v.flags &= ~SerialOut::SHOW_HV;   // no adc
+  }
+  size_t pos = labelled_line(buf, cap, v);
+  if (pos == 0) return 0;
+  if (pos < cap - 1) buf[pos++] = '\n';
+  return pos;
+}
+
 void SerialOut::loop(unsigned long now) {
-  uint32_t period = (uint32_t)_interval * 1000UL;
-  bool due = (now - _last_fire) >= period;
+  uint32_t period = (uint32_t)_interval_s * 1000UL;
+  bool due = (now - _fired_ms) >= period;
   // next line due or off: the rest now
   if (_rest) {
     drain(due);
     if (_rest) return;
   }
-  if (_interval == 0) {
+  if (_interval_s == 0) {
     corium::Registry::every(this, 0);
     return;
   }
   if (!due) {
-    corium::Registry::dueAt(this, _last_fire + period);
+    corium::Registry::dueAt(this, _fired_ms + period);
     return;
   }
-  _last_fire = now;
+  _fired_ms = now;
   corium::Registry::dueAt(this, now + period);
 
   if (_fmt_fn) {
@@ -282,20 +298,9 @@ void SerialOut::loop(unsigned long now) {
     if (n) send(line, n);
     return;
   }
-
-  if (_show_flags == 0) return;
-
-  Line v = { _show_flags, (int)corium::m_i(M_CPM), corium::m_f(M_CPS), corium::m_f(M_USV), 0 };
-  if (M_HAS_HV) {
-    int32_t hv;
-    if (m_hv_volts(&hv)) v.hv = (int)hv;
-    else v.flags &= ~SHOW_HV;   // no adc
-  }
   char buf[80];
-  size_t pos = labelled_line(buf, sizeof(buf), v);
-  if (pos == 0) return;
-  if (pos < sizeof(buf) - 1) buf[pos++] = '\n';
-  send(buf, pos);
+  size_t n = labelled(buf, sizeof(buf), _show);
+  if (n) send(buf, n);
 }
 
 // HTTP routes

@@ -51,7 +51,7 @@ class Console : public Module {
 public:
     const char* name() override { return PSTR("scmd"); }
     bool coreModule() override { return true; }
-    static constexpr uint16_t LOOP_MS = 10;
+    static constexpr uint16_t LOOP_MS = 10;   // ms between serial reads
     void begin() override;
     void loop(unsigned long now) override;
     void pollBoot();   // setup portal and the wifi wait, before the registry runs
@@ -76,6 +76,7 @@ private:
 
 extern corium::Console console;
 
+// file scope, adds a console word at static init
 #define CORIUM_REGISTER_CMD(word, fn) \
   static const char _cmdn_##word[] PROGMEM = #word; \
   static const corium::Cmd _cmd_##word PROGMEM = {_cmdn_##word, fn}; \

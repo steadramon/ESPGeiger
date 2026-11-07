@@ -39,6 +39,7 @@
 #define PUSHBUTTON_PIN2 -1
 #endif
 
+// One or two buttons, active low, presses posted as topics
 class PushButton : public corium::Module {
   public:
     PushButton();

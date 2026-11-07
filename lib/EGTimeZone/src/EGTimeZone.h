@@ -21,7 +21,7 @@
 
 namespace EGTimeZone {
 
-// PROGMEM or nullptr; hash only, a miss can match another zone
+// static PROGMEM rule or nullptr; hash only, a miss can match another zone
 const char *posixFor(const char *olson);
 
 }

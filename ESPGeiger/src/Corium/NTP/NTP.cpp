@@ -111,7 +111,7 @@ void corium::NTP_Client::setup()
   server = s_server;
 
   corium::Log::console(PSTR("NTP: Starting ... %s"), server);
-  const char *possixTZ = posix_tz();
+  const char *posix = posix_tz();
 #ifdef ESP8266
   // an RTC's settimeofday fires it too
   settimeofday_cb([](bool from_sntp){
@@ -120,7 +120,7 @@ void corium::NTP_Client::setup()
     corium::Registry::post(&ntpclient);
   });
 
-  configTime(possixTZ, server);
+  configTime(posix, server);
 #else
   // tcpip task, never wait here
   sntp_set_time_sync_notification_cb([](struct timeval *t){
@@ -129,7 +129,7 @@ void corium::NTP_Client::setup()
     corium::Registry::post(&ntpclient);
   });
   configTime(0, 0, server); // TZ set below
-  set_tz(possixTZ);
+  set_tz(posix);
 #endif
 #endif
 }

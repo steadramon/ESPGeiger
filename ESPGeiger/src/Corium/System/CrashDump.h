@@ -27,9 +27,10 @@ namespace CrashDump {
 
 static constexpr size_t STACK_WORDS = 32;
 
+// 8266: RTC memory over the reboot, esp32: from the IDF core dump summary
 struct Snapshot {
   uint32_t magic;
-  uint32_t fwFp;
+  uint32_t fwFp;   // other firmware's dump is dropped
   uint32_t reason;
   uint32_t exccause;
   uint32_t epc1;
@@ -39,12 +40,12 @@ struct Snapshot {
   uint32_t depc;
   uint32_t sp;
   uint32_t wordCount;
-  uint32_t stack[STACK_WORDS];
+  uint32_t stack[STACK_WORDS];   // 8266 raw stack, esp32 backtrace PCs
 };
 
 void begin();   // early in setup()
-bool hasCrash();
-const Snapshot* lastCrash();
+bool hasCrash();   // this boot follows a crash of this firmware
+const Snapshot* lastCrash();   // nullptr = none
 
 } // namespace CrashDump
 }  // namespace corium

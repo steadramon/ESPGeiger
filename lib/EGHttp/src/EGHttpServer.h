@@ -34,6 +34,7 @@
   #endif
 #endif
 #ifndef EGHTTP_REQ_BUF
+  // per client: request line, headers and a body that isn't streamed
   #define EGHTTP_REQ_BUF 1536
 #endif
 #ifndef EGHTTP_CHUNK_ACC
@@ -41,7 +42,7 @@
   #define EGHTTP_CHUNK_ACC 12288
 #endif
 #ifndef EGHTTP_MAX_UPLOADS
-  #define EGHTTP_MAX_UPLOADS 4
+  #define EGHTTP_MAX_UPLOADS 4   // onUpload() routes
 #endif
 #ifndef EGHTTP_ARG_MAX
   #define EGHTTP_ARG_MAX 127   // longest arg() value
@@ -84,14 +85,14 @@ class EGHttpRequest {
 
     Method method() const { return _method; }
     const char* path() const { return _path; }   // PROGMEM for body handlers
-    const char* query() const { return _query; }
-    const char* body() const { return _body; }
+    const char* query() const { return _query; }   // past '?', still encoded, or nullptr
+    const char* body() const { return _body; }     // bodyLen bytes, bodyLen 0 on upload routes
     size_t bodyLen() const { return _bodyLen; }
 
-    // static buffer, copy before next arg()
+    // query then body, nullptr if absent; static buffer, copy before next arg()
     const char* arg(const __FlashStringHelper* name) const;
 
-    // name may be PROGMEM
+    // out or nullptr; name may be PROGMEM
     static const char* decodeArg(const char* body, size_t bodyLen,
                                   const char* name, char* out, size_t cap);
 
@@ -105,20 +106,24 @@ class EGHttpRequest {
     size_t _bodyLen = 0;
 };
 
+// one send, sendGzipP, redirect or chunked reply per request, inside the handler
 class EGHttpResponse {
   public:
     void send(uint16_t status, const __FlashStringHelper* contentType, const char* body);
     void send(uint16_t status, const __FlashStringHelper* contentType, const __FlashStringHelper* body);
+    // body in flash, sent as acks come
     void sendGzipP(uint16_t status, const __FlashStringHelper* contentType,
                    const uint8_t* body, size_t len);
     // false = not sent, eg CR/LF in it
     bool redirect(const char* location);
     bool redirect(const __FlashStringHelper* location);
 
+    // then sendChunk() / sendKV(), endChunked() to finish
     bool beginChunked(uint16_t status, const __FlashStringHelper* contentType);
     bool sendChunk(const char* data, size_t len);
     bool sendChunk(const char* data);
     bool sendChunk(const __FlashStringHelper* data);
+    // prefix, value, suffix as one chunk
     bool sendKV(const __FlashStringHelper* prefix, const char* value);
     bool sendKV(const __FlashStringHelper* prefix, const char* value,
                 const __FlashStringHelper* suffix);
@@ -159,14 +164,16 @@ class EGHttpServer {
     using BodyHandler = void(*)(EGHttpRequest& req, BodyEvent ev,
                                 const char* chunk, size_t len, void* user);
 
+    // before begin(), first match wins; handlers run in tick()
     bool on(const __FlashStringHelper* path, EGHttpRequest::Method method, Handler h, void* user = nullptr);
     bool onUpload(const __FlashStringHelper* path, BodyHandler bh, void* user = nullptr);
-    void onNotFound(Handler h, void* user = nullptr);
+    void onNotFound(Handler h, void* user = nullptr);   // default a plain 404
 
-    // empty = no auth
+    // empty = no auth, user:password up to EGHTTP_AUTH_MAX
     void setBasicAuth(const __FlashStringHelper* user, const char* password,
                       const __FlashStringHelper* realm = nullptr);
 
+    // capped at EGHTTP_MAX_CLIENTS
     void setMaxClients(uint8_t n) { _maxClients = n < EGHTTP_MAX_CLIENTS ? n : EGHTTP_MAX_CLIENTS; }
 
     void begin(uint16_t port);

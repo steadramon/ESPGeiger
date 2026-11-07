@@ -30,7 +30,7 @@
 #define CORIUM_EXPORT_MAGIC_B64 "CORI"
 #endif
 #ifndef CORIUM_EXPORT_SEED
-#define CORIUM_EXPORT_SEED 0x434F5249u
+#define CORIUM_EXPORT_SEED 0x434F5249u   // xor keystream seed, also on the crc
 #endif
 
 namespace corium {
@@ -48,6 +48,7 @@ bool isBlob(const char* text, size_t len);
 // # comments and blank lines ignored
 Result apply(const char* text, size_t len, PutFn put);
 
+// records: group count, per group len+mid and pref count, per pref len+key, be16 len+value
 // blob records from the group count on; nullptr = ok, else why (PROGMEM)
 const char* blobError(const uint8_t* p, size_t len);
 // puts done, -1 = bad records

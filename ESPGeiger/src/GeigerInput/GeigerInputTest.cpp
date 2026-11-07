@@ -39,7 +39,7 @@ void set_pulse_width_us(int us) {
 GeigerInputTest::GeigerInputTest() {
 };
 
-// one writer each side, cross core on esp32
+// One writer on each side, they can be on different cores on esp32
 static constexpr uint8_t TP_RING = 64;
 static_assert((256 % TP_RING) == 0, "u8 index wraps, ring must divide 256");
 static uint32_t s_tp_at[TP_RING];   // head's release/acquire orders it
@@ -89,7 +89,7 @@ double GeigerInputTest::calcDelay() {
 #ifdef DISABLE_GEIGER_POISSON
   r = mult / cps;
 #else
-  // debt unclamped, keeps it Poisson
+  // The remainder carries over unclamped, which keeps it Poisson
   double interval     = generatePoissonRand(cps) + _remainder;
   double min_interval = (double)_pulse_width_us / 1000000;
   if (interval < min_interval) {
@@ -134,28 +134,29 @@ void GeigerInputTest::CPMAdjuster() {
     return;
   }
 #ifndef GEIGER_TEST_FIXEDCPM
+  // 30, 60, 100, 120 cpm in turn
   int selection = (corium::fastMillis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
-  if (selection != _current_selection) {
-    _current_selection = selection;
-    int _targetCPM = 30;
+  if (selection != _step) {
+    _step = selection;
+    int cpm = 30;
     switch (selection) {
       case 1:
-        _targetCPM = 60;
+        cpm = 60;
         break;
       case 2:
-        _targetCPM = 100;
+        cpm = 100;
         break;
       case 3:
-        _targetCPM = 120;
+        cpm = 120;
         break;
       default:
-        _targetCPM = 30;
+        cpm = 30;
         break;
     }
 #ifdef GEIGER_TEST_FAST
-    _targetCPM = _targetCPM * 100;
+    cpm = cpm * 100;
 #endif
-    setTargetCPM(_targetCPM, false);
+    setTargetCPM(cpm, false);
   }
 #endif
 }

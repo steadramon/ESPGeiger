@@ -39,7 +39,7 @@ CORIUM_PSTR(K_SYS_ALERT, "alert");
 
 Max7219Display max7219;
 CORIUM_REGISTER_MODULE(max7219)
-static bool _backend_max7219 = Display::add(&max7219);
+static bool s_added = Display::add(&max7219);
 
 enum { PAGE_CPM = 0, PAGE_USV = 1, PAGE_TEMP = 2, PAGE_HUM = 3, PAGE_GRAPH = 4, PAGE_VU = 5 };
 static const uint8_t MAX_PAGES = 5;
@@ -49,8 +49,8 @@ static const uint8_t ARC_REG  = Max7219Driver::REG_DIGIT0 + 4;
 static const uint8_t VU_SUB   = 16;   // 1/16 led
 
 // slow reads, see slow_reads()
-static float s_t = NAN, s_h = NAN;
-static float s_warn = 0, s_alert_cpm = 0;
+static float s_temp = NAN, s_hum = NAN;
+static float s_warn_cpm = 0, s_alert_cpm = 0;
 // matrix: a still page draws once a second
 static bool s_still = false;
 static bool s_redraw = true;
@@ -61,11 +61,11 @@ static void slow_reads(uint8_t page) {
   bool all = s_age == 0;
   if (++s_age >= 30) s_age = 0;
   if (all) {
-    s_warn      = (float)corium::Prefs::getUInt("counter", K_SYS_WARN);
+    s_warn_cpm  = (float)corium::Prefs::getUInt("counter", K_SYS_WARN);
     s_alert_cpm = (float)corium::Prefs::getUInt("counter", K_SYS_ALERT);
   }
-  if (all || page == PAGE_TEMP) s_t = corium::m_f(M_T);
-  if (all || page == PAGE_HUM)  s_h = corium::m_f(M_H);
+  if (all || page == PAGE_TEMP) s_temp = corium::m_f(M_T);
+  if (all || page == PAGE_HUM)  s_hum  = corium::m_f(M_H);
 }
 
 // rows, bit x = column x (xantorohara editor)
@@ -122,6 +122,7 @@ static const uint64_t MX_SMALL_SYMBOLS[9] PROGMEM = {
   0x0000000705070000    // ^ degree
 };
 
+// c's 8 rows into out8, false = no glyph
 static bool mxGlyph(char c, uint8_t* out8, bool small) {
   const uint64_t* digits  = small ? MX_SMALL_DIGITS  : MX_FONT_DIGITS;
   const uint64_t* symbols = small ? MX_SMALL_SYMBOLS : MX_FONT_SYMBOLS;
@@ -374,6 +375,7 @@ float Max7219Display::currentCPM() {
   return display.shown_cpm();
 }
 
+// a page's time in cycle mode
 #define MX_PAGE_DWELL_MS 5000UL
 
 uint8_t Max7219Display::buildPages(uint8_t* list) {
@@ -382,8 +384,8 @@ uint8_t Max7219Display::buildPages(uint8_t* list) {
   list[n++] = PAGE_CPM;
   list[n++] = PAGE_USV;
   if (_layout == DISP_MAX7219_MATRIX) list[n++] = PAGE_GRAPH;
-  if (!isnan(s_t)) list[n++] = PAGE_TEMP;
-  if (!isnan(s_h)) list[n++] = PAGE_HUM;
+  if (!isnan(s_temp)) list[n++] = PAGE_TEMP;
+  if (!isnan(s_hum))  list[n++] = PAGE_HUM;
   return n;
 }
 
@@ -393,9 +395,9 @@ void Max7219Display::updatePage() {
   if (_page >= n) _page = 0;
   if (_mode == MX_CYCLE) {
     unsigned long now = corium::fastMillis();
-    if ((now - _page_since) >= MX_PAGE_DWELL_MS) {
+    if ((now - _page_ms) >= MX_PAGE_DWELL_MS) {
       _page = (uint8_t)((_page + 1) % n);
-      _page_since = now;
+      _page_ms = now;
     }
   }
   _cur_page = list[_page];
@@ -414,7 +416,7 @@ void Max7219Display::update_power() {
 
 void Max7219Display::onButtonTap(unsigned long now, int8_t dir) {
   s_redraw = true;
-  if (_fx_on) {   // any tap ends it
+  if (_fx_on) {
     _fx_on = false;
     return;
   }
@@ -422,7 +424,7 @@ void Max7219Display::onButtonTap(unsigned long now, int8_t dir) {
   uint8_t n = buildPages(list);
   if (n <= 1) return;
   _page = (uint8_t)((_page + (dir > 0 ? 1 : n - 1)) % n);
-  _page_since = corium::fastMillis();
+  _page_ms = corium::fastMillis();
   _cur_page = list[_page];
 }
 
@@ -437,21 +439,21 @@ static const char* temp_unit() {
 void Max7219Display::pageInfo(uint8_t page, float& value, uint8_t& dec, const char*& unit) {
   switch (page) {
     case PAGE_USV:  value = display.usv(); dec = _decimals; unit = PSTR("~Sv/h"); break;
-    case PAGE_TEMP: value = corium::m_celsius_to(s_t, corium::m_temp_unit()); dec = 1; unit = temp_unit(); break;
-    case PAGE_HUM:  value = s_h;           dec = 0;         unit = PSTR("%");     break;
+    case PAGE_TEMP: value = corium::m_celsius_to(s_temp, corium::m_temp_unit()); dec = 1; unit = temp_unit(); break;
+    case PAGE_HUM:  value = s_hum;         dec = 0;         unit = PSTR("%");     break;
     default:        value = currentCPM(); dec = value < 10.0f ? 1 : 0; unit = PSTR("CPM"); break;   // as the OLED
   }
 }
 
-uint8_t Max7219Display::adaptiveLevel(uint8_t maxLevel) {
-  if (display.alert()) return maxLevel;
+uint8_t Max7219Display::adaptiveLevel(uint8_t top) {
+  if (display.alert()) return top;
   float cur  = currentCPM();
   float base = _bar_win == 0 ? display.cpm5() : display.cpm15();
   float full = base * (float)_bar_gain;
   const float MIN_FULL = 20.0f;   // cpm
   if (full < MIN_FULL) full = MIN_FULL;
-  int lvl = CounterMaths::to_int((cur / full) * (float)maxLevel);
-  return lvl > maxLevel ? maxLevel : (uint8_t)lvl;
+  int lvl = CounterMaths::to_int((cur / full) * (float)top);
+  return lvl > top ? top : (uint8_t)lvl;
 }
 
 void Max7219Display::pushNumber(uint8_t first_digit, uint8_t ndigits, float value,
@@ -539,12 +541,12 @@ void Max7219Display::renderRound() {
 
 // the board's 6 green, 9 orange, 9 red, scaled to the warn and alert CPM
 uint8_t Max7219Display::arcLevel() {
-  return zoneLevel(currentCPM(), s_warn, s_alert_cpm, 6, 9, 9);
+  return zoneLevel(currentCPM(), s_warn_cpm, s_alert_cpm, 6, 9, 9);
 }
 
 // /screen preview for 7-seg and round
 
-static inline void fbPix(uint8_t* fb, int W, int H, int x, int y) {
+static inline void fb_pix(uint8_t* fb, int W, int H, int x, int y) {
   if (x < 0 || x >= W || y < 0 || y >= H) return;
   fb[(y >> 3) * W + x] |= (uint8_t)(1 << (y & 7));
 }
@@ -562,25 +564,25 @@ struct Fb {
   int w, h;
 };
 
-static void drawCell(const Fb& f, int x, int y, uint8_t seg, bool big) {
+static void draw_cell(const Fb& f, int x, int y, uint8_t seg, bool big) {
   const uint8_t (*g)[3] = big ? BIG_SEG : SMALL_SEG;
   for (uint8_t s = 0; s < 7; s++) {
     if (!(seg & (1 << s))) continue;
     int sx = x + pgm_read_byte(&g[s][0]);
     int sy = y + pgm_read_byte(&g[s][1]);
     bool h = pgm_read_byte(&g[s][2]);
-    for (int i = 0; i < 3; i++) fbPix(f.p, f.w, f.h, sx + (h ? i : 0), sy + (h ? 0 : i));
+    for (int i = 0; i < 3; i++) fb_pix(f.p, f.w, f.h, sx + (h ? i : 0), sy + (h ? 0 : i));
   }
 }
 
 // colon or DP dot, in the gap after a digit
-static void drawPoint(const Fb& f, int gx, int y0, bool big, bool colon) {
+static void draw_point(const Fb& f, int gx, int y0, bool big, bool colon) {
   int x = big ? gx + 1 : gx;
   if (colon) {
-    fbPix(f.p, f.w, f.h, x, y0 + 2);
-    fbPix(f.p, f.w, f.h, x, y0 + 6);
+    fb_pix(f.p, f.w, f.h, x, y0 + 2);
+    fb_pix(f.p, f.w, f.h, x, y0 + 6);
   } else {
-    fbPix(f.p, f.w, f.h, x, y0 + (big ? 8 : 4));
+    fb_pix(f.p, f.w, f.h, x, y0 + (big ? 8 : 4));
   }
 }
 
@@ -599,8 +601,8 @@ void Max7219Display::drawRep7seg(uint8_t* fb, uint16_t& w, uint16_t& h) {
   for (uint8_t p = 0; p < _count; p++) {
     int x = x0 + p * pitch;
     if (x + cw > W) break;
-    drawCell({fb, W, H}, x, y0, segs[p], big);
-    if (segs[p] & 0x80) drawPoint({fb, W, H}, x + cw, y0, big, tm() && _colon);
+    draw_cell({fb, W, H}, x, y0, segs[p], big);
+    if (segs[p] & 0x80) draw_point({fb, W, H}, x + cw, y0, big, tm() && _colon);
   }
 }
 
@@ -714,7 +716,7 @@ static void hold_expired(unsigned long now, unsigned long& stamp, unsigned long 
 void Max7219Display::second() {
   if (!_active) return;
   unsigned long now = corium::fastMillis();
-  hold_expired(now, _page_since, MX_PAGE_DWELL_MS);
+  hold_expired(now, _page_ms, MX_PAGE_DWELL_MS);
   hold_expired(now, _vu_ms, VU_GAP_MS);
   slow_reads(_cur_page);
   s_redraw = true;   // /screen draws the matrix without pins too
@@ -722,19 +724,19 @@ void Max7219Display::second() {
   if (!tm()) _drv.heal();
   if (_layout == DISP_MAX7219_MATRIX || !_lit) return;
   // no ack, try every 10 s
-  if (tm() && (_tm_off || (!_tm_acked && ++_tm_wait < TM_RETRY_S))) return;
-  _tm_wait = 0;
+  if (tm() && (_tm_off || (!_tm_acked && ++_tm_wait_s < TM_RETRY_S))) return;
+  _tm_wait_s = 0;
   updatePage();
   if (_layout == DISP_MAX7219_ROUND) renderRound();
   else                               render7seg();
 }
 
-void Max7219Display::matrixValueUnit(char* val, size_t vc, char* unit, size_t uc) {
+void Max7219Display::matrixValueUnit(char* val, size_t val_cap, char* unit, size_t unit_cap) {
   float v; uint8_t dec; const char* u;
   pageInfo(_cur_page, v, dec, u);
-  if (dec == 0) snprintf_P(val, vc, PSTR("%d"), CounterMaths::to_int(v));
-  else          format_f(val, vc, v, dec);
-  flashToRam(u, unit, uc);
+  if (dec == 0) snprintf_P(val, val_cap, PSTR("%d"), CounterMaths::to_int(v));
+  else          format_f(val, val_cap, v, dec);
+  flashToRam(u, unit, unit_cap);
 }
 
 // works without pins, for /screen
@@ -757,27 +759,27 @@ void Max7219Display::renderMatrixContent(unsigned long now) {
   matrixValueUnit(value, sizeof(value), unit, sizeof(unit));
 
   const int gap = 2;
-  int wVal  = mxWidth(value, MX_BIG);
-  int wUnit = mxWidth(unit, MX_SMALL);
-  int wTot  = wVal + gap + wUnit;
+  int val_w  = mxWidth(value, MX_BIG);
+  int unit_w = mxWidth(unit, MX_SMALL);
+  int tot_w  = val_w + gap + unit_w;
 
-  if (wTot <= W) {                            // right aligned, unit stays put
-    mxDraw(_mfb, W, W - wTot, value, MX_BIG);
-    mxDraw(_mfb, W, W - wUnit, unit, MX_SMALL);
+  if (tot_w <= W) {                           // right aligned, unit stays put
+    mxDraw(_mfb, W, W - tot_w, value, MX_BIG);
+    mxDraw(_mfb, W, W - unit_w, unit, MX_SMALL);
     _scroll_x = 0;
     return;
   }
   s_still = false;
-  if (wVal <= W) {                            // value fits, alternate
-    bool showUnit = ((now / 2500) & 1);
-    if (showUnit) mxDraw(_mfb, W, (W - wUnit) / 2, unit,  MX_SMALL);
-    else          mxDraw(_mfb, W, (W - wVal)  / 2, value, MX_BIG);
+  if (val_w <= W) {                           // value fits, alternate
+    bool show_unit = ((now / 2500) & 1);
+    if (show_unit) mxDraw(_mfb, W, (W - unit_w) / 2, unit,  MX_SMALL);
+    else           mxDraw(_mfb, W, (W - val_w)  / 2, value, MX_BIG);
     _scroll_x = 0;
     return;
   }
   int xe = mxDraw(_mfb, W, _scroll_x, value, MX_BIG);  // too wide, scroll
   mxDraw(_mfb, W, xe + gap, unit, MX_SMALL);
-  if (--_scroll_x <= -(wTot + 2)) _scroll_x = W;
+  if (--_scroll_x <= -(tot_w + 2)) _scroll_x = W;
 }
 
 void Max7219Display::drawMatrixIcon(const uint8_t* rows8) {
@@ -791,7 +793,7 @@ void Max7219Display::drawMatrixIcon(const uint8_t* rows8) {
   _drv.drawMatrix(_mfb, _orient);
 }
 
-static bool glyphSpan(const uint8_t* g, int& first, int& last) {
+static bool glyph_span(const uint8_t* g, int& first, int& last) {
   first = 7; last = 0;
   for (int y = 0; y < 8; y++)
     for (int b = 0; b < 8; b++)
@@ -799,7 +801,7 @@ static bool glyphSpan(const uint8_t* g, int& first, int& last) {
   return first <= last;
 }
 
-static void blitGlyph(uint8_t* fb, int W, int x, const uint8_t* g, int first, int last) {
+static void blit_glyph(uint8_t* fb, int W, int x, const uint8_t* g, int first, int last) {
   for (int y = 0; y < 8; y++)
     for (int b = first; b <= last; b++) {
       int px = x + (b - first);
@@ -816,14 +818,14 @@ int Max7219Display::mxText(uint8_t* fb, int W, int x, const char* s, bool draw, 
     uint8_t g[8];
     int first, last;
     if (c == ' ') { x += (small ? 2 : 3); continue; }
-    if (!mxGlyph(c, g, small) || !glyphSpan(g, first, last)) { x += 3; continue; }
+    if (!mxGlyph(c, g, small) || !glyph_span(g, first, last)) { x += 3; continue; }
     int w = last - first + 1;
     int pad = 0;
     if (c >= '0' && c <= '9' && w < digit_w) {
       pad = (digit_w - w) / 2;
       w = digit_w;
     }
-    if (draw) blitGlyph(fb, W, x + pad, g, first, last);
+    if (draw) blit_glyph(fb, W, x + pad, g, first, last);
     x += w + 1;
   }
   return x > start ? x - 1 : x;
@@ -844,7 +846,6 @@ void Max7219Display::loop(unsigned long now) {
   _drv.drawMatrix(_mfb, _orient);   // no-op without pins
 }
 
-// matrix only, else a plain tap
 void Max7219Display::fx(unsigned long now) {
   if (_fx_on || _layout != DISP_MAX7219_MATRIX) {
     onButtonTap(now, 1);
@@ -859,18 +860,18 @@ void Max7219Display::fx(unsigned long now) {
 void Max7219Display::vuFrame() {
   uint32_t blip = display.blip();
   unsigned long now = corium::fastMillis();
-  bool fresh = now - _vu_ms > VU_GAP_MS;   // page just shown, no backlog kick
+  bool back = now - _vu_ms > VU_GAP_MS;   // page just shown, no backlog kick
   _vu_ms = now;
   // blip is the last click's stamp: one kick a frame at most
-  uint32_t counts = !fresh && blip != _vu_blip;
+  uint32_t counts = !back && blip != _vu_blip;
   _vu_blip = blip;
   float kick = 0;
   if (counts) {
     kick = 8 * VU_SUB;   // one count, 8 LEDs at most
-    float perFrame = currentCPM() * LOOP_MS / 60000.0f;
-    if (perFrame > 1) perFrame = 1;
+    float per_frame = currentCPM() * LOOP_MS / 60000.0f;
+    if (per_frame > 1) per_frame = 1;
     // at the last green LED the level falls 9 a frame
-    if (perFrame > 0 && 9 / perFrame < kick) kick = 9 / perFrame;
+    if (per_frame > 0 && 9 / per_frame < kick) kick = 9 / per_frame;
   }
   vuStep(_vu, counts, kick, 3 * VU_SUB, ARC_LEDS * VU_SUB);
   pushArc((uint8_t)(_vu.shown / VU_SUB));

@@ -78,6 +78,10 @@
 #if defined(I2C_BUS) && (defined(ESP32) || defined(RTC_8266))
 #define CORIUM_RTC
 #endif
+// the chip's signing key, attest builds
+#ifdef ESPGEIGER_ATTEST
+#define CORIUM_HWKEY
+#endif
 #ifdef OLED_PINS_BLOCKED
 #define I2C_PINS_FIXED
 #endif

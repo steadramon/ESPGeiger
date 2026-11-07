@@ -44,6 +44,7 @@ public:
   }
 
   virtual void flush() {}
+  virtual int availableForWrite() { return 0; }
   size_t write(const char* buf, size_t len) {
     return write((const uint8_t*)buf, len);
   }

@@ -142,6 +142,7 @@ static bool migrate_legacy_blip() {
   bool any = false;
   char key[24];
   char value[64];
+  // rows: klen u8, key, vlen u16 le, value
   while (f.available() > 0) {
     uint8_t klen;
     if (f.read(&klen, 1) != 1 || klen == 0 || klen >= sizeof(key)) break;

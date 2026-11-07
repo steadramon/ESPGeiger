@@ -43,13 +43,13 @@ const char* mohm_mode(int cps) {
 
 size_t fmt_mightyohm(char* buf, size_t cap) {
   int cps = (int)corium::m_i(M_CPS_I);
-  int reported_cpm = (int)corium::m_i(M_CPM);
+  int cpm = (int)corium::m_i(M_CPM);
   // cps*60 overflows int above ~35.8M cps
-  if (cps > 255) reported_cpm = (cps > 35791394) ? 2147483647 : cps * 60;
-  char usv_str[12];
-  format_f(usv_str, sizeof(usv_str), reported_cpm * (1.0f / MIGHTYOHM_USV_DIV));
+  if (cps > 255) cpm = (cps > 35791394) ? 2147483647 : cps * 60;
+  char usv[12];
+  format_f(usv, sizeof(usv), cpm * (1.0f / MIGHTYOHM_USV_DIV));
   int n = snprintf_P(buf, cap, PSTR("CPS, %d, CPM, %d, uSv/hr, %s, %s\n"),
-                     cps, reported_cpm, usv_str, mohm_mode(cps));
+                     cps, cpm, usv, mohm_mode(cps));
   return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
 }
 
@@ -90,6 +90,7 @@ static const char N_ESPG[]   PROGMEM = "ESPGeiger";
 static const char N_TPL[]    PROGMEM = "Template";
 static const char T_ESPG[]   PROGMEM = "CPM: {cpm}\n";
 
+// id, baud, name, line template, formatter, parser, sends cps
 static const TypeInfo TYPES[] PROGMEM = {
 #if EG_HAS_SERIAL_PARSERS
   { GEIGER_STYPE_GC10,      9600,   N_GC10,   T_CRLF,  nullptr,            IF_PARSE(parse_gc10),      false },

@@ -22,17 +22,20 @@
 #include <stdint.h>
 #include "App/AppConfig.h"
 
-// first second a send may take, the app keeps the ones before
+// First second a send may use, the app keeps the ones before it
 #ifndef CORIUM_SENDSLOT_FIRST
 #define CORIUM_SENDSLOT_FIRST 0
 #endif
 
 namespace corium {
 namespace SendSlot {
+  // ms into the interval, hashed per chip and module. Claims the seconds it lands on
   uint32_t initialOffset(const char* mod_name, uint32_t interval_ms);
-  // wall clock once ntp synced
+  // lines up on the wall clock once ntp has synced
   unsigned long initialPing(const char* mod_name, unsigned long now, uint32_t interval_ms);
+  // Returns a lastPing so the first send lands on offset
   unsigned long pingFromOffset(uint32_t offset, unsigned long now, uint32_t interval_ms);
+  // ms from cur round to target, both under period
   inline uint32_t untilPhase(uint32_t target, uint32_t cur, uint32_t period) {
     return target >= cur ? target - cur : period - cur + target;
   }

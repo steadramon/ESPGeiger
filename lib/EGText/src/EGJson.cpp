@@ -121,7 +121,7 @@ void EGJson::close(char c) {
   if (_lost) { _lost--; return; }
   if (!_depth) return;
   _depth--;
-  _buf[_pos++] = c;
+  _buf[_pos++] = c;   // room kept by put()
   _buf[_pos] = '\0';
   _first = false;
 }
@@ -137,12 +137,14 @@ void EGJson::name(const char* key) {
 
 void EGJson::put(const char* s, size_t n) {
   if (overflow) return;
+  // room left for every closer and the NUL
   if (_pos + n + _depth >= _cap) spill();
   if (_pos + n + _depth >= _cap) { overflow = true; return; }
   memcpy(_buf + _pos, s, n);
   _pos += n;
 }
 
+// a field that did not fit goes whole, no half key
 void EGJson::cut() {
   if (overflow) _pos = _mark;
 }

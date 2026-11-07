@@ -61,7 +61,6 @@ static void format_cpm(char* buf, size_t bufsz, float cpm) {
   else             snprintf_P(buf, bufsz, W_FMT_U, (unsigned)CounterMaths::to_int(cpm));
 }
 
-// Page 4 only, freed on exit
 struct Drop { int16_t y; uint8_t x; uint8_t speed; uint8_t tail; uint8_t seed; bool alive; };
 static const uint8_t MATRIX_DROPS = 32;
 static Drop*    s_matrix_drops = nullptr;
@@ -86,7 +85,7 @@ static const uint8_t TILE_ROWS = OLED_HEIGHT >> 3;
 
 SSD1306Display oled;
 CORIUM_REGISTER_FEATURE(oled, FEAT_OLED)
-static bool _backend_oled = Display::add(&oled);
+static bool s_added = Display::add(&oled);
 
 // all but the led types
 bool SSD1306Display::takes(uint8_t type) { return !DISP_IS_MAX7219(type); }
@@ -98,6 +97,7 @@ bool SSD1306Display::takes(uint8_t type) { return !DISP_IS_MAX7219(type); }
 
 static const char PIN_OWNER[] PROGMEM = "OLED";
 
+// ThingPulse font: height, first char, count, 4 byte jump rows, then glyphs as columns, lsb on top
 // hot path
 static void drawTPString(SSD1306Display& d, int16_t x, int16_t y_top,
                          const uint8_t* font, const char* str) {
@@ -190,9 +190,9 @@ void SSD1306Display::load_pins() {
   uint8_t rst = (uint8_t)corium::Prefs::getUInt("display", K_RST);
   _pin_rst = rst == 255 ? 255 : safe_pin(rst, _pin_rst, PIN_OWNER,
                                          PSTR("OLED: rst=%u unsafe (%s) - keeping default %u"));
-  _pref_display_type = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
+  _type = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
 #else
-  _pref_display_type = OLED_TYPE;
+  _type = OLED_TYPE;
 #endif
   corium::I2CBus::pins(_pin_sda, _pin_scl);
 }
@@ -285,7 +285,7 @@ uint8_t SSD1306Display::render_main(unsigned long now) {
 
 void SSD1306Display::render_saver(unsigned long now) {
   if (oled_last_update == 0) {
-    _page4_num_last = 0;
+    _page4_ms = 0;
     _page4_variant = random(2);
   }
   oled_last_update = now;
@@ -388,7 +388,7 @@ void SSD1306Display::draw_frame(unsigned long now) {
   if (!_send_rows_left) next_frame(now);
 }
 
-// rows ride the loop, else asleep till the frame, on the loop as before
+// rows ride the loop, else asleep till the frame
 void SSD1306Display::next_frame(unsigned long now) {
   uint32_t at = now + loop_ms();
   if (!corium::reached(at, _next_render_due)) at = _next_render_due;
@@ -435,7 +435,7 @@ void SSD1306Display::page_tiny() {
   }
 }
 
-static const char* fitStr(SSD1306Display& d, const char* src, int max_w) {
+static const char* fit_str(SSD1306Display& d, const char* src, int max_w) {
   static char buf[24];
   if ((int)d.getStrWidth(src) <= max_w) return src;
   size_t n = strlen(src);
@@ -449,7 +449,7 @@ static const char* fitStr(SSD1306Display& d, const char* src, int max_w) {
   return buf;
 }
 
-static const char* tinyUptime() {
+static const char* tiny_uptime() {
   static char buf[12];
   corium::Uptime::Split u = corium::Uptime::split((uint32_t)corium::Uptime::seconds());
   if (u.d > 0) snprintf_P(buf, sizeof(buf), PSTR("%ud %02u:%02u"), u.d, u.h, u.m);
@@ -475,20 +475,20 @@ void SSD1306Display::page_tiny_net() {
   char buf[20];
   if (corium::Wifi::connected) {
     corium::Wifi::formatIP(buf, sizeof(buf));
-    drawStr(0, 2,  fitStr(*this, buf, 71));
-    drawStr(0, 15, fitStr(*this, corium::Wifi::ssid, 71));
+    drawStr(0, 2,  fit_str(*this, buf, 71));
+    drawStr(0, 15, fit_str(*this, corium::Wifi::ssid, 71));
     snprintf_P(buf, sizeof(buf), PSTR("%d dBm"), (int)corium::Wifi::rssi);
     drawStr(0, 28, buf);
   } else if (corium::Wifi::ap) {
     // its name is the hostname
     corium::Wifi::formatIP(buf, sizeof(buf));
     drawStrP(0, 2,  PSTR("WiFi AP"));
-    drawStr (0, 15, fitStr(*this, corium::DeviceInfo::hostname(), 71));
-    drawStr (0, 28, fitStr(*this, buf, 71));
+    drawStr (0, 15, fit_str(*this, corium::DeviceInfo::hostname(), 71));
+    drawStr (0, 28, fit_str(*this, buf, 71));
   } else {
     drawStrP(0, 2,  PSTR("WiFi off"));
-    drawStr (0, 15, fitStr(*this, corium::DeviceInfo::hostname(), 71));
-    drawStr (0, 28, tinyUptime());
+    drawStr (0, 15, fit_str(*this, corium::DeviceInfo::hostname(), 71));
+    drawStr (0, 28, tiny_uptime());
   }
 }
 
@@ -533,17 +533,17 @@ void SSD1306Display::page_two_full() {
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 2, corium::DeviceInfo::hostname());
   drawStrP(0, 17, PSTR("IP:"));
-  char ipStr[CORIUM_IPV4_MAX + 1];
-  corium::Wifi::formatIP(ipStr, sizeof(ipStr));
-  drawStrP(16, 17, ipStr);
+  char ip[CORIUM_IPV4_MAX + 1];
+  corium::Wifi::formatIP(ip, sizeof(ip));
+  drawStrP(16, 17, ip);
   int uptime_y = 32;
   if (M_HAS_HV) {
     int32_t hv;
     if (m_hv_volts(&hv)) {
       drawStrP(0, uptime_y, PSTR("HV:"));
-      char hvBuf[12];
-      format_f(hvBuf, sizeof(hvBuf), (float)hv);
-      drawStrP(20, uptime_y, hvBuf);
+      char buf[12];
+      format_f(buf, sizeof(buf), (float)hv);
+      drawStrP(20, uptime_y, buf);
       uptime_y = 47;
     }
   }
@@ -551,23 +551,23 @@ void SSD1306Display::page_two_full() {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   GeigerUdpRx* rx = gcounter.udp_rx();
   if (rx) {
-    char rxBuf[24];
+    char buf[24];
     const char* chip = rx->locked_chipid();
     if (rx->summing()) {
-      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("Sum %u src"), (unsigned)rx->producer_count());
+      snprintf_P(buf, sizeof(buf), PSTR("Sum %u src"), (unsigned)rx->producer_count());
     } else if (chip) {
-      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("RX %s"), chip);
+      snprintf_P(buf, sizeof(buf), PSTR("RX %s"), chip);
     } else {
-      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("RX waiting"));
+      snprintf_P(buf, sizeof(buf), PSTR("RX waiting"));
     }
-    drawStrP(0, uptime_y + 18, rxBuf);
+    drawStrP(0, uptime_y + 18, buf);
 
     if (rx->packets_accepted() > 0) {
       uint16_t loss = rx->loss_pct_x10();
-      snprintf_P(rxBuf, sizeof(rxBuf), PSTR("%u.%u%%"),
+      snprintf_P(buf, sizeof(buf), PSTR("%u.%u%%"),
                  (unsigned)(loss / 10), (unsigned)(loss % 10));
-      int16_t w = (int16_t)getStrWidth(rxBuf);
-      drawStrP((int16_t)OLED_WIDTH - w, uptime_y + 18, rxBuf);
+      int16_t w = (int16_t)getStrWidth(buf);
+      drawStrP((int16_t)OLED_WIDTH - w, uptime_y + 18, buf);
     }
   }
 #endif
@@ -628,7 +628,7 @@ static uint8_t oled_i2c(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_pt
 }
 
 void SSD1306Display::setup_driver() {
-  switch (_pref_display_type) {
+  switch (_type) {
     case DISP_SH1106:
       u8g2_Setup_sh1106_i2c_128x64_noname_f(&_u8g2, U8G2_R0,
           oled_i2c, u8x8_gpio_and_delay_arduino);
@@ -747,8 +747,8 @@ void SSD1306Display::setup() {
   u8g2_SetBufferPtr(&_u8g2, _frame);
   reset_panel();
 
-  _oled_addr = corium::I2CBus::begin() ? oled_probe_addr() : 0;
-  if (!_oled_addr) {
+  _addr = corium::I2CBus::begin() ? oled_probe_addr() : 0;
+  if (!_addr) {
     _present = false;
     corium::Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
                  _pin_sda, _pin_scl);
@@ -757,8 +757,8 @@ void SSD1306Display::setup() {
     return;
   }
   _present = true;
-  corium::Log::console(PSTR("OLED: detected at 0x%02X (type=%u)"), _oled_addr, _pref_display_type);
-  setI2CAddress(_oled_addr << 1);
+  corium::Log::console(PSTR("OLED: detected at 0x%02X (type=%u)"), _addr, _type);
+  setI2CAddress(_addr << 1);
   setBusClock(700000);
   u8g2_InitDisplay(&_u8g2);
   u8g2_SetPowerSave(&_u8g2, 0);
@@ -888,34 +888,34 @@ void SSD1306Display::screen_mode(unsigned long now, bool auto_off) {
 
 bool SSD1306Display::page_one_graph() {
   int hist[HIST];
-  uint16_t histSize = (uint16_t)egm_history(hist, HIST);
-  int32_t minValue = 0;
-  int32_t maxValue = 0;
+  uint16_t n = (uint16_t)egm_history(hist, HIST);
+  int32_t lo = 0;
+  int32_t hi = 0;
   int k = 1;
-  bool counts = histSize > 0 && hist_range(hist, histSize, minValue, maxValue, k);
+  bool counts = n > 0 && hist_range(hist, n, lo, hi, k);
 
   setDrawColor(0);
   drawBox(0, GRAPH_TOP, OLED_WIDTH, GRAPH_BOT - GRAPH_TOP + 1);
   setDrawColor(1);
   drawLine(0, GRAPH_BOT, GRAPH_W, GRAPH_BOT);
   drawLine(GRAPH_W, GRAPH_TOP, GRAPH_W, GRAPH_BOT);
-  if (histSize > 0) {
-    int x_start = 2 * (HIST - histSize);
-    char graphBuf[8];
+  if (n > 0) {
+    int x_start = 2 * (HIST - n);
+    char buf[8];
     if (!counts) {
-      snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, 0);
-      drawTPString(*this, LABEL_X, 55, Open_Sans_Digits_10, graphBuf);
+      snprintf_P(buf, sizeof(buf), W_FMT_D, 0);
+      drawTPString(*this, LABEL_X, 55, Open_Sans_Digits_10, buf);
       return true;
     }
-    for (uint16_t i = 0; i < histSize; i++) {
-      int location = ((map((long)hist[i], (long)minValue, (long)maxValue, 0, GRAPH_H)) * (-1)) + GRAPH_BOT - 1;
-      drawFrame(x_start + i * 2, location, 2, (GRAPH_BOT - location));
+    for (uint16_t i = 0; i < n; i++) {
+      int y = ((map((long)hist[i], (long)lo, (long)hi, 0, GRAPH_H)) * (-1)) + GRAPH_BOT - 1;
+      drawFrame(x_start + i * 2, y, 2, (GRAPH_BOT - y));
     }
-    if (k > 1) { minValue /= 10; maxValue /= 10; }
-    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)minValue);
-    drawTPString(*this, LABEL_X, 55, Open_Sans_Digits_10, graphBuf);
-    snprintf_P(graphBuf, sizeof(graphBuf), W_FMT_D, (int)maxValue);
-    drawTPString(*this, LABEL_X, GRAPH_TOP, Open_Sans_Digits_10, graphBuf);
+    if (k > 1) { lo /= 10; hi /= 10; }
+    snprintf_P(buf, sizeof(buf), W_FMT_D, (int)lo);
+    drawTPString(*this, LABEL_X, 55, Open_Sans_Digits_10, buf);
+    snprintf_P(buf, sizeof(buf), W_FMT_D, (int)hi);
+    drawTPString(*this, LABEL_X, GRAPH_TOP, Open_Sans_Digits_10, buf);
   }
   return true;
 }
@@ -958,9 +958,9 @@ void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
   setDrawColor(1);
   if (p.trend > 0)      drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_up);
   else if (p.trend < 0) drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_down);
-  char oledBuf[16];
-  format_cpm(oledBuf, sizeof(oledBuf), p.cpm_x10 * 0.1f);
-  drawTPString(*this, 45, 0, DialogInput_Digits_17, oledBuf);
+  char buf[16];
+  format_cpm(buf, sizeof(buf), p.cpm_x10 * 0.1f);
+  drawTPString(*this, 45, 0, DialogInput_Digits_17, buf);
   if (p.flags & P1_NO_COUNTS) {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
     drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("no signal?"));
@@ -968,8 +968,8 @@ void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
     drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("check tube?"));
 #endif
   } else {
-    format_f(oledBuf, sizeof(oledBuf), dusv);
-    drawTPString(*this, 45, 20, DialogInput_plain_12, oledBuf);
+    format_f(buf, sizeof(buf), dusv);
+    drawTPString(*this, 45, 20, DialogInput_plain_12, buf);
   }
   if (p.mode != P1_LIVE) {
     drawTPString(*this, 98, 2, DialogInput_plain_12, p.mode == P1_WARMING ? PSTR("W") : PSTR("S"));
@@ -1002,7 +1002,7 @@ struct MatrixCtx {
   uint8_t cps_factor;
 };
 
-static MatrixCtx compute_matrix_ctx(unsigned long typical) {
+static MatrixCtx matrix_ctx(unsigned long typical) {
   MatrixCtx c;
   if      (typical < 200)  c.cps_factor = 8;
   else if (typical < 500)  c.cps_factor = 7;
@@ -1012,9 +1012,9 @@ static MatrixCtx compute_matrix_ctx(unsigned long typical) {
   return c;
 }
 
-static void compute_drop_speed_tail(unsigned long delta_ms, const MatrixCtx& ctx,
-                                    uint8_t multiplier, uint32_t r,
-                                    uint8_t& out_speed, uint8_t& out_tail) {
+static void drop_speed(unsigned long delta_ms, const MatrixCtx& ctx,
+                       uint8_t multiplier, uint32_t r,
+                       uint8_t& out_speed, uint8_t& out_tail) {
   uint8_t s_min = 2, s_max = 3;
   if      (delta_ms < MTX_T1) { s_min = 6; s_max = 9; }
   else if (delta_ms < MTX_T2) { s_min = 5; s_max = 8; }
@@ -1042,18 +1042,17 @@ static void compute_drop_speed_tail(unsigned long delta_ms, const MatrixCtx& ctx
 static const unsigned long MTX_IDLE_MS = 1500;   // no counts yet
 static const uint8_t MTX_SEED_DROPS = 6;
 static const uint8_t MTX_FULL = 8;               // alive factor once 3 run
-static unsigned long s_mtx_blip = 0;
+static unsigned long s_mtx_blip_us = 0;
 static uint8_t s_mtx_col = 255;                  // 255 = none yet
 
-// opening rain, speeds from the CPM history
 static void seed_drops(Drop* drops) {
-  s_mtx_blip = display.blip();
+  s_mtx_blip_us = display.blip();
   for (uint8_t i = 0; i < MATRIX_DROPS; i++) drops[i].alive = false;
   int hist[HIST];
   size_t hist_n = egm_history(hist, HIST);
   float cps = display.cps();
   unsigned long typical = (cps > 0.05f) ? (unsigned long)(1000.0f / cps) : MTX_IDLE_MS;
-  MatrixCtx ctx = compute_matrix_ctx(typical);
+  MatrixCtx ctx = matrix_ctx(typical);
   for (uint8_t i = 0; i < MTX_SEED_DROPS; i++) {
     uint32_t r = GRNG::fast_uint32();
     unsigned long sample_delta_ms = 5000;
@@ -1062,7 +1061,7 @@ static void seed_drops(Drop* drops) {
       if (cpm_sample > 0) sample_delta_ms = 60000UL / (unsigned long)cpm_sample;
     }
     uint8_t spd, tail;
-    compute_drop_speed_tail(sample_delta_ms, ctx, MTX_FULL, r, spd, tail);
+    drop_speed(sample_delta_ms, ctx, MTX_FULL, r, spd, tail);
     drops[i].alive = true;
     drops[i].x = (uint8_t)((r >> 4) & 0x7F);
     drops[i].y = (int16_t)((r >> 26) & 0x3F);
@@ -1088,31 +1087,34 @@ static Drop* free_drop(Drop* drops) {
   return nullptr;
 }
 
-// a click: quicker clicks, more and faster drops
-static void spawn_drops(Drop* drops, unsigned long now_blip) {
-  unsigned long delta_ms = (now_blip - s_mtx_blip) / 1000;
-  s_mtx_blip = now_blip;
-  MatrixCtx ctx = compute_matrix_ctx(recent_gap_ms());
+static uint8_t pick_col(uint32_t r, uint8_t thresh, uint8_t shift) {
+  uint8_t col = (uint8_t)(r & 0x7F);
+  int8_t diff = (int8_t)col - (int8_t)s_mtx_col;
+  if (diff < 0) diff = -diff;
+  if (s_mtx_col < 128 && diff < thresh) col = (col + shift) & 0x7F;
+  s_mtx_col = col;
+  return col;
+}
+
+static void spawn_drops(Drop* drops, unsigned long blip_us) {
+  unsigned long delta_ms = (blip_us - s_mtx_blip_us) / 1000;
+  s_mtx_blip_us = blip_us;
+  MatrixCtx ctx = matrix_ctx(recent_gap_ms());
   uint8_t alive_count = 0;
   for (uint8_t i = 0; i < MATRIX_DROPS; i++) if (drops[i].alive) alive_count++;
   uint8_t alive_factor = (alive_count < 3) ? (4 + alive_count * 2) : MTX_FULL;
   uint8_t to_spawn = 1;
   if      (delta_ms < MTX_T1) to_spawn = 3;
   else if (delta_ms < MTX_T2) to_spawn = 2;
-  // keep drops off the last column
   uint8_t prox_thresh = (ctx.cps_factor >> 1);
   uint8_t prox_shift  = prox_thresh + 3;
   for (uint8_t s = 0; s < to_spawn; s++) {
     Drop* d = free_drop(drops);
     if (!d) return;
     uint32_t r = GRNG::fast_uint32();
-    uint8_t col = (uint8_t)(r & 0x7F);
-    int8_t diff = (int8_t)col - (int8_t)s_mtx_col;
-    if (diff < 0) diff = -diff;
-    if (s_mtx_col < 128 && diff < prox_thresh) col = (col + prox_shift) & 0x7F;
-    s_mtx_col = col;
+    uint8_t col = pick_col(r, prox_thresh, prox_shift);
     uint8_t spd, tail;
-    compute_drop_speed_tail(delta_ms, ctx, alive_factor, r, spd, tail);
+    drop_speed(delta_ms, ctx, alive_factor, r, spd, tail);
     d->alive = true;
     d->x = col;
     d->y = (alive_factor < MTX_FULL) ? 0 : -(int16_t)((r >> 16) & 0x1F);
@@ -1124,7 +1126,6 @@ static void spawn_drops(Drop* drops, unsigned long now_blip) {
   }
 }
 
-// head solid, the tail thins out, same pixels each frame
 static void draw_drop(SSD1306Display& o, Drop& d) {
   const uint8_t BODY = 2;
   uint8_t fade_span = (d.tail > BODY) ? (d.tail - BODY) : 1;
@@ -1151,12 +1152,12 @@ void SSD1306Display::page_four_matrix() {
     drops = (Drop*)calloc(MATRIX_DROPS, sizeof(Drop));
     if (!drops) return;
   }
-  if (_page4_num_last == 0) {
-    _page4_num_last = corium::fastMillis();
+  if (_page4_ms == 0) {
+    _page4_ms = corium::fastMillis();
     seed_drops(drops);
   }
-  unsigned long now_blip = display.blip();
-  if (now_blip != s_mtx_blip) spawn_drops(drops, now_blip);
+  unsigned long blip_us = display.blip();
+  if (blip_us != s_mtx_blip_us) spawn_drops(drops, blip_us);
 
   clearBuffer();
   for (uint8_t i = 0; i < MATRIX_DROPS; i++) {
@@ -1166,8 +1167,8 @@ void SSD1306Display::page_four_matrix() {
 
 void SSD1306Display::page_four_static() {
   unsigned long now = corium::fastMillis();
-  if (!corium::fresh(now, _page4_num_last, 1000)) {
-    _page4_num_last = now;
+  if (!corium::fresh(now, _page4_ms, 1000)) {
+    _page4_ms = now;
     uint16_t num;
     GRNG::extract((uint8_t*)&num, sizeof(num));
     num %= 1001;

@@ -45,6 +45,7 @@
 #endif
 #endif
 
+// Hz, 16 bit mono
 #define AUDIO_TICK_SAMPLE_RATE 22050
 
 constexpr uint32_t ms_to_samples(uint32_t ms) {
@@ -60,7 +61,7 @@ enum AudioCmdType : uint8_t {
   AC_NUMBERS,
   AC_CHIME,
   AC_CLICK,
-  AC_DIGIT,     // speech, from the numbers station
+  AC_DIGIT,
   AC_SILENCE,
 };
 
@@ -71,12 +72,14 @@ struct AudioCmd {
   const char* word;   // static, vocab name
 };
 
+// any task, false = queue full or no worker
 bool audio_enqueue(const AudioCmd& cmd);
 void audio_silence(uint16_t ms);
 // speech types go here, on the worker
 typedef void (*AudioFn)(const AudioCmd& cmd);
 void audio_speech(AudioFn fn);
 
+// A click per count on an I2S amp, and the boot chimes
 class AudioTick : public corium::Module {
   public:
     AudioTick() {}
@@ -102,7 +105,7 @@ class AudioTick : public corium::Module {
     void toggleMute() { _muted.store(!muted(), std::memory_order_relaxed); }
 
   private:
-    void playClick(uint8_t engine_override = 255);
+    void playClick(uint8_t engine = 255);
     void playClickPool();
     void playClickChirp();
     void synthClick(float asym, float f2_amp, float amp, float tau, float f_lo, uint32_t nr);
@@ -115,7 +118,7 @@ class AudioTick : public corium::Module {
     void chimeMarioCoin();
     void chimeSputnik();
     void chimeItemGet();
-    void chimeMorseCallsign();    // chime 9
+    void chimeMorseCallsign();
     void chimeNumbersStation();
     void playMelodyNote(uint16_t freq_hz, uint16_t ms, bool square = false,
                         uint16_t gap_ms = 30);
@@ -131,7 +134,6 @@ class AudioTick : public corium::Module {
     uint8_t       _bclk     = AUDIO_TICK_BCLK;
     uint8_t       _ws       = AUDIO_TICK_WS;
     uint8_t       _dout     = AUDIO_TICK_DOUT;
-    unsigned long _last_emit_ms = 0;
     uint8_t       _tokens = 5;
     uint32_t      _last_token_ms = 0;
     std::atomic<bool> _muted{false};

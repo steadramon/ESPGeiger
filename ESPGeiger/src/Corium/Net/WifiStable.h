@@ -1,6 +1,5 @@
 /*
-  WifiStable.h - how long WiFi has been up, apart from the rest of Wifi.h
-  so host tests use the same rule.
+  WifiStable.h - how long WiFi has been up
 
   Copyright (C) 2026 @steadramon
 
@@ -26,9 +25,9 @@
 namespace corium {
 namespace Wifi {
   extern uint32_t connectedAtMs;  // 0 when down
-  extern bool settled;   // up past 2^31 ms, held over the wrap
+  extern bool settled;   // set once up past 2^31 ms, stays set over the wrap
 
-  // lets AsyncTCP drain after a reconnect
+  // Lets AsyncTCP drain after a reconnect
   inline bool stableFor(uint32_t ms) {
     return connectedAtMs != 0 && (settled || (uint32_t)(fastMillis() - connectedAtMs) >= ms);
   }

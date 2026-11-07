@@ -1,8 +1,7 @@
 /*
   CounterWeb.cpp - Counter HTTP routes (/json, /clicks, /hist, /pause, ...)
 
-  Split from Counter.cpp: request-cold code kept out of the TU that holds
-  the hot counting loop (icache locality).
+  Request-cold code, kept out of the counting TU (icache)
 
   Copyright (C) 2023 @steadramon
 
@@ -57,8 +56,8 @@ static void clicks_day(EGHttpResponse& res, char* line, size_t cap) {
   send_n(res, line, cap, snprintf_P(line, cap,
     PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour));
 
-  const int histSize = gcounter.day_hourly_history.size();
-  for (int i = histSize; i > 0; i--) {
+  const int n = gcounter.day_hourly_history.size();
+  for (int i = n; i > 0; i--) {
     send_n(res, line, cap, snprintf_P(line, cap, PSTR(",%d"),
                                  (int)gcounter.day_hourly_history[i - 1]));
   }
@@ -84,11 +83,11 @@ static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
 }
 
 static void clicks_life(EGHttpResponse& res, char* line, size_t cap) {
-  char clkBuf[24];
-  fmtU64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
+  char clk[24];
+  fmtU64(clk, sizeof(clk), gcounter.get_lifetime_clicks_total());
   send_n(res, line, cap, snprintf_P(line, cap,
     PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu,\"secs\":%lu}"),
-    clkBuf, (unsigned long)gcounter.get_first_boot_ts(),
+    clk, (unsigned long)gcounter.get_first_boot_ts(),
     gcounter.get_lifetime_seconds()));
 }
 
@@ -104,10 +103,10 @@ static void clicks_hist(EGHttpResponse& res, char* line, size_t cap) {
                                  (unsigned long)hist[b]));
   }
   res.sendChunk(F("]"));
-  uint32_t mp = gcounter.get_min_pulse_us();
-  if (mp > 0) {
+  uint32_t min_us = gcounter.get_min_pulse_us();
+  if (min_us > 0) {
     send_n(res, line, cap, snprintf_P(line, cap,
-                                 PSTR(",\"min_pulse_us\":%lu"), (unsigned long)mp));
+                                 PSTR(",\"min_pulse_us\":%lu"), (unsigned long)min_us));
   }
 }
 
@@ -440,16 +439,16 @@ R"HTML(<script src=/js)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 static void status_seed(EGHttpResponse& res) {
   int bo = corium::DeviceInfo::resetReason() == corium::DeviceInfo::RR_BROWNOUT;
   char buf[400];
-  size_t sp = 0;
-  advancePos(sp, snprintf_P(buf, sizeof(buf),
+  size_t pos = 0;
+  advancePos(pos, snprintf_P(buf, sizeof(buf),
               PSTR("<script>var w=window;w.CHIPID=\"%s\";w.GPIN=%d;w.BO=%d;w._seedHist=["),
               corium::DeviceInfo::chipId(), gcounter.input_pin(), bo), sizeof(buf));
-  int histSize = gcounter.cpm_history.size();
-  for (int i = 0; i < histSize && sp + sizeof(",-2147483648") <= sizeof(buf); i++) {
-    advancePos(sp, snprintf_P(buf + sp, sizeof(buf) - sp, i ? PSTR(",%d") : W_FMT_D,
+  int n = gcounter.cpm_history.size();
+  for (int i = 0; i < n && pos + sizeof(",-2147483648") <= sizeof(buf); i++) {
+    advancePos(pos, snprintf_P(buf + pos, sizeof(buf) - pos, i ? PSTR(",%d") : W_FMT_D,
                 gcounter.cpm_history[i]), sizeof(buf));
   }
-  res.sendChunk(buf, sp);
+  res.sendChunk(buf, pos);
   res.sendChunk(F("]</script>"));
 }
 

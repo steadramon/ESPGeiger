@@ -57,6 +57,7 @@ struct EGUdpLwip {
     locked_add<uint32_t>(n, 1, std::memory_order_relaxed);
   }
 
+  // stack side: copy into the tail slot, or count the drop
   static void take(EGUdp* u, const pbuf* p, const ip_addr_t* addr, u16_t port) {
     EGTcpHold h;
     uint8_t n = u->_count.load(std::memory_order_relaxed);

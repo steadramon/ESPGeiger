@@ -35,6 +35,10 @@
 #include "Corium/Util/Words.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
+#include "GeigerInput/GeigerInput.h"
+#if !GEIGER_IS_PULSE(GEIGER_TYPE)
+#error "ESPG_HV needs a pulse build"
+#endif
 #ifdef ESP8266
 #ifndef EG_TIMER1
 #error "ESP8266 HV runs on EGTimer1 (EG_TIMER1)"
@@ -120,13 +124,13 @@ void HV::onPrefsLoaded() {
   _trim_s = (uint8_t)corium::Prefs::getUInt("espghw", K_TRIM_S);
   _settle_s = (uint16_t)corium::Prefs::getUInt("espghw", K_SETTLE_S);
   _boot_s = (uint16_t)corium::Prefs::getUInt("espghw", K_BOOT_S);
-  corium::Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _hw_freq, _hw_duty, _hw_vd_ratio, _hv_target);
+  corium::Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _freq, _duty, _vd_ratio, _hv_target);
   if (_ov_v != GEIGERHW_OV_V) {
     corium::Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
                  _ov_v, (unsigned)GEIGERHW_OV_V);
   }
 #else
-  corium::Log::console(PSTR("HV: freq: %d duty: %d"), _hw_freq, _hw_duty);
+  corium::Log::console(PSTR("HV: freq: %d duty: %d"), _freq, _duty);
 #endif
 }
 
@@ -161,12 +165,12 @@ void HV::set_freq(int freq) {
 #endif
   ledcChangeFrequency(EGLED_HV_CHANNEL, freq, HV_PWM_BITS);
 #endif
-  _hw_freq = freq;
+  _freq = freq;
 }
 
 int HV::max_duty() const {
 #ifdef GEIGERHW_MAX_ON_US
-  int cap = hv_duty_cap(_hw_freq, GEIGERHW_MAX_ON_US);
+  int cap = hv_duty_cap(_freq, GEIGERHW_MAX_ON_US);
   return cap < GEIGERHW_MAX_DUTY ? cap : GEIGERHW_MAX_DUTY;
 #else
   return GEIGERHW_MAX_DUTY;
@@ -174,13 +178,13 @@ int HV::max_duty() const {
 }
 
 void HV::set_duty(int duty) {
-  _hw_duty = clamp(duty, 1, max_duty());
+  _duty = clamp(duty, 1, max_duty());
 }
 
 void HV::clear_ov() {
   if (_ov_trip) corium::Log::console(PSTR("HV: overvoltage cut-off cleared"));
   _ov_trip = false;
-  _ov_secs = 0;
+  _over_s = 0;
   _duty_trim = 0;
   force_write();
 }
@@ -189,13 +193,14 @@ void HV::write_duty() {
 #ifdef ESPGEIGER_HW32
   if (_fb_fault) return;   // pin let go
 #endif
-  int eff_duty = (_ov_trip || _held) ? 1 : clamp(_hw_duty + _duty_trim, 1, max_duty());
+  // tripped or held runs at duty 1
+  int eff_duty = (_ov_trip || _held) ? 1 : clamp(_duty + _duty_trim, 1, max_duty());
 #ifdef ESPGEIGER_HW32
   eff_duty = hv_ramp_duty(eff_duty, _ramp, GEIGERHW_RAMP_S);
 #endif
   if (_cur_duty == eff_duty) return;
 #ifdef ESP8266
-  EGTimer1::pwm_set((uint32_t)_hw_freq, (uint32_t)eff_duty, HV_PWM_MAX);
+  EGTimer1::pwm_set((uint32_t)_freq, (uint32_t)eff_duty, HV_PWM_MAX);
 #else
   ledcWrite(EGLED_HV_CHANNEL, eff_duty);
 #endif
@@ -253,7 +258,7 @@ void HV::begin() {
       corium::Registry::every(this, 0);
     }
 #else
-    ledcSetup(EGLED_HV_CHANNEL, _hw_freq, HV_PWM_BITS);
+    ledcSetup(EGLED_HV_CHANNEL, _freq, HV_PWM_BITS);
     ledcAttachPin(_pwm_pin, EGLED_HV_CHANNEL);
 #endif
     if (_pwm_pin >= 0) {
@@ -287,7 +292,7 @@ void HV::loop(unsigned long now) {
   if (_pwm_pin >= 0) write_duty();
 #ifdef ESPG_HV_ADC
   if (_settle.due(now)) _settle.clear();   // a held compare goes stale at the wrap
-  if (_hw_vd_ratio == 0) {
+  if (_vd_ratio == 0) {
     _adc_n = 0;
     return;
   }
@@ -333,7 +338,7 @@ void HV::sample_adc() {
 }
 
 int HV::read_hv() {
-  int volts = hv_volts(_hw_vd_ratio, hv_median2(_adc, _adc_n), 2, _hw_vd_offset);
+  int volts = hv_volts(_vd_ratio, hv_median2(_adc, _adc_n), 2, _vd_offset);
   _adc_n = 0;
   uint16_t v = (uint16_t)(volts < 0 ? 0 : volts);
   hvReading.add(v);
@@ -344,8 +349,8 @@ int HV::read_hv() {
 // raw, must trip in seconds
 void HV::check_overvoltage(int volts) {
   if (_ov_trip) return;
-  _ov_secs = hv_over_count(_ov_secs, volts, _ov_v);
-  if (_ov_secs < _ov_trip_s) return;
+  _over_s = hv_over_count(_over_s, volts, _ov_v);
+  if (_over_s < _ov_trip_s) return;
   _ov_trip = true;
   if (_pwm_pin >= 0) write_duty();
   corium::Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
@@ -376,17 +381,18 @@ static int trim_band(int ratio) {
 #ifdef ESPGEIGER_HW32
 // last second's reading
 void HV::note_low() {
-  bool top = _hv_target > 0 && _hw_vd_ratio > 0 && _duty_trim >= _trim_max;
+  bool top = _hv_target > 0 && _vd_ratio > 0 && _duty_trim >= _trim_max;
   int err = (int)_hv_target - (int)hvReading.get();
-  _low_s = hv_low_count(_low_s, err, trim_band(_hw_vd_ratio), top);
+  _low_s = hv_low_count(_low_s, err, trim_band(_vd_ratio), top);
 }
 #endif
 
+// one duty step every trim_s, outside the band, up to +-trim_max
 void HV::trim_step() {
-  if (++_trim_secs < _trim_s) return;
-  _trim_secs = 0;
+  if (++_trim_age_s < _trim_s) return;
+  _trim_age_s = 0;
   int err = (int)_hv_target - (int)hvReading.get();
-  int band = trim_band(_hw_vd_ratio);
+  int band = trim_band(_vd_ratio);
   int8_t old_trim = _duty_trim;
   if      (err >  band && _duty_trim <  _trim_max) _duty_trim++;
   else if (err < -band && _duty_trim > -_trim_max) _duty_trim--;
@@ -399,7 +405,7 @@ void HV::trim_step() {
 void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   if (_pwm_pin >= 0) {
 #ifdef ESP8266
-    EGTimer1::pwm_set((uint32_t)_hw_freq, 1, HV_PWM_MAX);
+    EGTimer1::pwm_set((uint32_t)_freq, 1, HV_PWM_MAX);
 #else
     ledcWrite(EGLED_HV_CHANNEL, 1);
 #endif
@@ -413,11 +419,11 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
 }
 
 bool HV::saveconfig() {
-  corium::Prefs::putInt("espghw", EG_K_FREQ, _hw_freq);
-  corium::Prefs::putInt("espghw", K_DUTY, _hw_duty);
+  corium::Prefs::putInt("espghw", EG_K_FREQ, _freq);
+  corium::Prefs::putInt("espghw", K_DUTY, _duty);
 #ifdef ESPG_HV_ADC
-  corium::Prefs::putInt("espghw", EG_K_RATIO, _hw_vd_ratio);
-  corium::Prefs::putInt("espghw", K_OFFSET, _hw_vd_offset);
+  corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
+  corium::Prefs::putInt("espghw", K_OFFSET, _vd_offset);
   corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
 #endif
   return corium::Prefs::commitSoon(corium::fastMillis());

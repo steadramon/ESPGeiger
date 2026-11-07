@@ -104,10 +104,10 @@ class EGMqtt {
     void onMessage(OnMessage fn, void* arg = nullptr) { _onMsg = fn; _onMsgArg = arg; }
     void onAck(OnAck fn, void* arg = nullptr) { _onAck = fn; _onAckArg = arg; }
 
-    bool connect();
+    bool connect();      // false = not started: no host, not down, or see lastError()
     void disconnect();   // DISCONNECT, then closed; the will isn't sent
     void stop();         // drops the queue and settings, frees all
-    void loop();
+    void loop();         // call often, every callback runs from here
 
     State state() const { return _state; }
     bool connected() const { return _state == CONNECTED; }

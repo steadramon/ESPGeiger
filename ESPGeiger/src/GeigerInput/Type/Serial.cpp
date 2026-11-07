@@ -19,7 +19,7 @@
 #include "Serial.h"
 #include "Corium/System/FastMillis.h"
 
-#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+#if GEIGER_TYPE == GEIGER_TYPE_SERIAL
 
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/Prefs.h"
@@ -30,7 +30,7 @@
 #include "GeigerInput/SerialFormat.h"
 
 // isr margin at 115200
-static GeigerPort<64> geigerPort;
+static GeigerPort<64> s_port;
 
 GeigerSerial::GeigerSerial() {
 };
@@ -51,10 +51,10 @@ void GeigerSerial::begin() {
   if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
     corium::Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
   }
-  if (!geigerPort.begin(baud, _rx_pin, _tx_pin)) {
+  if (!s_port.begin(baud, _rx_pin, _tx_pin)) {
     corium::Log::console(PSTR("GeigerSerial: ERROR port would not open"));
   }
-  geigerPort.flush();
+  s_port.flush();
   _idle_ms = (uint8_t)clamp<uint32_t>(50000UL / baud, 1, 4);   // ~5 chars
   _polls = true;
 }
@@ -88,8 +88,8 @@ void GeigerSerial::pullSerial() {
                 "maxRead is uint8_t: a 256-byte buffer truncates it to 0 and stops all input");
   uint8_t maxRead = sizeof(_serial_buffer);
   bool got_any = false;
-  while (geigerPort.available() && maxRead--) {
-    char input = geigerPort.read();
+  while (s_port.available() && maxRead--) {
+    char input = s_port.read();
     got_any = true;
     if (_discard) {
       if (input == '\n') _discard = false;
@@ -108,12 +108,12 @@ void GeigerSerial::pullSerial() {
       drop_line();   // too long
     }
   }
-  if (got_any) _line_ms = corium::fastMillis();
+  if (got_any) _rx_ms = corium::fastMillis();
 }
 
 void GeigerSerial::loop() {
   // else a stray byte polls every pass
-  if ((_serial_idx != 0 || _discard) && (corium::fastMillis() - _line_ms) > GEIGERSERIAL_LINE_TIMEOUT_MS) {
+  if ((_serial_idx != 0 || _discard) && (corium::fastMillis() - _rx_ms) > GEIGERSERIAL_LINE_TIMEOUT_MS) {
     clear_line();
     _discard = false;
   }
@@ -122,8 +122,8 @@ void GeigerSerial::loop() {
   _poll_at = (_serial_idx || _discard) ? now : now + _idle_ms;   // mid line, every pass
   bool line = _line.fresh(now, GEIGERSERIAL_OK_MS);
   _ok = !_drain.fresh(now, GEIGERSERIAL_OK_MS) && line;
-  if (serial_value <= 0) return;
-  if (corium::fastMillis() - last_serial > GEIGERSERIAL_QUIET_MS) serial_value = 0;
+  if (_cpm <= 0) return;
+  if (corium::fastMillis() - _good_ms > GEIGERSERIAL_QUIET_MS) _cpm = 0;
 }
 
 // saturate, don't wrap
@@ -134,20 +134,20 @@ static inline uint16_t clamp_batch(int n) {
 }
 
 void GeigerSerial::stopForOTA() {
-  geigerPort.pause();
+  s_port.pause();
 }
 
 void GeigerSerial::restartAfterOTA() {
   clear_line();
   _discard = false;
-  geigerPort.resume();
+  s_port.resume();
 }
 
 void GeigerSerial::secondTicker() {
   // sender can toggle cps
   if (_use_cps) {
-    int c = (int)partial_clicks;
-    partial_clicks = 0;
+    int c = (int)_carry;
+    _carry = 0;
     setCounter(c, false);
     if (c > 0) Counter::on_pulse_batch(clamp_batch(c), (uint32_t)micros(), 1000000UL);
     _use_cps = false;
@@ -155,12 +155,12 @@ void GeigerSerial::secondTicker() {
   }
   // cps sender, its line comes next tick
   if (_cps_seen.fresh(corium::fastMillis(), GEIGERSERIAL_QUIET_MS)) return;
-  // no soft-float divide
+  // cpm/60 a second, fraction carried; no soft-float divide
   static constexpr float INV_60 = 1.0f / 60.0f;
-  partial_clicks += (float)serial_value * INV_60;
-  if (partial_clicks >= 1.0f) {
-    int full_clicks = (int)partial_clicks;
-    partial_clicks -= full_clicks;
+  _carry += (float)_cpm * INV_60;
+  if (_carry >= 1.0f) {
+    int full_clicks = (int)_carry;
+    _carry -= full_clicks;
     setCounter(full_clicks, false);
     Counter::on_pulse_batch(clamp_batch(full_clicks), (uint32_t)micros(), 1000000UL);
   }
@@ -174,31 +174,32 @@ void GeigerSerial::drainPort() {
   } else {
     corium::Log::debug(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
   }
-  geigerPort.flush();
+  s_port.flush();
   clear_line();
   _bad_streak = 0;
   _drain.mark(now);
 }
 
 void GeigerSerial::handleSerial(char* input) {
-  int _scpm = 0;
-  int _scps = -1;
-  if (!SerialFormat::parse_cpm(_serial_type, input, &_scpm, &_scps)) {
+  int cpm = 0;
+  int cps = -1;
+  if (!SerialFormat::parse_cpm(_serial_type, input, &cpm, &cps)) {
     bad_line();
     return;
   }
 
-  corium::Log::debug(PSTR("GeigerSerial: Loop - %d"), _scpm);
+  corium::Log::debug(PSTR("GeigerSerial: Loop - %d"), cpm);
   setLastBlip();
-  serial_value = _scpm;
-  last_serial = corium::fastMillis();
-  if (_scps >= 0) {
-    partial_clicks += (float)_scps;
+  _cpm = cpm;
+  _good_ms = corium::fastMillis();
+  if (cps >= 0) {
+    _carry += (float)cps;
     _use_cps = true;
-    _cps_seen.mark(last_serial);
+    _cps_seen.mark(_good_ms);
   }
-  _line.mark(last_serial);
+  _line.mark(_good_ms);
+  // a good line takes 3 off
   _bad_streak = max((int)_bad_streak - 3, 0);
 }
 
-#endif // GEIGER_IS_SERIAL
+#endif // GEIGER_TYPE_SERIAL

@@ -23,10 +23,12 @@
 #include <atomic>
 #include "GeigerInput.h"
 
+// ms per target cpm step
 #ifndef GEIGER_TESTPULSE_ADJUSTTIME
 #define GEIGER_TESTPULSE_ADJUSTTIME 300000
 #endif
 
+// us, also the shortest gap
 #ifndef GEIGER_PULSE_WIDTH
 #define GEIGER_PULSE_WIDTH 500
 #endif
@@ -44,6 +46,7 @@ extern volatile int _pulse_width_us;
 extern volatile uint32_t _pulse_width_ticks;
 void set_pulse_width_us(int us);
 
+// Base for test inputs, Poisson pulses at a target cpm
 class GeigerInputTest : public GeigerInput
 {
   public:
@@ -57,6 +60,7 @@ class GeigerInputTest : public GeigerInput
     void setTargetCPS(float target);
     float getTargetCPS();
     void CPMAdjuster();
+    // timer ticks to the next pulse
     double calcDelay();
     char _test_type[16];
     unsigned long _last_pulse_test = 0;
@@ -77,7 +81,7 @@ class GeigerInputTest : public GeigerInput
     bool _retarget = false;
   private:
     float _target_cps = 0;
-    int _current_selection = -1;
+    int _step = -1;
     bool _manual = false;
 };
 #endif

@@ -25,6 +25,7 @@
 
 enum : uint8_t { LED_ACTIVITY, LED_ACK, LED_DISP_ON, LED_DISP_OFF };
 
+// on ms, off ms, count; enum order
 static const corium::LedSignal::Pattern LED_PATTERNS[] PROGMEM = {
   {500, 500, 1},   // one blink
   {200, 1,   1},   // pulse

@@ -396,6 +396,7 @@ static bool same_P(const char* a, PGM_P b) {
   return strcasecmp_P(a, b) == 0;
 }
 
+// digits only, fits int32
 static bool parse_length(const char* s, int32_t* out) {
   if (!*s) return false;
   uint32_t v = 0;
@@ -515,13 +516,13 @@ bool EGHttpClient::follow() {
   _hops++;
   char was[sizeof(_host)];
   strlcpy(was, _host, sizeof(was));
-  uint16_t wasPort = _port;
+  uint16_t was_port = _port;
   if (_status == 303 && !same_P(_method, PSTR("HEAD"))) strncpy_P(_method, PSTR("GET"), sizeof(_method));
   _tcp.close();
   int err = ok ? start(url.p) : HTTPCODE_TOO_LESS_RAM;
   url.clear();
   // headers for that host only
-  if (!err && (!same(was, _host) || wasPort != _port)) _hdrs.clear();
+  if (!err && (!same(was, _host) || was_port != _port)) _hdrs.clear();
   if (err || !seal(nullptr, 0, false)) end(err ? err : HTTPCODE_TOO_LESS_RAM);
   return true;
 }
@@ -641,6 +642,7 @@ void EGHttpClient::end(int err) {
 uint32_t EGHttpClient::due() const {
   uint32_t at = _heardMs + _timeoutS * 1000UL;
   uint32_t last = _startMs + _deadlineMs;
+  // earlier of the two, wrap safe
   if (_deadlineMs && (int32_t)(last - at) < 0) at = last;
   return at;
 }

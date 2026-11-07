@@ -92,6 +92,7 @@ static const char ML_1M[]    PROGMEM = ",window=\"1m\"";
 static const char ML_5M[]    PROGMEM = ",window=\"5m\"";
 static const char ML_15M[]   PROGMEM = ",window=\"15m\"";
 
+// output sets: J json, V vars, W webhook, M mqtt
 static constexpr uint8_t JV   = corium::M_OUT_JSON | corium::M_OUT_VARS;
 static constexpr uint8_t JVW  = JV | EGM_OUT_WEBHOOK;
 static constexpr uint8_t JVWM = JVW | EGM_OUT_MQTT;

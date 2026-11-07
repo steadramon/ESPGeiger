@@ -27,6 +27,7 @@
 #include "Corium/Net/HttpPoster.h"
 #include "Corium/Prefs/Prefs.h"
 
+// s between uploads, pref settable
 #ifndef RADMON_INTERVAL
 #define RADMON_INTERVAL 60
 #endif
@@ -51,7 +52,7 @@ class Radmon : public corium::HttpPoster {
     bool interpret(const char* reply) override;
     const char* logTag() override { return PSTR("Radmon"); }
   private:
-    uint16_t pingInterval = RADMON_INTERVAL;
+    uint16_t _interval_s = RADMON_INTERVAL;
 };
 
 extern Radmon radmon;

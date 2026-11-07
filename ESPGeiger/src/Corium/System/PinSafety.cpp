@@ -28,7 +28,7 @@ namespace {
   PinClaim s_claims[MAX_CLAIMS];
   int s_count = 0;
   char s_in_use[corium::PinSafety::WHY_MAX];   // "in use: " + owner
-  const corium::PinSafety::Fixed* s_rows = nullptr;
+  const corium::PinSafety::Fixed* s_shared = nullptr;
 
   const char SPI_FLASH[]    PROGMEM = "SPI flash";
   const char PSRAM[]        PROGMEM = "PSRAM";
@@ -177,13 +177,13 @@ const char* corium::PinSafety::check(const PinRule* rows, int pin, bool out, boo
                              uint8_t needs) {
   *warn = nullptr;
   if (!rows) return nullptr;
-  uint8_t now = needs | (out ? IF_OUT : IF_IN) | (usb ? IF_USB : 0) | ALWAYS;
+  uint8_t when = needs | (out ? IF_OUT : IF_IN) | (usb ? IF_USB : 0) | ALWAYS;
   for (;; rows++) {
     PinRule r;
     memcpy_P(&r, rows, sizeof(r));
     if (r.lo == PIN_END) return nullptr;
     if (pin < r.lo || pin > r.hi) continue;
-    if (!(pgm_read_byte(&KIND_WHEN[r.kind]) & now)) continue;
+    if (!(pgm_read_byte(&KIND_WHEN[r.kind]) & when)) continue;
     const char* says = (const char*)pgm_read_ptr(&KIND_SAYS[r.kind]);
     if (r.kind <= PK_INPUT_ONLY) return says;
     *warn = says;
@@ -199,7 +199,7 @@ static PinClaim* find(int pin) {
 
 // owner of the board's shared row on it, else nullptr
 static const char* shared_with(int pin) {
-  for (const corium::PinSafety::Fixed* rows = s_rows; rows; rows++) {
+  for (const corium::PinSafety::Fixed* rows = s_shared; rows; rows++) {
     corium::PinSafety::Fixed r;
     memcpy_P(&r, rows, sizeof(r));
     if (!r.owner) return nullptr;
@@ -267,7 +267,7 @@ const char* corium::PinSafety::claim(int pin, const char* owner) {
   return nullptr;
 }
 
-void corium::PinSafety::share(const Fixed* rows) { s_rows = rows; }
+void corium::PinSafety::share(const Fixed* rows) { s_shared = rows; }
 
 void corium::PinSafety::reserve(const Fixed* rows) {
   for (;; rows++) {

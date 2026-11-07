@@ -23,15 +23,8 @@
 #include <stdint.h>
 
 namespace corium {
-// Monotonic seconds since boot across the 49.71 day millis() wrap.
-//
-// tick() must be called at least once per wrap or a whole wrap is lost. The
-// unsigned delta is correct across the wrap. Do not scale or compare a
-// reconstructed time: it overflows uint32 at 4294967 s, the instant millis()
-// wraps.
-//
-// Types are uint32_t, not `unsigned long`: same width on target, 64-bit on a
-// host, where a wrap test would silently never fire.
+// seconds since boot across the 49.7 day millis() wrap, never value() * 1000
+// uint32_t not unsigned long, a host build's 64 bits never wraps
 class UptimeCounter {
 public:
   uint32_t tick(uint32_t now_ms) {   // at least once per millis wrap
@@ -42,12 +35,10 @@ public:
     return _value;
   }
 
-  // Result of the last tick(). tick() is a read-modify-write, so it needs a
-  // single writer; every other reader takes this instead. Zero until the
-  // first tick().
+  // last tick()'s, 0 till the first; tick() has one writer, the rest read this
   uint32_t value() const { return _value; }
 
-  // Diagnostic; tick() does not use it.
+  // diagnostic only
   uint16_t wraps() const { return _wraps; }
 
 private:

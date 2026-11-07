@@ -52,6 +52,7 @@ uint8_t corium::Sender::takePublishErr() {
   return v;
 }
 
+// age in seconds, null before the first send
 size_t corium::Sender::writeStatusJson(char* buf, size_t cap, const char* key,
                                    bool ok, unsigned long lastAttemptMs,
                                    unsigned long now) {

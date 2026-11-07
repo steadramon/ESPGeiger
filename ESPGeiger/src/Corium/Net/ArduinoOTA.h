@@ -32,6 +32,7 @@
 #include <ArduinoOTA.h>
 #include "Corium/Module/Module.h"
 
+// how often handle() is polled
 #ifndef OTA_POLL_INTERVAL_MS
 #define OTA_POLL_INTERVAL_MS 100
 #endif

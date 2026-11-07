@@ -26,6 +26,7 @@
 #include "Corium/Net/HttpPoster.h"
 #include "Corium/Prefs/Prefs.h"
 
+// s between uploads
 #ifndef GMC_INTERVAL
 #define GMC_INTERVAL 300
 #endif

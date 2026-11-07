@@ -279,10 +279,10 @@ void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   char opt[2 * sizeof(ssid) + 40];
   for (uint8_t i = 0; i < self->_scanCount; i++) {
     egesc_html(ssid, sizeof(ssid), self->_scan[i].ssid);
-    int m = snprintf_P(opt, sizeof(opt),
+    int n = snprintf_P(opt, sizeof(opt),
                        PSTR("<option value='%s'>%s (%d dBm)</option>"),
                        ssid, ssid, (int)self->_scan[i].rssi);
-    if (m > 0 && (size_t)m < sizeof(opt)) res.sendChunk(opt, (size_t)m);
+    if (n > 0 && (size_t)n < sizeof(opt)) res.sendChunk(opt, (size_t)n);
   }
 
   res.sendChunk(FPSTR(PORTAL_TAIL));

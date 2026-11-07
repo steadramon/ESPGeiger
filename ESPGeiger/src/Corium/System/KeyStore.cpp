@@ -87,6 +87,7 @@ struct Rec {
 };
 static_assert(sizeof(Rec) % 4 == 0, "flash takes whole words");
 
+// mapped address back to a flash offset
 uint32_t rec_addr() { return (uint32_t)(uintptr_t)&_EEPROM_start - 0x40200000; }
 
 uint32_t slot_crc(const Slot& s) {

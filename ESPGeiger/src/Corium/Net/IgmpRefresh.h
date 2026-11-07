@@ -22,7 +22,7 @@
 namespace corium {
 namespace IgmpRefresh {
 
-bool refresh();   // esp32 only
+bool refresh();   // esp32 only, loop, false = not sent
 
 }
 }  // namespace corium

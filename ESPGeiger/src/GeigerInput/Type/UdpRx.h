@@ -32,9 +32,11 @@ class WiFiUDP;
 #ifndef UDPRX_DEFAULT_PORT
 #define UDPRX_DEFAULT_PORT  UDPBLIP_DEFAULT_PORT
 #endif
+// senders tracked, oldest evicted
 #ifndef UDPRX_PRODUCER_SLOTS
 #define UDPRX_PRODUCER_SLOTS 8
 #endif
+// lost clicks replayed as blips, max pending
 #ifndef UDPRX_GAPFILL_QUEUE
 #define UDPRX_GAPFILL_QUEUE 16
 #endif
@@ -52,6 +54,7 @@ class WiFiUDP;
 #ifndef UDPRX_ENV_TTL_MS
 #define UDPRX_ENV_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
 #endif
+// Counts from UdpBlip senders, OSC /espg/<chipid>/click and /env
 class GeigerUdpRx final : public GeigerInput {
 public:
   GeigerUdpRx();
@@ -102,20 +105,20 @@ private:
   void teardownUdp();
   bool ensureUdp();
   bool ensureBound(uint32_t now);
-  void climbRecoveryLadder(uint32_t now);
+  void recover(uint32_t now);
   void readDatagrams();
   void fireDueGapfills();
   bool acceptChipid(const char* src_chipid, bool click);
   void processDatagram(uint8_t* buf, size_t len);
   void processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
-  uint32_t creditForwardGap(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
-  bool producerRestarted(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
+  uint32_t creditForwardGap(const ProducerRecord* p, uint32_t count, uint32_t ts_ms);
+  bool producerRestarted(const ProducerRecord* p, uint32_t count, uint32_t ts_ms);
   bool logOk();
   void creditClicks(uint32_t credit, uint32_t gap_credit, const ProducerRecord* p,
-                    uint32_t producer_ts, uint32_t now_ms);
+                    uint32_t ts_ms, uint32_t now_ms);
   void scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint32_t now_ms);
   void processEnv(const uint8_t* buf, size_t len);
-  ProducerRecord* findOrAllocProducer(const char* chipid, uint32_t now_ms);
+  ProducerRecord* producer(const char* chipid, uint32_t now_ms);
 
   WiFiUDP*  _udp = nullptr;
   IPAddress _group;
@@ -129,7 +132,7 @@ private:
   uint8_t   _rx_mode = 1;       // 0=light 1=modem 2=none
 
   uint32_t _local_count = 0;
-  uint32_t _last_seen_count = 0;
+  uint32_t _collected = 0;
   uint32_t _packets_accepted = 0;
   uint32_t _gap_filled = 0;
   uint32_t _resync_count = 0;
@@ -145,7 +148,7 @@ private:
   ProducerRecord _producers[UDPRX_PRODUCER_SLOTS] = {};
   uint8_t _producers_seen = 0;
   uint32_t _bound_at_ms = 0;
-  unsigned long _last_igmp_refresh_ms = 0;
+  unsigned long _igmp_ms = 0;
 
   void do_refresh();
   unsigned long _recovery_at_ms = 0;   // 0 = idle

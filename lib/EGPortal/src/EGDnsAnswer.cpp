@@ -99,10 +99,10 @@ size_t egdns_reply(const uint8_t* q, size_t len, const uint8_t ip[4], uint32_t t
   if (q[2] & DNS_QR) return 0;
   if (q[2] & DNS_OPCODE) return header_only(q, RC_NOTIMP, out, max);
   if (!one_question(q)) return header_only(q, RC_FORMERR, out, max);
-  size_t name = name_len(q + EGDNS_HEADER, len - EGDNS_HEADER);
-  if (!name || len - EGDNS_HEADER - name < EGDNS_QTAIL) return header_only(q, RC_FORMERR, out, max);
+  size_t nlen = name_len(q + EGDNS_HEADER, len - EGDNS_HEADER);
+  if (!nlen || len - EGDNS_HEADER - nlen < EGDNS_QTAIL) return header_only(q, RC_FORMERR, out, max);
 
-  size_t end = EGDNS_HEADER + name + EGDNS_QTAIL;   // bytes past the question not echoed
+  size_t end = EGDNS_HEADER + nlen + EGDNS_QTAIL;   // bytes past the question not echoed
   bool ok = asks_a(q, end);
   size_t n = ok ? end + EGDNS_ANSWER : end;
   if (n > max) return 0;
@@ -115,7 +115,7 @@ size_t egdns_reply(const uint8_t* q, size_t len, const uint8_t ip[4], uint32_t t
     set_rcode(out, RC_NOERROR);   // the name is there, no records
     return n;
   }
-  // today: rcode echoed
+  // rcode echoed from the query
   put_a(out + end, ip, ttl);
   return n;
 }

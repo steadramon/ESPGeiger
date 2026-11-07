@@ -66,7 +66,7 @@ namespace Reactor {
   template <void (*hot)(unsigned long)>
   inline void pass(WebPortal& portal) {
 #ifdef LOOP_PROFILE
-    uint32_t _body_t0 = micros();
+    uint32_t t0 = micros();
 #endif
     TickProfile::countIter();
     unsigned long now = fastMillis();
@@ -97,7 +97,7 @@ namespace Reactor {
       if (Registry::due(now)) Registry::loopAll(now);
     }
 #ifdef LOOP_PROFILE
-    TickProfile::addLoopBody((uint32_t)(micros() - _body_t0));
+    TickProfile::addLoopBody((uint32_t)(micros() - t0));
 #endif
   }
 

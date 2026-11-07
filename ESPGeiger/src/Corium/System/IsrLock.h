@@ -39,7 +39,7 @@ namespace IsrLock {
     detachInterrupt(digitalPinToInterrupt(pin));
   }
 
-  // esp32 isr may be on the other core, 8266 just masks, host a real lock for tsan
+  // esp32 isr may be on the other core, 8266 just masks, host a real lock
   struct Mux {
 #if defined(ESP32)
     portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;

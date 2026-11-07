@@ -47,9 +47,10 @@ class EGDnsAnswer {
   public:
     EGDnsAnswer() : _udp(EGDNS_MSG_MAX, EGDNS_SLOTS) {}
 
+    // ttl in seconds
     bool begin(uint16_t port, const EGTcpAddr& ip, uint32_t ttl = EGDNS_TTL);
     void end() { _udp.end(); }
-    void poll() { _udp.poll(); }
+    void poll() { _udp.poll(); }   // loop, answers from here
 
   private:
     void answer(const uint8_t* q, size_t len, const EGTcpAddr& from, uint16_t port);

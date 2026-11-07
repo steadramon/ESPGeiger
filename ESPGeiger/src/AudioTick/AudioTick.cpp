@@ -55,9 +55,9 @@ CORIUM_PSTR(K_DOUT,   "dout");
 AudioTick audiotick;
 CORIUM_REGISTER_MODULE(audiotick)
 
-static volatile bool s_nm_busy = false;
+static volatile bool s_owned = false;
 
-void AudioTick::setI2SOwned(bool owned) { s_nm_busy = owned; }
+void AudioTick::setI2SOwned(bool owned) { s_owned = owned; }
 
 static QueueHandle_t s_audio_q = nullptr;
 
@@ -285,11 +285,10 @@ void AudioTick::loop(unsigned long) {
 // 33 Hz cap, burst of 8
 void AudioTick::notifyClick(unsigned long now_ms) {
   if (!_enabled || !_i2s_up || _volume == 0 || muted()) return;
-  if (s_nm_busy) return;
+  if (s_owned) return;
   constexpr uint32_t TOKEN_REFILL_MS = 30;
   constexpr uint8_t  TOKEN_MAX       = 8;
   if (!takeToken(now_ms, _last_token_ms, _tokens, TOKEN_REFILL_MS, TOKEN_MAX)) return;
-  _last_emit_ms = now_ms;
   static const AudioCmd CLICK = { AC_CLICK, 255 };   // pref engine
   audio_enqueue(CLICK);
 }
@@ -305,10 +304,10 @@ void AudioTick::playBootChime() {
 // false = 400 sent
 static bool tick_cmd_from(EGHttpRequest& req, EGHttpResponse& res, AudioCmd* cmd,
                           int32_t chime) {
-  const char* k = req.arg(F("click"));
-  if (k && k[0]) {
+  const char* click = req.arg(F("click"));
+  if (click && click[0]) {
     int32_t eng;
-    if (!parseI32(k, &eng) || eng < 0 || eng > 1) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("0..1")); return false; }
+    if (!parseI32(click, &eng) || eng < 0 || eng > 1) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("0..1")); return false; }
     cmd->type = AC_CLICK; cmd->i1 = (uint8_t)eng;
     return true;
   }
@@ -351,12 +350,12 @@ constexpr uint16_t GAP_LEN = sizeof(GAP_50MS) / sizeof(int16_t);
 
 // the aud task only
 void audio_silence(uint16_t ms) {
-  uint32_t remaining = ms_to_samples(ms);
-  while (remaining > 0) {
-    const uint16_t n = (remaining > GAP_LEN) ? GAP_LEN : (uint16_t)remaining;
+  uint32_t left = ms_to_samples(ms);
+  while (left > 0) {
+    const uint16_t n = (left > GAP_LEN) ? GAP_LEN : (uint16_t)left;
     size_t written = 0;
     i2s_write(I2S_NUM_0, GAP_50MS, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
-    remaining -= n;
+    left -= n;
   }
 }
 
@@ -494,10 +493,10 @@ void AudioTick::chimeItemGet() {
 }
 
 void AudioTick::chimeMorseCallsign() {
-  constexpr uint16_t U       = 70;
-  constexpr uint16_t F       = 700;
-  constexpr uint16_t ELE_GAP = U;
-  constexpr uint16_t DIG_GAP = U * 3;
+  constexpr uint16_t UNIT_MS = 70;
+  constexpr uint16_t TONE_HZ = 700;
+  constexpr uint16_t ELE_GAP = UNIT_MS;
+  constexpr uint16_t DIG_GAP = UNIT_MS * 3;
   uint64_t mac = corium::DeviceInfo::hwId();
   uint32_t r = xorshift32(fold32(mac));
   for (uint8_t i = 0; i < 3; i++) {
@@ -507,7 +506,7 @@ void AudioTick::chimeMorseCallsign() {
     const uint8_t* code = MORSE_DIGIT[d];
     for (uint8_t e = 0; e < 5; e++) {
       uint16_t gap = (e == 4) ? DIG_GAP : ELE_GAP;
-      playMelodyNote(F, code[e] ? U * 3 : U, false, gap);
+      playMelodyNote(TONE_HZ, code[e] ? UNIT_MS * 3 : UNIT_MS, false, gap);
     }
   }
 }
@@ -559,8 +558,8 @@ void AudioTick::chimeSputnik() {
   }
 }
 
-void AudioTick::playClick(uint8_t engine_override) {
-  const uint8_t e = (engine_override <= 1) ? engine_override : _engine;
+void AudioTick::playClick(uint8_t engine) {
+  const uint8_t e = (engine <= 1) ? engine : _engine;
   switch (e) {
     case 0: default: playClickPool();  break;
     case 1:          playClickChirp(); break;
@@ -568,8 +567,8 @@ void AudioTick::playClick(uint8_t engine_override) {
 }
 
 static float chip_voice_factor() {
-  static const float factor = chip_click_pitch(corium::DeviceInfo::hwId());
-  return factor;
+  static const float s_factor = chip_click_pitch(corium::DeviceInfo::hwId());
+  return s_factor;
 }
 
 void AudioTick::playClickChirp() {
@@ -604,12 +603,13 @@ void AudioTick::playClickPool() {
   synthClick(v.asym, v.f2_amp, amp, tau, f_lo, r ^ 0xDECADECA);
 }
 
+// 1024 samples: chirp from 2x down to f_lo, a low f2 body, a little noise
 // f_lo from the caller, the * order differs per engine
 void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float f_lo,
                            uint32_t nr) {
   constexpr uint16_t N           = 1024;
-  constexpr uint16_t attack_ramp = 7;
-  constexpr uint16_t exit_ramp   = 16;
+  constexpr uint16_t ATTACK_N    = 7;
+  constexpr uint16_t EXIT_N      = 16;
   const float        peak_ceil   = (float)_peak / 100.0f;
   constexpr float    DC_R        = 0.997f;       // DC blocker, ~50 Hz
   constexpr float    NOISE_MIX   = 0.10f;
@@ -622,8 +622,8 @@ void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float
   const float chirp_dec = expf(-inv_fs / 0.0005f);
   const float asym_dec  = expf(-inv_fs / 0.0006f);
   const float f2_dec    = expf(-inv_fs / 0.004f);
-  constexpr uint16_t sustain_n = 130;   // ~6 ms
-  uint16_t cutoff = sustain_n + (uint16_t)(6.0f * tau * fs);
+  constexpr uint16_t SUSTAIN_N = 130;   // ~6 ms
+  uint16_t cutoff = SUSTAIN_N + (uint16_t)(6.0f * tau * fs);
   if (cutoff > N) cutoff = N;   // exit ramp still runs
   float env = 1.0f, chirp_env = 1.0f, asym_env = 1.0f, f2_env = 1.0f;
   float phase = 0.0f, f2_phase = 0.0f;
@@ -633,9 +633,9 @@ void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float
     const float f_inst = f_lo + (f_hi - f_lo) * chirp_env;
     phase += TWO_PI * f_inst * inv_fs;
     float eff_env = env;
-    if (i < attack_ramp)      eff_env *= (float)i / (float)attack_ramp;
+    if (i < ATTACK_N)         eff_env *= (float)i / (float)ATTACK_N;
     const uint16_t to_end = cutoff - i;
-    if (to_end <= exit_ramp)  eff_env *= (float)to_end / (float)exit_ramp;
+    if (to_end <= EXIT_N)     eff_env *= (float)to_end / (float)EXIT_N;
     nr = xorshift32(nr);
     const float n = ((int32_t)(nr & 0xFFFF) - 32768) * (1.0f/32768.0f);
     float sample = (sinf(phase) * (1.0f - NOISE_MIX) + n * NOISE_MIX) * eff_env
@@ -645,7 +645,7 @@ void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float
     const float y = sample - dc_x + DC_R * dc_y;
     dc_x = sample; dc_y = y;
     buf[i] = sat16((int32_t)(y * amp * peak_ceil));
-    if (i >= sustain_n) env *= env_dec;
+    if (i >= SUSTAIN_N) env *= env_dec;
     chirp_env *= chirp_dec;
     asym_env  *= asym_dec;
     f2_env    *= f2_dec;

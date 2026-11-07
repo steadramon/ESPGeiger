@@ -109,6 +109,7 @@
 #define GEIGER_RXPIN 13
 #endif
 
+// us, closer pulses are dropped
 #ifndef GEIGER_DEBOUNCE
 #define GEIGER_DEBOUNCE 200
 #endif
@@ -123,11 +124,13 @@ extern corium::IsrLock::Mux timerMux;
 class EGHttpResponse;
 class EGHttpServer;
 
+// Base for a count source, one built per GEIGER_TYPE
 class GeigerInput {
   public:
     virtual ~GeigerInput() {};
     virtual void loop() {}
     virtual void secondTicker();
+    // counts since the last call, from the second tick
     virtual int collect();
     virtual void begin();
     void set_debounce(int debounce) {
@@ -161,6 +164,7 @@ class GeigerInput {
     static void CORIUM_ISR_ATTR countInterrupt();
     // main code only, interrupts off
     static void countAt(unsigned long us);
+    // once a second, parks the pin over 10000 isr/s
     void checkIsrStorm();
     void stopIsr();
     void restartIsr();
@@ -181,8 +185,6 @@ class GeigerInput {
     // test stamp, pulse or retarget; loop() takes it first, collect() sweeps the rest
     static void post() { s_posted.store(true, std::memory_order_relaxed); }
     static void take() { s_posted.store(false, std::memory_order_relaxed); }
-  private:
-    void (*callback)(void) = nullptr;
   protected:
     static std::atomic<bool> s_posted;
     uint32_t _poll_at = 0;   // fastMillis()

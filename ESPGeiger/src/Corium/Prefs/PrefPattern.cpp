@@ -21,8 +21,10 @@
 
 namespace {
 
+// byte read, p SRAM or PROGMEM
 inline char pat(const char* p, size_t i) { return (char)pgm_read_byte(p + i); }
 
+// c in the class between from and to, a-z ranges and \ escapes
 bool in_class(const char* p, size_t from, size_t to, char c) {
   for (size_t i = from; i < to; i++) {
     char lo = pat(p, i);
@@ -47,6 +49,7 @@ size_t class_end(const char* p) {
   return i;
 }
 
+// digits at *q, *q left past them
 unsigned read_num(const char* p, size_t* q) {
   unsigned n = 0;
   for (; pat(p, *q) >= '0' && pat(p, *q) <= '9'; (*q)++) n = n * 10 + (pat(p, *q) - '0');
@@ -74,6 +77,7 @@ bool parse_count(const char* p, size_t q, unsigned* min, unsigned* max) {
   return pat(p, q) == '\0';
 }
 
+// regex chars, never literal
 const char META[] PROGMEM = "^$.|()*+?{}[]\\";
 
 bool literal(char c) {

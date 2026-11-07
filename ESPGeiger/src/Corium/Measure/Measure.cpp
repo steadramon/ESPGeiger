@@ -40,6 +40,7 @@ corium::MeasureIter::MeasureIter(uint8_t output, bool diag, const char* id)
   : _src(s_core), _j(0), _mod(0), _out(output), _diag(diag), _input(false),
     _id(id), _row(), _val() {}
 
+// core, then input, then each module not quarantined
 bool corium::MeasureIter::next_source() {
   if (!_input) {
     _input = true;

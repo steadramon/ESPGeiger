@@ -70,7 +70,7 @@ void EnvSensor::readPrefs() {
 #endif
   uint8_t unit = (uint8_t)corium::Prefs::getUInt("env", K_UNIT);
   corium::m_set_temp_unit(unit > UNIT_K ? UNIT_C : unit);
-  _temp_offset_tenths = (int8_t)corium::Prefs::getInt("env", K_TEMP_OFFSET);
+  _temp_x10 = (int8_t)corium::Prefs::getInt("env", K_TEMP_OFFSET);
   _altitude_m         = (uint16_t)corium::Prefs::getUInt("env", K_ALTITUDE_M);
 }
 
@@ -141,9 +141,9 @@ void EnvSensor::loop(unsigned long /*now*/) {
 }
 
 void EnvSensor::sampleStart() {
-  _bt = NAN; _bh = NAN; _bp = NAN;
+  _t = NAN; _h = NAN; _p = NAN;
   _failed = false;
-  if ((_drv_flags & DRV_BOSCH) && !_bosch.read(_bt, _bh, _bp)) _failed = true;
+  if ((_drv_flags & DRV_BOSCH) && !_bosch.read(_t, _h, _p)) _failed = true;
   // AHT needs ~80 ms, read next pass
   if (_drv_flags & DRV_AHT) {
     if (_aht.trigger()) {
@@ -160,8 +160,8 @@ void EnvSensor::sampleFinish() {
   float at = NAN, ah = NAN, ap = NAN;
   if (_aht.readResult(at, ah, ap)) {
     // AHT wins, BMP280 has no humidity
-    if (!isnan(at)) _bt = at;
-    if (!isnan(ah)) _bh = ah;
+    if (!isnan(at)) _t = at;
+    if (!isnan(ah)) _h = ah;
   } else {
     _failed = true;
   }
@@ -179,7 +179,7 @@ void EnvSensor::sampleDone() {
     _drv_flags = 0;
     return;
   }
-  if (!isnan(_bt) || !isnan(_bh) || !isnan(_bp)) emaUpdate(_bt, _bh, _bp);
+  if (!isnan(_t) || !isnan(_h) || !isnan(_p)) emaUpdate(_t, _h, _p);
 }
 
 void EnvSensor::emaUpdate(float t, float h, float p) {
@@ -214,7 +214,7 @@ float EnvSensor::tempC() const {
   if (localPresent()) {
     float t = _st->ema_t;
     if (isnan(t)) return NAN;
-    return t + (float)_temp_offset_tenths * 0.1f;
+    return t + (float)_temp_x10 * 0.1f;
   }
   return rx(_rx_t);
 }

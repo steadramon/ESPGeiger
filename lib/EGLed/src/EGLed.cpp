@@ -28,22 +28,22 @@ void EGLed::setClock(MillisFn fn) { EGClock::set(fn); }
 #ifdef ESP32
 
 namespace {
-  constexpr uint8_t kChannels  = SOC_LEDC_CHANNEL_NUM;
-  constexpr int     kLedFreqHz = 5000;
+  constexpr uint8_t LED_CHANNELS = SOC_LEDC_CHANNEL_NUM;
+  constexpr int     LED_HZ       = 5000;
 #ifdef SOC_LEDC_SUPPORT_HS_MODE
-  constexpr ledc_timer_t kTimer = LEDC_TIMER_0;
+  constexpr ledc_timer_t LED_TIMER = LEDC_TIMER_0;
 #elif SOC_LEDC_CHANNEL_NUM > 6
   // 0 hv, 1 tone, 3 analogWrite (ch 7/6)
-  constexpr ledc_timer_t kTimer = LEDC_TIMER_2;
+  constexpr ledc_timer_t LED_TIMER = LEDC_TIMER_2;
 #else
   // 0 hv, 1 tone, 2 analogWrite (ch 5/4)
-  constexpr ledc_timer_t kTimer = LEDC_TIMER_3;
+  constexpr ledc_timer_t LED_TIMER = LEDC_TIMER_3;
 #endif
   // ledcSetup's, one source for all timers on c3/s3. never auto, on s3 APLL fights I2S
 #ifdef SOC_LEDC_SUPPORT_XTAL_CLOCK
-  constexpr ledc_clk_cfg_t kClk = LEDC_USE_XTAL_CLK;
+  constexpr ledc_clk_cfg_t LED_CLK = LEDC_USE_XTAL_CLK;
 #else
-  constexpr ledc_clk_cfg_t kClk = LEDC_USE_APB_CLK;
+  constexpr ledc_clk_cfg_t LED_CLK = LEDC_USE_APB_CLK;
 #endif
 
   uint8_t s_next_chan   = 0;
@@ -54,19 +54,19 @@ namespace {
     ledc_timer_config_t cfg = {};
     cfg.speed_mode      = LEDC_LOW_SPEED_MODE;
     cfg.duty_resolution = LEDC_TIMER_8_BIT;
-    cfg.timer_num       = kTimer;
-    cfg.freq_hz         = kLedFreqHz;
-    cfg.clk_cfg         = kClk;
+    cfg.timer_num       = LED_TIMER;
+    cfg.freq_hz         = LED_HZ;
+    cfg.clk_cfg         = LED_CLK;
     ledc_timer_config(&cfg);
     s_timer_ready = true;
   }
 
   uint8_t next_chan() {
-    uint8_t c = (uint8_t)(s_next_chan++ % kChannels);
+    uint8_t c = (uint8_t)(s_next_chan++ % LED_CHANNELS);
 #ifndef SOC_LEDC_SUPPORT_HS_MODE
     // low speed only, same numbers as Arduino's
     while (c == EGLED_HV_CHANNEL || c == EGLED_TONE_CHANNEL)
-      c = (uint8_t)(s_next_chan++ % kChannels);
+      c = (uint8_t)(s_next_chan++ % LED_CHANNELS);
 #endif
     return c;
   }
@@ -92,7 +92,7 @@ void EGLed::attach(uint8_t pin, bool low_active) {
   cfg.speed_mode = LEDC_LOW_SPEED_MODE;
   cfg.channel    = (ledc_channel_t)_chan;
   cfg.intr_type  = LEDC_INTR_DISABLE;
-  cfg.timer_sel  = kTimer;
+  cfg.timer_sel  = LED_TIMER;
   cfg.duty       = 0;
   cfg.hpoint     = 0;
   ledc_channel_config(&cfg);
@@ -171,6 +171,7 @@ void EGLed::update() {
   if (_state == IDLE) return;
   uint32_t now = EGClock::now();
   if ((int32_t)(now - _next_ms) < 0) return;
+  // fade: value >> shift off every 5 ms, at least 1
   if (_state == PHASE_FADE) {
     uint8_t delta = _fade_value >> _fade_shift;
     if (delta == 0) delta = 1;

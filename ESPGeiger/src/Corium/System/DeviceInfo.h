@@ -73,6 +73,7 @@ namespace DeviceInfo {
   inline const char* chipModel()  { return ESP.getChipModel(); }
   inline uint8_t chipRev()        { return ESP.getChipRevision(); }
   inline const char* sdkVersion() { return ESP.getSdkVersion(); }
+  bool efuseMac(uint8_t* out);   // 6 bytes
 #endif
 
   inline uint32_t hwRandom() {
@@ -132,8 +133,9 @@ namespace DeviceInfo {
 
   uint32_t fwFingerprint();   // never 0
 
-  void safeRestart(uint32_t delayMs = 0);
+  void safeRestart(uint32_t delay_ms = 0);
 
+  // 8266 sw wdt only, the hw wdt still runs
   inline void wdtPause() {
 #ifdef ESP8266
     ESP.wdtDisable();

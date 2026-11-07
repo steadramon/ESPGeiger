@@ -75,7 +75,7 @@ corium::LegacyRows GMC::legacyAliases() { return GMC_LEGACY; }
 // === END LEGACY IMPORT ===
 
 GMC::GMC() {
-  pingIntervalMs = (uint32_t)GMC_INTERVAL * 1000UL;
+  _every_ms = (uint32_t)GMC_INTERVAL * 1000UL;
 }
 
 // "OK.ERR0" on success
@@ -97,10 +97,10 @@ bool GMC::interpret(const char* r)
 }
 
 bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
-  const char* _api_id    = corium::Prefs::getString("gmc", K_AID);
-  const char* _api_gc_id = corium::Prefs::getString("gmc", K_GCID);
-  bool has_id   = (_api_id[0]    != '\0');
-  bool has_gcid = (_api_gc_id[0] != '\0');
+  const char* id   = corium::Prefs::getString("gmc", K_AID);
+  const char* gcid = corium::Prefs::getString("gmc", K_GCID);
+  bool has_id   = (id[0]   != '\0');
+  bool has_gcid = (gcid[0] != '\0');
 
   if (!has_id && !has_gcid) return false;
   if (!upload_ready(logTag())) return false;
@@ -113,12 +113,13 @@ bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
   corium::Log::debug(PSTR("GMC: Uploading latest data ..."));
 
   char aid[3 * GMC_ID_MAX + 1], gid[3 * GMC_ID_MAX + 1];
-  egesc_url(aid, sizeof(aid), _api_id);
-  egesc_url(gid, sizeof(gid), _api_gc_id);
-  int avgcpm = CounterMaths::to_int(corium::m_f(M_CPM_ST));
+  egesc_url(aid, sizeof(aid), id);
+  egesc_url(gid, sizeof(gid), gcid);
+  // CPM the 60 s bucket, ACPM and uSV the 5 min average
+  int cpm = CounterMaths::to_int(corium::m_f(M_CPM_ST));
   char acpm[16], usv[16];
   format_f(acpm, sizeof(acpm), corium::m_f(M_CPM5));
   format_f(usv,  sizeof(usv),  corium::m_f(M_USV5), 4);
-  return urlFits(snprintf_P(url, cap, GMC_URI, aid, gid, avgcpm, acpm, usv), cap);
+  return urlFits(snprintf_P(url, cap, GMC_URI, aid, gid, cpm, acpm, usv), cap);
 }
 #endif

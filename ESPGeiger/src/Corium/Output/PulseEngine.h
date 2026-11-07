@@ -96,7 +96,7 @@ public:
   static constexpr uint8_t  FADE_SHIFT_MAX = 4;
   static constexpr uint8_t  FADE_SHIFT_DEFAULT = 3;
   static constexpr uint32_t FADE_STEP_US = 5000;
-  static constexpr uint16_t FADE_FLOOR = 8;
+  static constexpr uint16_t FADE_FLOOR = 8;   // below it, straight to off
 
   // callers pass prefs straight in
   void commitConfig() {
@@ -129,7 +129,7 @@ public:
     return phasesRemaining != 0 || (mode == MODE_FADE && brightness > 0);
   }
 
-  // one compare when idle
+  // poll side, micros; one compare when idle
   inline void loop(uint32_t now_us) {
     if (mode == MODE_FADE && brightness > 0) {
       if (!reached(now_us, nextUs)) return;
@@ -174,6 +174,7 @@ private:
       return;
     }
     if (mode == MODE_BURST) {
+      // tone() takes ms, round up, at least 1
       uint32_t duration_us = (uint32_t)cycles * 1000000UL / burstFreqEff;
       uint32_t duration_ms = (duration_us + 999u) / 1000u;
       if (duration_ms == 0) duration_ms = 1;

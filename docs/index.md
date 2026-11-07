@@ -44,8 +44,6 @@ ESPGeiger is a free, open-source firmware allowing you to transform any compatib
 
 ESPGeiger is used to power __ESPGeiger-HW__ - the fully featured IoT Geiger Counter from the creator of ESPGeiger.
 
-ESPGeiger-HW is almost ready for release!
-
 <img src="../img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
 
 ## Disclaimer

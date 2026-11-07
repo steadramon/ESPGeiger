@@ -43,10 +43,12 @@ class PrefsStorage {
     PrefsStorage();
     ~PrefsStorage();
 
+    // dir /name/, mounts the fs; false = prefs run on defaults
     bool begin(const char* name);
     void end();
 
     bool has(const char* module_id);
+    // cb per record; false = no file, bad magic or size, or a record cut short
     bool readGroup(const char* module_id, ReadCb cb, void* ctx);
     bool writeGroup(const char* module_id, const void* buf, size_t len);
     // writeGroup in two steps, many groups land together
@@ -58,7 +60,7 @@ class PrefsStorage {
     static constexpr size_t DIR_NAME_MAX = 15;
 
   private:
-    char   _path[DIR_NAME_MAX + 3];   // "/name/"
+    char   _dir[DIR_NAME_MAX + 3];   // "/name/"
     bool   _started;
 };
 

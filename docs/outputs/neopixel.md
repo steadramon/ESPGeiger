@@ -67,7 +67,7 @@ This is noise-aware: at low rates a small absolute change carries little statist
 | `z < -1.5` | __PURPLE__ | Dropping (≥1.5σ below baseline) |
 | _otherwise_ | __GREEN__ | Within normal variation around baseline |
 
-In mode 4, if a [warning or alert threshold](/configuration#system-settings) is configured and the current CPM crosses it, the NeoPixel switches to __YELLOW__ (warning) or __RED__ (alert) regardless of the z-score above. Mode 3 ignores the thresholds and shows only the trend colour.
+In mode 4, if a [warning or alert threshold](/configuration#counter-settings) is configured and the current CPM crosses it, the NeoPixel switches to __YELLOW__ (warning) or __RED__ (alert) regardless of the z-score above. Mode 3 ignores the thresholds and shows only the trend colour.
 
 ## Why mode 3/4 flashes look more regular than real clicks
 

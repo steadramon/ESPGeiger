@@ -72,7 +72,7 @@ static uint8_t bcd(uint8_t b) {
 }
 static uint8_t to_bcd(uint8_t v) { return (uint8_t)((v / 10) << 4 | (v % 10)); }
 
-// 2000-2199; the chips count a 29 Feb 2100, we don't
+// 2000-2199; the chips count a 29 Feb 2100, this doesn't
 static bool leap(uint16_t y) { return (y & 3) == 0 && y != 2100; }
 static const uint16_t BEFORE[13] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
 
@@ -95,7 +95,7 @@ static time_t epoch_of(uint8_t y, uint8_t mo, uint8_t d, uint8_t h, uint8_t m, u
   return (time_t)days * 86400 + h * 3600UL + m * 60UL + s;   // 2106 on is past 32 bits
 }
 
-// 12 h mode too, we only write 24
+// 12 h mode too, writes are always 24
 static uint8_t ds_hour(uint8_t b) {
   if (!(b & 0x40)) return bcd(b & 0x3F);
   uint8_t h = bcd(b & 0x1F);

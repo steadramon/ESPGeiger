@@ -20,12 +20,12 @@
 
 #include <stddef.h>
 
-// snprintf style, in may be PROGMEM
+// snprintf style: returns full length, out cut and NUL ended; in may be PROGMEM
 // grows json 6x, html 6x, url 3x, prom 3x
 #define EGESC_GROW_MAX 6
-size_t egesc_json(char* out, size_t cap, const char* in);  // json.dumps body
-size_t egesc_html(char* out, size_t cap, const char* in);  // html.escape
-size_t egesc_url (char* out, size_t cap, const char* in);  // quote(safe='')
+size_t egesc_json(char* out, size_t cap, const char* in);  // json string body
+size_t egesc_html(char* out, size_t cap, const char* in);  // & < > " '
+size_t egesc_url (char* out, size_t cap, const char* in);  // all but unreserved
 size_t egesc_prom(char* out, size_t cap, const char* in);  // label value
 
-bool egesc_utf8_ok(const char* in);
+bool egesc_utf8_ok(const char* in);  // false on any byte that would become U+FFFD

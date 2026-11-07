@@ -37,8 +37,9 @@ Sound sound;
 CORIUM_REGISTER_MODULE(sound)
 
 static constexpr uint16_t BURST_HZ = 2700;   // the coil's resonance
-static constexpr uint8_t GAP_PCT = 12;       // rtttl, as the hw demo page
+static constexpr uint8_t GAP_PCT = 12;       // rtttl, quiet end of each note
 
+// a higher one cuts in, urgent ignores volume and quiet hours
 enum : uint8_t { P_LOW = 1, P_MID, P_URGENT };
 
 CORIUM_PSTR(K_VOLUME,    "volume");
@@ -57,7 +58,7 @@ CORIUM_PSTR(K_OTA_FAIL,  "ota_fail");
 CORIUM_PSTR(K_BUTTON,    "button");
 CORIUM_PSTR(K_CLICK,     "click");
 
-// from the hw32 session's demo page
+// built-in tunes, EGTune steps
 CORIUM_PSTR(T_COPIER, "c,p79,c,p189,c,p119,c,p129,1500>3000:500@15,p90,c,p15,c,p15,c,p15,c,p15,"
                   "c,p15,c,p15,c,p15,c,p15,c,p181,2700:80,p80,2700:80");
 CORIUM_PSTR(T_DING,    "3136:40@25,3136:40@15,3136:50@8");
@@ -243,13 +244,13 @@ void Sound::play(uint8_t id) {
   if (t) TunePlayer::play((uint32_t)micros(), t, len, prio, vol);
 }
 
-void Sound::click(uint32_t now) {
+void Sound::click(uint32_t now_us) {
   if (!_click_on || !_vol || TunePlayer::busy() || gcounter.is_quiet_now()) return;
   const EGTune::Step& c = _click;
   uint8_t duty = TunePlayer::at_volume(c.duty ? c.duty : _duty, _vol);
-  if (c.op == EGTune::PULSE) corium::Buzzer::pulse(now, c.ms * 1000);
-  else if (c.op == EGTune::BURST) corium::Buzzer::burst(now, c.hz ? c.hz : BURST_HZ, c.ms);
-  else if (c.op == EGTune::TONE) corium::Buzzer::tone(now, c.hz, corium::Buzzer::toneCycles(c.ms, c.hz), duty);
+  if (c.op == EGTune::PULSE) corium::Buzzer::pulse(now_us, c.ms * 1000);
+  else if (c.op == EGTune::BURST) corium::Buzzer::burst(now_us, c.hz ? c.hz : BURST_HZ, c.ms);
+  else if (c.op == EGTune::TONE) corium::Buzzer::tone(now_us, c.hz, corium::Buzzer::toneCycles(c.ms, c.hz), duty);
 }
 
 // over chimes, alarms full as they'd play
@@ -304,7 +305,7 @@ void Sound::alarm(unsigned long now) {
   _alert = a;
   if (a) {
     play(ALERT);
-    _next_alert = now + _repeat_ms;
+    _repeat_at = now + _repeat_ms;
     return;
   }
   TunePlayer::stop();
@@ -320,9 +321,9 @@ void Sound::loop(unsigned long now) {
     s_ota = 0;
     play(ota == 1 ? OTA : OTA_FAIL);
   }
-  if (_alert && _repeat_ms && corium::reached(now, _next_alert)) {
+  if (_alert && _repeat_ms && corium::reached(now, _repeat_at)) {
     play(ALERT);
-    _next_alert = now + _repeat_ms;
+    _repeat_at = now + _repeat_ms;
   }
   if (!_fault_said && corium::Buzzer::faulted()) {
     _fault_said = true;
@@ -335,8 +336,8 @@ void Sound::loop(unsigned long now) {
 void Sound::schedule(unsigned long now, uint32_t us) {
   bool any = us != 0;
   unsigned long next = now + (us + 999) / 1000;
-  if (_alert && _repeat_ms && (!any || (long)(_next_alert - next) < 0)) {
-    next = _next_alert;
+  if (_alert && _repeat_ms && (!any || (long)(_repeat_at - next) < 0)) {
+    next = _repeat_at;
     any = true;
   }
   if (any) corium::Registry::dueAt(this, next);

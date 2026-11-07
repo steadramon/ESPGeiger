@@ -35,7 +35,7 @@ void corium::HttpPoster::setEnabled(bool on) {
 
 uint16_t corium::HttpPoster::setIntervalS(int s, int lo, int hi) {
   s = clamp(s, lo, hi);
-  pingIntervalMs = (uint32_t)s * 1000UL;
+  _every_ms = (uint32_t)s * 1000UL;
   return (uint16_t)s;
 }
 
@@ -55,7 +55,7 @@ void corium::HttpPoster::loop(unsigned long now)
   if (request.busy()) {
     corium::Registry::dueAt(this, request.due());   // the reply posts us sooner
   } else if (_send_enabled) {
-    corium::Registry::dueAt(this, lastPing + pingIntervalMs);
+    corium::Registry::dueAt(this, _ping_ms + _every_ms);
   } else {
     corium::Registry::every(this, 0);
   }
@@ -63,11 +63,11 @@ void corium::HttpPoster::loop(unsigned long now)
 
 // whole intervals, keeps the slot
 bool corium::HttpPoster::slot_due(unsigned long now) {
-  if (lastPing == 0) {
-    lastPing = corium::SendSlot::initialPing(name(), now, pingIntervalMs);
+  if (_ping_ms == 0) {
+    _ping_ms = corium::SendSlot::initialPing(name(), now, _every_ms);
     return false;
   }
-  return corium::dueSteps(now, lastPing, pingIntervalMs);
+  return corium::dueSteps(now, _ping_ms, _every_ms);
 }
 
 void corium::HttpPoster::take_reply()

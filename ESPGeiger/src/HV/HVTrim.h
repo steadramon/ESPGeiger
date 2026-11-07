@@ -21,6 +21,7 @@
 #define HV_TRIM_H
 #include <stdint.h>
 
+// 1 s readings in the trim average
 static constexpr uint8_t HV_TRIM_N = 8;
 
 // volts, 2 ADC counts
@@ -28,9 +29,10 @@ inline int hvtrim_band(int ratio) {
   return (2 * ratio) >> 10;
 }
 
+// ADC samples a reading, median taken
 static constexpr uint8_t HV_ADC_MAX = 10;
 
-// sum keeps the fraction
+// volts = adc * ratio >> 10; sum keeps the fraction
 inline int hv_volts(uint32_t ratio, uint32_t sum, uint8_t n, int offset) {
   if (!n) return offset;
   return (int)((ratio * sum / n) >> 10) + offset;
@@ -48,6 +50,7 @@ inline uint32_t hv_median2(uint16_t* r, uint8_t n) {
   return (uint32_t)r[(n - 1) / 2] + r[n / 2];
 }
 
+// readings over the limit in a row, 0 limit = off
 inline uint8_t hv_over_count(uint8_t count, int volts, int limit) {
   if (limit <= 0 || volts <= limit) return 0;
   return count < UINT8_MAX ? count + 1 : count;

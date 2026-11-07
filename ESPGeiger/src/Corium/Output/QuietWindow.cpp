@@ -33,10 +33,10 @@ bool corium::QuietWindow::active() {
   if (!corium::Clock::synced) return false;
   unsigned long now_ms = corium::fastMillis();
   // never more than a minute ahead, so a far one is stale (not asked for weeks)
-  if (!corium::reached(now_ms, _recompute_ms) && (uint32_t)(_recompute_ms - now_ms) <= 60000UL) return _cached;
+  if (!corium::reached(now_ms, _recompute_ms) && (uint32_t)(_recompute_ms - now_ms) <= 60000UL) return _quiet;
   struct tm t;
   if (!corium::Clock::localTm(&t)) return false;
-  _cached = quietInWindow(t.tm_hour * 60 + t.tm_min, _from, _to);
+  _quiet = quietInWindow(t.tm_hour * 60 + t.tm_min, _from, _to);
   _recompute_ms = now_ms + (60UL - t.tm_sec) * 1000UL;
-  return _cached;
+  return _quiet;
 }

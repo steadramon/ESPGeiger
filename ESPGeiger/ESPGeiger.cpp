@@ -45,6 +45,7 @@
 
 GRNG grng;
 
+// the ms ticker: blip LED and pulse out pins
 static inline void ms_poll(uint32_t now_us) {
 #ifdef LED_FLASH_ENGINE
   if (BlipLed::due()) BlipLed::poll(now_us);
@@ -57,7 +58,7 @@ static inline void ms_poll(uint32_t now_us) {
 
 static void counter_second(uint32_t up) { gcounter.secondticker(up); }
 
-static corium::WebPortal s_webPortal;
+static corium::WebPortal s_portal;
 
 static void boot_banner() {
   corium::Log::banner(PSTR("   ___"));
@@ -112,7 +113,7 @@ void setup()
   if (!safe && corium::Wifi::portalAhead()) {
     BootHooks::displaySetupWifi(corium::DeviceInfo::hostname());
   }
-  corium::Boot::net(s_webPortal);
+  corium::Boot::net(s_portal);
 
   if (!safe) {
     grng.begin();
@@ -123,6 +124,7 @@ void setup()
   BootHooks::displayResetTimeout();
 }
 
+// every loop pass, the inline gate first
 static inline void counter_pass(unsigned long now)
 {
   if (gcounter.needs_loop(now)) gcounter.loop();
@@ -130,7 +132,7 @@ static inline void counter_pass(unsigned long now)
 
 void loop()
 {
-  corium::Reactor::run<counter_pass>(s_webPortal);
+  corium::Reactor::run<counter_pass>(s_portal);
 }
 
 #ifdef ESP8266

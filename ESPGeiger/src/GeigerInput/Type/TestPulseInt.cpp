@@ -18,7 +18,7 @@
 */
 #include "TestPulseInt.h"
 
-#if GEIGER_IS_TEST(GEIGER_TYPE)
+#if GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
 
 #include "Corium/Logger/Logger.h"
 #ifdef USE_PCNT
@@ -29,7 +29,7 @@
 static volatile uint32_t s_half;   // ticks, isr reads it
 static uint32_t s_tx_mask;   // 0 = no TX pin
 static bool s_tx_hi;
-static bool _bool_pulse_state = false;
+static bool s_high = false;
 
 GeigerTestPulseInt::GeigerTestPulseInt() {
   strlcpy(_test_type, "TestPulsePWM", sizeof(_test_type));
@@ -58,10 +58,10 @@ void GeigerTestPulseInt::begin() {
     corium::Log::console(PSTR("TestPulsePWM: TXPIN %d can't be driven, no TX"), _tx_pin);
   }
   CPMAdjuster();
-  _target_pwm = calcPWM();
-  s_half = (uint32_t)_target_pwm;
+  _target_half = calcPWM();
+  s_half = (uint32_t)_target_half;
   TestTimer::start(pulseInterrupt, s_half);
-  _current_pwm = _target_pwm;
+  _cur_half = _target_half;
 }
 
 void GeigerTestPulseInt::loop() {
@@ -75,14 +75,15 @@ void GeigerTestPulseInt::restartAfterOTA() { TestTimer::start(pulseInterrupt, s_
 
 // returns ticks to the next
 uint32_t CORIUM_ISR_ATTR GeigerTestPulseInt::pulseInterrupt() {
-  _bool_pulse_state = !_bool_pulse_state;
-  TestTimer::tx(s_tx_mask, s_tx_hi, _bool_pulse_state);
+  s_high = !s_high;
+  TestTimer::tx(s_tx_mask, s_tx_hi, s_high);
 #ifdef GEIGER_COUNT_TXPULSE
-  if (!_bool_pulse_state) GeigerInputTest::timerPulse();
+  if (!s_high) GeigerInputTest::timerPulse();
 #endif
   return s_half;
 }
 
+// half period in ticks, square wave at the target cps
 double GeigerTestPulseInt::calcPWM() {
   double r = (GEIGER_TEST_TIMER_DIV / GeigerInputTest::getTargetCPS()) / 2;
   // 0 re-fires nonstop
@@ -97,10 +98,10 @@ void GeigerTestPulseInt::secondTicker() {
   checkIsrStorm();
 #endif
   CPMAdjuster();
-  _target_pwm = calcPWM();
-  if (_target_pwm != _current_pwm) {
-    s_half = (uint32_t)_target_pwm;   // next edge picks it up
-    _current_pwm = _target_pwm;
+  _target_half = calcPWM();
+  if (_target_half != _cur_half) {
+    s_half = (uint32_t)_target_half;   // next edge picks it up
+    _cur_half = _target_half;
   }
 }
 
@@ -115,4 +116,4 @@ int GeigerTestPulseInt::collect() {
   return n;
 }
 #endif
-#endif // GEIGER_IS_TEST
+#endif // GEIGER_TYPE_TESTPULSEINT

@@ -33,6 +33,7 @@
 
 namespace corium {
 
+// a Sender that posts every _every_ms on its send slot, one request at a time
 class HttpPoster : public Sender {
   public:
     bool requiresWifi() override { return true; }
@@ -46,25 +47,26 @@ class HttpPoster : public Sender {
   protected:
     // false skips, body null for GET, else malloc'd and post() frees it
     virtual bool prepare(char* url, size_t cap, const char** body) = 0;
+    // reply body, NUL ended, true = a good send
     virtual bool interpret(const char* reply) = 0;
     virtual const char* logTag() = 0;
     virtual const char* statusKey() { return name(); }
     virtual const char* method() const { return "GET"; }
     virtual uint16_t timeoutS() const { return 30; }
-    virtual size_t replyCap() const { return 64; }
+    virtual size_t replyCap() const { return 64; }   // bytes kept, REPLY_CAP max
     // else logged as an error
     virtual bool okCode(int code) const { return code == 200; }
     // a body's type, sent as Accept too
     virtual PGM_P contentType() const { return nullptr; }
 
     void setEnabled(bool on);
-    // clamped secs back, pingIntervalMs from it
+    // clamped secs back, _every_ms from it
     uint16_t setIntervalS(int s, int lo, int hi);
     // n from snprintf, a cut url is logged and not sent
     bool urlFits(int n, size_t cap);
 
-    uint32_t lastPing = 0;
-    uint32_t pingIntervalMs = 0;
+    uint32_t _ping_ms = 0;
+    uint32_t _every_ms = 0;
     bool _send_enabled = false;
 
   private:

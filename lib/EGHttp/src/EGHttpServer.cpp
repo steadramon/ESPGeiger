@@ -90,6 +90,7 @@ static void write_status(EGTcpClient* c, PGM_P status, uint8_t retry_s = 0) {
   #define EGHTTP_TRACE(...) do {} while (0)
 #endif
 
+// past s->due, wrap safe
 static bool eghttp_late(const EGHttpServer::Slot* s) {
   return (int32_t)(EGClock::now() - s->due) >= 0;
 }
@@ -104,7 +105,7 @@ static bool send_fail(EGHttpServer::Slot* s, PGM_P why, size_t sent, size_t len)
 static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len) {
   if (!s || s->send_aborted) return false;
   size_t sent = 0;
-  uint32_t last_progress = EGClock::now();
+  uint32_t last_ms = EGClock::now();
   while (sent < len) {
     if (s->send_aborted) return false;
     if (!s->client || !s->client->connected()) return send_fail(s, PSTR("client gone"), sent, len);
@@ -115,12 +116,12 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     // write() already sends
     size_t wrote = take ? s->client->write(data + sent, take) : 0;
     if (wrote == 0) {
-      if (EGClock::now() - last_progress > EGHTTP_SEND_BUDGET_MS) return send_fail(s, PSTR("stalled"), sent, len);
+      if (EGClock::now() - last_ms > EGHTTP_SEND_BUDGET_MS) return send_fail(s, PSTR("stalled"), sent, len);
       EGHTTP_BACKPRESSURE_PAUSE();
       continue;
     }
     sent += wrote;
-    last_progress = EGClock::now();
+    last_ms = EGClock::now();
     yield();
   }
   return true;
@@ -194,7 +195,7 @@ static size_t eghttp_find_header_end(const char* buf, size_t len) {
 
 // ---------- EGHttpServer ----------
 
-static const uint8_t ROUTE_STEP = 16;
+static const uint8_t ROUTE_STEP = 16;   // grow by, the cap stays below NO_ROUTE
 
 bool EGHttpServer::growRoutes() {
   if (_routeCap > NO_ROUTE - ROUTE_STEP) return false;
@@ -324,7 +325,6 @@ void EGHttpServer::end() {
 #endif
 }
 
-// fresh slot, buf kept
 // nullptr = none, cap 0
 static void set_acc(EGHttpServer::Slot* s, char* buf, size_t cap) {
   s->chunkAcc    = buf;
@@ -332,6 +332,7 @@ static void set_acc(EGHttpServer::Slot* s, char* buf, size_t cap) {
   s->chunkAccCap = buf ? cap : 0;
 }
 
+// fresh slot, buf kept
 static void clear_slot(EGHttpServer::Slot* s) {
   s->len            = 0;
   s->contentLength  = 0;

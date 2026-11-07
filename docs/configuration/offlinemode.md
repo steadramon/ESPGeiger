@@ -21,15 +21,15 @@ Offline mode needs a build with a push button.
 
 > Holding the button for 5 seconds or more performs a **factory reset**: settings and Wi-Fi credentials are erased. The Stations identity and lifetime totals are kept. A hold of 30 seconds or more is taken as a stuck button and ignored: the device boots as normal, online.
 
-Over the USB console, type `offline` while the device is in its setup portal or joining Wi-Fi: that boot goes offline the same way. `set wifi.mode 1` makes every boot offline until `set wifi.mode 0` (see [Serial](/outputs/serial)).
+Over the USB console, type `offline` while the device is in its setup portal or joining Wi-Fi: that boot goes offline the same way. `set wifi.mode 1` makes every boot offline until `set wifi.mode 0` (see [Serial](/output/serial)).
 
-To keep the web UI without a network, `set wifi.mode 2` makes the device start its own hotspot instead (see [Serial](/outputs/serial#its-own-hotspot)).
+To keep the web UI without a network, `set wifi.mode 2` makes the device start its own hotspot instead (see [Serial](/output/serial#its-own-hotspot)).
 
 ## What Offline Mode Does
 
 * Wi-Fi stays off. No uploads, no web portal, no network time.
 * The Geiger counter, display and local outputs work as normal.
-* SD card rows go to `undated.csv` with the seconds since boot, unless an RTC chip or a restart kept the time. See [SD Card](/outputs/sdcard#time-without-a-network).
+* SD card rows go to `undated.csv` with the seconds since boot, unless an RTC chip or a restart kept the time. See [SD Card](/output/sdcard#time-without-a-network).
 * The display timeout is switched off.
 
 To go back online, reboot without holding the button.

@@ -26,6 +26,7 @@
 #include "Corium/Module/Module.h"
 #include "GeigerInput/SerialFormat.h"
 
+// Readings on the console uart every interval, logs off while it runs
 class SerialOut : public corium::Module {
     public:
       static constexpr uint8_t SHOW_CPM = 1 << 0;
@@ -43,7 +44,7 @@ class SerialOut : public corium::Module {
       const corium::PrefGroup* prefsGroup() override;
       uint8_t displayOrder() override { return 15; }
       void onPrefsLoaded() override;
-      void set_show(int var);
+      void set_show(int secs);
       void print_cpm();
       void print_usv();
       void toggle(uint8_t show);
@@ -51,7 +52,8 @@ class SerialOut : public corium::Module {
       void toggle_usv() { toggle(SHOW_USV); }
       void toggle_hv()  { toggle(SHOW_HV); }
       void toggle_cps() { toggle(SHOW_CPS); }
-      uint16_t interval() const { return _interval; }
+      // s, 0 = off
+      uint16_t interval() const { return _interval_s; }
       void setInterval(uint16_t v);
       uint8_t format() const { return _format; }
       uint32_t baud() const { return _baud; }
@@ -65,9 +67,9 @@ class SerialOut : public corium::Module {
       char* _rest = nullptr;   // line not out yet, heap
       uint16_t _rest_n = 0;
       uint16_t _rest_at = 0;
-      unsigned long _last_fire = 0;
-      uint8_t _show_flags = 0;
-      uint16_t _interval = 0;
+      unsigned long _fired_ms = 0;
+      uint8_t _show = 0;
+      uint16_t _interval_s = 0;
       uint8_t _format = SO_LABELLED;
       uint32_t _baud = 0;      // 0 = framework default (115200)
       SerialFormat::FormatFn _fmt_fn = nullptr;

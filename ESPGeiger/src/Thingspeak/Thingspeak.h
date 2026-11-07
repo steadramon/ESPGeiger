@@ -26,10 +26,12 @@
 #include "Corium/Net/HttpPoster.h"
 #include "Corium/Prefs/Prefs.h"
 
+// s between uploads
 #ifndef THINGSPEAK_INTERVAL
 #define THINGSPEAK_INTERVAL 90
 #endif
 
+// fields: 1 cpm, 2 uSv/h, 3 cpm5, 4 cpm15; 5-7 t h p appended when present
 const char TS_URI[] PROGMEM = "http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%s&field3=%d&field4=%d";
 
 class Thingspeak : public corium::HttpPoster {

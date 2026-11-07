@@ -20,7 +20,7 @@
 
 #include <pgmspace.h>
 
-// As CPython, bad utf-8 becomes U+FFFD
+// bad utf-8 becomes U+FFFD
 
 namespace {
 

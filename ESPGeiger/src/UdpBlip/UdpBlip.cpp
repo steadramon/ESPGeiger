@@ -102,8 +102,8 @@ void UdpBlipModule::begin() {
 
 void UdpBlipModule::readPrefs() {
   _mode = (uint8_t)corium::Prefs::getUInt("udpblip", EG_K_MODE);
-  const char* gstr = corium::Prefs::getString("udpblip", K_GROUP);
-  if (!gstr || !gstr[0] || !_group.fromString(gstr)) {
+  const char* group = corium::Prefs::getString("udpblip", K_GROUP);
+  if (!group || !group[0] || !_group.fromString(group)) {
     _group.fromString(UDPBLIP_DEFAULT_GROUP);
   }
   uint32_t p = corium::Prefs::getUInt("udpblip", EG_K_PORT);
@@ -129,10 +129,6 @@ void UdpBlipModule::teardown() {
 bool UdpBlipModule::ensureUdp() {
   if (_udp) return true;
   _udp = new WiFiUDP();
-  if (!_udp) {
-    corium::Log::console(PSTR("UdpBlip: WiFiUDP alloc failed"));
-    return false;
-  }
   // random, not lwIP's shared 60288
   if (_src_port == 0) {
     _src_port = (uint16_t)(49152u + (GRNG::fast_uint32() & 0x3FFFu));
@@ -202,8 +198,8 @@ void UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   wake(_backoff.at);
 }
 
-void UdpBlipModule::emitClick(uint32_t counter, uint32_t ts_ms) {
-  wrBe32(&_click_packet[BLIP_CLICK_COUNT_AT], counter);
+void UdpBlipModule::emitClick(uint32_t count, uint32_t ts_ms) {
+  wrBe32(&_click_packet[BLIP_CLICK_COUNT_AT], count);
   wrBe32(&_click_packet[BLIP_CLICK_MS_AT], ts_ms);
   sendPacket(_click_packet, sizeof(_click_packet));
 }
@@ -269,7 +265,7 @@ bool UdpBlipModule::tryEmitClick(unsigned long now_ms) {
   if (!corium::Wifi::connected) return false;
   uint32_t true_count = (uint32_t)gcounter.total_clicks + s_event_counter;
   if (true_count == _last_clicks) return false;
-  if (!corium::otaInProgress && takeToken(now_ms, _last_token_ms, _burst_tokens,
+  if (!corium::otaInProgress && takeToken(now_ms, _last_token_ms, _tokens,
                                      UDPBLIP_CLICK_MIN_INTERVAL_MS, UDPBLIP_CLICK_BURST_TOKENS)) {
     _last_clicks = true_count;
     emitClick(true_count, (uint32_t)now_ms);

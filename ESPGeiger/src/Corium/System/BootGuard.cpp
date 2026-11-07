@@ -36,16 +36,16 @@ static constexpr uint32_t MAGIC = 0xE56B0014;
 
 #ifdef ESP8266
 typedef RtcSlot<State, RtcMap::BOOTGUARD_AT, RtcMap::BOOTGUARD_WORDS> Slot;
-static State s;
+static State s_state;
 
 static void load() {
-  if (!Slot::read(s)) s.magic = 0;
+  if (!Slot::read(s_state)) s_state.magic = 0;
 }
 static void save() {
-  Slot::write(s);
+  Slot::write(s_state);
 }
 #else
-static RTC_NOINIT_ATTR State s;   // garbage after power-on, magic catches it
+static RTC_NOINIT_ATTR State s_state;   // garbage after power-on, magic catches it
 
 static void load() {}
 static void save() {}
@@ -56,37 +56,37 @@ static bool     s_entered = false;
 
 void onBoot() {
   load();
-  bool was_safe = s.safe;
+  bool was_safe = s_state.safe;
   Ending end = ending(DeviceInfo::resetReason());
   if (CrashDump::hasCrash()) end = END_CRASH;   // esp8266 abort() looks like a restart
-  apply(s, MAGIC, DeviceInfo::fwFingerprint(), end);
-  if (s.safe) {
+  apply(s_state, MAGIC, DeviceInfo::fwFingerprint(), end);
+  if (s_state.safe) {
     s_entered = !was_safe;
-    s_retry_ms = retryMs(s.retries);
-    if (s.retries < 255) s.retries++;
+    s_retry_ms = retryMs(s_state.retries);
+    if (s_state.retries < 255) s_state.retries++;
   }
   save();
 }
 
 void requestSafe() {
-  s.enter = 1;
+  s_state.enter = 1;
   save();
 }
 
 void markLived() {
-  s.lived = 1;
+  s_state.lived = 1;
   save();
 }
 
 void markDay() {
-  s.retries = 0;
+  s_state.retries = 0;
   save();
 }
 
-bool     safeMode()    { return s.safe; }
+bool     safeMode()    { return s_state.safe; }
 bool     entered()      { return s_entered; }
 uint32_t retryAfterMs()  { return s_retry_ms; }
-uint8_t  crashStreak() { return s.crashStreak; }
+uint8_t  crashStreak() { return s_state.crashStreak; }
 
 }
 }  // namespace corium

@@ -17,13 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Split out of SerialFormat.cpp so these can be host tested. They take a
-// const char* and fill two ints: no Counter, no corium::Prefs, no OutputVars, which
-// is what the formatters in that file drag in.
-//
-// This is untrusted input off a wire, so treat every bound here as load
-// bearing. A value that escapes one goes straight into
-// Counter::on_pulse_batch.
+// Host tested: no Counter, Prefs or OutputVars
+// Untrusted wire input, every bound matters: it goes on into the counter
 
 #ifndef GEIGER_SERIAL_PARSE_H
 #define GEIGER_SERIAL_PARSE_H
@@ -32,12 +27,10 @@
 
 namespace SerialFormat {
 
-// Largest count any protocol may report. Above this the line is rejected
-// rather than clamped: a plausible-looking number out of a garbled line is
-// worse than no reading.
+// Over this the line is dropped, not clamped: no reading beats a garbled one
 static const int SERIAL_MAX_COUNT = 1000000;
 
-// Printable plus CR/LF over the whole line. Runs before any protocol parser.
+// Printable plus CR/LF, before any parser
 bool common_validate(const char* in, size_t len);
 
 bool parse_gc10(const char* in, int* out_cpm, int* out_cps);

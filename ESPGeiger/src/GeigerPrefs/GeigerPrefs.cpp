@@ -111,7 +111,7 @@ CORIUM_PSTR(IN_L_CNT, "Count with");
 CORIUM_PSTR(IN_O_CNT, "Hardware|Interrupt");
 CORIUM_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM. Reboot.");
 #ifdef NO_PCNT_ENV
-#define COUNT_MODE_DEF "1"   // _no_pcnt envs, retired in 0.15
+#define COUNT_MODE_DEF "1"   // _no_pcnt envs
 #else
 #define COUNT_MODE_DEF "0"
 #endif
@@ -294,9 +294,9 @@ static void keep_count_mode() {
 void CounterPrefs::onPrefsLoaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   _serial_type = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
-  uint8_t cw = (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW);
-  if (SerialFormat::has_cps(_serial_type)) cw = GEIGER_CPM_COUNT;
-  gcounter.set_cpm_window(cw);
+  uint8_t window = (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW);
+  if (SerialFormat::has_cps(_serial_type)) window = GEIGER_CPM_COUNT;
+  gcounter.set_cpm_window(window);
 #endif
   boot_pins();
 #ifdef NO_PCNT_ENV
@@ -523,12 +523,12 @@ void LedPrefs::onPrefsLoaded() {
   // UI is Pulse|Fade
   bool fade            = (corium::Prefs::getUInt("led", EG_K_MODE) == 1);
   uint8_t engine_mode  = fade ? corium::PulseEngine::MODE_FADE : corium::PulseEngine::MODE_PULSE;
-  uint8_t fadeIdx      = (uint8_t)corium::Prefs::getUInt("led", EG_K_FADE_SHIFT);
+  uint8_t fade_idx     = (uint8_t)corium::Prefs::getUInt("led", EG_K_FADE_SHIFT);
   uint16_t pulse_us    = (uint16_t)(corium::Prefs::getUInt("led", EG_K_PULSE_MS) * 1000);
 #ifdef LED_FLASH_ENGINE
-  BlipLed::setConfig(engine_mode, pulse_us, fadeIdx, 0);
+  BlipLed::setConfig(engine_mode, pulse_us, fade_idx, 0);
 #else
-  corium::LedSignal::setFlashConfig(engine_mode, pulse_us, fadeIdx);
+  corium::LedSignal::setFlashConfig(engine_mode, pulse_us, fade_idx);
 #endif
 #ifndef ESPGEIGER_HW
   gcounter.set_quiet_hours(

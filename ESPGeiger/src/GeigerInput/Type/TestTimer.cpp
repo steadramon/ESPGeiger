@@ -68,7 +68,7 @@ void TestTimer::restart(uint32_t first) {
 
 #else
 static esp_timer_handle_t s_hdl = NULL;
-static int64_t s_due;   // us, timer task only
+static int64_t s_due_us;   // us, timer task only
 static volatile bool s_rearm;
 static volatile uint32_t s_first;
 
@@ -76,16 +76,16 @@ static volatile uint32_t s_first;
 static void IRAM_ATTR on_timer(void*) {
   if (s_rearm) {   // new rate, from loop
     s_rearm = false;
-    s_due = esp_timer_get_time() + s_first;
+    s_due_us = esp_timer_get_time() + s_first;
     esp_timer_start_once(s_hdl, s_first);
     return;
   }
   uint32_t next = s_fn();
   if (!next) return;
   int64_t now = esp_timer_get_time();
-  s_due += next;
-  if (s_due <= now) s_due = now + next;   // fell behind, no catch-up burst
-  esp_timer_start_once(s_hdl, (uint64_t)(s_due - now));
+  s_due_us += next;
+  if (s_due_us <= now) s_due_us = now + next;   // fell behind, no catch-up burst
+  esp_timer_start_once(s_hdl, (uint64_t)(s_due_us - now));
 }
 
 void TestTimer::start(uint32_t (*fn)(), uint32_t first) {
@@ -95,7 +95,7 @@ void TestTimer::start(uint32_t (*fn)(), uint32_t first) {
     if (esp_timer_create(&cfg, &s_hdl) != ESP_OK) return;
   }
   esp_timer_stop(s_hdl);   // not running is fine
-  s_due = esp_timer_get_time() + first;
+  s_due_us = esp_timer_get_time() + first;
   esp_timer_start_once(s_hdl, first);
 }
 

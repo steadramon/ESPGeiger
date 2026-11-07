@@ -46,9 +46,9 @@ struct State {
   uint32_t fw;
   uint8_t  lived;         // this boot passed LIVED_S
   uint8_t  crashStreak;  // crashes before LIVED_S
-  uint8_t  safe;
+  uint8_t  safe;          // this boot runs safe mode
   uint8_t  retries;       // safe boots since a day up
-  uint8_t  enter;
+  uint8_t  enter;         // requestSafe(), for the next boot
   uint8_t  pad[3];
 };
 static_assert(sizeof(State) == 16, "State is kept in 4 RTC words");
