@@ -132,18 +132,23 @@ static void clear_backups_once_stable() {
   }
 }
 
-bool corium::Wifi::look(unsigned long now) {
-  wl_status_t st = WiFi.status();
-  bool prev = corium::Wifi::connected;
-  corium::Wifi::connected = (st == WL_CONNECTED);
-  if (corium::Wifi::connected) refresh_link_cache(!prev, now);
-
+static void watch_link(wl_status_t st, unsigned long now) {
   if (!corium::Wifi::disabled) {
     if (st != WL_CONNECTED) track_outage(now);
     else if (!s_was_up) note_reconnected(now);
   } else if (!corium::Wifi::offlineForced) {
     reprobe_saved_network(now);
   }
+}
+
+bool corium::Wifi::look(unsigned long now) {
+  wl_status_t st = WiFi.status();
+  bool prev = corium::Wifi::connected;
+  corium::Wifi::connected = (st == WL_CONNECTED);
+  if (corium::Wifi::connected) refresh_link_cache(!prev, now);
+
+  // a join test owns the link till it's done, offline too
+  if (!corium::Wifi::testing()) watch_link(st, now);
 
   if (!corium::Wifi::backupGraceDone && corium::Wifi::connected && now - CORIUM_MS_START > WIFI_BACKUP_MS) clear_backups_once_stable();
   return corium::Wifi::connected != prev;

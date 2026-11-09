@@ -88,11 +88,18 @@ static const char RESCAN_HTML[] PROGMEM =
   "<title>Scanning</title></head><body><h1>Scanning&hellip;</h1>"
   "<p>This page reloads in a few seconds.</p></body></html>";
 
-static const char SAVED_HTML[] PROGMEM =
-  "body{margin-top:3em;text-align:center}"
-  "</style><title>Saved</title></head><body>"
-  "<h1>Saved</h1><p>Connecting to your network. The setup AP will close shortly.</p>"
-  "</body></html>";
+// innerHTML never, the ssids are anyone's
+const char EGPortal::JOIN_JS[] PROGMEM = R"JS((()=>{var E=document.getElementById('jt'),D=E.dataset,A=Date.now(),
+w=(...a)=>{E.textContent='';a.forEach((t,i)=>{var e=document.createElement(i%2?'b':'span');e.textContent=t;E.append(e)})},
+show=r=>{var j=+r.j,s=r.s,ip=' (IP '+r.ip+').';
+if(j<3)return 1;
+if(j==3){D.k==0?w('Connected to ',s,ip+' The setup network is closing.'):w('Connected to ',s,ip+' Restarting to leave hotspot mode; find this device at ',D.h,'.');return 0}
+w(...[['Network ',s,' not found. Check the name, or move closer to it.'],['Password refused by ',s,'.'],['',s,' refused the connection.'],['No reply from ',s,' within 30 seconds.']][j-4]);
+if(D.b){var l=document.createElement('a');l.href=D.b;l.textContent='Back';E.append(' ',l)}return 0},
+go=()=>{var c=new AbortController();setTimeout(()=>c.abort(),2e3);
+fetch(D.u,{cache:'no-store',signal:c.signal}).then(r=>r.json()).then(r=>{A=Date.now();show(r)&&setTimeout(go,2e3)},
+()=>Date.now()-A<2e4?setTimeout(go,2e3):w('Lost the setup network. Reconnect to ',D.a,' and open http://192.168.4.1/ again.'))};
+setTimeout(go,2e3)})())JS";
 
 void EGPortal::begin(const char* apSsid, const char* apPassword) {
   if (_active) return;
@@ -102,7 +109,6 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
   WiFi.disconnect(false, false);   // keep the creds, one arg wipes them
   delay(100);
   int n = WiFi.scanNetworks(false);
-  Serial.printf_P(PSTR("[EGPortal] sync scan: %d networks\n"), n);
   refreshScan(n);
   WiFi.scanDelete();
 
@@ -111,8 +117,11 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
 #elif defined(ESP32)
   WiFi.mode(WIFI_MODE_APSTA);
 #endif
-  if (apPassword && apPassword[0]) WiFi.softAP(apSsid, apPassword);
-  else                              WiFi.softAP(apSsid);
+  // the STA's join moves the AP to its channel, start on the likely one
+  uint8_t chan = (_scanCount && _scan[0].chan) ? _scan[0].chan : 1;
+  WiFi.softAP(apSsid, (apPassword && apPassword[0]) ? apPassword : nullptr, chan);
+  _apSsid = apSsid;
+  _join = JOIN_IDLE;
 
   IPAddress apIp = WiFi.softAPIP();
   _dns.begin(53, EGTcpAddr(apIp[0], apIp[1], apIp[2], apIp[3]));
@@ -123,6 +132,7 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
     _http.on(F("/scan"),     EGHttpRequest::GET,  &EGPortal::hScan, this);
     _http.on(F("/rescan"),   EGHttpRequest::GET,  &EGPortal::hRescan, this);
     _http.on(F("/save"),     EGHttpRequest::POST, &EGPortal::hSave, this);
+    _http.on(F("/status"),   EGHttpRequest::GET,  &EGPortal::hStatus, this);
     _http.on(F("/reset"),    EGHttpRequest::GET,  &EGPortal::hResetConfirm, this);
     _http.on(F("/reset_go"), EGHttpRequest::POST, &EGPortal::hResetGo, this);
     _http.onNotFound(&EGPortal::hCaptive, this);
@@ -139,7 +149,6 @@ void EGPortal::kickScan() {
 }
 
 void EGPortal::takeScan(int n) {
-  Serial.printf_P(PSTR("[EGPortal] async scan: %d networks\n"), n);
   if (n > 0) refreshScan(n);
   WiFi.scanDelete();
 }
@@ -200,18 +209,20 @@ static void sort_by_rssi(EGPortal::ScanEntry* out, size_t count) {
 }
 
 // a 32 byte SSID has no NUL
-static bool scan_ssid(int i, char* out) {
+static bool scan_ssid(int i, char* out, uint8_t* chan) {
 #ifdef ESP32
   const wifi_ap_record_t* r = (const wifi_ap_record_t*)WiFi.getScanInfoByIndex(i);
   if (!r) return false;
   memcpy(out, r->ssid, EGPORTAL_SSID_MAX);
   out[EGPORTAL_SSID_MAX] = '\0';
+  *chan = r->primary;
 #else
   const bss_info* r = WiFi.getScanInfoByIndex(i);
   if (!r) return false;
   size_t n = r->ssid_len < EGPORTAL_SSID_MAX ? r->ssid_len : EGPORTAL_SSID_MAX;
   memcpy(out, r->ssid, n);
   out[n] = '\0';
+  *chan = r->channel;
 #endif
   return out[0] != '\0';
 }
@@ -221,15 +232,19 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
   if (rawCount <= 0 || maxOut == 0 || !out) return 0;
   size_t count = 0;
   char s[EGPORTAL_SSID_MAX + 1];
+  uint8_t chan = 0;
   for (int i = 0; i < rawCount; i++) {
     int8_t rssi = (int8_t)WiFi.RSSI(i);
     if (rssi < rssiMin) continue;
-    if (!scan_ssid(i, s)) continue;
+    if (!scan_ssid(i, s, &chan)) continue;
 
     // keep strongest
     int existing = find_ssid(out, count, s);
     if (existing >= 0) {
-      if (rssi > out[existing].rssi) out[existing].rssi = rssi;
+      if (rssi > out[existing].rssi) {
+        out[existing].rssi = rssi;
+        out[existing].chan = chan;
+      }
       continue;
     }
     // full: the weakest goes, a tie stays
@@ -245,13 +260,13 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
     memcpy(e.ssid, s, sizeof(s));
     e.rssi = rssi;
     e.enc  = (uint8_t)WiFi.encryptionType(i);
+    e.chan = chan;
   }
   sort_by_rssi(out, count);
   return count;
 }
 
 void EGPortal::refreshScan(int n) {
-  Serial.printf_P(PSTR("[EGPortal] refreshScan(%d)\n"), n);
   _scanCount = (uint8_t)processScan(_scan, EGPORTAL_SCAN_MAX, n, EGPORTAL_RSSI_MIN);
 }
 
@@ -262,17 +277,22 @@ static void send_page(EGHttpResponse& res, PGM_P html) {
   res.endChunked();
 }
 
-void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
-  EGPortal* self = static_cast<EGPortal*>(user);
-
+// to the notice, as the root page
+static void send_head(EGHttpResponse& res, const char* title, const char* notice) {
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   res.sendChunk(FPSTR(PAGE_TOP));
   res.sendChunk(FPSTR(PORTAL_STYLE));
-  res.sendChunk(self->_title);
+  res.sendChunk(title);
   res.sendChunk(F("</title></head><body><h1>"));
-  res.sendChunk(self->_title);
+  res.sendChunk(title);
   res.sendChunk(F("</h1>"));
-  if (self->_notice) res.sendChunk(self->_notice);
+  if (notice) res.sendChunk(notice);
+}
+
+void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
+  EGPortal* self = static_cast<EGPortal*>(user);
+
+  send_head(res, self->_title, self->_notice);
   res.sendChunk(FPSTR(PORTAL_FORM));
 
   char ssid[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
@@ -293,7 +313,6 @@ void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
 
 void EGPortal::hScan(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
-  Serial.printf_P(PSTR("[EGPortal] /scan hit, cache=%u\n"), self->_scanCount);
   if (self->_scanCount == 0 && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
     self->kickScan();
   }
@@ -315,6 +334,10 @@ void EGPortal::hScan(EGHttpRequest& req, EGHttpResponse& res, void* user) {
 
 void EGPortal::hSave(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
+  if (self->_join == JOIN_TESTING || self->_join == JOIN_BACK) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), F("Already testing a network, wait for the result."));
+    return;
+  }
 
   const char* ssid = req.arg(F("ssid"));
   // a cut one would fail to join
@@ -338,9 +361,42 @@ void EGPortal::hSave(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   strncpy(self->_savedPass, pass, EGPORTAL_PASS_MAX);
   self->_savedPass[EGPORTAL_PASS_MAX] = '\0';
 
-  send_page(res, SAVED_HTML);
+  if (self->_onSave && !self->_onSave(self->_savedSsid, self->_savedPass, self->_onSaveUser)) {
+    res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory"));
+    return;
+  }
+  self->_join = JOIN_TESTING;   // till the app says, a second save waits
 
-  if (self->_onSave) self->_onSave(self->_savedSsid, self->_savedPass, self->_onSaveUser);
+  send_head(res, self->_title, self->_notice);
+  char ap[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
+  char ssid_esc[sizeof(ap)];
+  egesc_html(ap, sizeof(ap), self->_apSsid ? self->_apSsid : "");
+  egesc_html(ssid_esc, sizeof(ssid_esc), self->_savedSsid);
+  res.sendKV(F("<p id=jt data-u=/status data-k=0 data-a='"), ap, F("'>Testing the connection to <b>"));
+  res.sendKV(nullptr, ssid_esc, F("</b>. This can take up to 30 seconds.</p><script>"));
+  res.sendChunk(FPSTR(EGPortal::JOIN_JS));
+  res.sendChunk(F("</script>"));
+  res.sendChunk(FPSTR(PORTAL_END));
+  res.endChunked();
+}
+
+void EGPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void* user) {
+  EGPortal* self = static_cast<EGPortal*>(user);
+  char ssid[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
+  egesc_json(ssid, sizeof(ssid), self->_savedSsid);
+  char out[sizeof(ssid) + 48];
+  int n = snprintf_P(out, sizeof(out), PSTR("{\"j\":%u,\"s\":\"%s\""), (unsigned)self->_join, ssid);
+  if (n > 0 && self->_join == JOIN_OK) {
+    IPAddress a = WiFi.localIP();
+    n += snprintf_P(out + n, sizeof(out) - n, PSTR(",\"ip\":\"%u.%u.%u.%u\""), a[0], a[1], a[2], a[3]);
+  }
+  if (n <= 0 || (size_t)n + 2 > sizeof(out)) {
+    res.send(500, FPSTR(HTTP_CT_PLAIN), F("status too long"));
+    return;
+  }
+  out[n++] = '}';
+  out[n] = '\0';
+  res.send(200, FPSTR(HTTP_CT_JSON), out);
 }
 
 void EGPortal::hRescan(EGHttpRequest& req, EGHttpResponse& res, void* user) {

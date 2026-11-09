@@ -239,6 +239,7 @@ void corium::Console::loop(unsigned long now) {
     if (improvSerial.consumeByte((uint8_t)c)) continue;
     feed(_serial, Serial, c);
   }
+  improvSerial.watch();
 #endif
 }
 

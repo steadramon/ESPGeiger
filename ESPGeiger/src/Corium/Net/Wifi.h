@@ -24,6 +24,7 @@
 #include <IPAddress.h>
 #include "App/AppConfig.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/Util/Attr.h"
 #include "WifiStable.h"
 
 #define WIFI_SSID_MAX 32   // 802.11
@@ -65,9 +66,16 @@ namespace Wifi {
   bool applyStaticConfig();   // before WiFi.begin()
   bool validateStatic(const char* ip, const char* gw, const char* sn,
                       char* err, size_t cap);
-  void onImprovCreds(const char* ssid, const char* pass);
-  // heap from save to beginHeld(), false = no pass, too long or no memory
-  bool holdCreds(const char* ssid, const char* pass);
+  // heap from save to the test or beginHeld(); bad = no pass or too long, busy = one held already
+  enum Hold : uint8_t { HOLD_OK, HOLD_BAD, HOLD_BUSY, HOLD_NO_MEMORY };
+  CORIUM_NODISCARD Hold holdCreds(const char* ssid, const char* pass);
+  constexpr uint32_t JOIN_WAIT_MS = 30000;
+  // the held creds joined in RAM, on flash only once up; false = none held, one running or no memory
+  CORIUM_NODISCARD bool testJoin(uint32_t ms = JOIN_WAIT_MS);
+  void testStep(uint32_t now);   // the portal loop or the wifi module, while testing()
+  uint8_t testState();   // an EGPortal::Join, the last one kept till the next test
+  bool testing();   // testing or going back
+  const char* testSsid();   // under test or the last one
   const char* heldSsid();   // "" if none
   bool beginHeld();   // WiFi.begin() then frees, false = none held
   void dropHeld();   // a save that didn't land

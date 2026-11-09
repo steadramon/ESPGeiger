@@ -61,6 +61,7 @@ void corium::ImprovSerial::poll() {
     uint8_t b = Serial.read();
     consumeByte(b);
   }
+  watch();
 }
 
 bool corium::ImprovSerial::consumeByte(uint8_t b) {
@@ -232,6 +233,8 @@ void corium::ImprovSerial::send_wifi_networks() {
   send_response_data(improv::GET_WIFI_NETWORKS, nullptr, 0);   // empty = end of list
 }
 
+static const uint32_t IMPROV_TEST_MS = 25000;   // esp-web-tools gives up at 30s
+
 void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
                                        const std::string& password) {
   // as the portal, one that can never join isn't saved
@@ -239,35 +242,30 @@ void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
     send_error(improv::ERROR_UNABLE_TO_CONNECT);
     return;
   }
+  // the web's test running, or no memory
+  if (corium::Wifi::holdCreds(ssid.c_str(), password.c_str()) != corium::Wifi::HOLD_OK
+      || !corium::Wifi::testJoin(IMPROV_TEST_MS)) {
+    send_error(improv::ERROR_UNKNOWN);
+    return;
+  }
   _joining = true;
   set_state(improv::STATE_PROVISIONING);
-  corium::Wifi::saveBackupCreds();
-  corium::Wifi::onImprovCreds(ssid.c_str(), password.c_str());
-  // else the wait loop sends the old IP
-  corium::Wifi::join(ssid.c_str(), password.c_str());
+}
 
-  // frame done, else its '\n' lands in the checksum slot
-  _pos = 0;
-  // esp-web-tools gives up at 30s
-  uint32_t start = corium::fastMillis();
-  while (corium::fastMillis() - start < 25000) {
-    if (corium::Wifi::connectedRaw()) {
-      set_state(improv::STATE_PROVISIONED);
-      send_url(improv::WIFI_SETTINGS);
-      corium::Log::console(PSTR("Improv: provisioned ssid='%s' ip=%s"),
-                   ssid.c_str(), corium::Wifi::localIP().toString().c_str());
-      _joining = false;
-      return;
-    }
-    yield();
-    poll();
-    delay(50);
+// the test is stepped by the portal or the wifi module, here only its end
+void corium::ImprovSerial::finish() {
+  if (corium::Wifi::testing()) return;
+  _joining = false;
+  const char* ssid = corium::Wifi::testSsid();
+  if (corium::Wifi::testState() == EGPortal::JOIN_OK) {
+    set_state(improv::STATE_PROVISIONED);
+    send_url(improv::WIFI_SETTINGS);
+    corium::Log::console(PSTR("Improv: provisioned ssid='%s' ip=%s"),
+                 ssid, corium::Wifi::localIP().toString().c_str());
+    return;
   }
-  corium::Log::console(PSTR("Improv: WiFi connect timeout for ssid='%s'"), ssid.c_str());
-  // installer gone, stop connecting
-  corium::Wifi::off();
+  corium::Log::console(PSTR("Improv: WiFi connect timeout for ssid='%s'"), ssid);
   set_state(improv::STATE_AUTHORIZED);
   send_error(improv::ERROR_UNABLE_TO_CONNECT);
-  _joining = false;
 }
 

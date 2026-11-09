@@ -32,6 +32,8 @@ public:
   bool consumeByte(uint8_t b);
   // setup and the portal wait only, else it races the console on Serial.read()
   void poll();
+  // a WIFI_SETTINGS test ended: its answer; each console pass
+  void watch() { if (_joining) finish(); }
   bool isProvisioning() const { return _state == improv::STATE_PROVISIONING; }
 
 private:
@@ -45,6 +47,7 @@ private:
   void send_device_info();
   void send_wifi_networks();
   void handle_wifi_settings(const std::string& ssid, const std::string& password);
+  void finish();
 
   uint8_t       _buf[128];   // one frame in
   size_t        _pos = 0;

@@ -40,11 +40,6 @@ namespace Wifi {
     WiFi.persistent(false);
 #endif
   }
-  inline void join(const char* ssid, const char* pass) {
-    WiFi.disconnect(false);
-    beginSaved(ssid, pass);
-  }
-  inline void off() { WiFi.disconnect(true); }
 
   // scan results, after Wifi::scanNetworks()
   inline String scanSSID(int i)  { return WiFi.SSID(i); }
