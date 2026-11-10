@@ -56,6 +56,6 @@ class EGDnsAnswer {
     void answer(const uint8_t* q, size_t len, const EGTcpAddr& from, uint16_t port);
 
     EGUdp _udp;
-    uint8_t _ip[4] = {0};
+    uint8_t _ip[4] = {};
     uint32_t _ttl = EGDNS_TTL;
 };

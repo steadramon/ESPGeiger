@@ -159,7 +159,7 @@ static const uint8_t MORSE_DIGIT[10][5] = {
 };
 
 
-CORIUM_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier");
+CORIUM_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier. Reboot to apply");
 CORIUM_PSTR(TK_L_FREQ,"Tone Hz");
 CORIUM_PSTR(TK_H_FREQ,"Click centre frequency (300-6000 Hz)");
 CORIUM_PSTR(TK_L_DEC, "Decay ms");
@@ -178,7 +178,7 @@ CORIUM_PSTR(TK_L_DOUT,"I2S DOUT Pin");
 #endif
 
 static const corium::Pref TICK_PREF_ITEMS[] PROGMEM = {
-  {EG_K_ENABLE, EG_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, corium::P_BOOL, 0},
+  {EG_K_ENABLE, EG_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, corium::P_BOOL, corium::P_REBOOT},
   {EG_K_VOLUME, EG_L_VOL,  EG_H_VOL,  "60",   nullptr, 0,   100,  0, corium::P_UINT, 0},
   {EG_K_FREQ,   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, corium::P_UINT, corium::P_ADVANCED},
   {K_DECAY,     TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, corium::P_UINT, corium::P_ADVANCED},

@@ -70,9 +70,9 @@ namespace Wifi {
   enum Hold : uint8_t { HOLD_OK, HOLD_BAD, HOLD_BUSY, HOLD_NO_MEMORY };
   CORIUM_NODISCARD Hold holdCreds(const char* ssid, const char* pass);
   constexpr uint32_t JOIN_WAIT_MS = 30000;
-  // the held creds joined in RAM, on flash only once up; false = none held, one running or no memory
+  // the held creds joined in RAM, on flash only once up; right after HOLD_OK. false = none held or no memory
   CORIUM_NODISCARD bool testJoin(uint32_t ms = JOIN_WAIT_MS);
-  void testStep(uint32_t now);   // the portal loop or the wifi module, while testing()
+  bool testStep(uint32_t now);   // the portal loop or the wifi module, while testing(); true = still testing
   uint8_t testState();   // an EGPortal::Join, the last one kept till the next test
   bool testing();   // testing or going back
   const char* testSsid();   // under test or the last one
@@ -86,6 +86,7 @@ namespace Wifi {
   void dropNetBackup();
   void applyRuntimeNetPrefs();   // after WiFi.mode()
   void rxSleep(int8_t mode);   // a receiver's sleep mode, -1 = the wifi.sleep pref
+  void applySleep();   // again, the 8266 Update.begin turns it off
   void reconnect();
 
   int txPowerQdbm();

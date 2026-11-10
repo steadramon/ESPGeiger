@@ -177,7 +177,7 @@ CORIUM_PSTR(CT_H_LE,  "Persist total clicks + exposure across reboots.");
 static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   // Source selector
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  {EG_K_SERIAL_TYPE,  IN_L_STY, nullptr, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
+  {EG_K_SERIAL_TYPE,  IN_L_STY, corium::H_RBA, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
    GEIGER_STYPE_GC10, GEIGER_STYPE_TEMPLATE, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -216,7 +216,7 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // CPM calculation
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  {K_CPM_WINDOW,      IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, corium::P_UINT, corium::P_SLIDER | corium::P_ADVANCED},
+  {K_CPM_WINDOW,      IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, corium::P_UINT, corium::P_SLIDER | corium::P_ADVANCED | corium::P_REBOOT},
 #endif
   {K_CPM_MODE,        IN_L_CMM, nullptr, "3", IN_O_CMM, 0, 4, 0, corium::P_ENUM, corium::P_ADVANCED},
   // Tube identity
@@ -329,19 +329,12 @@ void CounterPrefs::onPrefsLoaded() {
   gcounter.set_lifetime_enabled(corium::Prefs::getUInt("counter", K_LIFE_EN) != 0);
 }
 
-// pins and serial type are corium::P_REBOOT
+// pins, serial type and cpm window are corium::P_REBOOT
 void CounterPrefs::onPrefsSaved() {
-  bool need_reboot = false;
-#if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  // only formats without their own cps
-  if (!SerialFormat::has_cps(_serial_type) &&
-      gcounter.get_cpm_window() != (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW)) need_reboot = true;
-#endif
   onPrefsLoaded();
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   udprx_notify_prefs_saved();
 #endif
-  if (need_reboot) corium::Prefs::needsRestart();
 }
 
 // === LEGACY IMPORT (remove in v1.1.0) ===
@@ -490,7 +483,7 @@ static const corium::Pref LED_PREF_ITEMS[] PROGMEM = {
 #endif
 #ifndef LED_PIN_BLOCKED
   {EG_K_PIN,        LD_L_PIN, LD_H_PIN, STR(LED_SEND_RECEIVE), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-  {EG_K_POLARITY,   EG_L_POL, nullptr,  LD_POL_DEF, EG_O_POL, 0, 1, 0, corium::P_ENUM, corium::P_ADVANCED | corium::P_REBOOT},
+  {EG_K_POLARITY,   EG_L_POL, corium::H_RBA, LD_POL_DEF, EG_O_POL, 0, 1, 0, corium::P_ENUM, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
 };
 

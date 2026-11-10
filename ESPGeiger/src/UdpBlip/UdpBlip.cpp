@@ -108,8 +108,8 @@ void UdpBlipModule::readPrefs() {
   }
   uint32_t p = corium::Prefs::getUInt("udpblip", EG_K_PORT);
   _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPBLIP_DEFAULT_PORT;
-  // gate retry pace, the loop sets its own due
-  corium::Registry::every(this, _mode > UB_OFF ? LOOP_MS : 0);
+  // gate retry pace, the loop sets its own due; off runs till mDNS is down
+  corium::Registry::every(this, (_mode > UB_OFF || _mdns_port) ? LOOP_MS : 0);
   _wake_at = corium::fastMillis();
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
   // serial counts land with no click
@@ -133,8 +133,10 @@ bool UdpBlipModule::ensureUdp() {
   if (_src_port == 0) {
     _src_port = (uint16_t)(49152u + (GRNG::fast_uint32() & 0x3FFFu));
   }
-  _udp->begin(_src_port);
-  return true;
+  if (_udp->begin(_src_port)) return true;
+  teardown();
+  _src_port = 0;   // maybe taken, another next time
+  return false;
 }
 
 // send only, drop what lands so the stack doesn't hold it
@@ -147,11 +149,32 @@ void UdpBlipModule::drain() {
   }
 }
 
+// both stacks refuse a second add, so a new port goes on the one up
+static bool mdns_move(uint16_t port) {
+#ifdef ESP8266
+  (void)MDNS.removeService(nullptr, "osc", "udp");
+#else
+  // its remove is queued, an add straight after is still refused
+  if (mdns_service_port_set("_osc", "_udp", port) == ESP_OK) return true;
+#endif
+  return MDNS.addService("osc", "udp", port);
+}
+
+static bool mdns_off() {
+#ifdef ESP8266
+  return MDNS.removeService(nullptr, "osc", "udp");
+#else
+  return mdns_service_remove("_osc", "_udp") == ESP_OK;
+#endif
+}
+
 void UdpBlipModule::announce_mdns() {
-  if (_mdns_done || _mode == UB_OFF) return;
   // after ArduinoOTA starts mDNS
   if (corium::Uptime::seconds() < 8) return;
-  MDNS.addService("osc", "udp", _port);
+  bool move = _mdns_port && _mdns_port != _port;
+  bool ok = move ? mdns_move(_port) : MDNS.addService("osc", "udp", _port);
+  if (ok) _mdns_port = _port;
+  else if (move) return;   // the 8266 holds the old one in its probe, again next pass
   const char* fname = corium::DeviceInfo::friendlyName();
   if (fname && fname[0]) MDNS.addServiceTxt("osc", "udp", "fname", fname);
   MDNS.addServiceTxt("osc", "udp", "id", corium::DeviceInfo::chipId());
@@ -334,7 +357,12 @@ void UdpBlipModule::bind(uint32_t now) {
 }
 
 void UdpBlipModule::loop(unsigned long now) {
-  if (_mode == UB_OFF) return;
+  if (_mode == UB_OFF) {
+    // the 8266 refuses it in the probe after an add
+    if (_mdns_port && mdns_off()) _mdns_port = 0;
+    if (!_mdns_port) corium::Registry::every(this, 0);
+    return;
+  }
   uint16_t ev = corium::Registry::events(this);
   if ((ev & (1u << corium::Wifi::TOPIC_CHANGED)) && _udp && corium::Wifi::connectedAtMs != _bound_at_ms) {
     corium::Log::console(PSTR("UdpBlip: WiFi reconnect, rebinding"));

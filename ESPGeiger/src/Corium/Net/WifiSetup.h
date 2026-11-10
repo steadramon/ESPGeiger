@@ -29,6 +29,7 @@
 namespace corium {
 namespace Wifi {
   inline bool connectedRaw() { return WiFi.status() == WL_CONNECTED; }   // live, not Wifi::connected
+  inline bool apUp() { return (WiFi.getMode() & WIFI_AP) != 0; }   // the hotspot or the portal
   // saved to flash; 8266 off again or the next disconnect() wipes them
   inline void beginSaved(const char* ssid, const char* pass) {
 #ifdef ESP32

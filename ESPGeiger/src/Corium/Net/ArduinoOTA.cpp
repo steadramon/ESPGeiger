@@ -22,23 +22,61 @@
 #include "Corium/Module/Registry.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Fs.h"
 #include "Corium/Net/IgmpRefresh.h"
+#include "Corium/Net/Wifi.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/Output/LedSignal.h"
 
 corium::ArduinoOTAModule ota;
 CORIUM_REGISTER_MODULE(ota)
 
+// handle() holds the loop till the sender is done, a real one is 10-20 s
+#define ESPOTA_MAX_MS  120000
+#define ESPOTA_IDLE_MS 5000
+
+static uint32_t s_start_ms = 0;
+static uint32_t s_moved_ms = 0;
+static size_t s_got = 0;
+static bool s_stopped = false;
+static bool s_ours = false;   // started here: a refused invite can't end a web /update
+
+static bool ota_too_slow(uint32_t now, size_t got) {
+  if (got != s_got) {
+    s_got = got;
+    s_moved_ms = now;
+  }
+  return now - s_start_ms >= ESPOTA_MAX_MS || now - s_moved_ms >= ESPOTA_IDLE_MS;
+}
+
+// both cores' Update _reset() zeroes the size, so their loops read it as finished
+static void ota_check(size_t got) {
+  if (s_stopped || Update.isFinished() || !ota_too_slow(millis(), got)) return;
+  s_stopped = true;
+  corium::Log::console(PSTR("OTA: Too slow, stopped"));
+#ifdef ESP8266
+  (void)Update.end();   // short, so it fails and commits nothing
+#else
+  Update.abort();
+#endif
+}
+
 static void ota_start() {
-  const char* type;
-  if (ArduinoOTA.getCommand () == U_FLASH)
-    type = PSTR("sketch");
-  else // U_SPIFFS
-    type = PSTR("filesystem");
+  bool fs = ArduinoOTA.getCommand() != U_FLASH;
+  s_start_ms = s_moved_ms = millis();
+  s_got = 0;
+  s_stopped = false;
+  s_ours = true;
+#ifdef ESP8266
+  // writeStream holds the image, its own hook runs each pass
+  Update.onProgress([](size_t got, size_t) { ota_check(got); });
+#endif
   corium::Registry::post(&ota);
   corium::Lifecycle::send(corium::Lifecycle::OTA_START);
+  // SHUTDOWN's prefs would go through the old mount onto the new image
+  if (fs) corium::Fs::end();
   corium::LedSignal::lit(true);
-  corium::Log::console(PSTR("Start updating %s"), type);
+  corium::Log::console(PSTR("Start updating %s"), fs ? PSTR("filesystem") : PSTR("sketch"));
 }
 
 static void ota_end() {
@@ -52,6 +90,9 @@ static void ota_progress(unsigned int progress, unsigned int total) {
 #ifdef ESP32
   feedLoopWDT();   // handle() blocks for the whole transfer
 #endif
+#ifndef ESP8266
+  ota_check(progress);
+#endif
   static uint8_t s_pct = 255;
   if (total == 0) return;
   uint8_t pct = (uint8_t)((uint64_t)progress * 100 / total);
@@ -63,12 +104,23 @@ static void ota_progress(unsigned int progress, unsigned int total) {
 }
 
 static void ota_error(ota_error_t error) {
-  corium::LedSignal::lit(false);
-  if (corium::otaInProgress) corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
+  if (s_ours) {
+    s_ours = false;
+#ifdef ESP8266
+    Update.onProgress(nullptr);   // web /update shares Update
+    corium::Wifi::applySleep();   // Update.begin set none
+#endif
+    corium::LedSignal::lit(false);
+    corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
+  }
+#ifdef ESP8266
+  // refused at Update.begin, before onStart: it set no sleep; a web /update keeps its own
+  else if (error == OTA_BEGIN_ERROR && !corium::otaInProgress) corium::Wifi::applySleep();
+#endif
   // ota_error_t order, both cores
   static const char ERRS[][8] PROGMEM = {"Auth", "Begin", "Connect", "Receive", "End"};
   if ((unsigned)error <= OTA_END_ERROR) corium::Log::console(PSTR("OTA: %s Failed"), ERRS[error]);
-  else                                  corium::Log::console(PSTR("OTA: error %u"), error);
+  else                                  corium::Log::console(PSTR("OTA: Error %u"), error);
 }
 
 void corium::ArduinoOTAModule::begin() {
@@ -83,10 +135,11 @@ void corium::ArduinoOTAModule::begin() {
   if (pass && pass[0]) ArduinoOTA.setPassword(pass);
   ArduinoOTA.setHostname(corium::DeviceInfo::hostname());
   ArduinoOTA.begin();
-  MDNS.addService("http",   "tcp", 80);
+  // no mdns, the IP still works
+  (void)MDNS.addService("http",   "tcp", 80);
 #ifdef APP_MDNS_SERVICE
   // the app's own service, the name it's found by
-  MDNS.addService(APP_MDNS_SERVICE, "tcp", 80);
+  (void)MDNS.addService(APP_MDNS_SERVICE, "tcp", 80);
   const char* fname = corium::DeviceInfo::friendlyName();
   if (fname && fname[0]) {
     MDNS.addServiceTxt(APP_MDNS_SERVICE, "tcp", "fname", fname);

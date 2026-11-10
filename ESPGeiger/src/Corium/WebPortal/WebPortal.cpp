@@ -1106,12 +1106,16 @@ void corium::WebPortal::hWifiScan(EGHttpRequest& req, EGHttpResponse& res, void*
     if (status != WIFI_SCAN_RUNNING) corium::Wifi::scanDelete();
     corium::Wifi::scanNetworks(true /*async*/, false /*show_hidden*/);
     s_scan.mark(now);
+  }
+  // started, or failed: again 10 s on
+  if (rescan || status < 0) {
     res.send(200, FPSTR(HTTP_CT_JSON), FPSTR(SCANNING));
     return;
   }
 
   EGPortal::ScanEntry aps[12];
   size_t count = EGPortal::processScan(aps, 12, status);
+  corium::Wifi::scanDelete();   // aps is the copy, a reload scans again
   send_aps(res, aps, count);
 }
 
@@ -1204,11 +1208,11 @@ static void ap_test_save(EGHttpResponse& res);
 // the 0.13 way: saved, restart, the backup reverts a network that fails;
 // hotspot mode tests it here, the browser is on the unit's AP and sees the result
 static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
-  if (has_ssid && corium::Wifi::ap) {
-    ap_test_save(res);
-    return;
-  }
   if (has_ssid) {
+    if (corium::Wifi::ap) {
+      ap_test_save(res);
+      return;
+    }
     corium::Wifi::saveBackupCreds();
     s_wifi_save = true;
   }
@@ -1221,11 +1225,7 @@ static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
 
 // hotspot mode: tested in place, saved and off the AP only once joined
 static void ap_test_save(EGHttpResponse& res) {
-  if (!corium::Wifi::testJoin()) {
-    corium::Wifi::dropHeld();
-    wifi_held_ok(res, NO_MEMORY);
-    return;
-  }
+  (void)corium::Wifi::testJoin();   // held just now, ap mode: can't fail
   s_ap_test = true;
   char ssid[6 * EGPORTAL_SSID_MAX + 1], host[6 * CORIUM_HOST_MAX + 1];
   egesc_html(ssid, sizeof(ssid), corium::Wifi::testSsid());
@@ -1388,7 +1388,23 @@ static struct {
 
 static void ota_fail(PGM_P why) {
   s_ota.write_error = true;
-  if (!s_ota.why) s_ota.why = why;
+  if (s_ota.why) return;
+  s_ota.why = why;
+#ifdef ESP8266
+  corium::Wifi::applySleep();   // Update.begin set none
+#endif
+}
+
+// too big is SPACE on the 8266, SIZE on the esp32
+static PGM_P begin_why() {
+  uint8_t e = Update.getError();
+  if (e == UPDATE_ERROR_SPACE || e == UPDATE_ERROR_SIZE) return PSTR("no room");
+#ifdef ESP8266
+  if (e == UPDATE_ERROR_OOM) return PSTR("out of memory");
+#else
+  if (e == UPDATE_ERROR_OK) return PSTR("out of memory");   // its buffer malloc sets none
+#endif
+  return PSTR("begin failed");
 }
 
 static void ota_begin(size_t expected) {
@@ -1403,7 +1419,7 @@ static void ota_begin(size_t expected) {
   if (!Update.begin(s_ota.expected ? s_ota.expected : room)) {
     corium::Log::console(PSTR("OTA: Update.begin failed (size=%u, free=%u)"),
                  (unsigned)s_ota.expected, (unsigned)room);
-    ota_fail(PSTR("no room"));
+    ota_fail(begin_why());
   } else {
     corium::Log::console(PSTR("OTA: starting (%u bytes)"), (unsigned)s_ota.expected);
     s_ota.started = true;
@@ -2283,8 +2299,7 @@ static void deobfuscate_payload(uint8_t* buf, size_t len) {
 
 static const char* check_import(uint8_t* buf, size_t len) {
   if (len < BLOB_HEAD + 1 + BLOB_CRC) return PSTR("too short");   // no groups
-  const uint8_t MAGIC[BLOB_MAGIC] = {CORIUM_EXPORT_MAGIC};
-  if (buf[0] != MAGIC[0] || buf[1] != MAGIC[1] || buf[2] != MAGIC[2]) return PSTR("bad magic");
+  // the magic is blobStart's 4 base64 chars
   if (buf[BLOB_MAGIC] != BLOB_VER) return PSTR("bad format");
   size_t payload_len = len - BLOB_CRC;
   // crc is over the xored bytes, check before undoing them
@@ -2391,8 +2406,8 @@ static char* import_field(size_t* len, const char** err) {
 }
 
 // malloc'd blob, or nullptr and err
-static uint8_t* import_decode(char* b64, size_t b64_len, unsigned int* raw_len, const char** err) {
-  unsigned int raw_cap = decode_base64_length((unsigned char*)b64, b64_len);
+static uint8_t* import_decode(const char* b64, size_t b64_len, unsigned int* raw_len, const char** err) {
+  unsigned int raw_cap = decode_base64_length((const unsigned char*)b64, b64_len);
   if (raw_cap == 0 || raw_cap > BODY_MAX) {
     *err = PSTR("bad base64");
     return nullptr;
@@ -2402,12 +2417,12 @@ static uint8_t* import_decode(char* b64, size_t b64_len, unsigned int* raw_len, 
     *err = PSTR("alloc failed");
     return nullptr;
   }
-  *raw_len = decode_base64((unsigned char*)b64, b64_len, raw);
+  *raw_len = decode_base64((const unsigned char*)b64, b64_len, raw);
   return raw;
 }
 
 // wipe then apply, -1 = bad
-static int import_blob(char* b64, size_t b64_len, corium::ImportText::Result* out,
+static int import_blob(const char* b64, size_t b64_len, corium::ImportText::Result* out,
                        const char** err) {
   unsigned int raw_len = 0;
   uint8_t* raw = import_decode(b64, b64_len, &raw_len, err);
@@ -2443,7 +2458,8 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
     return;
   }
   char* field = import_field(&len, &err);
-  if (field && corium::ImportText::isBlob(field, len)) applied = import_blob(field, len, &r, &err);
+  const char* blob = field ? corium::ImportText::blobStart(field, len) : nullptr;
+  if (blob) applied = import_blob(blob, len - (size_t)(blob - field), &r, &err);
   else if (field) applied = import_lines(field, len, &r, &err);
   if (applied >= 0) err = import_commit(why, sizeof(why));
   if (applied < 0 || err) {

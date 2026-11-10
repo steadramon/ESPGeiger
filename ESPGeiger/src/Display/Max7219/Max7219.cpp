@@ -319,8 +319,7 @@ void Max7219Display::applyTm() {
   if (_decimals >= _count) _decimals = _count - 1;
   if (_tm_off) return;
   _tm.begin(claim_pins() ? _clk : -1, _din);
-  _lit = true;
-  _tm.light(brightness(7), true);
+  set_power(display.lit());
   if (_tm.ready() && !_swept) {
     bootSweep();
     _swept = true;
@@ -361,7 +360,7 @@ void Max7219Display::apply() {
   }
   int8_t din = claim_pins() ? _din : -1;
   _drv.begin(din, _clk, _cs, chips, decode, scan);   // wakes the chip
-  _lit = true;
+  set_power(display.lit());
   _drv.setIntensity(brightness(15));
   if (_drv.ready() && !_swept) {
     corium::Log::console(PSTR("MAX7219: display up (type=%u din=%d clk=%d cs=%d)"),
@@ -403,11 +402,13 @@ void Max7219Display::updatePage() {
   _cur_page = list[_page];
 }
 
-// no pins, stays lit for /screen
 void Max7219Display::update_power() {
+  if (display.lit() != _lit) set_power(display.lit());
+}
+
+// no pins, stays lit for /screen
+void Max7219Display::set_power(bool on) {
   if (!(tm() ? _tm.ready() : _drv.ready())) return;
-  bool on = display.lit();
-  if (on == _lit) return;
   _lit = on;
   s_redraw = true;
   if (tm()) { if (!_tm_off) _tm.light(brightness(7), on); }

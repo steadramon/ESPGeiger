@@ -66,6 +66,7 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     void apply();
     void applyTm();
     void update_power();
+    void set_power(bool on);
     uint8_t adaptiveLevel(uint8_t top);
     uint8_t arcLevel();
     float   currentCPM();

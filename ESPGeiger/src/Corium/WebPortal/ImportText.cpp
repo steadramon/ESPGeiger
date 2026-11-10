@@ -59,8 +59,10 @@ static void one_line(const char* p, const char* e, corium::ImportText::PutFn put
   r.skipped++;
 }
 
-bool corium::ImportText::isBlob(const char* text, size_t len) {
-  return len >= 4 && memcmp_P(text, PSTR(CORIUM_EXPORT_MAGIC_B64), 4) == 0;
+const char* corium::ImportText::blobStart(const char* text, size_t len) {
+  const char* end = text + len;
+  while (text < end && (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n')) text++;
+  return end - text >= 4 && memcmp_P(text, PSTR(CORIUM_EXPORT_MAGIC_B64), 4) == 0 ? text : nullptr;
 }
 
 corium::ImportText::Result corium::ImportText::apply(const char* text, size_t len, PutFn put) {
@@ -97,7 +99,7 @@ const char* corium::ImportText::blobError(const uint8_t* p, size_t len) {
       off += vlen;
     }
   }
-  return nullptr;
+  return off == len ? nullptr : PSTR("trailing bytes");
 }
 
 // too long = "", matches no pref

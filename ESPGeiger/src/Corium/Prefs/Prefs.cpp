@@ -925,7 +925,6 @@ bool corium::Prefs::groupEnabled(const corium::PrefGroup* g) {
   return v[0] != '\0' && strcmp_P(v, PSTR("0")) != 0 && strcmp_P(v, PSTR("-1")) != 0;
 }
 
-void corium::Prefs::needsRestart() { s_restart_pending = true; }
 bool corium::Prefs::restartPending() { return s_restart_pending; }
 
 bool corium::Prefs::stored(const char* module) {

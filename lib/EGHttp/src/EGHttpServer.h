@@ -75,6 +75,9 @@
   // streamed body silent this long; a slow flash write stalls the window
   #define EGHTTP_STREAM_IDLE_MS 60000
 #endif
+#ifndef EGHTTP_PULL
+  #define EGHTTP_PULL 1   // 0 = no sendPull()
+#endif
 #if defined(ESP32) && !defined(EGHTTP_MAX_INFLIGHT)
   // esp32 only, lwIP drops SYNs past this; the 8266 keeps EGTcp's backlog
   #define EGHTTP_MAX_INFLIGHT 10
@@ -118,6 +121,14 @@ class EGHttpResponse {
     // body in flash, sent as acks come
     void sendGzipP(uint16_t status, const __FlashStringHelper* contentType,
                    const uint8_t* body, size_t len);
+#if EGHTTP_PULL
+    // up to room bytes of the body from at, 0 = no more
+    using Fill = size_t (*)(void* ctx, size_t at, char* buf, size_t room);
+    using Done = void (*)(void* ctx);
+    // len bytes from fill() as acks come; done() once however it ends, even when refused
+    void sendPull(uint16_t status, const __FlashStringHelper* contentType, size_t len,
+                  Fill fill, Done done, void* ctx);
+#endif
     // false = not sent, eg CR/LF in it
     bool redirect(const char* location);
     bool redirect(const __FlashStringHelper* location);
@@ -196,6 +207,7 @@ class EGHttpServer {
     struct Slot {
       EGTcpClient* client = nullptr;   // resetSlot deletes it
       SlotState state = IDLE;
+      uint16_t query = 0;   // in buf past '?', 0 = none
       char* buf = nullptr;
       size_t len = 0;
       size_t contentLength = 0;
@@ -212,6 +224,12 @@ class EGHttpServer {
       size_t chunkAccCap = 0;
       PGM_P  tail        = nullptr;   // static body left, onSent sends it
       size_t tailLen     = 0;
+#if EGHTTP_PULL
+      EGHttpResponse::Fill pull = nullptr;   // the tail from here instead
+      EGHttpResponse::Done pulled = nullptr;   // resetSlot runs it
+      void*  pullCtx     = nullptr;
+      size_t pullAt      = 0;
+#endif
       uint32_t due       = 0;         // request, then response deadline
     };
 
@@ -257,7 +275,7 @@ class EGHttpServer {
 #endif
 
     bool _authEnabled = false;
-    char _authValue[6 + EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {0};   // "Basic " + base64
+    char _authValue[EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {0};   // base64, past "Basic "
     char _authRealm[40] = {};
 
     Slot* allocSlot(EGTcpClient* c);
@@ -296,9 +314,10 @@ class EGHttpServer {
     void sentMore(Slot* s);
     inline void claimChunkAcc(Slot* s);
     void dropChunkAcc(Slot* s);
-    inline bool readRequest(Slot* s, EGHttpRequest& req);
+    bool readRequest(Slot* s, EGHttpRequest& req);
     inline bool authorized(const Slot* s) const;
     inline bool argsFit(const Slot* s, const EGHttpRequest& req) const;
+    uint16_t refusal(const Slot* s, const EGHttpRequest& req) const;   // 0, 401 or 400
     void sendUnauthorized(Slot* s);
     void dispatch(Slot* s);
 };

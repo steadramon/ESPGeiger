@@ -48,14 +48,14 @@ struct Result {
   char firstKey[2 * CORIUM_PREF_ID_MAX + 2];
 };
 
-// export blobs always start CORIUM_EXPORT_MAGIC_B64
-bool isBlob(const char* text, size_t len);
+// export blobs always start CORIUM_EXPORT_MAGIC_B64; past leading blanks, nullptr = not one
+const char* blobStart(const char* text, size_t len);
 
 // # comments and blank lines ignored
 Result apply(const char* text, size_t len, PutFn put);
 
 // records: group count, per group len+mid and pref count, per pref len+key, be16 len+value
-// blob records from the group count on; nullptr = ok, else why (PROGMEM)
+// blob records from the group count on, all of len; nullptr = ok, else why (PROGMEM)
 const char* blobError(const uint8_t* p, size_t len);
 // applied -1 = bad records; a refused put counts in skipped
 Result applyBlob(const uint8_t* p, size_t len, PutFn put);

@@ -25,6 +25,7 @@
 namespace corium {
 namespace Fs {
   bool begin();   // first call only, formats after 3 failed mounts
+  void end();     // a new fs image goes under it: nothing more through this mount till reboot
   // all mount first and check before touching: esp32 logs a missing file
   File openR(const char* path);   // empty File if not there
   File openW(const char* path);

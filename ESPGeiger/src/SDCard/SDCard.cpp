@@ -19,6 +19,7 @@
 #ifdef GEIGER_SDCARD
 #include <Arduino.h>
 #include <sys/time.h>
+#include <new>
 #include <EGHttpServer.h>
 #include "SDCard.h"
 #include "Corium/Logger/Logger.h"
@@ -41,12 +42,45 @@ CORIUM_PSTR(K_SYNC_MIN, "sync_min");
 #define SD_COUNT_US 5000   // FAT a pass, ~1 ms a sector, the loop waits on it
 #define SD_COUNT_MS 5
 #define SD_FULL_MB 8       // at or under: delete old files, else stop
+#define SD_FAIL_MAX 3      // failed minutes in a row, then off till reinit
+#define SD_REINIT_S 30     // a missing card holds the loop ~2 s
+#define SD_MONTHS   120    // 10 years
+#define SD_TABLE_S  600    // the /sd table goes when nobody's looked for this long
 
 // rows from before the clock was set
 static const char UNDATED[] = "/undated.csv";
 static const uint32_t UNDATED_DAY = 1;   // _open_day while it's open
 
 SdFat32* sd = nullptr;
+static File32* s_dl = nullptr;   // /sd?f=, one at a time, freed when its reply ends
+
+struct MonthEntry {
+  uint32_t yyyymm : 20;
+  uint32_t files  : 12;
+  uint32_t bytes;
+};
+
+// /sd's months, off the card once; a new or deleted file drops it
+static MonthEntry* s_months = nullptr;
+static uint16_t s_month_n = 0;
+static bool s_undated = false;
+static uint32_t s_months_s = 0;   // uptime it was last shown
+
+static void forget_months() {
+  free(s_months);
+  s_months = nullptr;
+  s_month_n = 0;
+}
+
+// the day file's rows, as the card would say
+static void month_grew(uint32_t yyyymm, uint32_t bytes) {
+  for (uint16_t i = 0; i < s_month_n; i++) {
+    if (s_months[i].yyyymm == yyyymm) {
+      s_months[i].bytes += bytes;
+      return;
+    }
+  }
+}
 
 SDCard sdcard;
 CORIUM_REGISTER_FEATURE(sdcard, FEAT_SDCARD)
@@ -104,7 +138,11 @@ static void sd_lifecycle(corium::Lifecycle::Event e) {
 void SDCard::begin()
 {
   corium::Log::console(PSTR("SDCard: Init ..."));
-  sd = new SdFat32();
+  sd = new (std::nothrow) SdFat32();
+  if (!sd) {
+    corium::Log::console(PSTR("SDCard: Init failed, no memory"));
+    return;
+  }
 #ifdef GEIGER_SDCARD_SCK
   // pins first, the c3 defaults are hw32's HV and pulse pins; sd's begin() then keeps them
   SPI.begin(GEIGER_SDCARD_SCK, GEIGER_SDCARD_MISO, GEIGER_SDCARD_MOSI, GEIGER_SDCARD_CS);
@@ -133,6 +171,8 @@ void SDCard::begin()
 
   _enabled = true;
   _fault = false;
+  _fails = 0;
+  _fail_min = 0;
   corium::Log::console(PSTR("SDCard: Mounted."));
   corium::Log::console(PSTR("SDCard: Calculating free space"));
   startCount(CLEAN_FREECHECK);
@@ -236,21 +276,27 @@ bool SDCard::openDayFile(const char* dir, const char* name, uint32_t day, bool& 
     fail_step(PSTR("chdir /"), dir, name);
     return false;
   }
+  // SdFat never yields, a dying card waits up to 600 ms a step: the 8266 wdt
   const char* step = nullptr;
+  yield();
   if (!sd->exists(dir)) {
+    yield();
     if (sd->mkdir(dir)) used_clusters(1);
     else step = PSTR("mkdir");
   }
+  yield();
   if (!step && !sd->chdir(dir)) step = PSTR("chdir");
-
-  bool existed = !step && sd->exists(name);
+  yield();
   if (!step && !_file.open(name, FILE_WRITE)) step = PSTR("open");
   if (step) {
     fail_step(step, dir, name);
     failed = true;
   } else {
-    _file_cl = clusters_of(_file.fileSize());
-    if (!existed) write_header(_file, PSTR("DateTime"));
+    _file_size = _file.fileSize();
+    if (_file_size == 0) {
+      write_header(_file, PSTR("DateTime"));
+      forget_months();
+    }
     _open_day = day;
   }
   return true;
@@ -258,15 +304,19 @@ bool SDCard::openDayFile(const char* dir, const char* name, uint32_t day, bool& 
 
 // clusters used, a sync every _sync_min rows; false = the file's gone
 bool SDCard::wrote(const char* dir, const char* name) {
-  uint32_t cl = clusters_of(_file.fileSize());
-  if (cl > _file_cl) {
-    used_clusters(cl - _file_cl);
-    _file_cl = cl;
-  }
+  uint32_t size = _file.fileSize();
+  uint32_t cl = clusters_of(size);
+  uint32_t was = clusters_of(_file_size);
+  if (cl > was) used_clusters(cl - was);
+  if (_open_day != UNDATED_DAY) month_grew(_open_day / 100, size - _file_size);
+  _file_size = size;
   // power loss loses unsynced rows
   if (++_unsynced_writes < _sync_min) return true;
   _unsynced_writes = 0;
-  if (_file.sync()) return true;
+  if (_file.sync()) {
+    _fails = 0;
+    return true;
+  }
   fail_step(PSTR("sync"), dir, name);
   closeDay(false);
   return false;
@@ -281,8 +331,9 @@ void SDCard::writeUndated()
       fail_step(PSTR("open"), "", UNDATED + 1);
       return;
     }
-    _file_cl = clusters_of(_file.fileSize());
+    _file_size = _file.fileSize();
     _open_day = UNDATED_DAY;
+    s_undated = true;
   }
   if (!_undated) write_header(_file, PSTR("Uptime"));   // once a boot
   _undated = true;
@@ -353,6 +404,7 @@ void SDCard::scheduleCleanup(uint8_t what) {
 
 // once a minute, not re-armed once off; a cleanup counts free space first
 void SDCard::loop(unsigned long /*now*/) {
+  if (s_months && (!_enabled || (uint32_t)corium::Uptime::seconds() - s_months_s >= SD_TABLE_S)) forget_months();
   if (!_enabled) return;
   if (!_counting) {
     corium::Registry::dueIn(this, ms_to_minute());
@@ -442,10 +494,16 @@ void SDCard::fail_step(const char* step, const char* dir, const char* file) {
   fault();
 }
 
+// a dying card holds the loop seconds a try, so a minute counts once
 void SDCard::fault() {
-  if (_fault) return;
+  if (!_fault) corium::Registry::emit(TOPIC_ERROR);
   _fault = true;
-  corium::Registry::emit(TOPIC_ERROR);
+  uint32_t m = (uint32_t)(time(nullptr) / 60);
+  if (!_enabled || m == _fail_min) return;
+  _fail_min = m;
+  if (++_fails < SD_FAIL_MAX) return;
+  corium::Log::console(PSTR("SDCard: disabled after %u failed minutes"), (unsigned)SD_FAIL_MAX);
+  _enabled = false;
 }
 
 // leaves cwd at root
@@ -530,7 +588,10 @@ bool SDCard::deleteOldest(uint32_t cutoff) {
       f.close();
       corium::Log::console(PSTR("SDCard: Deleting old file %s/%s"), dir, name);
       deleted = sd->remove(name);
-      if (deleted) _free += clusters_of(size);
+      if (deleted) {
+        _free += clusters_of(size);
+        forget_months();
+      }
     }
     sd->chdir();
     return deleted;
@@ -542,6 +603,9 @@ void SDCard::reinit() {
   // first, the loop checks it
   _enabled = false;
   pauseWriter();
+  // the reply reads nothing more, it frees it
+  if (s_dl) (void)s_dl->close();
+  forget_months();
   if (sd) {
     delete sd;
     sd = nullptr;
@@ -557,18 +621,14 @@ void SDCard::pauseWriter() {
 
 void SDCard::closeDay(bool sync) {
   if (_file.isOpen()) {
-    if (sync) _file.sync();
-    _file.close();
+    // close flushes the rows since the last sync
+    bool ok = !sync || _file.sync();
+    if (!_file.close()) ok = false;
+    if (!ok) fail_step(PSTR("close"), "", "day file");
   }
   _open_day = 0;
   _unsynced_writes = 0;
 }
-
-struct MonthEntry {
-  uint32_t yyyymm;
-  uint16_t files;
-  uint32_t bytes;
-};
 
 struct DayEntry {
   uint8_t  day;
@@ -584,7 +644,7 @@ static void end_page(EGHttpResponse& res, const __FlashStringHelper* msg) {
   end_page(res);
 }
 
-static void tally_month(File32& sub, const char* dir, MonthEntry& m, uint64_t& total) {
+static void tally_month(File32& sub, const char* dir, MonthEntry& m) {
   File32 file;
   while (file.openNext(&sub, O_RDONLY)) {
     if (!file.isSubDir() && !file.isHidden()) {
@@ -593,7 +653,6 @@ static void tally_month(File32& sub, const char* dir, MonthEntry& m, uint64_t& t
       if (our_csv(f_name, dir)) {
         m.files++;
         m.bytes += file.fileSize();
-        total += file.fileSize();
       }
     }
     file.close();
@@ -601,7 +660,7 @@ static void tally_month(File32& sub, const char* dir, MonthEntry& m, uint64_t& t
   }
 }
 
-static uint16_t scan_months(MonthEntry* months, uint16_t cap, uint64_t& total) {
+static uint16_t scan_months(MonthEntry* months, uint16_t cap) {
   uint16_t count = 0;
   File32 root, sub;
   if (!sd->chdir() || !root.open("/")) return 0;
@@ -616,7 +675,7 @@ static uint16_t scan_months(MonthEntry* months, uint16_t cap, uint64_t& total) {
         m.yyyymm = (uint32_t)ym;
         m.files  = 0;
         m.bytes  = 0;
-        tally_month(sub, name, m, total);
+        tally_month(sub, name, m);
         if (m.files > 0) count++;
       }
     }
@@ -707,6 +766,21 @@ static void send_month_rows(EGHttpResponse& res, const MonthEntry* months,
   if (!any) res.sendChunk(F("<p>No log files in this year.</p>"));
 }
 
+// the whole card once, then only the months found are kept
+static bool load_months() {
+  MonthEntry* m = (MonthEntry*)malloc(SD_MONTHS * sizeof(MonthEntry));
+  if (!m) return false;
+  SDCard::Hold hold;
+  uint16_t n = scan_months(m, SD_MONTHS);
+  sort_months_desc(m, n);
+  s_undated = sd->exists(UNDATED);
+  // never 0, the pointer says it's loaded
+  MonthEntry* fit = (MonthEntry*)realloc(m, (n ? n : 1) * sizeof(MonthEntry));
+  s_months = fit ? fit : m;
+  s_month_n = n;
+  return true;
+}
+
 static void hSdList(EGHttpResponse& res, uint16_t sel = 0) {
   corium::WebPortal::beginPage(res, F("SD Logs"));
 
@@ -715,34 +789,27 @@ static void hSdList(EGHttpResponse& res, uint16_t sel = 0) {
     return;
   }
 
-  SDCard::Hold hold;
-
-  constexpr uint16_t MAX_MONTHS = 120;   // 10 years
-  MonthEntry* months = (MonthEntry*)malloc(MAX_MONTHS * sizeof(MonthEntry));
-  if (!months) {
+  if (!s_months && !load_months()) {
     end_page(res, F("<p>Out of memory.</p>"));
     return;
   }
+  s_months_s = (uint32_t)corium::Uptime::seconds();
 
   uint64_t total = 0;
-  uint16_t count = scan_months(months, MAX_MONTHS, total);
-  sort_months_desc(months, count);
-  send_list_summary(res, count, total);
-  if (sd->exists(UNDATED)) {
+  for (uint16_t i = 0; i < s_month_n; i++) total += s_months[i].bytes;
+  send_list_summary(res, s_month_n, total);
+  if (s_undated) {
     res.sendChunk(F("<p><a href='/sd?u=1'>Undated rows</a>, from before the clock was set.</p>"));
   }
 
-  if (count == 0) {
+  if (s_month_n == 0) {
     res.sendChunk(F("<p>No log files yet.</p>"));
-    free(months);
     end_page(res);
     return;
   }
 
-  uint16_t year = send_year_picker(res, months, count, sel);
-  send_month_rows(res, months, count, year);
-
-  free(months);
+  uint16_t year = send_year_picker(res, s_months, s_month_n, sel);
+  send_month_rows(res, s_months, s_month_n, year);
   end_page(res);
 }
 
@@ -835,6 +902,21 @@ static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
   end_page(res);
 }
 
+// the server asks as acks come, a short write asks again at the same place
+static size_t dl_fill(void* f, size_t at, char* buf, size_t room) {
+  File32* fp = (File32*)f;
+  if (fp->curPosition() != at && !fp->seekSet(at)) return 0;
+  int got = fp->read(buf, room);
+  return got > 0 ? (size_t)got : 0;
+}
+
+static void dl_done(void* f) {
+  File32* fp = (File32*)f;
+  (void)fp->close();   // read only
+  delete fp;
+  s_dl = nullptr;
+}
+
 // f checked, nullptr = the undated rows
 static void hSdDownload(EGHttpResponse& res, const char* f) {
   // arg() buffer is shared
@@ -845,34 +927,31 @@ static void hSdDownload(EGHttpResponse& res, const char* f) {
     res.send(503, FPSTR(HTTP_CT_PLAIN), F("SD not ready"));
     return;
   }
+  File32* fp = s_dl ? nullptr : new (std::nothrow) File32;
+  if (!fp) {
+    res.send(503, FPSTR(HTTP_CT_PLAIN), F("Busy"));
+    return;
+  }
 
-  char dir[SD_DIR_LEN + 1];
-  strlcpy(dir, name, sizeof(dir));
+  // full path, the writer runs between sends and moves the cwd
+  char path[SD_DIR_LEN + SD_NAME_LEN + 3];
+  if (f) snprintf_P(path, sizeof(path), PSTR("/%.6s/%s"), name, name);
+  else   strlcpy(path, UNDATED, sizeof(path));
 
+  // the writer reopens on its next row, the handle keeps the size at open
   SDCard::Hold hold;
-
-  File32 fp;
-  if (!sd->chdir() || (f && !sd->chdir(dir)) || !fp.open(name, O_RDONLY)) {
-    sd->chdir();
+  if (!fp->open(path, O_RDONLY)) {
+    delete fp;
     res.send(404, FPSTR(HTTP_CT_PLAIN), F("Not found"));
     return;
   }
+  s_dl = fp;
 
   char disp[64];
   snprintf_P(disp, sizeof(disp),
              PSTR("attachment; filename=\"%s\""), name);
   res.addHeader(F("Content-Disposition"), disp);
-  res.beginChunked(200, F("text/csv"));
-
-  uint8_t buf[512];
-  while (true) {
-    int got = fp.read(buf, sizeof(buf));
-    if (got <= 0) break;
-    if (!res.sendChunk((const char*)buf, (size_t)got)) break;
-  }
-  fp.close();
-  sd->chdir();
-  res.endChunked();
+  res.sendPull(200, F("text/csv"), fp->fileSize(), dl_fill, dl_done, fp);
 }
 
 static void hSdYear(EGHttpResponse& res, const char* y) {
@@ -920,6 +999,13 @@ const corium::MenuEntry* SDCard::menuEntries() {
 void SDCard::registerRoutes(EGHttpServer& http) {
   http.on(F("/sd/reinit"), EGHttpRequest::POST,
     [](EGHttpRequest& req, EGHttpResponse& res, void*) {
+      static uint32_t next_s = 0;   // uptime
+      uint32_t now = (uint32_t)corium::Uptime::seconds();
+      if (now < next_s) {
+        res.send(429, FPSTR(HTTP_CT_PLAIN), F("Try again later"));
+        return;
+      }
+      next_s = now + SD_REINIT_S;
       sdcard.reinit();
       res.send(200, FPSTR(HTTP_CT_PLAIN), sdcard.ready() ? F("Reinit OK") : F("Reinit failed"));
     });

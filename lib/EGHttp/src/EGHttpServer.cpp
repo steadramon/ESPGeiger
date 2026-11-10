@@ -139,27 +139,61 @@ static bool yield_write_pgm(EGHttpServer::Slot* s, PGM_P data, size_t len) {
   return true;
 }
 
+static const size_t TAIL_PART = 512;
+#if EGHTTP_PULL
+static const size_t PULL_STEP = 1024;   // about a segment, 2^n so no divide
+#endif
+
+// n cut to what goes; nullptr = the puller came up short
+static const char* tail_part(EGHttpServer::Slot* s, char* b, size_t& n) {
+#if EGHTTP_PULL
+  if (s->pull) {
+    if (n > TAIL_PART) n = TAIL_PART;
+    n = s->pull(s->pullCtx, s->pullAt, b, n);
+    return n ? b : nullptr;
+  }
+#endif
+#ifdef ESP8266
+  // flash isn't byte readable here
+  if (n > TAIL_PART) n = TAIL_PART;
+  memcpy_P(b, s->tail, n);
+  return b;
+#else
+  (void)b;
+  return s->tail;
+#endif
+}
+
+static void tail_sent(EGHttpServer::Slot* s, size_t w) {
+  s->tailLen -= w;
+#if EGHTTP_PULL
+  if (s->pull) {
+    // a KB out, more time: a big file goes, a trickle is cut
+    if (s->pullAt / PULL_STEP != (s->pullAt + w) / PULL_STEP) s->due = EGClock::now() + EGHTTP_SEND_MS;
+    s->pullAt += w;
+    return;
+  }
+#endif
+  s->tail += w;
+}
+
 // what fits now, onSent sends the rest
 static void send_tail(EGHttpServer::Slot* s) {
   while (s->tailLen && s->client) {
     size_t can = s->client->space();
     size_t n = s->tailLen < can ? s->tailLen : can;
     if (!n) return;
-#ifdef ESP8266
-    // flash isn't byte readable here
-    char b[512];
-    if (n > sizeof(b)) n = sizeof(b);
-    memcpy_P(b, s->tail, n);
-    const char* from = b;
-#else
-    const char* from = s->tail;
-#endif
+    char b[TAIL_PART];
+    const char* from = tail_part(s, b, n);
+    if (!from) {
+      s->send_aborted = true;   // shorter than its Content-Length
+      return;
+    }
     uint8_t f = EGTcpClient::COPY;
     if (n < s->tailLen && n < can) f |= EGTcpClient::MORE;
     size_t w = s->client->write(from, n, f);
     if (!w) return;
-    s->tail += w;
-    s->tailLen -= w;
+    tail_sent(s, w);
   }
 }
 
@@ -254,14 +288,8 @@ void EGHttpServer::setBasicAuth(const __FlashStringHelper* user, const char* pas
   char raw[EGHTTP_AUTH_MAX + 1];
   int rlen = snprintf_P(raw, sizeof(raw), PSTR("%s:%s"), (PGM_P)user, password);
   if (rlen <= 0 || (size_t)rlen >= sizeof(raw)) return;
-  unsigned char encoded[EGB64_LEN(EGHTTP_AUTH_MAX) + 1];
-  unsigned int elen = encode_base64((const unsigned char*)raw, (unsigned int)rlen, encoded);
-  encoded[elen] = '\0';
-  int n = snprintf_P(_authValue, sizeof(_authValue), PSTR("Basic %s"), (char*)encoded);
-  if (n <= 0 || (size_t)n >= sizeof(_authValue)) {
-    _authValue[0] = '\0';
-    return;
-  }
+  // rlen <= EGHTTP_AUTH_MAX, it fits with the NUL
+  encode_base64((const unsigned char*)raw, (unsigned int)rlen, (unsigned char*)_authValue);
   if (realm && pgm_read_byte((PGM_P)realm)) {
     strncpy_P(_authRealm, (PGM_P)realm, sizeof(_authRealm) - 1);
     _authRealm[sizeof(_authRealm) - 1] = '\0';
@@ -337,6 +365,7 @@ static void clear_slot(EGHttpServer::Slot* s) {
   s->len            = 0;
   s->contentLength  = 0;
   s->headerEnd      = 0;
+  s->query          = 0;
   s->stream         = EGHttpServer::NO_STREAM;
   s->ack_owed       = 0;
   s->bodyAcked      = 0;
@@ -346,6 +375,12 @@ static void clear_slot(EGHttpServer::Slot* s) {
   set_acc(s, nullptr, 0);
   s->tail           = nullptr;
   s->tailLen        = 0;
+#if EGHTTP_PULL
+  s->pull           = nullptr;
+  s->pulled         = nullptr;
+  s->pullCtx        = nullptr;
+  s->pullAt         = 0;
+#endif
 }
 
 EGHttpServer::Slot* EGHttpServer::allocSlot(EGTcpClient* c) {
@@ -378,6 +413,10 @@ void EGHttpServer::sendStatusAndClose(Slot* s, const char* status, uint8_t retry
 
 void EGHttpServer::resetSlot(Slot* s) {
   if (s->buf) { free(s->buf); s->buf = nullptr; }
+#if EGHTTP_PULL
+  // done, cut, gone or the server stopped: once
+  if (s->pulled) s->pulled(s->pullCtx);
+#endif
   clear_slot(s);
   EGTcpClient* c = s->client;
   s->client = nullptr;
@@ -450,6 +489,8 @@ void EGHttpServer::takeStream(Slot* s, const uint8_t* data, size_t len) {
   s->client->ackLater();
 }
 
+static_assert(EGHTTP_REQ_BUF <= 0xFFFF, "Slot::query is 16 bit");
+
 static bool append_req(EGHttpServer::Slot* s, const uint8_t* data, size_t len) {
   if (s->len + len > EGHTTP_REQ_BUF) return false;
   memcpy(s->buf + s->len, data, len);
@@ -501,12 +542,6 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
 
   identifyRoute(s);
   if (uploadFor(s->routeIdx)) {
-    // auth before any body
-    if (_authEnabled && !authorized(s)) {
-      sendUnauthorized(s);
-      sendStatusAndClose(s, nullptr);
-      return;
-    }
     beginStream(s, len);
     return;
   }
@@ -521,7 +556,16 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
   }
 }
 
+// judged once, before any body: nothing refuses it after
 void EGHttpServer::beginStream(Slot* s, size_t len) {
+  EGHttpRequest req;
+  readRequest(s, req);   // a route matched, the line parsed
+  uint16_t no = refusal(s, req);
+  if (no == 401) sendUnauthorized(s);
+  if (no) {
+    sendStatusAndClose(s, no == 400 ? S400 : nullptr);
+    return;
+  }
   if (_streamOwner) {
     sendStatusAndClose(s, S503, 5);
     return;
@@ -573,10 +617,11 @@ void EGHttpServer::identifyRoute(Slot* s) {
   char* sp2 = strchr(path, ' ');
   if (sp2) *sp2 = '\0';
   char* q = strchr(path, '?');
-  char savedQ = 0;
-  if (q) { savedQ = *q; *q = '\0'; }
+  if (q) {
+    *q = '\0';
+    s->query = (uint16_t)(q + 1 - s->buf);
+  }
   s->routeIdx = findRoute(path, method);
-  if (q) *q = savedQ;
 }
 
 // first match wins
@@ -684,16 +729,15 @@ bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
 
   char* path = sp1 + 1;
   if (!memchr(path, '\0', s->buf + s->headerEnd - path)) return false;
-  char* q = strchr(path, '?');
-  if (q) {
-    *q = '\0';
-    req._query    = q + 1;
-    req._queryLen = strlen(q + 1);
+  if (s->query) {
+    req._query    = s->buf + s->query;
+    req._queryLen = strlen(req._query);
   }
   req._path = path;
 
   req._body    = s->buf + s->headerEnd;
-  bool streamed = s->stream != NO_STREAM;
+  // before beginStream too
+  bool streamed = uploadFor(s->routeIdx) != nullptr;
   req._bodyLen = streamed ? 0 : s->contentLength;
   if (!streamed && s->headerEnd + req._bodyLen < EGHTTP_REQ_BUF) {
     s->buf[s->headerEnd + req._bodyLen] = '\0';
@@ -711,9 +755,11 @@ bool EGHttpServer::authorized(const Slot* s) const {
   const char* hend = s->buf + s->headerEnd;
   while (p < hend && (*p == ' ' || *p == '\t')) p++;
   size_t vlen = strlen(_authValue);
-  return (size_t)(hend - p) > vlen &&
-         strncmp(p, _authValue, vlen) == 0 &&
-         at_line_end(p[vlen]);
+  // the scheme any case, the token exact
+  return (size_t)(hend - p) > 6 + vlen &&
+         strncasecmp_P(p, PSTR("Basic "), 6) == 0 &&
+         strncmp(p + 6, _authValue, vlen) == 0 &&
+         at_line_end(p[6 + vlen]);
 }
 
 // a value arg() can't hold reads as absent, so none get past
@@ -724,6 +770,12 @@ bool EGHttpServer::argsFit(const Slot* s, const EGHttpRequest& req) const {
   while (ct && (*ct == ' ' || *ct == '\t')) ct++;
   if (ct && strncasecmp_P(ct, PSTR("text/plain"), 10) == 0) return true;
   return eghttp_form_fits(req._body, req._bodyLen, EGHTTP_ARG_MAX + 1);
+}
+
+// 401 before 400, both paths
+uint16_t EGHttpServer::refusal(const Slot* s, const EGHttpRequest& req) const {
+  if (_authEnabled && !authorized(s)) return 401;
+  return argsFit(s, req) ? 0 : 400;
 }
 
 static const char HEAD_401[] PROGMEM =
@@ -755,11 +807,13 @@ void EGHttpServer::dispatch(Slot* s) {
   }
   if (!readRequest(s, req)) return;
 
-  if (_authEnabled && !authorized(s)) {
+  // an upload's was at beginStream
+  uint16_t no = s->stream == NO_STREAM ? refusal(s, req) : 0;
+  if (no == 401) {
     sendUnauthorized(s);
     return;
   }
-  if (!argsFit(s, req)) {
+  if (no) {
     reply_status(s, S400);
     return;
   }
@@ -996,6 +1050,25 @@ void EGHttpResponse::sendGzipP(uint16_t status, const __FlashStringHelper* conte
   if (!n) return;
   writeHeadAndBodyP(head, (size_t)n, (PGM_P)body, len);
 }
+
+#if EGHTTP_PULL
+void EGHttpResponse::sendPull(uint16_t status, const __FlashStringHelper* contentType, size_t len,
+                              Fill fill, Done done, void* ctx) {
+  if (!_slot || _started || _done || !fill) {
+    if (done) done(ctx);
+    return;
+  }
+  auto* s = static_cast<EGHttpServer::Slot*>(_slot);
+  s->pull    = fill;
+  s->pulled  = done;
+  s->pullCtx = ctx;
+  s->pullAt  = 0;
+  char head[HEAD_MAX];
+  int n = eghttp_head(head, status, (PGM_P)contentType, PSTR(""), len, _extraHeaders);
+  if (!n) return;
+  writeHeadAndBodyP(head, (size_t)n, nullptr, len);
+}
+#endif
 
 void EGHttpResponse::writeHeadAndBodyP(const char* head, size_t headLen,
                                        PGM_P body, size_t bodyLen) {

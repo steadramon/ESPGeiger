@@ -50,6 +50,12 @@ bool corium::Fs::begin() {
   return s_mounted;
 }
 
+void corium::Fs::end() {
+  if (s_mounted) LittleFS.end();
+  s_tried = true;
+  s_mounted = false;
+}
+
 File corium::Fs::openR(const char* path) {
   if (!begin() || !LittleFS.exists(path)) return File();
   return LittleFS.open(path, "r");

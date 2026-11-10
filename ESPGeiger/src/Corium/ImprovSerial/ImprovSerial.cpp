@@ -147,6 +147,9 @@ static const uint32_t IMPROV_JOIN_MS = 30000;
 
 static improv::State current_state() {
   if (corium::Wifi::connectedRaw()) return improv::STATE_PROVISIONED;
+  bool joining = corium::fastMillis() - CORIUM_MS_START < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
+  // hasSavedCreds sets STA, that drops the hotspot or the portal
+  if (!joining || corium::Wifi::apUp()) return improv::STATE_AUTHORIZED;
   // can take 50ms on esp32
   static bool s_asked = false;
   static bool s_have = false;
@@ -154,8 +157,7 @@ static improv::State current_state() {
     s_have = corium::Wifi::hasSavedCreds();
     s_asked = true;
   }
-  bool joining = corium::fastMillis() - CORIUM_MS_START < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
-  return (joining && s_have) ? improv::STATE_PROVISIONING : improv::STATE_AUTHORIZED;
+  return s_have ? improv::STATE_PROVISIONING : improv::STATE_AUTHORIZED;
 }
 
 bool corium::ImprovSerial::on_command(improv::ImprovCommand cmd) {
@@ -231,6 +233,7 @@ void corium::ImprovSerial::send_wifi_networks() {
     send_response_data(improv::GET_WIFI_NETWORKS, entry, 3);
   }
   send_response_data(improv::GET_WIFI_NETWORKS, nullptr, 0);   // empty = end of list
+  corium::Wifi::scanDelete();
 }
 
 static const uint32_t IMPROV_TEST_MS = 25000;   // esp-web-tools gives up at 30s

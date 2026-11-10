@@ -101,8 +101,8 @@ fetch(D.u,{cache:'no-store',signal:c.signal}).then(r=>r.json()).then(r=>{A=Date.
 ()=>Date.now()-A<2e4?setTimeout(go,2e3):w('Lost the setup network. Reconnect to ',D.a,' and open http://192.168.4.1/ again.'))};
 setTimeout(go,2e3)})())JS";
 
-void EGPortal::begin(const char* apSsid, const char* apPassword) {
-  if (_active) return;
+bool EGPortal::begin(const char* apSsid, const char* apPassword) {
+  if (_active) return true;
 
   // STA only, AP_STA scan is unreliable
   WiFi.mode(WIFI_STA);
@@ -119,12 +119,12 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
 #endif
   // the STA's join moves the AP to its channel, start on the likely one
   uint8_t chan = (_scanCount && _scan[0].chan) ? _scan[0].chan : 1;
-  WiFi.softAP(apSsid, (apPassword && apPassword[0]) ? apPassword : nullptr, chan);
+  bool up = WiFi.softAP(apSsid, (apPassword && apPassword[0]) ? apPassword : nullptr, chan);
   _apSsid = apSsid;
   _join = JOIN_IDLE;
 
   IPAddress apIp = WiFi.softAPIP();
-  _dns.begin(53, EGTcpAddr(apIp[0], apIp[1], apIp[2], apIp[3]));
+  up = _dns.begin(53, EGTcpAddr(apIp[0], apIp[1], apIp[2], apIp[3])) && up;
 
   // routes outlive end()
   if (!_routed) {
@@ -138,9 +138,10 @@ void EGPortal::begin(const char* apSsid, const char* apPassword) {
     _http.onNotFound(&EGPortal::hCaptive, this);
     _routed = true;
   }
-  _http.begin(80);
+  _http.begin(80);   // retries its own listen
 
   _active = true;
+  return up;
 }
 
 // loop() collects it

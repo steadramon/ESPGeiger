@@ -37,11 +37,14 @@ static const char* skip_spaces(const char* p, const char* end) {
 }
 
 static const size_t CL_DIGITS_MAX = 8;   // under 100 MB, no size_t overflow
+static const char H_CL[] PROGMEM = "Content-Length:";
 
-// junk is BAD
+// junk, a second one or any Transfer-Encoding is BAD
 EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* out) {
   *out = 0;
-  const char* p = eghttp_find_header(hdr, headerEnd, PSTR("Content-Length:"));
+  // no chunked bodies here
+  if (eghttp_find_header(hdr, headerEnd, PSTR("Transfer-Encoding:"))) return EGHTTP_CL_BAD;
+  const char* p = eghttp_find_header(hdr, headerEnd, H_CL);
   if (!p) return EGHTTP_CL_ABSENT;
   const char* end = hdr + headerEnd;
   p = skip_spaces(p, end);
@@ -52,6 +55,8 @@ EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* 
   }
   p = skip_spaces(p, end);
   if (nd == 0 || p >= end || *p != '\r') return EGHTTP_CL_BAD;
+  // the same value twice too, as "5, 5"
+  if (eghttp_find_header(p, (size_t)(end - p), H_CL)) return EGHTTP_CL_BAD;
   *out = v;
   return EGHTTP_CL_OK;
 }

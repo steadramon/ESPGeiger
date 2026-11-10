@@ -246,8 +246,7 @@ public:
   static void resetAll(bool keep_network = false);
   // groups a failed commit left unsaved back to what's on flash, no callbacks
   static void revert();
-  static void needsRestart();  // from onPrefsSaved
-  static bool restartPending();  // the last commit needs one
+  static bool restartPending();  // the last commit changed a P_REBOOT row
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
   static bool stored(const char* module);
   // false = its stored value didn't load, the default stands; two in a group = every row

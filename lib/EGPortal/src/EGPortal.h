@@ -55,7 +55,9 @@ class EGPortal {
     static const char JOIN_JS[];
 
     // blocks for one sync scan, then AP + dns + http on 80; apSsid must outlive it
-    void begin(const char* apSsid, const char* apPassword = nullptr);   // nullptr = open
+    // false = the AP or dns didn't start, end() still owed
+    __attribute__((warn_unused_result))
+    bool begin(const char* apSsid, const char* apPassword = nullptr);   // nullptr = open
     void loop();   // every loop while active, handlers run from here
     void end();
 
@@ -123,8 +125,8 @@ class EGPortal {
     const char* _apSsid = nullptr;
     uint8_t _join = JOIN_IDLE;
 
-    char _savedSsid[EGPORTAL_SSID_MAX + 1] = {0};
-    char _savedPass[EGPORTAL_PASS_MAX + 1] = {0};
+    char _savedSsid[EGPORTAL_SSID_MAX + 1] = {};
+    char _savedPass[EGPORTAL_PASS_MAX + 1] = {};
 
     ScanEntry _scan[EGPORTAL_SCAN_MAX];
     uint8_t   _scanCount = 0;

@@ -65,6 +65,8 @@ class SDCard : public corium::Module {
     void fault();
     void fail_step(const char* step, const char* dir, const char* file);
     bool _fault = false;
+    uint8_t _fails = 0;        // failed minutes in a row
+    uint32_t _fail_min = 0;    // the last one counted
     time_t _last_minute = 0;
     uint32_t _open_day = 0;  // YYYYMMDD, 0 = closed
     uint8_t _sync_min = 1;
@@ -75,7 +77,7 @@ class SDCard : public corium::Module {
     uint8_t _counting = CLEAN_NONE;   // the cleanup it's counting for
     int32_t _free = -1;               // clusters
     bool _undated = false;   // its header written this boot
-    uint32_t _file_cl = 0;            // day file's clusters
+    uint32_t _file_size = 0;          // day file's, at the last row
     uint32_t _fat_sec = 0;            // next FAT sector
     void used_clusters(uint32_t n);
     void minuteEdge();
