@@ -1,5 +1,5 @@
 /*
-  ImprovSerial.cpp - see header.
+  ImprovSerial.cpp - Improv WiFi over serial
 
   Copyright (C) 2026 @steadramon
 
@@ -194,7 +194,7 @@ void corium::ImprovSerial::on_error(improv::Error err) {
 
 void corium::ImprovSerial::send_device_info() {
   const char* about[] = {
-    APP_FW_NAME,
+    APP_FW_NAME,  // sent from ram
     RELEASE_VERSION,
     IMPROV_CHIPFAMILY,
     corium::DeviceInfo::hostname(),

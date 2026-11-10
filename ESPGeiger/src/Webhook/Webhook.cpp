@@ -62,7 +62,7 @@ static const corium::PrefGroup WEBHOOK_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* Webhook::prefsGroup() { return &WEBHOOK_PREF_GROUP; }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias WEBHOOK_LEGACY[] PROGMEM = {
   {"whSend", "send"},
   {"whURL",  "url"},
@@ -71,7 +71,6 @@ static const corium::LegacyAlias WEBHOOK_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows Webhook::legacyAliases() { return WEBHOOK_LEGACY; }
-// === END LEGACY IMPORT ===
 
 Webhook::Webhook() {
   _every_ms = (uint32_t)WEBHOOK_INTERVAL * 1000UL;
@@ -94,20 +93,17 @@ bool Webhook::interpret(const char* r)
     corium::Log::debug(PSTR("Webhook: Upload OK"));
     return true;
   }
-  char esc[96];   // log only, cut is fine
+  // the reply can quote the key back, debug only
+  corium::Log::console(PSTR("Webhook: Error"));
+#if LOG_LEVEL >= 3
+  char esc[96];   // cut is fine
   egesc_json(esc, sizeof(esc), r);
-  corium::Log::console(PSTR("Webhook: Error - %s"), esc);
+  corium::Log::debug(PSTR("Webhook: %s"), esc);
+#endif
   return false;
 }
 
 PGM_P Webhook::contentType() const { return HTTP_CT_JSON; }
-
-const char* Webhook::cleanHTTP(const char* url) {
-  if (strncmp_P(url, PSTR("http://"), 7) == 0) {
-    return url + 7; // Skip "http://"
-  }
-  return url;
-}
 
 static constexpr size_t WEBHOOK_BUF_SIZE = 512;
 
@@ -124,21 +120,15 @@ static bool build_body(char* buf, const char* key) {
 
 bool Webhook::prepare(char* url, size_t cap, const char** body) {
   const char* raw = corium::Prefs::getString("webhook", K_URL);
-  if (raw[0] == '\0') return false;
+  if (unset(raw, WH_L_URL)) return false;
   if (!upload_ready(logTag())) return false;
-  // never sent as plain http
-  if (strncmp_P(raw, PSTR("https://"), 8) == 0) {
-    corium::Log::console(PSTR("Webhook: https not supported, not sent"));
-    notePublish(false);
-    return false;
-  }
 
   corium::Log::debug(PSTR("Webhook: Uploading latest data ..."));
 
   const char* key = corium::Prefs::getString("webhook", K_KEY);
 
-  const char* bare = cleanHTTP(raw);
-  if (!urlFits(snprintf_P(url, cap, PSTR("http://%s"), bare), cap)) return false;
+  // as typed, the client refuses what it can't do (https)
+  if (!urlFits((int)strlcpy(url, raw, cap), cap)) return false;
 
   // post() frees it once sent
   char* buf = (char*)malloc(WEBHOOK_BUF_SIZE);

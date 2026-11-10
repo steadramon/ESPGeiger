@@ -95,6 +95,7 @@ static bool eghttp_late(const EGHttpServer::Slot* s) {
   return (int32_t)(EGClock::now() - s->due) >= 0;
 }
 
+__attribute__((warn_unused_result))
 static bool send_fail(EGHttpServer::Slot* s, PGM_P why, size_t sent, size_t len) {
   EGHTTP_TRACE(PSTR("[EGHttp] send aborted, %s at %u/%u B\n"), why, (unsigned)sent, (unsigned)len);
   (void)why; (void)sent; (void)len;
@@ -227,7 +228,7 @@ static size_t eghttp_find_header_end(const char* buf, size_t len) {
   return 0;
 }
 
-// ---------- EGHttpServer ----------
+// EGHttpServer
 
 static const uint8_t ROUTE_STEP = 16;   // grow by, the cap stays below NO_ROUTE
 
@@ -328,7 +329,7 @@ void EGHttpServer::relisten() {
   uint32_t now = EGClock::now();
   if ((int32_t)(now - _relistenAt) < 0) return;
   _relistenAt = now + 1000;
-  _server->begin(_server->port());
+  (void)_server->begin(_server->port());   // listening() says, next tick
 }
 
 bool EGHttpServer::hasActiveClients() const {
@@ -905,7 +906,7 @@ void EGHttpServer::sentMore(Slot* s) {
   if ((!s->tailLen || s->send_aborted) && s->state == RESPONDING) finish(s);
 }
 
-// ---------- EGHttpRequest ----------
+// EGHttpRequest
 
 static char s_arg_decoded[EGHTTP_ARG_MAX + 1];
 
@@ -964,7 +965,7 @@ static bool eghttp_acc_flush(EGHttpServer::Slot* s) {
   return ok;
 }
 
-// ---------- EGHttpResponse ----------
+// EGHttpResponse
 
 // no CR or LF in a value
 static bool eghttp_text(const char* s) {

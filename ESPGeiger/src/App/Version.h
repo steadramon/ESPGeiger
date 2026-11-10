@@ -1,5 +1,5 @@
 /*
-  Version.h - The release version. The release workflow writes the tag here.
+  Version.h - release workflow sets it
 
   Copyright (C) 2026 @steadramon
 

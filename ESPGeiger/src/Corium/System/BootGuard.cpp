@@ -1,5 +1,5 @@
 /*
-  BootGuard.cpp - see header.
+  BootGuard.cpp - safe mode after crashes
 
   Copyright (C) 2026 @steadramon
 

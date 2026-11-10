@@ -33,7 +33,7 @@ static bool take(char (&out)[N], const char* p, const char* e) {
 }
 
 // value may hold '=' and '.'
-static bool put_line(const char* p, const char* e, corium::ImportText::PutFn put) {
+CORIUM_NODISCARD static bool put_line(const char* p, const char* e, corium::ImportText::PutFn put) {
   if (memchr(p, '\0', e - p)) return false;   // a NUL would cut the value
   const char* eq = (const char*)memchr(p, '=', e - p);
   if (!eq) return false;
@@ -118,7 +118,7 @@ static int moved_index(const char* mid) {
 }
 
 // a NUL would cut the value, as put_line
-static bool put_rec(const char* mid, const char* key, const uint8_t* v, uint16_t vlen,
+CORIUM_NODISCARD static bool put_rec(const char* mid, const char* key, const uint8_t* v, uint16_t vlen,
                     corium::ImportText::PutFn put) {
   char value[CORIUM_PREFS_MAX_VALUE + 1];
   if (vlen >= sizeof(value) || memchr(v, '\0', vlen)) return false;

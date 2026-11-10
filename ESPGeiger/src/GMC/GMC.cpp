@@ -47,8 +47,8 @@ CORIUM_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
 
 static const corium::Pref GMC_PREF_ITEMS[] PROGMEM = {
   {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  corium::P_BOOL,   0},
-  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, 0},
-  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, 0},
+  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, corium::P_SENSITIVE},
+  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, corium::P_SENSITIVE},
 };
 
 static const corium::PrefGroup GMC_PREF_GROUP PROGMEM = {
@@ -64,7 +64,7 @@ void GMC::onPrefsLoaded() {
   setEnabled(corium::Prefs::getBool("gmc", EG_K_SEND));
 }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias GMC_LEGACY[] PROGMEM = {
   {"gmcSend", "send"},
   {"gmcAID",  "aid"},
@@ -72,7 +72,6 @@ static const corium::LegacyAlias GMC_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows GMC::legacyAliases() { return GMC_LEGACY; }
-// === END LEGACY IMPORT ===
 
 GMC::GMC() {
   _every_ms = (uint32_t)GMC_INTERVAL * 1000UL;
@@ -99,16 +98,8 @@ bool GMC::interpret(const char* r)
 bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
   const char* id   = corium::Prefs::getString("gmc", K_AID);
   const char* gcid = corium::Prefs::getString("gmc", K_GCID);
-  bool has_id   = (id[0]   != '\0');
-  bool has_gcid = (gcid[0] != '\0');
-
-  if (!has_id && !has_gcid) return false;
+  if (unset(id, GM_L_AID) || unset(gcid, GM_L_GID)) return false;
   if (!upload_ready(logTag())) return false;
-
-  if (!has_id || !has_gcid) {
-    corium::Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
-    return false;
-  }
 
   corium::Log::debug(PSTR("GMC: Uploading latest data ..."));
 

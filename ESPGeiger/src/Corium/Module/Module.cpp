@@ -1,5 +1,5 @@
 /*
-  corium::Module.cpp - Out-of-line bodies for the corium::Module base class.
+  Module.cpp - Base class for modules
 
   Copyright (C) 2026 @steadramon
 
@@ -17,21 +17,22 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Module.h"
+#include "Corium/System/Uptime.h"
 #include "Corium/Util/Words.h"
 
-// sent and answered in one go
+// For a send that's answered in one go
 void corium::Sender::notePublish(bool ok) {
   noteAttempt();
   noteResult(ok);
 }
 
-// lastOk stays the last answer till this one's in
+// lastOk keeps the previous answer until this one comes back
 void corium::Sender::noteAttempt() {
-  lastAttemptMs = corium::fastMillis();
+  lastAttempt = corium::Uptime::seconds();
   _publish_pending = 1;
 }
 
-// counted on the result, not the attempt
+// Counts go up on the result, not the attempt
 void corium::Sender::noteResult(bool ok) {
   if (!_publish_pending) return;
   _publish_pending = 0;
@@ -52,13 +53,13 @@ uint8_t corium::Sender::takePublishErr() {
   return v;
 }
 
-// age in seconds, null before the first send
+// age is in uptime seconds so there's no ms wrap, null before the first send
 size_t corium::Sender::writeStatusJson(char* buf, size_t cap, const char* key,
-                                   bool ok, unsigned long lastAttemptMs,
-                                   unsigned long now) {
-  if (lastAttemptMs == 0) {
+                                   bool ok, unsigned long lastAttempt) {
+  if (lastAttempt == 0) {
     return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":false,\"age\":null}"), key);
   }
+  unsigned long up = corium::Uptime::seconds();
   return snprintf_P(buf, cap, PSTR("\"%s\":{\"ok\":%s,\"age\":%lu}"), key,
-                    ok ? W_TRUE : W_FALSE, (now - lastAttemptMs) / 1000);
+                    ok ? W_TRUE : W_FALSE, up - lastAttempt);
 }

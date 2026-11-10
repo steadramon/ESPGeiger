@@ -36,7 +36,7 @@ namespace Wifi {
   bool connected = false;
   bool ap = false;
   IPAddress local_ip;
-  char ssid[WIFI_SSID_MAX + 1] = "";
+  char ssid[WIFI_SSID_MAX + 1] = {};
   int16_t rssi = 0;
   uint32_t connectedAtMs = 0;
   bool settled = false;
@@ -118,16 +118,16 @@ static void reprobe_saved_network(unsigned long now) {
     s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
     corium::Log::console(PSTR("WiFi: Offline - re-probing saved network"));
     WiFi.mode(WIFI_STA);
-    WiFi.begin();
+    (void)WiFi.begin();   // the link watch reads the status
   }
 }
 
 static void clear_backups_once_stable() {
   corium::Wifi::backupGraceDone = true;
-  if (corium::Fs::remove(WIFI_BACKUP_PATH)) {
+  if (corium::Fs::exists(WIFI_BACKUP_PATH) && corium::Fs::remove(WIFI_BACKUP_PATH)) {
     corium::Log::console(PSTR("WiFi: New creds stable for 5 min, backup cleared"));
   }
-  if (corium::Fs::remove(NET_BACKUP_PATH)) {
+  if (corium::Fs::exists(NET_BACKUP_PATH) && corium::Fs::remove(NET_BACKUP_PATH)) {
     corium::Log::console(PSTR("WiFi: Static IP stable for 5 min, net backup cleared"));
   }
 }

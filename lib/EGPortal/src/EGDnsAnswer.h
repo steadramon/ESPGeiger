@@ -47,7 +47,8 @@ class EGDnsAnswer {
   public:
     EGDnsAnswer() : _udp(EGDNS_MSG_MAX, EGDNS_SLOTS) {}
 
-    // ttl in seconds
+    // ttl in seconds; false = the port didn't open
+    __attribute__((warn_unused_result))
     bool begin(uint16_t port, const EGTcpAddr& ip, uint32_t ttl = EGDNS_TTL);
     void end() { _udp.end(); }
     void poll() { _udp.poll(); }   // loop, answers from here

@@ -23,6 +23,7 @@
 #define GEIGERSERIALPORT_H
 
 #include "Corium/Platform/Flash.h"
+#include "Corium/Util/Attr.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -37,7 +38,7 @@
 template <uint16_t Cap>
 class GeigerPort {
   public:
-    bool   begin(uint32_t baud, int rx, int tx) { (void)tx; return EGTimer1::rx_begin((int8_t)rx, baud); }
+    CORIUM_NODISCARD bool begin(uint32_t baud, int rx, int tx) { (void)tx; return EGTimer1::rx_begin((int8_t)rx, baud); }
     int    available()                          { return EGTimer1::rx_available(); }
     int    read()                               { return EGTimer1::rx_read(); }
     size_t write(const uint8_t* b, size_t n)    { (void)b; (void)n; return 0; }
@@ -53,9 +54,9 @@ class GeigerPort {
 template <uint16_t Cap>
 class GeigerPort {
   public:
-    bool begin(uint32_t baud, int rx, int tx) {
+    CORIUM_NODISCARD bool begin(uint32_t baud, int rx, int tx) {
       _port.begin(baud, SWSERIAL_8N1, (int8_t)rx, (int8_t)tx, false, Cap);
-      return true;
+      return (bool)_port;
     }
     int    available()                       { return _port.available(); }
     int    read()                            { return _port.read(); }

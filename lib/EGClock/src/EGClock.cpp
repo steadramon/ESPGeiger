@@ -1,5 +1,5 @@
 /*
-  EGClock.cpp - see header.
+  EGClock.cpp - one millis source
 
   Copyright (C) 2026 @steadramon
 

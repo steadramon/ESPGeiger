@@ -60,8 +60,8 @@ namespace Wifi {
   bool offlineNow();   // console: this boot without wifi, false once joined
   bool hasSavedCreds();
   bool portalAhead();   // first setup: none saved, not offline
-  void joinMode();   // wifi.mode back to 0, no commit
-  bool saveBackupCreds();   // before WiFi.begin()
+  CORIUM_NODISCARD bool joinMode();   // wifi.mode back to 0, no commit
+  bool saveBackupCreds();   // before WiFi.begin(); a failed write logs, none to back up = false
   bool clearSavedCreds();   // false = the sdk kept them, logged
   bool applyStaticConfig();   // before WiFi.begin()
   bool validateStatic(const char* ip, const char* gw, const char* sn,
@@ -79,7 +79,9 @@ namespace Wifi {
   const char* heldSsid();   // "" if none
   bool beginHeld();   // WiFi.begin() then frees, false = none held
   void dropHeld();   // a save that didn't land
-  bool saveNetBackup();   // won't overwrite a pending backup
+  CORIUM_NODISCARD bool saveNetBackup();   // true = one there, a pending one kept
+  // static, ip, gw, sn, dns; no commit. false = one refused, the rest put
+  CORIUM_NODISCARD bool putNet(const char* const* f);
   bool probeReachability();   // blocks, lwIP timeout ~14s
   bool restoreNetBackup();   // restart after
   // on reset, else a later failed save reverts

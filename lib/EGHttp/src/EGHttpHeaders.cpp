@@ -1,5 +1,5 @@
 /*
-  EGHttpHeaders.cpp - see header.
+  EGHttpHeaders.cpp - request header recognisers
 
   Copyright (C) 2026 @steadramon
 
@@ -55,7 +55,7 @@ EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* 
   }
   p = skip_spaces(p, end);
   if (nd == 0 || p >= end || *p != '\r') return EGHTTP_CL_BAD;
-  // the same value twice too, as "5, 5"
+  // A second Content-Length is BAD even with the same value, like "5, 5" is
   if (eghttp_find_header(p, (size_t)(end - p), H_CL)) return EGHTTP_CL_BAD;
   *out = v;
   return EGHTTP_CL_OK;

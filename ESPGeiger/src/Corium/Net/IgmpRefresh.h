@@ -19,10 +19,17 @@
 #ifndef CORIUM_IGMP_REFRESH_H
 #define CORIUM_IGMP_REFRESH_H
 
+#include "Corium/Util/Attr.h"
+
+class IPAddress;
+
 namespace corium {
 namespace IgmpRefresh {
 
 bool refresh();   // esp32 only, loop, false = not sent
+// esp8266 only: its beginMulticast keeps the join when the bind fails, so join here, one leave each
+CORIUM_NODISCARD bool join(const IPAddress& group);
+void leave(const IPAddress& group);   // its WiFiUDP::stop() keeps the group
 
 }
 }  // namespace corium

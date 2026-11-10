@@ -26,16 +26,21 @@
 #include "App/Units.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/Prefs.h"
+#include "Corium/Prefs/PrefPattern.h"
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Corium/System/DeviceInfo.h"
+#include "Corium/System/Uptime.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Util/Bytes.h"
 #include "Corium/Util/MathUtil.h"
 #include <WiFiUdp.h>
+#include <new>
 #include <string.h>
 #include <ctype.h>
 
 static GeigerUdpRx* s_rx = nullptr;
+
+CORIUM_PSTR(ID_PAT, UDPRX_CHIPID_PAT);
 
 static constexpr const char PATH_PREFIX[]  = "/espg/";
 static constexpr const char TAG_II[]        = ",ii";
@@ -43,6 +48,10 @@ static constexpr const char TAG_FFF[]       = ",fff";
 // "env" includes its NUL
 static constexpr const char SUFFIX_CLICK[]  = "click";
 static constexpr const char SUFFIX_ENV[]    = "env";
+// quiet is over QUIET_MS
+static constexpr uint32_t HEARD_MS = UDPRX_QUIET_MS + 1;
+
+static uint32_t up_s() { return (uint32_t)corium::Uptime::seconds(); }
 
 static inline float rd_f32(const uint8_t* p) {
   uint32_t bits = rdBe32(p);
@@ -99,13 +108,15 @@ void GeigerUdpRx::onPrefsSaved() {
   uint16_t old_port = _port;
   uint8_t  old_rx_mode = _rx_mode;
   IPAddress old_group = _group;
+  char old_pin[BLIP_ID_LEN + 1];
+  memcpy(old_pin, _pinned_chipid, sizeof(old_pin));
   readPrefs();
   bool net_changed = (old_port != _port) || !(old_group == _group);
   if (net_changed) {
     teardownUdp();
   }
-  if (old_mode != _mode) {
-    _locked_chipid[0] = '\0';   // re-latch next click
+  if (old_mode != _mode || strcmp(old_pin, _pinned_chipid) != 0) {
+    unlatch();
   }
   if (old_rx_mode != _rx_mode && _udp) {
     corium::Wifi::rxSleep(_rx_mode);
@@ -120,17 +131,26 @@ void GeigerUdpRx::teardownUdp() {
     delete _udp;
     _udp = nullptr;
   }
+#ifdef ESP8266
+  if (_joined.isSet()) corium::IgmpRefresh::leave(_joined);
+  _joined.clear();
+#endif
 }
 
 bool GeigerUdpRx::ensureUdp() {
   if (_udp) return true;
   if (!corium::Wifi::connected) return false;
-  _udp = new WiFiUDP();
+  _udp = new (std::nothrow) WiFiUDP();
+  if (!_udp) return false;
   corium::Wifi::rxSleep(_rx_mode);
   bool ok;
   if (corium::Wifi::isMulticast(_group)) {
 #ifdef ESP8266
-    ok = _udp->beginMulticast(corium::Wifi::local_ip, _group, _port);
+    ok = corium::IgmpRefresh::join(_group);
+    if (ok) {
+      _joined = _group;   // a failed bind leaves it
+      ok = _udp->begin(_port);
+    }
 #else
     ok = _udp->beginMulticast(_group, _port);
 #endif
@@ -145,6 +165,12 @@ bool GeigerUdpRx::ensureUdp() {
     return false;
   }
   return true;
+}
+
+// next click latches again
+void GeigerUdpRx::unlatch() {
+  _locked_chipid[0] = '\0';
+  _env_chipid[0] = '\0';
 }
 
 bool GeigerUdpRx::acceptChipid(const char* src_chipid, bool click) {
@@ -316,9 +342,13 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   if (len < BLIP_ARGS_AT + 4) return;
   if (buf[BLIP_ID_AT + BLIP_ID_LEN] != '/') return;
   if (memcmp(buf, PATH_PREFIX, BLIP_ID_AT) != 0) return;
+  char src[BLIP_ID_LEN + 1];
+  memcpy(src, buf + BLIP_ID_AT, BLIP_ID_LEN);
+  src[BLIP_ID_LEN] = '\0';
+  // "" fits the pattern
+  if (!src[0] || prefPattern(ID_PAT, src) != 1) return;
   // own packets
-  if (memcmp(buf + BLIP_ID_AT, corium::DeviceInfo::chipId(), BLIP_ID_LEN) == 0) return;
-  const char* src = (const char*)(buf + BLIP_ID_AT);
+  if (memcmp(src, corium::DeviceInfo::chipId(), BLIP_ID_LEN) == 0) return;
   const uint8_t* suffix = buf + BLIP_SUFFIX_AT;
   bool click = memcmp(suffix, SUFFIX_CLICK, 5) == 0;
   if (!acceptChipid(src, click)) return;
@@ -326,6 +356,8 @@ void GeigerUdpRx::processDatagram(uint8_t* buf, size_t len) {
   uint32_t now_ms = corium::fastMillis();
   ProducerRecord* p = producer(src, now_ms);
   _last_packet_ms = now_ms;
+  _last_packet_s = up_s();
+  _heard.mark(now_ms);
 
   // other paths only keep the producer alive
   if (click) {
@@ -384,18 +416,19 @@ void GeigerUdpRx::recover(uint32_t now) {
   _recovery_at_ms = now;
   switch (_recovery_steps) {
     case 0:
+      unlatch();   // a pin stays
+      do_refresh();
+      break;
     case 1:
       do_refresh();
       break;
     case 3:
-      corium::Log::console(PSTR("UdpRx: silent %us, bouncing power save"),
-                   (unsigned)((now - _last_packet_ms) / 1000u));
+      corium::Log::console(PSTR("UdpRx: silent %us, bouncing power save"), (unsigned)quiet_s());
       corium::Wifi::rxSleep(2);
       _ps_bounce.set(now + 5000u);
       break;
     case 4:
-      corium::Log::console(PSTR("UdpRx: silent %us, reassociating WiFi"),
-                   (unsigned)((now - _last_packet_ms) / 1000u));
+      corium::Log::console(PSTR("UdpRx: silent %us, reassociating WiFi"), (unsigned)quiet_s());
       corium::Wifi::reconnect();
       break;
     case 2:
@@ -451,12 +484,12 @@ void GeigerUdpRx::loop() {
     corium::Wifi::rxSleep(_rx_mode);
   }
 
-  if (_last_packet_ms > 0 && (uint32_t)(now - _last_packet_ms) > UDPRX_QUIET_MS) {
+  if (_last_packet_ms > 0 && !_heard.fresh(now, HEARD_MS)) {
     recover(now);
     if (!_udp) return;
   } else {
     if (_recovery_steps) {
-      corium::Log::console(PSTR("UdpRx: rx resumed after rung %u"), _recovery_steps);
+      corium::Log::console(PSTR("UdpRx: rx resumed after rung %u"), (unsigned)_recovery_steps);
     }
     _recovery_steps = 0;
     _recovery_at_ms = 0;
@@ -471,7 +504,10 @@ void GeigerUdpRx::loop() {
 }
 
 void GeigerUdpRx::secondTicker() {
-  _env_at.fresh(corium::fastMillis(), UDPRX_ENV_TTL_MS);   // stale stays stale over the wrap
+  uint32_t now = corium::fastMillis();
+  // stale stays stale over the wrap
+  _env_at.fresh(now, UDPRX_ENV_TTL_MS);
+  _heard.fresh(now, HEARD_MS);
   if (!_draining) return;
   // a big gap goes in at the sender's rate
   float step = _drain_rate;
@@ -503,11 +539,11 @@ bool GeigerUdpRx::isHealthy() const {
 }
 
 uint32_t GeigerUdpRx::quiet_s() const {
-  return _last_packet_ms ? (uint32_t)(corium::fastMillis() - _last_packet_ms) / 1000u : 0;
+  return _last_packet_ms ? up_s() - _last_packet_s : 0;
 }
 
 bool GeigerUdpRx::heard() const {
-  return _last_packet_ms && (uint32_t)(corium::fastMillis() - _last_packet_ms) <= UDPRX_QUIET_MS;
+  return corium::fresh(corium::fastMillis(), _heard.at, HEARD_MS);
 }
 
 // igmpx = no netif

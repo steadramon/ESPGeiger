@@ -263,8 +263,7 @@ static corium::WebPortal* s_portal = nullptr;
 static void ap_test_end() {
   s_ap_test = false;
   if (corium::Wifi::testState() != EGPortal::JOIN_OK) return;
-  corium::Wifi::joinMode();
-  if (!corium::Prefs::commit()) {
+  if (!corium::Wifi::joinMode() || !corium::Prefs::commit()) {
     corium::Log::console(PSTR("WebPortal: net settings not saved"));
     return;
   }
@@ -284,7 +283,7 @@ void corium::WebPortal::poll(uint32_t now) {
     if (s_wifi_save) {
       corium::Log::console(PSTR("WebPortal: applying new WiFi creds (ssid='%s')"),
                    corium::Wifi::heldSsid());
-      corium::Wifi::beginHeld();
+      (void)corium::Wifi::beginHeld();   // held since the save
       s_wifi_save = false;
       delay(150);  // restart follows, NVS settle
     }
@@ -841,7 +840,7 @@ static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
 
 static void info_render_about(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>About</summary><table>"));
-  INFO_ROW("Build", PSTR(RELEASE_VERSION " " GIT_VERSION " &middot; " BUILD_ENV " &middot; %s"),
+  INFO_ROW("Build", PSTR(RELEASE_VERSION " " GIT_VERSION " " BUILD_ENV " %s"),
            corium::DeviceInfo::buildDate());
   corium::AppHooks::infoRows(res);
   res.sendChunk(FPSTR(IR_END));
@@ -902,12 +901,13 @@ static void about_device(EGHttpResponse& res) {
   advancePos(len, n, sizeof(buf));
   if (len) res.sendChunk(buf, len);
 
-  char gw[CORIUM_IPV4_MAX + 1], sn[CORIUM_IPV4_MAX + 1], bssid[18] = {}, tx[8] = "null";
+  char gw[CORIUM_IPV4_MAX + 1], sn[CORIUM_IPV4_MAX + 1], bssid[18] = {}, tx[8];
   corium::Wifi::formatIP(gw, sizeof(gw), corium::Wifi::gatewayIP());
   corium::Wifi::formatIP(sn, sizeof(sn), corium::Wifi::subnetMask());
   if (const uint8_t* b = corium::Wifi::BSSID()) info_fmt_mac(bssid, sizeof(bssid), b);
   int q = corium::Wifi::txPowerQdbm();   // 0.25 dBm steps, -1 = unknown
   if (q >= 0) snprintf_P(tx, sizeof(tx), PSTR("%d.%02d"), q / 4, (q % 4) * 25);
+  else flashToRam(PSTR("null"), tx, sizeof(tx));
   n = snprintf_P(buf, sizeof(buf),
     PSTR("\"mhz\":%u,\"gw\":\"%s\",\"sn\":\"%s\",\"bssid\":\"%s\",\"tx\":%s,"
          "\"phy\":\"%s\",\"sleep\":\"%s\",\"auto\":%s,"),
@@ -984,9 +984,9 @@ static const char WIFI_FORM_HEAD[] PROGMEM = R"HTML(
 <option value=''>Scanning&hellip;</option>
 </select>
 <label for=s>SSID</label>
-<input id=s name=ssid maxlength=32 placeholder='(blank to keep current network)'>
+<input id=s name=ssid maxlength=)HTML" STR(EGPORTAL_SSID_MAX) R"HTML( placeholder='(blank to keep current network)'>
 <label for=p>Password</label>
-<input id=p name=password type=password maxlength=64 placeholder='(blank for open networks)'>
+<input id=p name=password type=password maxlength=)HTML" STR(EGPORTAL_PASS_MAX) R"HTML( placeholder='(blank for open networks)'>
 )HTML";
 
 static const char WIFI_FORM_END[] PROGMEM = R"HTML(
@@ -1017,13 +1017,13 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
   res.sendChunk(F(">Use static IP (otherwise DHCP)</label>"));
 
   wifi_ip_field(res, F("<label for=ip>IP address</label>"
-                       "<input id=ip name=ip maxlength=15 placeholder='192.168.1.50'"), corium::K_IP);
+                       "<input id=ip name=ip maxlength=" STR(CORIUM_IPV4_MAX) " placeholder='192.168.1.50'"), corium::K_IP);
   wifi_ip_field(res, F("<label for=gw>Gateway</label>"
-                       "<input id=gw name=gw maxlength=15 placeholder='192.168.1.1'"), corium::K_GW);
+                       "<input id=gw name=gw maxlength=" STR(CORIUM_IPV4_MAX) " placeholder='192.168.1.1'"), corium::K_GW);
   wifi_ip_field(res, F("<label for=sn>Subnet mask</label>"
-                       "<input id=sn name=sn maxlength=15 placeholder='255.255.255.0'"), corium::K_SN);
+                       "<input id=sn name=sn maxlength=" STR(CORIUM_IPV4_MAX) " placeholder='255.255.255.0'"), corium::K_SN);
   wifi_ip_field(res, F("<label for=dns>DNS server <span class=muted style='font-weight:normal'>(optional)</span></label>"
-                       "<input id=dns name=dns maxlength=15 placeholder='same as gateway'"), corium::K_DNS);
+                       "<input id=dns name=dns maxlength=" STR(CORIUM_IPV4_MAX) " placeholder='same as gateway'"), corium::K_DNS);
   res.sendChunk(FPSTR(W_DETAILS_END));
 }
 
@@ -1195,12 +1195,14 @@ static bool static_refused(EGHttpResponse& res, const char* ip, const char* gw, 
   return true;
 }
 
-static void put_net(bool st, const char* ip, const char* gw, const char* sn, const char* dns) {
-  corium::Prefs::put("net", corium::K_STATIC_IP, st ? "1" : "0");
-  corium::Prefs::put("net", corium::K_IP, ip);
-  corium::Prefs::put("net", corium::K_GW, gw);
-  corium::Prefs::put("net", corium::K_SN, sn);
-  corium::Prefs::put("net", corium::K_DNS, dns);
+// backup first, boot can revert: a static IP with none to go back to could lock it out.
+// false = not all put, the rest still go as /param's
+CORIUM_NODISCARD static bool put_net(bool st, bool join, const char* ip, const char* gw,
+                                     const char* sn, const char* dns) {
+  if (!corium::Wifi::saveNetBackup() && st) return false;
+  const char* f[] = {st ? "1" : "0", ip, gw, sn, dns};
+  // hotspot mode: only once joined
+  return corium::Wifi::putNet(f) && (!join || corium::Wifi::ap || corium::Wifi::joinMode());
 }
 
 static void ap_test_save(EGHttpResponse& res);
@@ -1213,7 +1215,7 @@ static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
       ap_test_save(res);
       return;
     }
-    corium::Wifi::saveBackupCreds();
+    (void)corium::Wifi::saveBackupCreds();   // logged; the portal is the way back
     s_wifi_save = true;
   }
   corium::WebPortal::beginPage(res, F("Saving WiFi"));
@@ -1278,11 +1280,8 @@ void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*
   HoldResult held = has_ssid ? wifi_hold_args(req, ssid) : HELD;
   if (!wifi_held_ok(res, held)) return;
 
-  // backup first, boot can revert
-  corium::Wifi::saveNetBackup();
-  put_net(static_on, ip, gw, sn, dns);
-  if (has_ssid && !corium::Wifi::ap) corium::Wifi::joinMode();   // hotspot mode: only once joined
-  if (!corium::Prefs::commit()) {
+  bool put = put_net(static_on, has_ssid, ip, gw, sn, dns);
+  if (!corium::Prefs::commit() || !put) {
     if (has_ssid) corium::Wifi::dropHeld();
     not_saved_page(res, F("Saving WiFi"));
     return;
@@ -1675,19 +1674,14 @@ static void param_save_pref(const char* mid, const corium::Pref& p,
   flashToRam(p.id, id, sizeof(id));
   snprintf_P(name, sizeof(name), PSTR("%s.%s"), mid, id);
 
-  if (p.type == corium::P_BOOL) {
-    const char* one = EGHttpRequest::decodeArg(body, len, name, field, sizeof(field)) ? "1" : "0";
-    corium::Prefs::put(mid, id, one);
-    return;
-  }
   const char* v = EGHttpRequest::decodeArg(body, len, name, field, sizeof(field));
-  if (!v) return;
-  if (p.flags & corium::P_SENSITIVE) {
-    if (strcmp_P(v, PSTR("__CLEAR__")) == 0) {
-      corium::Prefs::put(mid, id, "");
-      return;
-    }
-    if (v[0] == '\0') return;
+  if (p.type == corium::P_BOOL) {
+    v = v ? "1" : "0";
+  } else if (!v) {
+    return;
+  } else if (p.flags & corium::P_SENSITIVE) {
+    if (strcmp_P(v, PSTR("__CLEAR__")) == 0) v = "";
+    else if (v[0] == '\0') return;
   }
   param_put(mid, id, name, v, r);
 }
@@ -2109,12 +2103,12 @@ static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart
     res.sendChunk(buf);
   }
   if (refused.note) {
-    snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>Note: %s, %s.%s</div>"),
+    snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>%s, %s.%s</div>"),
                refused.note_name, refused.note, link_once(link, RESTART_APPLY));
     res.sendChunk(buf);
   }
   if (frozen) {
-    snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>Note: %s.%s</div>"), frozen,
+    snprintf_P(buf, sizeof(buf), PSTR("<div class='a aw'>%s.%s</div>"), frozen,
                link_once(link, RESTART_APPLY));
     res.sendChunk(buf);
   }

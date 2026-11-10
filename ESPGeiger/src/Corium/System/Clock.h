@@ -38,7 +38,7 @@ namespace Clock {
   extern Source source;
   // loop task only, a sync callback posts its module
   bool onSync(Source s = NTP);   // true when s wasn't the last to set it
-  bool set(time_t epoch, Source s);   // NTP sets it itself
+  void set(time_t epoch, Source s);   // NTP sets it itself
   void kept();   // boot: esp32 keeps time() over a restart
   void anchor();   // boot: a clock set before Reactor::begin, bootEpoch from its uptime 0
 

@@ -49,10 +49,12 @@ class EGUdp {
     EGUdp& operator=(const EGUdp&) = delete;
 
     // port 0 = any free one; false = open already, no memory or bind failed
+    __attribute__((warn_unused_result))
     bool begin(uint16_t port);
     void end();                  // leaves the group, queued ones dropped
 
     // v4 only, one group, any iface = all
+    __attribute__((warn_unused_result))
     bool join(const EGTcpAddr& group, const EGTcpAddr& iface = EGTcpAddr());
     // after begin(), the 8266 core's beginPacketMulticast()
     void setMulticast(const EGTcpAddr& iface, uint8_t ttl = 1);
@@ -65,6 +67,7 @@ class EGUdp {
     }
 
     // copied before it returns; false = not open, no memory or the stack said no
+    __attribute__((warn_unused_result))
     bool sendTo(const EGTcpAddr& to, uint16_t port, const void* data, size_t len);
 
     bool listening() const { return _h != nullptr; }

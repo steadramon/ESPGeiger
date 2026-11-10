@@ -135,13 +135,12 @@ RgbColor NeoPixel::color(uint8_t r, uint8_t g, uint8_t b) {
   return _swap_rg ? RgbColor(g, r, b) : RgbColor(r, g, b);
 }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias NEOPIXEL_LEGACY[] PROGMEM = {
   {"neopixelBrightness", "brightness"},
   {},
 };
 corium::LegacyRows NeoPixel::legacyAliases() { return NEOPIXEL_LEGACY; }
-// === END LEGACY IMPORT ===
 
 NeoPixel::NeoPixel() {
 }

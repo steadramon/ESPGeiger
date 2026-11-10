@@ -52,7 +52,7 @@ class NeoPixel : public corium::Module {
     void begin() override;
     const corium::PrefGroup* prefsGroup() override;
     void onPrefsLoaded() override;
-    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    corium::LegacyRows legacyAliases() override;
     void loop(unsigned long now) override;
     static constexpr uint16_t LOOP_MS = 30;
     static constexpr uint16_t FAST_LOOP_MS = 10;

@@ -58,6 +58,19 @@
 #define USE_PCNT
 #endif
 
+#ifdef USE_PCNT
+#define PCNT_PULL_FLOATING 0
+#define PCNT_PULL_UP       1
+#define PCNT_PULL_DOWN     2
+#if defined(PCNT_PULLUP_PIN)
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_UP
+#elif defined(PCNT_PULLDOWN_PIN)
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_DOWN
+#else
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_FLOATING
+#endif
+#endif
+
 // pulse builds link both, a pref picks one at boot
 #if defined(USE_PCNT) && !GEIGER_IS_TEST(GEIGER_TYPE)
 #define PCNT_SELECTABLE

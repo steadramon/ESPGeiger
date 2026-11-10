@@ -60,7 +60,7 @@ static const corium::PrefGroup NTP_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* corium::NTP_Client::prefsGroup() { return &NTP_PREF_GROUP; }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias NTP_LEGACY[] PROGMEM = {
 #ifndef DISABLE_NTP
   {"srv", "server"},
@@ -69,7 +69,6 @@ static const corium::LegacyAlias NTP_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows corium::NTP_Client::legacyAliases() { return NTP_LEGACY; }
-// === END LEGACY IMPORT ===
 
 corium::NTP_Client::NTP_Client() {
 }

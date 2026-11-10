@@ -34,9 +34,11 @@ class GeigerTestSerial final : public GeigerInputTest
   private:
     void pullSerial();
     void handleSerial(char* input);
+    void send_line();
 
     char _buf[64];
     uint8_t _pos = 0;
+    bool _send = false;   // the tick's line, loop() writes it
     uint8_t _idle_ms = 1;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
 };

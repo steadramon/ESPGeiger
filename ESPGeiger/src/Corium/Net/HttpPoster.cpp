@@ -1,5 +1,5 @@
 /*
-  corium::HttpPoster.cpp - periodic HTTP upload, shared by the output modules
+  HttpPoster.cpp -periodic HTTP upload, shared by the output modules
 
   Copyright (C) 2026 @steadramon
 
@@ -33,15 +33,21 @@ void corium::HttpPoster::setEnabled(bool on) {
   corium::Registry::every(this, (on || request.busy()) ? LOOP_MS : 0);
 }
 
+// a new url or key gets its own say
+void corium::HttpPoster::onPrefsSaved() {
+  _told = false;
+  onPrefsLoaded();
+}
+
 uint16_t corium::HttpPoster::setIntervalS(int s, int lo, int hi) {
   s = clamp(s, lo, hi);
   _every_ms = (uint32_t)s * 1000UL;
   return (uint16_t)s;
 }
 
-size_t corium::HttpPoster::statusJson(char* buf, size_t cap, unsigned long now) {
+size_t corium::HttpPoster::statusJson(char* buf, size_t cap, unsigned long /*now*/) {
   if (!_send_enabled) return 0;
-  return writeStatusJson(buf, cap, statusKey(), lastOk, lastAttemptMs, now);
+  return writeStatusJson(buf, cap, statusKey(), lastOk, lastAttempt);
 }
 
 void corium::HttpPoster::loop(unsigned long now)
@@ -95,6 +101,15 @@ bool corium::HttpPoster::urlFits(int n, size_t cap) {
   return false;
 }
 
+bool corium::HttpPoster::unset(const char* v, PGM_P label) {
+  if (v[0]) return false;
+  if (!_told) {
+    corium::Log::console(PSTR("%s: %s not set, not sent"), logTag(), label);
+    _told = true;
+  }
+  return true;
+}
+
 void corium::HttpPoster::post() {
   if (request.busy()) return;   // last reply not in yet
   char url[URL_CAP];
@@ -118,6 +133,14 @@ void corium::HttpPoster::send(const char* url, const char* body) {
     return;
   }
   noteAttempt();
+  if (s == corium::HttpDriver::BAD_URL) {
+    if (!_told) {
+      corium::Log::console(PSTR("%s: URL not usable (%s)"), logTag(), (PGM_P)EGHttpClient::urlWhy(url));
+      _told = true;
+    }
+    noteResult(false);
+    return;
+  }
   if (s == corium::HttpDriver::NOT_OPENED) {
     corium::Log::console(PSTR("%s: Can't send request"), logTag());
     noteResult(false);

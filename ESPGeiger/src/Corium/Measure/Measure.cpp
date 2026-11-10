@@ -1,5 +1,5 @@
 /*
-  corium::Measure.cpp - One table of measurements behind every output.
+  Measure.cpp - one table of measurements behind every output
 
   Copyright (C) 2026 @steadramon
 

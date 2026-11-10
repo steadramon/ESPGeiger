@@ -1,5 +1,5 @@
 /*
-  corium::Module.h - Base class for modules
+  Module.h - Base class for modules
 
   Copyright (C) 2026 @steadramon
 
@@ -69,7 +69,7 @@ class Module {
     virtual uint8_t displayOrder() { return 50; }  // lower first, 0 = hidden
     virtual bool hwPresent() { return true; }
 
-    // LEGACY IMPORT (remove in v1.1.0) - PROGMEM table ending with {}
+    // legacy import, PROGMEM rows ending {}
     virtual LegacyRows legacyAliases() { return LegacyRows(); }
 #ifdef CORIUM_PREFS_LEGACY_FILE
     virtual const char* legacyFile() { return CORIUM_PREFS_LEGACY_FILE; }
@@ -113,13 +113,12 @@ class Sender : public Module {
     uint8_t _pub_ok  = 0;   // in the base's tail
     uint8_t _pub_err = 0;
   public:
-    unsigned long lastAttemptMs = 0;
+    unsigned long lastAttempt = 0;   // uptime s, 0 = none yet
 
   protected:
     ~Sender() = default;
     static size_t writeStatusJson(char* buf, size_t cap, const char* key,
-                                    bool ok, unsigned long lastAttemptMs,
-                                    unsigned long now);
+                                    bool ok, unsigned long lastAttempt);
 };
 
 }  // namespace corium

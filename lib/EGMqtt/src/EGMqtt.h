@@ -33,19 +33,19 @@ class __FlashStringHelper;   // F("...")
   #define EGMQTT_IN_CAP 512     // biggest packet taken in, bigger are dropped
 #endif
 #ifndef EGMQTT_MAX_QOS
-  #define EGMQTT_MAX_QOS 2      // 1 = no QoS 2, one sent to us ends the connection
+  #define EGMQTT_MAX_QOS 2      // 1 = no QoS 2, a QoS 2 message from the broker ends the connection
 #endif
 #ifndef EGMQTT_SUB_LOST
-  #define EGMQTT_SUB_LOST 1     // 0 = a subscribe lost with the connection isn't told
+  #define EGMQTT_SUB_LOST 1     // 0 = a subscribe lost with the connection isn't reported
 #endif
 #ifndef EGMQTT_QOS2_IN
-  #define EGMQTT_QOS2_IN 20     // QoS 2 ids held till PUBREL
+  #define EGMQTT_QOS2_IN 20     // QoS 2 ids held until PUBREL
 #endif
 #ifndef EGMQTT_STR_CAP
   #define EGMQTT_STR_CAP 128    // longest host, id, user, password, will topic, will
 #endif
 
-// all from loop(), buffers kept till stop(); QoS 1 and 2 kept till acked
+// Everything runs from loop(). Buffers are kept until stop(), QoS 1 and 2 until acked
 class EGMqtt {
   public:
     enum State : uint8_t { DISCONNECTED, CONNECTING, CONNECTED };
@@ -75,7 +75,7 @@ class EGMqtt {
       uint8_t granted;   // QoS 0-2, 0x80 = refused or lost
     };
 
-    // all from loop(); they may call anything here, connect() too
+    // All called from loop(), they may call anything here, connect() too
     typedef void (*OnConnect)(void* arg, bool session_present);
     typedef void (*OnDisconnect)(void* arg, int8_t error);   // not after disconnect()
     typedef void (*OnMessage)(void* arg, const Message& m);
@@ -89,11 +89,16 @@ class EGMqtt {
     EGMqtt(const EGMqtt&) = delete;
     EGMqtt& operator=(const EGMqtt&) = delete;
 
-    // copied, used from the next connect; false = too long or no room
+    // Copied and used from the next connect. false if too long or no room, the old one stays
+    __attribute__((warn_unused_result))
     bool setServer(const char* host, uint16_t port = 1883);
+    __attribute__((warn_unused_result))
     bool setClientId(const char* id);
+    __attribute__((warn_unused_result))
     bool setCredentials(const char* user, const char* pass = nullptr);   // no pass without a user
+    __attribute__((warn_unused_result))
     bool setWill(const char* topic, const char* msg, uint8_t qos = 0, bool retain = false);
+    __attribute__((warn_unused_result))
     bool setWill(const char* topic, const __FlashStringHelper* msg, uint8_t qos = 0, bool retain = false);
     void clearWill();
     void setKeepAlive(uint16_t secs) { _keepalive = secs; }   // 0 = off
@@ -105,7 +110,7 @@ class EGMqtt {
     void onAck(OnAck fn, void* arg = nullptr) { _onAck = fn; _onAckArg = arg; }
 
     bool connect();      // false = not started: no host, not down, or see lastError()
-    // DISCONNECT, then closed; will = publish it first, no room = no DISCONNECT so the broker does
+    // Sends DISCONNECT, then closes. will = publish the will first, with no room there's no DISCONNECT so the broker publishes it
     void disconnect(bool will = false);
     void stop();         // drops the queue and settings, frees all
     void loop();         // call often, every callback runs from here
@@ -119,7 +124,7 @@ class EGMqtt {
     uint16_t port() const { return _port; }
     const char* willTopic() const { return _will ? str(F_WILL_TOPIC) : ""; }
 
-    // 0 = refused (bad topic, full, QoS 0 while down), QoS 0 gives 1
+    // 0 = refused (bad topic, full, QoS 0 while down). QoS 0 returns 1 when sent
     uint16_t publish(const char* topic, const uint8_t* payload, size_t len,
                      uint8_t qos = 0, bool retain = false);
     uint16_t publish(const char* topic, const char* payload, uint8_t qos = 0, bool retain = false);
@@ -127,7 +132,7 @@ class EGMqtt {
     uint16_t publish(const char* topic, const __FlashStringHelper* payload,
                      uint8_t qos = 0, bool retain = false);
 
-    // payload written in place, nothing else on this client till end
+    // Payload is written in place, nothing else on this client until publish_end()
     uint8_t* publish_begin(const char* topic, uint8_t qos, bool retain, size_t* cap);
     uint16_t publish_end(size_t len);   // as publish(), 0 = refused
     uint16_t subscribe(const char* filter, uint8_t qos = 0);   // connected only
@@ -142,7 +147,7 @@ class EGMqtt {
 
   private:
     enum Phase : uint8_t { IDLE, DIAL, HELLO, UP };   // HELLO = CONNECT sent, no CONNACK yet
-    // from K_PUB1 on they're kept till acked
+    // K_PUB1 and later are kept until acked
     enum Kind : uint8_t { K_CONNECT, K_ONCE, K_PING, K_PUB1, K_PUB2, K_REL, K_SUB, K_UNSUB };
     enum Sent : uint8_t { S_NEW, S_SENT, S_DONE, S_LOST };   // S_LOST = told from events()
     enum Rx : uint8_t { R_HEAD, R_BODY, R_SKIP };
@@ -166,6 +171,7 @@ class EGMqtt {
 
     bool mem();
     const char* str(Field f) const { return _strs ? _strs + _at[f] : ""; }
+    __attribute__((warn_unused_result))
     bool set_str(Field f, const char* v, Field g = F_COUNT, const char* v2 = nullptr);
     EGMqttWire::Connect conf() const;
     static size_t needs(const EGMqttWire::Connect& c);

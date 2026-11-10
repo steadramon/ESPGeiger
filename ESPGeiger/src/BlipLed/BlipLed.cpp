@@ -1,5 +1,5 @@
 /*
-  BlipLed.cpp - see header.
+  BlipLed.cpp - a flash per count
 
   Copyright (C) 2026 @steadramon
 

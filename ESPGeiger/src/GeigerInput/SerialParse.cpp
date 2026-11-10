@@ -96,17 +96,23 @@ bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
   return true;
 }
 
+static const char* skip_sep(const char* p) {
+  while (*p == ':' || *p == ',' || *p == '=' || *p == ' ' || *p == '\t') p++;
+  return p;
+}
+
 // "CPM: 123", "CPM=123", "CPS,4"
 static bool parse_label_value(const char* in, char tag, int* out) {
   for (const char* p = in; p[0] && p[1] && p[2]; p++) {
     if (p[0] == 'C' && p[1] == 'P' && p[2] == tag) {
-      p += 3;
-      while (*p == ':' || *p == ',' || *p == '=' || *p == ' ' || *p == '\t') p++;
+      p = skip_sep(p + 3);
       if (*p != '-' && !is_digit(*p)) return false;
       // still present, -1 fails the bounds
       int32_t v;
       const char* end;
-      *out = parseI32(p, &v, &end) ? (int)v : -1;
+      if (!parseI32(p, &v, &end)) v = -1;
+      else if (tag == 'S' && *end == '.') return false;   // "CPS: 0.37" is a rate, not a count
+      *out = (int)v;
       return true;
     }
   }

@@ -1,5 +1,5 @@
 /*
-  EGTune.h - tunes as text, read one step at a time. RTTTL or steps. No heap.
+  EGTune.h - RTTTL or step tunes, no heap
 
   Copyright (C) 2026 @steadramon
 
@@ -55,7 +55,7 @@ static constexpr Caps DEFAULTS = {64, 5000, 15000};
 
 class Reader {
  public:
-  // s not copied, keep it till done; no NUL needed
+  // s isn't copied, keep it until done. No NUL needed
   void begin(const char* s, uint16_t len, Caps caps = DEFAULTS);
   // false at the end or on an error
   bool next(Step& st);
@@ -66,6 +66,7 @@ class Reader {
  private:
   bool is_rtttl() const;
   void header();
+  __attribute__((warn_unused_result))
   bool set(char k, uint32_t v);
   bool group(char c);
   void open();

@@ -1,5 +1,5 @@
 /*
-  corium::Prefs.cpp - Schema-driven preferences runtime.
+  Prefs.cpp - module preferences
 
   Copyright (C) 2025 @steadramon
 
@@ -187,8 +187,21 @@ int copy_value(const char* value, char* out, size_t outsz) {
 // 1, true, yes
 bool truthy(char c) { return c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y'; }
 
+// any case, 0.12 saved Y and N
+struct BoolWords { char on[5]; char off[6]; };
+static const BoolWords BOOL_WORDS[] PROGMEM = {
+  {"y", "n"}, {"yes", "no"}, {"true", "false"}, {"on", "off"},
+};
+
+// the rest refused, never read as off
 int valid_bool(const char* value, char* out, size_t outsz) {
-  return snprintf_P(out, outsz, PSTR("%c"), truthy(value[0]) ? '1' : '0');
+  // the form and the files
+  if ((value[0] == '0' || value[0] == '1') && !value[1]) return copy_value(value, out, outsz);
+  for (const BoolWords& w : BOOL_WORDS) {
+    if (strcasecmp_P(value, w.on) == 0) return copy_value("1", out, outsz);
+    if (strcasecmp_P(value, w.off) == 0) return copy_value("0", out, outsz);
+  }
+  return -1;
 }
 
 // refuse, don't clamp
@@ -212,6 +225,22 @@ int valid_uint(const corium::Pref* p, const char* value, char* out, size_t outsz
   return snprintf_P(out, outsz, FMT_LU, v);
 }
 
+static constexpr int JUNK = -2;   // never meant anything on this build
+
+// a blank option is a number this build hasn't got
+int enum_slot(const corium::Pref* p, const char* out, int len) {
+  if (!p->pattern) return len;
+  uint32_t skip = strtoul(out, nullptr, 10) - (uint32_t)p->minI;
+  const char* opt = p->pattern;
+  while (skip) {
+    char c = (char)pgm_read_byte(opt++);
+    if (!c) return -1;   // past the last
+    if (c == '|') skip--;
+  }
+  char c = (char)pgm_read_byte(opt);
+  return c && c != '|' ? len : JUNK;
+}
+
 // kept as typed, no String(float)
 int valid_float(const corium::Pref* p, const char* value, char* out, size_t outsz) {
   char* end;
@@ -229,14 +258,17 @@ int valid_string(const corium::Pref* p, const char* value, char* out, size_t out
   return copy_value(value, out, outsz);
 }
 
-// -1 = invalid
+// -1 = invalid, JUNK = a blank enum slot
 int validate(const corium::Pref* p, const char* value, char* out, size_t outsz) {
   if (!p || !value) return -1;
   switch (p->type) {
     case corium::P_BOOL:   return valid_bool(value, out, outsz);
     case corium::P_INT:    return valid_int(p, value, out, outsz);
     case corium::P_UINT:
-    case corium::P_ENUM:   return valid_uint(p, value, out, outsz);   // enum as index
+    case corium::P_ENUM: {   // enum as index
+      int len = valid_uint(p, value, out, outsz);
+      return len < 0 || p->type == corium::P_UINT ? len : enum_slot(p, out, len);
+    }
     case corium::P_FLOAT:  return valid_float(p, value, out, outsz);
     case corium::P_STRING: return valid_string(p, value, out, outsz);
     case corium::P_LABEL:
@@ -245,16 +277,21 @@ int validate(const corium::Pref* p, const char* value, char* out, size_t outsz) 
   return -1;
 }
 
-// same checks as put, a bad one gets the default, never an edge
-bool stored_ok(const corium::Pref& p, const char* value, uint16_t vlen) {
-  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return true;
-  if (vlen > CORIUM_PREFS_MAX_VALUE || memchr(value, '\0', vlen)) return false;
+// same checks as put, a bad one gets the default, never an edge; < 0 = refused
+int check_stored(const corium::Pref& p, const char* value, uint16_t vlen) {
+  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return 0;
+  if (vlen > CORIUM_PREFS_MAX_VALUE || memchr(value, '\0', vlen)) return -1;
   char copy[CORIUM_PREFS_MAX_VALUE + 1];
   memcpy(copy, value, vlen);
   copy[vlen] = '\0';
-  if (p.defaultVal && strcmp(copy, p.defaultVal) == 0) return true;   // "" defaults
+  if (p.defaultVal && strcmp(copy, p.defaultVal) == 0) return 0;   // "" defaults
   char out[CORIUM_PREFS_MAX_VALUE + 1];
-  return validate(&p, copy, out, sizeof(out)) >= 0;
+  int len = validate(&p, copy, out, sizeof(out));
+  if (len != -1 || p.type == corium::P_STRING) return len;
+  // text in a number row is junk, a number another build may want
+  const char* v = copy;
+  if (*v == '-' || *v == '+') v++;
+  return (*v >= '0' && *v <= '9') || *v == '.' ? -1 : JUNK;
 }
 
 void not_loaded(GroupShadow& gs, size_t j) {
@@ -273,9 +310,12 @@ bool read_record(GroupShadow* gs, const char* key, uint8_t klen,
     const char* pid = gs->group->prefs.id_P(j);
     if (strlen_P(pid) == klen && strncmp_P(key, pid, klen) == 0) {
       corium::Pref p = gs->group->prefs.row(j);
-      if (!stored_ok(p, value, vlen)) {
-        corium::Log::console(PSTR("prefs: %s.%s refused, default kept"), gs->group->moduleId, pid);
-        if (own) not_loaded(*gs, j);
+      int got = check_stored(p, value, vlen);
+      if (got < 0) {
+        // junk isn't kept, the next save writes the default over it
+        corium::Log::console(PSTR("prefs: %s.%s %s, default kept"), gs->group->moduleId, pid,
+                             got == JUNK ? PSTR("junk") : PSTR("refused"));
+        if (own && got != JUNK) not_loaded(*gs, j);
         return false;
       }
       if (shadow_set(*gs, j, value, vlen)) return true;
@@ -301,7 +341,7 @@ size_t group_bytes(const GroupShadow& gs) {
 }
 
 // stage = the .new only, commit puts it in place
-bool write_group(GroupShadow& gs, bool stage = false) {
+CORIUM_NODISCARD bool write_group(GroupShadow& gs, bool stage = false) {
   if (gs.partial) return false;
   size_t total = group_bytes(gs);
   if (total > CORIUM_PREFS_MAX_GROUP_SZ) {
@@ -372,7 +412,11 @@ void adopt_moved() {
 void drop_moved() {
   for (size_t i = 0; i < MOVED_N; i++) {
     if (find_group(from_at(i))) continue;
-    s_storage.removeGroup(from_at(i));
+    // one that stays: a file for the new group stops adopt_moved
+    if (!s_storage.removeGroup(from_at(i))) {
+      GroupShadow* to = find_group(to_at(i));
+      if (to) to->wipe = false;
+    }
     s_storage.dropStaged(from_at(i));   // 0.13 staged too
   }
 }
@@ -382,9 +426,10 @@ void adopt_moved() {}
 void drop_moved() {}
 #endif
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 #ifdef CORIUM_PREFS_NO_LEGACY
 void import_legacy() {}   // new boards, nothing to import
+void drop_stale_legacy() {}
 #else
 constexpr size_t LEGACY_PATHS = 4;
 
@@ -399,7 +444,7 @@ void add_path(const char** list, size_t* n, const char* path) {
   if (!has_path(list, *n, path) && *n < LEGACY_PATHS) list[(*n)++] = path;
 }
 
-// stale once every group has its own file
+// stale once every group has its own file, or a reset wiped them
 void drop_stale_legacy() {
   const char* seen[LEGACY_PATHS] = {0};
   size_t n = 0;
@@ -414,7 +459,7 @@ void drop_stale_legacy() {
 #endif
     if (has_path(seen, n, path) || n == LEGACY_PATHS) continue;
     seen[n++] = path;
-    if (corium::Fs::remove(path)) {
+    if (corium::Fs::exists(path) && corium::Fs::remove(path)) {
       corium::Log::console(PSTR("Prefs: removed stale legacy %s"), path);
     }
   }
@@ -480,7 +525,10 @@ void import_legacy() {
       char normalized[CORIUM_PREFS_MAX_VALUE + 1];
       corium::Pref p = gs.group->prefs.row(idx);
       int nlen = validate(&p, raw, normalized, sizeof(normalized));
-      if (nlen < 0) continue;
+      if (nlen < 0) {
+        corium::Log::console(PSTR("prefs: legacy %s.%s refused"), gs.group->moduleId, a.newKey);
+        continue;
+      }
       if (!shadow_set(gs, idx, normalized, (size_t)nlen)) {
         not_loaded(gs, idx);   // legacy file kept
         continue;
@@ -504,7 +552,6 @@ void import_legacy() {
   }
 }
 #endif
-// === END LEGACY IMPORT ===
 
 static bool runs(corium::Module* m) { return m && !corium::Registry::quarantined(m); }
 
@@ -558,7 +605,7 @@ void corium::Prefs::begin() {
   }
 
   adopt_moved();    // current data before any legacy file
-  import_legacy();  // LEGACY IMPORT (remove in v1.1.0)
+  import_legacy();
 
   s_begun = true;
   corium::Log::console(PSTR("Prefs: Initialised (%u groups)"), (unsigned)s_group_count);
@@ -618,7 +665,7 @@ static bool too_short(const corium::Pref& p, int nlen) {
   return true;
 }
 
-static bool put_value(const char* module, const char* key, const char* value, bool kept) {
+CORIUM_NODISCARD static bool put_value(const char* module, const char* key, const char* value, bool kept) {
   s_refused = nullptr;
   s_warned = nullptr;
   int idx;
@@ -782,7 +829,7 @@ static bool wipe_pass(bool fire_callbacks, bool& busy) {
     if (gs.dirty == CLEAN || !gs.wipe) continue;
     const char* id = gs.group->moduleId;
     pause(busy);
-    if (s_storage.has(id) && !s_storage.removeGroup(id)) {
+    if (!s_storage.removeGroup(id)) {
       all_ok = false;
       continue;
     }
@@ -884,7 +931,7 @@ bool corium::Prefs::removeGroup(const char* module) {
   }
   gs->dirty = CLEAN;
   gs->partial = 0;
-  import_legacy();  // LEGACY IMPORT (remove in v1.1.0)
+  import_legacy();
   if (runs(gs->module)) gs->module->onPrefsLoaded();
   return removed;
 }
@@ -911,6 +958,7 @@ void corium::Prefs::resetAll(bool keep_network) {
     if (!kept) gs.partial = 0;   // nothing stored is wanted
   }
   drop_moved();
+  drop_stale_legacy();
 }
 
 void corium::Prefs::revert() {
@@ -930,6 +978,11 @@ bool corium::Prefs::restartPending() { return s_restart_pending; }
 bool corium::Prefs::stored(const char* module) {
   GroupShadow* gs = find_group(module);
   return gs && gs->stored;
+}
+
+bool corium::Prefs::landed(const char* module) {
+  GroupShadow* gs = find_group(module);
+  return gs && gs->dirty == CLEAN && !gs->partial;
 }
 
 bool corium::Prefs::loaded(const char* module, const char* key) {

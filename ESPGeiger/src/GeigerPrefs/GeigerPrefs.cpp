@@ -79,7 +79,7 @@ public:
 #endif
   void onPrefsLoaded() override;
   void onPrefsSaved() override;
-  corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+  corium::LegacyRows legacyAliases() override;
 private:
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   uint8_t _serial_type = 0;
@@ -147,7 +147,7 @@ CORIUM_PSTR(IN_O_URMD, "Specific device|Sum all sources");
 CORIUM_PSTR(IN_H_URMD, "Specific uses the Pin chipid below, auto-latching the first source heard if left blank.");
 CORIUM_PSTR(IN_L_URCH, "Pin chipid");
 CORIUM_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in Specific device mode");
-CORIUM_PSTR(IN_P_URCH, "[0-9a-fA-F]{" STR(CHIPID_LEN) "}");   // blank allowed
+CORIUM_PSTR(IN_P_URCH, UDPRX_CHIPID_PAT);
 CORIUM_PSTR(IN_L_URGP, "Group / listen IP");
 CORIUM_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen.");
 CORIUM_PSTR(IN_H_URPT, "UDP port (default 57340)");
@@ -173,6 +173,11 @@ CORIUM_PSTR(CT_L_ALR, "Alert CPM");
 CORIUM_PSTR(CT_H_ALR, "Alert trigger (CPM)");
 CORIUM_PSTR(CT_L_LE,  "Track lifetime");
 CORIUM_PSTR(CT_H_LE,  "Persist total clicks + exposure across reboots.");
+
+// a -D one is the row default too
+#if defined(USE_PCNT) && !defined(PCNT_FILTER)
+#define PCNT_FILTER 200
+#endif
 
 static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   // Source selector
@@ -205,7 +210,7 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   {K_COUNT_KEPT,      nullptr,  nullptr,  "0", nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN | corium::P_LOCAL},
 #endif
 #ifdef USE_PCNT
-  {K_PCNT_FILTER,     IN_L_PCF, IN_H_PCF, "200", nullptr, 0, 1023, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_PCNT_FILTER,     IN_L_PCF, IN_H_PCF, STR(PCNT_FILTER), nullptr, 0, 1023, 0, corium::P_UINT, corium::P_ADVANCED},
   {K_PCNT_PULL,       IN_L_PCP, nullptr,  STR(PCNT_PIN_PULL_DEFAULT), IN_O_PCP, 0, 2, 0, corium::P_ENUM, corium::P_ADVANCED},
 #endif
 #ifdef PREF_DEBOUNCE
@@ -337,7 +342,7 @@ void CounterPrefs::onPrefsSaved() {
 #endif
 }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias COUNTER_LEGACY[] PROGMEM = {
   {"geigerRatio", "ratio"},
   {"geigerWarn",  "warn"},
@@ -358,7 +363,6 @@ static const corium::LegacyAlias COUNTER_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows CounterPrefs::legacyAliases() { return COUNTER_LEGACY; }
-// === END LEGACY IMPORT ===
 
 // Lifetime prefs, own group
 

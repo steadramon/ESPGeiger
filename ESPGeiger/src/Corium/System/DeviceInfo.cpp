@@ -211,9 +211,6 @@ void corium::DeviceInfo::factoryReset() {
   corium::Prefs::resetAll();
   // kept rows back on flash now
   if (!corium::Prefs::commit(false)) corium::Log::console(PSTR("Factory reset: not saved"));
-#ifdef CORIUM_PREFS_LEGACY_FILE
-  corium::Fs::remove(F(CORIUM_PREFS_LEGACY_FILE));   // legacy import file
-#endif
   corium::Wifi::clearSavedCreds();
 }
 

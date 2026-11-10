@@ -1,5 +1,5 @@
 /*
-  Lifecycle.cpp - see header.
+  Lifecycle.cpp - restart and OTA events
 
   Copyright (C) 2026 @steadramon
 

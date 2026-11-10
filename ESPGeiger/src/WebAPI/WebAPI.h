@@ -95,8 +95,8 @@ class WebAPI : public corium::Sender {
 
     uint32_t _station = 0;
     bool _have_key = false;   // a key can start with 0
-    uint8_t _priv[WEBAPI_PRIV_LEN] = {0};
-    uint8_t _pub[2 * WEBAPI_PRIV_LEN] = {0};
+    uint8_t _priv[WEBAPI_PRIV_LEN] = {};
+    uint8_t _pub[2 * WEBAPI_PRIV_LEN] = {};
     char _pub64[EGB64_LEN(2 * WEBAPI_PRIV_LEN) + 1] = {};  // base64, no padding
     static constexpr uint32_t PING_MS = (uint32_t)WEBAPI_INTERVAL * 1000UL;
     uint32_t _ping_ms = 0;

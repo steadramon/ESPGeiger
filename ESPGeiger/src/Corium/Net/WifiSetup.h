@@ -36,7 +36,7 @@ namespace Wifi {
     esp_wifi_set_storage(WIFI_STORAGE_FLASH);   // persistent() is read once, at the first mode()
 #endif
     WiFi.persistent(true);
-    WiFi.begin(ssid, pass);
+    (void)WiFi.begin(ssid, pass);   // the status judges the join; the 8266 never says if the save took
 #ifdef ESP8266
     WiFi.persistent(false);
 #endif

@@ -1,5 +1,5 @@
 /*
-  corium::Prefs.h - Schema-driven preferences for modules.
+  Prefs.h - module preferences
 
   Copyright (C) 2025 @steadramon
 
@@ -22,6 +22,7 @@
 
 #include <Arduino.h>
 #include "App/AppConfig.h"
+#include "Corium/Util/Attr.h"
 
 // bytes per group file
 #ifndef CORIUM_PREFS_MAX_GROUP_SZ
@@ -185,7 +186,7 @@ extern const char K_WEB_PASS[];
 extern const char H_RBA[];
 extern const char P_HOST[];
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 // PROGMEM, {old, new} rows ending {}
 struct LegacyAlias {
   char legacyKey[20];
@@ -204,7 +205,6 @@ public:
 private:
   const LegacyAlias* _rows;
 };
-// === END LEGACY IMPORT ===
 
 // all static, one store for every module's group
 class Prefs {
@@ -222,16 +222,16 @@ public:
   // put, commit: loop task only. a put frees that key's getString
   static bool put(const char* module, const char* key, const char* value);
   // a value saved before, the shortest rule doesn't apply
-  static bool putKept(const char* module, const char* key, const char* value);
+  CORIUM_NODISCARD static bool putKept(const char* module, const char* key, const char* value);
   // why the last put refused it (PROGMEM), else nullptr
   static const char* refused();
   // a pin the last put saved anyway, why it may not work (PROGMEM)
   static const char* warned();
-  static bool putInt(const char* module, const char* key, int32_t value);
-  static bool putUInt(const char* module, const char* key, uint32_t value);
+  CORIUM_NODISCARD static bool putInt(const char* module, const char* key, int32_t value);
+  CORIUM_NODISCARD static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);
   // for a write per request: callbacks now, one write CORIUM_PREFS_HOLD_MS on; true = will be written
-  static bool commitSoon(uint32_t now_ms);
+  CORIUM_NODISCARD static bool commitSoon(uint32_t now_ms);
   // why the last commit left a group out (a stored value didn't load, rest written), else 0
   static size_t frozen(char* out, size_t cap);
   // any group an export carries holding one now, the same text; the export would leave it out
@@ -241,7 +241,7 @@ public:
   static void holdBy(void (*wake)(uint32_t at));
   // back to the row default, a key by put() rules; no key = the whole group, all or none
   static bool reset(const char* module, const char* key = nullptr);
-  static bool removeGroup(const char* module);
+  CORIUM_NODISCARD static bool removeGroup(const char* module);
   // keep_network keeps net + web_pass
   static void resetAll(bool keep_network = false);
   // groups a failed commit left unsaved back to what's on flash, no callbacks
@@ -249,6 +249,8 @@ public:
   static bool restartPending();  // the last commit changed a P_REBOOT row
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
   static bool stored(const char* module);
+  // flash has what it reads: nothing waits to be written, none refused at load
+  static bool landed(const char* module);
   // false = its stored value didn't load, the default stands; two in a group = every row
   static bool loaded(const char* module, const char* key);
   // enableKey unset, "0" or "-1" (no pin) = off, no key = on

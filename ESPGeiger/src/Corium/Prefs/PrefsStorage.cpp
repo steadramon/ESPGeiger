@@ -1,5 +1,5 @@
 /*
-  corium::PrefsStorage.cpp - Per-module binary store. See corium::PrefsStorage.h for format.
+  PrefsStorage.cpp - prefs files on LittleFS, one per module
 
   Copyright (C) 2025 @steadramon
 
@@ -75,16 +75,13 @@ bool corium::PrefsStorage::begin(const char* name) {
   snprintf_P(dir, sizeof(dir), PSTR("/%s"), name);
   // a file where the dir goes would stop every write
   File chk = corium::Fs::openR(dir);
-  if (chk && !chk.isDirectory()) {
+  bool is_dir = chk && chk.isDirectory();
+  if (chk && !is_dir) {
     chk.close();
-    corium::Fs::remove(dir);
-    corium::Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
-  } else if (chk) {
-    chk.close();
+    if (corium::Fs::remove(dir)) corium::Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
   }
-  if (!corium::Fs::exists(dir)) {
-    corium::Fs::mkdir(dir);
-  }
+  // one that stayed fails here too
+  if (!is_dir && !corium::Fs::mkdir(dir)) return false;
   snprintf_P(_dir, sizeof(_dir), PSTR("%s/"), dir);
   _started = true;
   corium::Log::debug(PSTR("prefs: storage mounted at %s"), _dir);
@@ -166,7 +163,7 @@ bool corium::PrefsStorage::commitGroup(const char* module_id) {
 void corium::PrefsStorage::dropStaged(const char* module_id) {
   char staging[CORIUM_PS_PATH_BUFSZ];
   if (_started && module_id && staged_path(staging, sizeof(staging), _dir, module_id)) {
-    corium::Fs::remove(staging);
+    (void)corium::Fs::remove(staging);   // the next stage truncates it
   }
 }
 

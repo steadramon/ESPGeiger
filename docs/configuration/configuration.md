@@ -54,6 +54,8 @@ After a firmware update a saved setting can fail the new firmware's checks, for 
 
 Until you deal with it, a save that touches that group is refused and says why, for example `Not saved: webhook.url didn't load, set it or reset webhook.` Enter a new value for that setting, or put the whole group back to defaults with `reset webhook` over [serial](/output/serial) or the Status-page command box.
 
+A saved value that never meant anything to this firmware, text in a number setting or an option this build hasn't got, isn't kept: the boot log says, for example, `prefs: counter.pcnt_pull junk, default kept`, the default runs and the next save of that group writes it over the old value. Nothing is refused.
+
 ## Counter Settings
 
 On the **Input** tab. Some settings only appear on specific builds. Pin, Count with and Serial Type changes trigger a reboot to apply; PCNT Filter, PCNT Pin Pull and Debounce apply live.
@@ -168,8 +170,8 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Enable | `gmc.send` | Boolean | `0` off | Upload to gmcmap.com |
-| Account ID | `gmc.aid` | String (20) | (empty) | gmcmap.com account ID (numeric) |
-| Geiger Counter ID | `gmc.gcid` | String (20) | (empty) | gmcmap.com geiger counter ID (numeric) |
+| Account ID | `gmc.aid` | String (20) | (empty) | gmcmap.com account ID (numeric, sensitive) |
+| Geiger Counter ID | `gmc.gcid` | String (20) | (empty) | gmcmap.com geiger counter ID (numeric, sensitive) |
 
 <!-- /gen -->
 

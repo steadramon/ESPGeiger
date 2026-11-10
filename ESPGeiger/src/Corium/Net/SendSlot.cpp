@@ -1,5 +1,5 @@
 /*
-  SendSlot.cpp - see header.
+  SendSlot.cpp - sends spread round the minute
 
   Copyright (C) 2026 @steadramon
 

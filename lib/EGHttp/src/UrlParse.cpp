@@ -59,12 +59,12 @@ static const char* skip_scheme(const char* url) {
   return url;
 }
 
-// NULL on userinfo or [IPv6]
-static const char* find_host_end(const char* s, const char* netloc_end) {
+// NULL on userinfo or [IPv6], *why says which
+static const char* find_host_end(const char* s, const char* netloc_end, EGUrlErr* why) {
   const char* host_end = netloc_end;
   for (const char* c = s; c < netloc_end; c++) {
-    if (*c == '@' || *c == '[' || *c == ']')
-      return NULL;
+    if (*c == '@') { *why = EGURL_USERINFO; return NULL; }
+    if (*c == '[' || *c == ']') { *why = EGURL_IPV6; return NULL; }
     if (*c == ':' && host_end == netloc_end)
       host_end = c;
   }
@@ -104,19 +104,15 @@ static void split_path_query(const char* netloc_end, const char* end, EGUrlParts
   }
 }
 
-bool eg_parse_url(const char* url, EGUrlParts* out) {
-  if (url == NULL || out == NULL)
-    return false;
-
-  memset(out, 0, sizeof(*out));
+static EGUrlErr split(const char* url, EGUrlParts* out) {
   out->port = 80;
 
   if (has_space_or_ctl(url))
-    return false;
+    return EGURL_CHARS;
 
   const char* s = skip_scheme(url);
   if (s == NULL)
-    return false;
+    return EGURL_SCHEME;
 
   const char* end   = url + strlen(url);
   const char* frag  = strchr(s, '#');
@@ -124,19 +120,30 @@ bool eg_parse_url(const char* url, EGUrlParts* out) {
   const char* netloc_end = s;
   while (netloc_end < end && *netloc_end != '/' && *netloc_end != '?') netloc_end++;
 
-  const char* host_end = find_host_end(s, netloc_end);
+  EGUrlErr why = EGURL_HOST;
+  const char* host_end = find_host_end(s, netloc_end, &why);
   if (host_end == NULL || host_end == s)
-    return false;
+    return why;
 
   // empty port keeps 80
   if (host_end < netloc_end && host_end + 1 < netloc_end) {
     if (!parse_port(host_end + 1, netloc_end, &out->port))
-      return false;
+      return EGURL_PORT;
   }
 
   out->host     = s;
   out->host_len = (size_t)(host_end - s);
 
   split_path_query(netloc_end, end, out);
-  return true;
+  return EGURL_OK;
+}
+
+bool eg_parse_url(const char* url, EGUrlParts* out, EGUrlErr* why) {
+  EGUrlErr e = EGURL_HOST;
+  if (url != NULL && out != NULL) {
+    memset(out, 0, sizeof(*out));
+    e = split(url, out);
+  }
+  if (why) *why = e;
+  return e == EGURL_OK;
 }

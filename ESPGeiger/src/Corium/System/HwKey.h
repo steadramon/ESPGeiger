@@ -22,21 +22,22 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "Corium/Util/Attr.h"
 
-// RSA-2048, PKCS#1 v1.5 SHA-256; the key and blob are put there before the board ships
+// RSA-2048, PKCS#1 v1.5 SHA-256. The key and blob are put on before the board ships
 namespace corium {
 namespace HwKey {
   static constexpr size_t SIG = 256;
   static constexpr size_t HASH = 32;
   static constexpr size_t BLOB = 1220;   // ets_ds_data_t
 
-  // EM as the DS takes it, little endian words
+  // Padded EM the way the DS takes it, little endian words
   void pad(const uint8_t hash[HASH], uint8_t out[SIG]);
 
   bool present();
   bool burned();   // KEY5 holds the hmac key, blob or not
   bool sign(const uint8_t hash[HASH], uint8_t sig[SIG]);   // big endian
-  bool put(const uint8_t blob[BLOB]);   // kept only if it signs
+  CORIUM_NODISCARD bool put(const uint8_t blob[BLOB]);   // kept only if it signs
 }
 }  // namespace corium
 

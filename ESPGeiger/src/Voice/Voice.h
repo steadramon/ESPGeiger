@@ -60,7 +60,7 @@ class Voice : public corium::Module {
     corium::Sender* _radmon = nullptr;   // nullptr = not built
     bool     _radmon_known  = false;
     bool     _radmon_was_ok = true;
-    unsigned long _radmon_tried_ms = 0;
+    unsigned long _radmon_tried = 0;
     corium::QuietWindow _quiet;
     bool     _prev_alert = false;
     unsigned long _last_klax_ms = 0;

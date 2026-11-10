@@ -158,7 +158,7 @@ class Counter : public CounterMaths {
       // web ota keeps the second ticking, no zero seconds
       void stop_for_ota() {
         _running = false;
-        if (_lifetime_enabled) save_lifetime();
+        if (_lifetime_enabled) (void)save_lifetime();   // the stash has it
         if (_input) _input->stopForOTA();
       }
       void restart_after_ota() {
@@ -204,8 +204,8 @@ class Counter : public CounterMaths {
       uint32_t get_first_boot_ts() const { return _first_boot_ts; }
       void set_lifetime_seconds(unsigned long v) { _life_saved_s = v; }
       unsigned long get_lifetime_seconds() const;
-      void save_lifetime();
-      void reset_lifetime();
+      bool save_lifetime();
+      bool reset_lifetime();
       void clock_stepped(int32_t delta_s);
       void pulse_histogram(uint32_t* out) const;   // HIST_BUCKETS, a copy under the lock
       static constexpr uint8_t pulse_histogram_buckets() { return HIST_BUCKETS; }
@@ -259,8 +259,6 @@ class Counter : public CounterMaths {
       uint8_t  _alarm_bits = 0;   // warn, alert, warm as last emitted
       uint32_t _rtc_pending_now = 0;
       uint32_t _first_boot_ts = 0;
-      uint32_t _rtc_unsaved_clicks = 0;
-      uint32_t _rtc_carry_s = 0;
       unsigned long _life_saved_s = 0;
       uint32_t      _saved_at = 0;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;

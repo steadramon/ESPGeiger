@@ -1,5 +1,5 @@
 /*
-  BootGuardState.cpp - see header.
+  BootGuardState.cpp - crash count per boot
 
   Copyright (C) 2026 @steadramon
 

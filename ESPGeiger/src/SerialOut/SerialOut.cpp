@@ -103,9 +103,9 @@ void SerialOut::resolveFormat() {
 }
 
 void SerialOut::save() {
-  corium::Prefs::putUInt("sout", EG_K_INTERVAL, _interval_s);
-  corium::Prefs::putUInt("sout", K_FLAGS, _show);
-  if (!corium::Prefs::commitSoon(corium::fastMillis())) corium::Log::console(PSTR("SerialOut: not saved"));
+  bool ok = corium::Prefs::putUInt("sout", EG_K_INTERVAL, _interval_s);
+  ok &= corium::Prefs::putUInt("sout", K_FLAGS, _show);
+  if (!corium::Prefs::commitSoon(corium::fastMillis()) || !ok) corium::Log::console(PSTR("SerialOut: not saved"));
 }
 
 void SerialOut::applyBaud() {

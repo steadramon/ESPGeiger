@@ -16,8 +16,7 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one in-flight deploy; queue any newer attempt rather than cancel,
-# so a tag push during a manual rebuild can't lose either result.
+# one deploy at a time, queued
 concurrency:
   group: pages
   cancel-in-progress: false

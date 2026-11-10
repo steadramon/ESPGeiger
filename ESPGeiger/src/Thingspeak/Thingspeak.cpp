@@ -60,14 +60,13 @@ void Thingspeak::onPrefsLoaded() {
   setEnabled(corium::Prefs::getBool("thingspeak", EG_K_SEND));
 }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias TS_LEGACY[] PROGMEM = {
   {"tsSend",       "send"},
   {"tsChannelKey", "channel_key"},
   {},
 };
 corium::LegacyRows Thingspeak::legacyAliases() { return TS_LEGACY; }
-// === END LEGACY IMPORT ===
 
 Thingspeak::Thingspeak() {
   _every_ms = (uint32_t)THINGSPEAK_INTERVAL * 1000UL;
@@ -98,10 +97,9 @@ static size_t add_field(char* url, size_t cap, size_t pos, unsigned field, float
 }
 
 bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!upload_ready(logTag())) return false;
-
   const char* raw_key = corium::Prefs::getString("thingspeak", K_CHANNEL_KEY);
-  if (raw_key[0] == '\0') return false;
+  if (unset(raw_key, TS_L_CK)) return false;
+  if (!upload_ready(logTag())) return false;
 
   corium::Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
 

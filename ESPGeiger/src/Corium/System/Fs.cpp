@@ -66,8 +66,9 @@ File corium::Fs::openW(const char* path) {
   return LittleFS.open(path, "w");
 }
 
+// no mount = may still be there
 bool corium::Fs::remove(const char* path) {
-  return begin() && LittleFS.exists(path) && LittleFS.remove(path);
+  return begin() && (!LittleFS.exists(path) || LittleFS.remove(path));
 }
 
 bool corium::Fs::exists(const char* path) {
@@ -96,7 +97,7 @@ bool corium::Fs::writeWhole(const char* path, const void* buf, size_t len) {
   File r = openR(path);
   bool ok = n == len && r && r.size() == len;
   r.close();
-  if (!ok) remove(path);
+  if (!ok) (void)remove(path);   // false said already
   return ok;
 }
 

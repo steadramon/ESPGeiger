@@ -46,11 +46,13 @@ void GeigerTestSerial::begin() {
     Tube::set_model(name);
   }
   corium::Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d TXPIN: %d"),
-               name ? name : PSTR("?"), _serial_type, baud, _rx_pin, _tx_pin);
+                       name ? name : PSTR("?"), _serial_type, baud, _rx_pin, _tx_pin);
 #ifdef GEIGER_COUNT_TXPULSE
   corium::Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
-  s_port.begin(baud, _rx_pin, _tx_pin);
+  if (!s_port.begin(baud, _rx_pin, _tx_pin)) {
+    corium::Log::console(PSTR("TestSerial: ERROR port would not open"));
+  }
   _idle_ms = (uint8_t)clamp<uint32_t>(12500UL / baud, 1, 4);   // ~1 char
   _polls = true;
   CPMAdjuster();
@@ -73,7 +75,22 @@ void GeigerTestSerial::pullSerial() {
   }
 }
 
+// A write busy-waits each bit, ~50 ms a line at 9600, so it's done here and not in the tick
+void GeigerTestSerial::send_line() {
+  _send = false;
+  char line[80];
+  size_t n = SerialFormat::format_line(_serial_type, line, sizeof(line));
+  if (n == 0) return;
+  char echo[80];
+  memcpy(echo, line, n);
+  echo[n] = '\0';
+  while (n > 0 && (echo[n - 1] == '\n' || echo[n - 1] == '\r')) echo[--n] = '\0';
+  corium::Log::console(PSTR("TestSerial TX: %s"), echo);
+  s_port.write((const uint8_t*) line, strlen(line));
+}
+
 void GeigerTestSerial::loop() {
+  if (_send) send_line();
   pullSerial();
   uint32_t now = corium::fastMillis();
   _poll_at = _pos ? now : now + _idle_ms;   // mid line, every pass
@@ -95,17 +112,7 @@ void GeigerTestSerial::secondTicker() {
 
   // count first, like the device
   if (count > 0) setCounter(count, false);
-
-  char line[80];
-  size_t n = SerialFormat::format_line(_serial_type, line, sizeof(line));
-  if (n > 0) {
-    char echo[80];
-    memcpy(echo, line, n);
-    echo[n] = '\0';
-    while (n > 0 && (echo[n - 1] == '\n' || echo[n - 1] == '\r')) echo[--n] = '\0';
-    corium::Log::console(PSTR("TestSerial TX: %s"), echo);
-    s_port.write((const uint8_t*) line, strlen(line));
-  }
+  _send = true;
 }
 
 void GeigerTestSerial::handleSerial(char* input) {

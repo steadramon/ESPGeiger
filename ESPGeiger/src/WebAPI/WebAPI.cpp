@@ -247,7 +247,7 @@ void WebAPI::take_reply() {
 #endif
 }
 
-// NOT_OPENED / NO_MEMORY counted here, no reply comes
+// past SENT / NOT_SEALED no reply comes, counted here
 corium::HttpDriver::Sent WebAPI::send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
                                        const char* sig) {
   corium::HttpMeta m;
@@ -260,7 +260,7 @@ corium::HttpDriver::Sent WebAPI::send_signed(uint8_t kind, PGM_P url, const uint
   m.timeoutS = 10;
   _sent = kind;
   corium::HttpDriver::Sent s = request.send(m, body, len);
-  if (s == corium::HttpDriver::NOT_OPENED || s == corium::HttpDriver::NO_MEMORY) {
+  if (s != corium::HttpDriver::SENT && s != corium::HttpDriver::NOT_SEALED) {
     _sent = SENT_NONE;
     notePublish(false);
   }
@@ -802,11 +802,12 @@ static bool keep_key(const uint8_t* priv) {
   return false;
 }
 
-// key reset; factory reset keeps the station
-static void forget_key() {
+// key reset; factory reset keeps the station. false = either left, the old key comes back
+static bool forget_key() {
   // copy first, else a cut brings it back
-  if (!corium::KeyStore::clear()) corium::Log::console(PSTR("WebAPI: Key backup not cleared"));
-  corium::Fs::remove(API_KEY_PATH);
+  bool ok = corium::KeyStore::clear();
+  if (!ok) corium::Log::console(PSTR("WebAPI: Key backup not cleared"));
+  return corium::Fs::remove(API_KEY_PATH) && ok;
 }
 
 // either copy keeps it over a reboot
@@ -831,9 +832,9 @@ bool WebAPI::readKeyFile() {
       uECC_compute_public_key(_priv, _pub, uECC_secp192r1()) == 1) return true;
   memset(_priv, 0, sizeof(_priv));
   // kept to look at
-  corium::Fs::remove(API_BAD_PATH);
-  corium::Fs::rename(API_KEY_PATH, API_BAD_PATH);
-  corium::Log::console(PSTR("WebAPI: Stored key invalid, kept as api.bad"));
+  (void)corium::Fs::remove(API_BAD_PATH);   // the rename says
+  bool kept = corium::Fs::rename(API_KEY_PATH, API_BAD_PATH);
+  corium::Log::console(PSTR("WebAPI: Stored key invalid, %skept as api.bad"), kept ? PSTR("") : PSTR("NOT "));
   return false;
 }
 
@@ -855,9 +856,9 @@ void WebAPI::loadConfig() {
   corium::Log::console(PSTR("WebAPI: Key loaded"));
 }
 
-size_t WebAPI::statusJson(char* buf, size_t cap, unsigned long now) {
+size_t WebAPI::statusJson(char* buf, size_t cap, unsigned long /*now*/) {
   if (_mode == WA_OFF) return 0;
-  return writeStatusJson(buf, cap, PSTR("webapi"), lastOk, lastAttemptMs, now);
+  return writeStatusJson(buf, cap, PSTR("webapi"), lastOk, lastAttempt);
 }
 
 // HTTP routes
@@ -960,18 +961,21 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::Log::console(PSTR("WebAPI: Resetting api.key"));
-  forget_key();
+  bool gone = forget_key();
   corium::WebPortal::beginPage(res, F("Key Reset"));
-  res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
-  corium::WebPortal::sendRestartCountdown(res);
+  if (gone) {
+    res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
+    corium::WebPortal::sendRestartCountdown(res);
+    corium::WebPortal::requestRestart();
+  } else {
+    corium::WebPortal::sendNotSaved(res);
+  }
   corium::WebPortal::endPage(res);
-  corium::WebPortal::requestRestart();
 }
 
 static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
   webapi.forget();
-  corium::Prefs::put("webapi", EG_K_MODE, "0");
-  bool wrote = corium::Prefs::commit();
+  bool wrote = corium::Prefs::put("webapi", EG_K_MODE, "0") && corium::Prefs::commit();
 
   corium::WebPortal::beginPage(res, F("Station Forgotten"));
   if (!wrote) corium::WebPortal::sendNotSaved(res);

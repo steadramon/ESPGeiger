@@ -60,10 +60,17 @@ static volatile bool s_owned = false;
 void AudioTick::setI2SOwned(bool owned) { s_owned = owned; }
 
 static QueueHandle_t s_audio_q = nullptr;
+static volatile bool s_web = false;   // set by the routes, the worker clears it once played
 
 bool audio_enqueue(const AudioCmd& cmd) {
   if (!s_audio_q) return false;
-  return xQueueSend(s_audio_q, &cmd, 0) == pdTRUE;
+  if (!cmd.web) return xQueueSend(s_audio_q, &cmd, 0) == pdTRUE;
+  // minutes of no clicks otherwise
+  if (s_web) return false;
+  s_web = true;
+  if (xQueueSend(s_audio_q, &cmd, 0) == pdTRUE) return true;
+  s_web = false;
+  return false;
 }
 
 static volatile AudioFn s_speech = nullptr;   // set once, Voice begin
@@ -76,20 +83,22 @@ static void to_speech(const AudioCmd& cmd) {
 }
 
 static void speak(uint8_t type, uint8_t i1, int32_t i32) {
-  AudioCmd cmd = { type, i1, i32, nullptr };
+  AudioCmd cmd = { type, i1, i32, nullptr, false };
   to_speech(cmd);
 }
 
 void AudioTick::dispatch(const AudioCmd& cmd) {
-  if (muted()) return;
-  setI2SOwned(true);
-  switch (cmd.type) {
-    case AC_NUMBERS:  chimeNumbersStation(); break;
-    case AC_CHIME:    play_chime_now(cmd.i1); break;
-    case AC_CLICK:    playClick(cmd.i1); break;
-    default:          to_speech(cmd); break;
+  if (!muted()) {
+    setI2SOwned(true);
+    switch (cmd.type) {
+      case AC_NUMBERS:  chimeNumbersStation(); break;
+      case AC_CHIME:    play_chime_now(cmd.i1); break;
+      case AC_CLICK:    playClick(cmd.i1); break;
+      default:          to_speech(cmd); break;
+    }
+    setI2SOwned(false);
   }
-  setI2SOwned(false);
+  if (cmd.web) s_web = false;
 }
 
 static void audio_worker(void*) {
@@ -325,6 +334,7 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
       if (!audiotick._i2s_up) { res.send(503, FPSTR(HTTP_CT_PLAIN), F("audio not ready")); return; }
       AudioCmd cmd{};
       if (!tick_cmd_from(req, res, &cmd, audiotick._chime)) return;
+      cmd.web = true;
       if (audio_enqueue(cmd)) res.send(200, FPSTR(HTTP_CT_PLAIN), F("queued"));
       else                    res.send(503, FPSTR(HTTP_CT_PLAIN), F("queue full"));
     });
@@ -339,6 +349,7 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
       out[PAD_LEN] = '\0';
       AudioCmd cmd{};
       cmd.type = AC_NUMBERS;
+      cmd.web = true;
       if (!audio_enqueue(cmd)) { res.send(503, FPSTR(HTTP_CT_PLAIN), F("queue full")); return; }
       res.send(200, FPSTR(HTTP_CT_PLAIN), out);
     });
@@ -613,7 +624,8 @@ void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float
   const float        peak_ceil   = (float)_peak / 100.0f;
   constexpr float    DC_R        = 0.997f;       // DC blocker, ~50 Hz
   constexpr float    NOISE_MIX   = 0.10f;
-  int16_t buf[N];
+  constexpr uint16_t CHUNK       = 256;   // N a multiple
+  int16_t buf[CHUNK];
   const float fs     = (float)AUDIO_TICK_SAMPLE_RATE;
   const float inv_fs = 1.0f / fs;
   const float f_hi   = f_lo * 2.0f;
@@ -628,30 +640,34 @@ void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float
   float env = 1.0f, chirp_env = 1.0f, asym_env = 1.0f, f2_env = 1.0f;
   float phase = 0.0f, f2_phase = 0.0f;
   float dc_x = 0.0f, dc_y = 0.0f;
-  for (uint16_t i = 0; i < N; i++) {
-    if (i >= cutoff) { buf[i] = 0; continue; }
-    const float f_inst = f_lo + (f_hi - f_lo) * chirp_env;
-    phase += TWO_PI * f_inst * inv_fs;
-    float eff_env = env;
-    if (i < ATTACK_N)         eff_env *= (float)i / (float)ATTACK_N;
-    const uint16_t to_end = cutoff - i;
-    if (to_end <= EXIT_N)     eff_env *= (float)to_end / (float)EXIT_N;
-    nr = xorshift32(nr);
-    const float n = ((int32_t)(nr & 0xFFFF) - 32768) * (1.0f/32768.0f);
-    float sample = (sinf(phase) * (1.0f - NOISE_MIX) + n * NOISE_MIX) * eff_env
-                   - asym * asym_env;
-    f2_phase += w_f2;
-    sample += f2_amp * sinf(f2_phase) * f2_env;
-    const float y = sample - dc_x + DC_R * dc_y;
-    dc_x = sample; dc_y = y;
-    buf[i] = sat16((int32_t)(y * amp * peak_ceil));
-    if (i >= SUSTAIN_N) env *= env_dec;
-    chirp_env *= chirp_dec;
-    asym_env  *= asym_dec;
-    f2_env    *= f2_dec;
+  for (uint16_t out = 0; out < N; out += CHUNK) {
+    for (uint16_t k = 0; k < CHUNK; k++) {
+      const uint16_t i = out + k;
+      if (i >= cutoff) { buf[k] = 0; continue; }
+      const float f_inst = f_lo + (f_hi - f_lo) * chirp_env;
+      phase += TWO_PI * f_inst * inv_fs;
+      float eff_env = env;
+      if (i < ATTACK_N)         eff_env *= (float)i / (float)ATTACK_N;
+      const uint16_t to_end = cutoff - i;
+      if (to_end <= EXIT_N)     eff_env *= (float)to_end / (float)EXIT_N;
+      nr = xorshift32(nr);
+      const float n = ((int32_t)(nr & 0xFFFF) - 32768) * (1.0f/32768.0f);
+      float sample = (sinf(phase) * (1.0f - NOISE_MIX) + n * NOISE_MIX) * eff_env
+                     - asym * asym_env;
+      f2_phase += w_f2;
+      sample += f2_amp * sinf(f2_phase) * f2_env;
+      const float y = sample - dc_x + DC_R * dc_y;
+      dc_x = sample; dc_y = y;
+      buf[k] = sat16((int32_t)(y * amp * peak_ceil));
+      if (i >= SUSTAIN_N) env *= env_dec;
+      chirp_env *= chirp_dec;
+      asym_env  *= asym_dec;
+      f2_env    *= f2_dec;
+    }
+    size_t written = 0;
+    i2s_write(I2S_NUM_0, buf, sizeof(buf), &written, 10 / portTICK_PERIOD_MS);
+    if (written < sizeof(buf)) break;   // timed out, rest dropped as before
   }
-  size_t written = 0;
-  i2s_write(I2S_NUM_0, buf, sizeof(buf), &written, 10 / portTICK_PERIOD_MS);
 }
 
 #endif

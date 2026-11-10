@@ -159,15 +159,15 @@ void SDCard::begin()
   }
   FsDateTime::setCallback(fat_now);
 
-  if (!_file.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC)) {
+  // the entry lands at close, the remove writes again
+  bool wrote = _file.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC);
+  if (!wrote || !_file.close() || !sd->remove("TEST.TMP")) {
     corium::Log::console(PSTR("SDCard: write probe failed - read-only or full?"));
     fault();
     delete sd;
     sd = nullptr;
     return;
   }
-  _file.close();
-  sd->remove("TEST.TMP");
 
   _enabled = true;
   _fault = false;

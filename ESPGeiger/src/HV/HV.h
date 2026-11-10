@@ -173,7 +173,7 @@ class HV : public corium::Module {
 #ifdef ESPG_HV_ADC
       corium::MeasureRows measurements() override;
 #endif
-      corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+      corium::LegacyRows legacyAliases() override;
       const char* legacyFile() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
       void set_freq(int freq);
       int get_freq() {

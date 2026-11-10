@@ -331,7 +331,10 @@ static void hHistJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 static void hLifeReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  gcounter.reset_lifetime();
+  if (!gcounter.reset_lifetime()) {
+    res.send(500, FPSTR(HTTP_CT_PLAIN), F("Not saved"));
+    return;
+  }
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 

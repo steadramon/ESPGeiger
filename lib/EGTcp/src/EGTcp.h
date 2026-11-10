@@ -216,6 +216,7 @@ class EGTcpServer {
     EGTcpServer& operator=(const EGTcpServer&) = delete;
 
     // any addr = all; false = listening already or the stack said no
+    __attribute__((warn_unused_result))
     bool begin(uint16_t port, const EGTcpAddr& addr = EGTcpAddr());
     void end();   // open clients stay yours
 

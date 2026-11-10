@@ -26,7 +26,7 @@
   #define EGMQTT_CHECK_TEXT 1   // 0 = no UTF-8 or filter level checks, lengths and NUL still
 #endif
 
-// builders return the packet size, 0 = bad or no fit; parsers take the body
+// Builders return the packet size, 0 if bad or it won't fit. Parsers take the body
 namespace EGMqttWire {
 
 enum Type : uint8_t {
@@ -84,6 +84,7 @@ size_t ack(uint8_t* out, size_t cap, Type t, uint16_t id);   // PUBACK PUBREC PU
 size_t bare(uint8_t* out, size_t cap, Type t);               // PINGREQ DISCONNECT
 
 bool parse_publish(uint8_t first, const uint8_t* body, size_t n, Publish* p);
+__attribute__((warn_unused_result))
 bool publish_head(uint8_t first, uint16_t topic_len, uint16_t id, size_t n);   // all a skipped one has
 bool parse_connack(uint8_t first, const uint8_t* body, size_t n, bool* session, uint8_t* code);
 bool parse_id(uint8_t first, const uint8_t* body, size_t n, uint16_t* id);   // the acks

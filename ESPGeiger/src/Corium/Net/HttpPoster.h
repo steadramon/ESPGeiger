@@ -1,5 +1,5 @@
 /*
-  corium::HttpPoster.h - periodic HTTP upload, shared by the output modules
+  HttpPoster.h -periodic HTTP upload, shared by the output modules
 
   Copyright (C) 2026 @steadramon
 
@@ -23,6 +23,7 @@
 #include "App/AppConfig.h"
 #include "Corium/Module/Module.h"
 #include "Corium/Net/HttpDriver.h"
+#include "Corium/Util/Attr.h"
 
 #ifndef CORIUM_HTTPPOSTER_URL_MAX
 #define CORIUM_HTTPPOSTER_URL_MAX 256
@@ -40,6 +41,7 @@ class HttpPoster : public Sender {
     static constexpr uint16_t LOOP_MS = 500;
     void loop(unsigned long now) override;
     size_t statusJson(char* buf, size_t cap, unsigned long now) override;
+    void onPrefsSaved() override;
     HttpDriver request{this};
     // app's, true = no new post, replies still taken
     static bool (*hold)();
@@ -64,6 +66,8 @@ class HttpPoster : public Sender {
     uint16_t setIntervalS(int s, int lo, int hi);
     // n from snprintf, a cut url is logged and not sent
     bool urlFits(int n, size_t cap);
+    // true = v empty, not sent; logged once till the prefs change
+    CORIUM_NODISCARD bool unset(const char* v, PGM_P label);
 
     uint32_t _ping_ms = 0;
     uint32_t _every_ms = 0;
@@ -72,6 +76,7 @@ class HttpPoster : public Sender {
   private:
     static constexpr size_t URL_CAP = CORIUM_HTTPPOSTER_URL_MAX;
     static constexpr size_t REPLY_CAP = CORIUM_HTTPPOSTER_REPLY_MAX;
+    bool _told = false;   // once till the prefs change
     bool slot_due(unsigned long now);
     void post();
     void send(const char* url, const char* body);

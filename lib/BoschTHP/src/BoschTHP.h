@@ -32,6 +32,7 @@ enum ChipId : uint8_t {
 
 class Sensor {
   public:
+    __attribute__((warn_unused_result))
     bool begin(TwoWire& wire, uint8_t addr = 0);
 
     bool read(float& t_c, float& h_pct, float& p_hpa);
@@ -47,6 +48,7 @@ class Sensor {
     bool configure();
     bool read8 (uint8_t reg, uint8_t& out);
     bool readN (uint8_t reg, uint8_t* out, uint8_t len);
+    __attribute__((warn_unused_result))
     bool write8(uint8_t reg, uint8_t val);
 
     TwoWire* _wire = nullptr;

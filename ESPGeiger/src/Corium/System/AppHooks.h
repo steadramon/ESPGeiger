@@ -1,5 +1,5 @@
 /*
-  AppHooks.h - What Corium calls in the app. Empty by default, the app's own win.
+  AppHooks.h - app hooks, empty by default
 
   Copyright (C) 2026 @steadramon
 

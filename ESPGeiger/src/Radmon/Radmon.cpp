@@ -56,7 +56,7 @@ static const corium::PrefGroup RADMON_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* Radmon::prefsGroup() { return &RADMON_PREF_GROUP; }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias RADMON_LEGACY[] PROGMEM = {
   {"radmonSend", "send"},
   {"radmonUser", "user"},
@@ -65,7 +65,6 @@ static const corium::LegacyAlias RADMON_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows Radmon::legacyAliases() { return RADMON_LEGACY; }
-// === END LEGACY IMPORT ===
 
 Radmon::Radmon() {
   _every_ms = (uint32_t)RADMON_INTERVAL * 1000UL;
@@ -105,14 +104,10 @@ bool Radmon::interpret(const char* r)
 }
 
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!upload_ready(logTag())) return false;
-
   const char* raw_user = corium::Prefs::getString("radmon", EG_K_USER);
   const char* raw_pass = corium::Prefs::getString("radmon", EG_K_PASSWORD);
-  if (raw_user[0] == '\0' || raw_pass[0] == '\0') {
-    corium::Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
-    return false;
-  }
+  if (unset(raw_user, RM_L_USR) || unset(raw_pass, EG_L_PWD)) return false;
+  if (!upload_ready(logTag())) return false;
 
   corium::Log::debug(PSTR("Radmon: Uploading latest data ..."));
 

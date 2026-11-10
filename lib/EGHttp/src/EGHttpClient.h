@@ -30,6 +30,7 @@
 #define HTTPCODE_ENCODING        (-9)
 #define HTTPCODE_STREAM_WRITE    (-10)
 #define HTTPCODE_TIMEOUT         (-11)
+#define HTTPCODE_BAD_URL         (-12)   // urlWhy() says why
 
 #ifndef EGHTTP_HOST_MAX
   #define EGHTTP_HOST_MAX 64   // longer is refused
@@ -73,12 +74,14 @@ class EGHttpClient {
     EGHttpClient(const EGHttpClient&) = delete;
     EGHttpClient& operator=(const EGHttpClient&) = delete;
 
+    __attribute__((warn_unused_result))
     bool open(const char* method, const char* url);   // dials
     static const size_t URL_P_MAX = EGHTTP_URL_P_MAX;
     // url up to URL_P_MAX
+    __attribute__((warn_unused_result))
     bool open(const __FlashStringHelper* method, const __FlashStringHelper* url);
-    // false = dropped; Host, Connection and the length ones are the client's
-    bool setReqHeader(const char* name, const char* value);
+    // false = dropped; Host, Connection and the length ones are the client's. one that didn't fit fails send()
+    bool setReqHeader(const char* name, const char* value);   // send() says
     bool setReqHeader(const __FlashStringHelper* name, const char* value);
     bool setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
     void setTimeoutS(uint16_t secs) { _timeoutS = secs; }   // silence, default 10
@@ -92,7 +95,9 @@ class EGHttpClient {
     // once it ends, from the owner's task; not on abort()
     void setWake(Wake fn, void* arg) { _wake = fn; _wakeArg = arg; }
     // once per open(), body copied; false = not open or no ram
+    __attribute__((warn_unused_result))
     bool send(const char* body = nullptr);
+    __attribute__((warn_unused_result))
     bool send(const uint8_t* body, size_t len);
     void abort();
 
@@ -106,6 +111,7 @@ class EGHttpClient {
     int error() const { return _err; }       // 0 = fine, with a status = body cut
     const __FlashStringHelper* responseHTTPStringF() const;
     static const __FlashStringHelper* reason(int code);   // flash text; unknown = class text, "" below 300
+    static const __FlashStringHelper* urlWhy(const char* url);   // "" = one open() takes
     // kept body and location freed on the next call after takeDone()
     size_t responseRead(uint8_t* out, size_t len);   // no sink, up to BODY_CAP
     int32_t length() const { return _length; }   // -1 = not said

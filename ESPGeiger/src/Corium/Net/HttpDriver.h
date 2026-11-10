@@ -1,5 +1,5 @@
 /*
-  corium::HttpDriver.h - a module's HTTP requests, one at a time, a client each
+  HttpDriver.h -a module's HTTP requests, one at a time, a client each
 
   Copyright (C) 2026 @steadramon
 
@@ -41,7 +41,7 @@ struct HttpMeta {
 // the reply posts the owner, its client goes with it
 class HttpDriver {
   public:
-    enum Sent : uint8_t { SENT, NOT_SEALED, NOT_OPENED, NO_MEMORY };   // compare, SENT is 0
+    enum Sent : uint8_t { SENT, NOT_SEALED, NOT_OPENED, NO_MEMORY, BAD_URL };   // compare, SENT is 0
 
     explicit HttpDriver(Module* owner) : _owner(owner) {}
 #ifdef NATIVE_TEST

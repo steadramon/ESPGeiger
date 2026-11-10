@@ -1,5 +1,5 @@
 /*
-  BootHooks.h - Setup-time hooks for OLED and pushbutton, stubbed when not built.
+  BootHooks.h - setup hooks for OLED and pushbutton
 
   Copyright (C) 2026 @steadramon
 

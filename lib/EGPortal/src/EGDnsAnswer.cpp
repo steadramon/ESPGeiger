@@ -132,5 +132,5 @@ bool EGDnsAnswer::begin(uint16_t port, const EGTcpAddr& ip, uint32_t ttl) {
 void EGDnsAnswer::answer(const uint8_t* q, size_t len, const EGTcpAddr& from, uint16_t port) {
   uint8_t out[EGDNS_REPLY_MAX];
   size_t n = egdns_reply(q, len, _ip, _ttl, out, sizeof(out));
-  if (n) _udp.sendTo(from, port, out, n);
+  if (n) (void)_udp.sendTo(from, port, out, n);   // lost = the client asks again
 }

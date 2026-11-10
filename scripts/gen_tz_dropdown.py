@@ -58,8 +58,8 @@ REGIONS = [("as", "Asia"), ("af", "Africa"), ("eu", "Europe"),
            ("pa", "Pacific"), ("aq", "Antarctica")]
 
 
+# offset order, then aliases
 def etc_order(zone):
-    """Offset order, then aliases. GMT, GMT+0 and GMT-0 tie on name"""
     tail = zone[4:]
     m = re.match(r"GMT([+-])(\d+)$", tail)
     if m:
@@ -69,12 +69,11 @@ def etc_order(zone):
 
 
 def ui_groups(doc):
-    """Dropdown contents: canonical zones by region, then the fixed offsets."""
     zones = set(doc["zones"])
     by_region = collections.defaultdict(list)
     for z in doc["canonical"]:
         code, name = z["countries"][0], z["name"]
-        # A research station belongs to Antarctica whoever operates it.
+        # stations go to Antarctica
         region = "aq" if name.startswith("Antarctica/") else (
             OVERRIDE.get(code) or REGION_OF.get(code))
         if not region:
@@ -113,7 +112,6 @@ def write_js(groups):
 
 
 def report(have, want):
-    """Point at the offset: the data is one very long line."""
     hl, wl = have.splitlines(), want.splitlines()
     for line in difflib.unified_diff(hl, wl, "committed", "generated",
                                      lineterm="", n=0):

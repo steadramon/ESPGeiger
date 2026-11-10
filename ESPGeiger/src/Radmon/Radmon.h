@@ -44,7 +44,7 @@ class Radmon : public corium::HttpPoster {
     void onPrefsLoaded() override;
     const corium::PrefGroup* prefsGroup() override;
     uint8_t displayOrder() override { return 30; }
-    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    corium::LegacyRows legacyAliases() override;
     void setInterval(int interval);
     int getInterval();
   protected:

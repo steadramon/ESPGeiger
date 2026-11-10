@@ -1,5 +1,5 @@
 /*
-  corium::HttpDriver.cpp - a module's HTTP requests, one at a time, a client each
+  HttpDriver.cpp -a module's HTTP requests, one at a time, a client each
 
   Copyright (C) 2026 @steadramon
 
@@ -32,16 +32,18 @@ corium::HttpDriver::Sent corium::HttpDriver::send(const corium::HttpMeta& m, con
   if (!_c) return NO_MEMORY;
   bool open = m.flash ? _c->open(FPSTR(m.method), FPSTR(m.url)) : _c->open(m.method, m.url);
   if (!open) {
+    bool bad = _c->responseHTTPcode() == HTTPCODE_BAD_URL;
     delete _c;
     _c = nullptr;
-    return NOT_OPENED;
+    return bad ? BAD_URL : NOT_OPENED;
   }
   char ua[corium::DeviceInfo::UA_MAX];
   corium::DeviceInfo::userAgent(ua, sizeof(ua));
-  _c->setReqHeader(FPSTR(HTTP_H_UA), ua);
-  if (m.accept) _c->setReqHeader(F("Accept"), FPSTR(m.accept));
-  if (m.ctype) _c->setReqHeader(FPSTR(HTTP_H_CTYPE), FPSTR(m.ctype));
-  if (m.extra) _c->setReqHeader(FPSTR(m.extra), m.extraValue);
+  // no room fails the send below, bad text goes without
+  (void)_c->setReqHeader(FPSTR(HTTP_H_UA), ua);
+  if (m.accept) (void)_c->setReqHeader(F("Accept"), FPSTR(m.accept));
+  if (m.ctype) (void)_c->setReqHeader(FPSTR(HTTP_H_CTYPE), FPSTR(m.ctype));
+  if (m.extra) (void)_c->setReqHeader(FPSTR(m.extra), m.extraValue);
   _c->setTimeoutS(m.timeoutS);
   _c->setDeadline(m.timeoutS * 2000UL);   // a trickling reply can't hold it
   _c->setWake(wake, _owner);

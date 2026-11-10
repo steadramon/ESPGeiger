@@ -1,5 +1,5 @@
 /*
-  CrashDump.cpp - see header.
+  CrashDump.cpp - crash snapshot to RTC
 
   Copyright (C) 2026 @steadramon
 

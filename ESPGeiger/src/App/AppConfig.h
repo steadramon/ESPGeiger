@@ -1,5 +1,5 @@
 /*
-  AppConfig.h - What Corium needs to know about this app.
+  AppConfig.h - app settings for Corium
 
   Copyright (C) 2026 @steadramon
 

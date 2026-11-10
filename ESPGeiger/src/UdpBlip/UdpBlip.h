@@ -114,8 +114,8 @@ private:
   bool      _mdns_done = false;
   bool      _sys_phase = false;
   uint8_t   _emit_phase = 0;
-  uint8_t   _click_packet[BLIP_CLICK_LEN] = {0};
-  char      _path[BLIP_ARGS_AT] = {0};   // "/espg/<id>/" then the suffix
+  uint8_t   _click_packet[BLIP_CLICK_LEN] = {};
+  char      _path[BLIP_ARGS_AT] = {};   // "/espg/<id>/" then the suffix
 };
 
 extern UdpBlipModule& udpblip;

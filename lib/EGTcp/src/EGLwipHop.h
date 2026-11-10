@@ -1,5 +1,5 @@
 /*
-  EGLwipHop.h - onto lwIP's side, and its addresses. EGTcpLwip and EGUdp only.
+  EGLwipHop.h - lwip thread hop, EGTcpLwip and EGUdp only
 
   Copyright (C) 2026 @steadramon
 

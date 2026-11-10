@@ -40,7 +40,7 @@ class Thingspeak : public corium::HttpPoster {
     const char* name() override { return PSTR("thgspk"); }
     void onPrefsLoaded() override;
     const corium::PrefGroup* prefsGroup() override;
-    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    corium::LegacyRows legacyAliases() override;
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;

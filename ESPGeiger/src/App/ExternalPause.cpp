@@ -1,5 +1,5 @@
 /*
-  ExternalPause.cpp - see header.
+  ExternalPause.cpp - pause on external posters
 
   Copyright (C) 2026 @steadramon
 
@@ -34,14 +34,14 @@ static uint32_t up_s() { return (uint32_t)corium::Uptime::seconds(); }
 void ExternalPause::start(uint32_t secs) {
   if (secs == 0) {
     s_pause.clear();
-    corium::Log::console(PSTR("External posts: resumed"));
+    corium::Log::console(PSTR("External posts: Resumed"));
     return;
   }
   s_pause.set(up_s() + secs);
-  corium::Log::console(PSTR("External posts: paused for %u s"), (unsigned)secs);
+  corium::Log::console(PSTR("External posts: Paused for %u s"), (unsigned)secs);
 }
 
-// junk mustn't end a running pause
+// Bad input is refused here so it can't end a running pause
 bool ExternalPause::start_s(const char* secs) {
   int32_t n;
   if (!parseI32(secs, &n)) return false;
@@ -53,11 +53,11 @@ bool ExternalPause::active() {
   if (!s_pause.armed()) return false;
   if (!s_pause.due(up_s())) return true;
   s_pause.clear();
-  corium::Log::console(PSTR("External posts: resumed (timeout)"));
+  corium::Log::console(PSTR("External posts: Resumed (timeout)"));
   return false;
 }
 
-// a query logs the end too
+// Goes through active(), so asking also logs the end of an expired pause
 uint32_t ExternalPause::remaining_s() {
   return active() ? s_pause.at - up_s() : 0;
 }
@@ -70,7 +70,7 @@ static void cmd_pause() {
     return;
   }
   uint32_t rem = ExternalPause::remaining_s();
-  if (rem) corium::Log::console(PSTR("External posts: paused %u s remaining"), (unsigned)rem);
-  else     corium::Log::console(PSTR("External posts: active"));
+  if (rem) corium::Log::console(PSTR("External posts: Paused %u s remaining"), (unsigned)rem);
+  else     corium::Log::console(PSTR("External posts: Active"));
 }
 CORIUM_REGISTER_CMD(pause, cmd_pause)

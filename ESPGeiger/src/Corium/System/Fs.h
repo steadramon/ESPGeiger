@@ -24,14 +24,14 @@
 
 namespace corium {
 namespace Fs {
-  bool begin();   // first call only, formats after 3 failed mounts
+  CORIUM_NODISCARD bool begin();   // first call only, formats after 3 failed mounts
   void end();     // a new fs image goes under it: nothing more through this mount till reboot
   // all mount first and check before touching: esp32 logs a missing file
   File openR(const char* path);   // empty File if not there
   File openW(const char* path);
-  bool remove(const char* path);   // false if not there
+  CORIUM_NODISCARD bool remove(const char* path);   // true = not there now, none too
   bool exists(const char* path);
-  bool rename(const char* from, const char* to);
+  CORIUM_NODISCARD bool rename(const char* from, const char* to);
   bool mkdir(const char* path);
   void touch(const char* path);
   // all of buf or no file: the size read back, a flush lost at close shows there
@@ -41,9 +41,9 @@ namespace Fs {
   static const size_t PATH_P_MAX = 31;
   File openR(const __FlashStringHelper* path);
   File openW(const __FlashStringHelper* path);
-  bool remove(const __FlashStringHelper* path);
+  CORIUM_NODISCARD bool remove(const __FlashStringHelper* path);
   bool exists(const __FlashStringHelper* path);
-  bool rename(const __FlashStringHelper* from, const __FlashStringHelper* to);
+  CORIUM_NODISCARD bool rename(const __FlashStringHelper* from, const __FlashStringHelper* to);
   CORIUM_NODISCARD bool writeWhole(const __FlashStringHelper* path, const void* buf, size_t len);
 }
 }  // namespace corium

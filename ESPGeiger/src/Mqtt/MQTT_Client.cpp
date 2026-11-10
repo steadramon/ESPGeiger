@@ -97,8 +97,8 @@ CORIUM_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
 static const corium::Pref MQTT_PREF_ITEMS[] PROGMEM = {
   {corium::K_SERVER,    MQ_L_SRV, MQ_H_SRV, "",               corium::P_HOST, 0, 0, CORIUM_HOST_MAX, corium::P_STRING, 0},
   {EG_K_PORT,      EG_L_PRT, nullptr,  "1883",           nullptr,  1, 65535, 0,  corium::P_UINT,   0},
-  {EG_K_USER,      MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     64, corium::P_STRING, 0},
-  {EG_K_PASSWORD,  EG_L_PWD, nullptr,  "",               nullptr,  0, 0,     64, corium::P_STRING, corium::P_SENSITIVE},
+  {EG_K_USER,      MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     MQTT_USER_MAX, corium::P_STRING, 0},
+  {EG_K_PASSWORD,  EG_L_PWD, nullptr,  "",               nullptr,  0, 0,     MQTT_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE},
   {K_TOPIC,        MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, MQTT_TOPIC_PREF_MAX, corium::P_STRING, corium::P_ADVANCED},
   {EG_K_INTERVAL,  EG_L_INT, MQ_H_INT, STR(MQTT_INTERVAL), nullptr, MQTT_MIN_TIME, MQTT_MAX_TIME, 0, corium::P_UINT, 0},
 #ifdef MQTTAUTODISCOVER
@@ -116,12 +116,12 @@ static const corium::PrefGroup MQTT_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* MQTT_Client::prefsGroup() { return &MQTT_PREF_GROUP; }
 
-size_t MQTT_Client::statusJson(char* buf, size_t cap, unsigned long now) {
+size_t MQTT_Client::statusJson(char* buf, size_t cap, unsigned long /*now*/) {
   if (corium::Prefs::getString("mqtt", corium::K_SERVER)[0] == '\0') return 0;
-  return writeStatusJson(buf, cap, "mqtt", lastOk && s_mq.connected(), lastAttemptMs, now);
+  return writeStatusJson(buf, cap, PSTR("mqtt"), lastOk && s_mq.connected(), lastAttempt);
 }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias MQTT_LEGACY[] PROGMEM = {
   {"mqttServer",   "server"},
   {"mqttPort",     "port"},
@@ -136,22 +136,35 @@ static const corium::LegacyAlias MQTT_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows MQTT_Client::legacyAliases() { return MQTT_LEGACY; }
-// === END LEGACY IMPORT ===
 
 MQTT_Client::MQTT_Client()
 {
 }
 
+#ifdef MQTTAUTODISCOVER
+static void hass_prefix(char* out, size_t sz);
+#endif
+
 // the one way out; a new broker or topic gets Offline on the old one
 void MQTT_Client::disconnect()
 {
-  s_mq.disconnect(moved());
+  bool move = moved();
+  s_mq.disconnect(move);
+#ifdef MQTTAUTODISCOVER
+  char disc[sizeof(_hass_disc)];
+  hass_prefix(disc, sizeof(disc));
+  bool drop = move || strcmp(disc, _hass_disc) != 0;   // or old prefix configs
+#else
+  bool drop = move;
+#endif
+  if (drop) s_mq.stop();   // the kept QoS 1 queue was for the old broker
   _enabled = true;
   _tries = 0;
   _tried_ms = 0;
   _root_ok = false;
 #ifdef MQTTAUTODISCOVER
   _hass_next.clear();
+  _hass_walk_state = HASS_IDLE;   // a publish walk starts again on connect
 #endif
 }
 
@@ -197,7 +210,8 @@ void MQTT_Client::onMqttDisconnect(int8_t err) {
   wakeSoon();
   if (latched) corium::Log::console(PSTR("MQTT: Credentials rejected " STR(MQTT_AUTH_TRIES) " times, stopped until settings are saved"));
 #ifdef MQTTAUTODISCOVER
-  if (_hass_walk_state != HASS_IDLE) _hass_idx = 0;
+  if (_hass_walk_state == HASS_REMOVE) rejoin();   // gone mid leave, on to the new settings
+  else if (_hass_walk_state != HASS_IDLE) _hass_idx = 0;
 #endif
 }
 
@@ -307,7 +321,7 @@ void MQTT_Client::loop(unsigned long now)
   if (corium::Registry::events(this)) _pending |= PEND_ALARMS;
   if (!_enabled) return;
   if (_pending & PEND_CONNECT) { _pending &= ~PEND_CONNECT; reconnect(); return; }
-  if (!s_mq.connected()) return;
+  if (!s_mq.connected() || leaving()) return;
   checkAlarms();
   // one per call, hello then alarms; these stay till the outbox takes them
   if (sendHello()) return;
@@ -317,8 +331,20 @@ void MQTT_Client::loop(unsigned long now)
   if ((_pending & PEND_STATUS) && publishStatus()) { _pending &= ~PEND_STATUS; return; }
   if (_pending & PEND_PING)       { _pending &= ~PEND_PING;   publishPing();   return; }
 #ifdef MQTTAUTODISCOVER
-  if (_hass_walk_state != HASS_IDLE) { stepHassDiscovery(); }
+  stepHassDiscovery();
 #endif
+}
+
+// only the removals go to the old one; true = this call used
+bool MQTT_Client::leaving()
+{
+#ifdef MQTTAUTODISCOVER
+  if (_hass_walk_state == HASS_REMOVE) {
+    stepHassDiscovery();
+    return true;
+  }
+#endif
+  return false;
 }
 
 // Online, then the HA subscribe; true = this call used
@@ -332,7 +358,9 @@ bool MQTT_Client::sendHello()
   }
 #ifdef MQTTAUTODISCOVER
   if (_pending & PEND_SUB) {
-    if (s_mq.subscribe(_hass_status, 1)) _pending &= ~PEND_SUB;
+    char t[sizeof(_hass_disc) + sizeof("/status")];
+    snprintf_P(t, sizeof(t), PSTR("%s/status"), _hass_disc);
+    if (s_mq.subscribe(t, 1)) _pending &= ~PEND_SUB;
     return true;
   }
 #endif
@@ -447,8 +475,7 @@ uint16_t MQTT_Client::publishSensor()
   return pid;
 }
 
-// ---- LEGACY ----
-// stat/ topics
+// legacy stat/ topics
 struct StatTopic { char id[6]; char topic[6]; };
 static const StatTopic STAT_TOPICS[] PROGMEM = {
   {"cpm", "CPM"}, {"cpm5", "CPM5"}, {"cpm15", "CPM15"}, {"usv", "uSv"},
@@ -472,20 +499,18 @@ void MQTT_Client::publishStat(const char* cmd, const char* text)
   s_mq.publish(topic, text, 1, false);
   MQTT_PUB_YIELD();
 }
-// ---- end LEGACY block ----
 
 void MQTT_Client::publishPing()
 {
   if (!publishSensor()) notePublish(false);
 
-  // ---- LEGACY ----
+  // legacy stat/ topics
   for (corium::MeasureIter it(EGM_OUT_MQTT); it.next(); ) {
     const char* topic = stat_topic(it.row().id);
     char text[24];
     if (!topic || corium::m_format(it.row(), it.value(), text, sizeof(text)) == 0) continue;
     publishStat(topic, text);
   }
-  // ---- end LEGACY block ----
 
   corium::Registry::emit(TOPIC_PING);
 }
@@ -644,26 +669,31 @@ void MQTT_Client::reconnect()
   corium::Log::console(PSTR("MQTT: Connecting (attempt %d) ... %s:%d"), _tries, server, port);
 }
 
+// both topic prefs: {id} in any case, no trailing /
+static void topic_pref(char* out, size_t sz, const char* pref)
+{
+  const char* chipId = corium::DeviceInfo::chipId();
+  size_t w = 0;
+  const size_t cap = sz - 1;
+  for (const char* p = pref; *p && w < cap; ) {
+    if (strncasecmp_P(p, PSTR("{id}"), 4) == 0) {
+      size_t n = strlen(chipId);
+      if (w + n > cap) n = cap - w;
+      memcpy(out + w, chipId, n);
+      w += n;
+      p += 4;
+    } else {
+      out[w++] = *p++;
+    }
+  }
+  while (w > 0 && out[w-1] == '/') w--;
+  out[w] = '\0';
+}
+
 const char* MQTT_Client::getRootTopic()
 {
   if (!_root_ok) {
-    const char* rootTopic = corium::Prefs::getString("mqtt", K_TOPIC);
-    const char* chipId = corium::DeviceInfo::chipId();
-    size_t w = 0;
-    const size_t cap = sizeof(_root) - 1;
-    for (const char* p = rootTopic; *p && w < cap; ) {
-      if (strncmp_P(p, PSTR("{id}"), 4) == 0) {
-        size_t n = strlen(chipId);
-        if (w + n > cap) n = cap - w;
-        memcpy(_root + w, chipId, n);
-        w += n;
-        p += 4;
-      } else {
-        _root[w++] = *p++;
-      }
-    }
-    while (w > 0 && _root[w-1] == '/') w--;
-    _root[w] = '\0';
+    topic_pref(_root, sizeof(_root), corium::Prefs::getString("mqtt", K_TOPIC));
     _root_ok = true;
   }
   return _root;
@@ -763,17 +793,14 @@ static const char H_K_PLOFF[] PROGMEM = "pl_off";
 static const char H_V_ONE[]   PROGMEM = "1";
 static const char H_V_ZERO[]  PROGMEM = "0";
 
-static const char H_DISC_DEFAULT[] PROGMEM = MQTT_DISCOVERY_TOPIC;
-static const char H_STATUS_FMT[]   PROGMEM = "%s/status";
-
 static const size_t HASS_PATH_LEN = 128;
 // payload, path, MQTT header and id
 static const size_t HASS_PACKET_MAX = MQTT_JSON_BUFFER_SIZE + HASS_PATH_LEN + 16;
 
-// read each use, a save frees it
-static const char* hass_disc() {
-  const char* d = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
-  return d[0] ? d : H_DISC_DEFAULT;
+// the prefs' prefix, "" = off or blank
+static void hass_prefix(char* out, size_t sz) {
+  out[0] = '\0';
+  if (corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) topic_pref(out, sz, corium::Prefs::getString("mqtt", K_HASS_TOPIC));
 }
 
 // id PROGMEM, absent or NaN = no entity
@@ -808,29 +835,19 @@ static const char* hass_type(const HassRow* r) {
   return (hass_flags(r) & HR_BIN) ? H_TYPE_BINSENS : H_TYPE_SENSOR;
 }
 
+// kept till the next connect, walks and the save go by it
 void MQTT_Client::setupHassCB() {
-  _hass_listen = false;
-  _pending &= ~PEND_SUB;
-  if (!corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) return;
-  const char* disc = corium::Prefs::getString("mqtt", K_HASS_TOPIC);
-  if (disc[0] == '\0') return;
-  // onMqttMessage compares this
-  snprintf_P(_hass_status, sizeof(_hass_status), H_STATUS_FMT, disc);
-  _hass_listen = true;
-  _pending |= PEND_SUB;
+  hass_prefix(_hass_disc, sizeof(_hass_disc));
+  if (_hass_disc[0]) _pending |= PEND_SUB;
+  else _pending &= ~PEND_SUB;
 }
 
-// no topic, nothing to walk
+// HA off, nothing to walk
 void MQTT_Client::startHassWalk(int8_t dir) {
-  if (_hass_walk_state != HASS_IDLE) return;
-  if (corium::Prefs::getString("mqtt", K_HASS_TOPIC)[0] == '\0') return;
+  if (_hass_walk_state != HASS_IDLE || !_hass_disc[0]) return;
   _hass_walk_state = dir;
   _hass_idx = 0;
   corium::Log::console(PSTR("MQTT: Starting HA autodiscovery %swalk"), dir == HASS_REMOVE ? PSTR("removal ") : PSTR(""));
-}
-
-void MQTT_Client::setupHassAuto() {
-  if (corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) startHassWalk(HASS_PUBLISH);
 }
 
 void MQTT_Client::triggerHassDiscovery() {
@@ -841,7 +858,7 @@ void MQTT_Client::triggerHassDiscovery() {
                now_s - _hass_last_s);
     return;
   }
-  setupHassAuto();
+  startHassWalk(HASS_PUBLISH);
   _hass_next.set(now_s + MQTT_HASS_REFRESH_S);
 }
 
@@ -900,11 +917,11 @@ static void hass_fields(EGJson& j, const HassRow* r) {
 
 CORIUM_PSTR(HA_DROPPED, "MQTT: HA discovery publish dropped: %s");
 
-static void hass_publish(const HassRow* r, const char* root)
+static void hass_publish(const HassRow* r, const char* root, const char* disc)
 {
   const char* host = corium::DeviceInfo::hostname();
   char path[HASS_PATH_LEN];
-  hass_path(path, sizeof(path), hass_disc(), hass_type(r), r->id);
+  hass_path(path, sizeof(path), disc, hass_type(r), r->id);
   size_t cap;
   char* out = json_begin(path, MQTT_JSON_BUFFER_SIZE, &cap);
   if (!out) {
@@ -942,10 +959,10 @@ static void hass_publish(const HassRow* r, const char* root)
   MQTT_PUB_YIELD();
 }
 
-static void hass_remove(const HassRow* r)
+static void hass_remove(const HassRow* r, const char* disc)
 {
   char path[HASS_PATH_LEN];
-  hass_path(path, sizeof(path), hass_disc(), hass_type(r), r->id);
+  hass_path(path, sizeof(path), disc, hass_type(r), r->id);
   s_mq.publish(path, "", 1, false);
 }
 
@@ -955,15 +972,15 @@ void MQTT_Client::stepHassDiscovery() {
   if (s_mq.room() < HASS_PACKET_MAX) return;
   const HassRow* r = hass_row(_hass_idx);
   if (r) {
-    if (_hass_walk_state == HASS_PUBLISH) hass_publish(r, getRootTopic());
-    else hass_remove(r);
+    if (_hass_walk_state == HASS_PUBLISH) hass_publish(r, getRootTopic(), _hass_disc);
+    else hass_remove(r, _hass_disc);
     _hass_idx++;
-  } else {
-    if (_hass_walk_state == HASS_PUBLISH) {
-      _hass_last_s = (unsigned long)corium::DeviceInfo::uptime();
-      if (_hass_last_s == 0) _hass_last_s = 1;
-    }
+  } else if (_hass_walk_state == HASS_PUBLISH) {
+    _hass_last_s = (unsigned long)corium::DeviceInfo::uptime();
+    if (_hass_last_s == 0) _hass_last_s = 1;
     _hass_walk_state = HASS_IDLE;
+  } else if (!s_mq.queued()) {
+    rejoin();   // all acked, gone from the old prefix
   }
 }
 #endif
@@ -971,7 +988,8 @@ void MQTT_Client::stepHassDiscovery() {
 void MQTT_Client::onMqttMessage(const char* topic, const char* payload, size_t len)
 {
 #ifdef MQTTAUTODISCOVER
-  if (_hass_listen && strcmp(_hass_status, topic) == 0) {
+  size_t n = strlen(_hass_disc);
+  if (n && strncmp(topic, _hass_disc, n) == 0 && strcmp_P(topic + n, PSTR("/status")) == 0) {
     if (len == 6 && strncmp_P(payload, PSTR("online"), 6) == 0) {
       corium::Log::debug(PSTR("MQTT: HA is back online"));
       _hass_retrigger = true;
@@ -1005,20 +1023,29 @@ void MQTT_Client::begin()
   _pending |= PEND_ALARMS;   // an alarm already up when turned on
 }
 
+// out and back on the new settings
+void MQTT_Client::rejoin()
+{
+  disconnect();
+  begin();
+}
+
+// HA off or a new prefix: the old one's entities go first, on the old broker
 void MQTT_Client::onPrefsSaved()
 {
   _root_ok = false;
-  bool drop = false;
-#ifdef MQTTAUTODISCOVER
-  drop = (s_mq.connected() && !corium::Prefs::getBool("mqtt", K_HASS_ENABLED));
-#endif
-  disconnect();
   _auth_fails = 0;
 #ifdef MQTTAUTODISCOVER
-  // publish walk restarts on reconnect
-  if (_hass_walk_state == HASS_PUBLISH) _hass_walk_state = HASS_IDLE;
-  if (drop) startHassWalk(HASS_REMOVE);
+  if (_hass_disc[0] && s_mq.connected()) {
+    char disc[sizeof(_hass_disc)];
+    hass_prefix(disc, sizeof(disc));
+    if (strcmp(disc, _hass_disc) != 0) {
+      if (_hass_walk_state == HASS_PUBLISH) _hass_walk_state = HASS_IDLE;
+      startHassWalk(HASS_REMOVE);
+      return;
+    }
+  }
 #endif
-  begin();
+  rejoin();
 }
 #endif

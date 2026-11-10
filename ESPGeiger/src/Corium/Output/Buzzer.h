@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include "App/AppConfig.h"
+#include "Corium/Util/Attr.h"
 #ifdef ESP32
 #include <soc/soc_caps.h>
 #endif
@@ -128,7 +129,7 @@ struct Run {
 
 #if BUZZER_BUILT
 // own timer watches the pad: quiet but still high = stop, pin low, till restart
-bool begin(int pin, Limits lim = DEFAULTS);
+CORIUM_NODISCARD bool begin(int pin, Limits lim = DEFAULTS);
 // false while busy, faulted, or too soon for the budget
 bool pulse(uint32_t now_us, uint16_t us);
 bool burst(uint32_t now_us, uint16_t hz, uint8_t cycles);

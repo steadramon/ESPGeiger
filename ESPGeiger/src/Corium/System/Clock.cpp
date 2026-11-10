@@ -70,10 +70,10 @@ bool onSync(Source s) {
   return changed;
 }
 
-bool set(time_t epoch, Source s) {
+void set(time_t epoch, Source s) {
   struct timeval tv = { epoch, 0 };
   settimeofday(&tv, nullptr);
-  return onSync(s);
+  onSync(s);
 }
 
 // a power-on starts at 0

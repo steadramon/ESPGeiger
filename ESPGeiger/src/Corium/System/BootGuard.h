@@ -1,5 +1,5 @@
 /*
-  BootGuard.h - three crashes in a row, each before LIVED_S: the next boot runs safe mode.
+  BootGuard.h - safe mode after three quick crashes
 
   Copyright (C) 2026 @steadramon
 

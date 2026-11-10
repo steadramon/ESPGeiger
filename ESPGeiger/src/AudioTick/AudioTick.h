@@ -70,9 +70,10 @@ struct AudioCmd {
   uint8_t i1;
   int32_t i32;
   const char* word;   // static, vocab name
+  bool web;           // a route's, one at a time
 };
 
-// any task, false = queue full or no worker
+// any task, false = queue full, no worker, or a route's still waiting
 bool audio_enqueue(const AudioCmd& cmd);
 void audio_silence(uint16_t ms);
 // speech types go here, on the worker

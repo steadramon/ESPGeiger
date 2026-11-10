@@ -25,6 +25,9 @@
   #include <WiFi.h>
 #endif
 
+#define EGP_STR_(x) #x
+#define EGP_STR(x)  EGP_STR_(x)
+
 static const char P_ROOT[] PROGMEM = "/";
 
 // leaves <style> open, each page adds its own
@@ -48,8 +51,8 @@ static const char PORTAL_FORM[] PROGMEM =
 
 static const char PORTAL_TAIL[] PROGMEM =
   "</select>"
-  "<label>SSID <input id=s name=ssid maxlength=32 required></label>"
-  "<label>Password <input name=password type=password maxlength=64></label>"
+  "<label>SSID <input id=s name=ssid maxlength=" EGP_STR(EGPORTAL_SSID_MAX) " required></label>"
+  "<label>Password <input name=password type=password maxlength=" EGP_STR(EGPORTAL_PASS_MAX) "></label>"
   "<button>Save</button></form>"
   "<form action=/rescan method=get style=margin-top:1em>"
   "<button type=submit style=background:#888>Rescan networks</button></form>";
@@ -106,7 +109,7 @@ bool EGPortal::begin(const char* apSsid, const char* apPassword) {
 
   // STA only, AP_STA scan is unreliable
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect(false, false);   // keep the creds, one arg wipes them
+  (void)WiFi.disconnect(false, false);   // keep the creds, one arg wipes them; only for the scan
   delay(100);
   int n = WiFi.scanNetworks(false);
   refreshScan(n);

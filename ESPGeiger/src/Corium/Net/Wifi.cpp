@@ -132,7 +132,7 @@ bool corium::Wifi::hasSavedCreds() {
 bool corium::Wifi::clearSavedCreds() {
 #ifdef ESP8266
   WiFi.persistent(true);
-  WiFi.disconnect(true);          // also clears creds, any mode
+  (void)WiFi.disconnect(true);    // also clears creds, any mode; read back below
   WiFi.persistent(false);
   struct station_config c;
   bool ok = wifi_station_get_config_default(&c) && !c.ssid[0];
@@ -140,8 +140,9 @@ bool corium::Wifi::clearSavedCreds() {
   // disconnect(true, true) erases only with STA up, this in any mode
   bool ok = WiFi.eraseAP();
 #endif
-  corium::Fs::remove(WIFI_BACKUP_PATH);
-  corium::Fs::remove(NET_BACKUP_PATH);
+  // the backup holds them too
+  ok &= corium::Fs::remove(WIFI_BACKUP_PATH);
+  ok &= corium::Fs::remove(NET_BACKUP_PATH);
   corium::Log::console(PSTR("WiFi: SDK creds %scleared"), ok ? PSTR("") : PSTR("NOT "));
   return ok;
 }
@@ -164,7 +165,7 @@ static bool sdk_creds(Creds& c) {
   return c.ssid[0] != '\0';
 }
 
-static bool write_backup(const Creds& c) {
+CORIUM_NODISCARD static bool write_backup(const Creds& c) {
   if (!corium::Fs::begin()) return false;
   // 0, len, ssid, len, pass; an ssid can hold \n
   uint8_t raw[3 + EGPORTAL_SSID_MAX + EGPORTAL_PASS_MAX];
@@ -231,7 +232,7 @@ static bool restore_backup() {
   const char* pass = fields[1];
   // none, or one no join takes (a bad file)
   if (!*ssid || strlen(ssid) > EGPORTAL_SSID_MAX || strlen(pass) > EGPORTAL_PASS_MAX) {
-    corium::Fs::remove(WIFI_BACKUP_PATH);
+    (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // stays = the same false next boot
     return false;
   }
   corium::Log::console(PSTR("WiFi: Restoring backup creds (ssid=%s)"), ssid);
@@ -239,7 +240,7 @@ static bool restore_backup() {
   begin_ram(ssid, pass);
   if (!wait_wifi(JOIN_WAIT_MS)) return false;
   if (save_creds()) {
-    corium::Fs::remove(WIFI_BACKUP_PATH);
+    (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // the 5 min stable clear tries again
   } else {
     // kept, the next boot tries again
     corium::Log::console(PSTR("WiFi: Backup creds NOT saved"));
@@ -261,8 +262,7 @@ static void net_lines(char* buf, size_t len) {
              corium::Prefs::getString("net", corium::K_DNS));
 }
 
-// false = one refused
-static bool put_net(char** fields) {
+bool corium::Wifi::putNet(const char* const* fields) {
   bool ok = corium::Prefs::put("net", corium::K_STATIC_IP, fields[0]);
   ok &= corium::Prefs::put("net", corium::K_IP,  fields[1]);
   ok &= corium::Prefs::put("net", corium::K_GW,  fields[2]);
@@ -274,7 +274,7 @@ static bool put_net(char** fields) {
 bool corium::Wifi::saveNetBackup() {
   if (!corium::Fs::begin()) return false;
   // keep last good
-  if (corium::Fs::exists(NET_BACKUP_PATH)) return false;
+  if (corium::Fs::exists(NET_BACKUP_PATH)) return true;
   char raw[NET_LINES_MAX];
   net_lines(raw, sizeof(raw));
   return corium::Fs::writeWhole(NET_BACKUP_PATH, raw, strlen(raw));
@@ -297,17 +297,18 @@ bool corium::Wifi::restoreNetBackup() {
   f.close();
   char cur[NET_LINES_MAX];
   net_lines(cur, sizeof(cur));
-  if (!put_net(fields) || !corium::Prefs::commit()) {
+  if (!corium::Wifi::putNet(fields) || !corium::Prefs::commit()) {
     // back to what runs
     splitLines(cur, fields, 5);
-    put_net(fields);
+    (void)corium::Wifi::putNet(fields);   // the running values, they fit
     return false;
   }
-  corium::Fs::remove(NET_BACKUP_PATH);
+  (void)corium::Fs::remove(NET_BACKUP_PATH);   // the 5 min stable clear tries again
   return true;
 }
 
-void corium::Wifi::dropNetBackup() { corium::Fs::remove(NET_BACKUP_PATH); }
+// stays = the 5 min stable clear tries again
+void corium::Wifi::dropNetBackup() { (void)corium::Fs::remove(NET_BACKUP_PATH); }
 
 bool corium::Wifi::validateStatic(const char* ip, const char* gw, const char* sn,
                           char* err, size_t cap) {
@@ -349,7 +350,12 @@ bool corium::Wifi::applyStaticConfig() {
   gwa.fromString(gw);
   sna.fromString(sn);
   if (!dnsa.fromString(dns)) dnsa = gwa;
-  WiFi.config(ipa, gwa, sna, dnsa);
+  // both cores: no static flag kept, begin() starts dhcp
+  if (!WiFi.config(ipa, gwa, sna, dnsa)) {
+    // same text, the linker keeps one
+    corium::Log::console(PSTR("WiFi: Static IP rejected (%s); using DHCP"), PSTR("not applied"));
+    return false;
+  }
   corium::Log::console(PSTR("WiFi: Static %u.%u.%u.%u gw=%u.%u.%u.%u sn=%u.%u.%u.%u dns=%u.%u.%u.%u"),
                ipa[0], ipa[1], ipa[2], ipa[3],
                gwa[0], gwa[1], gwa[2], gwa[3],
@@ -576,11 +582,11 @@ const char* corium::Wifi::testSsid() { return s_test_ssid; }
 static void reset_wifi_tx_power_default();
 
 // retries, slow AP after a power blip
-static bool join_saved_network() {
+CORIUM_NODISCARD static bool join_saved_network() {
   bool associated = false;
   for (uint8_t attempt = 0; attempt <= JOIN_RETRIES && !associated && !corium::Wifi::offlineForced; attempt++) {
     if (attempt > 0) corium::Log::console(PSTR("WiFi: Retrying saved network (%u/" STR(JOIN_RETRIES) ")"), attempt);
-    WiFi.begin();                          // uses NVS-stored creds
+    (void)WiFi.begin();                    // NVS creds; wait_wifi reads the status
     associated = wait_wifi(attempt == 0 ? JOIN_WAIT_MS : JOIN_RETRY_WAIT_MS);
   }
   return associated;
@@ -678,7 +684,7 @@ static bool sta_up() {
   return corium::Wifi::applyStaticConfig();
 }
 
-static bool join_or_portal() {
+CORIUM_NODISCARD static bool join_or_portal() {
   bool have_creds = corium::Wifi::hasSavedCreds();
   if (have_creds) {
     bool static_on = sta_up();
@@ -739,7 +745,7 @@ static void start_ap() {
 }
 
 // a network to join, not the AP; saved with the next commit
-void corium::Wifi::joinMode() { corium::Prefs::put("wifi", K_MODE, "0"); }
+bool corium::Wifi::joinMode() { return corium::Prefs::put("wifi", K_MODE, "0"); }
 
 bool corium::Wifi::portalAhead() {
   if (corium::Wifi::offlineForced || corium::Prefs::getUInt("wifi", K_MODE) != 0) return false;

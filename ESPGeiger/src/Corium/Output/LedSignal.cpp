@@ -1,5 +1,5 @@
 /*
-  LedSignal.cpp - see header.
+  LedSignal.cpp - LED patterns over EGLed
 
   Copyright (C) 2026 @steadramon
 

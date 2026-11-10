@@ -48,7 +48,7 @@ class NTP_Client : public Module {
     void onPrefsSaved() override;
     uint8_t displayOrder() override { return 0; }  // managed via /network
 
-    LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    LegacyRows legacyAliases() override;
     const char* legacyFile() override { return "/ntp.json"; }  // LEGACY IMPORT
 
     const char* getServer() { return Prefs::getString("ntp", K_SERVER); }

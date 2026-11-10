@@ -43,10 +43,9 @@ class Webhook : public corium::HttpPoster {
     const char* name() override { return PSTR("whook"); }
     void onPrefsLoaded() override;
     const corium::PrefGroup* prefsGroup() override;
-    corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+    corium::LegacyRows legacyAliases() override;
     void setInterval(int interval);
     int getInterval() { return _interval_s; }
-    const char* cleanHTTP(const char* url);
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;

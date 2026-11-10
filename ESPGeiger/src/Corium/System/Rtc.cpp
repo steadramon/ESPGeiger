@@ -27,6 +27,7 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/Module.h"
 #include "Corium/Module/Registry.h"
+#include "Corium/Util/Attr.h"
 
 // DS3231 / DS1307 time from 0x00, PCF8563 / BM8563 from 0x02
 static const uint8_t DS_ADDR    = 0x68;
@@ -119,7 +120,7 @@ static time_t read_time() {
 }
 
 // a DS1307 has no century bit, to 2099 only
-static bool write_time(time_t now) {
+CORIUM_NODISCARD static bool write_time(time_t now) {
   struct tm tm;
   gmtime_r(&now, &tm);
   if (tm.tm_year < 100 || tm.tm_year > 299) return false;

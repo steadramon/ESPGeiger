@@ -106,7 +106,7 @@ bool EGHttpClient::open(const __FlashStringHelper* method, const __FlashStringHe
 // 0 or an HTTPCODE
 int EGHttpClient::start(const char* url) {
   EGUrlParts u;
-  if (!eg_parse_url(url, &u) || u.host_len >= sizeof(_host)) return HTTPCODE_NOT_CONNECTED;
+  if (!eg_parse_url(url, &u) || u.host_len > EGHTTP_HOST_MAX) return HTTPCODE_BAD_URL;
   memcpy(_host, u.host, u.host_len);
   _host[u.host_len] = '\0';
   _port = (uint16_t)u.port;
@@ -668,6 +668,7 @@ static const char R_RAM[] PROGMEM = "TOO_LESS_RAM";
 static const char R_ENC[] PROGMEM = "ENCODING";
 static const char R_WRITE[] PROGMEM = "STREAM_WRITE";
 static const char R_TIME[] PROGMEM = "TIMEOUT";
+static const char R_URL[] PROGMEM = "BAD_URL";
 static const char R_200[] PROGMEM = "HTTP OK";
 static const char R_400[] PROGMEM = "Bad Request";
 static const char R_401[] PROGMEM = "Unauthorized";
@@ -687,11 +688,25 @@ static const Reason REASONS[] PROGMEM = {
   { HTTPCODE_NOT_CONNECTED, R_NC }, { HTTPCODE_CONNECTION_LOST, R_LOST },
   { HTTPCODE_NO_HTTP_SERVER, R_NOHTTP }, { HTTPCODE_TOO_LESS_RAM, R_RAM },
   { HTTPCODE_ENCODING, R_ENC }, { HTTPCODE_STREAM_WRITE, R_WRITE },
-  { HTTPCODE_TIMEOUT, R_TIME },
+  { HTTPCODE_TIMEOUT, R_TIME }, { HTTPCODE_BAD_URL, R_URL },
   { 200, R_200 }, { 400, R_400 }, { 401, R_401 }, { 403, R_403 }, { 404, R_404 },
   { 413, R_413 }, { 429, R_429 }, { 500, R_500 }, { 502, R_502 }, { 503, R_503 },
   { 504, R_504 },
 };
+
+const __FlashStringHelper* EGHttpClient::urlWhy(const char* url) {
+  EGUrlParts u;
+  EGUrlErr e;
+  if (eg_parse_url(url, &u, &e)) return u.host_len > EGHTTP_HOST_MAX ? F("host too long") : F("");
+  switch (e) {
+    case EGURL_SCHEME:   return F("http only");
+    case EGURL_USERINFO: return F("no user@");
+    case EGURL_IPV6:     return F("no [IPv6]");
+    case EGURL_PORT:     return F("bad port");
+    case EGURL_CHARS:    return F("space or control char");
+    default:             return F("no host");
+  }
+}
 
 const __FlashStringHelper* EGHttpClient::responseHTTPStringF() const {
   return reason(responseHTTPcode());

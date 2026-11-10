@@ -39,6 +39,7 @@
 #include "Corium/Util/Bytes.h"
 #include <EGEscape.h>
 #include <WiFiUdp.h>
+#include <new>
 #ifdef ESP8266
 #include <ESP8266mDNS.h>
 #else
@@ -128,7 +129,8 @@ void UdpBlipModule::teardown() {
 
 bool UdpBlipModule::ensureUdp() {
   if (_udp) return true;
-  _udp = new WiFiUDP();
+  _udp = new (std::nothrow) WiFiUDP();
+  if (!_udp) return false;
   // random, not lwIP's shared 60288
   if (_src_port == 0) {
     _src_port = (uint16_t)(49152u + (GRNG::fast_uint32() & 0x3FFFu));
@@ -178,7 +180,7 @@ void UdpBlipModule::announce_mdns() {
   const char* fname = corium::DeviceInfo::friendlyName();
   if (fname && fname[0]) MDNS.addServiceTxt("osc", "udp", "fname", fname);
   MDNS.addServiceTxt("osc", "udp", "id", corium::DeviceInfo::chipId());
-  MDNS.addServiceTxt("osc", "udp", "group", corium::Prefs::getString("udpblip", K_GROUP));
+  MDNS.addServiceTxt("osc", "udp", "group", corium::Prefs::getString("udpblip", K_GROUP));  // no _P api
   _mdns_done = true;
 }
 

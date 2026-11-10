@@ -275,7 +275,7 @@ class EGHttpServer {
 #endif
 
     bool _authEnabled = false;
-    char _authValue[EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {0};   // base64, past "Basic "
+    char _authValue[EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {};   // base64, past "Basic "
     char _authRealm[40] = {};
 
     Slot* allocSlot(EGTcpClient* c);

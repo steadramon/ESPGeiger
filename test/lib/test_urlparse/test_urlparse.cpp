@@ -130,6 +130,25 @@ static void null_url(void) {
   TEST_ASSERT_FALSE(eg_parse_url(NULL, &p));
 }
 
+static EGUrlErr why_of(const char* url) {
+  EGUrlErr why = EGURL_OK;
+  eg_parse_url(url, &p, &why);
+  return why;
+}
+
+// each refusal says which
+static void reasons(void) {
+  TEST_ASSERT_EQUAL_INT(EGURL_OK,       why_of("http://h/a?e=a@b"));
+  TEST_ASSERT_EQUAL_INT(EGURL_SCHEME,   why_of("https://h/a"));
+  TEST_ASSERT_EQUAL_INT(EGURL_USERINFO, why_of("http://u:p@h/a"));
+  TEST_ASSERT_EQUAL_INT(EGURL_IPV6,     why_of("http://[::1]/a"));
+  TEST_ASSERT_EQUAL_INT(EGURL_PORT,     why_of("http://h:99999/a"));
+  TEST_ASSERT_EQUAL_INT(EGURL_PORT,     why_of("http://h:8x/a"));
+  TEST_ASSERT_EQUAL_INT(EGURL_CHARS,    why_of("http://h/a b"));
+  TEST_ASSERT_EQUAL_INT(EGURL_HOST,     why_of("http://:80/a"));
+  TEST_ASSERT_EQUAL_INT(EGURL_HOST,     why_of(NULL));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(scheme_host_path);
@@ -147,5 +166,6 @@ int main(int, char**) {
   RUN_TEST(empty_host);
   RUN_TEST(truncated_scheme);
   RUN_TEST(null_url);
+  RUN_TEST(reasons);
   return UNITY_END();
 }

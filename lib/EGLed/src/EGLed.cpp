@@ -1,5 +1,5 @@
 /*
-  EGLed.cpp - see header.
+  EGLed.cpp - non-blocking LED driver
 
   Copyright (C) 2026 @steadramon
 
@@ -39,7 +39,7 @@ namespace {
   // 0 hv, 1 tone, 2 analogWrite (ch 5/4)
   constexpr ledc_timer_t LED_TIMER = LEDC_TIMER_3;
 #endif
-  // ledcSetup's, one source for all timers on c3/s3. never auto, on s3 APLL fights I2S
+  // Same clock ledcSetup uses, c3/s3 have one source for all timers. Never auto, on s3 the APLL fights I2S
 #ifdef SOC_LEDC_SUPPORT_XTAL_CLOCK
   constexpr ledc_clk_cfg_t LED_CLK = LEDC_USE_XTAL_CLK;
 #else
@@ -64,7 +64,7 @@ namespace {
   uint8_t next_chan() {
     uint8_t c = (uint8_t)(s_next_chan++ % LED_CHANNELS);
 #ifndef SOC_LEDC_SUPPORT_HS_MODE
-    // low speed only, same numbers as Arduino's
+    // Low speed only, skip the hv and tone channels, same numbers as Arduino's
     while (c == EGLED_HV_CHANNEL || c == EGLED_TONE_CHANNEL)
       c = (uint8_t)(s_next_chan++ % LED_CHANNELS);
 #endif
@@ -146,7 +146,7 @@ void EGLed::blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count) {
 
 void EGLed::fade(uint8_t shift) {
   _fade_shift = shift > 7 ? 7 : shift;
-  // 255 detaches pwm on esp8266
+  // Start at 254 at most, 255 detaches pwm on esp8266
   uint8_t start = _brightness > 254 ? 254 : _brightness;
   _fade_value = start;
   writeDuty(_fade_value);
@@ -171,7 +171,7 @@ void EGLed::update() {
   if (_state == IDLE) return;
   uint32_t now = EGClock::now();
   if ((int32_t)(now - _next_ms) < 0) return;
-  // fade: value >> shift off every 5 ms, at least 1
+  // Fade takes value >> shift off every 5 ms, at least 1
   if (_state == PHASE_FADE) {
     uint8_t delta = _fade_value >> _fade_shift;
     if (delta == 0) delta = 1;

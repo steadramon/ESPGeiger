@@ -134,7 +134,7 @@ void HV::onPrefsLoaded() {
 #endif
 }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias HW_LEGACY[] PROGMEM = {
   {"freq",   "freq"},
   {"duty",   "duty"},
@@ -145,7 +145,6 @@ static const corium::LegacyAlias HW_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows HV::legacyAliases() { return HW_LEGACY; }
-// === END LEGACY IMPORT ===
 
 HV::HV() {
 }
@@ -418,15 +417,16 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   _settle.set(corium::fastMillis() + (unsigned long)_settle_s * 1000UL);
 }
 
+// a refused one says not saved, the rest still go
 bool HV::saveconfig() {
-  corium::Prefs::putInt("espghw", EG_K_FREQ, _freq);
-  corium::Prefs::putInt("espghw", K_DUTY, _duty);
+  bool ok = corium::Prefs::putInt("espghw", EG_K_FREQ, _freq);
+  ok &= corium::Prefs::putInt("espghw", K_DUTY, _duty);
 #ifdef ESPG_HV_ADC
-  corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
-  corium::Prefs::putInt("espghw", K_OFFSET, _vd_offset);
-  corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
+  ok &= corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
+  ok &= corium::Prefs::putInt("espghw", K_OFFSET, _vd_offset);
+  ok &= corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
 #endif
-  return corium::Prefs::commitSoon(corium::fastMillis());
+  return corium::Prefs::commitSoon(corium::fastMillis()) && ok;
 }
 
 extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(

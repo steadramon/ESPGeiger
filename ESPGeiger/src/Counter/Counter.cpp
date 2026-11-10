@@ -210,34 +210,29 @@ bool Counter::snapshot_ring(RingSnapshot& s) const {
   return count >= 2;
 }
 
-// RTC stash, survives a crash not a power cut
+// RTC stash, survives a crash not a power cut; the totals, a boot takes the bigger
 namespace {
-constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11D;  // bump on layout change
-struct LifeRtc { uint32_t magic; uint32_t delta_clicks; uint32_t delta_seconds; };
+constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11F;  // bump on layout change
+// magic ^ the rest, a flipped bit anywhere fails it
+struct LifeRtc { uint32_t magic; uint32_t clicks; uint32_t rollover; uint32_t secs; };
 
 #ifdef ESP8266
 typedef corium::RtcSlot<LifeRtc, corium::RtcMap::APP1_AT, corium::RtcMap::APP1_WORDS> LifeSlot;
 bool life_read(LifeRtc& r) { return LifeSlot::read(r); }
 void life_write(const LifeRtc& r) { LifeSlot::write(r); }
-void life_clear() { LifeSlot::clear(); }
 #else
 RTC_NOINIT_ATTR LifeRtc s_life;   // garbage after power-on
 bool life_read(LifeRtc& r) { r = s_life; return true; }
 void life_write(const LifeRtc& r) { s_life = r; }
-void life_clear() { s_life.magic = 0; }
 #endif
+// all zero never checks, magic 0 alone can
+void life_clear() { life_write(LifeRtc{}); }
 
-void rtc_life_stash(uint32_t delta_clicks, uint32_t delta_seconds) {
-  life_write(LifeRtc{LIFE_RTC_MAGIC, delta_clicks, delta_seconds});
+void rtc_life_stash(uint32_t clicks, uint32_t rollover, uint32_t secs) {
+  life_write(LifeRtc{LIFE_RTC_MAGIC ^ clicks ^ rollover ^ secs, clicks, rollover, secs});
 }
-bool rtc_life_recover(uint32_t* out_clicks, uint32_t* out_seconds) {
-  LifeRtc r{};
-  *out_clicks = 0; *out_seconds = 0;
-  if (!life_read(r)) return false;
-  if (r.magic != LIFE_RTC_MAGIC) return false;
-  *out_clicks  = r.delta_clicks;
-  *out_seconds = r.delta_seconds;
-  return true;
+bool rtc_life_recover(LifeRtc& r) {
+  return life_read(r) && r.magic == (LIFE_RTC_MAGIC ^ r.clicks ^ r.rollover ^ r.secs);
 }
 }
 
@@ -336,7 +331,6 @@ TICK_COLD uint32_t Counter::clock_read() {
 
 inline void Counter::lifetime_tick(int counts, uint32_t now) {
   add_wrapped(total_clicks_lifetime, total_clicks_lifetime_rollover, counts);
-  _rtc_unsaved_clicks += (uint32_t)counts;
   if (!--s_life_left) life_work(now);
 }
 
@@ -429,7 +423,8 @@ void Counter::reset_alarm() {
   corium::Log::console(PSTR("Alarm: snoozed until level drops below warning"));
 }
 
-void Counter::save_lifetime() {
+// true = on flash; the stash has the totals either way
+bool Counter::save_lifetime() {
   uint32_t now = corium::Clock::epoch();
   uint32_t secs = 0;
   if (_saved_at > 0 && corium::Clock::synced && corium::reached(now, _saved_at)) {
@@ -438,18 +433,14 @@ void Counter::save_lifetime() {
   _life_saved_s += secs;
   if (corium::Clock::synced) _saved_at = now;
 
-  corium::Prefs::putUInt("life", EG_K_CLK, total_clicks_lifetime);
-  corium::Prefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover);
-  corium::Prefs::putUInt("life", EG_K_FBT, _first_boot_ts);
-  corium::Prefs::putUInt("life", EG_K_SECS, _life_saved_s);
-  if (!corium::Prefs::commit()) {
-    corium::Log::console(PSTR("Lifetime: not saved"));
-    _rtc_carry_s += secs;   // the stash keeps it till a save
-    return;
-  }
-  _rtc_unsaved_clicks = 0;
-  _rtc_carry_s = 0;
-  rtc_life_stash(0, 0);
+  bool put = corium::Prefs::putUInt("life", EG_K_CLK, total_clicks_lifetime) &&
+             corium::Prefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover) &&
+             corium::Prefs::putUInt("life", EG_K_FBT, _first_boot_ts) &&
+             corium::Prefs::putUInt("life", EG_K_SECS, _life_saved_s);
+  (void)corium::Prefs::commit();   // false for any group, landed() says for life
+  if (put && corium::Prefs::landed("life")) return true;
+  corium::Log::console(PSTR("Lifetime: not saved"));
+  return false;
 }
 
 unsigned long Counter::get_lifetime_seconds() const {
@@ -475,15 +466,17 @@ void Counter::clock_stepped(int32_t delta_s) {
   s_clock.read_next();
 }
 
-void Counter::reset_lifetime() {
+bool Counter::reset_lifetime() {
   total_clicks_lifetime = 0;
   total_clicks_lifetime_rollover = 0;
   _first_boot_ts = 0;
   _life_saved_s = 0;
   _saved_at = 0;
-  save_lifetime();
+  life_clear();   // else a crash brings the old totals back
+  bool ok = save_lifetime();
   s_clock.read_next();   // stamps the first boot again
-  corium::Log::console(PSTR("Lifetime: reset"));
+  if (ok) corium::Log::console(PSTR("Lifetime: reset"));
+  return ok;
 }
 
 float Counter::get_cps() {
@@ -736,16 +729,21 @@ void Counter::begin() {
   corium::Lifecycle::on(counter_lifecycle);
   corium::Clock::onStep(counter_clock_stepped);
 
-  uint32_t clicks = 0, secs = 0;
-  // an erase keeps the rtc, not the life file
-  bool rtc_ok = corium::Prefs::stored("life") && rtc_life_recover(&clicks, &secs);
-  if (rtc_ok && !_lifetime_enabled) {
+  LifeRtc r{};
+  // an erase keeps the rtc, not the life file: no file, its totals go
+  bool rtc_ok = corium::Prefs::stored("life") && rtc_life_recover(r);
+  if (!rtc_ok || !_lifetime_enabled) {
     life_clear();
-  } else if (rtc_ok) {
-    // till a flash save
-    _rtc_unsaved_clicks = clicks;
-    _rtc_carry_s = secs;
-    if (clicks > 0) add_wrapped(total_clicks_lifetime, total_clicks_lifetime_rollover, clicks);
+  } else {
+    // newer than the file after a crash, older after a save
+    uint64_t was = all_clicks(total_clicks_lifetime_rollover, total_clicks_lifetime);
+    uint64_t got = all_clicks(r.rollover, r.clicks);
+    uint64_t clicks = got > was ? got - was : 0;
+    uint32_t secs = r.secs > _life_saved_s ? r.secs - _life_saved_s : 0;
+    if (clicks > 0) {
+      total_clicks_lifetime = r.clicks;
+      total_clicks_lifetime_rollover = r.rollover;
+    }
     _life_saved_s += secs;
     if (clicks > 0 || secs > 0) {
       corium::Log::console(PSTR("Lifetime: recovered %lu clicks + %lu s from RTC"),
@@ -781,18 +779,15 @@ void Counter::loop() {
     uint8_t pw = _pending_work;
     _pending_work = 0;
     if (pw & PENDING_RTC) {
-      uint32_t delta_s = 0;
+      uint32_t secs = _life_saved_s;
       // 0 = stamped before the sync, no time
       if (_rtc_pending_now && _saved_at > 0 && corium::reached(_rtc_pending_now, _saved_at)) {
-        delta_s = _rtc_pending_now - _saved_at;
+        secs += _rtc_pending_now - _saved_at;
       }
-      delta_s += _rtc_carry_s;
-      if (_rtc_unsaved_clicks > 0 || delta_s > 0) {
-        rtc_life_stash(_rtc_unsaved_clicks, delta_s);
-      }
+      rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, secs);
     }
     if (pw & PENDING_SAVE) {
-      save_lifetime();
+      (void)save_lifetime();   // the stash has it
     }
     if (pw & PENDING_ALARM) corium::Registry::emit(TOPIC_ALARM);
     if (pw & PENDING_COUNTS) corium::Registry::emit(TOPIC_COUNTS);

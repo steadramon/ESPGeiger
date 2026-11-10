@@ -1,7 +1,6 @@
 name: Unit tests
 
-# Host-native logic tests, kept out of the firmware matrix so a logic break
-# fails in a minute rather than twenty.
+# host tests, own job, fails fast
 on:
   push:
     paths-ignore:

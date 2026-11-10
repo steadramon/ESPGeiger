@@ -54,6 +54,9 @@ class WiFiUDP;
 #ifndef UDPRX_ENV_TTL_MS
 #define UDPRX_ENV_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
 #endif
+// pin pref and the wire, blank allowed
+#define UDPRX_CHIPID_PAT "[0-9a-fA-F]{" STR(CHIPID_LEN) "}"
+
 // Counts from UdpBlip senders, OSC /espg/<chipid>/click and /env
 class GeigerUdpRx final : public GeigerInput {
 public:
@@ -94,9 +97,9 @@ public:
   uint16_t loss_pct_x10() const { return perMille(_gap_filled, _local_count); }
   uint32_t quiet_s() const;   // 0 before the first
   bool heard() const;
-  uint16_t rebind_count() const       { return _rebind_count; }
-  uint16_t refresh_count() const      { return _refresh_count; }
-  uint16_t refresh_noop_count() const { return _refresh_noop_count; }
+  uint32_t rebind_count() const       { return _rebind_count; }
+  uint32_t refresh_count() const      { return _refresh_count; }
+  uint32_t refresh_noop_count() const { return _refresh_noop_count; }
   // the last /env, 0 t 1 h 2 p; false once stale
   bool env(uint8_t i, float* v);
 
@@ -108,6 +111,7 @@ private:
   void recover(uint32_t now);
   void readDatagrams();
   void fireDueGapfills();
+  void unlatch();
   bool acceptChipid(const char* src_chipid, bool click);
   void processDatagram(uint8_t* buf, size_t len);
   void processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
@@ -122,11 +126,14 @@ private:
 
   WiFiUDP*  _udp = nullptr;
   IPAddress _group;
+#ifdef ESP8266
+  IPAddress _joined;   // _group moves first on a change
+#endif
   uint16_t  _port = UDPRX_DEFAULT_PORT;
   uint8_t   _mode = 2;          // legacy auto
-  char      _pinned_chipid[BLIP_ID_LEN + 1] = {0};
-  char      _locked_chipid[BLIP_ID_LEN + 1] = {0};
-  char      _env_chipid[BLIP_ID_LEN + 1] = {0};
+  char      _pinned_chipid[BLIP_ID_LEN + 1] = {};
+  char      _locked_chipid[BLIP_ID_LEN + 1] = {};
+  char      _env_chipid[BLIP_ID_LEN + 1] = {};
   float     _env[3] = {NAN, NAN, NAN};
   corium::Stamp _env_at;
   uint8_t   _rx_mode = 1;       // 0=light 1=modem 2=none
@@ -138,6 +145,8 @@ private:
   uint32_t _resync_count = 0;
   uint32_t _last_click_ms = 0;
   uint32_t _last_packet_ms = 0;
+  uint32_t _last_packet_s = 0;   // uptime, quiet_s past the ms wrap
+  corium::Stamp _heard;          // stale stays stale over the wrap
   float _drain_pending = 0.0f;
   float _drain_rate    = 0.0f;
   float _drain_partial = 0.0f;
@@ -152,14 +161,14 @@ private:
 
   void do_refresh();
   unsigned long _recovery_at_ms = 0;   // 0 = idle
-  uint16_t _recovery_steps = 0;
+  uint32_t _recovery_steps = 0;
   corium::Deadline _ps_bounce;
   // Diags
-  uint16_t _rebind_count = 0;
-  uint16_t _refresh_count = 0;
-  uint16_t _refresh_noop_count = 0;    // no netif
+  uint32_t _rebind_count = 0;
+  uint32_t _refresh_count = 0;
+  uint32_t _refresh_noop_count = 0;    // no netif
 
-  uint32_t _gapfill_due_ms[UDPRX_GAPFILL_QUEUE] = {0};
+  uint32_t _gapfill_due_ms[UDPRX_GAPFILL_QUEUE] = {};
   uint8_t  _gapfill_count = 0;
 };
 

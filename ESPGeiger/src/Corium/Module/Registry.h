@@ -1,5 +1,5 @@
 /*
-  corium::Registry.h - Registry of modules
+  Registry.h -Registry of modules
 
   Copyright (C) 2026 @steadramon
 

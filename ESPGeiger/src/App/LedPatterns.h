@@ -1,5 +1,5 @@
 /*
-  LedPatterns.h - ESPGeiger's status LED patterns, LedSignal plays them.
+  LedPatterns.h - status LED patterns
 
   Copyright (C) 2026 @steadramon
 

@@ -206,15 +206,12 @@ static int ramp(uint32_t i, uint32_t total, int peak) {
 }
 
 // tail must be the scaled value
-static void adpcm_fade_out(int16_t tail) {
+static void adpcm_fade_out(I2sOut& out, int16_t tail) {
   constexpr int FADE_SAMPLES = ms_to_samples(20);
-  int16_t buf[FADE_SAMPLES];
   for (int i = 0; i < FADE_SAMPLES; i++) {
-    buf[i] = (int16_t)((int32_t)tail * (FADE_SAMPLES - 1 - i) / (FADE_SAMPLES - 1));
+    out.put((int16_t)((int32_t)tail * (FADE_SAMPLES - 1 - i) / (FADE_SAMPLES - 1)));
   }
-  size_t w;
-  i2s_write(I2S_NUM_0, buf, FADE_SAMPLES * sizeof(int16_t), &w,
-            200 / portTICK_PERIOD_MS);
+  out.flush();
 }
 
 // 7350 Hz up to 22050, each sample held 3x
@@ -263,8 +260,7 @@ static void adpcm_speak_word(const VocabADPCM* info, float pitch_scale) {
   }
   // decode runs one ahead, write the last one
   out.put(scale_sample((int16_t)s_pred, scale_q8));
-  out.flush();
-  adpcm_fade_out(scale_sample(s_pred, scale_q8));
+  adpcm_fade_out(out, scale_sample(s_pred, scale_q8));
 }
 
 // peak 0..32767
@@ -353,8 +349,8 @@ void Voice::queueAnnouncement() {
 void Voice::queueRadmonChange() {
   corium::Sender* m = _radmon;
   // lastOk is only the answer once the reply is in
-  if (m && m->lastAttemptMs != 0 && !m->pending() &&
-      m->lastAttemptMs != _radmon_tried_ms) {
+  if (m && m->lastAttempt != 0 && !m->pending() &&
+      m->lastAttempt != _radmon_tried) {
     const bool ok = m->lastOk;
     if (_radmon_known && ok != _radmon_was_ok) {
       AudioCmd cmd{};
@@ -366,7 +362,7 @@ void Voice::queueRadmonChange() {
     }
     _radmon_was_ok = ok;
     _radmon_known  = true;
-    _radmon_tried_ms = m->lastAttemptMs;
+    _radmon_tried = m->lastAttempt;
   }
 }
 
@@ -493,7 +489,8 @@ void Voice::speakDigits(const char* s) {
 }
 
 // all just enqueue, audio worker plays in order
-static void send_queued(EGHttpResponse& res, const AudioCmd& cmd) {
+static void send_queued(EGHttpResponse& res, AudioCmd cmd) {
+  cmd.web = true;
   if (audio_enqueue(cmd)) res.send(200, FPSTR(HTTP_CT_PLAIN), F("queued"));
   else                    res.send(503, FPSTR(HTTP_CT_PLAIN), F("queue full"));
 }

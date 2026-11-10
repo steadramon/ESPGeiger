@@ -1,5 +1,5 @@
 /*
-  corium::Registry.cpp - Registry of modules
+  Registry.cpp -Registry of modules
 
   Copyright (C) 2026 @steadramon
 

@@ -1,5 +1,5 @@
 /*
-  Sound.h - buzzer sounds for events: startup, wifi, alert, faults, button, ota, clicks.
+  Sound.h - buzzer sounds for events
 
   Copyright (C) 2026 @steadramon
 

@@ -1,5 +1,5 @@
 /*
-  Reactor.cpp - the ms and 1 s ticks: a Ticker each, the second due in the loop on esp32.
+  Reactor.cpp - ms and 1 s ticks
 
   Copyright (C) 2026 @steadramon
 

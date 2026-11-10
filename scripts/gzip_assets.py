@@ -1,19 +1,7 @@
 #!/usr/bin/env python3
-# Pre-compress immutable JS/CSS assets at build time.
-#
-# ASSETS = single-symbol assets. The R"DELIM(...)DELIM" body of the named
-# PROGMEM symbol is extracted, line indent dropped, gzipped, emitted as
-# <SYM>.gz.h with:
-#   static const uint8_t SYM_GZ[] PROGMEM = { ... };
-#   static const size_t  SYM_GZ_LEN = ...;
-#   #define EG_GZ_<SYM> 1
-#
-# ASSETS_COMBINED = multi-source bundles. Source bodies are concatenated
-# in list order, then gzipped as a single stream (browsers don't reliably
-# handle RFC 1952 multi-member gzip; one stream is mandatory).
-#
-# Any failure is a build error, raw costs flash.
-# Missing file or symbol: EG_GZ_ALLOW_STALE=1 for raw (EG_GZ_<NAME> 0)
+# gzip JS/CSS assets at build time, <SYM>.gz.h each: SYM_GZ[], SYM_GZ_LEN, EG_GZ_<SYM> 1
+# ASSETS_COMBINED: bodies joined in order, one gzip stream
+# any failure fails the build; EG_GZ_ALLOW_STALE=1 for raw (EG_GZ_<NAME> 0)
 
 import gzip
 import io
@@ -196,7 +184,6 @@ def run(project_dir, gen_dir, platform=""):
             f"the path/symbol, or set EG_GZ_ALLOW_STALE=1 to ship raw.")
 
 
-# PIO entry point: pre-script invoked from platformio.ini.
 try:
     Import("env")  # type: ignore  # noqa: F821
     _project_dir = env["PROJECT_DIR"]  # type: ignore  # noqa: F821

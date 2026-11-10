@@ -1,5 +1,5 @@
 /*
-  Display.cpp - see header.
+  Display.cpp - display module
 
   Copyright (C) 2026 @steadramon
 
@@ -123,7 +123,7 @@ const corium::PrefShow* Display::prefsShow() { return DISPLAY_SHOW; }
 const corium::PrefShow* Display::prefsShow() { return nullptr; }
 #endif
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
+// legacy import
 static const corium::LegacyAlias DISPLAY_LEGACY[] PROGMEM = {
   {"dispBrightness", "brightness"},
 #ifdef GEIGER_PUSHBUTTON
@@ -134,7 +134,6 @@ static const corium::LegacyAlias DISPLAY_LEGACY[] PROGMEM = {
   {},
 };
 corium::LegacyRows Display::legacyAliases() { return DISPLAY_LEGACY; }
-// === END LEGACY IMPORT ===
 
 static DisplayBackend* s_backend = nullptr;   // set once, first prefs load
 
@@ -260,12 +259,12 @@ static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   if (!screenOr503(res, buf, w, h, true)) return;
   const uint16_t row_unpadded = (w + 7) / 8;
   const uint16_t row_padded   = (row_unpadded + 3) & ~3;
-  uint8_t row[24] = {0};
+  uint8_t row[24] = {};
   if (row_padded > sizeof(row)) { res.send(503, FPSTR(HTTP_CT_PLAIN), F("display too wide")); return; }
   const uint32_t pixel_bytes  = (uint32_t)row_padded * h;
   const uint32_t file_size    = BMP_HEAD + pixel_bytes;
 
-  uint8_t hdr[BMP_HEAD] = {0};
+  uint8_t hdr[BMP_HEAD] = {};
   hdr[0] = 'B'; hdr[1] = 'M';
   wrLe32(hdr + 2, file_size);
   hdr[10] = BMP_HEAD;

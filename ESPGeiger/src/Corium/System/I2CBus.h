@@ -21,8 +21,9 @@
 
 #include <stdint.h>
 #include "App/AppConfig.h"
+#include "Corium/Util/Attr.h"
 
-// i2c.sda/scl defaults: the app's, else per chip
+// i2c.sda/scl defaults, the app's if it sets them, else per chip
 #ifndef I2C_DEFAULT_SDA
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)
   #define I2C_DEFAULT_SDA 8
@@ -39,15 +40,15 @@
 #endif
 #endif
 
-// 8266 wait per bit on a held SCL, the core's 150 ms stalls a dead bus for seconds
+// 8266 wait per bit on a held SCL. The core's 150 ms stalls a dead bus for seconds
 #ifndef CORIUM_I2C_STRETCH_US
 #define CORIUM_I2C_STRETCH_US 2000
 #endif
 
 namespace corium {
 namespace I2CBus {
-  void pins(uint8_t sda, uint8_t scl);   // whoever owns the pin prefs, no effect once up
-  bool begin();   // first user starts it, a remap would freeze the others
+  void pins(uint8_t sda, uint8_t scl);   // Called by whoever owns the pin prefs, no effect once the bus is up
+  CORIUM_NODISCARD bool begin();   // The first user starts it, a remap later would freeze the others
 }
 }  // namespace corium
 

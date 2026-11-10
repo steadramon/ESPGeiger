@@ -35,6 +35,8 @@
 #endif
 #define MQTT_HASS_TOPIC_MAX 32
 #define MQTT_TOPIC_PREF_MAX 28
+#define MQTT_USER_MAX 64
+#define MQTT_PASS_MAX 64
 #define MQTT_ROOT_MAX  (MQTT_TOPIC_PREF_MAX * CHIPID_LEN / (sizeof("{id}") - 1))   // all {id}
 #define MQTT_TOPIC_LEN (MQTT_ROOT_MAX + sizeof("/tele/status"))
 
@@ -95,7 +97,7 @@ public:
   void onPrefsSaved() override;
   uint8_t displayOrder() override { return 25; }
   size_t statusJson(char* buf, size_t cap, unsigned long now) override;
-  corium::LegacyRows legacyAliases() override;  // LEGACY IMPORT (remove in v1.1.0)
+  corium::LegacyRows legacyAliases() override;
   void setInterval(int interval);
   int getInterval();
   void disconnect();
@@ -116,6 +118,8 @@ private:
   static constexpr uint32_t DUE_MAX_MS = (MQTT_MAX_TIME + 1) * 1000UL;   // nextDue's most
   bool clientBusy();
   bool moved();
+  void rejoin();
+  bool leaving();
   void applyIntervalPref();
   void queueTimedPublishes(unsigned long now_s);
 #ifdef MQTTAUTODISCOVER
@@ -126,7 +130,6 @@ private:
   char _root[MQTT_ROOT_MAX + 1] = {};
   bool _root_ok = false;
 #ifdef MQTTAUTODISCOVER
-  void setupHassAuto();
   void startHassWalk(int8_t dir);
   void triggerHassDiscovery();
   void stepHassDiscovery();
@@ -165,8 +168,7 @@ private:
   uint16_t _ping_every = MQTT_INTERVAL;
 #ifdef MQTTAUTODISCOVER
   bool _hass_retrigger = false;   // HA came back, the timers spread it
-  bool _hass_listen = false;
-  char _hass_status[MQTT_HASS_TOPIC_MAX + sizeof("/status")] = {};
+  char _hass_disc[MQTT_HASS_TOPIC_MAX + 1] = {};   // prefix this connection is on, "" = off
   corium::Deadline _hass_next;   // uptime s
   unsigned long _hass_last_s = 0;
   enum : int8_t { HASS_REMOVE = -1, HASS_IDLE, HASS_PUBLISH };

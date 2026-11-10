@@ -129,8 +129,7 @@ void PulseOut::apply_voice() {
   _engine.publish();
 }
 
-// === LEGACY IMPORT (remove in v1.1.0) ===
-// v0.11 led.bin blip_pin, blip_pulse_ms to pulse.*
+// legacy import, v0.11 led.bin blip_pin, blip_pulse_ms to pulse.*
 static const char* BLIP_MIG_MARKER = "/.pulse_blip_mig";
 
 // one-off migration
@@ -147,9 +146,8 @@ static bool migrate_legacy_blip() {
     corium::Fs::touch(BLIP_MIG_MARKER);
     return false;
   }
-  char pin_val[16]  = {0};
-  char ms_val[16]   = {0};
-  bool any = false;
+  char pin_val[16]  = {};
+  char ms_val[16]   = {};
   char key[24];
   char value[64];
   // rows: klen u8, key, vlen u16 le, value
@@ -169,23 +167,18 @@ static bool migrate_legacy_blip() {
     }
   }
   f.close();
-  if (pin_val[0]) {
-    corium::Prefs::put("pulse", EG_K_PIN, pin_val);
-    any = true;
-  }
+  // a refused one shows (none), Prefs said why
+  if (pin_val[0] && !corium::Prefs::put("pulse", EG_K_PIN, pin_val)) pin_val[0] = '\0';
   if (ms_val[0]) {
     char* endp = nullptr;
     long ms = strtol(ms_val, &endp, 10);
-    if (endp != ms_val && ms > 0) {
-      if (ms > 50) ms = 50;
-      corium::Prefs::putInt("pulse", EG_K_PULSE_MS, ms);
-      any = true;
-    }
+    if (ms > 50) ms = 50;
+    if (endp == ms_val || ms <= 0 || !corium::Prefs::putInt("pulse", EG_K_PULSE_MS, ms)) ms_val[0] = '\0';
   }
+  bool any = pin_val[0] || ms_val[0];
   if (any) {
-    corium::Prefs::put("pulse", EG_K_ENABLE, "1");
     // no marker, again next boot
-    if (!corium::Prefs::commit(false)) {
+    if (!corium::Prefs::put("pulse", EG_K_ENABLE, "1") || !corium::Prefs::commit(false)) {
       corium::Log::console(PSTR("PulseOut: not saved"));
       return true;
     }
@@ -197,7 +190,6 @@ static bool migrate_legacy_blip() {
   corium::Fs::touch(BLIP_MIG_MARKER);
   return any;
 }
-// === END LEGACY IMPORT ===
 
 static void pulseout_click(uint32_t) { pulseout.notifyClick(corium::fastMillis()); }
 

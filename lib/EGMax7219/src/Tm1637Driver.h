@@ -20,7 +20,7 @@
 #define EG_TM1637DRIVER_H
 #include <Arduino.h>
 
-// LSB first, DIO let go for the ack, no ack = not there
+// LSB first, DIO is released for the ack, no ack means no display there
 class Tm1637Driver {
   public:
     static constexpr uint8_t MAX_DIGITS = 6;
@@ -32,7 +32,7 @@ class Tm1637Driver {
     uint8_t half_clock_us() const { return _us; }
 
     // leftmost first, bit 7 = dot or colon, only the changed digits sent
-    // false = no ack, all sent again next call
+    // false if there was no ack, then it all goes again next call
     bool show(const uint8_t* segs, uint8_t n);
     bool light(uint8_t level, bool on);   // 0..7
 
@@ -41,6 +41,7 @@ class Tm1637Driver {
     void release(int8_t pin);
     void start();
     void stop();
+    __attribute__((warn_unused_result))
     bool put(uint8_t b);
     bool command(uint8_t c);
 
