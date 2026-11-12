@@ -19,27 +19,13 @@
 #include "TestTimer.h"
 #include "GeigerInput/GeigerInputTest.h"
 #include "Corium/System/PinSafety.h"
+#include "Corium/Platform/Chip.h"
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 
 static uint32_t (*s_fn)();
 
-bool TestTimer::tx_pin(int pin, uint32_t& mask, bool& hi) {
-  mask = 0;
-  hi = false;
-#ifdef ESP8266
-  if (pin < 0 || pin > 15) return false;   // 16 is not on GPOS
-#elif defined(GPIO_OUT1_W1TS_REG)
-  if (pin < 0 || pin > MAX_GPIO_PIN) return false;
-#else
-  if (pin < 0 || pin > 31) return false;
-#endif
-  hi = pin >= 32;
-  mask = (uint32_t)1 << (pin & 31);
-  return true;
-}
-
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
 #include <EGTimer1.h>
 
 // 26.8 s, fits EGTimer1 once << 8

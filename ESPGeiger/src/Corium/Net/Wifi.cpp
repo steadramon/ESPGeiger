@@ -68,11 +68,10 @@ static Creds* s_back = nullptr;   // the network left, test only
 static char s_test_ssid[WIFI_SSID_MAX + 1];
 static const uint32_t PORTAL_DONE_MS = 3000;   // the page polls each 2 s, it sees OK
 static const uint32_t TEST_STEP_MS = 200;
+static corium::Deadline s_rebegin;   // no sdk retries, one more begin() half way
 #ifdef ESP32
 static volatile uint8_t s_reason = 0;   // the event task's, the last disconnect
 static bool s_hooked = false;
-#else
-static corium::Deadline s_rebegin;   // no sdk retries, one more begin() half way
 #endif
 
 namespace corium {
@@ -341,27 +340,26 @@ bool corium::Wifi::applyStaticConfig() {
   const char* sn  = corium::Prefs::getString("net", corium::K_SN);
   const char* dns = corium::Prefs::getString("net", corium::K_DNS);
   char err[96];
-  if (!corium::Wifi::validateStatic(ip, gw, sn, err, sizeof(err))) {
-    corium::Log::console(PSTR("WiFi: Static IP rejected (%s); using DHCP"), err);
-    return false;
+  const char* why = err;
+  if (corium::Wifi::validateStatic(ip, gw, sn, err, sizeof(err))) {
+    IPAddress ipa, gwa, sna, dnsa;
+    ipa.fromString(ip);
+    gwa.fromString(gw);
+    sna.fromString(sn);
+    if (!dnsa.fromString(dns)) dnsa = gwa;
+    // both cores keep it for the boot, begin() then skips dhcp
+    if (WiFi.config(ipa, gwa, sna, dnsa)) {
+      corium::Log::console(PSTR("WiFi: Static %u.%u.%u.%u gw=%u.%u.%u.%u sn=%u.%u.%u.%u dns=%u.%u.%u.%u"),
+                   ipa[0], ipa[1], ipa[2], ipa[3],
+                   gwa[0], gwa[1], gwa[2], gwa[3],
+                   sna[0], sna[1], sna[2], sna[3],
+                   dnsa[0], dnsa[1], dnsa[2], dnsa[3]);
+      return true;
+    }
+    why = PSTR("not applied");
   }
-  IPAddress ipa, gwa, sna, dnsa;
-  ipa.fromString(ip);
-  gwa.fromString(gw);
-  sna.fromString(sn);
-  if (!dnsa.fromString(dns)) dnsa = gwa;
-  // both cores: no static flag kept, begin() starts dhcp
-  if (!WiFi.config(ipa, gwa, sna, dnsa)) {
-    // same text, the linker keeps one
-    corium::Log::console(PSTR("WiFi: Static IP rejected (%s); using DHCP"), PSTR("not applied"));
-    return false;
-  }
-  corium::Log::console(PSTR("WiFi: Static %u.%u.%u.%u gw=%u.%u.%u.%u sn=%u.%u.%u.%u dns=%u.%u.%u.%u"),
-               ipa[0], ipa[1], ipa[2], ipa[3],
-               gwa[0], gwa[1], gwa[2], gwa[3],
-               sna[0], sna[1], sna[2], sna[3],
-               dnsa[0], dnsa[1], dnsa[2], dnsa[3]);
-  return true;
+  corium::Log::console(PSTR("WiFi: Static IP rejected (%s); using DHCP"), why);
+  return false;
 }
 
 // too long is refused, a cut one would never join; open = "", not nullptr
@@ -462,12 +460,7 @@ static uint8_t join_result(uint32_t now) {
     case WL_CONNECT_FAILED: return EGPortal::JOIN_REFUSED;
     default: break;
   }
-  if (s_join_due.due(now)) return EGPortal::JOIN_NO_REPLY;
-  if (s_rebegin.due(now)) {
-    s_rebegin.clear();
-    (void)WiFi.begin(s_creds->ssid, s_creds->pass);
-  }
-  return EGPortal::JOIN_TESTING;
+  return s_join_due.due(now) ? EGPortal::JOIN_NO_REPLY : EGPortal::JOIN_TESTING;
 }
 #endif
 
@@ -551,9 +544,7 @@ bool corium::Wifi::testJoin(uint32_t ms) {
   begin_ram(s_creds->ssid, s_creds->pass);
   uint32_t now = corium::fastMillis();
   s_join_ms = ms;
-#ifndef ESP32
   s_rebegin.set(now + ms / 2);
-#endif
   s_join_due.set(now + ms);
   s_join = EGPortal::JOIN_TESTING;
   return true;
@@ -562,7 +553,13 @@ bool corium::Wifi::testJoin(uint32_t ms) {
 bool corium::Wifi::testStep(uint32_t now) {
   if (s_join == EGPortal::JOIN_TESTING) {
     uint8_t r = join_result(now);
-    if (r == EGPortal::JOIN_TESTING) return true;
+    if (r == EGPortal::JOIN_TESTING) {
+      if (s_rebegin.due(now)) {
+        s_rebegin.clear();
+        begin_ram(s_creds->ssid, s_creds->pass);   // its leave never hides the reason (on_drop)
+      }
+      return true;
+    }
     if (r == EGPortal::JOIN_OK) test_joined();
     else test_failed(r, now);
   } else if (s_join == EGPortal::JOIN_BACK) {
@@ -693,7 +690,8 @@ CORIUM_NODISCARD static bool join_or_portal() {
       return true;
     }
     if (corium::Wifi::offlineForced) return false;
-    corium::Log::console(PSTR("WiFi: Saved creds failed to associate"));
+    Creds c;
+    corium::Log::console(PSTR("WiFi: Saved creds failed to associate (ssid=%s)"), sdk_creds(c) ? c.ssid : "");
     if (restore_backup()) return true;
     if (corium::Wifi::OFFLINE_OK) return false;
   }
@@ -712,9 +710,10 @@ CORIUM_NODISCARD static bool join_or_portal() {
     return false;
   }
 
-  // the AP off can drop it, a static IP too
-  sta_up();
+  // the AP off can drop it; a static set on the test's join never answers arp (8266), join again
+  bool static_on = sta_up();
   if (!corium::Wifi::connectedRaw()) (void)WiFi.begin();
+  else if (static_on) (void)WiFi.reconnect();
   return wait_wifi(JOIN_WAIT_MS);
 }
 

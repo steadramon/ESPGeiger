@@ -49,12 +49,10 @@
 #define GEIGER_IS_TEST(t)    ((t) & GEIGER_FLAG_TEST)
 #define GEIGER_HAS_INTPWM(t) ((t) & GEIGER_FLAG_INTPWM)
 
-#ifdef ESP32
-#include <soc/soc_caps.h>
-#endif
+#include "Corium/Platform/Chip.h"
 
 // TXPULSE counts internal pulses, C3 has no PCNT
-#if defined(ESP32) && SOC_PCNT_SUPPORTED && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
+#if CORIUM_HAS_PCNT && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
 #define USE_PCNT
 #endif
 

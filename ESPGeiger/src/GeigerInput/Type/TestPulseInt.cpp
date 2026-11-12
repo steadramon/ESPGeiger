@@ -25,6 +25,7 @@
 #include "Counter/Counter.h"
 #endif
 #include "TestTimer.h"
+#include "Corium/System/FastPin.h"
 
 static volatile uint32_t s_half;   // ticks, isr reads it
 static uint32_t s_tx_mask;   // 0 = no TX pin
@@ -52,7 +53,7 @@ void GeigerTestPulseInt::begin() {
 #endif
 
   corium::Log::console(PSTR("TestPulsePWM: Test TXPIN: %d"), _tx_pin);
-  if (TestTimer::tx_pin(_tx_pin, s_tx_mask, s_tx_hi)) {
+  if (corium::FastPin::bits(_tx_pin, s_tx_mask, s_tx_hi)) {
     pinMode(_tx_pin, OUTPUT);
   } else if (_tx_pin >= 0) {
     corium::Log::console(PSTR("TestPulsePWM: TXPIN %d can't be driven, no TX"), _tx_pin);
@@ -76,7 +77,7 @@ void GeigerTestPulseInt::restartAfterOTA() { TestTimer::start(pulseInterrupt, s_
 // returns ticks to the next
 uint32_t CORIUM_ISR_ATTR GeigerTestPulseInt::pulseInterrupt() {
   s_high = !s_high;
-  TestTimer::tx(s_tx_mask, s_tx_hi, s_high);
+  corium::FastPin::write(s_tx_mask, s_tx_hi, s_high);
 #ifdef GEIGER_COUNT_TXPULSE
   if (!s_high) GeigerInputTest::timerPulse();
 #endif

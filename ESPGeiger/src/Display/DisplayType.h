@@ -19,9 +19,18 @@
 #ifndef EG_DISPLAYTYPE_H
 #define EG_DISPLAYTYPE_H
 
-// display.type, never reorder
-// 3 and 4 (tiny) are esp32 only
+// 72x40 panels, 0 or 1, test with #if
+#ifndef OLED_TINY
 #ifdef ESP32
+#define OLED_TINY 1
+#else
+#define OLED_TINY 0
+#endif
+#endif
+
+// display.type, never reorder
+// 3 and 4 (tiny) only with OLED_TINY
+#if OLED_TINY
   #define DISP_OLED_COUNT 5   // SSD1306, SH1106, SSD1309, Tiny SSD1306, Tiny SH1106
 #else
   #define DISP_OLED_COUNT 3   // SSD1306, SH1106, SSD1309

@@ -33,7 +33,6 @@
 #include <math.h>
 #include <esp_chip_info.h>
 #include <esp_system.h>
-#include <esp_mac.h>
 #endif
 #ifdef ESP8266
 extern "C" {
@@ -97,12 +96,6 @@ uint8_t corium::DeviceInfo::heapFrag() {
   return s_frag;
 }
 
-#ifdef ESP8266
-void corium::DeviceInfo::heapStats(uint32_t* free_, uint16_t* max_, uint8_t* frag) {
-  ESP.getHeapStats(free_, max_, frag);
-}
-#endif
-
 uint32_t corium::DeviceInfo::largestFreeBlock() {
   heapFrag();
   return s_lfb_cur;
@@ -120,40 +113,11 @@ uint32_t corium::DeviceInfo::largestFreeBlockLowTake() {
   return low;
 }
 
-#ifdef ESP32
-static float s_temp_c = NAN;
-uint8_t corium::DeviceInfo::ctWait = 0;
-
-// next read 45-75 s on, then a 1/16 ema, out of range reads dropped
-void corium::DeviceInfo::chipTempRead() {
-  ctWait = 45 + (uint8_t)(esp_random() % 31);
-  float t = temperatureRead();
-  if (isnan(t) || t <= -40.0f || t >= 150.0f) return;
-  s_temp_c = isnan(s_temp_c) ? t : s_temp_c + (t - s_temp_c) * 0.0625f;
-}
-
-float corium::DeviceInfo::chipTempC() { return s_temp_c; }
-#endif
-
 void corium::DeviceInfo::safeRestart(uint32_t delay_ms) {
   corium::Lifecycle::send(corium::Lifecycle::SHUTDOWN);
   if (delay_ms) delay(delay_ms);
   ESP.restart();  // the one restart path
 }
-
-uint64_t corium::DeviceInfo::hwId() {
-#ifdef ESP8266
-  return ESP.getChipId();
-#else
-  return ESP.getEfuseMac();
-#endif
-}
-
-#ifdef ESP8266
-String corium::DeviceInfo::coreVersion() { return ESP.getCoreVersion(); }
-#else
-bool corium::DeviceInfo::efuseMac(uint8_t* out) { return esp_efuse_mac_get_default(out) == ESP_OK; }
-#endif
 
 void corium::DeviceInfo::begin() {
 #ifdef ESP8266
@@ -246,25 +210,6 @@ const char* corium::DeviceInfo::chip() {
   }
 #else
   return "UNKNOWN";
-#endif
-}
-
-bool corium::DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
-                          uint32_t* epc2, uint32_t* epc3, uint32_t* depc) {
-#ifdef ESP8266
-  rst_info* ri = ESP.getResetInfoPtr();
-  if (!ri || ri->reason != REASON_EXCEPTION_RST) return false;
-  if (epc1)     *epc1     = ri->epc1;
-  if (excvaddr) *excvaddr = ri->excvaddr;
-  if (exccause) *exccause = (uint8_t)ri->exccause;
-  if (epc2)     *epc2     = ri->epc2;
-  if (epc3)     *epc3     = ri->epc3;
-  if (depc)     *depc     = ri->depc;
-  return true;
-#else
-  (void)epc1; (void)excvaddr; (void)exccause;
-  (void)epc2; (void)epc3; (void)depc;
-  return false;
 #endif
 }
 

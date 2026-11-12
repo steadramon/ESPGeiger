@@ -28,9 +28,7 @@
 #include "BlipLed/BlipLed.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/System/RtcMap.h"
-#ifdef ESP32
-#include <esp_attr.h>
-#endif
+#include "Corium/Util/Attr.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
@@ -216,15 +214,9 @@ constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11F;  // bump on layout change
 // magic ^ the rest, a flipped bit anywhere fails it
 struct LifeRtc { uint32_t magic; uint32_t clicks; uint32_t rollover; uint32_t secs; };
 
-#ifdef ESP8266
-typedef corium::RtcSlot<LifeRtc, corium::RtcMap::APP1_AT, corium::RtcMap::APP1_WORDS> LifeSlot;
+CORIUM_RTC_SLOT(LifeSlot, LifeRtc, corium::RtcMap::APP1_AT, corium::RtcMap::APP1_WORDS);
 bool life_read(LifeRtc& r) { return LifeSlot::read(r); }
 void life_write(const LifeRtc& r) { LifeSlot::write(r); }
-#else
-RTC_NOINIT_ATTR LifeRtc s_life;   // garbage after power-on
-bool life_read(LifeRtc& r) { r = s_life; return true; }
-void life_write(const LifeRtc& r) { s_life = r; }
-#endif
 // all zero never checks, magic 0 alone can
 void life_clear() { life_write(LifeRtc{}); }
 
@@ -252,18 +244,8 @@ uint8_t  s_life_left      = RTC_STASH_S;
 uint32_t s_save_s         = 0;
 }  // namespace
 
-// once a second from flash misses the cache
-#ifdef ESP32
-#define TICK_ATTR CORIUM_ISR_ATTR
-#define TICK_COLD inline
-#else
-#define TICK_ATTR
-// the tick's work, from flash only when it has some
-#define TICK_COLD __attribute__((noinline))
-#endif
-
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
-TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
+CORIUM_TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
   bool missing = CounterMaths::counts_missing(uptime_s, _last_count_up_s,
                                               all_clicks(total_clicks_rollover, total_clicks));
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -285,7 +267,7 @@ static uint32_t next_boundary(time_t t, uint32_t secs) {
 }
 
 // t for the hour and day, 2^32 s isn't whole ones
-TICK_COLD void Counter::hour_rollover(time_t t) {
+CORIUM_TICK_COLD void Counter::hour_rollover(time_t t) {
   // not static, guard runs every tick
   const uint32_t step = _boundary_s;
   uint32_t now = (uint32_t)t;
@@ -314,7 +296,7 @@ TICK_COLD void Counter::hour_rollover(time_t t) {
 }
 
 // time(), the hour and the first sync stamps, on read ticks
-TICK_COLD uint32_t Counter::clock_read() {
+CORIUM_TICK_COLD uint32_t Counter::clock_read() {
   time_t t = time(nullptr);
   uint32_t now = (uint32_t)t;
   if (!s_next_boundary || corium::reached(now, s_next_boundary)) hour_rollover(t);
@@ -335,7 +317,7 @@ inline void Counter::lifetime_tick(int counts, uint32_t now) {
 }
 
 // the rtc stash every 30 s, the save every 6 h
-TICK_COLD void Counter::life_work(uint32_t now) {
+CORIUM_TICK_COLD void Counter::life_work(uint32_t now) {
   s_life_left = RTC_STASH_S;
   _rtc_pending_now = now;
   _pending_work |= PENDING_RTC;
@@ -347,13 +329,13 @@ TICK_COLD void Counter::life_work(uint32_t now) {
 }
 
 // the counts moved or the mode reads live
-TICK_COLD void Counter::cpm_work(bool fresh) {
+CORIUM_TICK_COLD void Counter::cpm_work(bool fresh) {
   if (fresh) _cached_cps = apply_dead_time(window_mean(_cps_in.sum, _cps_in.n, _cpm_window, _cpm_window_inv));
   _cached_cpm_active = (_cpm_mode == CPM_BUCKET ? _cached_cps : get_cps()) * 60.0f;
   _cached_ccpm = (int)(_cached_cpm_active + 0.5f);   // capped by apply_dead_time
 }
 
-TICK_COLD void Counter::ema_work(bool add15) {
+CORIUM_TICK_COLD void Counter::ema_work(bool add15) {
   _ticks5.add(_cached_cps);
   if (add15) _ticks15.add(_ticks5.get());
 }
@@ -381,7 +363,7 @@ inline void Counter::update_alarms(int cpm) {
   }
 }
 
-void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
+void CORIUM_TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
   if (!_running) return;
   InputType* in = static_cast<InputType*>(_input);
   in->secondTicker();

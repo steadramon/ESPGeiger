@@ -288,8 +288,11 @@ static void boot_pins() {}   // none on this build
 #endif
 
 #ifdef NO_PCNT_ENV
-// count_mode into the file once, so a plain bin keeps the interrupt
+// count_mode into the file once, so a plain bin keeps the interrupt; boot only, a save's callback can't commit
 static void keep_count_mode() {
+  static bool s_done = false;
+  if (s_done) return;
+  s_done = true;
   if (corium::Prefs::getBool("counter", K_COUNT_KEPT)) return;
   corium::Prefs::put("counter", K_COUNT_KEPT, "1");
   corium::Prefs::commit(false);

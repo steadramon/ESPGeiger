@@ -74,6 +74,23 @@ struct RtcSlot {
   }
 };
 }  // namespace corium
+// either chip: CORIUM_RTC_SLOT(Slot, T, AT, WORDS); then Slot::read(), write()
+#define CORIUM_RTC_SLOT(Name, T, AT, WORDS) typedef corium::RtcSlot<T, AT, WORDS> Name
+#else
+// esp32: a variable in rtc ram, garbage after power-on; AT and WORDS unused
+#ifdef ESP32
+#include <esp_attr.h>
+#define CORIUM_RTC_NOINIT RTC_NOINIT_ATTR
+#else
+#define CORIUM_RTC_NOINIT
+#endif
+#define CORIUM_RTC_SLOT(Name, T, AT, WORDS)                           \
+  static CORIUM_RTC_NOINIT T Name##_v;                                \
+  struct Name {                                                       \
+    static bool read(T& v) { v = Name##_v; return true; }             \
+    static void write(const T& v) { Name##_v = v; }                   \
+    static void clear() { Name##_v.magic = 0; }                       \
+  }
 #endif
 
 #endif

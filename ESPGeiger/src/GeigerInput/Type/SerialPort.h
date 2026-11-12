@@ -24,12 +24,13 @@
 
 #include "Corium/Platform/Flash.h"
 #include "Corium/Util/Attr.h"
+#include "Corium/Platform/Chip.h"
 #include <stdint.h>
 #include <stddef.h>
 
 #if defined(EG_SERIAL_NMI)
 
-#if !defined(ESP8266) || !defined(EG_TIMER1)
+#if !CORIUM_HAS_TIMER1 || !defined(EG_TIMER1)
 #error "EG_SERIAL_NMI: ESP8266 with EG_TIMER1 only"
 #endif
 #include <EGTimer1.h>

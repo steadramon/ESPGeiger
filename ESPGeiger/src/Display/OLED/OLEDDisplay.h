@@ -59,13 +59,13 @@ public:
       DISP_SSD1306        = 0,
       DISP_SH1106         = 1,
       DISP_SSD1309        = 2,
-#ifdef ESP32
+#if OLED_TINY
       DISP_SSD1306_72X40  = 3,
       DISP_SH1106_72X40   = 4,
 #endif
     };
 
-#ifdef ESP32
+#if OLED_TINY
     bool isTiny() const {
       return _type == DISP_SSD1306_72X40
           || _type == DISP_SH1106_72X40;

@@ -48,6 +48,7 @@
 #include "Corium/Util/Bytes.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
+#include "Corium/Platform/Chip.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "MsgPack.h"
 #include "Corium/System/Fs.h"
@@ -648,7 +649,7 @@ static void write_health(MsgPack::Writer& mp) {
   mp.kv(PSTR("l"),  (uint32_t)corium::TickProfile::lps);
   mp.kv(PSTR("tk"), (uint32_t)corium::TickProfile::tickMaxUs);
   mp.kv(PSTR("rs"), (int32_t)corium::Wifi::rssi);
-#ifdef ESP32
+#if CORIUM_HAS_CHIPTEMP
   float ct = corium::DeviceInfo::chipTempC();
   if (!isnan(ct)) mp.kv(PSTR("ct"), ct);
 #endif

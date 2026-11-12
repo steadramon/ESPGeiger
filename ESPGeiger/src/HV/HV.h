@@ -29,7 +29,8 @@
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Util/MathUtil.h"
 #include "HVTrim.h"
-#ifdef ESP32
+#include "Corium/Platform/Chip.h"
+#if CORIUM_HAS_LEDC
 #include <EGLed.h>
 #endif
 
@@ -98,6 +99,7 @@
 #ifndef GEIGERHW_ADC_RATIO
 #define GEIGERHW_ADC_RATIO 1035
 #endif
+#define GEIGERHW_MAX_RATIO 50000
 
 #ifndef GEIGERHW_ADC_OFFSET
 #define GEIGERHW_ADC_OFFSET 0
@@ -187,7 +189,7 @@ class HV : public corium::Module {
       // GEIGERHW_MAX_DUTY, or less if MAX_ON_US caps it at this freq
       int max_duty() const;
       void set_vd_ratio(int ratio) {
-        _vd_ratio = clamp(ratio, 0, 50000);   // 0 = ADC off
+        _vd_ratio = clamp(ratio, 0, GEIGERHW_MAX_RATIO);   // 0 = ADC off
       }
       void set_vd_offset(int offset) {
         _vd_offset = clamp(offset, -100, 100);
@@ -235,6 +237,7 @@ class HV : public corium::Module {
     private:
       void check_handler();
       void sample_adc();
+      void adc_second(unsigned long now);
       int read_hv();
       void check_overvoltage(int volts);
       void trim_step();
@@ -270,12 +273,14 @@ class HV : public corium::Module {
       uint8_t _trim_age_s = 0;
       uint16_t _settle_s = GEIGERHW_SETTLE_S;
       uint16_t _boot_s = GEIGERHW_BOOT_S;
-#ifdef ESP8266
-      uint8_t  _pass = 0;
+#if CORIUM_HAS_TIMER1
       uint32_t _t1_entries = 0;
       uint8_t  _t1_restarts = 0;
-      static constexpr uint8_t LOOP_SLOW = 10;
       static constexpr uint8_t PWM_RESTARTS = 3;   // per boot, then pin stays low
+#endif
+#if CORIUM_HAS_TIMER1 || defined(ESPG_HV_ADC)
+      uint8_t  _pass = 0;
+      static constexpr uint8_t LOOP_SLOW = 10;   // adc median of 10 a second, 8266 pwm watchdog
 #else
       static constexpr uint8_t LOOP_SLOW = 1;
 #endif

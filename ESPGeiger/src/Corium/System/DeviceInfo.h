@@ -84,6 +84,22 @@ namespace DeviceInfo {
 #endif
   }
 
+  // ram left from before the boot, a seed; the esp32's survives a warm reset, bootRamSet() changes it
+#ifdef ESP8266
+  inline const uint8_t* bootRam(size_t& n) {
+    n = 0x800;
+    return (const uint8_t*)(0x3FFFC000 - 0x800);   // top of dram
+  }
+  inline void bootRamSet(const uint8_t*, size_t) {}
+#else
+  extern uint8_t bootRamBuf[256];   // .noinit
+  inline const uint8_t* bootRam(size_t& n) {
+    n = sizeof(bootRamBuf);
+    return bootRamBuf;
+  }
+  inline void bootRamSet(const uint8_t* b, size_t n) { memcpy(bootRamBuf, b, n); }
+#endif
+
   inline __attribute__((always_inline)) uint32_t cycles() { return ESP.getCycleCount(); }
   inline uint32_t heapNow() { return ESP.getFreeHeap(); }   // raw, freeHeap() is smoothed
   // raw too

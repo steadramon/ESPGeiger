@@ -22,6 +22,7 @@
 #include "GeigerInput/GeigerInput.h"
 #include "UdpBlip/UdpBlip.h"
 #include "Corium/Util/MathUtil.h"
+#include "Corium/Net/IgmpRefresh.h"
 #include <IPAddress.h>
 
 class WiFiUDP;
@@ -126,9 +127,6 @@ private:
 
   WiFiUDP*  _udp = nullptr;
   IPAddress _group;
-#ifdef ESP8266
-  IPAddress _joined;   // _group moves first on a change
-#endif
   uint16_t  _port = UDPRX_DEFAULT_PORT;
   uint8_t   _mode = 2;          // legacy auto
   char      _pinned_chipid[BLIP_ID_LEN + 1] = {};
@@ -137,6 +135,7 @@ private:
   float     _env[3] = {NAN, NAN, NAN};
   corium::Stamp _env_at;
   uint8_t   _rx_mode = 1;       // 0=light 1=modem 2=none
+  corium::IgmpRefresh::Join _joined;   // _group moves first on a change
 
   uint32_t _local_count = 0;
   uint32_t _collected = 0;

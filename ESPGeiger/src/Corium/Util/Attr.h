@@ -22,4 +22,14 @@
 // a dropped result warns; esp32 is gnu++11, no [[nodiscard]]
 #define CORIUM_NODISCARD __attribute__((warn_unused_result))
 
+// the 1 s tick: esp32 runs it from iram, helpers inlined;
+// the 8266 from flash, helpers out of line so only work fetches them
+#ifdef ESP32
+#define CORIUM_TICK_ATTR IRAM_ATTR
+#define CORIUM_TICK_COLD inline
+#else
+#define CORIUM_TICK_ATTR
+#define CORIUM_TICK_COLD __attribute__((noinline))
+#endif
+
 #endif

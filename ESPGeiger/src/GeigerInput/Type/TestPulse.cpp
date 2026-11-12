@@ -25,6 +25,7 @@
 #include "Counter/Counter.h"
 #endif
 #include "TestTimer.h"
+#include "Corium/System/FastPin.h"
 
 static uint32_t s_tx_mask;   // 0 = no TX pin
 static bool s_tx_hi;
@@ -55,7 +56,7 @@ void GeigerTestPulse::begin() {
 #endif
 
   corium::Log::console(PSTR("TestPulse: Test TXPIN: %d"), _tx_pin);
-  if (TestTimer::tx_pin(_tx_pin, s_tx_mask, s_tx_hi)) {
+  if (corium::FastPin::bits(_tx_pin, s_tx_mask, s_tx_hi)) {
     pinMode(_tx_pin, OUTPUT);
   } else if (_tx_pin >= 0) {
     corium::Log::console(PSTR("TestPulse: TXPIN %d can't be driven, no TX"), _tx_pin);
@@ -74,7 +75,7 @@ void GeigerTestPulse::loop() {
   take();
   countTimerPulses();
   if (_retarget) {
-    // between pulses only
+    // Only retarget between pulses, try again next pass if the pin is high
     if (s_high) {
       post();
     } else {
@@ -89,10 +90,10 @@ void GeigerTestPulse::loop() {
   }
 }
 
-// returns ticks to the next
+// returns ticks to the next edge
 uint32_t CORIUM_ISR_ATTR GeigerTestPulse::pulseInterrupt() {
   s_high = !s_high;
-  TestTimer::tx(s_tx_mask, s_tx_hi, s_high);
+  corium::FastPin::write(s_tx_mask, s_tx_hi, s_high);
   uint32_t ticks = 0;
   uint32_t width = _pulse_width_ticks;
   if (!s_high) {

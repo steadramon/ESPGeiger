@@ -45,6 +45,7 @@ void send(Event e);
 // WebPortal::poll does the restart, never mid-write; no portal, no restart
 void requestRestart(uint32_t now, uint32_t delay_ms);
 bool restartDue(uint32_t now);
+bool restartPending();
 
 }
 

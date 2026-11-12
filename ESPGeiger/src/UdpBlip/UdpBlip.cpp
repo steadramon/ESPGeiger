@@ -28,6 +28,7 @@
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
+#include "Corium/Net/IgmpRefresh.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/TokenBucket.h"
 #include "Corium/System/Lifecycle.h"
@@ -40,11 +41,7 @@
 #include <EGEscape.h>
 #include <WiFiUdp.h>
 #include <new>
-#ifdef ESP8266
-#include <ESP8266mDNS.h>
-#else
-#include <ESPmDNS.h>
-#endif
+#include "Corium/Net/Mdns.h"
 
 CORIUM_PSTR(K_GROUP, "group");
 
@@ -145,36 +142,15 @@ bool UdpBlipModule::ensureUdp() {
 void UdpBlipModule::drain() {
   if (!_udp) return;
   for (uint8_t i = 0; i < DRAIN_MAX && _udp->parsePacket() > 0; i++) {
-#ifndef ESP8266
-    _udp->flush();   // esp32 keeps one till flush, the 8266's flush sends
-#endif
+    corium::IgmpRefresh::drop(*_udp);
   }
-}
-
-// both stacks refuse a second add, so a new port goes on the one up
-static bool mdns_move(uint16_t port) {
-#ifdef ESP8266
-  (void)MDNS.removeService(nullptr, "osc", "udp");
-#else
-  // its remove is queued, an add straight after is still refused
-  if (mdns_service_port_set("_osc", "_udp", port) == ESP_OK) return true;
-#endif
-  return MDNS.addService("osc", "udp", port);
-}
-
-static bool mdns_off() {
-#ifdef ESP8266
-  return MDNS.removeService(nullptr, "osc", "udp");
-#else
-  return mdns_service_remove("_osc", "_udp") == ESP_OK;
-#endif
 }
 
 void UdpBlipModule::announce_mdns() {
   // after ArduinoOTA starts mDNS
   if (corium::Uptime::seconds() < 8) return;
   bool move = _mdns_port && _mdns_port != _port;
-  bool ok = move ? mdns_move(_port) : MDNS.addService("osc", "udp", _port);
+  bool ok = move ? CORIUM_MDNS_MOVE("osc", "udp", _port) : MDNS.addService("osc", "udp", _port);
   if (ok) _mdns_port = _port;
   else if (move) return;   // the 8266 holds the old one in its probe, again next pass
   const char* fname = corium::DeviceInfo::friendlyName();
@@ -201,14 +177,7 @@ void UdpBlipModule::onPrefsSaved() {
 void UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
   if (!_udp) return;
   if (!corium::Wifi::connected) return;
-#ifdef ESP8266
-  // esp8266 needs this for IGMP
-  bool ok = corium::Wifi::isMulticast(_group)
-              ? _udp->beginPacketMulticast(_group, _port, corium::Wifi::local_ip)
-              : _udp->beginPacket(_group, _port);
-#else
-  bool ok = _udp->beginPacket(_group, _port);
-#endif
+  bool ok = corium::IgmpRefresh::beginPacket(*_udp, _group, _port);
   if (ok) {
     _udp->write(buf, len);
     ok = _udp->endPacket() != 0;
@@ -361,7 +330,7 @@ void UdpBlipModule::bind(uint32_t now) {
 void UdpBlipModule::loop(unsigned long now) {
   if (_mode == UB_OFF) {
     // the 8266 refuses it in the probe after an add
-    if (_mdns_port && mdns_off()) _mdns_port = 0;
+    if (_mdns_port && CORIUM_MDNS_OFF("osc", "udp")) _mdns_port = 0;
     if (!_mdns_port) corium::Registry::every(this, 0);
     return;
   }

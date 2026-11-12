@@ -29,13 +29,14 @@
 #include "Counter/Counter.h"
 #include "Corium/Module/Module.h"
 #include "Corium/Prefs/Prefs.h"
+#include "Corium/Platform/Chip.h"
 
 #ifndef NEOPIXEL_PIN
 #define NEOPIXEL_PIN 15
 #endif
 
 // esp32 uses RMT channel 0
-#ifdef ESP32
+#if CORIUM_HAS_RMT
   typedef NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> NeoController;
 #else
   typedef NeoPixelBus<NeoGrbFeature, NeoEsp8266BitBangWs2812xMethod> NeoController;

@@ -35,11 +35,12 @@
 #include "Corium/Util/Words.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
+#include "Corium/Platform/Chip.h"
 #include "GeigerInput/GeigerInput.h"
 #if !GEIGER_IS_PULSE(GEIGER_TYPE)
 #error "ESPG_HV needs a pulse build"
 #endif
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
 #ifndef EG_TIMER1
 #error "ESP8266 HV runs on EGTimer1 (EG_TIMER1)"
 #endif
@@ -84,7 +85,7 @@ static const corium::Pref HW_PREF_ITEMS[] PROGMEM = {
   {EG_K_FREQ,  HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, corium::P_UINT, corium::P_ADVANCED},
   {K_DUTY,     HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, GEIGERHW_MAX_DUTY, 0, corium::P_UINT, corium::P_ADVANCED},
 #ifdef ESPG_HV_ADC
-  {EG_K_RATIO, HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    50000, 0, corium::P_INT, corium::P_ADVANCED},
+  {EG_K_RATIO, HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    GEIGERHW_MAX_RATIO, 0, corium::P_INT, corium::P_ADVANCED},
   {K_OFFSET,   HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, corium::P_INT, corium::P_ADVANCED},
   {K_TARGET,   HW_L_TGT, HW_H_TGT, "0", nullptr, 0, GEIGERHW_MAX_V, 0, corium::P_UINT, 0},
   {K_OV_V,     nullptr,  nullptr,  STR(GEIGERHW_OV_V), nullptr, 0, 2000, 0, corium::P_UINT, corium::P_HIDDEN},
@@ -151,7 +152,7 @@ HV::HV() {
 
 void HV::set_freq(int freq) {
   freq = clamp(freq, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ);
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
   force_write();  // loop() posts freq and duty together
 #else
 #ifdef GEIGERHW_MAX_ON_US
@@ -198,7 +199,7 @@ void HV::write_duty() {
   eff_duty = hv_ramp_duty(eff_duty, _ramp, GEIGERHW_RAMP_S);
 #endif
   if (_cur_duty == eff_duty) return;
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
   EGTimer1::pwm_set((uint32_t)_freq, (uint32_t)eff_duty, HV_PWM_MAX);
 #else
   ledcWrite(EGLED_HV_CHANNEL, eff_duty);
@@ -211,7 +212,7 @@ void HV::hold(bool restarting) {
   _held = true;
   write_duty();
   if (!restarting) return;
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
   EGTimer1::pwm_stop();   // leaves the pin low
 #else
   ledcWrite(EGLED_HV_CHANNEL, 0);
@@ -248,7 +249,7 @@ void HV::begin() {
     corium::Registry::every(this, 0);
   } else {
     corium::Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
     pinMode(_pwm_pin, OUTPUT);
     digitalWrite(_pwm_pin, LOW);
     if (!EGTimer1::pwm_begin(_pwm_pin)) {
@@ -275,13 +276,15 @@ void HV::loop(unsigned long now) {
 #ifdef ESPG_HV_ADC
   sample_adc();
 #endif
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
   check_handler();
+#endif
+#if CORIUM_HAS_TIMER1 || defined(ESPG_HV_ADC)
   if (++_pass < LOOP_SLOW) return;
   _pass = 0;
-#ifdef EG_TIMER1_STATS
-  EGTimer1::stats_tick();
 #endif
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1_STATS)
+  EGTimer1::stats_tick();
 #endif
 #ifdef ESPGEIGER_HW32
   check_feedback();   // the sample is last second's duty, ratio 0 doesn't turn this off
@@ -290,6 +293,12 @@ void HV::loop(unsigned long now) {
 #endif
   if (_pwm_pin >= 0) write_duty();
 #ifdef ESPG_HV_ADC
+  adc_second(now);
+#endif
+}
+
+#ifdef ESPG_HV_ADC
+void HV::adc_second(unsigned long now) {
   if (_settle.due(now)) _settle.clear();   // a held compare goes stale at the wrap
   if (_vd_ratio == 0) {
     _adc_n = 0;
@@ -299,10 +308,10 @@ void HV::loop(unsigned long now) {
   int volts = read_hv();
   check_overvoltage(volts);
   if (_hv_target > 0 && !_ov_trip && settled) trim_step();
-#endif
 }
+#endif
 
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
 // stalled handler may leave the pin high
 void HV::check_handler() {
   if (_pwm_pin < 0) return;
@@ -403,7 +412,7 @@ void HV::trim_step() {
 
 void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   if (_pwm_pin >= 0) {
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
     EGTimer1::pwm_set((uint32_t)_freq, 1, HV_PWM_MAX);
 #else
     ledcWrite(EGLED_HV_CHANNEL, 1);
@@ -435,14 +444,14 @@ extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
 <span class="cl" onclick="this.parentElement.style.display='none';">×</span>
 <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
 </div>
-<table><tr><th><label for=freq>Frequency:</label></th><td><input type="range" id="freq" min="0" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" step="100" value="50"><input id="sfreq" class=mt type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" style="width:6em"> Hz</td></tr>
+<table><tr><th><label for=freq>Frequency:</label></th><td><input type="range" id="freq" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" step="100" value="50"><input id="sfreq" class=mt type="number" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" style="width:6em"> Hz</td></tr>
 <tr><th><label for=duty>Duty:</label></th><td><input type="range" id="duty" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" value="50"><input id="sduty" class=mt type="number" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" style="width:6em"> <small id="pduty" data-fs=")HTML" STR(HV_PWM_MAX) R"HTML("></small></td></tr>
-<tr><th><label for=ratio>Ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max="9999"> <small>(voltage-divider scale, 0 = disabled)</small></td></tr>
+<tr><th><label for=ratio>Ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_RATIO) R"HTML("> <small>(voltage-divider scale, 0 = disabled)</small></td></tr>
 <tr><th><label for=tgt>Target:</label></th><td><input id="tgt" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_V) R"HTML("> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
 
 <tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
 )HTML"
-#ifndef ESP8266
+#if !CORIUM_HAS_FEW_SOCKETS
 R"HTML(<script src="/pgjs)HTML" CORIUM_CACHE_BUST R"HTML("></script>
 )HTML"
 #endif
@@ -492,7 +501,7 @@ SB.addEventListener("click",function(){
 )JS";
 #endif
 
-#ifdef ESP8266
+#if CORIUM_HAS_FEW_SOCKETS
 extern const char picographJS[] PROGMEM;
 #endif
 
@@ -545,7 +554,7 @@ static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
-#ifdef ESP8266
+#if CORIUM_HAS_FEW_SOCKETS
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
   res.sendChunk(FPSTR(picographJS));
   res.sendChunk(FPSTR(hvJS));

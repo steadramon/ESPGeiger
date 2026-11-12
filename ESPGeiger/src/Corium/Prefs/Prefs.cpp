@@ -74,7 +74,7 @@ const char corium::K_STATIC_IP[]    PROGMEM = "static_ip";
 const char corium::K_TZ[]           PROGMEM = "tz";
 const char corium::K_WEB_PASS[]     PROGMEM = "web_pass";
 const char corium::H_RBA[] PROGMEM = "Reboot to apply";
-const char corium::P_HOST[] PROGMEM = "[A-Za-z0-9.:_\\-]+";
+const char corium::P_HOST[] PROGMEM = "[A-Za-z0-9._\\-]+";   // a name or an ip, no :port
 
 static const char FMT_LD[] PROGMEM = "%ld";
 static const char FMT_LU[] PROGMEM = "%lu";
@@ -91,6 +91,8 @@ static bool           s_waiting = false;   // commitSoon's write
 static GroupShadow*   s_frozen = nullptr;  // the last commit left it out
 static void         (*s_wake)(uint32_t) = nullptr;
 static uint8_t        s_fails = 0;   // flushes failed in a row
+static bool           s_committing = false;
+static bool           s_nest_said = false;
 static constexpr uint8_t FAILS_MAX = 7;   // hold doubles, 64x tops
 
 static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
@@ -840,10 +842,18 @@ static bool wipe_pass(bool fire_callbacks, bool& busy) {
 
 // a failed commit stays dirty, the next one writes it; a wiped file goes once the rest landed
 bool corium::Prefs::commit(bool fire_callbacks) {
+  // from a callback of one running: its puts go with the next
+  if (s_committing) {
+    if (!s_nest_said) corium::Log::console(PSTR("Prefs: commit inside a commit refused"));
+    s_nest_said = true;
+    return false;
+  }
+  s_committing = true;
   s_restart_pending = s_reboot_put;
   s_frozen = nullptr;
   bool busy = false;
   bool all_ok = land_pass(stage_pass(busy), fire_callbacks, busy) && wipe_pass(fire_callbacks, busy);
+  s_committing = false;
   if (all_ok) {
     s_reboot_put = false;
     s_fails = 0;

@@ -293,7 +293,7 @@ void SSD1306Display::render_saver(unsigned long now) {
   else page_four_matrix();
 }
 
-#ifdef ESP32
+#if OLED_TINY
 void SSD1306Display::render_tiny() {
   if (oled_page < PAGE_MAIN || oled_page > PAGE_SAVER) oled_page = PAGE_MAIN;
   clearBuffer();
@@ -309,7 +309,7 @@ void SSD1306Display::render_tiny() {
 
 // DR_ flags, what to send
 uint8_t SSD1306Display::render(unsigned long now) {
-#ifdef ESP32
+#if OLED_TINY
   if (isTiny()) {
     render_tiny();
     return DR_FULL;
@@ -334,7 +334,7 @@ uint8_t SSD1306Display::render(unsigned long now) {
 }
 
 void SSD1306Display::queue_rows(uint8_t dirty) {
-#ifdef ESP32
+#if OLED_TINY
   // tiny: one go, the row maths runs off the end
   if (isTiny()) {
     sendBuffer();
@@ -406,7 +406,7 @@ static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
   return counts;
 }
 
-#ifdef ESP32
+#if OLED_TINY
 void SSD1306Display::page_tiny() {
   char buf[12];
   format_cpm(buf, sizeof(buf), display.shown_cpm());
@@ -526,7 +526,7 @@ void SSD1306Display::page_tiny_meter() {
   drawDisc(px, py, 2);
 }
 
-#endif  // ESP32 (page_tiny)
+#endif  // OLED_TINY (page_tiny)
 
 void SSD1306Display::page_two_full() {
   clearBuffer();
@@ -637,7 +637,7 @@ void SSD1306Display::setup_driver() {
       u8g2_Setup_ssd1309_i2c_128x64_noname0_f(&_u8g2, U8G2_R0,
           oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
-#ifdef ESP32
+#if OLED_TINY
     case DISP_SSD1306_72X40:
       u8g2_Setup_ssd1306_i2c_72x40_er_f(&_u8g2, U8G2_R0,
           oled_i2c, u8x8_gpio_and_delay_arduino);
@@ -663,7 +663,7 @@ void SSD1306Display::reset_panel() {
     digitalWrite(_pin_rst, HIGH); delay(50);
   }
 
-#ifdef ESP32
+#if OLED_TINY
   // tiny has no RST and can wedge, 9 clocks + STOP
   // no START, other i2c devices stay ok
   if (isTiny()) {
@@ -712,7 +712,7 @@ bool SSD1306Display::take_screen() {
 
 void SSD1306Display::draw_splash() {
   clearBuffer();
-#ifdef ESP32
+#if OLED_TINY
   if (isTiny()) {
     drawXBMP(0, 7, 25, 25, ESPLogoTiny);
     setFont(U8G2_FONT_ARIAL_10);
@@ -726,7 +726,7 @@ void SSD1306Display::draw_splash() {
 static void oled_lifecycle(corium::Lifecycle::Event e) {
   if (e == corium::Lifecycle::OTA_START) oled.showOTABanner();
   if (e == corium::Lifecycle::OTA_FAILED) oled.endOTABanner();
-#ifdef ESP32
+#if OLED_TINY
   // tiny keeps its image over a reset
   if (e == corium::Lifecycle::SHUTDOWN && oled.is_present()) {
     oled.clearBuffer();
@@ -799,7 +799,7 @@ void SSD1306Display::redraw(unsigned long now) {
 
 void SSD1306Display::setupWifi(const char* s) {
   if (!take_screen()) return;
-#ifdef ESP32
+#if OLED_TINY
   if (isTiny()) {
     setFont(U8G2_FONT_ARIAL_10);
     drawStrP(0, 2,  PSTR("Setup WiFi"));
@@ -872,7 +872,7 @@ void SSD1306Display::screen_mode(unsigned long now, bool auto_off) {
   _send_rows_left = 0;
   clearBuffer();
   const uint8_t* font = U8G2_FONT_ARIAL_16;
-#ifdef ESP32
+#if OLED_TINY
   if (isTiny()) font = U8G2_FONT_ARIAL_10;
 #endif
   setFont(font);
@@ -1214,7 +1214,7 @@ void SSD1306Display::endOTABanner() {
 
 bool SSD1306Display::screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) {
   w = 128; h = 64;
-#ifdef ESP32
+#if OLED_TINY
   if (isTiny()) { w = 72; h = 40; }
 #endif
   buf = getBufferPtr();

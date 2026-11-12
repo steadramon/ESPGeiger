@@ -32,8 +32,10 @@
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/TickProfile.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/System/Yield.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
+#include "Corium/Platform/Chip.h"
 #include <EGJson.h>
 #include <EGMqtt.h>
 
@@ -60,11 +62,7 @@ static void note_dropped() {
 MQTT_Client& mqtt = MQTT_Client::getInstance();
 CORIUM_REGISTER_FEATURE(mqtt, FEAT_MQTT)
 
-#ifdef ESP8266
-#define MQTT_PUB_YIELD() optimistic_yield(10000)
-#else
-#define MQTT_PUB_YIELD() yield()
-#endif
+#define MQTT_PUB_YIELD() corium::yieldAfter(10000)
 
 // most each comes out at, cut beyond
 static const size_t STATUS_MAX = 512;
@@ -84,14 +82,14 @@ CORIUM_PSTR(MQ_H_SRV, "Broker address or IP");
 CORIUM_PSTR(MQ_L_USR, "User");
 CORIUM_PSTR(MQ_L_TPC, "Root Topic");
 CORIUM_PSTR(MQ_H_TPC, "Root topic; {id}=chip ID");
-CORIUM_PSTR(MQ_P_TPC, "[A-Za-z0-9_\\/\\{\\}\\-]+");
+CORIUM_PSTR(MQ_P_TPC, "/?[A-Za-z0-9_\\/\\{\\}\\-]+");   // a bare / refused
 CORIUM_PSTR(MQ_H_INT, "Publish interval (sec)");
 #ifdef MQTTAUTODISCOVER
 CORIUM_PSTR(MQ_L_HEN, "HA Autodiscovery");
 CORIUM_PSTR(MQ_H_HEN, "Publish HA autodiscovery");
 CORIUM_PSTR(MQ_L_HTP, "HA Autodiscovery Topic");
 CORIUM_PSTR(MQ_H_HTP, "HA discovery prefix");
-CORIUM_PSTR(MQ_P_HTP, "[A-Za-z0-9_\\/\\-]+");
+CORIUM_PSTR(MQ_P_HTP, "/?[A-Za-z0-9_\\/\\-]+");
 #endif
 
 static const corium::Pref MQTT_PREF_ITEMS[] PROGMEM = {
@@ -430,7 +428,7 @@ bool MQTT_Client::publishStatus()
 #else
   j.uint(PSTR("free_mem"), corium::DeviceInfo::freeHeap());
 #endif
-#ifdef ESP32
+#if CORIUM_HAS_CHIPTEMP
   j.fixed(PSTR("cpu_temp"), corium::DeviceInfo::chipTempC(), 1);
 #endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
@@ -765,7 +763,7 @@ static const HassRow HASS_ROWS[] PROGMEM = {
   {"rssi",     "",   "RSSI",         "dBm",        "wifi",           "",  DC_SIG,   HR_STATUS | HR_DIAG},
   {"uptime",   "ut", "Uptime",       "s",          "clock-outline",  "",  DC_DUR,   HR_STATUS | HR_TOTAL | HR_DIAG},
   {"free_mem", "",   "Free Memory",  "B",          "memory",         "",  DC_NONE,  HR_STATUS | HR_DIAG},
-#ifdef ESP32
+#if CORIUM_HAS_CHIPTEMP
   {"cpu_temp", "",   "CPU Temperature", "°C",      "chip",           "1", DC_TEMP,  HR_STATUS | HR_DIAG},
 #endif
   // binary

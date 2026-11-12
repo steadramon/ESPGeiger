@@ -54,5 +54,7 @@ bool restartDue(uint32_t now) {
   return s_restart.due(now);
 }
 
+bool restartPending() { return s_restart.armed(); }
+
 }
 }  // namespace corium

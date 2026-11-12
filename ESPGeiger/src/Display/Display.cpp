@@ -60,7 +60,7 @@ CORIUM_PSTR(DS_H_OFT, "Display off");
 CORIUM_PSTR(DS_L_FLP, "Flip 180\xC2\xB0");
 #ifndef OLED_PINS_BLOCKED
 CORIUM_PSTR(DS_L_TYP, "Display Type");
-#ifdef ESP32
+#if OLED_TINY
 #ifdef MAX7219_DISPLAY
 CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106|7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
 #else
@@ -68,7 +68,7 @@ CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106");
 #endif
 #else
 #ifdef MAX7219_DISPLAY
-// blanks keep the esp32 numbers, tiny is esp32 only
+// blanks keep the tiny numbers
 CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309|||7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
 #else
 CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");

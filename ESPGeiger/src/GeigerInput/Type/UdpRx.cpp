@@ -131,10 +131,7 @@ void GeigerUdpRx::teardownUdp() {
     delete _udp;
     _udp = nullptr;
   }
-#ifdef ESP8266
-  if (_joined.isSet()) corium::IgmpRefresh::leave(_joined);
-  _joined.clear();
-#endif
+  _joined.end();
 }
 
 bool GeigerUdpRx::ensureUdp() {
@@ -145,15 +142,7 @@ bool GeigerUdpRx::ensureUdp() {
   corium::Wifi::rxSleep(_rx_mode);
   bool ok;
   if (corium::Wifi::isMulticast(_group)) {
-#ifdef ESP8266
-    ok = corium::IgmpRefresh::join(_group);
-    if (ok) {
-      _joined = _group;   // a failed bind leaves it
-      ok = _udp->begin(_port);
-    }
-#else
-    ok = _udp->beginMulticast(_group, _port);
-#endif
+    ok = _joined.begin(*_udp, _group, _port);
     if (ok) corium::Log::console(PSTR("UdpRx: joined %s:%u"),
                           corium::Prefs::getString("counter", EG_K_UDPRX_GROUP), _port);
   } else {

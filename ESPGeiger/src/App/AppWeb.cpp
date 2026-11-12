@@ -22,6 +22,7 @@
 #include <EGHttpServer.h>
 #include "Corium/System/AppHooks.h"
 #include "Corium/WebPortal/WebPortal.h"
+#include "Corium/Platform/Chip.h"
 
 #include "STYLE_CSS.gz.h"
 #include "THEME_JS.gz.h"
@@ -135,7 +136,7 @@ sm(t){if(!(this.av>1))return t;this.hb=this.hb||[];return t.map((v,i)=>{const h=
 })JS";
 
 // /status and /hv load it before their own, esp8266 has it in /js and /hvjs (5 sockets)
-#ifndef ESP8266
+#if !CORIUM_HAS_FEW_SOCKETS
 static void hGraphJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_picographJS
   corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), picographJS_GZ, picographJS_GZ_LEN);
@@ -148,7 +149,7 @@ static void hGraphJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 namespace AppWeb {
 void routes(EGHttpServer& http) {
-#ifndef ESP8266
+#if !CORIUM_HAS_FEW_SOCKETS
   http.on(F("/pgjs"), EGHttpRequest::GET, hGraphJs);
 #endif
 }

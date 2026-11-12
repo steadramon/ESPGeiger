@@ -1413,6 +1413,11 @@ static void ota_begin(size_t expected) {
   s_ota.head_n      = 0;
   s_ota.started     = false;
   s_ota.why         = nullptr;
+  // a save's restart would cut it
+  if (corium::Lifecycle::restartPending()) {
+    ota_fail(PSTR("restarting, try again"));
+    return;
+  }
   // no length given: free space less one 4 KB sector, sector aligned
   uint32_t room = (corium::DeviceInfo::freeSketch() - 0x1000) & 0xFFFFF000;
   if (!Update.begin(s_ota.expected ? s_ota.expected : room)) {

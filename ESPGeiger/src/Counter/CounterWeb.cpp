@@ -33,16 +33,17 @@
 #include "Corium/System/Clock.h"
 #include "Corium/System/Uptime.h"
 #include "Corium/WebPortal/WebPortal.h"
+#include "Corium/Platform/Chip.h"
 #include "HIST_JS.gz.h"
 #include "JS_BUNDLE.gz.h"
-#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
 #include <EGTimer1.h>
 #endif
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 
 extern const char statusJS[]    PROGMEM;
-#ifdef ESP8266
+#if CORIUM_HAS_FEW_SOCKETS
 extern const char picographJS[] PROGMEM;
 #endif
 
@@ -159,7 +160,7 @@ static void cmd_target() { set_target(corium::Console::next()); }
 CORIUM_REGISTER_CMD(target, cmd_target)
 #endif
 
-#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
 // diag only, not a measurement
 static void json_timer1_stats(EGHttpResponse& res) {
   char buf[200];
@@ -182,7 +183,7 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   j.map_begin();
   corium::m_json_display(j, raw);
   j.flush();   // closed by hand
-#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
   if (raw) json_timer1_stats(res);
 #endif
   res.sendChunk(F("}"));
@@ -432,7 +433,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 </form>
 </details>
 )HTML"
-#ifndef ESP8266
+#if !CORIUM_HAS_FEW_SOCKETS
 R"HTML(<script src=/pgjs)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML"
 #endif
@@ -468,7 +469,7 @@ static void hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #else
   res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
-#ifdef ESP8266
+#if CORIUM_HAS_FEW_SOCKETS
   res.sendChunk(FPSTR(picographJS));
 #endif
   res.sendChunk(FPSTR(cmdJS));

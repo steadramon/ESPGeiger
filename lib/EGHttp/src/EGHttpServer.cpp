@@ -217,9 +217,9 @@ static char* eghttp_find_crlf(char* buf, size_t end) {
   return nullptr;
 }
 
-// 0 = incomplete
-static size_t eghttp_find_header_end(const char* buf, size_t len) {
-  for (size_t i = 3; i < len; i++) {
+// 0 = incomplete; from = bytes already looked at, an end there was found then
+static size_t eghttp_find_header_end(const char* buf, size_t len, size_t from) {
+  for (size_t i = from > 3 ? from : 3; i < len; i++) {
     if (buf[i-3] == '\r' && buf[i-2] == '\n' &&
         buf[i-1] == '\r' && buf[i]   == '\n') {
       return i + 1;
@@ -525,6 +525,7 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
     sendStatusAndClose(s, S503, 1);
     return;
   }
+  size_t seen = s->len;
   if (!append_req(s, data, len)) {
     Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
                     (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
@@ -532,7 +533,7 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
     return;
   }
 
-  size_t headerEnd = eghttp_find_header_end(s->buf, s->len);
+  size_t headerEnd = eghttp_find_header_end(s->buf, s->len, seen);
   if (!headerEnd) return;
   s->headerEnd = headerEnd;
 
@@ -746,21 +747,17 @@ bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
   return true;
 }
 
-static bool at_line_end(char c) {
-  return c == '\r' || c == '\n' || c == '\0';
-}
-
 bool EGHttpServer::authorized(const Slot* s) const {
   const char* p = eghttp_find_header(s->buf, s->headerEnd, PSTR("Authorization:"));
   if (!p) return false;
   const char* hend = s->buf + s->headerEnd;
   while (p < hend && (*p == ' ' || *p == '\t')) p++;
   size_t vlen = strlen(_authValue);
-  // the scheme any case, the token exact
+  // the scheme any case, the token exact, then the CR; nothing past the padding
   return (size_t)(hend - p) > 6 + vlen &&
          strncasecmp_P(p, PSTR("Basic "), 6) == 0 &&
          strncmp(p + 6, _authValue, vlen) == 0 &&
-         at_line_end(p[6 + vlen]);
+         p[6 + vlen] == '\r';
 }
 
 // a value arg() can't hold reads as absent, so none get past

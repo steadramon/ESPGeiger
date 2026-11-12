@@ -16,7 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-// keep host-buildable, web stuff in GRNGWeb.cpp
+// Keep this host-buildable, web stuff lives in GRNGWeb.cpp
 
 #include "GRNG.h"
 #include "Corium/System/DeviceInfo.h"
@@ -27,38 +27,23 @@
 static uint32_t s_pool[8] = {0};
 static uint8_t s_mix_idx = 0;
 
-// own hasher, runs inside uECC_sign
+// Its own hasher, since this can run inside uECC_sign
 static Sha256Class s_sha;
-
-// survives warm reset
-#ifdef NATIVE_TEST
-#  define EG_NOINIT
-#else
-#  define EG_NOINIT __attribute__((section(".noinit")))
-#endif
-
-#ifndef ESP8266
-static uint8_t s_boot_sram[256] EG_NOINIT;
-#endif
 
 GRNG::GRNG() {
 };
 
-// seed: ram left from before the boot, then the cycle count
+// Seeded from RAM left over from before the boot, then the cycle count
 void GRNG::begin() {
   s_sha.init();
-#ifdef ESP8266
-  s_sha.write((const uint8_t*)(0x3FFFC000 - 0x800), 0x800);
-#else
-  s_sha.write(s_boot_sram, sizeof(s_boot_sram));
-#endif
+  size_t n;
+  const uint8_t* ram = corium::DeviceInfo::bootRam(n);
+  s_sha.write(ram, n);
   uint32_t cc = corium::DeviceInfo::cycles();
   s_sha.write((const uint8_t*)&cc, sizeof(cc));
   uint8_t* h = s_sha.result();
   for (uint8_t i = 0; i < 8; i++) s_pool[i] ^= ((uint32_t*)h)[i];
-#ifndef ESP8266
-  memcpy(s_boot_sram, h, 32);
-#endif
+  corium::DeviceInfo::bootRamSet(h, 32);
   for (uint8_t i = 0; i < 8; i++) mix(corium::DeviceInfo::hwRandom());
   stir();
 }
@@ -75,7 +60,7 @@ uint32_t GRNG::stir() {
 }
 
 static constexpr uint8_t EXTRACT_HW_WORDS = 4;
-// 55 bytes a block, more costs two
+// One SHA block holds 55 bytes, any more costs two
 static_assert(sizeof(s_pool) + sizeof(uint32_t) + EXTRACT_HW_WORDS * sizeof(uint32_t) <= 55,
               "extract() input past one SHA-256 block");
 
@@ -97,7 +82,7 @@ void GRNG::extract(uint8_t* out, size_t n) {
   }
 }
 
-// no modulo bias, drops bytes past the last whole set
+// No modulo bias, bytes past the last whole multiple of the set length are dropped
 void GRNG::pick(char* out, size_t n, PGM_P set, uint8_t set_len) {
   const uint16_t top = 256 - 256 % set_len;
   uint8_t buf[32];

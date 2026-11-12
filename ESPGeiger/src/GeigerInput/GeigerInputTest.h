@@ -22,6 +22,7 @@
 #include <Arduino.h>
 #include <atomic>
 #include "GeigerInput.h"
+#include "Corium/Platform/Chip.h"
 
 // ms per target cpm step
 #ifndef GEIGER_TESTPULSE_ADJUSTTIME
@@ -33,7 +34,7 @@
 #define GEIGER_PULSE_WIDTH 500
 #endif
 
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
 // 3.2 us units, EGTimer1 takes them << 8
 #define GEIGER_TEST_TIMER_DIV 312500
 #define GEIGER_TEST_TICK_SHIFT 8

@@ -21,33 +21,11 @@
 
 #include <Arduino.h>
 
-// fn is isr, returns ticks to next, 0 stops
+// fn runs in the isr and returns ticks to the next, 0 stops
 namespace TestTimer {
   void start(uint32_t (*fn)(), uint32_t first);
   void stop();
   void restart(uint32_t first);
-  // false: no fast write for this pin
-  bool tx_pin(int pin, uint32_t& mask, bool& hi);
-
-  // hi = pins 32 and up
-  static inline __attribute__((always_inline)) void tx(uint32_t mask, bool hi, bool high) {
-#ifdef ESP8266
-    (void)hi;
-    if (high) GPOS = mask;
-    else      GPOC = mask;
-#else
-#ifdef GPIO_OUT1_W1TS_REG
-    if (hi) {
-      REG_WRITE(high ? GPIO_OUT1_W1TS_REG : GPIO_OUT1_W1TC_REG, mask);
-      return;
-    }
-#else
-    (void)hi;
-#endif
-    // C3 wraps out_w1ts in a union
-    REG_WRITE(high ? GPIO_OUT_W1TS_REG : GPIO_OUT_W1TC_REG, mask);
-#endif
-  }
 }
 
 #endif
