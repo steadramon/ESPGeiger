@@ -33,7 +33,6 @@
 #include "Corium/System/TickProfile.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Yield.h"
-#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/Platform/Chip.h"
 #include <EGJson.h>
@@ -114,8 +113,11 @@ static const corium::PrefGroup MQTT_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* MQTT_Client::prefsGroup() { return &MQTT_PREF_GROUP; }
 
+// a server set, as the /param badge
+static bool mqtt_on() { return corium::Prefs::groupEnabled(&MQTT_PREF_GROUP); }
+
 size_t MQTT_Client::statusJson(char* buf, size_t cap, unsigned long /*now*/) {
-  if (corium::Prefs::getString("mqtt", corium::K_SERVER)[0] == '\0') return 0;
+  if (!mqtt_on()) return 0;
   return writeStatusJson(buf, cap, PSTR("mqtt"), lastOk && s_mq.connected(), lastAttempt);
 }
 
@@ -214,7 +216,7 @@ void MQTT_Client::onMqttDisconnect(int8_t err) {
 }
 
 void MQTT_Client::setInterval(int interval) {
-  _ping_every = clamp(interval, MQTT_MIN_TIME, MQTT_MAX_TIME);
+  _ping_every = (uint16_t)interval;
 }
 
 int MQTT_Client::getInterval() {
@@ -547,7 +549,6 @@ static void mq_ack(void* arg, const EGMqtt::Ack& a) {
 void MQTT_Client::applyIntervalPref()
 {
   int secs = (int)corium::Prefs::getUInt("mqtt", EG_K_INTERVAL);
-  if (secs <= 0) secs = MQTT_INTERVAL;
   if (secs != getInterval()) {
     setInterval(secs);
     corium::Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
@@ -641,12 +642,12 @@ void MQTT_Client::reconnect()
   if (in_backoff(_tried_ms, now, (uint8_t)_tries)) return;
   _tried_ms = now;
 
-  const char* server = corium::Prefs::getString("mqtt", corium::K_SERVER);
-  if (server[0] == '\0') {
+  if (!mqtt_on()) {
     _enabled = false;
     s_mq.stop();
     return;
   }
+  const char* server = corium::Prefs::getString("mqtt", corium::K_SERVER);
   int port = mqtt_port();
 
   // every time, picks up a topic change
@@ -1001,8 +1002,7 @@ void MQTT_Client::onMqttMessage(const char* topic, const char* payload, size_t l
 
 void MQTT_Client::begin()
 {
-  const char* server = corium::Prefs::getString("mqtt", corium::K_SERVER);
-  if (server[0] == '\0') {
+  if (!mqtt_on()) {
     _enabled = false;
     s_mq.stop();
     corium::Registry::every(this, 0);

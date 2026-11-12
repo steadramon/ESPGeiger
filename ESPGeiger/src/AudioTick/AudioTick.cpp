@@ -168,7 +168,7 @@ static const uint8_t MORSE_DIGIT[10][5] = {
 };
 
 
-CORIUM_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier. Reboot to apply");
+CORIUM_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier.");
 CORIUM_PSTR(TK_L_FREQ,"Tone Hz");
 CORIUM_PSTR(TK_H_FREQ,"Click centre frequency (300-6000 Hz)");
 CORIUM_PSTR(TK_L_DEC, "Decay ms");
@@ -195,9 +195,9 @@ static const corium::Pref TICK_PREF_ITEMS[] PROGMEM = {
   {K_PEAK,      TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, corium::P_UINT, corium::P_ADVANCED},
   {K_CHIME,     TK_L_CHM,  nullptr,   "1",    TK_O_CHM, 0,  8,    0, corium::P_ENUM, 0},
 #ifndef AUDIO_TICK_PINS_BLOCKED
-  {K_BCLK,      TK_L_BCLK, corium::H_RBA,  STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-  {K_WS,        TK_L_WS,   corium::H_RBA,  STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-  {K_DOUT,      TK_L_DOUT, corium::H_RBA,  STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_BCLK,      TK_L_BCLK, nullptr,  STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_WS,        TK_L_WS,   nullptr,  STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_DOUT,      TK_L_DOUT, nullptr,  STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
 };
 

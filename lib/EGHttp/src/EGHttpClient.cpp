@@ -680,7 +680,7 @@ static const char R_500[] PROGMEM = "Internal Server Error";
 static const char R_502[] PROGMEM = "Bad Gateway";
 static const char R_503[] PROGMEM = "Service Unavailable";
 static const char R_504[] PROGMEM = "Gateway Timeout";
-static const char R_3XX[] PROGMEM = "Redirect";
+static const char R_3XX[] PROGMEM = "Site moved (https?), can't follow";
 static const char R_4XX[] PROGMEM = "Client Error";
 static const char R_5XX[] PROGMEM = "Server Error";
 

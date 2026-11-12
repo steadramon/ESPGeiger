@@ -56,10 +56,6 @@ static const corium::PrefGroup TS_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* Thingspeak::prefsGroup() { return &TS_PREF_GROUP; }
 
-void Thingspeak::onPrefsLoaded() {
-  setEnabled(corium::Prefs::getBool("thingspeak", EG_K_SEND));
-}
-
 // legacy import
 static const corium::LegacyAlias TS_LEGACY[] PROGMEM = {
   {"tsSend",       "send"},
@@ -75,15 +71,12 @@ Thingspeak::Thingspeak() {
 // entry number, "0" = refused
 bool Thingspeak::interpret(const char* r)
 {
-  bool digits = r[0] != '\0';
-  for (const char* p = r; *p; p++) {
-    if (*p < '0' || *p > '9') digits = false;
-  }
-  if (digits && strcmp_P(r, PSTR("0")) != 0) {
+  uint64_t entry;
+  if (parseU64(r, &entry) && entry != 0) {
     corium::Log::debug(PSTR("Thingspeak: Upload OK"));
     return true;
   }
-  corium::Log::console(PSTR("Thingspeak: Error!"));
+  corium::Log::console(PSTR("Thingspeak: Refused"));
   return false;
 }
 
@@ -103,12 +96,12 @@ bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
 
   corium::Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
 
-  int cpm = CounterMaths::to_int(corium::m_f(M_CPM));
+  int cpm = CounterMaths::to_int(corium::m_f(M_CPM_ST));
   int cpm5 = CounterMaths::to_int(corium::m_f(M_CPM5));
   int cpm15 = CounterMaths::to_int(corium::m_f(M_CPM15));
 
   char usv[20];
-  format_f(usv, sizeof(usv), corium::m_f(M_USV), 5);
+  format_f(usv, sizeof(usv), corium::m_f(M_USV_ST), 5);
   char key[3 * TS_KEY_MAX + 1];
   egesc_url(key, sizeof(key), raw_key);
   int n0 = snprintf_P(url, cap, TS_URI, key, cpm, usv, cpm5, cpm15);

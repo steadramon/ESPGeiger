@@ -29,7 +29,6 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
-#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "App/FeatureBits.h"
@@ -102,7 +101,7 @@ static const corium::PrefGroup SDCARD_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* SDCard::prefsGroup() { return &SDCARD_PREF_GROUP; }
 
 void SDCard::onPrefsLoaded() {
-  _sync_min = (uint8_t)clamp<uint32_t>(corium::Prefs::getUInt("sdcard", K_SYNC_MIN), 1, 5);
+  _sync_min = (uint8_t)corium::Prefs::getUInt("sdcard", K_SYNC_MIN);
 }
 
 // FAT date high, time low; FAT seconds are 2 s units
@@ -151,7 +150,7 @@ void SDCard::begin()
   bool ok = sd->begin(GEIGER_SDCARD_CS);
   corium::DeviceInfo::wdtResume();
   if (!ok) {
-    corium::Log::console(PSTR("SDCard: Init failed ... Please check wiring or insert a card."));
+    corium::Log::console(PSTR("SDCard: Init failed, check card or wiring"));
     if (sd->sdErrorCode() != SD_CARD_ERROR_CMD0) fault();   // CMD0 = no card
     delete sd;
     sd = nullptr;

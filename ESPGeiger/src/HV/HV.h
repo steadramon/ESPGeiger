@@ -85,7 +85,7 @@
 #ifdef ESPGEIGER_HW
 #define GEIGERHW_MAX_FREQ 9000   // bistable above ~10 kHz
 #elif defined(ESP32)
-#define GEIGERHW_MAX_FREQ 80000
+#define GEIGERHW_MAX_FREQ 78000  // ledc 80 MHz / 1024
 #else
 #define GEIGERHW_MAX_FREQ 40000  // analogWriteFreq max
 #endif
@@ -114,6 +114,7 @@
 #define HV_PWM_BITS 10
 #define HV_PWM_MAX  1023
 static_assert(HV_PWM_MAX == (1 << HV_PWM_BITS) - 1, "HV_PWM_MAX is the top of HV_PWM_BITS");
+#define HV_MIN_OFF_US 4   // low every period, as EGTimer1
 
 // coil saturates past this
 #ifndef GEIGERHW_MAX_DUTY
@@ -170,6 +171,7 @@ class HV : public corium::Module {
       void begin() override;
       const corium::PrefGroup* prefsGroup() override;
       void onPrefsLoaded() override;
+      void onPrefsSaved() override;
       void registerRoutes(EGHttpServer& http) override;
       const corium::MenuEntry* menuEntries() override;
 #ifdef ESPG_HV_ADC
@@ -177,7 +179,8 @@ class HV : public corium::Module {
 #endif
       corium::LegacyRows legacyAliases() override;
       const char* legacyFile() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
-      void set_freq(int freq);
+      // false = the PWM can't run it, HV off
+      bool set_freq(int freq);
       int get_freq() {
         return _freq;
       }
@@ -186,13 +189,13 @@ class HV : public corium::Module {
       int get_duty() {
         return _duty;
       }
-      // GEIGERHW_MAX_DUTY, or less if MAX_ON_US caps it at this freq
+      // GEIGERHW_MAX_DUTY, or less at this freq: MAX_ON_US, ledc's off time
       int max_duty() const;
       void set_vd_ratio(int ratio) {
         _vd_ratio = clamp(ratio, 0, GEIGERHW_MAX_RATIO);   // 0 = ADC off
       }
       void set_vd_offset(int offset) {
-        _vd_offset = clamp(offset, -100, 100);
+        _vd_offset = offset;
       }
       int get_vd_ratio() {
         return _vd_ratio;
@@ -201,8 +204,8 @@ class HV : public corium::Module {
         return _vd_offset;
       }
       bool saveconfig();
-      // Pin low first, never old duty at new freq
-      void apply_freq_duty_safe(int new_freq, int new_duty);
+      // Pin low first, never old duty at new freq; false as set_freq
+      bool apply_freq_duty_safe(int new_freq, int new_duty);
       void set_pwm_pin(int pin);   // reboot to apply
       int get_pwm_pin() const { return _pwm_pin; }
       void set_hv_target(uint16_t v) { _hv_target = v; }
@@ -236,11 +239,14 @@ class HV : public corium::Module {
       EGRingAvg<uint16_t, HV_TRIM_N> hvReading;
     private:
       void check_handler();
+      void pwm_off(int freq);
       void sample_adc();
       void adc_second(unsigned long now);
       int read_hv();
       void check_overvoltage(int volts);
       void trim_step();
+      void stash_trim();
+      void restore_trim();
 #ifdef ESPGEIGER_HW32
       void check_feedback();
       void note_low();

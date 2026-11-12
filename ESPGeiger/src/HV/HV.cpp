@@ -35,6 +35,7 @@
 #include "Corium/Util/Words.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
+#include "Corium/System/RtcMap.h"
 #include "Corium/Platform/Chip.h"
 #include "GeigerInput/GeigerInput.h"
 #if !GEIGER_IS_PULSE(GEIGER_TYPE)
@@ -135,6 +136,14 @@ void HV::onPrefsLoaded() {
 #endif
 }
 
+// Config or console: a new freq or duty goes as /hvset's
+void HV::onPrefsSaved() {
+  int f = (int)corium::Prefs::getUInt("espghw", EG_K_FREQ);
+  int d = (int)corium::Prefs::getUInt("espghw", K_DUTY);
+  if ((f != _freq || d != _duty) && !apply_freq_duty_safe(f, d)) return;
+  onPrefsLoaded();
+}
+
 // legacy import
 static const corium::LegacyAlias HW_LEGACY[] PROGMEM = {
   {"freq",   "freq"},
@@ -150,7 +159,7 @@ corium::LegacyRows HV::legacyAliases() { return HW_LEGACY; }
 HV::HV() {
 }
 
-void HV::set_freq(int freq) {
+bool HV::set_freq(int freq) {
   freq = clamp(freq, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ);
 #if CORIUM_HAS_TIMER1
   force_write();  // loop() posts freq and duty together
@@ -163,18 +172,42 @@ void HV::set_freq(int freq) {
     _cur_duty = cap;
   }
 #endif
-  ledcChangeFrequency(EGLED_HV_CHANNEL, freq, HV_PWM_BITS);
+  // 0 = refused, the old timer runs on
+  if (!ledcChangeFrequency(EGLED_HV_CHANNEL, freq, HV_PWM_BITS)) {
+    pwm_off(freq);
+    return false;
+  }
 #endif
   _freq = freq;
+  return true;
 }
 
+#if !CORIUM_HAS_TIMER1
+// as a failed pwm_begin
+void HV::pwm_off(int freq) {
+  corium::Log::console(PSTR("HV: PWM can't run %d Hz - HV inactive"), freq);
+  if (_pwm_pin >= 0) {
+    ledcDetachPin(_pwm_pin);
+    pinMode(_pwm_pin, OUTPUT);
+    digitalWrite(_pwm_pin, LOW);
+  }
+  _pwm_pin = -1;
+  corium::Registry::every(this, 0);
+}
+#endif
+
 int HV::max_duty() const {
+  int top = GEIGERHW_MAX_DUTY;
 #ifdef GEIGERHW_MAX_ON_US
   int cap = hv_duty_cap(_freq, GEIGERHW_MAX_ON_US);
-  return cap < GEIGERHW_MAX_DUTY ? cap : GEIGERHW_MAX_DUTY;
-#else
-  return GEIGERHW_MAX_DUTY;
+  if (cap < top) top = cap;
 #endif
+#if !CORIUM_HAS_TIMER1
+  // ledc writes 1023 as full on, EGTimer1 keeps its own off time
+  int low = HV_PWM_MAX - 1 - hv_duty_cap(_freq, HV_MIN_OFF_US);
+  if (low < top) top = low;
+#endif
+  return top;
 }
 
 void HV::set_duty(int duty) {
@@ -258,8 +291,8 @@ void HV::begin() {
       corium::Registry::every(this, 0);
     }
 #else
-    ledcSetup(EGLED_HV_CHANNEL, _freq, HV_PWM_BITS);
-    ledcAttachPin(_pwm_pin, EGLED_HV_CHANNEL);
+    if (ledcSetup(EGLED_HV_CHANNEL, _freq, HV_PWM_BITS)) ledcAttachPin(_pwm_pin, EGLED_HV_CHANNEL);
+    else pwm_off(_freq);
 #endif
     if (_pwm_pin >= 0) {
       corium::Lifecycle::on(hv_lifecycle);
@@ -269,6 +302,7 @@ void HV::begin() {
 #ifdef ESPG_HV_ADC
   hvReading.begin();
   _settle.set(corium::fastMillis() + (unsigned long)_boot_s * 1000UL);
+  restore_trim();
 #endif
 }
 
@@ -406,11 +440,32 @@ void HV::trim_step() {
   else if (err < -band && _duty_trim > -_trim_max) _duty_trim--;
   if (_duty_trim != old_trim) {
     corium::Log::console(PSTR("HV: trim %d -> %d (err %d, band %d)"), old_trim, _duty_trim, err, band);
+    stash_trim();
   }
+}
+
+// the trim over a restart, not a power cut
+namespace {
+constexpr uint32_t TRIM_RTC_MAGIC = 0xCAFE7121;  // bump on layout change
+struct TrimRtc { uint32_t magic; uint32_t freq; uint16_t duty, target, ratio; int8_t trim; uint8_t pad; };
+CORIUM_RTC_SLOT(TrimSlot, TrimRtc, corium::RtcMap::APP2_AT, corium::RtcMap::APP2_WORDS);
+}
+
+void HV::stash_trim() {
+  TrimSlot::write(TrimRtc{TRIM_RTC_MAGIC, (uint32_t)_freq, (uint16_t)_duty, _hv_target,
+                          (uint16_t)_vd_ratio, _duty_trim, 0});
+}
+
+// learned at this duty, freq, target and ratio only
+void HV::restore_trim() {
+  TrimRtc r;
+  if (!TrimSlot::read(r) || r.magic != TRIM_RTC_MAGIC) return;
+  if (r.freq != (uint32_t)_freq || r.duty != _duty || r.target != _hv_target || r.ratio != _vd_ratio) return;
+  _duty_trim = (int8_t)clamp((int)r.trim, -(int)_trim_max, (int)_trim_max);
 }
 #endif
 
-void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
+bool HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   if (_pwm_pin >= 0) {
 #if CORIUM_HAS_TIMER1
     EGTimer1::pwm_set((uint32_t)_freq, 1, HV_PWM_MAX);
@@ -419,11 +474,13 @@ void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
 #endif
     delay(20);
   }
-  set_freq(new_freq);
+  if (!set_freq(new_freq)) return false;
   set_duty(new_duty);
   force_write();
   _duty_trim = 0;
+  if (_pwm_pin >= 0) write_duty();   // not at the next second
   _settle.set(corium::fastMillis() + (unsigned long)_settle_s * 1000UL);
+  return true;
 }
 
 // a refused one says not saved, the rest still go
@@ -524,7 +581,10 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (new_duty >= 0 || new_freq >= 0) {
     int f = new_freq >= 0 ? new_freq : hv.get_freq();
     int d = new_duty >= 0 ? new_duty : hv.get_duty();
-    hv.apply_freq_duty_safe(f, d);
+    if (!hv.apply_freq_duty_safe(f, d)) {
+      res.send(400, FPSTR(HTTP_CT_PLAIN), F("Not saved: the PWM can't run that frequency, HV off"));
+      return;
+    }
     changed = true;
   }
   if (new_ratio >= 0)  { hv.set_vd_ratio(new_ratio); changed = true; }

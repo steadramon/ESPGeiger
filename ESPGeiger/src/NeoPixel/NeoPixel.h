@@ -59,7 +59,7 @@ class NeoPixel : public corium::Module {
     static constexpr uint16_t FAST_LOOP_MS = 10;
     void setup();
     void blink(uint16_t ms);   // lit for ms
-    void setBrightness(int input);   // 0-100 %
+    void setBrightness(int pct);
     RgbColor color(uint8_t r, uint8_t g, uint8_t b);
     const uint16_t PixelCount = 1;
     int8_t _pin = NEOPIXEL_PIN;   // -1 = none

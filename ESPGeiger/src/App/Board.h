@@ -42,7 +42,7 @@
 #include <stdint.h>
 #include "Corium/System/PinSafety.h"
 #include "GeigerInput/GeigerInput.h"
-#ifdef ESPGEIGER_HW
+#if defined(ESPGEIGER_HW) || defined(ESPG_HV_ADC)
 #include "HV/HV.h"
 #endif
 #if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED)
@@ -86,7 +86,7 @@ namespace Board {
 #ifdef ESPGEIGER_HW
     {P_HV, GEIGER_PWMPIN, corium::PinSafety::USE_OUT},
 #endif
-#ifdef ESPGEIGER_HW32
+#if defined(ESPG_HV_ADC) && !defined(ESP8266)
     {P_HVFB, GEIGER_VFEEDBACKPIN, corium::PinSafety::USE_IN},   // esp8266 A0 isn't a gpio
 #endif
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)

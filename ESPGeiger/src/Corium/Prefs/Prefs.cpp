@@ -32,7 +32,6 @@
 #include <EGEscape.h>
 #include <EGStr.h>
 #include "Corium/System/Fs.h"
-#include <errno.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -214,17 +213,13 @@ int valid_int(const corium::Pref* p, const char* value, char* out, size_t outsz)
   return snprintf_P(out, outsz, FMT_LD, (long)v);
 }
 
-// long is 64 bit on host
+// digits only
 int valid_uint(const corium::Pref* p, const char* value, char* out, size_t outsz) {
-  // strtoul takes "-1"
-  if (strchr(value, '-')) return -1;
-  char* end;
-  errno = 0;
-  unsigned long v = strtoul(value, &end, 10);
-  if (*end != '\0' || end == value || errno == ERANGE || v > UINT32_MAX) return -1;
+  uint64_t v;
+  if (!parseU64(value, &v) || v > UINT32_MAX) return -1;
   // unsigned, no wrap above INT32_MAX
   if (ranged(p) && (v < (uint32_t)p->minI || v > (uint32_t)p->maxI)) return -1;
-  return snprintf_P(out, outsz, FMT_LU, v);
+  return snprintf_P(out, outsz, FMT_LU, (unsigned long)v);
 }
 
 static constexpr int JUNK = -2;   // never meant anything on this build
@@ -602,7 +597,7 @@ void corium::Prefs::begin() {
   uint8_t n = corium::Registry::count();
   for (uint8_t i = 0; i < n && s_group_count < CORIUM_PREFS_MAX_GROUPS; i++) {
     corium::Module* m = corium::Registry::get(i);
-    const corium::PrefGroup* g = m ? m->prefsGroup() : nullptr;
+    const corium::PrefGroup* g = m->prefsGroup();
     if (g) add_group(m, g);
   }
 
@@ -849,7 +844,7 @@ bool corium::Prefs::commit(bool fire_callbacks) {
     return false;
   }
   s_committing = true;
-  s_restart_pending = s_reboot_put;
+  s_restart_pending |= s_reboot_put;   // till the reboot
   s_frozen = nullptr;
   bool busy = false;
   bool all_ok = land_pass(stage_pass(busy), fire_callbacks, busy) && wipe_pass(fire_callbacks, busy);
@@ -866,7 +861,7 @@ bool corium::Prefs::commit(bool fire_callbacks) {
 // callbacks now as commit's, the write waits for flush()
 bool corium::Prefs::commitSoon(uint32_t now_ms) {
   if (!s_wake) return commit();
-  s_restart_pending = s_reboot_put;
+  s_restart_pending |= s_reboot_put;
   s_frozen = nullptr;
   bool held = false;
   for (size_t i = 0; i < s_group_count; i++) {

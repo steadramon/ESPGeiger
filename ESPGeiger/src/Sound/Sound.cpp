@@ -162,7 +162,7 @@ void Sound::load() {
   _bad = 0;
   for (uint8_t i = 0; i < COUNT; i++) {
     const char* v = corium::Prefs::getString("sound", DEFS[i].key);
-    if (!v || !*v || is_off(v)) continue;
+    if (!*v || is_off(v)) continue;
     uint16_t at = 0;
     uint8_t e = EGTune::check(v, strlen(v), &at);
     if (!e) continue;

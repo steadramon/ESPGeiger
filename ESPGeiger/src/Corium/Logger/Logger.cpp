@@ -48,6 +48,10 @@ void corium::Log::vlog(LoggingLevels level, bool timed, const char* fmt, va_list
   if (level > _level) return;
   LOG_LOCK();
   vsnprintf_P(s_line, sizeof(s_line), fmt, arg);
+  // peer bytes (an SSID) can't split the ring or fake a line
+  for (char* c = s_line; *c; c++) {
+    if ((uint8_t)*c < ' ' || *c == 0x7f) *c = '?';  // DEL
+  }
   AddLog(level, s_line, timed);
   LOG_UNLOCK();
 }
@@ -118,8 +122,6 @@ void corium::Log::AddLog(corium::Log::LoggingLevels level, const char* line, boo
     if (stamp[0]) Serial.print(stamp);
     Serial.println(line);
   }
-
-  if (corium::Wifi::disabled) return;
 
   // Delimited, zero-terminated buffer of log lines.
   // Each entry has this format: [index][log data]['\1']

@@ -36,7 +36,7 @@ CORIUM_REGISTER_MODULE(sysprefs)
 CORIUM_PSTR(SY_L_NAM, "Friendly name");
 CORIUM_PSTR(SY_H_NAM, "Optional label for web UI");
 CORIUM_PSTR(SY_L_WPW, "Web password");
-CORIUM_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin), 8 or more characters. Empty = no auth. Reboot to apply.");
+CORIUM_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin), 8 or more characters. Empty = no auth.");
 
 static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    CORIUM_NAME_MAX, corium::P_STRING, 0},

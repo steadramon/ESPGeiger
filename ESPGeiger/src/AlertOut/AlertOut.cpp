@@ -32,7 +32,7 @@
 AlertOut alertout;
 CORIUM_REGISTER_MODULE(alertout)
 
-CORIUM_PSTR(AO_H_PIN,  "Alert output pin (-1 = disabled). Reboot to apply.");
+CORIUM_PSTR(AO_H_PIN,  "Alert output pin (-1 = disabled).");
 CORIUM_PSTR(AO_O_MOD,  "Steady level|1 Hz pulse");
 
 static const corium::Pref ALERT_PREF_ITEMS[] PROGMEM = {

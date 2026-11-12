@@ -884,11 +884,9 @@ static bool save_settings(EGHttpRequest& req, bool& wrote) {
 
 static void send_station(EGHttpResponse& res) {
   if (webapi.getStationId() != 0) {
-    char status[160];
-    int n = snprintf_P(status, sizeof(status),
+    corium::WebPortal::sendf(res,
       PSTR("<p>Station: <a href='" WEBAPI_STATION_URL "' target=_blank>#%u</a></p>"),
       webapi.getStationId(), webapi.getStationId());
-    if (n > 0 && (size_t)n < sizeof(status)) res.sendChunk(status, (size_t)n);
   } else {
     res.sendChunk(F(
       "<p>Station: not yet registered (handshake pending) "
@@ -964,14 +962,13 @@ static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::Log::console(PSTR("WebAPI: Resetting api.key"));
   bool gone = forget_key();
   corium::WebPortal::beginPage(res, F("Key Reset"));
-  if (gone) {
-    res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
-    corium::WebPortal::sendRestartCountdown(res);
-    corium::WebPortal::requestRestart();
-  } else {
+  if (!gone) {
     corium::WebPortal::sendNotSaved(res);
+    corium::WebPortal::endPage(res);
+    return;
   }
-  corium::WebPortal::endPage(res);
+  res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
+  corium::WebPortal::endRestartPage(res);
 }
 
 static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {

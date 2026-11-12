@@ -68,17 +68,13 @@ static const char* geiger_type_name() {
 void corium::AppHooks::aboutJson(EGHttpResponse& res) {
   char model[6 * CORIUM_NAME_MAX + 1];  // escaped worst case
   egesc_json(model, sizeof(model), Tube::model());
-  char buf[6 * CORIUM_NAME_MAX + 80];
-  int n = snprintf_P(buf, sizeof(buf),
+  corium::WebPortal::sendf(res,
     PSTR("\"g_mod\":\"%s\",\"g_type\":\"%s\",\"g_test\":%s,\"g_pcnt\":%s,\"fl\":%u,"),
     model,
     geiger_type_name(),
     GEIGER_IS_TEST(GEIGER_TYPE) ? W_TRUE : W_FALSE,
     gcounter.has_pcnt()         ? W_TRUE : W_FALSE,
     (unsigned)Features::flags());
-  size_t len = 0;
-  advancePos(len, n, sizeof(buf));
-  if (len) res.sendChunk(buf, len);
 }
 
 void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {
@@ -93,19 +89,19 @@ void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {
     cumul += hist[b];
     if (b < nb - 1) {
       uint32_t ub_us = 64UL << b;
-      corium::WebPortal::metricsLine(res,
+      corium::WebPortal::sendf(res,
         PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",le=\"%lu.%06lu\"} %lu\n"),
         cid,
         (unsigned long)(ub_us / 1000000UL),
         (unsigned long)(ub_us % 1000000UL),
         (unsigned long)cumul);
     } else {
-      corium::WebPortal::metricsLine(res,
+      corium::WebPortal::sendf(res,
         PSTR("geiger_pulse_interval_seconds_bucket{chipid=\"%s\",le=\"+Inf\"} %lu\n"),
         cid, (unsigned long)cumul);
     }
   }
-  corium::WebPortal::metricsLine(res,
+  corium::WebPortal::sendf(res,
     PSTR("geiger_pulse_interval_seconds_count{chipid=\"%s\"} %lu\n"),
     cid, (unsigned long)cumul);
 }

@@ -41,6 +41,7 @@ class HttpPoster : public Sender {
     static constexpr uint16_t LOOP_MS = 500;
     void loop(unsigned long now) override;
     size_t statusJson(char* buf, size_t cap, unsigned long now) override;
+    void onPrefsLoaded() override;   // on = the group's enableKey
     void onPrefsSaved() override;
     HttpDriver request{this};
     // app's, true = no new post, replies still taken
@@ -63,7 +64,7 @@ class HttpPoster : public Sender {
 
     void setEnabled(bool on);
     // clamped secs back, _every_ms from it
-    uint16_t setIntervalS(int s, int lo, int hi);
+    uint16_t setIntervalS(int s);
     // n from snprintf, a cut url is logged and not sent
     bool urlFits(int n, size_t cap);
     // true = v empty, not sent; logged once till the prefs change

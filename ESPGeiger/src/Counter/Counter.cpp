@@ -107,7 +107,7 @@ inline __attribute__((always_inline)) void add_wrapped(unsigned long& lo, unsign
 }  // namespace
 
 void Counter::set_cpm_mode(uint8_t m) {
-  _cpm_mode = (m > CPM_FAST) ? CPM_BUCKET : m;
+  _cpm_mode = m;
   _cps_in.reset();
   if (_cpm_mode != CPM_BUCKET) ensure_pulse_ring();
   else drop_pulse_ring();
@@ -624,14 +624,6 @@ void Counter::set_blip_brightness(uint8_t level) {
 
 void Counter::set_quiet_hours(const char* from, const char* to) {
   _quiet.set(from, to);
-}
-
-void Counter::set_warning(int val) {
-  _cpm_warning = clamp(val, 0, 9999);
-}
-
-void Counter::set_alert(int val) {
-  _cpm_alert = clamp(val, 0, 9999);
 }
 
 // warmup plus one full window

@@ -66,7 +66,7 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 |---|---|---|
 `esp8266_hv` | ESP8266 | Pulse build with HV generator + ADC feedback. PWM frequency up to 40 kHz; PWM pin defaults to **-1 (disabled)** until set in the Config page.
 `esp8266oled_hv` | ESP8266 + OLED | As `esp8266_hv` with SSD1306 OLED.
-`esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 80 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict). SSD1306 OLED auto-detected at boot.
+`esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 78 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict). SSD1306 OLED auto-detected at boot.
 
 For safety the PWM pin defaults to `-1`, so a freshly flashed board drives no pin until you choose one. Set **HV PWM Pin** on the [Config page](/configuration) (System tab, **HV Hardware**), then **reboot**.
 

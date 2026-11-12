@@ -47,78 +47,64 @@ extern const char statusJS[]    PROGMEM;
 extern const char picographJS[] PROGMEM;
 #endif
 
-// snprintf returns the untruncated length
-static void send_n(EGHttpResponse& res, const char* line, size_t cap, int n) {
-  if (n <= 0) return;
-  res.sendChunk(line, (size_t)n < cap ? (size_t)n : cap - 1);
-}
-
-static void clicks_day(EGHttpResponse& res, char* line, size_t cap) {
-  send_n(res, line, cap, snprintf_P(line, cap,
-    PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour));
+static void clicks_day(EGHttpResponse& res) {
+  corium::WebPortal::sendf(res, PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour);
 
   const int n = gcounter.day_hourly_history.size();
   for (int i = n; i > 0; i--) {
-    send_n(res, line, cap, snprintf_P(line, cap, PSTR(",%d"),
-                                 (int)gcounter.day_hourly_history[i - 1]));
+    corium::WebPortal::sendf(res, PSTR(",%d"), (int)gcounter.day_hourly_history[i - 1]);
   }
 
-  send_n(res, line, cap, snprintf_P(line, cap,
+  corium::WebPortal::sendf(res,
     PSTR("],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\""),
     (int)gcounter.clicks_today,
     (int)gcounter.clicks_yesterday,
-    corium::Prefs::getString("counter", EG_K_RATIO)));
+    corium::Prefs::getString("counter", EG_K_RATIO));
 }
 
-static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
-  int n;
+static void clicks_since(EGHttpResponse& res) {
   if (corium::Clock::synced) {
     char start[24];
     fmtU64(start, sizeof(start), (uint64_t)corium::Clock::bootEpoch);
-    n = snprintf_P(line, cap, PSTR(",\"start\":%s"), start);
+    corium::WebPortal::sendf(res, PSTR(",\"start\":%s"), start);
   } else {
-    n = snprintf_P(line, cap,
+    corium::WebPortal::sendf(res,
       PSTR(",\"uptime\":%lu"), (unsigned long)corium::Uptime::since(corium::Uptime::start));
   }
-  send_n(res, line, cap, n);
 }
 
-static void clicks_life(EGHttpResponse& res, char* line, size_t cap) {
+static void clicks_life(EGHttpResponse& res) {
   char clk[24];
   fmtU64(clk, sizeof(clk), gcounter.get_lifetime_clicks_total());
-  send_n(res, line, cap, snprintf_P(line, cap,
+  corium::WebPortal::sendf(res,
     PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu,\"secs\":%lu}"),
     clk, (unsigned long)gcounter.get_first_boot_ts(),
-    gcounter.get_lifetime_seconds()));
+    gcounter.get_lifetime_seconds());
 }
 
 // log2 buckets, 64 us to 512 s+
-static void clicks_hist(EGHttpResponse& res, char* line, size_t cap) {
+static void clicks_hist(EGHttpResponse& res) {
   const uint8_t nb = Counter::pulse_histogram_buckets();
   uint32_t hist[nb];
   gcounter.pulse_histogram(hist);
-  send_n(res, line, cap, snprintf_P(line, cap,
-                               PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]));
+  corium::WebPortal::sendf(res, PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]);
   for (uint8_t b = 1; b < nb; b++) {
-    send_n(res, line, cap, snprintf_P(line, cap, PSTR(",%lu"),
-                                 (unsigned long)hist[b]));
+    corium::WebPortal::sendf(res, PSTR(",%lu"), (unsigned long)hist[b]);
   }
   res.sendChunk(F("]"));
   uint32_t min_us = gcounter.get_min_pulse_us();
   if (min_us > 0) {
-    send_n(res, line, cap, snprintf_P(line, cap,
-                                 PSTR(",\"min_pulse_us\":%lu"), (unsigned long)min_us));
+    corium::WebPortal::sendf(res, PSTR(",\"min_pulse_us\":%lu"), (unsigned long)min_us);
   }
 }
 
 static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
-  char line[160];
-  clicks_day(res, line, sizeof(line));
+  clicks_day(res);
   gcounter.input()->appendClicksExtra(res);
-  clicks_since(res, line, sizeof(line));
-  if (gcounter.get_lifetime_enabled()) clicks_life(res, line, sizeof(line));
-  clicks_hist(res, line, sizeof(line));
+  clicks_since(res);
+  if (gcounter.get_lifetime_enabled()) clicks_life(res);
+  clicks_hist(res);
   res.sendChunk(F("}"));
   res.endChunked();
 }

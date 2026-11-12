@@ -27,7 +27,7 @@
 #endif
 
 namespace corium {
-// live, Wifi::local_ip and Wifi::ssid are the cached ones
+// Live reads, Wifi::local_ip and Wifi::ssid are the cached copies
 namespace Wifi {
   inline IPAddress localIP()    { return WiFi.localIP(); }
   inline IPAddress gatewayIP()  { return WiFi.gatewayIP(); }
@@ -46,6 +46,14 @@ namespace Wifi {
   inline int scanComplete()    { return WiFi.scanComplete(); }
   inline void scanDelete()     { WiFi.scanDelete(); }
   inline int scanNetworks(bool async, bool hidden) { return WiFi.scanNetworks(async, hidden); }
+  // true if a scan entry's enc means no password
+  inline bool encOpen(uint8_t enc) {
+#ifdef ESP8266
+    return enc == ENC_TYPE_NONE;
+#else
+    return enc == WIFI_AUTH_OPEN;
+#endif
+  }
 }
 }  // namespace corium
 

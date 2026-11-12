@@ -92,7 +92,7 @@ CORIUM_REGISTER_MODULE(counterprefs)
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 CORIUM_PSTR(IN_L_STY, "Serial Type");
 CORIUM_PSTR(IN_L_CPW, "CPM Window (CPM-only counters)");
-CORIUM_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth. Reboot.");
+CORIUM_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth.");
 #endif
 #ifndef RXPIN_BLOCKED
 CORIUM_PSTR(IN_L_RXP, "RX Pin");
@@ -109,7 +109,7 @@ CORIUM_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
 #ifdef PCNT_SELECTABLE
 CORIUM_PSTR(IN_L_CNT, "Count with");
 CORIUM_PSTR(IN_O_CNT, "Hardware|Interrupt");
-CORIUM_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM. Reboot.");
+CORIUM_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM.");
 #ifdef NO_PCNT_ENV
 #define COUNT_MODE_DEF "1"   // _no_pcnt envs
 #else
@@ -182,7 +182,7 @@ CORIUM_PSTR(CT_H_LE,  "Persist total clicks + exposure across reboots.");
 static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   // Source selector
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  {EG_K_SERIAL_TYPE,  IN_L_STY, corium::H_RBA, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
+  {EG_K_SERIAL_TYPE,  IN_L_STY, nullptr, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
    GEIGER_STYPE_GC10, GEIGER_STYPE_TEMPLATE, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -190,10 +190,10 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // Pins
 #ifndef RXPIN_BLOCKED
-  {K_RX_PIN,          IN_L_RXP, corium::H_RBA, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN | corium::P_PIN_IRQ},
+  {K_RX_PIN,          IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN | corium::P_PIN_IRQ},
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-  {K_TX_PIN,          IN_L_TXP, corium::H_RBA, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
   // UDP source target
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -444,7 +444,7 @@ CORIUM_REGISTER_MODULE(ledprefs)
 
 #ifndef LED_PIN_BLOCKED
 CORIUM_PSTR(LD_L_PIN, "Status LED");
-CORIUM_PSTR(LD_H_PIN, "GPIO of the board's own LED, -1 = none. Reboot to apply.");
+CORIUM_PSTR(LD_H_PIN, "GPIO of the board's own LED, -1 = none.");
 #if LED_SEND_RECEIVE_ON == LOW
 #define LD_POL_DEF "1"
 #else
@@ -467,6 +467,10 @@ CORIUM_PSTR(LD_O_MOD, "Pulse|Fade");
 #else
 #define LD_PULSE_DEF "20"
 #define LD_BRT_DEF   "80"
+#endif
+// not the 8266 HW's inside LED, hw32 has the beeper
+#if !defined(ESPGEIGER_HW) || defined(ESPGEIGER_HW32)
+#define LED_QUIET
 CORIUM_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
 #endif
 #define LED_LABEL  "Blip LED"
@@ -483,14 +487,14 @@ static const corium::Pref LED_PREF_ITEMS[] PROGMEM = {
   {EG_K_PULSE_MS,   EG_L_PUL, EG_H_PUL, LD_PULSE_DEF, nullptr, 1, 50,  0, corium::P_UINT, corium::P_ADVANCED},
   {EG_K_FADE_SHIFT, EG_L_FAD, nullptr,  "1",     EG_O_FAD, 0,  2,     0, corium::P_ENUM, corium::P_ADVANCED},
   {K_BLIP_BRIGHT,   LD_L_BRT, LD_H_BRT, LD_BRT_DEF, nullptr, 0, 100,  0, corium::P_UINT, corium::P_SLIDER},
-#ifndef ESPGEIGER_HW
+#ifdef LED_QUIET
   {EG_K_QUIET_FROM, EG_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
   {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",      nullptr, 0,   0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
 #endif
 #endif
 #ifndef LED_PIN_BLOCKED
   {EG_K_PIN,        LD_L_PIN, LD_H_PIN, STR(LED_SEND_RECEIVE), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-  {EG_K_POLARITY,   EG_L_POL, corium::H_RBA, LD_POL_DEF, EG_O_POL, 0, 1, 0, corium::P_ENUM, corium::P_ADVANCED | corium::P_REBOOT},
+  {EG_K_POLARITY,   EG_L_POL, nullptr, LD_POL_DEF, EG_O_POL, 0, 1, 0, corium::P_ENUM, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
 };
 
@@ -531,7 +535,7 @@ void LedPrefs::onPrefsLoaded() {
 #else
   corium::LedSignal::setFlashConfig(engine_mode, pulse_us, fade_idx);
 #endif
-#ifndef ESPGEIGER_HW
+#ifdef LED_QUIET
   gcounter.set_quiet_hours(
     corium::Prefs::getString("led", EG_K_QUIET_FROM),
     corium::Prefs::getString("led", EG_K_QUIET_TO)
@@ -555,7 +559,7 @@ static HVPinPrefs hvpinprefs;
 CORIUM_REGISTER_MODULE(hvpinprefs)
 
 CORIUM_PSTR(HV_L_PWM, "HV PWM Pin");
-CORIUM_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled). Reboot to apply.");
+CORIUM_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled).");
 
 static const corium::Pref HV_PIN_PREF_ITEMS[] PROGMEM = {
   {K_PWM_PIN, HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_PWM},

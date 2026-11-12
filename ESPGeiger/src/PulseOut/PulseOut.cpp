@@ -46,7 +46,7 @@ uint8_t PulseOut::s_idle_seen = 0;
 bool PulseOut::s_busy = false;
 
 CORIUM_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
-CORIUM_PSTR(PO_H_PIN,  "-1 disables. Reboot to apply.");
+CORIUM_PSTR(PO_H_PIN,  "-1 disables.");
 CORIUM_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
 CORIUM_PSTR(PO_L_FRQ,  "Burst Hz");
 CORIUM_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");

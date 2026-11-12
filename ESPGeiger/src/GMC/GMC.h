@@ -31,14 +31,13 @@
 #define GMC_INTERVAL 300
 #endif
 
-// %s not %f, soft-float is slow
+// %s rather than %f, soft-float printf is slow
 const char GMC_URI[] PROGMEM = "http://www.gmcmap.com/log2.asp?AID=%s&GID=%s&CPM=%d&ACPM=%s&uSV=%s";
 
 class GMC : public corium::HttpPoster {
   public:
     GMC();
     const char* name() override { return PSTR("gmc"); }
-    void onPrefsLoaded() override;
     const corium::PrefGroup* prefsGroup() override;
     corium::LegacyRows legacyAliases() override;
   protected:

@@ -71,7 +71,7 @@ Radmon::Radmon() {
 }
 
 void Radmon::setInterval(int interval) {
-  _interval_s = setIntervalS(interval, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX);
+  _interval_s = setIntervalS(interval);
 }
 
 int Radmon::getInterval() {
@@ -79,10 +79,8 @@ int Radmon::getInterval() {
 }
 
 void Radmon::onPrefsLoaded() {
-  int iv = (int)corium::Prefs::getUInt("radmon", EG_K_INTERVAL);
-  if (iv == 0) iv = RADMON_INTERVAL;
-  setInterval(iv);
-  setEnabled(corium::Prefs::getBool("radmon", EG_K_SEND));
+  setInterval((int)corium::Prefs::getUInt("radmon", EG_K_INTERVAL));
+  HttpPoster::onPrefsLoaded();
 }
 
 // "OK<br>" on success, else the error text
@@ -92,9 +90,9 @@ bool Radmon::interpret(const char* r)
     corium::Log::debug(PSTR("Radmon: Upload OK"));
     return true;
   } else if (strstr_P(r, PSTR("Incorrect"))) {
-    corium::Log::console(PSTR("Radmon: Password incorrect, please check"));
+    corium::Log::console(PSTR("Radmon: Password incorrect"));
   } else if (strstr_P(r, PSTR("register"))) {
-    corium::Log::console(PSTR("Radmon: Username incorrect, please check"));
+    corium::Log::console(PSTR("Radmon: Username incorrect"));
   } else if (strstr_P(r, PSTR("Too soon"))) {
     corium::Log::console(PSTR("Radmon: Rate limited"));
   } else {

@@ -17,7 +17,7 @@ This is the lightweight cousin of the [Audio Tick](/output/audiotick)
 output: no I2S, no amplifier IC, no synthesis. A real mechanical tick
 per pulse, available on most ESP builds.
 
-Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`) and `esp8266_pulsemin`. Disabled by default; set the pin,
+Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`, `espgeigerlog_udp`) and `esp8266_pulsemin`. Disabled by default; set the pin,
 enable it from **Config > Pulse Out** and reboot; the pin is read at boot.
 
 ## Settings

@@ -38,13 +38,12 @@ class Thingspeak : public corium::HttpPoster {
   public:
     Thingspeak();
     const char* name() override { return PSTR("thgspk"); }
-    void onPrefsLoaded() override;
     const corium::PrefGroup* prefsGroup() override;
     corium::LegacyRows legacyAliases() override;
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* logTag() override { return PSTR("Thingspeak"); }
+    const char* logTag() override { return PSTR("ThingSpeak"); }
     const char* statusKey() override { return PSTR("thingspeak"); }
     uint16_t timeoutS() const override { return 5; }
     size_t replyCap() const override { return 32; }

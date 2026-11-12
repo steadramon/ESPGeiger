@@ -60,10 +60,6 @@ static const corium::PrefGroup GMC_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* GMC::prefsGroup() { return &GMC_PREF_GROUP; }
 
-void GMC::onPrefsLoaded() {
-  setEnabled(corium::Prefs::getBool("gmc", EG_K_SEND));
-}
-
 // legacy import
 static const corium::LegacyAlias GMC_LEGACY[] PROGMEM = {
   {"gmcSend", "send"},

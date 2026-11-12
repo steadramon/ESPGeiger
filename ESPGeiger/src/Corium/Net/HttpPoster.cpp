@@ -21,7 +21,6 @@
 #include "SendSlot.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/Prefs.h"
-#include "Corium/Util/MathUtil.h"
 
 static_assert(EGHTTP_HOST_MAX >= CORIUM_HOST_MAX, "a host pref must fit the client");
 
@@ -33,14 +32,17 @@ void corium::HttpPoster::setEnabled(bool on) {
   corium::Registry::every(this, (on || request.busy()) ? LOOP_MS : 0);
 }
 
+void corium::HttpPoster::onPrefsLoaded() {
+  setEnabled(corium::Prefs::groupEnabled(prefsGroup()));
+}
+
 // a new url or key gets its own say
 void corium::HttpPoster::onPrefsSaved() {
   _told = false;
   onPrefsLoaded();
 }
 
-uint16_t corium::HttpPoster::setIntervalS(int s, int lo, int hi) {
-  s = clamp(s, lo, hi);
+uint16_t corium::HttpPoster::setIntervalS(int s) {
   _every_ms = (uint32_t)s * 1000UL;
   return (uint16_t)s;
 }
@@ -86,6 +88,7 @@ void corium::HttpPoster::take_reply()
   if (!request.take(&code, (uint8_t*)r, cap - 1, &got)) return;
   bool ok = false;
   if (okCode(code)) {
+    while (got && (uint8_t)r[got - 1] <= ' ') got--;   // a trailing newline
     r[got] = 0;
     ok = interpret(r);
   } else {

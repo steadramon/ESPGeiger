@@ -178,9 +178,9 @@ CORIUM_PSTR(MX_L_REV, "Reverse digits");
 CORIUM_PSTR(MX_H_REV, "7-seg: for modules that show 56781234");
 
 static const corium::Pref MAX7219_PREF_ITEMS[] PROGMEM = {
-  {K_DIN,      MX_L_DIN,  corium::H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
-  {EG_K_CLK,   MX_L_CLK,  corium::H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
-  {K_CS,       MX_L_CS,   corium::H_RBA,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_DIN,      MX_L_DIN,  nullptr,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_CLK,   MX_L_CLK,  nullptr,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_CS,       MX_L_CS,   nullptr,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
   {EG_K_MODE,  MX_L_MODE, MX_H_MODE, "1", MX_O_MODE, 0, 1, 0, corium::P_ENUM, 0},
   {K_COUNT,    MX_L_CNT,  nullptr,   "8", nullptr,  1, 8,  0, corium::P_UINT, corium::P_ADVANCED},
   {K_PANELS,   MX_L_PNL,  MX_H_PNL,  "4", nullptr,  1, Max7219Driver::MAX_CHIPS, 0, corium::P_UINT, corium::P_ADVANCED},

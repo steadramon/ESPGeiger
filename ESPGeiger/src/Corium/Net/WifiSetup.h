@@ -42,17 +42,6 @@ namespace Wifi {
 #endif
   }
 
-  // scan results, after Wifi::scanNetworks()
-  inline String scanSSID(int i)  { return WiFi.SSID(i); }
-  inline int32_t scanRSSI(int i) { return WiFi.RSSI(i); }
-  inline bool scanOpen(int i) {
-#ifdef ESP8266
-    return WiFi.encryptionType(i) == ENC_TYPE_NONE;
-#else
-    return WiFi.encryptionType(i) == WIFI_AUTH_OPEN;
-#endif
-  }
-
   // the 8266 takes the name after the mode, the esp32 only at a mode change
   inline void staMode(const char* name) {
 #ifdef ESP8266

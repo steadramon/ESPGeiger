@@ -76,7 +76,7 @@ CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");
 #endif
 static_assert(sizeof(DS_O_TYP) - 1 <= CORIUM_PREF_PATTERN_MAX, "display types past the options buffer");
 CORIUM_PSTR(DS_L_RST, "Reset Pin");
-CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot to apply.");
+CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none).");
 #endif
 
 #ifdef MAX7219_DISPLAY
@@ -88,13 +88,13 @@ CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none). Reboot t
 // 0.12 keys, never rename
 static const corium::Pref DISPLAY_PREF_ITEMS[] PROGMEM = {
 #ifndef OLED_PINS_BLOCKED
-  {EG_K_TYPE,       DS_L_TYP, corium::H_RBA, STR(OLED_TYPE), DS_O_TYP, 0, DS_TYPE_MAX, 0, corium::P_ENUM, corium::P_REBOOT},
+  {EG_K_TYPE,       DS_L_TYP, nullptr, STR(OLED_TYPE), DS_O_TYP, 0, DS_TYPE_MAX, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
   {EG_K_BRIGHTNESS, EG_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
 #ifndef OLED_PINS_BLOCKED
   {K_RST,           DS_L_RST, DS_H_RST, STR(OLED_RST), nullptr, 0, 255, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
-  {K_FLIP,          DS_L_FLP, corium::H_RBA, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
+  {K_FLIP,          DS_L_FLP, nullptr, OLED_FLIP ? "1" : "0", nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
 #ifdef GEIGER_PUSHBUTTON
   {K_TIMEOUT,       DS_L_TMO, DS_H_TMO, "120", nullptr, 0, 99999, 0, corium::P_UINT, 0},
 #endif

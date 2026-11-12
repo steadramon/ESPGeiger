@@ -78,13 +78,12 @@ Webhook::Webhook() {
 
 void Webhook::setInterval(int interval)
 {
-  _interval_s = setIntervalS(interval, WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX);
+  _interval_s = setIntervalS(interval);
 }
 
 void Webhook::onPrefsLoaded() {
-  int iv = (int)corium::Prefs::getUInt("webhook", EG_K_INTERVAL);
-  if (iv > 0) setInterval(iv);
-  setEnabled(corium::Prefs::getBool("webhook", EG_K_SEND));
+  setInterval((int)corium::Prefs::getUInt("webhook", EG_K_INTERVAL));
+  HttpPoster::onPrefsLoaded();
 }
 
 bool Webhook::interpret(const char* r)

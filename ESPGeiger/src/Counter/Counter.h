@@ -106,8 +106,6 @@ class Counter : public CounterMaths {
       // once a second, from the Reactor tick
       void secondticker(uint32_t uptime_s);
       void set_cpm_window(uint8_t n) {
-        if (n < 1) n = 1;
-        if (n > GEIGER_CPM_COUNT) n = GEIGER_CPM_COUNT;
         _cpm_window = n;
         _cpm_window_inv = 1.0f / (float)n;
         _warm_cached = false;
@@ -141,8 +139,8 @@ class Counter : public CounterMaths {
       bool has_pcnt() {
         return _input->has_pcnt();
       };
-      void set_warning(int val);
-      void set_alert(int val);
+      void set_warning(int val) { _cpm_warning = val; }
+      void set_alert(int val) { _cpm_alert = val; }
       void set_blip_led(bool on) { _blip_led = on; }
       void set_blip_brightness(uint8_t level);
       void set_quiet_hours(const char* from, const char* to);

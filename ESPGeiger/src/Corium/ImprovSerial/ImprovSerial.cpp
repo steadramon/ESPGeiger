@@ -203,32 +203,16 @@ void corium::ImprovSerial::send_device_info() {
 }
 
 void corium::ImprovSerial::send_wifi_networks() {
-  int n = corium::Wifi::scanNetworks(false, false);
-  // one row per ssid, its strongest AP, 16 max
-  int8_t best_idx[16];
-  uint8_t kept = 0;
-  for (int i = 0; i < n && kept < 16; i++) {
-    String ssid = corium::Wifi::scanSSID(i);
-    if (!ssid.length()) continue;
-    bool seen = false;
-    for (uint8_t k = 0; k < kept; k++) {
-      if (ssid == corium::Wifi::scanSSID(best_idx[k])) {
-        if (corium::Wifi::scanRSSI(i) > corium::Wifi::scanRSSI(best_idx[k])) best_idx[k] = (int8_t)i;
-        seen = true;
-        break;
-      }
-    }
-    if (!seen) best_idx[kept++] = (int8_t)i;
-  }
-  for (uint8_t k = 0; k < kept; k++) {
-    int i = best_idx[k];
-    String ssid = corium::Wifi::scanSSID(i);
+  // one row per ssid, its strongest AP, strongest first, no floor
+  EGPortal::ScanEntry aps[16];
+  size_t kept = EGPortal::processScan(aps, 16, corium::Wifi::scanNetworks(false, false), INT8_MIN);
+  for (size_t k = 0; k < kept; k++) {
     char rssi[12];
-    snprintf_P(rssi, sizeof(rssi), PSTR("%d"), (int)corium::Wifi::scanRSSI(i));
+    snprintf_P(rssi, sizeof(rssi), PSTR("%d"), (int)aps[k].rssi);
     const char* entry[] = {
-      ssid.c_str(),
+      aps[k].ssid,
       rssi,
-      corium::Wifi::scanOpen(i) ? "NO" : "YES"
+      corium::Wifi::encOpen(aps[k].enc) ? "NO" : "YES"
     };
     send_response_data(improv::GET_WIFI_NETWORKS, entry, 3);
   }

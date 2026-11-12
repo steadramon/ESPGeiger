@@ -38,7 +38,7 @@ NeoPixel neopixel;
 CORIUM_REGISTER_FEATURE(neopixel, FEAT_NEOPIXEL)
 
 CORIUM_PSTR(NP_L_SWAP, "Swap R/G");
-CORIUM_PSTR(NP_H_SWAP, "Enable if green appears as red (RGB-ordered LED chips).");
+CORIUM_PSTR(NP_H_SWAP, "On if green shows as red (RGB-ordered chips)");
 CORIUM_PSTR(NP_O_MODE, "Off|Blip|Blip+status|Trend pulse|Trend+status");
 enum : uint8_t { NP_OFF, NP_BLIP, NP_BLIP_STATUS, NP_TREND, NP_TREND_STATUS };
 static bool trend(uint32_t m)  { return m >= NP_TREND; }
@@ -49,7 +49,7 @@ CORIUM_PSTR(NP_O_COL,  "Green|Red|Blue|Yellow|Cyan|Magenta|White|Orange");
 CORIUM_PSTR(NP_O_FAD,  "Off|Fast|Medium|Slow");
 #ifndef NEOPIXEL_PIN_BLOCKED
 CORIUM_PSTR(NP_L_PIN,  "Pin");
-CORIUM_PSTR(NP_H_PIN,  "WS2812 data pin. -1 to disable. Reboot to apply.");
+CORIUM_PSTR(NP_H_PIN,  "WS2812 data pin (-1 = disabled)");
 #endif
 
 // esp8266 boards have RGB leds, swap on
@@ -173,12 +173,11 @@ static void show(NeoController* c, RgbColor rgb) {
   c->Show();
 }
 
-void NeoPixel::setBrightness(int input) {
-  int pct = clamp(input, 0, 100);
-  input = (int)brightnessCurve((uint32_t)pct, 128);  // 0-128
-  if (pct && !input) input = 1;
-  if (input == 0 && _bus) show(_bus, RgbColor(0));
-  _level = input;
+void NeoPixel::setBrightness(int pct) {
+  int level = (int)brightnessCurve((uint32_t)pct, 128);  // 0-128
+  if (pct && !level) level = 1;
+  if (level == 0 && _bus) show(_bus, RgbColor(0));
+  _level = level;
 }
 
 // trend modes: blink faster when rising, colour by trend

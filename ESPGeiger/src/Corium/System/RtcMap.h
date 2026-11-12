@@ -29,6 +29,9 @@
 #ifndef CORIUM_RTCMAP_APP1_WORDS
 #define CORIUM_RTCMAP_APP1_WORDS 4
 #endif
+#ifndef CORIUM_RTCMAP_APP2_WORDS
+#define CORIUM_RTCMAP_APP2_WORDS 4
+#endif
 
 namespace corium {
 namespace RtcMap {
@@ -45,10 +48,13 @@ constexpr uint32_t CRASHDUMP_WORDS = 43;
 // App
 constexpr uint32_t APP1_AT    = 48;
 constexpr uint32_t APP1_WORDS = CORIUM_RTCMAP_APP1_WORDS;
+constexpr uint32_t APP2_AT    = 60;
+constexpr uint32_t APP2_WORDS = CORIUM_RTCMAP_APP2_WORDS;
 
 static_assert(EBOOT_WORDS <= APP1_AT,                         "app words run into eboot");
 static_assert(APP1_AT + APP1_WORDS <= BOOTGUARD_AT,           "app words run into BootGuard");
-static_assert(BOOTGUARD_AT + BOOTGUARD_WORDS <= CRASHDUMP_AT, "BootGuard runs into CrashDump");
+static_assert(BOOTGUARD_AT + BOOTGUARD_WORDS <= APP2_AT,      "BootGuard runs into app words");
+static_assert(APP2_AT + APP2_WORDS <= CRASHDUMP_AT,           "app words run into CrashDump");
 static_assert(CRASHDUMP_AT + CRASHDUMP_WORDS <= 128,          "past the 128 user words");
 
 }
