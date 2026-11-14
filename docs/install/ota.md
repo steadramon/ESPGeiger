@@ -128,8 +128,9 @@ writes happen.
 ### Via espota.py (ArduinoOTA)
 
 A separate path that doesn't go through the web stack. `espota.py` ships
-with the Arduino ESP core. ESP8266 builds listen on port 8266, ESP32 builds
-(including C3 and S3) on port 3232:
+with the Arduino ESP core. It's off by default: tick **Network upload** under
+System, Advanced, and restart. ESP8266 builds then listen on port 8266, ESP32
+builds (including C3 and S3) on port 3232:
 
 ```
 python espota.py -i 192.168.1.167 -p 8266 -f esp8266_pulse-firmware.v1.2.3.bin

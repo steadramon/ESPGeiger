@@ -58,6 +58,7 @@ class NeoPixel : public corium::Module {
     static constexpr uint16_t LOOP_MS = 30;
     static constexpr uint16_t FAST_LOOP_MS = 10;
     void setup();
+    void park();   // safe mode only
     void blink(uint16_t ms);   // lit for ms
     void setBrightness(int pct);
     RgbColor color(uint8_t r, uint8_t g, uint8_t b);
@@ -85,5 +86,7 @@ class NeoPixel : public corium::Module {
     bool _is_off = true;
     bool _swap_rg = false;
 };
+
+extern NeoPixel neopixel;
 #endif
 #endif

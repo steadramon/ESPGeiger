@@ -32,7 +32,7 @@
 #define CORIUM_HAS_TIMER1 0
 #endif
 
-// 5 sockets, pages ship their js in one
+// Only 5 sockets, so pages ship their js in a single request
 #ifdef ESP8266
 #define CORIUM_HAS_FEW_SOCKETS 1
 #else
@@ -53,7 +53,7 @@
 #define CORIUM_HAS_PCNT 0
 #endif
 
-// rmt, the neopixel's
+// rmt, used by the neopixel
 #ifdef ESP32
 #define CORIUM_HAS_RMT 1
 #else
@@ -67,18 +67,25 @@
 #define CORIUM_HAS_CHIPTEMP 0
 #endif
 
-// analogReadMilliVolts, eFuse calibrated; the 8266 count is ~1 mV anyway
+// analogReadMilliVolts with eFuse calibration. On the 8266 a count is ~1 mV anyway
 #ifdef ESP32
 #define CORIUM_HAS_ADC_MV 1
 #else
 #define CORIUM_HAS_ADC_MV 0
 #endif
 
-// hears multicast in modem sleep, the classic esp32 doesn't
+// Hears multicast in modem sleep, the classic esp32 doesn't
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define CORIUM_HAS_SLEEP_MCAST 0
 #else
 #define CORIUM_HAS_SLEEP_MCAST 1
+#endif
+
+// The classic esp32's core nearly fills its ota slot
+#ifdef CONFIG_IDF_TARGET_ESP32
+#define CORIUM_HAS_SLOT_ROOM 0
+#else
+#define CORIUM_HAS_SLOT_ROOM 1
 #endif
 
 #endif

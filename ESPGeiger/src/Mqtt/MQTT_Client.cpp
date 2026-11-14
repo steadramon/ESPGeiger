@@ -108,7 +108,7 @@ static const corium::PrefGroup MQTT_PREF_GROUP PROGMEM = {
   "mqtt", "MQTT", 1,
   MQTT_PREF_ITEMS,
   sizeof(MQTT_PREF_ITEMS) / sizeof(MQTT_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT, corium::K_SERVER,
+  corium::P_CAT_OUTPUT, corium::K_SERVER, 0,
 };
 
 const corium::PrefGroup* MQTT_Client::prefsGroup() { return &MQTT_PREF_GROUP; }
@@ -145,11 +145,11 @@ MQTT_Client::MQTT_Client()
 static void hass_prefix(char* out, size_t sz);
 #endif
 
-// the one way out; a new broker or topic gets Offline on the old one
+// the one way out; Offline first, a refused rejoin never says it
 void MQTT_Client::disconnect()
 {
   bool move = moved();
-  s_mq.disconnect(move);
+  s_mq.disconnect(true);
 #ifdef MQTTAUTODISCOVER
   char disc[sizeof(_hass_disc)];
   hass_prefix(disc, sizeof(disc));

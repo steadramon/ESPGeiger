@@ -8,7 +8,7 @@ parent: Configuration
 
 # Safe Mode
 
-Safe mode starts ESPGeiger with only the core parts running: WiFi, the web pages, settings, firmware update and the serial console. It is there so a device that keeps crashing can still be reached and fixed.
+Safe mode starts ESPGeiger with only the core parts running: WiFi, the web pages, settings, firmware update and the serial console. It is there so a device that keeps crashing can still be reached and fixed. On HV builds the HV pin is held low, so the high voltage stays off.
 
 ## When it starts
 

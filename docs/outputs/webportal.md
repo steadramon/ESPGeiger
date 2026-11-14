@@ -56,7 +56,7 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/screen` | Live display preview (OLED and MAX7219/TM1637 builds) - see [OLED](/output/oled#browser-screen-viewer) |
 | `/export` | Streaming base64+CRC32 dump of the prefs that differ from their defaults. Device-only prefs are skipped: `sys.web_pass`, `sys.cpu_mhz`, the `net` group, the hidden `wifi.*` tunables and the lifetime totals. UI lives on the Config page's Backup tab. A 409 naming the group while a stored pref in an exported group didn't load. |
 | `/import` (POST) | Apply a previously-exported blob. Every pref except the device-only ones goes back to its default first, so keys not in the blob end up at their defaults. Reboots on success. Refused while a stored pref in an exported group didn't load. |
-| `/life/reset` (POST) | Zero the lifetime click counter + first-boot timestamp. Button on `/hist`. |
+| `/life/reset` (POST) | Zero the lifetime clicks and tracked seconds; the first-boot timestamp stays. Button on `/hist`. |
 | `/erase` (POST) | Wipe saved WiFi credentials, clear the `net` group (DHCP, as `resetnet`) and reboot into the captive setup portal. Linked from `/network` → Erase WiFi config. |
 | `/reset` (POST) | Factory reset. Every setting back to its default, WiFi credentials and the web password copy cleared; the lifetime totals and the station key are kept. Reboots into the setup portal. Button: `/network` > Advanced > Factory reset. |
 | `/restart` | Reboots the device - use with care |

@@ -54,7 +54,7 @@ static const corium::PrefGroup I2C_PREF_GROUP PROGMEM = {
   "i2c", "I2C Bus", 1,
   I2C_PREF_ITEMS,
   sizeof(I2C_PREF_ITEMS) / sizeof(I2C_PREF_ITEMS[0]),
-  corium::P_CAT_SYSTEM, nullptr,
+  corium::P_CAT_SYSTEM, nullptr, 0,
 };
 
 const corium::PrefGroup* I2CPrefs::prefsGroup() { return &I2C_PREF_GROUP; }
@@ -77,7 +77,7 @@ bool corium::I2CBus::begin() {
   const char* why = corium::PinSafety::claimOutput(s_sda, corium::PinSafety::I2C);
   if (!why) why = corium::PinSafety::claimOutput(s_scl, corium::PinSafety::I2C);
   if (why) {
-    corium::Log::console(PSTR("I2C: pins %u/%u unsafe (%s)"), s_sda, s_scl, why);
+    corium::Log::console(PSTR("I2C: Pins %u/%u unsafe (%s)"), s_sda, s_scl, why);
     return false;
   }
   Wire.begin(s_sda, s_scl);

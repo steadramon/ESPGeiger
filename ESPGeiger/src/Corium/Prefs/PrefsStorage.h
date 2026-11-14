@@ -27,10 +27,16 @@
 
 #include <Arduino.h>
 #include "Corium/Util/Attr.h"
+#include "Prefs.h"
 
 namespace corium {
 
 static constexpr size_t PREFS_MAGIC_LEN = 4;
+static constexpr size_t PREFS_MAX_ROWS = 32;
+// key_len, key, val_len
+static constexpr size_t PREFS_ROW_HEAD = 1 + CORIUM_PREF_ID_MAX + 2;
+// the values plus every row's head, a row added later still fits
+static constexpr size_t PREFS_FILE_MAX = PREFS_MAGIC_LEN + CORIUM_PREFS_GROUP_SZ_MAX + PREFS_MAX_ROWS * PREFS_ROW_HEAD;
 inline void putMagic(uint8_t* p) { p[0] = 'E'; p[1] = 'G'; p[2] = 'P'; p[3] = '1'; }
 inline bool isMagic(const uint8_t* p) { return p[0] == 'E' && p[1] == 'G' && p[2] == 'P' && p[3] == '1'; }
 

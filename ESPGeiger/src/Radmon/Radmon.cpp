@@ -51,7 +51,7 @@ static const corium::PrefGroup RADMON_PREF_GROUP PROGMEM = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
-  corium::P_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND, 0,
 };
 
 const corium::PrefGroup* Radmon::prefsGroup() { return &RADMON_PREF_GROUP; }

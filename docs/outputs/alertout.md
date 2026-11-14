@@ -28,6 +28,8 @@ Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log ha
 
 Set the threshold with **Alert CPM** under [Counter Settings](/configuration#counter-settings). Alert Out ignores the warning threshold.
 
+A short press of the user button, or a tap on the [screen page](/output/oled), snoozes it: the pin goes inactive until CPM falls back under the warning level. The alert itself still shows everywhere else (status page, `/json`, MQTT). The pin also goes inactive at every restart and stays that way in [safe mode](/configuration/safemode).
+
 ## Pin safety
 
 Alert Out will not take a GPIO already used by another feature (Pulse Out, blip LED, NeoPixel, OLED, Geiger input). A pin the board itself uses, or one the chip can't drive, is refused when you save it on the Config page (for example `in use: <owner>`). Any other clash is found at boot: the log says `AlertOut: pin=N unsafe (<reason>)` and the output stays off.

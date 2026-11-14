@@ -36,6 +36,15 @@
 #ifdef GEIGER_BUZZER
 #include "Sound/Sound.h"
 #endif
+#ifdef ALERT_OUT
+#include "AlertOut/AlertOut.h"
+#endif
+#ifdef PULSE_OUT
+#include "PulseOut/PulseOut.h"
+#endif
+#ifdef GEIGER_NEOPIXEL
+#include "NeoPixel/NeoPixel.h"
+#endif
 
 namespace BootHooks {
 
@@ -61,6 +70,23 @@ namespace BootHooks {
 #ifdef GEIGER_BUZZER
     sound.setup_portal();
 #endif
+  }
+
+  // after prefs, before the join: a crash or restart left them as they were
+  inline void parkOutputs(bool safe) {
+#ifdef ALERT_OUT
+    alertout.park();
+#endif
+#ifdef PULSE_OUT
+    pulseout.park();
+#endif
+#ifdef GEIGER_NEOPIXEL
+    if (safe) neopixel.park();
+#endif
+#ifdef GEIGER_BUZZER
+    sound.park();
+#endif
+    (void)safe;
   }
 
   inline void displaySafeMode() {

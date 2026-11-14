@@ -30,6 +30,7 @@
 #include "App/LedPatterns.h"
 #include "Corium/Util/MathUtil.h"
 #include "Counter/Counter.h"
+#include "Counter/CounterMaths.h"
 #include "Counter/Tube.h"
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/Platform/Chip.h"
@@ -166,9 +167,9 @@ extern "C" void udprx_notify_prefs_saved();
 CORIUM_PSTR(CT_L_RAT, "uSv/h Ratio");
 CORIUM_PSTR(CT_H_RAT, "CPM to uSv/h factor");
 CORIUM_PSTR(CT_L_WRN, "Warning CPM");
-CORIUM_PSTR(CT_H_WRN, "Warning trigger (CPM)");
+CORIUM_PSTR(CT_H_WRN, "Warning trigger (CPM), 0 = off");
 CORIUM_PSTR(CT_L_ALR, "Alert CPM");
-CORIUM_PSTR(CT_H_ALR, "Alert trigger (CPM)");
+CORIUM_PSTR(CT_H_ALR, "Alert trigger (CPM), 0 = off");
 CORIUM_PSTR(CT_L_LE,  "Track lifetime");
 CORIUM_PSTR(CT_H_LE,  "Persist total clicks + exposure across reboots.");
 
@@ -235,8 +236,8 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // Conversion and alarms
   {EG_K_RATIO,        CT_L_RAT, CT_H_RAT, STR(GEIGER_RATIO), nullptr, 1, 100000, 0, corium::P_FLOAT, 0},
-  {K_WARN,            CT_L_WRN, CT_H_WRN, "50",    nullptr, 0, 9999, 0,  corium::P_UINT,   0},
-  {K_ALERT,           CT_L_ALR, CT_H_ALR, "100",   nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {K_WARN,            CT_L_WRN, CT_H_WRN, STR(GEIGER_WARN_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {K_ALERT,           CT_L_ALR, CT_H_ALR, STR(GEIGER_ALERT_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
   {K_LIFE_EN,         CT_L_LE,  CT_H_LE,  "1",     nullptr, 0, 1,    0,  corium::P_BOOL,   corium::P_ADVANCED},
 };
 
@@ -477,7 +478,7 @@ CORIUM_PSTR(LD_O_MOD, "Pulse|Fade");
 // not the 8266 HW's inside LED, hw32 has the beeper
 #if !defined(ESPGEIGER_HW) || defined(ESPGEIGER_HW32)
 #define LED_QUIET
-CORIUM_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off)");
+CORIUM_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off), alarms still sound");
 #endif
 #define LED_LABEL  "Blip LED"
 #define LED_ENABLE K_BLIP_LED
@@ -508,7 +509,7 @@ static const corium::PrefGroup LED_PREF_GROUP PROGMEM = {
   "led", LED_LABEL, 1,
   LED_PREF_ITEMS,
   sizeof(LED_PREF_ITEMS) / sizeof(LED_PREF_ITEMS[0]),
-  corium::P_CAT_SYSTEM, LED_ENABLE,
+  corium::P_CAT_SYSTEM, LED_ENABLE, 0,
 };
 
 const corium::PrefGroup* LedPrefs::prefsGroup() { return &LED_PREF_GROUP; }
@@ -556,6 +557,7 @@ void LedPrefs::onPrefsLoaded() {
 class HVPinPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("hvpin"); }
+  bool coreModule() override { return true; }   // the pin parks in safe mode
   uint8_t displayOrder() override { return 14; }
   const corium::PrefGroup* prefsGroup() override;
   void onPrefsLoaded() override;

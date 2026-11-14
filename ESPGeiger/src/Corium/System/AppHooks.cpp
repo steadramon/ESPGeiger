@@ -26,6 +26,7 @@ APP_HOOK void corium::AppHooks::routes(EGHttpServer&) {}
 APP_HOOK void corium::AppHooks::infoRows(EGHttpResponse&) {}
 APP_HOOK void corium::AppHooks::aboutJson(EGHttpResponse&) {}
 APP_HOOK void corium::AppHooks::metrics(EGHttpResponse&, const char*) {}
+APP_HOOK void corium::AppHooks::onCrash() {}
 
 APP_HOOK extern const char APP_CSS[] PROGMEM = "";
 APP_HOOK extern const char APP_THEME_JS[] PROGMEM = "";

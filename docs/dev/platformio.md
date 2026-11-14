@@ -198,7 +198,7 @@ Identifies a specific product family. Implies a known set of capability flags as
 | `-D DISABLE_INTERNAL_BLIP` | Disable the internal status LED blip on each detected pulse. |
 | `-D NTP_SERVER="server"` | Set the default NTP server (default `pool.ntp.org`). |
 | `-D NTP_TZ="tz"` | Set the default timezone in POSIX format. |
-| `-D RTC_8266` | Look for an RTC chip on the I2C bus on ESP8266 builds too (ESP32 builds with the bus always do). |
+| `-D RTC_CHIP` | Look for an RTC chip on the I2C bus on ESP8266 and ESP32 builds too (C3 and S3 builds with the bus always do). |
 
 ### SdFat (SD card builds)
 

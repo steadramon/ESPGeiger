@@ -22,16 +22,17 @@
 
 #include <stdint.h>
 
-// whole intervals only, keeps the slack. restart: full starts the clock again
+// Adds whole intervals only, so the slack is kept. With restart, a full bucket starts the clock again
 static inline bool takeToken(uint32_t now, uint32_t& last, uint8_t& tokens,
                               uint32_t every, uint8_t max, bool restart = false) {
+  if (!every) return true;   // 0 = no cap
   uint32_t elapsed = now - last;
   if (elapsed >= every) {
     uint32_t gained = elapsed < 2u * every ? 1u : elapsed / every;
     tokens = gained >= (uint32_t)(max - tokens) ? max : (uint8_t)(tokens + gained);
     last += gained * every;
   }
-  if (restart && tokens >= max) last = now;   // full, no credit banked
+  if (restart && tokens >= max) last = now;   // full, so no credit is banked
   if (tokens == 0) return false;
   tokens--;
   return true;

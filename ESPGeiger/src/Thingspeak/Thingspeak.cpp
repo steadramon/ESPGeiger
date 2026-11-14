@@ -51,7 +51,7 @@ static const corium::PrefGroup TS_PREF_GROUP PROGMEM = {
   "thingspeak", "ThingSpeak", 1,
   TS_PREF_ITEMS,
   sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),
-  corium::P_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND, 0,
 };
 
 const corium::PrefGroup* Thingspeak::prefsGroup() { return &TS_PREF_GROUP; }

@@ -22,6 +22,7 @@
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/System/Uptime.h"
+#include "Corium/System/Clock.h"
 #ifdef ESP32
 #include "Corium/System/DeviceInfo.h"
 #endif
@@ -63,6 +64,7 @@ void corium::Reactor::second() {
 
 #ifdef ESP32
   corium::DeviceInfo::chipTempSample();
+  corium::Clock::stamp();
 #endif
 
   // wifi off counts as up, else safe mode

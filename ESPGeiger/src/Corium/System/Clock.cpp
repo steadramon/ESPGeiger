@@ -20,6 +20,7 @@
 #include "Clock.h"
 #include <sys/time.h>
 #include "Uptime.h"
+#include "RtcMap.h"
 #include "Corium/Logger/Logger.h"
 
 namespace corium {
@@ -61,7 +62,7 @@ bool onSync(Source s) {
     time_t delta = time(NULL) - (bootEpoch + (time_t)uptime);
     bootEpoch += delta;
     if (delta > STEP_S || delta < -STEP_S) {
-      Log::console(PSTR("Clock: stepped %ld s"), (long)delta);
+      Log::console(PSTR("Clock: Stepped %ld s"), (long)delta);
       if (s_on_step) s_on_step((int32_t)delta);   // the same mod 2^32, all its 32-bit stamps need
     }
   }
@@ -76,11 +77,27 @@ void set(time_t epoch, Source s) {
   onSync(s);
 }
 
+// time() over a restart is the IDF's rtc words: a new build can move them, garbage then
+static constexpr uint32_t STAMP_MAGIC = 0xC10C0014u;
+static constexpr uint32_t KEPT_GAP_S = 300;   // the reset, a stall before it
+struct StampRtc { uint32_t magic; uint32_t epoch; };
+CORIUM_RTC_SLOT(StampSlot, StampRtc, RtcMap::CLOCK_AT, RtcMap::CLOCK_WORDS);
+
+// from the anchor, an esp32 time() a second doubled the tick; unsynced is 1970 or garbage
+void stamp() {
+  if (!synced) return;
+  StampSlot::write(StampRtc{STAMP_MAGIC, (uint32_t)(bootEpoch + (time_t)Uptime::since(Uptime::start))});
+}
+
 // a power-on starts at 0
 void kept() {
   if (synced || time(NULL) < MIN_EPOCH) return;
+  StampRtc s;
+  if (!StampSlot::read(s) || s.magic != STAMP_MAGIC) return;
+  if ((uint32_t)time(NULL) - s.epoch > KEPT_GAP_S) return;   // before it too, mod 2^32
   onSync(KEPT);
-  Log::console(PSTR("Clock: kept over the restart"));
+  stamp();   // a restart loop before the Reactor runs keeps it too
+  Log::console(PSTR("Clock: Kept over restart"));
 }
 
 // the wifi join or portal ran since, no step

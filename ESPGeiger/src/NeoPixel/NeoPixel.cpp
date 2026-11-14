@@ -160,6 +160,14 @@ void NeoPixel::begin() {
   s_warn  = corium::m_core_read(PSTR("warn"),  corium::M_BOOL);
 }
 
+// safe mode skips preWifi and onPrefsLoaded: clear the pre-crash colour
+void NeoPixel::park() {
+#ifndef NEOPIXEL_PIN_BLOCKED
+  _pin = claim_pin((int)corium::Prefs::getInt("neopixel", EG_K_PIN));
+#endif
+  setup();
+}
+
 void NeoPixel::setup()
 {
   if (_pin < 0) return;

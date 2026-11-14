@@ -36,11 +36,14 @@ CORIUM_REGISTER_MODULE(sysprefs)
 CORIUM_PSTR(SY_L_NAM, "Friendly name");
 CORIUM_PSTR(SY_H_NAM, "Optional label for web UI");
 CORIUM_PSTR(SY_L_WPW, "Web password");
-CORIUM_PSTR(SY_H_WPW, "Optional. Set to require login for the web UI (user: admin), 8 or more characters. Empty = no auth.");
+CORIUM_PSTR(SY_H_WPW, "Web UI login, user admin, 8+ chars. Blank = no login");
+CORIUM_PSTR(SY_L_OTA, "Network upload");
+CORIUM_PSTR(SY_H_OTA, "espota port for PlatformIO and the Arduino IDE. The Update page works either way.");
 
 static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    CORIUM_NAME_MAX, corium::P_STRING, 0},
   {corium::K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_ADVANCED | corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_ESPOTA,   SY_L_OTA, SY_H_OTA, "0",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
 #ifdef ESP32
   // 0 = board default. C3 max 160
   {K_CPU_MHZ,     nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
@@ -56,12 +59,17 @@ static const corium::PrefGroup SYSTEM_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* corium::SystemPrefs::prefsGroup() { return &SYSTEM_PREF_GROUP; }
 
 bool corium::SystemPrefs::passRestored = false;
+static bool s_unrestored = false;   // no memory for the put, the backup stands in
 
 static_assert(WEB_PASS_MAX <= corium::KeyStore::MAX, "web_pass fits a key store slot");
 
 // login holds, again next boot
 static void restore_pass(const char* kept) {
-  if (!corium::Prefs::putKept("sys", corium::K_WEB_PASS, kept)) return;
+  if (!corium::Prefs::putKept("sys", corium::K_WEB_PASS, kept)) {
+    s_unrestored = true;
+    corium::Log::console(PSTR("System: Web password not restored, using the backup"));
+    return;
+  }
   if (!corium::Prefs::commit(false)) {
     corium::Log::console(PSTR("System: Web password not saved"));
     return;
@@ -111,7 +119,16 @@ void corium::SystemPrefs::onPrefsLoaded() {
   apply_sys();
 }
 
+const char* corium::SystemPrefs::webPass(char* kept) {
+  const char* cur = corium::Prefs::getString("sys", corium::K_WEB_PASS);
+  if (*cur || !s_unrestored) return cur;
+  memset(kept, 0, WEB_PASS_MAX + 1);
+  if (!corium::KeyStore::read((uint8_t*)kept, WEB_PASS_MAX, WEB_PASS_SLOT)) kept[0] = '\0';
+  return kept;
+}
+
 void corium::SystemPrefs::onPrefsSaved() {
+  s_unrestored = false;   // a save says what the login is
   keep_pass(true);
   apply_sys();
 }

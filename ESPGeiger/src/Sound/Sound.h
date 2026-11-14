@@ -43,6 +43,7 @@ class Sound : public corium::Module {
     void test(const char* v);
     // before begin, plays it through
     void setup_portal();
+    void park();
 
     enum : uint8_t { STARTUP, SETUP, WIFI, ALERT, ALERT_END, HVFAULT, SD_ERROR, OTA, OTA_FAIL, BUTTON, CLICK, COUNT };
 

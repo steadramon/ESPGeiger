@@ -20,7 +20,7 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 
 | Topic | Description | Publish Interval Default |
 |---|---|---|
-| `ESPGeiger-<device_id>/tele/lwt` | Last Will and Testament. `Online` on connect, `Offline` via LWT on disconnect. | event |
+| `ESPGeiger-<device_id>/tele/lwt` | Last Will and Testament. `Online` on connect, `Offline` via LWT on disconnect. Retained. A settings save sends `Offline` before it reconnects, so a rejoin the broker refuses still reads `Offline`. | event |
 | `ESPGeiger-<device_id>/tele/sensor` | Radiation measurements bundle (CPM, uSv, CPS, CPM5, CPM15, HV, warn, alert). | 60 s |
 | `ESPGeiger-<device_id>/tele/status` | Device state + diagnostics (time, uptime, IP, RSSI, counts, load metrics, memory, serial health on serial builds). | 60 s |
 

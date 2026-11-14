@@ -29,6 +29,13 @@
 #ifndef GEIGER_RATIO
   #define GEIGER_RATIO 151.0  // pref default is STR() of it
 #endif
+// cpm, pref defaults; 0 = off
+#ifndef GEIGER_WARN_CPM
+  #define GEIGER_WARN_CPM 50
+#endif
+#ifndef GEIGER_ALERT_CPM
+  #define GEIGER_ALERT_CPM 100
+#endif
 
 // set by Counter.h
 #ifndef GEIGER_DEAD_TIME_DEFAULT
@@ -179,8 +186,8 @@ class CounterMaths {
       return silence >= missing_threshold_s(uptime_s, total_clicks);
     }
 
-    // cold window reads high
-    static bool alarm_over(int cpm, int limit, bool warm) { return warm && limit < cpm; }
+    // cold window reads high; 0 = off
+    static bool alarm_over(int cpm, int limit, bool warm) { return warm && limit > 0 && limit < cpm; }
 
     // log2 from 64us, isr, no clz
     __attribute__((always_inline)) static uint8_t interval_bucket(uint32_t us) {

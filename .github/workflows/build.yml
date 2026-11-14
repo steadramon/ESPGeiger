@@ -100,7 +100,9 @@ jobs:
       matrix:
         include:
           - environment: "esp8266oled_pulse"
-            flags: "-DRTC_8266"
+            flags: "-DRTC_CHIP"
+          - environment: "esp32_pulse"
+            flags: "-DRTC_CHIP"
     runs-on: ubuntu-24.04
     name: Build options
     steps:

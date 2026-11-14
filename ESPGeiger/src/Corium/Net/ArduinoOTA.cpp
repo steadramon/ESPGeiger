@@ -123,7 +123,9 @@ static void ota_error(ota_error_t error) {
   else                                  corium::Log::console(PSTR("OTA: Error %u"), error);
 }
 
-void corium::ArduinoOTAModule::begin() {
+static bool s_espota = false;   // sys.espota at boot
+
+static void espota_begin() {
   // lambdas fold the statics in, a plain function in std::function costs more
   ArduinoOTA.onStart([]() { ota_start(); });
   ArduinoOTA.onEnd([]() { ota_end(); });
@@ -135,6 +137,12 @@ void corium::ArduinoOTAModule::begin() {
   if (pass && pass[0]) ArduinoOTA.setPassword(pass);
   ArduinoOTA.setHostname(corium::DeviceInfo::hostname());
   ArduinoOTA.begin();
+}
+
+void corium::ArduinoOTAModule::begin() {
+  s_espota = corium::Prefs::getBool("sys", corium::K_ESPOTA);
+  if (s_espota) espota_begin();
+  else (void)MDNS.begin(corium::DeviceInfo::hostname());   // espota's begin starts it otherwise
   // no mdns, the IP still works
   (void)MDNS.addService("http",   "tcp", 80);
 #ifdef APP_MDNS_SERVICE
@@ -149,7 +157,10 @@ void corium::ArduinoOTAModule::begin() {
 }
 
 void corium::ArduinoOTAModule::loop(unsigned long now) {
-  ArduinoOTA.handle();
+  if (s_espota) ArduinoOTA.handle();
+#ifdef ESP8266
+  else MDNS.update();   // handle() did it
+#endif
   // multicast groups re-reported every 5 min
   static unsigned long s_igmp_ms = 0;
   if (s_igmp_ms == 0) s_igmp_ms = now;

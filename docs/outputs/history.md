@@ -20,7 +20,7 @@ When lifetime tracking is enabled, a Lifetime card appears showing cumulative st
 - **Install age** is wall clock time since first boot.
 - **Avg CPM** is lifetime clicks divided by tracked seconds, multiplied by 60.
 
-A **Reset lifetime** button at the bottom of the card zeros every field in the card, including the saved totals that normally survive a reboot. The totals also survive a factory reset, so this button is the only way to clear them.
+A **Reset lifetime** button at the bottom of the card zeros every field in the card except Install age, including the saved totals that normally survive a reboot. The totals also survive a factory reset, so this button is the only way to clear them.
 
 ## Today, yesterday and the day rate
 

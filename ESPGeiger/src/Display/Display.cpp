@@ -314,6 +314,7 @@ static void hScreenBin(EGHttpRequest&, EGHttpResponse& res, void*) {
 
 static void hScreenTap(EGHttpRequest&, EGHttpResponse& res, void*) {
   display.button(corium::fastMillis(), 1);
+  gcounter.reset_alarm();   // as the button does
   res.send(200, FPSTR(HTTP_CT_PLAIN), F("ok"));
 }
 

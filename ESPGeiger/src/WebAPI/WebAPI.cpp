@@ -87,7 +87,7 @@ static const corium::PrefGroup WEBAPI_PREF_GROUP PROGMEM = {
   "webapi", "ESPGeiger Network", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
-  corium::P_CAT_UPLOAD, EG_K_MODE,
+  corium::P_CAT_UPLOAD, EG_K_MODE, 0,
 };
 
 const corium::PrefGroup* WebAPI::prefsGroup() { return &WEBAPI_PREF_GROUP; }

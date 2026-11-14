@@ -41,6 +41,7 @@ Some pins save with a warning shown after the save:
 |---|---|---|---|---|
 | Friendly name | `sys.name` | String (32) | (empty) | Optional human label shown in the web UI title and `/about`. Blank falls back to the hostname (e.g. `ESPGeiger-a1b2c3`). |
 | Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. Reboot to apply. |
+| Network upload | `sys.espota` | Boolean | `0` off | espota port for PlatformIO and the Arduino IDE. The Update page works either way. Reboot to apply. |
 
 <!-- /gen -->
 
@@ -101,7 +102,7 @@ ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.cou
 | Pulse width ms | `led.pulse_ms` | Int 1-50 | `20` (`2` on ESPGeiger-HW) | all | How long the LED stays lit per count, in milliseconds. |
 | Fade rate | `led.fade_shift` | `0` Fast, `1` Medium, `2` Slow | `1` Medium | all | Fade mode only. |
 | Blip brightness | `led.blip_bright` | Int 0-100 | `80` (`100` on ESPGeiger-HW) | all | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). |
-| Quiet from | `led.quiet_from` | Time HH:MM | (empty) | not ESPGeiger-HW | Silence the blip LED + beeper from this time. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
+| Quiet from | `led.quiet_from` | Time HH:MM | (empty) | not ESPGeiger-HW | Silence the blip LED + beeper from this time. The alert and HV fault alarms still sound. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
 | Quiet to | `led.quiet_to` | Time HH:MM | (empty) | not ESPGeiger-HW | End of quiet window. Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`). |
 | Status LED | `led.pin` | Int -1 to max GPIO | varies by build | ESP32 | GPIO of the board's own LED, `-1` = none. Defaults to `2` on ESP32 and `-1` on C3/S3, which have no plain LED on GPIO 2. ESP8266 is fixed at GPIO 2. A pin another setting already uses stays with that setting and the LED stays off. Reboot to apply. |
 | Polarity | `led.polarity` | `0` Active high, `1` Active low | varies by build | ESP32 | `Active low` for an LED that lights when its pin is low, such as the C3 SuperMini (GPIO 8) or Lolin32 Lite (GPIO 22). Reboot to apply. |

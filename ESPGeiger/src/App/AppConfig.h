@@ -19,6 +19,8 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
+#include "Corium/Platform/Chip.h"
+
 #ifndef THING_NAME
 #define THING_NAME "ESPGeiger"
 #endif
@@ -74,8 +76,8 @@
 #if defined(SSD1306_DISPLAY) || !defined(DISABLE_ENVSENSOR)
 #define I2C_BUS
 #endif
-// a battery clock on the bus: esp32, the 8266 with -DRTC_8266
-#if defined(I2C_BUS) && (defined(ESP32) || defined(RTC_8266))
+// a battery clock on the bus: c3/s3, the 8266 and esp32 with -DRTC_CHIP
+#if defined(I2C_BUS) && ((defined(ESP32) && CORIUM_HAS_SLOT_ROOM) || defined(RTC_CHIP))
 #define CORIUM_RTC
 #endif
 // the chip's signing key, attest builds

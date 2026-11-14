@@ -147,7 +147,8 @@ class Counter : public CounterMaths {
       bool is_quiet_now();
       bool is_warning() const { return _warn_on; }
       bool is_alert() const { return _alert_on; }
-      // warn, alert or warm changed, from loop()
+      bool is_snoozed() const { return _alarm_snoozed; }   // till it drops below warning
+      // warn, alert, warm or the snooze changed, from loop()
       static constexpr uint8_t TOPIC_ALARM = Topic::ALARM;
       // a second counted, from loop()
       static constexpr uint8_t TOPIC_COUNTS = Topic::COUNTS;
@@ -227,8 +228,8 @@ class Counter : public CounterMaths {
       void note_counts_missing(uint32_t uptime_s);
       void hour_rollover(time_t t);
       uint32_t clock_read();
-      void lifetime_tick(int counts, uint32_t now);
-      void life_work(uint32_t now);
+      void lifetime_tick(int counts);
+      void life_work();
       void cpm_work(bool fresh);
       void ema_work(bool add15);
       bool ema_tick();
@@ -241,8 +242,8 @@ class Counter : public CounterMaths {
       static uint32_t _pulse_hist[HIST_BUCKETS];
       uint32_t _prev_blip_us = 0;
       bool     _hist_primed  = false;
-      int _cpm_warning = 50;
-      int _cpm_alert = 100;
+      int _cpm_warning = GEIGER_WARN_CPM;
+      int _cpm_alert = GEIGER_ALERT_CPM;
       bool _warn_on = false;
       bool _alert_on = false;
       bool _alarm_snoozed = false;
@@ -256,10 +257,8 @@ class Counter : public CounterMaths {
       static constexpr uint8_t PENDING_COUNTS = 1 << 3;
       uint8_t  _pending_work = 0;
       uint8_t  _alarm_bits = 0;   // warn, alert, warm as last emitted
-      uint32_t _rtc_pending_now = 0;
       uint32_t _first_boot_ts = 0;
       unsigned long _life_saved_s = 0;
-      uint32_t      _saved_at = 0;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
       float   _cpm_window_inv = 1.0f / (float)GEIGER_CPM_COUNT;
       mutable bool _warm_cached = false;

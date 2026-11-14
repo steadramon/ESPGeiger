@@ -44,11 +44,11 @@ Voice voice;
 CORIUM_REGISTER_MODULE(voice)
 
 CORIUM_PSTR(VX_L_AEN, "Announce");
-CORIUM_PSTR(VX_H_AEN, "Periodically speak the current CPM");
+CORIUM_PSTR(VX_H_AEN, "Speak CPM every interval");
 CORIUM_PSTR(VX_L_AIV, "Every (seconds)");
 CORIUM_PSTR(VX_H_AIV, "10-3600");
 CORIUM_PSTR(VX_L_AUS, "Announce dose");
-CORIUM_PSTR(VX_H_AUS, "Include micro sievert per hour with the announcement");
+CORIUM_PSTR(VX_H_AUS, "Add uSv/h to the announcement");
 CORIUM_PSTR(VX_L_ARM, "RadMon up/down");
 CORIUM_PSTR(VX_H_ARM, "Speak when RadMon goes online or offline");
 
@@ -64,7 +64,7 @@ static const corium::PrefGroup VOICE_PREF_GROUP PROGMEM = {
   "klaxon", "Voice", 1,
   VOICE_PREF_ITEMS,
   sizeof(VOICE_PREF_ITEMS) / sizeof(VOICE_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT, K_ANNOUNCE_ENABLE,
+  corium::P_CAT_OUTPUT, K_ANNOUNCE_ENABLE, 0,
 };
 
 const corium::PrefGroup* Voice::prefsGroup() { return &VOICE_PREF_GROUP; }
@@ -115,7 +115,7 @@ static const corium::PrefGroup KLAXON_PREF_GROUP PROGMEM = {
   "klax", "Alert Klaxon", 1,
   KLAXON_PREF_ITEMS,
   sizeof(KLAXON_PREF_ITEMS) / sizeof(KLAXON_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT, EG_K_ENABLE,
+  corium::P_CAT_OUTPUT, EG_K_ENABLE, 0,
 };
 
 const corium::PrefGroup* KlaxonPrefs::prefsGroup() { return &KLAXON_PREF_GROUP; }
@@ -325,7 +325,7 @@ static const char* DIGIT_NAMES[10] = {
 };
 
 void Voice::queueKlaxonOnAlert() {
-  const bool now_alert = corium::m_b(M_ALERT);
+  const bool now_alert = corium::m_b(M_ALERT) && !gcounter.is_snoozed();
   if (now_alert && !_prev_alert && !_quiet.active() && !_klax_wait) {
     _klax_wait = true;
     _last_klax_ms = corium::fastMillis();
@@ -448,13 +448,13 @@ static void say_hundreds(Voice& v, long n) {
   }
 }
 
-void Voice::speakNumber(long n) {
-  if (n < 0) n = -n;
+void Voice::speakNumber(long v) {
+  unsigned long n = v < 0 ? 0UL - (unsigned long)v : (unsigned long)v;   // LONG_MIN too
   if (n == 0) { speakWord("zero"); silence(80); return; }
   if (n >= 1000000) {
     // no word past thousand, digit groups
     char buf[16];
-    snprintf(buf, sizeof(buf), "%ld", n);
+    snprintf(buf, sizeof(buf), "%lu", n);
     const size_t len = strlen(buf);
     for (size_t i = 0; i < len; i++) {
       const bool last = ((i + 1) % 5 == 0) || (i + 1 == len);
@@ -464,8 +464,7 @@ void Voice::speakNumber(long n) {
     return;
   }
   if (n >= 1000) {
-    long thousands = n / 1000;
-    say_hundreds(*this, thousands);
+    say_hundreds(*this, (long)(n / 1000));
     speakWord("thousand"); silence(120);
     n %= 1000;
     if (n == 0) return;

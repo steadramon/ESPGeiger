@@ -57,7 +57,7 @@ static const corium::PrefGroup WEBHOOK_PREF_GROUP PROGMEM = {
   "webhook", "Webhook", 1,
   WEBHOOK_PREF_ITEMS,
   sizeof(WEBHOOK_PREF_ITEMS) / sizeof(WEBHOOK_PREF_ITEMS[0]),
-  corium::P_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND, 0,
 };
 
 const corium::PrefGroup* Webhook::prefsGroup() { return &WEBHOOK_PREF_GROUP; }
@@ -138,7 +138,7 @@ bool Webhook::prepare(char* url, size_t cap, const char** body) {
   }
   if (!build_body(buf, key)) {
     free(buf);
-    corium::Log::console(PSTR("Webhook: body too long, not sent"));
+    corium::Log::console(PSTR("Webhook: Body too long, not sent"));
     notePublish(false);
     return false;
   }

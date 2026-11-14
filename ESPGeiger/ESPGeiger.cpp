@@ -104,6 +104,7 @@ void setup()
 
   corium::Boot::prefs();
   bool safe = corium::BootGuard::safeMode();
+  BootHooks::parkOutputs(safe);
   if (corium::BootGuard::entered()) BootHooks::displaySafeMode();
 
   delay(100);

@@ -38,6 +38,8 @@ class SystemPrefs : public Module {
     void begin() override;
     void loop(unsigned long now) override;
     static bool passRestored;   // FS lost, web_pass from the key store
+    // kept: WEB_PASS_MAX + 1, the backup when a restore failed
+    static const char* webPass(char* kept);
 };
 }  // namespace corium
 

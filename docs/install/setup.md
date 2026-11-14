@@ -74,7 +74,7 @@ On builds with a push button (such as ESPGeiger-HW and ESPGeiger Log):
 3. Power on while still holding.
 4. Keep holding for **at least 5 seconds** (the display counts down), then release. Don't hold it for 30 seconds or more: that is taken as a stuck button and the device boots as normal.
 
-The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity and the lifetime totals (clicks, first boot, tracked time) are kept; clear those with **Reset lifetime** on the [History page](/output/history). Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before 5 seconds starts [Offline Mode](/configuration/offlinemode) instead.
+The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity and the lifetime totals (clicks, first boot, tracked time) are kept; **Reset lifetime** on the [History page](/output/history) clears the clicks and tracked time. Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before 5 seconds starts [Offline Mode](/configuration/offlinemode) instead.
 
 ### 4. Reflash via the Web Installer
 

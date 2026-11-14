@@ -22,6 +22,7 @@
 #ifdef ESP8266
 #include "RtcMap.h"
 #include "DeviceInfo.h"
+#include "AppHooks.h"
 #include <stdint.h>
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
@@ -72,6 +73,7 @@ const Snapshot* lastCrash() { return s_recovered; }
 extern "C" void custom_crash_callback(struct rst_info* rst_info,
                                       uint32_t stack,
                                       uint32_t stack_end) {
+  corium::AppHooks::onCrash();   // outputs off first, the stack takes up to a second
   using namespace corium::CrashDump;
   Snapshot snap{};
   snap.magic    = MAGIC;

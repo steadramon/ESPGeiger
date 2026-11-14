@@ -49,6 +49,9 @@
 #error "ESPG_HV needs EG_TIMER1_PWM"
 #endif
 #include <EGTimer1.h>
+#include "Corium/System/AppHooks.h"
+// the gate low while the stack prints, the nmi keeps running
+void corium::AppHooks::onCrash() { EGTimer1::pwm_stop(); }
 #endif
 #include "Corium/WebPortal/WebPortal.h"
 #include "HVJS_BUNDLE.gz.h"
@@ -263,6 +266,9 @@ void HV::write_duty() {
 // write now, OTA stops HV::loop
 void HV::hold(bool restarting) {
   _held = true;
+#ifdef ESPGEIGER_HW32
+  _ramp = 0;   // a failed ota soft-starts again
+#endif
   write_duty();
   if (!restarting) return;
 #if CORIUM_HAS_TIMER1
@@ -294,6 +300,10 @@ void HV::set_pwm_pin(int pin) {
     pin = -1;
   }
   _pwm_pin = pin;
+  if (pin < 0) return;
+  // gate low till begin, safe mode too
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, LOW);
 }
 
 #ifdef HV_RATIO_MV

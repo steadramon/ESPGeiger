@@ -63,7 +63,7 @@ class HttpPoster : public Sender {
     virtual PGM_P contentType() const { return nullptr; }
 
     void setEnabled(bool on);
-    // clamped secs back, _every_ms from it
+    // _every_ms from secs, secs back
     uint16_t setIntervalS(int s);
     // n from snprintf, a cut url is logged and not sent
     bool urlFits(int n, size_t cap);

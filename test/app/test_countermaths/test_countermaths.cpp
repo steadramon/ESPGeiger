@@ -287,10 +287,11 @@ static void alarm_cold(void) {
   TEST_ASSERT_FALSE(CounterMaths::alarm_over(100000, 50, false));
 }
 
-// over the limit, not at it
+// over the limit, not at it; 0 = off
 static void alarm_limit(void) {
   TEST_ASSERT_TRUE(CounterMaths::alarm_over(51, 50, true));
   TEST_ASSERT_FALSE(CounterMaths::alarm_over(50, 50, true));
+  TEST_ASSERT_FALSE(CounterMaths::alarm_over(100000, 0, true));
 }
 
 // no alarm till the first minute is full

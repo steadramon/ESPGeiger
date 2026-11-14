@@ -63,6 +63,9 @@ static void slow_reads(uint8_t page) {
   if (all) {
     s_warn_cpm  = (float)corium::Prefs::getUInt("counter", K_SYS_WARN);
     s_alert_cpm = (float)corium::Prefs::getUInt("counter", K_SYS_ALERT);
+    // 0 = that alarm off, the arc still needs a scale
+    if (!s_warn_cpm)  s_warn_cpm  = GEIGER_WARN_CPM;
+    if (!s_alert_cpm) s_alert_cpm = GEIGER_ALERT_CPM;
   }
   if (all || page == PAGE_TEMP) s_temp = corium::m_f(M_T);
   if (all || page == PAGE_HUM)  s_hum  = corium::m_f(M_H);
@@ -160,7 +163,7 @@ CORIUM_PSTR(MX_O_PTS, "Dots|Colon only");
 CORIUM_PSTR(MX_H_PTS, "Colon only: page letters (C U t H), the colon is the uSv point");
 CORIUM_PSTR(MX_L_MODE, "Pages");
 CORIUM_PSTR(MX_O_MODE, "Cycle|Fixed");
-CORIUM_PSTR(MX_H_MODE, "Cycle auto-advances; Fixed holds until the button is pressed");
+CORIUM_PSTR(MX_H_MODE, "Cycle steps on, Fixed waits for the button");
 CORIUM_PSTR(MX_L_CNT, "Digits");
 CORIUM_PSTR(MX_L_PNL, "Panels");
 CORIUM_PSTR(MX_H_PNL, "8x8 panels in the chain");
@@ -172,7 +175,7 @@ CORIUM_PSTR(MX_H_BGN, "Bar fills at this multiple of the recent average");
 CORIUM_PSTR(MX_L_BWN, "Bar baseline");
 CORIUM_PSTR(MX_O_BWN, "5 min|15 min");
 CORIUM_PSTR(MX_L_ORI, "Matrix module");
-CORIUM_PSTR(MX_H_ORI, "FC-16 is the common 4-in-1 strip; Generic the single 8x8 kit. Upside down for a flipped strip");
+CORIUM_PSTR(MX_H_ORI, "FC-16 = 4-in-1 strip, Generic = single 8x8 kit, upside down = flipped strip");
 CORIUM_PSTR(MX_O_ORI, "FC-16|Generic|FC-16 upside down|Generic upside down");
 CORIUM_PSTR(MX_L_REV, "Reverse digits");
 CORIUM_PSTR(MX_H_REV, "7-seg: for modules that show 56781234");
@@ -198,7 +201,7 @@ static const corium::PrefGroup MAX7219_PREF_GROUP PROGMEM = {
   "max7219", "7-Seg / Matrix", 1,
   MAX7219_PREF_ITEMS,
   sizeof(MAX7219_PREF_ITEMS) / sizeof(MAX7219_PREF_ITEMS[0]),
-  corium::P_CAT_SYSTEM, K_DIN,
+  corium::P_CAT_SYSTEM, K_DIN, 0,
 };
 
 const corium::PrefGroup* Max7219Display::prefsGroup() { return &MAX7219_PREF_GROUP; }
@@ -324,10 +327,10 @@ void Max7219Display::applyTm() {
     bootSweep();
     _swept = true;
     if (_tm_acked) {
-      corium::Log::console(PSTR("TM1637: display up (clk=%d dio=%d)"), _clk, _din);
+      corium::Log::console(PSTR("TM1637: Display up (clk=%d dio=%d)"), _clk, _din);
     } else {
       _tm_off = true;
-      corium::Log::console(PSTR("TM1637: no ack (clk=%d dio=%d), off until reboot"), _clk, _din);
+      corium::Log::console(PSTR("TM1637: No ack (clk=%d dio=%d), off until reboot"), _clk, _din);
     }
   }
 }
@@ -363,7 +366,7 @@ void Max7219Display::apply() {
   set_power(display.lit());
   _drv.setIntensity(brightness(15));
   if (_drv.ready() && !_swept) {
-    corium::Log::console(PSTR("MAX7219: display up (type=%u din=%d clk=%d cs=%d)"),
+    corium::Log::console(PSTR("MAX7219: Display up (type=%u din=%d clk=%d cs=%d)"),
                  _layout, _din, _clk, _cs);
     bootSweep();
     _swept = true;
@@ -489,13 +492,13 @@ void Max7219Display::pageSegs(uint8_t* segs) {
 
 void Max7219Display::tmSend(const uint8_t* segs, uint8_t n) {
   bool ok = _tm.show(segs, n);
-  if (!ok && _tm_acked) corium::Log::console(PSTR("TM1637: no ack, check wiring and power"));
+  if (!ok && _tm_acked) corium::Log::console(PSTR("TM1637: No ack, check wiring and power"));
   _tm_acked = ok;
   if (ok) {
     _tm_fails = 0;
   } else if (++_tm_fails >= TM_GIVE_UP) {
     _tm_off = true;
-    corium::Log::console(PSTR("TM1637: no ack, off until reboot"));
+    corium::Log::console(PSTR("TM1637: No ack, off until reboot"));
   }
 }
 

@@ -183,13 +183,8 @@ static void send_head_open(EGHttpResponse& res) {
   res.sendChunk(FPSTR(corium::BootGuard::safeMode() ? SAFE_STYLE : HEAD_STYLE));
 }
 
-// no clock yet, the browser has one
-static const char CLOCK_JS[] PROGMEM =
-  "<script>fetch('/clock',{method:'POST',body:new URLSearchParams({e:Math.floor(Date.now()/1e3)})})</script>";
-
 static void send_head_tail(EGHttpResponse& res) {
   res.sendChunk(FPSTR(corium::BootGuard::safeMode() ? SAFE_THEME : HEAD_THEME));
-  if (!corium::Clock::synced) res.sendChunk(FPSTR(CLOCK_JS));
   res.sendChunk(FPSTR(HEAD_H1));
   res.sendChunk(FPSTR(FAVICON_PATHS));
   res.sendChunk(FPSTR(SVG_END));
@@ -398,7 +393,8 @@ void corium::WebPortal::begin(uint16_t port) {
 void corium::WebPortal::applyAuthFromPrefs() {
   corium::WebPortal* p = s_portal;
   if (!p || !p->_active) return;
-  const char* cur = corium::Prefs::getString("sys", corium::K_WEB_PASS);
+  char kept[WEB_PASS_MAX + 1];
+  const char* cur = corium::SystemPrefs::webPass(kept);
   static_assert(sizeof("admin") - 1 + 1 + WEB_PASS_MAX <= EGHTTP_AUTH_MAX,
                 "admin:pass must fit EGHTTP_AUTH_MAX or auth switches off");
   p->_http.setBasicAuth(F("admin"), cur, F(THING_NAME));
@@ -991,6 +987,12 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
   res.sendChunk(FPSTR(W_DETAILS_END));
 }
 
+// no clock yet, the browser has one. id=time, /status links here
+static const char CLOCK_SET[] PROGMEM =
+  "<p id=time>Clock not set <button type=button class='btn-sm btn-o' onclick=\"fetch('/clock',{method:'POST',"
+  "body:new URLSearchParams({e:Math.floor(Date.now()/1e3)})}).then(()=>location.reload())\">"
+  "Set from this browser</button></p>";
+
 void corium::WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("Network"));
 
@@ -1003,6 +1005,7 @@ void corium::WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   wifi_render_static_ip(res);
   res.sendChunk(FPSTR(WIFI_FORM_END));
 
+  if (!corium::Clock::synced) res.sendChunk(FPSTR(CLOCK_SET));
   if (!corium::Registry::quarantined(&ntpclient)) {
     // lazy load the tz list
     res.sendChunk(F("<details style='margin-top:1.5em' "

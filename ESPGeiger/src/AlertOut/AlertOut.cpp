@@ -26,6 +26,7 @@
 #include "Corium/Measure/Measure.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/Prefs/Prefs.h"
+#include "Corium/System/Lifecycle.h"
 #include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
 
@@ -45,7 +46,7 @@ static const corium::PrefGroup ALERT_PREF_GROUP PROGMEM = {
   "alert", "Alert Out", 1,
   ALERT_PREF_ITEMS,
   sizeof(ALERT_PREF_ITEMS) / sizeof(ALERT_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT, EG_K_PIN,
+  corium::P_CAT_OUTPUT, EG_K_PIN, 0,
 };
 
 const corium::PrefGroup* AlertOut::prefsGroup() { return &ALERT_PREF_GROUP; }
@@ -58,16 +59,33 @@ void AlertOut::onPrefsLoaded() {
   corium::Registry::post(this);
 }
 
-void AlertOut::begin() {
+static void alert_lifecycle(corium::Lifecycle::Event e) {
+  if (e == corium::Lifecycle::SHUTDOWN) alertout.off();
+}
+
+// every boot, safe mode too: off before the join
+void AlertOut::park() {
   int p = corium::Prefs::getInt("alert", EG_K_PIN);
   if (p < 0 || p > MAX_GPIO_PIN) return;
   if (const char* why = corium::PinSafety::claimOutput(p, PSTR("AlertOut"))) {
     corium::Log::console(PSTR("AlertOut: pin=%d unsafe (%s)"), p, why);
     return;
   }
+  _invert = (uint8_t)corium::Prefs::getUInt("alert", EG_K_POLARITY) & 1;   // safe mode skips onPrefsLoaded
   _pin = (int8_t)p;
   pinMode(_pin, OUTPUT);
   apply_level(false);
+}
+
+// a relay stays as it was through a restart
+void AlertOut::off() {
+  apply_level(false);
+  _pin = -1;
+}
+
+void AlertOut::begin() {
+  if (_pin < 0) return;
+  corium::Lifecycle::on(alert_lifecycle);
   corium::Registry::on(Counter::TOPIC_ALARM, this);
   corium::Log::console(PSTR("AlertOut: pin=%d polarity=%u mode=%u"),
                (int)_pin, (unsigned)_invert, (unsigned)_mode);
@@ -80,7 +98,7 @@ void AlertOut::apply_level(bool active) {
 
 // on alarm changes; while pulsing, at each flip
 void AlertOut::loop(unsigned long now) {
-  bool active = corium::m_b(M_ALERT);
+  bool active = corium::m_b(M_ALERT) && !gcounter.is_snoozed();
   if (_mode != 1 || !active) {
     _pulsing = false;
     apply_level(active);

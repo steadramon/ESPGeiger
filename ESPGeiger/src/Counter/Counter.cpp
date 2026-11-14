@@ -300,26 +300,25 @@ CORIUM_TICK_COLD uint32_t Counter::clock_read() {
   time_t t = time(nullptr);
   uint32_t now = (uint32_t)t;
   if (!s_next_boundary || corium::reached(now, s_next_boundary)) hour_rollover(t);
-  if (_lifetime_enabled) {
-    if (_saved_at == 0) _saved_at = now;
-    if (_first_boot_ts == 0) {
-      _first_boot_ts = now;
-      _pending_work |= PENDING_SAVE;
-    }
+  // none yet, or ntp says it's ahead of now; a browser or rtc never moves one
+  bool ahead = corium::Clock::source == corium::Clock::NTP && !corium::reached(now, _first_boot_ts);
+  if (_lifetime_enabled && (!_first_boot_ts || ahead)) {
+    _first_boot_ts = now;
+    _pending_work |= PENDING_SAVE;
   }
   s_clock.read(now, s_next_boundary);
   return now;
 }
 
-inline void Counter::lifetime_tick(int counts, uint32_t now) {
+inline void Counter::lifetime_tick(int counts) {
   add_wrapped(total_clicks_lifetime, total_clicks_lifetime_rollover, counts);
-  if (!--s_life_left) life_work(now);
+  if (!--s_life_left) life_work();
 }
 
-// the rtc stash every 30 s, the save every 6 h
-CORIUM_TICK_COLD void Counter::life_work(uint32_t now) {
+// counted time, no clock: the rtc stash every 30 s, the save every 6 h
+CORIUM_TICK_COLD void Counter::life_work() {
   s_life_left = RTC_STASH_S;
-  _rtc_pending_now = now;
+  _life_saved_s += RTC_STASH_S;
   _pending_work |= PENDING_RTC;
   s_save_s += RTC_STASH_S;
   if (s_save_s >= LIFETIME_SAVE_S) {
@@ -354,8 +353,8 @@ inline void Counter::update_alarms(int cpm) {
   bool warn = alarm_over(cpm, _cpm_warning, warm);
   bool alrt = alarm_over(cpm, _cpm_alert, warm);
   if (!warn && !alrt) _alarm_snoozed = false;
-  _warn_on  = warn && !_alarm_snoozed;
-  _alert_on = alrt && !_alarm_snoozed;
+  _warn_on  = warn;
+  _alert_on = alrt;
   uint8_t bits = _warn_on | (_alert_on << 1) | (warm << 2);
   if (bits != _alarm_bits) {
     _alarm_bits = bits;
@@ -386,35 +385,27 @@ void CORIUM_TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
   bool add5 = ema_tick();
   if (cpm5_history) push_cpm5(add5);
 
-  uint32_t now = 0;
-  if (corium::Clock::synced) now = s_clock.count() ? s_clock.now : clock_read();
+  // the hour, the first boot stamp
+  if (corium::Clock::synced && !s_clock.count()) (void)clock_read();
 
   clicks_today += counts;
   clicks_hour += counts;
 
-  if (_lifetime_enabled) lifetime_tick(counts, now);
+  if (_lifetime_enabled) lifetime_tick(counts);
   update_alarms(ccpm);
   _pending_work |= PENDING_COUNTS;
 }
 
+// the sounders and the relay sleep, the state stays
 void Counter::reset_alarm() {
-  if (!_warn_on && !_alert_on) return;
+  if (_alarm_snoozed || (!_warn_on && !_alert_on)) return;
   _alarm_snoozed = true;
-  _warn_on       = false;
-  _alert_on      = false;
+  _pending_work |= PENDING_ALARM;
   corium::Log::console(PSTR("Alarm: Snoozed until level drops below warning"));
 }
 
 // true = on flash; the stash has the totals either way
 bool Counter::save_lifetime() {
-  uint32_t now = corium::Clock::epoch();
-  uint32_t secs = 0;
-  if (_saved_at > 0 && corium::Clock::synced && corium::reached(now, _saved_at)) {
-    secs = now - _saved_at;
-  }
-  _life_saved_s += secs;
-  if (corium::Clock::synced) _saved_at = now;
-
   bool put = corium::Prefs::putUInt("life", EG_K_CLK, total_clicks_lifetime) &&
              corium::Prefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover) &&
              corium::Prefs::putUInt("life", EG_K_FBT, _first_boot_ts) &&
@@ -426,18 +417,10 @@ bool Counter::save_lifetime() {
 }
 
 unsigned long Counter::get_lifetime_seconds() const {
-  unsigned long live = _life_saved_s;
-  if (_saved_at > 0 && corium::Clock::synced) {
-    uint32_t now = corium::Clock::epoch();
-    if (corium::reached(now, _saved_at)) live += now - _saved_at;
-  }
-  return live;
+  return _life_saved_s;
 }
 
 void Counter::clock_stepped(int32_t delta_s) {
-  if (_saved_at) _saved_at += delta_s;
-  // stamped before the step, 0 stays no time
-  if ((_pending_work & PENDING_RTC) && _rtc_pending_now) _rtc_pending_now += delta_s;
   // stamped from the bad time this boot
   if (_first_boot_ts && corium::reached(_first_boot_ts, (uint32_t)(corium::Clock::bootEpoch - delta_s))) {
     _first_boot_ts += delta_s;
@@ -451,12 +434,9 @@ void Counter::clock_stepped(int32_t delta_s) {
 bool Counter::reset_lifetime() {
   total_clicks_lifetime = 0;
   total_clicks_lifetime_rollover = 0;
-  _first_boot_ts = 0;
-  _life_saved_s = 0;
-  _saved_at = 0;
+  _life_saved_s = 0;   // the first boot stays
   life_clear();   // else a crash brings the old totals back
   bool ok = save_lifetime();
-  s_clock.read_next();   // stamps the first boot again
   if (ok) corium::Log::console(PSTR("Lifetime: Reset"));
   return ok;
 }
@@ -751,14 +731,7 @@ bool Counter::is_quiet_now() {
 void __attribute__((noinline)) Counter::run_pending() {
   uint8_t pw = _pending_work;
   _pending_work = 0;
-  if (pw & PENDING_RTC) {
-    uint32_t secs = _life_saved_s;
-    // 0 = stamped before the sync, no time
-    if (_rtc_pending_now && _saved_at > 0 && corium::reached(_rtc_pending_now, _saved_at)) {
-      secs += _rtc_pending_now - _saved_at;
-    }
-    rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, secs);
-  }
+  if (pw & PENDING_RTC) rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, _life_saved_s);
   if (pw & PENDING_SAVE) {
     (void)save_lifetime();   // the stash has it
   }

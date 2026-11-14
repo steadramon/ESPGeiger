@@ -25,15 +25,16 @@ namespace corium { struct MenuEntry; }
 
 namespace corium {
 namespace AppHooks {
-  const MenuEntry* menu();   // first on the home page, PROGMEM, not in safe mode
+  const MenuEntry* menu();   // Shown first on the home page, PROGMEM, not in safe mode
   void routes(EGHttpServer& http);   // not in safe mode
   void infoRows(EGHttpResponse& res);   // About table on /info
   void aboutJson(EGHttpResponse& res);   // /about fields, each ends with a comma
-  void metrics(EGHttpResponse& res, const char* cid);   // after the measure rows
+  void metrics(EGHttpResponse& res, const char* cid);   // After the measure rows
+  void onCrash();   // 8266 crash callback, runs before the stack prints. No heap, Serial or libc in here
 }
 }  // namespace corium
 
-// PROGMEM, served after the core's own
+// In PROGMEM, served after the core's own
 extern const char APP_CSS[];        // style.css tail
 extern const char APP_THEME_JS[];   // theme.js tail
 

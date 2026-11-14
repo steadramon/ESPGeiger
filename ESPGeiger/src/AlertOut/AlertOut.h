@@ -34,6 +34,8 @@ class AlertOut : public corium::Module {
     void loop(unsigned long now) override;
     const corium::PrefGroup* prefsGroup() override;
     void onPrefsLoaded() override;
+    void park();   // from setup(), after prefs load
+    void off();
 
   private:
     void apply_level(bool active);

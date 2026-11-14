@@ -53,7 +53,7 @@ static inline bool dueEvery(uint32_t now, uint32_t& at, uint32_t ms) {
 static inline bool dueSteps(uint32_t now, uint32_t& last, uint32_t ms) {
   uint32_t gone = now - last;
   if (gone < ms) return false;
-  last += gone / ms * ms;
+  last += ms ? gone / ms * ms : gone;   // 0 = each call
   return true;
 }
 

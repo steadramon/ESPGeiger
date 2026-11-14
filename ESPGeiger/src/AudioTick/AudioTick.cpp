@@ -114,11 +114,11 @@ static void audio_worker_start() {
   if (s_audio_q) return;
   s_audio_q = xQueueCreate(8, sizeof(AudioCmd));
   if (!s_audio_q) {
-    corium::Log::console(PSTR("Tick: audio queue alloc failed"));
+    corium::Log::console(PSTR("Tick: Audio queue alloc failed"));
     return;
   }
   if (xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr) != pdPASS) {
-    corium::Log::console(PSTR("Tick: audio task failed"));
+    corium::Log::console(PSTR("Tick: Audio task failed"));
     vQueueDelete(s_audio_q);   // enqueue says no, a later start tries again
     s_audio_q = nullptr;
   }
@@ -144,13 +144,13 @@ static void mute_poll() {
 static void mute_btn_start() {
   if (AUDIO_MUTE_PIN < 0) return;
   if (const char* why = corium::PinSafety::claimInput(AUDIO_MUTE_PIN, PSTR("AudioMute"))) {
-    corium::Log::console(PSTR("Tick: mute pin=%d unsafe (%s)"), (int)AUDIO_MUTE_PIN, why);
+    corium::Log::console(PSTR("Tick: Mute pin=%d unsafe (%s)"), (int)AUDIO_MUTE_PIN, why);
     return;
   }
   pinMode(AUDIO_MUTE_PIN, INPUT_PULLUP);
   s_mute.reset(digitalRead(AUDIO_MUTE_PIN) == LOW, corium::fastMillis());
   s_mute_ticker.attach_ms(10, mute_poll);
-  corium::Log::console(PSTR("Tick: mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
+  corium::Log::console(PSTR("Tick: Mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
 }
 
 // 0 = dot, 1 = dash
@@ -176,7 +176,7 @@ CORIUM_PSTR(TK_H_DEC, "Click decay time constant (2-100 ms)");
 CORIUM_PSTR(TK_L_ENG, "Engine");
 CORIUM_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
 CORIUM_PSTR(TK_L_PK,  "Peak %");
-CORIUM_PSTR(TK_H_PK,  "Click amplitude ceiling (1-100). Lower = quieter and below NCN trip.");
+CORIUM_PSTR(TK_H_PK,  "Click peak (1-100). Lower = quieter, below NCN trip");
 CORIUM_PSTR(TK_L_CHM, "Boot chime");
 // value = index, as play_chime_now
 CORIUM_PSTR(TK_O_CHM, "Off|Random|Three beeps|Folk melody|DTMF|Bit ping|Coin|Sputnik|Item get");
@@ -205,7 +205,7 @@ static const corium::PrefGroup TICK_PREF_GROUP PROGMEM = {
   "tick", "Audio Tick", 1,
   TICK_PREF_ITEMS,
   sizeof(TICK_PREF_ITEMS) / sizeof(TICK_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT, EG_K_ENABLE,
+  corium::P_CAT_OUTPUT, EG_K_ENABLE, 0,
 };
 
 const corium::PrefGroup* AudioTick::prefsGroup() { return &TICK_PREF_GROUP; }

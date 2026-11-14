@@ -26,6 +26,7 @@
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
+#include "Corium/System/Lifecycle.h"
 #include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
 
@@ -46,7 +47,7 @@ uint8_t PulseOut::s_idle_seen = 0;
 bool PulseOut::s_busy = false;
 
 CORIUM_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
-CORIUM_PSTR(PO_H_PIN,  "-1 disables.");
+CORIUM_PSTR(PO_H_PIN,  "-1 = disabled");
 CORIUM_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
 CORIUM_PSTR(PO_L_FRQ,  "Burst Hz");
 CORIUM_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
@@ -76,7 +77,7 @@ static const corium::PrefGroup PULSE_PREF_GROUP PROGMEM = {
   "pulse", "Pulse Out", 1,
   PULSE_PREF_ITEMS,
   sizeof(PULSE_PREF_ITEMS) / sizeof(PULSE_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT, EG_K_ENABLE,
+  corium::P_CAT_OUTPUT, EG_K_ENABLE, 0,
 };
 
 const corium::PrefGroup* PulseOut::prefsGroup() { return &PULSE_PREF_GROUP; }
@@ -93,7 +94,7 @@ static int8_t claim_pin(bool enabled, int p) {
 void PulseOut::read_pin(bool was_enabled) {
   if (!_begun) { _pin = corium::Prefs::getInt("pulse", EG_K_PIN); return; }
   if (_enabled && !was_enabled && _engine.pin < 0)
-    corium::Log::console(PSTR("PulseOut: needs a reboot to start"));
+    corium::Log::console(PSTR("PulseOut: Needs a reboot to start"));
 }
 
 void PulseOut::onPrefsLoaded() {
@@ -179,19 +180,33 @@ static bool migrate_legacy_blip() {
   if (any) {
     // no marker, again next boot
     if (!corium::Prefs::put("pulse", EG_K_ENABLE, "1") || !corium::Prefs::commit(false)) {
-      corium::Log::console(PSTR("PulseOut: not saved"));
+      corium::Log::console(PSTR("PulseOut: Not saved"));
       return true;
     }
-    corium::Log::console(PSTR("PulseOut: migrated blip pin=%s pulse_ms=%s from v0.11"),
+    corium::Log::console(PSTR("PulseOut: Migrated blip pin=%s pulse_ms=%s from v0.11"),
                  pin_val[0] ? pin_val : "(none)", ms_val[0] ? ms_val : "(none)");
   } else {
-    corium::Log::console(PSTR("PulseOut: no blip pin/pulse keys in /prefs/led.bin"));
+    corium::Log::console(PSTR("PulseOut: No blip pin/pulse keys in /prefs/led.bin"));
   }
   corium::Fs::touch(BLIP_MIG_MARKER);
   return any;
 }
 
 static void pulseout_click(uint32_t) { pulseout.notifyClick(corium::fastMillis()); }
+
+// every boot, safe mode too: idle before the join, begin claims it again
+void PulseOut::park() {
+  int p = corium::Prefs::getInt("pulse", EG_K_PIN);
+  if (!corium::Prefs::getBool("pulse", EG_K_ENABLE) || p < 0) return;
+  if (corium::PinSafety::claimOutput(p, PSTR("PulseOut"))) return;   // begin says why
+  pinMode(p, OUTPUT);
+  digitalWrite(p, corium::Prefs::getUInt("pulse", EG_K_POLARITY) ? HIGH : LOW);
+}
+
+// no new click, a running one ends on its own
+static void pulse_lifecycle(corium::Lifecycle::Event e) {
+  if (e == corium::Lifecycle::SHUTDOWN) pulseout.stop();
+}
 
 void PulseOut::begin() {
   gcounter.on_click(pulseout_click);
@@ -200,12 +215,13 @@ void PulseOut::begin() {
   _begun = true;
   _engine.pin = claim_pin(_enabled, _pin);
   if (!_enabled || _engine.pin < 0) {
-    if (_enabled && _engine.pin < 0) corium::Log::console(PSTR("PulseOut: no pin set"));
+    if (_enabled && _engine.pin < 0) corium::Log::console(PSTR("PulseOut: No pin set"));
     return;
   }
   _voice = chip_blip(corium::DeviceInfo::hwId());
   _engine.begin();   // commits
   apply_voice();
+  corium::Lifecycle::on(pulse_lifecycle);
   corium::Log::console(PSTR("PulseOut: GPIO%d mode=%u polarity=%u"),
                (int)_engine.pin, (unsigned)_engine.mode, (unsigned)_engine.polarity);
 }

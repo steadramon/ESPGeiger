@@ -42,7 +42,7 @@ public:
   static constexpr uint16_t FULL = 255;
 #endif
 
-  // always convert through these
+  // Always convert levels through these
   static constexpr uint16_t levelFromPercent(uint32_t pct) {
     return (uint16_t)(((pct > 100 ? 100 : pct) * FULL + 50) / 100);
   }
@@ -50,20 +50,20 @@ public:
     return (uint16_t)(((v > 255 ? 255 : v) * FULL + 127) / 255);
   }
 
-  // Config, then commitConfig(), loop side
-  // wide so a bad pref clamps, not wraps
+  // Config. Set these then call commitConfig(), from the loop side
+  // wide types so a bad pref gets clamped rather than wrapping
   int8_t   pin        = -1;
   uint8_t  mode       = MODE_PULSE;
   uint32_t pulseUs    = 5000;
   uint32_t freqHz     = 3500;
   uint32_t cycles     = 1;
   uint8_t  polarity   = 0;
-  uint8_t  fadeShift = FADE_SHIFT_DEFAULT;
+  uint8_t  fadeShift  = FADE_SHIFT_DEFAULT;
   uint32_t maxHz      = 20;
   uint16_t activeLevel = FULL;  // FULL = digitalWrite
 
   // Caches + runtime state
-  uint32_t pulseUsEff     = 5000;
+  uint32_t pulseUsEff   = 5000;
   uint32_t burstFreqEff = 3500;
   uint16_t tokenIntervalMs = 50;
   uint8_t  tokens          = 0;
@@ -79,7 +79,7 @@ public:
     commitConfig();
     pinMode(pin, OUTPUT);
 #ifdef ESP32
-    // once, edges only write the duty
+    // Attach once here, after that each edge only writes the duty
     analogWrite(pin, polarity ? FULL : 0);
     _chan = analogGetChannel(pin);
     _out = _chan;
@@ -89,7 +89,7 @@ public:
     pinHigh = false;
   }
 
-  static constexpr uint32_t PULSE_US_MIN = 1000;   // 1 ms poll
+  static constexpr uint32_t PULSE_US_MIN = 1000;   // the poll runs every 1 ms
   static constexpr uint32_t PULSE_US_MAX = 50000;
   static constexpr uint32_t FREQ_MIN = 1000;
   static constexpr uint32_t FREQ_MAX = 8000;
@@ -100,24 +100,24 @@ public:
   static constexpr uint8_t  FADE_SHIFT_MAX = 4;
   static constexpr uint8_t  FADE_SHIFT_DEFAULT = 3;
   static constexpr uint32_t FADE_STEP_US = 5000;
-  static constexpr uint16_t FADE_FLOOR = 8;   // below it, straight to off
+  static constexpr uint16_t FADE_FLOOR = 8;   // below this the fade goes straight to off
 
-  // callers pass prefs straight in
+  // Clamps everything, so callers can pass prefs straight in
   void commitConfig() {
     if (mode > MODE_FADE) mode = MODE_PULSE;
-    pulseUs = clamp(pulseUs, PULSE_US_MIN, PULSE_US_MAX);
+    pulseUs  = clamp(pulseUs, PULSE_US_MIN, PULSE_US_MAX);
     freqHz   = clamp(freqHz, FREQ_MIN, FREQ_MAX);
     cycles   = clamp<uint32_t>(cycles, 1, CYCLES_MAX);
     if (polarity > 1) polarity = 0;
     if (maxHz > MAX_HZ_MAX) maxHz = MAX_HZ_MAX;
     if (fadeShift < FADE_SHIFT_MIN || fadeShift > FADE_SHIFT_MAX) fadeShift = FADE_SHIFT_DEFAULT;
-    pulseUsEff     = pulseUs;   // caller may scale after, then publish()
-    burstFreqEff = freqHz;
+    pulseUsEff     = pulseUs;   // the caller may scale it after, then call publish()
+    burstFreqEff   = freqHz;
     tokenIntervalMs = maxHz ? (uint16_t)(1000 / maxHz) : 0;
     publish();
   }
 
-  // the poll side takes it at its next start()
+  // The poll side picks this up at its next start()
   void publish() {
     IsrLock::enter(mux());
     _next = { mode, polarity, fadeShift, activeLevel, pulseUsEff, burstFreqEff, cycles };
@@ -125,15 +125,14 @@ public:
     IsrLock::leave(mux());
   }
 
-  // loop side, rate cap only, never the pin
+  // Loop side. Only checks the rate cap, it never touches the pin
   inline bool take(uint32_t now_ms) {
     if (pin < 0) return false;
-    if (!tokenIntervalMs) return true;
-    // full, no credit banked
+    // when the bucket is full its clock restarts, so no credit is banked
     return takeToken(now_ms, lastTokenMs, tokens, tokenIntervalMs, TOKENS_MAX, true);
   }
 
-  // poll side from here
+  // Everything from here runs on the poll side
   inline void start() {
     if (phasesRemaining != 0) return;
     adopt();
@@ -144,14 +143,14 @@ public:
     return phasesRemaining != 0 || (_run.mode == MODE_FADE && brightness > 0);
   }
 
-  // a saved polarity now, a running pulse ends on it
+  // Applies a saved polarity now. A running pulse picks it up when it ends
   inline void idleNow() {
     if (pin < 0 || busy()) return;
     adopt();
     writeIdle();
   }
 
-  // poll side, micros; one compare when idle
+  // poll side, in micros. Only one compare when idle
   inline void loop(uint32_t now_us) {
     if (_run.mode == MODE_FADE && brightness > 0) {
       if (!reached(now_us, nextUs)) return;
@@ -183,7 +182,7 @@ public:
   }
 
 private:
-  // what fire() and loop() run with
+  // The settings fire() and loop() run with
   struct Run {
     uint8_t  mode;
     uint8_t  polarity;
@@ -193,18 +192,18 @@ private:
     uint32_t burstHz;
     uint32_t cycles;
   };
-  Run _next = {};   // begin() commits and adopts first
+  Run _next = {};   // begin() fills both before they're used
   Run _run = {};
   volatile uint8_t _gen = 0;
   uint8_t _seen = 0;
 
-  // one for all engines, a save is rare
+  // One lock shared by all engines, saves are rare
   static IsrLock::Mux& mux() {
     static IsrLock::Mux m;
     return m;
   }
 
-  // between pulses, never mid one
+  // only between pulses, never in the middle of one
   inline void adopt() {
     if (_gen == _seen) return;
     IsrLock::enter(mux());
@@ -217,13 +216,13 @@ private:
   }
 
 #ifdef ESP32
-  static constexpr uint8_t  PWM_BITS   = 8;   // analogWrite's
+  static constexpr uint8_t  PWM_BITS   = 8;   // same as analogWrite
   static constexpr uint16_t BURST_DUTY = (FULL + 1) / 2;
-  int8_t   _chan   = -1;   // analogWrite's, from begin()
-  int8_t   _out    = -1;   // the one the pin is on
+  int8_t   _chan   = -1;   // analogWrite's channel, set in begin()
+  int8_t   _out    = -1;   // channel the pin is attached to now
   uint32_t _toneHz = 0;    // 0 = pin on _chan
 
-  // bursts on the tone channel's own timer, only on a mode or Hz change
+  // Bursts use the tone channel, which has its own timer. Only moves the pin on a mode or Hz change
   void route() {
     uint32_t hz = _run.mode == MODE_BURST ? _run.burstHz : 0;
     if (hz == _toneHz) return;
@@ -242,7 +241,7 @@ private:
   inline void writeLevel(int v) { analogWrite(pin, v); }
   inline void writeIdle()   { digitalWrite(pin, _run.polarity ? HIGH : LOW); }
   inline void writeActive() { digitalWrite(pin, _run.polarity ? LOW  : HIGH); }
-  inline void startBurst()  { tone(pin, _run.burstHz, 0); }   // 0 = till writeIdle
+  inline void startBurst()  { tone(pin, _run.burstHz, 0); }   // 0 = until writeIdle
 #endif
   inline int level(uint16_t v) const { return _run.polarity ? FULL - v : v; }
 
@@ -256,7 +255,7 @@ private:
     }
     uint32_t us = _run.pulseUs;
     if (_run.mode == MODE_BURST) {
-      // the poll ends it, as a pulse
+      // The poll ends it, same as a pulse
       us = _run.cycles * 1000000UL / _run.burstHz;
       startBurst();
     } else if (_run.level >= FULL) {

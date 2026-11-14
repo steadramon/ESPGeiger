@@ -34,13 +34,17 @@ synced,2026-11-04 10:15:30,1265
 
 Each boot that writes there starts with the header line. When the time arrives a `synced` line gives the date and time at that many seconds since boot, so the rows above it can be dated: a row's time is the synced time minus the difference in seconds. From then on rows go to the daily files as usual. A boot that never gets the time leaves its rows with the seconds only. The SD page links the file as *Undated rows*.
 
-An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; ESP32 builds with the I2C bus, ESP8266 builds with `-DRTC_8266`) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, opening any page of the web UI gives the device the time from the browser's clock, and an RTC keeps that too, so a device that never reaches NTP stays dated.
+An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; C3 and S3 builds with the I2C bus, ESP8266 and ESP32 builds with `-DRTC_CHIP`) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, opening any page of the web UI gives the device the time from the browser's clock, and an RTC keeps that too, so a device that never reaches NTP stays dated.
 
 ## (Micro) SD Card Compatibility
 
 During testing most SDCards are compatible, however it seems some Micro SDCards simply do not support the SPI interface. If you find an SD Card which is not supported, please try another, after double checking your wiring.
 
 The card is ready as soon as it mounts. Its free space is then counted in the background, a little at a time, so a larger card only takes longer to count. Until the count is done the SD page says *counting free space*. If the card can't be read during the count, it is tried again at the next minute and the page says *free space unknown* meanwhile.
+
+## A full or failing card
+
+Logging stops when the card is full with no file older than a year to clear, or when writes fail three minutes in a row. The SD Logs page says which, and the files already on the card can still be listed and downloaded. **Retry** on that page mounts the card again and starts logging if it can write; free some space or swap the card first.
 
 # Configuration
 

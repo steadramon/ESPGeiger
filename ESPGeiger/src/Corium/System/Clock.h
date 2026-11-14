@@ -40,6 +40,7 @@ namespace Clock {
   bool onSync(Source s = NTP);   // true when s wasn't the last to set it
   void set(time_t epoch, Source s);   // NTP sets it itself
   void kept();   // boot: esp32 keeps time() over a restart
+  void stamp();  // esp32, each second: what kept() checks against
   void anchor();   // boot: a clock set before Reactor::begin, bootEpoch from its uptime 0
 
   // a sync off by more than this tells onStep
@@ -59,10 +60,11 @@ namespace Clock {
 
   // 2001, below it = never set; checked against time_t
   static const uint32_t MIN_EPOCH = 1000000000UL;
-  static const uint64_t MAX_EPOCH = 253402300799ULL;   // end of 9999, dates stay 4 digits
+  // end of 9999, dates stay 4 digits; or what time_t holds (esp32: 2038), never a wrapped date
+  static const uint64_t MAX_EPOCH = sizeof(time_t) >= 8 ? 253402300799ULL : 2147483647ULL;
 
   // seconds into a period of wall time, 2^32 s isn't whole periods
-  inline uint32_t phase(uint32_t period_s) { return (uint32_t)(time(NULL) % period_s); }
+  inline uint32_t phase(uint32_t period_s) { return period_s ? (uint32_t)(time(NULL) % period_s) : 0; }
 
   inline bool utcTm(struct tm* out) {
     if (!synced) return false;

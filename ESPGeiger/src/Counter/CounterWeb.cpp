@@ -446,6 +446,7 @@ static void status_seed(EGHttpResponse& res) {
 static void hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("Status"), corium::DeviceInfo::displayName());
   status_seed(res);
+  if (!corium::Clock::synced) res.sendChunk(F("<p><a href=/network#time>Clock not set</a></p>"));
   res.sendChunk(FPSTR(STATUS_BODY));
   corium::WebPortal::endPage(res, true);
 }

@@ -93,7 +93,8 @@ static time_t epoch_of(uint8_t y, uint8_t mo, uint8_t d, uint8_t h, uint8_t m, u
   for (uint16_t i = 2000; i < 2000 + y; i++) days += leap(i) ? 366 : 365;
   days += BEFORE[mo - 1] + d - 1;
   if (mo > 2 && leap(2000 + y)) days++;
-  return (time_t)days * 86400 + h * 3600UL + m * 60UL + s;   // 2106 on is past 32 bits
+  uint64_t e = (uint64_t)days * 86400 + h * 3600UL + m * 60UL + s;   // 2106 on is past 32 bits
+  return e > corium::Clock::MAX_EPOCH ? 0 : (time_t)e;
 }
 
 // 12 h mode too, writes are always 24
@@ -173,9 +174,9 @@ void RtcModule::begin() {
     time_t e = read_time();
     if (e >= corium::Clock::MIN_EPOCH) {
       corium::Clock::set(e, corium::Clock::RTC);
-      corium::Log::console(PSTR("RTC: clock set from it"));
+      corium::Log::console(PSTR("RTC: Clock set from RTC"));
     } else {
-      corium::Log::console(PSTR("RTC: not set, waits for NTP"));
+      corium::Log::console(PSTR("RTC: Not set, waiting for NTP"));
     }
   }
   corium::Registry::every(this, 60000);
@@ -188,7 +189,7 @@ void RtcModule::loop(unsigned long now) {
   // NTP after the browser goes in at once
   if (corium::Clock::source == _from && now - _written_at < WRITE_MS) return;
   if (!write_time(time(nullptr))) return;
-  if (corium::Clock::source != _from) corium::Log::console(PSTR("RTC: set from %s"), ntp ? PSTR("NTP") : PSTR("the browser"));
+  if (corium::Clock::source != _from) corium::Log::console(PSTR("RTC: Set from %s"), ntp ? PSTR("NTP") : PSTR("browser"));
   _from = corium::Clock::source;
   _written_at = now;
 }

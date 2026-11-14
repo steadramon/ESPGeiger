@@ -39,7 +39,7 @@ class PulseOut : public corium::Module {
     void onPrefsLoaded() override;
     void onPrefsSaved() override;
 
-    // ms ticker owns the pin, clicks post s_req, a polarity save s_idle
+    // The ms ticker owns the pin. Clicks post s_req, a polarity save bumps s_idle
     static volatile uint8_t s_req;
     static uint8_t s_seen;
     static volatile uint8_t s_idle;
@@ -49,6 +49,8 @@ class PulseOut : public corium::Module {
     void poll(uint32_t now_us);
 
     void notifyClick(unsigned long now_ms);
+    void park();   // from setup(), after prefs load
+    void stop() { _enabled = false; }
 
   private:
     void read_pin(bool was_enabled);

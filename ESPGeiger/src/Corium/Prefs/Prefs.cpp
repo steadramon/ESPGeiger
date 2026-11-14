@@ -58,9 +58,11 @@ struct GroupShadow {
 };
 enum : uint8_t { CLEAN, DIRTY, HELD };
 static constexpr size_t MAX_ROWS = sizeof(GroupShadow::heap_mask) * 8;
+static_assert(MAX_ROWS == corium::PREFS_MAX_ROWS, "the file size counts every row");
 static constexpr uint8_t MANY  = 0xFF;   // more than one row, only a reset clears it
 
 const char corium::K_DNS[]          PROGMEM = "dns";
+const char corium::K_ESPOTA[]       PROGMEM = "espota";
 const char corium::K_GW[]           PROGMEM = "gw";
 const char corium::K_IP[]           PROGMEM = "ip";
 const char corium::K_SCL[]          PROGMEM = "scl";
@@ -160,10 +162,25 @@ GroupShadow* locate(const char*& module, const char* key, int& idx) {
   return nullptr;
 }
 
+static bool s_skipped = false;   // a group left out at begin
+
+// skipped: its defaults, saves still refused
+const char* skipped_default(const char* module, const char* key) {
+  uint8_t n = corium::Registry::count();
+  for (uint8_t i = 0; i < n; i++) {
+    const corium::PrefGroup* g = corium::Registry::get(i)->prefsGroup();
+    if (!g || strcmp(g->moduleId, module) != 0) continue;
+    int j = find_pref_index(g, key);
+    return j < 0 ? nullptr : g->prefs.defaultVal(j);
+  }
+  return nullptr;
+}
+
 const char* find_value(const char* module, const char* key) {
   int idx;
   GroupShadow* gs = locate(module, key, idx);
-  return gs ? gs->values[idx] : nullptr;
+  if (gs) return gs->values[idx];
+  return s_skipped ? skipped_default(module, key) : nullptr;
 }
 
 // no control chars, valid utf8, fits the pattern
@@ -336,11 +353,23 @@ size_t group_bytes(const GroupShadow& gs) {
   return total;
 }
 
+size_t value_bytes(const GroupShadow& gs) {
+  size_t total = 0;
+  for (size_t j = 0; j < gs.group->count.get(); j++) total += strlen(gs.values[j]);
+  return total;
+}
+
+// 0 = the default
+size_t value_cap(const GroupShadow& gs) {
+  uint16_t n = gs.group->maxBytes.get();
+  return n ? n : CORIUM_PREFS_MAX_GROUP_SZ;
+}
+
 // stage = the .new only, commit puts it in place
 CORIUM_NODISCARD bool write_group(GroupShadow& gs, bool stage = false) {
   if (gs.partial) return false;
   size_t total = group_bytes(gs);
-  if (total > CORIUM_PREFS_MAX_GROUP_SZ) {
+  if (total > corium::PREFS_FILE_MAX) {
     corium::Log::console(PSTR("Prefs: Group %s too large (%u)"), gs.group->moduleId, (unsigned)total);
     return false;
   }
@@ -561,9 +590,11 @@ void load_group(GroupShadow& gs) {
 }
 
 void add_group(corium::Module* m, const corium::PrefGroup* g) {
+  s_storage.dropStaged(g->moduleId);   // a cut mid commit, the old file stands
   if (g->count.get() > MAX_ROWS) {
     corium::Log::console(PSTR("prefs: %s has %u prefs, exceeds bitmap cap of 32 - skipped"),
                  g->moduleId, (unsigned)g->count.get());
+    s_skipped = true;
     return;
   }
   GroupShadow& gs = s_groups[s_group_count];
@@ -573,10 +604,10 @@ void add_group(corium::Module* m, const corium::PrefGroup* g) {
   gs.values = new (std::nothrow) const char*[g->count.get()];
   if (!gs.values) {
     corium::Log::console(PSTR("prefs: %s value alloc failed - skipped"), g->moduleId);
+    s_skipped = true;
     return;
   }
   s_group_count++;
-  s_storage.dropStaged(g->moduleId);   // a cut mid commit, the old file stands
   load_group(gs);
 
   corium::Log::debug(PSTR("prefs: %s (%u keys, v%u)"),
@@ -588,6 +619,7 @@ void add_group(corium::Module* m, const corium::PrefGroup* g) {
 void corium::Prefs::begin() {
   if (s_begun) return;
   s_group_count = 0;
+  s_skipped = false;
 
   if (!s_storage.begin(CORIUM_PREFS_NAMESPACE)) {
     corium::Log::console(PSTR("Prefs: Storage mount failed, using defaults"));
@@ -641,14 +673,33 @@ static corium::PinSafety::Use pin_use(uint16_t flags) {
   return flags & corium::P_PIN_OUT ? corium::PinSafety::USE_OUT : corium::PinSafety::USE_IN;
 }
 
-// pin rows only, sets s_refused and s_warned
-static bool pin_refused(const corium::Pref& p, const char* module, const char* key, const char* v) {
+static bool is_pin(const corium::Pref& p) { return p.flags & (corium::P_PIN | corium::P_PIN_OUT); }
+
+// another pin row set to it, "in use: group.key"; a put's own row holds its old value
+static const char* pin_taken(int32_t pin) {
+  static char s_taken[40];
+  if (pin < 0) return nullptr;
+  for (size_t gi = 0; gi < s_group_count; gi++) {
+    const GroupShadow& gs = s_groups[gi];
+    for (size_t j = 0; j < gs.group->count.get(); j++) {
+      int32_t v;
+      if (!is_pin(gs.group->prefs.row(j)) || !parseI32(gs.values[j], &v) || v != pin) continue;
+      snprintf_P(s_taken, sizeof(s_taken), PSTR("in use: %s.%s"), gs.group->moduleId, gs.group->prefs.id_P(j));
+      return s_taken;
+    }
+  }
+  return nullptr;
+}
+
+// pin rows only, sets s_refused and s_warned; a typed one can't take another row's pin, an import moves several
+static bool pin_refused(const char* module, const corium::Pref& p, const char* key, const char* v, bool kept) {
   int32_t pin;
-  if (!(p.flags & (corium::P_PIN | corium::P_PIN_OUT)) || !parseI32(v, &pin)) return false;
+  if (!is_pin(p) || !parseI32(v, &pin)) return false;
   uint8_t needs = (p.flags & corium::P_PIN_IRQ ? corium::PinSafety::NEED_IRQ : 0) |
                   (p.flags & corium::P_PIN_PWM ? corium::PinSafety::NEED_PWM : 0) |
                   (p.flags & corium::P_PIN_OD ? corium::PinSafety::NEED_OD : 0);
   s_refused = corium::PinSafety::refuse(pin, pin_use(p.flags), needs, &s_warned);
+  if (!s_refused && !kept) s_refused = pin_taken(pin);
   if (!s_refused) return false;
   corium::Log::console(PSTR("Prefs: %s.%s pin %s refused (%s)"), module, key, v, s_refused);
   return true;
@@ -677,10 +728,11 @@ CORIUM_NODISCARD static bool put_value(const char* module, const char* key, cons
   // same value = nothing to do, still true
   if (strcmp(out, gs->values[idx]) != 0) {
     // changes only, a stored pin still loads
-    if (pin_refused(p, module, key, out)) return false;
+    if (pin_refused(module, p, key, out, kept)) return false;
     if (!kept && too_short(p, nlen)) return false;
-    // write_group would refuse it, and every commit after
-    if (group_bytes(*gs) - strlen(gs->values[idx]) + nlen > CORIUM_PREFS_MAX_GROUP_SZ) {
+    // values only, a row added later can't fill it
+    size_t had = strlen(gs->values[idx]);
+    if ((size_t)nlen > had && value_bytes(*gs) - had + nlen > value_cap(*gs)) {
       s_refused = PSTR("group full");
       return false;
     }
@@ -692,6 +744,10 @@ CORIUM_NODISCARD static bool put_value(const char* module, const char* key, cons
     gs->dirty = DIRTY;
     gs->wipe = false;
     if (p.flags & corium::P_REBOOT) s_reboot_put = true;
+  } else if (gs->partial && gs->partial != idx + 1) {
+    // a frozen group's save again: refused again, never a stale OK.
+    // the unloaded one's own default again is the console's "reset the group"
+    gs->dirty = DIRTY;
   }
   return true;
 }

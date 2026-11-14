@@ -78,7 +78,7 @@ bool corium::PrefsStorage::begin(const char* name) {
   bool is_dir = chk && chk.isDirectory();
   if (chk && !is_dir) {
     chk.close();
-    if (corium::Fs::remove(dir)) corium::Log::console(PSTR("prefs: cleared rogue file at %s"), dir);
+    if (corium::Fs::remove(dir)) corium::Log::console(PSTR("Prefs: Cleared rogue file at %s"), dir);
   }
   // one that stayed fails here too
   if (!is_dir && !corium::Fs::mkdir(dir)) return false;
@@ -108,7 +108,7 @@ bool corium::PrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx
   File f = corium::Fs::openR(path);
   if (!f) return false;
   size_t sz = f.size();
-  if (sz < corium::PREFS_MAGIC_LEN || sz > CORIUM_PREFS_MAX_GROUP_SZ) { f.close(); return false; }
+  if (sz < corium::PREFS_MAGIC_LEN || sz > corium::PREFS_FILE_MAX) { f.close(); return false; }
 
   if (!read_magic(f)) {
     f.close();
@@ -144,7 +144,7 @@ bool corium::PrefsStorage::writeGroup(const char* module_id, const void* buf, si
 // <id>.bin.new, the old file stands till commitGroup
 bool corium::PrefsStorage::stageGroup(const char* module_id, const void* buf, size_t len) {
   if (!_started || !module_id || !buf) return false;
-  if (len < corium::PREFS_MAGIC_LEN || len > CORIUM_PREFS_MAX_GROUP_SZ) return false;
+  if (len < corium::PREFS_MAGIC_LEN || len > corium::PREFS_FILE_MAX) return false;
   char staging[CORIUM_PS_PATH_BUFSZ];
   if (!staged_path(staging, sizeof(staging), _dir, module_id)) return false;
   return corium::Fs::writeWhole(staging, buf, len);

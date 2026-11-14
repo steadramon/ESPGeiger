@@ -70,7 +70,7 @@ static const corium::PrefGroup UDPBLIP_PREF_GROUP PROGMEM = {
   "udpblip", "Local Broadcast", 1,
   UDPBLIP_PREF_ITEMS,
   sizeof(UDPBLIP_PREF_ITEMS) / sizeof(UDPBLIP_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT, EG_K_MODE,
+  corium::P_CAT_OUTPUT, EG_K_MODE, 0,
 };
 
 const corium::PrefGroup* UdpBlipModule::prefsGroup() { return &UDPBLIP_PREF_GROUP; }
@@ -171,7 +171,7 @@ void UdpBlipModule::onPrefsSaved() {
   _fail_count = 0;
   // no burst of stale clicks
   _last_clicks = (uint32_t)gcounter.total_clicks;
-  corium::Log::console(PSTR("UdpBlip: prefs saved, mode=%u port=%u"), _mode, _port);
+  corium::Log::console(PSTR("UdpBlip: Prefs saved, mode=%u port=%u"), _mode, _port);
 }
 
 void UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {

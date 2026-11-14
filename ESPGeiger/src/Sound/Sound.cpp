@@ -98,7 +98,8 @@ CORIUM_PSTR(H_CHIMES, "Startup, WiFi and button sounds");
 CORIUM_PSTR(L_REPEAT, "Alert repeat (s)");
 CORIUM_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
 
-#define SOUND_ROW(k) {k, nullptr, nullptr, "", nullptr, 0, 0, TunePlayer::MAX_TEXT, corium::P_STRING, corium::P_HIDDEN}
+// local: 15 whole tunes outgrow an import
+#define SOUND_ROW(k) {k, nullptr, nullptr, "", nullptr, 0, 0, TunePlayer::MAX_TEXT, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL}
 
 // "" = built-in, off = silent, else steps or rtttl
 static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
@@ -119,11 +120,16 @@ static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
   SOUND_ROW(K_CLICK),
 };
 
+static constexpr size_t SOUND_ROWS = sizeof(SOUND_PREF_ITEMS) / sizeof(SOUND_PREF_ITEMS[0]);
+// a whole tune in every row
+static constexpr uint16_t SOUND_BYTES = SOUND_ROWS * TunePlayer::MAX_TEXT;
+static_assert(SOUND_BYTES <= CORIUM_PREFS_GROUP_SZ_MAX, "every tune fits the group");
+
 static const corium::PrefGroup SOUND_PREF_GROUP PROGMEM = {
   "sound", "Sound", 1,
   SOUND_PREF_ITEMS,
-  sizeof(SOUND_PREF_ITEMS) / sizeof(SOUND_PREF_ITEMS[0]),
-  corium::P_CAT_OUTPUT,
+  SOUND_ROWS,
+  corium::P_CAT_OUTPUT, nullptr, SOUND_BYTES,
 };
 
 const corium::PrefGroup* Sound::prefsGroup() { return &SOUND_PREF_GROUP; }
@@ -203,12 +209,18 @@ void Sound::preWifi() {
 
 static void sound_click(uint32_t) { sound.click((uint32_t)micros()); }
 
+// idle low before the rmt has it, safe mode too
+void Sound::park() {
+  pinMode(GEIGER_BUZZER, OUTPUT);
+  digitalWrite(GEIGER_BUZZER, LOW);
+}
+
 // once, the setup portal can be first
 void Sound::start() {
   if (_started) return;
   _started = true;
   corium::Buzzer::Limits lim = Board::buzzer();
-  if (!corium::Buzzer::begin(GEIGER_BUZZER, lim)) corium::Log::console(PSTR("Buzzer: pin %d unusable"), GEIGER_BUZZER);
+  if (!corium::Buzzer::begin(GEIGER_BUZZER, lim)) corium::Log::console(PSTR("Buzzer: Pin %d unusable"), GEIGER_BUZZER);
   TunePlayer::begin({lim.dutyPct, BURST_HZ, GAP_PCT});
   _duty = lim.dutyPct;
 }
@@ -298,9 +310,14 @@ void Sound::events(uint16_t ev, unsigned long now) {
   if (ev & (1u << Topic::PRESS)) play(BUTTON);
 }
 
-// rising: alert, again every repeat. falling: the all clear
+// rising: alert, again every repeat. falling: the all clear. a snooze: quiet, no all clear
 void Sound::alarm(unsigned long now) {
   bool a = gcounter.is_alert();
+  if (a && gcounter.is_snoozed()) {
+    if (_alert) TunePlayer::stop();
+    _alert = false;
+    return;
+  }
   if (a == _alert) return;
   _alert = a;
   if (a) {
@@ -327,7 +344,7 @@ void Sound::loop(unsigned long now) {
   }
   if (!_fault_said && corium::Buzzer::faulted()) {
     _fault_said = true;
-    corium::Log::console(PSTR("Sound: buzzer pin held high - off until restart"));
+    corium::Log::console(PSTR("Sound: Buzzer pin stuck high, off until restart"));
   }
   schedule(now, TunePlayer::poll((uint32_t)micros()));
 }

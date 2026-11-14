@@ -24,9 +24,13 @@
 #include "App/AppConfig.h"
 #include "Corium/Util/Attr.h"
 
-// bytes per group file
+// value bytes per group, keys not counted. a group's maxBytes can ask for more
 #ifndef CORIUM_PREFS_MAX_GROUP_SZ
 #define CORIUM_PREFS_MAX_GROUP_SZ 1024
+#endif
+// most a group may ask for, files are sized from it. static_assert a group's maxBytes against it
+#ifndef CORIUM_PREFS_GROUP_SZ_MAX
+#define CORIUM_PREFS_GROUP_SZ_MAX 4096
 #endif
 
 // commitSoon's write waits this, the ones meanwhile join it
@@ -164,6 +168,7 @@ struct PrefGroup {
   Flash<size_t>   count;
   Flash<uint8_t>  category;
   const char*   enableKey;   // on/off badge, nullptr = none
+  Flash<uint16_t> maxBytes;  // its values, 0 = CORIUM_PREFS_MAX_GROUP_SZ
 
   // no copy, byte reads of flash fault
   PrefGroup(const PrefGroup&) = delete;
@@ -172,6 +177,7 @@ struct PrefGroup {
 
 // Shared keys
 extern const char K_DNS[];
+extern const char K_ESPOTA[];
 extern const char K_GW[];
 extern const char K_IP[];
 extern const char K_SCL[];
@@ -248,7 +254,7 @@ public:
   // groups a failed commit left unsaved back to what's on flash, no callbacks
   static void revert();
   static void revert(const char* module);   // that one group only
-  static bool restartPending();  // the last commit changed a P_REBOOT row
+  static bool restartPending();  // a commit since boot changed a P_REBOOT row
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
   static bool stored(const char* module);
   // flash has what it reads: nothing waits to be written, none refused at load
