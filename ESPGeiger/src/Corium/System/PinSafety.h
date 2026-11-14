@@ -78,6 +78,7 @@ enum PinKind : uint8_t {
   PK_NO_IRQ,      // warned when NEED_IRQ
   PK_NO_PWM,      // warned when NEED_PWM
   PK_NO_OD,       // warned when NEED_OD
+  PK_GLITCH,      // warned when NEED_IRQ, false edges
 };
 
 // what a pin is for, a kind it lacks is a warning

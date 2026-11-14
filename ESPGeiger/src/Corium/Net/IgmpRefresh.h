@@ -31,6 +31,12 @@ namespace corium {
 namespace IgmpRefresh {
 
 bool refresh();   // esp32 only, loop, false = not sent
+// the 8266 answers queries itself, its refresh() sends nothing
+#ifdef ESP8266
+constexpr bool REFRESHES = false;
+#else
+constexpr bool REFRESHES = true;
+#endif
 // esp8266 only: its beginMulticast keeps the join when the bind fails, so join here, one leave each
 CORIUM_NODISCARD bool join(const IPAddress& group);
 void leave(const IPAddress& group);   // its WiFiUDP::stop() keeps the group

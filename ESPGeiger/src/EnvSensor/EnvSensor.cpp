@@ -33,6 +33,17 @@ EnvSensor envsensor;
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
 #include "App/MeasureIds.h"
+#include "GeigerInput/GeigerInput.h"
+
+// UdpRx's /env rows, the only remote
+#if GEIGER_IS_UDPRX(GEIGER_TYPE) && !defined(ENV_RX)
+#define ENV_RX
+#endif
+#ifdef ENV_RX
+static corium::MRead s_rx_t, s_rx_h, s_rx_p;
+#else
+static constexpr corium::MRead s_rx_t = nullptr, s_rx_h = nullptr, s_rx_p = nullptr;
+#endif
 
 CORIUM_PSTR(K_UNIT,        "unit");
 CORIUM_PSTR(K_TEMP_OFFSET, "temp_offset");
@@ -45,7 +56,7 @@ CORIUM_PSTR(EN_O_UNIT, "Celsius|Fahrenheit|Kelvin");
 CORIUM_PSTR(EN_L_TOF,  "Temp offset");
 CORIUM_PSTR(EN_H_TOF,  "0.1 C steps. -25 = -2.5 C.");
 CORIUM_PSTR(EN_L_ALT,  "Altitude (m)");
-CORIUM_PSTR(EN_H_ALT,  "Elevation in metres. Corrects pressure to sea level (0 = local station pressure).");
+CORIUM_PSTR(EN_H_ALT,  "Metres, for sea level pressure. 0 = station pressure");
 
 // pins are i2c.sda/scl
 static const corium::Pref ENV_PREF_ITEMS[] PROGMEM = {
@@ -81,9 +92,11 @@ void EnvSensor::onPrefsLoaded() {
 void EnvSensor::begin() {
   if (_started) return;
   _started = true;
-  _rx_t = corium::m_core_read(M_RX_T, corium::M_F32);
-  _rx_h = corium::m_core_read(M_RX_H, corium::M_F32);
-  _rx_p = corium::m_core_read(M_RX_P, corium::M_F32);
+#ifdef ENV_RX
+  s_rx_t = corium::m_core_read(M_RX_T, corium::M_F32);
+  s_rx_h = corium::m_core_read(M_RX_H, corium::M_F32);
+  s_rx_p = corium::m_core_read(M_RX_P, corium::M_F32);
+#endif
   if (!corium::I2CBus::begin()) {
     corium::Registry::every(this, 0);
     return;
@@ -216,12 +229,12 @@ float EnvSensor::tempC() const {
     if (isnan(t)) return NAN;
     return t + (float)_temp_x10 * 0.1f;
   }
-  return rx(_rx_t);
+  return rx(s_rx_t);
 }
 
 float EnvSensor::humidity() const {
   if (localPresent()) return _st->ema_h;
-  return rx(_rx_h);
+  return rx(s_rx_h);
 }
 
 float EnvSensor::pressure() const {
@@ -232,7 +245,7 @@ float EnvSensor::pressure() const {
     float ratio = 1.0f - (float)_altitude_m / 44330.0f;
     return p / powf(ratio, 5.255f);
   }
-  return rx(_rx_p);
+  return rx(s_rx_p);
 }
 
 float EnvSensor::tempUser() const {
@@ -241,7 +254,7 @@ float EnvSensor::tempUser() const {
 
 bool EnvSensor::remoteFresh() const {
   corium::MValue v;
-  return _rx_t && _rx_t(&v);
+  return s_rx_t && s_rx_t(&v);
 }
 
 static bool env(float f, corium::MValue* v) {

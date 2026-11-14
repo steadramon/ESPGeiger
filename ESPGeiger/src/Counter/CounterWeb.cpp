@@ -25,6 +25,7 @@
 #include "Corium/Console/Console.h"
 #include "App/AppKeys.h"
 #include "App/ExternalPause.h"
+#include "App/MeasureIds.h"
 #include "Corium/Measure/Measure.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/StringUtil.h"
@@ -120,7 +121,7 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::m_text(PSTR("t"),     corium::M_OUT_JSON, t,     sizeof(t));
   corium::m_text(PSTR("h"),     corium::M_OUT_JSON, h,     sizeof(h));
   corium::m_text(PSTR("p"),     corium::M_OUT_JSON, p,     sizeof(p));
-  if (!corium::m_text(PSTR("hv"), corium::M_OUT_JSON, xtra, sizeof(xtra)))
+  if (!M_HAS_HV || !corium::m_text(PSTR("hv"), corium::M_OUT_JSON, xtra, sizeof(xtra)))
     corium::m_text(PSTR("usv"), corium::M_OUT_JSON, xtra, sizeof(xtra));
 
   char out[8 * sizeof(cpm) + 32];   // 8 fields and the commas
@@ -271,7 +272,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+(ok?Math.ceil(n/mins):'—')+'</td><td'+(ok?' class=usv data-uv="'+uv+'"':'')+'>'+(ok?uv.toFixed(4):'—')+'</td></tr>';
   });
   tb.innerHTML=rows;
-  if(o.hist&&o.hist.length){
+  if(o.hist&&o.hist.length&&$('ph')){
     var H=o.hist,mh=1,
         L=['<64us','<128us','<256us','<512us','<1ms','<2ms','<4ms','<8ms','<16ms','<32ms','<64ms','<128ms','<256ms','<512ms','<1s','<2s','<4s','<8s','<16s','<32s','<1m','<2m','<4m','<8m','>8m'],
         showL=[0,4,8,12,16,20,24];
@@ -287,7 +288,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     $('ph').innerHTML=hb;
     $('phL').innerHTML=lb;
   }
-  if(o.min_pulse_us){
+  if(o.min_pulse_us&&$('mp')){
     var u=o.min_pulse_us,
         s=u<1000?u+'µs':u<1e6?(u/1000).toFixed(u<10000?2:1)+'ms':(u/1e6).toFixed(2)+'s';
     $('mp').textContent=s;

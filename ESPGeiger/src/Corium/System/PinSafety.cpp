@@ -40,6 +40,7 @@ namespace {
   const char NO_IRQ[]       PROGMEM = "no interrupt, edges are missed";
   const char NO_PWM[]       PROGMEM = "no PWM";
   const char NO_OD[]        PROGMEM = "no open-drain, I2C won't work";
+  const char GLITCH[]       PROGMEM = "glitches low with the ADC or WiFi sleep, false edges";
   const char BOARD_TOO[]    PROGMEM = "the board uses it too";
   const char OUT_OF_RANGE[] PROGMEM = "out of range";
 
@@ -76,6 +77,8 @@ const PinRule corium::PinSafety::ESP32_PINS[] PROGMEM = {
   {28, 31, corium::PinSafety::PK_MISSING},
   {34, 39, corium::PinSafety::PK_INPUT_ONLY},
   {34, 39, corium::PinSafety::PK_NO_PULL},
+  {36, 36, corium::PinSafety::PK_GLITCH},  // esp32 errata, ~80 ns low pulses
+  {39, 39, corium::PinSafety::PK_GLITCH},
   {12, 12, corium::PinSafety::PK_STRAP},   // high = 1.8 V flash
   {0, 0, corium::PinSafety::PK_STRAP},     // low = download mode
   {2, 2, corium::PinSafety::PK_STRAP},
@@ -164,13 +167,14 @@ enum : uint8_t { IF_OUT = 8, IF_IN = 16, IF_USB = 32, ALWAYS = 64 };
 
 // by PinKind, up to PK_INPUT_ONLY a refusal, after a warning
 static const char* const KIND_SAYS[] PROGMEM = {
-  SPI_FLASH, PSRAM, NO_SUCH, USB, INPUT_ONLY, STRAP, NO_PULL, NO_IRQ, NO_PWM, NO_OD,
+  SPI_FLASH, PSRAM, NO_SUCH, USB, INPUT_ONLY, STRAP, NO_PULL, NO_IRQ, NO_PWM, NO_OD, GLITCH,
 };
 static const uint8_t KIND_WHEN[] PROGMEM = {
   ALWAYS, ALWAYS, ALWAYS, IF_USB, IF_OUT, IF_IN, IF_IN,
   corium::PinSafety::NEED_IRQ, corium::PinSafety::NEED_PWM, corium::PinSafety::NEED_OD,
+  corium::PinSafety::NEED_IRQ,
 };
-static_assert(sizeof(KIND_WHEN) == corium::PinSafety::PK_NO_OD + 1, "a KIND_WHEN per PinKind");
+static_assert(sizeof(KIND_WHEN) == corium::PinSafety::PK_GLITCH + 1, "a KIND_WHEN per PinKind");
 
 // rows can overlap, a refusal ends it, a warning carries on
 const char* corium::PinSafety::check(const PinRule* rows, int pin, bool out, bool usb, const char** warn,

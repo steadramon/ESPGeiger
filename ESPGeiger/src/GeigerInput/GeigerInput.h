@@ -74,11 +74,15 @@
 #define PCNT_SELECTABLE
 #endif
 
-// esp8266 test pulses count in loop()
-#if defined(ESP8266) && GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+// test pulses count in loop(), pcnt is polled
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE) && !defined(USE_PCNT)
 #define GEIGER_COUNTS_IN_ISR
-#elif defined(ESP32) && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-#define GEIGER_COUNTS_IN_ISR
+#endif
+
+// test counts made in code: no rx row, nothing held (a board's wired pin still is)
+#if GEIGER_TYPE == GEIGER_TYPE_TEST && !defined(RXPIN_BLOCKED)
+  #define RXPIN_BLOCKED
+  #define RXPIN_UNUSED
 #endif
 
 // no tube, no click pin
@@ -184,7 +188,7 @@ class GeigerInput {
     void setCounter(int val, bool update = true);
     void setLastBlip();
     // inline gate: posted, or the poll time came
-#if defined(GEIGER_COUNTS_IN_ISR) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#ifdef GEIGER_COUNTS_IN_ISR
     bool due(uint32_t) const { return false; }   // isr counts, nothing to poll
 #else
     bool due(uint32_t now) const {

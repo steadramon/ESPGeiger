@@ -63,6 +63,12 @@ CORIUM_PSTR(K_TRIM_MAX, "trim_max");
 CORIUM_PSTR(K_TRIM_S, "trim_s");
 CORIUM_PSTR(K_SETTLE_S, "settle_s");
 CORIUM_PSTR(K_BOOT_S, "boot_s");
+#if CORIUM_HAS_ADC_MV && !defined(ESPGEIGER_HW32) && !defined(HV_RATIO_MV)
+#define HV_RATIO_MV
+#endif
+#ifdef HV_RATIO_MV
+CORIUM_PSTR(K_RATIO_MV, "ratio_mv");
+#endif
 #endif
 
 
@@ -96,6 +102,9 @@ static const corium::Pref HW_PREF_ITEMS[] PROGMEM = {
   {K_TRIM_S,   nullptr,  nullptr,  STR(GEIGERHW_TRIM_S), nullptr, HV_TRIM_N, 120, 0, corium::P_UINT, corium::P_HIDDEN},
   {K_SETTLE_S, nullptr,  nullptr,  STR(GEIGERHW_SETTLE_S), nullptr, 0, 600, 0, corium::P_UINT, corium::P_HIDDEN},
   {K_BOOT_S,   nullptr,  nullptr,  STR(GEIGERHW_BOOT_S), nullptr, 0, 1800, 0, corium::P_UINT, corium::P_HIDDEN},
+#ifdef HV_RATIO_MV
+  {K_RATIO_MV, nullptr,  nullptr,  "0", nullptr, 0, 1, 0, corium::P_UINT, corium::P_HIDDEN},
+#endif
 #endif
 };
 
@@ -128,7 +137,7 @@ void HV::onPrefsLoaded() {
   _boot_s = (uint16_t)corium::Prefs::getUInt("espghw", K_BOOT_S);
   corium::Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _freq, _duty, _vd_ratio, _hv_target);
   if (_ov_v != GEIGERHW_OV_V) {
-    corium::Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
+    corium::Log::console(PSTR("HV: Overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
                  _ov_v, (unsigned)GEIGERHW_OV_V);
   }
 #else
@@ -215,7 +224,7 @@ void HV::set_duty(int duty) {
 }
 
 void HV::clear_ov() {
-  if (_ov_trip) corium::Log::console(PSTR("HV: overvoltage cut-off cleared"));
+  if (_ov_trip) corium::Log::console(PSTR("HV: Overvoltage cut-off cleared"));
   _ov_trip = false;
   _over_s = 0;
   _duty_trim = 0;
@@ -276,6 +285,22 @@ void HV::set_pwm_pin(int pin) {
   _pwm_pin = pin;
 }
 
+#ifdef HV_RATIO_MV
+// once, ratio and flag in one write
+static int ratio_to_mv(int ratio) {
+  if (corium::Prefs::getUInt("espghw", K_RATIO_MV)) return ratio;
+  int r = hv_ratio_to_mv(ratio, GEIGERHW_ADC_RATIO, GEIGERHW_MAX_RATIO);
+  // ratio and flag both or neither
+  if (!corium::Prefs::putInt("espghw", EG_K_RATIO, r) || !corium::Prefs::putUInt("espghw", K_RATIO_MV, 1)) {
+    corium::Prefs::revert("espghw");
+    return ratio;
+  }
+  if (r != ratio) corium::Log::console(PSTR("HV: Ratio %d now %d (mV), check it"), ratio, r);
+  (void)corium::Prefs::commit(false);   // failed: both stay due, the next save lands them
+  return r;
+}
+#endif
+
 void HV::begin() {
   if (_pwm_pin < 0) {
     corium::Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
@@ -286,7 +311,7 @@ void HV::begin() {
     pinMode(_pwm_pin, OUTPUT);
     digitalWrite(_pwm_pin, LOW);
     if (!EGTimer1::pwm_begin(_pwm_pin)) {
-      corium::Log::console(PSTR("HV: pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
+      corium::Log::console(PSTR("HV: Pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
       _pwm_pin = -1;
       corium::Registry::every(this, 0);
     }
@@ -301,6 +326,9 @@ void HV::begin() {
   }
 #ifdef ESPG_HV_ADC
   hvReading.begin();
+#ifdef HV_RATIO_MV
+  set_vd_ratio(ratio_to_mv(_vd_ratio));
+#endif
   _settle.set(corium::fastMillis() + (unsigned long)_boot_s * 1000UL);
   restore_trim();
 #endif
@@ -372,7 +400,7 @@ void HV::check_handler() {
 // median drops wifi ADC spikes
 void HV::sample_adc() {
   if (_adc_n >= HV_ADC_MAX) return;
-#ifdef ESPGEIGER_HW32
+#if CORIUM_HAS_ADC_MV
   _adc[_adc_n++] = analogReadMilliVolts(GEIGER_VFEEDBACKPIN);   // calibrated, ratio in mV
 #else
   _adc[_adc_n++] = analogRead(GEIGER_VFEEDBACKPIN);
@@ -397,6 +425,7 @@ void HV::check_overvoltage(int volts) {
   if (_pwm_pin >= 0) write_duty();
   corium::Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
                volts, _ov_v);
+  corium::Registry::emit(TOPIC_FAULT);
 }
 
 #ifdef ESPGEIGER_HW32
@@ -410,7 +439,7 @@ void HV::check_feedback() {
   ledcWrite(EGLED_HV_CHANNEL, 0);
   ledcDetachPin(_pwm_pin);
   pinMode(_pwm_pin, INPUT);   // base pull-down holds it off
-  corium::Log::console(PSTR("HV: feedback %d mV makes no sense - HV off until restart"), mv);
+  corium::Log::console(PSTR("HV: Feedback %d mV out of range, off until restart"), mv);
   corium::Registry::emit(TOPIC_FAULT);
 }
 #endif
@@ -439,7 +468,7 @@ void HV::trim_step() {
   if      (err >  band && _duty_trim <  _trim_max) _duty_trim++;
   else if (err < -band && _duty_trim > -_trim_max) _duty_trim--;
   if (_duty_trim != old_trim) {
-    corium::Log::console(PSTR("HV: trim %d -> %d (err %d, band %d)"), old_trim, _duty_trim, err, band);
+    corium::Log::console(PSTR("HV: Trim %d -> %d (err %d, band %d)"), old_trim, _duty_trim, err, band);
     stash_trim();
   }
 }
@@ -489,6 +518,9 @@ bool HV::saveconfig() {
   ok &= corium::Prefs::putInt("espghw", K_DUTY, _duty);
 #ifdef ESPG_HV_ADC
   ok &= corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
+#ifdef HV_RATIO_MV
+  ok &= corium::Prefs::putUInt("espghw", K_RATIO_MV, 1);   // a saved ratio is mV, whatever a revert left
+#endif
   ok &= corium::Prefs::putInt("espghw", K_OFFSET, _vd_offset);
   ok &= corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
 #endif
@@ -595,14 +627,12 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (changed) {
     hv.clear_ov();   // also resets the trim
     if (!hv.saveconfig()) {
-      char why[CORIUM_PREFS_FROZEN_MAX];
+      // as the Config page
+      char why[CORIUM_PREFS_FROZEN_MAX] = {};
+      if (!corium::Prefs::frozen(why, sizeof(why))) strncpy_P(why, corium::WRITE_FAILED, sizeof(why) - 1);
       char buf[sizeof("Not saved: ") + CORIUM_PREFS_FROZEN_MAX];
-      if (corium::Prefs::frozen(why, sizeof(why))) {
-        snprintf_P(buf, sizeof(buf), PSTR("Not saved: %s"), why);
-        res.send(500, FPSTR(HTTP_CT_PLAIN), buf);
-      } else {
-        res.send(500, FPSTR(HTTP_CT_PLAIN), F("Not saved"));
-      }
+      snprintf_P(buf, sizeof(buf), PSTR("Not saved: %s"), why);
+      res.send(500, FPSTR(HTTP_CT_PLAIN), buf);
       return;
     }
   }
@@ -650,15 +680,25 @@ static bool m_hv(corium::MValue* v) {
   return true;
 }
 
+// over the limit, or HW32's feedback latch
+static bool m_hv_fault(corium::MValue* v) {
+  if (hv.get_pwm_pin() < 0 || hv.get_vd_ratio() == 0) return false;
+  v->b = hv.ov_tripped() || hv.fb_fault();
+  return true;
+}
+
 static bool m_hv_tgt(corium::MValue* v)  { v->u = hv.get_hv_target(); return true; }
 static bool m_hv_duty(corium::MValue* v) { v->u = (uint32_t)hv.get_duty(); return true; }
 static bool m_hv_trim(corium::MValue* v) { v->i = hv.get_duty_trim(); return true; }
 
 static const char MP_HV[] PROGMEM = "device_hv_volts";
 static const char MH_HV[] PROGMEM = "Tube high voltage";
+static const char MP_HVF[] PROGMEM = "device_hv_fault";
+static const char MH_HVF[] PROGMEM = "1 while HV is held off: over the voltage limit or a feedback fault";
 
 static const corium::Measure HV_ROWS[] PROGMEM = {
   CORIUM_M_PROW("hv", "", m_hv, corium::M_I32, 0, corium::MU_VOLT, corium::M_OUT_ALL, 0, MP_HV, MH_HV, nullptr),
+  CORIUM_M_PROW("hv_fault", "", m_hv_fault, corium::M_BOOL, 0, corium::MU_NONE, corium::M_OUT_ALL, 0, MP_HVF, MH_HVF, nullptr),
   // the /hv blip
   CORIUM_M_ROW("hv_tgt",  "", m_hv_tgt,  corium::M_U32, 0, corium::MU_VOLT, corium::M_OUT_ID, 0),
   CORIUM_M_ROW("hv_duty", "", m_hv_duty, corium::M_U32, 0, corium::MU_NONE, corium::M_OUT_ID, 0),

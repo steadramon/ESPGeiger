@@ -38,6 +38,13 @@ inline int hv_volts(uint32_t ratio, uint32_t sum, uint8_t n, int offset) {
   return (int)((ratio * sum / n) >> 10) + offset;
 }
 
+// esp32_hv before 0.14: raw counts, ~4/3 a mV; 0 and the default stay
+inline int hv_ratio_to_mv(int ratio, int def, int max) {
+  if (ratio <= 0 || ratio == def) return ratio;
+  int r = ratio * 4 / 3;
+  return r < max ? r : max;
+}
+
 // x2, sorts in place
 inline uint32_t hv_median2(uint16_t* r, uint8_t n) {
   if (!n) return 0;

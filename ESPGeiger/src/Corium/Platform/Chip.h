@@ -21,6 +21,7 @@
 #define CORIUM_CHIP_H
 
 #ifdef ESP32
+#include <sdkconfig.h>
 #include <soc/soc_caps.h>
 #endif
 
@@ -64,6 +65,20 @@
 #define CORIUM_HAS_CHIPTEMP 1
 #else
 #define CORIUM_HAS_CHIPTEMP 0
+#endif
+
+// analogReadMilliVolts, eFuse calibrated; the 8266 count is ~1 mV anyway
+#ifdef ESP32
+#define CORIUM_HAS_ADC_MV 1
+#else
+#define CORIUM_HAS_ADC_MV 0
+#endif
+
+// hears multicast in modem sleep, the classic esp32 doesn't
+#ifdef CONFIG_IDF_TARGET_ESP32
+#define CORIUM_HAS_SLEEP_MCAST 0
+#else
+#define CORIUM_HAS_SLEEP_MCAST 1
 #endif
 
 #endif

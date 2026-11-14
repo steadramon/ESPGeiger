@@ -36,6 +36,9 @@ class GeigerPulse final : public GeigerInput
     void begin() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
+#ifdef COUNT_SELFTEST
+    corium::MeasureRows measurements() override;
+#endif
 #ifndef PCNT_SELECTABLE
     void secondTicker() override { checkIsrStorm(); }
 #else

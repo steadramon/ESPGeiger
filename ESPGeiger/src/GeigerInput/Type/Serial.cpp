@@ -48,9 +48,6 @@ void GeigerSerial::begin() {
   corium::Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d hasCPS=%d"),
                name ? name : PSTR("?"), _serial_type, baud, _rx_pin,
                SerialFormat::has_cps(_serial_type) ? 1 : 0);
-  if (_rx_pin == 1 || _rx_pin == 3 || _tx_pin == 1 || _tx_pin == 3) {
-    corium::Log::console(PSTR("GeigerSerial: ERROR rx/tx pin clashes with UART0"));
-  }
   if (!s_port.begin(baud, _rx_pin, _tx_pin)) {
     corium::Log::console(PSTR("GeigerSerial: ERROR port would not open"));
   }

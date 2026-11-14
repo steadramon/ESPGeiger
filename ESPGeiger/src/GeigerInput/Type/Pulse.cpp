@@ -34,6 +34,35 @@ static const char NO_PCNT_TAG[] PROGMEM = "<EGENV:" BUILD_ENV "_no_pcnt:ENV>";
 GeigerPulse::GeigerPulse() {
 };
 
+#ifdef COUNT_SELFTEST
+static volatile bool s_selftest_hit = false;
+static bool s_count_ok = true;
+
+static void CORIUM_ISR_ATTR selftest_isr() { s_selftest_hit = true; }
+
+// pulled low as the detector would: the pin, its pull-up and interrupt work.
+// open collector both sides, nothing fights
+static bool count_path_ok(int pin) {
+  s_selftest_hit = false;
+  pinMode(pin, INPUT);
+  corium::IsrLock::pinOnFall(pin, selftest_isr);
+  digitalWrite(pin, LOW);
+  pinMode(pin, OUTPUT_OPEN_DRAIN);
+  delayMicroseconds(100);
+  pinMode(pin, INPUT);
+  corium::IsrLock::pinOff(pin);
+  return s_selftest_hit;
+}
+
+static bool m_count_ok(corium::MValue* v) { v->b = s_count_ok; return true; }
+
+static const corium::Measure SELFTEST_ROWS[] PROGMEM = {
+  CORIUM_M_ROW("count_ok", "", m_count_ok, corium::M_BOOL, 0, corium::MU_NONE, corium::M_OUT_JSON, 0),
+};
+
+corium::MeasureRows GeigerPulse::measurements() { return corium::MeasureRows(SELFTEST_ROWS); }
+#endif
+
 void GeigerPulse::begin() {
   GeigerInput::begin();
 #ifdef NO_PCNT_ALIAS
@@ -49,6 +78,10 @@ void GeigerPulse::begin() {
     _polls = true;
     return;
   }
+#endif
+#ifdef COUNT_SELFTEST
+  s_count_ok = _rx_pin >= 0 && count_path_ok(_rx_pin);
+  corium::Log::console(PSTR("GeigerPulse: Self test %s"), s_count_ok ? "OK" : "FAILED");
 #endif
   corium::Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);

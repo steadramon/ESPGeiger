@@ -24,7 +24,7 @@ The `/hv` page edits the `espghw` prefs:
 |---|---|---|---|---|---|
 | PWM Frequency | `espghw.freq` | Int 100-6000/9000/40000/78000 | `6000` | all | PWM frequency in Hz. ESPGeiger-HW max 9000 Hz; `esp8266_hv` max 40000 Hz; `esp32_hv` max 78000 Hz. |
 | PWM Duty | `espghw.duty` | Int 1-282/600/1023 | varies by build | all | PWM duty (1-1023, 10-bit). Each step is ~0.1 % of period. ESPGeiger-HW caps it at 600. Every build leaves the gate low at least 4 us a period, so on `esp32_hv` the most duty is 998 at 6000 Hz. |
-| ADC VD Ratio | `espghw.ratio` | Int 0-50000 | varies by build | HV ADC builds | Voltage divider scale factor - converts ADC counts to displayed volts. Calibrate with an external HV meter. `0` disables the ADC readout. |
+| ADC VD Ratio | `espghw.ratio` | Int 0-50000 | varies by build | HV ADC builds | Voltage divider scale factor - converts the ADC reading to displayed volts. The reading is in mV on every build (calibrated mV on ESP32 builds, the ESP8266 count is about 1 mV), so the same divider takes about the same ratio on any chip. Calibrate with an external HV meter. `0` disables the ADC readout. |
 | ADC VD Offset | `espghw.offset` | Int -100 to 100 | `0` | HV ADC builds | Fixed offset added to the displayed voltage after scaling. |
 | HV target | `espghw.target` | Int 0-450/500/700 | `0` | HV ADC builds | Auto-trim target voltage (0 = open loop, disabled). When non-zero, firmware trims duty by a few steps to hold target. See [Closed-Loop Trim](#closed-loop-trim). |
 
@@ -88,7 +88,7 @@ If the displayed voltage drifts noticeably when you reconnect the tube, that's n
 
 ## Generic HV Builds (esp8266_hv / esp32_hv)
 
-1. Flash `esp8266_hv` or `esp32_hv` and wire your boost circuit (transistor, inductor, diode, cap, feedback divider). See [Build Targets](/install/buildtargets#hv-builds).
+1. Flash `esp8266_hv` or `esp32_hv` and wire your boost circuit (transistor, inductor, diode, cap, feedback divider). See [Build Targets](/install/buildtargets#hv-builds). Fit a pull-down on the transistor's gate or base: the pin floats until the firmware drives it, all through boot and in safe mode.
 2. HV starts **inactive**. On the [Config page](/configuration), System tab, **HV Hardware**, set **HV PWM Pin** to the GPIO driving your transistor, save and **reboot**.
 3. Open `/hv` to set frequency, duty and, after calibration, the target.
 

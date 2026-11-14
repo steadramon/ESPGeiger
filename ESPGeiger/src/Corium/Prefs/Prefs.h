@@ -185,6 +185,7 @@ extern const char K_WEB_PASS[];
 // Shared labels
 extern const char H_RBA[];
 extern const char P_HOST[];
+extern const char WRITE_FAILED[];   // a failed commit that isn't frozen()
 
 // legacy import
 // PROGMEM, {old, new} rows ending {}
@@ -246,6 +247,7 @@ public:
   static void resetAll(bool keep_network = false);
   // groups a failed commit left unsaved back to what's on flash, no callbacks
   static void revert();
+  static void revert(const char* module);   // that one group only
   static bool restartPending();  // the last commit changed a P_REBOOT row
   // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
   static bool stored(const char* module);

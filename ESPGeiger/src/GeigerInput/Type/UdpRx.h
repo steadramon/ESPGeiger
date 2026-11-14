@@ -55,6 +55,11 @@ class WiFiUDP;
 #ifndef UDPRX_ENV_TTL_MS
 #define UDPRX_ENV_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
 #endif
+// loss over the last 10-15 min: 3 starts, one every 5 min
+#ifndef UDPRX_LOSS_STEPS
+#define UDPRX_LOSS_STEPS 3
+#endif
+#define UDPRX_LOSS_STEP_MS 300000UL
 // pin pref and the wire, blank allowed
 #define UDPRX_CHIPID_PAT "[0-9a-fA-F]{" STR(CHIPID_LEN) "}"
 
@@ -95,7 +100,8 @@ public:
   uint32_t last_click_ms()    const { return _last_click_ms; }
   // any message
   uint32_t last_packet_ms()   const { return _last_packet_ms; }
-  uint16_t loss_pct_x10() const { return perMille(_gap_filled, _local_count); }
+  // last 10-15 min, false if nothing came in it
+  bool loss_pct_x10(uint16_t* v) const;
   uint32_t quiet_s() const;   // 0 before the first
   bool heard() const;
   uint32_t rebind_count() const       { return _rebind_count; }
@@ -141,6 +147,10 @@ private:
   uint32_t _collected = 0;
   uint32_t _packets_accepted = 0;
   uint32_t _gap_filled = 0;
+  struct Start { uint32_t count; uint32_t lost; };
+  Start    _starts[UDPRX_LOSS_STEPS] = {};
+  uint8_t  _oldest = 0;
+  uint32_t _start_at = 0;
   uint32_t _resync_count = 0;
   uint32_t _last_click_ms = 0;
   uint32_t _last_packet_ms = 0;
@@ -150,6 +160,7 @@ private:
   float _drain_rate    = 0.0f;
   float _drain_partial = 0.0f;
   bool  _draining      = false;   // int guard
+  bool  _any_packet    = false;
   uint32_t _log_at = 0;
   uint8_t  _log_left = UDPRX_LOG_MAX;
 

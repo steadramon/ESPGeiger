@@ -45,7 +45,9 @@ static bool m_blip(corium::MValue* v)  { v->u = (uint32_t)gcounter.last_blip(); 
 static bool m_cpm_st(corium::MValue* v) { v->f = gcounter.get_cpmf_stable(); return true; }
 static bool m_usv_st(corium::MValue* v) { v->f = gcounter.get_usv_stable(); return true; }
 static bool m_usv5(corium::MValue* v)   { v->f = gcounter.get_usv5(); return true; }
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
 static bool m_ser_ok(corium::MValue* v) { v->b = gcounter.is_healthy(); return true; }
+#endif
 
 static bool m_life(corium::MValue* v) {
   uint64_t n = gcounter.get_lifetime_clicks_total();
@@ -137,7 +139,9 @@ static const corium::Measure CORE[] PROGMEM = {
   CORIUM_M_ROW("cpm_st",    "",    m_cpm_st,  corium::M_F32,  2, EGMU_CPM,     corium::M_OUT_ID,   0),
   CORIUM_M_ROW("usv_st",    "",    m_usv_st,  corium::M_F32,  4, EGMU_USVH,    corium::M_OUT_ID,   0),
   CORIUM_M_ROW("usv5",      "",    m_usv5,    corium::M_F32,  4, EGMU_USVH,    corium::M_OUT_ID,   0),
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   CORIUM_M_ROW("ser_ok",    "",    m_ser_ok,  corium::M_BOOL, 0, corium::MU_NONE,    corium::M_OUT_ID,   0),
+#endif
 };
 
 static corium::MeasureRows input_rows() {

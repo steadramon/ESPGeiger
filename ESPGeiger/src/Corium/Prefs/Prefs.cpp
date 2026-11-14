@@ -74,6 +74,7 @@ const char corium::K_TZ[]           PROGMEM = "tz";
 const char corium::K_WEB_PASS[]     PROGMEM = "web_pass";
 const char corium::H_RBA[] PROGMEM = "Reboot to apply";
 const char corium::P_HOST[] PROGMEM = "[A-Za-z0-9._\\-]+";   // a name or an ip, no :port
+const char corium::WRITE_FAILED[] PROGMEM = "flash write failed";
 
 static const char FMT_LD[] PROGMEM = "%ld";
 static const char FMT_LU[] PROGMEM = "%lu";
@@ -310,7 +311,7 @@ bool read_record(GroupShadow* gs, const char* key, uint8_t klen,
       int got = check_stored(p, value, vlen);
       if (got < 0) {
         // junk isn't kept, the next save writes the default over it
-        corium::Log::console(PSTR("prefs: %s.%s %s, default kept"), gs->group->moduleId, pid,
+        corium::Log::console(PSTR("Prefs: %s.%s %s, default kept"), gs->group->moduleId, pid,
                              got == JUNK ? PSTR("junk") : PSTR("refused"));
         if (own && got != JUNK) not_loaded(*gs, j);
         return false;
@@ -342,7 +343,7 @@ CORIUM_NODISCARD bool write_group(GroupShadow& gs, bool stage = false) {
   if (gs.partial) return false;
   size_t total = group_bytes(gs);
   if (total > CORIUM_PREFS_MAX_GROUP_SZ) {
-    corium::Log::console(PSTR("prefs: group %s too large (%u)"), gs.group->moduleId, (unsigned)total);
+    corium::Log::console(PSTR("Prefs: Group %s too large (%u)"), gs.group->moduleId, (unsigned)total);
     return false;
   }
   uint8_t* buf = (uint8_t*)malloc(total);
@@ -401,7 +402,7 @@ void adopt_moved() {
       if (strcmp(to_at(i), to) != 0 || !s_storage.has(from_at(i))) continue;
       s_storage.readGroup(from_at(i), moved_record_cb, &a);
     }
-    if (a.any && write_group(*gs)) corium::Log::console(PSTR("Prefs: keys moved to %s"), to);
+    if (a.any && write_group(*gs)) corium::Log::console(PSTR("Prefs: Keys moved to %s"), to);
   }
 }
 
@@ -457,7 +458,7 @@ void drop_stale_legacy() {
     if (has_path(seen, n, path) || n == LEGACY_PATHS) continue;
     seen[n++] = path;
     if (corium::Fs::exists(path) && corium::Fs::remove(path)) {
-      corium::Log::console(PSTR("Prefs: removed stale legacy %s"), path);
+      corium::Log::console(PSTR("Prefs: Removed stale legacy %s"), path);
     }
   }
 }
@@ -503,7 +504,7 @@ void import_legacy() {
       DeserializationError err = deserializeJson(doc, f);
       f.close();
       if (err) {
-        corium::Log::console(PSTR("prefs: legacy parse error %s: %s"), path, err.c_str());
+        corium::Log::console(PSTR("Prefs: Legacy parse error %s: %s"), path, err.c_str());
         continue;
       }
       cached_ok = true;
@@ -523,7 +524,7 @@ void import_legacy() {
       corium::Pref p = gs.group->prefs.row(idx);
       int nlen = validate(&p, raw, normalized, sizeof(normalized));
       if (nlen < 0) {
-        corium::Log::console(PSTR("prefs: legacy %s.%s refused"), gs.group->moduleId, a.newKey);
+        corium::Log::console(PSTR("Prefs: Legacy %s.%s refused"), gs.group->moduleId, a.newKey);
         continue;
       }
       if (!shadow_set(gs, idx, normalized, (size_t)nlen)) {
@@ -534,7 +535,7 @@ void import_legacy() {
       imported++;
     }
     bool failed = any && !write_group(gs);
-    if (failed) corium::Log::console(PSTR("prefs: legacy persist failed for %s"), gs.group->moduleId);
+    if (failed) corium::Log::console(PSTR("Prefs: Legacy persist failed for %s"), gs.group->moduleId);
     if (failed || gs.partial) add_path(keep, &keep_n, path);
     else if (any) add_path(drop, &drop_n, path);
   }
@@ -544,7 +545,7 @@ void import_legacy() {
   for (size_t i = 0; i < drop_n; i++) {
     if (has_path(keep, keep_n, drop[i])) continue;
     if (corium::Fs::remove(drop[i])) {
-      corium::Log::console(PSTR("Prefs: removed legacy %s"), drop[i]);
+      corium::Log::console(PSTR("Prefs: Removed legacy %s"), drop[i]);
     }
   }
 }
@@ -591,7 +592,7 @@ void corium::Prefs::begin() {
   s_group_count = 0;
 
   if (!s_storage.begin(CORIUM_PREFS_NAMESPACE)) {
-    corium::Log::console(PSTR("Prefs: storage mount failed, using defaults"));
+    corium::Log::console(PSTR("Prefs: Storage mount failed, using defaults"));
   }
 
   uint8_t n = corium::Registry::count();
@@ -754,7 +755,7 @@ static void drop_frozen(GroupShadow& gs) {
   s_frozen = &gs;
   char why[CORIUM_PREFS_FROZEN_MAX];
   corium::Prefs::frozen(why, sizeof(why));
-  corium::Log::console(PSTR("Prefs: not saved, %s"), why);
+  corium::Log::console(PSTR("Prefs: Not saved, %s"), why);
 }
 
 static bool any_dirty() {
@@ -839,7 +840,7 @@ static bool wipe_pass(bool fire_callbacks, bool& busy) {
 bool corium::Prefs::commit(bool fire_callbacks) {
   // from a callback of one running: its puts go with the next
   if (s_committing) {
-    if (!s_nest_said) corium::Log::console(PSTR("Prefs: commit inside a commit refused"));
+    if (!s_nest_said) corium::Log::console(PSTR("Prefs: Nested commit refused"));
     s_nest_said = true;
     return false;
   }
@@ -887,7 +888,7 @@ void corium::Prefs::flush(uint32_t now_ms) {
   if (!s_waiting) return;
   s_waiting = false;
   if (commit() || !any_dirty()) return;   // a frozen one is dropped, not retried
-  if (!s_fails) corium::Log::console(PSTR("Prefs: not saved"));
+  if (!s_fails) corium::Log::console(PSTR("Prefs: Not saved"));
   if (s_fails < FAILS_MAX) s_fails++;
   s_waiting = true;
   if (s_wake) s_wake(now_ms + ((uint32_t)CORIUM_PREFS_HOLD_MS << (s_fails - 1)));
@@ -970,6 +971,11 @@ void corium::Prefs::revert() {
   for (size_t i = 0; i < s_group_count; i++) {
     if (s_groups[i].dirty != CLEAN) load_group(s_groups[i]);
   }
+}
+
+void corium::Prefs::revert(const char* module) {
+  GroupShadow* gs = find_group(module);
+  if (gs && gs->dirty != CLEAN) load_group(*gs);
 }
 
 bool corium::Prefs::groupEnabled(const corium::PrefGroup* g) {

@@ -24,12 +24,11 @@
   #define APP_HOME_NAME "ESPGeiger-HW32"
   #define APP_BOARD "ESPG-HW32"
 #elif defined(ESPGEIGER_HW)
-  #define APP_HOME_NAME "ESPGeiger-HW"
-  #ifdef ESP8266
-    #define APP_BOARD "ESPG-HW"
-  #else
-    #define APP_BOARD "ESPG32-HW"
+  #ifndef ESP8266
+    #error "ESPGEIGER_HW on an ESP32 is the HW32: add -DESPGEIGER_HW32"
   #endif
+  #define APP_HOME_NAME "ESPGeiger-HW"
+  #define APP_BOARD "ESPG-HW"
 #elif defined(ESPGEIGER_LT)
   #define APP_HOME_NAME "ESPGeiger-Log"
   #if defined(ESP8266) && defined(GEIGER_SDCARD)
@@ -90,7 +89,7 @@ namespace Board {
     {P_HVFB, GEIGER_VFEEDBACKPIN, corium::PinSafety::USE_IN},   // esp8266 A0 isn't a gpio
 #endif
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
-#ifdef RXPIN_BLOCKED
+#if defined(RXPIN_BLOCKED) && !defined(RXPIN_UNUSED)
     {P_RX, GEIGER_RXPIN, corium::PinSafety::USE_IN},
 #endif
 #if defined(TXPIN_BLOCKED) && defined(GEIGER_TXPIN)

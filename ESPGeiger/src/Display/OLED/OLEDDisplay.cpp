@@ -562,8 +562,8 @@ void SSD1306Display::page_two_full() {
     }
     drawStrP(0, uptime_y + 18, buf);
 
-    if (rx->packets_accepted() > 0) {
-      uint16_t loss = rx->loss_pct_x10();
+    uint16_t loss;
+    if (rx->loss_pct_x10(&loss)) {
       snprintf_P(buf, sizeof(buf), PSTR("%u.%u%%"),
                  (unsigned)(loss / 10), (unsigned)(loss % 10));
       int16_t w = (int16_t)getStrWidth(buf);

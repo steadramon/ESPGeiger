@@ -55,7 +55,7 @@ static bool s_drop_told = false;
 static void note_dropped() {
   if (s_drop_told || !s_mq.dropped()) return;
   s_drop_told = true;
-  corium::Log::console(PSTR("MQTT: msg over %u B dropped"), (unsigned)EGMqtt::IN_CAP);
+  corium::Log::console(PSTR("MQTT: Message over %u B dropped"), (unsigned)EGMqtt::IN_CAP);
 }
 
 MQTT_Client& mqtt = MQTT_Client::getInstance();
@@ -437,7 +437,7 @@ bool MQTT_Client::publishStatus()
   j.uint(PSTR("ser_ok"), corium::m_b(M_SER_OK) ? 1 : 0);
 #endif
   j.map_end();
-  if (j.overflow) corium::Log::console(PSTR("MQTT: status cut to fit"));
+  if (j.overflow) corium::Log::console(PSTR("MQTT: Status cut to fit"));
   track(s_mq.publish_end(j.length()));
   corium::Log::debug(PSTR("MQTT: Published"));
   return true;
@@ -482,7 +482,10 @@ static const StatTopic STAT_TOPICS[] PROGMEM = {
 #ifndef DISABLE_MQTT_CPS
   {"cps", "CPS"},
 #endif
-  {"hv", "HV"}, {"t", "T"}, {"h", "H"}, {"p", "P"},
+#if M_HAS_HV
+  {"hv", "HV"},
+#endif
+  {"t", "T"}, {"h", "H"}, {"p", "P"},
 };
 
 static const char* stat_topic(const char* id) {
@@ -752,8 +755,10 @@ static const HassRow HASS_ROWS[] PROGMEM = {
   {"cpm5",     "",   "CPM5",         "CPM",        "pulse",          "",  DC_NONE,  0},
   {"cpm15",    "",   "CPM15",        "CPM",        "pulse",          "",  DC_NONE,  0},
   {"usv",      "",   "\u00B5Sv/h",   "\u00B5Sv/h", "radioactive",    "2", DC_NONE,  0},
+#if M_HAS_HV
   {"hv",       "",   "HV",           "V",          "lightning-bolt", "",  DC_NONE,  HR_OPT},
-  {"temp",     "t",  "Temperature",  "°C",         "thermometer",    "",  DC_TEMP,  HR_OPT},
+#endif
+  {"temp",    "t",  "Temperature",  "°C",         "thermometer",    "",  DC_TEMP,  HR_OPT},
   {"humidity", "h",  "Humidity",     "%",          "water-percent",  "",  DC_HUMID, HR_OPT},
   {"pressure", "p",  "Pressure",     "hPa",        "gauge",          "",  DC_PRES,  HR_OPT},
   {"c_total",  "",   "Total Clicks", "",           "counter",        "",  DC_NONE,  HR_STATUS | HR_TOTAL},
@@ -774,6 +779,9 @@ static const HassRow HASS_ROWS[] PROGMEM = {
   {"ser_ok",   "",   "Serial Connected", "",       "serial-port",    "",  DC_CONN,  HR_BIN | HR_STATUS},
 #else
   {"tube",     "",   "Tube Active",  "",           "radioactive",    "",  DC_CONN,  HR_BIN},
+#endif
+#if M_HAS_HV
+  {"hv_fault", "",   "HV Fault",     "",           "flash-alert",    "",  DC_PROB,  HR_BIN | HR_OPT},
 #endif
 };
 

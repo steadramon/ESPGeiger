@@ -32,6 +32,7 @@
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
 #include "GeigerInput/GeigerInput.h"
+#include "Corium/Platform/Chip.h"
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "GeigerInput/GeigerInputTest.h"
 #endif
@@ -144,23 +145,20 @@ CORIUM_PSTR(IN_H_TBG, "Detects gamma radiation");
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 CORIUM_PSTR(IN_L_URMD, "Source Mode");
 CORIUM_PSTR(IN_O_URMD, "Specific device|Sum all sources");
-CORIUM_PSTR(IN_H_URMD, "Specific uses the Pin chipid below, auto-latching the first source heard if left blank.");
+CORIUM_PSTR(IN_H_URMD, "Specific: Pin chipid below, blank = first source heard");
 CORIUM_PSTR(IN_L_URCH, "Pin chipid");
-CORIUM_PSTR(IN_H_URCH, "6-hex chipid of the source device; only used in Specific device mode");
+CORIUM_PSTR(IN_H_URCH, "6-hex chipid of the source, Specific mode only");
 CORIUM_PSTR(IN_P_URCH, UDPRX_CHIPID_PAT);
 CORIUM_PSTR(IN_L_URGP, "Group / listen IP");
 CORIUM_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen.");
 CORIUM_PSTR(IN_H_URPT, "UDP port (default 57340)");
 CORIUM_PSTR(IN_L_URRM, "RX sleep");
 CORIUM_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
-// classic esp32 misses multicast on modem sleep, c3/s3 don't
-#ifdef ESP32
-#include <sdkconfig.h>
-#endif
-#if CONFIG_IDF_TARGET_ESP32
-#define UDPRX_RXMODE_DEFAULT "2"
-#else
+// modem sleep where multicast still gets in
+#if CORIUM_HAS_SLEEP_MCAST
 #define UDPRX_RXMODE_DEFAULT "1"
+#else
+#define UDPRX_RXMODE_DEFAULT "2"
 #endif
 // in UdpRx.cpp, keeps WiFiUDP.h out
 extern "C" void udprx_notify_prefs_saved();
@@ -444,7 +442,7 @@ CORIUM_REGISTER_MODULE(ledprefs)
 
 #ifndef LED_PIN_BLOCKED
 CORIUM_PSTR(LD_L_PIN, "Status LED");
-CORIUM_PSTR(LD_H_PIN, "GPIO of the board's own LED, -1 = none.");
+CORIUM_PSTR(LD_H_PIN, "GPIO of the onboard LED (-1 = disabled)");
 #if LED_SEND_RECEIVE_ON == LOW
 #define LD_POL_DEF "1"
 #else
@@ -559,7 +557,7 @@ static HVPinPrefs hvpinprefs;
 CORIUM_REGISTER_MODULE(hvpinprefs)
 
 CORIUM_PSTR(HV_L_PWM, "HV PWM Pin");
-CORIUM_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = HV disabled).");
+CORIUM_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = disabled)");
 
 static const corium::Pref HV_PIN_PREF_ITEMS[] PROGMEM = {
   {K_PWM_PIN, HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_PWM},

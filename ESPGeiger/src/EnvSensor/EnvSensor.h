@@ -106,10 +106,6 @@ class EnvSensor : public corium::Module {
     BoschTHP::Sensor _bosch;
     AsairAHT::Sensor _aht;
     State*   _st = nullptr;
-
-    corium::MRead _rx_t = nullptr;
-    corium::MRead _rx_h = nullptr;
-    corium::MRead _rx_p = nullptr;
 };
 
 #else  // DISABLE_ENVSENSOR

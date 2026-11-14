@@ -597,14 +597,12 @@ void corium::WebPortal::endRestartPage(EGHttpResponse& res, uint32_t delay_ms) {
   requestRestart(delay_ms);
 }
 
-static const char WRITE_FAILED[] PROGMEM = "flash write failed";
-
 // a group holding a value that didn't load says which
 void corium::WebPortal::sendNotSaved(EGHttpResponse& res) {
   res.sendChunk(F("<div class='a ae'>Not saved: "));
   char why[CORIUM_PREFS_FROZEN_MAX];
   if (corium::Prefs::frozen(why, sizeof(why))) res.sendChunk(why);
-  else res.sendChunk(FPSTR(WRITE_FAILED));
+  else res.sendChunk(FPSTR(corium::WRITE_FAILED));
   res.sendChunk(F(".</div>"));
 }
 
@@ -2296,7 +2294,7 @@ static int apply_import(uint8_t* buf, size_t len, corium::ImportText::Result* ou
 // safe mode gets here frozen: one the import didn't replace stops it all
 static const char* import_commit(char* why, size_t n) {
   const char* err = corium::Prefs::anyFrozen(why, n) ? why : nullptr;
-  if (!err && !corium::Prefs::commit(false)) err = WRITE_FAILED;   // silent, the cascade would WDT
+  if (!err && !corium::Prefs::commit(false)) err = corium::WRITE_FAILED;   // silent, the cascade would WDT
   if (err) corium::Prefs::revert();
   return err;
 }
