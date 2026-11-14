@@ -19,7 +19,6 @@
 
 #include <stdarg.h>
 #include "Logger.h"
-#include "Corium/Net/Wifi.h"
 #include "Corium/System/Clock.h"
 #include "Corium/System/Uptime.h"
 

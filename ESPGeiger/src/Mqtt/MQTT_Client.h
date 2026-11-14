@@ -96,7 +96,7 @@ public:
   const corium::PrefGroup* prefsGroup() override;
   void onPrefsSaved() override;
   uint8_t displayOrder() override { return 25; }
-  size_t statusJson(char* buf, size_t cap, unsigned long now) override;
+  size_t statusJson(char* buf, size_t cap) override;
   corium::LegacyRows legacyAliases() override;
   void setInterval(int interval);
   int getInterval();

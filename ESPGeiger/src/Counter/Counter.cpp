@@ -26,7 +26,6 @@
 #include "App/AppKeys.h"
 #include "Corium/Output/LedSignal.h"
 #include "BlipLed/BlipLed.h"
-#include "Corium/Util/MathUtil.h"
 #include "Corium/System/RtcMap.h"
 #include "Corium/Util/Attr.h"
 #include "Corium/System/Lifecycle.h"

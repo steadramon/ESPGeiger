@@ -20,10 +20,8 @@
 
 #include "AlertOut.h"
 #include "App/AppKeys.h"
-#include "App/MeasureIds.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/Measure.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/Lifecycle.h"
@@ -98,7 +96,7 @@ void AlertOut::apply_level(bool active) {
 
 // on alarm changes; while pulsing, at each flip
 void AlertOut::loop(unsigned long now) {
-  bool active = corium::m_b(M_ALERT) && !gcounter.is_snoozed();
+  bool active = gcounter.is_alert() && !gcounter.is_snoozed();
   if (_mode != 1 || !active) {
     _pulsing = false;
     apply_level(active);

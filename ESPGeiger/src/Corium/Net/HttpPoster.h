@@ -1,5 +1,5 @@
 /*
-  HttpPoster.h -periodic HTTP upload, shared by the output modules
+  HttpPoster.h - periodic HTTP upload, shared by the output modules
 
   Copyright (C) 2026 @steadramon
 
@@ -40,7 +40,7 @@ class HttpPoster : public Sender {
     bool requiresWifi() override { return true; }
     static constexpr uint16_t LOOP_MS = 500;
     void loop(unsigned long now) override;
-    size_t statusJson(char* buf, size_t cap, unsigned long now) override;
+    size_t statusJson(char* buf, size_t cap) override;
     void onPrefsLoaded() override;   // on = the group's enableKey
     void onPrefsSaved() override;
     HttpDriver request{this};

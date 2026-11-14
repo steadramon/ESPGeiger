@@ -22,22 +22,8 @@
 #include "Corium/Platform/Flash.h"
 #include "Corium/Measure/Measure.h"
 
+// sibling modules' rows; the counter's and the device's are read direct
 // PSTR so the linker keeps one copy of each
-#define M_ALERT  PSTR("alert")
-#define M_WARN   PSTR("warn")
-#define M_WARM   PSTR("warm")
-#define M_NONE   PSTR("no_counts")
-#define M_CPM    PSTR("cpm")
-#define M_CPM5   PSTR("cpm5")
-#define M_CPM15  PSTR("cpm15")
-#define M_CPM_ST PSTR("cpm_st")
-#define M_CPS    PSTR("cps")
-#define M_CPS_I  PSTR("cps_i")
-#define M_USV    PSTR("usv")
-#define M_USV5   PSTR("usv5")
-#define M_USV_ST PSTR("usv_st")
-#define M_TC     PSTR("tc")
-#define M_SER_OK PSTR("ser_ok")
 #define M_HV     PSTR("hv")
 // by id only
 #define M_HV_TGT PSTR("hv_tgt")

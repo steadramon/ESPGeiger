@@ -27,7 +27,7 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log and ESPGeiger Lite b
 | `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
 | `offline` | Start this boot without WiFi, as holding the button at power-up does. Only while it boots: in the setup portal or while it joins the saved network. The next boot is normal. | `offline` |
 | `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
-| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set counter.ratio 151.0` |
+| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. `net.*` (static IP) needs a `reboot` too; the old network settings are kept first, so a static IP that can't reach the gateway goes back at boot, as the web WiFi page does. | `set counter.ratio 151.0` |
 | `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never reboots or wipes anything else. | `reset counter.ratio` |
 | `pause [s]` | Stop posts to external services for s seconds, `pause 0` resumes, `pause` alone prints what's left. See [Pause](/output/pause) | `pause 600` |
 | `cpm` | Return current CPM value | |

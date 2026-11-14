@@ -158,6 +158,8 @@ enum PrefCategory : uint8_t {
   P_CAT_UPLOAD = 3,
   P_CAT_BACKUP = 4,
 };
+static constexpr uint8_t P_CAT_TAB   = 0x0F;   // the tab, the rest are marks
+static constexpr uint8_t P_CAT_BOARD = 0x80;   // this board's own calibration, an import from another keeps it
 
 // groups must be PROGMEM
 struct PrefGroup {
@@ -192,6 +194,7 @@ extern const char K_WEB_PASS[];
 extern const char H_RBA[];
 extern const char P_HOST[];
 extern const char WRITE_FAILED[];   // a failed commit that isn't frozen()
+extern const char AUTH_HELP[];      // a 401's body, APP_AUTH_HELP sets it
 
 // legacy import
 // PROGMEM, {old, new} rows ending {}
@@ -249,7 +252,7 @@ public:
   // back to the row default, a key by put() rules; no key = the whole group, all or none
   static bool reset(const char* module, const char* key = nullptr);
   CORIUM_NODISCARD static bool removeGroup(const char* module);
-  // keep_network keeps net + web_pass
+  // P_KEEP rows stay; keep_network keeps the P_LOCAL ones too (net, web_pass, radio)
   static void resetAll(bool keep_network = false);
   // groups a failed commit left unsaved back to what's on flash, no callbacks
   static void revert();

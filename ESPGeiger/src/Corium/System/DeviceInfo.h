@@ -51,6 +51,12 @@ namespace DeviceInfo {
   const char* chip();
   const char* board();   // the app's, else the chip
   void setBoard(const char* s);   // from setup()
+#ifdef CORIUM_BOARD_NAME
+  const char* boardName();   // the revision a user sees, nullptr = none
+  void setBoardName(const char* s);
+#else
+  inline const char* boardName() { return nullptr; }
+#endif
   const char* friendlyName();
   void setFriendlyName(const char* s);
   // friendly, else the hostname

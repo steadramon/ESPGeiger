@@ -167,11 +167,11 @@ CORIUM_PSTR(NT_L_DNS, "DNS server");
 CORIUM_PSTR(NT_P_IP,  "[0-9.]+");
 
 static const corium::Pref NET_PREF_ITEMS[] PROGMEM = {
-  {corium::K_STATIC_IP, NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  corium::P_BOOL,   corium::P_LOCAL},
-  {corium::K_IP,        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL},
-  {corium::K_GW,        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL},
-  {corium::K_SN,        NT_L_SN,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL},
-  {corium::K_DNS,       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL},
+  {corium::K_STATIC_IP, NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  corium::P_BOOL,   corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_IP,        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_GW,        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_SN,        NT_L_SN,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_DNS,       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
 };
 
 static const corium::PrefGroup NET_PREF_GROUP PROGMEM = {

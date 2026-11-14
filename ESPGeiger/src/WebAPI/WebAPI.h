@@ -67,7 +67,7 @@ class WebAPI : public corium::Sender {
     void onPrefsLoaded() override;
     void registerRoutes(EGHttpServer& http) override;
     const corium::MenuEntry* menuEntries() override;
-    size_t statusJson(char* buf, size_t cap, unsigned long now) override;
+    size_t statusJson(char* buf, size_t cap) override;
 
     corium::HttpDriver request;
 

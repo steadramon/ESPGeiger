@@ -1,5 +1,5 @@
 /*
-  DeviceInfo8266.cpp - DeviceInfo, the esp8266 half.
+  DeviceInfo8266.cpp - DeviceInfo, the esp8266 half
 
   Copyright (C) 2026 @steadramon
 

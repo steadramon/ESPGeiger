@@ -64,16 +64,18 @@ void corium::ImprovSerial::poll() {
   watch();
 }
 
+static constexpr uint32_t FRAME_GAP_MS = 2000;
+
 void corium::ImprovSerial::watch() {
-  // a part frame goes at 2s here too, a long quiet can't wrap its age
-  if (_pos && corium::fastMillis() - _last_byte_ms > 2000) _pos = 0;
+  // a part frame goes here too, a long quiet can't wrap its age
+  if (_pos && corium::fastMillis() - _last_byte_ms > FRAME_GAP_MS) _pos = 0;
   if (_joining) finish();
 }
 
 bool corium::ImprovSerial::consumeByte(uint8_t b) {
   uint32_t now = corium::fastMillis();
-  // 2s gap mid frame, start again
-  if (_pos && now - _last_byte_ms > 2000) {
+  // a gap mid frame, start again
+  if (_pos && now - _last_byte_ms > FRAME_GAP_MS) {
     _pos = 0;
   }
   _last_byte_ms = now;
@@ -156,7 +158,6 @@ static improv::State current_state() {
   bool joining = corium::fastMillis() - CORIUM_MS_START < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
   // hasSavedCreds sets STA, that drops the hotspot or the portal
   if (!joining || corium::Wifi::apUp()) return improv::STATE_AUTHORIZED;
-  // can take 50ms on esp32
   static bool s_asked = false;
   static bool s_have = false;
   if (!s_asked) {
@@ -260,7 +261,7 @@ void corium::ImprovSerial::finish() {
     corium::Wifi::keepJoined(IMPROV_MOVED_MS);   // hotspot mode, as the web's
     return;
   }
-  corium::Log::console(PSTR("Improv: WiFi connect timeout for ssid='%s'"), ssid);
+  corium::Log::console(PSTR("Improv: WiFi not joined for ssid='%s'"), ssid);
   set_state(improv::STATE_AUTHORIZED);
   send_error(improv::ERROR_UNABLE_TO_CONNECT);
 }

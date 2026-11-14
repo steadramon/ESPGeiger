@@ -53,11 +53,6 @@ static void ver() {
   if (!corium::Log::serialOn()) Serial.println(FPSTR(VER_LINE));
 }
 
-static void reset_wifi() {
-  corium::Wifi::clearSavedCreds();
-  reboot();
-}
-
 // a frozen group said why as it was left out
 static bool committed() {
   if (corium::Prefs::commit()) return true;
@@ -66,8 +61,17 @@ static bool committed() {
   return false;
 }
 
+// dhcp too, as /erase: an old static ip is lost on the new network
+static void reset_wifi() {
+  corium::Prefs::reset("net");
+  if (!committed()) return;
+  corium::Wifi::dropNetBackup();
+  corium::Wifi::clearSavedCreds();
+  reboot();
+}
+
 static void reset_net() {
-  corium::Log::console(PSTR("Clearing net.* prefs and rebooting"));
+  corium::Log::console(PSTR("Clearing net.* settings and restarting"));
   // dhcp, all blank
   corium::Prefs::reset("net");
   if (!committed()) return;
@@ -100,6 +104,10 @@ static bool pref_arg(PrefArg& a, const char* usage) {
 static void cmd_get() {
   PrefArg a;
   if (!pref_arg(a, PSTR("Usage: get <module>.<key>"))) return;
+  if (!corium::Prefs::loaded(a.mod, a.key)) {
+    corium::Log::console(PSTR("%s.%s didn't load, reset %s"), a.mod, a.key, a.mod);
+    return;
+  }
   // never null, unset is ""
   const char* v = corium::Prefs::getString(a.mod, a.key);
   if ((a.p.flags & corium::P_SENSITIVE) && *v) v = PSTR("***");
@@ -118,6 +126,11 @@ static void cmd_set() {
   size_t vlen = strlen(value);
   // a line never holds CR or LF
   while (vlen > 0 && value[vlen-1] == ' ') value[--vlen] = '\0';
+  // as /wifisave: the boot reverts a static that fails
+  if (!strcmp_P(mod, PSTR("net")) && !corium::Wifi::saveNetBackup()) {
+    corium::Log::console(PSTR("Rejected: %s.%s no backup to go back to"), mod, key);
+    return;
+  }
   if (!corium::Prefs::put(mod, key, value)) {
     const char* why = corium::Prefs::refused();
     corium::Log::console(PSTR("Rejected: %s.%s %s"), mod, key, why ? why : PSTR("validation failed"));
@@ -159,8 +172,8 @@ static void cmd_reset() {
 
 // this boot only, as the button held
 static void offline() {
-  if (corium::Wifi::offlineNow()) corium::Log::console(PSTR("WiFi: offline this boot"));
-  else corium::Log::console(PSTR("offline: at boot only (setup portal or wifi wait)"));
+  if (corium::Wifi::offlineNow()) corium::Log::console(PSTR("WiFi: Offline this boot"));
+  else corium::Log::console(PSTR("Offline: Boot only (setup portal or WiFi wait)"));
 }
 
 static const char C_REBOOT[] PROGMEM = "reboot";
@@ -291,7 +304,7 @@ bool corium::Console::run(const char* text, size_t len) {
   size_t end = n;
   while (end < len && line_end(text[end])) end++;
   if (end < len) {
-    corium::Log::console(PSTR("Command refused: one line of printable ASCII"));
+    corium::Log::console(PSTR("Command refused: One line of printable ASCII"));
     return false;
   }
   memcpy(l.buf, text, n);

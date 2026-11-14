@@ -1,5 +1,5 @@
 /*
-  Registry.cpp -Registry of modules
+  Registry.cpp - registry of modules
 
   Copyright (C) 2026 @steadramon
 

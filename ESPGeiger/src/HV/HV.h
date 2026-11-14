@@ -178,7 +178,7 @@ class HV : public corium::Module {
       corium::MeasureRows measurements() override;
 #endif
       corium::LegacyRows legacyAliases() override;
-      const char* legacyFile() override { return "/espgeigerhw.json"; }  // LEGACY IMPORT
+      const char* legacyFile() override { return "/espgeigerhw.json"; }  // legacy import
       // false = the PWM can't run it, HV off
       bool set_freq(int freq);
       int get_freq() {

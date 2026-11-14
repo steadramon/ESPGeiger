@@ -53,6 +53,7 @@ static void save() {}
 
 static uint32_t s_retry_ms = 0;
 static bool     s_entered = false;
+static bool     s_portal = false;
 
 void onBoot() {
   load();
@@ -60,6 +61,8 @@ void onBoot() {
   Ending end = ending(DeviceInfo::resetReason());
   if (CrashDump::hasCrash()) end = END_CRASH;   // esp8266 abort() looks like a restart
   apply(s_state, MAGIC, DeviceInfo::fwFingerprint(), end);
+  s_portal = s_state.portal;   // this boot only
+  s_state.portal = 0;
   if (s_state.safe) {
     s_entered = !was_safe;
     s_retry_ms = retryMs(s_state.retries);
@@ -70,6 +73,11 @@ void onBoot() {
 
 void requestSafe() {
   s_state.enter = 1;
+  save();
+}
+
+void requestPortal() {
+  s_state.portal = 1;
   save();
 }
 
@@ -87,6 +95,7 @@ bool     safeMode()    { return s_state.safe; }
 bool     entered()      { return s_entered; }
 uint32_t retryAfterMs()  { return s_retry_ms; }
 uint8_t  crashStreak() { return s_state.crashStreak; }
+bool     portalAsked() { return s_portal; }
 
 }
 }  // namespace corium

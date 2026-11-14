@@ -1,5 +1,5 @@
 /*
-  DeviceInfo32.cpp - DeviceInfo, the esp32 half.
+  DeviceInfo32.cpp - DeviceInfo, the esp32 half
 
   Copyright (C) 2026 @steadramon
 

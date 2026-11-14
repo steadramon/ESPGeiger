@@ -180,7 +180,7 @@ Identifies a specific product family. Implies a known set of capability flags as
 
 | Flag | Implies | Description |
 |---|---|---|
-| `-D ESPGEIGER_HW` | `ESPG_HV`, `ESPG_HV_ADC`, `GEIGER_BLIPLED=15` (unless `LED_SEND_RECEIVE` is set: counts then flash that LED), board name `ESPG-HW` (`ESPG32-HW` on ESP32), offline-OK | ESPGeiger-HW kit (HV generator with real ADC feedback divider, count LED on GPIO15). Stays offline (no setup portal) when the saved WiFi fails. Add `GEIGER_MODEL_FIXED` yourself if the tube is fixed. |
+| `-D ESPGEIGER_HW` | `ESPG_HV`, `ESPG_HV_ADC`, `GEIGER_BLIPLED=15` (unless `LED_SEND_RECEIVE` is set: counts then flash that LED), board name `ESPG-HW` (`ESPG32-HW` on ESP32), offline-OK | ESPGeiger-HW kit (HV generator with real ADC feedback divider, count LED on GPIO15). Stays offline (no setup portal) when the saved WiFi fails, except the boot after a WiFi change. Add `GEIGER_MODEL_FIXED` yourself if the tube is fixed. |
 | `-D ESPGEIGER_LT` | board name `ESPG-LT` (`ESPG-LOG` with `GEIGER_SDCARD`), offline-OK | Identify the build as an ESPGeiger Lite/Log device. A failed saved WiFi does not open the setup portal. |
 
 ### SD Card

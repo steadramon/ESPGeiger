@@ -15,11 +15,9 @@
 
 #include "Voice.h"
 #include "App/AppKeys.h"
-#include "App/MeasureIds.h"
 #include "AudioTick/AudioTick.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Measure/Measure.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/FastMillis.h"
@@ -325,7 +323,7 @@ static const char* DIGIT_NAMES[10] = {
 };
 
 void Voice::queueKlaxonOnAlert() {
-  const bool now_alert = corium::m_b(M_ALERT) && !gcounter.is_snoozed();
+  const bool now_alert = gcounter.is_alert() && !gcounter.is_snoozed();
   if (now_alert && !_prev_alert && !_quiet.active() && !_klax_wait) {
     _klax_wait = true;
     _last_klax_ms = corium::fastMillis();
@@ -377,16 +375,16 @@ void Voice::loop(unsigned long /*now*/) {
 }
 
 void Voice::announce() {
-  if (corium::m_b(M_ALERT)) {
+  if (gcounter.is_alert()) {
     speakWord("alert"); silence(200);
-  } else if (corium::m_b(M_WARN)) {
+  } else if (gcounter.is_warning()) {
     speakWord("warning"); silence(200);
   }
   speakWord("CPM"); silence(150);
-  speakNumber(corium::m_i(M_CPM));
+  speakNumber(gcounter.get_cpm());
   if (_ann_usv) {
     silence(250);
-    const float usv = corium::m_f(M_USV);
+    const float usv = gcounter.get_usv();
     const bool use_milli = (usv >= 1000.0f);
     const float scaled = use_milli ? (usv / 1000.0f) : usv;
     const long tenths = (long)(scaled * 10.0f + 0.5f);

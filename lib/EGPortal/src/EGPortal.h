@@ -72,6 +72,7 @@ class EGPortal {
                       const __FlashStringHelper* realm = nullptr) {
       _http.setBasicAuth(user, password, realm);
     }
+    void setAuthHelp(PGM_P text) { _http.setAuthHelp(text); }   // the 401's body
 
     // must outlive the portal
     void setTitle(const char* t)  { _title  = t; }

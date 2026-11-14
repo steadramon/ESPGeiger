@@ -188,6 +188,8 @@ class EGHttpServer {
     // empty = no auth, user:password up to EGHTTP_AUTH_MAX
     void setBasicAuth(const __FlashStringHelper* user, const char* password,
                       const __FlashStringHelper* realm = nullptr);
+    // a 401's text/plain body, PROGMEM; nullptr = empty
+    void setAuthHelp(PGM_P text);
 
     // capped at EGHTTP_MAX_CLIENTS
     void setMaxClients(uint8_t n) { _maxClients = n < EGHTTP_MAX_CLIENTS ? n : EGHTTP_MAX_CLIENTS; }
@@ -278,6 +280,7 @@ class EGHttpServer {
     bool _authEnabled = false;
     char _authValue[EGB64_LEN(EGHTTP_AUTH_MAX) + 1] = {};   // base64, past "Basic "
     char _authRealm[40] = {};
+    PGM_P _authHelp = nullptr;
 
     Slot* allocSlot(EGTcpClient* c);
     void  resetSlot(Slot* s);

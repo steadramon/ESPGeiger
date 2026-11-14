@@ -29,6 +29,7 @@
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 #include <math.h>
 
 CORIUM_PSTR(K_CHANNEL_KEY, "channel_key");
@@ -37,7 +38,7 @@ Thingspeak thingspeak;
 CORIUM_REGISTER_FEATURE(thingspeak, FEAT_THINGSPEAK)
 
 CORIUM_PSTR(TS_H_EN,  "Upload to ThingSpeak");
-CORIUM_PSTR(TS_L_CK,  "Channel Key");
+CORIUM_PSTR(TS_L_CK,  "Channel key");
 CORIUM_PSTR(TS_H_CK,  "ThingSpeak channel write API key");
 
 #define TS_KEY_MAX 16
@@ -73,14 +74,14 @@ bool Thingspeak::interpret(const char* r)
 {
   uint64_t entry;
   if (parseU64(r, &entry) && entry != 0) {
-    corium::Log::debug(PSTR("Thingspeak: Upload OK"));
+    corium::Log::debug(PSTR("ThingSpeak: Upload OK"));
     return true;
   }
-  corium::Log::console(PSTR("Thingspeak: Refused"));
+  corium::Log::console(PSTR("ThingSpeak: Refused"));
   return false;
 }
 
-// &fieldN=v, no reading leaves it out
+// Adds &fieldN=v, a missing reading is left out
 static size_t add_field(char* url, size_t cap, size_t pos, unsigned field, float v) {
   if (isnan(v)) return pos;
   char num[12];
@@ -94,14 +95,14 @@ bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
   if (unset(raw_key, TS_L_CK)) return false;
   if (!upload_ready(logTag())) return false;
 
-  corium::Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
+  corium::Log::debug(PSTR("ThingSpeak: Uploading latest data ..."));
 
-  int cpm = CounterMaths::to_int(corium::m_f(M_CPM_ST));
-  int cpm5 = CounterMaths::to_int(corium::m_f(M_CPM5));
-  int cpm15 = CounterMaths::to_int(corium::m_f(M_CPM15));
+  int cpm = CounterMaths::to_int(gcounter.get_cpmf_stable());
+  int cpm5 = CounterMaths::to_int(gcounter.get_cpm5f());
+  int cpm15 = CounterMaths::to_int(gcounter.get_cpm15f());
 
   char usv[20];
-  format_f(usv, sizeof(usv), corium::m_f(M_USV_ST), 5);
+  format_f(usv, sizeof(usv), gcounter.get_usv_stable(), 5);
   char key[3 * TS_KEY_MAX + 1];
   egesc_url(key, sizeof(key), raw_key);
   int n0 = snprintf_P(url, cap, TS_URI, key, cpm, usv, cpm5, cpm15);

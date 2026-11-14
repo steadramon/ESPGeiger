@@ -577,6 +577,7 @@ static const corium::PrefGroup HV_PIN_PREF_GROUP PROGMEM = {
   "hvpin", "HV Hardware", 1,
   HV_PIN_PREF_ITEMS,
   sizeof(HV_PIN_PREF_ITEMS) / sizeof(HV_PIN_PREF_ITEMS[0]),
+  corium::P_CAT_SYSTEM | corium::P_CAT_BOARD, nullptr, 0,
 };
 
 const corium::PrefGroup* HVPinPrefs::prefsGroup() { return &HV_PIN_PREF_GROUP; }

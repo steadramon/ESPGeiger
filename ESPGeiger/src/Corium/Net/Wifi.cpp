@@ -33,6 +33,7 @@
 #include "Corium/Module/Registry.h"
 #include "Corium/NTP/NTP.h"
 #include "Corium/Prefs/Prefs.h"
+#include "Corium/System/BootGuard.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
 #include "Corium/System/Lifecycle.h"
@@ -582,6 +583,8 @@ bool corium::Wifi::testing() { return s_join == EGPortal::JOIN_TESTING || s_join
 const char* corium::Wifi::testSsid() { return s_test_ssid; }
 
 static void reset_wifi_tx_power_default();
+static void reset_wifi_country();
+static void apply_wifi_phy_mode(uint8_t mode);
 
 // retries, slow AP after a power blip
 CORIUM_NODISCARD static bool join_saved_network() {
@@ -592,6 +595,22 @@ CORIUM_NODISCARD static bool join_saved_network() {
     associated = wait_wifi(attempt == 0 ? JOIN_WAIT_MS : JOIN_RETRY_WAIT_MS);
   }
   return associated;
+}
+
+// failed with radio rows set: once more at the chip's own, this boot only
+CORIUM_NODISCARD static bool join_at_defaults() {
+  bool tx  = corium::Prefs::getUInt("wifi", K_TX_POWER) != 0;
+  bool cc  = corium::Prefs::getString("wifi", K_COUNTRY)[0] != '\0';
+  bool phy = corium::Prefs::getUInt("wifi", K_PHY_MODE) != 0;
+  if (!tx && !cc && !phy) return false;
+  corium::Log::console(PSTR("WiFi: Retrying without wifi%s%s%s"), tx ? PSTR(" tx_power") : PSTR(""),
+                       cc ? PSTR(" country") : PSTR(""), phy ? PSTR(" phy_mode") : PSTR(""));
+  // all three, the unset ones are there already
+  reset_wifi_tx_power_default();
+  reset_wifi_country();
+  apply_wifi_phy_mode(3);   // b/g/n, the chip's own
+  (void)WiFi.begin();
+  return wait_wifi(JOIN_WAIT_MS);
 }
 
 // associated but may not route
@@ -630,6 +649,7 @@ static char* setup_portal(EGPortal* portal) {
   portal->onReset([](void*) { s_reset = true; });
   // open AP but every page asks, as the web UI
   portal->setBasicAuth(F("admin"), corium::Prefs::getString("sys", corium::K_WEB_PASS), F(THING_NAME));
+  portal->setAuthHelp(corium::AUTH_HELP);
   bool up = portal->begin(corium::DeviceInfo::hostname());
   reset_wifi_tx_power_default();   // after begin(), full power
   corium::Log::console(PSTR("WiFi: Setup portal %sup on AP %s"), up ? PSTR("") : PSTR("NOT "),
@@ -688,7 +708,7 @@ CORIUM_NODISCARD static bool join_or_portal() {
   bool have_creds = corium::Wifi::hasSavedCreds();
   if (have_creds) {
     bool static_on = sta_up();
-    if (join_saved_network()) {
+    if (join_saved_network() || (!corium::Wifi::offlineForced && join_at_defaults())) {
       probe_new_static_config(static_on);
       return true;
     }
@@ -696,7 +716,7 @@ CORIUM_NODISCARD static bool join_or_portal() {
     Creds c;
     corium::Log::console(PSTR("WiFi: Saved creds failed to associate (ssid=%s)"), sdk_creds(c) ? c.ssid : "");
     if (restore_backup()) return true;
-    if (corium::Wifi::OFFLINE_OK) return false;
+    if (corium::Wifi::OFFLINE_OK && !corium::BootGuard::portalAsked()) return false;   // a save's boot gets one
   }
 
   auto* portal = new EGPortal();
@@ -891,6 +911,20 @@ static uint8_t country_chans(const char* code) {
   return 13;
 }
 #endif
+
+// the sdk's own, both chips: CN 1-13, the AP's once joined
+static void reset_wifi_country() {
+#ifdef ESP8266
+  wifi_country_t c = {0};
+  memcpy_P(c.cc, PSTR("CN"), 2);
+  c.schan  = 1;
+  c.nchan  = 13;
+  c.policy = WIFI_COUNTRY_POLICY_AUTO;
+  wifi_set_country(&c);
+#else
+  esp_wifi_set_country_code("CN", true);
+#endif
+}
 
 static void apply_wifi_country(const char* code) {
   if (!code || !code[0]) return;

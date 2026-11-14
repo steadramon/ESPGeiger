@@ -62,6 +62,19 @@ names the build you run; a **Warning** means it doesn't, and you can still
 upload if you are sure. On 0.14 a `_no_pcnt` device also accepts the plain
 `_pulse` file (see [Build Targets](/install/buildtargets#pulse)).
 
+Boards that drive the tube's high voltage (`espgeigerhw`,
+`esp32_hv`, `esp8266_hv`, `esp8266oled_hv`) only take their own build:
+another build would leave the HV pin floating or drive it wrong, so the page
+says **Refused** and the device turns it down too. To move such a board to
+another build on purpose (e.g. `esp8266_hv` to `esp8266oled_hv`), post it
+with `?any=1`:
+
+```
+curl --data-binary @firmware.bin -H "Content-Type: application/octet-stream" "http://<device>/update?any=1"
+```
+
+Add `-u admin:<password>` if the portal has one. USB flashing always works.
+
 ## 5. Click **Upload**
 
 Click **Upload**. The button stays greyed until a file is chosen. The device:

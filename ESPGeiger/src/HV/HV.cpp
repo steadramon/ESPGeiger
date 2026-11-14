@@ -23,6 +23,7 @@
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
@@ -115,6 +116,7 @@ static const corium::PrefGroup HW_PREF_GROUP PROGMEM = {
   "espghw", "HV Generator", 1,
   HW_PREF_ITEMS,
   sizeof(HW_PREF_ITEMS) / sizeof(HW_PREF_ITEMS[0]),
+  corium::P_CAT_SYSTEM | corium::P_CAT_BOARD, nullptr, 0,
 };
 
 const corium::PrefGroup* HV::prefsGroup() { return &HW_PREF_GROUP; }
@@ -386,7 +388,7 @@ void HV::adc_second(unsigned long now) {
     _adc_n = 0;
     return;
   }
-  bool settled = corium::m_b(M_WARM) && !_settle.armed();
+  bool settled = gcounter.is_warm() && !_settle.armed();
   int volts = read_hv();
   check_overvoltage(volts);
   if (_hv_target > 0 && !_ov_trip && settled) trim_step();

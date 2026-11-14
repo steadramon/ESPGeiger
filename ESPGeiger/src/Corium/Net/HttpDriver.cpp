@@ -1,5 +1,5 @@
 /*
-  HttpDriver.cpp -a module's HTTP requests, one at a time, a client each
+  HttpDriver.cpp - a module's HTTP requests, one at a time, a client each
 
   Copyright (C) 2026 @steadramon
 

@@ -40,11 +40,13 @@ void onBoot();      // first thing in setup()
 void markLived();   // up LIVED_S, a crash after doesn't count
 void markDay();     // up DAY_MS
 void requestSafe();   // safe mode on next restart
+void requestPortal();   // next boot: the portal if the saved wifi fails, offline builds too
 
 bool     safeMode();
 bool     entered();       // first safe boot
 uint32_t retryAfterMs();   // ms
 uint8_t  crashStreak();
+bool     portalAsked();
 
 }
 }  // namespace corium

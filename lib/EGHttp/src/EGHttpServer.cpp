@@ -658,6 +658,10 @@ bool EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
   req._path    = r.path;
   req._body    = nullptr;
   req._bodyLen = s->contentLength;
+  if (s->query) {   // its flags too
+    req._query    = s->buf + s->query;
+    req._queryLen = strlen(req._query);
+  }
   return u->handler(req, ev, chunk, len, u->user);
 }
 
@@ -789,13 +793,23 @@ uint16_t EGHttpServer::refusal(const Slot* s, const EGHttpRequest& req) const {
 static const char HEAD_401[] PROGMEM =
   "HTTP/1.1 401 Unauthorized\r\n"
   "WWW-Authenticate: Basic realm=\"%s\"\r\n"
-  "%s%s\r\n";
+  "Content-Type: text/plain\r\n"
+  "Content-Length: %u\r\n"
+  "%s\r\n";
+
+void EGHttpServer::setAuthHelp(PGM_P text) { _authHelp = text; }
 
 void EGHttpServer::sendUnauthorized(Slot* s) {
-  char head[sizeof(HEAD_401) + sizeof(_authRealm) + sizeof(CL0_CRLF) + sizeof(CLOSE_NOSNIFF)];
-  int hn = snprintf_P(head, sizeof(head), HEAD_401, _authRealm, CL0_CRLF, CLOSE_NOSNIFF);
-  if (eghttp_head_fits(hn, sizeof(head)) && s->client) {
-    s->client->write(head, (size_t)hn);
+  size_t bn = _authHelp ? strlen_P(_authHelp) : 0;
+  char head[sizeof(HEAD_401) + sizeof(_authRealm) + 5 + sizeof(CLOSE_NOSNIFF)];   // 5: the length
+  int hn = snprintf_P(head, sizeof(head), HEAD_401, _authRealm, (unsigned)bn, CLOSE_NOSNIFF);
+  if (!eghttp_head_fits(hn, sizeof(head)) || !s->client) return;
+  s->client->write(head, (size_t)hn);
+  // as the head: an upload's is refused where nothing may yield
+  for (size_t at = 0; at < bn; at += sizeof(head)) {
+    size_t n = bn - at < sizeof(head) ? bn - at : sizeof(head);
+    memcpy_P(head, _authHelp + at, n);
+    s->client->write(head, n);
   }
 }
 

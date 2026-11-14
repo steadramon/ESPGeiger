@@ -37,7 +37,7 @@ class WiFiUDP;
 #ifndef UDPRX_PRODUCER_SLOTS
 #define UDPRX_PRODUCER_SLOTS 8
 #endif
-// lost clicks replayed as blips, max pending
+// Max lost clicks waiting to be replayed as blips
 #ifndef UDPRX_GAPFILL_QUEUE
 #define UDPRX_GAPFILL_QUEUE 16
 #endif
@@ -51,11 +51,11 @@ class WiFiUDP;
 #define UDPRX_LOG_MAX 4          // resync lines a minute
 #endif
 #define UDPRX_DRAIN_MAX 65535    // biggest gap drained, and all pending
-// 2 lost /env, third up to half a period late
+// Allows 2 lost /env, then the third up to half a period late
 #ifndef UDPRX_ENV_TTL_MS
 #define UDPRX_ENV_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
 #endif
-// loss over the last 10-15 min: 3 starts, one every 5 min
+// Loss over the last 10-15 min, 3 windows started 5 min apart
 #ifndef UDPRX_LOSS_STEPS
 #define UDPRX_LOSS_STEPS 3
 #endif
@@ -94,11 +94,10 @@ public:
   IPAddress group() const { return _group; }
   uint16_t  port()  const { return _port; }
 
-  uint32_t packets_accepted() const { return _packets_accepted; }
   uint32_t gap_filled()       const { return _gap_filled; }
   uint32_t resync_count()     const { return _resync_count; }
   uint32_t last_click_ms()    const { return _last_click_ms; }
-  // any message
+  // Any message counts
   uint32_t last_packet_ms()   const { return _last_packet_ms; }
   // last 10-15 min, false if nothing came in it
   bool loss_pct_x10(uint16_t* v) const;
@@ -107,7 +106,7 @@ public:
   uint32_t rebind_count() const       { return _rebind_count; }
   uint32_t refresh_count() const      { return _refresh_count; }
   uint32_t refresh_noop_count() const { return _refresh_noop_count; }
-  // the last /env, 0 t 1 h 2 p; false once stale
+  // The last /env, i is 0 t, 1 h, 2 p. false once stale
   bool env(uint8_t i, float* v);
 
 private:
@@ -145,7 +144,6 @@ private:
 
   uint32_t _local_count = 0;
   uint32_t _collected = 0;
-  uint32_t _packets_accepted = 0;
   uint32_t _gap_filled = 0;
   struct Start { uint32_t count; uint32_t lost; };
   Start    _starts[UDPRX_LOSS_STEPS] = {};
@@ -154,7 +152,7 @@ private:
   uint32_t _resync_count = 0;
   uint32_t _last_click_ms = 0;
   uint32_t _last_packet_ms = 0;
-  uint32_t _last_packet_s = 0;   // uptime, quiet_s past the ms wrap
+  uint32_t _last_packet_s = 0;   // uptime, keeps quiet_s right past the ms wrap
   corium::Stamp _heard;          // stale stays stale over the wrap
   float _drain_pending = 0.0f;
   float _drain_rate    = 0.0f;

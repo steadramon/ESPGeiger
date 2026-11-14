@@ -26,7 +26,6 @@
 #include "Corium/Net/WifiSetup.h"
 #include "Corium/Util/Fnv.h"
 #include "Corium/Util/MathUtil.h"
-#include "Fs.h"
 #include "KeyStore.h"
 
 #ifdef ESP32
@@ -170,17 +169,22 @@ void corium::DeviceInfo::factoryReset() {
   corium::Log::console(PSTR("Factory reset"));
   // first, a cut after the wipe would restore the old login
   if (!corium::KeyStore::clear(WEB_PASS_SLOT)) {
-    corium::Log::console(PSTR("Factory reset: web password backup kept"));   // the old login comes back
+    corium::Log::console(PSTR("Factory reset: Web password backup kept"));   // the old login comes back
   }
   corium::Prefs::resetAll();
   // kept rows back on flash now
-  if (!corium::Prefs::commit(false)) corium::Log::console(PSTR("Factory reset: not saved"));
+  if (!corium::Prefs::commit(false)) corium::Log::console(PSTR("Factory reset: Not saved"));
   corium::Wifi::clearSavedCreds();
 }
 
 static const char* s_board = nullptr;
 const char* corium::DeviceInfo::board() { return s_board ? s_board : chip(); }
 void corium::DeviceInfo::setBoard(const char* s) { s_board = s; }
+#ifdef CORIUM_BOARD_NAME
+static const char* s_board_name = nullptr;
+const char* corium::DeviceInfo::boardName() { return s_board_name; }
+void corium::DeviceInfo::setBoardName(const char* s) { s_board_name = s; }
+#endif
 
 const char* corium::DeviceInfo::friendlyName() { return s_friendlyname; }
 

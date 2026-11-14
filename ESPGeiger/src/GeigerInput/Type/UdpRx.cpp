@@ -279,7 +279,6 @@ void GeigerUdpRx::scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint3
 
 void GeigerUdpRx::creditClicks(uint32_t credit, uint32_t gap_credit, const ProducerRecord* p,
                                uint32_t ts_ms, uint32_t now_ms) {
-  _packets_accepted++;
   _last_click_ms  = now_ms;
   _gap_filled    += gap_credit;
   gcounter.dispatchReceiverBlip();

@@ -33,6 +33,8 @@
 #include "Corium/Util/StringUtil.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "App/FeatureBits.h"
+#include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 
 CORIUM_PSTR(K_SYNC_MIN, "sync_min");
 
@@ -262,7 +264,7 @@ static void write_row(File32& f, const char* dateTime) {
   write_col(f, PSTR("cpm15"));
 #ifdef SDCARD_EXTENDEDLOG
   f.print(F(","));
-  f.print(corium::DeviceInfo::freeHeap());
+  f.print((uint32_t)corium::DeviceInfo::freeHeap());
 #endif
   f.println();
 }

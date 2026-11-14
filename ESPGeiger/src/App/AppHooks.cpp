@@ -21,6 +21,7 @@
 #include <EGEscape.h>
 #include "Corium/System/AppHooks.h"
 #include "Corium/Prefs/Prefs.h"
+#include "Corium/System/DeviceInfo.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/Module/Module.h"
@@ -53,7 +54,7 @@ void corium::AppHooks::infoRows(EGHttpResponse& res) {
   char model[6 * CORIUM_NAME_MAX + 1];
   egesc_html(model, sizeof(model), Tube::model());
   corium::WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
-  if (Board::rev()) corium::WebPortal::infoRow(res, PSTR("Board"), PSTR("v%u"), (unsigned)Board::rev());
+  if (const char* b = corium::DeviceInfo::boardName()) corium::WebPortal::infoRow(res, PSTR("Board"), W_FMT_S, b);
 #if BUZZER_BUILT
   if (corium::Buzzer::faulted()) corium::WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
 #endif
@@ -75,6 +76,7 @@ void corium::AppHooks::aboutJson(EGHttpResponse& res) {
     GEIGER_IS_TEST(GEIGER_TYPE) ? W_TRUE : W_FALSE,
     gcounter.has_pcnt()         ? W_TRUE : W_FALSE,
     (unsigned)Features::flags());
+  if (const char* b = corium::DeviceInfo::boardName()) corium::WebPortal::sendf(res, PSTR("\"board\":\"%s\","), b);
 }
 
 void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {

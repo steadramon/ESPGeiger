@@ -1,5 +1,5 @@
 /*
-  IgmpRefresh.h - Fresh IGMP reports, group joins and the two cores' WiFiUDP quirks.
+  IgmpRefresh.h - fresh IGMP reports, group joins and the two cores' WiFiUDP quirks
 
   Copyright (C) 2026 @steadramon
 

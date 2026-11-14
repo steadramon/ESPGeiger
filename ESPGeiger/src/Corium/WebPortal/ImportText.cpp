@@ -136,7 +136,7 @@ static void apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put
     uint8_t mid_len = p[off++];
     char mid[CORIUM_PREF_ID_MAX + 1];
     take_id(mid, p + off, mid_len); off += mid_len;
-    bool mine = moved_index(mid) == pass;
+    bool mine = moved_index(mid) == pass && strcmp_P(mid, corium::ImportText::BOARD_MID) != 0;
     uint8_t pcount = p[off++];
     for (uint8_t pi = 0; pi < pcount; pi++) {
       uint8_t klen = p[off++];
@@ -155,6 +155,26 @@ static void apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put
       r.skipped++;
     }
   }
+}
+
+const char corium::ImportText::BOARD_MID[] PROGMEM = "board";
+
+void corium::ImportText::blobBoard(const uint8_t* p, size_t len, char* out, size_t cap) {
+  if (!cap) return;
+  out[0] = '\0';
+  size_t off = 1;   // group count
+  if (len < 2 || !p[0]) return;
+  uint8_t mid_len = p[off++];
+  char mid[CORIUM_PREF_ID_MAX + 1];
+  take_id(mid, p + off, mid_len);
+  off += mid_len;
+  if (strcmp_P(mid, BOARD_MID) != 0 || !p[off++]) return;
+  off += 1 + p[off];   // key
+  uint16_t vlen = rdBe16(p + off);
+  off += 2;
+  if (vlen >= cap) return;
+  memcpy(out, p + off, vlen);
+  out[vlen] = '\0';
 }
 
 // moved groups last listed first, then the rest, as at boot

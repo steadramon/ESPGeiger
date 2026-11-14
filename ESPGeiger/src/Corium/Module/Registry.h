@@ -1,5 +1,5 @@
 /*
-  Registry.h -Registry of modules
+  Registry.h - registry of modules
 
   Copyright (C) 2026 @steadramon
 

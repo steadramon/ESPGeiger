@@ -59,7 +59,7 @@ b.onclick = () => { var t = Intl.DateTimeFormat().resolvedOptions().timeZone; if
 
 void corium::NtpPage::form(EGHttpResponse& res) {
   // data-u 1 = name not known
-  char u[2] = { EGTimeZone::posixFor(ntpclient.getTz()) ? '0' : '1', '\0' };
+  char u[2] = { EGTimeZone::rule(ntpclient.getTz()) ? '0' : '1', '\0' };
   // one buffer, tz then server
   static_assert(NTP_TZ_MAX <= CORIUM_HOST_MAX, "esc too small for tz");
   char esc[6 * CORIUM_HOST_MAX + 1];
@@ -104,7 +104,7 @@ static void hNtpSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (!s || !corium::Prefs::put("ntp", corium::K_SERVER, s)) ok = false;
 #endif
   const char* t = req.arg(F("t"));
-  if (!t || !corium::Prefs::put("ntp", corium::K_TZ,  t)) ok = false;
+  if (!t || !EGTimeZone::rule(t) || !corium::Prefs::put("ntp", corium::K_TZ,  t)) ok = false;
   bool wrote = corium::Prefs::commit();
 
   corium::WebPortal::beginPage(res, ok && wrote ? F("NTP Saved") : F("NTP"));

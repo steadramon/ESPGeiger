@@ -29,7 +29,7 @@ To configure ESPGeiger for WiFi:
 - Enter your password in the form area provided (8-63 characters or a 64 hex digit key, or leave it blank for an open network)
 - Click Save
 
-After a few seconds your ESPGeiger should be connected to your WiFi. 
+The page then tests the network for up to 30 seconds and shows the result. A refused password or a network it can't find is shown there and the setup portal stays up, so you can try again.
 
 You should now be able to browse to the ESPGeiger web interface to finish setup.
 

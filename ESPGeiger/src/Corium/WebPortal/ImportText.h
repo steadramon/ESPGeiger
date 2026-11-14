@@ -57,8 +57,13 @@ Result apply(const char* text, size_t len, PutFn put);
 // records: group count, per group len+mid and pref count, per pref len+key, be16 len+value
 // blob records from the group count on, all of len; nullptr = ok, else why (PROGMEM)
 const char* blobError(const uint8_t* p, size_t len);
-// applied -1 = bad records; a refused put counts in skipped
+// applied -1 = bad records; a refused put counts in skipped; the board record isn't put
 Result applyBlob(const uint8_t* p, size_t len, PutFn put);
+
+// an export's first group, "board" with one row, the exporting DeviceInfo::board() (PROGMEM)
+extern const char BOARD_MID[];
+// that board into out, "" = an older export without one; records already checked
+void blobBoard(const uint8_t* p, size_t len, char* out, size_t cap);
 
 }
 }  // namespace corium

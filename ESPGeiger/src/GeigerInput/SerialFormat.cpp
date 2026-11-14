@@ -28,6 +28,7 @@
 #include "Corium/Prefs/Prefs.h"
 #include "App/AppKeys.h"
 #include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 #include <string.h>
 
 #define EG_HAS_SERIAL_PARSERS GEIGER_IS_SERIAL(GEIGER_TYPE)
@@ -42,8 +43,8 @@ const char* mohm_mode(int cps) {
 }
 
 size_t fmt_mightyohm(char* buf, size_t cap) {
-  int cps = (int)corium::m_i(M_CPS_I);
-  int cpm = (int)corium::m_i(M_CPM);
+  int cps = (int)gcounter.get_last_cps();
+  int cpm = (int)gcounter.get_cpm();
   // cps*60 overflows int above ~35.8M cps
   if (cps > 255) cpm = (cps > 35791394) ? 2147483647 : cps * 60;
   char usv[12];

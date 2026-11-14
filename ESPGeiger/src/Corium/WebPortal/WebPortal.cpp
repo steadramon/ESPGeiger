@@ -246,13 +246,7 @@ static corium::WebPortal* s_portal = nullptr;
 // joined from hotspot mode: off it, onto the network; failed: hotspot mode stays, the page said why
 static void ap_test_end() {
   s_ap_test = false;
-  if (corium::Wifi::testState() != EGPortal::JOIN_OK) return;
-  if (!corium::Wifi::joinMode() || !corium::Prefs::commit()) {
-    corium::Log::console(PSTR("WebPortal: Network settings not saved"));
-    return;
-  }
-  corium::Log::console(PSTR("WebPortal: WiFi moved to '%s', restarting"), corium::Wifi::testSsid());
-  corium::WebPortal::requestRestart(WIFI_MOVED_MS);
+  if (corium::Wifi::testState() == EGPortal::JOIN_OK) (void)corium::Wifi::keepJoined(WIFI_MOVED_MS);   // logs
 }
 
 void corium::WebPortal::poll(uint32_t now) {
@@ -398,6 +392,7 @@ void corium::WebPortal::applyAuthFromPrefs() {
   static_assert(sizeof("admin") - 1 + 1 + WEB_PASS_MAX <= EGHTTP_AUTH_MAX,
                 "admin:pass must fit EGHTTP_AUTH_MAX or auth switches off");
   p->_http.setBasicAuth(F("admin"), cur, F(THING_NAME));
+  p->_http.setAuthHelp(corium::AUTH_HELP);
   static int8_t s_auth = -1;
   int8_t auth = *cur ? 1 : 0;
   if (auth != s_auth) {
@@ -1160,8 +1155,7 @@ static bool static_refused(EGHttpResponse& res, const char* ip, const char* gw, 
   return true;
 }
 
-// backup first, boot can revert: a static IP with none to go back to could lock it out.
-// false = not all put, the rest still go as /param's
+// backup first, boot can revert a static. false = not all put
 CORIUM_NODISCARD static bool put_net(bool st, bool join, const char* ip, const char* gw,
                                      const char* sn, const char* dns) {
   if (!corium::Wifi::saveNetBackup() && st) return false;
@@ -1172,8 +1166,7 @@ CORIUM_NODISCARD static bool put_net(bool st, bool join, const char* ip, const c
 
 static void ap_test_save(EGHttpResponse& res);
 
-// the 0.13 way: saved, restart, the backup reverts a network that fails;
-// hotspot mode tests it here, the browser is on the unit's AP and sees the result
+// saved, restart, the backup reverts it; hotspot mode tests in place
 static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
   if (has_ssid) {
     if (corium::Wifi::ap) {
@@ -1181,6 +1174,7 @@ static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
       return;
     }
     (void)corium::Wifi::saveBackupCreds();   // logged; the portal is the way back
+    corium::BootGuard::requestPortal();   // offline builds too, once
     s_wifi_save = true;
   }
   corium::WebPortal::beginPage(res, F("Saving WiFi"));
@@ -1274,6 +1268,7 @@ if(u.length<8||(u[0]!==0xE9&&u[0]!==0xEA)){B.disabled=true;sC('e','Not an ESP fi
 var t=new TextDecoder('latin1').decode(u),e=D.env||'';
 B.disabled=false;
 if(D.tag&&t.indexOf(D.tag)!==-1)sC('k','<b>Looks compatible</b> - <code>'+e+'</code> matches.');
+else if(D.own){B.disabled=true;sC('e','<b>Refused:</b> running <code>'+e+'</code> not found in file. This board only takes its own build.')}
 else sC('w','<b>Warning:</b> running <code>'+e+'</code> not found in file. Upload anyway?');
 }
 F.addEventListener('change',function(){cF(this.files[0])});
@@ -1326,10 +1321,16 @@ x.send(f);
 // BUILD_ENV alone matches other variants
 // keep it used, gc-sections drops it
 static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
+// CORIUM_OTA_SAME_ENV: a bin without it is refused
+#ifdef CORIUM_OTA_SAME_ENV
+#define OTA_OWN ",own:1"
+#else
+#define OTA_OWN ""
+#endif
 
 void corium::WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("Update"));
-  sendf(res, PSTR("<script>window._dev={env:\"" BUILD_ENV "\",tag:\"%s\",rs:%u};</script>"),
+  sendf(res, PSTR("<script>window._dev={env:\"" BUILD_ENV "\",tag:\"%s\",rs:%u" OTA_OWN "};</script>"),
     EG_ENV_TAG, (unsigned)FLASH_COUNTDOWN_SECS);
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
   corium::WebPortal::endPage(res);
@@ -1342,6 +1343,8 @@ static struct {
   bool   write_error = false;
   uint8_t head[8];         // held until entry addr checked
   uint8_t head_n = 0;
+  uint8_t tag_n = 0;       // EG_ENV_TAG chars matched so far
+  bool    any = false;     // ?any=1, another env's bin meant
   bool    started = false; // OTA_FAILED owed
   PGM_P   why = nullptr;   // for the page
 } s_ota;
@@ -1372,6 +1375,7 @@ static void ota_begin(size_t expected) {
   s_ota.delivered   = 0;
   s_ota.write_error = false;
   s_ota.head_n      = 0;
+  s_ota.tag_n       = 0;
   s_ota.started     = false;
   s_ota.why         = nullptr;
   // a save's restart would cut it
@@ -1420,7 +1424,20 @@ static bool ota_entry_ok(uint32_t entry) {
   return entry >= ENTRY_LO && entry < ENTRY_HI;
 }
 
+#ifdef CORIUM_OTA_SAME_ENV
+// '<' only starts the tag, a miss goes back to 0 or 1
+static void ota_scan(const uint8_t* p, size_t len) {
+  for (size_t i = 0; i < len && s_ota.tag_n < sizeof(EG_ENV_TAG) - 1; i++) {
+    if (p[i] == pgm_read_byte(&EG_ENV_TAG[s_ota.tag_n])) s_ota.tag_n++;
+    else s_ota.tag_n = (p[i] == '<') ? 1 : 0;
+  }
+}
+#endif
+
 static bool ota_write(const uint8_t* p, size_t len) {
+#ifdef CORIUM_OTA_SAME_ENV
+  ota_scan(p, len);
+#endif
   size_t wrote = Update.write((uint8_t*)p, len);
   if (wrote != len) {
     corium::Log::console(PSTR("OTA: Short write %u/%u err=%u"),
@@ -1472,6 +1489,17 @@ static void ota_end() {
     ota_fail(PSTR("size mismatch"));
     return;
   }
+#ifdef CORIUM_OTA_SAME_ENV
+  if (s_ota.tag_n < sizeof(EG_ENV_TAG) - 1) {
+    static const char why[] PROGMEM = "not a " BUILD_ENV " bin";
+    corium::Log::console(s_ota.any ? PSTR("OTA: %s, ?any=1 takes it") : PSTR("OTA: REFUSING, %s"), why);
+    if (!s_ota.any) {
+      Update.end(false);
+      ota_fail(why);
+      return;
+    }
+  }
+#endif
   if (Update.end()) {
     corium::Log::console(PSTR("OTA: Success (%u bytes), restarting"),
                  (unsigned)s_ota.delivered);
@@ -1494,7 +1522,12 @@ bool corium::WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent 
                              const char* chunk, size_t len, void*) {
   // main loop, flash write ok
   switch (ev) {
-    case EGHttpServer::BODY_BEGIN: ota_begin(req.bodyLen()); break;
+    case EGHttpServer::BODY_BEGIN:
+#ifdef CORIUM_OTA_SAME_ENV
+      s_ota.any = req.arg(F("any")) != nullptr;
+#endif
+      ota_begin(req.bodyLen());
+      break;
     case EGHttpServer::BODY_DATA:  ota_data(chunk, len);     break;
     case EGHttpServer::BODY_END:   ota_end();                break;
     case EGHttpServer::BODY_ABORT: ota_abort();              break;
@@ -1662,7 +1695,7 @@ static __attribute__((noinline)) bool param_save_body(uint8_t tab, Refusal& r) {
     for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
       const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
       // this tab only, else other bools clear
-      if (g->category.get() != tab) continue;
+      if ((g->category.get() & corium::P_CAT_TAB) != tab) continue;
       // not on the page, a missing bool would save as off
       corium::Module* m = corium::Prefs::moduleAt(gi);
       if (m->displayOrder() == 0) continue;
@@ -1933,7 +1966,8 @@ static void param_load_text(ParamCtx& c, const corium::Pref& p) {
   // from the flag, no row types it
   if (p.flags & corium::P_REBOOT) {
     size_t n = strlen(c.help);
-    snprintf_P(c.help + n, sizeof(c.help) - n, n ? PSTR(" %s.") : PSTR("%s"), corium::H_RBA);
+    if (n && c.help[n - 1] != '.' && n + 1 < sizeof(c.help)) c.help[n++] = '.';   // help with no full stop
+    snprintf_P(c.help + n, sizeof(c.help) - n, n ? PSTR(" %s.") : PSTR("%s."), corium::H_RBA);
   }
 }
 
@@ -2015,7 +2049,7 @@ static void param_render_groups(EGHttpResponse& res, uint8_t tab) {
     corium::Module* mod = corium::Prefs::moduleAt(order[gi]);
     if (mod->displayOrder() == 0) continue;   // has its own page
     const corium::PrefGroup* g = corium::Prefs::groupAt(order[gi]);
-    if (g->category.get() != tab) continue;
+    if ((g->category.get() & corium::P_CAT_TAB) != tab) continue;
     c.show = mod->prefsShow();
     param_render_group(c, g, mod);
   }
@@ -2220,8 +2254,25 @@ static void export_write_group(B64Sink& sink, const corium::PrefGroup* g, uint8_
   }
 }
 
+// first, an import reads it before the rest
+static void export_board(B64Sink& sink) {
+  char mid[8];
+  flashToRam(corium::ImportText::BOARD_MID, mid, sizeof(mid));
+  const char* b = corium::DeviceInfo::board();
+  size_t n = strlen(b);
+  b64_write_u8(sink, (uint8_t)strlen(mid));
+  b64_write(sink, mid, strlen(mid));
+  b64_write_u8(sink, 1);
+  b64_write_u8(sink, 4);
+  b64_write(sink, "name", 4);
+  uint8_t vb[2];
+  wrBe16(vb, (uint16_t)n);
+  b64_write(sink, vb, 2);
+  b64_write(sink, b, n);
+}
+
 static void export_stream(B64Sink& sink) {
-  uint8_t groups = 0;
+  uint8_t groups = 1;   // the board
   for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
     const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
     if (group_export_count(g)) groups++;
@@ -2233,6 +2284,7 @@ static void export_stream(B64Sink& sink) {
   // magic and version stay clear, the rest is xored
   sink.obf_on = true;
   b64_write_u8(sink, groups);
+  export_board(sink);
 
   for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
     const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
@@ -2271,9 +2323,29 @@ static bool import_put(const char* mid, const char* key, const char* value) {
   return !import_local(mid, key) && corium::Prefs::put(mid, key, value);
 }
 
-// a backup's values were saved before, a newer shortest rule mustn't drop them
+static bool s_other_board = false;   // the blob came from another board
+
+static bool board_group(const char* mid) {
+  for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
+    const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
+    if (strcmp(g->moduleId, mid) == 0) return g->category.get() & corium::P_CAT_BOARD;
+  }
+  return false;
+}
+
+// a backup's values were saved before, a newer shortest rule mustn't drop them;
+// another board's calibration is refused, this one's stays
 static bool import_kept(const char* mid, const char* key, const char* value) {
+  if (s_other_board && board_group(mid)) return false;
   return !import_local(mid, key) && corium::Prefs::putKept(mid, key, value);
+}
+
+// the wipe reset them, flash still has this board's
+static void keep_board_groups() {
+  for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
+    const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
+    if (g->category.get() & corium::P_CAT_BOARD) corium::Prefs::revert(g->moduleId);
+  }
 }
 
 // wipe then apply, -1 = bad blob or every row refused
@@ -2282,8 +2354,15 @@ static int apply_import(uint8_t* buf, size_t len, corium::ImportText::Result* ou
   const char* err = check_import(buf, len);
   if (err) { if (err_out) *err_out = err; return -1; }
 
+  const uint8_t* recs = buf + BLOB_HEAD;
+  size_t recs_len = len - BLOB_HEAD - BLOB_CRC;
+  char from[32];
+  corium::ImportText::blobBoard(recs, recs_len, from, sizeof(from));
+  s_other_board = *from && strcmp(from, corium::DeviceInfo::board()) != 0;
+  if (s_other_board) corium::Log::console(PSTR("Import: From %s, this board's calibration kept"), from);
   corium::Prefs::resetAll(/*keep_network=*/true);
-  *out = corium::ImportText::applyBlob(buf + BLOB_HEAD, len - BLOB_HEAD - BLOB_CRC, import_kept);
+  *out = corium::ImportText::applyBlob(recs, recs_len, import_kept);
+  if (s_other_board) keep_board_groups();
   if (out->skipped) corium::Log::console(PSTR("Import: %d refused, first %s"), out->skipped, out->firstKey);
   // another board's export, say: the old settings stand
   if (out->applied == 0 && out->skipped) {
@@ -2432,14 +2511,13 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
 
 // a chunk per module, a big one can't push the rest out
 void corium::WebPortal::hOutputs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  unsigned long now = corium::fastMillis();
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
   res.sendChunk(F("{"));
   char buf[256];
   bool first = true;
   for (uint8_t i = 0; i < corium::Registry::count(); i++) {
     buf[0] = ',';
-    size_t n = corium::Outputs::module(i, buf + 1, sizeof(buf) - 1, now);
+    size_t n = corium::Outputs::module(i, buf + 1, sizeof(buf) - 1);
     if (!n) continue;
     if (first) res.sendChunk(buf + 1, n);
     else       res.sendChunk(buf, n + 1);

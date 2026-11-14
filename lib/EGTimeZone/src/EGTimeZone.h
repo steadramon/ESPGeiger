@@ -21,8 +21,11 @@
 
 namespace EGTimeZone {
 
-// static PROGMEM rule or nullptr; hash only, a miss can match another zone
+// Static PROGMEM rule or nullptr. Matches on the hash only, so a miss can match another zone
 const char *posixFor(const char *olson);
+
+// From the table, else tz itself if it looks posix (a digit, rule chars only). May be RAM
+const char *rule(const char *tz);
 
 }
 

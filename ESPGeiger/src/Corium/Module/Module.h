@@ -80,7 +80,7 @@ class Module {
     virtual MeasureRows measurements() { return MeasureRows(); }
 
     // /outputs fragment, 0 = not sending
-    virtual size_t statusJson(char* buf, size_t cap, unsigned long now) { return 0; }
+    virtual size_t statusJson(char* buf, size_t cap) { return 0; }
     virtual Sender* sender() { return nullptr; }   // nullptr = not a sender
 
     static constexpr uint8_t TOPIC_SENT = 1;   // a send went out

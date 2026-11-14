@@ -23,28 +23,28 @@
 #include "Corium/Module/Module.h"
 
 #ifndef CONSOLE_LINE_MAX
-#define CONSOLE_LINE_MAX 64
+#define CONSOLE_LINE_MAX 255
 #endif
 static_assert(CONSOLE_LINE_MAX < 256, "line pos is 8 bit");
 
-// app commands, Corium's own sit in a fixed table
+// Max app commands, Corium's own sit in a fixed table
 #ifndef CORIUM_MAX_CMDS
 #define CORIUM_MAX_CMDS 8
 #endif
 
 namespace corium {
 
-// PROGMEM, the name too
+// Lives in PROGMEM, and so does the name
 struct Cmd {
   const char* name;
   void (*fn)();
 };
 
-// typed bytes, one per input
+// Line being typed, one per input
 struct ConsoleLine {
   char buf[CONSOLE_LINE_MAX + 1];
   uint8_t pos;
-  bool overflow;   // too long, dropped at the end
+  bool overflow;   // too long, dropped when the line ends
 };
 
 class Console : public Module {
@@ -54,13 +54,13 @@ public:
     static constexpr uint16_t LOOP_MS = 10;   // ms between serial reads
     void begin() override;
     void loop(unsigned long now) override;
-    void pollBoot();   // setup portal and the wifi wait, before the registry runs
+    void pollBoot();   // From the setup portal and wifi wait, before the registry runs
 
     static bool add(const Cmd* cmd);   // static init, false = full
-    static bool run(const char* text, size_t len);   // web, one line; false = refused or unknown
-    // a command's words, as it runs
+    static bool run(const char* text, size_t len);   // one line from the web, false = refused or unknown
+    // For reading a command's words while it runs
     static char* next();   // nullptr = none left
-    static char* rest();   // rest of the line as typed
+    static char* rest();   // Rest of the line as typed
 private:
     static void feed(ConsoleLine& l, Print& io, char c);
     static void edit(ConsoleLine& l, Print& io, char c);
@@ -68,15 +68,15 @@ private:
     static const Cmd* _cmds[CORIUM_MAX_CMDS];
     static uint8_t _count;
     static uint8_t _dropped;
-    static bool _up;   // begun, app commands run
+    static bool _up;   // set by begin(), app commands can run
     static ConsoleLine _serial;
-    static char* _last;   // strtok_r's place
+    static char* _last;   // where strtok_r is up to
 };
 }  // namespace corium
 
 extern corium::Console console;
 
-// file scope, adds a console word at static init
+// File scope, adds a console word at static init
 #define CORIUM_REGISTER_CMD(word, fn) \
   static const char _cmdn_##word[] PROGMEM = #word; \
   static const corium::Cmd _cmd_##word PROGMEM = {_cmdn_##word, fn}; \

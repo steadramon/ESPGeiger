@@ -58,6 +58,7 @@
 #endif
 #ifdef ESPGEIGER_HW32
 #include "Corium/Logger/Logger.h"
+#include "Corium/System/DeviceInfo.h"
 #include "Corium/System/PinProbe.h"
 #include "Corium/Output/Buzzer.h"
 #endif
@@ -167,13 +168,15 @@ namespace Board {
 
   // after the boot button is let go
   inline void detect() {
-    // the button pull-up is v2 only, a misread says v1, the gentle one
+    // the button pull-up is rev 2 only, a misread says rev 1, the gentle one
     rev_slot() = corium::PinProbe::pulled(PUSHBUTTON_PIN) == corium::PinProbe::UP ? 2 : 1;
     pinMode(PUSHBUTTON_PIN, INPUT_PULLUP);
-    corium::Log::console(PSTR("Board: v%u"), (unsigned)rev_slot());
+    // rev 1 = Proto, rev 2 = v1
+    corium::DeviceInfo::setBoardName(rev_slot() == 2 ? "HW32 v1" : "HW32 Proto");
+    corium::Log::console(PSTR("Board: %s"), corium::DeviceInfo::boardName());
   }
 
-  // v1 drives the coil DC: 25 %, 2 s then rest. v2 is AC coupled
+  // Proto drives the coil DC: 25 %, 2 s then rest. v1 is AC coupled
   inline corium::Buzzer::Limits buzzer() {
     corium::Buzzer::Limits l = corium::Buzzer::DEFAULTS;
     l.dutyPct = rev() == 2 ? 50 : 25;

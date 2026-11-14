@@ -86,7 +86,7 @@ inline void put(uint32_t at, const void* p, size_t n) { ESP.rtcUserMemoryWrite(a
 namespace corium {
 namespace RtcMap {
 // esp32: app and clock words as one block, garbage after power-on. its size never changes:
-// the IDF keeps its rtc time behind it, a new slot moving that broke the kept clock
+// size fixed, the IDF's rtc time sits behind it
 constexpr uint32_t BLOCK_AT    = APP1_AT;
 constexpr uint32_t BLOCK_WORDS = CLOCK_AT + CLOCK_WORDS - APP1_AT;
 

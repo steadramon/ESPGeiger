@@ -58,6 +58,7 @@
 #include "Counter/Tube.h"
 #include "Corium/Measure/Measure.h"
 #include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 #include "App/ExternalPause.h"
 #ifdef ESPGEIGER_ATTEST
 #include "Corium/Console/Console.h"
@@ -351,6 +352,7 @@ static void write_handshake(MsgPack::Writer& mp, const char* pub64, uint8_t mode
   mp.kv(PSTR("ci"), corium::DeviceInfo::chipId());
   mp.kv(PSTR("v"),  ver);
   mp.kv(PSTR("bd"), corium::DeviceInfo::board());
+  if (const char* b = corium::DeviceInfo::boardName()) mp.kv(PSTR("bn"), b);
   mp.kv(PSTR("gm"), BUILD_ENV);
   mp.kv(PSTR("gc"), Tube::model());
   mp.kv(PSTR("td"), (uint32_t)Tube::detection());
@@ -639,9 +641,9 @@ static void write_env(MsgPack::Writer& mp) {
 
 // float32, no soft-float printer
 static void write_readings(MsgPack::Writer& mp) {
-  mp.kv(PSTR("c"),  corium::m_f(M_CPM_ST));
-  mp.kv(PSTR("u"),  corium::m_f(M_USV_ST));
-  if (corium::m_b(M_NONE)) mp.kv(PSTR("nc"), true);
+  mp.kv(PSTR("c"),  gcounter.get_cpmf_stable());
+  mp.kv(PSTR("u"),  gcounter.get_usv_stable());
+  if (gcounter.counts_missing()) mp.kv(PSTR("nc"), true);
 #ifdef ESPG_HV_ADC
   int32_t hv;
   if (m_hv_volts(&hv)) mp.kv(PSTR("hv"), hv);
@@ -651,7 +653,7 @@ static void write_readings(MsgPack::Writer& mp) {
 
 static void write_health(MsgPack::Writer& mp) {
   mp.kv(PSTR("ut"), (uint32_t)corium::DeviceInfo::uptime());
-  mp.kv(PSTR("mh"), corium::DeviceInfo::freeHeap());
+  mp.kv(PSTR("mh"), (uint32_t)corium::DeviceInfo::freeHeap());
   mp.kv(PSTR("l"),  (uint32_t)corium::TickProfile::lps);
   mp.kv(PSTR("tk"), (uint32_t)corium::TickProfile::tickMaxUs);
   mp.kv(PSTR("rs"), (int32_t)corium::Wifi::rssi);
@@ -683,7 +685,7 @@ void WebAPI::postMeasurement(bool census) {
 #endif
   }
 
-  if (!corium::m_b(M_WARM)) {
+  if (!gcounter.is_warm()) {
     corium::Log::debug(PSTR("WebAPI: Skipping early post (CPM bucket not full)"));
     return;
   }
@@ -863,7 +865,7 @@ void WebAPI::loadConfig() {
   corium::Log::console(PSTR("WebAPI: Key loaded"));
 }
 
-size_t WebAPI::statusJson(char* buf, size_t cap, unsigned long /*now*/) {
+size_t WebAPI::statusJson(char* buf, size_t cap) {
   if (_mode == WA_OFF) return 0;
   return writeStatusJson(buf, cap, PSTR("webapi"), lastOk, lastAttempt);
 }

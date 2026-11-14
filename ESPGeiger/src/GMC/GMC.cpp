@@ -29,6 +29,7 @@
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 
 CORIUM_PSTR(K_AID,  "aid");
 CORIUM_PSTR(K_GCID, "gcid");
@@ -102,11 +103,11 @@ bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
   char aid[3 * GMC_ID_MAX + 1], gid[3 * GMC_ID_MAX + 1];
   egesc_url(aid, sizeof(aid), id);
   egesc_url(gid, sizeof(gid), gcid);
-  // CPM the 60 s bucket, ACPM and uSV the 5 min average
-  int cpm = CounterMaths::to_int(corium::m_f(M_CPM_ST));
+  // CPM is the 60 s bucket, ACPM and uSV the 5 min average
+  int cpm = CounterMaths::to_int(gcounter.get_cpmf_stable());
   char acpm[16], usv[16];
-  format_f(acpm, sizeof(acpm), corium::m_f(M_CPM5));
-  format_f(usv,  sizeof(usv),  corium::m_f(M_USV5), 4);
+  format_f(acpm, sizeof(acpm), gcounter.get_cpm5f());
+  format_f(usv,  sizeof(usv),  gcounter.get_usv5(), 4);
   return urlFits(snprintf_P(url, cap, GMC_URI, aid, gid, cpm, acpm, usv), cap);
 }
 #endif

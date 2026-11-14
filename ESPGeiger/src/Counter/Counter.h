@@ -110,7 +110,6 @@ class Counter : public CounterMaths {
         _cpm_window_inv = 1.0f / (float)n;
         _warm_cached = false;
       }
-      uint8_t get_cpm_window() const { return _cpm_window; }
       bool is_warm() const;
       void set_rx_pin(int pin) {
         _input->set_rx_pin(pin);

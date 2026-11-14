@@ -94,7 +94,7 @@ WiFi + IP + NTP configuration, all on a single page. Reachable from the home pag
 | **Time / NTP** | Lazy-loaded section: timezone picker (with a **Detect** button that takes your browser's timezone) and NTP server. Pulls a ~4 KB JS payload only when expanded. |
 | **Erase WiFi config** | Under **Advanced**. Wipes saved credentials and the static IP settings, and reboots into the captive setup portal. Useful when no hardware reset button is available. |
 
-After **Save and reboot**, the device tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute.
+After **Save and reboot**, the device tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute; if that fails too, that boot opens the setup portal. In hotspot mode the page tests the network in place and shows the result: a failed one keeps the hotspot.
 
 ### Test build CPM setter
 

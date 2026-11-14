@@ -199,15 +199,15 @@ void UdpBlipModule::emitClick(uint32_t count, uint32_t ts_ms) {
 }
 
 static PGM_P rad_state() {
-  if (corium::m_b(M_ALERT)) return PSTR("alert");
-  if (corium::m_b(M_WARN)) return PSTR("warning");
+  if (gcounter.is_alert()) return PSTR("alert");
+  if (gcounter.is_warning()) return PSTR("warning");
   if (gcounter.counts_missing()) return PSTR("nocounts");
-  return corium::m_b(M_WARM) ? PSTR("healthy") : PSTR("warming");
+  return gcounter.is_warm() ? PSTR("healthy") : PSTR("warming");
 }
 
 void UdpBlipModule::emitRad() {
   uint8_t buf[96];
-  BlipRad r = { corium::m_f(M_CPM), corium::m_f(M_USV), rad_state(), corium::m_u(M_TC) };
+  BlipRad r = { gcounter.get_cpmf(), gcounter.get_usv(), rad_state(), (uint32_t)gcounter.total_clicks };
   size_t n = blip_rad(buf, sizeof(buf), path(PSTR("rad")), r);
   if (n) sendPacket(buf, n);
 }
@@ -233,7 +233,7 @@ void UdpBlipModule::emitEnv() {
 
 void UdpBlipModule::emitSys() {
   uint8_t buf[64];
-  BlipSys s = { (uint32_t)corium::DeviceInfo::uptime(), corium::Wifi::rssi,
+  BlipSys s = { (uint32_t)corium::DeviceInfo::uptime(), (int32_t)corium::Wifi::rssi,
                 corium::TickProfile::lps, corium::TickProfile::tickMaxUs };
   size_t n = blip_sys(buf, sizeof(buf), path(PSTR("sys")), s);
   if (n) sendPacket(buf, n);
@@ -353,7 +353,7 @@ void UdpBlipModule::loop(unsigned long now) {
   schedule(now, tryEmitClick(now));
 }
 
-size_t UdpBlipModule::statusJson(char* buf, size_t cap, unsigned long now) {
+size_t UdpBlipModule::statusJson(char* buf, size_t cap) {
   if (_mode == UB_OFF) return 0;
   // full length, like snprintf
   size_t pos = 0, need = 0;

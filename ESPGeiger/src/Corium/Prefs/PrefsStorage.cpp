@@ -84,7 +84,7 @@ bool corium::PrefsStorage::begin(const char* name) {
   if (!is_dir && !corium::Fs::mkdir(dir)) return false;
   snprintf_P(_dir, sizeof(_dir), PSTR("%s/"), dir);
   _started = true;
-  corium::Log::debug(PSTR("prefs: storage mounted at %s"), _dir);
+  corium::Log::debug(PSTR("Prefs: Storage mounted at %s"), _dir);
   return true;
 }
 

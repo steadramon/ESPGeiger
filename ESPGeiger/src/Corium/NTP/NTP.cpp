@@ -35,8 +35,8 @@ CORIUM_REGISTER_MODULE(ntpclient)
 CORIUM_PSTR(NT_L_SRV, "NTP Server");
 #endif
 CORIUM_PSTR(NT_L_TZ,  "Timezone");
-CORIUM_PSTR(NT_H_TZ,  "Olson name");
-CORIUM_PSTR(NT_P_TZ,  "[A-Za-z0-9/_+\\-]+");
+CORIUM_PSTR(NT_H_TZ,  "Olson name or POSIX rule");
+CORIUM_PSTR(NT_P_TZ,  "[A-Za-z0-9/_+\\-,.:<>]+");
 
 static const corium::Pref NTP_PREF_ITEMS[] PROGMEM = {
 #ifndef DISABLE_NTP
@@ -81,9 +81,9 @@ void corium::NTP_Client::begin() {
 static const char* posix_tz() {
   const char* tz = corium::Prefs::getString("ntp", corium::K_TZ);
   if (tz[0] == '\0') tz = NTP_TZ;
-  const char* posix = EGTimeZone::posixFor(tz);
+  const char* posix = EGTimeZone::rule(tz);
   if (posix) return posix;
-  corium::Log::console(PSTR("NTP: timezone '%s' not known, using UTC"), tz);
+  corium::Log::console(PSTR("NTP: Timezone '%s' not known, using UTC"), tz);
   return PSTR("UTC0");
 }
 

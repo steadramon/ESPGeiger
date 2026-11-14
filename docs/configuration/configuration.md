@@ -26,6 +26,7 @@ Pin settings take `-1` (off) or a GPIO number, but some pins are refused. The sa
 * Pins wired to the flash, PSRAM or the USB port, and pins the chip doesn't have.
 * Input-only pins (ESP32 GPIO 34-39) for an output.
 * Each kit's fixed pins, such as the SD card, button, blip LED, buzzer, I2S audio and HV.
+* A pin another pin setting already uses, for example `in use: led.pin`. To swap two pins, set one to `-1` first. A backup import is not checked this way, as it moves several pins at once.
 
 Some pins save with a warning shown after the save:
 
@@ -49,15 +50,15 @@ A new web password works for the web pages at once; [espota](/install/ota#via-es
 
 ### Config import / export
 
-On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. The export also holds the passwords and keys of your outputs (MQTT, Radmon, ThingSpeak, Webhook) and your GMC account and counter IDs, so keep it private. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. If the flash can't take all of it, nothing changes. WiFi credentials and the device-only settings are kept. A setting left at its default isn't in the export, so on another firmware version it takes that version's default. If a stored setting didn't load (this firmware refused it), Export and Import both refuse and name it, so a backup never drops it: set it or reset its group first. In [safe mode](/configuration/safemode) Import still goes through when the backup replaces that group, so the refused value is gone. A device-only group (`net`, the Wi-Fi tunables, the lifetime totals) isn't in a backup, so it doesn't stop one.
+On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. The export also holds the passwords and keys of your outputs (MQTT, Radmon, ThingSpeak, Webhook) and your GMC account and counter IDs, so keep it private. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. If the flash can't take all of it, nothing changes. WiFi credentials and the device-only settings are kept. An export names the board it came from. Imported on a different board, the HV generator and HV pin settings are skipped and this board's own stay, as the other board's calibration would read the tube voltage wrong; the import page lists them as refused. A setting left at its default isn't in the export, so on another firmware version it takes that version's default. If a stored setting didn't load (this firmware refused it), Export and Import both refuse and name it, so a backup never drops it: set it or reset its group first. In [safe mode](/configuration/safemode) Import still goes through when the backup replaces that group, so the refused value is gone. A device-only group (`net`, the Wi-Fi tunables, the lifetime totals) isn't in a backup, so it doesn't stop one.
 
 ### A setting that didn't load
 
-After a firmware update a saved setting can fail the new firmware's checks, for example a webhook URL with a character the URL field no longer takes. That setting runs on its default and the boot log says so, for example `prefs: webhook.url refused, default kept`. The saved value stays on the device, so going back to the older firmware still finds it; Export and Import are refused until you deal with it.
+After a firmware update a saved setting can fail the new firmware's checks, for example a webhook URL with a character the URL field no longer takes. That setting runs on its default and the boot log says so, for example `Prefs: webhook.url refused, default kept`. The saved value stays on the device, so going back to the older firmware still finds it; Export and Import are refused until you deal with it.
 
 Until you deal with it, a save that touches that group is refused and says why, for example `Not saved: webhook.url didn't load, set it or reset webhook.` Enter a new value for that setting, or put the whole group back to defaults with `reset webhook` over [serial](/output/serial) or the Status-page command box.
 
-A saved value that never meant anything to this firmware, text in a number setting or an option this build hasn't got, isn't kept: the boot log says, for example, `prefs: counter.pcnt_pull junk, default kept`, the default runs and the next save of that group writes it over the old value. Nothing is refused.
+A saved value that never meant anything to this firmware, text in a number setting or an option this build hasn't got, isn't kept: the boot log says, for example, `Prefs: counter.pcnt_pull junk, default kept`, the default runs and the next save of that group writes it over the old value. Nothing is refused.
 
 ## Counter Settings
 
@@ -317,6 +318,8 @@ Changes take effect on the next reboot.
 <!-- /gen -->
 
 With `wifi.country` set to `US` or `CA` the device uses channels 1-11 only, so a router on channel 12 or 13 is not seen. On ESP8266 any other code allows 1-13 and `JP` 1-14; ESP32 boards use the channel list of the country given.
+
+If the saved network does not answer with any of `tx_power`, `country` or `phy_mode` set, the device tries once more without them for that boot and logs `WiFi: Retrying without wifi tx_power ...` naming the ones set. If it then joins, one of those rows is the likely cause; the settings themselves are kept.
 
 ## CPU Frequency (ESP32 only)
 

@@ -106,6 +106,17 @@
 #if defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT)
 #define APP_OFFLINE_OK
 #endif
+// a 401's body
+#define APP_AUTH_HELP "Log in as admin with the web password. Forgotten it? " \
+  "https://docs.espgeiger.com/install/setup#locked-out-of-the-web-ui"
+// another env's bin floats or drives the HV pin
+#ifdef ESPG_HV
+#define CORIUM_OTA_SAME_ENV
+#endif
+// Proto or v1, read at boot
+#ifdef ESPGEIGER_HW32
+#define CORIUM_BOARD_NAME
+#endif
 
 // :00 free for the SD CSV flush
 #ifdef GEIGER_SDCARD

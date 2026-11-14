@@ -40,8 +40,7 @@ static bool s_count_ok = true;
 
 static void CORIUM_ISR_ATTR selftest_isr() { s_selftest_hit = true; }
 
-// pulled low as the detector would: the pin, its pull-up and interrupt work.
-// open collector both sides, nothing fights
+// pulled low as the detector would, open collector both sides
 static bool count_path_ok(int pin) {
   s_selftest_hit = false;
   pinMode(pin, INPUT);
@@ -81,7 +80,7 @@ void GeigerPulse::begin() {
 #endif
 #ifdef COUNT_SELFTEST
   s_count_ok = _rx_pin >= 0 && count_path_ok(_rx_pin);
-  corium::Log::console(PSTR("GeigerPulse: Self test %s"), s_count_ok ? "OK" : "FAILED");
+  corium::Log::console(PSTR("GeigerPulse: Self test %s"), s_count_ok ? PSTR("OK") : PSTR("FAILED"));
 #endif
   corium::Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
   pinMode(_rx_pin, INPUT);

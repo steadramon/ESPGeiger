@@ -1,5 +1,5 @@
 /*
-  HttpPoster.cpp -periodic HTTP upload, shared by the output modules
+  HttpPoster.cpp - periodic HTTP upload, shared by the output modules
 
   Copyright (C) 2026 @steadramon
 
@@ -47,7 +47,7 @@ uint16_t corium::HttpPoster::setIntervalS(int s) {
   return (uint16_t)s;
 }
 
-size_t corium::HttpPoster::statusJson(char* buf, size_t cap, unsigned long /*now*/) {
+size_t corium::HttpPoster::statusJson(char* buf, size_t cap) {
   if (!_send_enabled) return 0;
   return writeStatusJson(buf, cap, statusKey(), lastOk, lastAttempt);
 }

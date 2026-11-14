@@ -20,9 +20,15 @@
 #include "Measure.h"
 #include <EGFormat.h>
 #include <EGJson.h>
+#include <EGStr.h>
 #include "Corium/Module/Module.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/Util/MathUtil.h"
+
+// most rows differ at the first byte
+bool corium::MeasureRows::idIs(size_t j, const char* id) const {
+  return streq_PP(_rows[j].id, id);
+}
 
 static corium::MeasureRows s_core;
 static corium::MSource s_input = nullptr;

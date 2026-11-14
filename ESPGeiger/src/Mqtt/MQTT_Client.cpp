@@ -116,7 +116,7 @@ const corium::PrefGroup* MQTT_Client::prefsGroup() { return &MQTT_PREF_GROUP; }
 // a server set, as the /param badge
 static bool mqtt_on() { return corium::Prefs::groupEnabled(&MQTT_PREF_GROUP); }
 
-size_t MQTT_Client::statusJson(char* buf, size_t cap, unsigned long /*now*/) {
+size_t MQTT_Client::statusJson(char* buf, size_t cap) {
   if (!mqtt_on()) return 0;
   return writeStatusJson(buf, cap, PSTR("mqtt"), lastOk && s_mq.connected(), lastAttempt);
 }
@@ -299,14 +299,14 @@ void MQTT_Client::second(unsigned long now_s)
 // once warm, a full CPM bucket
 void MQTT_Client::checkAlarms()
 {
-  if (!(_pending & PEND_ALARMS) || !corium::m_b(M_WARM)) return;
+  if (!(_pending & PEND_ALARMS) || !gcounter.is_warm()) return;
   _pending &= ~PEND_ALARMS;
-  bool warn = corium::m_b(M_WARN);
+  bool warn = gcounter.is_warning();
   if (warn != _warn_sent) {
     _warn_sent = warn;
     _pending |= PEND_WARN;
   }
-  bool alert = corium::m_b(M_ALERT);
+  bool alert = gcounter.is_alert();
   if (alert != _alert_sent) {
     _alert_sent = alert;
     _pending |= PEND_ALERT;
@@ -403,13 +403,13 @@ bool MQTT_Client::publishStatus()
   EGJson j(out, cap);
   j.map_begin();
   j.str(PSTR("time"), dateTime);
-  j.uint(PSTR("ut"), corium::DeviceInfo::uptime());
+  j.uint(PSTR("ut"), (uint32_t)corium::DeviceInfo::uptime());
   j.str(PSTR("board"), corium::DeviceInfo::board());
   j.str(PSTR("model"), Tube::model());
   j.str(PSTR("ssid"), corium::Wifi::ssid);
   j.str(PSTR("ip"), ip);
-  j.sint(PSTR("rssi"), corium::Wifi::rssi);
-  j.uint(PSTR("c_total"), corium::m_u(M_TC));
+  j.sint(PSTR("rssi"), (int32_t)corium::Wifi::rssi);
+  j.uint(PSTR("c_total"), (uint32_t)gcounter.total_clicks);
   j.uint(PSTR("tick"), corium::TickProfile::tickUs);
   j.uint(PSTR("t_max"), corium::TickProfile::tickMaxUs);
   j.uint(PSTR("lps"), corium::TickProfile::lps);
@@ -428,13 +428,13 @@ bool MQTT_Client::publishStatus()
     j.uint(PSTR("heap_max"), corium::DeviceInfo::heapMaxBlock());
   #endif
 #else
-  j.uint(PSTR("free_mem"), corium::DeviceInfo::freeHeap());
+  j.uint(PSTR("free_mem"), (uint32_t)corium::DeviceInfo::freeHeap());
 #endif
 #if CORIUM_HAS_CHIPTEMP
   j.fixed(PSTR("cpu_temp"), corium::DeviceInfo::chipTempC(), 1);
 #endif
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  j.uint(PSTR("ser_ok"), corium::m_b(M_SER_OK) ? 1 : 0);
+  j.uint(PSTR("ser_ok"), gcounter.is_healthy() ? 1 : 0);
 #endif
   j.map_end();
   if (j.overflow) corium::Log::console(PSTR("MQTT: Status cut to fit"));

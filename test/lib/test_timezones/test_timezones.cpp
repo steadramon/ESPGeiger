@@ -29,6 +29,20 @@
 
 static const uint32_t NUM_ZONES = sizeof(zones) / sizeof(zones[0]);
 
+static uint32_t rowHash(uint32_t i) {
+  return ((uint32_t)zones[i][0] << 16 | zones[i][1] << 8 | zones[i][2]) >> 7;
+}
+
+static uint32_t rowRule(uint32_t i) {
+  return zones[i][2] & 0x7f;
+}
+
+static uint32_t numRules(void) {
+  uint32_t n = 0;
+  for (uint32_t off = 0; off < sizeof(TZ_RULES) - 1; off += strlen(TZ_RULES + off) + 1) n++;
+  return n;
+}
+
 void setUp(void)    {}
 void tearDown(void) {}
 
@@ -36,37 +50,29 @@ void tearDown(void) {}
 static void table_sorted(void) {
   for (uint32_t i = 1; i < NUM_ZONES; i++) {
     char msg[64];
-    snprintf(msg, sizeof(msg), "entry %u hash %u", i, (unsigned)zones[i].hash);
-    TEST_ASSERT_TRUE_MESSAGE(zones[i - 1].hash < zones[i].hash, msg);
+    snprintf(msg, sizeof(msg), "entry %u hash %u", i, (unsigned)rowHash(i));
+    TEST_ASSERT_TRUE_MESSAGE(rowHash(i - 1) < rowHash(i), msg);
   }
 }
 
-// offset is 11 bits
-static void rules_blob(void) {
-  TEST_ASSERT_LESS_OR_EQUAL_UINT32(2048, (uint32_t)sizeof(TZ_RULES));
-}
-
-static void rule_starts(void) {
-  const uint32_t blob = sizeof(TZ_RULES);
+// rule is 7 bits
+static void rules_fit(void) {
+  TEST_ASSERT_LESS_THAN_UINT32(128, numRules());
   for (uint32_t i = 0; i < NUM_ZONES; i++) {
-    uint32_t off = zones[i].offset;
     char msg[64];
-    snprintf(msg, sizeof(msg), "entry %u offset %u", i, off);
-    TEST_ASSERT_LESS_THAN_UINT32_MESSAGE(blob, off, msg);
-    if (off) TEST_ASSERT_EQUAL_CHAR_MESSAGE('\0', TZ_RULES[off - 1], msg);
-    TEST_ASSERT_NOT_EQUAL_MESSAGE('\0', TZ_RULES[off], msg);
+    snprintf(msg, sizeof(msg), "entry %u rule %u", i, (unsigned)rowRule(i));
+    TEST_ASSERT_LESS_THAN_UINT32_MESSAGE(numRules(), rowRule(i), msg);
   }
 }
 
 static void rules_used(void) {
-  const uint32_t blob = sizeof(TZ_RULES);
-  bool used[sizeof(TZ_RULES)] = { false };
-  for (uint32_t i = 0; i < NUM_ZONES; i++) used[zones[i].offset] = true;
-
-  for (uint32_t off = 0; off < blob - 1; off = off + strlen(TZ_RULES + off) + 1) {
+  bool used[128] = { false };
+  for (uint32_t i = 0; i < NUM_ZONES; i++) used[rowRule(i)] = true;
+  uint32_t n = 0;
+  for (uint32_t off = 0; off < sizeof(TZ_RULES) - 1; off += strlen(TZ_RULES + off) + 1, n++) {
     char msg[80];
-    snprintf(msg, sizeof(msg), "unreferenced rule at %u: %s", off, TZ_RULES + off);
-    TEST_ASSERT_TRUE_MESSAGE(used[off], msg);
+    snprintf(msg, sizeof(msg), "unreferenced rule %u: %s", n, TZ_RULES + off);
+    TEST_ASSERT_TRUE_MESSAGE(used[n], msg);
   }
 }
 
@@ -93,6 +99,9 @@ static void known_zones(void) {
     { "Asia/Kolkata",     "IST-5:30" },
     { "Asia/Kathmandu",   "<+0545>-5:45" },
     { "Antarctica/Troll", "<+00>0<+02>-2,M3.5.0/1,M10.5.0/3" },
+    // footer is 2087's, +01 till then
+    { "Africa/Casablanca", "<+01>-1" },
+    { "Africa/El_Aaiun",   "<+01>-1" },
     { "Etc/UTC",          "UTC0" },
   };
   assertResolves(known, sizeof(known) / sizeof(known[0]));
@@ -119,7 +128,7 @@ static void alias_rules(void) {
                         EGTimeZone::posixFor("UTC"));
 }
 
-// only proven to 21 bits
+// only proven to 17 bits
 static void unknown_zone(void) {
   static const char *const unknown[] = {
     "",
@@ -148,19 +157,46 @@ static void lookup_is_exact(void) {
     TEST_ASSERT_NULL_MESSAGE(EGTimeZone::posixFor(wrong[i]), wrong[i]);
 }
 
+// 17 bits, about 1 in 220 made up names hits
 static void misses_in_table(void) {
+  int hits = 0;
   for (int i = 0; i < 1000; i++) {
     char name[20];
     snprintf(name, sizeof(name), "Zone/%03d", i);
-    TEST_ASSERT_NULL_MESSAGE(EGTimeZone::posixFor(name), name);
+    if (EGTimeZone::posixFor(name)) hits++;
   }
+  TEST_ASSERT_LESS_THAN_INT(20, hits);
+}
+
+static void raw_rule(void) {
+  static const char *const ok[] = {
+    "EST5EDT,M3.2.0,M11.1.0",
+    "<+0330>-3:30",
+    "CET-1CEST,M3.5.0,M10.5.0/3",
+  };
+  for (size_t i = 0; i < sizeof(ok) / sizeof(ok[0]); i++)
+    TEST_ASSERT_EQUAL_PTR_MESSAGE(ok[i], EGTimeZone::rule(ok[i]), ok[i]);
+  TEST_ASSERT_EQUAL_PTR(EGTimeZone::posixFor("Europe/London"), EGTimeZone::rule("Europe/London"));
+}
+
+static void bad_rule(void) {
+  static const char *const bad[] = {
+    "",
+    "America/Nowhere",
+    "ABC",
+    "EST5 EDT",
+    "EST5EDT;M3.2.0",
+    "Zone/Under_1",
+  };
+  for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+    TEST_ASSERT_NULL_MESSAGE(EGTimeZone::rule(bad[i]), bad[i]);
+  TEST_ASSERT_NULL(EGTimeZone::rule(nullptr));
 }
 
 int main(void) {
   UNITY_BEGIN();
   RUN_TEST(table_sorted);
-  RUN_TEST(rules_blob);
-  RUN_TEST(rule_starts);
+  RUN_TEST(rules_fit);
   RUN_TEST(rules_used);
   RUN_TEST(known_zones);
   RUN_TEST(renamed_zones);
@@ -169,5 +205,7 @@ int main(void) {
   RUN_TEST(null_name);
   RUN_TEST(lookup_is_exact);
   RUN_TEST(misses_in_table);
+  RUN_TEST(raw_rule);
+  RUN_TEST(bad_rule);
   return UNITY_END();
 }

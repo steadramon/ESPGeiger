@@ -28,6 +28,7 @@
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 
 Radmon radmon;
 CORIUM_REGISTER_FEATURE(radmon, FEAT_RADMON)
@@ -111,9 +112,9 @@ bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
 
   // the average nearest the interval: 1, 5 or 15 min
   float avgcpm;
-  if      (_interval_s <= 90)  avgcpm = corium::m_f(M_CPM_ST);
-  else if (_interval_s <= 450) avgcpm = corium::m_f(M_CPM5);
-  else                         avgcpm = corium::m_f(M_CPM15);
+  if      (_interval_s <= 90)  avgcpm = gcounter.get_cpmf_stable();
+  else if (_interval_s <= 450) avgcpm = gcounter.get_cpm5f();
+  else                         avgcpm = gcounter.get_cpm15f();
   char value[12];
   format_f(value, sizeof(value), avgcpm, 1);
   char user[3 * RADMON_USER_MAX + 1], pass[3 * RADMON_PASS_MAX + 1];

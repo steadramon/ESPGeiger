@@ -25,6 +25,7 @@
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 #include "GeigerInput/SerialFormat.h"
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
@@ -105,7 +106,7 @@ void SerialOut::resolveFormat() {
 void SerialOut::save() {
   bool ok = corium::Prefs::putUInt("sout", EG_K_INTERVAL, _interval_s);
   ok &= corium::Prefs::putUInt("sout", K_FLAGS, _show);
-  if (!corium::Prefs::commitSoon(corium::fastMillis()) || !ok) corium::Log::console(PSTR("SerialOut: not saved"));
+  if (!corium::Prefs::commitSoon(corium::fastMillis()) || !ok) corium::Log::console(PSTR("SerialOut: Not saved"));
 }
 
 void SerialOut::applyBaud() {
@@ -120,14 +121,14 @@ SerialOut::SerialOut() {
 
 void SerialOut::print_cpm() {
   char buf[32];
-  snprintf_P(buf, sizeof(buf), PSTR("CPM: %d\n"), (int)corium::m_i(M_CPM));
+  snprintf_P(buf, sizeof(buf), PSTR("CPM: %d\n"), (int)gcounter.get_cpm());
   Serial.print(buf);
 }
 
 void SerialOut::print_usv() {
   char buf[32];
   char f[12];
-  format_f(f, sizeof(f), corium::m_f(M_USV));
+  format_f(f, sizeof(f), gcounter.get_usv());
   snprintf_P(buf, sizeof(buf), PSTR("uSv: %s\n"), f);
   Serial.print(buf);
 }
@@ -186,7 +187,7 @@ static void cmd_show() {
   int32_t n;
   if (strcmp_P(arg, PSTR("off")) == 0) serialout.set_show(0);
   else if (isDigit(arg[0]) && parseI32(arg, &n)) serialout.set_show((int)n);
-  else corium::Log::console(PSTR("show: unknown arg '%s'"), arg);
+  else corium::Log::console(PSTR("Show: Unknown arg '%s'"), arg);
 }
 
 static void cmd_cpm() { serialout.print_cpm(); }
@@ -257,12 +258,15 @@ void SerialOut::drain(bool wait) {
   _rest = nullptr;
 }
 
-// 0 = nothing to send
+// 0 = nothing to send. only what's shown, get_cps walks the ring
 static size_t labelled(char* buf, size_t cap, uint8_t flags) {
   if (flags == 0) return 0;
 
-  Line v = { flags, (int)corium::m_i(M_CPM), corium::m_f(M_CPS), corium::m_f(M_USV), 0 };
-  if (M_HAS_HV) {
+  Line v = { flags, 0, 0, 0, 0 };
+  if (flags & SerialOut::SHOW_CPM) v.cpm = gcounter.get_cpm();
+  if (flags & SerialOut::SHOW_CPS) v.cps = gcounter.get_cps();
+  if (flags & SerialOut::SHOW_USV) v.usv = gcounter.get_usv();
+  if (M_HAS_HV && (flags & SerialOut::SHOW_HV)) {
     int32_t hv;
     if (m_hv_volts(&hv)) v.hv = (int)hv;
     else v.flags &= ~SerialOut::SHOW_HV;   // no adc

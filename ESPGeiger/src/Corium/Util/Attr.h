@@ -1,5 +1,5 @@
 /*
-  Attr.h - Compiler attributes, one name for both cores.
+  Attr.h - compiler attributes, one name for both cores
 
   Copyright (C) 2026 @steadramon
 
@@ -19,11 +19,11 @@
 #ifndef CORIUM_ATTR_H
 #define CORIUM_ATTR_H
 
-// a dropped result warns; esp32 is gnu++11, no [[nodiscard]]
+// A dropped result warns. esp32 is gnu++11, so no [[nodiscard]]
 #define CORIUM_NODISCARD __attribute__((warn_unused_result))
 
-// the 1 s tick: esp32 runs it from iram, helpers inlined;
-// the 8266 from flash, helpers out of line so only work fetches them
+// The 1 s tick. esp32 runs it from iram with the helpers inlined,
+// the 8266 runs it from flash with the helpers out of line, so only real work fetches them
 #ifdef ESP32
 #define CORIUM_TICK_ATTR IRAM_ATTR
 #define CORIUM_TICK_COLD inline

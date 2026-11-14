@@ -75,6 +75,10 @@ const char corium::K_WEB_PASS[]     PROGMEM = "web_pass";
 const char corium::H_RBA[] PROGMEM = "Reboot to apply";
 const char corium::P_HOST[] PROGMEM = "[A-Za-z0-9._\\-]+";   // a name or an ip, no :port
 const char corium::WRITE_FAILED[] PROGMEM = "flash write failed";
+#ifndef APP_AUTH_HELP
+#define APP_AUTH_HELP "Log in as admin with the web password."
+#endif
+const char corium::AUTH_HELP[] PROGMEM = APP_AUTH_HELP;
 
 static const char FMT_LD[] PROGMEM = "%ld";
 static const char FMT_LU[] PROGMEM = "%lu";

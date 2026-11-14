@@ -47,7 +47,6 @@ extern const char RANDOM_JS[] PROGMEM = R"JS(
 ['Dice D','dice',['sides',6,2,10000],'Roll'],
 ['Password','password',['len',16,4,64],'Generate','chars'],
 ['Hex','hex',['n',16,1,32],'Generate','bytes'],
-['Bias test','flip',['n',1000,10,10000],'Run','flips'],
 ['OTP','otp',['n',256,16,1024],'Download','bytes',1]
 ].forEach(c=>{
 var t=document.createElement('tr'),
@@ -152,46 +151,6 @@ static size_t random_password(EGHttpRequest& req, char* out) {
   return len;
 }
 
-static uint32_t count_heads(long n) {
-  uint32_t heads = 0;
-  uint8_t  buf[64];
-  long left = n;
-  while (left > 0) {
-    size_t need = (size_t)((left + 7) / 8);
-    if (need > sizeof(buf)) need = sizeof(buf);
-    GRNG::extract_fast(buf, need);
-    for (size_t i = 0; i < need && left > 0; i++) {
-      uint8_t b = buf[i];
-      for (int k = 0; k < 8 && left > 0; k++) {
-        if (b & (1 << k)) heads++;
-        left--;
-      }
-    }
-  }
-  return heads;
-}
-
-static size_t random_flip(EGHttpRequest& req, char* out, size_t cap) {
-  // chi^2 1 dof, < 3.841 fair, < 6.635 suspect
-  int32_t n = 1000;
-  parseI32(req.arg(F("n")), &n);
-  n = clamp<int32_t>(n, 10, 10000);
-  uint32_t heads = count_heads(n);
-  uint32_t tails = (uint32_t)n - heads;
-  float diff = (float)heads - (float)n / 2.0f;
-  float chi2 = (diff * diff * 4.0f) / (float)n;
-  PGM_P verdict = chi2 < 3.841f ? PSTR("fair")
-                 : chi2 < 6.635f ? PSTR("suspect")
-                                 : PSTR("biased");
-  uint32_t chi2_milli = (uint32_t)(chi2 * 1000.0f + 0.5f);
-  return snprintf_P(out, cap,
-                    PSTR("N=%ld H=%lu T=%lu chi2=%lu.%03lu (%s)"),
-                    (long)n, (unsigned long)heads, (unsigned long)tails,
-                    (unsigned long)(chi2_milli / 1000UL),
-                    (unsigned long)(chi2_milli % 1000UL),
-                    verdict);
-}
-
 // arg() buffer is shared, don't compare type after a match
 static void hRandomDo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const char* type = req.arg(F("type"));
@@ -209,8 +168,6 @@ static void hRandomDo(EGHttpRequest& req, EGHttpResponse& res, void*) {
     len = random_dice(req, out, sizeof(out));
   } else if (strcmp_P(type, PSTR("password")) == 0) {
     len = random_password(req, out);
-  } else if (strcmp_P(type, PSTR("flip")) == 0) {
-    len = random_flip(req, out, sizeof(out));
   } else {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F(""));
     return;

@@ -49,7 +49,7 @@ class NTP_Client : public Module {
     uint8_t displayOrder() override { return 0; }  // managed via /network
 
     LegacyRows legacyAliases() override;
-    const char* legacyFile() override { return "/ntp.json"; }  // LEGACY IMPORT
+    const char* legacyFile() override { return "/ntp.json"; }  // legacy import
 
     const char* getServer() { return Prefs::getString("ntp", K_SERVER); }
     const char* getTz()     { return Prefs::getString("ntp", K_TZ); }
