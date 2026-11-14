@@ -61,7 +61,9 @@ None of the modes impose a CPM ceiling. The real limits:
   ISR at ~5000 CPS = 300 000 CPM.
 * **Dead time correction** (default 100 us on pulse builds): the
   formula saturates near `cps * dead_time = 0.875`, ~8750 CPS =
-  525 000 CPM. Above that the tube is paralysed in any case.
+  525 000 CPM. Above that the tube is paralysed in any case. Counting by
+  interrupt, the debounce is the dead time when it is longer: 200 us
+  saturates near ~4375 CPS.
 * **PCNT** (ESP32): bounded by the input filter, not ISR throughput.
 * **Interrupt saturation guard** (interrupt builds): above 10 000 ISR
   entries/sec the input is parked for 5 s. See

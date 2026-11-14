@@ -12,7 +12,7 @@ A configurable GPIO that follows the Counter alert state. Drives a relay, sounde
 
 The pin idles at its inactive level and switches to the active level once the alert threshold is breached. Two output modes: steady level or a 1 Hz square wave while alerting.
 
-Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`). Disabled by default; set the pin from **Config > Alert Out** after flashing.
+Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`, `espgeigerlog_udp`) and `esp8266_pulsemin`. Disabled by default; set the pin from **Config > Alert Out** after flashing.
 
 ## Settings
 

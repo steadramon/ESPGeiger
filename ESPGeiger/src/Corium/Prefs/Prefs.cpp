@@ -36,9 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <new>  // std::nothrow
-#ifdef ESP32
-#include <esp_task_wdt.h>
-#endif
+#include "Corium/System/Yield.h"
 
 #ifndef CORIUM_PREFS_MAX_GROUPS
 #define CORIUM_PREFS_MAX_GROUPS CORIUM_MAX_MODULES
@@ -767,12 +765,7 @@ static bool any_dirty() {
 
 // a write can take 200 ms, an import writes them all
 static void pause(bool& busy) {
-  if (busy) {
-    yield();
-#ifdef ESP32
-    esp_task_wdt_reset();
-#endif
-  }
+  if (busy) corium::yieldWalk();
   busy = true;
 }
 

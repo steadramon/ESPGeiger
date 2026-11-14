@@ -38,7 +38,6 @@ class SDCard : public corium::Module {
     SDCard();
     const char* name() override { return PSTR("sdcard"); }
     uint8_t displayOrder() override { return 20; }
-    bool requiresNtp() override { return true; }
     void loop(unsigned long now) override;
     void begin() override;
     const corium::PrefGroup* prefsGroup() override;
@@ -52,7 +51,8 @@ class SDCard : public corium::Module {
       Hold();
     };
     void reinit();
-    bool ready() const { return _enabled; }
+    bool ready() const { return _enabled; }   // writing; a stopped card still reads
+    bool mounted() const { return sd != nullptr; }
     int32_t freeMB() const;   // -1 = counting or a count failed
     bool counting() const { return _counting; }
     // a card there that won't mount or write, once till it mounts
@@ -84,6 +84,7 @@ class SDCard : public corium::Module {
     void writeMinute();
     void writeUndated();
     bool wrote(const char* dir, const char* name);
+    void afterRow(bool clean);
     void closeDay(bool sync);
     bool openDayFile(const char* dir, const char* name, uint32_t day, bool& failed);
     void scheduleCleanup(uint8_t what);

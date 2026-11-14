@@ -247,6 +247,7 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
     if (existing >= 0) {
       if (rssi > out[existing].rssi) {
         out[existing].rssi = rssi;
+        out[existing].enc  = (uint8_t)WiFi.encryptionType(i);
         out[existing].chan = chan;
       }
       continue;
@@ -336,34 +337,22 @@ void EGPortal::hScan(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   res.endChunked();
 }
 
+static const char CREDS_T_SSID[] PROGMEM = "ssid must be 1-32 characters";
+static const char CREDS_T_LONG[] PROGMEM = "password too long";
+static const char CREDS_T_PASS[] PROGMEM = "password must be empty (open), 8-63 characters or 64 hex digits";
+static const char* const CREDS_TEXT[] PROGMEM = {CREDS_T_SSID, CREDS_T_LONG, CREDS_T_PASS};
+
 void EGPortal::hSave(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
   if (self->_join == JOIN_TESTING || self->_join == JOIN_BACK) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("Already testing a network, wait for the result."));
     return;
   }
-
-  const char* ssid = req.arg(F("ssid"));
-  // a cut one would fail to join
-  if (!ssidOk(ssid)) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("ssid must be 1-32 characters"));
+  Creds c = takeCreds(req, self->_savedSsid, self->_savedPass);
+  if (c != CREDS_OK) {
+    res.send(400, FPSTR(HTTP_CT_PLAIN), FPSTR((PGM_P)pgm_read_ptr(&CREDS_TEXT[c - 1])));
     return;
   }
-  // arg() buffer is shared
-  strncpy(self->_savedSsid, ssid, EGPORTAL_SSID_MAX);
-  self->_savedSsid[EGPORTAL_SSID_MAX] = '\0';
-
-  const char* pass = req.arg(F("password"));
-  if (pass && strlen(pass) > EGPORTAL_PASS_MAX) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("password too long"));
-    return;
-  }
-  if (!passOk(pass)) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("password must be empty (open), 8-63 characters or 64 hex digits"));
-    return;
-  }
-  strncpy(self->_savedPass, pass, EGPORTAL_PASS_MAX);
-  self->_savedPass[EGPORTAL_PASS_MAX] = '\0';
 
   if (self->_onSave && !self->_onSave(self->_savedSsid, self->_savedPass, self->_onSaveUser)) {
     res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory"));

@@ -35,6 +35,7 @@
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
+#include "Corium/System/Lifecycle.h"
 #include "Corium/Util/StringUtil.h"
 
 CORIUM_PSTR(K_SLEEP,    "sleep");
@@ -421,8 +422,10 @@ CORIUM_NODISCARD static bool save_creds() {
 #ifdef ESP32
 // event task, one byte; a leave (begin()'s, the core's retry) never hides a real reason
 static void on_drop(arduino_event_t* e) {
-  uint8_t r = e->event_info.wifi_sta_disconnected.reason;
-  if (r != WIFI_REASON_ASSOC_LEAVE || !s_reason) s_reason = r;
+  const wifi_event_sta_disconnected_t& d = e->event_info.wifi_sta_disconnected;
+  // the network before's, queued ahead of the test
+  if (d.ssid_len && (d.ssid_len != strlen(s_test_ssid) || memcmp(d.ssid, s_test_ssid, d.ssid_len))) return;
+  if (d.reason != WIFI_REASON_ASSOC_LEAVE || !s_reason) s_reason = d.reason;
 }
 
 // status alone can't name a wrong password
@@ -754,17 +757,32 @@ static void start_ap() {
 // a network to join, not the AP; saved with the next commit
 bool corium::Wifi::joinMode() { return corium::Prefs::put("wifi", K_MODE, "0"); }
 
+// joined from hotspot or off mode: the next boot joins it too, a restart onto it
+bool corium::Wifi::keepJoined(uint32_t restart_ms) {
+  if (corium::Prefs::getUInt("wifi", K_MODE) == 0) return false;
+  if (!joinMode() || !corium::Prefs::commit()) {
+    corium::Log::console(PSTR("WiFi: Network settings not saved"));
+    return false;
+  }
+  corium::Log::console(PSTR("WiFi: Moved to '%s', restarting"), s_test_ssid);
+  corium::Lifecycle::requestRestart(corium::fastMillis(), restart_ms);
+  return true;
+}
+
 bool corium::Wifi::portalAhead() {
   if (corium::Wifi::offlineForced || corium::Prefs::getUInt("wifi", K_MODE) != 0) return false;
   return !corium::Wifi::hasSavedCreds();
 }
 
+static void apply_strongest_ap();
+
 bool corium::Wifi::connectOrPortal() {
+  apply_strongest_ap();   // before any begin(), a portal save is built with it
   uint32_t mode = corium::Prefs::getUInt("wifi", K_MODE);
   if (mode == MODE_OFF || mode == MODE_AP) {
     corium::Wifi::offlineForced = true;
     if (mode == MODE_AP) start_ap();
-    else corium::Log::console(PSTR("WiFi: off (wifi.mode)"));
+    else corium::Log::console(PSTR("WiFi: Off (wifi.mode)"));
     return false;
   }
   s_joining = true;
@@ -911,6 +929,21 @@ static void apply_wifi_phy_mode(uint8_t mode) {
 #endif
 }
 
+// one ssid on many aps: esp32 joins the first it hears unless it scans every channel.
+// begin(ssid, pass) takes the setters, begin() the stored config
+static void apply_strongest_ap() {
+#ifdef ESP32
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+  wifi_config_t c;
+  if (esp_wifi_get_config(WIFI_IF_STA, &c) != ESP_OK) return;
+  if (c.sta.scan_method == WIFI_ALL_CHANNEL_SCAN && c.sta.sort_method == WIFI_CONNECT_AP_BY_SIGNAL) return;
+  c.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+  c.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+  (void)esp_wifi_set_config(WIFI_IF_STA, &c);
+#endif
+}
+
 void WifiModule::onPrefsLoaded() {
   // rest needs WiFi.mode() first
   corium::Wifi::applySleep();
@@ -927,6 +960,7 @@ void corium::Wifi::applyRuntimeNetPrefs() {
   apply_wifi_tx_power((uint8_t)corium::Prefs::getUInt  ("wifi", K_TX_POWER));
   apply_wifi_country (         corium::Prefs::getString("wifi", K_COUNTRY));
   apply_wifi_phy_mode((uint8_t)corium::Prefs::getUInt  ("wifi", K_PHY_MODE));
+  apply_strongest_ap();
 }
 
 int corium::Wifi::txPowerQdbm() {

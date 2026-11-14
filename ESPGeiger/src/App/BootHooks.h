@@ -88,12 +88,16 @@ namespace BootHooks {
 #endif
   }
 
-  // Blocks until released
-  inline ButtonHold checkStartupButtonHold() {
+  // Blocks until released. safe mode: full reset only, never offline
+  inline ButtonHold checkStartupButtonHold(bool safe = false) {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();
     ButtonHold hold = corium::BootButton::check([] { return pushbutton.isPressed(); },
-                                        displayWifiDisabled, displayWipe);
+                                        safe ? +[] {} : &displayWifiDisabled, displayWipe);
+    if (safe && hold == ButtonHold::OFFLINE) {
+      Serial.println(F("BOOT: safe mode - offline ignored"));
+      hold = ButtonHold::NONE;
+    }
     if (hold != ButtonHold::NONE) displayDisableTimeout();
     return hold;
 #else

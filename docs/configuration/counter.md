@@ -59,14 +59,14 @@ Setting `0` disables the correction entirely.
 
 ## When debounce and dead time interact
 
-Debounce is a filter (drops pulses in the firmware), dead time is a correction (statistical adjustment to the displayed rate). They are not the same thing and should not be merged.
+Debounce is a filter (drops pulses in the firmware), dead time is a correction (statistical adjustment to the displayed rate). They are not the same thing.
 
 The recommended rule of thumb:
 
 * Set dead time from the tube datasheet. This is fixed physics.
 * Set debounce as low as your front end allows without false counts. This depends on your hardware.
 
-A reasonable setup has `debounce <= dead_time + a small margin`. If your debounce is much larger than your dead time, you are filtering pulses the tube did produce and the dead time correction will not recover them because it assumes the only thing lost was tube recovery.
+A reasonable setup has `debounce <= dead_time + a small margin`. Counting by interrupt, nothing is counted inside the debounce either, so the correction uses whichever of the two is longer (a dead time of `0` still turns it off). If your debounce is much larger than your dead time, you are filtering pulses the tube did produce: the correction estimates them back, it doesn't count them, so a high rate reads noisier.
 
 If you need a large debounce to reject hardware noise, that is a sign the front end could be improved (better shielding, lower impedance, an output buffer on the tube amplifier).
 

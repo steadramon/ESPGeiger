@@ -55,7 +55,7 @@ Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the
 | **Heltec WiFi LoRa 32 V3** | ESP32-S3 | 17 / 18 | GPIO 21 | `esp32s3_*` | Set SDA=17 / SCL=18 / RST=21 from Config page after flashing. |
 | **TTGO LoRa32 V1** | ESP32 classic | 4 / 15 | GPIO 16 | `esp32_*` | Same recipe as Heltec V2. |
 | **LilyGo T-Beam** | ESP32 classic | 21 / 22 | none | `esp32_*` | Set SDA=21 / SCL=22 from the Config page after flashing (firmware default is 4 / 5). |
-| **[MINI ESP32-S3-N16R8](https://s.click.aliexpress.com/e/_c3dXGAQt)** (sold as "XH-S3E-AI"; small purple board, onboard speaker + mic + button + NeoPixel + OLED header) <br><img src="img/xh-s3e-ai.png" width="240"/> | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; pin map hard-fixed in build flags. See [buildtargets](/install/buildtargets#audio-tick-esp32-s3-only). |
+| **[MINI ESP32-S3-N16R8](https://s.click.aliexpress.com/e/_c3dXGAQt)** (sold as "XH-S3E-AI"; small purple board, onboard speaker + mic + button + NeoPixel + OLED header) <br><img src="img/xh-s3e-ai.png" width="240"/> | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; board pins fixed in build flags, counter RX/TX still settable. See [buildtargets](/install/buildtargets#audio-tick-esp32-s3-only). |
 
 Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need that pin pulsed at boot. Set **Config > Display > Reset Pin** (advanced) to the GPIO and reboot; 255 means none. Custom builds can preset it with `-DOLED_RST=N`.
 
@@ -78,11 +78,11 @@ The filter value can be configured from the ESPGeiger web interface under __Conf
 | Filter Value | Pulse Duration Filtered | Use Case |
 |---|---|---|
 | 0 | Disabled | No filtering |
-| 200 (default) | < 2.5μs | Filters electrical noise while passing all real geiger pulses |
-| 500 | < 6.25μs | More aggressive filtering for noisy environments |
-| 1023 | < 12.8μs | Maximum filtering |
+| 200 (default) | < 2.5µs | Filters electrical noise while passing all real geiger pulses |
+| 500 | < 6.25µs | More aggressive filtering for noisy environments |
+| 1023 | < 12.8µs | Maximum filtering |
 
-Real Geiger-Muller tube pulses are typically 50-200μs in duration, so even the maximum filter value will not affect real readings. The filter only applies when an ESP32 counts with Hardware (PCNT).
+Real Geiger-Muller tube pulses are typically 50-200µs in duration, so even the maximum filter value will not affect real readings. The filter only applies when an ESP32 counts with Hardware (PCNT).
 
 Custom builds can change the starting value. See [Build Options](/dev/platformio#esp32-hardware-counter-pcnt).
 
@@ -95,10 +95,10 @@ The debounce value can be configured from the ESPGeiger web interface under __Co
 | Debounce Value | Pulses Rejected | Use Case |
 |---|---|---|
 | 0 | Disabled | No debounce |
-| 200 (default) | < 200μs apart | Suppresses typical switching noise, passes all real pulses |
+| 200 (default) | < 200µs apart | Suppresses typical switching noise, passes all real pulses |
 | 1000 | < 1ms apart | More aggressive for noisier setups |
 
-Real Geiger-Muller tube dead time is around 50-200μs, so the default sits just below the tube's own recovery time and passes real events at normal rates. At high rates it adds a dead time of its own: at 400 counts a second the 200μs default reads about 6% low. The debounce only applies to the software interrupt path; counting with PCNT uses the PCNT Filter above instead.
+Real Geiger-Muller tube dead time is around 50-200µs, so the default sits just below the tube's own recovery time and passes real events at normal rates. At high rates it adds a dead time of its own (at 400 counts a second the 200µs default drops about 7%); the [dead time](/configuration/counter#tube-dead-time) correction uses the debounce when it is the longer of the two, so the reading allows for it. The debounce only applies to the software interrupt path; counting with PCNT uses the PCNT Filter above instead.
 
 Custom builds can change the default. See [Build Options](/dev/platformio#geiger-counter-input).
 

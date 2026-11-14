@@ -97,8 +97,37 @@ bool SSD1306Display::takes(uint8_t type) { return !DISP_IS_MAX7219(type); }
 
 static const char PIN_OWNER[] PROGMEM = "OLED";
 
+// one glyph, bytes_per_col bytes a column
+static void draw_glyph(uint8_t* fb, int16_t cx, int16_t y_top, const uint8_t* glyph,
+                       uint16_t byte_count, uint8_t bytes_per_col) {
+  const uint8_t W = OLED_WIDTH;
+  const uint8_t PAGES = OLED_HEIGHT >> 3;
+  uint8_t col = 0;
+  uint8_t bc = 0;
+  int8_t  page0 = y_top >> 3;
+  uint8_t y_off = y_top & 7;
+  int8_t  page  = page0;
+  for (uint16_t i = 0; i < byte_count; i++) {
+    uint8_t pixels = pgm_read_byte(glyph + i);
+    int16_t tx = cx + col;
+    if (pixels && (uint16_t)tx < W) {
+      if ((uint8_t)page < PAGES) {
+        fb[(uint16_t)page * W + tx] |= (uint8_t)(pixels << y_off);
+      }
+      if (y_off != 0 && (uint8_t)(page + 1) < PAGES) {
+        fb[(uint16_t)(page + 1) * W + tx] |= (uint8_t)(pixels >> (8 - y_off));
+      }
+    }
+    if (++bc >= bytes_per_col) {
+      bc = 0; col++;
+      page = page0;
+    } else {
+      page++;
+    }
+  }
+}
+
 // ThingPulse font: height, first char, count, 4 byte jump rows, then glyphs as columns, lsb on top
-// hot path
 static void drawTPString(SSD1306Display& d, int16_t x, int16_t y_top,
                          const uint8_t* font, const char* str) {
   if (!font || !str) return;
@@ -111,8 +140,6 @@ static void drawTPString(SSD1306Display& d, int16_t x, int16_t y_top,
   const uint8_t* jump_table  = font + 4;
   const uint8_t* glyph_table = jump_table + ((uint16_t)num_chars << 2);
   uint8_t* fb = d.getBufferPtr();
-  const uint8_t W = OLED_WIDTH;
-  const uint8_t PAGES = OLED_HEIGHT >> 3;
 
   int16_t cx = x;
   for (const char* p = str; ; p++) {
@@ -127,34 +154,7 @@ static void drawTPString(SSD1306Display& d, int16_t x, int16_t y_top,
 
     if (msb == 0xFF) { cx += advance; continue; }
     uint16_t goff = ((uint16_t)msb << 8) | lsb;
-    const uint8_t* glyph = glyph_table + goff;
-
-    uint8_t col = 0;
-    uint8_t bc = 0;
-    int8_t  page0 = y_top >> 3;
-    uint8_t y_off0 = y_top & 7;
-    int8_t  page  = page0;
-    uint8_t y_off = y_off0;
-    for (uint16_t i = 0; i < byte_count; i++) {
-      uint8_t pixels = pgm_read_byte(glyph + i);
-      if (pixels) {
-        int16_t tx = cx + col;
-        if ((uint16_t)tx < W) {
-          if ((uint8_t)page < PAGES) {
-            fb[(uint16_t)page * W + tx] |= (uint8_t)(pixels << y_off);
-          }
-          if (y_off != 0 && (uint8_t)(page + 1) < PAGES) {
-            fb[(uint16_t)(page + 1) * W + tx] |= (uint8_t)(pixels >> (8 - y_off));
-          }
-        }
-      }
-      if (++bc >= bytes_per_col) {
-        bc = 0; col++;
-        page = page0; y_off = y_off0;
-      } else {
-        page++;
-      }
-    }
+    draw_glyph(fb, cx, y_top, glyph_table + goff, byte_count, bytes_per_col);
     cx += advance;
   }
 }
@@ -591,7 +591,7 @@ static bool s_bus_skip = false;
 static void bus_result(bool ok) {
   if (ok) {
     if (s_bus_fails >= BUS_FAILS) {
-      corium::Log::console(PSTR("OLED: answering again"));
+      corium::Log::console(PSTR("OLED: Back"));
       oled.oled_last_update = 0;   // full frame
     }
     s_bus_fails = 0;
@@ -599,7 +599,7 @@ static void bus_result(bool ok) {
   }
   s_bus_retry = corium::fastMillis() + BUS_RETRY_MS;
   if (s_bus_fails < BUS_FAILS && ++s_bus_fails == BUS_FAILS) {
-    corium::Log::console(PSTR("OLED: not answering, retry every 60 s"));
+    corium::Log::console(PSTR("OLED: Not answering, retry every 60 s"));
   }
 }
 
@@ -741,7 +741,7 @@ void SSD1306Display::setup() {
   // only when chosen, a MAX7219 build keeps the 1 KB
   if (!_frame) _frame = (uint8_t*)malloc(u8g2_GetBufferSize(&_u8g2));
   if (!_frame) {
-    corium::Log::console(PSTR("OLED: no memory for the frame"));
+    corium::Log::console(PSTR("OLED: No memory for the frame"));
     return;
   }
   u8g2_SetBufferPtr(&_u8g2, _frame);
@@ -750,14 +750,14 @@ void SSD1306Display::setup() {
   _addr = corium::I2CBus::begin() ? oled_probe_addr() : 0;
   if (!_addr) {
     _present = false;
-    corium::Log::console(PSTR("OLED: no display detected at 0x3C/0x3D (sda=%d scl=%d)"),
+    corium::Log::console(PSTR("OLED: No display detected at 0x3C/0x3D (sda=%d scl=%d)"),
                  _pin_sda, _pin_scl);
     corium::Registry::every(this, NOPANEL_LOOP_MS);
     setFontPosTop();
     return;
   }
   _present = true;
-  corium::Log::console(PSTR("OLED: detected at 0x%02X (type=%u)"), _addr, _type);
+  corium::Log::console(PSTR("OLED: Detected at 0x%02X (type=%u)"), _addr, _type);
   setI2CAddress(_addr << 1);
   setBusClock(700000);
   u8g2_InitDisplay(&_u8g2);

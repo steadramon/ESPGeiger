@@ -19,7 +19,7 @@ ESPGeiger will report the Webhook submission status in the Web Interface console
 
 Your endpoint should reply with a body that contains `OK`. Anything else, including an empty `204` reply, is logged as `Webhook: Error` and `/outputs` shows the webhook as not OK, even though the data arrived.
 
-**Note:** Only HTTP endpoints are supported. An HTTPS URL is not sent at all (the console shows `Webhook: https not supported, not sent`); it is never sent as plain HTTP.
+**Note:** Only HTTP endpoints are supported. An HTTPS URL saves but is never sent (the console shows `Webhook: URL not usable (http only)`); it is never sent as plain HTTP.
 
 The URL must start with `http://` and may carry a query string, for example `http://192.168.1.10/hook?src=geiger&n=1`. Characters outside the usual URL set, such as a space, `'`, `#`, `[` or `]`, are refused when you save.
 
@@ -36,8 +36,9 @@ ESPGeiger submits a JSON payload via HTTP POST with `Content-Type: application/j
 | `cpm` | float | Current CPM (1-minute smoothed) |
 | `cpm5` | float | 5-minute smoothed CPM |
 | `cpm15` | float | 15-minute smoothed CPM |
-| `usv` | float | Current microsieverts per hour (μSv/h) |
+| `usv` | float | Current microsieverts per hour (µSv/h) |
 | `hv` | integer | High voltage reading in volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
+| `hv_fault` | integer | `1` while HV is held off: over the voltage limit (same builds) |
 | `t` | float | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h` | float | Relative humidity in % (BME280 / AHT family only) |
 | `p` | float | Atmospheric pressure in hPa (BME280 / BMP280 only) |

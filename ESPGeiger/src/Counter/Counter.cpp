@@ -71,7 +71,7 @@ void ensure_pulse_ring() {
   if (s_pulse_ring) return;
   volatile uint32_t* r = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
   if (!r) {
-    corium::Log::console(PSTR("Counter: pulse ring alloc failed"));
+    corium::Log::console(PSTR("Counter: Pulse ring alloc failed"));
     return;
   }
   corium::IsrLock::enter(s_pulse_mux);
@@ -253,9 +253,9 @@ CORIUM_TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
 #endif
   if (missing && !s_missing_logged) {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-    corium::Log::console(PSTR("Counter: no counts detected - check tube and wiring (GPIO %d)"), input_pin());
+    corium::Log::console(PSTR("Counter: No counts detected - check tube and wiring (GPIO %d)"), input_pin());
 #else
-    corium::Log::console(PSTR("Counter: no counts detected - check tube/input wiring"));
+    corium::Log::console(PSTR("Counter: No counts detected - check tube/input wiring"));
 #endif
   }
   s_missing_logged = missing;
@@ -402,7 +402,7 @@ void Counter::reset_alarm() {
   _alarm_snoozed = true;
   _warn_on       = false;
   _alert_on      = false;
-  corium::Log::console(PSTR("Alarm: snoozed until level drops below warning"));
+  corium::Log::console(PSTR("Alarm: Snoozed until level drops below warning"));
 }
 
 // true = on flash; the stash has the totals either way
@@ -421,7 +421,7 @@ bool Counter::save_lifetime() {
              corium::Prefs::putUInt("life", EG_K_SECS, _life_saved_s);
   (void)corium::Prefs::commit();   // false for any group, landed() says for life
   if (put && corium::Prefs::landed("life")) return true;
-  corium::Log::console(PSTR("Lifetime: not saved"));
+  corium::Log::console(PSTR("Lifetime: Not saved"));
   return false;
 }
 
@@ -457,7 +457,7 @@ bool Counter::reset_lifetime() {
   life_clear();   // else a crash brings the old totals back
   bool ok = save_lifetime();
   s_clock.read_next();   // stamps the first boot again
-  if (ok) corium::Log::console(PSTR("Lifetime: reset"));
+  if (ok) corium::Log::console(PSTR("Lifetime: Reset"));
   return ok;
 }
 
@@ -659,7 +659,7 @@ bool ClickFns::add(ClickFn f) {
     if (fn[i] == f) return true;   // a second begin()
   }
   if (n >= MAX) {
-    corium::Log::console(PSTR("Counter: click hook dropped, %u max"), (unsigned)MAX);
+    corium::Log::console(PSTR("Counter: Click hook dropped, %u max"), (unsigned)MAX);
     return false;
   }
   fn[n++] = f;
@@ -720,7 +720,7 @@ void Counter::begin() {
     }
     _life_saved_s += secs;
     if (clicks > 0 || secs > 0) {
-      corium::Log::console(PSTR("Lifetime: recovered %lu clicks + %lu s from RTC"),
+      corium::Log::console(PSTR("Lifetime: Recovered %lu clicks + %lu s from RTC"),
                    (unsigned long)clicks,
                    (unsigned long)secs);
     }
@@ -747,25 +747,27 @@ bool Counter::is_quiet_now() {
   return _quiet.active();
 }
 
-// hot path
-void Counter::loop() {
-  if (_pending_work) {
-    uint8_t pw = _pending_work;
-    _pending_work = 0;
-    if (pw & PENDING_RTC) {
-      uint32_t secs = _life_saved_s;
-      // 0 = stamped before the sync, no time
-      if (_rtc_pending_now && _saved_at > 0 && corium::reached(_rtc_pending_now, _saved_at)) {
-        secs += _rtc_pending_now - _saved_at;
-      }
-      rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, secs);
+// rare, out of the pass
+void __attribute__((noinline)) Counter::run_pending() {
+  uint8_t pw = _pending_work;
+  _pending_work = 0;
+  if (pw & PENDING_RTC) {
+    uint32_t secs = _life_saved_s;
+    // 0 = stamped before the sync, no time
+    if (_rtc_pending_now && _saved_at > 0 && corium::reached(_rtc_pending_now, _saved_at)) {
+      secs += _rtc_pending_now - _saved_at;
     }
-    if (pw & PENDING_SAVE) {
-      (void)save_lifetime();   // the stash has it
-    }
-    if (pw & PENDING_ALARM) corium::Registry::emit(TOPIC_ALARM);
-    if (pw & PENDING_COUNTS) corium::Registry::emit(TOPIC_COUNTS);
+    rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, secs);
   }
+  if (pw & PENDING_SAVE) {
+    (void)save_lifetime();   // the stash has it
+  }
+  if (pw & PENDING_ALARM) corium::Registry::emit(TOPIC_ALARM);
+  if (pw & PENDING_COUNTS) corium::Registry::emit(TOPIC_COUNTS);
+}
+
+void Counter::loop() {
+  if (_pending_work) run_pending();
 
   static_cast<InputType*>(_input)->loop();
 

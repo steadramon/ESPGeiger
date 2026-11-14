@@ -64,6 +64,12 @@ void corium::ImprovSerial::poll() {
   watch();
 }
 
+void corium::ImprovSerial::watch() {
+  // a part frame goes at 2s here too, a long quiet can't wrap its age
+  if (_pos && corium::fastMillis() - _last_byte_ms > 2000) _pos = 0;
+  if (_joining) finish();
+}
+
 bool corium::ImprovSerial::consumeByte(uint8_t b) {
   uint32_t now = corium::fastMillis();
   // 2s gap mid frame, start again
@@ -221,6 +227,7 @@ void corium::ImprovSerial::send_wifi_networks() {
 }
 
 static const uint32_t IMPROV_TEST_MS = 25000;   // esp-web-tools gives up at 30s
+static const uint32_t IMPROV_MOVED_MS = 2000;   // the url out first
 
 void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
                                        const std::string& password) {
@@ -247,8 +254,10 @@ void corium::ImprovSerial::finish() {
   if (corium::Wifi::testState() == EGPortal::JOIN_OK) {
     set_state(improv::STATE_PROVISIONED);
     send_url(improv::WIFI_SETTINGS);
-    corium::Log::console(PSTR("Improv: provisioned ssid='%s' ip=%s"),
-                 ssid, corium::Wifi::localIP().toString().c_str());
+    char ip[16];
+    corium::Wifi::formatIP(ip, sizeof(ip), corium::Wifi::localIP());
+    corium::Log::console(PSTR("Improv: Provisioned ssid='%s' ip=%s"), ssid, ip);
+    corium::Wifi::keepJoined(IMPROV_MOVED_MS);   // hotspot mode, as the web's
     return;
   }
   corium::Log::console(PSTR("Improv: WiFi connect timeout for ssid='%s'"), ssid);

@@ -25,7 +25,7 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 | `ESPGeiger-<device_id> CPM` | CPM | Current CPM value | `30.0` | 60 s |
 | `ESPGeiger-<device_id> CPM5` | CPM | 5-minute smoothed CPM | `30.0` | 60 s |
 | `ESPGeiger-<device_id> CPM15` | CPM | 15-minute smoothed CPM | `30.0` | 60 s |
-| `ESPGeiger-<device_id> µSv/h` | µSv/h | μSv/h value | `0.10` | 60 s |
+| `ESPGeiger-<device_id> µSv/h` | µSv/h | µSv/h value | `0.10` | 60 s |
 | `ESPGeiger-<device_id> HV` | V | High-voltage reading - builds with HV feedback (ESPGeiger-HW, `*_hv`) | `400.1` | 60 s |
 | `ESPGeiger-<device_id> Temperature` | °C | Temperature in °C - [environment sensor](/configuration/env) only | `22.4` | 60 s |
 | `ESPGeiger-<device_id> Humidity` | % | Relative humidity in % - BME280 / AHT family only | `45.6` | 60 s |
@@ -48,6 +48,7 @@ Triggered when CPM crosses the configured warning / alert thresholds. Consumed v
 | `ESPGeiger-<device_id> Alert` | CPM above configured alert threshold | `safety` | all |
 | `ESPGeiger-<device_id> Serial Connected` | Serial counter has reported within the last 60 s. | `connectivity` | serial builds |
 | `ESPGeiger-<device_id> Tube Active` | Pulses are arriving from the tube (or, on UDP builds, from the source device). Takes the place of Serial Connected, which needs an external peer. | `connectivity` | pulse, UDP and test builds |
+| `ESPGeiger-<device_id> HV Fault` | HV is held off: the voltage went over the limit (duty held at minimum until settings are saved). | `problem` | HV ADC builds |
 
 <!-- /gen -->
 

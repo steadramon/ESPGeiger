@@ -58,7 +58,7 @@ static size_t header_only(const uint8_t* q, uint8_t rc, uint8_t* out, size_t max
   return EGDNS_HEADER;
 }
 
-// bytes up to and with the root, 0 = bad; no pointers
+// Bytes up to and including the root, 0 if bad. No pointers allowed
 static size_t name_len(const uint8_t* p, size_t left) {
   size_t n = 0;
   for (;;) {
@@ -71,7 +71,7 @@ static size_t name_len(const uint8_t* p, size_t left) {
   }
 }
 
-// one question, nothing else: edns gets FORMERR
+// Only one question and nothing else, so edns gets FORMERR
 static bool one_question(const uint8_t* q) {
   return rd16(q + QDCOUNT) == 1 && !rd16(q + ANCOUNT) && !rd16(q + NSCOUNT) && !rd16(q + ARCOUNT);
 }
@@ -123,9 +123,9 @@ size_t egdns_reply(const uint8_t* q, size_t len, const uint8_t ip[4], uint32_t t
 bool EGDnsAnswer::begin(uint16_t port, const EGTcpAddr& ip, uint32_t ttl) {
   memcpy(_ip, ip.b, 4);
   _ttl = ttl;
-  _udp.onPacket([this](const uint8_t* q, size_t len, const EGTcpAddr& from, uint16_t p) {
-    answer(q, len, from, p);
-  });
+  _udp.onPacket([](void* d, const uint8_t* q, size_t len, const EGTcpAddr& from, uint16_t p) {
+    ((EGDnsAnswer*)d)->answer(q, len, from, p);
+  }, this);
   return _udp.begin(port);
 }
 

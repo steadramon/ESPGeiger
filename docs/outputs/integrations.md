@@ -28,11 +28,11 @@ Response:
 |---|---|
 | `ut` | Uptime in seconds |
 | `c` | Current CPM |
-| `s` | Current μSv/h |
+| `s` | Current µSv/h |
 | `c5` | 5-minute smoothed CPM |
 | `c15` | 15-minute smoothed CPM |
 | `cs` | Current CPS |
-| `r` | μSv conversion ratio |
+| `r` | µSv conversion ratio |
 | `tc` | Total clicks since boot |
 | `mem` | Free heap memory in bytes |
 | `rssi` | WiFi signal strength in dBm |
@@ -41,6 +41,7 @@ Response:
 | `warn` | `1` when CPM is above the warning threshold (`counter.warn`) |
 | `alert` | `1` when CPM is above the alert threshold (`counter.alert`) |
 | `hv` | HV reading in whole volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
+| `hv_fault` | `1` while HV is held off: over the voltage limit (same builds) |
 
 #### Environmental sensor
 
@@ -59,7 +60,7 @@ MQTT, WebAPI, the webhook and UDP always send temperature in °C; only `/json` f
 
 | Field | Description |
 |---|---|
-| `loss` | Packet loss on the feed, as a percentage (appears once a producer has been heard) |
+| `loss` | Packet loss on the feed over the last 10 to 15 minutes, as a percentage (appears while clicks came in during that time) |
 
 `/json?raw=1` adds memory and load diagnostics; see [HTTP endpoint schemas](/dev/http-endpoints#jsonraw1).
 
@@ -188,9 +189,9 @@ geiger_pulse_interval_seconds_count{chipid="d5536d"} 1845231
 | `device_info` | gauge | Always 1; labels carry name, model, firmware version and build |
 | `geiger_cpm` | gauge | Counts per minute; `window` label is `1m`, `5m` or `15m` |
 | `geiger_cps` | gauge | Counts per second |
-| `geiger_usv_per_hour` | gauge | Dose rate in μSv/h |
-| `geiger_usv_ratio` | gauge | CPM per μSv/h conversion ratio |
-| `geiger_lifetime_clicks_total` | counter | Clicks over the device's life |
+| `geiger_usv_per_hour` | gauge | Dose rate in µSv/h |
+| `geiger_usv_ratio` | gauge | CPM per µSv/h conversion ratio |
+| `geiger_lifetime_clicks_total` | counter | Clicks over the device's life. Saved to flash every 6 hours and on every clean restart; a power cut loses the clicks since the last save, which Prometheus sees as a counter reset |
 | `geiger_tube_alive` | gauge | `1` while counts arrive, `0` once the tube has been silent longer than expected for its count rate |
 | `geiger_saturated` | gauge | `1` when the count rate is close to the tube's dead-time limit |
 | `geiger_pulse_interval_seconds` | histogram | Time between pulses, cumulative since boot |
@@ -198,10 +199,11 @@ geiger_pulse_interval_seconds_count{chipid="d5536d"} 1845231
 | `device_free_heap_bytes` | gauge | Free heap memory |
 | `device_wifi_rssi_dbm` | gauge | WiFi signal strength |
 | `device_hv_volts` | gauge | Tube high voltage (builds with HV feedback) |
+| `device_hv_fault` | gauge | `1` while HV is held off: over the voltage limit (builds with HV feedback) |
 | `env_temperature_celsius` | gauge | Temperature, always °C |
 | `env_humidity_percent` | gauge | Relative humidity |
 | `env_pressure_hpa` | gauge | Pressure in hPa, corrected to sea level when an elevation is set |
-| `geiger_udp_loss_percent` | gauge | Packet loss on the feed (UDP receiver builds, once a producer has been heard) |
+| `geiger_udp_loss_percent` | gauge | Packet loss on the feed over the last 10 to 15 minutes (UDP receiver builds, while clicks came in during that time) |
 
 The `env_` metrics appear only when a sensor is detected and each only if the sensor measures it.
 
@@ -309,8 +311,7 @@ rest:
         unit_of_measurement: "CPM"
       - name: "Radiation uSv/h"
         value_template: "{{ value_json.s }}"
-        unit_of_measurement: "μSv/h"
-        device_class: "radiation"
+        unit_of_measurement: "µSv/h"
       - name: "ESPGeiger WiFi RSSI"
         value_template: "{{ value_json.rssi }}"
         unit_of_measurement: "dBm"

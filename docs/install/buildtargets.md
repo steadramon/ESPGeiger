@@ -83,7 +83,7 @@ keep speech synthesis and the click engine clear of the counting path.
 
 | Target Name | Hardware | Counter Type | Notes |
 |---|---|---|---|
-`xh_s3e_pulse` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | Pulse | Pulse input on GPIO 13. Pin map fixed. |
+`xh_s3e_pulse` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | Pulse | Pulse input on GPIO 13. Board pins fixed, the counter RX pin can be changed on Config. |
 `xh_s3e_serial` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | Serial | Serial input on GPIO 13/14. |
 `xh_s3e_udp` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | UDP receiver | Tubeless receiver, see UDP Receiver below. |
 `xh_s3e_test` | MINI ESP32-S3-N16R8 (XH-S3E-AI) | n/a | Poisson simulator for tuning the click sound. |

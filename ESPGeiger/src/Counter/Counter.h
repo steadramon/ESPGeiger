@@ -233,6 +233,7 @@ class Counter : public CounterMaths {
       void ema_work(bool add15);
       bool ema_tick();
       void update_alarms(int cpm);
+      void run_pending();
       uint16_t _boundary_s = 3600;
       uint8_t _cpm_mode = CPM_BUCKET;
       unsigned long _last_blip_seen = 0;

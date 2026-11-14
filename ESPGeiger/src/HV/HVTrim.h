@@ -71,7 +71,7 @@ inline uint16_t hv_ov_limit(uint32_t pref, uint16_t board) {
 
 // most duty (of 1024) that keeps the on-time under max_us
 inline int hv_duty_cap(int freq, int max_us) {
-  return (int)((uint32_t)max_us * (uint32_t)freq * 1024u / 1000000u);
+  return (int)((uint64_t)max_us * (uint32_t)freq * 1024u / 1000000u);   // 200 us at 21 kHz is past 32 bits
 }
 
 // soft start, step of steps

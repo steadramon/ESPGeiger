@@ -38,7 +38,7 @@ Within a few seconds the receiver's OLED page 2 shows `RX <chipid>` and a loss p
 - **Same WiFi network and subnet.** Multicast does not cross routers or guest networks; both devices need to be on the same AP / SSID.
 - **Producer in Mode 2.** Mode 1 only sends stats every 30 s and produces no clicks.
 - **Receiver actually flashed as `*_udp`.** Check `/info` on the receiver shows a UDP build target.
-- **Loss percentage high or clicks missing (ESP32 receivers).** With WiFi power save on (the default), the classic ESP32 can miss most multicast packets on some access points. CPM still tracks, since each packet carries the running total, but clicks are lost. Set the producer's group to the receiver's IP address instead: unicast isn't affected. Failing that, `udprx_rxmode = 2` keeps the radio always on (runs warmer).
+- **Loss percentage high or clicks missing (ESP32 receivers).** With RX sleep set to Light or Modem, the classic ESP32 can miss most multicast packets on some access points. CPM still tracks, since each packet carries the running total, but clicks are lost. Set it back to None (`udprx_rxmode = 2`, the default there), or set the producer's group to the receiver's IP address: unicast isn't affected.
 - **Wrong producer locked.** In auto-mode the receiver latches onto the first producer heard. Set the chipid explicitly if you have multiple.
 
 ## Output Modes (Producer)
@@ -93,7 +93,7 @@ Radiation telemetry. Periodic heartbeat (~30 s).
   cpm          : float    1-minute average
   usv          : float    µSv/h
   state        : string   "warming" | "healthy" | "nocounts" | "warning" | "alert"
-  total_clicks : int32    producer's lifetime click count
+  total_clicks : int32    producer's clicks since it booted
 ```
 
 `nocounts` means no clicks for far longer than background allows (tube or source problem). `alert` and `warning` still win over it.
@@ -167,7 +167,7 @@ When mode > 0 the producer announces an `_osc._udp` service with the configured 
 
 ## Reliability and tuning
 
-- **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Cumulative loss % is on the OLED and in `/json` as `loss`.
+- **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Loss % over the last 10 to 15 minutes is on the OLED and in `/json` as `loss`; it is hidden while nothing has come in for that long.
 - **Send throttle**: high-CPS producers cap `/click` emit rate at 20 pps. Counter accuracy is preserved because each packet carries the producer's running total.
 - **RX sleep mode** (`udprx_rxmode`): `1` (modem sleep, default) suits most networks. `0` saves more power. `2` keeps the radio always on and runs warmer; try unicast first if packets go missing. The original ESP32 (not C3/S3) defaults to `2`: on modem sleep it misses most multicast.
 

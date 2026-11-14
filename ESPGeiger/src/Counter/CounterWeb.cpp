@@ -184,7 +184,7 @@ static const char HISTORY_BODY_LIFETIME[] PROGMEM = R"HTML(
 <div><span class=muted>Tracked </span><b id=lfd>&mdash;</b></div>
 <div><span class=muted>Install age </span><b id=lfi>&mdash;</b></div>
 <div><span class=muted>Avg CPM </span><b id=lfa>&mdash;</b></div>
-</div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
+</div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(r=>r.ok?location.reload():r.text().then(alert))">Reset lifetime</button></p></div></div>
 )HTML";
 
 static const char HISTORY_BODY_INTERPULSE[] PROGMEM = R"HTML(

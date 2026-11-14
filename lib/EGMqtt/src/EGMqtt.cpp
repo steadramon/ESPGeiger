@@ -31,19 +31,20 @@ static const size_t ACK_ROOM = 64;          // held back so acks always fit
 static const size_t HEADER_MAX = 5;         // first byte and 4 length bytes
 static const bool QOS2 = EGMQTT_MAX_QOS > 1;
 
-// records sit on 4 byte offsets, so a Rec's fields are aligned
+// Records sit on 4 byte offsets, so a Rec's fields are aligned
 static size_t padded(size_t n) { return (n + 3) & ~(size_t)3; }
 
 void EGMqtt::setClock(MillisFn fn) { EGClock::set(fn); }
 
-// the stack's wakes only send, callbacks wait for loop()
+// Wakes from the TCP stack only send, the callbacks wait for loop()
 EGMqtt::EGMqtt() {
   sized();
-  _tcp.onConnect([this]() {
-    if (_phase == DIAL) dial(EGClock::now());
-    flush();
-  });
-  _tcp.onSent([this](size_t) { flush(); });
+  _tcp.onConnect([](void* p) {
+    EGMqtt* m = (EGMqtt*)p;
+    if (m->_phase == DIAL) m->dial(EGClock::now());
+    m->flush();
+  }, this);
+  _tcp.onSent([](void* p, size_t) { ((EGMqtt*)p)->flush(); }, this);
 }
 
 EGMqtt::~EGMqtt() {
@@ -60,7 +61,7 @@ bool EGMqtt::mem() {
   return _m != nullptr;
 }
 
-// g set with f, both or neither
+// sets g along with f, both or neither
 bool EGMqtt::set_str(Field f, const char* v, Field g, const char* v2) {
   const char* vals[F_COUNT];
   size_t total = 0;
@@ -118,7 +119,7 @@ bool EGMqtt::setCredentials(const char* user, const char* pass) {
   return true;
 }
 
-// set_str copies it
+// set_str copies it, so a stack copy is fine
 bool EGMqtt::setWill(const char* topic, const __FlashStringHelper* msg, uint8_t qos, bool retain) {
   char m[EGMQTT_STR_CAP];
   size_t n = msg ? strlen_P((PGM_P)msg) : 0;
@@ -149,14 +150,14 @@ void EGMqtt::clearWill() {
   sized();
 }
 
-// CONNECT room kept free
+// Room kept free for the CONNECT
 size_t EGMqtt::needs(const Connect& c) {
   return sizeof(Rec) + padded(connect_size(c)) + ACK_ROOM;
 }
 
 void EGMqtt::sized() { _reserve = needs(conf()); }
 
-// CONNECT still fits beside the queue
+// true if the CONNECT still fits beside the queue
 bool EGMqtt::fits(const Connect& c) const { return _outLen + needs(c) <= OUT_CAP; }
 
 EGMqttWire::Connect EGMqtt::conf() const {
@@ -181,7 +182,7 @@ EGMqttWire::Connect EGMqtt::conf() const {
 bool EGMqtt::connect() {
   if (_state != DISCONNECTED || !str(F_HOST)[0]) return false;
   if (!connect_size(conf())) {
-    _err = PROTOCOL;   // settings no broker takes
+    _err = PROTOCOL;   // settings no broker would take
     return false;
   }
   sized();
@@ -200,7 +201,7 @@ bool EGMqtt::connect() {
   return true;
 }
 
-// qos 0, a kept one would go to the next broker
+// The will goes as qos 0, a kept one would go to the next broker
 void EGMqtt::disconnect(bool will) {
   if (_state == DISCONNECTED) return;
   bool bye = _phase == UP;
@@ -215,7 +216,7 @@ void EGMqtt::disconnect(bool will) {
     }
   }
   end(OK);
-  _downNew = false;   // asked for, no callback
+  _downNew = false;   // the caller asked for it, so no callback
 }
 
 void EGMqtt::stop() {
@@ -261,13 +262,13 @@ void EGMqtt::end(int8_t err) {
   compact();
 }
 
-// callbacks last
+// Callbacks run last
 void EGMqtt::loop() {
   if (_state != DISCONNECTED) {
     uint32_t now = EGClock::now();
     if (_phase == DIAL) dial(now);
     if (_phase == HELLO || _phase == UP) receive();
-    // closed, nothing left it can read
+    // closed, with nothing left that it can read
     bool gone = _tcp.state() == EGTcpClient::CLOSED && (!_tcp.available() || !acks_fit());
     if (_phase != IDLE && _phase != DIAL && gone) end(CONNECTION_LOST);
     if (_state != DISCONNECTED) timers(now);
@@ -276,7 +277,7 @@ void EGMqtt::loop() {
   events();
 }
 
-// up and down last, a callback may reconnect
+// Up and down go last, a callback may reconnect
 void EGMqtt::events() {
   if (EGMQTT_SUB_LOST && _lostNew) lost();
   if (_upNew) {
@@ -289,7 +290,7 @@ void EGMqtt::events() {
   }
 }
 
-// as if refused, callback may move the outbox
+// Lost subs are reported as refused. The callback may move the outbox, so search again each time
 void EGMqtt::lost() {
   _lostNew = false;
   for (;;) {
@@ -311,9 +312,9 @@ void EGMqtt::dial(uint32_t now) {
     return;
   }
   if (s != EGTcpClient::OPEN) return;
-  // CONNECT first, alone till the CONNACK
+  // CONNECT goes first, and alone until the CONNACK
   size_t cap;
-  uint8_t* p = tail(&cap, false);   // compacts, so _outLen after this
+  uint8_t* p = tail(&cap, false);   // compacts, so read _outLen after this
   size_t old = _outLen;
   size_t n = p ? EGMqttWire::connect(p, cap, conf()) : 0;
   if (!n) {
@@ -326,7 +327,7 @@ void EGMqtt::dial(uint32_t now) {
   _phaseMs = now;
 }
 
-// ping when either way goes quiet
+// Ping when either direction goes quiet
 void EGMqtt::timers(uint32_t now) {
   uint32_t limit = _timeoutS * 1000UL;
   if (_phase != UP) {
@@ -365,7 +366,7 @@ EGMqtt::Rec* EGMqtt::rec(size_t off) const { return (Rec*)(_m->out + off); }
 
 size_t EGMqtt::next(size_t off) const { return off + sizeof(Rec) + padded(rec(off)->len); }
 
-// room for one more packet, built in place then commit()ed
+// room for one more packet, it's built in place then commit()ed
 uint8_t* EGMqtt::tail(size_t* cap, bool keep_reserve) {
   if (!_m) return nullptr;
   compact();
@@ -376,7 +377,7 @@ uint8_t* EGMqtt::tail(size_t* cap, bool keep_reserve) {
   return _m->out + at;
 }
 
-// full outbox stops reading, an ack must fit
+// Reading stops when the outbox is full, an ack must always fit
 bool EGMqtt::acks_fit() const {
   return OUT_CAP - _outLen >= sizeof(Rec) + padded(4);
 }
@@ -424,7 +425,7 @@ EGMqtt::Rec* EGMqtt::find(Kind k) {
   return nullptr;
 }
 
-// not 0, not one still waiting for its ack
+// Never 0, and never one still waiting for its ack
 uint16_t EGMqtt::next_id() {
   for (;;) {
     if (++_lastId == 0) _lastId = 1;
@@ -436,7 +437,7 @@ uint16_t EGMqtt::next_id() {
   }
 }
 
-// in order, as far as the TCP window takes; only CONNECT before the CONNACK
+// Sends in order, as far as the TCP window takes. Only CONNECT goes before the CONNACK
 void EGMqtt::flush() {
   if (!_m || _tcp.state() != EGTcpClient::OPEN) return;
   for (size_t off = 0; off < _outLen; off = next(off)) {
@@ -476,7 +477,7 @@ void EGMqtt::compact() {
   _outLen = w;
 }
 
-// DUP only if the broker kept the session
+// sets up resends after a reconnect, DUP only if the broker kept the session
 void EGMqtt::rewind() {
   for (size_t off = 0; off < _outLen; off = next(off)) {
     Rec* r = rec(off);
@@ -495,7 +496,7 @@ void EGMqtt::rewind() {
   }
 }
 
-// fresh session, nothing to release
+// Fresh session, so nothing to release
 void EGMqtt::settle() {
   for (Rec* r; (r = find(K_REL));) {
     uint16_t id = r->id;
@@ -581,7 +582,7 @@ uint16_t EGMqtt::publish(const char* topic, const __FlashStringHelper* payload,
   return publish_end(len);   // refuses one that didn't fit
 }
 
-// room for the longest header, the topic and id; the payload goes after
+// Room for the longest header, the topic and id. The payload goes after
 static size_t ahead_of(size_t topic_len, uint8_t qos) {
   return HEADER_MAX + 2 + topic_len + (qos ? 2 : 0);
 }
@@ -601,7 +602,7 @@ uint8_t* EGMqtt::publish_begin(const char* topic, uint8_t qos, bool retain, size
   return _pend;
 }
 
-// header in front, payload slides down
+// writes the header in front, the payload slides down to meet it
 uint16_t EGMqtt::publish_end(size_t len) {
   uint8_t* body = _pend;
   _pend = nullptr;
@@ -641,7 +642,7 @@ void EGMqtt::receive() {
   }
 }
 
-// a byte at a time, it's 2-5 of them
+// Reads a byte at a time, there's only 2-5 of them
 bool EGMqtt::head() {
   while (_tcp.available()) {
     _tcp.read(_hdr + _hdrLen++, 1);
@@ -668,7 +669,7 @@ void EGMqtt::body() {
   handle();
 }
 
-// too big: thrown away, its topic length and id picked out on the way
+// Too big, so it's thrown away. Its topic length and id are picked out on the way
 void EGMqtt::skip() {
   while (_got < _rem) {
     size_t want = _rem - _got < IN_CAP ? _rem - _got : IN_CAP;
@@ -681,7 +682,7 @@ void EGMqtt::skip() {
   handle();
 }
 
-// bytes 0-1 the topic length, the id the 2 after the topic
+// bytes 0-1 are the topic length, the id is the 2 bytes after the topic
 void EGMqtt::pick(uint32_t at, uint8_t b) {
   if (at < 2) {
     _bigTopic = (uint16_t)((_bigTopic << 8) | b);
@@ -732,14 +733,14 @@ void EGMqtt::on_connack() {
   _upNew = true;
   _pingOut = _pingSent = false;
   _txMs = _rxMs = EGClock::now();
-  rewind();   // first, settle's callbacks may publish
+  rewind();   // rewind first, settle's callbacks may publish
   if (QOS2 && !session) {
     memset(_q2, 0, sizeof(_q2));   // a new session, any id is a new message
     settle();
   }
 }
 
-// too big: acked unread and lost, dropped() counts
+// One that's too big is acked unread and lost, dropped() counts them
 void EGMqtt::on_publish() {
   Publish p;
   bool big = _rem > IN_CAP;
@@ -753,11 +754,11 @@ void EGMqtt::on_publish() {
     p.qos = qos_of(_first);
     p.id = _bigId;
   }
-  if (p.qos > EGMQTT_MAX_QOS) {   // over the max, never asked for
+  if (p.qos > EGMQTT_MAX_QOS) {   // over the max, it was never asked for
     end(PROTOCOL);
     return;
   }
-  // QoS 2 once only: a resend of a known id is acked, not delivered
+  // QoS 2 delivers once only, a resend of a known id is acked but not delivered
   if (QOS2 && p.qos == 2 && q2_known(p.id)) {
     queue(PUBREC, p.id);
     return;
@@ -793,7 +794,7 @@ void EGMqtt::on_ack() {
     case UNSUBACK: done(K_UNSUB, id, ACK_UNSUBSCRIBE, 0); break;
     default:
       if (QOS2) q2_ack(t, id);
-      else end(PROTOCOL);   // no QoS 2 either way
+      else end(PROTOCOL);   // QoS 2 isn't built in, so these can't come either way
   }
 }
 
@@ -804,7 +805,7 @@ void EGMqtt::q2_ack(Type t, uint16_t id) {
   } else if (t == PUBREC) {
     Rec* r = find(K_PUB2, id);
     if (r) r->sent = S_DONE;
-    // a repeat gets the queued one, an unknown id one PUBREL and no record
+    // A repeat uses the PUBREL already queued. An unknown id gets one PUBREL and no record
     if (!find(K_REL, id)) queue(PUBREL, id, r != nullptr);
   } else {   // PUBREL
     q2_drop(id);
@@ -812,7 +813,7 @@ void EGMqtt::q2_ack(Type t, uint16_t id) {
   }
 }
 
-// done before the callback, which may publish and move the outbox
+// Marked done before the callback, which may publish and move the outbox
 void EGMqtt::done(Kind k, uint16_t id, AckOf of, uint8_t granted) {
   Rec* r = find(k, id);
   if (!r) return;   // unknown id, or a repeat
@@ -820,7 +821,7 @@ void EGMqtt::done(Kind k, uint16_t id, AckOf of, uint8_t granted) {
   note(id, of, granted);
 }
 
-// true = already had it; full = forgotten, a resend would be delivered again
+// true if this id was already seen. With the list full it isn't kept, so a resend would be delivered again
 bool EGMqtt::q2_known(uint16_t id) {
   uint16_t* free_slot = nullptr;
   for (uint16_t& s : _q2) {

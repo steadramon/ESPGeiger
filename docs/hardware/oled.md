@@ -8,7 +8,7 @@ nav_order: 5
 
 # OLED Displays
 
-ESPGeiger supports cheap, widely-available I2C OLED panels for live readout of CPM, μSv/h, history graphs and status. A small SSD1306 module slotted into an ESP8266 build adds a complete on-device UI for around $3-5.
+ESPGeiger supports cheap, widely-available I2C OLED panels for live readout of CPM, µSv/h, history graphs and status. A small SSD1306 module slotted into an ESP8266 build adds a complete on-device UI for around $3-5.
 
 ## Supported chips
 

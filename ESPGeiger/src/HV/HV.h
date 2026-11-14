@@ -246,6 +246,7 @@ class HV : public corium::Module {
       void check_overvoltage(int volts);
       void trim_step();
       void stash_trim();
+      void unstash_trim();
       void restore_trim();
 #ifdef ESPGEIGER_HW32
       void check_feedback();

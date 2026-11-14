@@ -58,9 +58,10 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `cpm` | Current CPM |
 | `cpm5` | 5-minute smoothed CPM |
 | `cpm15` | 15-minute smoothed CPM |
-| `usv` | μSv/h (cpm × ratio) |
+| `usv` | µSv/h (cpm × ratio) |
 | `cps` | Counts per second |
 | `hv` | HV reading in whole volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
+| `hv_fault` | `1` while HV is held off: over the voltage limit (same builds) |
 | `t` | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h` | Humidity in % (BME280 / AHT family only) |
 | `p` | Pressure in hPa (BME280 / BMP280 only) |
@@ -85,7 +86,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `ip` | Device IP address |
 | `rssi` | WiFi signal (dBm) |
 | `c_total` | Total clicks since boot |
-| `tick` | Smoothed device-load figure (μs spent in the once-per-second housekeeping pass) |
+| `tick` | Smoothed device-load figure (µs spent in the once-per-second housekeeping pass) |
 | `t_max` | Peak `tick` in last 60 s |
 | `lps` | Loop iterations per second |
 | `free_mem` | Free heap (bytes) |

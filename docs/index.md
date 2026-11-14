@@ -15,7 +15,7 @@ ESPGeiger is a free, open-source firmware allowing you to transform any compatib
 ## Features
 
 **Data Display & Analysis:**
-* 🔴 **Real-time Readings:** Live CPM and μSv/h with 1, 5 and 15-minute smoothed averages.
+* 🔴 **Real-time Readings:** Live CPM and µSv/h with 1, 5 and 15-minute smoothed averages.
 * 📈 **Web-based Graphing:** Built-in web portal with live charts and 24-hour history.
 * 🖥️ **Local Display:** SSD1306, SH1106 and SSD1309 OLEDs with runtime auto-detect.
 * 🕰️ **Lifetime Tracking:** Persistent total clicks, lifetime µSv and install age, surviving reboots.

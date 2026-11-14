@@ -29,20 +29,21 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log and ESPGeiger Lite b
 | `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
 | `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set counter.ratio 151.0` |
 | `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never reboots or wipes anything else. | `reset counter.ratio` |
+| `pause [s]` | Stop posts to external services for s seconds, `pause 0` resumes, `pause` alone prints what's left. See [Pause](/output/pause) | `pause 600` |
 | `cpm` | Return current CPM value | |
-| `usv` | Return current μSv/h value | |
+| `usv` | Return current µSv/h value | |
 | `show` | Toggles the 1 second output: on when it is off, off when it is on | |
 | `show N` | Enable periodic output every N seconds (1-65535). Implies CPM. | `show 5` |
 | `show 0` | Stops the periodic output. The field toggles are kept for the next `show N` | `show 0` |
 | `show off` | Same as `show 0` | `show off` |
 | `show cpm` | Toggle CPM line inclusion in periodic output | `show cpm` |
 | `show cps` | Toggle CPS on periodic output | |
-| `show usv` | Toggle μSv on periodic output | |
+| `show usv` | Toggle µSv on periodic output | |
 | `show hv` | Toggle HV on periodic output (builds with HV feedback: ESPGeiger-HW, `*_hv`) | |
 | `hv` | Return current live HV value (builds with HV feedback) | |
 | `target` | Set target CPM value for Test builds only | `target 1234` |
 
-The console also answers while the setup portal is up and while it joins WiFi at boot. Until the device has finished booting only the commands from `reboot` to `offline` above run; the others answer `after boot`.
+The console also answers while the setup portal is up and while it joins WiFi at boot. Until the device has finished booting only the commands from `reboot` to `reset` above run; the others answer `after boot`.
 
 ### No WiFi at all
 
@@ -191,6 +192,7 @@ cpm=30|cps=0.53|usv=0.17
 | `{warn}` | 1 while CPM is over the warning level |
 | `{alert}` | 1 while CPM is over the alert level |
 | `{hv}` | Measured HV in volts (HV ADC builds only) |
+| `{hv_fault}` | 1 while HV is held off (over the limit; HV ADC builds only) |
 | `{t}` | Temperature in user-preferred unit (env.unit) |
 | `{h}` | Relative humidity % |
 | `{p}` | Pressure in hPa |

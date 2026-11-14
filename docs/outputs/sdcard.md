@@ -71,6 +71,6 @@ DateTime,CPM,uSv/h,CPM5,CPM15
 |---|---|---|
 `DateTime` | Date and time of the row, in UTC. | `2023-12-23 01:23:45`
 `CPM` | Current Counts Per Minute (CPM) value. | `30.0`
-`uSv/h` | Current micro Sieverts per hour (μSv) value. | `0.10`
+`uSv/h` | Current micro Sieverts per hour (µSv) value. | `0.10`
 `CPM5` | Average CPM over the last 5 minutes. | `30.0`
 `CPM15` | Average CPM over the last 15 minutes. | `30.0`

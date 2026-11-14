@@ -29,9 +29,12 @@ static const bool PULL = EGHTTP_SINK || EGHTTP_REDIRECTS;   // only those read
 
 // the stack's wakes send; pushed, its bytes and its close end the reply too
 EGHttpClient::EGHttpClient() {
-  _tcp.onConnect([this]() { send_more(); });
-  _tcp.onSent([this](size_t) { send_more(); });
-  _tcp.onClose([this](int8_t) { if (!PULL || _push) step(); });
+  _tcp.onConnect([](void* p) { ((EGHttpClient*)p)->send_more(); }, this);
+  _tcp.onSent([](void* p, size_t) { ((EGHttpClient*)p)->send_more(); }, this);
+  _tcp.onClose([](void* p, int8_t) {
+    EGHttpClient* c = (EGHttpClient*)p;
+    if (!PULL || c->_push) c->step();
+  }, this);
 }
 
 EGHttpClient::~EGHttpClient() {
@@ -199,8 +202,8 @@ bool EGHttpClient::seal(const uint8_t* body, size_t len, bool has_body) {
   _ready = true;
   // a sink holds bytes back, a redirect dials again: those pull
   _push = !PULL || (!_sink && !_redirects);
-  if (_push) _tcp.onData([this](const uint8_t* d, size_t n) { feed(d, n); });
-  else _tcp.onData(nullptr);
+  if (_push) _tcp.onData([](void* p, const uint8_t* d, size_t n) { ((EGHttpClient*)p)->feed(d, n); }, this);
+  else _tcp.onData(nullptr, nullptr);
   return true;
 }
 

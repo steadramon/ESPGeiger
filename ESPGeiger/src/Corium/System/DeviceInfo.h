@@ -21,6 +21,9 @@
 #define CORIUM_DEVICEINFO_H
 
 #include <Arduino.h>
+#ifdef ESP32
+#include <esp_task_wdt.h>
+#endif
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
@@ -151,15 +154,19 @@ namespace DeviceInfo {
 
   void safeRestart(uint32_t delay_ms = 0);
 
-  // 8266 sw wdt only, the hw wdt still runs
+  // 8266 sw wdt only, the hw wdt still runs; esp32 a fed task wdt, 5 s from here
   inline void wdtPause() {
 #ifdef ESP8266
     ESP.wdtDisable();
+#elif defined(ESP32)
+    esp_task_wdt_reset();
 #endif
   }
   inline void wdtResume() {
 #ifdef ESP8266
     ESP.wdtEnable(WDTO_8S);
+#elif defined(ESP32)
+    esp_task_wdt_reset();
 #endif
   }
 

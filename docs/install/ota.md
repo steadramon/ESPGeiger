@@ -15,6 +15,8 @@ If you've never flashed the device before, use the [Web Installer](/install/webi
 instead - OTA only works on a device that's already connected to your Wi-Fi
 and reachable on your network.
 
+Set a [web password](/install/setup) first: without one, anyone on your network can flash the device, and images are not signed.
+
 ## 1. Download the firmware
 
 Grab the latest `.bin` file for your board from the
@@ -33,8 +35,7 @@ For example:
 ESP32 builds also have a `-firmware_merged` file. That is the full image for
 a USB install; for OTA use the plain `-firmware` file.
 
-Not sure which one you're running? The web portal shows the build name on
-the **Info** page as **Build env** - match that.
+Not sure which one you're running? The **Info** page shows it in the **Build** row (the env name is the third part) - match that.
 
 > ⚠️ Flashing the wrong variant will either refuse to boot or boot with the
 > wrong hardware assumptions (wrong pins, wrong counter type). If this
@@ -100,7 +101,7 @@ upload). Send it with `--data-binary` so curl doesn't wrap the bytes in a
 multipart envelope:
 
 ```
-curl --data-binary @esp8266_pulse.v1.2.3.bin \
+curl --data-binary @esp8266_pulse-firmware.v1.2.3.bin \
   -H "Content-Type: application/octet-stream" \
   http://192.168.1.167/update
 ```
@@ -114,7 +115,7 @@ If you've set a portal password under **Config -> System -> Web password**,
 include Basic Auth:
 
 ```
-curl -u admin:<password> --data-binary @esp8266_pulse.v1.2.3.bin \
+curl -u admin:<password> --data-binary @esp8266_pulse-firmware.v1.2.3.bin \
   -H "Content-Type: application/octet-stream" \
   http://192.168.1.167/update
 ```
@@ -131,13 +132,13 @@ with the Arduino ESP core. ESP8266 builds listen on port 8266, ESP32 builds
 (including C3 and S3) on port 3232:
 
 ```
-python espota.py -i 192.168.1.167 -p 8266 -f esp8266_pulse.v1.2.3.bin
+python espota.py -i 192.168.1.167 -p 8266 -f esp8266_pulse-firmware.v1.2.3.bin
 ```
 
 If you've set a web password, ArduinoOTA uses it too. Add it with `-a`:
 
 ```
-python espota.py -i 192.168.1.167 -p 8266 -a <password> -f esp8266_pulse.v1.2.3.bin
+python espota.py -i 192.168.1.167 -p 8266 -a <password> -f esp8266_pulse-firmware.v1.2.3.bin
 ```
 
 Without it the upload fails with an auth error. ArduinoOTA only reads the

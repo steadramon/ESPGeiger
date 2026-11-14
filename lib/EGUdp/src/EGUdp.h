@@ -28,7 +28,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <atomic>
-#include <functional>
 #include "EGTcp.h"   // EGTcpAddr
 
 #ifndef EGUDP_MAX
@@ -40,7 +39,7 @@
 
 class EGUdp {
   public:
-    using PacketFn = std::function<void(const uint8_t* data, size_t len, const EGTcpAddr& from, uint16_t port)>;
+    using PacketFn = void (*)(void* ctx, const uint8_t* data, size_t len, const EGTcpAddr& from, uint16_t port);
 
     // slots 0 = send only
     explicit EGUdp(uint16_t max = EGUDP_MAX, uint8_t slots = EGUDP_SLOTS);
@@ -56,11 +55,11 @@ class EGUdp {
     // v4 only, one group, any iface = all
     __attribute__((warn_unused_result))
     bool join(const EGTcpAddr& group, const EGTcpAddr& iface = EGTcpAddr());
-    // after begin(), the 8266 core's beginPacketMulticast()
+    // After begin(), like the 8266 core's beginPacketMulticast()
     void setMulticast(const EGTcpAddr& iface, uint8_t ttl = 1);
 
-    // end() is fine in here, delete is not; data gone once it returns
-    void onPacket(PacketFn cb) { _on_packet = cb; }
+    // end() is fine in here, delete is not. The data is gone once it returns
+    void onPacket(PacketFn fn, void* ctx) { _on_packet = fn; _packet_ctx = ctx; }
     // from the owner's loop, cheap when idle
     void poll() {
       if (_count.load(std::memory_order_acquire)) run();
@@ -111,7 +110,8 @@ class EGUdp {
     // owner only
     uint8_t _life = 0;   // end() bumps
     bool _in_run = false;
-    PacketFn _on_packet;
+    PacketFn _on_packet = nullptr;
+    void* _packet_ctx = nullptr;
 };
 
 #endif

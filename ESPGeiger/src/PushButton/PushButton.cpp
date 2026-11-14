@@ -110,6 +110,9 @@ void PushButton::init()
 #ifdef BTN_PIN_BLOCKED
   if (PUSHBUTTON_PIN  >= 0) set_pin(PUSHBUTTON_PIN);
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
+#else
+  // safe mode skips onPrefsLoaded (quarantined): the boot hold still reads the set pin
+  if (s_btn[0].pin < 0) set_pin((int)corium::Prefs::getInt("btn", EG_K_PIN));
 #endif
 }
 
@@ -183,7 +186,7 @@ static void pin_scan_loop(unsigned long now) {
 #endif
 
 static void short_press(uint8_t i) {
-  corium::Log::console(PSTR("Btn: short"));
+  corium::Log::console(PSTR("Btn: Short"));
   corium::LedSignal::play(LED_ACK);
   corium::Registry::emit(PushButton::TOPIC_PRESS);
   if (i) corium::Registry::emit(PushButton::TOPIC_BACK);
@@ -195,7 +198,7 @@ static void check_long(BtnState& b, unsigned long now) {
   if (b.long_fired || (uint32_t)(now - b.down_ms) < LONG_PRESS_MS) return;
   if (!corium::Registry::heard(PushButton::TOPIC_LONG)) return;
   b.long_fired = true;
-  corium::Log::console(PSTR("Btn: long"));
+  corium::Log::console(PSTR("Btn: Long"));
   corium::Registry::emit(PushButton::TOPIC_LONG);
 }
 

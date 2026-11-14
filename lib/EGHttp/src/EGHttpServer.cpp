@@ -95,6 +95,12 @@ static bool eghttp_late(const EGHttpServer::Slot* s) {
   return (int32_t)(EGClock::now() - s->due) >= 0;
 }
 
+// whole: waits on us now, not the peer, so no idle cut
+static void set_ready(EGHttpServer::Slot* s) {
+  s->state = EGHttpServer::READY;
+  if (s->client) s->client->setIdleTimeout(0);
+}
+
 __attribute__((warn_unused_result))
 static bool send_fail(EGHttpServer::Slot* s, PGM_P why, size_t sent, size_t len) {
   EGHTTP_TRACE(PSTR("[EGHttp] send aborted, %s at %u/%u B\n"), why, (unsigned)sent, (unsigned)len);
@@ -316,7 +322,7 @@ void EGHttpServer::begin(uint16_t port) {
 #ifdef ESP32
   _server->setMaxClients(EGHTTP_MAX_INFLIGHT);
 #endif
-  _server->onAccept([this](EGTcpClient* c) { onClient(c); });
+  _server->onAccept([](void* p, EGTcpClient* c) { ((EGHttpServer*)p)->onClient(c); }, this);
   if (_server->begin(port)) return;
   Serial.printf_P(PSTR("[EGHttp] listen on %u failed, retrying\n"), (unsigned)port);
   _tickWanted = true;
@@ -435,15 +441,19 @@ void EGHttpServer::abortStream(Slot* s) {
 void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
   c->setIdleTimeout(EGHTTP_REQ_MS);
   c->setAckTimeout(EGHTTP_ACK_MS);
-  c->onSent([this, s](size_t) { sentMore(s); });
-  c->onData([this, s](const uint8_t* data, size_t len) {
+  s->srv = this;
+  c->onSent([](void* p, size_t) { Slot* s = (Slot*)p; s->srv->sentMore(s); }, s);
+  c->onData([](void* p, const uint8_t* data, size_t len) {
+    Slot* s = (Slot*)p;
+    EGHttpServer* srv = s->srv;
     if (s->state != RECEIVING) return;
-    takeData(s, data, len);
+    srv->takeData(s, data, len);
     // still not all in, a trickle
-    if (s->state == RECEIVING && s->stream == NO_STREAM && eghttp_late(s)) drop(s);
-    _tickWanted = true;
-  });
-  c->onClose([this, s](int8_t err) {
+    if (s->state == RECEIVING && s->stream == NO_STREAM && eghttp_late(s)) srv->drop(s);
+    srv->_tickWanted = true;
+  }, s);
+  c->onClose([](void* p, int8_t err) {
+    Slot* s = (Slot*)p;
 #ifdef EGHTTP_DEBUG
     Serial.printf_P(PSTR("[EGHttp] closed err=%d streaming=%d acked=%u/%u\n"),
                     (int)err, (int)(s->stream != NO_STREAM), (unsigned)s->bodyAcked,
@@ -451,8 +461,8 @@ void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
 #else
     (void)err;
 #endif
-    onClosed(s);
-  });
+    s->srv->onClosed(s);
+  }, s);
 }
 
 void EGHttpServer::onClient(EGTcpClient* c) {
@@ -515,7 +525,7 @@ void EGHttpServer::takeData(Slot* s, const uint8_t* data, size_t len) {
     return;
   }
   if (s->len < s->headerEnd + s->contentLength) return;
-  s->state = READY;
+  set_ready(s);
 }
 
 void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
@@ -554,7 +564,7 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
     return;
   }
   if (s->len >= s->headerEnd + s->contentLength) {
-    s->state = READY;
+    set_ready(s);
   }
 }
 
@@ -654,7 +664,7 @@ bool EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
 // reply now, the reply closes it
 void EGHttpServer::refuseStream(Slot* s) {
   s->stream = STREAM_ENDED;
-  s->state = READY;
+  set_ready(s);
   releaseStream();
 }
 
@@ -704,7 +714,7 @@ void EGHttpServer::drainStream(Slot* s) {
   if (s->bodyAcked >= s->contentLength) {
     s->stream = STREAM_ENDED;
     deliverBodyEvent(s, BODY_END, nullptr, 0);
-    s->state = READY;
+    set_ready(s);
     releaseStream();
   } else if (eghttp_late(s)) {
     drop(s);
@@ -841,7 +851,8 @@ void EGHttpServer::dropChunkAcc(Slot* s) {
 }
 
 void EGHttpServer::tick() {
-  if (!_tickWanted) return;
+  // a silent upload still meets its deadline
+  if (!_tickWanted && !_streamOwner) return;
   _tickWanted = false;
   relisten();
 
@@ -851,7 +862,8 @@ void EGHttpServer::tick() {
       continue;
     }
     if (s.state == RECEIVING && s.stream != NO_STREAM) drainStream(&s);
-    if (s.state == READY) respond(&s);
+    // one reply a tick, a slow reader holds the loop once
+    if (s.state == READY) { respond(&s); _tickWanted = true; break; }
   }
 }
 
@@ -878,6 +890,7 @@ void EGHttpServer::respond(Slot* s) {
   // body goes as acks come, the request isn't needed
   free(s->buf);
   s->buf = nullptr;
+  s->client->setIdleTimeout(EGHTTP_REQ_MS);   // a reader that stops still goes
 }
 
 void EGHttpServer::finish(Slot* s) {

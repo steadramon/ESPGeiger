@@ -30,7 +30,7 @@ Pin settings take `-1` (off) or a GPIO number, but some pins are refused. The sa
 Some pins save with a warning shown after the save:
 
 * Pins the board shares: UART0 TX (GPIO 1) and RX (GPIO 3) on ESP8266 and classic ESP32 (RX only on builds that read serial commands), and the BOOT button pin on dev-board builds with a push button. The serial console or the button and your setting then share the pin, and the boot log says so, for example `PinSafety: pin=3 RX, shared with UART0`.
-* Boot strap pins and pins with no internal pull-up, used as an input.
+* Boot strap pins and pins with no internal pull-up, used as an input. A strap pin used as an output saves with no warning, so check what your load does to it at power-on (ESP8266 GPIO 15 must stay low, ESP32 GPIO 12 low on most boards).
 * Pins that can't do what the setting needs: no interrupt for a counter input, no PWM, or no open-drain for I2C.
 
 ## System Settings
@@ -44,9 +44,11 @@ Some pins save with a warning shown after the save:
 
 <!-- /gen -->
 
+A new web password works for the web pages at once; [espota](/install/ota#via-espotapy-arduinoota) only reads it at boot, so it takes the new one after a restart. A new friendly name shows in the web UI at once and reaches mDNS (the `fname` record) after a restart.
+
 ### Config import / export
 
-On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. If the flash can't take all of it, nothing changes. WiFi credentials and the device-only settings are kept. If a stored setting didn't load (this firmware refused it), Export and Import both refuse and name it, so a backup never drops it: set it or reset its group first. In [safe mode](/configuration/safemode) Import still goes through when the backup replaces that group, so the refused value is gone. A device-only group (`net`, the Wi-Fi tunables, the lifetime totals) isn't in a backup, so it doesn't stop one.
+On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. The export also holds the passwords and keys of your outputs (MQTT, Radmon, ThingSpeak, Webhook) and your GMC account and counter IDs, so keep it private. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. If the flash can't take all of it, nothing changes. WiFi credentials and the device-only settings are kept. A setting left at its default isn't in the export, so on another firmware version it takes that version's default. If a stored setting didn't load (this firmware refused it), Export and Import both refuse and name it, so a backup never drops it: set it or reset its group first. In [safe mode](/configuration/safemode) Import still goes through when the backup replaces that group, so the refused value is gone. A device-only group (`net`, the Wi-Fi tunables, the lifetime totals) isn't in a backup, so it doesn't stop one.
 
 ### A setting that didn't load
 
@@ -94,7 +96,7 @@ ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.cou
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Blip LED | `led.blip_led` | Boolean | `1` on | all | Flash the onboard LED on each detected count. Hidden on builds with `-D DISABLE_INTERNAL_BLIP`. |
+| Blip LED | `led.blip_led` | Boolean | `1` on | all | Flash the onboard LED on each detected count. Hidden on builds with `-D DISABLE_INTERNAL_BLIP`, unless the board has its own count LED (`GEIGER_BLIPLED`). |
 | Mode | `led.mode` | `0` Pulse, `1` Fade | `0` Pulse | all | `Pulse` switches the LED off after the pulse width; `Fade` ramps it down. |
 | Pulse width ms | `led.pulse_ms` | Int 1-50 | `20` (`2` on ESPGeiger-HW) | all | How long the LED stays lit per count, in milliseconds. |
 | Fade rate | `led.fade_shift` | `0` Fast, `1` Medium, `2` Slow | `1` Medium | all | Fade mode only. |

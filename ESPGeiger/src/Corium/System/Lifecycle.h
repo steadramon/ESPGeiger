@@ -44,6 +44,7 @@ void send(Event e);
 
 // WebPortal::poll does the restart, never mid-write; no portal, no restart
 void requestRestart(uint32_t now, uint32_t delay_ms);
+void retryAfter(uint32_t now, uint32_t delay_ms);   // safe mode's normal boot: not pending, waits out an update
 bool restartDue(uint32_t now);
 bool restartPending();
 

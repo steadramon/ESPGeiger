@@ -105,7 +105,7 @@ namespace Boot {
     Registry::beginAll();
     LedSignal::attach();
     // safe mode tries a normal boot again later
-    if (BootGuard::safeMode()) Lifecycle::requestRestart(fastMillis(), BootGuard::retryAfterMs());
+    if (BootGuard::safeMode()) Lifecycle::retryAfter(fastMillis(), BootGuard::retryAfterMs());
     Reactor::begin(second);
     Clock::anchor();
     LedSignal::off();

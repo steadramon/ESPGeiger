@@ -108,6 +108,21 @@ class EGPortal {
       return true;
     }
 
+    // a form's ssid and password, checked then copied out (arg() reuses its buffer)
+    enum Creds : uint8_t { CREDS_OK, CREDS_SSID, CREDS_LONG, CREDS_PASS };
+    static Creds takeCreds(EGHttpRequest& req, char (&ssid)[EGPORTAL_SSID_MAX + 1],
+                           char (&pass)[EGPORTAL_PASS_MAX + 1]) {
+      const char* s = req.arg(F("ssid"));
+      // a cut one would fail to join
+      if (!ssidOk(s)) return CREDS_SSID;
+      strlcpy(ssid, s, sizeof(ssid));
+      const char* p = req.arg(F("password"));
+      if (p && strlen(p) > EGPORTAL_PASS_MAX) return CREDS_LONG;
+      if (!passOk(p)) return CREDS_PASS;
+      strlcpy(pass, p, sizeof(pass));
+      return CREDS_OK;
+    }
+
   private:
     EGHttpServer _http;
     EGDnsAnswer  _dns;

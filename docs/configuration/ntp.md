@@ -17,6 +17,6 @@ Only canonical time zone names are listed. If yours is missing, pick a zone it l
 
 Until the clock is set:
 
-- [SD card](/output/sdcard) logging pauses.
+- [SD card](/output/sdcard) rows go to `undated.csv` with the seconds since boot.
 - Quiet hours for the blip LED are ignored.
 - The display On Time / Off Time schedule is ignored and the display stays on.

@@ -206,6 +206,7 @@ class EGHttpServer {
 
     struct Slot {
       EGTcpClient* client = nullptr;   // resetSlot deletes it
+      EGHttpServer* srv = nullptr;     // its callbacks' way back
       SlotState state = IDLE;
       uint16_t query = 0;   // in buf past '?', 0 = none
       char* buf = nullptr;

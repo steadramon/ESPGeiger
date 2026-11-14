@@ -71,8 +71,8 @@ static void boot_banner() {
   }
 }
 
-static void boot_button() {
-  auto action = BootHooks::checkStartupButtonHold();
+static void boot_button(bool safe) {
+  auto action = BootHooks::checkStartupButtonHold(safe);
   if (action == BootHooks::ButtonHold::FULL_RESET) {
     corium::DeviceInfo::factoryReset();
     corium::DeviceInfo::safeRestart(500);
@@ -108,7 +108,7 @@ void setup()
 
   delay(100);
   corium::Reactor::clock(corium::Reactor::ms<ms_poll>);
-  if (!safe) boot_button();
+  boot_button(safe);
   Board::detect();
   if (!safe && corium::Wifi::portalAhead()) {
     BootHooks::displaySetupWifi(corium::DeviceInfo::hostname());

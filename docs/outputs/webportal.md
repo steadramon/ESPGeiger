@@ -71,7 +71,7 @@ Human-readable HTML report grouped into expandable sections. Useful as the first
 
 | Section | Contents |
 |---|---|
-| System | Uptime, where the time came from (NTP, an RTC chip, kept over a restart, or not set), chip ID, free heap, firmware size and the room for it, last reset reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the whole stack plus a Crashed in row naming the module that was running (ESP32-C3 shows mcause and mtval). Rows that only matter when something's wrong show only then: safe mode, crash boots in a row, a flash size that doesn't match the chip, a web password restored from backup. |
+| System | Uptime, where the time came from (NTP, an RTC chip, kept over a restart, or not set), chip ID, free heap, firmware size and the room for it, last reset reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the backtrace, on ESP32-C3 the raw stack (with mcause and mtval); on both ESP32s a Crashed in row names the module that was running. Rows that only matter when something's wrong show only then: safe mode, crash boots in a row, a flash size that doesn't match the chip, a web password restored from backup. |
 | WiFi | Network and channel, signal strength (RSSI, with excellent / good / fair / weak), IP, hostname, MAC, DNS. The setup AP's SSID, IP and MAC while it's running. |
 | About | One build line (version, git hash, build environment, build date), Geiger model. |
 

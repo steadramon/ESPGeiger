@@ -1,6 +1,6 @@
 /*
   EGUdp.cpp - lwIP raw UDP. ESP32 hands each call to lwIP's thread,
-  the ESP8266 and the host tests call lwIP straight.
+  the ESP8266 calls lwIP straight.
 
   Copyright (C) 2026 @steadramon
 
@@ -242,7 +242,7 @@ void EGUdp::run() {
   uint8_t n = _count.load(std::memory_order_acquire);
   while (n--) {
     const Slot& s = _slot[_head];
-    if (_on_packet) _on_packet(_buf + (size_t)_head * _size, s.len, s.from, s.port);
+    if (_on_packet) _on_packet(_packet_ctx, _buf + (size_t)_head * _size, s.len, s.from, s.port);
     if (_life != life) break;   // end() in onPacket
     EGTcpHold h;
     _head = _head + 1 < _slots ? _head + 1 : 0;

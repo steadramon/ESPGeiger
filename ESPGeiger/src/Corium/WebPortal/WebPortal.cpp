@@ -253,7 +253,7 @@ static void ap_test_end() {
   s_ap_test = false;
   if (corium::Wifi::testState() != EGPortal::JOIN_OK) return;
   if (!corium::Wifi::joinMode() || !corium::Prefs::commit()) {
-    corium::Log::console(PSTR("WebPortal: net settings not saved"));
+    corium::Log::console(PSTR("WebPortal: Network settings not saved"));
     return;
   }
   corium::Log::console(PSTR("WebPortal: WiFi moved to '%s', restarting"), corium::Wifi::testSsid());
@@ -271,7 +271,7 @@ void corium::WebPortal::poll(uint32_t now) {
   if (corium::Lifecycle::restartDue(now)) {
     bool wrote = s_wifi_save || s_erase_creds || s_factory_reset;
     if (s_wifi_save) {
-      corium::Log::console(PSTR("WebPortal: applying new WiFi creds (ssid='%s')"),
+      corium::Log::console(PSTR("WebPortal: Applying new WiFi creds (ssid='%s')"),
                    corium::Wifi::heldSsid());
       (void)corium::Wifi::beginHeld();   // held since the save
       s_wifi_save = false;
@@ -285,7 +285,7 @@ void corium::WebPortal::poll(uint32_t now) {
       s_factory_reset = false;
     }
     if (wrote) delay(150);  // restart follows, NVS settle
-    corium::Log::console(PSTR("WebPortal: restarting"));
+    corium::Log::console(PSTR("WebPortal: Restarting"));
     corium::DeviceInfo::safeRestart(50);
   }
 }
@@ -326,7 +326,7 @@ static void hClock(EGHttpRequest& req, EGHttpResponse& res, void*) {
   uint64_t e = 0;
   if (!corium::Clock::synced && parseU64(req.arg(F("e")), &e) && e >= corium::Clock::MIN_EPOCH && e <= corium::Clock::MAX_EPOCH) {
     corium::Clock::set((time_t)e, corium::Clock::WEB);
-    corium::Log::console(PSTR("Clock: set from the browser"));
+    corium::Log::console(PSTR("Clock: Set from browser"));
   }
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
@@ -405,7 +405,7 @@ void corium::WebPortal::applyAuthFromPrefs() {
   static int8_t s_auth = -1;
   int8_t auth = *cur ? 1 : 0;
   if (auth != s_auth) {
-    corium::Log::console(PSTR("WebPortal: auth %s"),
+    corium::Log::console(PSTR("WebPortal: Auth %s"),
                  auth ? PSTR("enabled (user=admin)") : PSTR("disabled"));
     s_auth = auth;
   }
@@ -924,7 +924,7 @@ void corium::WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void corium::WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // back to DHCP for the setup AP, a net row that didn't load goes too
-  corium::Log::console(PSTR("WebPortal: erasing WiFi credentials"));
+  corium::Log::console(PSTR("WebPortal: Erasing WiFi credentials"));
   corium::Prefs::reset("net");
   if (!corium::Prefs::commit()) {
     not_saved_page(res, F("Erase WiFi"));
@@ -1115,14 +1115,13 @@ static void bad_settings(EGHttpResponse& res, PGM_P what, const char* why) {
 // BUSY is the sdk's
 enum HoldResult : uint8_t { HELD, TOO_LONG, BAD_PASS, NO_MEMORY, IN_TEST };
 
-// arg() reuses its buffer, copy the ssid first
-static HoldResult wifi_hold_args(EGHttpRequest& req, const char* ssid) {
-  char s[EGPORTAL_SSID_MAX + 1];
-  if (strlcpy(s, ssid, sizeof(s)) >= sizeof(s)) return TOO_LONG;
-  const char* pass = req.arg(F("password"));
-  if (pass && strlen(pass) > EGPORTAL_PASS_MAX) return TOO_LONG;
-  if (!EGPortal::passOk(pass)) return BAD_PASS;
-  switch (corium::Wifi::holdCreds(s, pass)) {
+// only with an ssid, none keeps the old one
+static HoldResult wifi_hold_args(EGHttpRequest& req) {
+  char s[EGPORTAL_SSID_MAX + 1], p[EGPORTAL_PASS_MAX + 1];
+  EGPortal::Creds c = EGPortal::takeCreds(req, s, p);
+  if (c == EGPortal::CREDS_PASS) return BAD_PASS;
+  if (c != EGPortal::CREDS_OK) return TOO_LONG;
+  switch (corium::Wifi::holdCreds(s, p)) {
     case corium::Wifi::HOLD_OK:   return HELD;
     case corium::Wifi::HOLD_BUSY: return IN_TEST;   // a join test, or a save waiting for its restart
     default:                      return NO_MEMORY;
@@ -1238,7 +1237,7 @@ void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*
 
   const char* ssid = req.arg(F("ssid"));
   bool has_ssid = (ssid && *ssid);
-  HoldResult held = has_ssid ? wifi_hold_args(req, ssid) : HELD;
+  HoldResult held = has_ssid ? wifi_hold_args(req) : HELD;
   if (!wifi_held_ok(res, held)) return;
 
   bool put = put_net(static_on, has_ssid, ip, gw, sn, dns);
@@ -1384,7 +1383,7 @@ static void ota_begin(size_t expected) {
                  (unsigned)s_ota.expected, (unsigned)room);
     ota_fail(begin_why());
   } else {
-    corium::Log::console(PSTR("OTA: starting (%u bytes)"), (unsigned)s_ota.expected);
+    corium::Log::console(PSTR("OTA: Starting (%u bytes)"), (unsigned)s_ota.expected);
     s_ota.started = true;
     corium::Lifecycle::send(corium::Lifecycle::OTA_START);
   }
@@ -1421,7 +1420,7 @@ static bool ota_entry_ok(uint32_t entry) {
 static bool ota_write(const uint8_t* p, size_t len) {
   size_t wrote = Update.write((uint8_t*)p, len);
   if (wrote != len) {
-    corium::Log::console(PSTR("OTA: short write %u/%u err=%u"),
+    corium::Log::console(PSTR("OTA: Short write %u/%u err=%u"),
                  (unsigned)wrote, (unsigned)len, Update.getError());
     ota_fail(PSTR("write failed"));
     return false;
@@ -1458,25 +1457,25 @@ static void ota_data(const char* chunk, size_t len) {
 static void ota_end() {
   // Update.end() is strict, needs full size
   if (s_ota.write_error || !Update.isRunning()) {
-    corium::Log::console(PSTR("OTA: aborting on prior error"));
+    corium::Log::console(PSTR("OTA: Aborting on prior error"));
     if (Update.isRunning()) Update.end(false);  // discard
     ota_fail(PSTR("not running"));
     return;
   }
   if (s_ota.delivered != s_ota.expected) {
-    corium::Log::console(PSTR("OTA: byte-count mismatch %u != %u"),
+    corium::Log::console(PSTR("OTA: Byte-count mismatch %u != %u"),
                  (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
     Update.end(false);
     ota_fail(PSTR("size mismatch"));
     return;
   }
   if (Update.end()) {
-    corium::Log::console(PSTR("OTA: success (%u bytes), restarting"),
+    corium::Log::console(PSTR("OTA: Success (%u bytes), restarting"),
                  (unsigned)s_ota.delivered);
     // here too, reply may never go out
     corium::WebPortal::requestRestart();
   } else {
-    corium::Log::console(PSTR("OTA: end failed err=%u"), Update.getError());
+    corium::Log::console(PSTR("OTA: End failed err=%u"), Update.getError());
     ota_fail(PSTR("image check failed"));
   }
 }
@@ -1484,7 +1483,7 @@ static void ota_end() {
 static void ota_abort() {
   if (Update.isRunning()) Update.end(false);
   ota_fail(PSTR("connection lost"));
-  corium::Log::console(PSTR("OTA: aborted at %u/%u bytes"),
+  corium::Log::console(PSTR("OTA: Aborted at %u/%u bytes"),
                (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
 }
 
@@ -1650,8 +1649,8 @@ static void param_save_pref(const char* mid, const corium::Pref& p,
   param_put(mid, id, name, v, r);
 }
 
-// false = nothing saved
-static bool param_save_body(uint8_t tab, Refusal& r) {
+// false = nothing saved; out of line, its buffers aren't on the stack under commit()
+static __attribute__((noinline)) bool param_save_body(uint8_t tab, Refusal& r) {
   const char* body = s_param_body.buf;
   size_t      len  = s_param_body.len;
   bool        ok   = s_param_body.ok && body;
@@ -2019,7 +2018,8 @@ static void param_render_groups(EGHttpResponse& res, uint8_t tab) {
   }
 }
 
-static void param_render_form(EGHttpResponse& res, uint8_t tab) {
+// out of line, the form's buffers aren't on the stack under commit()
+static __attribute__((noinline)) void param_render_form(EGHttpResponse& res, uint8_t tab) {
   corium::WebPortal::sendf(res, PSTR("<form method=POST action='/param?t=%u'>"), (unsigned)tab);
   param_render_groups(res, tab);
   res.sendChunk(F(

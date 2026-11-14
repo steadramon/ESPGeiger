@@ -14,7 +14,7 @@ If a web password is set, every endpoint here needs HTTP Basic auth, user `admin
 
 ## `/outputs`
 
-A JSON object keyed by output name, describing each enabled third-party output. Disabled or unconfigured modules are left out; `{}` means none are active. A module quarantined by the boot guard shows under its module short name as `{"quarantined":true}`. The body is capped at about 500 bytes; the last entries are dropped if it would overflow.
+A JSON object keyed by output name, describing each enabled third-party output. Disabled or unconfigured modules are left out; `{}` means none are active. A module quarantined by the boot guard shows under its module short name as `{"quarantined":true}`. Each output's entry is sent on its own: one that would pass 255 bytes is left out, the rest still come.
 
 Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi` and `udpblip` when Local Broadcast is on. `/about` lists module short names, which differ for three of them: `whook`, `thgspk`, `wapi`.
 
@@ -85,7 +85,7 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `mac` | Device MAC address |
 | `host` | Configured hostname |
 | `core`, `boot` | ESP8266 only: Arduino core version and bootloader version |
-| `model`, `rev`, `sdk`, `temp` | ESP32 only: chip model, chip revision, SDK version, die temperature in °C (`null` if the chip can't read it) |
+| `model`, `rev`, `sdk`, `temp` | ESP32 only: chip model, chip revision, SDK version, die temperature in C (`null` if the chip can't read it) |
 | `fsize` | Flash size the image was built for, in bytes |
 | `freal` | ESP8266 only: flash size the chip reports. `/info` warns when it differs from `fsize` |
 | `mhz` | CPU frequency |

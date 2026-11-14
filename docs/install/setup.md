@@ -12,7 +12,7 @@ parent: Install
 
 After first installation ESPGeiger requires configuring for connection to a WiFi network.
 
-The ESPGeiger opens a local WiFi hotspot which allows the user to configure which WiFi network the ESPGeiger connects to.
+The ESPGeiger opens a local WiFi hotspot which allows the user to configure which WiFi network the ESPGeiger connects to. The hotspot has no WiFi password, so anyone nearby can join it while it is up. With a web password set, its pages still ask for it.
 
 Connecting to this WiFi hotspot should automatically show a configuration page.
 
@@ -55,7 +55,7 @@ set sys.web_pass
 
 To set a new password later: `set sys.web_pass MyNewPassword` (8 or more characters).
 
-This works with the setup portal up too: during the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
+This works with the setup portal up too, with a `reboot` after the `set`: the portal reads the password once, when it starts. During the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
 
 The web password is also kept outside the settings files, so a device that loses its settings (a damaged or reformatted file system) comes back with the same password, and **Info** shows *Web password: restored from backup (settings lost)*. A factory reset or clearing the password as above clears that copy too.
 
@@ -84,7 +84,7 @@ Nuclear option: reflash the firmware from [install.espgeiger.com](https://instal
 
 ESPGeiger is designed to run on your **local network**, not on the open internet.
 
-The web interface uses HTTP Basic Auth (no TLS), the `/update` endpoint allows over-the-air firmware replacement to any authenticated caller and the device intentionally has no rate-limiting or hardening against brute-force attack. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
+The web interface uses HTTP Basic Auth with no TLS. With a web password set, `/update` and espota take new firmware from anyone who has it; with no password, from anyone on your network. Firmware images are not signed, and there is no rate limiting or brute-force protection. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
 
 If you need to reach your device from outside your LAN, use one of:
 
@@ -93,6 +93,14 @@ If you need to reach your device from outside your LAN, use one of:
 - **Reverse proxy** (Nginx, Caddy) that terminates TLS and adds rate limiting in front of the device.
 
 Do **not** port-forward the device's HTTP port directly to the internet.
+
+What the device doesn't do:
+
+- No TLS: the password and pages cross your network in clear.
+- No update check: it doesn't tell you a new release is out.
+- No check on NTP replies: it takes the time it is given.
+- Anyone with the device in hand can reflash it and read what is stored on it.
+- WiFi and service passwords stay on the device until a factory reset or an erase, so clear it before you give it away. The station key is kept by a factory reset, only an erase clears it: erase it if the next owner shouldn't post as your station.
 
 ### Remote monitoring done right
 

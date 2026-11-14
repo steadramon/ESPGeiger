@@ -20,16 +20,27 @@
 #define CORIUM_YIELD_H
 
 #include <Arduino.h>
+#ifdef ESP32
+#include <esp_task_wdt.h>
+#endif
 
 namespace corium {
 
-// the 8266 only once loop() has run us, esp32 always
+// The 8266 only yields once loop() has run for the given us, esp32 always yields
 static inline void yieldAfter(uint32_t us) {
 #ifdef ESP8266
   optimistic_yield(us);
 #else
   (void)us;
   yield();
+#endif
+}
+
+// For a long walk in loop(). yield() feeds the 8266 wdt, the esp32 task wdt needs its own feed
+static inline void yieldWalk() {
+  yield();
+#ifdef ESP32
+  esp_task_wdt_reset();
 #endif
 }
 

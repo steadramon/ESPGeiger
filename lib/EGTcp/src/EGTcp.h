@@ -31,7 +31,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <atomic>
-#include <functional>
 #ifdef ARDUINO
 #include <IPAddress.h>
 #endif
@@ -74,8 +73,8 @@ class EGTcpClient {
   public:
     enum State : uint8_t { IDLE, CONNECTING, OPEN, CLOSED };
 
-    // write flags
-    static const uint8_t COPY = 0x01;   // else data stays valid till acked
+    // Write flags
+    static const uint8_t COPY = 0x01;   // else the data has to stay valid until acked
     static const uint8_t MORE = 0x02;   // no PSH, more to come
 
     // lwIP's numbers
@@ -91,7 +90,7 @@ class EGTcpClient {
     EGTcpClient(const EGTcpClient&) = delete;
     EGTcpClient& operator=(const EGTcpClient&) = delete;
 
-    // false = busy, or failed now and error() says; else onConnect or onClose follows
+    // false = busy, or failed straight away and error() says why. Else onConnect or onClose follows
     bool connect(const char* host, uint16_t port);
     bool connect(const EGTcpAddr& ip, uint16_t port);
     void close();      // queued data still goes, then FIN; unread dropped
@@ -103,22 +102,27 @@ class EGTcpClient {
     size_t write(const void* data, size_t len, uint8_t flags = COPY);
     size_t write(const char* s);
 
-    // pull: with no onData, data waits here and the window opens as read
+    // Pull: with no onData the data waits here, the window opens as it's read
     size_t available() const;
     size_t read(void* out, size_t len);
     int read();   // -1 = nothing
     int peek();
 
-    // push: in onData, keep the window shut, ack() it later
+    // Push: call in onData to keep the window shut, then ack() it later
     void ackLater() { _ack_later = true; }
     void ack(size_t len);
 
-    void onConnect(std::function<void()> cb) { _on_connect.swap(cb); }
-    // data gone once it returns, no read() in here
-    void onData(std::function<void(const uint8_t* data, size_t len)> cb) { _on_data.swap(cb); }
-    void onSent(std::function<void(size_t acked)> cb) { _on_sent.swap(cb); }
-    // ended not by you: 0 = peer closed, else why. Once, never after close()
-    void onClose(std::function<void(int8_t err)> cb) { _on_close.swap(cb); }
+    using ConnectFn = void (*)(void* ctx);
+    using DataFn = void (*)(void* ctx, const uint8_t* data, size_t len);
+    using SentFn = void (*)(void* ctx, size_t acked);
+    using CloseFn = void (*)(void* ctx, int8_t err);
+
+    void onConnect(ConnectFn fn, void* ctx) { _on_connect = fn; _connect_ctx = ctx; }
+    // data is gone once it returns, don't read() in here
+    void onData(DataFn fn, void* ctx) { _on_data = fn; _data_ctx = ctx; }
+    void onSent(SentFn fn, void* ctx) { _on_sent = fn; _sent_ctx = ctx; }
+    // Called once if it ends without a close(). 0 = peer closed, else why
+    void onClose(CloseFn fn, void* ctx) { _on_close = fn; _close_ctx = ctx; }
 
     // ms, 0 = off; ends with E_TIMEOUT
     void setConnectTimeout(uint32_t ms) { _connect_ms = ms; rearm(); }
@@ -180,7 +184,7 @@ class EGTcpClient {
     uint32_t _ev_dns = 0;
     bool _ev_found = false;
     EGTcpServer* _srv = nullptr;            // accepted, not handed over
-    EGTcpAsk* _ask = nullptr;               // dns, the stack's till it answers
+    EGTcpAsk* _ask = nullptr;               // pending DNS ask, the stack owns it until it answers
     // owner writes, the stack's poll compares; 0 = nothing timed
     std::atomic<uint32_t> _due_at{0};
 
@@ -188,7 +192,7 @@ class EGTcpClient {
     State _state = IDLE;
     int8_t _err = 0;
     bool _ack_later = false;
-    uint8_t _life = 0;       // forget() bumps, old events stop there
+    uint8_t _life = 0;       // forget() bumps it so old events are ignored
     uint16_t _port = 0;
     uint32_t _dns_id = 0;
     uint32_t _owed = 0;      // taken, not acked yet
@@ -202,10 +206,14 @@ class EGTcpClient {
     uint32_t _ack_ms = 0;
     EGTcpClient* _accept_next = nullptr;    // server's pull list
 
-    std::function<void()> _on_connect;
-    std::function<void(const uint8_t*, size_t)> _on_data;
-    std::function<void(size_t)> _on_sent;
-    std::function<void(int8_t)> _on_close;
+    ConnectFn _on_connect = nullptr;
+    void* _connect_ctx = nullptr;
+    DataFn _on_data = nullptr;
+    void* _data_ctx = nullptr;
+    SentFn _on_sent = nullptr;
+    void* _sent_ctx = nullptr;
+    CloseFn _on_close = nullptr;
+    void* _close_ctx = nullptr;
 };
 
 class EGTcpServer {
@@ -221,7 +229,8 @@ class EGTcpServer {
     void end();   // open clients stay yours
 
     // push: the client is yours. Without it, accept() pulls them
-    void onAccept(std::function<void(EGTcpClient* c)> cb) { _on_accept.swap(cb); }
+    using AcceptFn = void (*)(void* ctx, EGTcpClient* c);
+    void onAccept(AcceptFn fn, void* ctx) { _on_accept = fn; _accept_ctx = ctx; }
     EGTcpClient* accept();   // nullptr = none, else yours to delete
 
     // before begin(); the stack drops SYNs past n open
@@ -239,7 +248,8 @@ class EGTcpServer {
     uint8_t _max = 0;   // 0 = stack's default
     bool _nodelay = false;
     EGTcpClient* _pull = nullptr;
-    std::function<void(EGTcpClient*)> _on_accept;
+    AcceptFn _on_accept = nullptr;
+    void* _accept_ctx = nullptr;
 };
 
 #endif

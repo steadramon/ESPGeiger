@@ -31,27 +31,32 @@ static uint8_t s_count = 0;
 bool on(Handler h) {
   if (!h) return false;
   for (uint8_t i = 0; i < s_count; i++) {
-    if (s_handlers[i] == h) return true;   // a second begin()
+    if (s_handlers[i] == h) return true;   // already added by an earlier begin()
   }
   if (s_count >= MAX_HANDLERS) return false;
   s_handlers[s_count++] = h;
   return true;
 }
 
-// the one writer, web and espota alike
+// The only writer of otaInProgress, for web and espota alike
 void send(Event e) {
   otaInProgress = e == OTA_START;
   for (uint8_t i = 0; i < s_count; i++) s_handlers[i](e);
 }
 
 static Deadline s_restart;
+static Deadline s_retry;
 
 void requestRestart(uint32_t now, uint32_t delay_ms) {
   s_restart.set(now + delay_ms);
 }
 
+void retryAfter(uint32_t now, uint32_t delay_ms) {
+  s_retry.set(now + delay_ms);
+}
+
 bool restartDue(uint32_t now) {
-  return s_restart.due(now);
+  return s_restart.due(now) || (s_retry.due(now) && !otaInProgress);
 }
 
 bool restartPending() { return s_restart.armed(); }

@@ -29,8 +29,8 @@ The following build flags can be added to your environment's `build_flags` to cu
 | `-D SERIALOUT` | Enable serial CPM/uSv output. |
 | `-D GEIGER_SDCARD` | Enable SD card data logging. |
 | `-D SDCARD_EXTENDEDLOG` | Add extra columns (free memory) to the SD card CSV output. Requires `GEIGER_SDCARD`. |
-| `-D PULSE_OUT` | Enable Pulse Out (per-pulse GPIO for piezo, speaker, LED). Ships in every stock ESP build. |
-| `-D ALERT_OUT` | Enable Alert Out (rising-edge alert GPIO). Ships in every stock ESP build. |
+| `-D PULSE_OUT` | Enable Pulse Out (per-pulse GPIO for piezo, speaker, LED). Ships in every stock ESP build except `espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`, `espgeigerlog_udp` and `esp8266_pulsemin`. |
+| `-D ALERT_OUT` | Enable Alert Out (rising-edge alert GPIO). Ships in every stock ESP build except `espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`, `espgeigerlog_udp` and `esp8266_pulsemin`. |
 | `-D AUDIO_TICK` | Enable Audio Tick (synthesised click via I2S amplifier, ESP32 only). |
 
 ### Display & LEDs
@@ -48,7 +48,7 @@ The following build flags can be added to your environment's `build_flags` to cu
 | `-D NEOPIXEL_PIN=N` | Set the NeoPixel data pin (default `15`). |
 | `-D GEIGER_PUSHBUTTON` | Enable push button for OLED page switching and display wake. |
 | `-D PUSHBUTTON_PIN=N` | Set the push button pin. Default `0` (BOOT) on ESP32, `-1` (off) on ESP8266; `base:esp32c3_main` sets `9`. |
-| `-D LED_SEND_RECEIVE=N` | Set the status LED pin (default `2`). |
+| `-D LED_SEND_RECEIVE=N` | Set the status LED pin (default `2`, `-1` on C3 and S3). |
 
 ### Geiger Counter Type
 
@@ -69,6 +69,7 @@ gc10 = 1
 gc10nx = 2
 mightyohm = 3
 espgeiger = 4
+template = 5
 ```
 
 These can be referenced in your environment's `build_flags` as:
@@ -81,8 +82,8 @@ build_flags =
 
 | Flag | Description |
 |---|---|
-| `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield - bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 3 = UDP receiver, bit 7 = test). `1` Pulse (default), `2` Serial, `8` UDP receiver (the `_udp` envs), `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. |
-| `-D GEIGER_SERIALTYPE=N` | Set the **default** serial counter type for serial builds. The serial type can be changed at runtime from the Config page. `1` GC10 (9600 baud), `2` GC10-Next (115200 baud), `3` MightyOhm (9600 baud), `4` ESPGeiger (115200 baud). |
+| `-D GEIGER_TYPE=N` | Set the geiger counter type (bitfield - bit 0 = pulse, bit 1 = serial, bit 2 = internal PWM, bit 3 = UDP receiver, bit 7 = test). `1` Pulse, `2` Serial, `8` UDP receiver (the `_udp` envs), `128` Test, `129` Test Pulse, `130` Test Serial, `133` Test Pulse PWM. Values ≥ 128 are test builds. Required: the build stops without it. |
+| `-D GEIGER_SERIALTYPE=N` | Set the **default** serial counter type for serial builds. The serial type can be changed at runtime from the Config page. `1` GC10 (9600 baud), `2` GC10-Next (115200 baud), `3` MightyOhm (9600 baud), `4` ESPGeiger (115200 baud), `5` Template (115200 baud, the number after CPM, else the first number). |
 
 ### Geiger Counter Input
 
@@ -91,7 +92,7 @@ build_flags =
 | `-D GEIGER_RXPIN=N` | Set the geiger counter input pin (default `13` on ESP8266 / ESP32, `4` on ESP32-C3). GPIO 11-17 are reserved for internal flash on C3-MINI-1 modules. |
 | `-D GEIGER_TXPIN=N` | Set the transmit pin for test builds (default `-1`). |
 | `-D GEIGER_DEBOUNCE=N` | Set the default pulse debounce time in microseconds (default `200`). This can also be configured at runtime from the web interface on builds that use software interrupt counting. |
-| `-D GEIGER_RATIO=N` | Set the default CPM to μSv/h conversion ratio (default `151.0`). |
+| `-D GEIGER_RATIO=N` | Set the default CPM to µSv/h conversion ratio (default `151.0`). |
 | `-D GEIGER_MODEL="name"` | Set the geiger counter model name. |
 | `-D GEIGER_MODEL_FIXED` | Hide the user-editable `geiger_model` pref from the Config page. Use on purpose-built kits where the tube is fixed in firmware via `GEIGER_MODEL`. |
 | `-D RXPIN_BLOCKED` | Prevent the RX pin from being changed via the web interface. |
@@ -165,7 +166,7 @@ The HV codepath splits into two independent capabilities, gated separately so th
 | `-D EG_TIMER1_PWM` | EGTimer1 PWM output. ESP8266 `ESPG_HV` builds need it. |
 | `-D ESPG_HV_ADC` | Enable ADC HV feedback divider: `ratio`/`offset` calibration prefs, live HV readout on /hv, /info, /status, OLED and as the `hv` field on every output module (WebAPI, MQTT, Webhook, SerialOut). Requires `ESPG_HV`. |
 | `-D GEIGER_PWMPIN=N` | Set the HV PWM output pin. Default `12` on ESPGeiger-HW, otherwise `-1` (HV off until the pin is set). Requires `ESPG_HV`. |
-| `-D GEIGER_VFEEDBACKPIN=N` | Set the HV voltage feedback ADC pin (default `A0`). Requires `ESPG_HV_ADC`. |
+| `-D GEIGER_VFEEDBACKPIN=N` | Set the HV voltage feedback ADC pin (default `A0` on ESP8266, `36` on ESP32). Requires `ESPG_HV_ADC`. |
 | `-D GEIGERHW_FREQ=N` | Set the default HV PWM frequency in Hz (default `6000`). Requires `ESPG_HV`. |
 | `-D GEIGERHW_DUTY=N` | Set the default HV PWM duty, out of 1023 (10-bit). Default `280`. Capped by `GEIGERHW_MAX_DUTY` (600 on ESPGeiger-HW). Requires `ESPG_HV`. |
 | `-D GEIGERHW_ADC_RATIO=N` | Set the ADC voltage divider ratio for HV reading (default `1035`). Requires `ESPG_HV_ADC`. |
@@ -248,8 +249,8 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | `esp32s3_pulse_no_pcnt` | ESP32-S3 | Pulse (interrupt) | RXPIN 13, defaults to interrupt; retired in 0.15 |
 | `esp32s3_audio_pulse` | ESP32-S3 | Pulse (PCNT) | I2S audio tick |
 | `esp32s3_audio_serial` | ESP32-S3 | Serial | I2S audio tick |
-| `xh_s3e_pulse` | ESP32-S3 (XH-S3E) | Pulse (PCNT) | RXPIN 13, OLED, NeoPixel, I2S audio tick, pins fixed |
-| `xh_s3e_serial` | ESP32-S3 (XH-S3E) | Serial | RXPIN 13, TXPIN 14, OLED, NeoPixel, I2S audio tick, pins fixed |
+| `xh_s3e_pulse` | ESP32-S3 (XH-S3E) | Pulse (PCNT) | RXPIN 13, OLED, NeoPixel, I2S audio tick, board pins fixed, counter pins settable |
+| `xh_s3e_serial` | ESP32-S3 (XH-S3E) | Serial | RXPIN 13, TXPIN 14, OLED, NeoPixel, I2S audio tick, board pins fixed, counter pins settable |
 | `esp8266_pulse` | ESP8266 | Pulse | |
 | `esp8266_pulsemin` | ESP8266 | Pulse | Minimal build, no cloud services |
 | `esp8266oled_pulse` | ESP8266 | Pulse | OLED |
@@ -333,7 +334,7 @@ build_flags =
 
 With no `BTN_PIN_BLOCKED` flag the button pin is also a setting, **Button Pin** (`btn.pin`) on the Config page, with `PUSHBUTTON_PIN` as its default. `-1` turns the button off.
 
-After flashing, select your serial counter type (GC10, GC10Next, MightyOhm, or ESPGeiger) from the **Config** page under **Input > Serial Type**.
+After flashing, select your serial counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page under **Input > Serial Type**.
 
 The key points when building a custom environment:
 

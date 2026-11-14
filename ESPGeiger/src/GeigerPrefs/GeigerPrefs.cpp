@@ -326,7 +326,15 @@ void CounterPrefs::onPrefsLoaded() {
   }
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-  gcounter.set_dead_time_us((uint16_t)corium::Prefs::getUInt("counter", K_DEAD_TIME_US));
+  {
+    uint32_t dead = corium::Prefs::getUInt("counter", K_DEAD_TIME_US);
+#ifdef PREF_DEBOUNCE
+    // interrupt: nothing counts inside the debounce either, 0 stays off
+    uint32_t dbn = corium::Prefs::getUInt("counter", K_DEBOUNCE);
+    if (dead && dbn > dead && !gcounter.has_pcnt()) dead = dbn;
+#endif
+    gcounter.set_dead_time_us((uint16_t)dead);
+  }
 #endif
   gcounter.set_cpm_mode((uint8_t)corium::Prefs::getUInt("counter", K_CPM_MODE));
   gcounter.set_ratio(corium::Prefs::getFloat("counter", EG_K_RATIO));

@@ -116,12 +116,23 @@ static const corium::PrefGroup HW_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* HV::prefsGroup() { return &HW_PREF_GROUP; }
 
+#ifdef ESPG_HV_ADC
+// unflagged = a raw count, read as mV
+static int stored_ratio() {
+  int r = (int)corium::Prefs::getInt("espghw", EG_K_RATIO);
+#ifdef HV_RATIO_MV
+  if (!corium::Prefs::getUInt("espghw", K_RATIO_MV)) r = hv_ratio_to_mv(r, GEIGERHW_ADC_RATIO, GEIGERHW_MAX_RATIO);
+#endif
+  return r;
+}
+#endif
+
 void HV::onPrefsLoaded() {
   set_freq((int)corium::Prefs::getUInt("espghw", EG_K_FREQ));
   set_duty((int)corium::Prefs::getUInt("espghw", K_DUTY));
   clear_ov();
 #ifdef ESPG_HV_ADC
-  set_vd_ratio((int)corium::Prefs::getInt("espghw", EG_K_RATIO));
+  set_vd_ratio(stored_ratio());
   set_vd_offset((int)corium::Prefs::getInt("espghw", K_OFFSET));
   set_hv_target((uint16_t)corium::Prefs::getUInt("espghw", K_TARGET));
   _ov_v = hv_ov_limit(corium::Prefs::getUInt("espghw", K_OV_V), GEIGERHW_OV_V);
@@ -286,18 +297,17 @@ void HV::set_pwm_pin(int pin) {
 }
 
 #ifdef HV_RATIO_MV
-// once, ratio and flag in one write
-static int ratio_to_mv(int ratio) {
-  if (corium::Prefs::getUInt("espghw", K_RATIO_MV)) return ratio;
-  int r = hv_ratio_to_mv(ratio, GEIGERHW_ADC_RATIO, GEIGERHW_MAX_RATIO);
+// once, ratio and flag in one write; refused, the stored one stays raw and reads as mV
+static void ratio_to_mv(int mv) {
+  if (corium::Prefs::getUInt("espghw", K_RATIO_MV)) return;
+  int raw = (int)corium::Prefs::getInt("espghw", EG_K_RATIO);
   // ratio and flag both or neither
-  if (!corium::Prefs::putInt("espghw", EG_K_RATIO, r) || !corium::Prefs::putUInt("espghw", K_RATIO_MV, 1)) {
+  if (!corium::Prefs::putInt("espghw", EG_K_RATIO, mv) || !corium::Prefs::putUInt("espghw", K_RATIO_MV, 1)) {
     corium::Prefs::revert("espghw");
-    return ratio;
+    return;
   }
-  if (r != ratio) corium::Log::console(PSTR("HV: Ratio %d now %d (mV), check it"), ratio, r);
+  if (mv != raw) corium::Log::console(PSTR("HV: Ratio %d now %d (mV), check it"), raw, mv);
   (void)corium::Prefs::commit(false);   // failed: both stay due, the next save lands them
-  return r;
 }
 #endif
 
@@ -327,7 +337,7 @@ void HV::begin() {
 #ifdef ESPG_HV_ADC
   hvReading.begin();
 #ifdef HV_RATIO_MV
-  set_vd_ratio(ratio_to_mv(_vd_ratio));
+  ratio_to_mv(_vd_ratio);
 #endif
   _settle.set(corium::fastMillis() + (unsigned long)_boot_s * 1000UL);
   restore_trim();
@@ -410,7 +420,8 @@ void HV::sample_adc() {
 int HV::read_hv() {
   int volts = hv_volts(_vd_ratio, hv_median2(_adc, _adc_n), 2, _vd_offset);
   _adc_n = 0;
-  uint16_t v = (uint16_t)(volts < 0 ? 0 : volts);
+  // the ring sums in 16 bits: a mis-set ratio reads high, never wraps low
+  uint16_t v = (uint16_t)clamp(volts, 0, (int)(UINT16_MAX / HV_TRIM_N));
   hvReading.add(v);
   _hv_prev = v;
   return volts;
@@ -422,6 +433,7 @@ void HV::check_overvoltage(int volts) {
   _over_s = hv_over_count(_over_s, volts, _ov_v);
   if (_over_s < _ov_trip_s) return;
   _ov_trip = true;
+  unstash_trim();   // a restart starts from 0, not the trip's trim
   if (_pwm_pin >= 0) write_duty();
   corium::Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
                volts, _ov_v);
@@ -485,6 +497,8 @@ void HV::stash_trim() {
                           (uint16_t)_vd_ratio, _duty_trim, 0});
 }
 
+void HV::unstash_trim() { TrimSlot::clear(); }
+
 // learned at this duty, freq, target and ratio only
 void HV::restore_trim() {
   TrimRtc r;
@@ -517,9 +531,14 @@ bool HV::saveconfig() {
   bool ok = corium::Prefs::putInt("espghw", EG_K_FREQ, _freq);
   ok &= corium::Prefs::putInt("espghw", K_DUTY, _duty);
 #ifdef ESPG_HV_ADC
-  ok &= corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
 #ifdef HV_RATIO_MV
-  ok &= corium::Prefs::putUInt("espghw", K_RATIO_MV, 1);   // a saved ratio is mV, whatever a revert left
+  // mV only with its flag; refused, the stored one stays as it reads
+  uint32_t was = corium::Prefs::getUInt("espghw", K_RATIO_MV);
+  bool mv = corium::Prefs::putUInt("espghw", K_RATIO_MV, 1) && corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
+  if (!mv && !was) (void)corium::Prefs::putUInt("espghw", K_RATIO_MV, 0);
+  ok &= mv;
+#else
+  ok &= corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
 #endif
   ok &= corium::Prefs::putInt("espghw", K_OFFSET, _vd_offset);
   ok &= corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
@@ -584,7 +603,7 @@ function ton(){PD.textContent=SD.value&&SF.value>0?'('+(SD.value*1e6/PD.dataset.
 tie(FQ,SF,ton);tie(DU,SD,ton);
 SB.addEventListener("click",function(){
   fetch('/hvset?f='+SF.value+'&d='+SD.value+'&r='+RT.value+'&t='+TG.value).then(r=>{
-    if(r.ok){SF.value='';SD.value='';ton();inited=!1}
+    if(r.ok){SF.value='';SD.value='';ton();inited=!1}else r.text().then(alert)
   });
 });
 )JS";

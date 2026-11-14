@@ -6,8 +6,8 @@ ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-c
 
 - 😃  Easy to install via web browser - no compiler required
 - 📈  Built-in web portal with live graphing and 24-hour history
-- 🔴  Live CPM and μSv/h with 1, 5 and 15-minute smoothed averages
-- 🕰️   Lifetime tracking - persistent total clicks and μSv across reboots
+- 🔴  Live CPM and µSv/h with 1, 5 and 15-minute smoothed averages
+- 🕰️   Lifetime tracking - persistent total clicks and µSv across reboots
 - 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED and WS2812X NeoPixel status light
 - 🌡️   Optional BME280 / BMP280 / AHT environmental sensors - auto-detected over I2C
 - ✅  Works with pulse and GC10 / GC10next / MightyOhm serial counters
@@ -50,7 +50,7 @@ ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect t
 
 ### I have an ESP + serial Geiger counter
 
-A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger). Select your counter type from the **Config** page after flashing.
+A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger, Template). Select your counter type from the **Config** page after flashing.
 
 | ESP8266 Build | ESP32 Build | ESP32-S3 Build | ESP32-C3 Build |
 |---|---|---|---|
@@ -160,18 +160,21 @@ Contributions are welcome - please feel free to raise a Pull Request or open an 
 
 Supporting libraries:
 - [ArduinoJson](https://github.com/bblanchon/ArduinoJson)
-- [AsyncTCP](https://github.com/ESP32Async/AsyncTCP) / [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP)
-- [async-mqtt-client](https://github.com/marvinroger/async-mqtt-client)
-- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
 - [U8g2](https://github.com/olikraus/u8g2)
-- [JLed](https://github.com/jandelgado/jled)
 - [NeoPixelBus](https://github.com/Makuna/NeoPixelBus)
 - [EspSoftwareSerial](https://github.com/plerup/espsoftwareserial)
 - [SdFat](https://github.com/greiman/SdFat)
 - [micro-ecc](https://github.com/kmackay/micro-ecc)
+- [Improv sdk-cpp](https://github.com/improv-wifi/sdk-cpp) (WiFi setup over USB)
 - [CircularBuffer](https://github.com/rlogiacco/CircularBuffer)
 - [base64_arduino](https://github.com/Densaugeo/base64_arduino) (basis for the bundled EGBase64)
 - [ESPNtpClient](https://github.com/gmag11/ESPNtpClient) (uptime tracking, now inlined)
+
+Earlier versions used:
+- [AsyncTCP](https://github.com/ESP32Async/AsyncTCP) / [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP)
+- [async-mqtt-client](https://github.com/marvinroger/async-mqtt-client)
+- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
+- [JLed](https://github.com/jandelgado/jled)
 
 Inspiration:
 - [OpenMQTTGateway](https://github.com/1technophile/OpenMQTTGateway)

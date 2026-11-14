@@ -29,6 +29,7 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Lifecycle.h"
+#include "Corium/System/Yield.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "App/FeatureBits.h"
@@ -147,7 +148,7 @@ void SDCard::begin()
   SPI.begin(GEIGER_SDCARD_SCK, GEIGER_SDCARD_MISO, GEIGER_SDCARD_MOSI, GEIGER_SDCARD_CS);
 #endif
   corium::DeviceInfo::wdtPause();
-  bool ok = sd->begin(GEIGER_SDCARD_CS);
+  bool ok = sd->begin(GEIGER_SDCARD_CS, SD_SCK_MHZ(20));   // spi mode is 25 max, sdfat's 50 ran 40
   corium::DeviceInfo::wdtResume();
   if (!ok) {
     corium::Log::console(PSTR("SDCard: Init failed, check card or wiring"));
@@ -161,7 +162,7 @@ void SDCard::begin()
   // the entry lands at close, the remove writes again
   bool wrote = _file.open("TEST.TMP", O_WRITE | O_CREAT | O_TRUNC);
   if (!wrote || !_file.close() || !sd->remove("TEST.TMP")) {
-    corium::Log::console(PSTR("SDCard: write probe failed - read-only or full?"));
+    corium::Log::console(PSTR("SDCard: Write probe failed - read-only or full?"));
     fault();
     delete sd;
     sd = nullptr;
@@ -275,17 +276,17 @@ bool SDCard::openDayFile(const char* dir, const char* name, uint32_t day, bool& 
     fail_step(PSTR("chdir /"), dir, name);
     return false;
   }
-  // SdFat never yields, a dying card waits up to 600 ms a step: the 8266 wdt
+  // SdFat never yields, a dying card waits up to 600 ms a step: the wdts
   const char* step = nullptr;
-  yield();
+  corium::yieldWalk();
   if (!sd->exists(dir)) {
-    yield();
+    corium::yieldWalk();
     if (sd->mkdir(dir)) used_clusters(1);
     else step = PSTR("mkdir");
   }
-  yield();
+  corium::yieldWalk();
   if (!step && !sd->chdir(dir)) step = PSTR("chdir");
-  yield();
+  corium::yieldWalk();
   if (!step && !_file.open(name, FILE_WRITE)) step = PSTR("open");
   if (step) {
     fail_step(step, dir, name);
@@ -303,6 +304,13 @@ bool SDCard::openDayFile(const char* dir, const char* name, uint32_t day, bool& 
 
 // clusters used, a sync every _sync_min rows; false = the file's gone
 bool SDCard::wrote(const char* dir, const char* name) {
+  // a full card fails the cluster, the sync still says ok
+  if (_file.getWriteError()) {
+    _file.clearWriteError();
+    fail_step(PSTR("write"), dir, name);
+    closeDay(false);
+    return false;
+  }
   uint32_t size = _file.fileSize();
   uint32_t cl = clusters_of(size);
   uint32_t was = clusters_of(_file_size);
@@ -339,7 +347,14 @@ void SDCard::writeUndated()
   char up[12];
   snprintf_P(up, sizeof(up), PSTR("%lu"), (unsigned long)corium::Uptime::seconds());
   write_row(_file, up);
-  if (!wrote("", UNDATED + 1)) scheduleCleanup(CLEAN_FULL);
+  afterRow(!wrote("", UNDATED + 1));
+}
+
+// looks full, count it properly before deleting
+void SDCard::afterRow(bool clean)
+{
+  int32_t mb = freeMB();
+  if (clean || (mb >= 0 && mb <= SD_FULL_MB)) scheduleCleanup(CLEAN_FULL);
 }
 
 void SDCard::writeMinute()
@@ -384,10 +399,7 @@ void SDCard::writeMinute()
     write_row(_file, dateTime);
     if (!wrote(dir, name)) clean = true;
   }
-
-  // looks full, count it properly before deleting
-  int32_t mb = freeMB();
-  if (clean || (mb >= 0 && mb <= SD_FULL_MB)) scheduleCleanup(CLEAN_FULL);
+  afterRow(clean);
 }
 
 // the device's own writes, so the FAT is only counted at mount and when full
@@ -466,8 +478,14 @@ void SDCard::cleanup(uint8_t what) {
   if (what == CLEAN_FREECHECK) {
     uint32_t mb = freeMB();
     corium::Log::console(PSTR("SDCard: %lu MB free."), (unsigned long)mb);
-    if (mb <= SD_FULL_MB && !deleteOldest(year_ago())) disableFull();
+    // no clock, no age: nothing deleted nor shut for it, a dated row's check comes back
+    if (mb <= SD_FULL_MB && corium::Clock::synced && !deleteOldest(year_ago())) disableFull();
   } else {
+    // a row failed or the card is low: with no clock nothing to delete, a full card still shuts
+    if (!corium::Clock::synced) {
+      if (freeMB() <= SD_FULL_MB) disableFull();
+      return;
+    }
     uint8_t left = 10;
     uint32_t mb = freeMB();
     uint32_t cutoff = year_ago();
@@ -480,7 +498,7 @@ void SDCard::cleanup(uint8_t what) {
 }
 
 void SDCard::disableFull() {
-  corium::Log::console(PSTR("SDCard: disabled - card full"));
+  corium::Log::console(PSTR("SDCard: Disabled - card full"));
   _enabled = false;
   fault();
 }
@@ -501,7 +519,7 @@ void SDCard::fault() {
   if (!_enabled || m == _fail_min) return;
   _fail_min = m;
   if (++_fails < SD_FAIL_MAX) return;
-  corium::Log::console(PSTR("SDCard: disabled after %u failed minutes"), (unsigned)SD_FAIL_MAX);
+  corium::Log::console(PSTR("SDCard: Disabled after %u failed minutes"), (unsigned)SD_FAIL_MAX);
   _enabled = false;
 }
 
@@ -524,7 +542,7 @@ static bool oldest_month_after(const char* after, char* out, size_t cap) {
       }
     }
     sub.close();
-    yield();
+    corium::yieldWalk();
   }
   root.close();
   return out[0] != '\0';
@@ -556,7 +574,7 @@ static bool oldest_csv_in(const char* dir, uint32_t cutoff,
       }
     }
     file.close();
-    yield();
+    corium::yieldWalk();
   }
   sub.close();
   return true;
@@ -584,6 +602,8 @@ bool SDCard::deleteOldest(uint32_t cutoff) {
     File32 f;
     if (sd->chdir(dir) && f.open(name, O_RDONLY)) {
       uint32_t size = f.fileSize();
+      // a download of it ends, its clusters go to the next rows; the reply frees it
+      if (s_dl && s_dl->isOpen() && s_dl->firstCluster() == f.firstCluster()) (void)s_dl->close();
       f.close();
       corium::Log::console(PSTR("SDCard: Deleting old file %s/%s"), dir, name);
       deleted = sd->remove(name);
@@ -655,7 +675,7 @@ static void tally_month(File32& sub, const char* dir, MonthEntry& m) {
       }
     }
     file.close();
-    yield();
+    corium::yieldWalk();
   }
 }
 
@@ -679,7 +699,7 @@ static uint16_t scan_months(MonthEntry* months, uint16_t cap) {
       }
     }
     sub.close();
-    yield();
+    corium::yieldWalk();
   }
   root.close();
   return count;
@@ -780,11 +800,24 @@ static bool load_months() {
   return true;
 }
 
+static const char SD_RETRY[] PROGMEM =
+  "<p><button onclick=\"fetch('/sd/reinit',{method:'POST'}).then(r=>r.ok?location.reload():r.text().then(alert))\">Retry</button></p>";
+
+// stopped: why, and a retry; the files still read
+static void sd_stopped(EGHttpResponse& res) {
+  int32_t mb = sdcard.freeMB();
+  if (!sd) res.sendChunk(F("<p>SD card not available.</p>"));
+  else if (mb >= 0 && mb <= SD_FULL_MB) res.sendChunk(F("<p>Logging stopped: the card is full.</p>"));
+  else res.sendChunk(F("<p>Logging stopped: the card failed to write.</p>"));
+  res.sendChunk(FPSTR(SD_RETRY));
+}
+
 static void hSdList(EGHttpResponse& res, uint16_t sel = 0) {
   corium::WebPortal::beginPage(res, F("SD Logs"));
 
-  if (!sdcard.ready() || !sd) {
-    end_page(res, F("<p>SD card not available.</p>"));
+  if (!sdcard.ready()) sd_stopped(res);
+  if (!sd) {
+    end_page(res);
     return;
   }
 
@@ -829,7 +862,7 @@ static bool scan_days(const char* dir, DayEntry* days, uint8_t cap,
       }
     }
     file.close();
-    yield();
+    corium::yieldWalk();
   }
   sub.close();
   return true;
@@ -868,7 +901,7 @@ static void hSdMonth(EGHttpResponse& res, const char* yyyymm) {
 
   corium::WebPortal::beginPage(res, F("SD Logs"));
 
-  if (!sdcard.ready() || !sd) {
+  if (!sd) {
     end_page(res, F("<p>SD card not available.</p>"));
     return;
   }
@@ -922,7 +955,7 @@ static void hSdDownload(EGHttpResponse& res, const char* f) {
   char name[SD_NAME_LEN + 1];
   strlcpy(name, f ? f : UNDATED + 1, sizeof(name));
 
-  if (!sdcard.ready() || !sd) {
+  if (!sd) {
     res.send(503, FPSTR(HTTP_CT_PLAIN), F("SD not ready"));
     return;
   }
@@ -991,8 +1024,9 @@ static const corium::MenuEntry SDCARD_MENU[] PROGMEM = {
   {"", ""}
 };
 
+// a card there, writing or not: the files and the retry
 const corium::MenuEntry* SDCard::menuEntries() {
-  return _enabled ? SDCARD_MENU : nullptr;
+  return sd || _fault ? SDCARD_MENU : nullptr;
 }
 
 void SDCard::registerRoutes(EGHttpServer& http) {
@@ -1006,7 +1040,8 @@ void SDCard::registerRoutes(EGHttpServer& http) {
       }
       next_s = now + SD_REINIT_S;
       sdcard.reinit();
-      res.send(200, FPSTR(HTTP_CT_PLAIN), sdcard.ready() ? F("Reinit OK") : F("Reinit failed"));
+      if (sdcard.ready()) res.send(200, FPSTR(HTTP_CT_PLAIN), F("Reinit OK"));
+      else res.send(500, FPSTR(HTTP_CT_PLAIN), F("Reinit failed"));
     });
   http.on(F("/sd"), EGHttpRequest::GET, hSd);
 }

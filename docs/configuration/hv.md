@@ -98,4 +98,4 @@ The feedback input is A0 on ESP8266 and GPIO 36 on ESP32.
 
 With `Target` above 0, the firmware moves duty by 1 step every 10 seconds when the average of the last 8 readings is outside a band around the target, up to **±5 steps** from your saved `duty`. The band is 2 ADC counts either side, about ±2 V on ESPGeiger-HW. Set `duty` so HV is already right with the tube connected and `Target = 0`; the trim only tracks drift.
 
-If the duty field shows `(trim +5)` or `(trim -5)`, the trim has hit its limit: move `duty` by hand in that direction until the trim sits near 0. The trim resets on reboot and on any duty or frequency change.
+If the duty field shows `(trim +5)` or `(trim -5)`, the trim has hit its limit: move `duty` by hand in that direction until the trim sits near 0. The trim is kept over a restart. It resets on a power cut, an over-voltage cut-off, and any duty, frequency, target or ratio change.

@@ -139,7 +139,7 @@ struct EGTcpRun {
       return true;
     }
     s_running = c;
-    s->_on_accept(c);
+    s->_on_accept(s->_accept_ctx, c);
     return s_running == c;
   }
 
@@ -413,7 +413,7 @@ void EGTcpClient::opened() {
   _state = OPEN;
   _rx_ms = _tx_ms = EGTcpCore::now();
   rearm();
-  if (_on_connect) _on_connect();
+  if (_on_connect) _on_connect(_connect_ctx);
 }
 
 void EGTcpClient::delivered() {
@@ -430,7 +430,7 @@ void EGTcpClient::delivered() {
     if (!d) return;
     // only the owner drops, d holds
     _ack_later = false;
-    _on_data(d, n);
+    _on_data(_data_ctx, d, n);
     if (s_running != this || _state == IDLE) return;   // deleted or closed
     {
       EGTcpHold h;
@@ -445,7 +445,7 @@ void EGTcpClient::acked(uint32_t n) {
   _unacked = n > _unacked ? 0 : _unacked - n;
   _rx_ms = EGTcpCore::now();
   rearm();
-  if (_on_sent) _on_sent(n);
+  if (_on_sent) _on_sent(_sent_ctx, n);
 }
 
 static bool late(uint32_t now, uint32_t since, uint32_t limit) {
@@ -493,7 +493,7 @@ void EGTcpClient::ended(int8_t err) {
   _state = CLOSED;
   if (!_err) _err = err;
   rearm();
-  if (_on_close) _on_close(err);
+  if (_on_close) _on_close(_close_ctx, err);
 }
 
 /*

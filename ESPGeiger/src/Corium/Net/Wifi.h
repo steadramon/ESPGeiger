@@ -61,6 +61,7 @@ namespace Wifi {
   bool hasSavedCreds();
   bool portalAhead();   // first setup: none saved, not offline
   CORIUM_NODISCARD bool joinMode();   // wifi.mode back to 0, no commit
+  bool keepJoined(uint32_t restart_ms);   // a test joined off hotspot/off mode: saved, restart; false = mode 0 or not saved, logged
   bool saveBackupCreds();   // before WiFi.begin(); a failed write logs, none to back up = false
   bool clearSavedCreds();   // false = the sdk kept them, logged
   bool applyStaticConfig();   // before WiFi.begin()

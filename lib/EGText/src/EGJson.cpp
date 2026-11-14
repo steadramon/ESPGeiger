@@ -37,7 +37,7 @@ void EGJson::flush() {
   _buf[0] = '\0';
 }
 
-// out with the whole fields, the one being written moves to the front
+// Sends the whole fields, the one being written moves to the front
 void EGJson::spill() {
   if (!_sink || !_mark) return;
   _sink(_arg, _buf, _mark);
@@ -108,6 +108,11 @@ void EGJson::str_end() {
 }
 
 void EGJson::open(const char* key, char c) {
+  if (_depth == UINT8_MAX) overflow = true;   // one byte per closer
+  if (overflow) {
+    if (_lost < UINT8_MAX) _lost++;
+    return;
+  }
   _mark = _pos;
   name(key);
   _depth++;

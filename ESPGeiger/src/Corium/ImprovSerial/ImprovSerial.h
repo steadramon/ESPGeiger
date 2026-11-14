@@ -33,7 +33,7 @@ public:
   // setup and the portal wait only, else it races the console on Serial.read()
   void poll();
   // a WIFI_SETTINGS test ended: its answer; each console pass
-  void watch() { if (_joining) finish(); }
+  void watch();
   bool isProvisioning() const { return _state == improv::STATE_PROVISIONING; }
 
 private:

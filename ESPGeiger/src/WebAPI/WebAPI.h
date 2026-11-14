@@ -86,6 +86,7 @@ class WebAPI : public corium::Sender {
     void onPost(int code, const uint8_t* r, size_t n);
     void onForget(int code, const uint8_t* r, size_t n);
     void doHandshake();
+    bool offStep();
     void pingIfDue(unsigned long now);
     unsigned long wakeTarget();
     void postMeasurement(bool census = false);
