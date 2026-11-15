@@ -29,3 +29,4 @@ const char W_FMT_U[]       PROGMEM = "%u";
 
 const char W_CHECKED[]     PROGMEM = " checked";
 const char W_DETAILS_END[] PROGMEM = "</details>";
+const char W_CONNECTED[]   PROGMEM = "<p class=muted>Connected to <b>%s";

@@ -90,8 +90,10 @@ bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
   p = skip_ws(p + 1);
   if (!cp_tag(p, 'M') || !scan_int(p + 4, &cpm)) return false;
   if (!count_ok(cpm)) return false;
-  // bound cps too, it goes in the counter
-  if (out_cps && count_ok(cps)) *out_cps = (int)cps;
+  // bound cps too, it goes in the counter; its minute holds the second
+  bool cps_ok = count_ok(cps);
+  if (cps_ok && cps > cpm) return false;
+  if (out_cps && cps_ok) *out_cps = (int)cps;
   *out_cpm = (int)cpm;
   return true;
 }

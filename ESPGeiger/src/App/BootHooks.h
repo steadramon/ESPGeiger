@@ -20,6 +20,7 @@
 #define BOOT_HOOKS_H
 
 #include <Arduino.h>
+#include "Corium/Logger/Logger.h"
 #include "Corium/System/BootButton.h"
 #include "Corium/System/FastMillis.h"
 #include "App/LedPatterns.h"
@@ -123,7 +124,7 @@ namespace BootHooks {
     ButtonHold hold = corium::BootButton::check([] { return pushbutton.isPressed(); },
                                         safe ? +[] {} : &displayWifiDisabled, displayWipe);
     if (safe && hold == ButtonHold::OFFLINE) {
-      Serial.println(F("BOOT: safe mode - offline ignored"));
+      corium::Log::console(PSTR("BOOT: safe mode - offline ignored"));
       hold = ButtonHold::NONE;
     }
     if (hold != ButtonHold::NONE) displayDisableTimeout();

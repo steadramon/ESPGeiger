@@ -33,5 +33,6 @@ extern const char W_FMT_U[] PROGMEM;
 
 extern const char W_CHECKED[] PROGMEM;
 extern const char W_DETAILS_END[] PROGMEM;
+extern const char W_CONNECTED[] PROGMEM;
 
 #endif

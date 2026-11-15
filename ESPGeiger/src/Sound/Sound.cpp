@@ -45,6 +45,7 @@ enum : uint8_t { P_LOW = 1, P_MID, P_URGENT };
 CORIUM_PSTR(K_VOLUME,    "volume");
 CORIUM_PSTR(K_CLICKS,    "clicks");
 CORIUM_PSTR(K_CHIMES,    "chimes");
+CORIUM_PSTR(K_ALARM,     "alarm");
 CORIUM_PSTR(K_REPEAT,    "repeat");
 CORIUM_PSTR(K_STARTUP,   "startup");
 CORIUM_PSTR(K_SETUP,     "setup");
@@ -95,6 +96,8 @@ CORIUM_PSTR(H_VOLUME, "Tones only. Alarms and HV faults always play full, 0 = on
 CORIUM_PSTR(L_CLICKS, "Click per count");
 CORIUM_PSTR(L_CHIMES, "Chimes");
 CORIUM_PSTR(H_CHIMES, "Startup, WiFi and button sounds");
+CORIUM_PSTR(L_ALARM,  "Alarm sound");
+CORIUM_PSTR(H_ALARM,  "Off, the LED, pages and MQTT still alert");
 CORIUM_PSTR(L_REPEAT, "Alert repeat (s)");
 CORIUM_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
 
@@ -106,6 +109,7 @@ static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
   {K_VOLUME, L_VOLUME, H_VOLUME, "100", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
   {K_CLICKS, L_CLICKS, nullptr,  "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
   {K_CHIMES, L_CHIMES, H_CHIMES, "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
+  {K_ALARM,  L_ALARM,  H_ALARM,  "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
   {K_REPEAT, L_REPEAT, H_REPEAT, "60", nullptr, 0, 3600, 0, corium::P_UINT, 0},
   SOUND_ROW(K_STARTUP),
   SOUND_ROW(K_SETUP),
@@ -165,6 +169,8 @@ void Sound::load() {
   _repeat_ms = corium::Prefs::getUInt("sound", K_REPEAT) * 1000UL;
   _vol = corium::Prefs::getUInt("sound", K_VOLUME);
   _chimes = corium::Prefs::getBool("sound", K_CHIMES);
+  _alarm = corium::Prefs::getBool("sound", K_ALARM);
+  if (!_alarm) _alert = false;   // no repeat
   _bad = 0;
   for (uint8_t i = 0; i < COUNT; i++) {
     const char* v = corium::Prefs::getString("sound", DEFS[i].key);
@@ -312,7 +318,7 @@ void Sound::events(uint16_t ev, unsigned long now) {
 
 // rising: alert, again every repeat. falling: the all clear. a snooze: quiet, no all clear
 void Sound::alarm(unsigned long now) {
-  bool a = gcounter.is_alert();
+  bool a = _alarm && gcounter.is_alert();
   if (a && gcounter.is_snoozed()) {
     if (_alert) TunePlayer::stop();
     _alert = false;

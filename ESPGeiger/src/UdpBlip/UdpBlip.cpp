@@ -48,7 +48,8 @@ CORIUM_PSTR(K_GROUP, "group");
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 static constexpr uint16_t LOOP_MS = 1000;
 #else
-static constexpr uint16_t LOOP_MS = UDPBLIP_CLICK_MIN_INTERVAL_MS;
+// 0 = no click cap, the bind retry keeps a pace
+static constexpr uint16_t LOOP_MS = UDPBLIP_CLICK_MIN_INTERVAL_MS ? UDPBLIP_CLICK_MIN_INTERVAL_MS : 50;
 #endif
 static constexpr uint8_t DRAIN_MAX = 8;   // a stats pass, the 8266 keeps ~5
 
@@ -150,13 +151,13 @@ void UdpBlipModule::announce_mdns() {
   // after ArduinoOTA starts mDNS
   if (corium::Uptime::seconds() < 8) return;
   bool move = _mdns_port && _mdns_port != _port;
-  bool ok = move ? CORIUM_MDNS_MOVE("osc", "udp", _port) : MDNS.addService("osc", "udp", _port);
+  bool ok = move ? CORIUM_MDNS_MOVE("osc", "udp", _port) : corium::Mdns::add("osc", "udp", _port);
   if (ok) _mdns_port = _port;
   else if (move) return;   // the 8266 holds the old one in its probe, again next pass
   const char* fname = corium::DeviceInfo::friendlyName();
-  if (fname && fname[0]) MDNS.addServiceTxt("osc", "udp", "fname", fname);
-  MDNS.addServiceTxt("osc", "udp", "id", corium::DeviceInfo::chipId());
-  MDNS.addServiceTxt("osc", "udp", "group", corium::Prefs::getString("udpblip", K_GROUP));  // no _P api
+  if (fname && fname[0]) corium::Mdns::txt("osc", "udp", "fname", fname);
+  corium::Mdns::txt("osc", "udp", "id", corium::DeviceInfo::chipId());
+  corium::Mdns::txt("osc", "udp", "group", corium::Prefs::getString("udpblip", K_GROUP));  // no _P api
   _mdns_done = true;
 }
 
@@ -169,14 +170,17 @@ void UdpBlipModule::onPrefsSaved() {
   if (!changed) return;
   teardown();
   _fail_count = 0;
+  _stats_at = 0;   // time off isn't skipped
   // no burst of stale clicks
   _last_clicks = (uint32_t)gcounter.total_clicks;
   corium::Log::console(PSTR("UdpBlip: Prefs saved, mode=%u port=%u"), _mode, _port);
 }
 
 void UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
-  if (!_udp) return;
-  if (!corium::Wifi::connected) return;
+  if (!_udp || !corium::Wifi::connected) {
+    _skipped++;
+    return;
+  }
   bool ok = corium::IgmpRefresh::beginPacket(*_udp, _group, _port);
   if (ok) {
     _udp->write(buf, len);
@@ -186,6 +190,7 @@ void UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
     _fail_count = 0;
     return;
   }
+  _skipped++;
   // the last one starts the cooldown
   if (++_fail_count != UDPBLIP_FAIL_BACKOFF) return;
   _backoff.set(corium::fastMillis() + UDPBLIP_FAIL_COOLDOWN_MS);
@@ -319,6 +324,8 @@ void UdpBlipModule::stats(uint32_t now) {
 void UdpBlipModule::bind(uint32_t now) {
   if (!_udp) {
     if (!ensureUdp()) return;
+    // whole cycles missed while not looping: wifi down, a cooldown
+    if (_stats_at && corium::reached(now, _stats_at)) _skipped += (now - _stats_at) / UDPBLIP_STATS_INTERVAL_MS;
     _stats_at = now + UDPBLIP_STATS_INTERVAL_MS - 1000 - _jitter_ms;   // bind second counts
     _emit_phase = 0;
     _sys_phase = false;
@@ -363,7 +370,7 @@ size_t UdpBlipModule::statusJson(char* buf, size_t cap) {
   n = egesc_json(buf + pos, cap - pos, corium::Prefs::getString("udpblip", K_GROUP));
   need += n;
   advancePos(pos, n, cap);
-  need += snprintf_P(buf + pos, cap - pos, PSTR("\",\"port\":%u,\"fails\":%u}"),
-                     _port, _fail_count);
+  need += snprintf_P(buf + pos, cap - pos, PSTR("\",\"port\":%u,\"fails\":%u,\"skipped\":%lu}"),
+                     _port, _fail_count, (unsigned long)_skipped);
   return need;
 }

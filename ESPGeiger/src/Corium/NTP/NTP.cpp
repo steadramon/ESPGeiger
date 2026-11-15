@@ -27,8 +27,27 @@
 
 corium::NTP_Client ntpclient = corium::NTP_Client();
 CORIUM_REGISTER_MODULE(ntpclient)
-#ifdef ESP32
+#if defined(DISABLE_NTP)
+// no sntp
+#elif defined(ESP32)
 #include "sntp.h"
+#include <esp_netif.h>
+#include <lwip/tcpip.h>
+
+// configTime() without a lock (no core locking in this sdk): on lwIP's thread, s_server outlives it
+static void sntp_start(void* server) {
+  if (sntp_enabled()) sntp_stop();
+  sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  sntp_setservername(0, (char*)server);
+  sntp_init();
+}
+
+static void start_sntp(const char* server) {
+  esp_netif_init();   // lwIP's thread up, as configTime; once
+  tcpip_callback(sntp_start, (void*)server);
+}
+#elif !defined(ESP8266)
+static void start_sntp(const char*) {}   // host, no lwIP thread
 #endif
 
 #ifndef DISABLE_NTP
@@ -127,7 +146,7 @@ void corium::NTP_Client::setup()
     s_synced = true;
     corium::Registry::post(&ntpclient);
   });
-  configTime(0, 0, server); // TZ set below
+  start_sntp(server);
   set_tz(posix);
 #endif
 #endif

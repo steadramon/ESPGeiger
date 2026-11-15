@@ -296,7 +296,7 @@ CORIUM_TICK_COLD void Counter::hour_rollover(time_t t) {
 
 // time(), the hour and the first sync stamps, on read ticks
 CORIUM_TICK_COLD uint32_t Counter::clock_read() {
-  time_t t = time(nullptr);
+  time_t t = corium::Clock::now();
   uint32_t now = (uint32_t)t;
   if (!s_next_boundary || corium::reached(now, s_next_boundary)) hour_rollover(t);
   // none yet, or ntp says it's ahead of now; a browser or rtc never moves one
@@ -426,7 +426,7 @@ void Counter::clock_stepped(int32_t delta_s) {
     _pending_work |= PENDING_SAVE;
   }
   // same hour, no early bar
-  if (s_next_boundary != next_boundary(time(nullptr), _boundary_s)) s_next_boundary = 0;
+  if (s_next_boundary != next_boundary(corium::Clock::now(), _boundary_s)) s_next_boundary = 0;
   s_clock.read_next();
 }
 
@@ -457,7 +457,7 @@ float Counter::get_cps() {
         prune_ring();
         return _cached_cps;
       }
-      float live = get_cps_live();
+      float live = get_cps_live(FAST_N);   // a few close pulses overshoot, the bucket till then
       if (live <= 0.0f) return _cached_cps;
       if (up <  w)      return apply_dead_time(live);
       float adj = apply_dead_time(live);
@@ -540,9 +540,9 @@ bool Counter::get_saturated() {
   return saturated_at(cps);
 }
 
-float Counter::get_cps_live() {
+float Counter::get_cps_live(uint16_t min_n) {
   RingSnapshot s;
-  if (!snapshot_ring(s)) return 0.0f;
+  if (!snapshot_ring(s) || s.count < min_n) return 0.0f;
   uint32_t span_us = s.now_us - s.oldest_us;   // to now, falls once they stop
   if (span_us == 0) return 0.0f;
   return (float)(s.count - 1) * 1.0e6f / (float)span_us;

@@ -28,7 +28,7 @@
 namespace SerialFormat {
 
 // Over this the line is dropped, not clamped: no reading beats a garbled one
-static const int SERIAL_MAX_COUNT = 1000000;
+static const int SERIAL_MAX_COUNT = 10000 * 60;   // cpm, a GM tube tops out near 10k cps
 
 // Printable plus CR/LF, before any parser
 bool common_validate(const char* in, size_t len);

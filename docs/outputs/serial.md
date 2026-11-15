@@ -20,15 +20,15 @@ Note that Serial commands are __disabled__ on ESPGeiger-Log and ESPGeiger Lite b
 
 | Command | Description | Example |
 |---|---|---|
-| `reboot` | Reboot ESPGeiger | `reboot` |
-| `safe` | Reboot into [safe mode](/configuration/safemode) | `safe` |
+| `reboot` | Restart ESPGeiger | `reboot` |
+| `safe` | Restart into [safe mode](/configuration/safemode) | `safe` |
 | `ver` | Print the name, version and build | `ver` |
-| `resetwifi` | Erase WiFi credentials and drop into setup mode | `resetwifi` |
-| `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
+| `resetwifi` | Erase WiFi credentials and restart into the setup portal | `resetwifi` |
+| `resetnet` | Clear net.* settings (static IP/gw/sn/dns) and restart to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
 | `offline` | Start this boot without WiFi, as holding the button at power-up does. Only while it boots: in the setup portal or while it joins the saved network. The next boot is normal. | `offline` |
 | `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
-| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. `net.*` (static IP) needs a `reboot` too; the old network settings are kept first, so a static IP that can't reach the gateway goes back at boot, as the web WiFi page does. | `set counter.ratio 151.0` |
-| `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never reboots or wipes anything else. | `reset counter.ratio` |
+| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, restart-required prefs need a `reboot`. `net.*` (static IP) needs a `reboot` too; the old network settings are kept first, so a static IP that can't reach the gateway goes back at boot, as the web WiFi page does. | `set counter.ratio 151.0` |
+| `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never restarts or wipes anything else. | `reset counter.ratio` |
 | `pause [s]` | Stop posts to external services for s seconds, `pause 0` resumes, `pause` alone prints what's left. See [Pause](/output/pause) | `pause 600` |
 | `cpm` | Return current CPM value | |
 | `usv` | Return current µSv/h value | |
@@ -47,7 +47,7 @@ The console also answers while the setup portal is up and while it joins WiFi at
 
 ### No WiFi at all
 
-`set wifi.mode 1` starts every boot without WiFi: no network, no setup portal, everything else runs (counter, display, HV, SD card rows in `undated.csv` until the time is known). It is not on the web Config page, because the page goes with it. To turn WiFi back on, `set wifi.mode 0` over USB and reboot, or factory reset (hold the button 5 s at power-up).
+`set wifi.mode 1` starts every boot without WiFi: no network, no setup portal, everything else runs (counter, display, HV, SD card rows in `undated.csv` until the time is known). It is not on the web Config page, because the page goes with it. To turn WiFi back on, `set wifi.mode 0` over USB and restart, or factory reset (hold the button 5 s at power-up).
 
 ### Its own hotspot
 
@@ -55,9 +55,9 @@ The console also answers while the setup portal is up and while it joins WiFi at
 
 * With a web password of 8 characters or more, the hotspot uses it as its Wi-Fi password. A shorter web password, or none, leaves the hotspot open, but the pages still ask for the web password if one is set.
 * `set wifi.ap_hide 1` hides the hotspot's name; you then join it by typing the name.
-* The first page you open sends your browser's time to the device, so SD card rows are dated from then on.
+* Until the time is set, the **Network Config** page shows *Clock not set* with a **Set from this browser** button. Press it and SD card rows are dated from then on.
 
-To join a network again, save one on the **Network Config** page: that also turns the hotspot off. Or `set wifi.mode 0` (over USB, or in the console box on the Status page) and reboot.
+To join a network again, save one on the **Network Config** page: that also turns the hotspot off. Or `set wifi.mode 0` (over USB, or in the console box on the Status page) and restart.
 
 ### Setting prefs
 
@@ -117,7 +117,7 @@ Turn it all off with `show 0` - periodic output stops and the regular log verbos
 
 The default output uses ESPGeiger's own labelled style, but the firmware can also emit lines in any of the protocols it supports on the input side. This is useful for piping data into existing tools that expect a particular counter's wire format, or for chaining ESPGeiger to a parent device that thinks it is talking to a real GC10 / MightyOhm.
 
-Set the format with the `sout.format` pref. These IDs are separate from the input-side Serial Type IDs.
+Set the format with the `sout.format` pref. These IDs are separate from the input-side Serial type IDs.
 
 | `set sout.format N` | Wire format | Default baud |
 |---|---|---|
@@ -232,7 +232,7 @@ If you leave off the trailing newline the firmware adds one for you. Multi-line 
 
 ## Baud rate
 
-Set `sout.baud` to override the serial baud rate at runtime. The change applies immediately on ESP8266 and classic ESP32 builds, which have a real UART. On ESP32-S3 and ESP32-C3 builds the console is native USB and the baud setting does nothing.
+Set `sout.baud` to override the serial baud rate while lines stream. The change applies immediately on ESP8266 and classic ESP32 builds, which have a real UART. With streaming off (`show 0`) the console stays at 115200, so the recovery commands always work there; the log says `Serial: N baud` just before each switch. On ESP32-S3 and ESP32-C3 builds the console is native USB and the baud setting does nothing.
 
 | `set sout.baud N` | Effect |
 |---|---|

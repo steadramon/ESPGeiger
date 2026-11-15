@@ -61,7 +61,9 @@ uint32_t corium::DeviceInfo::freeHeap() {
 
 static uint32_t s_lfb_cur = 0;
 static uint32_t s_lfb_low = 0;  // 0 = unset
+#ifdef CORIUM_LFB_TAKE
 static uint32_t s_lfb_win = 0;  // since the last take
+#endif
 static const uint32_t FRAG_MS = 60000;   // 8266 getHeapStats masks ints ~260 us
 
 uint8_t corium::DeviceInfo::heapFrag() {
@@ -90,7 +92,9 @@ uint8_t corium::DeviceInfo::heapFrag() {
 #endif
     s_last_ms = now;
     if (s_lfb_low == 0 || s_lfb_cur < s_lfb_low) s_lfb_low = s_lfb_cur;
+#ifdef CORIUM_LFB_TAKE
     if (s_lfb_win == 0 || s_lfb_cur < s_lfb_win) s_lfb_win = s_lfb_cur;
+#endif
   }
   return s_frag;
 }
@@ -105,12 +109,14 @@ uint32_t corium::DeviceInfo::largestFreeBlockLow() {
   return s_lfb_low;
 }
 
+#ifdef CORIUM_LFB_TAKE
 uint32_t corium::DeviceInfo::largestFreeBlockLowTake() {
   heapFrag();
   uint32_t low = s_lfb_win;
   s_lfb_win = s_lfb_cur;
   return low;
 }
+#endif
 
 void corium::DeviceInfo::safeRestart(uint32_t delay_ms) {
   corium::Lifecycle::send(corium::Lifecycle::SHUTDOWN);
@@ -278,6 +284,6 @@ unsigned long corium::DeviceInfo::uptime() { return corium::Uptime::seconds(); }
 char* corium::DeviceInfo::uptimeString() {
   static char s_buf[20];
   corium::Uptime::Split u = corium::Uptime::split((uint32_t)corium::Uptime::seconds());
-  snprintf_P(s_buf, sizeof(s_buf), PSTR("%uT%02u:%02u:%02u"), u.d, u.h, u.m, u.s);
+  snprintf_P(s_buf, sizeof(s_buf), PSTR("%ud %02u:%02u:%02u"), u.d, u.h, u.m, u.s);
   return s_buf;
 }

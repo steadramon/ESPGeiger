@@ -38,6 +38,7 @@ public:
   enum LoggingLevels {LOG_LEVEL_CONSOLE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
   // fmt in flash or SRAM
   static void console(const char* fmt, ...);
+  static void vconsole(const char* fmt, va_list ap) { vlog(LOG_LEVEL_CONSOLE, true, fmt, ap); }   // a lib's hook
   static void error(const char* fmt, ...);
 #if LOG_LEVEL >= 2
   static void info(const char* fmt, ...);
@@ -56,6 +57,10 @@ public:
   static size_t copySince(uint32_t* idx, uint8_t end, char* out, size_t cap);
   static char getLogIdx();   // idx the next line gets, 1..255
   static void setSerialOn(bool on);
+  // 8266 tick, SYS context: lines go to the ring only, serial owes them; off with some owed runs wake
+  static void hold(bool on);
+  static void flush();   // owed lines out on serial, in order; the console's loop
+  static void (*wake)();   // the console's, a post to its loop
   static bool serialOn() { return _serial; }
 
 private:

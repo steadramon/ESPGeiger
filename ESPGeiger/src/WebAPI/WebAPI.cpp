@@ -18,10 +18,6 @@
 */
 #ifdef WEBAPIOUT
 
-#ifndef WEBAPI_URL
-#define WEBAPI_URL "http://api.espgeiger.com"
-#endif
-
 // test input never registers
 #ifdef WEBAPI_TESTMODE_POST
 #define WEBAPI_SENDS true
@@ -31,6 +27,7 @@
 
 #include <EGHttpServer.h>
 #include "WebAPI.h"
+#include "WebAPIKey.h"
 #include "Features.h"
 #include <EGBase64.h>   // no heap
 #include "Corium/Logger/Logger.h"
@@ -47,9 +44,7 @@
 #include "Corium/System/CrashDump.h"
 #include "Corium/Util/Bytes.h"
 #include "Corium/Util/StringUtil.h"
-#include "Corium/Util/Words.h"
 #include "Corium/Platform/Chip.h"
-#include "Corium/WebPortal/WebPortal.h"
 #include "MsgPack.h"
 #include "Corium/System/Fs.h"
 #include "Corium/System/KeyStore.h"
@@ -61,7 +56,6 @@
 #include "Counter/Counter.h"
 #include "App/ExternalPause.h"
 #ifdef ESPGEIGER_ATTEST
-#include "Corium/Console/Console.h"
 #include "Corium/System/HwKey.h"
 #define WEBAPI_REPLY_MAX 112   // + the attest nonce, hex
 #else
@@ -122,8 +116,6 @@ static void __attribute__((noinline)) hash_body(const uint8_t* p, size_t n, uint
   sha.write(p, n);
   memcpy(out, sha.result(), HASH_LENGTH);
 }
-
-#define WEBAPI_SIG_B64 (EGB64_LEN(WEBAPI_SIG_LEN) + 1)
 
 // X-Auth: secp192r1 over the body's sha256, base64 into out; false = sign failed
 static bool sign(const uint8_t* priv, const uint8_t* body, size_t len, char* out) {
@@ -357,7 +349,7 @@ static void write_handshake(MsgPack::Writer& mp, const char* pub64, uint8_t mode
   bool coords = (lat != 0.0f || lon != 0.0f);
 
   mp.map_begin();
-  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
+  mp.kv_u64(PSTR("n"), (uint64_t)corium::Clock::now());
   mp.kv(PSTR("pk"), pub64);
   mp.kv(PSTR("ci"), corium::DeviceInfo::chipId());
   mp.kv(PSTR("v"),  ver);
@@ -488,7 +480,7 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
       notePublish(true);
       return;
     }
-  } else if (hsError(code, r, n)) {
+  } else if (replyError(code, r, n, true)) {
     notePublish(false);
     return;
   }
@@ -498,34 +490,34 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
   notePublish(false);
 }
 
-// true = no backoff: gone, or a 429 waits for its slot
-bool WebAPI::hsError(int code, const uint8_t* r, size_t n) {
-  corium::Log::console(PSTR("WebAPI: Handshake error %d - %s"), code, (PGM_P)EGHttpClient::reason(code));
-  if (code == 404 || code == 410) {
-    gone(code);
+// a handshake's or a post's; true = no backoff: gone, or a 429 waits for its slot
+bool WebAPI::replyError(int code, const uint8_t* r, size_t n, bool hs) {
+  corium::HttpDriver::logError(PSTR("WebAPI"), code);
+  if (code == 410 || (hs && code == 404)) {   // a post's 404 isn't gone
+    _gone = true;
+    corium::Log::console(PSTR("WebAPI: Off till a save or restart"));
     return true;
   }
-  if (code == 403) denied(r, n);
-  return code == 429;
+  if (code == 429) {
+    if (!hs) _hold = WEBAPI_429_HOLD;
+    return true;
+  }
+  if (code == 403) {
+    denied(r, n);
+    if (!hs) {   // the station goes, a new handshake
+      _station = 0;
+      _hs_at = 0;
+      corium::Registry::dueIn(this, REPLAN_MS);
+    }
+  } else if (code == 409) {
+    corium::Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
+  }
+  return false;
 }
 
 #ifdef ESPGEIGER_ATTEST
 // official hardware, once a boot: challenge, then the chip signs it with the station key
 static const char ATTEST_TAG[] PROGMEM = "espgeiger-attest-v1";
-static constexpr size_t ATT_MAC = 6;
-
-// a challenge is answered this pass or never, a stale nonce only fails
-bool WebAPI::takeSign() {
-  if (_att != ATT_SIGN) return false;
-  _att = ATT_WAIT;
-  return true;
-}
-
-// after the off / forget checks, before a post takes the request
-void WebAPI::attestIfDue(bool sign) {
-  if ((sign || _att == ATT_DUE || _att == ATT_FETCH) && _station != 0 && !request.busy())
-    sendAttest(sign ? _nonce : nullptr);
-}
 
 // nonce nullptr = ask for one, or for the blob; a lost reply asks again after the next handshake
 void WebAPI::sendAttest(const uint8_t* nonce) {
@@ -535,7 +527,7 @@ void WebAPI::sendAttest(const uint8_t* nonce) {
   if (!corium::DeviceInfo::efuseMac(mac)) return;
   MsgPack::Writer mp(buf, sizeof(buf));
   mp.map_begin();
-  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
+  mp.kv_u64(PSTR("n"), (uint64_t)corium::Clock::now());
   mp.kv(PSTR("pk"), _pub64);
   mp.kv(PSTR("hw"), mac, ATT_MAC);
   if (nonce) {
@@ -567,91 +559,6 @@ void WebAPI::sendAttest(const uint8_t* nonce) {
   }
   send_signed(kind, url, buf, mp.length(), sig);
 }
-
-static_assert(EGHttpClient::BODY_CAP > corium::HwKey::BLOB, "blob reply needs EGHTTP_BODY_CAP");
-
-// +1 sees a longer reply
-void __attribute__((noinline)) WebAPI::takeBlob() {
-  uint8_t r[corium::HwKey::BLOB + 1];
-  int code;
-  size_t n;
-  if (!request.take(&code, r, sizeof(r), &n)) return;
-  _sent = SENT_NONE;
-  onBlob(code, r, n);
-}
-
-// raw blob; 403 / 404 = not for this boot
-void WebAPI::onBlob(int code, const uint8_t* r, size_t n) {
-  if (code == 200 && n == corium::HwKey::BLOB && corium::HwKey::put(r)) {
-    corium::Log::debug(PSTR("WebAPI: Key restored"));
-    _att = ATT_DUE;
-  } else if (code == 200 || code == 403 || code == 404) {
-    corium::Log::debug(PSTR("WebAPI: Key not restored"));
-    _att = ATT_DONE;
-  }
-}
-
-// 404 = not official hardware, nothing more this boot
-void WebAPI::onChallenge(int code, const uint8_t* r, size_t n) {
-  MsgPack::Reader reader(r, n);
-  char hex[2 * ATT_NONCE + 1];
-  if (code == 200 && reader.find_key(PSTR("an")) && reader.read_str(hex, sizeof(hex)) &&
-      hexDecode(_nonce, hex, ATT_NONCE)) {
-    _att = ATT_SIGN;
-  } else if (code == 403 || code == 404) {
-    _att = ATT_DONE;
-  }
-}
-
-void WebAPI::onAttest(int code) {
-  if (code == 200) {
-    corium::Log::debug(PSTR("WebAPI: Official hardware verified"));
-    _att = ATT_DONE;
-  } else if (code == 403 || code == 404) {
-    corium::Log::debug(PSTR("WebAPI: Official hardware not verified"));
-    _att = ATT_DONE;
-  }
-}
-
-// genuine <64 hex>: setup.espgeiger.com's check over serial. Its own tag, never a station attest
-static const char CHECK_TAG[] PROGMEM = "espgeiger-check-v1";
-static constexpr size_t SIG_LINE = 32;
-
-static void genuine(const char* hex) {
-  uint8_t nonce[ATT_NONCE], mac[ATT_MAC], sig[corium::HwKey::SIG];
-  if (!hex || !hexDecode(nonce, hex, ATT_NONCE) || !corium::DeviceInfo::efuseMac(mac)) {
-    corium::Log::console(PSTR("genuine <64 hex>"));
-    return;
-  }
-  Sha256Class sha;
-  sha.init();
-  sha.write((const uint8_t*)CHECK_TAG, sizeof(CHECK_TAG) - 1);
-  sha.write(mac, ATT_MAC);
-  sha.write(nonce, ATT_NONCE);
-  if (!corium::HwKey::sign(sha.result(), sig)) {
-    corium::Log::console(PSTR("Genuine: no"));
-    return;
-  }
-  char out[2 * SIG_LINE + 1];
-  hexEncode(out, mac, ATT_MAC);
-  out[2 * ATT_MAC] = '\0';
-  corium::Log::console(PSTR("Genuine: mac %s"), out);
-  for (size_t i = 0; i < corium::HwKey::SIG / SIG_LINE; i++) {
-    hexEncode(out, sig + i * SIG_LINE, SIG_LINE);
-    out[2 * SIG_LINE] = '\0';
-    corium::Log::console(PSTR("Genuine: sig %u %s"), (unsigned)i, out);
-  }
-  corium::Log::console(PSTR("Genuine: end"));
-}
-
-// the reply reaches USB even while SerialOut streams
-static void cmd_genuine() {
-  const bool was = corium::Log::serialOn();
-  corium::Log::setSerialOn(true);
-  genuine(corium::Console::next());
-  corium::Log::setSerialOn(was);
-}
-CORIUM_REGISTER_CMD(genuine, cmd_genuine)
 #endif
 
 static void write_env(MsgPack::Writer& mp) {
@@ -693,7 +600,7 @@ static void write_post(MsgPack::Writer& mp, uint32_t id, bool census,
                        bool health) {
   mp.map_begin();
   mp.kv(PSTR("id"), id);
-  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
+  mp.kv_u64(PSTR("n"), (uint64_t)corium::Clock::now());
   if (!census) write_readings(mp);
   if (health)  write_health(mp);
   mp.map_end();
@@ -747,26 +654,9 @@ void WebAPI::onPost(int code, const uint8_t* r, size_t n) {
       corium::Log::debug(PSTR("WebAPI: Post response not ok"));
     }
   } else {
-    corium::Log::console(PSTR("WebAPI: Error %d - %s"), code, (PGM_P)EGHttpClient::reason(code));
-    if (code == 403) {
-      denied(r, n);
-      _station = 0;
-      _hs_at = 0;
-      corium::Registry::dueIn(this, REPLAN_MS);
-    } else if (code == 409) {
-      corium::Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
-    } else if (code == 410) {
-      gone(code);
-    } else if (code == 429) {
-      _hold = WEBAPI_429_HOLD;
-    }
+    (void)replyError(code, r, n, false);
   }
   notePublish(ok);
-}
-
-void WebAPI::gone(int code) {
-  _gone = true;
-  corium::Log::console(PSTR("WebAPI: Server says gone (%d), stopped till a save or restart"), code);
 }
 
 static const char API_FGT_P[] PROGMEM = "/api.fgt";   // a forget owed
@@ -792,7 +682,7 @@ void WebAPI::sendForget() {
   MsgPack::Writer mp(buf, sizeof(buf));
   mp.map(2);
   mp.kv(PSTR("id"), _station);
-  mp.kv_u64(PSTR("n"), (uint64_t)time(nullptr));
+  mp.kv_u64(PSTR("n"), (uint64_t)corium::Clock::now());
   if (mp.overflow) return;
   size_t len = mp.length();
 
@@ -855,7 +745,7 @@ static bool keep_key(const uint8_t* priv) {
 }
 
 // key reset; factory reset keeps the station. false = either left, the old key comes back
-static bool forget_key() {
+bool forget_key() {
   // copy first, else a cut brings it back
   bool ok = corium::KeyStore::clear();
   if (!ok) corium::Log::console(PSTR("WebAPI: Key backup not cleared"));
@@ -912,154 +802,5 @@ void WebAPI::loadConfig() {
 size_t WebAPI::statusJson(char* buf, size_t cap) {
   if (_mode == WA_OFF) return 0;
   return writeStatusJson(buf, cap, PSTR("webapi"), lastOk, lastAttempt);
-}
-
-// HTTP routes
-
-static const char FORGET_BODY[] PROGMEM =
-  "<p>A delete request goes to the server as soon as it can be reached. Sharing is now <b>Off</b>.</p>"
-  "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
-
-// false = a field refused, rest still saved; the pref rows are the rule
-static bool save_settings(EGHttpRequest& req, bool& wrote) {
-  bool ok = true;
-  // arg() reuses its buffer
-  const char* m = req.arg(F("m"));
-  if (m && !corium::Prefs::put("webapi", EG_K_MODE, m)) ok = false;
-  char lat[24] = {};
-  const char* a = req.arg(FPSTR(EG_K_LAT));
-  if (a) strlcpy(lat, a, sizeof(lat));
-  const char* lon = req.arg(FPSTR(EG_K_LON));
-  // both or neither, 0,0 = use IP
-  if (a && lon && !*lat != !*lon) {
-    ok = false;
-  } else {
-    if (a && !corium::Prefs::put("webapi", EG_K_LAT, *lat ? lat : "0")) ok = false;
-    if (lon && !corium::Prefs::put("webapi", EG_K_LON, *lon ? lon : "0")) ok = false;
-  }
-  wrote = corium::Prefs::commit();
-  return ok;
-}
-
-static void send_station(EGHttpResponse& res) {
-  if (webapi.getStationId() != 0) {
-    corium::WebPortal::sendf(res,
-      PSTR("<p>Station: <a href='" WEBAPI_STATION_URL "' target=_blank>#%u</a></p>"),
-      webapi.getStationId(), webapi.getStationId());
-  } else {
-    res.sendChunk(F(
-      "<p>Station: not yet registered (handshake pending) "
-      "<button type=button onclick='location.reload()'>Refresh</button></p>"));
-  }
-}
-
-static void send_sharing(EGHttpResponse& res, uint8_t mode) {
-  // 0,0 shows blank, the placeholder says why
-  bool ip = corium::Prefs::getFloat("webapi", EG_K_LAT) == 0.0f && corium::Prefs::getFloat("webapi", EG_K_LON) == 0.0f;
-  res.sendChunk(F(
-    "<form method=POST action=/webapi><fieldset><legend>Sharing</legend>"
-    "<label><input type=radio name=m value=0"));
-  if (mode == 0) res.sendChunk(FPSTR(W_CHECKED));
-  res.sendChunk(F("> Off</label>"
-    "<label><input type=radio name=m value=1"));
-  if (mode == 1) res.sendChunk(FPSTR(W_CHECKED));
-  res.sendChunk(F("> Heartbeat</label>"
-    "<label><input type=radio name=m value=2"));
-  if (mode == 2) res.sendChunk(FPSTR(W_CHECKED));
-  res.sendKV(F("> CPM readings</label></fieldset>"
-               "<label for=lat>Latitude</label>"
-               "<input id=lat name=lat type=number step=any min=-90 max=90 placeholder='approximate by IP if blank' value='"),
-             ip ? "" : corium::Prefs::getString("webapi", EG_K_LAT),
-             F("'><label for=lon>Longitude</label>"
-               "<input id=lon name=lon type=number step=any min=-180 max=180 placeholder='approximate by IP if blank' value='"));
-  res.sendKV(nullptr, ip ? "" : corium::Prefs::getString("webapi", EG_K_LON),
-             F("'><p style=margin-top:.5em>"));
-  res.sendChunk(F(
-    "<button type=button onclick=\"window.open('" APP_LOC_URL "/','" APP_LOC_WIN "')\">Find location</button></p>"
-    "<button type=submit>Save</button></form>"
-    "<script>window.addEventListener('message',function(e){if(e.origin!=='" APP_LOC_URL "')return;var d=e.data;if(!d||d.type!=='" APP_LOC_MSG "')return;var la=document.getElementById('lat');var lo=document.getElementById('lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
-}
-
-static void send_advanced(EGHttpResponse& res, uint8_t mode) {
-  res.sendChunk(F(
-    "<details style=margin-top:1em><summary>Advanced</summary>"
-    "<p class=muted>Reset the station key. The next handshake registers a new station: the existing one <b>cannot be retrieved</b>.</p>"
-    "<form method=POST action=/webapikeyreset onsubmit=\"return confirm('Reset the station key? This orphans the existing station.')\">"
-    "<button type=submit class=danger>Reset key</button></form>"));
-  if (mode > 0 && webapi.getStationId() != 0) {
-    res.sendChunk(F(
-      "<p class=muted style=margin-top:1em>Delete this station from the network. Removes all readings and history server-side and switches sharing to Off. <b>Cannot be undone.</b></p>"
-      "<form method=POST action=/webapiforget onsubmit=\"return confirm('Permanently delete this station from the network? This cannot be undone.')\">"
-      "<button type=submit class=danger>Forget station</button></form>"));
-  }
-  res.sendChunk(FPSTR(W_DETAILS_END));
-}
-
-// POST saves first, both show the page
-static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  const bool posted = req.method() == EGHttpRequest::POST;
-  bool wrote = true;
-  const bool saved = posted && save_settings(req, wrote);
-
-  corium::WebPortal::beginPage(res, F("ESPGeiger Stations"));
-  if (!wrote) corium::WebPortal::sendNotSaved(res);
-  else if (saved) res.sendChunk(F("<div class='a ak'>Saved.</div>"));
-  else if (posted) res.sendChunk(F("<div class='a ae'>A value was out of range and not saved.</div>"));
-  res.sendChunk(F(
-    "<p class=muted>ESPGeiger can share data with ESPGeiger Stations "
-    "so it appears on the global map. The device identity and "
-    "location are obscured before publication.</p>"));
-
-  uint8_t mode = (uint8_t)corium::Prefs::getUInt("webapi", EG_K_MODE);
-  if (mode > 0) send_station(res);
-
-  send_sharing(res, mode);
-  send_advanced(res, mode);
-
-  corium::WebPortal::endPage(res);
-}
-
-static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  corium::Log::console(PSTR("WebAPI: Resetting api.key"));
-  bool gone = forget_key();
-  corium::WebPortal::beginPage(res, F("Station key reset"));
-  if (!gone) {
-    corium::WebPortal::sendNotSaved(res);
-    corium::WebPortal::endPage(res);
-    return;
-  }
-  res.sendChunk(F("<p>Station key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
-  corium::WebPortal::endRestartPage(res);
-}
-
-static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  webapi.forget();
-  bool wrote = corium::Prefs::put("webapi", EG_K_MODE, "0") && corium::Prefs::commit();
-
-  corium::WebPortal::beginPage(res, F("Station forgotten"));
-  if (!wrote) corium::WebPortal::sendNotSaved(res);
-  res.sendChunk(FPSTR(FORGET_BODY));
-  corium::WebPortal::endPage(res);
-}
-
-static const corium::MenuEntry WEBAPI_MENU[] PROGMEM = {
-  {"/webapi", "ESPGeiger Stations"},
-  {"", ""}
-};
-const corium::MenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
-
-static const char R_WEBAPI[] PROGMEM = "/webapi";
-static const char R_KEYRESET[] PROGMEM = "/webapikeyreset";
-static const char R_FORGET[]   PROGMEM = "/webapiforget";
-
-static const corium::WebRoute ROUTES[] PROGMEM = {
-  {R_WEBAPI,   hWebAPI,   EGHttpRequest::GET},
-  {R_WEBAPI,   hWebAPI,   EGHttpRequest::POST},
-  {R_KEYRESET, hKeyReset, EGHttpRequest::POST},
-  {R_FORGET,   hForget,   EGHttpRequest::POST},
-};
-
-void WebAPI::registerRoutes(EGHttpServer& http) {
-  corium::WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
 }
 #endif

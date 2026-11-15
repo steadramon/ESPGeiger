@@ -34,6 +34,7 @@
 #include "Corium/NTP/NTP.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/BootGuard.h"
+#include "Corium/System/Clock.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/Fs.h"
 #include "Corium/System/Lifecycle.h"
@@ -702,6 +703,7 @@ static void run_portal(EGPortal* portal, bool have_creds) {
   while (!done.due(corium::fastMillis()) && !corium::Wifi::offlineForced) {
     portal->loop();
     console.pollBoot();
+    corium::Clock::stampNow();   // its restart keeps the time
     delay(portal->busy() ? 1 : 10);   // work waiting, back in 1 ms
     uint32_t now = corium::fastMillis();
     corium::Wifi::testStep(now);

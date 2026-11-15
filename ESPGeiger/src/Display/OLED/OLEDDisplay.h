@@ -25,7 +25,6 @@
 #include <Wire.h>
 #include <U8g2lib.h>
 #include "App/AppConfig.h"
-#include "Counter/Counter.h"
 #include "Corium/Module/Module.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Display/DisplayBackend.h"

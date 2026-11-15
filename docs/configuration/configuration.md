@@ -43,8 +43,11 @@ Some pins save with a warning shown after the save:
 | Friendly name | `sys.name` | String (32) | (empty) | Optional human label shown in the web UI title and `/about`. Blank falls back to the hostname (e.g. `ESPGeiger-a1b2c3`). |
 | Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. Restart to apply. |
 | Network upload | `sys.espota` | Boolean | `0` off | espota port for PlatformIO and the Arduino IDE. The Update page works either way. Restart to apply. |
+| Origin check | `sys.origin` | Boolean | `1` on | Refuse saves sent from other websites. |
 
 <!-- /gen -->
+
+**Origin check** refuses a save whose page came from another website, so a page you open elsewhere can't change the device through your browser. curl, Home Assistant and scripts send no origin and aren't affected, nor are the device's own pages. Behind a reverse proxy that changes the host name, saves come back 403 Forbidden: turn it off there.
 
 A new web password works for the web pages at once; [espota](/install/ota#via-espotapy-arduinoota) only reads it at boot, so it takes the new one after a restart. A new friendly name shows in the web UI at once and reaches mDNS (the `fname` record) after a restart.
 
@@ -323,11 +326,19 @@ If the saved network does not answer with any of `tx_power`, `country` or `phy_m
 
 ## CPU Frequency (ESP32 only)
 
-Hidden `sys.cpu_mhz` pref forces the CPU clock. `0` (default) leaves the board's default in place; `80`, `160` or `240` override (ESP32-C3 silicon caps at 160 MHz, so 240 is silently ignored there). Lowering the clock noticeably reduces power draw and die temperature on hot-running boards such as the ESP32-C3 Zero, at the cost of LPS headroom. The setting is per-device and is not included in config export blobs.
+Hidden `sys.cpu_mhz` pref forces the CPU clock. `0` (default) leaves the board's default in place; `80`, `160` or `240` override (ESP32-C3 silicon caps at 160 MHz). Any other value, or 240 on a C3, changes nothing and the console says `System: CPU 240 MHz not taken, 80/160/240`. Lowering the clock noticeably reduces power draw and die temperature on hot-running boards such as the ESP32-C3 Zero, at the cost of LPS headroom. The setting is per-device and is not included in config export blobs.
 
 Set via the Status-page command box or USB serial:
 
 ```
 set sys.cpu_mhz 80
 reboot
+```
+
+## Upload backoff
+
+Radmon, GMC, ThingSpeak and Webhook back off when a send fails: after two failures in a row the next interval is skipped, then three, doubling up to 5 minutes between tries. One good send goes back to every interval; saving that upload's settings (a fixed password, say) or a restart tries again at the next interval. Hidden `sys.backoff` sets the longest wait in seconds (default `300`, `0` = try every interval as before 0.14):
+
+```
+set sys.backoff 900
 ```

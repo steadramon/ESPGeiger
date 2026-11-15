@@ -19,6 +19,7 @@
 #ifdef GEIGER_NEOPIXEL
 
 #include "NeoPixel.h"
+#include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Measure/Measure.h"
 #include "Corium/Module/Registry.h"

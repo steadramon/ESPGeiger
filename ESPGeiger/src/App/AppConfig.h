@@ -118,6 +118,11 @@
 #define CORIUM_BOARD_NAME
 #endif
 
+// lowest free block per post, test posts only
+#ifdef WEBAPI_TESTMODE_POST
+#define CORIUM_LFB_TAKE
+#endif
+
 // :00 free for the SD CSV flush
 #ifdef GEIGER_SDCARD
 #define CORIUM_SENDSLOT_FIRST 1

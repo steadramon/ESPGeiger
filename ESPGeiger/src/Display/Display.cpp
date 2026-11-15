@@ -322,8 +322,8 @@ static void hScreenTap(EGHttpRequest&, EGHttpResponse& res, void*) {
 static const char SCREEN_PAGE_BODY[] PROGMEM = R"HTML(
 <style>
 .oledwrap{display:flex;flex-direction:column;align-items:center;gap:1em;margin:1em 0}
-.oledframe{padding:8px;background:#222;border-radius:8px;box-shadow:0 0 10px #0006}
-canvas{image-rendering:pixelated;display:block;background:#000;width:512px;height:256px}
+.oledframe{padding:8px;background:#222;border-radius:8px;box-shadow:0 0 10px #0006;max-width:100%}
+canvas{image-rendering:pixelated;display:block;background:#000;width:512px;max-width:100%;height:auto}
 .ctrls{display:flex;gap:.6em;align-items:center;flex-wrap:wrap;justify-content:center}
 button.tap{padding:.7em 1.5em;font-size:1em;cursor:pointer}
 .ms{display:flex;align-items:center;gap:.3em;font-size:.9em}
@@ -359,7 +359,7 @@ if(sv&&RE.test(sv)){M.value=sv;H.value=sv}
 const sT=()=>LS.setItem(TK,M.value);
 const S=[[0,0,1,0],[1,0,1,1],[1,1,1,2],[0,2,1,2],[0,1,0,2],[0,0,0,1],[0,1,1,1]],DK='#222';
 function rd(b){
-  C.width=C.height=240;C.style.width=C.style.height='240px';
+  C.width=C.height=240;C.style.width='240px';
   x.fillStyle='#000';x.fillRect(0,0,240,240);
   for(let i=0;i<24;i++){const a=(225-i*270/23)*Math.PI/180;
     x.fillStyle=i<b[8]?(i<6?'#0c0':i<15?'#f90':'#f00'):DK;
@@ -384,7 +384,7 @@ async function r(){
           if(nw!==w||nh!==h||I.width!==w*s){
             w=nw;h=nh;s=h==8?3:1;C.width=w*s;C.height=h*s;
             const z=Math.min(512/w,256/h)|0;
-            C.style.width=(w*z)+'px';C.style.height=(h*z)+'px';
+            C.style.width=(w*z)+'px';
             I=x.createImageData(w*s,h*s);P=new Uint32Array(I.data.buffer);
           }
           const v=M.value,

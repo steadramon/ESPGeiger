@@ -36,10 +36,32 @@ void corium::HttpPoster::onPrefsLoaded() {
   setEnabled(corium::Prefs::groupEnabled(prefsGroup()));
 }
 
-// a new url or key gets its own say
+// a new url or key gets its own say, and a try at the next slot
 void corium::HttpPoster::onPrefsSaved() {
   _told = false;
+  _fails = 0;
+  _skip = 0;
   onPrefsLoaded();
+}
+
+void corium::HttpPoster::result(bool ok) {
+  noteResult(ok);
+  backoff(ok);
+}
+
+// 1, 2, 4 ... slots between tries up to sys.backoff s, whole slots so the phase holds
+void corium::HttpPoster::backoff(bool ok) {
+  uint32_t max_s = ok ? 0 : corium::Prefs::getUInt("sys", corium::K_BACKOFF);
+  if (!max_s) {
+    _fails = 0;
+    _skip = 0;
+    return;
+  }
+  if (_fails < 15) _fails++;
+  uint32_t slots = 1UL << (_fails - 1);
+  uint32_t cap = _every_ms ? max_s * 1000UL / _every_ms : 1;
+  if (slots > cap) slots = cap;
+  _skip = slots > 1 ? (uint8_t)(slots - 1 > 255 ? 255 : slots - 1) : 0;
 }
 
 uint16_t corium::HttpPoster::setIntervalS(int s) {
@@ -59,7 +81,10 @@ void corium::HttpPoster::loop(unsigned long now)
     corium::Registry::dueAt(this, now + LOOP_MS);
     return;
   }
-  if (_send_enabled && slot_due(now)) post();
+  if (_send_enabled && slot_due(now)) {
+    if (_skip) _skip--;
+    else post();
+  }
   if (request.busy()) {
     corium::Registry::dueAt(this, request.due());   // the reply posts us sooner
   } else if (_send_enabled) {
@@ -92,9 +117,9 @@ void corium::HttpPoster::take_reply()
     r[got] = 0;
     ok = interpret(r);
   } else {
-    corium::Log::console(PSTR("%s: Error %d - %s"), logTag(), code, (PGM_P)EGHttpClient::reason(code));
+    corium::HttpDriver::logError(logTag(), code);
   }
-  noteResult(ok);
+  result(ok);
 }
 
 bool corium::HttpPoster::urlFits(int n, size_t cap) {
@@ -133,6 +158,7 @@ void corium::HttpPoster::send(const char* url, const char* body) {
   if (s == corium::HttpDriver::NO_MEMORY) {
     corium::Log::console(PSTR("%s: alloc failed"), logTag());
     notePublish(false);
+    backoff(false);   // memory won't be back by the next slot
     return;
   }
   noteAttempt();
@@ -141,12 +167,12 @@ void corium::HttpPoster::send(const char* url, const char* body) {
       corium::Log::console(PSTR("%s: URL not usable (%s)"), logTag(), (PGM_P)EGHttpClient::urlWhy(url));
       _told = true;
     }
-    noteResult(false);
+    result(false);
     return;
   }
   if (s == corium::HttpDriver::NOT_OPENED) {
     corium::Log::console(PSTR("%s: Can't send request"), logTag());
-    noteResult(false);
+    result(false);
     return;
   }
   corium::Registry::emit(TOPIC_SENT);

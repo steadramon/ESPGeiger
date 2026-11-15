@@ -36,11 +36,11 @@
 #ifndef WEBAPI_STATION_URL
 #define WEBAPI_STATION_URL "https://stations.espgeiger.com/station/%u"
 #endif
-// handshake hourly; a failed one backs off 30 s, doubling to 5 min
+// Handshake hourly. A failed one backs off 30 s, doubling up to 5 min
 #define WEBAPI_HANDSHAKE_MS  (1UL * 60UL * 60UL * 1000UL)
 #define WEBAPI_BACKOFF_MS    30000UL
 #define WEBAPI_BACKOFF_MAX   (5UL * 60UL * 1000UL)
-// health fields on one post in 15
+// Health fields go on one post in 15
 #define WEBAPI_HEALTH_EVERY  15
 // posts skipped after a 429
 #define WEBAPI_429_HOLD      5
@@ -74,22 +74,21 @@ class WebAPI : public corium::Sender {
     corium::HttpDriver request;
 
     uint32_t getStationId() const { return _station; }
-    void forget();   // sent when idle, even once off, kept over a restart
+    void forget();   // Sent when idle, even after it's turned off, and kept over a restart
 
   private:
     bool _forget = false;
     uint32_t _forget_at = 0;   // the next try
     void sendForget();
-    bool _gone = false;   // a 410, till a save or restart
+    bool _gone = false;   // got a 410, stays gone until a save or restart
     uint8_t _hold = 0;   // posts to skip
-    void gone(int code);
     enum Sent : uint8_t { SENT_NONE, SENT_HS, SENT_POST, SENT_FORGET, SENT_ATT_CH, SENT_ATT, SENT_ATT_BLOB };
     uint8_t _sent = SENT_NONE;   // what the reply is for
     corium::HttpDriver::Sent send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
                                    const char* sig);
     void take_reply();
     void onHandshake(int code, const uint8_t* r, size_t n);
-    bool hsError(int code, const uint8_t* r, size_t n);
+    bool replyError(int code, const uint8_t* r, size_t n, bool hs);
     void onPost(int code, const uint8_t* r, size_t n);
     void onForget(int code, const uint8_t* r, size_t n);
     void doHandshake();

@@ -365,21 +365,22 @@ s.connect(f);f.connect(g);g.connect(ac.destination);s.start(t);
 n=Math.max(20,-Math.log(1-Math.random())/cps*1000)}
 O(clk,n)})();
 if(window._seedHist&&window._seedHist.length){var N=window._seedHist.length,w=D.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new D(w-(N-1-i)*1e3).toLocaleTimeString()))}
-var I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
+var I=2e3,K='#0c9',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
 B.style.setProperty('--blip',K);
 setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
 var Q=function(){if(!window._csk){window._csk=1;csK(100)}};
-live("/json",1e3,function(s){Q();$('ow').style.display=s==null?'':'none';if(s==null){cps=0;I=Infinity}else{var o=JSON.parse(s),u=o.ut;
+live("/json",1e3,function(s){Q();var o=s==null?0:JSON.parse(s),k=o?o.alert?2:o.warn?1:0:3,L=$('al');
+if(L.k!=k){L.k=k;L.style.display=k?'':'none';L.className='a '+(k==2?'ae':'aw');L.innerHTML=k>2?'<b>&#9888; Not updating</b> - no reply from the device.':'&#9888; '+(k>1?'Alert':'Warning')+' level reached'}
+if(!o){cps=0;I=Infinity}else{var u=o.ut;
 U.textContent=(u/86400|0)+"d "+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 var dd=o.c-o.c5,dc=o.c<10&&o.c5<10&&dd*dd<9*o.c5?o.c5:o.c;C.textContent=dc.toFixed(2);T.textContent=o.tc;setUsv(V,dc/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
 var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v?v+' dBm ('+p+'%)':'-';
 if(W)W.style.display=(o.tc===0&&u>=Math.max(60,6e3/o.r))||o.tube===0?'':'none';
 if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
-var k=o.alert?2:o.warn?1:0,L=$('al');if(L.k!=k){L.k=k;L.style.display=k?'':'none';L.className='a '+(k>1?'ae':'aw');L.textContent=k>1?'\u26a0 Alert level reached':k?'\u26a0 Warning level reached':''}
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
 I=Math.max(334,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
-K=o.c<.01&&o.c5<.01?'#08f':z>3?'#f33':z>1.5?'#fa0':z<-1.5?'#c0f':'#0f0';
+K=o.c<.01&&o.c5<.01?'#5be':z>3?'#d50':z>1.5?'#e90':z<-1.5?'#c7a':'#0c9';
 B.style.setProperty('--blip',K)}},250)}();
 var DD=Date,lc=0,id=0,M=1e4,dl=200,dz=0,T1,ci=3e3;
 var csK=live(function(){if(lc&&DD.now()-lc>1.08e7)id=0;return"/cs?c1="+id},3e3,function(n){lc=DD.now();if(n==null)return;T1=T1||byID("t1");
@@ -399,7 +400,7 @@ window._boost=function(){ci=3e3;csK(200)};
 static const char STATUS_BODY[] PROGMEM = R"HTML(
 <style>
 #blip{display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--border);margin-right:.5em;vertical-align:middle;transition:background-color .08s ease-out,box-shadow .08s ease-out}
-#blip.f{background:var(--blip,#0f0);box-shadow:0 0 6px var(--blip,#0f0)}
+#blip.f{background:var(--blip,#0c9);box-shadow:0 0 6px var(--blip,#0c9)}
 #snd{display:none;width:auto;padding:.2em .8em;font-size:.85em;float:right;margin:0 0 .5em .5em}
 :root.crt #snd{display:inline-block}
 </style>
@@ -409,7 +410,6 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <p id=tw class="a aw" role=alert style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
 <p id=bw class="a aw" role=alert style=display:none><b>&#9888; Brownout reset detected</b> - check the power supply.</p>
 <p id=al class=a role=alert style=display:none></p>
-<p id=ow class="a aw" style=display:none><b>&#9888; Not updating</b> - no reply from the device.</p>
 <div class=stat>
 <div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
 <div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Clicks since boot</b><span id=tc>-</span></div>

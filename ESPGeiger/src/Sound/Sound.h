@@ -37,11 +37,11 @@ class Sound : public corium::Module {
     const corium::PrefGroup* prefsGroup() override;
     void onPrefsLoaded() override;
 
-    // per count, nothing while a tune plays
+    // Each count, nothing while a tune plays
     void click(uint32_t now_us);
-    // console: a sound's name or a tune
+    // From the console, a sound's name or a tune
     void test(const char* v);
-    // before begin, plays it through
+    // Can run before begin(), plays the tune through
     void setup_portal();
     void park();
 
@@ -66,6 +66,7 @@ class Sound : public corium::Module {
     volatile bool _reload = true;
     bool _click_on = false;
     bool _chimes = true;
+    bool _alarm = true;
     bool _started = false;
     bool _alert = false;
     bool _wifi = false;

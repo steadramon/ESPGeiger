@@ -50,6 +50,7 @@ namespace Boot {
     Serial.println();
     delay(100);
     improvSerial.begin();
+    EGHttpServer::setLog(Log::vconsole);
 
 #ifdef ESP8266
     // core default is 255

@@ -22,6 +22,7 @@
 #include "Uptime.h"
 #include "RtcMap.h"
 #include "Corium/Logger/Logger.h"
+#include "Corium/Util/StringUtil.h"
 
 namespace corium {
 namespace Clock {
@@ -62,7 +63,9 @@ bool onSync(Source s) {
     time_t delta = time(NULL) - (bootEpoch + (time_t)uptime);
     bootEpoch += delta;
     if (delta > STEP_S || delta < -STEP_S) {
-      Log::console(PSTR("Clock: Stepped %ld s"), (long)delta);
+      char s[24];
+      fmtU64(s, sizeof(s), delta < 0 ? 0 - (uint64_t)delta : (uint64_t)delta);
+      Log::console(PSTR("Clock: Stepped %s%s s"), delta < 0 ? "-" : "", s);
       if (s_on_step) s_on_step((int32_t)delta);   // the same mod 2^32, all its 32-bit stamps need
     }
   }
@@ -89,9 +92,14 @@ void stamp() {
   StampSlot::write(StampRtc{STAMP_MAGIC, (uint32_t)(bootEpoch + (time_t)Uptime::since(Uptime::start))});
 }
 
+// a wait before the Reactor, uptime stands still
+void stampNow() {
+  if (synced) StampSlot::write(StampRtc{STAMP_MAGIC, (uint32_t)time(NULL)});
+}
+
 // a power-on starts at 0
 void kept() {
-  if (synced || time(NULL) < MIN_EPOCH) return;
+  if (synced || time(NULL) < BUILT_EPOCH) return;
   StampRtc s;
   if (!StampSlot::read(s) || s.magic != STAMP_MAGIC) return;
   if ((uint32_t)time(NULL) - s.epoch > KEPT_GAP_S) return;   // before it too, mod 2^32

@@ -239,6 +239,7 @@ bool corium::Console::exec(corium::ConsoleLine& l) {
 
 void corium::Console::begin() {
   _up = true;
+  corium::Log::wake = [] { corium::Registry::post(&console); };
   if (_dropped) corium::Log::console(PSTR("Console: %u command(s) dropped (raise CORIUM_MAX_CMDS)"), _dropped);
 #ifndef DISABLE_SERIALRX
   corium::Registry::every(this, LOOP_MS);   // else nothing to read
@@ -246,6 +247,7 @@ void corium::Console::begin() {
 }
 
 void corium::Console::loop(unsigned long now) {
+  corium::Log::flush();   // the 8266 tick's lines, posted here
 #ifndef DISABLE_SERIALRX
   while (Serial.available() > 0) {
     char c = Serial.read();

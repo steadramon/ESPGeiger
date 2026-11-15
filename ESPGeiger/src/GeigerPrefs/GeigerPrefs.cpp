@@ -59,6 +59,9 @@ CORIUM_PSTR(K_PULSE_WIDTH_US, "pulse_width_us");
 CORIUM_PSTR(K_CPM_WINDOW,     "cpm_window");
 CORIUM_PSTR(K_CPM_MODE,       "cpm_mode");
 CORIUM_PSTR(K_TUBE_HDR,       "_tube_hdr");
+CORIUM_PSTR(K_DET_HDR,        "_det_hdr");
+CORIUM_PSTR(K_DOSE_HDR,       "_dose_hdr");
+CORIUM_PSTR(K_COUNT_HDR,      "_count_hdr");
 CORIUM_PSTR(K_DEAD_TIME_US,   "dead_time_us");
 CORIUM_PSTR(K_BLIP_LED,       "blip_led");
 CORIUM_PSTR(K_BLIP_BRIGHT,    "blip_bright");
@@ -67,6 +70,19 @@ CORIUM_PSTR(K_PWM_PIN,        "pwm_pin");
 // interrupt counting, debounce applies
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && (!defined(USE_PCNT) || defined(PCNT_SELECTABLE))
 #define PREF_DEBOUNCE
+#endif
+// rows this build has
+#ifndef RXPIN_BLOCKED
+#define PREF_RX_PIN
+#endif
+#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
+#define PREF_TX_PIN
+#endif
+#if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+#define PREF_PULSE_WIDTH
+#endif
+#if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#define PREF_MODEL
 #endif
 
 // Counter prefs, pin and serial type need a reboot
@@ -97,10 +113,10 @@ CORIUM_PSTR(IN_L_STY, "Serial type");
 CORIUM_PSTR(IN_L_CPW, "CPM window (CPM-only counters)");
 CORIUM_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth.");
 #endif
-#ifndef RXPIN_BLOCKED
+#ifdef PREF_RX_PIN
 CORIUM_PSTR(IN_L_RXP, "RX pin");
 #endif
-#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
+#ifdef PREF_TX_PIN
 CORIUM_PSTR(IN_L_TXP, "TX pin");
 #endif
 #ifdef USE_PCNT
@@ -123,7 +139,7 @@ CORIUM_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high C
 CORIUM_PSTR(IN_L_DBN, "Debounce");
 CORIUM_PSTR(IN_H_DBN, "Pulse debounce (us). Filters electrical noise. 100-300 typical.");
 #endif
-#if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+#ifdef PREF_PULSE_WIDTH
 CORIUM_PSTR(IN_L_PWU, "Pulse width");
 CORIUM_PSTR(IN_H_PWU, "Simulated pulse width (us)");
 #endif
@@ -133,7 +149,10 @@ CORIUM_PSTR(IN_H_DTU, "GM tube dead time (us), from the datasheet. 0 = off. SBM-
 #endif
 CORIUM_PSTR(IN_L_CMM, "CPM mode");
 CORIUM_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
-#if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
+CORIUM_PSTR(IN_L_DET, "Detector");
+CORIUM_PSTR(IN_L_DOSE, "Dose &amp; alarms");
+CORIUM_PSTR(IN_L_COUNT, "Counting");
+#ifdef PREF_MODEL
 CORIUM_PSTR(IN_L_GMD, "Tube model");
 CORIUM_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
 CORIUM_PSTR(IN_L_THD, "Tube detects");
@@ -180,6 +199,7 @@ CORIUM_PSTR(CT_H_LE,  "Keep lifetime clicks and dose across restarts.");
 #endif
 
 static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
+  {K_DET_HDR,         IN_L_DET, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, 0},
   // Source selector
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   {EG_K_SERIAL_TYPE,  IN_L_STY, nullptr, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
@@ -189,10 +209,10 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   {EG_K_UDPRX_MODE,   IN_L_URMD, IN_H_URMD, "0",                  IN_O_URMD,   0, 1,     0,  corium::P_ENUM,   0},
 #endif
   // Pins
-#ifndef RXPIN_BLOCKED
+#ifdef PREF_RX_PIN
   {K_RX_PIN,          IN_L_RXP, nullptr, STR(GEIGER_RXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN | corium::P_PIN_IRQ},
 #endif
-#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
+#ifdef PREF_TX_PIN
   {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
   // UDP source target
@@ -202,7 +222,22 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   {EG_K_UDPRX_PORT,   EG_L_PRT,  IN_H_URPT, STR(UDPRX_DEFAULT_PORT), nullptr,  1, 65535, 0,  corium::P_UINT,   corium::P_ADVANCED},
   {EG_K_UDPRX_RXMODE, IN_L_URRM, nullptr,   UDPRX_RXMODE_DEFAULT, IN_O_URRM,   0, 2,     0,  corium::P_ENUM,   corium::P_ADVANCED},
 #endif
-  // Signal conditioning
+  // Tube identity
+#ifdef PREF_MODEL
+  {EG_K_GEIGER_MODEL, IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, CORIUM_NAME_MAX, corium::P_STRING, 0},
+  {K_TUBE_HDR,        IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
+  {EG_K_TUBE_ALPHA,   IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+  {EG_K_TUBE_BETA,    IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+  {EG_K_TUBE_GAMMA,   IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+#endif
+  // Conversion and alarms
+  {K_DOSE_HDR,        IN_L_DOSE, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, 0},
+  {EG_K_RATIO,        CT_L_RAT, CT_H_RAT, STR(GEIGER_RATIO), nullptr, 1, 100000, 0, corium::P_FLOAT, 0},
+  {K_WARN,            CT_L_WRN, CT_H_WRN, STR(GEIGER_WARN_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {K_ALERT,           CT_L_ALR, CT_H_ALR, STR(GEIGER_ALERT_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {K_LIFE_EN,         CT_L_LE,  CT_H_LE,  "1",     nullptr, 0, 1,    0,  corium::P_BOOL,   corium::P_ADVANCED},
+  // Signal conditioning, all advanced
+  {K_COUNT_HDR,       IN_L_COUNT, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, corium::P_ADVANCED},
 #ifdef PCNT_SELECTABLE
   {K_COUNT_MODE,      IN_L_CNT, IN_H_CNT, COUNT_MODE_DEF, IN_O_CNT, 0, 1, 0, corium::P_ENUM, corium::P_ADVANCED | corium::P_REBOOT},
 #endif
@@ -216,7 +251,7 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #ifdef PREF_DEBOUNCE
   {K_DEBOUNCE,       IN_L_DBN, IN_H_DBN, STR(GEIGER_DEBOUNCE), nullptr, 0, 10000, 0, corium::P_UINT, corium::P_ADVANCED},
 #endif
-#if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+#ifdef PREF_PULSE_WIDTH
   {K_PULSE_WIDTH_US,  IN_L_PWU, IN_H_PWU, STR(GEIGER_PULSE_WIDTH), nullptr, 10, 2000, 0, corium::P_UINT, corium::P_ADVANCED},
 #endif
   // CPM calculation
@@ -224,22 +259,9 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   {K_CPM_WINDOW,      IN_L_CPW, IN_H_CPW, "30", nullptr, 1, 60, 0, corium::P_UINT, corium::P_SLIDER | corium::P_ADVANCED | corium::P_REBOOT},
 #endif
   {K_CPM_MODE,        IN_L_CMM, nullptr, "3", IN_O_CMM, 0, 4, 0, corium::P_ENUM, corium::P_ADVANCED},
-  // Tube identity
-#if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  {EG_K_GEIGER_MODEL, IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, CORIUM_NAME_MAX, corium::P_STRING, 0},
-  {K_TUBE_HDR,        IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
-  {EG_K_TUBE_ALPHA,   IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
-  {EG_K_TUBE_BETA,    IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
-  {EG_K_TUBE_GAMMA,   IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
-#endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
   {K_DEAD_TIME_US,    IN_L_DTU, IN_H_DTU, STR(GEIGER_DEAD_TIME_DEFAULT), nullptr, 0, 1000, 0, corium::P_UINT, corium::P_ADVANCED},
 #endif
-  // Conversion and alarms
-  {EG_K_RATIO,        CT_L_RAT, CT_H_RAT, STR(GEIGER_RATIO), nullptr, 1, 100000, 0, corium::P_FLOAT, 0},
-  {K_WARN,            CT_L_WRN, CT_H_WRN, STR(GEIGER_WARN_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
-  {K_ALERT,           CT_L_ALR, CT_H_ALR, STR(GEIGER_ALERT_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
-  {K_LIFE_EN,         CT_L_LE,  CT_H_LE,  "1",     nullptr, 0, 1,    0,  corium::P_BOOL,   corium::P_ADVANCED},
 };
 
 static const corium::PrefGroup COUNTER_PREF_GROUP PROGMEM = {
@@ -267,8 +289,7 @@ const corium::PrefShow* CounterPrefs::prefsShow() { return COUNTER_SHOW; }
 #endif
 
 // pins and count mode read at boot only, the isr and port keep theirs
-#if !defined(RXPIN_BLOCKED) || defined(PCNT_SELECTABLE) || \
-    (defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED))
+#if defined(PREF_RX_PIN) || defined(PCNT_SELECTABLE) || defined(PREF_TX_PIN)
 static void boot_pins() {
   static bool s_set = false;
   if (s_set) return;
@@ -276,10 +297,10 @@ static void boot_pins() {
 #ifdef PCNT_SELECTABLE
   gcounter.input()->use_pcnt(corium::Prefs::getUInt("counter", K_COUNT_MODE) == 0);
 #endif
-#ifndef RXPIN_BLOCKED
+#ifdef PREF_RX_PIN
   gcounter.set_rx_pin((int)corium::Prefs::getInt("counter", K_RX_PIN));
 #endif
-#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
+#ifdef PREF_TX_PIN
   gcounter.set_tx_pin((int)corium::Prefs::getInt("counter", K_TX_PIN));
 #endif
 }
@@ -318,10 +339,10 @@ void CounterPrefs::onPrefsLoaded() {
 #ifdef PREF_DEBOUNCE
   gcounter.set_debounce((int)corium::Prefs::getUInt("counter", K_DEBOUNCE));
 #endif
-#if GEIGER_TYPE == GEIGER_TYPE_TEST || GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
+#ifdef PREF_PULSE_WIDTH
   set_pulse_width_us((int)corium::Prefs::getUInt("counter", K_PULSE_WIDTH_US));
 #endif
-#if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#ifdef PREF_MODEL
   {
     const char* m = corium::Prefs::getString("counter", EG_K_GEIGER_MODEL);
     if (m[0] != '\0') Tube::set_model(m);
@@ -358,10 +379,10 @@ static const corium::LegacyAlias COUNTER_LEGACY[] PROGMEM = {
   {"geigerRatio", "ratio"},
   {"geigerWarn",  "warn"},
   {"geigerAlert", "alert"},
-#ifndef RXPIN_BLOCKED
+#ifdef PREF_RX_PIN
   {"geigerRX", "rx_pin"},
 #endif
-#if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
+#ifdef PREF_TX_PIN
   {"geigerTX", "tx_pin"},
 #endif
 #ifdef USE_PCNT

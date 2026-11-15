@@ -24,7 +24,7 @@ The main page has buttons to reach each area of configuration:
 
 The coloured dot next to the CPM reading on the `/status` page is a synchronised mirror of the [NeoPixel output](/output/neopixel) - it flashes at a rate proportional to the CPM-vs-CPM5 ratio and changes colour based on a Poisson z-score against the 5-minute baseline. See the [NeoPixel page](/output/neopixel#how-the-trend-colour-and-flash-rate-are-derived-modes-3-and-4) for the colour table and full derivation.
 
-It's an "activity trend" indicator rather than a per-click visualization. For per-click visual feedback, see the blip LED on supported builds. On the page the dot flashes at most 3 times a second.
+It's an "activity trend" indicator rather than a per-click visualization. For per-click visual feedback, see the blip LED on supported builds. On the page the dot flashes at most 3 times a second, in colour-blind safe shades of the same colours. On the graph CPM5 and CPM15 are dashed.
 
 While CPM is over the warning or alert level, `/status` shows "Warning level reached" or "Alert level reached" under the graph. Screen readers announce it once, when the level changes.
 

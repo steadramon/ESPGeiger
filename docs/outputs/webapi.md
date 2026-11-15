@@ -122,4 +122,4 @@ instead if you want the server to actively delete it.
 
 If the server says the station is gone for good, sharing stops until
 you save the `/webapi` settings again or restart the device; the
-console says `WebAPI: Server says gone`.
+console says `WebAPI: Off till a save or restart`.

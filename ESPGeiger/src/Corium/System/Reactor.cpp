@@ -23,6 +23,7 @@
 #include "Corium/System/BootGuard.h"
 #include "Corium/System/Uptime.h"
 #include "Corium/System/Clock.h"
+#include "Corium/Logger/Logger.h"
 #ifdef ESP32
 #include "Corium/System/DeviceInfo.h"
 #endif
@@ -50,6 +51,8 @@ void corium::Reactor::second() {
   // a stall runs it once, as the 8266 ticker
   uint32_t now = corium::fastMillis();
   if (corium::reached(now, s_next_sec)) s_next_sec = now + 1000;
+#else
+  corium::Log::hold(true);   // a Ticker, SYS context: no serial writes here
 #endif
   corium::TickProfile::beginTick();
   if (!s_day_marked && corium::fastMillis() - CORIUM_MS_START > corium::BootGuard::DAY_MS) {
@@ -78,6 +81,9 @@ void corium::Reactor::second() {
 #endif
 
   if (corium::TickProfile::endTick()) corium::Registry::logActivityAndReset();
+#ifndef ESP32
+  corium::Log::hold(false);   // the console's loop prints them
+#endif
 }
 
 #ifdef ESP32

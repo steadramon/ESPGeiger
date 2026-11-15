@@ -129,7 +129,9 @@ namespace DeviceInfo {
 
   uint32_t largestFreeBlock();
   uint32_t largestFreeBlockLow();       // since boot
+#ifdef CORIUM_LFB_TAKE
   uint32_t largestFreeBlockLowTake();   // since the last take, one taker
+#endif
 
 #ifdef ESP32
   float chipTempC();   // die not ambient, classic esp32 reads high

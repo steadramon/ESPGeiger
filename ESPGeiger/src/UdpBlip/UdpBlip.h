@@ -101,11 +101,12 @@ private:
   IPAddress _group;
   uint16_t  _port = 0;
   uint16_t  _src_port = 0;
-  uint16_t  _mdns_port = 0;   // the one up, 0 = none
+  uint16_t  _mdns_port = 0;   // port announced now, 0 = none
   unsigned long _last_clicks = 0;
   uint32_t      _last_token_ms = 0;
   uint32_t _bound_at_ms = 0;            // wifi session, rebind on change
   uint32_t _stats_at = 0;
+  uint32_t _skipped = 0;                // sends not made or failed
   uint32_t _wake_at = 0;                // last dueAt asked
   corium::Deadline _backoff;
   uint16_t _jitter_ms = 0;

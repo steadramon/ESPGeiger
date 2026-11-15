@@ -61,10 +61,12 @@ static constexpr size_t MAX_ROWS = sizeof(GroupShadow::heap_mask) * 8;
 static_assert(MAX_ROWS == corium::PREFS_MAX_ROWS, "the file size counts every row");
 static constexpr uint8_t MANY  = 0xFF;   // more than one row, only a reset clears it
 
+const char corium::K_BACKOFF[]      PROGMEM = "backoff";
 const char corium::K_DNS[]          PROGMEM = "dns";
 const char corium::K_ESPOTA[]       PROGMEM = "espota";
 const char corium::K_GW[]           PROGMEM = "gw";
 const char corium::K_IP[]           PROGMEM = "ip";
+const char corium::K_ORIGIN[]       PROGMEM = "origin";
 const char corium::K_SCL[]          PROGMEM = "scl";
 const char corium::K_SDA[]          PROGMEM = "sda";
 const char corium::K_SERVER[]       PROGMEM = "server";
@@ -72,7 +74,7 @@ const char corium::K_SN[]           PROGMEM = "sn";
 const char corium::K_STATIC_IP[]    PROGMEM = "static_ip";
 const char corium::K_TZ[]           PROGMEM = "tz";
 const char corium::K_WEB_PASS[]     PROGMEM = "web_pass";
-const char corium::H_RBA[] PROGMEM = "Reboot to apply";
+const char corium::H_RBA[] PROGMEM = "Restart to apply";
 const char corium::P_HOST[] PROGMEM = "[A-Za-z0-9._\\-]+";   // a name or an ip, no :port
 const char corium::WRITE_FAILED[] PROGMEM = "flash write failed";
 #ifndef APP_AUTH_HELP

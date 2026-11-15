@@ -31,7 +31,6 @@
 #ifndef CORIUM_HTTPPOSTER_REPLY_MAX
 #define CORIUM_HTTPPOSTER_REPLY_MAX 128
 #endif
-
 namespace corium {
 
 // a Sender that posts every _every_ms on its send slot, one request at a time
@@ -78,6 +77,10 @@ class HttpPoster : public Sender {
     static constexpr size_t URL_CAP = CORIUM_HTTPPOSTER_URL_MAX;
     static constexpr size_t REPLY_CAP = CORIUM_HTTPPOSTER_REPLY_MAX;
     bool _told = false;   // once till the prefs change
+    uint8_t _fails = 0;   // in a row
+    uint8_t _skip = 0;    // slots left to sit out
+    void result(bool ok);
+    void backoff(bool ok);
     bool slot_due(unsigned long now);
     void post();
     void send(const char* url, const char* body);

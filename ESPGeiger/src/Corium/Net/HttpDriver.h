@@ -56,6 +56,7 @@ class HttpDriver {
     // once a request: code below 0 = client error, body cut to cap
     bool take(int* code, uint8_t* body, size_t cap, size_t* got);
     uint32_t due() const { return _c ? _c->due() : 0; }   // its timeouts
+    static void logError(const char* tag, int code);   // "tag: Error code - reason"
 
   private:
     static void wake(void* owner);

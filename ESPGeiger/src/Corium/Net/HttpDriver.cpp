@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "HttpDriver.h"
+#include "Corium/Logger/Logger.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/System/DeviceInfo.h"
 #include <EGHttpStrings.h>
@@ -27,7 +28,7 @@ void corium::HttpDriver::wake(void* owner) {
 }
 
 corium::HttpDriver::Sent corium::HttpDriver::send(const corium::HttpMeta& m, const uint8_t* body, size_t len) {
-  if (_c) return NOT_OPENED;   // last reply not taken
+  if (_c) return NOT_OPENED;   // last reply hasn't been taken yet
   _c = new (std::nothrow) EGHttpClient();
   if (!_c) return NO_MEMORY;
   bool open = m.flash ? _c->open(FPSTR(m.method), FPSTR(m.url)) : _c->open(m.method, m.url);
@@ -39,13 +40,13 @@ corium::HttpDriver::Sent corium::HttpDriver::send(const corium::HttpMeta& m, con
   }
   char ua[corium::DeviceInfo::UA_MAX];
   corium::DeviceInfo::userAgent(ua, sizeof(ua));
-  // no room fails the send below, bad text goes without
+  // No room makes the send below fail, a header with bad text is just left off
   (void)_c->setReqHeader(FPSTR(HTTP_H_UA), ua);
   if (m.accept) (void)_c->setReqHeader(F("Accept"), FPSTR(m.accept));
   if (m.ctype) (void)_c->setReqHeader(FPSTR(HTTP_H_CTYPE), FPSTR(m.ctype));
   if (m.extra) (void)_c->setReqHeader(FPSTR(m.extra), m.extraValue);
   _c->setTimeoutS(m.timeoutS);
-  _c->setDeadline(m.timeoutS * 2000UL);   // a trickling reply can't hold it
+  _c->setDeadline(m.timeoutS * 2000UL);   // hard limit, so a trickling reply can't hold it open
   _c->setWake(wake, _owner);
   bool sealed = body ? _c->send(body, len) : _c->send();
   return sealed ? SENT : NOT_SEALED;
@@ -58,4 +59,8 @@ bool corium::HttpDriver::take(int* code, uint8_t* body, size_t cap, size_t* got)
   delete _c;
   _c = nullptr;
   return true;
+}
+
+void corium::HttpDriver::logError(const char* tag, int code) {
+  corium::Log::console(PSTR("%s: Error %d - %s"), tag, code, (PGM_P)EGHttpClient::reason(code));
 }

@@ -178,10 +178,12 @@ struct PrefGroup {
 };
 
 // Shared keys
+extern const char K_BACKOFF[];
 extern const char K_DNS[];
 extern const char K_ESPOTA[];
 extern const char K_GW[];
 extern const char K_IP[];
+extern const char K_ORIGIN[];
 extern const char K_SCL[];
 extern const char K_SDA[];
 extern const char K_SERVER[];

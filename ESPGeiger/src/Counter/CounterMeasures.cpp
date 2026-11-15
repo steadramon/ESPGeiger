@@ -59,16 +59,6 @@ static bool m_cs_live(corium::MValue* v) {
   v->f = gcounter.get_cps_live();
   return true;
 }
-static bool m_cs_n(corium::MValue* v) {
-  if (gcounter.get_cps_n() < 2) return false;
-  v->u = gcounter.get_cps_n();
-  return true;
-}
-static bool m_cs_win(corium::MValue* v) {
-  if (gcounter.get_cps_n() < 2) return false;
-  v->u = gcounter.get_cps_win_us();
-  return true;
-}
 
 static const char MP_CPM[]   PROGMEM = "geiger_cpm";
 static const char MH_CPM[]   PROGMEM = "Counts per minute (window label selects averaging period)";
@@ -124,8 +114,6 @@ static const corium::Measure CORE[] PROGMEM = {
   CORIUM_M_ROW_LFB(corium::M_OUT_JSON),
   CORIUM_M_ROW_LFBLOW(corium::M_OUT_JSON),
   CORIUM_M_ROW("cs_live",   "",    m_cs_live, corium::M_F32,  2, EGMU_CPS,     corium::M_OUT_JSON, corium::M_DIAG),
-  CORIUM_M_ROW("cs_n",      "",    m_cs_n,    corium::M_U32,  0, EGMU_COUNT,   corium::M_OUT_JSON, corium::M_DIAG),
-  CORIUM_M_ROW("cs_win_us", "",    m_cs_win,  corium::M_U32,  0, corium::MU_NONE,    corium::M_OUT_JSON, corium::M_DIAG),
   CORIUM_M_ROW("warm",      "",    m_warm,    corium::M_BOOL, 0, corium::MU_NONE,    corium::M_OUT_ID,   0),
   CORIUM_M_ROW("no_counts", "",    m_none,    corium::M_BOOL, 0, corium::MU_NONE,    corium::M_OUT_ID,   0),
   CORIUM_M_ROW("blip",      "",    m_blip,    corium::M_U32,  0, corium::MU_NONE,    corium::M_OUT_ID,   0),

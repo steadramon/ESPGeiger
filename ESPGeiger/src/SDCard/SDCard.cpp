@@ -122,7 +122,7 @@ static uint32_t fat_stamp(const struct tm& t) {
 }
 
 static void fat_now(uint16_t *date, uint16_t *tod) {
-  time_t now = time(nullptr);
+  time_t now = corium::Clock::now();
   struct tm t;
   localtime_r(&now, &t);
   uint32_t s = fat_stamp(t);
@@ -196,7 +196,7 @@ static uint32_t clusters_of(uint32_t bytes) {
 }
 
 static uint32_t year_ago() {
-  time_t cutoff_t = time(nullptr) - (365L * 86400L);
+  time_t cutoff_t = corium::Clock::now() - (365L * 86400L);
   struct tm tmv;
   localtime_r(&cutoff_t, &tmv);
   return fat_stamp(tmv);
@@ -234,7 +234,7 @@ static uint32_t ms_to_minute() {
 // first minute seen is only noted, a row needs a whole one
 void SDCard::minuteEdge()
 {
-  time_t minute = time(NULL) / 60;
+  time_t minute = corium::Clock::now() / 60;
   if (minute == _last_minute) return;
   if (_last_minute) writeMinute();
   _last_minute = minute;
@@ -377,7 +377,7 @@ void SDCard::writeMinute()
   snprintf_P(name, sizeof(name), PSTR("%04d%02d%02d.csv"), year, mon, t.tm_mday);
   snprintf_P(dir, sizeof(dir), PSTR("%04d%02d"), year, mon);
 #ifdef SDCARD_LOG_UNIXTIME
-  fmtU64(dateTime, sizeof(dateTime), (uint64_t)time(nullptr));
+  fmtU64(dateTime, sizeof(dateTime), (uint64_t)corium::Clock::now());
 #else
   snprintf_P(dateTime, sizeof(dateTime), PSTR("%04d-%02d-%02d %02d:%02d:%02d"),
     year, mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
@@ -517,7 +517,7 @@ void SDCard::fail_step(const char* step, const char* dir, const char* file) {
 void SDCard::fault() {
   if (!_fault) corium::Registry::emit(TOPIC_ERROR);
   _fault = true;
-  uint32_t m = (uint32_t)(time(nullptr) / 60);
+  uint32_t m = (uint32_t)(corium::Clock::now() / 60);
   if (!_enabled || m == _fail_min) return;
   _fail_min = m;
   if (++_fails < SD_FAIL_MAX) return;

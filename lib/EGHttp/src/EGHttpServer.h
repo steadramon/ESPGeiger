@@ -20,6 +20,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <stdarg.h>
 
 #include <EGTcp.h>
 #include <EGBase64.h>
@@ -77,6 +78,9 @@
 #endif
 #ifndef EGHTTP_PULL
   #define EGHTTP_PULL 1   // 0 = no sendPull()
+#endif
+#ifndef EGHTTP_SAY_GAP_MS
+  #define EGHTTP_SAY_GAP_MS 1000   // error lines, the rest counted
 #endif
 #ifndef EGHTTP_REPLIES_A_TICK
   #define EGHTTP_REPLIES_A_TICK 3   // each holds the loop for its render
@@ -193,6 +197,8 @@ class EGHttpServer {
                       const __FlashStringHelper* realm = nullptr);
     // a 401's text/plain body, PROGMEM; nullptr = empty
     void setAuthHelp(PGM_P text);
+    // every server: a POST whose Origin isn't its Host gets 403; no Origin (curl, scripts) passes
+    static void setSameOrigin(bool on) { s_sameOrigin = on; }
 
     // capped at EGHTTP_MAX_CLIENTS
     void setMaxClients(uint8_t n) { _maxClients = n < EGHTTP_MAX_CLIENTS ? n : EGHTTP_MAX_CLIENTS; }
@@ -201,6 +207,9 @@ class EGHttpServer {
     void end();
 
     void tick();   // call from loop()
+    // the owner's log for errors, fmt in flash; nullptr = Serial
+    using LogFn = void (*)(const char* fmt, va_list ap);
+    static void setLog(LogFn fn) { s_log = fn; }
     bool tickWanted() const { return _tickWanted; }   // work waiting, tick soon
 
     bool hasActiveClients() const;
@@ -241,6 +250,9 @@ class EGHttpServer {
     };
 
   private:
+    static LogFn s_log;
+    static bool s_sameOrigin;
+    static void say(PGM_P fmt, ...);
     struct Route {
       PGM_P path;
       EGHttpRequest::Method method;
@@ -324,8 +336,9 @@ class EGHttpServer {
     void dropChunkAcc(Slot* s);
     bool readRequest(Slot* s, EGHttpRequest& req);
     inline bool authorized(const Slot* s) const;
+    inline bool crossSite(const Slot* s) const;
     inline bool argsFit(const Slot* s, const EGHttpRequest& req) const;
-    uint16_t refusal(const Slot* s, const EGHttpRequest& req) const;   // 0, 401 or 400
+    uint16_t refusal(const Slot* s, const EGHttpRequest& req) const;   // 0, 403, 401 or 400
     void sendUnauthorized(Slot* s);
     void dispatch(Slot* s);
 };

@@ -77,10 +77,10 @@ void SerialOut::onPrefsLoaded() {
   _baud       = (uint32_t)corium::Prefs::getUInt("sout", K_BAUD);
   if (_baud && _baud < SOUT_BAUD_MIN) _baud = SOUT_BAUD_MIN;
   if (_rest) drain(true);   // the rest now, before off or a new baud
+  applyBaud();   // said while the log still reaches serial
   quiet_logs();
   corium::Registry::every(this, _interval_s > 0 ? LOOP_MS : 0);
   resolveFormat();
-  applyBaud();
 }
 
 // not SerialFormat's input IDs
@@ -109,10 +109,15 @@ void SerialOut::save() {
   if (!corium::Prefs::commitSoon(corium::fastMillis()) || !ok) corium::Log::console(PSTR("SerialOut: Not saved"));
 }
 
+// streaming only, the console stays at the boot baud for recovery
 void SerialOut::applyBaud() {
 #if !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT == 0
+  static uint32_t s_baud = SOUT_BAUD_BOOT;
+  uint32_t b = _interval_s ? (_baud ? _baud : sout_baud(_format)) : SOUT_BAUD_BOOT;
+  if (b != s_baud) corium::Log::console(PSTR("Serial: %lu baud"), (unsigned long)b);
+  s_baud = b;
   Serial.flush();
-  Serial.updateBaudRate(_baud ? _baud : sout_baud(_format));
+  Serial.updateBaudRate(b);
 #endif
 }
 
@@ -147,6 +152,7 @@ void SerialOut::set_show(int secs) {
 void SerialOut::setInterval(uint16_t v) {
   _interval_s = v;
   corium::Registry::dueIn(this, REPLAN_MS);
+  applyBaud();
   quiet_logs();
   save();
 }

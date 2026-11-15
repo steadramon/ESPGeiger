@@ -21,6 +21,7 @@
 #error "OLED builds need ${u8g2_flags.build_flags}, the frame is malloc'd"
 #endif
 #include "OLEDDisplay.h"
+#include "Counter/Counter.h"
 #include <EGFormat.h>
 #include <BarGraph.h>
 #include "fonts.h"
@@ -449,14 +450,6 @@ static const char* fit_str(SSD1306Display& d, const char* src, int max_w) {
   return buf;
 }
 
-static const char* tiny_uptime() {
-  static char buf[12];
-  corium::Uptime::Split u = corium::Uptime::split((uint32_t)corium::Uptime::seconds());
-  if (u.d > 0) snprintf_P(buf, sizeof(buf), PSTR("%ud %02u:%02u"), u.d, u.h, u.m);
-  else         snprintf_P(buf, sizeof(buf), PSTR("%02u:%02u:%02u"),      u.h, u.m, u.s);
-  return buf;
-}
-
 void SSD1306Display::page_tiny_dose() {
   char buf[12];
   format_f(buf, sizeof(buf), display.usv(), 2);
@@ -488,7 +481,7 @@ void SSD1306Display::page_tiny_net() {
   } else {
     drawStrP(0, 2,  PSTR("Offline"));
     drawStr (0, 15, fit_str(*this, corium::DeviceInfo::hostname(), 71));
-    drawStr (0, 28, tiny_uptime());
+    drawStr (0, 28, fit_str(*this, corium::DeviceInfo::uptimeString(), 71));
   }
 }
 

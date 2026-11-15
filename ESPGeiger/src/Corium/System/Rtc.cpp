@@ -172,7 +172,7 @@ void RtcModule::begin() {
   corium::Log::console(PSTR("RTC: %s found"), corium::Rtc::chip());
   if (!corium::Clock::synced) {
     time_t e = read_time();
-    if (e >= corium::Clock::MIN_EPOCH) {
+    if (e >= corium::Clock::BUILT_EPOCH) {
       corium::Clock::set(e, corium::Clock::RTC);
       corium::Log::console(PSTR("RTC: Clock set from RTC"));
     } else {

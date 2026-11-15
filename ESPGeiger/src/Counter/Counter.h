@@ -87,7 +87,7 @@ class Counter : public CounterMaths {
       // keep out of line
       int input_pin();
       bool  get_saturated();
-      float    get_cps_live();      // (N-1)/T oldest to now, 0 if N<2
+      float    get_cps_live(uint16_t min_n = 2);   // (N-1)/T oldest to now, 0 under min_n
       uint16_t get_cps_n();
       uint32_t get_cps_win_us();
       uint32_t get_min_pulse_us();

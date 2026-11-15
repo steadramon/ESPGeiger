@@ -36,14 +36,19 @@ CORIUM_REGISTER_MODULE(sysprefs)
 CORIUM_PSTR(SY_L_NAM, "Friendly name");
 CORIUM_PSTR(SY_H_NAM, "Optional label for web UI");
 CORIUM_PSTR(SY_L_WPW, "Web password");
-CORIUM_PSTR(SY_H_WPW, "Web UI login, user admin, 8+ chars. Blank = no login");
+CORIUM_PSTR(SY_H_WPW, "Web UI login, user admin, 8+ chars. Also the hotspot's WiFi password. Blank = no login");
 CORIUM_PSTR(SY_L_OTA, "Network upload");
 CORIUM_PSTR(SY_H_OTA, "espota port for PlatformIO and the Arduino IDE. The Update page works either way.");
+CORIUM_PSTR(SY_L_ORG, "Origin check");
+CORIUM_PSTR(SY_H_ORG, "Refuse saves sent from other websites.");
 
 static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    CORIUM_NAME_MAX, corium::P_STRING, 0},
-  {corium::K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_ADVANCED | corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_LOCAL | corium::P_REBOOT},
   {corium::K_ESPOTA,   SY_L_OTA, SY_H_OTA, "0",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
+  {corium::K_ORIGIN,   SY_L_ORG, SY_H_ORG, "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED},
+  // uploads failing in a row wait up to this long, s; 0 = every interval
+  {corium::K_BACKOFF,  nullptr,  nullptr,  "300",   nullptr, 0, 3600, 0, corium::P_UINT, corium::P_HIDDEN},
 #ifdef ESP32
   // 0 = board default. C3 max 160
   {K_CPU_MHZ,     nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
@@ -105,10 +110,11 @@ static void apply_sys() {
   corium::DeviceInfo::setFriendlyName(corium::Prefs::getString("sys", K_NAME));
 #ifdef ESP32
   uint32_t mhz = corium::Prefs::getUInt("sys", K_CPU_MHZ);
-  if (mhz == 80 || mhz == 160 || mhz == 240) {
-    if (setCpuFrequencyMhz(mhz)) {
-      corium::Log::console(PSTR("System: CPU set to %u MHz"), (unsigned)mhz);
-    }
+  if (mhz) {
+    // the row takes 0-240, say why the rest change nothing
+    bool ok = (mhz == 80 || mhz == 160 || mhz == 240) && setCpuFrequencyMhz(mhz);
+    corium::Log::console(ok ? PSTR("System: CPU set to %u MHz") : PSTR("System: CPU %u MHz not taken, 80/160/240"),
+                         (unsigned)mhz);
   }
 #endif
   corium::WebPortal::applyAuthFromPrefs();

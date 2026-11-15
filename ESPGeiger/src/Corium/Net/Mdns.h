@@ -26,23 +26,32 @@
 #include <ESPmDNS.h>
 #endif
 
-// literals only, idf wants "_osc" where MDNS takes "osc"
+// String literals only, idf wants "_osc" where MDNS takes "osc"
 #define CORIUM_MDNS_MOVE(s, p, port) corium::Mdns::move(s, p, "_" s, "_" p, port)
 #define CORIUM_MDNS_OFF(s, p)        corium::Mdns::off(s, p, "_" s, "_" p)
 
 namespace corium {
 namespace Mdns {
 
-  // both stacks refuse a second add, so a new port goes on the one up
+  // Both stacks refuse a second add, so a new port goes on the service that's already up
   static inline bool move(const char* s, const char* p, const char* us, const char* up, uint16_t port) {
 #ifdef ESP8266
     (void)us; (void)up;
     (void)MDNS.removeService(nullptr, s, p);
 #else
-    // its remove is queued, an add straight after is still refused
+    // idf's remove is queued, an add straight after it is still refused
     if (mdns_service_port_set(us, up, port) == ESP_OK) return true;
 #endif
     return MDNS.addService(s, p, port);
+  }
+
+  // First add only, use move() for a new port
+  static inline bool add(const char* s, const char* p, uint16_t port) {
+    return MDNS.addService(s, p, port);
+  }
+
+  static inline void txt(const char* s, const char* p, const char* key, const char* value) {
+    MDNS.addServiceTxt(s, p, key, value);
   }
 
   static inline bool off(const char* s, const char* p, const char* us, const char* up) {

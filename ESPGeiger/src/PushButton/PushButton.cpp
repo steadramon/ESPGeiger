@@ -19,6 +19,7 @@
 #ifdef GEIGER_PUSHBUTTON
 
 #include "PushButton.h"
+#include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/Output/LedSignal.h"

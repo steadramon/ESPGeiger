@@ -22,7 +22,6 @@
 #ifdef SERIALOUT
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Counter/Counter.h"
 #include "Corium/Module/Module.h"
 #include "GeigerInput/SerialFormat.h"
 

@@ -119,9 +119,28 @@ static void mightyohm_cps_bound(void) {
   TEST_ASSERT_EQUAL_INT(10, cpm);
   TEST_ASSERT_EQUAL_INT(NOPE, cps);
 
-  snprintf(line, sizeof(line), "CPS, %d, CPM, 10\n", SERIAL_MAX_COUNT);
+  snprintf(line, sizeof(line), "CPS, %d, CPM, %d\n", SERIAL_MAX_COUNT, SERIAL_MAX_COUNT);
   TEST_ASSERT_TRUE(parse_mightyohm(line, &cpm, &cps));
   TEST_ASSERT_EQUAL_INT(SERIAL_MAX_COUNT, cps);
+}
+
+// a garbled line, past what a tube can count
+static void gc10_noise(void) {
+  int cpm = NOPE;
+  TEST_ASSERT_FALSE(parse_gc10("999999\r\n", &cpm, nullptr));
+  TEST_ASSERT_FALSE(parse_espgeiger("CPM: 999999\n", &cpm, nullptr));
+  TEST_ASSERT_EQUAL_INT(NOPE, cpm);
+}
+
+// the minute holds the second
+static void mightyohm_cps_cpm(void) {
+  int cpm = NOPE, cps = NOPE;
+  TEST_ASSERT_FALSE(parse_mightyohm("CPS, 50, CPM, 41, uSv/hr, 0.23, SLOW\n", &cpm, &cps));
+  TEST_ASSERT_EQUAL_INT(NOPE, cpm);
+  TEST_ASSERT_EQUAL_INT(NOPE, cps);
+  TEST_ASSERT_TRUE(parse_mightyohm("CPS, 41, CPM, 41, uSv/hr, 0.23, SLOW\n", &cpm, &cps));
+  TEST_ASSERT_EQUAL_INT(41, cpm);
+  TEST_ASSERT_EQUAL_INT(41, cps);
 }
 
 static void mightyohm_neg_cps(void) {
@@ -305,6 +324,8 @@ int main(void) {
   RUN_TEST(mightyohm_bound);
   RUN_TEST(mightyohm_cps_bound);
   RUN_TEST(mightyohm_neg_cps);
+  RUN_TEST(gc10_noise);
+  RUN_TEST(mightyohm_cps_cpm);
   RUN_TEST(mightyohm_null_cps);
   RUN_TEST(gc10_scanf);
   RUN_TEST(gc10_overflow);

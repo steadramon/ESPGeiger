@@ -101,6 +101,16 @@ void corium::Log::banner(const char* fmt, ...)
 
 static uint8_t next_idx(uint8_t i) { return i == 255 ? 1 : i + 1; }
 
+static bool s_held = false;
+static uint8_t s_owed = 0;   // first line serial hasn't had, 0 = none
+
+void (*corium::Log::wake)() = nullptr;
+
+void corium::Log::hold(bool on) {
+  s_held = on;
+  if (!on && s_owed && wake) wake();
+}
+
 // Based on arendst/Tasmota addLog (support.ino)
 void corium::Log::AddLog(corium::Log::LoggingLevels level, const char* line, bool timed)
 {
@@ -117,7 +127,10 @@ void corium::Log::AddLog(corium::Log::LoggingLevels level, const char* line, boo
     }
   }
 #endif
-  if (_serial) {
+  if (_serial && s_held) {
+    if (!s_owed) s_owed = (uint8_t)_idx;
+  } else if (_serial) {
+    flush();   // the held ones first
     if (stamp[0]) Serial.print(stamp);
     Serial.println(line);
   }
@@ -202,6 +215,26 @@ size_t corium::Log::copySince(uint32_t* idx, uint8_t end, char* out, size_t cap)
   }
   LOG_UNLOCK();
   return n;
+}
+
+// the ring's lines from s_owed on, as AddLog prints them; ones the ring dropped are gone
+void corium::Log::flush()
+{
+  if (!s_owed || s_held) return;
+  uint8_t from = s_owed;
+  s_owed = 0;
+  int want = idx_dist(from, (uint8_t)_idx);
+  const char* it = _log;
+  const char* line;
+  uint8_t cur_idx;
+  size_t span;
+  while (next_line(it, _log + MAX_LOG_SIZE, cur_idx, line, span)) {
+    if (idx_dist(from, cur_idx) >= want) continue;
+    char* end = (char*)line + span - 1;   // the \1 in _log: a NUL for the print, back after
+    *end = '\0';
+    Serial.println(line);
+    *end = '\1';
+  }
 }
 
 // Get span until single character in string

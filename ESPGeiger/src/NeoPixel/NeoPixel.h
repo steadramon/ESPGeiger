@@ -26,7 +26,6 @@
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
 #include <NeoPixelBus.h>
-#include "Counter/Counter.h"
 #include "Corium/Module/Module.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/Platform/Chip.h"

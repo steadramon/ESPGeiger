@@ -33,7 +33,7 @@ Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi` and `udpblip` w
 | `ok` | `true` if the last submission was accepted. For MQTT this means connected plus a successful recent publish. |
 | `age` | Seconds since the last submission attempt completed, or `null` if none has been attempted yet. |
 
-`udpblip` has a different shape: `{"mode":N,"group":"239.x.x.x","port":N,"fails":N}`.
+`udpblip` has a different shape: `{"mode":N,"group":"239.x.x.x","port":N,"fails":N,"skipped":N}`. `skipped` counts sends not made since boot: WiFi down, no socket or a failed send, plus a whole stats cycle for each one missed while it was not running.
 
 Use it as a lightweight health check for dashboards, scripts or Home Assistant REST sensors.
 

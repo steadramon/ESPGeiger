@@ -22,7 +22,6 @@
 #include <SPI.h>
 #include <SdFat.h>
 #include "App/AppConfig.h"
-#include "Counter/Counter.h"
 #include "Corium/Module/Module.h"
 #include "Corium/Module/Registry.h"
 #include "App/Topics.h"

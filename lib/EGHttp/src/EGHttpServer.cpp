@@ -40,6 +40,7 @@ static const char R_HTTP[]  PROGMEM = "HTTP/1.1 ";
 static const char R_CLOSE[] PROGMEM = "\r\nContent-Length: 0\r\nConnection: close\r\n";
 static const char R_RETRY[] PROGMEM = "Retry-After: ";
 static const char S400[] PROGMEM = "400 Bad Request";
+static const char S403[] PROGMEM = "403 Forbidden";
 static const char S413[] PROGMEM = "413 Payload Too Large";
 static const char S501[] PROGMEM = "501 Not Implemented";
 static const char S503[] PROGMEM = "503 Service Unavailable";
@@ -89,6 +90,46 @@ static void write_status(EGTcpClient* c, PGM_P status, uint8_t retry_s = 0) {
 #else
   #define EGHTTP_TRACE(...) do {} while (0)
 #endif
+
+EGHttpServer::LogFn EGHttpServer::s_log = nullptr;
+
+static void emit(EGHttpServer::LogFn log, PGM_P fmt, va_list ap) {
+  if (log) {
+    log(fmt, ap);
+    return;
+  }
+  char line[96];
+  vsnprintf_P(line, sizeof(line), fmt, ap);
+  Serial.printf_P(PSTR("%s\n"), line);
+}
+
+static void emitf(EGHttpServer::LogFn log, PGM_P fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  emit(log, fmt, ap);
+  va_end(ap);
+}
+
+// a flood of refused requests can't hold the loop on the UART: a line a second, the rest counted
+static bool s_said = false;
+static uint32_t s_said_ms = 0;
+static uint16_t s_unsaid = 0;
+
+void EGHttpServer::say(PGM_P fmt, ...) {
+  uint32_t now = EGClock::now();
+  if (s_said && now - s_said_ms < EGHTTP_SAY_GAP_MS) {
+    if (s_unsaid < UINT16_MAX) s_unsaid++;
+    return;
+  }
+  s_said = true;
+  s_said_ms = now;
+  if (s_unsaid) emitf(s_log, PSTR("[EGHttp] %u more not shown"), (unsigned)s_unsaid);
+  s_unsaid = 0;
+  va_list ap;
+  va_start(ap, fmt);
+  emit(s_log, fmt, ap);
+  va_end(ap);
+}
 
 // past s->due, wrap safe
 static bool eghttp_late(const EGHttpServer::Slot* s) {
@@ -251,7 +292,7 @@ bool EGHttpServer::growRoutes() {
 // before begin() only
 bool EGHttpServer::on(const __FlashStringHelper* path, EGHttpRequest::Method method, Handler h, void* user) {
   if (_server || (_routeCount == _routeCap && !growRoutes())) {
-    Serial.printf_P(PSTR("[EGHttp] route not added: %s\n"), (PGM_P)path);
+    say(PSTR("[EGHttp] route not added: %s"), (PGM_P)path);
     return false;
   }
   _routes[_routeCount++] = { (PGM_P)path, method, h, user };
@@ -261,7 +302,7 @@ bool EGHttpServer::on(const __FlashStringHelper* path, EGHttpRequest::Method met
 // before begin(), after on()
 bool EGHttpServer::onUpload(const __FlashStringHelper* path, BodyHandler bh, void* user) {
   if (_server || _uploadCount == EGHTTP_MAX_UPLOADS) {
-    Serial.printf_P(PSTR("[EGHttp] upload not added: %s\n"), (PGM_P)path);
+    say(PSTR("[EGHttp] upload not added: %s"), (PGM_P)path);
     return false;
   }
   for (uint8_t i = 0; i < _routeCount; i++) {
@@ -271,7 +312,7 @@ bool EGHttpServer::onUpload(const __FlashStringHelper* path, BodyHandler bh, voi
       return true;
     }
   }
-  Serial.printf_P(PSTR("[EGHttp] onUpload: no POST route for %s\n"), (PGM_P)path);
+  say(PSTR("[EGHttp] onUpload: no POST route for %s"), (PGM_P)path);
   return false;
 }
 
@@ -316,7 +357,7 @@ void EGHttpServer::begin(uint16_t port) {
   }
   _server = new (std::nothrow) EGTcpServer();
   if (!_server) {
-    Serial.printf_P(PSTR("[EGHttp] no memory for the server\n"));
+    say(PSTR("[EGHttp] no memory for the server"));
     return;
   }
 #ifdef ESP32
@@ -324,7 +365,7 @@ void EGHttpServer::begin(uint16_t port) {
 #endif
   _server->onAccept([](void* p, EGTcpClient* c) { ((EGHttpServer*)p)->onClient(c); }, this);
   if (_server->begin(port)) return;
-  Serial.printf_P(PSTR("[EGHttp] listen on %u failed, retrying\n"), (unsigned)port);
+  say(PSTR("[EGHttp] listen on %u failed, retrying"), (unsigned)port);
   _tickWanted = true;
 }
 
@@ -490,8 +531,8 @@ void EGHttpServer::takeStream(Slot* s, const uint8_t* data, size_t len) {
   if (len > room) len = room;
   if (!len) return;
   if (_streamLen + len > STREAM_BUF_SIZE) {
-    Serial.printf_P(PSTR("[EGHttp] stream buf overflow: %u+%u>%u, aborting\n"),
-                    (unsigned)_streamLen, (unsigned)len, (unsigned)STREAM_BUF_SIZE);
+    say(PSTR("[EGHttp] stream buf overflow: %u+%u>%u, aborting"),
+        (unsigned)_streamLen, (unsigned)len, (unsigned)STREAM_BUF_SIZE);
     sendStatusAndClose(s, nullptr);
     return;
   }
@@ -537,8 +578,8 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
   }
   size_t seen = s->len;
   if (!append_req(s, data, len)) {
-    Serial.printf_P(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413\n"),
-                    (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
+    say(PSTR("[EGHttp] headers exceed REQ_BUF (%u+%u>%u) - 413"),
+        (unsigned)s->len, (unsigned)len, (unsigned)EGHTTP_REQ_BUF);
     sendStatusAndClose(s, S413);
     return;
   }
@@ -575,7 +616,7 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   uint16_t no = refusal(s, req);
   if (no == 401) sendUnauthorized(s);
   if (no) {
-    sendStatusAndClose(s, no == 400 ? S400 : nullptr);
+    sendStatusAndClose(s, no == 400 ? S400 : no == 403 ? S403 : nullptr);
     return;
   }
   if (_streamOwner) {
@@ -586,8 +627,8 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   size_t cap = s->contentLength < STREAM_BUF_SIZE ? s->contentLength : STREAM_BUF_SIZE;
   uint8_t* buf = (uint8_t*)malloc(cap ? cap : 1);
   if (!buf) {
-    Serial.printf_P(PSTR("[EGHttp] stream buf alloc failed (need %u)\n"),
-                    (unsigned)cap);
+    say(PSTR("[EGHttp] stream buf alloc failed (need %u)"),
+        (unsigned)cap);
     sendStatusAndClose(s, S503);
     return;
   }
@@ -774,6 +815,33 @@ bool EGHttpServer::authorized(const Slot* s) const {
          p[6 + vlen] == '\r';
 }
 
+// past the spaces, n = its length to the CR
+static const char* header_value(const char* p, const char* end, size_t* n) {
+  while (p < end && *p == ' ') p++;
+  size_t k = 0;
+  while (p + k < end && p[k] != '\r') k++;
+  *n = k;
+  return p;
+}
+
+// the page's site vs the one asked: scheme off, then host[:port], any case
+bool EGHttpServer::crossSite(const Slot* s) const {
+  if (strcmp_P(s->buf, M_POST) != 0) return false;   // the line is cut at the method
+  const char* o = eghttp_find_header(s->buf, s->headerEnd, PSTR("Origin:"));
+  if (!o) return false;
+  const char* h = eghttp_find_header(s->buf, s->headerEnd, PSTR("Host:"));
+  if (!h) return true;
+  const char* end = s->buf + s->headerEnd;
+  size_t on, hn;
+  o = header_value(o, end, &on);
+  h = header_value(h, end, &hn);
+  size_t skip = 0;
+  if (on > 7 && strncasecmp_P(o, PSTR("http://"), 7) == 0) skip = 7;
+  else if (on > 8 && strncasecmp_P(o, PSTR("https://"), 8) == 0) skip = 8;
+  if (!skip) return true;   // "null", no scheme
+  return on - skip != hn || strncasecmp(o + skip, h, hn) != 0;
+}
+
 // a value arg() can't hold reads as absent, so none get past
 bool EGHttpServer::argsFit(const Slot* s, const EGHttpRequest& req) const {
   if (!eghttp_form_fits(req._query, req._queryLen, EGHTTP_ARG_MAX + 1)) return false;
@@ -784,8 +852,12 @@ bool EGHttpServer::argsFit(const Slot* s, const EGHttpRequest& req) const {
   return eghttp_form_fits(req._body, req._bodyLen, EGHTTP_ARG_MAX + 1);
 }
 
-// 401 before 400, both paths
+// 403, 401, then 400, both paths
 uint16_t EGHttpServer::refusal(const Slot* s, const EGHttpRequest& req) const {
+  if (s_sameOrigin && crossSite(s)) {
+    say(PSTR("[EGHttp] POST from another site refused"));
+    return 403;
+  }
   if (_authEnabled && !authorized(s)) return 401;
   return argsFit(s, req) ? 0 : 400;
 }
@@ -796,6 +868,8 @@ static const char HEAD_401[] PROGMEM =
   "Content-Type: text/plain\r\n"
   "Content-Length: %u\r\n"
   "%s\r\n";
+
+bool EGHttpServer::s_sameOrigin = false;
 
 void EGHttpServer::setAuthHelp(PGM_P text) { _authHelp = text; }
 
@@ -836,7 +910,7 @@ void EGHttpServer::dispatch(Slot* s) {
     return;
   }
   if (no) {
-    reply_status(s, S400);
+    reply_status(s, no == 403 ? S403 : S400);
     return;
   }
 
