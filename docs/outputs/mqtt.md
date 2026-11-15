@@ -58,7 +58,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `cpm` | Current CPM |
 | `cpm5` | 5-minute smoothed CPM |
 | `cpm15` | 15-minute smoothed CPM |
-| `usv` | µSv/h (cpm × ratio) |
+| `usv` | uSv/h (cpm / ratio) |
 | `cps` | Counts per second |
 | `hv` | HV reading in whole volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `hv_fault` | `1` while HV is held off: over the voltage limit (same builds) |

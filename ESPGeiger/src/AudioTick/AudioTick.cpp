@@ -169,21 +169,21 @@ static const uint8_t MORSE_DIGIT[10][5] = {
 
 
 CORIUM_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier.");
-CORIUM_PSTR(TK_L_FREQ,"Tone Hz");
+CORIUM_PSTR(TK_L_FREQ,"Tone (Hz)");
 CORIUM_PSTR(TK_H_FREQ,"Click centre frequency (300-6000 Hz)");
-CORIUM_PSTR(TK_L_DEC, "Decay ms");
+CORIUM_PSTR(TK_L_DEC, "Decay (ms)");
 CORIUM_PSTR(TK_H_DEC, "Click decay time constant (2-100 ms)");
 CORIUM_PSTR(TK_L_ENG, "Engine");
 CORIUM_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
-CORIUM_PSTR(TK_L_PK,  "Peak %");
+CORIUM_PSTR(TK_L_PK,  "Peak (%)");
 CORIUM_PSTR(TK_H_PK,  "Click peak (1-100). Lower = quieter, below NCN trip");
 CORIUM_PSTR(TK_L_CHM, "Boot chime");
 // value = index, as play_chime_now
 CORIUM_PSTR(TK_O_CHM, "Off|Random|Three beeps|Folk melody|DTMF|Bit ping|Coin|Sputnik|Item get");
 #ifndef AUDIO_TICK_PINS_BLOCKED
-CORIUM_PSTR(TK_L_BCLK,"I2S BCLK Pin");
-CORIUM_PSTR(TK_L_WS,  "I2S WS Pin");
-CORIUM_PSTR(TK_L_DOUT,"I2S DOUT Pin");
+CORIUM_PSTR(TK_L_BCLK,"I2S BCLK pin");
+CORIUM_PSTR(TK_L_WS,  "I2S WS pin");
+CORIUM_PSTR(TK_L_DOUT,"I2S DOUT pin");
 #endif
 
 static const corium::Pref TICK_PREF_ITEMS[] PROGMEM = {

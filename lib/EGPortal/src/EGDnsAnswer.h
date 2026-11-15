@@ -18,7 +18,7 @@
 */
 #pragma once
 
-// answers as the esp8266 core's DNSServer with start(port, "*", ip), but no records = NOERROR
+// Answers like the esp8266 core's DNSServer with start(port, "*", ip), except no records gives NOERROR
 
 #include <stddef.h>
 #include <stdint.h>
@@ -51,7 +51,8 @@ class EGDnsAnswer {
     __attribute__((warn_unused_result))
     bool begin(uint16_t port, const EGTcpAddr& ip, uint32_t ttl = EGDNS_TTL);
     void end() { _udp.end(); }
-    void poll() { _udp.poll(); }   // loop, answers from here
+    void poll() { _udp.poll(); }   // call from loop, answers are sent from here
+    uint8_t waiting() const { return _udp.waiting(); }
 
   private:
     void answer(const uint8_t* q, size_t len, const EGTcpAddr& from, uint16_t port);

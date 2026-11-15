@@ -26,6 +26,9 @@
 #endif
 // script and css urls, a new build fetches them again
 #define CORIUM_CACHE_BUST "?v=" GIT_VERSION
+#ifndef CORIUM_HTTP_POLL_MS
+#define CORIUM_HTTP_POLL_MS 13   // ms between idle http ticks
+#endif
 
 namespace corium {
 // a route table row (PROGMEM), smaller than an on() call; no user pointer
@@ -34,10 +37,10 @@ struct WebRoute { PGM_P path; EGHttpServer::Handler h; EGHttpRequest::Method met
 class WebPortal {
   public:
     void begin(uint16_t port);
-    static constexpr uint8_t POLL_MS = 13;   // ms between http ticks
+    static constexpr uint8_t POLL_MS = CORIUM_HTTP_POLL_MS;   // idle, work waiting goes next ms
     // loop: http tick, then a due restart
     void poll(uint32_t now);
-    inline uint32_t nextPollDue() const { return _poll_last_ms + POLL_MS; }
+    inline uint32_t nextPollDue() const { return _poll_last_ms + pollGap(); }
     bool active() const { return _active; }
 
     // Shared page templates
@@ -70,6 +73,8 @@ class WebPortal {
     EGHttpServer _http;
     bool _active = false;
     uint32_t _poll_last_ms = 0;
+    // a request waiting goes next ms
+    inline uint8_t pollGap() const { return _active && _http.tickWanted() ? 1 : POLL_MS; }
 
     // Non-module routes
     static void hRoot(EGHttpRequest&, EGHttpResponse&, void*);

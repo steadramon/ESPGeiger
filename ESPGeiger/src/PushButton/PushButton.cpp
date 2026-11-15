@@ -49,7 +49,7 @@ CORIUM_REGISTER_FEATURE(pushbutton, FEAT_BUTTON)
 
 #ifndef BTN_PIN_BLOCKED
 
-CORIUM_PSTR(BTN_L_PIN, "Button Pin");
+CORIUM_PSTR(BTN_L_PIN, "Button pin");
 CORIUM_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
 
 static const corium::Pref BTN_PREF_ITEMS[] PROGMEM = {

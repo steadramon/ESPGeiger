@@ -217,7 +217,7 @@ static const char HIST_JS[] PROGMEM = R"JS(
 fetch('/clicks').then(r=>r.json()).then(o=>{
   var $=byID,N=Date.now()/1000|0,T=o.today||0,Y=o.yesterday||0,
       tb=$('tb'),
-      start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
+      start=new Date(o.start*1000),
       rlv='roll' in o?o.roll*1000:3600000,
       rows='',mx=0,sum=0,
       F=s=>s>=31536000?(s/31536000).toFixed(1)+'y':s>=86400?(s/86400|0)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?(s/60|0)+'m':s+'s';
@@ -229,6 +229,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     if(L.fbt>0)$('lfi').textContent=F(N-L.fbt);
     $('lf').style.display='';
   }
+  if(!('start' in o))$('hsT').innerHTML='<a href=/network#time>Clock not set</a>';else{
   var nowMs=Date.now(),curB=Math.floor(nowMs/rlv)*rlv,pk=0,bs=o.start*1000;
   o.last_day.forEach((n,i)=>{
     sum+=n;if(n>mx)mx=n;
@@ -239,12 +240,12 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
   });
   $('hsT').textContent=T.toLocaleString();
   $('hsY').textContent=Y.toLocaleString();
-  var es='start' in o?Math.max(0,N-o.start):o.uptime||0,
+  var es=Math.max(0,N-o.start),
       h60=rlv>=3600000&&es>=3600,
       cpmA=h60?((o.last_day[1]||0)*(60-new Date().getMinutes())/60+(o.last_day[0]||0))/60
               :es>0?sum*60/Math.min(es,86400):0,
       M=N%86400,
-      ok=Y>0&&M>=3600&&'start' in o&&o.start<=N-M-86400,
+      ok=Y>0&&M>=3600&&o.start<=N-M-86400,
       Tp=M>0?T*86400/M:T,
       p=ok?(Tp-Y)*100/Y:0;
   $('hsA').textContent=Math.round(cpmA);
@@ -272,6 +273,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+(ok?Math.ceil(n/mins):'—')+'</td><td'+(ok?' class=usv data-uv="'+uv+'"':'')+'>'+(ok?uv.toFixed(4):'—')+'</td></tr>';
   });
   tb.innerHTML=rows;
+  }
   if(o.hist&&o.hist.length&&$('ph')){
     var H=o.hist,mh=1,
         L=['<64us','<128us','<256us','<512us','<1ms','<2ms','<4ms','<8ms','<16ms','<32ms','<64ms','<128ms','<256ms','<512ms','<1s','<2s','<4s','<8s','<16s','<32s','<1m','<2m','<4m','<8m','>8m'],
@@ -367,14 +369,15 @@ var I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remov
 B.style.setProperty('--blip',K);
 setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
 var Q=function(){if(!window._csk){window._csk=1;csK(100)}};
-live("/json",1e3,function(s){Q();if(s!=null){var o=JSON.parse(s),u=o.ut;
-U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
+live("/json",1e3,function(s){Q();$('ow').style.display=s==null?'':'none';if(s==null){cps=0;I=Infinity}else{var o=JSON.parse(s),u=o.ut;
+U.textContent=(u/86400|0)+"d "+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 var dd=o.c-o.c5,dc=o.c<10&&o.c5<10&&dd*dd<9*o.c5?o.c5:o.c;C.textContent=dc.toFixed(2);T.textContent=o.tc;setUsv(V,dc/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
-var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
+var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v?v+' dBm ('+p+'%)':'-';
 if(W)W.style.display=(o.tc===0&&u>=Math.max(60,6e3/o.r))||o.tube===0?'':'none';
 if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
+var k=o.alert?2:o.warn?1:0,L=$('al');if(L.k!=k){L.k=k;L.style.display=k?'':'none';L.className='a '+(k>1?'ae':'aw');L.textContent=k>1?'\u26a0 Alert level reached':k?'\u26a0 Warning level reached':''}
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
-I=Math.max(100,Math.min(4e3,2e3/r));
+I=Math.max(334,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
 K=o.c<.01&&o.c5<.01?'#08f':z>3?'#f33':z>1.5?'#fa0':z<-1.5?'#c0f':'#0f0';
 B.style.setProperty('--blip',K)}},250)}();
@@ -403,11 +406,13 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <button id=snd>Sound: off</button>
 <canvas id=g1></canvas>
 <div id=g2></div>
-<p id=tw class="a aw" style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
-<p id=bw class="a aw" style=display:none><b>&#9888; Brownout reset detected</b> - check the power supply.</p>
+<p id=tw class="a aw" role=alert style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
+<p id=bw class="a aw" role=alert style=display:none><b>&#9888; Brownout reset detected</b> - check the power supply.</p>
+<p id=al class=a role=alert style=display:none></p>
+<p id=ow class="a aw" style=display:none><b>&#9888; Not updating</b> - no reply from the device.</p>
 <div class=stat>
 <div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
-<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Total clicks</b><span id=tc>-</span></div>
+<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Clicks since boot</b><span id=tc>-</span></div>
 <div class=row><b>Uptime</b><span id=upt>-</span><b>Signal</b><span id=rssi>-</span></div>
 <div class=row id=envR style=display:none></div>
 </div>
@@ -415,7 +420,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <textarea readonly id=t1 wrap=off></textarea>
 <details style="margin-top:.4em"><summary style="cursor:pointer;color:var(--muted);width:1.5em;list-style-position:inside">&nbsp;</summary>
 <form id=cf style="display:flex;gap:.5em;margin-top:.4em" onsubmit="return cmdSend(event)">
-<input id=ci placeholder="cmd" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:.95em" autocomplete=off spellcheck=false>
+<input id=ci aria-label=Command placeholder="cmd" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:.95em" autocomplete=off spellcheck=false>
 <button type=submit>Send</button>
 </form>
 </details>

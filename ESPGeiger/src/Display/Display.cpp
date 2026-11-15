@@ -45,21 +45,21 @@ CORIUM_PSTR(K_ON_TIME,  "on_time");
 CORIUM_PSTR(K_OFF_TIME, "off_time");
 
 #ifdef GEIGER_PUSHBUTTON
-CORIUM_PSTR(DS_L_TMO, "Timeout");
+CORIUM_PSTR(DS_L_TMO, "Idle time (s)");
 CORIUM_PSTR(DS_H_TMO, "Idle seconds before display blanks (0 = use schedule below)");
 #endif
-CORIUM_PSTR(DS_L_ONT, "On Time");
-CORIUM_PSTR(DS_L_OFT, "Off Time");
+CORIUM_PSTR(DS_L_ONT, "On time");
+CORIUM_PSTR(DS_L_OFT, "Off time");
 #ifdef GEIGER_PUSHBUTTON
-CORIUM_PSTR(DS_H_ONT, "Display on (used when Timeout = 0)");
-CORIUM_PSTR(DS_H_OFT, "Display off (used when Timeout = 0)");
+CORIUM_PSTR(DS_H_ONT, "Display on (used when idle time = 0)");
+CORIUM_PSTR(DS_H_OFT, "Display off (used when idle time = 0)");
 #else
 CORIUM_PSTR(DS_H_ONT, "Display on");
 CORIUM_PSTR(DS_H_OFT, "Display off");
 #endif
 CORIUM_PSTR(DS_L_FLP, "Flip 180\xC2\xB0");
 #ifndef OLED_PINS_BLOCKED
-CORIUM_PSTR(DS_L_TYP, "Display Type");
+CORIUM_PSTR(DS_L_TYP, "Display type");
 #if OLED_TINY
 #ifdef MAX7219_DISPLAY
 CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106|7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
@@ -75,7 +75,7 @@ CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");
 #endif
 #endif
 static_assert(sizeof(DS_O_TYP) - 1 <= CORIUM_PREF_PATTERN_MAX, "display types past the options buffer");
-CORIUM_PSTR(DS_L_RST, "Reset Pin");
+CORIUM_PSTR(DS_L_RST, "Reset pin");
 CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none).");
 #endif
 
@@ -235,6 +235,7 @@ void Display::presses(unsigned long now) {
 
 Display::Sleep Display::sleep(unsigned long now) {
   if (!_auto_off) return AWAKE;
+  if (alert()) _woke.mark(now);   // an alert wakes it
   // idle over it, + 1
   if (_timeout_ms > 0) return _woke.fresh(now, _timeout_ms + 1) ? AWAKE : TIMED_OUT;
   if (!_woke.fresh(now, 30000 + 1) && !on_hours()) return OFF_HOURS;
@@ -336,7 +337,7 @@ button.tap{padding:.7em 1.5em;font-size:1em;cursor:pointer}
 <div class=ctrls>
 <button class=tap id=tap type=button>Tap (cycle page)</button>
 <label class=ms>Refresh <input id=ivl type=number min=50 max=10000 step=50 value=500>ms</label>
-<label class=ms>Tint <input id=col type=color value=#ffffff><input id=colt type=text maxlength=7 value=#ffffff></label>
+<label class=ms>Tint <input id=col type=color value=#ffffff><input id=colt aria-label=Tint type=text maxlength=7 value=#ffffff></label>
 <span class=fps id=fps>--</span>
 </div>
 </div>

@@ -57,6 +57,9 @@ class NeoPixel : public corium::Module {
     void loop(unsigned long now) override;
     static constexpr uint16_t LOOP_MS = 30;
     static constexpr uint16_t FAST_LOOP_MS = 10;
+    static constexpr uint16_t FLASH_MS = 334;   // 3 flashes a second at most
+    static constexpr uint16_t WARN_MS = 80;
+    static constexpr uint16_t ALERT_MS = 200;
     void setup();
     void park();   // safe mode only
     void blink(uint16_t ms);   // lit for ms
@@ -75,16 +78,19 @@ class NeoPixel : public corium::Module {
   private:
     void precompute_blip();
     RgbColor trend_color();
-    RgbColor alarm_color(RgbColor rgb);
+    RgbColor alarm_color(RgbColor rgb, uint16_t& ms);
+    void flash(unsigned long now);
     unsigned long _on_ms = 0;
     unsigned long _lit_ms = 0;
     unsigned long _blink_ms = 2000;
     unsigned long _next_ms = 2000;
     static void on_click(uint32_t us);
     bool _blip = false;
+    bool _rest = false;   // a flash under FLASH_MS ago
     int _level = 15;
     bool _is_off = true;
     bool _swap_rg = false;
+    bool _no_counts = false;   // cpm and cpm5 under 0.01, each loop
 };
 
 extern NeoPixel neopixel;

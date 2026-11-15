@@ -66,12 +66,13 @@ None of the modes impose a CPM ceiling. The real limits:
   saturates near ~4375 CPS.
 * **PCNT** (ESP32): bounded by the input filter, not ISR throughput.
 * **Interrupt saturation guard** (interrupt builds): above 10 000 ISR
-  entries/sec the input is parked for 5 s. See
+  entries/sec the input is parked for 5 s, doubling while it repeats, up
+  to 300 s. PCNT drops such a second instead. See
   [Troubleshooting](/troubleshooting#log-shows-isr-storm).
 
 ## Memory cost
 
 The pulse ring is 1 KB, allocated only when a non-bucket mode is
-selected. Once allocated it stays until reboot, even after switching
-back to `3`, to avoid heap fragmentation. If the allocation fails the
-mode falls back to bucket silently; check `/info` heap numbers.
+selected, and freed again on a switch back to `3`. If the allocation
+fails the console says `Counter: Pulse ring alloc failed` and the
+reading runs as bucket; check `/info` heap numbers.

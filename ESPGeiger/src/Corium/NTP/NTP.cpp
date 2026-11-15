@@ -32,7 +32,7 @@ CORIUM_REGISTER_MODULE(ntpclient)
 #endif
 
 #ifndef DISABLE_NTP
-CORIUM_PSTR(NT_L_SRV, "NTP Server");
+CORIUM_PSTR(NT_L_SRV, "NTP server");
 #endif
 CORIUM_PSTR(NT_L_TZ,  "Timezone");
 CORIUM_PSTR(NT_H_TZ,  "Olson name or POSIX rule");

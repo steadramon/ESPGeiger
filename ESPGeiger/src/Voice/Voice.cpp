@@ -43,12 +43,12 @@ CORIUM_REGISTER_MODULE(voice)
 
 CORIUM_PSTR(VX_L_AEN, "Announce");
 CORIUM_PSTR(VX_H_AEN, "Speak CPM every interval");
-CORIUM_PSTR(VX_L_AIV, "Every (seconds)");
+CORIUM_PSTR(VX_L_AIV, "Every (s)");
 CORIUM_PSTR(VX_H_AIV, "10-3600");
 CORIUM_PSTR(VX_L_AUS, "Announce dose");
 CORIUM_PSTR(VX_H_AUS, "Add uSv/h to the announcement");
-CORIUM_PSTR(VX_L_ARM, "RadMon up/down");
-CORIUM_PSTR(VX_H_ARM, "Speak when RadMon goes online or offline");
+CORIUM_PSTR(VX_L_ARM, "Radmon up/down");
+CORIUM_PSTR(VX_H_ARM, "Speak when Radmon goes online or offline");
 
 static const corium::Pref VOICE_PREF_ITEMS[] PROGMEM = {
   {K_ANNOUNCE_ENABLE,   VX_L_AEN,  VX_H_AEN,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
@@ -95,7 +95,7 @@ CORIUM_REGISTER_MODULE(klaxonprefs)
 CORIUM_PSTR(KX_L_EN,  "Klaxon on alert");
 CORIUM_PSTR(KX_H_EN,  "Sound a klaxon when CPM crosses the alert threshold");
 CORIUM_PSTR(KX_L_TY,  "Pattern");
-CORIUM_PSTR(KX_O_TY,  "Alarm|Two-Tone|Wail|Horn|Voice");
+CORIUM_PSTR(KX_O_TY,  "Alarm|Two-tone|Wail|Horn|Voice");
 CORIUM_PSTR(KX_L_CD,  "Cooldown");
 CORIUM_PSTR(KX_H_CD,  "Minutes between alert klaxons (1-60)");
 CORIUM_PSTR(KX_H_QFR, "Silence klaxon + voice from this time (blank = off)");

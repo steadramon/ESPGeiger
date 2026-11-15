@@ -12,7 +12,7 @@ Wire format for the [ESPGeiger Stations](/output/webapi) uploads. Posts and hand
 
 ## Per-minute post
 
-Sent in CPM Readings mode:
+Sent in CPM readings mode:
 
 | Field | Type    | Description |
 |---|---|---|
@@ -79,7 +79,7 @@ After a crash the first handshake of the boot adds what the device kept about it
 
 The server responds with the assigned station ID, which the device uses as `id` in later posts.
 
-The key is made on the first handshake and kept both in a file on the device and in a copy outside the file system; a lost file system does not change `pk`. Forget deletes the key.
+The key is made on the first handshake and kept both in a file on the device and in a copy outside the file system; a lost file system does not change `pk`. **Reset key** deletes both copies. **Forget station** keeps the key and asks the server to delete the station.
 
 ## Endpoint
 
@@ -90,6 +90,8 @@ Canonical URL: `http://api.espgeiger.com/api/1/`. HTTP-only by design: each requ
 | `/api/1/handshake` | POST | Register or refresh station metadata |
 | `/api/1/post`      | POST | Submit a reading (+ optional health snapshot) |
 | `/api/1/forget`    | POST | Right-to-erasure: purge station + history |
+
+Devices don't follow redirects, so the API stays on plain http at `/api/1`. Reply codes the device acts on: `403` drops the station and handshakes again, `410` (or `404` to a handshake) stops sharing till its settings are saved or the device restarts, `429` skips the next 5 posts. Any other error is logged to the console.
 
 ## Pin scoring
 

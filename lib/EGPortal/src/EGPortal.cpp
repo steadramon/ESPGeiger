@@ -32,7 +32,7 @@ static const char P_ROOT[] PROGMEM = "/";
 
 // leaves <style> open, each page adds its own
 static const char PAGE_TOP[] PROGMEM =
-  "<!doctype html><html><head><meta charset=utf-8>"
+  "<!doctype html><html lang=en><head><meta charset=utf-8>"
   "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
   "<style>body{font-family:sans-serif;max-width:420px;margin:2em auto;padding:0 1em}";
 
@@ -45,8 +45,8 @@ static const char PORTAL_STYLE[] PROGMEM =
 
 static const char PORTAL_FORM[] PROGMEM =
   "<form action=/save method=post>"
-  "<label>Network</label>"
-  "<select onchange=\"document.getElementById('s').value=this.value\">"
+  "<label for=n>Network</label>"
+  "<select id=n onchange=\"document.getElementById('s').value=this.value\">"
   "<option value=''>- Pick a network -</option>";
 
 static const char PORTAL_TAIL[] PROGMEM =
@@ -55,7 +55,7 @@ static const char PORTAL_TAIL[] PROGMEM =
   "<label>Password <input name=password type=password maxlength=" EGP_STR(EGPORTAL_PASS_MAX) "></label>"
   "<button>Save</button></form>"
   "<form action=/rescan method=get style=margin-top:1em>"
-  "<button type=submit style=background:#888>Rescan networks</button></form>";
+  "<button type=submit style=background:#666>Rescan networks</button></form>";
 
 static const char PORTAL_RESET_BTN[] PROGMEM =
   "<form action=/reset method=get style=margin-top:2.5em>"
@@ -74,16 +74,16 @@ static const char RESET_CONFIRM_HTML[] PROGMEM =
   "<h1>Factory reset</h1>"
   "<p>This erases <b>all settings</b>: WiFi credentials, module configuration "
   "and calibration. The device restarts into this setup portal as if new.</p>"
-  "<form action=/reset_go method=post><button>Erase everything</button></form>"
+  "<form action=/reset_go method=post><button>Factory reset</button></form>"
   "<a class=c href=/>Cancel</a>"
   "</body></html>";
 
 static const char RESET_DONE_HTML[] PROGMEM =
   "body{margin-top:3em;text-align:center}"
-  "</style><title>Resetting</title></head><body>"
-  "<h1>Erasing&hellip;</h1>"
+  "</style><title>Factory reset</title></head><body>"
+  "<h1>Factory reset</h1>"
   "<p>All settings cleared. The device is restarting and will reopen "
-  "the setup AP in a few seconds.</p></body></html>";
+  "the setup portal in a few seconds.</p></body></html>";
 
 static const char RESCAN_HTML[] PROGMEM =
   "body{margin-top:4em;text-align:center}"
@@ -147,9 +147,15 @@ bool EGPortal::begin(const char* apSsid, const char* apPassword) {
   return up;
 }
 
-// loop() collects it
 void EGPortal::kickScan() {
   WiFi.scanNetworks(true);
+}
+
+bool EGPortal::heard(const char* ssid) const {
+  for (uint8_t i = 0; i < _scanCount; i++) {
+    if (strcmp(_scan[i].ssid, ssid) == 0) return true;
+  }
+  return false;
 }
 
 void EGPortal::takeScan(int n) {
@@ -164,6 +170,10 @@ void EGPortal::loop() {
   _http.tick();
   int n = WiFi.scanComplete();
   if (n >= 0) takeScan(n);
+}
+
+bool EGPortal::busy() const {
+  return _http.tickWanted() || EGTcp::pending.load(std::memory_order_relaxed) || _dns.waiting();
 }
 
 void EGPortal::end() {

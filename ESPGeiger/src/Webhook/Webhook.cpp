@@ -43,7 +43,7 @@ CORIUM_PSTR(WH_H_URL, "Webhook endpoint (http only)");
 CORIUM_PSTR(WH_P_URL, "https?://[A-Za-z0-9.:_~%?=&+,;!$*@\\(\\)\\/\\-]+");
 CORIUM_PSTR(WH_L_KEY, "Key");
 CORIUM_PSTR(WH_H_KEY, "Optional shared secret sent as \"key\"");
-CORIUM_PSTR(WH_H_INT, "POST interval (sec)");
+CORIUM_PSTR(WH_H_INT, "Send interval (s)");
 
 
 static const corium::Pref WEBHOOK_PREF_ITEMS[] PROGMEM = {

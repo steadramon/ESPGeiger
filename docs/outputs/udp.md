@@ -29,9 +29,10 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 2. Join your WiFi via the captive portal, same network as the producer.
 3. Open the device's web UI and go to **Config → Input**.
 4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
-5. Save.
+5. Set **Dose ratio** under Counter to the producer's: the receiver works out the dose itself.
+6. Save.
 
-Within a few seconds the receiver's OLED page 2 shows `RX <chipid>` and a loss percentage, the console says `UdpRx: locked to <chipid>`, and `loss` appears in `/json`. The CPM should track the producer's.
+Within a few seconds the receiver's OLED page 2 shows `RX <chipid>` and a loss percentage, the console says `UdpRx: Locked to <chipid>`, and `loss` appears in `/json`. The CPM should track the producer's.
 
 ### Not working?
 

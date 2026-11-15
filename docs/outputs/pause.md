@@ -20,7 +20,7 @@ working on the device.
 * WebAPI (stations.espgeiger.com)
 * [GMC / GeigerLog](/output/gmc)
 * [Webhook](/output/webhook)
-* [Thingspeak](/output/thingspeak)
+* [ThingSpeak](/output/thingspeak)
 
 ## What stays running
 
@@ -54,7 +54,7 @@ Returns `PAUSED <N> s` or `RESUMED`.
 
 ## Notes
 
-* Max 24 h. Reboot clears any active pause.
+* Max 24 h. A restart clears any active pause.
 * Set and auto-resume both log to console.
 * One post fires on the next tick after the pause ends, then normal cadence.
 

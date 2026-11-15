@@ -12,7 +12,7 @@ ESPGeiger can send radiation data to a custom URL endpoint via HTTP POST. This a
 
 ## Setup
 
-1. __Configure ESPGeiger__: In the ESPGeiger web interface, click __Config__ and enter your target `URL` in the Webhook section. Optionally set a `Key` for authenticating requests from your device.
+1. __Configure ESPGeiger__: On the [Config page](/configuration), open the __Upload__ tab, tick __Enable__ under __Webhook__ and enter your target `URL` in the Webhook section. Optionally set a `Key` for authenticating requests from your device.
 2. __Set the interval__: Configure the submission interval in seconds. The default is 60 seconds.
 
 ESPGeiger will report the Webhook submission status in the Web Interface console.

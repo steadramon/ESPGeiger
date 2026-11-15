@@ -155,19 +155,19 @@ CORIUM_PSTR(K_ORIENT,   "orient");
 CORIUM_PSTR(K_REVERSE,  "reverse");
 CORIUM_PSTR(K_POINTS,   "points");
 
-CORIUM_PSTR(MX_L_DIN, "Data Pin (DIN/DIO)");
-CORIUM_PSTR(MX_L_CLK, "CLK Pin");
-CORIUM_PSTR(MX_L_CS,  "CS Pin");
+CORIUM_PSTR(MX_L_DIN, "Data pin (DIN/DIO)");
+CORIUM_PSTR(MX_L_CLK, "CLK pin");
+CORIUM_PSTR(MX_L_CS,  "CS pin");
 CORIUM_PSTR(MX_L_PTS, "TM1637 points");
 CORIUM_PSTR(MX_O_PTS, "Dots|Colon only");
-CORIUM_PSTR(MX_H_PTS, "Colon only: page letters (C U t H), the colon is the uSv point");
+CORIUM_PSTR(MX_H_PTS, "Colon only: page letters (C U t H), the colon is the uSv/h point");
 CORIUM_PSTR(MX_L_MODE, "Pages");
 CORIUM_PSTR(MX_O_MODE, "Cycle|Fixed");
 CORIUM_PSTR(MX_H_MODE, "Cycle steps on, Fixed waits for the button");
 CORIUM_PSTR(MX_L_CNT, "Digits");
 CORIUM_PSTR(MX_L_PNL, "Panels");
 CORIUM_PSTR(MX_H_PNL, "8x8 panels in the chain");
-CORIUM_PSTR(MX_L_DEC, "uSv decimal places");
+CORIUM_PSTR(MX_L_DEC, "uSv/h decimal places");
 CORIUM_PSTR(MX_L_BAR, "Level bar (decimal-point row)");
 CORIUM_PSTR(MX_H_BAR, "Light the decimal points as a level bar (7-seg, CPM only)");
 CORIUM_PSTR(MX_L_BGN, "Bar sensitivity");
@@ -330,7 +330,7 @@ void Max7219Display::applyTm() {
       corium::Log::console(PSTR("TM1637: Display up (clk=%d dio=%d)"), _clk, _din);
     } else {
       _tm_off = true;
-      corium::Log::console(PSTR("TM1637: No ack (clk=%d dio=%d), off until reboot"), _clk, _din);
+      corium::Log::console(PSTR("TM1637: No ack (clk=%d dio=%d), off until restart"), _clk, _din);
     }
   }
 }
@@ -420,16 +420,29 @@ void Max7219Display::set_power(bool on) {
 
 void Max7219Display::onButtonTap(unsigned long now, int8_t dir) {
   s_redraw = true;
-  if (_fx_on) {
-    _fx_on = false;
-    return;
-  }
+  if (_fx_on) _fx_on = false;
+  else        nextPage(dir);
+  showNow();
+}
+
+void Max7219Display::nextPage(int8_t dir) {
   uint8_t list[MAX_PAGES];
   uint8_t n = buildPages(list);
   if (n <= 1) return;
   _page = (uint8_t)((_page + (dir > 0 ? 1 : n - 1)) % n);
   _page_ms = corium::fastMillis();
   _cur_page = list[_page];
+}
+
+// matrix on its next pass, digits now, not at the next second
+void Max7219Display::showNow() {
+  if (_layout == DISP_MAX7219_MATRIX) {
+    corium::Registry::post(this);
+    return;
+  }
+  if (!_active || !_lit || !(tm() ? _tm.ready() : _drv.ready())) return;
+  if (tm() && (_tm_off || !_tm_acked)) return;
+  drawDigits();
 }
 
 // env.unit
@@ -498,7 +511,7 @@ void Max7219Display::tmSend(const uint8_t* segs, uint8_t n) {
     _tm_fails = 0;
   } else if (++_tm_fails >= TM_GIVE_UP) {
     _tm_off = true;
-    corium::Log::console(PSTR("TM1637: No ack, off until reboot"));
+    corium::Log::console(PSTR("TM1637: No ack, off until restart"));
   }
 }
 
@@ -730,6 +743,10 @@ void Max7219Display::second() {
   // no ack, try every 10 s
   if (tm() && (_tm_off || (!_tm_acked && ++_tm_wait_s < TM_RETRY_S))) return;
   _tm_wait_s = 0;
+  drawDigits();
+}
+
+void Max7219Display::drawDigits() {
   updatePage();
   if (_layout == DISP_MAX7219_ROUND) renderRound();
   else                               render7seg();
@@ -859,6 +876,7 @@ void Max7219Display::fx(unsigned long now) {
   _fx_on = true;
   _fx_part = 0;
   _fx = 0;
+  corium::Registry::post(this);
 }
 
 void Max7219Display::vuFrame() {

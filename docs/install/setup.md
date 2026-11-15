@@ -12,11 +12,11 @@ parent: Install
 
 After first installation ESPGeiger requires configuring for connection to a WiFi network.
 
-The ESPGeiger opens a local WiFi hotspot which allows the user to configure which WiFi network the ESPGeiger connects to. The hotspot has no WiFi password, so anyone nearby can join it while it is up. With a web password set, its pages still ask for it.
+The ESPGeiger opens a setup portal, its own WiFi network, which allows the user to configure which WiFi network the ESPGeiger connects to. The setup portal has no WiFi password, so anyone nearby can join it while it is up. With a web password set, its pages still ask for it.
 
-Connecting to this WiFi hotspot should automatically show a configuration page.
+Connecting to the setup portal should automatically show a configuration page.
 
-Visiting [http://192.168.4.1/](http://192.168.4.1/) whilst connected to the hotspot will also show the configuration page.
+Visiting [http://192.168.4.1/](http://192.168.4.1/) whilst connected to the setup portal will also show the configuration page.
 
 > **Captive portal not appearing?** The automatic popup relies on DHCP-assigned DNS. If your device has a manual DNS server set (e.g. a pinned `1.1.1.1` or a local LAN DNS), the captive-portal detection probe fails silently because the DNS server isn't reachable from the ESPGeiger AP. Either switch that interface to DHCP-assigned DNS, or just browse to [http://192.168.4.1/](http://192.168.4.1/) directly - both work.
 
@@ -51,11 +51,11 @@ Connect the device over USB to your computer and open a serial terminal at **115
 set sys.web_pass
 ```
 
-(That is, the `set` command with an empty value.) The web UI stops prompting on the next request. The console also says `Reboot to apply`: that is for [espota](/install/ota#via-espotapy-arduinoota), which only reads the password at boot.
+(That is, the `set` command with an empty value.) The web UI stops prompting on the next request. The console also says `Restart to apply`: that is for [espota](/install/ota#via-espotapy-arduinoota), which only reads the password at boot.
 
 To set a new password later: `set sys.web_pass MyNewPassword` (8 or more characters).
 
-This works with the setup portal up too, with a `reboot` after the `set`: the portal reads the password once, when it starts. During the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
+This works with the setup portal up too, with a restart (`reboot`) after the `set`: the portal reads the password once, when it starts. During the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
 
 The web password is also kept outside the settings files, so a device that loses its settings (a damaged or reformatted file system) comes back with the same password, and **Info** shows *Web password: restored from backup (settings lost)*. A factory reset or clearing the password as above clears that copy too.
 
@@ -72,7 +72,9 @@ On builds with a push button (such as ESPGeiger-HW and ESPGeiger Log):
 1. Power off the device.
 2. **Hold the push button.**
 3. Power on while still holding.
-4. Keep holding for **at least 5 seconds** (the display counts down), then release. Don't hold it for 30 seconds or more: that is taken as a stuck button and the device boots as normal.
+4. Keep holding for **at least 5 seconds** (the display counts down; on ESP8266 builds the status LED blinks once a second), then release. Don't hold it for 30 seconds or more: that is taken as a stuck button and the device boots as normal.
+
+On a plain ESP32, S2, S3 or C3 dev board the push button is the board's own **BOOT** button. Held while powering on, BOOT starts the chip's download mode and ESPGeiger never runs, so power on first and press BOOT **a moment after**, then keep holding. The serial console shows `BOOT: button held` once it has been seen; if nothing happens, power-cycle and press a little later.
 
 The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity and the lifetime totals (clicks, first boot, tracked time) are kept; **Reset lifetime** on the [History page](/output/history) clears the clicks and tracked time. Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before 5 seconds starts [Offline Mode](/configuration/offlinemode) instead.
 
@@ -84,7 +86,7 @@ Nuclear option: reflash the firmware from [install.espgeiger.com](https://instal
 
 ESPGeiger is designed to run on your **local network**, not on the open internet.
 
-The web interface uses HTTP Basic Auth with no TLS. With a web password set, `/update` and espota take new firmware from anyone who has it; with no password, from anyone on your network. Firmware images are not signed, and there is no rate limiting or brute-force protection. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
+The web interface uses HTTP Basic Auth with no TLS. With a web password set, `/update` and espota (when **Network upload** is on) take new firmware from anyone who has it; with no password, from anyone on your network. Firmware images are not signed, and there is no rate limiting or brute-force protection. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
 
 If you need to reach your device from outside your LAN, use one of:
 
@@ -100,7 +102,7 @@ What the device doesn't do:
 - No update check: it doesn't tell you a new release is out.
 - No check on NTP replies: it takes the time it is given.
 - Anyone with the device in hand can reflash it and read what is stored on it.
-- WiFi and service passwords stay on the device until a factory reset or an erase, so clear it before you give it away. The station key is kept by a factory reset, only an erase clears it: erase it if the next owner shouldn't post as your station.
+- WiFi and service passwords stay on the device until a factory reset or an erase, so clear it before you give it away. A factory reset keeps the station key. **Reset key** under Advanced on the `/webapi` page clears it, as does a Web Installer erase, so the next owner doesn't post as your station.
 
 ### Remote monitoring done right
 

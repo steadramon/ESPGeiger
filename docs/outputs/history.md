@@ -14,13 +14,13 @@ The `/hist` page gives a longer term view of activity on the device. It shows to
 
 When lifetime tracking is enabled, a Lifetime card appears showing cumulative state since the device was first set up:
 
-- **Clicks** is the total number of clicks ever recorded. Survives reboots.
+- **Clicks** is the total number of clicks ever recorded. Kept across restarts.
 - **Dose** is the cumulative absorbed dose using the configured tube ratio. It scales automatically: micro sieverts for small values, milli sieverts from 1000 µSv, full sieverts from 1 Sv.
 - **Tracked** is the number of seconds the device has been counting toward the dose denominator. It pauses whilst the device is off and resumes from saved state on the next boot.
 - **Install age** is wall clock time since first boot.
 - **Avg CPM** is lifetime clicks divided by tracked seconds, multiplied by 60.
 
-A **Reset lifetime** button at the bottom of the card zeros every field in the card except Install age, including the saved totals that normally survive a reboot. The totals also survive a factory reset, so this button is the only way to clear them.
+A **Reset lifetime** button at the bottom of the card zeros every field in the card except Install age, including the saved totals that normally survive a restart. The totals also survive a factory reset, so this button is the only way to clear them.
 
 ## Today, yesterday and the day rate
 
@@ -34,6 +34,8 @@ The summary card at the top of the page shows five figures:
 
 The day rate shows a dash until the device has run through a full UTC day, at least one hour of today has passed and yesterday has at least one click.
 
+Until the clock is set, Today shows "Clock not set" (a link to the time setting on `/network`) and the other figures, the bar chart and the table stay empty.
+
 ## 24 hour bar chart and table
 
 The bar chart shows the click count for each of the last 24 hours, with the current partial hour as the right hand bar.
@@ -42,7 +44,7 @@ The table below repeats the same data with timestamps in your browser's local ti
 
 ## Inter pulse interval histogram
 
-This is a histogram of the time gaps between consecutive clicks. Buckets double in size from `<64µs` up to `>=512s`, so one chart covers both slow background and a hot source. The data is cumulative since the last reboot.
+This is a histogram of the time gaps between consecutive clicks. Buckets double in size from `<64µs` up to `>=512s`, so one chart covers both slow background and a hot source. The data is cumulative since the last restart.
 
 ### What healthy looks like
 
@@ -58,4 +60,4 @@ Background radiation is a Poisson process, which means consecutive inter pulse g
 - Two distinct peaks suggest two pulse sources are mixing, for example real clicks plus electrical noise, or two physically separate tubes wired into the same input.
 - An empty histogram means the tube isn't producing pulses, or the input pin isn't wired to the line the firmware is reading.
 
-The histogram resets on reboot, so an unusual cluster from a one off event will fade after the next power cycle.
+The histogram resets on a restart, so an unusual cluster from a one off event will fade after the next power cycle.

@@ -22,6 +22,7 @@
 #include <Arduino.h>
 #include "Corium/System/BootButton.h"
 #include "Corium/System/FastMillis.h"
+#include "App/LedPatterns.h"
 
 #ifdef SSD1306_DISPLAY
 #include "Display/Display.h"
@@ -109,6 +110,7 @@ namespace BootHooks {
 
   // 0 = armed
   inline void displayWipe(int s) {
+    led_hold_tick();
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
     display.wipe(s);
 #endif

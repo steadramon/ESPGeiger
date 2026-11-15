@@ -15,7 +15,7 @@ Specialised pages with their own UI:
 * **Network Config** - Wi-Fi, static IP, time zone and NTP server. See [Time and NTP](/configuration/ntp).
 * **HV Config** - high-voltage tuning on ESPGeiger-HW and the `*_hv` builds. See [HV Configuration](/configuration/hv).
 
-Settings changed on the Config page take effect immediately (or on next submission cycle for output modules). Pin and serial type changes require a reboot.
+Settings changed on the Config page take effect immediately (or on next submission cycle for output modules). Pin and serial type changes require a restart.
 
 The Config page is split across five tabs: **System**, **Input**, **Output**, **Upload** and **Backup**.
 
@@ -41,8 +41,8 @@ Some pins save with a warning shown after the save:
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Friendly name | `sys.name` | String (32) | (empty) | Optional human label shown in the web UI title and `/about`. Blank falls back to the hostname (e.g. `ESPGeiger-a1b2c3`). |
-| Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. Reboot to apply. |
-| Network upload | `sys.espota` | Boolean | `0` off | espota port for PlatformIO and the Arduino IDE. The Update page works either way. Reboot to apply. |
+| Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. Restart to apply. |
+| Network upload | `sys.espota` | Boolean | `0` off | espota port for PlatformIO and the Arduino IDE. The Update page works either way. Restart to apply. |
 
 <!-- /gen -->
 
@@ -50,7 +50,7 @@ A new web password works for the web pages at once; [espota](/install/ota#via-es
 
 ### Config import / export
 
-On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. The export also holds the passwords and keys of your outputs (MQTT, Radmon, ThingSpeak, Webhook) and your GMC account and counter IDs, so keep it private. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device reboots. If the flash can't take all of it, nothing changes. WiFi credentials and the device-only settings are kept. An export names the board it came from. Imported on a different board, the HV generator and HV pin settings are skipped and this board's own stay, as the other board's calibration would read the tube voltage wrong; the import page lists them as refused. A setting left at its default isn't in the export, so on another firmware version it takes that version's default. If a stored setting didn't load (this firmware refused it), Export and Import both refuse and name it, so a backup never drops it: set it or reset its group first. In [safe mode](/configuration/safemode) Import still goes through when the backup replaces that group, so the refused value is gone. A device-only group (`net`, the Wi-Fi tunables, the lifetime totals) isn't in a backup, so it doesn't stop one.
+On the **Backup** tab, **Export** copies every setting that differs from its default into the text box. The export also holds the passwords and keys of your outputs (MQTT, Radmon, ThingSpeak, Webhook) and your GMC account and counter IDs, so keep it private. Settings that belong to this device stay out of it: the web password, static IP settings, the advanced Wi-Fi tunables, `sys.cpu_mhz` and the lifetime totals. Paste a saved export and click **Import** to restore it: every other setting goes back to its default first, then the export is applied and the device restarts. If the flash can't take all of it, nothing changes. WiFi credentials and the device-only settings are kept. An export names the board it came from. Imported on a different board, the HV generator and HV pin settings are skipped and this board's own stay, as the other board's calibration would read the tube voltage wrong; the import page lists them as refused. A setting left at its default isn't in the export, so on another firmware version it takes that version's default. If a stored setting didn't load (this firmware refused it), Export and Import both refuse and name it, so a backup never drops it: set it or reset its group first. In [safe mode](/configuration/safemode) Import still goes through when the backup replaces that group, so the refused value is gone. A device-only group (`net`, the Wi-Fi tunables, the lifetime totals) isn't in a backup, so it doesn't stop one.
 
 ### A setting that didn't load
 
@@ -58,39 +58,39 @@ After a firmware update a saved setting can fail the new firmware's checks, for 
 
 Until you deal with it, a save that touches that group is refused and says why, for example `Not saved: webhook.url didn't load, set it or reset webhook.` Enter a new value for that setting, or put the whole group back to defaults with `reset webhook` over [serial](/output/serial) or the Status-page command box.
 
-A saved value that never meant anything to this firmware, text in a number setting or an option this build hasn't got, isn't kept: the boot log says, for example, `Prefs: counter.pcnt_pull junk, default kept`, the default runs and the next save of that group writes it over the old value. Nothing is refused.
+A saved value that never meant anything to this firmware, text in a number setting or a blank option slot, isn't kept: the boot log says, for example, `Prefs: counter.pcnt_pull junk, default kept`, the default runs and the next save of that group writes it over the old value. A number this build doesn't allow, such as a display type it wasn't built with, is refused as above.
 
 ## Counter Settings
 
-On the **Input** tab. Some settings only appear on specific builds. Pin, Count with and Serial Type changes trigger a reboot to apply; PCNT Filter, PCNT Pin Pull and Debounce apply live.
+On the **Input** tab. Some settings only appear on specific builds. Pin, Count with and Serial type changes need a restart to apply; PCNT filter, PCNT pull and Debounce apply live.
 
 <!-- gen:prefs counter skip=udprx_mode,udprx_chipid,udprx_group,udprx_port,udprx_rxmode -->
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Serial Type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
-| RX Pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
-| TX Pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
+| Serial type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
+| RX pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
+| TX pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
 | Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Interrupt has the debounce dead time, reads low at high CPM. Reboot. |
-| PCNT Filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
-| PCNT Pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. None suits modules that drive the line both ways; a pull-up can hold some (the Cajoe IOT-GM v1.1) high so no pulse counts. Pull-up is for open-drain outputs, and keeps an unconnected pin quiet. Pull-down is for active-high modules without their own idle pull. |
+| PCNT filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
+| PCNT pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. None suits modules that drive the line both ways; a pull-up can hold some (the Cajoe IOT-GM v1.1) high so no pulse counts. Pull-up is for open-drain outputs, and keeps an unconnected pin quiet. Pull-down is for active-high modules without their own idle pull. |
 | Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |
 | Pulse width | `counter.pulse_width_us` | Int 10-2000 | `500` | `test`, `testpulse` | Width of the simulated pulse on the TX pin, in microseconds. |
-| CPM Window (CPM-only counters) | `counter.cpm_window` | Int 1-60 | `30` | serial builds | Applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
+| CPM window (CPM-only counters) | `counter.cpm_window` | Int 1-60 | `30` | serial builds | Applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
 | CPM mode | `counter.cpm_mode` | `0` Fast start, `1` Live ring, `2` Fixed 60s, `3` Bucket, `4` Adaptive fast | `3` Bucket | all | How the 1-minute CPM is computed. See [CPM Calculation Mode](/configuration/cpm-mode). |
-| Geiger Counter | `counter.geiger_model` | String (32) | varies by build | not test builds | GM tube model name (e.g. SBM-20, J305). Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
+| Tube model | `counter.geiger_model` | String (32) | varies by build | not test builds | GM tube model name (e.g. SBM-20, J305). Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
 | α Alpha | `counter.tube_alpha` | Boolean | `0` off | not test builds | The tube detects alpha radiation. Informational; passed to upstream aggregators. |
 | β Beta | `counter.tube_beta` | Boolean | `0` off | not test builds | The tube detects beta radiation. Informational. |
 | γ Gamma | `counter.tube_gamma` | Boolean | `0` off | not test builds | The tube detects gamma radiation. Informational. |
 | Tube dead time | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | GM tube dead time in microseconds, used to compensate the rate at high CPS. `0` disables. Set from the tube's datasheet: SBM-20 = 190; the J305 and M4011 datasheets give none (see [Counter](/configuration/counter)). |
-| uSv/h Ratio | `counter.ratio` | Float 1-100000 | `151.0` | all | CPM to uSv/h conversion factor |
+| Dose ratio | `counter.ratio` | Float 1-100000 | `151.0` | all | CPM to uSv/h conversion factor |
 | Warning CPM | `counter.warn` | Int 0-9999 | `50` | all | CPM threshold for warning state |
 | Alert CPM | `counter.alert` | Int 0-9999 | `100` | all | CPM threshold for alert state |
 | Track lifetime | `counter.life_en` | Boolean | `1` on | all | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
 
 <!-- /gen -->
 
-ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.count_mode`, advanced): `0` Hardware (PCNT, the default) or `1` Interrupt. Reboot to apply. Hardware shows PCNT Filter and PCNT Pull, Interrupt shows Debounce. Interrupt counting reads low at high count rates, see [PCNT](/hardware/esphardware#pcnt).
+ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.count_mode`, advanced): `0` Hardware (PCNT, the default) or `1` Interrupt. Restart to apply. Hardware shows PCNT filter and PCNT pull, Interrupt shows Debounce. Interrupt counting reads low at high count rates, see [PCNT](/hardware/esphardware#pcnt).
 
 ## Blip LED Settings
 
@@ -100,13 +100,13 @@ ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.cou
 |---|---|---|---|---|---|
 | Blip LED | `led.blip_led` | Boolean | `1` on | all | Flash the onboard LED on each detected count. Hidden on builds with `-D DISABLE_INTERNAL_BLIP`, unless the board has its own count LED (`GEIGER_BLIPLED`). |
 | Mode | `led.mode` | `0` Pulse, `1` Fade | `0` Pulse | all | `Pulse` switches the LED off after the pulse width; `Fade` ramps it down. |
-| Pulse width ms | `led.pulse_ms` | Int 1-50 | `20` (`2` on ESPGeiger-HW) | all | How long the LED stays lit per count, in milliseconds. |
+| Pulse width (ms) | `led.pulse_ms` | Int 1-50 | `20` (`2` on ESPGeiger-HW) | all | How long the LED stays lit per count, in milliseconds. |
 | Fade rate | `led.fade_shift` | `0` Fast, `1` Medium, `2` Slow | `1` Medium | all | Fade mode only. |
 | Blip brightness | `led.blip_bright` | Int 0-100 | `80` (`100` on ESPGeiger-HW) | all | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). |
 | Quiet from | `led.quiet_from` | Time HH:MM | (empty) | not ESPGeiger-HW | Silence the blip LED + beeper from this time. The alert and HV fault alarms still sound. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
 | Quiet to | `led.quiet_to` | Time HH:MM | (empty) | not ESPGeiger-HW | End of quiet window. Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`). |
-| Status LED | `led.pin` | Int -1 to max GPIO | varies by build | ESP32 | GPIO of the board's own LED, `-1` = none. Defaults to `2` on ESP32 and `-1` on C3/S3, which have no plain LED on GPIO 2. ESP8266 is fixed at GPIO 2. A pin another setting already uses stays with that setting and the LED stays off. Reboot to apply. |
-| Polarity | `led.polarity` | `0` Active high, `1` Active low | varies by build | ESP32 | `Active low` for an LED that lights when its pin is low, such as the C3 SuperMini (GPIO 8) or Lolin32 Lite (GPIO 22). Reboot to apply. |
+| Status LED pin | `led.pin` | Int -1 to max GPIO | varies by build | ESP32 | GPIO of the board's own LED, `-1` = none. Defaults to `2` on ESP32 and `-1` on C3/S3, which have no plain LED on GPIO 2. ESP8266 is fixed at GPIO 2. A pin another setting already uses stays with that setting and the LED stays off. Restart to apply. |
+| Polarity | `led.polarity` | `0` Active high, `1` Active low | varies by build | ESP32 | `Active low` for an LED that lights when its pin is low, such as the C3 SuperMini (GPIO 8) or Lolin32 Lite (GPIO 22). Restart to apply. |
 
 <!-- /gen -->
 
@@ -118,8 +118,8 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| Source Mode | `counter.udprx_mode` | `0` Specific device, `1` Sum all sources | `0` Specific device | `0` = specific producer (auto-latches the first one heard if **Pin chipid** is blank, otherwise locks to the chipid given). `1` = sum mode, totalises clicks from every producer heard (up to 8). |
-| Pin chipid | `counter.udprx_chipid` | String (6) | (empty) | 6-hex chipid of the producer to lock to. Only used in Source Mode `0`. Blank = auto-latch. |
+| Source mode | `counter.udprx_mode` | `0` Specific device, `1` Sum all sources | `0` Specific device | `0` = specific producer (auto-latches the first one heard if **Pin chipid** is blank, otherwise locks to the chipid given). `1` = sum mode, totalises clicks from every producer heard (up to 8). |
+| Source chip ID | `counter.udprx_chipid` | String (6) | (empty) | 6-hex chipid of the producer to lock to. Only used in Source Mode `0`. Blank = auto-latch. |
 | Group / listen IP | `counter.udprx_group` | String (15) | `239.255.86.86` | 239.x = multicast, else unicast listen. |
 | Port | `counter.udprx_port` | Int 1-65535 | `57340` | UDP port. Must match the producer. |
 | RX sleep | `counter.udprx_rxmode` | `0` Light (low power), `1` Modem (balanced), `2` None (always on) | varies by build | WiFi sleep while receiving. Modem suits most networks; the original ESP32 defaults to None. See [Reliability and tuning](/output/udp#reliability-and-tuning). |
@@ -136,10 +136,10 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 | Port | `mqtt.port` | Int 1-65535 | `1883` | MQTT broker port |
 | User | `mqtt.user` | String (64) | (empty) | MQTT username |
 | Password | `mqtt.password` | String (64) | (empty) | MQTT password (sensitive) |
-| Root Topic | `mqtt.topic` | String (28) | `ESPGeiger-{id}` | Root publish topic. `{id}` is replaced with the chip ID. |
+| Root topic | `mqtt.topic` | String (28) | `ESPGeiger-{id}` | Root publish topic. `{id}` is replaced with the chip ID. |
 | Interval | `mqtt.interval` | Int 5-3600 | `60` | Publish interval in seconds |
-| HA Autodiscovery | `mqtt.hass_enabled` | Boolean | `1` on (`0` on test builds) | Publish Home Assistant autodiscovery on connect |
-| HA Autodiscovery Topic | `mqtt.hass_topic` | String (32) | `homeassistant` | HA discovery prefix |
+| HA autodiscovery | `mqtt.hass_enabled` | Boolean | `1` on (`0` on test builds) | Publish Home Assistant autodiscovery on connect |
+| HA autodiscovery topic | `mqtt.hass_topic` | String (32) | `homeassistant` | HA discovery prefix |
 
 <!-- /gen -->
 
@@ -163,7 +163,7 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Enable | `thingspeak.send` | Boolean | `0` off | Upload to ThingSpeak |
-| Channel Key | `thingspeak.channel_key` | String (16) | (empty) | ThingSpeak channel write API key (sensitive) |
+| Channel key | `thingspeak.channel_key` | String (16) | (empty) | ThingSpeak channel write API key (sensitive) |
 
 <!-- /gen -->
 
@@ -198,7 +198,7 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| Sync Interval (min) | `sdcard.sync_min` | Int 1-5 | `1` | Minutes between syncs to the card. `1` syncs on every write (safest). Higher values reduce SD wear at the cost of up to `N - 1` minutes of data loss on a power cut. File is always flushed at day rollover and before cleanup. See [SD Output](/output/sdcard). |
+| Sync interval (min) | `sdcard.sync_min` | Int 1-5 | `1` | Minutes between syncs to the card. `1` syncs on every write (safest). Higher values reduce SD wear at the cost of up to `N - 1` minutes of data loss on a power cut. File is always flushed at day rollover and before cleanup. See [SD Output](/output/sdcard). |
 
 <!-- /gen -->
 
@@ -210,8 +210,8 @@ One bus for the OLED and the [environment sensor](/configuration/env). Upgrades 
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| SDA Pin | `i2c.sda` | Int 0-max GPIO | varies by build | Reboot to apply |
-| SCL Pin | `i2c.scl` | Int 0-max GPIO | varies by build | Reboot to apply |
+| SDA pin | `i2c.sda` | Int 0-max GPIO | varies by build | Restart to apply |
+| SCL pin | `i2c.scl` | Int 0-max GPIO | varies by build | Restart to apply |
 
 <!-- /gen -->
 
@@ -221,23 +221,23 @@ One bus for the OLED and the [environment sensor](/configuration/env). Upgrades 
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Display Type | `display.type` | `0` SSD1306, `1` SH1106 (1.3in), `2` SSD1309 | `0` SSD1306 | boards without fixed pins | OLED panel, or an LED display on builds with MAX7219 support: `3` Tiny SSD1306 and `4` Tiny SH1106 (ESP32), `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637). Reboot to apply. |
+| Display type | `display.type` | `0` SSD1306, `1` SH1106 (1.3in), `2` SSD1309 | `0` SSD1306 | boards without fixed pins | OLED panel, or an LED display on builds with MAX7219 support: `3` Tiny SSD1306 and `4` Tiny SH1106 (ESP32), `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637). Restart to apply. |
 | Brightness | `display.brightness` | Int 0-100 | `25` | all | Display brightness |
-| Reset Pin | `display.rst` | Int 0-255 | `255` | boards without fixed pins | GPIO toggled at boot to reset OLED (255 = none). Reboot to apply. |
-| Flip 180° | `display.flip` | Boolean | varies by build | all | Reboot to apply |
-| Timeout | `display.timeout` | Int 0-99999 | `120` | push-button builds | Display turns off after this many seconds of inactivity. `0` falls back to On Time / Off Time below. |
-| On Time | `display.on_time` | Time HH:MM | (empty) | all | Display on-time. On push-button builds, only takes effect when Timeout is `0`. Blank means always on. |
-| Off Time | `display.off_time` | Time HH:MM | (empty) | all | Display off-time. Same rules as On Time. Window crosses midnight if `from > to`. |
+| Reset pin | `display.rst` | Int 0-255 | `255` | boards without fixed pins | GPIO toggled at boot to reset OLED (255 = none). Restart to apply. |
+| Flip 180° | `display.flip` | Boolean | varies by build | all | Restart to apply |
+| Idle time (s) | `display.timeout` | Int 0-99999 | `120` | push-button builds | Display turns off after this many seconds of inactivity. `0` falls back to On Time / Off Time below. |
+| On time | `display.on_time` | Time HH:MM | (empty) | all | Display on-time. On push-button builds, only takes effect when Timeout is `0`. Blank means always on. |
+| Off time | `display.off_time` | Time HH:MM | (empty) | all | Display off-time. Same rules as On Time. Window crosses midnight if `from > to`. |
 
 <!-- /gen -->
 
-On push-button builds the long-press gesture toggles a permanent override that keeps the display on regardless of Timeout or schedule. Re-toggle to restore the configured behaviour.
+On push-button builds the long-press gesture toggles a permanent override that keeps the display on regardless of Idle time or schedule. Re-toggle to restore the configured behaviour.
 
 ### MAX7219
 
-Shown while Display Type is a MAX7219 layout: `7-Seg` (up to 8 digits), `Round` (4 digits and a 24-LED arc) or `Matrix` (1 to 8 chained 8x8 panels), or a `7-Seg (TM1637)` module. Pages step through CPM, µSv/h, a CPM graph on the matrix and, with an environment sensor, temperature and humidity. The Round starts on a VU meter page before those.
+Shown while Display type is a MAX7219 layout: `7-Seg` (up to 8 digits), `Round` (4 digits and a 24-LED arc) or `Matrix` (1 to 8 chained 8x8 panels), or a `7-Seg (TM1637)` module. Pages step through CPM, µSv/h, a CPM graph on the matrix and, with an environment sensor, temperature and humidity. The Round starts on a VU meter page before those.
 
-The TM1637 has two wires: its DIO goes on the Data Pin and its CLK on the CLK Pin. CS is not used.
+The TM1637 has two wires: its DIO goes on the Data pin and its CLK on the CLK pin. CS is not used.
 
 The `Round` arc (MottramLabs MAX7219 Power Display) lights green up to the System **warn** CPM, orange up to **alert** and red up to twice **alert**. On the VU page the digits hold CPM and each count kicks the arc, which falls back like a needle and auto-ranges so the usual rate bobs around the green/orange border. The board is built for 5V logic: from an ESP, power it from 3V3 or put a level shifter on DIN, CLK and CS.
 
@@ -245,13 +245,13 @@ The `Round` arc (MottramLabs MAX7219 Power Display) lights green up to the Syste
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| Data Pin (DIN/DIO) | `max7219.din` | Int -1 to max GPIO | `-1` | Reboot to apply |
-| CLK Pin | `max7219.clk` | Int -1 to max GPIO | `-1` | Reboot to apply |
-| CS Pin | `max7219.cs` | Int -1 to max GPIO | `-1` | Reboot to apply |
+| Data pin (DIN/DIO) | `max7219.din` | Int -1 to max GPIO | `-1` | Restart to apply |
+| CLK pin | `max7219.clk` | Int -1 to max GPIO | `-1` | Restart to apply |
+| CS pin | `max7219.cs` | Int -1 to max GPIO | `-1` | Restart to apply |
 | Pages | `max7219.mode` | `0` Cycle, `1` Fixed | `1` Fixed | Cycle auto-advances; Fixed holds until the button is pressed |
 | Digits | `max7219.count` | Int 1-8 | `8` | 7-seg digit count. TM1637 takes 2-6, anything over 6 shows as 4 |
 | Panels | `max7219.panels` | Int 1-8 | `4` | 8x8 panels in the chain |
-| uSv decimal places | `max7219.decimals` | Int 0-3 | `2` | Decimal places on the µSv/h page. |
+| uSv/h decimal places | `max7219.decimals` | Int 0-3 | `2` | Decimal places on the µSv/h page. |
 | Level bar (decimal-point row) | `max7219.bar` | Boolean | `1` on | Light the decimal points as a level bar (7-seg, CPM only) |
 | Bar sensitivity | `max7219.bar_gain` | Int 1-10 | `2` | Bar fills at this multiple of the recent average |
 | Bar baseline | `max7219.bar_win` | `0` 5 min, `1` 15 min | `1` 15 min | The recent average the bar scales against. |
@@ -267,7 +267,7 @@ The `Round` arc (MottramLabs MAX7219 Power Display) lights green up to the Syste
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Pin | `neopixel.pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | WS2812 data pin. `-1` leaves the module inert (no LED wired). Set to the GPIO your pixel is on. Reboot to apply. |
+| Pin | `neopixel.pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | WS2812 data pin. `-1` leaves the module inert (no LED wired). Set to the GPIO your pixel is on. Restart to apply. |
 | Brightness | `neopixel.brightness` | Int 0-100 | `15` | all | NeoPixel brightness, 0 disables and unloads the module. Too low a value can cause inaccurate colours. |
 | Mode | `neopixel.mode` | `0` Off, `1` Blip, `2` Blip+status, `3` Trend pulse, `4` Trend+status | `4` Trend+status | all | Render mode. See [NeoPixel output](/output/neopixel) for behaviour. |
 | Blip colour | `neopixel.color` | `0` Green, `1` Red, `2` Blue, `3` Yellow, `4` Cyan, `5` Magenta, `6` White, `7` Orange | `0` Green | all | Colour for mode 1 only. |
@@ -284,7 +284,7 @@ Drives a GPIO when CPM crosses the alert threshold. See [Alert Out](/output/aler
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| GPIO | `alert.pin` | Int -1 to max GPIO | `-1` | Output pin. `-1` disables the module. Reboot to apply. |
+| GPIO | `alert.pin` | Int -1 to max GPIO | `-1` | Output pin. `-1` disables the module. Restart to apply. |
 | Polarity | `alert.polarity` | `0` Active high, `1` Active low | `0` Active high | Output level while alerting. |
 | Mode | `alert.mode` | `0` Steady level, `1` 1 Hz pulse | `0` Steady level | Hold the level while alerting, or toggle it as a 1 Hz square wave. |
 
@@ -302,7 +302,7 @@ set wifi.country GB
 reboot
 ```
 
-Changes take effect on the next reboot.
+Changes take effect on the next restart.
 
 <!-- gen:prefs wifi hidden -->
 

@@ -466,7 +466,7 @@ void SSD1306Display::page_tiny_dose() {
   drawStrP(0, 16, PSTR("uSv/h"));
   char cpmbuf[8];
   format_cpm(cpmbuf, sizeof(cpmbuf), display.shown_cpm());
-  snprintf_P(buf, sizeof(buf), PSTR("%s cpm"), cpmbuf);
+  snprintf_P(buf, sizeof(buf), PSTR("%s CPM"), cpmbuf);
   drawStr(0, 28, buf);
 }
 
@@ -482,11 +482,11 @@ void SSD1306Display::page_tiny_net() {
   } else if (corium::Wifi::ap) {
     // its name is the hostname
     corium::Wifi::formatIP(buf, sizeof(buf));
-    drawStrP(0, 2,  PSTR("WiFi AP"));
+    drawStrP(0, 2,  PSTR("Hotspot"));
     drawStr (0, 15, fit_str(*this, corium::DeviceInfo::hostname(), 71));
     drawStr (0, 28, fit_str(*this, buf, 71));
   } else {
-    drawStrP(0, 2,  PSTR("WiFi off"));
+    drawStrP(0, 2,  PSTR("Offline"));
     drawStr (0, 15, fit_str(*this, corium::DeviceInfo::hostname(), 71));
     drawStr (0, 28, tiny_uptime());
   }
@@ -802,7 +802,7 @@ void SSD1306Display::setupWifi(const char* s) {
 #if OLED_TINY
   if (isTiny()) {
     setFont(U8G2_FONT_ARIAL_10);
-    drawStrP(0, 2,  PSTR("Setup WiFi"));
+    drawStrP(0, 2,  PSTR("Setup portal"));
     const char* host = s ? s : "";
     const char* dash = strrchr(host, '-');
     char line[16];
@@ -812,21 +812,10 @@ void SSD1306Display::setupWifi(const char* s) {
     return;
   }
 #endif
-  drawTPString(*this, 0, 10, DialogInput_plain_12, PSTR("Setup - Connect to"));
-  drawTPString(*this, 0, 24, DialogInput_plain_12, PSTR("WiFi -"));
+  drawTPString(*this, 0, 10, DialogInput_plain_12, PSTR("Setup portal"));
+  drawTPString(*this, 0, 24, DialogInput_plain_12, PSTR("Join WiFi:"));
   drawTPString(*this, 0, 38, DialogInput_plain_12, s);
   sendBuffer();
-}
-
-void SSD1306Display::apOnlyMode(const char* host, const char* ip) {
-  if (!take_screen()) return;
-  drawTPString(*this, 0, 6,  DialogInput_plain_12, PSTR("Setup - Join AP"));
-  drawTPString(*this, 0, 20, DialogInput_plain_12, host ? host : "");
-  drawTPString(*this, 0, 34, DialogInput_plain_12, ip ? ip : "");
-  drawTPString(*this, 0, 48, DialogInput_plain_12, PSTR("Set region, reboot"));
-  sendBuffer();
-  display.keep_on();
-  _locked_page = true;
 }
 
 void SSD1306Display::safe_mode() {
@@ -858,8 +847,8 @@ void SSD1306Display::wipeCountdown(int seconds_left) {
 void SSD1306Display::wipeReady() {
   if (!take_screen()) return;
   setFont(U8G2_FONT_ARIAL_16);
-  drawStrP(0, 0,  PSTR("RELEASE for"));
-  drawStrP(0, 18, PSTR("FULL WIPE"));
+  drawStrP(0, 0,  PSTR("Release for"));
+  drawStrP(0, 18, PSTR("factory reset"));
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 44, PSTR("Keep holding"));
   drawStrP(0, 54, PSTR("to cancel."));
@@ -944,7 +933,8 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   int32_t  usv_x100 = CounterMaths::to_int(dusv * 100.0f);
   uint8_t mode = !display.warm() ? P1_WARMING : slow ? P1_SLOW : P1_LIVE;
   uint8_t flags = (corium::Wifi::disabled ? P1_WIFI_OFF : 0) | (corium::Wifi::connected ? P1_WIFI_UP : 0)
-                | (display.no_counts() ? P1_NO_COUNTS : 0);
+                | (display.no_counts() ? P1_NO_COUNTS : 0)
+                | (display.alert() ? P1_ALERT : display.warn() ? P1_WARN : 0);
   P1 p = { cpm_x10, usv_x100, mode, _sent_mark, flags, cpm_trend(cpm_x10 / 10) };
   if (p == _p1_last) return false;
   _p1_last = p;
@@ -956,8 +946,16 @@ void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
   setDrawColor(0);
   drawBox(36, 0, 92, 32);
   setDrawColor(1);
-  if (p.trend > 0)      drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_up);
-  else if (p.trend < 0) drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_arrow_down);
+  const uint8_t* g = nullptr;
+  if (p.flags & (P1_WARN | P1_ALERT)) g = EGGlyph_warning;
+  else if (p.trend > 0) g = EGGlyph_arrow_up;
+  else if (p.trend < 0) g = EGGlyph_arrow_down;
+  if (p.flags & P1_ALERT) {
+    drawBox(36, 2, EG_GLYPH_W + 2, EG_GLYPH_H);
+    setDrawColor(0);   // solid bitmap: black on white
+  }
+  if (g) drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, g);
+  setDrawColor(1);
   char buf[16];
   format_cpm(buf, sizeof(buf), p.cpm_x10 * 0.1f);
   drawTPString(*this, 45, 0, DialogInput_Digits_17, buf);

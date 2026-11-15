@@ -18,7 +18,7 @@ output: no I2S, no amplifier IC, no synthesis. A real mechanical tick
 per pulse, available on most ESP builds.
 
 Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log hardware builds (`espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`, `espgeigerlog_udp`) and `esp8266_pulsemin`. Disabled by default; set the pin,
-enable it from **Config > Pulse Out** and reboot; the pin is read at boot.
+enable it from **Config > Pulse Out** and restart; the pin is read at boot.
 
 ## Settings
 
@@ -26,16 +26,16 @@ enable it from **Config > Pulse Out** and reboot; the pin is read at boot.
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| Enable | `pulse.enable` | Boolean | `0` off | Takes effect on save, no reboot needed. |
+| Enable | `pulse.enable` | Boolean | `0` off | Off takes effect on save. On needs a reboot if it was off at boot. |
 | GPIO | `pulse.pin` | Int -1 to max GPIO | `-1` | GPIO driving the load. `-1` keeps the pin idle. |
 | Polarity | `pulse.polarity` | `0` Active high, `1` Active low | `0` Active high | Active high suits most cases. Active low is for common-anode LEDs and inverted MOSFET drivers. |
 | Mode | `pulse.mode` | `0` Pulse, `1` Burst, `2` LED fade | `0` Pulse | Single pulse, resonant burst (for a piezo or speaker) or LED fade. |
-| Pulse width ms | `pulse.pulse_ms` | Int 1-50 | `5` | Single-pulse width in milliseconds. 1 ms for audio, several ms for LEDs. |
-| Burst Hz | `pulse.freq` | Int 1000-8000 | `3500` | Burst frequency in Hz. For a piezo, match its marked resonance. |
+| Pulse width (ms) | `pulse.pulse_ms` | Int 1-50 | `5` | Single-pulse width in milliseconds. 1 ms for audio, several ms for LEDs. |
+| Burst (Hz) | `pulse.freq` | Int 1000-8000 | `3500` | Burst frequency in Hz. For a piezo, match its marked resonance. |
 | Burst cycles | `pulse.cycles` | Int 1-10 | `1` | Cycles per burst. More = louder + slightly longer. |
 | Fade rate | `pulse.fade_shift` | `0` Fast, `1` Medium, `2` Slow | `1` Medium | Fade decay rate: Fast is ~100 ms, Medium ~250 ms, Slow ~500 ms. |
 | Brightness | `pulse.brightness` | Int 0-100 | `100` | LED brightness in percent (LED loads only). Applies to Pulse and Fade modes. |
-| Max Hz | `pulse.max_hz` | Int 0-200 | `20` | Cap on clicks per second. `0` removes the cap. |
+| Max (Hz) | `pulse.max_hz` | Int 0-200 | `20` | Cap on clicks per second. `0` removes the cap. |
 | Quiet from | `pulse.quiet_from` | Time HH:MM | (empty) | Silence clicks from this time. Blank = off. |
 | Quiet to | `pulse.quiet_to` | Time HH:MM | (empty) | End of the quiet window; crosses midnight if from > to. |
 

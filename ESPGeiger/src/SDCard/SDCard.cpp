@@ -87,7 +87,7 @@ static void month_grew(uint32_t yyyymm, uint32_t bytes) {
 SDCard sdcard;
 CORIUM_REGISTER_FEATURE(sdcard, FEAT_SDCARD)
 
-CORIUM_PSTR(SD_L_SI, "Sync Interval (min)");
+CORIUM_PSTR(SD_L_SI, "Sync interval (min)");
 CORIUM_PSTR(SD_H_SI, "Minutes between syncs. 1=safest, higher=less SD wear");
 
 static const corium::Pref SDCARD_PREF_ITEMS[] PROGMEM = {

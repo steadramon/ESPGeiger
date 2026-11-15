@@ -12,7 +12,7 @@ ESPGeiger supports cheap, widely-available I2C OLED panels for live readout of C
 
 ## Supported chips
 
-Set the chip type from **Config → Display → Display Type** (or build flag `-DOLED_TYPE=N`). All three options share the same 128×64 pixel resolution and I2C interface; they differ only in the panel driver IC.
+Set the chip type from **Config → Display → Display type** (or build flag `-DOLED_TYPE=N`). All three options share the same 128×64 pixel resolution and I2C interface; they differ only in the panel driver IC.
 
 | ID | Chip | Common form factor | Notes |
 |---|---|---|---|

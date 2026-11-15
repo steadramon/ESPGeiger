@@ -79,6 +79,10 @@ class EGPortal {
     void setNotice(const char* n) { _notice = n; }
 
     bool active() const { return _active; }
+    bool busy() const;   // work waiting, loop() again soon
+
+    void kickScan();   // async, loop() collects it
+    bool heard(const char* ssid) const;   // in the last scan
 
     struct ScanEntry {
       char    ssid[EGPORTAL_SSID_MAX + 1];
@@ -157,6 +161,5 @@ class EGPortal {
     static void hResetGo(EGHttpRequest&, EGHttpResponse&, void*);
 
     void refreshScan(int n);
-    void kickScan();
     void takeScan(int n);
 };

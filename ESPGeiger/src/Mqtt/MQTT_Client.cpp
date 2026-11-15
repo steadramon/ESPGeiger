@@ -79,14 +79,14 @@ static char* json_begin(const char* topic, size_t max, size_t* cap) {
 CORIUM_PSTR(MQ_L_SRV, "Server");
 CORIUM_PSTR(MQ_H_SRV, "Broker address or IP");
 CORIUM_PSTR(MQ_L_USR, "User");
-CORIUM_PSTR(MQ_L_TPC, "Root Topic");
+CORIUM_PSTR(MQ_L_TPC, "Root topic");
 CORIUM_PSTR(MQ_H_TPC, "Root topic; {id}=chip ID");
 CORIUM_PSTR(MQ_P_TPC, "/?[A-Za-z0-9_\\/\\{\\}\\-]+");   // a bare / refused
-CORIUM_PSTR(MQ_H_INT, "Publish interval (sec)");
+CORIUM_PSTR(MQ_H_INT, "Send interval (s)");
 #ifdef MQTTAUTODISCOVER
-CORIUM_PSTR(MQ_L_HEN, "HA Autodiscovery");
+CORIUM_PSTR(MQ_L_HEN, "HA autodiscovery");
 CORIUM_PSTR(MQ_H_HEN, "Publish HA autodiscovery");
-CORIUM_PSTR(MQ_L_HTP, "HA Autodiscovery Topic");
+CORIUM_PSTR(MQ_L_HTP, "HA autodiscovery topic");
 CORIUM_PSTR(MQ_H_HTP, "HA discovery prefix");
 CORIUM_PSTR(MQ_P_HTP, "/?[A-Za-z0-9_\\/\\-]+");
 #endif

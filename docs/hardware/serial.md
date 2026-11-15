@@ -8,7 +8,7 @@ nav_order: 3
 
 # Serial Counters
 
-ESPGeiger supports a variety of Geiger counters that communicate via serial interfaces. A single unified `serial` build supports all serial protocols - select your counter type on the [Config page](/configuration) under **Input > Serial Type** after flashing.
+ESPGeiger supports a variety of Geiger counters that communicate via serial interfaces. A single unified `serial` build supports all serial protocols - select your counter type on the [Config page](/configuration) under **Input > Serial type** after flashing.
 
 ## Supported Counters
 
@@ -30,13 +30,13 @@ All supported counters send one reading per second. If no valid line arrives for
 
 ## How readings are derived
 
-- **CPM-only counters (GC10, GC10Next, ESPGeiger).** ESPGeiger turns each reported CPM into counts per second (CPM ÷ 60). Its display is a smoothed view of the counter's own smoothed number, so it lags the counter's display when the rate changes. The [CPM Window](#cpm-window-option) option shortens the lag.
+- **CPM-only counters (GC10, GC10Next, ESPGeiger).** ESPGeiger turns each reported CPM into counts per second (CPM ÷ 60). Its display is a smoothed view of the counter's own smoothed number, so it lags the counter's display when the rate changes. The [CPM window](#cpm-window-option) option shortens the lag.
 - **MightyOhm.** The counter sends its exact counts per second and ESPGeiger uses them directly.
 - **Totals** count only from when ESPGeiger started listening, so they will not match the counter's own lifetime total.
 
 ## CPM Window Option
 
-ESPGeiger averages received CPM values over a rolling window before displaying them, which keeps the reading steady at the cost of lagging the counter's own display whenever the true rate changes. The **CPM Window (CPM-only counters)** setting (Config > Input, serial builds only) controls that window's length, from **1 to 60 seconds**.
+ESPGeiger averages received CPM values over a rolling window before displaying them, which keeps the reading steady at the cost of lagging the counter's own display whenever the true rate changes. The **CPM window (CPM-only counters)** setting (Config > Input, serial builds only) controls that window's length, from **1 to 60 seconds**.
 
 It only applies to CPM-only counters (GC10, GC10Next, ESPGeiger). MightyOhm always uses 60 seconds, because it sends exact per-second counts.
 
@@ -52,7 +52,7 @@ Things to know:
 
 - Lower window values mean higher natural variance at steady state - CPM will bounce more, closer to what the counter's own display shows.
 - Warning / alert thresholds can trip on short Poisson spikes that a 60-second window would have smoothed over. If you have tight thresholds, bump them up or use a larger window.
-- Requires a reboot to apply (the window size is fixed at startup).
+- Requires a restart to apply (the window size is fixed at startup).
 
 `total_clicks`, CPS, 5- and 15-minute averages and all MQTT/API feeds continue to work unchanged at any window setting - only the 1-minute CPM's responsiveness is affected.
 

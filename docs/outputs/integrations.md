@@ -35,7 +35,7 @@ Response:
 | `r` | µSv conversion ratio |
 | `tc` | Total clicks since boot |
 | `mem` | Free heap memory in bytes |
-| `rssi` | WiFi signal strength in dBm |
+| `rssi` | WiFi signal strength in dBm, `0` while the WiFi link is down |
 | `tube` | `1` while counts are arriving, `0` once the tube has been silent longer than expected for its count rate |
 | `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `warn` | `1` when CPM is above the warning threshold (`counter.warn`) |

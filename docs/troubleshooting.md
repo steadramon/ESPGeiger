@@ -9,12 +9,12 @@ nav_order: 7
 
 Common problems, what they look like and where to look first.
 
-## Device restarts by itself / "Last reset: Brownout"
+## Device restarts by itself / "Restart reason: Brownout"
 
 **Sort out your power supply.** This is by far the most common hardware
 problem and almost never a firmware issue.
 
-On ESP32 boards the `/info` page reports it directly: **Last reset:
+On ESP32 boards the `/info` page reports it directly: **Restart reason:
 Brownout** means the supply voltage dipped below the safe threshold and the
 chip protected itself by resetting. The usual suspects, in order:
 
@@ -67,7 +67,9 @@ GeigerPulse: ISR storm (N/s) - parked 5s
 ```
 
 The input pin is seeing more than 10,000 edges a second, far beyond any
-Geiger tube. Counting pauses for 5 seconds, then retries. The usual causes:
+Geiger tube. Counting pauses for 5 seconds, then retries. If the storm is
+still there each pause is twice as long, up to 5 minutes; a quiet second
+starts it back at 5. The usual causes:
 
 - **Floating input.** Nothing connected to the input pin, or a loose wire.
 - **Noisy cable.** A long or unshielded pulse wire picking up mains hum or
@@ -75,20 +77,21 @@ Geiger tube. Counting pauses for 5 seconds, then retries. The usual causes:
 - **Failed tube** oscillating instead of producing clean pulses.
 
 Counting resumes by itself once the input is quiet and the log shows
-`GeigerPulse: re-armed after storm cooldown`. WiFi, the web pages and MQTT
+`GeigerPulse: Re-armed after storm cooldown`. WiFi, the web pages and MQTT
 keep running while counting is paused.
 
 This check is on when pulses are counted with an interrupt: all ESP8266 and
 ESP32-C3 pulse builds, and ESP32 pulse builds set to **Count with** Interrupt
 (the default on the `no_pcnt` builds, retired in 0.15). Counting with
-Hardware (PCNT) doesn't need it.
+Hardware (PCNT) drops any second over 10,000 counts instead and logs
+`GeigerPulse: PCNT storm (N/s) - dropped`.
 
 ## WiFi keeps dropping
 
 - Check **RSSI** on the `/info` page: weaker than about -80 dBm is
   unreliable in practice. Move the device or the access point.
 - A reduced **TX power** setting saves energy but shrinks range - the
-  current value is shown on `/info`.
+  current value, in dBm, is `tx` in `/about`.
 - Erratic drops combined with random resets: see the power supply section
   above - WiFi transmit is exactly when a weak supply gives out.
 
@@ -102,6 +105,6 @@ Hardware (PCNT) doesn't need it.
 
 ## When reporting a problem
 
-Include the `/info` page contents (platform, version, last reset reason)
+Include the `/info` page contents (platform, version, restart reason)
 and, for crashes, the exception details shown there. A photo of the wiring
 helps more often than you would expect.

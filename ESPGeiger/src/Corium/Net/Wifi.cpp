@@ -92,6 +92,7 @@ namespace Wifi {
 }  // namespace corium
 
 static const uint32_t PORTAL_RETRY_MS = 600000UL;   // 10 min
+static const uint32_t OUTAGE_SCAN_MS = 60000UL;
 using corium::Wifi::JOIN_WAIT_MS;
 static const uint32_t JOIN_RETRY_WAIT_MS = 15000;
 static const uint32_t LEAVE_WAIT_MS = 2000;
@@ -662,7 +663,7 @@ static void portal_factory_reset(EGPortal* portal) {
   unsigned long flush_until = corium::fastMillis() + 1200;
   while (!corium::reached(corium::fastMillis(), flush_until)) {
     portal->loop();
-    delay(10);
+    delay(portal->busy() ? 1 : 10);
   }
   corium::Log::console(PSTR("WiFi: Factory reset from setup portal"));
   corium::DeviceInfo::factoryReset();
@@ -676,22 +677,44 @@ static bool portal_timed_out(uint32_t& idle_ms, uint32_t now) {
   return now - idle_ms >= PORTAL_RETRY_MS || now - CORIUM_MS_START >= WIFI_OFFLINE_MAX_MS;
 }
 
+// the saved ap not heard as the portal came up (an outage): back = rejoin
+static bool ap_back(EGPortal* portal, const char* ssid, corium::Deadline& scan, uint32_t now) {
+  if (WiFi.softAPgetStationNum() > 0 || corium::Wifi::testing()) {
+    scan.set(now + OUTAGE_SCAN_MS);   // a scan hops channel, a phone on it drops
+    return false;
+  }
+  if (portal->heard(ssid)) return true;
+  if (scan.due(now)) {
+    portal->kickScan();
+    scan.set(now + OUTAGE_SCAN_MS);
+  }
+  return false;
+}
+
 // hasSavedCreds() here drops the AP
 static void run_portal(EGPortal* portal, bool have_creds) {
   uint32_t idle_ms = corium::fastMillis();
   corium::Deadline done;   // joined, the page shows it first
+  Creds c;
+  bool watch = have_creds && sdk_creds(c) && !portal->heard(c.ssid);
+  corium::Deadline scan;
+  scan.set(idle_ms + OUTAGE_SCAN_MS);
   while (!done.due(corium::fastMillis()) && !corium::Wifi::offlineForced) {
     portal->loop();
     console.pollBoot();
-    delay(10);
+    delay(portal->busy() ? 1 : 10);   // work waiting, back in 1 ms
     uint32_t now = corium::fastMillis();
     corium::Wifi::testStep(now);
     portal->setJoinState(s_join);
     if (s_join == EGPortal::JOIN_OK && !done.armed()) done.set(now + PORTAL_DONE_MS);
     if (s_reset) portal_factory_reset(portal);
     if (!have_creds) continue;   // first setup, wait forever
+    if (watch && ap_back(portal, c.ssid, scan, now)) {
+      corium::Log::console(PSTR("WiFi: %s back, restarting to join"), c.ssid);
+      corium::DeviceInfo::safeRestart(500);
+    }
     if (portal_timed_out(idle_ms, now)) {
-      corium::Log::console(PSTR("WiFi: Portal timeout, rebooting to retry saved network"));
+      corium::Log::console(PSTR("WiFi: Portal timeout, restarting to retry saved network"));
       corium::DeviceInfo::safeRestart(500);
     }
   }

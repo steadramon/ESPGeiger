@@ -82,14 +82,14 @@ Click **Upload**. The button stays greyed until a file is chosen. The device:
 - Shows *"Update in progress..."* on its OLED (if fitted)
 - Stops all regular activity (MQTT publishes, WebAPI posts, serial output)
   to avoid interfering with the flash write
-- Receives the new firmware, writes it, verifies it and reboots
+- Receives the new firmware, writes it, verifies it and restarts
 
 Total time is typically **15-30 seconds** depending on your Wi-Fi. Don't
 close the browser tab until the upload bar finishes.
 
 ## After the update
 
-The device reboots into the new firmware. Wait about 10 seconds, the
+The device restarts into the new firmware. Wait about 10 seconds, the
 page should refresh. The version on the **Info** page should show the
 new release tag.
 
@@ -124,7 +124,7 @@ curl --data-binary @esp8266_pulse-firmware.v1.2.3.bin \
 > reads them as the entry-address and refuses the upload as
 > wrong-platform (`entry=0x2d2d2d2d`).
 
-If you've set a portal password under **Config -> System -> Web password**,
+If you've set a web password under **Config -> System -> Web password**,
 include Basic Auth:
 
 ```

@@ -38,7 +38,7 @@ The following build flags can be added to your environment's `build_flags` to cu
 | Flag | Description |
 |---|---|
 | `-D SSD1306_DISPLAY` | Enable SSD1306 OLED display. |
-| `-D MAX7219_DISPLAY` | Add the LED displays (MAX7219 7-seg, Round and Matrix, TM1637) as Display Type choices. |
+| `-D MAX7219_DISPLAY` | Add the LED displays (MAX7219 7-seg, Round and Matrix, TM1637) as Display type choices. |
 | `-D OLED_SDA=N` | Set the default OLED I2C SDA pin (default `4`). Also exposed as a runtime pref unless `OLED_PINS_BLOCKED` is set. |
 | `-D OLED_SCL=N` | Set the default OLED I2C SCL pin (default `5`). Also exposed as a runtime pref unless `OLED_PINS_BLOCKED` is set. |
 | `-D OLED_PINS_BLOCKED=true` | Hide the OLED SDA/SCL pins from the runtime prefs UI. Use on builds with fixed hardware where the pins must not be reconfigured. |
@@ -108,7 +108,7 @@ By default, the 5-minute and 15-minute CPM values use exponential moving average
 | `-D GEIGER_SMOOTH_AVG` | Use rolling average buckets instead of EMA for the 5 and 15-minute CPM values. Uses more memory but gives equal weighting to all readings in the window. |
 | `-D GEIGER_EMA_FACTOR=N` | Set the EMA smoothing factor (default `30`, matching a 5 and 15 minute average). Lower values respond faster, higher values are smoother. |
 
-The 1-minute CPM value always uses a 60-second rolling average for accuracy.
+The 1-minute CPM follows the [CPM Mode](/configuration/cpm-mode) setting.
 
 ### ESP32 Hardware Counter (PCNT)
 
@@ -197,7 +197,7 @@ Identifies a specific product family. Implies a known set of capability flags as
 | `-D DISABLE_BLIP` | Disable the LED blip on each detected pulse. |
 | `-D DISABLE_INTERNAL_BLIP` | Disable the internal status LED blip on each detected pulse. |
 | `-D NTP_SERVER="server"` | Set the default NTP server (default `pool.ntp.org`). |
-| `-D NTP_TZ="tz"` | Set the default timezone in POSIX format. |
+| `-D NTP_TZ="tz"` | Default timezone as an Olson name, e.g. `Europe/London`. Default `Etc/UTC`; an unknown name runs as UTC. |
 | `-D RTC_CHIP` | Look for an RTC chip on the I2C bus on ESP8266 and ESP32 builds too (C3 and S3 builds with the bus always do). |
 
 ### SdFat (SD card builds)
@@ -332,9 +332,9 @@ build_flags =
 
 `${serial_nmi.build_flags}` reads the serial counter on the timer NMI instead of SoftwareSerial, as the shipped ESP8266 serial builds do.
 
-With no `BTN_PIN_BLOCKED` flag the button pin is also a setting, **Button Pin** (`btn.pin`) on the Config page, with `PUSHBUTTON_PIN` as its default. `-1` turns the button off.
+With no `BTN_PIN_BLOCKED` flag the button pin is also a setting, **Button pin** (`btn.pin`) on the Config page, with `PUSHBUTTON_PIN` as its default. `-1` turns the button off.
 
-After flashing, select your serial counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page under **Input > Serial Type**.
+After flashing, select your serial counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page under **Input > Serial type**.
 
 The key points when building a custom environment:
 

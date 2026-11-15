@@ -62,7 +62,7 @@ extern const char wifiAdvancedHTML[] PROGMEM;
 // CSS + page templates
 
 #if !EG_GZ_STYLE_CSS
-static const char STYLE_CSS[] PROGMEM = R"CSS(:root{--bg:#fff;--page:#f8f9fa;--fg:#212529;--muted:#6c757d;--border:#dee2e6;--accent:#06c;--link:#06c;--card:#f8f9fa}
+static const char STYLE_CSS[] PROGMEM = R"CSS(:root{--bg:#fff;--page:#f8f9fa;--fg:#212529;--muted:#687179;--border:#dee2e6;--accent:#06c;--link:#06c;--card:#f8f9fa}
 :root[data-theme=dark]{--bg:#212529;--page:#1a1d20;--fg:#dee2e6;--muted:#adb5bd;--border:#373b3e;--card:#2b3035;--link:#6aa9f0}
 *{box-sizing:border-box}
 html{background:var(--page);min-height:100%}
@@ -73,7 +73,7 @@ h2{font-size:.9em;margin:.6em 0 .3em;font-weight:700;color:var(--fg);text-transf
 a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
 input,select,textarea,button{font:inherit;padding:.5em .7em;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--fg);width:100%}
 input[type=radio],input[type=checkbox]{width:auto;margin:0 .4em 0 0;vertical-align:middle}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px #0066cc26}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px #06c}
 button,input[type=submit]{background:var(--accent);color:#fff;border:0;cursor:pointer;width:auto;padding:.5em 1em}
 form>button[type=submit]{margin-top:.8em}
 button.danger{background:#c0392b}button.danger:hover{background:#a02a1f}.btn-o{background:transparent;color:var(--link);border:1px solid var(--link)}.btn-o:hover{background:var(--accent);color:#fff}.r{display:block;margin:.5em 0 0 auto}
@@ -93,7 +93,6 @@ th{font-weight:500;color:var(--muted)}
 .ak{background:#1f6f3a26;border-color:#1f6f3a}
 .aw{background:#ffc40026;border-color:#ffc40099}
 .ae{background:#c0392b26;border-color:#c0392b}
-.cl{float:right;cursor:pointer;font-size:1.3em;line-height:1;opacity:.6}.cl:hover{opacity:1}
 .il{display:inline-block;margin:.4em 1em .4em 0}.il input{width:auto;margin-right:.3em;vertical-align:middle}
 small{display:block;color:var(--muted);font-size:.85em;margin:.1em 0 .4em}
 hr{border:0;border-top:1px solid var(--border);margin:1em 0}
@@ -102,14 +101,13 @@ output{display:inline-block;margin-left:.6em;color:var(--muted)}
 details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
 details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
 details.adv{margin:.5em 0 0;border:0;padding:0}details.adv>summary{color:var(--muted);font-size:.85em;font-weight:400}
-details.bx.off>summary{opacity:.55}
 .gb{font-size:.68em;font-weight:400;padding:.05em .45em;border-radius:3px;margin-left:.5em;border:1px solid var(--border);color:var(--muted)}.gb.on{color:var(--link);border-color:var(--link)}
 nav.tabs{display:flex;border-bottom:1px solid var(--border);margin:0 0 1em;gap:.4em;flex-wrap:wrap}
 nav.tabs a{padding:.5em .9em;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none}
 nav.tabs a:hover{color:var(--fg)}
 nav.tabs a.ac{color:var(--link);border-bottom-color:var(--link)}
 .mt{margin-top:.4em}
-#dyB{position:fixed;top:0;left:0;right:0;padding:.5em;background:#fc3;color:#000;text-align:center;z-index:9999;cursor:pointer;font-size:.9em;font-weight:600}
+#dyB{position:fixed;top:0;left:0;width:100%;padding:.5em;background:#fc3;color:#000;text-align:center;z-index:9999;cursor:pointer;font-size:.9em;font-weight:600}
 .menu{display:flex;flex-direction:column;gap:.85em;margin:1em auto;max-width:22em}
 .menu a,.back{background:var(--accent);color:#fff;font-weight:500;padding:.5em 1em;border-radius:4px}
 .menu a{display:block;text-align:center;font-size:1.15em;padding:.55em 1em;border-radius:6px}
@@ -213,7 +211,7 @@ static const corium::MenuEntry WEBPORTAL_TOP_MENU[] PROGMEM = {
 static const corium::MenuEntry WEBPORTAL_BOTTOM_MENU[] PROGMEM = {
   {"/info",    "Info"},
   {"/update",  "Update"},
-  {"/restart", "Reboot"},
+  {"/restart", "Restart"},
   {"", ""}
 };
 
@@ -251,7 +249,7 @@ static void ap_test_end() {
 
 void corium::WebPortal::poll(uint32_t now) {
   // unsigned diff, wrap safe
-  if (now - _poll_last_ms < POLL_MS) return;
+  if (now - _poll_last_ms < pollGap()) return;
   _poll_last_ms = now;
 
   if (_active) _http.tick();
@@ -538,7 +536,8 @@ d.dataset.theme=LS.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'da
 }();
 window.live=(u,ms,fn,at)=>{var J,L=0,
 k=w=>{clearTimeout(J);J=setTimeout(go,w)},
-go=()=>fetch(typeof u=='function'?u():u,{cache:'no-store'}).then(r=>r.ok?r.text():null,()=>null).then(t=>{L=Date.now();var w;try{w=fn(t)}catch(e){}k(w>=0?w:t==null?6e3:ms)});
+go=()=>{var c=new AbortController(),x=setTimeout(()=>c.abort(),ms+5e3);
+fetch(typeof u=='function'?u():u,{cache:'no-store',signal:c.signal}).then(r=>r.ok?r.text():null).catch(()=>null).then(t=>{clearTimeout(x);L=Date.now();var w;try{w=fn(t)}catch(e){}k(w>=0?w:t==null?6e3:ms)})};
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&L)k(Math.max(0,ms-(Date.now()-L)))});
 if(at>=0)k(at);return k};
 )JS";
@@ -660,7 +659,7 @@ static void info_collect_net(InfoNet& net) {
   uint8_t mac[6];
   corium::Wifi::softAPmacAddress(mac);
   info_fmt_mac(net.ap_mac, sizeof(net.ap_mac), mac);
-  egesc_html(net.ssid, sizeof(net.ssid), corium::Wifi::SSID().c_str());
+  egesc_html(net.ssid, sizeof(net.ssid), corium::Wifi::isConnected() ? corium::Wifi::SSID().c_str() : "");
   strlcpy(net.ap_ssid, corium::Wifi::softAPSSID().c_str(), sizeof(net.ap_ssid));
 }
 
@@ -688,7 +687,7 @@ static void info_render_frames(EGHttpResponse& res, const corium::CrashDump::Sna
 }
 
 static void info_render_reset(EGHttpResponse& res) {
-  INFO_ROW("Last reset",    W_FMT_S, corium::DeviceInfo::resetText());
+  INFO_ROW("Restart reason", W_FMT_S, corium::DeviceInfo::resetText());
   uint32_t epc1, excvaddr;
   uint8_t exccause;
   if (corium::DeviceInfo::resetExc(&epc1, &excvaddr, &exccause)) {
@@ -722,7 +721,7 @@ static void info_render_backtrace(EGHttpResponse& res, const corium::CrashDump::
 }
 
 static void info_render_reset(EGHttpResponse& res) {
-  INFO_ROW("Last reset", W_FMT_S, corium::DeviceInfo::resetText());
+  INFO_ROW("Restart reason", W_FMT_S, corium::DeviceInfo::resetText());
   if (const char* in = corium::Registry::crashedIn()) INFO_ROW("Crashed in", W_FMT_S, in);
   if (const corium::CrashDump::Snapshot* cd = corium::CrashDump::lastCrash()) {
 #ifdef __riscv
@@ -772,7 +771,7 @@ static void info_render_system(EGHttpResponse& res) {
   INFO_ROW("Chip ID",       W_FMT_S, corium::DeviceInfo::chipId());   // udp pairing asks for it
   uint32_t heap = corium::DeviceInfo::freeHeap();
   // KB with one decimal, no float
-  INFO_ROW("Free heap",     PSTR("%u.%u KB"), (unsigned)(heap / 1024), (unsigned)(heap % 1024 * 10 / 1024));
+  INFO_ROW("Free memory",   PSTR("%u.%u KB"), (unsigned)(heap / 1024), (unsigned)(heap % 1024 * 10 / 1024));
   INFO_ROW("Firmware",      PSTR("%u KB of %u KB"), (unsigned)(corium::DeviceInfo::sketchSize() / 1024),
                             (unsigned)((corium::DeviceInfo::sketchSize() + corium::DeviceInfo::freeSketch()) / 1024));
 #ifdef ESP8266
@@ -799,7 +798,7 @@ static PGM_P rssi_word(int r) {
 static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
   res.sendChunk(F("<details open><summary>WiFi</summary><table>"));
   if (net.ssid[0]) INFO_ROW("Network", PSTR("%s, channel %d"), net.ssid, (int)corium::Wifi::channel());
-  if (corium::Wifi::isConnected()) INFO_ROW("RSSI", PSTR("%d dBm (%s)"), (int)corium::Wifi::rssi, rssi_word(corium::Wifi::rssi));
+  if (corium::Wifi::isConnected()) INFO_ROW("Signal", PSTR("%d dBm (%s)"), (int)corium::Wifi::rssi, rssi_word(corium::Wifi::rssi));
   INFO_ROW("IP",             W_FMT_S,     net.ip);
   INFO_ROW("Hostname",       W_FMT_S,     corium::DeviceInfo::hostname());
   INFO_ROW("MAC",            W_FMT_S,     net.mac);
@@ -908,7 +907,7 @@ void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void corium::WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   s_factory_reset = true;
-  corium::WebPortal::beginPage(res, F("Reset"));
+  corium::WebPortal::beginPage(res, F("Factory reset"));
   res.sendChunk(F("<p>All settings cleared. Device is restarting and will return to the setup portal.</p>"));
   corium::WebPortal::endRestartPage(res);
 }
@@ -922,7 +921,7 @@ void corium::WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void
     return;
   }
   corium::WebPortal::beginPage(res, F("Erase WiFi"));
-  res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Device will reboot into Setup Mode.</p>"));
+  res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Restarting into the setup portal.</p>"));
   corium::WebPortal::endPage(res);
   s_erase_creds = true;
   corium::WebPortal::requestRestart();
@@ -932,10 +931,10 @@ void corium::WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void
 
 static const char WIFI_FORM_HEAD[] PROGMEM = R"HTML(
 <form method=POST action=/wifisave>
-<label style='display:flex;align-items:center;justify-content:space-between'>
-<span>Network</span>
+<div style='display:flex;align-items:center;justify-content:space-between'>
+<label for=ws>Network</label>
 <button type=button id=rescan class='btn-sm btn-o'>Rescan</button>
-</label>
+</div>
 <select id=ws onchange="byID('s').value=this.options[this.selectedIndex].dataset.ssid||''">
 <option value=''>Scanning&hellip;</option>
 </select>
@@ -946,7 +945,7 @@ static const char WIFI_FORM_HEAD[] PROGMEM = R"HTML(
 )HTML";
 
 static const char WIFI_FORM_END[] PROGMEM = R"HTML(
-<button type=submit>Save and reboot</button>
+<button type=submit>Save and restart</button>
 </form>
 <p class=muted style='margin-top:1em'>If the new network is unreachable, the previous one is restored automatically after about a minute.</p>
 )HTML";
@@ -992,7 +991,7 @@ void corium::WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("Network"));
 
   char ssid[6 * EGPORTAL_SSID_MAX + 1];
-  egesc_html(ssid, sizeof(ssid), corium::Wifi::SSID().c_str());
+  egesc_html(ssid, sizeof(ssid), corium::Wifi::isConnected() ? corium::Wifi::SSID().c_str() : "");
   sendf(res, W_CONNECTED, ssid[0] ? ssid : PSTR("(none)"));
   res.sendChunk(F("</b></p>"));
 
@@ -1081,12 +1080,12 @@ static void wifi_render_save_msg(EGHttpResponse& res, bool has_ssid) {
   if (has_ssid) {
     char ssid[6 * EGPORTAL_SSID_MAX + 1];
     egesc_html(ssid, sizeof(ssid), corium::Wifi::heldSsid());
-    res.sendKV(F("<p>Saving credentials for <b>"), ssid, F("</b> and rebooting.</p>"));
+    res.sendKV(F("<p>Saving credentials for <b>"), ssid, F("</b> and restarting.</p>"));
     res.sendChunk(F("<p class=muted>If the new network is reachable, the device will "
                     "reconnect on its own. If it isn't, the previous credentials are "
                     "restored automatically after about a minute.</p>"));
   } else {
-    res.sendChunk(F("<p>Saving network settings and rebooting.</p>"
+    res.sendChunk(F("<p>Saving network settings and restarting.</p>"
                     "<p class=muted>WiFi credentials unchanged. New IP "
                     "configuration will apply once the device comes back up.</p>"));
   }
@@ -1249,7 +1248,7 @@ void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*
 // /update
 
 static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
-<p>Upload a firmware <code>.bin</code> built for this board. The device will reboot when the upload completes.</p>
+<p>Upload a firmware <code>.bin</code> built for this board. The device will restart when the upload completes.</p>
 <form id=uf>
 <input type=file id=uf_file accept=".bin,application/octet-stream" required>
 <div id=uf_check class=a style=display:none></div>
@@ -1720,18 +1719,18 @@ static void param_render_tabs(EGHttpResponse& res, uint8_t tab) {
   res.sendChunk(F("<nav class=tabs>"));
   for (uint8_t t = 0; t < TABS; t++) {
     corium::WebPortal::sendf(res, PSTR("<a href='/param?t=%u'%s>%s</a>"),
-      (unsigned)t, t == tab ? PSTR(" class=ac") : PSTR(""), TAB_NAMES[t]);
+      (unsigned)t, t == tab ? PSTR(" class=ac aria-current=page") : PSTR(""), TAB_NAMES[t]);
   }
   res.sendChunk(F("</nav>"));
 }
 
 static void param_render_backup(EGHttpResponse& res) {
   res.sendChunk(F(
-    "<form method=POST action=/import onsubmit=\"return confirm('Import config and reboot?')\">"
+    "<form method=POST action=/import onsubmit=\"return confirm('Import config and restart?')\">"
     "<p><textarea name=blob id=cfgB rows=5 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
     "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
     " <button type=submit>Import</button></p></form>"
-    "<p style=\"color:var(--muted);font-size:.85em\">WiFi and network settings are preserved. Device reboots automatically after import.</p>"
+    "<p style=\"color:var(--muted);font-size:.85em\">WiFi and network settings are preserved. Device restarts automatically after import.</p>"
     "<p class=\"a aw\" style=\"font-size:.85em\"><b>Note:</b> The exported blob contains private information. Keep it private.</p>"));
 }
 
@@ -2495,16 +2494,16 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
   corium::WebPortal::beginPage(res, F("Imported"));
   if (r.firstKey[0]) {
     // blob, a key from the upload
-    sendf(res, PSTR("<p>Imported %d prefs, %d refused (first "), applied, r.skipped);
+    sendf(res, PSTR("<p>Imported %d settings, %d refused (first "), applied, r.skipped);
     char esc[6 * (sizeof(r.firstKey) - 1) + 1];
     egesc_html(esc, sizeof(esc), r.firstKey);
     res.sendChunk(esc);
     res.sendChunk(F("). Restarting.</p>"));
   } else if (r.skipped) {
-    sendf(res, PSTR("<p>Imported %d prefs, skipped %d (first at line %d). Restarting.</p>"),
+    sendf(res, PSTR("<p>Imported %d settings, skipped %d (first at line %d). Restarting.</p>"),
           applied, r.skipped, r.firstSkip);
   } else {
-    sendf(res, PSTR("<p>Imported %d prefs. Restarting.</p>"), applied);
+    sendf(res, PSTR("<p>Imported %d settings. Restarting.</p>"), applied);
   }
   corium::WebPortal::endRestartPage(res);
 }
@@ -2639,12 +2638,12 @@ void corium::WebPortal::hConsoleStream(EGHttpRequest& req, EGHttpResponse& res, 
 
 extern const char wifiAdvancedHTML[] PROGMEM = R"HTML(
 <details style='margin-top:1.5em'><summary>Advanced</summary>
-<p class=muted>Erase the saved WiFi credentials and reboot into the captive setup portal.</p>
-<form method=POST action=/erase onsubmit="return confirm('Erase saved WiFi credentials? Device will reboot into setup mode.')">
-<button type=submit class=danger>Erase WiFi config</button>
+<p class=muted>Erase the saved WiFi credentials and restart into the setup portal.</p>
+<form method=POST action=/erase onsubmit="return confirm('Erase saved WiFi credentials? Device will restart into the setup portal.')">
+<button type=submit class=danger>Erase WiFi</button>
 </form>
-<p class=muted style=margin-top:1em>Factory reset: erase <b>all</b> settings and calibration, then reboot into the setup portal.</p>
-<form method=POST action=/reset onsubmit="return confirm('Erase ALL settings and reboot into setup mode? This cannot be undone.')">
+<p class=muted style=margin-top:1em>Factory reset: erase <b>all</b> settings and calibration, then restart into the setup portal.</p>
+<form method=POST action=/reset onsubmit="return confirm('Erase ALL settings and restart into the setup portal? This cannot be undone.')">
 <button type=submit class=danger>Factory reset</button>
 </form>
 </details>

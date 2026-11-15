@@ -18,11 +18,11 @@ Set brightness, mode and blip colour on the [Config page](/configuration#neopixe
 |---|---|---|
 | 0 - Off | nothing | LED dark, module unloaded |
 | 1 - Blip | every click | fixed (user-chosen colour, default green) |
-| 2 - Blip+status | every click | green normally; yellow on warning, red on alert, blue if no clicks |
+| 2 - Blip+status | every click | green normally; yellow on warning (short blink), red on alert (long blink), a blue pulse every 2 s while no clicks arrive |
 | 3 - Trend pulse | periodic, rate-derived interval | rate trend (see below) |
 | 4 - Trend + status (default) | periodic, rate-derived interval | rate trend, with warning / alert / no-data overrides |
 
-Modes 1 and 2 flash once per click. On UDP receiver builds the flashes follow packet arrival from the producer, not the tube itself.
+Modes 1 and 2 flash once per click, 3 flashes a second at most: faster clicks keep it lit. On UDP receiver builds the flashes follow packet arrival from the producer, not the tube itself.
 
 Modes 3 and 4 produce a regular *pulse* whose rate scales with how the current 1-minute CPM compares to the 5-minute average. The pulse is a trend indicator, not a 1:1 click visualisation.
 
@@ -45,11 +45,11 @@ Brightness scales the chosen colour proportionally.
 
 ### Advanced settings
 
-Fade (`neopixel.fade`, Off/Fast/Medium/Slow) stretches the mode 1 blip with a decay (20, 80, 150 or 300 ms). Swap R/G (`neopixel.swap`) fixes chips that show green as red; on by default on ESP8266. Pin (`neopixel.pin`) is the data pin, -1 off, reboot to apply; fixed on the XH-S3E, ESPGeiger-Log and ESPGeiger Lite.
+Fade (`neopixel.fade`, Off/Fast/Medium/Slow) stretches the mode 1 blip with a decay (20, 80, 150 or 300 ms). Swap R/G (`neopixel.swap`) fixes chips that show green as red; on by default on ESP8266. Pin (`neopixel.pin`) is the data pin, -1 off, restart to apply; fixed on the XH-S3E, ESPGeiger-Log and ESPGeiger Lite.
 
 ## How the trend colour and flash rate are derived (modes 3 and 4)
 
-The pulse **rate** scales with the ratio of the current 1-minute CPM to the 5-minute average CPM (`CPM5`). Rising activity pulses faster; steady or falling activity pulses slower. The interval is clamped to between 100 ms (≈10/sec) at maximum activity and 4 s at minimum.
+The pulse **rate** scales with the ratio of the current 1-minute CPM to the 5-minute average CPM (`CPM5`). Rising activity pulses faster; steady or falling activity pulses slower. The interval is clamped to between 334 ms (3 a second) at maximum activity and 4 s at minimum.
 
 The pulse **colour** is derived from a *Poisson z-score* against the 5-minute baseline:
 
@@ -67,7 +67,7 @@ This is noise-aware: at low rates a small absolute change carries little statist
 | `z < -1.5` | __PURPLE__ | Dropping (≥1.5σ below baseline) |
 | _otherwise_ | __GREEN__ | Within normal variation around baseline |
 
-In mode 4, if a [warning or alert threshold](/configuration#counter-settings) is configured and the current CPM crosses it, the NeoPixel switches to __YELLOW__ (warning) or __RED__ (alert) regardless of the z-score above. Mode 3 ignores the thresholds and shows only the trend colour.
+In mode 4, if a [warning or alert threshold](/configuration#counter-settings) is configured and the current CPM crosses it, the NeoPixel switches to __YELLOW__ (warning, short blink) or __RED__ (alert, long blink) regardless of the z-score above. Mode 3 ignores the thresholds and shows only the trend colour.
 
 ## Why mode 3/4 flashes look more regular than real clicks
 

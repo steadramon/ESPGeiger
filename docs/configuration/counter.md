@@ -16,7 +16,7 @@ Debounce is an input filter in the firmware. It drops any pulse that arrives wit
 
 The job of debounce is to reject electrical artifacts: tube ringing, capacitive pickup, amplifier overshoot. These are not real radiation events and should not be counted.
 
-Debounce applies when counting by interrupt. ESP32 builds counting with PCNT use the [PCNT Filter](/hardware/esphardware#pcnt-filter) instead.
+Debounce applies when counting by interrupt. ESP32 builds counting with PCNT use the [PCNT filter](/hardware/esphardware#pcnt-filter) instead.
 
 <!-- gen:prefs counter only=debounce -->
 

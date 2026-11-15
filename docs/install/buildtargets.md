@@ -27,7 +27,7 @@ ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support; the panel is aut
 
 ## Serial
 
-A single unified serial build supports all serial Geiger counter types. Select the serial protocol on the [Config page](/configuration) under **Input > Serial Type**.
+A single unified serial build supports all serial Geiger counter types. Select the serial protocol on the [Config page](/configuration) under **Input > Serial type**.
 
 | Target Name | Notes |
 |---|---|
@@ -68,7 +68,7 @@ Generic HV builds enable the same closed-loop high-voltage management used on ES
 `esp8266oled_hv` | ESP8266 + OLED | As `esp8266_hv` with SSD1306 OLED.
 `esp32_hv` | ESP32 | Pulse build with HV generator + ADC feedback. PWM frequency up to 78 kHz (hardware LEDC). VFB pin defaults to **GPIO 36** (ADC1, no WiFi conflict). SSD1306 OLED auto-detected at boot.
 
-For safety the PWM pin defaults to `-1`, so a freshly flashed board drives no pin until you choose one. Set **HV PWM Pin** on the [Config page](/configuration) (System tab, **HV Hardware**), then **reboot**.
+For safety the PWM pin defaults to `-1`, so a freshly flashed board drives no pin until you choose one. Set **HV PWM pin** on the [Config page](/configuration) (System tab, **HV Hardware**), then **restart**.
 
 ## Audio Tick (ESP32-S3 only)
 
@@ -91,7 +91,7 @@ keep speech synthesis and the click engine clear of the counting path.
 `esp32s3_audio_serial` | ESP32-S3 dev kit + amp | Serial | |
 
 Audio Tick is on by default. On the `esp32s3_audio_*` envs, set the
-three I2S pins on the Config page to match your wiring, then reboot.
+three I2S pins on the Config page to match your wiring, then restart.
 
 ## UDP Receiver
 
@@ -105,7 +105,7 @@ UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for
 `esp32c3_udp` | ESP32-C3 | auto | ESP32-C3 receiver with bundled OLED. |
 `esp32s3_udp` | ESP32-S3 | auto | ESP32-S3 receiver with bundled OLED. |
 
-After flashing, set **Source Mode** on **Config > Input**: Specific device (leave Pin chipid blank to latch the first source heard) or Sum all sources. Group / listen IP and UDP port are under advanced.
+After flashing, set **Source mode** on **Config > Input**: Specific device (leave Source chip ID blank to latch the first source heard) or Sum all sources. Group / listen IP and UDP port are under advanced.
 
 ## Test and Custom Builds
 

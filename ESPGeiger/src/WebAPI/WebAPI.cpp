@@ -85,7 +85,7 @@ static const corium::Pref WEBAPI_PREF_ITEMS[] PROGMEM = {
 };
 
 static const corium::PrefGroup WEBAPI_PREF_GROUP PROGMEM = {
-  "webapi", "ESPGeiger Network", 3,
+  "webapi", "ESPGeiger Stations", 3,
   WEBAPI_PREF_ITEMS,
   sizeof(WEBAPI_PREF_ITEMS) / sizeof(WEBAPI_PREF_ITEMS[0]),
   corium::P_CAT_UPLOAD, EG_K_MODE, 0,
@@ -94,6 +94,10 @@ static const corium::PrefGroup WEBAPI_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* WebAPI::prefsGroup() { return &WEBAPI_PREF_GROUP; }
 
 void WebAPI::onPrefsLoaded() {
+  if (_gone) {   // a save tries again
+    _gone = false;
+    _hs_at = 0;
+  }
   _mode = (uint8_t)corium::Prefs::getUInt("webapi", EG_K_MODE);
   bool off = _mode == WA_OFF && !_forget && !request.busy();
   corium::Registry::every(this, off ? 0 : LOOP_MS);
@@ -161,6 +165,10 @@ void WebAPI::pingIfDue(unsigned long now) {
       _ping_off = corium::SendSlot::initialOffset(name(), PING_MS);
     _ping_ms = corium::SendSlot::pingFromOffset(_ping_off, now, PING_MS);
   } else if (corium::dueSteps(now, _ping_ms, PING_MS)) {
+    if (_hold) {
+      _hold--;
+      return;
+    }
     const bool health = (_health_n == 0);
     if (_mode == WA_CPM || health) {
       postMeasurement(_mode != WA_CPM);
@@ -188,11 +196,13 @@ static bool crash_to_send() {
 // true = off, nothing more this pass
 bool WebAPI::offStep() {
   if (!WEBAPI_SENDS || !_have_key) _forget = false;   // never had a station
-  if (_forget && _station && corium::Clock::synced && !request.busy()) {
-    _forget = false;
+  uint32_t now = corium::fastMillis();
+  if (_forget && _station && corium::Clock::synced && !request.busy() &&
+      corium::reachedMax(now, _forget_at, WEBAPI_BACKOFF_MAX)) {
+    _forget_at = now + backoff();   // the reply clears it
     sendForget();
   }
-  if (_mode != WA_OFF || (_forget && !_station)) return false;
+  if ((_mode != WA_OFF && !_gone) || (_forget && !_station)) return false;
   // forget reply still due, or the clock
   if (request.busy()) corium::Registry::dueAt(this, request.due());
   else corium::Registry::every(this, _forget ? LOOP_MS : 0);
@@ -427,9 +437,15 @@ void WebAPI::handshakeAt(uint32_t at) {
 }
 
 void WebAPI::backoffHandshake() {
-  handshakeAt(corium::fastMillis() + _hs_backoff_ms);
-  uint32_t next = _hs_backoff_ms * 2;
+  handshakeAt(corium::fastMillis() + backoff());
+}
+
+// a failed handshake or forget, doubles to the max
+uint32_t WebAPI::backoff() {
+  uint32_t wait = _hs_backoff_ms;
+  uint32_t next = wait * 2;
   _hs_backoff_ms = next > WEBAPI_BACKOFF_MAX ? WEBAPI_BACKOFF_MAX : next;
+  return wait;
 }
 
 static uint32_t wall_clock_wait_ms(uint32_t k, uint32_t interval_ms, uint32_t period_s) {
@@ -472,19 +488,25 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
       notePublish(true);
       return;
     }
-  } else {
-    corium::Log::debug(PSTR("WebAPI: Handshake error %d - %s"), code, (PGM_P)EGHttpClient::reason(code));
-    if (code == 403) denied(r, n);
-    if (code == 429) {
-      corium::Log::debug(PSTR("WebAPI: Rate-limited; waiting for next scheduled interval"));
-      notePublish(false);
-      return;
-    }
+  } else if (hsError(code, r, n)) {
+    notePublish(false);
+    return;
   }
   // backoff, uECC_sign is slow
   backoffHandshake();
   corium::Registry::dueIn(this, REPLAN_MS);
   notePublish(false);
+}
+
+// true = no backoff: gone, or a 429 waits for its slot
+bool WebAPI::hsError(int code, const uint8_t* r, size_t n) {
+  corium::Log::console(PSTR("WebAPI: Handshake error %d - %s"), code, (PGM_P)EGHttpClient::reason(code));
+  if (code == 404 || code == 410) {
+    gone(code);
+    return true;
+  }
+  if (code == 403) denied(r, n);
+  return code == 429;
 }
 
 #ifdef ESPGEIGER_ATTEST
@@ -725,7 +747,7 @@ void WebAPI::onPost(int code, const uint8_t* r, size_t n) {
       corium::Log::debug(PSTR("WebAPI: Post response not ok"));
     }
   } else {
-    corium::Log::debug(PSTR("WebAPI: Error %d - %s"), code, (PGM_P)EGHttpClient::reason(code));
+    corium::Log::console(PSTR("WebAPI: Error %d - %s"), code, (PGM_P)EGHttpClient::reason(code));
     if (code == 403) {
       denied(r, n);
       _station = 0;
@@ -733,9 +755,27 @@ void WebAPI::onPost(int code, const uint8_t* r, size_t n) {
       corium::Registry::dueIn(this, REPLAN_MS);
     } else if (code == 409) {
       corium::Log::debug(PSTR("WebAPI: Replay rejected (check NTP clock)"));
+    } else if (code == 410) {
+      gone(code);
+    } else if (code == 429) {
+      _hold = WEBAPI_429_HOLD;
     }
   }
   notePublish(ok);
+}
+
+void WebAPI::gone(int code) {
+  _gone = true;
+  corium::Log::console(PSTR("WebAPI: Server says gone (%d), stopped till a save or restart"), code);
+}
+
+static const char API_FGT_P[] PROGMEM = "/api.fgt";   // a forget owed
+#define API_FGT_PATH FPSTR(API_FGT_P)
+
+void WebAPI::forget() {
+  _forget = true;
+  _forget_at = corium::fastMillis();
+  if (!corium::Fs::writeWhole(API_FGT_PATH, "1", 1)) corium::Log::console(PSTR("WebAPI: Forget not kept over a restart"));
 }
 
 void WebAPI::sendForget() {
@@ -777,6 +817,9 @@ void WebAPI::onForget(int code, const uint8_t* r, size_t n) {
   bool ok = (code == 200 || code == 403) && !off;
   if (ok) {
     corium::Log::console(PSTR("WebAPI: Station forgotten (HTTP %d)"), code);
+    _forget = false;
+    (void)corium::Fs::remove(API_FGT_PATH);   // stays = sent again next boot, the server says gone
+    _hs_backoff_ms = WEBAPI_BACKOFF_MS;
     _station = 0;
     _hs_at = 0;
     _ping_ms = 0;
@@ -861,6 +904,7 @@ void WebAPI::loadConfig() {
     corium::Log::console(PSTR("WebAPI: Key restored from backup"));
   }
   if (!_have_key) return;
+  _forget = corium::Fs::exists(API_FGT_PATH);
   encode_base64(_pub, sizeof(_pub), (uint8_t *)_pub64);
   corium::Log::console(PSTR("WebAPI: Key loaded"));
 }
@@ -873,7 +917,7 @@ size_t WebAPI::statusJson(char* buf, size_t cap) {
 // HTTP routes
 
 static const char FORGET_BODY[] PROGMEM =
-  "<p>A delete request has been sent to the server. Sharing is now <b>Off</b>.</p>"
+  "<p>A delete request goes to the server as soon as it can be reached. Sharing is now <b>Off</b>.</p>"
   "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
 
 // false = a field refused, rest still saved; the pref rows are the rule
@@ -922,7 +966,7 @@ static void send_sharing(EGHttpResponse& res, uint8_t mode) {
   res.sendChunk(F("> Heartbeat</label>"
     "<label><input type=radio name=m value=2"));
   if (mode == 2) res.sendChunk(FPSTR(W_CHECKED));
-  res.sendKV(F("> CPM Readings</label></fieldset>"
+  res.sendKV(F("> CPM readings</label></fieldset>"
                "<label for=lat>Latitude</label>"
                "<input id=lat name=lat type=number step=any min=-90 max=90 placeholder='approximate by IP if blank' value='"),
              ip ? "" : corium::Prefs::getString("webapi", EG_K_LAT),
@@ -939,8 +983,8 @@ static void send_sharing(EGHttpResponse& res, uint8_t mode) {
 static void send_advanced(EGHttpResponse& res, uint8_t mode) {
   res.sendChunk(F(
     "<details style=margin-top:1em><summary>Advanced</summary>"
-    "<p class=muted>Reset the device key. The next handshake registers a new station &mdash; the existing one <b>cannot be retrieved</b>.</p>"
-    "<form method=POST action=/webapikeyreset onsubmit=\"return confirm('Reset the ESPGeiger Network key? This orphans the existing station.')\">"
+    "<p class=muted>Reset the station key. The next handshake registers a new station: the existing one <b>cannot be retrieved</b>.</p>"
+    "<form method=POST action=/webapikeyreset onsubmit=\"return confirm('Reset the station key? This orphans the existing station.')\">"
     "<button type=submit class=danger>Reset key</button></form>"));
   if (mode > 0 && webapi.getStationId() != 0) {
     res.sendChunk(F(
@@ -957,13 +1001,13 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool wrote = true;
   const bool saved = posted && save_settings(req, wrote);
 
-  corium::WebPortal::beginPage(res, F("ESPGeiger Network"));
+  corium::WebPortal::beginPage(res, F("ESPGeiger Stations"));
   if (!wrote) corium::WebPortal::sendNotSaved(res);
   else if (saved) res.sendChunk(F("<div class='a ak'>Saved.</div>"));
   else if (posted) res.sendChunk(F("<div class='a ae'>A value was out of range and not saved.</div>"));
   res.sendChunk(F(
-    "<p class=muted>ESPGeiger can share data with the public station "
-    "network so it appears on the global map. The device identity and "
+    "<p class=muted>ESPGeiger can share data with ESPGeiger Stations "
+    "so it appears on the global map. The device identity and "
     "location are obscured before publication.</p>"));
 
   uint8_t mode = (uint8_t)corium::Prefs::getUInt("webapi", EG_K_MODE);
@@ -978,13 +1022,13 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
 static void hKeyReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::Log::console(PSTR("WebAPI: Resetting api.key"));
   bool gone = forget_key();
-  corium::WebPortal::beginPage(res, F("Key Reset"));
+  corium::WebPortal::beginPage(res, F("Station key reset"));
   if (!gone) {
     corium::WebPortal::sendNotSaved(res);
     corium::WebPortal::endPage(res);
     return;
   }
-  res.sendChunk(F("<p>ESPGeiger Network key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
+  res.sendChunk(F("<p>Station key cleared. Device is restarting; a new station identity will be created on next connection.</p>"));
   corium::WebPortal::endRestartPage(res);
 }
 
@@ -992,14 +1036,14 @@ static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
   webapi.forget();
   bool wrote = corium::Prefs::put("webapi", EG_K_MODE, "0") && corium::Prefs::commit();
 
-  corium::WebPortal::beginPage(res, F("Station Forgotten"));
+  corium::WebPortal::beginPage(res, F("Station forgotten"));
   if (!wrote) corium::WebPortal::sendNotSaved(res);
   res.sendChunk(FPSTR(FORGET_BODY));
   corium::WebPortal::endPage(res);
 }
 
 static const corium::MenuEntry WEBAPI_MENU[] PROGMEM = {
-  {"/webapi", "ESPGeiger Network"},
+  {"/webapi", "ESPGeiger Stations"},
   {"", ""}
 };
 const corium::MenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }

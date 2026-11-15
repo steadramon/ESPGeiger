@@ -20,7 +20,7 @@ Included in every shipped ESP build except the ESPGeiger-HW and ESPGeiger Log ha
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| GPIO | `alert.pin` | Int -1 to max GPIO | `-1` | Output pin. `-1` disables the module. Reboot to apply a change. |
+| GPIO | `alert.pin` | Int -1 to max GPIO | `-1` | Output pin. `-1` disables the module. Restart to apply a change. |
 | Polarity | `alert.polarity` | `0` Active high, `1` Active low | `0` Active high | Active high drives the pin HIGH on alert, LOW otherwise. Active low inverts both. |
 | Mode | `alert.mode` | `0` Steady level, `1` 1 Hz pulse | `0` Steady level | Steady holds the pin at the active level for the duration of the alert. 1 Hz pulse toggles it at 1 Hz (50% duty) while alerting. |
 

@@ -106,6 +106,7 @@ class Display : public corium::Module {
     bool  warm()      { return corium::m_read_b(_warm); }
     bool  no_counts() { return corium::m_read_b(_none); }
     bool  alert()     { return corium::m_read_b(_alert); }
+    bool  warn()      { return corium::m_read_b(_warn); }
     uint32_t blip() {
       corium::MValue v;
       return (_blip && _blip(&v)) ? v.u : 0;
@@ -147,10 +148,12 @@ class Display : public corium::Module {
       _warm  = corium::m_core_read(PSTR("warm"),      corium::M_BOOL);
       _none  = corium::m_core_read(PSTR("no_counts"), corium::M_BOOL);
       _alert = corium::m_core_read(PSTR("alert"),     corium::M_BOOL);
+      _warn  = corium::m_core_read(PSTR("warn"),      corium::M_BOOL);
       _blip  = corium::m_core_read(PSTR("blip"),      corium::M_U32);
     }
     corium::MRead _cpm = nullptr, _cpm5 = nullptr, _cpm15 = nullptr, _cps = nullptr, _usv = nullptr;
     corium::MRead _ratio = nullptr, _warm = nullptr, _none = nullptr, _alert = nullptr, _blip = nullptr;
+    corium::MRead _warn = nullptr;
 
     bool on_hours();
     bool _started = false;

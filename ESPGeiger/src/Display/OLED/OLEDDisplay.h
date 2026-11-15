@@ -98,7 +98,6 @@ public:
 
     void setup();
     void setupWifi(const char* s);
-    void apOnlyMode(const char* host, const char* ip);
     void wifiDisabled();
     void wipeCountdown(int seconds_left);
     void wipeReady();
@@ -178,6 +177,8 @@ public:
     static constexpr uint8_t P1_WIFI_OFF  = 1 << 0;
     static constexpr uint8_t P1_WIFI_UP   = 1 << 1;
     static constexpr uint8_t P1_NO_COUNTS = 1 << 2;
+    static constexpr uint8_t P1_WARN      = 1 << 3;
+    static constexpr uint8_t P1_ALERT     = 1 << 4;
     struct P1 {
       uint32_t cpm_x10;
       int32_t  usv_x100;

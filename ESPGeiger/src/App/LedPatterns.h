@@ -23,16 +23,20 @@
 #include "App/AppConfig.h"
 #include "Corium/Output/LedSignal.h"
 
-enum : uint8_t { LED_ACTIVITY, LED_ACK, LED_DISP_ON, LED_DISP_OFF };
+enum : uint8_t { LED_ACTIVITY, LED_ACK, LED_DISP_ON, LED_DISP_OFF, LED_ALERT };
 
-// on ms, off ms, count; enum order
+// On ms, off ms, count. Same order as the enum
 static const corium::LedSignal::Pattern LED_PATTERNS[] PROGMEM = {
   {500, 500, 1},   // one blink
   {200, 1,   1},   // pulse
   {200, 100, 2},   // two blinks = auto off
   {600, 1,   1},   // long = always on
+  {100, 100, 3},   // three short = alert, each second
 };
 static const uint8_t LED_PATTERN_COUNT = sizeof(LED_PATTERNS) / sizeof(LED_PATTERNS[0]);
+
+// Called each second while the boot button is held, only where the board fixes the LED pin
+void led_hold_tick();
 
 // blip on its own pin, else on the status LED
 #ifdef GEIGER_BLIPLED

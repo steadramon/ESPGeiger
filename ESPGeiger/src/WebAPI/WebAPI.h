@@ -42,6 +42,8 @@
 #define WEBAPI_BACKOFF_MAX   (5UL * 60UL * 1000UL)
 // health fields on one post in 15
 #define WEBAPI_HEALTH_EVERY  15
+// posts skipped after a 429
+#define WEBAPI_429_HOLD      5
 
 // secp192r1, public key and signature are 2x
 #define WEBAPI_PRIV_LEN      24
@@ -72,17 +74,22 @@ class WebAPI : public corium::Sender {
     corium::HttpDriver request;
 
     uint32_t getStationId() const { return _station; }
-    void forget() { _forget = true; }   // sent when idle, even once off
+    void forget();   // sent when idle, even once off, kept over a restart
 
   private:
     bool _forget = false;
+    uint32_t _forget_at = 0;   // the next try
     void sendForget();
+    bool _gone = false;   // a 410, till a save or restart
+    uint8_t _hold = 0;   // posts to skip
+    void gone(int code);
     enum Sent : uint8_t { SENT_NONE, SENT_HS, SENT_POST, SENT_FORGET, SENT_ATT_CH, SENT_ATT, SENT_ATT_BLOB };
     uint8_t _sent = SENT_NONE;   // what the reply is for
     corium::HttpDriver::Sent send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
                                    const char* sig);
     void take_reply();
     void onHandshake(int code, const uint8_t* r, size_t n);
+    bool hsError(int code, const uint8_t* r, size_t n);
     void onPost(int code, const uint8_t* r, size_t n);
     void onForget(int code, const uint8_t* r, size_t n);
     void doHandshake();
@@ -112,6 +119,7 @@ class WebAPI : public corium::Sender {
     enum : uint8_t { WA_OFF, WA_HEARTBEAT, WA_CPM };
     uint8_t _mode = WA_CPM;
     void backoffHandshake();
+    uint32_t backoff();
     bool _exc_sent = false;
 #ifdef ESPGEIGER_ATTEST
     // WAIT = after the next good handshake, FETCH = burned but the blob is gone

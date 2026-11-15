@@ -126,6 +126,7 @@ void NeoPixel::onPrefsLoaded() {
   uint32_t f = corium::Prefs::getUInt("neopixel", K_FADE);
   _fade_rate = f > 3 ? 0 : (uint8_t)f;
   precompute_blip();
+  _rest = false;
   bool active = (b > 0) && (neoPixelMode != NP_OFF) && (_pin >= 0);
   bool fast_loop = (neoPixelMode == NP_BLIP) && (_fade_rate > 0);
   corium::Registry::every(this, active ? (fast_loop ? FAST_LOOP_MS : LOOP_MS) : 0);
@@ -198,7 +199,7 @@ RgbColor NeoPixel::trend_color()
     _next_ms = _blink_ms;
     return color(0, 0, s);                         // no data: blue
   }
-  _next_ms = clamp((unsigned long)(_blink_ms * cpm5 / cpm), 100UL, 4000UL);
+  _next_ms = clamp((unsigned long)(_blink_ms * cpm5 / cpm), (unsigned long)FLASH_MS, 4000UL);
   float z = poisson_z(cpm, cpm5);
   if (z > 3.0f)  return color(s, 0, 0);            // rise: red
   if (z > 1.5f)  return color(s, s, 0);            // rising: yellow
@@ -206,13 +207,19 @@ RgbColor NeoPixel::trend_color()
   return color(0, s, 0);                           // stable: green
 }
 
-// status modes: alarms win, blue when quiet
-RgbColor NeoPixel::alarm_color(RgbColor rgb)
+// status modes: alarms win and stay lit longer, blue when quiet
+RgbColor NeoPixel::alarm_color(RgbColor rgb, uint16_t& ms)
 {
   uint8_t s = (uint8_t)_level;
-  if (corium::m_read_b(s_alert)) return color(s, 0, 0);
-  if (corium::m_read_b(s_warn))  return color(s, s, 0);
-  if (corium::m_read_f(s_cpm) < 0.01f && corium::m_read_f(s_cpm5) < 0.01f) return color(0, 0, s);
+  if (corium::m_read_b(s_alert)) {
+    if (ms < ALERT_MS) ms = ALERT_MS;
+    return color(s, 0, 0);
+  }
+  if (corium::m_read_b(s_warn)) {
+    if (ms < WARN_MS) ms = WARN_MS;
+    return color(s, s, 0);
+  }
+  if (_no_counts) return color(0, 0, s);
   return rgb;
 }
 
@@ -229,7 +236,7 @@ void NeoPixel::blink(uint16_t ms)
   } else {
     rgb = color(0, _level, 0);
   }
-  if (alarms(neoPixelMode)) rgb = alarm_color(rgb);
+  if (alarms(neoPixelMode)) rgb = alarm_color(rgb, ms);
 
   show(_bus, rgb);
   _is_off = false;
@@ -242,6 +249,7 @@ void NeoPixel::loop(unsigned long now)
   if (_level == 0 || !_bus) {
     return;
   }
+  _no_counts = corium::m_read_f(s_cpm) < 0.01f && corium::m_read_f(s_cpm5) < 0.01f;
   if (!_is_off) {
     unsigned long elapsed = now - _on_ms;
     if (elapsed >= _lit_ms) {
@@ -264,15 +272,29 @@ void NeoPixel::loop(unsigned long now)
     }
   }
   if (!trend(neoPixelMode)) {
-    if (_blip) {
-      _blip = false;
-      static const uint16_t FADE_MS[4] PROGMEM = {20, 80, 150, 300};
-      blink(this->neoPixelMode == NP_BLIP ? pgm_read_word(&FADE_MS[_fade_rate]) : 20);
-    }
+    flash(now);
   } else {
     if (now - _on_ms >= _next_ms) {
       blink(20);
     }
+  }
+}
+
+// click modes: flashes FLASH_MS apart, a click while lit keeps it lit, one in the gap waits
+void NeoPixel::flash(unsigned long now)
+{
+  bool gap = !_rest || now - _on_ms >= FLASH_MS;
+  if (_blip && (gap || !_is_off)) {
+    _blip = false;
+    static const uint16_t FADE_MS[4] PROGMEM = {20, 80, 150, 300};
+    uint16_t ms = this->neoPixelMode == NP_BLIP ? pgm_read_word(&FADE_MS[_fade_rate]) : 20;
+    blink(_rest ? FLASH_MS : ms);
+    _rest = true;
+  } else if (neoPixelMode == NP_BLIP_STATUS && now - _on_ms >= _blink_ms && _no_counts) {
+    blink(20);   // no clicks: blue
+    _rest = true;
+  } else if (gap) {
+    _rest = false;
   }
 }
 #endif

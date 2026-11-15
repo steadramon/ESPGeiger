@@ -870,14 +870,17 @@ void EGHttpServer::tick() {
   _tickWanted = false;
   relisten();
 
+  uint8_t replies = 0;
   for (auto& s : _slots) {
     if (s.state == DONE) {
       reclaimSlot(&s);
       continue;
     }
     if (s.state == RECEIVING && s.stream != NO_STREAM) drainStream(&s);
-    // one reply a tick, a slow reader holds the loop once
-    if (s.state == READY) { respond(&s); _tickWanted = true; break; }
+    if (s.state != READY) continue;
+    respond(&s);
+    // a few replies a tick, a slow reader holds the loop once each
+    if (++replies >= EGHTTP_REPLIES_A_TICK) { _tickWanted = true; break; }
   }
 }
 

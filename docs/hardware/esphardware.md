@@ -57,17 +57,17 @@ Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the
 | **LilyGo T-Beam** | ESP32 classic | 21 / 22 | none | `esp32_*` | Set SDA=21 / SCL=22 from the Config page after flashing (firmware default is 4 / 5). |
 | **[MINI ESP32-S3-N16R8](https://s.click.aliexpress.com/e/_c3dXGAQt)** (sold as "XH-S3E-AI"; small purple board, onboard speaker + mic + button + NeoPixel + OLED header) <br><img src="img/xh-s3e-ai.png" width="240"/> | ESP32-S3 (16 MB flash, 8 MB PSRAM) | 41 / 42 (fixed) | none | `xh_s3e_*` | Dedicated env set; board pins fixed in build flags, counter RX/TX still settable. See [buildtargets](/install/buildtargets#audio-tick-esp32-s3-only). |
 
-Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need that pin pulsed at boot. Set **Config > Display > Reset Pin** (advanced) to the GPIO and reboot; 255 means none. Custom builds can preset it with `-DOLED_RST=N`.
+Boards that wire the OLED's reset line to a GPIO (Heltec / TTGO) need that pin pulsed at boot. Set **Config > Display > Reset pin** (advanced) to the GPIO and restart; 255 means none. Custom builds can preset it with `-DOLED_RST=N`.
 
 If your board isn't listed but matches one of these patterns, the same recipe applies - set `OLED_SDA`, `OLED_SCL` and `OLED_RST` (if relevant) in a custom build env.
 
 ### PCNT
 
-The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/pcnt.html) (`PCNT`). The ESP32 and ESP32-S3 `_pulse` builds carry both counters: **Count with** in the Input tab's advanced settings (`counter.count_mode`) picks Hardware (PCNT, the default) or Interrupt, the same interrupt counter as the ESP8266 builds, and applies after a reboot. The PCNT Filter and PCNT Pull settings show for Hardware, Debounce for Interrupt. The `_no_pcnt` builds are the same firmware defaulting to Interrupt; they are retired in 0.15, and a `_no_pcnt` device flashed with the `_pulse` build keeps counting by interrupt. The [Web Installer](/install/webinstall) offers the interrupt build as its standard Pulse option and PCNT as a separate choice. ESP32-C3 has no PCNT and always uses the interrupt counter.
+The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/pcnt.html) (`PCNT`). The ESP32 and ESP32-S3 `_pulse` builds carry both counters: **Count with** in the Input tab's advanced settings (`counter.count_mode`) picks Hardware (PCNT, the default) or Interrupt, the same interrupt counter as the ESP8266 builds, and applies after a restart. The PCNT filter and PCNT pull settings show for Hardware, Debounce for Interrupt. The `_no_pcnt` builds are the same firmware defaulting to Interrupt; they are retired in 0.15, and a `_no_pcnt` device flashed with the `_pulse` build keeps counting by interrupt. The [Web Installer](/install/webinstall) offers the interrupt build as its standard Pulse option and PCNT as a separate choice. ESP32-C3 has no PCNT and always uses the interrupt counter.
 
 Hardware is the better choice at high count rates: it has no dead time of its own, while the interrupt counter's debounce (below) drops pulses that come close together.
 
-The PCNT input pin floats by default (None), as an internal pull-up can hold some modules' output high so no pulse gets through (the Cajoe IOT-GM v1.1, for one). Change **PCNT Pull** in the Input tab's advanced settings to Pull-up for open-drain outputs, or Pull-down for active-high modules with no idle pull of their own.
+The PCNT input pin floats by default (None), as an internal pull-up can hold some modules' output high so no pulse gets through (the Cajoe IOT-GM v1.1, for one). Change **PCNT pull** in the Input tab's advanced settings to Pull-up for open-drain outputs, or Pull-down for active-high modules with no idle pull of their own.
 
 ### PCNT Filter
 
@@ -104,4 +104,4 @@ Custom builds can change the default. See [Build Options](/dev/platformio#geiger
 
 ### Interrupt Saturation Guard
 
-On interrupt-counting builds, an input flooded with far more edges than any tube can produce is paused for 5 seconds at a time while the rest of the device keeps running. The log shows `ISR storm`. See [Troubleshooting](/troubleshooting#log-shows-isr-storm) for causes.
+On interrupt-counting builds, an input flooded with far more edges than any tube can produce is paused, for 5 seconds at first and up to 5 minutes while it goes on. The rest of the device keeps running. The log shows `ISR storm`. See [Troubleshooting](/troubleshooting#log-shows-isr-storm) for causes.

@@ -61,6 +61,9 @@ class Max7219Display : public corium::Module, public DisplayBackend {
 
   private:
     void second();   // 7-seg / round, on new counts
+    void drawDigits();
+    void nextPage(int8_t dir);
+    void showNow();   // after a tap
     void read_prefs();
     bool claim_pins();
     void apply();
@@ -94,10 +97,10 @@ class Max7219Display : public corium::Module, public DisplayBackend {
     bool    _tm_acked = true;
     uint8_t _tm_wait_s = 0;
     uint8_t _tm_fails = 0;
-    bool    _tm_off = false;      // gave up, until reboot (as the OLED)
+    bool    _tm_off = false;      // gave up until reboot, same as the OLED
     static const uint8_t TM_RETRY_S = 10;
     static const uint8_t TM_GIVE_UP = 6;   // ~1 min of retries
-    bool    _colon = false;       // no dots, a colon
+    bool    _colon = false;       // a colon instead of dots
     bool    _active = false;
     bool    _lit = true;          // false = shut down
     uint8_t _layout = 0;

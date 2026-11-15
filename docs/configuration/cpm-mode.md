@@ -8,7 +8,7 @@ parent: Configuration
 
 # CPM Calculation Mode
 
-**CPM mode** picks how the displayed CPM is calculated. Set it on the [Config page](/configuration), Input tab, in the advanced settings. Changes apply at once, no reboot.
+**CPM mode** picks how the displayed CPM is calculated. Set it on the [Config page](/configuration), Input tab, in the advanced settings. Changes apply at once, no restart.
 
 ## Picking a mode
 
@@ -28,7 +28,7 @@ parent: Configuration
 | 3 | Bucket *(default)* | Average of the per-second counts over the last 60 seconds. Stable, predictable, slowest to respond. |
 | 4 | Adaptive fast | Rate over the last 19 pulses or 5 seconds, whichever is shorter. Fast, but jumps around at background rates. |
 
-On serial builds for counters that only report CPM, Bucket uses the **CPM Window** setting (default 30 s) instead of 60 s. These counters already smooth their own CPM, so the display lags by roughly their window plus yours. See [Serial Counters](/hardware/serial#cpm-window-option).
+On serial builds for counters that only report CPM, Bucket uses the **CPM window** setting (default 30 s) instead of 60 s. These counters already smooth their own CPM, so the display lags by roughly their window plus yours. See [Serial Counters](/hardware/serial#cpm-window-option).
 
 ## What changes when I switch modes
 
@@ -39,14 +39,14 @@ The mode changes the live CPM, CPS and dose shown to your own consumers:
 * Live serial output / GeigerLog connection
 * MQTT (your own broker / Home Assistant)
 * Webhook (your own URL)
-* ThingSpeak (your own channel)
 * Local UDP broadcast between your ESPGeiger devices
 
-Public aggregators always get a steady 60-second value, so the network sees consistent data from every device:
+Uploads to outside services always get a steady 60-second value, so the network sees consistent data from every device:
 
 * **[Radmon](/output/radmon)** (radmon.org; with an interval over 90 s it gets the 5 or 15 minute average instead)
 * **[ESPGeiger Stations](/output/webapi)** (stations.espgeiger.com)
 * **[GMC / GeigerLog](/output/gmc)** protocol
+* **[ThingSpeak](/output/thingspeak)** (your own channel)
 
 The mode never affects the 5- and 15-minute averages, total and lifetime counts, the 24-hour history or the inter-pulse histogram.
 

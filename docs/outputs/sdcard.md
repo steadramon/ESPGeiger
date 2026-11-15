@@ -34,7 +34,7 @@ synced,2026-11-04 10:15:30,1265
 
 Each boot that writes there starts with the header line. When the time arrives a `synced` line gives the date and time at that many seconds since boot, so the rows above it can be dated: a row's time is the synced time minus the difference in seconds. From then on rows go to the daily files as usual. A boot that never gets the time leaves its rows with the seconds only. The SD page links the file as *Undated rows*.
 
-An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; C3 and S3 builds with the I2C bus, ESP8266 and ESP32 builds with `-DRTC_CHIP`) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, opening any page of the web UI gives the device the time from the browser's clock, and an RTC keeps that too, so a device that never reaches NTP stays dated.
+An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; C3 and S3 builds with the I2C bus, ESP8266 and ESP32 builds with `-DRTC_CHIP`) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, press **Set from this browser** under *Clock not set* on the **Network Config** page (Status links to it). An RTC keeps that time too, so a device that never reaches NTP stays dated.
 
 ## (Micro) SD Card Compatibility
 
@@ -54,7 +54,7 @@ The SD Card module exposes one setting on the `/param` configuration page:
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
-| Sync Interval (min) | `sdcard.sync_min` | Int 1-5 | `1` | Minutes between syncs to the card. |
+| Sync interval (min) | `sdcard.sync_min` | Int 1-5 | `1` | Minutes between syncs to the card. |
 
 <!-- /gen -->
 

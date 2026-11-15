@@ -49,11 +49,11 @@ bool PulseOut::s_busy = false;
 CORIUM_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
 CORIUM_PSTR(PO_H_PIN,  "-1 = disabled");
 CORIUM_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
-CORIUM_PSTR(PO_L_FRQ,  "Burst Hz");
+CORIUM_PSTR(PO_L_FRQ,  "Burst (Hz)");
 CORIUM_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
 CORIUM_PSTR(PO_L_CYC,  "Burst cycles");
 CORIUM_PSTR(PO_H_CYC,  "1-10. More = louder and longer");
-CORIUM_PSTR(PO_L_MHZ,  "Max Hz");
+CORIUM_PSTR(PO_L_MHZ,  "Max (Hz)");
 CORIUM_PSTR(PO_H_MHZ,  "Cap clicks per second (0 = unlimited, 1-200)");
 CORIUM_PSTR(PO_H_BRT,  "0-100% (LED only). Applies to Pulse + Fade modes.");
 CORIUM_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
@@ -94,7 +94,7 @@ static int8_t claim_pin(bool enabled, int p) {
 void PulseOut::read_pin(bool was_enabled) {
   if (!_begun) { _pin = corium::Prefs::getInt("pulse", EG_K_PIN); return; }
   if (_enabled && !was_enabled && _engine.pin < 0)
-    corium::Log::console(PSTR("PulseOut: Needs a reboot to start"));
+    corium::Log::console(PSTR("PulseOut: Needs a restart to start"));
 }
 
 void PulseOut::onPrefsLoaded() {

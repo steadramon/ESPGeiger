@@ -62,6 +62,6 @@ Note: By default the RXPIN for ESPGeiger is set to `GPIO13` on ESP8266 / ESP32 a
 
 <img src="/img/cajoe-wemosd1.jpg" width="50%" title="D1 mini basic wiring">
 
-A flashing/"blipping" status LED on the ESP device visually confirms that ESPGeiger is receiving readings from your Geiger counter.
+On ESP8266 and classic ESP32 boards a flashing/"blipping" status LED confirms that ESPGeiger is receiving readings from your Geiger counter. C3 and S3 dev boards have no LED set: set **Status LED** under Config, System, first.
 
 Specific instructions and diagrams for connecting ESPGeiger to a variety of different Geiger counters can be found in the [Hardware](/hardware) section.

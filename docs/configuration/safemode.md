@@ -26,7 +26,7 @@ Installing a new firmware clears the crash count.
 * `/info` shows the latest crash, worth including in a bug report.
 * The Status and History pages aren't there, nor is the command box on the Status page or `/json`. Use the [serial console](/output/serial) for commands; it works as normal, except on ESPGeiger Log and ESPGeiger Lite builds, which read no serial commands.
 * `/outputs` lists each stopped module as `{"quarantined":true}`.
-* The push button at boot does nothing, so no offline mode or factory reset from the button.
+* A short hold of the push button at boot does nothing, so no offline mode. A hold of 5 seconds or more still does a factory reset.
 
 ## Getting out
 

@@ -50,7 +50,7 @@ extern const char RANDOM_JS[] PROGMEM = R"JS(
 ['OTP','otp',['n',256,16,1024],'Download','bytes',1]
 ].forEach(c=>{
 var t=document.createElement('tr'),
-i=c[2]?'<input type=number value='+c[2][1]+' min='+c[2][2]+' max='+c[2][3]+'>':'',
+i=c[2]?'<input type=number aria-label="'+c[0]+'" value='+c[2][1]+' min='+c[2][2]+' max='+c[2][3]+'>':'',
 u=c[4]?'<span class=muted>'+c[4]+'</span>':'';
 t.innerHTML='<th>'+c[0]+'</th><td>'+i+'</td><td>'+u+'</td><td><button type=button>'+c[3]+'</button></td><td><span class=o></span></td>';
 t.dataset.type=c[1];if(c[2])t.dataset.arg=c[2][0];if(c[5])t.dataset.dl=1;

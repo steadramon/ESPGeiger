@@ -24,6 +24,7 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/PinSafety.h"
+#include "Corium/System/FastMillis.h"
 #include "Corium/Output/LedSignal.h"
 #include "BlipLed/BlipLed.h"
 #include "Corium/Output/PulseEngine.h"
@@ -92,20 +93,20 @@ static CounterPrefs counterprefs;
 CORIUM_REGISTER_MODULE(counterprefs)
 
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-CORIUM_PSTR(IN_L_STY, "Serial Type");
-CORIUM_PSTR(IN_L_CPW, "CPM Window (CPM-only counters)");
+CORIUM_PSTR(IN_L_STY, "Serial type");
+CORIUM_PSTR(IN_L_CPW, "CPM window (CPM-only counters)");
 CORIUM_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth.");
 #endif
 #ifndef RXPIN_BLOCKED
-CORIUM_PSTR(IN_L_RXP, "RX Pin");
+CORIUM_PSTR(IN_L_RXP, "RX pin");
 #endif
 #if defined(GEIGER_TXPIN) && GEIGER_TXPIN != -1 && !defined(TXPIN_BLOCKED)
-CORIUM_PSTR(IN_L_TXP, "TX Pin");
+CORIUM_PSTR(IN_L_TXP, "TX pin");
 #endif
 #ifdef USE_PCNT
-CORIUM_PSTR(IN_L_PCF, "PCNT Filter");
-CORIUM_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0=off)");
-CORIUM_PSTR(IN_L_PCP, "PCNT Pull");
+CORIUM_PSTR(IN_L_PCF, "PCNT filter");
+CORIUM_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0 = off)");
+CORIUM_PSTR(IN_L_PCP, "PCNT pull");
 CORIUM_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
 #endif
 #ifdef PCNT_SELECTABLE
@@ -128,14 +129,14 @@ CORIUM_PSTR(IN_H_PWU, "Simulated pulse width (us)");
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
 CORIUM_PSTR(IN_L_DTU, "Tube dead time");
-CORIUM_PSTR(IN_H_DTU, "GM tube dead time (us), from the datasheet. 0=disabled. SBM-20=190.");
+CORIUM_PSTR(IN_H_DTU, "GM tube dead time (us), from the datasheet. 0 = off. SBM-20=190.");
 #endif
 CORIUM_PSTR(IN_L_CMM, "CPM mode");
 CORIUM_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
 #if !defined(GEIGER_MODEL_FIXED) && !GEIGER_IS_TEST(GEIGER_TYPE)
-CORIUM_PSTR(IN_L_GMD, "Geiger Counter");
+CORIUM_PSTR(IN_L_GMD, "Tube model");
 CORIUM_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
-CORIUM_PSTR(IN_L_THD, "Tube Detects");
+CORIUM_PSTR(IN_L_THD, "Tube detects");
 CORIUM_PSTR(IN_L_TBA, "\xCE\xB1 Alpha");
 CORIUM_PSTR(IN_H_TBA, "Detects alpha radiation");
 CORIUM_PSTR(IN_L_TBB, "\xCE\xB2 Beta");
@@ -144,10 +145,10 @@ CORIUM_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
 CORIUM_PSTR(IN_H_TBG, "Detects gamma radiation");
 #endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-CORIUM_PSTR(IN_L_URMD, "Source Mode");
+CORIUM_PSTR(IN_L_URMD, "Source mode");
 CORIUM_PSTR(IN_O_URMD, "Specific device|Sum all sources");
-CORIUM_PSTR(IN_H_URMD, "Specific: Pin chipid below, blank = first source heard");
-CORIUM_PSTR(IN_L_URCH, "Pin chipid");
+CORIUM_PSTR(IN_H_URMD, "Specific: source chip ID below, blank = first source heard");
+CORIUM_PSTR(IN_L_URCH, "Source chip ID");
 CORIUM_PSTR(IN_H_URCH, "6-hex chipid of the source, Specific mode only");
 CORIUM_PSTR(IN_P_URCH, UDPRX_CHIPID_PAT);
 CORIUM_PSTR(IN_L_URGP, "Group / listen IP");
@@ -164,14 +165,14 @@ CORIUM_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
 // in UdpRx.cpp, keeps WiFiUDP.h out
 extern "C" void udprx_notify_prefs_saved();
 #endif
-CORIUM_PSTR(CT_L_RAT, "uSv/h Ratio");
+CORIUM_PSTR(CT_L_RAT, "Dose ratio");
 CORIUM_PSTR(CT_H_RAT, "CPM to uSv/h factor");
 CORIUM_PSTR(CT_L_WRN, "Warning CPM");
 CORIUM_PSTR(CT_H_WRN, "Warning trigger (CPM), 0 = off");
 CORIUM_PSTR(CT_L_ALR, "Alert CPM");
 CORIUM_PSTR(CT_H_ALR, "Alert trigger (CPM), 0 = off");
 CORIUM_PSTR(CT_L_LE,  "Track lifetime");
-CORIUM_PSTR(CT_H_LE,  "Persist total clicks + exposure across reboots.");
+CORIUM_PSTR(CT_H_LE,  "Keep lifetime clicks and dose across restarts.");
 
 // a -D one is the row default too
 #if defined(USE_PCNT) && !defined(PCNT_FILTER)
@@ -433,24 +434,56 @@ void LifePrefs::onPrefsLoaded() {
 #define LED_BLIP
 #endif
 
-// every build, led.pin and the blink on a send
+// every build, led.pin, the blink on a send, the alert flashes
 class LedPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("led"); }
   uint8_t displayOrder() override { return 14; }
   const corium::PrefGroup* prefsGroup() override;
   void onPrefsLoaded() override;
-  void begin() override { corium::Registry::on(TOPIC_SENT, this); }
-  void loop(unsigned long) override {
-    if (corium::Registry::events(this)) corium::LedSignal::play(LED_ACTIVITY);
+  void begin() override {
+    corium::Registry::on(TOPIC_SENT, this);
+    corium::Registry::on(Counter::TOPIC_ALARM, this);
   }
+  void loop(unsigned long now) override;
+private:
+  static constexpr uint32_t ALERT_MS = 1000;
+  bool _alert = false;
+  uint32_t _alert_at = 0;
 };
+
+// alert, not snoozed: the pattern each second
+void LedPrefs::loop(unsigned long now) {
+  if (corium::Registry::events(this) & (1u << TOPIC_SENT)) corium::LedSignal::play(LED_ACTIVITY);
+  if (!gcounter.is_alert() || gcounter.is_snoozed()) {
+    _alert = false;
+    return;
+  }
+  if (!_alert) {
+    _alert = true;
+    _alert_at = now;
+  }
+  if (corium::dueEvery(now, _alert_at, ALERT_MS)) corium::LedSignal::play(LED_ALERT);
+  corium::Registry::dueAt(this, _alert_at);
+}
 
 static LedPrefs ledprefs;
 CORIUM_REGISTER_MODULE(ledprefs)
 
+void led_hold_tick() {
+#ifdef LED_PIN_BLOCKED
+  // the board's pin: up before Boot::end
+  static bool s_attached = false;
+  if (!s_attached) {
+    s_attached = true;
+    corium::LedSignal::attach();
+  }
+  corium::LedSignal::play(LED_ACK);
+#endif
+}
+
 #ifndef LED_PIN_BLOCKED
-CORIUM_PSTR(LD_L_PIN, "Status LED");
+CORIUM_PSTR(LD_L_PIN, "Status LED pin");
 CORIUM_PSTR(LD_H_PIN, "GPIO of the onboard LED (-1 = disabled)");
 #if LED_SEND_RECEIVE_ON == LOW
 #define LD_POL_DEF "1"
@@ -566,7 +599,7 @@ public:
 static HVPinPrefs hvpinprefs;
 CORIUM_REGISTER_MODULE(hvpinprefs)
 
-CORIUM_PSTR(HV_L_PWM, "HV PWM Pin");
+CORIUM_PSTR(HV_L_PWM, "HV PWM pin");
 CORIUM_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = disabled)");
 
 static const corium::Pref HV_PIN_PREF_ITEMS[] PROGMEM = {

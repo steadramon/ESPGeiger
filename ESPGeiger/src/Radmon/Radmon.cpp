@@ -35,7 +35,7 @@ CORIUM_REGISTER_FEATURE(radmon, FEAT_RADMON)
 
 CORIUM_PSTR(RM_H_EN,  "Upload to radmon.org");
 CORIUM_PSTR(RM_L_USR, "Username");
-CORIUM_PSTR(RM_H_INT, "Upload interval (sec)");
+CORIUM_PSTR(RM_H_INT, "Send interval (s)");
 
 
 #define RADMON_USER_MAX 32

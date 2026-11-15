@@ -146,6 +146,7 @@ bool corium::Wifi::look(unsigned long now) {
   bool prev = corium::Wifi::connected;
   corium::Wifi::connected = (st == WL_CONNECTED);
   if (corium::Wifi::connected) refresh_link_cache(!prev, now);
+  else corium::Wifi::rssi = 0;
 
   // a join test owns the link till it's done, offline too
   if (!corium::Wifi::testing()) watch_link(st, now);

@@ -78,6 +78,9 @@
 #ifndef EGHTTP_PULL
   #define EGHTTP_PULL 1   // 0 = no sendPull()
 #endif
+#ifndef EGHTTP_REPLIES_A_TICK
+  #define EGHTTP_REPLIES_A_TICK 3   // each holds the loop for its render
+#endif
 #if defined(ESP32) && !defined(EGHTTP_MAX_INFLIGHT)
   // esp32 only, lwIP drops SYNs past this; the 8266 keeps EGTcp's backlog
   #define EGHTTP_MAX_INFLIGHT 10
@@ -198,6 +201,7 @@ class EGHttpServer {
     void end();
 
     void tick();   // call from loop()
+    bool tickWanted() const { return _tickWanted; }   // work waiting, tick soon
 
     bool hasActiveClients() const;
 

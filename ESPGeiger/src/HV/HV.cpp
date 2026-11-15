@@ -79,14 +79,14 @@ CORIUM_PSTR(K_RATIO_MV, "ratio_mv");
 HV hv;
 CORIUM_REGISTER_FEATURE(hv, FEAT_HV)
 
-CORIUM_PSTR(HW_L_FRQ, "PWM Frequency");
+CORIUM_PSTR(HW_L_FRQ, "PWM frequency");
 CORIUM_PSTR(HW_H_FRQ, "HV generator frequency (Hz)");
-CORIUM_PSTR(HW_L_DTY, "PWM Duty");
+CORIUM_PSTR(HW_L_DTY, "PWM duty");
 CORIUM_PSTR(HW_H_DTY, "HV generator duty, out of " STR(HV_PWM_MAX));
 #ifdef ESPG_HV_ADC
-CORIUM_PSTR(HW_L_RAT, "ADC VD Ratio");
-CORIUM_PSTR(HW_H_RAT, "Voltage divider ratio (0 = ADC disabled)");
-CORIUM_PSTR(HW_L_OFF, "ADC VD Offset");
+CORIUM_PSTR(HW_L_RAT, "Divider ratio");
+CORIUM_PSTR(HW_H_RAT, "Voltage divider ratio (0 = off)");
+CORIUM_PSTR(HW_L_OFF, "Divider offset");
 CORIUM_PSTR(HW_H_OFF, "Voltage divider offset");
 CORIUM_PSTR(HW_L_TGT, "HV target");
 CORIUM_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage (0 = open loop)");
@@ -561,15 +561,14 @@ bool HV::saveconfig() {
 extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
 <canvas id=g1></canvas><div id=g2></div>
 <div class="a aw">
-<span class="cl" onclick="this.parentElement.style.display='none';">×</span>
 <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
 </div>
-<table><tr><th><label for=freq>Frequency:</label></th><td><input type="range" id="freq" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" step="100" value="50"><input id="sfreq" class=mt type="number" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" style="width:6em"> Hz</td></tr>
-<tr><th><label for=duty>Duty:</label></th><td><input type="range" id="duty" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" value="50"><input id="sduty" class=mt type="number" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" style="width:6em"> <small id="pduty" data-fs=")HTML" STR(HV_PWM_MAX) R"HTML("></small></td></tr>
-<tr><th><label for=ratio>Ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_RATIO) R"HTML("> <small>(voltage-divider scale, 0 = disabled)</small></td></tr>
-<tr><th><label for=tgt>Target:</label></th><td><input id="tgt" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_V) R"HTML("> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
+<table><tr><th><label for=freq>PWM frequency:</label></th><td><input type="range" id="freq" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" step="100" value="50"><input id="sfreq" aria-label=Frequency class=mt type="number" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" style="width:6em"> Hz</td></tr>
+<tr><th><label for=duty>PWM duty:</label></th><td><input type="range" id="duty" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" value="50"><input id="sduty" aria-label=Duty class=mt type="number" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" style="width:6em"> <small id="pduty" data-fs=")HTML" STR(HV_PWM_MAX) R"HTML("></small></td></tr>
+<tr><th><label for=ratio>Divider ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_RATIO) R"HTML("> <small>(0 = off)</small></td></tr>
+<tr><th><label for=tgt>HV target:</label></th><td><input id="tgt" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_V) R"HTML("> V <small>(0 = open loop) <span id="strim" role=status></span></small></td></tr>
 
-<tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
+<tr><td><button id="submit" disabled>Loading...</button></td></tr></table>
 )HTML"
 #if !CORIUM_HAS_FEW_SOCKETS
 R"HTML(<script src="/pgjs)HTML" CORIUM_CACHE_BUST R"HTML("></script>
@@ -590,7 +589,7 @@ ge=!0,inited=!1;
 e.av=3;
 function showGraph(on){if(on===ge)return;ge=on;var d=on?'':'none';G1.style.display=d;G2.style.display=d;TRow.style.display=d}
 var hvK=live('/hvjson',1e3,function(s){
-  if(s==null)return 1e3;
+  if(s==null){ST.textContent='(not updating)';return 1e3}
   var o=JSON.parse(s);
   showGraph(o.ratio>0);
   if(o.ratio>0)e.update([o.volts]);

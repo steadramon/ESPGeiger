@@ -14,17 +14,19 @@ nav_order: 10
 
 Three settings in the **Display** section of the [Config page](/configuration#display-settings-oled-builds) control when the OLED is on:
 
-- **Timeout** *(push-button builds only)* - seconds of inactivity before the display turns off after a tap. `0` falls back to the On/Off Time schedule below.
-- **On Time / Off Time** - daily schedule; outside the window the display is off. Leave both blank for "always on". Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`).
+- **Idle time (s)** *(push-button builds only)* - seconds of inactivity before the display turns off after a tap. `0` falls back to the On/Off time schedule below.
+- **On time / Off time** - daily schedule; outside the window the display is off. Leave both blank for "always on". Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`).
 - **Brightness** - 0-100 %.
+
+On page 1 a warning sign left of the CPM shows the warning level is reached; at the alert level the sign sits in a white box.
 
 On builds **without** a push button, only the schedule applies.
 
 On builds **with** a push button, the resolution order is:
 
 1. Long-press override active → display always on.
-2. Otherwise, if Timeout > 0 → on for Timeout seconds after each tap.
-3. Otherwise (Timeout = 0) → follow On/Off Time schedule, with a 30-second wake window after any tap so you can check readings during off-hours.
+2. Otherwise, if Idle time > 0 → on for Idle time seconds after each tap.
+3. Otherwise (Idle time = 0) → follow On/Off time schedule, with a 30-second wake window after any tap so you can check readings during off-hours.
 
 # Push-button operations
 
@@ -40,7 +42,7 @@ The screen shows **Screen always on** or **Screen auto off** for a moment. The s
 
 # Pin configuration
 
-Set **SDA Pin** and **SCL Pin** in the **I2C Bus** section of the Config page (System tab), then reboot. Not shown on kits with fixed pins.
+Set **SDA pin** and **SCL pin** in the **I2C Bus** section of the Config page (System tab), then restart. Not shown on kits with fixed pins.
 
 # Browser screen viewer
 

@@ -52,7 +52,7 @@ In these test build modes, you can connect the `TXPIN` (transmit pin) of one ESP
 
 ### TestPulse → esp8266_pulse cross-device setup
 
-To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13) and share GND between the two boards. Both devices then post to the WebAPI independently and their CPM readings should agree within Poisson noise.
+To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13) and share GND between the two boards. Only the `esp8266_pulse` device posts (test builds never upload); the two CPM readings should agree within Poisson noise.
 
 Notes:
 
@@ -70,7 +70,7 @@ To stress-test beyond 120k CPM:
 
 1. Lower `pulse_width_us` on the transmitting device (e.g. 100µs → ~600k CPM ceiling).
 2. Lower `debounce` on the receiving device to match or beat the new pulse cadence.
-3. Optionally set `GEIGER_TEST_FIXEDCPM`, or pin the rate: `GET /cpm?v=250` (two decimals allowed) or the console command `target 250`. The rotation stops until the next reboot, so you're testing a specific rate rather than the rotating 30/60/100/120.
+3. Optionally set `GEIGER_TEST_FIXEDCPM`, or pin the rate: `GET /cpm?v=250` (two decimals allowed) or the console command `target 250`. The rotation stops until the next restart, so you're testing a specific rate rather than the rotating 30/60/100/120.
 
 The `*_testpulseint` variant uses a deterministic PWM (not Poisson) and scales cleanly to ~500k CPM without these knobs - useful when the goal is "does the counter keep up?" rather than "does the statistics look right?".
 
