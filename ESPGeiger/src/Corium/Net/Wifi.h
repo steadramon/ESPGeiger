@@ -32,15 +32,20 @@
 namespace corium {
 namespace Wifi {
 #ifdef APP_OFFLINE_OK
-  constexpr bool OFFLINE_OK = true;   // saved wifi fails: no portal, stay offline
+  constexpr bool OFFLINE_OK = true;   // saved wifi fails: no portal, a hotspot 10 min, then offline
 #else
   constexpr bool OFFLINE_OK = false;
 #endif
+  // boot = before the join; disabled from OFFLINE on
+  enum State : uint8_t { BOOT, JOINING, PORTAL, ONLINE, LINK_LOST, OFFLINE, HOTSPOT, AP_MODE, OFF };
+  State state();
+  const char* stateName(State s);   // flash
+  void go(State to, PGM_P why);   // Net only, sets disabled and ap
   extern bool disabled;
   extern bool offlineForced;    // app sets it, else the wifi loop retries
-  inline void forceOffline() { disabled = true; offlineForced = true; }   // this boot, no retry
+  void forceOffline();   // this boot, no retry
   extern bool connected;
-  extern bool ap;                // wifi.mode 2, its own AP up
+  extern bool ap;                // wifi.mode 2 or the hotspot, its own AP up
   extern IPAddress local_ip;     // refreshed on connect + once a minute
   extern char ssid[WIFI_SSID_MAX + 1];
   extern int16_t rssi;
@@ -60,8 +65,9 @@ namespace Wifi {
   bool offlineNow();   // console: this boot without wifi, false once joined
   bool hasSavedCreds();
   bool portalAhead();   // first setup: none saved, not offline
+  bool apHeld(uint32_t now);   // the fallback AP still up; idle past its time it goes, false
   CORIUM_NODISCARD bool joinMode();   // wifi.mode back to 0, no commit
-  bool keepJoined(uint32_t restart_ms);   // a test joined off hotspot/off mode: saved, restart; false = mode 0 or not saved, logged
+  CORIUM_NODISCARD bool keepJoined(uint32_t restart_ms);   // a test joined: true = it stays; false = offline this boot or not saved
   bool saveBackupCreds();   // before WiFi.begin(); a failed write logs, none to back up = false
   bool clearSavedCreds();   // false = the sdk kept them, logged
   bool applyStaticConfig();   // before WiFi.begin()
@@ -77,6 +83,8 @@ namespace Wifi {
   uint8_t testState();   // an EGPortal::Join, the last one kept till the next test
   bool testing();   // testing or going back
   const char* testSsid();   // under test or the last one
+  constexpr size_t LAST_TRY_MAX = 64 + 6 * WIFI_SSID_MAX;   // html, the ssid escaped
+  size_t lastTry(char* buf, size_t cap);   // a failed join's line for the pages, once; 0 = none
   const char* heldSsid();   // "" if none
   bool beginHeld();   // WiFi.begin() then frees, false = none held
   void dropHeld();   // a save that didn't land

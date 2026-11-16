@@ -49,7 +49,6 @@ namespace Wifi {
 }
 }  // namespace corium
 
-static bool s_was_up = false;
 static unsigned long s_lost_at = 0;   // 0 = never lost
 static uint32_t s_retry_at = 0;
 static unsigned long s_link_at = 0;
@@ -76,15 +75,13 @@ static void refresh_link_cache(bool just_connected, unsigned long now) {
 }
 
 static void track_outage(unsigned long now) {
-  if (s_was_up) {
-    s_was_up = false;
+  if (corium::Wifi::state() != corium::Wifi::LINK_LOST) {
+    // joined at boot, the loop never saw it up: no line
+    if (corium::Wifi::connectedAtMs) corium::Log::console(PSTR("WiFi: Connection lost"));
     s_lost_at = now;
     s_retry_at = now + WIFI_RETRY_MS;
     corium::Wifi::connectedAtMs = 0;
-    corium::Log::console(PSTR("WiFi: Connection lost"));
-  } else if (s_lost_at == 0) {
-    s_lost_at = now;
-    s_retry_at = now + WIFI_RETRY_MS;
+    corium::Wifi::go(corium::Wifi::LINK_LOST, PSTR("link down"));
   }
   unsigned long down_s = (now - s_lost_at) / 1000;
   if (corium::dueEvery(now, s_retry_at, WIFI_RETRY_MS)) {
@@ -92,25 +89,26 @@ static void track_outage(unsigned long now) {
     WiFi.reconnect();
   }
   if (down_s > WIFI_DOWN_MAX_S) {
-    corium::Log::console(PSTR("WiFi: Down for %lus, rebooting"), down_s);
+    corium::Log::console(PSTR("WiFi: Down for %lus, restarting"), down_s);
     corium::Lifecycle::requestRestart(now, 100);
   }
 }
 
 static void note_reconnected(unsigned long now) {
-  s_was_up = true;
   if (s_lost_at > 0) {
     unsigned long down_s = (now - s_lost_at) / 1000;
     corium::Log::console(PSTR("WiFi: Reconnected after %lus"), down_s);
   }
+  corium::Wifi::go(corium::Wifi::ONLINE, PSTR("link up"));
 }
 
 static void reprobe_saved_network(unsigned long now) {
+  if (corium::Wifi::apHeld(now)) return;   // a probe's STA mode would drop it
   if (corium::Wifi::connected) {
-    corium::Log::console(PSTR("WiFi: Saved network back, rebooting to reconnect"));
+    corium::Log::console(PSTR("WiFi: Saved network back, restarting to reconnect"));
     corium::Lifecycle::requestRestart(now, 500);
   } else if (now - CORIUM_MS_START > WIFI_OFFLINE_MAX_MS) {   // ms since boot
-    corium::Log::console(PSTR("WiFi: Offline %lus, rebooting to retry"), now / 1000);
+    corium::Log::console(PSTR("WiFi: Offline %lus, restarting to retry"), now / 1000);
     corium::Lifecycle::requestRestart(now, 500);
   } else if (s_offline_retry_at == 0) {
     s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
@@ -135,7 +133,7 @@ static void clear_backups_once_stable() {
 static void watch_link(wl_status_t st, unsigned long now) {
   if (!corium::Wifi::disabled) {
     if (st != WL_CONNECTED) track_outage(now);
-    else if (!s_was_up) note_reconnected(now);
+    else if (corium::Wifi::state() != corium::Wifi::ONLINE) note_reconnected(now);
   } else if (!corium::Wifi::offlineForced) {
     reprobe_saved_network(now);
   }

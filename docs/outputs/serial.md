@@ -57,7 +57,7 @@ The console also answers while the setup portal is up and while it joins WiFi at
 * `set wifi.ap_hide 1` hides the hotspot's name; you then join it by typing the name.
 * Until the time is set, the **Network Config** page shows *Clock not set* with a **Set from this browser** button. Press it and SD card rows are dated from then on.
 
-To join a network again, save one on the **Network Config** page: that also turns the hotspot off. Or `set wifi.mode 0` (over USB, or in the console box on the Status page) and restart.
+To join a network again, save one on the **Network Config** page: that also turns the hotspot off and restarts to join it. If it can't, it goes back to the network saved before, if any, else the setup portal opens instead of the hotspot. Or `set wifi.mode 0` (over USB, or in the console box on the Status page) and restart.
 
 ### Setting prefs
 

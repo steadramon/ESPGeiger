@@ -252,17 +252,19 @@ void corium::ImprovSerial::finish() {
   if (corium::Wifi::testing()) return;
   _joining = false;
   const char* ssid = corium::Wifi::testSsid();
-  if (corium::Wifi::testState() == EGPortal::JOIN_OK) {
+  bool joined = corium::Wifi::testState() == EGPortal::JOIN_OK;
+  if (joined && corium::Wifi::keepJoined(IMPROV_MOVED_MS)) {
     set_state(improv::STATE_PROVISIONED);
     send_url(improv::WIFI_SETTINGS);
     char ip[16];
     corium::Wifi::formatIP(ip, sizeof(ip), corium::Wifi::localIP());
     corium::Log::console(PSTR("Improv: Provisioned ssid='%s' ip=%s"), ssid, ip);
-    corium::Wifi::keepJoined(IMPROV_MOVED_MS);   // hotspot mode, as the web's
     return;
   }
-  corium::Log::console(PSTR("Improv: WiFi not joined for ssid='%s'"), ssid);
+  corium::Log::console(joined ? PSTR("Improv: WiFi joined for ssid='%s', not kept")
+                              : PSTR("Improv: WiFi not joined for ssid='%s'"), ssid);
   set_state(improv::STATE_AUTHORIZED);
-  send_error(improv::ERROR_UNABLE_TO_CONNECT);
+  // joined but offline this boot: no url to give
+  send_error(joined ? improv::ERROR_UNKNOWN : improv::ERROR_UNABLE_TO_CONNECT);
 }
 

@@ -85,24 +85,19 @@ static const char RESET_DONE_HTML[] PROGMEM =
   "<p>All settings cleared. The device is restarting and will reopen "
   "the setup portal in a few seconds.</p></body></html>";
 
+static const char SAVED_HTML[] PROGMEM =
+  "body{margin-top:3em;text-align:center}"
+  "</style><title>Saved</title></head><body>"
+  "<h1>Saved</h1><p>Restarting to join <b>";
+
+static const char SAVED_END[] PROGMEM =
+  "</b>. If it can't, this setup hotspot comes back.</p></body></html>";
+
 static const char RESCAN_HTML[] PROGMEM =
   "body{margin-top:4em;text-align:center}"
   "</style><meta http-equiv=refresh content=\"4;url=/\">"
   "<title>Scanning</title></head><body><h1>Scanning&hellip;</h1>"
   "<p>This page reloads in a few seconds.</p></body></html>";
-
-// innerHTML never, the ssids are anyone's
-const char EGPortal::JOIN_JS[] PROGMEM = R"JS((()=>{var E=document.getElementById('jt'),D=E.dataset,A=Date.now(),
-w=(...a)=>{E.textContent='';a.forEach((t,i)=>{var e=document.createElement(i%2?'b':'span');e.textContent=t;E.append(e)})},
-show=r=>{var j=+r.j,s=r.s,ip=' (IP '+r.ip+').';
-if(j<3)return 1;
-if(j==3){D.k==0?w('Connected to ',s,ip+' The setup network is closing.'):w('Connected to ',s,ip+' Restarting to leave hotspot mode; find this device at ',D.h,'.');return 0}
-w(...[['Network ',s,' not found. Check the name, or move closer to it.'],['Password refused by ',s,'.'],['',s,' refused the connection.'],['No reply from ',s,' within 30 seconds.']][j-4]);
-if(D.b){var l=document.createElement('a');l.href=D.b;l.textContent='Back';E.append(' ',l)}return 0},
-go=()=>{var c=new AbortController();setTimeout(()=>c.abort(),2e3);
-fetch(D.u,{cache:'no-store',signal:c.signal}).then(r=>r.json()).then(r=>{A=Date.now();show(r)&&setTimeout(go,2e3)},
-()=>Date.now()-A<2e4?setTimeout(go,2e3):w('Lost the setup network. Reconnect to ',D.a,' and open http://192.168.4.1/ again.'))};
-setTimeout(go,2e3)})())JS";
 
 bool EGPortal::begin(const char* apSsid, const char* apPassword) {
   if (_active) return true;
@@ -123,8 +118,6 @@ bool EGPortal::begin(const char* apSsid, const char* apPassword) {
   // the STA's join moves the AP to its channel, start on the likely one
   uint8_t chan = (_scanCount && _scan[0].chan) ? _scan[0].chan : 1;
   bool up = WiFi.softAP(apSsid, (apPassword && apPassword[0]) ? apPassword : nullptr, chan);
-  _apSsid = apSsid;
-  _join = JOIN_IDLE;
 
   IPAddress apIp = WiFi.softAPIP();
   up = _dns.begin(53, EGTcpAddr(apIp[0], apIp[1], apIp[2], apIp[3])) && up;
@@ -135,7 +128,6 @@ bool EGPortal::begin(const char* apSsid, const char* apPassword) {
     _http.on(F("/scan"),     EGHttpRequest::GET,  &EGPortal::hScan, this);
     _http.on(F("/rescan"),   EGHttpRequest::GET,  &EGPortal::hRescan, this);
     _http.on(F("/save"),     EGHttpRequest::POST, &EGPortal::hSave, this);
-    _http.on(F("/status"),   EGHttpRequest::GET,  &EGPortal::hStatus, this);
     _http.on(F("/reset"),    EGHttpRequest::GET,  &EGPortal::hResetConfirm, this);
     _http.on(F("/reset_go"), EGHttpRequest::POST, &EGPortal::hResetGo, this);
     _http.onNotFound(&EGPortal::hCaptive, this);
@@ -354,52 +346,25 @@ static const char* const CREDS_TEXT[] PROGMEM = {CREDS_T_SSID, CREDS_T_LONG, CRE
 
 void EGPortal::hSave(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
-  if (self->_join == JOIN_TESTING || self->_join == JOIN_BACK) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), F("Already testing a network, wait for the result."));
-    return;
-  }
-  Creds c = takeCreds(req, self->_savedSsid, self->_savedPass);
+  char ssid[EGPORTAL_SSID_MAX + 1], pass[EGPORTAL_PASS_MAX + 1];
+  Creds c = takeCreds(req, ssid, pass);
   if (c != CREDS_OK) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), FPSTR((PGM_P)pgm_read_ptr(&CREDS_TEXT[c - 1])));
     return;
   }
 
-  if (self->_onSave && !self->_onSave(self->_savedSsid, self->_savedPass, self->_onSaveUser)) {
+  if (self->_onSave && !self->_onSave(ssid, pass, self->_onSaveUser)) {
     res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory"));
     return;
   }
-  self->_join = JOIN_TESTING;   // till the app says, a second save waits
 
-  send_head(res, self->_title, self->_notice);
-  char ap[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
-  char ssid_esc[sizeof(ap)];
-  egesc_html(ap, sizeof(ap), self->_apSsid ? self->_apSsid : "");
-  egesc_html(ssid_esc, sizeof(ssid_esc), self->_savedSsid);
-  res.sendKV(F("<p id=jt data-u=/status data-k=0 data-a='"), ap, F("'>Testing the connection to <b>"));
-  res.sendKV(nullptr, ssid_esc, F("</b>. This can take up to 30 seconds.</p><script>"));
-  res.sendChunk(FPSTR(EGPortal::JOIN_JS));
-  res.sendChunk(F("</script>"));
-  res.sendChunk(FPSTR(PORTAL_END));
+  char s[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
+  egesc_html(s, sizeof(s), ssid);
+  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
+  res.sendChunk(FPSTR(PAGE_TOP));
+  res.sendChunk(FPSTR(SAVED_HTML));
+  res.sendKV(nullptr, s, FPSTR(SAVED_END));
   res.endChunked();
-}
-
-void EGPortal::hStatus(EGHttpRequest& req, EGHttpResponse& res, void* user) {
-  EGPortal* self = static_cast<EGPortal*>(user);
-  char ssid[EGESC_GROW_MAX * EGPORTAL_SSID_MAX + 1];
-  egesc_json(ssid, sizeof(ssid), self->_savedSsid);
-  char out[sizeof(ssid) + 48];
-  int n = snprintf_P(out, sizeof(out), PSTR("{\"j\":%u,\"s\":\"%s\""), (unsigned)self->_join, ssid);
-  if (n > 0 && self->_join == JOIN_OK) {
-    IPAddress a = WiFi.localIP();
-    n += snprintf_P(out + n, sizeof(out) - n, PSTR(",\"ip\":\"%u.%u.%u.%u\""), a[0], a[1], a[2], a[3]);
-  }
-  if (n <= 0 || (size_t)n + 2 > sizeof(out)) {
-    res.send(500, FPSTR(HTTP_CT_PLAIN), F("status too long"));
-    return;
-  }
-  out[n++] = '}';
-  out[n] = '\0';
-  res.send(200, FPSTR(HTTP_CT_JSON), out);
 }
 
 void EGPortal::hRescan(EGHttpRequest& req, EGHttpResponse& res, void* user) {

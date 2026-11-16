@@ -280,9 +280,9 @@ static void about_device(EGHttpResponse& res) {
   else flashToRam(PSTR("null"), tx, sizeof(tx));
   corium::WebPortal::sendf(res,
     PSTR("\"mhz\":%u,\"gw\":\"%s\",\"sn\":\"%s\",\"bssid\":\"%s\",\"tx\":%s,"
-         "\"phy\":\"%s\",\"sleep\":\"%s\",\"auto\":%s,"),
+         "\"phy\":\"%s\",\"sleep\":\"%s\",\"auto\":%s,\"wifi\":\"%s\","),
     (unsigned)corium::DeviceInfo::cpuMHz(), gw, sn, bssid, tx, corium::Wifi::phyModeStr(), corium::Wifi::sleepModeStr(),
-    corium::Wifi::getAutoReconnect() ? W_TRUE : W_FALSE);
+    corium::Wifi::getAutoReconnect() ? W_TRUE : W_FALSE, corium::Wifi::stateName(corium::Wifi::state()));
 }
 
 void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {

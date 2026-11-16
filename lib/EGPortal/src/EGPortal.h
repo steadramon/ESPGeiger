@@ -42,19 +42,13 @@ class EGPortal {
     using SaveCallback = bool(*)(const char* ssid, const char* password, void* user);
     using ResetCallback = void(*)(void* user);
 
-    // a join after a save, the app sets it, /status and the page show it
+    // a join test's state, the app keeps it
     enum Join : uint8_t {
       JOIN_IDLE, JOIN_TESTING, JOIN_BACK, JOIN_OK,
       JOIN_NO_SSID, JOIN_BAD_PASS, JOIN_REFUSED, JOIN_NO_REPLY,
     };
-    void setJoinState(uint8_t j) { _join = j; }
-    uint8_t joinState() const { return _join; }
 
-    // the page's poll: <p id=jt> with data-u (json url), data-k (0 setup, 1 hotspot),
-    // data-a (AP), data-h (host), data-b (back link). Any page can send it
-    static const char JOIN_JS[];
-
-    // blocks for one sync scan, then AP + dns + http on 80; apSsid must outlive it
+    // blocks for one sync scan, then AP + dns + http on 80
     // false = the AP or dns didn't start, end() still owed
     __attribute__((warn_unused_result))
     bool begin(const char* apSsid, const char* apPassword = nullptr);   // nullptr = open
@@ -142,11 +136,6 @@ class EGPortal {
 
     const char* _title  = "Setup";
     const char* _notice = nullptr;
-    const char* _apSsid = nullptr;
-    uint8_t _join = JOIN_IDLE;
-
-    char _savedSsid[EGPORTAL_SSID_MAX + 1] = {};
-    char _savedPass[EGPORTAL_PASS_MAX + 1] = {};
 
     ScanEntry _scan[EGPORTAL_SCAN_MAX];
     uint8_t   _scanCount = 0;
@@ -155,7 +144,6 @@ class EGPortal {
     static void hScan(EGHttpRequest&, EGHttpResponse&, void*);
     static void hRescan(EGHttpRequest&, EGHttpResponse&, void*);
     static void hSave(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hStatus(EGHttpRequest&, EGHttpResponse&, void*);
     static void hCaptive(EGHttpRequest&, EGHttpResponse&, void*);
     static void hResetConfirm(EGHttpRequest&, EGHttpResponse&, void*);
     static void hResetGo(EGHttpRequest&, EGHttpResponse&, void*);

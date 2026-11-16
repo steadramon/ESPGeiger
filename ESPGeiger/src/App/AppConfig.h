@@ -102,7 +102,7 @@
 #define BUZZER_ENGINE
 #endif
 
-// saved wifi fails: stay offline, no portal
+// saved wifi fails or none set: a setup hotspot + web UI, then offline; counting throughout
 #if defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT)
 #define APP_OFFLINE_OK
 #endif

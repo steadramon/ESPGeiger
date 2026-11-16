@@ -46,6 +46,9 @@
 #define CACHE_1D "public, max-age=86400"
 #define CACHE_7D "public, max-age=604800"
 extern const char wifiAdvancedHTML[] PROGMEM;
+#ifdef APP_OFFLINE_OK
+static void hHotspot(EGHttpRequest& req, EGHttpResponse& res, void*);
+#endif
 
 // CSS + page templates
 
@@ -220,20 +223,11 @@ void corium::WebPortal::requestRestart(uint32_t delay_ms) {
 
 // poll() applies these, page drains first
 static bool s_wifi_save = false;   // creds in Wifi::holdCreds
-static bool s_ap_test = false;     // hotspot mode, the join test runs in place
 
 static bool s_erase_creds = false;
 static bool s_factory_reset = false;
 
 static corium::WebPortal* s_portal = nullptr;
-
-#define WIFI_MOVED_MS 4000   // the page polls each 2 s, it sees OK first
-
-// joined from hotspot mode: off it, onto the network; failed: hotspot mode stays, the page said why
-static void ap_test_end() {
-  s_ap_test = false;
-  if (corium::Wifi::testState() == EGPortal::JOIN_OK) (void)corium::Wifi::keepJoined(WIFI_MOVED_MS);   // logs
-}
 
 void corium::WebPortal::poll(uint32_t now) {
   // unsigned diff, wrap safe
@@ -241,7 +235,6 @@ void corium::WebPortal::poll(uint32_t now) {
   _poll_last_ms = now;
 
   if (_active) _http.tick();
-  if (s_ap_test && !corium::Wifi::testing()) ap_test_end();
 
   if (corium::Lifecycle::restartDue(now)) {
     bool wrote = s_wifi_save || s_erase_creds || s_factory_reset;
@@ -292,7 +285,6 @@ static const char R_PROGRESS[] PROGMEM = "/update/progress";
 static const char R_NETWORK[]  PROGMEM = "/network";
 static const char R_SCAN[]     PROGMEM = "/wifiscan";
 static const char R_SAVE[]     PROGMEM = "/wifisave";
-static const char R_JOIN[]     PROGMEM = "/wifijoin";
 static const char R_EXPORT[]   PROGMEM = "/export";
 static const char R_CLOCK[]    PROGMEM = "/clock";
 
@@ -340,7 +332,6 @@ void corium::WebPortal::begin(uint16_t port) {
     {R_NETWORK,  &corium::WebPortal::hWifi,           R::GET},
     {R_SCAN,     &corium::WebPortal::hWifiScan,       R::GET},
     {R_SAVE,     &corium::WebPortal::hWifiSave,       R::POST},
-    {R_JOIN,     &corium::WebPortal::hWifiJoin,       R::GET},
     {R_EXPORT,   &corium::WebPortal::hExport,         R::GET},
     {P_IMPORT,   &corium::WebPortal::hImport,         R::POST},
     {R_CLOCK,    hClock,                      R::POST},
@@ -353,6 +344,9 @@ void corium::WebPortal::begin(uint16_t port) {
   _http.onUpload(FPSTR(P_PARAM), &corium::WebPortal::hParamBody, nullptr);
   _http.onUpload(FPSTR(P_UPDATE), &corium::WebPortal::hUpdateBody, nullptr);
   _http.onUpload(FPSTR(P_IMPORT), &corium::WebPortal::hImportBody, nullptr);
+#ifdef APP_OFFLINE_OK
+  _http.on(F("/hotspot"), R::POST, hHotspot);
+#endif
 
   if (!safe) corium::AppHooks::routes(_http);
 
@@ -677,6 +671,36 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
   res.sendChunk(FPSTR(W_DETAILS_END));
 }
 
+#ifdef APP_OFFLINE_OK
+static const char K_HS_HOLD[] PROGMEM = "hs_hold";
+// these builds count offline: a dead or unset network opens the device's own setup hotspot
+static void wifi_render_hotspot(EGHttpResponse& res) {
+  res.sendChunk(F("<details style='margin-top:1.5em'><summary>Setup hotspot</summary>"
+                  "<form method=POST action=/hotspot>"
+                  "<p class=muted>If the saved network can't be joined, this device opens its own "
+                  "Wi-Fi with the setup page and keeps counting.</p>"
+                  "<label for=hsh>Stays up with nobody on it (minutes, 0 = always)</label>"
+                  "<input id=hsh name=m type=number min=0 max=1440 value='"));
+  corium::WebPortal::sendf(res, PSTR("%u"), (unsigned)corium::Prefs::getUInt("wifi", K_HS_HOLD));
+  res.sendChunk(F("'><button type=submit>Save</button></form></details>"));
+}
+
+static const char HS_SAVED_BODY[] PROGMEM = "<p>Setup hotspot saved. In effect now.</p>";
+
+static void hHotspot(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  const char* m = req.arg(F("m"));
+  uint32_t mins = (m && *m) ? strtoul(m, nullptr, 10) : 10;
+  if (mins > 1440) mins = 1440;
+  char v[6];
+  snprintf(v, sizeof(v), "%u", (unsigned)mins);
+  bool ok = corium::Prefs::put("wifi", K_HS_HOLD, v) && corium::Prefs::commit();
+  corium::WebPortal::beginPage(res, ok ? F("Setup hotspot saved") : F("Setup hotspot"));
+  if (!ok) corium::WebPortal::sendNotSaved(res);
+  else res.sendChunk(FPSTR(HS_SAVED_BODY));
+  corium::WebPortal::endPage(res);
+}
+#endif
+
 // no clock yet, the browser has one. id=time, /status links here
 static const char CLOCK_SET[] PROGMEM =
   "<p id=time>Clock not set <button type=button class='btn-sm btn-o' onclick=\"fetch('/clock',{method:'POST',"
@@ -686,14 +710,18 @@ static const char CLOCK_SET[] PROGMEM =
 void corium::WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("Network"));
 
-  char ssid[6 * EGPORTAL_SSID_MAX + 1];
-  egesc_html(ssid, sizeof(ssid), corium::Wifi::isConnected() ? corium::Wifi::SSID().c_str() : "");
-  sendf(res, W_CONNECTED, ssid[0] ? ssid : PSTR("(none)"));
+  char buf[corium::Wifi::LAST_TRY_MAX];   // the ssid, then the last try
+  egesc_html(buf, sizeof(buf), corium::Wifi::isConnected() ? corium::Wifi::SSID().c_str() : "");
+  sendf(res, W_CONNECTED, buf[0] ? buf : PSTR("(none)"));
   res.sendChunk(F("</b></p>"));
+  if (corium::Wifi::lastTry(buf, sizeof(buf))) res.sendChunk(buf);
 
   res.sendChunk(FPSTR(WIFI_FORM_HEAD));
   wifi_render_static_ip(res);
   res.sendChunk(FPSTR(WIFI_FORM_END));
+#ifdef APP_OFFLINE_OK
+  wifi_render_hotspot(res);
+#endif
 
   if (!corium::Clock::synced) res.sendChunk(FPSTR(CLOCK_SET));
   if (!corium::Registry::quarantined(&ntpclient)) {
@@ -855,61 +883,19 @@ CORIUM_NODISCARD static bool put_net(bool st, bool join, const char* ip, const c
                                      const char* sn, const char* dns) {
   if (!corium::Wifi::saveNetBackup() && st) return false;
   const char* f[] = {st ? "1" : "0", ip, gw, sn, dns};
-  // hotspot mode: only once joined
-  return corium::Wifi::putNet(f) && (!join || corium::Wifi::ap || corium::Wifi::joinMode());
+  return corium::Wifi::putNet(f) && (!join || corium::Wifi::joinMode());
 }
 
-static void ap_test_save(EGHttpResponse& res);
-
-// saved, restart, the backup reverts it; hotspot mode tests in place
+// saved, restart, the backup reverts it; hotspot mode too
 static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
   if (has_ssid) {
-    if (corium::Wifi::ap) {
-      ap_test_save(res);
-      return;
-    }
     (void)corium::Wifi::saveBackupCreds();   // logged; the portal is the way back
-    corium::BootGuard::requestPortal();   // offline builds too, once
+    corium::BootGuard::requestPortal();   // offline builds too
     s_wifi_save = true;
   }
   corium::WebPortal::beginPage(res, F("Saving WiFi"));
   wifi_render_save_msg(res, has_ssid);
   corium::WebPortal::endRestartPage(res, WIFI_RESTART_MS);
-}
-
-// hotspot mode: tested in place, saved and off the AP only once joined
-static void ap_test_save(EGHttpResponse& res) {
-  (void)corium::Wifi::testJoin();   // held just now, ap mode: can't fail
-  s_ap_test = true;
-  char ssid[6 * EGPORTAL_SSID_MAX + 1], host[6 * CORIUM_HOST_MAX + 1];
-  egesc_html(ssid, sizeof(ssid), corium::Wifi::testSsid());
-  egesc_html(host, sizeof(host), corium::DeviceInfo::hostname());
-  corium::WebPortal::beginPage(res, F("Saving WiFi"));
-  res.sendKV(F("<p id=jt data-u=/wifijoin data-k=1 data-b=/network data-a='"), host, F("' data-h='"));
-  res.sendKV(nullptr, host, F(".local'>Testing the connection to <b>"));
-  res.sendKV(nullptr, ssid, F("</b>. This can take up to 30 seconds.</p><script>"));
-  res.sendChunk(FPSTR(EGPortal::JOIN_JS));
-  res.sendChunk(F("</script>"));
-  corium::WebPortal::endPage(res);
-}
-
-// {"j":code,"s":tested,"ip":the STA's}, hotspot mode's page polls it
-void corium::WebPortal::hWifiJoin(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  char ip[CORIUM_IPV4_MAX + 1];
-  corium::Wifi::formatIP(ip, sizeof(ip), corium::Wifi::localIP());
-  char out[6 * WIFI_SSID_MAX + 48];   // the ssid json-escaped
-  EGJson js(out, sizeof(out));
-  js.map_begin();
-  js.uint(PSTR("j"), corium::Wifi::testState());
-  js.str(PSTR("s"), corium::Wifi::testSsid());
-  js.str(PSTR("ip"), ip);
-  js.map_end();
-  if (js.overflow || js.length() >= sizeof(out)) {
-    res.send(500, FPSTR(HTTP_CT_PLAIN), F("status too long"));
-    return;
-  }
-  out[js.length()] = '\0';
-  res.send(200, FPSTR(HTTP_CT_JSON), out);
 }
 
 void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*) {
