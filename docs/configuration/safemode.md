@@ -12,7 +12,7 @@ Safe mode starts ESPGeiger with only the core parts running: WiFi, the web pages
 
 ## When it starts
 
-* **After 3 crashes in a row**, each before the device has run for 10 minutes. A crash here is an exception, a watchdog reset or a brownout, so a poor power supply can trigger it too (see [Troubleshooting](/troubleshooting)).
+* **After <!-- gen:const CORIUM_BOOTGUARD_CRASHES -->3<!-- /gen --> crashes in a row**, each before the device has run for <!-- gen:const CORIUM_BOOTGUARD_LIVED_S s -->10 minutes<!-- /gen -->. A crash here is an exception, a watchdog reset or a brownout, so a poor power supply can trigger it too (see [Troubleshooting](/troubleshooting)).
 * **On request**, with the `safe` command over [serial](/output/serial), or by opening `/guard?enter=1`. The device restarts into safe mode.
 
 Installing a new firmware clears the crash count.
@@ -24,13 +24,13 @@ Installing a new firmware clears the crash count.
 * The home page shows **SAFE MODE**, why it started, and how long until it tries normal mode again. An OLED shows *Safe mode* when it first starts.
 * The **Config**, **Network Config**, **Info** and **Update** pages still work. Config shows every setting, so a recent change can be undone. On ESPGeiger-HW and the `_hv` builds the HV settings are the exception: `/hv` is off in safe mode, so undo them with `set espghw.duty <n>` or `reset espghw` over serial.
 * `/info` shows the latest crash, worth including in a bug report.
-* The Status and History pages aren't there, nor is the command box on the Status page or `/json`. Use the [serial console](/output/serial) for commands; it works as normal, except on ESPGeiger Log and ESPGeiger Lite builds, which read no serial commands.
+* The Status and History pages aren't there, nor is the command box on the Status page or `/json`. Use the [serial console](/output/serial) for commands; it works as normal, except on ESPGeiger Log builds, which read no serial commands.
 * `/outputs` lists each stopped module as `{"quarantined":true}`.
-* A short hold of the push button at boot does nothing, so no offline mode. A hold of 5 seconds or more still does a factory reset.
+* A short hold of the push button at boot does nothing, so no offline mode. A hold of <!-- gen:const CORIUM_BOOT_BUTTON_RESET_S s -->5 seconds<!-- /gen --> or more still does a factory reset.
 
 ## Getting out
 
-* Wait. The device restarts and tries normal mode after 30 minutes. If it ends up back in safe mode the wait doubles each time, up to 16 hours, and goes back to 30 minutes once the device has run for a day.
+* Wait. The device restarts and tries normal mode after <!-- gen:const CORIUM_BOOTGUARD_RETRY_MS ms -->30 minutes<!-- /gen -->. If it ends up back in safe mode the wait doubles each time, up to <!-- gen:const CORIUM_BOOTGUARD_RETRY_MS<<RETRY_DOUBLINGS ms -->16 hours<!-- /gen -->, and goes back to <!-- gen:const CORIUM_BOOTGUARD_RETRY_MS ms -->30 minutes<!-- /gen --> once the device has run for a day.
 * Restart it: the **restart now** link on the home page, the `reboot` command, or a power cycle. The next boot is normal.
 * Install a different firmware from the **Update** page.
 

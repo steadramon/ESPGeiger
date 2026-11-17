@@ -200,9 +200,6 @@ class HV : public corium::Module {
       int get_vd_ratio() {
         return _vd_ratio;
       }
-      int get_vd_offset() {
-        return _vd_offset;
-      }
       bool saveconfig();
       // Pin low first, never old duty at new freq; false as set_freq
       bool apply_freq_duty_safe(int new_freq, int new_duty);
@@ -233,7 +230,6 @@ class HV : public corium::Module {
       // release_hold() if the OTA fails
       void hold(bool restarting);
       void release_hold();
-      void reset_trim() { _duty_trim = 0; }
       // last reading, volts
       uint16_t get_volts() const { return _hv_prev; }
       EGRingAvg<uint16_t, HV_TRIM_N> hvReading;

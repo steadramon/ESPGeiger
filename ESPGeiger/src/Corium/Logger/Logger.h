@@ -39,7 +39,6 @@ public:
   // fmt in flash or SRAM
   static void console(const char* fmt, ...);
   static void vconsole(const char* fmt, va_list ap) { vlog(LOG_LEVEL_CONSOLE, true, fmt, ap); }   // a lib's hook
-  static void error(const char* fmt, ...);
 #if LOG_LEVEL >= 2
   static void info(const char* fmt, ...);
 #else

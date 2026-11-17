@@ -104,4 +104,4 @@ Custom builds can change the default. See [Build Options](/dev/platformio#geiger
 
 ### Interrupt Saturation Guard
 
-On interrupt-counting builds, an input flooded with far more edges than any tube can produce is paused, for 5 seconds at first and up to 5 minutes while it goes on. The rest of the device keeps running. The log shows `ISR storm`. See [Troubleshooting](/troubleshooting#log-shows-isr-storm) for causes.
+On interrupt-counting builds, an input flooded with far more edges than any tube can produce is paused, for <!-- gen:const ISR_STORM_COOLDOWN_S s -->5 seconds<!-- /gen --> at first and up to <!-- gen:const ISR_STORM_MAX_S s -->5 minutes<!-- /gen --> while it goes on. The rest of the device keeps running. The log shows `ISR storm`. See [Troubleshooting](/troubleshooting#log-shows-isr-storm) for causes.

@@ -61,6 +61,8 @@ CORIUM_PSTR(K_DET_HDR,        "_det_hdr");
 CORIUM_PSTR(K_DOSE_HDR,       "_dose_hdr");
 CORIUM_PSTR(K_COUNT_HDR,      "_count_hdr");
 CORIUM_PSTR(K_DEAD_TIME_US,   "dead_time_us");
+CORIUM_PSTR(K_BG_USVH,        "bg_usvh");
+CORIUM_PSTR(K_QUIET_MIN,      "quiet_min");
 CORIUM_PSTR(K_BLIP_LED,       "blip_led");
 CORIUM_PSTR(K_BLIP_BRIGHT,    "blip_bright");
 CORIUM_PSTR(K_PWM_PIN,        "pwm_pin");
@@ -188,6 +190,10 @@ CORIUM_PSTR(CT_H_OFF, "0 = off");
 CORIUM_PSTR(CT_L_ALR, "Alert CPM");
 CORIUM_PSTR(CT_L_LE,  "Track lifetime");
 CORIUM_PSTR(CT_H_LE,  "Keep lifetime clicks and dose across restarts");
+CORIUM_PSTR(CT_L_BG,  "Background (uSv/h)");
+CORIUM_PSTR(CT_H_BG,  "Usual here, 0.1 if unsure");
+CORIUM_PSTR(CT_L_QM,  "No count warning after (min)");
+CORIUM_PSTR(CT_H_QM,  "Slow tubes need longer");
 
 // a -D one is the row default too
 #if defined(USE_PCNT) && !defined(PCNT_FILTER)
@@ -232,6 +238,8 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   {EG_K_WARN,         CT_L_WRN, CT_H_OFF, STR(GEIGER_WARN_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
   {EG_K_ALERT,        CT_L_ALR, CT_H_OFF, STR(GEIGER_ALERT_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
   {K_LIFE_EN,         CT_L_LE,  CT_H_LE,  "1",     nullptr, 0, 1,    0,  corium::P_BOOL,   corium::P_ADVANCED},
+  {K_BG_USVH,         CT_L_BG,  CT_H_BG,  STR(GEIGER_ASSUMED_BG_USVH), nullptr, 0, 1, 0, corium::P_FLOAT, corium::P_ADVANCED},
+  {K_QUIET_MIN,       CT_L_QM,  CT_H_QM,  STR(GEIGER_QUIET_MIN), nullptr, 5, 360, 0, corium::P_UINT, corium::P_ADVANCED},
   // Signal conditioning, all advanced
   {K_COUNT_HDR,       IN_L_COUNT, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, corium::P_ADVANCED},
 #ifdef PCNT_SELECTABLE
@@ -357,6 +365,8 @@ void CounterPrefs::onPrefsLoaded() {
 #endif
   gcounter.set_cpm_mode((uint8_t)corium::Prefs::getUInt("counter", K_CPM_MODE));
   gcounter.set_ratio(corium::Prefs::getFloat("counter", EG_K_RATIO));
+  gcounter.set_background(corium::Prefs::getFloat("counter", K_BG_USVH),
+                          corium::Prefs::getUInt("counter", K_QUIET_MIN) * 60UL);
   gcounter.set_warning((int)corium::Prefs::getUInt("counter", EG_K_WARN));
   gcounter.set_alert((int)corium::Prefs::getUInt("counter", EG_K_ALERT));
   gcounter.set_lifetime_enabled(corium::Prefs::getUInt("counter", K_LIFE_EN) != 0);

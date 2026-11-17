@@ -59,7 +59,7 @@ void onBoot() {
   load();
   bool was_safe = s_state.safe;
   Ending end = ending(DeviceInfo::resetReason());
-  if (CrashDump::hasCrash()) end = END_CRASH;   // esp8266 abort() looks like a restart
+  if (CrashDump::reset().crash) end = END_CRASH;   // esp8266 abort() looks like a restart
   apply(s_state, MAGIC, DeviceInfo::fwFingerprint(), end);
   s_portal = s_state.portal;   // this boot only
   s_state.portal = 0;

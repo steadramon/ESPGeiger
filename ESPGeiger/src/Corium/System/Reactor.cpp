@@ -18,7 +18,12 @@
 */
 #include "Reactor.h"
 #include <EGClock.h>
+#ifdef ESP32
 #include <Ticker.h>
+#else
+#include <osapi.h>
+extern "C" void* umm_last_fail_alloc_addr;   // the core's
+#endif
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/System/Uptime.h"
@@ -33,7 +38,17 @@ uint32_t corium::Reactor::s_ms_last_us = 0;
 uint32_t corium::Reactor::s_ms_acc_us = 0;
 uint32_t corium::Reactor::s_next_house = 0;
 
+#ifdef ESP32
 static Ticker s_ms_ticker;
+#else
+// os_timer straight, Ticker drags in std::function (~1 KB)
+static os_timer_t s_ms_timer;
+static os_timer_t s_sec_timer;
+static void every(os_timer_t* t, uint32_t ms, void (*fn)()) {
+  os_timer_setfn(t, [](void* f) { ((void (*)())f)(); }, (void*)fn);
+  os_timer_arm(t, ms, true);
+}
+#endif
 static void (*s_app)(uint32_t) = nullptr;
 // boot guard marks, once each
 static bool s_lived = false;
@@ -45,7 +60,11 @@ void corium::Reactor::clock(void (*ms)()) {
   s_ms_last_us = micros();
   corium::_fast_ms_counter = CORIUM_MS_START + s_ms_last_us / 1000;
   EGClock::set(fastMillis);
+#ifdef ESP32
   s_ms_ticker.attach_ms(1, ms);
+#else
+  every(&s_ms_timer, 1, ms);
+#endif
 }
 
 void corium::Reactor::second() {
@@ -54,7 +73,9 @@ void corium::Reactor::second() {
   uint32_t now = corium::fastMillis();
   if (corium::reached(now, s_next_sec)) s_next_sec = now + 1000;
 #else
-  corium::Log::hold(true);   // a Ticker, SYS context: no serial writes here
+  corium::Log::hold(true);   // an os_timer, SYS context: no serial writes here
+  // the core keeps the last failed alloc forever: an abort is oom only if it failed this second
+  umm_last_fail_alloc_addr = nullptr;
 #endif
   corium::TickProfile::beginTick();
   s_up = (uint32_t)corium::Uptime::tick();
@@ -95,8 +116,6 @@ void corium::Reactor::house() {
 
 #ifdef ESP32
 uint32_t corium::Reactor::s_next_sec = 0;
-#else
-static Ticker s_sec_ticker;
 #endif
 
 void corium::Reactor::begin(void (*app)(uint32_t up)) {
@@ -108,6 +127,6 @@ void corium::Reactor::begin(void (*app)(uint32_t up)) {
   // the tick in loop feeds it
   esp_task_wdt_add(NULL);
 #else
-  s_sec_ticker.attach(1, second);
+  every(&s_sec_timer, 1000, second);
 #endif
 }

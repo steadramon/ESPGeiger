@@ -53,9 +53,9 @@ set sys.web_pass
 
 (That is, the `set` command with an empty value.) The web UI stops prompting on the next request. The console also says `Restart to apply`: that is for [espota](/install/ota#via-espotapy-arduinoota), which only reads the password at boot.
 
-To set a new password later: `set sys.web_pass MyNewPassword` (8 or more characters).
+To set a new password later: `set sys.web_pass MyNewPassword` (<!-- gen:const WEB_PASS_MIN -->8<!-- /gen --> or more characters).
 
-This works with the setup portal up too, with a restart (`reboot`) after the `set`: the portal reads the password once, when it starts. During the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log and ESPGeiger Lite builds don't read serial commands at all.
+This works with the setup portal up too, with a restart (`reboot`) after the `set`: the portal reads the password once, when it starts. During the portal the console takes `set`, `get`, `reset`, `resetwifi`, `resetnet`, `offline`, `ver`, `safe` and `reboot`. ESPGeiger Log builds don't read serial commands at all.
 
 The web password is also kept outside the settings files, so a device that loses its settings (a damaged or reformatted file system) comes back with the same password, and **Info** shows *Web password: restored from backup (settings lost)*. A factory reset or clearing the password as above clears that copy too.
 
@@ -63,7 +63,7 @@ The web password is also kept outside the settings files, so a device that loses
 
 If the device is stuck on the setup portal, open [install.espgeiger.com](https://install.espgeiger.com) in Chrome or Edge, click Connect and pick the device, then choose the option to change or connect Wi-Fi (no reinstall needed). This sets the WiFi without going through the portal or the password. The web pages still ask for the password afterwards, so then clear it with option 1.
 
-This doesn't work on ESPGeiger Log or ESPGeiger Lite, where the serial RX pin is the push button. Use option 3 there.
+This doesn't work on ESPGeiger Log, where the serial RX pin is the push button. Use option 3 there.
 
 ### 3. Hardware button factory reset
 
@@ -76,7 +76,7 @@ On builds with a push button (such as ESPGeiger-HW and ESPGeiger Log):
 
 On a plain ESP32, S2, S3 or C3 dev board the push button is the board's own **BOOT** button. Held while powering on, BOOT starts the chip's download mode and ESPGeiger never runs, so power on first and press BOOT **a moment after**, then keep holding. The serial console shows `BOOT: button held` once it has been seen; if nothing happens, power-cycle and press a little later.
 
-The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity and the lifetime totals (clicks, first boot, tracked time) are kept; **Reset lifetime** on the [History page](/output/history) clears the clicks and tracked time. Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before 5 seconds starts [Offline Mode](/configuration/offlinemode) instead.
+The device performs a factory reset, wiping all settings including the web password and the WiFi credentials. Your ESPGeiger Stations identity and the lifetime totals (clicks, first boot, tracked time) are kept; **Reset lifetime** on the [History page](/output/history) clears the clicks and tracked time. Re-run [Initial Setup](#initial-setup) from the top of this page. Releasing the button before <!-- gen:const CORIUM_BOOT_BUTTON_RESET_S s -->5 seconds<!-- /gen --> starts [Offline Mode](/configuration/offlinemode) instead.
 
 ### 4. Reflash via the Web Installer
 
@@ -86,7 +86,7 @@ Nuclear option: reflash the firmware from [install.espgeiger.com](https://instal
 
 ESPGeiger is designed to run on your **local network**, not on the open internet.
 
-The web interface uses HTTP Basic Auth with no TLS. With a web password set, `/update` and espota (when **Arduino OTA** is on) take new firmware from anyone who has it; with no password, from anyone on your network. Firmware images are not signed, and there is no rate limiting or brute-force protection. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
+The web interface uses HTTP Basic Auth with no TLS. With a web password set, `/update` and espota (when **Arduino OTA** is on) take new firmware from anyone who has it; with no password, from anyone on your network. Firmware images are not signed. The web login stops for <!-- gen:const EGHTTP_BRAKE_MS ms -->10 seconds<!-- /gen --> after <!-- gen:const EGHTTP_BRAKE_TRIES -->5<!-- /gen --> wrong passwords (the [login brake](/configuration#login-brake)); espota has no brake. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
 
 If you need to reach your device from outside your LAN, use one of:
 

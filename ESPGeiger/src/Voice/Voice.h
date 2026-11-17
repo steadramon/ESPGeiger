@@ -43,7 +43,6 @@ class Voice : public corium::Module {
     void playKlaxon(uint8_t type);
 
     uint8_t klaxonType()    const { return _klax_type; }
-    uint8_t klaxonVolume()  const { return _klax_vol; }
 
     void announce();
 

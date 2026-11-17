@@ -155,6 +155,8 @@ See [UDP / OSC Output](/output/udp) for the full protocol. Tunables for the prod
 |---|---|
 | `-D GEIGER_TEST_FIXEDCPM` | Lock the test output to a single CPM value instead of cycling through 30/60/100/120. |
 | `-D GEIGER_COUNT_TXPULSE` | Count the pulses generated on the TX pin locally. Note: if RX and TX pins are connected together, counts will be doubled. |
+| `-D DISABLE_GEIGER_POISSON` | Evenly spaced test pulses instead of random (Poisson) ones. Also leaves out the maths library, about 1.5 KB. |
+| `-D GEIGER_TEST_FAST` | Run the test output at 100 times its CPM. |
 
 ### High-Voltage Generator (HV)
 
@@ -189,6 +191,7 @@ Identifies a specific product family. Implies a known set of capability flags as
 |---|---|
 | `-D GEIGER_SDCARD_CS=N` | Set the SD card SPI chip select pin (default `16`). Requires `GEIGER_SDCARD`. |
 | `-D GEIGER_SDCARD_SCK=N` | SD card on its own SPI pins, with `GEIGER_SDCARD_MOSI=N` and `GEIGER_SDCARD_MISO=N` (ESP32 family). Without it the chip's default SPI pins are used. |
+| `-D SDCARD_LOG_UNIXTIME` | Write the CSV time column as Unix seconds instead of `YYYY-MM-DD hh:mm:ss`. |
 
 ### Miscellaneous
 
@@ -199,6 +202,8 @@ Identifies a specific product family. Implies a known set of capability flags as
 | `-D NTP_SERVER="server"` | Set the default NTP server (default `pool.ntp.org`). |
 | `-D NTP_TZ="tz"` | Default timezone as an Olson name, e.g. `Europe/London`. Default `Etc/UTC`; an unknown name runs as UTC. |
 | `-D RTC_CHIP` | Look for an RTC chip on the I2C bus on ESP8266 and ESP32 builds too (C3 and S3 builds with the bus always do). |
+| `-D DISABLE_ENVSENSOR` | Leave out the environment sensor drivers. On builds without an OLED the I2C bus and RTC support go too, about 13 KB on an ESP8266. |
+| `-D DISABLE_LOG_TS` | No time stamp at the start of log lines. |
 
 ### SdFat (SD card builds)
 

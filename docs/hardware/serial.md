@@ -26,7 +26,7 @@ ESPGeiger supports a variety of Geiger counters that communicate via serial inte
 
 ## Expected Reporting Frequency
 
-All supported counters send one reading per second. If no valid line arrives for **60 seconds**, ESPGeiger marks the counter as disconnected. This shows in MQTT and Home Assistant as **Serial Connected** (JSON field `ser_ok`). Counters that report less often than once a minute will flip this flag.
+All supported counters send one reading per second. If no valid line arrives for **<!-- gen:const GEIGERSERIAL_OK_MS ms as=s -->60 seconds<!-- /gen -->**, ESPGeiger marks the counter as disconnected. This shows in MQTT and Home Assistant as **Serial Connected** (JSON field `ser_ok`). Counters that report less often than once a minute will flip this flag.
 
 ## How readings are derived
 

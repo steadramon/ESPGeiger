@@ -19,6 +19,7 @@
 #ifdef ESP32
 #include "DeviceInfo.h"
 #include "DeviceInfoChip.h"
+#include "CrashDump.h"
 #include <math.h>
 #include <esp_chip_info.h>
 #include <esp_system.h>
@@ -29,7 +30,7 @@ uint8_t corium::DeviceInfo::bootRamBuf[256] __attribute__((section(".noinit")));
 static float s_temp_c = NAN;
 uint8_t corium::DeviceInfo::ctWait = 0;
 
-// next read 45-75 s on, then a 1/16 ema, out of range reads dropped
+// Next read is 45-75 s on. Smoothed with a 1/16 ema, out of range reads are dropped
 void corium::DeviceInfo::chipTempRead() {
   ctWait = 45 + (uint8_t)(esp_random() % 31);
   float t = temperatureRead();
@@ -45,7 +46,7 @@ uint64_t corium::DeviceInfo::hwId() {
   return ESP.getEfuseMac();
 }
 
-// one case per chip
+// One case per chip
 const char* corium::DeviceInfo::chip() {
   esp_chip_info_t info;
   esp_chip_info(&info);
@@ -81,7 +82,7 @@ void corium::DeviceInfo::Chip::flashText(char* buf, size_t cap) {
   snprintf_P(buf, cap, PSTR("%s %luMHz"), mode, mhz);
 }
 
-// same as umm_malloc on the 8266
+// Same frag sum as umm_malloc on the 8266
 uint8_t corium::DeviceInfo::Chip::heapRead(uint32_t* lfb) {
   uint32_t free_ = ESP.getFreeHeap();
   uint32_t max_  = ESP.getMaxAllocHeap();
@@ -91,16 +92,17 @@ uint8_t corium::DeviceInfo::Chip::heapRead(uint32_t* lfb) {
   return (uint8_t)(100.0f - sqrtf(ratio) * 100.0f);
 }
 
+namespace CD = corium::CrashDump;
 static const corium::DeviceInfo::Chip::ResetRow RESETS[] = {
-  {ESP_RST_POWERON,   corium::DeviceInfo::RR_POWER_ON,   "Power on"},
-  {ESP_RST_EXT,       corium::DeviceInfo::RR_PIN,        "External reset"},
-  {ESP_RST_SW,        corium::DeviceInfo::RR_RESTART,    "Software restart"},
-  {ESP_RST_PANIC,     corium::DeviceInfo::RR_EXCEPTION,  "Exception"},
-  {ESP_RST_INT_WDT,   corium::DeviceInfo::RR_WDT,        "Interrupt watchdog"},
-  {ESP_RST_TASK_WDT,  corium::DeviceInfo::RR_WDT,        "Task watchdog"},
-  {ESP_RST_WDT,       corium::DeviceInfo::RR_WDT,        "Watchdog"},
-  {ESP_RST_BROWNOUT,  corium::DeviceInfo::RR_BROWNOUT,   "Brownout"},
-  {ESP_RST_DEEPSLEEP, corium::DeviceInfo::RR_DEEP_SLEEP, "Deep sleep wake"},
+  {ESP_RST_POWERON,   corium::DeviceInfo::RR_POWER_ON,   CD::K_POWER_ON},
+  {ESP_RST_EXT,       corium::DeviceInfo::RR_PIN,        CD::K_PIN},
+  {ESP_RST_SW,        corium::DeviceInfo::RR_RESTART,    CD::K_RESTART},
+  {ESP_RST_PANIC,     corium::DeviceInfo::RR_EXCEPTION,  CD::K_EXCEPTION},
+  {ESP_RST_INT_WDT,   corium::DeviceInfo::RR_WDT,        CD::K_INT_WDT},
+  {ESP_RST_TASK_WDT,  corium::DeviceInfo::RR_WDT,        CD::K_TASK_WDT},
+  {ESP_RST_WDT,       corium::DeviceInfo::RR_WDT,        CD::K_WDT},
+  {ESP_RST_BROWNOUT,  corium::DeviceInfo::RR_BROWNOUT,   CD::K_BROWNOUT},
+  {ESP_RST_DEEPSLEEP, corium::DeviceInfo::RR_DEEP_SLEEP, CD::K_DEEP_SLEEP},
 };
 
 const corium::DeviceInfo::Chip::ResetRow* corium::DeviceInfo::Chip::resets(size_t* n) {
@@ -113,7 +115,7 @@ uint32_t corium::DeviceInfo::Chip::resetCause() { return esp_reset_reason(); }
 bool corium::DeviceInfo::efuseMac(uint8_t* out) { return esp_efuse_mac_get_default(out) == ESP_OK; }
 
 bool corium::DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
-                          uint32_t* epc2, uint32_t* epc3, uint32_t* depc) {
+                                  uint32_t* epc2, uint32_t* epc3, uint32_t* depc) {
   (void)epc1; (void)excvaddr; (void)exccause;
   (void)epc2; (void)epc3; (void)depc;
   return false;

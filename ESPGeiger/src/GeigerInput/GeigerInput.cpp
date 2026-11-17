@@ -25,6 +25,7 @@
 volatile unsigned long _last_blip = 0;
 volatile uint32_t s_event_counter = 0;
 volatile uint32_t s_isr_entries = 0;  // before debounce
+uint32_t s_isr_seen = 0;   // last value checkIsrStorm saw, only the isr writes s_isr_entries
 
 volatile unsigned long _debounce = GEIGER_DEBOUNCE;
 
@@ -32,7 +33,7 @@ static constexpr uint16_t ISR_STORM_COOLDOWN_S = 5;
 static constexpr uint16_t ISR_STORM_MAX_S = 300;
 static uint16_t s_cooldown_s = 0;
 static uint16_t s_park_s = ISR_STORM_COOLDOWN_S;   // doubles per storm, a quiet second resets
-static bool     s_isr_stopped = false;   // ota, the cooldown leaves it off
+static bool     s_isr_stopped = false;   // stopped for OTA, so the cooldown doesn't re-arm it
 static Chatter  s_chatter;
 
 corium::IsrLock::Mux timerMux;
@@ -79,7 +80,7 @@ void GeigerInput::setLastBlip()  {
   _last_blip = micros();
 }
 
-// inline, isr stays one IRAM function
+// Forced inline so the ISR stays one IRAM function
 static inline __attribute__((always_inline)) void count_at(unsigned long us) {
   s_isr_entries++;
   if (us - _last_blip < _debounce) {
@@ -100,13 +101,14 @@ void GeigerInput::countAt(unsigned long us) {
   count_at(us);
 }
 
-// floating pin, EMI; the ones it throws away, a ringing tube
+// Parks the pin on a storm (floating pin, EMI). The pulses debounce throws away point to a ringing tube
 void GeigerInput::checkIsrStorm() {
   if (_rx_pin < 0) return;
   corium::IsrLock::enter(timerMux);
-  uint32_t n = s_isr_entries;
+  uint32_t e = s_isr_entries;
+  uint32_t n = e - s_isr_seen;
+  s_isr_seen = e;
   uint32_t kept = s_event_counter;   // collect() takes it next
-  s_isr_entries = 0;
   corium::IsrLock::leave(timerMux);
 
   if (s_cooldown_s > 0) {
@@ -120,11 +122,11 @@ void GeigerInput::checkIsrStorm() {
 
   if (n > STORM_COUNTS) {
     corium::IsrLock::pinOff(_rx_pin);
-    Counter::drop_pulses(s_event_counter);   // and the ring's
-    setCounter(0, false);   // junk, collect() hands 0
+    Counter::drop_pulses(s_event_counter);   // drop them from the ring too
+    setCounter(0, false);   // junk, so collect() hands back 0
     s_cooldown_s = s_park_s;
     corium::Log::console(PSTR("GeigerPulse: ISR storm (%u/s) - parked %us"),
-                 (unsigned)n, (unsigned)s_park_s);
+                         (unsigned)n, (unsigned)s_park_s);
     s_park_s = s_park_s >= ISR_STORM_MAX_S / 2 ? ISR_STORM_MAX_S : s_park_s * 2;
     _stormy = true;
   } else {
@@ -143,7 +145,7 @@ void GeigerInput::stopIsr() {
   corium::IsrLock::pinOff(_rx_pin);
 }
 
-// a storm cooldown re-arms it when done
+// If a storm cooldown is running, it re-arms the pin when done
 void GeigerInput::restartIsr() {
   s_isr_stopped = false;
   if (s_cooldown_s == 0) corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);

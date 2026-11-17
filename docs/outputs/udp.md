@@ -12,8 +12,8 @@ ESPGeiger can broadcast click events and periodic stats to a UDP multicast group
 
 A matching receiver firmware variant (`UDP-Receiver`) lets a tubeless ESP device mirror another ESPGeiger over the air. Display, MQTT, WebAPI, OLED and blip-LED all work as if a real tube were attached.
 
-- Multicast group: `239.255.86.86` (configurable)
-- UDP port: `57340` (configurable)
+- Multicast group: <!-- gen:const UDPBLIP_DEFAULT_GROUP code -->`239.255.86.86`<!-- /gen --> (configurable)
+- UDP port: <!-- gen:const UDPBLIP_DEFAULT_PORT code -->`57340`<!-- /gen --> (configurable)
 - Service announced via mDNS as `_osc._udp`
 
 ## Quick Start
@@ -59,7 +59,7 @@ Configured on the **Config → Input** page (`udprx_mode`).
 | Mode | Behaviour |
 |---|---|
 | `0` (specific) | Accept clicks from a specific producer. With `udprx_chipid` blank, auto-latch onto the first producer heard and lock to it. |
-| `1` (sum) | Aggregate clicks from every producer heard. Up to 8 tracked. |
+| `1` (sum) | Aggregate clicks from every producer heard. Up to <!-- gen:const UDPRX_PRODUCER_SLOTS -->8<!-- /gen --> tracked. |
 
 ## Build Targets
 
@@ -169,7 +169,7 @@ When mode > 0 the producer announces an `_osc._udp` service with the configured 
 ## Reliability and tuning
 
 - **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Loss % over the last 10 to 15 minutes is on the OLED and in `/json` as `loss`; it is hidden while nothing has come in for that long.
-- **Send throttle**: high-CPS producers cap `/click` emit rate at 20 pps. Counter accuracy is preserved because each packet carries the producer's running total.
+- **Send throttle**: high-CPS producers cap `/click` emit rate at <!-- gen:const 1000/UDPBLIP_CLICK_MIN_INTERVAL_MS -->20<!-- /gen --> pps. Counter accuracy is preserved because each packet carries the producer's running total.
 - **RX sleep mode** (`udprx_rxmode`): `1` (modem sleep, default) suits most networks. `0` saves more power. `2` keeps the radio always on and runs warmer; try unicast first if packets go missing. The original ESP32 (not C3/S3) defaults to `2`: on modem sleep it misses most multicast.
 
 ## Build Flags

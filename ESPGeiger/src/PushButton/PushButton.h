@@ -52,7 +52,6 @@ class PushButton : public corium::Module {
     void begin() override;
     void init();
     bool isPressed();
-    bool is_active();
     void set_pin(int pin);
     void set_pin2(int pin);
 #ifndef BTN_PIN_BLOCKED

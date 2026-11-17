@@ -45,7 +45,7 @@ Brightness scales the chosen colour proportionally.
 
 ### Advanced settings
 
-Fade (`neopixel.fade`, Off/Fast/Medium/Slow) stretches the mode 1 blip with a decay (20, 80, 150 or 300 ms). Swap R/G (`neopixel.swap`) fixes chips that show green as red; on by default on ESP8266. Pin (`neopixel.pin`) is the data pin, -1 off, restart to apply; fixed on the XH-S3E, ESPGeiger-Log and ESPGeiger Lite.
+Fade (`neopixel.fade`, Off/Fast/Medium/Slow) stretches the mode 1 blip with a decay (20, 80, 150 or 300 ms). Swap R/G (`neopixel.swap`) fixes chips that show green as red; on by default on ESP8266. Pin (`neopixel.pin`) is the data pin, -1 off, restart to apply; fixed on the XH-S3E and ESPGeiger-Log.
 
 ## How the trend colour and flash rate are derived (modes 3 and 4)
 

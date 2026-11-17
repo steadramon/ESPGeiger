@@ -70,9 +70,7 @@ class Counter : public CounterMaths {
       int get_last_cps() const { return (int)_ticks.last(); }
       int get_cpm();
       float get_cpmf();
-      float get_cps_stable()  const { return _cached_cps; }
       float get_cpmf_stable() const { return _cached_cps * 60.0f; }
-      int   get_cpm_stable()  const { return to_int(_cached_cps * 60.0f); }
       float get_usv_stable()  const { return _cached_cps * 60.0f * _ratio_inv; }
       int get_cpm5();
       float get_cpm5f();
@@ -100,7 +98,6 @@ class Counter : public CounterMaths {
       // pref order
       enum : uint8_t { CPM_FAST_START, CPM_LIVE, CPM_60S, CPM_BUCKET, CPM_FAST };
       void    set_cpm_mode(uint8_t m);
-      uint8_t get_cpm_mode() const { return _cpm_mode; }
       bool blip_led();
       void begin();
       // once a second, from the Reactor tick

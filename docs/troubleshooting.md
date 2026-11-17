@@ -66,10 +66,10 @@ The warning clears itself the moment the first count arrives.
 GeigerPulse: ISR storm (N/s) - parked 5s
 ```
 
-The input pin is seeing more than 10,000 edges a second, far beyond any
-Geiger tube. Counting pauses for 5 seconds, then retries. If the storm is
-still there each pause is twice as long, up to 5 minutes; a quiet second
-starts it back at 5. The usual causes:
+The input pin is seeing more than <!-- gen:const GeigerInput::STORM_COUNTS comma -->10,000<!-- /gen --> edges a second, far beyond any
+Geiger tube. Counting pauses for <!-- gen:const ISR_STORM_COOLDOWN_S s -->5 seconds<!-- /gen -->, then retries. If the storm is
+still there each pause is twice as long, up to <!-- gen:const ISR_STORM_MAX_S s -->5 minutes<!-- /gen -->; a quiet second
+starts it back at <!-- gen:const ISR_STORM_COOLDOWN_S -->5<!-- /gen -->. The usual causes:
 
 - **Floating input.** Nothing connected to the input pin, or a loose wire.
 - **Noisy cable.** A long or unshielded pulse wire picking up mains hum or
@@ -83,7 +83,7 @@ keep running while counting is paused.
 This check is on when pulses are counted with an interrupt: all ESP8266 and
 ESP32-C3 pulse builds, and ESP32 pulse builds set to **Count with** Interrupt
 (the default on the `no_pcnt` builds, retired in 0.15). Counting with
-Hardware (PCNT) drops any second over 10,000 counts instead and logs
+Hardware (PCNT) drops any second over <!-- gen:const GeigerInput::STORM_COUNTS comma -->10,000<!-- /gen --> counts instead and logs
 `GeigerPulse: PCNT storm (N/s) - dropped`.
 
 ## WiFi keeps dropping

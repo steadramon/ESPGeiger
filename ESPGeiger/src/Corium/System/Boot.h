@@ -72,17 +72,17 @@ namespace Boot {
     Wifi::checkBackupState();
 
 #ifdef CORIUM_CRASH_MARK
-    uint8_t rr = DeviceInfo::resetReason();
     uint8_t in = Registry::IN_NONE;
-    if (rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION) {
 #ifdef ESP8266
-      // the crash dump's; a hw wdt never reaches the callback, no dump = not known
-      if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) in = (uint8_t)cd->in;
+    // the crash dump's; a hw wdt never reaches the callback, no dump = not known
+    if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) in = (uint8_t)cd->in;
 #else
+    uint8_t rr = DeviceInfo::resetReason();
+    if (rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION) {
       in = Registry::firing();   // noinit, still the crash's
       Registry::keepTrace();
-#endif
     }
+#endif
     Registry::crashBoot(in);
 #endif
     Registry::setSafeMode(BootGuard::safeMode());

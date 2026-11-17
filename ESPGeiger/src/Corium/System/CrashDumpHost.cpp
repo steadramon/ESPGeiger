@@ -22,7 +22,6 @@
 namespace corium {
 namespace CrashDump {
 void begin() {}
-bool hasCrash() { return false; }
 const Snapshot* lastCrash() { return nullptr; }
 }
 }  // namespace corium

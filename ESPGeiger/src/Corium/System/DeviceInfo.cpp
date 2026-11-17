@@ -29,6 +29,7 @@
 #include "Corium/Util/Words.h"
 #include "KeyStore.h"
 #include "DeviceInfoChip.h"
+#include "CrashDump.h"
 
 static char s_hostname[sizeof(THING_NAME "-") + CHIPID_LEN] = "";
 static char s_chipid[CHIPID_LEN + 1] = "";
@@ -171,9 +172,13 @@ uint8_t corium::DeviceInfo::resetReason() {
   return r ? pgm_read_byte(&r->rr) : RR_UNKNOWN;
 }
 
-const char* corium::DeviceInfo::resetText() {
+uint8_t corium::DeviceInfo::resetKind() {
   const ResetRow* r = reset_row();
-  return r ? r->text : PSTR("Unknown");
+  return r ? pgm_read_byte(&r->kind) : corium::CrashDump::K_UNKNOWN;
+}
+
+const char* corium::DeviceInfo::resetText() {
+  return corium::CrashDump::kindText(corium::CrashDump::reset().kind);
 }
 
 uint32_t corium::DeviceInfo::fwFingerprint() {

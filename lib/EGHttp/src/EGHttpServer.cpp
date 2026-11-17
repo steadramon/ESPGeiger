@@ -809,6 +809,13 @@ bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
   return true;
 }
 
+// every byte, no early out on the first wrong one
+static bool same_bytes(const char* a, const char* b, size_t n) {
+  uint8_t d = 0;
+  for (size_t i = 0; i < n; i++) d |= (uint8_t)(a[i] ^ b[i]);
+  return d == 0;
+}
+
 // p past "Authorization:"
 bool EGHttpServer::authorized(const Slot* s, const char* p) const {
   const char* hend = s->buf + s->headerEnd;
@@ -817,7 +824,7 @@ bool EGHttpServer::authorized(const Slot* s, const char* p) const {
   // the scheme any case, the token exact, then the CR; nothing past the padding
   return (size_t)(hend - p) > 6 + vlen &&
          strncasecmp_P(p, PSTR("Basic "), 6) == 0 &&
-         strncmp(p + 6, _authValue, vlen) == 0 &&
+         same_bytes(p + 6, _authValue, vlen) &&
          p[6 + vlen] == '\r';
 }
 

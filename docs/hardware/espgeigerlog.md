@@ -41,7 +41,7 @@ ESPGeiger Log is a hardware solution designed to seamlessly transform existing G
 - ESP8266 MCU based Geiger counter logger
 - Compatible with numerous Geiger counters - Pulse and Serial
 - Intuitive coloured NeoPixel feedback
-- OLED display (SSD1305 0.96-inch 128x64)
+- OLED display (SSD1306 0.96-inch 128x64)
 - SDCard logging
 - Low Power Requirements (< 250mA @ 5v)
 

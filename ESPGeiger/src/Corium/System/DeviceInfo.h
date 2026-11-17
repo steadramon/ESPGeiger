@@ -110,7 +110,8 @@ namespace DeviceInfo {
     RR_DEEP_SLEEP = 7,
   };
   uint8_t resetReason();
-  const char* resetText();   // /info text
+  uint8_t resetKind();   // the chip's, CrashDump::reset() knows more
+  const char* resetText();   // /info text, CrashDump::reset()'s
 
   uint32_t fwFingerprint();   // never 0
 

@@ -46,7 +46,7 @@ constexpr uint32_t CLOCK_AT        = 64;
 constexpr uint32_t CLOCK_WORDS     = 2;
 // past eboot, a crash before the OTA reboot can't eat its command
 constexpr uint32_t CRASHDUMP_AT    = 76;
-constexpr uint32_t CRASHDUMP_WORDS = 44;
+constexpr uint32_t CRASHDUMP_WORDS = 49;   // the dump, then its boot count
 
 // App
 constexpr uint32_t APP1_AT    = 48;

@@ -52,14 +52,15 @@
 #endif
 // 6 h, cap on the observed rate timeout
 #define GEIGER_TUBE_DEAD_MAX_S 21600
-// uSv/h, until the first count
+// uSv/h, until the first count, pref bg_usvh
 #ifndef GEIGER_ASSUMED_BG_USVH
-#define GEIGER_ASSUMED_BG_USVH 0.1f
+#define GEIGER_ASSUMED_BG_USVH 0.1  // STR() into the pref default
 #endif
-// floor, low cpm setups false alarm
-#ifndef GEIGER_TUBE_TIMEOUT_MIN_S
-#define GEIGER_TUBE_TIMEOUT_MIN_S 1800
+// floor, low cpm setups false alarm, pref quiet_min
+#ifndef GEIGER_QUIET_MIN
+#define GEIGER_QUIET_MIN 30
 #endif
+#define GEIGER_TUBE_TIMEOUT_MIN_S (GEIGER_QUIET_MIN * 60UL)
 
 // samples in the 5 and 15 min averages
 #define GEIGER_CPM5_COUNT 60
@@ -126,14 +127,17 @@ class CounterMaths {
       if (!(ratio >= 1.0f)) return;   // pref min, NaN too
       _ratio = ratio;
       _ratio_inv = 1.0f / ratio;
-      float bg_cpm = GEIGER_ASSUMED_BG_USVH * ratio;
-      uint32_t t = (uint32_t)(GEIGER_DEAD_COUNTS * 60.0f / bg_cpm);
-      _tube_timeout_s = (t < GEIGER_TUBE_TIMEOUT_MIN_S) ? GEIGER_TUBE_TIMEOUT_MIN_S : t;
+      retime();
+    }
+    // the site's background and the warning floor, under 0.01 = the default
+    void set_background(float usvh, uint32_t floor_s) {
+      _bg_usvh = usvh >= 0.01f && usvh <= 1.0f ? usvh : (float)GEIGER_ASSUMED_BG_USVH;
+      if (floor_s) _floor_s = floor_s;
+      retime();
     }
     float get_ratio() const { return _ratio; }
 
     void     set_dead_time_us(uint16_t us) { _dead_time_us = us; _dead_time_s = us * 1e-6f; }
-    uint16_t get_dead_time_us() const { return _dead_time_us; }
 
     // Non-paralyzable, 10x cap
     float apply_dead_time(float cps) const {
@@ -168,8 +172,7 @@ class CounterMaths {
     // capped at tube timeout
     uint32_t missing_threshold_s(uint32_t uptime_s, uint64_t total_clicks) const {
       if (_ratio <= 0.0f) return 0;
-      uint32_t thresh = (uint32_t)((GEIGER_MISSING_COUNTS * 60.0f)
-                                   / (GEIGER_ASSUMED_BG_USVH * _ratio));
+      uint32_t thresh = (uint32_t)((GEIGER_MISSING_COUNTS * 60.0f) / (_bg_usvh * _ratio));
       if (total_clicks > 0) {
         uint32_t obs = (uint32_t)(((uint64_t)GEIGER_MISSING_COUNTS * uptime_s) / total_clicks);
         if (obs > thresh) thresh = obs;
@@ -199,9 +202,16 @@ class CounterMaths {
     }
 
   protected:
+    void retime() {
+      uint32_t t = (uint32_t)(GEIGER_DEAD_COUNTS * 60.0f / (_bg_usvh * _ratio));
+      _tube_timeout_s = t < _floor_s ? _floor_s : t;
+    }
+
     float    _ratio = (float)GEIGER_RATIO;
     float    _ratio_inv = 1.0f / (float)GEIGER_RATIO;
     uint32_t _tube_timeout_s = GEIGER_TUBE_TIMEOUT_MIN_S;
+    float    _bg_usvh = (float)GEIGER_ASSUMED_BG_USVH;
+    uint32_t _floor_s = GEIGER_TUBE_TIMEOUT_MIN_S;
     uint16_t _dead_time_us = GEIGER_DEAD_TIME_DEFAULT;
     float    _dead_time_s = GEIGER_DEAD_TIME_DEFAULT * 1e-6f;
 };

@@ -92,6 +92,12 @@ static void info_collect_net(InfoNet& net) {
 // "0x%08x " per word, longer than infoRow's buffer
 static constexpr size_t FRAMES_MAX = corium::CrashDump::STACK_WORDS * 11 + 1;
 
+static void info_reset_head(EGHttpResponse& res) {
+  INFO_ROW("Restart reason", W_FMT_S, corium::DeviceInfo::resetText());
+  if (const char* in = corium::Registry::crashedIn()) INFO_ROW("Crashed in", W_FMT_S, in);
+  if (corium::CrashDump::reset().damaged) INFO_ROW("Crash dump", PSTR("damaged"));
+}
+
 #ifdef ESP8266
 static void info_render_frames(EGHttpResponse& res, const corium::CrashDump::Snapshot* cd) {
   // code addresses only, iram and flash
@@ -113,15 +119,26 @@ static void info_render_frames(EGHttpResponse& res, const corium::CrashDump::Sna
 }
 
 static void info_render_reset(EGHttpResponse& res) {
-  INFO_ROW("Restart reason", W_FMT_S, corium::DeviceInfo::resetText());
+  info_reset_head(res);
+  const corium::CrashDump::Reset& r = corium::CrashDump::reset();
+  const corium::CrashDump::Snapshot* cd = corium::CrashDump::lastCrash();
   uint32_t epc1, excvaddr;
   uint8_t exccause;
-  if (corium::DeviceInfo::resetExc(&epc1, &excvaddr, &exccause)) {
+  bool exc = corium::DeviceInfo::resetExc(&epc1, &excvaddr, &exccause);
+  // a soft wdt's pc is in the dump only
+  if (cd && r.kind == corium::CrashDump::K_SW_WDT) {
+    epc1 = cd->epc1;
+    excvaddr = cd->excvaddr;
+    exccause = (uint8_t)cd->exccause;
+    exc = true;
+  }
+  if (exc) {
     INFO_ROW("Exc cause", W_FMT_U,   (unsigned)exccause);
     INFO_ROW("Exc PC",    IR_HEX, (unsigned)epc1);
     INFO_ROW("Exc addr",  IR_HEX, (unsigned)excvaddr);
   }
-  if (const corium::CrashDump::Snapshot* cd = corium::CrashDump::lastCrash()) {
+  if (r.kind == corium::CrashDump::K_OOM) INFO_ROW("Failed alloc", IR_HEX, (unsigned)r.pc);
+  if (cd) {
     INFO_ROW("EPC2",      IR_HEX, (unsigned)cd->epc2);
     INFO_ROW("EPC3",      IR_HEX, (unsigned)cd->epc3);
     INFO_ROW("DEPC",      IR_HEX, (unsigned)cd->depc);
@@ -147,8 +164,7 @@ static void info_render_backtrace(EGHttpResponse& res, const corium::CrashDump::
 }
 
 static void info_render_reset(EGHttpResponse& res) {
-  INFO_ROW("Restart reason", W_FMT_S, corium::DeviceInfo::resetText());
-  if (const char* in = corium::Registry::crashedIn()) INFO_ROW("Crashed in", W_FMT_S, in);
+  info_reset_head(res);
   if (const corium::CrashDump::Snapshot* cd = corium::CrashDump::lastCrash()) {
 #ifdef __riscv
     INFO_ROW("mcause",    W_FMT_U,   (unsigned)cd->exccause);

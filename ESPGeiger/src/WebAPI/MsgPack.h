@@ -66,7 +66,7 @@ static inline float bits_to_f32(uint32_t u) {
   x.u = u; return x.f;
 }
 
-// big-endian, never past cap: sets overflow instead
+// Big-endian, never writes past cap, sets overflow instead
 class Writer {
 public:
   uint8_t* buf;
@@ -84,7 +84,7 @@ public:
     else { put_u8(TAG_MAP16); put_u16(n); }
   }
 
-  // count set in map_end, one at a time
+  // Count is filled in by map_end, one open map at a time
   void map_begin() {
     _map_at = pos;
     _map_n = 0;
@@ -96,7 +96,7 @@ public:
       buf[_map_at] = (uint8_t)(0x80 | _map_n);
       return;
     }
-    // map16, shift entries up 2
+    // Needs map16, shift the entries up 2
     if (pos + 2 > cap) { overflow = true; return; }
     memmove(buf + _map_at + 3, buf + _map_at + 1, pos - _map_at - 1);
     buf[_map_at] = TAG_MAP16;
@@ -158,7 +158,7 @@ public:
 
   void kv(const char* k, int32_t v)               { key(k); sint(v); }
   void kv(const char* k, uint32_t v)              { key(k); uint(v); }
-  void kv_u64(const char* k, uint64_t v)          { key(k); uint64(v); }   // not kv(), unsigned long goes ambiguous
+  void kv_u64(const char* k, uint64_t v)          { key(k); uint64(v); }   // not kv(), unsigned long would be ambiguous
   void kv(const char* k, float v)                 { key(k); f32(v); }
   void kv(const char* k, double v)                { key(k); f32((float)v); }
   void kv(const char* k, bool v)                  { key(k); b(v); }
@@ -208,8 +208,6 @@ public:
 
   Reader(const uint8_t* b, size_t c) : buf(b), cap(c), pos(0), error(false) {}
 
-  bool eof() const { return pos >= cap; }
-
   uint16_t read_map() {
     uint8_t t;
     if (!peek(&t)) return 0;
@@ -218,16 +216,7 @@ public:
     if (t == TAG_MAP32)      { pos++; uint32_t n; return get_u32(&n) ? count16(n) : 0; }
     error = true; return 0;
   }
-  uint16_t read_array() {
-    uint8_t t;
-    if (!peek(&t)) return 0;
-    if ((t & 0xf0) == 0x90)  { pos++; return t & 0x0f; }
-    if (t == TAG_ARRAY16)    { pos++; uint16_t n; return get_u16(&n) ? n : 0; }
-    if (t == TAG_ARRAY32)    { pos++; uint32_t n; return get_u32(&n) ? count16(n) : 0; }
-    error = true; return 0;
-  }
-
-  // a case a tag
+  // One case per tag
   bool read_int(int32_t* out) {
     uint8_t t;
     if (!get_u8(&t)) return false;
@@ -247,7 +236,7 @@ public:
   }
 
   // -1 must not pass as uint
-  // a case a tag
+  // one case per tag
   bool read_uint(uint32_t* out) {
     uint8_t t;
     if (!get_u8(&t)) return false;
@@ -294,7 +283,7 @@ public:
   }
 
   static constexpr uint8_t SKIP_DEPTH = 16;
-  // a case a tag
+  // One case per tag
   bool skip(uint8_t depth = 0) {
     if (depth > SKIP_DEPTH) { error = true; return false; }
     uint8_t t; if (!get_u8(&t)) return false;
@@ -340,7 +329,7 @@ public:
         pos += len;
         return true;
       }
-      // check first, truncated input
+      // Check first, the input may be truncated
       if (len > cap - pos) { error = true; return false; }
       pos += len;
       if (!skip()) return false;
@@ -376,7 +365,7 @@ private:
     if (width == 2) { uint16_t v; if (!get_u16(&v)) return false; *out = v; return true; }
     return get_u32(out);
   }
-  // count can't outrun the data
+  // Every item is at least a byte, so a count past the bytes left is bad
   bool skip_n(uint32_t n, uint8_t depth) {
     if (n > cap - pos) { error = true; return false; }
     for (uint32_t i = 0; i < n; i++) if (!skip(depth + 1)) return false;

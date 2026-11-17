@@ -180,8 +180,7 @@ unsigned long WebAPI::wakeTarget() {
 }
 
 static bool crash_to_send() {
-  return corium::CrashDump::hasCrash() ||
-         corium::DeviceInfo::resetExc(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+  return corium::CrashDump::reset().crash;
 }
 
 // a forget is owed till sent: after a restart the station id comes from a handshake first.
@@ -286,6 +285,7 @@ struct HsCrash {
   bool     sendExtra = false;
   bool     sendStack = false;   // RTC snapshot only
   const char* in = nullptr;     // what the loop was in, esp32
+  const corium::CrashDump::Reset* r = nullptr;   // crash boots
 };
 }
 
@@ -293,6 +293,7 @@ struct HsCrash {
 static void collect_crash(HsCrash& c) {
   c.in = corium::Registry::crashedIn();
   c.cd = corium::CrashDump::lastCrash();
+  if (corium::CrashDump::reset().crash) c.r = &corium::CrashDump::reset();
   if (c.cd) {
     c.epc1     = c.cd->epc1;
     c.excvaddr = c.cd->excvaddr;
@@ -308,6 +309,8 @@ static void collect_crash(HsCrash& c) {
     c.sendExc   = true;
     c.sendExtra = c.epc2 || c.epc3 || c.depc;
   }
+  // no dump: zeros, the server files a crash on ec/pc/va, rk says which
+  if (c.r) c.sendExc = true;
 }
 
 static void write_crash(MsgPack::Writer& mp, const HsCrash& c) {
@@ -328,6 +331,10 @@ static void write_crash(MsgPack::Writer& mp, const HsCrash& c) {
     mp.kv(PSTR("st"), (const uint8_t*)c.cd->stack, stack_len);
   }
   if (c.in) mp.kv(PSTR("cm"), c.in);
+  if (c.r) {
+    mp.kv(PSTR("rk"), (uint32_t)c.r->kind);
+    if (c.r->kind == corium::CrashDump::K_OOM) mp.kv(PSTR("fa"), c.r->pc);
+  }
 }
 
 static float round_2dp(float v) {

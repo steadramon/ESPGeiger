@@ -97,7 +97,7 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `g_test` | `true` on test / simulation builds |
 | `g_pcnt` | `true` if pulses are counted by the ESP32 PCNT hardware counter |
 | `fl` | Feature flags, the same bits WebAPI sends as `fl` |
-| `modules` | Every module compiled into this firmware, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`). Each has `peak`, its longest loop in microseconds (stops at 65535), and `stalls`, how many of its loops took over 10 ms since boot (stops at 255, left out when 0) |
+| `modules` | Every module compiled into this firmware, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`). Each has `peak`, its longest recent loop in microseconds (halved every hour, so a one-off fades and a repeating one stays; above 32 ms it's to the millisecond, up to 32 s; on ESP32 it can include time other tasks such as WiFi held the loop, so it can read higher than the module's own work), and `stalls`, how many of its loops took over 10 ms since boot (stops at 255, left out when 0) |
 
 ## `/json?raw=1`
 

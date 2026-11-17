@@ -18,7 +18,6 @@
 */
 #ifdef ESP8266
 #include "CrashDump.h"
-#include "StatusWord.h"
 #include <new>
 #include "RtcMap.h"
 #include "DeviceInfo.h"
@@ -27,16 +26,31 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
+#include "Corium/Util/Fnv.h"
 #include <user_interface.h>
 extern "C" {
 #include "cont.h"
+extern void* umm_last_fail_alloc_addr;   // the core's, a failed alloc's caller
 }
 
 namespace corium {
 namespace CrashDump {
 
-static constexpr uint32_t MAGIC = 0xC0DECAFFu;
-typedef RtcSlot<Snapshot, RtcMap::CRASHDUMP_AT, RtcMap::CRASHDUMP_WORDS> Slot;
+static constexpr uint32_t MAGIC = 0xC0DECB01u;
+static constexpr uint32_t SNAP_WORDS = sizeof(Snapshot) / 4;
+typedef RtcSlot<Snapshot, RtcMap::CRASHDUMP_AT, SNAP_WORDS> Slot;
+
+// boots counted, a dump is only the last one's
+struct Boots {
+  uint32_t magic;
+  uint32_t seq;
+};
+static constexpr uint32_t BOOTS_MAGIC = 0xB0075EC1u;
+typedef RtcSlot<Boots, RtcMap::CRASHDUMP_AT + SNAP_WORDS, RtcMap::CRASHDUMP_WORDS - SNAP_WORDS> BootSlot;
+
+// the core's user exceptions
+static constexpr uint32_t USER_SMASH = 253;
+static constexpr uint32_t USER_ABORT = 254;
 
 // DRAM
 static constexpr uint32_t DRAM_LO = 0x3FFE0000u;
@@ -44,6 +58,7 @@ static constexpr uint32_t DRAM_HI = 0x40000000u;
 
 static Snapshot* s_recovered = nullptr;   // crash boots only
 static uint32_t  s_fw_fp = 0;
+static uint32_t  s_seq = 0;
 
 // stack goes off-device, keep code addresses only
 static bool code_word(uint32_t w) {
@@ -52,20 +67,51 @@ static bool code_word(uint32_t w) {
       || (w >= 0x40000000u && w < 0x40010000u);   // ROM
 }
 
-void begin() {
-  s_fw_fp = DeviceInfo::fwFingerprint();
-  Snapshot snap{};
-  if (!Slot::read(snap)) return;
-  if (snap.magic != MAGIC) return;
-  Slot::clear();
-  if (snap.fwFp != s_fw_fp) return;
+static uint32_t check(const Snapshot& s) {
+  const uint8_t* p = (const uint8_t*)&s;
+  uint32_t h = FNV_BASIS;
+  for (size_t i = 0; i < offsetof(Snapshot, check); i++) h = (h ^ p[i]) * FNV_PRIME;
+  return h;
+}
+
+static uint8_t dump_kind(const Snapshot& s, uint8_t chip) {
+  switch (s.reason) {
+    case REASON_EXCEPTION_RST: return K_EXCEPTION;
+    case REASON_SOFT_WDT_RST:  return K_SW_WDT;
+    case USER_ABORT:           return s.alloc ? K_OOM : K_ABORT;
+    case USER_SMASH:           return K_SMASH;
+    default:                   return chip >= K_BROWNOUT ? chip : K_CRASH;   // the sdk restarting itself
+  }
+}
+
+static void recover(Snapshot& snap, Reset& r) {
   // a bad RTC word never reads past stack[]
   if (snap.wordCount > STACK_WORDS) snap.wordCount = STACK_WORDS;
   if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
-  if (s_recovered) corium::healthWord().set(corium::DEV_CRASHED, true);
+  r.kind = dump_kind(snap, r.kind);
+  r.pc = r.kind == K_OOM ? snap.alloc : snap.epc1;
+  r.seq = snap.seq;
 }
 
-bool hasCrash() { return s_recovered != nullptr; }
+void begin() {
+  s_fw_fp = DeviceInfo::fwFingerprint();
+  Boots b{};
+  uint32_t last = BootSlot::read(b) && b.magic == BOOTS_MAGIC ? b.seq : 0;
+  s_seq = last + 1;
+  b = {BOOTS_MAGIC, s_seq};
+  BootSlot::write(b);
+
+  Reset& r = fresh(DeviceInfo::resetKind());
+  Snapshot snap{};
+  if (Slot::read(snap) && snap.magic == MAGIC) {
+    Slot::clear();
+    if (snap.check != check(snap)) r.damaged = true;
+    else if (snap.fwFp == s_fw_fp && snap.seq == last) recover(snap, r);
+  }
+  if (r.damaged && r.kind == K_RESTART) r.kind = K_CRASH;
+  settle();
+}
+
 const Snapshot* lastCrash() { return s_recovered; }
 
 } // namespace CrashDump
@@ -91,6 +137,8 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
   }
   snap.sp       = stack;
   snap.in       = corium::Registry::firing();
+  if (snap.reason == USER_ABORT) snap.alloc = (uint32_t)(uintptr_t)umm_last_fail_alloc_addr;
+  snap.seq      = s_seq;   // 0 = crashed before begin()
 
   uint32_t lo = stack;
   uint32_t hi = stack_end;
@@ -102,8 +150,9 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
     for (size_t i = 0; i < avail; i++) snap.stack[i] = code_word(p[i]) ? p[i] : 0;
     snap.wordCount = avail;
   }
+  snap.check = check(snap);
 
-  Slot::write(snap);
+  Slot::write(snap);   // check last, a torn write fails it
 }
 
 #endif

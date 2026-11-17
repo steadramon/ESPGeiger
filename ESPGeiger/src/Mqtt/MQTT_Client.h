@@ -98,8 +98,6 @@ public:
   uint8_t displayOrder() override { return 25; }
   size_t statusJson(char* buf, size_t cap) override;
   corium::LegacyRows legacyAliases() override;
-  void setInterval(int interval);
-  int getInterval();
   void disconnect();
   void onMqttConnect(bool sessionPresent);
   void onMqttDisconnect(int8_t err);
@@ -141,7 +139,7 @@ private:
   uint16_t publishSensor();
   void track(uint16_t pid);
   uint16_t _ack_pid = 0;   // the publish whose ack decides lastOk
-  void publishStat(const char* cmd, const char* text);
+  bool publishStat(const char* cmd, const char* text);
   bool sendHello();
   bool publishFlag(const char* cmd, bool on);   // cmd PROGMEM
   static constexpr uint8_t PEND_STATUS = 1 << 0;

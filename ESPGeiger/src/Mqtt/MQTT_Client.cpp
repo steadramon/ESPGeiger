@@ -87,6 +87,7 @@ CORIUM_PSTR(MQ_L_HEN, "HA autodiscovery");
 CORIUM_PSTR(MQ_L_HTP, "HA autodiscovery topic");
 CORIUM_PSTR(MQ_H_HTP, "HA discovery prefix");
 CORIUM_PSTR(MQ_P_HTP, "/?[A-Za-z0-9_\\/\\-]+");
+static void hass_prefix(char* out, size_t sz);
 #endif
 
 static const corium::Pref MQTT_PREF_ITEMS[] PROGMEM = {
@@ -139,31 +140,23 @@ MQTT_Client::MQTT_Client()
 {
 }
 
-#ifdef MQTTAUTODISCOVER
-static void hass_prefix(char* out, size_t sz);
-#endif
-
 // the one way out; Offline first, a refused rejoin never says it
 void MQTT_Client::disconnect()
 {
-  bool move = moved();
+  bool drop = moved();
   s_mq.disconnect(true);
 #ifdef MQTTAUTODISCOVER
   char disc[sizeof(_hass_disc)];
   hass_prefix(disc, sizeof(disc));
-  bool drop = move || strcmp(disc, _hass_disc) != 0;   // or old prefix configs
-#else
-  bool drop = move;
+  if (strcmp(disc, _hass_disc) != 0) drop = true;   // or old prefix configs
+  _hass_next.clear();
+  _hass_walk_state = HASS_IDLE;   // a publish walk starts again on connect
 #endif
   if (drop) s_mq.stop();   // the kept QoS 1 queue was for the old broker
   _enabled = true;
   _tries = 0;
   _tried_ms = 0;
   _root_ok = false;
-#ifdef MQTTAUTODISCOVER
-  _hass_next.clear();
-  _hass_walk_state = HASS_IDLE;   // a publish walk starts again on connect
-#endif
 }
 
 void MQTT_Client::onMqttConnect(bool sessionPresent) {
@@ -214,14 +207,6 @@ void MQTT_Client::onMqttDisconnect(int8_t err) {
 #endif
 }
 
-void MQTT_Client::setInterval(int interval) {
-  _ping_every = (uint16_t)interval;
-}
-
-int MQTT_Client::getInterval() {
-  return (int)_ping_every;
-}
-
 unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
   if (_slot_s < 0)
     _slot_s = (int16_t)(corium::SendSlot::initialOffset(name(), _status_every * 1000UL) / 1000UL);
@@ -235,9 +220,7 @@ unsigned long MQTT_Client::statusSlotAnchor(unsigned long now_s) {
 static uint32_t hass_spread_offset_s() {
   return corium::DeviceInfo::chipHash() % (MQTT_HASS_BIRTH_SPREAD_S + 1);
 }
-#endif
 
-#ifdef MQTTAUTODISCOVER
 void MQTT_Client::scheduleHassDiscovery(bool reconnected)
 {
   const unsigned long up_s = (unsigned long)corium::DeviceInfo::uptime();
@@ -369,9 +352,7 @@ bool MQTT_Client::sendHello()
 // stat/WARN, stat/ALERT
 bool MQTT_Client::publishFlag(const char* cmd, bool on)
 {
-  char topic[MQTT_TOPIC_LEN];
-  buildTopic(topic, sizeof(topic), T_STAT, cmd);
-  return s_mq.publish(topic, on ? F("1") : F("0"), 1, false);
+  return publishStat(cmd, on ? "1" : "0");
 }
 
 bool MQTT_Client::publishStatus()
@@ -494,12 +475,11 @@ static const char* stat_topic(const char* id) {
   return nullptr;
 }
 
-void MQTT_Client::publishStat(const char* cmd, const char* text)
+bool MQTT_Client::publishStat(const char* cmd, const char* text)
 {
   char topic[MQTT_TOPIC_LEN];
   buildTopic(topic, sizeof(topic), T_STAT, cmd);
-  s_mq.publish(topic, text, 1, false);
-  MQTT_PUB_YIELD();
+  return s_mq.publish(topic, text, 1, false);
 }
 
 void MQTT_Client::publishPing()
@@ -512,6 +492,7 @@ void MQTT_Client::publishPing()
     char text[24];
     if (!topic || corium::m_format(it.row(), it.value(), text, sizeof(text)) == 0) continue;
     publishStat(topic, text);
+    MQTT_PUB_YIELD();
   }
 
   corium::Registry::emit(TOPIC_PING);
@@ -551,9 +532,9 @@ static void mq_ack(void* arg, const EGMqtt::Ack& a) {
 void MQTT_Client::applyIntervalPref()
 {
   int secs = (int)corium::Prefs::getUInt("mqtt", EG_K_INTERVAL);
-  if (secs != getInterval()) {
-    setInterval(secs);
-    corium::Log::console(PSTR("MQTT: Submission Interval %d seconds"), getInterval());
+  if (secs != _ping_every) {
+    _ping_every = (uint16_t)secs;
+    corium::Log::console(PSTR("MQTT: Submission Interval %d seconds"), (int)_ping_every);
   }
 }
 
@@ -712,80 +693,71 @@ static const char H_ST_STATUS[] PROGMEM = "~/tele/status";
 // state_class
 static const char H_SC_MEAS[]   PROGMEM = "measurement";
 static const char H_SC_TOTINC[] PROGMEM = "total_increasing";
-// device_class
-static const char H_DC_SIG[]    PROGMEM = "signal_strength";
-static const char H_DC_DUR[]    PROGMEM = "duration";
-static const char H_DC_PROB[]   PROGMEM = "problem";
-static const char H_DC_SAFETY[] PROGMEM = "safety";
-static const char H_DC_CONN[]   PROGMEM = "connectivity";
-static const char H_DC_TEMP[]   PROGMEM = "temperature";
-static const char H_DC_HUMID[]  PROGMEM = "humidity";
-static const char H_DC_PRES[]   PROGMEM = "atmospheric_pressure";
 // entity_category
 static const char H_EC_DIAG[]   PROGMEM = "diagnostic";
 
-enum { DC_NONE, DC_SIG, DC_DUR, DC_PROB, DC_SAFETY, DC_CONN, DC_TEMP, DC_HUMID, DC_PRES };
-static const char* const H_DEV_CLA[] PROGMEM = {
-  nullptr, H_DC_SIG, H_DC_DUR, H_DC_PROB, H_DC_SAFETY, H_DC_CONN, H_DC_TEMP, H_DC_HUMID, H_DC_PRES,
-};
+// device_class
+#define DC_NONE   ""
+#define DC_SIG    "signal_strength"
+#define DC_DUR    "duration"
+#define DC_PROB   "problem"
+#define DC_SAFETY "safety"
+#define DC_CONN   "connectivity"
+#define DC_TEMP   "temperature"
+#define DC_HUMID  "humidity"
+#define DC_PRES   "atmospheric_pressure"
 
-// row flags
-static const uint8_t HR_STATUS = 1 << 0;   // tele/status, else tele/sensor
-static const uint8_t HR_TOTAL  = 1 << 1;   // total_increasing, else measurement
-static const uint8_t HR_DIAG   = 1 << 2;
-static const uint8_t HR_BIN    = 1 << 3;   // binary_sensor
-static const uint8_t HR_OPT    = 1 << 4;   // only with its measure row
-static const uint8_t HR_TEXT   = 1 << 5;   // words, no state_class
+// row flags, one letter each
+#define HR_STATUS "s"   // tele/status, else tele/sensor
+#define HR_TOTAL  "t"   // total_increasing, else measurement
+#define HR_DIAG   "d"
+#define HR_BIN    "b"   // binary_sensor
+#define HR_OPT    "o"   // only with its measure row
+#define HR_TEXT   "w"   // words, no state_class
 
-struct HassRow {
-  char id[9];
-  char key[3];    // "" = id
-  char name[17];
-  char unit[7];
-  char icon[23];  // after mdi:
-  char prec[2];   // "" = HA default
-  uint8_t dev;
-  uint8_t flags;
-};
+// key "" = id, icon after mdi:, prec "" = HA default
+#define HROW(id, key, name, unit, icon, prec, dev, flags) \
+  id "\0" key "\0" name "\0" unit "\0" icon "\0" prec "\0" dev "\0" flags "\0"
+enum { F_ID, F_KEY, F_NAME, F_UNIT, F_ICON, F_PREC, F_DEV, F_FLAGS, F_ROW };
 
-// walk order
-static const HassRow HASS_ROWS[] PROGMEM = {
+// walk order, an empty id ends it
+static const char HASS_ROWS[] PROGMEM =
   // tele/sensor
-  {"cpm",      "",   "CPM",          "CPM",        "pulse",          "",  DC_NONE,  0},
-  {"cpm5",     "",   "CPM5",         "CPM",        "pulse",          "",  DC_NONE,  0},
-  {"cpm15",    "",   "CPM15",        "CPM",        "pulse",          "",  DC_NONE,  0},
-  {"usv",      "",   "\u00B5Sv/h",   "\u00B5Sv/h", "radioactive",    "2", DC_NONE,  0},
+  HROW("cpm",      "",   "CPM",          "CPM",        "pulse",          "",  DC_NONE,  "")
+  HROW("cpm5",     "",   "CPM5",         "CPM",        "pulse",          "",  DC_NONE,  "")
+  HROW("cpm15",    "",   "CPM15",        "CPM",        "pulse",          "",  DC_NONE,  "")
+  HROW("usv",      "",   "\u00B5Sv/h",   "\u00B5Sv/h", "radioactive",    "2", DC_NONE,  "")
 #if M_HAS_HV
-  {"hv",       "",   "HV",           "V",          "lightning-bolt", "",  DC_NONE,  HR_OPT},
+  HROW("hv",       "",   "HV",           "V",          "lightning-bolt", "",  DC_NONE,  HR_OPT)
 #endif
-  {"temp",    "t",  "Temperature",  "°C",         "thermometer",    "",  DC_TEMP,  HR_OPT},
-  {"humidity", "h",  "Humidity",     "%",          "water-percent",  "",  DC_HUMID, HR_OPT},
-  {"pressure", "p",  "Pressure",     "hPa",        "gauge",          "",  DC_PRES,  HR_OPT},
-  {"c_total",  "",   "Total Clicks", "",           "counter",        "",  DC_NONE,  HR_STATUS | HR_TOTAL},
+  HROW("temp",     "t",  "Temperature",  "°C",         "thermometer",    "",  DC_TEMP,  HR_OPT)
+  HROW("humidity", "h",  "Humidity",     "%",          "water-percent",  "",  DC_HUMID, HR_OPT)
+  HROW("pressure", "p",  "Pressure",     "hPa",        "gauge",          "",  DC_PRES,  HR_OPT)
+  HROW("c_total",  "",   "Total Clicks", "",           "counter",        "",  DC_NONE,  HR_STATUS HR_TOTAL)
   // tele/status
-  {"tick",     "",   "Tick",         "\u00B5s",    "timer-outline",  "",  DC_NONE,  HR_STATUS | HR_DIAG},
-  {"t_max",    "",   "Max Tick",     "\u00B5s",    "timer-alert-outline", "", DC_NONE, HR_STATUS | HR_DIAG},
-  {"lps",      "",   "LPS",          "1/s",        "speedometer",    "",  DC_NONE,  HR_STATUS | HR_DIAG},
-  {"rssi",     "",   "RSSI",         "dBm",        "wifi",           "",  DC_SIG,   HR_STATUS | HR_DIAG},
-  {"uptime",   "ut", "Uptime",       "s",          "clock-outline",  "",  DC_DUR,   HR_STATUS | HR_TOTAL | HR_DIAG},
-  {"free_mem", "",   "Free Memory",  "B",          "memory",         "",  DC_NONE,  HR_STATUS | HR_DIAG},
+  HROW("tick",     "",   "Tick",         "\u00B5s",    "timer-outline",  "",  DC_NONE,  HR_STATUS HR_DIAG)
+  HROW("t_max",    "",   "Max Tick",     "\u00B5s",    "timer-alert-outline", "", DC_NONE, HR_STATUS HR_DIAG)
+  HROW("lps",      "",   "LPS",          "1/s",        "speedometer",    "",  DC_NONE,  HR_STATUS HR_DIAG)
+  HROW("rssi",     "",   "RSSI",         "dBm",        "wifi",           "",  DC_SIG,   HR_STATUS HR_DIAG)
+  HROW("uptime",   "ut", "Uptime",       "s",          "clock-outline",  "",  DC_DUR,   HR_STATUS HR_TOTAL HR_DIAG)
+  HROW("free_mem", "",   "Free Memory",  "B",          "memory",         "",  DC_NONE,  HR_STATUS HR_DIAG)
 #if CORIUM_HAS_CHIPTEMP
-  {"cpu_temp", "",   "CPU Temperature", "°C",      "chip",           "1", DC_TEMP,  HR_STATUS | HR_DIAG},
+  HROW("cpu_temp", "",   "CPU Temperature", "°C",      "chip",           "1", DC_TEMP,  HR_STATUS HR_DIAG)
 #endif
   // binary
-  {"warn",     "",   "Warning",      "",           "alert-outline",  "",  DC_PROB,  HR_BIN},
-  {"alert",    "",   "Alert",        "",           "alert-octagram-outline", "", DC_SAFETY, HR_BIN},
+  HROW("warn",     "",   "Warning",      "",           "alert-outline",  "",  DC_PROB,  HR_BIN)
+  HROW("alert",    "",   "Alert",        "",           "alert-octagram-outline", "", DC_SAFETY, HR_BIN)
 #if GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  {"ser_ok",   "",   "Serial Connected", "",       "serial-port",    "",  DC_CONN,  HR_BIN | HR_STATUS},
+  HROW("ser_ok",   "",   "Serial Connected", "",       "serial-port",    "",  DC_CONN,  HR_BIN HR_STATUS)
 #else
-  {"tube",     "",   "Tube Active",  "",           "radioactive",    "",  DC_CONN,  HR_BIN},
+  HROW("tube",     "",   "Tube Active",  "",           "radioactive",    "",  DC_CONN,  HR_BIN)
 #endif
-  {"problem",  "",   "Tube Problem", "",           "alert-circle-outline", "", DC_PROB, HR_BIN},
-  {"health",   "",   "Health",       "",           "heart-pulse",    "",  DC_NONE,  HR_DIAG | HR_TEXT},
+  HROW("problem",  "",   "Tube Problem", "",           "alert-circle-outline", "", DC_PROB, HR_BIN)
+  HROW("health",   "",   "Health",       "",           "heart-pulse",    "",  DC_NONE,  HR_DIAG HR_TEXT)
 #if M_HAS_HV
-  {"hv_fault", "",   "HV Fault",     "",           "flash-alert",    "",  DC_PROB,  HR_BIN | HR_OPT},
+  HROW("hv_fault", "",   "HV Fault",     "",           "flash-alert",    "",  DC_PROB,  HR_BIN HR_OPT)
 #endif
-};
+  ;
 
 // Discovery type
 static const char H_TYPE_SENSOR[]  PROGMEM = "sensor";
@@ -823,25 +795,34 @@ static int hass_path(char* buf, size_t sz, const char* disc,
   return snprintf_P(buf, sz, PSTR("%s/%s/%s-%s/config"), disc, type, corium::DeviceInfo::hostname(), name);
 }
 
-static const char* hass_key(const HassRow* r) {
-  return pgm_read_byte(r->key) ? r->key : r->id;
+static const char* hass_field(const char* r, uint8_t n) {
+  while (n--) r += strlen_P(r) + 1;
+  return r;
 }
 
-static uint8_t hass_flags(const HassRow* r) {
-  return pgm_read_byte(&r->flags);
+static bool hass_is(const char* r, char flag) {
+  for (const char* f = hass_field(r, F_FLAGS); pgm_read_byte(f); f++) {
+    if (pgm_read_byte(f) == flag) return true;
+  }
+  return false;
+}
+
+static const char* hass_key(const char* r) {
+  const char* k = hass_field(r, F_KEY);
+  return pgm_read_byte(k) ? k : r;
 }
 
 // the idx-th row HA gets, nullptr past the end
-static const HassRow* hass_row(uint8_t idx) {
-  for (const HassRow& r : HASS_ROWS) {
-    if ((hass_flags(&r) & HR_OPT) && !has_row(hass_key(&r))) continue;
-    if (idx-- == 0) return &r;
+static const char* hass_row(uint8_t idx) {
+  for (const char* r = HASS_ROWS; pgm_read_byte(r); r = hass_field(r, F_ROW)) {
+    if (hass_is(r, *HR_OPT) && !has_row(hass_key(r))) continue;
+    if (idx-- == 0) return r;
   }
   return nullptr;
 }
 
-static const char* hass_type(const HassRow* r) {
-  return (hass_flags(r) & HR_BIN) ? H_TYPE_BINSENS : H_TYPE_SENSOR;
+static const char* hass_type(const char* r) {
+  return hass_is(r, *HR_BIN) ? H_TYPE_BINSENS : H_TYPE_SENSOR;
 }
 
 // kept till the next connect, walks and the save go by it
@@ -903,43 +884,45 @@ static void hass_device(EGJson& j, const char* host) {
   j.map_end();
 }
 
-static void hass_fields(EGJson& j, const HassRow* r) {
-  uint8_t f = hass_flags(r);
-  uint8_t dev = pgm_read_byte(&r->dev);
-  if (dev) j.str(PSTR("dev_cla"), (const char*)pgm_read_ptr(&H_DEV_CLA[dev]));
-  if (!(f & (HR_BIN | HR_TEXT))) j.str(PSTR("stat_cla"), (f & HR_TOTAL) ? H_SC_TOTINC : H_SC_MEAS);
-  if (f & HR_DIAG) j.str(PSTR("ent_cat"), H_EC_DIAG);
-  j.str(H_K_STAT, (f & HR_STATUS) ? H_ST_STATUS : H_ST_SENSOR);
+static void hass_fields(EGJson& j, const char* r) {
+  bool bin = hass_is(r, *HR_BIN);
+  const char* dev = hass_field(r, F_DEV);
+  if (pgm_read_byte(dev)) j.str(PSTR("dev_cla"), dev);
+  if (!bin && !hass_is(r, *HR_TEXT)) j.str(PSTR("stat_cla"), hass_is(r, *HR_TOTAL) ? H_SC_TOTINC : H_SC_MEAS);
+  if (hass_is(r, *HR_DIAG)) j.str(PSTR("ent_cat"), H_EC_DIAG);
+  j.str(H_K_STAT, hass_is(r, *HR_STATUS) ? H_ST_STATUS : H_ST_SENSOR);
   j.str_begin(H_K_VT);
   j.part(PSTR("{{ value_json."));
   j.part(hass_key(r));
   // gone = unknown in HA
-  if (f & HR_OPT) j.part(PSTR(" | default(None)"));
+  if (hass_is(r, *HR_OPT)) j.part(PSTR(" | default(None)"));
   j.part(PSTR(" }}"));
   j.str_end();
-  if (f & HR_BIN) {
+  if (bin) {
     j.str(H_K_PLON, H_V_ONE);
     j.str(H_K_PLOFF, H_V_ZERO);
   }
   j.str_begin(H_K_IC);
   j.part(PSTR("mdi:"));
-  j.part(r->icon);
+  j.part(hass_field(r, F_ICON));
   j.str_end();
-  if (pgm_read_byte(r->unit)) j.str(H_K_UOM, r->unit);
-  if (pgm_read_byte(r->prec)) j.str(H_K_PREC, r->prec);
+  const char* unit = hass_field(r, F_UNIT);
+  if (pgm_read_byte(unit)) j.str(H_K_UOM, unit);
+  const char* prec = hass_field(r, F_PREC);
+  if (pgm_read_byte(prec)) j.str(H_K_PREC, prec);
 }
 
 CORIUM_PSTR(HA_DROPPED, "MQTT: HA discovery publish dropped: %s");
 
-static void hass_publish(const HassRow* r, const char* root, const char* disc)
+static void hass_publish(const char* r, const char* root, const char* disc)
 {
   const char* host = corium::DeviceInfo::hostname();
   char path[HASS_PATH_LEN];
-  hass_path(path, sizeof(path), disc, hass_type(r), r->id);
+  hass_path(path, sizeof(path), disc, hass_type(r), r);
   size_t cap;
   char* out = json_begin(path, MQTT_JSON_BUFFER_SIZE, &cap);
   if (!out) {
-    corium::Log::console(HA_DROPPED, r->id);
+    corium::Log::console(HA_DROPPED, r);
     return;
   }
 
@@ -950,29 +933,29 @@ static void hass_publish(const HassRow* r, const char* root, const char* disc)
   j.str(PSTR("pl_avail"), LWT_ONLINE);
   j.str(PSTR("pl_not_avail"), LWT_OFFLINE);
   j.str(PSTR("~"), root);
-  j.str(PSTR("name"), r->name);
+  j.str(PSTR("name"), hass_field(r, F_NAME));
   j.str_begin(PSTR("uniq_id"));
   j.part(host);
   j.part(PSTR("_"));
-  j.part(r->id);
+  j.part(r);
   j.str_end();
   hass_fields(j, r);
   j.map_end();
   // partial is worse than none; not ended, nothing goes
   if (j.overflow) {
-    corium::Log::console(PSTR("MQTT: HA discovery too big, not sent: %s"), r->id);
+    corium::Log::console(PSTR("MQTT: HA discovery too big, not sent: %s"), r);
     return;
   }
   if (s_mq.publish_end(j.length()) == 0) {
-    corium::Log::console(HA_DROPPED, r->id);
+    corium::Log::console(HA_DROPPED, r);
   }
   MQTT_PUB_YIELD();
 }
 
-static void hass_remove(const HassRow* r, const char* disc)
+static void hass_remove(const char* r, const char* disc)
 {
   char path[HASS_PATH_LEN];
-  hass_path(path, sizeof(path), disc, hass_type(r), r->id);
+  hass_path(path, sizeof(path), disc, hass_type(r), r);
   s_mq.publish(path, "", 1, false);
 }
 
@@ -980,7 +963,7 @@ void MQTT_Client::stepHassDiscovery() {
   if (_hass_walk_state == HASS_IDLE) return;
   // wait for acks, a refused one would be a sensor missing in HA
   if (s_mq.room() < HASS_PACKET_MAX) return;
-  const HassRow* r = hass_row(_hass_idx);
+  const char* r = hass_row(_hass_idx);
   if (r) {
     if (_hass_walk_state == HASS_PUBLISH) hass_publish(r, getRootTopic(), _hass_disc);
     else hass_remove(r, _hass_disc);

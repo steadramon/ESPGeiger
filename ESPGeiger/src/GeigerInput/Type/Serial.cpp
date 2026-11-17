@@ -29,7 +29,7 @@
 #include "Counter/Tube.h"
 #include "GeigerInput/SerialFormat.h"
 
-// isr margin at 115200
+// 64 bytes gives the isr some margin at 115200
 static GeigerPort<64> s_port;
 
 GeigerSerial::GeigerSerial() {
@@ -46,15 +46,18 @@ void GeigerSerial::begin() {
     Tube::set_model(name);
   }
   corium::Log::console(PSTR("GeigerSerial: %s (type %d) BAUD: %lu RXPIN: %d hasCPS=%d"),
-               name ? name : PSTR("?"), _serial_type, baud, _rx_pin,
-               SerialFormat::has_cps(_serial_type) ? 1 : 0);
+                       name ? name : PSTR("?"), _serial_type, baud, _rx_pin,
+                       SerialFormat::has_cps(_serial_type) ? 1 : 0);
+  // No line yet doesn't mean no input, the wait starts here. A port that won't open does
   if (!s_port.begin(baud, _rx_pin, _tx_pin)) {
     corium::Log::console(PSTR("GeigerSerial: ERROR port would not open"));
+    _line.clear();
+  } else {
+    _line.mark(corium::fastMillis());
   }
   s_port.flush();
   _idle_ms = (uint8_t)clamp<uint32_t>(50000UL / baud, 1, 4);   // ~5 chars
   _polls = true;
-  _line.mark(corium::fastMillis());   // no line yet isn't no input, the wait starts here
 }
 
 // well over a 64 B line at the slowest baud
@@ -63,10 +66,10 @@ void GeigerSerial::begin() {
 // bad lines in a row before a drain
 #define GEIGERSERIAL_BAD_LIMIT 20
 
-// connected: a good line in this long, and no drain
+// Connected means a good line within this long, and no drain
 #define GEIGERSERIAL_OK_MS 60000
 
-// sender quiet this long: cpm 0, cps off
+// Sender quiet this long drops cpm to 0 and stops using cps
 #define GEIGERSERIAL_QUIET_MS 10000
 
 inline __attribute__((always_inline)) void GeigerSerial::bad_line() {
@@ -74,7 +77,7 @@ inline __attribute__((always_inline)) void GeigerSerial::bad_line() {
   if (_bad_streak >= GEIGERSERIAL_BAD_LIMIT) drainPort();
 }
 
-// its tail would parse as a line of its own
+// Skip the rest of the line, its tail would parse as a line of its own
 void GeigerSerial::drop_line() {
   clear_line();
   _discard = true;
@@ -110,14 +113,14 @@ void GeigerSerial::pullSerial() {
 }
 
 void GeigerSerial::loop() {
-  // else a stray byte polls every pass
+  // Time out a half line, else a stray byte polls every pass
   if ((_serial_idx != 0 || _discard) && (corium::fastMillis() - _rx_ms) > GEIGERSERIAL_LINE_TIMEOUT_MS) {
     clear_line();
     _discard = false;
   }
   pullSerial();
   uint32_t now = corium::fastMillis();
-  _poll_at = (_serial_idx || _discard) ? now : now + _idle_ms;   // mid line, every pass
+  _poll_at = (_serial_idx || _discard) ? now : now + _idle_ms;   // every pass while mid line
   bool line = _line.fresh(now, GEIGERSERIAL_OK_MS);
   _ok = !_drain.fresh(now, GEIGERSERIAL_OK_MS) && line;
   if (_cpm <= 0) return;
@@ -142,7 +145,7 @@ void GeigerSerial::restartAfterOTA() {
 }
 
 void GeigerSerial::secondTicker() {
-  // sender can toggle cps
+  // The sender can switch cps on and off
   if (_use_cps) {
     int c = (int)_carry;
     _carry = 0;
@@ -151,9 +154,9 @@ void GeigerSerial::secondTicker() {
     _use_cps = false;
     return;
   }
-  // cps sender, its line comes next tick
+  // A cps sender's line comes next tick
   if (_cps_seen.fresh(corium::fastMillis(), GEIGERSERIAL_QUIET_MS)) return;
-  // cpm/60 a second, fraction carried; no soft-float divide
+  // cpm/60 each second with the fraction carried over, multiply to avoid a soft-float divide
   static constexpr float INV_60 = 1.0f / 60.0f;
   _carry += (float)_cpm * INV_60;
   if (_carry >= 1.0f) {
@@ -197,7 +200,7 @@ void GeigerSerial::handleSerial(char* input) {
     _cps_seen.mark(_good_ms);
   }
   _line.mark(_good_ms);
-  // a good line takes 3 off
+  // Each good line takes 3 off the bad streak
   _bad_streak = max((int)_bad_streak - 3, 0);
 }
 

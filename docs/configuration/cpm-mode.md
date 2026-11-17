@@ -23,12 +23,12 @@ parent: Configuration
 | Value | Menu name | Behaviour |
 |---|---|---|
 | 0 | Fast start | Uses recent pulses just after boot, then blends into Bucket once a full window of data exists. |
-| 1 | Live ring | Rate over the last 256 pulses. Very smooth at background, quick at high rates, slow to follow change at very low rates. |
-| 2 | Fixed 60s | Rate over the last 60 seconds, capped at 64 pulses, so the window narrows above about 64 CPM. Can read 0 if no pulse landed in the last minute. |
-| 3 | Bucket *(default)* | Average of the per-second counts over the last 60 seconds. Stable, predictable, slowest to respond. |
-| 4 | Adaptive fast | Rate over the last 19 pulses or 5 seconds, whichever is shorter. Fast, but jumps around at background rates. |
+| 1 | Live ring | Rate over the last <!-- gen:const PULSE_RING_SIZE -->256<!-- /gen --> pulses. Very smooth at background, quick at high rates, slow to follow change at very low rates. |
+| 2 | Fixed 60s | Rate over the last <!-- gen:const FIXED_US us as=s -->60 seconds<!-- /gen -->, capped at <!-- gen:const FIXED_N -->64<!-- /gen --> pulses, so the window narrows above about <!-- gen:const FIXED_N -->64<!-- /gen --> CPM. Can read 0 if no pulse landed in the last minute. |
+| 3 | Bucket *(default)* | Average of the per-second counts over the last <!-- gen:const GEIGER_CPM_COUNT s as=s -->60 seconds<!-- /gen -->. Stable, predictable, slowest to respond. |
+| 4 | Adaptive fast | Rate over the last <!-- gen:const FAST_N -->19<!-- /gen --> pulses or <!-- gen:const FAST_US us -->5 seconds<!-- /gen -->, whichever is shorter. Fast, but jumps around at background rates. |
 
-On serial builds for counters that only report CPM, Bucket uses the **CPM window** setting (default 30 s) instead of 60 s. These counters already smooth their own CPM, so the display lags by roughly their window plus yours. See [Serial Counters](/hardware/serial#cpm-window-option).
+On serial builds for counters that only report CPM, Bucket uses the **CPM window** setting (default <!-- gen:const counter.cpm_window s short -->30 s<!-- /gen -->) instead of <!-- gen:const GEIGER_CPM_COUNT s as=s short -->60 s<!-- /gen -->. These counters already smooth their own CPM, so the display lags by roughly their window plus yours. See [Serial Counters](/hardware/serial#cpm-window-option).
 
 ## What changes when I switch modes
 

@@ -20,7 +20,7 @@ Files on the SDCard are written to every minute, giving the average values for t
 
 A SD Card of 4-8GB is recommended - an SD Card of 2GB should give enough capacity for ~20 years of minutely CSV information.
 
-Writing to the file takes place once per minute. Each row is stamped with the time from NTP, from an [RTC chip](#time-without-a-network) if one is fitted, or kept over a restart.
+Writing to the file takes place once per minute. Each row is stamped with the time from NTP, from an [RTC chip](#time-without-a-network) if one is fitted, or on ESP32 kept over a restart (an ESP8266 loses it on a restart).
 
 ## Time without a network
 
@@ -44,7 +44,7 @@ The card is ready as soon as it mounts. Its free space is then counted in the ba
 
 ## A full or failing card
 
-Logging stops when the card is full with no file older than a year to clear, or when writes fail three minutes in a row. The SD Logs page says which, and the files already on the card can still be listed and downloaded. **Retry** on that page mounts the card again and starts logging if it can write; free some space or swap the card first.
+Logging stops when the card is full with no file older than a year to clear, or when writes fail three minutes in a row. After failed writes it tries the card again by itself, 1, 2, 4 and 8 minutes later, then every 15 minutes. The SD Logs page says which, and the files already on the card can still be listed and downloaded. **Retry** on that page mounts the card again and starts logging if it can write; free some space or swap the card first.
 
 # Configuration
 

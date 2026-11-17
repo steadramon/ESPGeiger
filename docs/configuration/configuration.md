@@ -82,6 +82,8 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | Warning CPM | `counter.warn` | Int 0-9999 | `50` | all | CPM threshold for warning state |
 | Alert CPM | `counter.alert` | Int 0-9999 | `100` | all | CPM threshold for alert state |
 | Track lifetime | `counter.life_en` | Boolean | `1` on | all | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
+| Background (uSv/h) | `counter.bg_usvh` | Float 0-1 | `0.1` | all | Usual here, 0.1 if unsure |
+| No count warning after (min) | `counter.quiet_min` | Int 5-360 | `30` | all | Slow tubes need longer |
 | Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Hardware uses the chip's pulse counter. Interrupt counts in software, with the Debounce filter. Reboot. |
 | PCNT filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. None suits modules that drive the line both ways; a pull-up can hold some (the Cajoe IOT-GM v1.1) high so no pulse counts. Pull-up is for open-drain outputs, and keeps an unconnected pin quiet. Pull-down is for active-high modules without their own idle pull. |
@@ -339,7 +341,7 @@ reboot
 
 ## Upload backoff
 
-Radmon, GMC, ThingSpeak and Webhook back off when a send fails: after two failures in a row the next interval is skipped, then three, doubling up to 5 minutes between tries. One good send goes back to every interval; saving that upload's settings (a fixed password, say) or a restart tries again at the next interval. Hidden `sys.backoff` sets the longest wait in seconds (default `300`, `0` = try every interval as before 0.14):
+Radmon, GMC, ThingSpeak and Webhook back off when a send fails: after two failures in a row the next interval is skipped, then three, doubling up to <!-- gen:const sys.backoff s -->5 minutes<!-- /gen --> between tries. One good send goes back to every interval; saving that upload's settings (a fixed password, say) or a restart tries again at the next interval. Hidden `sys.backoff` sets the longest wait in seconds (default <!-- gen:const sys.backoff code -->`300`<!-- /gen -->, `0` = try every interval as before 0.14):
 
 ```
 set sys.backoff 900
@@ -347,7 +349,7 @@ set sys.backoff 900
 
 ## Login brake
 
-With a web password set, 5 wrong logins in a row stop all logins for 10 seconds, the right password included, so a script can't try passwords quickly. The log says when it starts. A right login, a restart or a settings save starts the count again. Hidden `sys.brake` turns it off:
+With a web password set, <!-- gen:const EGHTTP_BRAKE_TRIES -->5<!-- /gen --> wrong logins in a row stop all logins for <!-- gen:const EGHTTP_BRAKE_MS ms -->10 seconds<!-- /gen -->, the right password included, so a script can't try passwords quickly. The log says when it starts. A right login, a restart or a settings save starts the count again. Hidden `sys.brake` turns it off:
 
 ```
 set sys.brake 0

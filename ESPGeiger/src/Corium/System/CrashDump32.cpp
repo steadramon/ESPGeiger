@@ -18,7 +18,7 @@
 */
 #ifdef ESP32
 #include "CrashDump.h"
-#include "StatusWord.h"
+#include "DeviceInfo.h"
 #include <new>
 // IDF coredump partition
 #include <esp_core_dump.h>
@@ -31,9 +31,9 @@ namespace CrashDump {
 
 static Snapshot* s_recovered = nullptr;   // crash boots only
 
-static bool panic_reset(esp_reset_reason_t rr) {
-  return rr == ESP_RST_PANIC || rr == ESP_RST_INT_WDT ||
-         rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT;
+// the resets the panic handler may have written a dump for
+static bool panic_reset(uint8_t kind) {
+  return kind == K_EXCEPTION || kind == K_INT_WDT || kind == K_TASK_WDT || kind == K_WDT;
 }
 
 static void from_summary(Snapshot& snap, const esp_core_dump_summary_t& sum) {
@@ -63,32 +63,35 @@ static void from_summary(Snapshot& snap, const esp_core_dump_summary_t& sum) {
 #endif
 }
 
-void begin() {
-  esp_reset_reason_t rr = esp_reset_reason();
-  if (!panic_reset(rr)) return;
-  if (esp_core_dump_image_check() != ESP_OK) return;
-
-  esp_core_dump_summary_t sum{};
-  if (esp_core_dump_get_summary(&sum) == ESP_OK) {
-    // Old firmware, wrong ELF
-    char sha[APP_ELF_SHA256_SZ];
-    esp_ota_get_app_elf_sha256(sha, sizeof(sha));
-    if (strncmp((const char*)sum.app_elf_sha256, sha, sizeof(sha)) != 0) {
-      esp_core_dump_image_erase();
-      return;
-    }
-    Snapshot snap{};
-    snap.reason = (uint32_t)rr;
-    from_summary(snap, sum);
-    if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
-    if (s_recovered) corium::healthWord().set(corium::DEV_CRASHED, true);
+static void read(Reset& r) {
+  if (esp_core_dump_image_check() != ESP_OK) {
+    r.damaged = true;
+    return;
   }
-
-  // always, or a bad image loops
-  esp_core_dump_image_erase();
+  esp_core_dump_summary_t sum{};
+  if (esp_core_dump_get_summary(&sum) != ESP_OK) return;
+  // Old firmware, wrong ELF
+  char sha[APP_ELF_SHA256_SZ];
+  esp_ota_get_app_elf_sha256(sha, sizeof(sha));
+  if (strncmp((const char*)sum.app_elf_sha256, sha, sizeof(sha)) != 0) return;
+  Snapshot snap{};
+  snap.reason = (uint32_t)esp_reset_reason();
+  from_summary(snap, sum);
+  if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
+  r.pc = snap.epc1;
 }
 
-bool hasCrash() { return s_recovered != nullptr; }
+void begin() {
+  Reset& r = fresh(DeviceInfo::resetKind());
+  size_t at, size;
+  if (esp_core_dump_image_get(&at, &size) == ESP_OK) {
+    if (panic_reset(r.kind)) read(r);
+    // read or not: left, a later crash would show it as its own
+    esp_core_dump_image_erase();
+  }
+  settle();
+}
+
 const Snapshot* lastCrash() { return s_recovered; }
 
 } // namespace CrashDump

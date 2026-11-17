@@ -169,7 +169,6 @@ class GeigerInput {
     virtual bool isHealthy() const { return true; }
     bool stormy() const { return _stormy; }       // parked or dropping
     bool chattering() const { return _chatter; }  // isr builds, Chatter.h
-    virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
     virtual void registerRoutes(EGHttpServer&) {}
     virtual corium::MeasureRows measurements() { return corium::MeasureRows(); }
     virtual void appendClicksExtra(EGHttpResponse&) {}

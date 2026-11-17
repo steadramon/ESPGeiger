@@ -30,9 +30,9 @@ namespace Chip {
   uint8_t heapRead(uint32_t* lfb);   // frag %, and the largest free block
 
   struct ResetRow {
-    uint8_t cause;   // the sdk's
+    uint8_t cause;   // sdk reset cause
     uint8_t rr;
-    char text[19];
+    uint8_t kind;    // CrashDump::Kind
   };
   const ResetRow* resets(size_t* n);   // PROGMEM on the 8266
   uint32_t resetCause();

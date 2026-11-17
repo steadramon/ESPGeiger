@@ -259,10 +259,6 @@ float EnvSensor::pressure() const {
   return rx(s_rx_p);
 }
 
-float EnvSensor::tempUser() const {
-  return corium::m_celsius_to(tempC(), corium::m_temp_unit());
-}
-
 bool EnvSensor::remoteFresh() const {
   corium::MValue v;
   return s_rx_t && s_rx_t(&v);

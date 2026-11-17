@@ -17,9 +17,9 @@ Offline mode needs a build with a push button.
 1. Power off or reset the device.
 2. Press and hold the push button.
 3. Power on or reset the device while holding the button.
-4. **Release the button within 5 seconds.** The display shows a countdown.
+4. **Release the button within <!-- gen:const CORIUM_BOOT_BUTTON_RESET_S s -->5 seconds<!-- /gen -->.** The display shows a countdown.
 
-> Holding the button for 5 seconds or more performs a **factory reset**: settings and Wi-Fi credentials are erased. The Stations identity and lifetime totals are kept. A hold of 30 seconds or more is taken as a stuck button and ignored: the device boots as normal, online.
+> Holding the button for <!-- gen:const CORIUM_BOOT_BUTTON_RESET_S s -->5 seconds<!-- /gen --> or more performs a **factory reset**: settings and Wi-Fi credentials are erased. The Stations identity and lifetime totals are kept. A hold of <!-- gen:const CORIUM_BOOT_BUTTON_STUCK_S s -->30 seconds<!-- /gen --> or more is taken as a stuck button and ignored: the device boots as normal, online.
 
 Over the USB console, type `offline` while the device is in its setup portal or joining Wi-Fi: that boot goes offline the same way. `set wifi.mode 1` makes every boot offline until `set wifi.mode 0` (see [Serial](/output/serial)).
 

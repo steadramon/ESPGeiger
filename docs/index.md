@@ -10,46 +10,46 @@ has_children: true
 
 # ESPGeiger
 
-ESPGeiger is a free, open-source firmware allowing you to transform any compatible Geiger counter into a real-time, IoT-enabled radiation monitoring system using ESP8266 or ESP32 microcontrollers.
+ESPGeiger is free, open-source firmware for ESP8266 and ESP32 boards. Wire it to a Geiger counter and it counts, shows CPM and µSv/h, keeps history, and sends readings to your network and the services you use.
 
-## Features
+## What it does
 
-**Data Display & Analysis:**
-* 🔴 **Real-time Readings:** Live CPM and µSv/h with 1, 5 and 15-minute smoothed averages.
-* 📈 **Web-based Graphing:** Built-in web portal with live charts and 24-hour history.
-* 🖥️ **Local Display:** SSD1306, SH1106 and SSD1309 OLEDs with runtime auto-detect.
-* 🕰️ **Lifetime Tracking:** Lifetime clicks, lifetime µSv and install age, kept across restarts.
+Readings
+* 🔴 Live CPM and µSv/h, with 1, 5 and 15 minute averages.
+* 📈 Live charts and 24 hours of history in the web page.
+* 🖥️ Readings on an SSD1306, SH1106 or SSD1309 OLED. The panel is found at boot; set the chip type on the Config page.
+* 🕰️ Lifetime clicks, lifetime dose and install age, kept across restarts.
 
-**Connectivity & Data Sharing:**
-* 🌐 **Online Data Export:** Radmon.org, GMCMAP, ThingSpeak, generic Webhook and GeigerLog.
-* 🏠 **Local Network:** MQTT with Home Assistant auto-discovery and a Prometheus `/metrics` endpoint.
-* 📡 **UDP / OSC Broadcast:** Multicast clicks and telemetry over OSC to any tool on the LAN (Pure Data, TouchDesigner, Node-RED, etc).
-* 🛰️ **UDP-Receiver Mode:** A tubeless ESP can mirror another ESPGeiger over the air for fleet displays or aggregation.
-* 💾 **Local Data Logging:** SD card export for offline analysis.
-* 🔌 **Offline Mode:** Hold the onboard button at startup to disable all network functionality.
+Sending data
+* 🌐 Uploads to Radmon.org, GMCMAP, ThingSpeak, a webhook of your own, and GeigerLog.
+* 🏠 MQTT with Home Assistant discovery, and a Prometheus `/metrics` page.
+* 📡 Clicks and readings over UDP / OSC on your network, for Pure Data, TouchDesigner, Node-RED and the like.
+* 🛰️ A board with no tube can mirror another ESPGeiger over the network, for an extra display.
+* 💾 Logging to an SD card.
+* 🔌 Offline mode: press the button at startup and release it within <!-- gen:const CORIUM_BOOT_BUTTON_RESET_S s -->5 seconds<!-- /gen --> and the network stays off.
 
-**Hardware & Compatibility:**
-* ✅ **Wide Counter Compatibility:** Pulse-output and serial-based Geiger counters.
-* 📟 **Accurate Counting:** Interrupt-driven and non-blocking, with ESP32 PCNT hardware counter support.
-* 🎛️ **Noise Control:** Configurable filtering and debounce.
-* 💡 **Visual Feedback:** WS2812X NeoPixel with rate-scaled flash and z-score trend colour.
-* 🌡️ **[Environment Sensors](/hardware/env):** Auto-detected BME280 / BMP280 / AHT10/20/25/30 over I2C - temperature, humidity, pressure.
+Counters and hardware
+* ✅ Works with pulse output and serial output Geiger counters.
+* 📟 Counts with interrupts, or the ESP32's PCNT hardware counter.
+* 🎛️ Debounce and filtering you can set, for noisy inputs.
+* 💡 A WS2812 NeoPixel that flashes with the count rate and changes colour with the trend.
+* 🌡️ [Environment sensors](/hardware/env): BME280, BMP280 and AHT10/20/25/30 over I2C are found at boot, for temperature, humidity and pressure.
 
-**Ease of Use & Development:**
-* 😃 **Easy Setup:** Captive-portal WiFi onboarding, friendly device naming, optional web password.
-* 🗂️ **Config Backup & Restore:** Portable backup blob of every editable setting, transferable between devices.
-* 🚧 **Emulation Tools:** Test builds for emulating pulse and serial counters.
+Setup
+* 😃 Wi-Fi setup from a phone (the setup portal), a name for each device, and an optional web password.
+* 🗂️ Back up every setting to one file and load it on the same device or another.
+* 🚧 Test builds that pretend to be a pulse or serial counter, for trying things without a tube.
 
 ## ESPGeiger-HW
 
-ESPGeiger is used to power __ESPGeiger-HW__ - the fully featured IoT Geiger Counter from the creator of ESPGeiger.
+__ESPGeiger-HW__ is a Geiger counter board that runs ESPGeiger, from the same maker.
 
 <img src="../img/ESPGeiger-HW-STS-5.jpg" width="75%"/>
 
 ## Disclaimer
 
 {: .highlight }
-> The creators of ESPGeiger make no claims about the suitability of the firmware or hardware for measuring radiation in any serious or life threatening situation. ESPGeiger is created as an educational resource for hobbyists and makers a-like.
+> The creators of ESPGeiger make no claims about the suitability of the firmware or hardware for measuring radiation in any serious or life threatening situation. ESPGeiger is created as an educational resource for hobbyists and makers alike.
 > 
 **Safety First:**
 > Always avoid the high voltage elements on any Geiger Counter, many of which have exposed circuitry.

@@ -75,7 +75,7 @@ Human-readable HTML report grouped into expandable sections. Useful as the first
 
 | Section | Contents |
 |---|---|
-| System | Uptime, where the time came from (NTP, an RTC chip, kept over a restart, or not set), chip ID, free memory, firmware size and the room for it, restart reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the backtrace, on ESP32-C3 the raw stack (with mcause and mtval); on both ESP32s a Crashed in row names the module that was running. Rows that only matter when something's wrong show only then: safe mode, crash boots in a row, a flash size that doesn't match the chip, a web password restored from backup. |
+| System | Uptime, where the time came from (NTP, an RTC chip, kept over a restart on ESP32, or not set; an ESP8266 loses it on a restart), chip ID, free memory, firmware size and the room for it, restart reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the backtrace, on ESP32-C3 the raw stack (with mcause and mtval); a Crashed in row names the module that was running. On ESP8266 an abort, an out of memory and a stack smash each have their own restart reason, and a soft watchdog shows its PC. A crash dump cut short by the reset shows as damaged. Rows that only matter when something's wrong show only then: safe mode, crash boots in a row, a flash size that doesn't match the chip, a web password restored from backup. |
 | WiFi | Network and channel, signal (RSSI in dBm, with excellent / good / fair / weak), IP, hostname, MAC, DNS. The hotspot's SSID, IP and MAC while it's running. |
 | About | One build line (version, git hash, build environment, build date), Geiger model. |
 
@@ -102,7 +102,7 @@ After **Save and restart**, the device tries the new credentials. If the new net
 
 ### Test build CPM setter
 
-Test builds (any target whose `GEIGER_TYPE` has the test bit set, e.g. `espgeigerlog_test`, `esp32_testpulse`, `espgeigerlite_testpulse`) expose `/cpm` so you can steer the simulated counter from a browser or script. This is useful for exercising downstream integrations (MQTT, `/json`, the display, alert thresholds, dashboards) without needing a radiation source.
+Test builds (any target whose `GEIGER_TYPE` has the test bit set, e.g. `espgeigerlog_test`, `esp32_testpulse`) expose `/cpm` so you can steer the simulated counter from a browser or script. This is useful for exercising downstream integrations (MQTT, `/json`, the display, alert thresholds, dashboards) without needing a radiation source.
 
 ```
 GET /cpm?v=<target_cpm>

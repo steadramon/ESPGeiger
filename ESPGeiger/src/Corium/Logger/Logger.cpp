@@ -63,13 +63,6 @@ void corium::Log::console(const char* fmt, ...)
   va_end(arg);
 }
 
-void corium::Log::error(const char* fmt, ...)
-{
-  va_list arg;
-  va_start(arg, fmt);
-  vlog(LOG_LEVEL_ERROR, true, fmt, arg);
-  va_end(arg);
-}
 
 #if LOG_LEVEL >= 2
 void corium::Log::info(const char* fmt, ...)

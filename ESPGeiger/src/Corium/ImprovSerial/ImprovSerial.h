@@ -34,7 +34,6 @@ public:
   void poll();
   // a WIFI_SETTINGS test ended: its answer; each console pass
   void watch();
-  bool isProvisioning() const { return _state == improv::STATE_PROVISIONING; }
 
 private:
   void set_state(improv::State s);

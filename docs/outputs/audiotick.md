@@ -13,7 +13,7 @@ supported boards. A short boot chime plays once when the device starts
 so you know the audio path is alive.
 
 **ESP32 only.** AudioTick uses the ESP-IDF I2S driver, which is not
-available on the ESP8266. See "Audible feedback on ESP8266" below for
+available on the ESP8266. The shipped builds are all ESP32-S3. See "Audible feedback on ESP8266" below for
 the alternative.
 
 ## Shipped builds

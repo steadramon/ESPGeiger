@@ -194,6 +194,56 @@ static void threshold_cap(void) {
                            m.missing_threshold_s(1000000u, 1u));
 }
 
+// 0.0625 and 0.25 are exact in binary
+static void bg_low(void) {
+  m.set_ratio(1.0f);
+  m.set_background(0.0625f, 1800u);   // 1200 / 0.0625
+  TEST_ASSERT_TRUE (m.tube_alive(19199u, 0u, 0u));
+  TEST_ASSERT_FALSE(m.tube_alive(19200u, 0u, 0u));
+  m.set_ratio(151.0f);
+  TEST_ASSERT_EQUAL_UINT32(63u, m.missing_threshold_s(0u, 0u));   // was 39
+}
+
+static void bg_high(void) {
+  m.set_ratio(1.0f);
+  m.set_background(0.25f, 1800u);
+  TEST_ASSERT_TRUE (m.tube_alive(4799u, 0u, 0u));
+  TEST_ASSERT_FALSE(m.tube_alive(4800u, 0u, 0u));
+}
+
+static void bg_first(void) {
+  m.set_background(0.0625f, 1800u);
+  m.set_ratio(1.0f);
+  TEST_ASSERT_FALSE(m.tube_alive(19200u, 0u, 0u));
+  TEST_ASSERT_TRUE (m.tube_alive(19199u, 0u, 0u));
+}
+
+static void bg_refused(void) {
+  m.set_ratio(1.0f);   // 12000 s
+  m.set_background(0.0f, 0u);
+  m.set_background(NAN, 0u);
+  m.set_background(2.0f, 0u);
+  TEST_ASSERT_TRUE (m.tube_alive(11999u, 0u, 0u));
+  TEST_ASSERT_FALSE(m.tube_alive(12000u, 0u, 0u));
+}
+
+// a saved 0 goes back to the default, not the last one
+static void bg_zeroed(void) {
+  m.set_ratio(1.0f);
+  m.set_background(0.25f, 1800u);
+  m.set_background(0.0f, 1800u);
+  TEST_ASSERT_TRUE (m.tube_alive(11999u, 0u, 0u));
+  TEST_ASSERT_FALSE(m.tube_alive(12000u, 0u, 0u));
+}
+
+static void quiet_floor(void) {
+  m.set_ratio(151.0f);   // 79 s, the floor rules
+  m.set_background(0.1f, 3600u);
+  TEST_ASSERT_TRUE (m.tube_alive(3599u, 0u, 0u));
+  TEST_ASSERT_FALSE(m.tube_alive(3600u, 0u, 0u));
+  TEST_ASSERT_EQUAL_UINT32(39u, m.missing_threshold_s(0u, 0u));
+}
+
 static void missing_fires(void) {
   m.set_ratio(151.0f);            // 39 s, but 60 s floor
   TEST_ASSERT_FALSE(m.counts_missing(59u, 0u, 0u));
@@ -368,6 +418,12 @@ int main(void) {
   RUN_TEST(threshold_bg);
   RUN_TEST(threshold_cal);
   RUN_TEST(threshold_cap);
+  RUN_TEST(bg_low);
+  RUN_TEST(bg_high);
+  RUN_TEST(bg_first);
+  RUN_TEST(bg_refused);
+  RUN_TEST(bg_zeroed);
+  RUN_TEST(quiet_floor);
   RUN_TEST(missing_fires);
   RUN_TEST(missing_60s);
   RUN_TEST(missing_quiet);

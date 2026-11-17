@@ -16,14 +16,14 @@ From the Web installer a number of predefined builds can be installed -
 
 ## Pulse
 
-Two pulse builds are made available. The installer auto-picks the right binary for whichever chip family (ESP8266 / ESP32 / ESP32-S3) is connected.
+Two pulse builds are made available. The installer auto-picks the right binary for whichever chip family (ESP8266 / ESP32 / ESP32-S3 / ESP32-C3) is connected.
 
 - **Pulse** - interrupt-based counting on all chip families. Safe default that works regardless of how a tube's pulse is wired.
 - **Pulse - PCNT (ESP32 / ESP32-S3)** - opt-in hardware pulse counter build. Lower CPU overhead, but requires the tube's pulse to be clean enough for the PCNT peripheral to latch reliably. Use this if you are confident in your wiring and want maximum performance; fall back to the standard Pulse build if counts look low or noisy.
 
 ## Serial
 
-A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page. ESP8266, ESP32 and ESP32-S3 are all detected automatically.
+A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page. ESP8266, ESP32, ESP32-S3 and ESP32-C3 are all detected automatically.
 
 - Serial
 
@@ -81,4 +81,4 @@ Make sure the relevant drivers are installed for your device. If your device isn
 
 ![Completed](img/webinstall_7.png)
 
-- To skip the setup portal, use the installer's option to connect to Wi-Fi when it offers it. It sends your network details to the device over USB. This doesn't work on ESPGeiger Log or ESPGeiger Lite, which use the serial RX pin for its button; use the setup portal there. Otherwise carry on with [Setup](/install/setup).
+- To skip the setup portal, use the installer's option to connect to Wi-Fi when it offers it. It sends your network details to the device over USB. This doesn't work on ESPGeiger Log, which uses the serial RX pin for its button; use the setup portal there. Otherwise carry on with [Setup](/install/setup).

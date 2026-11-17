@@ -36,15 +36,19 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** - i
 
 ### I have an ESP + generic pulse Geiger counter
 
-| Hardware | Recommended Build |
-|---|---|
-| ESP8266 (Wemos D1 Mini, NodeMCU, etc.) | `esp8266_pulse` |
-| ESP8266 with SSD1306 OLED | `esp8266oled_pulse` |
-| ESP32 | `esp32_pulse` |
-| ESP32-S3 (dev kits) | `esp32s3_pulse` |
-| ESP32-S3 with onboard amp + speaker (XH-S3E-AI) | `xh_s3e_pulse` |
-| ESP32-C3 (RISC-V, no PCNT - software pulse counter) | `esp32c3_pulse` |
-| CAJOE IoT-GM | `esp32_cajoe_iotgm` |
+<!-- gen:builds only=esp8266_pulse,esp8266oled_pulse,esp32_pulse,esp32s3_pulse,xh_s3e_pulse,esp32c3_pulse,esp32_cajoe_iotgm cols=env,rx -->
+
+| Hardware | Build | RX pin (default) |
+|---|---|---|
+| ESP8266 (Wemos D1 Mini, NodeMCU, etc.) | `esp8266_pulse` | 13 |
+| ESP8266 with SSD1306 OLED | `esp8266oled_pulse` | 13 |
+| ESP32 | `esp32_pulse` | 13 |
+| ESP32-S3 (dev kits) | `esp32s3_pulse` | 13 |
+| ESP32-S3 with onboard amp + speaker (XH-S3E-AI) | `xh_s3e_pulse` | 13 |
+| ESP32-C3 (RISC-V, no PCNT - software pulse counter) | `esp32c3_pulse` | 4 |
+| CAJOE IoT-GM | `esp32_cajoe_iotgm` | 26, wired |
+
+<!-- /gen -->
 
 ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect the panel at boot - no separate `oled_*` envs on the ESP32 family. ESP8266 still ships dedicated `esp8266oled_*` envs to avoid the runtime cost on the slower core.
 
@@ -52,9 +56,16 @@ ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect t
 
 A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger, Template). Select your counter type from the **Config** page after flashing.
 
-| ESP8266 Build | ESP32 Build | ESP32-S3 Build | ESP32-C3 Build |
-|---|---|---|---|
-| `esp8266_serial` | `esp32_serial` | `esp32s3_serial` | `esp32c3_serial` |
+<!-- gen:builds only=esp8266_serial,esp32_serial,esp32s3_serial,esp32c3_serial cols=chip,env,rx -->
+
+| Chip | Build | RX pin (default) |
+|---|---|---|
+| ESP8266 | `esp8266_serial` | 13 |
+| ESP32 | `esp32_serial` | 13 |
+| ESP32-S3 | `esp32s3_serial` | 13 |
+| ESP32-C3 | `esp32c3_serial` | 4 |
+
+<!-- /gen -->
 
 ESP8266 OLED variant: `esp8266oled_serial`. The ESP32 family bundles OLED so the same `esp32*_serial` envs work with or without a display.
 
@@ -73,8 +84,9 @@ Test builds emulate a Geiger counter internally. You can also wire the `TXPIN` o
 
 | Build | Description |
 |---|---|
-| `esp8266_test` / `esp32_test` / `esp32s3_test` | Internal counter, no output |
+| `esp8266_test` / `esp32_test` / `esp32s3_test` / `esp32c3_test` | Internal counter, no output |
 | `esp8266_testpulse` / `esp32_testpulse` | Outputs Poisson-distributed pulses on TXPIN |
+| `esp8266_testpulseint` / `esp32_testpulseint` | Outputs evenly timed (PWM) pulses on TXPIN, for high rates |
 | `esp8266_testserial` / `esp32_testserial` | Emulates a serial counter (type selectable via Config) |
 
 ### I want a remote display or fleet aggregator (no tube needed)
@@ -94,7 +106,7 @@ See the full list of available builds on the [releases page](https://github.com/
 
 ## Hardware Connection
 
-By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32 and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin. Don't forget a common ground.
+By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32 / ESP32-S3 and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin; the tables above give it for each build. Don't forget a common ground.
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>

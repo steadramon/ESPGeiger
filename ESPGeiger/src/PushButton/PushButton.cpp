@@ -51,7 +51,7 @@ CORIUM_REGISTER_FEATURE(pushbutton, FEAT_BUTTON)
 #ifndef BTN_PIN_BLOCKED
 
 CORIUM_PSTR(BTN_L_PIN, "Button pin");
-CORIUM_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
+CORIUM_PSTR(BTN_H_PIN, "-1 = off. Button to GND, internal pull-up");
 
 static const corium::Pref BTN_PREF_ITEMS[] PROGMEM = {
   {EG_K_PIN, BTN_L_PIN, BTN_H_PIN, STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_PIN_BTN},
@@ -124,9 +124,6 @@ void PushButton::begin()
   corium::Log::console(PSTR("Btn: pin=%d pin2=%d"),
                (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
 #endif
-#ifdef PIN_SCAN
-  corium::Registry::every(this, POLL_MS);
-#endif
 }
 
 // samples too, setup has no loop
@@ -138,53 +135,6 @@ bool PushButton::isPressed()
   }
   return s_btn[0].deb.level || s_btn[1].deb.level;
 }
-
-bool PushButton::is_active()
-{
-  return s_btn[0].pin >= 0 || s_btn[1].pin >= 0;
-}
-
-#ifdef PIN_SCAN
-// Diagnostic, logs any pin going LOW
-static bool pin_scan_skips(int p) {
-  if (p == 0 || p == 41 || p == 42 || p == 48) return true;
-  if (p >= 22 && p <= 25) return true;      // gap on S3
-  return p >= 26 && p <= 37;                // possible flash/PSRAM
-}
-
-static void pin_scan_init() {
-  for (int p = 1; p <= 48; p++) {
-    if (pin_scan_skips(p)) continue;
-    pinMode(p, INPUT_PULLUP);
-  }
-}
-
-static void pin_scan_poll() {
-  static uint8_t s_level[49] = {0};
-  static bool s_primed = false;
-  if (!s_primed) {
-    delay(5);
-    for (int p = 1; p <= 48; p++) s_level[p] = digitalRead(p) ? 1 : 0;
-    s_primed = true;
-    return;
-  }
-  for (int p = 1; p <= 48; p++) {
-    if (pin_scan_skips(p)) continue;
-    uint8_t cur = digitalRead(p) ? 1 : 0;
-    if (cur != s_level[p]) {
-      corium::Log::console(PSTR("PinScan: GPIO%d %s"), p, cur ? "HIGH" : "LOW");
-      s_level[p] = cur;
-    }
-  }
-}
-
-static void pin_scan_loop(unsigned long now) {
-  static bool s_inited = false;
-  if (!s_inited) { pin_scan_init(); s_inited = true; }
-  static unsigned long s_poll_ms = 0;
-  if (now - s_poll_ms >= 30) { s_poll_ms = now; pin_scan_poll(); }
-}
-#endif
 
 static void short_press(uint8_t i) {
   corium::Log::console(PSTR("Btn: Short"));
@@ -221,9 +171,6 @@ static void step_one(uint8_t i, unsigned long now) {
 // every POLL_MS while a pin is set
 void PushButton::loop(unsigned long now)
 {
-#ifdef PIN_SCAN
-  pin_scan_loop(now);
-#endif
   for (uint8_t i = 0; i < 2; i++) step_one(i, now);
 }
 #endif
