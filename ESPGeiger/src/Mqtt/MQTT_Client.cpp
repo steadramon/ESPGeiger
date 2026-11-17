@@ -173,7 +173,8 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   _reanchor = true;
   _tries = 0;
   _auth_fails = 0;
-  _pending |= PEND_LWT;
+  // warn and alert again, a clear may have gone with a restart
+  _pending |= PEND_LWT | PEND_WARN | PEND_ALERT;
 #ifdef MQTTAUTODISCOVER
   this->setupHassCB();
 #endif
@@ -763,8 +764,8 @@ static const HassRow HASS_ROWS[] PROGMEM = {
   {"pressure", "p",  "Pressure",     "hPa",        "gauge",          "",  DC_PRES,  HR_OPT},
   {"c_total",  "",   "Total Clicks", "",           "counter",        "",  DC_NONE,  HR_STATUS | HR_TOTAL},
   // tele/status
-  {"tick",     "",   "tick",         "\u00B5s",    "timer-outline",  "",  DC_NONE,  HR_STATUS | HR_DIAG},
-  {"t_max",    "",   "tick max",     "\u00B5s",    "timer-alert-outline", "", DC_NONE, HR_STATUS | HR_DIAG},
+  {"tick",     "",   "Tick",         "\u00B5s",    "timer-outline",  "",  DC_NONE,  HR_STATUS | HR_DIAG},
+  {"t_max",    "",   "Max Tick",     "\u00B5s",    "timer-alert-outline", "", DC_NONE, HR_STATUS | HR_DIAG},
   {"lps",      "",   "LPS",          "1/s",        "speedometer",    "",  DC_NONE,  HR_STATUS | HR_DIAG},
   {"rssi",     "",   "RSSI",         "dBm",        "wifi",           "",  DC_SIG,   HR_STATUS | HR_DIAG},
   {"uptime",   "ut", "Uptime",       "s",          "clock-outline",  "",  DC_DUR,   HR_STATUS | HR_TOTAL | HR_DIAG},
@@ -844,6 +845,11 @@ static const char* hass_type(const HassRow* r) {
 
 // kept till the next connect, walks and the save go by it
 void MQTT_Client::setupHassCB() {
+  if (_hass_gone) {   // saved while down, the old prefix's go first
+    _hass_gone = false;
+    startHassWalk(HASS_REMOVE);
+    return;
+  }
   hass_prefix(_hass_disc, sizeof(_hass_disc));
   if (_hass_disc[0]) _pending |= PEND_SUB;
   else _pending &= ~PEND_SUB;
@@ -943,11 +949,7 @@ static void hass_publish(const HassRow* r, const char* root, const char* disc)
   j.str(PSTR("pl_avail"), LWT_ONLINE);
   j.str(PSTR("pl_not_avail"), LWT_OFFLINE);
   j.str(PSTR("~"), root);
-  j.str_begin(PSTR("name"));
-  j.part(host);
-  j.part(PSTR(" "));
-  j.part(r->name);
-  j.str_end();
+  j.str(PSTR("name"), r->name);
   j.str_begin(PSTR("uniq_id"));
   j.part(host);
   j.part(PSTR("_"));
@@ -1042,14 +1044,16 @@ void MQTT_Client::onPrefsSaved()
   _root_ok = false;
   _auth_fails = 0;
 #ifdef MQTTAUTODISCOVER
-  if (_hass_disc[0] && s_mq.connected()) {
+  if (_hass_disc[0]) {
     char disc[sizeof(_hass_disc)];
     hass_prefix(disc, sizeof(disc));
-    if (strcmp(disc, _hass_disc) != 0) {
+    bool gone = strcmp(disc, _hass_disc) != 0;
+    if (gone && s_mq.connected()) {
       if (_hass_walk_state == HASS_PUBLISH) _hass_walk_state = HASS_IDLE;
       startHassWalk(HASS_REMOVE);
       return;
     }
+    _hass_gone = gone;   // down, the next connect removes them
   }
 #endif
   rejoin();

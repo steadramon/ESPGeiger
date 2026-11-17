@@ -40,6 +40,7 @@ struct Snapshot {
   uint32_t depc;
   uint32_t sp;
   uint32_t wordCount;
+  uint32_t in;   // 8266, the Registry slot the loop was in
   uint32_t stack[STACK_WORDS];   // 8266 stack code words (rest 0), esp32 backtrace PCs
 };
 

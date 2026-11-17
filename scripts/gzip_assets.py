@@ -11,6 +11,8 @@ import sys
 
 ASSETS = [
     ("ESPGeiger/src/Corium/WebPortal/NtpPage.cpp", "NTP_PAGE_JS", "application/javascript"),
+    ("ESPGeiger/src/Corium/WebPortal/ParamPage.cpp", "PARAM_PAGE_JS", "application/javascript"),
+    ("ESPGeiger/src/Corium/WebPortal/UpdatePage.cpp", "UPDATE_PAGE_JS", "application/javascript"),
     ("ESPGeiger/src/Counter/CounterWeb.cpp",      "HIST_JS",     "application/javascript"),
     ("ESPGeiger/src/Display/Display.cpp",         "screenJS",    "application/javascript"),
     ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS", "application/javascript"),
@@ -185,14 +187,14 @@ def run(project_dir, gen_dir, platform=""):
 
 
 try:
-    Import("env")  # type: ignore  # noqa: F821
-    _project_dir = env["PROJECT_DIR"]  # type: ignore  # noqa: F821
-    _build_dir = env.subst("$BUILD_DIR")  # type: ignore  # noqa: F821
+    Import("env")
+    _project_dir = env["PROJECT_DIR"]
+    _build_dir = env.subst("$BUILD_DIR")
     _gen_dir = os.path.join(_build_dir, "generated")
-    run(_project_dir, _gen_dir, env.get("PIOPLATFORM", ""))  # type: ignore  # noqa: F821
-    env.Append(CPPPATH=[_gen_dir])  # type: ignore  # noqa: F821
+    run(_project_dir, _gen_dir, env.get("PIOPLATFORM", ""))
+    env.Append(CPPPATH=[_gen_dir])
 except NameError:
     if __name__ == "__main__":
         # CLI fallback: python scripts/gzip_assets.py <gen_dir>
-        gen = sys.argv[1] if len(sys.argv) > 1 else "build_test/generated"
+        gen = sys.argv[1] if len(sys.argv) > 1 else ".pio/generated"
         run(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), gen)

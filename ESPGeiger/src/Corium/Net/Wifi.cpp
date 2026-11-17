@@ -27,6 +27,9 @@
 #include <esp_wifi.h>
 #endif
 #include <EGPortal.h>
+#ifdef APP_OFFLINE_OK
+#include <EGDnsAnswer.h>
+#endif
 #include <EGEscape.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/Module/Module.h"
@@ -48,6 +51,7 @@ CORIUM_PSTR(K_PHY_MODE, "phy_mode");
 CORIUM_PSTR(K_MODE,     "mode");
 CORIUM_PSTR(K_AP_HIDE,  "ap_hide");
 CORIUM_PSTR(K_HS_HOLD,  "hs_hold");
+CORIUM_PSTR(K_DOWN_MAX, "down_max");
 
 static const uint8_t MODE_OFF = 1;
 static const uint8_t MODE_AP  = 2;
@@ -541,6 +545,7 @@ static PGM_P fail_text(uint8_t r) {
     case EGPortal::JOIN_BAD_PASS: return PSTR("password refused");
     case EGPortal::JOIN_REFUSED:  return PSTR("refused");
     case EGPortal::JOIN_NO_REPLY: return PSTR("no reply");
+    case EGPortal::JOIN_NOT_SAVED: return PSTR("joined but not saved, try again");
     default:                      return nullptr;
   }
 }
@@ -580,7 +585,7 @@ static void test_joined() {
   bool saved = save_creds();
   corium::Log::console(PSTR("WiFi: Join test: joined, creds %ssaved"), saved ? PSTR("") : PSTR("NOT "));
   if (saved) (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // tested beats a revert
-  s_join = EGPortal::JOIN_OK;
+  s_join = saved ? EGPortal::JOIN_OK : EGPortal::JOIN_NOT_SAVED;
   end_test();
 }
 
@@ -752,7 +757,8 @@ static bool leaving(corium::Deadline& leave, uint32_t now) {
 
 // the 10 min idle, or the offline cap
 static bool portal_timed_out(uint32_t idle_ms, uint32_t now) {
-  return now - idle_ms >= PORTAL_RETRY_MS || now - CORIUM_MS_START >= WIFI_OFFLINE_MAX_MS;
+  uint32_t max_s = corium::Wifi::downMaxS();
+  return now - idle_ms >= PORTAL_RETRY_MS || (max_s && now - CORIUM_MS_START >= max_s * 1000UL);
 }
 
 // the saved ap not heard as the portal came up (an outage): a scan a minute, back = rejoin
@@ -775,6 +781,12 @@ static void portal_out(const char* ssid, bool back) {
   corium::DeviceInfo::safeRestart(500);
 }
 
+// a save or reset late in Improv's wait still gets its page out and restart
+static bool portal_stays(corium::Deadline& done) {
+  if (corium::Wifi::offlineForced) return false;
+  return !done.due(corium::fastMillis()) || s_saved || s_reset;
+}
+
 // hasSavedCreds() here drops the AP; ssid null = first setup
 static void run_portal(EGPortal* portal, const char* ssid) {
   uint32_t idle_ms = corium::fastMillis();
@@ -782,8 +794,7 @@ static void run_portal(EGPortal* portal, const char* ssid) {
   corium::Deadline done;   // Improv joined
   corium::Deadline leave;
   bool watch = ssid && !portal->heard(ssid);
-  // a save or reset late in Improv's wait still gets its page out and restart
-  while ((!done.due(corium::fastMillis()) || s_saved || s_reset) && !corium::Wifi::offlineForced) {
+  while (portal_stays(done)) {
     portal->loop();
     console.pollBoot();
     corium::Clock::stampNow();   // its restart keeps the time
@@ -814,11 +825,36 @@ static bool sta_up() {
 static bool start_ap();
 static uint32_t s_ap_seen = 0;   // the fallback AP's last client, or its start
 
-// offline builds, saved wifi dead or none set: the device's AP and the whole UI, counting on
-static void fallback_ap(bool fresh) {
-  corium::Log::console(fresh ? PSTR("WiFi: No saved network, setup hotspot")
-                             : PSTR("WiFi: Saved network failed, setup hotspot"));
-  if (start_ap()) corium::Wifi::go(corium::Wifi::HOTSPOT, fresh ? PSTR("first setup") : PSTR("join failed"));
+#ifdef APP_OFFLINE_OK
+static EGDnsAnswer* s_dns = nullptr;   // every name = the AP, the phone's setup popup; only while up
+static const uint32_t DNS_POLL_MS = 200;
+
+static void dns_up() {
+  IPAddress ip = WiFi.softAPIP();
+  s_dns = new (std::nothrow) EGDnsAnswer();
+  if (s_dns && s_dns->begin(53, EGTcpAddr(ip[0], ip[1], ip[2], ip[3]))) return;
+  delete s_dns;
+  s_dns = nullptr;
+  corium::Log::console(PSTR("WiFi: Hotspot DNS failed"));
+}
+
+static void dns_down() {
+  if (!s_dns) return;
+  s_dns->end();
+  delete s_dns;
+  s_dns = nullptr;
+}
+#endif
+
+// offline builds, saved wifi dead: the device's AP and the whole UI, counting on
+static void fallback_ap() {
+  corium::Log::console(PSTR("WiFi: Saved network failed, setup hotspot"));
+  if (start_ap()) {
+    corium::Wifi::go(corium::Wifi::HOTSPOT, PSTR("join failed"));
+#ifdef APP_OFFLINE_OK
+    dns_up();
+#endif
+  }
   s_ap_seen = corium::fastMillis();
 }
 
@@ -828,9 +864,28 @@ bool corium::Wifi::apHeld(uint32_t now) {
   uint32_t mins = corium::Prefs::getUInt("wifi", K_HS_HOLD);   // 0 = stays up
   if (mins == 0 || now - s_ap_seen < mins * 60000UL) return true;
   (void)WiFi.softAPdisconnect(true);
+#ifdef APP_OFFLINE_OK
+  dns_down();
+#endif
   corium::Log::console(PSTR("WiFi: Hotspot off, nobody on it for %u min"), (unsigned)mins);
   go(OFFLINE, PSTR("hotspot idle"));
   return false;
+}
+
+// after the portal: the AP off can drop it; a static set on the test's join never answers arp (8266), join again
+static bool rejoin() {
+  bool static_on = sta_up();
+  if (!corium::Wifi::connectedRaw()) (void)WiFi.begin();
+  else if (static_on) {
+    (void)WiFi.reconnect();
+    // the old link reads up till it drops (esp32)
+    uint32_t start = corium::fastMillis();
+    while (WiFi.status() == WL_CONNECTED && corium::fastMillis() - start < LEAVE_WAIT_MS) {
+      console.pollBoot();
+      delay(10);
+    }
+  }
+  return wait_wifi(JOIN_WAIT_MS);
 }
 
 CORIUM_NODISCARD static bool join_or_portal() {
@@ -849,15 +904,11 @@ CORIUM_NODISCARD static bool join_or_portal() {
     stop_test();   // Improv's from the boot console, else its creds stay held
     s_join = boot_fail();   // the pages say why
     if (restore_backup()) return true;
-    if (corium::Wifi::OFFLINE_OK && !corium::BootGuard::portalAsked()) {   // a save's boot gets the portal
-      fallback_ap(false);
-      return false;
-    }
   }
 
-  // first setup on an offline build: open the AP and the UI but keep booting, so it counts
-  if (!have_creds && corium::Wifi::OFFLINE_OK && !corium::BootGuard::portalAsked()) {
-    fallback_ap(true);
+  // offline builds, saved one dead: the AP and the UI but keep booting, so it counts; none set or a save's boot = portal
+  if (corium::Wifi::OFFLINE_OK && have_creds && !corium::BootGuard::portalAsked()) {
+    fallback_ap();
     return false;
   }
 
@@ -875,20 +926,7 @@ CORIUM_NODISCARD static bool join_or_portal() {
     return false;
   }
   corium::Wifi::go(corium::Wifi::JOINING, PSTR("portal done"));
-
-  // the AP off can drop it; a static set on the test's join never answers arp (8266), join again
-  bool static_on = sta_up();
-  if (!corium::Wifi::connectedRaw()) (void)WiFi.begin();
-  else if (static_on) {
-    (void)WiFi.reconnect();
-    // the old link reads up till it drops (esp32)
-    uint32_t start = corium::fastMillis();
-    while (WiFi.status() == WL_CONNECTED && corium::fastMillis() - start < LEAVE_WAIT_MS) {
-      console.pollBoot();
-      delay(10);
-    }
-  }
-  return wait_wifi(JOIN_WAIT_MS);
+  return rejoin();
 }
 
 bool corium::Wifi::offlineNow() {
@@ -919,6 +957,11 @@ static bool start_ap() {
 
 // a network to join, not the AP; saved with the next commit
 bool corium::Wifi::joinMode() { return corium::Prefs::put("wifi", K_MODE, "0"); }
+
+bool corium::Wifi::offSet(const char* mod, const char* key) {
+  if (strcmp_P(mod, PSTR("wifi")) || strcmp_P(key, K_MODE)) return false;
+  return corium::Prefs::getUInt("wifi", K_MODE) == MODE_OFF;
+}
 
 // from hotspot or off mode the next boot joins it too, a restart onto it; offline this boot keeps it off
 bool corium::Wifi::keepJoined(uint32_t restart_ms) {
@@ -991,11 +1034,21 @@ void WifiModule::begin() {
 }
 
 void WifiModule::loop(unsigned long now) {
+#ifdef APP_OFFLINE_OK
+  if (s_dns) {
+    s_dns->poll();
+    corium::Registry::dueIn(this, DNS_POLL_MS);
+  }
+#endif
   if (corium::Wifi::testing() && corium::Wifi::testStep(now)) corium::Registry::dueIn(this, TEST_STEP_MS);
   if (corium::Wifi::look(now)) corium::Registry::emit(corium::Wifi::TOPIC_CHANGED);
 }
 
 #define WIFI_SLEEP_DEFAULT "1"
+// minutes, 0 = never
+#ifndef WIFI_DOWN_MAX_DEFAULT
+#define WIFI_DOWN_MAX_DEFAULT "60"
+#endif
 
 static const corium::Pref WIFI_PREF_ITEMS[] PROGMEM = {
   {K_SLEEP,    nullptr, nullptr, WIFI_SLEEP_DEFAULT, nullptr, 0, 2,  0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
@@ -1004,8 +1057,9 @@ static const corium::Pref WIFI_PREF_ITEMS[] PROGMEM = {
   {K_PHY_MODE, nullptr, nullptr, "0",                nullptr, 0, 3,  0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL | corium::P_REBOOT},
   {K_MODE,     nullptr, nullptr, "0",                nullptr, 0, 2,  0, corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL | corium::P_REBOOT},
   {K_AP_HIDE,  nullptr, nullptr, "0",                nullptr, 0, 0,  0, corium::P_BOOL,   corium::P_HIDDEN | corium::P_LOCAL | corium::P_REBOOT},
+  {K_DOWN_MAX, nullptr, nullptr, WIFI_DOWN_MAX_DEFAULT, nullptr, 0, 1440, 0, corium::P_UINT, corium::P_HIDDEN | corium::P_LOCAL},
 #ifdef APP_OFFLINE_OK
-  {K_HS_HOLD,  nullptr, nullptr, "10",               nullptr, 0, 1440, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_HS_HOLD,  nullptr, nullptr, "10",               nullptr, 0, 1440, 0, corium::P_UINT, corium::P_HIDDEN | corium::P_LOCAL},
 #endif
 };
 
@@ -1016,6 +1070,8 @@ static const corium::PrefGroup WIFI_PREF_GROUP PROGMEM = {
 };
 
 const corium::PrefGroup* WifiModule::prefsGroup() { return &WIFI_PREF_GROUP; }
+
+uint32_t corium::Wifi::downMaxS() { return corium::Prefs::getUInt("wifi", K_DOWN_MAX) * 60UL; }
 
 static int8_t s_rx_sleep = -1;   // the receiver's, wins over the pref
 

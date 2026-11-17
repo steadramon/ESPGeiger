@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "WebPortal.h"
+#include "PARAM_PAGE_JS.gz.h"
 #include "ImportText.h"
 #include "PortalPaths.h"
 #include "Corium/Module/Module.h"
@@ -198,9 +199,9 @@ static void param_render_tabs(EGHttpResponse& res, uint8_t tab) {
 
 static void param_render_backup(EGHttpResponse& res) {
   res.sendChunk(F(
-    "<form method=POST action=/import onsubmit=\"return confirm('Import config and restart?')\">"
+    "<form method=POST action=/import id=impF>"
     "<p><textarea name=blob id=cfgB rows=5 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
-    "<p><button type=button onclick=\"fetch('/export').then(r=>r.text()).then(t=>{var e=document.getElementById('cfgB');e.value=t;e.select();})\">Export</button>"
+    "<p><button type=button id=expB>Export</button>"
     " <button type=submit>Import</button></p></form>"
     "<p style=\"color:var(--muted);font-size:.85em\">WiFi and network settings are preserved. Device restarts automatically after import.</p>"
     "<p class=\"a aw\" style=\"font-size:.85em\"><b>Note:</b> The exported blob contains private information. Keep it private.</p>"));
@@ -397,8 +398,7 @@ static void param_emit_input_end(ParamCtx& c, const corium::Pref& p, bool slider
   if (p.flags & corium::P_REQUIRED) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " required");
   if (p.flags & corium::P_READONLY) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " readonly");
   if (slider) {
-    param_appendf(c,
-      PSTR(" oninput='this.nextElementSibling.value=this.value'><output>%s</output><br>"), c.cur);
+    param_appendf(c, PSTR("><output>%s</output><br>"), c.cur);
   } else {
     APPEND_LIT(c.buf, c.pos, sizeof(c.buf), "><br>");
   }
@@ -421,9 +421,8 @@ static void param_emit_help(ParamCtx& c, const corium::Pref& p, bool inline_bool
   }
   if ((p.flags & corium::P_SENSITIVE) && c.cur[0]) {
     param_appendf(c,
-      PSTR("<button type=button class='danger btn-sm' style='margin-top:.2em' "
-           "onclick=\"if(confirm('Clear stored value?')){byID('%s.%s').value='__CLEAR__';this.form.submit();}\""
-           ">Clear</button>"),
+      PSTR("<button type=button class='danger btn-sm clr' data-k='%s.%s' "
+           "style='margin-top:.2em'>Clear</button>"),
       c.mid, c.id);
   }
   c.res->sendChunk(c.buf, c.pos);
@@ -526,6 +525,28 @@ static void param_render_groups(EGHttpResponse& res, uint8_t tab) {
   }
 }
 
+#if !EG_GZ_PARAM_PAGE_JS
+extern const char PARAM_PAGE_JS[] PROGMEM = R"JS(
+document.forms[0].addEventListener('invalid',e=>{for(let n=e.target;n;n=n.parentNode)n.tagName=='DETAILS'&&(n.open=1);fErr.style.display=''},true);
+function sw(){Q('[data-w]').forEach(e=>{var c=byID(e.dataset.w);if(c)e.hidden=!(e.dataset.m>>(c.type=='checkbox'?+c.checked:+c.value)&1)})}
+addEventListener('change',sw);sw();
+Q('.clr').forEach(b=>b.onclick=()=>{if(confirm('Clear stored value?')){byID(b.dataset.k).value='__CLEAR__';b.form.submit()}});
+Q('input[type=range]').forEach(r=>r.oninput=()=>r.nextElementSibling.value=r.value);
+var x=byID('expB');if(x)x.onclick=()=>fetch('/export').then(r=>r.text()).then(t=>{var e=byID('cfgB');e.value=t;e.select()});
+var im=byID('impF');if(im)im.onsubmit=()=>confirm('Import config and restart?');
+var w=byID('sys.web_pass');if(w){var c=mk('input');c.type='password';c.placeholder='Confirm password';var k=()=>c.setCustomValidity(c.value!=w.value?'Passwords do not match':'');c.oninput=k;w.addEventListener('input',k);w.after(c)}
+)JS";
+#endif
+
+void corium::WebPortal::hParamJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+#if EG_GZ_PARAM_PAGE_JS
+  sendGz(res, FPSTR(HTTP_CT_JS), PARAM_PAGE_JS_GZ, PARAM_PAGE_JS_GZ_LEN);
+#else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(PARAM_PAGE_JS));
+#endif
+}
+
 // out of line, the form's buffers aren't on the stack under commit()
 static __attribute__((noinline)) void param_render_form(EGHttpResponse& res, uint8_t tab) {
   corium::WebPortal::sendf(res, PSTR("<form method=POST action='/param?t=%u'>"), (unsigned)tab);
@@ -533,13 +554,7 @@ static __attribute__((noinline)) void param_render_form(EGHttpResponse& res, uin
   res.sendChunk(F(
     "<hr><div id=fErr class='a ae' style=display:none>"
     "Some fields need fixing - check expanded sections.</div>"
-    "<button type=submit>Save</button>"
-    "<script>document.forms[0].addEventListener('invalid',e=>{"
-    "for(let n=e.target;n;n=n.parentNode)n.tagName=='DETAILS'&&(n.open=1);"
-    "fErr.style.display=''},true);"
-    "function sw(){document.querySelectorAll('[data-w]').forEach(e=>{var c=byID(e.dataset.w);"
-    "if(c)e.hidden=!(e.dataset.m>>(c.type=='checkbox'?+c.checked:+c.value)&1)})}"
-    "addEventListener('change',sw);sw()</script></form>"));
+    "<button type=submit>Save</button></form>"));
 }
 
 static uint8_t param_tab(EGHttpRequest& req) {
@@ -604,6 +619,7 @@ void corium::WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // Backup is the import form only
   if (tab == (uint8_t)corium::P_CAT_BACKUP) param_render_backup(res);
   else                                param_render_form(res, tab);
+  res.sendChunk(F("<script src=/paramjs" CORIUM_CACHE_BUST "></script>"));
   corium::WebPortal::endPage(res);
 }
 

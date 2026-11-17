@@ -46,6 +46,7 @@ class EGPortal {
     enum Join : uint8_t {
       JOIN_IDLE, JOIN_TESTING, JOIN_BACK, JOIN_OK,
       JOIN_NO_SSID, JOIN_BAD_PASS, JOIN_REFUSED, JOIN_NO_REPLY,
+      JOIN_NOT_SAVED,   // joined, the flash write failed
     };
 
     // blocks for one sync scan, then AP + dns + http on 80

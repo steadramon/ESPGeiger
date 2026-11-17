@@ -802,9 +802,8 @@ bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
   return true;
 }
 
-bool EGHttpServer::authorized(const Slot* s) const {
-  const char* p = eghttp_find_header(s->buf, s->headerEnd, PSTR("Authorization:"));
-  if (!p) return false;
+// p past "Authorization:"
+bool EGHttpServer::authorized(const Slot* s, const char* p) const {
   const char* hend = s->buf + s->headerEnd;
   while (p < hend && (*p == ' ' || *p == '\t')) p++;
   size_t vlen = strlen(_authValue);
@@ -813,6 +812,38 @@ bool EGHttpServer::authorized(const Slot* s) const {
          strncasecmp_P(p, PSTR("Basic "), 6) == 0 &&
          strncmp(p + 6, _authValue, vlen) == 0 &&
          p[6 + vlen] == '\r';
+}
+
+// a guessing run: every server's, the right one refused too till it's over
+static uint8_t s_wrong = 0;
+static bool s_braked = false;
+static uint32_t s_braked_ms = 0;
+
+void EGHttpServer::setBrake(bool on) {
+  s_brake = on;
+  s_wrong = 0;
+  s_braked = false;
+}
+
+// no header is the browser's first ask, not a guess
+bool EGHttpServer::loginOk(const Slot* s) const {
+  const char* p = eghttp_find_header(s->buf, s->headerEnd, PSTR("Authorization:"));
+  if (!p) return false;
+  uint32_t now = EGClock::now();
+  if (s_braked && now - s_braked_ms < EGHTTP_BRAKE_MS) return false;
+  s_braked = false;
+  if (authorized(s, p)) {
+    s_wrong = 0;
+    return true;
+  }
+  if (s_brake && ++s_wrong >= EGHTTP_BRAKE_TRIES) {
+    s_wrong = 0;
+    s_braked = true;
+    s_braked_ms = now;
+    say(PSTR("[EGHttp] %u wrong logins, none taken for %u s"), (unsigned)EGHTTP_BRAKE_TRIES,
+        (unsigned)(EGHTTP_BRAKE_MS / 1000));
+  }
+  return false;
 }
 
 // past the spaces, n = its length to the CR
@@ -858,7 +889,7 @@ uint16_t EGHttpServer::refusal(const Slot* s, const EGHttpRequest& req) const {
     say(PSTR("[EGHttp] POST from another site refused"));
     return 403;
   }
-  if (_authEnabled && !authorized(s)) return 401;
+  if (_authEnabled && !loginOk(s)) return 401;
   return argsFit(s, req) ? 0 : 400;
 }
 
@@ -870,6 +901,7 @@ static const char HEAD_401[] PROGMEM =
   "%s\r\n";
 
 bool EGHttpServer::s_sameOrigin = false;
+bool EGHttpServer::s_brake = true;
 
 void EGHttpServer::setAuthHelp(PGM_P text) { _authHelp = text; }
 

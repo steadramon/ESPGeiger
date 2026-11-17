@@ -254,6 +254,34 @@ static void about_modules(EGHttpResponse& res) {
   }
 }
 
+// us, the modules' order
+static void about_peaks(EGHttpResponse& res) {
+  uint8_t count = corium::Registry::count();
+  for (uint8_t i = 0; i < count; i++) {
+    corium::WebPortal::sendf(res, PSTR("%s%u"), (i > 0 ? PSTR(",") : PSTR("")), (unsigned)corium::Registry::peakUs(i));
+  }
+}
+
+#ifdef CORIUM_TRACE
+// crash boots: the last fires, ms before the last
+static void about_trace(EGHttpResponse& res) {
+  const uint32_t* t = corium::Registry::trace();
+  if (!t) return;
+  uint8_t count = corium::Registry::count();
+  uint32_t last = t[corium::Registry::TRACE_N - 1] >> 8;
+  const char* sep = PSTR("");
+  res.sendChunk(F(",\"trace\":["));
+  for (uint8_t i = 0; i < corium::Registry::TRACE_N; i++) {
+    uint8_t slot = t[i] & 0xFF;
+    if (slot >= count) continue;   // empty
+    long ago = (long)((last - (t[i] >> 8)) & 0xFFFFFF);   // 24 bit ms
+    corium::WebPortal::sendf(res, PSTR("%s[\"%s\",%ld]"), sep, corium::Registry::get(slot)->name(), -ago);
+    sep = PSTR(",");
+  }
+  res.sendChunk(F("]"));
+}
+#endif
+
 // what /info leaves out
 static void about_device(EGHttpResponse& res) {
 #ifdef ESP8266
@@ -307,6 +335,12 @@ void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::AppHooks::aboutJson(res);
   res.sendChunk(F("\"modules\":["));
   about_modules(res);
-  res.sendChunk(F("]}"));
+  res.sendChunk(F("],\"peak\":["));
+  about_peaks(res);
+  res.sendChunk(F("]"));
+#ifdef CORIUM_TRACE
+  about_trace(res);
+#endif
+  res.sendChunk(F("}"));
   res.endChunked();
 }

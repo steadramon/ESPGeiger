@@ -66,7 +66,9 @@ namespace Wifi {
   bool hasSavedCreds();
   bool portalAhead();   // first setup: none saved, not offline
   bool apHeld(uint32_t now);   // the fallback AP still up; idle past its time it goes, false
+  uint32_t downMaxS();   // wifi.down_max in s, 0 = never
   CORIUM_NODISCARD bool joinMode();   // wifi.mode back to 0, no commit
+  bool offSet(const char* mod, const char* key);   // that row is wifi.mode and it's now 1
   CORIUM_NODISCARD bool keepJoined(uint32_t restart_ms);   // a test joined: true = it stays; false = offline this boot or not saved
   bool saveBackupCreds();   // before WiFi.begin(); a failed write logs, none to back up = false
   bool clearSavedCreds();   // false = the sdk kept them, logged

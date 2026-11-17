@@ -103,8 +103,10 @@
 #endif
 
 // saved wifi fails or none set: a setup hotspot + web UI, then offline; counting throughout
-#if defined(ESPGEIGER_HW) || defined(ESPGEIGER_LT)
 #define APP_OFFLINE_OK
+// held at boot: the way back from wifi.mode 1 without serial
+#ifdef GEIGER_PUSHBUTTON
+#define CORIUM_BOOT_BUTTON
 #endif
 // a 401's body
 #define APP_AUTH_HELP "Log in as admin with the web password. Forgotten it? " \

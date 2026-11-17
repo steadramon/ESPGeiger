@@ -48,6 +48,7 @@
 extern const char wifiAdvancedHTML[] PROGMEM;
 #ifdef APP_OFFLINE_OK
 static void hHotspot(EGHttpRequest& req, EGHttpResponse& res, void*);
+static void hNotFound(EGHttpRequest& req, EGHttpResponse& res, void*);
 #endif
 
 // CSS + page templates
@@ -160,7 +161,7 @@ static const char HEAD_THEME[] PROGMEM =
   "</title><script src=/theme.js" CORIUM_CACHE_BUST "></script></head><body>"
   "<button class=themetoggle aria-label=\"Toggle theme\" onclick=theme()></button>";
 static const char SAFE_THEME[] PROGMEM =
-  " (safe mode)</title><script>var byID=t=>document.getElementById(t)</script></head><body>";
+  " (safe mode)</title><script>var byID=t=>document.getElementById(t),Q=s=>document.querySelectorAll(s),mk=t=>document.createElement(t)</script></head><body>";
 static const char HEAD_H1[] PROGMEM =
   "<div class=devhead>"
   "<h1><svg viewBox='0 0 512 512' style='width:1.4em;height:1.4em;flex:0 0 auto'>";
@@ -272,6 +273,8 @@ static const char R_STYLE[]    PROGMEM = "/style.css";
 static const char R_FAV_SVG[]  PROGMEM = "/favicon.svg";
 static const char R_FAV_ICO[]  PROGMEM = "/favicon.ico";
 static const char R_THEME[]    PROGMEM = "/theme.js";
+static const char R_PARAMJS[]  PROGMEM = "/paramjs";
+static const char R_UPDATEJS[] PROGMEM = "/updatejs";
 static const char R_GUARD[]    PROGMEM = "/guard";
 static const char R_RESET[]    PROGMEM = "/reset";
 static const char R_ERASE[]    PROGMEM = "/erase";
@@ -326,7 +329,9 @@ void corium::WebPortal::begin(uint16_t port) {
     {R_VARS,     &corium::WebPortal::hVars,           R::GET},
     {P_PARAM,    &corium::WebPortal::hParam,          R::GET},
     {P_PARAM,    &corium::WebPortal::hParam,          R::POST},
+    {R_PARAMJS,  &corium::WebPortal::hParamJs,        R::GET},
     {P_UPDATE,   &corium::WebPortal::hUpdateForm,     R::GET},
+    {R_UPDATEJS, &corium::WebPortal::hUpdateJs,       R::GET},
     {P_UPDATE,   &corium::WebPortal::hUpdateDone,     R::POST},
     {R_PROGRESS, &corium::WebPortal::hUpdateProgress, R::GET},
     {R_NETWORK,  &corium::WebPortal::hWifi,           R::GET},
@@ -346,6 +351,7 @@ void corium::WebPortal::begin(uint16_t port) {
   _http.onUpload(FPSTR(P_IMPORT), &corium::WebPortal::hImportBody, nullptr);
 #ifdef APP_OFFLINE_OK
   _http.on(F("/hotspot"), R::POST, hHotspot);
+  _http.onNotFound(hNotFound, nullptr);
 #endif
 
   if (!safe) corium::AppHooks::routes(_http);
@@ -374,6 +380,7 @@ void corium::WebPortal::applyAuthFromPrefs() {
   p->_http.setBasicAuth(F("admin"), cur, F(THING_NAME));
   p->_http.setAuthHelp(corium::AUTH_HELP);
   p->_http.setSameOrigin(corium::Prefs::getBool("sys", corium::K_ORIGIN));
+  p->_http.setBrake(corium::Prefs::getBool("sys", corium::K_BRAKE));
   static int8_t s_auth = -1;
   int8_t auth = *cur ? 1 : 0;
   if (auth != s_auth) {
@@ -510,7 +517,7 @@ void corium::WebPortal::hFavicon(EGHttpRequest& req, EGHttpResponse& res, void*)
 
 #if !EG_GZ_THEME_JS
 // live(url or fn, ms, fn, first): fn(text), null on error, returns the next ms or nothing; gives kick(ms)
-static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t);
+static const char THEME_JS[] PROGMEM = R"JS(var byID=t=>document.getElementById(t),Q=s=>document.querySelectorAll(s),mk=t=>document.createElement(t);
 !function(){
 var d=document.documentElement,LS=localStorage;
 window.theme=()=>{var t=d.dataset.theme=='dark'?'light':'dark';
@@ -598,7 +605,7 @@ void corium::WebPortal::hGuard(EGHttpRequest& req, EGHttpResponse& res, void*) {
 void corium::WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   s_factory_reset = true;
   corium::WebPortal::beginPage(res, F("Factory reset"));
-  res.sendChunk(F("<p>All settings cleared. Device is restarting and will return to the setup portal.</p>"));
+  res.sendChunk(F("<p>Clearing all settings. Device is restarting into setup.</p>"));
   corium::WebPortal::endRestartPage(res);
 }
 
@@ -606,12 +613,13 @@ void corium::WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void
   // back to DHCP for the setup AP, a net row that didn't load goes too
   corium::Log::console(PSTR("WebPortal: Erasing WiFi credentials"));
   corium::Prefs::reset("net");
-  if (!corium::Prefs::commit()) {
+  // hotspot mode too, else it boots back into it
+  if (!corium::Wifi::joinMode() || !corium::Prefs::commit()) {
     not_saved_page(res, F("Erase WiFi"));
     return;
   }
   corium::WebPortal::beginPage(res, F("Erase WiFi"));
-  res.sendChunk(F("<p>WiFi credentials erased and network reset to DHCP. Restarting into the setup portal.</p>"));
+  res.sendChunk(F("<p>Erasing WiFi credentials, network back to DHCP. Restarting into setup.</p>"));
   corium::WebPortal::endPage(res);
   s_erase_creds = true;
   corium::WebPortal::requestRestart();
@@ -678,7 +686,8 @@ static void wifi_render_hotspot(EGHttpResponse& res) {
   res.sendChunk(F("<details style='margin-top:1.5em'><summary>Setup hotspot</summary>"
                   "<form method=POST action=/hotspot>"
                   "<p class=muted>If the saved network can't be joined, this device opens its own "
-                  "Wi-Fi with the setup page and keeps counting.</p>"
+                  "Wi-Fi and keeps counting. Connect to it to reach the usual web pages and set a "
+                  "new network here.</p>"
                   "<label for=hsh>Stays up with nobody on it (minutes, 0 = always)</label>"
                   "<input id=hsh name=m type=number min=0 max=1440 value='"));
   corium::WebPortal::sendf(res, PSTR("%u"), (unsigned)corium::Prefs::getUInt("wifi", K_HS_HOLD));
@@ -698,6 +707,19 @@ static void hHotspot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (!ok) corium::WebPortal::sendNotSaved(res);
   else res.sendChunk(FPSTR(HS_SAVED_BODY));
   corium::WebPortal::endPage(res);
+}
+
+// hotspot up: any host or path goes to /network, the phone's setup popup
+static void hNotFound(EGHttpRequest&, EGHttpResponse& res, void*) {
+  if (corium::Wifi::state() != corium::Wifi::HOTSPOT) {
+    res.send(404, FPSTR(HTTP_CT_PLAIN), F("Not Found"));
+    return;
+  }
+  char ip[16];
+  corium::Wifi::formatIP(ip, sizeof(ip));
+  char loc[32];
+  snprintf_P(loc, sizeof(loc), PSTR("http://%s/network"), ip);
+  res.redirect(loc);
 }
 #endif
 

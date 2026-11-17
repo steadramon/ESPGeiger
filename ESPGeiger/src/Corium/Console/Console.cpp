@@ -24,6 +24,7 @@
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/BootGuard.h"
+#include "Corium/System/BootButton.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
 
 corium::Console console;
@@ -64,7 +65,7 @@ static bool committed() {
 // dhcp too, as /erase: an old static ip is lost on the new network
 static void reset_wifi() {
   corium::Prefs::reset("net");
-  if (!committed()) return;
+  if (!corium::Wifi::joinMode() || !committed()) return;
   corium::Wifi::dropNetBackup();
   corium::Wifi::clearSavedCreds();
   reboot();
@@ -77,6 +78,26 @@ static void reset_net() {
   if (!committed()) return;
   corium::Wifi::dropNetBackup();
   reboot();
+}
+
+static bool s_web = false;   // run(), not the serial line
+
+#ifdef CORIUM_BOOT_BUTTON
+static const char WIFI_BACK[] PROGMEM = "WiFi: Off after restart, undo: set wifi.mode 0 (serial) or button %ds at boot (reset)";
+#else
+static const char WIFI_BACK[] PROGMEM = "WiFi: Off after restart, undo: set wifi.mode 0";
+#endif
+
+// no button: once off only serial brings it back
+static bool off_refused(bool off, const char* mod) {
+#ifndef CORIUM_BOOT_BUTTON
+  if (off && s_web) {
+    corium::Prefs::revert(mod);
+    corium::Log::console(PSTR("Rejected: wifi.mode 1 needs serial"));
+    return true;
+  }
+#endif
+  return false;
 }
 
 // <module>.<key> of a known pref
@@ -136,10 +157,13 @@ static void cmd_set() {
     corium::Log::console(PSTR("Rejected: %s.%s %s"), mod, key, why ? why : PSTR("validation failed"));
     return;
   }
+  bool off = corium::Wifi::offSet(mod, key);
+  if (off_refused(off, mod)) return;
   if (!committed()) return;
   const char* ok = (a.p.flags & corium::P_SENSITIVE) ? PSTR("OK: %s.%s set") : PSTR("OK: %s.%s=%s");
   corium::Log::console(ok, mod, key, corium::Prefs::getString(mod, key));
   if (corium::Prefs::restartPending()) corium::Log::console(corium::H_RBA);
+  if (off) corium::Log::console(WIFI_BACK, CORIUM_BOOT_BUTTON_RESET_S);
 }
 
 // back to defaults, never reboots or wipes
@@ -316,7 +340,10 @@ bool corium::Console::run(const char* text, size_t len) {
   char* secret = secret_at(l.buf);
   if (secret) corium::Log::console(PSTR("> %.*s ***"), (int)(secret - l.buf), l.buf);
   else corium::Log::console(PSTR("> %s"), l.buf);
-  return exec(l);
+  s_web = true;
+  bool found = exec(l);
+  s_web = false;
+  return found;
 }
 
 void corium::Console::edit(corium::ConsoleLine& l, Print& io, char c) {

@@ -177,10 +177,11 @@ void corium::DeviceInfo::factoryReset() {
   if (!corium::KeyStore::clear(WEB_PASS_SLOT)) {
     corium::Log::console(PSTR("Factory reset: Web password backup kept"));   // the old login comes back
   }
+  // before the prefs, a cut after them would rejoin the old network wide open
+  corium::Wifi::clearSavedCreds();
   corium::Prefs::resetAll();
   // kept rows back on flash now
   if (!corium::Prefs::commit(false)) corium::Log::console(PSTR("Factory reset: Not saved"));
-  corium::Wifi::clearSavedCreds();
 }
 
 static const char* s_board = nullptr;

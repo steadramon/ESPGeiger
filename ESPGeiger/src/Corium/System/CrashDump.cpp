@@ -23,6 +23,7 @@
 #include "RtcMap.h"
 #include "DeviceInfo.h"
 #include "AppHooks.h"
+#include "Corium/Module/Registry.h"
 #include <stdint.h>
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
@@ -88,6 +89,7 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
     snap.depc     = rst_info->depc;
   }
   snap.sp       = stack;
+  snap.in       = corium::Registry::firing();
 
   uint32_t lo = stack;
   uint32_t hi = stack_end;

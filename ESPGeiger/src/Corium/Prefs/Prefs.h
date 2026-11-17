@@ -179,6 +179,7 @@ struct PrefGroup {
 
 // Shared keys
 extern const char K_BACKOFF[];
+extern const char K_BRAKE[];
 extern const char K_DNS[];
 extern const char K_ESPOTA[];
 extern const char K_GW[];

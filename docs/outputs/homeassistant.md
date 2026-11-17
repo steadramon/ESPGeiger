@@ -60,8 +60,8 @@ Appear under the device's **Diagnostic** section in Home Assistant, not the main
 
 | Value | Unit | Description | Example | Publish Interval |
 |---|---|---|---|---|
-| `ESPGeiger-<device_id> tick` | µs | Smoothed device-load figure in µs (time in the once-per-second housekeeping pass) | `953` | 60 s |
-| `ESPGeiger-<device_id> tick max` | µs | Peak `tick` observed in last 60 s | `4870` | 60 s |
+| `ESPGeiger-<device_id> Tick` | µs | Smoothed device-load figure in µs (time in the once-per-second housekeeping pass) | `953` | 60 s |
+| `ESPGeiger-<device_id> Max Tick` | µs | | | |
 | `ESPGeiger-<device_id> LPS` | 1/s | Loop iterations per second | `58733` | 60 s |
 | `ESPGeiger-<device_id> RSSI` | dBm | WiFi signal strength (dBm) | `-37` | 60 s |
 | `ESPGeiger-<device_id> Uptime` | s | Seconds since boot | `120` | 60 s |

@@ -36,7 +36,7 @@ Some pins save with a warning shown after the save:
 
 ## System Settings
 
-<!-- gen:prefs sys -->
+<!-- gen:prefs sys hidden=origin -->
 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
@@ -74,6 +74,14 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | Serial type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
 | RX pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
 | TX pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
+| Tube model | `counter.geiger_model` | String (32) | varies by build | not test builds | GM tube model name (e.g. SBM-20, J305). Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
+| α Alpha | `counter.tube_alpha` | Boolean | `0` off | not test builds | The tube detects alpha radiation. Informational; passed to upstream aggregators. |
+| β Beta | `counter.tube_beta` | Boolean | `0` off | not test builds | The tube detects beta radiation. Informational. |
+| γ Gamma | `counter.tube_gamma` | Boolean | `0` off | not test builds | The tube detects gamma radiation. Informational. |
+| Dose ratio | `counter.ratio` | Float 1-100000 | `151.0` | all | CPM to uSv/h conversion factor |
+| Warning CPM | `counter.warn` | Int 0-9999 | `50` | all | CPM threshold for warning state |
+| Alert CPM | `counter.alert` | Int 0-9999 | `100` | all | CPM threshold for alert state |
+| Track lifetime | `counter.life_en` | Boolean | `1` on | all | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
 | Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Interrupt has the debounce dead time, reads low at high CPM. Reboot. |
 | PCNT filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. None suits modules that drive the line both ways; a pull-up can hold some (the Cajoe IOT-GM v1.1) high so no pulse counts. Pull-up is for open-drain outputs, and keeps an unconnected pin quiet. Pull-down is for active-high modules without their own idle pull. |
@@ -81,15 +89,7 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | Pulse width | `counter.pulse_width_us` | Int 10-2000 | `500` | `test`, `testpulse` | Width of the simulated pulse on the TX pin, in microseconds. |
 | CPM window (CPM-only counters) | `counter.cpm_window` | Int 1-60 | `30` | serial builds | Applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
 | CPM mode | `counter.cpm_mode` | `0` Fast start, `1` Live ring, `2` Fixed 60s, `3` Bucket, `4` Adaptive fast | `3` Bucket | all | How the 1-minute CPM is computed. See [CPM Calculation Mode](/configuration/cpm-mode). |
-| Tube model | `counter.geiger_model` | String (32) | varies by build | not test builds | GM tube model name (e.g. SBM-20, J305). Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
-| α Alpha | `counter.tube_alpha` | Boolean | `0` off | not test builds | The tube detects alpha radiation. Informational; passed to upstream aggregators. |
-| β Beta | `counter.tube_beta` | Boolean | `0` off | not test builds | The tube detects beta radiation. Informational. |
-| γ Gamma | `counter.tube_gamma` | Boolean | `0` off | not test builds | The tube detects gamma radiation. Informational. |
 | Tube dead time | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | GM tube dead time in microseconds, used to compensate the rate at high CPS. `0` disables. Set from the tube's datasheet: SBM-20 = 190; the J305 and M4011 datasheets give none (see [Counter](/configuration/counter)). |
-| Dose ratio | `counter.ratio` | Float 1-100000 | `151.0` | all | CPM to uSv/h conversion factor |
-| Warning CPM | `counter.warn` | Int 0-9999 | `50` | all | CPM threshold for warning state |
-| Alert CPM | `counter.alert` | Int 0-9999 | `100` | all | CPM threshold for alert state |
-| Track lifetime | `counter.life_en` | Boolean | `1` on | all | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
 
 <!-- /gen -->
 
@@ -317,6 +317,8 @@ Changes take effect on the next restart.
 | `phy_mode` | `wifi.phy_mode` | Int 0-3 | `0` | Wi-Fi PHY lock-down. `0` lets the device negotiate (recommended). `1` = 802.11b only, `2` = b/g, `3` = b/g/n. Use this only as a workaround for routers that fail to negotiate higher rates cleanly. |
 | `mode` | `wifi.mode` | Int 0-2 | `0` | `0` = join the saved network, `1` = no Wi-Fi at all, `2` = its own hotspot with the web UI (see [Serial](/output/serial#its-own-hotspot)). |
 | `ap_hide` | `wifi.ap_hide` | Boolean | `0` off | Hide the hotspot name in `wifi.mode` `2`. |
+| `down_max` | `wifi.down_max` | Int 0-1440 | `60` | Minutes the saved network can be gone before the device restarts to try again. It keeps retrying every 30 s meanwhile. `0` never restarts for an outage. |
+| `hs_hold` | `wifi.hs_hold` | Int 0-1440 | `10` | Minutes the setup hotspot stays up with no phone or laptop on it, after the saved network fails. Then the hotspot turns off and the device keeps counting offline. `0` keeps the hotspot up. |
 
 <!-- /gen -->
 
@@ -341,4 +343,12 @@ Radmon, GMC, ThingSpeak and Webhook back off when a send fails: after two failur
 
 ```
 set sys.backoff 900
+```
+
+## Login brake
+
+With a web password set, 5 wrong logins in a row stop all logins for 10 seconds, the right password included, so a script can't try passwords quickly. The log says when it starts. A right login, a restart or a settings save starts the count again. Hidden `sys.brake` turns it off:
+
+```
+set sys.brake 0
 ```

@@ -82,6 +82,12 @@
 #ifndef EGHTTP_SAY_GAP_MS
   #define EGHTTP_SAY_GAP_MS 1000   // error lines, the rest counted
 #endif
+#ifndef EGHTTP_BRAKE_TRIES
+  #define EGHTTP_BRAKE_TRIES 5   // wrong logins in a row
+#endif
+#ifndef EGHTTP_BRAKE_MS
+  #define EGHTTP_BRAKE_MS 10000   // then every login refused this long
+#endif
 #ifndef EGHTTP_REPLIES_A_TICK
   #define EGHTTP_REPLIES_A_TICK 3   // each holds the loop for its render
 #endif
@@ -199,6 +205,8 @@ class EGHttpServer {
     void setAuthHelp(PGM_P text);
     // every server: a POST whose Origin isn't its Host gets 403; no Origin (curl, scripts) passes
     static void setSameOrigin(bool on) { s_sameOrigin = on; }
+    // every server: EGHTTP_BRAKE_TRIES wrong logins, then EGHTTP_BRAKE_MS of 401s, the right one too
+    static void setBrake(bool on);   // and starts clean
 
     // capped at EGHTTP_MAX_CLIENTS
     void setMaxClients(uint8_t n) { _maxClients = n < EGHTTP_MAX_CLIENTS ? n : EGHTTP_MAX_CLIENTS; }
@@ -252,6 +260,7 @@ class EGHttpServer {
   private:
     static LogFn s_log;
     static bool s_sameOrigin;
+    static bool s_brake;
     static void say(PGM_P fmt, ...);
     struct Route {
       PGM_P path;
@@ -335,7 +344,8 @@ class EGHttpServer {
     inline void claimChunkAcc(Slot* s);
     void dropChunkAcc(Slot* s);
     bool readRequest(Slot* s, EGHttpRequest& req);
-    inline bool authorized(const Slot* s) const;
+    inline bool authorized(const Slot* s, const char* p) const;
+    inline bool loginOk(const Slot* s) const;
     inline bool crossSite(const Slot* s) const;
     inline bool argsFit(const Slot* s, const EGHttpRequest& req) const;
     uint16_t refusal(const Slot* s, const EGHttpRequest& req) const;   // 0, 403, 401 or 400

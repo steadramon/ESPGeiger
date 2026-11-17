@@ -22,18 +22,13 @@
 #include <Arduino.h>
 #include "App/AppConfig.h"
 
-// 0, ssid len, SSID, psk len, PSK
+// File layout: 0, ssid len, SSID, psk len, PSK
 extern const char WIFI_BACKUP_P[] PROGMEM;
 #define WIFI_BACKUP_PATH FPSTR(WIFI_BACKUP_P)
 
 // static_ip\nip\ngw\nsn\ndns\n
 extern const char NET_BACKUP_P[] PROGMEM;
 #define NET_BACKUP_PATH FPSTR(NET_BACKUP_P)
-
-#ifndef WIFI_DOWN_MAX_S
-#define WIFI_DOWN_MAX_S 3600
-#endif
-static const uint32_t WIFI_OFFLINE_MAX_MS = WIFI_DOWN_MAX_S * 1000UL;
 
 namespace corium {
 namespace Wifi {

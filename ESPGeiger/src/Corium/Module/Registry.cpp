@@ -23,6 +23,8 @@
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Clock.h"
 #include "Corium/System/IsrLock.h"
+#include <new>
+#include <string.h>
 #ifdef ESP32
 #include <esp_attr.h>
 #endif
@@ -43,6 +45,16 @@ uint8_t corium::Registry::_firing = IN_NONE;
 #endif
 #ifdef CORIUM_CRASH_MARK
 uint8_t corium::Registry::_crashed_in = IN_NONE;
+#endif
+#ifdef CORIUM_TRACE
+#ifdef ESP32
+__NOINIT_ATTR uint32_t corium::Registry::_trace[TRACE_N];   // keepTrace reads it first
+__NOINIT_ATTR uint8_t corium::Registry::_trace_at;
+#else
+uint32_t corium::Registry::_trace[TRACE_N];
+uint8_t corium::Registry::_trace_at;
+#endif
+uint32_t* corium::Registry::_traced = nullptr;
 #endif
 corium::IsrLock::Bits corium::Registry::_posted;
 bool corium::Registry::_safe_mode = false;
@@ -114,6 +126,9 @@ inline void corium::Registry::fire_slot(uint8_t idx, unsigned long now) {
   if (s.period_ms) s.next_due = now + s.period_ms;
   else s.flags &= ~FLAG_ARMED;
   _firing = idx;
+#ifdef CORIUM_TRACE
+  _trace[_trace_at++ % TRACE_N] = ((uint32_t)now << 8) | idx;
+#endif
 #ifdef LOOP_PROFILE
   unsigned long t0 = micros();
   s.module->loop(now);
@@ -170,6 +185,7 @@ inline void corium::Registry::walk(unsigned long now) {
   uint32_t t0 = micros();
   uint32_t fired = 0;
 
+  uint32_t t = t0;   // after the last fire
   uint8_t k = 0;
   while (k < _due_count) {
     uint8_t idx = _due_order[k];
@@ -181,12 +197,16 @@ inline void corium::Registry::walk(unsigned long now) {
       s.next_due = now + retry_in(s.period_ms);
     } else {
       fired |= 1u << idx;
+      uint32_t a = micros();
       fire_slot(idx, now);
+      t = micros();
+      uint32_t d = t - a;
+      if (d > s.peak_us) s.peak_us = d > 0xFFFF ? 0xFFFF : (uint16_t)d;
     }
     if (_resort) { rebuild_due(); k = 0; }
     else if (sift_due(k) == k) k++;
     // the rest next pass
-    if (fired && (uint32_t)(micros() - t0) >= CORIUM_LOOP_BUDGET_US) break;
+    if (fired && t - t0 >= CORIUM_LOOP_BUDGET_US) break;
   }
 }
 
@@ -383,6 +403,10 @@ void corium::Registry::sort_by_priority() {
 // cached, no virtual calls in loopAll(); nothing armed till a module asks
 void corium::Registry::preWifiAll() {
   _firing = IN_NONE;   // no crashBoot, junk stays out
+#ifdef CORIUM_TRACE
+  memset(_trace, 0xFF, sizeof(_trace));   // slot IN_NONE = empty
+  _trace_at = 0;
+#endif
   sort_by_priority();
 
   uint32_t now = corium::fastMillis();
@@ -396,6 +420,7 @@ void corium::Registry::preWifiAll() {
     s.period_ms = 0;
     s.topics = 0;
     s.events = 0;
+    s.peak_us = 0;
     if (_safe_mode && !m->coreModule()) {
       s.flags = FLAG_QUARANTINED | FLAG_OFF;
       continue;
@@ -417,8 +442,8 @@ void corium::Registry::setSafeMode(bool on) {
 
 #ifdef CORIUM_CRASH_MARK
 // noinit holds junk after power on, only a crash reset is trusted
-void corium::Registry::crashBoot(bool crashed) {
-  _crashed_in = crashed ? _firing : IN_NONE;
+void corium::Registry::crashBoot(uint8_t in) {
+  _crashed_in = in;
 }
 
 // slots are sorted the same each boot
@@ -429,6 +454,21 @@ const char* corium::Registry::crashedIn() {
   return nullptr;
 }
 #endif
+
+#ifdef CORIUM_TRACE
+// oldest first; heap on crash boots only
+void corium::Registry::keepTrace() {
+  if (!_traced) _traced = new (std::nothrow) uint32_t[TRACE_N];
+  if (!_traced) return;
+  for (uint8_t i = 0; i < TRACE_N; i++) _traced[i] = _trace[(_trace_at + i) % TRACE_N];
+}
+
+const uint32_t* corium::Registry::trace() { return _traced; }
+#endif
+
+uint16_t corium::Registry::peakUs(uint8_t idx) {
+  return idx < _count ? _slots[idx].peak_us : 0;
+}
 
 bool corium::Registry::quarantined(corium::Module* m) {
   if (!_safe_mode || !m) return false;

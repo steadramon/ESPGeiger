@@ -93,9 +93,11 @@ class WebPortal {
     static void hWebCmd(EGHttpRequest&, EGHttpResponse&, void*);
     static void hEraseWifi(EGHttpRequest&, EGHttpResponse&, void*);
     static void hParam(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hParamJs(EGHttpRequest&, EGHttpResponse&, void*);
     static bool hParamBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                            const char*, size_t, void*);
     static void hUpdateForm(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hUpdateJs(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateDone(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateProgress(EGHttpRequest&, EGHttpResponse&, void*);
     static bool hUpdateBody(EGHttpRequest&, EGHttpServer::BodyEvent,

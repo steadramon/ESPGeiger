@@ -17,6 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "WebPortal.h"
+#include "UPDATE_PAGE_JS.gz.h"
+#include "Corium/System/BootGuard.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Util/Bytes.h"
@@ -44,7 +46,11 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 </form>
 <progress id=uf_p style="width:100%;margin-top:.6em;display:none" value=0 max=1></progress>
 <p id=uf_st style="margin-top:.6em"></p>
-<script>
+)HTML";
+
+// the full uploader (file check, env match, progress, reload countdown): normal mode, gzipped at /updatejs
+#if !EG_GZ_UPDATE_PAGE_JS
+extern const char UPDATE_PAGE_JS[] PROGMEM = R"JS(
 (function(){
 var D=window._dev||{},F=byID('uf_file'),B=byID('uf_btn'),C=byID('uf_check'),S=byID('uf_st'),P=byID('uf_p');
 function sC(l,h){C.style.display='block';C.className='a a'+l;C.innerHTML=h}
@@ -102,8 +108,15 @@ fetch('/update/progress',{cache:'no-store'}).then(r=>r.json()).then(j=>fl(j.err)
 x.send(f);
 });
 })();
-</script>
-)HTML";
+)JS";
+#endif
+
+// safe mode: a minimal uploader, inline and self-contained (no /updatejs fetch). The device
+// still gates the image, so dropping the client-side checks here is safe.
+static const char UPDATE_SAFE_JS[] PROGMEM = R"JS(<script>
+byID('uf_btn').disabled=false;
+byID('uf').onsubmit=function(e){e.preventDefault();var f=byID('uf_file').files[0];if(!f)return;var B=byID('uf_btn'),S=byID('uf_st');B.disabled=true;S.textContent='Uploading '+f.size+' bytes...';var x=new XMLHttpRequest();x.open('POST','/update');x.setRequestHeader('Content-Type','application/octet-stream');x.onload=function(){S.textContent=x.responseText||'Done';if(x.status==200)setTimeout(function(){location.href='/'},3000)};x.onerror=function(){B.disabled=false;S.textContent='Upload failed'};x.send(f)};
+</script>)JS";
 
 // BUILD_ENV alone matches other variants
 // keep it used, gc-sections drops it
@@ -117,10 +130,24 @@ static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
 
 void corium::WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("Update"));
-  sendf(res, PSTR("<script>window._dev={env:\"" BUILD_ENV "\",tag:\"%s\",rs:%u" OTA_OWN "};</script>"),
-    EG_ENV_TAG, (unsigned)FLASH_COUNTDOWN_SECS);
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
+  if (corium::BootGuard::safeMode()) {
+    res.sendChunk(FPSTR(UPDATE_SAFE_JS));   // minimal inline uploader, no asset fetch
+  } else {
+    sendf(res, PSTR("<script>window._dev={env:\"" BUILD_ENV "\",tag:\"%s\",rs:%u" OTA_OWN "};</script>"
+                    "<script src=/updatejs" CORIUM_CACHE_BUST "></script>"),
+      EG_ENV_TAG, (unsigned)FLASH_COUNTDOWN_SECS);
+  }
   corium::WebPortal::endPage(res);
+}
+
+void corium::WebPortal::hUpdateJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+#if EG_GZ_UPDATE_PAGE_JS
+  sendGz(res, FPSTR(HTTP_CT_JS), UPDATE_PAGE_JS_GZ, UPDATE_PAGE_JS_GZ_LEN);
+#else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(UPDATE_PAGE_JS));
+#endif
 }
 
 // one upload at a time
@@ -211,6 +238,10 @@ static bool ota_entry_ok(uint32_t entry) {
   return entry >= ENTRY_LO && entry < ENTRY_HI;
 }
 
+// every chip's image starts so; the 8266's end() takes gzip too, but its bytes 4-7 never pass the entry check
+static constexpr uint8_t IMAGE_MAGIC = 0xE9;
+static const char W_IMAGE[] PROGMEM = "image check failed";
+
 #ifdef CORIUM_OTA_SAME_ENV
 // '<' only starts the tag, a miss goes back to 0 or 1
 static void ota_scan(const uint8_t* p, size_t len) {
@@ -249,11 +280,12 @@ static void ota_data(const char* chunk, size_t len) {
     if (s_ota.head_n < sizeof(s_ota.head)) return;
     const uint8_t* h = s_ota.head;
     uint32_t entry = rdLe32(h + 4);   // image header bytes 4-7
-    if (!ota_entry_ok(entry)) {
-      corium::Log::console(PSTR("OTA: REFUSING wrong-platform bin (entry=0x%08x)"),
-                   (unsigned)entry);
+    // what end() would refuse, before a byte is written
+    if (h[0] != IMAGE_MAGIC || !ota_entry_ok(entry)) {
+      corium::Log::console(PSTR("OTA: REFUSING bin (magic=0x%02x entry=0x%08x)"),
+                   (unsigned)h[0], (unsigned)entry);
       Update.end(false);
-      ota_fail(PSTR("wrong platform"));
+      ota_fail(h[0] != IMAGE_MAGIC ? W_IMAGE : PSTR("wrong platform"));
       return;
     }
     if (!ota_write(h, sizeof(s_ota.head))) return;
@@ -294,7 +326,7 @@ static void ota_end() {
     corium::WebPortal::requestRestart();
   } else {
     corium::Log::console(PSTR("OTA: End failed err=%u"), Update.getError());
-    ota_fail(PSTR("image check failed"));
+    ota_fail(W_IMAGE);
   }
 }
 

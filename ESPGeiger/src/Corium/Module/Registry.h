@@ -42,9 +42,13 @@ static_assert(corium::Module::TOPIC_SENT < CORIUM_TOPIC_APP, "Corium topics sit 
 #define WIFI_SETTLE_MS 3000
 #endif
 
-// esp32 noinit RAM keeps what the loop was in through a crash reset
-#if defined(ESP32) && !defined(CORIUM_CRASH_MARK)
+// what the loop was in, through a crash reset: esp32 noinit RAM, 8266 the crash dump
+#if (defined(ESP32) || defined(ESP8266)) && !defined(CORIUM_CRASH_MARK)
 #define CORIUM_CRASH_MARK
+#endif
+// the last fires before a crash: noinit RAM, so not the 8266 (its RTC words are full)
+#if defined(CORIUM_CRASH_MARK) && !defined(ESP8266)
+#define CORIUM_TRACE
 #endif
 
 namespace corium {
@@ -81,15 +85,23 @@ class Registry {
     // Corium's own loop work, between modules
     static constexpr uint8_t IN_TCP = 0xFD, IN_PORTAL = 0xFE, IN_NONE = 0xFF;
 #ifdef CORIUM_CRASH_MARK
-    // before preWifiAll (it clears), a crash reset keeps where the loop was
-    static void crashBoot(bool crashed);
+    // before preWifiAll (it clears): where the loop was at a crash reset, IN_NONE = not known
+    static void crashBoot(uint8_t in);
     static const char* crashedIn();   // module name, "tcp", "portal", nullptr = not known
     static inline void in(uint8_t what) { _firing = what; }
+    static inline uint8_t firing() { return _firing; }   // the crash callback, boot
 #else
-    static inline void crashBoot(bool) {}
+    static inline void crashBoot(uint8_t) {}
     static inline const char* crashedIn() { return nullptr; }
     static inline void in(uint8_t) {}
 #endif
+#ifdef CORIUM_TRACE
+    static constexpr uint8_t TRACE_N = 16;
+    static void keepTrace();   // crash boots, before preWifiAll
+    static const uint32_t* trace();   // TRACE_N, oldest first, ms << 8 | slot, slot IN_NONE = empty; nullptr = none
+#endif
+
+    static uint16_t peakUs(uint8_t idx);   // longest loop() since boot, saturates
 
     static uint8_t count();
     static Module* get(uint8_t idx);
@@ -111,6 +123,7 @@ class Registry {
       uint32_t period_ms;        // 0 = none
       uint16_t topics;           // on()
       uint16_t events;           // emitted, not taken yet
+      uint16_t peak_us;          // in the padding
       uint8_t flags;
 #ifdef LOOP_PROFILE
       uint32_t max_loop_us;      // 32 bit, can pass 65 ms
@@ -131,6 +144,11 @@ class Registry {
     static uint8_t _firing;       // slot in its loop, IN_*, 0xFF = none
 #ifdef CORIUM_CRASH_MARK
     static uint8_t _crashed_in;   // _firing at a crash reset
+#endif
+#ifdef CORIUM_TRACE
+    static uint32_t _trace[TRACE_N];
+    static uint8_t _trace_at;
+    static uint32_t* _traced;     // crash boots only
 #endif
     static corium::IsrLock::Bits _posted;   // bit per slot
     static void rebuild_due();

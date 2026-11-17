@@ -62,6 +62,7 @@ static_assert(MAX_ROWS == corium::PREFS_MAX_ROWS, "the file size counts every ro
 static constexpr uint8_t MANY  = 0xFF;   // more than one row, only a reset clears it
 
 const char corium::K_BACKOFF[]      PROGMEM = "backoff";
+const char corium::K_BRAKE[]        PROGMEM = "brake";
 const char corium::K_DNS[]          PROGMEM = "dns";
 const char corium::K_ESPOTA[]       PROGMEM = "espota";
 const char corium::K_GW[]           PROGMEM = "gw";
