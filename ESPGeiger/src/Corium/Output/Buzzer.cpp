@@ -33,10 +33,10 @@ constexpr rmt_channel_t CH = RMT_CHANNEL_0;
 
 int s_pin = -1;
 corium::Buzzer::Limits s_lim = corium::Buzzer::DEFAULTS;
-// elapsed, not due times: micros() wraps
+// Elapsed times rather than due times, since micros() wraps
 volatile uint32_t s_sent_at = 0;
-volatile uint32_t s_busy_us = 0;   // sound length, watch() reads both
-uint32_t s_wait_us = 0;            // budget
+volatile uint32_t s_busy_us = 0;   // how long the sound lasts, watch() reads both of these
+uint32_t s_wait_us = 0;            // quiet budget before the next sound
 corium::Buzzer::Run s_run;
 volatile bool s_fault = false;
 uint8_t s_high_n = 0;
@@ -70,7 +70,7 @@ rmt_item32_t cycle(uint32_t high, uint32_t low) {
   return it;
 }
 
-// esp_timer task
+// Runs on the esp_timer task
 void watch(void*) {
   if (micros() - s_sent_at < s_busy_us + 1000 || !gpio_get_level((gpio_num_t)s_pin)) {
     s_high_n = 0;
@@ -86,8 +86,10 @@ void watch(void*) {
 
 }
 
+const char corium::Buzzer::NAME[] PROGMEM = "Buzzer";
+
 bool corium::Buzzer::begin(int pin, Limits lim) {
-  if (corium::PinSafety::claimOutput(pin, PSTR("Buzzer"))) return false;
+  if (corium::PinSafety::claimOutput(pin, NAME)) return false;
   rmt_config_t c = RMT_DEFAULT_CONFIG_TX((gpio_num_t)pin, CH);
   c.clk_div = 80;   // 1 us
   c.tx_config.idle_level = RMT_IDLE_LEVEL_LOW;
@@ -95,7 +97,7 @@ bool corium::Buzzer::begin(int pin, Limits lim) {
   if (rmt_config(&c) != ESP_OK || rmt_driver_install(CH, 0, 0) != ESP_OK) return false;
   const esp_timer_create_args_t w = { .callback = &watch, .name = "buzzer" };
   if (esp_timer_create(&w, &s_watch) != ESP_OK) return false;
-  // read the pad back for watch(), routing stays on the RMT
+  // Lets watch() read the pad back, the output stays routed to the RMT
   PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[pin]);
   s_lim = fit(lim);
   s_pin = pin;
@@ -126,7 +128,7 @@ bool corium::Buzzer::burst(uint32_t now_us, uint16_t hz, uint8_t cycles) {
   return true;
 }
 
-// the player keeps the budget for tones, run cap here
+// The player keeps the budget for tones, only the run cap is applied here
 bool corium::Buzzer::tone(uint32_t now_us, uint16_t hz, uint16_t cycles, uint8_t duty_pct) {
   if (!ready(now_us) || !cycles) return false;
   if (cycles > MAX_CYCLES) cycles = MAX_CYCLES;

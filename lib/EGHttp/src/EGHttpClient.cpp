@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGHttpClient.h"
+#include "EGHttpStrings.h"
 #include <EGClock.h>
 
 #include <stdlib.h>
@@ -25,9 +26,9 @@
 #include "RespParse.h"
 #include "UrlParse.h"
 
-static const bool PULL = EGHTTP_SINK || EGHTTP_REDIRECTS;   // only those read
+static const bool PULL = EGHTTP_SINK || EGHTTP_REDIRECTS;   // only these read the socket themselves
 
-// the stack's wakes send; pushed, its bytes and its close end the reply too
+// The stack's connect and sent callbacks drive the send. When pushed, its data and close finish the reply too
 EGHttpClient::EGHttpClient() {
   _tcp.onConnect([](void* p) { ((EGHttpClient*)p)->send_more(); }, this);
   _tcp.onSent([](void* p, size_t) { ((EGHttpClient*)p)->send_more(); }, this);
@@ -141,7 +142,7 @@ int EGHttpClient::start(const char* url) {
   return 0;
 }
 
-// bad ones and the client's own dropped
+// Drops bad headers and the ones the client sets itself
 bool EGHttpClient::setReqHeader(const char* name, const char* value) {
   if (_phase != DIAL || _ready) return false;
   if (!eg_http_token(name, strlen(name)) || !eg_http_text(value, strlen(value))) return false;
@@ -200,7 +201,7 @@ bool EGHttpClient::seal(const uint8_t* body, size_t len, bool has_body) {
   }
   _bodyless = !has_body;
   _ready = true;
-  // a sink holds bytes back, a redirect dials again: those pull
+  // A sink can hold bytes back and a redirect dials again, so those pull
   _push = !PULL || (!_sink && !_redirects);
   if (_push) _tcp.onData([](void* p, const uint8_t* d, size_t n) { ((EGHttpClient*)p)->feed(d, n); }, this);
   else _tcp.onData(nullptr, nullptr);
@@ -210,7 +211,7 @@ bool EGHttpClient::seal(const uint8_t* body, size_t len, bool has_body) {
 void EGHttpClient::abort() {
   if (_phase == IDLE || _phase == DONE) return;
   Wake w = _wake;
-  _wake = nullptr;   // owner knows
+  _wake = nullptr;   // owner called abort, no wake
   end(HTTPCODE_CONNECTION_LOST);
   _wake = w;
   _pending = false;
@@ -310,7 +311,7 @@ void EGHttpClient::listen() {
 
 // Reply
 
-// pushed, past the reply dropped
+// Push mode, bytes past the end of the reply are dropped
 void EGHttpClient::feed(const uint8_t* d, size_t n) {
   if (_phase == SEND) listen();   // early reply
   while (n && (_phase == REPLY || _phase == HEAD || _phase == BODY)) {
@@ -441,7 +442,7 @@ uint8_t EGHttpClient::header_kind(const char* name) {
   return H_OTHER;
 }
 
-// sent by start() and seal()
+// Headers start() and seal() send themselves
 bool EGHttpClient::owned(const char* name) {
   uint8_t kind = header_kind(name);
   return kind == H_LENGTH || kind == H_CODING || same_P(name, PSTR("Host")) ||
@@ -451,11 +452,11 @@ bool EGHttpClient::owned(const char* name) {
 void EGHttpClient::act_on(uint8_t kind, const char* value) {
   if (kind == H_LENGTH) {
     int32_t n;
-    // a second has to agree
+    // A second Content-Length has to match the first
     if (!parse_length(value, &n) || (_length >= 0 && n != _length)) end(HTTPCODE_ENCODING);
     else _length = n;
   } else if (kind == H_CODING) {
-    // chunked, once
+    // only chunked, and only once
     if (_chunked || !same_P(value, PSTR("chunked"))) end(HTTPCODE_ENCODING);
     else _chunked = true;
   } else {
@@ -524,7 +525,7 @@ bool EGHttpClient::follow() {
   _tcp.close();
   int err = ok ? start(url.p) : HTTPCODE_TOO_LESS_RAM;
   url.clear();
-  // headers for that host only
+  // Custom headers were for that host only
   if (!err && (!same(was, _host) || was_port != _port)) _hdrs.clear();
   if (err || !seal(nullptr, 0, false)) end(err ? err : HTTPCODE_TOO_LESS_RAM);
   return true;
@@ -545,7 +546,7 @@ void EGHttpClient::body() {
     }
   }
   if (_phase != BODY || !gone()) return;
-  // no length, clean close ends it
+  // With no length a clean close ends it
   end(_toClose && !_tcp.error() ? 0 : HTTPCODE_CONNECTION_LOST);
 }
 
@@ -579,7 +580,7 @@ void EGHttpClient::chunked() {
   if (_phase == BODY && gone()) end(HTTPCODE_CONNECTION_LOST);
 }
 
-// sink can end it, check _phase
+// The sink can end the request, callers check _phase
 size_t EGHttpClient::take(size_t n) {
   size_t took = give(_in + _inOff, n);
   _inOff += took;
@@ -588,7 +589,7 @@ size_t EGHttpClient::take(size_t n) {
   return took;
 }
 
-// sink, or kept up to BODY_CAP
+// To the sink, or kept up to BODY_CAP
 size_t EGHttpClient::give(const uint8_t* buf, size_t n) {
   if (EGHTTP_SINK && _sink) {
     int took = _sink(_sinkArg, buf, n);
@@ -676,7 +677,6 @@ static const char R_200[] PROGMEM = "HTTP OK";
 static const char R_400[] PROGMEM = "Bad Request";
 static const char R_401[] PROGMEM = "Unauthorized";
 static const char R_403[] PROGMEM = "Forbidden";
-static const char R_404[] PROGMEM = "Not Found";
 static const char R_413[] PROGMEM = "Payload Too Large";
 static const char R_429[] PROGMEM = "Too Many Requests";
 static const char R_500[] PROGMEM = "Internal Server Error";
@@ -692,7 +692,7 @@ static const Reason REASONS[] PROGMEM = {
   { HTTPCODE_NO_HTTP_SERVER, R_NOHTTP }, { HTTPCODE_TOO_LESS_RAM, R_RAM },
   { HTTPCODE_ENCODING, R_ENC }, { HTTPCODE_STREAM_WRITE, R_WRITE },
   { HTTPCODE_TIMEOUT, R_TIME }, { HTTPCODE_BAD_URL, R_URL },
-  { 200, R_200 }, { 400, R_400 }, { 401, R_401 }, { 403, R_403 }, { 404, R_404 },
+  { 200, R_200 }, { 400, R_400 }, { 401, R_401 }, { 403, R_403 }, { 404, HTTP_NOT_FOUND },
   { 413, R_413 }, { 429, R_429 }, { 500, R_500 }, { 502, R_502 }, { 503, R_503 },
   { 504, R_504 },
 };

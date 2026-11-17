@@ -35,6 +35,7 @@
 #include "Counter/Counter.h"
 
 CORIUM_PSTR(K_CYCLES, "cycles");
+static const char PO_NAME[] PROGMEM = "PulseOut";
 CORIUM_PSTR(K_MAX_HZ, "max_hz");
 
 PulseOut pulseout;
@@ -47,16 +48,16 @@ uint8_t PulseOut::s_idle_seen = 0;
 bool PulseOut::s_busy = false;
 
 CORIUM_PSTR(PO_H_EN,   "Per-pulse GPIO output for LED, piezo, speaker or line-out");
-CORIUM_PSTR(PO_H_PIN,  "-1 = disabled");
+CORIUM_PSTR(PO_H_PIN,  "-1 = off");
 CORIUM_PSTR(PO_O_MODE, "Pulse|Burst|LED fade");
 CORIUM_PSTR(PO_L_FRQ,  "Burst (Hz)");
-CORIUM_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance (1000-8000)");
+CORIUM_PSTR(PO_H_FRQ,  "Match the piezo's marked resonance");
 CORIUM_PSTR(PO_L_CYC,  "Burst cycles");
 CORIUM_PSTR(PO_H_CYC,  "1-10. More = louder and longer");
 CORIUM_PSTR(PO_L_MHZ,  "Max (Hz)");
-CORIUM_PSTR(PO_H_MHZ,  "Cap clicks per second (0 = unlimited, 1-200)");
-CORIUM_PSTR(PO_H_BRT,  "0-100% (LED only). Applies to Pulse + Fade modes.");
-CORIUM_PSTR(PO_H_QFR,  "Silence clicks from this time (blank = off)");
+CORIUM_PSTR(PO_H_MHZ,  "Clicks per second cap, 0 = off");
+CORIUM_PSTR(PO_H_BRT,  "Not used in Burst mode");
+CORIUM_PSTR(PO_H_QFR,  "Silence clicks from this time, blank = off");
 
 static const corium::Pref PULSE_PREF_ITEMS[] PROGMEM = {
   {EG_K_ENABLE,     EG_L_EN,   PO_H_EN,   "0",    nullptr, 0,    0,     0, corium::P_BOOL, 0},
@@ -84,13 +85,13 @@ const corium::PrefGroup* PulseOut::prefsGroup() { return &PULSE_PREF_GROUP; }
 
 static int8_t claim_pin(bool enabled, int p) {
   if (!enabled || p < 0) return -1;
-  const char* why = corium::PinSafety::claimOutput(p, PSTR("PulseOut"));
+  const char* why = corium::PinSafety::claimOutput(p, PO_NAME);
   if (!why) return (int8_t)p;
   corium::Log::console(PSTR("PulseOut: pin=%d unsafe (%s)"), p, why);
   return -1;
 }
 
-// pin is corium::P_REBOOT, msTicker keeps the boot one
+// The pin is corium::P_REBOOT, msTicker keeps the one it booted with
 void PulseOut::read_pin(bool was_enabled) {
   if (!_begun) { _pin = corium::Prefs::getInt("pulse", EG_K_PIN); return; }
   if (_enabled && !was_enabled && _engine.pin < 0)
@@ -115,14 +116,14 @@ void PulseOut::onPrefsLoaded() {
   apply_voice();
 }
 
-// else the pin keeps the old idle level till a click
+// Bump s_idle on a polarity change, else the pin keeps the old idle level until a click
 void PulseOut::onPrefsSaved() {
   uint8_t was = _engine.polarity;
   onPrefsLoaded();
   if (_engine.polarity != was) s_idle++;
 }
 
-// after the engine clamps, so it can pass them
+// Applied after the engine clamps, so the chip voice can go past them
 void PulseOut::apply_voice() {
   _engine.pulseUsEff     = (uint32_t)(_engine.pulseUsEff * _voice.pulse);
   _engine.burstFreqEff = (uint32_t)(_engine.burstFreqEff * _voice.freq);
@@ -168,7 +169,7 @@ static bool migrate_legacy_blip() {
     }
   }
   f.close();
-  // a refused one shows (none), Prefs said why
+  // A refused value shows as (none), Prefs already logged why
   if (pin_val[0] && !corium::Prefs::put("pulse", EG_K_PIN, pin_val)) pin_val[0] = '\0';
   if (ms_val[0]) {
     char* endp = nullptr;
@@ -178,13 +179,13 @@ static bool migrate_legacy_blip() {
   }
   bool any = pin_val[0] || ms_val[0];
   if (any) {
-    // no marker, again next boot
+    // No marker written, so it tries again next boot
     if (!corium::Prefs::put("pulse", EG_K_ENABLE, "1") || !corium::Prefs::commit(false)) {
       corium::Log::console(PSTR("PulseOut: Not saved"));
       return true;
     }
     corium::Log::console(PSTR("PulseOut: Migrated blip pin=%s pulse_ms=%s from v0.11"),
-                 pin_val[0] ? pin_val : "(none)", ms_val[0] ? ms_val : "(none)");
+                         pin_val[0] ? pin_val : "(none)", ms_val[0] ? ms_val : "(none)");
   } else {
     corium::Log::console(PSTR("PulseOut: No blip pin/pulse keys in /prefs/led.bin"));
   }
@@ -194,16 +195,16 @@ static bool migrate_legacy_blip() {
 
 static void pulseout_click(uint32_t) { pulseout.notifyClick(corium::fastMillis()); }
 
-// every boot, safe mode too: idle before the join, begin claims it again
+// Runs every boot, safe mode too. Sets the idle level before wifi joins, begin() claims the pin again
 void PulseOut::park() {
   int p = corium::Prefs::getInt("pulse", EG_K_PIN);
   if (!corium::Prefs::getBool("pulse", EG_K_ENABLE) || p < 0) return;
-  if (corium::PinSafety::claimOutput(p, PSTR("PulseOut"))) return;   // begin says why
+  if (corium::PinSafety::claimOutput(p, PO_NAME)) return;   // begin says why
   pinMode(p, OUTPUT);
   digitalWrite(p, corium::Prefs::getUInt("pulse", EG_K_POLARITY) ? HIGH : LOW);
 }
 
-// no new click, a running one ends on its own
+// Stop new clicks on shutdown, a running one ends on its own
 static void pulse_lifecycle(corium::Lifecycle::Event e) {
   if (e == corium::Lifecycle::SHUTDOWN) pulseout.stop();
 }
@@ -223,7 +224,7 @@ void PulseOut::begin() {
   apply_voice();
   corium::Lifecycle::on(pulse_lifecycle);
   corium::Log::console(PSTR("PulseOut: GPIO%d mode=%u polarity=%u"),
-               (int)_engine.pin, (unsigned)_engine.mode, (unsigned)_engine.polarity);
+                       (int)_engine.pin, (unsigned)_engine.mode, (unsigned)_engine.polarity);
 }
 
 void PulseOut::notifyClick(unsigned long now_ms) {

@@ -20,7 +20,7 @@ Sent in CPM readings mode:
 | `n`   | uint32  | Unix timestamp of the reading (seconds) |
 | `c`   | float32 | Current CPM |
 | `u`   | float32 | Microsieverts per hour |
-| `nc`  | bool    | `true` when no counts are arriving (dead tube or input), so `c`/`u` are not a real reading. Omitted otherwise. |
+| `hb`  | uint    | Health bits, omitted while all fine: 1 no counts (dead tube or input, so `c`/`u` are not a real reading), 2 input storm, 4 chatter, 8 input not reporting, 16 HV low, 32 HV high, 64 HV feedback. Device states (crash, clock, save, heap) are not sent. Add-only. |
 | `hv`  | int     | HV tube reading in volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `t`   | float32 | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h`   | float32 | Humidity in % (BME280 / AHT family only) |

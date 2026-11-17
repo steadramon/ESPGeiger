@@ -166,11 +166,11 @@ int GeigerPulse::collect() {
   uint32_t n = pending + (uint32_t)residual;
   if (n > STORM_COUNTS) {
     Counter::drop_pulses(pushed);   // what this second put in, not n: older ones stay
-    if (!_storm) corium::Log::console(PSTR("GeigerPulse: PCNT storm (%u/s) - dropped"), (unsigned)n);
-    _storm = true;
+    if (!_stormy) corium::Log::console(PSTR("GeigerPulse: PCNT storm (%u/s) - dropped"), (unsigned)n);
+    _stormy = true;
     return 0;
   }
-  _storm = false;
+  _stormy = false;
   return (int)n;
 }
 

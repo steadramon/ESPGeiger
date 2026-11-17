@@ -80,12 +80,10 @@ CORIUM_PSTR(MQ_L_SRV, "Server");
 CORIUM_PSTR(MQ_H_SRV, "Broker address or IP");
 CORIUM_PSTR(MQ_L_USR, "User");
 CORIUM_PSTR(MQ_L_TPC, "Root topic");
-CORIUM_PSTR(MQ_H_TPC, "Root topic; {id}=chip ID");
+CORIUM_PSTR(MQ_H_TPC, "{id} = chip ID");
 CORIUM_PSTR(MQ_P_TPC, "/?[A-Za-z0-9_\\/\\{\\}\\-]+");   // a bare / refused
-CORIUM_PSTR(MQ_H_INT, "Send interval (s)");
 #ifdef MQTTAUTODISCOVER
 CORIUM_PSTR(MQ_L_HEN, "HA autodiscovery");
-CORIUM_PSTR(MQ_H_HEN, "Publish HA autodiscovery");
 CORIUM_PSTR(MQ_L_HTP, "HA autodiscovery topic");
 CORIUM_PSTR(MQ_H_HTP, "HA discovery prefix");
 CORIUM_PSTR(MQ_P_HTP, "/?[A-Za-z0-9_\\/\\-]+");
@@ -97,9 +95,9 @@ static const corium::Pref MQTT_PREF_ITEMS[] PROGMEM = {
   {EG_K_USER,      MQ_L_USR, nullptr,  "",               nullptr,  0, 0,     MQTT_USER_MAX, corium::P_STRING, 0},
   {EG_K_PASSWORD,  EG_L_PWD, nullptr,  "",               nullptr,  0, 0,     MQTT_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE},
   {K_TOPIC,        MQ_L_TPC, MQ_H_TPC, "ESPGeiger-{id}", MQ_P_TPC, 0, 0, MQTT_TOPIC_PREF_MAX, corium::P_STRING, corium::P_ADVANCED},
-  {EG_K_INTERVAL,  EG_L_INT, MQ_H_INT, STR(MQTT_INTERVAL), nullptr, MQTT_MIN_TIME, MQTT_MAX_TIME, 0, corium::P_UINT, 0},
+  {EG_K_INTERVAL,  EG_L_INT, EG_H_INT, STR(MQTT_INTERVAL), nullptr, MQTT_MIN_TIME, MQTT_MAX_TIME, 0, corium::P_UINT, 0},
 #ifdef MQTTAUTODISCOVER
-  {K_HASS_ENABLED, MQ_L_HEN, MQ_H_HEN, MQTT_HASS_DEFAULT,    nullptr,  0, 0, 0,  corium::P_BOOL,   corium::P_ADVANCED},
+  {K_HASS_ENABLED, MQ_L_HEN, nullptr,  MQTT_HASS_DEFAULT,    nullptr,  0, 0, 0,  corium::P_BOOL,   corium::P_ADVANCED},
   {K_HASS_TOPIC,   MQ_L_HTP, MQ_H_HTP, MQTT_DISCOVERY_TOPIC, MQ_P_HTP, 0, 0, MQTT_HASS_TOPIC_MAX, corium::P_STRING, corium::P_ADVANCED},
 #endif
 };
@@ -737,6 +735,7 @@ static const uint8_t HR_TOTAL  = 1 << 1;   // total_increasing, else measurement
 static const uint8_t HR_DIAG   = 1 << 2;
 static const uint8_t HR_BIN    = 1 << 3;   // binary_sensor
 static const uint8_t HR_OPT    = 1 << 4;   // only with its measure row
+static const uint8_t HR_TEXT   = 1 << 5;   // words, no state_class
 
 struct HassRow {
   char id[9];
@@ -781,6 +780,8 @@ static const HassRow HASS_ROWS[] PROGMEM = {
 #else
   {"tube",     "",   "Tube Active",  "",           "radioactive",    "",  DC_CONN,  HR_BIN},
 #endif
+  {"problem",  "",   "Tube Problem", "",           "alert-circle-outline", "", DC_PROB, HR_BIN},
+  {"health",   "",   "Health",       "",           "heart-pulse",    "",  DC_NONE,  HR_DIAG | HR_TEXT},
 #if M_HAS_HV
   {"hv_fault", "",   "HV Fault",     "",           "flash-alert",    "",  DC_PROB,  HR_BIN | HR_OPT},
 #endif
@@ -879,7 +880,7 @@ static void hass_device(EGJson& j, const char* host) {
   char ip[CORIUM_IPV4_MAX + 1];
   corium::Wifi::formatIP(ip, sizeof(ip));
   j.map_begin(PSTR("device"));
-  j.str(PSTR("mf"), PSTR(THING_NAME));
+  j.str(PSTR("mf"), APP_NAME);
   j.str(PSTR("mdl"), corium::DeviceInfo::board());
   j.str(PSTR("mdl_id"), PSTR(BUILD_ENV));
   j.str(PSTR("name"), host);
@@ -906,7 +907,7 @@ static void hass_fields(EGJson& j, const HassRow* r) {
   uint8_t f = hass_flags(r);
   uint8_t dev = pgm_read_byte(&r->dev);
   if (dev) j.str(PSTR("dev_cla"), (const char*)pgm_read_ptr(&H_DEV_CLA[dev]));
-  if (!(f & HR_BIN)) j.str(PSTR("stat_cla"), (f & HR_TOTAL) ? H_SC_TOTINC : H_SC_MEAS);
+  if (!(f & (HR_BIN | HR_TEXT))) j.str(PSTR("stat_cla"), (f & HR_TOTAL) ? H_SC_TOTINC : H_SC_MEAS);
   if (f & HR_DIAG) j.str(PSTR("ent_cat"), H_EC_DIAG);
   j.str(H_K_STAT, (f & HR_STATUS) ? H_ST_STATUS : H_ST_SENSOR);
   j.str_begin(H_K_VT);

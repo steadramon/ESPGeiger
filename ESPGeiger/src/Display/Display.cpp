@@ -28,6 +28,7 @@
 #include "Corium/Output/QuietWindow.h"
 #include "Corium/Output/LedSignal.h"
 #include "App/LedPatterns.h"
+#include "App/Notice.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "Counter/Counter.h"
 #include <EGHttpServer.h>
@@ -35,7 +36,6 @@
 Display display;
 CORIUM_REGISTER_MODULE(display)
 
-const char W_APP_NAME[] PROGMEM = THING_NAME;
 
 
 CORIUM_PSTR(K_RST,      "rst");
@@ -46,7 +46,7 @@ CORIUM_PSTR(K_OFF_TIME, "off_time");
 
 #ifdef GEIGER_PUSHBUTTON
 CORIUM_PSTR(DS_L_TMO, "Idle time (s)");
-CORIUM_PSTR(DS_H_TMO, "Idle seconds before display blanks (0 = use schedule below)");
+CORIUM_PSTR(DS_H_TMO, "Blank after this long idle, 0 = use the on/off times");
 #endif
 CORIUM_PSTR(DS_L_ONT, "On time");
 CORIUM_PSTR(DS_L_OFT, "Off time");
@@ -76,7 +76,7 @@ CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");
 #endif
 static_assert(sizeof(DS_O_TYP) - 1 <= CORIUM_PREF_PATTERN_MAX, "display types past the options buffer");
 CORIUM_PSTR(DS_L_RST, "Reset pin");
-CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset OLED (255 = none).");
+CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset the OLED, 255 = off");
 #endif
 
 #ifdef MAX7219_DISPLAY
@@ -111,11 +111,10 @@ static const corium::PrefGroup DISPLAY_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* Display::prefsGroup() { return &DISPLAY_PREF_GROUP; }
 
 #if defined(MAX7219_DISPLAY) && !defined(OLED_PINS_BLOCKED)
-CORIUM_PSTR(DS_W_TYPE, "display.type");
 static const uint16_t SHOW_OLED = (1u << DISP_OLED_COUNT) - 1;   // OLED types come first
 static const corium::PrefShow DISPLAY_SHOW[] PROGMEM = {
-  {K_RST,  DS_W_TYPE, SHOW_OLED},
-  {K_FLIP, DS_W_TYPE, SHOW_OLED},
+  {K_RST,  EG_K_DISP_TYPE, SHOW_OLED},
+  {K_FLIP, EG_K_DISP_TYPE, SHOW_OLED},
   {},
 };
 const corium::PrefShow* Display::prefsShow() { return DISPLAY_SHOW; }
@@ -197,6 +196,23 @@ void Display::onPrefsSaved() {
   s_backend->reload();
 }
 
+#ifdef APP_NOTICE
+static const char* s_notice = nullptr;
+
+const char* Notice::shown() { return s_notice; }
+
+// dark at night stays dark, the next wake shows it
+void Notice::show(const char* msg) {
+  s_notice = msg;
+  unsigned long now = corium::fastMillis();
+  if (display.sleep(now) != Display::OFF_HOURS) display.wake(now);
+}
+
+void Notice::end(const char* msg) {
+  if (s_notice == msg) s_notice = nullptr;
+}
+#endif
+
 // first tap only wakes
 void Display::button(unsigned long now, int8_t dir) {
   _woke.mark(now);
@@ -204,6 +220,13 @@ void Display::button(unsigned long now, int8_t dir) {
     refresh(now);
     return;
   }
+#ifdef APP_NOTICE
+  // a tap takes it down, nothing else
+  if (s_notice) {
+    s_notice = nullptr;
+    return;
+  }
+#endif
   if (dir > 0) {
     _taps = (now - _tap_ms < 500) ? _taps + 1 : 1;
     _tap_ms = now;
@@ -413,7 +436,7 @@ r();
 )JS";
 
 static void hScreen(EGHttpRequest&, EGHttpResponse& res, void*) {
-  corium::WebPortal::beginPage(res, F("Screen"));
+  corium::WebPortal::beginPage(res, FPSTR(EG_W_SCREEN));
   res.sendChunk(FPSTR(SCREEN_PAGE_BODY));
   corium::WebPortal::endPage(res);
 }

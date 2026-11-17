@@ -29,6 +29,13 @@
 #include <esp_attr.h>
 #endif
 
+// Peak in us below 32768, above that the top bit is set and it's ms (32 s max). Still goes up with d
+static inline uint16_t peak_code(uint32_t d) {
+  if (d < 0x8000) return (uint16_t)d;
+  uint32_t ms = d / 1000;
+  return ms > 0x7FFF ? 0xFFFF : (uint16_t)(0x8000 | ms);
+}
+static uint32_t peak_of(uint16_t c) { return c & 0x8000 ? (uint32_t)(c & 0x7FFF) * 1000 : c; }
 
 corium::Registry::Slot corium::Registry::_slots[CORIUM_MAX_MODULES] = {};
 uint8_t corium::Registry::_count = 0;
@@ -59,8 +66,8 @@ uint32_t* corium::Registry::_traced = nullptr;
 corium::IsrLock::Bits corium::Registry::_posted;
 bool corium::Registry::_safe_mode = false;
 
-// keep sorted, loopAll reads [0]
-// signed diff, safe over the millis wrap
+// Kept sorted by next_due, loopAll reads [0].
+// Signed diff so it's safe over the millis wrap
 void corium::Registry::rebuild_due() {
   _resort = false;
   _due_count = 0;
@@ -84,10 +91,22 @@ bool corium::Registry::add(corium::Module* m) {
   return true;
 }
 
-// built in, slot or not
+// feature bit says it's built in, even if there's no slot left for it
 bool corium::Registry::add(corium::Module* m, uint8_t feature) {
   _features |= (uint16_t)(1u << feature);
   return add(m);
+}
+
+// Spread slots on the same period evenly across it
+static inline uint32_t phase(uint8_t idx, uint32_t period, uint8_t count) {
+  return period * idx / count;   // 32 bit to ~37 h periods
+}
+
+// First base + k * step after now. If base is more than a step ahead it's stale, use now
+static inline uint32_t next_point(uint32_t base, uint32_t now, uint32_t step) {
+  int32_t d = (int32_t)(now - base);
+  if (d < 0) return base - now <= step ? base : now;
+  return base + ((uint32_t)d / step + 1) * step;
 }
 
 void corium::Registry::beginAll() {
@@ -119,31 +138,25 @@ inline uint8_t corium::Registry::unmet_requirements() {
   return unmet;
 }
 
-// period re-armed first, the loop's own dueAt wins
+// Re-arm the period before loop() so a dueAt() from inside the loop wins
 inline void corium::Registry::fire_slot(uint8_t idx, unsigned long now) {
   Slot& s = _slots[idx];
-  s.loop_last = now;
-  if (s.period_ms) s.next_due = now + s.period_ms;
-  else s.flags &= ~FLAG_ARMED;
+  if (s.period_ms) {
+    if ((int32_t)(now - s.grid) < 0) s.grid = now;   // run early by a post, restart the period from here
+    s.next_due = s.grid = next_point(s.grid, now, s.period_ms);
+  } else {
+    s.flags &= ~FLAG_ARMED;
+  }
   _firing = idx;
 #ifdef CORIUM_TRACE
   _trace[_trace_at++ % TRACE_N] = ((uint32_t)now << 8) | idx;
 #endif
-#ifdef LOOP_PROFILE
-  unsigned long t0 = micros();
   s.module->loop(now);
-  uint32_t d = (uint32_t)(micros() - t0);
-  if (d > s.max_loop_us) s.max_loop_us = d;
-  s.total_loop_us += d;
-  if (s.loop_calls < 0xFFFF) s.loop_calls++;
-#else
-  s.module->loop(now);
-#endif
   _firing = IN_NONE;
   if (!(s.flags & FLAG_ARMED)) _resort = true;
 }
 
-// later only, all before [k] are due already; equal stays
+// Only moves it later, everything before [k] is already due. Equal ones stay put
 inline uint8_t corium::Registry::sift_due(uint8_t k) {
   uint8_t idx = _due_order[k];
   uint32_t due = _slots[idx].next_due;
@@ -155,7 +168,7 @@ inline uint8_t corium::Registry::sift_due(uint8_t k) {
   return k;
 }
 
-// nothing armed, look again in a minute
+// Nothing armed, check again in a minute
 static constexpr uint32_t IDLE_WAKE_MS = 60000;
 inline uint32_t corium::Registry::next_wake(unsigned long now) {
   return _due_count ? _slots[_due_order[0]].next_due : now + IDLE_WAKE_MS;
@@ -165,7 +178,7 @@ void corium::Registry::take_posts(unsigned long now) {
   uint32_t p = _posted.take();
   for (uint8_t i = 0; p && i < _count; i++, p >>= 1) {
     Slot& s = _slots[i];
-    // off drops it, a closed gate holds it
+    // an off module drops the post, the WiFi/NTP gate just holds it in walk()
     if (!(p & 1) || (s.flags & FLAG_OFF)) continue;
     s.next_due = now;
     s.flags |= FLAG_ARMED;
@@ -174,10 +187,24 @@ void corium::Registry::take_posts(unsigned long now) {
   _next_loop_due = now;
 }
 
-// wifi or ntp not there yet, try again at its period or 1 s
+// WiFi or NTP not up yet, try again at its period or in 1 s
 static constexpr uint32_t GATE_RETRY_MS = 1000;
 static inline uint32_t retry_in(uint32_t period) {
   return period && period < GATE_RETRY_MS ? period : GATE_RETRY_MS;
+}
+
+// peak, stalls and the profile for one run of d us
+inline void corium::Registry::note_run(Slot& s, uint32_t d) {
+  if (d > s.peak_us) {
+    uint16_t c = peak_code(d);
+    if (c > s.peak_us) s.peak_us = c;
+  }
+  if (d > CORIUM_STALL_US) s.stalls += s.stalls != 0xFF;
+#ifdef LOOP_PROFILE
+  if (d > s.max_loop_us) s.max_loop_us = d;
+  s.total_loop_us += d;
+  if (s.loop_calls < 0xFFFF) s.loop_calls++;
+#endif
 }
 
 inline void corium::Registry::walk(unsigned long now) {
@@ -185,27 +212,27 @@ inline void corium::Registry::walk(unsigned long now) {
   uint32_t t0 = micros();
   uint32_t fired = 0;
 
-  uint32_t t = t0;   // after the last fire
+  uint32_t t = t0;   // time after the last loop() ran
   uint8_t k = 0;
   while (k < _due_count) {
     uint8_t idx = _due_order[k];
     Slot& s = _slots[idx];
     if (!corium::reached(now, s.next_due)) break;
-    // once a pass, dueIn(0) runs on the next
+    // Each slot runs once a pass, a dueIn(0) waits for the next one
     if (fired & (1u << idx)) { k++; continue; }
     if (s.flags & unmet) {
       s.next_due = now + retry_in(s.period_ms);
+      if (s.period_ms) s.grid = s.next_due;
     } else {
       fired |= 1u << idx;
       uint32_t a = micros();
       fire_slot(idx, now);
       t = micros();
-      uint32_t d = t - a;
-      if (d > s.peak_us) s.peak_us = d > 0xFFFF ? 0xFFFF : (uint16_t)d;
+      note_run(s, t - a);
     }
     if (_resort) { rebuild_due(); k = 0; }
     else if (sift_due(k) == k) k++;
-    // the rest next pass
+    // over budget, the rest go next pass
     if (fired && t - t0 >= CORIUM_LOOP_BUDGET_US) break;
   }
 }
@@ -260,7 +287,7 @@ void corium::Registry::logLoopProfileAndReset() {
 }
 #endif
 
-// senders only, name=ok or name=ok/total once one failed
+// Senders only. Logs name=ok, or name=ok/total if any failed
 void corium::Registry::logActivityAndReset() {
   char buf[200];
   int pos = 0;
@@ -292,7 +319,7 @@ corium::Registry::Slot* corium::Registry::slot_of(corium::Module* m) {
   return &_slots[i];
 }
 
-// the walk sorts its own slot
+// The walk re-sorts the slot that's running itself
 void corium::Registry::changed(Slot& s) {
   if (&s - _slots == _firing) return;
   _resort = true;
@@ -302,14 +329,17 @@ void corium::Registry::changed(Slot& s) {
 bool corium::Registry::every(corium::Module* m, uint32_t ms) {
   Slot* s = slot_of(m);
   if (!s) return false;
+  bool fresh = !(s->flags & FLAG_ARMED) || !s->period_ms;   // no grid yet
+  uint32_t last = s->grid - s->period_ms;
   s->period_ms = ms;
   if (!ms) {
     s->flags &= ~FLAG_ARMED;
   } else {
     uint32_t now = corium::fastMillis();
-    bool start = !(s->flags & FLAG_ARMED);
-    bool overdue = (uint32_t)(now - s->loop_last) >= ms;   // or idle past 2^31 ms
-    s->next_due = (start || overdue) ? now : s->loop_last + ms;
+    if (fresh) s->grid = now + phase(s - _slots, ms, _count);
+    else if ((int32_t)(now - s->grid) < 0) s->grid = next_point(last, now, ms);   // from the last run
+    // already due, it stays that way and runs now
+    s->next_due = s->grid;
     s->flags |= FLAG_ARMED;
   }
   changed(*s);
@@ -320,6 +350,7 @@ bool corium::Registry::dueAt(corium::Module* m, uint32_t t) {
   Slot* s = slot_of(m);
   if (!s) return false;
   s->next_due = t;
+  s->grid = t;   // its own phase from here
   s->flags |= FLAG_ARMED;
   changed(*s);
   return true;
@@ -386,7 +417,7 @@ corium::Module* corium::Registry::find(const char* name) {
   return nullptr;
 }
 
-// stable, keeps registration order. _slot follows before any preWifi
+// Stable, same priority keeps registration order. _slot is updated before any preWifi()
 void corium::Registry::sort_by_priority() {
   for (uint8_t i = 1; i < _count; i++) {
     Slot cur = _slots[i];
@@ -400,9 +431,9 @@ void corium::Registry::sort_by_priority() {
   for (uint8_t i = 0; i < _count; i++) _slots[i].module->_slot = i;
 }
 
-// cached, no virtual calls in loopAll(); nothing armed till a module asks
+// Flags cached here so loopAll() makes no virtual calls. Nothing is armed until a module asks
 void corium::Registry::preWifiAll() {
-  _firing = IN_NONE;   // no crashBoot, junk stays out
+  _firing = IN_NONE;   // clears the noinit junk if there was no crashBoot()
 #ifdef CORIUM_TRACE
   memset(_trace, 0xFF, sizeof(_trace));   // slot IN_NONE = empty
   _trace_at = 0;
@@ -410,17 +441,18 @@ void corium::Registry::preWifiAll() {
   sort_by_priority();
 
   uint32_t now = corium::fastMillis();
-  _posted.take();   // bits were registration order
+  _posted.take();   // any posted bits were in registration order, before the sort
   _due_count = 0;
   for (uint8_t i = 0; i < _count; i++) {
     Slot& s = _slots[i];
     corium::Module* m = s.module;
-    s.loop_last = now;
+    s.grid = now;
     s.next_due = now;
     s.period_ms = 0;
     s.topics = 0;
     s.events = 0;
     s.peak_us = 0;
+    s.stalls = 0;
     if (_safe_mode && !m->coreModule()) {
       s.flags = FLAG_QUARANTINED | FLAG_OFF;
       continue;
@@ -441,12 +473,12 @@ void corium::Registry::setSafeMode(bool on) {
 }
 
 #ifdef CORIUM_CRASH_MARK
-// noinit holds junk after power on, only a crash reset is trusted
+// Noinit RAM is junk after power on, only trust it after a crash reset
 void corium::Registry::crashBoot(uint8_t in) {
   _crashed_in = in;
 }
 
-// slots are sorted the same each boot
+// slots sort the same way each boot, so the index still matches
 const char* corium::Registry::crashedIn() {
   if (_crashed_in < _count) return _slots[_crashed_in].module->name();
   if (_crashed_in == IN_TCP) return PSTR("tcp");
@@ -456,7 +488,7 @@ const char* corium::Registry::crashedIn() {
 #endif
 
 #ifdef CORIUM_TRACE
-// oldest first; heap on crash boots only
+// Oldest first. Only takes heap on a crash boot
 void corium::Registry::keepTrace() {
   if (!_traced) _traced = new (std::nothrow) uint32_t[TRACE_N];
   if (!_traced) return;
@@ -466,9 +498,16 @@ void corium::Registry::keepTrace() {
 const uint32_t* corium::Registry::trace() { return _traced; }
 #endif
 
-uint16_t corium::Registry::peakUs(uint8_t idx) {
-  return idx < _count ? _slots[idx].peak_us : 0;
+uint32_t corium::Registry::peakUs(uint8_t idx) {
+  return idx < _count ? peak_of(_slots[idx].peak_us) : 0;
 }
+
+// Halved each hour, so a one-off fades and one that keeps happening stays
+void corium::Registry::agePeaks() {
+  for (uint8_t i = 0; i < _count; i++) _slots[i].peak_us = peak_code(peak_of(_slots[i].peak_us) / 2);
+}
+
+uint8_t corium::Registry::stalls(uint8_t idx) { return _slots[idx].stalls; }
 
 bool corium::Registry::quarantined(corium::Module* m) {
   if (!_safe_mode || !m) return false;

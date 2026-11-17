@@ -18,7 +18,9 @@
 */
 #ifdef ESP32
 #include "DeviceInfo.h"
+#include "DeviceInfoChip.h"
 #include <math.h>
+#include <esp_chip_info.h>
 #include <esp_system.h>
 #include <esp_mac.h>
 
@@ -35,11 +37,78 @@ void corium::DeviceInfo::chipTempRead() {
   s_temp_c = isnan(s_temp_c) ? t : s_temp_c + (t - s_temp_c) * 0.0625f;
 }
 
+uint32_t corium::DeviceInfo::heapSize() { return ESP.getHeapSize(); }
+
 float corium::DeviceInfo::chipTempC() { return s_temp_c; }
 
 uint64_t corium::DeviceInfo::hwId() {
   return ESP.getEfuseMac();
 }
+
+// one case per chip
+const char* corium::DeviceInfo::chip() {
+  esp_chip_info_t info;
+  esp_chip_info(&info);
+  switch ((int)info.model) {
+    case 0:  return "ESP8266";
+    case (int)esp_chip_model_t::CHIP_ESP32:   return "ESP32";
+    case (int)esp_chip_model_t::CHIP_ESP32S2: return "ESP32-S2";
+    case (int)esp_chip_model_t::CHIP_ESP32S3: return "ESP32-S3";
+    case (int)esp_chip_model_t::CHIP_ESP32C3: return "ESP32-C3";
+    // raw model numbers, not in every IDF enum
+    case 6:  return "ESP32-H4";
+    case 12: return "ESP32-C2";
+    case 13: return "ESP32-C6";
+    case 16: return "ESP32-H2";
+    default: return "ESP32";
+  }
+}
+
+// last 3 MAC bytes, like the 8266 chip id
+uint32_t corium::DeviceInfo::Chip::id() {
+  uint32_t id = 0;
+  for (int i = 0; i < 17; i += 8) {
+    id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  }
+  return id;
+}
+
+void corium::DeviceInfo::Chip::flashText(char* buf, size_t cap) {
+  const uint8_t fm = (uint8_t)ESP.getFlashChipMode();
+  static const char FLASH_MODES[][5] PROGMEM = {"QIO", "QOUT", "DIO", "DOUT"};
+  const char* mode = fm < 4 ? FLASH_MODES[fm] : PSTR("?");
+  const unsigned long mhz = (unsigned long)(ESP.getFlashChipSpeed() / 1000000ul);
+  snprintf_P(buf, cap, PSTR("%s %luMHz"), mode, mhz);
+}
+
+// same as umm_malloc on the 8266
+uint8_t corium::DeviceInfo::Chip::heapRead(uint32_t* lfb) {
+  uint32_t free_ = ESP.getFreeHeap();
+  uint32_t max_  = ESP.getMaxAllocHeap();
+  *lfb = max_;
+  if (free_ == 0 || max_ > free_) return 0;
+  float ratio = (float)max_ / (float)free_;
+  return (uint8_t)(100.0f - sqrtf(ratio) * 100.0f);
+}
+
+static const corium::DeviceInfo::Chip::ResetRow RESETS[] = {
+  {ESP_RST_POWERON,   corium::DeviceInfo::RR_POWER_ON,   "Power on"},
+  {ESP_RST_EXT,       corium::DeviceInfo::RR_PIN,        "External reset"},
+  {ESP_RST_SW,        corium::DeviceInfo::RR_RESTART,    "Software restart"},
+  {ESP_RST_PANIC,     corium::DeviceInfo::RR_EXCEPTION,  "Exception"},
+  {ESP_RST_INT_WDT,   corium::DeviceInfo::RR_WDT,        "Interrupt watchdog"},
+  {ESP_RST_TASK_WDT,  corium::DeviceInfo::RR_WDT,        "Task watchdog"},
+  {ESP_RST_WDT,       corium::DeviceInfo::RR_WDT,        "Watchdog"},
+  {ESP_RST_BROWNOUT,  corium::DeviceInfo::RR_BROWNOUT,   "Brownout"},
+  {ESP_RST_DEEPSLEEP, corium::DeviceInfo::RR_DEEP_SLEEP, "Deep sleep wake"},
+};
+
+const corium::DeviceInfo::Chip::ResetRow* corium::DeviceInfo::Chip::resets(size_t* n) {
+  *n = sizeof(RESETS) / sizeof(RESETS[0]);
+  return RESETS;
+}
+
+uint32_t corium::DeviceInfo::Chip::resetCause() { return esp_reset_reason(); }
 
 bool corium::DeviceInfo::efuseMac(uint8_t* out) { return esp_efuse_mac_get_default(out) == ESP_OK; }
 

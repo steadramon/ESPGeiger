@@ -34,6 +34,8 @@ On builds **with** a push button, the resolution order is:
 
 Cycles through the information pages. If the display is off, the first tap turns it on and shows page 1.
 
+On builds with an SD card or HV, a fault puts one line on the screen: *SD card error* (the card failed or is full, not a card missing at boot) or *HV fault*. It stays until a press, and that press only clears it. The fault wakes the display, but not in the off hours of the On/Off schedule: it shows at the next wake.
+
 ## Long press
 
 Toggles the always-on override. Long-press once to keep the display on; long-press again to return to the Timeout and schedule.

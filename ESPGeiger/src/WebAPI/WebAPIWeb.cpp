@@ -27,6 +27,11 @@
 #include "Corium/Util/Words.h"
 #include "Corium/WebPortal/WebPortal.h"
 
+static const corium::MenuEntry WEBAPI_MENU[] PROGMEM = {
+  {"/webapi", "ESPGeiger Stations"},
+  {"", ""}
+};
+
 static const char FORGET_BODY[] PROGMEM =
   "<p>A delete request goes to the server as soon as it can be reached. Sharing is now <b>Off</b>.</p>"
   "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
@@ -112,7 +117,7 @@ static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   bool wrote = true;
   const bool saved = posted && save_settings(req, wrote);
 
-  corium::WebPortal::beginPage(res, F("ESPGeiger Stations"));
+  corium::WebPortal::beginPage(res, FPSTR(WEBAPI_MENU[0].label));
   if (!wrote) corium::WebPortal::sendNotSaved(res);
   else if (saved) res.sendChunk(F("<div class='a ak'>Saved.</div>"));
   else if (posted) res.sendChunk(F("<div class='a ae'>A value was out of range and not saved.</div>"));
@@ -153,10 +158,6 @@ static void hForget(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::endPage(res);
 }
 
-static const corium::MenuEntry WEBAPI_MENU[] PROGMEM = {
-  {"/webapi", "ESPGeiger Stations"},
-  {"", ""}
-};
 const corium::MenuEntry* WebAPI::menuEntries() { return WEBAPI_MENU; }
 
 static const char R_WEBAPI[] PROGMEM = "/webapi";

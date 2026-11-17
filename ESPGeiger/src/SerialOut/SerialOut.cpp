@@ -41,7 +41,6 @@ CORIUM_PSTR(K_FORMAT, "format");
 CORIUM_PSTR(K_BAUD,   "baud");
 
 #define SOUT_TPL_MAX 128
-#define SOUT_BAUD_MIN 9600
 #define SOUT_BAUD_BOOT 115200   // as Boot
 
 SerialOut serialout;
@@ -49,17 +48,17 @@ CORIUM_REGISTER_FEATURE(serialout, FEAT_SERIALOUT)
 
 CORIUM_PSTR(SO_L_FMT,  "Wire format");
 CORIUM_PSTR(SO_O_FMT,  "Labelled|MightyOhm|User template");
-CORIUM_PSTR(SO_L_TPL,  "Template");
 CORIUM_PSTR(SO_H_TPL,  "User template. See /vars.json for live values. Escapes: \\n \\r \\t");
 CORIUM_PSTR(SO_L_BAUD, "Baud override");
-CORIUM_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
+CORIUM_PSTR(SO_H_BAUD, "0 = the format's own");
+CORIUM_PSTR(SO_O_BAUD, "0|9600|19200|38400|57600|115200");
 
 static const corium::Pref SOUT_PREF_ITEMS[] PROGMEM = {
   {EG_K_INTERVAL, nullptr, nullptr,  "0",  nullptr, 0, 65535,  0,   corium::P_UINT,   corium::P_HIDDEN},
   {K_FLAGS,       nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   corium::P_UINT,   corium::P_HIDDEN},
   {K_FORMAT,      SO_L_FMT,  nullptr,   "0",  SO_O_FMT, 0, 2,     0,   corium::P_ENUM,   0},
-  {K_BAUD,        SO_L_BAUD, SO_H_BAUD, "0",  nullptr, 0, 921600, 0,   corium::P_UINT,   corium::P_ADVANCED},
-  {EG_K_TPL,      SO_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    SOUT_TPL_MAX, corium::P_STRING, 0},
+  {K_BAUD,        SO_L_BAUD, SO_H_BAUD, "0",  SO_O_BAUD, 0, 0,  0,   corium::P_UINT,   corium::P_ADVANCED},
+  {EG_K_TPL,      EG_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    SOUT_TPL_MAX, corium::P_STRING, 0},
 };
 static const corium::PrefGroup SOUT_PREF_GROUP PROGMEM = {
   "sout", "Serial out", 1,
@@ -75,7 +74,6 @@ void SerialOut::onPrefsLoaded() {
   _show = (uint8_t)corium::Prefs::getUInt("sout", K_FLAGS);
   _format     = (uint8_t)corium::Prefs::getUInt("sout", K_FORMAT);
   _baud       = (uint32_t)corium::Prefs::getUInt("sout", K_BAUD);
-  if (_baud && _baud < SOUT_BAUD_MIN) _baud = SOUT_BAUD_MIN;
   if (_rest) drain(true);   // the rest now, before off or a new baud
   applyBaud();   // said while the log still reaches serial
   quiet_logs();

@@ -34,7 +34,11 @@ namespace TickProfile {
 
 #ifdef LOOP_PROFILE
   extern uint32_t loopBodyUs;
-  inline void addLoopBody(uint32_t us) { loopBodyUs += us; }
+  extern uint32_t loopMaxUs;   // worst pass
+  inline void addLoopBody(uint32_t us) {
+    loopBodyUs += us;
+    if (us > loopMaxUs) loopMaxUs = us;
+  }
 #endif
 
   void beginTick();

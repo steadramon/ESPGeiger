@@ -20,9 +20,11 @@
 #define APP_KEYS_H
 
 // Shared keys
+extern const char EG_K_ALERT[];
 extern const char EG_K_BRIGHTNESS[];
 extern const char EG_K_CLK[];
 extern const char EG_K_CLKR[];
+extern const char EG_K_DISP_TYPE[];   // display.type
 extern const char EG_K_ENABLE[];
 extern const char EG_K_FADE_SHIFT[];
 extern const char EG_K_FBT[];
@@ -45,11 +47,13 @@ extern const char EG_K_TPL[];
 extern const char EG_K_TYPE[];
 extern const char EG_K_USER[];
 extern const char EG_K_VOLUME[];
+extern const char EG_K_WARN[];
 
 // Shared labels: L label, O options, H hint, P input pattern
 extern const char EG_L_EN[];
 extern const char EG_L_MOD[];
 extern const char EG_L_INT[];
+extern const char EG_H_INT[];
 extern const char EG_L_PRT[];
 extern const char EG_L_PWD[];
 extern const char EG_L_PIN[];
@@ -66,5 +70,7 @@ extern const char EG_L_QFR[];
 extern const char EG_L_QTO[];
 extern const char EG_H_QTO[];
 extern const char EG_P_IP[];
+extern const char EG_L_TPL[];
+extern const char EG_W_SCREEN[];
 
 #endif

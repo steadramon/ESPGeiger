@@ -33,6 +33,7 @@ namespace TickProfile {
   uint32_t _lps_count = 0;
 #ifdef LOOP_PROFILE
   uint32_t loopBodyUs = 0;
+  uint32_t loopMaxUs = 0;
 #endif
 }
 }  // namespace corium
@@ -57,7 +58,7 @@ void corium::TickProfile::markWifi()    { s_wifi_done_us = micros(); }
 #endif
 
 bool corium::TickProfile::endTick() {
-  // never reset, the loop owns it
+  // _lps_count is never reset, the loop owns it
   static uint32_t s_lps_last = 0;
   uint32_t n = _lps_count;
   uint32_t count = n - s_lps_last;
@@ -88,12 +89,14 @@ bool corium::TickProfile::endTick() {
     corium::Registry::logLoopProfileAndReset();
     uint32_t body = loopBodyUs;
     loopBodyUs = 0;
-    // of the 60 s, what loop() didn't get
+    // The part of the 60 s that loop() didn't get
     uint32_t stolen = (body > 60000000UL) ? 0 : (60000000UL - body);
-    corium::Log::console(PSTR("Loop wall: body=%lums stolen=%lums (%lu%% async)"),
+    corium::Log::console(PSTR("Loop wall: body=%lums stolen=%lums (%lu%% async) worst=%luus"),
       (unsigned long)(body / 1000UL),
       (unsigned long)(stolen / 1000UL),
-      (unsigned long)(stolen / 600000UL));
+      (unsigned long)(stolen / 600000UL),
+      (unsigned long)loopMaxUs);
+    loopMaxUs = 0;
 #endif
     corium::TickProfile::tickMaxUs = us;
     return true;

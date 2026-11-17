@@ -62,7 +62,6 @@ static const char PORTAL_RESET_BTN[] PROGMEM =
   "<button type=submit style=\"background:#fff;color:#c0392b;border:1px solid #c0392b\">"
   "Factory reset&hellip;</button></form>";
 
-static const char PORTAL_END[] PROGMEM = "</body></html>";
 
 // after PAGE_TOP
 static const char RESET_CONFIRM_HTML[] PROGMEM =
@@ -104,7 +103,7 @@ bool EGPortal::begin(const char* apSsid, const char* apPassword) {
 
   // STA only, AP_STA scan is unreliable
   WiFi.mode(WIFI_STA);
-  (void)WiFi.disconnect(false, false);   // keep the creds, one arg wipes them; only for the scan
+  (void)WiFi.disconnect(false, false);   // keeps the creds (the one arg form wipes them), only for the scan
   delay(100);
   int n = WiFi.scanNetworks(false);
   refreshScan(n);
@@ -115,14 +114,14 @@ bool EGPortal::begin(const char* apSsid, const char* apPassword) {
 #elif defined(ESP32)
   WiFi.mode(WIFI_MODE_APSTA);
 #endif
-  // the STA's join moves the AP to its channel, start on the likely one
+  // The STA's join moves the AP to its channel, so start on the likely one
   uint8_t chan = (_scanCount && _scan[0].chan) ? _scan[0].chan : 1;
   bool up = WiFi.softAP(apSsid, (apPassword && apPassword[0]) ? apPassword : nullptr, chan);
 
   IPAddress apIp = WiFi.softAPIP();
   up = _dns.begin(53, EGTcpAddr(apIp[0], apIp[1], apIp[2], apIp[3])) && up;
 
-  // routes outlive end()
+  // Routes outlive end(), only add them once
   if (!_routed) {
     _http.on(FPSTR(P_ROOT),  EGHttpRequest::GET,  &EGPortal::hRoot, this);
     _http.on(F("/scan"),     EGHttpRequest::GET,  &EGPortal::hScan, this);
@@ -254,7 +253,7 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
       }
       continue;
     }
-    // full: the weakest goes, a tie stays
+    // When full the weakest goes, on a tie the old one stays
     size_t at = count;
     if (count >= maxOut) {
       at = weakest(out, count);
@@ -284,7 +283,7 @@ static void send_page(EGHttpResponse& res, PGM_P html) {
   res.endChunked();
 }
 
-// to the notice, as the root page
+// Page head up to the notice, same as the root page
 static void send_head(EGHttpResponse& res, const char* title, const char* notice) {
   res.beginChunked(200, FPSTR(HTTP_CT_HTML));
   res.sendChunk(FPSTR(PAGE_TOP));
@@ -314,7 +313,7 @@ void EGPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void* user) {
 
   res.sendChunk(FPSTR(PORTAL_TAIL));
   if (self->_onReset) res.sendChunk(FPSTR(PORTAL_RESET_BTN));
-  res.sendChunk(FPSTR(PORTAL_END));
+  res.sendChunk(FPSTR(HTTP_HTML_END));
   res.endChunked();
 }
 
@@ -343,18 +342,23 @@ static const char CREDS_T_SSID[] PROGMEM = "ssid must be 1-32 characters";
 static const char CREDS_T_LONG[] PROGMEM = "password too long";
 static const char CREDS_T_PASS[] PROGMEM = "password must be empty (open), 8-63 characters or 64 hex digits";
 static const char* const CREDS_TEXT[] PROGMEM = {CREDS_T_SSID, CREDS_T_LONG, CREDS_T_PASS};
+const char EGPortal::NOT_SAVED[] PROGMEM = "WiFi settings not saved: out of memory";
+
+PGM_P EGPortal::credsText(Creds c) {
+  return (PGM_P)pgm_read_ptr(&CREDS_TEXT[c - 1]);
+}
 
 void EGPortal::hSave(EGHttpRequest& req, EGHttpResponse& res, void* user) {
   EGPortal* self = static_cast<EGPortal*>(user);
   char ssid[EGPORTAL_SSID_MAX + 1], pass[EGPORTAL_PASS_MAX + 1];
   Creds c = takeCreds(req, ssid, pass);
   if (c != CREDS_OK) {
-    res.send(400, FPSTR(HTTP_CT_PLAIN), FPSTR((PGM_P)pgm_read_ptr(&CREDS_TEXT[c - 1])));
+    res.send(400, FPSTR(HTTP_CT_PLAIN), FPSTR(credsText(c)));
     return;
   }
 
   if (self->_onSave && !self->_onSave(ssid, pass, self->_onSaveUser)) {
-    res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory"));
+    res.send(500, FPSTR(HTTP_CT_PLAIN), FPSTR(NOT_SAVED));
     return;
   }
 

@@ -54,6 +54,7 @@ void GeigerSerial::begin() {
   s_port.flush();
   _idle_ms = (uint8_t)clamp<uint32_t>(50000UL / baud, 1, 4);   // ~5 chars
   _polls = true;
+  _line.mark(corium::fastMillis());   // no line yet isn't no input, the wait starts here
 }
 
 // well over a 64 B line at the slowest baud
@@ -164,12 +165,13 @@ void GeigerSerial::secondTicker() {
 }
 
 void GeigerSerial::drainPort() {
+  static const char DRAIN[] PROGMEM = "GeigerSerial: %u bad lines, draining port";
   unsigned long now = corium::fastMillis();
   if (now - _last_drain_log > 60000UL) {
-    corium::Log::console(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
+    corium::Log::console(DRAIN, _bad_streak);
     _last_drain_log = now;
   } else {
-    corium::Log::debug(PSTR("GeigerSerial: %u bad lines, draining port"), _bad_streak);
+    corium::Log::debug(DRAIN, _bad_streak);
   }
   s_port.flush();
   clear_line();

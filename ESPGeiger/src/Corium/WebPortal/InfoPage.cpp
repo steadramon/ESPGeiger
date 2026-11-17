@@ -40,6 +40,17 @@ static const char IR_HEX[]   PROGMEM = "0x%08x";
 static const char IR_CODE_END[] PROGMEM = "</code></td></tr>";
 static const char IR_END[]   PROGMEM = "</table></details>";
 
+static const uint8_t BAR_WARN = 85;   // %, as the ota check
+static constexpr size_t BAR_MAX = 56;
+
+// num of den as a bar, amber from BAR_WARN when warn
+static const char* info_bar(char* b, uint32_t num, uint32_t den, bool warn) {
+  uint32_t pct = num < den ? num * 100 / den : 100;
+  snprintf_P(b, BAR_MAX, PSTR("<div class=bar><i%s style=width:%u%%></i></div>"),
+             warn && pct >= BAR_WARN ? PSTR(" class=w") : PSTR(""), (unsigned)pct);
+  return b;
+}
+
 void corium::WebPortal::infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...) {
   char row[320];
   size_t pos = 0;
@@ -159,9 +170,9 @@ static void info_render_reset(EGHttpResponse& res) {
 // who set the clock
 static void info_time(EGHttpResponse& res) {
   PGM_P src = PSTR("not set");
-  if (corium::Clock::source == corium::Clock::NTP)       src = PSTR("NTP");
+  if (corium::Clock::source == corium::Clock::NTP)       src = W_NTP;
   else if (corium::Clock::source == corium::Clock::KEPT) src = PSTR("kept over a restart");
-  else if (corium::Clock::source == corium::Clock::WEB)  src = PSTR("browser");
+  else if (corium::Clock::source == corium::Clock::WEB)  src = W_BROWSER;
 #ifdef CORIUM_RTC
   if (corium::Rtc::chip()) {
     if (corium::Clock::source == corium::Clock::RTC) INFO_ROW("Time", PSTR("RTC (%s)"), corium::Rtc::chip());
@@ -178,10 +189,16 @@ static void info_render_system(EGHttpResponse& res) {
   info_time(res);
   INFO_ROW("Chip ID",       W_FMT_S, corium::DeviceInfo::chipId());   // udp pairing asks for it
   uint32_t heap = corium::DeviceInfo::freeHeap();
+  uint32_t total = corium::DeviceInfo::heapSize();
+  uint32_t sketch = corium::DeviceInfo::sketchSize();
+  uint32_t slot = corium::DeviceInfo::freeSketch();   // what the next update gets
+  char barhtml[BAR_MAX];
   // KB with one decimal, no float
-  INFO_ROW("Free memory",   PSTR("%u.%u KB"), (unsigned)(heap / 1024), (unsigned)(heap % 1024 * 10 / 1024));
-  INFO_ROW("Firmware",      PSTR("%u KB of %u KB"), (unsigned)(corium::DeviceInfo::sketchSize() / 1024),
-                            (unsigned)((corium::DeviceInfo::sketchSize() + corium::DeviceInfo::freeSketch()) / 1024));
+  INFO_ROW("Free memory",   PSTR("%u.%u KB of %u KB%s"), (unsigned)(heap / 1024), (unsigned)(heap % 1024 * 10 / 1024),
+                            (unsigned)(total / 1024), info_bar(barhtml, total > heap ? total - heap : 0, total, false));
+  INFO_ROW("Firmware",      PSTR("%u KB of %u KB%s"), (unsigned)(sketch / 1024), (unsigned)(slot / 1024),
+                            info_bar(barhtml, sketch, slot, true));
+  if (uint32_t st = corium::DeviceInfo::stackFree()) INFO_ROW("Stack headroom", IR_BYTES, (unsigned)st);
 #ifdef ESP8266
   if (corium::DeviceInfo::flashSize() != corium::DeviceInfo::realFlash()) {
     INFO_ROW("Flash", PSTR("%u KB set, the chip has %u KB"), (unsigned)(corium::DeviceInfo::flashSize() / 1024),
@@ -191,38 +208,43 @@ static void info_render_system(EGHttpResponse& res) {
   info_render_reset(res);
   if (corium::BootGuard::safeMode()) INFO_ROW("Safe mode", PSTR("yes"));
   if (corium::BootGuard::crashStreak()) INFO_ROW("Crash boots in a row", W_FMT_U, (unsigned)corium::BootGuard::crashStreak());
-  if (corium::SystemPrefs::passRestored) INFO_ROW("Web password", PSTR("restored from backup (settings lost)"));
+  if (corium::SystemPrefs::passRestored) corium::WebPortal::infoRow(res, corium::L_WEB_PASS, PSTR("restored from backup (settings lost)"));
   res.sendChunk(FPSTR(IR_END));
 }
 
-// -80 and weaker drops out
-static PGM_P rssi_word(int r) {
-  if (r >= -60) return PSTR("excellent");
-  if (r >= -70) return PSTR("good");
-  if (r >= -80) return PSTR("fair");
-  return PSTR("weak");
+// as the status page
+static int rssi_pct(int r) {
+  if (r <= -100) return 0;
+  if (r >= -50) return 100;
+  return 2 * (r + 100);
 }
 
 static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
   res.sendChunk(F("<details open><summary>WiFi</summary><table>"));
   if (net.ssid[0]) INFO_ROW("Network", PSTR("%s, channel %d"), net.ssid, (int)corium::Wifi::channel());
-  if (corium::Wifi::isConnected()) INFO_ROW("Signal", PSTR("%d dBm (%s)"), (int)corium::Wifi::rssi, rssi_word(corium::Wifi::rssi));
+  char barhtml[BAR_MAX];
+  if (corium::Wifi::isConnected()) {
+    int pct = rssi_pct(corium::Wifi::rssi);
+    INFO_ROW("Signal", PSTR("%d dBm (%d%%)%s"), (int)corium::Wifi::rssi, pct, info_bar(barhtml, pct, 100, false));
+  }
   INFO_ROW("IP",             W_FMT_S,     net.ip);
   INFO_ROW("Hostname",       W_FMT_S,     corium::DeviceInfo::hostname());
   INFO_ROW("MAC",            W_FMT_S,     net.mac);
   INFO_ROW("DNS",            W_FMT_S,     net.dns);
   if (strcmp_P(net.ap_ip, PSTR("0.0.0.0"))) {   // ssid is kept with the AP off
-    INFO_ROW("AP SSID",      W_FMT_S,     net.ap_ssid);
-    INFO_ROW("AP IP",        W_FMT_S,     net.ap_ip);
-    INFO_ROW("AP MAC",       W_FMT_S,     net.ap_mac);
+    INFO_ROW("Hotspot SSID", W_FMT_S,     net.ap_ssid);
+    INFO_ROW("Hotspot IP",   W_FMT_S,     net.ap_ip);
+    INFO_ROW("Hotspot MAC",  W_FMT_S,     net.ap_mac);
   }
   res.sendChunk(FPSTR(IR_END));
 }
 
 static void info_render_about(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>About</summary><table>"));
-  INFO_ROW("Build", PSTR(RELEASE_VERSION " " GIT_VERSION " " BUILD_ENV " %s"),
-           corium::DeviceInfo::buildDate());
+  INFO_ROW("Version", PSTR(RELEASE_VERSION));
+  INFO_ROW("Commit",  PSTR(GIT_VERSION));
+  INFO_ROW("Build",   PSTR(BUILD_ENV));
+  INFO_ROW("Built",   W_FMT_S, corium::DeviceInfo::buildDate());
   corium::AppHooks::infoRows(res);
   res.sendChunk(FPSTR(IR_END));
 }
@@ -235,30 +257,26 @@ void corium::WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   InfoNet net;
   info_collect_net(net);
 
-  sendf(res, W_CONNECTED, net.ssid[0] ? net.ssid : PSTR("(not connected)"));
+  sendf(res, W_CONNECTED, net.ssid[0] ? net.ssid : W_NONE);
   res.sendKV(F("</b> with IP <b>"), net.ip);
   res.sendKV(F("</b> &middot; "), corium::DeviceInfo::board(), F("</p>"));
 
   info_render_system(res);
   info_render_wifi(res, net);
   info_render_about(res);
+  res.sendChunk(F("<p><a href=/about>More</a></p>"));
 
   corium::WebPortal::endPage(res);
 }
 
+// name: peak us, stalls when any
 static void about_modules(EGHttpResponse& res) {
   uint8_t count = corium::Registry::count();
   for (uint8_t i = 0; i < count; i++) {
-    corium::Module* m = corium::Registry::get(i);
-    corium::WebPortal::sendf(res, PSTR("%s\"%s\""), (i > 0 ? PSTR(",") : PSTR("")), m->name());
-  }
-}
-
-// us, the modules' order
-static void about_peaks(EGHttpResponse& res) {
-  uint8_t count = corium::Registry::count();
-  for (uint8_t i = 0; i < count; i++) {
-    corium::WebPortal::sendf(res, PSTR("%s%u"), (i > 0 ? PSTR(",") : PSTR("")), (unsigned)corium::Registry::peakUs(i));
+    uint8_t n = corium::Registry::stalls(i);
+    corium::WebPortal::sendf(res, n ? PSTR("%s\"%s\":{\"peak\":%u,\"stalls\":%u}") : PSTR("%s\"%s\":{\"peak\":%u}"),
+                             (i > 0 ? PSTR(",") : PSTR("")), corium::Registry::get(i)->name(),
+                             (unsigned)corium::Registry::peakUs(i), (unsigned)n);
   }
 }
 
@@ -333,11 +351,9 @@ void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   about_device(res);
   corium::AppHooks::aboutJson(res);
-  res.sendChunk(F("\"modules\":["));
+  res.sendChunk(F("\"modules\":{"));
   about_modules(res);
-  res.sendChunk(F("],\"peak\":["));
-  about_peaks(res);
-  res.sendChunk(F("]"));
+  res.sendChunk(F("}"));
 #ifdef CORIUM_TRACE
   about_trace(res);
 #endif

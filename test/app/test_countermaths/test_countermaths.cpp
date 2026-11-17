@@ -136,18 +136,28 @@ static void x600_sat(void) {
   TEST_ASSERT_EQUAL_UINT16(0xFFFF, CounterMaths::cps_x600(huge));
 }
 
-// none below 50 cps
+// no divide below 50 cps
 static void dead_time_skip(void) {
   m.set_dead_time_us(100);
-  TEST_ASSERT_EQUAL_FLOAT(50.0f, m.apply_dead_time(50.0f));
-  float just_over = m.apply_dead_time(50.01f);
-  TEST_ASSERT_TRUE(just_over > 50.01f);
-  TEST_ASSERT_TRUE((just_over / 50.01f) < 1.006f);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 50.25f, m.apply_dead_time(50.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.01f, m.apply_dead_time(10.0f));
+}
+
+// both branches meet at 50 cps
+static void dead_time_join(void) {
+  m.set_dead_time_us(190);
+  float below = m.apply_dead_time(49.99f);
+  float above = m.apply_dead_time(50.01f);
+  TEST_ASSERT_TRUE(above > below);
+  TEST_ASSERT_TRUE((above / 50.01f - below / 49.99f) < 0.0001f);
+  float lo = m.apply_dead_time(50.0f);
+  float exact = 50.0f / (1.0f - 50.0f * 190e-6f);
+  TEST_ASSERT_TRUE((exact - lo) / exact < 0.0001f);
 }
 
 static void long_tau(void) {
   m.set_dead_time_us(1000);
-  TEST_ASSERT_EQUAL_FLOAT(50.0f, m.apply_dead_time(50.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 52.5f, m.apply_dead_time(50.0f));
   float just_over = m.apply_dead_time(50.01f);
   TEST_ASSERT_FLOAT_WITHIN(0.05f, 52.64f, just_over);
   TEST_ASSERT_TRUE((just_over / 50.01f) > 1.05f);
@@ -346,6 +356,7 @@ int main(void) {
   RUN_TEST(dead_time_zero);
   RUN_TEST(dead_time_model);
   RUN_TEST(dead_time_cap);
+  RUN_TEST(dead_time_join);
   RUN_TEST(dead_time_bounds);
   RUN_TEST(counts_clamp);
   RUN_TEST(to_int_sat);

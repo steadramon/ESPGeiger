@@ -26,18 +26,9 @@
 #include "Corium/Net/WifiSetup.h"
 #include "Corium/Util/Fnv.h"
 #include "Corium/Util/MathUtil.h"
+#include "Corium/Util/Words.h"
 #include "KeyStore.h"
-
-#ifdef ESP32
-#include <math.h>
-#include <esp_chip_info.h>
-#include <esp_system.h>
-#endif
-#ifdef ESP8266
-extern "C" {
-#include <user_interface.h>
-}
-#endif
+#include "DeviceInfoChip.h"
 
 static char s_hostname[sizeof(THING_NAME "-") + CHIPID_LEN] = "";
 static char s_chipid[CHIPID_LEN + 1] = "";
@@ -71,25 +62,7 @@ uint8_t corium::DeviceInfo::heapFrag() {
   static uint32_t s_last_ms = 0;
   uint32_t now = corium::fastMillis();
   if (s_last_ms == 0 || now - s_last_ms >= FRAG_MS) {
-#ifdef ESP8266
-    uint32_t free_;
-    uint16_t max_;
-    uint8_t frag_;
-    ESP.getHeapStats(&free_, &max_, &frag_);
-    s_frag = frag_;
-    s_lfb_cur = max_;
-#else
-    // same as umm_malloc on the 8266
-    uint32_t free_ = ESP.getFreeHeap();
-    uint32_t max_  = ESP.getMaxAllocHeap();
-    s_lfb_cur = max_;
-    if (free_ == 0 || max_ > free_) {
-      s_frag = 0;
-    } else {
-      float ratio = (float)max_ / (float)free_;
-      s_frag = (uint8_t)(100.0f - sqrtf(ratio) * 100.0f);
-    }
-#endif
+    s_frag = Chip::heapRead(&s_lfb_cur);
     s_last_ms = now;
     if (s_lfb_low == 0 || s_lfb_cur < s_lfb_low) s_lfb_low = s_lfb_cur;
 #ifdef CORIUM_LFB_TAKE
@@ -125,33 +98,15 @@ void corium::DeviceInfo::safeRestart(uint32_t delay_ms) {
 }
 
 void corium::DeviceInfo::begin() {
-#ifdef ESP8266
-  uint32_t id = ESP.getChipId();
-#else
-  uint32_t id = 0;
-  // last 3 MAC bytes, like the 8266 chip id
-  for (int i = 0; i < 17; i += 8) {
-    id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
-  }
-#endif
+  uint32_t id = Chip::id();
   snprintf_P(s_chipid, sizeof(s_chipid), PSTR("%06lx"),
              (unsigned long)(id & 0xFFFFFFul));
   s_chip_hash = fnv1a(s_chipid);
 
   // <THING_NAME>-d5536d
-  snprintf_P(s_hostname, sizeof(s_hostname), PSTR("%s-%s"),
-             THING_NAME, s_chipid);
+  snprintf_P(s_hostname, sizeof(s_hostname), PSTR(THING_NAME "-%s"), s_chipid);
 
-  const uint8_t fm = (uint8_t)ESP.getFlashChipMode();
-  static const char FLASH_MODES[][5] PROGMEM = {"QIO", "QOUT", "DIO", "DOUT"};
-  const char* mode = fm < 4 ? FLASH_MODES[fm] : PSTR("?");
-  const unsigned long mhz = (unsigned long)(ESP.getFlashChipSpeed() / 1000000ul);
-#ifdef ESP8266
-  snprintf_P(s_flash, sizeof(s_flash), PSTR("%06lx %s %luMHz"),
-             (unsigned long)(ESP.getFlashChipId() & 0xFFFFFFul), mode, mhz);
-#else
-  snprintf_P(s_flash, sizeof(s_flash), PSTR("%s %luMHz"), mode, mhz);
-#endif
+  Chip::flashText(s_flash, sizeof(s_flash));
 
   // else the MAC can read all FF
   corium::Wifi::staMode(s_hostname);
@@ -162,8 +117,7 @@ const char* corium::DeviceInfo::hostname()    { return s_hostname; }
 const char* corium::DeviceInfo::chipId()      { return s_chipid; }
 uint32_t    corium::DeviceInfo::chipHash()    { return s_chip_hash; }
 void corium::DeviceInfo::userAgent(char* buf, size_t cap) {
-  snprintf_P(buf, cap, PSTR("%s/%s (%s; %s; %s)"),
-             THING_NAME, RELEASE_VERSION, GIT_VERSION, BUILD_ENV, s_chipid);
+  snprintf_P(buf, cap, PSTR(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; %s)"), s_chipid);
 }
 const char* corium::DeviceInfo::mac()         { return s_mac; }
 const char* corium::DeviceInfo::flashInfo()   { return s_flash; }
@@ -172,7 +126,7 @@ PGM_P corium::DeviceInfo::buildDate()         { return BUILD_DATE; }
 
 void corium::DeviceInfo::factoryReset() {
   // keeps the key
-  corium::Log::console(PSTR("Factory reset"));
+  corium::Log::console(W_FACTORY_RESET);
   // first, a cut after the wipe would restore the old login
   if (!corium::KeyStore::clear(WEB_PASS_SLOT)) {
     corium::Log::console(PSTR("Factory reset: Web password backup kept"));   // the old login comes back
@@ -199,67 +153,15 @@ void corium::DeviceInfo::setFriendlyName(const char* s) {
   strlcpy(s_friendlyname, s ? s : "", sizeof(s_friendlyname));
 }
 
-// one case per chip
-const char* corium::DeviceInfo::chip() {
-#ifdef ESP8266
-  return "ESP8266";
-#elif defined(ESP32)
-  esp_chip_info_t info;
-  esp_chip_info(&info);
-  switch ((int)info.model) {
-    case 0:  return "ESP8266";
-    case (int)esp_chip_model_t::CHIP_ESP32:   return "ESP32";
-    case (int)esp_chip_model_t::CHIP_ESP32S2: return "ESP32-S2";
-    case (int)esp_chip_model_t::CHIP_ESP32S3: return "ESP32-S3";
-    case (int)esp_chip_model_t::CHIP_ESP32C3: return "ESP32-C3";
-    // raw model numbers, not in every IDF enum
-    case 6:  return "ESP32-H4";
-    case 12: return "ESP32-C2";
-    case 13: return "ESP32-C6";
-    case 16: return "ESP32-H2";
-    default: return "ESP32";
-  }
-#else
-  return "UNKNOWN";
-#endif
-}
-
-struct ResetRow {
-  uint8_t cause;   // the sdk's
-  uint8_t rr;
-  char text[19];
-};
-
-#ifdef ESP8266
-static const ResetRow RESETS[] PROGMEM = {
-  {REASON_DEFAULT_RST,      corium::DeviceInfo::RR_POWER_ON,   "Power on"},
-  {REASON_WDT_RST,          corium::DeviceInfo::RR_WDT,        "Hardware watchdog"},
-  {REASON_EXCEPTION_RST,    corium::DeviceInfo::RR_EXCEPTION,  "Exception"},
-  {REASON_SOFT_WDT_RST,     corium::DeviceInfo::RR_WDT,        "Software watchdog"},
-  {REASON_SOFT_RESTART,     corium::DeviceInfo::RR_RESTART,    "Software restart"},
-  {REASON_DEEP_SLEEP_AWAKE, corium::DeviceInfo::RR_DEEP_SLEEP, "Deep sleep wake"},
-  {REASON_EXT_SYS_RST,      corium::DeviceInfo::RR_PIN,        "External reset"},
-};
-static uint32_t reset_cause() { return ESP.getResetInfoPtr()->reason; }
-#else
-static const ResetRow RESETS[] = {
-  {ESP_RST_POWERON,   corium::DeviceInfo::RR_POWER_ON,   "Power on"},
-  {ESP_RST_EXT,       corium::DeviceInfo::RR_PIN,        "External reset"},
-  {ESP_RST_SW,        corium::DeviceInfo::RR_RESTART,    "Software restart"},
-  {ESP_RST_PANIC,     corium::DeviceInfo::RR_EXCEPTION,  "Exception"},
-  {ESP_RST_INT_WDT,   corium::DeviceInfo::RR_WDT,        "Interrupt watchdog"},
-  {ESP_RST_TASK_WDT,  corium::DeviceInfo::RR_WDT,        "Task watchdog"},
-  {ESP_RST_WDT,       corium::DeviceInfo::RR_WDT,        "Watchdog"},
-  {ESP_RST_BROWNOUT,  corium::DeviceInfo::RR_BROWNOUT,   "Brownout"},
-  {ESP_RST_DEEPSLEEP, corium::DeviceInfo::RR_DEEP_SLEEP, "Deep sleep wake"},
-};
-static uint32_t reset_cause() { return esp_reset_reason(); }
-#endif
+namespace Chip = corium::DeviceInfo::Chip;
+using Chip::ResetRow;
 
 static const ResetRow* reset_row() {
-  uint32_t c = reset_cause();
-  for (const ResetRow& r : RESETS) {
-    if (pgm_read_byte(&r.cause) == c) return &r;
+  uint32_t c = Chip::resetCause();
+  size_t n = 0;
+  const ResetRow* rows = Chip::resets(&n);
+  for (size_t i = 0; i < n; i++) {
+    if (pgm_read_byte(&rows[i].cause) == c) return &rows[i];
   }
   return nullptr;
 }

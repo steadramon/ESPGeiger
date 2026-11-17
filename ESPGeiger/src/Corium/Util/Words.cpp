@@ -26,7 +26,23 @@ const char W_FALSE[]       PROGMEM = "false";
 const char W_FMT_S[]       PROGMEM = "%s";
 const char W_FMT_D[]       PROGMEM = "%d";
 const char W_FMT_U[]       PROGMEM = "%u";
+const char W_FMT_LU[]      PROGMEM = "%lu";
+const char W_FMT_LD[]      PROGMEM = "%ld";
+const char W_FMT_DOT[]     PROGMEM = "%s.%s";
 
 const char W_CHECKED[]     PROGMEM = " checked";
 const char W_DETAILS_END[] PROGMEM = "</details>";
 const char W_CONNECTED[]   PROGMEM = "<p class=muted>Connected to <b>%s";
+const char W_NONE[]        PROGMEM = "(none)";
+const char W_ADMIN[]       PROGMEM = "admin";
+const char W_FACTORY_RESET[] PROGMEM = "Factory reset";
+const char W_UPDATE[]      PROGMEM = "Update";
+const char W_NTP[]         PROGMEM = "NTP";
+const char W_BROWSER[]     PROGMEM = "browser";
+
+const char W_REFUSED[]      PROGMEM = "refused";
+const char W_BAD_VALUE[]    PROGMEM = "bad value";
+const char W_BAD_FORMAT[]   PROGMEM = "bad format";
+const char W_TOO_SHORT[]    PROGMEM = "too short";
+const char W_TOO_LONG[]     PROGMEM = "too long";
+const char W_OOM[]          PROGMEM = "out of memory";

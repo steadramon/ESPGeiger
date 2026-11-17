@@ -129,7 +129,7 @@ static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
 #endif
 
 void corium::WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  corium::WebPortal::beginPage(res, F("Update"));
+  corium::WebPortal::beginPage(res, FPSTR(W_UPDATE));
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
   if (corium::BootGuard::safeMode()) {
     res.sendChunk(FPSTR(UPDATE_SAFE_JS));   // minimal inline uploader, no asset fetch
@@ -175,11 +175,11 @@ static void ota_fail(PGM_P why) {
 // too big is SPACE on the 8266, SIZE on the esp32
 static PGM_P begin_why() {
   uint8_t e = Update.getError();
-  if (e == UPDATE_ERROR_SPACE || e == UPDATE_ERROR_SIZE) return PSTR("no room");
+  if (e == UPDATE_ERROR_SPACE || e == UPDATE_ERROR_SIZE) return PSTR("too big");
 #ifdef ESP8266
-  if (e == UPDATE_ERROR_OOM) return PSTR("out of memory");
+  if (e == UPDATE_ERROR_OOM) return W_OOM;
 #else
-  if (e == UPDATE_ERROR_OK) return PSTR("out of memory");   // its buffer malloc sets none
+  if (e == UPDATE_ERROR_OK) return W_OOM;   // its buffer malloc sets none
 #endif
   return PSTR("begin failed");
 }

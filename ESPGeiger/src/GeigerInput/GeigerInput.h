@@ -167,6 +167,8 @@ class GeigerInput {
     virtual void use_pcnt(bool) {}   // before begin
 #endif
     virtual bool isHealthy() const { return true; }
+    bool stormy() const { return _stormy; }       // parked or dropping
+    bool chattering() const { return _chatter; }  // isr builds, Chatter.h
     virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
     virtual void registerRoutes(EGHttpServer&) {}
     virtual corium::MeasureRows measurements() { return corium::MeasureRows(); }
@@ -212,6 +214,8 @@ class GeigerInput {
     int _tx_pin = -1;
 #endif
     int _rx_pin = GEIGER_RXPIN;
+    bool _stormy = false;
+    bool _chatter = false;
 };
 
 #endif

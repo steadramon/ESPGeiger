@@ -156,7 +156,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
   uint32_t last_ms = EGClock::now();
   while (sent < len) {
     if (s->send_aborted) return false;
-    if (!s->client || !s->client->connected()) return send_fail(s, PSTR("client gone"), sent, len);
+    if (!s->client || !s->client->connected()) return send_fail(s, PSTR("connection lost"), sent, len);
     // acks a little at a time still hold the loop
     if (eghttp_late(s)) return send_fail(s, PSTR("past deadline"), sent, len);
     size_t can = s->client->space();
@@ -408,6 +408,13 @@ static void set_acc(EGHttpServer::Slot* s, char* buf, size_t cap) {
   s->chunkAccCap = buf ? cap : 0;
 }
 
+// query is an offset into buf, it goes with it
+static void free_buf(EGHttpServer::Slot* s) {
+  free(s->buf);
+  s->buf   = nullptr;
+  s->query = 0;
+}
+
 // fresh slot, buf kept
 static void clear_slot(EGHttpServer::Slot* s) {
   s->len            = 0;
@@ -445,7 +452,7 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(EGTcpClient* c) {
 }
 
 void EGHttpServer::markDone(Slot* s) {
-  if (s->buf) { free(s->buf); s->buf = nullptr; }
+  free_buf(s);
   set_acc(s, nullptr, 0);
   s->state    = DONE;
   _tickWanted = true;
@@ -460,7 +467,7 @@ void EGHttpServer::sendStatusAndClose(Slot* s, const char* status, uint8_t retry
 }
 
 void EGHttpServer::resetSlot(Slot* s) {
-  if (s->buf) { free(s->buf); s->buf = nullptr; }
+  free_buf(s);
 #if EGHTTP_PULL
   // done, cut, gone or the server stopped: once
   if (s->pulled) s->pulled(s->pullCtx);
@@ -879,7 +886,7 @@ bool EGHttpServer::argsFit(const Slot* s, const EGHttpRequest& req) const {
   // console text, not a form
   const char* ct = eghttp_find_header(s->buf, s->headerEnd, PSTR("Content-Type:"));
   while (ct && (*ct == ' ' || *ct == '\t')) ct++;
-  if (ct && strncasecmp_P(ct, PSTR("text/plain"), 10) == 0) return true;
+  if (ct && strncasecmp_P(ct, HTTP_CT_PLAIN, 10) == 0) return true;
   return eghttp_form_fits(req._body, req._bodyLen, EGHTTP_ARG_MAX + 1);
 }
 
@@ -952,7 +959,7 @@ void EGHttpServer::dispatch(Slot* s) {
     r->handler(req, res, r->user);
   } else {
     if (_notFound) _notFound(req, res, _notFoundUser);
-    else           res.send(404, FPSTR(HTTP_CT_PLAIN), F("Not Found"));
+    else           res.send(404, FPSTR(HTTP_CT_PLAIN), FPSTR(HTTP_NOT_FOUND));
   }
 
   if (!res._started && !res._done) {
@@ -1011,8 +1018,7 @@ void EGHttpServer::respond(Slot* s) {
     return;
   }
   // body goes as acks come, the request isn't needed
-  free(s->buf);
-  s->buf = nullptr;
+  free_buf(s);
   s->client->setIdleTimeout(EGHTTP_REQ_MS);   // a reader that stops still goes
 }
 

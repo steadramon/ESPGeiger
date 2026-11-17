@@ -93,6 +93,7 @@ output{display:inline-block;margin-left:.6em;color:var(--muted)}
 details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
 details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
 details.adv{margin:.5em 0 0;border:0;padding:0}details.adv>summary{color:var(--muted);font-size:.85em;font-weight:400}
+.bar{height:.4em;background:var(--border);border-radius:2px;margin-top:.3em;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}.bar .w{background:#e90}
 .gb{font-size:.68em;font-weight:400;padding:.05em .45em;border-radius:3px;margin-left:.5em;border:1px solid var(--border);color:var(--muted)}.gb.on{color:var(--link);border-color:var(--link)}
 nav.tabs{display:flex;border-bottom:1px solid var(--border);margin:0 0 1em;gap:.4em;flex-wrap:wrap}
 nav.tabs a{padding:.5em .9em;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none}
@@ -134,14 +135,12 @@ nav.tabs a.ac{color:var(--link);border-bottom-color:var(--link)}
 // one flash copy
 static const char FAVICON_PATHS[] PROGMEM = APP_ICON_SVG;
 
-static const char HOME_NAME[] PROGMEM = THING_NAME;
-static PGM_P s_home = HOME_NAME;
+static PGM_P s_home = APP_NAME;
 
 void corium::WebPortal::setHomeName(PGM_P name) { s_home = name; }
 
 static const char BACK_ROW[] PROGMEM =
   "<p class=back-row><a class=back href=/>\xe2\x86\x90 Home</a></p>";
-static const char HTML_END[] PROGMEM = "</body></html>";
 
 static const char HEAD_OPEN[] PROGMEM =
   "<!DOCTYPE html><html lang=en><head>"
@@ -203,7 +202,6 @@ static const corium::MenuEntry WEBPORTAL_TOP_MENU[] PROGMEM = {
 static const corium::MenuEntry WEBPORTAL_BOTTOM_MENU[] PROGMEM = {
   {"/info",    "Info"},
   {"/update",  "Update"},
-  {"/restart", "Restart"},
   {"", ""}
 };
 
@@ -377,7 +375,7 @@ void corium::WebPortal::applyAuthFromPrefs() {
   const char* cur = corium::SystemPrefs::webPass(kept);
   static_assert(sizeof("admin") - 1 + 1 + WEB_PASS_MAX <= EGHTTP_AUTH_MAX,
                 "admin:pass must fit EGHTTP_AUTH_MAX or auth switches off");
-  p->_http.setBasicAuth(F("admin"), cur, F(THING_NAME));
+  p->_http.setBasicAuth(FPSTR(W_ADMIN), cur, FPSTR(APP_NAME));
   p->_http.setAuthHelp(corium::AUTH_HELP);
   p->_http.setSameOrigin(corium::Prefs::getBool("sys", corium::K_ORIGIN));
   p->_http.setBrake(corium::Prefs::getBool("sys", corium::K_BRAKE));
@@ -413,7 +411,7 @@ void corium::WebPortal::sendPageHead(EGHttpResponse& res, const __FlashStringHel
 void corium::WebPortal::sendPageTail(EGHttpResponse& res, bool footer) {
   res.sendChunk(FPSTR(BACK_ROW));
   if (footer) corium::WebPortal::sendPageFooter(res);
-  res.sendChunk(FPSTR(HTML_END));
+  res.sendChunk(FPSTR(HTTP_HTML_END));
 }
 
 void corium::WebPortal::beginPage(EGHttpResponse& res, const __FlashStringHelper* title,
@@ -450,7 +448,7 @@ static void root_menus(EGHttpResponse& res, bool safe) {
     if (!corium::Registry::quarantined(m)) render_menu(res, m->menuEntries());
   }
   render_menu(res, WEBPORTAL_BOTTOM_MENU);
-  res.sendChunk(F("</div>"));
+  res.sendChunk(F("<a href='/restart' onclick=\"return confirm('Restart the device?')\">Restart</a></div>"));
 }
 
 void corium::WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -484,7 +482,7 @@ void corium::WebPortal::hRoot(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (safe) root_safe_note(res);
   root_menus(res, safe);
   if (!safe) corium::WebPortal::sendPageFooter(res);
-  res.sendChunk(FPSTR(HTML_END));
+  res.sendChunk(FPSTR(HTTP_HTML_END));
   res.endChunked();
 }
 
@@ -604,10 +602,12 @@ void corium::WebPortal::hGuard(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
 void corium::WebPortal::hReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
   s_factory_reset = true;
-  corium::WebPortal::beginPage(res, F("Factory reset"));
+  corium::WebPortal::beginPage(res, FPSTR(W_FACTORY_RESET));
   res.sendChunk(F("<p>Clearing all settings. Device is restarting into setup.</p>"));
   corium::WebPortal::endRestartPage(res);
 }
+
+static const char ERASE_WIFI[] PROGMEM = "Erase WiFi";
 
 void corium::WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // back to DHCP for the setup AP, a net row that didn't load goes too
@@ -615,10 +615,10 @@ void corium::WebPortal::hEraseWifi(EGHttpRequest& req, EGHttpResponse& res, void
   corium::Prefs::reset("net");
   // hotspot mode too, else it boots back into it
   if (!corium::Wifi::joinMode() || !corium::Prefs::commit()) {
-    not_saved_page(res, F("Erase WiFi"));
+    not_saved_page(res, FPSTR(ERASE_WIFI));
     return;
   }
-  corium::WebPortal::beginPage(res, F("Erase WiFi"));
+  corium::WebPortal::beginPage(res, FPSTR(ERASE_WIFI));
   res.sendChunk(F("<p>Erasing WiFi credentials, network back to DHCP. Restarting into setup.</p>"));
   corium::WebPortal::endPage(res);
   s_erase_creds = true;
@@ -670,9 +670,9 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
   if (static_on) res.sendChunk(FPSTR(W_CHECKED));
   res.sendChunk(F(">Use static IP (otherwise DHCP)</label>"));
 
-  wifi_ip_field(res, corium::K_IP, PSTR("IP address"), PSTR("192.168.1.50"));
-  wifi_ip_field(res, corium::K_GW, PSTR("Gateway"), PSTR("192.168.1.1"));
-  wifi_ip_field(res, corium::K_SN, PSTR("Subnet mask"), PSTR("255.255.255.0"));
+  wifi_ip_field(res, corium::K_IP, corium::L_IP, PSTR("192.168.1.50"));
+  wifi_ip_field(res, corium::K_GW, corium::L_GW, PSTR("192.168.1.1"));
+  wifi_ip_field(res, corium::K_SN, corium::L_SN, PSTR("255.255.255.0"));
   wifi_ip_field(res, corium::K_DNS,
                 PSTR("DNS server <span class=muted style='font-weight:normal'>(optional)</span>"),
                 PSTR("same as gateway"));
@@ -680,30 +680,28 @@ static void wifi_render_static_ip(EGHttpResponse& res) {
 }
 
 #ifdef APP_OFFLINE_OK
-static const char K_HS_HOLD[] PROGMEM = "hs_hold";
+static void bad_settings(EGHttpResponse& res, PGM_P what, const char* why);
+
 // these builds count offline: a dead or unset network opens the device's own setup hotspot
 static void wifi_render_hotspot(EGHttpResponse& res) {
-  res.sendChunk(F("<details style='margin-top:1.5em'><summary>Setup hotspot</summary>"
+  res.sendChunk(F("<details style='margin-top:1.5em'><summary>Setup hotspot (if the saved network fails)</summary>"
                   "<form method=POST action=/hotspot>"
-                  "<p class=muted>If the saved network can't be joined, this device opens its own "
-                  "Wi-Fi and keeps counting. Connect to it to reach the usual web pages and set a "
-                  "new network here.</p>"
                   "<label for=hsh>Stays up with nobody on it (minutes, 0 = always)</label>"
                   "<input id=hsh name=m type=number min=0 max=1440 value='"));
-  corium::WebPortal::sendf(res, PSTR("%u"), (unsigned)corium::Prefs::getUInt("wifi", K_HS_HOLD));
+  corium::WebPortal::sendf(res, W_FMT_U, (unsigned)corium::Prefs::getUInt("wifi", corium::K_HS_HOLD));
   res.sendChunk(F("'><button type=submit>Save</button></form></details>"));
 }
 
 static const char HS_SAVED_BODY[] PROGMEM = "<p>Setup hotspot saved. In effect now.</p>";
+static const char SETUP_HS[] PROGMEM = "Setup hotspot";
 
 static void hHotspot(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  const char* m = req.arg(F("m"));
-  uint32_t mins = (m && *m) ? strtoul(m, nullptr, 10) : 10;
-  if (mins > 1440) mins = 1440;
-  char v[6];
-  snprintf(v, sizeof(v), "%u", (unsigned)mins);
-  bool ok = corium::Prefs::put("wifi", K_HS_HOLD, v) && corium::Prefs::commit();
-  corium::WebPortal::beginPage(res, ok ? F("Setup hotspot saved") : F("Setup hotspot"));
+  if (!corium::Prefs::put("wifi", corium::K_HS_HOLD, req.arg(F("m")))) {
+    bad_settings(res, SETUP_HS, W_BAD_VALUE);
+    return;
+  }
+  bool ok = corium::Prefs::commit();
+  corium::WebPortal::beginPage(res, ok ? F("Setup hotspot saved") : FPSTR(SETUP_HS));
   if (!ok) corium::WebPortal::sendNotSaved(res);
   else res.sendChunk(FPSTR(HS_SAVED_BODY));
   corium::WebPortal::endPage(res);
@@ -712,7 +710,7 @@ static void hHotspot(EGHttpRequest& req, EGHttpResponse& res, void*) {
 // hotspot up: any host or path goes to /network, the phone's setup popup
 static void hNotFound(EGHttpRequest&, EGHttpResponse& res, void*) {
   if (corium::Wifi::state() != corium::Wifi::HOTSPOT) {
-    res.send(404, FPSTR(HTTP_CT_PLAIN), F("Not Found"));
+    res.send(404, FPSTR(HTTP_CT_PLAIN), FPSTR(HTTP_NOT_FOUND));
     return;
   }
   char ip[16];
@@ -734,7 +732,7 @@ void corium::WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
 
   char buf[corium::Wifi::LAST_TRY_MAX];   // the ssid, then the last try
   egesc_html(buf, sizeof(buf), corium::Wifi::isConnected() ? corium::Wifi::SSID().c_str() : "");
-  sendf(res, W_CONNECTED, buf[0] ? buf : PSTR("(none)"));
+  sendf(res, W_CONNECTED, buf[0] ? buf : W_NONE);
   res.sendChunk(F("</b></p>"));
   if (corium::Wifi::lastTry(buf, sizeof(buf))) res.sendChunk(buf);
 
@@ -848,6 +846,8 @@ static bool take_ip(EGHttpRequest& req, const __FlashStringHelper* name,
   return !*dst || a.fromString(dst);
 }
 
+static const char NET_CONFIG[] PROGMEM = "network config";
+
 // the 400 a form fix answers
 static void bad_settings(EGHttpResponse& res, PGM_P what, const char* why) {
   char body[160];
@@ -855,15 +855,15 @@ static void bad_settings(EGHttpResponse& res, PGM_P what, const char* why) {
   res.send(400, FPSTR(HTTP_CT_PLAIN), body);
 }
 
-// BUSY is the sdk's
-enum HoldResult : uint8_t { HELD, TOO_LONG, BAD_PASS, NO_MEMORY, IN_TEST };
+// BUSY is the sdk's; the bad ones are EGPortal's Creds
+enum HoldResult : uint8_t { HELD, BAD_SSID, BAD_LONG, BAD_PASS, NO_MEMORY, IN_TEST };
+static_assert(BAD_SSID == (int)EGPortal::CREDS_SSID && BAD_PASS == (int)EGPortal::CREDS_PASS, "as EGPortal::Creds");
 
 // only with an ssid, none keeps the old one
 static HoldResult wifi_hold_args(EGHttpRequest& req) {
   char s[EGPORTAL_SSID_MAX + 1], p[EGPORTAL_PASS_MAX + 1];
   EGPortal::Creds c = EGPortal::takeCreds(req, s, p);
-  if (c == EGPortal::CREDS_PASS) return BAD_PASS;
-  if (c != EGPortal::CREDS_OK) return TOO_LONG;
+  if (c != EGPortal::CREDS_OK) return (HoldResult)c;
   switch (corium::Wifi::holdCreds(s, p)) {
     case corium::Wifi::HOLD_OK:   return HELD;
     case corium::Wifi::HOLD_BUSY: return IN_TEST;   // a join test, or a save waiting for its restart
@@ -877,16 +877,12 @@ static bool wifi_held_ok(EGHttpResponse& res, HoldResult held) {
     res.send(400, FPSTR(HTTP_CT_PLAIN), F("Already testing a network, wait for the result.\n"));
     return false;
   }
-  if (held == TOO_LONG) {
-    bad_settings(res, PSTR("WiFi settings"), PSTR("SSID or password too long"));
-    return false;
-  }
-  if (held == BAD_PASS) {
-    bad_settings(res, PSTR("WiFi settings"), PSTR("password must be 8-63 characters, or 64 hex digits"));
+  if (held != HELD && held <= BAD_PASS) {
+    bad_settings(res, PSTR("WiFi settings"), EGPortal::credsText((EGPortal::Creds)held));
     return false;
   }
   if (held == NO_MEMORY) {
-    res.send(500, FPSTR(HTTP_CT_PLAIN), F("WiFi settings not saved: out of memory\n"));
+    res.send(500, FPSTR(HTTP_CT_PLAIN), FPSTR(EGPortal::NOT_SAVED));
     return false;
   }
   return true;
@@ -896,7 +892,7 @@ static bool wifi_held_ok(EGHttpResponse& res, HoldResult held) {
 static bool static_refused(EGHttpResponse& res, const char* ip, const char* gw, const char* sn) {
   char err[96];
   if (corium::Wifi::validateStatic(ip, gw, sn, err, sizeof(err))) return false;
-  bad_settings(res, PSTR("network config"), err);
+  bad_settings(res, NET_CONFIG, err);
   return true;
 }
 
@@ -908,6 +904,8 @@ CORIUM_NODISCARD static bool put_net(bool st, bool join, const char* ip, const c
   return corium::Wifi::putNet(f) && (!join || corium::Wifi::joinMode());
 }
 
+static const char SAVING_WIFI[] PROGMEM = "Saving WiFi";
+
 // saved, restart, the backup reverts it; hotspot mode too
 static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
   if (has_ssid) {
@@ -915,7 +913,7 @@ static void wifi_saved(EGHttpResponse& res, bool has_ssid) {
     corium::BootGuard::requestPortal();   // offline builds too
     s_wifi_save = true;
   }
-  corium::WebPortal::beginPage(res, F("Saving WiFi"));
+  corium::WebPortal::beginPage(res, FPSTR(SAVING_WIFI));
   wifi_render_save_msg(res, has_ssid);
   corium::WebPortal::endRestartPage(res, WIFI_RESTART_MS);
 }
@@ -929,7 +927,7 @@ void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*
       || !take_ip(req, FPSTR(corium::K_GW),  gw)
       || !take_ip(req, FPSTR(corium::K_SN),  sn)
       || !take_ip(req, FPSTR(corium::K_DNS), dns)) {
-    bad_settings(res, PSTR("network config"), PSTR("not an IP address"));
+    bad_settings(res, NET_CONFIG, PSTR("bad IP address"));
     return;
   }
 
@@ -943,7 +941,7 @@ void corium::WebPortal::hWifiSave(EGHttpRequest& req, EGHttpResponse& res, void*
   bool put = put_net(static_on, has_ssid, ip, gw, sn, dns);
   if (!corium::Prefs::commit() || !put) {
     if (has_ssid) corium::Wifi::dropHeld();
-    not_saved_page(res, F("Saving WiFi"));
+    not_saved_page(res, FPSTR(SAVING_WIFI));
     return;
   }
   wifi_saved(res, has_ssid);

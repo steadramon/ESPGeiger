@@ -18,9 +18,13 @@
 */
 #ifdef ESP8266
 #include "DeviceInfo.h"
+#include "DeviceInfoChip.h"
 extern "C" {
 #include <user_interface.h>
 }
+
+extern char _heap_start[];
+uint32_t corium::DeviceInfo::heapSize() { return 0x3FFFC000u - (uint32_t)(uintptr_t)_heap_start; }   // as umm's end
 
 void corium::DeviceInfo::heapStats(uint32_t* free_, uint16_t* max_, uint8_t* frag) {
   ESP.getHeapStats(free_, max_, frag);
@@ -31,6 +35,45 @@ uint64_t corium::DeviceInfo::hwId() {
 }
 
 String corium::DeviceInfo::coreVersion() { return ESP.getCoreVersion(); }
+
+const char* corium::DeviceInfo::chip() { return "ESP8266"; }
+
+uint32_t corium::DeviceInfo::Chip::id() { return ESP.getChipId(); }
+
+void corium::DeviceInfo::Chip::flashText(char* buf, size_t cap) {
+  const uint8_t fm = (uint8_t)ESP.getFlashChipMode();
+  static const char FLASH_MODES[][5] PROGMEM = {"QIO", "QOUT", "DIO", "DOUT"};
+  const char* mode = fm < 4 ? FLASH_MODES[fm] : PSTR("?");
+  const unsigned long mhz = (unsigned long)(ESP.getFlashChipSpeed() / 1000000ul);
+  snprintf_P(buf, cap, PSTR("%06lx %s %luMHz"),
+             (unsigned long)(ESP.getFlashChipId() & 0xFFFFFFul), mode, mhz);
+}
+
+uint8_t corium::DeviceInfo::Chip::heapRead(uint32_t* lfb) {
+  uint32_t free_;
+  uint16_t max_;
+  uint8_t frag_;
+  ESP.getHeapStats(&free_, &max_, &frag_);
+  *lfb = max_;
+  return frag_;
+}
+
+static const corium::DeviceInfo::Chip::ResetRow RESETS[] PROGMEM = {
+  {REASON_DEFAULT_RST,      corium::DeviceInfo::RR_POWER_ON,   "Power on"},
+  {REASON_WDT_RST,          corium::DeviceInfo::RR_WDT,        "Hardware watchdog"},
+  {REASON_EXCEPTION_RST,    corium::DeviceInfo::RR_EXCEPTION,  "Exception"},
+  {REASON_SOFT_WDT_RST,     corium::DeviceInfo::RR_WDT,        "Software watchdog"},
+  {REASON_SOFT_RESTART,     corium::DeviceInfo::RR_RESTART,    "Software restart"},
+  {REASON_DEEP_SLEEP_AWAKE, corium::DeviceInfo::RR_DEEP_SLEEP, "Deep sleep wake"},
+  {REASON_EXT_SYS_RST,      corium::DeviceInfo::RR_PIN,        "External reset"},
+};
+
+const corium::DeviceInfo::Chip::ResetRow* corium::DeviceInfo::Chip::resets(size_t* n) {
+  *n = sizeof(RESETS) / sizeof(RESETS[0]);
+  return RESETS;
+}
+
+uint32_t corium::DeviceInfo::Chip::resetCause() { return ESP.getResetInfoPtr()->reason; }
 
 bool corium::DeviceInfo::resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
                           uint32_t* epc2, uint32_t* epc3, uint32_t* depc) {

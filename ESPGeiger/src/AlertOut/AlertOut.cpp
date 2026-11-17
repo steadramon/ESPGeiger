@@ -31,7 +31,7 @@
 AlertOut alertout;
 CORIUM_REGISTER_MODULE(alertout)
 
-CORIUM_PSTR(AO_H_PIN,  "Alert output pin (-1 = disabled).");
+CORIUM_PSTR(AO_H_PIN,  "Alert output GPIO, -1 = off");
 CORIUM_PSTR(AO_O_MOD,  "Steady level|1 Hz pulse");
 
 static const corium::Pref ALERT_PREF_ITEMS[] PROGMEM = {
@@ -52,7 +52,7 @@ const corium::PrefGroup* AlertOut::prefsGroup() { return &ALERT_PREF_GROUP; }
 void AlertOut::onPrefsLoaded() {
   _invert = (uint8_t)corium::Prefs::getUInt("alert", EG_K_POLARITY) & 1;
   _mode   = (uint8_t)corium::Prefs::getUInt("alert", EG_K_MODE) & 1;
-  // pin only at begin(), PinSafety holds the claim
+  // Pin is only claimed once at boot, PinSafety holds the claim
   _pulsing = false;
   corium::Registry::post(this);
 }
@@ -61,7 +61,7 @@ static void alert_lifecycle(corium::Lifecycle::Event e) {
   if (e == corium::Lifecycle::SHUTDOWN) alertout.off();
 }
 
-// every boot, safe mode too: off before the join
+// Runs every boot, safe mode too, so the output is off before WiFi joins
 void AlertOut::park() {
   int p = corium::Prefs::getInt("alert", EG_K_PIN);
   if (p < 0 || p > MAX_GPIO_PIN) return;
@@ -69,13 +69,13 @@ void AlertOut::park() {
     corium::Log::console(PSTR("AlertOut: pin=%d unsafe (%s)"), p, why);
     return;
   }
-  _invert = (uint8_t)corium::Prefs::getUInt("alert", EG_K_POLARITY) & 1;   // safe mode skips onPrefsLoaded
+  _invert = (uint8_t)corium::Prefs::getUInt("alert", EG_K_POLARITY) & 1;   // safe mode skips onPrefsLoaded, so read it here
   _pin = (int8_t)p;
   pinMode(_pin, OUTPUT);
   apply_level(false);
 }
 
-// a relay stays as it was through a restart
+// Drive it off on shutdown, else a relay stays as it was through the restart
 void AlertOut::off() {
   apply_level(false);
   _pin = -1;
@@ -86,7 +86,7 @@ void AlertOut::begin() {
   corium::Lifecycle::on(alert_lifecycle);
   corium::Registry::on(Counter::TOPIC_ALARM, this);
   corium::Log::console(PSTR("AlertOut: pin=%d polarity=%u mode=%u"),
-               (int)_pin, (unsigned)_invert, (unsigned)_mode);
+                       (int)_pin, (unsigned)_invert, (unsigned)_mode);
 }
 
 void AlertOut::apply_level(bool active) {
@@ -94,7 +94,7 @@ void AlertOut::apply_level(bool active) {
   digitalWrite(_pin, (active ^ _invert) ? HIGH : LOW);
 }
 
-// on alarm changes; while pulsing, at each flip
+// Runs when the alarm changes, and at each flip while pulsing
 void AlertOut::loop(unsigned long now) {
   bool active = gcounter.is_alert() && !gcounter.is_snoozed();
   if (_mode != 1 || !active) {
@@ -102,7 +102,7 @@ void AlertOut::loop(unsigned long now) {
     apply_level(active);
     return;
   }
-  // other alarm changes don't move the flips
+  // Only start the flips once, other alarm changes don't reset them
   if (!_pulsing) {
     _pulsing = true;
     _high = false;

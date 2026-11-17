@@ -48,17 +48,17 @@ CORIUM_PSTR(K_GROUP, "group");
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 static constexpr uint16_t LOOP_MS = 1000;
 #else
-// 0 = no click cap, the bind retry keeps a pace
+// 0 means no click cap, the bind retry still keeps a 50 ms pace
 static constexpr uint16_t LOOP_MS = UDPBLIP_CLICK_MIN_INTERVAL_MS ? UDPBLIP_CLICK_MIN_INTERVAL_MS : 50;
 #endif
-static constexpr uint8_t DRAIN_MAX = 8;   // a stats pass, the 8266 keeps ~5
+static constexpr uint8_t DRAIN_MAX = 8;   // per stats pass, the 8266 keeps ~5 queued
 
 UdpBlipModule& udpblip = UdpBlipModule::getInstance();
 CORIUM_REGISTER_MODULE(udpblip)
 
 CORIUM_PSTR(UB_O_MODE,  "Off|Telemetry only|Telemetry + per-click");
 CORIUM_PSTR(UB_L_GROUP, "Group / peer IP");
-CORIUM_PSTR(UB_H_GROUP, "239.x = multicast, else unicast peer.");
+CORIUM_PSTR(UB_H_GROUP, "239.x = multicast, else unicast peer");
 
 
 static const corium::Pref UDPBLIP_PREF_ITEMS[] PROGMEM = {
@@ -93,9 +93,9 @@ void UdpBlipModule::begin() {
   blip_click(_click_packet, sizeof(_click_packet), path(PSTR("click")));
   if (_mode > UB_OFF) {
     corium::Log::console(PSTR("UdpBlip: mode=%u group=%s port=%u"),
-                 _mode,
-                 corium::Prefs::getString("udpblip", K_GROUP),
-                 _port);
+                         _mode,
+                         corium::Prefs::getString("udpblip", K_GROUP),
+                         _port);
   }
 }
 
@@ -107,11 +107,11 @@ void UdpBlipModule::readPrefs() {
   }
   uint32_t p = corium::Prefs::getUInt("udpblip", EG_K_PORT);
   _port = (p > 0 && p < 65536) ? (uint16_t)p : UDPBLIP_DEFAULT_PORT;
-  // gate retry pace, the loop sets its own due; off runs till mDNS is down
+  // Pace for the retry gate, the loop sets its own due. When off it keeps running until mDNS is down
   corium::Registry::every(this, (_mode > UB_OFF || _mdns_port) ? LOOP_MS : 0);
   _wake_at = corium::fastMillis();
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // serial counts land with no click
+  // Serial counts land without a click, so listen for counts too
   if (_mode == UB_CLICKS) corium::Registry::on(Counter::TOPIC_COUNTS, this);
 #endif
 }
@@ -129,17 +129,17 @@ bool UdpBlipModule::ensureUdp() {
   if (_udp) return true;
   _udp = new (std::nothrow) WiFiUDP();
   if (!_udp) return false;
-  // random, not lwIP's shared 60288
+  // Random source port, not lwIP's shared 60288
   if (_src_port == 0) {
     _src_port = (uint16_t)(49152u + (GRNG::fast_uint32() & 0x3FFFu));
   }
   if (_udp->begin(_src_port)) return true;
   teardown();
-  _src_port = 0;   // maybe taken, another next time
+  _src_port = 0;   // may be taken, pick another next time
   return false;
 }
 
-// send only, drop what lands so the stack doesn't hold it
+// Send only, drop anything that arrives so the stack doesn't hold it
 void UdpBlipModule::drain() {
   if (!_udp) return;
   for (uint8_t i = 0; i < DRAIN_MAX && _udp->parsePacket() > 0; i++) {
@@ -153,7 +153,7 @@ void UdpBlipModule::announce_mdns() {
   bool move = _mdns_port && _mdns_port != _port;
   bool ok = move ? CORIUM_MDNS_MOVE("osc", "udp", _port) : corium::Mdns::add("osc", "udp", _port);
   if (ok) _mdns_port = _port;
-  else if (move) return;   // the 8266 holds the old one in its probe, again next pass
+  else if (move) return;   // the 8266 holds the old one while probing, try again next pass
   const char* fname = corium::DeviceInfo::friendlyName();
   if (fname && fname[0]) corium::Mdns::txt("osc", "udp", "fname", fname);
   corium::Mdns::txt("osc", "udp", "id", corium::DeviceInfo::chipId());
@@ -170,8 +170,8 @@ void UdpBlipModule::onPrefsSaved() {
   if (!changed) return;
   teardown();
   _fail_count = 0;
-  _stats_at = 0;   // time off isn't skipped
-  // no burst of stale clicks
+  _stats_at = 0;   // time spent off isn't counted as skipped
+  // Don't send a burst of stale clicks
   _last_clicks = (uint32_t)gcounter.total_clicks;
   corium::Log::console(PSTR("UdpBlip: Prefs saved, mode=%u port=%u"), _mode, _port);
 }
@@ -191,7 +191,7 @@ void UdpBlipModule::sendPacket(const uint8_t* buf, size_t len) {
     return;
   }
   _skipped++;
-  // the last one starts the cooldown
+  // The failure that hits the limit starts the cooldown
   if (++_fail_count != UDPBLIP_FAIL_BACKOFF) return;
   _backoff.set(corium::fastMillis() + UDPBLIP_FAIL_COOLDOWN_MS);
   wake(_backoff.at);
@@ -219,11 +219,11 @@ void UdpBlipModule::emitRad() {
 
 void UdpBlipModule::emitHv() {
   uint8_t buf[64];
-  // nan with no adc
+  // NaN volts with no adc
   int32_t v;
   BlipHv h = { m_hv_volts(&v) ? (float)v : NAN, (float)corium::m_u(M_HV_TGT),
                corium::m_u(M_HV_DTY), corium::m_i(M_HV_TRM) };
-  size_t n = blip_hv(buf, sizeof(buf), path(PSTR("hv")), h);
+  size_t n = blip_hv(buf, sizeof(buf), path(M_HV), h);
   if (n) sendPacket(buf, n);
 }
 
@@ -251,10 +251,10 @@ const char* UdpBlipModule::path(const char* suffix) {
   return _path;
 }
 
-// true = one waits for a token, woken then
+// Returns true when a click is waiting for a token, the module is woken then
 bool UdpBlipModule::tryEmitClick(unsigned long now_ms) {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // never re-broadcast, feedback loop
+  // Never re-broadcast, it would make a feedback loop
   (void)now_ms;
   return false;
 #else
@@ -280,7 +280,7 @@ void UdpBlipModule::due(uint32_t at) {
   corium::Registry::dueAt(this, at);
 }
 
-// sooner only, one call per token at most
+// Only moves the wake sooner, one call per token at most
 void UdpBlipModule::wake(uint32_t at) {
   if (corium::reached(at, _wake_at)) return;
   due(at);
@@ -290,7 +290,7 @@ static inline void sooner(uint32_t& at, uint32_t t) {
   if (!corium::reached(t, at)) at = t;
 }
 
-// stats, the cooldown, a held click or the bind retry
+// Next due is whichever comes first of stats, the cooldown, a held click or the bind retry
 void UdpBlipModule::schedule(uint32_t now, bool held) {
   uint32_t at = _stats_at;
   if (_fail_count >= UDPBLIP_FAIL_BACKOFF) {
@@ -302,7 +302,7 @@ void UdpBlipModule::schedule(uint32_t now, bool held) {
   due(at);
 }
 
-// rad, hv a second on, sys + env every other cycle
+// rad, then hv a second later, sys + env every other cycle
 void UdpBlipModule::stats(uint32_t now) {
   drain();
   if (_emit_phase == 0) {
@@ -320,7 +320,7 @@ void UdpBlipModule::stats(uint32_t now) {
   _emit_phase = (_emit_phase + 1) % 3;
 }
 
-// a new socket starts the cycle, as at boot
+// A new socket starts the cycle again, as at boot
 void UdpBlipModule::bind(uint32_t now) {
   if (!_udp) {
     if (!ensureUdp()) return;
@@ -336,7 +336,7 @@ void UdpBlipModule::bind(uint32_t now) {
 
 void UdpBlipModule::loop(unsigned long now) {
   if (_mode == UB_OFF) {
-    // the 8266 refuses it in the probe after an add
+    // The 8266 refuses the remove while probing after an add, so it retries
     if (_mdns_port && CORIUM_MDNS_OFF("osc", "udp")) _mdns_port = 0;
     if (!_mdns_port) corium::Registry::every(this, 0);
     return;

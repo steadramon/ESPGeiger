@@ -225,6 +225,8 @@ class Counter : public CounterMaths {
       bool snapshot_ring(RingSnapshot& s) const;
       float cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const;
       void note_counts_missing(uint32_t uptime_s);
+      void note_health();
+      void second_work();
       void hour_rollover(time_t t);
       uint32_t clock_read();
       void lifetime_tick(int counts);
@@ -254,7 +256,11 @@ class Counter : public CounterMaths {
       static constexpr uint8_t PENDING_SAVE  = 1 << 1;
       static constexpr uint8_t PENDING_ALARM = 1 << 2;
       static constexpr uint8_t PENDING_COUNTS = 1 << 3;
+      static constexpr uint8_t PENDING_SECOND = 1 << 4;
       uint8_t  _pending_work = 0;
+      uint8_t  _secs_due = 0;   // a stalled loop still pushes each one
+      uint32_t _second_up = 0;
+      uint32_t _sec_counts = 0;
       uint8_t  _alarm_bits = 0;   // warn, alert, warm as last emitted
       uint32_t _first_boot_ts = 0;
       unsigned long _life_saved_s = 0;

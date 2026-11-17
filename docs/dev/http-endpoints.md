@@ -70,7 +70,7 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
   "g_test": false,
   "g_pcnt": true,
   "fl": 127,
-  "modules": ["sys","net","wifi","scmd","ota","counter","life","led","disp","neopx","btn","sdcard","ntp","mqtt","radmon","whook","sout"]
+  "modules": {"sys":{"peak":412},"net":{"peak":96},"wifi":{"peak":1840},"counter":{"peak":58},"sdcard":{"peak":14211,"stalls":2},"mqtt":{"peak":5380}}
 }
 ```
 
@@ -97,7 +97,7 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `g_test` | `true` on test / simulation builds |
 | `g_pcnt` | `true` if pulses are counted by the ESP32 PCNT hardware counter |
 | `fl` | Feature flags, the same bits WebAPI sends as `fl` |
-| `modules` | Every module compiled into this firmware, core ones included. Each is the module's short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`) |
+| `modules` | Every module compiled into this firmware, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`). Each has `peak`, its longest loop in microseconds (stops at 65535), and `stalls`, how many of its loops took over 10 ms since boot (stops at 255, left out when 0) |
 
 ## `/json?raw=1`
 

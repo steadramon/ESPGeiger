@@ -36,6 +36,13 @@
 #define ENV_FAIL_SAMPLES  6     // 1 min
 #define ENV_RETRY_MS      60000UL   // max 0xFFFF
 #define ENV_AHT_WAIT_MS   80
+// BME280, BMP280 and AHTxx datasheets
+#define ENV_T_MIN   -40.0f
+#define ENV_T_MAX    85.0f
+#define ENV_H_MIN     0.0f
+#define ENV_H_MAX   100.0f
+#define ENV_P_MIN   300.0f
+#define ENV_P_MAX  1100.0f
 
 #ifndef DISABLE_ENVSENSOR
 

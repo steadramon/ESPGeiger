@@ -26,6 +26,7 @@
 #include "Corium/System/BootGuard.h"
 #include "Corium/System/BootButton.h"
 #include "Corium/ImprovSerial/ImprovSerial.h"
+#include "Corium/Util/Words.h"
 
 corium::Console console;
 
@@ -154,7 +155,7 @@ static void cmd_set() {
   }
   if (!corium::Prefs::put(mod, key, value)) {
     const char* why = corium::Prefs::refused();
-    corium::Log::console(PSTR("Rejected: %s.%s %s"), mod, key, why ? why : PSTR("validation failed"));
+    corium::Log::console(PSTR("Rejected: %s.%s %s"), mod, key, why ? why : W_BAD_VALUE);
     return;
   }
   bool off = corium::Wifi::offSet(mod, key);

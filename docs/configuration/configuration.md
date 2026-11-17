@@ -42,7 +42,7 @@ Some pins save with a warning shown after the save:
 |---|---|---|---|---|
 | Friendly name | `sys.name` | String (32) | (empty) | Optional human label shown in the web UI title and `/about`. Blank falls back to the hostname (e.g. `ESPGeiger-a1b2c3`). |
 | Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. Restart to apply. |
-| Network upload | `sys.espota` | Boolean | `0` off | espota port for PlatformIO and the Arduino IDE. The Update page works either way. Restart to apply. |
+| Arduino OTA | `sys.espota` | Boolean | `0` off | Firmware uploads from PlatformIO (espota) or the Arduino IDE network port. The Update page works without it. Restart to apply. |
 | Origin check | `sys.origin` | Boolean | `1` on | Refuse saves sent from other websites. |
 
 <!-- /gen -->
@@ -82,18 +82,18 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | Warning CPM | `counter.warn` | Int 0-9999 | `50` | all | CPM threshold for warning state |
 | Alert CPM | `counter.alert` | Int 0-9999 | `100` | all | CPM threshold for alert state |
 | Track lifetime | `counter.life_en` | Boolean | `1` on | all | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
-| Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Interrupt has the debounce dead time, reads low at high CPM. Reboot. |
+| Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Hardware uses the chip's pulse counter. Interrupt counts in software, with the Debounce filter. Reboot. |
 | PCNT filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. None suits modules that drive the line both ways; a pull-up can hold some (the Cajoe IOT-GM v1.1) high so no pulse counts. Pull-up is for open-drain outputs, and keeps an unconnected pin quiet. Pull-down is for active-high modules without their own idle pull. |
-| Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |
+| Debounce (us) | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |
 | Pulse width | `counter.pulse_width_us` | Int 10-2000 | `500` | `test`, `testpulse` | Width of the simulated pulse on the TX pin, in microseconds. |
 | CPM window (CPM-only counters) | `counter.cpm_window` | Int 1-60 | `30` | serial builds | Applies to CPM-only counters (GC10, GC10Next, ESPGeiger-serial). Rolling CPM window in seconds; lower values track the counter's display more closely during rate changes, higher values smooth out natural variance. Ignored for MightyOhm, which uses a 60s window since its CPS feed is already exact. Reboot required. See [Serial Counters](/hardware/serial#cpm-window-option). |
 | CPM mode | `counter.cpm_mode` | `0` Fast start, `1` Live ring, `2` Fixed 60s, `3` Bucket, `4` Adaptive fast | `3` Bucket | all | How the 1-minute CPM is computed. See [CPM Calculation Mode](/configuration/cpm-mode). |
-| Tube dead time | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | GM tube dead time in microseconds, used to compensate the rate at high CPS. `0` disables. Set from the tube's datasheet: SBM-20 = 190; the J305 and M4011 datasheets give none (see [Counter](/configuration/counter)). |
+| Tube dead time (us) | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | GM tube dead time in microseconds, used to compensate the rate at high CPS. `0` disables. Set from the tube's datasheet: SBM-20 = 190; the J305 and M4011 datasheets give none (see [Counter](/configuration/counter)). |
 
 <!-- /gen -->
 
-ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.count_mode`, advanced): `0` Hardware (PCNT, the default) or `1` Interrupt. Restart to apply. Hardware shows PCNT filter and PCNT pull, Interrupt shows Debounce. Interrupt counting reads low at high count rates, see [PCNT](/hardware/esphardware#pcnt).
+ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.count_mode`, advanced): `0` Hardware (PCNT, the default) or `1` Interrupt. Restart to apply. Hardware shows PCNT filter and PCNT pull, Interrupt shows Debounce. See [PCNT](/hardware/esphardware#pcnt).
 
 ## Blip LED Settings
 
@@ -108,7 +108,7 @@ ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.cou
 | Blip brightness | `led.blip_bright` | Int 0-100 | `80` (`100` on ESPGeiger-HW) | all | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). |
 | Quiet from | `led.quiet_from` | Time HH:MM | (empty) | not ESPGeiger-HW | Silence the blip LED + beeper from this time. The alert and HV fault alarms still sound. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
 | Quiet to | `led.quiet_to` | Time HH:MM | (empty) | not ESPGeiger-HW | End of quiet window. Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`). |
-| Status LED pin | `led.pin` | Int -1 to max GPIO | varies by build | ESP32 | GPIO of the board's own LED, `-1` = none. Defaults to `2` on ESP32 and `-1` on C3/S3, which have no plain LED on GPIO 2. ESP8266 is fixed at GPIO 2. A pin another setting already uses stays with that setting and the LED stays off. Restart to apply. |
+| Status LED pin | `led.pin` | Int -1 to max GPIO | varies by build | ESP32 | GPIO of the board's own LED, `-1` = off. Defaults to `2` on ESP32 and `-1` on C3/S3, which have no plain LED on GPIO 2. ESP8266 is fixed at GPIO 2. A pin another setting already uses stays with that setting and the LED stays off. Restart to apply. |
 | Polarity | `led.polarity` | `0` Active high, `1` Active low | varies by build | ESP32 | `Active low` for an LED that lights when its pin is low, such as the C3 SuperMini (GPIO 8) or Lolin32 Lite (GPIO 22). Restart to apply. |
 
 <!-- /gen -->
@@ -122,7 +122,7 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Source mode | `counter.udprx_mode` | `0` Specific device, `1` Sum all sources | `0` Specific device | `0` = specific producer (auto-latches the first one heard if **Pin chipid** is blank, otherwise locks to the chipid given). `1` = sum mode, totalises clicks from every producer heard (up to 8). |
-| Source chip ID | `counter.udprx_chipid` | String (6) | (empty) | 6-hex chipid of the producer to lock to. Only used in Source Mode `0`. Blank = auto-latch. |
+| Source chip ID | `counter.udprx_chipid` | String (6) | (empty) | 6-hex chip ID of the producer to lock to. Only used in Source Mode `0`. Blank = auto-latch. |
 | Group / listen IP | `counter.udprx_group` | String (15) | `239.255.86.86` | 239.x = multicast, else unicast listen. |
 | Port | `counter.udprx_port` | Int 1-65535 | `57340` | UDP port. Must match the producer. |
 | RX sleep | `counter.udprx_rxmode` | `0` Light (low power), `1` Modem (balanced), `2` None (always on) | varies by build | WiFi sleep while receiving. Modem suits most networks; the original ESP32 defaults to None. See [Reliability and tuning](/output/udp#reliability-and-tuning). |
@@ -226,7 +226,7 @@ One bus for the OLED and the [environment sensor](/configuration/env). Upgrades 
 |---|---|---|---|---|---|
 | Display type | `display.type` | `0` SSD1306, `1` SH1106 (1.3in), `2` SSD1309 | `0` SSD1306 | boards without fixed pins | OLED panel, or an LED display on builds with MAX7219 support: `3` Tiny SSD1306 and `4` Tiny SH1106 (ESP32), `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637). Restart to apply. |
 | Brightness | `display.brightness` | Int 0-100 | `25` | all | Display brightness |
-| Reset pin | `display.rst` | Int 0-255 | `255` | boards without fixed pins | GPIO toggled at boot to reset OLED (255 = none). Restart to apply. |
+| Reset pin | `display.rst` | Int 0-255 | `255` | boards without fixed pins | GPIO toggled at boot to reset the OLED, 255 = off. Restart to apply. |
 | Flip 180° | `display.flip` | Boolean | varies by build | all | Restart to apply |
 | Idle time (s) | `display.timeout` | Int 0-99999 | `120` | push-button builds | Display turns off after this many seconds of inactivity. `0` falls back to On Time / Off Time below. |
 | On time | `display.on_time` | Time HH:MM | (empty) | all | Display on-time. On push-button builds, only takes effect when Timeout is `0`. Blank means always on. |
@@ -328,7 +328,7 @@ If the saved network does not answer with any of `tx_power`, `country` or `phy_m
 
 ## CPU Frequency (ESP32 only)
 
-Hidden `sys.cpu_mhz` pref forces the CPU clock. `0` (default) leaves the board's default in place; `80`, `160` or `240` override (ESP32-C3 silicon caps at 160 MHz). Any other value, or 240 on a C3, changes nothing and the console says `System: CPU 240 MHz not taken, 80/160/240`. Lowering the clock noticeably reduces power draw and die temperature on hot-running boards such as the ESP32-C3 Zero, at the cost of LPS headroom. The setting is per-device and is not included in config export blobs.
+Hidden `sys.cpu_mhz` pref forces the CPU clock. `0` (default) leaves the board's default in place; `80`, `160` or `240` override (ESP32-C3 silicon caps at 160 MHz). Any other value is refused. 240 on a C3 changes nothing and the console says `System: CPU 240 MHz not taken, 80/160/240`. Lowering the clock noticeably reduces power draw and die temperature on hot-running boards such as the ESP32-C3 Zero, at the cost of LPS headroom. The setting is per-device and is not included in config export blobs.
 
 Set via the Status-page command box or USB serial:
 

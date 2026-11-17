@@ -217,6 +217,9 @@ public:
     uint8_t _send_cur = 0;
     uint8_t _send_rows_left = 0;      // 0 = idle, direct draws zero it
     uint32_t _next_render_due = 0;
+#ifdef APP_NOTICE
+    const char* _notice = nullptr;   // the one drawn
+#endif
 };
 
 extern SSD1306Display oled;

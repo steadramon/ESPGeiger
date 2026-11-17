@@ -191,6 +191,7 @@ cpm=30|cps=0.53|usv=0.17
 | `{sat}` | 1 when the rate is near the tube's dead-time limit |
 | `{warn}` | 1 while CPM is over the warning level |
 | `{alert}` | 1 while CPM is over the alert level |
+| `{health}` | `ok`, or what is wrong: `silent`, `storm`, `chatter`, `no_input`, `hv_low`, `hv_high`, `hv_fb`, `crashed`, `noclock`, `savefail`, `lowheap` |
 | `{hv}` | Measured HV in volts (HV ADC builds only) |
 | `{hv_fault}` | 1 while HV is held off (over the limit; HV ADC builds only) |
 | `{t}` | Temperature in user-preferred unit (env.unit) |
@@ -237,8 +238,9 @@ Set `sout.baud` to override the serial baud rate while lines stream. The change 
 | `set sout.baud N` | Effect |
 |---|---|
 | `0` (default) | If `sout.format` is set to a known protocol, use that protocol's native baud. Otherwise 115200. |
-| 9600 or more | Force this baud regardless of format. |
-| 1-9599 | Runs at 9600, the lowest rate Serial Output uses. |
+| `9600`, `19200`, `38400`, `57600` or `115200` | Force this baud regardless of format. Any other number is refused. |
+
+A rate an older build saved that isn't in the list doesn't load: the console says `Prefs: sout.baud refused, default kept`, the port runs at the format's own rate, and Serial out settings aren't saved until `sout.baud` is set again.
 
 After changing baud, reconnect your serial monitor at the new rate so it can decode the wire.
 

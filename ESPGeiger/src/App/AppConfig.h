@@ -24,6 +24,7 @@
 #ifndef THING_NAME
 #define THING_NAME "ESPGeiger"
 #endif
+extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define APP_URL     "https://github.com/steadramon/ESPGeiger"
 #define APP_LOC_URL "https://loc.espgeiger.com"
 #define APP_LOC_WIN "espgeiger-loc"        // finder window name
@@ -131,6 +132,11 @@
 #endif
 #ifndef GEIGER_SDCARD_CS
 #define GEIGER_SDCARD_CS 16
+#endif
+
+// a fault line on the oled till a press, App/Notice.h; sd and hv post
+#if defined(SSD1306_DISPLAY) && !defined(MAX7219_DISPLAY) && defined(GEIGER_PUSHBUTTON) && (defined(GEIGER_SDCARD) || defined(ESPG_HV))
+#define APP_NOTICE
 #endif
 
 // Radmon worst case 376

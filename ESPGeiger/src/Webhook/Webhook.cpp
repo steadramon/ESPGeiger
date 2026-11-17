@@ -36,21 +36,20 @@ CORIUM_PSTR(K_KEY, "key");
 Webhook webhook;
 CORIUM_REGISTER_FEATURE(webhook, FEAT_WEBHOOK)
 
-CORIUM_PSTR(WH_H_EN,  "Enable webhook POSTs");
+CORIUM_PSTR(WH_H_EN,  "Send to the webhook");
 CORIUM_PSTR(WH_L_URL, "URL");
 CORIUM_PSTR(WH_H_URL, "Webhook endpoint (http only)");
-// a url's chars less ' # [ ], escaped for the browser's v flag
+// URL chars minus ' # [ ], escaped for the browser's v flag
 CORIUM_PSTR(WH_P_URL, "https?://[A-Za-z0-9.:_~%?=&+,;!$*@\\(\\)\\/\\-]+");
 CORIUM_PSTR(WH_L_KEY, "Key");
 CORIUM_PSTR(WH_H_KEY, "Optional shared secret sent as \"key\"");
-CORIUM_PSTR(WH_H_INT, "Send interval (s)");
 
 
 static const corium::Pref WEBHOOK_PREF_ITEMS[] PROGMEM = {
   {EG_K_SEND,     EG_L_EN,  WH_H_EN,  "0",  nullptr,  0, 0,    0,   corium::P_BOOL,   0},
   {K_URL,         WH_L_URL, WH_H_URL, "",   WH_P_URL, 0, 0,    CORIUM_PREFS_MAX_VALUE, corium::P_STRING, 0},
   {K_KEY,         WH_L_KEY, WH_H_KEY, "",   nullptr,  0, 0,    CORIUM_PREFS_MAX_VALUE, corium::P_STRING, corium::P_SENSITIVE},
-  {EG_K_INTERVAL, EG_L_INT, WH_H_INT, STR(WEBHOOK_INTERVAL), nullptr,  WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX, 0, corium::P_UINT, 0},
+  {EG_K_INTERVAL, EG_L_INT, EG_H_INT, STR(WEBHOOK_INTERVAL), nullptr,  WEBHOOK_INTERVAL_MIN, WEBHOOK_INTERVAL_MAX, 0, corium::P_UINT, 0},
 };
 
 static const corium::PrefGroup WEBHOOK_PREF_GROUP PROGMEM = {
@@ -92,7 +91,7 @@ bool Webhook::interpret(const char* r)
     corium::Log::debug(PSTR("Webhook: Upload OK"));
     return true;
   }
-  // the reply can quote the key back, debug only
+  // The reply can quote the key back, so its text only goes to debug
   corium::Log::console(PSTR("Webhook: Error"));
 #if LOG_LEVEL >= 3
   char esc[96];   // cut is fine
@@ -126,7 +125,7 @@ bool Webhook::prepare(char* url, size_t cap, const char** body) {
 
   const char* key = corium::Prefs::getString("webhook", K_KEY);
 
-  // as typed, the client refuses what it can't do (https)
+  // URL as typed, the client refuses what it can't do (https)
   if (!urlFits((int)strlcpy(url, raw, cap), cap)) return false;
 
   // post() frees it once sent

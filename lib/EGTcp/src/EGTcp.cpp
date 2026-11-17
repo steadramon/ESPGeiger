@@ -224,6 +224,7 @@ EGTcpClient::EGTcpClient() : _ops(egtcp_ops) {}
 
 EGTcpClient::~EGTcpClient() {
   if (s_running == this) s_running = nullptr;   // its callback stops here
+  if (_h.load()) credit(_owed + _rx_len.load(), true);   // as close(): FIN, not RST
   forget(false);
 }
 

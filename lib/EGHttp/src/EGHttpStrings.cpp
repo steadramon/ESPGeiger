@@ -29,3 +29,5 @@ const char HTTP_H_CTYPE[]    PROGMEM = "Content-Type";
 const char HTTP_H_UA[]       PROGMEM = "User-Agent";
 
 const char HTTP_CACHE_FOREVER[] PROGMEM = "public, max-age=31536000, immutable";
+const char HTTP_HTML_END[] PROGMEM = "</body></html>";
+const char HTTP_NOT_FOUND[] PROGMEM = "Not found";

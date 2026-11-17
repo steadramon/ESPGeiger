@@ -114,15 +114,15 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // GeigerLog field order, keep it
   // CPM,CPS,CPM1st,CPS1st,CPM2nd,CPS2nd,CPM3rd,CPS3rd,Temp,Press,Humid,Xtra
   char cpm[16], cps[16], cpm5[16], cpm15[16], t[16], h[16], p[16], xtra[16];
-  corium::m_text(PSTR("cpm"),   corium::M_OUT_JSON, cpm,   sizeof(cpm));
-  corium::m_text(PSTR("cps"),   corium::M_OUT_JSON, cps,   sizeof(cps));
-  corium::m_text(PSTR("cpm5"),  corium::M_OUT_JSON, cpm5,  sizeof(cpm5));
-  corium::m_text(PSTR("cpm15"), corium::M_OUT_JSON, cpm15, sizeof(cpm15));
-  corium::m_text(PSTR("t"),     corium::M_OUT_JSON, t,     sizeof(t));
-  corium::m_text(PSTR("h"),     corium::M_OUT_JSON, h,     sizeof(h));
-  corium::m_text(PSTR("p"),     corium::M_OUT_JSON, p,     sizeof(p));
-  if (!M_HAS_HV || !corium::m_text(PSTR("hv"), corium::M_OUT_JSON, xtra, sizeof(xtra)))
-    corium::m_text(PSTR("usv"), corium::M_OUT_JSON, xtra, sizeof(xtra));
+  corium::m_text(K_M_CPM,   corium::M_OUT_JSON, cpm,   sizeof(cpm));
+  corium::m_text(K_M_CPS,   corium::M_OUT_JSON, cps,   sizeof(cps));
+  corium::m_text(K_M_CPM5,  corium::M_OUT_JSON, cpm5,  sizeof(cpm5));
+  corium::m_text(K_M_CPM15, corium::M_OUT_JSON, cpm15, sizeof(cpm15));
+  corium::m_text(M_T,       corium::M_OUT_JSON, t,     sizeof(t));
+  corium::m_text(M_H,       corium::M_OUT_JSON, h,     sizeof(h));
+  corium::m_text(M_P,       corium::M_OUT_JSON, p,     sizeof(p));
+  if (!M_HAS_HV || !corium::m_text(M_HV, corium::M_OUT_JSON, xtra, sizeof(xtra)))
+    corium::m_text(K_M_USV, corium::M_OUT_JSON, xtra, sizeof(xtra));
 
   char out[8 * sizeof(cpm) + 32];   // 8 fields and the commas
   snprintf_P(out, sizeof(out),
@@ -132,7 +132,7 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-// 2 dp, else left as was
+// Up to 2 dp, a bad value leaves the target as it was
 static void set_target(const char* s) {
   int32_t target;
   if (parseCenti(s, &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
@@ -304,7 +304,7 @@ static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::beginPage(res, F("History"), corium::DeviceInfo::displayName());
   res.sendChunk(FPSTR(HISTORY_BODY_LIFETIME));
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // udp rx is batched, no intervals
+  // Udp rx comes in batches, so there are no real intervals
   res.sendChunk(FPSTR(HISTORY_BODY_INTERPULSE));
 #endif
   res.sendChunk(FPSTR(HISTORY_BODY_LAST24));
@@ -342,7 +342,7 @@ static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.send(200, FPSTR(HTTP_CT_PLAIN), body);
 }
 
-// /status pollers, /json and /cs
+// JS for /status, it polls /json and /cs
 #if !EG_GZ_JS_BUNDLE
 extern const char cmdJS[] PROGMEM = R"JS(function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1})JS";
 
@@ -412,7 +412,7 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <p id=al class=a role=alert style=display:none></p>
 <div class=stat>
 <div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
-<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Clicks since boot</b><span id=tc>-</span></div>
+<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Clicks</b><span id=tc>-</span></div>
 <div class=row><b>Uptime</b><span id=upt>-</span><b>Signal</b><span id=rssi>-</span></div>
 <div class=row id=envR style=display:none></div>
 </div>

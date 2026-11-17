@@ -32,6 +32,9 @@ static_assert(CORIUM_MAX_MODULES <= 32, "post and profile masks are 32 bits");
 #define CORIUM_LOOP_BUDGET_US 2000
 #endif
 
+// a loop() over this counts as a stall
+#define CORIUM_STALL_US 10000
+
 // topics below CORIUM_TOPIC_APP Corium's, an app numbers its own from it
 #define CORIUM_TOPIC_APP 2
 #define CORIUM_MAX_TOPICS 16
@@ -101,7 +104,9 @@ class Registry {
     static const uint32_t* trace();   // TRACE_N, oldest first, ms << 8 | slot, slot IN_NONE = empty; nullptr = none
 #endif
 
-    static uint16_t peakUs(uint8_t idx);   // longest loop() since boot, saturates
+    static uint32_t peakUs(uint8_t idx);   // longest loop() lately, halves each hour
+    static void agePeaks();                // each hour, Reactor
+    static uint8_t stalls(uint8_t idx);    // loop()s over CORIUM_STALL_US, saturates
 
     static uint8_t count();
     static Module* get(uint8_t idx);
@@ -118,13 +123,14 @@ class Registry {
 
     struct Slot {
       Module* module;
-      uint32_t loop_last;
+      uint32_t grid;             // a recent point on its phase
       uint32_t next_due;
       uint32_t period_ms;        // 0 = none
       uint16_t topics;           // on()
       uint16_t events;           // emitted, not taken yet
       uint16_t peak_us;          // in the padding
       uint8_t flags;
+      uint8_t stalls;            // in the padding too
 #ifdef LOOP_PROFILE
       uint32_t max_loop_us;      // 32 bit, can pass 65 ms
       uint32_t total_loop_us;
@@ -160,6 +166,7 @@ class Registry {
     // one caller each, folds inline
     static inline uint8_t unmet_requirements();
     static inline void walk(unsigned long now);
+    static inline void note_run(Slot& s, uint32_t d);
     static inline void fire_slot(uint8_t idx, unsigned long now);
     static inline uint8_t sift_due(uint8_t k);
     static inline uint32_t next_wake(unsigned long now);

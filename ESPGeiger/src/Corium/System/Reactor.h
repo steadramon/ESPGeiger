@@ -41,6 +41,7 @@ namespace Reactor {
 #endif
   extern uint32_t s_ms_last_us;
   extern uint32_t s_ms_acc_us;
+  extern uint32_t s_next_house;
 
   // before wifi, the libs time from it
   void clock(void (*ms)());
@@ -62,6 +63,8 @@ namespace Reactor {
   // end of setup, app(up) each second, nullptr = none; 8266 = Ticker (SYS), esp32 = loop
   void begin(void (*app)(uint32_t up));
   void second();
+  // health, boot marks; half a second off second(), from the loop
+  void house();
 
   template <void (*hot)(unsigned long)>
   inline void pass(WebPortal& portal) {
@@ -87,6 +90,11 @@ namespace Reactor {
 #endif
       }
 #endif
+      if (reached(now, s_next_house)) {
+        s_next_house += 1000;
+        if (reached(now, s_next_house)) s_next_house = now + 1000;   // a stall runs it once
+        house();
+      }
       // tcp callbacks, ota needs them too
       Registry::in(Registry::IN_TCP);
       EGTcp::poll();

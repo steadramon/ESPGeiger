@@ -24,8 +24,10 @@
 #include "Corium/Module/Module.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/PinSafety.h"
+#include "Corium/System/StatusWord.h"
 #include "Corium/Util/Bytes.h"
 #include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
 #ifndef CORIUM_PREFS_NO_LEGACY
 #include <ArduinoJson.h>
 #endif
@@ -66,6 +68,7 @@ const char corium::K_BRAKE[]        PROGMEM = "brake";
 const char corium::K_DNS[]          PROGMEM = "dns";
 const char corium::K_ESPOTA[]       PROGMEM = "espota";
 const char corium::K_GW[]           PROGMEM = "gw";
+const char corium::K_HS_HOLD[]      PROGMEM = "hs_hold";
 const char corium::K_IP[]           PROGMEM = "ip";
 const char corium::K_ORIGIN[]       PROGMEM = "origin";
 const char corium::K_SCL[]          PROGMEM = "scl";
@@ -76,15 +79,16 @@ const char corium::K_STATIC_IP[]    PROGMEM = "static_ip";
 const char corium::K_TZ[]           PROGMEM = "tz";
 const char corium::K_WEB_PASS[]     PROGMEM = "web_pass";
 const char corium::H_RBA[] PROGMEM = "Restart to apply";
+const char corium::L_GW[] PROGMEM = "Gateway";
+const char corium::L_IP[] PROGMEM = "IP address";
+const char corium::L_SN[] PROGMEM = "Subnet mask";
+const char corium::L_WEB_PASS[] PROGMEM = "Web password";
 const char corium::P_HOST[] PROGMEM = "[A-Za-z0-9._\\-]+";   // a name or an ip, no :port
 const char corium::WRITE_FAILED[] PROGMEM = "flash write failed";
 #ifndef APP_AUTH_HELP
 #define APP_AUTH_HELP "Log in as admin with the web password."
 #endif
 const char corium::AUTH_HELP[] PROGMEM = APP_AUTH_HELP;
-
-static const char FMT_LD[] PROGMEM = "%ld";
-static const char FMT_LU[] PROGMEM = "%lu";
 
 static GroupShadow    s_groups[CORIUM_PREFS_MAX_GROUPS];
 static size_t         s_group_count = 0;
@@ -233,7 +237,7 @@ int valid_int(const corium::Pref* p, const char* value, char* out, size_t outsz)
   int32_t v;
   if (!parseI32(value, &v)) return -1;
   if (ranged(p) && (v < p->minI || v > p->maxI)) return -1;
-  return snprintf_P(out, outsz, FMT_LD, (long)v);
+  return snprintf_P(out, outsz, W_FMT_LD, (long)v);
 }
 
 // digits only
@@ -242,7 +246,7 @@ int valid_uint(const corium::Pref* p, const char* value, char* out, size_t outsz
   if (!parseU64(value, &v) || v > UINT32_MAX) return -1;
   // unsigned, no wrap above INT32_MAX
   if (ranged(p) && (v < (uint32_t)p->minI || v > (uint32_t)p->maxI)) return -1;
-  return snprintf_P(out, outsz, FMT_LU, (unsigned long)v);
+  return snprintf_P(out, outsz, W_FMT_LU, (unsigned long)v);
 }
 
 static constexpr int JUNK = -2;   // never meant anything on this build
@@ -259,6 +263,23 @@ int enum_slot(const corium::Pref* p, const char* out, int len) {
   }
   char c = (char)pgm_read_byte(opt);
   return c && c != '|' ? len : JUNK;
+}
+
+// a uint's pattern lists the only numbers it takes
+int listed(const corium::Pref* p, const char* out, int len) {
+  if (!p->pattern) return len;
+  const char* opt = p->pattern;
+  const char* o = out;
+  for (;;) {
+    char c = (char)pgm_read_byte(opt++);
+    if (!c || c == '|') {
+      if (o && !*o) return len;
+      if (!c) return -1;
+      o = out;
+    } else {
+      o = o && *o == c ? o + 1 : nullptr;
+    }
+  }
 }
 
 // kept as typed, no String(float)
@@ -287,7 +308,8 @@ int validate(const corium::Pref* p, const char* value, char* out, size_t outsz) 
     case corium::P_UINT:
     case corium::P_ENUM: {   // enum as index
       int len = valid_uint(p, value, out, outsz);
-      return len < 0 || p->type == corium::P_UINT ? len : enum_slot(p, out, len);
+      if (len < 0) return len;
+      return p->type == corium::P_UINT ? listed(p, out, len) : enum_slot(p, out, len);
     }
     case corium::P_FLOAT:  return valid_float(p, value, out, outsz);
     case corium::P_STRING: return valid_string(p, value, out, outsz);
@@ -334,7 +356,7 @@ bool read_record(GroupShadow* gs, const char* key, uint8_t klen,
       if (got < 0) {
         // junk isn't kept, the next save writes the default over it
         corium::Log::console(PSTR("Prefs: %s.%s %s, default kept"), gs->group->moduleId, pid,
-                             got == JUNK ? PSTR("junk") : PSTR("refused"));
+                             got == JUNK ? PSTR("junk") : W_REFUSED);
         if (own && got != JUNK) not_loaded(*gs, j);
         return false;
       }
@@ -715,7 +737,7 @@ static bool pin_refused(const char* module, const corium::Pref& p, const char* k
 // a stored shorter one still loads
 static bool too_short(const corium::Pref& p, int nlen) {
   if (p.type != corium::P_STRING || nlen == 0 || nlen >= p.minI) return false;
-  s_refused = PSTR("too short");
+  s_refused = W_TOO_SHORT;
   return true;
 }
 
@@ -744,7 +766,7 @@ CORIUM_NODISCARD static bool put_value(const char* module, const char* key, cons
       return false;
     }
     if (!shadow_set(*gs, idx, out, (size_t)nlen)) {
-      s_refused = PSTR("no memory");
+      s_refused = W_OOM;
       return false;
     }
     if (gs->partial == idx + 1) gs->partial = 0;   // its new value stands
@@ -772,13 +794,13 @@ const char* corium::Prefs::warned() { return s_refused ? nullptr : s_warned; }
 
 bool corium::Prefs::putInt(const char* module, const char* key, int32_t value) {
   char buf[CORIUM_U32_MAX_LEN + 2];   // sign
-  snprintf_P(buf, sizeof(buf), FMT_LD, (long)value);
+  snprintf_P(buf, sizeof(buf), W_FMT_LD, (long)value);
   return put(module, key, buf);
 }
 
 bool corium::Prefs::putUInt(const char* module, const char* key, uint32_t value) {
   char buf[CORIUM_U32_MAX_LEN + 1];
-  snprintf_P(buf, sizeof(buf), FMT_LU, (unsigned long)value);
+  snprintf_P(buf, sizeof(buf), W_FMT_LU, (unsigned long)value);
   return put(module, key, buf);
 }
 
@@ -912,7 +934,9 @@ bool corium::Prefs::commit(bool fire_callbacks) {
   } else {
     s_frozen = nullptr;   // a failed write says more
   }
-  return all_ok && !s_frozen;
+  bool ok = all_ok && !s_frozen;
+  corium::healthWord().set(corium::DEV_SAVEFAIL, !ok);
+  return ok;
 }
 
 // callbacks now as commit's, the write waits for flush()

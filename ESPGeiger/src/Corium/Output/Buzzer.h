@@ -27,7 +27,7 @@
 #include <soc/soc_caps.h>
 #endif
 
-// rmt loop count: c3, s3
+// Needs the rmt loop count, so c3 and s3
 #if defined(BUZZER_ENGINE) && defined(ESP32) && defined(SOC_RMT_SUPPORT_TX_LOOP_COUNT)
 #define BUZZER_BUILT 1
 #else
@@ -35,10 +35,10 @@
 #endif
 
 namespace corium {
-// idle is low, a held high is a fault
+// Pin idles low, a held high is a fault
 namespace Buzzer {
 
-// rmt: 1 us ticks, 15 bit halves
+// rmt runs 1 us ticks, each half of an item is 15 bits
 static constexpr uint16_t MAX_TICKS  = 32767;
 static constexpr uint16_t LOW_HZ     = 1000000UL / MAX_TICKS + 1;
 static constexpr uint16_t MAX_CYCLES = 1023;   // c3 loop count
@@ -46,11 +46,11 @@ static constexpr uint8_t  MAX_BURST  = 8;
 static constexpr uint8_t  GUARD_MS   = 20;
 static constexpr uint8_t  GUARD_POLL_MS = 5;
 
-// the app's call, set once at begin
+// Picked by the app, set once at begin
 struct Limits {
   uint16_t maxHighUs;
   uint8_t  dutyPct;   // tones and bursts
-  uint8_t  gapX;      // pulses, bursts: quiet x times the on time
+  uint8_t  gapX;      // pulses and bursts stay quiet for x times the on time
   uint16_t minHz;
   uint16_t maxHz;
   uint16_t runMs;     // longest unbroken tone, 0 = off
@@ -59,7 +59,7 @@ struct Limits {
 };
 static constexpr Limits DEFAULTS = {10000, 25, 10, 200, 8000, 2000, 20, 2000};
 
-// what the rmt can do
+// Clamp to what the rmt can do
 inline Limits fit(Limits l) {
   if (l.maxHighUs > MAX_TICKS) l.maxHighUs = MAX_TICKS;
   if (l.minHz < LOW_HZ) l.minHz = LOW_HZ;
@@ -67,7 +67,7 @@ inline Limits fit(Limits l) {
   return l;
 }
 
-// high part of one cycle at hz, 1 .. max_us, always ends low
+// High part of one cycle at hz, 1 .. max_us, always leaves some low
 inline uint32_t highUs(uint16_t hz, uint8_t duty_pct, uint16_t max_us) {
   uint32_t period = 1000000UL / hz;
   uint32_t h = period * duty_pct / 100;
@@ -82,7 +82,7 @@ inline uint16_t clampHz(uint16_t hz, const Limits& l) {
   return hz < l.minHz ? l.minHz : hz > l.maxHz ? l.maxHz : hz;
 }
 
-// cycles in ms at hz, capped before it's 16 bit
+// Cycles in ms at hz, capped before it goes to 16 bit
 inline uint16_t toneCycles(uint16_t ms, uint16_t hz) {
   uint32_t n = (uint32_t)ms * hz / 1000;
   return n > MAX_CYCLES ? MAX_CYCLES : (uint16_t)n;
@@ -92,7 +92,7 @@ inline uint8_t capDuty(uint8_t duty_pct, uint8_t max_pct) {
   return duty_pct > max_pct ? max_pct : duty_pct;
 }
 
-// cycles that still fit the run, 0 = rest first
+// cycles that still fit in the run, 0 = must rest first
 inline uint16_t runCycles(uint16_t cycles, uint32_t period_us, uint32_t used_us, uint32_t run_us) {
   if (!run_us) return cycles;
   if (used_us >= run_us) return 0;
@@ -100,7 +100,7 @@ inline uint16_t runCycles(uint16_t cycles, uint32_t period_us, uint32_t used_us,
   return n < cycles ? n : cycles;
 }
 
-// tone runs: cut at runMs, restMs quiet after a cut
+// Tone runs are cut at runMs, then restMs of quiet after a cut
 struct Run {
   uint32_t start = 0;
   uint32_t restAt = 0;
@@ -128,7 +128,7 @@ struct Run {
 };
 
 #if BUZZER_BUILT
-// own timer watches the pad: quiet but still high = stop, pin low, till restart
+// Its own timer watches the pad. Quiet but still high = stop and hold the pin low until restart
 CORIUM_NODISCARD bool begin(int pin, Limits lim = DEFAULTS);
 // false while busy, faulted, or too soon for the budget
 bool pulse(uint32_t now_us, uint16_t us);
@@ -136,6 +136,7 @@ bool burst(uint32_t now_us, uint16_t hz, uint8_t cycles);
 bool tone(uint32_t now_us, uint16_t hz, uint16_t cycles, uint8_t duty_pct);
 uint32_t waitUs(uint32_t now_us);   // 0 = free
 bool faulted();
+extern const char NAME[];   // pin owner, PROGMEM
 #endif
 
 }

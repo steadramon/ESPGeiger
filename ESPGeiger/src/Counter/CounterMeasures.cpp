@@ -20,6 +20,7 @@
 #include "Corium/Measure/Measure.h"
 #include "Corium/Measure/DeviceMeasures.h"
 #include "App/Units.h"
+#include "App/Health.h"
 #include "Counter.h"
 #include "CounterMeasures.h"
 #include "CounterUpload.h"
@@ -42,6 +43,22 @@ static bool m_alert(corium::MValue* v) { v->b = gcounter.is_alert(); return true
 static bool m_warm(corium::MValue* v)  { v->b = gcounter.is_warm(); return true; }
 static bool m_none(corium::MValue* v)  { v->b = gcounter.counts_missing(); return true; }
 static bool m_blip(corium::MValue* v)  { v->u = (uint32_t)gcounter.last_blip(); return true; }
+static bool m_problem(corium::MValue* v) { v->b = (health().live() & H_TUBE_MASK) != 0; return true; }
+
+// by App/Health.h bit
+static const char HEALTH_NAMES[] PROGMEM = "silent\0storm\0chatter\0no_input\0hv_low\0hv_high\0hv_fb\0";
+static const char DEV_NAMES[] PROGMEM = CORIUM_DEV_NAMES;
+
+size_t health_text(char* buf, size_t cap, uint16_t bits) {
+  return corium::StatusWord::text(buf, cap, bits, HEALTH_NAMES, DEV_NAMES);
+}
+
+static bool m_health(corium::MValue* v) {
+  static char s[40];
+  health_text(s, sizeof(s), health().live());
+  v->s = s;
+  return true;
+}
 
 static bool m_life(corium::MValue* v) {
   uint64_t n = gcounter.get_lifetime_clicks_total();
@@ -83,6 +100,7 @@ static constexpr uint8_t JV   = corium::M_OUT_JSON | corium::M_OUT_VARS;
 static constexpr uint8_t JVW  = JV | EGM_OUT_WEBHOOK;
 static constexpr uint8_t JVWM = JVW | EGM_OUT_MQTT;
 static constexpr uint8_t JWM  = corium::M_OUT_JSON | EGM_OUT_WEBHOOK | EGM_OUT_MQTT;
+static constexpr uint8_t JVM  = JV | EGM_OUT_MQTT;
 
 // keep a metric's rows together
 static const corium::Measure CORE[] PROGMEM = {
@@ -107,6 +125,8 @@ static const corium::Measure CORE[] PROGMEM = {
   CORIUM_M_PROW("sat",      "",    m_sat,     corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         0, MP_SAT, MH_SAT, nullptr),
   CORIUM_M_ROW("warn",      "",    m_warn,    corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         0),
   CORIUM_M_ROW("alert",     "",    m_alert,   corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         0),
+  CORIUM_M_ROW("health",    "",    m_health,  corium::M_STR,  0, corium::MU_NONE,    JVM,          0),
+  CORIUM_M_ROW("problem",   "",    m_problem, corium::M_BOOL, 0, corium::MU_NONE,    EGM_OUT_MQTT, 0),
   CORIUM_M_ROW_TICK(corium::M_OUT_JSON),
   CORIUM_M_ROW_T_MAX(corium::M_OUT_JSON),
   CORIUM_M_ROW_LPS(corium::M_OUT_JSON),

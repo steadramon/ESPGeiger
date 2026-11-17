@@ -22,7 +22,7 @@ Debounce applies when counting by interrupt. ESP32 builds counting with PCNT use
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Debounce window in microseconds. |
+| Debounce (us) | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Debounce window in microseconds. |
 
 <!-- /gen -->
 
@@ -34,13 +34,13 @@ If you suspect real pulses are being dropped at high rates (you flash a hot sour
 
 Tube dead time is a physical property of the GM tube itself. After each ionisation event the tube needs to recover before it can fire again. During that window real radiation events are missed by the tube hardware, not by the firmware.
 
-ESPGeiger applies a statistical upward correction to the displayed CPS to compensate for what the tube missed. The correction kicks in only above 50 CPS (3000 CPM); at typical background rates it has no observable effect.
+ESPGeiger applies a statistical upward correction to the displayed CPS to compensate for what the tube missed. The correction is applied at all rates (a no-divide approximation below 50 CPS); at typical background rates it is too small to see.
 
 <!-- gen:prefs counter only=dead_time_us -->
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Tube dead time | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | Tube dead time in microseconds. `0` disables the correction. |
+| Tube dead time (us) | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | Tube dead time in microseconds. `0` disables the correction. |
 
 <!-- /gen -->
 

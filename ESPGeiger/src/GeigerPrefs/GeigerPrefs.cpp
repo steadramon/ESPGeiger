@@ -45,8 +45,6 @@
 #include "GeigerInput/Type/UdpRx.h"
 #endif
 
-CORIUM_PSTR(K_WARN,           "warn");
-CORIUM_PSTR(K_ALERT,          "alert");
 CORIUM_PSTR(K_LIFE_EN,        "life_en");
 CORIUM_PSTR(K_RX_PIN,         "rx_pin");
 CORIUM_PSTR(K_TX_PIN,         "tx_pin");
@@ -111,7 +109,7 @@ CORIUM_REGISTER_MODULE(counterprefs)
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
 CORIUM_PSTR(IN_L_STY, "Serial type");
 CORIUM_PSTR(IN_L_CPW, "CPM window (CPM-only counters)");
-CORIUM_PSTR(IN_H_CPW, "Window (s). Lower=responsive, higher=smooth.");
+CORIUM_PSTR(IN_H_CPW, "Window (s). Lower = responsive, higher = smooth");
 #endif
 #ifdef PREF_RX_PIN
 CORIUM_PSTR(IN_L_RXP, "RX pin");
@@ -121,14 +119,14 @@ CORIUM_PSTR(IN_L_TXP, "TX pin");
 #endif
 #ifdef USE_PCNT
 CORIUM_PSTR(IN_L_PCF, "PCNT filter");
-CORIUM_PSTR(IN_H_PCF, "Pulse counter filter (0-1023, 0 = off)");
+CORIUM_PSTR(IN_H_PCF, "Hardware mode. Ignores pulses under N x 12.5 ns (200 = 2.5 us), 0 = off");
 CORIUM_PSTR(IN_L_PCP, "PCNT pull");
 CORIUM_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
 #endif
 #ifdef PCNT_SELECTABLE
 CORIUM_PSTR(IN_L_CNT, "Count with");
 CORIUM_PSTR(IN_O_CNT, "Hardware|Interrupt");
-CORIUM_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high CPM.");
+CORIUM_PSTR(IN_H_CNT, "Hardware uses the chip's pulse counter. Interrupt counts in software, with the Debounce filter");
 #ifdef NO_PCNT_ENV
 #define COUNT_MODE_DEF "1"   // _no_pcnt envs
 #else
@@ -136,16 +134,16 @@ CORIUM_PSTR(IN_H_CNT, "Interrupt has the debounce dead time, reads low at high C
 #endif
 #endif
 #ifdef PREF_DEBOUNCE
-CORIUM_PSTR(IN_L_DBN, "Debounce");
-CORIUM_PSTR(IN_H_DBN, "Pulse debounce (us). Filters electrical noise. 100-300 typical.");
+CORIUM_PSTR(IN_L_DBN, "Debounce (us)");
+CORIUM_PSTR(IN_H_DBN, "Filters electrical noise, 100-300 typical");
 #endif
 #ifdef PREF_PULSE_WIDTH
 CORIUM_PSTR(IN_L_PWU, "Pulse width");
 CORIUM_PSTR(IN_H_PWU, "Simulated pulse width (us)");
 #endif
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-CORIUM_PSTR(IN_L_DTU, "Tube dead time");
-CORIUM_PSTR(IN_H_DTU, "GM tube dead time (us), from the datasheet. 0 = off. SBM-20=190.");
+CORIUM_PSTR(IN_L_DTU, "Tube dead time (us)");
+CORIUM_PSTR(IN_H_DTU, "From the datasheet, 0 = off. SBM-20 = 190");
 #endif
 CORIUM_PSTR(IN_L_CMM, "CPM mode");
 CORIUM_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
@@ -154,7 +152,7 @@ CORIUM_PSTR(IN_L_DOSE, "Dose &amp; alarms");
 CORIUM_PSTR(IN_L_COUNT, "Counting");
 #ifdef PREF_MODEL
 CORIUM_PSTR(IN_L_GMD, "Tube model");
-CORIUM_PSTR(IN_H_GMD, "Connected counter/tube model (e.g., SBM-20, J305)");
+CORIUM_PSTR(IN_H_GMD, "e.g. SBM-20, J305");
 CORIUM_PSTR(IN_L_THD, "Tube detects");
 CORIUM_PSTR(IN_L_TBA, "\xCE\xB1 Alpha");
 CORIUM_PSTR(IN_H_TBA, "Detects alpha radiation");
@@ -168,11 +166,10 @@ CORIUM_PSTR(IN_L_URMD, "Source mode");
 CORIUM_PSTR(IN_O_URMD, "Specific device|Sum all sources");
 CORIUM_PSTR(IN_H_URMD, "Specific: source chip ID below, blank = first source heard");
 CORIUM_PSTR(IN_L_URCH, "Source chip ID");
-CORIUM_PSTR(IN_H_URCH, "6-hex chipid of the source, Specific mode only");
+CORIUM_PSTR(IN_H_URCH, "6-hex chip ID of the source, Specific mode only");
 CORIUM_PSTR(IN_P_URCH, UDPRX_CHIPID_PAT);
 CORIUM_PSTR(IN_L_URGP, "Group / listen IP");
-CORIUM_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen.");
-CORIUM_PSTR(IN_H_URPT, "UDP port (default 57340)");
+CORIUM_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen");
 CORIUM_PSTR(IN_L_URRM, "RX sleep");
 CORIUM_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
 // modem sleep where multicast still gets in
@@ -185,13 +182,12 @@ CORIUM_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
 extern "C" void udprx_notify_prefs_saved();
 #endif
 CORIUM_PSTR(CT_L_RAT, "Dose ratio");
-CORIUM_PSTR(CT_H_RAT, "CPM to uSv/h factor");
+CORIUM_PSTR(CT_H_RAT, "CPM per uSv/h");
 CORIUM_PSTR(CT_L_WRN, "Warning CPM");
-CORIUM_PSTR(CT_H_WRN, "Warning trigger (CPM), 0 = off");
+CORIUM_PSTR(CT_H_OFF, "0 = off");
 CORIUM_PSTR(CT_L_ALR, "Alert CPM");
-CORIUM_PSTR(CT_H_ALR, "Alert trigger (CPM), 0 = off");
 CORIUM_PSTR(CT_L_LE,  "Track lifetime");
-CORIUM_PSTR(CT_H_LE,  "Keep lifetime clicks and dose across restarts.");
+CORIUM_PSTR(CT_H_LE,  "Keep lifetime clicks and dose across restarts");
 
 // a -D one is the row default too
 #if defined(USE_PCNT) && !defined(PCNT_FILTER)
@@ -219,7 +215,7 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   {EG_K_UDPRX_CHIPID, IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     CHIPID_LEN,  corium::P_STRING, 0},
   {EG_K_UDPRX_GROUP,  IN_L_URGP, IN_H_URGP, UDPRX_DEFAULT_GROUP, EG_P_IP,      0, 0,     CORIUM_IPV4_MAX, corium::P_STRING, corium::P_ADVANCED},
-  {EG_K_UDPRX_PORT,   EG_L_PRT,  IN_H_URPT, STR(UDPRX_DEFAULT_PORT), nullptr,  1, 65535, 0,  corium::P_UINT,   corium::P_ADVANCED},
+  {EG_K_UDPRX_PORT,   EG_L_PRT,  nullptr,   STR(UDPRX_DEFAULT_PORT), nullptr,  1, 65535, 0,  corium::P_UINT,   corium::P_ADVANCED},
   {EG_K_UDPRX_RXMODE, IN_L_URRM, nullptr,   UDPRX_RXMODE_DEFAULT, IN_O_URRM,   0, 2,     0,  corium::P_ENUM,   corium::P_ADVANCED},
 #endif
   // Tube identity
@@ -233,8 +229,8 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   // Conversion and alarms
   {K_DOSE_HDR,        IN_L_DOSE, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, 0},
   {EG_K_RATIO,        CT_L_RAT, CT_H_RAT, STR(GEIGER_RATIO), nullptr, 1, 100000, 0, corium::P_FLOAT, 0},
-  {K_WARN,            CT_L_WRN, CT_H_WRN, STR(GEIGER_WARN_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
-  {K_ALERT,           CT_L_ALR, CT_H_ALR, STR(GEIGER_ALERT_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {EG_K_WARN,         CT_L_WRN, CT_H_OFF, STR(GEIGER_WARN_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
+  {EG_K_ALERT,        CT_L_ALR, CT_H_OFF, STR(GEIGER_ALERT_CPM), nullptr, 0, 9999, 0,  corium::P_UINT,   0},
   {K_LIFE_EN,         CT_L_LE,  CT_H_LE,  "1",     nullptr, 0, 1,    0,  corium::P_BOOL,   corium::P_ADVANCED},
   // Signal conditioning, all advanced
   {K_COUNT_HDR,       IN_L_COUNT, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, corium::P_ADVANCED},
@@ -361,8 +357,8 @@ void CounterPrefs::onPrefsLoaded() {
 #endif
   gcounter.set_cpm_mode((uint8_t)corium::Prefs::getUInt("counter", K_CPM_MODE));
   gcounter.set_ratio(corium::Prefs::getFloat("counter", EG_K_RATIO));
-  gcounter.set_warning((int)corium::Prefs::getUInt("counter", K_WARN));
-  gcounter.set_alert((int)corium::Prefs::getUInt("counter", K_ALERT));
+  gcounter.set_warning((int)corium::Prefs::getUInt("counter", EG_K_WARN));
+  gcounter.set_alert((int)corium::Prefs::getUInt("counter", EG_K_ALERT));
   gcounter.set_lifetime_enabled(corium::Prefs::getUInt("counter", K_LIFE_EN) != 0);
 }
 
@@ -505,7 +501,7 @@ void led_hold_tick() {
 
 #ifndef LED_PIN_BLOCKED
 CORIUM_PSTR(LD_L_PIN, "Status LED pin");
-CORIUM_PSTR(LD_H_PIN, "GPIO of the onboard LED (-1 = disabled)");
+CORIUM_PSTR(LD_H_PIN, "Onboard LED GPIO, -1 = off");
 #if LED_SEND_RECEIVE_ON == LOW
 #define LD_POL_DEF "1"
 #else
@@ -520,7 +516,6 @@ CORIUM_PSTR(LD_L_BRT, "Internal brightness");
 #else
 CORIUM_PSTR(LD_L_BRT, "Blip brightness");
 #endif
-CORIUM_PSTR(LD_H_BRT, "LED brightness (0-100%)");
 CORIUM_PSTR(LD_O_MOD, "Pulse|Fade");
 #ifdef ESPGEIGER_HW
 #define LD_PULSE_DEF "2"
@@ -532,7 +527,7 @@ CORIUM_PSTR(LD_O_MOD, "Pulse|Fade");
 // not the 8266 HW's inside LED, hw32 has the beeper
 #if !defined(ESPGEIGER_HW) || defined(ESPGEIGER_HW32)
 #define LED_QUIET
-CORIUM_PSTR(LD_H_QFR, "Silence blip LED + beeper from (blank = off), alarms still sound");
+CORIUM_PSTR(LD_H_QFR, "Silence the blip LED and beeper from this time, blank = off. Alarms still sound");
 #endif
 #define LED_LABEL  "Blip LED"
 #define LED_ENABLE K_BLIP_LED
@@ -547,7 +542,7 @@ static const corium::Pref LED_PREF_ITEMS[] PROGMEM = {
   {EG_K_MODE,       EG_L_MOD, nullptr,  "0",     LD_O_MOD, 0,  1,     0, corium::P_ENUM, corium::P_ADVANCED},
   {EG_K_PULSE_MS,   EG_L_PUL, EG_H_PUL, LD_PULSE_DEF, nullptr, 1, 50,  0, corium::P_UINT, corium::P_ADVANCED},
   {EG_K_FADE_SHIFT, EG_L_FAD, nullptr,  "1",     EG_O_FAD, 0,  2,     0, corium::P_ENUM, corium::P_ADVANCED},
-  {K_BLIP_BRIGHT,   LD_L_BRT, LD_H_BRT, LD_BRT_DEF, nullptr, 0, 100,  0, corium::P_UINT, corium::P_SLIDER},
+  {K_BLIP_BRIGHT,   LD_L_BRT, EG_H_VOL, LD_BRT_DEF, nullptr, 0, 100,  0, corium::P_UINT, corium::P_SLIDER},
 #ifdef LED_QUIET
   {EG_K_QUIET_FROM, EG_L_QFR, LD_H_QFR, "",      nullptr, 0,   0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
   {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",      nullptr, 0,   0,     CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
@@ -621,7 +616,7 @@ static HVPinPrefs hvpinprefs;
 CORIUM_REGISTER_MODULE(hvpinprefs)
 
 CORIUM_PSTR(HV_L_PWM, "HV PWM pin");
-CORIUM_PSTR(HV_H_PWM, "GPIO for HV generator PWM (-1 = disabled)");
+CORIUM_PSTR(HV_H_PWM, "HV generator PWM GPIO, -1 = off");
 
 static const corium::Pref HV_PIN_PREF_ITEMS[] PROGMEM = {
   {K_PWM_PIN, HV_L_PWM, HV_H_PWM, STR(GEIGER_PWMPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_PWM},

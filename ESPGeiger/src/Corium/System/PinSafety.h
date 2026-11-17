@@ -50,6 +50,7 @@ namespace corium {
 namespace PinSafety {
 
 extern const char I2C[];   // shared bus, one owner
+extern const char OUT_OF_RANGE[];
 
 // nullptr = ok, else why or the other owner (PROGMEM)
 const char* claim(int pin, const char* owner);

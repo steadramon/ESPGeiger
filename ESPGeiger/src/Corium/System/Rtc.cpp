@@ -28,6 +28,7 @@
 #include "Corium/Module/Module.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/Util/Attr.h"
+#include "Corium/Util/Words.h"
 
 // DS3231 / DS1307 time from 0x00, PCF8563 / BM8563 from 0x02
 static const uint8_t DS_ADDR    = 0x68;
@@ -189,7 +190,7 @@ void RtcModule::loop(unsigned long now) {
   // NTP after the browser goes in at once
   if (corium::Clock::source == _from && now - _written_at < WRITE_MS) return;
   if (!write_time(time(nullptr))) return;
-  if (corium::Clock::source != _from) corium::Log::console(PSTR("RTC: Set from %s"), ntp ? PSTR("NTP") : PSTR("browser"));
+  if (corium::Clock::source != _from) corium::Log::console(PSTR("RTC: Set from %s"), ntp ? W_NTP : W_BROWSER);
   _from = corium::Clock::source;
   _written_at = now;
 }

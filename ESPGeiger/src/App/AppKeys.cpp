@@ -1,5 +1,5 @@
 /*
-  AppKeys.cpp - Pref keys and labels the app modules share.
+  AppKeys.cpp - Pref keys, labels and words the app modules share.
 
   Copyright (C) 2026 @steadramon
 
@@ -17,11 +17,27 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Corium/Platform/Flash.h"
+#include "App/AppConfig.h"
 #include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 
+const char APP_NAME[] PROGMEM = THING_NAME;
+
+const char K_M_CPM[]   PROGMEM = "cpm";
+const char K_M_CPM5[]  PROGMEM = "cpm5";
+const char K_M_CPM15[] PROGMEM = "cpm15";
+const char K_M_CPS[]   PROGMEM = "cps";
+const char K_M_USV[]   PROGMEM = "usv";
+const char M_HV[]      PROGMEM = "hv";
+const char M_T[]       PROGMEM = "t";
+const char M_H[]       PROGMEM = "h";
+const char M_P[]       PROGMEM = "p";
+
+const char EG_K_ALERT[]        PROGMEM = "alert";
 const char EG_K_BRIGHTNESS[]   PROGMEM = "brightness";
 const char EG_K_CLK[]          PROGMEM = "clk";
 const char EG_K_CLKR[]         PROGMEM = "clkr";
+const char EG_K_DISP_TYPE[]    PROGMEM = "display.type";
 const char EG_K_ENABLE[]       PROGMEM = "enable";
 const char EG_K_FADE_SHIFT[]   PROGMEM = "fade_shift";
 const char EG_K_FBT[]          PROGMEM = "fbt";
@@ -44,9 +60,11 @@ const char EG_K_TPL[]          PROGMEM = "tpl";
 const char EG_K_TYPE[]         PROGMEM = "type";
 const char EG_K_USER[]         PROGMEM = "user";
 const char EG_K_VOLUME[]       PROGMEM = "volume";
+const char EG_K_WARN[]         PROGMEM = "warn";
 const char EG_L_EN[]  PROGMEM = "Enable";
 const char EG_L_MOD[] PROGMEM = "Mode";
 const char EG_L_INT[] PROGMEM = "Interval";
+const char EG_H_INT[] PROGMEM = "Send interval (s)";
 const char EG_L_PRT[] PROGMEM = "Port";
 const char EG_L_PWD[] PROGMEM = "Password";
 const char EG_L_PIN[] PROGMEM = "GPIO";
@@ -63,3 +81,5 @@ const char EG_L_QFR[] PROGMEM = "Quiet from";
 const char EG_L_QTO[] PROGMEM = "Quiet to";
 const char EG_H_QTO[] PROGMEM = "End of quiet window; crosses midnight if from > to";
 const char EG_P_IP[]  PROGMEM = "[0-9.]+";
+const char EG_L_TPL[] PROGMEM = "Template";
+const char EG_W_SCREEN[] PROGMEM = "Screen";

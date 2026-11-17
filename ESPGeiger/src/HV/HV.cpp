@@ -22,6 +22,7 @@
 #include "HV.h"
 #include "App/AppKeys.h"
 #include "App/FeatureBits.h"
+#include "App/Health.h"
 #include "App/MeasureIds.h"
 #include "Counter/Counter.h"
 #include "Corium/Console/Console.h"
@@ -38,6 +39,10 @@
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/RtcMap.h"
 #include "Corium/Platform/Chip.h"
+#if CORIUM_HAS_LEDC
+#include "hal/clk_gate_ll.h"
+#include "soc/ledc_struct.h"
+#endif
 #include "GeigerInput/GeigerInput.h"
 #if !GEIGER_IS_PULSE(GEIGER_TYPE)
 #error "ESPG_HV needs a pulse build"
@@ -56,7 +61,9 @@ void corium::AppHooks::onCrash() { EGTimer1::pwm_stop(); }
 #endif
 #include "Corium/WebPortal/WebPortal.h"
 #include "HVJS_BUNDLE.gz.h"
+#include "App/Notice.h"
 
+CORIUM_PSTR(HV_NOTICE, "HV fault");
 CORIUM_PSTR(K_DUTY,   "duty");
 CORIUM_PSTR(K_OFFSET, "offset");
 CORIUM_PSTR(K_TARGET, "target");
@@ -85,11 +92,11 @@ CORIUM_PSTR(HW_L_DTY, "PWM duty");
 CORIUM_PSTR(HW_H_DTY, "HV generator duty, out of " STR(HV_PWM_MAX));
 #ifdef ESPG_HV_ADC
 CORIUM_PSTR(HW_L_RAT, "Divider ratio");
-CORIUM_PSTR(HW_H_RAT, "Voltage divider ratio (0 = off)");
+CORIUM_PSTR(HW_H_RAT, "Voltage divider ratio, 0 = off");
 CORIUM_PSTR(HW_L_OFF, "Divider offset");
 CORIUM_PSTR(HW_H_OFF, "Voltage divider offset");
 CORIUM_PSTR(HW_L_TGT, "HV target");
-CORIUM_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage (0 = open loop)");
+CORIUM_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage, 0 = open loop");
 #endif
 
 static const corium::Pref HW_PREF_ITEMS[] PROGMEM = {
@@ -294,7 +301,7 @@ static void hv_lifecycle(corium::Lifecycle::Event e) {
 void HV::set_pwm_pin(int pin) {
   const char* why = nullptr;
 #ifdef ESP8266
-  if (pin == 16) why = PSTR("no PWM on GPIO 16");
+  if (pin == 16) why = PSTR("no PWM on GPIO16");
 #endif
   if (!why) why = corium::PinSafety::claimOutput(pin, PSTR("HV"));
   if (why) {
@@ -320,6 +327,20 @@ static void ratio_to_mv(int mv) {
   }
   if (mv != raw) corium::Log::console(PSTR("HV: Ratio %d now %d (mV), check it"), raw, mv);
   (void)corium::Prefs::commit(false);   // failed: both stay due, the next save lands them
+}
+#endif
+
+#if CORIUM_HAS_LEDC
+// a crash or restart resets the cpu only, ledc keeps the gate on its last duty
+// before setup, pin unknown till prefs; registers only, the driver's state went with the ram
+__attribute__((constructor)) static void gate_off() {
+  if (!periph_ll_periph_enabled(PERIPH_LEDC_MODULE)) return;   // power on
+  // group 0: esp32 high speed, c3 low speed
+  LEDC.channel_group[0].channel[EGLED_HV_CHANNEL].conf0.idle_lv = 0;
+  LEDC.channel_group[0].channel[EGLED_HV_CHANNEL].conf0.sig_out_en = 0;
+#if !SOC_LEDC_SUPPORT_HS_MODE
+  LEDC.channel_group[0].channel[EGLED_HV_CHANNEL].conf0.low_speed_update = 1;   // low speed waits for this
+#endif
 }
 #endif
 
@@ -356,6 +377,14 @@ void HV::begin() {
 #endif
 }
 
+// health bits 4-6, a board with a reading only
+static void note_health(HV& h) {
+  bool on = h.get_pwm_pin() >= 0 && h.get_vd_ratio() != 0;
+  health().put(H_HV, on ? (uint16_t)(h.hv_low() << H_HV_LOW |
+                                     h.ov_tripped() << H_HV_HIGH |
+                                     h.fb_fault() << H_HV_FB) : 0);
+}
+
 void HV::loop(unsigned long now) {
 #ifdef ESPG_HV_ADC
   sample_adc();
@@ -376,6 +405,7 @@ void HV::loop(unsigned long now) {
   note_low();
 #endif
   if (_pwm_pin >= 0) write_duty();
+  note_health(*this);
 #ifdef ESPG_HV_ADC
   adc_second(now);
 #endif
@@ -450,6 +480,7 @@ void HV::check_overvoltage(int volts) {
   corium::Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
                volts, _ov_v);
   corium::Registry::emit(TOPIC_FAULT);
+  Notice::show(HV_NOTICE);
 }
 
 #ifdef ESPGEIGER_HW32
@@ -465,6 +496,7 @@ void HV::check_feedback() {
   pinMode(_pwm_pin, INPUT);   // base pull-down holds it off
   corium::Log::console(PSTR("HV: Feedback %d mV out of range, off until restart"), mv);
   corium::Registry::emit(TOPIC_FAULT);
+  Notice::show(HV_NOTICE);
 }
 #endif
 
@@ -476,7 +508,7 @@ static int trim_band(int ratio) {
 #ifdef ESPGEIGER_HW32
 // last second's reading
 void HV::note_low() {
-  bool top = _hv_target > 0 && _vd_ratio > 0 && _duty_trim >= _trim_max;
+  bool top = _hv_target > 0 && _vd_ratio > 0 && hv_no_room(_duty, _duty_trim, _trim_max, max_duty());
   int err = (int)_hv_target - (int)hvReading.get();
   _low_s = hv_low_count(_low_s, err, trim_band(_vd_ratio), top);
 }
@@ -584,7 +616,7 @@ G1=byID('g1'),G2=byID('g2'),
 FQ=byID('freq'),DU=byID('duty'),RT=byID('ratio'),TG=byID('tgt'),
 SF=byID('sfreq'),SD=byID('sduty'),PD=byID('pduty'),ST=byID('strim'),SB=byID('submit'),
 TRow=TG.closest('tr'),
-M=['','(overvoltage cut-off: save to retry)','(feedback fault: HV off until restart)','(trim at max, still under target: raise duty or lower target)'],
+M=['','(overvoltage cut-off: save to retry)','(feedback fault: HV off until restart)','(at its limit, still under target: raise duty or lower target)'],
 ge=!0,inited=!1;
 e.av=3;
 function showGraph(on){if(on===ge)return;ge=on;var d=on?'':'none';G1.style.display=d;G2.style.display=d;TRow.style.display=d}

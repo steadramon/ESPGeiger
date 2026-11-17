@@ -22,6 +22,7 @@
 #include "Corium/Util/Bytes.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
 #include <EGHttpServer.h>
 #include "RANDOM_JS.gz.h"
 
@@ -138,7 +139,7 @@ static size_t random_dice(EGHttpRequest& req, char* out, size_t cap) {
   GRNG::extract(bytes, 4);
   uint32_t r = rdBe32(bytes);
   long roll = (long)(r % (uint32_t)sides) + 1;
-  return snprintf_P(out, cap, PSTR("%ld"), roll);
+  return snprintf_P(out, cap, W_FMT_LD, roll);
 }
 
 // out >= 64 chars

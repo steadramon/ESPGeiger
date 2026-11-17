@@ -34,8 +34,6 @@
 #include "App/AppKeys.h"
 #include "App/MeasureIds.h"
 
-CORIUM_PSTR(K_SYS_WARN,  "warn");
-CORIUM_PSTR(K_SYS_ALERT, "alert");
 
 Max7219Display max7219;
 CORIUM_REGISTER_MODULE(max7219)
@@ -61,8 +59,8 @@ static void slow_reads(uint8_t page) {
   bool all = s_age == 0;
   if (++s_age >= 30) s_age = 0;
   if (all) {
-    s_warn_cpm  = (float)corium::Prefs::getUInt("counter", K_SYS_WARN);
-    s_alert_cpm = (float)corium::Prefs::getUInt("counter", K_SYS_ALERT);
+    s_warn_cpm  = (float)corium::Prefs::getUInt("counter", EG_K_WARN);
+    s_alert_cpm = (float)corium::Prefs::getUInt("counter", EG_K_ALERT);
     // 0 = that alarm off, the arc still needs a scale
     if (!s_warn_cpm)  s_warn_cpm  = GEIGER_WARN_CPM;
     if (!s_alert_cpm) s_alert_cpm = GEIGER_ALERT_CPM;
@@ -207,7 +205,6 @@ static const corium::PrefGroup MAX7219_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* Max7219Display::prefsGroup() { return &MAX7219_PREF_GROUP; }
 
 // rows per display.type
-CORIUM_PSTR(MX_W_TYPE, "display.type");
 static const uint16_t SHOW_7SEG   = 1u << DISP_MAX7219_7SEG;
 static const uint16_t SHOW_ROUND  = 1u << DISP_MAX7219_ROUND;
 static const uint16_t SHOW_MATRIX = 1u << DISP_MAX7219_MATRIX;
@@ -215,16 +212,16 @@ static const uint16_t SHOW_TM     = 1u << DISP_TM1637;
 static const uint16_t SHOW_MAX    = SHOW_7SEG | SHOW_ROUND | SHOW_MATRIX;
 
 static const corium::PrefShow MAX7219_SHOW[] PROGMEM = {
-  {nullptr,    MX_W_TYPE, SHOW_MAX | SHOW_TM},
-  {K_CS,       MX_W_TYPE, SHOW_MAX},
-  {K_COUNT,    MX_W_TYPE, SHOW_7SEG | SHOW_TM},
-  {K_PANELS,   MX_W_TYPE, SHOW_MATRIX},
-  {K_BAR,      MX_W_TYPE, SHOW_7SEG | SHOW_TM},
-  {K_BAR_GAIN, MX_W_TYPE, SHOW_7SEG | SHOW_TM},
-  {K_BAR_WIN,  MX_W_TYPE, SHOW_7SEG | SHOW_TM},
-  {K_ORIENT,   MX_W_TYPE, SHOW_MATRIX},
-  {K_REVERSE,  MX_W_TYPE, SHOW_7SEG},
-  {K_POINTS,   MX_W_TYPE, SHOW_TM},
+  {nullptr,    EG_K_DISP_TYPE, SHOW_MAX | SHOW_TM},
+  {K_CS,       EG_K_DISP_TYPE, SHOW_MAX},
+  {K_COUNT,    EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_PANELS,   EG_K_DISP_TYPE, SHOW_MATRIX},
+  {K_BAR,      EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_BAR_GAIN, EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_BAR_WIN,  EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_ORIENT,   EG_K_DISP_TYPE, SHOW_MATRIX},
+  {K_REVERSE,  EG_K_DISP_TYPE, SHOW_7SEG},
+  {K_POINTS,   EG_K_DISP_TYPE, SHOW_TM},
   {},
 };
 
@@ -755,7 +752,7 @@ void Max7219Display::drawDigits() {
 void Max7219Display::matrixValueUnit(char* val, size_t val_cap, char* unit, size_t unit_cap) {
   float v; uint8_t dec; const char* u;
   pageInfo(_cur_page, v, dec, u);
-  if (dec == 0) snprintf_P(val, val_cap, PSTR("%d"), CounterMaths::to_int(v));
+  if (dec == 0) snprintf_P(val, val_cap, W_FMT_D, CounterMaths::to_int(v));
   else          format_f(val, val_cap, v, dec);
   flashToRam(u, unit, unit_cap);
 }
@@ -920,7 +917,7 @@ void Max7219Display::fxFrame(int W) {
 
 bool Max7219Display::fxScroll(int W) {
   char text[12];
-  flashToRam(W_APP_NAME, text, sizeof(text));
+  flashToRam(APP_NAME, text, sizeof(text));
   int x = W - (int)_fx;
   int end = mxDraw(_mfb, W, x, text, MX_SMALL);
   for (int c = 0; c < W; c++) {

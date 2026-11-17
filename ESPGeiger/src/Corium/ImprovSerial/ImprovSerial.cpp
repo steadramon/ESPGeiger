@@ -27,6 +27,7 @@
 #include "Corium/Net/WifiSetup.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Uptime.h"
+#include "Corium/Util/Words.h"
 
 corium::ImprovSerial improvSerial;
 
@@ -215,7 +216,7 @@ void corium::ImprovSerial::send_wifi_networks() {
   size_t kept = EGPortal::processScan(aps, 16, corium::Wifi::scanNetworks(false, false), INT8_MIN);
   for (size_t k = 0; k < kept; k++) {
     char rssi[12];
-    snprintf_P(rssi, sizeof(rssi), PSTR("%d"), (int)aps[k].rssi);
+    snprintf_P(rssi, sizeof(rssi), W_FMT_D, (int)aps[k].rssi);
     const char* entry[] = {
       aps[k].ssid,
       rssi,

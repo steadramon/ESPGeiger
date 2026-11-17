@@ -34,15 +34,17 @@ corium::SystemPrefs sysprefs;
 CORIUM_REGISTER_MODULE(sysprefs)
 
 CORIUM_PSTR(SY_L_NAM, "Friendly name");
-CORIUM_PSTR(SY_H_NAM, "Optional label for web UI");
-CORIUM_PSTR(SY_L_WPW, "Web password");
-CORIUM_PSTR(SY_H_WPW, "Web UI login, user admin, 8+ chars. Also the hotspot's WiFi password. Blank = no login");
-CORIUM_PSTR(SY_L_OTA, "Network upload");
-CORIUM_PSTR(SY_H_OTA, "espota port for PlatformIO and the Arduino IDE. The Update page works either way.");
+CORIUM_PSTR(SY_H_NAM, "Optional label for the web pages");
+CORIUM_PSTR(SY_H_WPW, "User admin, 8+ chars, also the hotspot's WiFi password, blank = no login");
+CORIUM_PSTR(SY_L_OTA, "Arduino OTA");
+CORIUM_PSTR(SY_H_OTA, "For PlatformIO (espota) and the Arduino IDE network port. Not needed for the Update page");
+#ifdef ESP32
+CORIUM_PSTR(SY_O_MHZ, "0|80|160|240");
+#endif
 
 static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    CORIUM_NAME_MAX, corium::P_STRING, 0},
-  {corium::K_WEB_PASS, SY_L_WPW, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_WEB_PASS, corium::L_WEB_PASS, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_LOCAL | corium::P_REBOOT},
   {corium::K_ESPOTA,   SY_L_OTA, SY_H_OTA, "0",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
   {corium::K_ORIGIN,   nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},
   // uploads failing in a row wait up to this long, s; 0 = every interval
@@ -51,7 +53,7 @@ static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {corium::K_BRAKE,    nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},
 #ifdef ESP32
   // 0 = board default. C3 max 160
-  {K_CPU_MHZ,     nullptr,  nullptr,  "0",     nullptr, 0, 240,  0,  corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
+  {K_CPU_MHZ,     nullptr,  nullptr,  "0",     SY_O_MHZ, 0, 0,   0,  corium::P_UINT,   corium::P_HIDDEN | corium::P_LOCAL},
 #endif
 };
 
@@ -111,8 +113,8 @@ static void apply_sys() {
 #ifdef ESP32
   uint32_t mhz = corium::Prefs::getUInt("sys", K_CPU_MHZ);
   if (mhz) {
-    // the row takes 0-240, say why the rest change nothing
-    bool ok = (mhz == 80 || mhz == 160 || mhz == 240) && setCpuFrequencyMhz(mhz);
+    // 240 on a C3
+    bool ok = setCpuFrequencyMhz(mhz);
     corium::Log::console(ok ? PSTR("System: CPU set to %u MHz") : PSTR("System: CPU %u MHz not taken, 80/160/240"),
                          (unsigned)mhz);
   }
@@ -166,17 +168,14 @@ static NetPrefs netprefs;
 CORIUM_REGISTER_MODULE(netprefs)
 
 CORIUM_PSTR(NT_L_STA, "Use static IP");
-CORIUM_PSTR(NT_L_IP,  "IP address");
-CORIUM_PSTR(NT_L_GW,  "Gateway");
-CORIUM_PSTR(NT_L_SN,  "Subnet mask");
 CORIUM_PSTR(NT_L_DNS, "DNS server");
 CORIUM_PSTR(NT_P_IP,  "[0-9.]+");
 
 static const corium::Pref NET_PREF_ITEMS[] PROGMEM = {
   {corium::K_STATIC_IP, NT_L_STA, nullptr, "0", nullptr,  0, 0, 0,  corium::P_BOOL,   corium::P_LOCAL | corium::P_REBOOT},
-  {corium::K_IP,        NT_L_IP,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
-  {corium::K_GW,        NT_L_GW,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
-  {corium::K_SN,        NT_L_SN,  nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_IP,        corium::L_IP, nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_GW,        corium::L_GW, nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
+  {corium::K_SN,        corium::L_SN, nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
   {corium::K_DNS,       NT_L_DNS, nullptr, "",  NT_P_IP,  0, 0, CORIUM_IPV4_MAX, corium::P_STRING, corium::P_LOCAL | corium::P_REBOOT},
 };
 

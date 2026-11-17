@@ -21,8 +21,9 @@
 #include <string.h>
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/Bytes.h"
+#include "Corium/Util/Words.h"
 
-// too long = false
+// false if it's too long
 template <size_t N>
 static bool take(char (&out)[N], const char* p, const char* e) {
   size_t n = e - p;
@@ -32,7 +33,7 @@ static bool take(char (&out)[N], const char* p, const char* e) {
   return true;
 }
 
-// value may hold '=' and '.'
+// Line is mid.key=value, the value may hold '=' and '.'
 CORIUM_NODISCARD static bool put_line(const char* p, const char* e, corium::ImportText::PutFn put) {
   if (memchr(p, '\0', e - p)) return false;   // a NUL would cut the value
   const char* eq = (const char*)memchr(p, '=', e - p);
@@ -79,30 +80,30 @@ corium::ImportText::Result corium::ImportText::apply(const char* text, size_t le
 }
 
 const char* corium::ImportText::blobError(const uint8_t* p, size_t len) {
-  if (len < 1) return PSTR("too short");
+  if (len < 1) return W_TOO_SHORT;
   size_t off = 0;
   uint8_t gcount = p[off++];
   for (uint8_t gi = 0; gi < gcount; gi++) {
-    if (off + 1 > len) return PSTR("truncated group hdr");
+    if (off + 1 > len) return W_TOO_SHORT;
     uint8_t mid_len = p[off++];
-    if (off + mid_len + 1 > len) return PSTR("bad group hdr");
+    if (off + mid_len + 1 > len) return W_BAD_FORMAT;
     off += mid_len;
     uint8_t pcount = p[off++];
     for (uint8_t pi = 0; pi < pcount; pi++) {
-      if (off + 3 > len) return PSTR("truncated pref");
+      if (off + 3 > len) return W_TOO_SHORT;
       uint8_t klen = p[off++];
-      if (off + klen + 2 > len) return PSTR("bad pref key");
+      if (off + klen + 2 > len) return W_BAD_FORMAT;
       off += klen;
       uint16_t vlen = rdBe16(p + off);
       off += 2;
-      if (off + vlen > len) return PSTR("truncated pref value");
+      if (off + vlen > len) return W_TOO_SHORT;
       off += vlen;
     }
   }
-  return off == len ? nullptr : PSTR("trailing bytes");
+  return off == len ? nullptr : W_BAD_FORMAT;
 }
 
-// too long = "", matches no pref
+// Too long gives "", which matches no pref
 static void take_id(char (&out)[CORIUM_PREF_ID_MAX + 1], const uint8_t* p, uint8_t n) {
   if (n > CORIUM_PREF_ID_MAX) n = 0;
   memcpy(out, p, n);
@@ -117,7 +118,7 @@ static int moved_index(const char* mid) {
   return -1;
 }
 
-// a NUL would cut the value, as put_line
+// A NUL would cut the value, same as in put_line
 CORIUM_NODISCARD static bool put_rec(const char* mid, const char* key, const uint8_t* v, uint16_t vlen,
                     corium::ImportText::PutFn put) {
   char value[CORIUM_PREFS_MAX_VALUE + 1];
@@ -127,7 +128,7 @@ CORIUM_NODISCARD static bool put_rec(const char* mid, const char* key, const uin
   return put(mid, key, value);
 }
 
-// only the groups whose moved_index is pass
+// only applies the groups whose moved_index is pass
 static void apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put,
                        corium::ImportText::Result& r) {
   size_t off = 0;
@@ -151,7 +152,7 @@ static void apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put
         r.applied++;
         continue;
       }
-      if (!r.skipped) snprintf_P(r.firstKey, sizeof(r.firstKey), PSTR("%s.%s"), mid, key);
+      if (!r.skipped) snprintf_P(r.firstKey, sizeof(r.firstKey), W_FMT_DOT, mid, key);
       r.skipped++;
     }
   }
@@ -169,7 +170,7 @@ void corium::ImportText::blobBoard(const uint8_t* p, size_t len, char* out, size
   take_id(mid, p + off, mid_len);
   off += mid_len;
   if (strcmp_P(mid, BOARD_MID) != 0 || !p[off++]) return;
-  off += 1 + p[off];   // key
+  off += 1 + p[off];   // skip the key
   uint16_t vlen = rdBe16(p + off);
   off += 2;
   if (vlen >= cap) return;
@@ -177,7 +178,7 @@ void corium::ImportText::blobBoard(const uint8_t* p, size_t len, char* out, size
   out[vlen] = '\0';
 }
 
-// moved groups last listed first, then the rest, as at boot
+// Moved groups go first, last listed first, then the rest. Same order as at boot
 corium::ImportText::Result corium::ImportText::applyBlob(const uint8_t* p, size_t len, PutFn put) {
   Result r = {};
   if (blobError(p, len)) {

@@ -22,23 +22,30 @@
 #include "Corium/Platform/Flash.h"
 #include "Corium/Measure/Measure.h"
 
-// sibling modules' rows; the counter's and the device's are read direct
-// PSTR so the linker keeps one copy of each
-#define M_HV     PSTR("hv")
-// by id only
+// Counter ids looked up by name in more than one place, defined in AppKeys.cpp
+extern const char K_M_CPM[] PROGMEM;
+extern const char K_M_CPM5[] PROGMEM;
+extern const char K_M_CPM15[] PROGMEM;
+extern const char K_M_CPS[] PROGMEM;
+extern const char K_M_USV[] PROGMEM;
+
+// Rows from the other modules. The counter's and the device's own are read directly
+// a PSTR is a copy per use, so the shared ones live in AppKeys.cpp
+extern const char M_HV[] PROGMEM;
+// only looked up by id
 #define M_HV_TGT PSTR("hv_tgt")
 #define M_HV_DTY PSTR("hv_duty")
 #define M_HV_TRM PSTR("hv_trim")
 #define M_RX_T   PSTR("rx_t")   // UdpRx /env
 #define M_RX_H   PSTR("rx_h")
 #define M_RX_P   PSTR("rx_p")
-// built with the hv rows, 0 = the code reading them drops out
+// 1 when the HV rows are built, 0 lets the code that reads them drop out
 #ifdef ESPG_HV_ADC
 #define M_HAS_HV 1
 #else
 #define M_HAS_HV 0
 #endif
-// tube volts, false with no hv row
+// Tube volts, false if there's no HV row
 inline bool m_hv_volts(int32_t* v) {
   corium::MeasureIter it(corium::M_OUT_ANY, false, M_HV);
   if (!it.next()) return false;
@@ -46,8 +53,8 @@ inline bool m_hv_volts(int32_t* v) {
   return true;
 }
 // celsius
-#define M_T      PSTR("t")
-#define M_H      PSTR("h")
-#define M_P      PSTR("p")
+extern const char M_T[] PROGMEM;
+extern const char M_H[] PROGMEM;
+extern const char M_P[] PROGMEM;
 
 #endif

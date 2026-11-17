@@ -24,19 +24,21 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/System/Clock.h"
 #include "Corium/Logger/Logger.h"
-#ifdef ESP32
 #include "Corium/System/DeviceInfo.h"
-#endif
+#include "Corium/System/StatusWord.h"
+#include "Corium/Module/Registry.h"
 
 namespace corium { volatile uint32_t _fast_ms_counter = 0; }
 uint32_t corium::Reactor::s_ms_last_us = 0;
 uint32_t corium::Reactor::s_ms_acc_us = 0;
+uint32_t corium::Reactor::s_next_house = 0;
 
 static Ticker s_ms_ticker;
 static void (*s_app)(uint32_t) = nullptr;
 // boot guard marks, once each
 static bool s_lived = false;
 static bool s_day_marked = false;
+static uint32_t s_up = 0;
 
 void corium::Reactor::clock(void (*ms)()) {
   // else first tick sees all of uptime
@@ -55,28 +57,10 @@ void corium::Reactor::second() {
   corium::Log::hold(true);   // a Ticker, SYS context: no serial writes here
 #endif
   corium::TickProfile::beginTick();
-  if (!s_day_marked && corium::fastMillis() - CORIUM_MS_START > corium::BootGuard::DAY_MS) {
-    corium::BootGuard::markDay();
-    s_day_marked = true;
-  }
-  uint32_t up = (uint32_t)corium::Uptime::tick();
-  if (s_app) s_app(up);
+  s_up = (uint32_t)corium::Uptime::tick();
+  if (s_app) s_app(s_up);
 #ifdef TICK_PROFILE
   corium::TickProfile::markApp();
-#endif
-
-#ifdef ESP32
-  corium::DeviceInfo::chipTempSample();
-  corium::Clock::stamp();
-#endif
-
-  // wifi off counts as up, else safe mode
-  if (!s_lived && corium::Uptime::since(corium::Uptime::start) >= corium::BootGuard::LIVED_S &&
-      (corium::Wifi::stableFor(corium::BootGuard::STABLE_MS) || corium::Wifi::disabled)) {
-    corium::BootGuard::markLived();
-    s_lived = true;
-  }
-#ifdef TICK_PROFILE
   corium::TickProfile::markWifi();
 #endif
 
@@ -84,6 +68,29 @@ void corium::Reactor::second() {
 #ifndef ESP32
   corium::Log::hold(false);   // the console's loop prints them
 #endif
+}
+
+void corium::Reactor::house() {
+  corium::statusTick(s_up, corium::Clock::synced, !corium::Wifi::disabled, corium::DeviceInfo::heapNow());
+  static uint16_t hour_s = 0;
+  if (++hour_s >= 3600) {
+    hour_s = 0;
+    corium::Registry::agePeaks();
+  }
+#ifdef ESP32
+  corium::DeviceInfo::chipTempSample();
+  corium::Clock::stamp();
+#endif
+  if (!s_day_marked && corium::fastMillis() - CORIUM_MS_START > corium::BootGuard::DAY_MS) {
+    corium::BootGuard::markDay();
+    s_day_marked = true;
+  }
+  // wifi off counts as up, else safe mode
+  if (!s_lived && corium::Uptime::since(corium::Uptime::start) >= corium::BootGuard::LIVED_S &&
+      (corium::Wifi::stableFor(corium::BootGuard::STABLE_MS) || corium::Wifi::disabled)) {
+    corium::BootGuard::markLived();
+    s_lived = true;
+  }
 }
 
 #ifdef ESP32
@@ -95,6 +102,7 @@ static Ticker s_sec_ticker;
 void corium::Reactor::begin(void (*app)(uint32_t up)) {
   s_app = app;
   corium::Uptime::start = corium::Uptime::tick() + 1;
+  s_next_house = corium::fastMillis() + 1500;
 #ifdef ESP32
   s_next_sec = corium::fastMillis() + 1000;
   // the tick in loop feeds it

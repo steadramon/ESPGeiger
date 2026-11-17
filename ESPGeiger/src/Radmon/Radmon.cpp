@@ -35,7 +35,6 @@ CORIUM_REGISTER_FEATURE(radmon, FEAT_RADMON)
 
 CORIUM_PSTR(RM_H_EN,  "Upload to radmon.org");
 CORIUM_PSTR(RM_L_USR, "Username");
-CORIUM_PSTR(RM_H_INT, "Send interval (s)");
 
 
 #define RADMON_USER_MAX 32
@@ -45,7 +44,7 @@ static const corium::Pref RADMON_PREF_ITEMS[] PROGMEM = {
   {EG_K_SEND,     EG_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   0},
   {EG_K_USER,     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  RADMON_USER_MAX, corium::P_STRING, 0},
   {EG_K_PASSWORD, EG_L_PWD, nullptr,  "",   nullptr, 0, 0,  RADMON_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE},
-  {EG_K_INTERVAL, EG_L_INT, RM_H_INT, STR(RADMON_INTERVAL), nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, corium::P_UINT, corium::P_ADVANCED},
+  {EG_K_INTERVAL, EG_L_INT, EG_H_INT, STR(RADMON_INTERVAL), nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, corium::P_UINT, corium::P_ADVANCED},
 };
 
 static const corium::PrefGroup RADMON_PREF_GROUP PROGMEM = {

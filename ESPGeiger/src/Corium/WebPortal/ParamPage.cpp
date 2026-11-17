@@ -35,11 +35,7 @@
 #include "Corium/Logger/Logger.h"
 #include <EGBase64.h>
 
-// a literal from flash, dropped if it won't fit
-#define APPEND_LIT(buf, pos, cap, lit) do {                              \
-  size_t _n = sizeof(lit) - 1;                                           \
-  if ((pos) + _n < (cap)) { memcpy_P((buf)+(pos), PSTR(lit), _n); (pos) += _n; } \
-} while (0)
+static const char W_NOTHING_IMP[] PROGMEM = "nothing imported";
 
 // POST body for /param and /import
 struct BodyBuf {
@@ -132,7 +128,7 @@ static void param_put(const char* mid, const char* id, const char* name,
   if (r.why[0]) return;
   strncpy(r.name, name, sizeof(r.name) - 1);
   r.name[sizeof(r.name) - 1] = '\0';
-  strncpy_P(r.why, corium::Prefs::refused() ? corium::Prefs::refused() : PSTR("not valid"), sizeof(r.why) - 1);
+  strncpy_P(r.why, corium::Prefs::refused() ? corium::Prefs::refused() : W_BAD_VALUE, sizeof(r.why) - 1);
 }
 
 static void param_save_pref(const char* mid, const corium::Pref& p,
@@ -143,7 +139,7 @@ static void param_save_pref(const char* mid, const corium::Pref& p,
   char id[CORIUM_PREF_ID_MAX + 1];
   char field[CORIUM_PREFS_MAX_VALUE + 1];
   flashToRam(p.id, id, sizeof(id));
-  snprintf_P(name, sizeof(name), PSTR("%s.%s"), mid, id);
+  snprintf_P(name, sizeof(name), W_FMT_DOT, mid, id);
 
   const char* v = EGHttpRequest::decodeArg(body, len, name, field, sizeof(field));
   if (p.type == corium::P_BOOL) {
@@ -255,6 +251,12 @@ static void param_appendf(ParamCtx& c, PGM_P fmt, ...) {
   advancePos(c.pos, n, sizeof(c.buf));
 }
 
+// flash, dropped if it won't fit
+static void param_append(ParamCtx& c, PGM_P s) {
+  size_t n = strlen_P(s);
+  if (c.pos + n < sizeof(c.buf)) { memcpy_P(c.buf + c.pos, s, n); c.pos += n; }
+}
+
 // one chunk from the start of buf
 static void param_sendf(ParamCtx& c, PGM_P fmt, ...) {
   va_list ap;
@@ -316,14 +318,20 @@ static void param_emit_options(ParamCtx& c, const corium::Pref& p) {
     size_t olen = sep ? (size_t)(sep - opt) : strlen(opt);
     // blank holds a number this build hasn't got
     if (olen) {
+      long v = p.type == corium::P_UINT ? strtol(opt, nullptr, 10) : idx;   // a number list
       param_sendf(c, PSTR("<option value=%ld%s>%.*s%s</option>"),
-                  idx, (idx == cur_idx) ? PSTR(" selected") : PSTR(""),
-                  (int)olen, opt, (idx == def_idx) ? PSTR(" (default)") : PSTR(""));
+                  v, (v == cur_idx) ? PSTR(" selected") : PSTR(""),
+                  (int)olen, opt, (v == def_idx) ? PSTR(" (default)") : PSTR(""));
     }
     if (!sep) break;
     opt = sep + 1;
     idx++;
   }
+}
+
+// enum, or a uint's number list
+static bool param_is_select(const corium::Pref& p) {
+  return p.type == corium::P_ENUM || (p.type == corium::P_UINT && p.pattern);
 }
 
 static void param_emit_enum(ParamCtx& c, const corium::Pref& p) {
@@ -362,7 +370,7 @@ static void param_send_escaped(ParamCtx& c, const char* s) {
 
 static void param_emit_value(ParamCtx& c, const corium::Pref& p, bool slider) {
   if (p.flags & corium::P_SENSITIVE) {
-    PGM_P ph = c.cur[0] ? PSTR("(unchanged \xE2\x80\x94 leave blank)") : PSTR("(not set)");
+    PGM_P ph = c.cur[0] ? PSTR("(unchanged, leave blank)") : PSTR("(not set)");
     param_appendf(c, PSTR(" value='' placeholder='%s'"), ph);
     return;
   }
@@ -389,18 +397,18 @@ static void param_emit_limits(ParamCtx& c, const corium::Pref& p) {
 }
 
 static void param_emit_input_end(ParamCtx& c, const corium::Pref& p, bool slider) {
-  if (p.type == corium::P_FLOAT) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " step=any");
+  if (p.type == corium::P_FLOAT) param_append(c, PSTR(" step=any"));
   if (!slider && (p.type == corium::P_INT || p.type == corium::P_UINT)) {
-    APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " inputmode=numeric");
+    param_append(c, PSTR(" inputmode=numeric"));
   } else if (p.type == corium::P_FLOAT) {
-    APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " inputmode=decimal");
+    param_append(c, PSTR(" inputmode=decimal"));
   }
-  if (p.flags & corium::P_REQUIRED) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " required");
-  if (p.flags & corium::P_READONLY) APPEND_LIT(c.buf, c.pos, sizeof(c.buf), " readonly");
+  if (p.flags & corium::P_REQUIRED) param_append(c, PSTR(" required"));
+  if (p.flags & corium::P_READONLY) param_append(c, PSTR(" readonly"));
   if (slider) {
     param_appendf(c, PSTR("><output>%s</output><br>"), c.cur);
   } else {
-    APPEND_LIT(c.buf, c.pos, sizeof(c.buf), "><br>");
+    param_append(c, PSTR("><br>"));
   }
 }
 
@@ -479,7 +487,7 @@ static void param_emit_row(ParamCtx& c, const corium::Pref& p) {
   if (!inline_bool) param_emit_label(c, lbl);
 
   if (p.type == corium::P_BOOL)      param_emit_bool(c, lbl, inline_bool);
-  else if (p.type == corium::P_ENUM) param_emit_enum(c, p);
+  else if (param_is_select(p))   param_emit_enum(c, p);
   else                         param_emit_input(c, p);
   param_emit_help(c, p, inline_bool);
 }
@@ -592,7 +600,7 @@ static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart
                link_once(link, RESTART_APPLY));
   }
   if (!saved) res.sendChunk(F(
-    "<div class='a ae'>Not saved: the form was too large or memory was short.</div>"));
+    "<div class='a ae'>Not saved: the form was too big or out of memory.</div>"));
 }
 
 void corium::WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -787,9 +795,9 @@ static void deobfuscate_payload(uint8_t* buf, size_t len) {
 }
 
 static const char* check_import(uint8_t* buf, size_t len) {
-  if (len < BLOB_HEAD + 1 + BLOB_CRC) return PSTR("too short");   // no groups
+  if (len < BLOB_HEAD + 1 + BLOB_CRC) return W_TOO_SHORT;   // no groups
   // the magic is blobStart's 4 base64 chars
-  if (buf[BLOB_MAGIC] != BLOB_VER) return PSTR("bad format");
+  if (buf[BLOB_MAGIC] != BLOB_VER) return W_BAD_FORMAT;
   size_t payload_len = len - BLOB_CRC;
   // crc is over the xored bytes, check before undoing them
   uint32_t expected = rdBe32(buf + payload_len);
@@ -854,7 +862,7 @@ static int apply_import(uint8_t* buf, size_t len, corium::ImportText::Result* ou
   // another board's export, say: the old settings stand
   if (out->applied == 0 && out->skipped) {
     corium::Prefs::revert();
-    if (err_out) *err_out = PSTR("nothing imported");
+    if (err_out) *err_out = W_NOTHING_IMP;
     return -1;
   }
   return out->applied;
@@ -912,7 +920,7 @@ static char* import_field(size_t* len, const char** err) {
   }
   char* field = eghttp_form_take(s_import_body.buf, s_import_body.len, PSTR("blob"), len);
   if (!field || *len == 0) {
-    *err = PSTR("missing blob");
+    *err = PSTR("no blob");
     return nullptr;
   }
   return field;
@@ -927,7 +935,7 @@ static uint8_t* import_decode(const char* b64, size_t b64_len, unsigned int* raw
   }
   uint8_t* raw = (uint8_t*)malloc(raw_cap);
   if (!raw) {
-    *err = PSTR("alloc failed");
+    *err = W_OOM;
     return nullptr;
   }
   *raw_len = decode_base64((const unsigned char*)b64, b64_len, raw);
@@ -952,7 +960,7 @@ static int import_lines(const char* text, size_t len, corium::ImportText::Result
   body_free(s_import_body);
   *out = r;
   if (r.applied == 0) {
-    *err = PSTR("nothing imported");
+    *err = W_NOTHING_IMP;
     return -1;
   }
   return r.applied;

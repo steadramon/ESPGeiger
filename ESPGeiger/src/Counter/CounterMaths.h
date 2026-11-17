@@ -135,13 +135,14 @@ class CounterMaths {
     void     set_dead_time_us(uint16_t us) { _dead_time_us = us; _dead_time_s = us * 1e-6f; }
     uint16_t get_dead_time_us() const { return _dead_time_us; }
 
-    // Non-paralyzable, 10x cap, off below 50 cps
+    // Non-paralyzable, 10x cap
     float apply_dead_time(float cps) const {
       int32_t b = fbits(cps);
       if (b <= 0 || b > 0x7F800000) return 0.0f;
       if (b >= 0x4A000000 && cps > CPS_MAX) cps = CPS_MAX;   // 2^21 first
-      if (_dead_time_us == 0 || cps <= 50.0f) return cps;
+      if (_dead_time_us == 0) return cps;
       float x = cps * _dead_time_s;
+      if (cps <= 50.0f) return cps + cps * x;   // no divide below 50 cps, x^2 off
       if (x > 0.9f) x = 0.9f;
       return cps / (1.0f - x);
     }

@@ -21,7 +21,7 @@ http://192.168.1.100/json
 Response:
 
 ```json
-{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"warn":0,"alert":0,"hv":394,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
+{"ut":66080,"c":30.00,"s":0.17,"c5":26.19,"c15":27.55,"cs":0.50,"r":175.0,"tc":29099,"mem":22447,"rssi":-69,"tube":1,"sat":0,"warn":0,"alert":0,"health":"ok","hv":394,"t":20.78,"tu":0,"h":48.20,"p":1027.40}
 ```
 
 | Field | Description |
@@ -40,6 +40,7 @@ Response:
 | `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `warn` | `1` when CPM is above the warning threshold (`counter.warn`) |
 | `alert` | `1` when CPM is above the alert threshold (`counter.alert`) |
+| `health` | `ok`, or what is wrong, comma split: `silent` (no counts), `storm` (an input flood, parked), `chatter` (the input rings, check tube/HV/wiring), `no_input` (serial or UDP source not reporting), `hv_low`, `hv_high`, `hv_fb` (HV builds). The device's own: `crashed` (this boot follows a crash), `noclock` (clock not synced 10 minutes after boot, with WiFi on), `savefail` (the last settings save failed), `lowheap` (free heap under 4 KB on ESP8266, 16 KB on ESP32). Names are cut to whole ones if too many are on. |
 | `hv` | HV reading in whole volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `hv_fault` | `1` while HV is held off: over the voltage limit (same builds) |
 

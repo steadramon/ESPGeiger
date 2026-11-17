@@ -28,6 +28,8 @@
 #include "Corium/Module/Module.h"
 #include "Corium/Module/Registry.h"
 #include "App/Topics.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "Corium/System/FastMillis.h"
 
 // under 10 the 5 min avg, unless 3 sigma off
@@ -139,16 +141,16 @@ class Display : public corium::Module {
     uint8_t _taps = 0;
     unsigned long _tap_ms = 0;
     void find_rows() {
-      _cpm   = corium::m_core_read(PSTR("cpm"),       corium::M_F32);
-      _cpm5  = corium::m_core_read(PSTR("cpm5"),      corium::M_F32);
-      _cpm15 = corium::m_core_read(PSTR("cpm15"),     corium::M_F32);
-      _cps   = corium::m_core_read(PSTR("cps"),       corium::M_F32);
-      _usv   = corium::m_core_read(PSTR("usv"),       corium::M_F32);
+      _cpm   = corium::m_core_read(K_M_CPM,           corium::M_F32);
+      _cpm5  = corium::m_core_read(K_M_CPM5,          corium::M_F32);
+      _cpm15 = corium::m_core_read(K_M_CPM15,         corium::M_F32);
+      _cps   = corium::m_core_read(K_M_CPS,           corium::M_F32);
+      _usv   = corium::m_core_read(K_M_USV,           corium::M_F32);
       _ratio = corium::m_core_read(PSTR("ratio"),     corium::M_F32);
       _warm  = corium::m_core_read(PSTR("warm"),      corium::M_BOOL);
       _none  = corium::m_core_read(PSTR("no_counts"), corium::M_BOOL);
-      _alert = corium::m_core_read(PSTR("alert"),     corium::M_BOOL);
-      _warn  = corium::m_core_read(PSTR("warn"),      corium::M_BOOL);
+      _alert = corium::m_core_read(EG_K_ALERT,        corium::M_BOOL);
+      _warn  = corium::m_core_read(EG_K_WARN,         corium::M_BOOL);
       _blip  = corium::m_core_read(PSTR("blip"),      corium::M_U32);
     }
     corium::MRead _cpm = nullptr, _cpm5 = nullptr, _cpm15 = nullptr, _cps = nullptr, _usv = nullptr;
@@ -164,7 +166,6 @@ class Display : public corium::Module {
 
 extern Display display;
 
-extern const char W_APP_NAME[] PROGMEM;   // splash screens
 
 #endif
 #endif

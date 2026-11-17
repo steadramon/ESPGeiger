@@ -24,6 +24,7 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/Prefs/Prefs.h"
 #include "App/AppKeys.h"
+#include "App/Health.h"
 #include "Corium/Output/LedSignal.h"
 #include "BlipLed/BlipLed.h"
 #include "Corium/System/RtcMap.h"
@@ -232,9 +233,7 @@ Counter::Counter() {
 }
 
 namespace {
-#if !GEIGER_IS_TEST(GEIGER_TYPE)
-bool     s_missing_logged = false;
-#endif
+bool     s_missing = false;   // test input never sets it
 uint32_t s_next_boundary  = 0;   // epoch, past 2106 too
 TickClock s_clock;
 bool     s_boundary_armed = false;
@@ -250,14 +249,14 @@ CORIUM_TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   missing = missing && !udp_rx()->heard();
 #endif
-  if (missing && !s_missing_logged) {
+  if (missing && !s_missing) {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
     corium::Log::console(PSTR("Counter: No counts detected - check tube and wiring (GPIO %d)"), input_pin());
 #else
     corium::Log::console(PSTR("Counter: No counts detected - check tube/input wiring"));
 #endif
   }
-  s_missing_logged = missing;
+  s_missing = missing;
 }
 #endif
 
@@ -368,12 +367,24 @@ void CORIUM_TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
 
   int counts = clamp_counts(in->collect());
   if (counts > 0) _last_count_up_s = uptime_s;
-#if !GEIGER_IS_TEST(GEIGER_TYPE)
-  if (uptime_s - _last_count_up_s >= MISSING_MIN_S || s_missing_logged) note_counts_missing(uptime_s);
-#endif
   _ticks.add(counts);
   add_wrapped(total_clicks, total_clicks_rollover, counts);
+  _sec_counts += counts;   // the hour and day take them after the clock
+  if (_lifetime_enabled) lifetime_tick(counts);
 
+  // the rest from the loop
+  _second_up = uptime_s;
+  // ota holds the loop: the tick does it, the history stays live
+  if (_ota) { second_work(); return; }
+  if (_secs_due < 255) _secs_due++;
+  _pending_work |= PENDING_SECOND;
+}
+
+void Counter::second_work() {
+  uint32_t uptime_s = _second_up;
+#if !GEIGER_IS_TEST(GEIGER_TYPE)
+  if (uptime_s - _last_count_up_s >= MISSING_MIN_S || s_missing) note_counts_missing(uptime_s);
+#endif
   // same counts, same cps
   bool fresh = !_cps_in.same(_ticks.sum(), _ticks.count(), _dead_time_us);
   if (fresh || _cpm_mode != CPM_BUCKET) cpm_work(fresh);
@@ -386,13 +397,21 @@ void CORIUM_TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
 
   // the hour, the first boot stamp
   if (corium::Clock::synced && !s_clock.count()) (void)clock_read();
+  clicks_today += _sec_counts;
+  clicks_hour += _sec_counts;
+  _sec_counts = 0;
 
-  clicks_today += counts;
-  clicks_hour += counts;
-
-  if (_lifetime_enabled) lifetime_tick(counts);
   update_alarms(ccpm);
+  note_health();
   _pending_work |= PENDING_COUNTS;
+}
+
+// health bits 0-3, HV keeps its own
+CORIUM_TICK_COLD void Counter::note_health() {
+  health().put(H_COUNTER, (uint16_t)(s_missing << H_SILENT |
+                                     _input->stormy() << H_STORM |
+                                     _input->chattering() << H_CHATTER |
+                                     !_input->isHealthy() << H_NO_INPUT));
 }
 
 // the sounders and the relay sleep, the state stays
@@ -728,6 +747,10 @@ bool Counter::is_quiet_now() {
 
 // rare, out of the pass
 void __attribute__((noinline)) Counter::run_pending() {
+  if (_pending_work & PENDING_SECOND) {
+    _pending_work &= ~PENDING_SECOND;
+    while (_secs_due) { _secs_due--; second_work(); }
+  }
   uint8_t pw = _pending_work;
   _pending_work = 0;
   if (pw & PENDING_RTC) rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, _life_saved_s);

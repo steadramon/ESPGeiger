@@ -65,6 +65,10 @@ class SDCard : public corium::Module {
     void fail_step(const char* step, const char* dir, const char* file);
     bool _fault = false;
     uint8_t _fails = 0;        // failed minutes in a row
+    uint8_t _retry_min = 0;    // off by faults: minutes to the next remount, 0 = none
+    uint32_t _retry_at = 0;    // Uptime::seconds()
+    void retry();
+    void retry_in(uint8_t min);
     uint32_t _fail_min = 0;    // the last one counted
     time_t _last_minute = 0;
     uint32_t _open_day = 0;  // YYYYMMDD, 0 = closed

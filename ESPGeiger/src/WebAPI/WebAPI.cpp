@@ -35,6 +35,7 @@
 #include "Corium/Net/SendSlot.h"
 #include "Corium/Prefs/Prefs.h"
 #include "App/AppKeys.h"
+#include "App/Health.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/System/Clock.h"
@@ -68,14 +69,13 @@ CORIUM_REGISTER_MODULE(webapi)
 CORIUM_PSTR(WA_L_MD,  "Sharing mode");
 CORIUM_PSTR(WA_O_MD,  "Off|Heartbeat|CPM readings");
 CORIUM_PSTR(WA_L_LAT, "Latitude");
-CORIUM_PSTR(WA_H_LAT, "Station latitude  (-90..90, 0 = use IP)");
+CORIUM_PSTR(WA_H_IP,  "0 = from IP");
 CORIUM_PSTR(WA_L_LON, "Longitude");
-CORIUM_PSTR(WA_H_LON, "Station longitude (-180..180, 0 = use IP)");
 
 static const corium::Pref WEBAPI_PREF_ITEMS[] PROGMEM = {
   {EG_K_MODE, WA_L_MD,  nullptr,  "2", WA_O_MD, 0,    2,   0, corium::P_ENUM,  0},
-  {EG_K_LAT,  WA_L_LAT, WA_H_LAT, "0", nullptr, -90,  90,  0, corium::P_FLOAT, 0},
-  {EG_K_LON,  WA_L_LON, WA_H_LON, "0", nullptr, -180, 180, 0, corium::P_FLOAT, 0},
+  {EG_K_LAT,  WA_L_LAT, WA_H_IP,  "0", nullptr, -90,  90,  0, corium::P_FLOAT, 0},
+  {EG_K_LON,  WA_L_LON, WA_H_IP,  "0", nullptr, -180, 180, 0, corium::P_FLOAT, 0},
 };
 
 static const corium::PrefGroup WEBAPI_PREF_GROUP PROGMEM = {
@@ -369,9 +369,11 @@ static void write_handshake(MsgPack::Writer& mp, const char* pub64, uint8_t mode
   mp.map_end();
 }
 
+static const char WA_TESTMODE[] PROGMEM = "WebAPI: Testmode";
+
 void WebAPI::doHandshake() {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    corium::Log::console(PSTR("WebAPI: Testmode"));
+    corium::Log::console(WA_TESTMODE);
     handshakeAt(corium::fastMillis() + WEBAPI_HANDSHAKE_MS);
 #ifndef WEBAPI_TESTMODE_POST
     return;
@@ -572,10 +574,10 @@ static void write_env(MsgPack::Writer& mp) {
 static void write_readings(MsgPack::Writer& mp) {
   mp.kv(PSTR("c"),  gcounter.get_cpmf_stable());
   mp.kv(PSTR("u"),  gcounter.get_usv_stable());
-  if (gcounter.counts_missing()) mp.kv(PSTR("nc"), true);
+  if (health().live() & H_TUBE_MASK) mp.kv(PSTR("hb"), (uint32_t)(health().live() & H_TUBE_MASK));   // App/Health.h bits, nc was bit 0; h is humidity
 #ifdef ESPG_HV_ADC
   int32_t hv;
-  if (m_hv_volts(&hv)) mp.kv(PSTR("hv"), hv);
+  if (m_hv_volts(&hv)) mp.kv(M_HV, hv);
 #endif
   write_env(mp);
 }
@@ -608,7 +610,7 @@ static void write_post(MsgPack::Writer& mp, uint32_t id, bool census,
 
 void WebAPI::postMeasurement(bool census) {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    corium::Log::console(PSTR("WebAPI: Testmode"));
+    corium::Log::console(WA_TESTMODE);
 #ifndef WEBAPI_TESTMODE_POST
     return;
 #endif

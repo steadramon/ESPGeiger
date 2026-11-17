@@ -59,7 +59,6 @@ class GeigerPulse final : public GeigerInput
     int8_t   _pull_logged = -1;        // -1 = not logged
     int64_t  _last_drain_us = 0;      // esp_timer, no wrap
     uint32_t _pushed = 0;              // into the ring this second
-    bool     _storm = false;           // logged, till a clean second
 #endif
 };
 #endif

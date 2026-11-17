@@ -20,6 +20,8 @@
 
 #include <string.h>
 #include "Sound.h"
+#include "App/AppKeys.h"
+#include "Corium/Util/Words.h"
 #include "App/Board.h"
 #include "App/Topics.h"
 #include "Counter/Counter.h"
@@ -28,6 +30,7 @@
 #include "Corium/Module/Registry.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Output/Buzzer.h"
+#include "Corium/System/PinSafety.h"
 #include "TunePlayer.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/FastMillis.h"
@@ -39,10 +42,9 @@ CORIUM_REGISTER_MODULE(sound)
 static constexpr uint16_t BURST_HZ = 2700;   // the coil's resonance
 static constexpr uint8_t GAP_PCT = 12;       // rtttl, quiet end of each note
 
-// a higher one cuts in, urgent ignores volume and quiet hours
+// A higher priority cuts in, urgent ignores volume and quiet hours
 enum : uint8_t { P_LOW = 1, P_MID, P_URGENT };
 
-CORIUM_PSTR(K_VOLUME,    "volume");
 CORIUM_PSTR(K_CLICKS,    "clicks");
 CORIUM_PSTR(K_CHIMES,    "chimes");
 CORIUM_PSTR(K_ALARM,     "alarm");
@@ -50,7 +52,6 @@ CORIUM_PSTR(K_REPEAT,    "repeat");
 CORIUM_PSTR(K_STARTUP,   "startup");
 CORIUM_PSTR(K_SETUP,     "setup");
 CORIUM_PSTR(K_WIFI,      "wifi");
-CORIUM_PSTR(K_ALERT,     "alert");
 CORIUM_PSTR(K_ALERT_END, "alert_end");
 CORIUM_PSTR(K_HVFAULT,   "hvfault");
 CORIUM_PSTR(K_SD_ERROR,  "sd_error");
@@ -81,7 +82,7 @@ static const SoundDef DEFS[Sound::COUNT] = {
   {K_STARTUP,   T_COPIER,  P_LOW},
   {K_SETUP,     T_BEEPS,   P_MID},
   {K_WIFI,      T_DING,    P_LOW},
-  {K_ALERT,     T_ALARM,   P_URGENT},
+  {EG_K_ALERT,  T_ALARM,   P_URGENT},
   {K_ALERT_END, T_CLEAR,   P_MID},
   {K_HVFAULT,   T_PROBLEM, P_URGENT},
   {K_SD_ERROR,  T_PROBLEM, P_MID},
@@ -92,7 +93,7 @@ static const SoundDef DEFS[Sound::COUNT] = {
 };
 
 CORIUM_PSTR(L_VOLUME, "Volume (%)");
-CORIUM_PSTR(H_VOLUME, "Tones only. Alarms and HV faults always play full, 0 = only those");
+CORIUM_PSTR(H_VOLUME, "Alarms and HV faults always play full. 0 = only those");
 CORIUM_PSTR(L_CLICKS, "Click per count");
 CORIUM_PSTR(L_CHIMES, "Chimes");
 CORIUM_PSTR(H_CHIMES, "Startup, WiFi and button sounds");
@@ -101,12 +102,12 @@ CORIUM_PSTR(H_ALARM,  "Off, the LED, pages and MQTT still alert");
 CORIUM_PSTR(L_REPEAT, "Alert repeat (s)");
 CORIUM_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
 
-// local: 15 whole tunes outgrow an import
+// P_LOCAL, 15 whole tunes would outgrow an import
 #define SOUND_ROW(k) {k, nullptr, nullptr, "", nullptr, 0, 0, TunePlayer::MAX_TEXT, corium::P_STRING, corium::P_HIDDEN | corium::P_LOCAL}
 
 // "" = built-in, off = silent, else steps or rtttl
 static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
-  {K_VOLUME, L_VOLUME, H_VOLUME, "100", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
+  {EG_K_VOLUME, L_VOLUME, H_VOLUME, "100", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
   {K_CLICKS, L_CLICKS, nullptr,  "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
   {K_CHIMES, L_CHIMES, H_CHIMES, "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
   {K_ALARM,  L_ALARM,  H_ALARM,  "1",   nullptr, 0, 1,   0, corium::P_BOOL, 0},
@@ -114,7 +115,7 @@ static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
   SOUND_ROW(K_STARTUP),
   SOUND_ROW(K_SETUP),
   SOUND_ROW(K_WIFI),
-  SOUND_ROW(K_ALERT),
+  SOUND_ROW(EG_K_ALERT),
   SOUND_ROW(K_ALERT_END),
   SOUND_ROW(K_HVFAULT),
   SOUND_ROW(K_SD_ERROR),
@@ -125,7 +126,7 @@ static const corium::Pref SOUND_PREF_ITEMS[] PROGMEM = {
 };
 
 static constexpr size_t SOUND_ROWS = sizeof(SOUND_PREF_ITEMS) / sizeof(SOUND_PREF_ITEMS[0]);
-// a whole tune in every row
+// room for a whole tune in every row
 static constexpr uint16_t SOUND_BYTES = SOUND_ROWS * TunePlayer::MAX_TEXT;
 static_assert(SOUND_BYTES <= CORIUM_PREFS_GROUP_SZ_MAX, "every tune fits the group");
 
@@ -148,9 +149,9 @@ static void sound_lifecycle(corium::Lifecycle::Event e) {
 
 static const char* err_word(uint8_t e) {
   switch (e) {
-    case EGTune::RANGE:    return PSTR("out of range");
+    case EGTune::RANGE:    return corium::PinSafety::OUT_OF_RANGE;
     case EGTune::TOO_MANY: return PSTR("too many steps");
-    case EGTune::TOO_LONG: return PSTR("too long");
+    case EGTune::TOO_LONG: return W_TOO_LONG;
     case EGTune::GROUP:    return PSTR("x( ) group");
     default:               return PSTR("not a step");
   }
@@ -163,14 +164,14 @@ void Sound::onPrefsLoaded() {
   corium::Registry::post(this);
 }
 
-// a typo can't silence an alarm: the built-in plays
+// A typo can't silence an alarm, the built-in plays instead
 void Sound::load() {
   _reload = false;
   _repeat_ms = corium::Prefs::getUInt("sound", K_REPEAT) * 1000UL;
-  _vol = corium::Prefs::getUInt("sound", K_VOLUME);
+  _vol = corium::Prefs::getUInt("sound", EG_K_VOLUME);
   _chimes = corium::Prefs::getBool("sound", K_CHIMES);
   _alarm = corium::Prefs::getBool("sound", K_ALARM);
-  if (!_alarm) _alert = false;   // no repeat
+  if (!_alarm) _alert = false;   // stops any repeat
   _bad = 0;
   for (uint8_t i = 0; i < COUNT; i++) {
     const char* v = corium::Prefs::getString("sound", DEFS[i].key);
@@ -190,7 +191,7 @@ void Sound::load() {
   _click_on = r.next(_click);
 }
 
-// pref, else built-in. nullptr = off
+// The pref, else the built-in. nullptr = off
 const char* Sound::text(uint8_t id, uint16_t& len) {
   const char* v = corium::Prefs::getString("sound", DEFS[id].key);
   if (v && *v) {
@@ -215,13 +216,13 @@ void Sound::preWifi() {
 
 static void sound_click(uint32_t) { sound.click((uint32_t)micros()); }
 
-// idle low before the rmt has it, safe mode too
+// Idle low before the rmt takes the pin, safe mode too
 void Sound::park() {
   pinMode(GEIGER_BUZZER, OUTPUT);
   digitalWrite(GEIGER_BUZZER, LOW);
 }
 
-// once, the setup portal can be first
+// Only once, the setup portal can get here first
 void Sound::start() {
   if (_started) return;
   _started = true;
@@ -233,7 +234,7 @@ void Sound::start() {
 
 static const unsigned long SETUP_MAX_MS = 3000;   // a long custom one is cut
 
-// the portal holds the loop, so played here
+// The portal holds the loop, so the tune is played out here
 void Sound::setup_portal() {
   start();
   if (_reload) load();
@@ -271,7 +272,7 @@ void Sound::click(uint32_t now_us) {
   else if (c.op == EGTune::TONE) corium::Buzzer::tone(now_us, c.hz, corium::Buzzer::toneCycles(c.ms, c.hz), duty);
 }
 
-// over chimes, alarms full as they'd play
+// Plays over chimes, alarms at full volume as they would really play
 void Sound::test(const char* v) {
   uint16_t len = 0;
   const char* t = v;
@@ -302,7 +303,7 @@ static void cmd_play() {
 }
 CORIUM_REGISTER_CMD(play, cmd_play)
 
-// up, not down
+// only on connect, not on a drop
 void Sound::wifi() {
   if (corium::Wifi::connected && !_wifi) play(WIFI);
   _wifi = corium::Wifi::connected;
@@ -316,7 +317,7 @@ void Sound::events(uint16_t ev, unsigned long now) {
   if (ev & (1u << Topic::PRESS)) play(BUTTON);
 }
 
-// rising: alert, again every repeat. falling: the all clear. a snooze: quiet, no all clear
+// Rising plays the alert, again every repeat. Falling plays the all clear. A snooze goes quiet with no all clear
 void Sound::alarm(unsigned long now) {
   bool a = _alarm && gcounter.is_alert();
   if (a && gcounter.is_snoozed()) {

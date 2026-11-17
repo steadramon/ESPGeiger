@@ -101,7 +101,7 @@ struct Pref {
   const char* label;      // SRAM or PROGMEM
   const char* help;       // SRAM or PROGMEM
   const char* defaultVal;// SRAM
-  const char* pattern;    // regex, SRAM or PROGMEM
+  const char* pattern;    // regex, SRAM or PROGMEM. uint: 0|80|160 only those
   int32_t     minI;      // strings: shortest a new one may be, "" still ok
   int32_t     maxI;      // == minI: no range
   uint8_t     maxLen;    // 0 = unlimited
@@ -183,6 +183,7 @@ extern const char K_BRAKE[];
 extern const char K_DNS[];
 extern const char K_ESPOTA[];
 extern const char K_GW[];
+extern const char K_HS_HOLD[];
 extern const char K_IP[];
 extern const char K_ORIGIN[];
 extern const char K_SCL[];
@@ -195,6 +196,10 @@ extern const char K_WEB_PASS[];
 
 // Shared labels
 extern const char H_RBA[];
+extern const char L_GW[];
+extern const char L_IP[];
+extern const char L_SN[];
+extern const char L_WEB_PASS[];
 extern const char P_HOST[];
 extern const char WRITE_FAILED[];   // a failed commit that isn't frozen()
 extern const char AUTH_HELP[];      // a 401's body, APP_AUTH_HELP sets it
@@ -208,7 +213,11 @@ struct LegacyAlias {
 
 class LegacyRows {
 public:
+#ifdef CORIUM_PREFS_NO_LEGACY
+  constexpr LegacyRows(const LegacyAlias* = nullptr) : _rows(nullptr) {}   // tables go unlinked
+#else
   constexpr LegacyRows(const LegacyAlias* rows = nullptr) : _rows(rows) {}
+#endif
   explicit operator bool() const { return _rows != nullptr; }
   LegacyAlias row(size_t j) const {
     LegacyAlias r;

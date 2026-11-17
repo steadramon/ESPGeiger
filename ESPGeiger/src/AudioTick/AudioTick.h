@@ -75,6 +75,8 @@ struct AudioCmd {
 
 // any task, false = queue full, no worker, or a route's still waiting
 bool audio_enqueue(const AudioCmd& cmd);
+extern const char AT_QUEUED[];   // the routes' replies, PROGMEM
+extern const char AT_QFULL[];
 void audio_silence(uint16_t ms);
 // speech types go here, on the worker
 typedef void (*AudioFn)(const AudioCmd& cmd);

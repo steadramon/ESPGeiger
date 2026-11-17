@@ -54,9 +54,9 @@ CORIUM_REGISTER_MODULE(envsensor)
 CORIUM_PSTR(EN_L_UNIT, "Temp unit");
 CORIUM_PSTR(EN_O_UNIT, "Celsius|Fahrenheit|Kelvin");
 CORIUM_PSTR(EN_L_TOF,  "Temp offset");
-CORIUM_PSTR(EN_H_TOF,  "0.1 C steps. -25 = -2.5 C.");
+CORIUM_PSTR(EN_H_TOF,  "0.1 C steps, -25 = -2.5 C");
 CORIUM_PSTR(EN_L_ALT,  "Altitude (m)");
-CORIUM_PSTR(EN_H_ALT,  "Metres, for sea level pressure. 0 = station pressure");
+CORIUM_PSTR(EN_H_ALT,  "For sea level pressure, 0 = station pressure");
 
 // pins are i2c.sda/scl
 static const corium::Pref ENV_PREF_ITEMS[] PROGMEM = {
@@ -103,6 +103,7 @@ void EnvSensor::begin() {
   }
   corium::Registry::every(this, ENV_SAMPLE_MS);
   tryDetect();
+  corium::Registry::dueIn(this, 0);   // first reading at boot, not at its slot
 }
 
 bool EnvSensor::tryDetect() {
@@ -183,8 +184,18 @@ void EnvSensor::sampleFinish() {
   sampleDone();
 }
 
+// past the chip's range is noise off the bus
+static bool junk(float& v, float lo, float hi) {
+  if (isnan(v) || (v >= lo && v <= hi)) return false;
+  v = NAN;
+  return true;
+}
+
 // reset or gone, look again
 void EnvSensor::sampleDone() {
+  if (junk(_t, ENV_T_MIN, ENV_T_MAX)) _failed = true;
+  if (junk(_h, ENV_H_MIN, ENV_H_MAX)) _failed = true;
+  if (junk(_p, ENV_P_MIN, ENV_P_MAX)) _failed = true;
   if (!_failed) {
     _st->fails = 0;
   } else if (++_st->fails >= ENV_FAIL_SAMPLES) {

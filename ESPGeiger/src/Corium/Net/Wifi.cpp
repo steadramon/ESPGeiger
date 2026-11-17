@@ -43,6 +43,8 @@
 #include "Corium/System/Fs.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
+#include "App/AppConfig.h"
 
 CORIUM_PSTR(K_SLEEP,    "sleep");
 CORIUM_PSTR(K_TX_POWER, "tx_power");
@@ -50,7 +52,6 @@ CORIUM_PSTR(K_COUNTRY,  "country");
 CORIUM_PSTR(K_PHY_MODE, "phy_mode");
 CORIUM_PSTR(K_MODE,     "mode");
 CORIUM_PSTR(K_AP_HIDE,  "ap_hide");
-CORIUM_PSTR(K_HS_HOLD,  "hs_hold");
 CORIUM_PSTR(K_DOWN_MAX, "down_max");
 
 static const uint8_t MODE_OFF = 1;
@@ -108,6 +109,7 @@ static const char ST_OFFLINE[] PROGMEM = "offline";
 static const char ST_HOTSPOT[] PROGMEM = "hotspot";
 static const char ST_AP_MODE[] PROGMEM = "ap_mode";
 static const char ST_OFF[] PROGMEM = "off";
+static const char JOIN_FAILED[] PROGMEM = "join failed";
 
 static const char* const STATE_NAMES[] PROGMEM = {
   ST_BOOT, ST_JOINING, ST_PORTAL, ST_ONLINE, ST_LINK_LOST, ST_OFFLINE, ST_HOTSPOT, ST_AP_MODE, ST_OFF,
@@ -351,15 +353,15 @@ void corium::Wifi::dropNetBackup() { (void)corium::Fs::remove(NET_BACKUP_PATH); 
 static bool parse_static(const char* ip, const char* gw, const char* sn, IPAddress* a,
                          char* err, size_t cap) {
   if (!a[0].fromString(ip)) {
-    if (err) snprintf_P(err, cap, PSTR("invalid IP address: %s"), ip);
+    if (err) snprintf_P(err, cap, PSTR("bad IP address: %s"), ip);
     return false;
   }
   if (!a[1].fromString(gw)) {
-    if (err) snprintf_P(err, cap, PSTR("invalid gateway: %s"), gw);
+    if (err) snprintf_P(err, cap, PSTR("bad gateway: %s"), gw);
     return false;
   }
   if (!a[2].fromString(sn)) {
-    if (err) snprintf_P(err, cap, PSTR("invalid subnet mask: %s"), sn);
+    if (err) snprintf_P(err, cap, PSTR("bad subnet mask: %s"), sn);
     return false;
   }
   // gw on the same subnet
@@ -543,7 +545,7 @@ static PGM_P fail_text(uint8_t r) {
   switch (r) {
     case EGPortal::JOIN_NO_SSID:  return PSTR("network not found");
     case EGPortal::JOIN_BAD_PASS: return PSTR("password refused");
-    case EGPortal::JOIN_REFUSED:  return PSTR("refused");
+    case EGPortal::JOIN_REFUSED:  return W_REFUSED;
     case EGPortal::JOIN_NO_REPLY: return PSTR("no reply");
     case EGPortal::JOIN_NOT_SAVED: return PSTR("joined but not saved, try again");
     default:                      return nullptr;
@@ -724,7 +726,7 @@ static char* setup_portal(EGPortal* portal) {
   });
   portal->onReset([](void*) { s_reset = true; });
   // open AP but every page asks, as the web UI
-  portal->setBasicAuth(F("admin"), corium::Prefs::getString("sys", corium::K_WEB_PASS), F(THING_NAME));
+  portal->setBasicAuth(FPSTR(W_ADMIN), corium::Prefs::getString("sys", corium::K_WEB_PASS), FPSTR(APP_NAME));
   portal->setAuthHelp(corium::AUTH_HELP);
   bool up = portal->begin(corium::DeviceInfo::hostname());
   reset_wifi_tx_power_default();   // after begin(), full power
@@ -850,7 +852,7 @@ static void dns_down() {
 static void fallback_ap() {
   corium::Log::console(PSTR("WiFi: Saved network failed, setup hotspot"));
   if (start_ap()) {
-    corium::Wifi::go(corium::Wifi::HOTSPOT, PSTR("join failed"));
+    corium::Wifi::go(corium::Wifi::HOTSPOT, JOIN_FAILED);
 #ifdef APP_OFFLINE_OK
     dns_up();
 #endif
@@ -861,7 +863,7 @@ static void fallback_ap() {
 bool corium::Wifi::apHeld(uint32_t now) {
   if (!corium::Wifi::OFFLINE_OK || s_state != HOTSPOT) return false;   // only those fall back
   if (WiFi.softAPgetStationNum() > 0) s_ap_seen = now;
-  uint32_t mins = corium::Prefs::getUInt("wifi", K_HS_HOLD);   // 0 = stays up
+  uint32_t mins = corium::Prefs::getUInt("wifi", corium::K_HS_HOLD);   // 0 = stays up
   if (mins == 0 || now - s_ap_seen < mins * 60000UL) return true;
   (void)WiFi.softAPdisconnect(true);
 #ifdef APP_OFFLINE_OK
@@ -922,7 +924,7 @@ CORIUM_NODISCARD static bool join_or_portal() {
   if (corium::Wifi::offlineForced) {
     stop_test();
     WiFi.mode(WIFI_OFF);
-    corium::Wifi::go(corium::Wifi::OFF, PSTR("offline"));
+    corium::Wifi::go(corium::Wifi::OFF, ST_OFFLINE);
     return false;
   }
   corium::Wifi::go(corium::Wifi::JOINING, PSTR("portal done"));
@@ -988,8 +990,8 @@ static void join_end(bool up) {
   using namespace corium::Wifi;
   if (up) go(ONLINE, PSTR("joined"));
   else if (s_state != JOINING) return;
-  else if (offlineForced) go(OFF, PSTR("offline"));
-  else if (OFFLINE_OK) go(OFFLINE, PSTR("join failed"));
+  else if (offlineForced) go(OFF, ST_OFFLINE);
+  else if (OFFLINE_OK) go(OFFLINE, JOIN_FAILED);
 }
 
 bool corium::Wifi::connectOrPortal() {
@@ -1059,7 +1061,7 @@ static const corium::Pref WIFI_PREF_ITEMS[] PROGMEM = {
   {K_AP_HIDE,  nullptr, nullptr, "0",                nullptr, 0, 0,  0, corium::P_BOOL,   corium::P_HIDDEN | corium::P_LOCAL | corium::P_REBOOT},
   {K_DOWN_MAX, nullptr, nullptr, WIFI_DOWN_MAX_DEFAULT, nullptr, 0, 1440, 0, corium::P_UINT, corium::P_HIDDEN | corium::P_LOCAL},
 #ifdef APP_OFFLINE_OK
-  {K_HS_HOLD,  nullptr, nullptr, "10",               nullptr, 0, 1440, 0, corium::P_UINT, corium::P_HIDDEN | corium::P_LOCAL},
+  {corium::K_HS_HOLD, nullptr, nullptr, "10",        nullptr, 0, 1440, 0, corium::P_UINT, corium::P_HIDDEN | corium::P_LOCAL},
 #endif
 };
 

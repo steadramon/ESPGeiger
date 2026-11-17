@@ -1,6 +1,6 @@
 /*
   EGTcpLwip.cpp - lwIP raw backend. ESP32 hands each call to lwIP's thread,
-  the ESP8266 and the host tests call lwIP straight.
+  the ESP8266 calls lwIP straight.
 
   Copyright (C) 2026 @steadramon
 
@@ -33,10 +33,10 @@ extern "C" {
 #include <Arduino.h>
 #endif
 
-// lwIP coarse ticks, 500 ms
+// Poll interval in lwIP's coarse ticks of 500 ms
 #define EGTCP_POLL_TICKS 1
 
-// closed, peer silent this long: abort, else lwIP retries 30+ min
+// After a close, abort if the peer stays silent this long. Otherwise lwIP keeps retrying for 30+ min
 #ifndef EGTCP_LINGER_S
 #define EGTCP_LINGER_S 180
 #endif
@@ -49,7 +49,7 @@ static_assert(EGTcpClient::MORE == TCP_WRITE_FLAG_MORE, "flags pass straight");
 static_assert(EGTCP_LATER == ERR_INPROGRESS, "lwIP's number");
 
 /*
- * Per chip: the owner's task, and the way onto lwIP's side
+ * Per chip, the owner's task and how calls get onto lwIP's side
  */
 
 #if defined(ESP32)
@@ -59,7 +59,7 @@ void EGTcpCore::owner() {
   if (!s_owner) s_owner = xTaskGetCurrentTaskHandle();
 }
 
-// once, a wrong task is a bug in the caller
+// Logs once, a call from the wrong task is a bug in the caller
 void EGTcpCore::check() {
   static bool s_told = false;
   if (!s_owner || s_told || xTaskGetCurrentTaskHandle() == s_owner) return;
@@ -88,14 +88,14 @@ struct Call {
 
 typedef void (*StackFn)(Call* m);
 
-// tmr = last heard, unsigned so tcp_ticks wrap is fine
+// tmr is when the peer was last heard, unsigned so a tcp_ticks wrap is fine
 static err_t linger_poll(void*, tcp_pcb* p) {
   if (tcp_ticks - p->tmr < EGTCP_LINGER_S * 1000UL / TCP_SLOW_INTERVAL) return ERR_OK;
   tcp_abort(p);
   return ERR_ABRT;
 }
 
-// these trip lwIP write asserts
+// Only these states can be written, the rest trip lwIP's write asserts
 static bool writable(const tcp_pcb* p) {
   switch (p->state) {
     case ESTABLISHED: case CLOSE_WAIT: case SYN_SENT: case SYN_RCVD:
@@ -129,7 +129,7 @@ struct EGTcpLwip {
   }
 
   /*
-   * lwIP's callbacks: note it, post it, never call the app
+   * lwIP's callbacks. Each notes what happened and posts it, none of them call the app
    */
 
   static err_t on_connected(void* arg, tcp_pcb* p, err_t) {
@@ -146,10 +146,13 @@ struct EGTcpLwip {
       if (pb) pbuf_free(pb);
       return ERR_OK;
     }
-    cache(c, p);   // FIN moves the state
+    cache(c, p);   // A FIN moves the state
     EGTcpHold h;
     if (!pb) {
       EGTcpCore::post(c, EV_FIN);
+      // This side shut down first. lwIP frees it from TIME_WAIT without calling errf,
+      // so let go now. tcp_close can't fail here
+      if (p->state == TIME_WAIT || p->state == CLOSING) let_go(c);
       return ERR_OK;
     }
     if (c->_rx) pbuf_cat((pbuf*)c->_rx, pb);
@@ -173,13 +176,13 @@ struct EGTcpLwip {
     EGTcpClient* c = (EGTcpClient*)arg;
     if (!c) return ERR_OK;
     cache(c, p);   // backstop
-    // one word the owner keeps, idle costs the loop nothing
+    // Only reads one word the owner keeps, so an idle client costs the loop nothing
     uint32_t at = c->_due_at.load(std::memory_order_relaxed);
     if (at && (int32_t)(EGTcpCore::now() - at) >= 0) post(c, EV_POLL);
     return ERR_OK;
   }
 
-  // lwIP freed the pcb, nothing to clear
+  // lwIP has already freed the pcb, nothing to clear
   static void on_error(void* arg, err_t err) {
     EGTcpClient* c = (EGTcpClient*)arg;
     if (!c) return;
@@ -193,7 +196,7 @@ struct EGTcpLwip {
     EGTcpAsk* ask = (EGTcpAsk*)arg;
     {
       EGTcpHold h;
-      EGTcpClient* c = ask->c;   // null: gone or asked again
+      EGTcpClient* c = ask->c;   // null if the client went or asked again
       if (c) {
         c->_ask = nullptr;
         c->_ev_found = ip != nullptr;
@@ -205,7 +208,7 @@ struct EGTcpLwip {
     delete ask;
   }
 
-  // listening till end(), so the server is live
+  // Listening until end(), so the server is still there
   static err_t on_accept(void* arg, tcp_pcb* p, err_t err) {
     EGTcpServer* s = (EGTcpServer*)arg;
     if (!s || !p || err != ERR_OK) return ERR_VAL;
@@ -215,7 +218,7 @@ struct EGTcpLwip {
       return ERR_ABRT;
     }
     if (s->_nodelay) tcp_nagle_disable(p);
-    if (s->_max) tcp_backlog_delayed(p);   // holds a slot till closed
+    if (s->_max) tcp_backlog_delayed(p);   // holds a backlog slot until closed
     bind(p, c);
     own(c, p);
     c->_state = EGTcpClient::CONNECTING;
@@ -240,7 +243,7 @@ struct EGTcpLwip {
     tcp_poll(p, nullptr, 0);
   }
 
-  // drops it from the client, lwIP's after
+  // Takes the pcb off the client, it's lwIP's after this
   static tcp_pcb* release(EGTcpClient* c) {
     tcp_pcb* p = pcb(c);
     if (!p) return nullptr;
@@ -251,10 +254,10 @@ struct EGTcpLwip {
   }
 
   /*
-   * Calls, each body on lwIP's side: _h is exact there
+   * Calls. Each body runs on lwIP's side, where _h is exact
    */
 
-  // nullptr = ERR_MEM in m
+  // nullptr with ERR_MEM in m
   static tcp_pcb* new_pcb(Call* m) {
 #if LWIP_IPV4 && LWIP_IPV6
     tcp_pcb* p = tcp_new_ip_type(IP_GET_TYPE(m->addr));
@@ -271,10 +274,10 @@ struct EGTcpLwip {
     bind(p, m->c);
     own(m->c, p);
     m->err = tcp_connect(p, m->addr, m->port, on_connected);
-    if (m->err != ERR_OK) close_or_abort(release(m->c));   // nothing left
+    if (m->err != ERR_OK) close_or_abort(release(m->c));   // the client is left with nothing
   }
 
-  // clamps to room; queued counts as taken even if output fails
+  // Clamps to the room there is. Queued counts as taken even if output fails
   static void write_api(Call* m) {
     size_t want = m->len;
     m->len = 0;
@@ -297,16 +300,18 @@ struct EGTcpLwip {
     if (len) tcp_recved(p, (u16_t)len);
   }
 
-  // never fails: a pcb that won't close is aborted
-  static void close_api(Call* m) {
-    tcp_pcb* p = release(m->c);
+  // Never fails, a pcb that won't close is aborted
+  static void close_api(Call* m) { let_go(m->c); }
+
+  static void let_go(EGTcpClient* c) {
+    tcp_pcb* p = release(c);
     if (!p) return;
     tcp_poll(p, linger_poll, EGTCP_LINGER_TICKS);   // before tcp_close, it can free p
     close_or_abort(p);
   }
 
   static void abort_api(Call* m) {
-    tcp_pcb* p = release(m->c);   // no errf, the owner knows
+    tcp_pcb* p = release(m->c);   // No errf, the owner already knows
     if (p) tcp_abort(p);
   }
 
@@ -355,7 +360,7 @@ struct EGTcpLwip {
   static void listen_api(Call* m) {
     tcp_pcb* p = new_pcb(m);
     if (!p) return;
-    ip_set_option(p, SOF_REUSEADDR);   // rebind with clients in TIME_WAIT
+    ip_set_option(p, SOF_REUSEADDR);   // Lets it rebind with clients still in TIME_WAIT
     m->err = tcp_bind(p, m->addr, m->port);
     tcp_pcb* l = m->err == ERR_OK ? tcp_listen_with_backlog(p, m->flags) : nullptr;
     if (!l) {   // a failed listen keeps p
@@ -378,7 +383,7 @@ struct EGTcpLwip {
   }
 
   /*
-   * The ops, owner's task
+   * The ops, these run on the owner's task
    */
 
   static int8_t connect(EGTcpClient* c, const EGTcpAddr& a, uint16_t port) {
@@ -396,7 +401,7 @@ struct EGTcpLwip {
     EGTcpAsk* ask = new (std::nothrow) EGTcpAsk{c, c->_dns_id};
     if (!ask) return ERR_MEM;
     {
-      // an older ask answers nobody
+      // An older ask now answers nobody
       EGTcpHold h;
       if (c->_ask) c->_ask->c = nullptr;
       c->_ask = ask;
@@ -410,7 +415,7 @@ struct EGTcpLwip {
     m.err = ERR_VAL;
     on_stack(dns_api, m);
     if (m.err != ERR_INPROGRESS) {
-      // cached or failed, lwIP never calls back
+      // Cached or failed, so lwIP never calls back
       EGTcpHold h;
       c->_ask = nullptr;
       delete ask;
@@ -458,9 +463,9 @@ struct EGTcpLwip {
     on_stack(info_api, m);
   }
 
-  // lock held from here down
+  // The lock is held for everything below
 
-  // frees the head, gives the next
+  // Frees the head pbuf and returns the next
   static pbuf* rx_pop(EGTcpClient* c) {
     pbuf* p = (pbuf*)c->_rx;
     c->_rx = p->next;
@@ -472,7 +477,7 @@ struct EGTcpLwip {
 
   static const uint8_t* rx_peek(EGTcpClient* c, size_t* len) {
     pbuf* p = (pbuf*)c->_rx;
-    while (p && c->_rx_off >= p->len) p = rx_pop(c);   // empty ones
+    while (p && c->_rx_off >= p->len) p = rx_pop(c);   // skip empty ones
     if (!p) return nullptr;
     *len = p->len - c->_rx_off;
     return (const uint8_t*)p->payload + c->_rx_off;

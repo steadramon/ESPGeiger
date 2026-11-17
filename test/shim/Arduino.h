@@ -90,7 +90,7 @@ inline void detachInterrupt(uint8_t pin) {}
 inline void interrupts() {}
 inline void noInterrupts() {}
 
-typedef int portMUX_TYPE;   // NOLINT(mixed-case)
+typedef int portMUX_TYPE;
 #define portMUX_INITIALIZER_UNLOCKED 0
 #define portENTER_CRITICAL(m)         do { (void)(m); } while (0)
 #define portEXIT_CRITICAL(m)          do { (void)(m); } while (0)
@@ -165,6 +165,7 @@ public:
   uint32_t getChipId() const           { return 0x00c0ffee; }
   uint32_t getMaxFreeBlockSize() const { return _max_block; }
   uint8_t  getHeapFragmentation() const { return 0; }
+  uint32_t getFreeContStack() const    { return 0; }
   void     getHeapStats(uint32_t* f, uint16_t* m, uint8_t* fr) const {
     *f = _free_heap; *m = (uint16_t)_max_block; *fr = 7;
   }

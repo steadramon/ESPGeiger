@@ -24,28 +24,28 @@
 // 1 s readings in the trim average
 static constexpr uint8_t HV_TRIM_N = 8;
 
-// volts, 2 ADC counts
+// Band in volts, 2 ADC counts wide
 inline int hvtrim_band(int ratio) {
   return (2 * ratio) >> 10;
 }
 
-// ADC samples a reading, median taken
+// ADC samples per reading, the median is taken
 static constexpr uint8_t HV_ADC_MAX = 10;
 
-// volts = adc * ratio >> 10; sum keeps the fraction
+// volts = adc * ratio >> 10, the sum keeps the fraction until the end
 inline int hv_volts(uint32_t ratio, uint32_t sum, uint8_t n, int offset) {
   if (!n) return offset;
   return (int)((ratio * sum / n) >> 10) + offset;
 }
 
-// esp32_hv before 0.14: raw counts, ~4/3 a mV; 0 and the default stay
+// esp32_hv before 0.14 stored raw counts, ~4/3 of a mV each. 0 and the default stay as they are
 inline int hv_ratio_to_mv(int ratio, int def, int max) {
   if (ratio <= 0 || ratio == def) return ratio;
   int r = ratio * 4 / 3;
   return r < max ? r : max;
 }
 
-// x2, sorts in place
+// Returns twice the median, sorts in place
 inline uint32_t hv_median2(uint16_t* r, uint8_t n) {
   if (!n) return 0;
   for (uint8_t i = 1; i < n; i++) {
@@ -63,7 +63,7 @@ inline uint8_t hv_over_count(uint8_t count, int volts, int limit) {
   return count < UINT8_MAX ? count + 1 : count;
 }
 
-// a board's cut-off: the pref can only lower it, 0 = the board's
+// The pref can only lower a board's cut-off, 0 uses the board's
 inline uint16_t hv_ov_limit(uint32_t pref, uint16_t board) {
   if (board && (!pref || pref > board)) return board;
   return (uint16_t)pref;
@@ -74,18 +74,23 @@ inline int hv_duty_cap(int freq, int max_us) {
   return (int)((uint64_t)max_us * (uint32_t)freq * 1024u / 1000000u);   // 200 us at 21 kHz is past 32 bits
 }
 
-// soft start, step of steps
+// Soft start, the duty at step out of steps
 inline int hv_ramp_duty(int duty, uint8_t step, uint8_t steps) {
   if (step >= steps) return duty;
   return 1 + (duty - 1) * step / steps;
 }
 
-// err = target - volts, past the band with no trim left, in a row
+// True when trim is at its cap, or duty + trim hits the duty clamp first
+inline bool hv_no_room(int duty, int trim, int trim_max, int dmax) {
+  return trim >= trim_max || duty + trim >= dmax;
+}
+
+// Counts readings in a row with err (target - volts) past the band and no trim left
 inline uint8_t hv_low_count(uint8_t count, int err, int band, bool top) {
   return top ? hv_over_count(count, err, band) : 0;
 }
 
-// ~0 while driving or the ADC top, in a row
+// Counts readings in a row near 0 while driving, or at the ADC top
 inline uint8_t hv_bad_count(uint8_t count, int mv, bool driving, int low_mv, int high_mv) {
   if (mv < high_mv && (!driving || mv >= low_mv)) return 0;
   return count < UINT8_MAX ? count + 1 : count;

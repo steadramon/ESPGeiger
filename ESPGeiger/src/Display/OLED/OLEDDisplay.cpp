@@ -38,10 +38,12 @@
 #include "App/AppMath.h"
 #include "App/FeatureBits.h"
 #include "App/MeasureIds.h"
+#include "App/Notice.h"
 #include "Corium/System/I2CBus.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/System/Uptime.h"
 #include "Corium/Net/Wifi.h"
+#include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Counter/CounterMaths.h"
 #include "GRNG/GRNG.h"
@@ -310,6 +312,15 @@ void SSD1306Display::render_tiny() {
 
 // DR_ flags, what to send
 uint8_t SSD1306Display::render(unsigned long now) {
+#ifdef APP_NOTICE
+  if (_notice) {
+    if (!due(now, ABOUT_MS)) return DR_NONE;
+    clearBuffer();
+    setFont(isTiny() ? U8G2_FONT_ARIAL_10 : U8G2_FONT_ARIAL_16);
+    drawStrP(0, 20, _notice);
+    return DR_FULL;
+  }
+#endif
 #if OLED_TINY
   if (isTiny()) {
     render_tiny();
@@ -377,6 +388,15 @@ void SSD1306Display::take_events(unsigned long now) {
   if (oled_page > OLED_PAGES) oled_page = PAGE_MAIN;
   if (oled_page != _last_page) page_changed(now);
   if (oled_page == PAGE_SAVER) display.wake(now);
+#ifdef APP_NOTICE
+  // up or down, all of it now
+  const char* n = Notice::shown();
+  if (n != _notice) {
+    _notice = n;
+    oled_last_update = 0;
+    _next_render_due = now;
+  }
+#endif
   uint16_t ev = corium::Registry::events(this);
   if (ev & ~(1u << Display::TOPIC_POWER)) _sent_mark = 2;   // the rest are sends
   if (ev & (1u << Display::TOPIC_POWER)) _next_render_due = now;   // lit or dark
@@ -690,7 +710,7 @@ static uint8_t oled_probe_addr() {
 void SSD1306Display::draw_logo(const char* line) {
   drawXBMP(0, 0, 51, 51, ESPLogo);
   setFont(U8G2_FONT_ARIAL_10);
-  drawStrP(55, 10, W_APP_NAME);
+  drawStrP(55, 10, APP_NAME);
   drawStrP(55, 24, RELEASE_VERSION);
   drawStrP(55, 42, line);
 }
@@ -858,7 +878,7 @@ void SSD1306Display::screen_mode(unsigned long now, bool auto_off) {
   if (isTiny()) font = U8G2_FONT_ARIAL_10;
 #endif
   setFont(font);
-  drawStrP(0, 0,  PSTR("Screen"));
+  drawStrP(0, 0,  EG_W_SCREEN);
   drawStrP(0, 20, auto_off ? PSTR("auto off") : PSTR("always on"));
   if (_present) { setPowerSave(0); sendBuffer(); }
   oled_on = true;
@@ -937,7 +957,8 @@ bool SSD1306Display::page_one_values(unsigned long now) {
 
 void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
   setDrawColor(0);
-  drawBox(36, 0, 92, 32);
+  drawBox(36, 0, 92, 20);
+  drawBox(42, 20, 86, 12);   // the colon of "Sv/h:" ends at 41
   setDrawColor(1);
   const uint8_t* g = nullptr;
   if (p.flags & (P1_WARN | P1_ALERT)) g = EGGlyph_warning;
@@ -1184,7 +1205,7 @@ void SSD1306Display::showOTABanner() {
   setFont(U8G2_FONT_ARIAL_16);
   // not PROGMEM safe, copy to ram
   char l1[12], l2[20];
-  snprintf_P(l1, sizeof(l1), PSTR("Update"));
+  flashToRam(W_UPDATE, l1, sizeof(l1));
   snprintf_P(l2, sizeof(l2), PSTR("in progress..."));
   drawStr((OLED_WIDTH - getStrWidth(l1)) / 2, (OLED_HEIGHT / 2) - 20, l1);
   drawStr((OLED_WIDTH - getStrWidth(l2)) / 2, (OLED_HEIGHT / 2),  l2);

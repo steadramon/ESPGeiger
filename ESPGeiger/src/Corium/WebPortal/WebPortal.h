@@ -67,7 +67,7 @@ class WebPortal {
                        const uint8_t* gz, size_t len);
 
     static void applyAuthFromPrefs();   // not in loop, walks pref tables
-    static void setHomeName(PGM_P name);   // the root page's name, THING_NAME till set
+    static void setHomeName(PGM_P name);   // the root page's name, APP_NAME till set
 
   private:
     EGHttpServer _http;

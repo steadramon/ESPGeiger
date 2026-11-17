@@ -26,6 +26,7 @@
 #include "Corium/System/FastMillis.h"
 #include "Corium/Util/MathUtil.h"
 #include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "App/AppMath.h"
 #include "App/FeatureBits.h"
 #include "Corium/System/PinSafety.h"
@@ -45,15 +46,15 @@ enum : uint8_t { NP_OFF, NP_BLIP, NP_BLIP_STATUS, NP_TREND, NP_TREND_STATUS };
 static bool trend(uint32_t m)  { return m >= NP_TREND; }
 static bool alarms(uint32_t m) { return m == NP_BLIP_STATUS || m == NP_TREND_STATUS; }
 CORIUM_PSTR(NP_L_COL,  "Blip colour");
-CORIUM_PSTR(NP_H_BLP,  "Blip mode only.");
+CORIUM_PSTR(NP_H_BLP,  "Blip mode only");
 CORIUM_PSTR(NP_O_COL,  "Green|Red|Blue|Yellow|Cyan|Magenta|White|Orange");
 CORIUM_PSTR(NP_O_FAD,  "Off|Fast|Medium|Slow");
 #ifndef NEOPIXEL_PIN_BLOCKED
 CORIUM_PSTR(NP_L_PIN,  "Pin");
-CORIUM_PSTR(NP_H_PIN,  "WS2812 data pin (-1 = disabled)");
+CORIUM_PSTR(NP_H_PIN,  "WS2812 data GPIO, -1 = off");
 #endif
 
-// esp8266 boards have RGB leds, swap on
+// esp8266 boards have RGB leds, so swap is on
 #ifndef NPX_DEFAULT_SWAP
   #if defined(ESP32)
     #define NPX_DEFAULT_SWAP "0"
@@ -108,12 +109,12 @@ static int8_t claim_pin(int p) {
 
 void NeoPixel::onPrefsLoaded() {
 #ifndef NEOPIXEL_PIN_BLOCKED
-  // boot only, the controller keeps its pin
+  // Pin read at boot only, the controller keeps its pin
   static bool s_pin_read = false;
   if (!s_pin_read) {
     s_pin_read = true;
     _pin = claim_pin((int)corium::Prefs::getInt("neopixel", EG_K_PIN));
-    // setup() ran before corium::Prefs::begin
+    // setup() ran before corium::Prefs::begin, so set up now the pin is known
     if (!_bus && _pin >= 0) setup();
   }
 #endif
@@ -147,22 +148,22 @@ corium::LegacyRows NeoPixel::legacyAliases() { return NEOPIXEL_LEGACY; }
 NeoPixel::NeoPixel() {
 }
 
-// loop blinks it
+// Just flags it, loop() does the blink
 void NeoPixel::on_click(uint32_t) { neopixel._blip = true; }
 
-// found once, read each blink
+// Looked up once, read on each blink
 static corium::MRead s_cpm = nullptr, s_cpm5 = nullptr, s_alert = nullptr, s_warn = nullptr;
 
 void NeoPixel::begin() {
   gcounter.on_click(on_click);
   gcounter.on_rx_click(on_click);
-  s_cpm   = corium::m_core_read(PSTR("cpm"),   corium::M_F32);
-  s_cpm5  = corium::m_core_read(PSTR("cpm5"),  corium::M_F32);
-  s_alert = corium::m_core_read(PSTR("alert"), corium::M_BOOL);
-  s_warn  = corium::m_core_read(PSTR("warn"),  corium::M_BOOL);
+  s_cpm   = corium::m_core_read(K_M_CPM,     corium::M_F32);
+  s_cpm5  = corium::m_core_read(K_M_CPM5,    corium::M_F32);
+  s_alert = corium::m_core_read(EG_K_ALERT, corium::M_BOOL);
+  s_warn  = corium::m_core_read(EG_K_WARN,  corium::M_BOOL);
 }
 
-// safe mode skips preWifi and onPrefsLoaded: clear the pre-crash colour
+// Safe mode skips preWifi and onPrefsLoaded, so clear the pre-crash colour here
 void NeoPixel::park() {
 #ifndef NEOPIXEL_PIN_BLOCKED
   _pin = claim_pin((int)corium::Prefs::getInt("neopixel", EG_K_PIN));
@@ -281,7 +282,7 @@ void NeoPixel::loop(unsigned long now)
   }
 }
 
-// click modes: flashes FLASH_MS apart, a click while lit keeps it lit, one in the gap waits
+// Click modes flash at least FLASH_MS apart. A click while lit keeps it lit, one in the gap waits for the next flash
 void NeoPixel::flash(unsigned long now)
 {
   bool gap = !_rest || now - _on_ms >= FLASH_MS;

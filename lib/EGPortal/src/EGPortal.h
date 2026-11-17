@@ -59,7 +59,7 @@ class EGPortal {
     // pointers only valid in the callback
     void onSave(SaveCallback cb, void* user = nullptr);
 
-    // dont restart in here, set a flag
+    // Don't restart in here, set a flag
     void onReset(ResetCallback cb, void* user = nullptr);
 
     // every page, empty = open
@@ -95,7 +95,7 @@ class EGPortal {
       return s && s[0] && strlen(s) <= EGPORTAL_SSID_MAX;
     }
 
-    // "" = open, else 8-63, or 64 = the hex PSK; no field isn't open
+    // "" = open, else 8-63, or 64 = the hex PSK. A missing field isn't open
     static bool passOk(const char* p) {
       if (!p) return false;
       size_t n = strlen(p);
@@ -122,6 +122,8 @@ class EGPortal {
       strlcpy(pass, p, sizeof(pass));
       return CREDS_OK;
     }
+    static PGM_P credsText(Creds c);   // not CREDS_OK
+    static const char NOT_SAVED[];     // PROGMEM, out of memory
 
   private:
     EGHttpServer _http;

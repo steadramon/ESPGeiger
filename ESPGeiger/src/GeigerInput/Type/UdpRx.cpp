@@ -529,8 +529,9 @@ int GeigerUdpRx::collect() {
   return delta;
 }
 
+// none heard yet isn't no input till 3 heartbeats in
 bool GeigerUdpRx::isHealthy() const {
-  return _producers_seen > 0;
+  return _producers_seen > 0 || up_s() < UDPRX_QUIET_MS / 1000;
 }
 
 uint32_t GeigerUdpRx::quiet_s() const {

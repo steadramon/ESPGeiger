@@ -38,6 +38,7 @@ extern const char APP_CSS[] PROGMEM = R"CSS(.stat>.row.envflex{display:flex;gap:
 .bar-cell{flex:1;min-width:0}
 #g1{height:200px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px}
 #g2{display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.4em 0;font-size:1.05em}
+#g2 span[id]{display:inline-block;min-width:9ch;text-align:right;font-variant-numeric:tabular-nums}
 #t1{width:100%;height:250px;font-family:monospace;font-size:.8em;line-height:1.3;resize:vertical}
 :root.crt{--bg:#000;--page:#000;--fg:#0f0;--muted:#080;--border:#050;--accent:#0a0;--link:#0a0;--card:#001a00}
 :root.crt[data-theme=light]{--bg:#212529;--card:#2b3035;--border:#373b3e;background:#1a1d20}
@@ -137,6 +138,7 @@ sm(t){if(!(this.av>1))return t;this.hb=this.hb||[];return t.map((v,i)=>{const h=
 })JS";
 
 // /status and /hv load it before their own, esp8266 has it in /js and /hvjs (5 sockets)
+// TODO: one way to serve the graph JS on every chip
 #if !CORIUM_HAS_FEW_SOCKETS
 static void hGraphJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
 #if EG_GZ_picographJS

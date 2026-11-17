@@ -24,6 +24,7 @@
 #include "Corium/Module/Module.h"
 #include "Corium/Module/Registry.h"
 #include "Corium/Util/MathUtil.h"
+#include "Corium/Util/Words.h"
 
 // most rows differ at the first byte
 bool corium::MeasureRows::idIs(size_t j, const char* id) const {
@@ -110,17 +111,17 @@ size_t corium::m_format(const corium::Measure& m, const corium::MValue& v, char*
       n = format_f(buf, cap, v.f, m.decimals);
       break;
     case corium::M_U32:
-      n = snprintf_P(buf, cap, PSTR("%lu"), (unsigned long)v.u);
+      n = snprintf_P(buf, cap, W_FMT_LU, (unsigned long)v.u);
       break;
     case corium::M_I32:
-      n = snprintf_P(buf, cap, PSTR("%ld"), (long)v.i);
+      n = snprintf_P(buf, cap, W_FMT_LD, (long)v.i);
       break;
     case corium::M_BOOL:
-      n = snprintf_P(buf, cap, PSTR("%u"), v.b ? 1u : 0u);
+      n = snprintf_P(buf, cap, W_FMT_U, v.b ? 1u : 0u);
       break;
     case corium::M_STR:
       if (!v.s) return 0;
-      n = snprintf_P(buf, cap, PSTR("%s"), v.s);
+      n = snprintf_P(buf, cap, W_FMT_S, v.s);
       break;
     default:
       return 0;

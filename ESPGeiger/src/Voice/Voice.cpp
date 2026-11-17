@@ -15,6 +15,7 @@
 
 #include "Voice.h"
 #include "App/AppKeys.h"
+#include "Corium/Util/Words.h"
 #include "AudioTick/AudioTick.h"
 #include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
@@ -49,13 +50,14 @@ CORIUM_PSTR(VX_L_AUS, "Announce dose");
 CORIUM_PSTR(VX_H_AUS, "Add uSv/h to the announcement");
 CORIUM_PSTR(VX_L_ARM, "Radmon up/down");
 CORIUM_PSTR(VX_H_ARM, "Speak when Radmon goes online or offline");
+CORIUM_PSTR(VX_H_VOL, "1-100");
 
 static const corium::Pref VOICE_PREF_ITEMS[] PROGMEM = {
   {K_ANNOUNCE_ENABLE,   VX_L_AEN,  VX_H_AEN,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
   {K_ANNOUNCE_INTERVAL, VX_L_AIV,  VX_H_AIV,  "60", nullptr, 10, 3600,  0, corium::P_UINT, corium::P_ADVANCED},
   {K_ANNOUNCE_USV,      VX_L_AUS,  VX_H_AUS,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
   {K_ANNOUNCE_RADMON,   VX_L_ARM,  VX_H_ARM,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
-  {K_VOICE_VOLUME,      EG_L_VOL,  EG_H_VOL,  "80", nullptr,  1,  100,  0, corium::P_UINT, 0},
+  {K_VOICE_VOLUME,      EG_L_VOL,  VX_H_VOL,  "80", nullptr,  1,  100,  0, corium::P_UINT, 0},
 };
 
 static const corium::PrefGroup VOICE_PREF_GROUP PROGMEM = {
@@ -97,13 +99,13 @@ CORIUM_PSTR(KX_H_EN,  "Sound a klaxon when CPM crosses the alert threshold");
 CORIUM_PSTR(KX_L_TY,  "Pattern");
 CORIUM_PSTR(KX_O_TY,  "Alarm|Two-tone|Wail|Horn|Voice");
 CORIUM_PSTR(KX_L_CD,  "Cooldown");
-CORIUM_PSTR(KX_H_CD,  "Minutes between alert klaxons (1-60)");
-CORIUM_PSTR(KX_H_QFR, "Silence klaxon + voice from this time (blank = off)");
+CORIUM_PSTR(KX_H_CD,  "Minutes between alert klaxons");
+CORIUM_PSTR(KX_H_QFR, "Silence klaxon and voice from this time, blank = off");
 
 static const corium::Pref KLAXON_PREF_ITEMS[] PROGMEM = {
   {EG_K_ENABLE,     KX_L_EN,  KX_H_EN,  "0",  nullptr, 0, 0,   0, corium::P_BOOL, 0},
   {EG_K_TYPE,       KX_L_TY,  nullptr,  "0",  KX_O_TY, 0, 4,   0, corium::P_ENUM, 0},
-  {EG_K_VOLUME,     EG_L_VOL, EG_H_VOL, "55", nullptr, 1, 100, 0, corium::P_UINT, 0},
+  {EG_K_VOLUME,     EG_L_VOL, VX_H_VOL, "55", nullptr, 1, 100, 0, corium::P_UINT, 0},
   {K_COOLDOWN,      KX_L_CD,  KX_H_CD,  "5",  nullptr, 1, 60,  0, corium::P_UINT, corium::P_ADVANCED},
   {EG_K_QUIET_FROM, EG_L_QFR, KX_H_QFR, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME},
   {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME},
@@ -452,7 +454,7 @@ void Voice::speakNumber(long v) {
   if (n >= 1000000) {
     // no word past thousand, digit groups
     char buf[16];
-    snprintf(buf, sizeof(buf), "%lu", n);
+    snprintf_P(buf, sizeof(buf), W_FMT_LU, n);
     const size_t len = strlen(buf);
     for (size_t i = 0; i < len; i++) {
       const bool last = ((i + 1) % 5 == 0) || (i + 1 == len);
@@ -488,8 +490,8 @@ void Voice::speakDigits(const char* s) {
 // all just enqueue, audio worker plays in order
 static void send_queued(EGHttpResponse& res, AudioCmd cmd) {
   cmd.web = true;
-  if (audio_enqueue(cmd)) res.send(200, FPSTR(HTTP_CT_PLAIN), F("queued"));
-  else                    res.send(503, FPSTR(HTTP_CT_PLAIN), F("queue full"));
+  if (audio_enqueue(cmd)) res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(AT_QUEUED));
+  else                    res.send(503, FPSTR(HTTP_CT_PLAIN), FPSTR(AT_QFULL));
 }
 
 static void hAdpcm(EGHttpRequest& req, EGHttpResponse& res, void*) {

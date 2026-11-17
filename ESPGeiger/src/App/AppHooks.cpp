@@ -31,6 +31,7 @@
 #include "GRNG/GRNG.h"
 #include "WebAPI/Features.h"
 #include "App/Board.h"
+#include "App/Health.h"
 #include "Corium/Output/Buzzer.h"
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
@@ -50,13 +51,23 @@ void corium::AppHooks::routes(EGHttpServer& http) {
   AppWeb::routes(http);
 }
 
+static const char HEALTH[] PROGMEM = "Health";
+
 void corium::AppHooks::infoRows(EGHttpResponse& res) {
   char model[6 * CORIUM_NAME_MAX + 1];
   egesc_html(model, sizeof(model), Tube::model());
   corium::WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
   if (const char* b = corium::DeviceInfo::boardName()) corium::WebPortal::infoRow(res, PSTR("Board"), W_FMT_S, b);
+  char now[40], ever[40];
+  health_text(now, sizeof(now), health().live());
+  if (health().ever() == health().live()) {
+    corium::WebPortal::infoRow(res, HEALTH, W_FMT_S, now);
+  } else {
+    health_text(ever, sizeof(ever), health().ever());
+    corium::WebPortal::infoRow(res, HEALTH, PSTR("%s (since boot: %s)"), now, ever);
+  }
 #if BUZZER_BUILT
-  if (corium::Buzzer::faulted()) corium::WebPortal::infoRow(res, PSTR("Buzzer"), W_FMT_S, PSTR("pin held high, off till restart"));
+  if (corium::Buzzer::faulted()) corium::WebPortal::infoRow(res, corium::Buzzer::NAME, W_FMT_S, PSTR("pin held high, off until restart"));
 #endif
 }
 
@@ -77,6 +88,10 @@ void corium::AppHooks::aboutJson(EGHttpResponse& res) {
     gcounter.has_pcnt()         ? W_TRUE : W_FALSE,
     (unsigned)Features::flags());
   if (const char* b = corium::DeviceInfo::boardName()) corium::WebPortal::sendf(res, PSTR("\"board\":\"%s\","), b);
+  char now[40], ever[40];
+  health_text(now, sizeof(now), health().live());
+  health_text(ever, sizeof(ever), health().ever());
+  corium::WebPortal::sendf(res, PSTR("\"health\":\"%s\",\"health_boot\":\"%s\","), now, ever);
 }
 
 void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {

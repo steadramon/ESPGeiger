@@ -88,7 +88,6 @@ static const char T_CRLF[]   PROGMEM = "{cpm}\r\n";
 #endif
 static const char N_MOHM[]   PROGMEM = "MightyOhm";
 static const char N_ESPG[]   PROGMEM = "ESPGeiger";
-static const char N_TPL[]    PROGMEM = "Template";
 static const char T_ESPG[]   PROGMEM = "CPM: {cpm}\n";
 
 // id, baud, name, line template, formatter, parser, sends cps
@@ -99,7 +98,7 @@ static const TypeInfo TYPES[] PROGMEM = {
 #endif
   { GEIGER_STYPE_MIGHTYOHM, 9600,   N_MOHM,   nullptr, fmt_mightyohm,      IF_PARSE(parse_mightyohm), true  },
   { GEIGER_STYPE_ESPGEIGER, 115200, N_ESPG,   T_ESPG,  nullptr,            IF_PARSE(parse_espgeiger), false },
-  { GEIGER_STYPE_TEMPLATE,  115200, N_TPL,    nullptr, fmt_user_template,  IF_PARSE(parse_template),  false },
+  { GEIGER_STYPE_TEMPLATE,  115200, EG_L_TPL, nullptr, fmt_user_template,  IF_PARSE(parse_template),  false },
 };
 static constexpr uint8_t TYPE_COUNT = sizeof(TYPES) / sizeof(TYPES[0]);
 

@@ -21,6 +21,7 @@
 #include "Corium/Logger/Logger.h"
 
 const char corium::PinSafety::I2C[] PROGMEM = "I2C";
+const char corium::PinSafety::OUT_OF_RANGE[] PROGMEM = "out of range";
 
 namespace {
   constexpr int MAX_CLAIMS = CORIUM_PINSAFETY_MAX_CLAIMS;
@@ -32,7 +33,7 @@ namespace {
 
   const char SPI_FLASH[]    PROGMEM = "SPI flash";
   const char PSRAM[]        PROGMEM = "PSRAM";
-  const char NO_SUCH[]      PROGMEM = "no such pin";
+  const char NO_SUCH[]      PROGMEM = "unknown pin";
   const char USB[]          PROGMEM = "USB";
   const char INPUT_ONLY[]   PROGMEM = "input only";
   const char STRAP[]        PROGMEM = "boot strap, a pull the wrong way at power-on stops boot";
@@ -42,7 +43,6 @@ namespace {
   const char NO_OD[]        PROGMEM = "no open-drain, I2C won't work";
   const char GLITCH[]       PROGMEM = "glitches low with the ADC or WiFi sleep, false edges";
   const char BOARD_TOO[]    PROGMEM = "the board uses it too";
-  const char OUT_OF_RANGE[] PROGMEM = "out of range";
 
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
   constexpr bool USB_CONSOLE = true;
@@ -216,7 +216,7 @@ static const char* shared_with(int pin) {
 static const char* checked(int pin, corium::PinSafety::Use use, uint8_t needs, const char** warn) {
   *warn = nullptr;
   if (pin == -1) return nullptr;
-  if (pin < 0 || pin > MAX_GPIO_PIN) return OUT_OF_RANGE;
+  if (pin < 0 || pin > MAX_GPIO_PIN) return corium::PinSafety::OUT_OF_RANGE;
   bool out = use == corium::PinSafety::USE_OUT;
   if (const char* why = corium::PinSafety::check(CHIP, pin, out, USB_CONSOLE, warn, needs)) return why;
   if (use == corium::PinSafety::USE_BUTTON && *warn == STRAP) *warn = nullptr;
@@ -266,7 +266,7 @@ const char* corium::PinSafety::claim(int pin, const char* owner) {
     s_claims[s_count].owner = owner;
     s_count++;
   } else {
-    corium::Log::console(PSTR("PinSafety: table full, pin=%d %s unchecked"), pin, owner);
+    corium::Log::console(PSTR("PinSafety: Table full, pin=%d %s unchecked"), pin, owner);
   }
   return nullptr;
 }

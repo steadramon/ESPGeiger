@@ -50,7 +50,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 ## Example `tele/sensor` JSON
 
 ```json
-{"cpm":87.00,"cpm5":149.76,"cpm15":212.07,"usv":0.5100,"cps":1.45,"tube":1,"sat":0,"warn":1,"alert":0}
+{"cpm":87.00,"cpm5":149.76,"cpm15":212.07,"usv":0.5100,"cps":1.45,"tube":1,"sat":0,"warn":1,"alert":0,"health":"ok","problem":0}
 ```
 
 | Field | Description |
@@ -69,6 +69,8 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `warn` | `1` when CPM is above configured warning threshold |
 | `alert` | `1` when CPM is above configured alert threshold |
+| `health` | `ok`, or what is wrong, comma split (see [the JSON fields](/output/integrations)). Home Assistant's **Health** reads this. |
+| `problem` | `1` while a tube or HV word is on in `health` (not the device's `crashed`, `noclock`, `savefail`, `lowheap`). Home Assistant's **Tube Problem** reads this. |
 
 ## Example `tele/status` JSON
 

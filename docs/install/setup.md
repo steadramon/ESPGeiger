@@ -86,7 +86,7 @@ Nuclear option: reflash the firmware from [install.espgeiger.com](https://instal
 
 ESPGeiger is designed to run on your **local network**, not on the open internet.
 
-The web interface uses HTTP Basic Auth with no TLS. With a web password set, `/update` and espota (when **Network upload** is on) take new firmware from anyone who has it; with no password, from anyone on your network. Firmware images are not signed, and there is no rate limiting or brute-force protection. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
+The web interface uses HTTP Basic Auth with no TLS. With a web password set, `/update` and espota (when **Arduino OTA** is on) take new firmware from anyone who has it; with no password, from anyone on your network. Firmware images are not signed, and there is no rate limiting or brute-force protection. None of that is a problem on a trusted LAN. **It is a problem on a port-forwarded WAN address.**
 
 If you need to reach your device from outside your LAN, use one of:
 
