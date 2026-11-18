@@ -26,36 +26,35 @@ namespace corium {
 
 class Module;
 
-// what goes with the payload
 struct HttpMeta {
   const char* method = nullptr;
   const char* url = nullptr;
-  bool flash = false;              // method and url PROGMEM
-  PGM_P ctype = nullptr;           // Content-Type, nullptr = none
-  PGM_P accept = nullptr;          // Accept, nullptr = none
-  PGM_P extra = nullptr;           // one more header
+  bool flash = false;              // method and url are in PROGMEM
+  PGM_P ctype = nullptr;           // nullptr = none
+  PGM_P accept = nullptr;
+  PGM_P extra = nullptr;           // One more header
   const char* extraValue = nullptr;
-  uint16_t timeoutS = 30;         // quiet, twice that whole
+  uint16_t timeoutS = 30;         // Max quiet time, the whole request gets twice that
 };
 
-// the reply posts the owner, its client goes with it
+// The reply posts the owner module, the client is freed once the reply is taken
 class HttpDriver {
   public:
-    enum Sent : uint8_t { SENT, NOT_SEALED, NOT_OPENED, NO_MEMORY, BAD_URL };   // compare, SENT is 0
+    enum Sent : uint8_t { SENT, NOT_SEALED, NOT_OPENED, NO_MEMORY, BAD_URL };   // compare against these, SENT is 0
 
     explicit HttpDriver(Module* owner) : _owner(owner) {}
 #ifdef NATIVE_TEST
-    ~HttpDriver() { delete _c; }   // device drivers are statics, never die
+    ~HttpDriver() { delete _c; }   // On the device drivers are statics and never die
 #endif
     HttpDriver(const HttpDriver&) = delete;
     HttpDriver& operator=(const HttpDriver&) = delete;
 
-    // NOT_SEALED still replies, with an error
+    // NOT_SEALED still gets a reply, with an error
     Sent send(const HttpMeta& m, const uint8_t* body, size_t len);
     bool busy() const { return _c != nullptr; }
-    // once a request: code below 0 = client error, body cut to cap
+    // Once per request, code < 0 = client error
     bool take(int* code, uint8_t* body, size_t cap, size_t* got);
-    uint32_t due() const { return _c ? _c->due() : 0; }   // its timeouts
+    uint32_t due() const { return _c ? _c->due() : 0; }   // when the client's next timeout is due
     static void logError(const char* tag, int code);   // "tag: Error code - reason"
 
   private:

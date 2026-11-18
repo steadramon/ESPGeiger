@@ -23,7 +23,7 @@
 #include "SerialPort.h"
 #include "GeigerInput/GeigerInputTest.h"
 
-// Test counts each second, sent as a line on TX, RX read back to the log
+// a line a second on TX, RX read back to the log
 class GeigerTestSerial final : public GeigerInputTest
 {
   public:
@@ -38,7 +38,7 @@ class GeigerTestSerial final : public GeigerInputTest
 
     char _buf[64];
     uint8_t _pos = 0;
-    bool _send = false;   // the tick's line, loop() writes it
+    bool _send = false;   // set by the tick, loop() writes the line
     uint8_t _idle_ms = 1;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
 };

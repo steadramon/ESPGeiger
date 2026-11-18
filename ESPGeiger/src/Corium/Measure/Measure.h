@@ -67,6 +67,7 @@ static constexpr uint8_t M_OUT_ANY     = 0xFF;  // lookups by id
 static constexpr uint8_t M_DIAG    = 1 << 0;  // only when diag asked for
 static constexpr uint8_t M_COUNTER = 1 << 1;  // else gauge
 static constexpr uint8_t M_NODIAG  = 1 << 2;  // left out when diag asked for
+static constexpr uint8_t M_HELD    = 1 << 3;  // left out while m_hold is on
 
 union MValue {
   float       f;
@@ -123,6 +124,7 @@ typedef MeasureRows (*MSource)();
 
 // walked core, input, then the modules. input nullptr = none
 void m_sources(MeasureRows core, MSource input);
+void m_hold(bool on);   // M_HELD rows gone, not read
 
 // rows for one output with a value now, id = that row only
 class MeasureIter {

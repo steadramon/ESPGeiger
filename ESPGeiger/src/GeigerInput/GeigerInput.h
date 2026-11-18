@@ -139,7 +139,7 @@ extern corium::IsrLock::Mux timerMux;
 class EGHttpResponse;
 class EGHttpServer;
 
-// Base for a count source, one built per GEIGER_TYPE
+// one built per GEIGER_TYPE
 class GeigerInput {
   public:
     virtual ~GeigerInput() {};

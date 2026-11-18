@@ -1,5 +1,5 @@
 /*
-  Reactor.h - the loop pass: hot work every pass, the rest once a ms.
+  Reactor.h - the main loop. Hot work runs every pass, the rest once a ms.
 
   Copyright (C) 2026 @steadramon
 
@@ -36,17 +36,17 @@ namespace corium {
 namespace Reactor {
 
 #ifdef ESP32
-  // loop runs the tick like esp8266, due on the ms edge
+  // The ms the next second() is due on
   extern uint32_t s_next_sec;
 #endif
   extern uint32_t s_ms_last_us;
   extern uint32_t s_ms_acc_us;
   extern uint32_t s_next_house;
 
-  // before wifi, the libs time from it
+  // Call before wifi, the libs take their time from it
   void clock(void (*ms)());
 
-  // the ms ticker, extra(now_us) is the app's; 8266 = os_timer (SYS), esp32 = esp_timer task, no log or yield
+  // Runs from an os_timer (SYS) on 8266 and the esp_timer task on esp32, so no log or yield in here
   template <void (*extra)(uint32_t)>
   void ms() {
     uint32_t now_us = micros();
@@ -60,10 +60,10 @@ namespace Reactor {
     extra(now_us);
   }
 
-  // end of setup, app(up) each second, nullptr = none; 8266 = os_timer (SYS), esp32 = loop
+  // Called at the end of setup. second() then runs from an os_timer (SYS) on 8266, from the loop on esp32
   void begin(void (*app)(uint32_t up));
   void second();
-  // health, boot marks; half a second off second(), from the loop
+  // runs from the loop, half a second apart from second()
   void house();
 
   template <void (*hot)(unsigned long)>
@@ -74,32 +74,32 @@ namespace Reactor {
     TickProfile::countIter();
     unsigned long now = fastMillis();
     hot(now);
-    // the rest runs on ms, once a ms is plenty
+    // once a ms is plenty
     static unsigned long s_ms;
     if (now != s_ms) {
       s_ms = now;
 #ifdef ESP32
-      // one a ms, second() skips a stall
+      // At most one a ms. After a stall second() runs once and skips the missed ones
       if (reached(now, s_next_sec)) {
         s_next_sec += 1000;
         second();
         esp_task_wdt_reset();
 #if CONFIG_FREERTOS_UNICORE
-        // c3: idle task gets a turn
+        // single core (c3), give the idle task a turn
         vTaskDelay(1);
 #endif
       }
 #endif
       if (reached(now, s_next_house)) {
         s_next_house += 1000;
-        if (reached(now, s_next_house)) s_next_house = now + 1000;   // a stall runs it once
+        if (reached(now, s_next_house)) s_next_house = now + 1000;   // after a stall it only runs once
         house();
       }
-      // tcp callbacks, ota needs them too
+      // TCP callbacks, OTA needs these too
       Registry::in(Registry::IN_TCP);
       EGTcp::poll();
       Registry::in(Registry::IN_PORTAL);
-      // web ota needs it too
+      // Web OTA needs this too
       if (reached(now, portal.nextPollDue())) portal.poll(now);
       Registry::in(Registry::IN_NONE);
       if (Registry::due(now)) Registry::loopAll(now);
@@ -109,11 +109,10 @@ namespace Reactor {
 #endif
   }
 
-  // 8266: the core runs preloop_update_frequency() every pass, the app throttles it
+  // On 8266 the core runs preloop_update_frequency() every pass, the app throttles it
   template <void (*hot)(unsigned long)>
   inline void run(WebPortal& portal) {
 #ifdef ESP32
-    // never returns
     for (;;) pass<hot>(portal);
 #else
     pass<hot>(portal);

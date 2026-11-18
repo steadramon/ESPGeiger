@@ -25,7 +25,7 @@
 #include <mutex>
 #endif
 
-// isr code kept in ram
+// ISR code kept in ram
 #define CORIUM_ISR_ATTR IRAM_ATTR
 
 namespace corium {
@@ -39,7 +39,7 @@ namespace IsrLock {
     detachInterrupt(digitalPinToInterrupt(pin));
   }
 
-  // esp32 isr may be on the other core, 8266 just masks, host a real lock
+  // The esp32 isr may be on the other core, the 8266 just masks interrupts, the host uses a real lock
   struct Mux {
 #if defined(ESP32)
     portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
@@ -48,7 +48,7 @@ namespace IsrLock {
 #endif
   };
 
-  // from the loop
+  // Call from the loop
   static inline __attribute__((always_inline)) void enter(Mux& x) {
 #if defined(ESP32)
     portENTER_CRITICAL(&x.m);
@@ -71,7 +71,7 @@ namespace IsrLock {
 #endif
   }
 
-  // in the isr, 8266 isrs don't nest
+  // Call in the isr. 8266 isrs don't nest, so nothing to do there
   static inline __attribute__((always_inline)) void enterIsr(Mux& x) {
 #if defined(ESP32)
     portENTER_CRITICAL_ISR(&x.m);
@@ -92,8 +92,8 @@ namespace IsrLock {
 #endif
   }
 
-  // bits set from another task, read lock-free by the loop, taken under the lock
-  // load + store, 8266 has no atomic or
+  // Set from another task, read lock-free by the loop
+  // load + store under the lock, the 8266 has no atomic or
   struct Bits {
     Mux mux;
     std::atomic<uint32_t> w{0};

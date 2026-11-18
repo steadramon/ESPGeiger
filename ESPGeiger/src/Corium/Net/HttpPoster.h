@@ -33,40 +33,39 @@
 #endif
 namespace corium {
 
-// a Sender that posts every _every_ms on its send slot, one request at a time
+// One request at a time
 class HttpPoster : public Sender {
   public:
     bool requiresWifi() override { return true; }
     static constexpr uint16_t LOOP_MS = 500;
     void loop(unsigned long now) override;
     size_t statusJson(char* buf, size_t cap) override;
-    void onPrefsLoaded() override;   // on = the group's enableKey
+    void onPrefsLoaded() override;   // on/off comes from the group's enableKey
     void onPrefsSaved() override;
     HttpDriver request{this};
-    // app's, true = no new post, replies still taken
+    // Set by the app. true = no new posts, replies are still taken
     static bool (*hold)();
 
   protected:
-    // false skips, body null for GET, else malloc'd and post() frees it
+    // body is null for GET, else malloc'd and post() frees it
     virtual bool prepare(char* url, size_t cap, const char** body) = 0;
-    // reply body, NUL ended, true = a good send
+    // true = a good send
     virtual bool interpret(const char* reply) = 0;
     virtual const char* logTag() = 0;
     virtual const char* statusKey() { return name(); }
     virtual const char* method() const { return "GET"; }
     virtual uint16_t timeoutS() const { return 30; }
-    virtual size_t replyCap() const { return 64; }   // bytes kept, REPLY_CAP max
-    // else logged as an error
+    virtual size_t replyCap() const { return 64; }   // reply bytes kept, REPLY_CAP max
+    // Any other code is logged as an error
     virtual bool okCode(int code) const { return code == 200; }
-    // a body's type, sent as Accept too
+    // Type of the body, also sent as Accept
     virtual PGM_P contentType() const { return nullptr; }
 
     void setEnabled(bool on);
-    // _every_ms from secs, secs back
     uint16_t setIntervalS(int s);
-    // n from snprintf, a cut url is logged and not sent
+    // n is what snprintf returned
     bool urlFits(int n, size_t cap);
-    // true = v empty, not sent; logged once till the prefs change
+    // true = empty, logged once
     CORIUM_NODISCARD bool unset(const char* v, PGM_P label);
 
     uint32_t _ping_ms = 0;
@@ -76,8 +75,8 @@ class HttpPoster : public Sender {
   private:
     static constexpr size_t URL_CAP = CORIUM_HTTPPOSTER_URL_MAX;
     static constexpr size_t REPLY_CAP = CORIUM_HTTPPOSTER_REPLY_MAX;
-    bool _told = false;   // once till the prefs change
-    uint8_t _fails = 0;   // in a row
+    bool _told = false;   // Logged once until the prefs change
+    uint8_t _fails = 0;   // fails in a row
     uint8_t _skip = 0;    // slots left to sit out
     void result(bool ok);
     void backoff(bool ok);

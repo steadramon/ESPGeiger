@@ -26,7 +26,7 @@ static_assert(EGHTTP_HOST_MAX >= CORIUM_HOST_MAX, "a host pref must fit the clie
 
 bool (*corium::HttpPoster::hold)() = nullptr;
 
-// off mid-post: loop() still reaps the reply, then sleeps
+// Turned off mid post it still loops to reap the reply
 void corium::HttpPoster::setEnabled(bool on) {
   _send_enabled = on;
   corium::Registry::every(this, (on || request.busy()) ? LOOP_MS : 0);
@@ -36,7 +36,6 @@ void corium::HttpPoster::onPrefsLoaded() {
   setEnabled(corium::Prefs::groupEnabled(prefsGroup()));
 }
 
-// a new url or key gets its own say, and a try at the next slot
 void corium::HttpPoster::onPrefsSaved() {
   _told = false;
   _fails = 0;
@@ -49,7 +48,7 @@ void corium::HttpPoster::result(bool ok) {
   backoff(ok);
 }
 
-// 1, 2, 4 ... slots between tries up to sys.backoff s, whole slots so the phase holds
+// Backs off in whole slots so the send phase holds
 void corium::HttpPoster::backoff(bool ok) {
   uint32_t max_s = ok ? 0 : corium::Prefs::getUInt("sys", corium::K_BACKOFF);
   if (!max_s) {
@@ -86,7 +85,7 @@ void corium::HttpPoster::loop(unsigned long now)
     else post();
   }
   if (request.busy()) {
-    corium::Registry::dueAt(this, request.due());   // the reply posts us sooner
+    corium::Registry::dueAt(this, request.due());   // the reply posts the module sooner
   } else if (_send_enabled) {
     corium::Registry::dueAt(this, _ping_ms + _every_ms);
   } else {
@@ -94,7 +93,7 @@ void corium::HttpPoster::loop(unsigned long now)
   }
 }
 
-// whole intervals, keeps the slot
+// Steps in whole intervals, so the send keeps its slot
 bool corium::HttpPoster::slot_due(unsigned long now) {
   if (_ping_ms == 0) {
     _ping_ms = corium::SendSlot::initialPing(name(), now, _every_ms);
@@ -113,7 +112,7 @@ void corium::HttpPoster::take_reply()
   if (!request.take(&code, (uint8_t*)r, cap - 1, &got)) return;
   bool ok = false;
   if (okCode(code)) {
-    while (got && (uint8_t)r[got - 1] <= ' ') got--;   // a trailing newline
+    while (got && (uint8_t)r[got - 1] <= ' ') got--;   // drop a trailing newline
     r[got] = 0;
     ok = interpret(r);
   } else {
@@ -139,7 +138,7 @@ bool corium::HttpPoster::unset(const char* v, PGM_P label) {
 }
 
 void corium::HttpPoster::post() {
-  if (request.busy()) return;   // last reply not in yet
+  if (request.busy()) return;
   char url[URL_CAP];
   const char* body = nullptr;
   if (!prepare(url, sizeof(url), &body)) return;

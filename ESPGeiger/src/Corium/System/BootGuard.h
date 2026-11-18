@@ -32,19 +32,19 @@
 namespace corium {
 namespace BootGuard {
 
-constexpr uint32_t LIVED_S   = CORIUM_BOOTGUARD_LIVED_S;     // from beginAll
-constexpr uint32_t STABLE_MS = CORIUM_BOOTGUARD_STABLE_MS;   // wifi
+constexpr uint32_t LIVED_S   = CORIUM_BOOTGUARD_LIVED_S;     // counted from beginAll
+constexpr uint32_t STABLE_MS = CORIUM_BOOTGUARD_STABLE_MS;   // wifi up this long before markLived()
 constexpr uint32_t DAY_MS    = 86400000UL;
 
-void onBoot();      // first thing in setup()
-void markLived();   // up LIVED_S, a crash after doesn't count
-void markDay();     // up DAY_MS
-void requestSafe();   // safe mode on next restart
-void requestPortal();   // next boot: the portal if the saved wifi fails, offline builds too
+void onBoot();      // First thing in setup()
+void markLived();   // Up LIVED_S, a crash after this doesn't count
+void markDay();     // up DAY_MS, clears the retries
+void scram();       // Safe mode on next restart
+void requestPortal();   // Portal on the next boot if the saved wifi fails
 
 bool     safeMode();
-bool     entered();       // first safe boot
-uint32_t retryAfterMs();   // ms
+bool     entered();       // true on the first safe boot
+uint32_t retryAfterMs();
 uint8_t  crashStreak();
 bool     portalAsked();
 

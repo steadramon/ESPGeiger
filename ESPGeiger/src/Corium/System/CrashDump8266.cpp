@@ -30,7 +30,7 @@
 #include <user_interface.h>
 extern "C" {
 #include "cont.h"
-extern void* umm_last_fail_alloc_addr;   // the core's, a failed alloc's caller
+extern void* umm_last_fail_alloc_addr;   // set by the core to a failed alloc's caller
 }
 
 namespace corium {
@@ -40,7 +40,7 @@ static constexpr uint32_t MAGIC = 0xC0DECB01u;
 static constexpr uint32_t SNAP_WORDS = sizeof(Snapshot) / 4;
 typedef RtcSlot<Snapshot, RtcMap::CRASHDUMP_AT, SNAP_WORDS> Slot;
 
-// boots counted, a dump is only the last one's
+// Boots are counted, so a dump is only used if it came from the boot just before
 struct Boots {
   uint32_t magic;
   uint32_t seq;
@@ -60,7 +60,7 @@ static Snapshot* s_recovered = nullptr;   // crash boots only
 static uint32_t  s_fw_fp = 0;
 static uint32_t  s_seq = 0;
 
-// stack goes off-device, keep code addresses only
+// The stack gets sent off the device, so keep code addresses only
 static bool code_word(uint32_t w) {
   return (w >= 0x40200000u && w < 0x40600000u)    // flash
       || (w >= 0x40100000u && w < 0x40108000u)    // IRAM
@@ -85,7 +85,7 @@ static uint8_t dump_kind(const Snapshot& s, uint8_t chip) {
 }
 
 static void recover(Snapshot& snap, Reset& r) {
-  // a bad RTC word never reads past stack[]
+  // A bad RTC word can't make it read past stack[]
   if (snap.wordCount > STACK_WORDS) snap.wordCount = STACK_WORDS;
   if (!s_recovered) s_recovered = new (std::nothrow) Snapshot(snap);
   r.kind = dump_kind(snap, r.kind);
@@ -121,7 +121,7 @@ const Snapshot* lastCrash() { return s_recovered; }
 extern "C" void custom_crash_callback(struct rst_info* rst_info,
                                       uint32_t stack,
                                       uint32_t stack_end) {
-  corium::AppHooks::onCrash();   // outputs off first, the stack takes up to a second
+  corium::AppHooks::onCrash();   // Outputs off first, printing the stack takes up to a second
   using namespace corium::CrashDump;
   Snapshot snap{};
   snap.magic    = MAGIC;
@@ -142,7 +142,6 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
 
   uint32_t lo = stack;
   uint32_t hi = stack_end;
-  // copy only a stack that sits in DRAM
   if (lo >= DRAM_LO && lo < DRAM_HI && hi > lo && hi <= DRAM_HI) {
     size_t avail = (hi - lo) / 4;
     if (avail > STACK_WORDS) avail = STACK_WORDS;
@@ -152,7 +151,7 @@ extern "C" void custom_crash_callback(struct rst_info* rst_info,
   }
   snap.check = check(snap);
 
-  Slot::write(snap);   // check last, a torn write fails it
+  Slot::write(snap);   // check is written last, so a torn write fails it
 }
 
 #endif

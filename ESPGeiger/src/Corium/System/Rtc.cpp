@@ -30,13 +30,13 @@
 #include "Corium/Util/Attr.h"
 #include "Corium/Util/Words.h"
 
-// DS3231 / DS1307 time from 0x00, PCF8563 / BM8563 from 0x02
+// DS3231 / DS1307 time starts at 0x00, PCF8563 / BM8563 at 0x02
 static const uint8_t DS_ADDR    = 0x68;
 static const uint8_t DS_STATUS  = 0x0F;   // bit 7 OSF, the clock stopped
 static const uint8_t PCF_ADDR   = 0x51;
 static const uint8_t PCF_TIME   = 0x02;   // seconds bit 7 VL, the clock stopped
 static const uint8_t PCF_CLKOUT = 0x0D;
-static const unsigned long WRITE_MS = 24UL * 3600UL * 1000UL;   // its drift, once a day
+static const unsigned long WRITE_MS = 24UL * 3600UL * 1000UL;   // rewritten once a day to take out its drift
 
 enum Chip : uint8_t { NONE, DS, PCF };
 static Chip s_chip = NONE;
@@ -67,18 +67,18 @@ static bool wr(uint8_t addr, uint8_t reg, const uint8_t* buf, uint8_t n) {
   return Wire.endTransmission() == 0;
 }
 
-// not bcd = 0xFF, out of every range below. tens past 9 already are
+// Not bcd = 0xFF, which is out of every range
 static uint8_t bcd(uint8_t b) {
   if ((b & 0x0F) > 9) return 0xFF;
   return (uint8_t)((b >> 4) * 10 + (b & 0x0F));
 }
 static uint8_t to_bcd(uint8_t v) { return (uint8_t)((v / 10) << 4 | (v % 10)); }
 
-// 2000-2199; the chips count a 29 Feb 2100, this doesn't
+// 2000-2199. The chips count a 29 Feb 2100, this doesn't
 static bool leap(uint16_t y) { return (y & 3) == 0 && y != 2100; }
 static const uint16_t BEFORE[13] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
 
-// years from 2000, the month's bit 7 the century; 0 = 20xx as RTClib and Linux write it
+// Years from 2000, the month's bit 7 is the century. 0 = 20xx, as RTClib and Linux write it
 static uint8_t year_of(uint8_t yb, uint8_t mb) {
   uint8_t y = bcd(yb);
   if (y > 99) return 0xFF;
@@ -94,11 +94,11 @@ static time_t epoch_of(uint8_t y, uint8_t mo, uint8_t d, uint8_t h, uint8_t m, u
   for (uint16_t i = 2000; i < 2000 + y; i++) days += leap(i) ? 366 : 365;
   days += BEFORE[mo - 1] + d - 1;
   if (mo > 2 && leap(2000 + y)) days++;
-  uint64_t e = (uint64_t)days * 86400 + h * 3600UL + m * 60UL + s;   // 2106 on is past 32 bits
+  uint64_t e = (uint64_t)days * 86400 + h * 3600UL + m * 60UL + s;   // 2106 onwards is past 32 bits
   return e > corium::Clock::MAX_EPOCH ? 0 : (time_t)e;
 }
 
-// 12 h mode too, writes are always 24
+// Reads 12 h mode too, writes are always 24 h
 static uint8_t ds_hour(uint8_t b) {
   if (!(b & 0x40)) return bcd(b & 0x3F);
   uint8_t h = bcd(b & 0x1F);
@@ -121,7 +121,7 @@ static time_t read_time() {
                   bcd(t[1] & 0x7F), bcd(t[0] & 0x7F));
 }
 
-// a DS1307 has no century bit, to 2099 only
+// A DS1307 has no century bit, so it's good to 2099 only
 CORIUM_NODISCARD static bool write_time(time_t now) {
   struct tm tm;
   gmtime_r(&now, &tm);
@@ -138,7 +138,7 @@ CORIUM_NODISCARD static bool write_time(time_t now) {
   const uint8_t t[7] = {s, m, h, (uint8_t)(tm.tm_wday + 1), d, mo, y};
   uint8_t st = 0;
   if (!wr(DS_ADDR, 0, t, 7) || !rd(DS_ADDR, DS_STATUS, &st, 1)) return false;
-  st &= 0x7F;   // OSF, a DS1307's ram byte there
+  st &= 0x7F;   // clears OSF, on a DS1307 that's just a ram byte
   return wr(DS_ADDR, DS_STATUS, &st, 1);
 }
 
@@ -168,7 +168,7 @@ void RtcModule::begin() {
   else return;
   if (s_chip == PCF) {
     const uint8_t off = 0;
-    wr(PCF_ADDR, PCF_CLKOUT, &off, 1);   // on at power-up
+    wr(PCF_ADDR, PCF_CLKOUT, &off, 1);   // clkout is on at power-up, turn it off
   }
   corium::Log::console(PSTR("RTC: %s found"), corium::Rtc::chip());
   if (!corium::Clock::synced) {
@@ -183,11 +183,11 @@ void RtcModule::begin() {
   corium::Registry::every(this, 60000);
 }
 
-// NTP's or the browser's time into it, then daily; offline the browser is all it gets
+// Writes NTP's or the browser's time, then daily
 void RtcModule::loop(unsigned long now) {
   bool ntp = corium::Clock::source == corium::Clock::NTP;
   if (!ntp && corium::Clock::source != corium::Clock::WEB) return;
-  // NTP after the browser goes in at once
+  // NTP after a browser set goes in straight away
   if (corium::Clock::source == _from && now - _written_at < WRITE_MS) return;
   if (!write_time(time(nullptr))) return;
   if (corium::Clock::source != _from) corium::Log::console(PSTR("RTC: Set from %s"), ntp ? W_NTP : W_BROWSER);

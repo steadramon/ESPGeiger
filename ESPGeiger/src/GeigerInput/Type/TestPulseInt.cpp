@@ -74,7 +74,7 @@ void GeigerTestPulseInt::stopForOTA() { TestTimer::stop(); }
 
 void GeigerTestPulseInt::restartAfterOTA() { TestTimer::start(pulseInterrupt, s_half); }
 
-// returns ticks to the next
+// Returns ticks to the next edge
 uint32_t CORIUM_ISR_ATTR GeigerTestPulseInt::pulseInterrupt() {
   s_high = !s_high;
   corium::FastPin::write(s_tx_mask, s_tx_hi, s_high);
@@ -84,10 +84,10 @@ uint32_t CORIUM_ISR_ATTR GeigerTestPulseInt::pulseInterrupt() {
   return s_half;
 }
 
-// half period in ticks, square wave at the target cps
+// half period in ticks
 double GeigerTestPulseInt::calcPWM() {
   double r = (GEIGER_TEST_TIMER_DIV / GeigerInputTest::getTargetCPS()) / 2;
-  // 0 re-fires nonstop
+  // a 0 would re-fire nonstop
   if (r < _pulse_width_ticks) r = _pulse_width_ticks;
   if (r < 1) r = 1;
   if (r > UINT32_MAX) r = UINT32_MAX;

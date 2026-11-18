@@ -20,18 +20,18 @@
 #define EG_DISPLAYBACKEND_H
 #include <stdint.h>
 
-// One panel family, OLED or LED; Display uses the one that takes the type pref
+// One backend per panel family
 class DisplayBackend {
   public:
     virtual void start() = 0;
     virtual void button(unsigned long now, int8_t dir) = 0;
     virtual void fx(unsigned long now) { button(now, 1); }
-    // page-major, h 0 = round, false = none
+    // Page-major buffer, h 0 means a round display, false if there's none
     virtual bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) = 0;
     virtual void reload() {}
     virtual bool present() { return true; }
     virtual bool takes(uint8_t type) = 0;   // display.type it draws
-    virtual void unchosen() {}              // another backend drew
+    virtual void unchosen() {}              // another backend was picked
 
     virtual void setup_wifi(const char* host) { (void)host; }
     virtual void safe_mode() {}   // starts the panel too

@@ -27,10 +27,10 @@
 #include "Corium/Logger/Logger.h"
 
 #ifndef ESP8266
-  #include <Update.h>   // esp32 needs it
+  #include <Update.h>
 #endif
 
-// esp8266 copies the new image at boot
+// The esp8266 copies the new image over at boot, so it takes longer
 #ifdef ESP8266
 #define FLASH_COUNTDOWN_SECS 20
 #else
@@ -48,7 +48,7 @@ static const char UPDATE_FORM_BODY[] PROGMEM = R"HTML(
 <p id=uf_st style="margin-top:.6em"></p>
 )HTML";
 
-// the full uploader (file check, env match, progress, reload countdown): normal mode, gzipped at /updatejs
+// normal mode script, served gzipped at /updatejs
 #if !EG_GZ_UPDATE_PAGE_JS
 extern const char UPDATE_PAGE_JS[] PROGMEM = R"JS(
 (function(){
@@ -86,7 +86,7 @@ P.value=1;
 var R=x.responseText;
 var n=D.rs;
 function sh(t){S.innerHTML='<b style="color:#0a0"></b><br>'+t;S.firstChild.textContent=R}
-sh('Reloading in '+n+'s...');
+sh('Keep it powered, reloading in '+n+'s...');
 var pa=null,T=setTimeout;
 function pn(){
 if(document.hidden){T(pn,1000);return}
@@ -96,7 +96,7 @@ T(()=>b.abort(),1000);
 fetch('/ping',{cache:'no-store',signal:b.signal}).then(r=>location.href='/').catch(()=>T(pn,500));
 }
 var iv=setInterval(function(){
-if(--n>0)sh('Reloading in '+n+'s...');
+if(--n>0)sh('Keep it powered, reloading in '+n+'s...');
 else{clearInterval(iv);sh('Checking...');pn()}
 },1000);
 }else fl(x.responseText);
@@ -111,19 +111,20 @@ x.send(f);
 )JS";
 #endif
 
-// safe mode: a minimal uploader, inline and self-contained (no /updatejs fetch). The device
-// still gates the image, so dropping the client-side checks here is safe.
+// Safe mode script, sent inline. The device still checks the image
 static const char UPDATE_SAFE_JS[] PROGMEM = R"JS(<script>
 byID('uf_btn').disabled=false;
-byID('uf').onsubmit=function(e){e.preventDefault();var f=byID('uf_file').files[0];if(!f)return;var B=byID('uf_btn'),S=byID('uf_st');B.disabled=true;S.textContent='Uploading '+f.size+' bytes...';var x=new XMLHttpRequest();x.open('POST','/update');x.setRequestHeader('Content-Type','application/octet-stream');x.onload=function(){S.textContent=x.responseText||'Done';if(x.status==200)setTimeout(function(){location.href='/'},3000)};x.onerror=function(){B.disabled=false;S.textContent='Upload failed'};x.send(f)};
+byID('uf').onsubmit=function(e){e.preventDefault();var f=byID('uf_file').files[0];if(!f)return;var B=byID('uf_btn'),S=byID('uf_st');B.disabled=true;S.textContent='Uploading '+f.size+' bytes...';var A=byID('ua'),x=new XMLHttpRequest();x.open('POST','/update'+(A&&A.checked?'?any=1':''));x.setRequestHeader('Content-Type','application/octet-stream');x.onload=function(){S.textContent=x.responseText||'Done';if(x.status==200)setTimeout(function(){location.href='/'},3000)};x.onerror=function(){B.disabled=false;S.textContent='Upload failed'};x.send(f)};
 </script>)JS";
 
-// BUILD_ENV alone matches other variants
-// keep it used, gc-sections drops it
+// BUILD_ENV on its own would match other variants too, so it's wrapped
+// It has to stay used or gc-sections drops it from the bin
 static const char EG_ENV_TAG[] PROGMEM = "<EGENV:" BUILD_ENV ":ENV>";
-// CORIUM_OTA_SAME_ENV: a bin without it is refused
+// with CORIUM_OTA_SAME_ENV a bin without the tag is refused
 #ifdef CORIUM_OTA_SAME_ENV
 #define OTA_OWN ",own:1"
+// Safe mode's way back to an older build, the normal page doesn't offer it
+static const char UPDATE_SAFE_ANY[] PROGMEM = "<p><label><input type=checkbox id=ua> Another build (an older firmware)</label></p>";
 #else
 #define OTA_OWN ""
 #endif
@@ -132,7 +133,10 @@ void corium::WebPortal::hUpdateForm(EGHttpRequest& req, EGHttpResponse& res, voi
   corium::WebPortal::beginPage(res, FPSTR(W_UPDATE));
   res.sendChunk(FPSTR(UPDATE_FORM_BODY));
   if (corium::BootGuard::safeMode()) {
-    res.sendChunk(FPSTR(UPDATE_SAFE_JS));   // minimal inline uploader, no asset fetch
+#ifdef CORIUM_OTA_SAME_ENV
+    res.sendChunk(FPSTR(UPDATE_SAFE_ANY));
+#endif
+    res.sendChunk(FPSTR(UPDATE_SAFE_JS));
   } else {
     sendf(res, PSTR("<script>window._dev={env:\"" BUILD_ENV "\",tag:\"%s\",rs:%u" OTA_OWN "};</script>"
                     "<script src=/updatejs" CORIUM_CACHE_BUST "></script>"),
@@ -150,17 +154,19 @@ void corium::WebPortal::hUpdateJs(EGHttpRequest& req, EGHttpResponse& res, void*
 #endif
 }
 
-// one upload at a time
+// One upload at a time
 static struct {
   size_t expected = 0;
   size_t delivered = 0;
   bool   write_error = false;
-  uint8_t head[8];         // held until entry addr checked
+  uint8_t head[8];         // held until the entry addr is checked
   uint8_t head_n = 0;
   uint8_t tag_n = 0;       // EG_ENV_TAG chars matched so far
-  bool    any = false;     // ?any=1, another env's bin meant
-  bool    started = false; // OTA_FAILED owed
-  PGM_P   why = nullptr;   // for the page
+  bool    any = false;     // ?any=1, another env's bin is meant
+  uint8_t last = 0;        // held back until the checks at the end
+  uint32_t len = 0;        // 8266 only, the length the image itself gives
+  bool    started = false; // OTA_START went out, so OTA_FAILED is owed on a failure
+  PGM_P   why = nullptr;   // reason shown on the page
 } s_ota;
 
 static void ota_fail(PGM_P why) {
@@ -168,18 +174,18 @@ static void ota_fail(PGM_P why) {
   if (s_ota.why) return;
   s_ota.why = why;
 #ifdef ESP8266
-  corium::Wifi::applySleep();   // Update.begin set none
+  corium::Wifi::applySleep();   // Update.begin set WiFi sleep to none, put it back
 #endif
 }
 
-// too big is SPACE on the 8266, SIZE on the esp32
+// Too big is SPACE on the 8266, SIZE on the esp32
 static PGM_P begin_why() {
   uint8_t e = Update.getError();
   if (e == UPDATE_ERROR_SPACE || e == UPDATE_ERROR_SIZE) return PSTR("too big");
 #ifdef ESP8266
   if (e == UPDATE_ERROR_OOM) return W_OOM;
 #else
-  if (e == UPDATE_ERROR_OK) return W_OOM;   // its buffer malloc sets none
+  if (e == UPDATE_ERROR_OK) return W_OOM;   // a failed buffer malloc sets no error
 #endif
   return PSTR("begin failed");
 }
@@ -190,18 +196,19 @@ static void ota_begin(size_t expected) {
   s_ota.write_error = false;
   s_ota.head_n      = 0;
   s_ota.tag_n       = 0;
+  s_ota.len         = 0;
   s_ota.started     = false;
   s_ota.why         = nullptr;
-  // a save's restart would cut it
+  // A restart from a save would cut the upload off
   if (corium::Lifecycle::restartPending()) {
     ota_fail(PSTR("restarting, try again"));
     return;
   }
-  // no length given: free space less one 4 KB sector, sector aligned
+  // with no length given use the free space less one 4 KB sector, sector aligned
   uint32_t room = (corium::DeviceInfo::freeSketch() - 0x1000) & 0xFFFFF000;
   if (!Update.begin(s_ota.expected ? s_ota.expected : room)) {
     corium::Log::console(PSTR("OTA: Update.begin failed (size=%u, free=%u)"),
-                 (unsigned)s_ota.expected, (unsigned)room);
+                         (unsigned)s_ota.expected, (unsigned)room);
     ota_fail(begin_why());
   } else {
     corium::Log::console(PSTR("OTA: Starting (%u bytes)"), (unsigned)s_ota.expected);
@@ -216,17 +223,18 @@ static void ota_failed() {
   corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
 }
 
-// a bin's entry point must sit in this chip's IRAM
+// A bin's entry point must sit in this chip's IRAM
 #ifdef ESP8266
 // esp8266 IRAM
 static constexpr uint32_t ENTRY_LO = 0x40100000UL, ENTRY_HI = 0x40200000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-// S3 IRAM
-static constexpr uint32_t ENTRY_LO = 0x40370000UL, ENTRY_HI = 0x403E0000UL;
+// S3 IRAM, up to below the bootloader's entry (0x403C9700) which a merged bin starts with
+static constexpr uint32_t ENTRY_LO = 0x40370000UL, ENTRY_HI = 0x403C0000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
 static constexpr uint32_t ENTRY_LO = 0x40020000UL, ENTRY_HI = 0x40050000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32C3)
-static constexpr uint32_t ENTRY_LO = 0x40380000UL, ENTRY_HI = 0x403E0000UL;
+// up to below the bootloader's entry (0x403CC710), a merged bin starts with that one
+static constexpr uint32_t ENTRY_LO = 0x40380000UL, ENTRY_HI = 0x403C0000UL;
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
 static constexpr uint32_t ENTRY_LO = 0x40800000UL, ENTRY_HI = 0x40880000UL;
 #else
@@ -238,12 +246,22 @@ static bool ota_entry_ok(uint32_t entry) {
   return entry >= ENTRY_LO && entry < ENTRY_HI;
 }
 
-// every chip's image starts so; the 8266's end() takes gzip too, but its bytes 4-7 never pass the entry check
+// A merged bin is for this chip, but it's the wrong file
+static PGM_P entry_why(uint32_t entry) {
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3)
+  if (entry >= ENTRY_HI && entry < 0x403E0000UL) return PSTR("a merged bin, upload firmware.bin");
+#else
+  (void)entry;
+#endif
+  return PSTR("wrong platform");
+}
+
+// The 8266 end() takes gzip too, but a gzip's bytes 4-7 never pass the entry check
 static constexpr uint8_t IMAGE_MAGIC = 0xE9;
 static const char W_IMAGE[] PROGMEM = "image check failed";
 
 #ifdef CORIUM_OTA_SAME_ENV
-// '<' only starts the tag, a miss goes back to 0 or 1
+// '<' only appears at the start of the tag, so a miss goes back to 0, or 1 on a '<'
 static void ota_scan(const uint8_t* p, size_t len) {
   for (size_t i = 0; i < len && s_ota.tag_n < sizeof(EG_ENV_TAG) - 1; i++) {
     if (p[i] == pgm_read_byte(&EG_ENV_TAG[s_ota.tag_n])) s_ota.tag_n++;
@@ -252,24 +270,42 @@ static void ota_scan(const uint8_t* p, size_t len) {
 }
 #endif
 
+#ifdef ESP8266
+// elf2bin's crcsize_offset holds the whole image's length, a cut file still has it
+static constexpr size_t LEN_AT = 4096 + 16;
+
+static void ota_len_scan(const uint8_t* p, size_t len) {
+  size_t at = s_ota.delivered;
+  if (at + len <= LEN_AT || at >= LEN_AT + 4) return;
+  for (size_t i = 0; i < len; i++, at++)
+    if (at >= LEN_AT && at < LEN_AT + 4) s_ota.len |= (uint32_t)p[i] << (8 * (at - LEN_AT));
+}
+#endif
+
 static bool ota_write(const uint8_t* p, size_t len) {
+  size_t n = len;
 #ifdef CORIUM_OTA_SAME_ENV
   ota_scan(p, len);
 #endif
-  size_t wrote = Update.write((uint8_t*)p, len);
-  if (wrote != len) {
+#ifdef ESP8266
+  ota_len_scan(p, len);
+#endif
+  // A finished update commits even on end(false), so the last byte is held back and a refused bin stays short
+  if (s_ota.delivered + len == s_ota.expected) s_ota.last = p[--n];
+  size_t wrote = n ? Update.write((uint8_t*)p, n) : 0;
+  if (wrote != n) {
     corium::Log::console(PSTR("OTA: Short write %u/%u err=%u"),
-                 (unsigned)wrote, (unsigned)len, Update.getError());
+                         (unsigned)wrote, (unsigned)n, Update.getError());
     ota_fail(PSTR("write failed"));
     return false;
   }
-  s_ota.delivered += wrote;
+  s_ota.delivered += len;
   return true;
 }
 
 static void ota_data(const char* chunk, size_t len) {
   if (s_ota.write_error || !Update.isRunning()) return;   // already failed
-  // check entry_addr first, wrong chip bricks it
+  // Check entry_addr first, a bin for the wrong chip would brick it
   if (s_ota.head_n < sizeof(s_ota.head)) {
     size_t n = sizeof(s_ota.head) - s_ota.head_n;
     if (n > len) n = len;
@@ -280,12 +316,12 @@ static void ota_data(const char* chunk, size_t len) {
     if (s_ota.head_n < sizeof(s_ota.head)) return;
     const uint8_t* h = s_ota.head;
     uint32_t entry = rdLe32(h + 4);   // image header bytes 4-7
-    // what end() would refuse, before a byte is written
+    // refuse what end() would refuse, before a byte is written
     if (h[0] != IMAGE_MAGIC || !ota_entry_ok(entry)) {
       corium::Log::console(PSTR("OTA: REFUSING bin (magic=0x%02x entry=0x%08x)"),
-                   (unsigned)h[0], (unsigned)entry);
+                           (unsigned)h[0], (unsigned)entry);
       Update.end(false);
-      ota_fail(h[0] != IMAGE_MAGIC ? W_IMAGE : PSTR("wrong platform"));
+      ota_fail(h[0] != IMAGE_MAGIC ? W_IMAGE : entry_why(entry));
       return;
     }
     if (!ota_write(h, sizeof(s_ota.head))) return;
@@ -294,16 +330,16 @@ static void ota_data(const char* chunk, size_t len) {
 }
 
 static void ota_end() {
-  // Update.end() is strict, needs full size
+  // Update.end() is strict and needs the full size
   if (s_ota.write_error || !Update.isRunning()) {
     corium::Log::console(PSTR("OTA: Aborting on prior error"));
-    if (Update.isRunning()) Update.end(false);  // discard
+    if (Update.isRunning()) Update.end(false);
     ota_fail(PSTR("not running"));
     return;
   }
   if (s_ota.delivered != s_ota.expected) {
     corium::Log::console(PSTR("OTA: Byte-count mismatch %u != %u"),
-                 (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
+                         (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
     Update.end(false);
     ota_fail(PSTR("size mismatch"));
     return;
@@ -319,10 +355,26 @@ static void ota_end() {
     }
   }
 #endif
+#ifdef ESP8266
+  // The image says it's longer than what came and would still fit, so the file was cut short.
+  // An old core's bin has no length here. No real image ends before LEN_AT + 4 either
+  if (s_ota.expected < LEN_AT + 4 || (s_ota.len > s_ota.expected && s_ota.len <= corium::DeviceInfo::freeSketch())) {
+    corium::Log::console(PSTR("OTA: REFUSING, cut short (%u of %u bytes)"),
+                         (unsigned)s_ota.expected, (unsigned)s_ota.len);
+    Update.end(false);
+    ota_fail(PSTR("file cut short"));
+    return;
+  }
+#endif
+  if (Update.write(&s_ota.last, 1) != 1) {
+    Update.end(false);
+    ota_fail(PSTR("write failed"));
+    return;
+  }
   if (Update.end()) {
     corium::Log::console(PSTR("OTA: Success (%u bytes), restarting"),
-                 (unsigned)s_ota.delivered);
-    // here too, reply may never go out
+                         (unsigned)s_ota.delivered);
+    // restart from here too, the reply may never go out
     corium::WebPortal::requestRestart();
   } else {
     corium::Log::console(PSTR("OTA: End failed err=%u"), Update.getError());
@@ -334,12 +386,12 @@ static void ota_abort() {
   if (Update.isRunning()) Update.end(false);
   ota_fail(PSTR("connection lost"));
   corium::Log::console(PSTR("OTA: Aborted at %u/%u bytes"),
-               (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
+                       (unsigned)s_ota.delivered, (unsigned)s_ota.expected);
 }
 
 bool corium::WebPortal::hUpdateBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                              const char* chunk, size_t len, void*) {
-  // main loop, flash write ok
+  // Runs on the main loop, so flash writes are fine here
   switch (ev) {
     case EGHttpServer::BODY_BEGIN:
 #ifdef CORIUM_OTA_SAME_ENV
@@ -370,7 +422,7 @@ void corium::WebPortal::hUpdateDone(EGHttpRequest& req, EGHttpResponse& res, voi
   corium::WebPortal::requestRestart();
 }
 
-// device-side count, 0 when idle; err after a refused upload
+// Bytes written on the device, total is 0 when idle. err is set after a refused upload
 void corium::WebPortal::hUpdateProgress(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char buf[80];
   snprintf_P(buf, sizeof(buf), PSTR("{\"done\":%u,\"total\":%u,\"err\":\"%s\"}"),

@@ -51,7 +51,6 @@ class EGHttpServer;
 #define OLED_SCL      5
 #endif
 
-// SSD1306, SH1106 and SSD1309 panels over u8g2, a page per button tap
 class SSD1306Display : public corium::Module, public DisplayBackend {
 public:
     enum DisplayType : uint8_t {

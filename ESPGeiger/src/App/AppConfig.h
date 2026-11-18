@@ -31,10 +31,10 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define APP_LOC_MSG "espgeiger-location"   // finder message type
 #define APP_MDNS_SERVICE "geiger"          // _geiger._tcp, the gadget looks for it
 
-// /param tabs, corium::PrefCategory order, 6 chars max
+// Tabs on /param in corium::PrefCategory order, 6 chars max
 #define APP_PARAM_TABS "System", "Input", "Output", "Upload", "Backup"
 
-// favicon and page head, inside a 512 viewBox
+// favicon and page header icon, drawn in a 512 viewBox
 #define APP_ICON_SVG \
   "<circle cx='256' cy='256' r='256' fill='#666'/>" \
   "<circle cx='256' cy='256' r='220' fill='#FB2'/>" \
@@ -46,11 +46,11 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define APP_MODEL ""
 #endif
 
-// improv fw name: the model if it starts "ESPGeiger-", else "ESPGeiger <model>"
+// Improv firmware name is the model if it starts "ESPGeiger-", else "ESPGeiger <model>"
 #define APP_FW_NAME (!APP_MODEL[0] ? THING_NAME : \
   strncmp(APP_MODEL, THING_NAME "-", sizeof(THING_NAME)) == 0 ? APP_MODEL : THING_NAME " " APP_MODEL)
 
-// For builds that only set ESPGEIGER_HW, unless they name their LED
+// Defaults for builds that only set ESPGEIGER_HW. Blip LED on 15 unless the build names its own LED
 #ifdef ESPGEIGER_HW
 #if !defined(GEIGER_BLIPLED) && !defined(LED_SEND_RECEIVE)
 #define GEIGER_BLIPLED 15
@@ -67,17 +67,17 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #error "EG_SERIAL_NMI and ESPG_HV both need EGTimer1"
 #endif
 
-// own pin for the flash, the status LED never flashes counts
+// Blips flash on their own pin, so the status LED never flashes counts
 #ifdef GEIGER_BLIPLED
 #define LED_FLASH_ENGINE
 #define CORIUM_LEDSIGNAL_FLASH 0
 #endif
 
-// one i2c bus for the OLED and env sensors
+// One i2c bus shared by the OLED and env sensors
 #if defined(SSD1306_DISPLAY) || !defined(DISABLE_ENVSENSOR)
 #define I2C_BUS
 #endif
-// a battery clock on the bus: c3/s3, the 8266 and esp32 with -DRTC_CHIP
+// battery backed clock on the bus. On by default for c3/s3, the 8266 and esp32 need -DRTC_CHIP
 #if defined(I2C_BUS) && ((defined(ESP32) && CORIUM_HAS_SLOT_ROOM) || defined(RTC_CHIP))
 #define CORIUM_RTC
 #endif
@@ -103,16 +103,16 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define BUZZER_ENGINE
 #endif
 
-// saved wifi fails or none set: a setup hotspot + web UI, then offline; counting throughout
+// If the saved wifi fails, open the setup hotspot, then run offline
 #define APP_OFFLINE_OK
-// held at boot: the way back from wifi.mode 1 without serial
+// Button held at boot is the way back from wifi.mode 1 without serial
 #ifdef GEIGER_PUSHBUTTON
 #define CORIUM_BOOT_BUTTON
 #endif
-// a 401's body
+// body of a 401 reply
 #define APP_AUTH_HELP "Log in as admin with the web password. Forgotten it? " \
   "https://docs.espgeiger.com/install/setup#locked-out-of-the-web-ui"
-// another env's bin floats or drives the HV pin
+// Refuse another env's bin, it could float or drive the HV pin
 #ifdef ESPG_HV
 #define CORIUM_OTA_SAME_ENV
 #endif
@@ -126,7 +126,7 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define CORIUM_LFB_TAKE
 #endif
 
-// :00 free for the SD CSV flush
+// keep :00 free for the SD CSV flush
 #ifdef GEIGER_SDCARD
 #define CORIUM_SENDSLOT_FIRST 1
 #endif
@@ -134,7 +134,7 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define GEIGER_SDCARD_CS 16
 #endif
 
-// a fault line on the oled till a press, App/Notice.h; sd and hv post
+// One fault line on the OLED until the button is pressed (App/Notice.h). SD and HV post to it
 #if defined(SSD1306_DISPLAY) && !defined(MAX7219_DISPLAY) && defined(GEIGER_PUSHBUTTON) && (defined(GEIGER_SDCARD) || defined(ESPG_HV))
 #define APP_NOTICE
 #endif
@@ -142,7 +142,7 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 // Radmon worst case 376
 #define CORIUM_HTTPPOSTER_URL_MAX 384
 
-// old pref groups and where their keys went, first listed wins; display = OLED builds
+// Old pref groups and where their keys moved to, first listed wins. "display" was on OLED builds only
 #define CORIUM_PREFS_MOVED \
   {"display", "i2c"}, \
   {"env",     "i2c"}, \
@@ -152,11 +152,11 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 // 0.12 config file, read once by the legacy import
 #define CORIUM_PREFS_LEGACY_FILE "/geigerconfig.json"
 
-// fielded devices hold their key here, never change
+// Devices in the field keep their key here, never change it
 #define CORIUM_KEYSTORE_NS    "espg"
 #define CORIUM_KEYSTORE_MAGIC 0x4B475345   // "ESGK"
 
-// export blobs start "ESPG", old exports must import
+// export blobs start "ESPG", old exports must still import
 #define CORIUM_EXPORT_MAGIC     0x11, 0x23, 0xC6
 #define CORIUM_EXPORT_MAGIC_B64 "ESPG"
 #define CORIUM_EXPORT_SEED      0xB11C5EEDu

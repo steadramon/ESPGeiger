@@ -51,7 +51,7 @@ static const char LWT_OFFLINE[] PROGMEM = "Offline";
 static EGMqtt s_mq;
 static bool s_drop_told = false;
 
-// once a boot
+// Logged once a boot
 static void note_dropped() {
   if (s_drop_told || !s_mq.dropped()) return;
   s_drop_told = true;
@@ -63,11 +63,11 @@ CORIUM_REGISTER_FEATURE(mqtt, FEAT_MQTT)
 
 #define MQTT_PUB_YIELD() corium::yieldAfter(10000)
 
-// most each comes out at, cut beyond
+// Max size of each payload, anything longer is cut
 static const size_t STATUS_MAX = 512;
 static const size_t SENSOR_MAX = 384;
 
-// into the outbox, nullptr = no room for max
+// Writes straight into the outbox, nullptr if there's no room for max
 static char* json_begin(const char* topic, size_t max, size_t* cap) {
   size_t room;
   char* p = (char*)s_mq.publish_begin(topic, 1, false, &room);
@@ -112,7 +112,7 @@ static const corium::PrefGroup MQTT_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* MQTT_Client::prefsGroup() { return &MQTT_PREF_GROUP; }
 
-// a server set, as the /param badge
+// On when a server is set, same as the /param badge
 static bool mqtt_on() { return corium::Prefs::groupEnabled(&MQTT_PREF_GROUP); }
 
 size_t MQTT_Client::statusJson(char* buf, size_t cap) {
@@ -140,7 +140,7 @@ MQTT_Client::MQTT_Client()
 {
 }
 
-// the one way out; Offline first, a refused rejoin never says it
+// The only way out. Sends Offline first, a refused rejoin would never say it
 void MQTT_Client::disconnect()
 {
   bool drop = moved();
@@ -148,7 +148,7 @@ void MQTT_Client::disconnect()
 #ifdef MQTTAUTODISCOVER
   char disc[sizeof(_hass_disc)];
   hass_prefix(disc, sizeof(disc));
-  if (strcmp(disc, _hass_disc) != 0) drop = true;   // or old prefix configs
+  if (strcmp(disc, _hass_disc) != 0) drop = true;   // HA prefix changed, its old configs go too
   _hass_next.clear();
   _hass_walk_state = HASS_IDLE;   // a publish walk starts again on connect
 #endif
@@ -164,7 +164,7 @@ void MQTT_Client::onMqttConnect(bool sessionPresent) {
   _reanchor = true;
   _tries = 0;
   _auth_fails = 0;
-  // warn and alert again, a clear may have gone with a restart
+  // Send warn and alert again, a clear may have been lost with a restart
   _pending |= PEND_LWT | PEND_WARN | PEND_ALERT;
 #ifdef MQTTAUTODISCOVER
   this->setupHassCB();
@@ -195,14 +195,14 @@ void MQTT_Client::onMqttDisconnect(int8_t err) {
   bool latched = false;
   if (refused && ++_auth_fails >= MQTT_AUTH_TRIES) {
     _enabled = false;
-    s_mq.stop();   // memory back till the settings change
+    s_mq.stop();   // free the memory until the settings change
     latched = true;
   }
   _tried_ms = now_ms;
   wakeSoon();
   if (latched) corium::Log::console(PSTR("MQTT: Credentials rejected " STR(MQTT_AUTH_TRIES) " times, stopped until settings are saved"));
 #ifdef MQTTAUTODISCOVER
-  if (_hass_walk_state == HASS_REMOVE) rejoin();   // gone mid leave, on to the new settings
+  if (_hass_walk_state == HASS_REMOVE) rejoin();   // dropped while leaving, carry on to the new settings
   else if (_hass_walk_state != HASS_IDLE) _hass_idx = 0;
 #endif
 }
@@ -237,7 +237,7 @@ void MQTT_Client::scheduleHassDiscovery(bool reconnected)
 }
 #endif
 
-// once now - last > interval, on the slot, or now when a whole one behind
+// Fires once now - last > interval and stays on the slot, or restarts from now if a whole interval behind
 static bool fired(unsigned long now, unsigned long& last, uint16_t interval)
 {
   if ((now - last) <= interval) return false;
@@ -266,7 +266,7 @@ void MQTT_Client::second(unsigned long now_s)
   const bool reconnected = _reanchor;
   if (reconnected) {
     _reanchor = false;
-    // ping half a slot after status
+    // Ping half a slot after status
     _status_s = statusSlotAnchor(now_s);
     _ping_s   = _status_s + _status_every + (_status_every / 2) - _ping_every;
   }
@@ -278,7 +278,7 @@ void MQTT_Client::second(unsigned long now_s)
   queueTimedPublishes(now_s);
 }
 
-// once warm, a full CPM bucket
+// Only once warm, with a full CPM bucket
 void MQTT_Client::checkAlarms()
 {
   if (!(_pending & PEND_ALARMS) || !gcounter.is_warm()) return;
@@ -305,11 +305,11 @@ void MQTT_Client::loop(unsigned long now)
   if (_pending & PEND_CONNECT) { _pending &= ~PEND_CONNECT; reconnect(); return; }
   if (!s_mq.connected() || leaving()) return;
   checkAlarms();
-  // one per call, hello then alarms; these stay till the outbox takes them
+  // One publish per call, these stay pending until the outbox takes them
   if (sendHello()) return;
   if (_pending & PEND_WARN)       { if (publishFlag(PSTR("WARN"), _warn_sent))   _pending &= ~PEND_WARN;  return; }
   if (_pending & PEND_ALERT)      { if (publishFlag(PSTR("ALERT"), _alert_sent)) _pending &= ~PEND_ALERT; return; }
-  // no room for status, ping is smaller
+  // if there's no room for status, ping is smaller and can still go
   if ((_pending & PEND_STATUS) && publishStatus()) { _pending &= ~PEND_STATUS; return; }
   if (_pending & PEND_PING)       { _pending &= ~PEND_PING;   publishPing();   return; }
 #ifdef MQTTAUTODISCOVER
@@ -317,7 +317,7 @@ void MQTT_Client::loop(unsigned long now)
 #endif
 }
 
-// only the removals go to the old one; true = this call used
+// While leaving only the removals go, to the old broker
 bool MQTT_Client::leaving()
 {
 #ifdef MQTTAUTODISCOVER
@@ -329,7 +329,7 @@ bool MQTT_Client::leaving()
   return false;
 }
 
-// Online, then the HA subscribe; true = this call used
+// Online, then the HA subscribe
 bool MQTT_Client::sendHello()
 {
   if (_pending & PEND_LWT) {
@@ -362,14 +362,14 @@ bool MQTT_Client::publishStatus()
   size_t cap;
   char* out = json_begin(topic, STATUS_MAX, &cap);
   if (!out) {
-    // counted once, then waits for room
+    // count it as failed once, then wait for room
     if (!_status_late) track(0);
     _status_late = true;
     return false;
   }
   _status_late = false;
   corium::Registry::emit(TOPIC_SENT);
-  // pre-NTP time gives a bad year
+  // Left blank before NTP, the time would give a bad year
   char dateTime[sizeof("2026-01-01T00:00:00Z")];
   dateTime[0] = '\0';
   struct tm t;
@@ -423,7 +423,7 @@ bool MQTT_Client::publishStatus()
   return true;
 }
 
-// ok once the broker acks it, not when queued
+// Counts as ok once the broker acks it, not when it's queued
 void MQTT_Client::track(uint16_t pid)
 {
   if (_ack_pid) noteResult(false);   // the last one never came back
@@ -486,7 +486,6 @@ void MQTT_Client::publishPing()
 {
   if (!publishSensor()) notePublish(false);
 
-  // legacy stat/ topics
   for (corium::MeasureIter it(EGM_OUT_MQTT); it.next(); ) {
     const char* topic = stat_topic(it.row().id);
     char text[24];
@@ -512,7 +511,7 @@ static unsigned long reconnect_backoff_ms(uint8_t attempts)
   return backoff;
 }
 
-// all from s_mq.loop()
+// These are all called from s_mq.loop()
 static void mq_up(void* arg, bool session) {
   static_cast<MQTT_Client*>(arg)->onMqttConnect(session);
 }
@@ -544,24 +543,24 @@ static bool in_backoff(unsigned long last, unsigned long now, uint8_t attempts)
   return last && now - last < backoff;
 }
 
-// as queueTimedPublishes: fires once now - last > interval
+// Same rule as queueTimedPublishes, fires once now - last > interval
 static uint32_t left_s(unsigned long last, uint16_t interval, unsigned long now)
 {
   if ((now - last) > interval) return 1;
   return (uint32_t)(last + interval + 1 - now);
 }
 
-// the timed work, only when a timer is due
+// Only runs when a timer is due
 void MQTT_Client::timers(unsigned long now)
 {
   if (!corium::reachedMax(now, _due_ms, DUE_MAX_MS)) return;
-  // uptime, ms / 1000 wraps at 49.7 d
+  // use uptime, ms / 1000 wraps at 49.7 days
   unsigned long up_s = (unsigned long)corium::DeviceInfo::uptime();
   second(up_s);
   _due_ms = (now / 1000 + nextDue(now, up_s)) * 1000;
 }
 
-// seconds to the first timer that can fire, at least 1
+// Seconds to the next due timer, at least 1
 uint32_t MQTT_Client::nextDue(unsigned long now_ms, unsigned long now_s)
 {
   if (!_enabled) return 3600;   // begin() wakes it
@@ -586,7 +585,7 @@ uint32_t MQTT_Client::nextDue(unsigned long now_ms, unsigned long now_s)
   return s;
 }
 
-// a callback moved a timer, look on the next second
+// A callback moved a timer, check again on the next second
 void MQTT_Client::wakeSoon()
 {
   _due_ms = (corium::fastMillis() / 1000 + 1) * 1000;
@@ -598,7 +597,7 @@ static int mqtt_port()
   return port > 0 ? port : 1883;
 }
 
-// the prefs against what the connection was set up with
+// true if the prefs differ from what the connection was set up with
 bool MQTT_Client::moved()
 {
   if (s_mq.port() != mqtt_port() ||
@@ -608,7 +607,7 @@ bool MQTT_Client::moved()
   return strcmp(lwt, s_mq.willTopic()) != 0;
 }
 
-// no password without a user in 3.1.1
+// MQTT 3.1.1 has no password without a user
 static bool set_credentials()
 {
   const char* user = corium::Prefs::getString("mqtt", EG_K_USER);
@@ -633,7 +632,7 @@ void MQTT_Client::reconnect()
   const char* server = corium::Prefs::getString("mqtt", corium::K_SERVER);
   int port = mqtt_port();
 
-  // every time, picks up a topic change
+  // Set every time so a topic change is picked up
   char lwt[MQTT_TOPIC_LEN];
   buildTopic(lwt, sizeof(lwt), T_TELE, PSTR("lwt"));
   bool set = s_mq.setServer(server, (uint16_t)port) &&
@@ -651,7 +650,7 @@ void MQTT_Client::reconnect()
   corium::Log::console(PSTR("MQTT: Connecting (attempt %d) ... %s:%d"), _tries, server, port);
 }
 
-// both topic prefs: {id} in any case, no trailing /
+// For both topic prefs: {id} in any case is replaced, no trailing /
 static void topic_pref(char* out, size_t sz, const char* pref)
 {
   const char* chipId = corium::DeviceInfo::chipId();
@@ -707,20 +706,20 @@ static const char H_EC_DIAG[]   PROGMEM = "diagnostic";
 #define DC_HUMID  "humidity"
 #define DC_PRES   "atmospheric_pressure"
 
-// row flags, one letter each
+// Row flags, one letter each
 #define HR_STATUS "s"   // tele/status, else tele/sensor
 #define HR_TOTAL  "t"   // total_increasing, else measurement
 #define HR_DIAG   "d"
 #define HR_BIN    "b"   // binary_sensor
 #define HR_OPT    "o"   // only with its measure row
-#define HR_TEXT   "w"   // words, no state_class
+#define HR_TEXT   "w"   // text value, no state_class
 
 // key "" = id, icon after mdi:, prec "" = HA default
 #define HROW(id, key, name, unit, icon, prec, dev, flags) \
   id "\0" key "\0" name "\0" unit "\0" icon "\0" prec "\0" dev "\0" flags "\0"
 enum { F_ID, F_KEY, F_NAME, F_UNIT, F_ICON, F_PREC, F_DEV, F_FLAGS, F_ROW };
 
-// walk order, an empty id ends it
+// In walk order, an empty id ends it
 static const char HASS_ROWS[] PROGMEM =
   // tele/sensor
   HROW("cpm",      "",   "CPM",          "CPM",        "pulse",          "",  DC_NONE,  "")
@@ -775,10 +774,10 @@ static const char H_V_ONE[]   PROGMEM = "1";
 static const char H_V_ZERO[]  PROGMEM = "0";
 
 static const size_t HASS_PATH_LEN = 128;
-// payload, path, MQTT header and id
+// Payload, path, MQTT header and packet id
 static const size_t HASS_PACKET_MAX = MQTT_JSON_BUFFER_SIZE + HASS_PATH_LEN + 16;
 
-// the prefs' prefix, "" = off or blank
+// HA prefix from the prefs, "" if off or blank
 static void hass_prefix(char* out, size_t sz) {
   out[0] = '\0';
   if (corium::Prefs::getBool("mqtt", K_HASS_ENABLED)) topic_pref(out, sz, corium::Prefs::getString("mqtt", K_HASS_TOPIC));
@@ -812,7 +811,7 @@ static const char* hass_key(const char* r) {
   return pgm_read_byte(k) ? k : r;
 }
 
-// the idx-th row HA gets, nullptr past the end
+// nullptr past the end
 static const char* hass_row(uint8_t idx) {
   for (const char* r = HASS_ROWS; pgm_read_byte(r); r = hass_field(r, F_ROW)) {
     if (hass_is(r, *HR_OPT) && !has_row(hass_key(r))) continue;
@@ -825,9 +824,9 @@ static const char* hass_type(const char* r) {
   return hass_is(r, *HR_BIN) ? H_TYPE_BINSENS : H_TYPE_SENSOR;
 }
 
-// kept till the next connect, walks and the save go by it
+// Prefix is kept until the next connect, walks and saves go by it
 void MQTT_Client::setupHassCB() {
-  if (_hass_gone) {   // saved while down, the old prefix's go first
+  if (_hass_gone) {   // saved while down, remove the old prefix's entities first
     _hass_gone = false;
     startHassWalk(HASS_REMOVE);
     return;
@@ -837,7 +836,7 @@ void MQTT_Client::setupHassCB() {
   else _pending &= ~PEND_SUB;
 }
 
-// HA off, nothing to walk
+// Nothing to walk with HA off
 void MQTT_Client::startHassWalk(int8_t dir) {
   if (_hass_walk_state != HASS_IDLE || !_hass_disc[0]) return;
   _hass_walk_state = dir;
@@ -850,7 +849,7 @@ void MQTT_Client::triggerHassDiscovery() {
   unsigned long now_s = (unsigned long)corium::DeviceInfo::uptime();
   if (corium::fresh(now_s, _hass_last_s, MQTT_HASS_MIN_INTERVAL_S)) {
     corium::Log::debug(PSTR("MQTT: HA discovery throttled (%lu s since last)"),
-               now_s - _hass_last_s);
+                       now_s - _hass_last_s);
     return;
   }
   startHassWalk(HASS_PUBLISH);
@@ -894,7 +893,7 @@ static void hass_fields(EGJson& j, const char* r) {
   j.str_begin(H_K_VT);
   j.part(PSTR("{{ value_json."));
   j.part(hass_key(r));
-  // gone = unknown in HA
+  // shows as unknown in HA when the value isn't there
   if (hass_is(r, *HR_OPT)) j.part(PSTR(" | default(None)"));
   j.part(PSTR(" }}"));
   j.str_end();
@@ -941,7 +940,7 @@ static void hass_publish(const char* r, const char* root, const char* disc)
   j.str_end();
   hass_fields(j, r);
   j.map_end();
-  // partial is worse than none; not ended, nothing goes
+  // A partial config is worse than none. Not ended, so nothing is sent
   if (j.overflow) {
     corium::Log::console(PSTR("MQTT: HA discovery too big, not sent: %s"), r);
     return;
@@ -961,7 +960,7 @@ static void hass_remove(const char* r, const char* disc)
 
 void MQTT_Client::stepHassDiscovery() {
   if (_hass_walk_state == HASS_IDLE) return;
-  // wait for acks, a refused one would be a sensor missing in HA
+  // Wait for acks to free room, a refused one would be a sensor missing in HA
   if (s_mq.room() < HASS_PACKET_MAX) return;
   const char* r = hass_row(_hass_idx);
   if (r) {
@@ -973,7 +972,7 @@ void MQTT_Client::stepHassDiscovery() {
     if (_hass_last_s == 0) _hass_last_s = 1;
     _hass_walk_state = HASS_IDLE;
   } else if (!s_mq.queued()) {
-    rejoin();   // all acked, gone from the old prefix
+    rejoin();   // all acked and removed from the old prefix
   }
 }
 #endif
@@ -1012,17 +1011,17 @@ void MQTT_Client::begin()
   s_mq.onAck(mq_ack, this);
   corium::Registry::every(this, LOOP_MS);
   corium::Registry::on(Counter::TOPIC_ALARM, this);
-  _pending |= PEND_ALARMS;   // an alarm already up when turned on
+  _pending |= PEND_ALARMS;   // in case an alarm is already up when it's turned on
 }
 
-// out and back on the new settings
+// Disconnect and start again on the new settings
 void MQTT_Client::rejoin()
 {
   disconnect();
   begin();
 }
 
-// HA off or a new prefix: the old one's entities go first, on the old broker
+// HA off or a new prefix, the old prefix's entities are removed first, on the old broker
 void MQTT_Client::onPrefsSaved()
 {
   _root_ok = false;
@@ -1037,7 +1036,7 @@ void MQTT_Client::onPrefsSaved()
       startHassWalk(HASS_REMOVE);
       return;
     }
-    _hass_gone = gone;   // down, the next connect removes them
+    _hass_gone = gone;   // not connected, the next connect removes them
   }
 #endif
   rejoin();

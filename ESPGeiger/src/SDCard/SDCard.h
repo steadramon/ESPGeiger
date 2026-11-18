@@ -27,11 +27,11 @@
 #include "App/Topics.h"
 #include "Corium/Prefs/Prefs.h"
 
-#define SD_EDGE_MS 50   // past :00, the clock has rolled
+#define SD_EDGE_MS 50   // ms past :00, so the clock has rolled
 
 extern SdFat32* sd;
 
-// A csv row a minute in /YYYYMM/YYYYMMDD.csv, oldest year-old files go when full
+// Logs to /YYYYMM/YYYYMMDD.csv, year-old files are deleted when the card is full
 class SDCard : public corium::Module {
   public:
     SDCard();
@@ -45,16 +45,16 @@ class SDCard : public corium::Module {
     const corium::MenuEntry* menuEntries() override;
     bool deleteOldest(uint32_t cutoff);   // DOS (date<<16)|time
     void pauseWriter();
-    // SdFat not reentrant, closes the day file first
+    // SdFat isn't reentrant, this closes the day file first
     struct Hold {
       Hold();
     };
     void reinit();
-    bool ready() const { return _enabled; }   // writing; a stopped card still reads
+    bool ready() const { return _enabled; }   // writing, a stopped card can still be read
     bool mounted() const { return sd != nullptr; }
     int32_t freeMB() const;   // -1 = counting or a count failed
     bool counting() const { return _counting; }
-    // a card there that won't mount or write, once till it mounts
+    // Card is there but won't mount or write. Sent once until it mounts
     static constexpr uint8_t TOPIC_ERROR = Topic::SD_ERROR;
     bool faulted() const { return _fault; }
   protected:
@@ -65,7 +65,7 @@ class SDCard : public corium::Module {
     void fail_step(const char* step, const char* dir, const char* file);
     bool _fault = false;
     uint8_t _fails = 0;        // failed minutes in a row
-    uint8_t _retry_min = 0;    // off by faults: minutes to the next remount, 0 = none
+    uint8_t _retry_min = 0;    // after faults, minutes to the next remount, 0 = none
     uint32_t _retry_at = 0;    // Uptime::seconds()
     void retry();
     void retry_in(uint8_t min);
@@ -80,7 +80,7 @@ class SDCard : public corium::Module {
     uint8_t _counting = CLEAN_NONE;   // the cleanup it's counting for
     int32_t _free = -1;               // clusters
     bool _undated = false;   // its header written this boot
-    uint32_t _file_size = 0;          // day file's, at the last row
+    uint32_t _file_size = 0;          // day file size at the last row
     uint32_t _fat_sec = 0;            // next FAT sector
     void used_clusters(uint32_t n);
     void minuteEdge();

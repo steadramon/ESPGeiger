@@ -25,12 +25,12 @@
 namespace corium {
 namespace LedSignal {
 
-  // dark till attach(), the pin comes from led.pin
+  // Dark until attach(), the pin comes from led.pin
   static EGLed s_onboard(EGLed::NO_PIN);
-  static int8_t s_pin = -1;   // none in safe mode, prefs never load
+  static int8_t s_pin = -1;   // none in safe mode, the prefs never load
   static bool   s_low = false;
 
-  // the app's, from begin()
+  // App's pattern table, set by begin()
   static const Pattern* s_rows = nullptr;
   static uint8_t s_rows_n = 0;
 
@@ -41,14 +41,14 @@ namespace LedSignal {
   static uint8_t  s_flash_fade     = PulseEngine::FADE_SHIFT_DEFAULT;
 #endif
 
-  // rows go in as is, these sit above them
+  // Row numbers are queued as is, these codes sit above them
   enum : uint8_t { DO_FLASH = 252, DO_ON, DO_OFF, DO_ATTACH };
-  static uint8_t s_todo[8];   // head's release/acquire orders it
+  static uint8_t s_todo[8];   // ordered by the release/acquire on s_head
   std::atomic<uint8_t> s_head{0};   // loop writes
   std::atomic<uint8_t> s_tail{0};   // poll writes
   bool s_busy = false;
 
-  // loop only, full drops it
+  // Loop only, dropped if the queue is full
   // 8 divides 256, so h % 8 holds over the uint8_t wrap
   static void post(uint8_t what) {
     uint8_t h = s_head.load(std::memory_order_relaxed);
@@ -83,7 +83,7 @@ namespace LedSignal {
     s_low = low_active;
   }
 
-  // after the modules, a pin one took stays theirs
+  // Runs after the modules, a pin one of them took stays theirs
   void attach() {
     if (s_pin < 0) return;
     if (const char* why = PinSafety::claimOutput(s_pin, PSTR("LED"))) {
@@ -120,12 +120,12 @@ namespace LedSignal {
 
 #if CORIUM_LEDSIGNAL_FLASH
   void flash() {
-    if (s_pin < 0 || !s_flash_led) return;   // no LED, no flash
+    if (s_pin < 0 || !s_flash_led) return;
     post(DO_FLASH);
   }
 
   void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us, uint8_t fade_shift_idx) {
-    // onboard led, PulseEngine's limits
+    // onboard led uses PulseEngine's limits
     if (fade_shift_idx > PulseEngine::FADE_SHIFT_MAX - PulseEngine::FADE_SHIFT_MIN)
       fade_shift_idx = PulseEngine::FADE_SHIFT_DEFAULT - PulseEngine::FADE_SHIFT_MIN;
     s_flash_pulse_ms = (uint16_t)(clamp((uint32_t)pulse_us, PulseEngine::PULSE_US_MIN,

@@ -45,7 +45,7 @@ static void save() {
   Slot::write(s_state);
 }
 #else
-static RTC_NOINIT_ATTR State s_state;   // garbage after power-on, magic catches it
+static RTC_NOINIT_ATTR State s_state;   // Garbage after power-on, the magic check catches it
 
 static void load() {}
 static void save() {}
@@ -59,19 +59,21 @@ void onBoot() {
   load();
   bool was_safe = s_state.safe;
   Ending end = ending(DeviceInfo::resetReason());
-  if (CrashDump::reset().crash) end = END_CRASH;   // esp8266 abort() looks like a restart
+  // An esp8266 abort() looks like a restart, so go by the dump. A brownout that left a dump stays a brownout
+  if (CrashDump::reset().crash && end != END_BROWNOUT) end = END_CRASH;
   apply(s_state, MAGIC, DeviceInfo::fwFingerprint(), end);
   s_portal = s_state.portal;   // this boot only
   s_state.portal = 0;
   if (s_state.safe) {
     s_entered = !was_safe;
-    s_retry_ms = retryMs(s_state.retries);
-    if (s_state.retries < 255) s_state.retries++;
+    // Counts the times safe mode came back, not each safe boot
+    if (s_entered && s_state.retries < 255) s_state.retries++;
+    s_retry_ms = retryMs(s_state.retries ? s_state.retries - 1 : 0);
   }
   save();
 }
 
-void requestSafe() {
+void scram() {
   s_state.enter = 1;
   save();
 }

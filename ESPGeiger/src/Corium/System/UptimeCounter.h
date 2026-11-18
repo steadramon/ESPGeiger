@@ -23,11 +23,11 @@
 #include <stdint.h>
 
 namespace corium {
-// seconds since boot across the 49.7 day millis() wrap, never value() * 1000
-// uint32_t not unsigned long, a host build's 64 bits never wraps
+// Counts seconds across the millis() wrap
+// uint32_t not unsigned long, since a host build's 64 bit one never wraps
 class UptimeCounter {
 public:
-  uint32_t tick(uint32_t now_ms) {   // at least once per millis wrap
+  uint32_t tick(uint32_t now_ms) {   // At least once per millis wrap
     if (now_ms < _last_ms) _wraps++;
     _acc += now_ms - _last_ms;
     _last_ms = now_ms;
@@ -35,15 +35,15 @@ public:
     return _value;
   }
 
-  // last tick()'s, 0 till the first; tick() has one writer, the rest read this
+  // tick() is the only writer
   uint32_t value() const { return _value; }
 
-  // diagnostic only
+  // Diagnostic only
   uint16_t wraps() const { return _wraps; }
 
 private:
   uint32_t _last_ms = 0;
-  uint32_t _acc     = 0;   // ms not yet counted, always < 1000 after tick()
+  uint32_t _acc     = 0;   // < 1000 after tick()
   uint32_t _value   = 0;
   uint16_t _wraps   = 0;
 };

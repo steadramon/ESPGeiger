@@ -70,19 +70,18 @@ struct AudioCmd {
   uint8_t i1;
   int32_t i32;
   const char* word;   // static, vocab name
-  bool web;           // a route's, one at a time
+  bool web;           // from a web route, only one queued at a time
 };
 
-// any task, false = queue full, no worker, or a route's still waiting
+// Safe from any task
 bool audio_enqueue(const AudioCmd& cmd);
 extern const char AT_QUEUED[];   // the routes' replies, PROGMEM
 extern const char AT_QFULL[];
 void audio_silence(uint16_t ms);
-// speech types go here, on the worker
+// Speech commands are handed to this, on the worker task
 typedef void (*AudioFn)(const AudioCmd& cmd);
 void audio_speech(AudioFn fn);
 
-// A click per count on an I2S amp, and the boot chimes
 class AudioTick : public corium::Module {
   public:
     AudioTick() {}
@@ -97,14 +96,14 @@ class AudioTick : public corium::Module {
 
     void notifyClick(unsigned long now_ms);
 
-    // ticks dropped while owned
+    // Clicks are dropped while something else owns I2S
     static void setI2SOwned(bool owned);
     bool        isI2SUp() const { return _i2s_up; }
     void        dispatch(const struct AudioCmd& cmd);
     static void numbersPad(uint8_t* out, size_t n);
 
     bool muted() const { return _muted.load(std::memory_order_relaxed); }
-    // timer task, posts the loop to log it
+    // Runs on the timer task, loop() gets posted to log it
     void toggleMute() { _muted.store(!muted(), std::memory_order_relaxed); }
 
   private:

@@ -38,7 +38,7 @@ static char s_mac[18]        = "";
 static char s_flash[24]      = "";
 static char s_friendlyname[CORIUM_NAME_MAX + 1] = "";
 
-// sampled once a second, smoothed
+// Sampled once a second, smoothed
 uint32_t corium::DeviceInfo::freeHeap() {
   static uint32_t s_heap = 0;
   static uint32_t s_last_ms = 0;
@@ -56,7 +56,7 @@ static uint32_t s_lfb_low = 0;  // 0 = unset
 #ifdef CORIUM_LFB_TAKE
 static uint32_t s_lfb_win = 0;  // since the last take
 #endif
-static const uint32_t FRAG_MS = 60000;   // 8266 getHeapStats masks ints ~260 us
+static const uint32_t FRAG_MS = 60000;   // once a minute, the 8266 getHeapStats masks interrupts for ~260 us
 
 uint8_t corium::DeviceInfo::heapFrag() {
   static uint8_t s_frag = 0;
@@ -104,12 +104,11 @@ void corium::DeviceInfo::begin() {
              (unsigned long)(id & 0xFFFFFFul));
   s_chip_hash = fnv1a(s_chipid);
 
-  // <THING_NAME>-d5536d
   snprintf_P(s_hostname, sizeof(s_hostname), PSTR(THING_NAME "-%s"), s_chipid);
 
   Chip::flashText(s_flash, sizeof(s_flash));
 
-  // else the MAC can read all FF
+  // Set the mode first, else the MAC can read all FF
   corium::Wifi::staMode(s_hostname);
   strlcpy(s_mac, corium::Wifi::macStr().c_str(), sizeof(s_mac));
 }
@@ -126,16 +125,16 @@ static const char BUILD_DATE[] PROGMEM = __DATE__ " " __TIME__;
 PGM_P corium::DeviceInfo::buildDate()         { return BUILD_DATE; }
 
 void corium::DeviceInfo::factoryReset() {
-  // keeps the key
+  // The device key is kept
   corium::Log::console(W_FACTORY_RESET);
-  // first, a cut after the wipe would restore the old login
+  // Clear this first, else a power cut after the wipe would restore the old login
   if (!corium::KeyStore::clear(WEB_PASS_SLOT)) {
-    corium::Log::console(PSTR("Factory reset: Web password backup kept"));   // the old login comes back
+    corium::Log::console(PSTR("Factory reset: Web password backup kept"));
   }
-  // before the prefs, a cut after them would rejoin the old network wide open
+  // before the prefs, else a power cut after them would rejoin the old network with no login
   corium::Wifi::clearSavedCreds();
   corium::Prefs::resetAll();
-  // kept rows back on flash now
+  // Puts the kept rows back on flash now
   if (!corium::Prefs::commit(false)) corium::Log::console(PSTR("Factory reset: Not saved"));
 }
 

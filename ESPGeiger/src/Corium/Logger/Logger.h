@@ -23,11 +23,11 @@
 #include "Arduino.h"
 #include "App/AppConfig.h"
 
-// web log buffer in bytes, oldest lines drop out
+// Web log buffer in bytes, oldest lines drop out
 #ifndef MAX_LOG_SIZE
 #define MAX_LOG_SIZE 4000
 #endif
-// a number: 0 console, 1 error, 2 info, 3 debug. below it info/debug compile out
+// 0 console, 1 error, 2 info, 3 debug. info/debug compile out when LOG_LEVEL is below them
 #ifndef LOG_LEVEL
 #define LOG_LEVEL    1
 #endif
@@ -38,7 +38,7 @@ public:
   enum LoggingLevels {LOG_LEVEL_CONSOLE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
   // fmt in flash or SRAM
   static void console(const char* fmt, ...);
-  static void vconsole(const char* fmt, va_list ap) { vlog(LOG_LEVEL_CONSOLE, true, fmt, ap); }   // a lib's hook
+  static void vconsole(const char* fmt, va_list ap) { vlog(LOG_LEVEL_CONSOLE, true, fmt, ap); }   // for a lib's log hook
 #if LOG_LEVEL >= 2
   static void info(const char* fmt, ...);
 #else
@@ -49,17 +49,17 @@ public:
 #else
   template <class... A> static void debug(const char*, A...) {}
 #endif
-  static void banner(const char* fmt, ...);  // raw serial, no timestamp
-  // line idx ending '\1', at most cap-1 bytes; 0 if gone
+  static void banner(const char* fmt, ...);  // Raw serial, no timestamp
+  // Copies line idx with its '\1' end, at most cap-1 bytes. 0 if it's gone
   static size_t copyLog(uint32_t idx, char* out, size_t cap);
-  // lines idx..end-1 ending '\n', whole lines in one pass, idx moves on; idx 0 = all, over 255 = none
+  // copies whole lines idx..end-1, idx 0 = all, over 255 = none
   static size_t copySince(uint32_t* idx, uint8_t end, char* out, size_t cap);
   static char getLogIdx();   // idx the next line gets, 1..255
   static void setSerialOn(bool on);
-  // 8266 tick, SYS context: lines go to the ring only, serial owes them; off with some owed runs wake
+  // For the 8266 tick in SYS context. Lines only go to the ring, serial prints them later
   static void hold(bool on);
-  static void flush();   // owed lines out on serial, in order; the console's loop
-  static void (*wake)();   // the console's, a post to its loop
+  static void flush();   // Called from the console's loop
+  static void (*wake)();   // Set by the console, posts to its loop
   static bool serialOn() { return _serial; }
 
 private:

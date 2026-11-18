@@ -43,19 +43,19 @@ static const char DELIM[] = " ";
 
 static void reboot() { corium::DeviceInfo::safeRestart(); }
 static void safe() {
-  corium::BootGuard::requestSafe();
+  corium::BootGuard::scram();
   corium::DeviceInfo::safeRestart();
 }
 
-// setup site reads this
+// The setup site reads this
 static const char VER_LINE[] PROGMEM = THING_NAME " " RELEASE_VERSION " " BUILD_ENV;
 static void ver() {
   corium::Log::console(VER_LINE);
-  // show streaming turns console logging off
+  // show streaming turns console logging off, so print it straight out
   if (!corium::Log::serialOn()) Serial.println(FPSTR(VER_LINE));
 }
 
-// a frozen group said why as it was left out
+// A frozen group already logged why when it was left out
 static bool committed() {
   if (corium::Prefs::commit()) return true;
   char why[CORIUM_PREFS_FROZEN_MAX];
@@ -63,7 +63,7 @@ static bool committed() {
   return false;
 }
 
-// dhcp too, as /erase: an old static ip is lost on the new network
+// Clears the dhcp/static settings too, same as /erase
 static void reset_wifi() {
   corium::Prefs::reset("net");
   if (!corium::Wifi::joinMode() || !committed()) return;
@@ -74,14 +74,14 @@ static void reset_wifi() {
 
 static void reset_net() {
   corium::Log::console(PSTR("Clearing net.* settings and restarting"));
-  // dhcp, all blank
+  // back to dhcp with everything blank
   corium::Prefs::reset("net");
   if (!committed()) return;
   corium::Wifi::dropNetBackup();
   reboot();
 }
 
-static bool s_web = false;   // run(), not the serial line
+static bool s_web = false;   // true while run() has a web command, not the serial line
 
 #ifdef CORIUM_BOOT_BUTTON
 static const char WIFI_BACK[] PROGMEM = "WiFi: Off after restart, undo: set wifi.mode 0 (serial) or button %ds at boot (reset)";
@@ -89,7 +89,7 @@ static const char WIFI_BACK[] PROGMEM = "WiFi: Off after restart, undo: set wifi
 static const char WIFI_BACK[] PROGMEM = "WiFi: Off after restart, undo: set wifi.mode 0";
 #endif
 
-// no button: once off only serial brings it back
+// Without a boot button only serial can turn wifi back on, so the web can't turn it off
 static bool off_refused(bool off, const char* mod) {
 #ifndef CORIUM_BOOT_BUTTON
   if (off && s_web) {
@@ -141,14 +141,13 @@ static void cmd_set() {
   if (!pref_arg(a, PSTR("Usage: set <module>.<key> <value>"))) return;
   const char* mod = a.mod;
   const char* key = a.key;
-  // rest of line, keeps spaces
   char* value = corium::Console::rest();
   if (!value) value = (char*)"";
   while (*value == ' ') value++;
   size_t vlen = strlen(value);
-  // a line never holds CR or LF
+  // only spaces to trim, a line never holds CR or LF
   while (vlen > 0 && value[vlen-1] == ' ') value[--vlen] = '\0';
-  // as /wifisave: the boot reverts a static that fails
+  // Same as /wifisave, the backup lets the boot revert a static IP that fails
   if (!strcmp_P(mod, PSTR("net")) && !corium::Wifi::saveNetBackup()) {
     corium::Log::console(PSTR("Rejected: %s.%s no backup to go back to"), mod, key);
     return;
@@ -167,7 +166,7 @@ static void cmd_set() {
   if (off) corium::Log::console(WIFI_BACK, CORIUM_BOOT_BUTTON_RESET_S);
 }
 
-// back to defaults, never reboots or wipes
+// Back to defaults, never reboots or wipes
 static void cmd_reset() {
   char* arg = corium::Console::next();
   if (!arg) {
@@ -178,9 +177,8 @@ static void cmd_reset() {
   if (dot) *dot = '\0';
   const char* key = dot ? dot + 1 : nullptr;
   bool ok = corium::Prefs::reset(arg, key);
-  // its default again doesn't unfreeze it, a group reset does
+  // Setting one key back to its default doesn't unfreeze it, only a group reset does
   bool stuck = ok && key && !corium::Prefs::loaded(arg, key);
-  // whole word again for the reply
   if (dot) *dot = '.';
   if (!ok) {
     corium::Log::console(PSTR("Rejected: reset %s"), arg);
@@ -195,7 +193,7 @@ static void cmd_reset() {
   if (corium::Prefs::restartPending()) corium::Log::console(corium::H_RBA);
 }
 
-// this boot only, as the button held
+// This boot only, same as holding the button
 static void offline() {
   if (corium::Wifi::offlineNow()) corium::Log::console(PSTR("WiFi: Offline this boot"));
   else corium::Log::console(PSTR("Offline: Boot only (setup portal or WiFi wait)"));
@@ -211,7 +209,6 @@ static const char C_RESET[] PROGMEM = "reset";
 static const char C_VER[] PROGMEM = "ver";
 static const char C_OFFLINE[] PROGMEM = "offline";
 
-// in flash, no RAM copy
 static const corium::Cmd CMDS[] PROGMEM = {
   { C_REBOOT, reboot },
   { C_SAFE, safe },
@@ -238,12 +235,14 @@ char* corium::Console::rest() {
   return _last;
 }
 
-// runs it unless held
-static bool run_row(const corium::Cmd* row, const char* word, bool held) {
+enum : uint8_t { RUN, HELD_BOOT, HELD_SAFE };
+
+static bool run_row(const corium::Cmd* row, const char* word, uint8_t held) {
   corium::Cmd c;
   memcpy_P(&c, row, sizeof(c));
   if (strcmp_P(word, c.name) != 0) return false;
-  if (held) corium::Log::console(PSTR("%s: after boot"), word);
+  if (held == HELD_SAFE) corium::Log::console(PSTR("%s: off in safe mode"), word);
+  else if (held) corium::Log::console(PSTR("%s: after boot"), word);
   else c.fn();
   return true;
 }
@@ -251,11 +250,12 @@ static bool run_row(const corium::Cmd* row, const char* word, bool held) {
 // false = no such command
 bool corium::Console::exec(corium::ConsoleLine& l) {
   char* word = strtok_r(l.buf, DELIM, &_last);
-  // own rows, then the app's, held till their modules are up
+  // App commands are held until their modules are up, and in safe mode
   const uint8_t own = sizeof(CMDS) / sizeof(CMDS[0]);
+  const uint8_t app = !_up ? HELD_BOOT : corium::BootGuard::safeMode() ? HELD_SAFE : RUN;
   bool found = false;
   for (uint8_t i = 0; word && !found && i < own + _count; i++) {
-    found = run_row(i < own ? &CMDS[i] : _cmds[i - own], word, i >= own && !_up);
+    found = run_row(i < own ? &CMDS[i] : _cmds[i - own], word, i >= own ? app : RUN);
   }
   l.buf[0] = '\0';
   l.pos = 0;
@@ -267,12 +267,12 @@ void corium::Console::begin() {
   corium::Log::wake = [] { corium::Registry::post(&console); };
   if (_dropped) corium::Log::console(PSTR("Console: %u command(s) dropped (raise CORIUM_MAX_CMDS)"), _dropped);
 #ifndef DISABLE_SERIALRX
-  corium::Registry::every(this, LOOP_MS);   // else nothing to read
+  corium::Registry::every(this, LOOP_MS);   // only polled when serial rx is built in
 #endif
 }
 
 void corium::Console::loop(unsigned long now) {
-  corium::Log::flush();   // the 8266 tick's lines, posted here
+  corium::Log::flush();   // Lines logged from the 8266 tick get printed here
 #ifndef DISABLE_SERIALRX
   while (Serial.available() > 0) {
     char c = Serial.read();
@@ -285,18 +285,18 @@ void corium::Console::loop(unsigned long now) {
 
 void corium::Console::pollBoot() {
 #ifdef DISABLE_SERIALRX
-  improvSerial.poll();   // rx pin is the app's, improv only
+  improvSerial.poll();   // rx pin belongs to the app, only improv is polled
 #else
-  loop(0);   // improv's bytes first, the rest typed
+  loop(0);   // Improv takes its bytes first, the rest are typed commands
 #endif
 }
 
-// a cut line could still save
+// A cut off line is never run, it could still save something
 static void too_long() {
   corium::Log::console(PSTR("Command too long, max %u chars"), (unsigned)CONSOLE_LINE_MAX);
 }
 
-// set of a P_SENSITIVE pref: where its value starts, else null
+// For a set of a P_SENSITIVE pref returns where the value starts, else null
 static char* secret_at(char* line) {
   const size_t n = sizeof(C_SET) - 1;
   char* s = line;
@@ -316,12 +316,12 @@ static char* secret_at(char* line) {
   return secret ? sp : nullptr;
 }
 
-// isprint, no call
+// same as isprint() without the call
 static bool typed(char c) { return c >= ' ' && c <= '~'; }
 
 static bool line_end(char c) { return c == '\r' || c == '\n'; }
 
-// shares the serial line, a half typed one is dropped
+// Uses the serial line's buffer, so a half typed serial line is dropped
 bool corium::Console::run(const char* text, size_t len) {
   if (!text) return false;
   corium::ConsoleLine& l = _serial;
@@ -337,7 +337,7 @@ bool corium::Console::run(const char* text, size_t len) {
   memcpy(l.buf, text, n);
   l.buf[n] = '\0';
   l.pos = n;
-  // via Log so /cs sees it
+  // Echo it through Log so /cs sees it
   char* secret = secret_at(l.buf);
   if (secret) corium::Log::console(PSTR("> %.*s ***"), (int)(secret - l.buf), l.buf);
   else corium::Log::console(PSTR("> %s"), l.buf);
@@ -366,12 +366,12 @@ void corium::Console::feed(corium::ConsoleLine& l, Print& io, char c) {
     edit(l, io, c);
     return;
   }
-  // CRLF gives an empty line
+  // The LF of a CRLF gives an empty line, which runs nothing
   if (l.pos > 0) io.write("\r\n", 2);
   if (l.overflow) {
     too_long();
     l.overflow = false;
-    l.buf[0] = '\0';   // exec runs nothing, clears
+    l.buf[0] = '\0';   // so exec runs nothing and just clears it
   }
   exec(l);
 }

@@ -21,10 +21,10 @@
 
 namespace {
 
-// byte read, p SRAM or PROGMEM
+// Byte read, works with p in SRAM or PROGMEM
 inline char pat(const char* p, size_t i) { return (char)pgm_read_byte(p + i); }
 
-// c in the class between from and to, a-z ranges and \ escapes
+// Is c in the class between from and to, handles a-z ranges and \ escapes
 bool in_class(const char* p, size_t from, size_t to, char c) {
   for (size_t i = from; i < to; i++) {
     char lo = pat(p, i);
@@ -49,14 +49,14 @@ size_t class_end(const char* p) {
   return i;
 }
 
-// digits at *q, *q left past them
+// reads the digits at *q and leaves *q just past them
 unsigned read_num(const char* p, size_t* q) {
   unsigned n = 0;
   for (; pat(p, *q) >= '0' && pat(p, *q) <= '9'; (*q)++) n = n * 10 + (pat(p, *q) - '0');
   return n;
 }
 
-// + * {m} {m,} {m,n} or nothing, then the end
+// Count is + * {m} {m,} {m,n} or nothing, and has to be the end of the pattern
 bool parse_count(const char* p, size_t q, unsigned* min, unsigned* max) {
   char c = pat(p, q);
   *min = *max = 1;
@@ -77,7 +77,7 @@ bool parse_count(const char* p, size_t q, unsigned* min, unsigned* max) {
   return pat(p, q) == '\0';
 }
 
-// regex chars, never literal
+// Regex chars, never taken as literals
 const char META[] PROGMEM = "^$.|()*+?{}[]\\";
 
 bool literal(char c) {
@@ -88,7 +88,7 @@ bool literal(char c) {
   return true;
 }
 
-// x? takes x when it's there; false once a needed one is missing, *v past what matched
+// Matches the literal prefix, false once a needed char is missing
 bool prefix(const char* p, size_t* i, const char** v) {
   bool ok = true;
   for (; literal(pat(p, *i)); (*i)++) {
@@ -101,7 +101,7 @@ bool prefix(const char* p, size_t* i, const char** v) {
   return ok;
 }
 
-// how many, or -1 at one outside the class
+// how many chars are in the class, or -1 at the first one outside it
 int count_in(const char* p, bool digits, size_t to, const char* v) {
   int n = 0;
   for (; *v; v++, n++) {
@@ -113,7 +113,7 @@ int count_in(const char* p, bool digits, size_t to, const char* v) {
 
 }  // namespace
 
-// no backtracking: x? takes x when it's there
+// No backtracking, an x? takes the x whenever it's there
 int prefPattern(const char* p, const char* value) {
   if (!p) return 1;
   const char* v = value;

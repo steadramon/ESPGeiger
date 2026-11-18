@@ -21,7 +21,7 @@
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Util/Fnv.h"
 
-// two halves, no uint64 shift helper
+// 64 claim bits kept as two halves, so no uint64 shift helper is needed
 static uint32_t s_claimed_lo = 0;
 static uint32_t s_claimed_hi = 0;
 
@@ -42,7 +42,7 @@ static uint8_t orbit_length(uint8_t step60) {
   return 60 / a;
 }
 
-// claims = others count too, else only the app's seconds
+// With claims, seconds other modules took clash too, else only the app's seconds do
 static bool orbit_clashes(uint8_t sec, uint8_t step60, uint8_t orbit_n, bool claims) {
   uint8_t s = sec; if (s >= 60) s -= 60;
   for (uint8_t k = 0; k < orbit_n; k++) {
@@ -52,7 +52,7 @@ static bool orbit_clashes(uint8_t sec, uint8_t step60, uint8_t orbit_n, bool cla
   return false;
 }
 
-// every second of the minute meets all the others anyway, so it only takes its own
+// A full 60 orbit meets all the others anyway, so it only claims its start
 static void orbit_claim(uint8_t sec, uint8_t step60, uint8_t orbit_n) {
   if (orbit_n == 60) orbit_n = 1;
   uint8_t s = sec; if (s >= 60) s -= 60;
@@ -62,7 +62,7 @@ static void orbit_claim(uint8_t sec, uint8_t step60, uint8_t orbit_n) {
   }
 }
 
-// from start round to it again, the first sec whose orbit is clear, 0xFF = none
+// 0xFF = none
 static uint8_t first_clear(uint8_t start, uint8_t avail, uint8_t step60, uint8_t orbit_n, bool claims) {
   uint8_t sec = start;
   do {
@@ -80,9 +80,9 @@ uint32_t corium::SendSlot::initialOffset(const char* mod_name, uint32_t interval
   uint32_t h = fnv1a_P(mod_name, chip);
 
   uint16_t interval_s = interval_ms < 1000 ? 0 : (uint16_t)(interval_ms / 1000);
-  if (interval_s < 2) return interval_ms >> 1;   // under 2s, halfway
+  if (interval_s < 2) return interval_ms >> 1;
 
-  // second 63 at most, the claim bits hold 64
+  // Second 63 at most, the claim bits only hold 64
   uint8_t avail = interval_s > 63 ? 63 : (uint8_t)(interval_s - 1);
   if (avail < CORIUM_SENDSLOT_FIRST) return interval_ms >> 1;
   uint8_t span = (uint8_t)(avail - CORIUM_SENDSLOT_FIRST + 1);
@@ -90,7 +90,7 @@ uint32_t corium::SendSlot::initialOffset(const char* mod_name, uint32_t interval
   uint8_t orbit_n = orbit_length(step60);
 
   uint8_t start = (uint8_t)(CORIUM_SENDSLOT_FIRST + (h % span));
-  // free, else clear of the app's seconds, else the hashed one
+  // Take a free second, else one clear of the app's seconds, else just the hashed one
   uint8_t sec = first_clear(start, avail, step60, orbit_n, true);
   if (sec == 0xFF) sec = first_clear(start, avail, step60, orbit_n, false);
   if (sec == 0xFF) sec = start;
@@ -105,7 +105,7 @@ unsigned long corium::SendSlot::pingFromOffset(uint32_t offset, unsigned long no
   uint32_t until = offset;
   uint32_t secs = interval_ms / 1000;
   if (secs > 0 && corium::Clock::synced) until = untilPhase(offset, corium::Clock::phase(secs) * 1000UL, interval_ms);
-  // one interval back, due in until ms
+  // Set one interval back so the first send is due in until ms
   return now + until - interval_ms;
 }
 

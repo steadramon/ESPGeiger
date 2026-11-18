@@ -33,11 +33,14 @@ bool corium::MeasureRows::idIs(size_t j, const char* id) const {
 
 static corium::MeasureRows s_core;
 static corium::MSource s_input = nullptr;
+static bool s_rows_held = false;
 
 void corium::m_sources(corium::MeasureRows core, corium::MSource input) {
   s_core = core;
   s_input = input;
 }
+
+void corium::m_hold(bool on) { s_rows_held = on; }
 
 static corium::MeasureRows rows_of(corium::MSource f) {
   return f ? f() : corium::MeasureRows();
@@ -66,7 +69,12 @@ bool corium::MeasureIter::next_source() {
   return false;
 }
 
-// Skips other outputs, diag rows, absent, NaN and inf
+static bool flags_skip(uint8_t f, bool diag) {
+  return ((f & corium::M_DIAG) && !diag) || ((f & corium::M_NODIAG) && diag) ||
+         ((f & corium::M_HELD) && s_rows_held);
+}
+
+// skips absent, NaN and inf
 bool corium::MeasureIter::next() {
   for (;;) {
     if (_j >= _src.size()) {
@@ -76,8 +84,7 @@ bool corium::MeasureIter::next() {
     if (_id && !_src.idIs(_j, _id)) { _j++; continue; }
     _row = _src.row(_j++);
     if (!(_row.outputs & _out)) continue;
-    if ((_row.flags & corium::M_DIAG) && !_diag) continue;
-    if ((_row.flags & corium::M_NODIAG) && _diag) continue;
+    if (flags_skip(_row.flags, _diag)) continue;
     if (!_row.read || !_row.read(&_val)) continue;
     if (_row.kind == corium::M_F32 && !isFinite(_val.f)) continue;
     return true;

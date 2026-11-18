@@ -31,14 +31,14 @@ namespace CrashDump {
 
 static Snapshot* s_recovered = nullptr;   // crash boots only
 
-// the resets the panic handler may have written a dump for
+// Resets the panic handler may have written a dump for
 static bool panic_reset(uint8_t kind) {
   return kind == K_EXCEPTION || kind == K_INT_WDT || kind == K_TASK_WDT || kind == K_WDT;
 }
 
 static void from_summary(Snapshot& snap, const esp_core_dump_summary_t& sum) {
 #if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32H2
-  // RISC-V, raw stack bytes not PCs
+  // RISC-V gives raw stack bytes, not PCs
   snap.epc1     = sum.exc_pc;
   snap.exccause = sum.ex_info.mcause;
   snap.excvaddr = sum.ex_info.mtval;
@@ -50,7 +50,7 @@ static void from_summary(Snapshot& snap, const esp_core_dump_summary_t& sum) {
 #else
   snap.exccause = sum.ex_info.exc_cause;
   snap.epc1     = sum.exc_pc;
-  // epcx[n] only good when its bit is set
+  // epcx[n] is only valid when its bit is set
   snap.epc2     = (sum.ex_info.epcx_reg_bits & (1u << 1)) ? sum.ex_info.epcx[1] : 0;
   snap.epc3     = (sum.ex_info.epcx_reg_bits & (1u << 2)) ? sum.ex_info.epcx[2] : 0;
   snap.excvaddr = sum.ex_info.exc_vaddr;
@@ -70,7 +70,7 @@ static void read(Reset& r) {
   }
   esp_core_dump_summary_t sum{};
   if (esp_core_dump_get_summary(&sum) != ESP_OK) return;
-  // Old firmware, wrong ELF
+  // Dump from old firmware, wrong ELF
   char sha[APP_ELF_SHA256_SZ];
   esp_ota_get_app_elf_sha256(sha, sizeof(sha));
   if (strncmp((const char*)sum.app_elf_sha256, sha, sizeof(sha)) != 0) return;
@@ -86,7 +86,7 @@ void begin() {
   size_t at, size;
   if (esp_core_dump_image_get(&at, &size) == ESP_OK) {
     if (panic_reset(r.kind)) read(r);
-    // read or not: left, a later crash would show it as its own
+    // Erase it, if left a later crash would show it as its own
     esp_core_dump_image_erase();
   }
   settle();

@@ -33,37 +33,36 @@ namespace Clock {
   extern int16_t tzOffsetMin;
   void refreshTzOffsetMin();
 
-  // who set it, a later sync from a lower one is ignored by its setter
+  // Who set it. RTC and the browser only set it while nothing has, NTP always does
   enum Source : uint8_t { NONE, KEPT, RTC, WEB, NTP };
   extern Source source;
-  // loop task only, a sync callback posts its module
+  // Loop task only, a sync callback posts its module to call this
   bool onSync(Source s = NTP);   // true when s wasn't the last to set it
-  void set(time_t epoch, Source s);   // NTP sets it itself
-  void kept();   // boot: esp32 keeps time() over a restart
-  void stamp();  // esp32, each second: what kept() checks against
-  void stampNow();   // the setup portal, time() itself
-  void anchor();   // boot: a clock set before Reactor::begin, bootEpoch from its uptime 0
+  void set(time_t epoch, Source s);   // NTP sets the time itself
+  void kept();   // at boot, the esp32 keeps time() over a restart
+  void stamp();  // esp32, each second, writes what kept() checks against
+  void stampNow();   // for the setup portal, stamps time() itself
+  void anchor();   // re-anchors a clock set before Reactor::begin
 
-  // a sync off by more than this tells onStep
+  // A sync off by more than this calls the onStep hook
   static const int32_t STEP_S = 60;
   using StepFn = void (*)(int32_t delta_s);
   void onStep(StepFn fn);
 
-  // a server says the clock is off, resync at most every 5 min
+  // Resync at most every 5 min
   extern bool resync;
   extern unsigned long resyncMs;
   inline void requestResync() { resync = true; }
   bool resyncDue(unsigned long now);
 
-  // 32 bits, wraps in 2106: differences and reached() only,
-  // dates and phases from time()
+  // Wraps in 2106, so only use it for differences and take dates from time()
   inline uint32_t epoch() { return (uint32_t)time(NULL); }
   inline time_t now() { return time(NULL); }   // full width, past 2106 where time_t is 64-bit
 
-  // 2001, below it = never set; checked against time_t
+  // 2001, anything below = never set. Compared against time_t
   static const uint32_t MIN_EPOCH = 1000000000UL;
 
-  // __DATE__ "Nov  3 2026" to its midnight UTC, at compile time; c++11, one return each
+  // __DATE__ to midnight UTC. C++11 constexpr, so one return each
   constexpr int dateNum(char c) { return c == ' ' ? 0 : c - '0'; }
   constexpr int dateMonth(const char* d) {
     return d[0] == 'J' ? (d[1] == 'a' ? 0 : d[2] == 'n' ? 5 : 6) : d[0] == 'F' ? 1 :
@@ -83,13 +82,13 @@ namespace Clock {
 #ifndef CORIUM_BUILT_EPOCH
 #define CORIUM_BUILT_EPOCH corium::Clock::dateEpoch(__DATE__)
 #endif
-  // the build's day: a battery clock or a kept time before it is a flat cell or garbage
+  // The build's day. A battery clock or kept time before it means a flat cell or garbage
   static const time_t BUILT_EPOCH = CORIUM_BUILT_EPOCH;
 
-  // end of 9999, dates stay 4 digits; or what time_t holds (esp32: 2038), never a wrapped date
+  // end of 9999, or what time_t holds (esp32: 2038)
   static const uint64_t MAX_EPOCH = sizeof(time_t) >= 8 ? 253402300799ULL : 2147483647ULL;
 
-  // seconds into a period of wall time, 2^32 s isn't whole periods
+  // seconds into a period of wall time, uses the full time_t since 2^32 s isn't whole periods
   inline uint32_t phase(uint32_t period_s) { return period_s ? (uint32_t)(time(NULL) % period_s) : 0; }
 
   inline bool utcTm(struct tm* out) {

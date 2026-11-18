@@ -17,7 +17,7 @@
 #include "Corium/Module/Module.h"
 #include "Corium/Output/QuietWindow.h"
 
-// Spoken cpm, alerts and klaxons; speak and play calls block on I2S
+// speak and play calls block on I2S
 class Voice : public corium::Module {
   public:
     Voice() {}

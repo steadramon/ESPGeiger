@@ -25,7 +25,7 @@
 namespace corium {
 namespace Fs {
   CORIUM_NODISCARD bool begin();   // first call only, formats after 3 failed mounts
-  void end();     // a new fs image goes under it: nothing more through this mount till reboot
+  void end();     // a new fs image goes under it, nothing more till reboot
   // all mount first and check before touching: esp32 logs a missing file
   File openR(const char* path);   // empty File if not there
   File openW(const char* path);
@@ -34,7 +34,7 @@ namespace Fs {
   CORIUM_NODISCARD bool rename(const char* from, const char* to);
   bool mkdir(const char* path);
   void touch(const char* path);
-  // all of buf or no file: the size read back, a flush lost at close shows there
+  // all of buf or no file, the size read back
   CORIUM_NODISCARD bool writeWhole(const char* path, const void* buf, size_t len);
 
   // flash paths, copied for the call; longer than PATH_P_MAX fails

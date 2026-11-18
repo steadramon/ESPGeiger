@@ -31,7 +31,6 @@
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/System/FastMillis.h"
 
-// Counter on a uart, sends cpm (and maybe cps) lines
 class GeigerSerial final : public GeigerInput
 {
   public:

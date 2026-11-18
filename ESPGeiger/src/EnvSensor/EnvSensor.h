@@ -68,12 +68,12 @@ class EnvSensor : public corium::Module {
     bool    localPresent() const { return _drv_flags != 0 && _st != nullptr; }
     const __FlashStringHelper* chipName() const;
 
-    // local sensor, else UdpRx's; NAN = none
+    // From the local sensor, else UdpRx's. NAN = none
     float tempC() const;      // C, offset applied
     float humidity() const;   // %
     float pressure() const;   // hPa, sea level once an altitude is set
 
-    // UdpRx's /env rows, used with no local sensor
+    // used with no local sensor
     bool remoteFresh() const;
 
   private:

@@ -45,7 +45,7 @@ static const char S413[] PROGMEM = "413 Payload Too Large";
 static const char S501[] PROGMEM = "501 Not Implemented";
 static const char S503[] PROGMEM = "503 Service Unavailable";
 
-// no yield, one write or dropped
+// Canned replies never yield, they go in one write or are dropped
 static const size_t STATUS_MAX = 96;
 static_assert(sizeof(R_HTTP) + sizeof(S503) + sizeof(R_CLOSE) + sizeof(R_RETRY) + 2 * sizeof(CRLF) <= STATUS_MAX,
               "canned reply over STATUS_MAX");
@@ -56,7 +56,7 @@ static size_t put_P(char* buf, size_t n, PGM_P p) {
   return n + l;
 }
 
-// retry_s one digit, 0 = none
+// retry_s is one digit, 0 = no Retry-After
 static size_t canned(char* buf, PGM_P status, uint8_t retry_s) {
   size_t n = put_P(buf, 0, R_HTTP);
   n = put_P(buf, n, status);
@@ -77,7 +77,7 @@ static void write_status(EGTcpClient* c, PGM_P status, uint8_t retry_s = 0) {
   c->write(buf, len);
 }
 
-// main loop only, under the 3.2 s wdt
+// Main loop only, it runs under the 3.2 s wdt
 #ifdef ESP32
   // not vTaskDelay, that sleeps a tick
   #define EGHTTP_BACKPRESSURE_PAUSE() do { taskYIELD(); feedLoopWDT(); } while (0)
@@ -110,7 +110,7 @@ static void emitf(EGHttpServer::LogFn log, PGM_P fmt, ...) {
   va_end(ap);
 }
 
-// a flood of refused requests can't hold the loop on the UART: a line a second, the rest counted
+// At most a line a second, the rest are counted
 static bool s_said = false;
 static uint32_t s_said_ms = 0;
 static uint16_t s_unsaid = 0;
@@ -131,12 +131,12 @@ void EGHttpServer::say(PGM_P fmt, ...) {
   va_end(ap);
 }
 
-// past s->due, wrap safe
+// true once past s->due, wrap safe
 static bool eghttp_late(const EGHttpServer::Slot* s) {
   return (int32_t)(EGClock::now() - s->due) >= 0;
 }
 
-// whole: waits on us now, not the peer, so no idle cut
+// The whole request is in. It's waiting on the server now, not the peer, so no idle timeout
 static void set_ready(EGHttpServer::Slot* s) {
   s->state = EGHttpServer::READY;
   if (s->client) s->client->setIdleTimeout(0);
@@ -157,7 +157,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
   while (sent < len) {
     if (s->send_aborted) return false;
     if (!s->client || !s->client->connected()) return send_fail(s, PSTR("connection lost"), sent, len);
-    // acks a little at a time still hold the loop
+    // Acks that trickle in a little at a time would still hold the loop
     if (eghttp_late(s)) return send_fail(s, PSTR("past deadline"), sent, len);
     size_t can = s->client->space();
     size_t take = (len - sent) < can ? (len - sent) : can;
@@ -189,10 +189,10 @@ static bool yield_write_pgm(EGHttpServer::Slot* s, PGM_P data, size_t len) {
 
 static const size_t TAIL_PART = 512;
 #if EGHTTP_PULL
-static const size_t PULL_STEP = 1024;   // about a segment, 2^n so no divide
+static const size_t PULL_STEP = 1024;   // about one segment, a power of 2 so no divide
 #endif
 
-// n cut to what goes; nullptr = the puller came up short
+// Cuts n to what goes out. nullptr if the puller came up short
 static const char* tail_part(EGHttpServer::Slot* s, char* b, size_t& n) {
 #if EGHTTP_PULL
   if (s->pull) {
@@ -216,7 +216,7 @@ static void tail_sent(EGHttpServer::Slot* s, size_t w) {
   s->tailLen -= w;
 #if EGHTTP_PULL
   if (s->pull) {
-    // a KB out, more time: a big file goes, a trickle is cut
+    // Each KB sent buys more time, so a big file gets through but a trickle is cut
     if (s->pullAt / PULL_STEP != (s->pullAt + w) / PULL_STEP) s->due = EGClock::now() + EGHTTP_SEND_MS;
     s->pullAt += w;
     return;
@@ -225,7 +225,7 @@ static void tail_sent(EGHttpServer::Slot* s, size_t w) {
   s->tail += w;
 }
 
-// what fits now, onSent sends the rest
+// sends what fits now, onSent sends the rest
 static void send_tail(EGHttpServer::Slot* s) {
   while (s->tailLen && s->client) {
     size_t can = s->client->space();
@@ -245,7 +245,7 @@ static void send_tail(EGHttpServer::Slot* s) {
   }
 }
 
-// a cut head has no blank line, send none
+// A cut head would have no blank line, so send nothing
 static inline bool eghttp_head_fits(int n, size_t cap) {
   return n > 0 && (size_t)n < cap;
 }
@@ -264,7 +264,7 @@ static char* eghttp_find_crlf(char* buf, size_t end) {
   return nullptr;
 }
 
-// 0 = incomplete; from = bytes already looked at, an end there was found then
+// 0 = incomplete, from = bytes already looked at
 static size_t eghttp_find_header_end(const char* buf, size_t len, size_t from) {
   for (size_t i = from > 3 ? from : 3; i < len; i++) {
     if (buf[i-3] == '\r' && buf[i-2] == '\n' &&
@@ -277,7 +277,7 @@ static size_t eghttp_find_header_end(const char* buf, size_t len, size_t from) {
 
 // EGHttpServer
 
-static const uint8_t ROUTE_STEP = 16;   // grow by, the cap stays below NO_ROUTE
+static const uint8_t ROUTE_STEP = 16;   // grow by this, the cap stays below NO_ROUTE
 
 bool EGHttpServer::growRoutes() {
   if (_routeCap > NO_ROUTE - ROUTE_STEP) return false;
@@ -347,7 +347,7 @@ void EGHttpServer::setBasicAuth(const __FlashStringHelper* user, const char* pas
 
 void EGHttpServer::begin(uint16_t port) {
   if (_server) return;
-  // give back the growth room
+  // Give back the spare route room
   if (_routeCount && _routeCount < _routeCap) {
     Route* r = (Route*)realloc(_routes, _routeCount * sizeof(Route));
     if (r) {
@@ -369,14 +369,14 @@ void EGHttpServer::begin(uint16_t port) {
   _tickWanted = true;
 }
 
-// no memory at begin(), once a second till it listens
+// If there was no memory to listen at begin(), try once a second until it does
 void EGHttpServer::relisten() {
   if (!_server || _server->listening()) return;
   _tickWanted = true;
   uint32_t now = EGClock::now();
   if ((int32_t)(now - _relistenAt) < 0) return;
   _relistenAt = now + 1000;
-  (void)_server->begin(_server->port());   // listening() says, next tick
+  (void)_server->begin(_server->port());   // listening() tells on the next tick
 }
 
 bool EGHttpServer::hasActiveClients() const {
@@ -408,14 +408,14 @@ static void set_acc(EGHttpServer::Slot* s, char* buf, size_t cap) {
   s->chunkAccCap = buf ? cap : 0;
 }
 
-// query is an offset into buf, it goes with it
+// query is an offset into buf, so it's cleared with it
 static void free_buf(EGHttpServer::Slot* s) {
   free(s->buf);
   s->buf   = nullptr;
   s->query = 0;
 }
 
-// fresh slot, buf kept
+// Fresh slot, keeps buf
 static void clear_slot(EGHttpServer::Slot* s) {
   s->len            = 0;
   s->contentLength  = 0;
@@ -458,7 +458,7 @@ void EGHttpServer::markDone(Slot* s) {
   _tickWanted = true;
 }
 
-// the slot keeps the client till reclaimed
+// The slot keeps the client until tick() reclaims it
 void EGHttpServer::sendStatusAndClose(Slot* s, const char* status, uint8_t retry_s) {
   markDone(s);
   if (!s->client) return;
@@ -469,7 +469,7 @@ void EGHttpServer::sendStatusAndClose(Slot* s, const char* status, uint8_t retry
 void EGHttpServer::resetSlot(Slot* s) {
   free_buf(s);
 #if EGHTTP_PULL
-  // done, cut, gone or the server stopped: once
+  // Called once, whether it finished, was cut, the client went or the server stopped
   if (s->pulled) s->pulled(s->pullCtx);
 #endif
   clear_slot(s);
@@ -479,7 +479,7 @@ void EGHttpServer::resetSlot(Slot* s) {
   delete c;   // closes it if still open
 }
 
-// handler hears it once
+// the handler only hears the abort once
 void EGHttpServer::abortStream(Slot* s) {
   if (s->stream != STREAM_OPEN) return;
   s->stream = STREAM_ABORTED;
@@ -496,7 +496,7 @@ void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
     EGHttpServer* srv = s->srv;
     if (s->state != RECEIVING) return;
     srv->takeData(s, data, len);
-    // still not all in, a trickle
+    // Still not all in by the deadline, it's a trickle so drop it
     if (s->state == RECEIVING && s->stream == NO_STREAM && eghttp_late(s)) srv->drop(s);
     srv->_tickWanted = true;
   }, s);
@@ -518,13 +518,13 @@ void EGHttpServer::onClient(EGTcpClient* c) {
   Slot* s = allocSlot(c);
   if (s) { wireSlotCallbacks(s, c); return; }
 
-  // full, 503 as queueing drops pbufs
+  // No free slot. Send a 503, queueing it would drop pbufs
   write_status(c, S503, 1);
   c->close();
   delete c;
 }
 
-// peer, error or timeout; tick() reclaims
+// Closed by the peer, an error or a timeout. tick() reclaims the slot
 void EGHttpServer::onClosed(Slot* s) {
   s->state    = DONE;
   _tickWanted = true;
@@ -532,7 +532,7 @@ void EGHttpServer::onClosed(Slot* s) {
 
 void EGHttpServer::takeStream(Slot* s, const uint8_t* data, size_t len) {
   if (_streamOwner != s || !_streamBuf) return;
-  // past Content-Length is dropped
+  // anything past Content-Length is dropped
   size_t have = s->bodyAcked + _streamLen;
   size_t room = s->contentLength > have ? s->contentLength - have : 0;
   if (len > room) len = room;
@@ -577,7 +577,7 @@ void EGHttpServer::takeData(Slot* s, const uint8_t* data, size_t len) {
 }
 
 void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
-  // first byte, not accept
+  // Allocated on the first byte, not on accept
   if (!s->buf && ESP.getFreeHeap() >= EGHTTP_HEAP_MIN) s->buf = (char*)malloc(EGHTTP_REQ_BUF);
   if (!s->buf) {
     sendStatusAndClose(s, S503, 1);
@@ -616,10 +616,10 @@ void EGHttpServer::receiveHeaders(Slot* s, const uint8_t* data, size_t len) {
   }
 }
 
-// judged once, before any body: nothing refuses it after
+// Checked once, before any body comes in. Nothing refuses it after this
 void EGHttpServer::beginStream(Slot* s, size_t len) {
   EGHttpRequest req;
-  readRequest(s, req);   // a route matched, the line parsed
+  readRequest(s, req);   // a route matched, so the line parses
   uint16_t no = refusal(s, req);
   if (no == 401) sendUnauthorized(s);
   if (no) {
@@ -630,7 +630,7 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
     sendStatusAndClose(s, S503, 5);
     return;
   }
-  // a small form needs no whole window, takeStream stops at Content-Length
+  // A small form doesn't need a whole window, takeStream stops at Content-Length
   size_t cap = s->contentLength < STREAM_BUF_SIZE ? s->contentLength : STREAM_BUF_SIZE;
   uint8_t* buf = (uint8_t*)malloc(cap ? cap : 1);
   if (!buf) {
@@ -643,7 +643,7 @@ void EGHttpServer::beginStream(Slot* s, size_t len) {
   if (inBuf > s->contentLength) inBuf = s->contentLength;
   if (inBuf) memcpy(buf, s->buf + s->headerEnd, inBuf);
   s->len = s->headerEnd;
-  // an ack inside onData is clamped to 0
+  // an ack inside onData is clamped to 0, so it's owed until the drain
   s->ack_owed = (uint16_t)(len - inBuf);
   _streamBuf    = buf;
   _streamLen    = inBuf;
@@ -661,7 +661,7 @@ void EGHttpServer::releaseStream() {
   _streamOwner = nullptr;
 }
 
-// writes NULs into s->buf
+// Writes NULs into s->buf
 void EGHttpServer::identifyRoute(Slot* s) {
   char* lineEnd = eghttp_find_crlf(s->buf, s->headerEnd);
   if (!lineEnd) return;
@@ -706,27 +706,27 @@ bool EGHttpServer::deliverBodyEvent(Slot* s, BodyEvent ev,
   req._path    = r.path;
   req._body    = nullptr;
   req._bodyLen = s->contentLength;
-  if (s->query) {   // its flags too
+  if (s->query) {   // uploads get the query too, for their flags
     req._query    = s->buf + s->query;
     req._queryLen = strlen(req._query);
   }
   return u->handler(req, ev, chunk, len, u->user);
 }
 
-// reply now, the reply closes it
+// Reply now, the reply closes the connection
 void EGHttpServer::refuseStream(Slot* s) {
   s->stream = STREAM_ENDED;
   set_ready(s);
   releaseStream();
 }
 
-// n handed over: ack it, keep the rest
+// n bytes were handed over, ack those and keep the rest
 void EGHttpServer::streamTaken(Slot* s, size_t n) {
   // a second ackLater() loses bytes
   if (s->client) s->client->ack(n);
   size_t was = s->bodyAcked;
   s->bodyAcked += n;
-  // a window moved, more time
+  // A whole window moved, so give it more time
   if (was / STREAM_BUF_SIZE != s->bodyAcked / STREAM_BUF_SIZE) {
     s->due = EGClock::now() + EGHTTP_REQ_MS;
   }
@@ -738,7 +738,7 @@ void EGHttpServer::streamTaken(Slot* s, size_t n) {
 }
 
 void EGHttpServer::drainStream(Slot* s) {
-  // snapshot, a handler that polls adds more
+  // Take a snapshot, a handler that polls can add more
   bool mine = s->stream != NO_STREAM && _streamOwner == s;
   size_t toDeliver = _streamLen;
   if (!mine || s->stream == STREAM_ENDED) return;
@@ -780,7 +780,7 @@ void EGHttpServer::claimChunkAcc(Slot* s) {
   }
   set_acc(s, _dispatchChunkAcc, EGHTTP_CHUNK_ACC);
 #else
-  // tail only, +1 keeps the body's NUL
+  // only the unused tail of buf, +1 keeps the body's NUL
   size_t reqUsed = s->headerEnd + (s->stream != NO_STREAM ? 0 : s->contentLength) + 1;
   if (s->buf && reqUsed < EGHTTP_REQ_BUF) set_acc(s, s->buf + reqUsed, EGHTTP_REQ_BUF - reqUsed);
   else                                    set_acc(s, nullptr, 0);
@@ -800,7 +800,7 @@ bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
   req._path = path;
 
   req._body    = s->buf + s->headerEnd;
-  // before beginStream too
+  // also called before beginStream, so ask about the upload here
   bool streamed = uploadFor(s->routeIdx) != nullptr;
   req._bodyLen = streamed ? 0 : s->contentLength;
   if (!streamed && s->headerEnd + req._bodyLen < EGHTTP_REQ_BUF) {
@@ -809,26 +809,27 @@ bool EGHttpServer::readRequest(Slot* s, EGHttpRequest& req) {
   return true;
 }
 
-// every byte, no early out on the first wrong one
+// Compares every byte, no early out on the first wrong one
 static bool same_bytes(const char* a, const char* b, size_t n) {
   uint8_t d = 0;
   for (size_t i = 0; i < n; i++) d |= (uint8_t)(a[i] ^ b[i]);
   return d == 0;
 }
 
-// p past "Authorization:"
+// p points just past "Authorization:"
 bool EGHttpServer::authorized(const Slot* s, const char* p) const {
   const char* hend = s->buf + s->headerEnd;
   while (p < hend && (*p == ' ' || *p == '\t')) p++;
   size_t vlen = strlen(_authValue);
-  // the scheme any case, the token exact, then the CR; nothing past the padding
+  // Scheme in any case, the token exact, then the CR. Nothing allowed past the padding
   return (size_t)(hend - p) > 6 + vlen &&
          strncasecmp_P(p, PSTR("Basic "), 6) == 0 &&
          same_bytes(p + 6, _authValue, vlen) &&
          p[6 + vlen] == '\r';
 }
 
-// a guessing run: every server's, the right one refused too till it's over
+// Brake for a run of wrong logins. It's shared by every server, and while it's on
+// even the right password is refused
 static uint8_t s_wrong = 0;
 static bool s_braked = false;
 static uint32_t s_braked_ms = 0;
@@ -839,7 +840,7 @@ void EGHttpServer::setBrake(bool on) {
   s_braked = false;
 }
 
-// no header is the browser's first ask, not a guess
+// no header is just the browser's first try, not a guess
 bool EGHttpServer::loginOk(const Slot* s) const {
   const char* p = eghttp_find_header(s->buf, s->headerEnd, PSTR("Authorization:"));
   if (!p) return false;
@@ -860,7 +861,7 @@ bool EGHttpServer::loginOk(const Slot* s) const {
   return false;
 }
 
-// past the spaces, n = its length to the CR
+// Skips the spaces, n is the value's length up to the CR
 static const char* header_value(const char* p, const char* end, size_t* n) {
   while (p < end && *p == ' ') p++;
   size_t k = 0;
@@ -869,9 +870,9 @@ static const char* header_value(const char* p, const char* end, size_t* n) {
   return p;
 }
 
-// the page's site vs the one asked: scheme off, then host[:port], any case
+// Compares the page's site with the one asked for. Scheme stripped, then host[:port] in any case
 bool EGHttpServer::crossSite(const Slot* s) const {
-  if (strcmp_P(s->buf, M_POST) != 0) return false;   // the line is cut at the method
+  if (strcmp_P(s->buf, M_POST) != 0) return false;   // the request line was cut after the method
   const char* o = eghttp_find_header(s->buf, s->headerEnd, PSTR("Origin:"));
   if (!o) return false;
   const char* h = eghttp_find_header(s->buf, s->headerEnd, PSTR("Host:"));
@@ -883,11 +884,11 @@ bool EGHttpServer::crossSite(const Slot* s) const {
   size_t skip = 0;
   if (on > 7 && strncasecmp_P(o, PSTR("http://"), 7) == 0) skip = 7;
   else if (on > 8 && strncasecmp_P(o, PSTR("https://"), 8) == 0) skip = 8;
-  if (!skip) return true;   // "null", no scheme
+  if (!skip) return true;   // "null" or no scheme
   return on - skip != hn || strncasecmp(o + skip, h, hn) != 0;
 }
 
-// a value arg() can't hold reads as absent, so none get past
+// A value arg() can't hold would read as absent, so refuse any of those
 bool EGHttpServer::argsFit(const Slot* s, const EGHttpRequest& req) const {
   if (!eghttp_form_fits(req._query, req._queryLen, EGHTTP_ARG_MAX + 1)) return false;
   // console text, not a form
@@ -897,7 +898,7 @@ bool EGHttpServer::argsFit(const Slot* s, const EGHttpRequest& req) const {
   return eghttp_form_fits(req._body, req._bodyLen, EGHTTP_ARG_MAX + 1);
 }
 
-// 403, 401, then 400, both paths
+// Checks 403, then 401, then 400. Used for normal requests and uploads
 uint16_t EGHttpServer::refusal(const Slot* s, const EGHttpRequest& req) const {
   if (s_sameOrigin && crossSite(s)) {
     say(PSTR("[EGHttp] POST from another site refused"));
@@ -921,11 +922,11 @@ void EGHttpServer::setAuthHelp(PGM_P text) { _authHelp = text; }
 
 void EGHttpServer::sendUnauthorized(Slot* s) {
   size_t bn = _authHelp ? strlen_P(_authHelp) : 0;
-  char head[sizeof(HEAD_401) + sizeof(_authRealm) + 5 + sizeof(CLOSE_NOSNIFF)];   // 5: the length
+  char head[sizeof(HEAD_401) + sizeof(_authRealm) + 5 + sizeof(CLOSE_NOSNIFF)];   // 5 for the length digits
   int hn = snprintf_P(head, sizeof(head), HEAD_401, _authRealm, (unsigned)bn, CLOSE_NOSNIFF);
   if (!eghttp_head_fits(hn, sizeof(head)) || !s->client) return;
   s->client->write(head, (size_t)hn);
-  // as the head: an upload's is refused where nothing may yield
+  // Plain writes like the head, an upload gets refused from a place where nothing may yield
   for (size_t at = 0; at < bn; at += sizeof(head)) {
     size_t n = bn - at < sizeof(head) ? bn - at : sizeof(head);
     memcpy_P(head, _authHelp + at, n);
@@ -949,7 +950,7 @@ void EGHttpServer::dispatch(Slot* s) {
   }
   if (!readRequest(s, req)) return;
 
-  // an upload's was at beginStream
+  // an upload was already checked in beginStream
   uint16_t no = s->stream == NO_STREAM ? refusal(s, req) : 0;
   if (no == 401) {
     sendUnauthorized(s);
@@ -978,14 +979,14 @@ void EGHttpServer::dispatch(Slot* s) {
 void EGHttpServer::dropChunkAcc(Slot* s) {
   set_acc(s, nullptr, 0);
 #ifdef ESP32
-  // per response, not held idle
+  // Freed after each response, not held while idle
   free(_dispatchChunkAcc);
   _dispatchChunkAcc = nullptr;
 #endif
 }
 
 void EGHttpServer::tick() {
-  // a silent upload still meets its deadline
+  // Runs while an upload is open, so a silent one still hits its deadline
   if (!_tickWanted && !_streamOwner) return;
   _tickWanted = false;
   relisten();
@@ -999,7 +1000,7 @@ void EGHttpServer::tick() {
     if (s.state == RECEIVING && s.stream != NO_STREAM) drainStream(&s);
     if (s.state != READY) continue;
     respond(&s);
-    // a few replies a tick, a slow reader holds the loop once each
+    // only a few replies a tick, each slow reader holds the loop once
     if (++replies >= EGHTTP_REPLIES_A_TICK) { _tickWanted = true; break; }
   }
 }
@@ -1008,7 +1009,7 @@ void EGHttpServer::reclaimSlot(Slot* s) {
   if (s->stream == STREAM_OPEN && _streamOwner == s && _streamLen > 0) {
     drainStream(s);
   }
-  // whole body came, handler frees
+  // The whole body came, reply anyway so the handler frees it
   if (s->stream == STREAM_ENDED && !s->responded) respond(s);
   abortStream(s);
   if (_streamOwner == s) releaseStream();
@@ -1024,13 +1025,13 @@ void EGHttpServer::respond(Slot* s) {
     finish(s);
     return;
   }
-  // body goes as acks come, the request isn't needed
+  // The body goes out as acks come in, the request isn't needed any more
   free_buf(s);
-  s->client->setIdleTimeout(EGHTTP_REQ_MS);   // a reader that stops still goes
+  s->client->setIdleTimeout(EGHTTP_REQ_MS);   // a reader that stops reading still gets dropped
 }
 
 void EGHttpServer::finish(Slot* s) {
-  // a cut reply, nothing left worth a linger
+  // A cut reply has nothing worth lingering for
   if (s->send_aborted) {
     drop(s);
     return;
@@ -1157,7 +1158,7 @@ static int eghttp_head(char (&head)[HEAD_MAX], uint16_t status, PGM_P ct, PGM_P 
   return eghttp_head_fits(n, sizeof(head)) ? n : 0;
 }
 
-// RAM only, F() has its own
+// RAM body only, F() has its own overload
 void EGHttpResponse::send(uint16_t status, const __FlashStringHelper* contentType, const char* body) {
   if (!_slot || _started || _done) return;
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
@@ -1222,7 +1223,7 @@ void EGHttpResponse::writeHeadAndBodyP(const char* head, size_t headLen,
   auto* s = static_cast<EGHttpServer::Slot*>(_slot);
   _started = true;
   _done    = true;
-  // first write, the head fits; MORE keeps it with the body
+  // First write so the head fits, MORE keeps it with the body
   uint8_t f = bodyLen ? EGTcpClient::COPY | EGTcpClient::MORE : EGTcpClient::COPY;
   if (!s->client || s->client->write(head, headLen, f) < headLen) {
     s->send_aborted = true;

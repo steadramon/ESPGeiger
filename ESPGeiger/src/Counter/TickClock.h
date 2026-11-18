@@ -22,14 +22,14 @@
 
 #include <stdint.h>
 
-// time() once a minute and on the boundary, +1 a tick between;
-// an ntp step lands within the minute
+// Reads time() once a minute and on the boundary, adds 1 each tick in between.
+// An NTP step shows up within the minute
 struct TickClock {
   static constexpr uint8_t READ_EVERY = 60;
   uint32_t now = 0;
-  uint8_t  left = 0;   // ticks counted before the next read, 0 = read
+  uint8_t  left = 0;   // 0 = read time() next
 
-  // false = read due
+  // Returns false when a read is due
   bool count() {
     if (!left) return false;
     left--;

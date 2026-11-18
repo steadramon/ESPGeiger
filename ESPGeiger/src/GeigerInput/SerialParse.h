@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Host tested: no Counter, Prefs or OutputVars
-// Untrusted wire input, every bound matters: it goes on into the counter
+// Host tested, so no Counter, Prefs or OutputVars here.
+// The input is untrusted wire data and it goes into the counter
 
 #ifndef GEIGER_SERIAL_PARSE_H
 #define GEIGER_SERIAL_PARSE_H
@@ -27,7 +27,7 @@
 
 namespace SerialFormat {
 
-// Over this the line is dropped, not clamped: no reading beats a garbled one
+// over this the line is dropped, not clamped
 static const int SERIAL_MAX_COUNT = 10000 * 60;   // cpm, a GM tube tops out near 10k cps
 
 // Printable plus CR/LF, before any parser

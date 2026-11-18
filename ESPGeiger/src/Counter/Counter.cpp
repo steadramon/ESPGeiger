@@ -48,8 +48,8 @@ constexpr uint32_t RTC_STASH_S     = 30;
 constexpr uint32_t LIFETIME_SAVE_S = 6 * 3600;
 constexpr uint16_t PULSE_RING_SIZE = 256;
 constexpr uint16_t PULSE_RING_MASK = PULSE_RING_SIZE - 1;
-constexpr uint32_t PULSE_AGE_MAX_US = 70UL * 60UL * 1000000UL;   // under the 71.6 min wrap
-// CPM_60S and CPM_FAST: max age or max pulses, first hit wins
+constexpr uint32_t PULSE_AGE_MAX_US = 70UL * 60UL * 1000000UL;   // under the 71.6 min micros() wrap
+// CPM_60S and CPM_FAST stop at max age or max pulses, whichever comes first
 constexpr uint32_t FIXED_US = 60UL * 1000000UL;
 constexpr uint16_t FIXED_N  = 64;
 constexpr uint32_t FAST_US  = 5UL * 1000000UL;
@@ -62,11 +62,11 @@ volatile uint16_t  s_pulse_head   = 0;
 volatile uint16_t  s_pulse_count  = 0;
 volatile uint32_t  s_min_pulse_us = UINT32_MAX;
 volatile uint32_t  s_prev_pulse_us = 0;
-// isr owns the histogram once set
+// Set once the ISR fills the histogram, loop() leaves it alone after that
 volatile bool      s_hist_from_isr = false;
 corium::IsrLock::Mux s_pulse_mux;
 
-// zeros first, then the ISR sees it under the lock
+// Zeroed by calloc before the ISR can see it, swapped in under the lock
 void ensure_pulse_ring() {
   if (s_pulse_ring) return;
   volatile uint32_t* r = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
@@ -81,7 +81,7 @@ void ensure_pulse_ring() {
   corium::IsrLock::leave(s_pulse_mux);
 }
 
-// as a boot in bucket mode; the ISR takes it under the lock
+// Same as a boot in bucket mode. Pointer cleared under the lock so the ISR can't write to it once freed
 void drop_pulse_ring() {
   if (!s_pulse_ring) return;
   corium::IsrLock::enter(s_pulse_mux);
@@ -93,12 +93,11 @@ void drop_pulse_ring() {
   free((void*)r);
 }
 
-// past the 32 bit wrap
+// full count including the 32 bit rollovers
 inline uint64_t all_clicks(unsigned long rollover, unsigned long clicks) {
   return ((uint64_t)rollover << 32) + clicks;
 }
 
-// lo += n, carry into hi
 inline __attribute__((always_inline)) void add_wrapped(unsigned long& lo, unsigned long& hi, unsigned long n) {
   unsigned long prev = lo;
   lo += n;
@@ -123,7 +122,7 @@ GeigerUdpRx* Counter::udp_rx() { return static_cast<GeigerUdpRx*>(_input); }
 #endif
 
 uint16_t Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
-  // synthetic, no min_pulse_us; evenly spaced, last one at end_us
+  // synthetic timestamps, so min_pulse_us is left alone
   if (!s_pulse_ring || count == 0) return 0;
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
@@ -150,7 +149,7 @@ void Counter::drop_pulses(uint32_t n) {
 
 uint32_t Counter::_pulse_hist[Counter::HIST_BUCKETS] = {0};
 
-// hist and min under the ring's lock, the pages copy them under it
+// histogram and min interval are updated under the ring's lock too
 void CORIUM_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
   corium::IsrLock::enterIsr(s_pulse_mux);
   if (s_prev_pulse_us) {
@@ -174,7 +173,7 @@ void Counter::pulse_histogram(uint32_t* out) const {
   corium::IsrLock::leave(s_pulse_mux);
 }
 
-// under the lock; looked at each second, an age never reaches the us wrap
+// Caller holds the lock. Runs every second so an age never gets near the micros() wrap
 static uint16_t drop_old(uint16_t head, uint32_t now_us) {
   uint16_t count = s_pulse_count;
   while (count && now_us - s_pulse_ring[(head - count) & PULSE_RING_MASK] > PULSE_AGE_MAX_US) count--;
@@ -182,7 +181,7 @@ static uint16_t drop_old(uint16_t head, uint32_t now_us) {
   return count;
 }
 
-// the ISR still fills it when no mode reads it each second
+// The ISR keeps filling the ring even when the mode isn't reading it, so trim it here
 static void prune_ring() {
   if (!s_pulse_ring) return;
   corium::IsrLock::enter(s_pulse_mux);
@@ -199,7 +198,7 @@ bool Counter::snapshot_ring(RingSnapshot& s) const {
   if (count >= 2) {
     s.newest_us = s_pulse_ring[(head - 1)     & PULSE_RING_MASK];
     s.oldest_us = s_pulse_ring[(head - count) & PULSE_RING_MASK];
-    // quiet longer than the ring spans, no rate now
+    // quiet for longer than the ring covers, so no live rate
     if (now - s.newest_us > s.newest_us - s.oldest_us) count = 0;
   }
   corium::IsrLock::leave(s_pulse_mux);
@@ -208,16 +207,17 @@ bool Counter::snapshot_ring(RingSnapshot& s) const {
   return count >= 2;
 }
 
-// RTC stash, survives a crash not a power cut; the totals, a boot takes the bigger
+// Lifetime totals kept in RTC memory. Survives a crash or reset but not a power cut,
+// on boot the bigger of RTC and the saved file wins.
 namespace {
 constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11F;  // bump on layout change
-// magic ^ the rest, a flipped bit anywhere fails it
+// Magic is XORed with the other fields so a flipped bit anywhere fails the check
 struct LifeRtc { uint32_t magic; uint32_t clicks; uint32_t rollover; uint32_t secs; };
 
 CORIUM_RTC_SLOT(LifeSlot, LifeRtc, corium::RtcMap::APP1_AT, corium::RtcMap::APP1_WORDS);
 bool life_read(LifeRtc& r) { return LifeSlot::read(r); }
 void life_write(const LifeRtc& r) { LifeSlot::write(r); }
-// all zero never checks, magic 0 alone can
+// All zeros can never pass the check, zeroing just the magic could
 void life_clear() { life_write(LifeRtc{}); }
 
 void rtc_life_stash(uint32_t clicks, uint32_t rollover, uint32_t secs) {
@@ -234,7 +234,7 @@ Counter::Counter() {
 
 namespace {
 bool     s_missing = false;   // test input never sets it
-uint32_t s_next_boundary  = 0;   // epoch, past 2106 too
+uint32_t s_next_boundary  = 0;   // epoch, reached() copes with the 2106 wrap
 TickClock s_clock;
 bool     s_boundary_armed = false;
 uint32_t s_last_day       = 0;
@@ -242,9 +242,15 @@ uint8_t  s_life_left      = RTC_STASH_S;
 uint32_t s_save_s         = 0;
 }  // namespace
 
+// counting starts with the reactor, 0 before that
+static inline uint32_t run_from(uint32_t up) {
+  long s = corium::Uptime::start;
+  return s > 0 ? up - (uint32_t)(s - 1) : 0;
+}
+
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
-CORIUM_TICK_COLD void Counter::note_counts_missing(uint32_t uptime_s) {
-  bool missing = CounterMaths::counts_missing(uptime_s, _last_count_up_s,
+CORIUM_TICK_COLD void Counter::note_counts_missing(uint32_t run) {
+  bool missing = CounterMaths::counts_missing(run, _last_count_up_s,
                                               all_clicks(total_clicks_rollover, total_clicks));
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   missing = missing && !udp_rx()->heard();
@@ -264,19 +270,19 @@ static uint32_t next_boundary(time_t t, uint32_t secs) {
   return (uint32_t)(t - t % secs + secs);
 }
 
-// t for the hour and day, 2^32 s isn't whole ones
+// Hour and day maths use the full time_t, 2^32 s isn't a whole number of days
 CORIUM_TICK_COLD void Counter::hour_rollover(time_t t) {
-  // not static, guard runs every tick
+  // Plain local, a static would add an init guard check every tick
   const uint32_t step = _boundary_s;
   uint32_t now = (uint32_t)t;
   bool fire = false;
   if (s_next_boundary == 0) {
-    // first sync
+    // First sync, line up and fire once
     s_next_boundary = next_boundary(t, step);
     fire = true;
   } else if (corium::reached(now, s_next_boundary)) {
     fire = true;
-    // ntp stepped forward
+    // catch up if NTP stepped forward
     while (corium::reached(now, s_next_boundary)) s_next_boundary += step;
   }
   if (!fire) return;
@@ -293,12 +299,12 @@ CORIUM_TICK_COLD void Counter::hour_rollover(time_t t) {
   s_boundary_armed = true;
 }
 
-// time(), the hour and the first sync stamps, on read ticks
+// only on the ticks that read the clock
 CORIUM_TICK_COLD uint32_t Counter::clock_read() {
   time_t t = corium::Clock::now();
   uint32_t now = (uint32_t)t;
   if (!s_next_boundary || corium::reached(now, s_next_boundary)) hour_rollover(t);
-  // none yet, or ntp says it's ahead of now; a browser or rtc never moves one
+  // Only NTP can pull the first boot stamp back, browser or RTC time can't
   bool ahead = corium::Clock::source == corium::Clock::NTP && !corium::reached(now, _first_boot_ts);
   if (_lifetime_enabled && (!_first_boot_ts || ahead)) {
     _first_boot_ts = now;
@@ -313,7 +319,7 @@ inline void Counter::lifetime_tick(int counts) {
   if (!--s_life_left) life_work();
 }
 
-// counted time, no clock: the rtc stash every 30 s, the save every 6 h
+// Lifetime seconds are counted ticks, not taken from the clock
 CORIUM_TICK_COLD void Counter::life_work() {
   s_life_left = RTC_STASH_S;
   _life_saved_s += RTC_STASH_S;
@@ -325,7 +331,7 @@ CORIUM_TICK_COLD void Counter::life_work() {
   }
 }
 
-// the counts moved or the mode reads live
+// When the counts changed, or the mode reads the live ring
 CORIUM_TICK_COLD void Counter::cpm_work(bool fresh) {
   if (fresh) _cached_cps = apply_dead_time(window_mean(_cps_in.sum, _cps_in.n, _cpm_window, _cpm_window_inv));
   _cached_cpm_active = (_cpm_mode == CPM_BUCKET ? _cached_cps : get_cps()) * 60.0f;
@@ -337,7 +343,7 @@ CORIUM_TICK_COLD void Counter::ema_work(bool add15) {
   if (add15) _ticks15.add(_ticks5.get());
 }
 
-// true on a 5 s step
+// Returns true on each 5 s step
 inline bool Counter::ema_tick() {
   static uint8_t s_tick = 0;
   bool add5 = s_tick == 0 || s_tick == EMA5_S || s_tick == 2 * EMA5_S;
@@ -366,26 +372,27 @@ void CORIUM_TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
   in->secondTicker();
 
   int counts = clamp_counts(in->collect());
-  if (counts > 0) _last_count_up_s = uptime_s;
+  uint32_t run = run_from(uptime_s);
+  if (counts > 0) _last_count_up_s = run;
   _ticks.add(counts);
   add_wrapped(total_clicks, total_clicks_rollover, counts);
-  _sec_counts += counts;   // the hour and day take them after the clock
+  _sec_counts += counts;   // added to hour and day after the clock check
   if (_lifetime_enabled) lifetime_tick(counts);
 
-  // the rest from the loop
-  _second_up = uptime_s;
-  // ota holds the loop: the tick does it, the history stays live
+  // rest of the work is done from the loop
+  _second_up = run;
+  // OTA holds the loop, so do it here and keep the history going
   if (_ota) { second_work(); return; }
   if (_secs_due < 255) _secs_due++;
   _pending_work |= PENDING_SECOND;
 }
 
 void Counter::second_work() {
-  uint32_t uptime_s = _second_up;
+  uint32_t run = _second_up;
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
-  if (uptime_s - _last_count_up_s >= MISSING_MIN_S || s_missing) note_counts_missing(uptime_s);
+  if (run - _last_count_up_s >= MISSING_MIN_S || s_missing) note_counts_missing(run);
 #endif
-  // same counts, same cps
+  // skip the maths if the counts haven't changed
   bool fresh = !_cps_in.same(_ticks.sum(), _ticks.count(), _dead_time_us);
   if (fresh || _cpm_mode != CPM_BUCKET) cpm_work(fresh);
   int ccpm = _cached_ccpm;
@@ -395,7 +402,6 @@ void Counter::second_work() {
   bool add5 = ema_tick();
   if (cpm5_history) push_cpm5(add5);
 
-  // the hour, the first boot stamp
   if (corium::Clock::synced && !s_clock.count()) (void)clock_read();
   clicks_today += _sec_counts;
   clicks_hour += _sec_counts;
@@ -406,7 +412,7 @@ void Counter::second_work() {
   _pending_work |= PENDING_COUNTS;
 }
 
-// health bits 0-3, HV keeps its own
+// Health bits 0-3, HV has its own
 CORIUM_TICK_COLD void Counter::note_health() {
   health().put(H_COUNTER, (uint16_t)(s_missing << H_SILENT |
                                      _input->stormy() << H_STORM |
@@ -414,7 +420,7 @@ CORIUM_TICK_COLD void Counter::note_health() {
                                      !_input->isHealthy() << H_NO_INPUT));
 }
 
-// the sounders and the relay sleep, the state stays
+// Snooze quiets the sounders and relay, the warning/alert state is kept
 void Counter::reset_alarm() {
   if (_alarm_snoozed || (!_warn_on && !_alert_on)) return;
   _alarm_snoozed = true;
@@ -422,13 +428,13 @@ void Counter::reset_alarm() {
   corium::Log::console(PSTR("Alarm: Snoozed until level drops below warning"));
 }
 
-// true = on flash; the stash has the totals either way
+// If this fails the RTC stash still has the totals
 bool Counter::save_lifetime() {
   bool put = corium::Prefs::putUInt("life", EG_K_CLK, total_clicks_lifetime) &&
              corium::Prefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover) &&
              corium::Prefs::putUInt("life", EG_K_FBT, _first_boot_ts) &&
              corium::Prefs::putUInt("life", EG_K_SECS, _life_saved_s);
-  (void)corium::Prefs::commit();   // false for any group, landed() says for life
+  (void)corium::Prefs::commit();   // false if any group failed, landed() checks just life
   if (put && corium::Prefs::landed("life")) return true;
   corium::Log::console(PSTR("Lifetime: Not saved"));
   return false;
@@ -439,12 +445,12 @@ unsigned long Counter::get_lifetime_seconds() const {
 }
 
 void Counter::clock_stepped(int32_t delta_s) {
-  // stamped from the bad time this boot
+  // First boot stamp was taken from the wrong time this boot, move it too
   if (_first_boot_ts && corium::reached(_first_boot_ts, (uint32_t)(corium::Clock::bootEpoch - delta_s))) {
     _first_boot_ts += delta_s;
     _pending_work |= PENDING_SAVE;
   }
-  // same hour, no early bar
+  // Only re-align if the step changed the hour, else it pushes an early hour bar
   if (s_next_boundary != next_boundary(corium::Clock::now(), _boundary_s)) s_next_boundary = 0;
   s_clock.read_next();
 }
@@ -452,8 +458,8 @@ void Counter::clock_stepped(int32_t delta_s) {
 bool Counter::reset_lifetime() {
   total_clicks_lifetime = 0;
   total_clicks_lifetime_rollover = 0;
-  _life_saved_s = 0;   // the first boot stays
-  life_clear();   // else a crash brings the old totals back
+  _life_saved_s = 0;   // first boot stamp is kept
+  life_clear();   // Else a crash brings the old totals back
   bool ok = save_lifetime();
   if (ok) corium::Log::console(PSTR("Lifetime: Reset"));
   return ok;
@@ -469,14 +475,14 @@ float Counter::get_cps() {
     case CPM_60S:  return or_bucket(cps_windowed(FIXED_US, FIXED_N));
     case CPM_FAST: return or_bucket(cps_windowed(FAST_US, FAST_N));
     case CPM_FAST_START: {
-      uint32_t up = corium::DeviceInfo::uptime();
+      uint32_t up = run_s();
       uint32_t w  = _cpm_window;
-      // live till w, then blend into the bucket by 2w; warm, the ring only pruned
+      // Live rate up to w, then blend into the bucket by 2w. After that the ring just gets pruned
       if (up >= 2u * w) {
         prune_ring();
         return _cached_cps;
       }
-      float live = get_cps_live(FAST_N);   // a few close pulses overshoot, the bucket till then
+      float live = get_cps_live(FAST_N);   // a few close pulses overshoot, use the bucket until there's FAST_N
       if (live <= 0.0f) return _cached_cps;
       if (up <  w)      return apply_dead_time(live);
       float adj = apply_dead_time(live);
@@ -503,7 +509,7 @@ float Counter::get_cpm5f() {
   return _ticks5.get() * 60.0f;
 }
 
-// out of the tick
+// noinline keeps this out of the tick
 void __attribute__((noinline)) Counter::push_cpm5(bool fresh) {
   if (fresh) _cpm5_x10 = cps_x600(_ticks5.get());
   cpm5_history->push(_cpm5_x10);
@@ -527,7 +533,7 @@ bool Counter::get_tube_alive() {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   if (udp_rx()->heard()) return true;
 #endif
-  return tube_alive((uint32_t)corium::DeviceInfo::uptime(), _last_count_up_s,
+  return tube_alive(run_s(), _last_count_up_s,
                     all_clicks(total_clicks_rollover, total_clicks));
 }
 
@@ -543,7 +549,7 @@ bool Counter::counts_missing() {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   return false;
 #else
-  bool missing = CounterMaths::counts_missing((uint32_t)corium::DeviceInfo::uptime(),
+  bool missing = CounterMaths::counts_missing(run_s(),
                                               _last_count_up_s,
                                               all_clicks(total_clicks_rollover, total_clicks));
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
@@ -562,7 +568,7 @@ bool Counter::get_saturated() {
 float Counter::get_cps_live(uint16_t min_n) {
   RingSnapshot s;
   if (!snapshot_ring(s) || s.count < min_n) return 0.0f;
-  uint32_t span_us = s.now_us - s.oldest_us;   // to now, falls once they stop
+  uint32_t span_us = s.now_us - s.oldest_us;   // span to now, so the rate falls once pulses stop
   if (span_us == 0) return 0.0f;
   return (float)(s.count - 1) * 1.0e6f / (float)span_us;
 }
@@ -577,7 +583,7 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
   uint32_t newest = s_pulse_ring[(head - 1) & PULSE_RING_MASK];
   uint32_t oldest = newest;
   uint16_t take = 0;
-  // quiet past the window, none in it
+  // Quiet for longer than the window, nothing in it
   if (max_age_us && now - newest > max_age_us) count = 0;
   if (count >= 2) {
     take = 1;
@@ -627,7 +633,7 @@ void Counter::set_quiet_hours(const char* from, const char* to) {
 // warmup plus one full window
 bool Counter::is_warm() const {
   if (_warm_cached) return true;
-  if (corium::DeviceInfo::uptime() >= (uint32_t)(ESPG_WARMUP_S + _cpm_window)) {
+  if (run_s() >= (uint32_t)(ESPG_WARMUP_S + _cpm_window)) {
     _warm_cached = true;
     return true;
   }
@@ -650,11 +656,11 @@ static void counter_lifecycle(corium::Lifecycle::Event e) {
 
 static void counter_clock_stepped(int32_t delta_s) { gcounter.clock_stepped(delta_s); }
 
-// past MAX the build fails, this logs one that slips by
+// Build fails past MAX, this just logs one that gets through anyway
 bool ClickFns::add(ClickFn f) {
   if (!f) return false;
   for (uint8_t i = 0; i < n; i++) {
-    if (fn[i] == f) return true;   // a second begin()
+    if (fn[i] == f) return true;   // already added by an earlier begin()
   }
   if (n >= MAX) {
     corium::Log::console(PSTR("Counter: Click hook dropped, %u max"), (unsigned)MAX);
@@ -702,12 +708,13 @@ void Counter::begin() {
   corium::Clock::onStep(counter_clock_stepped);
 
   LifeRtc r{};
-  // an erase keeps the rtc, not the life file: no file, its totals go
+  // An erase wipes the life file but not RTC, so no file means the RTC totals go too
+  // TODO: keep a backup of life.bin
   bool rtc_ok = corium::Prefs::stored("life") && rtc_life_recover(r);
   if (!rtc_ok || !_lifetime_enabled) {
     life_clear();
   } else {
-    // newer than the file after a crash, older after a save
+    // RTC is newer than the file after a crash, older after a save
     uint64_t was = all_clicks(total_clicks_lifetime_rollover, total_clicks_lifetime);
     uint64_t got = all_clicks(r.rollover, r.clicks);
     uint64_t clicks = got > was ? got - was : 0;
@@ -719,8 +726,8 @@ void Counter::begin() {
     _life_saved_s += secs;
     if (clicks > 0 || secs > 0) {
       corium::Log::console(PSTR("Lifetime: Recovered %lu clicks + %lu s from RTC"),
-                   (unsigned long)clicks,
-                   (unsigned long)secs);
+                           (unsigned long)clicks,
+                           (unsigned long)secs);
     }
   }
   _running = true;
@@ -736,7 +743,7 @@ bool Counter::blip_led() {
 
 void Counter::dispatchReceiverBlip() {
   _last_blip = micros();
-  // else audio fires twice and udpblip echoes
+  // Mark it seen, else loop() fires audio again and udpblip echoes it back out
   _last_blip_seen = _last_blip;
   _rx_clicks.fire((uint32_t)_last_blip_seen);
 }
@@ -745,7 +752,7 @@ bool Counter::is_quiet_now() {
   return _quiet.active();
 }
 
-// rare, out of the pass
+// rare, kept out of the loop pass
 void __attribute__((noinline)) Counter::run_pending() {
   if (_pending_work & PENDING_SECOND) {
     _pending_work &= ~PENDING_SECOND;
@@ -755,7 +762,7 @@ void __attribute__((noinline)) Counter::run_pending() {
   _pending_work = 0;
   if (pw & PENDING_RTC) rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, _life_saved_s);
   if (pw & PENDING_SAVE) {
-    (void)save_lifetime();   // the stash has it
+    (void)save_lifetime();
   }
   if (pw & PENDING_ALARM) corium::Registry::emit(TOPIC_ALARM);
   if (pw & PENDING_COUNTS) corium::Registry::emit(TOPIC_COUNTS);

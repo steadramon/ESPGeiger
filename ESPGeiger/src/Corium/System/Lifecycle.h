@@ -38,13 +38,13 @@ enum Event : uint8_t {
 
 typedef void (*Handler)(Event);
 
-// loop task only, handlers stay till restart and run inside send
+// Loop task only, handlers run inside send()
 bool on(Handler h);   // false = full
 void send(Event e);
 
-// WebPortal::poll does the restart, never mid-write; no portal, no restart
+// WebPortal::poll does the restart, never mid write. No portal means no restart
 void requestRestart(uint32_t now, uint32_t delay_ms);
-void retryAfter(uint32_t now, uint32_t delay_ms);   // safe mode's normal boot: not pending, waits out an update
+void retryAfter(uint32_t now, uint32_t delay_ms);   // safe mode's retry, waits until an update is done
 bool restartDue(uint32_t now);
 bool restartPending();
 

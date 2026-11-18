@@ -31,7 +31,7 @@
 corium::ArduinoOTAModule ota;
 CORIUM_REGISTER_MODULE(ota)
 
-// handle() holds the loop till the sender is done, a real one is 10-20 s
+// handle() holds the loop for the whole upload, a real one takes 10-20 s
 #define ESPOTA_MAX_MS  120000
 #define ESPOTA_IDLE_MS 5000
 
@@ -39,7 +39,7 @@ static uint32_t s_start_ms = 0;
 static uint32_t s_moved_ms = 0;
 static size_t s_got = 0;
 static bool s_stopped = false;
-static bool s_ours = false;   // started here: a refused invite can't end a web /update
+static bool s_ours = false;   // only set by ota_start(), so a refused invite can't end a web /update
 
 static bool ota_too_slow(uint32_t now, size_t got) {
   if (got != s_got) {
@@ -49,13 +49,13 @@ static bool ota_too_slow(uint32_t now, size_t got) {
   return now - s_start_ms >= ESPOTA_MAX_MS || now - s_moved_ms >= ESPOTA_IDLE_MS;
 }
 
-// both cores' Update _reset() zeroes the size, so their loops read it as finished
+// Update's _reset() zeroes the size, which then reads as finished
 static void ota_check(size_t got) {
   if (s_stopped || Update.isFinished() || !ota_too_slow(millis(), got)) return;
   s_stopped = true;
   corium::Log::console(PSTR("OTA: Too slow, stopped"));
 #ifdef ESP8266
-  (void)Update.end();   // short, so it fails and commits nothing
+  (void)Update.end();   // image is short, so end() fails and commits nothing
 #else
   Update.abort();
 #endif
@@ -68,12 +68,12 @@ static void ota_start() {
   s_stopped = false;
   s_ours = true;
 #ifdef ESP8266
-  // writeStream holds the image, its own hook runs each pass
+  // writeStream holds the loop for the image, its progress hook runs each pass
   Update.onProgress([](size_t got, size_t) { ota_check(got); });
 #endif
   corium::Registry::post(&ota);
   corium::Lifecycle::send(corium::Lifecycle::OTA_START);
-  // SHUTDOWN's prefs would go through the old mount onto the new image
+  // Unmount now, else the prefs save on SHUTDOWN goes through the old mount onto the new image
   if (fs) corium::Fs::end();
   corium::LedSignal::lit(true);
   corium::Log::console(PSTR("Start updating %s"), fs ? PSTR("filesystem") : PSTR("sketch"));
@@ -82,7 +82,7 @@ static void ota_start() {
 static void ota_end() {
   corium::Log::console(PSTR("End"));
   corium::LedSignal::lit(false);
-  // core restarts, not safeRestart()
+  // The core does the restart, not safeRestart()
   corium::Lifecycle::send(corium::Lifecycle::SHUTDOWN);
 }
 
@@ -108,16 +108,16 @@ static void ota_error(ota_error_t error) {
     s_ours = false;
 #ifdef ESP8266
     Update.onProgress(nullptr);   // web /update shares Update
-    corium::Wifi::applySleep();   // Update.begin set none
+    corium::Wifi::applySleep();   // Update.begin set sleep to none
 #endif
     corium::LedSignal::lit(false);
     corium::Lifecycle::send(corium::Lifecycle::OTA_FAILED);
   }
 #ifdef ESP8266
-  // refused at Update.begin, before onStart: it set no sleep; a web /update keeps its own
+  // Refused at Update.begin, which had already set sleep to none
   else if (error == OTA_BEGIN_ERROR && !corium::otaInProgress) corium::Wifi::applySleep();
 #endif
-  // ota_error_t order, both cores
+  // In ota_error_t order, same on both cores
   static const char ERRS[][8] PROGMEM = {"Auth", "Begin", "Connect", "Receive", "End"};
   if ((unsigned)error <= OTA_END_ERROR) corium::Log::console(PSTR("OTA: %s Failed"), ERRS[error]);
   else                                  corium::Log::console(PSTR("OTA: Error %u"), error);
@@ -126,13 +126,13 @@ static void ota_error(ota_error_t error) {
 static bool s_espota = false;   // sys.espota at boot
 
 static void espota_begin() {
-  // lambdas fold the statics in, a plain function in std::function costs more
+  // Lambdas come out smaller than plain functions here
   ArduinoOTA.onStart([]() { ota_start(); });
   ArduinoOTA.onEnd([]() { ota_end(); });
   ArduinoOTA.onProgress([](unsigned int p, unsigned int t) { ota_progress(p, t); });
   ArduinoOTA.onError([](ota_error_t e) { ota_error(e); });
 
-  // core copies it, before begin() only, so a new one needs a restart
+  // The core copies it, and only reads it before begin()
   const char* pass = corium::Prefs::getString("sys", corium::K_WEB_PASS);
   if (pass && pass[0]) ArduinoOTA.setPassword(pass);
   ArduinoOTA.setHostname(corium::DeviceInfo::hostname());
@@ -142,11 +142,10 @@ static void espota_begin() {
 void corium::ArduinoOTAModule::begin() {
   s_espota = corium::Prefs::getBool("sys", corium::K_ESPOTA);
   if (s_espota) espota_begin();
-  else (void)MDNS.begin(corium::DeviceInfo::hostname());   // espota's begin starts it otherwise
-  // no mdns, the IP still works
+  else (void)MDNS.begin(corium::DeviceInfo::hostname());   // ArduinoOTA.begin() starts it when espota is on
+  // Without mdns the IP still works, so the results are ignored
   (void)MDNS.addService("http",   "tcp", 80);
 #ifdef APP_MDNS_SERVICE
-  // the app's own service, the name it's found by
   (void)MDNS.addService(APP_MDNS_SERVICE, "tcp", 80);
   const char* fname = corium::DeviceInfo::friendlyName();
   if (fname && fname[0]) {
@@ -159,9 +158,9 @@ void corium::ArduinoOTAModule::begin() {
 void corium::ArduinoOTAModule::loop(unsigned long now) {
   if (s_espota) ArduinoOTA.handle();
 #ifdef ESP8266
-  else MDNS.update();   // handle() did it
+  else MDNS.update();   // handle() does this when espota is on
 #endif
-  // multicast groups re-reported every 5 min
+  // Multicast groups get re-reported every 5 min
   static unsigned long s_igmp_ms = 0;
   if (s_igmp_ms == 0) s_igmp_ms = now;
   if ((unsigned long)(now - s_igmp_ms) > 300000UL) {

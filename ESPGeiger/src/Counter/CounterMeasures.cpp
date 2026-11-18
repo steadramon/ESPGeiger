@@ -26,6 +26,7 @@
 #include "CounterUpload.h"
 #include "GeigerInput/SerialFormat.h"
 #include "Corium/Logger/Logger.h"
+#include "Corium/System/BootGuard.h"
 
 static bool m_cpmf(corium::MValue* v)  { v->f = gcounter.get_cpmf(); return true; }
 static bool m_cpm_i(corium::MValue* v) { v->i = gcounter.get_cpm(); return true; }
@@ -101,30 +102,31 @@ static constexpr uint8_t JVW  = JV | EGM_OUT_WEBHOOK;
 static constexpr uint8_t JVWM = JVW | EGM_OUT_MQTT;
 static constexpr uint8_t JWM  = corium::M_OUT_JSON | EGM_OUT_WEBHOOK | EGM_OUT_MQTT;
 static constexpr uint8_t JVM  = JV | EGM_OUT_MQTT;
+static constexpr uint8_t HELD = corium::M_HELD;   // counts: gone in safe mode
 
 // keep a metric's rows together
 static const corium::Measure CORE[] PROGMEM = {
   CORIUM_M_ROW_UPTIME(JVW),
-  CORIUM_M_PROW("cpm",      "c",   m_cpmf,    corium::M_F32,  2, EGMU_CPM,     JWM,          0, MP_CPM, MH_CPM, ML_1M),
-  CORIUM_M_ROW("cpm",       "",    m_cpm_i,   corium::M_I32,  0, EGMU_CPM,     corium::M_OUT_VARS, 0),
-  CORIUM_M_PROW("cpm5",     "c5",  m_cpm5,    corium::M_F32,  2, EGMU_CPM,     JVWM,         0, MP_CPM, MH_CPM, ML_5M),
-  CORIUM_M_PROW("cpm15",    "c15", m_cpm15,   corium::M_F32,  2, EGMU_CPM,     JVWM,         0, MP_CPM, MH_CPM, ML_15M),
-  CORIUM_M_PROW("usv",      "s",   m_usv,     corium::M_F32,  4, EGMU_USVH,    JVWM,         0, MP_USV, MH_USV, nullptr),
-  CORIUM_M_PROW("cps",      "cs",  m_cps,     corium::M_F32,  2, EGMU_CPS,     JVWM,         0, MP_CPS, MH_CPS, nullptr),
-  CORIUM_M_ROW("cps_i",     "",    m_cps_i,   corium::M_I32,  0, EGMU_CPS,     corium::M_OUT_VARS, 0),
+  CORIUM_M_PROW("cpm",      "c",   m_cpmf,    corium::M_F32,  2, EGMU_CPM,     JWM,          HELD, MP_CPM, MH_CPM, ML_1M),
+  CORIUM_M_ROW("cpm",       "",    m_cpm_i,   corium::M_I32,  0, EGMU_CPM,     corium::M_OUT_VARS, HELD),
+  CORIUM_M_PROW("cpm5",     "c5",  m_cpm5,    corium::M_F32,  2, EGMU_CPM,     JVWM,         HELD, MP_CPM, MH_CPM, ML_5M),
+  CORIUM_M_PROW("cpm15",    "c15", m_cpm15,   corium::M_F32,  2, EGMU_CPM,     JVWM,         HELD, MP_CPM, MH_CPM, ML_15M),
+  CORIUM_M_PROW("usv",      "s",   m_usv,     corium::M_F32,  4, EGMU_USVH,    JVWM,         HELD, MP_USV, MH_USV, nullptr),
+  CORIUM_M_PROW("cps",      "cs",  m_cps,     corium::M_F32,  2, EGMU_CPS,     JVWM,         HELD, MP_CPS, MH_CPS, nullptr),
+  CORIUM_M_ROW("cps_i",     "",    m_cps_i,   corium::M_I32,  0, EGMU_CPS,     corium::M_OUT_VARS, HELD),
   CORIUM_M_PROW("ratio",    "r",   m_ratio,   corium::M_F32,  2, corium::MU_NONE,    corium::M_OUT_JSON, 0, MP_RATIO, MH_RATIO, nullptr),
-  CORIUM_M_ROW("tc",        "",    m_tc,      corium::M_U32,  0, EGMU_COUNT,   JVW,          0),
-  CORIUM_M_PROW("life",     "",    m_life,    corium::M_U32,  0, EGMU_COUNT,   corium::M_OUT_VARS, corium::M_COUNTER, MP_LIFE, MH_LIFE, nullptr),
+  CORIUM_M_ROW("tc",        "",    m_tc,      corium::M_U32,  0, EGMU_COUNT,   JVW,          HELD),
+  CORIUM_M_PROW("life",     "",    m_life,    corium::M_U32,  0, EGMU_COUNT,   corium::M_OUT_VARS, corium::M_COUNTER | HELD, MP_LIFE, MH_LIFE, nullptr),
   CORIUM_M_ROW_MEM(JVW),
   CORIUM_M_ROW_MEM_RAW(corium::M_OUT_JSON),
   CORIUM_M_ROW_RSSI(JVW),
   CORIUM_M_ROW_ID(corium::M_OUT_VARS),
   CORIUM_M_ROW_NAME(corium::M_OUT_VARS),
-  CORIUM_M_ROW("mode",      "",    m_mode,    corium::M_STR,  0, corium::MU_NONE,    corium::M_OUT_VARS, 0),
-  CORIUM_M_PROW("tube",     "",    m_tube,    corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         0, MP_TUBE, MH_TUBE, nullptr),
-  CORIUM_M_PROW("sat",      "",    m_sat,     corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         0, MP_SAT, MH_SAT, nullptr),
-  CORIUM_M_ROW("warn",      "",    m_warn,    corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         0),
-  CORIUM_M_ROW("alert",     "",    m_alert,   corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         0),
+  CORIUM_M_ROW("mode",      "",    m_mode,    corium::M_STR,  0, corium::MU_NONE,    corium::M_OUT_VARS, HELD),
+  CORIUM_M_PROW("tube",     "",    m_tube,    corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         HELD, MP_TUBE, MH_TUBE, nullptr),
+  CORIUM_M_PROW("sat",      "",    m_sat,     corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         HELD, MP_SAT, MH_SAT, nullptr),
+  CORIUM_M_ROW("warn",      "",    m_warn,    corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         HELD),
+  CORIUM_M_ROW("alert",     "",    m_alert,   corium::M_BOOL, 0, corium::MU_NONE,    JVWM,         HELD),
   CORIUM_M_ROW("health",    "",    m_health,  corium::M_STR,  0, corium::MU_NONE,    JVM,          0),
   CORIUM_M_ROW("problem",   "",    m_problem, corium::M_BOOL, 0, corium::MU_NONE,    EGM_OUT_MQTT, 0),
   CORIUM_M_ROW_TICK(corium::M_OUT_JSON),
@@ -133,10 +135,10 @@ static const corium::Measure CORE[] PROGMEM = {
   CORIUM_M_ROW_FRAG(corium::M_OUT_JSON),
   CORIUM_M_ROW_LFB(corium::M_OUT_JSON),
   CORIUM_M_ROW_LFBLOW(corium::M_OUT_JSON),
-  CORIUM_M_ROW("cs_live",   "",    m_cs_live, corium::M_F32,  2, EGMU_CPS,     corium::M_OUT_JSON, corium::M_DIAG),
-  CORIUM_M_ROW("warm",      "",    m_warm,    corium::M_BOOL, 0, corium::MU_NONE,    corium::M_OUT_ID,   0),
-  CORIUM_M_ROW("no_counts", "",    m_none,    corium::M_BOOL, 0, corium::MU_NONE,    corium::M_OUT_ID,   0),
-  CORIUM_M_ROW("blip",      "",    m_blip,    corium::M_U32,  0, corium::MU_NONE,    corium::M_OUT_ID,   0),
+  CORIUM_M_ROW("cs_live",   "",    m_cs_live, corium::M_F32,  2, EGMU_CPS,     corium::M_OUT_JSON, corium::M_DIAG | HELD),
+  CORIUM_M_ROW("warm",      "",    m_warm,    corium::M_BOOL, 0, corium::MU_NONE,    corium::M_OUT_ID,   HELD),
+  CORIUM_M_ROW("no_counts", "",    m_none,    corium::M_BOOL, 0, corium::MU_NONE,    corium::M_OUT_ID,   HELD),
+  CORIUM_M_ROW("blip",      "",    m_blip,    corium::M_U32,  0, corium::MU_NONE,    corium::M_OUT_ID,   HELD),
 };
 
 static corium::MeasureRows input_rows() {
@@ -144,7 +146,10 @@ static corium::MeasureRows input_rows() {
   return in ? in->measurements() : corium::MeasureRows();
 }
 
-void measures_begin() { corium::m_sources(corium::MeasureRows(CORE), input_rows); }
+void measures_begin() {
+  corium::m_sources(corium::MeasureRows(CORE), input_rows);
+  corium::m_hold(corium::BootGuard::safeMode());   // no rows, not zeros that read as real
+}
 
 size_t egm_history(int* out, size_t cap) {
   size_t n = gcounter.cpm_history.size();

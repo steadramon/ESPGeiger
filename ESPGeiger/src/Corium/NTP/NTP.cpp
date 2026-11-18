@@ -34,7 +34,7 @@ CORIUM_REGISTER_MODULE(ntpclient)
 #include <esp_netif.h>
 #include <lwip/tcpip.h>
 
-// configTime() without a lock (no core locking in this sdk): on lwIP's thread, s_server outlives it
+// Same as configTime() but without the lock. Runs on lwIP's thread, s_server outlives the call
 static void sntp_start(void* server) {
   if (sntp_enabled()) sntp_stop();
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
@@ -43,11 +43,11 @@ static void sntp_start(void* server) {
 }
 
 static void start_sntp(const char* server) {
-  esp_netif_init();   // lwIP's thread up, as configTime; once
+  esp_netif_init();   // brings up lwIP's thread like configTime does, only once
   tcpip_callback(sntp_start, (void*)server);
 }
 #elif !defined(ESP8266)
-static void start_sntp(const char*) {}   // host, no lwIP thread
+static void start_sntp(const char*) {}   // host build has no lwIP thread
 #endif
 
 #ifndef DISABLE_NTP
@@ -65,10 +65,10 @@ static const corium::Pref NTP_PREF_ITEMS[] PROGMEM = {
 };
 
 #ifndef DISABLE_NTP
-// sntp keeps the pointer, a save frees the pref's
+// sntp keeps the pointer, and a prefs save frees the pref's own string
 static char s_server[CORIUM_HOST_MAX + 1];
 #endif
-// set by sntp, the loop applies it
+// Set by sntp, the loop applies it
 static volatile bool s_synced = false;
 
 static const corium::PrefGroup NTP_PREF_GROUP PROGMEM = {
@@ -115,7 +115,7 @@ static void set_tz(const char* posix) {
 #endif
 }
 
-// before the modules begin: a kept, RTC or browser clock stamps local, wifi or not
+// Runs before the modules begin, so a kept, RTC or browser clock shows local time with or without wifi
 void corium::NTP_Client::onPrefsLoaded() {
   set_tz(posix_tz());
 }
@@ -131,7 +131,7 @@ void corium::NTP_Client::setup()
   corium::Log::console(PSTR("NTP: Starting ... %s"), server);
   const char *posix = posix_tz();
 #ifdef ESP8266
-  // an RTC's settimeofday fires it too
+  // An RTC's settimeofday fires this too, hence the from_sntp check
   settimeofday_cb([](bool from_sntp){
     if (!from_sntp || time(nullptr) < corium::Clock::MIN_EPOCH) return;  // SDK fires once before sync
     s_synced = true;
@@ -140,7 +140,7 @@ void corium::NTP_Client::setup()
 
   configTime(posix, server);
 #else
-  // tcpip task, never wait here
+  // Runs on the tcpip task, never wait here
   sntp_set_time_sync_notification_cb([](struct timeval *t){
     if (!t || t->tv_sec < corium::Clock::MIN_EPOCH) return;
     s_synced = true;
@@ -156,7 +156,7 @@ void corium::NTP_Client::onPrefsSaved() {
   setup();
 }
 
-// posted on each sync, else every LOOP_MS for resyncs
+// Posted on each sync, otherwise runs every LOOP_MS to check for resyncs
 void corium::NTP_Client::loop(unsigned long now) {
   if (s_synced) {
     s_synced = false;

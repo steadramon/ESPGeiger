@@ -25,13 +25,13 @@
 #include "App/AppConfig.h"
 #include "Corium/Prefs/Prefs.h"
 
-// export blob head and its base64, set both; app sets its own
+// Export blob head and its base64, set both. The app sets its own
 #ifndef CORIUM_EXPORT_MAGIC
 #define CORIUM_EXPORT_MAGIC     0x08, 0xE4, 0x48
 #define CORIUM_EXPORT_MAGIC_B64 "CORI"
 #endif
 #ifndef CORIUM_EXPORT_SEED
-#define CORIUM_EXPORT_SEED 0x434F5249u   // xor keystream seed, also on the crc
+#define CORIUM_EXPORT_SEED 0x434F5249u   // xor keystream seed, also used for the crc
 #endif
 
 namespace corium {
@@ -40,7 +40,7 @@ namespace ImportText {
 // false = skipped
 typedef bool (*PutFn)(const char* mid, const char* key, const char* value);
 
-// firstSkip: line number from 1, 0 = none; firstKey: a blob's first refused mid.key, "" = none
+// firstSkip is the line number from 1, 0 = none
 struct Result {
   int applied;
   int skipped;
@@ -48,21 +48,21 @@ struct Result {
   char firstKey[2 * CORIUM_PREF_ID_MAX + 2];
 };
 
-// export blobs always start CORIUM_EXPORT_MAGIC_B64; past leading blanks, nullptr = not one
+// Start of a blob past leading blanks, nullptr = not a blob
 const char* blobStart(const char* text, size_t len);
 
-// # comments and blank lines ignored
+// # comments and blank lines are ignored
 Result apply(const char* text, size_t len, PutFn put);
 
-// records: group count, per group len+mid and pref count, per pref len+key, be16 len+value
-// blob records from the group count on, all of len; nullptr = ok, else why (PROGMEM)
+// Records are a group count, then per group len+mid and a pref count, then per pref len+key and be16 len+value
+// nullptr = ok, else why (PROGMEM)
 const char* blobError(const uint8_t* p, size_t len);
-// applied -1 = bad records; a refused put counts in skipped; the board record isn't put
+// applied -1 = bad records
 Result applyBlob(const uint8_t* p, size_t len, PutFn put);
 
-// an export's first group, "board" with one row, the exporting DeviceInfo::board() (PROGMEM)
+// An export's first group, one row (PROGMEM)
 extern const char BOARD_MID[];
-// that board into out, "" = an older export without one; records already checked
+// "" = an older export without one
 void blobBoard(const uint8_t* p, size_t len, char* out, size_t cap);
 
 }

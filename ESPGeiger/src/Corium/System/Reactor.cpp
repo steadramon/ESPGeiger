@@ -41,7 +41,7 @@ uint32_t corium::Reactor::s_next_house = 0;
 #ifdef ESP32
 static Ticker s_ms_ticker;
 #else
-// os_timer straight, Ticker drags in std::function (~1 KB)
+// os_timer used straight, Ticker drags in std::function (~1 KB)
 static os_timer_t s_ms_timer;
 static os_timer_t s_sec_timer;
 static void every(os_timer_t* t, uint32_t ms, void (*fn)()) {
@@ -50,13 +50,13 @@ static void every(os_timer_t* t, uint32_t ms, void (*fn)()) {
 }
 #endif
 static void (*s_app)(uint32_t) = nullptr;
-// boot guard marks, once each
+// Boot guard marks, each set once
 static bool s_lived = false;
 static bool s_day_marked = false;
 static uint32_t s_up = 0;
 
 void corium::Reactor::clock(void (*ms)()) {
-  // else first tick sees all of uptime
+  // Else the first tick would see all of uptime at once
   s_ms_last_us = micros();
   corium::_fast_ms_counter = CORIUM_MS_START + s_ms_last_us / 1000;
   EGClock::set(fastMillis);
@@ -69,12 +69,12 @@ void corium::Reactor::clock(void (*ms)()) {
 
 void corium::Reactor::second() {
 #ifdef ESP32
-  // a stall runs it once, as the 8266 ticker
+  // after a stall it runs once, same as the 8266 ticker
   uint32_t now = corium::fastMillis();
   if (corium::reached(now, s_next_sec)) s_next_sec = now + 1000;
 #else
-  corium::Log::hold(true);   // an os_timer, SYS context: no serial writes here
-  // the core keeps the last failed alloc forever: an abort is oom only if it failed this second
+  corium::Log::hold(true);   // runs from an os_timer in SYS context, so no serial writes here
+  // The core never clears it, so an abort only counts as oom if an alloc failed this second
   umm_last_fail_alloc_addr = nullptr;
 #endif
   corium::TickProfile::beginTick();
@@ -87,7 +87,7 @@ void corium::Reactor::second() {
 
   if (corium::TickProfile::endTick()) corium::Registry::logActivityAndReset();
 #ifndef ESP32
-  corium::Log::hold(false);   // the console's loop prints them
+  corium::Log::hold(false);   // the console's loop prints the held lines
 #endif
 }
 
@@ -106,7 +106,7 @@ void corium::Reactor::house() {
     corium::BootGuard::markDay();
     s_day_marked = true;
   }
-  // wifi off counts as up, else safe mode
+  // Wifi turned off counts as up, else it could never mark lived
   if (!s_lived && corium::Uptime::since(corium::Uptime::start) >= corium::BootGuard::LIVED_S &&
       (corium::Wifi::stableFor(corium::BootGuard::STABLE_MS) || corium::Wifi::disabled)) {
     corium::BootGuard::markLived();
@@ -124,7 +124,7 @@ void corium::Reactor::begin(void (*app)(uint32_t up)) {
   s_next_house = corium::fastMillis() + 1500;
 #ifdef ESP32
   s_next_sec = corium::fastMillis() + 1000;
-  // the tick in loop feeds it
+  // The tick in loop feeds it
   esp_task_wdt_add(NULL);
 #else
   every(&s_sec_timer, 1000, second);

@@ -28,7 +28,7 @@
 #define GEIGER_MODEL "genpulse"
 #endif
 
-// Tube pulses on a pin, by interrupt or esp32 PCNT
+// interrupt or PCNT
 class GeigerPulse final : public GeigerInput
 {
   public:

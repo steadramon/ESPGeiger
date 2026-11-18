@@ -27,29 +27,29 @@
 #endif
 static_assert(CORIUM_MAX_MODULES <= 32, "post and profile masks are 32 bits");
 
-// a pass stops starting loops past this
+// A pass stops starting module loops once it's been this long
 #ifndef CORIUM_LOOP_BUDGET_US
 #define CORIUM_LOOP_BUDGET_US 2000
 #endif
 
-// a loop() over this counts as a stall
+// A loop() longer than this counts as a stall
 #define CORIUM_STALL_US 10000
 
-// topics below CORIUM_TOPIC_APP Corium's, an app numbers its own from it
+// Topics below CORIUM_TOPIC_APP are Corium's, an app numbers its own from there
 #define CORIUM_TOPIC_APP 2
 #define CORIUM_MAX_TOPICS 16
 static_assert(corium::Module::TOPIC_SENT < CORIUM_TOPIC_APP, "Corium topics sit below CORIUM_TOPIC_APP");
 
-// settle after reconnect
+// settle time after a WiFi reconnect
 #ifndef WIFI_SETTLE_MS
 #define WIFI_SETTLE_MS 3000
 #endif
 
-// what the loop was in, through a crash reset: esp32 noinit RAM, 8266 the crash dump
+// Which module the loop was in, kept over a crash reset. ESP32 in noinit RAM, 8266 in the crash dump
 #if (defined(ESP32) || defined(ESP8266)) && !defined(CORIUM_CRASH_MARK)
 #define CORIUM_CRASH_MARK
 #endif
-// the last fires before a crash: noinit RAM, so not the 8266 (its RTC words are full)
+// Loop trace in noinit RAM, not on the 8266 (its RTC words are all used)
 #if defined(CORIUM_CRASH_MARK) && !defined(ESP8266)
 #define CORIUM_TRACE
 #endif
@@ -69,18 +69,18 @@ class Registry {
     static void logLoopProfileAndReset();
 #endif
     static void logActivityAndReset();
-    // a module schedules itself, from the loop task
+    // A module schedules itself, from the loop task
     static bool every(Module* m, uint32_t ms);   // 0 = off
-    static bool dueAt(Module* m, uint32_t t);   // once, keeps every()
+    static bool dueAt(Module* m, uint32_t t);   // one-off, every() still stands
     static bool dueIn(Module* m, uint32_t ms) { return dueAt(m, corium::fastMillis() + ms); }
-    // due now, from any task, not an isr
+    // Run it now. From any task, but not an ISR
     static void post(Module* m);
 
-    // topics: emit() posts every module on() it, from the loop task; on() from begin()
+    // Topics: emit() posts every module that's on() it, from the loop task. Call on() from begin()
     static bool on(uint8_t topic, Module* m);
     static void emit(uint8_t topic);
     static uint16_t events(Module* m);   // bit per topic since the last call
-    static bool heard(uint8_t topic);    // anyone on() it
+    static bool heard(uint8_t topic);    // any module on() it
 
     static void setSafeMode(bool on);   // before preWifiAll
     static bool quarantined(Module* m);
@@ -88,11 +88,11 @@ class Registry {
     // Corium's own loop work, between modules
     static constexpr uint8_t IN_TCP = 0xFD, IN_PORTAL = 0xFE, IN_NONE = 0xFF;
 #ifdef CORIUM_CRASH_MARK
-    // before preWifiAll (it clears): where the loop was at a crash reset, IN_NONE = not known
+    // Call before preWifiAll, it clears the mark
     static void crashBoot(uint8_t in);
     static const char* crashedIn();   // module name, "tcp", "portal", nullptr = not known
     static inline void in(uint8_t what) { _firing = what; }
-    static inline uint8_t firing() { return _firing; }   // the crash callback, boot
+    static inline uint8_t firing() { return _firing; }   // for the crash callback and boot
 #else
     static inline void crashBoot(uint8_t) {}
     static inline const char* crashedIn() { return nullptr; }
@@ -123,14 +123,14 @@ class Registry {
 
     struct Slot {
       Module* module;
-      uint32_t grid;             // a recent point on its phase
+      uint32_t grid;             // a recent tick of its period, keeps it in phase
       uint32_t next_due;
       uint32_t period_ms;        // 0 = none
-      uint16_t topics;           // on()
+      uint16_t topics;           // topics it's on()
       uint16_t events;           // emitted, not taken yet
-      uint16_t peak_us;          // in the padding
+      uint16_t peak_us;          // peak_us and stalls fit in the struct padding, no extra RAM
       uint8_t flags;
-      uint8_t stalls;            // in the padding too
+      uint8_t stalls;
 #ifdef LOOP_PROFILE
       uint32_t max_loop_us;      // 32 bit, can pass 65 ms
       uint32_t total_loop_us;
@@ -163,7 +163,7 @@ class Registry {
     static void changed(Slot& s);
     static void take_posts(unsigned long now);
 
-    // one caller each, folds inline
+    // One caller each, so these get inlined
     static inline uint8_t unmet_requirements();
     static inline void walk(unsigned long now);
     static inline void note_run(Slot& s, uint32_t d);
@@ -172,7 +172,7 @@ class Registry {
     static inline uint32_t next_wake(unsigned long now);
 };
 
-// static init, before setup; FEATURE also sets a features() bit
+// Static init, runs before setup(). FEATURE also sets a features() bit
 #define CORIUM_REGISTER_MODULE(instance) \
   static bool _reg_##instance = corium::Registry::add(&instance);
 #define CORIUM_REGISTER_FEATURE(instance, bit) \

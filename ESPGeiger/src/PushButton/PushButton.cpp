@@ -34,7 +34,7 @@ static const uint16_t POLL_MS      = 10;
 static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
-// 0 = next page, 1 = back. loop task only
+// Slot 0 = next page, 1 = back. Only touched from the loop task
 struct BtnState {
   int      pin = -1;
   corium::Debounce deb;
@@ -68,7 +68,7 @@ const corium::PrefGroup* PushButton::prefsGroup() { return &BTN_PREF_GROUP; }
 void PushButton::onPrefsLoaded() {
   int pin1 = (int)corium::Prefs::getInt("btn", EG_K_PIN);
   set_pin(pin1);
-  // pin2 build flag only
+  // pin2 only comes from the build flag
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
   corium::Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
 }
@@ -77,7 +77,7 @@ void PushButton::onPrefsLoaded() {
 PushButton::PushButton() {
 }
 
-// reset only on change, keeps the prefs cascade quiet
+// Only resets on a change, which keeps the prefs cascade quiet
 static void set_pin_slot(uint8_t slot, int pin) {
   if (slot >= 2) return;
   BtnState& b = s_btn[slot];
@@ -94,7 +94,7 @@ static void set_pin_slot(uint8_t slot, int pin) {
     delayMicroseconds(20);
     down = read_down(b);
   }
-  // held at boot: no short on release
+  // If held at boot, the release isn't a short press
   b.deb.reset(down, now);
   b.down_ms = now;
   b.long_fired = down;
@@ -105,14 +105,14 @@ static void set_pin_slot(uint8_t slot, int pin) {
 void PushButton::set_pin(int pin)  { set_pin_slot(0, pin); }
 void PushButton::set_pin2(int pin) { set_pin_slot(1, pin); }
 
-// boot hold reads it before begin, fixed pins set here
+// The boot hold reads the button before begin(), fixed pins are set here
 void PushButton::init()
 {
 #ifdef BTN_PIN_BLOCKED
   if (PUSHBUTTON_PIN  >= 0) set_pin(PUSHBUTTON_PIN);
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
 #else
-  // safe mode skips onPrefsLoaded (quarantined): the boot hold still reads the set pin
+  // safe mode skips onPrefsLoaded, so read the pin here for the boot hold
   if (s_btn[0].pin < 0) set_pin((int)corium::Prefs::getInt("btn", EG_K_PIN));
 #endif
 }
@@ -122,11 +122,11 @@ void PushButton::begin()
   init();
 #ifdef BTN_PIN_BLOCKED
   corium::Log::console(PSTR("Btn: pin=%d pin2=%d"),
-               (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
+                       (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
 #endif
 }
 
-// samples too, setup has no loop
+// Samples the pins too, as setup has no loop
 bool PushButton::isPressed()
 {
   uint32_t now = corium::fastMillis();

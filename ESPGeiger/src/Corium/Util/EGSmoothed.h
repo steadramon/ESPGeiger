@@ -26,7 +26,6 @@ class EGRingAvg {
 public:
   EGRingAvg() { reset(); _window = MaxN; }
 
-  // resets state
   void begin(uint16_t window = MaxN) {
     if (window < 1)    window = 1;
     if (window > MaxN) window = MaxN;
@@ -87,7 +86,7 @@ private:
   uint16_t _count;
 };
 
-// mean until factor samples, then EMA
+// Plain mean until there are factor samples, then EMA
 template<typename T>
 class EGEma {
 public:

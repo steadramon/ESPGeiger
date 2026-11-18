@@ -29,20 +29,20 @@
 namespace corium {
 namespace Wifi {
   inline bool connectedRaw() { return WiFi.status() == WL_CONNECTED; }   // live, not Wifi::connected
-  inline bool apUp() { return (WiFi.getMode() & WIFI_AP) != 0; }   // the hotspot or the portal
-  // saved to flash; 8266 off again or the next disconnect() wipes them
+  inline bool apUp() { return (WiFi.getMode() & WIFI_AP) != 0; }   // The hotspot or the portal
+  // Saved to flash. The 8266 turns persistent off again, else the next disconnect() wipes them
   inline void beginSaved(const char* ssid, const char* pass) {
 #ifdef ESP32
     esp_wifi_set_storage(WIFI_STORAGE_FLASH);   // persistent() is read once, at the first mode()
 #endif
     WiFi.persistent(true);
-    (void)WiFi.begin(ssid, pass);   // the status judges the join; the 8266 never says if the save took
+    (void)WiFi.begin(ssid, pass);   // The 8266 never says if the save took
 #ifdef ESP8266
     WiFi.persistent(false);
 #endif
   }
 
-  // the 8266 takes the name after the mode, the esp32 only at a mode change
+  // The 8266 takes the hostname after the mode is set, the esp32 only at a mode change
   inline void staMode(const char* name) {
 #ifdef ESP8266
     WiFi.mode(WIFI_STA);

@@ -36,19 +36,21 @@ namespace BootGuard {
 enum Ending : uint8_t {
   END_OTHER,      // power-on, deep sleep
   END_RESTART,    // restart or reset pin
-  END_CRASH,      // exception, watchdog or brownout
+  END_CRASH,      // exception or watchdog
+  END_BROWNOUT,   // the supply, not the firmware: nothing moves
 };
 
 constexpr uint8_t CRASHES_TO_SAFE_MODE = CORIUM_BOOTGUARD_CRASHES;
 
+// TODO: add a check over the flag bytes, only magic and fw are checked
 struct State {
   uint32_t magic;
   uint32_t fw;
   uint8_t  lived;         // this boot passed LIVED_S
-  uint8_t  crashStreak;  // crashes before LIVED_S
+  uint8_t  crashStreak;   // crashes before LIVED_S
   uint8_t  safe;          // this boot runs safe mode
   uint8_t  retries;       // safe boots since a day up
-  uint8_t  enter;         // requestSafe(), for the next boot
+  uint8_t  enter;         // scram(), for the next boot
   uint8_t  portal;        // requestPortal(), for the next boot
   uint8_t  pad[2];
 };

@@ -24,12 +24,11 @@
 
 namespace corium {
 
-// 0 = all fine; each bit has one writer, names live with whoever says them
+// 0 = all fine. Each bit has one writer, and the names live with whoever sets them
 class StatusWord {
   public:
     constexpr StatusWord() {}
 
-    // the bits under mask become bits
     void put(uint16_t mask, uint16_t bits) {
       _live = (uint16_t)((_live & ~mask) | bits);
       _ever |= bits;
@@ -41,7 +40,7 @@ class StatusWord {
     uint16_t live() const { return _live; }
     uint16_t ever() const { return _ever; }
 
-    // "ok", else the names on, comma split; whole names only, cut to fit
+    // Gives "ok", else the names of the bits that are on, comma separated
     // lo = bits 0-7, hi = 8-15, PROGMEM "a\0b\0" with a last \0
     static __attribute__((noinline)) size_t text(char* buf, size_t cap, uint16_t bits,
                                                  const char* lo, const char* hi) {
@@ -76,13 +75,13 @@ class StatusWord {
     uint16_t _ever = 0;
 };
 
-// the device's word: the app's bits are 0-7, these are Corium's, add-only
+// The device's word. The app's bits are 0-7, these are Corium's, only ever added to
 enum : uint8_t { DEV_CRASHED = 8, DEV_NOCLOCK, DEV_SAVEFAIL, DEV_LOWHEAP };
 #define CORIUM_DEV_NAMES "crashed\0noclock\0savefail\0lowheap\0"
 
-static const uint16_t DEV_TIME = (1u << DEV_NOCLOCK) | (1u << DEV_LOWHEAP);   // the Reactor's two
+static const uint16_t DEV_TIME = (1u << DEV_NOCLOCK) | (1u << DEV_LOWHEAP);   // the two the Reactor sets
 
-static const uint32_t CLOCK_WAIT_S = 600;   // a normal boot syncs well before
+static const uint32_t CLOCK_WAIT_S = 600;   // a normal boot syncs well before this
 static const uint32_t HEAP_MIN_8266 = 4096;
 static const uint32_t HEAP_MIN_32   = 16384;
 #ifdef ESP8266
@@ -91,15 +90,15 @@ static const uint32_t HEAP_MIN = HEAP_MIN_8266;
 static const uint32_t HEAP_MIN = HEAP_MIN_32;
 #endif
 
-// a function, the esp32 core is c++11
+// A function, since the esp32 core is c++11
 inline StatusWord& healthWord() {
   static StatusWord w;
   return w;
 }
 
-static const uint8_t HEAP_LOW_S = 2;   // seconds in a row, one dip isn't low
+static const uint8_t HEAP_LOW_S = 2;   // seconds in a row, a single dip isn't low
 
-// each second, Reactor; online = wifi is meant to be up, heap = free bytes now
+// Each second. online = wifi is meant to be up
 inline void statusTick(uint32_t up, bool synced, bool online, uint32_t heap) {
   static uint8_t low_s = 0;
   low_s = heap < HEAP_MIN ? (low_s < HEAP_LOW_S ? low_s + 1 : HEAP_LOW_S) : 0;

@@ -49,32 +49,32 @@
 namespace corium {
 namespace PinSafety {
 
-extern const char I2C[];   // shared bus, one owner
+extern const char I2C[];   // Owner name for the shared bus
 extern const char OUT_OF_RANGE[];
 
 // nullptr = ok, else why or the other owner (PROGMEM)
 const char* claim(int pin, const char* owner);
 const char* claimOutput(int pin, const char* owner);
 const char* claimInput(int pin, const char* owner);
-const char* claimButton(int pin, const char* owner);   // input, no strap note
+const char* claimButton(int pin, const char* owner);   // input without the strap note
 
 enum Use : uint8_t { USE_OUT, USE_IN, USE_BUTTON };
 
-// a pin the board wires, a null owner ends the table (PROGMEM)
+// A pin the board wires up, a null owner ends the table (PROGMEM)
 struct Fixed { const char* owner; int8_t pin; Use use; };
 
-// before prefs load: each claimed, and no pref can take one
+// Call before prefs load. Each one is claimed and no pref can take it
 void reserve(const Fixed* rows);
-// shared ones, none claimed: a pref saves with a note, the first module takes it, warned
+// Shared pins, none claimed. A pref can still take one, it saves with a note
 void share(const Fixed* rows);
 
 enum PinKind : uint8_t {
   PK_FLASH,       // refused
   PK_PSRAM,       // refused
-  PK_MISSING,     // no such GPIO, refused
-  PK_USB,         // refused when USB is the console
+  PK_MISSING,     // No such GPIO, refused
+  PK_USB,         // Refused when USB is the console
   PK_INPUT_ONLY,  // outputs refused
-  PK_STRAP,       // inputs warned, a pull the wrong way at power-on stops boot
+  PK_STRAP,       // Inputs warned, a pull the wrong way at power-on stops boot
   PK_NO_PULL,     // inputs warned, no internal pull-up
   PK_NO_IRQ,      // warned when NEED_IRQ
   PK_NO_PWM,      // warned when NEED_PWM
@@ -82,14 +82,13 @@ enum PinKind : uint8_t {
   PK_GLITCH,      // warned when NEED_IRQ, false edges
 };
 
-// what a pin is for, a kind it lacks is a warning
+// What a pin is needed for, a kind it lacks gives a warning
 enum Need : uint8_t { NEED_IRQ = 1, NEED_PWM = 2, NEED_OD = 4 };
 
 // lo..hi inclusive, a lo of PIN_END ends the table
 struct PinRule { uint8_t lo, hi; PinKind kind; };
 constexpr uint8_t PIN_END = 255;
 
-// one per chip, the build uses its own
 extern const PinRule ESP8266_PINS[];
 extern const PinRule ESP32_PINS[];
 extern const PinRule ESP32S2_PINS[];
@@ -97,13 +96,13 @@ extern const PinRule ESP32S3_PINS[];
 extern const PinRule ESP32C3_PINS[];
 extern const PinRule ESP32C6_PINS[];
 
-// nullptr = ok, else why; *warn = a note worth logging
+// nullptr = ok, else why. *warn = a note worth logging
 const char* check(const PinRule* rows, int pin, bool out, bool usb, const char** warn,
                   uint8_t needs = 0);
 
-// this chip's table and the reserved pins, no claim; -1 = no pin; *warn as a claim's
+// Checks without claiming, -1 = no pin
 const char* refuse(int pin, Use use, uint8_t needs, const char** warn);
-constexpr size_t WHY_MAX = 24;   // longest refuse() text, with the nul
+constexpr size_t WHY_MAX = 24;   // Longest refuse() text, with the nul
 
 }  // namespace PinSafety
 }  // namespace corium

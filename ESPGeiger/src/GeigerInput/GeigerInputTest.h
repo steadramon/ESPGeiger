@@ -47,7 +47,7 @@ extern volatile int _pulse_width_us;
 extern volatile uint32_t _pulse_width_ticks;
 void set_pulse_width_us(int us);
 
-// Base for test inputs, Poisson pulses at a target cpm
+// Poisson pulses at a target cpm
 class GeigerInputTest : public GeigerInput
 {
   public:
@@ -61,15 +61,14 @@ class GeigerInputTest : public GeigerInput
     void setTargetCPS(float target);
     float getTargetCPS();
     void CPMAdjuster();
-    // timer ticks to the next pulse
     double calcDelay();
     char _test_type[16];
     unsigned long _last_pulse_test = 0;
     double _remainder = 0;
     double generatePoissonRand(double lambda);
-    // timer side, stamp only, count in loop()
+    // Timer side only stamps, the count is done in loop()
     static void CORIUM_ISR_ATTR timerPulse();
-    // every pass, keep inline. relaxed, no memw a pass
+    // Runs every pass so keep it inline. Relaxed, so no memw a pass
     static void countTimerPulses() {
       if (_tp_head.load(std::memory_order_relaxed) != _tp_tail.load(std::memory_order_relaxed))
         drainTimerPulses();

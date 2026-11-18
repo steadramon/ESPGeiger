@@ -28,8 +28,8 @@ Ending ending(uint8_t reset_reason) {
     case DeviceInfo::RR_PIN:
     case DeviceInfo::RR_RESTART:   return END_RESTART;
     case DeviceInfo::RR_EXCEPTION:
-    case DeviceInfo::RR_WDT:
-    case DeviceInfo::RR_BROWNOUT:  return END_CRASH;
+    case DeviceInfo::RR_WDT:       return END_CRASH;
+    case DeviceInfo::RR_BROWNOUT:  return END_BROWNOUT;
     default:                       return END_OTHER;
   }
 }
@@ -42,19 +42,21 @@ uint32_t retryMs(uint8_t retries) {
 }
 
 void apply(State& s, uint32_t magic, uint32_t fw, Ending end) {
-  // new firmware starts clean
+  // New firmware starts clean
   if (s.magic != magic || s.fw != fw) {
     memset(&s, 0, sizeof(s));
     s.magic = magic;
     s.fw = fw;
   }
+  if (end == END_BROWNOUT) return;
   bool lived = s.lived;
   s.lived = 0;
   bool enter = s.enter;
   s.enter = 0;
 
   if (end != END_CRASH) {
-    s.crashStreak = 0;
+    // Leaves safe mode on probation, one early crash puts it back
+    s.crashStreak = s.safe ? CRASHES_TO_SAFE_MODE - 1 : 0;
     s.safe = enter && end == END_RESTART;
     return;
   }

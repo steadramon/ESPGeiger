@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// No clock, prefs or log, no vtable
+// Pure counter maths. No clock, prefs or log, and no vtable
 
 #ifndef COUNTERMATHS_H
 #define COUNTERMATHS_H
@@ -29,7 +29,7 @@
 #ifndef GEIGER_RATIO
   #define GEIGER_RATIO 151.0  // pref default is STR() of it
 #endif
-// cpm, pref defaults; 0 = off
+// Pref defaults in cpm, 0 = off
 #ifndef GEIGER_WARN_CPM
   #define GEIGER_WARN_CPM 50
 #endif
@@ -46,17 +46,17 @@
 #ifndef GEIGER_MISSING_COUNTS
 #define GEIGER_MISSING_COUNTS 10
 #endif
-// longer than missing, drives the banner
+// Longer than missing, this one drives the dead tube banner
 #ifndef GEIGER_DEAD_COUNTS
 #define GEIGER_DEAD_COUNTS 20
 #endif
-// 6 h, cap on the observed rate timeout
+// 6 h cap
 #define GEIGER_TUBE_DEAD_MAX_S 21600
-// uSv/h, until the first count, pref bg_usvh
+// assumed background until the first count
 #ifndef GEIGER_ASSUMED_BG_USVH
 #define GEIGER_ASSUMED_BG_USVH 0.1  // STR() into the pref default
 #endif
-// floor, low cpm setups false alarm, pref quiet_min
+// Floor for the tube timeout, else low cpm setups false alarm
 #ifndef GEIGER_QUIET_MIN
 #define GEIGER_QUIET_MIN 30
 #endif
@@ -65,28 +65,28 @@
 // samples in the 5 and 15 min averages
 #define GEIGER_CPM5_COUNT 60
 #define GEIGER_CPM15_COUNT 60
-// same as a 60 sample avg
+// EMA that matches a 60 sample average
 #ifndef GEIGER_EMA_FACTOR
 #define GEIGER_EMA_FACTOR ((GEIGER_CPM5_COUNT + 1) / 2)
 #endif
 
 class CounterMaths {
   public:
-    // pulse interval histogram, log2 buckets from 64 us
+    // log2 buckets starting at 64 us
     static constexpr uint8_t  HIST_BUCKETS = 25;
     static constexpr uint32_t HIST_BASE_US = 64;
     static constexpr uint32_t MISSING_MIN_S = 60;   // never sooner
-    // x10 dead time, x60 cpm, still an int
+    // Leaves room for 10x dead time and x60 to cpm, still fits an int
     static constexpr float CPS_MAX = (float)(INT32_MAX / 600);
 
-    // floating pin
+    // Clamps junk counts from a floating pin
     static int clamp_counts(int n) {
       if (n < 0) return 0;
       if (n > (int)CPS_MAX) return (int)CPS_MAX;
       return n;
     }
 
-    // int compares, a float compare is a soft-float call
+    // For int compares, a float compare is a soft-float call
     static int32_t fbits(float v) { int32_t b; memcpy(&b, &v, 4); return b; }
 
     // NaN and below 0 read 0
@@ -103,13 +103,13 @@ class CounterMaths {
       return t > 0xFFFF ? 0xFFFF : (uint16_t)t;
     }
 
-    // full window multiplies, a divide is soft-float from flash
+    // Multiplies by the inverse once full, a divide is soft-float from flash
     static float window_mean(uint32_t sum, uint16_t n, uint16_t window, float window_inv) {
       if (!n) return 0.0f;
       return n == window ? (float)sum * window_inv : (float)sum / (float)n;
     }
 
-    // inputs of the last cps, same again needs no maths
+    // Remembers the last inputs so the same again can skip the maths
     struct CpsInputs {
       uint32_t sum = 0;
       uint16_t n = 0xFFFF;   // none yet
@@ -122,14 +122,13 @@ class CounterMaths {
       void reset() { n = 0xFFFF; }
     };
 
-    // CPM per uSv/h
     void set_ratio(float ratio) {
       if (!(ratio >= 1.0f)) return;   // pref min, NaN too
       _ratio = ratio;
       _ratio_inv = 1.0f / ratio;
       retime();
     }
-    // the site's background and the warning floor, under 0.01 = the default
+    // Out of range (under 0.01 or over 1) uses the default
     void set_background(float usvh, uint32_t floor_s) {
       _bg_usvh = usvh >= 0.01f && usvh <= 1.0f ? usvh : (float)GEIGER_ASSUMED_BG_USVH;
       if (floor_s) _floor_s = floor_s;
@@ -146,12 +145,12 @@ class CounterMaths {
       if (b >= 0x4A000000 && cps > CPS_MAX) cps = CPS_MAX;   // 2^21 first
       if (_dead_time_us == 0) return cps;
       float x = cps * _dead_time_s;
-      if (cps <= 50.0f) return cps + cps * x;   // no divide below 50 cps, x^2 off
+      if (cps <= 50.0f) return cps + cps * x;   // no divide below 50 cps, the x^2 term is dropped
       if (x > 0.9f) x = 0.9f;
       return cps / (1.0f - x);
     }
 
-    // raw cps only
+    // Takes raw cps, before dead time
     bool saturated_at(float cps) const {
       if (_dead_time_us == 0) return false;
       return cps * _dead_time_s > 0.875f;
@@ -183,17 +182,17 @@ class CounterMaths {
 
     bool counts_missing(uint32_t uptime_s, uint32_t last_count_up_s,
                         uint64_t total_clicks) const {
-      // int guard first
+      // cheap int check before the float maths
       uint32_t silence = uptime_s - last_count_up_s;
       if (silence < MISSING_MIN_S) return false;
       if (_ratio <= 0.0f) return false;
       return silence >= missing_threshold_s(uptime_s, total_clicks);
     }
 
-    // cold window reads high; 0 = off
+    // A cold window reads high, so only once warm. limit 0 = off
     static bool alarm_over(int cpm, int limit, bool warm) { return warm && limit > 0 && limit < cpm; }
 
-    // log2 from 64us, isr, no clz
+    // Runs in the ISR, a loop as there's no clz
     __attribute__((always_inline)) static uint8_t interval_bucket(uint32_t us) {
       uint32_t d = us / HIST_BASE_US;
       uint8_t b = 0;

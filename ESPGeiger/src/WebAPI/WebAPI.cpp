@@ -117,7 +117,7 @@ static void __attribute__((noinline)) hash_body(const uint8_t* p, size_t n, uint
   memcpy(out, sha.result(), HASH_LENGTH);
 }
 
-// X-Auth: secp192r1 over the body's sha256, base64 into out; false = sign failed
+// X-Auth: secp192r1 over the body's sha256, base64
 static bool sign(const uint8_t* priv, const uint8_t* body, size_t len, char* out) {
   uint8_t signature[WEBAPI_SIG_LEN];
   uint8_t hash[HASH_LENGTH];
@@ -183,8 +183,8 @@ static bool crash_to_send() {
   return corium::CrashDump::reset().crash;
 }
 
-// a forget is owed till sent: after a restart the station id comes from a handshake first.
-// true = off, nothing more this pass
+// a forget is owed till sent, after a restart the station id comes from a handshake
+// true = off
 bool WebAPI::offStep() {
   if (!WEBAPI_SENDS || !_have_key) _forget = false;   // never had a station
   uint32_t now = corium::fastMillis();
@@ -441,7 +441,7 @@ void WebAPI::backoffHandshake() {
   handshakeAt(corium::fastMillis() + backoff());
 }
 
-// a failed handshake or forget, doubles to the max
+// doubles to the max
 uint32_t WebAPI::backoff() {
   uint32_t wait = _hs_backoff_ms;
   uint32_t next = wait * 2;
@@ -499,7 +499,7 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
   notePublish(false);
 }
 
-// a handshake's or a post's; true = no backoff: gone, or a 429 waits for its slot
+// true = no backoff
 bool WebAPI::replyError(int code, const uint8_t* r, size_t n, bool hs) {
   corium::HttpDriver::logError(PSTR("WebAPI"), code);
   if (code == 410 || (hs && code == 404)) {   // a post's 404 isn't gone
@@ -525,10 +525,10 @@ bool WebAPI::replyError(int code, const uint8_t* r, size_t n, bool hs) {
 }
 
 #ifdef ESPGEIGER_ATTEST
-// official hardware, once a boot: challenge, then the chip signs it with the station key
+// official hardware, once a boot: the chip signs a challenge with the station key
 static const char ATTEST_TAG[] PROGMEM = "espgeiger-attest-v1";
 
-// nonce nullptr = ask for one, or for the blob; a lost reply asks again after the next handshake
+// nonce nullptr = ask for one; a lost reply asks again after the next handshake
 void WebAPI::sendAttest(const uint8_t* nonce) {
   const bool fetch = _att == ATT_FETCH;
   _att = ATT_WAIT;
@@ -753,7 +753,7 @@ static bool keep_key(const uint8_t* priv) {
   return false;
 }
 
-// key reset; factory reset keeps the station. false = either left, the old key comes back
+// factory reset keeps the station; false = the old key comes back
 bool forget_key() {
   // copy first, else a cut brings it back
   bool ok = corium::KeyStore::clear();

@@ -24,11 +24,11 @@
 #include "App/AppConfig.h"
 #include "Corium/Util/Attr.h"
 
-// value bytes per group, keys not counted. a group's maxBytes can ask for more
+// value bytes per group, keys not counted
 #ifndef CORIUM_PREFS_MAX_GROUP_SZ
 #define CORIUM_PREFS_MAX_GROUP_SZ 1024
 #endif
-// most a group may ask for, files are sized from it. static_assert a group's maxBytes against it
+// files are sized from it
 #ifndef CORIUM_PREFS_GROUP_SZ_MAX
 #define CORIUM_PREFS_GROUP_SZ_MAX 4096
 #endif
@@ -38,9 +38,9 @@
 #define CORIUM_PREFS_HOLD_MS 5000
 #endif
 
-// string maxes, rows and buffers both use these. buffers +1
+// buffers +1
 #ifndef CORIUM_PREFS_MAX_VALUE
-#define CORIUM_PREFS_MAX_VALUE 255   // longest value a row may carry, maxLen is 8 bit
+#define CORIUM_PREFS_MAX_VALUE 255   // maxLen is 8 bit
 #endif
 #ifndef CORIUM_PREF_ID_MAX
 #define CORIUM_PREF_ID_MAX     17    // longest pref or group id
@@ -57,7 +57,6 @@
 #define CORIUM_PREFS_FROZEN_MAX (3 * CORIUM_PREF_ID_MAX + 32)   // frozen()'s text, with the nul
 #define CORIUM_PREF_PATTERN_MAX 127  // regex or enum options
 
-// build macro as text, for defaults and maxlength
 #define STR_(x) #x
 #define STR(x)  STR_(x)
 
@@ -159,7 +158,7 @@ enum PrefCategory : uint8_t {
   P_CAT_BACKUP = 4,
 };
 static constexpr uint8_t P_CAT_TAB   = 0x0F;   // the tab, the rest are marks
-static constexpr uint8_t P_CAT_BOARD = 0x80;   // this board's own calibration, an import from another keeps it
+static constexpr uint8_t P_CAT_BOARD = 0x80;   // board calibration, an import keeps it
 
 // groups must be PROGMEM
 struct PrefGroup {
@@ -228,10 +227,9 @@ private:
   const LegacyAlias* _rows;
 };
 
-// all static, one store for every module's group
 class Prefs {
 public:
-  // setup, once modules are registered; loads every group then onPrefsLoaded
+  // once modules are registered
   static void begin();
 
   // module SRAM, key SRAM or PROGMEM; unknown = "" or 0
@@ -252,29 +250,29 @@ public:
   CORIUM_NODISCARD static bool putInt(const char* module, const char* key, int32_t value);
   CORIUM_NODISCARD static bool putUInt(const char* module, const char* key, uint32_t value);
   static bool commit(bool fire_callbacks = true);
-  // for a write per request: callbacks now, one write CORIUM_PREFS_HOLD_MS on; true = will be written
+  // callbacks now, one write CORIUM_PREFS_HOLD_MS on
   CORIUM_NODISCARD static bool commitSoon(uint32_t now_ms);
-  // why the last commit left a group out (a stored value didn't load, rest written), else 0
+  // why the last commit left a group out, else 0
   static size_t frozen(char* out, size_t cap);
-  // any group an export carries holding one now, the same text; the export would leave it out
+  // any group an export would leave out
   static size_t anyFrozen(char* out, size_t cap);
-  static void flush(uint32_t now_ms);   // the waiting write, at wake or shutdown; now as commitSoon's
+  static void flush(uint32_t now_ms);   // at wake or shutdown
   // wake(at) has flush() called then; none = commitSoon writes now
   static void holdBy(void (*wake)(uint32_t at));
-  // back to the row default, a key by put() rules; no key = the whole group, all or none
+  // no key = the whole group, all or none
   static bool reset(const char* module, const char* key = nullptr);
   CORIUM_NODISCARD static bool removeGroup(const char* module);
-  // P_KEEP rows stay; keep_network keeps the P_LOCAL ones too (net, web_pass, radio)
+  // P_KEEP rows stay; keep_network keeps P_LOCAL too
   static void resetAll(bool keep_network = false);
-  // groups a failed commit left unsaved back to what's on flash, no callbacks
+  // back to flash, no callbacks
   static void revert();
-  static void revert(const char* module);   // that one group only
+  static void revert(const char* module);
   static bool restartPending();  // a commit since boot changed a P_REBOOT row
-  // read at begin() or written since; false = defaults (no file, unreadable, FS lost)
+  // false = defaults
   static bool stored(const char* module);
-  // flash has what it reads: nothing waits to be written, none refused at load
+  // nothing waiting, none refused at load
   static bool landed(const char* module);
-  // false = its stored value didn't load, the default stands; two in a group = every row
+  // false = the default stands; two in a group = every row
   static bool loaded(const char* module, const char* key);
   // enableKey unset, "0" or "-1" (no pin) = off, no key = on
   static bool groupEnabled(const PrefGroup* g);

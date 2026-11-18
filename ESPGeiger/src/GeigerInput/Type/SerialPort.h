@@ -17,7 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// EG_SERIAL_NMI receiver or EspSoftwareSerial. Cap a power of two
+// Cap must be a power of two
 
 #ifndef GEIGERSERIALPORT_H
 #define GEIGERSERIALPORT_H

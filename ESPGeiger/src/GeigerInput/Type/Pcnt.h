@@ -26,12 +26,12 @@ extern "C" {
   #include "soc/pcnt_struct.h"
 }
 #include <driver/pcnt.h>
-#define PCNT_HIGH_LIMIT 32767  // largest +ve value for int16_t.
+#define PCNT_HIGH_LIMIT 32767
 #define PCNT_LOW_LIMIT  0
 
 #define PCNT_UNIT PCNT_UNIT_0
 #define PCNT_CHANNEL PCNT_CHANNEL_0
-// the unit's two bits in ctrl, as hal/pcnt_ll.h (C only)
+// The unit's two bits in ctrl, as in hal/pcnt_ll.h (which is C only)
 #define PCNT_RST_BIT   (1u << (2 * PCNT_UNIT))
 #define PCNT_PAUSE_BIT (1u << (2 * PCNT_UNIT + 1))
 
@@ -58,7 +58,7 @@ static inline void pcnt_begin(int pin, gpio_pull_mode_t pull) {
   pcnt_counter_resume(PCNT_UNIT);
 }
 
-// paused so the read is steady; registers, not the driver, so the pause is short
+// Paused for a steady read, straight to the registers so the pause is short
 static inline int16_t pcnt_take() {
   PCNT.ctrl.val |= PCNT_PAUSE_BIT;
   int16_t n = (int16_t)(uint16_t)PCNT.cnt_unit[PCNT_UNIT].val;

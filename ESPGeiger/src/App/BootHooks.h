@@ -50,7 +50,7 @@
 
 namespace BootHooks {
 
-  // under 5s offline, 5s+ full reset (keeps /api.key)
+  // Held under 5s goes offline, 5s or more is a full reset (keeps /api.key)
   using ButtonHold = corium::BootButton::Hold;
 
   inline void displayWifiDisabled() {
@@ -61,7 +61,7 @@ namespace BootHooks {
 
   inline void displaySetupWifi(const char* host) {
 #ifdef AUDIO_TICK
-    // I2S not up yet
+    // I2S isn't up yet, start it here
     audiotick.begin();
     voice.silence(1000);
     voice.speakWord("setup_wifi");
@@ -74,7 +74,7 @@ namespace BootHooks {
 #endif
   }
 
-  // after prefs, before the join: a crash or restart left them as they were
+  // After prefs load, before wifi joins
   inline void parkOutputs(bool safe) {
 #ifdef ALERT_OUT
     alertout.park();
@@ -117,12 +117,12 @@ namespace BootHooks {
 #endif
   }
 
-  // Blocks until released. safe mode: full reset only, never offline
+  // Blocks until released. In safe mode it can only do a full reset, never offline
   inline ButtonHold checkStartupButtonHold(bool safe = false) {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();
     ButtonHold hold = corium::BootButton::check([] { return pushbutton.isPressed(); },
-                                        safe ? +[] {} : &displayWifiDisabled, displayWipe);
+                                                safe ? +[] {} : &displayWifiDisabled, displayWipe);
     if (safe && hold == ButtonHold::OFFLINE) {
       corium::Log::console(PSTR("BOOT: safe mode - offline ignored"));
       hold = ButtonHold::NONE;

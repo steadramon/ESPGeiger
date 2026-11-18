@@ -145,7 +145,6 @@ static const int16_t IMA_STEP_TABLE[89] = {
 static int16_t s_pred = 0;
 static int8_t  s_idx  = 0;
 
-// one 4 bit code to the next 16 bit sample
 static int16_t adpcm_decode_nibble(uint8_t code) {
   int16_t step = IMA_STEP_TABLE[s_idx];
   int32_t diff = step >> 3;
@@ -258,7 +257,7 @@ static void adpcm_speak_word(const VocabADPCM* info, float pitch_scale) {
     }
     if (consumed >= total_in) break;
   }
-  // decode runs one ahead, write the last one
+  // Decode runs one sample ahead, so write out the last one
   out.put(scale_sample((int16_t)s_pred, scale_q8));
   adpcm_fade_out(out, scale_sample(s_pred, scale_q8));
 }
@@ -297,7 +296,7 @@ static void klaxon_square_sweep(float f_start, float f_end, uint16_t ms, int pea
   out.flush();
 }
 
-// the audio worker's speech commands
+// Runs on the audio worker
 static void voice_cmd(const AudioCmd& cmd) {
   switch (cmd.type) {
     case AC_WORD:     voice.speakWord(cmd.word, 1.0f); break;
@@ -313,7 +312,7 @@ static void voice_cmd(const AudioCmd& cmd) {
 void Voice::begin() {
   audio_speech(voice_cmd);
   corium::Registry::every(this, LOOP_MS);
-  // klaxon on the edge, not the next second
+  // Klaxon on the alarm edge, not on the next second
   corium::Registry::on(Counter::TOPIC_ALARM, this);
   corium::Module* r = corium::Registry::find("radmon");
   _radmon = r ? r->sender() : nullptr;
@@ -345,7 +344,7 @@ void Voice::queueAnnouncement() {
   audio_enqueue(cmd);
 }
 
-// not at boot
+// Says RadMon online/offline when it changes, not at boot
 void Voice::queueRadmonChange() {
   corium::Sender* m = _radmon;
   // lastOk is only the answer once the reply is in
@@ -452,7 +451,7 @@ void Voice::speakNumber(long v) {
   unsigned long n = v < 0 ? 0UL - (unsigned long)v : (unsigned long)v;   // LONG_MIN too
   if (n == 0) { speakWord("zero"); silence(80); return; }
   if (n >= 1000000) {
-    // no word past thousand, digit groups
+    // No word past thousand, so read it out in digit groups
     char buf[16];
     snprintf_P(buf, sizeof(buf), W_FMT_LU, n);
     const size_t len = strlen(buf);
@@ -487,7 +486,7 @@ void Voice::speakDigits(const char* s) {
   }
 }
 
-// all just enqueue, audio worker plays in order
+// These all just enqueue, the audio worker plays them in order
 static void send_queued(EGHttpResponse& res, AudioCmd cmd) {
   cmd.web = true;
   if (audio_enqueue(cmd)) res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(AT_QUEUED));

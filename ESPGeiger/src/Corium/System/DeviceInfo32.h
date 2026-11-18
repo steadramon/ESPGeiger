@@ -19,7 +19,7 @@
 #ifndef CORIUM_DEVICEINFO32_H
 #define CORIUM_DEVICEINFO32_H
 
-// from DeviceInfo.h
+// Included from DeviceInfo.h
 #include <esp_task_wdt.h>
 
 namespace corium {
@@ -32,7 +32,7 @@ namespace DeviceInfo {
 
   inline uint32_t hwRandom() { return esp_random(); }
 
-  // ram left from before the boot, a seed; survives a warm reset, bootRamSet() changes it
+  // Ram left from before boot, used as a seed
   extern uint8_t bootRamBuf[256];   // .noinit
   inline const uint8_t* bootRam(size_t& n) {
     n = sizeof(bootRamBuf);
@@ -44,21 +44,20 @@ namespace DeviceInfo {
   inline uint32_t heapMin() { return ESP.getMinFreeHeap(); }
   inline uint32_t heapMaxBlock() { return ESP.getMaxAllocHeap(); }
 
-  // loop stack never touched since boot, bytes
   inline uint32_t stackFree() {
     return uxTaskGetStackHighWaterMark(nullptr);   // handlers run on the loop task
   }
 
-  float chipTempC();   // die not ambient, classic esp32 reads high
+  float chipTempC();   // die temp, not ambient. The classic esp32 reads high
   extern uint8_t ctWait;
   void chipTempRead();
-  // 1 Hz, no call till a read is due
+  // call at 1 Hz
   inline void chipTempSample() {
     if (ctWait) { ctWait--; return; }
     chipTempRead();
   }
 
-  // a fed task wdt, 5 s from here
+  // Just feeds the task wdt, so 5 s from here
   inline void wdtPause() { esp_task_wdt_reset(); }
   inline void wdtResume() { esp_task_wdt_reset(); }
 }

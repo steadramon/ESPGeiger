@@ -30,13 +30,13 @@ namespace corium {
 
 class Sender;
 
-// PROGMEM, ends with an empty path
+// PROGMEM table, ends with an empty path
 struct MenuEntry {
   char path[12];
   char label[20];
 };
 
-// lower runs first
+// Lower runs first
 #define CORIUM_PRIORITY_HARDWARE       10
 #define CORIUM_PRIORITY_INFRASTRUCTURE 20
 #define CORIUM_PRIORITY_DEFAULT        50
@@ -46,20 +46,20 @@ class Module {
   public:
     virtual const char* name() = 0;   // flash or SRAM, read with _P
     virtual uint8_t priority() { return CORIUM_PRIORITY_DEFAULT; }
-    virtual void preWifi() {}   // no network yet
+    virtual void preWifi() {}   // No network yet
     virtual void begin() {}      // after wifi, or offline
-    // runs once every() / dueAt() / post() asks
+    // runs when every(), dueAt() or post() asks for it
     virtual void loop(unsigned long now) {}
 
     virtual bool requiresWifi() { return false; }
     virtual bool requiresNtp() { return false; }
-    // safe mode keeps these
+    // Safe mode still runs these
     virtual bool coreModule() { return false; }
-    // loops during OTA
+    // Keeps looping during OTA
     virtual bool runsDuringOta() { return false; }
 
     virtual const PrefGroup* prefsGroup() { return nullptr; }
-    virtual const PrefShow* prefsShow() { return nullptr; }   // /param rows by another pref
+    virtual const PrefShow* prefsShow() { return nullptr; }   // /param rows shown or hidden by another pref
     virtual void onPrefsLoaded() {}
 
     virtual void registerRoutes(EGHttpServer& http) { (void)http; }
@@ -69,32 +69,32 @@ class Module {
     virtual uint8_t displayOrder() { return 50; }  // lower first, 0 = hidden
     virtual bool hwPresent() { return true; }
 
-    // legacy import, PROGMEM rows ending {}
+    // For the legacy import, PROGMEM rows ending with {}
     virtual LegacyRows legacyAliases() { return LegacyRows(); }
 #ifdef CORIUM_PREFS_LEGACY_FILE
     virtual const char* legacyFile() { return CORIUM_PREFS_LEGACY_FILE; }
 #else
-    virtual const char* legacyFile() { return nullptr; }   // none
+    virtual const char* legacyFile() { return nullptr; }
 #endif
 
     virtual MeasureRows measurements() { return MeasureRows(); }
 
     // /outputs fragment, 0 = not sending
     virtual size_t statusJson(char* buf, size_t cap) { return 0; }
-    virtual Sender* sender() { return nullptr; }   // nullptr = not a sender
+    virtual Sender* sender() { return nullptr; }
 
-    static constexpr uint8_t TOPIC_SENT = 1;   // a send went out
+    static constexpr uint8_t TOPIC_SENT = 1;   // A send went out
 
   private:
     friend class Registry;
-    uint8_t _slot = 0xFF;   // registry's, 0xFF = not added
+    uint8_t _slot = 0xFF;   // set by the registry, 0xFF = not added
 
   protected:
-    // statics, never deleted
+    // Modules are statics, never deleted
     ~Module() = default;
 };
 
-// a module that sends: last result, counts for the Activity log
+// A module that sends. Keeps the last result and the counts for the Activity log
 class Sender : public Module {
   public:
     Sender* sender() override { return this; }
@@ -104,13 +104,13 @@ class Sender : public Module {
     void noteResult(bool ok);
     uint8_t takePublishOk();
     uint8_t takePublishErr();
-    bool pending() const { return _publish_pending; }   // sent, no reply yet
+    bool pending() const { return _publish_pending; }   // Sent, no reply yet
 
-    // share a byte, set via noteAttempt() / noteResult() only
+    // Both share a byte, only set via noteAttempt() / noteResult()
     uint8_t lastOk           : 1;
     uint8_t _publish_pending : 1;
   private:
-    uint8_t _pub_ok  = 0;   // in the base's tail
+    uint8_t _pub_ok  = 0;   // packs into the tail of the base class
     uint8_t _pub_err = 0;
   public:
     unsigned long lastAttempt = 0;   // uptime s, 0 = none yet
@@ -118,7 +118,7 @@ class Sender : public Module {
   protected:
     ~Sender() = default;
     static size_t writeStatusJson(char* buf, size_t cap, const char* key,
-                                    bool ok, unsigned long lastAttempt);
+                                  bool ok, unsigned long lastAttempt);
 };
 
 }  // namespace corium

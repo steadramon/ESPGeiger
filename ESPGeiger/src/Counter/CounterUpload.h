@@ -22,10 +22,10 @@
 #include "GeigerInput/GeigerInput.h"
 
 bool upload_warm();
-// logs tag once warm
+// Test builds just log the tag once warm
 void upload_testmode(const char* tag);
 
-// warm and not a test build; inline so test builds drop the upload
+// inline so test builds drop the upload
 inline bool upload_ready(const char* tag) {
   if (GEIGER_IS_TEST(GEIGER_TYPE)) {
     upload_testmode(tag);

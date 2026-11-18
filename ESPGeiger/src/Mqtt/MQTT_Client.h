@@ -37,7 +37,7 @@
 #define MQTT_TOPIC_PREF_MAX 28
 #define MQTT_USER_MAX 64
 #define MQTT_PASS_MAX 64
-#define MQTT_ROOT_MAX  (MQTT_TOPIC_PREF_MAX * CHIPID_LEN / (sizeof("{id}") - 1))   // all {id}
+#define MQTT_ROOT_MAX  (MQTT_TOPIC_PREF_MAX * CHIPID_LEN / (sizeof("{id}") - 1))   // if it's all {id}
 #define MQTT_TOPIC_LEN (MQTT_ROOT_MAX + sizeof("/tele/status"))
 
 #ifndef MQTT_HASS_DEFAULT
@@ -52,7 +52,7 @@
 #ifndef MQTT_JSON_BUFFER_SIZE
 #define MQTT_JSON_BUFFER_SIZE 1024
 #endif
-// s, the interval pref's range
+// s, range of the interval pref
 #define MQTT_MIN_TIME 5
 #define MQTT_MAX_TIME 3600
 #ifndef MQTT_INTERVAL
@@ -79,7 +79,6 @@
 #define MQTT_HASS_BIRTH_SPREAD_S 30UL   // stagger a fleet on HA birth
 #endif
 
-// tele/sensor and tele/status, stat/WARN and ALERT, HA discovery
 class MQTT_Client : public corium::Sender {
 public:
   static MQTT_Client& getInstance()
@@ -90,7 +89,7 @@ public:
   const char* name() override { return PSTR("mqtt"); }
   bool requiresWifi() override { return true; }
   static constexpr uint16_t LOOP_MS = 500;
-  static constexpr uint8_t TOPIC_PING = Topic::PING;   // the send mark, no LED
+  static constexpr uint8_t TOPIC_PING = Topic::PING;   // marks a send, without the LED
   void begin() override;
   void loop(unsigned long now) override;
   const corium::PrefGroup* prefsGroup() override;
@@ -112,8 +111,8 @@ private:
   void second(unsigned long now_s);
   uint32_t nextDue(unsigned long now_ms, unsigned long now_s);
   void wakeSoon();
-  uint32_t _due_ms = 0;   // timers next run
-  static constexpr uint32_t DUE_MAX_MS = (MQTT_MAX_TIME + 1) * 1000UL;   // nextDue's most
+  uint32_t _due_ms = 0;   // when the timers next run
+  static constexpr uint32_t DUE_MAX_MS = (MQTT_MAX_TIME + 1) * 1000UL;   // the longest nextDue gives
   bool clientBusy();
   bool moved();
   void rejoin();
@@ -165,7 +164,7 @@ private:
   uint16_t _status_every = MQTT_STATUS_INTERVAL;
   uint16_t _ping_every = MQTT_INTERVAL;
 #ifdef MQTTAUTODISCOVER
-  bool _hass_retrigger = false;   // HA came back, the timers spread it
+  bool _hass_retrigger = false;   // HA came back, the timers spread the resend
   bool _hass_gone = false;   // _hass_disc's entities to remove on connect
   char _hass_disc[MQTT_HASS_TOPIC_MAX + 1] = {};   // prefix this connection is on, "" = off
   corium::Deadline _hass_next;   // uptime s

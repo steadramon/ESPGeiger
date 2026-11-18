@@ -111,7 +111,7 @@ void GeigerPulse::restartAfterOTA() {
 }
 
 #ifdef PCNT_SELECTABLE
-// us since the last drain, 1 s the first time; a stall's pulses spread over the stall
+// 1 s the first time, a stall's pulses spread over it
 static inline __attribute__((always_inline)) uint32_t span_us(int64_t now_us, int64_t last_us) {
   if (last_us == 0 || now_us <= last_us) return 1000000UL;
   int64_t s = now_us - last_us;

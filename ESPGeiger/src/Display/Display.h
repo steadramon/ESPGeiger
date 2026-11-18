@@ -32,7 +32,7 @@
 #include "App/MeasureIds.h"
 #include "Corium/System/FastMillis.h"
 
-// under 10 the 5 min avg, unless 3 sigma off
+// Under 10 cpm show the 5 min avg, unless the two are over 3 sigma apart
 inline bool use_cpm5(float cpm, float cpm5) {
   if (cpm >= 10.0f || cpm5 >= 10.0f) return false;
   float d = cpm - cpm5;
@@ -43,7 +43,7 @@ inline float display_cpm(float cpm, float cpm5) {
   return use_cpm5(cpm, cpm5) ? cpm5 : cpm;
 }
 
-// tenths, as the number was
+// Turns the history into tenths, the same way the number was picked
 inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
   for (int i = 0; i < n; i++) {
     int j = i - (n - m);
@@ -52,7 +52,6 @@ inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
   }
 }
 
-// Prefs, sleep and the button for whichever DisplayBackend the type pref picks
 class Display : public corium::Module {
   public:
     const char* name() override { return PSTR("disp"); }
@@ -67,7 +66,7 @@ class Display : public corium::Module {
     void registerRoutes(EGHttpServer& http) override;
 
     DisplayBackend* backend();   // never null
-    // from a backend's file, at static init
+    // Each backend adds itself from its own file at static init
     static constexpr uint8_t BACKENDS_MAX = 2;
     static bool add(DisplayBackend* b);
 
@@ -89,16 +88,16 @@ class Display : public corium::Module {
 
     enum Sleep : uint8_t { AWAKE, TIMED_OUT, OFF_HOURS };
     Sleep sleep(unsigned long now);
-    // looked at on new counts, presses, taps and wakes
+    // Runs on new counts, presses, taps and wakes
     void loop(unsigned long now) override {
       presses(now);
       refresh(now);
     }
-    // lit or dark changed, from loop()
+    // Posted from loop() when the display goes lit or dark
     static constexpr uint8_t TOPIC_POWER = Topic::POWER;
     bool lit() const { return _lit; }
 
-    // core rows, found at the first prefs load
+    // Core rows, looked up at the first prefs load
     float cpm()       { return corium::m_read_f(_cpm); }
     float cpm5()      { return corium::m_read_f(_cpm5); }
     float cpm15()     { return corium::m_read_f(_cpm15); }
@@ -113,12 +112,12 @@ class Display : public corium::Module {
       corium::MValue v;
       return (_blip && _blip(&v)) ? v.u : 0;
     }
-    // the 5 min avg under 10
+    // swaps in the 5 min avg under 10 cpm
     float shown_cpm() {
       float c = cpm();
       return c < 10.0f ? display_cpm(c, cpm5()) : c;
     }
-    // a graph under 10 goes to tenths, each second with its 5 min avg; 10 = tenths
+    // A graph that dips under 10 is drawn in tenths, tenths() returns 10 when it is
     static const uint8_t HIST_MAX = 64;
     int tenths(int* h, uint16_t n) {
       int lo = n ? h[0] : 10;

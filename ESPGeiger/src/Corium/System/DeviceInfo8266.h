@@ -21,7 +21,7 @@
 
 // from DeviceInfo.h
 
-// top of dram, a host build points it at its own
+// Top of dram, a host build points it at its own buffer
 #ifndef CORIUM_BOOT_RAM
 #define CORIUM_BOOT_RAM (0x3FFFC000 - 0x800)
 #endif
@@ -35,7 +35,7 @@ namespace DeviceInfo {
 
   inline uint32_t hwRandom() { return RANDOM_REG32; }
 
-  // ram left from before the boot, a seed
+  // ram left from before boot, used as a seed
   inline const uint8_t* bootRam(size_t& n) {
     n = 0x800;
     return (const uint8_t*)(CORIUM_BOOT_RAM);
@@ -45,10 +45,9 @@ namespace DeviceInfo {
   // raw
   void heapStats(uint32_t* free_, uint16_t* max_, uint8_t* frag);
 
-  // loop stack never touched since boot, bytes
   inline uint32_t stackFree() { return ESP.getFreeContStack(); }
 
-  // sw wdt only, the hw wdt still runs
+  // Only the sw wdt, the hw wdt still runs
   inline void wdtPause() { ESP.wdtDisable(); }
   inline void wdtResume() { ESP.wdtEnable(WDTO_8S); }
 }

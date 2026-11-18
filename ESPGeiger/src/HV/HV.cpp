@@ -168,7 +168,7 @@ void HV::onPrefsLoaded() {
 #endif
 }
 
-// Config or console: a new freq or duty goes as /hvset's
+// a new freq or duty goes as /hvset's
 void HV::onPrefsSaved() {
   int f = (int)corium::Prefs::getUInt("espghw", EG_K_FREQ);
   int d = (int)corium::Prefs::getUInt("espghw", K_DUTY);

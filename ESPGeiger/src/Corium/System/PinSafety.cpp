@@ -59,7 +59,7 @@ using corium::PinSafety::PIN_END;
 const PinRule corium::PinSafety::ESP8266_PINS[] PROGMEM = {
   {6, 11, corium::PinSafety::PK_FLASH},
   {0, 0, corium::PinSafety::PK_STRAP},     // low = download mode
-  {2, 2, corium::PinSafety::PK_STRAP},     // low stops boot
+  {2, 2, corium::PinSafety::PK_STRAP},     // Low stops boot
   {15, 15, corium::PinSafety::PK_STRAP},   // high stops boot
   {16, 16, corium::PinSafety::PK_NO_PULL},
   {16, 16, corium::PinSafety::PK_NO_IRQ},
@@ -69,7 +69,7 @@ const PinRule corium::PinSafety::ESP8266_PINS[] PROGMEM = {
 };
 
 // https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/gpio.html
-// 16-17 are PSRAM on WROVER, left open: UART2's default pins
+// 16-17 are PSRAM on WROVER but left open, they're UART2's default pins
 const PinRule corium::PinSafety::ESP32_PINS[] PROGMEM = {
   {6, 11, corium::PinSafety::PK_FLASH},
   {20, 20, corium::PinSafety::PK_MISSING},
@@ -79,7 +79,7 @@ const PinRule corium::PinSafety::ESP32_PINS[] PROGMEM = {
   {34, 39, corium::PinSafety::PK_NO_PULL},
   {36, 36, corium::PinSafety::PK_GLITCH},  // esp32 errata, ~80 ns low pulses
   {39, 39, corium::PinSafety::PK_GLITCH},
-  {12, 12, corium::PinSafety::PK_STRAP},   // high = 1.8 V flash
+  {12, 12, corium::PinSafety::PK_STRAP},   // High = 1.8 V flash
   {0, 0, corium::PinSafety::PK_STRAP},     // low = download mode
   {2, 2, corium::PinSafety::PK_STRAP},
   {5, 5, corium::PinSafety::PK_STRAP},
@@ -94,14 +94,14 @@ const PinRule corium::PinSafety::ESP32S2_PINS[] PROGMEM = {
   {26, 32, corium::PinSafety::PK_FLASH},
   {19, 20, corium::PinSafety::PK_USB},
   {46, 46, corium::PinSafety::PK_INPUT_ONLY},
-  {45, 45, corium::PinSafety::PK_STRAP},   // flash voltage
+  {45, 45, corium::PinSafety::PK_STRAP},   // Flash voltage
   {0, 0, corium::PinSafety::PK_STRAP},     // low = download mode
   {46, 46, corium::PinSafety::PK_STRAP},
   {PIN_END, 0, corium::PinSafety::PK_FLASH},
 };
 
 // https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/gpio.html
-// 33-37 only on octal PSRAM chips (S3R8), refused on all: can't tell at build
+// 33-37 are only taken on octal PSRAM chips (S3R8), refused on all since the build can't tell
 const PinRule corium::PinSafety::ESP32S3_PINS[] PROGMEM = {
   {22, 25, corium::PinSafety::PK_MISSING},
   {26, 32, corium::PinSafety::PK_FLASH},
@@ -115,7 +115,7 @@ const PinRule corium::PinSafety::ESP32S3_PINS[] PROGMEM = {
 };
 
 // https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-reference/peripherals/gpio.html
-// 11 is VDD_SPI, powers the flash unless an efuse says not
+// 11 is VDD_SPI, it powers the flash unless an efuse says otherwise
 const PinRule corium::PinSafety::ESP32C3_PINS[] PROGMEM = {
   {11, 17, corium::PinSafety::PK_FLASH},
   {18, 19, corium::PinSafety::PK_USB},
@@ -148,10 +148,10 @@ namespace {
 #elif defined(PINSAFETY_TEST_CHIP)
   const PinRule* const CHIP = PINSAFETY_TEST_CHIP;
 #else
-  const PinRule* const CHIP = nullptr;   // host
+  const PinRule* const CHIP = nullptr;   // Host
 #endif
 
-  // both PROGMEM
+  // Both are PROGMEM
   bool same_owner(const char* a, const char* b) {
     if (a == b) return true;
     for (;; a++, b++) {
@@ -162,10 +162,10 @@ namespace {
   }
 }
 
-// when a kind speaks, past the Need bits
+// When a kind applies, these bits sit above the Need bits
 enum : uint8_t { IF_OUT = 8, IF_IN = 16, IF_USB = 32, ALWAYS = 64 };
 
-// by PinKind, up to PK_INPUT_ONLY a refusal, after a warning
+// Indexed by PinKind. Up to PK_INPUT_ONLY is a refusal, after that a warning
 static const char* const KIND_SAYS[] PROGMEM = {
   SPI_FLASH, PSRAM, NO_SUCH, USB, INPUT_ONLY, STRAP, NO_PULL, NO_IRQ, NO_PWM, NO_OD, GLITCH,
 };
@@ -176,9 +176,9 @@ static const uint8_t KIND_WHEN[] PROGMEM = {
 };
 static_assert(sizeof(KIND_WHEN) == corium::PinSafety::PK_GLITCH + 1, "a KIND_WHEN per PinKind");
 
-// rows can overlap, a refusal ends it, a warning carries on
+// Rows can overlap. A refusal ends the walk, a warning carries on
 const char* corium::PinSafety::check(const PinRule* rows, int pin, bool out, bool usb, const char** warn,
-                             uint8_t needs) {
+                                     uint8_t needs) {
   *warn = nullptr;
   if (!rows) return nullptr;
   uint8_t when = needs | (out ? IF_OUT : IF_IN) | (usb ? IF_USB : 0) | ALWAYS;
@@ -201,7 +201,6 @@ static PinClaim* find(int pin) {
   return nullptr;
 }
 
-// owner of the board's shared row on it, else nullptr
 static const char* shared_with(int pin) {
   for (const corium::PinSafety::Fixed* rows = s_shared; rows; rows++) {
     corium::PinSafety::Fixed r;
@@ -212,7 +211,7 @@ static const char* shared_with(int pin) {
   return nullptr;
 }
 
-// boot and save both: a button is open at power-on, like BOOT
+// A button is open at power-on like BOOT, so no strap warning
 static const char* checked(int pin, corium::PinSafety::Use use, uint8_t needs, const char** warn) {
   *warn = nullptr;
   if (pin == -1) return nullptr;
@@ -278,7 +277,7 @@ void corium::PinSafety::reserve(const Fixed* rows) {
     Fixed r;
     memcpy_P(&r, rows, sizeof(r));
     if (!r.owner) return;
-    // the module logs any warning when it claims
+    // the module logs any warning itself when it claims
     const char* warn;
     const char* why = checked(r.pin, r.use, 0, &warn);
     if (!why) why = claim(r.pin, r.owner);

@@ -24,7 +24,7 @@
 
 // Cheaper than millis(), not for sub-ms
 
-// a test build starts it near the wrap
+// A test build starts it near the wrap
 #ifndef CORIUM_MS_START
 #define CORIUM_MS_START 0
 #endif
@@ -34,22 +34,22 @@ extern volatile uint32_t _fast_ms_counter;
 
 static inline uint32_t fastMillis() { return _fast_ms_counter; }
 
-// at or past, wrap-safe, any unit
+// true when now is at or past at. Wrap-safe, any unit
 static inline bool reached(uint32_t now, uint32_t at) { return (int32_t)(now - at) >= 0; }
 
-// reached, or more than max off: one left 24.8 d behind reads as ahead
+// Reached, or more than max away. Without max, an at left 24.8 d behind would read as ahead
 static inline bool reachedMax(uint32_t now, uint32_t at, uint32_t max) {
   return reached(now, at) || at - now > max;
 }
 
-// at or past, then next ms from now
+// at or past, then sets the next one ms from now
 static inline bool dueEvery(uint32_t now, uint32_t& at, uint32_t ms) {
   if (!reached(now, at)) return false;
   at = now + ms;
   return true;
 }
 
-// ms or more since last, last on by whole ms so the phase holds
+// ms or more since last. last moves on in whole ms steps so the phase holds
 static inline bool dueSteps(uint32_t now, uint32_t& last, uint32_t ms) {
   uint32_t gone = now - last;
   if (gone < ms) return false;
@@ -57,7 +57,7 @@ static inline bool dueSteps(uint32_t now, uint32_t& last, uint32_t ms) {
   return true;
 }
 
-// stamped under ms ago, 0 = never
+// Stamped less than ms ago, 0 = never
 static inline bool fresh(uint32_t now, uint32_t last, uint32_t ms) {
   return last != 0 && now - last < ms;
 }
@@ -71,8 +71,7 @@ struct Deadline {
   bool due(uint32_t now) const { return at != 0 && reached(now, at); }
 };
 
-// fresh() under ms after mark(), then stale till the next mark,
-// so a look once a wrap (49 days) keeps an old stamp from coming back
+// Once stale it stays stale until the next mark, so an old stamp never comes back on the wrap
 struct Stamp {
   uint32_t at = 0;   // 0 = never
   void mark(uint32_t now) { at = now ? now : now - 1; }

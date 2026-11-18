@@ -19,7 +19,7 @@
 #ifndef BOARD_H
 #define BOARD_H
 
-// board name, not the chip; setup() hands them to Corium
+// Board names, not the chip. setup() hands them to Corium
 #if defined(ESPGEIGER_HW32)
   #define APP_HOME_NAME "ESPGeiger-HW32"
   #define APP_BOARD "ESPG-HW32"
@@ -81,7 +81,7 @@ namespace Board {
   static const char P_I2S[]   PROGMEM = "AudioI2S";
   static const char P_MUTE[]  PROGMEM = "AudioMute";
 
-  // pins the board wires, owners as the modules claim them
+  // Pins wired on the board, the owner is filled in as each module claims one
   constexpr corium::PinSafety::Fixed PINS[] PROGMEM = {
 #ifdef ESPGEIGER_HW
     {P_HV, GEIGER_PWMPIN, corium::PinSafety::USE_OUT},
@@ -139,7 +139,7 @@ namespace Board {
     {nullptr, -1, corium::PinSafety::USE_OUT},
   };
 
-  // a pref may still take these, only noted: UART0, a dev board's BOOT button (a board's own is fixed)
+  // A pref may still use these, so they're only noted
   constexpr corium::PinSafety::Fixed SHARED[] PROGMEM = {
 #if defined(GEIGER_PUSHBUTTON) && defined(BTN_PIN_BLOCKED) && !defined(I2C_PINS_FIXED)
     {P_BTN, PUSHBUTTON_PIN, corium::PinSafety::USE_BUTTON},
@@ -156,7 +156,7 @@ namespace Board {
     {nullptr, -1, corium::PinSafety::USE_OUT},
   };
 
-  // before prefs load, a pref on one is refused, on a shared one noted
+  // Before prefs load
   inline void claim() {
     corium::PinSafety::reserve(PINS);
     corium::PinSafety::share(SHARED);
@@ -168,10 +168,9 @@ namespace Board {
 
   // after the boot button is let go
   inline void detect() {
-    // the button pull-up is rev 2 only, a misread says rev 1, the gentle one
+    // Only rev 2 has the button pull-up. A misread falls back to rev 1, the gentler limits
     rev_slot() = corium::PinProbe::pulled(PUSHBUTTON_PIN) == corium::PinProbe::UP ? 2 : 1;
     pinMode(PUSHBUTTON_PIN, INPUT_PULLUP);
-    // rev 1 = Proto, rev 2 = v1
     corium::DeviceInfo::setBoardName(rev_slot() == 2 ? "HW32 v1" : "HW32 Proto");
     corium::Log::console(PSTR("Board: %s"), corium::DeviceInfo::boardName());
   }

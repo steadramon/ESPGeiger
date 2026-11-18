@@ -26,9 +26,9 @@ struct Chatter {
   static constexpr uint8_t WIN_S = 10;
   static constexpr uint8_t ON_N = 3;
   static constexpr uint8_t OFF_N = 6;
-  // under it a real tube's pulses inside the debounce stay rare (~2% at 200 us)
+  // Below this a real tube rarely puts pulses inside the debounce (~2% at 200 us)
   static constexpr uint32_t MAX_CPS = 100;
-  static constexpr uint32_t MIN_REJECTS = 10;   // a window, one bounce isn't a tube
+  static constexpr uint32_t MIN_REJECTS = 10;   // per window, one bounce isn't a ringing tube
 
   uint32_t seen = 0;
   uint32_t kept = 0;
@@ -37,7 +37,7 @@ struct Chatter {
   uint8_t good = 0;
   bool on = false;
 
-  // a second's isr entries and the pulses kept of them; true = on changed
+  // Returns true when on changed
   bool second(uint32_t entries, uint32_t counted) {
     seen += entries;
     kept += counted;
@@ -45,7 +45,7 @@ struct Chatter {
     return window();
   }
 
-  // once a window, kept out of the second
+  // Once a window, noinline keeps it out of second()
   __attribute__((noinline)) bool window() {
     uint32_t rej = seen > kept ? seen - kept : 0;
     bool hot = kept > MAX_CPS * WIN_S;
@@ -53,7 +53,7 @@ struct Chatter {
     seen = 0;
     kept = 0;
     secs = 0;
-    if (hot) return false;   // no say, keeps its state
+    if (hot) return false;   // too busy to tell, keep the state
     if (ring) {
       good = 0;
       if (bad < ON_N) bad++;

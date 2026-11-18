@@ -60,7 +60,7 @@
 // http only, one at a time, headers after open(), sink and redirects before send()
 class EGHttpClient {
   public:
-    // bytes taken, below 0 to stop
+    // Returns bytes taken, below 0 to stop
     typedef int (*Sink)(void* arg, const uint8_t* buf, size_t len);
     typedef void (*Wake)(void* arg);
 
@@ -80,11 +80,11 @@ class EGHttpClient {
     // url up to URL_P_MAX
     __attribute__((warn_unused_result))
     bool open(const __FlashStringHelper* method, const __FlashStringHelper* url);
-    // false = dropped; Host, Connection and the length ones are the client's. one that didn't fit fails send()
+    // false if dropped. Host, Connection and the lengths are set by the client. One that didn't fit makes send() fail
     bool setReqHeader(const char* name, const char* value);   // send() says
     bool setReqHeader(const __FlashStringHelper* name, const char* value);
     bool setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
-    void setTimeoutS(uint16_t secs) { _timeoutS = secs; }   // silence, default 10
+    void setTimeoutS(uint16_t secs) { _timeoutS = secs; }   // max silence, default 10
     void setDeadline(uint32_t ms) { _deadlineMs = ms; }    // whole request, 0 = none
 #if EGHTTP_REDIRECTS
     void setRedirects(uint8_t n) { _redirects = n; }       // http only
@@ -92,31 +92,31 @@ class EGHttpClient {
 #if EGHTTP_SINK
     void setSink(Sink fn, void* arg) { _sink = fn; _sinkArg = arg; }
 #endif
-    // once it ends, from the owner's task; not on abort()
+    // Called once when it ends, on the owner's task. Not called on abort()
     void setWake(Wake fn, void* arg) { _wake = fn; _wakeArg = arg; }
-    // once per open(), body copied; false = not open or no ram
+    // Once per open(), the body is copied. false if not open or no ram
     __attribute__((warn_unused_result))
     bool send(const char* body = nullptr);
     __attribute__((warn_unused_result))
     bool send(const uint8_t* body, size_t len);
     void abort();
 
-    // no sink or redirects: the reply is read as it lands, else idle() moves it
+    // With no sink or redirects the reply is read as it lands
     bool idle();
     bool takeDone();                       // true once per request
     uint32_t due() const;                  // EGClock ms a timeout could end it
 
     int responseHTTPcode() const { return _err ? _err : _status; }
     int status() const { return _status; }   // 0 = none came
-    int error() const { return _err; }       // 0 = fine, with a status = body cut
+    int error() const { return _err; }       // 0 = fine, an error with a status means the body was cut
     const __FlashStringHelper* responseHTTPStringF() const;
     static const __FlashStringHelper* reason(int code);   // flash text; unknown = class text, "" below 300
-    static const __FlashStringHelper* urlWhy(const char* url);   // "" = one open() takes
-    // kept body and location freed on the next call after takeDone()
+    static const __FlashStringHelper* urlWhy(const char* url);   // "" if open() would take it
+    // The kept body and location are freed on the next call after takeDone()
     size_t responseRead(uint8_t* out, size_t len);   // no sink, up to BODY_CAP
     int32_t length() const { return _length; }   // -1 = not said
     uint32_t received() const { return _got; }   // body bytes so far
-    const char* location() const { return _location; }   // a redirect not followed
+    const char* location() const { return _location; }   // from a redirect that wasn't followed
 
   private:
     enum Phase : uint8_t { IDLE, DIAL, SEND, REPLY, HEAD, BODY, DONE };   // REPLY = status line
@@ -191,7 +191,7 @@ class EGHttpClient {
     bool _mattered = false;    // last header acted on
     bool _chunked = false;
     Chunk _chunk = AT_SIZE;
-    bool _toClose = false;     // body runs till close
+    bool _toClose = false;     // body runs until close
     bool _held = false;        // sink full
     int32_t _length = -1;
     uint32_t _got = 0;

@@ -24,12 +24,12 @@
 #include <Arduino.h>
 #endif
 
-// clients per poll(), the loop keeps going
+// Max clients handled per run(), so the loop keeps going
 #ifndef EGTCP_BATCH
 #define EGTCP_BATCH 16
 #endif
 
-// window updates under this wait for more
+// Window updates smaller than this wait until there's more
 #define EGTCP_CREDIT_MIN 512
 
 std::atomic<bool> EGTcp::pending{false};
@@ -53,7 +53,7 @@ EGTcpLock& EGTcpCore::lock() {
 
 static EGTcpClient* s_head = nullptr;
 static EGTcpClient* s_tail = nullptr;
-static EGTcpClient* s_running = nullptr;   // whose callback, ~EGTcpClient clears it
+static EGTcpClient* s_running = nullptr;   // client whose callback is running, ~EGTcpClient clears it
 
 void EGTcpCore::post(EGTcpClient* c, uint16_t ev) {
   c->_ev |= ev;
@@ -64,12 +64,12 @@ void EGTcpCore::post(EGTcpClient* c, uint16_t ev) {
     else s_head = c;
     s_tail = c;
   }
-  // the lock orders it
+  // relaxed is fine, the lock orders it
   EGTcp::pending.store(true, std::memory_order_relaxed);
 }
 
 struct EGTcpRun {
-  // lock held
+  // Caller holds the lock
   static void unqueue(EGTcpClient* c) {
     c->_ev = 0;
     c->_ev_acked = 0;
@@ -86,7 +86,7 @@ struct EGTcpRun {
     c->_next = nullptr;
   }
 
-  // the stack adds to acked, so it goes with the bits
+  // The stack adds to acked too, so take it with the event bits
   static EGTcpClient* take(uint16_t& ev, uint32_t& acked) {
     EGTcpHold h;
     EGTcpClient* c = s_head;
@@ -103,7 +103,7 @@ struct EGTcpRun {
     return c;
   }
 
-  // accepts for s, never handed over, lock held
+  // Pulls out accepts for s that were never handed over. Lock held
   static EGTcpClient* unqueue_accepts(EGTcpServer* s) {
     EGTcpClient* gone = nullptr;
     EGTcpClient* p = s_head;
@@ -123,7 +123,7 @@ struct EGTcpRun {
    * Dispatch, owner's task
    */
 
-  // false: never seen, or deleted in onAccept
+  // false if the owner never saw it, or deleted it in onAccept
   static bool hand_over(EGTcpClient* c, uint16_t ev) {
     EGTcpServer* s = c->_srv;
     c->_srv = nullptr;
@@ -143,19 +143,19 @@ struct EGTcpRun {
     return s_running == c;
   }
 
-  // not deleted, closed or redialled since
+  // true if it hasn't been deleted, closed or redialled since
   static bool live(EGTcpClient* c, uint8_t life) {
     return s_running == c && c->_life == life;
   }
 
-  // poll, then how it ended
+  // Timers from the poll first, then how it ended
   static void tail(EGTcpClient* c, uint16_t ev, uint8_t life) {
     if ((ev & EV_POLL) && live(c, life)) c->timers();
     if ((ev & EV_FIN) && live(c, life)) c->ended(0);
     if ((ev & EV_ERROR) && live(c, life)) c->ended(c->_ev_err);
   }
 
-  // in bit order, each once
+  // Each event once, in bit order
   static void dispatch(EGTcpClient* c, uint16_t ev, uint32_t acked) {
     if ((ev & EV_ACCEPT) && !hand_over(c, ev)) return;
     s_running = c;
@@ -171,10 +171,10 @@ struct EGTcpRun {
 
 void EGTcp::run() {
   static bool s_in_run = false;
-  if (s_in_run) return;   // a callback polled
+  if (s_in_run) return;   // a callback called run() again
   s_in_run = true;
   EGTcpCore::owner();
-  // before the drain, a post after sets it again
+  // Clear before the drain, a post after this sets it again
   pending.store(false, std::memory_order_relaxed);
   for (uint8_t n = 0; n < EGTCP_BATCH; n++) {
     uint16_t ev;
@@ -224,11 +224,11 @@ EGTcpClient::EGTcpClient() : _ops(egtcp_ops) {}
 
 EGTcpClient::~EGTcpClient() {
   if (s_running == this) s_running = nullptr;   // its callback stops here
-  if (_h.load()) credit(_owed + _rx_len.load(), true);   // as close(): FIN, not RST
+  if (_h.load()) credit(_owed + _rx_len.load(), true);   // same as close(), FIN not RST
   forget(false);
 }
 
-// no stack link, no events, no data
+// Drops the stack link, any queued events and the data
 void EGTcpClient::forget(bool rst) {
   if (_h.load()) {
     if (rst) _ops->abort(this);
@@ -237,7 +237,7 @@ void EGTcpClient::forget(bool rst) {
   {
     EGTcpHold h;
     EGTcpRun::unqueue(this);
-    if (_ask) _ask->c = nullptr;   // answer goes nowhere
+    if (_ask) _ask->c = nullptr;   // a late DNS answer goes nowhere
     _ask = nullptr;
     _ops->rx_clear(this);
   }
@@ -286,7 +286,7 @@ bool EGTcpClient::connect(const char* host, uint16_t port) {
 }
 
 void EGTcpClient::close() {
-  // else lwIP sends RST over unread data
+  // Credit unread data first, else lwIP sends RST
   if (_h.load()) credit(_owed + _rx_len.load(), true);
   forget(false);
   _state = IDLE;
@@ -310,7 +310,7 @@ size_t EGTcpClient::space() const {
 }
 
 size_t EGTcpClient::write(const void* data, size_t len, uint8_t flags) {
-  if (!data || !len || !space()) return 0;   // full costs no trip
+  if (!data || !len || !space()) return 0;   // full, no trip to the stack
   EGTcpCore::check();
   size_t n = _ops->write(this, data, len, flags);
   if (n) {
@@ -364,7 +364,7 @@ void EGTcpClient::ack(size_t len) {
   credit(len, true);
 }
 
-// batched, lwIP only updates the window past a threshold anyway
+// Batched, lwIP only updates the window past a threshold anyway
 void EGTcpClient::credit(size_t n, bool flush) {
   _credit += n;
   if (!_h.load()) {
@@ -396,9 +396,9 @@ EGTcpAddr EGTcpClient::localAddr() const  { return info().local; }
 uint16_t EGTcpClient::localPort() const   { return info().local_port; }
 uint16_t EGTcpClient::mss() const         { return info().mss; }
 
-// what happened, owner's task
+// Event handlers, these run on the owner's task
 
-// the answer stays put till the next ask, the owner's
+// The DNS answer stays put until the owner asks again, so it's safe to read here
 void EGTcpClient::resolved() {
   if (_ev_dns != _dns_id || _state != CONNECTING || _h.load()) return;
   if (!_ev_found) {
@@ -410,7 +410,7 @@ void EGTcpClient::resolved() {
 }
 
 void EGTcpClient::opened() {
-  if (_state != CONNECTING || !_h.load()) return;   // an error took it
+  if (_state != CONNECTING || !_h.load()) return;   // an error got there first
   _state = OPEN;
   _rx_ms = _tx_ms = EGTcpCore::now();
   rearm();
@@ -420,7 +420,7 @@ void EGTcpClient::opened() {
 void EGTcpClient::delivered() {
   _rx_ms = EGTcpCore::now();
   rearm();
-  if (!_on_data) return;   // pull, it waits
+  if (!_on_data) return;   // pull mode, the data waits for read()
   for (;;) {
     size_t n = 0;
     const uint8_t* d;
@@ -429,7 +429,7 @@ void EGTcpClient::delivered() {
       d = _ops->rx_peek(this, &n);
     }
     if (!d) return;
-    // only the owner drops, d holds
+    // d stays valid, only the owner drops data
     _ack_later = false;
     _on_data(_data_ctx, d, n);
     if (s_running != this || _state == IDLE) return;   // deleted or closed
@@ -453,7 +453,7 @@ static bool late(uint32_t now, uint32_t since, uint32_t limit) {
   return limit && now - since >= limit;
 }
 
-// idle runs from the later of rx and tx, signed diff so millis wrap is fine
+// Idle counts from the later of rx and tx, wrap safe
 bool EGTcpClient::due(uint32_t now) const {
   uint32_t heard = (int32_t)(_rx_ms - _tx_ms) > 0 ? _rx_ms : _tx_ms;
   return (_state == CONNECTING && late(now, _start_ms, _connect_ms)) ||
@@ -461,7 +461,7 @@ bool EGTcpClient::due(uint32_t now) const {
          (_unacked && late(now, _tx_ms, _ack_ms));
 }
 
-// the soonest due() could say yes, for the stack's poll
+// Earliest time due() could return true, for the stack's poll
 void EGTcpClient::rearm() {
   uint32_t at = 0;
   bool any = false;
@@ -484,11 +484,11 @@ void EGTcpClient::timers() {
   ended(E_TIMEOUT);
 }
 
-// once: the peer, the stack or a timer ended it
+// Runs once, when the peer, the stack or a timer ended it
 void EGTcpClient::ended(int8_t err) {
   if (_state != CONNECTING && _state != OPEN) return;
   if (_h.load()) {
-    credit(_owed + available(), true);   // FIN, not RST; pull keeps the data
+    credit(_owed + available(), true);   // FIN not RST, in pull mode the data is kept
     _ops->close(this);
   }
   _state = CLOSED;
@@ -521,7 +521,7 @@ EGTcpClient* EGTcpServer::accept() {
   return c;
 }
 
-// accepts not handed over go
+// Accepts not handed over yet are deleted
 void EGTcpServer::end() {
   if (_h.load()) egtcp_ops->unlisten(this);
   EGTcpClient* gone;

@@ -100,7 +100,6 @@ bool SSD1306Display::takes(uint8_t type) { return !DISP_IS_MAX7219(type); }
 
 static const char PIN_OWNER[] PROGMEM = "OLED";
 
-// one glyph, bytes_per_col bytes a column
 static void draw_glyph(uint8_t* fb, int16_t cx, int16_t y_top, const uint8_t* glyph,
                        uint16_t byte_count, uint8_t bytes_per_col) {
   const uint8_t W = OLED_WIDTH;
@@ -174,7 +173,7 @@ void SSD1306Display::drawStrP(int16_t x, int16_t y, const char* s) {
 }
 
 #ifndef OLED_PINS_BLOCKED
-// the pref's pin if it's safe, else the default, claimed for it
+// the default if unsafe, claimed for it
 static uint8_t safe_pin(uint8_t want, uint8_t def, const char* owner, const char* fmt) {
   const char* why = corium::PinSafety::claimOutput((int)want, owner);
   if (!why) return want;
@@ -247,7 +246,7 @@ void SSD1306Display::page_changed(unsigned long now) {
   corium::Registry::every(this, loop_ms());
 }
 
-// false = asleep, nothing to draw
+// false = asleep
 bool SSD1306Display::awake(unsigned long now) {
   if (!_present) return true;
   if (!display.lit()) {
@@ -715,7 +714,7 @@ void SSD1306Display::draw_logo(const char* line) {
   drawStrP(55, 42, line);
 }
 
-// a whole-screen message: the row sends stop, the frame starts clear
+// the row sends stop, the frame starts clear
 bool SSD1306Display::take_screen() {
   if (!_present) return false;
   _send_rows_left = 0;
@@ -935,7 +934,7 @@ static int8_t cpm_trend(uint32_t cpm) {
   return 0;
 }
 
-// false = nothing changed, no redraw
+// false = nothing changed
 bool SSD1306Display::page_one_values(unsigned long now) {
   float c = display.cpm(), c5 = c < 10.0f ? display.cpm5() : c;
   bool slow = use_cpm5(c, c5);

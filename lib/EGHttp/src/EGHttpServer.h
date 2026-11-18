@@ -39,7 +39,7 @@
   #define EGHTTP_REQ_BUF 1536
 #endif
 #ifndef EGHTTP_HEAP_MIN
-  // free heap under this, a new request gets 503
+  // With free heap under this, a new request gets a 503
   #define EGHTTP_HEAP_MIN 6144
 #endif
 #ifndef EGHTTP_CHUNK_ACC
@@ -57,30 +57,30 @@
   #define EGHTTP_AUTH_MAX 64
 #endif
 #ifndef EGHTTP_REQ_MS
-  // request in by then; a streamed body moves a window per this
+  // The request must be in by then. A streamed body gets this long again each time a whole window moves
   #define EGHTTP_REQ_MS 10000
 #endif
 #ifndef EGHTTP_SEND_MS
-  // whole response, the loop waits on it
+  // Time for the whole response, the loop waits on it
   #define EGHTTP_SEND_MS 15000
 #endif
 #ifndef EGHTTP_SEND_BUDGET_MS
-  // no room to write this long, the send gives up
+  // After no room to write for this long, the send gives up
   #define EGHTTP_SEND_BUDGET_MS 2500
 #endif
 #ifndef EGHTTP_ACK_MS
-  // sent, not acked this long, dropped
+  // Sent but not acked for this long, the client is dropped
   #define EGHTTP_ACK_MS 5000
 #endif
 #ifndef EGHTTP_STREAM_IDLE_MS
-  // streamed body silent this long; a slow flash write stalls the window
+  // Streamed body silent for this long is dropped. A slow flash write stalls the window too
   #define EGHTTP_STREAM_IDLE_MS 60000
 #endif
 #ifndef EGHTTP_PULL
   #define EGHTTP_PULL 1   // 0 = no sendPull()
 #endif
 #ifndef EGHTTP_SAY_GAP_MS
-  #define EGHTTP_SAY_GAP_MS 1000   // error lines, the rest counted
+  #define EGHTTP_SAY_GAP_MS 1000   // between error lines, the rest are just counted
 #endif
 #ifndef EGHTTP_BRAKE_TRIES
   #define EGHTTP_BRAKE_TRIES 5   // wrong logins in a row
@@ -112,7 +112,7 @@ class EGHttpRequest {
     // query then body, nullptr if absent; static buffer, copy before next arg()
     const char* arg(const __FlashStringHelper* name) const;
 
-    // out or nullptr; name may be PROGMEM
+    // Returns out or nullptr, name may be PROGMEM
     static const char* decodeArg(const char* body, size_t bodyLen,
                                   const char* name, char* out, size_t cap);
 
@@ -189,7 +189,7 @@ class EGHttpServer {
     enum BodyEvent : uint8_t {
       BODY_BEGIN = 1, BODY_DATA = 2, BODY_END = 3, BODY_ABORT = 4
     };
-    // false refuses: rest not read, the route replies, no END/ABORT
+    // Returning false refuses it. The rest isn't read, the route replies, and no END/ABORT follows
     using BodyHandler = bool(*)(EGHttpRequest& req, BodyEvent ev,
                                 const char* chunk, size_t len, void* user);
 
@@ -201,11 +201,11 @@ class EGHttpServer {
     // empty = no auth, user:password up to EGHTTP_AUTH_MAX
     void setBasicAuth(const __FlashStringHelper* user, const char* password,
                       const __FlashStringHelper* realm = nullptr);
-    // a 401's text/plain body, PROGMEM; nullptr = empty
+    // text/plain body for a 401, PROGMEM. nullptr = empty
     void setAuthHelp(PGM_P text);
-    // every server: a POST whose Origin isn't its Host gets 403; no Origin (curl, scripts) passes
+    // For every server, a POST whose Origin isn't its Host gets a 403. No Origin passes
     static void setSameOrigin(bool on) { s_sameOrigin = on; }
-    // every server: EGHTTP_BRAKE_TRIES wrong logins, then EGHTTP_BRAKE_MS of 401s, the right one too
+    // For every server. After EGHTTP_BRAKE_TRIES wrong logins every login gets a 401 for EGHTTP_BRAKE_MS, the right one too
     static void setBrake(bool on);   // and starts clean
 
     // capped at EGHTTP_MAX_CLIENTS
@@ -229,14 +229,14 @@ class EGHttpServer {
 
     struct Slot {
       EGTcpClient* client = nullptr;   // resetSlot deletes it
-      EGHttpServer* srv = nullptr;     // its callbacks' way back
+      EGHttpServer* srv = nullptr;     // how its callbacks get back to the server
       SlotState state = IDLE;
       uint16_t query = 0;   // in buf past '?', 0 = none
       char* buf = nullptr;
       size_t len = 0;
       size_t contentLength = 0;
       size_t headerEnd = 0;
-      // onData can't yield, tick() drains
+      // onData can't yield, so tick() drains it
       StreamState stream = NO_STREAM;
       uint16_t ack_owed = 0;   // header bytes in first pbuf
       size_t bodyAcked = 0;
@@ -285,7 +285,7 @@ class EGHttpServer {
     Slot _slots[EGHTTP_MAX_CLIENTS];
     uint8_t _maxClients = EGHTTP_MAX_CLIENTS;
 
-    // one TCP window
+    // Stream buffer holds one TCP window
 #ifdef ESP32
     static constexpr size_t STREAM_BUF_SIZE = 16384;   // TCP_WND ~16 KB
 #else

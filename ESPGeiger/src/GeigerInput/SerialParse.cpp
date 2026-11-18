@@ -69,7 +69,7 @@ static bool cp_tag(const char* p, char c) {
   return p[0] == 'C' && p[1] == 'P' && p[2] == c && p[3] == ',';
 }
 
-// as %d, too big is -1. nullptr = no number
+// Like %d, too big gives -1, nullptr if there's no number
 static const char* scan_int(const char* p, int32_t* v) {
   const char* end;
   if (parseI32(p, v, &end)) return end;
@@ -90,7 +90,7 @@ bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
   p = skip_ws(p + 1);
   if (!cp_tag(p, 'M') || !scan_int(p + 4, &cpm)) return false;
   if (!count_ok(cpm)) return false;
-  // bound cps too, it goes in the counter; its minute holds the second
+  // Bound cps too since it goes into the counter. A minute's count can't be under its second's
   bool cps_ok = count_ok(cps);
   if (cps_ok && cps > cpm) return false;
   if (out_cps && cps_ok) *out_cps = (int)cps;
@@ -109,7 +109,7 @@ static bool parse_label_value(const char* in, char tag, int* out) {
     if (p[0] == 'C' && p[1] == 'P' && p[2] == tag) {
       p = skip_sep(p + 3);
       if (*p != '-' && !is_digit(*p)) return false;
-      // still present, -1 fails the bounds
+      // A number that won't parse still counts as present, -1 then fails the bounds check
       int32_t v;
       const char* end;
       if (!parseI32(p, &v, &end)) v = -1;
@@ -145,7 +145,7 @@ static bool parse_labelled(const char* in, int* out_cpm, int* out_cps, bool loos
   return true;
 }
 
-// needs the label, boot logs share the uart
+// Needs the label, boot logs share the uart
 bool parse_espgeiger(const char* in, int* out_cpm, int* out_cps) {
   return parse_labelled(in, out_cpm, out_cps, false);
 }

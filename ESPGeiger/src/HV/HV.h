@@ -34,7 +34,7 @@
 #include <EGLed.h>
 #endif
 
-// hw32: the board's hard limits, not prefs
+// Hard limits for this board, not prefs
 #ifdef ESPGEIGER_HW32
 #define GEIGER_PWMPIN 7
 #define GEIGER_VFEEDBACKPIN 4
@@ -45,12 +45,12 @@
 #define GEIGERHW_ADC_RATIO 336      // 328.3 in mV
 #define GEIGERHW_MAX_V 450          // boost tops out ~460 V at the cap
 #define GEIGERHW_OV_V 520
-#define GEIGERHW_TRIM_BAND_MIN 3    // volts, the mV ratio gives 0
-#define GEIGERHW_FB_LOW_MV 150      // ~50 V while driving: divider open
-#define GEIGERHW_FB_HIGH_MV 2400    // ADC top: low leg open
+#define GEIGERHW_TRIM_BAND_MIN 3    // volts, the band from the mV ratio rounds to 0
+#define GEIGERHW_FB_LOW_MV 150      // under ~50 V while driving, divider is open
+#define GEIGERHW_FB_HIGH_MV 2400    // ADC at the top, low leg is open
 #define GEIGERHW_FB_BAD_S 5
-#define GEIGERHW_RAMP_S 4           // boot soft start, a step a second
-#define GEIGERHW_LOW_S 30           // full trim, still under target: the /hv hint
+#define GEIGERHW_RAMP_S 4           // Soft start at boot, one step a second
+#define GEIGERHW_LOW_S 30           // full trim and still under target this long, /hv shows a hint
 #endif
 
 #ifndef GEIGER_PWMPIN
@@ -105,7 +105,7 @@
 #define GEIGERHW_ADC_OFFSET 0
 #endif
 
-// volts, top of the target pref
+// Max for the target pref, volts
 #ifndef GEIGERHW_MAX_V
 #define GEIGERHW_MAX_V 700
 #endif
@@ -114,9 +114,9 @@
 #define HV_PWM_BITS 10
 #define HV_PWM_MAX  1023
 static_assert(HV_PWM_MAX == (1 << HV_PWM_BITS) - 1, "HV_PWM_MAX is the top of HV_PWM_BITS");
-#define HV_MIN_OFF_US 4   // low every period, as EGTimer1
+#define HV_MIN_OFF_US 4   // pin goes low every period, same as EGTimer1
 
-// coil saturates past this
+// Coil saturates past this
 #ifndef GEIGERHW_MAX_DUTY
 #ifdef ESPGEIGER_HW
 #define GEIGERHW_MAX_DUTY 600
@@ -139,7 +139,7 @@ static_assert(GEIGERHW_MAX_DUTY <= GEIGERHW_MAX_ON_US * GEIGERHW_MAX_FREQ * 1024
 #define GEIGERHW_TRIM_BAND_MIN 0
 #endif
 
-// set espghw.<key> over serial
+// These can be set over serial with espghw.<key>
 #ifndef GEIGERHW_TRIM_MAX
 #define GEIGERHW_TRIM_MAX 5       // steps either side of saved duty
 #endif
@@ -150,13 +150,12 @@ static_assert(GEIGERHW_MAX_DUTY <= GEIGERHW_MAX_ON_US * GEIGERHW_MAX_FREQ * 1024
 #define GEIGERHW_SETTLE_S 30      // no trim after a change
 #endif
 #ifndef GEIGERHW_BOOT_S
-#define GEIGERHW_BOOT_S 300       // or after boot
+#define GEIGERHW_BOOT_S 300       // or this long after boot
 #endif
 #ifndef GEIGERHW_OV_S
-#define GEIGERHW_OV_S 3           // over ov_v before cut-off
+#define GEIGERHW_OV_S 3           // seconds over ov_v before the cut-off
 #endif
 
-// HV boost PWM, ADC feedback, auto-trim and overvoltage cut-off
 class HV : public corium::Module {
     public:
       HV();
@@ -189,7 +188,7 @@ class HV : public corium::Module {
       int get_duty() {
         return _duty;
       }
-      // GEIGERHW_MAX_DUTY, or less at this freq: MAX_ON_US, ledc's off time
+      // GEIGERHW_MAX_DUTY, or lower if MAX_ON_US or the LEDC off time limits it at this freq
       int max_duty() const;
       void set_vd_ratio(int ratio) {
         _vd_ratio = clamp(ratio, 0, GEIGERHW_MAX_RATIO);   // 0 = ADC off
@@ -201,7 +200,7 @@ class HV : public corium::Module {
         return _vd_ratio;
       }
       bool saveconfig();
-      // Pin low first, never old duty at new freq; false as set_freq
+      // Pin goes low first so the old duty never runs at the new freq
       bool apply_freq_duty_safe(int new_freq, int new_duty);
       void set_pwm_pin(int pin);   // reboot to apply
       int get_pwm_pin() const { return _pwm_pin; }
@@ -209,7 +208,7 @@ class HV : public corium::Module {
       uint16_t get_hv_target() const { return _hv_target; }
       int8_t get_duty_trim() const { return _duty_trim; }
       bool ov_tripped() const { return _ov_trip; }
-      // feedback latch, from loop()
+      // Sent from loop() when the feedback fault latches
       static constexpr uint8_t TOPIC_FAULT = Topic::HV_FAULT;
 #ifdef ESPGEIGER_HW32
       bool fb_fault() const { return _fb_fault; }
@@ -218,7 +217,7 @@ class HV : public corium::Module {
       bool fb_fault() const { return false; }
       bool hv_low() const { return false; }
 #endif
-      // /hvjson ov
+      // reported as ov in /hvjson
       enum : uint8_t { HV_OK, HV_OVER, HV_FB_FAULT, HV_LOW };
       uint8_t status() const {
         if (fb_fault())   return HV_FB_FAULT;
@@ -227,10 +226,10 @@ class HV : public corium::Module {
       }
       void clear_ov();
       void write_duty();
-      // release_hold() if the OTA fails
+      // Call release_hold() if the OTA fails
       void hold(bool restarting);
       void release_hold();
-      // last reading, volts
+      // volts
       uint16_t get_volts() const { return _hv_prev; }
       EGRingAvg<uint16_t, HV_TRIM_N> hvReading;
     private:
@@ -247,7 +246,7 @@ class HV : public corium::Module {
 #ifdef ESPGEIGER_HW32
       void check_feedback();
       void note_low();
-      bool    _fb_fault = false;   // till restart
+      bool    _fb_fault = false;   // latched until restart
       uint8_t _fb_bad_s = 0;
       uint8_t _ramp = 0;
       uint8_t _low_s = 0;
@@ -283,7 +282,7 @@ class HV : public corium::Module {
 #endif
 #if CORIUM_HAS_TIMER1 || defined(ESPG_HV_ADC)
       uint8_t  _pass = 0;
-      static constexpr uint8_t LOOP_SLOW = 10;   // adc median of 10 a second, 8266 pwm watchdog
+      static constexpr uint8_t LOOP_SLOW = 10;   // 10 ADC reads a second for the median, also the 8266 PWM watchdog
 #else
       static constexpr uint8_t LOOP_SLOW = 1;
 #endif

@@ -47,7 +47,7 @@ static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {corium::K_WEB_PASS, corium::L_WEB_PASS, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_LOCAL | corium::P_REBOOT},
   {corium::K_ESPOTA,   SY_L_OTA, SY_H_OTA, "0",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
   {corium::K_ORIGIN,   nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},
-  // uploads failing in a row wait up to this long, s; 0 = every interval
+  // max backoff s, 0 = every interval
   {corium::K_BACKOFF,  nullptr,  nullptr,  "300",   nullptr, 0, 3600, 0, corium::P_UINT, corium::P_HIDDEN},
   // 5 wrong logins = 10 s of none taken
   {corium::K_BRAKE,    nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},
@@ -87,8 +87,7 @@ static void restore_pass(const char* kept) {
 
 static const char PASS_NOT_KEPT[] PROGMEM = "System: Web password backup not saved";
 
-// a copy outside LittleFS, a lost FS keeps the login. Only a save clears it,
-// a blank or missing one at load takes it back
+// outside LittleFS, a lost FS keeps the login; only a save clears it
 static void keep_pass(bool saved) {
   char kept[WEB_PASS_MAX + 1] = {};
   bool have = corium::KeyStore::read((uint8_t*)kept, WEB_PASS_MAX, WEB_PASS_SLOT);
@@ -113,7 +112,7 @@ static void apply_sys() {
 #ifdef ESP32
   uint32_t mhz = corium::Prefs::getUInt("sys", K_CPU_MHZ);
   if (mhz) {
-    // 240 on a C3
+    // a C3 refuses 240, said below
     bool ok = setCpuFrequencyMhz(mhz);
     corium::Log::console(ok ? PSTR("System: CPU set to %u MHz") : PSTR("System: CPU %u MHz not taken, 80/160/240"),
                          (unsigned)mhz);

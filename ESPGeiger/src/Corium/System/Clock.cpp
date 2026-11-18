@@ -39,14 +39,14 @@ static StepFn s_on_step = nullptr;
 
 void onStep(StepFn fn) { s_on_step = fn; }
 
-// local minus UTC, minutes
+// Local minus UTC, in minutes
 void refreshTzOffsetMin() {
   time_t now = time(NULL);
   struct tm loc, utc;
   localtime_r(&now, &loc);
   gmtime_r(&now, &utc);
   int days = loc.tm_yday - utc.tm_yday;
-  if (days > 1) days = -1;   // new year
+  if (days > 1) days = -1;   // across new year
   else if (days < -1) days = 1;
   tzOffsetMin = (int16_t)((days * 24 + loc.tm_hour - utc.tm_hour) * 60 + loc.tm_min - utc.tm_min);
 }
@@ -59,14 +59,14 @@ bool onSync(Source s) {
     synced = true;
     bootEpoch = time(NULL) - uptime;
   } else {
-    // drift moves it a little each sync, a bad earlier reply a lot, a wrong century 2^32 s and more
+    // Normal drift moves it a little, a bad earlier reply moves it a lot
     time_t delta = time(NULL) - (bootEpoch + (time_t)uptime);
     bootEpoch += delta;
     if (delta > STEP_S || delta < -STEP_S) {
       char s[24];
       fmtU64(s, sizeof(s), delta < 0 ? 0 - (uint64_t)delta : (uint64_t)delta);
       Log::console(PSTR("Clock: Stepped %s%s s"), delta < 0 ? "-" : "", s);
-      if (s_on_step) s_on_step((int32_t)delta);   // the same mod 2^32, all its 32-bit stamps need
+      if (s_on_step) s_on_step((int32_t)delta);   // mod 2^32 is all 32-bit stamps need
     }
   }
   source = s;
@@ -80,35 +80,35 @@ void set(time_t epoch, Source s) {
   onSync(s);
 }
 
-// time() over a restart is the IDF's rtc words: a new build can move them, garbage then
+// time() survives a restart in the IDF's rtc words, but a new build can move them
 static constexpr uint32_t STAMP_MAGIC = 0xC10C0014u;
-static constexpr uint32_t KEPT_GAP_S = 300;   // the reset, a stall before it
+static constexpr uint32_t KEPT_GAP_S = 300;   // covers the reset and a stall before it
 struct StampRtc { uint32_t magic; uint32_t epoch; };
 CORIUM_RTC_SLOT(StampSlot, StampRtc, RtcMap::CLOCK_AT, RtcMap::CLOCK_WORDS);
 
-// from the anchor, an esp32 time() a second doubled the tick; unsynced is 1970 or garbage
+// Worked out from the anchor, calling the esp32 time() every second doubled the tick
 void stamp() {
   if (!synced) return;
   StampSlot::write(StampRtc{STAMP_MAGIC, (uint32_t)(bootEpoch + (time_t)Uptime::since(Uptime::start))});
 }
 
-// a wait before the Reactor, uptime stands still
+// For a wait before the Reactor runs, uptime stands still then so it uses time()
 void stampNow() {
   if (synced) StampSlot::write(StampRtc{STAMP_MAGIC, (uint32_t)time(NULL)});
 }
 
-// a power-on starts at 0
+// A power-on starts time() at 0, so this only keeps it over a restart
 void kept() {
   if (synced || time(NULL) < BUILT_EPOCH) return;
   StampRtc s;
   if (!StampSlot::read(s) || s.magic != STAMP_MAGIC) return;
-  if ((uint32_t)time(NULL) - s.epoch > KEPT_GAP_S) return;   // before it too, mod 2^32
+  if ((uint32_t)time(NULL) - s.epoch > KEPT_GAP_S) return;   // catches a time before the stamp too, mod 2^32
   onSync(KEPT);
-  stamp();   // a restart loop before the Reactor runs keeps it too
+  stamp();   // so a restart loop before the Reactor runs keeps it too
   Log::console(PSTR("Clock: Kept over restart"));
 }
 
-// the wifi join or portal ran since, no step
+// The wifi join or portal ran since the clock was set, re-anchor without a step
 void anchor() {
   if (synced) bootEpoch = time(NULL) - Uptime::since(Uptime::start);
 }

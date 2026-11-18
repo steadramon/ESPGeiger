@@ -109,7 +109,7 @@ bool corium::WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent e
   return body_event(s_param_body, req, ev, chunk, len, P_PARAM);
 }
 
-// first field a save refused, and first saved with a warning, shown above the form
+// first refused, first warned, above the form
 struct Refusal {
   char name[2 * CORIUM_PREF_ID_MAX + 2];   // mid.id
   char why[corium::PinSafety::WHY_MAX];       // copied, the next put reuses "in use"
@@ -153,7 +153,7 @@ static void param_save_pref(const char* mid, const corium::Pref& p,
   param_put(mid, id, name, v, r);
 }
 
-// false = nothing saved; out of line, its buffers aren't on the stack under commit()
+// out of line, its buffers aren't on the stack under commit()
 static __attribute__((noinline)) bool param_save_body(uint8_t tab, Refusal& r) {
   const char* body = s_param_body.buf;
   size_t      len  = s_param_body.len;
@@ -212,7 +212,7 @@ static uint8_t param_group_order(uint8_t gi) {
   return corium::Prefs::moduleAt(gi)->displayOrder();
 }
 
-// on groups first, then displayOrder; insertion sort, keeps ties in order
+// on groups first, ties keep their order
 static void param_sort_groups(uint8_t* order, uint8_t gc) {
   static constexpr uint16_t OFF_LAST = 0x100;
   uint16_t key[CORIUM_MAX_MODULES];
@@ -444,7 +444,7 @@ static void param_load_text(ParamCtx& c, const corium::Pref& p) {
   // from the flag, no row types it
   if (p.flags & corium::P_REBOOT) {
     size_t n = strlen(c.help);
-    if (n && c.help[n - 1] != '.' && n + 1 < sizeof(c.help)) c.help[n++] = '.';   // help with no full stop
+    if (n && c.help[n - 1] != '.' && n + 1 < sizeof(c.help)) c.help[n++] = '.';
     snprintf_P(c.help + n, sizeof(c.help) - n, n ? PSTR(" %s.") : PSTR("%s."), corium::H_RBA);
   }
 }
@@ -579,7 +579,7 @@ static PGM_P link_once(bool& link, PGM_P text) {
   return text;
 }
 
-// what a post did, above the form; frozen = a group left out, the rest saved
+// frozen = a group left out, the rest saved
 static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart,
                        const Refusal& refused, const char* frozen) {
   if (wrote) res.sendChunk(F(
@@ -828,8 +828,7 @@ static bool board_group(const char* mid) {
   return false;
 }
 
-// a backup's values were saved before, a newer shortest rule mustn't drop them;
-// another board's calibration is refused, this one's stays
+// a newer shortest rule mustn't drop a backup's values
 static bool import_kept(const char* mid, const char* key, const char* value) {
   if (s_other_board && board_group(mid)) return false;
   return !import_local(mid, key) && corium::Prefs::putKept(mid, key, value);

@@ -36,7 +36,7 @@ static const char FORGET_BODY[] PROGMEM =
   "<p>A delete request goes to the server as soon as it can be reached. Sharing is now <b>Off</b>.</p>"
   "<p class=muted>Re-enabling sharing later will register a new station; old readings will not be linked.</p>";
 
-// false = a field refused, rest still saved; the pref rows are the rule
+// false if a field was refused, the rest are still saved
 static bool save_settings(EGHttpRequest& req, bool& wrote) {
   bool ok = true;
   // arg() reuses its buffer
@@ -46,7 +46,7 @@ static bool save_settings(EGHttpRequest& req, bool& wrote) {
   const char* a = req.arg(FPSTR(EG_K_LAT));
   if (a) strlcpy(lat, a, sizeof(lat));
   const char* lon = req.arg(FPSTR(EG_K_LON));
-  // both or neither, 0,0 = use IP
+  // Lat and lon both or neither, 0,0 means use the IP location
   if (a && lon && !*lat != !*lon) {
     ok = false;
   } else {
@@ -111,7 +111,7 @@ static void send_advanced(EGHttpResponse& res, uint8_t mode) {
   res.sendChunk(FPSTR(W_DETAILS_END));
 }
 
-// POST saves first, both show the page
+// A POST saves first, then both show the page
 static void hWebAPI(EGHttpRequest& req, EGHttpResponse& res, void*) {
   const bool posted = req.method() == EGHttpRequest::POST;
   bool wrote = true;

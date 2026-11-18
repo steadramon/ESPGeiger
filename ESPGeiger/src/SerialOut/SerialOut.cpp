@@ -74,14 +74,14 @@ void SerialOut::onPrefsLoaded() {
   _show = (uint8_t)corium::Prefs::getUInt("sout", K_FLAGS);
   _format     = (uint8_t)corium::Prefs::getUInt("sout", K_FORMAT);
   _baud       = (uint32_t)corium::Prefs::getUInt("sout", K_BAUD);
-  if (_rest) drain(true);   // the rest now, before off or a new baud
-  applyBaud();   // said while the log still reaches serial
+  if (_rest) drain(true);   // send the rest now, before going off or changing baud
+  applyBaud();   // logs the baud while the log still reaches serial
   quiet_logs();
   corium::Registry::every(this, _interval_s > 0 ? LOOP_MS : 0);
   resolveFormat();
 }
 
-// not SerialFormat's input IDs
+// Output format ids, not SerialFormat's input ids
 static SerialFormat::FormatFn sout_resolve(uint8_t fmt) {
   switch (fmt) {
     case SerialOut::SO_MIGHTYOHM: return SerialFormat::fmt_mightyohm;
@@ -107,7 +107,7 @@ void SerialOut::save() {
   if (!corium::Prefs::commitSoon(corium::fastMillis()) || !ok) corium::Log::console(PSTR("SerialOut: Not saved"));
 }
 
-// streaming only, the console stays at the boot baud for recovery
+// Only changes baud while streaming, the console stays at the boot baud for recovery
 void SerialOut::applyBaud() {
 #if !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT == 0
   static uint32_t s_baud = SOUT_BAUD_BOOT;
@@ -136,11 +136,11 @@ void SerialOut::print_usv() {
   Serial.print(buf);
 }
 
-// lines streaming, no logs between them
+// While lines stream, logs stay off serial so nothing lands between them
 void SerialOut::quiet_logs() { corium::Log::setSerialOn(_interval_s == 0); }
 
 void SerialOut::set_show(int secs) {
-  // keep flags for a bare show
+  // a bare show with no flags set shows cpm
   if (secs > 0 && _show == 0) {
     _show = SHOW_CPM;
   }
@@ -183,7 +183,7 @@ static bool show_toggle(const char* arg) {
 static void cmd_show() {
   char* arg = corium::Console::next();
   if (arg == NULL) {
-    // bare show toggles, on = 1 s
+    // A bare show toggles, on means every 1 s
     serialout.set_show(serialout.interval() > 0 ? 0 : 1);
     return;
   }
@@ -234,11 +234,11 @@ static size_t labelled_line(char* buf, size_t cap, const Line& v) {
   return pos;
 }
 
-// what fits the tx fifo now, the rest over the next passes
+// Writes what fits the tx fifo now, the rest over the next passes
 void SerialOut::send(const char* s, size_t n) {
   if (Serial.availableForWrite() < (int)n) _rest = new (std::nothrow) char[n];
   if (!_rest) {
-    // fits, or no heap: a blocking write
+    // It fits, or there's no heap, so just a blocking write
     Serial.write((const uint8_t*)s, n);
     return;
   }
@@ -262,7 +262,7 @@ void SerialOut::drain(bool wait) {
   _rest = nullptr;
 }
 
-// 0 = nothing to send. only what's shown, get_cps walks the ring
+// Only reads what's shown, get_cps walks the ring
 static size_t labelled(char* buf, size_t cap, uint8_t flags) {
   if (flags == 0) return 0;
 
@@ -284,7 +284,7 @@ static size_t labelled(char* buf, size_t cap, uint8_t flags) {
 void SerialOut::loop(unsigned long now) {
   uint32_t period = (uint32_t)_interval_s * 1000UL;
   bool due = (now - _fired_ms) >= period;
-  // next line due or off: the rest now
+  // If the next line is due or it's off, send the rest now
   if (_rest) {
     drain(due);
     if (_rest) return;

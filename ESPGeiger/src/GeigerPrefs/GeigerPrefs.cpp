@@ -38,11 +38,17 @@
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 #include "GeigerInput/GeigerInputTest.h"
 #endif
-#if GEIGER_IS_SERIAL(GEIGER_TYPE)
-#include "GeigerInput/SerialFormat.h"
-#endif
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
 #include "GeigerInput/Type/UdpRx.h"
+CORIUM_PSTR(IN_P_URCH, UDPRX_CHIPID_PAT);
+// Default to modem sleep where multicast still gets in
+#if CORIUM_HAS_SLEEP_MCAST
+#define UDPRX_RXMODE_DEFAULT "1"
+#else
+#define UDPRX_RXMODE_DEFAULT "2"
+#endif
+// Lives in UdpRx.cpp, keeps WiFiUDP.h out of here
+extern "C" void udprx_notify_prefs_saved();
 #endif
 
 CORIUM_PSTR(K_LIFE_EN,        "life_en");
@@ -67,11 +73,11 @@ CORIUM_PSTR(K_BLIP_LED,       "blip_led");
 CORIUM_PSTR(K_BLIP_BRIGHT,    "blip_bright");
 CORIUM_PSTR(K_PWM_PIN,        "pwm_pin");
 
-// interrupt counting, debounce applies
+// Debounce only applies to interrupt counting
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && (!defined(USE_PCNT) || defined(PCNT_SELECTABLE))
 #define PREF_DEBOUNCE
 #endif
-// rows this build has
+// Which rows this build has
 #ifndef RXPIN_BLOCKED
 #define PREF_RX_PIN
 #endif
@@ -85,7 +91,7 @@ CORIUM_PSTR(K_PWM_PIN,        "pwm_pin");
 #define PREF_MODEL
 #endif
 
-// Counter prefs, pin and serial type need a reboot
+// pin and serial type need a reboot
 
 class CounterPrefs : public corium::Module {
 public:
@@ -99,60 +105,35 @@ public:
   void onPrefsLoaded() override;
   void onPrefsSaved() override;
   corium::LegacyRows legacyAliases() override;
-private:
-#if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  uint8_t _serial_type = 0;
-#endif
 };
 
 static CounterPrefs counterprefs;
 CORIUM_REGISTER_MODULE(counterprefs)
 
-#if GEIGER_IS_SERIAL(GEIGER_TYPE)
+// unused labels drop out of the build
 CORIUM_PSTR(IN_L_STY, "Serial type");
 CORIUM_PSTR(IN_L_CPW, "CPM window (CPM-only counters)");
 CORIUM_PSTR(IN_H_CPW, "Window (s). Lower = responsive, higher = smooth");
-#endif
-#ifdef PREF_RX_PIN
 CORIUM_PSTR(IN_L_RXP, "RX pin");
-#endif
-#ifdef PREF_TX_PIN
 CORIUM_PSTR(IN_L_TXP, "TX pin");
-#endif
-#ifdef USE_PCNT
 CORIUM_PSTR(IN_L_PCF, "PCNT filter");
 CORIUM_PSTR(IN_H_PCF, "Hardware mode. Ignores pulses under N x 12.5 ns (200 = 2.5 us), 0 = off");
 CORIUM_PSTR(IN_L_PCP, "PCNT pull");
 CORIUM_PSTR(IN_O_PCP, "None|Pull-up|Pull-down");
-#endif
-#ifdef PCNT_SELECTABLE
 CORIUM_PSTR(IN_L_CNT, "Count with");
 CORIUM_PSTR(IN_O_CNT, "Hardware|Interrupt");
 CORIUM_PSTR(IN_H_CNT, "Hardware uses the chip's pulse counter. Interrupt counts in software, with the Debounce filter");
-#ifdef NO_PCNT_ENV
-#define COUNT_MODE_DEF "1"   // _no_pcnt envs
-#else
-#define COUNT_MODE_DEF "0"
-#endif
-#endif
-#ifdef PREF_DEBOUNCE
 CORIUM_PSTR(IN_L_DBN, "Debounce (us)");
 CORIUM_PSTR(IN_H_DBN, "Filters electrical noise, 100-300 typical");
-#endif
-#ifdef PREF_PULSE_WIDTH
 CORIUM_PSTR(IN_L_PWU, "Pulse width");
 CORIUM_PSTR(IN_H_PWU, "Simulated pulse width (us)");
-#endif
-#if GEIGER_IS_PULSE(GEIGER_TYPE)
 CORIUM_PSTR(IN_L_DTU, "Tube dead time (us)");
 CORIUM_PSTR(IN_H_DTU, "From the datasheet, 0 = off. SBM-20 = 190");
-#endif
 CORIUM_PSTR(IN_L_CMM, "CPM mode");
 CORIUM_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
 CORIUM_PSTR(IN_L_DET, "Detector");
 CORIUM_PSTR(IN_L_DOSE, "Dose &amp; alarms");
 CORIUM_PSTR(IN_L_COUNT, "Counting");
-#ifdef PREF_MODEL
 CORIUM_PSTR(IN_L_GMD, "Tube model");
 CORIUM_PSTR(IN_H_GMD, "e.g. SBM-20, J305");
 CORIUM_PSTR(IN_L_THD, "Tube detects");
@@ -162,26 +143,19 @@ CORIUM_PSTR(IN_L_TBB, "\xCE\xB2 Beta");
 CORIUM_PSTR(IN_H_TBB, "Detects beta radiation");
 CORIUM_PSTR(IN_L_TBG, "\xCE\xB3 Gamma");
 CORIUM_PSTR(IN_H_TBG, "Detects gamma radiation");
-#endif
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
 CORIUM_PSTR(IN_L_URMD, "Source mode");
 CORIUM_PSTR(IN_O_URMD, "Specific device|Sum all sources");
 CORIUM_PSTR(IN_H_URMD, "Specific: source chip ID below, blank = first source heard");
 CORIUM_PSTR(IN_L_URCH, "Source chip ID");
 CORIUM_PSTR(IN_H_URCH, "6-hex chip ID of the source, Specific mode only");
-CORIUM_PSTR(IN_P_URCH, UDPRX_CHIPID_PAT);
 CORIUM_PSTR(IN_L_URGP, "Group / listen IP");
 CORIUM_PSTR(IN_H_URGP, "239.x = multicast, else unicast listen");
 CORIUM_PSTR(IN_L_URRM, "RX sleep");
 CORIUM_PSTR(IN_O_URRM, "Light (low power)|Modem (balanced)|None (always on)");
-// modem sleep where multicast still gets in
-#if CORIUM_HAS_SLEEP_MCAST
-#define UDPRX_RXMODE_DEFAULT "1"
+#ifdef NO_PCNT_ENV
+#define COUNT_MODE_DEF "1"   // _no_pcnt envs
 #else
-#define UDPRX_RXMODE_DEFAULT "2"
-#endif
-// in UdpRx.cpp, keeps WiFiUDP.h out
-extern "C" void udprx_notify_prefs_saved();
+#define COUNT_MODE_DEF "0"
 #endif
 CORIUM_PSTR(CT_L_RAT, "Dose ratio");
 CORIUM_PSTR(CT_H_RAT, "CPM per uSv/h");
@@ -207,8 +181,13 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
   {EG_K_SERIAL_TYPE,  IN_L_STY, nullptr, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
    GEIGER_STYPE_GC10, GEIGER_STYPE_TEMPLATE, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
+  // UDP source, no pins
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   {EG_K_UDPRX_MODE,   IN_L_URMD, IN_H_URMD, "0",                  IN_O_URMD,   0, 1,     0,  corium::P_ENUM,   0},
+  {EG_K_UDPRX_CHIPID, IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     CHIPID_LEN,  corium::P_STRING, 0},
+  {EG_K_UDPRX_GROUP,  IN_L_URGP, IN_H_URGP, UDPRX_DEFAULT_GROUP, EG_P_IP,      0, 0,     CORIUM_IPV4_MAX, corium::P_STRING, corium::P_ADVANCED},
+  {EG_K_UDPRX_PORT,   EG_L_PRT,  nullptr,   STR(UDPRX_DEFAULT_PORT), nullptr,  1, 65535, 0,  corium::P_UINT,   corium::P_ADVANCED},
+  {EG_K_UDPRX_RXMODE, IN_L_URRM, nullptr,   UDPRX_RXMODE_DEFAULT, IN_O_URRM,   0, 2,     0,  corium::P_ENUM,   corium::P_ADVANCED},
 #endif
   // Pins
 #ifdef PREF_RX_PIN
@@ -216,13 +195,6 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
 #ifdef PREF_TX_PIN
   {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-#endif
-  // UDP source target
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  {EG_K_UDPRX_CHIPID, IN_L_URCH, IN_H_URCH, "",                   IN_P_URCH,   0, 0,     CHIPID_LEN,  corium::P_STRING, 0},
-  {EG_K_UDPRX_GROUP,  IN_L_URGP, IN_H_URGP, UDPRX_DEFAULT_GROUP, EG_P_IP,      0, 0,     CORIUM_IPV4_MAX, corium::P_STRING, corium::P_ADVANCED},
-  {EG_K_UDPRX_PORT,   EG_L_PRT,  nullptr,   STR(UDPRX_DEFAULT_PORT), nullptr,  1, 65535, 0,  corium::P_UINT,   corium::P_ADVANCED},
-  {EG_K_UDPRX_RXMODE, IN_L_URRM, nullptr,   UDPRX_RXMODE_DEFAULT, IN_O_URRM,   0, 2,     0,  corium::P_ENUM,   corium::P_ADVANCED},
 #endif
   // Tube identity
 #ifdef PREF_MODEL
@@ -292,7 +264,7 @@ static const corium::PrefShow COUNTER_SHOW[] PROGMEM = {
 const corium::PrefShow* CounterPrefs::prefsShow() { return COUNTER_SHOW; }
 #endif
 
-// pins and count mode read at boot only, the isr and port keep theirs
+// Pins and count mode are only read at boot, the isr and port keep what they started with
 #if defined(PREF_RX_PIN) || defined(PCNT_SELECTABLE) || defined(PREF_TX_PIN)
 static void boot_pins() {
   static bool s_set = false;
@@ -307,34 +279,25 @@ static void boot_pins() {
 #ifdef PREF_TX_PIN
   gcounter.set_tx_pin((int)corium::Prefs::getInt("counter", K_TX_PIN));
 #endif
+#ifdef NO_PCNT_ENV
+  // Stored so a plain bin keeps the interrupt. Committed here, a save's callback can't commit
+  if (corium::Prefs::getBool("counter", K_COUNT_KEPT)) return;
+  corium::Prefs::put("counter", K_COUNT_KEPT, "1");
+  corium::Prefs::commit(false);
+#endif
 }
 #else
 static void boot_pins() {}   // none on this build
 #endif
 
-#ifdef NO_PCNT_ENV
-// count_mode into the file once, so a plain bin keeps the interrupt; boot only, a save's callback can't commit
-static void keep_count_mode() {
-  static bool s_done = false;
-  if (s_done) return;
-  s_done = true;
-  if (corium::Prefs::getBool("counter", K_COUNT_KEPT)) return;
-  corium::Prefs::put("counter", K_COUNT_KEPT, "1");
-  corium::Prefs::commit(false);
-}
-#endif
-
 void CounterPrefs::onPrefsLoaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
-  _serial_type = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
+  uint8_t type = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
   uint8_t window = (uint8_t)corium::Prefs::getUInt("counter", K_CPM_WINDOW);
-  if (SerialFormat::has_cps(_serial_type)) window = GEIGER_CPM_COUNT;
+  if (SerialFormat::has_cps(type)) window = GEIGER_CPM_COUNT;
   gcounter.set_cpm_window(window);
 #endif
   boot_pins();
-#ifdef NO_PCNT_ENV
-  keep_count_mode();
-#endif
 #ifdef USE_PCNT
   gcounter.set_pcnt_filter((int)corium::Prefs::getUInt("counter", K_PCNT_FILTER));
   gcounter.apply_pcnt_filter();
@@ -356,7 +319,7 @@ void CounterPrefs::onPrefsLoaded() {
   {
     uint32_t dead = corium::Prefs::getUInt("counter", K_DEAD_TIME_US);
 #ifdef PREF_DEBOUNCE
-    // interrupt: nothing counts inside the debounce either, 0 stays off
+    // With interrupts nothing counts inside the debounce either. 0 dead time stays off
     uint32_t dbn = corium::Prefs::getUInt("counter", K_DEBOUNCE);
     if (dead && dbn > dead && !gcounter.has_pcnt()) dead = dbn;
 #endif
@@ -459,9 +422,18 @@ void LifePrefs::onPrefsLoaded() {
 
 #if !defined(DISABLE_INTERNAL_BLIP) || defined(GEIGER_BLIPLED)
 #define LED_BLIP
+#define LED_LABEL  "Blip LED"
+#define LED_ENABLE K_BLIP_LED
+#else
+#define LED_LABEL  "Status LED"
+#define LED_ENABLE nullptr
+#endif
+// not the 8266 HW's inside LED, hw32 has the beeper
+#if !defined(ESPGEIGER_HW) || defined(ESPGEIGER_HW32)
+#define LED_QUIET
 #endif
 
-// every build, led.pin, the blink on a send, the alert flashes
+// every build
 class LedPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("led"); }
@@ -479,7 +451,7 @@ private:
   uint32_t _alert_at = 0;
 };
 
-// alert, not snoozed: the pattern each second
+// While alert and not snoozed, play the pattern each second
 void LedPrefs::loop(unsigned long now) {
   if (corium::Registry::events(this) & (1u << TOPIC_SENT)) corium::LedSignal::play(LED_ACTIVITY);
   if (!gcounter.is_alert() || gcounter.is_snoozed()) {
@@ -499,7 +471,7 @@ CORIUM_REGISTER_MODULE(ledprefs)
 
 void led_hold_tick() {
 #ifdef LED_PIN_BLOCKED
-  // the board's pin: up before Boot::end
+  // The board's fixed pin, attach it before Boot::end
   static bool s_attached = false;
   if (!s_attached) {
     s_attached = true;
@@ -509,7 +481,6 @@ void led_hold_tick() {
 #endif
 }
 
-#ifndef LED_PIN_BLOCKED
 CORIUM_PSTR(LD_L_PIN, "Status LED pin");
 CORIUM_PSTR(LD_H_PIN, "Onboard LED GPIO, -1 = off");
 #if LED_SEND_RECEIVE_ON == LOW
@@ -517,8 +488,6 @@ CORIUM_PSTR(LD_H_PIN, "Onboard LED GPIO, -1 = off");
 #else
 #define LD_POL_DEF "0"
 #endif
-#endif
-#ifdef LED_BLIP
 CORIUM_PSTR(LD_L_BLP, "Blip LED");
 CORIUM_PSTR(LD_H_BLP, "Flash LED on each count");
 #ifdef GEIGER_BLIPLED
@@ -527,23 +496,13 @@ CORIUM_PSTR(LD_L_BRT, "Internal brightness");
 CORIUM_PSTR(LD_L_BRT, "Blip brightness");
 #endif
 CORIUM_PSTR(LD_O_MOD, "Pulse|Fade");
+CORIUM_PSTR(LD_H_QFR, "Silence the blip LED and beeper from this time, blank = off. Alarms still sound");
 #ifdef ESPGEIGER_HW
 #define LD_PULSE_DEF "2"
 #define LD_BRT_DEF   "100"
 #else
 #define LD_PULSE_DEF "20"
 #define LD_BRT_DEF   "80"
-#endif
-// not the 8266 HW's inside LED, hw32 has the beeper
-#if !defined(ESPGEIGER_HW) || defined(ESPGEIGER_HW32)
-#define LED_QUIET
-CORIUM_PSTR(LD_H_QFR, "Silence the blip LED and beeper from this time, blank = off. Alarms still sound");
-#endif
-#define LED_LABEL  "Blip LED"
-#define LED_ENABLE K_BLIP_LED
-#else
-#define LED_LABEL  "Status LED"
-#define LED_ENABLE nullptr
 #endif
 
 static const corium::Pref LED_PREF_ITEMS[] PROGMEM = {
@@ -574,7 +533,7 @@ static const corium::PrefGroup LED_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* LedPrefs::prefsGroup() { return &LED_PREF_GROUP; }
 
 void LedPrefs::onPrefsLoaded() {
-  // boot only, attach() takes it once
+  // Pin read at boot only, attach() takes it once
   static bool s_pin_read = false;
   if (!s_pin_read) {
     s_pin_read = true;
@@ -641,7 +600,7 @@ static const corium::PrefGroup HV_PIN_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* HVPinPrefs::prefsGroup() { return &HV_PIN_PREF_GROUP; }
 
-// boot only, live -1 leaves pwm unguarded
+// Boot only, a live change to -1 would leave the pwm unguarded
 void HVPinPrefs::onPrefsLoaded() {
   static bool s_set = false;
   if (s_set) return;

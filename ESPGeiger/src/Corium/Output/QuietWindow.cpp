@@ -27,12 +27,12 @@ void corium::QuietWindow::set(const char* from, const char* to) {
   _recompute_ms = corium::fastMillis();
 }
 
-// every call, cached to the minute, localTm() is slow
+// Cached until the next minute, localTm() is slow
 bool corium::QuietWindow::active() {
   if (_from < 0 || _to < 0 || _from == _to) return false;   // off
   if (!corium::Clock::synced) return false;
   unsigned long now_ms = corium::fastMillis();
-  // never more than a minute ahead, so a far one is stale (not asked for weeks)
+  // a recompute more than a minute ahead is stale, so redo it
   if (!corium::reached(now_ms, _recompute_ms) && (uint32_t)(_recompute_ms - now_ms) <= 60000UL) return _quiet;
   struct tm t;
   if (!corium::Clock::localTm(&t)) return false;

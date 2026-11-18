@@ -39,7 +39,7 @@
 #include "Corium/WebPortal/WebPortal.h"
 
 namespace corium {
-// begin, prefs, Reactor::clock, net, end; once each, inline into setup(); no clock = nothing ever due
+// Call begin, prefs, Reactor::clock, net and end in that order, once each
 namespace Boot {
 
   inline __attribute__((always_inline))
@@ -53,7 +53,7 @@ namespace Boot {
     EGHttpServer::setLog(Log::vconsole);
 
 #ifdef ESP8266
-    // core default is 255
+    // Core default is 255
     analogWriteRange(1023);
 #endif
     LedSignal::begin(leds, count, flash_led);
@@ -66,7 +66,7 @@ namespace Boot {
   // fs, modules, prefs
   inline __attribute__((always_inline)) void prefs() {
     if (!Fs::begin()) {
-      // prefs on defaults, wifi and ota still up
+      // Prefs run on defaults, wifi and ota still come up
       Log::console(PSTR("LittleFS Mount Failed"));
     }
     Wifi::checkBackupState();
@@ -74,12 +74,12 @@ namespace Boot {
 #ifdef CORIUM_CRASH_MARK
     uint8_t in = Registry::IN_NONE;
 #ifdef ESP8266
-    // the crash dump's; a hw wdt never reaches the callback, no dump = not known
+    // A hw wdt leaves no dump
     if (const CrashDump::Snapshot* cd = CrashDump::lastCrash()) in = (uint8_t)cd->in;
 #else
     uint8_t rr = DeviceInfo::resetReason();
     if (rr == DeviceInfo::RR_WDT || rr == DeviceInfo::RR_EXCEPTION) {
-      in = Registry::firing();   // noinit, still the crash's
+      in = Registry::firing();   // noinit, still holds the value from the crash
       Registry::keepTrace();
     }
 #endif
@@ -88,13 +88,13 @@ namespace Boot {
     Registry::setSafeMode(BootGuard::safeMode());
     Registry::preWifiAll();
     Prefs::begin();
-    Clock::kept();   // after the zone, stamps from here on
+    Clock::kept();   // after the zone is set, log lines get clock stamps from here on
   }
 
   inline __attribute__((always_inline)) void join() {
     if (Wifi::connectOrPortal()) return;
     if (Wifi::OFFLINE_OK || Wifi::offlineForced) {
-      Wifi::disabled = true;   // tick retries the saved wifi, unless forced
+      Wifi::disabled = true;   // the tick retries the saved wifi unless forced offline
       return;
     }
     Log::console(PSTR("WiFi not connecting ... Restarting ... "));
@@ -111,11 +111,10 @@ namespace Boot {
     delay(500);
   }
 
-  // modules begin, the tick starts
   inline __attribute__((always_inline)) void end(void (*second)(uint32_t up)) {
     Registry::beginAll();
     LedSignal::attach();
-    // safe mode tries a normal boot again later
+    // Safe mode tries a normal boot again later
     if (BootGuard::safeMode()) Lifecycle::retryAfter(fastMillis(), BootGuard::retryAfterMs());
     Reactor::begin(second);
     Clock::anchor();

@@ -28,11 +28,11 @@ namespace corium {
 class ImprovSerial {
 public:
   void begin();
-  // true = part of an Improv frame, caller drops it; false = caller keeps it
+  // true = an Improv byte, the caller drops it
   bool consumeByte(uint8_t b);
-  // setup and the portal wait only, else it races the console on Serial.read()
+  // Only for setup and the portal wait, otherwise it races the console on Serial.read()
   void poll();
-  // a WIFI_SETTINGS test ended: its answer; each console pass
+  // Each console pass, sends the answer once a WIFI_SETTINGS test has ended
   void watch();
 
 private:
@@ -48,7 +48,7 @@ private:
   void handle_wifi_settings(const std::string& ssid, const std::string& password);
   void finish();
 
-  uint8_t       _buf[128];   // one frame in
+  uint8_t       _buf[128];   // one incoming frame
   size_t        _pos = 0;
   improv::State _state = improv::STATE_AUTHORIZED;
   uint32_t      _last_byte_ms = 0;

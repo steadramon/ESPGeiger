@@ -1,5 +1,5 @@
 /*
-  DeviceInfoHost.h - DeviceInfo off the chips: the native tests, inline
+  DeviceInfoHost.h - DeviceInfo off the chips, inline
 
   Copyright (C) 2026 @steadramon
 
@@ -25,7 +25,7 @@ namespace corium {
 namespace DeviceInfo {
   inline uint32_t hwRandom() { return esp_random(); }
 
-  // ram left from before the boot, a seed; bootRamSet() changes it
+  // Ram from before boot, used as a seed
   extern uint8_t bootRamBuf[256];
   inline const uint8_t* bootRam(size_t& n) {
     n = sizeof(bootRamBuf);
@@ -37,7 +37,7 @@ namespace DeviceInfo {
   inline uint32_t heapMin() { return ESP.getMinFreeHeap(); }
   inline uint32_t heapMaxBlock() { return ESP.getMaxAllocHeap(); }
 
-  inline uint32_t stackFree() { return 0; }   // not known
+  inline uint32_t stackFree() { return 0; }   // Not known
 
   inline void wdtPause() {}
   inline void wdtResume() {}

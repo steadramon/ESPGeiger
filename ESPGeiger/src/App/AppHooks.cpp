@@ -33,6 +33,7 @@
 #include "App/Board.h"
 #include "App/Health.h"
 #include "Corium/Output/Buzzer.h"
+#include "Corium/System/BootGuard.h"
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 namespace AppWeb { void routes(EGHttpServer& http); }
@@ -95,6 +96,7 @@ void corium::AppHooks::aboutJson(EGHttpResponse& res) {
 }
 
 void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {
+  if (corium::BootGuard::safeMode()) return;   // not counting, no histogram
   res.sendChunk(F("# HELP geiger_pulse_interval_seconds Inter-pulse intervals in seconds, log2 buckets\n"
                   "# TYPE geiger_pulse_interval_seconds histogram\n"));
   const uint8_t nb = Counter::pulse_histogram_buckets();

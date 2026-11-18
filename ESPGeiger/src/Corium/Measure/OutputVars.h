@@ -26,10 +26,10 @@
 namespace corium {
 namespace OutputVars {
 
-// key not NUL-terminated, may carry :spec. 0 = unknown, bad spec or too long (cut set)
+// key isn't NUL terminated and may end in :spec
 size_t render(const char* key, size_t klen, char* buf, size_t cap, bool* cut = nullptr);
 
-// {name} {name:F1} \n \r \t \\ \{ \}, unknown left as written. tpl in SRAM
+// Fills in {name} {name:F1} and the escapes \n \r \t \\ \{ \}, anything unknown is left as written. tpl in SRAM
 size_t renderTemplate(const char* tpl, char* buf, size_t cap);
 
 }  // namespace OutputVars

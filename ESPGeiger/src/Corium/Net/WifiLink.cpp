@@ -27,6 +27,7 @@
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Fs.h"
 #include "Corium/System/Lifecycle.h"
+#include "Corium/System/BootGuard.h"
 
 const char WIFI_BACKUP_P[] PROGMEM = "/wifi_backup";
 const char NET_BACKUP_P[] PROGMEM = "/net_backup";
@@ -54,9 +55,15 @@ static uint32_t s_retry_at = 0;
 static unsigned long s_link_at = 0;
 static unsigned long s_offline_retry_at = 0;
 static const uint32_t WIFI_RETRY_MS = 30000UL;
-static const uint32_t WIFI_LINK_MS = 60000UL;   // rssi + ip
-static const uint32_t WIFI_BACKUP_MS = 300000UL;   // up this long after boot, backups go
-static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;   // disabled, try the saved network
+static const uint32_t WIFI_LINK_MS = 60000UL;   // refresh rssi + ip
+static const uint32_t WIFI_BACKUP_MS = 300000UL;   // Once up this long after boot, the backups are removed
+static const uint32_t WIFI_OFFLINE_RETRY_MS = 120000UL;   // while disabled, try the saved network this often
+
+// An automatic restart mustn't be a way out of safe mode
+static void restart_soon(unsigned long now, uint32_t ms) {
+  if (corium::BootGuard::safeMode()) corium::BootGuard::scram();
+  corium::Lifecycle::requestRestart(now, ms);
+}
 
 static void refresh_link_cache(bool just_connected, unsigned long now) {
   if (!just_connected && !corium::reached(now, s_link_at)) return;
@@ -64,7 +71,7 @@ static void refresh_link_cache(bool just_connected, unsigned long now) {
   corium::Wifi::rssi = WiFi.RSSI();
   corium::Wifi::local_ip = WiFi.localIP();
   if (!just_connected) {
-    // set before the u32 diff wraps back to small
+    // Set settled before the u32 diff wraps round to small again
     uint32_t up = (uint32_t)(now - corium::Wifi::connectedAtMs);
     if (up > INT32_MAX) corium::Wifi::settled = true;
     return;
@@ -76,7 +83,7 @@ static void refresh_link_cache(bool just_connected, unsigned long now) {
 
 static void track_outage(unsigned long now) {
   if (corium::Wifi::state() != corium::Wifi::LINK_LOST) {
-    // joined at boot, the loop never saw it up: no line
+    // Joined at boot and the loop never saw it up, so no log line
     if (corium::Wifi::connectedAtMs) corium::Log::console(PSTR("WiFi: Connection lost"));
     s_lost_at = now;
     s_retry_at = now + WIFI_RETRY_MS;
@@ -91,7 +98,7 @@ static void track_outage(unsigned long now) {
   uint32_t max_s = corium::Wifi::downMaxS();
   if (max_s && down_s > max_s) {
     corium::Log::console(PSTR("WiFi: Down for %lus, restarting"), down_s);
-    corium::Lifecycle::requestRestart(now, 100);
+    restart_soon(now, 100);
   }
 }
 
@@ -104,21 +111,21 @@ static void note_reconnected(unsigned long now) {
 }
 
 static void reprobe_saved_network(unsigned long now) {
-  if (corium::Wifi::apHeld(now)) return;   // a probe's STA mode would drop it
+  if (corium::Wifi::apHeld(now)) return;   // a probe's STA mode would drop the AP
   uint32_t max_s = corium::Wifi::downMaxS();
   if (corium::Wifi::connected) {
     corium::Log::console(PSTR("WiFi: Saved network back, restarting to reconnect"));
-    corium::Lifecycle::requestRestart(now, 500);
+    restart_soon(now, 500);
   } else if (max_s && now - CORIUM_MS_START > max_s * 1000UL) {   // ms since boot
     corium::Log::console(PSTR("WiFi: Offline %lus, restarting to retry"), now / 1000);
-    corium::Lifecycle::requestRestart(now, 500);
+    restart_soon(now, 500);
   } else if (s_offline_retry_at == 0) {
     s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
   } else if (corium::reached(now, s_offline_retry_at)) {
     s_offline_retry_at = now + WIFI_OFFLINE_RETRY_MS;
     corium::Log::console(PSTR("WiFi: Offline - re-probing saved network"));
     WiFi.mode(WIFI_STA);
-    (void)WiFi.begin();   // the link watch reads the status
+    (void)WiFi.begin();   // the link watch reads the status after
   }
 }
 
@@ -148,7 +155,7 @@ bool corium::Wifi::look(unsigned long now) {
   if (corium::Wifi::connected) refresh_link_cache(!prev, now);
   else corium::Wifi::rssi = 0;
 
-  // a join test owns the link till it's done, offline too
+  // A join test owns the link until it's done, offline too
   if (!corium::Wifi::testing()) watch_link(st, now);
 
   if (!corium::Wifi::backupGraceDone && corium::Wifi::connected && now - CORIUM_MS_START > WIFI_BACKUP_MS) clear_backups_once_stable();

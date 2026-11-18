@@ -30,27 +30,26 @@ class IPAddress;
 namespace corium {
 namespace IgmpRefresh {
 
-bool refresh();   // esp32 only, loop, false = not sent
-// the 8266 answers queries itself, its refresh() sends nothing
+bool refresh();   // call from the loop, only sends on esp32. false = not sent
+// The 8266 answers queries itself, so its refresh() sends nothing
 #ifdef ESP8266
 constexpr bool REFRESHES = false;
 #else
 constexpr bool REFRESHES = true;
 #endif
-// esp8266 only: its beginMulticast keeps the join when the bind fails, so join here, one leave each
+// Used on the 8266 only, its beginMulticast keeps the join even when the bind fails
 CORIUM_NODISCARD bool join(const IPAddress& group);
-void leave(const IPAddress& group);   // its WiFiUDP::stop() keeps the group
+void leave(const IPAddress& group);   // needed since WiFiUDP::stop() doesn't leave the group
 
-// Udp = WiFiUDP
-// a group listen, end() after the socket's stop()
+// Call end() after the socket's stop()
 struct Join {
 #ifdef ESP8266
-  IPAddress group;   // the joined one, the caller's can move first
+  IPAddress group;   // copy of the joined group, the caller's may change before end()
 
   template <class Udp>
   CORIUM_NODISCARD bool begin(Udp& udp, const IPAddress& g, uint16_t port) {
     if (!join(g)) return false;
-    group = g;   // a failed bind leaves it
+    group = g;   // kept even if the bind fails, so end() still leaves it
     return udp.begin(port);
   }
   void end() {
@@ -66,7 +65,7 @@ struct Join {
 #endif
 };
 
-// a packet to a group goes out the station, the 8266 needs it named
+// A packet to a group goes out on the station interface, the 8266 needs that named
 template <class Udp>
 CORIUM_NODISCARD inline bool beginPacket(Udp& udp, const IPAddress& to, uint16_t port) {
 #ifdef ESP8266
@@ -78,7 +77,7 @@ CORIUM_NODISCARD inline bool beginPacket(Udp& udp, const IPAddress& to, uint16_t
 #endif
 }
 
-// a received packet dropped: esp32 keeps one till flush, the 8266's flush sends
+// Drops a received packet. The esp32 keeps one until flush(), on the 8266 flush() sends instead
 template <class Udp>
 inline void drop(Udp& udp) {
 #ifdef ESP8266

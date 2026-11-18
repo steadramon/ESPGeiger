@@ -35,7 +35,6 @@
 
 namespace SerialFormat {
 
-// MightyOhm uSv/hr = CPM / 175
 static constexpr float MIGHTYOHM_USV_DIV = 175.0f;
 
 const char* mohm_mode(int cps) {
@@ -115,7 +114,7 @@ const char* name_for(uint8_t type)  { TypeInfo t; return find(type, t) ? t.name 
 bool        is_known(uint8_t type)  { TypeInfo t; return find(type, t); }
 bool        has_cps(uint8_t type)   { TypeInfo t; return find(type, t) ? t.has_cps : false; }
 
-// TYPES order
+// same order as TYPES
 const char TYPE_OPTS[] PROGMEM =
 #if EG_HAS_SERIAL_PARSERS
   "GC10|GC10Next|"

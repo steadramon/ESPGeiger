@@ -27,7 +27,7 @@ static const uint8_t SHA256_DI[] = {
   0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20,
 };
 
-// 00 01 ff.. 00 DI hash, written back to front
+// Builds 00 01 ff.. 00 DI hash, written back to front
 void corium::HwKey::pad(const uint8_t hash[HASH], uint8_t out[SIG]) {
   for (size_t i = 0; i < HASH; i++) out[i] = hash[HASH - 1 - i];
   for (size_t i = 0; i < sizeof(SHA256_DI); i++) out[HASH + i] = SHA256_DI[sizeof(SHA256_DI) - 1 - i];
@@ -51,12 +51,12 @@ void corium::HwKey::pad(const uint8_t hash[HASH], uint8_t out[SIG]) {
 #include <esp_timer.h>
 #include <nvs.h>
 
-// written at provisioning, KEY5 holds the eFuse half
+// Blob is written at provisioning, KEY5 holds the eFuse half
 static const char NVS_NS[] = "hwkey";
 static const char NVS_KEY[] = "ds";
 static const ets_efuse_block_t KEY_BLOCK = ETS_EFUSE_BLOCK_KEY5;
 static const uint32_t RSA_2048 = 2048 / 32 - 1;   // rsa_length
-static const int64_t DS_WAIT_US = 500000;   // a stuck DS fails, not the wdt
+static const int64_t DS_WAIT_US = 500000;   // a stuck DS fails the sign instead of tripping the wdt
 static_assert(sizeof(ets_ds_data_t) == corium::HwKey::BLOB, "blob size");
 
 namespace {
@@ -66,8 +66,8 @@ struct Work {
   uint8_t sig[corium::HwKey::SIG];
 };
 
-// ROM routines, not IDF's esp_ds (~1 KB of hal). The lock also keeps WiFi's mbedtls off SHA/AES/RSA,
-// periph_module_* keeps its clock counts right
+// Uses the ROM calls, not esp_ds (~1 KB). The lock keeps WiFi's mbedtls off SHA/AES/RSA
+// and periph_module_* keeps the clock counts right
 bool rom_sign(Work* w) {
   esp_crypto_ds_lock_acquire();
   periph_module_enable(PERIPH_HMAC_MODULE);
@@ -78,7 +78,7 @@ bool rom_sign(Work* w) {
   if (ok) {
     int64_t until = esp_timer_get_time() + DS_WAIT_US;
     while (ets_ds_is_busy() && esp_timer_get_time() < until) {}
-    // finish blocks while busy
+    // finish would block while busy
     ok = !ets_ds_is_busy() && ets_ds_finish_sign(w->sig, &w->data) == ETS_DS_OK;
   }
   ets_hmac_invalidate_downstream(ETS_EFUSE_KEY_PURPOSE_HMAC_DOWN_DIGITAL_SIGNATURE);
@@ -98,7 +98,7 @@ bool load(Work* w) {
   return ok;
 }
 
-// another chip's or a damaged blob fails the DS digest check
+// A blob from another chip, or a damaged one, fails the DS digest check
 bool run(Work* w, const uint8_t hash[corium::HwKey::HASH]) {
   if (w->data.rsa_length != RSA_2048) return false;
   corium::HwKey::pad(hash, w->msg);
@@ -130,7 +130,7 @@ bool corium::HwKey::sign(const uint8_t hash[HASH], uint8_t sig[SIG]) {
   return ok;
 }
 
-// a wiped nvs gets the blob back from the api
+// After an nvs wipe the blob comes back from the api
 bool corium::HwKey::put(const uint8_t blob[BLOB]) {
   Work* w = (Work*)malloc(sizeof(Work));
   if (!w) return false;

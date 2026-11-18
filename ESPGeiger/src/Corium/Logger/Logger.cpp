@@ -27,10 +27,10 @@ corium::Log::LoggingLevels corium::Log::_level = (corium::Log::LoggingLevels)LOG
 char corium::Log::_log[MAX_LOG_SIZE] = "";
 bool corium::Log::_serial = true;
 
-// esp32: other tasks log too
+// On esp32 other tasks log too, so it needs a lock
 #ifdef ESP32
 #include <freertos/semphr.h>
-static SemaphoreHandle_t s_lock = nullptr;   // first log is in setup
+static SemaphoreHandle_t s_lock = nullptr;   // made on the first log, which is in setup
 #define LOG_LOCK()   do { if (!s_lock) s_lock = xSemaphoreCreateMutex(); \
                           xSemaphoreTake(s_lock, portMAX_DELAY); } while (0)
 #define LOG_UNLOCK() xSemaphoreGive(s_lock)
@@ -39,7 +39,7 @@ static SemaphoreHandle_t s_lock = nullptr;   // first log is in setup
 #define LOG_UNLOCK()
 #endif
 
-// one line, longer is cut; used under LOG_LOCK
+// Only used under LOG_LOCK
 static char s_line[256];
 
 void corium::Log::vlog(LoggingLevels level, bool timed, const char* fmt, va_list arg)
@@ -47,7 +47,7 @@ void corium::Log::vlog(LoggingLevels level, bool timed, const char* fmt, va_list
   if (level > _level) return;
   LOG_LOCK();
   vsnprintf_P(s_line, sizeof(s_line), fmt, arg);
-  // peer bytes (an SSID) can't split the ring or fake a line
+  // Bytes from a peer (an SSID say) can't split the ring or fake a line
   for (char* c = s_line; *c; c++) {
     if ((uint8_t)*c < ' ' || *c == 0x7f) *c = '?';  // DEL
   }
@@ -95,7 +95,7 @@ void corium::Log::banner(const char* fmt, ...)
 static uint8_t next_idx(uint8_t i) { return i == 255 ? 1 : i + 1; }
 
 static bool s_held = false;
-static uint8_t s_owed = 0;   // first line serial hasn't had, 0 = none
+static uint8_t s_owed = 0;   // first line serial hasn't printed yet, 0 = none
 
 void (*corium::Log::wake)() = nullptr;
 
@@ -123,7 +123,7 @@ void corium::Log::AddLog(corium::Log::LoggingLevels level, const char* line, boo
   if (_serial && s_held) {
     if (!s_owed) s_owed = (uint8_t)_idx;
   } else if (_serial) {
-    flush();   // the held ones first
+    flush();   // print the held lines first
     if (stamp[0]) Serial.print(stamp);
     Serial.println(line);
   }
@@ -145,7 +145,7 @@ void corium::Log::AddLog(corium::Log::LoggingLevels level, const char* line, boo
   _idx = (char)next_idx((uint8_t)_idx);
 }
 
-// the next "[idx]line\1", span takes the \1; false = none left
+// Reads the next "[idx]line\1", span includes the \1. false = none left
 static bool next_line(const char*& it, const char* stop, uint8_t& idx, const char*& line, size_t& span)
 {
   if (it >= stop || *it == '\0') return false;
@@ -178,7 +178,7 @@ size_t corium::Log::copyLog(uint32_t idx, char* out, size_t cap)
   return n;
 }
 
-// steps from a to b, indices 1..255
+// Steps from a to b, indices run 1..255
 static int idx_dist(uint8_t a, uint8_t b) {
   int d = b - a;
   return d < 0 ? d + 255 : d;
@@ -199,7 +199,7 @@ size_t corium::Log::copySince(uint32_t* idx, uint8_t end, char* out, size_t cap)
     if (idx_dist(from, cur_idx) >= want) continue;
     if (n + span > cap - 1) {
       if (n) break;
-      span = cap - 1;   // one long line, cut as copyLog
+      span = cap - 1;   // a single long line, cut the same as copyLog
     }
     memcpy(out + n, line, span);
     n += span;
@@ -210,7 +210,7 @@ size_t corium::Log::copySince(uint32_t* idx, uint8_t end, char* out, size_t cap)
   return n;
 }
 
-// the ring's lines from s_owed on, as AddLog prints them; ones the ring dropped are gone
+// Prints the owed lines, any the ring already dropped are lost
 void corium::Log::flush()
 {
   if (!s_owed || s_held) return;
@@ -223,7 +223,7 @@ void corium::Log::flush()
   size_t span;
   while (next_line(it, _log + MAX_LOG_SIZE, cur_idx, line, span)) {
     if (idx_dist(from, cur_idx) >= want) continue;
-    char* end = (char*)line + span - 1;   // the \1 in _log: a NUL for the print, back after
+    char* end = (char*)line + span - 1;   // swap the \1 in _log for a NUL to print, then put it back
     *end = '\0';
     Serial.println(line);
     *end = '\1';

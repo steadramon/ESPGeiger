@@ -45,7 +45,7 @@
 
 GRNG grng;
 
-// the ms ticker: blip LED and pulse out pins
+// Runs from the ms ticker
 static inline void ms_poll(uint32_t now_us) {
 #ifdef LED_FLASH_ENGINE
   if (BlipLed::due()) BlipLed::poll(now_us);
@@ -53,7 +53,7 @@ static inline void ms_poll(uint32_t now_us) {
 #ifdef PULSE_OUT
   if (PulseOut::due()) pulseout.poll(now_us);
 #endif
-  (void)now_us;   // neither built
+  (void)now_us;   // if neither is built
 }
 
 static void counter_second(uint32_t up) { gcounter.secondticker(up); }
@@ -67,7 +67,7 @@ static void boot_banner() {
   corium::Log::banner(PSTR(" \\/   \\/"));
   if (corium::BootGuard::crashStreak()) {
     corium::Log::console(PSTR("BootGuard: %u crash boots in a row%s"), corium::BootGuard::crashStreak(),
-                 corium::BootGuard::safeMode() ? PSTR(" - safe mode") : PSTR(""));
+                         corium::BootGuard::safeMode() ? PSTR(" - safe mode") : PSTR(""));
   }
 }
 
@@ -84,7 +84,7 @@ static void boot_button(bool safe) {
 void setup()
 {
 #ifdef ESPGEIGER_HW
-  // no pull-down on the gate, low till HV::begin (never in safe mode)
+  // No pull-down on the gate, hold it low until HV::begin (which never runs in safe mode)
   pinMode(GEIGER_PWMPIN, OUTPUT);
   digitalWrite(GEIGER_PWMPIN, LOW);
 #endif
@@ -125,7 +125,7 @@ void setup()
   BootHooks::displayResetTimeout();
 }
 
-// every loop pass, the inline gate first
+// Every loop pass
 static inline void counter_pass(unsigned long now)
 {
   if (gcounter.needs_loop(now)) gcounter.loop();
@@ -138,7 +138,7 @@ void loop()
 
 #ifdef ESP8266
 extern "C" void __preloop_update_frequency();
-// core sets it every pass, once a second is plenty
+// Core calls this every pass, once a second is plenty
 extern "C" void preloop_update_frequency() {
   static uint32_t s_next;
   uint32_t now = corium::fastMillis();

@@ -68,7 +68,7 @@ const char AT_QFULL[]  PROGMEM = "queue full";
 bool audio_enqueue(const AudioCmd& cmd) {
   if (!s_audio_q) return false;
   if (!cmd.web) return xQueueSend(s_audio_q, &cmd, 0) == pdTRUE;
-  // minutes of no clicks otherwise
+  // One web request at a time, else a pile of them means minutes with no clicks
   if (s_web) return false;
   s_web = true;
   if (xQueueSend(s_audio_q, &cmd, 0) == pdTRUE) return true;
@@ -76,7 +76,7 @@ bool audio_enqueue(const AudioCmd& cmd) {
   return false;
 }
 
-static volatile AudioFn s_speech = nullptr;   // set once, Voice begin
+static volatile AudioFn s_speech = nullptr;   // set once, from Voice begin()
 
 void audio_speech(AudioFn fn) { s_speech = fn; }
 
@@ -122,7 +122,7 @@ static void audio_worker_start() {
   }
   if (xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr) != pdPASS) {
     corium::Log::console(PSTR("Tick: Audio task failed"));
-    vQueueDelete(s_audio_q);   // enqueue says no, a later start tries again
+    vQueueDelete(s_audio_q);   // enqueue then refuses, a later start tries again
     s_audio_q = nullptr;
   }
 }
@@ -181,7 +181,7 @@ CORIUM_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
 CORIUM_PSTR(TK_L_PK,  "Peak (%)");
 CORIUM_PSTR(TK_H_PK,  "Lower = quieter");
 CORIUM_PSTR(TK_L_CHM, "Boot chime");
-// value = index, as play_chime_now
+// Option value is the index, same as play_chime_now() takes
 CORIUM_PSTR(TK_O_CHM, "Off|Random|Three beeps|Folk melody|DTMF|Bit ping|Coin|Sputnik|Item get");
 #ifndef AUDIO_TICK_PINS_BLOCKED
 CORIUM_PSTR(TK_L_BCLK,"I2S BCLK pin");
@@ -282,11 +282,11 @@ void AudioTick::begin() {
   audio_worker_start();
   mute_btn_start();
   corium::Log::console(PSTR("Tick: I2S ready (BCLK=%u WS=%u DOUT=%u)"),
-               (unsigned)_bclk, (unsigned)_ws, (unsigned)_dout);
+                       (unsigned)_bclk, (unsigned)_ws, (unsigned)_dout);
   playBootChime();
 }
 
-// only posted, by the mute button
+// Only runs when posted, by the mute button
 void AudioTick::loop(unsigned long) {
   bool m = muted();
   if (m == _muted_logged) return;
@@ -301,11 +301,11 @@ void AudioTick::notifyClick(unsigned long now_ms) {
   constexpr uint32_t TOKEN_REFILL_MS = 30;
   constexpr uint8_t  TOKEN_MAX       = 8;
   if (!takeToken(now_ms, _last_token_ms, _tokens, TOKEN_REFILL_MS, TOKEN_MAX)) return;
-  static const AudioCmd CLICK = { AC_CLICK, 255 };   // pref engine
+  static const AudioCmd CLICK = { AC_CLICK, 255 };   // 255 = engine from prefs
   audio_enqueue(CLICK);
 }
 
-// on the aud task, setup goes on
+// Plays on the aud task so setup carries on
 void AudioTick::playBootChime() {
   AudioCmd cmd{};
   cmd.type = AC_CHIME;
@@ -313,7 +313,7 @@ void AudioTick::playBootChime() {
   audio_enqueue(cmd);
 }
 
-// false = 400 sent
+// false if a 400 was already sent
 static bool tick_cmd_from(EGHttpRequest& req, EGHttpResponse& res, AudioCmd* cmd,
                           int32_t chime) {
   const char* click = req.arg(F("click"));
@@ -358,11 +358,11 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
     });
 }
 
-// zeros, off the aud task stack
+// Silence, kept off the aud task stack
 static const int16_t GAP_50MS[1100] = {0};
 constexpr uint16_t GAP_LEN = sizeof(GAP_50MS) / sizeof(int16_t);
 
-// the aud task only
+// Only from the aud task
 void audio_silence(uint16_t ms) {
   uint32_t left = ms_to_samples(ms);
   while (left > 0) {
@@ -390,11 +390,10 @@ void AudioTick::play_chime_now(uint8_t c) {
     case 8:          chimeItemGet();       break;
     case 9:          chimeMorseCallsign(); break;
   }
-  // else the amp soft-stop eats the next clicks
+  // Pad with silence, else the amp soft-stop eats the next clicks
   audio_silence(300);
 }
 
-// ramp up, hold, ramp down
 static inline float envelope(uint32_t pos, uint32_t total, uint32_t attack, uint32_t release) {
   if (pos < attack)          return (float)pos / (float)attack;
   if (pos > total - release) return (float)(total - pos) / (float)release;
@@ -617,8 +616,8 @@ void AudioTick::playClickPool() {
   synthClick(v.asym, v.f2_amp, amp, tau, f_lo, r ^ 0xDECADECA);
 }
 
-// 1024 samples: chirp from 2x down to f_lo, a low f2 body, a little noise
-// f_lo from the caller, the * order differs per engine
+// A chirp from 2x down to f_lo, a lower f2 body and a little noise.
+// f_lo comes from the caller, each engine multiplies it out in its own order
 void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float f_lo,
                            uint32_t nr) {
   constexpr uint16_t N           = 1024;
@@ -627,7 +626,7 @@ void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float
   const float        peak_ceil   = (float)_peak / 100.0f;
   constexpr float    DC_R        = 0.997f;       // DC blocker, ~50 Hz
   constexpr float    NOISE_MIX   = 0.10f;
-  constexpr uint16_t CHUNK       = 256;   // N a multiple
+  constexpr uint16_t CHUNK       = 256;   // N must be a multiple
   int16_t buf[CHUNK];
   const float fs     = (float)AUDIO_TICK_SAMPLE_RATE;
   const float inv_fs = 1.0f / fs;
@@ -669,7 +668,7 @@ void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float
     }
     size_t written = 0;
     i2s_write(I2S_NUM_0, buf, sizeof(buf), &written, 10 / portTICK_PERIOD_MS);
-    if (written < sizeof(buf)) break;   // timed out, rest dropped as before
+    if (written < sizeof(buf)) break;   // timed out, rest dropped
   }
 }
 

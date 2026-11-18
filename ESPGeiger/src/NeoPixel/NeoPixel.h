@@ -41,7 +41,6 @@
   typedef NeoPixelBus<NeoGrbFeature, NeoEsp8266BitBangWs2812xMethod> NeoController;
 #endif
 
-// One WS2812: a flash per count or a trend pulse, alarm colours on top
 class NeoPixel : public corium::Module {
   public:
     NeoPixel();
@@ -85,11 +84,11 @@ class NeoPixel : public corium::Module {
     unsigned long _next_ms = 2000;
     static void on_click(uint32_t us);
     bool _blip = false;
-    bool _rest = false;   // a flash under FLASH_MS ago
+    bool _rest = false;   // last flash was under FLASH_MS ago
     int _level = 15;
     bool _is_off = true;
     bool _swap_rg = false;
-    bool _no_counts = false;   // cpm and cpm5 under 0.01, each loop
+    bool _no_counts = false;   // cpm and cpm5 both under 0.01, checked each loop
 };
 
 extern NeoPixel neopixel;

@@ -25,7 +25,7 @@
 #include "Corium/Module/Module.h"
 #include "GeigerInput/SerialFormat.h"
 
-// Readings on the console uart every interval, logs off while it runs
+// Serial logs are off while it streams
 class SerialOut : public corium::Module {
     public:
       static constexpr uint8_t SHOW_CPM = 1 << 0;

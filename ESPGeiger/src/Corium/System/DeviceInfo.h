@@ -21,7 +21,7 @@
 #define CORIUM_DEVICEINFO_H
 
 #include <Arduino.h>
-// the chip's own: /info extras, random, boot ram, raw heap, stack, wdt
+// Each chip has its own file for the /info extras, random, boot ram, raw heap, stack and wdt
 #if defined(ESP8266)
 #include "DeviceInfo8266.h"
 #elif defined(ESP32)
@@ -45,16 +45,16 @@
 
 namespace corium {
 namespace DeviceInfo {
-  void begin();   // early in setup()
+  void begin();   // Early in setup()
   void factoryReset();
 
   const char* hostname();
   const char* chipId();
   uint32_t chipHash();   // fnv1a of chipid
   constexpr size_t UA_MAX = sizeof(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; )") + CHIPID_LEN;
-  void userAgent(char* buf, size_t cap);   // per request, no buffer kept
+  void userAgent(char* buf, size_t cap);   // Per request, no buffer kept
   const char* chip();
-  const char* board();   // the app's, else the chip
+  const char* board();   // the app's board name, else the chip
   void setBoard(const char* s);   // from setup()
 #ifdef CORIUM_BOARD_NAME
   const char* boardName();   // the revision a user sees, nullptr = none
@@ -64,15 +64,14 @@ namespace DeviceInfo {
 #endif
   const char* friendlyName();
   void setFriendlyName(const char* s);
-  // friendly, else the hostname
   inline const char* displayName() {
     const char* fn = friendlyName();
     return (fn && fn[0]) ? fn : hostname();
   }
   const char* mac();
   const char* flashInfo();   // "ef4016 DIO 40MHz"
-  PGM_P buildDate();   // one copy
-  uint64_t hwId();   // chip id, efuse mac on esp32
+  PGM_P buildDate();   // one PROGMEM copy
+  uint64_t hwId();   // Chip id, efuse mac on esp32
 
   // /info
   inline uint32_t flashSize()  { return ESP.getFlashChipSize(); }
@@ -81,8 +80,8 @@ namespace DeviceInfo {
   inline uint32_t freeSketch() { return ESP.getFreeSketchSpace(); }
 
   inline __attribute__((always_inline)) uint32_t cycles() { return ESP.getCycleCount(); }
-  inline uint32_t heapNow() { return ESP.getFreeHeap(); }   // raw, freeHeap() is smoothed
-  uint32_t heapSize();   // 8266 dram, the core has no getter; esp32 free + allocated
+  inline uint32_t heapNow() { return ESP.getFreeHeap(); }   // Raw, freeHeap() is smoothed
+  uint32_t heapSize();   // 8266 dram size since the core has no getter, on esp32 free + allocated
 
   unsigned long uptime();
 
@@ -95,10 +94,10 @@ namespace DeviceInfo {
   uint32_t largestFreeBlock();
   uint32_t largestFreeBlockLow();       // since boot
 #ifdef CORIUM_LFB_TAKE
-  uint32_t largestFreeBlockLowTake();   // since the last take, one taker
+  uint32_t largestFreeBlockLowTake();   // since the last take, only one caller should take it
 #endif
 
-  // on the wire, never renumber
+  // Sent on the wire, never renumber
   enum ResetReason : uint8_t {
     RR_UNKNOWN    = 0,
     RR_POWER_ON   = 1,
@@ -110,8 +109,8 @@ namespace DeviceInfo {
     RR_DEEP_SLEEP = 7,
   };
   uint8_t resetReason();
-  uint8_t resetKind();   // the chip's, CrashDump::reset() knows more
-  const char* resetText();   // /info text, CrashDump::reset()'s
+  uint8_t resetKind();   // From the chip, CrashDump::reset() knows more
+  const char* resetText();   // /info text for CrashDump::reset()
 
   uint32_t fwFingerprint();   // never 0
 

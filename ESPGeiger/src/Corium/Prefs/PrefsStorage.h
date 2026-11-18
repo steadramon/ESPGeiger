@@ -35,14 +35,14 @@ static constexpr size_t PREFS_MAGIC_LEN = 4;
 static constexpr size_t PREFS_MAX_ROWS = 32;
 // key_len, key, val_len
 static constexpr size_t PREFS_ROW_HEAD = 1 + CORIUM_PREF_ID_MAX + 2;
-// the values plus every row's head, a row added later still fits
+// a row added later still fits
 static constexpr size_t PREFS_FILE_MAX = PREFS_MAGIC_LEN + CORIUM_PREFS_GROUP_SZ_MAX + PREFS_MAX_ROWS * PREFS_ROW_HEAD;
 inline void putMagic(uint8_t* p) { p[0] = 'E'; p[1] = 'G'; p[2] = 'P'; p[3] = '1'; }
 inline bool isMagic(const uint8_t* p) { return p[0] == 'E' && p[1] == 'G' && p[2] == 'P' && p[3] == '1'; }
 
 class PrefsStorage {
   public:
-    // not NUL-terminated, valid during the call only; key_len 0 = a record didn't read, the rest lost
+    // not NUL ended, valid during the call only; key_len 0 = the rest lost
     typedef void (*ReadCb)(void* ctx,
                            const char* key, uint8_t key_len,
                            const char* value, uint16_t val_len);
@@ -50,12 +50,12 @@ class PrefsStorage {
     PrefsStorage();
     ~PrefsStorage();
 
-    // dir /name/, mounts the fs; false = prefs run on defaults
+    // false = prefs run on defaults
     CORIUM_NODISCARD bool begin(const char* name);
     void end();
 
     bool has(const char* module_id);
-    // cb per record; false = no file, bad magic or size, or a record cut short
+    // false = no file, bad or cut short
     bool readGroup(const char* module_id, ReadCb cb, void* ctx);
     CORIUM_NODISCARD bool writeGroup(const char* module_id, const void* buf, size_t len);
     // writeGroup in two steps, many groups land together

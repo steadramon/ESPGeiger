@@ -38,14 +38,14 @@
 #define PUSHBUTTON_PIN2 -1
 #endif
 
-// One or two buttons, active low, presses posted as topics
+// active low
 class PushButton : public corium::Module {
   public:
     PushButton();
     const char* name() override { return PSTR("btn"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     void loop(unsigned long now) override;
-    // from loop(); a long only when something hears it
+    // Emitted from loop(). A long press is only sent when something listens for it
     static constexpr uint8_t TOPIC_PRESS = Topic::PRESS;
     static constexpr uint8_t TOPIC_BACK  = Topic::BACK;
     static constexpr uint8_t TOPIC_LONG  = Topic::LONG;

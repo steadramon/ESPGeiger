@@ -22,19 +22,19 @@
 #include <Arduino.h>
 
 namespace corium {
-// loop and the tick only, esp32 runs the tick on loop too: no volatile
+// Only touched by the loop and the tick, so no volatile
 namespace TickProfile {
   extern uint32_t tickUs;
-  extern uint32_t tickMaxUs;  // 60s
+  extern uint32_t tickMaxUs;  // worst in 60 s
   extern uint32_t lps;
   extern uint32_t lpsRaw;
-  extern uint32_t _lps_count;    // free-running, never reset
+  extern uint32_t _lps_count;    // Free-running, never reset
 
   inline void countIter() { ++_lps_count; }
 
 #ifdef LOOP_PROFILE
   extern uint32_t loopBodyUs;
-  extern uint32_t loopMaxUs;   // worst pass
+  extern uint32_t loopMaxUs;   // Worst pass
   inline void addLoopBody(uint32_t us) {
     loopBodyUs += us;
     if (us > loopMaxUs) loopMaxUs = us;

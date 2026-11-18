@@ -88,7 +88,7 @@ void WebAPI::onAttest(int code) {
   }
 }
 
-// genuine <64 hex>: setup.espgeiger.com's check over serial. Its own tag, never a station attest
+// genuine <64 hex> over serial, setup.espgeiger.com's check: its own tag, never a station attest
 static const char CHECK_TAG[] PROGMEM = "espgeiger-check-v1";
 static constexpr size_t SIG_LINE = 32;
 
