@@ -36,7 +36,7 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** - i
 
 ### I have an ESP + generic pulse Geiger counter
 
-<!-- gen:builds only=esp8266_pulse,esp8266oled_pulse,esp32_pulse,esp32s3_pulse,xh_s3e_pulse,esp32c3_pulse,esp32_cajoe_iotgm cols=env,rx -->
+<!-- gen:builds only=esp8266_pulse,esp8266oled_pulse,esp32_pulse,esp32s3_pulse,xh_s3e_pulse,esp32c3_pulse,esp32s2_pulse,esp32_cajoe_iotgm cols=env,rx -->
 
 | Hardware | Build | RX pin (default) |
 |---|---|---|
@@ -46,17 +46,18 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** - i
 | ESP32-S3 (dev kits) | `esp32s3_pulse` | 13 |
 | ESP32-S3 with onboard amp + speaker (XH-S3E-AI) | `xh_s3e_pulse` | 13 |
 | ESP32-C3 (RISC-V, no PCNT - software pulse counter) | `esp32c3_pulse` | 4 |
+| ESP32-S2 (S2 Mini, S2 Pico) | `esp32s2_pulse` | 13 |
 | CAJOE IoT-GM | `esp32_cajoe_iotgm` | 26, wired |
 
 <!-- /gen -->
 
-ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect the panel at boot - no separate `oled_*` envs on the ESP32 family. ESP8266 still ships dedicated `esp8266oled_*` envs to avoid the runtime cost on the slower core.
+ESP32 / ESP32-S3 / ESP32-C3 / ESP32-S2 builds bundle SSD1306 OLED support and auto-detect the panel at boot - no separate `oled_*` envs on the ESP32 family. ESP8266 still ships dedicated `esp8266oled_*` envs to avoid the runtime cost on the slower core.
 
 ### I have an ESP + serial Geiger counter
 
 A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger, Template). Select your counter type from the **Config** page after flashing.
 
-<!-- gen:builds only=esp8266_serial,esp32_serial,esp32s3_serial,esp32c3_serial cols=chip,env,rx -->
+<!-- gen:builds only=esp8266_serial,esp32_serial,esp32s3_serial,esp32c3_serial,esp32s2_serial cols=chip,env,rx -->
 
 | Chip | Build | RX pin (default) |
 |---|---|---|
@@ -64,6 +65,7 @@ A single serial build supports all serial counter types (GC10, GC10Next, MightyO
 | ESP32 | `esp32_serial` | 13 |
 | ESP32-S3 | `esp32s3_serial` | 13 |
 | ESP32-C3 | `esp32c3_serial` | 4 |
+| ESP32-S2 | `esp32s2_serial` | 13 |
 
 <!-- /gen -->
 

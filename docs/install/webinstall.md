@@ -16,14 +16,14 @@ From the Web installer a number of predefined builds can be installed -
 
 ## Pulse
 
-Two pulse builds are made available. The installer auto-picks the right binary for whichever chip family (ESP8266 / ESP32 / ESP32-S3 / ESP32-C3) is connected.
+Two pulse builds are made available. The installer auto-picks the right binary for whichever chip family (ESP8266 / ESP32 / ESP32-S3 / ESP32-C3 / ESP32-S2) is connected.
 
 - **Pulse** - interrupt-based counting on all chip families. Safe default that works regardless of how a tube's pulse is wired.
-- **Pulse - PCNT (ESP32 / ESP32-S3)** - opt-in hardware pulse counter build. Lower CPU overhead, but requires the tube's pulse to be clean enough for the PCNT peripheral to latch reliably. Use this if you are confident in your wiring and want maximum performance; fall back to the standard Pulse build if counts look low or noisy.
+- **Pulse - PCNT (ESP32 / ESP32-S3 / ESP32-S2)** - opt-in hardware pulse counter build. Lower CPU overhead, but requires the tube's pulse to be clean enough for the PCNT peripheral to latch reliably. Use this if you are confident in your wiring and want maximum performance; fall back to the standard Pulse build if counts look low or noisy.
 
 ## Serial
 
-A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page. ESP8266, ESP32, ESP32-S3 and ESP32-C3 are all detected automatically.
+A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page. ESP8266, ESP32, ESP32-S3, ESP32-C3 and ESP32-S2 are all detected automatically. An S2 goes into download mode by hand for its first flash: hold 0, tap RST, let go of 0.
 
 - Serial
 

@@ -32,10 +32,11 @@ The pulse target is the most widely compatible build and works with all Pulse-ty
 | `esp32s3_pulse` | ESP32-S3 | 13 | yes | PCNT | As `esp32_pulse` |
 | `esp32s3_pulse_no_pcnt` | ESP32-S3 | 13 | yes | interrupt, PCNT on the Input tab | As `esp32_pulse_no_pcnt` |
 | `esp32c3_pulse` | ESP32-C3 | 4 | yes | interrupt | |
+| `esp32s2_pulse` | ESP32-S2 | 13 | yes | PCNT | |
 
 <!-- /gen -->
 
-ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support; the panel is auto-detected at boot. No separate `oled_*` envs needed on the ESP32 family. ESP8266 still ships dedicated `oled_*` envs to avoid the runtime cost on the slower core.
+ESP32 / ESP32-S3 / ESP32-C3 / ESP32-S2 builds bundle SSD1306 OLED support; the panel is auto-detected at boot. No separate `oled_*` envs needed on the ESP32 family. ESP8266 still ships dedicated `oled_*` envs to avoid the runtime cost on the slower core.
 
 ## Serial
 
@@ -50,6 +51,7 @@ A single unified serial build supports all serial Geiger counter types. Select t
 | `esp32_serial` | ESP32 | 13 | yes |
 | `esp32s3_serial` | ESP32-S3 | 13 | yes |
 | `esp32c3_serial` | ESP32-C3 | 4 | yes |
+| `esp32s2_serial` | ESP32-S2 | 13 | yes |
 
 <!-- /gen -->
 
@@ -138,6 +140,7 @@ UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for
 | `esp32_udp` | ESP32 | yes | ESP32 receiver. SSD1306 OLED auto-detected at boot; more heap headroom than ESP8266, cleaner choice for fleet aggregator (sum mode). |
 | `esp32s3_udp` | ESP32-S3 | yes | ESP32-S3 receiver with bundled OLED. |
 | `esp32c3_udp` | ESP32-C3 | yes | ESP32-C3 receiver with bundled OLED. |
+| `esp32s2_udp` | ESP32-S2 | yes | |
 
 <!-- /gen -->
 

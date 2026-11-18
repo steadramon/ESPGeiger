@@ -41,6 +41,8 @@ corium::ImprovSerial improvSerial;
   static const char* IMPROV_CHIPFAMILY = "ESP32-S3";
 #elif defined(CONFIG_IDF_TARGET_ESP32C3)
   static const char* IMPROV_CHIPFAMILY = "ESP32-C3";
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  static const char* IMPROV_CHIPFAMILY = "ESP32-S2";
 #else
   static const char* IMPROV_CHIPFAMILY = "ESP32";
 #endif
@@ -68,14 +70,14 @@ void corium::ImprovSerial::poll() {
 static constexpr uint32_t FRAME_GAP_MS = 2000;
 
 void corium::ImprovSerial::watch() {
-  // a part frame goes here too, a long quiet can't wrap its age
+  // Drop a stale part frame here too, so a long quiet spell can't wrap its age
   if (_pos && corium::fastMillis() - _last_byte_ms > FRAME_GAP_MS) _pos = 0;
   if (_joining) finish();
 }
 
 bool corium::ImprovSerial::consumeByte(uint8_t b) {
   uint32_t now = corium::fastMillis();
-  // a gap mid frame, start again
+  // Gap in the middle of a frame, start again
   if (_pos && now - _last_byte_ms > FRAME_GAP_MS) {
     _pos = 0;
   }
@@ -115,17 +117,17 @@ void corium::ImprovSerial::send_frame(improv::ImprovSerialType type, const uint8
   frame[pos++] = (uint8_t)len;
   memcpy(frame + pos, payload, len);
   pos += len;
-  uint8_t checksum = 0;   // byte sum, header too
+  uint8_t checksum = 0;   // sum of every byte, header included
   for (size_t i = 0; i < pos; i++) checksum += frame[i];
   frame[pos++] = checksum;
   frame[pos++] = '\n';
   Serial.write(frame, pos);
 }
 
-// as improv's build_rpc_response, its unused checksum byte kept
+// Same layout as improv's build_rpc_response, including its unused checksum byte
 void corium::ImprovSerial::send_response_data(improv::Command cmd, const char* const* datum, uint8_t n) {
   uint8_t out[FRAME_MAX - FRAME_OVERHEAD];
-  size_t pos = 2;   // cmd, total len, then len + string each
+  size_t pos = 2;   // cmd and total len, then len + string for each entry
   for (uint8_t i = 0; i < n; i++) {
     size_t len = strlen(datum[i]);
     if (len + 2 > sizeof(out) - pos) return;   // too big to send
@@ -151,13 +153,14 @@ void corium::ImprovSerial::send_error(improv::Error err) {
   send_frame(improv::TYPE_ERROR_STATE, &b, 1);
 }
 
-// boot still joining the saved wifi; uptime ticks from the loop, the ms clock from setup
+// How long the boot may still be joining the saved wifi. Uptime only ticks from the loop
+// and the ms clock runs from setup, so both are checked
 static const uint32_t IMPROV_JOIN_MS = 30000;
 
 static improv::State current_state() {
   if (corium::Wifi::connectedRaw()) return improv::STATE_PROVISIONED;
   bool joining = corium::fastMillis() - CORIUM_MS_START < IMPROV_JOIN_MS && corium::Uptime::seconds() < (time_t)(IMPROV_JOIN_MS / 1000);
-  // hasSavedCreds sets STA, that drops the hotspot or the portal
+  // hasSavedCreds() switches to STA, which would drop the hotspot or the portal
   if (!joining || corium::Wifi::apUp()) return improv::STATE_AUTHORIZED;
   static bool s_asked = false;
   static bool s_have = false;
@@ -169,7 +172,7 @@ static improv::State current_state() {
 }
 
 bool corium::ImprovSerial::on_command(improv::ImprovCommand cmd) {
-  // mid join, a frame here would nest another
+  // Already joining, a new command here would nest another one
   if (_joining) {
     send_error(improv::ERROR_UNKNOWN);
     return false;
@@ -192,11 +195,11 @@ bool corium::ImprovSerial::on_command(improv::ImprovCommand cmd) {
       send_error(improv::ERROR_UNKNOWN_RPC);
       break;
   }
-  return false;   // resets _pos
+  return false;   // Resets _pos
 }
 
 void corium::ImprovSerial::on_error(improv::Error err) {
-  // no reply, installer retries
+  // No reply, the installer retries
   corium::Log::debug(PSTR("Improv: parser error %u"), (unsigned)err);
 }
 
@@ -211,7 +214,7 @@ void corium::ImprovSerial::send_device_info() {
 }
 
 void corium::ImprovSerial::send_wifi_networks() {
-  // one row per ssid, its strongest AP, strongest first, no floor
+  // One row per ssid using its strongest AP, strongest first, no rssi floor
   EGPortal::ScanEntry aps[16];
   size_t kept = EGPortal::processScan(aps, 16, corium::Wifi::scanNetworks(false, false), INT8_MIN);
   for (size_t k = 0; k < kept; k++) {
@@ -229,16 +232,16 @@ void corium::ImprovSerial::send_wifi_networks() {
 }
 
 static const uint32_t IMPROV_TEST_MS = 25000;   // esp-web-tools gives up at 30s
-static const uint32_t IMPROV_MOVED_MS = 2000;   // the url out first
+static const uint32_t IMPROV_MOVED_MS = 2000;   // time to get the url out first
 
 void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
                                        const std::string& password) {
-  // as the portal, one that can never join isn't saved
+  // Same as the portal, creds that can never join aren't saved
   if (!EGPortal::ssidOk(ssid.c_str()) || !EGPortal::passOk(password.c_str())) {
     send_error(improv::ERROR_UNABLE_TO_CONNECT);
     return;
   }
-  // the web's test running, or no memory
+  // fails if the web's test is running or there's no memory
   if (corium::Wifi::holdCreds(ssid.c_str(), password.c_str()) != corium::Wifi::HOLD_OK
       || !corium::Wifi::testJoin(IMPROV_TEST_MS)) {
     send_error(improv::ERROR_UNKNOWN);
@@ -248,7 +251,7 @@ void corium::ImprovSerial::handle_wifi_settings(const std::string& ssid,
   set_state(improv::STATE_PROVISIONING);
 }
 
-// the test is stepped by the portal or the wifi module, here only its end
+// The test is stepped by the portal or the wifi module, this only handles its end
 void corium::ImprovSerial::finish() {
   if (corium::Wifi::testing()) return;
   _joining = false;
@@ -265,7 +268,7 @@ void corium::ImprovSerial::finish() {
   corium::Log::console(joined ? PSTR("Improv: WiFi joined for ssid='%s', not kept")
                               : PSTR("Improv: WiFi not joined for ssid='%s'"), ssid);
   set_state(improv::STATE_AUTHORIZED);
-  // joined but offline this boot: no url to give
+  // Joined but not kept, offline this boot so there's no url to give
   send_error(joined ? improv::ERROR_UNKNOWN : improv::ERROR_UNABLE_TO_CONNECT);
 }
 

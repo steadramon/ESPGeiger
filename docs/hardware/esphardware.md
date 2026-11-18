@@ -20,11 +20,15 @@ The ESP8266 ESPGeiger build is the base firmware for the official ESPGeiger-base
 
 ### Classic
 
-The **[ESP32 DevKit / WROOM-32](https://s.click.aliexpress.com/e/_c4MWYcBT)** (classic ESP32) is the recommended ESP32 target. Any 4 MB board built on the original ESP32 (Tensilica dual-core, IDF target `esp32`) should work with the `esp32_*` builds. ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect the panel at boot, so the same env works whether or not a display is fitted.
+The **[ESP32 DevKit / WROOM-32](https://s.click.aliexpress.com/e/_c4MWYcBT)** (classic ESP32) is the recommended ESP32 target. Any 4 MB board built on the original ESP32 (Tensilica dual-core, IDF target `esp32`) should work with the `esp32_*` builds. ESP32 / ESP32-S3 / ESP32-C3 / ESP32-S2 builds bundle SSD1306 OLED support and auto-detect the panel at boot, so the same env works whether or not a display is fitted.
 
 ### ESP-S3
 
 For ESP32-S3, the **[ESP32-S3-WROOM-1 N16R8](https://s.click.aliexpress.com/e/_c40rZstr)** dev board (44-pin Type-C, 16 MB flash, 8 MB PSRAM, onboard NeoPixel on GPIO 48) is a target for the `esp32s3_*` builds.
+
+### ESP-S2
+
+S2 boards with native USB and 4 MB flash, like the **[Lolin S2 Mini](https://s.click.aliexpress.com/e/_c388T7W1)** (Wemos D1 Mini footprint) and **S2 Pico**, take the `esp32s2_*` builds. The first flash needs the board in download mode by hand: hold **0**, tap **RST**, let go of **0**, then press **RST** once the flash is done. After that, updates go over the web as on any other board.
 
 ### ESP-C3
 
@@ -41,7 +45,7 @@ Other variants and devboards for the ESP classic, C3 and S3 should all be suppor
 | **ESP32 (classic)** | Fully supported | All `esp32_*` build envs. PCNT hardware counter. SSD1306 OLED bundled and auto-detected. |
 | **ESP32-S3** | Supported | Generic `esp32s3_pulse / _pulse_no_pcnt / _serial / _udp / _test` envs. As on ESP32 classic, `_pulse` uses the PCNT hardware counter and `_pulse_no_pcnt` uses the interrupt counter. SSD1306 OLED bundled and auto-detected. |
 | **ESP32-C3** | Supported | `esp32c3_*` envs (RISC-V, no PCNT - software pulse counter). SSD1306 OLED bundled with default SDA=5 / SCL=6. |
-| **ESP32-S2** | Experimental | Base config present, no shipped end-user envs. |
+| **ESP32-S2** | Supported | Generic `esp32s2_pulse / _serial / _udp / _test` envs for S2 boards with native USB and 4 MB flash (Lolin S2 Mini, S2 Pico). Console and Improv on the native USB port. `_pulse` counts with PCNT, or the interrupt counter from the Input tab. SSD1306 OLED bundled, SDA=8 / SCL=9. |
 | **ESP32-C6 / H2** | Not supported | No build envs. RISC-V cores not tested. |
 
 ### Boards with onboard OLED
