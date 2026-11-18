@@ -69,14 +69,14 @@ static const uint8_t MATRIX_DROPS = 32;
 static Drop*    s_matrix_drops = nullptr;
 static uint8_t* s_static_noise = nullptr;
 
-// loop rates, ms. no panel: /screen polls every 500 ms
+// Loop rates in ms. With no panel only /screen reads it, every 500 ms
 static const uint16_t LOOP_MS           = 20;
 static const uint16_t SAVER_LOOP_MS     = 10;
 static const uint16_t NOPANEL_LOOP_MS   = 250;
 static const uint16_t NOPANEL_SAVER_MS  = 80;
 static const uint16_t DARK_LOOP_MS      = 30000;
 static const uint16_t LOCKED_LOOP_MS    = 1000;
-// redraws, ms
+// redraw rates in ms
 static const unsigned long FRAME_MS         = 500;
 static const unsigned long NOPANEL_FRAME_MS = 250;
 static const unsigned long SAVER_FRAME_MS   = 80;
@@ -84,7 +84,19 @@ static const unsigned long MAIN_FULL_MS     = 10000;
 static const unsigned long NET_MS           = 1000;
 static const unsigned long ABOUT_MS         = 10000;
 static const uint8_t TILE_COLS = OLED_WIDTH >> 3;
-static const uint8_t TILE_ROWS = OLED_HEIGHT >> 3;
+// how many sizes are built in, out of 128x64, 72x40 and 128x32
+#define OLED_SIZES ((DISP_HAS(0) || DISP_HAS(1) || DISP_HAS(2)) + DISP_HAS_TINY + DISP_HAS_SHORT)
+// The panel's size, setup_driver sets these when more than one size is built
+#if OLED_SIZES > 1
+static uint8_t s_tile_rows = OLED_HEIGHT >> 3;
+#else
+static constexpr uint8_t s_tile_rows = DISP_HAS_TINY ? 5 : DISP_HAS_SHORT ? 4 : OLED_HEIGHT >> 3;
+#endif
+#if OLED_SIZES > 1 && DISP_HAS_TINY
+static uint8_t s_width = OLED_WIDTH;
+#else
+static constexpr uint8_t s_width = DISP_HAS_TINY ? 72 : OLED_WIDTH;
+#endif
 
 SSD1306Display oled;
 CORIUM_REGISTER_FEATURE(oled, FEAT_OLED)
@@ -102,8 +114,8 @@ static const char PIN_OWNER[] PROGMEM = "OLED";
 
 static void draw_glyph(uint8_t* fb, int16_t cx, int16_t y_top, const uint8_t* glyph,
                        uint16_t byte_count, uint8_t bytes_per_col) {
-  const uint8_t W = OLED_WIDTH;
-  const uint8_t PAGES = OLED_HEIGHT >> 3;
+  const uint8_t W = s_width;
+  const uint8_t PAGES = s_tile_rows;
   uint8_t col = 0;
   uint8_t bc = 0;
   int8_t  page0 = y_top >> 3;
@@ -129,7 +141,7 @@ static void draw_glyph(uint8_t* fb, int16_t cx, int16_t y_top, const uint8_t* gl
   }
 }
 
-// ThingPulse font: height, first char, count, 4 byte jump rows, then glyphs as columns, lsb on top
+// ThingPulse font layout is height, first char, count, the 4 byte jump rows, then glyphs as columns with lsb on top
 static void drawTPString(SSD1306Display& d, int16_t x, int16_t y_top,
                          const uint8_t* font, const char* str) {
   if (!font || !str) return;
@@ -173,7 +185,7 @@ void SSD1306Display::drawStrP(int16_t x, int16_t y, const char* s) {
 }
 
 #ifndef OLED_PINS_BLOCKED
-// the default if unsafe, claimed for it
+// Falls back to the default if the pin is unsafe, and claims that one instead
 static uint8_t safe_pin(uint8_t want, uint8_t def, const char* owner, const char* fmt) {
   const char* why = corium::PinSafety::claimOutput((int)want, owner);
   if (!why) return want;
@@ -192,6 +204,8 @@ void SSD1306Display::load_pins() {
   uint8_t rst = (uint8_t)corium::Prefs::getUInt("display", K_RST);
   _pin_rst = rst == 255 ? 255 : safe_pin(rst, _pin_rst, PIN_OWNER,
                                          PSTR("OLED: rst=%u unsafe (%s) - keeping default %u"));
+#endif
+#if DISP_MANY
   _type = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
 #else
   _type = OLED_TYPE;
@@ -204,7 +218,7 @@ void SSD1306Display::start() {
   setup();
   if (!_frame) return;
   _started = true;
-  setBrightness((uint8_t)corium::Prefs::getUInt("display", EG_K_BRIGHTNESS));
+  reload();
   corium::Registry::on(Display::TOPIC_POWER, this);
   corium::Registry::on(TOPIC_SENT, this);
   corium::Registry::on(Topic::PING, this);
@@ -213,9 +227,6 @@ void SSD1306Display::start() {
 
 void SSD1306Display::reload() {
   setBrightness((uint8_t)corium::Prefs::getUInt("display", EG_K_BRIGHTNESS));
-}
-
-SSD1306Display::SSD1306Display() {
 }
 
 void SSD1306Display::setBrightness(uint8_t brightness) {
@@ -235,7 +246,7 @@ unsigned long SSD1306Display::frame_ms() const {
   return _present ? FRAME_MS : NOPANEL_FRAME_MS;
 }
 
-// due now, 0 reads as the future half the wrap
+// Due now. 0 would read as in the future for half the wrap
 void SSD1306Display::page_changed(unsigned long now) {
   if (_last_page == PAGE_SAVER) {
     if (s_matrix_drops) { free(s_matrix_drops); s_matrix_drops = nullptr; }
@@ -251,7 +262,7 @@ bool SSD1306Display::awake(unsigned long now) {
   if (!_present) return true;
   if (!display.lit()) {
     if (oled_on) { clearBuffer(); setPowerSave(1); oled_on = false; _send_rows_left = 0; }
-    corium::Registry::every(this, DARK_LOOP_MS);   // not 0, power events still land
+    corium::Registry::every(this, DARK_LOOP_MS);   // not 0, so power events still get through
     return false;
   }
   if (!oled_on) {
@@ -264,7 +275,7 @@ bool SSD1306Display::awake(unsigned long now) {
   return true;
 }
 
-// 0 = never drawn
+// oled_last_update 0 = never drawn
 bool SSD1306Display::due(unsigned long now, unsigned long every) {
   if (corium::fresh(now, oled_last_update, every)) return false;
   oled_last_update = now;
@@ -278,9 +289,11 @@ uint8_t SSD1306Display::render_main(unsigned long now) {
     page_one_clear();
     dirty = DR_FULL;
   }
-  // values and graph take turns
+  // Values and graph take turns
   _p1_alt = !_p1_alt;
-  if ((_p1_alt || full) && page_one_values(now)) dirty |= DR_TOP;
+  uint8_t top = DR_TOP;
+  if (isShort()) top = DR_FULL;   // usv sits in the bottom half
+  if ((_p1_alt || full) && page_one_values(now)) dirty |= top;
   if ((!_p1_alt || full) && page_one_graph()) dirty |= DR_BOT;
   return dirty;
 }
@@ -295,7 +308,7 @@ void SSD1306Display::render_saver(unsigned long now) {
   else page_four_matrix();
 }
 
-#if OLED_TINY
+#if DISP_HAS_TINY
 void SSD1306Display::render_tiny() {
   if (oled_page < PAGE_MAIN || oled_page > PAGE_SAVER) oled_page = PAGE_MAIN;
   clearBuffer();
@@ -305,22 +318,24 @@ void SSD1306Display::render_tiny() {
     case 4:  page_tiny_meter(); break;
     default: page_tiny();       break;
   }
-  if (corium::Wifi::connected) drawPixel(71, 0);   // every page, over what's drawn
+  if (corium::Wifi::connected) drawPixel(71, 0);   // on every page, drawn over the top
 }
 #endif
 
-// DR_ flags, what to send
+// Returns DR_ flags for what needs sending
 uint8_t SSD1306Display::render(unsigned long now) {
 #ifdef APP_NOTICE
   if (_notice) {
     if (!due(now, ABOUT_MS)) return DR_NONE;
     clearBuffer();
     setFont(isTiny() ? U8G2_FONT_ARIAL_10 : U8G2_FONT_ARIAL_16);
-    drawStrP(0, 20, _notice);
+    int16_t y = 20;
+    if (isShort()) y = 8;
+    drawStrP(0, y, _notice);
     return DR_FULL;
   }
 #endif
-#if OLED_TINY
+#if DISP_HAS_TINY
   if (isTiny()) {
     render_tiny();
     return DR_FULL;
@@ -345,8 +360,8 @@ uint8_t SSD1306Display::render(unsigned long now) {
 }
 
 void SSD1306Display::queue_rows(uint8_t dirty) {
-#if OLED_TINY
-  // tiny: one go, the row maths runs off the end
+#if DISP_HAS_TINY
+  // tiny sends in one go, the row maths would run off the end
   if (isTiny()) {
     sendBuffer();
     return;
@@ -354,8 +369,8 @@ void SSD1306Display::queue_rows(uint8_t dirty) {
 #endif
   bool half = (dirty == DR_TOP || dirty == DR_BOT);
   _send_cur = 0;
-  _send_ty = (dirty == DR_BOT) ? TILE_ROWS / 2 : 0;
-  _send_rows_left = half ? TILE_ROWS / 2 : TILE_ROWS;
+  _send_ty = (dirty == DR_BOT) ? s_tile_rows / 2 : 0;
+  _send_rows_left = half ? s_tile_rows / 2 : s_tile_rows;
 }
 
 void SSD1306Display::loop(unsigned long now) {
@@ -363,11 +378,11 @@ void SSD1306Display::loop(unsigned long now) {
     corium::Registry::every(this, 0);
     return;
   }
-  if (_locked_page || _ota_lock) {
+  if (_ota_lock) {
     corium::Registry::every(this, LOCKED_LOOP_MS);
     return;
   }
-  // one row a loop
+  // One row a loop
   if (_send_rows_left > 0) {
     if (_present) updateDisplayArea(0, _send_ty + _send_cur, TILE_COLS, 1);
     _send_cur++;
@@ -388,7 +403,7 @@ void SSD1306Display::take_events(unsigned long now) {
   if (oled_page != _last_page) page_changed(now);
   if (oled_page == PAGE_SAVER) display.wake(now);
 #ifdef APP_NOTICE
-  // up or down, all of it now
+  // A notice going up or down redraws the lot now
   const char* n = Notice::shown();
   if (n != _notice) {
     _notice = n;
@@ -397,7 +412,7 @@ void SSD1306Display::take_events(unsigned long now) {
   }
 #endif
   uint16_t ev = corium::Registry::events(this);
-  if (ev & ~(1u << Display::TOPIC_POWER)) _sent_mark = 2;   // the rest are sends
+  if (ev & ~(1u << Display::TOPIC_POWER)) _sent_mark = 2;   // the other topics are all sends
   if (ev & (1u << Display::TOPIC_POWER)) _next_render_due = now;   // lit or dark
 }
 
@@ -408,14 +423,14 @@ void SSD1306Display::draw_frame(unsigned long now) {
   if (!_send_rows_left) next_frame(now);
 }
 
-// rows ride the loop, else asleep till the frame
+// While rows are going out it runs every loop, otherwise it sleeps until the next frame
 void SSD1306Display::next_frame(unsigned long now) {
   uint32_t at = now + loop_ms();
   if (!corium::reached(at, _next_render_due)) at = _next_render_due;
   corium::Registry::dueAt(this, at);
 }
 
-// k 10 = tenths, only under 10; false = no counts
+// k is 10 for tenths, only under 10. false if there are no counts
 static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
   k = display.tenths(h, n);
   int l, u;
@@ -426,7 +441,7 @@ static bool hist_range(int* h, uint16_t n, int32_t& lo, int32_t& hi, int& k) {
   return counts;
 }
 
-#if OLED_TINY
+#if DISP_HAS_TINY
 void SSD1306Display::page_tiny() {
   char buf[12];
   format_cpm(buf, sizeof(buf), display.shown_cpm());
@@ -492,7 +507,7 @@ void SSD1306Display::page_tiny_net() {
     snprintf_P(buf, sizeof(buf), PSTR("%d dBm"), (int)corium::Wifi::rssi);
     drawStr(0, 28, buf);
   } else if (corium::Wifi::ap) {
-    // its name is the hostname
+    // The hotspot's name is the hostname
     corium::Wifi::formatIP(buf, sizeof(buf));
     drawStrP(0, 2,  PSTR("Hotspot"));
     drawStr (0, 15, fit_str(*this, corium::DeviceInfo::hostname(), 71));
@@ -538,13 +553,67 @@ void SSD1306Display::page_tiny_meter() {
   drawDisc(px, py, 2);
 }
 
-#endif  // OLED_TINY (page_tiny)
+#endif  // DISP_HAS_TINY (page_tiny)
+
+// 128x32: cpm and icons on top, usv and the graph under
+static const uint8_t S_GRAPH_X   = OLED_WIDTH - 1 - HIST;
+static const uint8_t S_GRAPH_TOP = 17;
+static const uint8_t S_GRAPH_BOT = 31;
+
+// One bar a second, no labels
+bool SSD1306Display::graph_short() {
+  int hist[HIST];
+  uint16_t n = (uint16_t)egm_history(hist, HIST);
+  int32_t lo = 0;
+  int32_t hi = 0;
+  int k = 1;
+  bool counts = n > 0 && hist_range(hist, n, lo, hi, k);
+
+  setDrawColor(0);
+  drawBox(S_GRAPH_X - 1, 16, OLED_WIDTH - S_GRAPH_X + 1, 16);
+  setDrawColor(1);
+  drawLine(S_GRAPH_X, S_GRAPH_BOT, OLED_WIDTH - 1, S_GRAPH_BOT);
+  if (!counts) return true;
+  int x = S_GRAPH_X + HIST - n;
+  for (uint16_t i = 0; i < n; i++, x++) {
+    int y = S_GRAPH_BOT - 1 - (int)map((long)hist[i], (long)lo, (long)hi, 0, S_GRAPH_BOT - 1 - S_GRAPH_TOP);
+    drawLine(x, y, x, S_GRAPH_BOT - 1);
+  }
+  return true;
+}
+
+// three text lines, 128x32 packs them closer
+void SSD1306Display::lines(int16_t x, const char* a, const char* b, const char* c) {
+  int16_t y = isShort() ? 0 : 2, step = isShort() ? 11 : 15;
+  setFont(U8G2_FONT_ARIAL_10);
+  drawStrP(x, y, a);
+  drawStrP(x, y + step, b);
+  drawStrP(x, y + 2 * step, c);
+}
+
+void SSD1306Display::page_short_net() {
+  clearBuffer();
+  lines(0, corium::DeviceInfo::hostname(), PSTR("IP:"), corium::DeviceInfo::uptimeString());
+  char ip[CORIUM_IPV4_MAX + 1];
+  corium::Wifi::formatIP(ip, sizeof(ip));
+  drawStrP(16, 11, ip);
+  if (M_HAS_HV) {
+    int32_t hv;
+    if (m_hv_volts(&hv)) {
+      char buf[12];
+      snprintf_P(buf, sizeof(buf), PSTR("%ldV"), (long)hv);
+      drawStr(OLED_WIDTH - getStrWidth(buf), 11, buf);
+    }
+  }
+}
 
 void SSD1306Display::page_two_full() {
+  if (isShort()) {
+    page_short_net();
+    return;
+  }
   clearBuffer();
-  setFont(U8G2_FONT_ARIAL_10);
-  drawStrP(0, 2, corium::DeviceInfo::hostname());
-  drawStrP(0, 17, PSTR("IP:"));
+  lines(0, corium::DeviceInfo::hostname(), PSTR("IP:"), nullptr);
   char ip[CORIUM_IPV4_MAX + 1];
   corium::Wifi::formatIP(ip, sizeof(ip));
   drawStrP(16, 17, ip);
@@ -590,10 +659,10 @@ void SSD1306Display::page_one_clear() {
   drawTPString(*this, 0,  5, DialogInput_plain_12, PSTR("CPM:"));
   drawXBMP(0, 20, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_mu);
   drawTPString(*this, EG_GLYPH_W, 20, DialogInput_plain_12, PSTR("Sv/h:"));
-  _p1_last.cpm_x10 = 0xFFFFFFFFu;   // the values redraw, wifi icon and all
+  _p1_last.cpm_x10 = 0xFFFFFFFFu;   // makes the values redraw, wifi icon and all
 }
 
-// 3 bad transfers in a row and nothing goes out, one a minute tries
+// After 3 bad transfers in a row nothing goes out, apart from one try a minute
 static const uint8_t BUS_FAILS = 3;
 static const uint32_t BUS_RETRY_MS = 60000;
 static uint8_t s_bus_fails = 0;
@@ -615,12 +684,12 @@ static void bus_result(bool ok) {
   }
 }
 
-// as u8g2's hw i2c, but no Wire.begin (I2CBus did it) and the result kept
+// Same as u8g2's hw i2c, but without Wire.begin (I2CBus did that) and it keeps the result
 static uint8_t oled_i2c(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_ptr) {
   switch (msg) {
     case U8X8_MSG_BYTE_START_TRANSFER:
       s_bus_skip = s_bus_fails >= BUS_FAILS && !corium::reached(corium::fastMillis(), s_bus_retry);
-      if (s_bus_skip) break;   // esp32 Wire holds its lock till endTransmission
+      if (s_bus_skip) break;   // esp32 Wire holds its lock until endTransmission
       Wire.setClock(u8x8->bus_clock);
       Wire.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1);
       break;
@@ -639,32 +708,60 @@ static uint8_t oled_i2c(u8x8_t* u8x8, uint8_t msg, uint8_t arg_int, void* arg_pt
   return 1;
 }
 
+// u8g2's setup per display.type
+#define OLED_U8G2_0 u8g2_Setup_ssd1306_i2c_128x64_noname_f
+#define OLED_U8G2_1 u8g2_Setup_sh1106_i2c_128x64_noname_f
+#define OLED_U8G2_2 u8g2_Setup_ssd1309_i2c_128x64_noname0_f
+#define OLED_U8G2_3 u8g2_Setup_ssd1306_i2c_72x40_er_f
+#define OLED_U8G2_4 u8g2_Setup_sh1106_i2c_72x40_wise_f
+#define OLED_U8G2_9 u8g2_Setup_ssd1306_i2c_128x32_univision_f
+#define OLED_U8G2_(t) OLED_U8G2_##t
+#define OLED_U8G2(t)  OLED_U8G2_(t)
+#define OLED_CASE(t)  (DISP_HAS(t) && (t) != OLED_TYPE)
+
+// Only the types built in, the build's own type takes the rest
 void SSD1306Display::setup_driver() {
   switch (_type) {
+#if OLED_CASE(1)
     case DISP_SH1106:
-      u8g2_Setup_sh1106_i2c_128x64_noname_f(&_u8g2, U8G2_R0,
-          oled_i2c, u8x8_gpio_and_delay_arduino);
-      break;
-    case DISP_SSD1309:
-      u8g2_Setup_ssd1309_i2c_128x64_noname0_f(&_u8g2, U8G2_R0,
-          oled_i2c, u8x8_gpio_and_delay_arduino);
-      break;
-#if OLED_TINY
-    case DISP_SSD1306_72X40:
-      u8g2_Setup_ssd1306_i2c_72x40_er_f(&_u8g2, U8G2_R0,
-          oled_i2c, u8x8_gpio_and_delay_arduino);
-      break;
-    case DISP_SH1106_72X40:
-      u8g2_Setup_sh1106_i2c_72x40_wise_f(&_u8g2, U8G2_R0,
-          oled_i2c, u8x8_gpio_and_delay_arduino);
+      OLED_U8G2_1(&_u8g2, U8G2_R0, oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
 #endif
+#if OLED_CASE(2)
+    case DISP_SSD1309:
+      OLED_U8G2_2(&_u8g2, U8G2_R0, oled_i2c, u8x8_gpio_and_delay_arduino);
+      break;
+#endif
+#if OLED_CASE(3)
+    case DISP_SSD1306_72X40:
+      OLED_U8G2_3(&_u8g2, U8G2_R0, oled_i2c, u8x8_gpio_and_delay_arduino);
+      break;
+#endif
+#if OLED_CASE(4)
+    case DISP_SH1106_72X40:
+      OLED_U8G2_4(&_u8g2, U8G2_R0, oled_i2c, u8x8_gpio_and_delay_arduino);
+      break;
+#endif
+#if OLED_CASE(9)
+    case DISP_SSD1306_128X32:
+      OLED_U8G2_9(&_u8g2, U8G2_R0, oled_i2c, u8x8_gpio_and_delay_arduino);
+      break;
+#endif
+#if OLED_CASE(0)
     case DISP_SSD1306:
+      OLED_U8G2_0(&_u8g2, U8G2_R0, oled_i2c, u8x8_gpio_and_delay_arduino);
+      break;
+#endif
     default:
-      u8g2_Setup_ssd1306_i2c_128x64_noname_f(&_u8g2, U8G2_R0,
-          oled_i2c, u8x8_gpio_and_delay_arduino);
+      OLED_U8G2(OLED_TYPE)(&_u8g2, U8G2_R0, oled_i2c, u8x8_gpio_and_delay_arduino);
       break;
   }
+#if OLED_SIZES > 1
+  s_tile_rows = u8g2_GetBufferTileHeight(&_u8g2);
+#if DISP_HAS_TINY
+  s_width = u8g2_GetBufferTileWidth(&_u8g2) << 3;
+#endif
+#endif
 }
 
 void SSD1306Display::reset_panel() {
@@ -675,9 +772,9 @@ void SSD1306Display::reset_panel() {
     digitalWrite(_pin_rst, HIGH); delay(50);
   }
 
-#if OLED_TINY
-  // tiny has no RST and can wedge, 9 clocks + STOP
-  // no START, other i2c devices stay ok
+#if DISP_HAS_TINY
+  // Tiny has no RST and can wedge the bus, so clock it 9 times then send a STOP.
+  // No START, so other i2c devices aren't upset
   if (isTiny()) {
     pinMode(_pin_sda, INPUT_PULLUP);
     pinMode(_pin_scl, OUTPUT);
@@ -707,6 +804,22 @@ static uint8_t oled_probe_addr() {
 }
 
 void SSD1306Display::draw_logo(const char* line) {
+#if DISP_HAS_TINY
+  if (isTiny()) {
+    drawXBMP(0, 0, 25, 25, ESPLogoTiny);
+    setFont(U8G2_FONT_ARIAL_10);
+    drawStrP(28, 7, RELEASE_VERSION);
+    drawStrP(0, 28, line);
+    return;
+  }
+#endif
+#if DISP_HAS_SHORT
+  if (isShort()) {
+    drawXBMP(0, 3, 25, 25, ESPLogoTiny);
+    lines(30, APP_NAME, RELEASE_VERSION, line);
+    return;
+  }
+#endif
   drawXBMP(0, 0, 51, 51, ESPLogo);
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(55, 10, APP_NAME);
@@ -714,7 +827,7 @@ void SSD1306Display::draw_logo(const char* line) {
   drawStrP(55, 42, line);
 }
 
-// the row sends stop, the frame starts clear
+// Stops the row sends so the frame starts clear
 bool SSD1306Display::take_screen() {
   if (!_present) return false;
   _send_rows_left = 0;
@@ -724,7 +837,7 @@ bool SSD1306Display::take_screen() {
 
 void SSD1306Display::draw_splash() {
   clearBuffer();
-#if OLED_TINY
+#if DISP_HAS_TINY
   if (isTiny()) {
     drawXBMP(0, 7, 25, 25, ESPLogoTiny);
     setFont(U8G2_FONT_ARIAL_10);
@@ -738,9 +851,9 @@ void SSD1306Display::draw_splash() {
 static void oled_lifecycle(corium::Lifecycle::Event e) {
   if (e == corium::Lifecycle::OTA_START) oled.showOTABanner();
   if (e == corium::Lifecycle::OTA_FAILED) oled.endOTABanner();
-#if OLED_TINY
-  // tiny keeps its image over a reset
-  if (e == corium::Lifecycle::SHUTDOWN && oled.is_present()) {
+#if DISP_HAS_TINY
+  // tiny keeps its image over a reset, so blank it
+  if (e == corium::Lifecycle::SHUTDOWN && oled.present()) {
     oled.clearBuffer();
     oled.sendBuffer();
   }
@@ -750,7 +863,7 @@ static void oled_lifecycle(corium::Lifecycle::Event e) {
 void SSD1306Display::setup() {
   corium::Lifecycle::on(oled_lifecycle);
   setup_driver();
-  // only when chosen, a MAX7219 build keeps the 1 KB
+  // Only allocated when chosen, so a MAX7219 build keeps the 1 KB
   if (!_frame) _frame = (uint8_t*)malloc(u8g2_GetBufferSize(&_u8g2));
   if (!_frame) {
     corium::Log::console(PSTR("OLED: No memory for the frame"));
@@ -759,18 +872,18 @@ void SSD1306Display::setup() {
   u8g2_SetBufferPtr(&_u8g2, _frame);
   reset_panel();
 
-  _addr = corium::I2CBus::begin() ? oled_probe_addr() : 0;
-  if (!_addr) {
+  uint8_t addr = corium::I2CBus::begin() ? oled_probe_addr() : 0;
+  if (!addr) {
     _present = false;
     corium::Log::console(PSTR("OLED: No display detected at 0x3C/0x3D (sda=%d scl=%d)"),
-                 _pin_sda, _pin_scl);
+                         _pin_sda, _pin_scl);
     corium::Registry::every(this, NOPANEL_LOOP_MS);
     setFontPosTop();
     return;
   }
   _present = true;
-  corium::Log::console(PSTR("OLED: Detected at 0x%02X (type=%u)"), _addr, _type);
-  setI2CAddress(_addr << 1);
+  corium::Log::console(PSTR("OLED: Detected at 0x%02X (type=%u)"), addr, _type);
+  setI2CAddress(addr << 1);
   setBusClock(700000);
   u8g2_InitDisplay(&_u8g2);
   u8g2_SetPowerSave(&_u8g2, 0);
@@ -779,14 +892,14 @@ void SSD1306Display::setup() {
   u8g2_SendBuffer(&_u8g2);
   setFontPosTop();
   bool flipped = corium::Prefs::getBool("display", K_FLIP);
-  // inverted vs ThingPulse, u8g2 init is already flipped
+  // Inverted compared to ThingPulse, u8g2's init is already flipped
   setFlipMode(flipped ? 0 : 1);
   setContrast(64);
   draw_splash();
 }
 
-// lit only, Display wakes
-void SSD1306Display::onButtonTap(unsigned long now, int8_t direction) {
+// only called while lit, Display does the waking
+void SSD1306Display::button(unsigned long now, int8_t direction) {
   if (direction > 0) {
     oled_page++;
     if (oled_page > PAGE_LAST) oled_page = PAGE_MAIN;
@@ -809,9 +922,9 @@ void SSD1306Display::redraw(unsigned long now) {
   loop(now);
 }
 
-void SSD1306Display::setupWifi(const char* s) {
+void SSD1306Display::setup_wifi(const char* s) {
   if (!take_screen()) return;
-#if OLED_TINY
+#if DISP_HAS_TINY
   if (isTiny()) {
     setFont(U8G2_FONT_ARIAL_10);
     drawStrP(0, 2,  PSTR("Setup portal"));
@@ -824,6 +937,11 @@ void SSD1306Display::setupWifi(const char* s) {
     return;
   }
 #endif
+  if (isShort()) {
+    lines(0, PSTR("Setup portal"), PSTR("Join WiFi:"), s);
+    sendBuffer();
+    return;
+  }
   drawTPString(*this, 0, 10, DialogInput_plain_12, PSTR("Setup portal"));
   drawTPString(*this, 0, 24, DialogInput_plain_12, PSTR("Join WiFi:"));
   drawTPString(*this, 0, 38, DialogInput_plain_12, s);
@@ -848,8 +966,15 @@ void SSD1306Display::wipeCountdown(int seconds_left) {
   if (!take_screen()) return;
   setFont(U8G2_FONT_ARIAL_10);
   drawStrP(0, 0,  PSTR("Offline mode armed"));
-  drawStrP(0, 16, PSTR("Hold to factory reset"));
   char line[24];
+  if (isShort()) {
+    drawStrP(0, 11, PSTR("Hold to factory reset"));
+    snprintf_P(line, sizeof(line), PSTR("%ds"), seconds_left);
+    drawStr(0, 22, line);
+    sendBuffer();
+    return;
+  }
+  drawStrP(0, 16, PSTR("Hold to factory reset"));
   snprintf_P(line, sizeof(line), PSTR("%ds"), seconds_left);
   setFont(U8G2_FONT_ARIAL_24);
   drawStrP(0, 32, line);
@@ -858,6 +983,11 @@ void SSD1306Display::wipeCountdown(int seconds_left) {
 
 void SSD1306Display::wipeReady() {
   if (!take_screen()) return;
+  if (isShort()) {
+    lines(0, PSTR("Release for factory reset"), PSTR("Keep holding"), PSTR("to cancel."));
+    sendBuffer();
+    return;
+  }
   setFont(U8G2_FONT_ARIAL_16);
   drawStrP(0, 0,  PSTR("Release for"));
   drawStrP(0, 18, PSTR("factory reset"));
@@ -873,21 +1003,24 @@ void SSD1306Display::screen_mode(unsigned long now, bool auto_off) {
   _send_rows_left = 0;
   clearBuffer();
   const uint8_t* font = U8G2_FONT_ARIAL_16;
-#if OLED_TINY
+  int16_t y = 20;
+#if DISP_HAS_TINY
   if (isTiny()) font = U8G2_FONT_ARIAL_10;
 #endif
+  if (isShort()) y = 16;
   setFont(font);
   drawStrP(0, 0,  EG_W_SCREEN);
-  drawStrP(0, 20, auto_off ? PSTR("auto off") : PSTR("always on"));
+  drawStrP(0, y, auto_off ? PSTR("auto off") : PSTR("always on"));
   if (_present) { setPowerSave(0); sendBuffer(); }
   oled_on = true;
   oled_last_update = 0;
-  _next_render_due = now + 1500;   // message stays up
+  _next_render_due = now + 1500;   // the message stays up for 1.5 s
   corium::Registry::every(this, LOOP_MS);
 }
 #endif
 
 bool SSD1306Display::page_one_graph() {
+  if (isShort()) return graph_short();
   int hist[HIST];
   uint16_t n = (uint16_t)egm_history(hist, HIST);
   int32_t lo = 0;
@@ -921,7 +1054,7 @@ bool SSD1306Display::page_one_graph() {
   return true;
 }
 
-// vs 5 s ago, 1.5 sigma
+// Compared with 5 s ago, a trend needs 1.5 sigma
 static int8_t cpm_trend(uint32_t cpm) {
   int last5[5];
   if (egm_history(last5, 5) != 5) return 0;
@@ -954,36 +1087,61 @@ bool SSD1306Display::page_one_values(unsigned long now) {
   return true;
 }
 
-void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
-  setDrawColor(0);
-  drawBox(36, 0, 92, 20);
-  drawBox(42, 20, 86, 12);   // the colon of "Sv/h:" ends at 41
-  setDrawColor(1);
-  const uint8_t* g = nullptr;
-  if (p.flags & (P1_WARN | P1_ALERT)) g = EGGlyph_warning;
-  else if (p.trend > 0) g = EGGlyph_arrow_up;
-  else if (p.trend < 0) g = EGGlyph_arrow_down;
-  if (p.flags & P1_ALERT) {
-    drawBox(36, 2, EG_GLYPH_W + 2, EG_GLYPH_H);
-    setDrawColor(0);   // solid bitmap: black on white
+// Where page one's values go: the clear boxes, glyph, cpm, usv and the W/S row
+struct P1At { uint8_t b1w, b1h, b2x, b2y, b2w, b2h, gx, gy, cx; int8_t cy; uint8_t vx, vy, my; };
+static const P1At P1_64 PROGMEM = {92, 20, 42, 20, 86, 12, 37, 2, 45, 0, 45, 20, 2};   // the colon of "Sv/h:" ends at 41
+static const P1At P1_32 PROGMEM = {128, 16, 0, 16, 81, 16, 1, 0, 11, -3, 0, 16, 0};   // the graph starts at 82, page_one_clear's labels get covered
+
+static const uint8_t* trend_glyph(bool warn, int8_t trend) {
+  if (warn) return EGGlyph_warning;
+  if (trend > 0) return EGGlyph_arrow_up;
+  if (trend < 0) return EGGlyph_arrow_down;
+  return nullptr;
+}
+
+// 128x32 adds the unit
+static void draw_usv(SSD1306Display& d, bool none, float dusv, int16_t x, int16_t y, bool unit) {
+  if (none) {
+#if GEIGER_IS_UDPRX(GEIGER_TYPE)
+    drawTPString(d, x, y, DialogInput_plain_12, PSTR("no signal?"));
+#else
+    drawTPString(d, x, y, DialogInput_plain_12, PSTR("check tube?"));
+#endif
+    return;
   }
-  if (g) drawXBMP(37, 2, EG_GLYPH_W, EG_GLYPH_H, g);
+  char buf[16];
+  format_f(buf, sizeof(buf), dusv);
+  drawTPString(d, x, y, DialogInput_plain_12, buf);
+  if (!unit) return;
+  x += (int16_t)strlen(buf) * pgm_read_byte(DialogInput_plain_12) + 3;
+  d.drawXBMP(x, y, EG_GLYPH_W, EG_GLYPH_H, EGGlyph_mu);
+  drawTPString(d, x + EG_GLYPH_W, y, DialogInput_plain_12, PSTR("Sv/h"));
+}
+
+void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
+  P1At a;
+  memcpy_P(&a, isShort() ? &P1_32 : &P1_64, sizeof(a));
+  setDrawColor(0);
+  drawBox(OLED_WIDTH - a.b1w, 0, a.b1w, a.b1h);
+  drawBox(a.b2x, a.b2y, a.b2w, a.b2h);
+  setDrawColor(1);
+  const uint8_t* g = trend_glyph(p.flags & (P1_WARN | P1_ALERT), p.trend);
+  if (p.flags & P1_ALERT) {
+    drawBox(a.gx - 1, a.gy, EG_GLYPH_W + 2, EG_GLYPH_H);
+    setDrawColor(0);   // solid bitmap, black on white
+  }
+  if (g) drawXBMP(a.gx, a.gy, EG_GLYPH_W, EG_GLYPH_H, g);
   setDrawColor(1);
   char buf[16];
   format_cpm(buf, sizeof(buf), p.cpm_x10 * 0.1f);
-  drawTPString(*this, 45, 0, DialogInput_Digits_17, buf);
-  if (p.flags & P1_NO_COUNTS) {
-#if GEIGER_IS_UDPRX(GEIGER_TYPE)
-    drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("no signal?"));
-#else
-    drawTPString(*this, 45, 20, DialogInput_plain_12, PSTR("check tube?"));
-#endif
-  } else {
-    format_f(buf, sizeof(buf), dusv);
-    drawTPString(*this, 45, 20, DialogInput_plain_12, buf);
+  drawTPString(*this, a.cx, a.cy, DialogInput_Digits_17, buf);
+  draw_usv(*this, p.flags & P1_NO_COUNTS, dusv, a.vx, a.vy, isShort());
+  if (isShort()) {
+    setFont(U8G2_FONT_ARIAL_10);
+    drawStrP(70, 3, PSTR("CPM"));
   }
   if (p.mode != P1_LIVE) {
-    drawTPString(*this, 98, 2, DialogInput_plain_12, p.mode == P1_WARMING ? PSTR("W") : PSTR("S"));
+    drawTPString(*this, 98, a.my, DialogInput_plain_12, p.mode == P1_WARMING ? PSTR("W") : PSTR("S"));
   }
   if (p.snd) {
     drawXBMP(110, 0, 8, 16, _iconimage_remotext);
@@ -995,12 +1153,18 @@ void SSD1306Display::draw_p1_values(const P1& p, float dusv) {
 }
 
 void SSD1306Display::page_three_full() {
+  static const char ME[] PROGMEM = "@ steadramon";
   clearBuffer();
-  setFont(U8G2_FONT_ARIAL_10);
-  drawStrP(0, 2, GEIGER_MODEL);
-  drawStrP(0, 17, PSTR(RELEASE_VERSION " / " GIT_VERSION));
-  drawStrP(0, 32, corium::DeviceInfo::buildDate());
-  drawStrP(0, 47, PSTR("@ steadramon"));
+  lines(0, GEIGER_MODEL, PSTR(RELEASE_VERSION " / " GIT_VERSION), corium::DeviceInfo::buildDate());
+  if (!isShort()) {
+    drawStrP(0, 47, ME);
+    return;
+  }
+  // Right of the model, if it fits
+  char at[16];
+  flashToRam(ME, at, sizeof(at));   // getStrWidth reads plain bytes, not flash
+  int16_t w = getStrWidth(at);
+  if (getStrWidth(GEIGER_MODEL) + w + 4 <= OLED_WIDTH) drawStr(OLED_WIDTH - w, 0, at);
 }
 
 namespace {
@@ -1052,7 +1216,7 @@ static void drop_speed(unsigned long delta_ms, const MatrixCtx& ctx,
 
 static const unsigned long MTX_IDLE_MS = 1500;   // no counts yet
 static const uint8_t MTX_SEED_DROPS = 6;
-static const uint8_t MTX_FULL = 8;               // alive factor once 3 run
+static const uint8_t MTX_FULL = 8;               // alive factor once 3 drops are running
 static unsigned long s_mtx_blip_us = 0;
 static uint8_t s_mtx_col = 255;                  // 255 = none yet
 
@@ -1082,7 +1246,7 @@ static void seed_drops(Drop* drops) {
   }
 }
 
-// ms between clicks over the last 5 s
+// Average ms between clicks over the last 5 s
 static unsigned long recent_gap_ms() {
   int recent[5];
   uint8_t  n   = (uint8_t)egm_history(recent, 5);
@@ -1143,7 +1307,7 @@ static void draw_drop(SSD1306Display& o, Drop& d) {
   uint16_t skip_step = 256 / fade_span;
   for (uint8_t t = 0; t < d.tail; t++) {
     int16_t ty = d.y - (t << 1);
-    if (ty < 0 || ty >= OLED_HEIGHT) continue;
+    if (ty < 0 || ty >= s_tile_rows << 3) continue;
     if (t >= BODY) {
       uint16_t skip_prob = (uint16_t)(t - BODY) * skip_step;
       uint8_t h = (uint8_t)(d.seed * 53u + t * 97u);
@@ -1152,7 +1316,7 @@ static void draw_drop(SSD1306Display& o, Drop& d) {
     o.drawPixel(d.x, ty);
   }
   d.y += d.speed >> 3;
-  if (d.y - (d.tail << 1) >= OLED_HEIGHT) d.alive = false;
+  if (d.y - (d.tail << 1) >= s_tile_rows << 3) d.alive = false;
 }
 
 }  // namespace
@@ -1192,29 +1356,33 @@ void SSD1306Display::page_four_static() {
     GRNG::extract_fast(noise, 1024);
     drawXBMP(0, 0, 128, 64, noise);
   }
+  int16_t y = 19;
+  if (isShort()) y = 4;
   setDrawColor(0);
-  drawBox(41, 19, 44, 24);
+  drawBox(41, y, 44, 24);
   setDrawColor(1);
-  drawTPString(*this, 63 - (int)strlen(_page4_num) * 5, 21,
+  drawTPString(*this, 63 - (int)strlen(_page4_num) * 5, y + 2,
                DialogInput_Digits_17, _page4_num);
 }
 
 void SSD1306Display::showOTABanner() {
   if (!take_screen()) return;
   setFont(U8G2_FONT_ARIAL_16);
-  // not PROGMEM safe, copy to ram
+  // drawStr isn't PROGMEM safe, copy to ram
   char l1[12], l2[20];
   flashToRam(W_UPDATE, l1, sizeof(l1));
   snprintf_P(l2, sizeof(l2), PSTR("in progress..."));
-  drawStr((OLED_WIDTH - getStrWidth(l1)) / 2, (OLED_HEIGHT / 2) - 20, l1);
-  drawStr((OLED_WIDTH - getStrWidth(l2)) / 2, (OLED_HEIGHT / 2),  l2);
+  int16_t y1 = (OLED_HEIGHT / 2) - 20, y2 = OLED_HEIGHT / 2;
+  if (isShort()) { y1 = 0; y2 = 16; }
+  drawStr((OLED_WIDTH - getStrWidth(l1)) / 2, y1, l1);
+  drawStr((OLED_WIDTH - getStrWidth(l2)) / 2, y2, l2);
   setPowerSave(0);
   oled_on = true;
   sendBuffer();
   _ota_lock = true;
 }
 
-// failed, redraw
+// The update failed, go back to the normal screen
 void SSD1306Display::endOTABanner() {
   if (!_ota_lock) return;
   _ota_lock = false;
@@ -1224,11 +1392,10 @@ void SSD1306Display::endOTABanner() {
 }
 
 bool SSD1306Display::screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) {
-  w = 128; h = 64;
-#if OLED_TINY
-  if (isTiny()) { w = 72; h = 40; }
-#endif
   buf = getBufferPtr();
-  return buf != nullptr;
+  if (!buf) return false;   // no driver yet either
+  w = u8g2_GetBufferTileWidth(&_u8g2) * 8;
+  h = u8g2_GetBufferTileHeight(&_u8g2) * 8;
+  return true;
 }
 #endif

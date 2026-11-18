@@ -36,8 +36,6 @@
 Display display;
 CORIUM_REGISTER_MODULE(display)
 
-
-
 CORIUM_PSTR(K_RST,      "rst");
 CORIUM_PSTR(K_FLIP,     "flip");
 CORIUM_PSTR(K_TIMEOUT,  "timeout");
@@ -58,36 +56,84 @@ CORIUM_PSTR(DS_H_ONT, "Display on");
 CORIUM_PSTR(DS_H_OFT, "Display off");
 #endif
 CORIUM_PSTR(DS_L_FLP, "Flip 180\xC2\xB0");
-#ifndef OLED_PINS_BLOCKED
+#if DISP_MANY
 CORIUM_PSTR(DS_L_TYP, "Display type");
-#if OLED_TINY
-#ifdef MAX7219_DISPLAY
-CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106|7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
-#else
-CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106|SSD1309|Tiny SSD1306|Tiny SH1106");
+// One slot per type up to the last one built. Blanks keep the numbers in place, 127 max
+static const char DS_O_TYP[] PROGMEM =
+#if DISP_HAS(0)
+  "SSD1306"
 #endif
-#else
-#ifdef MAX7219_DISPLAY
-// blanks keep the tiny numbers
-CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309|||7-Seg (MAX7219)|Round (Mottram MAX7219)|Matrix (MAX7219)|7-Seg (TM1637)");
-#else
-CORIUM_PSTR(DS_O_TYP, "SSD1306|SH1106 (1.3in)|SSD1309");
+#if DISPLAY_TYPES >> 1
+  "|"
 #endif
+#if DISP_HAS(1) && DISP_HAS_TINY
+  "SH1106"
+#elif DISP_HAS(1)
+  "SH1106 (1.3in)"
 #endif
+#if DISPLAY_TYPES >> 2
+  "|"
+#endif
+#if DISP_HAS(2)
+  "SSD1309"
+#endif
+#if DISPLAY_TYPES >> 3
+  "|"
+#endif
+#if DISP_HAS(3)
+  "Tiny SSD1306"
+#endif
+#if DISPLAY_TYPES >> 4
+  "|"
+#endif
+#if DISP_HAS(4)
+  "Tiny SH1106"
+#endif
+#if DISPLAY_TYPES >> 5
+  "|"
+#endif
+#if DISP_HAS(5)
+  "7-Seg (MAX7219)"
+#endif
+#if DISPLAY_TYPES >> 6
+  "|"
+#endif
+#if DISP_HAS(6)
+  "Round (Mottram MAX7219)"
+#endif
+#if DISPLAY_TYPES >> 7
+  "|"
+#endif
+#if DISP_HAS(7)
+  "Matrix (MAX7219)"
+#endif
+#if DISPLAY_TYPES >> 8
+  "|"
+#endif
+#if DISP_HAS(8)
+  "7-Seg (TM1637)"
+#endif
+#if DISPLAY_TYPES >> 9
+  "|"
+#endif
+#if DISP_HAS(9)
+  "128x32"
+#endif
+  "";
 static_assert(sizeof(DS_O_TYP) - 1 <= CORIUM_PREF_PATTERN_MAX, "display types past the options buffer");
+static_assert(DISPLAY_TYPES >> 10 == 0, "no display.type past 9");
+// highest type number built in
+static constexpr uint8_t top_type(uint32_t m) { return m > 1 ? 1 + top_type(m >> 1) : 0; }
+#define DS_TYPE_MAX top_type(DISPLAY_TYPES)
+#endif
+#ifndef OLED_PINS_BLOCKED
 CORIUM_PSTR(DS_L_RST, "Reset pin");
 CORIUM_PSTR(DS_H_RST, "GPIO toggled at boot to reset the OLED, 255 = off");
 #endif
 
-#ifdef MAX7219_DISPLAY
-#define DS_TYPE_MAX DISP_TM1637
-#else
-#define DS_TYPE_MAX (DISP_OLED_COUNT - 1)
-#endif
-
-// 0.12 keys, never rename
+// Keys from 0.12, never rename them
 static const corium::Pref DISPLAY_PREF_ITEMS[] PROGMEM = {
-#ifndef OLED_PINS_BLOCKED
+#if DISP_MANY
   {EG_K_TYPE,       DS_L_TYP, nullptr, STR(OLED_TYPE), DS_O_TYP, 0, DS_TYPE_MAX, 0, corium::P_ENUM, corium::P_REBOOT},
 #endif
   {EG_K_BRIGHTNESS, EG_L_BRT, nullptr,  "25", nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
@@ -110,10 +156,12 @@ static const corium::PrefGroup DISPLAY_PREF_GROUP PROGMEM = {
 
 const corium::PrefGroup* Display::prefsGroup() { return &DISPLAY_PREF_GROUP; }
 
-#if defined(MAX7219_DISPLAY) && !defined(OLED_PINS_BLOCKED)
-static const uint16_t SHOW_OLED = (1u << DISP_OLED_COUNT) - 1;   // OLED types come first
+#if defined(MAX7219_DISPLAY) && DISP_MANY
+static const uint16_t SHOW_OLED = DISPLAY_TYPES & ~DISP_LED_TYPES;
 static const corium::PrefShow DISPLAY_SHOW[] PROGMEM = {
+#ifndef OLED_PINS_BLOCKED
   {K_RST,  EG_K_DISP_TYPE, SHOW_OLED},
+#endif
   {K_FLIP, EG_K_DISP_TYPE, SHOW_OLED},
   {},
 };
@@ -122,7 +170,6 @@ const corium::PrefShow* Display::prefsShow() { return DISPLAY_SHOW; }
 const corium::PrefShow* Display::prefsShow() { return nullptr; }
 #endif
 
-// legacy import
 static const corium::LegacyAlias DISPLAY_LEGACY[] PROGMEM = {
   {"dispBrightness", "brightness"},
 #ifdef GEIGER_PUSHBUTTON
@@ -134,9 +181,9 @@ static const corium::LegacyAlias DISPLAY_LEGACY[] PROGMEM = {
 };
 corium::LegacyRows Display::legacyAliases() { return DISPLAY_LEGACY; }
 
-static DisplayBackend* s_backend = nullptr;   // set once, first prefs load
+static DisplayBackend* s_backend = nullptr;   // set once, on the first prefs load
 
-// backends add themselves, before setup
+// Backends add themselves before setup
 static DisplayBackend* s_all[Display::BACKENDS_MAX];
 static uint8_t s_count = 0;
 
@@ -147,8 +194,8 @@ bool Display::add(DisplayBackend* b) {
 }
 
 static DisplayBackend* chosen() {
-  uint8_t type = 0;
-#ifdef MAX7219_DISPLAY
+  uint8_t type = OLED_TYPE;
+#if defined(MAX7219_DISPLAY) && DISP_MANY
   type = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
 #endif
   for (uint8_t i = 0; i < s_count; i++) {
@@ -159,7 +206,7 @@ static DisplayBackend* chosen() {
 
 DisplayBackend* Display::backend() { return s_backend ? s_backend : chosen(); }
 
-// off to on, on == off or blank never sleeps
+// Off hours run from the off time to the on time. on == off, or a blank, never sleeps
 static corium::QuietWindow s_off_hours;
 
 static void read_timing(uint32_t& timeout_ms) {
@@ -201,7 +248,7 @@ static const char* s_notice = nullptr;
 
 const char* Notice::shown() { return s_notice; }
 
-// dark at night stays dark, the next wake shows it
+// dark in the off hours stays dark, the next wake shows it
 void Notice::show(const char* msg) {
   s_notice = msg;
   unsigned long now = corium::fastMillis();
@@ -213,7 +260,7 @@ void Notice::end(const char* msg) {
 }
 #endif
 
-// first tap only wakes
+// The first tap only wakes it
 void Display::button(unsigned long now, int8_t dir) {
   _woke.mark(now);
   if (!_lit) {
@@ -221,7 +268,7 @@ void Display::button(unsigned long now, int8_t dir) {
     return;
   }
 #ifdef APP_NOTICE
-  // a tap takes it down, nothing else
+  // a tap clears the notice and does nothing else
   if (s_notice) {
     s_notice = nullptr;
     return;
@@ -248,7 +295,7 @@ bool Display::toggle_auto_off(unsigned long now) {
   return _auto_off;
 }
 
-// short pages on or back, long flips the screen mode
+// A short press pages on or back, a long one flips the screen mode
 void Display::presses(unsigned long now) {
   uint16_t ev = corium::Registry::events(this);
   if (ev & (1u << Topic::PRESS)) button(now, (ev & (1u << Topic::BACK)) ? -1 : 1);
@@ -259,7 +306,7 @@ void Display::presses(unsigned long now) {
 Display::Sleep Display::sleep(unsigned long now) {
   if (!_auto_off) return AWAKE;
   if (alert()) _woke.mark(now);   // an alert wakes it
-  // idle over it, + 1
+  // times out once idle for longer than the timeout, hence the + 1
   if (_timeout_ms > 0) return _woke.fresh(now, _timeout_ms + 1) ? AWAKE : TIMED_OUT;
   if (!_woke.fresh(now, 30000 + 1) && !on_hours()) return OFF_HOURS;
   return AWAKE;
@@ -276,7 +323,8 @@ static bool screenOr503(EGHttpResponse& res, const uint8_t*& buf, uint16_t& w, u
 
 static constexpr uint8_t BMP_HEAD = 62;
 
-// 1 bit BMP, 2 colour table, rows bottom up, padded to 4; the buffer is 8 row pages, lsb on top
+// 1 bit BMP with a 2 colour table, rows bottom up and padded to 4 bytes.
+// The screen buffer is in 8 row pages, lsb on top
 static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   const uint8_t* buf = nullptr;
   uint16_t w = 0, h = 0;
@@ -323,7 +371,7 @@ static void hScreenBmp(EGHttpRequest&, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
-// w, h as le16, then the pages; h 0 = w bytes of segments
+// w and h as le16, then the pages. h 0 means w bytes of segments
 static void hScreenBin(EGHttpRequest&, EGHttpResponse& res, void*) {
   const uint8_t* buf = nullptr;
   uint16_t w = 0, h = 0;

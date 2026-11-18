@@ -226,7 +226,7 @@ One bus for the OLED and the [environment sensor](/configuration/env). Upgrades 
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Display type | `display.type` | `0` SSD1306, `1` SH1106 (1.3in), `2` SSD1309 | `0` SSD1306 | boards without fixed pins | OLED panel, or an LED display on builds with MAX7219 support: `3` Tiny SSD1306 and `4` Tiny SH1106 (ESP32), `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637). Restart to apply. |
+| Display type | `display.type` | `0` SSD1306, `1` SH1106 (1.3in), `2` SSD1309, `3` Tiny SSD1306, `4` Tiny SH1106, `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637), `9` 128x32 | `0` SSD1306 | builds with more than one display type | OLED panel, or an LED display on builds with MAX7219 support: `3` Tiny SSD1306 and `4` Tiny SH1106 (ESP32), `5` 7-Seg (MAX7219), `6` Round (Mottram MAX7219), `7` Matrix (MAX7219), `8` 7-Seg (TM1637), `9` 128x32 SSD1306 (every OLED build). A build can pick its own with `-DDISPLAY_TYPES`, a bitmask of type numbers (`0x201` = SSD1306 + 128x32). Restart to apply. |
 | Brightness | `display.brightness` | Int 0-100 | `25` | all | Display brightness |
 | Reset pin | `display.rst` | Int 0-255 | `255` | boards without fixed pins | GPIO toggled at boot to reset the OLED, 255 = off. Restart to apply. |
 | Flip 180° | `display.flip` | Boolean | varies by build | all | Restart to apply |

@@ -57,13 +57,13 @@ public:
       DISP_SSD1306        = 0,
       DISP_SH1106         = 1,
       DISP_SSD1309        = 2,
-#if OLED_TINY
       DISP_SSD1306_72X40  = 3,
       DISP_SH1106_72X40   = 4,
-#endif
+      DISP_SSD1306_128X32 = DISP_OLED_128X32,
     };
 
-#if OLED_TINY
+    // only types built, the prefs refuse the rest
+#if DISP_HAS_TINY
     bool isTiny() const {
       return _type == DISP_SSD1306_72X40
           || _type == DISP_SH1106_72X40;
@@ -71,20 +71,24 @@ public:
 #else
     bool isTiny() const { return false; }
 #endif
+#if DISP_HAS_SHORT
+    bool isShort() const { return _type == DISP_SSD1306_128X32; }
+#else
+    bool isShort() const { return false; }
+#endif
 
-    SSD1306Display();
     const char* name() override { return PSTR("oled"); }
     uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
 
     void start() override;
-    void button(unsigned long now, int8_t dir) override { onButtonTap(now, dir); }
+    void button(unsigned long now, int8_t dir) override;
     void fx(unsigned long now) override;
     bool screen(const uint8_t*& buf, uint16_t& w, uint16_t& h) override;
     void reload() override;
     bool present() override { return _present; }
     bool takes(uint8_t type) override;
     void unchosen() override { load_pins(); }   // env sensor needs i2c
-    void setup_wifi(const char* host) override { setupWifi(host); }
+    void setup_wifi(const char* host) override;
     void safe_mode() override;
 #ifdef GEIGER_PUSHBUTTON
     void offline() override { wifiDisabled(); }
@@ -95,12 +99,9 @@ public:
     void load_pins();   // also the env sensor's i2c pins
 
     void setup();
-    void setupWifi(const char* s);
     void wifiDisabled();
     void wipeCountdown(int seconds_left);
     void wipeReady();
-    void onButtonTap(unsigned long now, int8_t direction = 1);
-    bool is_present() const { return _present; }
 
     void setBrightness(uint8_t brightness);
 
@@ -118,6 +119,7 @@ public:
     void page_tiny_dose();
     void page_tiny_net();
     void page_tiny_meter();
+    void page_short_net();         // 128x32
     void page_four_static();
     void page_four_matrix();
     void showOTABanner();
@@ -152,13 +154,12 @@ public:
     uint8_t oled_page = PAGE_MAIN;
     unsigned long oled_last_update = 0;
     bool oled_on = true;
-    bool _locked_page = false;
     bool _ota_lock = false;   // OTA banner up
 
   private:
     enum : uint8_t { DR_NONE = 0, DR_TOP = 1, DR_BOT = 2, DR_FULL = 0xFF };
     void page_changed(unsigned long now);
-    void redraw(unsigned long now);   // a frame now, page changed
+    void redraw(unsigned long now);   // draw a frame now, the page changed
     void next_frame(unsigned long now);
     void take_events(unsigned long now);
     void draw_frame(unsigned long now);
@@ -190,6 +191,8 @@ public:
       }
     };
     void draw_p1_values(const P1& p, float usv);
+    bool graph_short();
+    void lines(int16_t x, const char* a, const char* b, const char* c);   // 128x32, small font
     void setup_driver();
     void reset_panel();
     void draw_splash();
@@ -202,7 +205,6 @@ public:
     uint8_t _pin_scl = OLED_SCL;
     uint8_t _pin_rst = OLED_RST;
     bool _present = false;
-    uint8_t _addr = 0;
     uint8_t _type = OLED_TYPE;
     unsigned long _page4_ms = 0;
     char _page4_num[8] = {};
@@ -211,13 +213,13 @@ public:
     bool _p1_alt = false;
     // 0xFF.. = force a render
     P1 _p1_last = { 0xFFFFFFFFu, -1, P1_LIVE, 0, 0xFFu, 0 };
-    uint8_t _sent_mark = 0;   // a send sets 2, draws count down
+    uint8_t _sent_mark = 0;   // set to 2 on a send, each draw counts it down
     uint8_t _send_ty = 0;
     uint8_t _send_cur = 0;
     uint8_t _send_rows_left = 0;      // 0 = idle, direct draws zero it
     uint32_t _next_render_due = 0;
 #ifdef APP_NOTICE
-    const char* _notice = nullptr;   // the one drawn
+    const char* _notice = nullptr;   // the notice drawn now
 #endif
 };
 

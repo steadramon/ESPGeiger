@@ -42,6 +42,7 @@ The following build flags can be added to your environment's `build_flags` to cu
 | `-D OLED_SDA=N` | Set the default OLED I2C SDA pin (default `4`). Also exposed as a runtime pref unless `OLED_PINS_BLOCKED` is set. |
 | `-D OLED_SCL=N` | Set the default OLED I2C SCL pin (default `5`). Also exposed as a runtime pref unless `OLED_PINS_BLOCKED` is set. |
 | `-D OLED_PINS_BLOCKED=true` | Hide the OLED SDA/SCL pins from the runtime prefs UI. Use on builds with fixed hardware where the pins must not be reconfigured. |
+| `-D DISPLAY_TYPES=0xNNN` | The Display types built, bit n = type n (`0x201` = SSD1306 + 128x32). Default: every type the build supports, or only `OLED_TYPE` with `OLED_PINS_BLOCKED`. One type hides the Display type setting. The LED types (5-8) need `MAX7219_DISPLAY`. |
 | `-D OLED_FLIP=true` | Flip the OLED display vertically. |
 | `-D GEIGER_BLIPLED=N` | Set the count-flash LED pin. Defining this flag enables the dedicated count LED (used for visible per-pulse feedback alongside `GEIGER_PUSHBUTTON` long-press confirmations). When undefined, no dedicated LED is wired up. |
 | `-D GEIGER_NEOPIXEL` | Enable WS2812X NeoPixel status LED. |
