@@ -17,7 +17,7 @@ ESPGeiger is free, open-source firmware for ESP8266 and ESP32 boards. Wire it to
 Readings
 * 🔴 Live CPM and µSv/h, with 1, 5 and 15 minute averages.
 * 📈 Live charts and 24 hours of history in the web page.
-* 🖥️ Readings on an SSD1306, SH1106 or SSD1309 OLED. The panel is found at boot; set the chip type on the Config page.
+* 🖥️ Readings on an SSD1306, SH1106 or SSD1309 OLED, or a 128x32 SSD1306. The panel is found at boot; set the chip type on the Config page.
 * 🕰️ Lifetime clicks, lifetime dose and install age, kept across restarts.
 
 Sending data
@@ -26,7 +26,7 @@ Sending data
 * 📡 Clicks and readings over UDP / OSC on your network, for Pure Data, TouchDesigner, Node-RED and the like.
 * 🛰️ A board with no tube can mirror another ESPGeiger over the network, for an extra display.
 * 💾 Logging to an SD card.
-* 🔌 Offline mode: press the button at startup and release it within <!-- gen:const CORIUM_BOOT_BUTTON_RESET_S s -->5 seconds<!-- /gen --> and the network stays off.
+* 🔌 Offline mode: press the button at startup and release it within <!-- gen:const CORIUM_BOOT_BUTTON_RESET_S s -->5 seconds<!-- /gen --> and the network stays off. If the saved WiFi is gone, it keeps counting and opens its own hotspot.
 
 Counters and hardware
 * ✅ Works with pulse output and serial output Geiger counters.

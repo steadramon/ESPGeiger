@@ -20,7 +20,7 @@ Six steps from a bare board to a working counter. Each one links to the full pag
 
 Optional:
 
-- OLED screen (SSD1306 0.96-inch 128x64; SH1106 and SSD1309 also work)
+- OLED screen (SSD1306 0.96-inch 128x64; SH1106, SSD1309 and the 0.91-inch 128x32 SSD1306 also work)
 - [ESPGeiger Log](/hardware/espgeigerlog) kit
 
 _OR_
@@ -33,6 +33,7 @@ The easiest way to install ESPGeiger is to use the web installer in your Chrome 
 
 1. Visit <https://install.espgeiger.com> and follow the instructions to install the latest firmware.
   - Select your Geiger Counter type from the dropdown list - in most cases this is "Pulse"
+  - An ESP32-S2 needs download mode for its first flash: hold **0**, tap **RST**, let go of **0**, then press **RST** once it is done
   - Installation takes up to two minutes
   - Once installed your ESP device will create its own Wi-Fi network with the name in the format of "**ESPGeiger-XXXXXX**"
   - The ESPGeiger-XXXXXX network appearing is the sign the install worked.
@@ -53,7 +54,7 @@ Congratulations! 🎉 ESPGeiger is installed
 
 ## 4. Wire the counter
 
-Note: By default the RXPIN for ESPGeiger is set to `GPIO13` on ESP8266 / ESP32 / ESP32-S3 and `GPIO4` on ESP32-C3 (its GPIO 11-17 are bonded to internal flash). Kits and boards with a fixed pin differ, see [Build Targets](/install/buildtargets). The pin can be changed from the Web Portal.
+Note: By default the RXPIN for ESPGeiger is set to `GPIO13` on ESP8266 / ESP32 / ESP32-S2 / ESP32-S3 and `GPIO4` on ESP32-C3 (its GPIO 11-17 are bonded to internal flash). Kits and boards with a fixed pin differ, see [Build Targets](/install/buildtargets). The pin can be changed from the Web Portal.
 
 <img src="/img/D1mini-basicwiring.png" title="D1 mini basic wiring">
 
@@ -62,7 +63,7 @@ Note: By default the RXPIN for ESPGeiger is set to `GPIO13` on ESP8266 / ESP32 /
 
 <img src="/img/cajoe-wemosd1.jpg" width="50%" title="D1 mini basic wiring">
 
-On ESP8266 and classic ESP32 boards a flashing/"blipping" status LED confirms that ESPGeiger is receiving readings from your Geiger counter. C3 and S3 dev boards have no LED set: set **Status LED** under Config, System, first.
+On ESP8266 and classic ESP32 boards a flashing/"blipping" status LED confirms that ESPGeiger is receiving readings from your Geiger counter. C3, S2 and S3 dev boards have no LED set: set **Status LED pin** under Config, System (advanced) first.
 
 Specific instructions and diagrams for connecting ESPGeiger to a variety of different Geiger counters can be found in the [Hardware](/hardware) section.
 

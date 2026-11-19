@@ -52,8 +52,9 @@ Sent once per hour and on first boot or reset:
 | `n`   | uint32  | Unix timestamp of the handshake (seconds) |
 | `pk`  | string  | Device public key, base64 (ECC secp192r1, 64 chars) |
 | `ci`  | string  | Device chip ID (hex). The server looks up or creates a station for this chip and returns the numeric `id` the device quotes in later posts. |
-| `v`   | string  | Firmware release version: `tag/sha` when built from a non-tagged commit (e.g. `devel/7a2407d`), or `tag` for released builds (e.g. `0.9.3`). |
-| `bd`  | string  | Board name on ESPGeiger kits (e.g. `ESPG-HW`), else the chip model (e.g. `esp8266`, `ESP32-C3`) |
+| `v`   | string  | Release version and the git revision it was built from, `version/git` (e.g. `0.14.0/7a2407d`, `devel/7a2407d`). Just the version when the revision is unknown. |
+| `bd`  | string  | Board name on ESPGeiger kits (e.g. `ESPG-HW`), else the chip model (e.g. `ESP8266`, `ESP32-C3`) |
+| `bn`  | string  | Board revision, only on kits that report one |
 | `gm`  | string  | PlatformIO build environment name (e.g. `espgeigerlog_serial`) |
 | `gc`  | string  | Geiger counter model: auto-detected on Serial builds, user-set on Pulse builds |
 | `td`  | uint32  | Tube detection bitmask: bit 0 = α, bit 1 = β, bit 2 = γ. `0` = unknown / not set. Bits 3-7 reserved. |
@@ -74,8 +75,10 @@ After a crash the first handshake of the boot adds what the device kept about it
 | `e3`  | uint32  | epc3 |
 | `dp`  | uint32  | depc |
 | `sp`  | uint32  | Stack pointer at the fault |
-| `st`  | bin     | Up to 32 raw stack words, little-endian uint32 each |
-| `cm`  | string  | Where the loop was when it crashed: a module name, `tcp` or `portal` (ESP32 only) |
+| `st`  | bin     | Up to 32 words, little-endian uint32 each: on ESP8266 the code addresses found on the stack, on ESP32 the backtrace PCs |
+| `cm`  | string  | Where the loop was when it crashed: a module name, `tcp` or `portal` |
+| `rk`  | uint32  | Kind of reset: 5 brownout, 6 exception, 7 hardware watchdog, 8 software watchdog, 9 interrupt watchdog, 10 task watchdog, 11 watchdog, 12 abort, 13 out of memory, 14 stack smash, 15 a damaged or unknown dump. Add-only. |
+| `fa`  | uint32  | Out of memory only: the caller of the allocation that failed |
 
 The server responds with the assigned station ID, which the device uses as `id` in later posts.
 
@@ -91,7 +94,7 @@ Canonical URL: `http://api.espgeiger.com/api/1/`. HTTP-only by design: each requ
 | `/api/1/post`      | POST | Submit a reading (+ optional health snapshot) |
 | `/api/1/forget`    | POST | Right-to-erasure: purge station + history |
 
-Devices don't follow redirects, so the API stays on plain http at `/api/1`. Reply codes the device acts on: `403` drops the station and handshakes again, `410` (or `404` to a handshake) stops sharing till its settings are saved or the device restarts, `429` skips the next 5 posts. Any other error is logged to the console.
+Devices don't follow redirects, so the API stays on plain http at `/api/1`. Reply codes the device acts on: `403` re-syncs NTP when its body is `Clock off`, and to a post also drops the station and handshakes again, `410` (or `404` to a handshake) stops sharing till its settings are saved or the device restarts, `429` skips the next 5 posts. Any other error is logged to the console.
 
 ## Pin scoring
 

@@ -32,11 +32,11 @@ S2 boards with native USB and 4 MB flash, like the **[Lolin S2 Mini](https://s.c
 
 ### ESP-C3
 
-For the **world's smallest ESPGeiger**, the **[Seeed Studio XIAO ESP32-C3](https://s.click.aliexpress.com/e/_c3OtwhXJ)** (21x17.5 mm, USB-C, BLE 5.0, external u.FL antenna) flashes cleanly with the `esp32c3_*` builds. Bare-minimum receiver: just power, an attached tube or upstream UDP feed and you have a working monitor in a footprint that fits inside almost any enclosure.
+For a small ESPGeiger, the **[Seeed Studio XIAO ESP32-C3](https://s.click.aliexpress.com/e/_c3OtwhXJ)** (21x17.5 mm, USB-C, BLE 5.0, external u.FL antenna) takes the `esp32c3_*` builds. With power and a tube or a UDP feed it is a working monitor that fits in most enclosures.
 <br>
 <img src="img/xiao-esp32c3.png" width="240"/>
 
-Other variants and devboards for the ESP classic, C3 and S3 should all be supported. Most options are selectable runtime for various pins, OLED options, NeoPixel and LED.
+Other variants and devboards for the ESP classic, C3, S2 and S3 should all be supported. Most options are selectable runtime for various pins, OLED options, NeoPixel and LED.
 
 ### Variant support
 
@@ -50,7 +50,7 @@ Other variants and devboards for the ESP classic, C3 and S3 should all be suppor
 
 ### Boards with onboard OLED
 
-Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the same PCB. ESP32 family envs bundle OLED support and auto-detect the panel; just set SDA / SCL (and RST if your board wires it) from the Config page after flashing. ESP8266 still uses dedicated `esp8266oled_*` builds.
+Several popular ESP32 / ESP8266 boards ship with an SSD1306 OLED soldered to the same PCB. ESP32 family envs bundle OLED support and auto-detect the panel; set SDA / SCL in the **I2C Bus** section (and the Display **Reset pin** if your board wires it) on the Config page after flashing. ESP8266 still uses dedicated `esp8266oled_*` builds.
 
 | Board | MCU | OLED pins (SDA / SCL) | OLED RST | Build | Notes |
 |---|---|---|---|---|---|
@@ -67,7 +67,7 @@ If your board isn't listed but matches one of these patterns, the same recipe ap
 
 ### PCNT
 
-The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/pcnt.html) (`PCNT`). The ESP32 and ESP32-S3 `_pulse` builds carry both counters: **Count with** in the Input tab's advanced settings (`counter.count_mode`) picks Hardware (PCNT, the default) or Interrupt, the same interrupt counter as the ESP8266 builds, and applies after a restart. The PCNT filter and PCNT pull settings show for Hardware, Debounce for Interrupt. The `_no_pcnt` builds are the same firmware defaulting to Interrupt; they are retired in 0.15, and a `_no_pcnt` device flashed with the `_pulse` build keeps counting by interrupt. The [Web Installer](/install/webinstall) offers the interrupt build as its standard Pulse option and PCNT as a separate choice. ESP32-C3 has no PCNT and always uses the interrupt counter.
+The `ESP32` range of MCUs feature an in-built [hardware pulse counter](https://docs.espressif.com/projects/esp-idf/en/v5.4/esp32/api-reference/peripherals/pcnt.html) (`PCNT`). The ESP32, ESP32-S2 and ESP32-S3 `_pulse` builds carry both counters: **Count with** in the Input tab's advanced settings (`counter.count_mode`) picks Hardware (PCNT, the default) or Interrupt, the same interrupt counter as the ESP8266 builds, and applies after a restart. The PCNT filter and PCNT pull settings show for Hardware, Debounce for Interrupt. The `_no_pcnt` builds are the same firmware defaulting to Interrupt; they are retired in 0.15, and a `_no_pcnt` device flashed with the `_pulse` build keeps counting by interrupt. The [Web Installer](/install/webinstall)'s Pulse option installs the `_pulse` build. The S2 has no `_no_pcnt` build. ESP32-C3 has no PCNT and always uses the interrupt counter.
 
 Hardware is the better choice at high count rates: it has no dead time of its own, while the interrupt counter's debounce (below) drops pulses that come close together.
 
@@ -92,7 +92,7 @@ Custom builds can change the starting value. See [Build Options](/dev/platformio
 
 ### Interrupt Debounce
 
-On builds that use software interrupt counting instead of PCNT (all ESP8266 and ESP32-C3 pulse builds, and ESP32 builds set to **Count with** Interrupt), a debounce window rejects any edge that arrives within a configurable number of microseconds of the previously accepted pulse. This serves the same purpose as the PCNT filter - suppressing electrical noise and contact bounce without affecting real tube pulses.
+On builds that use software interrupt counting instead of PCNT (all ESP8266 and ESP32-C3 pulse builds, and ESP32, S2 and S3 builds set to **Count with** Interrupt), a debounce window rejects any edge that arrives within a configurable number of microseconds of the previously accepted pulse. This serves the same purpose as the PCNT filter - suppressing electrical noise and contact bounce without affecting real tube pulses.
 
 The debounce value can be configured from the ESPGeiger web interface under __Config__. The value is in microseconds, with a range of 0 to 10000. A value of 0 disables the debounce.
 

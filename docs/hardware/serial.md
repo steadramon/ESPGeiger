@@ -60,13 +60,13 @@ Things to know:
 
 ESPGeiger may also function with additional serial Geiger counters that are not explicitly listed. These counters are considered theoretically compatible based on their communication protocols. However, due to limited resources, formal testing hasn't been possible.
 
-Additional counters can be added easily within the codebase, if you own or can offer a device for testing and support, please get in touch.
+Additional counters can be added in the code. If you own or can offer a device for testing and support, please get in touch.
 
 ## Other Serial Counters
 
 At present the GQ Geiger Counter range of counters is unsupported due to the lack of access to a device. 
 
-The information regarding the CQ protocol can be found here - https://www.gqelectronicsllc.com/download/GQ-RFC1201.txt
+The information regarding the GQ protocol can be found here - https://www.gqelectronicsllc.com/download/GQ-RFC1201.txt
 
 - GMC-300 Plus V4.xx
 - GMC-320

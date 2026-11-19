@@ -4,14 +4,14 @@
 
 ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-connected Geiger counter. It collects, calculates and reports radiation levels from a range of Geiger counters with pulse or serial outputs.
 
-- 😃  Easy to install via web browser - no compiler required
+- 😃  Installs from a web browser - no compiler required
 - 📈  Built-in web portal with live graphing and 24-hour history
 - 🔴  Live CPM and µSv/h with 1, 5 and 15-minute smoothed averages
 - 🕰️   Lifetime tracking - persistent total clicks and µSv across reboots
-- 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED and WS2812X NeoPixel status light
+- 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED (128x64 or 128x32) and WS2812X NeoPixel status light
 - 🌡️   Optional BME280 / BMP280 / AHT environmental sensors - auto-detected over I2C
-- ✅  Works with pulse and GC10 / GC10next / MightyOhm serial counters
-- 📟  Accurate counting via interrupt or ESP32 hardware counter (PCNT)
+- ✅  Works with pulse and GC10 / GC10next / MightyOhm / ESPGeiger serial counters, or any that sends its CPM in a line
+- 📟  Counting by interrupt or the ESP32 hardware counter (PCNT)
 - 🎛️   Configurable noise filtering and debounce
 - 🌐  MQTT and Home Assistant auto-discovery, Radmon.org, GMCMAP, ThingSpeak, GeigerLog, custom Webhooks
 - 📡  UDP / OSC broadcast and receiver builds - mirror clicks to a tubeless ESP, or feed PD / TouchDesigner / Node-RED
@@ -28,7 +28,7 @@ The easiest way to install ESPGeiger is the **Web Installer** - it runs in your 
 
 ### 👉 [https://install.espgeiger.com](https://install.espgeiger.com)
 
-Select your build from the dropdown and follow the on-screen instructions. Installation takes about two minutes.
+Select your build from the dropdown and follow the on-screen instructions. Installation takes about two minutes. An ESP32-S2 needs download mode for its first flash: hold 0, tap RST, let go of 0.
 
 ## Which Build Do I Need?
 
@@ -86,7 +86,7 @@ Test builds emulate a Geiger counter internally. You can also wire the `TXPIN` o
 
 | Build | Description |
 |---|---|
-| `esp8266_test` / `esp32_test` / `esp32s3_test` / `esp32c3_test` | Internal counter, no output |
+| `esp8266_test` / `esp32_test` / `esp32s3_test` / `esp32c3_test` / `esp32s2_test` | Internal counter, no output |
 | `esp8266_testpulse` / `esp32_testpulse` | Outputs Poisson-distributed pulses on TXPIN |
 | `esp8266_testpulseint` / `esp32_testpulseint` | Outputs evenly timed (PWM) pulses on TXPIN, for high rates |
 | `esp8266_testserial` / `esp32_testserial` | Emulates a serial counter (type selectable via Config) |
@@ -101,14 +101,15 @@ UDP receiver builds listen for OSC multicast broadcasts from other ESPGeiger dev
 | ESP32 | `esp32_udp` |
 | ESP32-C3 | `esp32c3_udp` |
 | ESP32-S3 | `esp32s3_udp` |
+| ESP32-S2 | `esp32s2_udp` |
 
-Producers enable the broadcast via Config → Local broadcast → mode 2. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
+Producers turn on the broadcast on the Config page: **Local Broadcast**, Mode **Telemetry + per-click**. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
 
 See the full list of available builds on the [releases page](https://github.com/steadramon/ESPGeiger/releases/latest) or in the [build targets documentation](https://docs.espgeiger.com/install/buildtargets).
 
 ## Hardware Connection
 
-By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32 / ESP32-S3 and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin; the tables above give it for each build. Don't forget a common ground.
+By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32 / ESP32-S2 / ESP32-S3 and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin; the tables above give it for each build. Don't forget a common ground.
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
@@ -156,7 +157,8 @@ If you want to customise the firmware or create a build for unsupported hardware
 
 - GC10 / GC10-Next
 - MightyOhm
-- ESPGeiger-HW
+- ESPGeiger (`CPM: 60` lines)
+- Template: any counter that sends its CPM in a line
 
 Other serial-based counters should be supportable with small additions to the codebase. If you have one not listed, please [raise an issue](https://github.com/steadramon/ESPGeiger/issues).
 

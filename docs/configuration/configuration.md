@@ -84,7 +84,7 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | Track lifetime | `counter.life_en` | Boolean | `1` on | all | Persist total clicks + first-boot timestamp + tracked seconds across reboots. Tracked seconds advance only over spans where clicks were persisted, so the lifetime CPM on `/hist` stays accurate across crashes. Toggling off pauses the counter without losing the saved value. View totals and reset from `/hist`. |
 | Background (uSv/h) | `counter.bg_usvh` | Float 0-1 | `0.1` | all | Usual here, 0.1 if unsure |
 | No count warning after (min) | `counter.quiet_min` | Int 5-360 | `30` | all | Slow tubes need longer |
-| Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S3 pulse builds | Hardware uses the chip's pulse counter. Interrupt counts in software, with the Debounce filter. Reboot. |
+| Count with | `counter.count_mode` | `0` Hardware, `1` Interrupt | varies by build | ESP32 / ESP32-S2 / ESP32-S3 pulse builds | Hardware uses the chip's pulse counter. Interrupt counts in software, with the Debounce filter. Reboot. |
 | PCNT filter | `counter.pcnt_filter` | Int 0-1023 | `200` | ESP32 PCNT builds | Glitch filter threshold. `0` disables. See [PCNT Filter](/hardware/esphardware#pcnt-filter). |
 | PCNT pull | `counter.pcnt_pull` | `0` None, `1` Pull-up, `2` Pull-down | `0` None, unless the board sets a pull | ESP32 PCNT builds | PCNT input pin pull. None suits modules that drive the line both ways; a pull-up can hold some (the Cajoe IOT-GM v1.1) high so no pulse counts. Pull-up is for open-drain outputs, and keeps an unconnected pin quiet. Pull-down is for active-high modules without their own idle pull. |
 | Debounce (us) | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Software interrupt debounce in microseconds. Filters electrical noise; 100-300 is typical. |
@@ -95,7 +95,7 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 
 <!-- /gen -->
 
-ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.count_mode`, advanced): `0` Hardware (PCNT, the default) or `1` Interrupt. Restart to apply. Hardware shows PCNT filter and PCNT pull, Interrupt shows Debounce. See [PCNT](/hardware/esphardware#pcnt).
+**Count with** is on the ESP32, ESP32-S2 and ESP32-S3 pulse builds. Hardware shows PCNT filter and PCNT pull, Interrupt shows Debounce. See [PCNT](/hardware/esphardware#pcnt).
 
 ## Blip LED Settings
 
@@ -110,7 +110,7 @@ ESP32 and ESP32-S3 pulse builds with PCNT also have **Count with** (`counter.cou
 | Blip brightness | `led.blip_bright` | Int 0-100 | `80` (`100` on ESPGeiger-HW) | all | Onboard LED brightness as a percentage (PWM duty). Also applies to network-activity blinks (MQTT/WebAPI/etc.). |
 | Quiet from | `led.quiet_from` | Time HH:MM | (empty) | not ESPGeiger-HW | Silence the blip LED + beeper from this time. The alert and HV fault alarms still sound. Leave blank to disable quiet hours. Requires NTP sync; if time isn't known, quiet hours are ignored. |
 | Quiet to | `led.quiet_to` | Time HH:MM | (empty) | not ESPGeiger-HW | End of quiet window. Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`). |
-| Status LED pin | `led.pin` | Int -1 to max GPIO | varies by build | ESP32 | GPIO of the board's own LED, `-1` = off. Defaults to `2` on ESP32 and `-1` on C3/S3, which have no plain LED on GPIO 2. ESP8266 is fixed at GPIO 2. A pin another setting already uses stays with that setting and the LED stays off. Restart to apply. |
+| Status LED pin | `led.pin` | Int -1 to max GPIO | varies by build | ESP32 | GPIO of the board's own LED, `-1` = off. Defaults to `2` on ESP32 and `-1` on C3, S2 and S3, which have no plain LED on GPIO 2. ESP8266 is fixed at GPIO 2. A pin another setting already uses stays with that setting and the LED stays off. Restart to apply. |
 | Polarity | `led.polarity` | `0` Active high, `1` Active low | varies by build | ESP32 | `Active low` for an LED that lights when its pin is low, such as the C3 SuperMini (GPIO 8) or Lolin32 Lite (GPIO 22). Restart to apply. |
 
 <!-- /gen -->
@@ -209,7 +209,7 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 
 ## I2C Bus
 
-One bus for the OLED and the [environment sensor](/configuration/env). Upgrades carry the pins over from the old `display.sda`/`scl` or `env.sda`/`scl`.
+One bus for the OLED, the [environment sensor](/configuration/env) and an [RTC chip](/configuration/ntp#without-ntp).
 
 <!-- gen:prefs i2c -->
 
@@ -307,7 +307,7 @@ set wifi.country GB
 reboot
 ```
 
-Changes take effect on the next restart.
+Most take effect on the next restart. `wifi.sleep` applies at once; `wifi.down_max` and `wifi.hs_hold` from the next time the WiFi is lost.
 
 <!-- gen:prefs wifi hidden -->
 
@@ -341,7 +341,7 @@ reboot
 
 ## Upload backoff
 
-Radmon, GMC, ThingSpeak and Webhook back off when a send fails: after two failures in a row the next interval is skipped, then three, doubling up to <!-- gen:const sys.backoff s -->5 minutes<!-- /gen --> between tries. One good send goes back to every interval; saving that upload's settings (a fixed password, say) or a restart tries again at the next interval. Hidden `sys.backoff` sets the longest wait in seconds (default <!-- gen:const sys.backoff code -->`300`<!-- /gen -->, `0` = try every interval as before 0.14):
+Radmon, GMC, ThingSpeak and Webhook back off when a send fails: after two failures in a row the next interval is skipped, then three, doubling up to <!-- gen:const sys.backoff s -->5 minutes<!-- /gen --> between tries. One good send goes back to every interval; saving that upload's settings (a fixed password, say) or a restart tries again at the next interval. Hidden `sys.backoff` sets the longest wait in seconds (default <!-- gen:const sys.backoff code -->`300`<!-- /gen -->, `0` = try every interval):
 
 ```
 set sys.backoff 900

@@ -32,6 +32,7 @@ Connect SDA, SCL, VCC (3.3 V), GND. Default pins:
 |---|---|---|
 | ESP8266, ESP32, ESP32-S3 | 4 | 5 |
 | ESP32-C3 | 5 | 6 |
+| ESP32-S2 | 8 | 9 |
 | Kits | fixed, see [OLED](/hardware/oled) | |
 
 ESPGeiger uses a single I2C bus, shared with the OLED. OLED builds default to the OLED's pins. Change the pins in the **I2C Bus** section of the [Config page](/configuration). A restart is required to apply pin changes.

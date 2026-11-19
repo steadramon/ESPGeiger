@@ -1,7 +1,7 @@
 # Host tests
 
-Unity tests for the plain logic (counting maths, serial parsing, formats, board pin
-tables), built and run on your computer with PlatformIO. No board needed.
+Unity tests for the plain logic (counting maths, serial parsing, formats), built
+and run on your computer with PlatformIO. No board needed.
 
 ```
 pio test -c test.ini -e native                        all suites

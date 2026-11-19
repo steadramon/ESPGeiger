@@ -18,9 +18,9 @@ CSV files are written to a subdirectory of the SD Card, using the following form
 
 Files on the SDCard are written to every minute, giving the average values for the last minute.
 
-A SD Card of 4-8GB is recommended - an SD Card of 2GB should give enough capacity for ~20 years of minutely CSV information.
+A 4-8 GB card is recommended. The minutely rows use under 100 KB a day, so even a 2 GB card holds decades of them.
 
-Writing to the file takes place once per minute. Each row is stamped with the time from NTP, from an [RTC chip](#time-without-a-network) if one is fitted, or on ESP32 kept over a restart (an ESP8266 loses it on a restart).
+Each row is stamped with the time from NTP, from an [RTC chip](#time-without-a-network) if one is fitted, or on ESP32 kept over a restart (an ESP8266 loses it on a restart).
 
 ## Time without a network
 
@@ -28,13 +28,13 @@ Until the device knows the time, rows go to `undated.csv` in the card's root ins
 
 ```
 Uptime,CPM,uSv/h,CPM5,CPM15
-1260,24.00,0.16,23.80,22.10
+1260,24.00,0.1600,23.80,22.10
 synced,2026-11-04 10:15:30,1265
 ```
 
 Each boot that writes there starts with the header line. When the time arrives a `synced` line gives the date and time at that many seconds since boot, so the rows above it can be dated: a row's time is the synced time minus the difference in seconds. From then on rows go to the daily files as usual. A boot that never gets the time leaves its rows with the seconds only. The SD page links the file as *Undated rows*.
 
-An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; C3 and S3 builds with the I2C bus, ESP8266 and ESP32 builds with `-DRTC_CHIP`) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, press **Set from this browser** under *Clock not set* on the **Network Config** page (Status links to it). An RTC keeps that time too, so a device that never reaches NTP stays dated.
+An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; ESP32-C3, ESP32-S2 and ESP32-S3 builds with the I2C bus, ESP8266 and classic ESP32 builds with `-DRTC_CHIP`) keeps the time over a power cut, so rows are dated from power-on. Without the time from either, press **Set from this browser** under *Clock not set* on the **Network Config** page (Status links to it). An RTC keeps that time too, so a device that never reaches NTP stays dated.
 
 ## (Micro) SD Card Compatibility
 
@@ -74,7 +74,7 @@ DateTime,CPM,uSv/h,CPM5,CPM15
 | Value | Description |  Example Value |
 |---|---|---|
 `DateTime` | Date and time of the row, in UTC. | `2023-12-23 01:23:45`
-`CPM` | Current Counts Per Minute (CPM) value. | `30.0`
-`uSv/h` | Current micro Sieverts per hour (µSv) value. | `0.10`
-`CPM5` | Average CPM over the last 5 minutes. | `30.0`
-`CPM15` | Average CPM over the last 15 minutes. | `30.0`
+`CPM` | Current Counts Per Minute (CPM) value. | `30.00`
+`uSv/h` | Current micro Sieverts per hour (µSv/h) value. | `0.1000`
+`CPM5` | Average CPM over the last 5 minutes. | `30.00`
+`CPM15` | Average CPM over the last 15 minutes. | `30.00`

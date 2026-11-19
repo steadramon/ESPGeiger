@@ -27,11 +27,15 @@ The following build flags can be added to your environment's `build_flags` to cu
 | `-D THINGSPEAKOUT` | Enable ThingSpeak submission. |
 | `-D WEBHOOKOUT` | Enable custom Webhook output. |
 | `-D SERIALOUT` | Enable serial CPM/uSv output. |
+| `-D WEBAPIOUT` | Enable [ESPGeiger Stations](/output/webapi) (WebAPI) sharing. |
 | `-D GEIGER_SDCARD` | Enable SD card data logging. |
 | `-D SDCARD_EXTENDEDLOG` | Add extra columns (free memory) to the SD card CSV output. Requires `GEIGER_SDCARD`. |
 | `-D PULSE_OUT` | Enable Pulse Out (per-pulse GPIO for piezo, speaker, LED). Ships in every stock ESP build except `espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`, `espgeigerlog_udp` and `esp8266_pulsemin`. |
 | `-D ALERT_OUT` | Enable Alert Out (rising-edge alert GPIO). Ships in every stock ESP build except `espgeigerhw`, `espgeigerlog`, `espgeigerlog_serial`, `espgeigerlog_test`, `espgeigerlog_udp` and `esp8266_pulsemin`. |
 | `-D AUDIO_TICK` | Enable Audio Tick (synthesised click via I2S amplifier, ESP32 only). |
+| `-D AUDIO_TICK_BCLK=N`, `AUDIO_TICK_WS=N`, `AUDIO_TICK_DOUT=N` | Default I2S pins (`41`, `42`, `40`). |
+| `-D AUDIO_TICK_PINS_BLOCKED` | Fix the I2S pins: no pin settings on the Config page. |
+| `-D AUDIO_MUTE_PIN=N` | A button to GND that mutes and unmutes all audio (`0` on the XH-S3E). Default `-1`, none. |
 
 ### Display & LEDs
 
@@ -43,13 +47,17 @@ The following build flags can be added to your environment's `build_flags` to cu
 | `-D OLED_SCL=N` | Set the default OLED I2C SCL pin (default `5`). Also exposed as a runtime pref unless `OLED_PINS_BLOCKED` is set. |
 | `-D OLED_PINS_BLOCKED=true` | Hide the OLED SDA/SCL pins from the runtime prefs UI. Use on builds with fixed hardware where the pins must not be reconfigured. |
 | `-D DISPLAY_TYPES=0xNNN` | The Display types built, bit n = type n (`0x201` = SSD1306 + 128x32). Default: every type the build supports, or only `OLED_TYPE` with `OLED_PINS_BLOCKED`. One type hides the Display type setting. The LED types (5-8) need `MAX7219_DISPLAY`. |
-| `-D OLED_FLIP=true` | Flip the OLED display vertically. |
-| `-D GEIGER_BLIPLED=N` | Set the count-flash LED pin. Defining this flag enables the dedicated count LED (used for visible per-pulse feedback alongside `GEIGER_PUSHBUTTON` long-press confirmations). When undefined, no dedicated LED is wired up. |
+| `-D OLED_FLIP=true` | Default for the display flip setting (`display.flip`, turns it 180 degrees). |
+| `-D GEIGER_BLIPLED=N` | A dedicated count LED on this pin, flashed on each count (`15` on ESPGeiger-HW). Without it counts flash the status LED, unless `DISABLE_INTERNAL_BLIP`. |
 | `-D GEIGER_NEOPIXEL` | Enable WS2812X NeoPixel status LED. |
 | `-D NEOPIXEL_PIN=N` | Set the NeoPixel data pin (default `15`). |
 | `-D GEIGER_PUSHBUTTON` | Enable push button for OLED page switching and display wake. |
 | `-D PUSHBUTTON_PIN=N` | Set the push button pin. Default `0` (BOOT) on ESP32, `-1` (off) on ESP8266; `base:esp32c3_main` sets `9`. |
-| `-D LED_SEND_RECEIVE=N` | Set the status LED pin (default `2`, `-1` on C3 and S3). |
+| `-D PUSHBUTTON_PIN2=N` | A second button that does the same as the first (`39` on the XH-S3E). Default `-1`, none. |
+| `-D BTN_PIN_BLOCKED` | Fix the button pin: no **Button pin** (`btn.pin`) setting. |
+| `-D LED_SEND_RECEIVE=N` | Set the status LED pin (default `2` on ESP8266 and ESP32, `-1` on C3, S2 and S3). |
+| `-D LED_PIN_BLOCKED` | Fix the status LED pin: no pin or polarity setting. Always on ESP8266. |
+| `-D NEOPIXEL_PIN_BLOCKED` | Fix the NeoPixel pin: no **Pin** setting. |
 
 ### Geiger Counter Type
 
@@ -99,6 +107,7 @@ build_flags =
 | `-D RXPIN_BLOCKED` | Prevent the RX pin from being changed via the web interface. |
 | `-D TXPIN_BLOCKED` | Prevent the TX pin from being changed via the web interface. |
 | `-D DISABLE_SERIALRX` | Disable the serial command interface on the hardware UART. |
+| `-D COUNT_SELFTEST` | At boot, pull the input low once as the detector would and check the count interrupt fires; the log says `GeigerPulse: Self test OK` or `FAILED`. For boards with an open-collector input stage. |
 
 ### Data Smoothing
 
@@ -113,7 +122,7 @@ The 1-minute CPM follows the [CPM Mode](/configuration/cpm-mode) setting.
 
 ### ESP32 Hardware Counter (PCNT)
 
-On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type geiger counters. This provides accurate counting without software interrupts. Pulse builds also carry the interrupt counter; the **Count with** setting picks one at boot.
+On ESP32, ESP32-S2 and ESP32-S3 (the C3 has none), the hardware pulse counter (PCNT) is used by default for pulse-type geiger counters: it counts in hardware, without an interrupt per pulse. Pulse builds also carry the interrupt counter; the **Count with** setting picks one at boot.
 
 | Flag | Description |
 |---|---|
@@ -122,15 +131,15 @@ On ESP32, the hardware pulse counter (PCNT) is used by default for pulse-type ge
 | `-D PCNT_FILTER=N` | Set the initial PCNT glitch filter value at compile time. Filters pulses shorter than N APB clock cycles. This can also be configured at runtime from the web interface. |
 | `-D PCNT_PULLUP_PIN` | Default the PCNT input to the internal pull-up instead of floating. For open-drain outputs. |
 | `-D PCNT_PULLDOWN_PIN` | Default the PCNT input to the internal pull-down instead of floating. For active-high modules without their own idle pull. |
-| `-D OTA_POLL_INTERVAL_MS=N` | How often to poll the ArduinoOTA UDP socket, in ms (default `100`). Shorter = faster OTA start response, more CPU cost. |
-| `-D MQTT_HASS_REFRESH_S=N` | How often to republish Home Assistant autodiscovery configs on MQTT reconnect, in seconds (default `3600` = 1h). `0` = publish on every reconnect (legacy behaviour). |
+| `-D NO_PCNT_ALIAS` | The image also carries the matching `_no_pcnt` env's name, so a device running that env takes this one on its Update page (`esp32_pulse`, `esp32s3_pulse`, `esp32_cajoe_iotgm`). |
 
 ### MQTT Options
 
 | Flag | Description |
 |---|---|
-| `-D MQTT_MEM_DEBUG` | Include additional memory statistics in the MQTT status JSON (free heap, max block, fragmentation). |
-| `-D DISABLE_MQTT_CPS` | Disable publishing the CPS topic to reduce MQTT traffic. |
+| `-D MQTT_MEM_DEBUG` | Include additional memory statistics in the MQTT status JSON: largest free block, and fragmentation on ESP8266 or lowest free heap on ESP32. |
+| `-D DISABLE_MQTT_CPS` | Leave out the legacy `stat/CPS` topic. `cps` stays in `tele/sensor`. |
+| `-D MQTT_HASS_REFRESH_S=N` | Seconds between Home Assistant discovery publishes while connected (default `3600`). A reconnect publishes them again only once this is due. |
 
 ### UDP / OSC Output
 
@@ -174,6 +183,8 @@ The HV codepath splits into two independent capabilities, gated separately so th
 | `-D GEIGERHW_DUTY=N` | Set the default HV PWM duty, out of 1023 (10-bit). Default `280`. Capped by `GEIGERHW_MAX_DUTY` (600 on ESPGeiger-HW). Requires `ESPG_HV`. |
 | `-D GEIGERHW_ADC_RATIO=N` | Set the ADC voltage divider ratio for HV reading (default `1035`). Requires `ESPG_HV_ADC`. |
 | `-D GEIGERHW_ADC_OFFSET=N` | Set the ADC offset for HV reading calibration (default `0`). Requires `ESPG_HV_ADC`. |
+| `-D GEIGERHW_MAX_V=N` | Top of the HV target setting, in volts (default `700`; `500` on ESPGeiger-HW). |
+| `-D GEIGERHW_OV_V=N` | Over-voltage cut-off in volts: HV is held off above it (default `0`, off; `530` on ESPGeiger-HW). The hidden `espghw.ov_v` pref can lower a build's cut-off, and sets one where the build has none. Requires `ESPG_HV_ADC`. |
 
 When `ESPG_HV` is defined without `ESPG_HV_ADC` (a board that drives HV via PWM but has no real feedback divider), the espghw prefs also show in the regular `/param` UI, the `/hv` page still exists but has no readout, and no `hv` field is emitted on any output.
 
@@ -183,7 +194,7 @@ Identifies a specific product family. Implies a known set of capability flags as
 
 | Flag | Implies | Description |
 |---|---|---|
-| `-D ESPGEIGER_HW` | `ESPG_HV`, `ESPG_HV_ADC`, `GEIGER_BLIPLED=15` (unless `LED_SEND_RECEIVE` is set: counts then flash that LED), board name `ESPG-HW` (`ESPG32-HW` on ESP32) | ESPGeiger-HW kit (HV generator with real ADC feedback divider, count LED on GPIO15). Add `GEIGER_MODEL_FIXED` yourself if the tube is fixed. |
+| `-D ESPGEIGER_HW` | `ESPG_HV`, `ESPG_HV_ADC`, `GEIGER_BLIPLED=15` (unless `LED_SEND_RECEIVE` is set: counts then flash that LED), board name `ESPG-HW`; ESP8266 only, an ESP32 build stops with an error | ESPGeiger-HW kit (HV generator with real ADC feedback divider, count LED on GPIO15). Add `GEIGER_MODEL_FIXED` yourself if the tube is fixed. |
 | `-D ESPGEIGER_LT` | board name `ESPG-LT` (`ESPG-LOG` with `GEIGER_SDCARD`) | Identify the build as an ESPGeiger Lite/Log device. |
 
 ### SD Card
@@ -202,9 +213,11 @@ Identifies a specific product family. Implies a known set of capability flags as
 | `-D DISABLE_INTERNAL_BLIP` | Disable the internal status LED blip on each detected pulse. |
 | `-D NTP_SERVER="server"` | Set the default NTP server (default `pool.ntp.org`). |
 | `-D NTP_TZ="tz"` | Default timezone as an Olson name, e.g. `Europe/London`. Default `Etc/UTC`; an unknown name runs as UTC. |
-| `-D RTC_CHIP` | Look for an RTC chip on the I2C bus on ESP8266 and ESP32 builds too (C3 and S3 builds with the bus always do). |
+| `-D RTC_CHIP` | Look for an RTC chip on the I2C bus on ESP8266 and classic ESP32 builds too (C3, S2 and S3 builds with the bus always do). |
 | `-D DISABLE_ENVSENSOR` | Leave out the environment sensor drivers. On builds without an OLED the I2C bus and RTC support go too, about 13 KB on an ESP8266. |
 | `-D DISABLE_LOG_TS` | No time stamp at the start of log lines. |
+| `-D CONSOLE_LINE_MAX=N` | Longest console command line, in characters (default `255`, the most). |
+| `-D OTA_POLL_INTERVAL_MS=N` | How often to poll the ArduinoOTA UDP socket, in ms (default `100`). Shorter = faster OTA start response, more CPU cost. |
 
 ### SdFat (SD card builds)
 
@@ -212,7 +225,7 @@ Applied globally in `[com-esp]` so they affect every SD-enabled build:
 
 | Flag | Description |
 |---|---|
-| `-D MAINTAIN_FREE_CLUSTER_COUNT=1` | Cache free-cluster count; `freeClusterCount()` becomes O(1) after first call. Eliminates multi-second "calculating free space" delay at boot and when the card looks full. |
+| `-D MAINTAIN_FREE_CLUSTER_COUNT=1` | SdFat keeps its free-cluster count up to date as it writes. ESPGeiger counts the FAT itself, in the background, at mount and when the card looks full. |
 | `-D SDFAT_FILE_TYPE=1` | FAT16/FAT32 only (no exFAT). Saves ~15-20 KB flash; we use FAT32 exclusively. |
 | `-D USE_LONG_FILE_NAMES=0` | Disable LFN support. Saves ~5 KB flash. All our filenames are 8.3-compliant (`YYYYMMDD.CSV`, `YYYYMM/`, `TEST.TMP`). |
 
@@ -226,7 +239,7 @@ Build environments are defined in `environments.ini`. Each environment extends a
 |---|---|---|
 | `base:esp32_main` | ESP32 | Base ESP32 build (esp32dev board). Bundles SSD1306 OLED support (auto-detected at boot). |
 | `base:esp32d1_main` | ESP32 | ESP32 with RXPIN set to GPIO23 |
-| `base:esp32s2_main` | ESP32-S2 | ESP32-S2 build (Lolin S2 Pico) |
+| `base:esp32s2_main` | ESP32-S2 | ESP32-S2 build (esp32-s2-saola-1 board, native USB). Bundles SSD1306 OLED support; defaults SDA=8 / SCL=9. |
 | `base:esp32s3_main` | ESP32-S3 | Base ESP32-S3 build (esp32-s3-devkitc-1 board). Bundles SSD1306 OLED support. |
 | `base:esp32c3_main` | ESP32-C3 | Base ESP32-C3 build (RISC-V, no PCNT). Bundles SSD1306 OLED support; defaults SDA=5 / SCL=6. |
 | `base:esp8266_main` | ESP8266 | Base ESP8266 build (NodeMCU v2) |
@@ -253,6 +266,7 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | `esp32c3_pulse` | ESP32-C3 | Pulse (interrupt) | RXPIN 4, NeoPixel pref, OLED auto-detected |
 | `esp32s3_pulse` | ESP32-S3 | Pulse (PCNT) | RXPIN 13, OLED auto-detected |
 | `esp32s3_pulse_no_pcnt` | ESP32-S3 | Pulse (interrupt) | RXPIN 13, defaults to interrupt; retired in 0.15 |
+| `esp32s2_pulse` | ESP32-S2 | Pulse (PCNT) | RXPIN 13, OLED auto-detected |
 | `esp32s3_audio_pulse` | ESP32-S3 | Pulse (PCNT) | I2S audio tick |
 | `esp32s3_audio_serial` | ESP32-S3 | Serial | I2S audio tick |
 | `xh_s3e_pulse` | ESP32-S3 (XH-S3E) | Pulse (PCNT) | RXPIN 13, OLED, NeoPixel, I2S audio tick, board pins fixed, counter pins settable |
@@ -266,9 +280,11 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | `esp8266oled_serial` | ESP8266 | Serial | OLED |
 | `esp32_serial` | ESP32 | Serial | Runtime-selectable serial type |
 | `esp32c3_serial` | ESP32-C3 | Serial | |
+| `esp32s2_serial` | ESP32-S2 | Serial | RXPIN 13, TXPIN 14 |
 | `esp32s3_serial` | ESP32-S3 | Serial | RXPIN 13, TXPIN 14 |
 | `esp32_udp` | ESP32 | UDP receiver | Tubeless receiver |
 | `esp32c3_udp` | ESP32-C3 | UDP receiver | Tubeless receiver |
+| `esp32s2_udp` | ESP32-S2 | UDP receiver | Tubeless receiver |
 | `esp32s3_udp` | ESP32-S3 | UDP receiver | Tubeless receiver |
 | `xh_s3e_udp` | ESP32-S3 (XH-S3E) | UDP receiver | Tubeless receiver, OLED, NeoPixel, I2S audio tick |
 | `esp8266_udp` | ESP8266 | UDP receiver | Tubeless receiver |
@@ -286,6 +302,7 @@ All ESP32 family envs below bundle SSD1306 OLED support (auto-detected at boot).
 | `esp8266_test` | ESP8266 | Internal counter | |
 | `esp8266oled_test` | ESP8266 | Internal counter | OLED |
 | `esp32_test` | ESP32 | Internal counter | OLED auto-detected |
+| `esp32s2_test` | ESP32-S2 | Internal counter | OLED auto-detected |
 | `esp32s3_test` | ESP32-S3 | Internal counter | OLED auto-detected |
 | `esp32c3_test` | ESP32-C3 | Internal counter | OLED auto-detected |
 | `xh_s3e_test` | ESP32-S3 (XH-S3E) | Internal counter | OLED, NeoPixel, I2S audio tick |

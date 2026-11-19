@@ -89,7 +89,7 @@ If the displayed voltage drifts noticeably when you reconnect the tube, that's n
 
 ## Generic HV Builds (esp8266_hv / esp32_hv)
 
-1. Flash `esp8266_hv` or `esp32_hv` and wire your boost circuit (transistor, inductor, diode, cap, feedback divider). See [Build Targets](/install/buildtargets#hv-builds). Fit a pull-down on the transistor's gate or base: the pin floats until the firmware drives it, all through boot and in safe mode.
+1. Flash `esp8266_hv` or `esp32_hv` and wire your boost circuit (transistor, inductor, diode, cap, feedback divider). See [Build Targets](/install/buildtargets#hv-builds). Fit a pull-down on the transistor's gate or base: the pin floats until the firmware drives it low, early in boot.
 2. HV starts **inactive**. On the [Config page](/configuration), System tab, **HV Hardware**, set **HV PWM pin** to the GPIO driving your transistor, save and **restart**.
 3. Open `/hv` to set frequency, duty and, after calibration, the target.
 4. Once calibrated, set a cut-off a little above your working voltage with `set espghw.ov_v <volts>`.
@@ -100,4 +100,4 @@ The feedback input is A0 on ESP8266 and GPIO 36 on ESP32.
 
 With `Target` above 0, the firmware moves duty by 1 step every 10 seconds when the average of the last 8 readings is outside a band around the target, up to **±5 steps** from your saved `duty`. The band is 2 ADC counts either side, about ±2 V on ESPGeiger-HW. Set `duty` so HV is already right with the tube connected and `Target = 0`; the trim only tracks drift.
 
-If the duty field shows `(trim +5)` or `(trim -5)`, the trim has hit its limit: move `duty` by hand in that direction until the trim sits near 0. The trim is kept over a restart. It resets on a power cut, an over-voltage cut-off, and any duty, frequency, target or ratio change. On boards with HV feedback, when the trim or the duty is at its limit and HV is still under the target for 30 seconds, `/hv` shows *at its limit, still under target: raise duty or lower target*.
+If the duty field shows `(trim +5)` or `(trim -5)`, the trim has hit its limit: move `duty` by hand in that direction until the trim sits near 0. The trim is kept over a restart. It resets on a power cut, an over-voltage cut-off, and any duty, frequency, target or ratio change.

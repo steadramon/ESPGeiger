@@ -32,7 +32,7 @@ The pulse target is the most widely compatible build and works with all Pulse-ty
 | `esp32s3_pulse` | ESP32-S3 | 13 | yes | PCNT | As `esp32_pulse` |
 | `esp32s3_pulse_no_pcnt` | ESP32-S3 | 13 | yes | interrupt, PCNT on the Input tab | As `esp32_pulse_no_pcnt` |
 | `esp32c3_pulse` | ESP32-C3 | 4 | yes | interrupt | |
-| `esp32s2_pulse` | ESP32-S2 | 13 | yes | PCNT | |
+| `esp32s2_pulse` | ESP32-S2 | 13 | yes | PCNT | As `esp32_pulse`. No `_no_pcnt` build: switch with **Count with** |
 
 <!-- /gen -->
 
@@ -140,7 +140,7 @@ UDP receiver builds turn an ESP into a tubeless "mirror" device that listens for
 | `esp32_udp` | ESP32 | yes | ESP32 receiver. SSD1306 OLED auto-detected at boot; more heap headroom than ESP8266, cleaner choice for fleet aggregator (sum mode). |
 | `esp32s3_udp` | ESP32-S3 | yes | ESP32-S3 receiver with bundled OLED. |
 | `esp32c3_udp` | ESP32-C3 | yes | ESP32-C3 receiver with bundled OLED. |
-| `esp32s2_udp` | ESP32-S2 | yes | |
+| `esp32s2_udp` | ESP32-S2 | yes | ESP32-S2 receiver with bundled OLED. |
 
 <!-- /gen -->
 

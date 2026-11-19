@@ -67,9 +67,9 @@ of pulses behind the reading. Quick reference:
 | 1000+ | ±6% | Very solid |
 
 At background rates, collecting ~256 pulses takes around 8 minutes;
-at higher rates it happens much faster. Live ring and Fixed 60s tend to
-give the most solid readings at low rates because they widen the
-window to collect more pulses.
+at higher rates it happens much faster. Live ring gives the most solid
+reading at low rates, as its window widens to hold
+<!-- gen:const PULSE_RING_SIZE -->256<!-- /gen --> pulses.
 
 Details of the calculations, rate limits and memory use are on the [CPM mode internals](/dev/cpm-mode-internals) developer page.
 

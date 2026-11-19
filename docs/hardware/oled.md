@@ -12,13 +12,14 @@ ESPGeiger supports cheap, widely-available I2C OLED panels for live readout of C
 
 ## Supported chips
 
-Set the chip type from **Config → Display → Display type** (or build flag `-DOLED_TYPE=N`). The first three share the same 128×64 pixel resolution and I2C interface; they differ only in the panel driver IC.
+Set the chip type from **Config > Display > Display type** (or build flag `-DOLED_TYPE=N`). The first three share the same 128×64 pixel resolution and I2C interface; they differ only in the panel driver IC.
 
 | ID | Chip | Common form factor | Notes |
 |---|---|---|---|
 | `0` | **SSD1306** | 0.96" 128×64 | Default. The cheapest and most common. Tiny but very readable. |
 | `1` | **SH1106** | 1.3" 128×64 | Larger panel, slightly nicer pixels. Bus address and command set differ subtly from SSD1306 - pick this if you bought a "1.3 inch OLED" and the screen looks garbled with the default setting. |
 | `2` | **SSD1309** | 2.42" 128×64 | Big, clearly readable across a room. Less common, slightly more expensive. Same protocol as SSD1306 - the firmware drives it the same way. |
+| `3`, `4` | **Tiny SSD1306**, **Tiny SH1106** | 0.42" 72x40 | ESP32 builds only. A smaller layout for the tiny panels. |
 | `9` | **SSD1306 128x32** | 0.91" 128×32 | Every OLED build, ESP8266 and ESP32, shown as `128x32` in the list. Half the height, so a smaller layout: CPM, µSv/h, status icons and a short graph. The Lolin S2 Pico has one built in (its reset is GPIO 18, set **Reset pin** to 18). |
 
 If a module arrives and the display looks wrong (wrong characters, half the screen missing, snow), try the other chip IDs - it's the most common "this OLED doesn't work" cause.
@@ -27,7 +28,7 @@ A build can pick which types it carries with `-DDISPLAY_TYPES`, a bitmask of the
 
 ## Connection
 
-Four pins: VCC, GND, SCL, SDA. The firmware default is **SDA = GPIO 4 (D2)**, **SCL = GPIO 5 (D1)** on ESP8266, ESP32 and generic ESP32-S3 builds; ESP32-C3 builds use SDA = 5, SCL = 6. Kits have them fixed. These are configurable per build via `-DOLED_SDA=N`/`-DOLED_SCL=N` build flags and most builds also expose them as runtime prefs on the Config page (the exception is fixed-hardware builds like `espgeigerhw`, where the pins are blocked).
+Four pins: VCC, GND, SCL, SDA. The firmware default is **SDA = GPIO 4 (D2)**, **SCL = GPIO 5 (D1)** on ESP8266, ESP32 and generic ESP32-S3 builds; ESP32-C3 builds use SDA = 5, SCL = 6, and ESP32-S2 builds SDA = 8, SCL = 9. Kits have them fixed. These are configurable per build via `-DOLED_SDA=N`/`-DOLED_SCL=N` build flags and most builds also expose them in the **I2C Bus** section of the Config page (the exception is fixed-hardware builds like `espgeigerhw`, where the pins are blocked).
 
 Power: 3.3 V (most modules work with either 3.3 V or 5 V VCC, since they have onboard regulators; but 3.3 V is safer and matches the ESP).
 

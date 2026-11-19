@@ -38,7 +38,7 @@ HV, Temperature, Humidity and Pressure show `unknown` in Home Assistant when the
 
 ## Threshold alerts (binary sensors)
 
-Triggered when CPM crosses the configured warning / alert thresholds. Consumed via `value_template` from `tele/sensor` JSON. Good targets for HA automations (notifications, lights, sirens).
+Read from the `tele/sensor` JSON (Serial Connected from `tele/status`). Warning and Alert follow the configured warning / alert thresholds. Good targets for HA automations (notifications, lights, sirens).
 
 <!-- gen:ha binary -->
 

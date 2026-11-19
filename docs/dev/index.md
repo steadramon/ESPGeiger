@@ -57,7 +57,7 @@ To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX 
 Notes:
 
 - Idle line level is LOW; each simulated count is a ~500µs HIGH pulse. The receiver counts on the falling edge at pulse end. This is inverted-polarity from a real Geiger tube (idles HIGH, pulses LOW) but the count is the same.
-- `GEIGER_COUNT_TXPULSE` is set on `esp8266_testpulse`, `esp32_testpulseint` and the ESPGeiger Lite/Log TX test builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX↔RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 200µs) drops the duplicate edge that arrives immediately after.
+- `GEIGER_COUNT_TXPULSE` is set on `esp8266_testpulse`, `esp32_testpulseint` and the ESPGeiger Lite/Log TX test builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX-RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 200µs) drops the duplicate edge that arrives immediately after.
 
 ### Pushing the rate ceiling
 
@@ -68,7 +68,7 @@ Default settings give a practical ceiling of roughly 120k CPM on both sides:
 
 To stress-test beyond 120k CPM:
 
-1. Lower `pulse_width_us` on the transmitting device (e.g. 100µs → ~600k CPM ceiling).
+1. Lower `pulse_width_us` on the transmitting device (e.g. 100µs gives a ~600k CPM ceiling).
 2. Lower `debounce` on the receiving device to match or beat the new pulse cadence.
 3. Optionally set `GEIGER_TEST_FIXEDCPM`, or pin the rate: `GET /cpm?v=250` (two decimals allowed) or the console command `target 250`. The rotation stops until the next restart, so you're testing a specific rate rather than the rotating 30/60/100/120.
 

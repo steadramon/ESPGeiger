@@ -45,7 +45,7 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 
 ```json
 {
-  "ver": "0.8.0",
+  "ver": "0.14.0",
   "git": "06a2d9d",
   "env": "espgeigerlog",
   "date": "Apr 15 2026 12:34:56",
@@ -65,11 +65,14 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
   "phy": "11n",
   "sleep": "Modem",
   "auto": true,
+  "wifi": "online",
   "g_mod": "genpulse",
   "g_type": "pulse",
   "g_test": false,
-  "g_pcnt": true,
+  "g_pcnt": false,
   "fl": 127,
+  "health": "ok",
+  "health_boot": "ok",
   "modules": {"sys":{"peak":412},"net":{"peak":96},"wifi":{"peak":1840},"counter":{"peak":58},"sdcard":{"peak":14211,"stalls":2},"mqtt":{"peak":5380}}
 }
 ```
@@ -92,12 +95,16 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `gw`, `sn`, `bssid` | Gateway, subnet mask and the BSSID of the access point it's joined to |
 | `tx` | WiFi transmit power in dBm, `null` if the core doesn't report it |
 | `phy`, `sleep`, `auto` | WiFi PHY mode, radio sleep mode, and whether WiFi auto-reconnect is on |
+| `wifi` | WiFi state: `boot`, `joining`, `portal`, `online`, `link_lost`, `offline`, `hotspot`, `ap_mode` or `off` |
 | `g_mod` | Geiger model name. On serial builds this identifies the protocol (`GC10`, `GC10Next`, `MightyOhm`, `ESPG`). |
 | `g_type` | Counter input type: `"pulse"`, `"serial"`, or `"none"` (UDP receiver and internal test builds) |
 | `g_test` | `true` on test / simulation builds |
 | `g_pcnt` | `true` if pulses are counted by the ESP32 PCNT hardware counter |
 | `fl` | Feature flags, the same bits WebAPI sends as `fl` |
+| `board` | Board revision, only on kits that report one |
+| `health`, `health_boot` | [Health](/output/integrations#json-endpoint) now, and every word that has been on since boot |
 | `modules` | Every module compiled into this firmware, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`). Each has `peak`, its longest recent loop in microseconds (halved every hour, so a one-off fades and a repeating one stays; above 32 ms it's to the millisecond, up to 32 s; on ESP32 it can include time other tasks such as WiFi held the loop, so it can read higher than the module's own work), and `stalls`, how many of its loops took over 10 ms since boot (stops at 255, left out when 0) |
+| `trace` | ESP32, after a crash: the last module runs before it, `["name", -ms]`, ms before the last one |
 
 ## `/json?raw=1`
 
@@ -111,5 +118,6 @@ By default `mem` is lightly smoothed and the device-load fields are left out to 
 | `frag` | Heap fragmentation, percent |
 | `lfb` | Largest contiguous free block in bytes |
 | `lfblow` | Largest-free-block low-water mark since boot, in bytes |
+| `cs_live` | CPS from the recent pulse times, `(N-1) / T` from the oldest to now; left out under 2 pulses |
 
 `lfb` / `lfblow` are the honest measure of memory health: free heap can look fine while fragmentation shrinks the largest block that can be allocated.

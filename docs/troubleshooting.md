@@ -37,8 +37,9 @@ before anything else.
 
 The device crashed 3 times in a row soon after boot, or safe mode was asked
 for. Counting and outputs are stopped, but the web pages, Config and Update
-still work. See [Safe Mode](/configuration/safemode) for what to do. If the
-crashes are brownouts, sort out the power supply first (above).
+still work. See [Safe Mode](/configuration/safemode) for what to do.
+Brownouts don't count toward it: a device with a poor supply keeps
+restarting instead (above).
 
 ## Device is online but shows 0 CPM
 
@@ -57,6 +58,9 @@ are not reaching the board:
 - **Pulse polarity or level.** Counter boards differ in whether the pulse
   output idles high or low. If everything is wired and powered but silent,
   check the counting board's output against what your build expects.
+- **PCNT pull.** On ESP32 boards counting with Hardware (PCNT), a pull-up
+  can hold some modules' output high so nothing counts. **PCNT pull** on the
+  Input tab is None by default; see [PCNT](/hardware/esphardware#pcnt).
 
 The warning clears itself the moment the first count arrives.
 
@@ -82,9 +86,17 @@ keep running while counting is paused.
 
 This check is on when pulses are counted with an interrupt: all ESP8266 and
 ESP32-C3 pulse builds, and ESP32 pulse builds set to **Count with** Interrupt
-(the default on the `no_pcnt` builds, retired in 0.15). Counting with
+(the default on the `no_pcnt` builds). Counting with
 Hardware (PCNT) drops any second over <!-- gen:const GeigerInput::STORM_COUNTS comma -->10,000<!-- /gen --> counts instead and logs
 `GeigerPulse: PCNT storm (N/s) - dropped`.
+
+## Health is not "ok"
+
+The `health` field in `/json` and MQTT (Home Assistant's **Health**) names
+what is wrong: `silent` (no counts, above), `storm` (above), `chatter` (the
+input rings, the log says `GeigerPulse: Tube chatter, check tube/HV/wiring`),
+`no_input` (a serial or UDP source not reporting), the HV words, then the
+device's own. Each is listed under [the JSON fields](/output/integrations).
 
 ## WiFi keeps dropping
 

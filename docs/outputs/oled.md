@@ -10,6 +10,10 @@ nav_order: 10
 
 ![Img](../img/OLEDExample.png)
 
+# Display type
+
+OLED builds drive 128x64 panels (SSD1306, SH1106 1.3in, SSD1309), 128x32 SSD1306 panels and, on ESP32 builds, 72x40 "Tiny" panels. Pick yours with **Display type** (`display.type`, `9` for 128x32) on the [Config page](/configuration#display-settings-oled-builds) and restart. The list shows only the types the build has; a build with one type has no setting.
+
 # Display behaviour
 
 Three settings in the **Display** section of the [Config page](/configuration#display-settings-oled-builds) control when the OLED is on:
@@ -24,9 +28,9 @@ On builds **without** a push button, only the schedule applies.
 
 On builds **with** a push button, the resolution order is:
 
-1. Long-press override active → display always on.
-2. Otherwise, if Idle time > 0 → on for Idle time seconds after each tap.
-3. Otherwise (Idle time = 0) → follow On/Off time schedule, with a 30-second wake window after any tap so you can check readings during off-hours.
+1. Long-press override active: display always on.
+2. Otherwise, if Idle time > 0: on for Idle time seconds after each tap.
+3. Otherwise (Idle time = 0): follow the On/Off time schedule, with a 30-second wake window after any tap so you can check readings during off-hours.
 
 # Push-button operations
 
@@ -38,7 +42,7 @@ On builds with an SD card or HV, a fault puts one line on the screen: *SD card e
 
 ## Long press
 
-Toggles the always-on override. Long-press once to keep the display on; long-press again to return to the Timeout and schedule.
+Toggles the always-on override. Long-press once to keep the display on; long-press again to return to the Idle time and schedule.
 
 The screen shows **Screen always on** or **Screen auto off** for a moment. The status LED gives one long pulse for always on, two short blinks for auto off.
 

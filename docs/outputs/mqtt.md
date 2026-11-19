@@ -21,7 +21,7 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 | Topic | Description | Publish Interval Default |
 |---|---|---|
 | `ESPGeiger-<device_id>/tele/lwt` | Last Will and Testament. `Online` on connect, `Offline` via LWT on disconnect. Retained. A settings save sends `Offline` before it reconnects, so a rejoin the broker refuses still reads `Offline`. | event |
-| `ESPGeiger-<device_id>/tele/sensor` | Radiation measurements bundle (CPM, uSv, CPS, CPM5, CPM15, HV, warn, alert). | 60 s |
+| `ESPGeiger-<device_id>/tele/sensor` | Radiation measurements bundle (CPM, CPM5, CPM15, uSv, CPS, tube, warn, alert, health; HV and environment readings where fitted). | 60 s |
 | `ESPGeiger-<device_id>/tele/status` | Device state + diagnostics (time, uptime, IP, RSSI, counts, load metrics, memory, serial health on serial builds). | 60 s |
 
 ### Event topics
@@ -75,14 +75,14 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 ## Example `tele/status` JSON
 
 ```json
-{"time":"2026-04-18T14:52:52Z","ut":120,"board":"ESP-12E","model":"ESPGeiger-Log","ssid":"MyWiFi","ip":"192.168.1.166","rssi":-37,"c_total":165,"tick":953,"t_max":4870,"lps":58733,"free_mem":16928}
+{"time":"2026-04-18T14:52:52Z","ut":120,"board":"ESPG-LOG","model":"ESPGeiger-Log","ssid":"MyWiFi","ip":"192.168.1.166","rssi":-37,"c_total":165,"tick":953,"t_max":4870,"lps":58733,"free_mem":16928}
 ```
 
 | Field | Description |
 |---|---|
 | `time` | Current device time (ISO 8601 UTC, with `Z` suffix) |
 | `ut` | Uptime in seconds |
-| `board` | ESP chip model |
+| `board` | Board name on ESPGeiger kits (`ESPG-HW`, `ESPG-LOG`, `ESPG-LT`), else the chip (`ESP8266`, `ESP32-S3` etc.) |
 | `model` | Configured Geiger model |
 | `ssid` | Connected WiFi SSID |
 | `ip` | Device IP address |
@@ -92,5 +92,5 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `t_max` | Peak `tick` in last 60 s |
 | `lps` | Loop iterations per second |
 | `free_mem` | Free heap (bytes) |
-| `cpu_temp` | Chip die temperature (°C), not ambient. ESP32 only. |
+| `cpu_temp` | Chip die temperature (°C), not ambient. ESP32 family only. |
 | `ser_ok` | `1` when the external serial counter has sent a valid line within the last 60 s, `0` otherwise. Serial builds only - absent from pulse builds. |

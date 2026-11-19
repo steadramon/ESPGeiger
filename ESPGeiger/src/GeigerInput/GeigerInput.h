@@ -60,6 +60,7 @@
 #define PCNT_PULL_FLOATING 0
 #define PCNT_PULL_UP       1
 #define PCNT_PULL_DOWN     2
+// Floating by default, a pull-up holds a Cajoe's INT high (#2, #21)
 #if defined(PCNT_PULLUP_PIN)
 #define PCNT_PIN_PULL_DEFAULT PCNT_PULL_UP
 #elif defined(PCNT_PULLDOWN_PIN)
@@ -74,12 +75,12 @@
 #define PCNT_SELECTABLE
 #endif
 
-// test pulses count in loop(), pcnt is polled
+// Real pulse builds count in the ISR. Test pulses count in loop() and pcnt is polled
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE) && !defined(USE_PCNT)
 #define GEIGER_COUNTS_IN_ISR
 #endif
 
-// test counts made in code: no rx row, nothing held (a board's wired pin still is)
+// Test counts are made in code, so no rx row and no pin held (a board's wired pin still is)
 #if GEIGER_TYPE == GEIGER_TYPE_TEST && !defined(RXPIN_BLOCKED)
   #define RXPIN_BLOCKED
   #define RXPIN_UNUSED
@@ -145,7 +146,7 @@ class GeigerInput {
     virtual ~GeigerInput() {};
     virtual void loop() {}
     virtual void secondTicker();
-    // counts since the last call, from the second tick
+    // Counts since the last call, called from the second tick
     virtual int collect();
     virtual void begin();
     void set_debounce(int debounce) {
@@ -178,9 +179,9 @@ class GeigerInput {
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
     static void CORIUM_ISR_ATTR countInterrupt();
-    // main code only, interrupts off
+    // main code only, with interrupts off
     static void countAt(unsigned long us);
-    // a second over it is junk, ~600x any real tube
+    // A second over this is junk, ~600x any real tube
     static constexpr uint32_t STORM_COUNTS = 10000;
     // once a second, parks the pin over STORM_COUNTS isr/s
     void checkIsrStorm();
@@ -188,19 +189,19 @@ class GeigerInput {
     void restartIsr();
     void setCounter(int val, bool update = true);
     void setLastBlip();
-    // inline gate: posted, or the poll time came
+    // Inline gate, true when posted or the poll time came
 #ifdef GEIGER_COUNTS_IN_ISR
     bool due(uint32_t) const { return false; }   // isr counts, nothing to poll
 #else
     bool due(uint32_t now) const {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-      // only test timers post, the atomic costs a memw a pass
+      // Only test timers post, so only test builds pay a memw a pass for the atomic
       if (s_posted.load(std::memory_order_relaxed)) return true;
 #endif
       return _polls && corium::reached(now, _poll_at);
     }
 #endif
-    // test stamp, pulse or retarget; loop() takes it first, collect() sweeps the rest
+    // Set on a test stamp, pulse or retarget. loop() takes it first, collect() sweeps the rest
     static void post() { s_posted.store(true, std::memory_order_relaxed); }
     static void take() { s_posted.store(false, std::memory_order_relaxed); }
   protected:

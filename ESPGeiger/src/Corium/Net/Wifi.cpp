@@ -60,26 +60,25 @@ static const size_t AP_PASS_MIN = 8;   // wpa2
 
 static_assert(WIFI_SSID_MAX == EGPORTAL_SSID_MAX, "one ssid max");
 
-// save to WiFi.begin() only
+// Held creds, only kept from the save to WiFi.begin()
 struct Creds { char ssid[EGPORTAL_SSID_MAX + 1]; char pass[EGPORTAL_PASS_MAX + 1]; };
 static Creds* s_creds = nullptr;
 
 static corium::Wifi::State s_state = corium::Wifi::BOOT;
 static bool s_reset = false;
-static bool s_saved = false;   // restart once the page is out
+static bool s_saved = false;   // restart once the page has been sent
 
-// one test at a time
+// Join test state, one test at a time
 static uint8_t s_join = EGPortal::JOIN_IDLE;
-static uint8_t s_fail = EGPortal::JOIN_IDLE;   // what BACK ends with
+static uint8_t s_fail = EGPortal::JOIN_IDLE;   // result the BACK step ends with
 static corium::Deadline s_join_due;
 static uint32_t s_join_ms = 0;
-static bool s_left = false;   // the status lags begin()
-static Creds* s_back = nullptr;   // the network left, test only
+static bool s_left = false;   // left the old network, the status lags begin()
+static Creds* s_back = nullptr;   // network the test left, to go back to
 static char s_test_ssid[WIFI_SSID_MAX + 1];
-static const uint32_t PORTAL_DONE_MS = 3000;   // Improv's url out first
 static const uint32_t PAGE_OUT_MS = 1200;
 static const uint32_t TEST_STEP_MS = 200;
-static corium::Deadline s_rebegin;   // no sdk retries, one more begin() half way
+static corium::Deadline s_rebegin;   // the SDK doesn't retry, so one more begin() half way through
 #ifdef ESP32
 static volatile uint8_t s_reason = 0;   // event task writes it
 static bool s_hooked = false;
@@ -120,7 +119,7 @@ corium::Wifi::State corium::Wifi::state() { return s_state; }
 
 const char* corium::Wifi::stateName(State s) { return (const char*)pgm_read_ptr(&STATE_NAMES[s]); }
 
-// safe from the nested boot console
+// Safe to call from the nested boot console
 void corium::Wifi::go(State to, PGM_P why) {
   corium::Log::debug(PSTR("WiFi: %s -> %s (%s)"), stateName(s_state), stateName(to), why);
   s_state = to;
@@ -148,7 +147,7 @@ static bool wait_wifi(uint32_t timeout_ms) {
     if (WiFi.status() == WL_CONNECTED) {
       IPAddress ipa = WiFi.localIP();
       corium::Log::console(PSTR("WiFi: IP: %u.%u.%u.%u"),
-                   ipa[0], ipa[1], ipa[2], ipa[3]);
+                           ipa[0], ipa[1], ipa[2], ipa[3]);
       return true;
     }
     console.pollBoot();
@@ -161,12 +160,12 @@ static bool wait_wifi(uint32_t timeout_ms) {
 bool corium::Wifi::clearSavedCreds() {
 #ifdef ESP8266
   WiFi.persistent(true);
-  (void)WiFi.disconnect(true);    // also clears creds, any mode; read back below
+  (void)WiFi.disconnect(true);    // also clears the creds in any mode, checked below
   WiFi.persistent(false);
   struct station_config c;
   bool ok = wifi_station_get_config_default(&c) && !c.ssid[0];
 #else
-  // disconnect(true, true) erases only with STA up, this in any mode
+  // disconnect(true, true) only erases with STA up, eraseAP() works in any mode
   bool ok = WiFi.eraseAP();
 #endif
   ok &= corium::Fs::remove(WIFI_BACKUP_PATH);
@@ -201,7 +200,7 @@ bool corium::Wifi::hasSavedCreds() {
 
 CORIUM_NODISCARD static bool write_backup(const Creds& c) {
   if (!corium::Fs::begin()) return false;
-  // 0, len, ssid, len, pass; an ssid can hold \n
+  // 0, len, ssid, len, pass. An ssid can have a \n in it
   uint8_t raw[3 + EGPORTAL_SSID_MAX + EGPORTAL_PASS_MAX];
   uint8_t sl = strlen(c.ssid), pl = strlen(c.pass);
   raw[0] = 0;
@@ -232,7 +231,7 @@ static uint8_t read_lines(File& f, char* buf, size_t cap,
   return splitLines(buf, fields, count);
 }
 
-// 0.13 wrote SSID\nPSK\n, never a 0 first
+// 0.13 wrote SSID\nPSK\n, which never starts with a 0
 static void split_backup(char* raw, size_t n, char** fields) {
   if (n == 0 || raw[0] != 0) {
     splitLines(raw, fields, 2);
@@ -264,19 +263,19 @@ static bool restore_backup() {
   split_backup(raw, n, fields);
   const char* ssid = fields[0];
   const char* pass = fields[1];
-  // none, or one no join takes (a bad file)
+  // Empty, or too long to ever join (a bad file)
   if (!*ssid || strlen(ssid) > EGPORTAL_SSID_MAX || strlen(pass) > EGPORTAL_PASS_MAX) {
-    (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // stays = the same false next boot
+    (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // else it fails the same way next boot
     return false;
   }
   corium::Log::console(PSTR("WiFi: Restoring backup creds (ssid=%s)"), ssid);
-  // joined first, flash after: a dead backup never replaces the saved
+  // Join first, flash after, so a dead backup never replaces the saved creds
   begin_ram(ssid, pass);
   if (!wait_wifi(JOIN_WAIT_MS)) return false;
   if (save_creds()) {
-    (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // the 5 min stable clear tries again
+    (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // if this fails the 5 min stable clear tries again
   } else {
-    // kept, the next boot tries again
+    // backup kept, the next boot tries again
     corium::Log::console(PSTR("WiFi: Backup creds NOT saved"));
     corium::Wifi::backupGraceDone = true;
   }
@@ -287,7 +286,7 @@ static bool restore_backup() {
 // 5 IPs + newlines
 #define NET_LINES_MAX 96
 
-// the backup file's lines and putNet's fields, in this order
+// Backup file lines and putNet() fields are in this order
 static const char* const NET_KEYS[] PROGMEM = {
   corium::K_STATIC_IP, corium::K_IP, corium::K_GW, corium::K_SN, corium::K_DNS,
 };
@@ -311,7 +310,7 @@ bool corium::Wifi::putNet(const char* const* fields) {
 
 bool corium::Wifi::saveNetBackup() {
   if (!corium::Fs::begin()) return false;
-  // keep last good
+  // keep the last good one
   if (corium::Fs::exists(NET_BACKUP_PATH)) return true;
   char raw[NET_LINES_MAX];
   net_lines(raw, sizeof(raw));
@@ -321,7 +320,7 @@ bool corium::Wifi::saveNetBackup() {
 bool corium::Wifi::probeReachability() {
   IPAddress ip;
   const char* host = corium::Prefs::getString("ntp", corium::K_SERVER);
-  // an ip skips dns, so no test
+  // An IP skips DNS so it tests nothing, use the default server
   if (!*host || ip.fromString(host)) host = NTP_SERVER;
   return WiFi.hostByName(host, ip);
 }
@@ -336,16 +335,16 @@ bool corium::Wifi::restoreNetBackup() {
   char cur[NET_LINES_MAX];
   net_lines(cur, sizeof(cur));
   if (!corium::Wifi::putNet(fields) || !corium::Prefs::commit()) {
-    // back to what runs
+    // Put back what's running
     splitLines(cur, fields, NET_N);
-    (void)corium::Wifi::putNet(fields);   // the running values, they fit
+    (void)corium::Wifi::putNet(fields);   // running values, they always fit
     return false;
   }
-  (void)corium::Fs::remove(NET_BACKUP_PATH);   // the 5 min stable clear tries again
+  (void)corium::Fs::remove(NET_BACKUP_PATH);   // if this fails the 5 min stable clear tries again
   return true;
 }
 
-// stays = the 5 min stable clear tries again
+// If it can't be removed the 5 min stable clear tries again
 void corium::Wifi::dropNetBackup() { (void)corium::Fs::remove(NET_BACKUP_PATH); }
 
 // ip, gw, sn into a[3]
@@ -372,7 +371,7 @@ static bool parse_static(const char* ip, const char* gw, const char* sn, IPAddre
 }
 
 bool corium::Wifi::validateStatic(const char* ip, const char* gw, const char* sn,
-                          char* err, size_t cap) {
+                                  char* err, size_t cap) {
   IPAddress a[3];
   return parse_static(ip, gw, sn, a, err, cap);
 }
@@ -392,13 +391,13 @@ bool corium::Wifi::applyStaticConfig() {
     const IPAddress& sna = a[2];
     IPAddress dnsa;
     if (!dnsa.fromString(dns)) dnsa = gwa;
-    // both cores keep it for the boot, begin() then skips dhcp
+    // Both cores keep this for the boot, begin() then skips DHCP
     if (WiFi.config(ipa, gwa, sna, dnsa)) {
       corium::Log::console(PSTR("WiFi: Static %u.%u.%u.%u gw=%u.%u.%u.%u sn=%u.%u.%u.%u dns=%u.%u.%u.%u"),
-                   ipa[0], ipa[1], ipa[2], ipa[3],
-                   gwa[0], gwa[1], gwa[2], gwa[3],
-                   sna[0], sna[1], sna[2], sna[3],
-                   dnsa[0], dnsa[1], dnsa[2], dnsa[3]);
+                           ipa[0], ipa[1], ipa[2], ipa[3],
+                           gwa[0], gwa[1], gwa[2], gwa[3],
+                           sna[0], sna[1], sna[2], sna[3],
+                           dnsa[0], dnsa[1], dnsa[2], dnsa[3]);
       return true;
     }
     why = PSTR("not applied");
@@ -407,10 +406,10 @@ bool corium::Wifi::applyStaticConfig() {
   return false;
 }
 
-// open = "", not nullptr
+// Open network = "", not nullptr
 corium::Wifi::Hold corium::Wifi::holdCreds(const char* ssid, const char* pass) {
   if (!ssid || !pass) return HOLD_BAD;
-  // a test's, or /wifisave's till its restart
+  // already held by a test, or by /wifisave until its restart
   if (s_creds) return HOLD_BUSY;
   size_t sl = strlen(ssid), pl = strlen(pass);
   if (sl > EGPORTAL_SSID_MAX || pl > EGPORTAL_PASS_MAX) return HOLD_BAD;
@@ -437,7 +436,7 @@ void corium::Wifi::dropHeld() {
 
 // Join test
 
-// RAM only, flash keeps the saved network
+// RAM only, flash keeps the saved network.
 static void begin_ram(const char* ssid, const char* pass) {
 #ifdef ESP32
   WiFi.enableSTA(true);   // set_storage needs the radio up, wifi.mode 1 never started it
@@ -445,10 +444,10 @@ static void begin_ram(const char* ssid, const char* pass) {
 #else
   WiFi.persistent(false);
 #endif
-  (void)WiFi.begin(ssid, pass);   // the step reads the status
+  (void)WiFi.begin(ssid, pass);   // testStep() reads the status
 }
 
-// the running config to flash; begin() would connect again or write nothing
+// Write the running config to flash. begin() would connect again or write nothing
 CORIUM_NODISCARD static bool save_creds() {
 #ifdef ESP32
   wifi_config_t c = {};
@@ -462,15 +461,15 @@ CORIUM_NODISCARD static bool save_creds() {
 }
 
 #ifdef ESP32
-// event task, a leave never hides a real reason
+// Runs on the event task. A plain leave never overwrites a real reason
 static void on_drop(arduino_event_t* e) {
   const wifi_event_sta_disconnected_t& d = e->event_info.wifi_sta_disconnected;
-  // the network before's, queued ahead of the test
+  // skip a drop from the previous network, queued before the test
   if (d.ssid_len && (d.ssid_len != strlen(s_test_ssid) || memcmp(d.ssid, s_test_ssid, d.ssid_len))) return;
   if (d.reason != WIFI_REASON_ASSOC_LEAVE || !s_reason) s_reason = d.reason;
 }
 
-// status alone can't name a wrong password
+// Status alone can't tell a wrong password, so use the disconnect reason
 static uint8_t why(uint8_t reason) {
   switch (reason) {
     case 0:
@@ -484,9 +483,9 @@ static uint8_t why(uint8_t reason) {
   }
 }
 
-// a stale status lingers, the reason decides
+// The status can stay stale for a while, the reason decides
 static uint8_t join_result(uint32_t now) {
-  uint8_t reason = s_reason;   // before the status, the core sets that first
+  uint8_t reason = s_reason;   // read before the status, the core sets the reason first
   wl_status_t st = WiFi.status();
   bool up = st == WL_CONNECTED;
   if (reason || !up) s_left = true;
@@ -534,7 +533,7 @@ static void end_test() {
   free(s_back);
   s_back = nullptr;
   s_join_due.clear();
-  WiFi.setAutoReconnect(true);   // esp32 store stays RAM, only a save writes NVS
+  WiFi.setAutoReconnect(true);   // esp32 storage stays RAM, only a save writes NVS
 }
 
 static PGM_P fail_text(uint8_t r) {
@@ -566,7 +565,7 @@ size_t corium::Wifi::lastTry(char* buf, size_t cap) {
 static void test_failed(uint8_t r, uint32_t now) {
   if (r == EGPortal::JOIN_NO_REPLY) corium::Log::console(PSTR("WiFi: Join test: no reply in %u s"), (unsigned)(s_join_ms / 1000));
   else corium::Log::console(PSTR("WiFi: Join test: %s"), fail_text(r));
-  // no erase; AP mode drops the STA again
+  // No erase. In AP mode this drops the STA again
   (void)WiFi.disconnect(corium::Wifi::ap, false);
   if (!s_back) {
     s_join = r;
@@ -582,12 +581,12 @@ static void test_failed(uint8_t r, uint32_t now) {
 static void test_joined() {
   bool saved = save_creds();
   corium::Log::console(PSTR("WiFi: Join test: joined, creds %ssaved"), saved ? PSTR("") : PSTR("NOT "));
-  if (saved) (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // tested beats a revert
+  if (saved) (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // creds that just joined beat the old backup
   s_join = saved ? EGPortal::JOIN_OK : EGPortal::JOIN_NOT_SAVED;
   end_test();
 }
 
-// radio left as it is
+// Leaves the radio as it is
 static void stop_test() {
   if (!corium::Wifi::testing()) return;
   s_join = EGPortal::JOIN_IDLE;
@@ -611,7 +610,7 @@ bool corium::Wifi::testJoin(uint32_t ms) {
   watch_reason(s_creds->ssid);
   corium::Log::console(PSTR("WiFi: Join test '%s'"), s_test_ssid);
   s_left = !corium::Wifi::connectedRaw();
-  // on it already, begin() would say nothing
+  // Already on it, begin() wouldn't report anything
   if (!s_left && s_back && !strcmp(s_back->ssid, s_creds->ssid) && !strcmp(s_back->pass, s_creds->pass)) {
     test_joined();
     return true;
@@ -632,7 +631,7 @@ bool corium::Wifi::testStep(uint32_t now) {
     if (r == EGPortal::JOIN_TESTING) {
       if (s_rebegin.due(now)) {
         s_rebegin.clear();
-        begin_ram(s_creds->ssid, s_creds->pass);   // its leave never hides the reason (on_drop)
+        begin_ram(s_creds->ssid, s_creds->pass);   // on_drop() stops its leave hiding the reason
       }
       return true;
     }
@@ -656,7 +655,7 @@ static void reset_wifi_tx_power_default();
 static void reset_wifi_country();
 static void apply_wifi_phy_mode(uint8_t mode);
 
-// retries, slow AP after a power blip
+// Retries for a slow AP after a power blip
 CORIUM_NODISCARD static bool join_saved_network() {
   bool associated = false;
   for (uint8_t attempt = 0; attempt <= JOIN_RETRIES && !associated && !corium::Wifi::offlineForced; attempt++) {
@@ -667,7 +666,7 @@ CORIUM_NODISCARD static bool join_saved_network() {
   return associated;
 }
 
-// once more at the chip's own, this boot only
+// One more try at the chip's own radio defaults, this boot only
 CORIUM_NODISCARD static bool join_at_defaults() {
   bool tx  = corium::Prefs::getUInt("wifi", K_TX_POWER) != 0;
   bool cc  = corium::Prefs::getString("wifi", K_COUNTRY)[0] != '\0';
@@ -682,7 +681,7 @@ CORIUM_NODISCARD static bool join_at_defaults() {
   return wait_wifi(JOIN_WAIT_MS);
 }
 
-// associated but may not route
+// Associated, but a new static config may not route anywhere
 static void probe_new_static_config(bool static_on) {
   if (!static_on || !corium::Fs::exists(NET_BACKUP_PATH)) return;
   corium::Log::console(PSTR("WiFi: Probing reachability of new static config"));
@@ -695,7 +694,7 @@ static void probe_new_static_config(bool static_on) {
     corium::DeviceInfo::safeRestart(500);
     return;
   }
-  // a restart boots the same config, next boot tries again
+  // a restart would boot the same config, the next boot tries again
   corium::Log::console(PSTR("WiFi: Revert not saved"));
   corium::Wifi::backupGraceDone = true;
 }
@@ -720,7 +719,7 @@ static char* setup_portal(EGPortal* portal) {
     return true;
   });
   portal->onReset([](void*) { s_reset = true; });
-  // open AP but every page asks, as the web UI
+  // AP is open but every page asks for the password, same as the web UI
   portal->setBasicAuth(FPSTR(W_ADMIN), corium::Prefs::getString("sys", corium::K_WEB_PASS), FPSTR(APP_NAME));
   portal->setAuthHelp(corium::AUTH_HELP);
   bool up = portal->begin(corium::DeviceInfo::hostname());
@@ -736,14 +735,14 @@ static void portal_restart() {
     corium::DeviceInfo::factoryReset();
   } else {
     corium::Log::console(PSTR("WiFi: Saved '%s', restarting to join"), corium::Wifi::heldSsid());
-    corium::BootGuard::requestPortal();   // offline builds too
-    (void)corium::Wifi::saveBackupCreds();   // logged; a bad new one gets the old back
+    corium::BootGuard::requestPortal();   // portal again next boot, offline builds too
+    (void)corium::Wifi::saveBackupCreds();   // so a bad new network can go back to the old one
     (void)corium::Wifi::beginHeld();   // held since the save
   }
   corium::DeviceInfo::safeRestart(200);
 }
 
-// page drains first; true = leaving
+// Let the page finish sending first. true = leaving
 static bool leaving(corium::Deadline& leave, uint32_t now) {
   if (!s_reset && !s_saved) return false;
   if (!leave.armed()) leave.set(now + PAGE_OUT_MS);
@@ -751,13 +750,13 @@ static bool leaving(corium::Deadline& leave, uint32_t now) {
   return true;
 }
 
-// the 10 min idle, or the offline cap
+// 10 min idle, or the offline cap
 static bool portal_timed_out(uint32_t idle_ms, uint32_t now) {
   uint32_t max_s = corium::Wifi::downMaxS();
   return now - idle_ms >= PORTAL_RETRY_MS || (max_s && now - CORIUM_MS_START >= max_s * 1000UL);
 }
 
-// an outage, a scan a minute
+// Saved AP is down, scan once a minute to see if it's back
 static bool ap_back(EGPortal* portal, const char* ssid, uint32_t& scan_ms, uint32_t now) {
   if (portal->heard(ssid)) return true;
   if (now - scan_ms >= OUTAGE_SCAN_MS) {
@@ -778,29 +777,27 @@ static void portal_out(const char* ssid, bool back) {
   corium::DeviceInfo::safeRestart(500);
 }
 
-// a late save still gets its page out
-static bool portal_stays(corium::Deadline& done) {
+// An Improv join ends the portal, its URL goes out the same pass. A late save still gets its page sent
+static bool portal_stays() {
   if (corium::Wifi::offlineForced) return false;
-  return !done.due(corium::fastMillis()) || s_saved || s_reset;
+  return s_join != EGPortal::JOIN_OK || s_saved || s_reset;
 }
 
-// hasSavedCreds() here drops the AP; ssid null = first setup
+// Calling hasSavedCreds() in here would drop the AP. ssid null = first setup
 static void run_portal(EGPortal* portal, const char* ssid) {
   uint32_t idle_ms = corium::fastMillis();
   uint32_t scan_ms = idle_ms;
-  corium::Deadline done;   // Improv joined
   corium::Deadline leave;
   bool watch = ssid && !portal->heard(ssid);
-  while (portal_stays(done)) {
+  while (portal_stays()) {
     portal->loop();
-    console.pollBoot();
-    corium::Clock::stampNow();   // its restart keeps the time
-    delay(portal->busy() ? 1 : 10);   // work waiting, back in 1 ms
     uint32_t now = corium::fastMillis();
-    bool testing = corium::Wifi::testStep(now);   // Improv's
-    if (s_join == EGPortal::JOIN_OK && !done.armed()) done.set(now + PORTAL_DONE_MS);
+    bool testing = corium::Wifi::testStep(now);   // before the poll, so Improv answers its end in AP_STA
+    console.pollBoot();
+    corium::Clock::stampNow();   // so the restart keeps the time
+    delay(portal->busy() ? 1 : 10);   // work waiting, back in 1 ms
     if (leaving(leave, now) || !ssid) continue;   // first setup, wait forever
-    // a scan hops channel, a phone on it drops
+    // A scan hops channel and a phone on the AP drops, so no scans with one on
     bool phone = WiFi.softAPgetStationNum() > 0;
     if (phone) idle_ms = scan_ms = now;
     if (testing) {   // never mid test
@@ -823,7 +820,7 @@ static bool start_ap();
 static uint32_t s_ap_seen = 0;   // the fallback AP's last client, or its start
 
 #ifdef APP_OFFLINE_OK
-static EGDnsAnswer* s_dns = nullptr;   // every name = the AP, the phone's popup
+static EGDnsAnswer* s_dns = nullptr;   // answers every name with the AP so the phone shows its popup
 static const uint32_t DNS_POLL_MS = 200;
 
 static void dns_up() {
@@ -843,7 +840,7 @@ static void dns_down() {
 }
 #endif
 
-// offline builds, own AP and the UI, counting on
+// Offline builds: own AP with the UI, and it keeps counting
 static void fallback_ap() {
   corium::Log::console(PSTR("WiFi: Saved network failed, setup hotspot"));
   if (start_ap()) {
@@ -869,13 +866,13 @@ bool corium::Wifi::apHeld(uint32_t now) {
   return false;
 }
 
-// AP off can drop it; 8266 static set on the test's join never answers arp
+// Turning the AP off can drop the link. On the 8266 a static IP set on the test's join never answers ARP
 static bool rejoin() {
   bool static_on = sta_up();
   if (!corium::Wifi::connectedRaw()) (void)WiFi.begin();
   else if (static_on) {
     (void)WiFi.reconnect();
-    // the old link reads up till it drops (esp32)
+    // the old link still reads as up until it drops (esp32)
     uint32_t start = corium::fastMillis();
     while (WiFi.status() == WL_CONNECTED && corium::fastMillis() - start < LEAVE_WAIT_MS) {
       console.pollBoot();
@@ -886,7 +883,7 @@ static bool rejoin() {
 }
 
 CORIUM_NODISCARD static bool join_or_portal() {
-  WiFi.mode(WIFI_STA);   // hasSavedCreds(), the creds kept for the portal
+  WiFi.mode(WIFI_STA);   // same as hasSavedCreds(), but keeps the creds for the portal
   Creds c;
   bool have_creds = sdk_creds(c);
   if (have_creds) {
@@ -898,12 +895,12 @@ CORIUM_NODISCARD static bool join_or_portal() {
     }
     if (corium::Wifi::offlineForced) return false;
     corium::Log::console(PSTR("WiFi: Saved creds failed to associate (ssid=%s)"), s_test_ssid);
-    stop_test();   // Improv's from the boot console, else its creds stay held
+    stop_test();   // an Improv test from the boot console, else its creds stay held
     s_join = boot_fail();   // the pages say why
     if (restore_backup()) return true;
   }
 
-  // offline builds keep booting so it counts; a save's boot = portal
+  // Offline builds keep booting so it keeps counting. The boot after a portal save goes back to the portal
   if (corium::Wifi::OFFLINE_OK && have_creds && !corium::BootGuard::portalAsked()) {
     fallback_ap();
     return false;
@@ -932,12 +929,12 @@ bool corium::Wifi::offlineNow() {
   return true;
 }
 
-// own AP, the whole UI, no network
+// Own AP with the whole UI, no network
 static bool start_ap() {
   WiFi.mode(WIFI_AP);
   corium::Wifi::applyRuntimeNetPrefs();
   const char* pass = corium::Prefs::getString("sys", corium::K_WEB_PASS);
-  // short or none: open, the pages still ask
+  // short or no password, the AP is open but the pages still ask
   bool locked = strlen(pass) >= AP_PASS_MIN;
   bool hide = corium::Prefs::getBool("wifi", K_AP_HIDE);
   if (!WiFi.softAP(corium::DeviceInfo::hostname(), locked ? pass : nullptr, 1, hide)) {
@@ -948,11 +945,11 @@ static bool start_ap() {
   char ip[16];
   corium::Wifi::formatIP(ip, sizeof(ip));
   corium::Log::console(PSTR("WiFi: AP %s at %s (%s)"), corium::DeviceInfo::hostname(), ip,
-               locked ? PSTR("web password") : PSTR("open"));
+                       locked ? PSTR("web password") : PSTR("open"));
   return true;
 }
 
-// a network to join, not the AP; saved with the next commit
+// Join a network instead of running the AP. Saved with the next commit
 bool corium::Wifi::joinMode() { return corium::Prefs::put("wifi", K_MODE, "0"); }
 
 bool corium::Wifi::offSet(const char* mod, const char* key) {
@@ -960,7 +957,7 @@ bool corium::Wifi::offSet(const char* mod, const char* key) {
   return corium::Prefs::getUInt("wifi", K_MODE) == MODE_OFF;
 }
 
-// from hotspot or off mode, a restart onto it
+// From hotspot or off mode, restart onto the network
 bool corium::Wifi::keepJoined(uint32_t restart_ms) {
   if (corium::Prefs::getUInt("wifi", K_MODE) == 0) {
     if (!corium::Wifi::offlineForced && !corium::Wifi::ap) return true;   // on it already; the hotspot never started the net
@@ -980,7 +977,7 @@ bool corium::Wifi::portalAhead() {
 
 static void apply_strongest_ap();
 
-// the portal and the hotspot set their own; a failed one without OFFLINE_OK restarts
+// Portal and hotspot set their own state. A failed join without OFFLINE_OK restarts
 static void join_end(bool up) {
   using namespace corium::Wifi;
   if (up) go(ONLINE, PSTR("joined"));
@@ -1025,7 +1022,7 @@ public:
 static WifiModule wifimodule;
 CORIUM_REGISTER_MODULE(wifimodule)
 
-// SDK events cost the 8266 ~1.2 KB
+// Polled once a second, SDK event handlers cost the 8266 ~1.2 KB
 void WifiModule::begin() {
   corium::Registry::every(this, 1000);
 }
@@ -1070,10 +1067,10 @@ const corium::PrefGroup* WifiModule::prefsGroup() { return &WIFI_PREF_GROUP; }
 
 uint32_t corium::Wifi::downMaxS() { return corium::Prefs::getUInt("wifi", K_DOWN_MAX) * 60UL; }
 
-static int8_t s_rx_sleep = -1;   // the receiver's, wins over the pref
+static int8_t s_rx_sleep = -1;   // set by the receiver, wins over the pref
 
 void corium::Wifi::applySleep() {
-  // always, SDK keeps it in NVS
+  // Apply it every time, the SDK keeps it in NVS
   bool rx = s_rx_sleep >= 0;
   uint8_t mode = rx ? (uint8_t)s_rx_sleep : (uint8_t)corium::Prefs::getUInt("wifi", K_SLEEP);
 #ifdef ESP8266
@@ -1117,7 +1114,7 @@ static void reset_wifi_tx_power_default() {
 }
 
 #ifdef ESP8266
-// esp32 knows its own
+// esp32 knows its own channels per country
 static uint8_t country_chans(const char* code) {
   if (!strncasecmp_P(code, PSTR("US"), 2) || !strncasecmp_P(code, PSTR("CA"), 2)) return 11;
   if (!strncasecmp_P(code, PSTR("JP"), 2)) return 14;
@@ -1125,7 +1122,7 @@ static uint8_t country_chans(const char* code) {
 }
 #endif
 
-// the sdk's own, both chips: CN 1-13, the AP's once joined
+// Back to the SDK default on both chips, CN 1-13 then the AP's once joined
 static void reset_wifi_country() {
 #ifdef ESP8266
   wifi_country_t c = {0};
@@ -1176,7 +1173,7 @@ static void apply_wifi_phy_mode(uint8_t mode) {
 #endif
 }
 
-// esp32 joins the first ap it hears; begin() takes the stored config
+// By default esp32 joins the first AP it hears. begin() takes the stored config
 static void apply_strongest_ap() {
 #ifdef ESP32
   WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
@@ -1191,7 +1188,7 @@ static void apply_strongest_ap() {
 }
 
 void WifiModule::onPrefsLoaded() {
-  // rest needs WiFi.mode() first
+  // the rest needs WiFi.mode() first
   corium::Wifi::applySleep();
 }
 

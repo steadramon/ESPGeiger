@@ -73,4 +73,4 @@ In mode 4, if a [warning or alert threshold](/configuration#counter-settings) is
 
 Modes 3 and 4 are deliberate trend indicators, not 1:1 click visualisations. Real radioactive decay follows a Poisson process so individual clicks are irregularly spaced; the trend pulse smooths this into an evenly-paced flash whose rate reflects activity vs baseline.
 
-For per-click visual feedback, use mode 1 or 2, the [Pulse Out](/output/pulseout) module on any spare GPIO, or the dedicated blip LED on boards that fix the pin at build time via `GEIGER_BLIPLED` (ESPGeiger-HW).
+For per-click visual feedback, use mode 1 or 2, the [Pulse Out](/output/pulseout) module on any spare GPIO, or the Blip LED (the status LED, or the count LED on ESPGeiger-HW; see [Blip LED Settings](/configuration#blip-led-settings)).

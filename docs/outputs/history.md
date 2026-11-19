@@ -8,7 +8,7 @@ nav_order: 2
 
 # History page
 
-The `/hist` page gives a longer term view of activity on the device. It shows totals for today and yesterday, a 24 hour bar chart, an hour by hour table and (when enabled) a lifetime totals card and an inter pulse interval histogram.
+The `/hist` page gives a longer term view of activity on the device. It shows totals for today and yesterday, a 24 hour bar chart, an hour by hour table, a lifetime totals card (when lifetime tracking is on) and an inter pulse interval histogram (not on UDP receiver builds).
 
 ## Lifetime card
 

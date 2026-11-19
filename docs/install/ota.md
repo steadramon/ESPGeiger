@@ -35,7 +35,7 @@ For example:
 ESP32 builds also have a `-firmware_merged` file. That is the full image for
 a USB install; for OTA use the plain `-firmware` file.
 
-Not sure which one you're running? The **Info** page shows it in the **Build** row (the env name is the third part) - match that.
+Not sure which one you're running? The **Info** page shows it in the **Build** row - match that.
 
 > ⚠️ Flashing the wrong variant will either refuse to boot or boot with the
 > wrong hardware assumptions (wrong pins, wrong counter type). If this
@@ -59,7 +59,7 @@ Click **Browse...** and pick the `.bin` you downloaded in step 1.
 
 The page checks the file before upload. **Looks compatible** means the file
 names the build you run; a **Warning** means it doesn't, and you can still
-upload if you are sure. On 0.14 a `_no_pcnt` device also accepts the plain
+upload if you are sure. A `_no_pcnt` device also accepts the plain
 `_pulse` file (see [Build Targets](/install/buildtargets#pulse)).
 
 Boards that drive the tube's high voltage (`espgeigerhw`,
@@ -73,7 +73,7 @@ with `?any=1`:
 curl --data-binary @firmware.bin -H "Content-Type: application/octet-stream" "http://<device>/update?any=1"
 ```
 
-Add `-u admin:<password>` if the portal has one. USB flashing always works.
+Add `-u admin:<password>` if the portal has one. In [safe mode](/configuration/safemode) the Update page has an **Another build (an older firmware)** tick box that does the same. USB flashing always works.
 
 ## 5. Click **Upload**
 

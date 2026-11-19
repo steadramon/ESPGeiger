@@ -22,13 +22,13 @@ You need two devices on the same WiFi: one ESPGeiger with a tube (the **producer
 
 **On the producer:**
 1. Note its 6-hex chipid, visible on the home page or `/info`.
-2. Go to **Config → Local Broadcast**, set Mode to `2` (telemetry + blips), Save.
+2. Go to **Config > Local Broadcast**, set Mode to `2` (Telemetry + per-click), Save.
 
 **On the receiver:**
-1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32c3_udp` / `esp32s3_udp` build via the [Web Installer](https://install.espgeiger.com).
+1. Flash an `esp8266_udp` / `esp8266oled_udp` / `esp32_udp` / `esp32c3_udp` / `esp32s2_udp` / `esp32s3_udp` build via the [Web Installer](https://install.espgeiger.com).
 2. Join your WiFi via the captive portal, same network as the producer.
-3. Open the device's web UI and go to **Config → Input**.
-4. (Optional) Set **udprx_chipid** to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
+3. Open the device's web UI and go to **Config > Input**.
+4. (Optional) Set **Source chip ID** (`counter.udprx_chipid`) to the producer's 6-hex ID. Leave blank to auto-latch onto the first producer heard.
 5. Set **Dose ratio** under Counter to the producer's: the receiver works out the dose itself.
 6. Save.
 
@@ -39,12 +39,12 @@ Within a few seconds the receiver's OLED page 2 shows `RX <chipid>` and a loss p
 - **Same WiFi network and subnet.** Multicast does not cross routers or guest networks; both devices need to be on the same AP / SSID.
 - **Producer in Mode 2.** Mode 1 only sends stats every 30 s and produces no clicks.
 - **Receiver actually flashed as `*_udp`.** Check `/info` on the receiver shows a UDP build target.
-- **Loss percentage high or clicks missing (ESP32 receivers).** With RX sleep set to Light or Modem, the classic ESP32 can miss most multicast packets on some access points. CPM still tracks, since each packet carries the running total, but clicks are lost. Set it back to None (`udprx_rxmode = 2`, the default there), or set the producer's group to the receiver's IP address: unicast isn't affected.
+- **Loss percentage high or clicks missing (ESP32 receivers).** With RX sleep set to Light or Modem, the classic ESP32 can miss most multicast packets on some access points. CPM still tracks, since each packet carries the running total, but clicks are lost. Set it back to None (`counter.udprx_rxmode` `2`, the default there), or set the producer's group to the receiver's IP address: unicast isn't affected.
 - **Wrong producer locked.** In auto-mode the receiver latches onto the first producer heard. Set the chipid explicitly if you have multiple.
 
 ## Output Modes (Producer)
 
-Configured on the **Config → Local Broadcast** page.
+Configured on the **Config > Local Broadcast** page.
 
 | Mode | Behaviour |
 |---|---|
@@ -54,7 +54,7 @@ Configured on the **Config → Local Broadcast** page.
 
 ## Source Modes (Receiver)
 
-Configured on the **Config → Input** page (`udprx_mode`).
+Configured on the **Config > Input** page (**Source mode**, `counter.udprx_mode`).
 
 | Mode | Behaviour |
 |---|---|
@@ -69,6 +69,7 @@ Configured on the **Config → Input** page (`udprx_mode`).
 | `esp8266oled_udp` | ESP8266 | OLED |
 | `esp32_udp` | ESP32 | OLED auto-detected |
 | `esp32c3_udp` | ESP32-C3 | OLED auto-detected |
+| `esp32s2_udp` | ESP32-S2 | OLED auto-detected |
 | `esp32s3_udp` | ESP32-S3 | OLED auto-detected |
 | `xh_s3e_udp` | ESP32-S3 (XH-S3E) | OLED fixed |
 | `espgeigerlog_udp` | ESP8266 (ESPGeiger-Log) | OLED fixed |
@@ -91,7 +92,7 @@ Radiation telemetry. Periodic heartbeat (~30 s).
 
 ```
 ,ffsi
-  cpm          : float    1-minute average
+  cpm          : float    CPM as the device shows it (follows the CPM mode)
   usv          : float    µSv/h
   state        : string   "warming" | "healthy" | "nocounts" | "warning" | "alert"
   total_clicks : int32    producer's clicks since it booted
@@ -105,7 +106,7 @@ HV telemetry (HV-equipped builds only, same cadence as `/rad`).
 
 ```
 ,ffii
-  reading_v  : float    measured HV (smoothed)
+  reading_v  : float    measured HV in whole volts, NaN without an HV ADC
   target_v   : float    HV setpoint
   duty       : int32    PWM duty (0-1023)
   trim       : int32    autotrim adjustment in duty units (signed)
@@ -120,7 +121,7 @@ System telemetry. Every other `/rad` (~60 s).
   uptime_s      : int32   producer seconds since boot
   rssi          : int32   WiFi signal strength
   lps           : int32   main loops per second
-  tick_max_us   : int32   worst main-loop iteration in last window
+  tick_max_us   : int32   peak once-a-second tick in the last 60 s, microseconds
 ```
 
 ### `/espg/<chipid>/env`
@@ -170,7 +171,7 @@ When mode > 0 the producer announces an `_osc._udp` service with the configured 
 
 - **Loss handling**: every `/click` carries a running counter so the receiver detects loss as a sequence gap and gap-fills automatically. Loss % over the last 10 to 15 minutes is on the OLED and in `/json` as `loss`; it is hidden while nothing has come in for that long.
 - **Send throttle**: high-CPS producers cap `/click` emit rate at <!-- gen:const 1000/UDPBLIP_CLICK_MIN_INTERVAL_MS -->20<!-- /gen --> pps. Counter accuracy is preserved because each packet carries the producer's running total.
-- **RX sleep mode** (`udprx_rxmode`): `1` (modem sleep, default) suits most networks. `0` saves more power. `2` keeps the radio always on and runs warmer; try unicast first if packets go missing. The original ESP32 (not C3/S3) defaults to `2`: on modem sleep it misses most multicast.
+- **RX sleep mode** (`counter.udprx_rxmode`): `1` (modem sleep, default) suits most networks. `0` saves more power. `2` keeps the radio always on and runs warmer; try unicast first if packets go missing. The original ESP32 (not C3/S3) defaults to `2`: on modem sleep it misses most multicast.
 
 ## Build Flags
 

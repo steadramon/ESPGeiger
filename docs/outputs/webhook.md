@@ -13,7 +13,7 @@ ESPGeiger can send radiation data to a custom URL endpoint via HTTP POST. This a
 ## Setup
 
 1. __Configure ESPGeiger__: On the [Config page](/configuration), open the __Upload__ tab, tick __Enable__ under __Webhook__ and enter your target `URL` in the Webhook section. Optionally set a `Key` for authenticating requests from your device.
-2. __Set the interval__: Configure the submission interval in seconds. The default is 60 seconds.
+2. __Set the interval__: the submission interval in seconds, 10 to 3600. The default is 60 seconds.
 
 ESPGeiger will report the Webhook submission status in the Web Interface console.
 
@@ -32,16 +32,11 @@ ESPGeiger submits a JSON payload via HTTP POST with `Content-Type: application/j
 | `id` | string | Device chip ID |
 | `key` | string | Configured webhook key (only included if set) |
 | `ut` | integer | Uptime in seconds |
-| `cps` | float | Current counts per second |
 | `cpm` | float | Current CPM (1-minute smoothed) |
 | `cpm5` | float | 5-minute smoothed CPM |
 | `cpm15` | float | 15-minute smoothed CPM |
 | `usv` | float | Current microsieverts per hour (µSv/h) |
-| `hv` | integer | High voltage reading in volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
-| `hv_fault` | integer | `1` while HV is held off: over the voltage limit (same builds) |
-| `t` | float | Temperature in °C ([environment sensor](/configuration/env) only) |
-| `h` | float | Relative humidity in % (BME280 / AHT family only) |
-| `p` | float | Atmospheric pressure in hPa (BME280 / BMP280 only) |
+| `cps` | float | Current counts per second |
 | `tc` | integer | Total accumulated click count since boot |
 | `mem` | integer | Free heap memory in bytes |
 | `rssi` | integer | WiFi signal strength in dBm |
@@ -49,11 +44,16 @@ ESPGeiger submits a JSON payload via HTTP POST with `Content-Type: application/j
 | `sat` | integer | `1` when the count rate is close to the tube's dead-time limit |
 | `warn` | integer | `1` when CPM is above the warning threshold |
 | `alert` | integer | `1` when CPM is above the alert threshold |
+| `hv` | integer | High voltage reading in volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
+| `hv_fault` | integer | `1` while HV is held off: over the voltage limit (same builds) |
+| `t` | float | Temperature in °C ([environment sensor](/configuration/env) only) |
+| `h` | float | Relative humidity in % (BME280 / AHT family only) |
+| `p` | float | Atmospheric pressure in hPa (BME280 / BMP280 only) |
 
 Environmental fields are emitted only when the corresponding sensor channel is available. A BMP280 ships `t` and `p` but not `h`; an AHT20 ships `t` and `h` but not `p`; a BME280 or AHT20+BMP280 combo ships all three.
 
 ## Example JSON Output
 
 ```json
-{"id":"7a9256","ut":3600,"cps":0.50,"cpm":30.00,"cpm5":29.50,"cpm15":30.10,"usv":0.20,"tc":1800,"mem":19088,"rssi":-45}
+{"id":"7a9256","ut":3600,"cpm":30.00,"cpm5":29.50,"cpm15":30.10,"usv":0.1987,"cps":0.50,"tc":1800,"mem":19088,"rssi":-45,"tube":1,"sat":0,"warn":0,"alert":0}
 ```

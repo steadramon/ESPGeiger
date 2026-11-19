@@ -12,23 +12,26 @@ published: true
 ESPGeiger can optionally contribute its readings to the public map at
 [stations.espgeiger.com](https://stations.espgeiger.com), a global
 radiation-monitoring grid built from community-run Geiger counters.
-Participation is opt-in, signed end-to-end and privacy-respecting.
+Sharing is on by default (CPM readings) and can be turned off at any
+time on the device; every post is signed.
 
 ## What is shared
 
 - **Every minute** (CPM readings mode only): CPM and µSv/h, plus HV,
-  temperature, humidity and pressure where the hardware has them.
+  temperature, humidity and pressure where the hardware has them, and
+  the tube health bits while something is wrong.
 - **Every 15 minutes**: a health snapshot of uptime, free memory, loop
-  rate and Wi-Fi signal. Kept short-term only, never added to history.
+  rate, peak tick time, Wi-Fi signal and, on ESP32, the chip temperature. Kept short-term only, never added to history.
 - **Every hour**: a handshake with the device's public key, chip ID,
   firmware version, board and build, tube model and type, compiled-in
   features, restart reason, sharing mode and, if you set one, your
   location rounded to about 1 km.
 - **After a crash**, the first handshake also carries the crash details
   to help fix the bug: exception cause, program counter and fault
-  address, a few CPU registers, a copy of up to 32 words (128 bytes) of
-  the stack and, on ESP32, the module that was running. No settings, passwords or
-  readings are in it.
+  address, a few CPU registers, up to 32 words (128 bytes) from the
+  stack (on ESP8266 the code addresses in it, on ESP32 the backtrace),
+  the kind of reset and the module that was running. No settings,
+  passwords or readings are in it.
 
 Field-level details are in the [WebAPI protocol](/dev/webapi-protocol) developer page.
 
