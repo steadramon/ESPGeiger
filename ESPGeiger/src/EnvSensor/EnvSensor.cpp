@@ -35,7 +35,7 @@ EnvSensor envsensor;
 #include "App/MeasureIds.h"
 #include "GeigerInput/GeigerInput.h"
 
-// UdpRx's /env rows, the only remote
+// UdpRx's /env rows are the only remote source
 #if GEIGER_IS_UDPRX(GEIGER_TYPE) && !defined(ENV_RX)
 #define ENV_RX
 #endif
@@ -58,7 +58,7 @@ CORIUM_PSTR(EN_H_TOF,  "0.1 C steps, -25 = -2.5 C");
 CORIUM_PSTR(EN_L_ALT,  "Altitude (m)");
 CORIUM_PSTR(EN_H_ALT,  "For sea level pressure, 0 = station pressure");
 
-// pins are i2c.sda/scl
+// Pins come from i2c.sda/scl
 static const corium::Pref ENV_PREF_ITEMS[] PROGMEM = {
   {K_UNIT,        EN_L_UNIT, nullptr,    "0",                  EN_O_UNIT, 0,  2,            0, corium::P_ENUM, 0},
   {K_TEMP_OFFSET, EN_L_TOF,  EN_H_TOF,   "0",                  nullptr, -100, 100,          0, corium::P_INT,  corium::P_ADVANCED},
@@ -77,7 +77,7 @@ const corium::PrefGroup* EnvSensor::prefsGroup() { return &ENV_PREF_GROUP; }
 void EnvSensor::readPrefs() {
 #ifndef SSD1306_DISPLAY   // the OLED sets them
   corium::I2CBus::pins((uint8_t)corium::Prefs::getUInt("i2c", corium::K_SDA),
-               (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL));
+                       (uint8_t)corium::Prefs::getUInt("i2c", corium::K_SCL));
 #endif
   uint8_t unit = (uint8_t)corium::Prefs::getUInt("env", K_UNIT);
   corium::m_set_temp_unit(unit > UNIT_K ? UNIT_C : unit);
@@ -119,7 +119,7 @@ bool EnvSensor::tryDetect() {
     }
     return false;
   }
-  // reuse State, else it leaks
+  // Reuse State on a re-detect, else it leaks
   if (!_st) _st = (State*)calloc(1, sizeof(State));
   if (!_st) {
     corium::Log::console(PSTR("Env: calloc(%u) failed"), (unsigned)sizeof(State));
@@ -128,7 +128,7 @@ bool EnvSensor::tryDetect() {
     corium::Registry::every(this, 0);
     return false;
   }
-  *_st = State();   // calloc'd, the NANs from its defaults
+  *_st = State();   // calloc gives zeros, this sets the NAN defaults
   corium::Registry::every(this, ENV_SAMPLE_MS);
   corium::Log::console(PSTR("Env: %s detected"), chipName());
   return true;
@@ -184,14 +184,14 @@ void EnvSensor::sampleFinish() {
   sampleDone();
 }
 
-// past the chip's range is noise off the bus
+// A reading past the chip's range is noise off the bus
 static bool junk(float& v, float lo, float hi) {
   if (isnan(v) || (v >= lo && v <= hi)) return false;
   v = NAN;
   return true;
 }
 
-// reset or gone, look again
+// Too many bad samples means the chip was reset or is gone, so detect it again
 void EnvSensor::sampleDone() {
   if (junk(_t, ENV_T_MIN, ENV_T_MAX)) _failed = true;
   if (junk(_h, ENV_H_MIN, ENV_H_MAX)) _failed = true;
@@ -207,7 +207,7 @@ void EnvSensor::sampleDone() {
 }
 
 void EnvSensor::emaUpdate(float t, float h, float p) {
-  // NAN breaks the run
+  // Stuck check, a NAN breaks the run
   bool same = true, any = false;
   if (!isnan(t)) { any = true; if (t != _st->prev_t) same = false; }
   if (!isnan(h)) { any = true; if (h != _st->prev_h) same = false; }
@@ -228,7 +228,7 @@ void EnvSensor::emaUpdate(float t, float h, float p) {
   _st->ema_p = emaNan(_st->ema_p, p, ENV_EMA_ALPHA);
 }
 
-// NAN once stale
+// NAN once the remote value is stale
 static float rx(corium::MRead r) {
   corium::MValue v;
   return r && r(&v) ? v.f : NAN;
@@ -286,13 +286,18 @@ static const char MH_H[] PROGMEM = "Relative humidity";
 static const char MP_P[] PROGMEM = "env_pressure_hpa";
 static const char MH_P[] PROGMEM = "Pressure, sea-level corrected when an elevation is set";
 
-static const corium::Measure ENV_ROWS[] PROGMEM = {
-  CORIUM_M_PROW("t", "", m_t,  corium::M_F32, 2, corium::MU_CELSIUS, corium::M_OUT_ALL,  0, MP_T, MH_T, nullptr),
+static const corium::MProm ENV_PROM[] PROGMEM = {
+  {MP_T, nullptr, MH_T},
+  {MP_H, nullptr, MH_H},
+  {MP_P, nullptr, MH_P},
+};
+static const corium::MRow ENV_ROWS[] PROGMEM = {
+  CORIUM_M_PROW("t", "", m_t,  corium::M_F32, 2, corium::MU_CELSIUS, corium::M_OUT_ALL,  0, 1),
   CORIUM_M_ROW("tu", "", m_tu, corium::M_U32, 0, corium::MU_NONE,    corium::M_OUT_JSON, 0),
-  CORIUM_M_PROW("h", "", m_h,  corium::M_F32, 2, corium::MU_PCT,     corium::M_OUT_ALL,  0, MP_H, MH_H, nullptr),
-  CORIUM_M_PROW("p", "", m_p,  corium::M_F32, 2, corium::MU_HPA,     corium::M_OUT_ALL,  0, MP_P, MH_P, nullptr),
+  CORIUM_M_PROW("h", "", m_h,  corium::M_F32, 2, corium::MU_PCT,     corium::M_OUT_ALL,  0, 2),
+  CORIUM_M_PROW("p", "", m_p,  corium::M_F32, 2, corium::MU_HPA,     corium::M_OUT_ALL,  0, 3),
 };
 
-corium::MeasureRows EnvSensor::measurements() { return corium::MeasureRows(ENV_ROWS); }
+corium::MeasureRows EnvSensor::measurements() { return corium::MeasureRows(ENV_ROWS, ENV_PROM); }
 
 #endif  // DISABLE_ENVSENSOR

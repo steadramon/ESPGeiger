@@ -26,7 +26,7 @@
 #include "Corium/Util/MathUtil.h"
 #include "Corium/Util/Words.h"
 
-// most rows differ at the first byte
+// Most ids differ at the first byte, so this is quick
 bool corium::MeasureRows::idIs(size_t j, const char* id) const {
   return streq_PP(_rows[j].id, id);
 }
@@ -50,7 +50,7 @@ corium::MeasureIter::MeasureIter(uint8_t output, bool diag, const char* id)
   : _src(s_core), _j(0), _mod(0), _out(output), _diag(diag), _input(false),
     _id(id), _row(), _val() {}
 
-// core, then input, then each module not quarantined
+// Core first, then input, then each module that isn't quarantined
 bool corium::MeasureIter::next_source() {
   if (!_input) {
     _input = true;
@@ -74,7 +74,7 @@ static bool flags_skip(uint8_t f, bool diag) {
          ((f & corium::M_HELD) && s_rows_held);
 }
 
-// skips absent, NaN and inf
+// Skips rows that are absent, NaN or inf
 bool corium::MeasureIter::next() {
   for (;;) {
     if (_j >= _src.size()) {
@@ -109,7 +109,7 @@ size_t corium::m_format_unit(const corium::Measure& m, const corium::MValue& v, 
   return corium::m_format(m, out, buf, cap, cut);
 }
 
-// truncated prints nothing
+// prints nothing if it would be truncated
 size_t corium::m_format(const corium::Measure& m, const corium::MValue& v, char* buf, size_t cap, bool* cut) {
   int n;
   switch (m.kind) {
@@ -207,7 +207,7 @@ corium::MRead corium::m_core_read(const char* id, corium::MKind kind) {
   for (const corium::MeasureRows& src : srcs) {
     for (size_t j = 0; j < src.size(); j++) {
       if (!src.idIs(j, id)) continue;
-      corium::Measure r = src.row(j);
+      corium::MRow r = src.raw(j);
       if (r.kind == kind) return r.read;
     }
   }
@@ -224,7 +224,7 @@ static int prom_head(const corium::Measure& m, char* buf, size_t cap) {
                     (m.flags & corium::M_COUNTER) ? PSTR("counter") : PSTR("gauge"));
 }
 
-// too big = left out whole, head too
+// If it doesn't fit the whole row is left out, head included
 size_t corium::m_prom_format(const corium::Measure& m, const corium::MValue& v, const char* chipid,
                        bool head, char* buf, size_t cap) {
   if (!m.prom || m.kind == corium::M_STR) return 0;

@@ -27,7 +27,7 @@
 #endif
 
 #ifdef NO_PCNT_ALIAS
-// a _no_pcnt device's /update looks for its own env
+// So a _no_pcnt device's /update finds its own env in the bin
 static const char NO_PCNT_TAG[] PROGMEM = "<EGENV:" BUILD_ENV "_no_pcnt:ENV>";
 #endif
 
@@ -40,7 +40,7 @@ static bool s_count_ok = true;
 
 static void CORIUM_ISR_ATTR selftest_isr() { s_selftest_hit = true; }
 
-// pulled low as the detector would, open collector both sides
+// Pulls the pin low the way the detector would, open collector on both sides
 static bool count_path_ok(int pin) {
   s_selftest_hit = false;
   pinMode(pin, INPUT);
@@ -55,7 +55,7 @@ static bool count_path_ok(int pin) {
 
 static bool m_count_ok(corium::MValue* v) { v->b = s_count_ok; return true; }
 
-static const corium::Measure SELFTEST_ROWS[] PROGMEM = {
+static const corium::MRow SELFTEST_ROWS[] PROGMEM = {
   CORIUM_M_ROW("count_ok", "", m_count_ok, corium::M_BOOL, 0, corium::MU_NONE, corium::M_OUT_JSON, 0),
 };
 
@@ -70,7 +70,7 @@ void GeigerPulse::begin() {
 #ifdef PCNT_SELECTABLE
   if (_pcnt) {
     corium::Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
-    // pull-up for PCNT init, user pull after
+    // Pull-up for the PCNT init, then the user's pull
     gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
     pcnt_begin(_rx_pin, GPIO_PULLUP_ONLY);
     set_pin_pull(_pin_pull);
@@ -111,14 +111,14 @@ void GeigerPulse::restartAfterOTA() {
 }
 
 #ifdef PCNT_SELECTABLE
-// 1 s the first time, a stall's pulses spread over it
+// 1 s the first time. After a stall the pulses are spread over the whole gap
 static inline __attribute__((always_inline)) uint32_t span_us(int64_t now_us, int64_t last_us) {
   if (last_us == 0 || now_us <= last_us) return 1000000UL;
   int64_t s = now_us - last_us;
   return s < (int64_t)UINT32_MAX ? (uint32_t)s : UINT32_MAX;
 }
 
-// wakes run it too, so it keeps its own time
+// Wakes run loop() too, so it keeps its own timer
 void GeigerPulse::loop() {
   if (!_pcnt) return;
   uint32_t now = corium::fastMillis();
@@ -165,7 +165,7 @@ int GeigerPulse::collect() {
 
   uint32_t n = pending + (uint32_t)residual;
   if (n > STORM_COUNTS) {
-    Counter::drop_pulses(pushed);   // what this second put in, not n: older ones stay
+    Counter::drop_pulses(pushed);   // only what this second put in, not n, older ones stay
     if (!_stormy) corium::Log::console(PSTR("GeigerPulse: PCNT storm (%u/s) - dropped"), (unsigned)n);
     _stormy = true;
     return 0;
@@ -179,7 +179,7 @@ void GeigerPulse::set_pcnt_filter(int val) {
 }
 
 void GeigerPulse::apply_pcnt_filter() {
-  if (!_pcnt || !_polls) return;   // no unit till begin
+  if (!_pcnt || !_polls) return;   // no unit until begin()
   if (_pcnt_filter > 0) {
     pcnt_set_filter_value(PCNT_UNIT, _pcnt_filter);
     pcnt_filter_enable(PCNT_UNIT);
@@ -190,7 +190,7 @@ void GeigerPulse::apply_pcnt_filter() {
   }
 }
 
-// plain gpio, both modes
+// Plain gpio pull, used in both modes
 void GeigerPulse::set_pin_pull(int mode) {
   gpio_pull_mode_t m;
   const char* name;
