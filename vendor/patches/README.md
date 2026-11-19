@@ -12,5 +12,5 @@ so the library can be updated without losing it.
 
 1. Replace `vendor/<library>/` with the new upstream release.
 2. `git apply --directory=vendor/<library> vendor/patches/<patch>`
-3. Run the host suites (`test_uecc` pins micro-ecc's keys and signatures).
+3. Build an ESP8266 and an ESP32 env and check a station still signs in.
 4. Update the table above.
