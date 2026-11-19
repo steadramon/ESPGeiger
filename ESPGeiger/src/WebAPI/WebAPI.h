@@ -66,6 +66,7 @@ class WebAPI : public corium::Sender {
     void loop(unsigned long now) override;
     const corium::PrefGroup* prefsGroup() override;
     uint8_t displayOrder() override { return 0; }  // managed via /webapi page
+    uint16_t stallMs() override { return 250; }   // the sign, ~180 ms on 8266
     void onPrefsLoaded() override;
     void registerRoutes(EGHttpServer& http) override;
     const corium::MenuEntry* menuEntries() override;

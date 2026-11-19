@@ -67,6 +67,7 @@ class Module {
     virtual const MenuEntry* menuEntries() { return nullptr; }
     virtual void onPrefsSaved() { onPrefsLoaded(); }
     virtual uint8_t displayOrder() { return 50; }  // lower first, 0 = hidden
+    virtual uint16_t stallMs() { return 0; }   // a loop() over this is a stall, 0 = CORIUM_STALL_US
     virtual bool hwPresent() { return true; }
 
     // For the legacy import, PROGMEM rows ending with {}

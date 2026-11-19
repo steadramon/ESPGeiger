@@ -199,7 +199,7 @@ inline void corium::Registry::note_run(Slot& s, uint32_t d) {
     uint16_t c = peak_code(d);
     if (c > s.peak_us) s.peak_us = c;
   }
-  if (d > CORIUM_STALL_US) s.stalls += s.stalls != 0xFF;
+  if (d > CORIUM_STALL_US && d > s.module->stallMs() * 1000UL) s.stalls += s.stalls != 0xFF;
 #ifdef LOOP_PROFILE
   if (d > s.max_loop_us) s.max_loop_us = d;
   s.total_loop_us += d;

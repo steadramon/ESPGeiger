@@ -32,7 +32,7 @@ static_assert(CORIUM_MAX_MODULES <= 32, "post and profile masks are 32 bits");
 #define CORIUM_LOOP_BUDGET_US 2000
 #endif
 
-// A loop() longer than this counts as a stall
+// A loop() longer than this counts as a stall, a module's stallMs() can give it longer
 #define CORIUM_STALL_US 10000
 
 // Topics below CORIUM_TOPIC_APP are Corium's, an app numbers its own from there
@@ -106,7 +106,7 @@ class Registry {
 
     static uint32_t peakUs(uint8_t idx);   // longest loop() lately, halves each hour
     static void agePeaks();                // each hour, Reactor
-    static uint8_t stalls(uint8_t idx);    // loop()s over CORIUM_STALL_US, saturates
+    static uint8_t stalls(uint8_t idx);    // loop()s over the module's limit, saturates
 
     static uint8_t count();
     static Module* get(uint8_t idx);
