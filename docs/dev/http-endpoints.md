@@ -96,6 +96,8 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `tx` | WiFi transmit power in dBm, `null` if the core doesn't report it |
 | `phy`, `sleep`, `auto` | WiFi PHY mode, radio sleep mode, and whether WiFi auto-reconnect is on |
 | `wifi` | WiFi state: `boot`, `joining`, `portal`, `online`, `link_lost`, `offline`, `hotspot`, `ap_mode` or `off` |
+| `wear` | Flash wear of the file storage in percent, counted since 0.14 against a rating of 10,000 erases a block. An estimate from the firmware's own writes, high rather than low |
+| `erases` | Flash block erases the firmware's writes cost since boot (the same estimate). A number that climbs fast while nothing is being changed points at a fault |
 | `g_mod` | Geiger model name. On serial builds this identifies the protocol (`GC10`, `GC10Next`, `MightyOhm`, `ESPG`). |
 | `g_type` | Counter input type: `"pulse"`, `"serial"`, or `"none"` (UDP receiver and internal test builds) |
 | `g_test` | `true` on test / simulation builds |

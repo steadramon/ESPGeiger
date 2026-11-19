@@ -47,16 +47,16 @@ static_assert(CORIUM_PREFS_MAX_GROUPS >= CORIUM_MAX_MODULES, "every module needs
 
 #define CORIUM_PREFS_NAMESPACE    "prefs"
 
-// a group's live values in SRAM, files only change at commit
+// A group's live values in SRAM, the files only change at commit
 struct GroupShadow {
   const corium::PrefGroup* group;
   corium::Module*          module;
   const char**       values;    // heap copy or the default's pointer
   uint32_t           heap_mask; // bit j = values[j] is malloc'd
-  uint8_t            dirty;     // HELD = write waits
+  uint8_t            dirty;     // HELD = the write is being held back
   bool               stored;
-  uint8_t            partial;   // never write over it: row + 1, or MANY
-  bool               wipe;      // resetAll, no file unless a put comes
+  uint8_t            partial;   // row refused at load (row + 1, or MANY), file never written over
+  bool               wipe;      // set by resetAll, no file unless something is put
 };
 enum : uint8_t { CLEAN, DIRTY, HELD };
 static constexpr size_t MAX_ROWS = sizeof(GroupShadow::heap_mask) * 8;
@@ -98,20 +98,20 @@ static bool           s_reboot_put = false;   // a P_REBOOT row changed
 static const char*    s_refused = nullptr;
 static const char*    s_warned = nullptr;
 static corium::PrefsStorage s_storage;
-static bool           s_waiting = false;   // commitSoon's write
-static GroupShadow*   s_frozen = nullptr;  // the last commit left it out
+static bool           s_waiting = false;   // commitSoon's write is pending
+static GroupShadow*   s_frozen = nullptr;  // group the last commit had to leave out
 static void         (*s_wake)(uint32_t) = nullptr;
 static uint8_t        s_fails = 0;   // flushes failed in a row
 static bool           s_committing = false;
 static bool           s_nest_said = false;
-static constexpr uint8_t FAILS_MAX = 7;   // hold doubles, 64x tops
+static constexpr uint8_t FAILS_MAX = 7;   // hold doubles on each fail, up to 64x
 
 static inline bool shadow_is_heap(const GroupShadow& gs, size_t j) {
   return (gs.heap_mask >> j) & 1u;
 }
 
-// default reuses the flash pointer, no heap
-// no memory = old value kept, false
+// The default reuses the flash pointer, no heap.
+// Out of memory keeps the old value and returns false
 static bool shadow_set(GroupShadow& gs, size_t j, const char* val, size_t len) {
   const char* dv = gs.group->prefs.defaultVal(j);
   bool is_dv = dv && strlen(dv) == len && memcmp(dv, val, len) == 0;
@@ -163,7 +163,7 @@ int find_pref_index(const corium::PrefGroup* g, const char* key) {
 
 const char* moved_to(const char* from);
 
-// module follows a moved key
+// Follows a moved key to its new group, module is updated to match
 GroupShadow* locate(const char*& module, const char* key, int& idx) {
   for (const char* m = module; m; m = moved_to(m)) {
     GroupShadow* gs = find_group(m);
@@ -175,7 +175,7 @@ GroupShadow* locate(const char*& module, const char* key, int& idx) {
 
 static bool s_skipped = false;   // a group left out at begin
 
-// skipped: its defaults, saves still refused
+// A skipped group reads its defaults, saves to it are still refused
 const char* skipped_default(const char* module, const char* key) {
   uint8_t n = corium::Registry::count();
   for (uint8_t i = 0; i < n; i++) {
@@ -194,7 +194,7 @@ const char* find_value(const char* module, const char* key) {
   return s_skipped ? skipped_default(module, key) : nullptr;
 }
 
-// no control chars, valid utf8, fits the pattern
+// No control chars, valid UTF-8 and fits the pattern
 bool string_ok(const corium::Pref* p, const char* value) {
   for (const char* v = value; *v; v++) {
     unsigned char c = (unsigned char)*v;
@@ -215,13 +215,13 @@ int copy_value(const char* value, char* out, size_t outsz) {
 // 1, true, yes
 bool truthy(char c) { return c == '1' || c == 't' || c == 'T' || c == 'y' || c == 'Y'; }
 
-// any case, 0.12 saved Y and N
+// Any case. 0.12 saved Y and N
 struct BoolWords { char on[5]; char off[6]; };
 static const BoolWords BOOL_WORDS[] PROGMEM = {
   {"y", "n"}, {"yes", "no"}, {"true", "false"}, {"on", "off"},
 };
 
-// the rest refused, never read as off
+// Anything else is refused, never read as off
 int valid_bool(const char* value, char* out, size_t outsz) {
   if ((value[0] == '0' || value[0] == '1') && !value[1]) return copy_value(value, out, outsz);
   for (const BoolWords& w : BOOL_WORDS) {
@@ -231,7 +231,7 @@ int valid_bool(const char* value, char* out, size_t outsz) {
   return -1;
 }
 
-// refuse, don't clamp
+// Out of range is refused, not clamped
 int valid_int(const corium::Pref* p, const char* value, char* out, size_t outsz) {
   int32_t v;
   if (!parseI32(value, &v)) return -1;
@@ -243,14 +243,14 @@ int valid_int(const corium::Pref* p, const char* value, char* out, size_t outsz)
 int valid_uint(const corium::Pref* p, const char* value, char* out, size_t outsz) {
   uint64_t v;
   if (!parseU64(value, &v) || v > UINT32_MAX) return -1;
-  // unsigned, no wrap above INT32_MAX
+  // compare unsigned so values above INT32_MAX don't wrap
   if (ranged(p) && (v < (uint32_t)p->minI || v > (uint32_t)p->maxI)) return -1;
   return snprintf_P(out, outsz, W_FMT_LU, (unsigned long)v);
 }
 
 static constexpr int JUNK = -2;   // never meant anything on this build
 
-// a blank option is a number this build hasn't got
+// A blank option is a number this build doesn't have
 int enum_slot(const corium::Pref* p, const char* out, int len) {
   if (!p->pattern) return len;
   uint32_t skip = strtoul(out, nullptr, 10) - (uint32_t)p->minI;
@@ -281,7 +281,7 @@ int listed(const corium::Pref* p, const char* out, int len) {
   }
 }
 
-// kept as typed, no String(float)
+// Kept as typed, no String(float) round trip
 int valid_float(const corium::Pref* p, const char* value, char* out, size_t outsz) {
   char* end;
   float v = parseF(value, &end);
@@ -318,7 +318,7 @@ int validate(const corium::Pref* p, const char* value, char* out, size_t outsz) 
   return -1;
 }
 
-// a bad one gets the default, never an edge
+// A bad stored value gets the default, it's never clamped to an edge
 int check_stored(const corium::Pref& p, const char* value, uint16_t vlen) {
   if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return 0;
   if (vlen > CORIUM_PREFS_MAX_VALUE || memchr(value, '\0', vlen)) return -1;
@@ -329,7 +329,7 @@ int check_stored(const corium::Pref& p, const char* value, uint16_t vlen) {
   char out[CORIUM_PREFS_MAX_VALUE + 1];
   int len = validate(&p, copy, out, sizeof(out));
   if (len != -1 || p.type == corium::P_STRING) return len;
-  // text in a number row is junk, a number another build may want
+  // Text in a number row is junk. A number may be valid on another build, so refused not junk
   const char* v = copy;
   if (*v == '-' || *v == '+') v++;
   return (*v >= '0' && *v <= '9') || *v == '.' ? -1 : JUNK;
@@ -339,10 +339,10 @@ void not_loaded(GroupShadow& gs, size_t j) {
   gs.partial = gs.partial ? MANY : (uint8_t)(j + 1);
 }
 
-// own = the group's file; true = a row took it
+// own = read from the group's own file. Returns true if a row took the value
 bool read_record(GroupShadow* gs, const char* key, uint8_t klen,
                  const char* value, uint16_t vlen, bool own) {
-  // rest didn't read, never write over it
+  // the rest of the file didn't read, so never write over it
   if (!klen) {
     if (own) gs->partial = MANY;
     return false;
@@ -372,9 +372,9 @@ void load_record_cb(void* ctx, const char* key, uint8_t klen,
   read_record((GroupShadow*)ctx, key, klen, value, vlen, true);
 }
 
-// file size: magic, then klen key vlen value per row
+// file size: magic, then klen key vlen value per row, then the tail
 size_t group_bytes(const GroupShadow& gs) {
-  size_t total = corium::PREFS_MAGIC_LEN;
+  size_t total = corium::PREFS_MAGIC_LEN + corium::PREFS_TAIL_LEN;
   for (size_t j = 0; j < gs.group->count.get(); j++) {
     total += 1 + strlen_P(gs.group->prefs.id_P(j)) + 2 + strlen(gs.values[j]);
   }
@@ -390,10 +390,10 @@ size_t value_bytes(const GroupShadow& gs) {
 // 0 = the default
 size_t value_cap(const GroupShadow& gs) {
   uint16_t n = gs.group->maxBytes.get();
-  return n ? n : CORIUM_PREFS_MAX_GROUP_SZ;
+  return n ? n : CORIUM_PREFS_GROUP_DEFAULT;
 }
 
-// stage = the .new only, commit puts it in place
+// stage writes the .new only, commit moves it into place
 CORIUM_NODISCARD bool write_group(GroupShadow& gs, bool stage = false) {
   if (gs.partial) return false;
   size_t total = group_bytes(gs);
@@ -415,6 +415,7 @@ CORIUM_NODISCARD bool write_group(GroupShadow& gs, bool stage = false) {
     wrLe16(&buf[pos], (uint16_t)vlen); pos += 2;
     memcpy(&buf[pos], value, vlen); pos += vlen;
   }
+  corium::putTail(buf, pos);
   const char* id = gs.group->moduleId;
   bool ok = stage ? s_storage.stageGroup(id, buf, total) : s_storage.writeGroup(id, buf, total);
   free(buf);
@@ -422,7 +423,7 @@ CORIUM_NODISCARD bool write_group(GroupShadow& gs, bool stage = false) {
   return ok;
 }
 
-// moved keys, first listed wins
+// Keys moved to another group, the first one listed wins
 #ifdef CORIUM_PREFS_MOVED
 struct MovedKeys { const char* from; const char* to; };
 static const MovedKeys MOVED[] PROGMEM = { CORIUM_PREFS_MOVED };
@@ -451,7 +452,7 @@ void adopt_moved() {
     const char* to = to_at(k);
     GroupShadow* gs = find_group(to);
     if (!gs || s_storage.has(to)) continue;
-    // last listed read first, so the first overwrites
+    // Read the last listed first so the first one listed wins
     Adopt a = {gs, false};
     for (size_t i = MOVED_N; i-- > 0;) {
       if (strcmp(to_at(i), to) != 0 || !s_storage.has(from_at(i))) continue;
@@ -461,16 +462,16 @@ void adopt_moved() {
   }
 }
 
-// on reset, else they come back next boot
+// Remove the old files on reset, else they come back next boot
 void drop_moved() {
   for (size_t i = 0; i < MOVED_N; i++) {
     if (find_group(from_at(i))) continue;
-    // one that stays: a file for the new group stops adopt_moved
+    // Can't remove it, so write a file for the new group to stop adopt_moved pulling it back
     if (!s_storage.removeGroup(from_at(i))) {
       GroupShadow* to = find_group(to_at(i));
       if (to) to->wipe = false;
     }
-    s_storage.dropStaged(from_at(i));   // 0.13 staged too
+    s_storage.dropStaged(from_at(i));   // 0.13 could leave a staged one too
   }
 }
 #else
@@ -497,7 +498,7 @@ void add_path(const char** list, size_t* n, const char* path) {
   if (!has_path(list, *n, path) && *n < LEGACY_PATHS) list[(*n)++] = path;
 }
 
-// stale once every group has its own file, or a reset wiped them
+// Legacy file is stale once every group has its own file, or a reset wiped them
 void drop_stale_legacy() {
   const char* seen[LEGACY_PATHS] = {0};
   size_t n = 0;
@@ -534,7 +535,7 @@ void import_legacy() {
   bool cached_ok = false;
   int imported = 0;
   const char* drop[LEGACY_PATHS] = {0};
-  const char* keep[LEGACY_PATHS] = {0};   // a group's import didn't land
+  const char* keep[LEGACY_PATHS] = {0};   // kept, a group's import didn't land
   size_t drop_n = 0, keep_n = 0;
 
   for (size_t gi = 0; gi < s_group_count; gi++) {
@@ -608,7 +609,7 @@ void import_legacy() {
 
 static bool runs(corium::Module* m) { return m && !corium::Registry::quarantined(m); }
 
-// defaults, then whatever's stored
+// Defaults first, then whatever's stored
 void load_group(GroupShadow& gs) {
   for (size_t j = 0; j < gs.group->count.get(); j++) shadow_reset(gs, j);
   gs.dirty = CLEAN;
@@ -618,10 +619,10 @@ void load_group(GroupShadow& gs) {
 }
 
 void add_group(corium::Module* m, const corium::PrefGroup* g) {
-  s_storage.dropStaged(g->moduleId);   // a cut mid commit, the old file stands
+  s_storage.dropStaged(g->moduleId);   // power cut mid commit, the old file stands
   if (g->count.get() > MAX_ROWS) {
     corium::Log::console(PSTR("prefs: %s has %u prefs, exceeds bitmap cap of 32 - skipped"),
-                 g->moduleId, (unsigned)g->count.get());
+                         g->moduleId, (unsigned)g->count.get());
     s_skipped = true;
     return;
   }
@@ -639,7 +640,7 @@ void add_group(corium::Module* m, const corium::PrefGroup* g) {
   load_group(gs);
 
   corium::Log::debug(PSTR("prefs: %s (%u keys, v%u)"),
-             g->moduleId, (unsigned)g->count.get(), (unsigned)g->version.get());
+                     g->moduleId, (unsigned)g->count.get(), (unsigned)g->version.get());
 }
 
 } // anonymous namespace
@@ -703,7 +704,7 @@ static corium::PinSafety::Use pin_use(uint16_t flags) {
 
 static bool is_pin(const corium::Pref& p) { return p.flags & (corium::P_PIN | corium::P_PIN_OUT); }
 
-// a put's own row holds its old value
+// The row being put still has its old value, so it can't match itself
 static const char* pin_taken(int32_t pin) {
   static char s_taken[40];
   if (pin < 0) return nullptr;
@@ -719,7 +720,7 @@ static const char* pin_taken(int32_t pin) {
   return nullptr;
 }
 
-// sets s_refused and s_warned; an import moves several
+// Sets s_refused and s_warned. kept skips the in-use check, an import moves several pins at once
 static bool pin_refused(const char* module, const corium::Pref& p, const char* key, const char* v, bool kept) {
   int32_t pin;
   if (!is_pin(p) || !parseI32(v, &pin)) return false;
@@ -733,7 +734,7 @@ static bool pin_refused(const char* module, const corium::Pref& p, const char* k
   return true;
 }
 
-// a stored shorter one still loads
+// New values only, a stored shorter one still loads
 static bool too_short(const corium::Pref& p, int nlen) {
   if (p.type != corium::P_STRING || nlen == 0 || nlen >= p.minI) return false;
   s_refused = W_TOO_SHORT;
@@ -753,12 +754,12 @@ CORIUM_NODISCARD static bool put_value(const char* module, const char* key, cons
   int nlen = validate(&p, value, out, sizeof(out));
   if (nlen < 0) return false;
 
-  // same value = nothing to do, still true
+  // Same value, nothing to do but still true
   if (strcmp(out, gs->values[idx]) != 0) {
-    // changes only, a stored pin still loads
+    // pins are checked on a change only, so a stored pin still loads
     if (pin_refused(module, p, key, out, kept)) return false;
     if (!kept && too_short(p, nlen)) return false;
-    // values only, a row added later can't fill it
+    // Cap counts value bytes only, so a row added later can't fill the group
     size_t had = strlen(gs->values[idx]);
     if ((size_t)nlen > had && value_bytes(*gs) - had + nlen > value_cap(*gs)) {
       s_refused = PSTR("group full");
@@ -773,7 +774,7 @@ CORIUM_NODISCARD static bool put_value(const char* module, const char* key, cons
     gs->wipe = false;
     if (p.flags & corium::P_REBOOT) s_reboot_put = true;
   } else if (gs->partial && gs->partial != idx + 1) {
-    // a frozen group's save refused again, never a stale OK
+    // Frozen group, mark it dirty so the save is refused again rather than a stale OK
     gs->dirty = DIRTY;
   }
   return true;
@@ -791,7 +792,7 @@ const char* corium::Prefs::refused() { return s_refused; }
 const char* corium::Prefs::warned() { return s_refused ? nullptr : s_warned; }
 
 bool corium::Prefs::putInt(const char* module, const char* key, int32_t value) {
-  char buf[CORIUM_U32_MAX_LEN + 2];   // sign
+  char buf[CORIUM_U32_MAX_LEN + 2];   // +1 for the sign
   snprintf_P(buf, sizeof(buf), W_FMT_LD, (long)value);
   return put(module, key, buf);
 }
@@ -815,7 +816,7 @@ size_t corium::Prefs::frozen(char* out, size_t cap) {
   return s_frozen ? frozen_text(*s_frozen, out, cap) : 0;
 }
 
-// all local = no export or import touches it
+// A group of only P_LOCAL rows isn't touched by an export or import
 static bool exported(const GroupShadow& gs) {
   for (size_t j = 0; j < gs.group->count.get(); j++) {
     if (!(gs.group->prefs.row(j).flags & corium::P_LOCAL)) return true;
@@ -830,7 +831,7 @@ size_t corium::Prefs::anyFrozen(char* out, size_t cap) {
   return 0;
 }
 
-// dropped, said once, never retried
+// Frozen group's write is dropped, logged once and not retried
 static void drop_frozen(GroupShadow& gs) {
   gs.dirty = CLEAN;
   s_frozen = &gs;
@@ -846,7 +847,7 @@ static bool any_dirty() {
   return false;
 }
 
-// a write can take 200 ms, an import writes them all
+// A write can take 200 ms and an import writes every group, so yield between them
 static void pause(bool& busy) {
   if (busy) corium::yieldWalk();
   busy = true;
@@ -858,7 +859,7 @@ static void saved(GroupShadow& gs, bool fire_callbacks) {
   if (fire_callbacks && !held && runs(gs.module)) gs.module->onPrefsSaved();
 }
 
-// every file staged before any lands
+// Stage every file before any of them land
 static bool stage_pass(bool& busy) {
   bool ok = true;
   for (size_t i = 0; i < s_group_count; i++) {
@@ -875,7 +876,7 @@ static bool stage_pass(bool& busy) {
   return ok;
 }
 
-// else every .new goes
+// Land them if every one staged, else drop every .new
 static bool land_pass(bool ok, bool fire_callbacks, bool& busy) {
   for (size_t i = 0; i < s_group_count; i++) {
     GroupShadow& gs = s_groups[i];
@@ -912,16 +913,16 @@ static bool wipe_pass(bool fire_callbacks, bool& busy) {
   return all_ok;
 }
 
-// a failed commit stays dirty
+// A failed commit stays dirty so it's tried again
 bool corium::Prefs::commit(bool fire_callbacks) {
-  // from a callback of one running: its puts go with the next
+  // called from a callback during a commit, its puts go with the next one
   if (s_committing) {
     if (!s_nest_said) corium::Log::console(PSTR("Prefs: Nested commit refused"));
     s_nest_said = true;
     return false;
   }
   s_committing = true;
-  s_restart_pending |= s_reboot_put;   // till the reboot
+  s_restart_pending |= s_reboot_put;   // stays set until the reboot
   s_frozen = nullptr;
   bool busy = false;
   bool all_ok = land_pass(stage_pass(busy), fire_callbacks, busy) && wipe_pass(fire_callbacks, busy);
@@ -930,14 +931,14 @@ bool corium::Prefs::commit(bool fire_callbacks) {
     s_reboot_put = false;
     s_fails = 0;
   } else {
-    s_frozen = nullptr;   // a failed write says more
+    s_frozen = nullptr;   // report the write failure instead, it says more
   }
   bool ok = all_ok && !s_frozen;
   corium::healthWord().set(corium::DEV_SAVEFAIL, !ok);
   return ok;
 }
 
-// callbacks now as commit's, the write waits for flush()
+// Callbacks run now like commit(), the write waits for flush()
 bool corium::Prefs::commitSoon(uint32_t now_ms) {
   if (!s_wake) return commit();
   s_restart_pending |= s_reboot_put;
@@ -974,7 +975,7 @@ void corium::Prefs::flush(uint32_t now_ms) {
 
 void corium::Prefs::holdBy(void (*wake)(uint32_t at)) { s_wake = wake; }
 
-// readonly rows and headings keep theirs
+// Readonly rows and headings aren't reset
 static bool resets(const corium::Pref& p) {
   return !(p.flags & corium::P_READONLY) && p.type != corium::P_LABEL && p.type != corium::P_HEADER;
 }
@@ -987,7 +988,7 @@ bool corium::Prefs::reset(const char* module, const char* key) {
   GroupShadow* gs = find_group(module);
   if (!gs) return false;
   size_t n = gs->group->count.get();
-  // a bad default refuses it all, before any row changes
+  // Check every default first, one bad one refuses the lot before any row changes
   char out[CORIUM_PREFS_MAX_VALUE + 1];
   for (size_t j = 0; j < n; j++) {
     corium::Pref p = gs->group->prefs.row(j);
@@ -1000,7 +1001,7 @@ bool corium::Prefs::reset(const char* module, const char* key) {
     gs->dirty = DIRTY;
     if (p.flags & corium::P_REBOOT) s_reboot_put = true;
   }
-  // nothing stored is wanted, the defaults go over it
+  // none of the stored file is wanted now, write the defaults over it
   if (gs->partial) gs->dirty = DIRTY;
   gs->partial = 0;
   return true;
@@ -1030,13 +1031,13 @@ void corium::Prefs::resetAll(bool keep_network) {
     for (size_t j = 0; j < n; j++) {
       if (gs.group->prefs.row(j).flags & keep) kept++;
     }
-    if (kept && kept == n) continue;   // all kept, file as is
+    if (kept && kept == n) continue;   // all kept, leave the file as is
     for (size_t j = 0; j < n; j++) {
       if (gs.group->prefs.row(j).flags & keep) continue;
       shadow_reset(gs, j);
-      if (gs.partial == j + 1) gs.partial = 0;   // not wanted now, as put
+      if (gs.partial == j + 1) gs.partial = 0;   // not wanted now, same as a put
     }
-    // files change at commit, till then the old ones stand
+    // Files change at commit, until then the old ones stand
     gs.dirty = DIRTY;
     gs.wipe = !kept;
     if (!kept) gs.partial = 0;   // nothing stored is wanted

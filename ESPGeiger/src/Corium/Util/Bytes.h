@@ -20,6 +20,7 @@
 #ifndef CORIUM_BYTES_H
 #define CORIUM_BYTES_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 inline uint16_t rdBe16(const uint8_t* p) {
@@ -43,7 +44,7 @@ inline void wrBe32(uint8_t* p, uint32_t v) {
   p[3] = (uint8_t)v;
 }
 
-// prefs records are le
+// Prefs records are little endian
 inline uint16_t rdLe16(const uint8_t* p) {
   return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
@@ -63,6 +64,19 @@ inline void wrLe32(uint8_t* p, uint32_t v) {
   p[1] = (uint8_t)(v >> 8);
   p[2] = (uint8_t)(v >> 16);
   p[3] = (uint8_t)(v >> 24);
+}
+
+// crc32 (reflected), a bit at a time; mask is all ones when the low bit is set
+inline __attribute__((noinline)) uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t len) {
+  crc = ~crc;
+  for (size_t i = 0; i < len; i++) {
+    crc ^= data[i];
+    for (int j = 0; j < 8; j++) {
+      uint32_t mask = -(int32_t)(crc & 1);
+      crc = (crc >> 1) ^ (0xEDB88320 & mask);
+    }
+  }
+  return ~crc;
 }
 
 #endif

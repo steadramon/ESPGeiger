@@ -115,6 +115,18 @@ device's own. Each is listed under [the JSON fields](/output/integrations).
 - **CPM much higher than expected**: look for electrical noise pickup -
   long unshielded pulse wires near the HV side can double-count.
 
+## Some settings went back to their defaults
+
+Every settings file is checked when the device starts. If the log says
+`Prefs: <group> damaged, defaults`, that file was corrupted on flash: the
+group runs on its defaults and the damaged copy is kept as
+`<group>.bin.bad` until the group is saved after a restart. Set those
+settings again.
+The web password and the Stations key are restored from their backup copy
+(`Web password restored from backup`, `Key restored from backup`).
+
+`/info` shows how full the file storage is under **Files**.
+
 ## When reporting a problem
 
 Include the `/info` page contents (platform, version, restart reason)

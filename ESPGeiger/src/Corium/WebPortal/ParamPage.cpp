@@ -52,7 +52,7 @@ static void body_free(BodyBuf& b) {
   b.ok  = false;
 }
 
-static constexpr size_t BODY_MAX = 8192;   // largest body held, it's heap
+static constexpr size_t BODY_MAX = 8192;   // largest body held, it comes from the heap
 
 static bool body_size_ok(size_t cap) {
   return cap != 0 && cap <= BODY_MAX;
@@ -77,7 +77,7 @@ static void body_end(BodyBuf& b) {
   if (b.buf) b.buf[b.len] = '\0';
 }
 
-// path nullptr = quiet
+// path nullptr = no log
 static void body_begin(BodyBuf& b, size_t cap, PGM_P path) {
   body_free(b);
   if (!body_size_ok(cap)) {
@@ -89,7 +89,7 @@ static void body_begin(BodyBuf& b, size_t cap, PGM_P path) {
   }
 }
 
-// no buffer, the rest isn't read
+// False with no buffer, then the rest of the body isn't read
 static bool body_event(BodyBuf& b, EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                        const char* chunk, size_t len, PGM_P path) {
   switch (ev) {
@@ -109,10 +109,10 @@ bool corium::WebPortal::hParamBody(EGHttpRequest& req, EGHttpServer::BodyEvent e
   return body_event(s_param_body, req, ev, chunk, len, P_PARAM);
 }
 
-// first refused, first warned, above the form
+// The first refused pref and the first warning, shown above the form
 struct Refusal {
   char name[2 * CORIUM_PREF_ID_MAX + 2];   // mid.id
-  char why[corium::PinSafety::WHY_MAX];       // copied, the next put reuses "in use"
+  char why[corium::PinSafety::WHY_MAX];       // a copy, the next put reuses the "in use" text
   char note_name[2 * CORIUM_PREF_ID_MAX + 2];
   const char* note;                   // PROGMEM
 };
@@ -153,7 +153,7 @@ static void param_save_pref(const char* mid, const corium::Pref& p,
   param_put(mid, id, name, v, r);
 }
 
-// out of line, its buffers aren't on the stack under commit()
+// Kept out of line so its buffers aren't on the stack while commit() runs
 static __attribute__((noinline)) bool param_save_body(uint8_t tab, Refusal& r) {
   const char* body = s_param_body.buf;
   size_t      len  = s_param_body.len;
@@ -162,9 +162,9 @@ static __attribute__((noinline)) bool param_save_body(uint8_t tab, Refusal& r) {
   if (ok) {
     for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
       const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
-      // this tab only, else other bools clear
+      // Only this tab, bools on the other tabs aren't in the form and would clear
       if ((g->category.get() & corium::P_CAT_TAB) != tab) continue;
-      // not on the page, a missing bool would save as off
+      // not shown on the page, so a missing bool would save as off
       corium::Module* m = corium::Prefs::moduleAt(gi);
       if (m->displayOrder() == 0) continue;
       for (size_t j = 0; j < g->count.get(); j++) {
@@ -178,7 +178,7 @@ static __attribute__((noinline)) bool param_save_body(uint8_t tab, Refusal& r) {
 }
 
 #ifndef APP_PARAM_TABS
-#define APP_PARAM_TABS "System", "Input", "Output", "Upload", "Backup"   // app sets it
+#define APP_PARAM_TABS "System", "Input", "Output", "Upload", "Backup"   // the app sets its own
 #endif
 
 static constexpr uint8_t TABS = corium::P_CAT_BACKUP + 1;
@@ -212,7 +212,7 @@ static uint8_t param_group_order(uint8_t gi) {
   return corium::Prefs::moduleAt(gi)->displayOrder();
 }
 
-// on groups first, ties keep their order
+// Groups that are on go first, ties keep their order
 static void param_sort_groups(uint8_t* order, uint8_t gc) {
   static constexpr uint16_t OFF_LAST = 0x100;
   uint16_t key[CORIUM_MAX_MODULES];
@@ -251,13 +251,13 @@ static void param_appendf(ParamCtx& c, PGM_P fmt, ...) {
   advancePos(c.pos, n, sizeof(c.buf));
 }
 
-// flash, dropped if it won't fit
+// Appends a flash string, dropped if it won't fit
 static void param_append(ParamCtx& c, PGM_P s) {
   size_t n = strlen_P(s);
   if (c.pos + n < sizeof(c.buf)) { memcpy_P(c.buf + c.pos, s, n); c.pos += n; }
 }
 
-// one chunk from the start of buf
+// sends one chunk, formatted at the start of buf
 static void param_sendf(ParamCtx& c, PGM_P fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -266,7 +266,7 @@ static void param_sendf(ParamCtx& c, PGM_P fmt, ...) {
   if (n > 0 && (size_t)n < sizeof(c.buf)) c.res->sendChunk(c.buf, (size_t)n);
 }
 
-// for the form script, "" = always shown
+// Show rule attrs for the form script, "" = always shown
 static const char* show_attr(ParamCtx& c, const char* id) {
   corium::PrefShow r;
   c.attr[0] = '\0';
@@ -306,7 +306,7 @@ static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
   }
 }
 
-// sent per option, a long list can't overflow buf
+// Sent one option at a time so a long list can't overflow buf
 static void param_emit_options(ParamCtx& c, const corium::Pref& p) {
   int32_t cur_idx = 0, def_idx = -1;
   parseI32(c.cur, &cur_idx);
@@ -316,9 +316,9 @@ static void param_emit_options(ParamCtx& c, const corium::Pref& p) {
   while (*opt) {
     const char* sep = strchr(opt, '|');
     size_t olen = sep ? (size_t)(sep - opt) : strlen(opt);
-    // blank holds a number this build hasn't got
+    // a blank option keeps the place of a value this build doesn't have
     if (olen) {
-      long v = p.type == corium::P_UINT ? strtol(opt, nullptr, 10) : idx;   // a number list
+      long v = p.type == corium::P_UINT ? strtol(opt, nullptr, 10) : idx;   // a uint's list holds the numbers
       param_sendf(c, PSTR("<option value=%ld%s>%.*s%s</option>"),
                   v, (v == cur_idx) ? PSTR(" selected") : PSTR(""),
                   (int)olen, opt, (v == def_idx) ? PSTR(" (default)") : PSTR(""));
@@ -351,14 +351,14 @@ static PGM_P param_input_type(const corium::Pref& p, bool slider) {
   return PSTR("text");
 }
 
-// html grows 6x, a cut value would be saved cut
+// Escaping can grow it 6x. A value cut short here would be saved cut short
 static constexpr size_t ESC_PIECE = sizeof(ParamCtx::buf) / 6;
 
 static void param_send_escaped(ParamCtx& c, const char* s) {
   char piece[ESC_PIECE + 1];
   for (size_t left = strlen(s); left; ) {
     size_t k = left < ESC_PIECE ? left : ESC_PIECE;
-    // whole chars, a cut one comes back as two U+FFFD
+    // split on whole UTF-8 chars, a cut one comes back as two U+FFFD
     while (k < left && k > 1 && (s[k] & 0xC0) == 0x80) k--;
     memcpy(piece, s, k);
     piece[k] = '\0';
@@ -441,7 +441,7 @@ static void param_load_text(ParamCtx& c, const corium::Pref& p) {
   flashToRam(p.label,   c.lbl,  sizeof(c.lbl));
   flashToRam(p.help,    c.help, sizeof(c.help));
   flashToRam(p.pattern, c.pat,  sizeof(c.pat));
-  // from the flag, no row types it
+  // The restart note comes from the flag, so no row has to spell it out
   if (p.flags & corium::P_REBOOT) {
     size_t n = strlen(c.help);
     if (n && c.help[n - 1] != '.' && n + 1 < sizeof(c.help)) c.help[n++] = '.';
@@ -460,7 +460,7 @@ static void param_emit_label(ParamCtx& c, const char* lbl) {
 
 static void param_emit_row(ParamCtx& c, const corium::Pref& p);
 
-// a row with a show rule sits in its own div
+// A row with a show rule goes in its own div
 static void param_emit_field(ParamCtx& c, const corium::Pref& p) {
   param_load_text(c, p);
   bool wrap = show_attr(c, c.id)[0];
@@ -555,7 +555,7 @@ void corium::WebPortal::hParamJs(EGHttpRequest& req, EGHttpResponse& res, void*)
 #endif
 }
 
-// out of line, the form's buffers aren't on the stack under commit()
+// kept out of line too, so the form's buffers aren't on the stack under commit()
 static __attribute__((noinline)) void param_render_form(EGHttpResponse& res, uint8_t tab) {
   corium::WebPortal::sendf(res, PSTR("<form method=POST action='/param?t=%u'>"), (unsigned)tab);
   param_render_groups(res, tab);
@@ -579,7 +579,7 @@ static PGM_P link_once(bool& link, PGM_P text) {
   return text;
 }
 
-// frozen = a group left out, the rest saved
+// frozen means one group was left out and the rest saved
 static void param_says(EGHttpResponse& res, bool saved, bool wrote, bool restart,
                        const Refusal& refused, const char* frozen) {
   if (wrote) res.sendChunk(F(
@@ -609,11 +609,11 @@ void corium::WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   Refusal refused{};
   bool saved = posted && param_save_body(tab, refused);
   bool wrote = saved && corium::Prefs::commit();
-  // every tab row is put, a frozen group on it mustn't read as not saved
+  // Every row on the tab was put, so a frozen group there mustn't show as not saved
   char why[CORIUM_PREFS_FROZEN_MAX];
   const char* frozen = saved && !wrote && corium::Prefs::frozen(why, sizeof(why)) ? why : nullptr;
   if (frozen) wrote = true;
-  // stay, so the refusal or note shows
+  // stay on the page when there's a refusal or note to show
   bool restart = wrote && corium::Prefs::restartPending();
   if (restart && !refused.why[0] && !refused.note && !frozen) {
     res.redirect(FPSTR(P_RESTART));
@@ -624,32 +624,18 @@ void corium::WebPortal::hParam(EGHttpRequest& req, EGHttpResponse& res, void*) {
   if (posted) param_says(res, saved, wrote, restart, refused, frozen);
   param_render_tabs(res, tab);
 
-  // Backup is the import form only
   if (tab == (uint8_t)corium::P_CAT_BACKUP) param_render_backup(res);
   else                                param_render_form(res, tab);
   res.sendChunk(F("<script src=/paramjs" CORIUM_CACHE_BUST "></script>"));
   corium::WebPortal::endPage(res);
 }
 
-// crc32 (reflected), a bit at a time; mask is all ones when the low bit is set
-static uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len) {
-  crc = ~crc;
-  for (size_t i = 0; i < len; i++) {
-    crc ^= data[i];
-    for (int j = 0; j < 8; j++) {
-      uint32_t mask = -(int32_t)(crc & 1);
-      crc = (crc >> 1) ^ (0xEDB88320 & mask);
-    }
-  }
-  return ~crc;
-}
-
 static constexpr uint32_t EXPORT_OBF_SEED = CORIUM_EXPORT_SEED;
-// magic, version, groups, crc
+// Blob layout is magic, version, groups, crc
 static constexpr size_t  BLOB_MAGIC = 3, BLOB_HEAD = BLOB_MAGIC + 1, BLOB_CRC = 4;
 static constexpr uint8_t BLOB_VER = 1;
 
-// base64 straight into the response, crc over the bytes as sent
+// Encodes base64 straight into the response, the crc is over the bytes as sent
 struct B64Sink {
   EGHttpResponse* res;
   uint8_t  tri[3];
@@ -677,7 +663,7 @@ static void b64_flush_out(B64Sink& s) {
 }
 static void b64_emit_quartet(B64Sink& s, uint8_t in_len) {
   if (s.out_len + 4 > sizeof(s.out)) b64_flush_out(s);
-  // writes a NUL too
+  // encode_base64 writes a NUL too
   unsigned char quad[5];
   encode_base64(s.tri, in_len, quad);
   memcpy(s.out + s.out_len, quad, 4);
@@ -693,7 +679,7 @@ static void b64_write(B64Sink& s, const void* data, size_t len) {
   for (size_t i = 0; i < len; i++) {
     uint8_t b = p[i];
     if (s.obf_on) b ^= obf_step(&s.obf_state);
-    s.crc = crc32_update(s.crc, &b, 1);
+    s.crc = crc32Update(s.crc, &b, 1);
     b64_put(s, b);
   }
 }
@@ -703,7 +689,7 @@ static void b64_finish(B64Sink& s) {
   b64_flush_out(s);
 }
 
-// id gets the key, val_out its value
+// Skips labels, local prefs and defaults. id gets the key, val_out its value
 static bool is_exportable_pref(const corium::PrefGroup* g, const corium::Pref& p,
                                char (&id)[CORIUM_PREF_ID_MAX + 1], const char*& val_out) {
   if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return false;
@@ -749,7 +735,7 @@ static void export_write_group(B64Sink& sink, const corium::PrefGroup* g, uint8_
   }
 }
 
-// first, an import reads it before the rest
+// Written first, an import reads the board before the rest
 static void export_board(B64Sink& sink) {
   char mid[8];
   flashToRam(corium::ImportText::BOARD_MID, mid, sizeof(mid));
@@ -776,7 +762,7 @@ static void export_stream(B64Sink& sink) {
   const uint8_t MAGIC[BLOB_MAGIC] = {CORIUM_EXPORT_MAGIC};
   b64_write(sink, MAGIC, BLOB_MAGIC);
   b64_write_u8(sink, BLOB_VER);
-  // magic and version stay clear, the rest is xored
+  // Magic and version stay clear, the rest is xored
   sink.obf_on = true;
   b64_write_u8(sink, groups);
   export_board(sink);
@@ -795,13 +781,13 @@ static void deobfuscate_payload(uint8_t* buf, size_t len) {
 }
 
 static const char* check_import(uint8_t* buf, size_t len) {
-  if (len < BLOB_HEAD + 1 + BLOB_CRC) return W_TOO_SHORT;   // no groups
-  // the magic is blobStart's 4 base64 chars
+  if (len < BLOB_HEAD + 1 + BLOB_CRC) return W_TOO_SHORT;   // too short to hold any groups
+  // blobStart already checked the magic, as its 4 base64 chars
   if (buf[BLOB_MAGIC] != BLOB_VER) return W_BAD_FORMAT;
   size_t payload_len = len - BLOB_CRC;
-  // crc is over the xored bytes, check before undoing them
+  // The crc is over the xored bytes, so check it before undoing them
   uint32_t expected = rdBe32(buf + payload_len);
-  uint32_t actual = crc32_update(0, buf, payload_len) ^ EXPORT_OBF_SEED;
+  uint32_t actual = crc32Update(0, buf, payload_len) ^ EXPORT_OBF_SEED;
   if (expected != actual) return PSTR("checksum mismatch");
 
   deobfuscate_payload(buf + BLOB_HEAD, payload_len - BLOB_HEAD);
@@ -828,13 +814,13 @@ static bool board_group(const char* mid) {
   return false;
 }
 
-// a newer shortest rule mustn't drop a backup's values
+// A newer min length rule mustn't drop a backup's values
 static bool import_kept(const char* mid, const char* key, const char* value) {
   if (s_other_board && board_group(mid)) return false;
   return !import_local(mid, key) && corium::Prefs::putKept(mid, key, value);
 }
 
-// the wipe reset them, flash still has this board's
+// The wipe reset the board groups, flash still has this board's values so go back to those
 static void keep_board_groups() {
   for (size_t gi = 0; gi < corium::Prefs::groupCount(); gi++) {
     const corium::PrefGroup* g = corium::Prefs::groupAt(gi);
@@ -842,7 +828,7 @@ static void keep_board_groups() {
   }
 }
 
-// wipe then apply, -1 = bad blob or every row refused
+// wipes then applies, -1 for a bad blob or if every row was refused
 static int apply_import(uint8_t* buf, size_t len, corium::ImportText::Result* out,
                         const char** err_out) {
   const char* err = check_import(buf, len);
@@ -858,7 +844,7 @@ static int apply_import(uint8_t* buf, size_t len, corium::ImportText::Result* ou
   *out = corium::ImportText::applyBlob(recs, recs_len, import_kept);
   if (s_other_board) keep_board_groups();
   if (out->skipped) corium::Log::console(PSTR("Import: %d refused, first %s"), out->skipped, out->firstKey);
-  // another board's export, say: the old settings stand
+  // e.g. another board's export, the old settings stay
   if (out->applied == 0 && out->skipped) {
     corium::Prefs::revert();
     if (err_out) *err_out = W_NOTHING_IMP;
@@ -867,15 +853,15 @@ static int apply_import(uint8_t* buf, size_t len, corium::ImportText::Result* ou
   return out->applied;
 }
 
-// safe mode gets here frozen: one the import didn't replace stops it all
+// In safe mode prefs can be frozen here. A frozen group the import didn't replace stops the whole import
 static const char* import_commit(char* why, size_t n) {
   const char* err = corium::Prefs::anyFrozen(why, n) ? why : nullptr;
-  if (!err && !corium::Prefs::commit(false)) err = corium::WRITE_FAILED;   // silent, the cascade would WDT
+  if (!err && !corium::Prefs::commit(false)) err = corium::WRITE_FAILED;   // no callbacks, running every module's onPrefsSaved here could trip the WDT
   if (err) corium::Prefs::revert();
   return err;
 }
 
-// a row that didn't load isn't in the blob, an import would lose it
+// Refused while a row didn't load. It wouldn't be in the blob, so an import would lose it
 void corium::WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) {
   (void)req;
   char why[CORIUM_PREFS_FROZEN_MAX];
@@ -898,7 +884,7 @@ void corium::WebPortal::hExport(EGHttpRequest& req, EGHttpResponse& res, void*) 
 
 static BodyBuf s_import_body;
 
-// too big or no memory, hImport says no body
+// if it's too big or there's no memory, hImport says no body
 bool corium::WebPortal::hImportBody(EGHttpRequest& req, EGHttpServer::BodyEvent ev,
                              const char* chunk, size_t len, void*) {
   return body_event(s_import_body, req, ev, chunk, len, nullptr);
@@ -911,7 +897,7 @@ static void import_fail(EGHttpResponse& res, const char* msg) {
   body_free(s_import_body);
 }
 
-// decoded in the body buffer
+// The field is decoded in place, in the body buffer
 static char* import_field(size_t* len, const char** err) {
   if (!s_import_body.ok || !s_import_body.buf || s_import_body.len == 0) {
     *err = PSTR("no body");
@@ -925,7 +911,7 @@ static char* import_field(size_t* len, const char** err) {
   return field;
 }
 
-// malloc'd blob, or nullptr and err
+// returns a malloc'd blob, or nullptr with err set
 static uint8_t* import_decode(const char* b64, size_t b64_len, unsigned int* raw_len, const char** err) {
   unsigned int raw_cap = decode_base64_length((const unsigned char*)b64, b64_len);
   if (raw_cap == 0 || raw_cap > BODY_MAX) {
@@ -941,7 +927,7 @@ static uint8_t* import_decode(const char* b64, size_t b64_len, unsigned int* raw
   return raw;
 }
 
-// wipe then apply, -1 = bad
+// Wipes then applies, -1 if bad
 static int import_blob(const char* b64, size_t b64_len, corium::ImportText::Result* out,
                        const char** err) {
   unsigned int raw_len = 0;
@@ -953,7 +939,7 @@ static int import_blob(const char* b64, size_t b64_len, corium::ImportText::Resu
   return applied;
 }
 
-// only the listed prefs change, each one validated; -1 = none
+// Only the listed prefs change and each one is validated. -1 if none applied
 static int import_lines(const char* text, size_t len, corium::ImportText::Result* out, const char** err) {
   corium::ImportText::Result r = corium::ImportText::apply(text, len, import_put);
   body_free(s_import_body);
@@ -972,7 +958,7 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
   corium::ImportText::Result r = {};
   int applied = -1;
   char why[CORIUM_PREFS_FROZEN_MAX];
-  // safe mode: the import may replace it
+  // in safe mode carry on, the import may replace the frozen group
   if (!corium::BootGuard::safeMode() && corium::Prefs::anyFrozen(why, sizeof(why))) {
     import_fail(res, why);
     return;
@@ -988,7 +974,7 @@ void corium::WebPortal::hImport(EGHttpRequest& req, EGHttpResponse& res, void*) 
   }
   corium::WebPortal::beginPage(res, F("Imported"));
   if (r.firstKey[0]) {
-    // blob, a key from the upload
+    // From a blob, the key came in the upload so escape it
     sendf(res, PSTR("<p>Imported %d settings, %d refused (first "), applied, r.skipped);
     char esc[6 * (sizeof(r.firstKey) - 1) + 1];
     egesc_html(esc, sizeof(esc), r.firstKey);

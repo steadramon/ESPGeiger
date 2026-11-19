@@ -21,6 +21,7 @@
 #include "Corium/Module/Registry.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
+#include "Corium/System/Fs.h"
 #include "Corium/System/KeyStore.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/WebPortal/WebPortal.h"
@@ -49,7 +50,7 @@ static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {corium::K_ORIGIN,   nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},
   // max backoff s, 0 = every interval
   {corium::K_BACKOFF,  nullptr,  nullptr,  "300",   nullptr, 0, 3600, 0, corium::P_UINT, corium::P_HIDDEN},
-  // 5 wrong logins = 10 s of none taken
+  // 5 wrong logins = no logins taken for 10 s
   {corium::K_BRAKE,    nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},
 #ifdef ESP32
   // 0 = board default. C3 max 160
@@ -66,11 +67,11 @@ static const corium::PrefGroup SYSTEM_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* corium::SystemPrefs::prefsGroup() { return &SYSTEM_PREF_GROUP; }
 
 bool corium::SystemPrefs::passRestored = false;
-static bool s_unrestored = false;   // no memory for the put, the backup stands in
+static bool s_unrestored = false;   // Put failed for memory, so the backup stands in for the login
 
 static_assert(WEB_PASS_MAX <= corium::KeyStore::MAX, "web_pass fits a key store slot");
 
-// login holds, again next boot
+// Keeps the login, and if it can't save this runs again next boot
 static void restore_pass(const char* kept) {
   if (!corium::Prefs::putKept("sys", corium::K_WEB_PASS, kept)) {
     s_unrestored = true;
@@ -87,7 +88,7 @@ static void restore_pass(const char* kept) {
 
 static const char PASS_NOT_KEPT[] PROGMEM = "System: Web password backup not saved";
 
-// outside LittleFS, a lost FS keeps the login; only a save clears it
+// Copy kept outside LittleFS, so a lost FS keeps the login. Only a save clears it
 static void keep_pass(bool saved) {
   char kept[WEB_PASS_MAX + 1] = {};
   bool have = corium::KeyStore::read((uint8_t*)kept, WEB_PASS_MAX, WEB_PASS_SLOT);
@@ -99,7 +100,7 @@ static void keep_pass(bool saved) {
     else if (!corium::KeyStore::clear(WEB_PASS_SLOT)) corium::Log::console(PASS_NOT_KEPT);
     return;
   }
-  char pad[WEB_PASS_MAX];   // = {} copies a ram template
+  char pad[WEB_PASS_MAX];   // memset because = {} copies a ram template
   memset(pad, 0, sizeof(pad));
   memcpy(pad, cur, strnlen(cur, sizeof(pad)));
   if (!corium::KeyStore::write((const uint8_t*)pad, sizeof(pad), WEB_PASS_SLOT)) {
@@ -112,7 +113,7 @@ static void apply_sys() {
 #ifdef ESP32
   uint32_t mhz = corium::Prefs::getUInt("sys", K_CPU_MHZ);
   if (mhz) {
-    // a C3 refuses 240, said below
+    // A C3 refuses 240, the log line below says so
     bool ok = setCpuFrequencyMhz(mhz);
     corium::Log::console(ok ? PSTR("System: CPU set to %u MHz") : PSTR("System: CPU %u MHz not taken, 80/160/240"),
                          (unsigned)mhz);
@@ -135,19 +136,21 @@ const char* corium::SystemPrefs::webPass(char* kept) {
 }
 
 void corium::SystemPrefs::onPrefsSaved() {
-  s_unrestored = false;   // a save says what the login is
+  s_unrestored = false;   // a save decides what the login is
   keep_pass(true);
   apply_sys();
 }
 
-// held prefs writes: flushed when due and at shutdown
+// Held prefs writes get flushed when due and at shutdown
 static void prefs_wake(uint32_t at) { corium::Registry::dueAt(&sysprefs, at); }
 static void prefs_lifecycle(corium::Lifecycle::Event e) {
-  if (e == corium::Lifecycle::SHUTDOWN) corium::Prefs::flush(corium::fastMillis());
+  if (e != corium::Lifecycle::SHUTDOWN) return;
+  corium::Prefs::flush(corium::fastMillis());
+  corium::Fs::saveWear();
 }
 
 void corium::SystemPrefs::begin() {
-  // no handler free, every write goes now
+  // If no lifecycle handler is free, every write goes straight out
   if (corium::Lifecycle::on(prefs_lifecycle)) corium::Prefs::holdBy(prefs_wake);
 }
 

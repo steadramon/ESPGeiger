@@ -88,7 +88,7 @@ static const corium::PrefGroup WEBAPI_PREF_GROUP PROGMEM = {
 const corium::PrefGroup* WebAPI::prefsGroup() { return &WEBAPI_PREF_GROUP; }
 
 void WebAPI::onPrefsLoaded() {
-  if (_gone) {   // a save tries again
+  if (_gone) {   // station was gone, a save tries again
     _gone = false;
     _hs_at = 0;
   }
@@ -109,7 +109,7 @@ static void hex_str(const uint8_t* in, unsigned int len, char* out) {
 
 static const char HS_OK[] PROGMEM = "WebAPI: Handshake OK - station ID %u";
 
-// hasher on the stack, noinline so it's gone before uECC_sign
+// Hasher on the stack, noinline so it's gone before uECC_sign
 static void __attribute__((noinline)) hash_body(const uint8_t* p, size_t n, uint8_t* out) {
   Sha256Class sha;
   sha.init();
@@ -183,8 +183,8 @@ static bool crash_to_send() {
   return corium::CrashDump::reset().crash;
 }
 
-// a forget is owed till sent, after a restart the station id comes from a handshake
-// true = off
+// A forget is owed until it's sent. After a restart the station id has to come from a handshake first.
+// Returns true when off
 bool WebAPI::offStep() {
   if (!WEBAPI_SENDS || !_have_key) _forget = false;   // never had a station
   uint32_t now = corium::fastMillis();
@@ -194,7 +194,7 @@ bool WebAPI::offStep() {
     sendForget();
   }
   if ((_mode != WA_OFF && !_gone) || (_forget && !_station)) return false;
-  // forget reply still due, or the clock
+  // still waiting on the forget reply, or on the clock
   if (request.busy()) corium::Registry::dueAt(this, request.due());
   else corium::Registry::every(this, _forget ? LOOP_MS : 0);
   return true;
@@ -205,7 +205,7 @@ void WebAPI::loop(unsigned long now) {
 #ifdef ESPGEIGER_ATTEST
   const bool sign = takeSign();
 #endif
-  if (offStep()) return;   // a forget isn't a reading, a pause doesn't hold it
+  if (offStep()) return;   // A forget isn't a reading, so a pause doesn't hold it
   if (ExternalPause::active()) {
     corium::Registry::dueAt(this, now + LOOP_MS);
     return;
@@ -215,7 +215,7 @@ void WebAPI::loop(unsigned long now) {
   attestIfDue(sign);
 #endif
   if (_hs_at == 0) {
-    // own slot, a crash boot goes at once
+    // Own send slot, but a crash boot handshakes straight away
     bool first = _hs_off == SLOT_UNSET;
     if (first)
       _hs_off = corium::SendSlot::initialOffset(PSTR("wapi.hs"), PING_MS);
@@ -226,7 +226,7 @@ void WebAPI::loop(unsigned long now) {
     pingIfDue(now);
   }
   if (request.busy()) {
-    corium::Registry::dueAt(this, request.due());   // the reply posts us sooner
+    corium::Registry::dueAt(this, request.due());   // the reply posts the module sooner
     return;
   }
   corium::Registry::dueAt(this, wakeTarget());
@@ -256,7 +256,7 @@ void WebAPI::take_reply() {
 #endif
 }
 
-// past SENT / NOT_SEALED no reply comes, counted here
+// Anything but SENT / NOT_SEALED gets no reply, so it's counted here
 corium::HttpDriver::Sent WebAPI::send_signed(uint8_t kind, PGM_P url, const uint8_t* body, size_t len,
                                        const char* sig) {
   corium::HttpMeta m;
@@ -289,7 +289,7 @@ struct HsCrash {
 };
 }
 
-// rst_info when CrashDump missed it
+// Falls back to rst_info when CrashDump missed it
 static void collect_crash(HsCrash& c) {
   c.in = corium::Registry::crashedIn();
   c.cd = corium::CrashDump::lastCrash();
@@ -309,7 +309,7 @@ static void collect_crash(HsCrash& c) {
     c.sendExc   = true;
     c.sendExtra = c.epc2 || c.epc3 || c.depc;
   }
-  // no dump: zeros, the server files a crash on ec/pc/va, rk says which
+  // No dump, send zeros. The server files a crash on ec/pc/va and rk says which kind
   if (c.r) c.sendExc = true;
 }
 
@@ -387,7 +387,7 @@ void WebAPI::doHandshake() {
 #endif
   }
 
-  // before anything can fail, else it spins
+  // Back off before anything can fail, else it spins
   backoffHandshake();
 
   GRNG::stir();
@@ -395,9 +395,9 @@ void WebAPI::doHandshake() {
   if (!_have_key) {
     corium::Log::console(PSTR("WebAPI: Generating keys"));
     GRNG::stir();
-    if (uECC_make_key(_pub, _priv, uECC_secp192r1()) != 1) return;   // again after the backoff
+    if (uECC_make_key(_pub, _priv, uECC_secp192r1()) != 1) return;   // tries again after the backoff
     optimistic_yield(100 * 1000);
-    if (!saveConfig()) return;   // no station for a key a reboot loses
+    if (!saveConfig()) return;   // don't get a station for a key a reboot would lose
     _have_key = true;
     encode_base64(_pub, sizeof(_pub), (uint8_t *)_pub64);
   }
@@ -406,7 +406,7 @@ void WebAPI::doHandshake() {
 
   uint8_t buf[512];   // ~200B, +180B after a crash
 
-  // first handshake only
+  // Crash details go on the first handshake only
   HsCrash crash;
   if (!_exc_sent) collect_crash(crash);
 
@@ -441,7 +441,7 @@ void WebAPI::backoffHandshake() {
   handshakeAt(corium::fastMillis() + backoff());
 }
 
-// doubles to the max
+// Doubles each time up to the max
 uint32_t WebAPI::backoff() {
   uint32_t wait = _hs_backoff_ms;
   uint32_t next = wait * 2;
@@ -493,7 +493,7 @@ void WebAPI::onHandshake(int code, const uint8_t* r, size_t n) {
     notePublish(false);
     return;
   }
-  // backoff, uECC_sign is slow
+  // Back off, uECC_sign is slow
   backoffHandshake();
   corium::Registry::dueIn(this, REPLAN_MS);
   notePublish(false);
@@ -513,7 +513,7 @@ bool WebAPI::replyError(int code, const uint8_t* r, size_t n, bool hs) {
   }
   if (code == 403) {
     denied(r, n);
-    if (!hs) {   // the station goes, a new handshake
+    if (!hs) {   // drop the station and handshake again
       _station = 0;
       _hs_at = 0;
       corium::Registry::dueIn(this, REPLAN_MS);
@@ -577,7 +577,7 @@ static void write_env(MsgPack::Writer& mp) {
   if (!isnan(p)) mp.kv(PSTR("p"), p);
 }
 
-// float32, no soft-float printer
+// Sent as float32, so no soft-float printing
 static void write_readings(MsgPack::Writer& mp) {
   mp.kv(PSTR("c"),  gcounter.get_cpmf_stable());
   mp.kv(PSTR("u"),  gcounter.get_usv_stable());
@@ -604,7 +604,7 @@ static void write_health(MsgPack::Writer& mp) {
 #endif
 }
 
-// n = epoch s on every body, the server's replay check
+// n = epoch seconds on every body, the server uses it for its replay check
 static void write_post(MsgPack::Writer& mp, uint32_t id, bool census,
                        bool health) {
   mp.map_begin();
@@ -642,7 +642,7 @@ void WebAPI::postMeasurement(bool census) {
   size_t len = mp.length();
 
   char sig[WEBAPI_SIG_B64];
-  if (!sign(_priv, buf, len, sig)) return;   // next slot
+  if (!sign(_priv, buf, len, sig)) return;   // try again next slot
 
   if (request.busy()) return;
   corium::HttpDriver::Sent s = send_signed(SENT_POST, PSTR(WEBAPI_URL "/api/1/post"), buf, len, sig);
@@ -668,7 +668,7 @@ void WebAPI::onPost(int code, const uint8_t* r, size_t n) {
   notePublish(ok);
 }
 
-static const char API_FGT_P[] PROGMEM = "/api.fgt";   // a forget owed
+static const char API_FGT_P[] PROGMEM = "/api.fgt";   // exists while a forget is owed
 #define API_FGT_PATH FPSTR(API_FGT_P)
 
 void WebAPI::forget() {
@@ -711,13 +711,13 @@ void WebAPI::sendForget() {
 }
 
 void WebAPI::onForget(int code, const uint8_t* r, size_t n) {
-  // 403 = gone, unless clock off
+  // 403 means already gone, unless it's the clock that's off
   bool off = code == 403 && denied(r, n);
   bool ok = (code == 200 || code == 403) && !off;
   if (ok) {
     corium::Log::console(PSTR("WebAPI: Station forgotten (HTTP %d)"), code);
     _forget = false;
-    (void)corium::Fs::remove(API_FGT_PATH);   // stays = sent again next boot, the server says gone
+    (void)corium::Fs::remove(API_FGT_PATH);   // if it stays it's sent again next boot, the server just says gone
     _hs_backoff_ms = WEBAPI_BACKOFF_MS;
     _station = 0;
     _hs_at = 0;
@@ -735,13 +735,24 @@ static const char API_BAD_P[] PROGMEM = "/api.bad";
 #define API_KEY_PATH FPSTR(API_KEY_P)
 #define API_BAD_PATH FPSTR(API_BAD_P)
 
-// file only, the key store has it; read back, close() says nothing
+// Second line is the key's crc32, older builds only read the first
+static constexpr size_t KEY_CRC_HEX = 8;
+static bool s_key_crc;   // the file had a crc line
+
+// File only, the key store has its own copy. writeWhole reads it back since close() reports nothing
 static bool write_key_file(const uint8_t* priv) {
-  char line[2 * WEBAPI_PRIV_LEN + 2];   // hex, \r\n as println had it
+  char line[2 * WEBAPI_PRIV_LEN + 2 + KEY_CRC_HEX + 2 + 1];   // hex \r\n as println had it, crc \r\n, NUL
   hex_str(priv, WEBAPI_PRIV_LEN, line);
-  line[2 * WEBAPI_PRIV_LEN] = '\r';
-  line[2 * WEBAPI_PRIV_LEN + 1] = '\n';
-  if (corium::Fs::writeWhole(API_KEY_PATH, line, sizeof(line))) return true;
+  char* p = line + 2 * WEBAPI_PRIV_LEN;
+  *p++ = '\r';
+  *p++ = '\n';
+  uint8_t c[4];
+  wrBe32(c, crc32Update(0, priv, WEBAPI_PRIV_LEN));
+  hex_str(c, sizeof(c), p);
+  p += KEY_CRC_HEX;
+  *p++ = '\r';
+  *p++ = '\n';
+  if (corium::Fs::writeWhole(API_KEY_PATH, line, p - line)) return true;
   corium::Log::console(PSTR("WebAPI: Failed to write api.key"));
   return false;
 }
@@ -753,15 +764,15 @@ static bool keep_key(const uint8_t* priv) {
   return false;
 }
 
-// factory reset keeps the station; false = the old key comes back
+// A factory reset keeps the station. false = the old key could come back
 bool forget_key() {
-  // copy first, else a cut brings it back
+  // Clear the copy first, else a power cut could bring it back
   bool ok = corium::KeyStore::clear();
   if (!ok) corium::Log::console(PSTR("WebAPI: Key backup not cleared"));
   return corium::Fs::remove(API_KEY_PATH) && ok;
 }
 
-// either copy keeps it over a reboot
+// Either copy keeps it over a reboot
 bool WebAPI::saveConfig() {
   corium::Log::console(PSTR("WebAPI: Saving key ..."));
   bool kept = keep_key(_priv);
@@ -770,36 +781,49 @@ bool WebAPI::saveConfig() {
   return false;
 }
 
-// a cut or bad file would sign as some other station
+// 1 = holds, 0 = no line (an older file), -1 = damaged
+static int key_crc(File& f, const uint8_t* priv) {
+  char hex[KEY_CRC_HEX + 2];   // room for the \r
+  size_t n = f.readBytesUntil('\n', hex, sizeof(hex) - 1);
+  hex[n] = '\0';
+  if (n && hex[n - 1] == '\r') hex[--n] = '\0';
+  if (!n) return 0;
+  uint8_t c[4];
+  return hexDecode(c, hex, sizeof(c)) && rdBe32(c) == crc32Update(0, priv, WEBAPI_PRIV_LEN) ? 1 : -1;
+}
+
+// A cut short or bad file would sign as some other station, so it's checked
 bool WebAPI::readKeyFile() {
   File f = corium::Fs::openR(API_KEY_PATH);
   if (!f) return false;
-  char key_hex[2 * WEBAPI_PRIV_LEN + 2];   // hex, \r
+  char key_hex[2 * WEBAPI_PRIV_LEN + 3];   // hex, \r, room so the \n is taken too
   size_t n = f.readBytesUntil('\n', key_hex, sizeof(key_hex) - 1);
   key_hex[n] = '\0';
-  f.close();
   if (n && key_hex[n - 1] == '\r') key_hex[n - 1] = '\0';
-  if (hexDecode(_priv, key_hex, sizeof(_priv)) &&
-      uECC_compute_public_key(_priv, _pub, uECC_secp192r1()) == 1) return true;
+  int crc = hexDecode(_priv, key_hex, sizeof(_priv)) ? key_crc(f, _priv) : -1;
+  f.close();
+  s_key_crc = crc > 0;
+  if (crc >= 0 && uECC_compute_public_key(_priv, _pub, uECC_secp192r1()) == 1) return true;
   memset(_priv, 0, sizeof(_priv));
-  // kept to look at
-  (void)corium::Fs::remove(API_BAD_PATH);   // the rename says
+  // keep it to look at
+  (void)corium::Fs::remove(API_BAD_PATH);   // the rename result is what gets logged
   bool kept = corium::Fs::rename(API_KEY_PATH, API_BAD_PATH);
   corium::Log::console(PSTR("WebAPI: Stored key invalid, %skept as api.bad"), kept ? PSTR("") : PSTR("NOT "));
   return false;
 }
 
-// the file wins, the key store is its copy outside LittleFS
+// File wins, the key store is a copy outside LittleFS
 void WebAPI::loadConfig() {
   uint8_t kept[WEBAPI_PRIV_LEN];
   bool have_kept = corium::KeyStore::read(kept, sizeof(kept));
   _have_key = readKeyFile();
   if (_have_key) {
     if (!have_kept || memcmp(kept, _priv, sizeof(kept)) != 0) (void)keep_key(_priv);
+    if (!s_key_crc) (void)write_key_file(_priv);   // an older file gets its crc line
   } else if (have_kept && uECC_compute_public_key(kept, _pub, uECC_secp192r1()) == 1) {
     memcpy(_priv, kept, sizeof(_priv));
     _have_key = true;
-    (void)write_key_file(_priv);   // the copy still has it
+    (void)write_key_file(_priv);   // file was lost but the copy still has it
     corium::Log::console(PSTR("WebAPI: Key restored from backup"));
   }
   if (!_have_key) return;

@@ -25,6 +25,7 @@
 #include "Corium/System/Uptime.h"
 #include "Corium/System/CrashDump.h"
 #include "Corium/System/BootGuard.h"
+#include "Corium/System/Fs.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Net/WifiInfo.h"
 #include "Corium/Util/StringUtil.h"
@@ -40,10 +41,10 @@ static const char IR_HEX[]   PROGMEM = "0x%08x";
 static const char IR_CODE_END[] PROGMEM = "</code></td></tr>";
 static const char IR_END[]   PROGMEM = "</table></details>";
 
-static const uint8_t BAR_WARN = 85;   // %, as the ota check
+static const uint8_t BAR_WARN = 85;   // %, same as the ota check
 static constexpr size_t BAR_MAX = 56;
 
-// num of den as a bar, amber from BAR_WARN when warn
+// num of den as a bar, amber from BAR_WARN up when warn is set
 static const char* info_bar(char* b, uint32_t num, uint32_t den, bool warn) {
   uint32_t pct = num < den ? num * 100 / den : 100;
   snprintf_P(b, BAR_MAX, PSTR("<div class=bar><i%s style=width:%u%%></i></div>"),
@@ -89,7 +90,7 @@ static void info_collect_net(InfoNet& net) {
   strlcpy(net.ap_ssid, corium::Wifi::softAPSSID().c_str(), sizeof(net.ap_ssid));
 }
 
-// "0x%08x " per word, longer than infoRow's buffer
+// "0x%08x " per word, which is longer than infoRow's buffer
 static constexpr size_t FRAMES_MAX = corium::CrashDump::STACK_WORDS * 11 + 1;
 
 static void info_reset_head(EGHttpResponse& res) {
@@ -100,7 +101,7 @@ static void info_reset_head(EGHttpResponse& res) {
 
 #ifdef ESP8266
 static void info_render_frames(EGHttpResponse& res, const corium::CrashDump::Snapshot* cd) {
-  // code addresses only, iram and flash
+  // Code addresses only, iram and flash
   char frames[FRAMES_MAX];
   size_t pos = 0;
   bool any = false;
@@ -125,7 +126,7 @@ static void info_render_reset(EGHttpResponse& res) {
   uint32_t epc1, excvaddr;
   uint8_t exccause;
   bool exc = corium::DeviceInfo::resetExc(&epc1, &excvaddr, &exccause);
-  // a soft wdt's pc is in the dump only
+  // A soft wdt's pc is only in the dump
   if (cd && r.kind == corium::CrashDump::K_SW_WDT) {
     epc1 = cd->epc1;
     excvaddr = cd->excvaddr;
@@ -183,7 +184,7 @@ static void info_render_reset(EGHttpResponse& res) {
 }
 #endif
 
-// who set the clock
+// Shows who set the clock
 static void info_time(EGHttpResponse& res) {
   PGM_P src = PSTR("not set");
   if (corium::Clock::source == corium::Clock::NTP)       src = W_NTP;
@@ -214,6 +215,11 @@ static void info_render_system(EGHttpResponse& res) {
                             (unsigned)(total / 1024), info_bar(barhtml, total > heap ? total - heap : 0, total, false));
   INFO_ROW("Firmware",      PSTR("%u KB of %u KB%s"), (unsigned)(sketch / 1024), (unsigned)(slot / 1024),
                             info_bar(barhtml, sketch, slot, true));
+  uint32_t fs_used, fs_total;
+  if (corium::Fs::usage(&fs_used, &fs_total)) {
+    INFO_ROW("Files", PSTR("%u KB of %u KB (%u%%)%s"), (unsigned)(fs_used / 1024), (unsigned)(fs_total / 1024),
+             (unsigned)((uint64_t)fs_used * 100 / fs_total), info_bar(barhtml, fs_used, fs_total, true));
+  }
   if (uint32_t st = corium::DeviceInfo::stackFree()) INFO_ROW("Stack headroom", IR_BYTES, (unsigned)st);
 #ifdef ESP8266
   if (corium::DeviceInfo::flashSize() != corium::DeviceInfo::realFlash()) {
@@ -228,7 +234,7 @@ static void info_render_system(EGHttpResponse& res) {
   res.sendChunk(FPSTR(IR_END));
 }
 
-// as the status page
+// same sum as the status page
 static int rssi_pct(int r) {
   if (r <= -100) return 0;
   if (r >= -50) return 100;
@@ -285,7 +291,7 @@ void corium::WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::endPage(res);
 }
 
-// name: peak us, stalls when any
+// Each module as name: peak us, plus stalls when there are any
 static void about_modules(EGHttpResponse& res) {
   uint8_t count = corium::Registry::count();
   for (uint8_t i = 0; i < count; i++) {
@@ -297,7 +303,7 @@ static void about_modules(EGHttpResponse& res) {
 }
 
 #ifdef CORIUM_TRACE
-// crash boots: the last fires, ms before the last
+// On crash boots, the last modules that fired and how many ms before the last one
 static void about_trace(EGHttpResponse& res) {
   const uint32_t* t = corium::Registry::trace();
   if (!t) return;
@@ -316,7 +322,7 @@ static void about_trace(EGHttpResponse& res) {
 }
 #endif
 
-// what /info leaves out
+// What /info leaves out
 static void about_device(EGHttpResponse& res) {
 #ifdef ESP8266
   corium::WebPortal::sendf(res,
@@ -366,6 +372,9 @@ void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
     corium::DeviceInfo::hostname());
 
   about_device(res);
+  uint32_t wear;
+  if (corium::Fs::wearPct100(&wear)) sendf(res, PSTR("\"wear\":%u.%02u,"), (unsigned)(wear / 100), (unsigned)(wear % 100));
+  sendf(res, PSTR("\"erases\":%u,"), (unsigned)corium::Fs::wearBoot());
   corium::AppHooks::aboutJson(res);
   res.sendChunk(F("\"modules\":{"));
   about_modules(res);

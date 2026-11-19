@@ -80,7 +80,7 @@ Build the probe on an offcut of perfboard or inside a marker-pen case - keep the
 3. Open `/hv`. Leave `Ratio` as it is (the build default is a good start), set `Offset = 0` and `Target = 0` (open-loop, no trim chasing)
 4. Adjust `Duty` until the DMM reads close to the voltage you want (HV/100 - so 4.00 V for 400 V)
 5. Wait about 10 seconds, then note the voltage **shown** on `/hv` and your **measured HV** (DMM × 100)
-6. Set `Ratio = Ratio × measured_HV / shown_HV`, rounded. The shown voltage moves by the same factor, so it should now match your DMM × 100.
+6. Set `Ratio = Ratio × measured_HV / shown_HV`, rounded. The shown voltage moves by the same factor, so it should now match your DMM × 100. For example, 1035 showing 380 V against a measured 400 V gives 1035 × 400 / 380 = 1089
 7. Once `/hv` agrees with the DMM at one operating point, sweep duty over a couple of points to confirm the displayed voltage tracks the meter - if it does, the divider is calibrated
 8. Reconnect the tube. Read the now-calibrated voltage on `/hv` directly - no probe needed for routine checks
 9. (Optional) Set `Target` to your desired voltage to enable the closed-loop trim

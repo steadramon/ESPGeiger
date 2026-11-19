@@ -58,10 +58,42 @@ bool read_record(File& f, char* key, uint8_t* klen, char* value, uint16_t* vlen)
   return true;
 }
 
+// 1 = its crc holds, 0 = none (an older file, or unread), -1 = damaged
+int check_crc(File& f, size_t sz, uint8_t* buf, size_t cap) {
+  if (sz < corium::PREFS_MAGIC_LEN + corium::PREFS_TAIL_LEN) return 0;
+  size_t body = sz - corium::PREFS_TAIL_LEN;
+  uint32_t crc = 0;
+  for (size_t at = 0; at < body; ) {
+    size_t n = body - at < cap ? body - at : cap;
+    if (f.read(buf, n) != n) return 0;
+    crc = crc32Update(crc, buf, n);
+    at += n;
+  }
+  uint8_t t[corium::PREFS_TAIL_LEN];
+  if (f.read(t, sizeof(t)) != sizeof(t) || !corium::isTail(t)) return 0;
+  return rdLe32(t + 4) == crc ? 1 : -1;
+}
+
+bool bad_path(char* out, size_t sz, const char* base, const char* id) {
+  int n = snprintf_P(out, sz, PSTR("%s%s.bin.bad"), base, id);
+  return n > 0 && n < (int)sz;
+}
+
+// kept to look at till the group saves, it runs on defaults
+void set_aside(const char* path, const char* base, const char* module_id) {
+  char bad[CORIUM_PS_PATH_BUFSZ];
+  bool kept = false;
+  if (bad_path(bad, sizeof(bad), base, module_id)) {
+    (void)corium::Fs::remove(bad);   // the rename says
+    kept = corium::Fs::rename(path, bad);
+  }
+  corium::Log::console(PSTR("Prefs: %s damaged, defaults (%skept as .bad)"), module_id, kept ? "" : "NOT ");
+}
+
 } // anonymous namespace
 
 corium::PrefsStorage::PrefsStorage()
-  : _dir{}, _started(false)
+  : _dir{}, _started(false), _aside(false)
 {}
 
 corium::PrefsStorage::~PrefsStorage() {
@@ -105,21 +137,33 @@ bool corium::PrefsStorage::readGroup(const char* module_id, ReadCb cb, void* ctx
   if (!_started || !module_id || !cb) return false;
   char path[CORIUM_PS_PATH_BUFSZ];
   group_path(path, sizeof(path), _dir, module_id);
+  // TODO: a LittleFS rollback to the last saved copy loads without a word, log it
   File f = corium::Fs::openR(path);
   if (!f) return false;
   size_t sz = f.size();
   if (sz < corium::PREFS_MAGIC_LEN || sz > corium::PREFS_FILE_MAX) { f.close(); return false; }
 
+  // stream it, no ~1 KB heap
+  char key[CORIUM_PS_KEY_BUFSZ];
+  char value[CORIUM_PS_VAL_BUFSZ];
+  // the whole file first, a row never lands from a damaged one
+  int crc = check_crc(f, sz, (uint8_t*)value, sizeof(value));
+  f.close();
+  if (crc < 0) {
+    set_aside(path, _dir, module_id);
+    _aside = true;
+    return false;
+  }
+  f = corium::Fs::openR(path);
+  if (!f) return false;
   if (!read_magic(f)) {
     f.close();
     return false;
   }
 
-  // stream it, no ~1 KB heap
-  char key[CORIUM_PS_KEY_BUFSZ];
-  char value[CORIUM_PS_VAL_BUFSZ];
+  size_t tail = crc ? corium::PREFS_TAIL_LEN : 0;   // not a row
   bool ok = true;
-  while (f.available() > 0) {
+  while (f.available() > (int)tail) {
     uint8_t klen;
     uint16_t vlen;
     if (!read_record(f, key, &klen, value, &vlen)) {
@@ -157,7 +201,11 @@ bool corium::PrefsStorage::commitGroup(const char* module_id) {
   char path[CORIUM_PS_PATH_BUFSZ];
   if (!staged_path(staging, sizeof(staging), _dir, module_id)) return false;
   group_path(path, sizeof(path), _dir, module_id);
-  return corium::Fs::rename(staging, path);
+  if (!corium::Fs::rename(staging, path)) return false;
+  // a damaged copy goes once the group saves clean; one from this boot stays, a restore saves it now
+  char bad[CORIUM_PS_PATH_BUFSZ];
+  if (!_aside && bad_path(bad, sizeof(bad), _dir, module_id)) (void)corium::Fs::remove(bad);
+  return true;
 }
 
 void corium::PrefsStorage::dropStaged(const char* module_id) {
