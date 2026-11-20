@@ -40,6 +40,8 @@ An RTC chip on the I2C bus (DS3231, DS1307, PCF8563 or BM8563; ESP32-C3, ESP32-S
 
 During testing most SDCards are compatible, however it seems some Micro SDCards simply do not support the SPI interface. If you find an SD Card which is not supported, please try another, after double checking your wiring.
 
+The card must be formatted FAT32 (or FAT16). Cards over 32 GB (SDXC) come formatted exFAT, which isn't read: format them as FAT32 first.
+
 The card is ready as soon as it mounts. Its free space is then counted in the background, a little at a time, so a larger card only takes longer to count. Until the count is done the SD page says *counting free space*. If the card can't be read during the count, it is tried again at the next minute and the page says *free space unknown* meanwhile.
 
 ## A full or failing card

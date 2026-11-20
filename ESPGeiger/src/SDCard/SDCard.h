@@ -37,7 +37,7 @@ class SDCard : public corium::Module {
     SDCard();
     const char* name() override { return PSTR("sdcard"); }
     uint8_t displayOrder() override { return 20; }
-    uint16_t stallMs() override { return 250; }   // the spec's write timeout
+    uint16_t stallMs() override { return 500; }   // the spec's write timeout, SDXC
     void loop(unsigned long now) override;
     void begin() override;
     const corium::PrefGroup* prefsGroup() override;
