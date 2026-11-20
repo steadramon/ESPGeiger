@@ -360,7 +360,7 @@ void Sound::loop(unsigned long now) {
 void Sound::schedule(unsigned long now, uint32_t us) {
   bool any = us != 0;
   unsigned long next = now + (us + 999) / 1000;
-  if (_alert && _repeat_ms && (!any || (long)(_repeat_at - next) < 0)) {
+  if (_alert && _repeat_ms && (!any || (int32_t)(_repeat_at - next) < 0)) {
     next = _repeat_at;
     any = true;
   }

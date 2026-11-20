@@ -174,7 +174,7 @@ unsigned long WebAPI::wakeTarget() {
   unsigned long target = _hs_at;
   if (_station != 0 && _ping_ms != 0) {
     unsigned long ping_target = _ping_ms + PING_MS;
-    if ((long)(ping_target - target) < 0) target = ping_target;
+    if ((int32_t)(ping_target - target) < 0) target = ping_target;
   }
   return target;
 }
