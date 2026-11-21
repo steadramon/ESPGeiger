@@ -548,6 +548,9 @@ void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
 #endif
     s->srv->onClosed(s);
   }, s);
+  // a whole request then FIN (shutdown(SHUT_WR)): still answered, it closes after.
+  // Mid answer a FIN is a peer gone
+  c->onFin([](void* p) { return ((Slot*)p)->state == READY; }, s);
 }
 
 void EGHttpServer::onClient(EGTcpClient* c) {

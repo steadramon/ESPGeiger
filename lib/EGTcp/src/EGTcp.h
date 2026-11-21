@@ -116,6 +116,7 @@ class EGTcpClient {
     using DataFn = void (*)(void* ctx, const uint8_t* data, size_t len);
     using SentFn = void (*)(void* ctx, size_t acked);
     using CloseFn = void (*)(void* ctx, int8_t err);
+    using FinFn = bool (*)(void* ctx);
 
     void onConnect(ConnectFn fn, void* ctx) { _on_connect = fn; _connect_ctx = ctx; }
     // data is gone once it returns, don't read() in here
@@ -123,6 +124,8 @@ class EGTcpClient {
     void onSent(SentFn fn, void* ctx) { _on_sent = fn; _sent_ctx = ctx; }
     // Called once if it ends without a close(). 0 = peer closed, else why
     void onClose(CloseFn fn, void* ctx) { _on_close = fn; _close_ctx = ctx; }
+    // Peer sent FIN, done sending. true = stay open to answer, then close(); else onClose(0)
+    void onFin(FinFn fn, void* ctx) { _on_fin = fn; _fin_ctx = ctx; }
 
     // ms, 0 = off; ends with E_TIMEOUT
     void setConnectTimeout(uint32_t ms) { _connect_ms = ms; rearm(); }
@@ -161,6 +164,7 @@ class EGTcpClient {
     void rearm();   // after anything due() reads changes
     void timers();
     void ended(int8_t err);
+    void finished();
     void resolved();
     void credit(size_t n, bool flush);
     void forget(bool rst);
@@ -214,6 +218,8 @@ class EGTcpClient {
     void* _sent_ctx = nullptr;
     CloseFn _on_close = nullptr;
     void* _close_ctx = nullptr;
+    FinFn _on_fin = nullptr;
+    void* _fin_ctx = nullptr;
 };
 
 class EGTcpServer {

@@ -151,7 +151,7 @@ struct EGTcpRun {
   // Timers from the poll first, then how it ended
   static void tail(EGTcpClient* c, uint16_t ev, uint8_t life) {
     if ((ev & EV_POLL) && live(c, life)) c->timers();
-    if ((ev & EV_FIN) && live(c, life)) c->ended(0);
+    if ((ev & EV_FIN) && live(c, life)) c->finished();
     if ((ev & EV_ERROR) && live(c, life)) c->ended(c->_ev_err);
   }
 
@@ -495,6 +495,12 @@ void EGTcpClient::ended(int8_t err) {
   if (!_err) _err = err;
   rearm();
   if (_on_close) _on_close(_close_ctx, err);
+}
+
+// Half-close: the owner may keep it to answer. Not once the stack has let go
+void EGTcpClient::finished() {
+  if (_on_fin && _state == OPEN && _h.load() && _on_fin(_fin_ctx)) return;
+  ended(0);
 }
 
 /*
