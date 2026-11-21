@@ -101,6 +101,19 @@ void corium::Fs::end() {
   s_mounted = false;
 }
 
+// the wear count comes back with the next mount
+void corium::Fs::unmount() {
+  if (s_mounted) LittleFS.end();
+  s_tried = false;
+  s_mounted = false;
+  s_wear_base = s_wear_boot = s_wear_saved = 0;
+}
+
+bool corium::Fs::format() {
+  unmount();
+  return LittleFS.format();
+}
+
 File corium::Fs::openR(const char* path) {
   if (!begin() || !LittleFS.exists(path)) return File();
   return LittleFS.open(path, "r");
