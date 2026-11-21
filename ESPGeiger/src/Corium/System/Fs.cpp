@@ -109,8 +109,11 @@ void corium::Fs::unmount() {
   s_wear_base = s_wear_boot = s_wear_saved = 0;
 }
 
+// esp32: format() asserts on the label only begin() sets, mounted or not
 bool corium::Fs::format() {
   unmount();
+  (void)LittleFS.begin();
+  LittleFS.end();
   return LittleFS.format();
 }
 
