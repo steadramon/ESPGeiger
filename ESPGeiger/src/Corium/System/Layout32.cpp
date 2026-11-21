@@ -27,7 +27,6 @@
 #include <string.h>
 #include <sdkconfig.h>
 #include <nvs.h>
-#include <esp_attr.h>
 #include <esp_flash.h>
 #include <esp_heap_caps.h>
 #include <esp_ota_ops.h>
@@ -35,15 +34,6 @@
 #include <esp_rom_crc.h>
 #include <esp_rom_md5.h>
 #include <esp_spi_flash.h>
-#if CONFIG_IDF_TARGET_ESP32C3
-#include <esp32c3/rom/spi_flash.h>
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include <esp32s2/rom/spi_flash.h>
-#elif CONFIG_IDF_TARGET_ESP32S3
-#include <esp32s3/rom/spi_flash.h>
-#else
-#include <esp32/rom/spi_flash.h>
-#endif
 
 namespace corium {
 namespace Layout {
@@ -351,23 +341,22 @@ static const char* putBack() {
   return why;
 }
 
-// caches off around each rom call, as the idf's own legacy erase does. Inlined it lands in flash.
-// No unlock: the bootloader did it this boot, and a locked chip only fails the read back
-static IRAM_ATTR NOINLINE_ATTR bool romPut(uint32_t at, const uint32_t* buf) {
-  const spi_flash_guard_funcs_t* g = spi_flash_guard_get();
-  g->start();
-  bool ok = esp_rom_spiflash_erase_sector(at / SECTOR) == ESP_ROM_SPIFLASH_RESULT_OK;
-  g->end();
-  g->start();
-  ok = ok && esp_rom_spiflash_write(at, buf, SECTOR) == ESP_ROM_SPIFLASH_RESULT_OK;
-  esp_rom_spiflash_write_disable();
-  g->end();
-  return ok;
-}
+// The default chip's os_func with no region check, for the table write only. Static, a task that read the
+// pointer late still finds it. The check runs before the op lock, so the swap sits inside that lock
+static esp_flash_os_functions_t s_open;
 
 CORIUM_NODISCARD static bool putCheck(uint32_t at, const uint8_t* buf, uint8_t* chk) {
-  return romPut(at, (const uint32_t*)buf) && esp_flash_read(NULL, chk, at, SECTOR) == ESP_OK &&
-         !memcmp(buf, chk, SECTOR);
+  esp_flash_t* c = esp_flash_default_chip;
+  const spi_flash_guard_funcs_t* g = spi_flash_guard_get();
+  const esp_flash_os_functions_t* os = c->os_func;
+  s_open = *os;
+  s_open.region_protected = NULL;
+  g->op_lock();
+  c->os_func = &s_open;
+  bool ok = esp_flash_erase_region(c, at, SECTOR) == ESP_OK && esp_flash_write(c, buf, at, SECTOR) == ESP_OK;
+  c->os_func = os;
+  g->op_unlock();
+  return ok && esp_flash_read(c, chk, at, SECTOR) == ESP_OK && !memcmp(buf, chk, SECTOR);
 }
 
 // bufs: the old sector, the new, a read back. A practice write on the coredump first
@@ -388,7 +377,7 @@ static const char* swap(uint8_t* old, uint8_t* neu, uint8_t* chk) {
   return putCheck(TABLE_AT, old, chk) ? R_FLASH : R_STUCK;
 }
 
-// internal ram, the rom calls run with the caches off
+// internal ram, the writes run with the caches off
 static const char* writeTable() {
   uint8_t* m = (uint8_t*)heap_caps_malloc(3 * SECTOR, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (!m) return R_FLASH;
