@@ -26,8 +26,11 @@ namespace corium {
 namespace Fs {
   CORIUM_NODISCARD bool begin();   // first call only, formats after 3 failed mounts
   void end();     // A new fs image goes under it, no more fs use until reboot
+#ifndef ESP8266
+  // the esp32 table move
   void unmount();   // the next call mounts again
   CORIUM_NODISCARD bool format();   // unmounts first, empty after
+#endif
   // These all mount first and check before touching, the esp32 logs a missing file
   File openR(const char* path);   // empty File if not there
   File openW(const char* path);

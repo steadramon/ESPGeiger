@@ -101,6 +101,7 @@ void corium::Fs::end() {
   s_mounted = false;
 }
 
+#ifndef ESP8266
 // the wear count comes back with the next mount
 void corium::Fs::unmount() {
   if (s_mounted) LittleFS.end();
@@ -116,6 +117,7 @@ bool corium::Fs::format() {
   LittleFS.end();
   return LittleFS.format();
 }
+#endif
 
 File corium::Fs::openR(const char* path) {
   if (!begin() || !LittleFS.exists(path)) return File();
