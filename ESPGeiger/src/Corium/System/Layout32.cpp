@@ -24,6 +24,7 @@
 #include "BootGuard.h"
 #include "CrashDump.h"
 #include "Corium/Module/Registry.h"
+#include "Corium/Prefs/PrefsStorage.h"
 #include "Corium/WebPortal/WebPortal.h"
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
@@ -256,10 +257,17 @@ static bool pump(Pump m, File* f, const esp_partition_t* p, uint32_t at, uint32_
   return ok;
 }
 
+static bool staged(const char* path, size_t plen) {
+  const size_t n = sizeof(CORIUM_PS_STAGING_SUFFIX) - 1;
+  return plen >= n && !strcmp(path + plen - n, CORIUM_PS_STAGING_SUFFIX);
+}
+
+// a staged write left by a cut is never read back, so it stays behind
 static const char* rec(File& f, void* ctx) {
   Rec& r = *(Rec*)ctx;
   const char* path = f.path();
   uint32_t plen = strlen(path);
+  if (staged(path, plen)) return nullptr;
   uint32_t size = f.size();
   if (plen >= PATH_CAP || r.at + 1 + plen + 4 + size + 4 > BACKUP_MAX) return R_BIG;
   uint8_t h[4] = {(uint8_t)plen};

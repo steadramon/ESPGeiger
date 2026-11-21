@@ -32,6 +32,8 @@
 #include "Corium/Util/Bytes.h"
 #include "Prefs.h"
 
+#define CORIUM_PS_STAGING_SUFFIX ".new"   // a write not landed yet, never read back
+
 namespace corium {
 
 static constexpr size_t PREFS_MAGIC_LEN = 4;

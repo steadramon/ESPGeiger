@@ -23,7 +23,6 @@
 #include "Corium/System/Fs.h"
 #include "Corium/Util/Bytes.h"
 
-#define CORIUM_PS_STAGING_SUFFIX   ".new"
 #define CORIUM_PS_PATH_BUFSZ       96
 // a longer key or value = a bad record, the rest not read
 #define CORIUM_PS_KEY_BUFSZ        64
