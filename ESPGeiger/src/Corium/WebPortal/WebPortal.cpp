@@ -364,6 +364,12 @@ void corium::WebPortal::begin(uint16_t port) {
   applyAuthFromPrefs();
 }
 
+#ifndef ESP8266
+bool corium::WebPortal::busy() {
+  return s_portal && s_portal->_http.hasActiveClients();
+}
+#endif
+
 void corium::WebPortal::applyAuthFromPrefs() {
   corium::WebPortal* p = s_portal;
   if (!p || !p->_active) return;

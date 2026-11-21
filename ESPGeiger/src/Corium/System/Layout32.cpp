@@ -21,6 +21,10 @@
 #include "DeviceInfo.h"
 #include "Fs.h"
 #include "Lifecycle.h"
+#include "BootGuard.h"
+#include "CrashDump.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/WebPortal/WebPortal.h"
 #include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/Bytes.h"
@@ -455,7 +459,49 @@ const char* start() {
 }
 
 }  // namespace Layout
+
+#ifdef CORIUM_LAYOUT_AUTO
+#ifndef CORIUM_LAYOUT_AFTER_MS
+#define CORIUM_LAYOUT_AFTER_MS BootGuard::DAY_MS
+#endif
+
+// The move on its own: a day up on a boot that didn't follow a crash, then the first quiet minute.
+// A refusal waits for the next boot, the new table ends it for good
+class LayoutAuto : public Module {
+  public:
+    const char* name() override { return PSTR("layout"); }
+    static constexpr uint32_t AFTER_MS = CORIUM_LAYOUT_AFTER_MS;
+    static constexpr uint32_t QUIET_MS = 60000;
+    void begin() override {
+      if (Layout::kind() == Layout::OLD && Layout::step() == Layout::IDLE && !CrashDump::reset().crash) {
+        (void)Registry::dueIn(this, AFTER_MS);
+      }
+    }
+    void loop(unsigned long) override {
+      if (!quiet()) {
+        (void)Registry::dueIn(this, QUIET_MS);
+        return;
+      }
+      const char* why = Layout::start();
+      if (why) Log::console(why);
+    }
+  private:
+    static bool quiet() {
+      if (otaInProgress || Lifecycle::restartPending() || WebPortal::busy()) return false;
+      for (uint8_t i = 0; i < Registry::count(); i++) {
+        Sender* s = Registry::get(i)->sender();
+        if (s && s->pending()) return false;
+      }
+      return true;
+    }
+};
+#endif
 }  // namespace corium
+
+#ifdef CORIUM_LAYOUT_AUTO
+static corium::LayoutAuto layoutAuto;
+CORIUM_REGISTER_MODULE(layoutAuto)
+#endif
 
 // prototype: layout shows it, layout migrate runs it
 static void cmd_layout() {

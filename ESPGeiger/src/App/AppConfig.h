@@ -161,4 +161,7 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define CORIUM_EXPORT_MAGIC_B64 "ESPG"
 #define CORIUM_EXPORT_SEED      0xB11C5EEDu
 
+// 4 MB esp32 boards move to the bigger app slots on their own, a day after the update
+#define CORIUM_LAYOUT_AUTO
+
 #endif

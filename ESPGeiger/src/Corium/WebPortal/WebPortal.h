@@ -41,6 +41,9 @@ class WebPortal {
     void poll(uint32_t now);
     inline uint32_t nextPollDue() const { return _poll_last_ms + pollGap(); }
     bool active() const { return _active; }
+#ifndef ESP8266
+    static bool busy();   // a request or upload being served
+#endif
 
     // Shared page templates
     // inlineSub: small tag after the title, escaped here
