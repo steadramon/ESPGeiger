@@ -724,6 +724,8 @@ void corium::WebPortal::hWifi(EGHttpRequest& req, EGHttpResponse& res, void*) {
     res.sendChunk(FPSTR(W_DETAILS_END));
   }
 
+  // A scan takes the radio off channel for seconds: online it waits until the list is opened
+  if (!corium::Wifi::isConnected()) res.sendChunk(F("<script>var wsAuto=1</script>"));
   res.sendChunk(FPSTR(wifiAdvancedHTML));
   corium::WebPortal::endPage(res);
 }
@@ -1081,7 +1083,11 @@ sel.innerHTML='<option value="">(scan failed)</option>';
 .catch(function(){rb.disabled=false;sel.innerHTML='<option value="">(error)</option>';});
 }
 rb.addEventListener('click',function(e){e.preventDefault();clearTimeout(pollT);poll(true);});
-poll(false);
+if(window.wsAuto)poll(false);
+else{
+sel.innerHTML='<option value="">-- open to scan --</option>';
+sel.addEventListener('focus',function(){poll(false);},{once:true});
+}
 })();
 </script>
 )HTML";
