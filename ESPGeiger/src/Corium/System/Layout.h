@@ -36,7 +36,7 @@ namespace Layout {
     uint8_t sub;
     uint32_t off;
     uint32_t size;
-    char label[17];
+    const char* label;
   };
 
   static const uint32_t TABLE_AT = 0x8000;

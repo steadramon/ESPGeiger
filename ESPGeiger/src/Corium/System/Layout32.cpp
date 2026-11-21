@@ -43,9 +43,6 @@
 #include <esp32/rom/spi_flash.h>
 #endif
 
-// bootloader_support's, only writes the status when a protect bit is set
-extern "C" esp_err_t bootloader_flash_unlock(void);
-
 namespace corium {
 namespace Layout {
 
@@ -89,7 +86,7 @@ static const char STUCK[] PROGMEM = "Layout: TABLE BAD, needs a USB install";
 
 static bool same(const Row& a, const Row& b) {
   return a.type == b.type && a.sub == b.sub && a.off == b.off && a.size == b.size &&
-         !strncmp(a.label, b.label, sizeof(a.label));
+         !strcmp(a.label, b.label);
 }
 
 static bool all(const Row* rows, size_t n, const Row* want) {
@@ -134,8 +131,7 @@ Kind kind() {
       return UNKNOWN;   // more rows than either
     }
     const esp_partition_t* p = esp_partition_get(it);
-    rows[n] = {(uint8_t)p->type, (uint8_t)p->subtype, p->address, p->size, {}};
-    strlcpy(rows[n].label, p->label, sizeof(rows[n].label));
+    rows[n] = {(uint8_t)p->type, (uint8_t)p->subtype, p->address, p->size, p->label};
   }
   return classify(rows, n);
 }
@@ -263,7 +259,7 @@ static const char* sized(File& f, void* ctx) {
 
 const char* fit(Fit* f) {
   *f = {};
-  f->need = 2;   // step and count
+  f->need = step() == IDLE ? 2 : 1;   // the count, and the step unless it's there
   const char* why = walk(sized, f);
   if (why) return why;
   nvs_stats_t s;
@@ -394,14 +390,12 @@ static const char* putBack() {
   return why;
 }
 
-// caches off around each rom call, as the idf's own legacy erase does. Inlined it lands in flash
+// caches off around each rom call, as the idf's own legacy erase does. Inlined it lands in flash.
+// No unlock: the bootloader did it this boot, and a locked chip only fails the read back
 static IRAM_ATTR NOINLINE_ATTR bool romPut(uint32_t at, const uint32_t* buf) {
   const spi_flash_guard_funcs_t* g = spi_flash_guard_get();
   g->start();
-  bool ok = bootloader_flash_unlock() == ESP_OK;
-  g->end();
-  g->start();
-  ok = ok && esp_rom_spiflash_erase_sector(at / SECTOR) == ESP_ROM_SPIFLASH_RESULT_OK;
+  bool ok = esp_rom_spiflash_erase_sector(at / SECTOR) == ESP_ROM_SPIFLASH_RESULT_OK;
   g->end();
   g->start();
   ok = ok && esp_rom_spiflash_write(at, buf, SECTOR) == ESP_ROM_SPIFLASH_RESULT_OK;
