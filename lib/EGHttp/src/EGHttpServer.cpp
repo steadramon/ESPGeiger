@@ -451,6 +451,52 @@ EGHttpServer::Slot* EGHttpServer::allocSlot(EGTcpClient* c) {
   return nullptr;
 }
 
+// slots the peer at a holds
+static uint8_t held_by(const EGHttpServer::Slot* slots, const EGTcpAddr* at, uint8_t n, const EGTcpAddr& a) {
+  uint8_t k = 0;
+  for (uint8_t i = 0; i < n; i++) {
+    if (slots[i].client && at[i] == a) k++;
+  }
+  return k;
+}
+
+// the peer at a's oldest slot waiting EGHTTP_SHARE_MS or more for a request
+static EGHttpServer::Slot* oldest_waiting(EGHttpServer::Slot* slots, const EGTcpAddr* at, uint8_t n,
+                                          const EGTcpAddr& a) {
+  const uint32_t now = EGClock::now();
+  EGHttpServer::Slot* old = nullptr;
+  for (uint8_t i = 0; i < n; i++) {
+    EGHttpServer::Slot* s = &slots[i];
+    if (!s->client || !(at[i] == a)) continue;
+    if (s->state != EGHttpServer::RECEIVING || s->stream != EGHttpServer::NO_STREAM) continue;
+    // due is its accept + EGHTTP_REQ_MS until the request is in
+    if ((int32_t)(now - (s->due - EGHTTP_REQ_MS)) < (int32_t)EGHTTP_SHARE_MS) continue;
+    if (!old || (int32_t)(s->due - old->due) < 0) old = s;
+  }
+  return old;
+}
+
+// Full: the peer holding the most slots, if more than the newcomer's, gives
+// up its oldest one still waiting for a request. One peer can't keep the rest out
+EGHttpServer::Slot* EGHttpServer::shareSlot(EGTcpClient* c) {
+  EGTcpAddr at[EGHTTP_MAX_CLIENTS];
+  for (uint8_t i = 0; i < _maxClients; i++) {
+    if (_slots[i].client) at[i] = _slots[i].client->remoteAddr();
+  }
+  uint8_t most = 0, hog = 0;
+  for (uint8_t i = 0; i < _maxClients; i++) {
+    if (!_slots[i].client) continue;
+    uint8_t n = held_by(_slots, at, _maxClients, at[i]);
+    if (n > most) { most = n; hog = i; }
+  }
+  if (most <= held_by(_slots, at, _maxClients, c->remoteAddr())) return nullptr;
+  Slot* old = oldest_waiting(_slots, at, _maxClients, at[hog]);
+  if (!old) return nullptr;
+  drop(old);
+  reclaimSlot(old);
+  return allocSlot(c);
+}
+
 void EGHttpServer::markDone(Slot* s) {
   free_buf(s);
   set_acc(s, nullptr, 0);
@@ -523,6 +569,7 @@ void EGHttpServer::onClient(EGTcpClient* c) {
     }
     s = allocSlot(c);
   }
+  if (!s) s = shareSlot(c);
   if (s) { wireSlotCallbacks(s, c); return; }
 
   // No free slot. Send a 503, queueing it would drop pbufs

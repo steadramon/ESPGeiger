@@ -60,6 +60,10 @@
   // The request must be in by then. A streamed body gets this long again each time a whole window moves
   #define EGHTTP_REQ_MS 10000
 #endif
+#ifndef EGHTTP_SHARE_MS
+  // Full: a slot waiting this long for its request can go to another peer
+  #define EGHTTP_SHARE_MS 1000
+#endif
 #ifndef EGHTTP_SEND_MS
   // Time for the whole response, the loop waits on it
   #define EGHTTP_SEND_MS 15000
@@ -308,6 +312,7 @@ class EGHttpServer {
     PGM_P _authHelp = nullptr;
 
     Slot* allocSlot(EGTcpClient* c);
+    Slot* shareSlot(EGTcpClient* c);
     void  resetSlot(Slot* s);
     void  abortStream(Slot* s);
     void  markDone(Slot* s);
