@@ -51,6 +51,9 @@ bool restartPending();
 }
 
 extern bool otaInProgress;
+#ifndef ESP8266
+extern bool otaHeld;   // app1 holds a table move's files, no OTA till it's done
+#endif
 }  // namespace corium
 
 #endif

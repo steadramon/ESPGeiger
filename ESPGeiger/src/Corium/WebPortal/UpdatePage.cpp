@@ -204,6 +204,12 @@ static void ota_begin(size_t expected) {
     ota_fail(PSTR("restarting, try again"));
     return;
   }
+#ifndef ESP8266
+  if (corium::otaHeld) {
+    ota_fail(PSTR("table move not done"));
+    return;
+  }
+#endif
   // with no length given use the free space less one 4 KB sector, sector aligned
   uint32_t room = (corium::DeviceInfo::freeSketch() - 0x1000) & 0xFFFFF000;
   if (!Update.begin(s_ota.expected ? s_ota.expected : room)) {

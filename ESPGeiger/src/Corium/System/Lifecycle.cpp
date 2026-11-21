@@ -21,6 +21,9 @@
 
 namespace corium {
 bool otaInProgress = false;
+#ifndef ESP8266
+bool otaHeld = false;
+#endif
 
 namespace Lifecycle {
 

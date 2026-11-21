@@ -72,6 +72,14 @@ static void ota_start() {
   Update.onProgress([](size_t got, size_t) { ota_check(got); });
 #endif
   corium::Registry::post(&ota);
+#ifndef ESP8266
+  // begin() erases nothing, the first write would
+  if (corium::otaHeld) {
+    s_stopped = true;
+    corium::Log::console(PSTR("OTA: table move not done"));
+    Update.abort();
+  }
+#endif
   corium::Lifecycle::send(corium::Lifecycle::OTA_START);
   // Unmount now, else the prefs save on SHUTDOWN goes through the old mount onto the new image
   if (fs) corium::Fs::end();
