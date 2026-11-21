@@ -68,12 +68,8 @@
   // Time for the whole response, the loop waits on it
   #define EGHTTP_SEND_MS 15000
 #endif
-#ifndef EGHTTP_SEND_BUDGET_MS
-  // After no room to write for this long, the send gives up
-  #define EGHTTP_SEND_BUDGET_MS 2500
-#endif
 #ifndef EGHTTP_ACK_MS
-  // Sent but not acked for this long, the client is dropped
+  // Sent but not acked for this long, the client is dropped. Past lwIP's first resend (3 s)
   #define EGHTTP_ACK_MS 5000
 #endif
 #ifndef EGHTTP_STREAM_IDLE_MS

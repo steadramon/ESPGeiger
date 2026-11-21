@@ -164,7 +164,7 @@ static bool yield_write_sram(EGHttpServer::Slot* s, const char* data, size_t len
     // write() already sends
     size_t wrote = take ? s->client->write(data + sent, take) : 0;
     if (wrote == 0) {
-      if (EGClock::now() - last_ms > EGHTTP_SEND_BUDGET_MS) return send_fail(s, PSTR("stalled"), sent, len);
+      if (EGClock::now() - last_ms > EGHTTP_ACK_MS) return send_fail(s, PSTR("stalled"), sent, len);
       EGHTTP_BACKPRESSURE_PAUSE();
       continue;
     }
