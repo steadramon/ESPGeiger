@@ -51,7 +51,7 @@ struct Row {
 };
 
 // min_spiffs.csv
-static const Row ROWS[] = {
+static constexpr Row ROWS[] = {
   {1, 0x02, 0x9000,   0x5000,   "nvs"},
   {1, 0x00, 0xe000,   0x2000,   "otadata"},
   {0, 0x10, 0x10000,  0x1E0000, "app0"},
@@ -60,14 +60,29 @@ static const Row ROWS[] = {
   {1, 0x03, 0x3F0000, 0x10000,  "coredump"},
 };
 static const uint8_t NROWS = sizeof(ROWS) / sizeof(ROWS[0]);
+static constexpr uint8_t APP0 = 2;
+static constexpr uint8_t APP1 = 3;
+static_assert(ROWS[APP0].off == 0x10000, "app0 stays where the bootloader runs it");
+static_assert(ROWS[APP1].off <= BACKUP_AT && BACKUP_AT + BACKUP_MAX <= ROWS[APP1].off + ROWS[APP1].size,
+              "the backup sits in the new app1");
 
-static const uint8_t APP1 = 3;
-static const uint32_t OLD_APP1_AT = 0x150000;   // default.csv's
-static const uint32_t OLD_SLOT = 0x140000;
+// A table this moves from: md5 of its first 0xC00 bytes as gen_esp32part.py makes them, and its app slots
+struct From {
+  uint8_t md5[16];
+  uint32_t app0;
+  uint32_t app0Size;
+  uint32_t app1;
+  uint32_t app1Size;
+};
 
-// md5 of the 0xC00 bytes gen_esp32part.py makes from default.csv
-static const uint8_t OLD_MD5[16] = {0xa0, 0x39, 0xc6, 0x6c, 0xd3, 0x48, 0x81, 0x76,
-                                    0x03, 0x7b, 0x61, 0x6b, 0x75, 0x95, 0xfe, 0x72};
+static const From FROM[] = {
+  // default.csv
+  {{0xa0, 0x39, 0xc6, 0x6c, 0xd3, 0x48, 0x81, 0x76, 0x03, 0x7b, 0x61, 0x6b, 0x75, 0x95, 0xfe, 0x72},
+   0x10000, 0x140000, 0x150000, 0x140000},
+#ifdef CORIUM_LAYOUT_FROM_MORE
+  CORIUM_LAYOUT_FROM_MORE
+#endif
+};
 
 static const char NS[] = "layout";
 static const char K_STEP[] = "st";
@@ -80,7 +95,7 @@ static const uint8_t DEPTH = 4;
 static const size_t CHUNK = 256;
 
 static const char R_BUSY[] PROGMEM = "Layout: busy";
-static const char R_TABLE[] PROGMEM = "Layout: not default.csv";
+static const char R_TABLE[] PROGMEM = "Layout: not a known table";
 static const char R_APP0[] PROGMEM = "Layout: app0 not this build";
 static const char R_BIG[] PROGMEM = "Layout: files too big";
 static const char R_FLASH[] PROGMEM = "Layout: flash write failed";
@@ -117,12 +132,30 @@ static const esp_partition_t* app(esp_partition_subtype_t s) {
   return esp_partition_find_first(ESP_PARTITION_TYPE_APP, s, NULL);
 }
 
-// by app1 this boot, the table write checks the whole old table first
+// app0 where it is in the new table and no bigger, the backup inside its app1
+static bool fits(const From& f) {
+  return f.app0 == ROWS[APP0].off && f.app0Size <= ROWS[APP0].size && f.app1 <= BACKUP_AT &&
+         BACKUP_AT + BACKUP_MAX <= f.app1 + f.app1Size;
+}
+
+static bool at(const esp_partition_t* p, uint32_t off, uint32_t size) {
+  return p && p->address == off && p->size == size;
+}
+
+// the entry this boot's app slots match, nullptr = none or one that doesn't fit
+static const From* from() {
+  const esp_partition_t* a0 = app(ESP_PARTITION_SUBTYPE_APP_OTA_0);
+  const esp_partition_t* a1 = app(ESP_PARTITION_SUBTYPE_APP_OTA_1);
+  for (const From& f : FROM) {
+    if (at(a0, f.app0, f.app0Size) && at(a1, f.app1, f.app1Size)) return fits(f) ? &f : nullptr;
+  }
+  return nullptr;
+}
+
+// by the app slots this boot, the table write checks the whole old table first
 Kind kind() {
-  const esp_partition_t* p = app(ESP_PARTITION_SUBTYPE_APP_OTA_1);
-  if (p && p->address == OLD_APP1_AT && p->size == OLD_SLOT) return OLD;
-  if (p && p->address == ROWS[APP1].off && p->size == ROWS[APP1].size) return NEW;
-  return UNKNOWN;
+  if (at(app(ESP_PARTITION_SUBTYPE_APP_OTA_1), ROWS[APP1].off, ROWS[APP1].size)) return NEW;
+  return from() ? OLD : UNKNOWN;
 }
 
 // app1 hands over to app0 only for the same build, the image is checked when it's set
@@ -367,11 +400,12 @@ CORIUM_NODISCARD static bool putCheck(uint32_t at, const uint8_t* buf, uint8_t* 
 static const char* swap(uint8_t* old, uint8_t* neu, uint8_t* chk) {
   uint8_t d[16];
   md5_context_t c;
-  bool ok = esp_flash_read(NULL, old, TABLE_AT, SECTOR) == ESP_OK;
+  const From* f = from();
+  bool ok = f && esp_flash_read(NULL, old, TABLE_AT, SECTOR) == ESP_OK;
   esp_rom_md5_init(&c);
   esp_rom_md5_update(&c, old, TABLE_LEN);
   esp_rom_md5_final(d, &c);
-  if (!ok || memcmp(d, OLD_MD5, 16)) return R_TABLE;
+  if (!ok || memcmp(d, f->md5, 16)) return R_TABLE;
   build(neu);
   const esp_partition_t* cd = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
   ok = cd && putCheck(cd->address, neu, chk);
