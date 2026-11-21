@@ -516,6 +516,13 @@ void EGHttpServer::wireSlotCallbacks(Slot* s, EGTcpClient* c) {
 void EGHttpServer::onClient(EGTcpClient* c) {
   _tickWanted = true;
   Slot* s = allocSlot(c);
+  if (!s) {
+    // one closed this poll, tick() hasn't got to it yet
+    for (auto& d : _slots) {
+      if (d.state == DONE) reclaimSlot(&d);
+    }
+    s = allocSlot(c);
+  }
   if (s) { wireSlotCallbacks(s, c); return; }
 
   // No free slot. Send a 503, queueing it would drop pbufs
