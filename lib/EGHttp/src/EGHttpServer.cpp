@@ -460,37 +460,28 @@ static uint8_t held_by(const EGHttpServer::Slot* slots, const EGTcpAddr* at, uin
   return k;
 }
 
-// the peer at a's oldest slot waiting EGHTTP_SHARE_MS or more for a request
-static EGHttpServer::Slot* oldest_waiting(EGHttpServer::Slot* slots, const EGTcpAddr* at, uint8_t n,
-                                          const EGTcpAddr& a) {
-  const uint32_t now = EGClock::now();
-  EGHttpServer::Slot* old = nullptr;
-  for (uint8_t i = 0; i < n; i++) {
-    EGHttpServer::Slot* s = &slots[i];
-    if (!s->client || !(at[i] == a)) continue;
-    if (s->state != EGHttpServer::RECEIVING || s->stream != EGHttpServer::NO_STREAM) continue;
-    // due is its accept + EGHTTP_REQ_MS until the request is in
-    if ((int32_t)(now - (s->due - EGHTTP_REQ_MS)) < (int32_t)EGHTTP_SHARE_MS) continue;
-    if (!old || (int32_t)(s->due - old->due) < 0) old = s;
-  }
-  return old;
+// waiting EGHTTP_SHARE_MS or more for its request
+static bool waiting_long(const EGHttpServer::Slot* s, uint32_t now) {
+  if (!s->client || s->state != EGHttpServer::RECEIVING || s->stream != EGHttpServer::NO_STREAM) return false;
+  // due is its accept + EGHTTP_REQ_MS until the request is in
+  return (int32_t)(now - (s->due - EGHTTP_REQ_MS)) >= (int32_t)EGHTTP_SHARE_MS;
 }
 
-// Full: the peer holding the most slots, if more than the newcomer's, gives
-// up its oldest one still waiting for a request. One peer can't keep the rest out
+// Full: the oldest slot still waiting for a request, from a peer holding more
+// than the newcomer, goes to it. One peer can't keep the rest out
 EGHttpServer::Slot* EGHttpServer::shareSlot(EGTcpClient* c) {
   EGTcpAddr at[EGHTTP_MAX_CLIENTS];
   for (uint8_t i = 0; i < _maxClients; i++) {
     if (_slots[i].client) at[i] = _slots[i].client->remoteAddr();
   }
-  uint8_t most = 0, hog = 0;
+  const uint8_t mine = held_by(_slots, at, _maxClients, c->remoteAddr());
+  const uint32_t now = EGClock::now();
+  Slot* old = nullptr;
   for (uint8_t i = 0; i < _maxClients; i++) {
-    if (!_slots[i].client) continue;
-    uint8_t n = held_by(_slots, at, _maxClients, at[i]);
-    if (n > most) { most = n; hog = i; }
+    Slot* s = &_slots[i];
+    if (!waiting_long(s, now) || held_by(_slots, at, _maxClients, at[i]) <= mine) continue;
+    if (!old || (int32_t)(s->due - old->due) < 0) old = s;
   }
-  if (most <= held_by(_slots, at, _maxClients, c->remoteAddr())) return nullptr;
-  Slot* old = oldest_waiting(_slots, at, _maxClients, at[hog]);
   if (!old) return nullptr;
   drop(old);
   reclaimSlot(old);
