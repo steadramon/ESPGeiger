@@ -32,6 +32,7 @@
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Fs.h"
+#include "Corium/System/Layout.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/Reactor.h"
 #include "Corium/System/Clock.h"
@@ -65,6 +66,9 @@ namespace Boot {
 
   // fs, modules, prefs
   inline __attribute__((always_inline)) void prefs() {
+#ifdef ESP32
+    Layout::resume();   // a table move goes on before the fs mounts
+#endif
     if (!Fs::begin()) {
       // Prefs run on defaults, wifi and ota still come up
       Log::console(PSTR("LittleFS Mount Failed"));
