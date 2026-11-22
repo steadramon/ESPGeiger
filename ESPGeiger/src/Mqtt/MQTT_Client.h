@@ -166,6 +166,7 @@ private:
 #ifdef MQTTAUTODISCOVER
   bool _hass_retrigger = false;   // HA came back, the timers spread the resend
   bool _hass_gone = false;   // _hass_disc's entities to remove on connect
+  uint32_t _hass_gone_srv = 0;   // the broker they were on (hash of host and port)
   char _hass_disc[MQTT_HASS_TOPIC_MAX + 1] = {};   // prefix this connection is on, "" = off
   corium::Deadline _hass_next;   // uptime s
   unsigned long _hass_last_s = 0;

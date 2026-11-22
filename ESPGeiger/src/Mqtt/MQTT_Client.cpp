@@ -34,6 +34,7 @@
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Yield.h"
 #include "Corium/Util/Words.h"
+#include "Corium/Util/Bytes.h"
 #include "Corium/Platform/Chip.h"
 #include <EGJson.h>
 #include <EGMqtt.h>
@@ -824,12 +825,20 @@ static const char* hass_type(const char* r) {
   return hass_is(r, *HR_BIN) ? H_TYPE_BINSENS : H_TYPE_SENSOR;
 }
 
+// The broker the client is set up for now
+static uint32_t broker_hash() {
+  uint16_t port = s_mq.port();
+  return crc32Update(crc32Update(0, (const uint8_t*)s_mq.host(), strlen(s_mq.host())), (const uint8_t*)&port, sizeof(port));
+}
+
 // Prefix is kept until the next connect, walks and saves go by it
 void MQTT_Client::setupHassCB() {
-  if (_hass_gone) {   // saved while down, remove the old prefix's entities first
+  if (_hass_gone) {   // saved while down, the old prefix's entities go first, on their own broker only
     _hass_gone = false;
-    startHassWalk(HASS_REMOVE);
-    return;
+    if (broker_hash() == _hass_gone_srv) {
+      startHassWalk(HASS_REMOVE);
+      return;
+    }
   }
   hass_prefix(_hass_disc, sizeof(_hass_disc));
   if (_hass_disc[0]) _pending |= PEND_SUB;
@@ -1037,6 +1046,7 @@ void MQTT_Client::onPrefsSaved()
       return;
     }
     _hass_gone = gone;   // not connected, the next connect removes them
+    if (gone) _hass_gone_srv = broker_hash();   // the client is still set up for the old broker here
   }
 #endif
   rejoin();
