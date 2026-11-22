@@ -614,10 +614,10 @@ void rescue() {
 
 #ifdef CORIUM_LAYOUT_AUTO
 #ifndef CORIUM_LAYOUT_AFTER_MS
-#define CORIUM_LAYOUT_AFTER_MS BootGuard::DAY_MS
+#define CORIUM_LAYOUT_AFTER_MS 3600000UL   // an hour
 #endif
 
-// The move on its own: a day up on a boot that didn't follow a crash, then the first quiet minute.
+// The move on its own: an hour up on a boot that didn't follow a crash, then the first quiet minute.
 // A refusal waits for the next boot, the new table ends it for good
 class LayoutAuto : public Module {
   public:
