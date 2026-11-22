@@ -704,14 +704,15 @@ static corium::PinSafety::Use pin_use(uint16_t flags) {
 
 static bool is_pin(const corium::Pref& p) { return p.flags & (corium::P_PIN | corium::P_PIN_OUT); }
 
-// The row being put still has its old value, so it can't match itself
-static const char* pin_taken(int32_t pin) {
+// The row being put is skipped: its stored text may be the same pin written another way (+5, 05)
+static const char* pin_taken(int32_t pin, const GroupShadow* self, size_t self_j) {
   static char s_taken[40];
   if (pin < 0) return nullptr;
   for (size_t gi = 0; gi < s_group_count; gi++) {
     const GroupShadow& gs = s_groups[gi];
     for (size_t j = 0; j < gs.group->count.get(); j++) {
       int32_t v;
+      if (&gs == self && j == self_j) continue;
       if (!is_pin(gs.group->prefs.row(j)) || !parseI32(gs.values[j], &v) || v != pin) continue;
       snprintf_P(s_taken, sizeof(s_taken), PSTR("in use: %s.%s"), gs.group->moduleId, gs.group->prefs.id_P(j));
       return s_taken;
@@ -721,14 +722,14 @@ static const char* pin_taken(int32_t pin) {
 }
 
 // Sets s_refused and s_warned. kept skips the in-use check, an import moves several pins at once
-static bool pin_refused(const char* module, const corium::Pref& p, const char* key, const char* v, bool kept) {
+static bool pin_refused(const GroupShadow* gs, size_t idx, const char* module, const corium::Pref& p, const char* key, const char* v, bool kept) {
   int32_t pin;
   if (!is_pin(p) || !parseI32(v, &pin)) return false;
   uint8_t needs = (p.flags & corium::P_PIN_IRQ ? corium::PinSafety::NEED_IRQ : 0) |
                   (p.flags & corium::P_PIN_PWM ? corium::PinSafety::NEED_PWM : 0) |
                   (p.flags & corium::P_PIN_OD ? corium::PinSafety::NEED_OD : 0);
   s_refused = corium::PinSafety::refuse(pin, pin_use(p.flags), needs, &s_warned);
-  if (!s_refused && !kept) s_refused = pin_taken(pin);
+  if (!s_refused && !kept) s_refused = pin_taken(pin, gs, idx);
   if (!s_refused) return false;
   corium::Log::console(PSTR("Prefs: %s.%s pin %s refused (%s)"), module, key, v, s_refused);
   return true;
@@ -757,7 +758,7 @@ CORIUM_NODISCARD static bool put_value(const char* module, const char* key, cons
   // Same value, nothing to do but still true
   if (strcmp(out, gs->values[idx]) != 0) {
     // pins are checked on a change only, so a stored pin still loads
-    if (pin_refused(module, p, key, out, kept)) return false;
+    if (pin_refused(gs, (size_t)idx, module, p, key, out, kept)) return false;
     if (!kept && too_short(p, nlen)) return false;
     // Cap counts value bytes only, so a row added later can't fill the group
     size_t had = strlen(gs->values[idx]);
