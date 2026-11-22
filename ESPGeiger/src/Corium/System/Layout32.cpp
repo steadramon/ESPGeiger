@@ -34,6 +34,7 @@
 #include <nvs.h>
 #include <esp_flash.h>
 #include <esp_heap_caps.h>
+#include <esp_image_format.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 #include <esp_rom_crc.h>
@@ -63,6 +64,7 @@ static constexpr Row ROWS[] = {
 static const uint8_t NROWS = sizeof(ROWS) / sizeof(ROWS[0]);
 static constexpr uint8_t APP0 = 2;
 static constexpr uint8_t APP1 = 3;
+static constexpr uint8_t SPIFFS = 4;
 static_assert(ROWS[APP0].off == 0x10000, "app0 stays where the bootloader runs it");
 static_assert(ROWS[APP1].off <= BACKUP_AT && BACKUP_AT + BACKUP_MAX <= ROWS[APP1].off + ROWS[APP1].size,
               "the backup sits in the new app1");
@@ -94,15 +96,23 @@ static const uint32_t HEAD = 12;
 static const size_t PATH_CAP = 64;
 static const uint8_t DEPTH = 4;
 static const size_t CHUNK = 256;
+// the new fs in lfs blocks: a file up to the cache size sits in its directory, a directory takes 2 blocks
+static const uint32_t FS_BLOCK = 4096;
+static const uint32_t FS_BLOCKS = ROWS[SPIFFS].size / FS_BLOCK;
+static const uint32_t INLINE = CONFIG_LITTLEFS_CACHE_SIZE;
+static const uint32_t DIR_BYTES = 2048;   // inline bytes a directory's 2 blocks hold, low
+static const uint32_t SPARE = 4;          // lfs writes copies
+static const uint8_t CRASHES = 2;
 
 static const char R_BUSY[] PROGMEM = "Layout: busy";
 static const char R_TABLE[] PROGMEM = "Layout: not a known table";
-static const char R_APP0[] PROGMEM = "Layout: app0 not this build";
+static const char R_APP0[] PROGMEM = "Layout: app0 copy failed";
 static const char R_BIG[] PROGMEM = "Layout: files too big";
 static const char R_FLASH[] PROGMEM = "Layout: flash write failed";
 static const char R_FS[] PROGMEM = "Layout: fs failed";
 static const char R_BACKUP[] PROGMEM = "Layout: backup bad";
 static const char R_STUCK[] PROGMEM = "Layout: TABLE BAD, USB install";
+static const char R_CRASH[] PROGMEM = "Layout: crashing, stopped";
 
 void build(uint8_t* sec) {
   memset(sec, 0xFF, SECTOR);
@@ -153,13 +163,30 @@ static const From* from() {
   return nullptr;
 }
 
-// by the app slots this boot, the table write checks the whole old table first
-Kind kind() {
-  if (at(app(ESP_PARTITION_SUBTYPE_APP_OTA_1), ROWS[APP1].off, ROWS[APP1].size)) return NEW;
-  return from() ? OLD : UNKNOWN;
+static const esp_partition_t* coredump() {
+  return esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
 }
 
-// app1 hands over to app0 only for the same build, the image is checked when it's set
+// the 0xC00 bytes at 0x8000 as they are in flash now
+static bool md5Is(const uint8_t* want) {
+  uint8_t b[CHUNK], d[16];
+  md5_context_t c;
+  esp_rom_md5_init(&c);
+  for (uint32_t at = 0; at < TABLE_LEN; at += CHUNK) {
+    if (esp_flash_read(NULL, b, TABLE_AT + at, CHUNK) != ESP_OK) return false;
+    esp_rom_md5_update(&c, b, CHUNK);
+  }
+  esp_rom_md5_final(d, &c);
+  return !memcmp(d, want, 16);
+}
+
+// old = an entry's slots, its bytes and a coredump to practice on; new = by the app slots
+Kind kind() {
+  if (at(app(ESP_PARTITION_SUBTYPE_APP_OTA_1), ROWS[APP1].off, ROWS[APP1].size)) return NEW;
+  const From* f = from();
+  return f && coredump() && md5Is(f->md5) ? OLD : UNKNOWN;
+}
+
 static bool app0Same() {
   esp_app_desc_t d;
   const esp_partition_t* a = app(ESP_PARTITION_SUBTYPE_APP_OTA_0);
@@ -199,7 +226,7 @@ static void restart() {
 
 typedef const char* (*Visit)(File& f, void* ctx);
 
-// every file, depth first, nullptr = all seen
+// every file and directory, depth first, nullptr = all seen
 static const char* walk(Visit fn, void* ctx) {
   File dirs[DEPTH];
   uint8_t d = 0;
@@ -215,6 +242,7 @@ static const char* walk(Visit fn, void* ctx) {
     } else if (!f.isDirectory()) {
       why = fn(f, ctx);
     } else if (d + 1 < DEPTH) {
+      why = fn(f, ctx);
       dirs[++d] = f;
     } else {
       why = R_BIG;
@@ -231,6 +259,8 @@ struct Rec {
   uint32_t crc;
   uint16_t count;
   bool ok;
+  uint32_t blocks;   // on the new fs, root and inline files apart
+  uint32_t inl;
 };
 
 static void add(Rec& r, const void* b, size_t n) {
@@ -267,8 +297,13 @@ static const char* rec(File& f, void* ctx) {
   Rec& r = *(Rec*)ctx;
   const char* path = f.path();
   uint32_t plen = strlen(path);
-  if (staged(path, plen)) return nullptr;
+  if (f.isDirectory() || staged(path, plen)) {
+    r.blocks += f.isDirectory() ? 2 : 0;
+    return nullptr;
+  }
   uint32_t size = f.size();
+  if (size > INLINE) r.blocks += size / FS_BLOCK + 1;
+  else r.inl += plen + size + 16;
   if (plen >= PATH_CAP || r.at + 1 + plen + 4 + size + 4 > BACKUP_MAX) return R_BIG;
   uint8_t h[4] = {(uint8_t)plen};
   add(r, h, 1);
@@ -279,6 +314,19 @@ static const char* rec(File& f, void* ctx) {
   if (r.p && !pump(OUT, &f, r.p, r.off + r.at, size, &r.crc)) r.ok = false;
   r.at += size;
   return nullptr;
+}
+
+// the files on the new fs, low on room rather than out of it
+static const char* room(const Rec& r) {
+  uint32_t blocks = 2 + r.blocks + 2 * ((r.inl + DIR_BYTES - 1) / DIR_BYTES);
+  return blocks + SPARE <= FS_BLOCKS ? nullptr : R_BIG;
+}
+
+// a size pass over the fs, as backup() writes it
+static const char* sized(Rec& r) {
+  r = {nullptr, 0, HEAD, 0, 0, true, 0, 0};
+  const char* why = walk(rec, &r);
+  return why ? why : room(r);
 }
 
 struct Back {
@@ -315,8 +363,8 @@ static Back app1() {
 static const char* backup() {
   Back k = app1();
   if (!k.p) return R_FLASH;
-  Rec r = {nullptr, 0, HEAD, 0, 0, true};
-  const char* why = walk(rec, &r);
+  Rec r;
+  const char* why = sized(r);
   if (why) return why;
   uint32_t end = r.at;
   uint16_t count = r.count;
@@ -326,7 +374,7 @@ static const char* backup() {
   wrLe16(h + 4, VERSION);
   wrLe16(h + 6, count);
   wrLe32(h + 8, end - HEAD);
-  r = {k.p, k.off, 0, 0, 0, true};
+  r = {k.p, k.off, 0, 0, 0, true, 0, 0};
   add(r, h, HEAD);
   why = walk(rec, &r);
   if (why) return why;
@@ -406,17 +454,11 @@ CORIUM_NODISCARD static bool putCheck(uint32_t at, const uint8_t* buf, uint8_t* 
 
 // bufs: the old sector, the new, a read back. A practice write on the coredump first
 static const char* swap(uint8_t* old, uint8_t* neu, uint8_t* chk) {
-  uint8_t d[16];
-  md5_context_t c;
   const From* f = from();
-  bool ok = f && esp_flash_read(NULL, old, TABLE_AT, SECTOR) == ESP_OK;
-  esp_rom_md5_init(&c);
-  esp_rom_md5_update(&c, old, TABLE_LEN);
-  esp_rom_md5_final(d, &c);
-  if (!ok || memcmp(d, f->md5, 16)) return R_TABLE;
+  if (!f || !md5Is(f->md5) || esp_flash_read(NULL, old, TABLE_AT, SECTOR) != ESP_OK) return R_TABLE;
   build(neu);
-  const esp_partition_t* cd = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
-  ok = cd && putCheck(cd->address, neu, chk);
+  const esp_partition_t* cd = coredump();
+  bool ok = cd && putCheck(cd->address, neu, chk);
   if (cd && esp_partition_erase_range(cd, 0, SECTOR) != ESP_OK) ok = false;
   if (!ok) return R_FLASH;
   if (putCheck(TABLE_AT, neu, chk)) return nullptr;
@@ -432,10 +474,31 @@ static const char* writeTable() {
   return why;
 }
 
+// this image from app1 into app0, image length only. Each erase yields, otadata keeps app1 till it's set
+static bool copyApp() {
+  const esp_partition_t* a0 = app(ESP_PARTITION_SUBTYPE_APP_OTA_0);
+  const esp_partition_t* a1 = esp_ota_get_running_partition();
+  const esp_partition_pos_t pos = {a1->address, a1->size};
+  esp_image_metadata_t md;
+  if (!a0 || esp_image_verify(ESP_IMAGE_VERIFY_SILENT, &pos, &md) != ESP_OK || md.image_len > a0->size) return false;
+  uint8_t b[CHUNK];
+  for (uint32_t at = 0; at < md.image_len; at += CHUNK) {
+    size_t k = md.image_len - at < CHUNK ? md.image_len - at : CHUNK;
+    if (at % SECTOR == 0 && esp_partition_erase_range(a0, at, SECTOR) != ESP_OK) return false;
+    if (esp_partition_read(a1, at, b, k) != ESP_OK || esp_partition_write(a0, at, b, k) != ESP_OK) return false;
+  }
+  return app0Same();
+}
+
+// from app1: this build into app0, set checks the image, the next boot goes on from app0.
+// A copy cut short leaves this build's header in app0, so a set that fails copies again
 static Step save(Kind k) {
   if (k != OLD) return quit(R_TABLE);
   if (slot()) {
-    if (!app0Same() || esp_ota_set_boot_partition(app(ESP_PARTITION_SUBTYPE_APP_OTA_0)) != ESP_OK) return quit(R_APP0);
+    const esp_partition_t* a0 = app(ESP_PARTITION_SUBTYPE_APP_OTA_0);
+    bool ok = (app0Same() && esp_ota_set_boot_partition(a0) == ESP_OK) ||
+              (copyApp() && esp_ota_set_boot_partition(a0) == ESP_OK);
+    if (!ok) return quit(R_APP0);
     restart();
     return IDLE;
   }
@@ -455,13 +518,10 @@ static Step flip(Kind k) {
   return IDLE;
 }
 
-// a bad record or put back keeps the step, the next boot tries again
+// a failed put back fails the same way again, so it stops with what fitted and OTA comes back
 static Step restore(Kind k) {
   const char* why = k == NEW ? putBack() : R_TABLE;
-  if (why) {
-    Log::console(why);
-    return IDLE;
-  }
+  if (why) return quit(why);
   return setStep(CLEARING) ? CLEARING : IDLE;
 }
 
@@ -476,6 +536,9 @@ void resume() {
   Step s = step();
   if (s == IDLE) return;
   Kind k = kind();
+  // crashing in the move: stop while the old table stands, or give up the put back
+  bool unwritten = s == SAVING || (s == SAVED && k == OLD);
+  if (BootGuard::crashStreak() >= CRASHES && (unwritten || s == RESTORING)) s = quit(R_CRASH);
   if (s == SAVING) s = save(k);
   if (s == SAVED) s = flip(k);
   if (s == RESTORING) s = restore(k);
@@ -486,9 +549,8 @@ void resume() {
 const char* check() {
   if (step() != IDLE) return R_BUSY;
   if (kind() != OLD) return R_TABLE;
-  if (slot() && !app0Same()) return R_APP0;
-  Rec r = {nullptr, 0, HEAD, 0, 0, true};
-  return walk(rec, &r);
+  Rec r;
+  return sized(r);
 }
 
 const char* start() {
