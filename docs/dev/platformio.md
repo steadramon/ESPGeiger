@@ -366,3 +366,7 @@ The key points when building a custom environment:
 - **Set your counter type** with `GEIGER_TYPE`. For serial builds, the specific serial protocol is selected at runtime from the Config page.
 - **Configure your pins** to match your hardware wiring.
 - Common output modules (MQTT, Radmon, GMC, ThingSpeak, Webhook) are enabled globally in `platformio.ini` under `[com-esp]` and will be available in all custom environments.
+
+### ESP32 Partition Table
+
+The 4 MB ESP32, ESP32-C3 and ESP32-S2 envs use `partitions/esp32_4mb.csv`. Keep custom images under 1280 KB (1310720 bytes) so boards that haven't [moved to it](/install/ota#esp32-4-mb-table-move) yet can still take them.

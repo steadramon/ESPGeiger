@@ -28,7 +28,7 @@ The pulse target is the most widely compatible build and works with all Pulse-ty
 | `esp32_cajoe_iotgm` | ESP32 | 26, wired | yes | PCNT | CAJOE IoT-GM board |
 | `esp32_cajoe_iotgm_no_pcnt` | ESP32 | 26, wired | yes | interrupt, PCNT on the Input tab | As `esp32_pulse_no_pcnt`, for the CAJOE IoT-GM |
 | `esp32_pulse` | ESP32 | 13 | yes | PCNT | Counts with the built in hardware PCNT counter by default; **Count with** on the Input tab switches to the interrupt counter |
-| `esp32_pulse_no_pcnt` | ESP32 | 13 | yes | interrupt, PCNT on the Input tab | The same build defaulting to the interrupt counter. Retired in 0.15: flash the `pulse` build, it keeps the interrupt setting |
+| `esp32_pulse_no_pcnt` | ESP32 | 13 | yes | interrupt, PCNT on the Input tab | The same build defaulting to the interrupt counter. Retired in 0.15: flash the `pulse` build, it keeps the interrupt setting if the 0.14 `_no_pcnt` build ran first. Straight from 0.13 it starts on PCNT: set **Count with** to Interrupt |
 | `esp32s3_pulse` | ESP32-S3 | 13 | yes | PCNT | As `esp32_pulse` |
 | `esp32s3_pulse_no_pcnt` | ESP32-S3 | 13 | yes | interrupt, PCNT on the Input tab | As `esp32_pulse_no_pcnt` |
 | `esp32c3_pulse` | ESP32-C3 | 4 | yes | interrupt | |

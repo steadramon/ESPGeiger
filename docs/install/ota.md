@@ -96,6 +96,12 @@ new release tag.
 Your settings (Wi-Fi credentials, MQTT config, tube ratio, etc.) survive
 the update - only the firmware code is replaced.
 
+## ESP32 4 MB table move
+
+Older ESP32 and ESP32-C3 boards make more room for future firmware once,
+about an hour after updating to 0.14. They restart twice and keep all
+their settings. There's nothing to do.
+
 ## If it fails
 
 - **"Update failed"** with a tiny bar - the device recovers automatically,
@@ -104,6 +110,8 @@ the update - only the firmware code is replaced.
   See the warning in step 1. Recover with the Web Installer over USB.
 - **Upload stalls partway** - usually Wi-Fi instability. Move closer to the
   router or use a wired-closer AP and retry.
+- **"Update failed: table move not done"** - an ESP32 is in the middle of its
+  [table move](#esp32-4-mb-table-move). Try again in a minute.
 
 ## Advanced: command-line OTA
 

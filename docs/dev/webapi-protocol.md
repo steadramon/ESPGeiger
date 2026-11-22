@@ -54,7 +54,6 @@ Sent once per hour and on first boot or reset:
 | `ci`  | string  | Device chip ID (hex). The server looks up or creates a station for this chip and returns the numeric `id` the device quotes in later posts. |
 | `v`   | string  | Release version and the git revision it was built from, `version/git` (e.g. `0.14.0/7a2407d`, `devel/7a2407d`). Just the version when the revision is unknown. |
 | `bd`  | string  | Board name on ESPGeiger kits (e.g. `ESPG-HW`), else the chip model (e.g. `ESP8266`, `ESP32-C3`) |
-| `bn`  | string  | Board revision, only on kits that report one |
 | `gm`  | string  | PlatformIO build environment name (e.g. `espgeigerlog_serial`) |
 | `gc`  | string  | Geiger counter model: auto-detected on Serial builds, user-set on Pulse builds |
 | `td`  | uint32  | Tube detection bitmask: bit 0 = α, bit 1 = β, bit 2 = γ. `0` = unknown / not set. Bits 3-7 reserved. |
