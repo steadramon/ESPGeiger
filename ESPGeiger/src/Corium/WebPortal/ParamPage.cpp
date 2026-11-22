@@ -196,7 +196,7 @@ static void param_render_tabs(EGHttpResponse& res, uint8_t tab) {
 static void param_render_backup(EGHttpResponse& res) {
   res.sendChunk(F(
     "<form method=POST action=/import id=impF>"
-    "<p><textarea name=blob id=cfgB rows=5 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
+    "<p><textarea name=blob id=cfgB rows=8 style=\"width:100%;font-family:monospace;font-size:.85em\" placeholder=\"Click Export to read current config, or paste a blob here to import\" required></textarea></p>"
     "<p><button type=button id=expB>Export</button>"
     " <button type=submit>Import</button></p></form>"
     "<p style=\"color:var(--muted);font-size:.85em\">WiFi and network settings are preserved. Device restarts automatically after import.</p>"
@@ -540,8 +540,8 @@ function sw(){Q('[data-w]').forEach(e=>{var c=byID(e.dataset.w);if(c)e.hidden=!(
 addEventListener('change',sw);sw();
 Q('.clr').forEach(b=>b.onclick=()=>{if(confirm('Clear stored value?')){byID(b.dataset.k).value='__CLEAR__';b.form.submit()}});
 Q('input[type=range]').forEach(r=>r.oninput=()=>r.nextElementSibling.value=r.value);
-var x=byID('expB');if(x)x.onclick=()=>fetch('/export').then(r=>r.text()).then(t=>{var e=byID('cfgB');e.value=t;e.select()});
-var im=byID('impF');if(im)im.onsubmit=()=>confirm('Import config and restart?');
+var x=byID('expB');if(x)x.onclick=()=>fetch('/export').then(r=>r.text()).then(t=>{var e=byID('cfgB');e.value=(t.match(/.{1,76}/g)||[]).join('\n');e.select()});
+var im=byID('impF');if(im)im.onsubmit=()=>{if(!confirm('Import config and restart?'))return false;var b=byID('cfgB');if(/^[\sA-Za-z0-9+\/=]+$/.test(b.value))b.value=b.value.replace(/\s/g,'');return true};
 var w=byID('sys.web_pass');if(w){var c=mk('input');c.type='password';c.placeholder='Confirm password';var k=()=>c.setCustomValidity(c.value!=w.value?'Passwords do not match':'');c.oninput=k;w.addEventListener('input',k);w.after(c)}
 )JS";
 #endif
