@@ -240,7 +240,7 @@ public:
   static float       getFloat (const char* module, const char* key);
 
   // put and commit from the loop task only. A put frees the string getString() gave for that key
-  static bool put(const char* module, const char* key, const char* value);
+  CORIUM_NODISCARD static bool put(const char* module, const char* key, const char* value);
   // For a value saved before, the min length rule doesn't apply
   CORIUM_NODISCARD static bool putKept(const char* module, const char* key, const char* value);
   // why the last put refused it (PROGMEM), else nullptr
@@ -249,7 +249,7 @@ public:
   static const char* warned();
   CORIUM_NODISCARD static bool putInt(const char* module, const char* key, int32_t value);
   CORIUM_NODISCARD static bool putUInt(const char* module, const char* key, uint32_t value);
-  static bool commit(bool fire_callbacks = true);
+  CORIUM_NODISCARD static bool commit(bool fire_callbacks = true);
   // Runs the callbacks now, writes to flash CORIUM_PREFS_HOLD_MS later
   CORIUM_NODISCARD static bool commitSoon(uint32_t now_ms);
   // why the last commit left a group out, else 0

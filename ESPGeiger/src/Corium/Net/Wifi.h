@@ -70,7 +70,7 @@ namespace Wifi {
   CORIUM_NODISCARD bool joinMode();   // Sets wifi.mode back to 0, no commit
   bool offSet(const char* mod, const char* key);   // true if this set turned wifi.mode to 1
   CORIUM_NODISCARD bool keepJoined(uint32_t restart_ms);   // false = offline or not saved
-  bool saveBackupCreds();   // Call before WiFi.begin(). A failed write is logged, false = nothing to back up
+  CORIUM_NODISCARD bool saveBackupCreds();   // Call before WiFi.begin(). A failed write is logged, false = nothing to back up
   bool clearSavedCreds();   // false = the sdk kept them
   bool applyStaticConfig();   // before WiFi.begin()
   bool validateStatic(const char* ip, const char* gw, const char* sn,
@@ -88,7 +88,7 @@ namespace Wifi {
   constexpr size_t LAST_TRY_MAX = 64 + 6 * WIFI_SSID_MAX;   // html with the ssid escaped
   size_t lastTry(char* buf, size_t cap);   // Only given once, 0 = none
   const char* heldSsid();   // "" if none
-  bool beginHeld();   // WiFi.begin() then frees them, false = none held
+  CORIUM_NODISCARD bool beginHeld();   // WiFi.begin() then frees them, false = none held
   void dropHeld();   // For a save that didn't land
   CORIUM_NODISCARD bool saveNetBackup();   // true = a backup exists, a pending one is kept
   // Fields are static, ip, gw, sn, dns. No commit

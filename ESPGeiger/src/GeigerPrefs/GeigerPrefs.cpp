@@ -282,8 +282,8 @@ static void boot_pins() {
 #ifdef NO_PCNT_ENV
   // Stored so a plain bin keeps the interrupt. Committed here, a save's callback can't commit
   if (corium::Prefs::getBool("counter", K_COUNT_KEPT)) return;
-  corium::Prefs::put("counter", K_COUNT_KEPT, "1");
-  corium::Prefs::commit(false);
+  if (!corium::Prefs::put("counter", K_COUNT_KEPT, "1") || !corium::Prefs::commit(false))
+    corium::Log::console(PSTR("Counter: interrupt not kept, next boot tries again"));
 #endif
 }
 #else

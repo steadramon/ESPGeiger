@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "OutputVars.h"
+#include "Corium/Util/Attr.h"
 #include <string.h>
 
 namespace corium {
@@ -88,7 +89,7 @@ static bool unescape(char in, char* out) {
 }
 
 // p points at the '\'. false = buffer full, unknown escapes pass through
-static bool put_escape(const char*& p, char* buf, size_t& pos, size_t cap) {
+CORIUM_NODISCARD static bool put_escape(const char*& p, char* buf, size_t& pos, size_t cap) {
   p++;
   char c = 0;
   if (unescape(*p, &c)) { buf[pos++] = c; p++; return true; }
@@ -100,7 +101,7 @@ static bool put_escape(const char*& p, char* buf, size_t& pos, size_t cap) {
 }
 
 // p points at the '{', false = buffer full
-static bool put_var(const char*& p, char* buf, size_t& pos, size_t cap) {
+CORIUM_NODISCARD static bool put_var(const char*& p, char* buf, size_t& pos, size_t cap) {
   const char* k = p + 1;
   const char* e = strchr(k, '}');
   if (!e) { buf[pos++] = *p++; return true; }

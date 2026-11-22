@@ -81,8 +81,11 @@ class EGHttpClient {
     __attribute__((warn_unused_result))
     bool open(const __FlashStringHelper* method, const __FlashStringHelper* url);
     // false if dropped. Host, Connection and the lengths are set by the client. One that didn't fit makes send() fail
+    __attribute__((warn_unused_result))
     bool setReqHeader(const char* name, const char* value);   // send() says
+    __attribute__((warn_unused_result))
     bool setReqHeader(const __FlashStringHelper* name, const char* value);
+    __attribute__((warn_unused_result))
     bool setReqHeader(const __FlashStringHelper* name, const __FlashStringHelper* value);
     void setTimeoutS(uint16_t secs) { _timeoutS = secs; }   // max silence, default 10
     void setDeadline(uint32_t ms) { _deadlineMs = ms; }    // whole request, 0 = none
