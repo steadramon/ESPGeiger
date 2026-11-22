@@ -42,6 +42,7 @@ namespace Layout {
   const char* check();   // flash string why not, nullptr = ok to start
   const char* start();   // check() then restarts into the move, else why not
   void resume();   // Boot::prefs, before the fs mounts
+  void rescue();   // the fs didn't mount: the old table's files found = restarts into the put back
   void build(uint8_t* sector);   // the new table as the sector holds it
 }
 }  // namespace corium

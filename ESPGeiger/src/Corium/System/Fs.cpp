@@ -21,6 +21,7 @@
 #include "Corium/Util/Bytes.h"
 #ifdef ESP32
 #include "esp_log.h"
+#include "Layout.h"
 #endif
 
 #define FS_MOUNT_TRIES 6
@@ -88,6 +89,9 @@ bool corium::Fs::begin() {
     s_mounted = LittleFS.begin();
   }
   if (!s_mounted) {
+#ifdef ESP32
+    corium::Layout::rescue();
+#endif
     corium::Log::console(PSTR("FS: Mount failed, formatting"));
     if (LittleFS.format()) s_mounted = LittleFS.begin();
   }

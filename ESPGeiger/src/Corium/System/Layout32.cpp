@@ -35,11 +35,13 @@
 #include <esp_flash.h>
 #include <esp_heap_caps.h>
 #include <esp_image_format.h>
+#include <esp_littlefs.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 #include <esp_rom_crc.h>
 #include <esp_rom_md5.h>
 #include <esp_spi_flash.h>
+#include <vfs_api.h>
 
 namespace corium {
 namespace Layout {
@@ -69,19 +71,21 @@ static_assert(ROWS[APP0].off == 0x10000, "app0 stays where the bootloader runs i
 static_assert(ROWS[APP1].off <= BACKUP_AT && BACKUP_AT + BACKUP_MAX <= ROWS[APP1].off + ROWS[APP1].size,
               "the backup sits in the new app1");
 
-// A table this moves from: md5 of its first 0xC00 bytes as gen_esp32part.py makes them, and its app slots
+// A table this moves from: md5 of its first 0xC00 bytes as gen_esp32part.py makes them, its app slots, its fs
 struct From {
   uint8_t md5[16];
   uint32_t app0;
   uint32_t app0Size;
   uint32_t app1;
   uint32_t app1Size;
+  uint32_t fs;
+  uint32_t fsSize;
 };
 
 static const From FROM[] = {
   // default.csv
   {{0xa0, 0x39, 0xc6, 0x6c, 0xd3, 0x48, 0x81, 0x76, 0x03, 0x7b, 0x61, 0x6b, 0x75, 0x95, 0xfe, 0x72},
-   0x10000, 0x140000, 0x150000, 0x140000},
+   0x10000, 0x140000, 0x150000, 0x140000, 0x290000, 0x160000},
 #ifdef CORIUM_LAYOUT_FROM_MORE
   CORIUM_LAYOUT_FROM_MORE
 #endif
@@ -103,6 +107,7 @@ static const uint32_t INLINE = CONFIG_LITTLEFS_CACHE_SIZE;
 static const uint32_t DIR_BYTES = 2048;   // inline bytes a directory's 2 blocks hold, low
 static const uint32_t SPARE = 4;          // lfs writes copies
 static const uint8_t CRASHES = 2;
+static const char OLD_PATH[] = "/old";
 
 static const char R_BUSY[] PROGMEM = "Layout: busy";
 static const char R_TABLE[] PROGMEM = "Layout: not a known table";
@@ -226,11 +231,11 @@ static void restart() {
 
 typedef const char* (*Visit)(File& f, void* ctx);
 
-// every file and directory, depth first, nullptr = all seen
-static const char* walk(Visit fn, void* ctx) {
+// every file and directory, depth first, nullptr = all seen. No src = Fs
+static const char* walk(fs::FS* src, Visit fn, void* ctx) {
   File dirs[DEPTH];
   uint8_t d = 0;
-  dirs[0] = Fs::openR("/");
+  dirs[0] = src ? src->open("/") : Fs::openR("/");
   if (!dirs[0] || !dirs[0].isDirectory()) return R_FS;
   const char* why = nullptr;
   while (!why) {
@@ -323,9 +328,9 @@ static const char* room(const Rec& r) {
 }
 
 // a size pass over the fs, as backup() writes it
-static const char* sized(Rec& r) {
+static const char* sized(Rec& r, fs::FS* src) {
   r = {nullptr, 0, HEAD, 0, 0, true, 0, 0};
-  const char* why = walk(rec, &r);
+  const char* why = walk(src, rec, &r);
   return why ? why : room(r);
 }
 
@@ -360,11 +365,11 @@ static Back app1() {
 }
 
 // one record into the old app1, read back as the restore reads it
-static const char* backup() {
+static const char* backup(fs::FS* src) {
   Back k = app1();
   if (!k.p) return R_FLASH;
   Rec r;
-  const char* why = sized(r);
+  const char* why = sized(r, src);
   if (why) return why;
   uint32_t end = r.at;
   uint16_t count = r.count;
@@ -376,7 +381,7 @@ static const char* backup() {
   wrLe32(h + 8, end - HEAD);
   r = {k.p, k.off, 0, 0, 0, true, 0, 0};
   add(r, h, HEAD);
-  why = walk(rec, &r);
+  why = walk(src, rec, &r);
   if (why) return why;
   wrLe32(h, r.crc);
   add(r, h, 4);
@@ -502,7 +507,7 @@ static Step save(Kind k) {
     restart();
     return IDLE;
   }
-  const char* why = backup();
+  const char* why = backup(nullptr);
   if (why) return quit(why);
   return setStep(SAVED) ? SAVED : quit(R_FLASH);
 }
@@ -525,9 +530,18 @@ static Step restore(Kind k) {
   return setStep(CLEARING) ? CLEARING : IDLE;
 }
 
+// the old fs's first block pair, inside app1 now, so rescue() never finds old files again
+static bool forget(const esp_partition_t* a1) {
+  for (const From& f : FROM) {
+    if (f.fs < a1->address || f.fs + 2 * SECTOR > a1->address + a1->size) continue;
+    if (esp_partition_erase_range(a1, f.fs - a1->address, 2 * SECTOR) != ESP_OK) return false;
+  }
+  return true;
+}
+
 static void clearOut() {
   Back k = app1();
-  if (k.p && esp_partition_erase_range(k.p, k.off, SECTOR) == ESP_OK && setStep(IDLE)) {
+  if (k.p && esp_partition_erase_range(k.p, k.off, SECTOR) == ESP_OK && forget(k.p) && setStep(IDLE)) {
     Log::console(PSTR("Layout: done"));
   }
 }
@@ -550,7 +564,7 @@ const char* check() {
   if (step() != IDLE) return R_BUSY;
   if (kind() != OLD) return R_TABLE;
   Rec r;
-  return sized(r);
+  return sized(r, nullptr);
 }
 
 const char* start() {
@@ -560,6 +574,40 @@ const char* start() {
   Log::console(PSTR("Layout: moving"));
   restart();
   return nullptr;
+}
+
+// A USB install over the old table writes the new one and leaves the old fs where app1 is now: mounted
+// read only from its old place, its files go into the backup, then the put back as a move does it
+void rescue() {
+  // a put back that crashed twice stays given up
+  if (BootGuard::crashStreak() >= CRASHES || kind() != NEW || step() != IDLE || slot()) return;
+  for (const From& f : FROM) {
+    esp_partition_t p = {};
+    p.flash_chip = esp_flash_default_chip;
+    p.type = ESP_PARTITION_TYPE_DATA;
+    p.subtype = ESP_PARTITION_SUBTYPE_DATA_SPIFFS;
+    p.address = f.fs;
+    p.size = f.fsSize;
+    strlcpy(p.label, "old", sizeof(p.label));
+    esp_vfs_littlefs_conf_t c = {};
+    c.base_path = OLD_PATH;
+    c.partition = &p;
+    c.read_only = 1;
+    if (esp_vfs_littlefs_register(&c) != ESP_OK) continue;   // nothing there
+    fs::FSImplPtr impl(new VFSImpl());
+    impl->mountpoint(OLD_PATH);
+    fs::FS old(impl);
+    const char* why = backup(&old);
+    (void)esp_vfs_littlefs_unregister_partition(&p);   // read only, nothing to lose
+    if (!why && !setStep(RESTORING)) why = R_FLASH;
+    if (why) {
+      Log::console(why);
+      return;
+    }
+    Log::console(PSTR("Layout: old files found, putting back"));
+    restart();
+    return;
+  }
 }
 
 }  // namespace Layout
