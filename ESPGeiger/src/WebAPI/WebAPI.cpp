@@ -108,18 +108,27 @@ static void hex_str(const uint8_t* in, unsigned int len, char* out) {
 static const char HS_OK[] PROGMEM = "WebAPI: Handshake OK - station ID %u";
 
 // Hasher on the stack, noinline so it's gone before uECC_sign
-static void __attribute__((noinline)) hash_body(const uint8_t* p, size_t n, uint8_t* out) {
+static void __attribute__((noinline)) hash_body(PGM_P path, const uint8_t* p, size_t n, uint8_t* out) {
   Sha256Class sha;
   sha.init();
+  // the path and its 0 first, a signature only fits its own endpoint
+  char c;
+  do {
+    c = (char)pgm_read_byte(path++);
+    sha.write((uint8_t)c);
+  } while (c);
   sha.write(p, n);
   memcpy(out, sha.result(), HASH_LENGTH);
 }
 
-// X-Auth: secp192r1 over the body's sha256, base64
-static bool sign(const uint8_t* priv, const uint8_t* body, size_t len, char* out) {
+// the part of a request url that's signed
+static PGM_P path_of(PGM_P url) { return url + sizeof(WEBAPI_URL) - 1; }
+
+// X-Auth: secp192r1 over sha256 of path, 0, body, base64
+static bool sign(const uint8_t* priv, PGM_P path, const uint8_t* body, size_t len, char* out) {
   uint8_t signature[WEBAPI_SIG_LEN];
   uint8_t hash[HASH_LENGTH];
-  hash_body(body, len, hash);
+  hash_body(path, body, len, hash);
   optimistic_yield(100 * 1000);
   if (uECC_sign(priv, hash, HASH_LENGTH, signature, uECC_secp192r1()) != 1) return false;
   optimistic_yield(100 * 1000);
@@ -440,11 +449,12 @@ void WebAPI::doHandshake() {
   }
   size_t len = mp.length();
 
+  PGM_P url = PSTR(WEBAPI_URL "/api/1/handshake");
   char sig[WEBAPI_SIG_B64];
-  if (!sign(_priv, buf, len, sig)) return;
+  if (!sign(_priv, path_of(url), buf, len, sig)) return;
 
   if (request.busy()) return;
-  corium::HttpDriver::Sent s = send_signed(SENT_HS, PSTR(WEBAPI_URL "/api/1/handshake"), buf, len, sig);
+  corium::HttpDriver::Sent s = send_signed(SENT_HS, url, buf, len, sig);
   if (s == corium::HttpDriver::SENT) {
     handshakeAt(corium::fastMillis() + WEBAPI_HANDSHAKE_MS);
     corium::Registry::emit(TOPIC_SENT);
@@ -577,8 +587,6 @@ void WebAPI::sendAttest(const uint8_t* nonce) {
     mp.kv(PSTR("as"), hw_sig, sizeof(hw_sig));
   }
   mp.map_end();
-  char sig[WEBAPI_SIG_B64];
-  if (mp.overflow || !sign(_priv, buf, mp.length(), sig)) return;
   uint8_t kind = SENT_ATT_CH;
   PGM_P url = PSTR(WEBAPI_URL "/api/1/attest/challenge");
   if (nonce) {
@@ -588,6 +596,8 @@ void WebAPI::sendAttest(const uint8_t* nonce) {
     kind = SENT_ATT_BLOB;
     url = PSTR(WEBAPI_URL "/api/1/attest/blob");
   }
+  char sig[WEBAPI_SIG_B64];
+  if (mp.overflow || !sign(_priv, path_of(url), buf, mp.length(), sig)) return;
   send_signed(kind, url, buf, mp.length(), sig);
 }
 #endif
@@ -663,11 +673,12 @@ void WebAPI::postMeasurement(bool census) {
   }
   size_t len = mp.length();
 
+  PGM_P url = PSTR(WEBAPI_URL "/api/1/post");
   char sig[WEBAPI_SIG_B64];
-  if (!sign(_priv, buf, len, sig)) return;   // try again next slot
+  if (!sign(_priv, path_of(url), buf, len, sig)) return;   // try again next slot
 
   if (request.busy()) return;
-  corium::HttpDriver::Sent s = send_signed(SENT_POST, PSTR(WEBAPI_URL "/api/1/post"), buf, len, sig);
+  corium::HttpDriver::Sent s = send_signed(SENT_POST, url, buf, len, sig);
   if (s == corium::HttpDriver::SENT || s == corium::HttpDriver::NOT_SEALED) corium::Registry::emit(TOPIC_SENT);
   else corium::Log::console(PSTR("WebAPI: Post connect failed"));
 }
@@ -717,13 +728,14 @@ void WebAPI::sendForget() {
   if (mp.overflow) return;
   size_t len = mp.length();
 
+  PGM_P url = PSTR(WEBAPI_URL "/api/1/forget");
   char sig[WEBAPI_SIG_B64];
-  if (!sign(_priv, buf, len, sig)) {
+  if (!sign(_priv, path_of(url), buf, len, sig)) {
     corium::Log::console(PSTR("WebAPI: Forget sign failed"));
     return;
   }
 
-  corium::HttpDriver::Sent s = send_signed(SENT_FORGET, PSTR(WEBAPI_URL "/api/1/forget"), buf, len, sig);
+  corium::HttpDriver::Sent s = send_signed(SENT_FORGET, url, buf, len, sig);
   if (s == corium::HttpDriver::SENT || s == corium::HttpDriver::NOT_SEALED) {
     corium::Log::console(PSTR("WebAPI: Forget station %u"), _station);
     corium::Registry::emit(TOPIC_SENT);

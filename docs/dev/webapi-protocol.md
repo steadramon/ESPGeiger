@@ -94,6 +94,8 @@ Canonical URL: `http://api.espgeiger.com/api/1/`. HTTP-only by design: each requ
 | `/api/1/post`      | POST | Submit a reading (+ optional health snapshot) |
 | `/api/1/forget`    | POST | Right-to-erasure: purge station + history |
 
+`X-Auth` is the base64 ECDSA (secp192r1) signature over SHA-256 of the path, a 0 byte, then the body, for example `/api/1/post` 0x00 body. The path ties a signature to its endpoint, so a captured post can't be sent to `/forget`. 0.13 and older sign the body alone; the server still takes that from them.
+
 Devices don't follow redirects, so the API stays on plain http at `/api/1`. Reply codes the device acts on: `403` re-syncs NTP when its body is `Clock off`, and to a post also drops the station and handshakes again, `410` (or `404` to a handshake) stops sharing till its settings are saved or the device restarts, `429` skips the next 5 posts. Any other error is logged to the console.
 
 ## Pin scoring
