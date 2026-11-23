@@ -71,6 +71,7 @@ class HttpPoster : public Sender {
     uint32_t _ping_ms = 0;
     uint32_t _every_ms = 0;
     bool _send_enabled = false;
+    bool _again = false;   // set in prepare, the next post goes when this reply is in
 
   private:
     static constexpr size_t URL_CAP = CORIUM_HTTPPOSTER_URL_MAX;
@@ -83,7 +84,7 @@ class HttpPoster : public Sender {
     bool slot_due(unsigned long now);
     void post();
     void send(const char* url, const char* body);
-    void take_reply();
+    bool take_reply();
 };
 
 }  // namespace corium

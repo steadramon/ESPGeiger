@@ -41,6 +41,8 @@ Some pins save with a warning shown after the save:
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Friendly name | `sys.name` | String (32) | (empty) | Optional human label shown in the web UI title and `/about`. Blank falls back to the hostname (e.g. `ESPGeiger-a1b2c3`). |
+| Latitude | `sys.lat` | Float -90 to 90 | `0` | Where the device is, for [ESPGeiger Stations](/output/webapi) and [Radmon](/output/radmon). Both 0 = not set. Set on the Stations page before 0.14. |
+| Longitude | `sys.lon` | Float -180 to 180 | `0` | See Latitude. |
 | Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. Restart to apply. |
 | Arduino OTA | `sys.espota` | Boolean | `0` off | Firmware uploads from PlatformIO (espota) or the Arduino IDE network port. The Update page works without it. Restart to apply. |
 | Origin check | `sys.origin` | Boolean | `1` on | Refuse saves sent from other websites. |
@@ -74,6 +76,7 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 | Serial type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
 | RX pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
 | TX pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
+| Tube | `counter.tube` | `0` Other, `1` SBM-20, `2` SBM-19, `3` SBM-21, `4` STS-5, `5` SI-22G, `6` J305, `7` J321, `8` M4011, `9` LND 712, `10` VacuTec 70 013 | `0` Other | not test builds | The GM tube. Picking one and saving sets the ratio, the dead time and α/β/γ that are still the default or the previous tube's figure; your own values are kept. Figures and sources: [Tube setting](/hardware/pulse#tube-setting). Sent to ESPGeiger Stations. |
 | Tube model | `counter.geiger_model` | String (32) | varies by build | not test builds | GM tube model name (e.g. SBM-20, J305). Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
 | α Alpha | `counter.tube_alpha` | Boolean | `0` off | not test builds | The tube detects alpha radiation. Informational; passed to upstream aggregators. |
 | β Beta | `counter.tube_beta` | Boolean | `0` off | not test builds | The tube detects beta radiation. Informational. |

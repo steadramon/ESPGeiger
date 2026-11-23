@@ -75,12 +75,15 @@ size_t corium::HttpPoster::statusJson(char* buf, size_t cap) {
 
 void corium::HttpPoster::loop(unsigned long now)
 {
-  take_reply();
+  bool got = take_reply();
   if (hold && hold()) {
     corium::Registry::dueAt(this, now + LOOP_MS);
     return;
   }
-  if (_send_enabled && slot_due(now)) {
+  if (_send_enabled && got && _again) {
+    _again = false;
+    post();
+  } else if (_send_enabled && slot_due(now)) {
     if (_skip) _skip--;
     else post();
   }
@@ -102,14 +105,14 @@ bool corium::HttpPoster::slot_due(unsigned long now) {
   return corium::dueSteps(now, _ping_ms, _every_ms);
 }
 
-void corium::HttpPoster::take_reply()
+bool corium::HttpPoster::take_reply()
 {
   char r[REPLY_CAP];
   size_t cap = replyCap();
   if (cap > sizeof(r)) cap = sizeof(r);
   int code;
   size_t got;
-  if (!request.take(&code, (uint8_t*)r, cap - 1, &got)) return;
+  if (!request.take(&code, (uint8_t*)r, cap - 1, &got)) return false;
   bool ok = false;
   if (okCode(code)) {
     while (got && (uint8_t)r[got - 1] <= ' ') got--;   // drop a trailing newline
@@ -119,6 +122,7 @@ void corium::HttpPoster::take_reply()
     corium::HttpDriver::logError(logTag(), code);
   }
   result(ok);
+  return true;
 }
 
 bool corium::HttpPoster::urlFits(int n, size_t cap) {
@@ -141,9 +145,14 @@ void corium::HttpPoster::post() {
   if (request.busy()) return;
   char url[URL_CAP];
   const char* body = nullptr;
-  if (!prepare(url, sizeof(url), &body)) return;
+  _again = false;
+  if (!prepare(url, sizeof(url), &body)) {
+    _again = false;
+    return;
+  }
   send(url, body);
   free((void*)body);   // the client copied it
+  if (!request.busy()) _again = false;   // not sent, no reply to follow
 }
 
 void corium::HttpPoster::send(const char* url, const char* body) {

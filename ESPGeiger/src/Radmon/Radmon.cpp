@@ -86,6 +86,10 @@ void Radmon::onPrefsLoaded() {
 // "OK<br>" on success, else the error text
 bool Radmon::interpret(const char* r)
 {
+  if (_loc) {   // any 200
+    corium::Log::console(PSTR("Radmon: Location sent"));
+    return true;
+  }
   if (strcmp_P(r, PSTR("OK<br>")) == 0) {
     corium::Log::debug(PSTR("Radmon: Upload OK"));
     return true;
@@ -101,7 +105,18 @@ bool Radmon::interpret(const char* r)
   return false;
 }
 
+// once after boot and after a change, tried once
+bool Radmon::loc_due(float* lat, float* lon) {
+  *lat = corium::Prefs::getFloat("sys", corium::K_LAT);
+  *lon = corium::Prefs::getFloat("sys", corium::K_LON);
+  if ((*lat == 0.0f && *lon == 0.0f) || (*lat == _lat && *lon == _lon)) return false;
+  _lat = *lat;
+  _lon = *lon;
+  return true;
+}
+
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
+  _loc = false;
   const char* raw_user = corium::Prefs::getString("radmon", EG_K_USER);
   const char* raw_pass = corium::Prefs::getString("radmon", EG_K_PASSWORD);
   if (unset(raw_user, RM_L_USR) || unset(raw_pass, EG_L_PWD)) return false;
@@ -119,6 +134,16 @@ bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
   char user[3 * RADMON_USER_MAX + 1], pass[3 * RADMON_PASS_MAX + 1];
   egesc_url(user, sizeof(user), raw_user);
   egesc_url(pass, sizeof(pass), raw_pass);
+  float lat, lon;
+  if (loc_due(&lat, &lon)) {
+    // 3 dp, about 100 m
+    char la[12], lo[12];
+    format_f(la, sizeof(la), lat, 3);
+    format_f(lo, sizeof(lo), lon, 3);
+    _loc = urlFits(snprintf_P(url, cap, RADMON_LOC_URI, user, pass, la, lo), cap);
+    _again = _loc;   // the reading right after
+    if (_loc) return true;
+  }
   return urlFits(snprintf_P(url, cap, RADMON_URI, user, pass, value), cap);
 }
 #endif

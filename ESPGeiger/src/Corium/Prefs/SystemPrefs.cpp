@@ -39,12 +39,17 @@ CORIUM_PSTR(SY_H_NAM, "Optional label for the web pages");
 CORIUM_PSTR(SY_H_WPW, "User admin, 8+ chars, also the hotspot's WiFi password, blank = no login");
 CORIUM_PSTR(SY_L_OTA, "Arduino OTA");
 CORIUM_PSTR(SY_H_OTA, "For PlatformIO (espota) and the Arduino IDE network port. Not needed for the Update page");
+CORIUM_PSTR(SY_L_LAT, "Latitude");
+CORIUM_PSTR(SY_L_LON, "Longitude");
+CORIUM_PSTR(SY_H_LOC, "0 = not set");
 #ifdef ESP32
 CORIUM_PSTR(SY_O_MHZ, "0|80|160|240");
 #endif
 
 static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    CORIUM_NAME_MAX, corium::P_STRING, 0},
+  {corium::K_LAT, SY_L_LAT, SY_H_LOC, "0",     nullptr, -90,  90,  0, corium::P_FLOAT, 0},
+  {corium::K_LON, SY_L_LON, SY_H_LOC, "0",     nullptr, -180, 180, 0, corium::P_FLOAT, 0},
   {corium::K_WEB_PASS, corium::L_WEB_PASS, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_LOCAL | corium::P_REBOOT},
   {corium::K_ESPOTA,   SY_L_OTA, SY_H_OTA, "0",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
   {corium::K_ORIGIN,   nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},

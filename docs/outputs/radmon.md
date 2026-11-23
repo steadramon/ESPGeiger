@@ -16,6 +16,8 @@ ESPGeiger allows you to contribute to the global monitoring of radiation levels 
 2. __Configure Data Sending Password__: Login to your radmon.org account and navigate to the [Control Panel](https://radmon.org/index.php/control-panel). Within the control panel, locate the section for setting up your station. Make a note of the `Data Sending Password` for your station.
 3. __Configure ESPGeiger__: On the [Config page](/configuration), open the __Upload__ tab, tick __Enable__ under __Radmon__ and enter your radmon.org `username` and the `Data Sending Password` in the relevant fields. ESPGeiger submits your `CPM` to radmon.org every 60 seconds by default (**Interval**, 30 to 1800 s, under the advanced settings). Up to 90 s it sends the 1-minute CPM, up to 450 s the 5-minute average, above that the 15-minute average. The Data Sending Password goes to radmon.org in the request URL over plain HTTP (their API), so use one you don't use anywhere else.
 
+With a **Latitude** and **Longitude** set (Config, System, or the Stations page), ESPGeiger also sets your station's location on radmon.org, rounded to 3 decimal places (about 100 m): once after each restart and after you change it, with the reading sent straight after.
+
 ESPGeiger will report the radmon.org submission status in the Web Interface console. Once your ESPGeiger is set up and transmitting data, it will appear as a station on the radmon.org map and be listed in the [Stations list](https://radmon.org/index.php/stations).
 
 Plain http: if the site goes https-only the console says `Site moved (https?), can't follow` and every upload fails.

@@ -20,12 +20,25 @@
 #define COUNTER_TUBE_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include "Corium/Platform/Flash.h"
+
+// counter.tube, 0 = other. Append only, the number is saved
+extern const char TUBE_OPTS[];
 
 namespace Tube {
   const char* model();
   void set_model(const char* s);   // s may be in flash
   uint8_t detection();   // bits: alpha beta gamma
+
+  static const uint8_t COUNT = 11;   // in TUBE_OPTS
+  struct Preset {
+    uint16_t ratio10;   // CPM per uSv/h x 10
+    uint16_t dead_us;   // 0 = no datasheet figure
+    uint8_t  detects;   // as detection()
+  };
+  uint8_t id();
+  bool preset(uint8_t id, Preset* p);
 }
 
 #endif

@@ -36,6 +36,7 @@
 #define RADMON_INTERVAL_MAX 1800
 
 const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%s&unit=CPM";
+const char RADMON_LOC_URI[] PROGMEM = "http://radmon.org/radmon.php?function=setlatitudelongitude&user=%s&password=%s&latitude=%s&longitude=%s";
 
 class Radmon : public corium::HttpPoster {
   public:
@@ -53,6 +54,9 @@ class Radmon : public corium::HttpPoster {
     const char* logTag() override { return PSTR("Radmon"); }
   private:
     uint16_t _interval_s = RADMON_INTERVAL;
+    float _lat = 0, _lon = 0;   // last sent
+    bool _loc = false;          // the request out is the location
+    bool loc_due(float* lat, float* lon);
 };
 
 extern Radmon radmon;

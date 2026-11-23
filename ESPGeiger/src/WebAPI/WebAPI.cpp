@@ -68,14 +68,12 @@ CORIUM_REGISTER_MODULE(webapi)
 
 CORIUM_PSTR(WA_L_MD,  "Sharing mode");
 CORIUM_PSTR(WA_O_MD,  "Off|Heartbeat|CPM readings");
-CORIUM_PSTR(WA_L_LAT, "Latitude");
-CORIUM_PSTR(WA_H_IP,  "0 = from IP");
-CORIUM_PSTR(WA_L_LON, "Longitude");
 
 static const corium::Pref WEBAPI_PREF_ITEMS[] PROGMEM = {
   {EG_K_MODE, WA_L_MD,  nullptr,  "2", WA_O_MD, 0,    2,   0, corium::P_ENUM,  0},
-  {EG_K_LAT,  WA_L_LAT, WA_H_IP,  "0", nullptr, -90,  90,  0, corium::P_FLOAT, 0},
-  {EG_K_LON,  WA_L_LON, WA_H_IP,  "0", nullptr, -180, 180, 0, corium::P_FLOAT, 0},
+  // 0.13, moved to sys at boot
+  {corium::K_LAT, nullptr, nullptr, "0", nullptr, -90,  90,  0, corium::P_FLOAT, corium::P_HIDDEN},
+  {corium::K_LON, nullptr, nullptr, "0", nullptr, -180, 180, 0, corium::P_FLOAT, corium::P_HIDDEN},
 };
 
 static const corium::PrefGroup WEBAPI_PREF_GROUP PROGMEM = {
@@ -143,7 +141,30 @@ static bool denied(const uint8_t* b, size_t n) {
 
 WebAPI::WebAPI() : request(this) {}
 
+static bool no_loc(const char* g) {
+  return corium::Prefs::getFloat(g, corium::K_LAT) == 0.0f && corium::Prefs::getFloat(g, corium::K_LON) == 0.0f;
+}
+
+// once, the old keys go to 0 so a cleared location stays cleared
+static void move_location() {
+  if (no_loc("webapi")) return;
+  bool ok = true;
+  if (no_loc("sys")) {
+    ok = corium::Prefs::put("sys", corium::K_LAT, corium::Prefs::getString("webapi", corium::K_LAT)) &&
+         corium::Prefs::put("sys", corium::K_LON, corium::Prefs::getString("webapi", corium::K_LON));
+  }
+  ok = ok && corium::Prefs::put("webapi", corium::K_LAT, "0") &&
+       corium::Prefs::put("webapi", corium::K_LON, "0") && corium::Prefs::commit(false);
+  if (!ok) {
+    corium::Prefs::revert();
+    corium::Log::console(PSTR("WebAPI: Location not moved"));
+    return;
+  }
+  corium::Log::console(PSTR("WebAPI: Location moved to System"));
+}
+
 void WebAPI::begin() {
+  move_location();
   uECC_set_rng(&webapi_rng);
   GRNG::stir();
   loadConfig();
@@ -351,8 +372,8 @@ static void write_handshake(MsgPack::Writer& mp, const char* pub64, uint8_t mode
   }
 
   // 2dp (~1km) for privacy, 0,0 = use IP
-  float lat = corium::Prefs::getFloat("webapi", EG_K_LAT);
-  float lon = corium::Prefs::getFloat("webapi", EG_K_LON);
+  float lat = corium::Prefs::getFloat("sys", corium::K_LAT);
+  float lon = corium::Prefs::getFloat("sys", corium::K_LON);
   bool coords = (lat != 0.0f || lon != 0.0f);
 
   mp.map_begin();
@@ -365,6 +386,7 @@ static void write_handshake(MsgPack::Writer& mp, const char* pub64, uint8_t mode
   mp.kv(PSTR("gm"), BUILD_ENV);
   mp.kv(PSTR("gc"), Tube::model());
   mp.kv(PSTR("td"), (uint32_t)Tube::detection());
+  if (uint8_t tb = Tube::id()) mp.kv(PSTR("tb"), (uint32_t)tb);
   mp.kv(PSTR("fl"), (uint32_t)Features::flags());
   mp.kv(PSTR("rr"), (uint32_t)corium::DeviceInfo::resetReason());
   mp.kv(PSTR("m"),  (uint32_t)mode);

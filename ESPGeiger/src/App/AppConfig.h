@@ -139,8 +139,8 @@ extern const char APP_NAME[];   // THING_NAME, PROGMEM, App/AppKeys.cpp
 #define APP_NOTICE
 #endif
 
-// Radmon worst case 376
-#define CORIUM_HTTPPOSTER_URL_MAX 384
+// Radmon location worst case 399
+#define CORIUM_HTTPPOSTER_URL_MAX 400
 
 // Old pref groups and where their keys moved to, first listed wins. "display" was on OLED builds only
 #define CORIUM_PREFS_MOVED \

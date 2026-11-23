@@ -57,6 +57,7 @@ Sent once per hour and on first boot or reset:
 | `gm`  | string  | PlatformIO build environment name (e.g. `espgeigerlog_serial`) |
 | `gc`  | string  | Geiger counter model: auto-detected on Serial builds, user-set on Pulse builds |
 | `td`  | uint32  | Tube detection bitmask: bit 0 = α, bit 1 = β, bit 2 = γ. `0` = unknown / not set. Bits 3-7 reserved. |
+| `tb`  | uint32  | Optional. The **Tube** setting's number: 1 SBM-20, 2 SBM-19, 3 SBM-21, 4 STS-5, 5 SI-22G, 6 J305, 7 J321, 8 M4011, 9 LND 712, 10 VacuTec 70 013; new tubes are appended. Omitted when it is Other (0). |
 | `fl`  | uint32  | Feature-flag bitmask (which optional output modules are compiled in) |
 | `rr`  | uint32  | Normalised last-reset reason |
 | `m`   | uint8   | Sharing mode: `1` = heartbeat-only, `2` = full readings (mode `0` doesn't handshake) |

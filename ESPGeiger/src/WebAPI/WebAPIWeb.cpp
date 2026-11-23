@@ -43,15 +43,15 @@ static bool save_settings(EGHttpRequest& req, bool& wrote) {
   const char* m = req.arg(F("m"));
   if (m && !corium::Prefs::put("webapi", EG_K_MODE, m)) ok = false;
   char lat[24] = {};
-  const char* a = req.arg(FPSTR(EG_K_LAT));
+  const char* a = req.arg(FPSTR(corium::K_LAT));
   if (a) strlcpy(lat, a, sizeof(lat));
-  const char* lon = req.arg(FPSTR(EG_K_LON));
+  const char* lon = req.arg(FPSTR(corium::K_LON));
   // Lat and lon both or neither, 0,0 means use the IP location
   if (a && lon && !*lat != !*lon) {
     ok = false;
   } else {
-    if (a && !corium::Prefs::put("webapi", EG_K_LAT, *lat ? lat : "0")) ok = false;
-    if (lon && !corium::Prefs::put("webapi", EG_K_LON, *lon ? lon : "0")) ok = false;
+    if (a && !corium::Prefs::put("sys", corium::K_LAT, *lat ? lat : "0")) ok = false;
+    if (lon && !corium::Prefs::put("sys", corium::K_LON, *lon ? lon : "0")) ok = false;
   }
   wrote = corium::Prefs::commit();
   return ok;
@@ -71,7 +71,7 @@ static void send_station(EGHttpResponse& res) {
 
 static void send_sharing(EGHttpResponse& res, uint8_t mode) {
   // 0,0 shows blank, the placeholder says why
-  bool ip = corium::Prefs::getFloat("webapi", EG_K_LAT) == 0.0f && corium::Prefs::getFloat("webapi", EG_K_LON) == 0.0f;
+  bool ip = corium::Prefs::getFloat("sys", corium::K_LAT) == 0.0f && corium::Prefs::getFloat("sys", corium::K_LON) == 0.0f;
   res.sendChunk(F(
     "<form method=POST action=/webapi><fieldset><legend>Sharing</legend>"
     "<label><input type=radio name=m value=0"));
@@ -85,10 +85,10 @@ static void send_sharing(EGHttpResponse& res, uint8_t mode) {
   res.sendKV(F("> CPM readings</label></fieldset>"
                "<label for=lat>Latitude</label>"
                "<input id=lat name=lat type=number step=any min=-90 max=90 placeholder='approximate by IP if blank' value='"),
-             ip ? "" : corium::Prefs::getString("webapi", EG_K_LAT),
+             ip ? "" : corium::Prefs::getString("sys", corium::K_LAT),
              F("'><label for=lon>Longitude</label>"
                "<input id=lon name=lon type=number step=any min=-180 max=180 placeholder='approximate by IP if blank' value='"));
-  res.sendKV(nullptr, ip ? "" : corium::Prefs::getString("webapi", EG_K_LON),
+  res.sendKV(nullptr, ip ? "" : corium::Prefs::getString("sys", corium::K_LON),
              F("'><p style=margin-top:.5em>"));
   res.sendChunk(F(
     "<button type=button onclick=\"window.open('" APP_LOC_URL "/','" APP_LOC_WIN "')\">Find location</button></p>"

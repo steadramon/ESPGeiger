@@ -21,6 +21,7 @@
 
 const char EG_K_GEIGER_MODEL[] PROGMEM = "geiger_model";
 const char EG_K_SERIAL_TYPE[]  PROGMEM = "serial_type";
+const char EG_K_TUBE[]         PROGMEM = "tube";
 const char EG_K_TUBE_ALPHA[]   PROGMEM = "tube_alpha";
 const char EG_K_TUBE_BETA[]    PROGMEM = "tube_beta";
 const char EG_K_TUBE_GAMMA[]   PROGMEM = "tube_gamma";

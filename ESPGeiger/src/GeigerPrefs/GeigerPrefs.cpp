@@ -30,6 +30,7 @@
 #include "Corium/Output/PulseEngine.h"
 #include "App/LedPatterns.h"
 #include "Corium/Util/MathUtil.h"
+#include <EGFormat.h>
 #include "Counter/Counter.h"
 #include "Counter/CounterMaths.h"
 #include "Counter/Tube.h"
@@ -104,6 +105,9 @@ public:
 #endif
   void onPrefsLoaded() override;
   void onPrefsSaved() override;
+#ifdef PREF_MODEL
+  void loop(unsigned long now) override;
+#endif
   corium::LegacyRows legacyAliases() override;
 };
 
@@ -134,6 +138,8 @@ CORIUM_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
 CORIUM_PSTR(IN_L_DET, "Detector");
 CORIUM_PSTR(IN_L_DOSE, "Dose &amp; alarms");
 CORIUM_PSTR(IN_L_COUNT, "Counting");
+CORIUM_PSTR(IN_L_TUB, "Tube");
+CORIUM_PSTR(IN_H_TUB, "Sets ratio, dead time, detects on save");
 CORIUM_PSTR(IN_L_GMD, "Tube model");
 CORIUM_PSTR(IN_H_GMD, "e.g. SBM-20, J305");
 CORIUM_PSTR(IN_L_THD, "Tube detects");
@@ -198,6 +204,7 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
   // Tube identity
 #ifdef PREF_MODEL
+  {EG_K_TUBE,         IN_L_TUB, IN_H_TUB, "0", TUBE_OPTS, 0, Tube::COUNT - 1, 0, corium::P_ENUM, 0},
   {EG_K_GEIGER_MODEL, IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, CORIUM_NAME_MAX, corium::P_STRING, 0},
   {K_TUBE_HDR,        IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
   {EG_K_TUBE_ALPHA,   IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
@@ -290,6 +297,64 @@ static void boot_pins() {
 static void boot_pins() {}   // none on this build
 #endif
 
+#ifdef PREF_MODEL
+static uint8_t s_tube;   // as last loaded or saved
+static bool s_fill_due = false;
+
+static uint32_t dead_us() {
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
+  return corium::Prefs::getUInt("counter", K_DEAD_TIME_US);
+#else
+  return 0;
+#endif
+}
+
+static const char* on_off(uint8_t v, uint8_t b) { return (v & b) ? "1" : "0"; }
+
+// not set = the build default or the old tube's figure
+static bool unset(uint32_t v, uint32_t def, uint32_t old) { return v == def || (old && v == old); }
+
+static bool fill_ratio(const Tube::Preset& p, const Tube::Preset& q) {
+  uint32_t r10 = (uint32_t)(corium::Prefs::getFloat("counter", EG_K_RATIO) * 10.0f + 0.5f);
+  if (r10 == p.ratio10 || !unset(r10, (uint32_t)(GEIGER_RATIO * 10.0f + 0.5f), q.ratio10)) return true;
+  char v[12];
+  format_f(v, sizeof(v), p.ratio10 / 10.0f, 1);
+  return corium::Prefs::put("counter", EG_K_RATIO, v);
+}
+
+static bool fill_detects(const Tube::Preset& p, const Tube::Preset& q) {
+  uint8_t t = Tube::detection();
+  if (t == p.detects || !unset(t, 0, q.detects)) return true;
+  return corium::Prefs::put("counter", EG_K_TUBE_ALPHA, on_off(p.detects, 0x01)) &&
+         corium::Prefs::put("counter", EG_K_TUBE_BETA,  on_off(p.detects, 0x02)) &&
+         corium::Prefs::put("counter", EG_K_TUBE_GAMMA, on_off(p.detects, 0x04));
+}
+
+// A new tube sets the figures not set. Written from loop(), a save's callback can't commit
+static void tube_fill() {
+  Tube::Preset p, q = {};
+  uint8_t id = Tube::id();
+  if (id == s_tube || !Tube::preset(id, &p)) return;
+  Tube::preset(s_tube, &q);
+  bool ok = fill_ratio(p, q);
+#if GEIGER_IS_PULSE(GEIGER_TYPE)
+  uint32_t d = p.dead_us ? p.dead_us : GEIGER_DEAD_TIME_DEFAULT;
+  if (d != dead_us() && unset(dead_us(), GEIGER_DEAD_TIME_DEFAULT, q.dead_us))
+    ok = corium::Prefs::putUInt("counter", K_DEAD_TIME_US, d) && ok;
+#endif
+  ok = fill_detects(p, q) && ok;
+  if (!ok) corium::Log::console(PSTR("Counter: Tube figures not set"));
+  s_fill_due = true;
+  corium::Registry::dueAt(&counterprefs, corium::fastMillis());
+}
+
+void CounterPrefs::loop(unsigned long) {
+  if (!s_fill_due) return;
+  s_fill_due = false;
+  if (!corium::Prefs::commit(false)) corium::Log::console(PSTR("Counter: Tube figures not saved"));
+}
+#endif
+
 void CounterPrefs::onPrefsLoaded() {
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   uint8_t type = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
@@ -333,10 +398,16 @@ void CounterPrefs::onPrefsLoaded() {
   gcounter.set_warning((int)corium::Prefs::getUInt("counter", EG_K_WARN));
   gcounter.set_alert((int)corium::Prefs::getUInt("counter", EG_K_ALERT));
   gcounter.set_lifetime_enabled(corium::Prefs::getUInt("counter", K_LIFE_EN) != 0);
+#ifdef PREF_MODEL
+  s_tube = Tube::id();
+#endif
 }
 
 // pins, serial type and cpm window are corium::P_REBOOT
 void CounterPrefs::onPrefsSaved() {
+#ifdef PREF_MODEL
+  tube_fill();
+#endif
   onPrefsLoaded();
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   udprx_notify_prefs_saved();
