@@ -17,7 +17,6 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Tube.h"
-#include <string.h>
 #include "Corium/Prefs/Prefs.h"
 #include "GeigerPrefs/GeigerKeys.h"
 
@@ -48,27 +47,7 @@ uint8_t Tube::detection() {
 
 const char TUBE_OPTS[] PROGMEM = "Other|SBM-20|SBM-19|SBM-21|STS-5|SI-22G|J305|J321|M4011|LND 712|VacuTec 70 013";
 
-// docs/hardware tube table has the sources
-static const Tube::Preset PRESETS[Tube::COUNT - 1] PROGMEM = {
-  {1580, 190, 0x06},   // SBM-20
-  {6670, 250, 0x06},   // SBM-19
-  { 208,   0, 0x06},   // SBM-21
-  {1500,   0, 0x06},   // STS-5
-  {5830,   0, 0x06},   // SI-22G
-  {1750,   0, 0x06},   // J305
-  {1510,   0, 0x06},   // J321
-  {1510,   0, 0x06},   // M4011
-  {1680,  90, 0x07},   // LND 712
-  {6000, 100, 0x04},   // VacuTec 70 013, per uGy/h
-};
-
 uint8_t Tube::id() {
   uint32_t t = corium::Prefs::getUInt("counter", EG_K_TUBE);
   return t < COUNT ? (uint8_t)t : 0;
-}
-
-bool Tube::preset(uint8_t id, Preset* p) {
-  if (id == 0 || id >= COUNT) return false;
-  memcpy_P(p, &PRESETS[id - 1], sizeof(*p));
-  return true;
 }
