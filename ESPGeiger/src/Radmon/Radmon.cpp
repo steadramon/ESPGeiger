@@ -131,8 +131,8 @@ bool Radmon::interpret(const char* r)
 // once after boot and after a change, tried once
 bool Radmon::loc_due(float* lat, float* lon) {
   if (!corium::Prefs::getBool("radmon", RM_K_LOC)) return false;
-  *lat = corium::Prefs::getFloat("sys", corium::K_LAT);
-  *lon = corium::Prefs::getFloat("sys", corium::K_LON);
+  *lat = corium::Prefs::getFloat("loc", corium::K_LAT);
+  *lon = corium::Prefs::getFloat("loc", corium::K_LON);
   if ((*lat == 0.0f && *lon == 0.0f) || (*lat == _lat && *lon == _lon)) return false;
   _lat = *lat;
   _lon = *lon;

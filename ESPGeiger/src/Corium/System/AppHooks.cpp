@@ -25,6 +25,7 @@ APP_HOOK const corium::MenuEntry* corium::AppHooks::menu() { return nullptr; }
 APP_HOOK void corium::AppHooks::routes(EGHttpServer&) {}
 APP_HOOK void corium::AppHooks::statusRows(EGHttpResponse&) {}
 APP_HOOK void corium::AppHooks::infoRows(EGHttpResponse&) {}
+APP_HOOK void corium::AppHooks::rowTail(const char*, const char*, EGHttpResponse&) {}
 APP_HOOK void corium::AppHooks::aboutJson(EGHttpResponse&) {}
 APP_HOOK void corium::AppHooks::metrics(EGHttpResponse&, const char*) {}
 APP_HOOK void corium::AppHooks::onCrash() {}

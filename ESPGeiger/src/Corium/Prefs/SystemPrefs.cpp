@@ -48,8 +48,6 @@ CORIUM_PSTR(SY_O_MHZ, "0|80|160|240");
 
 static const corium::Pref SYSTEM_PREF_ITEMS[] PROGMEM = {
   {K_NAME,        SY_L_NAM, SY_H_NAM, "",      nullptr, 0, 0,    CORIUM_NAME_MAX, corium::P_STRING, 0},
-  {corium::K_LAT, SY_L_LAT, SY_H_LOC, "0",     nullptr, -90,  90,  0, corium::P_FLOAT, 0},
-  {corium::K_LON, SY_L_LON, SY_H_LOC, "0",     nullptr, -180, 180, 0, corium::P_FLOAT, 0},
   {corium::K_WEB_PASS, corium::L_WEB_PASS, SY_H_WPW, "",      nullptr, WEB_PASS_MIN, 0, WEB_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE | corium::P_LOCAL | corium::P_REBOOT},
   {corium::K_ESPOTA,   SY_L_OTA, SY_H_OTA, "0",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_ADVANCED | corium::P_REBOOT},
   {corium::K_ORIGIN,   nullptr,  nullptr,  "1",     nullptr, 0, 1, 0, corium::P_BOOL, corium::P_HIDDEN},
@@ -193,3 +191,29 @@ static const corium::PrefGroup NET_PREF_GROUP PROGMEM = {
 };
 
 const corium::PrefGroup* NetPrefs::prefsGroup() { return &NET_PREF_GROUP; }
+
+// Location, own box on the System tab
+
+class LocPrefs : public corium::Module {
+public:
+  const char* name() override { return PSTR("loc"); }
+  bool coreModule() override { return true; }
+  uint8_t displayOrder() override { return 11; }
+  const corium::PrefGroup* prefsGroup() override;
+};
+
+static LocPrefs locprefs;
+CORIUM_REGISTER_MODULE(locprefs)
+
+static const corium::Pref LOC_PREF_ITEMS[] PROGMEM = {
+  {corium::K_LAT, SY_L_LAT, SY_H_LOC, "0", nullptr, -90,  90,  0, corium::P_FLOAT, 0},
+  {corium::K_LON, SY_L_LON, SY_H_LOC, "0", nullptr, -180, 180, 0, corium::P_FLOAT, 0},
+};
+
+static const corium::PrefGroup LOC_PREF_GROUP PROGMEM = {
+  "loc", "Location", 1,
+  LOC_PREF_ITEMS,
+  sizeof(LOC_PREF_ITEMS) / sizeof(LOC_PREF_ITEMS[0]),
+};
+
+const corium::PrefGroup* LocPrefs::prefsGroup() { return &LOC_PREF_GROUP; }

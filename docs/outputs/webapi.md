@@ -43,9 +43,9 @@ The `/webapi` page on each device shows the ESPGeiger Stations controls:
 
 - **Station ID** - assigned by the server on first handshake. Click to view your station on `stations.espgeiger.com`.
 - **Sharing** - tri-state: Off / Heartbeat / CPM readings (see below).
-- **Latitude / Longitude** - optional, the same location as on the System tab (Radmon uses it too). Leave both at `0` to fall back to coarse IP-based geolocation. Coordinates are rounded to 2 decimal places (~1 km resolution) before publication.
-- **Find location** - uses browser geolocation to fill in the lat/lon fields.
 - **Advanced** - `Reset key` (rotate identity, register as a new station) and `Forget station` (server-side delete; see below).
+
+The station's place on the map comes from the **Location** box on the System tab (Radmon uses it too), where **Find location** fills it in. Leave both at `0` to fall back to coarse IP-based geolocation. Coordinates are rounded to 2 decimal places (~1 km resolution) before publication.
 
 ## Sharing modes
 

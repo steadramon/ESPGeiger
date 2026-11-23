@@ -71,7 +71,7 @@ CORIUM_PSTR(WA_O_MD,  "Off|Heartbeat|CPM readings");
 
 static const corium::Pref WEBAPI_PREF_ITEMS[] PROGMEM = {
   {EG_K_MODE, WA_L_MD,  nullptr,  "2", WA_O_MD, 0,    2,   0, corium::P_ENUM,  0},
-  // 0.13, moved to sys at boot
+  // 0.13, moved to loc at boot
   {corium::K_LAT, nullptr, nullptr, "0", nullptr, -90,  90,  0, corium::P_FLOAT, corium::P_HIDDEN},
   {corium::K_LON, nullptr, nullptr, "0", nullptr, -180, 180, 0, corium::P_FLOAT, corium::P_HIDDEN},
 };
@@ -149,9 +149,9 @@ static bool no_loc(const char* g) {
 static void move_location() {
   if (no_loc("webapi")) return;
   bool ok = true;
-  if (no_loc("sys")) {
-    ok = corium::Prefs::put("sys", corium::K_LAT, corium::Prefs::getString("webapi", corium::K_LAT)) &&
-         corium::Prefs::put("sys", corium::K_LON, corium::Prefs::getString("webapi", corium::K_LON));
+  if (no_loc("loc")) {
+    ok = corium::Prefs::put("loc", corium::K_LAT, corium::Prefs::getString("webapi", corium::K_LAT)) &&
+         corium::Prefs::put("loc", corium::K_LON, corium::Prefs::getString("webapi", corium::K_LON));
   }
   ok = ok && corium::Prefs::put("webapi", corium::K_LAT, "0") &&
        corium::Prefs::put("webapi", corium::K_LON, "0") && corium::Prefs::commit(false);
@@ -372,8 +372,8 @@ static void write_handshake(MsgPack::Writer& mp, const char* pub64, uint8_t mode
   }
 
   // 2dp (~1km) for privacy, 0,0 = use IP
-  float lat = corium::Prefs::getFloat("sys", corium::K_LAT);
-  float lon = corium::Prefs::getFloat("sys", corium::K_LON);
+  float lat = corium::Prefs::getFloat("loc", corium::K_LAT);
+  float lon = corium::Prefs::getFloat("loc", corium::K_LON);
   bool coords = (lat != 0.0f || lon != 0.0f);
 
   mp.map_begin();

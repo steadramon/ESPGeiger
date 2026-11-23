@@ -20,6 +20,7 @@
 #include <EGHttpServer.h>
 #include <EGEscape.h>
 #include "Corium/System/AppHooks.h"
+#include "App/AppConfig.h"
 #include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Util/StringUtil.h"
@@ -62,6 +63,14 @@ void corium::AppHooks::infoRows(EGHttpResponse& res) {
 #if BUZZER_BUILT
   if (corium::Buzzer::faulted()) corium::WebPortal::infoRow(res, corium::Buzzer::NAME, W_FMT_S, PSTR("pin held high, off until restart"));
 #endif
+}
+
+// the location finder fills the Location box
+void corium::AppHooks::rowTail(const char* mid, const char* id, EGHttpResponse& res) {
+  if (strcmp_P(mid, PSTR("loc")) || strcmp_P(id, corium::K_LON)) return;
+  res.sendChunk(F(
+    "<p style=margin-top:.5em><button type=button onclick=\"window.open('" APP_LOC_URL "/','" APP_LOC_WIN "')\">Find location</button></p>"
+    "<script>window.addEventListener('message',function(e){if(e.origin!=='" APP_LOC_URL "')return;var d=e.data;if(!d||d.type!=='" APP_LOC_MSG "')return;var la=document.getElementById('loc.lat');var lo=document.getElementById('loc.lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
 }
 
 void corium::AppHooks::statusRows(EGHttpResponse& res) {

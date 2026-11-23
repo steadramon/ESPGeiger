@@ -29,6 +29,7 @@ namespace AppHooks {
   void routes(EGHttpServer& http);   // not in safe mode
   void statusRows(EGHttpResponse& res);   // top of the System table on /info
   void infoRows(EGHttpResponse& res);   // About table on /info
+  void rowTail(const char* mid, const char* id, EGHttpResponse& res);   // after a /param row
   void aboutJson(EGHttpResponse& res);   // /about fields, each ends with a comma
   void metrics(EGHttpResponse& res, const char* cid);   // After the measure rows
   void onCrash();   // 8266 crash callback, runs before the stack prints. No heap, Serial or libc in here

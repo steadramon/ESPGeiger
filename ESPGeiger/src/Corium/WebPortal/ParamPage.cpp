@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "WebPortal.h"
+#include "Corium/System/AppHooks.h"
 #include "PARAM_PAGE_JS.gz.h"
 #include "ImportText.h"
 #include "PortalPaths.h"
@@ -470,6 +471,7 @@ static void param_emit_field(ParamCtx& c, const corium::Pref& p) {
     c.res->sendChunk(F(">"));
   }
   param_emit_row(c, p);
+  corium::AppHooks::rowTail(c.mid, c.id, *c.res);
   if (wrap) c.res->sendChunk(F("</div>"));
 }
 

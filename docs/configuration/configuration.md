@@ -41,8 +41,6 @@ Some pins save with a warning shown after the save:
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Friendly name | `sys.name` | String (32) | (empty) | Optional human label shown in the web UI title and `/about`. Blank falls back to the hostname (e.g. `ESPGeiger-a1b2c3`). |
-| Latitude | `sys.lat` | Float -90 to 90 | `0` | Where the device is, for [ESPGeiger Stations](/output/webapi) and [Radmon](/output/radmon). Both 0 = not set. Set on the Stations page before 0.14. |
-| Longitude | `sys.lon` | Float -180 to 180 | `0` | See Latitude. |
 | Web password | `sys.web_pass` | String (32) | (empty) | Optional HTTP Basic Auth password (user is `admin`), 8 or more characters; a shorter one set before keeps working. Blank disables auth. Sensitive. Restart to apply. |
 | Arduino OTA | `sys.espota` | Boolean | `0` off | Firmware uploads from PlatformIO (espota) or the Arduino IDE network port. The Update page works without it. Restart to apply. |
 | Origin check | `sys.origin` | Boolean | `1` on | Refuse saves sent from other websites. |
@@ -52,6 +50,19 @@ Some pins save with a warning shown after the save:
 **Origin check** refuses a save whose page came from another website, so a page you open elsewhere can't change the device through your browser. curl, Home Assistant and scripts send no origin and aren't affected, nor are the device's own pages. Behind a reverse proxy that changes the host name, saves come back 403 Forbidden: turn it off there.
 
 A new web password works for the web pages at once; [espota](/install/ota#via-espotapy-arduinoota) only reads it at boot, so it takes the new one after a restart. A new friendly name shows in the web UI at once and reaches mDNS (the `fname` record) after a restart.
+
+### Location
+
+Its own box on the **System** tab. **Find location** opens a map and fills both.
+
+<!-- gen:prefs loc -->
+
+| Setting | Key | Type | Default | Description |
+|---|---|---|---|---|
+| Latitude | `loc.lat` | Float -90 to 90 | `0` | Where the device is, for [ESPGeiger Stations](/output/webapi) and [Radmon](/output/radmon). Both 0 = not set, Stations then goes by your IP address. 0.13 kept it on the Stations page, an update moves it here. |
+| Longitude | `loc.lon` | Float -180 to 180 | `0` | See Latitude. |
+
+<!-- /gen -->
 
 ### Config import / export
 
