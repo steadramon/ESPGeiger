@@ -970,13 +970,28 @@ void corium::WebPortal::hVars(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.endChunked();
 }
 
+// a line past buf goes again on the heap, never dropped
 void corium::WebPortal::sendf(EGHttpResponse& res, PGM_P fmt, ...) {
   char buf[320];
   va_list ap;
   va_start(ap, fmt);
   int n = vsnprintf_P(buf, sizeof(buf), fmt, ap);
   va_end(ap);
-  if (n > 0 && (size_t)n < sizeof(buf)) res.sendChunk(buf, (size_t)n);
+  if (n <= 0) return;
+  if ((size_t)n < sizeof(buf)) {
+    res.sendChunk(buf, (size_t)n);
+    return;
+  }
+  char* big = (char*)malloc((size_t)n + 1);
+  if (!big) {
+    corium::Log::console(PSTR("Web: %d B line not sent, no memory"), n);
+    return;
+  }
+  va_start(ap, fmt);
+  vsnprintf_P(big, (size_t)n + 1, fmt, ap);
+  va_end(ap);
+  res.sendChunk(big, (size_t)n);
+  free(big);
 }
 
 static void metrics_render_info(EGHttpResponse& res, const char* cid, const char* name) {

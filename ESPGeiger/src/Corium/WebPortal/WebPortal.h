@@ -56,7 +56,7 @@ class WebPortal {
     static void endPage(EGHttpResponse& res, bool footer = false);
     static void on(EGHttpServer& http, const WebRoute* rows, size_t n);
     static void infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...);   // key, fmt in flash
-    static void sendf(EGHttpResponse& res, PGM_P fmt, ...);   // one chunk, a cut line is dropped
+    static void sendf(EGHttpResponse& res, PGM_P fmt, ...);   // one chunk, any length
 
     static constexpr uint32_t RESTART_MS = 1500;
     static void requestRestart(uint32_t delay_ms = RESTART_MS);   // ok from async callbacks
