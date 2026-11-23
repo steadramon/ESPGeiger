@@ -19,7 +19,7 @@
 #ifndef EGTIMEZONE_TABLE_H
 #define EGTIMEZONE_TABLE_H
 
-// IANA tzdb 2026e. Rerun tools/gen_timezones.py; never edit.
+// IANA tzdb 2026f. Rerun tools/gen_timezones.py; never edit.
 // Included only by EGTimeZone.cpp.
 
 // NUL separated; zones[] rule n is the nth
