@@ -48,7 +48,7 @@ CORIUM_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
 
 static const corium::Pref GMC_PREF_ITEMS[] PROGMEM = {
   {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  corium::P_BOOL,   0},
-  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, corium::P_SENSITIVE},
+  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, 0},   // NOLINT(sensitive-row) shown on the user's gmcmap page
   {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, corium::P_SENSITIVE},
 };
 

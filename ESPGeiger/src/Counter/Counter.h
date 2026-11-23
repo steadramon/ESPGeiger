@@ -141,6 +141,8 @@ class Counter : public CounterMaths {
       };
       void set_warning(int val) { _cpm_warning = val; }
       void set_alert(int val) { _cpm_alert = val; }
+      int get_warning() const { return _cpm_warning; }
+      int get_alert() const { return _cpm_alert; }
       void set_blip_led(bool on) { _blip_led = on; }
       void set_blip_brightness(uint8_t level);
       void set_quiet_hours(const char* from, const char* to);
