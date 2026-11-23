@@ -96,7 +96,7 @@ C();L('pageshow',e=>{if(e.persisted)C()});
 var k=[38,38,40,40,37,39,37,39,66,65],i=0;
 L('keydown',e=>{i=e.keyCode===k[i]?i+1:0;
 if(i===k.length){toggleCrt();i=0;}});
-L('DOMContentLoaded',()=>Q('input[type=password]').forEach(p=>{var b=mk('button');b.type='button';b.textContent='Show';b.className='btn-sm btn-o';b.onclick=()=>p.type=p.type[0]=='p'?'text':'password';var c=Q('.clr[data-k="'+p.id+'"]')[0];if(c){b.style.margin='.2em .3em 0 0';c.before(b)}else p.after(b)}))
+L('DOMContentLoaded',()=>Q('input[type=password]').forEach(p=>{if(!p.id)return;var b=mk('button');b.type='button';b.textContent='Show';b.className='btn-sm btn-o';b.onclick=()=>p.type=p.type[0]=='p'?'text':'password';var c=Q('.clr[data-k="'+p.id+'"]')[0];if(c){b.style.margin='.2em .3em 0 0';c.before(b)}else p.after(b)}))
 }();)JS";
 #endif
 

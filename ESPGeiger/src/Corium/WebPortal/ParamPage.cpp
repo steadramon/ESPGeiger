@@ -544,7 +544,7 @@ Q('.clr').forEach(b=>b.onclick=()=>{if(confirm('Clear stored value?')){byID(b.da
 Q('input[type=range]').forEach(r=>r.oninput=()=>r.nextElementSibling.value=r.value);
 var x=byID('expB');if(x)x.onclick=()=>fetch('/export').then(r=>r.text()).then(t=>{var e=byID('cfgB');e.value=(t.match(/.{1,76}/g)||[]).join('\n');e.select()});
 var im=byID('impF');if(im)im.onsubmit=()=>{if(!confirm('Import config and restart?'))return false;var b=byID('cfgB');if(/^[\sA-Za-z0-9+\/=]+$/.test(b.value))b.value=b.value.replace(/\s/g,'');return true};
-var w=byID('sys.web_pass');if(w){var c=mk('input');c.type='password';c.placeholder='Confirm password';var k=()=>c.setCustomValidity(c.value!=w.value?'Passwords do not match':'');c.oninput=k;w.addEventListener('input',k);w.after(c)}
+var w=byID('sys.web_pass');if(w){let d=mk('div'),l=mk('label'),c=mk('input'),k=()=>{d.hidden=!w.value;c.setCustomValidity(w.value&&c.value!=w.value?'Passwords do not match':'')};l.className='gl';l.textContent='Confirm web password';c.type='password';d.append(l,c);c.oninput=k;w.addEventListener('input',k);new MutationObserver(()=>c.type=w.type).observe(w,{attributes:true});(Q('.clr[data-k="sys.web_pass"]')[0]||w).after(d);k()}
 )JS";
 #endif
 
