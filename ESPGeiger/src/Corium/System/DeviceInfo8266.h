@@ -20,6 +20,9 @@
 #define CORIUM_DEVICEINFO8266_H
 
 // from DeviceInfo.h
+#if __has_include(<flash_hal.h>)
+#include <flash_hal.h>
+#endif
 
 // Top of dram, a host build points it at its own buffer
 #ifndef CORIUM_BOOT_RAM
@@ -46,6 +49,17 @@ namespace DeviceInfo {
   void heapStats(uint32_t* free_, uint16_t* max_, uint8_t* frag);
 
   inline uint32_t stackFree() { return ESP.getFreeContStack(); }
+
+  // the irom segment (eagle.flash ld): up to the file system, at most the cache window
+#if __has_include(<flash_hal.h>)
+  inline uint32_t appMax() {
+    static const uint32_t IROM_ORG = 0x40201010u, IROM_MAX = 0xFEFF0u;
+    uint32_t irom = FS_start - IROM_ORG;
+    return irom < IROM_MAX ? irom : IROM_MAX;
+  }
+#else
+  inline uint32_t appMax() { return 0xFFFFFFFFu; }   // host
+#endif
 
   // Only the sw wdt, the hw wdt still runs
   inline void wdtPause() { ESP.wdtDisable(); }

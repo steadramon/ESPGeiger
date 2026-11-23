@@ -38,6 +38,7 @@ namespace DeviceInfo {
   inline uint32_t heapMaxBlock() { return ESP.getMaxAllocHeap(); }
 
   inline uint32_t stackFree() { return 0; }   // Not known
+  inline uint32_t appMax() { return 0xFFFFFFFFu; }   // no limit past the slot
 
   inline void wdtPause() {}
   inline void wdtResume() {}

@@ -27,6 +27,7 @@ namespace corium {
 namespace AppHooks {
   const MenuEntry* menu();   // Shown first on the home page, PROGMEM, not in safe mode
   void routes(EGHttpServer& http);   // not in safe mode
+  void statusRows(EGHttpResponse& res);   // top of the System table on /info
   void infoRows(EGHttpResponse& res);   // About table on /info
   void aboutJson(EGHttpResponse& res);   // /about fields, each ends with a comma
   void metrics(EGHttpResponse& res, const char* cid);   // After the measure rows

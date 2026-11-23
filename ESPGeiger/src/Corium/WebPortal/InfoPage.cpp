@@ -202,6 +202,7 @@ static void info_time(EGHttpResponse& res) {
 
 static void info_render_system(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>System</summary><table>"));
+  corium::AppHooks::statusRows(res);
   INFO_ROW("Uptime", W_FMT_S, corium::DeviceInfo::uptimeString());
   info_time(res);
   INFO_ROW("Chip ID",       W_FMT_S, corium::DeviceInfo::chipId());   // udp pairing asks for it
@@ -209,6 +210,7 @@ static void info_render_system(EGHttpResponse& res) {
   uint32_t total = corium::DeviceInfo::heapSize();
   uint32_t sketch = corium::DeviceInfo::sketchSize();
   uint32_t slot = corium::DeviceInfo::freeSketch();   // what the next update gets
+  if (slot > corium::DeviceInfo::appMax()) slot = corium::DeviceInfo::appMax();
   char barhtml[BAR_MAX];
   // KB with one decimal, no float
   INFO_ROW("Free memory",   PSTR("%u.%u KB of %u KB%s"), (unsigned)(heap / 1024), (unsigned)(heap % 1024 * 10 / 1024),
@@ -220,7 +222,13 @@ static void info_render_system(EGHttpResponse& res) {
     INFO_ROW("Files", PSTR("%u KB of %u KB (%u%%)%s"), (unsigned)(fs_used / 1024), (unsigned)(fs_total / 1024),
              (unsigned)((uint64_t)fs_used * 100 / fs_total), info_bar(barhtml, fs_used, fs_total, true));
   }
-  if (uint32_t st = corium::DeviceInfo::stackFree()) INFO_ROW("Stack headroom", IR_BYTES, (unsigned)st);
+  uint32_t wear;
+  if (corium::Fs::wearPct100(&wear)) INFO_ROW("Flash wear", PSTR("%u.%02u%%"), (unsigned)(wear / 100), (unsigned)(wear % 100));
+#if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32)
+  // the classic esp32 reads a fixed figure
+  float t = corium::DeviceInfo::chipTempC();
+  if (!isnan(t)) INFO_ROW("Chip temperature", PSTR("%.1f &deg;C"), t);
+#endif
 #ifdef ESP8266
   if (corium::DeviceInfo::flashSize() != corium::DeviceInfo::realFlash()) {
     INFO_ROW("Flash", PSTR("%u KB set, the chip has %u KB"), (unsigned)(corium::DeviceInfo::flashSize() / 1024),
@@ -263,10 +271,8 @@ static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
 
 static void info_render_about(EGHttpResponse& res) {
   res.sendChunk(F("<details open><summary>About</summary><table>"));
-  INFO_ROW("Version", PSTR(RELEASE_VERSION));
-  INFO_ROW("Commit",  PSTR(GIT_VERSION));
+  INFO_ROW("Version", PSTR(RELEASE_VERSION " (" GIT_VERSION ", %s)"), corium::DeviceInfo::buildDate());
   INFO_ROW("Build",   PSTR(BUILD_ENV));
-  INFO_ROW("Built",   W_FMT_S, corium::DeviceInfo::buildDate());
   corium::AppHooks::infoRows(res);
   res.sendChunk(FPSTR(IR_END));
 }
@@ -375,6 +381,7 @@ void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   uint32_t wear;
   if (corium::Fs::wearPct100(&wear)) sendf(res, PSTR("\"wear\":%u.%02u,"), (unsigned)(wear / 100), (unsigned)(wear % 100));
   sendf(res, PSTR("\"erases\":%u,"), (unsigned)corium::Fs::wearBoot());
+  if (uint32_t st = corium::DeviceInfo::stackFree()) sendf(res, PSTR("\"stack\":%u,"), (unsigned)st);
   corium::AppHooks::aboutJson(res);
   res.sendChunk(F("\"modules\":{"));
   about_modules(res);

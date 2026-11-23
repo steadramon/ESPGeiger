@@ -47,6 +47,7 @@ namespace DeviceInfo {
   inline uint32_t stackFree() {
     return uxTaskGetStackHighWaterMark(nullptr);   // handlers run on the loop task
   }
+  inline uint32_t appMax() { return ESP.getFreeSketchSpace(); }   // the app slot
 
   float chipTempC();   // die temp, not ambient. The classic esp32 reads high
   extern uint8_t ctWait;

@@ -59,6 +59,12 @@ void corium::AppHooks::infoRows(EGHttpResponse& res) {
   egesc_html(model, sizeof(model), Tube::model());
   corium::WebPortal::infoRow(res, PSTR("Geiger"), W_FMT_S, model);
   if (const char* b = corium::DeviceInfo::boardName()) corium::WebPortal::infoRow(res, PSTR("Board"), W_FMT_S, b);
+#if BUZZER_BUILT
+  if (corium::Buzzer::faulted()) corium::WebPortal::infoRow(res, corium::Buzzer::NAME, W_FMT_S, PSTR("pin held high, off until restart"));
+#endif
+}
+
+void corium::AppHooks::statusRows(EGHttpResponse& res) {
   char now[40], ever[40];
   health_text(now, sizeof(now), health().live());
   if (health().ever() == health().live()) {
@@ -67,9 +73,6 @@ void corium::AppHooks::infoRows(EGHttpResponse& res) {
     health_text(ever, sizeof(ever), health().ever());
     corium::WebPortal::infoRow(res, HEALTH, PSTR("%s (since boot: %s)"), now, ever);
   }
-#if BUZZER_BUILT
-  if (corium::Buzzer::faulted()) corium::WebPortal::infoRow(res, corium::Buzzer::NAME, W_FMT_S, PSTR("pin held high, off until restart"));
-#endif
 }
 
 static const char* geiger_type_name() {
