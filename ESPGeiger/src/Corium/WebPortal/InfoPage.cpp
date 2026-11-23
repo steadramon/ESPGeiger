@@ -184,7 +184,7 @@ static void info_render_reset(EGHttpResponse& res) {
 }
 #endif
 
-// Shows who set the clock
+// Who set the clock, NTP isn't news
 static void info_time(EGHttpResponse& res) {
   PGM_P src = PSTR("not set");
   if (corium::Clock::source == corium::Clock::NTP)       src = W_NTP;
@@ -197,7 +197,7 @@ static void info_time(EGHttpResponse& res) {
     return;
   }
 #endif
-  INFO_ROW("Time", W_FMT_S, src);
+  if (corium::Clock::source != corium::Clock::NTP) INFO_ROW("Time", W_FMT_S, src);
 }
 
 static void info_render_system(EGHttpResponse& res) {
