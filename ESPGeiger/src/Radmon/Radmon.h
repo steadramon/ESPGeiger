@@ -63,6 +63,7 @@ class Radmon : public corium::HttpPoster {
     int _warn = -1, _alert = -1;
     bool _on_due = false;   // alerts on, after warn/alert
     uint8_t _set = 0;   // the request out is a setting, not a reading
+    bool _read_next = false;   // one setting a slot, its reading next
     bool loc_due(float* lat, float* lon);
     int setting(char* url, size_t cap, const char* user, const char* pass);
     int alerts(char* url, size_t cap, const char* user, const char* pass);

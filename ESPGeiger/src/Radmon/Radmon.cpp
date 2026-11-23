@@ -217,10 +217,13 @@ bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
   char user[3 * RADMON_USER_MAX + 1], pass[3 * RADMON_PASS_MAX + 1];
   egesc_url(user, sizeof(user), raw_user);
   egesc_url(pass, sizeof(pass), raw_pass);
-  int n = setting(url, cap, user, pass);
+  bool read = _read_next;
+  _read_next = false;
+  int n = read ? -1 : setting(url, cap, user, pass);
   if (n >= 0) {
     if (urlFits(n, cap)) {
-      _again = true;   // the next setting or the reading right after
+      _again = true;   // the reading right after, the next setting next slot
+      _read_next = true;
       return true;
     }
     _set = 0;
