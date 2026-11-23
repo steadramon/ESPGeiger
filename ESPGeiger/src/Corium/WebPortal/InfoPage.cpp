@@ -261,7 +261,7 @@ static void info_render_wifi(EGHttpResponse& res, const InfoNet& net) {
   INFO_ROW("Hostname",       W_FMT_S,     corium::DeviceInfo::hostname());
   INFO_ROW("MAC",            W_FMT_S,     net.mac);
   INFO_ROW("DNS",            W_FMT_S,     net.dns);
-  if (strcmp_P(net.ap_ip, PSTR("0.0.0.0"))) {   // ssid is kept with the AP off
+  if (corium::Wifi::ap) {   // the esp32 keeps the AP ip with it off
     INFO_ROW("Hotspot SSID", W_FMT_S,     net.ap_ssid);
     INFO_ROW("Hotspot IP",   W_FMT_S,     net.ap_ip);
     INFO_ROW("Hotspot MAC",  W_FMT_S,     net.ap_mac);

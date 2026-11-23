@@ -87,7 +87,8 @@ th{font-weight:500;color:var(--muted)}
 .il{display:inline-block;margin:.4em 1em .4em 0}.il input{width:auto;margin-right:.3em;vertical-align:middle}
 small{display:block;color:var(--muted);font-size:.85em;margin:.1em 0 .4em}
 hr{border:0;border-top:1px solid var(--border);margin:1em 0}
-h4{margin:.8em 0 .2em;font-size:1em;color:var(--muted)}
+h4{margin:1.2em 0 .4em;padding-bottom:.2em;font-size:.8em;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border)}
+.gl{font-weight:600}
 output{display:inline-block;margin-left:.6em;color:var(--muted)}
 details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
 details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}

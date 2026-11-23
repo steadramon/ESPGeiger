@@ -450,7 +450,7 @@ static void param_load_text(ParamCtx& c, const corium::Pref& p) {
 }
 
 static void param_emit_heading(ParamCtx& c, const corium::Pref& p) {
-  param_sendf(c, p.type == corium::P_LABEL ? PSTR("<label>%s</label>") : PSTR("<h4>%s</h4>"), c.lbl);
+  param_sendf(c, p.type == corium::P_LABEL ? PSTR("<label class=gl>%s</label>") : PSTR("<h4>%s</h4>"), c.lbl);
 }
 
 static void param_emit_label(ParamCtx& c, const char* lbl) {
