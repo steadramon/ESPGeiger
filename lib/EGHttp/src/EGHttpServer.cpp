@@ -1033,6 +1033,8 @@ void EGHttpServer::dropChunkAcc(Slot* s) {
 #endif
 }
 
+static const uint32_t SLOW_REPLY_MS = 100;   // a reply that held the loop this long
+
 void EGHttpServer::tick() {
   // Runs while an upload is open, so a silent one still hits its deadline
   if (!_tickWanted && !_streamOwner) return;
@@ -1047,9 +1049,13 @@ void EGHttpServer::tick() {
     }
     if (s.state == RECEIVING && s.stream != NO_STREAM) drainStream(&s);
     if (s.state != READY) continue;
+    uint32_t t0 = EGClock::now();
     respond(&s);
-    // only a few replies a tick, each slow reader holds the loop once
-    if (++replies >= EGHTTP_REPLIES_A_TICK) { _tickWanted = true; break; }
+    // only a few replies a tick, a slow one ends it so the loop runs before the next
+    if (++replies >= EGHTTP_REPLIES_A_TICK || EGClock::now() - t0 >= SLOW_REPLY_MS) {
+      _tickWanted = true;
+      break;
+    }
   }
 }
 
