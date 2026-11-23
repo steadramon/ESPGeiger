@@ -301,8 +301,8 @@ static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
       c.help, c.mid, c.id, c.mid, c.id, checked, c.disabled, lbl);
   } else {
     param_appendf(c,
-      PSTR("<input type=checkbox id='%s.%s' name='%s.%s' value=1%s%s><br>"),
-      c.mid, c.id, c.mid, c.id, checked, c.disabled);
+      PSTR("<label class=cb><input type=checkbox id='%s.%s' name='%s.%s' value=1%s%s>%s</label>"),
+      c.mid, c.id, c.mid, c.id, checked, c.disabled, c.help);
   }
 }
 
@@ -489,7 +489,7 @@ static void param_emit_row(ParamCtx& c, const corium::Pref& p) {
   if (p.type == corium::P_BOOL)      param_emit_bool(c, lbl, inline_bool);
   else if (param_is_select(p))   param_emit_enum(c, p);
   else                         param_emit_input(c, p);
-  param_emit_help(c, p, inline_bool);
+  param_emit_help(c, p, p.type == corium::P_BOOL);   // a box's help sits beside it
 }
 
 static void param_render_group(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {

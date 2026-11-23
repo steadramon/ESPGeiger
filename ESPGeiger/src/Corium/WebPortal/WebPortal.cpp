@@ -88,7 +88,8 @@ th{font-weight:500;color:var(--muted)}
 small{display:block;color:var(--muted);font-size:.85em;margin:.1em 0 .4em}
 hr{border:0;border-top:1px solid var(--border);margin:1em 0}
 h4{margin:1.2em 0 .4em;padding-bottom:.2em;font-size:.8em;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border)}
-.gl{font-weight:600}
+label[for],.gl{font-size:.8em;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.cb{margin:.7em 0 .1em}.cb input{width:auto;margin:0 .4em 0 0;vertical-align:middle}
 output{display:inline-block;margin-left:.6em;color:var(--muted)}
 details.bx{border:1px solid var(--border);border-radius:4px;padding:.6em .8em;margin:.6em 0}
 details.bx>summary{font-weight:500;cursor:pointer;color:var(--muted)}
