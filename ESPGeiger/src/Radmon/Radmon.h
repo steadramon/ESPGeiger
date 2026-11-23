@@ -35,12 +35,6 @@
 #define RADMON_INTERVAL_MIN 30
 #define RADMON_INTERVAL_MAX 1800
 
-const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%s&unit=CPM";
-const char RADMON_LOC_URI[] PROGMEM = "http://radmon.org/radmon.php?function=setlatitudelongitude&user=%s&password=%s&latitude=%s&longitude=%s";
-const char RADMON_FAC_URI[] PROGMEM = "http://radmon.org/radmon.php?function=setconversionfactor&user=%s&password=%s&value=%s";
-const char RADMON_ALR_URI[] PROGMEM = "http://radmon.org/radmon.php?function=setwarnalert&user=%s&password=%s&warn=%u&alert=%u";
-const char RADMON_AON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=setalertsenabled&user=%s&password=%s";
-const char RADMON_AOFF_URI[] PROGMEM = "http://radmon.org/radmon.php?function=setalertsdisabled&user=%s&password=%s";
 
 class Radmon : public corium::HttpPoster {
   public:

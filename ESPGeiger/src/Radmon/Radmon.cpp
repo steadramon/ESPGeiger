@@ -18,6 +18,7 @@
 */
 #ifdef RADMONOUT
 #include "Radmon.h"
+#include <stdarg.h>
 #include <EGFormat.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/Words.h"
@@ -139,6 +140,20 @@ bool Radmon::loc_due(float* lat, float* lon) {
   return true;
 }
 
+// radmon.php?function=<fn>&user=..&password=.. then the tail
+static int url_of(char* url, size_t cap, PGM_P fn, const char* user, const char* pass, PGM_P tail, ...) {
+  char f[24] = {};
+  strncpy_P(f, fn, sizeof(f) - 1);   // %s can't read flash on the 8266
+  size_t n = snprintf_P(url, cap, PSTR("http://radmon.org/radmon.php?function=%s&user=%s&password=%s"), f, user, pass);
+  if (n < cap) {
+    va_list ap;
+    va_start(ap, tail);
+    n += vsnprintf_P(url + n, cap - n, tail, ap);
+    va_end(ap);
+  }
+  return (int)n;
+}
+
 // 3 dp. Fuzzed: 2 dp, the third from the chip so a station sits apart in its cell, as StationsAPI does
 static void loc_text(char* out, size_t cap, float v, uint32_t h, int32_t lim, bool fuzz) {
   int32_t t = fuzz ? (int32_t)(v * 100.0f + (v >= 0 ? 0.5f : -0.5f)) * 10 + (int32_t)(h % 10) - 5
@@ -158,7 +173,7 @@ int Radmon::setting(char* url, size_t cap, const char* user, const char* pass) {
     loc_text(la, sizeof(la), lat, h, 90, fuzz);
     loc_text(lo, sizeof(lo), lon, h / 10, 180, fuzz);
     _set = 1;
-    return snprintf_P(url, cap, RADMON_LOC_URI, user, pass, la, lo);
+    return url_of(url, cap, PSTR("setlatitudelongitude"), user, pass, PSTR("&latitude=%s&longitude=%s"), la, lo);
   }
   float r = gcounter.get_ratio();
   if (corium::Prefs::getBool("radmon", RM_K_FAC) && r > 0 && r != _ratio) {
@@ -166,7 +181,7 @@ int Radmon::setting(char* url, size_t cap, const char* user, const char* pass) {
     char v[12];
     format_f(v, sizeof(v), 1.0f / r, 6);
     _set = 2;
-    return snprintf_P(url, cap, RADMON_FAC_URI, user, pass, v);
+    return url_of(url, cap, PSTR("setconversionfactor"), user, pass, PSTR("&value=%s"), v);
   }
   return corium::Prefs::getBool("radmon", RM_K_ALR) ? alerts(url, cap, user, pass) : -1;
 }
@@ -181,12 +196,12 @@ int Radmon::alerts(char* url, size_t cap, const char* user, const char* pass) {
     if (changed) {
       _on_due = true;
       _set = 3;
-      return snprintf_P(url, cap, RADMON_ALR_URI, user, pass, (unsigned)w, (unsigned)a);
+      return url_of(url, cap, PSTR("setwarnalert"), user, pass, PSTR("&warn=%u&alert=%u"), (unsigned)w, (unsigned)a);
     }
     if (!_on_due) return -1;
     _on_due = false;
     _set = 4;
-    return snprintf_P(url, cap, RADMON_AON_URI, user, pass);
+    return url_of(url, cap, PSTR("setalertsenabled"), user, pass, PSTR(""));
   }
   _on_due = false;
   if (!changed) return -1;
@@ -195,7 +210,7 @@ int Radmon::alerts(char* url, size_t cap, const char* user, const char* pass) {
     return -1;
   }
   _set = 5;
-  return snprintf_P(url, cap, RADMON_AOFF_URI, user, pass);
+  return url_of(url, cap, PSTR("setalertsdisabled"), user, pass, PSTR(""));
 }
 
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
@@ -228,6 +243,6 @@ bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
     }
     _set = 0;
   }
-  return urlFits(snprintf_P(url, cap, RADMON_URI, user, pass, value), cap);
+  return urlFits(url_of(url, cap, PSTR("submit"), user, pass, PSTR("&value=%s&unit=CPM"), value), cap);
 }
 #endif
