@@ -36,18 +36,20 @@ CORIUM_REGISTER_FEATURE(radmon, FEAT_RADMON)
 
 CORIUM_PSTR(RM_H_EN,  "Upload to radmon.org");
 CORIUM_PSTR(RM_L_USR, "Username");
+CORIUM_PSTR(RM_K_HDR, "_send_hdr");
+CORIUM_PSTR(RM_L_HDR, "Also send");
 CORIUM_PSTR(RM_K_LOC, "loc");
-CORIUM_PSTR(RM_L_LOC, "Send location");
+CORIUM_PSTR(RM_L_LOC, "Location");
 CORIUM_PSTR(RM_H_LOC, "The System location");
 CORIUM_PSTR(RM_K_FUZ, "loc_fuzz");
 CORIUM_PSTR(RM_L_FUZ, "Fuzz location");
 CORIUM_PSTR(RM_H_FUZ, "To about 1 km, else 100 m");
 CORIUM_PSTR(RM_K_FAC, "factor");
-CORIUM_PSTR(RM_L_FAC, "Send conversion factor");
+CORIUM_PSTR(RM_L_FAC, "Conversion factor");
 CORIUM_PSTR(RM_H_FAC, "1 / ratio");
 CORIUM_PSTR(RM_K_ALR, "alerts");
-CORIUM_PSTR(RM_L_ALR, "Send warn/alert");
-CORIUM_PSTR(RM_H_ALR, "Warning and Alert CPM, both 0 = Radmon alerts off");
+CORIUM_PSTR(RM_L_ALR, "Warn/alert");
+CORIUM_PSTR(RM_H_ALR, "Warning and Alert CPM, both 0 = alerts off");
 
 
 #define RADMON_USER_MAX 32
@@ -57,10 +59,11 @@ static const corium::Pref RADMON_PREF_ITEMS[] PROGMEM = {
   {EG_K_SEND,     EG_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   0},
   {EG_K_USER,     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  RADMON_USER_MAX, corium::P_STRING, 0},
   {EG_K_PASSWORD, EG_L_PWD, nullptr,  "",   nullptr, 0, 0,  RADMON_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE},
-  {RM_K_LOC,      RM_L_LOC, RM_H_LOC, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   0},
+  {RM_K_HDR,      RM_L_HDR, nullptr,  nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
+  {RM_K_LOC,      RM_L_LOC, RM_H_LOC, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_INLINE},
+  {RM_K_FAC,      RM_L_FAC, RM_H_FAC, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_INLINE},
+  {RM_K_ALR,      RM_L_ALR, RM_H_ALR, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_INLINE},
   {RM_K_FUZ,      RM_L_FUZ, RM_H_FUZ, "1",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_ADVANCED},
-  {RM_K_FAC,      RM_L_FAC, RM_H_FAC, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   0},
-  {RM_K_ALR,      RM_L_ALR, RM_H_ALR, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   0},
   {EG_K_INTERVAL, EG_L_INT, EG_H_INT, STR(RADMON_INTERVAL), nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, corium::P_UINT, corium::P_ADVANCED},
 };
 

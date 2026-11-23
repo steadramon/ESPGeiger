@@ -160,10 +160,10 @@ UDP-Receiver builds (`*_udp` targets) listen for [Local Broadcast](/output/udp) 
 | Enable | `radmon.send` | Boolean | `0` off | Upload to radmon.org |
 | Username | `radmon.user` | String (32) | (empty) | Radmon.org username |
 | Password | `radmon.password` | String (64) | (empty) | Radmon.org password (sensitive) |
-| Send location | `radmon.loc` | Boolean | `0` off | Sets the station's place on the radmon.org map from the System location, see [Radmon](/output/radmon). |
+| Location | `radmon.loc` | Boolean | `0` off | Sets the station's place on the radmon.org map from the System location, see [Radmon](/output/radmon). |
+| Conversion factor | `radmon.factor` | Boolean | `0` off | Sets the station's radmon.org conversion factor to 1 / ratio, see [Radmon](/output/radmon). |
+| Warn/alert | `radmon.alerts` | Boolean | `0` off | Sets radmon.org's warning and alert levels to the Warning and Alert CPM and turns its alerts on; both 0 turns them off. |
 | Fuzz location | `radmon.loc_fuzz` | Boolean | `1` on | Advanced. Sends the location to about 1 km (2 decimal places and a third fixed per device), off = 3 decimal places, about 100 m. |
-| Send conversion factor | `radmon.factor` | Boolean | `0` off | Sets the station's radmon.org conversion factor to 1 / ratio, see [Radmon](/output/radmon). |
-| Send warn/alert | `radmon.alerts` | Boolean | `0` off | Sets radmon.org's warning and alert levels to the Warning and Alert CPM and turns its alerts on; both 0 turns them off. |
 | Interval | `radmon.interval` | Int 30-1800 | `60` | Upload interval in seconds |
 
 <!-- /gen -->
