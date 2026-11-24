@@ -26,6 +26,7 @@
 #include "Corium/System/CrashDump.h"
 #include "Corium/System/BootGuard.h"
 #include "Corium/System/Fs.h"
+#include "Corium/System/TickProfile.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Net/WifiInfo.h"
 #include "Corium/Util/StringUtil.h"
@@ -298,13 +299,15 @@ void corium::WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 // Each module as name: peak us, plus stalls when there are any
-static void about_modules(EGHttpResponse& res) {
+static void ps_modules(EGHttpResponse& res) {
   uint8_t count = corium::Registry::count();
   for (uint8_t i = 0; i < count; i++) {
-    uint8_t n = corium::Registry::stalls(i);
-    corium::WebPortal::sendf(res, n ? PSTR("%s\"%s\":{\"peak\":%u,\"stalls\":%u}") : PSTR("%s\"%s\":{\"peak\":%u}"),
-                             (i > 0 ? PSTR(",") : PSTR("")), corium::Registry::get(i)->name(),
-                             (unsigned)corium::Registry::peakUs(i), (unsigned)n);
+    corium::WebPortal::sendf(res, PSTR("%s\"%s\":{"), (i > 0 ? PSTR(",") : PSTR("")), corium::Registry::get(i)->name());
+    PGM_P sep = PSTR("");   // {} = nothing to say
+    if (uint32_t p = corium::Registry::peakUs(i)) { corium::WebPortal::sendf(res, PSTR("\"peak\":%u"), (unsigned)p); sep = PSTR(","); }
+    if (uint8_t n = corium::Registry::stalls(i)) { corium::WebPortal::sendf(res, PSTR("%s\"stalls\":%u"), sep, (unsigned)n); sep = PSTR(","); }
+    if (const char* st = corium::Registry::state(i)) corium::WebPortal::sendf(res, PSTR("%s\"state\":\"%s\""), sep, st);
+    res.sendChunk(F("}"));
   }
 }
 
@@ -345,17 +348,15 @@ static void about_device(EGHttpResponse& res) {
     (unsigned)corium::DeviceInfo::flashSize(), celsius);
 #endif
 
-  char gw[CORIUM_IPV4_MAX + 1], sn[CORIUM_IPV4_MAX + 1], bssid[18] = {}, tx[8];
-  corium::Wifi::formatIP(gw, sizeof(gw), corium::Wifi::gatewayIP());
-  corium::Wifi::formatIP(sn, sizeof(sn), corium::Wifi::subnetMask());
-  if (const uint8_t* b = corium::Wifi::BSSID()) info_fmt_mac(bssid, sizeof(bssid), b);
+  // no gateway, mask or bssid: it gets pasted into bug reports
+  char tx[8];
   int q = corium::Wifi::txPowerQdbm();   // 0.25 dBm steps, -1 = unknown
   if (q >= 0) snprintf_P(tx, sizeof(tx), PSTR("%d.%02d"), q / 4, (q % 4) * 25);
   else flashToRam(PSTR("null"), tx, sizeof(tx));
   corium::WebPortal::sendf(res,
-    PSTR("\"mhz\":%u,\"gw\":\"%s\",\"sn\":\"%s\",\"bssid\":\"%s\",\"tx\":%s,"
+    PSTR("\"mhz\":%u,\"tx\":%s,"
          "\"phy\":\"%s\",\"sleep\":\"%s\",\"auto\":%s,\"wifi\":\"%s\","),
-    (unsigned)corium::DeviceInfo::cpuMHz(), gw, sn, bssid, tx, corium::Wifi::phyModeStr(), corium::Wifi::sleepModeStr(),
+    (unsigned)corium::DeviceInfo::cpuMHz(), tx, corium::Wifi::phyModeStr(), corium::Wifi::sleepModeStr(),
     corium::Wifi::getAutoReconnect() ? W_TRUE : W_FALSE, corium::Wifi::stateName(corium::Wifi::state()));
 }
 
@@ -380,15 +381,22 @@ void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   about_device(res);
   uint32_t wear;
   if (corium::Fs::wearPct100(&wear)) sendf(res, PSTR("\"wear\":%u.%02u,"), (unsigned)(wear / 100), (unsigned)(wear % 100));
-  sendf(res, PSTR("\"erases\":%u,"), (unsigned)corium::Fs::wearBoot());
   if (uint32_t st = corium::DeviceInfo::stackFree()) sendf(res, PSTR("\"stack\":%u,"), (unsigned)st);
   corium::AppHooks::aboutJson(res);
-  res.sendChunk(F("\"modules\":{"));
-  about_modules(res);
-  res.sendChunk(F("}"));
+  sendf(res, PSTR("\"erases\":%u"), (unsigned)corium::Fs::wearBoot());   // last, no comma
 #ifdef CORIUM_TRACE
   about_trace(res);
 #endif
   res.sendChunk(F("}"));
+  res.endChunked();
+}
+
+// the loop, then each module's slowest recent loop, slow loops and what holds it
+void corium::WebPortal::hPs(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  res.beginChunked(200, FPSTR(HTTP_CT_JSON));
+  sendf(res, PSTR("{\"lps\":%u,\"tick\":%u,\"t_max\":%u,\"modules\":{"), (unsigned)corium::TickProfile::lps,
+        (unsigned)corium::TickProfile::tickUs, (unsigned)corium::TickProfile::tickMaxUs);
+  ps_modules(res);
+  res.sendChunk(F("}}"));
   res.endChunked();
 }

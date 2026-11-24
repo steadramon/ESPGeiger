@@ -85,6 +85,7 @@ class WebPortal {
     static void hReset(EGHttpRequest&, EGHttpResponse&, void*);
     static void hInfo(EGHttpRequest&, EGHttpResponse&, void*);
     static void hAbout(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hPs(EGHttpRequest&, EGHttpResponse&, void*);
     static void hOutputs(EGHttpRequest&, EGHttpResponse&, void*);
     static void hMetrics(EGHttpRequest&, EGHttpResponse&, void*);
     static void hVars(EGHttpRequest&, EGHttpResponse&, void*);

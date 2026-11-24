@@ -107,6 +107,7 @@ class Registry {
     static uint32_t peakUs(uint8_t idx);   // longest loop() lately, halves each hour
     static void agePeaks();                // each hour, Reactor
     static uint8_t stalls(uint8_t idx);    // loop()s over the module's limit, saturates
+    static const char* state(uint8_t idx);   // PSTR, nullptr = running
 
     static uint8_t count();
     static Module* get(uint8_t idx);

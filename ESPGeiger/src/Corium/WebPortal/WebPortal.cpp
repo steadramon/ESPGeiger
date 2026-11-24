@@ -277,6 +277,7 @@ static const char R_RESET[]    PROGMEM = "/reset";
 static const char R_ERASE[]    PROGMEM = "/erase";
 static const char R_INFO[]     PROGMEM = "/info";
 static const char R_ABOUT[]    PROGMEM = "/about";
+static const char R_PS[]       PROGMEM = "/ps";
 static const char R_CS[]       PROGMEM = "/cs";
 static const char R_OUTPUTS[]  PROGMEM = "/outputs";
 static const char R_METRICS[]  PROGMEM = "/metrics";
@@ -320,6 +321,7 @@ void corium::WebPortal::begin(uint16_t port) {
     {R_ERASE,    &corium::WebPortal::hEraseWifi,      R::POST},
     {R_INFO,     &corium::WebPortal::hInfo,           R::GET},
     {R_ABOUT,    &corium::WebPortal::hAbout,          R::GET},
+    {R_PS,       &corium::WebPortal::hPs,             R::GET},
     {R_CS,       &corium::WebPortal::hConsoleStream,  R::GET},
     {R_OUTPUTS,  &corium::WebPortal::hOutputs,        R::GET},
     {R_METRICS,  &corium::WebPortal::hMetrics,        R::GET},

@@ -55,7 +55,8 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/vars.json` | Every template variable and its value now - see [Serial Output](/output/serial#variables) |
 | `/pause?s=N` | Pause posts to outside services for N seconds - see [Pause Posts](/output/pause) |
 | `/info` | Human-readable HTML page with full device + network identity - see [/info page](#info-page) |
-| `/about` | Build, hardware and module identity, as JSON (useful for support) |
+| `/about` | Build and hardware identity, as JSON (useful for support) |
+| `/ps` | The main loop's speed and each module's longest recent loop, slow loops and what holds it up, as JSON |
 | `/network` | WiFi + static IP + NTP configuration - see [/network page](#network-page) |
 | `/outputs` | Whether each enabled upload service is working, as JSON |
 | `/hv` | High-voltage tuning page (ESPGeiger-HW and `*_hv` builds) |
@@ -84,7 +85,7 @@ Human-readable HTML report grouped into expandable sections. Useful as the first
 | WiFi | Network and channel, signal (RSSI in dBm, with excellent / good / fair / weak), IP, hostname, MAC, DNS. The hotspot's SSID, IP and MAC while it's running. |
 | About | Version (with the git hash and build date), build environment, Geiger model. |
 
-The chip, flash, core/SDK and WiFi radio details, gateway, subnet, stack headroom, feature flags and the module list are in `/about`.
+The chip, flash, core/SDK and WiFi radio details, stack headroom and feature flags are in `/about`, the module list in `/ps`.
 
 For machine-readable equivalents see `/json` (live data) and `/about` (static identity).
 

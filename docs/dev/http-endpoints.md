@@ -16,7 +16,7 @@ If a web password is set, every endpoint here needs HTTP Basic auth, user `admin
 
 A JSON object keyed by output name, describing each enabled third-party output. Disabled or unconfigured modules are left out; `{}` means none are active. A module quarantined by the boot guard shows under its module short name as `{"quarantined":true}`. Each output's entry is sent on its own: one that would pass 255 bytes is left out, the rest still come.
 
-Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi` and `udpblip` when Local Broadcast is on. `/about` lists module short names, which differ for three of them: `whook`, `thgspk`, `wapi`.
+Keys: `mqtt`, `radmon`, `thingspeak`, `gmc`, `webhook`, `webapi` and `udpblip` when Local Broadcast is on. `/ps` lists module short names, which differ for three of them: `whook`, `thgspk`, `wapi`.
 
 ```json
 {
@@ -39,9 +39,9 @@ Use it as a lightweight health check for dashboards, scripts or Home Assistant R
 
 ## `/about`
 
-Identity of the device and firmware, the chip and WiFi details the `/info` page leaves out, and the compiled-in modules. Live values (uptime, memory, RSSI) are in `/json`.
+Identity of the device and firmware, and the chip and WiFi details the `/info` page leaves out. Made to paste into a bug report: nothing that locates the network (no gateway, subnet or access point). Live values (uptime, memory, RSSI) are in `/json`, the modules in `/ps`.
 
-In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcmd` answer 404; `/about`, `/outputs` and `/metrics` still work.
+In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcmd` answer 404; `/about`, `/ps`, `/outputs` and `/metrics` still work.
 
 ```json
 {
@@ -58,9 +58,6 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
   "fsize": 4194304,
   "freal": 4194304,
   "mhz": 80,
-  "gw": "192.168.1.1",
-  "sn": "255.255.255.0",
-  "bssid": "E4:95:6E:45:15:B4",
   "tx": 20.50,
   "phy": "11n",
   "sleep": "Modem",
@@ -73,7 +70,7 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
   "fl": 127,
   "health": "ok",
   "health_boot": "ok",
-  "modules": {"sys":{"peak":412},"net":{"peak":96},"wifi":{"peak":1840},"counter":{"peak":58},"sdcard":{"peak":620000,"stalls":2},"mqtt":{"peak":5380}}
+  "erases": 0
 }
 ```
 
@@ -92,7 +89,6 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `fsize` | Flash size the image was built for, in bytes |
 | `freal` | ESP8266 only: flash size the chip reports. `/info` warns when it differs from `fsize` |
 | `mhz` | CPU frequency |
-| `gw`, `sn`, `bssid` | Gateway, subnet mask and the BSSID of the access point it's joined to |
 | `tx` | WiFi transmit power in dBm, `null` if the core doesn't report it |
 | `phy`, `sleep`, `auto` | WiFi PHY mode, radio sleep mode, and whether WiFi auto-reconnect is on |
 | `wifi` | WiFi state: `boot`, `joining`, `portal`, `online`, `link_lost`, `offline`, `hotspot`, `ap_mode` or `off` |
@@ -104,8 +100,29 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 | `g_pcnt` | `true` if pulses are counted by the ESP32 PCNT hardware counter |
 | `fl` | Feature flags, the same bits WebAPI sends as `fl` |
 | `health`, `health_boot` | [Health](/output/integrations#json-endpoint) now, and every word that has been on since boot |
-| `modules` | Every module compiled into this firmware, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`). Each has `peak`, its longest recent loop in microseconds (halved every hour, so a one-off fades and a repeating one stays; above 32 ms it's to the millisecond, up to 32 s; on ESP32 it can include time other tasks such as WiFi held the loop, so it can read higher than the module's own work), and `stalls`, how many of its loops took over 10 ms since boot (`wapi` 250 ms, as the Stations signature takes ~180 ms on an ESP8266, `sdcard` 500 ms, an SD card's write timeout; stops at 255, left out when 0) |
 | `trace` | ESP32, after a crash: the last module runs before it, `["name", -ms]`, ms before the last one |
+
+## `/ps`
+
+The main loop, then every module compiled into this firmware under `modules`, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`).
+
+```json
+{"lps":58733,"tick":93,"t_max":410,"modules":{"sys":{"peak":412},"net":{"peak":96},"wifi":{"peak":1840},"counter":{},"loc":{},"sdcard":{"peak":620000,"stalls":2},"mqtt":{"peak":5380,"state":"wifi"}}}
+```
+
+| Field | Meaning |
+|---|---|
+| `lps` | Main-loop iterations per second, smoothed |
+| `tick` | Smoothed microseconds spent in the once-per-second housekeeping pass |
+| `t_max` | Worst `tick` in the last 60 seconds |
+
+Each module, a field left out when it has nothing to say. `{}` = nothing measured, e.g. a module that only holds settings, or `counter`, which runs outside the module loop:
+
+| Field | Meaning |
+|---|---|
+| `peak` | The module's longest recent loop in microseconds, halved every hour, so a one-off fades and a repeating one stays. Above 32 ms it's to the millisecond, up to 32 s. On ESP32 it can include time other tasks such as WiFi held the loop, so it can read higher than the module's own work |
+| `stalls` | How many of its loops took over 10 ms since boot (`wapi` 250 ms, as the Stations signature takes ~180 ms on an ESP8266; `sdcard` 500 ms, an SD card's write timeout). Stops at 255, left out when 0 |
+| `state` | Left out when it runs as normal. `off`: never started (WiFi off), `quarantined`: safe mode, `wifi` or `ntp`: waiting for it |
 
 ## `/json?raw=1`
 
