@@ -41,7 +41,7 @@ CORIUM_PSTR(SY_L_OTA, "Arduino OTA");
 CORIUM_PSTR(SY_H_OTA, "Enable the Arduino IDE network port");
 CORIUM_PSTR(SY_L_LAT, "Latitude");
 CORIUM_PSTR(SY_L_LON, "Longitude");
-CORIUM_PSTR(SY_H_LOC, "0 = not set");
+CORIUM_PSTR(SY_H_LOC, "Both 0 = not set");
 #ifdef ESP32
 CORIUM_PSTR(SY_O_MHZ, "0|80|160|240");
 #endif
