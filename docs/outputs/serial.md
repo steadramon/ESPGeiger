@@ -43,7 +43,6 @@ Serial commands are __disabled__ on ESPGeiger-Lite and ESPGeiger-Log builds: the
 | `hv` | Return current live HV value (builds with HV feedback) | |
 | `target` | Set target CPM value for Test builds only | `target 1234` |
 | `layout` | ESP32: show the flash layout. `layout migrate` starts the [table move](/install/ota#esp32-4-mb-table-move) now | `layout migrate` |
-| `genuine <64 hex>` | Answer the genuine-board check on [setup.espgeiger.com](https://setup.espgeiger.com) (ESPGeiger kits with a hardware key). The site sends the code; there's no need to type it | |
 
 The console also answers while the setup portal is up and while it joins WiFi at boot. Until the device has finished booting only the commands from `reboot` to `reset` above run; the others answer `after boot`. In [safe mode](/configuration/safemode) they answer `off in safe mode`.
 

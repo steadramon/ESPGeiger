@@ -22,11 +22,11 @@ The `/hv` page edits the `espghw` prefs:
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| PWM frequency | `espghw.freq` | Int 100-6000/9000/40000/78000 | `6000` | all | PWM frequency in Hz. ESPGeiger-HW max 9000 Hz; `esp8266_hv` max 40000 Hz; `esp32_hv` max 78000 Hz. |
-| PWM duty | `espghw.duty` | Int 1-282/600/1023 | varies by build | all | PWM duty (1-1023, 10-bit). Each step is ~0.1 % of period. ESPGeiger-HW caps it at 600. Every build leaves the gate low at least 4 us a period, so on `esp32_hv` the most duty is 998 at 6000 Hz. |
-| Divider ratio | `espghw.ratio` | Int 0-50000 | varies by build | HV ADC builds | Voltage divider scale factor - converts the ADC reading to displayed volts. The reading is in mV on every build (calibrated mV on ESP32 builds, the ESP8266 count is about 1 mV), so the same divider takes about the same ratio on any chip. Calibrate with an external HV meter. `0` disables the ADC readout. |
+| PWM frequency | `espghw.freq` | Int 100-9000/40000/78000 | `6000` | all | PWM frequency in Hz. ESPGeiger-HW max 9000 Hz; `esp8266_hv` max 40000 Hz; `esp32_hv` max 78000 Hz. |
+| PWM duty | `espghw.duty` | Int 1-600/1023 | `280` | all | PWM duty (1-1023, 10-bit). Each step is ~0.1 % of period. ESPGeiger-HW caps it at 600. Every build leaves the gate low at least 4 us a period, so on `esp32_hv` the most duty is 998 at 6000 Hz. |
+| Divider ratio | `espghw.ratio` | Int 0-50000 | `1035` | HV ADC builds | Voltage divider scale factor - converts the ADC reading to displayed volts. The reading is in mV on every build (calibrated mV on ESP32 builds, the ESP8266 count is about 1 mV), so the same divider takes about the same ratio on any chip. Calibrate with an external HV meter. `0` disables the ADC readout. |
 | Divider offset | `espghw.offset` | Int -100 to 100 | `0` | HV ADC builds | Fixed offset added to the displayed voltage after scaling. |
-| HV target | `espghw.target` | Int 0-450/500/700 | `0` | HV ADC builds | Auto-trim target voltage (0 = open loop, disabled). When non-zero, firmware trims duty by a few steps to hold target. See [Closed-Loop Trim](#closed-loop-trim). |
+| HV target | `espghw.target` | Int 0-500/700 | `0` | HV ADC builds | Auto-trim target voltage (0 = open loop, disabled). When non-zero, firmware trims duty by a few steps to hold target. See [Closed-Loop Trim](#closed-loop-trim). |
 
 <!-- /gen -->
 
