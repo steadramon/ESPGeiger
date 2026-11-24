@@ -73,15 +73,11 @@ void corium::AppHooks::rowTail(const char* mid, const char* id, EGHttpResponse& 
     "<script>window.addEventListener('message',function(e){if(e.origin!=='" APP_LOC_URL "')return;var d=e.data;if(!d||d.type!=='" APP_LOC_MSG "')return;var la=document.getElementById('loc.lat');var lo=document.getElementById('loc.lon');if(la&&typeof d.lat==='number')la.value=d.lat;if(lo&&typeof d.lon==='number')lo.value=d.lon;});</script>"));
 }
 
+// now only, /about has since boot
 void corium::AppHooks::statusRows(EGHttpResponse& res) {
-  char now[40], ever[40];
+  char now[40];
   health_text(now, sizeof(now), health().live());
-  if (health().ever() == health().live()) {
-    corium::WebPortal::infoRow(res, HEALTH, W_FMT_S, now);
-  } else {
-    health_text(ever, sizeof(ever), health().ever());
-    corium::WebPortal::infoRow(res, HEALTH, PSTR("%s (since boot: %s)"), now, ever);
-  }
+  corium::WebPortal::infoRow(res, HEALTH, W_FMT_S, now);
 }
 
 static const char* geiger_type_name() {
