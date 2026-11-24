@@ -94,12 +94,12 @@ void drop_pulse_ring() {
 }
 
 // full count including the 32 bit rollovers
-inline uint64_t all_clicks(unsigned long rollover, unsigned long clicks) {
+inline uint64_t all_clicks(uint32_t rollover, uint32_t clicks) {
   return ((uint64_t)rollover << 32) + clicks;
 }
 
-inline __attribute__((always_inline)) void add_wrapped(unsigned long& lo, unsigned long& hi, unsigned long n) {
-  unsigned long prev = lo;
+inline __attribute__((always_inline)) void add_wrapped(uint32_t& lo, uint32_t& hi, uint32_t n) {
+  uint32_t prev = lo;
   lo += n;
   if (prev > lo) hi++;
 }

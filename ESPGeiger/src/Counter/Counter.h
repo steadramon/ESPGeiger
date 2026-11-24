@@ -187,17 +187,17 @@ class Counter : public CounterMaths {
       bool on_click(ClickFn f) { return _clicks.add(f); }
       // UDP receiver clicks, these aren't echoed back out
       bool on_rx_click(ClickFn f) { return _rx_clicks.add(f); }
-      unsigned long clicks_hour = 0;
-      unsigned long total_clicks_rollover = 0;
-      unsigned long total_clicks = 0;
-      unsigned long clicks_today = 0;
-      unsigned long clicks_yesterday = 0;
-      unsigned long total_clicks_lifetime = 0;
-      unsigned long total_clicks_lifetime_rollover = 0;
+      uint32_t clicks_hour = 0;
+      uint32_t total_clicks_rollover = 0;
+      uint32_t total_clicks = 0;
+      uint32_t clicks_today = 0;
+      uint32_t clicks_yesterday = 0;
+      uint32_t total_clicks_lifetime = 0;
+      uint32_t total_clicks_lifetime_rollover = 0;
       void set_lifetime_enabled(bool on) { _lifetime_enabled = on; }
       bool get_lifetime_enabled() const { return _lifetime_enabled; }
-      void set_lifetime_clicks(unsigned long v) { total_clicks_lifetime = v; }
-      void set_lifetime_rollover(unsigned long v) { total_clicks_lifetime_rollover = v; }
+      void set_lifetime_clicks(uint32_t v) { total_clicks_lifetime = v; }
+      void set_lifetime_rollover(uint32_t v) { total_clicks_lifetime_rollover = v; }
       uint64_t get_lifetime_clicks_total() const {
         return ((uint64_t)total_clicks_lifetime_rollover << 32) + total_clicks_lifetime;
       }
