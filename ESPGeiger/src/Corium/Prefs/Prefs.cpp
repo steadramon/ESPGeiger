@@ -315,14 +315,15 @@ int validate(const corium::Pref* p, const char* value, char* out, size_t outsz) 
     case corium::P_FLOAT:  return valid_float(p, value, out, outsz);
     case corium::P_STRING: return valid_string(p, value, out, outsz);
     case corium::P_LABEL:
-    case corium::P_HEADER: return -1;
+    case corium::P_HEADER:
+    case corium::P_BOX:    return -1;
   }
   return -1;
 }
 
 // A bad stored value gets the default, it's never clamped to an edge
 int check_stored(const corium::Pref& p, const char* value, uint16_t vlen) {
-  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return 0;
+  if (corium::isHeading(p)) return 0;
   if (vlen > CORIUM_PREFS_MAX_VALUE || memchr(value, '\0', vlen)) return -1;
   char copy[CORIUM_PREFS_MAX_VALUE + 1];
   memcpy(copy, value, vlen);
@@ -981,7 +982,7 @@ void corium::Prefs::holdBy(void (*wake)(uint32_t at)) { s_wake = wake; }
 
 // Readonly rows and headings aren't reset
 static bool resets(const corium::Pref& p) {
-  return !(p.flags & corium::P_READONLY) && p.type != corium::P_LABEL && p.type != corium::P_HEADER;
+  return !(p.flags & corium::P_READONLY) && !corium::isHeading(p);
 }
 
 bool corium::Prefs::reset(const char* module, const char* key) {

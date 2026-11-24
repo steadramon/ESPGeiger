@@ -30,7 +30,7 @@ Special thanks to all the above original creators. Without your hard work and in
 
 ## Tube setting
 
-**Tube** (Config, Input) names the GM tube for [ESPGeiger Stations](/output/webapi). It changes nothing on the device: set the ratio, the dead time and α/β/γ yourself, this table has starting figures.
+**Tube** (Config, Input, the Tube box) names the GM tube for [ESPGeiger Stations](/output/webapi). It changes nothing on the device: set the ratio, the dead time and α/β/γ yourself, this table has starting figures.
 
 | Tube | Ratio (CPM per µSv/h) | Dead time (µs) | Detects | Ratio from |
 |---|---|---|---|---|

@@ -71,6 +71,7 @@ enum PrefType : uint8_t {
   P_LABEL,
   P_HEADER,
   P_ENUM,     // options in pattern, value = minI + index
+  P_BOX,      // a heading that starts its own box, same group
 };
 
 static constexpr uint16_t P_SENSITIVE = 1 << 0;
@@ -107,6 +108,9 @@ struct Pref {
   PrefType    type;
   uint16_t    flags;
 };
+
+// a row with no value
+inline bool isHeading(const Pref& p) { return p.type == P_LABEL || p.type == P_HEADER || p.type == P_BOX; }
 
 // Flash only does 32-bit loads, so copy the whole row out
 class PrefRows {

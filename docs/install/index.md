@@ -72,7 +72,7 @@ Specific instructions and diagrams for connecting ESPGeiger to a variety of diff
 On the device's web page, open **Config** and find the Counter settings.
 
 - **Dose ratio** (`counter.ratio`) turns CPM into µSv/h and depends on the tube. The default, <!-- gen:const GEIGER_RATIO -->151.0<!-- /gen -->, is for the M4011 on most cheap kits. For other tubes, see the table on the [ESPGeiger-HW](/hardware/espgeigerhw) page.
-- **Tube model** is the name of your tube.
+- **Tube** (its own box) names your tube for Stations; **Geiger model** is a free name for the counter.
 - Leave **CPM mode** and **Debounce** as they are to start. [CPM Mode](/configuration/cpm-mode) and [Counter](/configuration/counter) say when to change them.
 
 ## 6. Pick outputs

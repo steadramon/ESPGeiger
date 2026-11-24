@@ -63,6 +63,8 @@ CORIUM_PSTR(K_PULSE_WIDTH_US, "pulse_width_us");
 CORIUM_PSTR(K_CPM_WINDOW,     "cpm_window");
 CORIUM_PSTR(K_CPM_MODE,       "cpm_mode");
 CORIUM_PSTR(K_TUBE_HDR,       "_tube_hdr");
+CORIUM_PSTR(K_TUBE_BOX,       "_tube_box");
+CORIUM_PSTR(K_COUNTER_BOX,    "_counter_box");
 CORIUM_PSTR(K_DET_HDR,        "_det_hdr");
 CORIUM_PSTR(K_DOSE_HDR,       "_dose_hdr");
 CORIUM_PSTR(K_COUNT_HDR,      "_count_hdr");
@@ -131,13 +133,14 @@ CORIUM_PSTR(IN_L_DTU, "Tube dead time (us)");
 CORIUM_PSTR(IN_H_DTU, "From the datasheet, 0 = off. SBM-20 = 190");
 CORIUM_PSTR(IN_L_CMM, "CPM mode");
 CORIUM_PSTR(IN_O_CMM, "Fast start|Live ring|Fixed 60s|Bucket|Adaptive fast");
-CORIUM_PSTR(IN_L_DET, "Detector");
+CORIUM_PSTR(IN_L_DET, "Input");
 CORIUM_PSTR(IN_L_DOSE, "Dose &amp; alarms");
 CORIUM_PSTR(IN_L_COUNT, "Counting");
 CORIUM_PSTR(IN_L_TUB, "Tube");
 CORIUM_PSTR(IN_H_TUB, "Sent to ESPGeiger Stations");
-CORIUM_PSTR(IN_L_GMD, "Tube model");
-CORIUM_PSTR(IN_H_GMD, "e.g. SBM-20, J305");
+CORIUM_PSTR(IN_L_GMD, "Geiger model");
+CORIUM_PSTR(IN_L_CTR, "Counter");
+CORIUM_PSTR(IN_H_GMD, "Your counter's name, e.g. GC10, ESPGeiger-HW");
 CORIUM_PSTR(IN_L_THD, "Tube detects");
 CORIUM_PSTR(IN_L_TBA, "\xCE\xB1 Alpha");
 CORIUM_PSTR(IN_H_TBA, "Detects alpha radiation");
@@ -177,7 +180,21 @@ CORIUM_PSTR(CT_H_QM,  "Slow tubes need longer");
 #endif
 
 static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
+  // Tube first, its own box, then the counter's
+#ifdef PREF_MODEL
+  {K_TUBE_BOX,        IN_L_TUB, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_BOX, 0},
+  {EG_K_TUBE,         IN_L_TUB, IN_H_TUB, "0", TUBE_OPTS, 0, Tube::COUNT - 1, 0, corium::P_ENUM, 0},
+  {EG_K_GEIGER_MODEL, IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, CORIUM_NAME_MAX, corium::P_STRING, 0},
+  {K_TUBE_HDR,        IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
+  {EG_K_TUBE_ALPHA,   IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+  {EG_K_TUBE_BETA,    IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+  {EG_K_TUBE_GAMMA,   IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
+  {K_COUNTER_BOX,     IN_L_CTR, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_BOX, 0},
+#endif
+  // only with a row under it
+#if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_UDPRX(GEIGER_TYPE) || defined(PREF_RX_PIN)
   {K_DET_HDR,         IN_L_DET, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, 0},
+#endif
   // Source selector
 #if GEIGER_IS_SERIAL(GEIGER_TYPE)
   {EG_K_SERIAL_TYPE,  IN_L_STY, nullptr, STR(GEIGER_SERIALTYPE), SerialFormat::TYPE_OPTS,
@@ -197,15 +214,6 @@ static const corium::Pref COUNTER_PREF_ITEMS[] PROGMEM = {
 #endif
 #ifdef PREF_TX_PIN
   {K_TX_PIN,          IN_L_TXP, nullptr, STR(GEIGER_TXPIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
-#endif
-  // Tube identity
-#ifdef PREF_MODEL
-  {EG_K_TUBE,         IN_L_TUB, IN_H_TUB, "0", TUBE_OPTS, 0, Tube::COUNT - 1, 0, corium::P_ENUM, 0},
-  {EG_K_GEIGER_MODEL, IN_L_GMD, IN_H_GMD, GEIGER_MODEL, nullptr, 0, 0, CORIUM_NAME_MAX, corium::P_STRING, 0},
-  {K_TUBE_HDR,        IN_L_THD, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
-  {EG_K_TUBE_ALPHA,   IN_L_TBA, IN_H_TBA, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
-  {EG_K_TUBE_BETA,    IN_L_TBB, IN_H_TBB, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
-  {EG_K_TUBE_GAMMA,   IN_L_TBG, IN_H_TBG, "0", nullptr, 0, 0, 0, corium::P_BOOL, corium::P_INLINE},
 #endif
   // Conversion and alarms
   {K_DOSE_HDR,        IN_L_DOSE, nullptr, nullptr, nullptr, 0, 0, 0, corium::P_HEADER, 0},

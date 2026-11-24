@@ -135,7 +135,7 @@ static void param_put(const char* mid, const char* id, const char* name,
 static void param_save_pref(const char* mid, const corium::Pref& p,
                             const char* body, size_t len, Refusal& r) {
   if (p.flags & (corium::P_HIDDEN | corium::P_READONLY)) return;
-  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return;
+  if (corium::isHeading(p)) return;
   char name[2 * CORIUM_PREF_ID_MAX + 2];   // mid.id
   char id[CORIUM_PREF_ID_MAX + 1];
   char field[CORIUM_PREFS_MAX_VALUE + 1];
@@ -278,7 +278,7 @@ static const char* show_attr(ParamCtx& c, const char* id) {
   return c.attr;
 }
 
-static void param_group_header(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {
+static void param_group_header(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod, const char* title) {
   bool has_toggle = (g->enableKey != nullptr);
   bool grp_on = corium::Prefs::groupEnabled(g);
   bool hw_absent = (mod && !mod->hwPresent());
@@ -291,7 +291,7 @@ static void param_group_header(ParamCtx& c, const corium::PrefGroup* g, corium::
     badge = grp_on ? PSTR(" <span class='gb on'>on</span>") : PSTR(" <span class='gb off'>off</span>");
   }
   param_sendf(c, PSTR("<details class='bx%s'%s><summary>%s%s</summary>"),
-              off ? PSTR(" off") : PSTR(""), show_attr(c, nullptr), g->label, badge);
+              off ? PSTR(" off") : PSTR(""), show_attr(c, nullptr), title, badge);
 }
 
 static void param_emit_bool(ParamCtx& c, const char* lbl, bool inline_bool) {
@@ -476,7 +476,7 @@ static void param_emit_field(ParamCtx& c, const corium::Pref& p) {
 }
 
 static void param_emit_row(ParamCtx& c, const corium::Pref& p) {
-  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) {
+  if (corium::isHeading(p)) {
     param_emit_heading(c, p);
     return;
   }
@@ -494,17 +494,15 @@ static void param_emit_row(ParamCtx& c, const corium::Pref& p) {
   param_emit_help(c, p, p.type == corium::P_BOOL);   // a box's help sits beside it
 }
 
-static void param_render_group(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {
-  param_group_header(c, g, mod);
-  c.mid = g->moduleId;
-
-  for (size_t j = 0; j < g->count.get(); j++) {
+// rows from..to-1 of one box, its Advanced after, then the box closed
+static void param_render_box(ParamCtx& c, const corium::PrefGroup* g, size_t from, size_t to) {
+  for (size_t j = from; j < to; j++) {
     const corium::Pref p = g->prefs.row(j);
     if (p.flags & (corium::P_HIDDEN | corium::P_ADVANCED)) continue;
     param_emit_field(c, p);
   }
   bool adv_open = false;
-  for (size_t j = 0; j < g->count.get(); j++) {
+  for (size_t j = from; j < to; j++) {
     const corium::Pref p = g->prefs.row(j);
     if ((p.flags & corium::P_HIDDEN) || !(p.flags & corium::P_ADVANCED)) continue;
     if (!adv_open) {
@@ -515,6 +513,28 @@ static void param_render_group(ParamCtx& c, const corium::PrefGroup* g, corium::
   }
   if (adv_open) c.res->sendChunk(FPSTR(W_DETAILS_END));
   c.res->sendChunk(FPSTR(W_DETAILS_END));
+}
+
+// a P_BOX row ends the box and starts the next, same group; one first titles the first box
+static void param_render_group(ParamCtx& c, const corium::PrefGroup* g, corium::Module* mod) {
+  c.mid = g->moduleId;
+  size_t n = g->count.get(), from = 0;
+  const char* title = g->label;
+  if (n && g->prefs.row(0).type == corium::P_BOX) {
+    param_load_text(c, g->prefs.row(0));
+    title = c.lbl;
+    from = 1;
+  }
+  param_group_header(c, g, mod, title);
+  for (size_t j = from; j < n; j++) {
+    const corium::Pref p = g->prefs.row(j);
+    if (p.type != corium::P_BOX) continue;
+    param_render_box(c, g, from, j);
+    param_load_text(c, p);
+    param_sendf(c, PSTR("<details class=bx><summary>%s</summary>"), c.lbl);
+    from = j + 1;
+  }
+  param_render_box(c, g, from, n);
 }
 
 static void param_render_groups(EGHttpResponse& res, uint8_t tab) {
@@ -694,7 +714,7 @@ static void b64_finish(B64Sink& s) {
 // Skips labels, local prefs and defaults. id gets the key, val_out its value
 static bool is_exportable_pref(const corium::PrefGroup* g, const corium::Pref& p,
                                char (&id)[CORIUM_PREF_ID_MAX + 1], const char*& val_out) {
-  if (p.type == corium::P_LABEL || p.type == corium::P_HEADER) return false;
+  if (corium::isHeading(p)) return false;
   if (p.flags & corium::P_LOCAL) return false;
   flashToRam(p.id, id, sizeof(id));
   const char* cur = corium::Prefs::getString(g->moduleId, id);

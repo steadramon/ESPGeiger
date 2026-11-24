@@ -84,14 +84,14 @@ On the **Input** tab. Some settings only appear on specific builds. Pin, Count w
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Serial type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
-| RX pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
-| TX pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
 | Tube | `counter.tube` | `0` Other, `1` SBM-20, `2` SBM-19, `3` SBM-21, `4` STS-5, `5` SI-22G, `6` J305, `7` J321, `8` M4011, `9` LND 712, `10` VacuTec 70 013, `11` RD003 | `0` Other | not test builds | The GM tube, sent to [ESPGeiger Stations](/output/webapi). Changes nothing on the device, the [tube table](/hardware/pulse#tube-setting) has starting figures. |
-| Tube model | `counter.geiger_model` | String (32) | varies by build | not test builds | GM tube model name (e.g. SBM-20, J305). Hidden when `-D GEIGER_MODEL_FIXED` (purpose-built kits where the tube is fixed in firmware). |
+| Geiger model | `counter.geiger_model` | String (32) | varies by build | not test builds | Your counter's name (e.g. GC10, ESPGeiger-HW), sent to Stations and shown in `/about` as `g_mod`. Defaults to the build's name; blank puts it back. Hidden when `-D GEIGER_MODEL_FIXED` (UDP receivers, or a kit whose name is fixed in firmware). |
 | α Alpha | `counter.tube_alpha` | Boolean | `0` off | not test builds | The tube detects alpha radiation. Informational; passed to upstream aggregators. |
 | β Beta | `counter.tube_beta` | Boolean | `0` off | not test builds | The tube detects beta radiation. Informational. |
 | γ Gamma | `counter.tube_gamma` | Boolean | `0` off | not test builds | The tube detects gamma radiation. Informational. |
+| Serial type | `counter.serial_type` | `1` GC10, `2` GC10Next, `3` MightyOhm, `4` ESPGeiger, `5` Template | `1` GC10 | serial builds | Serial counter protocol, see [Serial Counters](/hardware/serial). Reboot required. |
+| RX pin | `counter.rx_pin` | Int -1 to max GPIO | varies by build | boards without fixed pins | Geiger counter input pin. Reboot required. |
+| TX pin | `counter.tx_pin` | Int -1 to max GPIO | varies by build | builds with a TX pin | Transmit pin. Reboot required. |
 | Dose ratio | `counter.ratio` | Float 1-100000 | `151.0` | all | CPM to uSv/h conversion factor |
 | Warning CPM | `counter.warn` | Int 0-9999 | `50` | all | CPM threshold for warning state |
 | Alert CPM | `counter.alert` | Int 0-9999 | `100` | all | CPM threshold for alert state |
