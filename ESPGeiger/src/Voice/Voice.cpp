@@ -54,7 +54,7 @@ CORIUM_PSTR(VX_H_VOL, "1-100");
 
 static const corium::Pref VOICE_PREF_ITEMS[] PROGMEM = {
   {K_ANNOUNCE_ENABLE,   VX_L_AEN,  VX_H_AEN,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
-  {K_ANNOUNCE_INTERVAL, VX_L_AIV,  VX_H_AIV,  "60", nullptr, 10, 3600,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_ANNOUNCE_INTERVAL, VX_L_AIV,  VX_H_AIV,  "60", nullptr, 10, 3600,  0, corium::P_UINT, 0},
   {K_ANNOUNCE_USV,      VX_L_AUS,  VX_H_AUS,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
   {K_ANNOUNCE_RADMON,   VX_L_ARM,  VX_H_ARM,  "0",  nullptr,  0,    0,  0, corium::P_BOOL, 0},
   {K_VOICE_VOLUME,      EG_L_VOL,  VX_H_VOL,  "80", nullptr,  1,  100,  0, corium::P_UINT, 0},
@@ -107,8 +107,8 @@ static const corium::Pref KLAXON_PREF_ITEMS[] PROGMEM = {
   {EG_K_TYPE,       KX_L_TY,  nullptr,  "0",  KX_O_TY, 0, 4,   0, corium::P_ENUM, 0},
   {EG_K_VOLUME,     EG_L_VOL, VX_H_VOL, "55", nullptr, 1, 100, 0, corium::P_UINT, 0},
   {K_COOLDOWN,      KX_L_CD,  KX_H_CD,  "5",  nullptr, 1, 60,  0, corium::P_UINT, corium::P_ADVANCED},
-  {EG_K_QUIET_FROM, EG_L_QFR, KX_H_QFR, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME},
-  {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME},
+  {EG_K_QUIET_FROM, EG_L_QFR, KX_H_QFR, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
+  {EG_K_QUIET_TO,   EG_L_QTO, EG_H_QTO, "",   nullptr, 0, 0,   CORIUM_HHMM_MAX, corium::P_STRING, corium::P_TIME | corium::P_ADVANCED},
 };
 
 static const corium::PrefGroup KLAXON_PREF_GROUP PROGMEM = {

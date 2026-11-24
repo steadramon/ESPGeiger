@@ -98,7 +98,7 @@ CORIUM_PSTR(L_CLICKS, "Click per count");
 CORIUM_PSTR(L_CHIMES, "Chimes");
 CORIUM_PSTR(H_CHIMES, "Startup, WiFi and button sounds");
 CORIUM_PSTR(L_ALARM,  "Alarm sound");
-CORIUM_PSTR(H_ALARM,  "Off, the LED, pages and MQTT still alert");
+CORIUM_PSTR(H_ALARM,  "Enable alarm sound");
 CORIUM_PSTR(L_REPEAT, "Alert repeat (s)");
 CORIUM_PSTR(H_REPEAT, "Play the alert again while it lasts, 0 = once");
 

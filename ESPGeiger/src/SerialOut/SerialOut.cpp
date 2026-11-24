@@ -58,7 +58,7 @@ static const corium::Pref SOUT_PREF_ITEMS[] PROGMEM = {
   {K_FLAGS,       nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   corium::P_UINT,   corium::P_HIDDEN},
   {K_FORMAT,      SO_L_FMT,  nullptr,   "0",  SO_O_FMT, 0, 2,     0,   corium::P_ENUM,   0},
   {K_BAUD,        SO_L_BAUD, SO_H_BAUD, "0",  SO_O_BAUD, 0, 0,  0,   corium::P_UINT,   corium::P_ADVANCED},
-  {EG_K_TPL,      EG_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    SOUT_TPL_MAX, corium::P_STRING, 0},
+  {EG_K_TPL,      EG_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    SOUT_TPL_MAX, corium::P_STRING, corium::P_ADVANCED},
 };
 static const corium::PrefGroup SOUT_PREF_GROUP PROGMEM = {
   "sout", "Serial out", 1,

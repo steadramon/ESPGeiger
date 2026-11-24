@@ -38,7 +38,7 @@ CORIUM_PSTR(SY_L_NAM, "Friendly name");
 CORIUM_PSTR(SY_H_NAM, "Optional label for the web pages");
 CORIUM_PSTR(SY_H_WPW, "User admin, 8+ chars, also the hotspot's WiFi password, blank = no login");
 CORIUM_PSTR(SY_L_OTA, "Arduino OTA");
-CORIUM_PSTR(SY_H_OTA, "For PlatformIO (espota) and the Arduino IDE network port. Not needed for the Update page");
+CORIUM_PSTR(SY_H_OTA, "Enable the Arduino IDE network port");
 CORIUM_PSTR(SY_L_LAT, "Latitude");
 CORIUM_PSTR(SY_L_LON, "Longitude");
 CORIUM_PSTR(SY_H_LOC, "0 = not set");

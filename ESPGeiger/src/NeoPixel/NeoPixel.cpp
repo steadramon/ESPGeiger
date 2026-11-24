@@ -65,7 +65,7 @@ CORIUM_PSTR(NP_H_PIN,  "WS2812 data GPIO, -1 = off");
 
 static const corium::Pref NEOPIXEL_PREF_ITEMS[] PROGMEM = {
 #ifndef NEOPIXEL_PIN_BLOCKED
-  {EG_K_PIN,        NP_L_PIN,  NP_H_PIN,  STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_PIN,        NP_L_PIN,  NP_H_PIN,  STR(NEOPIXEL_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
   {EG_K_BRIGHTNESS, EG_L_BRT,  nullptr,   "15",              nullptr, 0, 100, 0, corium::P_UINT, corium::P_SLIDER},
   {EG_K_MODE,       EG_L_MOD,  nullptr,   "4",               NP_O_MODE, 0, 4, 0, corium::P_ENUM, 0},
