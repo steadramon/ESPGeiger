@@ -30,7 +30,7 @@ namespace Tube {
   void set_model(const char* s);   // s may be in flash
   uint8_t detection();   // bits: alpha beta gamma
 
-  static const uint8_t COUNT = 11;   // in TUBE_OPTS
+  static const uint8_t COUNT = 12;   // in TUBE_OPTS
   uint8_t id();
 }
 

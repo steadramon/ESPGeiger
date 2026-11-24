@@ -45,7 +45,7 @@ uint8_t Tube::detection() {
   return f;
 }
 
-const char TUBE_OPTS[] PROGMEM = "Other|SBM-20|SBM-19|SBM-21|STS-5|SI-22G|J305|J321|M4011|LND 712|VacuTec 70 013";
+const char TUBE_OPTS[] PROGMEM = "Other|SBM-20|SBM-19|SBM-21|STS-5|SI-22G|J305|J321|M4011|LND 712|VacuTec 70 013|RD003";
 
 uint8_t Tube::id() {
   uint32_t t = corium::Prefs::getUInt("counter", EG_K_TUBE);
