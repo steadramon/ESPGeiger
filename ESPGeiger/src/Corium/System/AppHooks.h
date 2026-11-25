@@ -21,6 +21,7 @@
 
 class EGHttpServer;
 class EGHttpResponse;
+class EGJson;
 namespace corium { struct MenuEntry; }
 
 namespace corium {
@@ -30,7 +31,7 @@ namespace AppHooks {
   void statusRows(EGHttpResponse& res);   // top of the System table on /info
   void infoRows(EGHttpResponse& res);   // About table on /info
   void rowTail(const char* mid, const char* id, EGHttpResponse& res);   // after a /param row
-  void aboutJson(EGHttpResponse& res);   // /about fields, each ends with a comma
+  void aboutJson(EGJson& j);   // /about fields
   void metrics(EGHttpResponse& res, const char* cid);   // After the measure rows
   void onCrash();   // 8266 crash callback, runs before the stack prints. No heap, Serial or libc in here
 }

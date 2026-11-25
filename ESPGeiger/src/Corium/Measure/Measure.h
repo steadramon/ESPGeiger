@@ -60,6 +60,7 @@ static constexpr uint8_t M_OUT_APP0    = 1 << 2;  // App sinks, the app names th
 static constexpr uint8_t M_OUT_APP1    = 1 << 3;
 static constexpr uint8_t M_OUT_VARS    = 1 << 4;  // Templates and /vars.json
 static constexpr uint8_t M_OUT_ID      = 1 << 5;  // by id only
+static constexpr uint8_t M_OUT_PS      = 1 << 6;  // /ps, diag rows too
 static constexpr uint8_t M_OUT_ALL     = M_OUT_JSON | M_OUT_PROM | M_OUT_APP0 |
                                          M_OUT_APP1 | M_OUT_VARS;
 static constexpr uint8_t M_OUT_ANY     = 0xFF;  // lookups by id
@@ -191,7 +192,7 @@ inline const char* m_json_name(const Measure& m) {
 }
 
 // Temperatures stay in celsius as stored
-void m_json_fields(uint8_t output, EGJson& j);
+void m_json_fields(uint8_t output, EGJson& j, bool diag = false);
 
 // /json: short names, temperature in the display unit
 void m_json_display(EGJson& j, bool diag);

@@ -104,10 +104,10 @@ In safe mode only the core routes exist: `/json`, `/status`, `/hist` and `/webcm
 
 ## `/ps`
 
-The main loop, then every module compiled into this firmware under `modules`, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`).
+The main loop and memory, then every module compiled into this firmware under `modules`, core ones included, keyed by its short name; three differ from the `/outputs` keys (`whook`, `thgspk`, `wapi`). Modules are listed in the order they start. Unlike `/json`, it answers in safe mode too.
 
 ```json
-{"lps":58733,"tick":93,"t_max":410,"modules":{"sys":{"peak":412},"net":{"peak":96},"wifi":{"peak":1840},"counter":{},"loc":{},"sdcard":{"peak":620000,"stalls":2},"mqtt":{"peak":5380,"state":"wifi"}}}
+{"lps":58733,"tick":93,"t_max":410,"mem":25800,"frag":3,"lfb":25232,"lfblow":25232,"stack":752,"modules":{"counter":{"pri":9},"btn":{"pri":10,"peak":73},"ntp":{"pri":20,"peak":315},"sdcard":{"pri":50,"peak":620000,"stalls":2},"mqtt":{"pri":50,"peak":5380,"state":"wifi"},"sys":{"pri":50},"wifi":{"pri":50,"peak":1840}},"active":6}
 ```
 
 | Field | Meaning |
@@ -115,14 +115,19 @@ The main loop, then every module compiled into this firmware under `modules`, co
 | `lps` | Main-loop iterations per second, smoothed |
 | `tick` | Smoothed microseconds spent in the once-per-second housekeeping pass |
 | `t_max` | Worst `tick` in the last 60 seconds |
+| `mem`, `frag`, `lfb`, `lfblow` | Free heap, fragmentation, largest free block and its low-water mark, as in [`/json?raw=1`](#jsonraw1) |
+| `stack` | Lowest free stack since boot in bytes, as in `/about` |
 
-Each module, a field left out when it has nothing to say. `{}` = nothing measured, e.g. a module that only holds settings, or `counter`, which runs outside the module loop:
+Each module, a field left out when it has nothing to say:
 
 | Field | Meaning |
 |---|---|
+| `pri` | Its start priority, lower starts first: 10 hardware, 20 network services, 50 the rest. Modules of the same priority keep the firmware's own order |
 | `peak` | The module's longest recent loop in microseconds, halved every hour, so a one-off fades and a repeating one stays. Above 32 ms it's to the millisecond, up to 32 s. On ESP32 it can include time other tasks such as WiFi held the loop, so it can read higher than the module's own work |
 | `stalls` | How many of its loops took over 10 ms since boot (`wapi` 250 ms, as the Stations signature takes ~180 ms on an ESP8266; `sdcard` 500 ms, an SD card's write timeout). Stops at 255, left out when 0 |
 | `state` | Left out when it runs as normal. `off`: never started (WiFi off), `quarantined`: safe mode, `wifi` or `ntp`: waiting for it |
+
+After the modules, `active`: how many run as normal, those without a `state`.
 
 ## `/json?raw=1`
 

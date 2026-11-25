@@ -56,7 +56,7 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | `/pause?s=N` | Pause posts to outside services for N seconds - see [Pause Posts](/output/pause) |
 | `/info` | Human-readable HTML page with full device + network identity - see [/info page](#info-page) |
 | `/about` | Build and hardware identity, as JSON (useful for support) |
-| `/ps` | The main loop's speed and each module's longest recent loop, slow loops and what holds it up, as JSON |
+| `/ps` | The main loop's speed, memory, and each module's priority, longest recent loop, slow loops and what holds it up, as JSON |
 | `/network` | WiFi + static IP + NTP configuration - see [/network page](#network-page) |
 | `/outputs` | Whether each enabled upload service is working, as JSON |
 | `/hv` | High-voltage tuning page (ESPGeiger-HW and `*_hv` builds) |

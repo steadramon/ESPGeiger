@@ -27,11 +27,13 @@
 #include "Corium/System/BootGuard.h"
 #include "Corium/System/Fs.h"
 #include "Corium/System/TickProfile.h"
+#include "Corium/Measure/Measure.h"
 #include "Corium/Net/Wifi.h"
 #include "Corium/Net/WifiInfo.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include <EGEscape.h>
+#include <EGJson.h>
 #include <EGPortal.h>
 #include "Corium/System/Clock.h"
 #include "Corium/System/Rtc.h"
@@ -298,66 +300,57 @@ void corium::WebPortal::hInfo(EGHttpRequest& req, EGHttpResponse& res, void*) {
   corium::WebPortal::endPage(res);
 }
 
-// Each module as name: peak us, plus stalls when there are any
-static void ps_modules(EGHttpResponse& res) {
-  uint8_t count = corium::Registry::count();
-  for (uint8_t i = 0; i < count; i++) {
-    corium::WebPortal::sendf(res, PSTR("%s\"%s\":{"), (i > 0 ? PSTR(",") : PSTR("")), corium::Registry::get(i)->name());
-    PGM_P sep = PSTR("");   // {} = nothing to say
-    if (uint32_t p = corium::Registry::peakUs(i)) { corium::WebPortal::sendf(res, PSTR("\"peak\":%u"), (unsigned)p); sep = PSTR(","); }
-    if (uint8_t n = corium::Registry::stalls(i)) { corium::WebPortal::sendf(res, PSTR("%s\"stalls\":%u"), sep, (unsigned)n); sep = PSTR(","); }
-    if (const char* st = corium::Registry::state(i)) corium::WebPortal::sendf(res, PSTR("%s\"state\":\"%s\""), sep, st);
-    res.sendChunk(F("}"));
-  }
+static void send_part(void* arg, const char* s, size_t n) {
+  static_cast<EGHttpResponse*>(arg)->sendChunk(s, n);
 }
 
 #ifdef CORIUM_TRACE
 // On crash boots, the last modules that fired and how many ms before the last one
-static void about_trace(EGHttpResponse& res) {
+static void about_trace(EGJson& j) {
   const uint32_t* t = corium::Registry::trace();
   if (!t) return;
   uint8_t count = corium::Registry::count();
   uint32_t last = t[corium::Registry::TRACE_N - 1] >> 8;
-  const char* sep = PSTR("");
-  res.sendChunk(F(",\"trace\":["));
+  j.array_begin(PSTR("trace"));
   for (uint8_t i = 0; i < corium::Registry::TRACE_N; i++) {
     uint8_t slot = t[i] & 0xFF;
     if (slot >= count) continue;   // empty
     long ago = (long)((last - (t[i] >> 8)) & 0xFFFFFF);   // 24 bit ms
-    corium::WebPortal::sendf(res, PSTR("%s[\"%s\",%ld]"), sep, corium::Registry::get(slot)->name(), -ago);
-    sep = PSTR(",");
+    j.array_begin();
+    j.str(nullptr, corium::Registry::get(slot)->name());
+    j.sint(nullptr, -ago);
+    j.array_end();
   }
-  res.sendChunk(F("]"));
+  j.array_end();
 }
 #endif
 
 // What /info leaves out
-static void about_device(EGHttpResponse& res) {
+static void about_device(EGJson& j) {
 #ifdef ESP8266
-  corium::WebPortal::sendf(res,
-    PSTR("\"core\":\"%s\",\"boot\":%u,\"fsize\":%u,\"freal\":%u,"),
-    corium::DeviceInfo::coreVersion().c_str(), (unsigned)corium::DeviceInfo::bootVersion(),
-    (unsigned)corium::DeviceInfo::flashSize(), (unsigned)corium::DeviceInfo::realFlash());
+  j.str(PSTR("core"), corium::DeviceInfo::coreVersion().c_str());
+  j.uint(PSTR("boot"), corium::DeviceInfo::bootVersion());
+  j.uint(PSTR("fsize"), corium::DeviceInfo::flashSize());
+  j.uint(PSTR("freal"), corium::DeviceInfo::realFlash());
 #elif defined(ESP32)
-  char celsius[8] = "null";
+  j.str(PSTR("model"), corium::DeviceInfo::chipModel());
+  j.uint(PSTR("rev"), corium::DeviceInfo::chipRev());
+  j.str(PSTR("sdk"), corium::DeviceInfo::sdkVersion());
+  j.uint(PSTR("fsize"), corium::DeviceInfo::flashSize());
   float t = corium::DeviceInfo::chipTempC();
-  if (!isnan(t)) snprintf_P(celsius, sizeof(celsius), PSTR("%.1f"), t);
-  corium::WebPortal::sendf(res,
-    PSTR("\"model\":\"%s\",\"rev\":%u,\"sdk\":\"%s\",\"fsize\":%u,\"temp\":%s,"),
-    corium::DeviceInfo::chipModel(), (unsigned)corium::DeviceInfo::chipRev(), corium::DeviceInfo::sdkVersion(),
-    (unsigned)corium::DeviceInfo::flashSize(), celsius);
+  if (isnan(t)) j.null(PSTR("temp"));
+  else j.fixed(PSTR("temp"), t, 1);
 #endif
 
   // no gateway, mask or bssid: it gets pasted into bug reports
-  char tx[8];
+  j.uint(PSTR("mhz"), corium::DeviceInfo::cpuMHz());
   int q = corium::Wifi::txPowerQdbm();   // 0.25 dBm steps, -1 = unknown
-  if (q >= 0) snprintf_P(tx, sizeof(tx), PSTR("%d.%02d"), q / 4, (q % 4) * 25);
-  else flashToRam(PSTR("null"), tx, sizeof(tx));
-  corium::WebPortal::sendf(res,
-    PSTR("\"mhz\":%u,\"tx\":%s,"
-         "\"phy\":\"%s\",\"sleep\":\"%s\",\"auto\":%s,\"wifi\":\"%s\","),
-    (unsigned)corium::DeviceInfo::cpuMHz(), tx, corium::Wifi::phyModeStr(), corium::Wifi::sleepModeStr(),
-    corium::Wifi::getAutoReconnect() ? W_TRUE : W_FALSE, corium::Wifi::stateName(corium::Wifi::state()));
+  if (q >= 0) j.fixed(PSTR("tx"), q / 4.0f, 2);
+  else j.null(PSTR("tx"));
+  j.str(PSTR("phy"), corium::Wifi::phyModeStr());
+  j.str(PSTR("sleep"), corium::Wifi::sleepModeStr());
+  j.boolean(PSTR("auto"), corium::Wifi::getAutoReconnect());
+  j.str(PSTR("wifi"), corium::Wifi::stateName(corium::Wifi::state()));
 }
 
 void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -368,35 +361,57 @@ void corium::WebPortal::hAbout(EGHttpRequest& req, EGHttpResponse& res, void*) {
   snprintf_P(hex, sizeof(hex), PSTR("%02X%02X%02X%02X%02X%02X"),
     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-  sendf(res,
-    PSTR("{\"ver\":\"" RELEASE_VERSION "\",\"git\":\"" GIT_VERSION "\",\"env\":\"" BUILD_ENV "\","
-         "\"date\":\"%s\",\"chip\":\"%s\",\"flash\":\"%s\",\"mac\":\"%s\","
-         "\"host\":\"%s\","),
-    corium::DeviceInfo::buildDate(),
-    corium::DeviceInfo::board(),   // "chip" carries the board
-    corium::DeviceInfo::flashInfo(),
-    hex,
-    corium::DeviceInfo::hostname());
-
-  about_device(res);
+  char buf[256];
+  EGJson j(buf, sizeof(buf), send_part, &res);
+  j.map_begin();
+  j.str(PSTR("ver"), PSTR(RELEASE_VERSION));
+  j.str(PSTR("git"), PSTR(GIT_VERSION));
+  j.str(PSTR("env"), PSTR(BUILD_ENV));
+  j.str(PSTR("date"), corium::DeviceInfo::buildDate());
+  j.str(PSTR("chip"), corium::DeviceInfo::board());   // "chip" carries the board
+  j.str(PSTR("flash"), corium::DeviceInfo::flashInfo());
+  j.str(PSTR("mac"), hex);
+  j.str(PSTR("host"), corium::DeviceInfo::hostname());
+  about_device(j);
   uint32_t wear;
-  if (corium::Fs::wearPct100(&wear)) sendf(res, PSTR("\"wear\":%u.%02u,"), (unsigned)(wear / 100), (unsigned)(wear % 100));
-  if (uint32_t st = corium::DeviceInfo::stackFree()) sendf(res, PSTR("\"stack\":%u,"), (unsigned)st);
-  corium::AppHooks::aboutJson(res);
-  sendf(res, PSTR("\"erases\":%u"), (unsigned)corium::Fs::wearBoot());   // last, no comma
+  if (corium::Fs::wearPct100(&wear)) j.fixed(PSTR("wear"), wear / 100.0f, 2);
+  if (uint32_t st = corium::DeviceInfo::stackFree()) j.uint(PSTR("stack"), st);
+  corium::AppHooks::aboutJson(j);
+  j.uint(PSTR("erases"), corium::Fs::wearBoot());
 #ifdef CORIUM_TRACE
-  about_trace(res);
+  about_trace(j);
 #endif
-  res.sendChunk(F("}"));
+  j.map_end();
+  j.flush();
   res.endChunked();
 }
 
-// the loop, then each module's slowest recent loop, slow loops and what holds it
+// the loop and memory, then each module's priority, slowest recent loop, slow loops and what holds it
 void corium::WebPortal::hPs(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
-  sendf(res, PSTR("{\"lps\":%u,\"tick\":%u,\"t_max\":%u,\"modules\":{"), (unsigned)corium::TickProfile::lps,
-        (unsigned)corium::TickProfile::tickUs, (unsigned)corium::TickProfile::tickMaxUs);
-  ps_modules(res);
-  res.sendChunk(F("}}"));
+  char buf[128];
+  EGJson j(buf, sizeof(buf), send_part, &res);
+  j.map_begin();
+  j.uint(PSTR("lps"), corium::TickProfile::lps);
+  j.uint(PSTR("tick"), corium::TickProfile::tickUs);
+  j.uint(PSTR("t_max"), corium::TickProfile::tickMaxUs);
+  corium::m_json_fields(corium::M_OUT_PS, j, true);   // the app's memory rows
+  if (uint32_t st = corium::DeviceInfo::stackFree()) j.uint(PSTR("stack"), st);
+  uint8_t active = 0;
+  j.map_begin(PSTR("modules"));
+  for (uint8_t i = 0; i < corium::Registry::count(); i++) {
+    corium::Module* m = corium::Registry::get(i);
+    j.map_begin(m->name());
+    j.uint(PSTR("pri"), m->priority());
+    if (uint32_t p = corium::Registry::peakUs(i)) j.uint(PSTR("peak"), p);
+    if (uint8_t n = corium::Registry::stalls(i)) j.uint(PSTR("stalls"), n);
+    if (const char* st = corium::Registry::state(i)) j.str(PSTR("state"), st);
+    else active++;
+    j.map_end();
+  }
+  j.map_end();
+  j.uint(PSTR("active"), active);
+  j.map_end();
+  j.flush();
   res.endChunked();
 }

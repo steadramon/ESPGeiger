@@ -152,8 +152,8 @@ static void json_field(EGJson& j, const char* key, const corium::Measure& m, con
   }
 }
 
-void corium::m_json_fields(uint8_t output, EGJson& j) {
-  for (corium::MeasureIter it(output); it.next(); ) json_field(j, it.row().id, it.row(), it.value());
+void corium::m_json_fields(uint8_t output, EGJson& j, bool diag) {
+  for (corium::MeasureIter it(output, diag); it.next(); ) json_field(j, it.row().id, it.row(), it.value());
 }
 
 void corium::m_json_display(EGJson& j, bool diag) {

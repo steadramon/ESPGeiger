@@ -19,6 +19,7 @@
 #include <Arduino.h>
 #include <EGHttpServer.h>
 #include <EGEscape.h>
+#include <EGJson.h>
 #include "Corium/System/AppHooks.h"
 #include "App/AppConfig.h"
 #include "Corium/Prefs/Prefs.h"
@@ -86,21 +87,18 @@ static const char* geiger_type_name() {
   return PSTR("none");
 }
 
-void corium::AppHooks::aboutJson(EGHttpResponse& res) {
-  char model[6 * CORIUM_NAME_MAX + 1];  // escaped worst case
-  egesc_json(model, sizeof(model), Tube::model());
-  corium::WebPortal::sendf(res,
-    PSTR("\"g_mod\":\"%s\",\"g_type\":\"%s\",\"g_test\":%s,\"g_pcnt\":%s,\"fl\":%u,"),
-    model,
-    geiger_type_name(),
-    GEIGER_IS_TEST(GEIGER_TYPE) ? W_TRUE : W_FALSE,
-    gcounter.has_pcnt()         ? W_TRUE : W_FALSE,
-    (unsigned)Features::flags());
-  if (const char* b = corium::DeviceInfo::boardName()) corium::WebPortal::sendf(res, PSTR("\"board\":\"%s\","), b);
-  char now[40], ever[40];
-  health_text(now, sizeof(now), health().live());
-  health_text(ever, sizeof(ever), health().ever());
-  corium::WebPortal::sendf(res, PSTR("\"health\":\"%s\",\"health_boot\":\"%s\","), now, ever);
+void corium::AppHooks::aboutJson(EGJson& j) {
+  j.str(PSTR("g_mod"), Tube::model());
+  j.str(PSTR("g_type"), geiger_type_name());
+  j.boolean(PSTR("g_test"), GEIGER_IS_TEST(GEIGER_TYPE));
+  j.boolean(PSTR("g_pcnt"), gcounter.has_pcnt());
+  j.uint(PSTR("fl"), Features::flags());
+  if (const char* b = corium::DeviceInfo::boardName()) j.str(PSTR("board"), b);
+  char t[40];
+  health_text(t, sizeof(t), health().live());
+  j.str(PSTR("health"), t);
+  health_text(t, sizeof(t), health().ever());
+  j.str(PSTR("health_boot"), t);
 }
 
 void corium::AppHooks::metrics(EGHttpResponse& res, const char* cid) {
