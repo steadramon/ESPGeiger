@@ -83,7 +83,6 @@ class EGPortal {
       char    ssid[EGPORTAL_SSID_MAX + 1];
       int8_t  rssi;    // dBm
       uint8_t enc;     // wl_enc_type / wifi_auth_mode_t per platform
-      uint8_t chan;
     };
 
     // WiFi scan results into out: one per SSID, weak ones dropped, strongest first

@@ -114,9 +114,8 @@ bool EGPortal::begin(const char* apSsid, const char* apPassword) {
 #elif defined(ESP32)
   WiFi.mode(WIFI_MODE_APSTA);
 #endif
-  // The STA's join moves the AP to its channel, so start on the likely one
-  uint8_t chan = (_scanCount && _scan[0].chan) ? _scan[0].chan : 1;
-  bool up = WiFi.softAP(apSsid, (apPassword && apPassword[0]) ? apPassword : nullptr, chan);
+  // ch 1, on the strongest neighbour's channel some scans never heard it
+  bool up = WiFi.softAP(apSsid, (apPassword && apPassword[0]) ? apPassword : nullptr);
 
   IPAddress apIp = WiFi.softAPIP();
   up = _dns.begin(53, EGTcpAddr(apIp[0], apIp[1], apIp[2], apIp[3])) && up;
@@ -214,20 +213,18 @@ static void sort_by_rssi(EGPortal::ScanEntry* out, size_t count) {
 }
 
 // a 32 byte SSID has no NUL
-static bool scan_ssid(int i, char* out, uint8_t* chan) {
+static bool scan_ssid(int i, char* out) {
 #ifdef ESP32
   const wifi_ap_record_t* r = (const wifi_ap_record_t*)WiFi.getScanInfoByIndex(i);
   if (!r) return false;
   memcpy(out, r->ssid, EGPORTAL_SSID_MAX);
   out[EGPORTAL_SSID_MAX] = '\0';
-  *chan = r->primary;
 #else
   const bss_info* r = WiFi.getScanInfoByIndex(i);
   if (!r) return false;
   size_t n = r->ssid_len < EGPORTAL_SSID_MAX ? r->ssid_len : EGPORTAL_SSID_MAX;
   memcpy(out, r->ssid, n);
   out[n] = '\0';
-  *chan = r->channel;
 #endif
   return out[0] != '\0';
 }
@@ -237,11 +234,10 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
   if (rawCount <= 0 || maxOut == 0 || !out) return 0;
   size_t count = 0;
   char s[EGPORTAL_SSID_MAX + 1];
-  uint8_t chan = 0;
   for (int i = 0; i < rawCount; i++) {
     int8_t rssi = (int8_t)WiFi.RSSI(i);
     if (rssi < rssiMin) continue;
-    if (!scan_ssid(i, s, &chan)) continue;
+    if (!scan_ssid(i, s)) continue;
 
     // keep strongest
     int existing = find_ssid(out, count, s);
@@ -249,7 +245,6 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
       if (rssi > out[existing].rssi) {
         out[existing].rssi = rssi;
         out[existing].enc  = (uint8_t)WiFi.encryptionType(i);
-        out[existing].chan = chan;
       }
       continue;
     }
@@ -266,7 +261,6 @@ size_t EGPortal::processScan(ScanEntry* out, size_t maxOut, int rawCount,
     memcpy(e.ssid, s, sizeof(s));
     e.rssi = rssi;
     e.enc  = (uint8_t)WiFi.encryptionType(i);
-    e.chan = chan;
   }
   sort_by_rssi(out, count);
   return count;

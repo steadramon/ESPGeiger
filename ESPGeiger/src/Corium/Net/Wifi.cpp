@@ -249,7 +249,7 @@ static void split_backup(char* raw, size_t n, char** fields) {
 }
 
 static void begin_ram(const char* ssid, const char* pass);
-CORIUM_NODISCARD static bool save_creds();
+CORIUM_NODISCARD static bool save_creds(const char* ssid, const char* pass);
 
 static bool restore_backup() {
   File f = corium::Fs::openR(WIFI_BACKUP_PATH);
@@ -272,7 +272,7 @@ static bool restore_backup() {
   // Join first, flash after, so a dead backup never replaces the saved creds
   begin_ram(ssid, pass);
   if (!wait_wifi(JOIN_WAIT_MS)) return false;
-  if (save_creds()) {
+  if (save_creds(ssid, pass)) {
     (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // if this fails the 5 min stable clear tries again
   } else {
     // backup kept, the next boot tries again
@@ -447,16 +447,22 @@ static void begin_ram(const char* ssid, const char* pass) {
   (void)WiFi.begin(ssid, pass);   // testStep() reads the status
 }
 
-// Write the running config to flash. begin() would connect again or write nothing
-CORIUM_NODISCARD static bool save_creds() {
+// Write the running config to flash
+CORIUM_NODISCARD static bool save_creds(const char* ssid, const char* pass) {
 #ifdef ESP32
+  (void)ssid; (void)pass;
   wifi_config_t c = {};
   if (esp_wifi_set_storage(WIFI_STORAGE_FLASH) != ESP_OK) return false;
   if (esp_wifi_get_config(WIFI_IF_STA, &c) != ESP_OK) return false;
   return esp_wifi_set_config(WIFI_IF_STA, &c) == ESP_OK;
 #else
+  // the core's save, no reconnect. get_config never fills threshold, a copy of it saved junk rssi that hid the AP
+  WiFi.persistent(true);
+  (void)WiFi.begin(ssid, pass, 0, nullptr, false);
+  WiFi.persistent(false);
   struct station_config c;
-  return wifi_station_get_config(&c) && wifi_station_set_config(&c);
+  return wifi_station_get_config_default(&c) && !strncmp((const char*)c.ssid, ssid, sizeof(c.ssid))
+         && !strncmp((const char*)c.password, pass, sizeof(c.password));
 #endif
 }
 
@@ -579,7 +585,7 @@ static void test_failed(uint8_t r, uint32_t now) {
 }
 
 static void test_joined() {
-  bool saved = save_creds();
+  bool saved = save_creds(s_creds->ssid, s_creds->pass);
   corium::Log::console(PSTR("WiFi: Join test: joined, creds %ssaved"), saved ? PSTR("") : PSTR("NOT "));
   if (saved) (void)corium::Fs::remove(WIFI_BACKUP_PATH);   // creds that just joined beat the old backup
   s_join = saved ? EGPortal::JOIN_OK : EGPortal::JOIN_NOT_SAVED;
