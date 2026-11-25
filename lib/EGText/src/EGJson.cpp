@@ -83,6 +83,16 @@ void EGJson::fixed(const char* key, float v, uint8_t decimals) {
   num(key, t, format_f(t, sizeof(t), v, decimals));
 }
 
+void EGJson::boolean(const char* key, bool v) {
+  char t[6];
+  num(key, t, snprintf_P(t, sizeof(t), v ? PSTR("true") : PSTR("false")));
+}
+
+void EGJson::null(const char* key) {
+  char t[5];
+  num(key, t, snprintf_P(t, sizeof(t), PSTR("null")));
+}
+
 void EGJson::str_begin(const char* key) {
   _mark = _pos;
   name(key);

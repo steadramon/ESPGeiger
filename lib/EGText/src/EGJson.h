@@ -39,6 +39,8 @@ public:
   void uint(const char* key, uint32_t v);
   void sint(const char* key, int32_t v);
   void fixed(const char* key, float v, uint8_t decimals);   // nan / inf left out
+  void boolean(const char* key, bool v);
+  void null(const char* key);
 
   // one string value from parts
   void str_begin(const char* key);
